@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { podTotals, summarizeInfraClusters, pctOfLimit, clusterStatus } from './infraClusters';
+import { podTotals, summarizeInfraClusters, pctOfLimit, clusterStatus, mergeClusterSeries, limitThreshold } from './infraClusters';
 import type { ClusterPodRow } from '@/lib/types';
 
 // v0.10.718 — Infrastructure dilim 1: cluster tablosu + KPI toplamları saf
@@ -56,5 +56,25 @@ describe('pctOfLimit / clusterStatus', () => {
     expect(clusterStatus(two)).toEqual({ text: '1 failing', tone: 'warn' });
     const half = podTotals([pod({ pod: 'a', cluster: 'c', phase: 'Failed' }), pod({ pod: 'b', cluster: 'c', phase: 'Running' })]);
     expect(clusterStatus(half)).toEqual({ text: '1 failing', tone: 'err' });
+  });
+});
+
+// v0.10.719 — Infra dilim 2
+describe('mergeClusterSeries / limitThreshold', () => {
+  const pts = [{ bucket: 1, value: 1 }];
+  it('tek hedef: seriler aynen (adsız toplam korunur)', () => {
+    expect(mergeClusterSeries(['prod-eu'], [[{ name: '', points: pts }]])).toEqual([{ name: '', points: pts }]);
+    expect(mergeClusterSeries(['prod-eu'], [null])).toEqual([]);
+  });
+  it('çok hedef: adsız → cluster adı, adlı → "cluster · ad"; null cluster atlanır', () => {
+    const out = mergeClusterSeries(['prod-eu', 'prod-us', 'prod-x'], [
+      [{ name: '', points: pts }], [{ name: 'route-a', points: pts }], null,
+    ]);
+    expect(out.map(s => s.name)).toEqual(['prod-eu', 'prod-us · route-a']);
+  });
+  it('limit çizgisi yalnız bilinen ve pozitif limitte', () => {
+    expect(limitThreshold(null, String)).toEqual([]);
+    expect(limitThreshold(0, String)).toEqual([]);
+    expect(limitThreshold(12, n => `${n} cores`)).toEqual([{ value: 12, label: 'limit 12 cores', severity: 'warn' }]);
   });
 });

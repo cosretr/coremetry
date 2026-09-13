@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { thanosMaxDataPoints } from '@/lib/chartStep';
 import { clampSuffix } from '@/lib/thanosWindow';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { LinkButton, IconButton, SectionHead, Button } from '@/components/ui';
 import { StatTile } from '@/components/ui/StatTile';
@@ -17,7 +17,7 @@ import { entityHref } from '@/lib/entityHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { useServicePods } from '@/pages/service/useServicePods';
 import { useEntityEnabled, useClusters } from '@/lib/queries';
-import { summarizeInfraClusters, podTotals, pctOfLimit, clusterStatus, type InfraClusterRow } from './infraClusters';
+import { summarizeInfraClusters, podTotals, pctOfLimit, clusterStatus, mergeClusterSeries, limitThreshold, type InfraClusterRow } from './infraClusters';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange } from '@/lib/types';
 import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.552
@@ -46,7 +46,9 @@ import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.
 // - Grafik hatası YERİNDE ("okunamadı · yeniden dene"); bölüm sessizce
 //   kaybolmaz. Metrik ailesi yoksa (boş seri) görünmez-düşme korunur.
 // - HAProxy üçlüsü 3 sütun (2 sütunlu ızgarada yarım satır boş kalıyordu).
-// Grafiklerin "Toplam / pod başına" ve cluster başına seri kipi dilim 2.
+// v0.10.719 (dilim 2): grafikler yalnız TOPLAM (pod başına Pods'ta); kapsam
+// "tümü" iken CPU/Mem/HAProxy cluster başına seri; tek cluster'da pod limit
+// toplamı çizgisi (envanterden, sunucu değişikliği yok).
 
 const CL_COLS: DataTableColumn<InfraClusterRow>[] = [
   { id: 'cluster',  label: 'Cluster',     sortValue: r => r.cluster, naturalDir: 'asc', flex: true, minWidth: 150 },
@@ -58,6 +60,21 @@ const CL_COLS: DataTableColumn<InfraClusterRow>[] = [
   { id: 'status',   label: 'Durum',       sortValue: r => (r.phaseKnown ? r.failing : -1), width: 140 },
   { id: 'act',      label: '',            width: 150 },
 ];
+
+type QLike = { isError: boolean; error: unknown; refetch: () => unknown };
+// aggregate — v0.10.719: cluster başına sorguların ChartSlot görünümü. HEPSİ
+// hata → yerinde hata; kısmi hata → gelen seriler çizilir, başlık rozeti
+// "N cluster okunamadı" der (sessiz eksik seri yok).
+function aggregate(qs: QLike[]): QLike {
+  return {
+    isError: qs.length > 0 && qs.every(q => q.isError),
+    error: qs.find(q => q.isError)?.error,
+    refetch: () => { for (const q of qs) void q.refetch(); },
+  };
+}
+function failedOf(targets: string[], qs: { isError: boolean }[]): string[] {
+  return targets.filter((_, i) => qs[i]?.isError);
+}
 
 // ChartSlot — v0.10.718: okuma hatası grafiğin YERİNDE görünür; MetricArea
 // boş seride null döner (metrik ailesi yoksa görünmez-düşme bilinçli).
@@ -106,24 +123,30 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   }, { replace: true });
   const visRows = effCluster ? rows.filter(r => r.cluster === effCluster) : rows;
 
-  // Grafikler kapsamın cluster'ını izler (kapsam yoksa ilk eşleşen).
-  const chartCluster = effCluster || clustersWithPods[0] || '';
-  // v0.9.72 — CPU/Mem default pod-bazlı (asıl soru "hangi pod sıcak").
-  const [cpuByPod, setCpuByPod] = useState(true);
-  const [memByPod, setMemByPod] = useState(true);
-  const trendOK = chartCluster !== '' && effNs !== '' && effDeploy !== '';
+  // v0.10.719 (mockup şerh 3; multi-cluster ilkesi) — grafikler kapsamı izler:
+  // kapsam varsa TEK cluster (toplam seri + pod limit toplamı çizgisi), yoksa
+  // HER cluster ayrı seri ("birleşik | cluster başına" burada kapsamın
+  // kendisidir; ikinci kip düğmesi yok). "By pod" kipi Infra'dan KALKTI —
+  // pod başına kırılım Pods sekmesinde (PodResourceCharts, aynı endpoint
+  // byPod=1); tekrar yok, başlıkta "Pod başına → Pods" linki.
+  const targets = effCluster ? [effCluster] : clustersWithPods;
+  const single = targets.length === 1;
+  const scopeLabel = single ? targets[0] : 'cluster başına';
+  const trendOK = effNs !== '' && effDeploy !== '';
   // v0.10.287 — sunucu nokta bütçesi (iki sütunlu grid); anahtara girer.
   const trendMdp = thanosMaxDataPoints(2);
-  const cpuTrendQ = useQuery({
-    queryKey: ['deploy-trend', chartCluster, effNs, effDeploy, 'cpu', cpuByPod, cFrom, cTo, trendMdp],
-    queryFn: () => api.clusterDeployTrend(chartCluster, effNs, effDeploy, 'cpu', cpuByPod, cFrom, cTo, trendMdp),
+  const trendQueries = (metric: 'cpu' | 'mem') => targets.map(c => ({
+    queryKey: ['deploy-trend', c, effNs, effDeploy, metric, false, cFrom, cTo, trendMdp],
+    queryFn: () => api.clusterDeployTrend(c, effNs, effDeploy, metric, false, cFrom, cTo, trendMdp),
     staleTime: 60_000, retry: 1, enabled: trendOK,
-  });
-  const memTrendQ = useQuery({
-    queryKey: ['deploy-trend', chartCluster, effNs, effDeploy, 'mem', memByPod, cFrom, cTo, trendMdp],
-    queryFn: () => api.clusterDeployTrend(chartCluster, effNs, effDeploy, 'mem', memByPod, cFrom, cTo, trendMdp),
-    staleTime: 60_000, retry: 1, enabled: trendOK,
-  });
+  }));
+  const cpuQs = useQueries({ queries: trendQueries('cpu') });
+  const memQs = useQueries({ queries: trendQueries('mem') });
+  const cpuTrend = mergeClusterSeries(targets, cpuQs.map(q => q.data?.series));
+  const memTrend = mergeClusterSeries(targets, memQs.map(q => q.data?.series));
+  const aggCpu = aggregate(cpuQs);
+  const aggMem = aggregate(memQs);
+  const trendFailed = [...new Set([...failedOf(targets, cpuQs), ...failedOf(targets, memQs)])];
 
   // v0.9.534 — Router / HAProxy (operatör isteği + Grafana probe'u):
   // namespace'in route'larına OpenShift router'ı gözünden bakış. Servisin
@@ -132,27 +155,24 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   // yalnız cluster + ns ister; üç sorgu da 60s sunucu cache'li, staleTime
   // TTL ile hizalı (ES-maliyet disiplini). Cluster'da haproxy_* ailesi
   // yoksa seriler boş döner ve bölüm görünmez-düşer (CPU/Mem emsali).
-  const haproxyOK = chartCluster !== '' && effNs !== '';
-  const hap2xxQ = useQuery({
-    queryKey: ['haproxy-trend', chartCluster, effNs, '2xx', cFrom, cTo],
-    queryFn: () => api.clusterHaproxyTrend(chartCluster, effNs, '2xx', cFrom, cTo),
+  // v0.10.719 — kapsam "tümü" iken cluster başına (seri adı "cluster · route").
+  const haproxyOK = effNs !== '';
+  const hapQueries = (kind: '2xx' | '5xx' | 'latency') => targets.map(c => ({
+    queryKey: ['haproxy-trend', c, effNs, kind, cFrom, cTo],
+    queryFn: () => api.clusterHaproxyTrend(c, effNs, kind, cFrom, cTo),
     staleTime: 60_000, retry: 1, enabled: haproxyOK,
-  });
-  const hap5xxQ = useQuery({
-    queryKey: ['haproxy-trend', chartCluster, effNs, '5xx', cFrom, cTo],
-    queryFn: () => api.clusterHaproxyTrend(chartCluster, effNs, '5xx', cFrom, cTo),
-    staleTime: 60_000, retry: 1, enabled: haproxyOK,
-  });
-  const hapLatQ = useQuery({
-    queryKey: ['haproxy-trend', chartCluster, effNs, 'latency', cFrom, cTo],
-    queryFn: () => api.clusterHaproxyTrend(chartCluster, effNs, 'latency', cFrom, cTo),
-    staleTime: 60_000, retry: 1, enabled: haproxyOK,
-  });
-  const haproxyAny =
-    (hap2xxQ.data?.series?.length ?? 0) > 0 ||
-    (hap5xxQ.data?.series?.length ?? 0) > 0 ||
-    (hapLatQ.data?.series?.length ?? 0) > 0;
-  const haproxyErr = hap2xxQ.isError || hap5xxQ.isError || hapLatQ.isError;
+  }));
+  const hap2xxQs = useQueries({ queries: hapQueries('2xx') });
+  const hap5xxQs = useQueries({ queries: hapQueries('5xx') });
+  const hapLatQs = useQueries({ queries: hapQueries('latency') });
+  const hap2xx = mergeClusterSeries(targets, hap2xxQs.map(q => q.data?.series));
+  const hap5xx = mergeClusterSeries(targets, hap5xxQs.map(q => q.data?.series));
+  const hapLat = mergeClusterSeries(targets, hapLatQs.map(q => q.data?.series));
+  const agg2xx = aggregate(hap2xxQs);
+  const agg5xx = aggregate(hap5xxQs);
+  const aggLat = aggregate(hapLatQs);
+  const haproxyAny = hap2xx.length > 0 || hap5xx.length > 0 || hapLat.length > 0;
+  const haproxyErr = agg2xx.isError || agg5xx.isError || aggLat.isError;
 
   // v0.10.718 — Traces → satır eylemi yalnız Thanos cluster adı span'lerin
   // cluster adıyla da görülüyorsa (aksi hâlde boş /traces'e götürürdü).
@@ -238,8 +258,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
     const memPct = pctOfLimit(kpi.memBytes, kpi.memLimitBytes);
     const restartTone = kpi.restarts != null && kpi.restarts > 8 ? 'err' : kpi.restarts != null && kpi.restarts > 2 ? 'warn' : undefined;
     const ago = podsUpdatedAt ? fmtAgoNs(podsUpdatedAt * 1e6) : '';
-    const chartsVisible = cpuTrendQ.isError || memTrendQ.isError
-      || (cpuTrendQ.data?.series?.length ?? 0) > 0 || (memTrendQ.data?.series?.length ?? 0) > 0;
+    const chartsVisible = aggCpu.isError || aggMem.isError || cpuTrend.length > 0 || memTrend.length > 0;
 
     return (
       <>
@@ -358,30 +377,39 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
           </div>
         </div>
 
-        {/* ── Kaynak kullanımı: MetricArea (Clusters ile ortak), By pod toggle;
-            hata yerinde (ChartSlot). Toplam/cluster başına kipi dilim 2. ── */}
+        {/* ── Kaynak kullanımı (v0.10.719): yalnız TOPLAM; kapsam tümü → cluster
+            başına seri; tek cluster → toplam + pod limit toplamı çizgisi
+            (envanterin kube-state limitlerinden; bilinmiyorsa çizgi yok).
+            Hata yerinde (ChartSlot); kısmi hata başlıkta rozet. ── */}
         {chartsVisible && (
           <>
             <SectionHead id="infra-resources" title="Kaynak kullanımı" source="Thanos · deploy-trend"
-              badges={<span className="badge b-gray mono">{chartCluster}{clampSuffix(clamped)}</span>}
+              badges={<>
+                <span className="badge b-gray mono">{scopeLabel}{clampSuffix(clamped)}</span>
+                {trendFailed.length > 0 && (
+                  <span className="badge b-warn" title={`Okunamayan: ${trendFailed.join(', ')}`}>
+                    {trendFailed.length} cluster okunamadı
+                  </span>
+                )}
+              </>}
               actions={<Link to={podsTabWithParams} title="Pod başına kırılım Pods sekmesinde">Pod başına → Pods</Link>} />
             <div className="grid-2" style={{ display: 'grid', gap: 14 }}>
               <div ref={cpuChartRef} style={flashStyle('cpu')}>
-                <ChartSlot q={cpuTrendQ}>
-                  <MetricArea title={`CPU (cores) · ${chartCluster}${clampSuffix(clamped)}`} byLabel="By pod"
-                    by={cpuByPod} onToggle={setCpuByPod} onZoom={onZoom} onZoomReset={onZoomReset}
-                    syncKey={`infra:${service}`} totalSeries={cpuTrendQ.data?.totalSeries}
-                    labelTrimPrefix={effDeploy}
-                    series={cpuTrendQ.data?.series} seriesName="CPU" />
+                <ChartSlot q={aggCpu}>
+                  <MetricArea title={`CPU (cores) · ${scopeLabel}${clampSuffix(clamped)}`}
+                    subtitle={single ? 'sum(rate(container_cpu_usage_seconds_total)) · limit = pod limitleri toplamı' : 'sum(rate(container_cpu_usage_seconds_total)) · by cluster'}
+                    onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`}
+                    series={cpuTrend} seriesName="CPU"
+                    thresholds={single ? limitThreshold(kpi.cpuLimitCores, fmtCores) : undefined} />
                 </ChartSlot>
               </div>
               <div ref={memChartRef} style={flashStyle('mem')}>
-                <ChartSlot q={memTrendQ}>
-                  <MetricArea title={`Memory · ${chartCluster}${clampSuffix(clamped)}`} byLabel="By pod"
-                    by={memByPod} onToggle={setMemByPod} onZoom={onZoom} onZoomReset={onZoomReset}
-                    syncKey={`infra:${service}`} totalSeries={memTrendQ.data?.totalSeries}
-                    labelTrimPrefix={effDeploy}
-                    series={memTrendQ.data?.series} seriesName="Memory" unit="bytes" />
+                <ChartSlot q={aggMem}>
+                  <MetricArea title={`Memory · ${scopeLabel}${clampSuffix(clamped)}`}
+                    subtitle={single ? 'sum(container_memory_working_set_bytes) · limit = pod limitleri toplamı' : 'sum(container_memory_working_set_bytes) · by cluster'}
+                    onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`}
+                    series={memTrend} seriesName="Memory" unit="bytes"
+                    thresholds={single ? limitThreshold(kpi.memLimitBytes, fmtBytes) : undefined} />
                 </ChartSlot>
               </div>
             </div>
@@ -391,31 +419,32 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
         {/* v0.9.534 — Router / HAProxy: namespace'in route'ları, router
             gözünden. Seri adı = route; 2xx trafiğin kendisi, yokluğu da
             sinyal (operatör onaylı üçlü: 2xx + 5xx + gecikme).
-            v0.10.718 — üç grafik üç sütun; başlık atomu; hata yerinde. */}
+            v0.10.718 — üç grafik üç sütun; başlık atomu; hata yerinde.
+            v0.10.719 — kapsam tümü → cluster başına ("cluster · route"). */}
         {(haproxyAny || haproxyErr) && (
           <>
             <SectionHead id="infra-haproxy" title="Router / HAProxy" source="Thanos · router haproxy_backend_*"
               badges={<span className="badge b-gray mono"
                 title="Kaynak: OpenShift router'ının (HAProxy) backend metrikleri, Thanos üzerinden. Namespace kapsamlı — servisin route'u değil, namespace'in tüm route'ları.">
-                ns: {effNs} · {chartCluster}
+                ns: {effNs} · {scopeLabel}
               </span>} />
             <div className="grid-3" style={{ display: 'grid', gap: 14 }}>
-              <ChartSlot q={hap2xxQ}>
+              <ChartSlot q={agg2xx}>
                 <MetricArea title={`HTTP 2xx (req/s)${clampSuffix(clamped)}`}
                   subtitle="haproxy_backend_http_responses_total{code=2xx} · by route"
-                  series={hap2xxQ.data?.series} seriesName="2xx"
+                  series={hap2xx} seriesName="2xx"
                   onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
               </ChartSlot>
-              <ChartSlot q={hap5xxQ}>
+              <ChartSlot q={agg5xx}>
                 <MetricArea title={`HTTP 5xx (req/s)${clampSuffix(clamped)}`}
                   subtitle="haproxy_backend_http_responses_total{code=5xx} · by route"
-                  series={hap5xxQ.data?.series} seriesName="5xx"
+                  series={hap5xx} seriesName="5xx"
                   onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
               </ChartSlot>
-              <ChartSlot q={hapLatQ}>
+              <ChartSlot q={aggLat}>
                 <MetricArea title={`Backend gecikme (ms)${clampSuffix(clamped)}`}
                   subtitle="haproxy_backend_http_average_response_latency_milliseconds · by route"
-                  series={hapLatQ.data?.series} seriesName="latency" unit="ms"
+                  series={hapLat} seriesName="latency" unit="ms"
                   onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
               </ChartSlot>
             </div>

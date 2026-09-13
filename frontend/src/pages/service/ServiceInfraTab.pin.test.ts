@@ -59,3 +59,32 @@ describe('Infra dilim 1 — KPI, grafik hatası, HAProxy', () => {
     expect(css).toContain('.sec-head .badge { text-transform: none;');
   });
 });
+
+// v0.10.719 — Infra dilim 2: grafikler yalnız toplam, kapsam tümü → cluster
+// başına seri (useQueries), tek cluster → limit çizgisi; HAProxy aynı;
+// Kafka 4 birincil + "tümü ▸" (uyarılı ikincil katlanmaz).
+describe('Infra dilim 2 — cluster başına seri, limit çizgisi, Kafka 4+5', () => {
+  it('By pod kipi Infra\'dan kalktı; pod başına Pods\'a link', () => {
+    expect(infra).not.toContain('byLabel="By pod"');
+    expect(infra).not.toContain('cpuByPod');
+    expect(infra).toContain('Pod başına → Pods');
+  });
+  it('kapsam: hedefler = seçili cluster ya da hepsi; her hedef ayrı sorgu, birleşik seri', () => {
+    expect(infra).toContain('const targets = effCluster ? [effCluster] : clustersWithPods;');
+    expect(infra).toContain("useQueries({ queries: trendQueries('cpu') })");
+    expect(infra).toContain("useQueries({ queries: hapQueries('latency') })");
+    expect(infra).toContain('mergeClusterSeries(targets, cpuQs.map(q => q.data?.series))');
+    expect(infra).toContain("api.clusterDeployTrend(c, effNs, effDeploy, metric, false, cFrom, cTo, trendMdp)");
+  });
+  it('tek cluster → limit çizgisi (envanter limitleri), kısmi hata rozeti', () => {
+    expect(infra).toContain('thresholds={single ? limitThreshold(kpi.cpuLimitCores, fmtCores) : undefined}');
+    expect(infra).toContain('thresholds={single ? limitThreshold(kpi.memLimitBytes, fmtBytes) : undefined}');
+    expect(infra).toContain('cluster okunamadı');
+    expect(infra).toContain('isError: qs.length > 0 && qs.every(q => q.isError)');
+  });
+  it('Kafka: 4 birincil + tümü ▸; ikincil uyarı taşıyorsa açık başlar', () => {
+    expect(kafka).toContain('const KAFKA_PRIMARY_TILES = 4;');
+    expect(kafka).toContain('const expanded = showAll || restFlagged;');
+    expect(kafka).toContain('tümü (${rest.length}) ▸');
+  });
+});

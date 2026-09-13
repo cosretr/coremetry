@@ -2,6 +2,7 @@ import { Card } from '@/components/ui';
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { namedSeriesToSeries } from '@/pages/clusters/trendSeries';
 import type { XPin } from '@/lib/chart/xRange';
+import type { Threshold } from '@/lib/chart/thresholdLines';
 import type { ClusterNamedSeries } from '@/lib/types';
 
 // MetricArea — başlık + Total/By-X segmented toggle + area chart kartı
@@ -9,7 +10,7 @@ import type { ClusterNamedSeries } from '@/lib/types';
 // CPU/Mem kartlarından çıkarıldı (v0.9.35 ResToggleHeader'ın genel
 // hali): Servis → Infrastructure sekmesi aynı kartı "By pod"
 // etiketiyle kullanır. Seri yoksa null döner — görünmez-düşer.
-export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange }: {
+export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange, thresholds }: {
   title: string;
   // v0.9.383 (redesign D7) — insanileştirilmiş başlığın altında ham
   // metrik adı (monospace, soluk) — bilgi kaybı yasak.
@@ -51,6 +52,9 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
   // v0.9.1042 — x-ekseni sorgu penceresine mıhlanır (unix sec;
   // ServiceCharts v0.9.725 paritesi). Verilmezse veri-fit.
   xRange?: XPin | null;
+  // v0.10.719 — yatay eşik çizgileri (pod limit toplamı vb.); MultiLineChart'a
+  // aynen iletilir. Verilmezse çizgi yok.
+  thresholds?: Threshold[];
 }) {
   if (!series || series.length === 0) return null;
   return (
@@ -79,7 +83,7 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
         )}
       </div>
     }>
-      <MultiLineChart series={namedSeriesToSeries(series, seriesName, labelTrimPrefix)} height={height} unit={unit} maxSeries={maxSeries} onZoom={onZoom} onZoomReset={onZoomReset} syncKey={syncKey} xRange={xRange} />
+      <MultiLineChart series={namedSeriesToSeries(series, seriesName, labelTrimPrefix)} height={height} unit={unit} maxSeries={maxSeries} onZoom={onZoom} onZoomReset={onZoomReset} syncKey={syncKey} xRange={xRange} thresholds={thresholds} />
     </Card>
   );
 }

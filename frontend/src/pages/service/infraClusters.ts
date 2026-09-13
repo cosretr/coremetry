@@ -1,4 +1,5 @@
-import type { ClusterPodRow } from '@/lib/types';
+import type { ClusterPodRow, ClusterNamedSeries } from '@/lib/types';
+import type { Threshold } from '@/lib/chart/thresholdLines';
 
 // infraClusters — v0.10.718 (servis sekmeleri etüdü, Infrastructure dilim 1;
 // mockup 3b03fe22 şerh 1-2, operatör onayı 2026-09-13). Thanos pod
@@ -82,4 +83,30 @@ export function clusterStatus(t: PodTotals): { text: string; tone: 'ok' | 'warn'
   if (!t.phaseKnown) return { text: 'durum bilinmiyor', tone: 'gray' };
   if (t.failing === 0) return { text: t.running === t.pods ? 'all running' : `${t.running} / ${t.pods} running`, tone: 'ok' };
   return { text: `${t.failing} failing`, tone: t.failing >= Math.max(1, Math.ceil(t.pods / 2)) ? 'err' : 'warn' };
+}
+
+// ── v0.10.719 — Infra dilim 2: kapsam "tümü" iken cluster başına seri ──
+
+/**
+ * mergeClusterSeries — her cluster'ın kendi okumasını tek seri listesine
+ * birleştirir. Tek hedef: seriler AYNEN (adsız toplam seri MetricArea'nın
+ * seriesName'ini alır). Çok hedef: seri adı cluster (adsız toplam) ya da
+ * "cluster · ad" (route gibi adlı seriler). Başarısız/bekleyen cluster
+ * (null) atlanır — çağıran ayrıca "N cluster okunamadı" der.
+ */
+export function mergeClusterSeries(
+  targets: string[],
+  per: (ClusterNamedSeries[] | null | undefined)[],
+): ClusterNamedSeries[] {
+  if (targets.length <= 1) return per[0] ?? [];
+  const out: ClusterNamedSeries[] = [];
+  targets.forEach((c, i) => {
+    for (const s of per[i] ?? []) out.push({ ...s, name: s.name ? `${c} · ${s.name}` : c });
+  });
+  return out;
+}
+
+/** Pod limit toplamı → tek warn eşik çizgisi; bilinmiyorsa/0 ise çizgi yok. */
+export function limitThreshold(limit: number | null, fmt: (n: number) => string): Threshold[] {
+  return limit != null && limit > 0 ? [{ value: limit, label: `limit ${fmt(limit)}`, severity: 'warn' }] : [];
 }
