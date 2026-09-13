@@ -1058,6 +1058,8 @@ function TracesPageInner() {
           geçersizleştirir, elle temizlik gerekmez. */}
       <Topbar title="Traces" context={{ ctx: ctxForBar, envApplies: true, hidden: TRACES_CONTEXT_HIDDEN }} />
       <PageShell>
+        {/* v0.10.722 — liste görünümü tek kaydırıcı: .tr-fill (CSS'te gerekçe). */}
+        <div className={view === 'list' ? 'tr-fill' : undefined}>
         {/* v0.9.304 (operatör) — Trace ID araması sayfanın SAĞ ÜSTÜNE,
             zaman aralığı seçicisinin hemen altına taşındı. Filtre satırının
             içinde marginLeft:auto ile duruyordu ve oradaki alanlarla aynı
@@ -1385,7 +1387,7 @@ function TracesPageInner() {
             narrowedFromNs={data?.narrowedFromNs} />
         )}
         {view === 'list' && data && traces.length > 0 && (
-          <div style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
+          <div className="tr-fill__body" style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
             aria-busy={refreshing}>
             {/* v0.10.339 — Operator-reported: terfi kolonu uyuşmazlığı. Bu
                 satırlar dizi yolundan geldi (sunucu kolonun yalan söylediğini
@@ -1450,9 +1452,19 @@ function TracesPageInner() {
                 (openTrace). K8s entity hücreleri KENDİ linklerini taşır —
                 <a> içinde <a> geçersiz HTML, o hücreler satır linkine
                 sarılmaz (ownLink). */}
+            {/* v0.10.722 (operatör onayı "A", 2026-09-13; denetim
+                docs/audit/traces-scroll-audit-2026-09-13.md) — v0.9.645'in
+                "yükseklik = içerik" formülü (44 + n×36) gerçek satır/başlık
+                yüksekliğiyle uyuşmuyor ve İKİNCİ bir dikey çubuk üretiyordu
+                (v0.10.225'in yaması yetmedi). Model tersine döndü: kutu
+                kalan yüksekliği doldurur ve sayfanın TEK kaydırıcısıdır;
+                chart + filtreler sabit, thead kutuya yapışık, pager altta.
+                Sanallaştırma artık gerçekten pencereler (görünür + overscan).
+                Geri dönüş: bu commit'i revert et. */}
             <VirtualTable<TraceRow>
               dt={dt}
-              height={44 + displayRows.length * 36}
+              height="fill"
+              scrollResetKey={`${page}|${sort}|${order}`}
               rowHeight={36}
               getRowKey={(t) => t.traceId}
               renderRow={(t) => {
@@ -1653,6 +1665,7 @@ function TracesPageInner() {
 
         {/* Shapes view. */}
         {view === 'shapes' && <ShapesView range={range} service={filter.service || undefined} />}
+        </div>
       </PageShell>
     </>
   );

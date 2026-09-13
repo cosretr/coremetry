@@ -92,7 +92,9 @@ describe('/traces satırı gerçek bir link', () => {
     const c = css();
     expect(c).toMatch(/\.vt-scroll tbody td\.row-cell > \.row-link \{[^}]*height: 36px;[^}]*line-height: 18px;/);
     expect(traces()).toContain('rowHeight={36}');
-    expect(traces()).toContain('height={44 + displayRows.length * 36}');
+    // v0.10.722 — kutu kalan yüksekliği doldurur (tek kaydırıcı); formül gitti.
+    expect(traces()).toContain('height="fill"');
+    expect(traces()).not.toContain('44 + displayRows.length * 36');
   });
 
   it('row-link primitifi globals.css\'te tanımlı (hücre dolgusu + odak halkası)', () => {

@@ -389,7 +389,7 @@ code, pre, .mono { font-family: monospace; font-size: 12px; }
 .sidebar-resizer:hover { background: var(--accent); opacity: .6; }
 .sidebar-resizer:active { background: var(--accent); }
 
-#main { flex: 1; overflow: auto; display: flex; flex-direction: column; min-width: 0; }
+#main { flex: 1; overflow: auto; display: flex; flex-direction: column; min-width: 0; min-height: 0; } /* v0.10.722 — min-height:0: flex çocuğu içerik kadar büyümesin */
 #topbar {
   padding: 10px 20px; border-bottom: 1px solid var(--border);
   background: var(--bg1); display: flex; align-items: center; gap: 12px; flex-shrink: 0;
@@ -454,7 +454,7 @@ code, pre, .mono { font-family: monospace; font-size: 12px; }
    Dashboard/ServiceCharts/Explore çağırıyor — ama problem detayına bir
    sparkline eklendiği gün grafik adımı sessizce yanlış hesaplanır.
    Gizlenen liste artık id yerine sınıf taşıyor; stil bit bit aynı. */
-#content, .page-body { flex: 1; padding: 20px; overflow: auto; }
+#content, .page-body { flex: 1; padding: 20px; overflow: auto; min-height: 0; }
 
 /* Controls */
 .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
@@ -3348,6 +3348,19 @@ td > .cell-actions.end { justify-content: flex-end; }
 /* v0.10.721 — 'fill' kipi: flex kolon ebeveynin kalan yüksekliği; min-height:0
    olmadan flex çocuğu içerik kadar büyür ve ebeveyn kaydırır (iki çubuk). */
 .vt-scroll.is-fill { flex: 1 1 0; min-height: 0; }
+/* v0.10.722 — /traces liste görünümü TEK kaydırıcı (denetim
+   docs/audit/traces-scroll-audit-2026-09-13.md, operatör onayı "A" 2026-09-13):
+   .tr-fill #content'in içerik kutusunu tam doldurur (height:100%, min-height
+   DEĞİL — v0.9.645/1078'in sayfa-kaydırma modelinin Traces için bilinçli
+   tersi), chart/filtre/araç çubuğu flex:none, .tr-fill__body kalan yüksekliği
+   alır ve içindeki .vt-scroll.is-fill tek kaydırıcıdır; pager kutunun altında
+   akışta. Hiçbir öğe position:sticky değil — 2026-08-16 "yüzen şerit" kararı
+   ihlal edilmiyor, çerçeve sabit ve yalnız satırlar kayar. Aggregate/shapes
+   görünümleri sınıfı almaz, sayfa kaydırmada kalır. */
+.tr-fill { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.tr-fill > * { flex: none; }
+.tr-fill__body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.tr-fill__body > * { flex: none; }
 .vt-scroll > table { border-collapse: collapse; }
 .vt-scroll thead { position: sticky; top: 0; z-index: var(--z-sticky-cell); }
 .vt-scroll thead th { background: var(--bg2); }
