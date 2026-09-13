@@ -62,3 +62,15 @@ describe('/traces şerit katlama (v0.10.724)', () => {
     expect(vc).toContain('data-collapsed={collapsed || undefined}');
   });
 });
+
+// v0.10.727 — "Last ⇥" sıralamayı ters çevirip sayfa 1'e döner (kesin son
+// sayfa numarası tavanlı sayıda türetilemez); o kipte etiket "Sondan sayfa".
+describe('/traces ters sıra sayfa etiketi (v0.10.727)', () => {
+  it('order asc iken pageLabel verilir, desc iken verilmez', () => {
+    expect(traces).toContain("pageLabel={order === 'asc'");
+    expect(traces).toContain('>Sondan sayfa</span>');
+    expect(traces).toContain(': undefined}');
+    // Etiket ile bitiş düğmesi AYNI koşulu okur (ikisi de ters sırayı tarif eder).
+    expect(traces).toContain("endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}");
+  });
+});

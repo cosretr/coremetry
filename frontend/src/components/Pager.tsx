@@ -78,6 +78,13 @@ interface OffsetOnly {
   // etiket/başlık çağıranın (ters sıradayken "⇤ First").
   onEnd?: () => void;
   endLabel?: string;
+  // v0.10.727 (operator-reported: "Last diyince sayfa numarası hâlâ 1
+  // gözüküyor") — sayfa girdisinin ETİKETİ; varsayılan 'Page'. onEnd yolu
+  // listeyi TERS sıraya çevirip sayfa 1'e döner (kesin son sayfa numarası
+  // tavanlı sayıda türetilemez, v0.9.638), yani o kipte girdideki 1
+  // "baştan 1" değil "SONDAN 1"dir. Çağıran bunu söyleyen bir etiket
+  // verir; sayı uydurulmaz, anlamı yazılır.
+  pageLabel?: React.ReactNode;
   endTitle?: string;
 }
 
@@ -171,7 +178,7 @@ export function Pager(props: PagerProps) {
 }
 
 function OffsetPager({
-  page, pageSize, hasMore, onPage, lastReachablePage, onEnd, endLabel, endTitle, count, total, extras, cls, label,
+  page, pageSize, hasMore, onPage, lastReachablePage, onEnd, endLabel, endTitle, pageLabel, count, total, extras, cls, label,
 }: PagerCommon & CountDecl & OffsetOnly & { cls: string; label: string | null }) {
   const [draft, setDraft] = useState(String(page + 1));
 
@@ -200,7 +207,7 @@ function OffsetPager({
       </Button>
 
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-        <span>Page</span>
+        <span>{pageLabel ?? 'Page'}</span>
         <form onSubmit={commit} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <input value={draft}
             onChange={e => setDraft(e.target.value)}

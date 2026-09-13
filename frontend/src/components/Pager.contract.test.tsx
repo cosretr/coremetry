@@ -190,6 +190,24 @@ describe('Pager — offset kipi', () => {
   });
 });
 
+// v0.10.727 (operator-reported: "Last diyince sayfa numarası hâlâ 1
+// gözüküyor") — onEnd yolu listeyi ters çevirip sayfa 1'e döndüğü için
+// girdideki sayı SONDAN sayılır; etiket bunu söyleyebilmeli.
+describe('Pager — sayfa etiketi (v0.10.727)', () => {
+  it("varsayılan 'Page'; çağıran ters-sıra kipinde kendi etiketini verir", () => {
+    render(<Pager mode="offset" count="skip" page={0} pageSize={50} hasMore onPage={() => {}} />);
+    expect(host!.textContent).toContain('Page');
+    act(() => { root!.unmount(); });
+    host!.remove();
+    render(<Pager mode="offset" count="skip" page={0} pageSize={50} hasMore onPage={() => {}}
+      pageLabel={<span title="ters sıra">Sondan sayfa</span>} />);
+    expect(host!.textContent).toContain('Sondan sayfa');
+    expect(host!.textContent).not.toMatch(/\bPage\b/);
+    // Etiket girdinin ANLAMINI değiştirir, değerini değil: hâlâ 1 yazar.
+    expect(host!.querySelector('input')!.value).toBe('1');
+  });
+});
+
 describe('Pager — cursor kipi', () => {
   it('sayfa girdisi YOK — keyset imleçte "sayfa 7" ifade edilemez', () => {
     render(<Pager mode="cursor" count="skip" hasMore onMore={() => {}} />);

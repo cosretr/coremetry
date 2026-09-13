@@ -1563,6 +1563,11 @@ function TracesPageInner() {
                 setPage(0);
               }}
               endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}
+              // v0.10.727 (operator-reported) — ters sırada girdideki sayı
+              // SONDAN sayılır; "Page 1" listenin başı sanılıyordu.
+              pageLabel={order === 'asc'
+                ? <span title="Liste ters sıralı (en eski önce): bu kipte 1 = SON sayfa, 2 = sondan ikinci. Kesin son sayfa NUMARASI gösterilemez çünkü sayım tavanlı (10.000+) ve aşama-1 kimlik bütçesi sınırlı — ⇤ First başa döner.">Sondan sayfa</span>
+                : undefined}
               endTitle={order === 'desc'
                 ? 'Listenin sonuna git: sıralama tersine döner (en eski önce), sayfa 1'
                 : 'Listenin başına dön: sıralama yeniden en yeni önce, sayfa 1'}
