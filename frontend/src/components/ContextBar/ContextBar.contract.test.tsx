@@ -44,8 +44,8 @@ describe('ContextBar', () => {
     const cluster = el.querySelector('select[aria-label="Cluster"]') as HTMLSelectElement;
     expect(cluster.disabled).toBe(true);
     expect(cluster.closest('.ctx-field')!.getAttribute('title')).toContain('uygulanmıyor');
-    const ns = el.querySelector('input[aria-label="Namespace"]') as HTMLInputElement;
-    expect(ns.disabled).toBe(true);
+    // v0.10.710 — Namespace kutusu çubuktan kaldırıldı (hiçbir sayfa uygulamıyordu).
+    expect(el.querySelector('input[aria-label="Namespace"]')).toBeNull();
     expect(el.querySelector('button[aria-pressed]')).toBeNull(); // compare uygulanmıyor → çip yok
   });
   it('compare çipi × → set({compare: ""}); uygulanınca cluster seçilebilir', () => {

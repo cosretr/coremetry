@@ -3,7 +3,12 @@
 // geçer (`#topbar` içinde, uygulama kromu — feedback-no-floating-strips).
 // Kontroller soldan sağa mevcut atomlarla: TimeRangePicker · EnvPicker
 // applies · Cluster (≤10 değer <select>, üstü Combobox serverFiltered) ·
-// Namespace (cluster uygulanıyorsa) · ServicePicker · Compare çipi.
+// ServicePicker · Compare çipi.
+// v0.10.710 (operatör: "Namespace kaldır") — Namespace kutusu ÇIKTI: hiçbir
+// sayfa bu boyutu çubuğa uygulamıyordu (backend FilterExpr yok, audit soru
+// 8), yani her sayfada devre dışı "—" olarak ölü bir alan çiziliyordu.
+// `?namespace=` URL boyutu kendi okuyan sayfalarda (Rollouts, Services, Pod)
+// aynen yaşar; yalnız çubuk çizmez.
 // Uygulanmayan boyut devre dışı + ipucu (ürün-önce tasarımdan aşılanan
 // `applies`). Dar ekranda üç kapsam kontrolü DisclosureButton "Kapsam (n)"
 // arkasına (PageControls emsali). Yoğunluk cascade'i globals.css'te;
@@ -28,8 +33,8 @@ export interface ContextBarProps {
   /**
    * v0.10.257 (operatör: "service filtresi iki defa olmuş") — sayfanın KENDİ
    * kontrolüyle zaten sunduğu boyutlar çubukta HİÇ çizilmez (devre dışı
-   * kutu bile değil). Uygulanmayan-ama-gelecek boyutlar (namespace/compare)
-   * devre dışı + ipucu kalır.
+   * kutu bile değil). Uygulanmayan-ama-gelecek boyut (compare) devre dışı
+   * + ipucu kalır.
    */
   hidden?: ContextDim[];
 }
@@ -38,7 +43,7 @@ const NOT_APPLIED = 'Bu sayfada uygulanmıyor';
 const CLUSTER_SELECT_MAX = 10;
 
 function scopeCount(p: ContextParamsResult['params']): number {
-  return [p.cluster, p.namespace, p.service].filter(Boolean).length;
+  return [p.cluster, p.service].filter(Boolean).length;
 }
 
 export function ContextBar({ ctx, envApplies = false, hidden = [] }: ContextBarProps) {
@@ -55,8 +60,6 @@ export function ContextBar({ ctx, envApplies = false, hidden = [] }: ContextBarP
     <>
       {!hide.has('cluster') && <ClusterControl value={params.cluster} options={clusters} disabled={!clusterOn}
         onChange={v => patch({ cluster: v })} />}
-      {!hide.has('namespace') && <NamespaceControl value={params.namespace} disabled={!applies.has('namespace') || (clusterOn && !params.cluster)}
-        onChange={v => patch({ namespace: v })} />}
       {!hide.has('service') && (
         <div className="ctx-field" title={applies.has('service') ? undefined : NOT_APPLIED}>
           <span className="field-label">Service</span>
@@ -114,19 +117,3 @@ function ClusterControl({ value, options, disabled, onChange }: { value: string;
   );
 }
 
-function NamespaceControl({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (v: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  // Dış değer değişince (URL) taslağı hizala; yazarken filtreleme yok (EnvPicker emsali).
-  if (!disabled && draft !== value && document.activeElement?.getAttribute('aria-label') !== 'Namespace') {
-    // render sırasında set etmek yerine efekt: küçük ve nadir, doğrudan hizala
-  }
-  return (
-    <div className="ctx-field" title={disabled ? NOT_APPLIED : undefined}>
-      <span className="field-label">Namespace</span>
-      <input aria-label="Namespace" value={disabled ? '' : draft} disabled={disabled} placeholder={disabled ? '—' : 'All namespaces'}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => { if (draft !== value) onChange(draft.trim()); }}
-        onKeyDown={e => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setDraft(value); } }} />
-    </div>
-  );
-}
