@@ -155,13 +155,15 @@ export function familyOf(language: string | undefined): string | null {
 
 const FAMILY_TITLE: Record<string, string> = { jvm: 'JVM', dotnet: '.NET', go: 'Go' };
 
-export function RuntimeCharts({ service, from, to, onZoom, onZoomReset }: {
+export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false }: {
   service: string;
   from: number; // unix ns (parent'ın çözülmüş penceresi — RQ anahtarı hizalı)
   to: number;
   onZoom?: (fromSec: number, toSec: number) => void;
   // Grafana-parite M1 — çift-tık: Service.tsx zoom geri-yığınını pop eder.
   onZoomReset?: () => void;
+  // v0.10.720 — başlık üst bileşende (SectionHead); yalnız Pods sekmesi geçer.
+  hideHeader?: boolean;
 }) {
   // Parent Service.tsx ile AYNI anahtar → RQ cache'inden dolar, ek istek yok.
   const runtimeQ = useQuery({
@@ -284,7 +286,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset }: {
 
   return (
     <>
-      <div style={{ marginTop: 18, marginBottom: 8 }}>
+      {!hideHeader && <div style={{ marginTop: 18, marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
           Runtime — {FAMILY_TITLE[family]}
         </div>
@@ -293,7 +295,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset }: {
           {family === 'dotnet' && <>Runtime instrumentation <code>process.runtime.dotnet.*</code> metrics per pod.</>}
           {family === 'go' && <>Go runtime <code>process.runtime.go.*</code> metrics.</>}
         </div>
-      </div>
+      </div>}
       {/* Full-width istifli kartlar — 30+ pod çizgisi + lejand tablosu için
           3-across dar kalıyordu (operatör raporu). Ortak syncKey: bir karta
           hover TÜM kartlarda crosshair çizer (heap spike ↔ GC pause korele). */}

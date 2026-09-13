@@ -85,11 +85,13 @@ describe('ResetLayoutButton adoption', () => {
     const gap = uses.length - binds.length;
     // v0.9.1332 ölçümü: 75 kullanıcı / 2 bağlayan → 73 açık.
     // v0.9.1333: ProblemsSection bağlandı → 72.
+    // v0.10.718/720: Infra Clusters + Pods tek tablo bağlandı, entity tablosu
+    // silindi → 69.
     //
     // Bu rakam bir HEDEF değil, bir MUHASEBE. Düştüyse süpürme ilerledi:
     // sayıyı güncelle. ARTTIYSA yeni bir tabloya geri dönüşü olmayan bir
     // sürükleme çıkmazı eklenmiş: butonu bağla, sayıyı güncelleme.
-    expect(gap).toBeLessThanOrEqual(72);
+    expect(gap).toBeLessThanOrEqual(69);
     // Sağlık kontrolü: yürüyüş gerçekten dosya buluyor. Sıfır dönen bir
     // tarayıcı bu testi sessizce yeşil yapardı (boş küme tuzağı).
     expect(uses.length).toBeGreaterThan(50);

@@ -1,43 +1,46 @@
-// v0.10.145 — entity pod tablosu her kapıdan ÖNCE mount edilir (kaynak taraması).
-// v0.10.149 — operatör: tablo hem Infra hem Pods'ta çıkıyor + Pods'ta altta
-// Thanos listesi tekrar → tek yer (Pods), Infra boş durumu oraya işaret eder,
-// envanter entity satırı varken kapalı başlar.
-//
-// Bug: ServiceInfraTab'ın "No pods matched" / "No Thanos clusters configured"
-// erken dönüşleri <ServiceEntityPods> mount'unun ÜSTÜNDEYDİ; Thanos ad-regex'i
-// (`<service>-*`) eşleşmeyince — entity katmanının var olma sebebi olan
-// durum — tablo hiç çizilmiyordu, API 2 pod döndürürken. Pods sekmesi ise
-// tabloyu hiç mount etmiyordu. Bu test dosya sırasını piner: ilk
-// `<ServiceEntityPods` her boş-durum başlığından önce gelmeli, iki sekmede de.
+// v0.10.145 — entity pod'ları her kapıdan ÖNCE görünür (kaynak taraması).
+// v0.10.149 — tek yer (Pods), ikinci pod listesi yok.
+// v0.10.720 — entity tablosu + Thanos akordeonu TEK tabloya indi
+// (ServicePodsTable). Kural aynı, biçimi değişti: entity satırları Thanos
+// keşfinden BAĞIMSIZ hook'tan gelir ve birleşik kümeye girer; hiçbir Thanos
+// boş-durumu entity satırlarını yutamaz (boş durum yalnız rows.length === 0
+// iken); Infra sekmesi tabloyu mount etmez, Pods'a işaret eder.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const read = (f: string) => readFileSync(join(__dirname, f), 'utf8');
+const strip = (s: string) => s.replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
 
-function firstMount(src: string): number {
-  // JSX mount'u say, import satırını / const tanımını değil: `<ServiceEntityPods `.
-  const i = src.indexOf('<ServiceEntityPods ');
-  expect(i, '<ServiceEntityPods> mount yok').toBeGreaterThan(-1);
-  return i;
-}
-
-describe('ServiceEntityPods reachability (v0.10.145 → v0.10.149)', () => {
-  it('Infra tab does NOT mount the entity table (it lives in the Pods tab only) but points at it', () => {
-    const src = read('ServiceInfraTab.tsx').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+describe('Pods tek tablo — entity erişilebilirliği (v0.10.145 → 149 → 720)', () => {
+  it('Infra tab does NOT mount the pods table (it lives in the Pods tab only) but points at it', () => {
+    const src = strip(read('ServiceInfraTab.tsx'));
+    expect(src).not.toContain('<ServicePodsTable');
     expect(src).not.toContain('<ServiceEntityPods');
     expect(src).toMatch(/entityHint/);
     expect(src).toMatch(/tab: 'pods'/);
   });
-
-  it('Pods tab mounts the entity table before its empty state and collapses the Thanos inventory when entity rows exist', () => {
-    const src = read('ServicePodsTab.tsx').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
-    const mount = firstMount(src);
-    const g = src.indexOf('title="No pods matched"');
-    expect(g).toBeGreaterThan(-1);
-    expect(mount).toBeLessThan(g);
-    expect(src).toMatch(/onRows=\{setEntityRows\}/);
-    expect(src).toMatch(/entityRows > 0 && !thanosOpen\) \? null/);
-    expect(src).toMatch(/<DisclosureButton[^>]*expanded=\{thanosOpen\}/);
+  it("Pods tab: entity hook Thanos'tan bağımsız, birleşik küme, boş durum yalnız birleşik küme boşken", () => {
+    const src = strip(read('ServicePodsTab.tsx'));
+    expect(src).toContain("useEntityServicePods(service, '', win, entityEnabled)");
+    expect(src).toContain('mergePods(entityEnabled ? (entityQ.data?.pods ?? []) : [], th.rows, nameOf)');
+    expect(src.indexOf('title="No pods matched"')).toBeGreaterThan(-1);
+    expect(src.indexOf('<ServicePodsTable')).toBeGreaterThan(-1);
+    // Boş durum birleşik satır sayısına bağlı — Thanos eşleşmemesi entity satırını gizleyemez.
+    expect(src).toContain('rows.length === 0 ? (');
+    // Eski iki liste ve yapışkan şerit yok.
+    expect(src).not.toContain('ServiceEntityPods');
+    expect(src).not.toContain('ServiceClusterPods');
+    expect(src).not.toContain("position: 'sticky'");
+  });
+  it('tablo: yapışık Pod sütunu, kaynak rozeti, ?jpod tüketimi, grup başlığı eylemleri', () => {
+    const tab = read('ServicePodsTab.tsx');
+    const tbl = read('ServicePodsTable.tsx');
+    expect(tab).toContain('stickyLeft: true');
+    expect(tab).toContain("storageKey: 'service-pods-v2'");
+    expect(tbl).toContain("next.delete('jpod')");
+    expect(tbl).toContain('className="badge b-gray" title={src.title}');
+    expect(tbl).toContain('Infra →');
+    expect(tbl).toContain('/pod →');
   });
 });
