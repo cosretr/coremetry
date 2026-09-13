@@ -8,7 +8,7 @@ import (
 
 // v0.10.712 — kök kapsaması ucu: pencere kelepçesi + toplamlar.
 func TestRootCoverageRangeAndTotals(t *testing.T) {
-	for raw, want := range map[string]int{"": 900, "60": 300, "900": 900, "99999": 3600, "abc": 900} {
+	for raw, want := range map[string]int{"": 900, "60": 60, "10": 60, "900": 900, "99999": 3600, "abc": 900} {
 		if got := rootCoverageRange(raw); got != want {
 			t.Errorf("%q → %d, beklenen %d", raw, got, want)
 		}

@@ -25,3 +25,9 @@ describe('AdminClickhouse kök kapsaması (v0.10.712)', () => {
     expect(page).toContain('ilk 200 giriş servisi');
   });
 });
+describe('kök kapsaması 1 dk (v0.10.713)', () => {
+  it('1 dk seçeneği ve kaynak rozeti', () => {
+    expect(page).toContain('<option value={60}>son 1 dk</option>');
+    expect(page).toContain("kaynak: {data.source === 'spans' ? 'spans' : 'MV'}");
+  });
+});

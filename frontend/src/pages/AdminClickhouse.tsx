@@ -2590,10 +2590,12 @@ function RootCoveragePanel() {
       <p className="cell-hint">
         Tam kök span = parent boş + ad dolu + servis dolu. Köksüz trace &quot;Root traces only&quot; süzgecinde
         düşer ve listede giriş servisiyle (yoksa &quot;unknown&quot;) görünür. Kaynak trace_summary_5m; pencere boyu
-        GROUP BY trace_id — bu yüzden isteğe bağlı ve ≤ 1 saat.
+        GROUP BY trace_id — bu yüzden isteğe bağlı ve ≤ 1 saat; 5 dk altı pencere ham spans'ten (v0.10.713).
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <select value={rangeS} onChange={e => setRangeS(Number(e.target.value))} aria-label="Pencere">
+          {/* v0.10.713 (operatör) — 1 dk: MV 5 dk kovasını bölemez, ham spans'ten okunur. */}
+          <option value={60}>son 1 dk</option>
           <option value={300}>son 5 dk</option>
           <option value={900}>son 15 dk</option>
           <option value={3600}>son 1 saat</option>
@@ -2602,6 +2604,11 @@ function RootCoveragePanel() {
         {data && (
           <>
             <span className="badge b-gray">{fmtNum(data.totalTraces)} trace</span>
+            <span className="badge b-gray" title={data.source === 'spans'
+              ? '5 dk altı pencere: ham spans (tam pencere, MV kovası bölünemez)'
+              : 'trace_summary_5m (5 dk kovalar, alt uç kovaya kırpılır)'}>
+              kaynak: {data.source === 'spans' ? 'spans' : 'MV'}
+            </span>
             <span className={`badge ${rootTone(pct ?? 0)}`} title="Tam kök span'ı olan trace oranı (tüm giriş servisleri)">
               köklü {pct === null ? '—' : `${pct.toFixed(1)}%`}
             </span>

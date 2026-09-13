@@ -45,36 +45,72 @@ func traceRootCoverageSQL() string {
 		SETTINGS max_execution_time = ` + itoa(traceRootCoverageMaxExec) + `, ` + tracesSpillSettings
 }
 
-// traceRootCoverageWindow — SAF: [now−range, now), alt uç 5 dk grid'e
-// kırpılmış; range 5 dk..1 sa kelepçeli (pencere GROUP BY trace_id'nin
-// maliyetini belirler — prod'da 1 saat ≈ 3.3M grup).
+// traceRootCoverageRawSQL — v0.10.713 (operatör: "1 dakika olabilir mi").
+// 5 dk kovaları 1 dakikayı ifade edemez; kısa pencere ham spans'ten AYNI
+// tanımla okunur: tam kök = parent boş + ad dolu + servis dolu; giriş =
+// en erken server/consumer span'in servisi ('unknown'/boş dışarıda).
+// Pencere ≤ 5 dk olduğundan tarama sınırlı; aynı LIMIT/tavan/spill.
+func traceRootCoverageRawSQL() string {
+	return `
+		SELECT entry, count() AS traces, countIf(has_root) AS with_root
+		FROM (
+		  SELECT trace_id,
+		         max((parent_id = '' OR parent_id = '0000000000000000') AND name != '' AND service_name != '') AS has_root,
+		         argMinIf(service_name, time,
+		           (kind = 'server' OR kind = 'consumer') AND service_name != '' AND service_name != 'unknown') AS entry
+		  FROM spans
+		  WHERE time >= ? AND time < ?
+		  GROUP BY trace_id
+		)
+		GROUP BY entry
+		ORDER BY traces - with_root DESC, traces DESC
+		LIMIT ` + itoa(traceRootCoverageMaxRows) + `
+		SETTINGS max_execution_time = ` + itoa(traceRootCoverageMaxExec) + `, ` + tracesSpillSettings
+}
+
+// traceRootCoverageUsesRaw — SAF: 5 dk altı pencere ham spans (MV kovası
+// 5 dk); 5 dk ve üstü MV.
+func traceRootCoverageUsesRaw(rangeS int) bool { return rangeS < 300 }
+
+// traceRootCoverageWindow — SAF: [now−range, now). MV yolunda alt uç 5 dk
+// grid'e kırpılır; ham yolda tam pencere (1 dk = 1 dk). range 1 dk..1 sa
+// kelepçeli (pencere GROUP BY trace_id'nin maliyetini belirler — prod'da
+// 1 saat ≈ 3.3M grup).
 func traceRootCoverageWindow(now time.Time, rangeS int) (from, to time.Time) {
-	if rangeS < 300 {
-		rangeS = 300
+	if rangeS < 60 {
+		rangeS = 60
 	}
 	if rangeS > 3600 {
 		rangeS = 3600
 	}
 	to = now.UTC()
-	from = to.Add(-time.Duration(rangeS) * time.Second).Truncate(5 * time.Minute)
+	from = to.Add(-time.Duration(rangeS) * time.Second)
+	if !traceRootCoverageUsesRaw(rangeS) {
+		from = from.Truncate(5 * time.Minute)
+	}
 	return from, to
 }
 
 // TraceRootCoverage — son rangeS için giriş servisi başına kök kapsaması.
-func (s *Store) TraceRootCoverage(ctx context.Context, rangeS int) ([]TraceRootCoverageRow, error) {
+// Döndürülen source: "spans" (kısa pencere) | "mv".
+func (s *Store) TraceRootCoverage(ctx context.Context, rangeS int) ([]TraceRootCoverageRow, string, error) {
 	from, to := traceRootCoverageWindow(time.Now(), rangeS)
-	rows, err := s.telemetryReadConn().Query(ctx, traceRootCoverageSQL(), from, to)
+	sql, source := traceRootCoverageSQL(), "mv"
+	if traceRootCoverageUsesRaw(rangeS) {
+		sql, source = traceRootCoverageRawSQL(), "spans"
+	}
+	rows, err := s.telemetryReadConn().Query(ctx, sql, from, to)
 	if err != nil {
-		return nil, err
+		return nil, source, err
 	}
 	defer rows.Close()
 	out := []TraceRootCoverageRow{}
 	for rows.Next() {
 		var r TraceRootCoverageRow
 		if err := rows.Scan(&r.EntryService, &r.Traces, &r.WithRoot); err != nil {
-			return nil, err
+			return nil, source, err
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	return out, source, rows.Err()
 }

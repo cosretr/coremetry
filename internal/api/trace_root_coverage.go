@@ -5,6 +5,9 @@ package api
 //
 //	GET /api/admin/clickhouse/root-coverage?range_s=900   (admin; serveCached 60 s)
 //
+// v0.10.713 — range_s 60..3600; 5 dk altı ham spans (MV kovası 5 dk'yı
+// bölemez), cevaptaki `source` hangisi olduğunu söyler.
+//
 // Giriş servisi başına: trace, tam köklü trace, köksüz sayı. Root-only
 // süzgecinin listeyi neden yarıladığını ve "unknown" servis gösterimini
 // hangi servislerin ürettiğini söyler. İsteğe bağlı (panelde "Çalıştır"),
@@ -27,11 +30,11 @@ func (s *Server) registerTraceRootCoverageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/clickhouse/root-coverage", auth.RequireRole(auth.RoleAdmin, s.getTraceRootCoverage))
 }
 
-// rootCoverageRange — SAF: 300..3600, varsayılan 900.
+// rootCoverageRange — SAF: 60..3600, varsayılan 900.
 func rootCoverageRange(raw string) int {
 	r := parseInt(raw, 900)
-	if r < 300 {
-		return 300
+	if r < 60 {
+		return 60
 	}
 	if r > 3600 {
 		return 3600
@@ -52,13 +55,13 @@ func (s *Server) getTraceRootCoverage(w http.ResponseWriter, r *http.Request) {
 	rangeS := rootCoverageRange(r.URL.Query().Get("range_s"))
 	key := fmt.Sprintf("ch:root-coverage:v1:r=%d", rangeS)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		rows, err := s.store.TraceRootCoverage(ctx, rangeS)
+		rows, source, err := s.store.TraceRootCoverage(ctx, rangeS)
 		if err != nil {
 			return nil, err
 		}
 		traces, withRoot := rootCoverageTotals(rows)
 		return map[string]any{
-			"rangeS": rangeS, "generatedAt": time.Now().UnixNano(),
+			"rangeS": rangeS, "generatedAt": time.Now().UnixNano(), "source": source,
 			"totalTraces": traces, "totalWithRoot": withRoot,
 			"rows": rows, "capped": len(rows) >= 200,
 		}, nil

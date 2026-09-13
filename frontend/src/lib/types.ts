@@ -3484,6 +3484,8 @@ export interface CHRootCoverageRow { entryService: string; traces: number; withR
 export interface CHRootCoverageResponse {
   rangeS: number;
   generatedAt: number;
+  // v0.10.713 — 5 dk altı pencere ham spans'ten, üstü MV'den okunur.
+  source: 'spans' | 'mv';
   totalTraces: number;
   totalWithRoot: number;
   rows: CHRootCoverageRow[];
