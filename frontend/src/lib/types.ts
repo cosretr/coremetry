@@ -3479,6 +3479,16 @@ export interface CHMeasurePartsRow { host: string; table: string; partitions: nu
 export interface CHMeasureEventsRow { host: string; uptimeS: number; delayedInserts: number; rejectedInserts: number; insertedRows: number; mergedRows: number; }
 export interface CHMeasureAsyncRow { host: string; buffers: number; bytes: number; }
 export interface CHMeasureInsertRow { host: string; rowsPerInsert: number; inserts: number; }
+// v0.10.712 — trace kök kapsaması (admin teşhisi; mirrors Go chstore.TraceRootCoverageRow).
+export interface CHRootCoverageRow { entryService: string; traces: number; withRoot: number; }
+export interface CHRootCoverageResponse {
+  rangeS: number;
+  generatedAt: number;
+  totalTraces: number;
+  totalWithRoot: number;
+  rows: CHRootCoverageRow[];
+  capped: boolean;
+}
 export interface CHMeasureResponse {
   mode: 'cluster' | 'standalone';
   cluster?: string;

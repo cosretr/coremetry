@@ -19,6 +19,7 @@ import type {
   StateRepartPreflightResult, StateRepartRun, StateRepartTable,
   TraceBackfillDay, TraceBackfillRun,
   CHMeasurePartsRow, // v0.10.683 — ölçüm paneli
+  CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
 } from '@/lib/types';
 
 // AdminClickhouse — v0.5.329. Datadog-style CH self-stats:
@@ -720,6 +721,7 @@ export default function AdminClickhousePage() {
                 sorgu yolunda değil, yazma/merge tarafındadır. */}
             <NodeWorkPanel />
             <MeasurePanel />
+            <RootCoveragePanel />
 
             {/* v0.9.770 — rollup kurulum sihirbazı. Topolojinin hemen
                 altında değil BURADA: operatör önce kümenin sağlıklı
@@ -2554,6 +2556,87 @@ function partsTone(maxPP: number): string {
 }
 function perHour(v: number, uptimeS: number): string {
   return uptimeS > 0 ? fmtNum(Math.round(v / (uptimeS / 3600))) : '—';
+}
+
+// v0.10.712 (kuyruk 1; operatör prod ölçümü 2026-09-13: trace'lerin %49'unda
+// tam kök span yok) — giriş servisi başına kök kapsaması. İSTEĞE BAĞLI:
+// GROUP BY trace_id pencere boyu koşar, mount'ta fetch YOK, yoklama YOK;
+// operatör pencereyi seçip "Çalıştır" der. Köksüz trace = root-only
+// süzgecinde düşer ve listede "unknown" servisle görünebilir.
+const ROOT_COV_COLS: DataTableColumn<CHRootCoverageRow>[] = [
+  { id: 'entry',    label: 'Giriş servisi', sortValue: r => r.entryService, naturalDir: 'asc', flex: true },
+  { id: 'traces',   label: 'Trace',         sortValue: r => r.traces, numeric: true, width: 110 },
+  { id: 'without',  label: 'Köksüz',        sortValue: r => r.traces - r.withRoot, numeric: true, width: 110 },
+  { id: 'pct',      label: 'Köklü %',       sortValue: r => (r.traces ? r.withRoot / r.traces : 0), numeric: true, width: 100 },
+];
+function rootTone(pct: number): string { return pct >= 90 ? 'b-ok' : pct >= 50 ? 'b-warn' : 'b-err'; }
+function RootCoveragePanel() {
+  const [rangeS, setRangeS] = useState(900);
+  const [armed, setArmed] = useState<number | null>(null); // çalıştırılan pencere
+  const q = useQuery({
+    queryKey: ['ch-root-coverage', armed],
+    queryFn: ({ signal }) => api.chRootCoverage(armed ?? 900, signal),
+    enabled: armed !== null,
+    staleTime: 60_000,
+  });
+  const data = armed === null ? null : q.isPending ? undefined : q.isError ? null : q.data ?? null;
+  const dt = useDataTable<CHRootCoverageRow>({
+    storageKey: 'ch-root-coverage', columns: ROOT_COV_COLS,
+    rows: data?.rows ?? [], initialSort: { id: 'without', dir: 'desc' },
+  });
+  const pct = data && data.totalTraces > 0 ? (data.totalWithRoot / data.totalTraces) * 100 : null;
+  return (
+    <Section title="Trace kök kapsaması · giriş servisi başına">
+      <p className="cell-hint">
+        Tam kök span = parent boş + ad dolu + servis dolu. Köksüz trace &quot;Root traces only&quot; süzgecinde
+        düşer ve listede giriş servisiyle (yoksa &quot;unknown&quot;) görünür. Kaynak trace_summary_5m; pencere boyu
+        GROUP BY trace_id — bu yüzden isteğe bağlı ve ≤ 1 saat.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <select value={rangeS} onChange={e => setRangeS(Number(e.target.value))} aria-label="Pencere">
+          <option value={300}>son 5 dk</option>
+          <option value={900}>son 15 dk</option>
+          <option value={3600}>son 1 saat</option>
+        </select>
+        <Button variant="accent" size="sm" onClick={() => setArmed(rangeS)} loading={armed !== null && q.isPending}>Çalıştır</Button>
+        {data && (
+          <>
+            <span className="badge b-gray">{fmtNum(data.totalTraces)} trace</span>
+            <span className={`badge ${rootTone(pct ?? 0)}`} title="Tam kök span'ı olan trace oranı (tüm giriş servisleri)">
+              köklü {pct === null ? '—' : `${pct.toFixed(1)}%`}
+            </span>
+            {data.capped && <span className="badge b-warn">ilk 200 giriş servisi</span>}
+          </>
+        )}
+      </div>
+      {data === undefined && <Spinner />}
+      {data === null && armed !== null && <EmptyNote text="Kapsama okunamadı (pencereyi daralt)" />}
+      {data && data.rows.length === 0 && <EmptyNote text="Pencerede trace yok" />}
+      {data && data.rows.length > 0 && (
+        <div className="table-wrap is-fit">
+          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.map(r => {
+                const p = r.traces ? (r.withRoot / r.traces) * 100 : 0;
+                return (
+                  <tr key={r.entryService || '(none)'} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
+                    <td className="mono" title={r.entryService || 'Trace\'te hiç server/consumer span yok'}>
+                      {r.entryService || <span style={{ color: 'var(--text3)' }}>(giriş servisi de yok)</span>}
+                    </td>
+                    <td className="num mono">{fmtNum(r.traces)}</td>
+                    <td className="num mono">{fmtNum(r.traces - r.withRoot)}</td>
+                    <td className="num mono"><span className={`badge ${rootTone(p)}`}>{p.toFixed(1)}%</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  );
 }
 
 function MeasurePanel() {

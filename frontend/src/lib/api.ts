@@ -3363,6 +3363,9 @@ export const api = {
   // parça baskısı, DelayedInserts/RejectedInserts, async tamponlar, insert
   // boyutu (query_log açıksa). Sunucu 30 s cache.
   chMeasure: () => get<CHMeasureResponse>('/api/admin/clickhouse/measure'),
+  // v0.10.712 — trace kök kapsaması (isteğe bağlı; 5 dk..1 sa).
+  chRootCoverage: (rangeS: number, signal?: AbortSignal) =>
+    get<import('./types').CHRootCoverageResponse>(`/api/admin/clickhouse/root-coverage?range_s=${rangeS}`, signal),
   chNodeWork: () =>
     get<{
       nodes: import('./chNodeWork').NodeWorkRaw[];
