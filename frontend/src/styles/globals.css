@@ -2236,6 +2236,49 @@ tbody tr.wf-evidence:hover > td { background: color-mix(in srgb, var(--warn) 14%
   stroke-dasharray: 6 8;
 }
 
+/* v0.10.729 (operatör, prod: "çizgiler kayıyor ama oklar sabit belki onlar da
+   kaysa iyi olur. Aynı sütun hizasındaki oklarda karışıklık olabiliyor") —
+   yön oku artık kendi kenarı boyunca AKAR.
+
+   İki şikâyet tek mekanizmayla kapanıyor: ok eğrinin sabit bir noktasında
+   (t=0.78) duruyordu, bu yüzden (a) hareketsizdi, (b) yakınsayan kenarların
+   okları aynı dikey hizada üst üste yığılıyordu. Artık her ok hedefe yakın
+   DAR bir aralıkta ilerliyor (58%→88%) ve her kenarın kendi süresi +
+   gecikmesi var → hiza dağılıyor, yığılma kalkıyor.
+
+   Aralık bilinçli dar: tam yol boyu akan bir ok komşu kolonlardan geçip
+   "hangi kenarın oku" sorusunu büyütürdü; hedef ucunda kalması yön
+   çapasını korur. Ters (çift yönlü) ok kaynağa doğru, ters aralıkta.
+
+   offset-path DESTEKLENMEZSE eski davranış aynen: ok, bileşenin verdiği
+   --ax/--ay/--aa ile t=0.78'de sabit durur (üçgen geometrisi değişmedi). */
+.topo-edge-arrow {
+  /* Değişkenleri bileşen basar (kenarın kendi noktası/açısı); fallback'ler
+     kuralı kendi başına geçerli tutar (undefinedCssRefs kapısı). */
+  transform: translate(calc(var(--ax, 0) * 1px), calc(var(--ay, 0) * 1px)) rotate(var(--aa, 0deg));
+}
+@supports (offset-path: path("M 0 0")) {
+  .topo-edge-arrow {
+    /* offset-path satır içinde (kenarın d'si gibi per-element veri); burada
+       yalnız dönüş/konum/tempo. transform SIFIRLANIR: motion-path dönüşümü
+       ile toplanıp oku iki kat kaydırırdı. */
+    transform: none;
+    offset-rotate: auto;
+    offset-distance: 78%;
+    animation: topo-arrow-flow var(--arw-dur, 2.4s) linear infinite;
+    animation-delay: var(--arw-delay, 0s);
+  }
+  .topo-edge-arrow.rev { offset-rotate: auto 180deg; offset-distance: 22%; animation-name: topo-arrow-flow-rev; }
+}
+@keyframes topo-arrow-flow     { from { offset-distance: 58%; } to { offset-distance: 88%; } }
+@keyframes topo-arrow-flow-rev { from { offset-distance: 42%; } to { offset-distance: 12%; } }
+@media (prefers-reduced-motion: reduce) {
+  /* Hareket kapalıyken ok hedef ucunda SABİT durur — animation:none tek
+     başına offset-distance'ı 0'a (yolun başına) düşürürdü. */
+  .topo-edge-arrow { animation: none; offset-distance: 78%; }
+  .topo-edge-arrow.rev { offset-distance: 22%; }
+}
+
 /* ── Sidebar atom modifiers (v0.9.899, R14) ─────────────────────────
    The sidebar took four families in one commit: MenuItem, the nav-group
    disclosure, and two buttons that were wearing `.theme-toggle` for its

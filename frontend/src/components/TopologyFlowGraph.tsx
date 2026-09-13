@@ -382,11 +382,21 @@ export function TopologyFlowGraph({
               </title>
             </path>
             {arrows.map((ar, j) => (
-              <path key={`ar-${j}`}
+              // v0.10.729 — ok kenarı boyunca akar (globals.css topo-edge-arrow).
+              // Konum/açı CSS değişkenlerinde: offset-path destekleyen tarayıcı
+              // yolu kullanır, desteklemeyen aynı noktada sabit çizer.
+              // Gecikme kenar indeksinden türer (deterministik): yakınsayan
+              // kenarların okları aynı fazda olmasın, hiza dağılsın.
+              <path key={`ar-${j}`} className={j === 0 ? 'topo-edge-arrow' : 'topo-edge-arrow rev'}
                 d={`M ${-as * 0.9} ${-as * 0.62} L ${as * 0.9} 0 L ${-as * 0.9} ${as * 0.62} Z`}
-                transform={`translate(${ar.x} ${ar.y}) rotate(${ar.angle})`}
                 fill={stroke} opacity={opacity} pointerEvents="none"
-                style={{ transition: 'opacity 120ms, fill 120ms' }} />
+                style={{
+                  transition: 'opacity 120ms, fill 120ms',
+                  ['--ax' as string]: ar.x, ['--ay' as string]: ar.y, ['--aa' as string]: `${ar.angle}deg`,
+                  offsetPath: `path("M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}")`,
+                  ['--arw-dur' as string]: `${(2.8 - 1.8 * t).toFixed(2)}s`,
+                  ['--arw-delay' as string]: `-${(((i * 37) % 100) / 100 * (2.8 - 1.8 * t)).toFixed(2)}s`,
+                }} />
             ))}
             </g>
           );
