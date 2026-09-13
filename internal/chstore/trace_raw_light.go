@@ -77,8 +77,56 @@ func traceRawStage1Streaming(sort, lightHavingSQL string) bool {
 	return sort == "duration" || sort == "" || sort == "time"
 }
 
-// traceRawStage1OverFetch — akışkan varyantta span-düzeyi LIMIT: K trace
-// için K×4 span (çok-span'lı trace'ler slot yer), tavan 4×traceStage2MaxIDs.
+// traceRawStage1OverFetchMax — v0.10.708: yeniden çekme tavanı (id, t)
+// satırı; ~2 MB. Üstünde streamStage1Cands "capped" döner ve hasMore
+// dürüstçe true kalır.
+const traceRawStage1OverFetchMax = 8 * traceStage2MaxIDs
+
+// traceRawStage1OverFetchNext — v0.10.708: bir sonraki tur limiti (×4,
+// tavanlı). Tavanda aynı değeri döner → çağıran durur.
+func traceRawStage1OverFetchNext(limit int) int {
+	n := limit * 4
+	if n > traceRawStage1OverFetchMax {
+		n = traceRawStage1OverFetchMax
+	}
+	if n < limit {
+		n = limit
+	}
+	return n
+}
+
+// streamStage1Cands — v0.10.708 (operatör, prod: "çok trace ingest
+// ediliyor ama arama az ve seyrek buluyor"). Akışkan 1. aşama SPAN satırı
+// çekip trace id'ye indiriyordu ve k'nın altında kalınca yeniden ÇEKMİYORDU:
+// 50'lik sayfa için 200 span, 100-span'lı trace'lerde 2-5 trace ediyor ve
+// hasMore "yok" diyordu. Şimdi tekil trace wantK'ya ulaşana ya da kaynak
+// tükenene (satır < limit) dek limit ×4 büyür; tavana çarpınca capped=true.
+// SAF (fetch enjekte), tablo-testli; sıra fetch'in sırası (time/duration).
+func streamStage1Cands(wantK int, fetch func(limit int) ([]stage1Cand, error)) (cands []stage1Cand, capped bool, err error) {
+	if wantK < 1 {
+		wantK = 1
+	}
+	limit := traceRawStage1OverFetch(wantK)
+	for {
+		rows, ferr := fetch(limit)
+		if ferr != nil {
+			return nil, false, ferr
+		}
+		cands = dedupeStage1(rows, wantK)
+		if len(cands) >= wantK || len(rows) < limit {
+			return cands, false, nil
+		}
+		next := traceRawStage1OverFetchNext(limit)
+		if next <= limit {
+			return cands, true, nil
+		}
+		limit = next
+	}
+}
+
+// traceRawStage1OverFetch — akışkan varyantta İLK tur span-düzeyi LIMIT:
+// K trace için K×4 span, tavan 4×traceStage2MaxIDs. Yetmezse
+// streamStage1Cands büyütür (v0.10.708).
 func traceRawStage1OverFetch(k int) int {
 	n := k * 4
 	if n > 4*traceStage2MaxIDs {

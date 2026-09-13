@@ -2719,6 +2719,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 		// kök kontrolü demet nokta okuma; 2. aşama trace-başı zaman aralığı.
 		from := f.From
 		var cands []stage1Cand
+		stage1Capped := false // v0.10.708 — akışkan yeniden çekme tavana çarptı
 		streaming := traceRawStage1Streaming(f.Sort, lightHavingSQL)
 		s1Limit, s1Offset := rawLightStage1Window(f.Offset, pageLimit, rootPostFilter)
 		// v0.10.499 — servis/operasyon sıralaması: 1. aşama en yeni N aday
@@ -2741,22 +2742,32 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 			lwc := buildGetTracesWhere(lf, s.clusterExpr())
 			maxExec := traceRawStage1MaxExec(from, f.To)
 			var stage1SQL string
-			s1args := append([]any{}, lwc.args...)
+			var got []stage1Cand
+			var err error
 			if streaming {
+				// v0.10.708 — span-satırı LIMIT'i trace sayısı DEĞİL: tekil
+				// trace wantK'ya ulaşana ya da kaynak tükenene dek limit ×4
+				// büyür (streamStage1Cands); tavana çarpınca stage1Capped →
+				// hasMore dürüstçe true.
 				stage1SQL = traceRawStage1StreamSQL(lwc.sql(), f.Sort, order, maxExec)
-				s1args = append(s1args, traceRawStage1OverFetch(wantK))
+				whereArgs := append([]any{}, lwc.args...)
+				got, stage1Capped, err = streamStage1Cands(wantK, func(limit int) ([]stage1Cand, error) {
+					args := append(append([]any{}, whereArgs...), limit)
+					t0 := time.Now()
+					rows, qerr := s.queryStage1Cands(ctx, stage1SQL, args, true)
+					f.Explain.step("light-stage1", stage1SQL, args, t0, len(rows), qerr)
+					return rows, qerr
+				})
 			} else {
+				s1args := append([]any{}, lwc.args...)
 				stage1SQL, _ = traceRawStage1GroupSQL(lwc.sql(), lightHavingSQL, f.Sort, order, maxExec)
 				s1args = append(s1args, lightHavingArgs...)
 				s1args = append(s1args, s1Limit, s1Offset)
+				s10 := time.Now()
+				got, err = s.queryStage1Cands(ctx, stage1SQL, s1args, false)
+				f.Explain.step("light-stage1", stage1SQL, s1args, s10, len(got), err)
 			}
-			s10 := time.Now()
-			got, err := s.queryStage1Cands(ctx, stage1SQL, s1args, streaming)
-			f.Explain.step("light-stage1", stage1SQL, s1args, s10, len(got), err)
 			if err == nil {
-				if streaming {
-					got = dedupeStage1(got, wantK)
-				}
 				cands = got
 				break
 			}
@@ -2831,7 +2842,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 			}
 			out = page
 		}
-		hasMore = len(cands) > f.Limit
+		hasMore = len(cands) > f.Limit || stage1Capped // v0.10.708
 		if rankedRaw {
 			// Sayfa 2. aşamada kesildi: hasMore = pageLimit'in fazlası;
 			// RankedWithin = 1. aşamanın aday sayısı (dilim pencereyi
