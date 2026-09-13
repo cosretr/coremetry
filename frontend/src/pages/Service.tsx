@@ -24,6 +24,8 @@ import { ServiceCatalogPill } from '@/components/ServiceCatalogPill';
 import { DBQueriesPanel } from '@/components/DBQueriesPanel';
 import { DeployHistoryPanel } from '@/components/DeployHistoryPanel';
 import { DetailsPropsStrip } from './service/DetailsPropsStrip';
+import { DetailsEndpointsSection } from './service/DetailsEndpointsSection'; // v0.10.715
+import { SectionHead } from '@/components/ui/SectionHead'; // v0.10.715
 import { DetailsToc } from './service/DetailsToc';
 import { DetailsMetricsSection, useDetailsMetricPanels } from './service/DetailsMetricsSection';
 import { panelMaxDataPoints } from '@/lib/chartStep';
@@ -617,9 +619,8 @@ function ServiceDetailInner() {
                     oluyor?" ve "hangi sorgu?"; Performance/Latency aşağı indi.
                     Per-cluster breakdown Runtime & rollouts'tan buraya taşındı
                     (kendi çapası dtl-clusters). */}
-                <div className="dtl-sech" id="dtl-clusters">Clusters
-                  {opScope && <span className="badge b-gray" style={{ textTransform: 'none', letterSpacing: 0 }}>tüm servis</span>}
-                </div>
+                <SectionHead id="dtl-clusters" title="Clusters" source="service_summary_5m · cluster"
+                  badges={opScope && <span className="badge b-gray">tüm servis</span>} />
                 <div className="ov-mb">
                   <LazyMount minHeight={140}>
                     <ServiceClusterBreakdown service={svc} range={range} />
@@ -627,9 +628,9 @@ function ServiceDetailInner() {
                 </div>
                 {/* v0.9.141 (operatör) — Structure paneli kaldırıldı; bölüm
                     yalnız DB sorgularına indi, başlık "Database" oldu. */}
-                <div className="dtl-sech" id="dtl-db">Database
-                  {opScope && <span className="badge b-gray" style={{ textTransform: 'none', letterSpacing: 0 }}>tüm servis</span>}
-                </div>
+                <SectionHead id="dtl-db" title="Database" source="db_statement_summary_5m"
+                  badges={opScope && <span className="badge b-gray">tüm servis</span>}
+                  actions={<Link to="/databases/slow-queries">Slow queries →</Link>} />
                 <div className="ov-mb">
                   <LazyMount minHeight={300}>
                     <DBQueriesPanel service={svc}
@@ -638,9 +639,11 @@ function ServiceDetailInner() {
                                     defaultOpen />
                   </LazyMount>
                 </div>
-                <div className="dtl-sech" id="dtl-perf">Performance
-                  {opScope && <span className="badge b-info" style={{ textTransform: 'none', letterSpacing: 0 }}>op kapsamı</span>}
-                </div>
+                {/* v0.10.715 (etüt dilim 1) — Endpoints bölümü: bugüne dek yalnız
+                    Overview'daydı; cluster boyutlu (mockup şerh 4). */}
+                <DetailsEndpointsSection service={svc} range={range} rangeNs={rangeNs} env={env} />
+                <SectionHead id="dtl-perf" title="Performance" source="giriş span'leri"
+                  badges={opScope && <span className="badge b-info">op kapsamı</span>} />
                 {/* v0.9.348 — rootOnly: bu paneller servisin KENDİ giriş
                     noktalarını çiziyor artık, dışarı yaptığı çağrıları değil.
                     Filtresiz hâlde api-gateway'in grafiği
@@ -666,18 +669,16 @@ function ServiceDetailInner() {
                     bölüm de ToC girdisi de gizli. */}
                 <DetailsMetricsSection service={svc} rangeNs={rangeNs}
                   onZoom={handleZoom} onZoomReset={handleZoomReset} />
-                <div className="dtl-sech" id="dtl-latency">Latency
-                  {opScope && <span className="badge b-info" style={{ textTransform: 'none', letterSpacing: 0 }}>op kapsamı</span>}
-                </div>
+                <SectionHead id="dtl-latency" title="Latency" source="spans · heatmap"
+                  badges={opScope && <span className="badge b-info">op kapsamı</span>} />
                 <div className="ov-mb">
                   <LazyMount minHeight={360}>
                     <ServiceLatencyHeatmap service={svc} range={range}
                                            operation={opScope} rootOnly env={env} />
                   </LazyMount>
                 </div>
-                <div className="dtl-sech" id="dtl-runtime">Runtime &amp; rollouts
-                  {opScope && <span className="badge b-gray" style={{ textTransform: 'none', letterSpacing: 0 }}>tüm servis</span>}
-                </div>
+                <SectionHead id="dtl-runtime" title={<>Runtime &amp; rollouts</>} source="spans · service.version"
+                  badges={opScope && <span className="badge b-gray">tüm servis</span>} />
                 {/* Recent rollouts — #deploys anchor preserved so the
                     /deploys "history →" link still scrolls here. */}
                 <div id="deploys">

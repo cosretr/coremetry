@@ -95,3 +95,6 @@ export { SectionUnavailable } from './SectionUnavailable';
 // (sayfa kopyası `right` yuvasını kaybetmişti); terfi `right`lı sürüme.
 export { PanelTitle } from './PanelTitle';
 export { PriorityBadge } from './PriorityBadge';
+
+export { SectionHead } from './SectionHead'; // v0.10.715 — bölüm başlığı atomu
+export type { SectionHeadProps } from './SectionHead';

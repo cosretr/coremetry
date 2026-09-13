@@ -17,6 +17,7 @@ function sectionsFor(showMetrics: boolean): Array<{ id: string; label: string }>
     // v0.10.151 (operatör) — Clusters + Database en üstte; sıra sayfayı izler.
     { id: 'dtl-clusters', label: 'Clusters' },
     { id: 'dtl-db', label: 'Database' },
+    { id: 'dtl-endpoints', label: 'Endpoints' }, // v0.10.715
     { id: 'dtl-perf', label: 'Performance' },
     ...(showMetrics ? [{ id: 'dtl-metrics', label: 'Metrikler' }] : []),
     { id: 'dtl-latency', label: 'Latency' },

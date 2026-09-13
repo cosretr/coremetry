@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react';
+import { SectionHead } from '@/components/ui/SectionHead'; // v0.10.715
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -134,11 +135,8 @@ export function DetailsMetricsSection({ service, rangeNs, onZoom, onZoomReset }:
 
   return (
     <>
-      <div className="dtl-sech" id="dtl-metrics">Metrikler
-        <span className="badge b-gray" style={{ textTransform: 'none', letterSpacing: 0 }}>
-          tüm servis
-        </span>
-      </div>
+      <SectionHead id="dtl-metrics" title="Metrikler" source="metric_points"
+        badges={<span className="badge b-gray" title="metric_points'te operasyon boyutu yok — bölüm daralmaz">tüm servis</span>} />
       <div className="ov-grid ov-cols-2" style={{ marginBottom: 16 }}>
         {cards.map(({ panel, items, loading, errored, empty, rowsCapped }) => (
           <LazyMount key={panel.key} minHeight={240}>
