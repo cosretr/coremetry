@@ -6,10 +6,10 @@ import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatLabel, stripS
 
 describe('stripStat', () => {
   it('varsayılan p95; tanınmayan/boş değer varsayılana düşer', () => {
-    expect(STRIP_STAT_DEFAULT).toBe('p95');
-    expect(parseStripStat(null)).toBe('p95');
-    expect(parseStripStat('')).toBe('p95');
-    expect(parseStripStat('avg')).toBe('p95');
+    expect(STRIP_STAT_DEFAULT).toBe('p50'); // v0.10.725 operatör: p50 varsayılan
+    expect(parseStripStat(null)).toBe('p50');
+    expect(parseStripStat('')).toBe('p50');
+    expect(parseStripStat('avg')).toBe('p50');
     expect(parseStripStat('p50')).toBe('p50');
     expect(parseStripStat('p99')).toBe('p99');
     expect(STRIP_STATS).toEqual(['p50', 'p95', 'p99']);

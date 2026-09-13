@@ -172,8 +172,9 @@ describe('stripScope', () => {
 // seçilebilir istatistik; etiket seçimi söyler, varsayılan p95.
 describe('şerit istatistiği (v0.10.513)', () => {
   const mk = (v: number): SpanMetricSeries[] => [{ groupKey: [], points: [1, 2, 3].map(i => ({ time: (1_700_000_000 + i * 120) * 1e9, value: v })) }];
-  it('varsayılan etiket p95; p50 "median" diye, p99 adıyla', () => {
-    expect(buildVolumeSeries(mk(10), mk(1), mk(42)).series.find(s0 => s0.key === 'rt')!.label).toContain('(p95)');
+  it('varsayılan etiket median (p50, v0.10.725); p95/p99 adıyla', () => {
+    expect(buildVolumeSeries(mk(10), mk(1), mk(42)).series.find(s0 => s0.key === 'rt')!.label).toContain('(median)');
+    expect(buildVolumeSeries(mk(10), mk(1), mk(42), 'traces', 'p95').series.find(s0 => s0.key === 'rt')!.label).toContain('(p95)');
     expect(buildVolumeSeries(mk(10), mk(1), mk(42), 'traces', 'p50').series.find(s0 => s0.key === 'rt')!.label).toContain('(median)');
     expect(buildVolumeSeries(mk(10), mk(1), mk(42), 'traces', 'p99').series.find(s0 => s0.key === 'rt')!.label).toContain('(p99)');
   });

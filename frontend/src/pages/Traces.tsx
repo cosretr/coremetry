@@ -413,7 +413,7 @@ function TracesPageInner() {
   // kalsın") — toggle KALDIRILDI, şerit hep kompakt (130 px): Dynatrace
   // keeps this strip thin because the TABLE is the page.
   // v0.10.513 — yanıt-süresi çizgisinin istatistiği (p50/p95/p99), URL
-  // `?rt=`; varsayılan p95 URL'ye yazılmaz (stripStat.ts).
+  // `?rt=`; varsayılan (p50, v0.10.725) URL'ye yazılmaz (stripStat.ts).
   const [stripStat, setStripStat] = useState<StripStat>(() => parseStripStat(searchParams.get('rt')));
   const [viz, setViz] = useState<'volume' | 'latency'>(() => searchParams.get('viz') === 'latency' ? 'latency' : 'volume');
 

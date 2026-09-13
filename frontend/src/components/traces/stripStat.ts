@@ -11,9 +11,13 @@
 
 export type StripStat = 'p50' | 'p95' | 'p99';
 export const STRIP_STATS: readonly StripStat[] = ['p50', 'p95', 'p99'];
-export const STRIP_STAT_DEFAULT: StripStat = 'p95';
+// v0.10.725 (operatör, 2026-09-13: "histogramda p50 default süre olsun") —
+// varsayılan p95 → p50. 513'ün gerekçesi (median kuyruğu saklar) geçerli
+// ama operatör tercihi gösterimde tipik süre; p95/p99 seçici ve URL ?rt=
+// aynen. p95 yazan eski linkler p95 göstermeye devam eder.
+export const STRIP_STAT_DEFAULT: StripStat = 'p50';
 
-/** URL/ham değer → istatistik; tanınmayan/boş → varsayılan (p95). */
+/** URL/ham değer → istatistik; tanınmayan/boş → varsayılan (p50, v0.10.725). */
 export function parseStripStat(raw: string | null | undefined): StripStat {
   return raw === 'p50' || raw === 'p95' || raw === 'p99' ? raw : STRIP_STAT_DEFAULT;
 }
