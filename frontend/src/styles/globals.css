@@ -3345,6 +3345,9 @@ td > .cell-actions.end { justify-content: flex-end; }
 /* v0.9.978 (D1.2) — `.table-wrap` ile aynı boşluk, aynı gerekçe:
    `thead th` `--bg2` ile opak, gövde şeffaftı. */
 .vt-scroll { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); }
+/* v0.10.721 — 'fill' kipi: flex kolon ebeveynin kalan yüksekliği; min-height:0
+   olmadan flex çocuğu içerik kadar büyür ve ebeveyn kaydırır (iki çubuk). */
+.vt-scroll.is-fill { flex: 1 1 0; min-height: 0; }
 .vt-scroll > table { border-collapse: collapse; }
 .vt-scroll thead { position: sticky; top: 0; z-index: var(--z-sticky-cell); }
 .vt-scroll thead th { background: var(--bg2); }
