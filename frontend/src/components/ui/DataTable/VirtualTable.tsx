@@ -23,15 +23,15 @@ import { DataTableColgroup, DataTableHead, type DataTable } from './DataTable';
 export interface VirtualTableProps<T> {
   dt: DataTable<T>;
   // Pixel height of the scroll viewport. A number or any CSS length.
-  // v0.10.721 — 'fill': kutu, flex KOLON bir ebeveynin kalan yüksekliğini
-  // doldurur (`flex:1; min-height:0`, sınıf `is-fill`), sayfanın tek
-  // kaydırıcısı olur; thead aynı kutuya yapışık kalır. Ebeveyn zinciri
-  // yüksekliği KESİN olmalı (AppShell 100vh → #content → flex kolon), aksi
-  // hâlde kutu içerik kadar büyür ve ebeveyn kaydırır (iki çubuk).
-  height: number | string | 'fill';
-  // v0.10.721 — değişince kutu tepeye döner (sayfa/sıralama değişimi).
-  // Sayfa kaydırırken bu gerekmiyordu; kutu kaydırınca 2. sayfa eski
-  // scrollTop'ta açılırdı.
+  // 'auto' (v0.10.726, Traces): yükseklik = içerik, kutu dikeyde HİÇ
+  // kaydırmaz, sayfa (#content) kaydırır; yatay kaydırma kutuda kalır.
+  // (v0.10.721'in 'fill' kipi 726'da kaldırıldı — operatör test ortamında
+  // gördü: Dynatrace sayfayı kaydırır, kutuyu değil.)
+  height: number | string;
+  // v0.10.721/726 — değişince (mount hariç) liste başa döner: kutu
+  // kaydırıyorsa scrollTop 0; kutu içerik kadarsa (sayfa kaydırır) kutu
+  // görünüme getirilir — "Next"e basan operatör yeni sayfanın BAŞINI görür,
+  // 50 satır yukarı kaydırmaz.
   scrollResetKey?: unknown;
   // Fixed row height in px. Match the real row height (default 36).
   rowHeight?: number;
@@ -86,24 +86,28 @@ export function VirtualTable<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
   // contain:strict yalnız sınırlı (sayısal) yükseklikte anlamlı; 'auto'
-  // yükseklikte içeriği keser. 'fill'de boyut flex'ten gelir: size
-  // containment ebeveyn zinciri bir gün gevşerse kutuyu sessizce 0'a
-  // indirirdi → yalnız layout+paint.
-  const fill = height === 'fill';
-  const contain = typeof height === 'number' ? 'strict' : fill ? 'layout paint' : undefined;
-  // v0.10.721 — sayfa/sıralama değişiminde tepeye dön (yalnız kutu
-  // kaydırırken anlamlı; sayısal/auto yükseklikte de zararsız).
+  // yükseklikte içeriği keser.
+  const contain = typeof height === 'number' ? 'strict' : undefined;
+  // v0.10.721/726 — sayfa/sıralama değişiminde başa dön (mount'ta değil:
+  // ilk açılışta sayfa zaten tepede, kutuya kaydırmak şeridi gizlerdi).
+  const resetSeen = useRef(false);
   useEffect(() => {
     const el = parentRef.current;
     if (!el || scrollResetKey === undefined) return;
+    if (!resetSeen.current) { resetSeen.current = true; return; }
     if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0 }); else el.scrollTop = 0;
+    // Kutu kendisi dikey kaydırmıyorsa (yükseklik = içerik) sayfa kaydırıcısını
+    // kutunun başına getir. jsdom scrollIntoView taşımaz → koruma.
+    if (el.scrollHeight <= el.clientHeight + 1 && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'start' });
+    }
   }, [scrollResetKey]);
 
   return (
     <div
       ref={parentRef}
-      className={['vt-scroll', fill ? 'is-fill' : '', className].filter(Boolean).join(' ')}
-      style={{ height: fill ? undefined : height, overflow: 'auto', position: 'relative', contain }}>
+      className={['vt-scroll', className].filter(Boolean).join(' ')}
+      style={{ height, overflow: 'auto', position: 'relative', contain }}>
       <table style={{ tableLayout: 'fixed', width: '100%' }} aria-rowcount={rows.length}>
         <DataTableColgroup dt={dt} leading={leading} />
         <DataTableHead dt={dt} leading={leadingHead} />

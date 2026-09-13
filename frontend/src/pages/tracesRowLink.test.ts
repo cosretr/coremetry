@@ -92,8 +92,8 @@ describe('/traces satırı gerçek bir link', () => {
     const c = css();
     expect(c).toMatch(/\.vt-scroll tbody td\.row-cell > \.row-link \{[^}]*height: 36px;[^}]*line-height: 18px;/);
     expect(traces()).toContain('rowHeight={36}');
-    // v0.10.722 — kutu kalan yüksekliği doldurur (tek kaydırıcı); formül gitti.
-    expect(traces()).toContain('height="fill"');
+    // v0.10.722/726 — yükseklik = içerik ('auto'), formül gitti; sayfa kaydırır.
+    expect(traces()).toContain('height="auto"');
     expect(traces()).not.toContain('44 + displayRows.length * 36');
   });
 

@@ -112,32 +112,32 @@ function VProbe({ rows }: { rows: Row[] }) {
   return <VirtualTable<Row> dt={dt} height={200} renderRow={r => <td>{r.name}</td>} />;
 }
 
-function VFill({ rows, resetKey }: { rows: Row[]; resetKey?: unknown }) {
-  const dt = useDataTable<Row>({ storageKey: 'contract-vt-fill', columns: COLS, rows });
-  return <VirtualTable<Row> dt={dt} height="fill" scrollResetKey={resetKey} renderRow={r => <td>{r.name}</td>} />;
+function VAuto({ rows, resetKey }: { rows: Row[]; resetKey?: unknown }) {
+  const dt = useDataTable<Row>({ storageKey: 'contract-vt-auto', columns: COLS, rows });
+  return <VirtualTable<Row> dt={dt} height="auto" scrollResetKey={resetKey} renderRow={r => <td>{r.name}</td>} />;
 }
 
 describe('VirtualTable', () => {
-  // v0.10.721 — 'fill': inline yükseklik yok, is-fill sınıfı (flex:1;
-  // min-height:0 CSS'te), size containment yok; scrollResetKey değişince
-  // kutu tepeye döner.
-  it("height='fill' → is-fill sınıfı, inline height yok, contain size değil", () => {
-    const el = render(<VFill rows={ROWS} />);
+  // v0.10.726 — 'auto': yükseklik içerik, contain yok (strict içeriği
+  // keserdi), sınıf yalnız vt-scroll; scrollResetKey mount'ta dokunmaz,
+  // sonraki değişimde scrollTop 0.
+  it("height='auto' → inline height auto, contain yok, ek sınıf yok", () => {
+    const el = render(<VAuto rows={ROWS} />);
     const box = el.querySelector('.vt-scroll') as HTMLDivElement;
-    expect(box.classList.contains('is-fill')).toBe(true);
-    expect(box.style.height).toBe('');
+    expect(box.className).toBe('vt-scroll');
+    expect(box.style.height).toBe('auto');
     expect(box.style.overflow).toBe('auto');
-    expect(box.style.contain).not.toContain('strict');
-    expect(box.style.contain).not.toContain('size');
+    expect(box.style.contain).toBe('');
     const num = render(<VProbe rows={ROWS} />);
-    expect((num.querySelector('.vt-scroll') as HTMLDivElement).classList.contains('is-fill')).toBe(false);
+    expect((num.querySelector('.vt-scroll') as HTMLDivElement).style.contain).toBe('strict');
   });
-  it('scrollResetKey değişince scrollTop 0', () => {
-    const el = render(<VFill rows={ROWS} resetKey={1} />);
+  it('scrollResetKey: mount dokunmaz, değişince scrollTop 0', () => {
+    const el = render(<VAuto rows={ROWS} resetKey={1} />);
     const box = el.querySelector('.vt-scroll') as HTMLDivElement;
-    // jsdom'da scrollTo yok → bileşen scrollTop'a düşer; burada da onu ölçüyoruz.
     box.scrollTop = 120;
-    act(() => { root!.render(<MemoryRouter><VFill rows={ROWS} resetKey={2} /></MemoryRouter>); });
+    act(() => { root!.render(<MemoryRouter><VAuto rows={ROWS} resetKey={1} /></MemoryRouter>); });
+    expect(box.scrollTop).toBe(120); // aynı anahtar → dokunma
+    act(() => { root!.render(<MemoryRouter><VAuto rows={ROWS} resetKey={2} /></MemoryRouter>); });
     expect(box.scrollTop).toBe(0);
   });
   it('aria-rowcount basar; boş satır colSpan görünür kolon sayısı', () => {
