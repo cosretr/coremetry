@@ -2944,6 +2944,7 @@ button.accent.copied {
    çizgi, sağda meta/eylem). Çizgi ::after yerine kendi elemanı ki sağ
    slotlar çizginin SONRASINDA dursun. */
 .sec-head::after { content: none; }
+.sec-head .sec-head__title { white-space: nowrap; }
 .sec-head .sec-head__rule { flex: 1; border-top: 1px solid var(--border); }
 .sec-head .sec-head__src { text-transform: none; letter-spacing: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; font-size: 10.5px; }
 .sec-head .badge { text-transform: none; letter-spacing: 0; }
