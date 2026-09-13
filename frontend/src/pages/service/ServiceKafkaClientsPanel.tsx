@@ -6,6 +6,7 @@
 // bu panel kendi verisiyle çizilir. Metrik yoksa tek satır soluk not.
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { SectionHead } from '@/components/ui/SectionHead'; // v0.10.718
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal'; // v0.10.554
 import { StatTile } from '@/components/ui/StatTile';
 import { Spinner } from '@/components/Spinner';
@@ -44,22 +45,22 @@ export function ServiceKafkaClientsPanel({ service, range, onZoom, onZoomReset }
   const sync = `infra:${service}`;
   return (
     <section className="kc-sec" aria-label="Kafka client (metrik)" style={{ marginTop: 14 }}>
-      <h3 style={{ fontSize: 13, margin: '4px 0 8px' }}>
-        Kafka client · {service}
-        <span className="badge b-gray" style={{ marginLeft: 8 }} title={data.note}>
-          {data.source} · OTel Java agent
-        </span>
-        {data.envAmbiguous && (
-          <span className="badge b-warn" style={{ marginLeft: 6 }}
-            title="env filtresi bu depoda ifade edilemiyor; seriler TÜM ortamları kapsıyor.">
-            env uygulanmadı
-          </span>
-        )}
-        <Button variant="secondary" size="sm" style={{ marginLeft: 8 }} onClick={() => setAlertOpen(true)}
+      {/* v0.10.718 — ortak bölüm başlığı atomu (Infra'nın diğer bölümleriyle
+          aynı anatomi: ad · kaynak rozeti · rozetler · sağda eylem). */}
+      <SectionHead id="infra-kafka" title="Kafka client" source={`${data.source} · OTel Java agent`}
+        badges={<>
+          <span className="badge b-gray mono">{service}</span>
+          {data.envAmbiguous && (
+            <span className="badge b-warn"
+              title="env filtresi bu depoda ifade edilemiyor; seriler TÜM ortamları kapsıyor.">
+              env uygulanmadı
+            </span>
+          )}
+        </>}
+        actions={<Button variant="secondary" size="sm" onClick={() => setAlertOpen(true)}
           title="Bu servisin Kafka istemcisi için alarm kuralı (lag ya da gönderim hatası)">
           Alarm kur
-        </Button>
-      </h3>
+        </Button>} />
       {alertOpen && (
         <KafkaAlertModal open onClose={() => setAlertOpen(false)} target={{ service }} />
       )}

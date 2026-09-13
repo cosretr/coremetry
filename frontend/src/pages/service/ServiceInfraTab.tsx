@@ -1,30 +1,81 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { thanosMaxDataPoints } from '@/lib/chartStep';
 import { clampSuffix } from '@/lib/thanosWindow';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Card, LinkButton, Chip } from '@/components/ui';
+import { LinkButton, IconButton, SectionHead, Button } from '@/components/ui';
+import { StatTile } from '@/components/ui/StatTile';
 import { Spinner, Empty } from '@/components/Spinner';
+import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
 import { MetricArea } from '@/pages/clusters/MetricArea';
 import { servicePodRegex } from '@/pages/clusters/podWorkload';
-import { promQuote } from '@/pages/clusters/promQuote';
-import { fmtCores, restartColor } from '@/pages/clusters/thresholds';
-import { fmtBytes, fmtNum } from '@/lib/utils';
+import { fmtCores } from '@/pages/clusters/thresholds';
+import { fmtBytes, fmtNum, fmtAgoNs } from '@/lib/utils';
+import { rowActivation } from '@/lib/a11y';
+import { entityHref } from '@/lib/entityHref';
+import { tracesPivotHref } from '@/lib/pivotHref';
 import { useServicePods } from '@/pages/service/useServicePods';
-import { useEntityEnabled } from '@/lib/queries';
-import { Link } from 'react-router-dom';
+import { useEntityEnabled, useClusters } from '@/lib/queries';
+import { summarizeInfraClusters, podTotals, pctOfLimit, clusterStatus, type InfraClusterRow } from './infraClusters';
+import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange } from '@/lib/types';
 import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.552
 
 // ServiceInfraTab — servis detayının Infrastructure sekmesi. CLUSTER-SEVİYESİ
-// altyapı: eşleşme notu, cluster çipleri (?icluster), KPI satırı, CPU/Mem
-// Total/By-pod grafikleri (MetricArea), servis-kapsamlı PromQL.
+// altyapı: Clusters tablosu (seçili satır = kapsam, ?icluster), KPI şeridi
+// (StatTile), CPU/Mem Total/By-pod grafikleri (MetricArea), Router/HAProxy,
+// Kafka client.
 //
 // v0.9.158 (operatör "Metrics→Pods, infra pod'ları oraya, JVM panellerde"):
 // pod listesi (açılır grup) + JVM/JBoss JMX panelleri Pods sekmesine TAŞINDI
 // (ServicePodsTab). Pod-envanteri paylaşılan useServicePods hook'undan (Pods
 // ile aynı veri). KPI "Pods"/"Restarts" kartları artık Pods sekmesine götürür.
+//
+// v0.10.718 (servis sekmeleri etüdü, mockup 3b03fe22 Infra şerh 1-4; operatör
+// onayı 2026-09-13; multi-cluster + entity ilkeleri):
+// - Cluster ÇİPLERİ → TABLO (tablolar > kartlar): Cluster · Namespace · Pods ·
+//   CPU · Memory · Restarts · Durum · eylemler (Pods →, Traces →). Satır
+//   tıkı kapsamı seçer (?icluster aynen), cluster hücresi cluster
+//   entity'sine gider. Topbar ?cluster= bir Thanos cluster adıyla birebir
+//   eşleşiyorsa o da kapsam sayılır (rozet kaynağını söyler).
+// - Eşleşme cümlesi + tazelik + ↻ bölüm başlığında (SectionHead atomu).
+// - KPI'lar Kafka şeridiyle AYNI StatTile atomu; CPU/Mem tile'ında limit
+//   oranı (bilinmiyorsa "limit bilinmiyor", %0 uydurulmaz); Restarts
+//   toplam + en çok restart eden pod; restart bilinmiyorsa "—".
+// - Grafik hatası YERİNDE ("okunamadı · yeniden dene"); bölüm sessizce
+//   kaybolmaz. Metrik ailesi yoksa (boş seri) görünmez-düşme korunur.
+// - HAProxy üçlüsü 3 sütun (2 sütunlu ızgarada yarım satır boş kalıyordu).
+// Grafiklerin "Toplam / pod başına" ve cluster başına seri kipi dilim 2.
+
+const CL_COLS: DataTableColumn<InfraClusterRow>[] = [
+  { id: 'cluster',  label: 'Cluster',     sortValue: r => r.cluster, naturalDir: 'asc', flex: true, minWidth: 150 },
+  { id: 'ns',       label: 'Namespace',   sortValue: r => r.namespace, naturalDir: 'asc', width: 140 },
+  { id: 'pods',     label: 'Pods',        sortValue: r => r.pods, numeric: true, width: 90 },
+  { id: 'cpu',      label: 'CPU (cores)', sortValue: r => r.cpuCores, numeric: true, width: 104 },
+  { id: 'mem',      label: 'Memory',      sortValue: r => r.memBytes, numeric: true, width: 100 },
+  { id: 'restarts', label: 'Restarts',    sortValue: r => r.restarts ?? -1, numeric: true, width: 86 },
+  { id: 'status',   label: 'Durum',       sortValue: r => (r.phaseKnown ? r.failing : -1), width: 140 },
+  { id: 'act',      label: '',            width: 150 },
+];
+
+// ChartSlot — v0.10.718: okuma hatası grafiğin YERİNDE görünür; MetricArea
+// boş seride null döner (metrik ailesi yoksa görünmez-düşme bilinçli).
+function ChartSlot({ q, children }: {
+  q: { isError: boolean; error: unknown; refetch: () => unknown };
+  children: React.ReactNode;
+}) {
+  if (q.isError) {
+    return (
+      <Empty compact icon="⚠" title="Grafik okunamadı"
+        action={<Button variant="secondary" size="sm" onClick={() => { void q.refetch(); }}>Yeniden dene</Button>}>
+        Bu bir boş sonuç değil, okuma hatası: {String(q.error)}
+      </Empty>
+    );
+  }
+  return <>{children}</>;
+}
+
 export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   service: string;
   range: TimeRange;
@@ -35,21 +86,28 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   const [params, setParams] = useSearchParams();
   const {
     metaQ, ns, deploy, matched, rows, clustersWithPods,
-    effNs, effDeploy, cFrom, cTo, clamped,
+    effNs, effDeploy, from, to, cFrom, cTo, clamped,
     sourcesPending, noClusters, podsBlocking,
+    podsSettled, podsTotal, podErrors, truncatedClusters,
+    podsUpdatedAt, podsFetching, refetchPods,
   } = useServicePods(service, range);
 
-  // ?icluster= — çip filtresi (URL kaynak-of-truth, replace:true).
+  // ?icluster= — satır seçimi (URL kaynak-of-truth, replace:true). v0.10.718:
+  // Topbar ?cluster= Thanos cluster adıyla birebir eşleşiyorsa kapsam odur
+  // (span cluster adı ile Thanos adı her kurulumda aynı olmayabilir; eşleşmeyen
+  // ad sessizce yok sayılmaz, rozet "Topbar" der yalnız eşleşince).
   const icluster = params.get('icluster') ?? '';
+  const topbarCluster = params.get('cluster') ?? '';
+  const effCluster = icluster || (clustersWithPods.includes(topbarCluster) ? topbarCluster : '');
   const setICluster = (c: string) => setParams(prev => {
     const next = new URLSearchParams(prev);
     if (c) next.set('icluster', c); else next.delete('icluster');
     return next;
   }, { replace: true });
-  const visRows = icluster ? rows.filter(r => r.cluster === icluster) : rows;
+  const visRows = effCluster ? rows.filter(r => r.cluster === effCluster) : rows;
 
-  // Grafikler aktif çipin cluster'ını izler (çip yoksa ilk eşleşen).
-  const chartCluster = icluster || clustersWithPods[0] || '';
+  // Grafikler kapsamın cluster'ını izler (kapsam yoksa ilk eşleşen).
+  const chartCluster = effCluster || clustersWithPods[0] || '';
   // v0.9.72 — CPU/Mem default pod-bazlı (asıl soru "hangi pod sıcak").
   const [cpuByPod, setCpuByPod] = useState(true);
   const [memByPod, setMemByPod] = useState(true);
@@ -94,6 +152,23 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
     (hap2xxQ.data?.series?.length ?? 0) > 0 ||
     (hap5xxQ.data?.series?.length ?? 0) > 0 ||
     (hapLatQ.data?.series?.length ?? 0) > 0;
+  const haproxyErr = hap2xxQ.isError || hap5xxQ.isError || hapLatQ.isError;
+
+  // v0.10.718 — Traces → satır eylemi yalnız Thanos cluster adı span'lerin
+  // cluster adıyla da görülüyorsa (aksi hâlde boş /traces'e götürürdü).
+  const spanClustersQ = useClusters(from, to);
+  const spanClusters = spanClustersQ.data ?? [];
+
+  // Cluster tablosu (useDataTable; sıralama + genişlik kalıcı).
+  const clusterRows = useMemo(() => summarizeInfraClusters(rows, clustersWithPods),
+    // rows kimliği her render değişir (useServicePods memo'suz, bilinçli);
+    // toplamlar ucuz — satır sayısı cluster sayısı kadar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows.length, clustersWithPods.join('|'), podsUpdatedAt]);
+  const dt = useDataTable<InfraClusterRow>({
+    storageKey: 'svc-infra-clusters', columns: CL_COLS, rows: clusterRows,
+    initialSort: { id: 'cpu', dir: 'desc' },
+  });
 
   // KPI kartları (OpenShift konsol deseni): CPU/Mem → kendi grafiğine kaydırır;
   // Pods/Restarts → pod listesi artık Pods sekmesinde olduğundan oraya götürür.
@@ -112,22 +187,6 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
     next.set('tab', 'pods');
     return next;
   }, { replace: true }); // setTab/setICluster deseni — history kirletme (v0.9.159 review)
-  const chartClick = (key: 'cpu' | 'mem') => ({
-    role: 'button' as const, tabIndex: 0,
-    onClick: () => scrollToChart(key),
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToChart(key); }
-    },
-    style: { cursor: 'pointer' },
-  });
-  const podsClick = {
-    role: 'button' as const, tabIndex: 0,
-    onClick: goToPods,
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToPods(); }
-    },
-    style: { cursor: 'pointer' },
-  };
   const flashStyle = (key: string): React.CSSProperties => ({
     outline: flash === key ? '2px solid var(--accent)' : '2px solid transparent',
     outlineOffset: 4, borderRadius: 8, transition: 'outline-color .35s',
@@ -142,6 +201,13 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   const entityHint = entityEnabled
     ? <> Entity katmanı (span'lerin gördüğü pod'lar) <Link to={podsTabHref} className="sec">Pods sekmesinde</Link>.</>
     : null;
+  // Pods → satır eylemi: sayfanın mevcut parametreleriyle (range korunur).
+  const podsTabWithParams = (() => {
+    const n = new URLSearchParams(params); n.set('tab', 'pods'); return `/service?${n.toString()}`;
+  })();
+  const tracesFor = (c: string) => tracesPivotHref({
+    window: { fromNs: from, toNs: to }, view: 'list', rootOnly: false, service, cluster: c,
+  });
 
   // ── Kapılar (hook'lardan SONRA) ──
   // v0.10.552 — Thanos gövdesi (erken dönüşler dahil) ayrı bir kapanışta; Kafka
@@ -167,126 +233,193 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
       </Empty>;
     }
 
-    const phaseKnown = visRows.some(r => r.phase);
-    const running = visRows.filter(r => r.phase === 'Running').length;
-    const cpuSum = visRows.reduce((a, r) => a + r.cpuCores, 0);
-    const memSum = visRows.reduce((a, r) => a + r.memBytes, 0);
-    const restartSum = visRows.reduce((a, r) => a + (r.restarts ?? 0), 0);
-    const kpiVal = { fontSize: 26, fontWeight: 700 } as const;
-    const kpiSub = { fontSize: 11, color: 'var(--text3)', marginTop: 4 } as const;
+    const kpi = podTotals(visRows);
+    const cpuPct = pctOfLimit(kpi.cpuCores, kpi.cpuLimitCores);
+    const memPct = pctOfLimit(kpi.memBytes, kpi.memLimitBytes);
+    const restartTone = kpi.restarts != null && kpi.restarts > 8 ? 'err' : kpi.restarts != null && kpi.restarts > 2 ? 'warn' : undefined;
+    const ago = podsUpdatedAt ? fmtAgoNs(podsUpdatedAt * 1e6) : '';
+    const chartsVisible = cpuTrendQ.isError || memTrendQ.isError
+      || (cpuTrendQ.data?.series?.length ?? 0) > 0 || (memTrendQ.data?.series?.length ?? 0) > 0;
 
     return (
       <>
-        {/* Drill breadcrumb — All clusters › cluster, ?icluster'dan (çip filtresi). */}
-        {icluster && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12, marginBottom: 10 }}>
-            <LinkButton title="Clear cluster filter" onClick={() => setICluster('')}>
-              All clusters
-            </LinkButton>
-            <span style={{ color: 'var(--text3)' }}>›</span>
-            <span className="mono" style={{ color: 'var(--text)' }}>{icluster}</span>
+        {/* ── Clusters: tablo = kapsam seçimi (v0.10.718, çipler kaldırıldı) ── */}
+        <SectionHead id="infra-clusters" title="Clusters" source="Thanos · kube-state"
+          badges={<>
+            {ns && deploy ? (
+              <span className="badge b-gray mono" title="Eşleşme: span'lerden gelen k8s metadata (namespace + deployment)">
+                k8s.namespace={ns} · {deploy}
+              </span>
+            ) : (
+              <span className="badge b-warn mono" title="Span'lerde k8s metadata yok; pod adı kalıbıyla eşleşme">
+                pod adı: {servicePodRegex(service, deploy)}{effNs ? ` · ns:${effNs}` : ''}
+              </span>
+            )}
+            {effCluster && (
+              <span className="badge b-info mono" title={icluster ? 'Satır seçimi (?icluster)' : 'Topbar Cluster seçicisi (?cluster)'}>
+                kapsam: {effCluster}{icluster ? '' : ' · Topbar'}
+              </span>
+            )}
+            {icluster && <LinkButton title="Cluster kapsamını kaldır" onClick={() => setICluster('')}>Tümü</LinkButton>}
+            {truncatedClusters.length > 0 && (
+              <span className="badge b-warn" title={`Sunucu topk tavanına dayanan cluster'lar: ${truncatedClusters.join(', ')} — sakin pod'lar listede olmayabilir.`}>
+                {truncatedClusters.length} cluster kesildi
+              </span>
+            )}
+            {podErrors.length > 0 && (
+              <span className="badge b-err" title={`Yanıt vermeyen: ${podErrors.join(', ')}`}>
+                {podErrors.length} cluster yanıt vermedi
+              </span>
+            )}
+          </>}
+          meta={<>{podsSettled} / {podsTotal} cluster tarandı{ago ? ` · ${ago}` : ''}</>}
+          actions={<>
+            <ResetLayoutButton dt={dt} />
+            <IconButton size="sm" icon={<span aria-hidden="true">↻</span>} aria-label="Pod envanterini yenile"
+              title="Tüm cluster'ları yeniden oku" disabled={podsFetching} onClick={refetchPods} />
+          </>} />
+        <div className="table-wrap is-fit" style={{ marginBottom: 14 }}>
+          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.map((r, i) => {
+                const rp = dt.rowProps(i);
+                const sel = effCluster === r.cluster;
+                const st = clusterStatus(r);
+                return (
+                  <tr key={r.cluster} {...rp}
+                      className={[rp.className, sel ? 'row-selected' : ''].filter(Boolean).join(' ') || undefined}
+                      style={{ cursor: 'pointer' }}
+                      title={sel ? 'Kapsamı kaldırmak için tıkla' : 'Bu cluster\'a daralt'}
+                      {...rowActivation(() => setICluster(sel ? '' : r.cluster))}>
+                    <td className="mono" onClick={e => e.stopPropagation()}>
+                      <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })}
+                        className="row-link" title="Cluster detayı" style={{ fontWeight: 600 }}>{r.cluster}</Link>
+                    </td>
+                    <td className="mono">{r.namespace || '—'}</td>
+                    <td className="num mono">{r.phaseKnown ? `${r.running} / ${r.pods}` : fmtNum(r.pods)}</td>
+                    <td className="num mono">{fmtCores(r.cpuCores)}</td>
+                    <td className="num mono">{fmtBytes(r.memBytes)}</td>
+                    <td className="num mono" title={r.restarts == null ? 'kube-state-metrics görünmüyor' : undefined}>
+                      {r.restarts == null ? '—' : fmtNum(r.restarts)}
+                    </td>
+                    <td><span className={`badge b-${st.tone}`}>{st.text}</span></td>
+                    <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                      <Link to={podsTabWithParams} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}
+                        title="Pods sekmesi (cluster'a göre gruplu)">Pods →</Link>
+                      {spanClusters.includes(r.cluster) && (
+                        <Link to={tracesFor(r.cluster)} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}
+                          title="Bu cluster'ın span'leri">Traces →</Link>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── KPI şeridi: StatTile (Kafka şeridiyle aynı atom, v0.10.718) ── */}
+        <div className="stat-grid">
+          <div className="stat-click" {...rowActivation<HTMLDivElement>(goToPods)} title="Pods sekmesine git">
+            <StatTile label={kpi.phaseKnown ? 'Running pods' : 'Pods'}>
+              {kpi.phaseKnown ? `${fmtNum(kpi.running)} / ${fmtNum(kpi.pods)}` : fmtNum(kpi.pods)}
+              <div className="stat-sub">{kpi.phaseKnown
+                ? (kpi.pods - kpi.running > 0 ? `${fmtNum(kpi.pods - kpi.running)} not running` : 'all pods healthy')
+                : 'status unknown — kube-state-metrics not visible'}</div>
+            </StatTile>
           </div>
-        )}
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
-          {ns && deploy ? (
-            <>Pods matched to <span className="mono">{service}</span> via{' '}
-            k8s.namespace=<span className="mono">{ns}</span> · <span className="mono">{deploy}</span></>
-          ) : (
-            <>Pods matched to <span className="mono">{service}</span> by pod name{' '}
-            (<span className="mono">{service}-*</span>{effNs ? <> · ns:<span className="mono">{effNs}</span></> : null} — no k8s metadata from spans)</>
-          )}{' '}
-          across {clustersWithPods.length} cluster{clustersWithPods.length > 1 ? 's' : ''}
-        </div>
-
-        {/* Cluster çipleri — tıklanınca grafikler o cluster'a daralır. */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          {clustersWithPods.map(c => {
-            const rs = rows.filter(r => r.cluster === c);
-            const failing = rs.filter(r =>
-              r.phase && r.phase !== 'Running' && r.phase !== 'Succeeded').length;
-            const active = icluster === c;
-            return (
-              <Chip key={c} active={active}
-                onClick={() => setICluster(active ? '' : c)}
-                title={active ? 'Click to clear the cluster filter' : 'Filter to this cluster'}>
-                <span className="mono" style={{ fontWeight: 600 }}>{c}</span>
-                <span style={{ color: 'var(--text3)' }}>{rs.length} pods · {fmtCores(rs.reduce((a, r) => a + r.cpuCores, 0))} CPU</span>
-                {failing > 0 && <span className="badge b-err">{failing} failing</span>}
-              </Chip>
-            );
-          })}
-        </div>
-
-        {/* KPI satırı: Running / CPU / Memory / Restarts. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
-          <Card density="tight" header={phaseKnown ? 'Running pods' : 'Pods'} {...podsClick}
-            title="Go to the Pods tab">
-            <div className="mono" style={{ ...kpiVal, color: phaseKnown ? 'var(--ok)' : undefined }}>
-              {fmtNum(phaseKnown ? running : visRows.length)}
-            </div>
-            <div style={kpiSub}>{phaseKnown
-              ? (visRows.length - running > 0 ? `${fmtNum(visRows.length - running)} not running` : 'all pods healthy')
-              : 'status unknown — kube-state-metrics not visible on this cluster'}</div>
-          </Card>
-          <Card density="tight" header="CPU used (cores)" {...chartClick('cpu')} title="Go to the CPU chart">
-            <div className="mono" style={kpiVal}>{visRows.length ? fmtCores(cpuSum) : '—'}</div>
-          </Card>
-          <Card density="tight" header="Memory used" {...chartClick('mem')} title="Go to the memory chart">
-            <div className="mono" style={kpiVal}>{visRows.length ? fmtBytes(memSum) : '—'}</div>
-          </Card>
-          <Card density="tight" header="Restarts (total)" {...podsClick}
-            title="Go to the Pods tab">
-            <div className="mono" style={{ ...kpiVal, color: restartColor(restartSum) }}>{fmtNum(restartSum)}</div>
-          </Card>
-        </div>
-
-        {/* CPU/Mem area — MetricArea (Clusters ile ortak), By pod toggle. */}
-        {((cpuTrendQ.data?.series?.length ?? 0) > 0 || (memTrendQ.data?.series?.length ?? 0) > 0) && (
-          <div className="grid-2" style={{ display: 'grid', gap: 14, marginTop: 14 }}>
-            <div ref={cpuChartRef} style={flashStyle('cpu')}>
-              <MetricArea title={`CPU (cores) · ${chartCluster}${clampSuffix(clamped)}`} byLabel="By pod"
-                by={cpuByPod} onToggle={setCpuByPod} onZoom={onZoom} onZoomReset={onZoomReset}
-                syncKey={`infra:${service}`} totalSeries={cpuTrendQ.data?.totalSeries}
-                labelTrimPrefix={effDeploy}
-                series={cpuTrendQ.data?.series} seriesName="CPU" />
-            </div>
-            <div ref={memChartRef} style={flashStyle('mem')}>
-              <MetricArea title={`Memory · ${chartCluster}${clampSuffix(clamped)}`} byLabel="By pod"
-                by={memByPod} onToggle={setMemByPod} onZoom={onZoom} onZoomReset={onZoomReset}
-                syncKey={`infra:${service}`} totalSeries={memTrendQ.data?.totalSeries}
-                labelTrimPrefix={effDeploy}
-                series={memTrendQ.data?.series} seriesName="Memory" unit="bytes" />
-            </div>
+          <div className="stat-click" {...rowActivation<HTMLDivElement>(() => scrollToChart('cpu'))} title="CPU grafiğine git">
+            <StatTile label="CPU used (cores)" tone={cpuPct != null && cpuPct >= 90 ? 'err' : cpuPct != null && cpuPct >= 75 ? 'warn' : undefined}>
+              {visRows.length ? fmtCores(kpi.cpuCores) : '—'}
+              <div className="stat-sub">{kpi.cpuLimitCores != null
+                ? `limit ${fmtCores(kpi.cpuLimitCores)} · %${cpuPct}`
+                : 'limit bilinmiyor'}</div>
+            </StatTile>
           </div>
+          <div className="stat-click" {...rowActivation<HTMLDivElement>(() => scrollToChart('mem'))} title="Memory grafiğine git">
+            <StatTile label="Memory used" tone={memPct != null && memPct >= 90 ? 'err' : memPct != null && memPct >= 75 ? 'warn' : undefined}>
+              {visRows.length ? fmtBytes(kpi.memBytes) : '—'}
+              <div className="stat-sub">{kpi.memLimitBytes != null
+                ? `limit ${fmtBytes(kpi.memLimitBytes)} · %${memPct}`
+                : 'limit bilinmiyor'}</div>
+            </StatTile>
+          </div>
+          <div className="stat-click" {...rowActivation<HTMLDivElement>(goToPods)} title="Pods sekmesine git">
+            <StatTile label="Restarts (toplam)" tone={restartTone}>
+              {kpi.restarts == null ? '—' : fmtNum(kpi.restarts)}
+              <div className="stat-sub">{kpi.restarts == null
+                ? 'kube-state-metrics görünmüyor'
+                : kpi.topRestart && kpi.topRestart.restarts > 0
+                  ? <>en çok: <span className="mono">{kpi.topRestart.pod}</span> · {fmtNum(kpi.topRestart.restarts)}</>
+                  : 'restart yok'}</div>
+            </StatTile>
+          </div>
+        </div>
+
+        {/* ── Kaynak kullanımı: MetricArea (Clusters ile ortak), By pod toggle;
+            hata yerinde (ChartSlot). Toplam/cluster başına kipi dilim 2. ── */}
+        {chartsVisible && (
+          <>
+            <SectionHead id="infra-resources" title="Kaynak kullanımı" source="Thanos · deploy-trend"
+              badges={<span className="badge b-gray mono">{chartCluster}{clampSuffix(clamped)}</span>}
+              actions={<Link to={podsTabWithParams} title="Pod başına kırılım Pods sekmesinde">Pod başına → Pods</Link>} />
+            <div className="grid-2" style={{ display: 'grid', gap: 14 }}>
+              <div ref={cpuChartRef} style={flashStyle('cpu')}>
+                <ChartSlot q={cpuTrendQ}>
+                  <MetricArea title={`CPU (cores) · ${chartCluster}${clampSuffix(clamped)}`} byLabel="By pod"
+                    by={cpuByPod} onToggle={setCpuByPod} onZoom={onZoom} onZoomReset={onZoomReset}
+                    syncKey={`infra:${service}`} totalSeries={cpuTrendQ.data?.totalSeries}
+                    labelTrimPrefix={effDeploy}
+                    series={cpuTrendQ.data?.series} seriesName="CPU" />
+                </ChartSlot>
+              </div>
+              <div ref={memChartRef} style={flashStyle('mem')}>
+                <ChartSlot q={memTrendQ}>
+                  <MetricArea title={`Memory · ${chartCluster}${clampSuffix(clamped)}`} byLabel="By pod"
+                    by={memByPod} onToggle={setMemByPod} onZoom={onZoom} onZoomReset={onZoomReset}
+                    syncKey={`infra:${service}`} totalSeries={memTrendQ.data?.totalSeries}
+                    labelTrimPrefix={effDeploy}
+                    series={memTrendQ.data?.series} seriesName="Memory" unit="bytes" />
+                </ChartSlot>
+              </div>
+            </div>
+          </>
         )}
 
         {/* v0.9.534 — Router / HAProxy: namespace'in route'ları, router
             gözünden. Seri adı = route; 2xx trafiğin kendisi, yokluğu da
-            sinyal (operatör onaylı üçlü: 2xx + 5xx + gecikme). */}
-        {haproxyAny && (
-          <div style={{ marginTop: 14 }}>
-            <h3 style={{ fontSize: 13, margin: '4px 0 8px' }}>
-              Router / HAProxy · {effNs}
-              <span className="badge b-gray" style={{ marginLeft: 8 }}
+            sinyal (operatör onaylı üçlü: 2xx + 5xx + gecikme).
+            v0.10.718 — üç grafik üç sütun; başlık atomu; hata yerinde. */}
+        {(haproxyAny || haproxyErr) && (
+          <>
+            <SectionHead id="infra-haproxy" title="Router / HAProxy" source="Thanos · router haproxy_backend_*"
+              badges={<span className="badge b-gray mono"
                 title="Kaynak: OpenShift router'ının (HAProxy) backend metrikleri, Thanos üzerinden. Namespace kapsamlı — servisin route'u değil, namespace'in tüm route'ları.">
-                Thanos · router
-              </span>
-            </h3>
-            <div className="grid-2" style={{ display: 'grid', gap: 14 }}>
-              <MetricArea title={`HTTP 2xx (req/s) · ${chartCluster}${clampSuffix(clamped)}`}
-                subtitle="haproxy_backend_http_responses_total{code=2xx} · by route"
-                series={hap2xxQ.data?.series} seriesName="2xx"
-                onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
-              <MetricArea title={`HTTP 5xx (req/s) · ${chartCluster}${clampSuffix(clamped)}`}
-                subtitle="haproxy_backend_http_responses_total{code=5xx} · by route"
-                series={hap5xxQ.data?.series} seriesName="5xx"
-                onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
-              <MetricArea title={`Backend gecikme (ms) · ${chartCluster}${clampSuffix(clamped)}`}
-                subtitle="haproxy_backend_http_average_response_latency_milliseconds · by route"
-                series={hapLatQ.data?.series} seriesName="latency" unit="ms"
-                onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
+                ns: {effNs} · {chartCluster}
+              </span>} />
+            <div className="grid-3" style={{ display: 'grid', gap: 14 }}>
+              <ChartSlot q={hap2xxQ}>
+                <MetricArea title={`HTTP 2xx (req/s)${clampSuffix(clamped)}`}
+                  subtitle="haproxy_backend_http_responses_total{code=2xx} · by route"
+                  series={hap2xxQ.data?.series} seriesName="2xx"
+                  onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
+              </ChartSlot>
+              <ChartSlot q={hap5xxQ}>
+                <MetricArea title={`HTTP 5xx (req/s)${clampSuffix(clamped)}`}
+                  subtitle="haproxy_backend_http_responses_total{code=5xx} · by route"
+                  series={hap5xxQ.data?.series} seriesName="5xx"
+                  onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
+              </ChartSlot>
+              <ChartSlot q={hapLatQ}>
+                <MetricArea title={`Backend gecikme (ms)${clampSuffix(clamped)}`}
+                  subtitle="haproxy_backend_http_average_response_latency_milliseconds · by route"
+                  series={hapLatQ.data?.series} seriesName="latency" unit="ms"
+                  onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
+              </ChartSlot>
             </div>
-          </div>
+          </>
         )}
 
         {/* v0.9.574 — servis-kapsamlı PromQL kartı KALDIRILDI (operatör:

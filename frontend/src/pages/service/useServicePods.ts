@@ -140,7 +140,14 @@ export function useServicePods(service: string, range: TimeRange) {
     .map((q, i) => (q.data?.truncated ? (matched[i] ?? `cluster ${i + 1}`) : null))
     .filter((x): x is string => !!x);
 
+  // v0.10.718 — tazelik + elle yenile (Infra Clusters başlığındaki "N sn
+  // önce ↻"): en yeni cluster cevabının zamanı; refetch tüm cluster'lara.
+  const podsUpdatedAt = podQs.reduce((m, q) => Math.max(m, q.dataUpdatedAt || 0), 0);
+  const podsFetching = podQs.some(q => q.isFetching);
+  const refetchPods = () => { for (const q of podQs) void q.refetch(); };
+
   return {
+    podsUpdatedAt, podsFetching, refetchPods,
     metaQ, ns, deploy, matched, rows, clustersWithPods,
     effNs, effDeploy, from, to, cFrom, cTo, clamped,
     sourcesPending, noClusters, podsPending, podsBlocking, podsSettled, podsTotal,

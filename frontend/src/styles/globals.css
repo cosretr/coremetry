@@ -2946,6 +2946,9 @@ button.accent.copied {
 .sec-head::after { content: none; }
 .sec-head .sec-head__title { white-space: nowrap; }
 .sec-head .sec-head__rule { flex: 1; border-top: 1px solid var(--border); }
+/* v0.10.718 — başlık içindeki rozetler (kapsam, eşleşme, cluster adı) büyük
+   harfe dönüşmez; mono değerler olduğu gibi okunur. */
+.sec-head .badge { text-transform: none; letter-spacing: 0; }
 .sec-head .sec-head__src { text-transform: none; letter-spacing: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; font-size: 10.5px; }
 .sec-head .badge { text-transform: none; letter-spacing: 0; }
 .sec-head .sec-head__meta { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11px; color: var(--text3); }
@@ -4146,3 +4149,13 @@ a.ins-val:hover { text-decoration: underline; }
 .seg-mini button { border: 0; background: var(--bg1); color: var(--text2); padding: 1px 8px; font: inherit; font-size: 11px; cursor: pointer; }
 .seg-mini button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
 .seg-mini button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* v0.10.718 — Infrastructure dilim 1: KPI StatTile ızgarası (Kafka şeridiyle
+   aynı atom), tıklanabilir tile (grafiğe kaydır / Pods'a git) ve tile alt
+   satırı (limit oranı, "en çok restart"). Token merdiveni, ham sayı yok. */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.stat-click { cursor: pointer; border-radius: var(--radius-sm); }
+.stat-click:hover { box-shadow: 0 0 0 1px var(--accent) inset; }
+.stat-click:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stat-sub { font-size: var(--fs-2xs); font-weight: 400; color: var(--text3); margin-top: var(--sp-1); font-family: inherit; }
+.stat-sub .mono { font-size: inherit; }
