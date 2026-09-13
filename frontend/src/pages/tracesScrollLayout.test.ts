@@ -41,3 +41,15 @@ describe('/traces tek kaydırıcı (v0.10.722)', () => {
     expect(strip(traces)).not.toMatch(/position:\s*['"]?sticky/);
   });
 });
+
+// v0.10.723 — Start time sola sabit: kolon tanımı stickyLeft, kümülatif
+// ofset (Endpoints deseni), gövde hücresi sınıf + left, hata tonu opak.
+describe('/traces Start time sticky-left (v0.10.723)', () => {
+  it('yalnız time kolonu sabit; ofsetler saf çekirdekten; hücre sınıf + left', () => {
+    expect(traces).toContain("stickyLeft: id === 'time',");
+    expect(traces).toContain('const leftOffs = stickyLeftOffsets(dt.visibleColumns, dt.colWidths, ATTR_W);');
+    expect(traces).toContain("stickyL !== undefined ? 'sticky-left' : ''");
+    expect(traces).toContain("${stickyL !== undefined ? 'var(--bg1)' : 'transparent'}");
+    expect(css).toMatch(/th\.sticky-left, td\.sticky-left \{[^}]*position: sticky/);
+  });
+});

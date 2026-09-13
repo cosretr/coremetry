@@ -39,8 +39,7 @@ import { stepForPoints, barPanelMaxDataPoints } from '@/lib/chartStep';
 import { VirtualTable } from '@/components/ui/DataTable';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTable } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
-import { formatSortParam } from '@/lib/dataTable';
+import { stickyLeftOffsets, formatSortParam, type DataTableColumn } from '@/lib/dataTable';
 import { type AggSort, toAggSort, decodeLegacyAggSort } from './traces/aggSort';
 import { parseRootOnlyParam, rootOnlyUrlValue, shouldDropRootOnly } from './traces/rootOnlyFallback';
 import { tracesEmptyReason } from './traces/emptyReason';
@@ -1005,6 +1004,13 @@ function TracesPageInner() {
         // içerik olarak en uzun alan o ("INSERT db0p.TUK_TURUN_SEPET_
         // HEADER" gibi), yani fazladan piksel en çok orada işe yarıyor.
         flex: id === 'operation',
+        // v0.10.723 (operatör onayı "A", 2026-09-13) — Start time sola
+        // sabit: ek kolonlar (channel_code, function_code, function_id…)
+        // tabloyu genişletip yatay kaydırınca zaman bağlamı kaybolmasın.
+        // Yalnız Start time (Service'i de sabitlemek yatay alanın 280 px'ini
+        // yerdi). Mekanizma /endpoints ile aynı: stickyLeft + kümülatif
+        // left ofsetleri (lib/dataTable stickyLeftOffsets, CSS th/td.sticky-left).
+        stickyLeft: id === 'time',
         numeric: id === 'spans',
         naturalDir: (id === 'service' || id === 'operation' ? 'asc' : 'desc') as SortOrder,
         sortValue: server ? sortAccessor(server) : undefined,
@@ -1035,6 +1041,9 @@ function TracesPageInner() {
     // ediyordu. Bu satır geri gelirse ikisi de geri gelir; kapı
     // components/shortcutSearchTarget.test.ts.
   });
+  // v0.10.723 — sola sabit kolonların kümülatif ofsetleri (görünür kolonlar +
+  // resize'lı genişlikler; saf çekirdek, Endpoints ile aynı).
+  const leftOffs = stickyLeftOffsets(dt.visibleColumns, dt.colWidths, ATTR_W);
 
   // Sync the shared table's sort → the SERVER query. The header click flips
   // dt.sort; we translate it into the server sort/order + reset the page. Guard
@@ -1476,10 +1485,14 @@ function TracesPageInner() {
                       // linkine diğer hücreler gibi sarılır; ölü hücre kalmaz.
                       const ownLink = false;
                       const cell = renderTraceCell(id, t, visibleMax, k8sOn ? { clusters: entityClusters, range } : undefined);
+                      // v0.10.723 — sola sabit hücre: sınıf + kümülatif left (Endpoints deseni).
+                      const stickyL = leftOffs[id];
                       return (
                         <td key={id} onMouseEnter={() => prefetchTrace(t.traceId)}
-                          className={ownLink ? undefined : 'row-cell'}
-                          style={{ background: t.hasError ? 'color-mix(in srgb, var(--err) 8%, transparent)' : undefined }}>
+                          className={[ownLink ? '' : 'row-cell', stickyL !== undefined ? 'sticky-left' : ''].filter(Boolean).join(' ') || undefined}
+                          // Sabit hücre opak olmak zorunda (altından satır kayar): hata tonu
+                          // transparent yerine kabın zemini (--bg1) üzerine karışır.
+                          style={{ background: t.hasError ? `color-mix(in srgb, var(--err) 8%, ${stickyL !== undefined ? 'var(--bg1)' : 'transparent'})` : undefined, left: stickyL }}>
                           {ownLink ? cell : <Link to={href} state={{ from: loc.pathname + loc.search }} className={id === 'operation' ? 'row-link row-link--name' : 'row-link'}>{cell}</Link>}
                           {/* v0.10.676 — kiosk modu: NAME hücresinde hover/odakta görünen
                               ⧉ düğmesi, /trace?id=…&kiosk=1'i YENİ PENCEREDE açar (kromsuz
