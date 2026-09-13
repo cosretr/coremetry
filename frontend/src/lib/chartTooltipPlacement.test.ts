@@ -50,6 +50,38 @@ describe('.ov-tt yerleşimi', () => {
   });
 });
 
+// v0.10.728 (operator-reported, prod: "ms yazıları sayfaya sığmıyor") — uzun
+// seri adları (route yolları) kutuyu büyütüp DEĞER sütununu kırdırıyordu.
+describe('.ov-tt uzun etiket taşması', () => {
+  const css = stripCssComments(readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8'));
+  // Seçiciyi düz metin ara (regex kaçışı bir kere ısırdı): "<sel> {" … "}".
+  const rule = (sel: string) => {
+    const i = css.indexOf(sel + ' {');
+    return i < 0 ? '' : css.slice(i + sel.length, css.indexOf('}', i));
+  };
+
+  it('kutu ekranla kelepçeli (max-width)', () => {
+    expect(rule('.ov-tt')).toMatch(/max-width:\s*min\(420px, calc\(100vw - 24px\)\)/);
+  });
+  it('etiket kısalır: flex çocuğu min-width:0 + metin kendi elemanında ellipsis', () => {
+    expect(rule('.ov-tt .ov-tt-r .ov-lbl')).toMatch(/min-width:\s*0/);
+    const t = rule('.ov-tt .ov-tt-r .ov-lbl-t');
+    expect(t).toMatch(/text-overflow:\s*ellipsis/);
+    expect(t).toMatch(/white-space:\s*nowrap/);
+  });
+  it('DEĞER asla kırılmaz (nowrap + flex:none)', () => {
+    const b = rule('.ov-tt .ov-tt-r b');
+    expect(b).toMatch(/white-space:\s*nowrap/);
+    expect(b).toMatch(/flex:\s*none/);
+  });
+  it('iki ipucu üreticisi de etiketi ov-lbl-t içine sarar (tam ad title\'da)', () => {
+    for (const f of ['../components/charts/TimeChart.tsx', '../components/chart/CorePanel.tsx']) {
+      const src = readFileSync(resolve(__dirname, f), 'utf8');
+      expect(src, f).toContain('<span class="ov-lbl-t" title="${escapeHTML(r.label)}">${escapeHTML(r.label)}</span>');
+    }
+  });
+});
+
 describe('placeTooltip', () => {
   // Bol yer varken Grafana davranışı: imlecin SAĞ-ALTI.
   it('yer varken sağ-alta koyar', () => {

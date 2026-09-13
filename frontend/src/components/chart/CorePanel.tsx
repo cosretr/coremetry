@@ -948,7 +948,7 @@ export function CorePanel({
       })));
       if (rows.length === 0 && !regionHTML) { tt.style.display = 'none'; return; }
       tt.innerHTML = regionHTML + (rows.length ? `<div class="ov-tt-t">${fmtTooltipTime(tMs / 1000, stepSec)}</div>` : '') + rows.map(r =>
-        `<div class="ov-tt-r"><span class="ov-lbl"><i class="ov-sw" style="background:${escapeHTML(r.color)}"></i>${escapeHTML(r.label)}</span><b>${escapeHTML(r.text)}</b></div>`,
+        `<div class="ov-tt-r"><span class="ov-lbl"><i class="ov-sw" style="background:${escapeHTML(r.color)}"></i><span class="ov-lbl-t" title="${escapeHTML(r.label)}">${escapeHTML(r.label)}</span></span><b>${escapeHTML(r.text)}</b></div>`,
       ).join('') + PIN_TIP_HTML;
       tt.style.display = 'block';
       const host = wrapRef.current;
