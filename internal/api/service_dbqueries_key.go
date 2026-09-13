@@ -2,6 +2,9 @@ package api
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -74,8 +77,16 @@ func serviceDBQueriesWindow(from, to time.Time) (time.Time, time.Time) {
 // serviceDBQueriesKey — TÜM girdileri taşıyan anahtar: servis, kovalanmış
 // pencere, limit. Saf tutuluyor ki kovalamanın kendisi test edilebilsin
 // (canlı CH'siz).
-func serviceDBQueriesKey(service string, from, to time.Time, limit int) string {
+func serviceDBQueriesKey(service string, from, to time.Time, limit int, cluster string) string {
 	bf, bt := serviceDBQueriesWindow(from, to)
-	return fmt.Sprintf("service-db-queries:svc=%s:from=%d:to=%d:limit=%d",
-		service, bf.Unix(), bt.Unix(), limit)
+	// v0.10.717 — cluster anahtarda: iki kapsam aynı girdiyi paylaşamaz (v0.5.187).
+	return fmt.Sprintf("service-db-queries:svc=%s:from=%d:to=%d:limit=%d:cl=%s",
+		service, bf.Unix(), bt.Unix(), limit, cluster)
+}
+
+// serviceDBQueriesLimitCluster — v0.10.717: handler'ın limit + cluster
+// okuması (api.go büyümesin diye tek satırlık çağrı).
+func serviceDBQueriesLimitCluster(q url.Values) (int, string) {
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	return limit, strings.TrimSpace(q.Get("cluster"))
 }

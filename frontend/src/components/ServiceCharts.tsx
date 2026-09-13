@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 import { useFailureSLO, useServiceDeploys, useServiceRollouts, useSLOs } from '@/lib/queries';
 import { failureThresholds } from '@/lib/failureSlo';
 import { timeRangeToNs } from '@/lib/utils';
-import { envDSL } from '@/lib/entrySpans';
+import { envDSL, clusterDSL } from '@/lib/entrySpans';
 import { quantizeWidth, stepForWidth } from '@/lib/chartStep';
 import { useContentWidth } from '@/lib/useContentWidth';
 import { isResolverEligible, serviceRedDescriptors } from '@/lib/resolverEligibility';
@@ -43,9 +43,14 @@ import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 // crosshair on the other two — Datadog dashboard convention,
 // turns the three panels into one synchronised view.
 
-export function ServiceCharts({ service, range, onZoom, onZoomReset, opScope = '', onOpScopeChange, windowNs, problems, rootOnly = false, env = '' }: {
+export function ServiceCharts({ service, range, onZoom, onZoomReset, opScope = '', onOpScopeChange, windowNs, problems, rootOnly = false, env = '', cluster = '', byCluster = false }: {
   service: string;
   range: TimeRange;
+  // v0.10.717 (multi-cluster ilkesi) — Topbar Cluster kapsamı DSL conjunct'ı
+  // olur; byCluster = 'cluster başına' seri kipi (groupBy cluster). İkisi de
+  // resolver'ı diskalifiye eder (env ile aynı iki-yol tuzağı) → ham yol.
+  cluster?: string;
+  byCluster?: boolean;
   // env(a), v0.9.1041 — global Topbar picker. A non-empty env appends a
   // deployment.environment conjunct to the RED DSL AND forces the legacy
   // (spanMetricBatch → raw spans) path: the resolver's Filters are
@@ -208,11 +213,15 @@ export function ServiceCharts({ service, range, onZoom, onZoomReset, opScope = '
         // env(a) — global env narrow. Forces the raw-spans path (the MV
         // fast-paths bail on a deploy_env filter), same as dimsFitTiers.
         dsl += envDSL(env);
+        dsl += clusterDSL(cluster); // v0.10.717 — Topbar Cluster kapsamı
+        // v0.10.717 — cluster başına: her seri bir cluster (op × cluster);
+        // groupBy 'cluster' filterexpr wellKnown'da clusterDeriveExpr'e çözülür.
+        const groupBy = byCluster ? (opScope ? ['cluster'] : ['name', 'cluster']) : (opScope ? [] : ['name']);
         // Batch — one CH pass for rate + error_rate + p99 over the same
         // WHERE. Cold-cache time drops to ~1/3 of a three-call fan-out
         // because the spans scan happens once.
         return api.spanMetricBatch({
-          from: fromNs, to: toNs, groupBy: opScope ? [] : ['name'], dsl,
+          from: fromNs, to: toNs, groupBy, dsl,
           // v0.9.391 — effStep zaten px-adaptif (stepForWidth); mdp ek
           // emniyet: explicit step sunucu bütçesinden de geçer. quantizeWidth
           // ŞART: ham piksel sunucu cache anahtarını piksel başına bölerdi
@@ -246,7 +255,9 @@ export function ServiceCharts({ service, range, onZoom, onZoomReset, opScope = '
       // reason rootOnly does: the resolver can't carry deploy_env, so
       // staying eligible would drop the env narrow on the resolver path
       // while the DSL path kept it (v0.9.345 two-paths trap).
-      const eligible = !rootOnly && !env
+      // v0.10.717 — cluster kapsamı/kipi resolver'da yok (Filters cluster
+      // taşımaz, v0.9.345 iki-yol tuzağı) → ham yol.
+      const eligible = !rootOnly && !env && !cluster && !byCluster
         && isResolverEligible(rpsMq) && isResolverEligible(errMq) && isResolverEligible(p99Mq)
         && (!avgMq || isResolverEligible(avgMq));
       if (!eligible) return viaLegacy();
@@ -267,7 +278,8 @@ export function ServiceCharts({ service, range, onZoom, onZoomReset, opScope = '
     // v0.9.348 — rootOnly joins the deps: it changes both the DSL and which
     // path runs, so a stale closure would keep serving the unfiltered series.
     // v0.9.1041 — env joins for the same reason (DSL conjunct + path choice).
-    [service, opScope, rpsMq, errMq, p99Mq, avgMq, effStep, rootOnly, env],
+    // v0.10.717 — cluster + byCluster aynı sebeple (DSL/groupBy + yol seçimi).
+    [service, opScope, rpsMq, errMq, p99Mq, avgMq, effStep, rootOnly, env, cluster, byCluster],
   );
 
   useEffect(() => {

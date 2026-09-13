@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link } from 'react-router-dom';
 import { Spinner, Empty } from './Spinner';
 import { DisclosureButton } from '@/components/ui';
 import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
+import { useQueries } from '@tanstack/react-query';
+import { useClusters } from '@/lib/queries';
+import { entityHref } from '@/lib/entityHref';
 import { fmtNum } from '@/lib/utils';
 import { encodeFilters, windowRangeParam } from '@/lib/urlState';
 import type { DataTableColumn } from '@/lib/dataTable';
-import type { DBQueryStat, FilterExpr } from '@/lib/types';
+import type { DBQueryStat, FilterExpr, TimeRange } from '@/lib/types';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { databasesFilterHref } from '@/pages/databases/databaseParam';
@@ -31,7 +34,8 @@ import { databasesFilterHref } from '@/pages/databases/databaseParam';
 // Default sort stays total wall-clock desc; Statement + DB gain
 // sorting for free. The trailing Traces-drill column is layout-only
 // (no sortValue → not clickable, still resizable).
-const DBQ_COLS: DataTableColumn<DBQueryStat>[] = [
+type DBRow = DBQueryStat & { cluster?: string }; // v0.10.717 — cluster başına kipte damga
+const DBQ_COLS: DataTableColumn<DBRow>[] = [
   { id: 'statement',  label: 'Statement', sortValue: r => r.statement,      naturalDir: 'asc', flex: true, minWidth: 160 },
   { id: 'dbSystem',   label: 'DB',        sortValue: r => r.dbSystem || '', naturalDir: 'asc', width: 90 },
   { id: 'count',      label: '×N',     sortValue: r => r.count,      numeric: true, width: 80 },
@@ -48,17 +52,23 @@ const DBQ_COLS: DataTableColumn<DBQueryStat>[] = [
   { id: 'detail',     label: '',       width: 84 },
   { id: 'traces',     label: '',       width: 90 },
 ];
-const DBQ_COL_COUNT = DBQ_COLS.length;
+// v0.10.717 — cluster başına kipte araya giren sütun (Statement'tan sonra).
+const DBQ_CLUSTER_COL: DataTableColumn<DBRow> = { id: 'cluster', label: 'Cluster', sortValue: r => r.cluster ?? '', width: 120 };
 
 // Kaç normalleştirilmiş statement gösterilir. Sunucu ağırlığa göre sıralı
 // döndürüyor, yani kırpılan kuyruk EN HAFİF olanlar — ama bu, kırpmanın
 // söylenmemesini haklı çıkarmaz (v0.9.349).
 const DBQ_LIMIT = 100;
 
-export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
+export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster = '', byCluster = false, range }: {
   service: string;
   from: number;
   to: number;
+  // v0.10.717 (multi-cluster) — Topbar kapsamı (?cluster=) sorguyu daraltır;
+  // byCluster: her cluster ayrı okunur, satır cluster damgası + linki taşır.
+  cluster?: string;
+  byCluster?: boolean;
+  range?: TimeRange;
   // v0.5.294 — render expanded on first paint when the caller
   // has already signalled "show me details" (Service detail
   // Details tab). Per-row expand-for-EXPLAIN still works
@@ -72,7 +82,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!open || !service) return;
+    if (!open || !service || byCluster) return; // v0.10.717 — cluster başına kip ayrı okur
     setData(undefined);
     // v0.9.349 — limit+1 sondası (/services'in probeLimit deseni).
     //
@@ -84,23 +94,46 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
     //
     // Bir fazlasını istemek "tam 100 var" ile "100'den fazla var"ı ayırt
     // ediyor — `rows.length === 100` tek başına ikisini ayıramaz.
-    api.serviceDBQueries(service, { from, to, limit: DBQ_LIMIT + 1 })
+    api.serviceDBQueries(service, { from, to, limit: DBQ_LIMIT + 1, cluster: cluster || undefined })
       .then(rows => {
         const all = rows ?? [];
         setCapped(all.length > DBQ_LIMIT);
         setData(all.slice(0, DBQ_LIMIT));
       })
       .catch(() => { setCapped(false); setData(null); });
-  }, [open, service, from, to]);
+  }, [open, service, from, to, cluster, byCluster]);
 
   // Shared sortable + resizable table. Client sort — the panel holds
   // its whole result set (one bounded fetch, limit 100), so there is
   // no server ordering to preserve. Called unconditionally (hooks
   // rule) with [] while collapsed/loading.
-  const dt = useDataTable<DBQueryStat>({
+  // v0.10.717 — cluster başına: cluster listesi + cluster başına okuma
+  // (limit 30), damgalı birleştirme, toplam süreye göre en ağır DBQ_LIMIT.
+  // Kapasite: cluster sayısı useClusters listesiyle sınırlı (küçük küme).
+  const clustersQ = useClusters(from, to);
+  const clusterList = useMemo(() => (open && byCluster ? (clustersQ.data ?? []) : []), [open, byCluster, clustersQ.data]);
+  const perCluster = useQueries({
+    queries: clusterList.map(c => ({
+      queryKey: ['db-queries', service, from, to, c],
+      queryFn: () => api.serviceDBQueries(service, { from, to, limit: 30, cluster: c }),
+      staleTime: 60_000,
+    })),
+  });
+  const merged: DBRow[] = useMemo(() => {
+    if (!byCluster) return [];
+    const all: DBRow[] = [];
+    clusterList.forEach((c, i) => { for (const r of perCluster[i]?.data ?? []) all.push({ ...r, cluster: c }); });
+    return all.sort((a, b) => b.totalMs - a.totalMs).slice(0, DBQ_LIMIT);
+  }, [byCluster, clusterList, perCluster]);
+  const view: DBRow[] | null | undefined = byCluster
+    ? (clustersQ.isPending || perCluster.some(q => q.isPending) ? undefined
+      : perCluster.some(q => q.isError) && merged.length === 0 ? null : merged)
+    : data;
+  const cols = useMemo(() => (byCluster ? [DBQ_COLS[0], DBQ_CLUSTER_COL, ...DBQ_COLS.slice(1)] : DBQ_COLS), [byCluster]);
+  const dt = useDataTable<DBRow>({
     storageKey: 'db-queries-panel',
-    columns: DBQ_COLS,
-    rows: data ?? [],
+    columns: cols,
+    rows: view ?? [],
     initialSort: { id: 'totalMs', dir: 'desc' },
   });
 
@@ -118,9 +151,9 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
         <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600 }}>
           DB queries by <span style={{ color: 'var(--text)' }}>{service}</span>
         </span>
-        {open && data && data.length > 0 && (
+        {open && view && view.length > 0 && (
           <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-            {data.length} normalised statement{data.length === 1 ? '' : 's'}
+            {view.length} normalised statement{view.length === 1 ? '' : 's'}
           </span>
         )}
         {/* v0.9.349 — sınır varsa görünür olacak. Yalnız GERÇEKTEN kırpıldıysa
@@ -141,23 +174,23 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
 
       {open && (
         <div style={{ padding: 14, paddingTop: 10 }}>
-          {data === undefined && (
+          {view === undefined && (
             <div style={{ minHeight: 120, display: 'grid', placeItems: 'center' }}>
               <Spinner />
             </div>
           )}
-          {data === null && (
+          {view === null && (
             <div style={{ fontSize: 12, color: 'var(--err)', padding: '12px 4px' }}>
               Failed to load DB queries.
             </div>
           )}
-          {data && data.length === 0 && (
+          {view && view.length === 0 && (
             <Empty compact icon="◯" title="No database statements in this window">
               No spans carry <code>db.statement</code> from <code>{service}</code>.
               {' '}If your DB instrumentation strips statements for security, that's expected.
             </Empty>
           )}
-          {data && data.length > 0 && (
+          {view && view.length > 0 && (
             <div className="table-wrap">
               <table style={{ tableLayout: 'fixed', width: '100%' }}>
                 <DataTableColgroup dt={dt} />
@@ -185,6 +218,13 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
                               title={r.statement}>
                             {r.statement}
                           </td>
+                          {byCluster && (
+                            <td className="mono" onClick={e => e.stopPropagation()}>
+                              {r.cluster
+                                ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+                                : '—'}
+                            </td>
+                          )}
                           {/* v0.9.964 (UX denetimi Ö9 / G2) — the engine
                               chip is the bridge OUT of the service into the
                               database catalogue. There was no link at all
@@ -260,7 +300,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
                               wildcards so all literal variants of the
                               same query class show up in one search. */}
                           <td onClick={e => e.stopPropagation()}>
-                            <Link to={tracesURL(service, r, { fromNs: from, toNs: to })}
+                            <Link to={tracesURL(service, r, { fromNs: from, toNs: to, cluster: cluster || undefined })}
                                   className="sec"
                                   title={`Open /traces filtered to ${service} + this query class`}
                                   style={{
@@ -280,7 +320,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false }: {
                             {/* Spans every column — derived, not a literal:
                                 the previous hardcoded 10 would have gone
                                 stale the moment a column was added. */}
-                            <td colSpan={DBQ_COL_COUNT}
+                            <td colSpan={cols.length}
                                 style={{ background: 'var(--bg0)', padding: '12px 16px' }}>
                               <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
                                 Sample statement (with real literals)
@@ -378,7 +418,7 @@ function fmtMs(ms: number): string {
 // yorumunda "the exact class pivotHref exists to prevent" diye belgeliyor —
 // bu yüzden pencere artık ZORUNLU argüman.
 export function tracesURL(
-  service: string, r: DBQueryStat, window: { fromNs: number; toNs: number },
+  service: string, r: DBQueryStat & { cluster?: string }, window: { fromNs: number; toNs: number; cluster?: string },
 ): string {
   const filters: FilterExpr[] = [
     { k: 'service.name', op: '=', v: [service] },
@@ -399,6 +439,7 @@ export function tracesURL(
   }
   return tracesPivotHref({
     window,
+    cluster: window.cluster || r.cluster || undefined, // v0.10.717 — pivot cluster kapsamını taşır
     // view=list: /traces aggregate görünümü her eşleşmeyi tek satıra
     // çökertirdi. rootOnly=false: db span'i asla kök değildir.
     view: 'list',

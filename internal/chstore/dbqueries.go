@@ -341,11 +341,20 @@ func (s *Store) getSlowQueriesGlobalMV(
 // are left as-is — they're not literals, they're already
 // normalised forms.
 func (s *Store) GetTopDBQueries(
-	ctx context.Context, service string, from, to time.Time, limit int,
+	ctx context.Context, service string, from, to time.Time, limit int, cluster string,
 ) ([]DBQueryStat, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
+	// v0.10.717 (multi-cluster ilkesi) — isteğe bağlı cluster daraltması:
+	// ham spans yolu zaten koşuyor, endpoints.go emsaliyle aynı türev.
+	clusterCond := ""
+	args := []any{service, from, to}
+	if cluster != "" {
+		clusterCond = " AND " + s.clusterExpr() + " = ?"
+		args = append(args, cluster)
+	}
+	args = append(args, limit)
 	// IMPORTANT: clickhouse-go counts every '?' in the SQL,
 	// including ones inside string literals and regex patterns,
 	// as a positional parameter. The normalisation regex would
@@ -378,13 +387,13 @@ func (s *Store) GetTopDBQueries(
 		FROM spans
 		WHERE service_name = ?
 		  AND time >= ? AND time <= ?
-		  AND db_statement != ''
+		  AND db_statement != ''` + clusterCond + `
 		GROUP BY norm_stmt
 		ORDER BY (cnt * avg_ms) DESC
 		LIMIT ?
 		SETTINGS max_execution_time = 25,
 		         ` + s.shardSkipSetting()
-	rows, err := s.conn.Query(ctx, sql, service, from, to, limit)
+	rows, err := s.conn.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query db queries: %w", err)
 	}

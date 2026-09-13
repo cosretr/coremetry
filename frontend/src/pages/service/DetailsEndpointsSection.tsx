@@ -15,6 +15,8 @@ import { encodeRange } from '@/lib/urlState';
 import { endpointDetailHref } from '@/pages/endpoints/endpointParam';
 import { tracesLink } from '@/pages/endpoints/links';
 import { RouteAlertModal } from '@/pages/alerts/RouteAlertModal';
+import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
+import { entityHref } from '@/lib/entityHref';
 import { topByTimeShare, mergePerCluster, shareBar, parseEndpointsMode, type ClusterEndpointRow } from './detailsEndpoints';
 
 // DetailsEndpointsSection — v0.10.715 (servis sekmeleri etüdü dilim 1,
@@ -105,11 +107,7 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
           <span className="badge b-gray" title="Yalnız giriş span'leri (server + consumer).">giriş span&#39;leri</span>
           {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
           {!scopeCluster && (
-            <span className="seg-mini" role="group" aria-label="Endpoint kırılımı">
-              <button type="button" className={mode === 'combined' ? 'on' : ''} onClick={() => setMode('combined')}>birleşik</button>
-              <button type="button" className={mode === 'cluster' ? 'on' : ''} onClick={() => setMode('cluster')}
-                title="Her cluster ayrı okunur ve süre payına göre birlikte sıralanır (cluster süzgeci ham yol)">cluster başına</button>
-            </span>
+            <ClusterModeToggle value={mode === 'cluster'} onChange={v => setMode(v ? 'cluster' : 'combined')} label="Endpoint kırılımı" />
           )}
         </>}
         meta={<>süre payına göre ilk {TOP_N}{mode === 'cluster' ? ` · ${clusters.length} cluster` : ''}</>}
@@ -134,7 +132,13 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
                         {...rowActivation(() => { window.location.assign(gotoEp(r)); })}>
                       <td><Link to={gotoEp(r)} className="mono row-link" onClick={e => e.stopPropagation()}
                         style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.path}>{r.path}</Link></td>
-                      {mode === 'cluster' && <td className="mono">{r.cluster || '—'}</td>}
+                      {mode === 'cluster' && (
+                        <td className="mono" onClick={e => e.stopPropagation()}>
+                          {r.cluster
+                            ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+                            : '—'}
+                        </td>
+                      )}
                       <td className="num mono">{fmtCount(r.calls)}</td>
                       <td className="num"><span className={errBadge(r.errorRate)}>{r.errorRate.toFixed(1)}%</span></td>
                       <td className="num mono">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>

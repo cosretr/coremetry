@@ -461,6 +461,10 @@ type Rollout struct {
 	Kind         string        `json:"kind"`
 	VersionAfter string        `json:"versionAfter,omitempty"`
 	Impact       *DeployImpact `json:"impact,omitempty"` // before/after RED, filled by the API layer
+	// Cluster (v0.10.717, multi-cluster ilkesi) — rollout'un koştuğu cluster
+	// (span cluster türevi). Kademeli çıkış her cluster'da ayrı satır;
+	// boş = cluster türetilemedi.
+	Cluster string `json:"cluster,omitempty"`
 }
 
 // RolloutsResult is the GetServiceRollouts payload.
@@ -497,9 +501,10 @@ func (s *Store) GetServiceRollouts(
 	ctx context.Context, service string, from, to time.Time,
 ) (*RolloutsResult, error) {
 	sql := `
-		SELECT bucket, groupUniqArrayIf(iid, iid != '') AS pods, argMax(ver, t) AS version
+		SELECT cl, bucket, groupUniqArrayIf(iid, iid != '') AS pods, argMax(ver, t) AS version
 		FROM (
 			SELECT
+				` + s.clusterExpr() + `                    AS cl,
 				toStartOfInterval(time, INTERVAL 5 MINUTE) AS bucket,
 				time                                       AS t,
 				` + instanceIdExpr + `                     AS iid,
@@ -507,9 +512,9 @@ func (s *Store) GetServiceRollouts(
 			FROM spans
 			WHERE service_name = ? AND time >= ? AND time <= ?
 		)
-		GROUP BY bucket
-		ORDER BY bucket ASC
-		LIMIT 2000
+		GROUP BY cl, bucket
+		ORDER BY cl, bucket ASC
+		LIMIT 4000
 		SETTINGS max_execution_time = 15,
 		         ` + s.shardSkipSetting()
 	rows, err := s.telemetryReadConn().Query(ctx, sql, service, from, to)
@@ -518,18 +523,47 @@ func (s *Store) GetServiceRollouts(
 	}
 	defer rows.Close()
 
-	var buckets []rolloutBucket
+	// v0.10.717 (multi-cluster ilkesi) — kovalar CLUSTER × 5 dk: kademeli
+	// çıkışta her cluster'ın pod kümesi ayrı analiz edilir; eskiden
+	// cluster'lar arası pod kimlikleri tek kovada karışıyordu.
+	var order []string
+	byCl := map[string][]rolloutBucket{}
 	for rows.Next() {
+		var cl string
 		var b rolloutBucket
-		if err := rows.Scan(&b.t, &b.pods, &b.version); err != nil {
+		if err := rows.Scan(&cl, &b.t, &b.pods, &b.version); err != nil {
 			return nil, err
 		}
-		buckets = append(buckets, b)
+		if _, seen := byCl[cl]; !seen {
+			order = append(order, cl)
+		}
+		byCl[cl] = append(byCl[cl], b)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return analyzeRollouts(service, buckets), nil
+	return analyzeRolloutsByCluster(service, order, byCl), nil
+}
+
+// analyzeRolloutsByCluster — SAF (v0.10.717): cluster başına analyzeRollouts,
+// satırlara Cluster damgası, zaman sırasıyla birleştirme. VersionConstant =
+// her cluster sabitse; InstancesTracked = herhangi bir cluster'da kimlik varsa.
+func analyzeRolloutsByCluster(service string, order []string, byCl map[string][]rolloutBucket) *RolloutsResult {
+	if len(order) == 0 {
+		return analyzeRollouts(service, nil)
+	}
+	res := &RolloutsResult{Service: service, Rollouts: []Rollout{}, VersionConstant: true}
+	for _, cl := range order {
+		part := analyzeRollouts(service, byCl[cl])
+		for i := range part.Rollouts {
+			part.Rollouts[i].Cluster = cl
+		}
+		res.Rollouts = append(res.Rollouts, part.Rollouts...)
+		res.VersionConstant = res.VersionConstant && part.VersionConstant
+		res.InstancesTracked = res.InstancesTracked || part.InstancesTracked
+	}
+	sort.SliceStable(res.Rollouts, func(i, j int) bool { return res.Rollouts[i].TimeUnixNs < res.Rollouts[j].TimeUnixNs })
+	return res
 }
 
 // rolloutBucket is one 5-minute slice of a service's active pod set +

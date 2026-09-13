@@ -59,3 +59,13 @@ export function entryLatencyDSL(service: string): string {
 export function envDSL(env: string): string {
   return env ? ` AND deployment.environment = "${env.replace(/"/g, '\\"')}"` : '';
 }
+
+/**
+ * clusterDSL — v0.10.717 (multi-cluster ilkesi): Topbar Cluster kapsamı DSL
+ * conjunct'ı; envDSL ikizi. `cluster` anahtarı filterexpr wellKnown'da
+ * clusterDeriveExpr'e eşlenir → spanMetricBatch MV hızlı yolundan düşer
+ * (spanmetrics_1m'de cluster boyutu yok, v0.9.943) — envDSL ile aynı yol.
+ */
+export function clusterDSL(cluster: string): string {
+  return cluster ? ` AND cluster = "${cluster.replace(/"/g, '\\"')}"` : '';
+}

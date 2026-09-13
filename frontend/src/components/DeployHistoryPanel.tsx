@@ -3,7 +3,9 @@ import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useServiceRollouts7d } from '@/lib/queries/services';
 import { fmtNum, fmtAgoNs } from '@/lib/utils';
-import type { Rollout, DeployImpact } from '@/lib/types';
+import type { Rollout, DeployImpact, TimeRange } from '@/lib/types';
+import { Link } from 'react-router-dom';
+import { entityHref } from '@/lib/entityHref';
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 
 // Per-row Copilot explain state (v0.5.192). Keyed by rollout
@@ -25,8 +27,12 @@ type ExplainState =
 // rollout: pods replaced + age + the before/after RED diff so the
 // operator reads "the rollout regressed p99 by 12%" at a glance. A
 // version is shown ONLY when it actually changed across the rollout.
-export function DeployHistoryPanel({ service, onZoomWindow }: {
+export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range }: {
   service: string;
+  // v0.10.717 (multi-cluster) — Topbar Cluster kapsamı: satırlar süzülür
+  // (cluster'ı türetilemeyen satır kalır); range cluster linki için.
+  cluster?: string;
+  range?: TimeRange;
   // v0.9.380 (redesign D4) — ⏱ pencere kapısı: rollout satırı, anın
   // ±30dk'sını sayfanın zoom yığınına push'lar (Service.tsx handleZoom
   // — grafiklerdeki ↻ marker'la liste iki yönlü bağlanır, çift-tık geri
@@ -51,9 +57,10 @@ export function DeployHistoryPanel({ service, onZoomWindow }: {
     // v0.9.365 — "Recent rollouts" en-yeni-üstte: API ASC döner (strip'in
     // deploys[len-1] sözleşmesi), panel triage için ters çevirir; fmtAgoNs
     // "2h ago"nun "3d ago"nun ALTINDA durması okuma yönünü bozuyordu.
-    setRows((rolloutsQ.data.rollouts ?? []).slice().reverse());
+    // v0.10.717 — kapsam seçiliyse yalnız o cluster'ın rollout'ları.
+    setRows((rolloutsQ.data.rollouts ?? []).filter(r => !cluster || !r.cluster || r.cluster === cluster).slice().reverse());
     setTracked(rolloutsQ.data.instancesTracked ?? false);
-  }, [rolloutsQ.data, rolloutsQ.isError]);
+  }, [rolloutsQ.data, rolloutsQ.isError, cluster]);
   useEffect(() => {
     // Probe the copilot once — if it's not configured, hide the
     // Explain button rather than show one that always 503's.
@@ -146,6 +153,14 @@ export function DeployHistoryPanel({ service, onZoomWindow }: {
                     title="service.version changed at this rollout">
                     {(r.versionBefore || '?')}→{r.versionAfter}
                   </span>
+                )}
+                {/* v0.10.717 — rollout'un cluster'ı, cluster detayına link (entity). */}
+                {r.cluster && (
+                  <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })}
+                    className="badge b-gray mono" title="Cluster detayı"
+                    onClick={e => e.stopPropagation()}>
+                    {r.cluster}
+                  </Link>
                 )}
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>
                   {fmtAgoNs(r.timeUnixNs)}

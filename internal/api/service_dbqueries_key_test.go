@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -28,8 +29,8 @@ func ts(s string) time.Time {
 // tutmaz. Bu test, düzeltmeden ÖNCE kırmızıydı.
 func TestSameMinuteSharesOneKey(t *testing.T) {
 	from := ts("2026-08-25T09:45:00Z")
-	a := serviceDBQueriesKey("portfolio-service", from, ts("2026-08-25T10:00:03Z"), 50)
-	b := serviceDBQueriesKey("portfolio-service", from, ts("2026-08-25T10:00:47Z"), 50)
+	a := serviceDBQueriesKey("portfolio-service", from, ts("2026-08-25T10:00:03Z"), 50, "")
+	b := serviceDBQueriesKey("portfolio-service", from, ts("2026-08-25T10:00:47Z"), 50, "")
 	if a != b {
 		t.Errorf("aynı dakikadaki iki istek AYRI anahtar üretti — cache ölü kalır:\n  %s\n  %s", a, b)
 	}
@@ -41,8 +42,8 @@ func TestSameMinuteSharesOneKey(t *testing.T) {
 // istemeli, yoksa panel donar.
 func TestNextMinuteRotatesTheKey(t *testing.T) {
 	from := ts("2026-08-25T09:45:00Z")
-	a := serviceDBQueriesKey("svc", from, ts("2026-08-25T10:00:47Z"), 50)
-	b := serviceDBQueriesKey("svc", from, ts("2026-08-25T10:01:02Z"), 50)
+	a := serviceDBQueriesKey("svc", from, ts("2026-08-25T10:00:47Z"), 50, "")
+	b := serviceDBQueriesKey("svc", from, ts("2026-08-25T10:01:02Z"), 50, "")
 	if a == b {
 		t.Error("dakika döndü ama anahtar aynı kaldı — veri donar")
 	}
@@ -52,16 +53,16 @@ func TestNextMinuteRotatesTheKey(t *testing.T) {
 // girdileri taşır. Birini düşürmek çapraz-zehirlenme demek (v0.5.187).
 func TestKeyCarriesEveryInput(t *testing.T) {
 	base := func() string {
-		return serviceDBQueriesKey("svc-a", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:00:00Z"), 50)
+		return serviceDBQueriesKey("svc-a", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:00:00Z"), 50, "")
 	}
 	for _, tc := range []struct {
 		name string
 		got  string
 	}{
-		{"servis", serviceDBQueriesKey("svc-B", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:00:00Z"), 50)},
-		{"from", serviceDBQueriesKey("svc-a", ts("2026-08-25T09:30:00Z"), ts("2026-08-25T10:00:00Z"), 50)},
-		{"to", serviceDBQueriesKey("svc-a", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:05:00Z"), 50)},
-		{"limit", serviceDBQueriesKey("svc-a", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:00:00Z"), 20)},
+		{"servis", serviceDBQueriesKey("svc-B", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:00:00Z"), 50, "")},
+		{"from", serviceDBQueriesKey("svc-a", ts("2026-08-25T09:30:00Z"), ts("2026-08-25T10:00:00Z"), 50, "")},
+		{"to", serviceDBQueriesKey("svc-a", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:05:00Z"), 50, "")},
+		{"limit", serviceDBQueriesKey("svc-a", ts("2026-08-25T09:45:00Z"), ts("2026-08-25T10:00:00Z"), 20, "")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.got == base() {
@@ -121,10 +122,24 @@ func TestHandlerUsesTheSharedHelpers(t *testing.T) {
 	}
 	for _, must := range []string{
 		"from, to = serviceDBQueriesWindow(from, to)",
-		"serviceDBQueriesKey(name, from, to, limit)",
+		"serviceDBQueriesKey(name, from, to, limit, cluster)",
 	} {
 		if !strings.Contains(src, must) {
 			t.Errorf("handler paylaşılan yardımcıyı kullanmıyor, kayıp: %s", must)
 		}
+	}
+}
+
+// v0.10.717 — cluster anahtarda: farklı kapsam farklı girdi; limit+cluster okuyucu.
+func TestServiceDBQueriesKeyCluster(t *testing.T) {
+	from := ts("2026-08-25T09:00:00Z")
+	a := serviceDBQueriesKey("svc", from, ts("2026-08-25T10:00:00Z"), 50, "")
+	b := serviceDBQueriesKey("svc", from, ts("2026-08-25T10:00:00Z"), 50, "prod-eu")
+	if a == b {
+		t.Fatal("cluster kapsamı anahtarı değiştirmeli")
+	}
+	q := url.Values{"limit": {"20"}, "cluster": {" prod-eu "}}
+	if l, c := serviceDBQueriesLimitCluster(q); l != 20 || c != "prod-eu" {
+		t.Fatalf("limit/cluster: %d %q", l, c)
 	}
 }

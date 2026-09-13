@@ -26,6 +26,7 @@ import { DeployHistoryPanel } from '@/components/DeployHistoryPanel';
 import { DetailsPropsStrip } from './service/DetailsPropsStrip';
 import { DetailsEndpointsSection } from './service/DetailsEndpointsSection'; // v0.10.715
 import { SectionHead } from '@/components/ui/SectionHead'; // v0.10.715
+import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
 import { DetailsToc } from './service/DetailsToc';
 import { DetailsMetricsSection, useDetailsMetricPanels } from './service/DetailsMetricsSection';
 import { panelMaxDataPoints } from '@/lib/chartStep';
@@ -55,6 +56,18 @@ type ServiceTab = 'overview' | 'operations' | 'details' | 'logs' | 'topology' | 
 
 function ServiceDetailInner() {
   const [searchParams, setSearchParams] = useSearchParams();
+  // v0.10.717 (multi-cluster ilkesi) — Topbar Cluster kapsamı ve Details
+  // bölüm kipleri (?dbmode= / ?perfmode= = cluster). Kapsam seçiliyken kip
+  // gizlenir (tek cluster'da kırılım anlamsız). replace:true, yabancı
+  // parametreler korunur.
+  const scopeCluster = searchParams.get('cluster') ?? '';
+  const dbByCluster = searchParams.get('dbmode') === 'cluster';
+  const perfByCluster = searchParams.get('perfmode') === 'cluster';
+  const setModeParam = (key: 'dbmode' | 'perfmode', on: boolean) => setSearchParams(prev => {
+    const next = new URLSearchParams(prev);
+    if (on) next.set(key, 'cluster'); else next.delete(key);
+    return next;
+  }, { replace: true });
   const navigate = useNavigate();
   // Canonical key is `name` (every in-app link uses /service?name=…); also accept
   // `service` so a hand-typed /service?service=X resolves instead of showing
@@ -628,22 +641,35 @@ function ServiceDetailInner() {
                 </div>
                 {/* v0.9.141 (operatör) — Structure paneli kaldırıldı; bölüm
                     yalnız DB sorgularına indi, başlık "Database" oldu. */}
-                <SectionHead id="dtl-db" title="Database" source="db_statement_summary_5m"
-                  badges={opScope && <span className="badge b-gray">tüm servis</span>}
+                {/* v0.10.717 — kaynak rozeti düzeltildi: panel ham spans okur
+                    (db_statement_summary_5m yalnız /slow-queries + alarm). */}
+                <SectionHead id="dtl-db" title="Database" source={scopeCluster || dbByCluster ? 'spans · db.statement (cluster kapsamı)' : 'spans · db.statement'}
+                  badges={<>
+                    {opScope && <span className="badge b-gray">tüm servis</span>}
+                    {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
+                    {!scopeCluster && <ClusterModeToggle value={dbByCluster} onChange={v => setModeParam('dbmode', v)} label="DB ifadeleri kırılımı" />}
+                  </>}
                   actions={<Link to="/databases/slow-queries">Slow queries →</Link>} />
                 <div className="ov-mb">
                   <LazyMount minHeight={300}>
                     <DBQueriesPanel service={svc}
                                     from={rangeNs.from}
                                     to={rangeNs.to}
+                                    cluster={scopeCluster}
+                                    byCluster={dbByCluster && !scopeCluster}
+                                    range={range}
                                     defaultOpen />
                   </LazyMount>
                 </div>
                 {/* v0.10.715 (etüt dilim 1) — Endpoints bölümü: bugüne dek yalnız
                     Overview'daydı; cluster boyutlu (mockup şerh 4). */}
                 <DetailsEndpointsSection service={svc} range={range} rangeNs={rangeNs} env={env} />
-                <SectionHead id="dtl-perf" title="Performance" source="giriş span'leri"
-                  badges={opScope && <span className="badge b-info">op kapsamı</span>} />
+                <SectionHead id="dtl-perf" title="Performance" source={scopeCluster || perfByCluster ? "giriş span'leri (cluster: ham yol)" : "giriş span'leri"}
+                  badges={<>
+                    {opScope && <span className="badge b-info">op kapsamı</span>}
+                    {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
+                    {!scopeCluster && <ClusterModeToggle value={perfByCluster} onChange={v => setModeParam('perfmode', v)} label="RED serileri kırılımı" />}
+                  </>} />
                 {/* v0.9.348 — rootOnly: bu paneller servisin KENDİ giriş
                     noktalarını çiziyor artık, dışarı yaptığı çağrıları değil.
                     Filtresiz hâlde api-gateway'in grafiği
@@ -654,6 +680,7 @@ function ServiceDetailInner() {
                 <ServiceCharts service={svc} range={range} windowNs={rangeNs}
                   opScope={opScope} onOpScopeChange={setOpScope}
                   problems={problems} rootOnly env={env}
+                  cluster={scopeCluster} byCluster={perfByCluster && !scopeCluster}
                   onZoom={handleZoom} onZoomReset={handleZoomReset} />
                 {/* v0.9.395 (Faz C-2 Ş2, mockup 52b05851 onaylı) — annotation
                     şeridi PİLOT: üç RED paneli aynı x-eksenini paylaştığı
@@ -677,13 +704,16 @@ function ServiceDetailInner() {
                                            operation={opScope} rootOnly env={env} />
                   </LazyMount>
                 </div>
-                <SectionHead id="dtl-runtime" title={<>Runtime &amp; rollouts</>} source="spans · service.version"
-                  badges={opScope && <span className="badge b-gray">tüm servis</span>} />
+                <SectionHead id="dtl-runtime" title={<>Runtime &amp; rollouts</>} source="spans · service.version × cluster"
+                  badges={<>
+                    {opScope && <span className="badge b-gray">tüm servis</span>}
+                    {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
+                  </>} />
                 {/* Recent rollouts — #deploys anchor preserved so the
                     /deploys "history →" link still scrolls here. */}
                 <div id="deploys">
                   <LazyMount minHeight={160}>
-                    <DeployHistoryPanel service={svc}
+                    <DeployHistoryPanel service={svc} cluster={scopeCluster} range={range}
                       onZoomWindow={(tNs) => handleZoom(tNs / 1e9 - 1800, tNs / 1e9 + 1800)} />
                   </LazyMount>
                 </div>

@@ -6130,6 +6130,9 @@ export interface Rollout {
   versionBefore?: string;
   versionAfter?: string;
   impact?: DeployImpact | null;
+  // v0.10.717 — rollout'un cluster'ı (span türevi); kademeli çıkışta cluster
+  // başına satır. Boş = türetilemedi.
+  cluster?: string;
 }
 // v0.9.435 — filo Deploys/Rollouts geçmişi (/deploys sayfası).
 export interface RecentDeployEntry {

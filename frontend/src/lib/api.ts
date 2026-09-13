@@ -2677,7 +2677,7 @@ export const api = {
   // /api/services/{name}/db-queries — top normalised DB
   // statements for a service in a time window. Powers the
   // DB query analyzer panel on /service.
-  serviceDBQueries: (svc: string, params: { from?: number; to?: number; limit?: number }) =>
+  serviceDBQueries: (svc: string, params: { from?: number; to?: number; limit?: number; cluster?: string }) => // v0.10.717 — ?cluster= daraltması
     get<import('./types').DBQueryStat[] | null>(
       `/api/services/${encodeURIComponent(svc)}/db-queries?${qs(params)}`),
 
