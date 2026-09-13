@@ -90,6 +90,7 @@ import type { EntityClusterInfo } from '@/lib/types';
 // sorgusu ham spans üzerinde koşuyordu, yani sayfadaki en pahalı okuma
 // yoluydu ve kullanılmıyordu.
 type View = 'list' | 'aggregate' | 'shapes';
+const STRIP_COLLAPSED_KEY = 'traces-strip-collapsed'; // v0.10.724
 type GroupBy =
   | 'operation' | 'service' | 'kind' | 'status'
   | 'http_method' | 'http_route' | 'http_status'
@@ -272,6 +273,19 @@ function TracesPageInner() {
   const [sort, setSort] = useState<SortColumn>(() => (searchParams.get('sort') as SortColumn) || 'time');
   const [order, setOrder] = useState<SortOrder>(() => (searchParams.get('order') === 'asc' ? 'asc' : 'desc'));
   const [page, setPage] = useState(() => parseInt(searchParams.get('page') ?? '0', 10) || 0);
+  // v0.10.724 (operatör onayı "A", 2026-09-13) — üst şerit katlanabilir;
+  // durum tarayıcıya özel (localStorage), URL'e YAZILMAZ: paylaşılan link
+  // görünümü değil, kişisel yer tasarrufu. v0.10.513 expand/shrink'i
+  // kaldırmıştı (tek yükseklik 130 px); bu, büyütme değil katlama — kutu
+  // kaydırıcı olunca (722) çerçevenin her pikseli satır sayısıdır.
+  const [stripCollapsed, setStripCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(STRIP_COLLAPSED_KEY) === '1'; } catch { return false; }
+  });
+  const toggleStrip = () => setStripCollapsed(v => {
+    const next = !v;
+    try { localStorage.setItem(STRIP_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* özel pencere / kota */ }
+    return next;
+  });
 
   // Aggregate view sort + group-by.
   const [groupBy, setGroupBy] = useState<GroupBy>(() => {
@@ -1139,6 +1153,12 @@ function TracesPageInner() {
         {view === 'list' && (() => {
           const vizToggle = (
             <>
+              {/* v0.10.724 — katla/aç; şerit başlığının en solunda. */}
+              <IconButton size="sm" aria-label={stripCollapsed ? 'Grafiği aç' : 'Grafiği katla'}
+                aria-expanded={!stripCollapsed}
+                title={stripCollapsed ? 'Grafiği göster' : 'Grafiği katla — yalnız istatistik şeridi kalır (tarayıcıda hatırlanır)'}
+                icon={<span aria-hidden="true">{stripCollapsed ? '▸' : '▾'}</span>}
+                onClick={toggleStrip} />
               <div className="segmented">
                 <button className={viz === 'volume' ? 'active' : ''} onClick={() => setViz('volume')}>Volume</button>
                 <button className={viz === 'latency' ? 'active' : ''} onClick={() => setViz('latency')}>Latency</button>
@@ -1174,7 +1194,7 @@ function TracesPageInner() {
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 8,
               // v0.9.301 — the skeleton must match the real card, or the
               // table jumps on every load. Tracks the persisted height.
-              height: 182, // v0.10.486 — kompakt yükseklikle hizalı; v0.10.513 tek yükseklik
+              height: stripCollapsed ? 40 : 182, // v0.10.486 — kompakt yükseklikle hizalı; v0.10.513 tek yükseklik; v0.10.724 katlı
               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Spinner />
             </div>
@@ -1187,6 +1207,7 @@ function TracesPageInner() {
               // v0.10.486 (operatör: "histogram biraz daha shrink edilebilir") — kompakt 170 → 130.
               // v0.10.513 — shrink/expand kaldırıldı; tek yükseklik.
               height={130} unit={volumeUnit} onBrush={applyBrush} onZoomReset={clearBrush}
+              collapsed={stripCollapsed}
               xRange={{ from: listRangeNs.from / 1e9, to: listRangeNs.to / 1e9 }}
               header={vizToggle}
               headerRight={<>{vizStats}
@@ -1214,7 +1235,7 @@ function TracesPageInner() {
                   {vizStats}
                 </span>
               </div>
-              <LatencyScatter rows={displayRows} onOpen={openTrace} onBrush={applyBrush} onZoomReset={clearBrush} />
+              {!stripCollapsed && <LatencyScatter rows={displayRows} onOpen={openTrace} onBrush={applyBrush} onZoomReset={clearBrush} />}
             </div>
           );
         })()}

@@ -53,3 +53,24 @@ describe('/traces Start time sticky-left (v0.10.723)', () => {
     expect(css).toMatch(/th\.sticky-left, td\.sticky-left \{[^}]*position: sticky/);
   });
 });
+
+// v0.10.724 — üst şerit katlanabilir; durum localStorage (URL değil);
+// katlıyken çizim yok, başlık şeridi (anahtar + istatistikler) kalır.
+describe('/traces şerit katlama (v0.10.724)', () => {
+  it('localStorage anahtarı, toggle düğmesi, VolumeChart collapsed, latency dalı da katlanır', () => {
+    expect(traces).toContain("const STRIP_COLLAPSED_KEY = 'traces-strip-collapsed';");
+    // (depo adı yazılmıyor: testEnvContract storage global'i geçen test dosyasından jsdom ister)
+    expect(traces).toContain("getItem(STRIP_COLLAPSED_KEY) === '1'");
+    expect(traces).toContain('collapsed={stripCollapsed}');
+    expect(traces).toContain('{!stripCollapsed && <LatencyScatter');
+    expect(traces).toContain('aria-expanded={!stripCollapsed}');
+    // URL'e yazılmaz
+    expect(traces).not.toMatch(/\[['"]strip['"],/);
+  });
+  it('VolumeChart katlıyken TimeChart çizmez, başlık şeridi kalır', () => {
+    const vc = readFileSync(resolve(__dirname, '../components/traces/VolumeChart.tsx'), 'utf8');
+    expect(vc).toContain('collapsed?: boolean;');
+    expect(vc).toContain('{collapsed ? null : times.length === 0 ? (');
+    expect(vc).toContain('data-collapsed={collapsed || undefined}');
+  });
+});

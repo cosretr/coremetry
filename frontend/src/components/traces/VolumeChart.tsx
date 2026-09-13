@@ -16,7 +16,7 @@ import { volumeHint, buildVolumeSeries, fmtVolumeDuration } from './volumeSeries
 import { STRIP_STAT_DEFAULT, type StripStat } from './stripStat';
 
 export function VolumeChart({
-  count, errors, latency, stat = STRIP_STAT_DEFAULT, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces',
+  count, errors, latency, stat = STRIP_STAT_DEFAULT, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces', collapsed = false,
 }: {
   count: SpanMetricSeries[] | null;
   errors: SpanMetricSeries[] | null;
@@ -42,6 +42,10 @@ export function VolumeChart({
   headerRight?: React.ReactNode;
   // v0.10.268 — çubuk birimi ("traces" | "requests"), volumeUnitLabel.
   unit?: string;
+  // v0.10.724 — katlı: yalnız başlık şeridi (anahtar + istatistikler) kalır,
+  // çizim ve bucket ipucu çizilmez. Durumu çağıran tutar (Traces:
+  // localStorage). Şerit sayfanın aracı; tablo sayfanın kendisi.
+  collapsed?: boolean;
 }) {
   const { times, series, bucketMin } = useMemo(
     () => buildVolumeSeries(count, errors, latency, unit, stat),
@@ -54,15 +58,18 @@ export function VolumeChart({
     // 12px padding + 10px margin around a 140px plot it read as the
     // headline instead, and the trace rows — the point of the page —
     // started below the fold. Operator-reported.
-    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}
+      data-collapsed={collapsed || undefined}>
       {/* v0.9.103 (Grafana-parity #1) — renk-anahtarı kaldırıldı; TimeChart
           artık altında StatsLegend (swatch+label+istatistik) gösteriyor.
           Yalnız bucket/sürükle ipucu üstte kalır (StatsLegend'de yok). */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4, fontSize: 10.5, color: 'var(--text-faint)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: collapsed ? 0 : 4, fontSize: 10.5, color: 'var(--text-faint)' }}>
         {header}
-        <span style={{ fontFamily: 'var(--font-mono, ui-monospace)' }}
-          title={volumeHint(unit ?? 'traces')}>
-          {unit} / {bucketMin}m bucket · sürükle = zaman seç</span>
+        {!collapsed && (
+          <span style={{ fontFamily: 'var(--font-mono, ui-monospace)' }}
+            title={volumeHint(unit ?? 'traces')}>
+            {unit} / {bucketMin}m bucket · sürükle = zaman seç</span>
+        )}
         {headerRight && (
           <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
             {headerRight}
@@ -70,7 +77,7 @@ export function VolumeChart({
         )}
       </div>
 
-      {times.length === 0 ? (
+      {collapsed ? null : times.length === 0 ? (
         <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
           No traces in view to bucket.
         </div>
