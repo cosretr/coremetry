@@ -1508,6 +1508,18 @@ function TracesPageInner() {
             <Pager mode="offset" count="skip"
               page={page} pageSize={50} hasMore={hasMore} onPage={setPage}
               lastReachablePage={lastReachablePage(countRes?.value, countRes?.atLeast ?? false, 50)}
+              onEnd={() => {
+                // v0.10.711 — kesin son sayfa sunulamıyorsa (sayım 10.000+
+                // tavanlı ya da 6.000 id bütçesi ötesinde) listenin sonu =
+                // ters sıranın ilk sayfası. Sıra DataTable üzerinden çevrilir
+                // ki başlık okları ve URL (order=) aynı efektle senkron kalsın.
+                dt.setSort({ id: dt.sort.id ?? 'startTime', dir: order === 'desc' ? 'asc' : 'desc' });
+                setPage(0);
+              }}
+              endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}
+              endTitle={order === 'desc'
+                ? 'Listenin sonuna git: sıralama tersine döner (en eski önce), sayfa 1'
+                : 'Listenin başına dön: sıralama yeniden en yeni önce, sayfa 1'}
               extras={
                 <>
                   {countRes?.reason && !hasMore ? (

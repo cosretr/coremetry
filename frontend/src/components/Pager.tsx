@@ -70,6 +70,15 @@ interface OffsetOnly {
   // YALNIZ hem kesin hem ulaşılabilir olduğunda verilir; verilmezse
   // "Last" hiç çizilmez.
   lastReachablePage?: number;
+  // v0.10.711 (operatör: "Next yanında last page butonu olsun") —
+  // lastReachablePage VERİLEMEDİĞİNDE (sayı tavanlı / bütçe ötesinde /
+  // sayılmadı) listenin SONUNA gitmenin sayfa-numarasız yolu: çağıran
+  // sıralamayı tersine çevirip sayfa 0'a döner (en eski 50 = son sayfanın
+  // içeriği). Sunulamayan sayfaya yollamaz (v0.9.638 kararı korunur);
+  // etiket/başlık çağıranın (ters sıradayken "⇤ First").
+  onEnd?: () => void;
+  endLabel?: string;
+  endTitle?: string;
 }
 
 interface CursorOnly {
@@ -162,7 +171,7 @@ export function Pager(props: PagerProps) {
 }
 
 function OffsetPager({
-  page, pageSize, hasMore, onPage, lastReachablePage, count, total, extras, cls, label,
+  page, pageSize, hasMore, onPage, lastReachablePage, onEnd, endLabel, endTitle, count, total, extras, cls, label,
 }: PagerCommon & CountDecl & OffsetOnly & { cls: string; label: string | null }) {
   const [draft, setDraft] = useState(String(page + 1));
 
@@ -224,6 +233,14 @@ function OffsetPager({
       <Button variant="primary" size="sm" onClick={() => onPage(page + 1)} disabled={atEnd}>
         Next →
       </Button>
+      {/* v0.10.711 — kesin son sayfa yoksa "sona git" (sıra tersi) düğmesi;
+          kesin sayfa varsa o kazanır (aynı yerde tek düğme). */}
+      {lastReachablePage === undefined && onEnd && (
+        <Button variant="secondary" size="sm" onClick={onEnd}
+          title={endTitle ?? 'Listenin sonuna git'}>
+          {endLabel ?? 'Last ⇥'}
+        </Button>
+      )}
       {lastReachablePage !== undefined && lastReachablePage > page && (
         <Button variant="secondary" size="sm" onClick={() => onPage(lastReachablePage)}
           title={`Son sayfaya git (${lastReachablePage + 1})`}>

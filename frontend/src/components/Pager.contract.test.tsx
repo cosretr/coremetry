@@ -13,7 +13,7 @@
 // "birim" sayının ANLAMI — 'exact' dalı doğru çalışıp 'capped' dalı
 // sessizce son sayfa türetseydi, operatör tam olarak v0.9.638'in
 // olayını yeniden yaşardı (ULAŞILAMAYAN sayfaya atlatma).
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { Pager, countLabel, cursorProgress, derivedLastPage, type PagerCount } from './Pager';
@@ -251,5 +251,32 @@ describe('Pager — konum', () => {
   it('şerit AKIŞTA — is-sticky-bottom asla basılmıyor', () => {
     render(<Pager mode="cursor" count="skip" hasMore onMore={() => {}} />);
     expect(document.querySelector('.pager')!.className).not.toContain('is-sticky-bottom');
+  });
+});
+
+// v0.10.711 (operatör: "Next yanında last page butonu olsun") — kesin son
+// sayfa yoksa `onEnd` ile "sona git"; kesin sayfa varsa o kazanır, iki
+// düğme birden çizilmez; etiket/başlık çağıranın.
+describe('Pager — onEnd (sona git)', () => {
+  it('lastReachablePage yokken onEnd düğmesi çizilir ve çağrılır', () => {
+    const onEnd = vi.fn();
+    render(<Pager mode="offset" count="skip" page={0} pageSize={50} hasMore onPage={() => {}} onEnd={onEnd} />);
+    const btn = Array.from(host!.querySelectorAll('button')).find(b => b.textContent?.includes('Last ⇥'))!;
+    expect(btn).toBeDefined();
+    act(() => { btn.click(); });
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+  it('lastReachablePage varken onEnd ÇİZİLMEZ (kesin sayfa kazanır)', () => {
+    render(<Pager mode="offset" count="exact" total={500} page={0} pageSize={50}
+      onPage={() => {}} lastReachablePage={9} onEnd={() => {}} endLabel="SONA" />);
+    const labels = Array.from(host!.querySelectorAll('button')).map(b => b.textContent ?? '');
+    expect(labels.some(l => l.includes('SONA'))).toBe(false);
+    expect(labels.some(l => l.includes('Last ⇥'))).toBe(true);
+  });
+  it('etiket ve başlık çağıranın', () => {
+    render(<Pager mode="offset" count="skip" page={0} pageSize={50} hasMore onPage={() => {}}
+      onEnd={() => {}} endLabel="⇤ First" endTitle="başa dön" />);
+    const btn = Array.from(host!.querySelectorAll('button')).find(b => b.textContent?.includes('⇤ First'))!;
+    expect(btn.getAttribute('title')).toBe('başa dön');
   });
 });
