@@ -505,8 +505,9 @@ export function DependenciesTable({
                         {r.dbName && r.dbName !== 'default' ? (
                           <span title={`db.name = ${r.dbName}`}
                             style={{
-                              fontSize: 10,
-                              padding: '1px 6px', borderRadius: 3,
+                              // v0.10.714 (operatör) — 10 → 13, System rozetiyle aynı ölçek.
+                              fontSize: 13,
+                              padding: '2px 8px', borderRadius: 3,
                               background: 'var(--bg3)',
                               border: '1px solid var(--border)',
                               color: 'var(--text2)',
@@ -923,12 +924,14 @@ function SystemBadge({ system, kind }: { system: string; kind: 'db' | 'queue' })
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+      // v0.10.714 (operatör: "biraz daha büyük font olabilir") — 11 → 13,
+      // Database rozetiyle aynı ölçek; satır metniyle hizalı okunur.
+      padding: '2px 8px', borderRadius: 4, fontSize: 13, fontWeight: 600,
       fontFamily: 'ui-monospace, SFMono-Regular, monospace',
       background: t.bg, color: t.fg,
       border: `1px solid ${t.fg}33`,
     }}>
-      <span aria-hidden style={{ fontSize: 10 }}>{kind === 'db' ? '⛁' : '⌬'}</span>
+      <span aria-hidden style={{ fontSize: 12 }}>{kind === 'db' ? '⛁' : '⌬'}</span>
       {system}
     </span>
   );
