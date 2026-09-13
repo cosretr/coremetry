@@ -128,9 +128,27 @@ export function smoothCentered(data: (number | null)[], window: number): (number
 // ikinci bir tam tarama olurdu; bilinçli yapılmadı.
 export type StripScope = 'entry' | 'spans';
 
+// v0.10.730 (operator-reported, prod: "operation name olarak bir sorgu
+// seçince Traces'taki histogram hiç gelmiyor" — name = "INSERT
+// paku01_prd.AHS_DOSYA", tablo dolu, şerit 0) — `name` / `span.name`
+// ENTRY_KEYS'ten ÇIKARILDI.
+//
+// Neden yanlıştı: liste bu anahtarları HER span'de eşler, giriş span'ı ise
+// yalnız server/consumer. Bir span ADI her kind'da yaşar — DB istemci
+// span'inin adı "INSERT <tablo>", Kafka üreticisininki topic. Ad giriş
+// span'ine AİT OLDUĞUNU garanti etmez; ettiğini varsaymak v0.10.323'ün
+// db.statement olayının birebir ikizini üretti (kind kısıtı AND'lenince
+// eşleşme sıfır, grafik boş, tablo dolu).
+//
+// Kabul edilen bedel: adı giriş span'ine ait olan durumda (GET /api/x)
+// şerit artık o adı taşıyan TÜM span'leri sayar — çağıranın istemci
+// span'i aynı adı taşıyorsa sayı bir miktar büyür. Servis seçiliyken
+// (yaygın hâl) ikisi aynı serviste olmadığı için fark yok; boş grafik
+// ise her hâlde toplam kayıptı. Kapsam etikette görünür ("spans") ve
+// ipucu neyi saydığını yazar.
 /** Giriş span'ında yaşayan anahtarlar / önekler — bunlar şeridi giriş kapsamında tutar. */
-const ENTRY_KEYS = new Set(['service.name', 'name', 'kind', 'status_code', 'status', 'cluster', 'deployment.environment',
-  'channel_code', 'function_code', 'function_id', 'span.kind', 'span.name']);
+const ENTRY_KEYS = new Set(['service.name', 'kind', 'status_code', 'status', 'cluster', 'deployment.environment',
+  'channel_code', 'function_code', 'function_id', 'span.kind']);
 const ENTRY_PREFIXES = ['http.', 'url.', 'server.', 'k8s.', 'resource.', 'host.', 'service.', 'deployment.', 'telemetry.', 'process.', 'os.', 'container.', 'cloud.'];
 
 export function isEntrySpanKey(key: string): boolean {

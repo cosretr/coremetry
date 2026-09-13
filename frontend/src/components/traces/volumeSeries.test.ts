@@ -159,6 +159,17 @@ describe('stripScope', () => {
     expect(isEntrySpanKey('HTTP.METHOD')).toBe(true);
     expect(isEntrySpanKey('db.system')).toBe(false);
   });
+  // v0.10.730 (operator-reported: name = "INSERT …" → şerit boş) — span ADI
+  // her kind'da yaşar (DB istemci span'i "INSERT <tablo>"); giriş span'ine
+  // ait olduğunu VARSAYMAK kind kısıtını AND'leyip grafiği boşaltıyordu.
+  it('name / span.name giriş anahtarı DEĞİL — şerit eşleşen span\'leri sayar', () => {
+    expect(isEntrySpanKey('name')).toBe(false);
+    expect(isEntrySpanKey('span.name')).toBe(false);
+    expect(stripScope([{ k: 'name' }], '')).toBe('spans');
+    expect(stripScope([{ k: 'service.name' }, { k: 'name' }], '')).toBe('spans');
+    // service.name (servis kimliği) etkilenmedi.
+    expect(isEntrySpanKey('service.name')).toBe(true);
+  });
   it('birim ve ipucu kapsamı söyler', () => {
     expect(volumeUnitFor(true, 'entry')).toBe('traces');
     expect(volumeUnitFor(false, 'entry')).toBe('requests');
