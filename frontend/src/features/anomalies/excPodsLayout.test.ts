@@ -55,7 +55,7 @@ describe('exception detayı Pods · nodes (v0.10.173 → v0.10.734)', () => {
     const src = read('./ProblemDetail.tsx');
     expect(src).toContain('const STACK_FOLD_AT = 20;');
     expect(src).toContain('const STACK_FOLD_SHOW = 12;');
-    expect(src).toContain('shownStackLines.map((l, i) =>');
+    expect(src).toContain('const shownStackLines = stackFolded ? stackLines.slice(0, STACK_FOLD_SHOW) : stackLines;'); // 735: StackTrace'e join ile gider
     expect(src).toContain('onClick={copyStack} disabled={!stack}');
     expect(src).toContain('<div className="ex-fold">');
     expect(src).not.toContain('<span className="k">first seen</span>');
@@ -82,5 +82,19 @@ describe('Occurrences over time — kenar payı', () => {
     const { fmtOccTick } = await import('./occTick');
     const t = new Date(2026, 8, 13, 11, 35, 0).getTime() / 1000; // yerel saat
     expect(fmtOccTick(t)).toBe('13.09 11:35');
+  });
+});
+
+// v0.10.735 — uygulama/kütüphane frame süsü + DevOps linki (SpanDetail makinesi).
+describe('stack frame süsü (v0.10.735)', () => {
+  it('StackTrace bileşeni, kanonik metin, fetch-on-open, katlı altküme aynı indeks', () => {
+    const src = read('./ProblemDetail.tsx');
+    expect(src).toContain("stack.replace(/\\r\\n/g, '\\n').trimEnd()");
+    expect(src).toContain('useStackFrameLinks({ service: group.service, stack: stackNorm, enabled: !!stackNorm })');
+    expect(src).toContain("<StackTrace stack={shownStackLines.join('\\n')}");
+    expect(src).toContain('headClass="ex-head-line"');
+    expect(src).not.toContain("color: i === 0 ? 'var(--err)'");
+    const css = read('../../styles/globals.css');
+    expect(css).toContain('.ex-head-line { color: var(--err); }');
   });
 });

@@ -24,6 +24,8 @@ import { fmtDurationNs, fmtStartedTs } from './problemTime';
 import { emptySamplesNote } from './exceptionSamples';
 import { ExceptionPodsPanel } from './ExceptionPodsPanel';
 import { fmtOccTick } from './occTick'; // v0.10.734
+import { StackTrace } from '@/components/StackTrace'; // v0.10.735
+import { useStackFrameLinks } from '@/lib/queries'; // v0.10.735
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import type { ExceptionGroup, ExceptionGroupState, Problem, RolloutEvidence } from '@/lib/types';
@@ -428,7 +430,18 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
 
   // Representative stack = the first sample that carries one.
   const stack = samples.find(s => s.stacktrace)?.stacktrace ?? '';
-  const stackLines = stack ? stack.split('\n') : [];
+  // v0.10.735 — KANONİK metin (CRLF → LF, sondaki boşluk kırpık): ekrana
+  // çizilen dizgi ile /api/devops/stack-frames'e giden dizgi AYNI olmak
+  // zorunda (SpanDetail formatStack sözleşmesi: sunucu frame'leri satır
+  // indeksiyle işaretler). Copy HAM stack'i kopyalar.
+  const stackNorm = useMemo(() => stack.replace(/\r\n/g, '\n').trimEnd(), [stack]);
+  const stackLines = stackNorm ? stackNorm.split('\n') : [];
+  // v0.10.735 (operatör "go") — uygulama frame'i koyu + DevOps linki,
+  // kütüphane frame'i soluk: SpanDetail'in v0.10.581 makinesi. Fetch-on-open:
+  // yalnız bu detay açıkken, stack varsa; DevOps ayarlı değilse
+  // (configured:false) düz metin, uyarı yok.
+  const frameLinks = useStackFrameLinks({ service: group.service, stack: stackNorm, enabled: !!stackNorm });
+  const framed = frameLinks.data?.configured ? frameLinks.data : undefined;
   // v0.10.734 (operatör onaylı mockup a42a0b31: "stack trace çok uzunsa
   // collapsed gösterelim, sayfa çok aşağı gidiyor") — 20 satırdan uzun
   // stack ilk 12 satırla açılır (mesaj + en üst frame'ler), "▾ N satır
@@ -634,11 +647,13 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                 </div>
               )
             ) : (
-              <pre className="mono" style={{ margin: 0, fontSize: 11.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                {shownStackLines.map((l, i) => (
-                  <div key={i} style={{ color: i === 0 ? 'var(--err)' : 'var(--text2)' }}>{l}</div>
-                ))}
-              </pre>
+              /* v0.10.735 — katlı altküme (ilk N satır) aynı indeksleri taşır;
+                 frame künyesi tam metinden, süs yalnız görünen satırlara. */
+              <StackTrace stack={shownStackLines.join('\n')}
+                frames={framed?.frames}
+                warning={framed?.revisionWarning}
+                verified={framed?.revision?.verified === true}
+                headClass="ex-head-line" />
             )}
           </div>
           {stackLines.length > STACK_FOLD_AT && (

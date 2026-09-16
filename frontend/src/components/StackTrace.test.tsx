@@ -252,3 +252,16 @@ describe('StackTrace — hiçbir satır yutulmuyor', () => {
     expect(pre(el).textContent).toBe(STACK);
   });
 });
+
+// v0.10.735 — headClass: ilk satır (mesaj) sınıf alır; frames yokken bile
+// (exception detayı klasik kırmızı mesaj). Prop verilmezse bit bit eski çıktı
+// (yukarıdaki testler).
+describe('headClass (v0.10.735)', () => {
+  it('yalnız 0. satır sarılır, metin aynen; frames yokken de', () => {
+    const el = render(<StackTrace stack={STACK} headClass="ex-head-line" />);
+    const spans = el.querySelectorAll('span.ex-head-line');
+    expect(spans.length).toBe(1);
+    expect(spans[0].textContent).toBe(STACK.split('\n')[0]);
+    expect(pre(el).textContent).toBe(STACK);
+  });
+});

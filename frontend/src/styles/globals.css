@@ -2146,6 +2146,8 @@ canvas { max-width: 100%; }
 .ex-stack-note { margin-top: var(--sp-4); }
 .ex-frame-app { color: var(--text); }
 .ex-frame-lib { color: var(--text3); }
+/* v0.10.735 — exception detayı: ilk satır (mesaj) kırmızı; klasik düzenin rengi. */
+.ex-head-line { color: var(--err); }
 .ex-frame-link { text-decoration: underline dotted; text-underline-offset: 2px; }
 .ex-frame-link:hover { text-decoration: underline solid; }
 

@@ -30,7 +30,7 @@ import type { StackFrameLink } from '@/lib/types';
 // DEGRADASYON SESSİZ: `frames` yoksa (uç `configured:false` döndü,
 // istek düştü, ya da hiçbir frame tanınmadı) çıktı bugünkü düz metnin
 // BİREBİR aynısı olur. Bu yüzeyde hata/uyarı gösterilmez.
-export function StackTrace({ stack, frames, warning, verified }: {
+export function StackTrace({ stack, frames, warning, verified, headClass }: {
   /** Çizilecek metin. Sunucuya gönderilen dizgenin AYNISI olmalı. */
   stack: string;
   /** Sunucudan gelen frame künyesi. Yoksa düz metne düşülür. */
@@ -39,6 +39,12 @@ export function StackTrace({ stack, frames, warning, verified }: {
   warning?: string;
   /** v0.10.590 — sürüm VCS'te doğrulandıysa uyarı yerine onay tonu. */
   verified?: boolean;
+  /**
+   * v0.10.735 — İLK satırın (exception mesajı; frame değildir) sınıfı.
+   * Exception detayı klasik düzeni mesajı kırmızı çizer; verilmezse çıktı
+   * bugünkü gibi (SpanDetail geçmez → bit bit aynı).
+   */
+  headClass?: string;
 }) {
   // İlk kazanır: sunucu aynı satır için birden çok frame dönerse
   // (bozuk bir gramer, iç içe geçmiş dil), satır TEK bir süs alır —
@@ -62,7 +68,7 @@ export function StackTrace({ stack, frames, warning, verified }: {
   // Süslenecek hiçbir şey yok → BUGÜNKÜ görünüm, birebir. Satır satır
   // çizmiyoruz bile: tek bir metin düğümü, yani boşluk/sekme davranışı
   // tartışmasız aynı kalıyor.
-  if (byLine.size === 0) return <pre className="ex-stack">{stack}</pre>;
+  if (byLine.size === 0 && !headClass) return <pre className="ex-stack">{stack}</pre>;
 
   const lines = stack.split('\n');
 
@@ -76,7 +82,9 @@ export function StackTrace({ stack, frames, warning, verified }: {
       <pre className="ex-stack">
         {lines.map((line, i) => (
           <Fragment key={i}>
-            {frameLine(line, byLine.get(i))}
+            {i === 0 && headClass && !byLine.get(0)
+              ? <span className={headClass}>{line}</span>
+              : frameLine(line, byLine.get(i))}
             {/* Ayırıcı AYRI bir düğüm: satır içeriği <a>/<span> içine
                 girse de `\n` dışarıda kalır, yani satır sayısı girdiyle
                 aynı — hiçbir satır yutulmaz. */}
