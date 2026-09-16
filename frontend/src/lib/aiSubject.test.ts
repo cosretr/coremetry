@@ -156,18 +156,22 @@ describe('SELF biçimi — ?ai=<kind> sayfa kimliğinden çözülür (v0.10.731)
     expect(formatAiParamForUrl({ kind: 'trace', id: 'ffff' }, null)).toBe('trace:ffff');
     expect(formatAiParamForUrl({ kind: 'trace', id: 'ffff' }, new URLSearchParams(''))).toBe('trace:ffff');
   });
-  it('fazladan veri taşıyan özneler (span, charts) kısalmaz', () => {
+  it('span KISMİ kısalır (v0.10.743: trace id sayfadan, spanId açık); charts/service-health kısalmaz', () => {
     expect(formatAiParamForUrl({ kind: 'span', id: 'e4de1be1b3227254cfb1c86c208b4a0a', spanId: 'ab' }, page))
-      .toBe('span:e4de1be1b3227254cfb1c86c208b4a0a:ab');
-    expect(aiSelfParam('span')).toBeNull();
+      .toBe('span:ab');
+    expect(aiSelfParam('span')).toBe('id');
     expect(aiSelfParam('trace')).toBe('id');
+    expect(aiSelfParam('charts')).toBeNull();
+    expect(aiSelfParam('service-health')).toBeNull();
   });
   it('kısa biçim parse: sayfa id\'si → özne; id yoksa null (yanlış özne açmaz)', () => {
     expect(parseAiParam('trace', page)).toEqual({ kind: 'trace', id: 'e4de1be1b3227254cfb1c86c208b4a0a' });
     expect(parseAiParam('trace', new URLSearchParams('range=6h'))).toBeNull();
     expect(parseAiParam('trace')).toBeNull();
-    // Kısa biçimi olmayan kind çıplak gelirse reddedilir.
+    // v0.10.743 — problem artık kısa biçim taşır (?problem=); bu sayfada o param yok → null.
     expect(parseAiParam('problem', page)).toBeNull();
+    // Kısa biçimi olmayan kind çıplak gelirse reddedilir.
+    expect(parseAiParam('charts', page)).toBeNull();
   });
   it('uzun biçim AYNEN çalışır (eski linkler); gidiş-dönüş kanonik', () => {
     const s = { kind: 'trace' as const, id: 'e4de1be1b3227254cfb1c86c208b4a0a' };
@@ -175,5 +179,44 @@ describe('SELF biçimi — ?ai=<kind> sayfa kimliğinden çözülür (v0.10.731)
     expect(parseAiParam(formatAiParamForUrl(s, page), page)).toEqual(s);
     // Karşılaştırma/sunucu tarafı kanonik biçimi kullanmaya devam eder.
     expect(formatAiParam(s)).toBe('trace:e4de1be1b3227254cfb1c86c208b4a0a');
+  });
+});
+
+// v0.10.731/743 — SELF biçimi: özne sayfanın kendi kimliğiyse adres id'yi
+// tekrarlamaz (`?ai=trace`, `?ai=problem`, `?ai=exception`, `?ai=span:<spanId>`).
+// Kısa biçim yalnız sayfa parametresi verilince çözülür; eşleşmeyen id
+// uzun biçimde kalır; uzun biçim her zaman parse edilir (geriye dönük).
+describe('SELF biçimi (v0.10.731/743)', () => {
+  const page = (o: Record<string, string>) => new URLSearchParams(o);
+  it("trace: ?id eşleşince 'trace', çözüm sayfadan, round-trip", () => {
+    const s = { kind: 'trace', id: 'abc123' } as const;
+    expect(formatAiParamForUrl(s, page({ id: 'abc123' }))).toBe('trace');
+    expect(parseAiParam('trace', page({ id: 'abc123' }))).toEqual(s);
+    expect(formatAiParamForUrl(s, page({ id: 'other' }))).toBe('trace:abc123'); // eşleşmiyor → uzun
+    expect(parseAiParam('trace', page({}))).toBeNull(); // sayfa kimliği yok → null
+    expect(parseAiParam('trace')).toBeNull();
+  });
+  it('problem (?problem=) ve exception (?exc=)', () => {
+    const pr = { kind: 'problem', id: 'p-9' } as const;
+    expect(formatAiParamForUrl(pr, page({ problem: 'p-9' }))).toBe('problem');
+    expect(parseAiParam('problem', page({ problem: 'p-9' }))).toEqual(pr);
+    const ex = { kind: 'exception', id: 'a6a7f0ebb720fc5c' } as const;
+    expect(formatAiParamForUrl(ex, page({ exc: 'a6a7f0ebb720fc5c' }))).toBe('exception');
+    expect(parseAiParam('exception', page({ exc: 'a6a7f0ebb720fc5c' }))).toEqual(ex);
+    // Uzun biçim aynen çalışır (eski/paylaşılan linkler).
+    expect(parseAiParam('exception:a6a7f0ebb720fc5c', page({}))).toEqual(ex);
+  });
+  it("span kısmi: 'span:<spanId>' — trace id sayfadan, spanId açık; 3 parçalı biçim korunur", () => {
+    const sp = { kind: 'span', id: 'abc123', spanId: 's:1' } as const;
+    expect(formatAiParamForUrl(sp, page({ id: 'abc123' }))).toBe('span:s%3A1');
+    expect(parseAiParam('span:s%3A1', page({ id: 'abc123' }))).toEqual(sp);
+    expect(parseAiParam('span:s%3A1', page({}))).toBeNull(); // sayfa kimliği yok
+    expect(parseAiParam('span', page({ id: 'abc123' }))).toBeNull(); // spanId şart
+    expect(formatAiParamForUrl(sp, page({ id: 'other' }))).toBe('span:abc123:s%3A1');
+    expect(parseAiParam('span:abc123:s%3A1')).toEqual(sp);
+  });
+  it('service-health / charts kısaltılmaz (pencere/kapsam taşır)', () => {
+    const sh = { kind: 'service-health', id: 'svc', fromNs: 1000, toNs: 2000 } as const;
+    expect(formatAiParamForUrl(sh, page({ name: 'svc' }))).toBe(formatAiParam(sh));
   });
 });

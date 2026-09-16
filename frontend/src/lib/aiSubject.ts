@@ -141,7 +141,11 @@ function safeDecode(s: string): string {
 // Geriye dönük: uzun biçim AYNEN parse edilir (eski linkler, paylaşılan
 // adresler, CoSRE'nin ürettiği derin linkler kırılmaz) ve sunucuya giden
 // özne parametresi (AIDrawerBody) her zaman KANONİK uzun biçimdir.
-const SELF_PARAM: Partial<Record<AIKind, string>> = { trace: 'id' };
+// v0.10.743 — harita genişledi: problem (Inbox ?problem=), exception
+// (/problems ?exc= = fingerprint) , incident (/incident ?id=). span KISMİ:
+// `span:<spanId>` — trace id sayfanın ?id='sinden, spanId açık kalır (aynı
+// sayfada başka span seçilince çekmece o span'e KAYMAZ; özne sabit).
+const SELF_PARAM: Partial<Record<AIKind, string>> = { trace: 'id', span: 'id', problem: 'problem', exception: 'exc', incident: 'id' };
 
 /** Bu kind sayfa kimliğinden çözülebiliyorsa o parametrenin adı. */
 export function aiSelfParam(kind: string): string | null {
@@ -155,7 +159,11 @@ export function aiSelfParam(kind: string): string | null {
  */
 export function formatAiParamForUrl(s: AISubject, pageParams: URLSearchParams | null | undefined): string {
   const self = SELF_PARAM[s.kind];
-  if (self && pageParams && s.id && pageParams.get(self) === s.id) return s.kind;
+  if (self && pageParams && s.id && pageParams.get(self) === s.id) {
+    // v0.10.743 — span kısmi biçim: trace id sayfadan, spanId açık.
+    if (s.kind === 'span') return `span:${encodeURIComponent(s.spanId)}`;
+    return s.kind;
+  }
   return formatAiParam(s);
 }
 
@@ -179,9 +187,17 @@ export function parseAiParam(
   const kind = parts[0];
   if (!KIND_SET.has(kind)) return null;
   if (parts.length === 1) {
+    if (kind === 'span') return null; // span kısmi biçimde en az spanId ister
     const self = SELF_PARAM[kind as AIKind];
     const v = self && pageParams ? (pageParams.get(self) ?? '') : '';
     return v ? { kind: kind as SimpleKind, id: v } : null;
+  }
+  // v0.10.743 — span kısmi biçimi: `span:<spanId>` (2 parça) → trace id
+  // sayfanın ?id='sinden; yoksa null (sessizce yanlış trace açmaktansa hiç).
+  if (kind === 'span' && parts.length === 2) {
+    const traceID = pageParams ? (pageParams.get(SELF_PARAM.span ?? 'id') ?? '') : '';
+    const spanId = safeDecode(parts[1] ?? '');
+    return traceID && spanId ? { kind: 'span', id: traceID, spanId } : null;
   }
   const id = safeDecode(parts[1] ?? '');
   if (!id) return null;
