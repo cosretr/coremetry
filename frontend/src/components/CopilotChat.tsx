@@ -100,7 +100,12 @@ function AiMark({ size = 26 }: { size?: number }) {
   );
 }
 
-export function CopilotChat() {
+// v0.10.732 (operatör: "Kiosk modunda da Explain trace yapılabilsin") —
+// `launcher={false}`: FAB, kritik-problem rozeti ve nudge baloncuğu
+// çizilmez/pollanmaz; yalnız `?ai=` öznesiyle açılan çekmece kalır. Kiosk
+// (kromsuz, salt-okunur pencere) çekmeceyi sayfa-yerel mount eder; kabuğun
+// kiosk dalı hâlâ hiçbir krom bileşeni çizmez (appShellKiosk pinleri).
+export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
   // v0.10.483 — config TEK kaynaktan (useCopilotConfig: modül cache'i, AIDrawer
   // ile aynı); eskiden CopilotChat kendi effect'iyle ikinci bir istek atıyordu.
   const cfg = useCopilotConfig(true);
@@ -120,7 +125,7 @@ export function CopilotChat() {
   const navigate = useNavigate(); // v0.10.434 (D7b) — "sayfasını aç" cevabı SPA içinde gezer
   // v0.9.169 — proaktif rozet: açık KRİTİK problem sayısı (chat kapalıyken
   // FAB'da kırmızı rozet). Yalnız copilot açıkken pollar; RQ tab gizliyken durur.
-  const criticalOpen = useOpenCriticalCount({ enabled: enabled === true }).data ?? 0;
+  const criticalOpen = useOpenCriticalCount({ enabled: enabled === true && launcher }).data ?? 0; // v0.10.732 — kiosk pollamaz
   // v0.9.528 — karşılama operatörü ADIYLA selamlar ve o anki durumu
   // söyler. İki kaynak da UCUZ: ad zaten AuthProvider'da (login'de
   // gelen /api/auth/me), P1 listesi YALNIZ pencere açıkken ve henüz
@@ -374,8 +379,8 @@ export function CopilotChat() {
     <>
       {/* Launcher — markalı animasyonlu sparkline (varyant B). Yuvarlak FAB
           kendi anatomisi; shared <Button> atomu uygulanmaz (U1 batch-2 kararı). */}
-      {!drawerOpen && <TraceExplainNudge />}{/* v0.10.432 (D8) — FAB'ın üstündeki baloncuk */}
-      {!drawerOpen && (
+      {launcher && !drawerOpen && <TraceExplainNudge />}{/* v0.10.432 (D8) — FAB'ın üstündeki baloncuk */}
+      {launcher && !drawerOpen && (
         <button
           className={criticalOpen > 0 ? 'cm-ai-fab is-alert' : 'cm-ai-fab'}
           onClick={() => setOpen(true)}

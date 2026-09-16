@@ -9,6 +9,9 @@ import { TraceLogsPanel } from './trace/TraceLogsPanel';
 import { KioskSpanPanel } from './trace/KioskSpanPanel'; // v0.10.681 — alt span detayı
 import { useEscLayer } from '@/lib/escLayer';
 import { pickRootSpan, bundleLogsState, toggleSpanSelection, KIOSK_LOG_LIMIT_DEFAULT, KIOSK_LOG_LIMIT_MAX } from './trace/kioskModel';
+import { AIExplainButton } from '@/components/ai/AIExplainButton'; // v0.10.732
+import { CopilotChat } from '@/components/CopilotChat'; // v0.10.732
+import { IconSparkles } from '@/components/icons';
 import { useTraceBundle } from '@/lib/queries';
 import { perSpanLogSignals, spanEventLogRows, splitGrpcMessageEvents } from '@/lib/traceEventLogs';
 import { STORAGE_KEYS, getRaw, setRaw } from '@/lib/storage';
@@ -126,6 +129,13 @@ export function TraceKiosk() {
         {/* v0.10.680 (operatör: "sağ tarafta log izleme linki de olsa") — bu
             trace'in logları tam Logs sayfasında, yeni pencerede; URL üreticiden
             (logsHref: traceId + span penceresi ±). */}
+        {/* v0.10.732 (operatör: "Kiosk modunda da Explain trace yapılabilsin")
+            — Trace sayfasındaki ile aynı affordance; adrese `?ai=trace` yazar
+            (v0.10.731 kısa biçim, id sayfanın ?id='sinden), çekmeceyi aşağıdaki
+            sayfa-yerel CopilotChat (launcher kapalı) açar. copilot kapalıysa
+            buton kendini gizler. */}
+        <AIExplainButton subject={{ kind: 'trace', id }} size="sm"
+          label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>Explain this trace</span></>} />
         <a className="trace-kiosk__brand-link" href={allLogsHref} target="_blank" rel="noopener noreferrer"
           title="Bu trace'in loglarını Logs sayfasında aç (yeni pencere)">≡ Logs ↗</a>
       </div>
@@ -192,6 +202,9 @@ export function TraceKiosk() {
           traceServices={traceServices}
         />
       </div>
+      {/* v0.10.732 — çekmece yalnız ?ai= öznesiyle; FAB/rozet/nudge YOK (kiosk
+          kromsuz kalır). Kabuğun kiosk dalı CopilotChat çizmediği için burada. */}
+      <CopilotChat launcher={false} />
     </div>
   );
 }

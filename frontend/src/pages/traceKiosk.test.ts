@@ -20,9 +20,16 @@ describe('TraceKiosk (v0.10.675)', () => {
     expect(kiosk).toContain('useEscLayer(!!selectedSpan, () => setSelectedId(null))');
   });
   it('krom bileşenlerini ithal etmez', () => {
-    for (const bad of ["from '@/components/Topbar'", 'AIExplainButton', 'ExternalLinkButtons', 'SharePopover', "from '@/components/SpanDetail'", 'EventSource']) {
+    // v0.10.732 — AIExplainButton listeden ÇIKTI (operatör: "Kiosk modunda da
+    // Explain trace yapılabilsin"); aşağıdaki test onu pozitif pinler.
+    for (const bad of ["from '@/components/Topbar'", 'ExternalLinkButtons', 'SharePopover', "from '@/components/SpanDetail'", 'EventSource']) {
       expect(kiosk).not.toContain(bad);
     }
+  });
+  it('Explain: buton marka şeridinde, çekmece sayfa-yerel ve FAB\'sız (v0.10.732)', () => {
+    expect(kiosk).toContain("<AIExplainButton subject={{ kind: 'trace', id }}");
+    expect(kiosk).toContain('<CopilotChat launcher={false} />');
+    // Kabuğun kiosk dalı hâlâ çizmez — çekmece SAYFADAN gelir (appShellKiosk pinleri aynen).
   });
   it('veriyi tek istekte alır (bundle); ayrı trace/log/oracle çağrısı yok', () => {
     expect(kiosk).toContain('useTraceBundle(');
