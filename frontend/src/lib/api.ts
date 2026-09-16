@@ -1040,6 +1040,13 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, fetchSize }),
     }),
+  // v0.10.742 — Oracle SQL konsolu (admin): tek SELECT/WITH, alt sorguya sarılı
+  // FETCH FIRST 10k tavanı; hata 200 + error (redaksiyonlu), DML 400.
+  oracleSqlQuery: (sourceId: string, query: string) =>
+    request<import('./types').SQLResult>(`/api/admin/sql/oracle`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceId, query }),
+    }),
 
   // Audit log (admin-only read).
   auditLog: (since: GoDuration = '24h', filters: { actor?: string; action?: string; target?: string; targetId?: string } = {}) =>

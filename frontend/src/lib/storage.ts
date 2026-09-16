@@ -45,6 +45,7 @@ export const STORAGE_KEYS = {
   spanPanelWidth:   'coremetry-span-panel-w',
   exploreHistory:   'coremetry-explore-history',
   sqlBackend:       'coremetry-sql-backend',
+  sqlOracleSource:  'coremetry-sql-oracle-source', // v0.10.742 — konsolda son seçilen Oracle kaynağı
   // v0.9.225 — son odaklanılan servis. Auto-pick tüm haritanın gelmesini
   // beklediği için ilk boyama gereksiz yere o sorguya bağlanıyordu; hatırlanan
   // odak, komşuluk sorgusunu harita daha yoldayken başlatır.

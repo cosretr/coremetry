@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query'; // v0.10.742 — Oracle kaynak listesi
 import { Empty, Spinner } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
 import { VirtualList, Button } from '@/components/ui';
@@ -17,7 +18,31 @@ import { getRaw, setRaw, getItem, setItem, STORAGE_KEYS } from '@/lib/storage';
 //
 // Layout: schema browser left, editor + results right.
 
-type Backend = 'clickhouse' | 'elasticsearch';
+type Backend = 'clickhouse' | 'elasticsearch' | 'oracle';
+
+// v0.10.742 (operatör: "Oracle için de SQL console") — Oracle örnekleri.
+// Genel katalog sorguları; şema/tablo adı operatörün kaynağından gelir.
+// Sunucu tek SELECT/WITH kabul eder ve 10k satıra tavanlar (FETCH FIRST).
+const ORACLE_SAMPLES: { label: string; sql: string }[] = [
+  { label: 'Bağlantı testi — sunucu zamanı', sql: 'SELECT SYSDATE AS now_ts, SYSTIMESTAMP AS now_tz FROM dual' },
+  { label: 'Erişilebilir tablolar (ilk 200)', sql:
+    `SELECT owner, table_name, num_rows, last_analyzed
+FROM all_tables
+ORDER BY owner, table_name
+FETCH FIRST 200 ROWS ONLY` },
+  { label: 'Bir tablonun kolonları', sql:
+    `-- <OWNER> ve <TABLE> yerine kaynağın şema/tablo adını yaz
+SELECT column_name, data_type, data_length, nullable
+FROM all_tab_columns
+WHERE owner = '<OWNER>' AND table_name = '<TABLE>'
+ORDER BY column_id` },
+  { label: 'Sürüm', sql: 'SELECT banner FROM v$version' },
+  { label: 'Şu an koşan oturumlar', sql:
+    `SELECT sid, serial#, username, status, program, sql_id
+FROM v$session
+WHERE username IS NOT NULL
+ORDER BY status, username` },
+];
 
 // ES-flavoured sample queries — shown only when the operator
 // switches the playground to the Elasticsearch tab. Quoted
@@ -137,8 +162,27 @@ export default function SQLPlaygroundPage() {
 
   const [backend, setBackend] = useState<Backend>(() => {
     const v = getRaw(STORAGE_KEYS.sqlBackend) as Backend | null;
-    return v === 'elasticsearch' ? 'elasticsearch' : 'clickhouse';
+    return v === 'elasticsearch' || v === 'oracle' ? v : 'clickhouse';
   });
+  // v0.10.742 — Oracle kaynakları (Settings → Oracle listesi; admin GET,
+  // şifre maskeli). Yalnız Oracle sekmesi açıkken çekilir; seçim
+  // tarayıcıda hatırlanır. Poller kapalı kaynak da seçilebilir (konsol
+  // bağlantıyı kendisi açar).
+  const oracleQ = useQuery({
+    queryKey: ['oracle-settings'],
+    queryFn: () => api.oracleSettings(),
+    enabled: isAdmin && backend === 'oracle',
+    staleTime: 60_000,
+  });
+  const oracleSources = oracleQ.data?.sources ?? [];
+  const [oracleSource, setOracleSource] = useState<string>(() => getRaw(STORAGE_KEYS.sqlOracleSource) ?? '');
+  const pickOracleSource = (id: string) => { setOracleSource(id); setRaw(STORAGE_KEYS.sqlOracleSource, id); };
+  // Kaynak listesi gelince: seçim yoksa ya da artık listede değilse ilkini al.
+  useEffect(() => {
+    if (backend !== 'oracle' || oracleSources.length === 0) return;
+    if (!oracleSources.some(sc => sc.id === oracleSource)) pickOracleSource(oracleSources[0].id ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backend, oracleSources]);
   const [query, setQuery] = useState<string>(
     'SELECT count() FROM spans WHERE time >= now() - INTERVAL 5 MINUTE');
   const [result, setResult] = useState<SQLResult | null | undefined>(undefined);
@@ -152,6 +196,8 @@ export default function SQLPlaygroundPage() {
     // CH SQL against ES (or vice-versa) and hit a parse error.
     if (next === 'elasticsearch') {
       setQuery(ES_SAMPLES[0].sql);
+    } else if (next === 'oracle') {
+      setQuery(ORACLE_SAMPLES[0].sql);
     } else {
       setQuery('SELECT count() FROM spans WHERE time >= now() - INTERVAL 5 MINUTE');
     }
@@ -173,9 +219,15 @@ export default function SQLPlaygroundPage() {
     setRunning(true);
     setResult(undefined);
     try {
+      if (backend === 'oracle' && !oracleSource) {
+        setResult({ columns: [], rows: [], rowCount: 0, tookMs: 0, error: 'Önce bir Oracle kaynağı seç (Settings → Oracle).' });
+        return;
+      }
       const res = backend === 'elasticsearch'
         ? await api.elasticSqlQuery(q)
-        : await api.sqlQuery(q);
+        : backend === 'oracle'
+          ? await api.oracleSqlQuery(oracleSource, q)
+          : await api.sqlQuery(q);
       setResult(res);
       // Push to history (dedupe + cap)
       const next = [q, ...history.filter(h => h !== q)].slice(0, HISTORY_MAX);
@@ -327,12 +379,31 @@ export default function SQLPlaygroundPage() {
                 title="Forwards the SQL to Elasticsearch's _sql endpoint. Requires the logs backend to be Elasticsearch.">
                 Elasticsearch
               </button>
+              <button type="button"
+                onClick={() => switchBackend('oracle')}
+                className={backend === 'oracle' ? 'active' : ''}
+                title="Settings → Oracle'daki bir kaynağa salt-okunur sorgu: tek SELECT/WITH, 10k satır tavanı, kaynağın zaman aşımı.">
+                Oracle
+              </button>
             </div>
+            {backend === 'oracle' && (
+              /* v0.10.742 — kaynak seçici (Settings → Oracle listesi). */
+              <select value={oracleSource} onChange={e => pickOracleSource(e.target.value)}
+                aria-label="Oracle kaynağı" title="Sorgunun gideceği Oracle kaynağı" style={{ fontSize: 11 }}>
+                {oracleQ.isPending && <option value="">kaynaklar yükleniyor…</option>}
+                {!oracleQ.isPending && oracleSources.length === 0 && <option value="">Oracle kaynağı yok — Settings → Oracle</option>}
+                {oracleSources.map(sc => (
+                  <option key={sc.id} value={sc.id}>
+                    {sc.name}{sc.enabled ? '' : ' (poller kapalı)'}{sc.passwordResolved ? '' : ' · şifre çözülemedi'}
+                  </option>
+                ))}
+              </select>
+            )}
             <Button variant="primary" onClick={run} loading={running}>
               Run <span style={{ color: 'var(--text3)' }}>⌘↵</span>
             </Button>
             <select onChange={e => {
-              const list = backend === 'elasticsearch' ? ES_SAMPLES : SAMPLES;
+              const list = backend === 'elasticsearch' ? ES_SAMPLES : backend === 'oracle' ? ORACLE_SAMPLES : SAMPLES;
               const s = list.find(x => x.label === e.target.value);
               if (s) setQuery(s.sql);
               e.target.value = '';
@@ -340,7 +411,7 @@ export default function SQLPlaygroundPage() {
               defaultValue=""
               style={{ fontSize: 11 }}>
               <option value="">Sample queries…</option>
-              {(backend === 'elasticsearch' ? ES_SAMPLES : SAMPLES)
+              {(backend === 'elasticsearch' ? ES_SAMPLES : backend === 'oracle' ? ORACLE_SAMPLES : SAMPLES)
                 .map(s => <option key={s.label} value={s.label}>{s.label}</option>)}
             </select>
             <select onChange={e => {
@@ -356,7 +427,9 @@ export default function SQLPlaygroundPage() {
             </select>
             <span style={{ flex: 1 }} />
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-              read-only · 60s timeout · 10k row cap
+              {backend === 'oracle'
+                ? 'read-only (SELECT/WITH, alt sorguya sarılı) · kaynağın zaman aşımı · 10k row cap'
+                : 'read-only · 60s timeout · 10k row cap'}
             </span>
           </div>
 
