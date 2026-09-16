@@ -23,6 +23,7 @@ import { statusColor } from '@/lib/statusColor';
 import { fmtDurationNs, fmtStartedTs } from './problemTime';
 import { emptySamplesNote } from './exceptionSamples';
 import { ExceptionPodsPanel } from './ExceptionPodsPanel';
+import { fmtOccTick } from './occTick'; // v0.10.734
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import type { ExceptionGroup, ExceptionGroupState, Problem, RolloutEvidence } from '@/lib/types';
@@ -229,6 +230,13 @@ function DeployBox({ version, ageSeconds }: { version: string; ageSeconds: numbe
 // down the uPlot (v0.5.184 unstable-input class), and the detail bar keeps
 // ShareButton + Esc-back as the affordances for the kept shareable link.
 
+// v0.10.734 — stack katlama eşiği ve katlıyken görünen satır sayısı.
+const STACK_FOLD_AT = 20;
+const STACK_FOLD_SHOW = 12;
+// v0.10.734 — Occurrences grafiğinde iki yanda pay (aralığın oranı).
+const OCC_EDGE_PAD = 0.05;
+
+
 // v0.9.740 (operatör) — ug/sy ekip rozetleri: service_metadata
 // katalogundan (60s cache'li ortak sorgu; sayfayla aynı queryKey,
 // RQ tekilleştirir — ek istek yok). Boşsa rozet çizilmez.
@@ -384,6 +392,16 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   // the v0.5.184 unstable-input class. x ticks use TimeChart's default
   // house day-boundary formatter (v0.8.402 fix), same as classic.
   const occTimes = useMemo(() => occ.map(p => p.time / 1e9), [occ]);
+  // v0.10.734 (operatör: "başladığı bitti net gözükebilir, sağdan soldan
+  // bir margin kalabilir") — x ekseni veri aralığına DEĞİL, iki yanda payla
+  // mıhlanır: ilk ve son bar kenara yapışmaz, "burada başladı / burada bitti"
+  // okunur. Pay = aralığın %5'i, en az 2 bucket; zoom'da da geçerli.
+  const occXRange = useMemo(() => {
+    if (occTimes.length < 2) return null;
+    const from = occTimes[0], to = occTimes[occTimes.length - 1];
+    const pad = Math.max((to - from) * OCC_EDGE_PAD, (occTimes[1] - occTimes[0]) * 2);
+    return { from: from - pad, to: to + pad };
+  }, [occTimes]);
   const occSeries = useMemo(() => [{
     key: 'occ', label: 'occurrences', data: occ.map(p => p.count),
     color: statusColor('warn'), type: 'bar' as const,
@@ -411,6 +429,14 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   // Representative stack = the first sample that carries one.
   const stack = samples.find(s => s.stacktrace)?.stacktrace ?? '';
   const stackLines = stack ? stack.split('\n') : [];
+  // v0.10.734 (operatör onaylı mockup a42a0b31: "stack trace çok uzunsa
+  // collapsed gösterelim, sayfa çok aşağı gidiyor") — 20 satırdan uzun
+  // stack ilk 12 satırla açılır (mesaj + en üst frame'ler), "▾ N satır
+  // daha" yerinde açar. Copy HER ZAMAN tamamını kopyalar (stack). Sayfa
+  // yüklemesi başına, kalıcı değil.
+  const [stackOpen, setStackOpen] = useState(false);
+  const stackFolded = !stackOpen && stackLines.length > STACK_FOLD_AT;
+  const shownStackLines = stackFolded ? stackLines.slice(0, STACK_FOLD_SHOW) : stackLines;
 
   // v0.9.882 (Dalga 2, W2.2) — bu dört buton bugüne dek HİÇBİR çift-tık
   // koruması taşımıyordu: ikinci tık ikinci PUT ve backend tarafında ikinci
@@ -492,8 +518,9 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           <span className="k">service</span><b className="mono" style={{ color: 'var(--accent2)' }}>{group.service}</b>
         </Link>
         <TeamChips service={group.service} />
-        <span className="chip"><span className="k">first seen</span><b className="mono">{tsLong(group.firstSeen)}</b></span>
-        <span className="chip"><span className="k">last seen</span><b className="mono">{tsLong(group.lastSeen)}</b></span>
+        {/* v0.10.734 (operatör: "pencere boyu yazmasına gerek var mı, open/closed
+            yeter") — first seen / last seen çipleri KALKTI; durum rozeti şeritte,
+            pencerenin kendisi Occurrences grafiğinde ve servis linkinde yaşıyor. */}
       </div>
 
       {/* v0.9.415 — arka plan ExceptionExplainer'ın proaktif kök-sebep
@@ -556,7 +583,11 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
               </div>
             )
           ) : (
-            <TimeChart times={occTimes} series={occSeries} height={110} regions={probRegions}
+            /* v0.10.734 (operatör: "histogramda da zaman olsun, zaman çizelgesi
+               yok gibi") — 110 → 140 px: x ekseni etiketlerine yer; her tik
+               tarih+saat (fmtOccTick), gün sınırı beklemez. */
+            <TimeChart times={occTimes} series={occSeries} height={140} regions={probRegions}
+              xRange={occXRange} fmtX={fmtOccTick}
               onBrush={(fromMs, toMs) => setZoomMs({ from: fromMs, to: toMs })}
               onZoomReset={() => setZoomMs(null)} />
           )}
@@ -576,7 +607,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h">
             <h3>Stack trace</h3>
-            <span className="ov-sub">representative sample</span>
+            <span className="ov-sub">representative sample{stackLines.length > 0 ? ` · ${stackLines.length} satır` : ''}</span>
             <span className="ov-right">
               <Button variant="secondary" size="sm" onClick={copyStack} disabled={!stack}>
                 {copied ? 'Copied' : 'Copy'}
@@ -604,14 +635,31 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
               )
             ) : (
               <pre className="mono" style={{ margin: 0, fontSize: 11.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                {stackLines.map((l, i) => (
+                {shownStackLines.map((l, i) => (
                   <div key={i} style={{ color: i === 0 ? 'var(--err)' : 'var(--text2)' }}>{l}</div>
                 ))}
               </pre>
             )}
           </div>
+          {stackLines.length > STACK_FOLD_AT && (
+            <div className="ex-fold">
+              <Button variant="secondary" size="sm" onClick={() => setStackOpen(o => !o)}
+                aria-expanded={!stackFolded}
+                title={stackFolded ? 'Tüm stack trace\'i yerinde aç' : 'İlk satırlara katla'}>
+                {stackFolded ? `▾ ${stackLines.length - STACK_FOLD_SHOW} satır daha` : '▴ daha az'}
+              </Button>
+              <span className="ex-fold__note">{stackFolded ? `ilk ${STACK_FOLD_SHOW} satır gösteriliyor` : `${stackLines.length} satır`} · Copy tamamını kopyalar</span>
+            </div>
+          )}
         </div>
 
+        {/* v0.10.734 (operatör onaylı mockup a42a0b31: "pod ismi üste,
+            occurrences ile stack trace adasına gelebilir") — sağ kolon: Pods ·
+            nodes ÜSTTE, Sample traces altında. v0.10.173 paneli en alta almıştı
+            (12 pod'luk tablo sayfayı itiyordu); o kaygı panelde korunuyor:
+            ilk 8 pod + "tümü (N) ▸", iç kaydırma yok. */}
+        <div style={{ minWidth: 0 }}>
+        <ExceptionPodsPanel fingerprint={group.fingerprint} service={group.service} groupOccurrences={group.occurrences} />
         {/* Sample traces */}
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h"><h3>Sample traces</h3>{samples.length > 0 && <span className="ov-sub">{Math.min(samples.length, 14)}{samples.length > 14 ? ` / ${samples.length}` : ''}</span>}</div>
@@ -648,13 +696,8 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             </table>
           </div>
         </div>
+        </div>
       </div>
-
-      {/* v0.10.138 (DETAY SAYFALARI adım 4) — oluşumların pod/node dağılımı +
-          pod pivotu; bayrak kapalı → hiç çizilmez. v0.10.173 (operatör, prod):
-          EN ALTA — 12 pod'luk tablo grafiğin ve stack'in önüne geçip sayfayı
-          itiyordu; dağılım ikincil bağlam. */}
-      <ExceptionPodsPanel fingerprint={group.fingerprint} service={group.service} groupOccurrences={group.occurrences} />
     </PageShell>
   );
 }

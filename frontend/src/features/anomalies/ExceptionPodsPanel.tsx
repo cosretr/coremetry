@@ -12,15 +12,23 @@
 // ellipsis + title (CLAUDE.md tuzağı: fixed + nowrap + küçük genişlik
 // sessizce kırpar → min/max + ellipsis + title), sayısal kolonlar sabit dar.
 // Kart genişliği ne olursa olsun yatay kaydırma yok.
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Row, Badge } from '@/components/ui';
+import { Row, Badge, LinkButton } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
 import { api } from '@/lib/api';
 import { useEntityEnabled } from '@/lib/queries';
 import { entityHref } from '@/lib/entityHref';
-import { fmtDateTime } from '@/lib/utils';
+import { fmtDateTime, fmtAgoNs } from '@/lib/utils';
 import { windowRangeParam } from '@/lib/urlState';
+
+// v0.10.734 (operatör onaylı mockup a42a0b31) — panel sağ kolona (stack
+// trace adası) çıktı: dört sütun (pod · node · oluşum çubuğu · son), pay
+// iki sayı yerine çubuk ("392 · 100%"), ilk 8 pod + "tümü (N) ▸" (v0.10.173'ün
+// "uzun tablo sayfayı itiyor" kaygısı iç kaydırmasız korunur), başlık alt
+// yazısı kısa (tarama/örnekleme ayrıntısı title'da).
+const PODS_SHOW = 8;
 
 export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: { fingerprint: string; service: string; groupOccurrences: number }) {
   const { enabled } = useEntityEnabled();
@@ -30,6 +38,8 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
     staleTime: 30_000,
     enabled: enabled && !!fingerprint,
   });
+  // Hook sırası: erken dönüşten ÖNCE (rules-of-hooks).
+  const [all, setAll] = useState(false);
   if (!enabled) return null;
   const d = q.data;
   const rows = d?.rows ?? [];
@@ -41,11 +51,15 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
   // /traces pivotu: grubun penceresi (range) + hata-only (hasError) — /traces'ın
   // OKUDUĞU parametreler; bilinmeyen parametre sessizce düşerdi (inceleme).
   const rangeParam = range ? windowRangeParam(range) : '';
+  const shown = all ? rows : rows.slice(0, PODS_SHOW);
+  const scanNote = d
+    ? `${withContext.toLocaleString()} / ${d.total.toLocaleString()} taranan oluşum pod bağlamlı${d.sampled ? ` · örneklem: en yeni ${d.scanned.toLocaleString()} satır / ${groupOccurrences.toLocaleString()}` : ''}`
+    : '';
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="ov-card-h">
         <h3>Pods · nodes</h3>
-        <span className="ov-sub">{d ? `${rows.length}${d.truncated ? '+' : ''} pod · ${withContext.toLocaleString()} / ${d.total.toLocaleString()} scanned occurrences with pod context${d.sampled ? ` · sampled (newest ${d.scanned.toLocaleString()} rows of ${groupOccurrences.toLocaleString()})` : ''}` : ''}</span>
+        <span className="ov-sub" title={scanNote}>{d ? `${rows.length}${d.truncated ? '+' : ''} pod · ${withContext.toLocaleString()} oluşum` : ''}</span>
       </div>
       <div className="ov-card-b">
         {q.isPending ? <Spinner /> : q.error ? (
@@ -62,13 +76,13 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
           <>
             <table className="exc-pods-t">
               <colgroup>
-                <col className="exc-pods-c-pod" /><col className="exc-pods-c-node" /><col className="exc-pods-c-n" /><col className="exc-pods-c-s" /><col className="exc-pods-c-t" /><col className="exc-pods-c-a" />
+                <col className="exc-pods-c-pod" /><col className="exc-pods-c-node" /><col className="exc-pods-c-n" /><col className="exc-pods-c-t" /><col className="exc-pods-c-a" />
               </colgroup>
               <thead>
-                <tr><th>pod · cluster › namespace</th><th>node</th><th className="num">occurrences</th><th className="num">share</th><th>last seen</th><th></th></tr>
+                <tr><th>pod · cluster › namespace</th><th>node</th><th>occurrences · share</th><th>son</th><th></th></tr>
               </thead>
               <tbody>
-                {rows.map(r => {
+                {shown.map(r => {
                   const cid = r.clusterId ?? '';
                   const atMs = Date.parse(r.lastSeen) || undefined;
                   const podHref = cid && !r.hostOnly ? entityHref({ type: 'pod', id: `pod:${cid}/${r.namespace}/${r.pod}`, name: r.pod, namespace: r.namespace, clusterId: cid }, { range, at: atMs, clusterName: r.clusterName, service }) : null;
@@ -88,9 +102,11 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
                         <div className="exc-pods-sub">{r.clusterName ?? r.cluster} › {r.namespace}</div>
                       </td>
                       <td className="mono exc-pods-cell" title={r.node ?? ''}>{nodeHref ? <Link to={nodeHref} className="sec">{r.node}</Link> : (r.node ?? '')}</td>
-                      <td className="num">{r.occurrences.toLocaleString()}</td>
-                      <td className="num">{share.toFixed(1)}%</td>
-                      <td className="mono exc-pods-cell" title={fmtDateTime(new Date(r.lastSeen))}>{fmtDateTime(new Date(r.lastSeen))}</td>
+                      <td title={`${r.occurrences.toLocaleString()} oluşum · %${share.toFixed(1)} (payda: taranan grup toplamı)`}>
+                        <div className="exc-share"><i style={{ width: `${Math.max(2, Math.min(100, share))}%` }} /><b>{r.occurrences.toLocaleString()} · {share.toFixed(share >= 10 ? 0 : 1)}%</b></div>
+                      </td>
+                      <td className="mono exc-pods-cell" title={fmtDateTime(new Date(r.lastSeen))}>{fmtAgoNs(Date.parse(r.lastSeen) * 1e6)}</td>
+                      {/* Operatör (2026-09-16): Traces düğmesi KALIR — pod'un hatalı trace'lerine tek tık. */}
                       <td><Link to={tracesHref} className="sec" title="Bu pod'un hatalı trace'leri">Traces</Link></td>
                     </tr>
                   );
@@ -98,6 +114,11 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
               </tbody>
             </table>
             <Row gap={2} wrap>
+              {rows.length > PODS_SHOW && (
+                <LinkButton onClick={() => setAll(v => !v)} title={all ? `İlk ${PODS_SHOW} pod` : `${rows.length - PODS_SHOW} pod daha`}>
+                  {all ? '▴ daha az' : `tümü (${rows.length}) ▸`}
+                </LinkButton>
+              )}
               {d && d.noContext > 0 && <span className="field-hint">{d.noContext.toLocaleString()} oluşum Kubernetes bağlamsız (k8s.pod.name yok ya da 0011 öncesi) — pivot yok</span>}
               {d?.truncated && <Badge tone="warning" title="Daha fazla pod var; yalnız en yoğun 50 gösteriliyor">ilk 50 pod</Badge>}
               {d?.unmappedClusters && d.unmappedClusters.length > 0 && (

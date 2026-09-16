@@ -4060,12 +4060,19 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .exc-pods-pod { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .exc-pods-sub { color: var(--text3); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* yüzdeler toplam 100 → hiçbir kart genişliğinde taşma yok; dar kartta metin sütunları ellipsis'e düşer (title'da tam değer) */
+/* v0.10.734 — beş sütun (sağ kolon, stack trace adası): pod · node · oluşum çubuğu · son · Traces */
 .exc-pods-c-pod { width: 34%; }
-.exc-pods-c-node { width: 24%; }
-.exc-pods-c-n { width: 10%; }
-.exc-pods-c-s { width: 8%; }
-.exc-pods-c-t { width: 15%; }
-.exc-pods-c-a { width: 9%; }
+.exc-pods-c-node { width: 20%; }
+.exc-pods-c-n { width: 22%; }
+.exc-pods-c-t { width: 13%; }
+.exc-pods-c-a { width: 11%; }
+/* v0.10.734 — oluşum çubuğu: dolgu pay, etiket "sayı · %" (iki sayı sütunu yerine). */
+.exc-share { position: relative; height: 16px; border-radius: var(--radius-xs); overflow: hidden; background: color-mix(in srgb, var(--text3) 16%, transparent); }
+.exc-share i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--err); opacity: .65; }
+.exc-share b { position: relative; z-index: 1; padding: 0 var(--sp-3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-2xs); line-height: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
+/* v0.10.734 — uzun stack trace katlama şeridi (kartın altı). */
+.ex-fold { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-5); border-top: 1px dashed var(--border); background: var(--bg2); border-radius: 0 0 8px 8px; }
+.ex-fold__note { color: var(--text3); font-size: var(--fs-xs); }
 
 /* v0.10.165 — kod alıntısı: satır numarası oluğu, dosya başlığı, stack katlama
    (etüt «cevap paneli» A, dilim 1). Aynı .cm-md-code ailesi. */
