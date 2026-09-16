@@ -144,8 +144,9 @@ const INBOX_COLS: DataTableColumn<InboxItem>[] = [
   // conditional "· ilk …" suffix, which meant it vanished whenever the two
   // timestamps matched and could never be sorted on. "What started first" is
   // the question that orders a cascade; "what fired last" is a different one.
-  { id: 'firstSeen', label: 'First seen', sortValue: it => it.startedAt, naturalDir: 'desc', width: 150 },
-  { id: 'lastSeen', label: 'Last seen', sortValue: it => it.lastSeen,        naturalDir: 'desc', width: 170 },
+  // v0.10.736 — 13 px mono damga ("16.09.2026 11:00:15" ≈ 150 px) sığsın: 150/170 → 168/180.
+  { id: 'firstSeen', label: 'First seen', sortValue: it => it.startedAt, naturalDir: 'desc', width: 168 },
+  { id: 'lastSeen', label: 'Last seen', sortValue: it => it.lastSeen,        naturalDir: 'desc', width: 180 },
   { id: 'assignee', label: 'Assignee', sortValue: it => it.assignee ?? '',   naturalDir: 'asc', width: 150 },
 ];
 
@@ -1047,20 +1048,22 @@ export default function InboxPage() {
                         ? it.exception.occurrences.toLocaleString()
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
                     </td>
-                    <td className="mono" style={{ fontSize: 11 }}>
+                    {/* v0.10.736 (operatör: "tarih fontu biraz daha büyük olabilir")
+                        — 11 → 13 px (--fs-md), sınıfta; yaş satırı 11 px kalır. */}
+                    <td className="mono ib-when">
                       {it.startedAt
                         ? <>
                             {tsLong(it.startedAt)}
                             {/* Age belongs to first-seen: "how long has this
                                 been going on" is read off the start, not the
                                 last hit. */}
-                            <div style={{ color: 'var(--text3)', marginTop: 2 }}>
+                            <div className="ib-when__ago">
                               {fmtAgoNs(it.startedAt)}
                             </div>
                           </>
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
                     </td>
-                    <td className="mono" style={{ fontSize: 11 }}>
+                    <td className="mono ib-when">
                       {/* v0.9.333 — yaş ve ilk-görülme artık kendi kolonunda.
                           v0.9.255'te ikisi bu hücreye sıkıştırılmıştı ve ilk
                           görülme yalnız iki damga FARKLIYSA çiziliyordu: yani

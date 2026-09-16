@@ -4239,3 +4239,8 @@ a.ins-val:hover { text-decoration: underline; }
 .pods-group__act { margin-left: auto; display: inline-flex; gap: var(--sp-4); }
 .pods-caret { color: var(--text3); margin-right: var(--sp-2); cursor: pointer; }
 .pods-term { margin-left: var(--sp-2); font-size: var(--fs-2xs); vertical-align: middle; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+
+/* v0.10.736 (operatör: "tarih fontu biraz daha büyük olabilir") — Inbox
+   First seen / Last seen damgaları 11 → 13 px; yaş alt satırı 11 px, soluk. */
+.ib-when { font-size: var(--fs-md); }
+.ib-when__ago { color: var(--text3); margin-top: var(--sp-1); font-size: var(--fs-xs); }
