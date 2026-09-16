@@ -162,7 +162,7 @@ export function TracesResult({
                       {t.durationMs.toFixed(1)}ms
                     </td>
                     <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(t.spanCount)}</td>
-                    <td className="mono" style={{ fontSize: 11 }}>{tsLong(t.startTime)}</td>
+                    <td className="mono ib-when">{tsLong(t.startTime)}</td>{/* v0.10.739 — 13 px damga */}
                     <td>
                       {t.hasError
                         ? <span className="badge b-err">ERROR</span>

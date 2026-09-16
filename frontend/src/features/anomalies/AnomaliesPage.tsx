@@ -76,8 +76,9 @@ const EXC_COLS: DataTableColumn<ExceptionGroup>[] = [
   { id: 'type',        label: 'Exception',   sortValue: g => g.type,        naturalDir: 'asc', flex: true },
   { id: 'service',     label: 'Service',     sortValue: g => g.service,     naturalDir: 'asc',  width: 150 },
   { id: 'occurrences', label: 'Occurrences', sortValue: g => g.occurrences, numeric: true,      width: 100 },
-  { id: 'firstSeen',   label: 'First seen',  sortValue: g => g.firstSeen,   width: 124 },
-  { id: 'lastSeen',    label: 'Last seen',   sortValue: g => g.lastSeen,    width: 124 },
+  // v0.10.739 — 13 px damga ("16.09.2026 11:00:15") sığsın: 124 → 168.
+  { id: 'firstSeen',   label: 'First seen',  sortValue: g => g.firstSeen,   width: 168 },
+  { id: 'lastSeen',    label: 'Last seen',   sortValue: g => g.lastSeen,    width: 168 },
   { id: 'assignee',    label: 'Assignee',    sortValue: g => g.assignee,    naturalDir: 'asc',  width: 120 },
 ];
 
@@ -640,8 +641,9 @@ export default function ProblemsPage() {
                         <td className="mono row-cell" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--err)' }}>
                           <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>
                         </td>
-                        <td className="mono row-cell" style={{ fontSize: 11, color: 'var(--text3)' }}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.firstSeen)}</Link></td>
-                        <td className="mono row-cell" style={{ fontSize: 11, color: 'var(--text3)' }}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.lastSeen)}</Link></td>
+                        {/* v0.10.739 — tarih damgası 13 px (.ib-when, Inbox 736 ile aynı). */}
+                        <td className="mono row-cell ib-when" style={{ color: 'var(--text3)' }}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.firstSeen)}</Link></td>
+                        <td className="mono row-cell ib-when" style={{ color: 'var(--text3)' }}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.lastSeen)}</Link></td>
                         <td onClick={e => e.stopPropagation()}>
                           {isAdmin ? (
                             <select value={g.assignee} onChange={e => setAssignee(g, e.target.value)}

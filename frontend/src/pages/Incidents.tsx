@@ -163,7 +163,7 @@ export default function IncidentsPage() {
                     <td className="mono" style={{ fontSize: 12 }}>
                       <IncidentCause rc={i.rootCause} />
                     </td>
-                    <td className="mono" style={{ fontSize: 11 }}>{tsLong(i.startedAt)}</td>
+                    <td className="mono ib-when">{tsLong(i.startedAt)}</td>{/* v0.10.739 — 13 px damga */}
                     <td className="mono" style={{ textAlign: 'right' }}>
                       {fmtDuration(i.startedAt, i.resolvedAt)}
                     </td>

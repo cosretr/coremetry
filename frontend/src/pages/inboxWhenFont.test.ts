@@ -24,3 +24,21 @@ describe('Inbox tarih hücreleri (v0.10.736)', () => {
     expect(page).toContain("{ id: 'lastSeen', label: 'Last seen', sortValue: it => it.lastSeen,        naturalDir: 'desc', width: 180 }");
   });
 });
+
+// v0.10.739 — aynı sınıf operatör-yüzeyli listelere yayıldı; satır-içi 11 px
+// tarih hücresi bu dosyalarda kalmadı.
+describe('tarih damgası sınıfı diğer listelerde (v0.10.739)', () => {
+  const files: [string, number][] = [
+    ['../features/anomalies/AnomaliesPage.tsx', 2],
+    ['../features/anomalies/streams.tsx', 2],
+    ['Incidents.tsx', 1],
+    ['explore/TracesResult.tsx', 1],
+  ];
+  for (const [f, n] of files) {
+    it(`${f}: ${n} hücre .ib-when, satır-içi 11 px tsLong hücresi yok`, () => {
+      const src = readFileSync(resolve(__dirname, f), 'utf8');
+      expect((src.match(/className="mono(?: row-cell)? ib-when"/g) ?? []).length).toBe(n);
+      expect(src).not.toMatch(/<td className="mono(?: row-cell)?" style=\{\{ fontSize: 11[^}]*\}\}>(?:<Link[^>]*>)?\{tsLong\(/);
+    });
+  }
+});

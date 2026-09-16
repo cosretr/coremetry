@@ -416,8 +416,8 @@ const ANOMALY_HISTORY_COLS: DataTableColumn<AnomalyEvent>[] = [
   { id: 'peak',     label: 'Peak ×', sortValue: e => e.peakRatio,              numeric: true, width: 56 },
   // Zaman kolonları sola hizalı mono kalıyor (numeric:true başlığı sağa
   // iterdi) — yalnız sıralanabilirlik ekleniyor.
-  { id: 'started',  label: 'Started',     sortValue: e => e.startedAt,              width: 134 },
-  { id: 'lastSeen', label: 'Last seen',   sortValue: e => e.lastSeen,               width: 134 },
+  { id: 'started',  label: 'Started',     sortValue: e => e.startedAt,              width: 168 }, // v0.10.739 — 13 px damga
+  { id: 'lastSeen', label: 'Last seen',   sortValue: e => e.lastSeen,               width: 168 },
 ];
 
 // AnomalyTable — extracted from HistorySection so the active +
@@ -518,8 +518,9 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
                   </span>
                 </td>
                 <td className="num mono" style={{ fontWeight: 700 }}>{e.peakRatio.toFixed(1)}</td>
-                <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>{tsLong(e.startedAt)}</td>
-                <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>{tsLong(e.lastSeen)}</td>
+                {/* v0.10.739 — tarih damgası 13 px (.ib-when). */}
+                <td className="mono ib-when" style={{ color: 'var(--text3)' }}>{tsLong(e.startedAt)}</td>
+                <td className="mono ib-when" style={{ color: 'var(--text3)' }}>{tsLong(e.lastSeen)}</td>
                 <td>
                   {/* v0.9.477 — satır-içi panel bir tablo hücresinde
                       satırı şişiriyordu; cevap artık sağ AI çekmecesinde. */}
