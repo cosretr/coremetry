@@ -673,7 +673,9 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             nodes ÜSTTE, Sample traces altında. v0.10.173 paneli en alta almıştı
             (12 pod'luk tablo sayfayı itiyordu); o kaygı panelde korunuyor:
             ilk 8 pod + "tümü (N) ▸", iç kaydırma yok. */}
-        <div style={{ minWidth: 0 }}>
+        {/* v0.10.737 (operatör: "biraz kayma var") — sağ kolon flex sütun, gap
+            ızgarayla aynı (14); kartların üstü Stack trace kartıyla aynı hizada. */}
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <ExceptionPodsPanel fingerprint={group.fingerprint} service={group.service} groupOccurrences={group.occurrences} />
         {/* Sample traces */}
         <div className="card" style={{ minWidth: 0 }}>

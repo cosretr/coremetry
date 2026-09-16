@@ -56,7 +56,9 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
     ? `${withContext.toLocaleString()} / ${d.total.toLocaleString()} taranan oluşum pod bağlamlı${d.sampled ? ` · örneklem: en yeni ${d.scanned.toLocaleString()} satır / ${groupOccurrences.toLocaleString()}` : ''}`
     : '';
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    // v0.10.737 — dış boşluk çağıranın (sağ kolon flex sütunu, gap 14); kart
+    // Stack trace kartıyla aynı üst hizadan başlar.
+    <div className="card">
       <div className="ov-card-h">
         <h3>Pods · nodes</h3>
         <span className="ov-sub" title={scanNote}>{d ? `${rows.length}${d.truncated ? '+' : ''} pod · ${withContext.toLocaleString()} oluşum` : ''}</span>
@@ -107,7 +109,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
                       </td>
                       <td className="mono exc-pods-cell" title={fmtDateTime(new Date(r.lastSeen))}>{fmtAgoNs(Date.parse(r.lastSeen) * 1e6)}</td>
                       {/* Operatör (2026-09-16): Traces düğmesi KALIR — pod'un hatalı trace'lerine tek tık. */}
-                      <td><Link to={tracesHref} className="sec" title="Bu pod'un hatalı trace'leri">Traces</Link></td>
+                      <td className="exc-pods-act"><Link to={tracesHref} className="sec" title="Bu pod'un hatalı trace'leri">Traces</Link></td>
                     </tr>
                   );
                 })}

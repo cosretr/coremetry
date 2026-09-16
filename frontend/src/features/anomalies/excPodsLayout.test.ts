@@ -48,7 +48,7 @@ describe('exception detayı Pods · nodes (v0.10.173 → v0.10.734)', () => {
     // yüzdeler toplam 100 → taşma yok (v0.10.174); 734: beş sütun (Traces düğmesi kalır — operatör)
     const pct = [...css.matchAll(/\.exc-pods-c-[a-z]+ \{ width: (\d+)%; \}/g)].map(m => Number(m[1]));
     expect(pct.length).toBe(5);
-    expect(src).toContain('<td><Link to={tracesHref} className="sec" title="Bu pod\'un hatalı trace\'leri">Traces</Link></td>');
+    expect(src).toContain('<td className="exc-pods-act"><Link to={tracesHref} className="sec" title="Bu pod\'un hatalı trace\'leri">Traces</Link></td>');
     expect(pct.reduce((a, b) => a + b, 0)).toBe(100);
   });
   it('uzun stack katlı: eşik 20, ilk 12; Copy tamamını kopyalar; first/last seen çipleri yok', () => {
@@ -96,5 +96,21 @@ describe('stack frame süsü (v0.10.735)', () => {
     expect(src).not.toContain("color: i === 0 ? 'var(--err)'");
     const css = read('../../styles/globals.css');
     expect(css).toContain('.ex-head-line { color: var(--err); }');
+  });
+});
+
+// v0.10.737 (operatör: "biraz kayma var" — hücre kesilmesi, başlık-değer
+// hizası, sağ kolon üst hizası).
+describe('Pods · nodes hiza (v0.10.737)', () => {
+  it('pod/node linkleri düz metin (pil değil) → ellipsis + başlıkla hizalı; Traces kompakt pil', () => {
+    const css = read('../../styles/globals.css');
+    expect(css).toContain('.exc-pods-t a.sec { display: inline; padding: 0; border: 0; background: none;');
+    expect(css).toMatch(/\.exc-pods-t td\.exc-pods-act a\.sec \{ display: inline-flex; padding: 2px 8px;/);
+  });
+  it('sağ kolon flex sütun (gap 14); pods kartı dış boşluk taşımaz', () => {
+    const detail = read('./ProblemDetail.tsx');
+    expect(detail).toContain("<div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>");
+    const pods = read('./ExceptionPodsPanel.tsx');
+    expect(pods).not.toContain('<div className="card" style={{ marginBottom: 16 }}>');
   });
 });

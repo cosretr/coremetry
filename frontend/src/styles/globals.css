@@ -4063,11 +4063,19 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .exc-pods-sub { color: var(--text3); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* yüzdeler toplam 100 → hiçbir kart genişliğinde taşma yok; dar kartta metin sütunları ellipsis'e düşer (title'da tam değer) */
 /* v0.10.734 — beş sütun (sağ kolon, stack trace adası): pod · node · oluşum çubuğu · son · Traces */
-.exc-pods-c-pod { width: 34%; }
-.exc-pods-c-node { width: 20%; }
-.exc-pods-c-n { width: 22%; }
-.exc-pods-c-t { width: 13%; }
-.exc-pods-c-a { width: 11%; }
+.exc-pods-c-pod { width: 36%; }
+.exc-pods-c-node { width: 22%; }
+.exc-pods-c-n { width: 21%; }
+.exc-pods-c-t { width: 9%; }
+.exc-pods-c-a { width: 12%; }
+/* v0.10.737 (operatör: "biraz kayma var") — dar sağ kolonda pil (a.sec: 5px 14px
+   dolgu, 13 px) hücreyi sert kesiyor ve değeri başlığa göre sağa itiyordu.
+   Pod/node linkleri DÜZ metin: hücrenin ellipsis'i çalışır, başlıkla hizalı.
+   Traces düğmesi pil kalır ama kompakt (2px 8px, 11 px) → 12 % sütuna sığar. */
+.exc-pods-t a.sec { display: inline; padding: 0; border: 0; background: none; font-size: inherit; color: var(--accent2); }
+.exc-pods-t a.sec:hover { background: none; text-decoration: underline; text-underline-offset: 2px; }
+.exc-pods-t td.exc-pods-act a.sec { display: inline-flex; padding: 2px 8px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: var(--fs-xs); }
+.exc-pods-t td.exc-pods-act a.sec:hover { background: var(--bg2); text-decoration: none; }
 /* v0.10.734 — oluşum çubuğu: dolgu pay, etiket "sayı · %" (iki sayı sütunu yerine). */
 .exc-share { position: relative; height: 16px; border-radius: var(--radius-xs); overflow: hidden; background: color-mix(in srgb, var(--text3) 16%, transparent); }
 .exc-share i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--err); opacity: .65; }
