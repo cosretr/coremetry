@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatAiParamForUrl, aiSelfParam,
   formatAiParam, parseAiParam, aiSubjectTitle, aiSubjectSubtitle,
   AI_KINDS, CHART_SCOPES, chartScopeLabel, type AISubject,
 } from './aiSubject';
@@ -140,5 +141,39 @@ describe('parseAiParam — charts kapsamı', () => {
     const labels = CHART_SCOPES.map(chartScopeLabel);
     expect(labels.every(l => l.length > 0)).toBe(true);
     expect(new Set(labels).size).toBe(labels.length);
+  });
+});
+
+// v0.10.731 (operator-reported: "explain trace diyince sonuna tekrar trace
+// id ekliyor") — SELF biçimi: özne sayfanın kendi kimliğiyse `?ai=trace`.
+describe('SELF biçimi — ?ai=<kind> sayfa kimliğinden çözülür (v0.10.731)', () => {
+  const page = new URLSearchParams('id=e4de1be1b3227254cfb1c86c208b4a0a&range=6h');
+  it('trace öznesi sayfanın ?id= ile aynıysa adrese YALNIZ kind yazılır', () => {
+    expect(formatAiParamForUrl({ kind: 'trace', id: 'e4de1be1b3227254cfb1c86c208b4a0a' }, page)).toBe('trace');
+  });
+  it('id farklıysa / sayfa parametresi yoksa kanonik uzun biçim', () => {
+    expect(formatAiParamForUrl({ kind: 'trace', id: 'ffff' }, page)).toBe('trace:ffff');
+    expect(formatAiParamForUrl({ kind: 'trace', id: 'ffff' }, null)).toBe('trace:ffff');
+    expect(formatAiParamForUrl({ kind: 'trace', id: 'ffff' }, new URLSearchParams(''))).toBe('trace:ffff');
+  });
+  it('fazladan veri taşıyan özneler (span, charts) kısalmaz', () => {
+    expect(formatAiParamForUrl({ kind: 'span', id: 'e4de1be1b3227254cfb1c86c208b4a0a', spanId: 'ab' }, page))
+      .toBe('span:e4de1be1b3227254cfb1c86c208b4a0a:ab');
+    expect(aiSelfParam('span')).toBeNull();
+    expect(aiSelfParam('trace')).toBe('id');
+  });
+  it('kısa biçim parse: sayfa id\'si → özne; id yoksa null (yanlış özne açmaz)', () => {
+    expect(parseAiParam('trace', page)).toEqual({ kind: 'trace', id: 'e4de1be1b3227254cfb1c86c208b4a0a' });
+    expect(parseAiParam('trace', new URLSearchParams('range=6h'))).toBeNull();
+    expect(parseAiParam('trace')).toBeNull();
+    // Kısa biçimi olmayan kind çıplak gelirse reddedilir.
+    expect(parseAiParam('problem', page)).toBeNull();
+  });
+  it('uzun biçim AYNEN çalışır (eski linkler); gidiş-dönüş kanonik', () => {
+    const s = { kind: 'trace' as const, id: 'e4de1be1b3227254cfb1c86c208b4a0a' };
+    expect(parseAiParam('trace:e4de1be1b3227254cfb1c86c208b4a0a', page)).toEqual(s);
+    expect(parseAiParam(formatAiParamForUrl(s, page), page)).toEqual(s);
+    // Karşılaştırma/sunucu tarafı kanonik biçimi kullanmaya devam eder.
+    expect(formatAiParam(s)).toBe('trace:e4de1be1b3227254cfb1c86c208b4a0a');
   });
 });

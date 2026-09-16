@@ -123,6 +123,42 @@ function safeDecode(s: string): string {
   try { return decodeURIComponent(s); } catch { return ''; }
 }
 
+// ── SELF biçimi (v0.10.731, operator-reported) ───────────────────────────
+// "Explain trace diyince sonuna tekrar trace id ekliyor; onun yerine
+// &explain=1 gibi bir query string olsa."
+//
+// Haklı: /trace?id=<32 karakter> sayfasında çekmece `?ai=trace:<AYNI 32
+// karakter>` yazıyordu — adres iki katına çıkıyor, kopyalanan link
+// okunmaz oluyordu. Özne SAYFANIN KENDİ kimliği olduğunda id'yi ikinci kez
+// yazmanın bilgi değeri yok: `?ai=trace` yeter, id sayfanın `?id=`
+// parametresinden çözülür.
+//
+// Kapsam bilinçli DAR: yalnız sayfa kimliği URL'de tek bir parametrede
+// yaşayan basit özneler. span (spanId), service-health/charts (pencere,
+// kapsam) fazladan veri taşır, uzun biçimde kalır. Yeni bir kind katmak
+// tek satır (aşağıdaki harita).
+//
+// Geriye dönük: uzun biçim AYNEN parse edilir (eski linkler, paylaşılan
+// adresler, CoSRE'nin ürettiği derin linkler kırılmaz) ve sunucuya giden
+// özne parametresi (AIDrawerBody) her zaman KANONİK uzun biçimdir.
+const SELF_PARAM: Partial<Record<AIKind, string>> = { trace: 'id' };
+
+/** Bu kind sayfa kimliğinden çözülebiliyorsa o parametrenin adı. */
+export function aiSelfParam(kind: string): string | null {
+  return SELF_PARAM[kind as AIKind] ?? null;
+}
+
+/**
+ * formatAiParamForUrl — ADRESE yazılacak biçim. Özne sayfanın kendi
+ * kimliğiyse kısa (`trace`), değilse kanonik uzun biçim.
+ * Karşılaştırma/anahtar/sunucu için formatAiParam (kanonik) kullanılır.
+ */
+export function formatAiParamForUrl(s: AISubject, pageParams: URLSearchParams | null | undefined): string {
+  const self = SELF_PARAM[s.kind];
+  if (self && pageParams && s.id && pageParams.get(self) === s.id) return s.kind;
+  return formatAiParam(s);
+}
+
 export function formatAiParam(s: AISubject): string {
   const head = `${s.kind}:${encodeURIComponent(s.id)}`;
   if (s.kind === 'span') return `${head}:${encodeURIComponent(s.spanId)}`;
@@ -131,11 +167,22 @@ export function formatAiParam(s: AISubject): string {
   return head;
 }
 
-export function parseAiParam(raw: string | null | undefined): AISubject | null {
+export function parseAiParam(
+  raw: string | null | undefined,
+  // v0.10.731 — SELF biçimi (`?ai=trace`) için sayfanın kendi parametreleri.
+  // Verilmezse kısa biçim çözülemez ve null döner (sessizce YANLIŞ özne
+  // açmaktansa hiç açmamak).
+  pageParams?: URLSearchParams | null,
+): AISubject | null {
   if (!raw) return null;
   const parts = raw.split(':');
   const kind = parts[0];
   if (!KIND_SET.has(kind)) return null;
+  if (parts.length === 1) {
+    const self = SELF_PARAM[kind as AIKind];
+    const v = self && pageParams ? (pageParams.get(self) ?? '') : '';
+    return v ? { kind: kind as SimpleKind, id: v } : null;
+  }
   const id = safeDecode(parts[1] ?? '');
   if (!id) return null;
 

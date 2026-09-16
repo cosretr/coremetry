@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AI_CODE_PARAM, AI_PARAM, AI_SRC_PARAM, formatAiParam, parseAiParam, type AISrc, type AISubject } from '@/lib/aiSubject';
+import { AI_CODE_PARAM, AI_PARAM, AI_SRC_PARAM, formatAiParamForUrl, parseAiParam, type AISrc, type AISubject } from '@/lib/aiSubject';
 
 // useAiSubject — AI çekmecesinin açık öznesi, ADRESTEN okunur/yazılır
 // (v0.9.477). Ev kuralı: her operatör seçimi `setSearchParams(prev => …,
@@ -9,7 +9,16 @@ import { AI_CODE_PARAM, AI_PARAM, AI_SRC_PARAM, formatAiParam, parseAiParam, typ
 export function useAiSubject(): [AISubject | null, (s: AISubject | null, src?: AISrc) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
   const raw = searchParams.get(AI_PARAM);
-  const subject = useMemo(() => parseAiParam(raw), [raw]);
+  // v0.10.731 — kısa biçim (`?ai=trace`) sayfanın kendi kimliğinden çözülür.
+  // Taban CANLI adres çubuğu (aşağıdaki setSubject ile aynı gerekçe: /trace
+  // ?span=/?tab='ı ham replaceState ile yazdığı için router bayat kalabilir).
+  const pageParams = useMemo(() => {
+    const live = typeof window !== 'undefined' ? window.location.search : '';
+    const next = new URLSearchParams(live || searchParams.toString());
+    searchParams.forEach((v, k) => { if (!next.has(k)) next.append(k, v); });
+    return next;
+  }, [searchParams]);
+  const subject = useMemo(() => parseAiParam(raw, pageParams), [raw, pageParams]);
 
   const setSubject = useCallback((s: AISubject | null, src?: AISrc) => {
     setSearchParams(prev => {
@@ -22,7 +31,8 @@ export function useAiSubject(): [AISubject | null, (s: AISubject | null, src?: A
       const live = typeof window !== 'undefined' ? window.location.search : '';
       const next = new URLSearchParams(live || prev.toString());
       prev.forEach((v, k) => { if (!next.has(k)) next.append(k, v); });
-      if (s) next.set(AI_PARAM, formatAiParam(s));
+      // Kısa biçim `next` üzerinden çözülür: sayfa kimliği zaten içinde.
+      if (s) next.set(AI_PARAM, formatAiParamForUrl(s, next));
       else next.delete(AI_PARAM);
       // v0.10.81 — aicode YALNIZ paylaşılan linkte yaşar: uygulama içi
       // her açılış/kapanış/özne değişimi onu siler. Silmeseydik bir kez
