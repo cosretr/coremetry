@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint } from './volumeSeries';
+import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent } from './volumeSeries';
 
 const S = 1_000_000_000; // 1 saniye, ns
 const T0 = 1_700_000_000 * S;
@@ -203,5 +203,31 @@ describe('weightedStatAvg (v0.10.660 — başlık: aralığın istek-ağırlıkl
   it('istek yoksa 0 (bölme yok); null seriler → 0', () => {
     expect(weightedStatAvg(ser([0, 0]), ser([5, 5]))).toBe(0);
     expect(weightedStatAvg(null, null)).toBe(0);
+  });
+});
+
+// v0.10.738 — veri pencerenin küçük bir kısmına sıkışmışsa "veriye sığdır".
+describe('dataExtent', () => {
+  const win = { from: T0 / S, to: T0 / S + 24 * 3600 }; // 24 saat
+  const series = (vals: number[], stepSec = 600) => [{ groupKey: [] as string[], points: vals.map((v, i) => ({ time: T0 + i * stepSec * S, value: v })) }];
+  it('35 dk patlama / 24 sa pencere → aralık + %10 pay, en az bir kova', () => {
+    // 144 kova (10 dk); yalnız 60-63. kovalar dolu (10:00-10:40 gibi)
+    const vals = Array.from({ length: 144 }, (_, i) => (i >= 60 && i <= 63 ? 5 : 0));
+    const e = dataExtent(series(vals), win.from, win.to)!;
+    expect(e).not.toBeNull();
+    const first = T0 / S + 60 * 600, last = T0 / S + 63 * 600 + 600;
+    expect(e.fraction).toBeCloseTo((last - first) / (24 * 3600), 6);
+    expect(e.fromSec).toBeCloseTo(first - 600, 6); // pay = max(step, %10) = 600
+    expect(e.toSec).toBeCloseTo(last + 600, 6);
+  });
+  it('veri pencerenin ≥ %25\'ini kaplıyorsa null (sığdıracak şey yok)', () => {
+    const vals = Array.from({ length: 144 }, (_, i) => (i >= 20 && i <= 120 ? 1 : 0));
+    expect(dataExtent(series(vals), win.from, win.to)).toBeNull();
+  });
+  it('hiç sıfır olmayan kova yoksa / boşsa null; pay pencereyi aşmaz', () => {
+    expect(dataExtent(series([0, 0, 0]), win.from, win.to)).toBeNull();
+    expect(dataExtent(null, win.from, win.to)).toBeNull();
+    const e = dataExtent(series([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), win.from, win.to)!;
+    expect(e.fromSec).toBe(win.from); // sol pay pencere başına kelepçeli
   });
 });

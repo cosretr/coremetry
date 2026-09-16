@@ -196,3 +196,40 @@ export function weightedStatAvg(
   }
   return den > 0 ? num / den : 0;
 }
+
+// ── v0.10.738 (operatör: Problems'tan pivot sonrası pencereyi 6 sa / 24 sa
+// yapınca "histogram tek bir bar çıkıyor") ──
+// Sebep tasarım gereği: 35 dakikalık bir hata patlaması 24 saatlik pencerede
+// 10-30 dk'lık kovalara düşer → 1-2 bar. Kova genişliği piksel bütçesinden
+// (v0.9.715 "barlar çok küçülmüş"), inceltmek o kararı geri alırdı. Çözüm
+// dürüst bir affordance: veri pencerenin küçük bir kısmına sıkışmışsa şerit
+// "veriye sığdır" der ve tık pencereyi o aralığa (sürükle-seçim gibi, zoom
+// yığınına) daraltır. SAF.
+export interface DataExtent {
+  fromSec: number;
+  toSec: number;
+  /** Sıfır olmayan kovaların pencereye oranı (0..1). */
+  fraction: number;
+}
+
+export function dataExtent(
+  count: SpanMetricSeries[] | null | undefined,
+  windowFromSec: number,
+  windowToSec: number,
+  maxFraction = 0.25,
+): DataExtent | null {
+  const pts = (count?.[0]?.points ?? []).filter(p => p.value > 0);
+  if (pts.length === 0 || windowToSec <= windowFromSec) return null;
+  const all = count?.[0]?.points ?? [];
+  const stepSec = all.length >= 2 ? Math.max(1, (all[1].time - all[0].time) / 1e9) : 60;
+  const first = Math.min(...pts.map(p => p.time)) / 1e9;
+  const last = Math.max(...pts.map(p => p.time)) / 1e9 + stepSec;
+  const fraction = (last - first) / (windowToSec - windowFromSec);
+  if (fraction >= maxFraction) return null;
+  const pad = Math.max(stepSec, (last - first) * 0.1);
+  return {
+    fromSec: Math.max(windowFromSec, first - pad),
+    toSec: Math.min(windowToSec, last + pad),
+    fraction,
+  };
+}
