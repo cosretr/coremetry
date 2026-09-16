@@ -75,3 +75,4 @@ export { useTablePrefs } from './prefs'; // v0.10.248 — kalıcı sütun tercih
 export { useBlastRadiusBatch } from './problems'; // v0.10.260 — inbox toplu blast-radius
 export { useStackFrameLinks } from './devops'; // v0.10.581 — tıklanabilir stack frame
 export * from './copilot'; // v0.10.702 — CoSRE veri çipleri
+export { useTraceRootDef, useSaveTraceRootDef } from './traceRootDef'; // v0.10.733 — kök tanımı

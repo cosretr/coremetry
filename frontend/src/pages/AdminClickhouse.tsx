@@ -8,6 +8,8 @@ import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupSta
 import { useQuery } from '@tanstack/react-query';
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
 import { Button, Modal } from '@/components/ui';
+import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
+import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
@@ -2567,7 +2569,8 @@ const ROOT_COV_COLS: DataTableColumn<CHRootCoverageRow>[] = [
   { id: 'entry',    label: 'Giriş servisi', sortValue: r => r.entryService, naturalDir: 'asc', flex: true },
   { id: 'traces',   label: 'Trace',         sortValue: r => r.traces, numeric: true, width: 110 },
   { id: 'without',  label: 'Köksüz',        sortValue: r => r.traces - r.withRoot, numeric: true, width: 110 },
-  { id: 'pct',      label: 'Köklü %',       sortValue: r => (r.traces ? r.withRoot / r.traces : 0), numeric: true, width: 100 },
+  { id: 'pct',      label: 'Tam kök %',     sortValue: r => (r.traces ? r.withRoot / r.traces : 0), numeric: true, width: 100 },
+  { id: 'entrypct', label: 'Giriş kökü %',  sortValue: r => (r.traces ? entryRootOf(r) / r.traces : 0), numeric: true, width: 110 },
 ];
 function rootTone(pct: number): string { return pct >= 90 ? 'b-ok' : pct >= 50 ? 'b-warn' : 'b-err'; }
 function RootCoveragePanel() {
@@ -2585,13 +2588,38 @@ function RootCoveragePanel() {
     rows: data?.rows ?? [], initialSort: { id: 'without', dir: 'desc' },
   });
   const pct = data && data.totalTraces > 0 ? (data.totalWithRoot / data.totalTraces) * 100 : null;
+  const entryPct = data && data.totalTraces > 0 ? (data.totalWithEntryRoot / data.totalTraces) * 100 : null;
+  // v0.10.733 — kök tanımı seçici (operatör onaylı spec): ayar system_settings'te,
+  // Traces Root süzgeci + şerit + bu ölçü aynı tanımı okur. Onay diyaloğu yok:
+  // değişiklik anında geri alınabilir ve audit'e düşer.
+  const defQ = useTraceRootDef();
+  const saveDef = useSaveTraceRootDef();
+  const def = defQ.data?.def ?? 'strict';
   return (
     <Section title="Trace kök kapsaması · giriş servisi başına">
       <p className="cell-hint">
-        Tam kök span = parent boş + ad dolu + servis dolu. Köksüz trace &quot;Root traces only&quot; süzgecinde
-        düşer ve listede giriş servisiyle (yoksa &quot;unknown&quot;) görünür. Kaynak trace_summary_5m; pencere boyu
-        GROUP BY trace_id — bu yüzden isteğe bağlı ve ≤ 1 saat; 5 dk altı pencere ham spans'ten (v0.10.713).
+        Tam kök span = parent boş + ad dolu + servis dolu. Giriş kökü (v0.10.733) = tam kök YA DA en az bir
+        giriş span'i (server/consumer) — gateway'in önündeki katman traceparent basıyorsa trace tam köksüz
+        kalır ama bütündür. Köksüz trace &quot;Root traces only&quot; süzgecinde düşer ve listede giriş
+        servisiyle (yoksa &quot;unknown&quot;) görünür. Kaynak trace_summary_5m; pencere boyu GROUP BY
+        trace_id — bu yüzden isteğe bağlı ve ≤ 1 saat; 5 dk altı pencere ham spans'ten (v0.10.713).
       </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span className="cell-hint">Kök tanımı (Root süzgeci + şerit + bu ölçü):</span>
+        <span className="seg-mini" role="group" aria-label="Kök tanımı">
+          <button type="button" className={def === 'strict' ? 'on' : ''} disabled={saveDef.isPending}
+            title="Tam kök: parent boş + ad dolu + servis dolu (v0.10.732 öncesi tek tanım)"
+            onClick={() => def !== 'strict' && saveDef.mutate('strict')}>tam kök</button>
+          <button type="button" className={def === 'entry' ? 'on' : ''} disabled={saveDef.isPending}
+            title="Giriş kökü: tam kök YA DA en az bir server/consumer giriş span'i. Öksüzlük şart değil."
+            onClick={() => def !== 'entry' && saveDef.mutate('entry')}>giriş kökü</button>
+        </span>
+        {defQ.isError && <span className="badge b-err" title={String(defQ.error)}>tanım okunamadı</span>}
+        {saveDef.isError && <span className="badge b-err" title={String(saveDef.error)}>kaydedilemedi</span>}
+        {data && data.def !== def && !saveDef.isPending && (
+          <span className="badge b-warn" title="Kapsama sonucu önceki tanımla alındı; yeniden çalıştır.">sonuç eski tanımla</span>
+        )}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <select value={rangeS} onChange={e => setRangeS(Number(e.target.value))} aria-label="Pencere">
           {/* v0.10.713 (operatör) — 1 dk: MV 5 dk kovasını bölemez, ham spans'ten okunur. */}
@@ -2610,7 +2638,10 @@ function RootCoveragePanel() {
               kaynak: {data.source === 'spans' ? 'spans' : 'MV'}
             </span>
             <span className={`badge ${rootTone(pct ?? 0)}`} title="Tam kök span'ı olan trace oranı (tüm giriş servisleri)">
-              köklü {pct === null ? '—' : `${pct.toFixed(1)}%`}
+              tam kök {pct === null ? '—' : `${pct.toFixed(1)}%`}
+            </span>
+            <span className={`badge ${rootTone(entryPct ?? 0)}`} title="Tam kök ya da giriş span'i olan trace oranı (giriş kökü tanımı)">
+              giriş kökü {entryPct === null ? '—' : `${entryPct.toFixed(1)}%`}
             </span>
             {data.capped && <span className="badge b-warn">ilk 200 giriş servisi</span>}
           </>
@@ -2635,6 +2666,8 @@ function RootCoveragePanel() {
                     <td className="num mono">{fmtNum(r.traces)}</td>
                     <td className="num mono">{fmtNum(r.traces - r.withRoot)}</td>
                     <td className="num mono"><span className={`badge ${rootTone(p)}`}>{p.toFixed(1)}%</span></td>
+                    <td className="num mono"><span className={`badge ${rootTone(r.traces ? (entryRootOf(r) / r.traces) * 100 : 0)}`}>
+                      {(r.traces ? (entryRootOf(r) / r.traces) * 100 : 0).toFixed(1)}%</span></td>
                   </tr>
                 );
               })}

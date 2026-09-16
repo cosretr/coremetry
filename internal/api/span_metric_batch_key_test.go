@@ -26,15 +26,15 @@ const (
 
 func baseKey() string {
 	return spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"service.name"}, "", `service.name = "a"`, "",
-		[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")})
+		[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict")
 }
 
 func TestSpanMetricBatchKeyMDP(t *testing.T) {
 	// v0.9.391 — maxDataPoints key bileşeni: farklı genişlik bucket'ları
 	// farklı çözünürlük ister; aynı diğer-girdilerle mdp=0 vs 1200 AYRI
 	// key üretmeli (v0.5.187 cross-poisoning kuralının mdp hali).
-	a := spanMetricBatchKey(tFrom, tTo, 0, 0, 0, nil, "", `service.name = "a"`, "", nil)
-	b := spanMetricBatchKey(tFrom, tTo, 0, 1200, 0, nil, "", `service.name = "a"`, "", nil)
+	a := spanMetricBatchKey(tFrom, tTo, 0, 0, 0, nil, "", `service.name = "a"`, "", nil, "strict")
+	b := spanMetricBatchKey(tFrom, tTo, 0, 1200, 0, nil, "", `service.name = "a"`, "", nil, "strict")
 	if a == b {
 		t.Fatalf("mdp farkı key'i değiştirmeli: %s", a)
 	}
@@ -44,23 +44,23 @@ func TestSpanMetricBatchKey_EveryInputSeparates(t *testing.T) {
 	base := baseKey()
 	cases := map[string]string{
 		"from": spanMetricBatchKey(tFrom+int64(time.Hour), tTo, 60, 0, 0, []string{"service.name"}, "", `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict"),
 		"to": spanMetricBatchKey(tFrom, tTo+int64(time.Hour), 60, 0, 0, []string{"service.name"}, "", `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict"),
 		"step": spanMetricBatchKey(tFrom, tTo, 300, 0, 0, []string{"service.name"}, "", `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict"),
 		"groupBy": spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"host.name"}, "", `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict"),
 		"filters": spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"service.name"}, `[{"k":"x"}]`, `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict"),
 		"dsl": spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"service.name"}, "", `service.name = "b"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict"),
 		"agg field": spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"service.name"}, "", `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "latency_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "latency_ms")}, "strict"),
 		"agg kind": spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"service.name"}, "", `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p95", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p95", "duration_ms")}, "strict"),
 		"extra agg": spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"service.name"}, "", `service.name = "a"`, "",
-			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms"), agg("p50", "p50", "duration_ms")}),
+			[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms"), agg("p50", "p50", "duration_ms")}, "strict"),
 	}
 	for name, got := range cases {
 		if got == base {
@@ -72,18 +72,18 @@ func TestSpanMetricBatchKey_EveryInputSeparates(t *testing.T) {
 // The v0.5.187 rule for strings: without a separator, moving a character
 // across a boundary produces the same byte stream and therefore the same key.
 func TestSpanMetricBatchKey_NoBoundaryCollision(t *testing.T) {
-	a := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"a", "bc"}, "", "", "", nil)
-	b := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"ab", "c"}, "", "", "", nil)
+	a := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"a", "bc"}, "", "", "", nil, "strict")
+	b := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"ab", "c"}, "", "", "", nil, "strict")
 	if a == b {
 		t.Fatal(`group-by ["a","bc"] and ["ab","c"] collided — separator missing`)
 	}
-	c := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "x", "y", "", nil)
-	d := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "xy", "", "", nil)
+	c := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "x", "y", "", nil, "strict")
+	d := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "xy", "", "", nil, "strict")
 	if c == d {
 		t.Fatal("filters/dsl boundary collided — separator missing")
 	}
-	e := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", "", "", []chstore.SpanMetricAggSpec{agg("n", "a", "f")})
-	f := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", "", "", []chstore.SpanMetricAggSpec{agg("n", "af", "")})
+	e := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", "", "", []chstore.SpanMetricAggSpec{agg("n", "a", "f")}, "strict")
+	f := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", "", "", []chstore.SpanMetricAggSpec{agg("n", "af", "")}, "strict")
 	if e == f {
 		t.Fatal("agg field boundary collided — separator missing")
 	}
@@ -94,9 +94,9 @@ func TestSpanMetricBatchKey_NoBoundaryCollision(t *testing.T) {
 // entry. Same for group-by.
 func TestSpanMetricBatchKey_OrderInsensitive(t *testing.T) {
 	a := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"a", "b"}, "", "", "",
-		[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")})
+		[]chstore.SpanMetricAggSpec{agg("rate", "rate", ""), agg("p99", "p99", "duration_ms")}, "strict")
 	b := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, []string{"b", "a"}, "", "", "",
-		[]chstore.SpanMetricAggSpec{agg("p99", "p99", "duration_ms"), agg("rate", "rate", "")})
+		[]chstore.SpanMetricAggSpec{agg("p99", "p99", "duration_ms"), agg("rate", "rate", "")}, "strict")
 	if a != b {
 		t.Fatalf("reordering group-by/aggs must not change the key:\n %q\n %q", a, b)
 	}
@@ -106,12 +106,12 @@ func TestSpanMetricBatchKey_OrderInsensitive(t *testing.T) {
 // nanoseconds, so an unbucketed key would be unique per request and cache
 // exactly nothing.
 func TestSpanMetricBatchKey_WindowBucketedToMinute(t *testing.T) {
-	base := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", "", "", nil)
-	within := spanMetricBatchKey(tFrom+int64(37*time.Second), tTo+int64(11*time.Second), 60, 0, 0, nil, "", "", "", nil)
+	base := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", "", "", nil, "strict")
+	within := spanMetricBatchKey(tFrom+int64(37*time.Second), tTo+int64(11*time.Second), 60, 0, 0, nil, "", "", "", nil, "strict")
 	if base != within {
 		t.Fatal("sub-minute jitter must land on the same key, otherwise nothing ever caches")
 	}
-	next := spanMetricBatchKey(tFrom+int64(90*time.Second), tTo, 60, 0, 0, nil, "", "", "", nil)
+	next := spanMetricBatchKey(tFrom+int64(90*time.Second), tTo, 60, 0, 0, nil, "", "", "", nil, "strict")
 	if base == next {
 		t.Fatal("crossing a minute boundary must produce a new key")
 	}
@@ -126,8 +126,8 @@ func TestSpanMetricBatchKey_WindowBucketedToMinute(t *testing.T) {
 // birbirini zehirlerdi — anahtarın önlemeye çalıştığı senaryonun
 // kendisi (review bulgusu).
 func TestSpanMetricBatchKeyRateWindow(t *testing.T) {
-	a := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", `service.name = "a"`, "", nil)
-	b := spanMetricBatchKey(tFrom, tTo, 60, 0, 180, nil, "", `service.name = "a"`, "", nil)
+	a := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", `service.name = "a"`, "", nil, "strict")
+	b := spanMetricBatchKey(tFrom, tTo, 60, 0, 180, nil, "", `service.name = "a"`, "", nil, "strict")
 	if a == b {
 		t.Fatal("rateWindow=0 ve 180 aynı cache key üretti — çapraz zehirlenme (v0.5.187)")
 	}
@@ -161,10 +161,25 @@ func TestSpanMetricBatchKeyFilterGroup(t *testing.T) {
 	}
 	g1 := spanMetricBatchFilterKeyInput(flat, `{"join":"OR","filters":[{"k":"db.system","op":"=","v":["oracle"]}]}`)
 	g2 := spanMetricBatchFilterKeyInput(flat, `{"join":"OR","filters":[{"k":"db.system","op":"=","v":["postgresql"]}]}`)
-	a := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, g1, "", "", nil)
-	b := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, g2, "", "", nil)
-	c := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, flat, "", "", nil)
+	a := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, g1, "", "", nil, "strict")
+	b := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, g2, "", "", nil, "strict")
+	c := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, flat, "", "", nil, "strict")
 	if a == b || a == c {
 		t.Fatalf("farklı filterGroup aynı anahtarı üretti: %s / %s / %s", a, b, c)
+	}
+}
+
+// v0.10.733 — kök TANIMI anahtara yalnız root bayrağı açıkken girer:
+// tanım değişince root-only seriler ayrışır, root kapalı seriler aynı kalır.
+func TestSpanMetricBatchKeyRootDef(t *testing.T) {
+	rootStrict := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", `service.name = "a"`, "", nil, "strict", true, false)
+	rootEntry := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", `service.name = "a"`, "", nil, "entry", true, false)
+	if rootStrict == rootEntry {
+		t.Fatal("root açıkken tanım anahtarı ayırmalı")
+	}
+	offStrict := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", `service.name = "a"`, "", nil, "strict", false, false)
+	offEntry := spanMetricBatchKey(tFrom, tTo, 60, 0, 0, nil, "", `service.name = "a"`, "", nil, "entry", false, false)
+	if offStrict != offEntry {
+		t.Fatal("root kapalıyken tanım anahtarı DEĞİŞTİRMEMELİ")
 	}
 }

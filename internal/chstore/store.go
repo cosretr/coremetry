@@ -77,6 +77,14 @@ type Store struct {
 	// nil-güvenli: Store{} kuran testler kuralsız davranır.
 	metricExclusions atomic.Pointer[CompiledMetricExclusions]
 
+	// traceRootDef (v0.10.733, operatör onaylı spec 2026-09-16) — /traces
+	// "Root" süzgecinin, şerit kök yükleminin ve kök kapsama ölçüsünün TANIMI:
+	// 0 = strict (tam kök: parent boş + ad + servis), 1 = entry (giriş kökü:
+	// tam kök YA DA en az bir server/consumer giriş span'i). system_settings
+	// 'trace_root_def' blob'undan hidre edilir (api.LoadTraceRootDef +
+	// 30 s yenileme); sıfır değeri strict = önceki davranış birebir.
+	traceRootDef atomic.Int32
+
 	// anomalyTracked (v0.9.800) — anomali dedektörünün ölçtüğü metrik
 	// seti, AYNI kablo (anomaly_tracked.go). Dedektör her tikte buradan
 	// okur: tik başına bir CH okuması daha eklemeden ayar canlı kalır.

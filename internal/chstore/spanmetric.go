@@ -879,7 +879,9 @@ func spanMetricBatchWhere(f SpanMetricBatchFilter, winK, effWin int) whereClause
 	}
 	// v0.10.484 — /traces Root / Errors bayrakları (tablo ile aynı küme).
 	if f.RootOnly {
-		wc.add(rootSpanPredicate) // v0.10.611 — kolon parent_id (parent_span_id YOK, prod CH 47)
+		// v0.10.611 — kolon parent_id (parent_span_id YOK, prod CH 47).
+		// v0.10.733 — tanım-duyarlı (QuerySpanMetricMulti f.RootDef'i canlı tanımdan doldurur).
+		wc.add(rootSpanPredicateFor(f.RootDef))
 	}
 	// v0.9.601 — tek-agg yolundaki (yukarıda, ~satır 189) searchPredicate
 	// ile BİREBİR aynı. İki yolun aynı yüklemi kurması şart: /traces
@@ -894,6 +896,9 @@ func spanMetricBatchWhere(f SpanMetricBatchFilter, winK, effWin int) whereClause
 // series without inspecting types.
 type SpanMetricBatchFilter struct {
 	Filters []FilterExpr
+	// RootDef — v0.10.733: RootOnly'nin tanımı (strict | entry). Boş =
+	// strict; QuerySpanMetricMulti canlı ayardan doldurur (Store.TraceRootDef).
+	RootDef TraceRootDef
 	// FilterRoot — v0.10.655: gruplu (OR / iç içe) yüklem; tek-agg yolundaki
 	// SpanMetricFilter.FilterRoot'un batch karşılığı. Düz Filters ile AND'lenir
 	// (env/cluster/kind bağlam çipleri düz gelir); varken MV/rollup fast-path
@@ -1107,6 +1112,9 @@ func (s *Store) QuerySpanMetricMulti(ctx context.Context, f SpanMetricBatchFilte
 		}
 	}
 
+	if f.RootDef == "" {
+		f.RootDef = s.TraceRootDef() // v0.10.733 — canlı kök tanımı (tablo ile aynı)
+	}
 	wc := spanMetricBatchWhere(f, winK, effWin)
 	// ── Bucket size — clampSpanMetricStep yukarıda uyguladı ──────────────────
 	step := f.StepSeconds

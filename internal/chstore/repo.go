@@ -2480,13 +2480,12 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 			WHERE time_bucket >= toStartOfFiveMinute(toDateTime(?, 'UTC'))
 			  AND time_bucket < toDateTime(?, 'UTC')
 			GROUP BY trace_id
-			HAVING argMaxIfMerge(root_service_state) != '')`)
+			HAVING `+s.rootHavingMV()+`)`) // v0.10.733 — tanım-duyarlı (strict | entry)
 			havingArgs = append(havingArgs, f.From.Unix(), f.To.Unix())
 		} else {
-			havingParts = append(havingParts,
-				"countIf((parent_id = '' OR parent_id = '0000000000000000') AND name != '' AND service_name != '') > 0")
-			lightHavingParts = append(lightHavingParts,
-				"countIf((parent_id = '' OR parent_id = '0000000000000000') AND name != '' AND service_name != '') > 0")
+			// v0.10.733 — tanım-duyarlı: strict = tam kök; entry = tam kök VEYA giriş span'i.
+			havingParts = append(havingParts, rootHavingRaw(s.TraceRootDef()))
+			lightHavingParts = append(lightHavingParts, rootHavingRaw(s.TraceRootDef()))
 		}
 	}
 	for _, svc := range f.RequireServices {
@@ -2995,7 +2994,7 @@ func (s *Store) filterRootTraces(ctx context.Context, ids []string, from, to tim
 			  AND time_bucket < toDateTime(?, 'UTC')
 			  AND trace_id IN (`+chPlaceholders(len(chunk))+`)
 			GROUP BY trace_id
-			HAVING argMaxIfMerge(root_service_state) != ''
+			HAVING `+s.rootHavingMV()+`
 			SETTINGS max_execution_time = 10`, args...)
 		if err != nil {
 			return nil, err
@@ -3742,7 +3741,7 @@ func (s *Store) getTracesFromMV(ctx context.Context, f TraceFilter) ([]TraceRow,
 	if f.RootOnly {
 		// Root span exists with non-empty service_name (same
 		// strict check the raw path uses).
-		having = append(having, "argMaxIfMerge(root_service_state) != ''")
+		having = append(having, s.rootHavingMV()) // v0.10.733 — tanım-duyarlı
 	}
 	if f.HasError {
 		having = append(having, "countMerge(error_count_state) > 0")

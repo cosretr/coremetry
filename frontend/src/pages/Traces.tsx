@@ -82,7 +82,7 @@ import { SvcBadge, DurationBar, fmtDur } from '@/components/traces/shared';
 import { PageControls } from '@/components/ui/PageControls';
 import { QueryError } from '@/components/QueryError';
 import { PageShell } from '@/components/ui/PageShell';
-import { useEntityEnabled } from '@/lib/queries';
+import { useEntityEnabled, useTraceRootDef } from '@/lib/queries';
 import { isTraceK8sCol, withK8sColumns, canAddK8sColumns } from '@/lib/traceK8sLinks';
 import type { EntityClusterInfo } from '@/lib/types';
 
@@ -273,6 +273,12 @@ function TracesPageInner() {
   const [sort, setSort] = useState<SortColumn>(() => (searchParams.get('sort') as SortColumn) || 'time');
   const [order, setOrder] = useState<SortOrder>(() => (searchParams.get('order') === 'asc' ? 'asc' : 'desc'));
   const [page, setPage] = useState(() => parseInt(searchParams.get('page') ?? '0', 10) || 0);
+  // v0.10.733 — Root kutusunun başlığı hangi kök tanımının geçerli olduğunu
+  // yazar (strict | entry; Settings'te, viewer görür değiştiremez).
+  const rootDefQ = useTraceRootDef();
+  const rootDefLabel = rootDefQ.data?.def === 'entry'
+    ? "giriş kökü (tam kök ya da server/consumer giriş span'i)"
+    : 'tam kök (parent boş + ad + servis)';
   // v0.10.724 (operatör onayı "A", 2026-09-13) — üst şerit katlanabilir;
   // durum tarayıcıya özel (localStorage), URL'e YAZILMAZ: paylaşılan link
   // görünümü değil, kişisel yer tasarrufu. v0.10.513 expand/shrink'i
@@ -1338,7 +1344,7 @@ function TracesPageInner() {
                 <span style={{ color: draft.hasError ? 'var(--err)' : 'var(--text2)' }}>Errors</span>
               </label>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                title="Kök span'i depoya düşmüş trace'ler — yarım trace'leri gizler. SUNUCU filtresi.">
+                title={`Kök span'i depoya düşmüş trace'ler — yarım trace'leri gizler. SUNUCU filtresi. Kök tanımı: ${rootDefLabel} (Admin → ClickHouse → kök kapsaması).`}>
                 <input type="checkbox" checked={draft.rootOnly}
                   onChange={() => setDraft({ ...draft, rootOnly: !draft.rootOnly })} />
                 <span style={{ color: draft.rootOnly ? 'var(--accent2)' : 'var(--text2)' }}>Root</span>

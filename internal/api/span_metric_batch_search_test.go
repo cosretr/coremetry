@@ -22,15 +22,15 @@ import (
 // serisini görürdü — v0.5.187 çapraz-zehirlenmesinin birebir aynısı.
 func TestBatchKeySeparatesSearches(t *testing.T) {
 	aggs := []chstore.SpanMetricAggSpec{{Name: "count", Aggregation: "count"}}
-	k1 := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "timeout", aggs)
-	k2 := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "refused", aggs)
+	k1 := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "timeout", aggs, "strict")
+	k2 := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "refused", aggs, "strict")
 	if k1 == k2 {
 		t.Error("iki farklı arama AYNI önbellek anahtarını üretti — operatör " +
 			"birinin sonucunu ötekinin sorusuna karşılık görür (v0.5.187)")
 	}
 	// Boş arama, aramasız çağrıyla aynı kalmalı: aksi halde mevcut
 	// çağıranların (servis detayı) önbelleği tek seferde soğurdu.
-	if k1, k2 := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "", aggs), spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "", aggs); k1 != k2 {
+	if k1, k2 := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "", aggs, "strict"), spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "", aggs, "strict"); k1 != k2 {
 		t.Error("aynı girdi iki farklı anahtar üretti — deterministik değil")
 	}
 }
@@ -120,12 +120,12 @@ func TestBatchSearchSkipsFastPaths(t *testing.T) {
 // v0.10.484 — Root / Errors bayrakları anahtara girer; ikisi boşken anahtar değişmez.
 func TestSpanMetricBatchKeyFlags(t *testing.T) {
 	aggs := []chstore.SpanMetricAggSpec{{Name: "count", Aggregation: "count"}}
-	base := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs, false, false)
-	if base != spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs) {
+	base := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs, "strict", false, false)
+	if base != spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs, "strict") {
 		t.Fatal("bayraksız anahtar eski anahtarla aynı olmalı")
 	}
-	root := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs, true, false)
-	errs := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs, false, true)
+	root := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs, "strict", true, false)
+	errs := spanMetricBatchKey(1, 2, 30, 0, 0, nil, "", "", "q", aggs, "strict", false, true)
 	if root == base || errs == base || root == errs {
 		t.Fatalf("bayraklar anahtarı ayırmalı: base=%s root=%s errs=%s", base, root, errs)
 	}

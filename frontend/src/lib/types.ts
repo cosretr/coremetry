@@ -3488,9 +3488,17 @@ export interface CHRootCoverageResponse {
   source: 'spans' | 'mv';
   totalTraces: number;
   totalWithRoot: number;
+  // v0.10.733 — "giriş kökü" tanımıyla köklü sayı (giriş servisli satırın tamamı +
+  // giriş servisi olmayan satırın tam köklüleri) ve ETKİN tanım.
+  totalWithEntryRoot: number;
+  def: TraceRootDef;
   rows: CHRootCoverageRow[];
   capped: boolean;
 }
+// v0.10.733 — kök tanımı ayarı (Go chstore.TraceRootDef; system_settings trace_root_def).
+// strict = tam kök (parent boş + ad + servis); entry = tam kök YA DA giriş span'i (server/consumer).
+export type TraceRootDef = 'strict' | 'entry';
+export interface TraceRootDefSettings { def: TraceRootDef }
 export interface CHMeasureResponse {
   mode: 'cluster' | 'standalone';
   cluster?: string;

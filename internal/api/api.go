@@ -4264,7 +4264,7 @@ func (s *Server) getTraces(w http.ResponseWriter, r *http.Request) {
 	// query string (GET, no body/role variance). raw from/to keep a
 	// relative window stable within the TTL (do NOT key on parsed now()-
 	// ticking time, the v0.5.184 class).
-	key := "traces:" + cacheRawQuery(r) // v0.10.256 — from/to 30 s grid, refresh düşer
+	key := "traces:" + cacheRawQuery(r) + tracesRootDefKeySuffix(q, s.store.TraceRootDef()) // v0.10.256 grid; v0.10.733 kök tanımı (rootOnly iken)
 	// v0.10.326 — ?explain=1 (yalnız admin): cache'i ATLAR, yanıta yol
 	// kararları + her CH adımı (SQL/arg/ms/satır/hata) eklenir. Prod'da
 	// tekrar etmeyen "kısa pencere boş" sınıfının teşhis aracı.

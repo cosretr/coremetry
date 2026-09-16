@@ -3366,6 +3366,14 @@ export const api = {
   // v0.10.712 — trace kök kapsaması (isteğe bağlı; 5 dk..1 sa).
   chRootCoverage: (rangeS: number, signal?: AbortSignal) =>
     get<import('./types').CHRootCoverageResponse>(`/api/admin/clickhouse/root-coverage?range_s=${rangeS}`, signal),
+  // v0.10.733 — kök tanımı (strict | entry); GET tüm roller, PUT admin.
+  getTraceRootDef: (signal?: AbortSignal) =>
+    get<import('./types').TraceRootDefSettings>('/api/settings/trace-root-def', signal),
+  putTraceRootDef: (def: import('./types').TraceRootDef) =>
+    request<import('./types').TraceRootDefSettings>('/api/settings/trace-root-def', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ def }),
+    }),
   chNodeWork: () =>
     get<{
       nodes: import('./chNodeWork').NodeWorkRaw[];

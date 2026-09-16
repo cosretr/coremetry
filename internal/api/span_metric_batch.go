@@ -174,7 +174,7 @@ func (s *Server) spanMetricBatch(w http.ResponseWriter, r *http.Request) {
 	// genişliğini artık TAHMİN etmiyor (bar genişliği/gap eşiği için
 	// sözleşme; rollup /api/rollup/red planıyla AYNI kontrat).
 	s.serveCached(w, r, spanMetricBatchKey(body.From, body.To, body.Step, body.MaxDataPoints,
-		body.RateWindow, body.GroupBy, spanMetricBatchFilterKeyInput(string(body.Filters), body.FilterGroup), body.DSL, body.Search, specs, body.RootOnly, body.HasError), 30*time.Second,
+		body.RateWindow, body.GroupBy, spanMetricBatchFilterKeyInput(string(body.Filters), body.FilterGroup), body.DSL, body.Search, specs, string(s.store.TraceRootDef()), body.RootOnly, body.HasError), 30*time.Second,
 		func(ctx context.Context) (any, error) {
 			series, stepSec, err := s.store.QuerySpanMetricMulti(ctx, f)
 			if err != nil {
@@ -198,7 +198,7 @@ func (s *Server) spanMetricBatch(w http.ResponseWriter, r *http.Request) {
 // v0.10.489 (Astra #11) — bayraklar ayrı alan olarak hash'lenir (search'e
 // gizlenmiş kuyruk yerine); ikisi de boşken anahtar eski anahtarla aynı.
 func spanMetricBatchKey(fromNs, toNs int64, step, maxDataPoints, rateWindow int, groupBy []string,
-	filters, dsl, search string, aggs []chstore.SpanMetricAggSpec, flags ...bool) string {
+	filters, dsl, search string, aggs []chstore.SpanMetricAggSpec, rootDef string, flags ...bool) string {
 	h := fnv.New64a()
 	write := func(parts ...string) {
 		for _, p := range parts {
@@ -220,6 +220,11 @@ func spanMetricBatchKey(fromNs, toNs int64, step, maxDataPoints, rateWindow int,
 	// hash'ler; girmeseydi kök-yalnız seri tüm-span serisiyle çapraz zehirlenirdi).
 	if len(flags) >= 2 && (flags[0] || flags[1]) {
 		write("root", strconv.FormatBool(flags[0]), "err", strconv.FormatBool(flags[1]))
+		// v0.10.733 — kök TANIMI yalnız root bayrağı açıkken anahtara girer
+		// (kapalıyken cevabı değiştirmez; anahtar kararlı kalır).
+		if flags[0] {
+			write("rd", rootDef)
+		}
 	}
 	// v0.9.391 — mdp key'de: farklı genişlikteki paneller farklı çözünürlük
 	// ister; key'e girmezse birbirinin çözünürlüğünü zehirler (v0.5.187).

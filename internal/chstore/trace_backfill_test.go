@@ -156,11 +156,15 @@ func TestRawRootOnlyLooksBeyondServiceFilter(t *testing.T) {
 		t.Fatal("ham rootOnly düzeltme bloğu yok")
 	}
 	block := src[i : i+1600]
+	// v0.10.733 — yüklemler tanım-duyarlı yardımcılardan gelir; pin, kaynak
+	// metninde yardımcıyı ve yardımcının strict çıktısında eski literali arar.
 	if !strings.Contains(block, "trace_id GLOBAL IN (") ||
-		!strings.Contains(block, "argMaxIfMerge(root_service_state) != ''") {
+		!strings.Contains(block, "HAVING `+s.rootHavingMV()+`") ||
+		!strings.Contains(rootHavingMV(TraceRootDefStrict, true), "argMaxIfMerge(root_service_state) != ''") {
 		t.Error("daraltılmış dal MV üyeliğine (GLOBAL) bakmıyor")
 	}
-	if !strings.Contains(block, `countIf((parent_id = '' OR parent_id = '0000000000000000')`) {
+	if !strings.Contains(block, "rootHavingRaw(s.TraceRootDef())") ||
+		!strings.Contains(rootHavingRaw(TraceRootDefStrict), `countIf((parent_id = '' OR parent_id = '0000000000000000')`) {
 		t.Error("daraltmasız dalın span-içi kök koşulu düşmüş — o dalda doğru ve ucuz olan buydu")
 	}
 	if !strings.Contains(block, "f.Service != \"\" || len(f.RequireServices) > 0") {

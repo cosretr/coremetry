@@ -31,3 +31,30 @@ describe('kök kapsaması 1 dk (v0.10.713)', () => {
     expect(page).toContain("kaynak: {data.source === 'spans' ? 'spans' : 'MV'}");
   });
 });
+
+// v0.10.733 — kök tanımı: iki ölçü yan yana, seçici, entryRootOf saf.
+describe('kök tanımı (v0.10.733)', () => {
+  it('iki yüzde (tam kök / giriş kökü) + sütun + seçici + eski-tanım rozeti', () => {
+    expect(page).toContain("{ id: 'entrypct', label: 'Giriş kökü %'");
+    expect(page).toContain('giriş kökü {entryPct === null');
+    expect(page).toContain('tam kök {pct === null');
+    expect(page).toContain('aria-label="Kök tanımı"');
+    expect(page).toContain("saveDef.mutate('entry')");
+    expect(page).toContain('sonuç eski tanımla');
+    expect(page).toContain("import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries';");
+    expect(page).toContain("import { entryRootOf } from '@/lib/rootCoverage';");
+  });
+  it('entryRootOf: giriş servisli satırın tamamı, olmayanın tam köklüleri', async () => {
+    const { entryRootOf } = await import('../lib/rootCoverage');
+    expect(entryRootOf({ entryService: 'gw', traces: 100, withRoot: 6 })).toBe(100);
+    expect(entryRootOf({ entryService: '', traces: 50, withRoot: 12 })).toBe(12);
+  });
+  it('istemci ucu + hook + Traces başlığı', () => {
+    expect(api).toContain("'/api/settings/trace-root-def'");
+    const idx = readFileSync(resolve(__dirname, '../lib/queries/index.ts'), 'utf8');
+    expect(idx).toContain("export { useTraceRootDef, useSaveTraceRootDef } from './traceRootDef';");
+    const traces = readFileSync(resolve(__dirname, 'Traces.tsx'), 'utf8');
+    expect(traces).toContain('Kök tanımı: ${rootDefLabel}');
+    expect(traces).toContain("rootDefQ.data?.def === 'entry'");
+  });
+});

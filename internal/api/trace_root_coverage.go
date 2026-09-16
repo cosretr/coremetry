@@ -51,9 +51,26 @@ func rootCoverageTotals(rows []chstore.TraceRootCoverageRow) (traces, withRoot u
 	return traces, withRoot
 }
 
+// rootCoverageEntryRoot — v0.10.733 SAF: "giriş kökü" tanımıyla köklü sayı.
+// Satır giriş servisi taşıyorsa trace'lerin HEPSİ giriş span'lidir (giriş =
+// en erken server/consumer span), yani hepsi giriş-kökü sayılır; giriş
+// servisi olmayan satırda yalnız tam köklüler kalır. SQL değişmeden
+// türetilir — panel iki tanımı yan yana gösterir.
+func rootCoverageEntryRoot(rows []chstore.TraceRootCoverageRow) (withEntryRoot uint64) {
+	for _, r := range rows {
+		if r.EntryService != "" {
+			withEntryRoot += r.Traces
+		} else {
+			withEntryRoot += r.WithRoot
+		}
+	}
+	return withEntryRoot
+}
+
 func (s *Server) getTraceRootCoverage(w http.ResponseWriter, r *http.Request) {
 	rangeS := rootCoverageRange(r.URL.Query().Get("range_s"))
-	key := fmt.Sprintf("ch:root-coverage:v1:r=%d", rangeS)
+	def := s.store.TraceRootDef()
+	key := fmt.Sprintf("ch:root-coverage:v2:r=%d:rd=%s", rangeS, def) // v0.10.733 — cevap etkin tanımı taşır
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		rows, source, err := s.store.TraceRootCoverage(ctx, rangeS)
 		if err != nil {
@@ -63,6 +80,7 @@ func (s *Server) getTraceRootCoverage(w http.ResponseWriter, r *http.Request) {
 		return map[string]any{
 			"rangeS": rangeS, "generatedAt": time.Now().UnixNano(), "source": source,
 			"totalTraces": traces, "totalWithRoot": withRoot,
+			"totalWithEntryRoot": rootCoverageEntryRoot(rows), "def": string(def), // v0.10.733
 			"rows": rows, "capped": len(rows) >= 200,
 		}, nil
 	})
