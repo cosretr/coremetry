@@ -205,7 +205,7 @@ func TestNormalizeInboxMinOcc(t *testing.T) {
 		raw  string
 		want uint64
 	}{
-		{"", inboxDefaultMinOcc},   // absent → the floor
+		{"", inboxDefaultMinOcc},   // absent → the floor (v0.10.740: 2 — tek oluşum varsayılanda yok)
 		{"0", 0},                   // explicit "show all" is honoured
 		{"10", 10},                 // the strip's second rung
 		{"  7 ", 7},                // whitespace from a pasted URL
@@ -670,4 +670,18 @@ func TestInboxExceptionBudgetIsUnconditional(t *testing.T) {
 	// metnini yakalayan bir yanlış pozitif üretirdi (aynı tuzak
 	// v0.9.564'te çıktı). Sabit silindiği için derleyici zaten
 	// koruyor — kullanan kod derlenmez.
+}
+
+// v0.10.740 (operatör: "1 tane geldiyse dahil etme") — varsayılan taban 2:
+// tek oluşumlu grup varsayılan listede yok, 2+ görünür; açık "0" hepsi.
+func TestInboxDefaultMinOccDropsSingletons(t *testing.T) {
+	if inboxDefaultMinOcc != 2 {
+		t.Fatalf("inboxDefaultMinOcc = %d, want 2", inboxDefaultMinOcc)
+	}
+	if got := normalizeInboxMinOcc(""); got != 2 {
+		t.Fatalf("param yokken taban 2 olmalı, %d", got)
+	}
+	if got := normalizeInboxMinOcc("0"); got != 0 {
+		t.Fatalf("açık 0 = hepsi, %d", got)
+	}
 }

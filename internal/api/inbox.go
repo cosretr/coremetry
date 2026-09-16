@@ -1228,7 +1228,13 @@ func applyInboxCategoryFacet(items []InboxItem, cats []string) []InboxItem {
 // onları zaten P3'e koyar ve priority-sıralı liste dibe iter. "Bazen az
 // sayıda hata olsa da gözükmesi iş görür." ?minOcc= eşiği aynen duruyor
 // ve /problems ile aynı varsayılanı paylaşır.
-const inboxDefaultMinOcc = 0
+//
+// v0.10.740 (operatör 2026-09-16: "exceptions'ta 1 tane geldiyse dahil
+// etme"): varsayılan taban 2 — TEK oluşumlu grup varsayılan listede yok.
+// 2-3'lükler görünür kalır (417'nin ruhu), yalnız tek-seferlik düşer. Açık
+// ?minOcc=0 ("show all") aynen çalışır; istemci "show all" için 0'ı URL'e
+// YAZAR (silerse varsayılan geri gelirdi).
+const inboxDefaultMinOcc = 2
 
 // normalizeInboxMinOcc parses ?minOcc=. Absent → the default floor; an
 // explicit "0" → no floor ("show all"), which is the affordance that keeps

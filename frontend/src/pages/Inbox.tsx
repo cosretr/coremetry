@@ -150,6 +150,9 @@ const INBOX_COLS: DataTableColumn<InboxItem>[] = [
   { id: 'assignee', label: 'Assignee', sortValue: it => it.assignee ?? '',   naturalDir: 'asc', width: 150 },
 ];
 
+// v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
+const DEFAULT_MIN_OCC = 2;
+
 export default function InboxPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -216,15 +219,19 @@ export default function InboxPage() {
   // occurrence'lı gruplar da GÖRÜNÜR; öncelik formülü onları zaten
   // P3'e koyar ve priority-sıralı liste dibe iter. ?minOcc= isteyen
   // için aynen duruyor.
+  // v0.10.740 (operatör: "1 tane geldiyse dahil etme") — varsayılan taban 2
+  // (sunucu inboxDefaultMinOcc ile aynı): tek oluşumlu grup varsayılanda
+  // yok, 2-3'lükler görünür. "show all" 0'ı URL'e YAZAR (silinirse
+  // varsayılan geri gelir); paylaşılan link gördüğünü taşır.
   const minOcc = (() => {
     const raw = searchParams.get('minOcc');
-    if (raw === null) return 0;
+    if (raw === null) return DEFAULT_MIN_OCC;
     const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 ? n : 0;
+    return Number.isFinite(n) && n >= 0 ? n : DEFAULT_MIN_OCC;
   })();
   const setMinOcc = (v: number) => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
-    if (v === 0) next.delete('minOcc'); else next.set('minOcc', String(v));
+    if (v === DEFAULT_MIN_OCC) next.delete('minOcc'); else next.set('minOcc', String(v));
     return next;
   }, { replace: true });
   // v0.9.525 (operatör: "son 1 gün veya 2 saat seçebilmek isterim") —
@@ -877,6 +884,7 @@ export default function InboxPage() {
             ) : (
               <>
                 <span>Showing <b style={{ color: 'var(--text2)' }}>every</b> row, including one-off exceptions</span>
+                <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>
                 <Button variant="ghost" size="sm" onClick={() => setMinOcc(5)}>5+ only</Button>
               </>
             )}
