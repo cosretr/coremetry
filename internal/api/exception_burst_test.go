@@ -290,12 +290,24 @@ func TestExceptionReasonNeverLiesAboutSteady(t *testing.T) {
 		}
 	})
 
-	t.Run("gerçekten kronik olan steady KALIR", func(t *testing.T) {
-		// 11.260 olay / 72 saat = ~2,6/dk — kelime burada doğru.
+	t.Run("eşiği aşmış kronik grup P1 kalır, cümle 'bitti' der (v0.10.741)", func(t *testing.T) {
+		// 11.260 olay / 72 saat = ~2,6/dk — v0.10.741'e dek "steady" P3'tü;
+		// operatör: "ilk anda P1 tespit ettiysen öyle kalsın" → hacim eşiğini
+		// (500) aşmış her grup ele alınana dek P1. Cümle yine yalan söylemez:
+		// "stopped N ago", "steady" değil.
 		g := mk(11260, 72*time.Hour)
-		_, reason := exceptionPriorityAt(g, cfg, time.Unix(0, g.LastSeen).Add(age))
-		if reason != "steady" {
-			t.Errorf("kronik grup için 'steady' beklenirdi: %q", reason)
+		prio, reason := exceptionPriorityAt(g, cfg, time.Unix(0, g.LastSeen).Add(age))
+		if prio != "P1" || !strings.Contains(reason, "stopped") || strings.Contains(reason, "steady") {
+			t.Errorf("eşik üstü kronik grup P1 + 'stopped' olmalı: (%s, %q)", prio, reason)
+		}
+	})
+
+	t.Run("eşiğin altında gerçekten kronik olan steady KALIR", func(t *testing.T) {
+		// 400 olay / 72 saat: hacim eşiğinin altında, hız düşük — kelime doğru.
+		g := mk(400, 72*time.Hour)
+		prio, reason := exceptionPriorityAt(g, cfg, time.Unix(0, g.LastSeen).Add(age))
+		if prio != "P3" || reason != "steady" {
+			t.Errorf("eşik altı kronik grup için (P3, steady) beklenirdi: (%s, %q)", prio, reason)
 		}
 	})
 }
@@ -353,10 +365,12 @@ func TestExceptionPriorityVolumeGateHasNoFiveMinuteCliff(t *testing.T) {
 		})
 	}
 
-	// Pencere KAPANINCA düşmeli — kapı kaldırılmadı, yeri düzeltildi.
-	prio, _ := exceptionPriorityAt(g, cfg, time.Unix(0, g.LastSeen).Add(5*time.Hour))
-	if prio == "P1" {
-		t.Error("P1 penceresi kapandıktan sonra hâlâ P1 — kapı kaldırılmış olurdu")
+	// v0.10.741 (operatör: "ilk anda P1 tespit ettiysen öyle kalsın") —
+	// pencere kapanınca da P1 KALIR; yalnız cümle "stopped N ago" der.
+	// (v0.9.1189'un "pencere kapanınca düşmeli" beklentisi direktifle terfi etti.)
+	prio, reason := exceptionPriorityAt(g, cfg, time.Unix(0, g.LastSeen).Add(5*time.Hour))
+	if prio != "P1" || !strings.Contains(reason, "stopped") {
+		t.Errorf("pencere kapandıktan sonra da P1 + 'stopped' olmalı: (%s, %q)", prio, reason)
 	}
 }
 

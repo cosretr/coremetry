@@ -190,3 +190,33 @@ func TestCurrentExceptionTriageGlobal(t *testing.T) {
 		t.Errorf("StaleResolveHours = %d, beklenen 24 (0 → varsayılan)", got.StaleResolveHours)
 	}
 }
+
+// v0.10.741 (operatör: "ilk anda P1 tespit ettiysen öyle kalsın") — hacim
+// eşiğini aşmış grup, akışı günler önce bitmiş ve hızı düşük (kronik damlama)
+// olsa da P1 KALIR; gerekçe ne zaman durduğunu söyler. Regressed dalı P2.
+func TestExceptionPriorityVolumeP1IsSticky(t *testing.T) {
+	cfg := chstore.NormalizeExceptionTriage(chstore.ExceptionTriageConfig{})
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	// 35 günde 11.000 olay (~0,2/dk): patlama değil, yoğun değil; 3 gün önce durmuş.
+	g := chstore.ExceptionGroup{
+		Occurrences: 11000,
+		FirstSeen:   now.Add(-35 * 24 * time.Hour).UnixNano(),
+		LastSeen:    now.Add(-3 * 24 * time.Hour).UnixNano(),
+		State:       "open",
+	}
+	got, reason := exceptionPriorityAt(g, cfg, now)
+	if got != "P1" || !strings.Contains(reason, "stopped") {
+		t.Fatalf("hacim P1'i zamanla düşmemeli: (%q, %q)", got, reason)
+	}
+	// Eşiğin altı eski merdivende (P3 steady).
+	g.Occurrences = uint64(cfg.P1MinOccurrences) - 1
+	if got, _ := exceptionPriorityAt(g, cfg, now); got != "P3" {
+		t.Fatalf("eşik altı kronik grup P3 kalmalı, %q", got)
+	}
+	// Regress mekanizması aynen: regressed → P2 (operatör onayı).
+	g.Occurrences = 11000
+	g.State = "regressed"
+	if got, reason := exceptionPriorityAt(g, cfg, now); got != "P2" || reason != "regressed" {
+		t.Fatalf("regressed dalı değişmemeli: (%q, %q)", got, reason)
+	}
+}

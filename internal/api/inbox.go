@@ -1973,20 +1973,27 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 	// basamaklara iner — 35 günlük 11 binlik bir damlanın ölümü
 	// operatörün kastettiği "bitmiş sorun" değil ve onu sonsuza dek P1
 	// tutmak kuyruğu şişirirdi (steady-pini bilinçli korunuyor).
+	// v0.10.741 (operatör 2026-09-16: "Problems'ta zaman içinde P1'den
+	// P2'ye ve P3'e geçişi yapma; ilk anda P1 diye tespit ettiysen öyle
+	// kalsın. Regress mekanizması çalışsın.") — hacim kapısı da KOŞULSUZ
+	// yapışkan: eşiği aşmış grup akışı ne zaman bitmiş olursa olsun P1
+	// kalır, ele alınana (resolve/ignore) dek. v0.9.1205'in "kronik damlama
+	// basamaklara iner" istisnası KALKTI (o istisna tam olarak operatörün
+	// gördüğü P1→P3 geçişiydi). Bedel bilinçli: uzun ömürlü damlama grupları
+	// resolve/ignore edilene dek P1 listesinde kalır. `regressed` dalı
+	// yukarıda AYNEN (P2 "regressed"): operatör onayı. Cümle dürüstlüğü
+	// aynen: "active in last 5min" ya da "stopped N ago".
 	if g.Occurrences >= uint64(cfg.P1MinOccurrences) {
 		if freshMin {
 			// v0.9.524'ün sözleşmesi BİREBİR korunuyor (inbox_test.go bu
 			// metni çiviliyor): tazelik ayrı, toplamın TOPLAM olduğu ayrı.
 			return "P1", fmt.Sprintf("active in last 5min · %s total", fmtThousands(g.Occurrences))
 		}
-		intense := exceptionBurstRate(g.Occurrences, g.FirstSeen, g.LastSeen) >= cfg.BurstMinRate/2
-		if fresh || intense {
-			// Durmuş hâli: aynı iki gerçek, artı ne zaman durduğu — "şu
-			// an devam ediyor" ile "iki saat önce bitti" operatör için
-			// farklı şeyler ve cümle bunu söylemeli.
-			return "P1", fmt.Sprintf("%s total · stopped %s ago",
-				fmtThousands(g.Occurrences), shortDur(time.Duration(age)))
-		}
+		// Durmuş hâli: aynı iki gerçek, artı ne zaman durduğu — "şu an
+		// devam ediyor" ile "iki saat önce bitti" operatör için farklı
+		// şeyler ve cümle bunu söylemeli.
+		return "P1", fmt.Sprintf("%s total · stopped %s ago",
+			fmtThousands(g.Occurrences), shortDur(time.Duration(age)))
 	}
 	// v0.9.775 — bu kapı da AYNI pencereye bağlandı. Operatörün ikinci
 	// şikâyeti tam buydu: 191 olaylık SQLTimeout grubu 1sa50dk'da
