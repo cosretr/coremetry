@@ -82,5 +82,12 @@ func (n *Notifier) subjectURL(p chstore.Problem) string {
 		}
 		return base + "/incident?id=" + p.ID
 	}
+	if fp := exceptionGroupFingerprint(p.ID); fp != "" { // v0.10.782 — grup satırı Exceptions'ta açılır
+		base := n.PublicURL()
+		if base == "" {
+			return ""
+		}
+		return base + "/problems?exception=" + fp
+	}
 	return n.problemURL(p.ID)
 }

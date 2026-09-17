@@ -20,10 +20,12 @@ export const NOTIFY_KIND_OPTIONS: NotifyKindOption[] = [
   { value: 'problem', label: 'Problem', hint: 'Operatör kuralları: alert rule, builtin, SLO, DB, runtime, watcher' },
   { value: 'anomaly', label: 'Anomali', hint: 'Anomali motoru: metrik anomalisi, service silent, dış tarayıcı, exception fırtınası / paylaşılan bağımlılık' },
   { value: 'incident', label: 'Incident', hint: 'Incident açılışı ve çözümü (otomatik korelasyon + manuel); critical incident P1, warning P2' },
+  // v0.10.782 — OPT-IN: boş süzgeç bu türü KAPSAMAZ (8.5K gruplu kurulumda sel olurdu); kanal açıkça seçer.
+  { value: 'exception', label: 'Exception / HTTP hatası', hint: 'Inbox merdiveninde P1/P2 olan TAZE exception ve HTTP-hata grupları (yeni: ilk 15 dk; regressed); grup başına bir kez. Boş süzgeç bu türü kapsamaz — açıkça seçin.' },
 ];
 
-const KNOWN: NotifyKind[] = ['problem', 'anomaly', 'incident'];
-const LABEL: Record<NotifyKind, string> = { problem: 'Problem', anomaly: 'Anomali', incident: 'Incident' };
+const KNOWN: NotifyKind[] = ['problem', 'anomaly', 'incident', 'exception'];
+const LABEL: Record<NotifyKind, string> = { problem: 'Problem', anomaly: 'Anomali', incident: 'Incident', exception: 'Exception' };
 
 export function isNotifyKind(v: string): v is NotifyKind {
   return (KNOWN as string[]).includes(v);

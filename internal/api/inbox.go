@@ -1826,6 +1826,10 @@ func exceptionPriority(g chstore.ExceptionGroup) (string, string) {
 	return exceptionPriorityAt(g, currentExceptionTriage(), time.Now())
 }
 
+// ExceptionPriority — v0.10.782: notify.ExceptionNotifier'a main.go'dan enjekte
+// edilen merdiven (notify → api içe aktaramaz). Aynı işlev, aynı ayar.
+func ExceptionPriority(g chstore.ExceptionGroup) (string, string) { return exceptionPriority(g) }
+
 // exceptionPriorityAt — SAF çekirdek (config + "şimdi" dışarıdan).
 // Tablo testleri buradan geçer; sarmalayıcı yalnız zamanı ve ayarı
 // bağlar.

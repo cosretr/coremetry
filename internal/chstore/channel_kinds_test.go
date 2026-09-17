@@ -54,8 +54,8 @@ func TestNormalizeNotifyKinds(t *testing.T) {
 		{"boş dilim → süzgeç yok", []string{}, "", false},
 		{"yalnız boşluk → süzgeç yok", []string{" ", ""}, "", false},
 		{"kırp + küçült + tekrar at, sıra korunur", []string{" Anomaly", "problem", "anomaly"}, "anomaly,problem", false},
-		{"üçü de", []string{"problem", "anomaly", "incident"}, "problem,anomaly,incident", false},
-		{"bilinmeyen → hata", []string{"problem", "exception"}, "", true},
+		{"dördü de (exception v0.10.782)", []string{"problem", "anomaly", "incident", "exception"}, "problem,anomaly,incident,exception", false},
+		{"bilinmeyen → hata", []string{"problem", "bogus"}, "", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

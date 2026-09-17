@@ -1229,7 +1229,9 @@ func main() {
 		// geçen grup, team-routing mail zincirinin ikiziyle owner+SRE
 		// takımlarına maillenir (tc.Enabled tek kapı; notification_log
 		// dedup — grup ömrü başına tek anons).
-		go notify.NewExceptionNotifier(store, notifier, lockImpl).Start(ctx)
+		// v0.10.782 — kanal yolu: P1/P2'ye ulaşan TAZE gruplar (Kind=exception,
+		// kanal başına opt-in); merdiven api'den enjekte.
+		go notify.NewExceptionNotifier(store, notifier, lockImpl, api.ExceptionPriority).Start(ctx)
 	}
 
 	// ── Root-cause synthesizer (rc #2, v0.8.x) ───────────────────────────────

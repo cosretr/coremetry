@@ -436,3 +436,21 @@ func (s *Store) HasNotification(ctx context.Context, relatedKind, relatedID, cha
 	defer rows.Close()
 	return rows.Next(), rows.Err()
 }
+
+// HasAnyNotification — v0.10.782: kanal adından bağımsız "bu kayıt için
+// herhangi bir kanala başarılı gönderim oldu mu" (exception grubu
+// bildirimleri: grup ömrü başına bir kez, restart'ta yeniden gönderme yok).
+func (s *Store) HasAnyNotification(ctx context.Context, relatedKind, relatedID string) (bool, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT 1 FROM notification_log
+		WHERE sent_at >= now() - INTERVAL 90 DAY
+		  AND related_kind = ? AND related_id = ? AND ok = 1
+		LIMIT 1
+		SETTINGS max_execution_time = 10`,
+		relatedKind, relatedID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	return rows.Next(), rows.Err()
+}

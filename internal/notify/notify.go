@@ -504,7 +504,9 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 	// döndürmüyordu; "mail gitti mi" bilgisi çağıranda YOKTU, dolayısıyla
 	// "bu problem kimseye gitmedi" sorusu sorulamıyordu bile.
 	var facts routingFacts
-	if p.Status == "open" {
+	// v0.10.782 — exception grubu bildirimleri YALNIZ kanallara: ekip maili
+	// P1 anonsunun (exception_notifier, ≥500 oluşum) işi, iki kez maillenmesin.
+	if p.Status == "open" && !strings.HasPrefix(p.RuleID, chstore.ExceptionGroupRulePrefix) {
 		facts.Team = n.sendTeamMail(ctx, p, n.teamMetadata(ctx, p, md), n.ruleNotifyFor(ctx, p))
 	}
 	// relKind yukarı taşındı (v0.9.1344): kanal listesi boş çıktığında da
@@ -661,6 +663,9 @@ func (n *Notifier) recordRouting(ctx context.Context, p chstore.Problem, relKind
 func problemRelatedKind(p chstore.Problem) string {
 	if p.Kind == chstore.NotifyKindIncident { // v0.10.748 incidentAsProblem
 		return "incident"
+	}
+	if strings.HasPrefix(p.RuleID, chstore.ExceptionGroupRulePrefix) { // v0.10.782 exceptionGroupProblem
+		return "exception"
 	}
 	if p.Metric == "watcher" {
 		return "watcher"

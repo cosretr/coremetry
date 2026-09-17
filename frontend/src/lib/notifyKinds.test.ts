@@ -9,7 +9,8 @@ import { NOTIFY_KIND_OPTIONS, kindsSummary, normalizeKinds, toggleKind } from '.
 describe('notifyKinds — saf', () => {
   it('normalizeKinds: kırp, küçült, tekrar at, bilinmeyeni düşür, sıra korunur', () => {
     expect(normalizeKinds(undefined)).toEqual([]);
-    expect(normalizeKinds([' Anomaly', 'problem', 'anomaly', 'exception', ''])).toEqual(['anomaly', 'problem']);
+    expect(normalizeKinds([' Anomaly', 'problem', 'anomaly', 'bogus', ''])).toEqual(['anomaly', 'problem']);
+    expect(normalizeKinds(['exception'])).toEqual(['exception']); // v0.10.782
     expect(normalizeKinds(['incident'])).toEqual(['incident']);
   });
 
@@ -24,12 +25,14 @@ describe('notifyKinds — saf', () => {
     expect(kindsSummary([])).toBe('Hepsi');
     expect(kindsSummary(['anomaly'])).toBe('Anomali');
     expect(kindsSummary(['problem', 'anomaly'])).toBe('Problem · Anomali');
-    // Eski/bilinmeyen değer taşıyan kanal "Hepsi" gibi görünmez, düşer.
-    expect(kindsSummary(['exception'])).toBe('Hepsi');
+    // v0.10.782 — exception artık bilinen tür; bilinmeyen değer yine düşer.
+    expect(kindsSummary(['exception'])).toBe('Exception');
+    expect(kindsSummary(['bogus'])).toBe('Hepsi');
   });
 
-  it('UI seçenekleri üç tür (incident üreticisi v0.10.748)', () => {
-    expect(NOTIFY_KIND_OPTIONS.map(o => o.value)).toEqual(['problem', 'anomaly', 'incident']);
+  it('UI seçenekleri dört tür (incident v0.10.748, exception v0.10.782 opt-in)', () => {
+    expect(NOTIFY_KIND_OPTIONS.map(o => o.value)).toEqual(['problem', 'anomaly', 'incident', 'exception']);
+    expect(NOTIFY_KIND_OPTIONS[3].hint).toContain('Boş süzgeç bu türü kapsamaz');
   });
 });
 
@@ -49,8 +52,8 @@ describe('notifyKinds — kablolama', () => {
     expect(tab).toContain('kindsSummary(');
   });
 
-  it('tip sunucuyla aynı üç değer ve matchRules.kinds', () => {
-    expect(types).toContain("export type NotifyKind = 'problem' | 'anomaly' | 'incident';");
+  it('tip sunucuyla aynı dört değer ve matchRules.kinds', () => {
+    expect(types).toContain("export type NotifyKind = 'problem' | 'anomaly' | 'incident' | 'exception';");
     expect(types).toContain('kinds?: NotifyKind[];');
   });
 });

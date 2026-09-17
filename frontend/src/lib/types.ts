@@ -2210,7 +2210,7 @@ export interface KibanaSettings {
 // open incident entirely while the sidebar's own /incidents badge counted it.
 export type InboxKind = 'problem' | 'exception' | 'httperror' | 'anomaly' | 'incident';
 /** v0.10.747 — kanal başına olay türü süzgeci; sunucu chstore.NotifyKindsAll ile birebir (Inbox grameri). */
-export type NotifyKind = 'problem' | 'anomaly' | 'incident';
+export type NotifyKind = 'problem' | 'anomaly' | 'incident' | 'exception'; // exception: v0.10.782, kanal başına opt-in
 // v0.10.706 — Dynatrace paritesi #5: satır kategorisi (okuma-anı, sunucu türetir).
 export type ProblemCategory = 'AVAILABILITY' | 'ERROR' | 'SLOWDOWN' | 'RESOURCE' | 'CUSTOM';
 /** v0.9.1342 — ÖZNE ŞERİDİ. `InboxKind` ile aynı şey DEĞİL:

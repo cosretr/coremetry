@@ -247,7 +247,10 @@ func (m ChannelMatchRules) MatchesProblem(in MatchInput) bool {
 // hesaplanır; açık geçmek daraltılmış kanala her şeyi sızdırırdı.
 func (m ChannelMatchRules) allowsKind(kind string) bool {
 	if len(m.Kinds) == 0 {
-		return true
+		// v0.10.782 — exception grupları OPT-IN: süzgeçsiz (eski) kanal
+		// problem/anomali/incident alır, exception almaz; kanal modalında
+		// açıkça seçilmeli. 8.5K gruplu bir kurulumda aksi bir sel olurdu.
+		return kind != NotifyKindException
 	}
 	for _, k := range m.Kinds {
 		if k == kind {

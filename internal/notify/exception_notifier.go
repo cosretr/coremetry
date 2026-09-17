@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/cache"
@@ -39,19 +41,31 @@ const exceptionNotifierLockKey = "exception-notifier:lock"
 const exNotifyFreshWindow = 5 * time.Minute
 const exNotifyMinOccurrences = 500
 
+// ExceptionPriorityFn — inbox merdiveni (api/inbox.go exceptionPriorityAt);
+// api paketi notify'ı içe aktardığı için işlev main.go'dan enjekte edilir.
+type ExceptionPriorityFn func(g chstore.ExceptionGroup) (priority, reason string)
+
 type ExceptionNotifier struct {
 	n        *Notifier
 	store    *chstore.Store
 	leader   *cache.LeaderHolder
 	interval time.Duration
+	// prio (v0.10.782) — kanal yolu için grup önceliği; nil = kanal yolu kapalı
+	// (yalnız P1 anons maili).
+	prio ExceptionPriorityFn
+	// sent — lider-yerel "bu grup/durum gönderildi" defteri; notification_log
+	// (HasAnyNotification) restart sonrası aynı görevi görür.
+	sent map[string]int64
 }
 
-func NewExceptionNotifier(store *chstore.Store, n *Notifier, lock cache.Lock) *ExceptionNotifier {
+func NewExceptionNotifier(store *chstore.Store, n *Notifier, lock cache.Lock, prio ExceptionPriorityFn) *ExceptionNotifier {
 	interval := 60 * time.Second
 	return &ExceptionNotifier{
 		n: n, store: store,
 		leader:   cache.NewLeaderHolder(lock, exceptionNotifierLockKey, cache.LeaderTTL(interval)),
 		interval: interval,
+		prio:     prio,
+		sent:     map[string]int64{},
 	}
 }
 
@@ -77,11 +91,148 @@ func (e *ExceptionNotifier) tickIfLeader(ctx context.Context) {
 	if !e.leader.IsLeader() {
 		return
 	}
+	// v0.10.782 — kanal yolu ekip-yönlendirmeden BAĞIMSIZ (kanal modalında
+	// "Exception" türü seçili kanallar); anons maili eski kapısında.
+	e.routeGroups(ctx, time.Now())
 	tc, err := e.store.GetTeamContacts(ctx)
 	if err != nil || !tc.Enabled {
 		return // team routing kapalı → anons kapalı (bilinçli tek kapı)
 	}
 	e.run(ctx, tc)
+}
+
+// ── v0.10.782 — exception / HTTP-hata grupları → bildirim kanalları ──────
+//
+// Operatör (2026-09-17, prod): "HTTP hataları olarak yansımış ama
+// notification gelmedi." Gruplar kanallara hiç girmiyordu; tek yol ≥500
+// oluşumlu P1 anons mailiydi. Şimdi: inbox merdiveninde P1/P2 olan TAZE
+// gruplar (new: ilk görülme ≤15 dk ve son görülme ≤10 dk; regressed: son
+// görülme ≤10 dk) sentetik bir Problem olarak SendProblemAlert hunisine
+// girer — kanal eşleşmesi Kind=exception (kanal başına opt-in), öncelik
+// merdivenden (computePriority ezmez), ekip maili YOK (anons ayrı), grup
+// ömrü + durum başına BİR kez (notification_log + lider-yerel defter), tik
+// başına tavan exChannelMaxPerTick. Eski yapışkan P1 yığını (ilk görülme
+// saatler önce) tetiklenmez: tazelik kapısı bunun için.
+
+const (
+	exChannelNewMaxAge  = 15 * time.Minute
+	exChannelActiveWin  = 10 * time.Minute
+	exChannelMaxPerTick = 20
+	exChannelMinOccur   = 2
+)
+
+// exceptionGroupID — SAF: bildirim kimliği; regressed ayrı kimlik (bir kez
+// daha bildirilir), Sustur bağlantısı da bu kimlikle çalışır.
+func exceptionGroupID(fp, state string) string {
+	if state == chstore.ExStateRegressed {
+		return chstore.ExceptionGroupRulePrefix + fp + ":regressed"
+	}
+	return chstore.ExceptionGroupRulePrefix + fp
+}
+
+// exceptionGroupFingerprint — SAF: kimlikten parmak izi ("" = bu tür değil).
+func exceptionGroupFingerprint(id string) string {
+	if !strings.HasPrefix(id, chstore.ExceptionGroupRulePrefix) {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(id, chstore.ExceptionGroupRulePrefix), ":regressed")
+}
+
+// isChannelCandidate — SAF: tazelik kapısı (state'e göre) + oluşum tabanı.
+func isChannelCandidate(g chstore.ExceptionGroup, state string, now time.Time) bool {
+	if g.Occurrences < exChannelMinOccur {
+		return false
+	}
+	sinceLast := time.Duration(now.UnixNano() - g.LastSeen)
+	if sinceLast > exChannelActiveWin || sinceLast < 0 {
+		return false
+	}
+	if state == chstore.ExStateNew {
+		return time.Duration(now.UnixNano()-g.FirstSeen) <= exChannelNewMaxAge
+	}
+	return state == chstore.ExStateRegressed
+}
+
+var httpErrorTypeRe = regexp.MustCompile(chstore.HTTPErrorTypeRe)
+
+// exceptionGroupProblem — SAF: kanal hunisine giren sentetik Problem.
+// Öncelik/gerekçe merdivenden; severity kanal ciddiyet süzgeci için
+// (P1 → critical, P2/P3 → warning). Saklanmaz.
+func exceptionGroupProblem(g chstore.ExceptionGroup, state, prio, reason string) chstore.Problem {
+	kind := "Exception"
+	if httpErrorTypeRe.MatchString(g.Type) {
+		kind = "HTTP hatası"
+	}
+	sev := "warning"
+	if prio == "P1" {
+		sev = "critical"
+	}
+	label := "yeni grup"
+	if state == chstore.ExStateRegressed {
+		label = "geri döndü (regressed)"
+	}
+	return chstore.Problem{
+		ID:             exceptionGroupID(g.Fingerprint, state),
+		RuleID:         chstore.ExceptionGroupRulePrefix + state,
+		RuleName:       kind + " · " + g.Type,
+		Service:        g.Service,
+		Severity:       sev,
+		Status:         "open",
+		Metric:         "exception",
+		Priority:       prio,
+		PriorityReason: reason,
+		Description:    fmt.Sprintf("%s — %d occurrence · %s. %s", g.Type, g.Occurrences, label, g.Message),
+		StartedAt:      g.FirstSeen,
+	}
+}
+
+// routeGroups — kanal yolu; her tik, lider.
+func (e *ExceptionNotifier) routeGroups(ctx context.Context, now time.Time) {
+	if e.prio == nil {
+		return
+	}
+	sent := 0
+	for _, state := range []string{chstore.ExStateNew, chstore.ExStateRegressed} {
+		groups, err := e.store.ListExceptionGroups(ctx, chstore.ExceptionGroupFilter{
+			State: state, Limit: 300, MinOccurrences: exChannelMinOccur,
+		})
+		if err != nil {
+			log.Printf("[exception-notifier] kanal yolu list %s: %v", state, err)
+			continue
+		}
+		for _, g := range groups {
+			if sent >= exChannelMaxPerTick {
+				log.Printf("[exception-notifier] tik tavanı (%d) — kalan gruplar sonraki tikte", exChannelMaxPerTick)
+				return
+			}
+			if !isChannelCandidate(g, state, now) {
+				continue
+			}
+			prio, reason := e.prio(g)
+			if prio != "P1" && prio != "P2" {
+				continue
+			}
+			id := exceptionGroupID(g.Fingerprint, state)
+			if _, done := e.sent[id]; done {
+				continue
+			}
+			if seen, herr := e.store.HasAnyNotification(ctx, "exception", id); herr == nil && seen {
+				e.sent[id] = now.UnixNano()
+				continue
+			}
+			e.sent[id] = now.UnixNano()
+			e.n.SendProblemAlert(ctx, exceptionGroupProblem(g, state, prio, reason))
+			sent++
+		}
+	}
+	if sent > 0 {
+		log.Printf("[exception-notifier] %d exception/HTTP-hata grubu kanallara yönlendirildi", sent)
+	}
+	for id, at := range e.sent { // defter büyümesin; dedup notification_log'da
+		if now.UnixNano()-at > int64(24*time.Hour) {
+			delete(e.sent, id)
+		}
+	}
 }
 
 func (e *ExceptionNotifier) run(ctx context.Context, tc chstore.TeamContacts) {

@@ -21,8 +21,8 @@ func TestValidateChannelKinds(t *testing.T) {
 	if got := strings.Join(c.MatchRules.Kinds, ","); got != "anomaly,problem" {
 		t.Fatalf("normalize edilmedi: %q", got)
 	}
-	c.MatchRules.Kinds = []string{"exception"}
-	if err := validateChannelKinds(&c); err == nil || !strings.Contains(err.Error(), "exception") {
+	c.MatchRules.Kinds = []string{"bogus"}
+	if err := validateChannelKinds(&c); err == nil || !strings.Contains(err.Error(), "bogus") {
 		t.Fatalf("bilinmeyen tür kabul edildi / mesaj değeri anmıyor: %v", err)
 	}
 	c.MatchRules.Kinds = []string{}

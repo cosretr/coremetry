@@ -28,10 +28,20 @@ const (
 	NotifyKindProblem  = "problem"
 	NotifyKindAnomaly  = "anomaly"
 	NotifyKindIncident = "incident"
+	// NotifyKindException (v0.10.782) — exception / HTTP-hata GRUPLARI (inbox
+	// merdiveninde P1/P2'ye ulaşan TAZE gruplar; notify/exception_notifier.go).
+	// Kanal başına AÇIKÇA seçilir: boş süzgeç bunu kapsamaz (allowsKind) —
+	// mevcut kanallar sessizce exception seli almasın.
+	NotifyKindException = "exception"
 )
 
 // NotifyKindsAll — geçerli değerler, UI sırasıyla.
-var NotifyKindsAll = []string{NotifyKindProblem, NotifyKindAnomaly, NotifyKindIncident}
+var NotifyKindsAll = []string{NotifyKindProblem, NotifyKindAnomaly, NotifyKindIncident, NotifyKindException}
+
+// ExceptionGroupRulePrefix — exception grubu bildirimlerinin RuleID öneki
+// (v0.10.782); Problem tablosuna yazılmaz (notify-only), computePriority
+// önceden hesaplanmış merdiven önceliğini korur, ProblemNotifyKind "exception" der.
+const ExceptionGroupRulePrefix = "exception-group:"
 
 // IsNotifyKind — allow-list üyeliği (küçük harf, kırpılmış beklenir).
 func IsNotifyKind(k string) bool {
@@ -51,6 +61,8 @@ func IsNotifyKind(k string) bool {
 func ProblemNotifyKind(p Problem) string {
 	rid := p.RuleID
 	switch {
+	case strings.HasPrefix(rid, ExceptionGroupRulePrefix): // v0.10.782 notify.exceptionGroupProblem
+		return NotifyKindException
 	case strings.HasPrefix(rid, "incident:"): // v0.10.748 notify.incidentAsProblem
 		return NotifyKindIncident
 	case strings.HasPrefix(rid, "anomaly:"),

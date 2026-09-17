@@ -396,6 +396,12 @@ func computePriority(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string,
 		}
 		return "P2", "incident"
 	}
+	if strings.HasPrefix(p.RuleID, ExceptionGroupRulePrefix) && (p.Priority == "P1" || p.Priority == "P2" || p.Priority == "P3") {
+		// v0.10.782 — exception grubunun önceliği inbox merdiveninden
+		// (api/inbox.go exceptionPriorityAt) ÖNCEDEN hesaplanır ve gerekçesiyle
+		// gelir; kural oranı/eşiği yok, ezme.
+		return p.Priority, p.PriorityReason
+	}
 
 	// Breach magnitude. If threshold is 0 we can't compute a
 	// ratio — fall back to severity alone. v0.8.321 — the FLIPPED
