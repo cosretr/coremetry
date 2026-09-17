@@ -162,15 +162,22 @@ func chMeasureAsyncQuery(clusterName string) string {
 // chMeasureInsertSizeQuery — son 1 saatte spans insert'lerinin satır medyanı
 // (denetim öneri 1: 10k tabanda; 10k–100k bandı önerilir). Küme kipinde
 // yazım Distributed `spans`'a, yerelde `spans_local`'a düşebilir; ikisi de.
+//
+// v0.10.771 (prod ekranı: "son 1 saatte spans insert kaydı yok" — yanlış):
+// async_insert=1 ile satırlar query_log'a `query_kind='AsyncInsertFlush'`
+// olarak düşer (reference-ch-query-log-pack-lessons) ve o satırlarda
+// `tables` boş kalabilir; ikisi de sayılır, tablo eşleşmesi metne de bakar.
+// Flush satırının written_rows'u zaten PART boyutudur — ölçünün istediği bu.
 func chMeasureInsertSizeQuery(clusterName string) string {
 	return `
 		SELECT hostName()                     AS host,
 		       quantile(0.5)(written_rows)    AS rows_per_insert,
 		       count()                        AS inserts
 		FROM ` + chMeasureSource(clusterName, "system.query_log") + `
-		WHERE type = 'QueryFinish' AND query_kind = 'Insert'
+		WHERE type = 'QueryFinish' AND query_kind IN ('Insert', 'AsyncInsertFlush')
 		  AND event_time > now() - INTERVAL 1 HOUR
-		  AND hasAny(tables, [currentDatabase() || '.spans', currentDatabase() || '.spans_local'])
+		  AND (hasAny(tables, [currentDatabase() || '.spans', currentDatabase() || '.spans_local'])
+		       OR query ILIKE 'INSERT INTO %spans%')
 		GROUP BY host
 		ORDER BY host
 		LIMIT 64

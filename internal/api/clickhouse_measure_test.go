@@ -65,7 +65,7 @@ func TestCHMeasureEventsAndInsertSizeShape(t *testing.T) {
 		}
 	}
 	i := chMeasureInsertSizeQuery("")
-	for _, want := range []string{"query_kind = 'Insert'", "spans", "quantile(0.5)(written_rows)", "INTERVAL 1 HOUR"} {
+	for _, want := range []string{"query_kind IN ('Insert', 'AsyncInsertFlush')", "spans", "quantile(0.5)(written_rows)", "INTERVAL 1 HOUR"} {
 		if !strings.Contains(i, want) {
 			t.Errorf("insert-boyutu sorgusu %q taşımalı:\n%s", want, i)
 		}
@@ -90,5 +90,16 @@ func TestCHMeasureRouteLivesInOwnFile(t *testing.T) {
 	}
 	if !strings.Contains(string(src), "auth.RequireRole(auth.RoleAdmin") {
 		t.Error("admin kapısı kayıt satırında olmalı")
+	}
+}
+
+// v0.10.771 — async_insert satırları AsyncInsertFlush'ta; probe ikisini de
+// saymalı ve `tables` boşken metne bakmalı (prod: "insert kaydı yok" yalanı).
+func TestCHMeasureInsertSizeCountsAsyncFlush(t *testing.T) {
+	q := chMeasureInsertSizeQuery("")
+	for _, must := range []string{"'AsyncInsertFlush'", "'Insert'", "ILIKE 'INSERT INTO %spans%'", "hasAny(tables"} {
+		if !strings.Contains(q, must) {
+			t.Errorf("%q yok:\n%s", must, q)
+		}
 	}
 }
