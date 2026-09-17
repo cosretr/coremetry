@@ -87,6 +87,20 @@ func TestNoCustomerIdentifiersInRepo(t *testing.T) {
 	if len(tracked) < 100 {
 		t.Fatalf("izlenen dosya sayısı şüpheli düşük (%d) — kapı boşa taramış olabilir", len(tracked))
 	}
+	// v0.10.744 — KOD DİZİNLERİNDEKİ izlenmeyen dosyalar da taranır. Olay:
+	// v0.10.742'nin yeni test dosyası commit'ten ÖNCE koşan `go test`te
+	// izlenmiyordu (index'te yok), muhafız görmedi, dosya iki sürüm boyunca
+	// depoda kaldı ve CI kırmızıya döndü. Yukarıdaki daraltma gerekçesi
+	// (operatörün yerel notları) aynen: yalnız kaynak dizinlerine bakılır;
+	// kök dizindeki .md/.patch notlar ve docs/ kapsam DIŞI.
+	if uo, err := exec.Command("git", "-C", root, "ls-files", "-z", "--others", "--exclude-standard", "--",
+		"internal", "frontend/src", "cmd", "charts", "scripts", ".github").Output(); err == nil {
+		for _, rel := range strings.Split(strings.TrimRight(string(uo), "\x00"), "\x00") {
+			if rel != "" {
+				tracked = append(tracked, rel)
+			}
+		}
+	}
 
 	var hits []string
 	for _, rel := range tracked {

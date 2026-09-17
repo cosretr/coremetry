@@ -29,6 +29,8 @@ describe('Admin SQL — Oracle backend (v0.10.742)', () => {
     expect(storage).toContain("sqlOracleSource:  'coremetry-sql-oracle-source'");
     const samples = page.slice(page.indexOf('const ORACLE_SAMPLES'), page.indexOf('];', page.indexOf('const ORACLE_SAMPLES')));
     expect(samples).toContain('<OWNER>');
-    expect(samples).not.toMatch(/akbank|bsa-|paku|rbcore/i);
+    // Kurum adı muhafızı repo-genelinde (internal/api/no_customer_identifiers_test.go);
+    // burada olumsuz bir desen yazmak muhafızı kendi kendine ısırtır (v0.10.744).
+    expect(samples).toContain('<TABLE>');
   });
 });
