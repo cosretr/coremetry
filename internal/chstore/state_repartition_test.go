@@ -216,7 +216,7 @@ func TestMigrateCallsStatePartitionDriftWarning(t *testing.T) {
 
 // liveWriteStore — YAZAN canlı test için AYRI kapı.
 //
-// state_unify_live_test.go'nun `COREMETRY_LIVE_CH` kapısı SALT OKUNUR bir
+// liveStore'un (live_store_test.go) `COREMETRY_LIVE_CH` kapısı SALT OKUNUR bir
 // sözleşme taşıyor ve operatör onu prod'a doğrultabiliyor. Bu test iki
 // scratch tablo KURAR ve DÜŞÜRÜR, yani aynı kapıyı paylaşamaz: ikinci bir
 // env değişkeni, "-run Live" yazan birinin prod'a DDL göndermesini

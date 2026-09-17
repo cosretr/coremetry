@@ -230,7 +230,9 @@ git diff <prod-tag>..HEAD | grep -E '^\+.*(ALTER|CREATE|DROP|MATERIALIZED)'
      replikasyon grubundadır ve uygulama hangi host'a bağlanırsa onun
      dilimini görür (prod ölçümü: problems 633.236 ↔ 4.169). Boot yalnız
      nötr bir INFO basar, "verin bölünmüş" DEMEZ.
-     Sihirbaz: `/api/admin/state-unify/{preflight,status,apply,cleanup}`.
+     Sihirbazı v0.10.765'te KALDIRILDI (prod 2026-09-17: göç + `_old`
+     temizliği tamam); elle: `migrations/0009_state_unify.sql` ya da
+     `scripts/migrate-0009-state-unify.sh`.
    - **0010 (state repartition)** — TÜM yükseltmelerde zorunlu, **tek-node
      dahil**. problems/anomaly_events `PARTITION BY toDate(started_at)` +
      `ORDER BY id` taşıyor; started_at ORDER BY'da olmadığı için aynı id
@@ -273,7 +275,7 @@ logunda `[chstore] parallel_view_processing=…` satırında.
 | Soru | Cevap | Sonucu |
 |---|---|---|
 | Prod sürümü | **v0.9.1385** | promotedAttrs **kolon** zinciri ateşlemez ⚠ aşağıdaki düzeltmeye bak |
-| 0009 | **uygulandı** | state tabloları birleşik |
+| 0009 | **tamamlandı** (`_old` temizliği 2026-09-17) | state tabloları birleşik |
 | 0010 | **tamamlandı** (2026-09-12: partition yok, `_old` yok) | şema taşındı |
 | Replica | **api 4 · ingest 12 · worker 1** = 16 pod | Roll rol-başına TEK pod (maxSurge 1) → en fazla 3 eşzamanlı |
 
@@ -313,7 +315,11 @@ Bunlar repodan OKUNAMAZ; kesimden önce cevaplanmalı:
   liste en son v0.9.624/625'te değişti. Prod ≥ 624 ise 1.0 yükseltmesinde
   spans'a hiçbir ifade gitmez. (İlk yazımın "spans'a dokunan ALTER yok"
   cümlesi KOŞULSUZ doğru değil — muhafız prod'un cluster kipini kapsamıyor.)
-- **0009 durumu:** `GET /api/admin/state-unify/status`
+- **0009 durumu** (sihirbaz v0.10.765'te kalktı) — SQL konsolu:
+  `SELECT table, uniqExact(zookeeper_path) g FROM clusterAllReplicas(
+  '<cluster>', system.replicas) WHERE database = currentDatabase() GROUP BY
+  table HAVING g > 1` → boş = birleşik; `system.tables`'ta `%_old` yok =
+  temizlik koştu.
 - **0010 kapandı mı** (sihirbaz v0.10.763'te kalktı) — SQL konsolu:
   `SELECT hostName(), name, partition_key, zookeeper_path FROM
   clusterAllReplicas('<cluster>', system.tables) WHERE database =
