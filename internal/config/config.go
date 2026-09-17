@@ -338,11 +338,12 @@ type CHConfig struct {
 	AllowUnsetCluster bool `yaml:"allow_unset_cluster"`
 	// InsertDistributedSync (COREMETRY_CH_INSERT_DISTRIBUTED_SYNC, v0.10.778) —
 	// Distributed tablolara INSERT'i SENKRON yapar (insert_distributed_sync=1):
-	// satırlar shard'lara sorgu içinde gider, yerel spool'a YAZILMAZ. Geçici
-	// köprü: gönderici asılıyken (prod 2026-09-17) DBA restart'ına kadar yeni
-	// span'lerin spool'da hapsolmasını önler. Bedeli: hedef shard erişilmezse
-	// INSERT hata verir (write_failed sayacı; spool'a düşmez) ve ingest podunun
-	// insert'i shard'ların MV kaskadını bekler. Varsayılan KAPALI.
+	// satırlar shard'lara sorgu içinde gider, yerel spool'a YAZILMAZ. Prod
+	// 2026-09-17: gönderici asılı kaldı, 514K dosya aranamaz oldu; operatör
+	// kararıyla İMAJDA VARSAYILAN AÇIK (Dockerfile ENV=1, v0.10.779). Bedeli:
+	// hedef shard erişilmezse INSERT hata verir (write_failed sayacı; spool'a
+	// düşmez) ve ingest podunun insert'i shard'ların MV kaskadını bekler. Eski
+	// spool davranışı için env 0. Kod varsayılanı kapalı (env yoksa).
 	InsertDistributedSync bool `yaml:"insert_distributed_sync"`
 
 	// Per-query memory limits (v0.9.184) — env-tunable so a large

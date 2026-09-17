@@ -57,6 +57,13 @@ ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 # internal/tzdefault okur; TZ/time.Local'a dokunmaz (CH bind arg'ları ve
 # loglar UTC kalır). Chart ya da ortam env'i ezer.
 ENV COREMETRY_TZ=Europe/Istanbul
+# v0.10.779 (operatör kararı 2026-09-17) — Distributed INSERT'ler imajda
+# varsayılan SENKRON: satırlar shard'lara sorgu içinde gider, yerel spool'a
+# yazılmaz (insert_distributed_sync=1, insert_distributed_timeout=60).
+# Gerekçe: prod'da spool göndericisi asılı kaldı, 514K dosya aranamaz oldu.
+# Bedel: hedef shard yanıt vermezse INSERT hata verir (write_failed), spool'a
+# düşmez. Eski davranış için chart/ortam env'i 0 yapar. Tek düğümde etkisiz.
+ENV COREMETRY_CH_INSERT_DISTRIBUTED_SYNC=1
 # Re-declare VERSION inside this stage — Docker ARGs are
 # scoped per-stage, so the value passed into stage 2 isn't
 # visible here without this line.

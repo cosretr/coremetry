@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -27,5 +28,16 @@ func TestInsertDistributedSyncEnv(t *testing.T) {
 		if cfg.ClickHouse.InsertDistributedSync != c.want {
 			t.Errorf("val=%q set=%v → %v, istenen %v", c.val, c.set, cfg.ClickHouse.InsertDistributedSync, c.want)
 		}
+	}
+}
+
+// v0.10.779 — imaj varsayılanı 1 (operatör kararı). Chart/ortam 0 ile ezer.
+func TestInsertDistributedSyncImageDefault(t *testing.T) {
+	src, err := os.ReadFile("../../Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "ENV COREMETRY_CH_INSERT_DISTRIBUTED_SYNC=1") {
+		t.Error("Dockerfile imaj varsayılanı ENV COREMETRY_CH_INSERT_DISTRIBUTED_SYNC=1 taşımalı")
 	}
 }
