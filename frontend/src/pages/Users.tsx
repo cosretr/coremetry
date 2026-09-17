@@ -240,9 +240,22 @@ export default function UsersPage() {
                             window, so offline rows show the last relative
                             sighting only while it's still fresh, else "—". */}
                         {u.online ? (
-                          <span className="badge b-ok"
-                            title="Authenticated API activity in the last 5 minutes">
-                            ● online
+                          <span>
+                            <span className="badge b-ok"
+                              title="Authenticated API activity in the last 5 minutes">
+                              ● online
+                            </span>
+                            {/* v0.10.764 — operatör: "son görülme sütunu ekle".
+                                Kolon vardı ama online satır damgayı gizliyordu;
+                                iki admin'in farklı "online" sayısı görmesi 5 dk
+                                penceresinin neresinde olunduğuyla açıklanır —
+                                damga online satırda da yazılır (tam damga title'da). */}
+                            {u.lastSeenAt ? (
+                              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}
+                                title={tsLong(u.lastSeenAt)}>
+                                {tsRel(u.lastSeenAt)}
+                              </div>
+                            ) : null}
                           </span>
                         ) : u.lastSeenAt ? (
                           <span style={{ color: 'var(--text3)', fontSize: 12 }}
