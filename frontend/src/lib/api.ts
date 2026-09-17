@@ -3372,6 +3372,13 @@ export const api = {
   // v0.10.712 — trace kök kapsaması (isteğe bağlı; 5 dk..1 sa).
   chRootCoverage: (rangeS: number, signal?: AbortSignal) =>
     get<import('./types').CHRootCoverageResponse>(`/api/admin/clickhouse/root-coverage?range_s=${rangeS}`, signal),
+  // v0.10.762 — Sarkan MV onarım sihirbazı: tespit (önbelleksiz) + node'a özel onarım (audit'li).
+  chDanglingMVs: (signal?: AbortSignal) =>
+    get<import('./types').CHDanglingMVResponse>('/api/admin/clickhouse/dangling-mv', signal),
+  chDanglingMVRepair: (host: string, view: string) =>
+    request<import('./types').CHDanglingMVRepairResult>('/api/admin/clickhouse/dangling-mv/repair', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view }),
+    }),
   // v0.10.757 — Trace hattı sağlığı (Admin ClickHouse): pod-içi ingest sayaçları + MV ölçüleri, bölüm başına hata.
   chTraceHealth: (rangeS: number, signal?: AbortSignal) =>
     get<import('./types').CHTraceHealthResponse>(`/api/admin/clickhouse/trace-health?range_s=${rangeS}`, signal),

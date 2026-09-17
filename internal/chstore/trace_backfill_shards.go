@@ -84,13 +84,35 @@ func (s *Store) backfillShards(ctx context.Context) ([]backfillShard, string, er
 	if cluster == "" {
 		return nil, "", nil
 	}
+	hosts, err := s.clusterHostRowsFor(ctx, cluster)
+	if err != nil {
+		return nil, cluster, err
+	}
+	return pickShardHosts(hosts), cluster, nil
+}
+
+// clusterHostRows — kümenin TÜM replikaları (v0.10.762: sarkan MV onarımı
+// node'a özel bağlantı için); küme yoksa (nil, "", nil).
+func (s *Store) clusterHostRows(ctx context.Context) ([]clusterHostRow, string, error) {
+	cluster := strings.TrimSpace(s.cfg.ClusterName)
+	if cluster == "" {
+		cluster = s.discoverSpansCluster(ctx)
+	}
+	if cluster == "" {
+		return nil, "", nil
+	}
+	hosts, err := s.clusterHostRowsFor(ctx, cluster)
+	return hosts, cluster, err
+}
+
+func (s *Store) clusterHostRowsFor(ctx context.Context, cluster string) ([]clusterHostRow, error) {
 	rows, err := s.conn.Query(ctx, `
 		SELECT shard_num, replica_num, host_name, port, is_local
 		FROM system.clusters WHERE cluster = ?
 		ORDER BY shard_num, replica_num
 		SETTINGS max_execution_time = 5`, cluster)
 	if err != nil {
-		return nil, cluster, err
+		return nil, err
 	}
 	defer rows.Close()
 	var hosts []clusterHostRow
@@ -100,12 +122,12 @@ func (s *Store) backfillShards(ctx context.Context) ([]backfillShard, string, er
 		var port uint16
 		var local uint8
 		if err := rows.Scan(&shard, &replica, &r.Host, &port, &local); err != nil {
-			return nil, cluster, err
+			return nil, err
 		}
 		r.Shard, r.Replica, r.Port, r.Local = int(shard), int(replica), int(port), local == 1
 		hosts = append(hosts, r)
 	}
-	return pickShardHosts(hosts), cluster, rows.Err()
+	return hosts, rows.Err()
 }
 
 // shardConn — host'a doğrudan bağlantı (önbellekli). Aynı kimlik/TLS/

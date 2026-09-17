@@ -837,6 +837,9 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 		conn.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	// v0.10.762 — sarkan MV dedektörü (log; onarım sihirbazdan). Boot'u
+	// bloklamaz: 10 s tavan, hata yalnız log.
+	s.LogDanglingMVs(ctx)
 	// v0.5.421 — boot-time reconciliation. In cluster mode the
 	// migration loop normally creates both the `<name>_local`
 	// table and its Distributed wrapper at `<name>`. If a prior
@@ -1014,6 +1017,10 @@ func (s *Store) dropCombinedMV(ctx context.Context, mv string) error {
 	if e := s.conn.Exec(ctx, "DROP TABLE IF EXISTS "+mv+onCluster+" SYNC"); e != nil {
 		return fmt.Errorf("drop mv %s: %w", mv, e)
 	}
+	// v0.10.762 — ON CLUSTER drop bir node'da yarım kaldıysa artık view o
+	// node'da INSERT kaskadını kırar (prod 2026-09-17: spool 398 GiB).
+	// Best-effort temizlik; sonraki CREATE IF NOT EXISTS o node'da taze kurar.
+	s.dropLeftoverViewObjects(ctx, mv)
 	return nil
 }
 

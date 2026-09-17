@@ -23,6 +23,7 @@ import type {
   TraceBackfillDay, TraceBackfillRun,
   CHMeasurePartsRow, // v0.10.683 — ölçüm paneli
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
+  CHDanglingMV, // v0.10.762 — sarkan MV onarımı
 } from '@/lib/types';
 
 // AdminClickhouse — v0.5.329. Datadog-style CH self-stats:
@@ -726,6 +727,7 @@ export default function AdminClickhousePage() {
             <MeasurePanel />
             <RootCoveragePanel />
             <TraceHealthPanel />
+            <DanglingMVPanel />
 
             {/* v0.9.770 — rollup kurulum sihirbazı. Topolojinin hemen
                 altında değil BURADA: operatör önce kümenin sağlıklı
@@ -2581,6 +2583,93 @@ function rootTone(pct: number): string { return pct >= 90 ? 'b-ok' : pct >= 50 ?
 // saklanan span/5 dk), kapsama (kök tanımı, MV gap günleri, son 5 dk kök
 // oranı), ad kalitesi (çıplak fiil payı, boş ad, servis başına ayrık ad).
 // İsteğe bağlı çalıştırma (CH maliyet disiplini); bölüm başına hata rozeti.
+// v0.10.762 — "Sarkan MV onarımı" (prod olayı 2026-09-17: bir node'da combined
+// MV'nin iç tablosu silinmiş, view kalmış → o shard INSERT reddediyor → spans
+// spool'u 398 GiB). Tespit küme geneli; onarım YALNIZ o node'da (view düşür +
+// kanonik DDL'i ON CLUSTER'sız kur; Replicated iç tablo verisini eş
+// replikadan çeker). Onay diyaloğu: DDL koşar, audit'e düşer.
+function DanglingMVPanel() {
+  const [rows, setRows] = useState<CHDanglingMV[] | null>(null);
+  const [cluster, setCluster] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<CHDanglingMV | null>(null);
+  const [repairing, setRepairing] = useState<string | null>(null);
+  const [result, setResult] = useState<{ key: string; ok: boolean; text: string; steps?: string[] } | null>(null);
+  const keyOf = (d: CHDanglingMV) => `${d.host}/${d.view}`;
+  const scan = async () => {
+    setBusy(true); setErr(null);
+    try { const r = await api.chDanglingMVs(); setRows(r.rows); setCluster(r.cluster); }
+    catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); setRows(null); }
+    finally { setBusy(false); }
+  };
+  const repair = async (d: CHDanglingMV) => {
+    setConfirm(null); setRepairing(keyOf(d)); setResult(null);
+    try {
+      const r = await api.chDanglingMVRepair(d.host, d.view);
+      setResult({ key: keyOf(d), ok: true, text: 'onarıldı — iç tablo doğdu', steps: r.steps });
+    } catch (e: unknown) {
+      setResult({ key: keyOf(d), ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally { setRepairing(null); void scan(); }
+  };
+  return (
+    <Section title="Sarkan MV onarımı">
+      <p className="cell-hint">
+        Combined bir MV'nin (TO'suz) iç tablosu (<code className="mono">.inner_id.&lt;uuid&gt;</code>) bir node'da silinmiş ama
+        view nesnesi kalmışsa o node INSERT kaskadında &quot;Target table … of view … doesn't exist&quot; ile HER INSERT'i reddeder;
+        Distributed spool o shard için büyür, span'lerin bir kısmı aranamaz. Tespit küme genelinde; onarım yalnız o node'da:
+        view düşürülür, kanonik DDL ON CLUSTER'sız kurulur, Replicated iç tablo verisini eş replikadan çeker. Sonra spool'da
+        &quot;Göndericiyi başlat&quot;.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <Button variant="accent" size="sm" onClick={() => void scan()} loading={busy}>Ölç</Button>
+        {rows && rows.length === 0 && <span className="badge b-ok">sarkan MV yok{cluster ? ` · ${cluster}` : ''}</span>}
+        {rows && rows.length > 0 && <span className="badge b-err">{rows.length} sarkan view</span>}
+        {err && <span className="badge b-err" title={err}>ölçülemedi</span>}
+      </div>
+      {rows && rows.length > 0 && (
+        <table style={{ width: '100%' }}>
+          <thead><tr><th>Node</th><th>View</th><th>UUID</th><th></th></tr></thead>
+          <tbody>
+            {rows.map(d => {
+              const k = keyOf(d);
+              const res = result?.key === k ? result : null;
+              return (
+                <tr key={k}>
+                  <td className="mono">{d.host}{d.shard ? ` (shard ${d.shard}/r${d.replica})` : ''}{!d.addr && cluster ? ' · adres çözülemedi' : ''}</td>
+                  <td className="mono">{d.view}</td>
+                  <td className="mono" style={{ fontSize: 11 }}>{d.uuid}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {d.canonical
+                      ? <Button variant="danger" size="sm" disabled={repairing !== null || (!!cluster && !d.addr)} loading={repairing === k}
+                          onClick={() => setConfirm(d)}>Onar</Button>
+                      : <span className="badge b-warn" title="Kanonik DDL yok (migrations/*.sql MV'si) — elle onar">elle</span>}
+                    {res && <div className={res.ok ? 'ok' : 'err'} style={{ fontSize: 11, marginTop: 4 }} title={res.steps?.join('\n')}>{res.text}</div>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {confirm && (
+        <Modal open title={`Sarkan view'ı onar — ${confirm.view} @ ${confirm.host}`} onClose={() => setConfirm(null)} footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setConfirm(null)}>Vazgeç</Button>
+            <Button variant="danger" size="sm" onClick={() => void repair(confirm)}>Onar (DDL koşar)</Button>
+          </>
+        }>
+          <p style={{ fontSize: 12 }}>
+            O node'da <code className="mono">DROP TABLE {confirm.view} SYNC</code> ve ardından kanonik
+            <code className="mono"> CREATE MATERIALIZED VIEW IF NOT EXISTS</code> (ON CLUSTER'sız) koşar. İç tablo taze doğar;
+            Replicated ise eş replikadan veri çeker. Spans'e dokunulmaz. Audit'e düşer.
+          </p>
+        </Modal>
+      )}
+    </Section>
+  );
+}
+
 function TraceHealthPanel() {
   const [rangeS, setRangeS] = useState(3600);
   const [armed, setArmed] = useState<number | null>(null);
