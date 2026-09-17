@@ -28,8 +28,8 @@ describe('notifyKinds — saf', () => {
     expect(kindsSummary(['exception'])).toBe('Hepsi');
   });
 
-  it('UI seçenekleri bu dilimde problem + anomali (incident üreticisi v0.10.748)', () => {
-    expect(NOTIFY_KIND_OPTIONS.map(o => o.value)).toEqual(['problem', 'anomaly']);
+  it('UI seçenekleri üç tür (incident üreticisi v0.10.748)', () => {
+    expect(NOTIFY_KIND_OPTIONS.map(o => o.value)).toEqual(['problem', 'anomaly', 'incident']);
   });
 });
 

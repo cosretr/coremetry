@@ -650,6 +650,9 @@ func (n *Notifier) recordRouting(ctx context.Context, p chstore.Problem, relKind
 // "problem" kind. related_id stays the problem id in BOTH cases —
 // the watcher history join goes problems(rule_id) → related_id.
 func problemRelatedKind(p chstore.Problem) string {
+	if p.Kind == chstore.NotifyKindIncident { // v0.10.748 incidentAsProblem
+		return "incident"
+	}
 	if p.Metric == "watcher" {
 		return "watcher"
 	}
@@ -1260,7 +1263,7 @@ func (n *Notifier) buildEmailBody(p chstore.Problem, rc *chstore.RootCauseHypoth
 	if p.RunbookURL != "" {
 		fmt.Fprintf(&b, "Runbook:    %s\n", p.RunbookURL)
 	}
-	if u := n.problemURL(p.ID); u != "" {
+	if u := n.subjectURL(p); u != "" {
 		fmt.Fprintf(&b, "Open:       %s\n", u)
 	}
 	// v0.9.513 — AI kök-sebep özeti. Boşsa hiçbir şey basılmaz (mevcut
@@ -1386,7 +1389,7 @@ func (n *Notifier) buildEmailHTML(p chstore.Problem, rc *chstore.RootCauseHypoth
 		}
 		b.WriteString(`</div></td></tr></table>`)
 	}
-	if u := n.problemURL(p.ID); u != "" {
+	if u := n.subjectURL(p); u != "" {
 		// Bulletproof button: padding + bgcolor on the td (Word honours
 		// both), the anchor only colours its text.
 		b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0"><tr>` +
@@ -1530,7 +1533,7 @@ func (n *Notifier) sendSlack(ctx context.Context, c chstore.NotificationChannel,
 			"short": false,
 		})
 	}
-	if u := n.problemURL(p.ID); u != "" {
+	if u := n.subjectURL(p); u != "" {
 		fields = append(fields, map[string]any{
 			"title": "Coremetry",
 			"value": fmt.Sprintf("<%s|Open in Coremetry ↗>", u),
@@ -1595,7 +1598,7 @@ func (n *Notifier) sendTeams(ctx context.Context, c chstore.NotificationChannel,
 			},
 		})
 	}
-	if u := n.problemURL(p.ID); u != "" {
+	if u := n.subjectURL(p); u != "" {
 		actions = append(actions, map[string]any{
 			"@type": "OpenUri",
 			"name":  "Open in Coremetry",
@@ -1712,7 +1715,7 @@ func (n *Notifier) sendZoomChat(ctx context.Context, c chstore.NotificationChann
 	if p.RunbookURL != "" {
 		msg += "\n• Runbook: " + p.RunbookURL
 	}
-	if u := n.problemURL(p.ID); u != "" {
+	if u := n.subjectURL(p); u != "" {
 		msg += "\n• View in Coremetry: " + u
 	}
 
@@ -1974,7 +1977,7 @@ func (n *Notifier) sendWebhook(ctx context.Context, c chstore.NotificationChanne
 	// about coremetryUrl just ignores the extra field.
 	payload := map[string]any{
 		"problem":      p,
-		"coremetryUrl": n.problemURL(p.ID),
+		"coremetryUrl": n.subjectURL(p),
 	}
 	// v0.8.445 — şablonlu gövde: alıcının (Studio agent tetikleyicisi,
 	// PagerDuty Events, n8n özel şeması) beklediği şekli operatör
@@ -1982,7 +1985,7 @@ func (n *Notifier) sendWebhook(ctx context.Context, c chstore.NotificationChanne
 	// bildirim şablon yüzünden ASLA kaybolmaz.
 	var body []byte
 	if strings.TrimSpace(wc.BodyTemplate) != "" {
-		if rendered, err := renderWebhookBody(wc.BodyTemplate, p, n.problemURL(p.ID)); err == nil {
+		if rendered, err := renderWebhookBody(wc.BodyTemplate, p, n.subjectURL(p)); err == nil {
 			body = rendered
 		} else {
 			log.Printf("[notify] webhook %s şablon render hatası (default gövdeye düşüldü): %v", c.Name, err)

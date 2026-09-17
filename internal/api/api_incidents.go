@@ -75,7 +75,9 @@ func (s *Server) createIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actor := actorOf(r)
-	_ = s.store.AppendIncidentEvent(r.Context(), chstore.IncidentEvent{
+	// v0.10.748 — yaşam döngüsü kancası: manuel açılış da bildirir (operatör
+	// kararı), gövdede aktör.
+	_ = s.store.AppendIncidentLifecycle(r.Context(), inc, chstore.IncidentEvent{
 		IncidentID: inc.ID, Kind: "created", Actor: actor,
 		Body: "Manually created",
 	})
@@ -149,7 +151,7 @@ func (s *Server) resolveIncident(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	_ = s.store.AppendIncidentEvent(r.Context(), chstore.IncidentEvent{
+	_ = s.store.AppendIncidentLifecycle(r.Context(), *inc, chstore.IncidentEvent{ // v0.10.748
 		IncidentID: id, Kind: "resolved", Actor: actorOf(r), Body: "Incident resolved",
 	})
 	s.audit(r, "incident.resolve", "incident", id, "")

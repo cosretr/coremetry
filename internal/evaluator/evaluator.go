@@ -705,7 +705,8 @@ func (e *Evaluator) cascadeResolveIncidents(ctx context.Context) {
 			log.Printf("[evaluator] incident cascade upsert %s: %v", ro.ID, err)
 			continue
 		}
-		_ = e.store.AppendIncidentEvent(ctx, chstore.IncidentEvent{
+		// v0.10.748 — yaşam döngüsü kancası (incident çözüm bildirimi).
+		_ = e.store.AppendIncidentLifecycle(ctx, *inc, chstore.IncidentEvent{
 			IncidentID: inc.ID,
 			Time:       endedAt,
 			Kind:       "resolved",

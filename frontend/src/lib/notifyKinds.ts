@@ -4,8 +4,8 @@
  *
  * Gramer Inbox'ın `InboxKind` gramerinin aynısı (problem | anomaly |
  * incident) — sunucu chstore.NotifyKindsAll ile birebir. Boş liste =
- * süzgeç yok (mevcut kanallar aynen). "incident" seçeneği UI'da v0.10.748
- * (incident bildirimi üreticisi) ile açılır; tip şimdiden tanımlı.
+ * süzgeç yok (mevcut kanallar aynen). "incident" seçeneği v0.10.748 ile
+ * (incident açılış/çözüm bildirimi üreticisi) açıldı.
  */
 import type { NotifyKind } from './types';
 
@@ -19,6 +19,7 @@ export interface NotifyKindOption {
 export const NOTIFY_KIND_OPTIONS: NotifyKindOption[] = [
   { value: 'problem', label: 'Problem', hint: 'Operatör kuralları: alert rule, builtin, SLO, DB, runtime, watcher' },
   { value: 'anomaly', label: 'Anomali', hint: 'Anomali motoru: metrik anomalisi, service silent, dış tarayıcı, exception fırtınası / paylaşılan bağımlılık' },
+  { value: 'incident', label: 'Incident', hint: 'Incident açılışı ve çözümü (otomatik korelasyon + manuel); critical incident P1, warning P2' },
 ];
 
 const KNOWN: NotifyKind[] = ['problem', 'anomaly', 'incident'];

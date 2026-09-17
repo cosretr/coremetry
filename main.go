@@ -590,6 +590,10 @@ func main() {
 	// ── Notifier (SMTP-driven email; slack/webhook stubs) ────────────────────
 	notifier := notify.New(store)
 	notifier.SetSMTPCacheTTL(cfg.Background.SMTPCacheTTL)
+	// v0.10.748 — incident açılış/çözüm bildirimi: dört yaşam döngüsü yolu
+	// (otomatik korelasyon, manuel açılış, kademeli/manuel çözüm) store'daki
+	// tek boğazdan (AppendIncidentLifecycle) bu kancaya düşer.
+	store.SetIncidentLifecycleHook(notifier.IncidentLifecycle)
 	// Deep-link base URL — set via COREMETRY_PUBLIC_URL or
 	// config.yaml. When configured, every problem / anomaly
 	// notification body includes a clickable "Open in

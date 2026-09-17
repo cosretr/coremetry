@@ -314,6 +314,9 @@ type Store struct {
 	// (evaluator, anomaly, monitor) don't need to thread it
 	// through their constructors.
 	neighborProvider NeighborProvider
+	// incidentLifecycle — v0.10.748 incident açılış/çözüm bildirimi kancası
+	// (incident_lifecycle.go); boot'ta SetIncidentLifecycleHook ile.
+	incidentLifecycle IncidentLifecycleHook
 
 	// smCov caches the earliest available time_bucket across the
 	// spanmetrics_{1s,10s,1m} rollups (v0.8.51, doorway D2). This is

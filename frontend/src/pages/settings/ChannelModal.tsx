@@ -64,7 +64,7 @@ export function ChannelModal({ initial, onClose, onSaved }: {
   // aynen davranır; alan match_rules JSON'ında olmadığı için DDL yok).
   const [matchMinPriority, setMatchMinPriority] =
     useState<'' | 'P1' | 'P2' | 'P3'>(initial?.matchRules?.minPriority ?? '');
-  // v0.10.747 — olay türü allow-list'i (problem/anomali). Boş = hepsi
+  // v0.10.747 — olay türü allow-list'i (problem/anomali/incident). Boş = hepsi
   // (mevcut kanallar aynen); JSON'da olmayan alan = süzgeç yok, DDL yok.
   const [matchKinds, setMatchKinds] = useState<NotifyKind[]>(normalizeKinds(initial?.matchRules?.kinds));
   const [busy, setBusy] = useState(false);
@@ -456,9 +456,9 @@ export function ChannelModal({ initial, onClose, onSaved }: {
               {/* v0.9.828 — triyaj basamağı kapısı. minSeverity'nin
                   YANINDA, yerine değil: ciddiyet "ne kadar kötü",
                   öncelik "ne kadar acil" diyor. */}
-              {/* v0.10.747 — olay türü süzgeci (operatör: "anomali ve
+              {/* v0.10.747 — olay türü süzgeci (operatör: "anomali, incident ve
                   problems ayrı ayrı gelsin"). Hiçbiri işaretli değilse hepsi.
-                  Incident türü v0.10.748 (incident bildirimi) ile eklenir. */}
+                  Incident üreticisi v0.10.748. */}
               <Field label="Olay türleri (boş = hepsi)">
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
                   {NOTIFY_KIND_OPTIONS.map(o => (
@@ -473,8 +473,10 @@ export function ChannelModal({ initial, onClose, onSaved }: {
                   <b>Problem</b> = operatör kuralları (alert rule, builtin, SLO, DB,
                   runtime, watcher). <b>Anomali</b> = anomali motoru (metrik anomalisi,
                   service silent, dış tarayıcı, exception fırtınası / paylaşılan
-                  bağımlılık). Türleri ayrı kanallara ayırmak için her kanalda tek
-                  tür işaretleyin; ikisi de boşsa kanal ikisini de alır.
+                  bağımlılık). <b>Incident</b> = incident açılışı ve çözümü (otomatik
+                  korelasyon + manuel; critical P1, warning P2). Türleri ayrı kanallara
+                  ayırmak için her kanalda tek tür işaretleyin; hiçbiri işaretli değilse
+                  kanal hepsini alır.
                 </div>
               </Field>
               <Field label="En düşük öncelik (triyaj basamağı)">

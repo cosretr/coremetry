@@ -51,6 +51,8 @@ func IsNotifyKind(k string) bool {
 func ProblemNotifyKind(p Problem) string {
 	rid := p.RuleID
 	switch {
+	case strings.HasPrefix(rid, "incident:"): // v0.10.748 notify.incidentAsProblem
+		return NotifyKindIncident
 	case strings.HasPrefix(rid, "anomaly:"),
 		strings.HasPrefix(rid, "anomaly-cluster:"),
 		rid == "exception-storm",

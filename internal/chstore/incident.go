@@ -447,7 +447,8 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 		if err := s.UpsertIncident(ctx, &inc); err != nil {
 			return nil, fmt.Errorf("create incident: %w", err)
 		}
-		_ = s.AppendIncidentEvent(ctx, IncidentEvent{
+		// v0.10.748 — yaşam döngüsü kancası (incident bildirimi).
+		_ = s.AppendIncidentLifecycle(ctx, inc, IncidentEvent{
 			IncidentID: inc.ID, Kind: "created", Actor: "system",
 			Body: "Auto-created from " + p.RuleName,
 		})

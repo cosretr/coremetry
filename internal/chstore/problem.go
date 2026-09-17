@@ -386,6 +386,16 @@ func computePriority(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string,
 	if p.RuleID == "exception-storm" {
 		return "P1", fmt.Sprintf("fırtına: %.0f servis (eşik %.0f)", p.Value, p.Threshold)
 	}
+	// v0.10.748 — incident bildirimi (notify.incidentAsProblem, RuleID
+	// "incident:<id>"): critical incident = şimdi (P1), warning = bugün
+	// (P2). Eşik/oran/yaş formülü incident'e uygulanmaz — incident'ler
+	// Problem olarak saklanmaz, bu dal yalnız bildirim anında koşar.
+	if strings.HasPrefix(p.RuleID, "incident:") {
+		if sev == "critical" {
+			return "P1", "critical incident"
+		}
+		return "P2", "incident"
+	}
 
 	// Breach magnitude. If threshold is 0 we can't compute a
 	// ratio — fall back to severity alone. v0.8.321 — the FLIPPED

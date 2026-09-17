@@ -32,6 +32,7 @@ func TestProblemNotifyKind(t *testing.T) {
 		{"slo:checkout:critical", NotifyKindProblem},
 		{"db-slow-stmt", NotifyKindProblem},
 		{"", NotifyKindProblem},
+		{"incident:9f2c", NotifyKindIncident}, // v0.10.748
 		// Önek sözcük sınırı: "anomalyx" bir anomali değil.
 		{"anomalyx:shop", NotifyKindProblem},
 	}
