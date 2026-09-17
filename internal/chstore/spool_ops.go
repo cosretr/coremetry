@@ -173,3 +173,115 @@ func (s *Store) StartDistributedSends(ctx context.Context, table string) error {
 	}
 	return s.conn.Exec(ctx, "SYSTEM START DISTRIBUTED SENDS `"+table+"`")
 }
+
+// ── v0.10.773 — eylemler düğüm-YERELDİR ───────────────────────────────
+//
+// SYSTEM START DISTRIBUTED SENDS ve SYSTEM FLUSH DISTRIBUTED yalnız
+// komutu alan düğümün spool'una dokunur. Ölçüm clusterAllReplicas ile
+// bütün düğümleri sayarken düğme ana bağlantıdaki tek düğüme gidiyordu:
+// prod 2026-09-17, 514K dosya başka düğümdeydi, düğme hiçbir şeye
+// dokunmadı. ON CLUSLTER kullanılmaz: FLUSH saatler sürer ve dağıtık DDL
+// kuyruğunu o süre boyunca kilitlerdi. Her düğüme kendi bağlantısıyla,
+// sırayla; sonuç düğüm başına ayrı (kısmi başarı dürüstçe görünür).
+
+// SpoolHostResult — bir düğümde bir eylemin sonucu.
+type SpoolHostResult struct {
+	Host  string `json:"host"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+// spoolHosts — eylemlerin koşacağı düğümler (host:port); küme yoksa nil.
+func (s *Store) spoolHosts(ctx context.Context) ([]string, error) {
+	rows, _, err := s.clusterHostRows(ctx)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fmt.Sprintf("%s:%d", r.Host, r.Port))
+	}
+	return out, nil
+}
+
+// StartDistributedSendsEverywhere — her düğümde START; küme yoksa ana
+// bağlantı. Bir düğüm düşerse ötekiler yine koşar.
+func (s *Store) StartDistributedSendsEverywhere(ctx context.Context, table string) ([]SpoolHostResult, error) {
+	if !chIdentRe.MatchString(table) {
+		return nil, fmt.Errorf("geçersiz tablo adı: %q", table)
+	}
+	hosts, err := s.spoolHosts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("küme düğümleri okunamadı: %w", err)
+	}
+	if len(hosts) == 0 {
+		err := s.StartDistributedSends(ctx, table)
+		return []SpoolHostResult{{Host: "(ana bağlantı)", OK: err == nil, Error: errText(err)}}, err
+	}
+	out := make([]SpoolHostResult, 0, len(hosts))
+	var firstErr error
+	for _, h := range hosts {
+		hctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		conn, err := s.shardConn(hctx, h)
+		if err == nil {
+			err = conn.Exec(hctx, "SYSTEM START DISTRIBUTED SENDS `"+table+"`")
+		}
+		cancel()
+		out = append(out, SpoolHostResult{Host: h, OK: err == nil, Error: errText(err)})
+		if err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("%s: %w", h, err)
+		}
+	}
+	return out, firstErr
+}
+
+// FlushDistributedEverywhere — her düğümde SENKRON flush, sırayla, her
+// düğüme kendi uzun-ömürlü bağlantısı. Küme yoksa ana yol. Dönüş: düğüm
+// başına sonuç + ilk hata (o ana dek giden dosyalar gitmiştir).
+func (s *Store) FlushDistributedEverywhere(ctx context.Context, table string) ([]SpoolHostResult, error) {
+	if !chIdentRe.MatchString(table) {
+		return nil, fmt.Errorf("geçersiz tablo adı: %q", table)
+	}
+	hosts, err := s.spoolHosts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("küme düğümleri okunamadı: %w", err)
+	}
+	if len(hosts) == 0 {
+		err := s.FlushDistributed(ctx, table)
+		return []SpoolHostResult{{Host: "(ana bağlantı)", OK: err == nil, Error: errText(err)}}, err
+	}
+	if s.chOpts == nil {
+		return nil, fmt.Errorf("uzun-işlem bağlantısı bu kurulumda yok")
+	}
+	out := make([]SpoolHostResult, 0, len(hosts))
+	var firstErr error
+	for _, h := range hosts {
+		err := s.flushDistributedOn(ctx, h, table)
+		out = append(out, SpoolHostResult{Host: h, OK: err == nil, Error: errText(err)})
+		if err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("%s: %w", h, err)
+		}
+	}
+	return out, firstErr
+}
+
+func (s *Store) flushDistributedOn(ctx context.Context, addr, table string) error {
+	opts := s.chOpts()
+	opts.Addr = []string{addr}
+	opts.ReadTimeout = spoolFlushReadTimeout
+	opts.MaxOpenConns = 1
+	opts.MaxIdleConns = 1
+	conn, err := clickhouse.Open(opts)
+	if err != nil {
+		return fmt.Errorf("flush bağlantısı: %w", err)
+	}
+	defer conn.Close()
+	return conn.Exec(ctx, "SYSTEM FLUSH DISTRIBUTED `"+table+"`")
+}
+
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}

@@ -98,6 +98,15 @@ type DistributionQueueEntry struct {
 	// LastError — en çok hata almış hedefin son istisnası, 200 karaktere
 	// kırpılmış. Teşhisin tamamı burada: 241 mi (bellek), 159 mu (timeout).
 	LastError string `json:"lastError,omitempty"`
+	// Blocked — v0.10.773: göndericisi EN AZ BİR düğümde durmuş
+	// (system.distribution_queue.is_blocked; SYSTEM STOP DISTRIBUTED SENDS).
+	// Dosya birikirken hata sayısı ARTMIYORSA sebep budur — prod 2026-09-17:
+	// 514K dosya, 28 kümülatif hata, bir saat sarkan MV arandı; son hata
+	// metni günler öncesinin izi çıktı, gönderici sadece kapalıydı.
+	Blocked bool `json:"blocked"`
+	// Hosts — düğüm başına dosya / durmuş / hata (yalnız küme kipinde,
+	// best-effort). Eylemler düğüm-yerel olduğundan "hangi düğümde" şart.
+	Hosts []DistributionQueueHost `json:"hosts,omitempty"`
 	// LastErrorAtNs (v0.9.1077) — o istisnanın ZAMANI. 2026-08-16 prod
 	// olayının dersi: 16 gün önceki bir 241, tarihsiz basılınca CANLI bir
 	// bellek krizi sanıldı ve operatör yaşamayan bir arızayı kovaladı.
@@ -106,6 +115,14 @@ type DistributionQueueEntry struct {
 }
 
 // DistributionQueue — tek bir ölçüm (küme geneli).
+// DistributionQueueHost — bir tablonun bir düğümdeki spool'u.
+type DistributionQueueHost struct {
+	Host       string `json:"host"`
+	Files      uint64 `json:"files"`
+	Blocked    bool   `json:"blocked"`
+	ErrorCount uint64 `json:"errorCount"`
+}
+
 type DistributionQueue struct {
 	// Measured — sorgu GERÇEKTEN koştu ve sonuç okundu mu?
 	//
@@ -202,7 +219,84 @@ func distributionQueueSelect(hasLastAt bool) string {
 		       substring(argMax(last_exception,
 		           if(empty(last_exception), toInt64(-1), toInt64(error_count))),
 		         1, 200)                            AS last_err,
-		       ` + lastAt + `                       AS last_err_at`
+		       ` + lastAt + `                       AS last_err_at,
+		       toUInt64(max(is_blocked))            AS blocked`
+}
+
+// distributionQueueHostsSQL — v0.10.773: düğüm başına dosya / durmuş /
+// hata. Yalnız küme kipinde (tek düğümde spool kavramı yok). Ayrı sorgu:
+// ana okuma tablo başına toplam, bu düğüm başına — ikisini tek GROUP BY'a
+// sıkıştırmak iki dalın ortak scan döngüsünü bozardı.
+func distributionQueueHostsSQL(clusterName string) string {
+	cn := strings.TrimSpace(clusterName)
+	if cn == "" {
+		return ""
+	}
+	return fmt.Sprintf(`
+		SELECT table, hostName() AS host,
+		       toUInt64(sum(data_files))  AS files,
+		       toUInt64(max(is_blocked))  AS blocked,
+		       toUInt64(sum(error_count)) AS errs
+		FROM clusterAllReplicas('%s', system.distribution_queue)
+		GROUP BY table, host
+		HAVING files > 0 OR blocked > 0
+		ORDER BY table, files DESC
+		LIMIT 256
+		SETTINGS skip_unavailable_shards = 1, max_execution_time = 10`,
+		strings.ReplaceAll(cn, "'", ""))
+}
+
+// distributionQueueHostRow — düğüm sorgusunun bir satırı (SAF eşleme girdisi).
+type distributionQueueHostRow struct {
+	Table, Host string
+	Files       uint64
+	Blocked     bool
+	ErrorCount  uint64
+}
+
+// attachDistributionHosts — SAF: düğüm satırlarını tablo girdilerine
+// dağıtır; bir düğümde durmuşsa tablo Blocked olur (ana sorgunun
+// max(is_blocked)'ı ile VEYA).
+func attachDistributionHosts(tables []DistributionQueueEntry, rows []distributionQueueHostRow) {
+	byTable := map[string][]DistributionQueueHost{}
+	blocked := map[string]bool{}
+	for _, r := range rows {
+		byTable[r.Table] = append(byTable[r.Table], DistributionQueueHost{Host: r.Host, Files: r.Files, Blocked: r.Blocked, ErrorCount: r.ErrorCount})
+		if r.Blocked {
+			blocked[r.Table] = true
+		}
+	}
+	for i := range tables {
+		tables[i].Hosts = byTable[tables[i].Table]
+		tables[i].Blocked = tables[i].Blocked || blocked[tables[i].Table]
+	}
+}
+
+// attachHostsFromCluster — düğüm sorgusunu koşar ve eşler; best-effort
+// (hata = düğüm kırılımı yok, ölçümün kendisi bozulmaz).
+func (s *Store) attachHostsFromCluster(ctx context.Context, out *DistributionQueue) {
+	q := distributionQueueHostsSQL(s.cfg.ClusterName)
+	if q == "" || out == nil || len(out.Tables) == 0 {
+		return
+	}
+	rows, err := s.conn.Query(ctx, q)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	var hr []distributionQueueHostRow
+	for rows.Next() {
+		var r distributionQueueHostRow
+		var blocked uint64
+		if err := rows.Scan(&r.Table, &r.Host, &r.Files, &blocked, &r.ErrorCount); err != nil {
+			return
+		}
+		r.Blocked = blocked > 0
+		hr = append(hr, r)
+	}
+	if rows.Err() == nil {
+		attachDistributionHosts(out.Tables, hr)
+	}
 }
 
 const distributionQueueTail = `
@@ -248,6 +342,7 @@ func (s *Store) CollectDistributionQueue(ctx context.Context) *DistributionQueue
 	out := &DistributionQueue{Generated: time.Now().UnixNano()}
 	if err := s.scanDistributionQueue(ctx, q, out); err == nil {
 		out.Measured = true
+		s.attachHostsFromCluster(ctx, out) // v0.10.773 — düğüm kırılımı + durmuş gönderici
 		return out
 	} else {
 		out.ProbeError = err.Error()
@@ -278,10 +373,12 @@ func (s *Store) scanDistributionQueue(ctx context.Context, q string, out *Distri
 	for rows.Next() {
 		var e DistributionQueueEntry
 		var lastAt time.Time
+		var blocked uint64
 		if serr := rows.Scan(&e.Table, &e.Files, &e.Bytes,
-			&e.BrokenFiles, &e.ErrorCount, &e.LastError, &lastAt); serr != nil {
+			&e.BrokenFiles, &e.ErrorCount, &e.LastError, &lastAt, &blocked); serr != nil {
 			return serr
 		}
+		e.Blocked = blocked > 0
 		// toDateTime(0) (eski CH dalı) ve "hiç istisna yok" ikisi de
 		// epoch'tur — ikisinde de yaş İDDİA EDİLMEZ.
 		if lastAt.Unix() > 0 {

@@ -158,7 +158,11 @@ func (s *Server) postSpoolFlush(w http.ResponseWriter, r *http.Request) {
 		// yaşar. Tavan chstore'un kendi ReadTimeout'uyla hizalı.
 		ctx, cancel := context.WithTimeout(context.Background(), 24*time.Hour)
 		defer cancel()
-		err := s.store.FlushDistributed(ctx, table)
+		// v0.10.773 — her düğümde (komut düğüm-yerel; ölçüm küme geneli).
+		res, err := s.store.FlushDistributedEverywhere(ctx, table)
+		for _, hr := range res {
+			log.Printf("[spool] FLUSH DISTRIBUTED %s @ %s: ok=%v %s", table, hr.Host, hr.OK, hr.Error)
+		}
 		s.spoolFlights.finish(table, time.Now().UnixNano(), err)
 		if err != nil {
 			// Dürüstlük notu: sürücü kopması sunucudaki flush'ı da iptal
@@ -180,12 +184,17 @@ func (s *Server) postSpoolStartSends(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.store.StartDistributedSends(r.Context(), table); err != nil {
+	// v0.10.773 — her düğümde: komut düğüm-yerel, spool başka düğümde
+	// olabilir (prod 2026-09-17: düğme ana bağlantının düğümüne gitti,
+	// 514K dosya başka düğümde bekledi). Kısmi başarı gövdede düğüm başına.
+	res, err := s.store.StartDistributedSendsEverywhere(r.Context(), table)
+	details, _ := json.Marshal(map[string]any{"hosts": res, "error": errString(err)})
+	s.audit(r, "clickhouse.start_distributed_sends", "clickhouse", table, string(details))
+	if err != nil && len(res) == 0 {
 		writeErr(w, err)
 		return
 	}
-	s.audit(r, "clickhouse.start_distributed_sends", "clickhouse", table, "{}")
-	writeJSON(w, map[string]any{"ok": true, "table": table})
+	writeJSON(w, map[string]any{"ok": err == nil, "table": table, "hosts": res, "error": errString(err)})
 }
 
 // userIDFromRequest — uçuş defterindeki "kim başlattı" alanı. Audit'in
@@ -195,4 +204,11 @@ func userIDFromRequest(r *http.Request) string {
 		return c.UserID
 	}
 	return "?"
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }

@@ -17,6 +17,7 @@
 package chstore
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -599,5 +600,68 @@ func TestDistributionQueueSelectOldCH(t *testing.T) {
 	}
 	if !strings.Contains(distributionQueueSelect(true), "argMax(last_exception_time,") {
 		t.Errorf("hasLastAt=true dalı zamanı last_err ile AYNI argMax anahtarından seçmeli")
+	}
+}
+
+// ── v0.10.773 — durmuş gönderici + düğüm kırılımı + düğüm başına eylem ──
+
+func TestDistributionQueueBlockedColumnAndHostsSQL(t *testing.T) {
+	for _, q := range []string{distributionQueueSQL("coremetry", true), distributionQueueLocalSQL(false)} {
+		if !strings.Contains(q, "toUInt64(max(is_blocked))            AS blocked") {
+			t.Errorf("is_blocked kolonu iki dalda da okunmalı:\n%s", q)
+		}
+	}
+	if distributionQueueHostsSQL("") != "" {
+		t.Error("tek düğümde düğüm sorgusu yok")
+	}
+	h := distributionQueueHostsSQL("core'metry")
+	for _, must := range []string{"clusterAllReplicas('coremetry', system.distribution_queue)", "hostName() AS host", "max(is_blocked)", "GROUP BY table, host", "LIMIT 256", "skip_unavailable_shards = 1", "max_execution_time"} {
+		if !strings.Contains(h, must) {
+			t.Errorf("düğüm sorgusu %q taşımalı:\n%s", must, h)
+		}
+	}
+}
+
+func TestAttachDistributionHosts(t *testing.T) {
+	tables := []DistributionQueueEntry{{Table: "spans", Files: 514000}, {Table: "logs", Files: 3, Blocked: true}, {Table: "metric_points"}}
+	attachDistributionHosts(tables, []distributionQueueHostRow{
+		{Table: "spans", Host: "ch-02", Files: 514000, Blocked: true, ErrorCount: 28},
+		{Table: "spans", Host: "ch-01", Files: 0, Blocked: false},
+		{Table: "logs", Host: "ch-03", Files: 3},
+	})
+	if !tables[0].Blocked || len(tables[0].Hosts) != 2 || tables[0].Hosts[0].Host != "ch-02" || !tables[0].Hosts[0].Blocked || tables[0].Hosts[0].ErrorCount != 28 {
+		t.Errorf("spans: %+v", tables[0])
+	}
+	if !tables[1].Blocked || len(tables[1].Hosts) != 1 {
+		t.Errorf("logs: ana sorgunun blocked'ı korunmalı: %+v", tables[1])
+	}
+	if tables[2].Blocked || len(tables[2].Hosts) != 0 {
+		t.Errorf("metric_points: dokunulmamalı: %+v", tables[2])
+	}
+}
+
+// Eylemler düğüm-yerel: API her düğümde koşan sürümü kullanmalı; tek-düğüm
+// yolu korunur (prod 2026-09-17: düğme yanlış düğüme gitti).
+func TestSpoolActionsRunOnEveryNode(t *testing.T) {
+	api, err := os.ReadFile("../api/spool_actions.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, must := range []string{"StartDistributedSendsEverywhere(", "FlushDistributedEverywhere("} {
+		if !strings.Contains(string(api), must) {
+			t.Errorf("spool_actions.go %s kullanmalı", must)
+		}
+	}
+	ops, err := os.ReadFile("spool_ops.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, must := range []string{"s.shardConn(hctx, h)", "SYSTEM START DISTRIBUTED SENDS `", "SYSTEM FLUSH DISTRIBUTED `", "opts.Addr = []string{addr}"} {
+		if !strings.Contains(string(ops), must) {
+			t.Errorf("spool_ops.go %q taşımalı", must)
+		}
+	}
+	if strings.Contains(string(ops), "ON CLUSTER") && !strings.Contains(string(ops), "ON CLUSLTER kullanılmaz") {
+		t.Error("FLUSH ON CLUSTER dağıtık DDL kuyruğunu saatlerce kilitler — düğüm başına kal")
 	}
 }

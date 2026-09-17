@@ -5546,6 +5546,9 @@ export interface SystemStats {
       errorCount: number;
       lastError?: string;
       lastErrorAtNs?: number; // v0.9.1077 — istisnanın zamanı (yaş etiketi)
+      /** v0.10.773 — gönderici en az bir düğümde durmuş (is_blocked); düğüm kırılımı. */
+      blocked?: boolean;
+      hosts?: { host: string; files: number; blocked: boolean; errorCount: number }[];
     }[];
     generated: number;
   };

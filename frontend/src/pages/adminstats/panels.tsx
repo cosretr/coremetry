@@ -14,7 +14,7 @@ import { fmtNum, fmtClock } from '@/lib/utils';
 import { KPI, fmtUptime, fmtBytes } from './shared';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { RedisStats, CacheStats, SystemStats, SpoolState } from '@/lib/types';
-import { orderSpoolTables } from './spoolOrder'; // v0.10.761
+import { orderSpoolTables, spoolRowBadge } from './spoolOrder'; // v0.10.761 / v0.10.773
 
 type TopKeyRow = CacheStats['topKeys'][number];
 
@@ -325,6 +325,13 @@ export function DistributionQueuePanel({ dq }: { dq: SystemStats['distributionQu
                     {t.errorCount > 0 && ` · ${fmtNum(t.errorCount)} hata`}
                     {t.brokenFiles > 0 && ` · ${fmtNum(t.brokenFiles)} bozuk`}
                   </span>
+                  {/* v0.10.773 — durmuş gönderici + düğüm kırılımı: eylemler düğüm-yerel. */}
+                  {t.blocked && <span className="badge b-err" style={{ marginLeft: 6 }} title="system.distribution_queue.is_blocked=1 — SYSTEM START DISTRIBUTED SENDS gerekir (Runbook düğmesi her düğümde koşar)">gönderici durmuş</span>}
+                  {(t.hosts?.length ?? 0) > 0 && (
+                    <div style={{ color: 'var(--text3)', fontSize: 10 }}>
+                      düğüm: {t.hosts!.map(h => `${h.host} ${fmtNum(h.files)}${h.blocked ? ' (durmuş)' : ''}`).join(' · ')}
+                    </div>
+                  )}
                   {t.lastError && (
                     <div className="err" style={{
                       fontFamily: 'ui-monospace, monospace', marginTop: 2,
@@ -783,11 +790,7 @@ function SpoolRunbook() {
               return (
                 <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <code style={{ minWidth: 140 }}>{t}</code>
-                  {row.files > 0
-                    ? <span className="badge b-err" title={row.errorCount > 0 ? `${fmtNum(row.errorCount)} gönderim hatası` : undefined}>{fmtNum(row.files)} dosya bekliyor{row.brokenFiles > 0 ? ` · ${fmtNum(row.brokenFiles)} bozuk` : ''}</span>
-                    : row.brokenFiles > 0
-                      ? <span className="badge b-err">{fmtNum(row.brokenFiles)} bozuk</span>
-                      : <span className="badge b-gray" title="Bu tabloda bekleyen spool dosyası yok">kuyruk boş</span>}
+                  {(() => { const b = spoolRowBadge(row); return <span className={`badge ${b.tone}`} title={b.title || undefined}>{b.text}</span>; })()}
                   <Button variant="secondary" size="sm" disabled={busy !== ''}
                     onClick={() => void act('start', t)}>Göndericiyi başlat</Button>
                   <Button variant="ghost-danger" size="sm" disabled={busy !== '' || !!fl}
