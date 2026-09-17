@@ -148,7 +148,11 @@ type periodSeries struct {
 	Note   string
 }
 
-func (p periodSeries) topPeaks(k int) []string {
+// loc (v0.10.758) — tepe saatleri operatörün diliminde (sohbet tz > sunucu varsayılanı).
+func (p periodSeries) topPeaks(k int, loc *time.Location) []string {
+	if loc == nil {
+		loc = time.UTC
+	}
 	type kv struct {
 		t int64
 		v float64
@@ -169,14 +173,17 @@ func (p periodSeries) topPeaks(k int) []string {
 		if kvs[bi].v <= 0 {
 			break
 		}
-		out = append(out, fmt.Sprintf("%s %.0f", time.Unix(0, kvs[bi].t).UTC().Format("15:04"), kvs[bi].v))
+		out = append(out, fmt.Sprintf("%s %.0f", time.Unix(0, kvs[bi].t).In(loc).Format("15:04"), kvs[bi].v))
 		kvs = append(kvs[:bi], kvs[bi+1:]...)
 	}
 	return out
 }
 
 // renderCallPeriodTR — SAF.
-func renderCallPeriodTR(route guidedRoute, series []periodSeries, minuteWin, edgeWin time.Duration) string {
+func renderCallPeriodTR(route guidedRoute, series []periodSeries, minuteWin, edgeWin time.Duration, loc *time.Location) string {
+	if loc == nil {
+		loc = time.UTC
+	}
 	var b strings.Builder
 	subject := route.Service
 	if route.PairTo != "" {
@@ -208,8 +215,8 @@ func renderCallPeriodTR(route guidedRoute, series []periodSeries, minuteWin, edg
 		} else {
 			fmt.Fprintf(&b, "belirgin periyot yok (%s).", res.Reason)
 		}
-		if peaks := s.topPeaks(3); len(peaks) > 0 {
-			fmt.Fprintf(&b, " Tepeler (UTC): %s.", strings.Join(peaks, ", "))
+		if peaks := s.topPeaks(3, loc); len(peaks) > 0 {
+			fmt.Fprintf(&b, " Tepeler (%s): %s.", loc.String(), strings.Join(peaks, ", "))
 		}
 		if s.Note != "" {
 			b.WriteString(" " + s.Note)
@@ -239,7 +246,7 @@ func spanMetricSeriesToPeriod(label string, ser []chstore.SpanMetricSeries, step
 
 // guidedCallPeriodBundle — seriler + kanıt. Pencere: dakikalık ≤ 6 sa,
 // yönlü 24 sa (periyot için çok döngü gerekir), çıpa `to`.
-func (s *Server) guidedCallPeriodBundle(ctx context.Context, emit func(string, any), route *guidedRoute, to time.Time) (string, string, error) {
+func (s *Server) guidedCallPeriodBundle(ctx context.Context, emit func(string, any), route *guidedRoute, to time.Time, loc *time.Location) (string, string, error) {
 	minFrom := to.Add(-callPeriodMinuteWindow)
 	edgeFrom := to.Add(-callPeriodEdgeWindow)
 	var series []periodSeries
@@ -310,5 +317,5 @@ func (s *Server) guidedCallPeriodBundle(ctx context.Context, emit func(string, a
 	}
 	src := strings.Join(srcParts, " + ") + fmt.Sprintf(" (dakikalık son %s, yönlü son %s); otokorelasyon eşiği r≥%.2f, ≥3 döngü", fmtAgoTR(int64(callPeriodMinuteWindow.Seconds())), fmtAgoTR(int64(callPeriodEdgeWindow.Seconds())), callPeriodMinStrength)
 	_ = math.Abs
-	return renderCallPeriodTR(*route, series, callPeriodMinuteWindow, callPeriodEdgeWindow), src, nil
+	return renderCallPeriodTR(*route, series, callPeriodMinuteWindow, callPeriodEdgeWindow, loc), src, nil
 }

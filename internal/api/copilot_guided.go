@@ -1474,7 +1474,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 					rs = endpointWindowS
 				}
 				emitGuidedContextStep(emit, "onay: endpoint trace'leri (bağlam)")
-				handled, ok = s.runGuidedRoute(ctx, emit, er, rs, question, msgs, explain, ctxService, ctxOperation, "", anchorTo)
+				handled, ok = s.runGuidedRoute(ctx, emit, er, rs, question, msgs, explain, ctxService, ctxOperation, "", anchorTo, chatLocationNamed(tzName, tzOffsetMin))
 				if handled {
 					s.noteChatContextRoute(ctx, er, rs, false)
 				}
@@ -1486,7 +1486,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 			if mr, mrange, next, ok := applyContextMutation(st.ctx, m); ok {
 				st.ctx, st.dirty = next, true
 				emitGuidedContextStep(emit, "takip: "+m.Label+" (bağlam)")
-				handled, ok = s.runGuidedRoute(ctx, emit, mr, mrange, question, msgs, explain, ctxService, ctxOperation, "", anchorTo)
+				handled, ok = s.runGuidedRoute(ctx, emit, mr, mrange, question, msgs, explain, ctxService, ctxOperation, "", anchorTo, chatLocationNamed(tzName, tzOffsetMin))
 				if handled {
 					s.noteChatContextRoute(ctx, mr, mrange, m.Kind == "window")
 				}
@@ -1620,7 +1620,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	// BUGÜNKÜ pencereyi cevaplıyordu. Sayılar gerçek olduğu için hata
 	// sessiz kalıyordu. anchorTo göreli aralıkta zaten `now()`dur
 	// (chat_anchor.go); mutlak seçimde operatörün penceresidir.
-	handled, ok = s.runGuidedRoute(ctx, emit, route, rangeS, question, msgs, explain, ctxService, ctxOperation, followBase, anchorTo)
+	handled, ok = s.runGuidedRoute(ctx, emit, route, rangeS, question, msgs, explain, ctxService, ctxOperation, followBase, anchorTo, chatLocationNamed(tzName, tzOffsetMin))
 	if handled {
 		s.noteChatContextRoute(ctx, route, rangeS, explicitRange) // v0.10.478 (F4-1)
 	}
@@ -1632,7 +1632,11 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 // (copilot_intent.go) deterministik router'ı atlayıp aynı paketleri ve aynı
 // anlatım çağrısını kullanabilsin: iki yolun cevabı, çipleri ve linkleri
 // birebir aynı üretimden çıkar. Davranış değişmedi — gövde olduğu gibi taşındı.
-func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), route guidedRoute, rangeS int64, question string, msgs []copilot.ChatMessage, explain, ctxService, ctxOperation, followBase string, anchorTo time.Time) (handled, ok bool) {
+// loc (v0.10.758) — operatörün dilimi (chatLocationNamed): vardiya/periyot özetlerinin saatleri.
+func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), route guidedRoute, rangeS int64, question string, msgs []copilot.ChatMessage, explain, ctxService, ctxOperation, followBase string, anchorTo time.Time, loc *time.Location) (handled, ok bool) {
+	if loc == nil {
+		loc = time.UTC
+	}
 	to := anchorTo
 	if to.IsZero() {
 		to = time.Now()
@@ -1724,7 +1728,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	case guidedWindowCompare: // v0.10.437 (D6)
 		evidence, sources, err = s.guidedWindowCompareBundle(ctx, emit, &route)
 	case guidedCallPeriod: // v0.10.438 (D3)
-		evidence, sources, err = s.guidedCallPeriodBundle(ctx, emit, &route, to)
+		evidence, sources, err = s.guidedCallPeriodBundle(ctx, emit, &route, to, loc) // v0.10.758
 	case guidedFanout: // v0.10.439 (D4)
 		evidence, sources, err = s.guidedFanoutBundle(ctx, emit, &route, from, to, rangeS)
 	case guidedMyServices:
@@ -1738,7 +1742,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	case guidedPodHealth:
 		evidence, sources, err = s.guidedPodHealthBundle(ctx, emit, route.Service, from, to)
 	case guidedShiftSummary:
-		evidence, sources, err = s.guidedShiftSummaryBundle(ctx, emit, route.Service, from, to, rangeS)
+		evidence, sources, err = s.guidedShiftSummaryBundle(ctx, emit, route.Service, from, to, rangeS, loc) // v0.10.758
 	case guidedDBHealth:
 		evidence, sources, err = s.guidedDBHealthBundle(ctx, emit, route.Service, from, to, rangeS)
 	case guidedMessagingHealth:

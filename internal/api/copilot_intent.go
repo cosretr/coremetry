@@ -350,7 +350,8 @@ func intentGeneralAnswer(raw string) (text string, general bool) {
 
 // copilotChatIntent — kademe 3.5 (bkz. dosya başlığı). handled=false ⇒
 // sonraki basamak (serbest döngü) sürer.
-func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, ctxService, ctxOperation, explain string, ctxRangeS int64, ctxEnv string, anchorTo time.Time) (handled, ok bool) {
+// tzOffsetMin/tzName (v0.10.758) — sohbet bağlamının dilimi; guided kanıt saatleri için.
+func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, ctxService, ctxOperation, explain string, ctxRangeS int64, ctxEnv string, anchorTo time.Time, tzOffsetMin int, tzName string) (handled, ok bool) {
 	mode := s.copilot.IntentClassifyMode()
 	if mode == copilot.IntentOff || !s.copilot.Active() {
 		return false, false
@@ -464,7 +465,7 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 			rangeS = 3600
 		}
 	}
-	handled, ok = s.runGuidedRoute(ctx, emit, route, rangeS, question, msgs, explain, ctxService, ctxOperation, "", anchorTo)
+	handled, ok = s.runGuidedRoute(ctx, emit, route, rangeS, question, msgs, explain, ctxService, ctxOperation, "", anchorTo, chatLocationNamed(tzName, tzOffsetMin)) // v0.10.758
 	if handled {
 		s.noteChatContextRoute(ctx, route, rangeS, false) // v0.10.478 (F4-1)
 	}

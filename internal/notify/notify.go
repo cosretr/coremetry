@@ -1272,7 +1272,7 @@ func (n *Notifier) buildEmailBody(p chstore.Problem, rc *chstore.RootCauseHypoth
 // buildEmailBodyWith — v0.10.749: alıcıya özel "Sustur" bağlantısı
 // (boş = satır basılmaz, gövde bayt-bayt eski).
 func (n *Notifier) buildEmailBodyWith(p chstore.Problem, rc *chstore.RootCauseHypothesis, ignore string) string {
-	t := time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339)
+	t := notifyStamp(p.StartedAt) // v0.10.758 — sunucu diliminde, etiketli (stamp.go)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", p.Description)
 	fmt.Fprintf(&b, "Service:    %s\n", p.Service)
@@ -1355,7 +1355,7 @@ func (n *Notifier) buildEmailHTML(p chstore.Problem, rc *chstore.RootCauseHypoth
 func (n *Notifier) buildEmailHTMLWith(p chstore.Problem, rc *chstore.RootCauseHypothesis, ignore string) string {
 	esc := html.EscapeString
 	sev := strings.ToUpper(p.Severity)
-	t := time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339)
+	t := notifyStamp(p.StartedAt) // v0.10.758 — sunucu diliminde, etiketli (stamp.go)
 	const font = `font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif`
 
 	row := func(label, value string) string {
@@ -1571,7 +1571,7 @@ func (n *Notifier) sendSlack(ctx context.Context, c chstore.NotificationChannel,
 		return errors.New("channel has no webhook URL")
 	}
 	color := severityColor(p.Severity)
-	t := time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339)
+	t := notifyStamp(p.StartedAt) // v0.10.758 — sunucu diliminde, etiketli (stamp.go)
 	fields := []map[string]any{
 		{"title": "Service", "value": p.Service, "short": true},
 		{"title": "Severity", "value": strings.ToUpper(p.Severity), "short": true},
@@ -1633,7 +1633,7 @@ func (n *Notifier) sendTeams(ctx context.Context, c chstore.NotificationChannel,
 		return errors.New("channel has no webhook URL")
 	}
 	colour := strings.TrimPrefix(severityColor(p.Severity), "#")
-	t := time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339)
+	t := notifyStamp(p.StartedAt) // v0.10.758 — sunucu diliminde, etiketli (stamp.go)
 	facts := []map[string]string{
 		{"name": "Service", "value": p.Service},
 		{"name": "Severity", "value": strings.ToUpper(p.Severity)},
@@ -1781,7 +1781,7 @@ func (n *Notifier) sendZoomChat(ctx context.Context, c chstore.NotificationChann
 		return fmt.Errorf("zoom oauth: %w", err)
 	}
 
-	t := time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339)
+	t := notifyStamp(p.StartedAt) // v0.10.758 — sunucu diliminde, etiketli (stamp.go)
 	header := alertTitle(p)
 	msg := fmt.Sprintf(
 		"%s\n%s\n\n• Service: %s\n• Severity: %s\n• Priority: %s\n• Metric: %s\n• Value: %.2f (threshold %.2f)\n• Started: %s",
@@ -2211,7 +2211,7 @@ func normaliseWhatsAppAddr(addr string) string {
 }
 
 func buildWhatsAppText(p chstore.Problem) string {
-	t := time.Unix(0, p.StartedAt).UTC().Format("15:04 MST")
+	t := notifyClock(p.StartedAt) // v0.10.758
 	// WhatsApp mrkdwn: başlığın tamamı kalın. alertTitle zaten
 	// "[CRITICAL][P1] servis — kural" üretiyor.
 	out := fmt.Sprintf(

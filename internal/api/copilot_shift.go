@@ -50,14 +50,18 @@ func renderShiftProblemsTR(data mcptools.ProblemWindowData, to time.Time) string
 // grupları. Tüm okumalar bounded state/MV okumaları — spans taraması YOK.
 // Servisli soru ("checkout'ta dün gece ne oldu") tüm blokları o servise
 // daraltır.
-func (s *Server) guidedShiftSummaryBundle(ctx context.Context, emit func(string, any), service string, from, to time.Time, rangeS int64) (string, string, error) {
+// loc (v0.10.758) — pencere saatleri operatörün diliminde (sohbet tz > sunucu varsayılanı).
+func (s *Server) guidedShiftSummaryBundle(ctx context.Context, emit func(string, any), service string, from, to time.Time, rangeS int64, loc *time.Location) (string, string, error) {
+	if loc == nil {
+		loc = time.UTC
+	}
 	var b strings.Builder
 	scope := "filo geneli"
 	if service != "" {
 		scope = service + " servisi"
 	}
-	fmt.Fprintf(&b, "Vardiya penceresi: son %s (%s → %s UTC), kapsam: %s.\n",
-		fmtAgoTR(rangeS), from.UTC().Format("15:04"), to.UTC().Format("15:04"), scope)
+	fmt.Fprintf(&b, "Vardiya penceresi: son %s (%s → %s %s), kapsam: %s.\n",
+		fmtAgoTR(rangeS), from.In(loc).Format("15:04"), to.In(loc).Format("15:04"), loc.String(), scope)
 
 	// ── Problemler: pencerede açılan + çözülen (v0.9.394 pencere sorgusu) ─
 	//

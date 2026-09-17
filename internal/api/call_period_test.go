@@ -147,13 +147,20 @@ func TestRenderCallPeriodTR(t *testing.T) {
 		{Label: "checkout → payment yönlü çağrı", StepS: 300, Note: "(5 dk kova)"},
 		{Label: "checkout giden client span/dk", StepS: 60, Times: ts, Values: vals, Note: "(tüm hedefler)"},
 	}
-	ev := renderCallPeriodTR(guidedRoute{PairFrom: "checkout", PairTo: "payment"}, series, 6*time.Hour, 24*time.Hour)
+	ev := renderCallPeriodTR(guidedRoute{PairFrom: "checkout", PairTo: "payment"}, series, 6*time.Hour, 24*time.Hour, time.UTC)
 	for _, want := range []string{"checkout → payment çağrı periyodu", "yönlü çağrı: veri yok", "PERİYOT ~5 dk", "Tepeler (UTC): 10:00 20", "(tüm hedefler)", "Sonuç: periyot bulunan"} {
 		if !strings.Contains(ev, want) {
 			t.Errorf("kanıt %q içermeli:\n%s", want, ev)
 		}
 	}
-	if !strings.Contains(renderCallPeriodTR(guidedRoute{Service: "x"}, nil, time.Hour, time.Hour), "Seri okunamadı") {
+	// v0.10.758 — tepe saatleri operatörün diliminde ve etiketli: UTC 10:00 = İstanbul 13:00.
+	if ist, err := time.LoadLocation("Europe/Istanbul"); err == nil {
+		evIst := renderCallPeriodTR(guidedRoute{PairFrom: "checkout", PairTo: "payment"}, series, 6*time.Hour, 24*time.Hour, ist)
+		if !strings.Contains(evIst, "Tepeler (Europe/Istanbul): 13:00 20") {
+			t.Errorf("İstanbul tepe saati yok:\n%s", evIst)
+		}
+	}
+	if !strings.Contains(renderCallPeriodTR(guidedRoute{Service: "x"}, nil, time.Hour, time.Hour, nil), "Seri okunamadı") {
 		t.Fatal("boş dürüst")
 	}
 }

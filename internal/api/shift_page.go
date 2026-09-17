@@ -125,7 +125,7 @@ func (s *Server) explainShift(w http.ResponseWriter, r *http.Request) {
 	rung, dur := shiftWindow(r.URL.Query().Get("w"))
 	to := time.Now()
 	from := to.Add(-dur)
-	evidence, _, err := s.guidedShiftSummaryBundle(r.Context(), func(string, any) {}, "", from, to, int64(dur.Seconds()))
+	evidence, _, err := s.guidedShiftSummaryBundle(r.Context(), func(string, any) {}, "", from, to, int64(dur.Seconds()), decodeExplainOptions(r).location()) // v0.10.758 — tarayıcı dilimi (explainInit) > sunucu varsayılanı
 	if err != nil {
 		writeErr(w, fmt.Errorf("shift bundle: %w", err))
 		return
