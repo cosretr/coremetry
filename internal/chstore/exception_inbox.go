@@ -579,6 +579,12 @@ func buildExceptionGroupWhere(f ExceptionGroupFilter) whereClause {
 		if f.State == "open" {
 			// Convenience bucket: anything not closed-out
 			wc.add("state IN ('new','acknowledged','regressed')")
+		} else if f.State == "inbox" {
+			// v0.10.751 (operatör) — Exceptions Inbox sekmesi: ignored hariç
+			// HER durum, resolved dahil (satır durum rozetiyle ayrışır).
+			// Boş parametreyle aynı küme; ayrı yazım URL grameri için
+			// ("inbox" açık bir sekme adı, boş parametre "süzgeç yok").
+			wc.add("state != ?", ExStateIgnored)
 		} else {
 			wc.add("state = ?", f.State)
 		}

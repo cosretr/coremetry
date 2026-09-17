@@ -39,15 +39,9 @@ import { PageShell } from '@/components/ui/PageShell';
 import { stripMarkdown } from '@/components/Markdown';
 import { IconSparkles } from '@/components/icons';
 
-// State buckets shown as tabs along the top of the page.
-const TABS: { key: string; label: string; hint: string }[] = [
-  { key: 'open',         label: 'Inbox',        hint: 'New + acknowledged + regressed' },
-  { key: 'new',          label: 'Open',         hint: 'Untouched since first occurrence' }, // v0.8.382: NEW is the first-seen badge
-  { key: 'acknowledged', label: 'Acknowledged', hint: 'Someone is on it' },
-  { key: 'regressed',    label: 'Regressed',    hint: 'Resolved but happening again' },
-  { key: 'resolved',     label: 'Resolved',     hint: 'Closed out' },
-  { key: 'ignored',      label: 'Ignored',      hint: 'Permanently silenced' },
-];
+// v0.10.751 — sekmeler tek kaynaktan (tabs.ts): Inbox = ignored hariç her
+// durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
+import { EXCEPTION_TABS as TABS, resolveExceptionTab } from './tabs';
 
 // Exception-inbox sort keys the SERVER understands (v0.8.318 — the
 // ORDER BY runs in ClickHouse across the whole paginated set). The
@@ -96,7 +90,7 @@ export default function ProblemsPage() {
   // teammate's link can't land them on "page 4 of 2".
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation(); // v0.10.221 — exception satır linkleri
-  const tab     = searchParams.get('tab') || 'open';
+  const tab     = resolveExceptionTab(searchParams.get('tab'));
   const service = searchParams.get('service') || '';
   // Owner (ug-team) / SRE (sy-team) team filter — URL-backed so a
   // triage link reproduces the exact team slice, mirroring /inbox's
@@ -491,8 +485,8 @@ export default function ProblemsPage() {
           </QueryError>
         )}
         {data && filtered.length === 0 && (
-          <Empty icon="✓" title={tab === 'open'
-            ? 'Inbox is clear — no untriaged exceptions'
+          <Empty icon="✓" title={tab === 'inbox'
+            ? 'Inbox boş — ignored dışında hiç grup yok'
             : `No groups in "${tab}"`}>
             {/* v0.6.24 — explain why each tab might legitimately
                 be empty so operators don't think the page broke. */}
