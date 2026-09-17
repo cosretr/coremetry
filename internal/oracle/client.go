@@ -24,7 +24,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,9 +58,6 @@ func openOracleDB(dsn string) (sqlDB, error) {
 const (
 	// testSampleLimit — bağlantı testinin FETCH FIRST tavanı.
 	testSampleLimit = 5
-	// testWindow — testin baktığı pencere: son 15 dakika. Zaman yüklemi
-	// ZORUNLU (audit §3: sınırsız tarama yok).
-	testWindow = 15 * time.Minute
 	// wideTestWindow — dar pencere boş dönerse ikinci deneme. "Trafik yok"
 	// ile "TZ kaymış" ayrımını yapan tek şey bu (v0.10.335 Influx dersi).
 	wideTestWindow = 24 * time.Hour
@@ -261,13 +261,336 @@ type TestResult struct {
 	WideWindow bool `json:"wideWindow,omitempty"`
 	// Hint — "hata yok + satır yok" ikircikliğinin okunabilir açıklaması.
 	Hint string `json:"hint,omitempty"`
+	// v0.10.768 — operatör "önce test edelim": pencere, poller'ın koşacağı
+	// sorgu + bind değerleri, sözlükten tam-tarama kanıtı, pencere özeti.
+	WindowMin int            `json:"windowMin"`
+	PollQuery string         `json:"pollQuery,omitempty"`
+	PollBinds []string       `json:"pollBinds,omitempty"`
+	Scan      *ScanCheck     `json:"scan,omitempty"`
+	Summary   *WindowSummary `json:"summary,omitempty"`
+}
+
+// ── v0.10.768 — tam-tarama ön kontrolü, pencere özeti ────────────────────
+//
+// Operatör (2026-09-17): "Oracle full scan / kilitli sorgu atmasın, önce bir
+// test edelim, gerekirse sorgu görünür olsun; test ederken hangi servis /
+// operasyon / trace geldiğini göreyim (son 5 dk gibi)."
+//
+// Kilit: Oracle'da SELECT kilit almaz; kilit alan tek okuma FOR UPDATE —
+// üreticiler yazmaz, konsol + extraWhere reddeder. Tam tarama: her sorgu
+// zaman kolonuna bağlı pencere + FETCH FIRST taşır; tam tarama olup
+// olmaması YALNIZ o kolonun indeksli (ilk kolon) ya da tablonun onunla
+// partition'lı olmasına bağlıdır. Sözlük görünümleri (ALL_IND_COLUMNS,
+// ALL_PART_KEY_COLUMNS, ALL_TABLES) bunu ucuz söyler; ScanCheck bu kanıttır.
+
+// TestOptions — operatör seçimleri + CH tarafı bağımlılığı (oracle paketi
+// chstore.Store'u bilmez; handler s.store.TraceServicesByIDs verir).
+type TestOptions struct {
+	// WindowMin — test penceresi: 5 | 15 | 60 (başkası → DefaultTestWindowMin).
+	WindowMin int
+	// TraceLookup — trace id → Coremetry servisi ([from, to] penceresinde).
+	// nil → arama yapılmaz, özet bunu söyler.
+	TraceLookup func(ctx context.Context, ids []string, from, to time.Time) (map[string]string, error)
+}
+
+const (
+	DefaultTestWindowMin = 15
+	// summaryRowCap — pencere özetinin FETCH FIRST tavanı (poller tavanı
+	// 5000; test bir kez koşar, 500 yeter ve "capped" ilan eder).
+	summaryRowCap = 500
+	// summaryTopN — operasyon / servis listelerinin uzunluğu.
+	summaryTopN = 10
+	// summaryLookupIDs — CH'de aranan ayrık trace id tavanı.
+	summaryLookupIDs = 200
+	// summaryLookupPad — Oracle damgası ile span zamanı arasındaki pay.
+	summaryLookupPad = 5 * time.Minute
+)
+
+// ClampTestWindow — SAF: 5 / 15 / 60; başkası varsayılan.
+func ClampTestWindow(n int) int {
+	switch n {
+	case 5, 15, 60:
+		return n
+	default:
+		return DefaultTestWindowMin
+	}
+}
+
+// ScanCheck — sözlükten okunan tam-tarama kanıtı.
+type ScanCheck struct {
+	Checked      bool   `json:"checked"`
+	Error        string `json:"error,omitempty"`
+	TsColumn     string `json:"tsColumn"`
+	Found        bool   `json:"found"` // ALL_TABLES'ta satır var (view/synonym değilse)
+	Indexed      bool   `json:"indexed"`
+	IndexName    string `json:"indexName,omitempty"`
+	Partitioned  bool   `json:"partitioned"`
+	PartitionKey string `json:"partitionKey,omitempty"`
+	NumRows      int64  `json:"numRows"`
+	LastAnalyzed string `json:"lastAnalyzed,omitempty"`
+}
+
+// FullScanRisk — SAF: tablo bulundu, zaman kolonu ne indeksli ne partition
+// anahtarı → her poll tam tarama.
+func (c ScanCheck) FullScanRisk() bool {
+	return c.Checked && c.Found && !c.Indexed && !c.Partitioned
+}
+
+// Sözlük sorguları — SAF, yalnız SELECT, identifier'lar bind (sözlük
+// büyük harf saklar; identRe tırnaksız ad kabul ettiğinden ToUpper doğru).
+func scanIndexSQL() string {
+	return `SELECT INDEX_NAME FROM ALL_IND_COLUMNS WHERE TABLE_OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3 AND COLUMN_POSITION = 1 FETCH FIRST 5 ROWS ONLY`
+}
+func scanPartitionSQL() string {
+	return `SELECT COLUMN_NAME FROM ALL_PART_KEY_COLUMNS WHERE OWNER = :1 AND NAME = :2 AND OBJECT_TYPE = 'TABLE' AND COLUMN_POSITION = 1 FETCH FIRST 1 ROWS ONLY`
+}
+func scanTableSQL() string {
+	return `SELECT NUM_ROWS, LAST_ANALYZED FROM ALL_TABLES WHERE OWNER = :1 AND TABLE_NAME = :2 FETCH FIRST 1 ROWS ONLY`
+}
+
+// scanCheckFromRows — SAF: üç sözlük cevabından hüküm.
+func scanCheckFromRows(tsCol string, idxRows, partRows, tblRows []map[string]any) ScanCheck {
+	c := ScanCheck{Checked: true, TsColumn: strings.ToUpper(tsCol)}
+	if len(idxRows) > 0 {
+		c.Indexed = true
+		c.IndexName = cellString(firstCell(idxRows[0]))
+	}
+	if len(partRows) > 0 {
+		c.PartitionKey = strings.ToUpper(cellString(firstCell(partRows[0])))
+		c.Partitioned = c.PartitionKey == c.TsColumn
+	}
+	if len(tblRows) > 0 {
+		c.Found = true
+		for k, v := range tblRows[0] {
+			switch strings.ToUpper(k) {
+			case "NUM_ROWS":
+				c.NumRows = cellInt64(v)
+			case "LAST_ANALYZED":
+				if t, ok := v.(time.Time); ok {
+					c.LastAnalyzed = t.Format("2006-01-02")
+				}
+			}
+		}
+	}
+	return c
+}
+
+func firstCell(row map[string]any) any {
+	for _, v := range row {
+		return v
+	}
+	return nil
+}
+
+func cellInt64(v any) int64 {
+	switch t := v.(type) {
+	case int64:
+		return t
+	case int32:
+		return int64(t)
+	case int:
+		return int64(t)
+	case float64:
+		return int64(t)
+	case float32:
+		return int64(t)
+	case string:
+		n, _ := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
+		return n
+	}
+	return 0
+}
+
+// runScanCheck — üç sözlük okuması; herhangi biri düşerse Checked=false +
+// hata (redaksiyonlu). Sözlük okuması yetkisizse de dürüstçe "kontrol
+// edilemedi" der, tabloyu taramaz.
+func runScanCheck(ctx context.Context, db sqlDB, cfg SourceConfig, budget time.Duration, secret string) *ScanCheck {
+	tsCol, _, _, err := queryParts(cfg)
+	if err != nil {
+		return &ScanCheck{Error: err.Error(), TsColumn: strings.ToUpper(tsCol)}
+	}
+	owner, table, col := strings.ToUpper(cfg.Schema), strings.ToUpper(cfg.Table), strings.ToUpper(tsCol)
+	_, idx, err := runRows(ctx, db, scanIndexSQL(), []any{owner, table, col}, budget, secret)
+	if err != nil {
+		return &ScanCheck{Error: "sözlük (ALL_IND_COLUMNS): " + err.Error(), TsColumn: col}
+	}
+	_, part, err := runRows(ctx, db, scanPartitionSQL(), []any{owner, table}, budget, secret)
+	if err != nil {
+		return &ScanCheck{Error: "sözlük (ALL_PART_KEY_COLUMNS): " + err.Error(), TsColumn: col}
+	}
+	_, tbl, err := runRows(ctx, db, scanTableSQL(), []any{owner, table}, budget, secret)
+	if err != nil {
+		return &ScanCheck{Error: "sözlük (ALL_TABLES): " + err.Error(), TsColumn: col}
+	}
+	c := scanCheckFromRows(tsCol, idx, part, tbl)
+	return &c
+}
+
+// pollPreview — SAF: poller'ın bu pencere için koşacağı TAM sorgu + bind
+// değerleri (operatör/DBA gözüyle inceleme için; şifre/DSN yok).
+func pollPreview(cfg SourceConfig, from, to time.Time) (string, []string) {
+	q, args, err := buildPollQuery(cfg, from, to, pollRowCap)
+	if err != nil {
+		return "", nil
+	}
+	binds := make([]string, 0, len(args))
+	for _, a := range args {
+		binds = append(binds, fmt.Sprint(a))
+	}
+	return q, binds
+}
+
+// NameCount — ad + sayı (operasyon kodu / servis listeleri).
+type NameCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// WindowSummary — pencerede ne geldi: satır, eşleme sayıları, operasyon
+// kodları, ayrık trace id sayısı ve kaçının Coremetry'de bulunduğu +
+// o trace'lerin servisleri. "Servis" Oracle satırında yoktur; eşleşen
+// trace'in Coremetry servisidir (operatör onayı 2026-09-17).
+type WindowSummary struct {
+	WindowMin   int         `json:"windowMin"`
+	Rows        int         `json:"rows"`
+	Capped      bool        `json:"capped"`
+	Mapped      int         `json:"mapped"`
+	NoTimestamp int         `json:"noTimestamp"`
+	BadTraceID  int         `json:"badTraceId"`
+	Operations  []NameCount `json:"operations"`
+	ErrorCodes  []NameCount `json:"errorCodes"`
+	TraceIDs    int         `json:"traceIds"`
+	LookupDone  bool        `json:"lookupDone"`
+	LookupError string      `json:"lookupError,omitempty"`
+	TracesFound int         `json:"tracesFound"`
+	Services    []NameCount `json:"services"`
+	Error       string      `json:"error,omitempty"`
+}
+
+// topCounts — SAF: sayıya göre azalan, eşitlikte ada göre; ilk n.
+func topCounts(m map[string]int, n int) []NameCount {
+	out := make([]NameCount, 0, len(m))
+	for k, v := range m {
+		out = append(out, NameCount{Name: k, Count: v})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Name < out[j].Name
+	})
+	if len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
+// distinctTraceIDs — SAF: eşlenmiş satırlardan boş olmayan ayrık id'ler,
+// ilk görülme sırasıyla, tavanlı.
+func distinctTraceIDs(rows []chstore.OracleErrorRow, capN int) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, r := range rows {
+		if r.TraceID == "" || seen[r.TraceID] {
+			continue
+		}
+		seen[r.TraceID] = true
+		if len(out) < capN {
+			out = append(out, r.TraceID)
+		}
+	}
+	return out
+}
+
+// summarizeWindow — SAF: eşlenmiş satırlar + eşleme istatistiği + CH arama
+// sonucundan özet. lookup nil → LookupDone=false.
+func summarizeWindow(windowMin int, rows []chstore.OracleErrorRow, st MapStats, capped bool, lookup map[string]string, lookupDone bool, lookupErr error) WindowSummary {
+	out := WindowSummary{
+		WindowMin: windowMin, Rows: st.Rows, Capped: capped, Mapped: st.Mapped,
+		NoTimestamp: st.NoTimestamp, BadTraceID: st.BadTraceID,
+		Operations: []NameCount{}, ErrorCodes: []NameCount{}, Services: []NameCount{},
+		LookupDone: lookupDone,
+	}
+	ops, codes := map[string]int{}, map[string]int{}
+	for _, r := range rows {
+		op := r.OperationCode
+		if op == "" {
+			op = "(boş)"
+		}
+		ops[op]++
+		if r.ErrorCode != "" {
+			codes[r.ErrorCode]++
+		}
+	}
+	out.Operations, out.ErrorCodes = topCounts(ops, summaryTopN), topCounts(codes, summaryTopN)
+	ids := distinctTraceIDs(rows, len(rows)+1)
+	out.TraceIDs = len(ids)
+	if lookupErr != nil {
+		out.LookupError = lookupErr.Error()
+	}
+	if lookupDone && lookup != nil {
+		svc := map[string]int{}
+		for _, id := range ids {
+			if s, ok := lookup[id]; ok {
+				out.TracesFound++
+				if s == "" {
+					s = "(servissiz)"
+				}
+				svc[s]++
+			}
+		}
+		out.Services = topCounts(svc, summaryTopN)
+	}
+	return out
+}
+
+// runWindowSummary — poller sorgusunun aynısı (tavan summaryRowCap), eşleme
+// (mapping.go), CH arama; hata özetin içinde, testi düşürmez.
+func runWindowSummary(ctx context.Context, db sqlDB, cfg SourceConfig, budget time.Duration, secret string, from, to time.Time, opt TestOptions) *WindowSummary {
+	q, args, err := buildPollQuery(cfg, from, to, summaryRowCap)
+	if err != nil {
+		return &WindowSummary{WindowMin: opt.WindowMin, Error: err.Error()}
+	}
+	_, raw, err := runRows(ctx, db, q, args, budget, secret)
+	if err != nil {
+		return &WindowSummary{WindowMin: opt.WindowMin, Error: err.Error()}
+	}
+	m, err := NewMapper(cfg)
+	if err != nil {
+		return &WindowSummary{WindowMin: opt.WindowMin, Rows: len(raw), Error: err.Error()}
+	}
+	rows, st := m.MapAll(raw)
+	var lookup map[string]string
+	var lerr error
+	done := false
+	if opt.TraceLookup != nil {
+		ids := distinctTraceIDs(rows, summaryLookupIDs)
+		if len(ids) > 0 {
+			lctx, cancel := context.WithTimeout(ctx, budget)
+			lookup, lerr = opt.TraceLookup(lctx, ids, from.Add(-summaryLookupPad), to.Add(summaryLookupPad))
+			cancel()
+		} else {
+			lookup = map[string]string{}
+		}
+		done = lerr == nil
+	}
+	out := summarizeWindow(opt.WindowMin, rows, st, len(raw) >= summaryRowCap, lookup, done, lerr)
+	return &out
 }
 
 // Test — formdaki kaynağı KAYDETMEDEN dener: şifre çözümü → Ping → son 15
 // dakikadan en çok 5 satır. Dönen kolon listesi ve örnek satırlar Aşama 2'nin
 // alan eşlemesini yazacak operatörün elindeki tek gerçek kanıt.
 func (s *Service) Test(ctx context.Context, src SourceConfig) TestResult {
-	res := TestResult{Columns: []string{}}
+	return s.TestWith(ctx, src, TestOptions{})
+}
+
+// TestWith — v0.10.768: pencere seçimi + tam-tarama ön kontrolü + pencere
+// özeti (poller sorgusu, tavan summaryRowCap) + CH'de trace/servis araması.
+func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOptions) TestResult {
+	opt.WindowMin = ClampTestWindow(opt.WindowMin)
+	testWindow := time.Duration(opt.WindowMin) * time.Minute
+	res := TestResult{Columns: []string{}, WindowMin: opt.WindowMin}
 	if s == nil {
 		res.Error = "oracle servisi yok"
 		return res
@@ -326,13 +649,20 @@ func (s *Service) Test(ctx context.Context, src SourceConfig) TestResult {
 		wideSQL, wideArgs, werr := buildSampleQuery(src, time.Now().Add(-wideTestWindow), time.Now(), testSampleLimit)
 		if werr == nil {
 			wcols, wsample, werr2 := runSample(ctx, db, wideSQL, wideArgs, budget, secret)
-			hint, useWide := emptyProbeHint(len(wsample), werr2)
+			hint, useWide := emptyProbeHint(opt.WindowMin, len(wsample), werr2)
 			res.Hint = hint
 			if useWide {
 				res.Columns, res.Sample, res.WideWindow = wcols, wsample, true
 			}
 		}
 	}
+
+	// v0.10.768 — operatör: "full scan / kilit olmasın, önce test edelim,
+	// sorgu görünür olsun; hangi servis/operasyon/trace geldiğini göreyim".
+	now := time.Now()
+	res.Scan = runScanCheck(ctx, db, src, budget, secret)
+	res.PollQuery, res.PollBinds = pollPreview(src, now.Add(-testWindow), now)
+	res.Summary = runWindowSummary(ctx, db, src, budget, secret, now.Add(-testWindow), now, opt)
 
 	res.OK = true
 	return res
@@ -345,12 +675,15 @@ func (s *Service) Test(ctx context.Context, src SourceConfig) TestResult {
 // edemezse yanlış yerde arar: geniş pencerede veri VARSA sorun zaman
 // dilimi ya da seyrek trafiktir; geniş pencerede de yoksa sorun süzgeç ya
 // da ad eşleşmesidir; geniş deneme HATA verirse ortada bir teşhis yoktur.
-func emptyProbeHint(wideRows int, wideErr error) (string, bool) {
+func emptyProbeHint(windowMin, wideRows int, wideErr error) (string, bool) {
+	if windowMin <= 0 {
+		windowMin = DefaultTestWindowMin
+	}
 	switch {
 	case wideErr != nil:
-		return "son 15 dakikada satır yok; geniş pencere denemesi de başarısız (" + wideErr.Error() + ")", false
+		return fmt.Sprintf("son %d dakikada satır yok; geniş pencere denemesi de başarısız (%s)", windowMin, wideErr.Error()), false
 	case wideRows > 0:
-		return "Son 15 dakikada satır YOK ama son 24 saatte var — trafik seyrek olabilir ya da " +
+		return fmt.Sprintf("Son %d dakikada satır YOK ama son 24 saatte var — trafik seyrek olabilir ya da ", windowMin) +
 			"zaman kolonu beklenenden farklı bir dilimde (TZ). Aşağıdaki örnek satırlar 24 saatlik pencereden.", true
 	default:
 		return "Son 24 saatte de satır yok — tip süzgeci, şema/tablo adı ya da zaman kolonu eşleşmiyor olabilir.", false

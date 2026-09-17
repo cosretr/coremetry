@@ -1733,8 +1733,8 @@ export const api = {
     }),
   /** Formdaki TEK kaynağı KAYDETMEDEN dener. Başarısızlık 200 + {ok:false}
    *  ile gelir — çağıran bunu HATA olarak değil, CEVAP olarak çizmeli. */
-  testOracleSource: (src: OracleSource) =>
-    request<OracleTestResult>(`/api/settings/oracle/test`, {
+  testOracleSource: (src: OracleSource, windowMin = 15) =>
+    request<OracleTestResult>(`/api/settings/oracle/test?windowMin=${windowMin}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(src),
     }),

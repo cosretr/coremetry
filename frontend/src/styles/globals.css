@@ -1322,6 +1322,9 @@ tbody td.row-cell, [data-density] tbody td.row-cell { padding: 0; }
 .oracle-q textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-xs); }
 .oracle-probe { margin-top: var(--sp-5); font-size: var(--fs-sm); }
 .oracle-probe table { font-size: var(--fs-xs); }
+.oracle-scan { margin-top: var(--sp-4); font-size: var(--fs-xs); }
+.oracle-summary { margin-top: var(--sp-4); font-size: var(--fs-xs); }
+.oracle-summary .oracle-row > div { flex: 1 1 160px; }
 .oracle-status { margin-bottom: var(--sp-5); font-size: var(--fs-sm); color: var(--text2); }
 .oracle-status .is-quiet, .oracle-actions .is-quiet { color: var(--text3); }
 /* Ayar sekmesi okuma genişliği — form satırı 820px'i aşınca etiket/kutu

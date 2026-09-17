@@ -14,6 +14,7 @@ package oracle
 
 import (
 	"errors"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"regexp"
 	"strconv"
 	"strings"
@@ -320,7 +321,7 @@ func TestQueryTimeoutClamped(t *testing.T) {
 // öğrendi (v0.10.335); aynı ayrımı burada doğuşta kuruyoruz.
 func TestEmptyProbeHint(t *testing.T) {
 	t.Run("geniş pencerede veri var → TZ/seyreklik, örnekler KULLANILIR", func(t *testing.T) {
-		hint, useWide := emptyProbeHint(3, nil)
+		hint, useWide := emptyProbeHint(15, 3, nil)
 		if !useWide {
 			t.Fatal("geniş pencerenin örnekleri kullanılmalıydı")
 		}
@@ -329,7 +330,7 @@ func TestEmptyProbeHint(t *testing.T) {
 		}
 	})
 	t.Run("geniş pencerede de yok → süzgeç/ad, örnek YOK", func(t *testing.T) {
-		hint, useWide := emptyProbeHint(0, nil)
+		hint, useWide := emptyProbeHint(15, 0, nil)
 		if useWide {
 			t.Fatal("boş geniş pencere örnek olarak kullanılamaz")
 		}
@@ -338,7 +339,7 @@ func TestEmptyProbeHint(t *testing.T) {
 		}
 	})
 	t.Run("geniş deneme hata verdi → teşhis YOK, uydurma", func(t *testing.T) {
-		hint, useWide := emptyProbeHint(0, errors.New("ORA-00942"))
+		hint, useWide := emptyProbeHint(5, 0, errors.New("ORA-00942"))
 		if useWide {
 			t.Fatal("hatalı denemenin örneği kullanılamaz")
 		}
@@ -346,4 +347,137 @@ func TestEmptyProbeHint(t *testing.T) {
 			t.Errorf("gerçek hata metni ipucuda görünmeli: %q", hint)
 		}
 	})
+}
+
+// ── v0.10.768 — tam-tarama ön kontrolü, pencere özeti, poll önizlemesi ──
+
+func TestScanSQLBuilders_DictionaryOnly(t *testing.T) {
+	for name, q := range map[string]string{"index": scanIndexSQL(), "partition": scanPartitionSQL(), "table": scanTableSQL()} {
+		assertSingleSelect(t, q)
+		if !strings.Contains(q, "FETCH FIRST") {
+			t.Errorf("%s: satır tavanı yok: %q", name, q)
+		}
+	}
+	if !strings.Contains(scanIndexSQL(), "ALL_IND_COLUMNS") || !strings.Contains(scanPartitionSQL(), "ALL_PART_KEY_COLUMNS") || !strings.Contains(scanTableSQL(), "ALL_TABLES") {
+		t.Error("sözlük görünümleri değişmiş")
+	}
+	// Üç bind: owner, table, column (yalnız indeks sorgusunda kolon).
+	assertEveryValueIsBound(t, scanIndexSQL(), []any{"S", "T", "C"})
+	assertEveryValueIsBound(t, scanPartitionSQL(), []any{"S", "T"})
+	assertEveryValueIsBound(t, scanTableSQL(), []any{"S", "T"})
+}
+
+func TestScanCheckFromRows(t *testing.T) {
+	idx := []map[string]any{{"INDEX_NAME": "IX_ERR_TS"}}
+	partTs := []map[string]any{{"COLUMN_NAME": "err_timestamp"}}
+	partOther := []map[string]any{{"COLUMN_NAME": "ERR_TYPE"}}
+	tbl := []map[string]any{{"NUM_ROWS": float64(1234567), "LAST_ANALYZED": time.Date(2026, 9, 1, 3, 0, 0, 0, time.UTC)}}
+	cases := []struct {
+		name            string
+		idx, part, tbl  []map[string]any
+		indexed, parted bool
+		risk            bool
+	}{
+		{"indeksli", idx, nil, tbl, true, false, false},
+		{"zaman kolonu partition anahtarı", nil, partTs, tbl, false, true, false},
+		{"başka kolon partition, indeks yok", nil, partOther, tbl, false, false, true},
+		{"ne indeks ne partition", nil, nil, tbl, false, false, true},
+		{"tablo sözlükte yok (view/synonym) → risk hükmü verilmez", nil, nil, nil, false, false, false},
+	}
+	for _, c := range cases {
+		got := scanCheckFromRows("err_timestamp", c.idx, c.part, c.tbl)
+		if !got.Checked || got.TsColumn != "ERR_TIMESTAMP" {
+			t.Errorf("%s: Checked/TsColumn: %+v", c.name, got)
+		}
+		if got.Indexed != c.indexed || got.Partitioned != c.parted || got.FullScanRisk() != c.risk {
+			t.Errorf("%s: indexed=%v partitioned=%v risk=%v (%+v)", c.name, got.Indexed, got.Partitioned, got.FullScanRisk(), got)
+		}
+		if c.tbl != nil && (got.NumRows != 1234567 || got.LastAnalyzed != "2026-09-01" || !got.Found) {
+			t.Errorf("%s: tablo satırı okunmadı: %+v", c.name, got)
+		}
+	}
+	if scanCheckFromRows("x", nil, partOther, tbl).PartitionKey != "ERR_TYPE" {
+		t.Error("başka kolonun partition anahtarı bilgi olarak taşınmalı")
+	}
+	if (ScanCheck{}).FullScanRisk() {
+		t.Error("kontrol edilmemiş → risk hükmü yok")
+	}
+}
+
+func TestClampTestWindow(t *testing.T) {
+	for in, want := range map[int]int{0: 15, 5: 5, 15: 15, 60: 60, 7: 15, -1: 15, 1440: 15} {
+		if got := ClampTestWindow(in); got != want {
+			t.Errorf("%d → %d, istenen %d", in, got, want)
+		}
+	}
+}
+
+func TestPollPreviewShowsBinds(t *testing.T) {
+	cfg := cfgFor(t)
+	from := time.Date(2026, 9, 17, 22, 0, 0, 0, time.UTC)
+	q, binds := pollPreview(cfg, from, from.Add(15*time.Minute))
+	want, args, err := buildPollQuery(cfg, from, from.Add(15*time.Minute), pollRowCap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q != want {
+		t.Errorf("önizleme poller sorgusundan farklı:\n%s\n--\n%s", q, want)
+	}
+	if len(binds) != len(args) {
+		t.Errorf("bind sayısı %d, arg %d", len(binds), len(args))
+	}
+	assertSingleSelect(t, q)
+	if strings.Contains(q, cfg.Password) && cfg.Password != "" {
+		t.Error("şifre önizlemeye sızdı")
+	}
+}
+
+func TestSummarizeWindow(t *testing.T) {
+	rows := []chstore.OracleErrorRow{
+		{OperationCode: "TRANSFER", ErrorCode: "E1", TraceID: "a"},
+		{OperationCode: "TRANSFER", ErrorCode: "E1", TraceID: "a"},
+		{OperationCode: "BALANCE", ErrorCode: "E2", TraceID: "b"},
+		{OperationCode: "", ErrorCode: "", TraceID: ""},
+		{OperationCode: "LOGIN", TraceID: "c"},
+	}
+	st := MapStats{Rows: 6, Mapped: 5, NoTimestamp: 1, BadTraceID: 1}
+	lookup := map[string]string{"a": "shop-payment", "c": "shop-auth"}
+	got := summarizeWindow(5, rows, st, false, lookup, true, nil)
+	if got.WindowMin != 5 || got.Rows != 6 || got.Mapped != 5 || got.NoTimestamp != 1 || got.BadTraceID != 1 || got.Capped {
+		t.Errorf("sayılar: %+v", got)
+	}
+	// Sayıya göre azalan, eşitlikte ada göre ("(boş)" ASCII'de harflerden önce).
+	if len(got.Operations) != 4 || got.Operations[0] != (NameCount{"TRANSFER", 2}) || got.Operations[1] != (NameCount{"(boş)", 1}) || got.Operations[3] != (NameCount{"LOGIN", 1}) {
+		t.Errorf("operasyonlar: %+v", got.Operations)
+	}
+	if len(got.ErrorCodes) != 2 || got.ErrorCodes[0] != (NameCount{"E1", 2}) {
+		t.Errorf("hata kodları: %+v", got.ErrorCodes)
+	}
+	if got.TraceIDs != 3 || got.TracesFound != 2 || !got.LookupDone {
+		t.Errorf("trace: %+v", got)
+	}
+	if len(got.Services) != 2 || got.Services[0] != (NameCount{"shop-auth", 1}) || got.Services[1] != (NameCount{"shop-payment", 1}) {
+		t.Errorf("servisler (eşitlikte ada göre): %+v", got.Services)
+	}
+	// Arama yok / arama hatası: dürüst.
+	noLookup := summarizeWindow(15, rows, st, true, nil, false, nil)
+	if noLookup.LookupDone || noLookup.TracesFound != 0 || !noLookup.Capped || len(noLookup.Services) != 0 {
+		t.Errorf("aramasız özet: %+v", noLookup)
+	}
+	failed := summarizeWindow(15, rows, st, false, nil, false, errors.New("CH timeout"))
+	if failed.LookupError != "CH timeout" || failed.LookupDone {
+		t.Errorf("arama hatası taşınmalı: %+v", failed)
+	}
+	// Boş satır listesi: dilimler nil değil (JSON [] sözleşmesi).
+	empty := summarizeWindow(15, nil, MapStats{}, false, nil, false, nil)
+	if empty.Operations == nil || empty.Services == nil || empty.ErrorCodes == nil {
+		t.Error("boş özetin dilimleri [] olmalı")
+	}
+}
+
+func TestDistinctTraceIDsCapped(t *testing.T) {
+	rows := []chstore.OracleErrorRow{{TraceID: "a"}, {TraceID: ""}, {TraceID: "a"}, {TraceID: "b"}, {TraceID: "c"}}
+	if got := distinctTraceIDs(rows, 2); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("tavan/sıra: %v", got)
+	}
 }

@@ -1586,6 +1586,28 @@ export interface OracleTestResult {
   latencyMs?: number;
   /** Koşan SELECT'in metni (şifre/DSN içermez; yalnız identifier + bind). */
   query?: string;
+  /** v0.10.768 — test penceresi (5/15/60 dk), poller'ın koşacağı sorgu + bind
+   *  değerleri, sözlükten tam-tarama kanıtı, pencere özeti. */
+  windowMin?: number;
+  pollQuery?: string;
+  pollBinds?: string[];
+  scan?: OracleScanCheck;
+  summary?: OracleWindowSummary;
+}
+/** oracle.ScanCheck — zaman kolonu indeksli / partition anahtarı mı (ALL_IND_COLUMNS,
+ *  ALL_PART_KEY_COLUMNS, ALL_TABLES). checked=false → sözlük okunamadı, hüküm yok. */
+export interface OracleScanCheck {
+  checked: boolean; error?: string; tsColumn: string; found: boolean;
+  indexed: boolean; indexName?: string; partitioned: boolean; partitionKey?: string;
+  numRows: number; lastAnalyzed?: string;
+}
+export interface OracleNameCount { name: string; count: number }
+/** oracle.WindowSummary — pencerede ne geldi; "servis" = eşleşen trace'in Coremetry servisi. */
+export interface OracleWindowSummary {
+  windowMin: number; rows: number; capped: boolean; mapped: number; noTimestamp: number; badTraceId: number;
+  operations: OracleNameCount[]; errorCodes: OracleNameCount[];
+  traceIds: number; lookupDone: boolean; lookupError?: string; tracesFound: number; services: OracleNameCount[];
+  error?: string;
 }
 /** oracle.SourceStatus — GET /api/oracle/status satırı. ŞİFRESİZ. Aşama 1'de
  *  poller YOK: "son kontrol" o pod'da koşmuş bağlantı testinin izidir. */

@@ -379,3 +379,13 @@ func TestNormalize_ConnectionShape(t *testing.T) {
 		t.Errorf("geçerli passwordRef reddedildi: %v", err)
 	}
 }
+
+// v0.10.768 — extraWhere FOR UPDATE reddi (salt-okunur sözleşme, kilit yok).
+func TestValidateExtraWhereRejectsForUpdate(t *testing.T) {
+	if err := validateExtraWhere("ERR_TYPE = 'E' FOR UPDATE", "x"); err == nil {
+		t.Error("FOR UPDATE geçmemeli")
+	}
+	if err := validateExtraWhere("for_update = 1", "x"); err != nil {
+		t.Errorf("for_update kolon adı geçmeli: %v", err)
+	}
+}

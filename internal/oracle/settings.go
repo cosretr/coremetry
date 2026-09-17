@@ -402,6 +402,12 @@ var (
 // yüklemi, FETCH FIRST) yorum yapıp sınırsız taramaya çevirir.
 var extraWhereBanned = []string{";", "--", "/*"}
 
+// forUpdateRe — v0.10.768: Oracle'da SELECT kilit almaz; kilit alan TEK
+// okuma `FOR UPDATE`. Üreticiler onu yazmaz, bu kapı operatör metninde
+// (extraWhere + konsol) sözcük sınırıyla reddeder — `for_update` bir kolon
+// adı olabilir, o geçer.
+var forUpdateRe = regexp.MustCompile(`(?i)\bFOR\s+UPDATE\b`)
+
 // Normalize — PUT ve test-connection'ın ORTAK kapısı: kırpar, doğrular,
 // varsayılanları basar, id'leri önceki kayıttan taşır. Girdiyi DEĞİŞTİRMEZ
 // (derin kopya: TypeFilter dilimi de kopyalanır). Hata mesajları Settings
@@ -626,6 +632,9 @@ func validateExtraWhere(w, label string) error {
 		if strings.Contains(w, bad) {
 			return fmt.Errorf("%s: extraWhere %q içeremez (ikinci ifade / yorum sorgunun kalanını susturur)", label, bad)
 		}
+	}
+	if forUpdateRe.MatchString(w) {
+		return fmt.Errorf("%s: extraWhere FOR UPDATE içeremez (kilit alan tek okuma; salt-okunur sözleşme)", label)
 	}
 	return nil
 }

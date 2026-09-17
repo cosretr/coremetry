@@ -124,7 +124,12 @@ func (s *Server) testOracleSource(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, oracle.TestResult{OK: false, Error: err.Error(), Columns: []string{}})
 		return
 	}
-	writeJSON(w, s.oracle.Test(r.Context(), cfg.Sources[0]))
+	// v0.10.768 — pencere (5/15/60) + CH trace araması (özet "hangi servis").
+	opt := oracle.TestOptions{WindowMin: oracle.ClampTestWindow(parseInt(r.URL.Query().Get("windowMin"), 0))}
+	if s.store != nil {
+		opt.TraceLookup = s.store.TraceServicesByIDs
+	}
+	writeJSON(w, s.oracle.TestWith(r.Context(), cfg.Sources[0], opt))
 }
 
 // oracleStatusPayload — Aşama 1 dürüstlüğü: poller YOK, dolayısıyla

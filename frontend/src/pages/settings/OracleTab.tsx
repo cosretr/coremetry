@@ -26,6 +26,7 @@ import { Badge, Button, Field, SelectField, TextareaField } from '@/components/u
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
 import { useSettingsLoad, SettingsLoadError, FlashBox } from './shared';
+import { ORACLE_TEST_WINDOWS, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768
 import {
   emptyOracleSource, sourceFromSnapshot, sourceForSave, validateOracleSource,
   hasOracleErrors, parseTypeFilter, typeFilterToText, numFromForm, numToForm,
@@ -64,6 +65,7 @@ export function OracleTab() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [probe, setProbe] = useState<Record<number, OracleTestResult | { pending: true }>>({});
+  const [testWindow, setTestWindow] = useState<OracleTestWindow>(15); // v0.10.768 — test penceresi
   // Durum: sekme açılışında bir kez + elle yenile. Poll YOK — ayar sekmesi.
   const [status, setStatus] = useState<OracleStatusPayload | null>(null);
   const [statusErr, setStatusErr] = useState<string | null>(null);
@@ -149,7 +151,7 @@ export function OracleTab() {
   const runTest = async (i: number) => {
     setProbe(p => ({ ...p, [i]: { pending: true } }));
     try {
-      const res = await api.testOracleSource(sourceForSave(rows[i].src, rows[i].snapshot));
+      const res = await api.testOracleSource(sourceForSave(rows[i].src, rows[i].snapshot), testWindow);
       setProbe(p => ({ ...p, [i]: res }));
     } catch (err) {
       setProbe(p => ({
@@ -418,6 +420,10 @@ export function OracleTab() {
                   onClick={() => runTest(i)}>
                   Bağlantıyı dene
                 </Button>
+                <select value={testWindow} onChange={e => setTestWindow(Number(e.target.value) as OracleTestWindow)}
+                  aria-label="Test penceresi" disabled={busy}>
+                  {ORACLE_TEST_WINDOWS.map(m => <option key={m} value={m}>son {m} dk</option>)}
+                </select>
                 {pr && 'pending' in pr && <span className="is-quiet">deneniyor…</span>}
               </div>
 
@@ -425,7 +431,7 @@ export function OracleTab() {
                 <div className="oracle-probe">
                   <FlashBox kind={pr.ok ? 'ok' : 'err'}>
                     {pr.ok
-                      ? `Bağlantı kuruldu — son 15 dakikada ${pr.rowCount} satır okundu.`
+                      ? `Bağlantı kuruldu — son ${pr.windowMin ?? 15} dakikada ${pr.summary && !pr.summary.error ? `${pr.summary.rows}${pr.summary.capped ? '+' : ''}` : pr.rowCount} satır okundu.`
                       : (pr.error || 'Başarısız')}
                     {' · '}şifre {pr.passwordResolved ? 'çözüldü' : 'çözülemedi'}
                     {pr.latencyMs !== undefined && <> · {pr.latencyMs} ms</>}
@@ -454,7 +460,65 @@ export function OracleTab() {
                       </table>
                     </div>
                   )}
-                  {pr.query && <pre className="oracle-sql">{pr.query}</pre>}
+                  {/* v0.10.768 — tam tarama hükmü + pencere özeti + poller sorgusu.
+                      Operatör: "full scan / kilit olmasın, önce test edelim, sorgu
+                      görünür olsun; hangi servis/operasyon/trace geldi". */}
+                  {pr.ok && (() => {
+                    const sv = scanVerdict(pr.scan);
+                    return (
+                      <div className="oracle-scan">
+                        <span className={`badge ${sv.tone}`} title={sv.detail}>{sv.text}</span>
+                        <span className="is-quiet"> {sv.detail}</span>
+                        {sv.tone === 'b-err' && (
+                          <div className="is-quiet">
+                            Kaynağı etkinleştirmeden önce zaman kolonuna indeks (ya da partition) ekletin; yoksa her
+                            poll tabloyu baştan sona okur. SELECT kilit almaz; FOR UPDATE üretilmez ve reddedilir.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {pr.ok && pr.summary && (
+                    <div className="oracle-summary">
+                      <div className="oracle-sub">{summaryHeadline(pr.summary)}</div>
+                      {!pr.summary.error && (
+                        <div className="oracle-row">
+                          <div>
+                            <div className="oracle-sub">Operasyon kodu</div>
+                            {pr.summary.operations.length === 0
+                              ? <span className="is-quiet">—</span>
+                              : pr.summary.operations.map(o => <div key={o.name} className="mono">{o.name} · {o.count}</div>)}
+                          </div>
+                          <div>
+                            <div className="oracle-sub">Hata kodu</div>
+                            {pr.summary.errorCodes.length === 0
+                              ? <span className="is-quiet">—</span>
+                              : pr.summary.errorCodes.map(o => <div key={o.name} className="mono">{o.name} · {o.count}</div>)}
+                          </div>
+                          <div>
+                            <div className="oracle-sub">Servis (eşleşen trace'in Coremetry servisi)</div>
+                            {!pr.summary.lookupDone
+                              ? <span className="is-quiet">arama yapılmadı</span>
+                              : pr.summary.services.length === 0
+                                ? <span className="is-quiet">trace bulunamadı</span>
+                                : pr.summary.services.map(o => <div key={o.name} className="mono">{o.name} · {o.count} trace</div>)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {pr.query && (
+                    <>
+                      <div className="oracle-sub">Test sorgusu</div>
+                      <pre className="oracle-sql">{pr.query}</pre>
+                    </>
+                  )}
+                  {pr.pollQuery && (
+                    <>
+                      <div className="oracle-sub">Poller'ın koşacağı sorgu (bind: {(pr.pollBinds ?? []).join(' · ')})</div>
+                      <pre className="oracle-sql">{pr.pollQuery}</pre>
+                    </>
+                  )}
                 </div>
               )}
             </div>

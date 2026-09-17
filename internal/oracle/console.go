@@ -76,6 +76,11 @@ func IsSafeConsoleSQL(q string) bool {
 		return false
 	}
 	cu := strings.ToUpper(clean)
+	// v0.10.768 — FOR UPDATE: sarmalayıcı zaten iç sorguda söz dizimi hatasına
+	// çevirir; açık ret, sözleşmeyi metinde de görünür kılar.
+	if forUpdateRe.MatchString(cu) {
+		return false
+	}
 	for _, p := range []string{"SELECT", "WITH"} {
 		if strings.HasPrefix(cu, p) {
 			next := byte(' ')

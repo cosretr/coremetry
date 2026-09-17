@@ -39,6 +39,10 @@ func TestIsSafeConsoleSQL(t *testing.T) {
 		{"-- SELECT\nDELETE FROM t", false}, // yorum hilesi
 		{"CALL p()", false},
 		{"MERGE INTO t USING d ON (1=1) WHEN MATCHED THEN UPDATE SET a=1", false},
+		// v0.10.768 — kilit alan tek okuma; sözcük sınırı (for_update kolon olabilir).
+		{"SELECT * FROM t FOR UPDATE", false},
+		{"select * from t where a = 1 for   update nowait", false},
+		{"SELECT for_update FROM t", true},
 	}
 	for _, c := range cases {
 		if got := IsSafeConsoleSQL(c.q); got != c.ok {
