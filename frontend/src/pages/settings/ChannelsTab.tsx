@@ -12,6 +12,7 @@ import { readState } from '@/lib/readState';
 import { fmtAgoNs } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
+import { kindsSummary } from '@/lib/notifyKinds'; // v0.10.747
 
 // v0.9.875 (tutarlılık denetimi BT16) — bildirim kanalları paylaşılan
 // primitife. Severity sıralaması SEVİYEYE göre (rozet sırası), alfabetik
@@ -39,6 +40,7 @@ const channelCols = (health: Map<string, ChannelHealthRow>): DataTableColumn<Not
   { id: 'type',   label: 'Type',                 sortValue: c => c.type, naturalDir: 'asc', width: 130 },
   { id: 'target', label: 'Recipients / target',  sortValue: c => summarizeChannel(c), naturalDir: 'asc', flex: true },
   { id: 'sev',    label: 'Min severity',         sortValue: c => SEVERITY_RANK[String(c.minSeverity).toLowerCase()] ?? 0, width: 130 },
+  { id: 'kinds',  label: 'Türler',               sortValue: c => kindsSummary(c.matchRules?.kinds), naturalDir: 'asc', width: 150 }, // v0.10.747
   { id: 'status', label: 'Status',               sortValue: c => (c.enabled ? 1 : 0), width: 100 },
   { id: 'health', label: 'Sağlık',               sortValue: c => healthRank(health.get(healthKey(c.type, c.name))), naturalDir: 'desc', width: 175 },
 ];
@@ -160,6 +162,7 @@ export function ChannelsTab() {
                   <td className="mono">{c.type}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{summarizeChannel(c)}</td>
                   <td><SeverityBadge s={c.minSeverity} /></td>
+                  <td style={{ fontSize: 12 }} title="Kanalın aldığı olay türleri (boş = hepsi)">{kindsSummary(c.matchRules?.kinds)}</td>
                   <td>{c.enabled
                     ? <span className="badge b-ok">ON</span>
                     : <span className="badge b-gray">OFF</span>}

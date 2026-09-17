@@ -2187,6 +2187,8 @@ export interface KibanaSettings {
 // merged queue never showed: an operator working from /inbox could miss an
 // open incident entirely while the sidebar's own /incidents badge counted it.
 export type InboxKind = 'problem' | 'exception' | 'httperror' | 'anomaly' | 'incident';
+/** v0.10.747 — kanal başına olay türü süzgeci; sunucu chstore.NotifyKindsAll ile birebir (Inbox grameri). */
+export type NotifyKind = 'problem' | 'anomaly' | 'incident';
 // v0.10.706 — Dynatrace paritesi #5: satır kategorisi (okuma-anı, sunucu türetir).
 export type ProblemCategory = 'AVAILABILITY' | 'ERROR' | 'SLOWDOWN' | 'RESOURCE' | 'CUSTOM';
 /** v0.9.1342 — ÖZNE ŞERİDİ. `InboxKind` ile aynı şey DEĞİL:
@@ -4188,6 +4190,8 @@ export interface NotificationChannel {
     // acil" diyor ve ikisi ayrışabiliyor — bir critical problem P2
     // olabilir, bir monitor DOWN ise tam kayıp olduğu için P1'dir.
     minPriority?: 'P1' | 'P2' | 'P3' | '';
+    /** v0.10.747 — olay türü allow-list'i; boş/yok = hepsi. */
+    kinds?: NotifyKind[];
   };
   // Type-specific union. Optional fields keep the existing email/slack/
   // webhook callers happy; new channels (mattermost shares slack's

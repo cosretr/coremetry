@@ -2,7 +2,8 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui';
 import { Combobox } from '@/components/Combobox';
 import { api } from '@/lib/api';
-import type { NotificationChannel, ChannelType } from '@/lib/types';
+import type { NotificationChannel, ChannelType, NotifyKind } from '@/lib/types';
+import { NOTIFY_KIND_OPTIONS, normalizeKinds, toggleKind } from '@/lib/notifyKinds';
 import { Field, Row, FlashBox, humanize } from './shared';
 import { ZoomChannelPicker } from './ZoomChannelPicker';
 import { useServicesMetadata } from '@/lib/queries';
@@ -63,6 +64,9 @@ export function ChannelModal({ initial, onClose, onSaved }: {
   // aynen davranır; alan match_rules JSON'ında olmadığı için DDL yok).
   const [matchMinPriority, setMatchMinPriority] =
     useState<'' | 'P1' | 'P2' | 'P3'>(initial?.matchRules?.minPriority ?? '');
+  // v0.10.747 — olay türü allow-list'i (problem/anomali). Boş = hepsi
+  // (mevcut kanallar aynen); JSON'da olmayan alan = süzgeç yok, DDL yok.
+  const [matchKinds, setMatchKinds] = useState<NotifyKind[]>(normalizeKinds(initial?.matchRules?.kinds));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -142,6 +146,7 @@ export function ChannelModal({ initial, onClose, onSaved }: {
         quietHours:   matchQuietHours.trim(),
         quietHoursTz: matchQuietHoursTz.trim(),
         minPriority:  matchMinPriority,
+        kinds:        matchKinds,
       };
       const payload = { name, type, config, enabled, minSeverity, matchRules };
       if (initial) await api.updateChannel(initial.id, payload);
@@ -451,6 +456,27 @@ export function ChannelModal({ initial, onClose, onSaved }: {
               {/* v0.9.828 — triyaj basamağı kapısı. minSeverity'nin
                   YANINDA, yerine değil: ciddiyet "ne kadar kötü",
                   öncelik "ne kadar acil" diyor. */}
+              {/* v0.10.747 — olay türü süzgeci (operatör: "anomali ve
+                  problems ayrı ayrı gelsin"). Hiçbiri işaretli değilse hepsi.
+                  Incident türü v0.10.748 (incident bildirimi) ile eklenir. */}
+              <Field label="Olay türleri (boş = hepsi)">
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+                  {NOTIFY_KIND_OPTIONS.map(o => (
+                    <label key={o.value} title={o.hint} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="checkbox" checked={matchKinds.includes(o.value)}
+                        onChange={() => setMatchKinds(k => toggleKind(k, o.value))} />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+                  <b>Problem</b> = operatör kuralları (alert rule, builtin, SLO, DB,
+                  runtime, watcher). <b>Anomali</b> = anomali motoru (metrik anomalisi,
+                  service silent, dış tarayıcı, exception fırtınası / paylaşılan
+                  bağımlılık). Türleri ayrı kanallara ayırmak için her kanalda tek
+                  tür işaretleyin; ikisi de boşsa kanal ikisini de alır.
+                </div>
+              </Field>
               <Field label="En düşük öncelik (triyaj basamağı)">
                 <select value={matchMinPriority}
                   onChange={e => setMatchMinPriority(e.target.value as '' | 'P1' | 'P2' | 'P3')}

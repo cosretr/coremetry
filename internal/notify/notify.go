@@ -541,6 +541,8 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 		// v0.9.828 — minPriority yüklemi için. Yukarıda bir kez
 		// hesaplandı; kanal döngüsü boyunca sabit.
 		Priority: p.Priority,
+		// v0.10.747 — olay türü süzgeci (kanal başına problem/anomaly).
+		Kind: chstore.ProblemNotifyKind(p),
 	}
 	// v0.9.587 — çözülme, o problem hakkındaki bastırma durumunu
 	// geçersiz kılar: aynı kimlikle yeniden açılırsa (flap) o meşru bir

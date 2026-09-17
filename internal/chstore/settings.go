@@ -130,6 +130,12 @@ type ChannelMatchRules struct {
 	// Çağrı cihazına yalnız "şimdi kalk" olanları göndermek isteyen
 	// operatörün ihtiyacı olan kapı budur.
 	MinPriority string `json:"minPriority,omitempty"`
+	// Kinds — olay türü allow-list'i (v0.10.747): problem | anomaly |
+	// incident (chstore.NotifyKindsAll, Inbox grameri). Boş = hepsi —
+	// mevcut kanallar bayt-bayt eski davranış, DDL yok (match_rules
+	// JSON). Dolu ise problem YALNIZ türü listedeyse gider; tür
+	// ProblemNotifyKind ile bildirim anında hesaplanır (notify_kind.go).
+	Kinds []string `json:"kinds,omitempty"`
 }
 
 // priorityRank — triyaj basamağının sayısal karşılığı; YALNIZ
@@ -182,6 +188,9 @@ type MatchInput struct {
 	// hesaplanmış (v0.9.828). Boş = hesaplanmamış; minPriority yüklemi
 	// o durumda AÇIK GEÇER (bkz. allowsPriority).
 	Priority string
+	// Kind — bildirim türü (v0.10.747): ProblemNotifyKind(p) ya da
+	// üreticinin verdiği "incident". Kinds süzgeci bunu okur.
+	Kind string
 }
 
 // MatchesProblem evaluates every predicate against a Problem's
@@ -226,7 +235,26 @@ func (m ChannelMatchRules) MatchesProblem(in MatchInput) bool {
 	if !m.allowsPriority(in.Priority) {
 		return false
 	}
+	if !m.allowsKind(in.Kind) {
+		return false
+	}
 	return true
+}
+
+// allowsKind — küme üyeliği (v0.10.747). Liste boş → hepsi. Liste dolu
+// ve tür üye değil (bilinmeyen/boş dahil) → düşer: minPriority'nin
+// "hesaplanmamış → açık geç" istisnası burada yok, tür her zaman
+// hesaplanır; açık geçmek daraltılmış kanala her şeyi sızdırırdı.
+func (m ChannelMatchRules) allowsKind(kind string) bool {
+	if len(m.Kinds) == 0 {
+		return true
+	}
+	for _, k := range m.Kinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // Matches retains the pre-v0.5.63 signature so existing

@@ -6678,24 +6678,6 @@ func (s *Server) channelHealth(w http.ResponseWriter, r *http.Request) {
 // a map; the config schema is unstructured by design (each
 // channel type has its own shape) so this is the cleanest way
 // to redact without per-type code paths.
-// validateWebhookChannel — v0.8.445: webhook kanalının BodyTemplate'i
-// KAYIT anında parse + örnek-render'dan geçer; bozuk şablon hiç
-// kaydedilmez (runtime'da default gövdeye düşüş yalnız beklenmedik
-// veri hataları için kalır).
-func validateWebhookChannel(c chstore.NotificationChannel) error {
-	if c.Type != "webhook" || len(c.Config) == 0 {
-		return nil
-	}
-	var wc notify.WebhookChannelConfig
-	if err := json.Unmarshal(c.Config, &wc); err != nil {
-		return fmt.Errorf("webhook config: %w", err)
-	}
-	if err := notify.ValidateWebhookTemplate(wc.BodyTemplate); err != nil {
-		return fmt.Errorf("bodyTemplate: %w", err)
-	}
-	return nil
-}
-
 func redactSecrets(channelType string, raw json.RawMessage) json.RawMessage {
 	if len(raw) == 0 {
 		return raw
@@ -6745,6 +6727,10 @@ func (s *Server) createChannel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"name and type required"}`, http.StatusBadRequest)
 		return
 	}
+	if err := validateChannelKinds(&c); err != nil { // v0.10.747
+		http.Error(w, `{"error":`+strconv.Quote(err.Error())+`}`, http.StatusBadRequest)
+		return
+	}
 	c.ID = newID(8)
 	if err := s.store.UpsertChannel(r.Context(), c); err != nil {
 		writeErr(w, err)
@@ -6776,6 +6762,10 @@ func (s *Server) updateChannel(w http.ResponseWriter, r *http.Request) {
 	c.ID = id
 	c.CreatedAt = existing.CreatedAt
 	if err := validateWebhookChannel(c); err != nil {
+		http.Error(w, `{"error":`+strconv.Quote(err.Error())+`}`, http.StatusBadRequest)
+		return
+	}
+	if err := validateChannelKinds(&c); err != nil { // v0.10.747
 		http.Error(w, `{"error":`+strconv.Quote(err.Error())+`}`, http.StatusBadRequest)
 		return
 	}
