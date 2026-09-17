@@ -64,6 +64,7 @@ import { mergeTraceExtras, missingExtraKeys } from '@/lib/traceExtrasMerge';
 import { DEFAULT_TRACE_COLUMNS, FIXED_COLS, traceColumnOrder } from '@/lib/traceColumns';
 import { opChipFor, opCellText, opCellTitle } from './traces/opPick'; // v0.10.752
 import { traceIdIdentityText } from './traces/emptyReason'; // v0.10.753
+import { opDisplayName } from '@/lib/opDisplayName'; // v0.10.756
 import { useContextParams, type ContextPatch } from '@/hooks/useContextParams';
 import { useTablePrefs } from '@/lib/queries/prefs';
 import { parseColsParam } from '@/lib/columnModel';
@@ -1758,7 +1759,7 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { cl
     case 'time':      return <span className="mono">{tsDateTime(t.startTime)}</span>;
     case 'service':   return <SvcBadge name={t.serviceName} />;
     // v0.10.658 (operatör): diğer hücrelerle AYNI yazı tipi (.mono 12 px) — sınıfsız span orantılı yazıyla büyük görünüyordu.
-    case 'operation': return <span className="mono cell-ellipsis" title={opCellTitle(op, t.rootName)}>{opCellText(op, t.rootName)}</span>;
+    case 'operation': return <span className="mono cell-ellipsis" title={opCellTitle(op, opDisplayName(t.rootName, t.rootRoute))}>{opCellText(op, opDisplayName(t.rootName, t.rootRoute))}</span>;
     case 'duration':  return <DurationBar ms={t.durationMs} err={t.hasError} max={visibleMax} />;
     case 'spans':     return <>{t.spanCount}</>;
     // v0.10.218 (D3) — hata rozetinin yanında hatalı span SAYISI (Dynatrace

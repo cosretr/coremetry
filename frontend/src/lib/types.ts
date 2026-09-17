@@ -2656,6 +2656,8 @@ export interface ServiceEdge {
 export interface TraceRow {
   traceId: string;
   rootName: string;
+  /** v0.10.756 — kök span'ın http_route'u; çıplak fiil adı için gösterim adı (lib/opDisplayName). */
+  rootRoute?: string;
   serviceName: string;
   startTime: number;     // unix nanoseconds
   durationMs: number;

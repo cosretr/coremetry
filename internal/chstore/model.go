@@ -266,8 +266,12 @@ type ExceptionRow struct {
 }
 
 type TraceRow struct {
-	TraceID     string  `json:"traceId"`
-	RootName    string  `json:"rootName"`
+	TraceID  string `json:"traceId"`
+	RootName string `json:"rootName"`
+	// RootRoute (v0.10.756) — kök span'ın http_route'u (ham: anyIf; MV:
+	// entry_route_state). Çıplak fiil adı ("POST") için FE gösterim adı
+	// "POST /route"; ham `name` OTel'e sadık kalır.
+	RootRoute   string  `json:"rootRoute,omitempty"`
 	ServiceName string  `json:"serviceName"`
 	StartTime   int64   `json:"startTime"`
 	DurationMs  float64 `json:"durationMs"`

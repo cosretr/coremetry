@@ -32,7 +32,7 @@ describe('opPick — kablolama', () => {
     // Liste + toplu + sayım: ÜÇ istek de etkin çipleri (op dahil) gönderir; şerit de.
     expect((traces.match(/JSON\.stringify\(advFiltersEff\)/g) ?? []).length).toBe(3);
     expect(traces).toContain('[...advFiltersEff]');
-    expect(traces).toContain('opCellText(op, t.rootName)');
+    expect(traces).toContain('opCellText(op, opDisplayName(t.rootName, t.rootRoute))'); // v0.10.756 gösterim adı
     expect(traces).toContain(', filter.op);'); // çağrı yeri seçili operasyonu geçirir
   });
   it('Service kolonu varsayılanı genişledi (operatör: "alan dar")', () => {

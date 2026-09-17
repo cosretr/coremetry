@@ -406,7 +406,7 @@ func (s *Store) runTraceStage2(
 			var t TraceRow
 			var hasErr uint8
 			var ts, firstBucket, lastBucket time.Time
-			if serr := rows.Scan(&t.TraceID, &t.RootName, &t.ServiceName, &ts,
+			if serr := rows.Scan(&t.TraceID, &t.RootName, &t.ServiceName, &t.RootRoute, &ts,
 				&t.DurationMs, &t.SpanCount, &hasErr, &t.ErrorSpans, &firstBucket, &lastBucket); serr != nil {
 				rows.Close()
 				return nil, false, serr

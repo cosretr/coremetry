@@ -2934,6 +2934,7 @@ func buildGetTracesListSQLWith(whereSQL, havingSQL, sortCol, order, extraSetting
 		         nullIf(anyIf(service_name, (parent_id = '' OR parent_id = '0000000000000000')), ''),
 		         any(service_name)
 		       )                                       AS root_svc,
+		       anyIf(http_route, (parent_id = '' OR parent_id = '0000000000000000') AND name != '') AS root_route,
 		       min(time)                               AS trace_start,
 		       (max(toUnixTimestamp64Nano(time) + duration) -
 		        toUnixTimestamp64Nano(min(time))) / 1e6 AS dur_ms,
@@ -3956,6 +3957,7 @@ func (s *Store) getTracesFromMV(ctx context.Context, f TraceFilter) ([]TraceRow,
 		SELECT trace_id,
 		       argMaxIfMerge(root_name_state)                              AS root_name,
 		       ` + s.traceDisplaySvcExpr() + `                           AS root_svc,
+		       argMaxIfMerge(entry_route_state)                            AS root_route,
 		       minMerge(trace_start_state)                                 AS trace_start,
 		       (maxMerge(trace_end_state) -
 		        toUnixTimestamp64Nano(minMerge(trace_start_state))) / 1e6  AS dur_ms,
