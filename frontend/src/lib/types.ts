@@ -3521,19 +3521,6 @@ export interface CHRootCoverageResponse {
   rows: CHRootCoverageRow[];
   capped: boolean;
 }
-/** v0.10.774 — Problems yaşam döngüsü şeridi (Go chstore.ProblemStats + api problemStatsResponse).
- *  Öncelik okuma anında hesaplanır; byPriority ŞU AN AÇIK olanların, byCategory pencerede AÇILANLARIN dağılımı. */
-export interface ProblemStats {
-  win: string;
-  generatedAt: number;
-  fromS: number; toS: number; stepS: number;
-  buckets: { t: number; opened: number; resolved: number }[];
-  opened: number; resolved: number; openNow: number; carried: number;
-  truncated: boolean;
-  mttr: { n: number; medianS: number; meanS: number; p90S: number };
-  byPriority: Record<string, number>;
-  byCategory: Record<string, number>;
-}
 /** v0.10.762 — Sarkan MV onarımı (Go chstore.DanglingMV): view var, `.inner_id.<uuid>` yok. */
 /** uuid = eksik iç tablonun uuid'si (hata metnindeki); peerHost = aynı shard'da sağlam eş (onarım oradan, tarihçe korunur) — v0.10.780. */
 export interface CHDanglingMV { host: string; addr?: string; shard?: number; replica?: number; view: string; uuid: string; viewUuid?: string; canonical: boolean; peerHost?: string; peerAddr?: string }

@@ -26,7 +26,6 @@ import { resolveSelectedItem } from '@/lib/inboxDrawer';
 // parçası, exception kuyruğunun değil. Modül yolundan import (barrel
 // değil): barrel AnomaliesPage'i de /inbox chunk'ına sürüklerdi.
 import { ProblemsSection, AlertProblemHost } from '@/features/anomalies/ProblemsSection';
-import { ProblemStatsStrip } from '@/features/anomalies/ProblemStatsStrip'; // v0.10.774 — yaşam döngüsü şeridi (parite #7)
 import { withProblemParam } from '@/features/anomalies/problemLink';
 import { useAuth } from '@/components/AuthProvider';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -647,10 +646,6 @@ export default function InboxPage() {
           <b>{PRIO_DEFAULT.join(' + ')}</b> Exceptions. Click any row to
           triage it in place.
         </p>
-        {/* v0.10.774 — Dynatrace paritesi #7: açılan/çözülen seri + MTTR +
-            dağılımlar. Liste zamansız (açık kuyruk); şeridin penceresi
-            ?sw= ile, env Topbar seçicisiyle aynı. */}
-        <ProblemStatsStrip env={env} />
 
         {/* One grouped facet bar (v0.8.38) — status pivot + priority + kind
             chips share the shared .facet primitive (repo equivalent of the

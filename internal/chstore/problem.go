@@ -1032,11 +1032,6 @@ type ProblemFilter struct {
 	// attached problem silently dropped out of the prompt. Nil = no
 	// constraint; empty behaves like Services (constrain to nothing).
 	IDs []string
-	// OverlapFrom/OverlapTo (v0.10.774, Problems yaşam döngüsü şeridi):
-	// pencereyle KESİŞEN satırlar — started_at < to AND (resolved_at IS NULL
-	// OR resolved_at >= from). İkisi de doluysa uygulanır; SQL'de, LIMIT'ten
-	// önce ısırır.
-	OverlapFrom, OverlapTo time.Time
 	// Services constrains the result to this set (service IN (…)), applied in
 	// SQL so it bites BEFORE the LIMIT. v0.9.342 — the owner/SRE team and
 	// cluster filters used to run in Go on the already-capped page; both
@@ -1363,9 +1358,6 @@ func (s *Store) ListProblems(ctx context.Context, f ProblemFilter) ([]Problem, e
 	}
 	if f.RuleID != "" {
 		wc.add("rule_id = ?", f.RuleID)
-	}
-	if !f.OverlapFrom.IsZero() && !f.OverlapTo.IsZero() {
-		wc.add("started_at < ? AND (resolved_at IS NULL OR resolved_at >= ?)", f.OverlapTo, f.OverlapFrom)
 	}
 	// v0.9.1342 — özne türü şeridi, SQL'de (LIMIT'ten ÖNCE).
 	if sql, arg, ok := problemSubjectConjunct(f.SubjectKind, s.hasProblemKindCol); ok {
