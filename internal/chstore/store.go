@@ -706,6 +706,20 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 				// v0.9.606 — sunucunun bekleme bütçesi İSTEMCİNİNKİNDEN
 				// kısa olmalı; gerekçe ddlTaskTimeoutSeconds'ta.
 				"distributed_ddl_task_timeout": ddlTaskTimeoutSeconds,
+				// v0.10.777 (prod 2026-09-17: spans spool'u 514K dosya / 391 GiB,
+				// dört düğümde de gönderici 7 hatadan sonra sustu; START etkisiz,
+				// FLUSH ilerlemedi) — DAĞITIK GÖNDERİCİ TAVANI. INSERT'in ayarları
+				// spool dosyasının başlığına yazılır ve arka plan göndericisi o
+				// dosyayı hedefe gönderirken BUNLARI kullanır. connection_pool_
+				// max_wait_ms varsayılanı 0 = havuzdan bağlantı beklerken SÜRESİZ:
+				// gönderici asılır, hata üretmez, FLUSH de arkasında bekler.
+				// Tavanlı bekleme = hata + geri çekilme + yeniden deneme, yani
+				// kendi kendine iyileşme; sayaç artar, panel "gönderici asılı"
+				// yerine gerçek hatayı gösterir. Yalnız YENİ dosyalar bu başlığı
+				// taşır — eski spool restart'la boşalır. Replika hata takibi
+				// (distributed_replica_error_half_life 60 sn, ignored 0) zaten
+				// varsayılan; hatalı replika seçimden düşer, sağlıklı eşe geçilir.
+				"connection_pool_max_wait_ms": 30000,
 			},
 		}
 	}

@@ -365,3 +365,32 @@ Ders: bir SQL yüklemi ekleyen dilim yüklemi saf kurucuya koyar ve kolon adın�
 DDL'e karşı pinler; "ham yolu zorlayan" bayraklar en az test edilen yoldur,
 çünkü lokal veri fast-path'te kalır. Dogfood exception listesi bu sınıfın
 tek erken uyarısı — boş bırakılmamalı.
+
+
+### v0.10.773–777 — Distributed spool göndericisi asılı kaldı; düğüm-yerel SYSTEM komutları tek düğüme gidiyordu
+
+Prod'da `spans` Distributed spool'u bir günde 514K dosya / 391 GiB'e çıktı.
+Son hata metni bir gün öncesinin sarkan-MV hatasıydı (762 bu sınıf için
+yazıldı, panel haklı olarak "yok" dedi — view arada yeniden kurulmuştu).
+Asıl durum: dört düğümde de gönderici tam 7 denemeden sonra susmuştu —
+`is_blocked=0`, hata sayısı sabit, dosya artıyor. Runbook'un "Göndericiyi
+başlat" düğmesi hiçbir şeye dokunmadı, çünkü `SYSTEM START DISTRIBUTED
+SENDS` ve `SYSTEM FLUSH DISTRIBUTED` düğüm-YERELDİR: düğme ana bağlantının
+düğümüne gidiyor, ölçüm clusterAllReplicas ile bütün düğümleri sayıyordu.
+FLUSH da ilerlemedi: pending dosyaları aynı kuyruk kilidi altında işler,
+asılı arka plan iş parçacığının arkasında bekledi.
+Çare: 773 eylemler her düğümde kendi bağlantısıyla (FLUSH için ON CLUSTER
+bilerek yok — saatlerce süren komut dağıtık DDL kuyruğunu kilitlerdi),
+`is_blocked` + düğüm kırılımı panelde; 775 sonuç satırın yanında, düğüm
+başına; 776 flush düğümlerde paralel; 777 INSERT ayarlarına
+`connection_pool_max_wait_ms=30000` (spool başlığına yazılır, gönderici
+havuz beklemesi süresiz asılmak yerine hata verip yeniden dener). Eski
+spool'un boşalması için o akşam ClickHouse düğümlerinin sıralı restart'ı
+gerekti.
+Ders: (1) küme geneli ölçüme düğüm-yerel eylem eşlemek düğmeyi sessizce
+işlevsiz bırakır; her SYSTEM komutu için "hangi düğümde koşuyor" sorusu
+tasarımın parçası. (2) "Dosya artıyor ama hata artmıyor" = gönderici
+asılı/kapalı; bu örüntü panelde tek bakışta okunmalı (hata metni yaşıyla
+birlikte, is_blocked ile birlikte). (3) Bir saatlik teşhisin yarısı parça /
+merge / MV aramasına gitti; teşhis sırası is_blocked → hata yaşı → gönderim
+metrikleri (DistributedSend) → parça/MV.
