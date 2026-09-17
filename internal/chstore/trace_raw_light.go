@@ -245,17 +245,22 @@ func rootCheckArgs(cands []stage1Cand) (buckets []any, ids []any) {
 }
 
 // rootCheckSQL — nBuckets kova × nIDs id için iki-IN sorgusu.
-func rootCheckSQL(nBuckets, nIDs int) string {
+// having (v0.10.755) — tanım-duyarlı kök yüklemi (rootHavingMV); eskiden
+// sabit strict'ti, entry tanımında tuple yolu strict'e sessizce düşüyordu.
+func rootCheckSQL(nBuckets, nIDs int, having string) string {
 	bucketPh := make([]string, nBuckets)
 	for i := range bucketPh {
 		bucketPh[i] = "toDateTime(?, 'UTC')"
+	}
+	if having == "" {
+		having = strictRootMV
 	}
 	return `
 			SELECT trace_id FROM trace_summary_5m
 			WHERE time_bucket IN (` + strings.Join(bucketPh, ", ") + `)
 			  AND trace_id IN (` + chPlaceholders(nIDs) + `)
 			GROUP BY trace_id
-			HAVING argMaxIfMerge(root_service_state) != ''
+			HAVING ` + having + `
 			SETTINGS max_execution_time = 10`
 }
 

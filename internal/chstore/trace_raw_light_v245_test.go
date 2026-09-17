@@ -124,7 +124,7 @@ func TestRootCheckArgsAndSQL(t *testing.T) {
 	if len(ids) != 2 || ids[0] != "abc" || ids[1] != "def" {
 		t.Errorf("id'ler: %v", ids)
 	}
-	q := rootCheckSQL(len(buckets), len(ids))
+	q := rootCheckSQL(len(buckets), len(ids), "")
 	if strings.Count(q, "toDateTime(?, 'UTC')") != 5 || !strings.Contains(q, "AND trace_id IN (?,?)") ||
 		!strings.Contains(q, "time_bucket IN (") || !strings.Contains(q, "argMaxIfMerge(root_service_state) != ''") ||
 		!strings.Contains(q, "max_execution_time = 10") {

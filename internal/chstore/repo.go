@@ -2485,12 +2485,19 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 		// (bucket-budanmış, GLOBAL — 288 sınıfı değil). Daraltmasız ham
 		// taramada eski countIf doğru ve ucuz: kök zaten görünür.
 		if f.Service != "" || len(f.RequireServices) > 0 {
-			havingParts = append(havingParts, `trace_id GLOBAL IN (
+			if f.MVGap {
+				// v0.10.755 — MV-gap günü: trace_summary_5m'de o güne satır YOK,
+				// MV alt sorgusu her adayı elerdi (boş liste). Ham alt sorgu:
+				// pencere-sınırlı, 241-sınıfı maliyet — yalnız gap gününde.
+				havingParts = append(havingParts, rootSubqueryRawSQL(s.TraceRootDef()))
+			} else {
+				havingParts = append(havingParts, `trace_id GLOBAL IN (
 			SELECT trace_id FROM trace_summary_5m
 			WHERE time_bucket >= toStartOfFiveMinute(toDateTime(?, 'UTC'))
 			  AND time_bucket < toDateTime(?, 'UTC')
 			GROUP BY trace_id
 			HAVING `+s.rootHavingMV()+`)`) // v0.10.733 — tanım-duyarlı (strict | entry)
+			}
 			havingArgs = append(havingArgs, f.From.Unix(), f.To.Unix())
 		} else {
 			// v0.10.733 — tanım-duyarlı: strict = tam kök; entry = tam kök VEYA giriş span'i.
@@ -2699,7 +2706,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 				for i, r := range rows {
 					cands[i] = stage1Cand{id: r.TraceID, t0: r.StartTime, t1: r.StartTime}
 				}
-				hasRoot, err := s.filterRootTracesAt(ctx, cands, f.From, f.To)
+				hasRoot, err := s.filterRootTracesAt(ctx, cands, f.From, f.To, f.MVGap)
 				if err != nil {
 					return nil, 0, false, err
 				}
@@ -2794,7 +2801,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 		}
 		stage1Seen := len(cands)
 		if rootPostFilter && len(cands) > 0 {
-			hasRoot, err := s.filterRootTracesAt(ctx, cands, f.From, f.To)
+			hasRoot, err := s.filterRootTracesAt(ctx, cands, f.From, f.To, f.MVGap)
 			if err != nil {
 				return nil, 0, false, err
 			}
@@ -3053,7 +3060,15 @@ func (s *Store) queryStage1Cands(ctx context.Context, sql string, args []any, st
 // filterRootTracesAt — v0.10.245: aday sayısı rootCheckTupleMaxIDs'i
 // aşmıyorsa (time_bucket, trace_id) demet nokta okuması (MV PK), aşıyorsa
 // eski pencereli tarama (filterRootTraces).
-func (s *Store) filterRootTracesAt(ctx context.Context, cands []stage1Cand, from, to time.Time) (map[string]bool, error) {
+func (s *Store) filterRootTracesAt(ctx context.Context, cands []stage1Cand, from, to time.Time, mvGap bool) (map[string]bool, error) {
+	if mvGap {
+		// v0.10.755 — gap gününde MV yok; ham ikiz (id-sınırlı).
+		ids := make([]string, len(cands))
+		for i, c := range cands {
+			ids[i] = c.id
+		}
+		return s.filterRootTracesRaw(ctx, ids, from, to)
+	}
 	if len(cands) > rootCheckTupleMaxIDs {
 		ids := make([]string, len(cands))
 		for i, c := range cands {
@@ -3071,7 +3086,7 @@ func (s *Store) filterRootTracesAt(ctx context.Context, cands []stage1Cand, from
 		chunk := cands[start:end]
 		buckets, ids := rootCheckArgs(chunk)
 		args := append(buckets, ids...)
-		rows, err := s.telemetryReadConn().Query(ctx, rootCheckSQL(len(buckets), len(ids)), args...)
+		rows, err := s.telemetryReadConn().Query(ctx, rootCheckSQL(len(buckets), len(ids), s.rootHavingMV()), args...) // v0.10.755 — tanım-duyarlı
 		if err != nil {
 			return nil, err
 		}
