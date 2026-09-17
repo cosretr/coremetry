@@ -1873,10 +1873,11 @@ function DanglingMVPanel() {
                   <td className="mono">{d.view}</td>
                   <td className="mono" style={{ fontSize: 11 }}>{d.uuid}</td>
                   <td style={{ textAlign: 'right' }}>
-                    {d.canonical
-                      ? <Button variant="danger" size="sm" disabled={repairing !== null || (!!cluster && !d.addr)} loading={repairing === k}
-                          onClick={() => setConfirm(d)}>Onar</Button>
-                      : <span className="badge b-warn" title="Kanonik DDL yok (migrations/*.sql MV'si) — elle onar">elle</span>}
+                    {d.canonical || d.peerHost
+                      ? <Button variant={d.peerHost ? 'accent' : 'danger'} size="sm" disabled={repairing !== null || (!!cluster && !d.addr)} loading={repairing === k}
+                          title={d.peerHost ? `İç tablo eş replikadan (${d.peerHost}) aynı UUID ile kurulur; view düşmez, tarihçe replikasyondan gelir` : 'View düşürülüp kanonik DDL ile yeniden kurulur; bu replikada MV tarihçesi sıfırlanır'}
+                          onClick={() => setConfirm(d)}>{d.peerHost ? 'Eşten kur' : 'Yeniden kur'}</Button>
+                      : <span className="badge b-warn" title="Kanonik DDL yok (migrations/*.sql MV'si) ve eş replika bulunamadı — elle onar">elle</span>}
                     {res && <div className={res.ok ? 'ok' : 'err'} style={{ fontSize: 11, marginTop: 4 }} title={res.steps?.join('\n')}>{res.text}</div>}
                   </td>
                 </tr>
@@ -1889,14 +1890,22 @@ function DanglingMVPanel() {
         <Modal open title={`Sarkan view'ı onar — ${confirm.view} @ ${confirm.host}`} onClose={() => setConfirm(null)} footer={
           <>
             <Button variant="secondary" size="sm" onClick={() => setConfirm(null)}>Vazgeç</Button>
-            <Button variant="danger" size="sm" onClick={() => void repair(confirm)}>Onar (DDL koşar)</Button>
+            <Button variant={confirm.peerHost ? 'accent' : 'danger'} size="sm" onClick={() => void repair(confirm)}>{confirm.peerHost ? 'Eşten kur (DDL koşar)' : 'Yeniden kur (DDL koşar)'}</Button>
           </>
         }>
-          <p style={{ fontSize: 12 }}>
-            O node'da <code className="mono">DROP TABLE {confirm.view} SYNC</code> ve ardından kanonik
-            <code className="mono"> CREATE MATERIALIZED VIEW IF NOT EXISTS</code> (ON CLUSTER'sız) koşar. İç tablo taze doğar;
-            Replicated ise eş replikadan veri çeker. Spans'e dokunulmaz. Audit'e düşer.
-          </p>
+          {confirm.peerHost ? (
+            <p style={{ fontSize: 12 }}>
+              Eş replika <code className="mono">{confirm.peerHost}</code>'ten iç tablonun DDL'i alınır ve o node'da
+              <code className="mono"> CREATE TABLE `.inner_id.{confirm.uuid}` UUID '…'</code> ile AYNI uuid'yle kurulur. View
+              düşmez; Replicated iç tablo aynı yola katılır ve tarihçeyi eşten çeker. Spans'e dokunulmaz. Audit'e düşer.
+            </p>
+          ) : (
+            <p style={{ fontSize: 12 }}>
+              O node'da <code className="mono">DROP TABLE {confirm.view} SYNC</code> ve ardından kanonik
+              <code className="mono"> CREATE MATERIALIZED VIEW IF NOT EXISTS</code> (ON CLUSTER'sız) koşar. İç tablo taze doğar
+              (yeni uuid): bu replikada MV tarihçesi sıfırlanır. Spans'e dokunulmaz. Audit'e düşer.
+            </p>
+          )}
         </Modal>
       )}
     </Section>

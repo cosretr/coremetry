@@ -84,3 +84,50 @@ func TestDanglingMVReachable(t *testing.T) {
 		t.Error("clusterHostRows yardımcısı (tüm replikalar) yok")
 	}
 }
+
+// v0.10.780 — Atomic DB'de iç tablo uuid'si view uuid'sinden AYRI (`TO INNER
+// UUID`). 762 view uuid'sine bakıyordu; prod'daki sarkan view'ı görmedi.
+func TestInnerUUIDForAndInject(t *testing.T) {
+	v := "11111111-1111-1111-1111-111111111111"
+	inner := "f8b2b97f-662a-4df3-a654-3a13313e363f"
+	ddl := "CREATE MATERIALIZED VIEW coremetry.service_summary_5m UUID '" + v + "' TO INNER UUID '" + strings.ToUpper(inner) + "' (`time_bucket` DateTime) ENGINE = ReplicatedAggregatingMergeTree(...) AS SELECT ..."
+	if got := innerUUIDFor(ddl, v); got != inner {
+		t.Errorf("TO INNER UUID okunmalı (küçük harf): %q", got)
+	}
+	if got := innerUUIDFor("CREATE MATERIALIZED VIEW x (a Int) ENGINE = MergeTree ORDER BY a AS SELECT 1", v); got != v {
+		t.Errorf("TO INNER UUID yoksa view uuid: %q", got)
+	}
+	show := "CREATE TABLE coremetry.`.inner_id." + inner + "`\n(\n    `time_bucket` DateTime\n)\nENGINE = ReplicatedAggregatingMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')\nORDER BY time_bucket"
+	got := injectTableUUID(show, inner)
+	want := "CREATE TABLE coremetry.`.inner_id." + inner + "` UUID '" + inner + "'\n(\n"
+	if !strings.HasPrefix(got, want) {
+		t.Errorf("UUID tablo adından hemen sonra eklenmeli:\n%s", got)
+	}
+	if injectTableUUID(got, inner) != got {
+		t.Error("zaten UUID taşıyan DDL'e ikinci kez eklenmemeli")
+	}
+	if injectTableUUID("CREATE TABLE x (a Int)", inner) != "CREATE TABLE x (a Int)" {
+		t.Error("ad eşleşmiyorsa dokunma")
+	}
+}
+
+func TestDanglingFromRowsUsesInnerUUID(t *testing.T) {
+	v := "11111111-1111-1111-1111-111111111111"
+	inner := "f8b2b97f-662a-4df3-a654-3a13313e363f"
+	mv := func(host string) mvTableRow {
+		return mvTableRow{Host: host, Name: "service_summary_5m", UUID: v, Engine: "MaterializedView",
+			CreateQuery: "CREATE MATERIALIZED VIEW coremetry.service_summary_5m UUID '" + v + "' TO INNER UUID '" + inner + "' (x Int) ENGINE = MergeTree ORDER BY x AS SELECT 1"}
+	}
+	rows := []mvTableRow{
+		mv("h1"), {Host: "h1", Name: ".inner_id." + inner, Engine: "ReplicatedAggregatingMergeTree"},
+		mv("h2"),                                                                                 // iç tablo YOK → sarkan; hata metnindeki uuid = inner
+		mv("h3"), {Host: "h3", Name: ".inner_id." + v, Engine: "ReplicatedAggregatingMergeTree"}, // view uuid'li tablo iç tablo DEĞİL → sarkan
+	}
+	got := danglingFromRows(rows)
+	if len(got) != 2 || got[0].Host != "h2" || got[0].UUID != inner || got[0].ViewUUID != v || got[1].Host != "h3" {
+		t.Fatalf("beklenen h2 ve h3 (inner uuid ile): %+v", got)
+	}
+	if got[0].PeerHost != "h1" {
+		t.Errorf("eş replika adayı h1 olmalı: %+v", got[0])
+	}
+}

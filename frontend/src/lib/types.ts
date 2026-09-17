@@ -3535,7 +3535,8 @@ export interface ProblemStats {
   byCategory: Record<string, number>;
 }
 /** v0.10.762 — Sarkan MV onarımı (Go chstore.DanglingMV): view var, `.inner_id.<uuid>` yok. */
-export interface CHDanglingMV { host: string; addr?: string; shard?: number; replica?: number; view: string; uuid: string; canonical: boolean }
+/** uuid = eksik iç tablonun uuid'si (hata metnindeki); peerHost = aynı shard'da sağlam eş (onarım oradan, tarihçe korunur) — v0.10.780. */
+export interface CHDanglingMV { host: string; addr?: string; shard?: number; replica?: number; view: string; uuid: string; viewUuid?: string; canonical: boolean; peerHost?: string; peerAddr?: string }
 export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number }
 export interface CHDanglingMVRepairResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.757 — Admin "Trace hattı sağlığı" (Go traceHealthResponse). Sayaçlar POD-İÇİ (pod.host). */

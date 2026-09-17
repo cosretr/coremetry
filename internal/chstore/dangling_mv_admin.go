@@ -31,13 +31,23 @@ import (
 
 // DanglingMV — bir node'daki sarkan view.
 type DanglingMV struct {
-	Host      string `json:"host"`
-	Addr      string `json:"addr,omitempty"` // host:port (native); boş = çözülemedi
-	Shard     int    `json:"shard,omitempty"`
-	Replica   int    `json:"replica,omitempty"`
-	View      string `json:"view"`
+	Host    string `json:"host"`
+	Addr    string `json:"addr,omitempty"` // host:port (native); boş = çözülemedi
+	Shard   int    `json:"shard,omitempty"`
+	Replica int    `json:"replica,omitempty"`
+	View    string `json:"view"`
+	// UUID — EKSİK iç tablonun uuid'si (`.inner_id.<uuid>`; hata metnindeki).
+	// v0.10.780: view'ın kendi uuid'si DEĞİL — Atomic DB'de iç tablo
+	// `TO INNER UUID '…'` ile ayrı bir uuid taşır; 762 view uuid'sine bakıp
+	// prod'daki sarkan view'ı GÖREMEDİ ("yok" dedi, spool 515K dosyaya çıktı).
 	UUID      string `json:"uuid"`
-	Canonical bool   `json:"canonical"` // kanonik DDL var → sihirbaz onarabilir
+	ViewUUID  string `json:"viewUuid,omitempty"`
+	Canonical bool   `json:"canonical"` // kanonik DDL var → yeniden kurulabilir
+	// PeerHost/PeerAddr — aynı shard'da iç tablosu SAĞLAM bir eş replika;
+	// varsa onarım iç tabloyu oradan AYNI UUID ile kurar (view düşmez,
+	// tarihçe replikasyondan gelir). Yoksa view yeniden kurulur (tarihçe yok).
+	PeerHost string `json:"peerHost,omitempty"`
+	PeerAddr string `json:"peerAddr,omitempty"`
 }
 
 // mvTableRow — system.tables'tan okunan satır (saf tespit girdisi).
@@ -53,6 +63,35 @@ var reMVWithTO = regexp.MustCompile(`(?is)^\s*CREATE\s+MATERIALIZED\s+VIEW\s+\S+
 
 // chObjRe — SYSTEM/DDL'e girecek nesne adı (spool_ops.go ile aynı disiplin).
 var chObjRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// reInnerUUID — Atomic DB'de MV DDL'i iç tablonun uuid'sini ayrıca taşır.
+var reInnerUUID = regexp.MustCompile(`(?i)TO\s+INNER\s+UUID\s+'([0-9a-fA-F-]{36})'`)
+
+// innerUUIDFor — SAF: iç tablonun uuid'si — DDL'de `TO INNER UUID` varsa o,
+// yoksa view'ın uuid'si (eski sürüm davranışı).
+func innerUUIDFor(createQuery, viewUUID string) string {
+	if m := reInnerUUID.FindStringSubmatch(createQuery); m != nil {
+		return strings.ToLower(m[1])
+	}
+	return viewUUID
+}
+
+// injectTableUUID — SAF: SHOW CREATE çıktısına (uuid'siz gelir;
+// show_table_uuid_in_table_create_query_if_not_nil=0) tablo adından hemen
+// sonra `UUID '<uuid>'` ekler ki eş replikada AYNI uuid ile kurulsun ve
+// {uuid}'li Replicated yoluna katılsın. Zaten varsa dokunmaz.
+func injectTableUUID(ddl, uuid string) string {
+	if strings.Contains(ddl, "UUID '") {
+		return ddl
+	}
+	name := "`.inner_id." + uuid + "`"
+	i := strings.Index(ddl, name)
+	if i < 0 {
+		return ddl
+	}
+	i += len(name)
+	return ddl[:i] + " UUID '" + uuid + "'" + ddl[i:]
+}
 
 // danglingFromRows — SAF: host başına view uuid'si için `.inner_id.<uuid>`
 // var mı. Çıktı host, view sıralı.
@@ -76,11 +115,21 @@ func danglingFromRows(rows []mvTableRow) []DanglingMV {
 		if v.UUID == "" || v.UUID == zeroUUID || reMVWithTO.MatchString(v.CreateQuery) {
 			continue
 		}
-		if inner[v.Host][".inner_id."+v.UUID] {
+		iu := innerUUIDFor(v.CreateQuery, v.UUID)
+		if inner[v.Host][".inner_id."+iu] {
 			continue
 		}
 		_, canon := canonicalMVForObject(v.Name)
-		out = append(out, DanglingMV{Host: v.Host, View: v.Name, UUID: v.UUID, Canonical: canon})
+		d := DanglingMV{Host: v.Host, View: v.Name, UUID: iu, ViewUUID: v.UUID, Canonical: canon}
+		// Eş replika adayı: iç tablo başka bir host'ta duruyor mu (shard eşleşmesi
+		// DanglingMVs'te adreslerle yapılır; burada yalnız aday listesi).
+		for h, set := range inner {
+			if h != v.Host && set[".inner_id."+iu] {
+				d.PeerHost = h
+				break
+			}
+		}
+		out = append(out, d)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Host != out[j].Host {
@@ -119,7 +168,7 @@ func (s *Store) DanglingMVs(ctx context.Context) ([]DanglingMV, string, error) {
 		src = fmt.Sprintf("clusterAllReplicas('%s', system.tables)", cluster)
 	}
 	rows, err := s.conn.Query(ctx, `
-		SELECT hostName(), name, toString(uuid), engine, substring(create_table_query, 1, 240)
+		SELECT hostName(), name, toString(uuid), engine, substring(create_table_query, 1, 400)
 		FROM `+src+`
 		WHERE database = currentDatabase()
 		  AND (engine = 'MaterializedView' OR name LIKE '.inner_id.%')
@@ -143,10 +192,23 @@ func (s *Store) DanglingMVs(ctx context.Context) ([]DanglingMV, string, error) {
 	if cluster != "" && len(out) > 0 {
 		hosts, _, herr := s.clusterHostRows(ctx)
 		if herr == nil {
+			byHost := map[string]clusterHostRow{}
+			for _, h := range hosts {
+				byHost[h.Host] = h
+			}
 			for i := range out {
-				for _, h := range hosts {
-					if h.Host == out[i].Host {
-						out[i].Addr, out[i].Shard, out[i].Replica = fmt.Sprintf("%s:%d", h.Host, h.Port), h.Shard, h.Replica
+				if h, ok := byHost[out[i].Host]; ok {
+					out[i].Addr, out[i].Shard, out[i].Replica = fmt.Sprintf("%s:%d", h.Host, h.Port), h.Shard, h.Replica
+				}
+				// Eş replika: AYNI shard'da iç tablosu sağlam bir host (ilk aday
+				// başka shard'daysa yeniden ara).
+				out[i].PeerHost, out[i].PeerAddr = "", ""
+				for _, r := range in {
+					if r.Host == out[i].Host || r.Name != ".inner_id."+out[i].UUID {
+						continue
+					}
+					if ph, ok := byHost[r.Host]; ok && ph.Shard == out[i].Shard && out[i].Shard != 0 {
+						out[i].PeerHost, out[i].PeerAddr = ph.Host, fmt.Sprintf("%s:%d", ph.Host, ph.Port)
 						break
 					}
 				}
@@ -177,10 +239,6 @@ func (s *Store) RepairDanglingMV(ctx context.Context, host, view string) ([]stri
 	if row == nil {
 		return nil, fmt.Errorf("%s/%s şu an sarkan değil ya da bulunamadı — yeniden Ölç", host, view)
 	}
-	name, ok := canonicalMVForObject(view)
-	if !ok {
-		return nil, fmt.Errorf("%s için kanonik DDL yok (migrations/*.sql MV'si) — elle onar", view)
-	}
 	conn := s.conn
 	if s.clusterMode() {
 		if row.Addr == "" {
@@ -191,6 +249,36 @@ func (s *Store) RepairDanglingMV(ctx context.Context, host, view string) ([]stri
 			return nil, fmt.Errorf("node bağlantısı: %w", err)
 		}
 		conn = c
+	}
+	// v0.10.780 — TERCİH: iç tabloyu eş replikadan AYNI UUID ile kur. View
+	// düşmez, iç tablo {uuid}'li Replicated yoluna katılır ve tarihçeyi eşten
+	// çeker; kaskad anında düzelir. Eş yoksa eski yol (view'ı yeniden kur).
+	if row.PeerAddr != "" && s.clusterMode() {
+		peer, err := s.shardConn(ctx, row.PeerAddr)
+		if err != nil {
+			return nil, fmt.Errorf("eş replika bağlantısı (%s): %w", row.PeerHost, err)
+		}
+		var ddl string
+		if err := peer.QueryRow(ctx, "SHOW CREATE TABLE `.inner_id."+row.UUID+"`").Scan(&ddl); err != nil {
+			return nil, fmt.Errorf("eş replikadan DDL (%s): %w", row.PeerHost, err)
+		}
+		ddl = injectTableUUID(ddl, row.UUID)
+		steps := []string{"-- eş replika " + row.PeerHost + "'ten, aynı UUID ile:", ddl}
+		ectx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		err = conn.Exec(ectx, ddl)
+		cancel()
+		if err != nil {
+			return steps, fmt.Errorf("iç tablo kurulamadı: %w", err)
+		}
+		var n uint64
+		if err := conn.QueryRow(ctx, "SELECT count() FROM system.tables WHERE database = currentDatabase() AND name = ?", ".inner_id."+row.UUID).Scan(&n); err != nil || n == 0 {
+			return steps, fmt.Errorf("doğrulama: iç tablo doğmadı (%v)", err)
+		}
+		return steps, nil
+	}
+	name, ok := canonicalMVForObject(view)
+	if !ok {
+		return nil, fmt.Errorf("%s için kanonik DDL yok (migrations/*.sql MV'si) ve eş replika bulunamadı — elle onar", view)
 	}
 	steps := []string{"DROP TABLE IF EXISTS `" + view + "` SYNC"}
 	for _, st := range s.adaptDDL(canonicalMVDDL(name)) {
@@ -205,12 +293,12 @@ func (s *Store) RepairDanglingMV(ctx context.Context, host, view string) ([]stri
 		}
 	}
 	// Doğrulama: view var ve iç tablosu doğdu.
-	var uuid string
-	if err := conn.QueryRow(ctx, "SELECT toString(uuid) FROM system.tables WHERE database = currentDatabase() AND name = ?", view).Scan(&uuid); err != nil {
+	var uuid, cq string
+	if err := conn.QueryRow(ctx, "SELECT toString(uuid), substring(create_table_query, 1, 400) FROM system.tables WHERE database = currentDatabase() AND name = ?", view).Scan(&uuid, &cq); err != nil {
 		return steps, fmt.Errorf("doğrulama (view): %w", err)
 	}
 	var n uint64
-	if err := conn.QueryRow(ctx, "SELECT count() FROM system.tables WHERE database = currentDatabase() AND name = ?", ".inner_id."+uuid).Scan(&n); err != nil || n == 0 {
+	if err := conn.QueryRow(ctx, "SELECT count() FROM system.tables WHERE database = currentDatabase() AND name = ?", ".inner_id."+innerUUIDFor(cq, uuid)).Scan(&n); err != nil || n == 0 {
 		return steps, fmt.Errorf("doğrulama: iç tablo doğmadı (%v)", err)
 	}
 	return steps, nil
