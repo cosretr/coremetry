@@ -1027,11 +1027,12 @@ func (s *Store) dropCombinedMV(ctx context.Context, mv string) error {
 // canonicalMVs — boot'ta yaratılan materialized view kataloğu (TEK GÖVDE).
 //
 // v0.10.564: katalog migrate() içinde YEREL bir dilimdi. Admin → ClickHouse
-// sihirbazları (messaging_opdim_admin.go) yerinde geçiş için `ALTER TABLE …
-// MODIFY QUERY <SELECT>` üretiyor ve o SELECT'in kanonik CREATE ile BİREBİR
-// aynı olması şart — ikinci bir kopya yazmak "aynalı kural iki gövde" sınıfı
-// (kopyalar ayrışır, kimse fark etmez). Bu yüzden katalog paket düzeyine
-// çıkarıldı; migrate() yalnız `mvs := canonicalMVs()` çağırır ve koşullu
+// sihirbazları (bugün dangling_mv_admin.go; messaging_opdim_admin.go
+// v0.10.766'da kalktı) kanonik CREATE'i node'a özel yeniden kurmak için
+// okuyor ve o DDL'in boot'takiyle BİREBİR aynı olması şart — ikinci bir
+// kopya yazmak "aynalı kural iki gövde" sınıfı (kopyalar ayrışır, kimse
+// fark etmez). Bu yüzden katalog paket düzeyine çıkarıldı; migrate()
+// yalnız `mvs := canonicalMVs()` çağırır ve koşullu
 // eklemeleri (entity_seen, workload_revision) üstüne append eder.
 //
 // DİKKAT: `mvs := []string{…}` literali BU DOSYADA kalmak zorunda —
