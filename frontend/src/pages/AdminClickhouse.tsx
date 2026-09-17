@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { fmtNum, fmtBytes, fmtClock, fmtDateTime } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
 import { useQuery } from '@tanstack/react-query';
+import { bucketBars, lossVerdict, nameTone, pctOf } from './adminch/traceHealth'; // v0.10.757
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
@@ -724,6 +725,7 @@ export default function AdminClickhousePage() {
             <NodeWorkPanel />
             <MeasurePanel />
             <RootCoveragePanel />
+            <TraceHealthPanel />
 
             {/* v0.9.770 — rollup kurulum sihirbazı. Topolojinin hemen
                 altında değil BURADA: operatör önce kümenin sağlıklı
@@ -2573,6 +2575,116 @@ const ROOT_COV_COLS: DataTableColumn<CHRootCoverageRow>[] = [
   { id: 'entrypct', label: 'Giriş kökü %',  sortValue: r => (r.traces ? entryRootOf(r) / r.traces : 0), numeric: true, width: 110 },
 ];
 function rootTone(pct: number): string { return pct >= 90 ? 'b-ok' : pct >= 50 ? 'b-warn' : 'b-err'; }
+// v0.10.757 — "Trace hattı sağlığı" (trace bütünlüğü denetimi 2026-09-17,
+// operatör onaylı spec: sihirbaz değil panel, önce pod-içi). Üç kart:
+// kayıp (bu podun ingest sayaçları + reject/degrade + spool + CH'de
+// saklanan span/5 dk), kapsama (kök tanımı, MV gap günleri, son 5 dk kök
+// oranı), ad kalitesi (çıplak fiil payı, boş ad, servis başına ayrık ad).
+// İsteğe bağlı çalıştırma (CH maliyet disiplini); bölüm başına hata rozeti.
+function TraceHealthPanel() {
+  const [rangeS, setRangeS] = useState(3600);
+  const [armed, setArmed] = useState<number | null>(null);
+  const q = useQuery({
+    queryKey: ['ch-trace-health', armed],
+    queryFn: ({ signal }) => api.chTraceHealth(armed ?? 3600, signal),
+    enabled: armed !== null,
+    staleTime: 30_000,
+  });
+  const data = armed === null ? null : q.isPending ? undefined : q.isError ? null : q.data ?? null;
+  const verdict = data ? lossVerdict(data.pod) : null;
+  const rootPct = data ? pctOf(data.coverage.withRoot, data.coverage.traces) : null;
+  const entryPct = data ? pctOf(data.coverage.withEntryRoot, data.coverage.traces) : null;
+  const barePct = data ? pctOf(data.names.bareMethodSpans, data.names.totalSpans) : null;
+  const bars = data ? bucketBars(data.stored) : [];
+  const hhmm = (ns: number) => fmtClock(ns / 1e6); // 24 saat kilidi (clockFormat.test): tarayıcı locale'i değil
+  const nonZero = (m: Record<string, number> | undefined) => Object.entries(m ?? {}).filter(([, v]) => v > 0);
+  const card: React.CSSProperties = { border: '1px solid var(--border)', borderRadius: 6, padding: 10, minWidth: 0 };
+  const kv = (k: string, v: React.ReactNode) => (
+    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12 }}>
+      <span style={{ color: 'var(--text3)' }}>{k}</span><span className="mono">{v}</span>
+    </div>
+  );
+  return (
+    <Section title="Trace hattı sağlığı">
+      <p className="cell-hint">
+        Kabul edilen span bu podun sayacı (restart'ta sıfırlanır, podlar toplanmaz); CH'de saklanan span
+        service_summary_5m'den. Reddedilen istek (çözülemeyen gövde / 32 MiB üstü / gRPC oversize) kalıcı
+        kayıptır — collector 4xx'i yeniden denemez. Boş id / geçersiz damga saklanır ama listelenemez ya da
+        TTL'de yiter. Kapsama son 5 dk, ad kalitesi son 24 sa (operation_summary_5m).
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <select value={rangeS} onChange={e => setRangeS(Number(e.target.value))} aria-label="Saklanan span penceresi">
+          <option value={900}>son 15 dk</option>
+          <option value={3600}>son 1 saat</option>
+          <option value={21600}>son 6 saat</option>
+          <option value={86400}>son 24 saat</option>
+        </select>
+        <Button variant="accent" size="sm" onClick={() => setArmed(rangeS)} loading={armed !== null && q.isPending}>Çalıştır</Button>
+        {data && <span className="badge b-gray" title="Sayaçlar pod-içi; bu cevabı veren pod">pod: {data.pod.host}</span>}
+        {data?.errors && Object.entries(data.errors).map(([k, v]) => (
+          <span key={k} className="badge b-err" title={v}>{k} okunamadı</span>
+        ))}
+        {q.isError && <span className="badge b-err" title={String(q.error)}>okunamadı</span>}
+      </div>
+      {data === undefined && <Spinner />}
+      {data && verdict && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <b>Kayıp</b> <span className={`badge ${verdict.tone}`}>{verdict.text}</span>
+            </div>
+            {kv('kabul edilen (bu pod)', fmtNum(data.pod.accepted))}
+            {kv('düşürülen (kuyruk dolu)', fmtNum(data.pod.dropped))}
+            {kv('yazma hatası', fmtNum(data.pod.writeFailed))}
+            {kv('kuyruk', `${fmtNum(data.pod.queued)} / ${fmtNum(data.pod.capacity)}`)}
+            {nonZero(data.pod.rejects).map(([k, v]) => kv(`reddedilen · ${k}`, fmtNum(v)))}
+            {nonZero(data.pod.degrades).map(([k, v]) => kv(`degrade · ${k}`, fmtNum(v)))}
+            {data.spool && data.spool.measured && kv('spool dosya / bozuk', `${fmtNum(data.spool.files)} / ${fmtNum(data.spool.brokenFiles)}`)}
+            {data.spool && !data.spool.measured && kv('spool', <span className="badge b-warn" title={data.spool.probeError}>ölçülemedi</span>)}
+            {data.spoolDegraded && kv('spool durumu', <span className="badge b-err" title={data.spoolDetail}>tıkalı</span>)}
+            {kv(`CH'de saklanan (son ${Math.round(data.rangeS / 60)} dk)`, fmtNum(data.storedTotal))}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 40, marginTop: 6 }} aria-label="5 dk kovası başına saklanan span">
+              {bars.map(b => (
+                <div key={b.t} title={`${hhmm(b.t)} · ${fmtNum(b.spans)} span`}
+                  style={{ flex: 1, height: `${b.h}%`, background: 'var(--accent)', minWidth: 1 }} />
+              ))}
+            </div>
+          </div>
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <b>Kapsama</b>
+              <span className={`badge ${rootTone(rootPct ?? 0)}`} title="Tam kök span'ı olan trace oranı (son 5 dk)">tam kök {rootPct === null ? '—' : `${rootPct.toFixed(1)}%`}</span>
+              <span className={`badge ${rootTone(entryPct ?? 0)}`} title="Tam kök ya da giriş span'i olan trace oranı">giriş kökü {entryPct === null ? '—' : `${entryPct.toFixed(1)}%`}</span>
+            </div>
+            {kv('kök tanımı', data.coverage.def === 'entry' ? 'giriş kökü' : 'tam kök')}
+            {kv('trace (son 5 dk)', `${fmtNum(data.coverage.traces)}${data.coverage.source ? ` · ${data.coverage.source}` : ''}`)}
+            {kv('köksüz trace', fmtNum(Math.max(0, data.coverage.traces - data.coverage.withEntryRoot)))}
+            {kv('MV gap günü', data.coverage.gapDays.length === 0
+              ? <span className="badge b-ok">yok</span>
+              : <span className="badge b-warn" title={data.coverage.gapDays.join(', ')}>{data.coverage.gapDays.length} gün</span>)}
+          </div>
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <b>Ad kalitesi</b>
+              <span className={`badge ${nameTone(barePct)}`} title="Adı yalnız HTTP fiili olan span payı (listede route ile gösterilir, v0.10.756)">çıplak fiil {barePct === null ? '—' : `${barePct.toFixed(1)}%`}</span>
+            </div>
+            {kv('span (24 sa)', fmtNum(data.names.totalSpans))}
+            {kv('çıplak fiil adlı', fmtNum(data.names.bareMethodSpans))}
+            {kv('boş adlı', fmtNum(data.names.emptyNameSpans))}
+            {kv('ayrık ad', fmtNum(data.names.distinctNames))}
+            {data.names.topCardinality.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 12 }}>
+                <div style={{ color: 'var(--text3)', marginBottom: 2 }}>servis başına ayrık ad (ilk 10) — gömülü id işareti</div>
+                {data.names.topCardinality.map(c => kv(c.service, fmtNum(c.distinctNames)))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function RootCoveragePanel() {
   const [rangeS, setRangeS] = useState(900);
   const [armed, setArmed] = useState<number | null>(null); // çalıştırılan pencere

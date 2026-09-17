@@ -3372,6 +3372,9 @@ export const api = {
   // v0.10.712 — trace kök kapsaması (isteğe bağlı; 5 dk..1 sa).
   chRootCoverage: (rangeS: number, signal?: AbortSignal) =>
     get<import('./types').CHRootCoverageResponse>(`/api/admin/clickhouse/root-coverage?range_s=${rangeS}`, signal),
+  // v0.10.757 — Trace hattı sağlığı (Admin ClickHouse): pod-içi ingest sayaçları + MV ölçüleri, bölüm başına hata.
+  chTraceHealth: (rangeS: number, signal?: AbortSignal) =>
+    get<import('./types').CHTraceHealthResponse>(`/api/admin/clickhouse/trace-health?range_s=${rangeS}`, signal),
   // v0.10.733 — kök tanımı (strict | entry); GET tüm roller, PUT admin.
   getTraceRootDef: (signal?: AbortSignal) =>
     get<import('./types').TraceRootDefSettings>('/api/settings/trace-root-def', signal),

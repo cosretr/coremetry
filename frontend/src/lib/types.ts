@@ -3499,6 +3499,23 @@ export interface CHRootCoverageResponse {
   rows: CHRootCoverageRow[];
   capped: boolean;
 }
+/** v0.10.757 — Admin "Trace hattı sağlığı" (Go traceHealthResponse). Sayaçlar POD-İÇİ (pod.host). */
+export interface CHTraceHealthResponse {
+  generatedAt: number;
+  rangeS: number;
+  pod: {
+    host: string; accepted: number; dropped: number; writeFailed: number; queued: number; capacity: number;
+    rejects: Record<string, number>; degrades: Record<string, number>;
+  };
+  spool?: { measured: boolean; probeError?: string; partial?: boolean; files: number; bytes: number; brokenFiles: number; errorCount: number } | null;
+  spoolDegraded: boolean;
+  spoolDetail?: string;
+  stored: { t: number; spans: number }[];
+  storedTotal: number;
+  coverage: { def: TraceRootDef; gapDays: string[]; rangeS: number; source?: string; traces: number; withRoot: number; withEntryRoot: number };
+  names: { totalSpans: number; bareMethodSpans: number; emptyNameSpans: number; distinctNames: number; topCardinality: { service: string; distinctNames: number }[] };
+  errors?: Record<string, string>;
+}
 // v0.10.733 — kök tanımı ayarı (Go chstore.TraceRootDef; system_settings trace_root_def).
 // strict = tam kök (parent boş + ad + servis); entry = tam kök YA DA giriş span'i (server/consumer).
 export type TraceRootDef = 'strict' | 'entry';
