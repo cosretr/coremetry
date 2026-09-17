@@ -40,6 +40,7 @@ func TestTraceHealthWiring(t *testing.T) {
 		"s.serveCached(w, r, key, 30*time.Second,",
 		`resp.Errors["stored"]`, `resp.Errors["coverage"]`, `resp.Errors["names"]`, // bölüm başına yumuşak hata
 		"otlp.IngestRejectCounts()", "s.distributionBacklog()", "s.store.TraceMVGapDayList(ctx)",
+		"IngestRole: !s.roleIngestOff", // v0.10.760 — api-rolü pod "kayıp yok" demesin
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("trace_health.go %q içermeli", want)

@@ -3504,7 +3504,7 @@ export interface CHTraceHealthResponse {
   generatedAt: number;
   rangeS: number;
   pod: {
-    host: string; accepted: number; dropped: number; writeFailed: number; queued: number; capacity: number;
+    host: string; ingestRole: boolean; accepted: number; dropped: number; writeFailed: number; queued: number; capacity: number;
     rejects: Record<string, number>; degrades: Record<string, number>;
   };
   spool?: { measured: boolean; probeError?: string; partial?: boolean; files: number; bytes: number; brokenFiles: number; errorCount: number } | null;

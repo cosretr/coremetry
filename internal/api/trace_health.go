@@ -50,7 +50,11 @@ func traceHealthRange(raw string) int {
 }
 
 type traceHealthPod struct {
-	Host        string            `json:"host"`
+	Host string `json:"host"`
+	// IngestRole (v0.10.760) — bu pod OTLP alıyor mu (COREMETRY_MODE ingest/all).
+	// api-rolü podda sayaçlar hep sıfırdır; "kayıp yok" demek yanıltırdı
+	// (prod ekranı: coremetry-api podu). Sayaçlar ingest podlarındadır.
+	IngestRole  bool              `json:"ingestRole"`
 	Accepted    int64             `json:"accepted"`
 	Dropped     int64             `json:"dropped"`
 	WriteFailed int64             `json:"writeFailed"`
@@ -103,9 +107,10 @@ func (s *Server) getTraceHealth(w http.ResponseWriter, r *http.Request) {
 			GeneratedAt: now.UnixNano(), RangeS: rangeS,
 			Errors: map[string]string{},
 			Pod: traceHealthPod{
-				Host:     host,
-				Rejects:  otlp.IngestRejectCounts(),
-				Degrades: otlp.ConvertDegradeCounts(),
+				Host:       host,
+				IngestRole: !s.roleIngestOff,
+				Rejects:    otlp.IngestRejectCounts(),
+				Degrades:   otlp.ConvertDegradeCounts(),
 			},
 			Stored: []chstore.StoredSpanBucket{},
 		}

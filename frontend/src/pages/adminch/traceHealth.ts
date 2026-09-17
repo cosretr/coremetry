@@ -8,10 +8,17 @@ export interface TraceHealthPodLike {
   rejects?: Record<string, number>;
 }
 
-export type LossTone = 'b-ok' | 'b-warn' | 'b-err';
+export type LossTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
 
-/** Kayıp kartı rozeti: kalıcı kayıp (drop + write_failed + reddedilen istek) → err; yalnız kalite sayaçları → warn. */
-export function lossVerdict(p: TraceHealthPodLike): { tone: LossTone; text: string } {
+/**
+ * Kayıp kartı rozeti: kalıcı kayıp (drop + write_failed + reddedilen istek) → err;
+ * spool tıkalı → err (henüz kayıp değil ama kuyrukta; 2026-08 olay sınıfı);
+ * yalnız kalite sayaçları → warn. v0.10.760: ingest rolü olmayan pod (api)
+ * sayaç taşımaz — "kayıp yok" YERİNE "bu pod ingest değil" (prod ekranı).
+ */
+export function lossVerdict(p: TraceHealthPodLike, spoolDegraded = false, ingestRole = true): { tone: LossTone; text: string } {
+  if (spoolDegraded) return { tone: 'b-err', text: 'spool tıkalı' };
+  if (!ingestRole) return { tone: 'b-gray', text: 'bu pod ingest değil' };
   const r = p.rejects ?? {};
   const lost = p.dropped + p.writeFailed + (r.http_decode_failed ?? 0) + (r.http_body_too_large ?? 0) + (r.grpc_message_too_big ?? 0);
   const quality = (r.span_empty_id ?? 0) + (r.span_invalid_time ?? 0);

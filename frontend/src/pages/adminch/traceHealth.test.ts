@@ -10,6 +10,10 @@ describe('traceHealth — saf', () => {
     expect(lossVerdict({ accepted: 10, dropped: 0, writeFailed: 0, rejects: { span_empty_id: 3 } }).tone).toBe('b-warn');
     expect(lossVerdict({ accepted: 10, dropped: 2, writeFailed: 0 }).tone).toBe('b-err');
     expect(lossVerdict({ accepted: 10, dropped: 0, writeFailed: 0, rejects: { http_decode_failed: 1, span_empty_id: 9 } }).text).toBe('1 kayıp');
+    // v0.10.760 — spool tıkalıysa sayaçlar sıfır olsa da kırmızı; api-rolü pod "kayıp yok" demez.
+    expect(lossVerdict({ accepted: 0, dropped: 0, writeFailed: 0 }, true)).toEqual({ tone: 'b-err', text: 'spool tıkalı' });
+    expect(lossVerdict({ accepted: 0, dropped: 0, writeFailed: 0 }, false, false)).toEqual({ tone: 'b-gray', text: 'bu pod ingest değil' });
+    expect(lossVerdict({ accepted: 0, dropped: 3, writeFailed: 0 }, false, false).tone).toBe('b-gray');
   });
   it('pctOf / nameTone / bucketBars', () => {
     expect(pctOf(1, 0)).toBeNull();
@@ -31,7 +35,7 @@ describe('traceHealth — kablolama', () => {
     expect(page).toContain('<TraceHealthPanel />');
     expect(page.indexOf('<RootCoveragePanel />')).toBeLessThan(page.indexOf('<TraceHealthPanel />'));
     expect(page).toContain("queryKey: ['ch-trace-health'");
-    expect(page).toContain('lossVerdict(');
+    expect(page).toContain('lossVerdict(data.pod, data.spoolDegraded, data.pod.ingestRole)');
     expect(api).toContain('/api/admin/clickhouse/trace-health?range_s=');
   });
 });

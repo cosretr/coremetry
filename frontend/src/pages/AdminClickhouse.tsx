@@ -2591,7 +2591,7 @@ function TraceHealthPanel() {
     staleTime: 30_000,
   });
   const data = armed === null ? null : q.isPending ? undefined : q.isError ? null : q.data ?? null;
-  const verdict = data ? lossVerdict(data.pod) : null;
+  const verdict = data ? lossVerdict(data.pod, data.spoolDegraded, data.pod.ingestRole) : null;
   const rootPct = data ? pctOf(data.coverage.withRoot, data.coverage.traces) : null;
   const entryPct = data ? pctOf(data.coverage.withEntryRoot, data.coverage.traces) : null;
   const barePct = data ? pctOf(data.names.bareMethodSpans, data.names.totalSpans) : null;
@@ -2633,6 +2633,11 @@ function TraceHealthPanel() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <b>Kayıp</b> <span className={`badge ${verdict.tone}`}>{verdict.text}</span>
             </div>
+            {!data.pod.ingestRole && (
+              <div className="cell-hint" style={{ marginBottom: 4 }}>
+                Bu pod OTLP almıyor (rol api); kabul/düşürme sayaçları ingest podlarında. Toplam için mutabakat Faz B.
+              </div>
+            )}
             {kv('kabul edilen (bu pod)', fmtNum(data.pod.accepted))}
             {kv('düşürülen (kuyruk dolu)', fmtNum(data.pod.dropped))}
             {kv('yazma hatası', fmtNum(data.pod.writeFailed))}
