@@ -1711,17 +1711,19 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 
 	switch metric {
 	case "error_rate":
+		// v0.10.783 — giriş-span ilkesi: toplu yolla (measureAllServicesPlan)
+		// aynı kaynak ve süzgeç; iki yol ayrışmasın.
 		var v float64
 		var sql string
 		if mv {
-			sql = `SELECT toFloat64(countMerge(error_count_state)) /
-			              nullIf(toFloat64(countMerge(span_count_state)),0) * 100
-			       FROM service_summary_5m
-			       WHERE service_name=? AND time_bucket>=?
+			sql = `SELECT toFloat64(countMerge(error_state)) /
+			              nullIf(toFloat64(countMerge(calls_state)),0) * 100
+			       FROM spanmetrics_1m
+			       WHERE service_name=? AND time_bucket>=? AND ` + chstore.EntrySpanKindsWhere + `
 			       SETTINGS max_execution_time = 10`
 		} else {
 			sql = `SELECT countIf(status_code='error') / nullIf(count(),0) * 100
-			       FROM spans WHERE service_name=? AND time>=?
+			       FROM spans WHERE service_name=? AND time>=? AND ` + chstore.EntrySpanKindsWhere + `
 			       SETTINGS max_execution_time = 10`
 		}
 		err := conn.QueryRow(ctx, sql, service, cutoff).Scan(&v)

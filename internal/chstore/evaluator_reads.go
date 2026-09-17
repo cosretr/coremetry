@@ -211,17 +211,30 @@ const evalReadTail = `
 // spanmetricsSourceFor — v0.8.408'den beri HER modda bare name:
 // distributed'da bare ad Distributed wrapper'ın kendisi, cluster()
 // sarmak N× overcount olurdu; ayrıntı endpoints.go:300 bloğunda).
+// EntrySpanKindsWhere — giriş-span ilkesi (operatör direktifi 2026-07-25):
+// bir servisin hata oranı KENDİ işinden, yani server/consumer span'lerinden
+// ölçülür; client/internal span'ler servisin YAPTIĞI çağrılardır, oranı
+// seyreltir. FE eşi lib/entrySpans.ts ENTRY_SPAN_KINDS, SLO eşi
+// sloLatencyEntryWhere. (v0.10.783)
+const EntrySpanKindsWhere = "kind IN ('server','consumer')"
+
 func measureAllServicesPlan(metric, smSource string) (measureAllPlan, error) {
 	// Basic RED metrics — service_summary_5m merge states, the batched
 	// twins of the per-service v0.6.12 MV queries.
 	switch metric {
 	case "error_rate":
-		return measureAllPlan{source: "service_summary_5m", scan: scanNullableFloat, sql: `
+		// v0.10.783 (operatör-bildirimi 2026-09-17, prod: bir servisin POST'u
+		// %92 hata, "Critical error rate >15%" kuralı AÇILMADI — service_
+		// summary_5m tüm span'leri sayıyordu, internal/client span'ler oranı
+		// eşiğin altına seyreltti). Tek kind taşıyan MV spanmetrics_1m;
+		// giriş span'lerine daraltılır. service_summary_5m'den daha büyük
+		// tarama (name×kind×status×route×dk); bütçe 10 sn.
+		return measureAllPlan{source: "spanmetrics_1m", scan: scanNullableFloat, sql: `
 			SELECT service_name,
-			       toFloat64(countMerge(error_count_state)) /
-			       nullIf(toFloat64(countMerge(span_count_state)),0) * 100
-			FROM service_summary_5m
-			WHERE time_bucket >= ?` + evalReadTail}, nil
+			       toFloat64(countMerge(error_state)) /
+			       nullIf(toFloat64(countMerge(calls_state)),0) * 100
+			FROM ` + smSource + `
+			WHERE time_bucket >= ? AND ` + EntrySpanKindsWhere + evalReadTail}, nil
 	case "error_count":
 		return measureAllPlan{source: "service_summary_5m", scan: scanCountScaled, sql: `
 			SELECT service_name, countMerge(error_count_state)

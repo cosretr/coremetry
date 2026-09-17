@@ -93,10 +93,15 @@ func TestMeasureAllServicesPlanClusterSource(t *testing.T) {
 		t.Errorf("mq plan still reads the bare per-shard MV\n--- SQL ---\n%s", plan.sql)
 	}
 
+	// v0.10.783 — error_rate de spanmetrics kaynağını okur (giriş-span süzgeci).
+	if p, err := measureAllServicesPlan("error_rate", src); err != nil || !strings.Contains(p.sql, "FROM "+src) || !strings.Contains(p.sql, "kind IN ('server','consumer')") {
+		t.Errorf("error_rate plan must read the injected spanmetrics source with the entry-kind filter (err=%v)\n--- SQL ---\n%s", err, p.sql)
+	}
+
 	// Non-spanmetrics routes must be untouched by the injection.
 	for metric, from := range map[string]string{
-		"error_rate": "FROM service_summary_5m",
-		"db_p99_ms":  "FROM spans",
+		"error_count": "FROM service_summary_5m",
+		"db_p99_ms":   "FROM spans",
 	} {
 		p, err := measureAllServicesPlan(metric, src)
 		if err != nil {

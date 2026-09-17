@@ -30,8 +30,9 @@ func TestMeasureAllServicesPlanRouting(t *testing.T) {
 		contains []string
 	}{
 		// ── basic RED → service_summary_5m merge states ─────────────
-		{"error_rate", "service_summary_5m", scanNullableFloat,
-			[]string{"countMerge(error_count_state)", "nullIf(toFloat64(countMerge(span_count_state)),0) * 100"}},
+		// v0.10.783 — giriş-span ilkesi: error_rate spanmetrics_1m + kind süzgeci.
+		{"error_rate", "spanmetrics_1m", scanNullableFloat,
+			[]string{"countMerge(error_state)", "nullIf(toFloat64(countMerge(calls_state)),0) * 100", "kind IN ('server','consumer')"}},
 		{"error_count", "service_summary_5m", scanCountScaled,
 			[]string{"countMerge(error_count_state)"}},
 		{"request_rate", "service_summary_5m", scanCountRate,
