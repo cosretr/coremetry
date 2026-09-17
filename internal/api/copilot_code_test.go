@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/devops"
@@ -791,5 +792,52 @@ func TestExplainEvidenceExpandsQuotes(t *testing.T) {
 	s := string(src)
 	if !strings.Contains(s, "return devops.ExpandQuotes(out, cc), nil") || !strings.Contains(s, "out = devops.ExpandQuotes(out, half)") {
 		t.Fatal("copilotExplainEvidence kod alıntılarını pencereden genişletmeli (her iki kodlu yol)")
+	}
+}
+
+// TestDecodeExplainOptionsTimezone — v0.10.745 (operatör bildirimi:
+// CoSRE exception açıklaması "tepe 22:30" dedi, ekran 01:30 gösteriyordu;
+// kanıt damgaları UTC ve dilimsizdi). Dilim çifti gövdeden (POST explain)
+// YA DA sorgu dizesinden (insight GET ucu gövde taşımaz) gelir; gövde
+// yazan kazanır; ad çözülemezse ofset, o da yoksa UTC — sohbetle aynı
+// merdiven (chatLocationNamed).
+func TestDecodeExplainOptionsTimezone(t *testing.T) {
+	cases := []struct {
+		name    string
+		method  string
+		target  string
+		body    string
+		wantTz  string
+		wantOff int
+		wantLoc string
+	}{
+		{"eski çağıran: gövdesiz, sorgusuz → UTC", http.MethodPost, "/api/copilot/explain-exception/fp1", "", "", 0, "UTC"},
+		{"gövde IANA adı", http.MethodPost, "/api/copilot/explain-exception/fp1", `{"tz":"Europe/Istanbul","tzOffsetMin":180}`, "Europe/Istanbul", 180, "Europe/Istanbul"},
+		{"gövde includeCode ile birlikte", http.MethodPost, "/api/copilot/explain-exception/fp1", `{"includeCode":true,"tz":"Europe/Istanbul","tzOffsetMin":180}`, "Europe/Istanbul", 180, "Europe/Istanbul"},
+		{"yalnız sorgu (insight GET)", http.MethodGet, "/api/insight/exception/fp1?tz=Europe%2FIstanbul&tzOffsetMin=180", "", "Europe/Istanbul", 180, "Europe/Istanbul"},
+		{"gövde sorguyu yener", http.MethodPost, "/api/copilot/explain-exception/fp1?tz=UTC&tzOffsetMin=0", `{"tz":"Europe/Istanbul","tzOffsetMin":180}`, "Europe/Istanbul", 180, "Europe/Istanbul"},
+		{"sorgu gövdenin boş bıraktığını doldurur", http.MethodPost, "/api/copilot/explain-exception/fp1?tzOffsetMin=180", `{"tz":"Europe/Istanbul"}`, "Europe/Istanbul", 180, "Europe/Istanbul"},
+		{"geçersiz ad → ofsete düşer", http.MethodPost, "/api/copilot/explain-exception/fp1", `{"tz":"Not/A_Zone_x","tzOffsetMin":180}`, "Not/A_Zone_x", 180, "UTC+3"},
+		{"yalnız ofset (eski istemci şekli)", http.MethodPost, "/api/copilot/explain-exception/fp1", `{"tzOffsetMin":330}`, "", 330, "UTC+5:30"},
+		{"bozuk ofset sorgusu yok sayılır", http.MethodGet, "/api/insight/exception/fp1?tzOffsetMin=abc", "", "", 0, "UTC"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
+			o := decodeExplainOptions(r)
+			if o.Tz != tc.wantTz || o.TzOffsetMin != tc.wantOff {
+				t.Fatalf("tz=%q off=%d, istenen tz=%q off=%d", o.Tz, o.TzOffsetMin, tc.wantTz, tc.wantOff)
+			}
+			if got := o.location().String(); got != tc.wantLoc {
+				t.Fatalf("location=%q, istenen %q", got, tc.wantLoc)
+			}
+		})
+	}
+	// Kanıt damgasının yön doğrulaması: 22:30 UTC → İstanbul 01:30 ertesi gün.
+	r := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(`{"tz":"Europe/Istanbul","tzOffsetMin":180}`))
+	loc := decodeExplainOptions(r).location()
+	peak := time.Date(2026, 9, 15, 22, 30, 0, 0, time.UTC).In(loc)
+	if got := peak.Format("2006-01-02 15:04"); got != "2026-09-16 01:30" {
+		t.Fatalf("İstanbul damgası = %q, istenen 2026-09-16 01:30", got)
 	}
 }

@@ -116,7 +116,8 @@ func (e *ExceptionExplainer) run(ctx context.Context) {
 	filled := 0
 	for i := range candidates {
 		g := candidates[i]
-		in := BuildExceptionExplainInput(ctx, e.store, e.logs, &g)
+		// Arka planda tarayıcı yok → UTC, prompt'ta etiketli (v0.10.745).
+		in := BuildExceptionExplainInput(ctx, e.store, e.logs, &g, time.UTC)
 		cctx := copilot.WithMeta(ctx, copilot.CallMeta{
 			Surface: "exception-auto-explain", UserID: "system",
 			Shield: func(prompt, answer string) uint8 {

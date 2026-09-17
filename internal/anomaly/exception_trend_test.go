@@ -59,16 +59,34 @@ func TestSummarizeExceptionOccurrences(t *testing.T) {
 	}
 }
 
-// TestExceptionTrendPromptLineUnchanged — prompt satırının ŞEKLİ.
-// v0.9.1129 öncesindeki fmt.Sprintf ile bayt bayt aynı olmak zorunda
-// (tepe damgası UTC + "2006-01-02 15:04").
-func TestExceptionTrendPromptLineUnchanged(t *testing.T) {
-	peak := time.Date(2026, 8, 16, 9, 5, 0, 0, time.UTC)
-	line := ExceptionTrend{Total: 1240, Last24: 380, Peak: 91,
-		PeakAtNs: peak.UnixNano(), Buckets: 48}.PromptLine()
-	const want = "toplam=1240 son24h=380 tepe=91@2026-08-16 09:05 bucket=48"
-	if line != want {
-		t.Errorf("prompt satırı = %q\nwant             %q", line, want)
+// TestExceptionTrendPromptLineZone — v0.10.745 (operatör bildirimi:
+// CoSRE "tepe 22:30" dedi, ekran 01:30 gösteriyordu). Tepe damgası
+// verilen konumda VE konum adıyla yazılır; nil → UTC ama etiketli.
+// Sayısal şekil (toplam/son24h/tepe/bucket) v0.9.1129 ile aynı.
+func TestExceptionTrendPromptLineZone(t *testing.T) {
+	// 22:30 UTC = 01:30 ertesi gün İstanbul (+03, DST yok).
+	peak := time.Date(2026, 9, 15, 22, 30, 0, 0, time.UTC)
+	tr := ExceptionTrend{Total: 1240, Last24: 380, Peak: 91, PeakAtNs: peak.UnixNano(), Buckets: 48}
+	ist, err := time.LoadLocation("Europe/Istanbul")
+	if err != nil {
+		t.Fatalf("tzdata: %v", err)
+	}
+	cases := []struct {
+		name string
+		loc  *time.Location
+		want string
+	}{
+		{"nil → UTC etiketli", nil, "toplam=1240 son24h=380 tepe=91@2026-09-15 22:30 (UTC) bucket=48"},
+		{"UTC", time.UTC, "toplam=1240 son24h=380 tepe=91@2026-09-15 22:30 (UTC) bucket=48"},
+		{"Europe/Istanbul — gün de kayar", ist, "toplam=1240 son24h=380 tepe=91@2026-09-16 01:30 (Europe/Istanbul) bucket=48"},
+		{"sabit ofset adı (chatLocation)", time.FixedZone("UTC+3", 3*3600), "toplam=1240 son24h=380 tepe=91@2026-09-16 01:30 (UTC+3) bucket=48"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tr.PromptLine(tc.loc); got != tc.want {
+				t.Errorf("prompt satırı = %q\nwant             %q", got, tc.want)
+			}
+		})
 	}
 }
 

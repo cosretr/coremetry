@@ -229,6 +229,11 @@ available — the newest sample's full trace (spans as JSON), that
 trace's correlated logs, and deploys around the group's first-seen
 time.
 
+Every absolute timestamp in the evidence (firstSeen, lastSeen, the
+peak bucket) is ALREADY in the operator's local timezone, named in
+meta.timezone. Quote clock times exactly as given; never convert
+them to UTC or to any other zone.
+
 Produce a DEEP, evidence-grounded analysis — the operator clicked
 Explain to avoid reading the stacktrace, trace and logs line by line.
 Use ONLY facts present in the evidence; never invent class names,

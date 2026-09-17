@@ -116,7 +116,8 @@ func (s *Server) insightException(w http.ResponseWriter, r *http.Request, fp str
 		http.Error(w, "exception group not found", http.StatusNotFound)
 		return
 	}
-	in := anomaly.BuildExceptionExplainInput(r.Context(), s.store, s.logs, g)
+	// v0.10.745 — GET ucu: dilim ?tz=&tzOffsetMin= sorgusundan (gövde yok).
+	in := anomaly.BuildExceptionExplainInput(r.Context(), s.store, s.logs, g, decodeExplainOptions(r).location())
 	ev := exceptionEvidence(g, in, time.Now().UnixNano())
 
 	resp := insight.Response{Charts: insight.ExceptionCharts(ev), Links: insight.ExceptionLinks(ev)}

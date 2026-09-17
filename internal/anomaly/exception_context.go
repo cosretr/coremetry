@@ -219,20 +219,34 @@ func SummarizeExceptionOccurrences(occ []chstore.OccurrencePoint, nowNs int64) E
 	return t
 }
 
-// PromptLine — trendin prompt'a giren satırı. v0.9.1129 öncesindeki
-// fmt.Sprintf ile BAYT BAYT aynı: refactor prompt'u değiştirmemeli,
-// yoksa altın-örnek testleri ve modelin okuduğu şekil birlikte kayar.
-func (t ExceptionTrend) PromptLine() string {
-	return fmt.Sprintf("toplam=%d son24h=%d tepe=%d@%s bucket=%d",
+// PromptLine — trendin prompt'a giren satırı. Tepe damgası verilen
+// konumda ve konum ADIYLA yazılır (v0.10.745, operatör bildirimi:
+// "tepe 22:30" dedi, ekran 01:30 gösteriyordu — damga UTC'ydi ve
+// dilimsizdi; model onu yerel saat sanıp aktardı). nil → UTC, ama o da
+// artık etiketli: arka plan açıklayıcının tarayıcısı yok, en azından
+// "UTC" der. Şekil bunun dışında v0.9.1129 ile aynı.
+func (t ExceptionTrend) PromptLine(loc *time.Location) string {
+	if loc == nil {
+		loc = time.UTC
+	}
+	return fmt.Sprintf("toplam=%d son24h=%d tepe=%d@%s (%s) bucket=%d",
 		t.Total, t.Last24, t.Peak,
-		time.Unix(0, t.PeakAtNs).UTC().Format("2006-01-02 15:04"), t.Buckets)
+		time.Unix(0, t.PeakAtNs).In(loc).Format("2006-01-02 15:04"), loc.String(), t.Buckets)
 }
 
 // BuildExceptionExplainInput — grup meta + occurrence trendi + temsilî
 // stacktrace + en yeni örneğin TAM trace'i + o trace'in logları +
 // FirstSeen-merkezli deploy penceresi. logs nil olabilir (CH-only
 // kurulum ya da işçi bağlamı) — log bloğu atlanır.
-func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs logstore.Store, g *chstore.ExceptionGroup) ExceptionExplainInput {
+//
+// loc (v0.10.745) — operatörün saat dilimi: prompt'taki her mutlak damga
+// (firstSeen/lastSeen/tepe) bu konumda yazılır ve konum adı meta'da
+// gider; nil → UTC (etiketli). İstek yolları tarayıcıdan alır
+// (explainOptions.location), arka plan açıklayıcı UTC verir.
+func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs logstore.Store, g *chstore.ExceptionGroup, loc *time.Location) ExceptionExplainInput {
+	if loc == nil {
+		loc = time.UTC
+	}
 	sres, _ := store.GetExceptionGroupSamples(ctx, g.Fingerprint, 5)
 	samples := sres.Samples
 
@@ -240,7 +254,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	var trendRef *ExceptionTrend
 	if occ, oerr := store.GetExceptionOccurrences(ctx, g.Fingerprint); oerr == nil && len(occ) > 0 {
 		t := SummarizeExceptionOccurrences(occ, time.Now().UnixNano())
-		trend, trendRef = t.PromptLine(), &t
+		trend, trendRef = t.PromptLine(loc), &t
 	}
 
 	// En yeni trace'li örnek → tam trace + kanıt (error span'ler GARANTİLİ
@@ -433,7 +447,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	}
 
 	return ExceptionExplainInput{
-		User:         assembleExceptionPrompt(g, trend, stackForPrompt, traceBlock, logsBlock, deployBlock),
+		User:         assembleExceptionPrompt(g, loc, trend, stackForPrompt, traceBlock, logsBlock, deployBlock),
 		EvTraces:     evTraces,
 		EvSpans:      evSpans,
 		LogsBlock:    logsBlock,
@@ -518,13 +532,19 @@ func renderNearbyDeploys(nd []NearbyDeploy) []string {
 	return parts
 }
 
-// assembleExceptionPrompt — saf montaj; boş bloklar atlanır.
-func assembleExceptionPrompt(g *chstore.ExceptionGroup, trend, stack, traceBlock, logsBlock, deployBlock string) string {
+// assembleExceptionPrompt — saf montaj; boş bloklar atlanır. Damgalar
+// loc'ta (RFC3339 ofsetli: "…T01:30:00+03:00") ve meta.timezone konumun
+// adı — sistem prompt'u modele "dilim çevirme, olduğu gibi aktar" der.
+func assembleExceptionPrompt(g *chstore.ExceptionGroup, loc *time.Location, trend, stack, traceBlock, logsBlock, deployBlock string) string {
+	if loc == nil {
+		loc = time.UTC
+	}
 	meta := map[string]any{
 		"type": g.Type, "message": truncRunes(g.Message, 400), "service": g.Service,
 		"state": g.State, "occurrences": g.Occurrences,
-		"firstSeen": time.Unix(0, g.FirstSeen).UTC().Format(time.RFC3339),
-		"lastSeen":  time.Unix(0, g.LastSeen).UTC().Format(time.RFC3339),
+		"firstSeen": time.Unix(0, g.FirstSeen).In(loc).Format(time.RFC3339),
+		"lastSeen":  time.Unix(0, g.LastSeen).In(loc).Format(time.RFC3339),
+		"timezone":  loc.String(),
 	}
 	mp, _ := json.Marshal(meta)
 	var sb strings.Builder

@@ -59,6 +59,7 @@ import { readSSE } from './sse';
 // which has no day unit; see the type's comment in utils.ts.
 import type { GoDuration } from './utils';
 import { decodeBundle, SERIES_ENC, type CompactSeries } from './seriesCompact';
+import { browserTz, tzBodyFields, withTzQuery } from './browserTz'; // v0.10.745 — kanıt damgaları operatör diliminde
 
 // Empty base = same origin (works in production where Go serves both UI and API).
 // In dev, Next.js rewrites /api/* to http://localhost:8088 (see next.config.mjs).
@@ -88,19 +89,17 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 
 // explainInit (v0.9.831) — Explain uçlarının istek gövdesi.
 //
-// includeCode verilmediyse gövde HİÇ gönderilmez: bu uçlar bugüne
-// kadar gövdesiz POST alıyor ve sunucu boş gövdeyi "kodsuz" olarak
-// çözüyor. Boş bir `{}` göndermek de çalışırdı ama "değişmedi"
-// niyetini kaybederdi.
-//
-// Kod okuma bir depo listelemesi + dosya çekmesi demek; varsayılan
-// KAPALI olması ve yalnız operatör isteyince açılması bilinçli.
+// v0.10.745 — gövde ARTIK HER ZAMAN gider: tarayıcının saat dilimi
+// (tz + tzOffsetMin, sohbet bağlamıyla aynı çift) olmadan sunucu kanıt
+// damgalarını UTC yazıyor, model onu yerel saat sanıp aktarıyordu
+// (operatör: "tepe 22:30" dedi, ekran 01:30). includeCode yalnız
+// operatör isteyince true: kod okuma bir depo listelemesi + dosya
+// çekmesi demek, varsayılan KAPALI olması bilinçli.
 function explainInit(includeCode?: boolean): RequestInit {
-  if (!includeCode) return { method: 'POST' };
   return {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ includeCode: true }),
+    body: JSON.stringify({ ...(includeCode ? { includeCode: true } : {}), ...tzBodyFields() }),
   };
 }
 
@@ -2198,12 +2197,9 @@ export const api = {
   ): Promise<void> => {
     // v0.10.437 (D6) — tarayıcı saat dilimi: mutlak tarih/saat soruları
     // ("08/08/2026 04-08 arası") operatörün yerel saatinde yorumlanır.
-    // getTimezoneOffset UTC'nin GERİSİNİ verir (İstanbul −180) → işaret çevrilir.
-    const tzOffsetMin = -new Date().getTimezoneOffset();
-    // v0.10.445 — IANA adı da gider: sabit ofset DST'yi bilmez (kışın
-    // sorulan yaz tarihi bir saat kayıyordu); sunucu adı çözebilirse onu kullanır.
-    let tz = '';
-    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? ''; } catch { tz = ''; }
+    // v0.10.445 — IANA adı da gider (sabit ofset DST'yi bilmez).
+    // v0.10.745 — çift lib/browserTz'den; Explain/insight uçlarıyla aynı kaynak.
+    const { tz, tzOffsetMin } = browserTz();
     const context =
       contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || tzOffsetMin !== 0 || tz
         ? {
@@ -2328,6 +2324,9 @@ export const api = {
     if (opts?.windowSec && opts.windowSec > 0) {
       path += `?window=${Math.round(opts.windowSec)}s`;
     }
+    // v0.10.745 — GET ucu gövde taşımaz: dilim çifti sorgu dizesinde
+    // (kartın anlatısı da aynı kanıttan üretilir, damgalar yerel olmalı).
+    path = withTzQuery(path);
     if (!opts?.onSignals && !opts?.onDelta) {
       // Kancasız yol da insightFrame'den GEÇER: iki kipin biri normalize
       // edip öteki etmezse `signals: null` taşıyan bir gövde yalnız

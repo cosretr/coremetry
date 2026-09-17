@@ -30,7 +30,7 @@ func (s *Server) copilotExplainException(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	opts := decodeExplainOptions(r)
-	in := anomaly.BuildExceptionExplainInput(r.Context(), s.store, s.logs, g)
+	in := anomaly.BuildExceptionExplainInput(r.Context(), s.store, s.logs, g, opts.location())
 
 	// v0.9.831 — "Kodu da incele". Varsayılan KAPALI: kod çekmek bir
 	// depo listelemesi + dosya okuması demek, her Explain tıkında

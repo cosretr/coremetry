@@ -281,7 +281,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// v0.9.482 — özne (context.subject) doluysa aynı yol ilgili explain'in
 	// HAM KANITINI da yeniden kurup anlatıma katar; kanıt çekilemezse
 	// v0.9.479'un metin-tabanlı anlatımı aynen sürer (soft-fail).
-	if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service); handled {
+	// v0.10.745 — çekmece kanıtındaki damgalar da operatörün diliminde.
+	if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
 		cspan.tier("drawer", dok)
 		emit("done", map[string]bool{"ok": dok})
 		return

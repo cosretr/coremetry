@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/devops"
 	"github.com/cilcenk/coremetry/internal/stackparse"
@@ -24,6 +26,18 @@ import (
 // explainOptions — Explain uçlarının opsiyonel gövdesi.
 type explainOptions struct {
 	IncludeCode bool `json:"includeCode"`
+	// Tz / TzOffsetMin (v0.10.745) — tarayıcının saat dilimi, sohbet
+	// bağlamındaki çiftin aynısı (copilot_chat.go). Kanıttaki mutlak
+	// damgalar bu dilimde yazılır; yoksa UTC (etiketli). Gövdede ya da
+	// sorgu dizesinde (insight GET ucu gövde taşımaz) gelebilir.
+	Tz          string `json:"tz"`
+	TzOffsetMin int    `json:"tzOffsetMin"`
+}
+
+// location — dilimi çözer: IANA adı (DST doğru) > sabit ofset > UTC.
+// chatLocationNamed'in şekil kapısı geçersiz adı sessizce ofsete düşürür.
+func (o explainOptions) location() *time.Location {
+	return chatLocationNamed(o.Tz, o.TzOffsetMin)
 }
 
 // decodeExplainOptions — gövdeyi okur. BOŞ GÖVDE GEÇERLİDİR: bu uçlar
@@ -33,15 +47,27 @@ type explainOptions struct {
 // zenginleştirme uğruna çalışan bir yüzeyi kırmak olurdu.
 func decodeExplainOptions(r *http.Request) explainOptions {
 	var o explainOptions
-	if r == nil || r.Body == nil {
+	if r == nil {
 		return o
 	}
-	// 4KB yeter: gövdede tek bir bayrak var.
-	b, err := io.ReadAll(io.LimitReader(r.Body, 4096))
-	if err != nil || len(strings.TrimSpace(string(b))) == 0 {
-		return o
+	if r.Body != nil {
+		// 4KB yeter: gövdede bir bayrak + dilim çifti var.
+		b, err := io.ReadAll(io.LimitReader(r.Body, 4096))
+		if err == nil && len(strings.TrimSpace(string(b))) > 0 {
+			_ = json.Unmarshal(b, &o)
+		}
 	}
-	_ = json.Unmarshal(b, &o)
+	// v0.10.745 — sorgu dizesi yalnız gövdenin BOŞ bıraktığını doldurur
+	// (gövde yazan çağıran kazanır); insight GET ucu yalnız buradan gelir.
+	q := r.URL.Query()
+	if o.Tz == "" {
+		o.Tz = strings.TrimSpace(q.Get("tz"))
+	}
+	if o.TzOffsetMin == 0 {
+		if n, err := strconv.Atoi(strings.TrimSpace(q.Get("tzOffsetMin"))); err == nil {
+			o.TzOffsetMin = n
+		}
+	}
 	return o
 }
 

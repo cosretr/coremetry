@@ -391,7 +391,7 @@ const drawerEvidenceHeader = "HAM KANIT (bu açıklamanın dayandığı veri —
 //
 // Maliyet: soru başına TEK sınırlı pass, üst-zaman aşımı ile çitlenir —
 // yavaş bir CH/ES sohbeti askıda bırakamaz.
-func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject) string {
+func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject, loc *time.Location) string {
 	ectx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	switch subj.Kind {
@@ -416,7 +416,7 @@ func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject) 
 		if err != nil || g == nil {
 			return ""
 		}
-		in := anomaly.BuildExceptionExplainInput(ectx, s.store, s.logs, g)
+		in := anomaly.BuildExceptionExplainInput(ectx, s.store, s.logs, g, loc)
 		return clampDrawerEvidence(in.User, in.LogsBlock)
 	}
 	return ""
@@ -514,7 +514,7 @@ func drawerNarrationUser(question, explain string, msgs []copilot.ChatMessage, e
 // v0.9.482: subject (frontend `?ai=` kodeği) doluysa ilgili explain'in
 // kanıt paketi yeniden kurulur ve anlatıma girer. Kanıt YOKSA/çekilemezse
 // akış v0.9.479'daki metin-tabanlı anlatımdır — soft-fail.
-func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, explain, subject, ctxService string) (handled, ok bool) {
+func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, explain, subject, ctxService string, loc *time.Location) (handled, ok bool) {
 	ex := clampDrawerExplain(explain)
 	question := strings.TrimSpace(lastUserText(msgs))
 	if ex == "" || question == "" {
@@ -527,7 +527,7 @@ func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), 
 	// soru başına tek pass. Çekilemezse çip de düşmez, akış bozulmaz.
 	evidence, evidenceKind := "", ""
 	if subj, sok := parseDrawerSubject(subject); sok {
-		if evidence = s.drawerSubjectEvidence(ctx, subj); evidence != "" {
+		if evidence = s.drawerSubjectEvidence(ctx, subj, loc); evidence != "" {
 			evidenceKind = subj.Kind
 			if step := drawerEvidenceStep(subj.Kind); step != "" {
 				// v0.9.1229 — çipin kanıtı, anlatıma giren HAM kanıt paketinin
