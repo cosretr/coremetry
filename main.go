@@ -706,6 +706,10 @@ func main() {
 
 	// ── Auth (JWT issuer + initial admin seed) ────────────────────────────────
 	authSvc := auth.NewService(cfg.Auth.JWTSecret, cfg.Auth.TokenTTL)
+	// v0.10.749 — bildirimdeki "Sustur" bağlantısı: imza anahtarı JWT secret,
+	// COREMETRY_NOTIFY_ACTION_SECRET verilirse o (docs/ENV.md §6).
+	authSvc.SetActionSecret(os.Getenv("COREMETRY_NOTIFY_ACTION_SECRET"))
+	notifier.SetActionSigner(authSvc.SignAction)
 	// v0.9.352 — authorization is resolved from the store on every request
 	// instead of being read out of the (up to 24h old) token. Without this,
 	// deleting or demoting a user took effect only when their session

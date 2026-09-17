@@ -17,7 +17,7 @@ func TestRenderWebhookBody(t *testing.T) {
 	}
 	out, err := renderWebhookBody(
 		`{"svc":"{{.Problem.Service}}","sev":"{{.Problem.Severity}}","url":"{{.CoremetryURL}}","v":{{printf "%.1f" .Problem.Value}}}`,
-		p, "https://x/problems?problem=p1")
+		p, "https://x/problems?problem=p1", "")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}

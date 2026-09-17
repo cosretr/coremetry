@@ -58,6 +58,9 @@ type Claims struct {
 type Service struct {
 	secret []byte
 	ttl    time.Duration
+	// actionSecret — v0.10.749 bildirim eylem jetonu anahtarı (action_token.go);
+	// boşsa secret. COREMETRY_NOTIFY_ACTION_SECRET ile ayrılır.
+	actionSecret []byte
 
 	// Trusted-header auth — optional. When non-nil and Enabled,
 	// the Middleware accepts identity from upstream-proxy
@@ -293,6 +296,10 @@ func SkipPath(method, path string) bool {
 	// random token in the path is the security boundary; same
 	// threat model as the heartbeat ingest below.
 	if strings.HasPrefix(path, "/api/public/trace/") {
+		return true
+	}
+	// v0.10.749 — bildirimdeki "Sustur" bağlantısı: imzalı jeton, oturum yok.
+	if strings.HasPrefix(path, "/api/public/notify/") {
 		return true
 	}
 	// Heartbeat ingest is unauth'd by design — cron jobs / batch

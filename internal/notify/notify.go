@@ -182,7 +182,8 @@ type EventPublisher interface {
 // Notifier is the small surface the evaluator + anomaly worker call into.
 // Construction is cheap; share one across the process.
 type Notifier struct {
-	store *chstore.Store
+	actionSigner ActionSigner // v0.10.749 — "Sustur" bağlantısı imzalayıcısı (ignore_link.go)
+	store        *chstore.Store
 
 	mu       sync.RWMutex
 	smtp     SMTPSettings
@@ -476,6 +477,14 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 	// Resolution events still go through (status=resolved
 	// short-circuits this branch on its own).
 	if p.Status == "acknowledged" {
+		return
+	}
+	// v0.10.749 — bildirim bağlantısından SUSTURULMUŞ kimlik: hiçbir
+	// fan-out yok (ekip maili, kanallar, çözüm dahil — ack yalnız açık
+	// yeniden-ateşlemeyi keser, çözüm maili yine giderdi). CH hatası =
+	// susturulmamış say: bildirim kaybetmek fazladan bir mailden kötü.
+	if ok, err := n.store.NotificationIgnored(ctx, p.ID); err == nil && ok {
+		log.Printf("[notify] ignored via notification link — skipping fan-out: %s · %s", p.ID, p.RuleName)
 		return
 	}
 	// Service catalog row — shared by the team-routing mail below AND
@@ -1136,14 +1145,31 @@ func (n *Notifier) sendEmail(ctx context.Context, c chstore.NotificationChannel,
 	// (v0.9.513 seçenek-A) ve hipotez o pencerede DOLUYOR. Best-effort:
 	// yoksa/zayıfsa hiçbir şey basılmaz, mail biçimi birebir eski.
 	rc := n.hypothesisForMail(ctx, p)
-	msg, err := composeAltEmail(fromHeader, ec.Recipients, subject,
-		n.buildEmailBody(p, rc), n.buildEmailHTML(p, rc))
-	if err != nil {
-		return fmt.Errorf("compose email: %w", err)
-	}
-
 	addr := net.JoinHostPort(smtpCfg.Host, strconv.Itoa(smtpCfg.Port))
-	return sendSMTP(addr, smtpCfg, from, ec.Recipients, msg)
+	// v0.10.749 — "Sustur" bağlantısı alıcıya ÖZEL (jeton alıcının adresini
+	// taşır → audit "kim susturdu"), o yüzden imzalayıcı varsa her alıcıya
+	// AYRI mail. İmzalayıcı/public URL yoksa eski tek-mail yolu bayt-bayt.
+	if n.ignoreURL(p, ec.Recipients[0]) == "" {
+		msg, err := composeAltEmail(fromHeader, ec.Recipients, subject,
+			n.buildEmailBody(p, rc), n.buildEmailHTML(p, rc))
+		if err != nil {
+			return fmt.Errorf("compose email: %w", err)
+		}
+		return sendSMTP(addr, smtpCfg, from, ec.Recipients, msg)
+	}
+	var errs []error
+	for _, rcpt := range ec.Recipients {
+		ignore := n.ignoreURL(p, rcpt)
+		msg, err := composeAltEmail(fromHeader, []string{rcpt}, subject,
+			n.buildEmailBodyWith(p, rc, ignore), n.buildEmailHTMLWith(p, rc, ignore))
+		if err != nil {
+			return fmt.Errorf("compose email: %w", err)
+		}
+		if err := sendSMTP(addr, smtpCfg, from, []string{rcpt}, msg); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", rcpt, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // composeAltEmail assembles a multipart/alternative RFC-5322 message:
@@ -1240,6 +1266,12 @@ func hypothesisReason(rc *chstore.RootCauseHypothesis) string {
 }
 
 func (n *Notifier) buildEmailBody(p chstore.Problem, rc *chstore.RootCauseHypothesis) string {
+	return n.buildEmailBodyWith(p, rc, "")
+}
+
+// buildEmailBodyWith — v0.10.749: alıcıya özel "Sustur" bağlantısı
+// (boş = satır basılmaz, gövde bayt-bayt eski).
+func (n *Notifier) buildEmailBodyWith(p chstore.Problem, rc *chstore.RootCauseHypothesis, ignore string) string {
 	t := time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", p.Description)
@@ -1265,6 +1297,9 @@ func (n *Notifier) buildEmailBody(p chstore.Problem, rc *chstore.RootCauseHypoth
 	}
 	if u := n.subjectURL(p); u != "" {
 		fmt.Fprintf(&b, "Open:       %s\n", u)
+	}
+	if ignore != "" {
+		fmt.Fprintf(&b, "Sustur:     %s\n", ignore)
 	}
 	// v0.9.513 — AI kök-sebep özeti. Boşsa hiçbir şey basılmaz (mevcut
 	// mail biçimi birebir korunur). "AI" etiketi BİLEREK duruyor: özet
@@ -1313,6 +1348,11 @@ func (n *Notifier) buildEmailBody(p chstore.Problem, rc *chstore.RootCauseHypoth
 // dynamic field is HTML-escaped — service/rule/description are
 // operator-shaped free text and must never inject markup.
 func (n *Notifier) buildEmailHTML(p chstore.Problem, rc *chstore.RootCauseHypothesis) string {
+	return n.buildEmailHTMLWith(p, rc, "")
+}
+
+// buildEmailHTMLWith — v0.10.749: "Bu alarmı sustur" düğmesi (boş = yok).
+func (n *Notifier) buildEmailHTMLWith(p chstore.Problem, rc *chstore.RootCauseHypothesis, ignore string) string {
 	esc := html.EscapeString
 	sev := strings.ToUpper(p.Severity)
 	t := time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339)
@@ -1395,6 +1435,12 @@ func (n *Notifier) buildEmailHTML(p chstore.Problem, rc *chstore.RootCauseHypoth
 		b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0"><tr>` +
 			`<td bgcolor="#111827" style="padding:9px 18px"><a href="` + esc(u) +
 			`" style="` + font + `;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600">Open in Coremetry</a></td></tr></table>`)
+	}
+	if ignore != "" {
+		// v0.10.749 — tek tık, kimliksiz, imzalı (ignore_link.go); alıcıya özel.
+		b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0"><tr>` +
+			`<td bgcolor="#6b7280" style="padding:7px 14px"><a href="` + esc(ignore) +
+			`" style="` + font + `;color:#ffffff;text-decoration:none;font-size:12px">Bu alarmı sustur</a></td></tr></table>`)
 	}
 	b.WriteString(`</td></tr></table>`)
 	b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="` + font + `;padding:12px 0 0;font-size:11px;color:#9ca3af" align="center">Coremetry problem alert</td></tr></table>`)
@@ -1540,6 +1586,13 @@ func (n *Notifier) sendSlack(ctx context.Context, c chstore.NotificationChannel,
 			"short": false,
 		})
 	}
+	if u := n.ignoreURL(p, channelWho(c)); u != "" { // v0.10.749
+		fields = append(fields, map[string]any{
+			"title": "Sustur",
+			"value": fmt.Sprintf("<%s|Bu alarmı sustur>", u),
+			"short": false,
+		})
+	}
 	body := map[string]any{
 		"text": alertTitle(p),
 		"attachments": []map[string]any{{
@@ -1602,6 +1655,15 @@ func (n *Notifier) sendTeams(ctx context.Context, c chstore.NotificationChannel,
 		actions = append(actions, map[string]any{
 			"@type": "OpenUri",
 			"name":  "Open in Coremetry",
+			"targets": []map[string]string{
+				{"os": "default", "uri": u},
+			},
+		})
+	}
+	if u := n.ignoreURL(p, channelWho(c)); u != "" { // v0.10.749
+		actions = append(actions, map[string]any{
+			"@type": "OpenUri",
+			"name":  "Bu alarmı sustur",
 			"targets": []map[string]string{
 				{"os": "default", "uri": u},
 			},
@@ -1717,6 +1779,9 @@ func (n *Notifier) sendZoomChat(ctx context.Context, c chstore.NotificationChann
 	}
 	if u := n.subjectURL(p); u != "" {
 		msg += "\n• View in Coremetry: " + u
+	}
+	if u := n.ignoreURL(p, channelWho(c)); u != "" { // v0.10.749
+		msg += "\n• Sustur: " + u
 	}
 
 	payload := map[string]any{"message": msg}
@@ -1978,6 +2043,7 @@ func (n *Notifier) sendWebhook(ctx context.Context, c chstore.NotificationChanne
 	payload := map[string]any{
 		"problem":      p,
 		"coremetryUrl": n.subjectURL(p),
+		"ignoreUrl":    n.ignoreURL(p, channelWho(c)), // v0.10.749 — boş string = bağlantı yok
 	}
 	// v0.8.445 — şablonlu gövde: alıcının (Studio agent tetikleyicisi,
 	// PagerDuty Events, n8n özel şeması) beklediği şekli operatör
@@ -1985,7 +2051,7 @@ func (n *Notifier) sendWebhook(ctx context.Context, c chstore.NotificationChanne
 	// bildirim şablon yüzünden ASLA kaybolmaz.
 	var body []byte
 	if strings.TrimSpace(wc.BodyTemplate) != "" {
-		if rendered, err := renderWebhookBody(wc.BodyTemplate, p, n.subjectURL(p)); err == nil {
+		if rendered, err := renderWebhookBody(wc.BodyTemplate, p, n.subjectURL(p), n.ignoreURL(p, channelWho(c))); err == nil {
 			body = rendered
 		} else {
 			log.Printf("[notify] webhook %s şablon render hatası (default gövdeye düşüldü): %v", c.Name, err)
@@ -2006,18 +2072,19 @@ func (n *Notifier) sendWebhook(ctx context.Context, c chstore.NotificationChanne
 type webhookTemplateData struct {
 	Problem      chstore.Problem
 	CoremetryURL string
+	IgnoreURL    string // v0.10.749 — {{.IgnoreURL}}; imzalayıcı yoksa ""
 }
 
 // renderWebhookBody — pure: şablon + problem → gövde. missingkey=error
 // ile yazım hataları sessizce boş string üretmek yerine hata verir
 // (ve default gövdeye düşülür).
-func renderWebhookBody(tmpl string, p chstore.Problem, url string) ([]byte, error) {
+func renderWebhookBody(tmpl string, p chstore.Problem, url, ignoreURL string) ([]byte, error) {
 	t, err := template.New("webhook").Option("missingkey=error").Parse(tmpl)
 	if err != nil {
 		return nil, err
 	}
 	var buf bytes.Buffer
-	if err := t.Execute(&buf, webhookTemplateData{Problem: p, CoremetryURL: url}); err != nil {
+	if err := t.Execute(&buf, webhookTemplateData{Problem: p, CoremetryURL: url, IgnoreURL: ignoreURL}); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -2033,7 +2100,7 @@ func ValidateWebhookTemplate(tmpl string) error {
 		ID: "sample", Service: "checkout", Severity: "critical",
 		RuleName: "sample rule", Metric: "error_rate", Value: 7.5, Threshold: 5,
 		Status: "open", StartedAt: 1_700_000_000_000_000_000,
-	}, "https://coremetry.local/problems?problem=sample")
+	}, "https://coremetry.local/problems?problem=sample", "https://coremetry.local/api/public/notify/ignore/sample")
 	return err
 }
 

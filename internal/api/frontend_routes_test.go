@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -179,8 +181,19 @@ func TestServerEmittedPathsAreRegisteredRoutes(t *testing.T) {
 		t.Fatalf("yalnız %d frontend yolu bulundu — dedektör kaymış olmalı", len(found))
 	}
 
+	// v0.10.749 — `/api/` altındaki emisyon SPA rotası değil, mux kalıbıdır
+	// (bildirimdeki imzalı "Sustur" bağlantısı /api/public/notify/ignore/).
+	// Kapı GEVŞEMEZ: yol mux'ta gerçek bir kalıba düşmeli; catch-all "/"
+	// (SPA) ya da boş eşleşme = kayıtsız, operatör ana sayfaya düşerdi.
+	mux := (&Server{}).buildMux()
 	var bad []string
 	for p, srcs := range found {
+		if strings.HasPrefix(p, "/api/") {
+			if !muxServesAPIPath(mux, p) {
+				bad = append(bad, p+" (mux kalıbı yok; "+strings.Join(srcs, ", ")+")")
+			}
+			continue
+		}
 		if !routes[p] {
 			bad = append(bad, p+" ("+strings.Join(srcs, ", ")+")")
 		}
@@ -238,4 +251,16 @@ func TestCatchAllStillRedirectsHome(t *testing.T) {
 		t.Error(`catch-all artık ana sayfaya yönlendirmiyor — bu dosyanın şerhlerini güncelle ` +
 			`(kayıtsız yolun zararı "sessiz yön değişimi" olmaktan çıkmış olabilir)`)
 	}
+}
+
+// muxServesAPIPath — emisyon bir önek olabilir ("/api/x/{id}" için
+// "/api/x/"); örnek bir segment ekleyip mux'a sorarız. Go 1.22 mux
+// eşleşen KALIBI döndürür; SPA catch-all "/" ya da "" = kayıtsız.
+func muxServesAPIPath(mux *http.ServeMux, p string) bool {
+	probe := p
+	if strings.HasSuffix(probe, "/") {
+		probe += "x"
+	}
+	_, pat := mux.Handler(httptest.NewRequest(http.MethodGet, probe, nil))
+	return pat != "" && pat != "/"
 }
