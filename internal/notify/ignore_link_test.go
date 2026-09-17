@@ -45,6 +45,7 @@ func TestIgnoreURL(t *testing.T) {
 
 func TestEmailBodiesCarryIgnoreLink(t *testing.T) {
 	n := New(nil)
+	n.SetPublicURL("https://coremetry.example.com") // "Open" düğmesi de çizilsin (üretimde ignore varsa public URL da var)
 	p := chstore.Problem{ID: "p1", RuleName: "err rate", Service: "shop", Severity: "critical", Status: "open"}
 	const link = "https://coremetry.example.com/api/public/notify/ignore/tok"
 	plain := n.buildEmailBodyWith(p, nil, link)
@@ -54,6 +55,14 @@ func TestEmailBodiesCarryIgnoreLink(t *testing.T) {
 	}
 	if !strings.Contains(html, `href="`+link+`"`) || !strings.Contains(html, "Bu alarmı sustur") {
 		t.Errorf("HTML düğme yok:\n%s", html)
+	}
+	// v0.10.750 (operatör: "mailde butonlar kayıyor") — iki düğme TEK
+	// satırda, aralarında boşluk hücresi, AYNI dolgu; ikinci tablo/margin yok.
+	if !strings.Contains(html, `Open in Coremetry</a></td><td width="10"`) || !strings.Contains(html, `Bu alarmı sustur</a></td></tr></table>`) {
+		t.Errorf("düğmeler aynı satırda değil:\n%s", html)
+	}
+	if strings.Count(html, "padding:9px 18px") != 2 || strings.Contains(html, "margin:8px 0 0") || strings.Count(html, `style="margin:16px 0 0"`) != 1 {
+		t.Errorf("düğme dolgusu/tablosu eşit değil:\n%s", html)
 	}
 	// Bağlantısız çağrı bayt-bayt eski: "Sustur" geçmez.
 	if strings.Contains(n.buildEmailBody(p, nil), "Sustur") || strings.Contains(n.buildEmailHTML(p, nil), "sustur") {

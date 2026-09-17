@@ -1429,18 +1429,31 @@ func (n *Notifier) buildEmailHTMLWith(p chstore.Problem, rc *chstore.RootCauseHy
 		}
 		b.WriteString(`</div></td></tr></table>`)
 	}
-	if u := n.subjectURL(p); u != "" {
-		// Bulletproof button: padding + bgcolor on the td (Word honours
-		// both), the anchor only colours its text.
-		b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0"><tr>` +
-			`<td bgcolor="#111827" style="padding:9px 18px"><a href="` + esc(u) +
-			`" style="` + font + `;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600">Open in Coremetry</a></td></tr></table>`)
-	}
-	if ignore != "" {
-		// v0.10.749 — tek tık, kimliksiz, imzalı (ignore_link.go); alıcıya özel.
-		b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0"><tr>` +
-			`<td bgcolor="#6b7280" style="padding:7px 14px"><a href="` + esc(ignore) +
-			`" style="` + font + `;color:#ffffff;text-decoration:none;font-size:12px">Bu alarmı sustur</a></td></tr></table>`)
+	// Bulletproof buttons: padding + bgcolor on the td (Word honours
+	// both), the anchor only colours its text.
+	//
+	// v0.10.750 (operatör: "mailde butonlar kayıyor") — "Open" ve "Sustur"
+	// (v0.10.749, ignore_link.go) TEK tabloda TEK satırda, AYNI dolgu ve
+	// yazı. Ayrı tablolar Outlook'ta kayıyordu: ikinci tablonun margin'i
+	// Word motorunda farklı çözülüyor, dolgu/yazı farkı da hizayı
+	// bozuyordu. Aradaki boşluk bir HÜCRE (margin/padding değil —
+	// Outlook-güvenli tek yol).
+	if u, ig := n.subjectURL(p), ignore; u != "" || ig != "" {
+		btn := func(bg, href, label string) string {
+			return `<td bgcolor="` + bg + `" style="padding:9px 18px"><a href="` + esc(href) +
+				`" style="` + font + `;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600">` + label + `</a></td>`
+		}
+		b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0"><tr>`)
+		if u != "" {
+			b.WriteString(btn("#111827", u, "Open in Coremetry"))
+		}
+		if u != "" && ig != "" {
+			b.WriteString(`<td width="10" style="width:10px;font-size:0;line-height:0">&nbsp;</td>`)
+		}
+		if ig != "" {
+			b.WriteString(btn("#6b7280", ig, "Bu alarmı sustur"))
+		}
+		b.WriteString(`</tr></table>`)
 	}
 	b.WriteString(`</td></tr></table>`)
 	b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="` + font + `;padding:12px 0 0;font-size:11px;color:#9ca3af" align="center">Coremetry problem alert</td></tr></table>`)
