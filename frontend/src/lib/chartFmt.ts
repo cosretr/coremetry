@@ -49,6 +49,13 @@ export function fmtSmart(v: number | null | undefined, unit?: string): string {
     return fmtCount(v) + ' ' + u;
   }
 
+  // v0.10.759 — SAYIM: tam sayı ("39", "1.23k"); fmtCount'un "39.0"su bir
+  // trace/span sayısı için yanlış hassasiyet (operatör: şerit ipucu).
+  if (u === 'count') {
+    const abs = Math.abs(v);
+    return abs >= 1e3 ? fmtCount(v) : String(Math.round(v));
+  }
+
   // Default — count + optional unit
   return fmtCount(v) + (u ? ' ' + u : '');
 }

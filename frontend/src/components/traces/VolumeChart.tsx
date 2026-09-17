@@ -86,8 +86,12 @@ export function VolumeChart({
           times={times}
           series={series}
           height={height}
-          leftUnit=""
-          rightUnit=""
+          // v0.10.759 (operatör, prod: ipucu "response time (median) 1.3k") —
+          // birimler ipucu + lejant için: sol süre (ms → fmtSmart "1.3s"),
+          // sağ sayım (tam sayı). Eksen biçimleyicisi (fmtLeft) aynen; boş
+          // birim ipucuyu k-sonekli sayıya düşürüyordu.
+          leftUnit="ms"
+          rightUnit="count"
           onBrush={onBrush}
           onZoomReset={onZoomReset}
           // v0.10.656 (operatör) — SÜRE sol eksende (fmtLeft = ms/s
