@@ -108,7 +108,10 @@ whole-repo sweeps stay with `/scale-audit`),
 `/frontend-design-system` (BEFORE writing any UI part — search for the
 existing primitive first; the `ui/` barrel is incomplete),
 `/otlp-converter` (BEFORE touching `internal/otlp/` — field map +
-what silently drops + golden-test obligation).
+what silently drops + golden-test obligation),
+`/aiops` (BEFORE adding/changing a detector, rule-id prefix, priority or
+escalation rule, incident attach, hypothesis score, exception ladder step
+or any loop writing problems/anomaly_events/root_cause_hypotheses).
 
 ## Frontend UI conventions
 
