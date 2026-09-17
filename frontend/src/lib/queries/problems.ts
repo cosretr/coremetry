@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { GoDuration } from '@/lib/utils';
 import { keys } from './keys';
-import type { Problem, EvaluatorHealth, BlastRadius } from '@/lib/types';
+import type { Problem, EvaluatorHealth, BlastRadius, ProblemStats } from '@/lib/types';
 
 // /api/problems — the open-incident inbox feeding /problems,
 // /anomalies, the sidebar badge, and several deep-link
@@ -170,5 +170,16 @@ export function useProblemAffected(id: string, enabled = true) {
     queryFn: ({ signal }) => api.problemAffected(id, signal),
     enabled: enabled && !!id,
     staleTime: 60_000,
+  });
+}
+
+// v0.10.774 — Problems yaşam döngüsü şeridi. 60 s sunucu önbelleğiyle hizalı
+// staleTime; tik gizli sekmede durur (refetchIntervalInBackground=false).
+export function useProblemStats(win: string, env?: string) {
+  return useQuery<ProblemStats>({
+    queryKey: [...keys.problems.all, 'stats', win, env ?? ''],
+    queryFn: () => api.problemStats({ win, env: env || undefined }),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 }

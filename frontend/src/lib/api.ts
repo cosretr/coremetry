@@ -944,6 +944,9 @@ export const api = {
   //
   // It deliberately takes no priority param — that is the whole point — and
   // is server-cached 5s on a key shared across viewers.
+  /** v0.10.774 — Problems başlığı yaşam döngüsü şeridi (açılan/çözülen seri, MTTR, dağılımlar); 60 s önbellek. */
+  problemStats: (params: { win: string; env?: string }) =>
+    get<import('./types').ProblemStats>(`/api/problems/stats?${qs(params)}`),
   problemBuckets: (params: { status?: string; service?: string; env?: string; ownerTeam?: string; sreTeam?: string; cluster?: string } = {}) =>
     get<{ severity: Record<string, number>; priority: Record<string, number>; total: number } | null>(
       `/api/problems/buckets?${qs(params)}`),

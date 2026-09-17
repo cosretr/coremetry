@@ -5,7 +5,7 @@
 
 export { keys } from './keys';
 export { useHealth } from './health';
-export { useProblems, useProblemByID, useOpenProblemCount, useOpenCriticalCount, useEvaluatorHealth } from './problems';
+export { useProblems, useProblemByID, useOpenProblemCount, useOpenCriticalCount, useEvaluatorHealth, useProblemStats } from './problems'; // v0.10.774 — useProblemStats
 export {
   useLogPatternAnomalies, useTraceOpAnomalies, useMetricAnomalies,
   useAnomalyEvents, useAnomalySilences,
