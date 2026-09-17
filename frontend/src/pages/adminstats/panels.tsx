@@ -14,6 +14,7 @@ import { fmtNum, fmtClock } from '@/lib/utils';
 import { KPI, fmtUptime, fmtBytes } from './shared';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { RedisStats, CacheStats, SystemStats, SpoolState } from '@/lib/types';
+import { orderSpoolTables } from './spoolOrder'; // v0.10.761
 
 type TopKeyRow = CacheStats['topKeys'][number];
 
@@ -772,12 +773,21 @@ function SpoolRunbook() {
               Distributed envanteri; elle ad girilemez. */}
           <div>
             <b>1 · Eylemler</b> <span style={{ color: 'var(--text3)' }}>(admin; her biri audit&apos;e düşer)</span>
-            {(state.tables ?? []).map(t => {
+            {/* v0.10.761 (operatör prod ekranı) — kuyruğu olan tablo başa, satırda
+                bekleyen/bozuk dosya rozeti: 30 tablolık listede hangi düğmeye
+                basılacağı üstteki panele bakmadan görünsün. */}
+            {orderSpoolTables(state.tables, state.queue?.tables).map(row => {
+              const t = row.table;
               const fl = state.flights.find(f => f.table === t && !f.doneAt);
               const done = state.flights.find(f => f.table === t && f.doneAt);
               return (
                 <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <code style={{ minWidth: 140 }}>{t}</code>
+                  {row.files > 0
+                    ? <span className="badge b-err" title={row.errorCount > 0 ? `${fmtNum(row.errorCount)} gönderim hatası` : undefined}>{fmtNum(row.files)} dosya bekliyor{row.brokenFiles > 0 ? ` · ${fmtNum(row.brokenFiles)} bozuk` : ''}</span>
+                    : row.brokenFiles > 0
+                      ? <span className="badge b-err">{fmtNum(row.brokenFiles)} bozuk</span>
+                      : <span className="badge b-gray" title="Bu tabloda bekleyen spool dosyası yok">kuyruk boş</span>}
                   <Button variant="secondary" size="sm" disabled={busy !== ''}
                     onClick={() => void act('start', t)}>Göndericiyi başlat</Button>
                   <Button variant="ghost-danger" size="sm" disabled={busy !== '' || !!fl}
