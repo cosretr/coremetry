@@ -29,3 +29,26 @@ export function tracesEmptyReason(i: TracesEmptyInput): TracesEmptyReason {
   if (i.serviceSpans === undefined) return 'unmeasured';
   return i.serviceSpans > 0 ? 'predicate' : 'aged';
 }
+
+/**
+ * v0.10.753 — `?traceId=` (Trace ID kutusu / derin bağlantı) ile gelen boş
+ * listenin metni. Sunucu pencereyi trace'in gerçek zamanına çıpalar
+ * (identity.traceId + windowFrom/To); hits=0 → son 90 günün trace
+ * özetinde yok; hits>0 ama liste boş → bulundu, süzgeç/Root/hata eledi.
+ * Saf: fmt zaman biçimleyicisi dışarıdan (tsLong).
+ */
+export function traceIdIdentityText(
+  identity: { traceId?: boolean; hits: number; windowFromNs?: number; windowToNs?: number } | undefined,
+  traceId: string,
+  fmt: (ns: number) => string,
+): string | null {
+  if (!identity?.traceId) return null;
+  const id = traceId.trim() || '(id)';
+  if (identity.hits <= 0) {
+    return `Trace ${id} son 90 günün trace özetinde (trace_summary_5m) bulunamadı — id'yi ve saklama süresini kontrol et; trace detay sayfası (id'yi Trace ID kutusuna yazıp Enter) 31 günlük ham taramayı da dener.`;
+  }
+  const win = identity.windowFromNs && identity.windowToNs
+    ? ` Pencere trace zamanına çıpalandı: ${fmt(identity.windowFromNs)} → ${fmt(identity.windowToNs)}.`
+    : '';
+  return `Trace ${id} bulundu ama listeye girmedi: servis / süzgeç / Root / yalnız-hata seçimi onu eledi.${win}`;
+}

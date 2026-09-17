@@ -63,6 +63,7 @@ import { mergeTraceExtras, missingExtraKeys } from '@/lib/traceExtrasMerge';
 // testli (traceColumns.ts). İkisi de karar; mekanik değil.
 import { DEFAULT_TRACE_COLUMNS, FIXED_COLS, traceColumnOrder } from '@/lib/traceColumns';
 import { opChipFor, opCellText, opCellTitle } from './traces/opPick'; // v0.10.752
+import { traceIdIdentityText } from './traces/emptyReason'; // v0.10.753
 import { useContextParams, type ContextPatch } from '@/hooks/useContextParams';
 import { useTablePrefs } from '@/lib/queries/prefs';
 import { parseColsParam } from '@/lib/columnModel';
@@ -1432,7 +1433,7 @@ function TracesPageInner() {
           </Empty>
         )}
         {view === 'list' && !listErr && data && traces.length === 0 && (
-          <TracesEmpty service={filter.service} search={filter.search} range={range} onSwitchView={() => setView('aggregate')}
+          <TracesEmpty service={filter.service} search={filter.search} traceId={filter.traceId} range={range} onSwitchView={() => setView('aggregate')}
             explainHref={explainHref ?? undefined}
             matchingSpans={data?.emptyDiag?.matchingSpans}
             serviceSpans={data?.emptyDiag?.serviceSpans}
@@ -1652,6 +1653,8 @@ function TracesPageInner() {
                       title={`Arama terimi kimlik olarak eşleşti: ${data.identity.matchedKey ?? '?'} = ${filter.search} · ${data.identity.hits.toLocaleString()} trace${data.identity.bounded ? ' (tavan)' : ''}. Denenen anahtarlar: ${data.identity.keys.join(', ')}`}>
                       kimlik: {data.identity.matchedKey ?? '?'}{data.identity.traceId ? '' : ` (${data.identity.hits.toLocaleString()})`}
                       {data.identity.anchorMs ? ` · kimlikteki zaman ${tsLong(data.identity.anchorMs * 1e6)} ±12 s` : ''}
+                      {/* v0.10.753 — ?traceId=: pencere trace zamanına çıpalandı (1 saat varsayılanı değil). */}
+                      {data.identity.traceId && data.identity.windowFromNs ? ` · pencere trace zamanına çıpalandı (${tsLong(data.identity.windowFromNs)} → ${tsLong(data.identity.windowToNs ?? data.identity.windowFromNs)})` : ''}
                     </span>
                   ) : null}
                   {data?.rankedWithinRecent ? (
@@ -1852,8 +1855,10 @@ export default function TracesPage() {
 
 // TracesEmpty — distinguishes "aged out of raw spans (MV still has it)" from
 // "search matched nothing" so the operator gets the right next step.
-function TracesEmpty({ service, search, range, onSwitchView, narrowedFromNs, explainHref, matchingSpans, serviceSpans, promotedDiag, identity }: {
+function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narrowedFromNs, explainHref, matchingSpans, serviceSpans, promotedDiag, identity }: {
   service: string; search: string; range: TimeRange; onSwitchView: () => void;
+  // v0.10.753 — ?traceId= ile gelen boş liste: metin kimlik çıpasına göre (emptyReason.ts).
+  traceId?: string;
   // v0.10.339 — terfi kolonu probu (host başına kolon/dizi sayımı) — boş kaldıysa da göster.
   promotedDiag?: TracesResponse['emptyDiag'];
   // v0.10.342 — kimlik-önce arama denendiyse (tek parçalı terim) sonucu.
@@ -1914,7 +1919,12 @@ function TracesEmpty({ service, search, range, onSwitchView, narrowedFromNs, exp
           <>Try widening the time range, dropping the service or search filter, or turning off the "Root traces" chip. If even an unfiltered query is empty, check ingest health at <Link to="/system/stats" style={{ color: 'var(--accent2)' }}>system stats</Link>.</>
         )}
       </div>
-      {identity && (
+      {identity?.traceId && (
+        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
+          {traceIdIdentityText(identity, traceId, ns => tsLong(ns))}
+        </div>
+      )}
+      {identity && !identity.traceId && (
         <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
           Kimlik araması: <span className="mono">{search}</span> şu anahtarlarda eşitlikle denendi — {identity.keys.join(', ') || '—'}:{' '}
           {identity.error

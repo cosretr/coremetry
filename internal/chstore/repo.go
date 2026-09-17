@@ -2367,6 +2367,16 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 		}
 	}
 
+	// v0.10.753 — ?traceId= (listenin Trace ID kutusu / derin bağlantı):
+	// pencere trace'in GERÇEK zamanına çıpalanır (trace_id_anchor.go);
+	// sessiz 1 saat varsayılanı yerine. Sonuç IdentityHit ile yanıta gider.
+	if f.TraceID != "" {
+		hit := s.anchorTraceID(ctx, &f)
+		if f.IdentityHit != nil {
+			*f.IdentityHit = hit
+		}
+	}
+
 	// v0.10.342 — KİMLİK-ÖNCE (trace_identity_first.go): arama terimi tek
 	// parçalı bir kimlikse (function_id, trace id) önce indeksli eşitlik;
 	// bulunursa liste o trace'lerle sınırlı. Bulunmazsa/hata → eski yol.
