@@ -157,6 +157,11 @@ type IngestFleet struct {
 	Accepted    uint64
 	Dropped     uint64
 	WriteFailed uint64
+	// FirstSampleNs — pencerede defterin İLK örneği (tüm podlar); 0 = satır
+	// yok. Mutabakat oranı yalnız defterin kapsadığı kovalar üzerinden
+	// hesaplanır (v0.10.770: deploy'dan 15 dk sonra 6 saatlik pencere
+	// "%7495 saklandı" demişti).
+	FirstSampleNs int64
 }
 
 // ingestFleetPodsSQL — SAF: toplamlar yalnız YERLEŞMİŞ kısımdan (bucket <
@@ -169,6 +174,7 @@ func ingestFleetPodsSQL() string {
 		       sumIf(dropped, bucket < toDateTime(?, 'UTC'))      AS dropped,
 		       sumIf(write_failed, bucket < toDateTime(?, 'UTC')) AS write_failed,
 		       max(bucket)                                        AS last_sample,
+		       min(bucket)                                        AS first_sample,
 		       uniqExact(boot_id)                                 AS boots
 		FROM ingest_ledger FINAL
 		WHERE signal = ? AND bucket >= toDateTime(?, 'UTC') AND bucket < toDateTime(?, 'UTC')
@@ -202,12 +208,15 @@ func (s *Store) IngestLedgerFleet(ctx context.Context, signal string, from, sett
 	}
 	for rows.Next() {
 		var p IngestFleetPod
-		var last time.Time
-		if err := rows.Scan(&p.Pod, &p.Accepted, &p.Dropped, &p.WriteFailed, &last, &p.Boots); err != nil {
+		var last, first time.Time
+		if err := rows.Scan(&p.Pod, &p.Accepted, &p.Dropped, &p.WriteFailed, &last, &first, &p.Boots); err != nil {
 			rows.Close()
 			return out, err
 		}
 		p.LastSampleNs = last.UnixNano()
+		if fn := first.UnixNano(); out.FirstSampleNs == 0 || fn < out.FirstSampleNs {
+			out.FirstSampleNs = fn
+		}
 		out.Pods = append(out.Pods, p)
 		out.Accepted += p.Accepted
 		out.Dropped += p.Dropped

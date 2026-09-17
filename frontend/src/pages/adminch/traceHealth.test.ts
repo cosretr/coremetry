@@ -48,6 +48,10 @@ describe('traceHealth — filo', () => {
     expect(fleetVerdict({ ...base, storedSettled: 980 }).tone).toBe('b-warn');
     expect(fleetVerdict({ ...base, storedSettled: 900 }).tone).toBe('b-err');
     expect(fleetVerdict({ ...base, storedSettled: 1012 })).toEqual({ tone: 'b-ok', text: '%101 saklandı', pct: 101.2 });
+    // v0.10.770 — prod: defter 15 dk'lık, pencere 6 saat → %7495 yeşil çizilmişti.
+    expect(fleetVerdict({ ...base, storedSettled: 74950 })).toEqual({ tone: 'b-warn', text: '%7495 saklandı (kapsam?)', pct: 7495 });
+    expect(fleetVerdict({ ...base, coveredFrom: 1, settledTo: 1 }).text).toBe('defter henüz yerleşmedi');
+    expect(fleetVerdict({ ...base, settledTo: 10, coveredFrom: 5, accepted: 1, acceptedSettled: 1000 }).tone).toBe('b-ok');
     expect(fleetVerdict({ ...base, empty: true })).toEqual({ tone: 'b-gray', text: 'defter boş', pct: null });
     expect(fleetVerdict({ ...base, settledTo: 0 }).text).toBe('pencere kısa');
     expect(fleetVerdict({ ...base, storedKnown: false }).text).toBe('saklanan okunamadı');

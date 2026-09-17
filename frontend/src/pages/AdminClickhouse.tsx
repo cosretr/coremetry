@@ -1987,13 +1987,15 @@ function TraceHealthPanel() {
             </div>
             <div className="cell-hint" style={{ marginBottom: 4 }}>
               Pencere {hhmm(data.fleet.settledFrom)}–{hhmm(data.fleet.settledTo)}; son 10 dk dışarıda (span zamanı ≠ kabul zamanı).
-              Oran %100'ü aşabilir: geç span, write_failed MV kaskadını fazla sayar.
+              {data.fleet.coveredFrom > data.fleet.settledFrom && <> Oran defterin kapsadığı {hhmm(data.fleet.coveredFrom)}–{hhmm(data.fleet.settledTo)} üzerinden.</>}
+              {' '}Oran %100'ü aşabilir: geç span, write_failed MV kaskadını fazla sayar.
             </div>
             {data.fleet.detail && <div className="cell-hint" style={{ marginBottom: 4 }}>{data.fleet.detail}</div>}
             {kv('kabul edilen (filo)', fmtNum(data.fleet.accepted))}
             {kv('düşürülen (filo)', fmtNum(data.fleet.dropped))}
             {kv('yazma hatası (filo)', fmtNum(data.fleet.writeFailed))}
-            {kv("CH'de saklanan (pencere)", data.fleet.storedKnown ? fmtNum(data.fleet.storedSettled) : '—')}
+            {kv('kabul edilen (oran penceresi)', fmtNum(data.fleet.acceptedSettled))}
+            {kv("CH'de saklanan (oran penceresi)", data.fleet.storedKnown ? fmtNum(data.fleet.storedSettled) : '—')}
             {data.fleet.pods.length > 0 && (
               <table style={{ width: '100%', marginTop: 6, fontSize: 11 }}>
                 <thead>

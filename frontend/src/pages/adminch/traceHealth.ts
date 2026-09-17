@@ -49,15 +49,24 @@ export function nameTone(barePct: number | null): LossTone {
 // span; write_failed MV kaskadını fazla sayar) — olduğu gibi yazılır.
 export interface FleetLike {
   accepted: number; storedSettled: number; storedKnown: boolean; empty: boolean; settledFrom: number; settledTo: number;
+  /** v0.10.770 — defterin kapsadığı pencere; yoksa settledFrom / accepted kullanılır. */
+  coveredFrom?: number; acceptedSettled?: number;
 }
+// v0.10.770 — oran yalnız defterin kapsadığı kovalardan (prod: deploy'dan
+// 15 dk sonra 6 saatlik pencere "%7495" demişti). %110 üstü yeşil OLAMAZ:
+// kapsam/zaman kayması işareti, sarı ve "kapsam?" der.
 export function fleetVerdict(f: FleetLike): { tone: LossTone; text: string; pct: number | null } {
   if (f.empty) return { tone: 'b-gray', text: 'defter boş', pct: null };
   if (f.settledTo <= f.settledFrom) return { tone: 'b-gray', text: 'pencere kısa', pct: null };
+  const covered = f.coveredFrom ?? f.settledFrom;
+  if (covered >= f.settledTo) return { tone: 'b-gray', text: 'defter henüz yerleşmedi', pct: null };
   if (!f.storedKnown) return { tone: 'b-gray', text: 'saklanan okunamadı', pct: null };
-  if (f.accepted <= 0) return { tone: 'b-gray', text: 'kabul yok', pct: null };
-  const pct = (f.storedSettled / f.accepted) * 100;
-  const text = `%${pct >= 100 ? Math.round(pct) : pct.toFixed(1)} saklandı`;
-  return { tone: pct >= 99.5 ? 'b-ok' : pct >= 97 ? 'b-warn' : 'b-err', text, pct };
+  const accepted = f.acceptedSettled ?? f.accepted;
+  if (accepted <= 0) return { tone: 'b-gray', text: 'kabul yok', pct: null };
+  const pct = (f.storedSettled / accepted) * 100;
+  const num = pct >= 100 ? String(Math.round(pct)) : pct.toFixed(1);
+  if (pct > 110) return { tone: 'b-warn', text: `%${num} saklandı (kapsam?)`, pct };
+  return { tone: pct >= 99.5 ? 'b-ok' : pct >= 97 ? 'b-warn' : 'b-err', text: `%${num} saklandı`, pct };
 }
 
 // stalePods — son örneği maxAgeS'den eski pod sayısı (defter kalp atışı 60 s).

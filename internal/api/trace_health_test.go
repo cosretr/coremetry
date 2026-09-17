@@ -87,3 +87,32 @@ func TestLedgerMissing(t *testing.T) {
 		t.Error("başka hata → false")
 	}
 }
+
+// v0.10.770 — oran yalnız defterin kapsadığı kovalardan (prod: deploy'dan
+// 15 dk sonra 6 saatlik pencerede "%7495 saklandı").
+func TestLedgerCoveredFrom(t *testing.T) {
+	sf := time.Date(2026, 9, 17, 14, 5, 0, 0, time.UTC)
+	if got := ledgerCoveredFrom(sf, 0); !got.Equal(sf) {
+		t.Errorf("örnek yok → pencere başı, %v", got)
+	}
+	first := time.Date(2026, 9, 17, 19, 51, 30, 0, time.UTC)
+	if got := ledgerCoveredFrom(sf, first.UnixNano()); !got.Equal(time.Date(2026, 9, 17, 19, 55, 0, 0, time.UTC)) {
+		t.Errorf("ilk kısmi kova dışarıda kalmalı (yukarı yuvarla): %v", got)
+	}
+	aligned := time.Date(2026, 9, 17, 19, 55, 0, 0, time.UTC)
+	if got := ledgerCoveredFrom(sf, aligned.UnixNano()); !got.Equal(aligned) {
+		t.Errorf("hizalı örnek olduğu gibi: %v", got)
+	}
+	early := time.Date(2026, 9, 17, 13, 0, 0, 0, time.UTC)
+	if got := ledgerCoveredFrom(sf, early.UnixNano()); !got.Equal(sf) {
+		t.Errorf("pencereden eski örnek → pencere başı: %v", got)
+	}
+}
+
+func TestSumAcceptedIn(t *testing.T) {
+	ns := func(h, m int) int64 { return time.Date(2026, 9, 17, h, m, 0, 0, time.UTC).UnixNano() }
+	b := []chstore.IngestFleetBucket{{TimeNs: ns(19, 50), Accepted: 5}, {TimeNs: ns(19, 55), Accepted: 50}, {TimeNs: ns(20, 0), Accepted: 500}}
+	if got := sumAcceptedIn(b, time.Date(2026, 9, 17, 19, 55, 0, 0, time.UTC), time.Date(2026, 9, 17, 20, 0, 0, 0, time.UTC)); got != 50 {
+		t.Errorf("[19:55,20:00) → %d", got)
+	}
+}

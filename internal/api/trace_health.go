@@ -92,8 +92,14 @@ type traceHealthFleet struct {
 	StoredKnown   bool                        `json:"storedKnown"`
 	SettledFrom   int64                       `json:"settledFrom"`
 	SettledTo     int64                       `json:"settledTo"`
-	Empty         bool                        `json:"empty"`
-	Detail        string                      `json:"detail,omitempty"`
+	// v0.10.770 — oran yalnız defterin kapsadığı kovalardan: CoveredFrom =
+	// max(SettledFrom, ilk örneğin 5 dk'ya YUKARI yuvarlanmışı); AcceptedSettled
+	// ve StoredSettled [CoveredFrom, SettledTo) üzerinden. Accepted (tüm
+	// pencere) pod tablosuyla tutarlı kalsın diye ayrı.
+	CoveredFrom     int64  `json:"coveredFrom"`
+	AcceptedSettled uint64 `json:"acceptedSettled"`
+	Empty           bool   `json:"empty"`
+	Detail          string `json:"detail,omitempty"`
 }
 
 type traceHealthResponse struct {
@@ -145,6 +151,35 @@ func sumStoredIn(b []chstore.StoredSpanBucket, from, to time.Time) uint64 {
 	return n
 }
 
+// ledgerCoveredFrom — SAF: defterin ilk örneği pencere başından sonraysa
+// oran o örneğin 5 dk'ya YUKARI yuvarlanmış kovasından başlar (ilk kısmi
+// kova iki tarafta da dışarıda); örnek yoksa pencere başı.
+func ledgerCoveredFrom(settledFrom time.Time, firstSampleNs int64) time.Time {
+	if firstSampleNs <= 0 {
+		return settledFrom
+	}
+	first := time.Unix(0, firstSampleNs)
+	c := first.Truncate(5 * time.Minute)
+	if !c.Equal(first) {
+		c = c.Add(5 * time.Minute)
+	}
+	if c.After(settledFrom) {
+		return c
+	}
+	return settledFrom
+}
+
+// sumAcceptedIn — SAF: 5 dk kova başlangıcı [from, to) içindeki filo kabulü.
+func sumAcceptedIn(b []chstore.IngestFleetBucket, from, to time.Time) uint64 {
+	var n uint64
+	for _, x := range b {
+		if t := time.Unix(0, x.TimeNs); !t.Before(from) && t.Before(to) {
+			n += x.Accepted
+		}
+	}
+	return n
+}
+
 // ledgerMissing — SAF: tablo yok hatası (küme kipinde CREATE ON CLUSTER
 // kuyruktayken ya da eski sürüm). Hata değil, "defter yok" durumu.
 func ledgerMissing(err error) bool {
@@ -191,7 +226,7 @@ func (s *Server) getTraceHealth(w http.ResponseWriter, r *http.Request) {
 		sf, st := settledWindow(now, rangeS)
 		resp.Fleet = traceHealthFleet{
 			Pods: []chstore.IngestFleetPod{}, Buckets: []chstore.IngestFleetBucket{},
-			SettledFrom: sf.UnixNano(), SettledTo: st.UnixNano(),
+			SettledFrom: sf.UnixNano(), SettledTo: st.UnixNano(), CoveredFrom: sf.UnixNano(),
 			StoredKnown: resp.Errors["stored"] == "",
 		}
 		if fl, err := s.store.IngestLedgerFleet(ctx, "spans", sf, st, now); err != nil {
@@ -203,7 +238,13 @@ func (s *Server) getTraceHealth(w http.ResponseWriter, r *http.Request) {
 		} else {
 			resp.Fleet.Pods, resp.Fleet.Buckets = fl.Pods, fl.Buckets
 			resp.Fleet.Accepted, resp.Fleet.Dropped, resp.Fleet.WriteFailed = fl.Accepted, fl.Dropped, fl.WriteFailed
-			resp.Fleet.StoredSettled = sumStoredIn(resp.Stored, sf, st)
+			cf := ledgerCoveredFrom(sf, fl.FirstSampleNs)
+			if cf.After(st) {
+				cf = st
+			}
+			resp.Fleet.CoveredFrom = cf.UnixNano()
+			resp.Fleet.StoredSettled = sumStoredIn(resp.Stored, cf, st)
+			resp.Fleet.AcceptedSettled = sumAcceptedIn(fl.Buckets, cf, st)
 			if len(fl.Pods) == 0 {
 				resp.Fleet.Empty, resp.Fleet.Detail = true, "defterde satır yok — ingest podları v0.10.767+ mı, pencere yerleşme payından (10 dk) uzun mu?"
 			}

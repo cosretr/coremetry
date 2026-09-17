@@ -3544,6 +3544,8 @@ export interface CHTraceHealthResponse {
     buckets: { t: number; accepted: number }[];
     accepted: number; dropped: number; writeFailed: number;
     storedSettled: number; storedKnown: boolean; settledFrom: number; settledTo: number;
+    /** v0.10.770 — oran [coveredFrom, settledTo) üzerinden; coveredFrom defterin ilk örneğinden. */
+    coveredFrom: number; acceptedSettled: number;
     empty: boolean; detail?: string;
   };
   coverage: { def: TraceRootDef; gapDays: string[]; rangeS: number; source?: string; traces: number; withRoot: number; withEntryRoot: number };
