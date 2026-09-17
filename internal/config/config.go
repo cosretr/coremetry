@@ -336,6 +336,14 @@ type CHConfig struct {
 	// with the cluster to set; set this true to run in degraded mode anyway
 	// (raw-spans reads only). v0.8.213.
 	AllowUnsetCluster bool `yaml:"allow_unset_cluster"`
+	// InsertDistributedSync (COREMETRY_CH_INSERT_DISTRIBUTED_SYNC, v0.10.778) —
+	// Distributed tablolara INSERT'i SENKRON yapar (insert_distributed_sync=1):
+	// satırlar shard'lara sorgu içinde gider, yerel spool'a YAZILMAZ. Geçici
+	// köprü: gönderici asılıyken (prod 2026-09-17) DBA restart'ına kadar yeni
+	// span'lerin spool'da hapsolmasını önler. Bedeli: hedef shard erişilmezse
+	// INSERT hata verir (write_failed sayacı; spool'a düşmez) ve ingest podunun
+	// insert'i shard'ların MV kaskadını bekler. Varsayılan KAPALI.
+	InsertDistributedSync bool `yaml:"insert_distributed_sync"`
 
 	// Per-query memory limits (v0.9.184) — env-tunable so a large
 	// external cluster can raise the conservative built-in defaults
@@ -609,6 +617,9 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("COREMETRY_CH_ALLOW_UNSET_CLUSTER"); v == "true" || v == "1" {
 		cfg.ClickHouse.AllowUnsetCluster = true
+	}
+	if v := os.Getenv("COREMETRY_CH_INSERT_DISTRIBUTED_SYNC"); v == "true" || v == "1" {
+		cfg.ClickHouse.InsertDistributedSync = true // v0.10.778 — geçici köprü, bkz. CHConfig
 	}
 	// v0.9.184 — per-query CH memory limits, env-tunable (bytes). Prod's
 	// external cluster raises these to match node RAM; local/default keep

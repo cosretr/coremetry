@@ -629,6 +629,9 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	// v0.10.511 (C6 ölçümü) — MV paralel itişi; etkin değer boot'ta görünür
 	// ki prod A/B'de hangi kolda olduğumuz tek satırdan okunsun.
 	SetParallelViewProcessing(!cfg.DisableParallelViews)
+	if cfg.InsertDistributedSync {
+		log.Printf("[chstore] insert_distributed_sync=1 (COREMETRY_CH_INSERT_DISTRIBUTED_SYNC) — Distributed INSERT'ler senkron, yerel spool'a yazılmaz; geçici köprü (v0.10.778)")
+	}
 	log.Printf("[chstore] parallel_view_processing=%d (COREMETRY_CH_PARALLEL_VIEWS; v0.10.511 ölçüm anahtarı)", map[bool]int{true: 1, false: 0}[!cfg.DisableParallelViews])
 	maxMem, extGroupBy, extSort := memPlan.MaxMemory, memPlan.GroupBy, memPlan.Sort
 	// v0.9.185 — surface the EFFECTIVE per-query limits at boot so an
@@ -656,7 +659,7 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	// chOpts builds a FRESH options struct per call — two pools must not
 	// share the Settings map (the driver retains it).
 	chOpts := func() *clickhouse.Options {
-		return &clickhouse.Options{
+		o := &clickhouse.Options{
 			Addr:        hosts,
 			Auth:        clickhouse.Auth{Database: cfg.Database, Username: cfg.Username, Password: cfg.Password},
 			TLS:         tlsCfg,
@@ -722,6 +725,15 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 				"connection_pool_max_wait_ms": 30000,
 			},
 		}
+		// v0.10.778 — COREMETRY_CH_INSERT_DISTRIBUTED_SYNC: Distributed INSERT
+		// senkron, spool'a yazılmaz (geçici köprü; gerekçe config.CHConfig).
+		// insert_distributed_timeout 60 sn: hedef shard yanıt vermezse INSERT
+		// süresiz beklemek yerine hata verir (write_failed görünür).
+		if cfg.InsertDistributedSync {
+			o.Settings["insert_distributed_sync"] = 1
+			o.Settings["insert_distributed_timeout"] = 60
+		}
+		return o
 	}
 	// Main conn: strategy DELIBERATELY left at the driver default
 	// (ConnOpenInOrder — every connection goes to the first healthy host).
