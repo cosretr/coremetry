@@ -656,7 +656,7 @@ func TestSpoolActionsRunOnEveryNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, must := range []string{"s.shardConn(hctx, h)", "SYSTEM START DISTRIBUTED SENDS `", "SYSTEM FLUSH DISTRIBUTED `", "opts.Addr = []string{addr}"} {
+	for _, must := range []string{"s.shardConn(hctx, h)", "SYSTEM START DISTRIBUTED SENDS `", "SYSTEM FLUSH DISTRIBUTED `", "opts.Addr = []string{addr}", "wg.Wait()"} { // v0.10.776 — flush düğümlerde paralel
 		if !strings.Contains(string(ops), must) {
 			t.Errorf("spool_ops.go %q taşımalı", must)
 		}

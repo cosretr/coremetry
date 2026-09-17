@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -235,9 +236,11 @@ func (s *Store) StartDistributedSendsEverywhere(ctx context.Context, table strin
 	return out, firstErr
 }
 
-// FlushDistributedEverywhere — her düğümde SENKRON flush, sırayla, her
-// düğüme kendi uzun-ömürlü bağlantısı. Küme yoksa ana yol. Dönüş: düğüm
-// başına sonuç + ilk hata (o ana dek giden dosyalar gitmiştir).
+// FlushDistributedEverywhere — her düğümde SENKRON flush, PARALEL (her
+// düğümün göndericisi zaten bağımsızdır; sıralı koşmak toplam süreyi düğüm
+// sayısıyla çarpıyordu — v0.10.776, prod 391 GiB / 4 düğüm), her düğüme
+// kendi uzun-ömürlü bağlantısı. Küme yoksa ana yol. Dönüş: düğüm başına
+// sonuç + ilk hata (o ana dek giden dosyalar gitmiştir).
 func (s *Store) FlushDistributedEverywhere(ctx context.Context, table string) ([]SpoolHostResult, error) {
 	if !chIdentRe.MatchString(table) {
 		return nil, fmt.Errorf("geçersiz tablo adı: %q", table)
@@ -253,13 +256,21 @@ func (s *Store) FlushDistributedEverywhere(ctx context.Context, table string) ([
 	if s.chOpts == nil {
 		return nil, fmt.Errorf("uzun-işlem bağlantısı bu kurulumda yok")
 	}
-	out := make([]SpoolHostResult, 0, len(hosts))
+	out := make([]SpoolHostResult, len(hosts))
+	var wg sync.WaitGroup
+	for i, h := range hosts {
+		wg.Add(1)
+		go func(i int, h string) {
+			defer wg.Done()
+			err := s.flushDistributedOn(ctx, h, table)
+			out[i] = SpoolHostResult{Host: h, OK: err == nil, Error: errText(err)}
+		}(i, h)
+	}
+	wg.Wait()
 	var firstErr error
-	for _, h := range hosts {
-		err := s.flushDistributedOn(ctx, h, table)
-		out = append(out, SpoolHostResult{Host: h, OK: err == nil, Error: errText(err)})
-		if err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("%s: %w", h, err)
+	for _, r := range out {
+		if !r.OK && firstErr == nil {
+			firstErr = fmt.Errorf("%s: %s", r.Host, r.Error)
 		}
 	}
 	return out, firstErr
