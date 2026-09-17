@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { bucketBars, lossVerdict, nameTone, pctOf } from './traceHealth';
+import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, stalePods } from './traceHealth';
 
 describe('traceHealth — saf', () => {
   it('lossVerdict: kalıcı kayıp err, kalite işareti warn, temiz ok', () => {
@@ -37,5 +37,31 @@ describe('traceHealth — kablolama', () => {
     expect(page).toContain("queryKey: ['ch-trace-health'");
     expect(page).toContain('lossVerdict(data.pod, data.spoolDegraded, data.pod.ingestRole)');
     expect(api).toContain('/api/admin/clickhouse/trace-health?range_s=');
+  });
+});
+
+// v0.10.767 (Faz B) — filo mutabakatı.
+describe('traceHealth — filo', () => {
+  const base = { accepted: 1000, storedSettled: 998, storedKnown: true, empty: false, settledFrom: 0, settledTo: 1 };
+  it('fleetVerdict: eşikler, %100 üstü olduğu gibi, gri durumlar', () => {
+    expect(fleetVerdict(base)).toEqual({ tone: 'b-ok', text: '%99.8 saklandı', pct: 99.8 });
+    expect(fleetVerdict({ ...base, storedSettled: 980 }).tone).toBe('b-warn');
+    expect(fleetVerdict({ ...base, storedSettled: 900 }).tone).toBe('b-err');
+    expect(fleetVerdict({ ...base, storedSettled: 1012 })).toEqual({ tone: 'b-ok', text: '%101 saklandı', pct: 101.2 });
+    expect(fleetVerdict({ ...base, empty: true })).toEqual({ tone: 'b-gray', text: 'defter boş', pct: null });
+    expect(fleetVerdict({ ...base, settledTo: 0 }).text).toBe('pencere kısa');
+    expect(fleetVerdict({ ...base, storedKnown: false }).text).toBe('saklanan okunamadı');
+    expect(fleetVerdict({ ...base, accepted: 0 }).text).toBe('kabul yok');
+  });
+  it('stalePods: 3 dk eşiği', () => {
+    const now = 1_000_000 * 1e9;
+    expect(stalePods([{ lastSampleAt: now - 60e9 }, { lastSampleAt: now - 200e9 }, { lastSampleAt: now - 181e9 }], now)).toBe(2);
+    expect(stalePods([], now)).toBe(0);
+  });
+  it('panel filo kartını çizer', () => {
+    const src = readFileSync(resolve(__dirname, '..', 'AdminClickhouse.tsx'), 'utf8');
+    expect(src).toContain('Filo mutabakatı');
+    expect(src).toContain('fleetVerdict(data.fleet)');
+    expect(src).toContain('stalePods(data.fleet.pods, data.generatedAt)');
   });
 });

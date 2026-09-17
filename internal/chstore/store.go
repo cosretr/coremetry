@@ -3266,6 +3266,29 @@ func (s *Store) migrate(ctx context.Context) error {
 		PARTITION BY toYYYYMM(started_at)
 		ORDER BY (cluster_id, started_at)
 		TTL started_at + INTERVAL 30 DAY`,
+
+		// v0.10.767 — ingest_ledger (trace bütünlüğü Faz B): ingest podlarının
+		// DAKİKALIK sayaç deltaları (spans consumer accepted/dropped/
+		// write_failed). Sayaçlar pod-içi, kümülatif, restart'ta sıfır; bu
+		// yüzden delta + boot_id yazılır, filo toplamı okuma anında alınır ve
+		// Trace hattı sağlığı CH'de saklanan span sayısıyla mutabakat eder.
+		// Kural P1: bucket ORDER BY'da → partition sürüklenmesi yok. Distributed
+		// sarmalayıcı YOK (state sınıfı; küme kipinde birleşik grup). Yazıcı ve
+		// okuyucu ingest_ledger.go (pod başına, lider kilidi yok).
+		`CREATE TABLE IF NOT EXISTS ingest_ledger (
+			signal         LowCardinality(String),
+			pod            LowCardinality(String),
+			bucket         DateTime,
+			boot_id        String,
+			accepted       UInt64 DEFAULT 0,
+			dropped        UInt64 DEFAULT 0,
+			write_failed   UInt64 DEFAULT 0,
+			accepted_total UInt64 DEFAULT 0,
+			version        UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		PARTITION BY toYYYYMM(bucket)
+		ORDER BY (signal, pod, bucket)
+		TTL bucket + INTERVAL 30 DAY`,
 	}
 
 	// v0.9.1308 — state tablolarının ZK yolu KODDAN değil KÜMEDEN

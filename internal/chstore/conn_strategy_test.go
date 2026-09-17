@@ -27,6 +27,8 @@ var stateTables = []string{
 	// v0.9.1306 — anomali durumunun geri kalanı: silences okuma-filtresi,
 	// tracked ise terfi defteri. İkisi de ReplacingMergeTree + FINAL.
 	"FROM anomaly_silences", "FROM anomaly_tracked",
+	// v0.10.767 — ingest_ledger: pod sayaç defteri, RMT + FINAL; ana bağlantı.
+	"FROM ingest_ledger",
 }
 
 // Tek kaynağa indirgeme, kapıyı SESSİZCE boşaltmanın da yoludur: liste

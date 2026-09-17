@@ -3516,6 +3516,14 @@ export interface CHTraceHealthResponse {
   spoolDetail?: string;
   stored: { t: number; spans: number }[];
   storedTotal: number;
+  /** v0.10.767 — Faz B: ingest_ledger filo toplamı; toplamlar ve storedSettled yerleşmiş pencere [settledFrom, settledTo). */
+  fleet: {
+    pods: { pod: string; accepted: number; dropped: number; writeFailed: number; lastSampleAt: number; boots: number }[];
+    buckets: { t: number; accepted: number }[];
+    accepted: number; dropped: number; writeFailed: number;
+    storedSettled: number; storedKnown: boolean; settledFrom: number; settledTo: number;
+    empty: boolean; detail?: string;
+  };
   coverage: { def: TraceRootDef; gapDays: string[]; rangeS: number; source?: string; traces: number; withRoot: number; withEntryRoot: number };
   names: { totalSpans: number; bareMethodSpans: number; emptyNameSpans: number; distinctNames: number; topCardinality: { service: string; distinctNames: number }[] };
   errors?: Record<string, string>;

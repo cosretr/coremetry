@@ -43,3 +43,24 @@ export function nameTone(barePct: number | null): LossTone {
   if (barePct === null) return 'b-ok';
   return barePct >= 20 ? 'b-err' : barePct >= 5 ? 'b-warn' : 'b-ok';
 }
+
+// v0.10.767 (Faz B) — filo mutabakatı rozeti. Oran = yerleşmiş pencerede
+// CH'de saklanan ÷ ingest podlarının kabul ettiği. %100'ü aşabilir (geç
+// span; write_failed MV kaskadını fazla sayar) — olduğu gibi yazılır.
+export interface FleetLike {
+  accepted: number; storedSettled: number; storedKnown: boolean; empty: boolean; settledFrom: number; settledTo: number;
+}
+export function fleetVerdict(f: FleetLike): { tone: LossTone; text: string; pct: number | null } {
+  if (f.empty) return { tone: 'b-gray', text: 'defter boş', pct: null };
+  if (f.settledTo <= f.settledFrom) return { tone: 'b-gray', text: 'pencere kısa', pct: null };
+  if (!f.storedKnown) return { tone: 'b-gray', text: 'saklanan okunamadı', pct: null };
+  if (f.accepted <= 0) return { tone: 'b-gray', text: 'kabul yok', pct: null };
+  const pct = (f.storedSettled / f.accepted) * 100;
+  const text = `%${pct >= 100 ? Math.round(pct) : pct.toFixed(1)} saklandı`;
+  return { tone: pct >= 99.5 ? 'b-ok' : pct >= 97 ? 'b-warn' : 'b-err', text, pct };
+}
+
+// stalePods — son örneği maxAgeS'den eski pod sayısı (defter kalp atışı 60 s).
+export function stalePods(pods: { lastSampleAt: number }[], nowNs: number, maxAgeS = 180): number {
+  return pods.filter(p => nowNs - p.lastSampleAt > maxAgeS * 1e9).length;
+}

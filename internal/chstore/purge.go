@@ -26,6 +26,10 @@ var telemetryPurgeTables = []string{
 	// purge silsin, poller watermark'tan devam eder (geçmiş yeniden gelmez —
 	// Oracle tarafında hâlâ duruyorsa operatör watermark'ı geri alır).
 	"oracle_error_log",
+	// v0.10.767 — ingest_ledger: ingest podlarının sayaç deltaları (Faz B
+	// mutabakat). Purge saklananı sıfırlar; defter de sıfırlansın ki oran
+	// yalan söylemesin. Yazıcı bir dakika içinde yeniden doldurur.
+	"ingest_ledger",
 	// v0.10.127 — K8s entity katmanı: hepsi telemetriden/Thanos'tan
 	// TÜRER ve syncer + MV ile yeniden doğar; operatör içeriği taşımaz.
 	// entities/entity_relations ömür tarihçesi purge'la gider — purge

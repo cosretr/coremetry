@@ -3,10 +3,10 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { api } from '@/lib/api';
-import { fmtNum, fmtBytes, fmtClock, fmtDateTime } from '@/lib/utils';
+import { fmtNum, fmtBytes, fmtClock, fmtDateTime, tsLong } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
 import { useQuery } from '@tanstack/react-query';
-import { bucketBars, lossVerdict, nameTone, pctOf } from './adminch/traceHealth'; // v0.10.757
+import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, stalePods } from './adminch/traceHealth'; // v0.10.757
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
@@ -1914,6 +1914,8 @@ function TraceHealthPanel() {
   });
   const data = armed === null ? null : q.isPending ? undefined : q.isError ? null : q.data ?? null;
   const verdict = data ? lossVerdict(data.pod, data.spoolDegraded, data.pod.ingestRole) : null;
+  const fleet = data ? fleetVerdict(data.fleet) : null; // v0.10.767 — Faz B
+  const stale = data ? stalePods(data.fleet.pods, data.generatedAt) : 0;
   const rootPct = data ? pctOf(data.coverage.withRoot, data.coverage.traces) : null;
   const entryPct = data ? pctOf(data.coverage.withEntryRoot, data.coverage.traces) : null;
   const barePct = data ? pctOf(data.names.bareMethodSpans, data.names.totalSpans) : null;
@@ -1929,7 +1931,7 @@ function TraceHealthPanel() {
   return (
     <Section title="Trace hattı sağlığı">
       <p className="cell-hint">
-        Kabul edilen span bu podun sayacı (restart'ta sıfırlanır, podlar toplanmaz); CH'de saklanan span
+        Kabul edilen span bu podun sayacı (restart'ta sıfırlanır); filo toplamı ingest_ledger'dan (Filo mutabakatı kartı); CH'de saklanan span
         service_summary_5m'den. Reddedilen istek (çözülemeyen gövde / 32 MiB üstü / gRPC oversize) kalıcı
         kayıptır — collector 4xx'i yeniden denemez. Boş id / geçersiz damga saklanır ama listelenemez ya da
         TTL'de yiter. Kapsama son 5 dk, ad kalitesi son 24 sa (operation_summary_5m).
@@ -1949,7 +1951,7 @@ function TraceHealthPanel() {
         {q.isError && <span className="badge b-err" title={String(q.error)}>okunamadı</span>}
       </div>
       {data === undefined && <Spinner />}
-      {data && verdict && (
+      {data && verdict && fleet && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -1957,7 +1959,7 @@ function TraceHealthPanel() {
             </div>
             {!data.pod.ingestRole && (
               <div className="cell-hint" style={{ marginBottom: 4 }}>
-                Bu pod OTLP almıyor (rol api); kabul/düşürme sayaçları ingest podlarında. Toplam için mutabakat Faz B.
+                Bu pod OTLP almıyor (rol api); kabul/düşürme sayaçları ingest podlarında, filo toplamı Filo mutabakatı kartında.
               </div>
             )}
             {kv('kabul edilen (bu pod)', fmtNum(data.pod.accepted))}
@@ -1976,6 +1978,44 @@ function TraceHealthPanel() {
                   style={{ flex: 1, height: `${b.h}%`, background: 'var(--accent)', minWidth: 1 }} />
               ))}
             </div>
+          </div>
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <b>Filo mutabakatı</b>
+              <span className={`badge ${fleet.tone}`} title="Yerleşmiş pencerede CH'de saklanan ÷ ingest podlarının kabul ettiği (ingest_ledger, dakikalık deltalar)">{fleet.text}</span>
+              {stale > 0 && <span className="badge b-err" title="Son 3 dk'da örnek yazmayan ingest podu">{stale} pod bayat</span>}
+            </div>
+            <div className="cell-hint" style={{ marginBottom: 4 }}>
+              Pencere {hhmm(data.fleet.settledFrom)}–{hhmm(data.fleet.settledTo)}; son 10 dk dışarıda (span zamanı ≠ kabul zamanı).
+              Oran %100'ü aşabilir: geç span, write_failed MV kaskadını fazla sayar.
+            </div>
+            {data.fleet.detail && <div className="cell-hint" style={{ marginBottom: 4 }}>{data.fleet.detail}</div>}
+            {kv('kabul edilen (filo)', fmtNum(data.fleet.accepted))}
+            {kv('düşürülen (filo)', fmtNum(data.fleet.dropped))}
+            {kv('yazma hatası (filo)', fmtNum(data.fleet.writeFailed))}
+            {kv("CH'de saklanan (pencere)", data.fleet.storedKnown ? fmtNum(data.fleet.storedSettled) : '—')}
+            {data.fleet.pods.length > 0 && (
+              <table style={{ width: '100%', marginTop: 6, fontSize: 11 }}>
+                <thead>
+                  <tr>
+                    <th>pod</th><th style={{ textAlign: 'right' }}>kabul</th><th style={{ textAlign: 'right' }}>düşen</th>
+                    <th style={{ textAlign: 'right' }}>hata</th><th style={{ textAlign: 'right' }}>son örnek</th><th style={{ textAlign: 'right' }}>boot</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.fleet.pods.map(p => (
+                    <tr key={p.pod}>
+                      <td className="mono">{p.pod}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(p.accepted)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(p.dropped)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(p.writeFailed)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }} title={tsLong(p.lastSampleAt)}>{hhmm(p.lastSampleAt)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }} title="Pencerede görülen farklı boot_id (restart) sayısı">{p.boots}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>

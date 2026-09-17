@@ -463,6 +463,15 @@ func main() {
 		metricConsumer.Start(pipeCtx)
 		exemplarConsumer.Start(pipeCtx)
 		spanLinkConsumer.Start(pipeCtx)
+		// v0.10.767 — ingest_ledger (Faz B): bu podun span sayaç deltaları
+		// dakikada bir CH'ye; Trace hattı sağlığı filo toplamını buradan
+		// okur. Sinyal ctx'i: SIGTERM'de son örnek yazılıp durur — kapanış
+		// ile drain arasında kabul edilen birkaç saniye defter dışı kalır,
+		// mutabakatın 10 dk yerleşme payı bunu yutar.
+		ledgerPod, _ := os.Hostname()
+		go store.StartIngestLedger(ctx, "spans", ledgerPod, func() chstore.IngestCounters {
+			return chstore.IngestCounters{Accepted: spanConsumer.Accepted(), Dropped: spanConsumer.Dropped(), WriteFailed: spanConsumer.WriteFailed()}
+		})
 	}
 
 	// ── OTLP ingester ─────────────────────────────────────────────────────────
