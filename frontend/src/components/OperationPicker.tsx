@@ -17,7 +17,7 @@ import { shouldAutoCommit } from '@/components/ServicePicker';
  * past tens of thousands of operations.
  */
 export function OperationPicker({
-  service, value, onChange, placeholder, width, onEnter,
+  service, value, onChange, placeholder, width, onEnter, onPick,
 }: {
   // Scope the search to one service. Pass undefined / empty to
   // search across every service (cardinality permitting).
@@ -27,6 +27,9 @@ export function OperationPicker({
   placeholder?: string;
   width?: number | string;
   onEnter?: (value?: string) => void;
+  // v0.10.752 — değer listedeki bir operasyonla BİREBİR eşleşince (seçim)
+  // çağrılır; çağıran bunu alt-dizge arama yerine tam eşleşme yapar.
+  onPick?: (v: string) => void;
 }) {
   const [opts, setOpts] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
@@ -55,7 +58,9 @@ export function OperationPicker({
     // v0.9.1024 — ServicePicker'ın SAF fonksiyonu. Buradaki kopya da
     // eski (v0.7.27 öncesi) ifadeydi: ilk tuş vuruşunda ve çok
     // karakterli SİLME sıçramalarında yanlış commit ediyordu.
-    if (shouldAutoCommit(prev, next, optsRef.current.includes(next)) && onEnter) {
+    const isPick = optsRef.current.includes(next);
+    if (isPick && onPick) onPick(next); // v0.10.752
+    if (shouldAutoCommit(prev, next, isPick) && onEnter) {
       setTimeout(() => onEnter(next), 0);
     }
   };

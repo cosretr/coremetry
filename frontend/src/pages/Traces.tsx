@@ -62,6 +62,7 @@ import { mergeTraceExtras, missingExtraKeys } from '@/lib/traceExtrasMerge';
 // v0.9.841 — kolon SIRASI ve varsayılan attr seti tek yerde, saf ve
 // testli (traceColumns.ts). İkisi de karar; mekanik değil.
 import { DEFAULT_TRACE_COLUMNS, FIXED_COLS, traceColumnOrder } from '@/lib/traceColumns';
+import { opChipFor, opCellText, opCellTitle } from './traces/opPick'; // v0.10.752
 import { useContextParams, type ContextPatch } from '@/hooks/useContextParams';
 import { useTablePrefs } from '@/lib/queries/prefs';
 import { parseColsParam } from '@/lib/columnModel';
@@ -162,7 +163,7 @@ const TRACES_CONTEXT_HIDDEN: ContextDim[] = ['service'];
 // tarafından sürüklenebilir ve tarayıcı başına kalıcı; bunlar yalnız hiç
 // sürüklememiş operatörün başlangıç noktası.
 const COL_W: Record<string, number> = {
-  time: 150, service: 130, operation: 210, duration: 104, spans: 58, status: 74,
+  time: 150, service: 190, operation: 210, duration: 104, spans: 58, status: 74, // v0.10.752 service 130→190 (operatör: alan dar)
   // v0.10.187 (görsel inceleme F11) — K8s kolonları ATTR_W'de kırpılıyordu (pod adı 40+ karakter)
   // v0.10.330 — çip kalkınca düz metin + üç nokta; başlangıç genişlikleri tablo
   // 1440 px'e sığsın diye daraltıldı (sürüklenebilir, tarayıcı başına kalıcı).
@@ -327,6 +328,8 @@ function TracesPageInner() {
   const [filter, setFilter] = useState(() => ({
     service:  searchParams.get('service') ?? '',
     search:   searchParams.get('search')  ?? '',
+    // v0.10.752 — seçiciden SEÇİLEN operasyon: tam eşleşme çipi (opPick.ts).
+    op:       searchParams.get('op')      ?? '',
     traceId:  searchParams.get('traceId') ?? '',
     minMs:    searchParams.get('minMs')   ?? '',
     maxMs:    searchParams.get('maxMs')   ?? '',
@@ -347,6 +350,9 @@ function TracesPageInner() {
   const [rootOnlyAuto, setRootOnlyAuto] = useState(
     () => parseRootOnlyParam(searchParams.get('rootOnly')).auto);
   const [advFilters, setAdvFilters] = useState<FilterExpr[]>(() => decodeFilters(searchParams.get('filters')));
+  // v0.10.752 — istek çipleri = operatörün çipleri + seçilen operasyon (?op=).
+  // URL'e advFilters yazılır (op kendi paramında); sunucuya bu gider.
+  const advFiltersEff = useMemo<FilterExpr[]>(() => [...advFilters, ...opChipFor(filter.op)], [advFilters, filter.op]);
   // v0.8.x gap-2 — grouped AND/OR builder. null = flat chip mode (the DEFAULT,
   // and what every existing saved view / shared URL decodes to). Non-null only
   // when the URL carries a real OR / nested `filterGroup`, or when the operator
@@ -493,6 +499,7 @@ function TracesPageInner() {
       ['having',   view === 'aggregate' ? encodeHavingParam(debouncedHaving) : ''],
       ['service',  filter.service],
       ['search',   filter.search],
+      ['op',       filter.op],
       ['traceId',  filter.traceId],
       ['minMs',    filter.minMs],
       ['maxMs',    filter.maxMs],
@@ -579,7 +586,7 @@ function TracesPageInner() {
       // Grouped builder supersedes the flat filters when an OR/nested group is
       // active; flat-AND encodes to '' so the legacy filters path stays in use.
       filterGroup: advGroupParam || undefined,
-      filters: advGroupParam ? undefined : (advFilters.length ? JSON.stringify(advFilters) : undefined),
+      filters: advGroupParam ? undefined : (advFiltersEff.length ? JSON.stringify(advFiltersEff) : undefined),
       // FAZ 2 — the list fetch is ALWAYS narrow (no extraAttrs): attribute
       // columns arrive via the phase-2 enrichment effect below, so a column
       // toggle never re-runs this (window-wide) query. extraCols is
@@ -602,7 +609,7 @@ function TracesPageInner() {
       setRefreshing(false);
     });
     return () => { cancelled = true; ctl.abort(); };
-  }, [view, listRangeNs, sort, order, page, filter, env, clusterScope, advFilters, advGroupParam, retryNonce]);
+  }, [view, listRangeNs, sort, order, page, filter, env, clusterScope, advFiltersEff, advGroupParam, retryNonce]);
 
   // ── Extras enrichment (FAZ 2 — docs/audit/traces-attribute-columns.md
   // §6B). Fires when the page rows are in and attribute columns are
@@ -679,7 +686,7 @@ function TracesPageInner() {
     // deploy_env): env is global context like service/search, not part
     // of the operator's ad-hoc predicate group, so it applies even in
     // grouped mode where the group itself is omitted (see above).
-    const chartFilters: FilterExpr[] = (!grouped && advFilters.length) ? [...advFilters] : [];
+    const chartFilters: FilterExpr[] = (!grouped && advFiltersEff.length) ? [...advFiltersEff] : [];
     // v0.10.268 (operatör onayı, mockup A) — şerit GİRİŞ span'ı kapsamlı:
     // istek ≈ trace (Dynatrace "trace count"), medyan = giriş span'ı p50.
     // Dar rollup (service_name, span_kind, status_code) bu şekli MV'den
@@ -742,7 +749,7 @@ function TracesPageInner() {
       })
       .catch((e: unknown) => { if (!cancelled && !isCanceled(e)) setVolSeries(null); });
     return () => { cancelled = true; ctl.abort(); };
-  }, [view, listRangeNs, filter.service, filter.search, filter.traceId, filter.rootOnly, filter.hasError, env, clusterScope, advFilters, grouped, advGroupParam, stripStat]); // v0.10.655 advGroupParam // v0.10.484, v0.10.513 stripStat, v0.10.523 traceId
+  }, [view, listRangeNs, filter.service, filter.search, filter.traceId, filter.rootOnly, filter.hasError, env, clusterScope, advFiltersEff, grouped, advGroupParam, stripStat]); // v0.10.655 advGroupParam // v0.10.484, v0.10.513 stripStat, v0.10.523 traceId
 
   // v0.9.637 — anahtar önerisi YALNIZ boş sonuçta çekilir. CLAUDE.md
   // ES/CH maliyet disiplini: liste boyunca prefetch yok, poll yok —
@@ -790,7 +797,7 @@ function TracesPageInner() {
       // değiştirmek soruyu genişletemez.
       cluster: clusterScope || undefined,
       filterGroup: advGroupParam || undefined,
-      filters: advGroupParam ? undefined : (advFilters.length ? JSON.stringify(advFilters) : undefined),
+      filters: advGroupParam ? undefined : (advFiltersEff.length ? JSON.stringify(advFiltersEff) : undefined),
       having: debouncedHaving.length ? encodeHavingParam(debouncedHaving) : undefined,
     }).then(a => { if (!cancelled) { setAgg(a); setAggErr(null); setAggRefreshing(false); } })
       // v0.9.858 (UX denetimi K6) — agg null HİÇBİR render dalına
@@ -801,7 +808,7 @@ function TracesPageInner() {
         setAggErr(e instanceof Error ? e.message : String(e));
       });
     return () => { cancelled = true; };
-  }, [view, aggRangeNs, groupBy, groupAttr, aggSort, aggOrder, debouncedHaving, filter, env, clusterScope, advFilters, advGroupParam, retryNonce]);
+  }, [view, aggRangeNs, groupBy, groupAttr, aggSort, aggOrder, debouncedHaving, filter, env, clusterScope, advFiltersEff, advGroupParam, retryNonce]);
 
   // apply commits the draft as the live filter (overrideService sidesteps the
   // picker auto-commit race).
@@ -821,7 +828,7 @@ function TracesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, filter]);
   const reset = () => {
-    const empty = { service: '', search: '', traceId: '', minMs: '', maxMs: '', hasError: false, rootOnly: false, requireServices: [] as string[] };
+    const empty = { service: '', search: '', op: '', traceId: '', minMs: '', maxMs: '', hasError: false, rootOnly: false, requireServices: [] as string[] };
     setDraft(empty); setFilter(empty); setPage(0);
     setAdvFilters([]); setAdvGroup(null);
   };
@@ -911,13 +918,13 @@ function TracesPageInner() {
       // söyler.
       cluster: clusterScope || undefined,
       filterGroup: advGroupParam || undefined,
-      filters: advGroupParam ? undefined : (advFilters.length ? JSON.stringify(advFilters) : undefined),
+      filters: advGroupParam ? undefined : (advFiltersEff.length ? JSON.stringify(advFiltersEff) : undefined),
     }, ctl.signal)
       .then(r => { if (!cancelled) setCountRes(r); })
       .catch((e: unknown) => { if (!cancelled && !isCanceled(e)) setCountRes(null); });
     return () => { cancelled = true; ctl.abort(); };
   }, [view, listRangeNs, filter.service, filter.search, filter.traceId, filter.minMs, filter.maxMs,
-      filter.hasError, filter.rootOnly, env, clusterScope, advFilters, advGroupParam]);
+      filter.hasError, filter.rootOnly, env, clusterScope, advFiltersEff, advGroupParam]);
   // v0.9.1372 — sessiz geri dönüş. Koşul, aşağıdaki "no traces found" boş
   // durumunun GÖRÜNME koşuluyla aynı: liste görünümü, hata yok, veri geldi,
   // sıfır satır. Operatör o boşluğu görüp root kutusunu elle kaldıracaktı;
@@ -1335,8 +1342,9 @@ function TracesPageInner() {
                   öyle diyor) ama işaret hiçbir sayfaya konmamıştı. */}
               <ServicePicker value={draft.service} onChange={v => setDraft({ ...draft, service: v })}
                 placeholder="Filter by service…" width={170} onEnter={(v) => apply(v)} shortcutSearch />
-              <OperationPicker service={draft.service} value={draft.search}
-                onChange={v => setDraft({ ...draft, search: v })}
+              <OperationPicker service={draft.service} value={draft.op || draft.search}
+                onChange={v => setDraft({ ...draft, search: v, op: '' })}
+                onPick={v => setDraft(d => ({ ...d, op: v, search: '' }))}
                 placeholder="Operation, or an id (function_id / trace ID)…" width={240} onEnter={() => apply()} />
               <input placeholder="Min ms" value={draft.minMs}
                 onChange={e => setDraft({ ...draft, minMs: e.target.value })} type="number" style={{ width: 72 }} />
@@ -1523,7 +1531,7 @@ function TracesPageInner() {
                       // v0.10.330 — K8s hücreleri artık düz metin (kendi <a>'sı yok) → satır
                       // linkine diğer hücreler gibi sarılır; ölü hücre kalmaz.
                       const ownLink = false;
-                      const cell = renderTraceCell(id, t, visibleMax, k8sOn ? { clusters: entityClusters, range } : undefined);
+                      const cell = renderTraceCell(id, t, visibleMax, k8sOn ? { clusters: entityClusters, range } : undefined, filter.op);
                       // v0.10.723 — sola sabit hücre: sınıf + kümülatif left (Endpoints deseni).
                       const stickyL = leftOffs[id];
                       return (
@@ -1729,7 +1737,8 @@ function TracesPageInner() {
 
 // Per-column cell content for a trace row. k8s: v0.10.143 — entity katmanı
 // açıkken Kubernetes kolonları entity sayfalarına link (traceK8sLinks).
-function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { clusters: EntityClusterInfo[]; range: TimeRange }) {
+// op (v0.10.752) — seçili operasyon; Name hücresi onu yazar (opPick.ts).
+function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { clusters: EntityClusterInfo[]; range: TimeRange }, op = '') {
   if (k8s && isTraceK8sCol(id)) {
     const v = t.extras?.[id] ?? '';
     if (!v) return <span className="mono" style={{ color: 'var(--text3)' }}>—</span>;
@@ -1746,7 +1755,7 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { cl
     case 'time':      return <span className="mono">{tsDateTime(t.startTime)}</span>;
     case 'service':   return <SvcBadge name={t.serviceName} />;
     // v0.10.658 (operatör): diğer hücrelerle AYNI yazı tipi (.mono 12 px) — sınıfsız span orantılı yazıyla büyük görünüyordu.
-    case 'operation': return <span className="mono cell-ellipsis" title={t.rootName}>{t.rootName || '—'}</span>;
+    case 'operation': return <span className="mono cell-ellipsis" title={opCellTitle(op, t.rootName)}>{opCellText(op, t.rootName)}</span>;
     case 'duration':  return <DurationBar ms={t.durationMs} err={t.hasError} max={visibleMax} />;
     case 'spans':     return <>{t.spanCount}</>;
     // v0.10.218 (D3) — hata rozetinin yanında hatalı span SAYISI (Dynatrace
