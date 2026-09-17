@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { orderSpoolTables, spoolRowBadge } from './spoolOrder';
+import { orderSpoolTables, spoolRowBadge, startResultText } from './spoolOrder';
 
 describe('orderSpoolTables', () => {
   it('kuyruğu olan tablolar başa (dosya azalan), gerisi ada göre; ölçüm yoksa 0', () => {
@@ -37,5 +37,17 @@ describe('orderSpoolTables', () => {
     expect(spoolRowBadge({ ...base, files: 0, brokenFiles: 3, blocked: false, hosts: [] }).text).toBe('3 bozuk');
     expect(spoolRowBadge({ ...base, files: 0, hosts: [] })).toMatchObject({ tone: 'b-err', text: 'kuyruk boş · gönderici durmuş' });
     expect(spoolRowBadge({ ...base, files: 0, blocked: false, errorCount: 0, hosts: [] })).toMatchObject({ tone: 'b-gray', text: 'kuyruk boş' });
+  });
+  // v0.10.775 — start cevabı satırın yanında, düğüm başına.
+  it('startResultText: düğüm başına ok/HATA, tek düğüm kısa', () => {
+    expect(startResultText({ ok: true })).toEqual({ tone: 'ok', text: 'gönderici başlatıldı' });
+    expect(startResultText({ ok: false, error: 'boom' })).toEqual({ tone: 'err', text: 'boom' });
+    const r = startResultText({ ok: false, hosts: [{ host: 'ch-01:9000', ok: true }, { host: 'ch-02:9000', ok: false, error: 'timeout' }] });
+    expect(r.tone).toBe('err');
+    expect(r.text).toBe('1/2 düğümde hata · ch-01 ok · ch-02 HATA: timeout');
+    expect(startResultText({ ok: true, hosts: [{ host: 'a:9000', ok: true }] }).text).toBe('başlatıldı · a ok');
+    const src = readFileSync(resolve(__dirname, 'panels.tsx'), 'utf8');
+    expect(src).toContain('rowNote[t]');
+    expect(src).toContain('startResultText(res)');
   });
 });

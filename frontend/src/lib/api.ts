@@ -2833,7 +2833,7 @@ export const api = {
       body: JSON.stringify({ table }),
     }),
   adminSpoolStartSends: (table: string) =>
-    request<{ ok: boolean; table: string }>('/api/admin/clickhouse/spool/start-sends', {
+    request<import('./types').SpoolStartResult>('/api/admin/clickhouse/spool/start-sends', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table }),
     }),

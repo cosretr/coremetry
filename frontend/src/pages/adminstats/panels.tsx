@@ -14,7 +14,7 @@ import { fmtNum, fmtClock } from '@/lib/utils';
 import { KPI, fmtUptime, fmtBytes } from './shared';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { RedisStats, CacheStats, SystemStats, SpoolState } from '@/lib/types';
-import { orderSpoolTables, spoolRowBadge } from './spoolOrder'; // v0.10.761 / v0.10.773
+import { orderSpoolTables, spoolRowBadge, startResultText } from './spoolOrder'; // v0.10.761 / v0.10.773 / v0.10.775
 
 type TopKeyRow = CacheStats['topKeys'][number];
 
@@ -715,6 +715,8 @@ function SpoolRunbook() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
+  // v0.10.775 — satır başına son eylem sonucu (düğüm başına), düğmenin yanında.
+  const [rowNote, setRowNote] = useState<Record<string, { tone: 'ok' | 'err'; text: string }>>({});
   const confirm = useConfirm();
 
   const load = () => {
@@ -732,11 +734,15 @@ function SpoolRunbook() {
         await api.adminSpoolFlush(table);
         setNote(`${table}: flush başladı — ilerleme yukarıdaki dosya sayısından izlenir.`);
       } else {
-        await api.adminSpoolStartSends(table);
-        setNote(`${table}: gönderici başlatıldı (zaten açıksa zararsız).`);
+        const res = await api.adminSpoolStartSends(table);
+        const r = startResultText(res);
+        setRowNote(m => ({ ...m, [table]: r }));
+        setNote(`${table}: ${r.text}`);
       }
     } catch (e) {
-      setNote(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setRowNote(m => ({ ...m, [table]: { tone: 'err', text: msg } }));
+      setNote(msg);
     } finally {
       setBusy(''); load();
     }
@@ -798,6 +804,7 @@ function SpoolRunbook() {
                   {fl && <span className="warn">flush koşuyor ({fmtClock(new Date(fl.startedAt / 1e6))})</span>}
                   {!fl && done?.error && <span className="err" title={done.error}>son flush hata verdi — tekrar başlatmak kaldığı yerden sürer</span>}
                   {!fl && done && !done.error && <span className="ok">son flush tamamlandı</span>}
+                  {rowNote[t] && <span className={rowNote[t].tone} style={{ fontSize: 11 }} title={rowNote[t].text}>{rowNote[t].text}</span>}
                 </div>
               );
             })}

@@ -5897,6 +5897,13 @@ export interface ChatTurn extends ChatMessage {
   links?: ChatAnswerLink[];
 }
 
+/** v0.10.773 — start-sends cevabı düğüm başına (komut düğüm-yerel). error = ilk hata; hosts kısmi başarıyı taşır. */
+export interface SpoolStartResult {
+  ok: boolean;
+  table: string;
+  hosts?: { host: string; ok: boolean; error?: string }[];
+  error?: string;
+}
 // SpoolState (v0.9.1191) — /api/admin/clickhouse/spool: Distributed spool
 // runbook'unun otomatik yarısı. `queue` null = tek düğüm (kavram yok).
 // `flights` süreç-yerel flush uçuş defteri — doneAt yokken koşuyor demek.

@@ -55,3 +55,14 @@ export function spoolRowBadge(row: SpoolActionRow): { tone: 'b-err' | 'b-gray'; 
   if (row.blocked) return { tone: 'b-err', text: 'kuyruk boş · gönderici durmuş', title: hosts || 'is_blocked=1 — yeni dosya birikecek' };
   return { tone: 'b-gray', text: 'kuyruk boş', title: 'Bu tabloda bekleyen spool dosyası yok' };
 }
+
+// v0.10.775 — "Göndericiyi başlat" cevabı satırın YANINDA, düğüm başına.
+// (prod: sonuç notu 30 satırlık listenin altındaydı, operatör "ok demiyor"
+// dedi.) Düğüm yoksa (tek düğüm) tek kelime.
+export function startResultText(res: { ok: boolean; hosts?: { host: string; ok: boolean; error?: string }[]; error?: string }): { tone: 'ok' | 'err'; text: string } {
+  const hosts = res.hosts ?? [];
+  if (hosts.length === 0) return res.ok ? { tone: 'ok', text: 'gönderici başlatıldı' } : { tone: 'err', text: res.error || 'başlatılamadı' };
+  const parts = hosts.map(h => `${h.host.split(':')[0]} ${h.ok ? 'ok' : 'HATA: ' + (h.error || '?')}`);
+  const bad = hosts.filter(h => !h.ok).length;
+  return { tone: bad === 0 ? 'ok' : 'err', text: `${bad === 0 ? 'başlatıldı' : `${bad}/${hosts.length} düğümde hata`} · ${parts.join(' · ')}` };
+}
