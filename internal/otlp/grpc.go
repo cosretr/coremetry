@@ -106,6 +106,9 @@ func StartGRPC(addr string, ing *Ingester) (*GRPCHandle, error) {
 	srv := grpc.NewServer(
 		grpc.MaxRecvMsgSize(32<<20),
 		grpc.MaxSendMsgSize(32<<20),
+		// v0.10.754 — MaxRecvMsgSize aşımı handler'a hiç uğramaz; yalnız
+		// stats handler görür (ingest_counters.go rejectStats).
+		grpc.StatsHandler(rejectStats{}),
 		// v0.8.x — recycle long-lived OTLP/gRPC connections so a fleet of
 		// collector exporters re-balances across api/ingest replicas instead of
 		// pinning to one. A k8s ClusterIP Service load-balances per CONNECTION,

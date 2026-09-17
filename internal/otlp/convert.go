@@ -84,6 +84,7 @@ func ConvertTraces(req *tracecollpb.ExportTraceServiceRequest) ([]*chstore.Span,
 				scopeName = ss.Scope.Name
 			}
 			for _, sp := range ss.Spans {
+				countSpanQuality(sp.TraceId, sp.SpanId, sp.StartTimeUnixNano) // v0.10.754 — sayar, düşürmez
 				row := convertSpan(sp, svcName, hostName, deployEnv, scopeName, resK, resV)
 				out = append(out, row)
 				links = appendSpanLinks(links, sp.Links, row)

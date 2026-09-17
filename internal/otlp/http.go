@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"compress/zlib"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -322,7 +323,7 @@ func StartHTTP(addr string, ing *Ingester) (*HTTPHandle, error) {
 func (ing *Ingester) handleTraces(w http.ResponseWriter, r *http.Request) {
 	var req tracecollpb.ExportTraceServiceRequest
 	if err := readProto(r, &req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeReadError(w, err) // v0.10.754 — 413 / 400, sayaçlı
 		return
 	}
 	spans, links := ConvertTraces(&req)
@@ -362,7 +363,7 @@ func (ing *Ingester) handleTraces(w http.ResponseWriter, r *http.Request) {
 func (ing *Ingester) handleLogs(w http.ResponseWriter, r *http.Request) {
 	var req logscollpb.ExportLogsServiceRequest
 	if err := readProto(r, &req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeReadError(w, err) // v0.10.754 — 413 / 400, sayaçlı
 		return
 	}
 	logs := ConvertLogs(&req)
@@ -487,14 +488,39 @@ func readProto(r *http.Request, msg proto.Message) error {
 	// LimitReader on the (decompressed) stream bounds memory at 32 MiB — a
 	// compression bomb is truncated to 32 MiB and fails decode gracefully,
 	// never OOMs.
-	body, err := io.ReadAll(io.LimitReader(src, 32<<20))
+	// v0.10.754 — tavan +1 okunur ki KESİLME ile "tam 32 MiB'lik geçerli
+	// gövde" ayrışsın; aşım 413 + sayaç (eskiden kesik gövde çözme hatasına
+	// düşüp 400 oluyordu, sayaçsız).
+	body, err := io.ReadAll(io.LimitReader(src, maxBodyBytes+1))
 	if err != nil {
 		return err
 	}
-	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		return protojson.Unmarshal(body, msg)
+	if len(body) > maxBodyBytes {
+		n := ingestRejects.httpOversize.Add(1)
+		logSampled(n, "[otlp/http] %s body rejected (413): larger than 32 MiB decompressed — count %d", r.URL.Path, n)
+		return errBodyTooLarge
 	}
-	return proto.Unmarshal(body, msg)
+	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		err = protojson.Unmarshal(body, msg)
+	} else {
+		err = proto.Unmarshal(body, msg)
+	}
+	if err != nil {
+		// v0.10.754 — collector 4xx'i yeniden denemez: bu batch kalıcı kayıp.
+		n := ingestRejects.httpDecode.Add(1)
+		logSampled(n, "[otlp/http] %s body rejected (400): %v — count %d", r.URL.Path, err, n)
+		return err
+	}
+	return nil
+}
+
+// writeReadError — readProto hatası: oversize 413, gerisi 400.
+func writeReadError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errBodyTooLarge) {
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusBadRequest)
 }
 
 func writeProtoResp(w http.ResponseWriter, r *http.Request, msg proto.Message) {
