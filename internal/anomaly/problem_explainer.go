@@ -11,6 +11,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/rca"
+	"github.com/cilcenk/coremetry/internal/tzdefault"
 )
 
 // ProblemExplainer is a background goroutine that fills the
@@ -194,7 +195,7 @@ func (e *ProblemExplainer) run(ctx context.Context) {
 		// bir ad anlatıda geçiyorsa satır dürüstçe işaretlenir — auto
 		// özet listede kimsenin sorgulamadan okuduğu metin, uydurma bir
 		// servis adı orada kalkansız yaşayamaz (plan kabulü).
-		summary = shieldNarrative(summary, buildProblemPrompt(p, bundle, hyp), p.Service, hyp)
+		summary = shieldNarrative(summary, buildProblemPrompt(p, bundle, hyp, tzdefault.Location()), p.Service, hyp)
 		if err := e.store.UpsertProblemAISummary(ctx, p.ID, summary); err != nil {
 			log.Printf("[problem-explainer] write %s: %v", p.ID, err)
 			continue
@@ -223,7 +224,7 @@ func (e *ProblemExplainer) explain(ctx context.Context, p chstore.Problem, bundl
 			return rca.CountUnknownEntities(rca.LowerKnownSet(p.Service), prompt, answer)
 		},
 	})
-	return e.copilot.Explain(ctx, copilot.SystemPromptProblem(), buildProblemPrompt(p, bundle, hyp))
+	return e.copilot.Explain(ctx, copilot.SystemPromptProblem(), buildProblemPrompt(p, bundle, hyp, tzdefault.Location()))
 }
 
 // buildProblemPrompt composes the user prompt for one Problem — the bare rule
@@ -232,14 +233,21 @@ func (e *ProblemExplainer) explain(ctx context.Context, p chstore.Problem, bundl
 // store, no copilot) so the fusion shape is table-testable
 // (rootcause_prompt_test.go): hypothesis absent → the prompt is byte-identical
 // to the pre-fusion shape.
-func buildProblemPrompt(p chstore.Problem, bundle EvidenceBundle, hyp *chstore.RootCauseHypothesis) string {
+//
+// loc (v0.10.746) — "Started:" damgası sunucu varsayılan diliminde ve
+// etiketli (RFC3339 ofsetli + konum adı); nil → UTC. Arka plan yolu,
+// tarayıcı yok — operatör dilimi COREMETRY_TZ'den gelir.
+func buildProblemPrompt(p chstore.Problem, bundle EvidenceBundle, hyp *chstore.RootCauseHypothesis, loc *time.Location) string {
+	if loc == nil {
+		loc = time.UTC
+	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Rule: %s\n", p.RuleName)
 	fmt.Fprintf(&sb, "Service: %s\n", p.Service)
 	fmt.Fprintf(&sb, "Severity: %s\n", p.Severity)
 	fmt.Fprintf(&sb, "Metric: %s\n", p.Metric)
 	fmt.Fprintf(&sb, "Value: %.4g (threshold %.4g)\n", p.Value, p.Threshold)
-	fmt.Fprintf(&sb, "Started: %s\n", time.Unix(0, p.StartedAt).UTC().Format(time.RFC3339))
+	fmt.Fprintf(&sb, "Started: %s (%s)\n", time.Unix(0, p.StartedAt).In(loc).Format(time.RFC3339), loc.String())
 	if p.Description != "" {
 		fmt.Fprintf(&sb, "Description: %s\n", p.Description)
 	}

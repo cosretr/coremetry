@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/cilcenk/coremetry/internal/tzdefault"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,12 @@ func TestExtractAbsoluteWindows(t *testing.T) {
 	}
 	if chatLocationNamed("Not/AZone", 180).String() != "UTC+3" || chatLocationNamed("../etc", 0) != time.UTC || chatLocationNamed("", 330).String() != "UTC+5:30" {
 		t.Fatal("geçersiz/boş ad ofsete düşer")
+	}
+	// v0.10.746 — ad yok/çözülmedi VE ofset 0 = dilim gönderilmemiş → sunucu
+	// varsayılanı (COREMETRY_TZ; test ortamında env yok → UTC). UTC tarayıcı
+	// "UTC" ADINI gönderir ve yukarıda çözülür, bu basamağa düşmez.
+	if chatLocationNamed("", 0) != tzdefault.Location() || chatLocationNamed("../etc", 0) != tzdefault.Location() || chatLocationNamed("UTC", 0) != time.UTC {
+		t.Fatal("dilimsiz istek sunucu varsayılanına inmeli")
 	}
 	// v0.10.444 — yarım saatlik ofsetler dakikayla etiketlenir.
 	if chatLocation(330).String() != "UTC+5:30" || chatLocation(-210).String() != "UTC-3:30" || chatLocation(345).String() != "UTC+5:45" {

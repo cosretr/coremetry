@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/tzdefault"
 )
 
 type absWindow struct {
@@ -64,11 +66,20 @@ var tzNameRe = regexp.MustCompile(`^[A-Za-z_]+(?:/[A-Za-z0-9_+-]+){0,3}$`)
 // chatLocationNamed — v0.10.445: IANA adı (DST doğru) önce; geçersiz/boş
 // ad → sabit ofset (chatLocation). Ad istemciden gelir: şekil kapısı +
 // LoadLocation başarısızlığı sessizce ofsete düşer.
+//
+// v0.10.746 — merdivenin SON basamağı sunucu varsayılanı (COREMETRY_TZ,
+// imajda Europe/Istanbul): ad yok/çözülmedi VE ofset 0 → tarayıcı dilim
+// göndermemiş demektir (v0.10.745'ten beri UTC tarayıcı bile "UTC" ADINI
+// gönderir, yukarıda çözülür). Eski istemci ve tarayıcısız yollar
+// (arka plan açıklayıcı) böylece UTC yerine operatörün dilimini alır.
 func chatLocationNamed(tzName string, tzOffsetMin int) *time.Location {
 	if tzName != "" && len(tzName) <= 64 && tzNameRe.MatchString(tzName) {
 		if loc, err := time.LoadLocation(tzName); err == nil {
 			return loc
 		}
+	}
+	if tzOffsetMin == 0 {
+		return tzdefault.Location()
 	}
 	return chatLocation(tzOffsetMin)
 }

@@ -3,6 +3,7 @@ package anomaly
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -98,7 +99,7 @@ func TestPromptGoldenScenarios(t *testing.T) {
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
 			bundle := EvidenceBundle{Problem: sc.problem, Deep: sc.deep}
-			got := buildProblemPrompt(sc.problem, bundle, nil)
+			got := buildProblemPrompt(sc.problem, bundle, nil, time.UTC)
 			for _, w := range sc.wantIn {
 				if !strings.Contains(got, w) {
 					t.Errorf("prompt %q içermiyor:\n%s", w, got)
@@ -120,7 +121,7 @@ func TestPromptGoldenScenarios(t *testing.T) {
 func TestPromptUnchangedWithoutDeepEvidence(t *testing.T) {
 	p := chstore.Problem{Service: "checkout", RuleName: "r", Metric: "error_rate", Severity: "warning"}
 
-	withEmpty := buildProblemPrompt(p, EvidenceBundle{Problem: p}, nil)
+	withEmpty := buildProblemPrompt(p, EvidenceBundle{Problem: p}, nil, time.UTC)
 	if strings.Contains(withEmpty, "SORUŞTURMA") {
 		t.Errorf("derin kanıt yokken SORUŞTURMA bloğu basılmamalı:\n%s", withEmpty)
 	}

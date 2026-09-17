@@ -51,6 +51,12 @@ FROM alpine:3.20 AS runtime-base
 # karakterleri mojibake'e çevirmesini keser. Deployment'a env geçmek
 # gerekmez — imaj varsayılanı.
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+# v0.10.746 (operatör isteği) — MODELE giden damgaların varsayılan saat
+# dilimi: tarayıcı dilim göndermeyen yollar (arka plan exception/problem
+# açıklayıcıları, eski istemci) UTC yerine bunu kullanır. Yalnız
+# internal/tzdefault okur; TZ/time.Local'a dokunmaz (CH bind arg'ları ve
+# loglar UTC kalır). Chart ya da ortam env'i ezer.
+ENV COREMETRY_TZ=Europe/Istanbul
 # Re-declare VERSION inside this stage — Docker ARGs are
 # scoped per-stage, so the value passed into stage 2 isn't
 # visible here without this line.

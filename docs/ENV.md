@@ -164,6 +164,7 @@ Env = ilk boot varsayılanı; Settings → AI Copilot'ta kaydedilen değer
 
 | Değişken | Okunduğu yer | Yokken / varsayılan | Etki | Rol | Gizli |
 |---|---|---|---|---|---|
+| `COREMETRY_TZ` | `internal/tzdefault` (`Location()`, bir kez) | boş → `UTC`; **imaj varsayılanı `Europe/Istanbul`** (Dockerfile) | IANA adı. YALNIZ modele giden kanıt damgalarının son-basamak dilimi: tarayıcı dilim göndermeyen yollar (arka plan exception/problem açıklayıcıları, eski istemci). Tarayıcı `tz`/`tzOffsetMin` gönderdiyse o kazanır. `time.Local`'a dokunmaz — CH/loglar UTC. Geçersiz ad → UTC + boot logu. | api (explain/sohbet), worker (açıklayıcılar) | hayır |
 | `COREMETRY_AI_PROVIDER` | `config.go:805` | `""` → `anthropic` (`copilot.go:315`) | `anthropic` \| `github` \| `openai` (OpenAI-uyumlu; Ollama/vLLM/LM Studio). | api (explain, sohbet), worker (problem/exception explainer `main.go:1205-1210`) | hayır |
 | `COREMETRY_AI_API_KEY` | `config.go:808` | `""` → özellik uykuda, UI düğmeleri gizli | Sağlayıcı anahtarı (`sk-ant-…`, `ghu_…`); openai sağlayıcıda opsiyonel. | api, worker | **evet** |
 | `COREMETRY_AI_MODEL` | `config.go:811` | `""` → sağlayıcı varsayılanı (`copilot.go:615` `DefaultModels`) | | api, worker | hayır |

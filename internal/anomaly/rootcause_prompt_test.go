@@ -10,6 +10,7 @@ package anomaly
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -154,12 +155,12 @@ func TestBuildProblemPromptHypothesisFusion(t *testing.T) {
 		TopSuspect: "payment-db", TopScore: 0.78, Confidence: 0.71,
 	}
 
-	without := buildProblemPrompt(p, bundle, nil)
+	without := buildProblemPrompt(p, bundle, nil, time.UTC)
 	if strings.Contains(without, "KÖK-NEDEN HİPOTEZİ") {
 		t.Fatal("nil hypothesis must not render the hypothesis block")
 	}
 
-	with := buildProblemPrompt(p, bundle, hyp)
+	with := buildProblemPrompt(p, bundle, hyp, time.UTC)
 	if !strings.Contains(with, "KÖK-NEDEN HİPOTEZİ") {
 		t.Fatal("hypothesis present but block missing from prompt")
 	}
@@ -172,7 +173,7 @@ func TestBuildProblemPromptHypothesisFusion(t *testing.T) {
 	}
 
 	// No-clear-suspect hypothesis degrades to the pre-fusion prompt.
-	noSuspect := buildProblemPrompt(p, bundle, &chstore.RootCauseHypothesis{Confidence: 0.4})
+	noSuspect := buildProblemPrompt(p, bundle, &chstore.RootCauseHypothesis{Confidence: 0.4}, time.UTC)
 	if noSuspect != without {
 		t.Fatalf("no-suspect hypothesis must be byte-identical to nil-hypothesis prompt\nwith: %q\nwithout: %q", noSuspect, without)
 	}
