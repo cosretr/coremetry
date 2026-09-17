@@ -73,3 +73,23 @@ export function fleetVerdict(f: FleetLike): { tone: LossTone; text: string; pct:
 export function stalePods(pods: { lastSampleAt: number }[], nowNs: number, maxAgeS = 180): number {
   return pods.filter(p => nowNs - p.lastSampleAt > maxAgeS * 1e9).length;
 }
+
+// v0.10.772 — "N pod bayat" rollout sırasında kırmızıydı (prod 770 deploy'u:
+// eski ReplicaSet'in 3 podu kapanınca 3 dk sonra bayat sayıldı). Kapanan
+// eski pod ile takılı pod aynı görünür; ayrım K8s ad kalıbından: pod adı
+// <deploy>-<rs-hash>-<ek>. Bayat podların hepsi taze podlarda GÖRÜNMEYEN bir
+// rs-hash taşıyorsa bu bir rollout artığıdır, gri; değilse gerçekten bayat.
+export function podRSHash(pod: string): string {
+  const parts = pod.split('-');
+  return parts.length >= 3 ? parts[parts.length - 2] : pod;
+}
+export function staleVerdict(pods: { pod: string; lastSampleAt: number }[], nowNs: number, maxAgeS = 180): { count: number; tone: LossTone; text: string } | null {
+  const stale = pods.filter(p => nowNs - p.lastSampleAt > maxAgeS * 1e9);
+  if (stale.length === 0) return null;
+  const fresh = pods.filter(p => nowNs - p.lastSampleAt <= maxAgeS * 1e9);
+  const freshHashes = new Set(fresh.map(p => podRSHash(p.pod)));
+  const rollout = fresh.length > 0 && stale.every(p => !freshHashes.has(podRSHash(p.pod)));
+  return rollout
+    ? { count: stale.length, tone: 'b-gray', text: `${stale.length} eski pod (rollout)` }
+    : { count: stale.length, tone: 'b-err', text: `${stale.length} pod bayat` };
+}

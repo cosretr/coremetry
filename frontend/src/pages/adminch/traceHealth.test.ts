@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, stalePods } from './traceHealth';
+import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, podRSHash, stalePods, staleVerdict } from './traceHealth';
 
 describe('traceHealth — saf', () => {
   it('lossVerdict: kalıcı kayıp err, kalite işareti warn, temiz ok', () => {
@@ -66,6 +66,28 @@ describe('traceHealth — filo', () => {
     const src = readFileSync(resolve(__dirname, '..', 'AdminClickhouse.tsx'), 'utf8');
     expect(src).toContain('Filo mutabakatı');
     expect(src).toContain('fleetVerdict(data.fleet)');
-    expect(src).toContain('stalePods(data.fleet.pods, data.generatedAt)');
+    expect(src).toContain('staleVerdict(data.fleet.pods, data.generatedAt)');
+  });
+});
+
+// v0.10.772 — rollout artığı ile gerçek bayat pod ayrımı.
+describe('traceHealth — bayat pod hükmü', () => {
+  const now = 1_000_000 * 1e9;
+  const fresh = (pod: string) => ({ pod, lastSampleAt: now - 60e9 });
+  const old = (pod: string) => ({ pod, lastSampleAt: now - 400e9 });
+  it('podRSHash: <deploy>-<rs>-<ek>', () => {
+    expect(podRSHash('coremetry-ingest-5f88b4fd-4xsnh')).toBe('5f88b4fd');
+    expect(podRSHash('ingest-abc12-x')).toBe('abc12');
+    expect(podRSHash('tek')).toBe('tek');
+  });
+  it('eski ReplicaSet\'in kapanan podları gri "rollout", aynı setten bayat pod kırmızı', () => {
+    expect(staleVerdict([fresh('coremetry-ingest-5dbb596498-a'), fresh('coremetry-ingest-5dbb596498-b'), old('coremetry-ingest-5f88b4fd-x'), old('coremetry-ingest-5f88b4fd-y')], now))
+      .toEqual({ count: 2, tone: 'b-gray', text: '2 eski pod (rollout)' });
+    expect(staleVerdict([fresh('coremetry-ingest-5dbb596498-a'), old('coremetry-ingest-5dbb596498-b')], now))
+      .toEqual({ count: 1, tone: 'b-err', text: '1 pod bayat' });
+    // Taze pod hiç yoksa rollout iddiası yok: hepsi bayat, kırmızı.
+    expect(staleVerdict([old('coremetry-ingest-5f88b4fd-x')], now)?.tone).toBe('b-err');
+    expect(staleVerdict([fresh('coremetry-ingest-5f88b4fd-x')], now)).toBeNull();
+    expect(stalePods([old('a-b-c')], now)).toBe(1);
   });
 });

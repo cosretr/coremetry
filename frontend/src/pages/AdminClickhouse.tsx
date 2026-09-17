@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { fmtNum, fmtBytes, fmtClock, fmtDateTime, tsLong } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
 import { useQuery } from '@tanstack/react-query';
-import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, stalePods } from './adminch/traceHealth'; // v0.10.757
+import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, staleVerdict } from './adminch/traceHealth'; // v0.10.757
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
@@ -1915,7 +1915,7 @@ function TraceHealthPanel() {
   const data = armed === null ? null : q.isPending ? undefined : q.isError ? null : q.data ?? null;
   const verdict = data ? lossVerdict(data.pod, data.spoolDegraded, data.pod.ingestRole) : null;
   const fleet = data ? fleetVerdict(data.fleet) : null; // v0.10.767 — Faz B
-  const stale = data ? stalePods(data.fleet.pods, data.generatedAt) : 0;
+  const stale = data ? staleVerdict(data.fleet.pods, data.generatedAt) : null; // v0.10.772 — rollout artığı gri
   const rootPct = data ? pctOf(data.coverage.withRoot, data.coverage.traces) : null;
   const entryPct = data ? pctOf(data.coverage.withEntryRoot, data.coverage.traces) : null;
   const barePct = data ? pctOf(data.names.bareMethodSpans, data.names.totalSpans) : null;
@@ -1983,7 +1983,7 @@ function TraceHealthPanel() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
               <b>Filo mutabakatı</b>
               <span className={`badge ${fleet.tone}`} title="Yerleşmiş pencerede CH'de saklanan ÷ ingest podlarının kabul ettiği (ingest_ledger, dakikalık deltalar)">{fleet.text}</span>
-              {stale > 0 && <span className="badge b-err" title="Son 3 dk'da örnek yazmayan ingest podu">{stale} pod bayat</span>}
+              {stale && <span className={`badge ${stale.tone}`} title={stale.tone === 'b-gray' ? 'Eski ReplicaSet\'in kapanan podları; pencereden çıkınca kaybolur' : "Son 3 dk'da örnek yazmayan ingest podu"}>{stale.text}</span>}
             </div>
             <div className="cell-hint" style={{ marginBottom: 4 }}>
               Pencere {hhmm(data.fleet.settledFrom)}–{hhmm(data.fleet.settledTo)}; son 10 dk dışarıda (span zamanı ≠ kabul zamanı).
