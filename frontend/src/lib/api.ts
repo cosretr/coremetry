@@ -3570,36 +3570,6 @@ export const api = {
     }),
   traceBackfillCancel: () =>
     request<{ ok: boolean }>(`/api/admin/clickhouse/trace-backfill/cancel`, { method: 'POST' }),
-  stateRepartPreflight: () =>
-    get<import('./types').StateRepartPreflightResult>('/api/admin/state-repart/preflight'),
-  /** Koşan/bitmiş göçün anlık hâli. */
-  stateRepartStatus: () =>
-    get<import('./types').StateRepartRun>('/api/admin/state-repart/status'),
-  /** AŞAMA A (202). Hiçbir şey SİLMEZ — `_old` yedeği kalır. */
-  stateRepartApply: (cluster: string) =>
-    request<import('./types').StateRepartRun>('/api/admin/state-repart/apply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cluster, tables: [] }),
-      timeoutMs: 120_000,
-    }),
-  /** ADIM 5 + AŞAMA B (202). YIKICI: `_old` yedekleri düşer ve kanonik
-   *  ZK yolu geri alınır. `acknowledged` sunucu tarafında da zorunlu. */
-  stateRepartFinalize: (cluster: string) =>
-    request<import('./types').StateRepartRun>('/api/admin/state-repart/finalize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cluster, tables: [], acknowledged: true }),
-      timeoutMs: 120_000,
-    }),
-  /** AŞAMA B'nin `_pathfix_old` yedeklerini düşürür. */
-  stateRepartCleanup: (cluster: string, tables: string[]) =>
-    request<import('./types').StateUnifyCleanupResult>('/api/admin/state-repart/cleanup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cluster, tables, acknowledged: true }),
-      timeoutMs: 330_000,
-    }),
   chCoordinators: (windowS: number) =>
     get<{
       nodes: Array<{

@@ -392,3 +392,24 @@ func TestStateUnifyPreflightNeverMarshalsNullSlices(t *testing.T) {
 		t.Errorf("sıfır değerli ön kontrol null dilim içeriyor:\n%s", zb)
 	}
 }
+
+// Ters yön: 0009'un sihirbazı BİLİNÇLİ olarak `count()` okumaya devam
+// ediyor ve bu bir unutma değil. 37 state tablosunun hepsinde `id` YOK
+// (system_settings, api_tokens, service_metadata, ldap_groups — ölçüldü
+// 2026-08-24), yani aynı düzeltme oraya uygulansa ön kontrol "kolon
+// bulunamadı" ile tamamen kırılırdı. Bu test o gerekçenin kaynakta
+// YAZILI kalmasını çiviliyor: biri "tutarlılık" diye 0009'u da
+// değiştirmeye kalkarsa önce bu şerhi okur.
+func TestStateUnifyHostCheckDivergenceIsDocumented(t *testing.T) {
+	src, err := os.ReadFile("state_unify_admin.go")
+	if err != nil {
+		t.Fatalf("kaynak okunamadı: %v", err)
+	}
+	s := string(src)
+	if !strings.Contains(s, "v0.9.1343") {
+		t.Error("0009'un count() kullanımı v0.9.1343 şerhiyle gerekçelendirilmeli")
+	}
+	if !strings.Contains(s, "hepsinde") || !strings.Contains(s, "`id` YOK") {
+		t.Error("gerekçe ölçümü (37 tablonun hepsinde id yok) kaynakta yazılı olmalı")
+	}
+}

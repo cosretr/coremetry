@@ -116,10 +116,6 @@ type Server struct {
 	// dakikalar sürer; istek bağlamında koşamaz, bu yüzden durum
 	// burada tutulup /api/admin/state-unify/status'tan yoklanır.
 	stateUnify stateUnifyFlight
-	// stateRepart (v0.9.1341) — 0010 partition sökme sihirbazının
-	// tek-uçuş ilerleme kaydı. Aynı gerekçe: `problems` tablosunun
-	// tamamı kopyalanır, istek bağlamında koşamaz.
-	stateRepart stateRepartFlight
 	// distQueueState — HİSTEREZİS durumu (v0.9.987). Karar artık iki
 	// ölçümden değil, ÖNCEKİ KARAR + iki ölçümden çıkıyor: durumsuz hâlde
 	// 44.320 → 44.318 (iki dosya) tek başına "degraded → ok" yapıyordu.
@@ -680,7 +676,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	s.registerEntityLayerAdminRoutes(mux)  // v0.10.134 — 0011 entity katmanı şeması sihirbazı, admin_entity_layer.go
 	s.registerRolloutLayerAdminRoutes(mux) // v0.10.197 — 0012 rollouts katmanı şeması sihirbazı, admin_rollout_layer.go
 	s.registerStateUnifyRoutes(mux)
-	s.registerStateRepartRoutes(mux)
 	s.registerTraceBackfillRoutes(mux) // v0.10.103 — /traces tarihçe sihirbazı, admin_trace_backfill.go
 	s.registerSchemaCatalogRoutes(mux) // v0.10.115 — şema kataloğu, schema_catalog.go
 	mux.HandleFunc("GET /api/correlations", s.getCorrelations)

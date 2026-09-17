@@ -240,8 +240,9 @@ git diff <prod-tag>..HEAD | grep -E '^\+.*(ALTER|CREATE|DROP|MATERIALIZED)'
      bayat satır servis eder ve started_at P1 açık-saat eşiğini beslediği
      için yaşlanmış bir problem sessizce geri iner. Boot uyarı basar ama
      DDL göndermez. Önkoşulu 0009.
-     Sihirbaz: `/api/admin/state-repart/{preflight,status,apply,finalize,cleanup}`.
-     Tek-node'da elle, `ON CLUSTER` cümleleri çıkarılarak.
+     Sihirbazı v0.10.763'te KALDIRILDI (prod 2026-09-12 'Tamamlandı');
+     elle uygulanır: `migrations/0010_state_repartition.sql`. Tek-node'da
+     `ON CLUSTER` cümleleri çıkarılarak.
 
 3. **0001-0008 OPSİYONEL performans katmanı** — uygulanmazsa fast-path'ler
    kendini kapatır, `/api/rollup/red` 424 döner.
@@ -273,7 +274,7 @@ logunda `[chstore] parallel_view_processing=…` satırında.
 |---|---|---|
 | Prod sürümü | **v0.9.1385** | promotedAttrs **kolon** zinciri ateşlemez ⚠ aşağıdaki düzeltmeye bak |
 | 0009 | **uygulandı** | state tabloları birleşik |
-| 0010 | **uygulandı**, `_old` silinmesi bekliyor | şema taşındı; cleanup hijyen |
+| 0010 | **tamamlandı** (2026-09-12: partition yok, `_old` yok) | şema taşındı |
 | Replica | **api 4 · ingest 12 · worker 1** = 16 pod | Roll rol-başına TEK pod (maxSurge 1) → en fazla 3 eşzamanlı |
 
 **Ve kesim için belirleyici olan ölçüm:** prod v0.9.1385'te, 1.0.0 ise
@@ -313,10 +314,12 @@ Bunlar repodan OKUNAMAZ; kesimden önce cevaplanmalı:
   spans'a hiçbir ifade gitmez. (İlk yazımın "spans'a dokunan ALTER yok"
   cümlesi KOŞULSUZ doğru değil — muhafız prod'un cluster kipini kapsamıyor.)
 - **0009 durumu:** `GET /api/admin/state-unify/status`
-- **0010 AŞAMA A ADIM 5 kapandı mı:** `GET /api/admin/state-repart/preflight`
-  → `stage` alanı (`stage:"B"` = ADIM 5 bekliyor).
-  ⚠ `/status` DEĞİL: o uç süreç-içi bir anlık görüntü döndürüyor
-  (pod-yerel). 4 api replica'da hangi pod'a düştüğüne göre
-  `{"running":false,"total":0}` gelir — yanlış bir "temiz" cevabı.
+- **0010 kapandı mı** (sihirbaz v0.10.763'te kalktı) — SQL konsolu:
+  `SELECT hostName(), name, partition_key, zookeeper_path FROM
+  clusterAllReplicas('<cluster>', system.tables) WHERE database =
+  currentDatabase() AND (name LIKE 'problems%' OR name LIKE
+  'anomaly_events%')` → partition_key boş, zookeeper_path'te `_repart`
+  yok, `_old` / `_pathfix_old` satırı yok = tamam. Boot da eski şemayı
+  görürse `[chstore] ⚠ … hâlâ ESKİ şemada` basar.
 - **Prod replica sayısı** — >1 ise §1.8'deki boot DDL yarışı gerçek.
 - v0.9 zincirinin son sürümü ne? (kesim anındaki HEAD)

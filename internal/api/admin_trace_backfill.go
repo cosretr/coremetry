@@ -4,7 +4,7 @@ package api
 // (v0.10.103, operatör isteği: "Sihirbaz ile yapalım" — elle SQL yerine
 // üründe adım adım).
 //
-// Emsal: admin_state_repartition.go (0010). Aynı duruş: ince HTTP +
+// Emsal: admin_state_unify.go (0009). Aynı duruş: ince HTTP +
 // kalın store (chstore/trace_backfill.go), tek-uçuş kapısı, arka planda
 // koşan apply + yoklanan durum, serveCached YOK (kontrol yüzeyi),
 // BOOT'TA ASLA KOŞMAZ — yalnız admin tıklamasıyla.
