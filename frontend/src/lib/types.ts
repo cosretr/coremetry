@@ -4885,6 +4885,7 @@ export interface EndpointSplitValue {
   errors: number;
   errorRate: number;
   avgMs: number;
+  p50Ms: number;
   p99Ms: number;
 }
 

@@ -335,6 +335,7 @@ const SPLIT_COLS: DataTableColumn<EndpointSplitValue>[] = [
   { id: 'errors',    label: 'Errors', sortValue: r => r.errors,    numeric: true, width: 64 },
   { id: 'errorRate', label: 'Err %',  sortValue: r => r.errorRate, numeric: true, width: 64 },
   { id: 'avgMs',     label: 'Avg',    sortValue: r => r.avgMs,     numeric: true, width: 66 },
+  { id: 'p50Ms',     label: 'P50',    sortValue: r => r.p50Ms ?? 0, numeric: true, width: 66 },
   { id: 'p99Ms',     label: 'P99',    sortValue: r => r.p99Ms,     numeric: true, width: 66 },
 ];
 
@@ -412,6 +413,7 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
                       </span>
                     </td>
                     <td className="num mono">{r.avgMs.toFixed(1)}ms</td>
+                    <td className="num mono">{r.p50Ms != null ? `${r.p50Ms.toFixed(1)}ms` : '—'}</td>
                     <td className="num mono">{r.p99Ms.toFixed(1)}ms</td>
                   </tr>
                 );

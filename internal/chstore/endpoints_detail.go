@@ -417,6 +417,7 @@ type EndpointSplitRow struct {
 	Errors    uint64  `json:"errors"`
 	ErrorRate float64 `json:"errorRate"`
 	AvgMs     float64 `json:"avgMs"`
+	P50Ms     float64 `json:"p50Ms"`
 	P99Ms     float64 `json:"p99Ms"`
 }
 
@@ -483,6 +484,7 @@ func (s *Store) EndpointSplit(ctx context.Context, q EndpointDetailQuery, by str
 		       count()                                    AS calls,
 		       countIf(status_code = 'error')             AS errors,
 		       sum(duration) / nullIf(count(), 0) / 1e6   AS avg_ms,
+		       quantileTDigest(0.50)(duration) / 1e6      AS p50_ms,
 		       quantileTDigest(0.99)(duration) / 1e6      AS p99_ms
 		FROM spans
 		`+wc.sql()+`
@@ -497,11 +499,12 @@ func (s *Store) EndpointSplit(ctx context.Context, q EndpointDetailQuery, by str
 	out := []EndpointSplitRow{}
 	for rows.Next() {
 		var r EndpointSplitRow
-		var avgMs, p99Ms *float64
-		if err := rows.Scan(&r.Value, &r.Calls, &r.Errors, &avgMs, &p99Ms); err != nil {
+		var avgMs, p50Ms, p99Ms *float64
+		if err := rows.Scan(&r.Value, &r.Calls, &r.Errors, &avgMs, &p50Ms, &p99Ms); err != nil {
 			return nil, err
 		}
 		r.AvgMs = safeF(avgMs)
+		r.P50Ms = safeF(p50Ms)
 		r.P99Ms = safeF(p99Ms)
 		if r.Calls > 0 {
 			r.ErrorRate = float64(r.Errors) * 100.0 / float64(r.Calls)
