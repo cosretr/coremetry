@@ -4258,3 +4258,34 @@ a.ins-val:hover { text-decoration: underline; }
    dokunulmadı). */
 .ib-when { font-size: var(--fs-md); }
 .ib-when__ago { color: var(--text3); margin-top: var(--sp-1); font-size: var(--fs-xs); }
+
+/* ── Servis dikkat şeridi — v0.10.784 (components/ServiceAttentionStrip.tsx).
+   Eski kırmızı callout'un sıkı hâli: başlık satırı 20px, satır 22px, kart
+   kenarlığı yok; satır = bağlantı. Mockup onaylı 2026-09-18. ── */
+.svc-att { border: 1px solid var(--border); border-left: 3px solid var(--err); background: color-mix(in oklab, var(--err) 7%, var(--bg1)); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-5) var(--sp-1); margin-bottom: 14px; }
+.svc-att-head { display: flex; align-items: center; gap: var(--sp-4); min-height: 20px; margin-bottom: var(--sp-1); font-size: var(--fs-sm); }
+.svc-att-title { color: var(--err); font-weight: 600; }
+.svc-att-sep { color: var(--text3); }
+.svc-att-slo { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text2); }
+.svc-att-slo-ico { color: var(--warn); }
+.svc-att-warn { font-size: var(--fs-xs); color: var(--warn); }
+.svc-att-sp { flex: 1; }
+.svc-att-head a { font-size: var(--fs-xs); }
+.svc-att-rows { display: flex; flex-direction: column; }
+.svc-att-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; align-items: center; gap: 0 var(--sp-4); height: 22px; padding: 0 var(--sp-3); margin: 0 calc(-1 * var(--sp-3)); border-radius: var(--radius-xs); border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); color: inherit; text-decoration: none; }
+.svc-att-row:first-child { border-top: 0; }
+.svc-att-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); text-decoration: none; }
+.svc-att-row .badge { padding: 0 var(--sp-3); font-size: var(--fs-2xs); line-height: 16px; }
+.svc-att-kind { font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--text2); background: var(--bg2); padding: 0 var(--sp-3); line-height: 16px; border-radius: var(--radius-xs); white-space: nowrap; }
+.svc-att-name { font-size: var(--fs-sm); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 22px; }
+.svc-att-sub { font-weight: 400; color: var(--text2); }
+.svc-att-meta { font-size: var(--fs-xs); color: var(--text2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.svc-att-meta b { color: var(--err); }
+.svc-att-go { color: var(--text3); font-size: var(--fs-sm); }
+.svc-att-row:hover .svc-att-go { color: var(--accent2); }
+.svc-att-more { font-size: var(--fs-xs); color: var(--text2); line-height: 20px; border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.svc-att-thin { border: 1px solid var(--border); background: var(--bg1); border-radius: var(--radius-sm); padding: 0 var(--sp-5); height: 24px; display: flex; align-items: center; margin-bottom: 14px; }
+@media (max-width: 640px) {
+  .svc-att-row { grid-template-columns: auto auto minmax(0, 1fr) auto; height: auto; min-height: 22px; padding: var(--sp-1) var(--sp-3); }
+  .svc-att-meta { grid-column: 1 / -1; white-space: normal; line-height: 16px; padding-bottom: var(--sp-1); }
+}

@@ -21,6 +21,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { ServiceCharts } from '@/components/ServiceCharts';
 import { LazyMount } from '@/components/LazyMount';
 import { ServiceCatalogPill } from '@/components/ServiceCatalogPill';
+import { ServiceAttentionStrip } from '@/components/ServiceAttentionStrip';
 import { DBQueriesPanel } from '@/components/DBQueriesPanel';
 import { DeployHistoryPanel } from '@/components/DeployHistoryPanel';
 import { DetailsPropsStrip } from './service/DetailsPropsStrip';
@@ -32,13 +33,11 @@ import { DetailsMetricsSection, useDetailsMetricPanels } from './service/Details
 import { panelMaxDataPoints } from '@/lib/chartStep';
 import { ServiceAnnotationLane } from '@/components/charts/ServiceAnnotationLane';
 import { api } from '@/lib/api';
-import { timeRangeToNs, fmtAgoNs, tsLong } from '@/lib/utils';
-import { IconSparkles } from '@/components/icons';
+import { timeRangeToNs } from '@/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ServiceRuntimeBadge } from '@/components/ServiceRuntimeBadge';
 import { keys } from '@/lib/queries/keys';
 import type { Service, Problem, OperationSummary, SLORow, TimeRange } from '@/lib/types';
-import { stripMarkdown } from '@/components/Markdown';
 import { QueryError } from '@/components/QueryError';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -384,7 +383,6 @@ function ServiceDetailInner() {
     );
   }
 
-  const openProbs = problems.filter(p => p.status === 'open');
 
   return (
     <>
@@ -458,95 +456,10 @@ function ServiceDetailInner() {
               label="∿ Anomalies" />
           </div>
         </div>
-        {openProbs.length > 0 && (
-          // Red PROBLEM CALLOUT (design handoff app.jsx .prob-callout) —
-          // token-only: a soft red-tinted panel (color-mix keeps it derived
-          // from --err, no raw hex) with a 3px red left accent. One card per
-          // open problem: severity badge + rule name + the anomaly metric
-          // line + description + since-stamp, and a "View all" deep-link.
-          <div style={{
-            border: '1px solid var(--border)',
-            borderLeft: '3px solid var(--err)',
-            background: 'color-mix(in oklab, var(--err) 7%, var(--bg1))',
-            borderRadius: 6, padding: 12, marginBottom: 14,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ color: 'var(--err)', fontWeight: 600 }}>
-                ! {openProbs.length} open problem{openProbs.length === 1 ? '' : 's'} on {svc}
-              </span>
-              <span style={{ flex: 1 }} />
-              <Link to={`/problems?service=${encodeURIComponent(svc)}`} style={{ fontSize: 11 }}>
-                View all for this service →
-              </Link>
-            </div>
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 8,
-            }}>
-              {openProbs.map(p => {
-                const sevCls = p.severity === 'critical' ? 'b-err' : 'b-warn';
-                return (
-                  <div key={p.id} style={{
-                    padding: 8, borderRadius: 4,
-                    background: 'var(--bg2)', border: '1px solid var(--border)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <span className={`badge ${sevCls}`} style={{ fontSize: 10 }}>
-                        {p.severity.toUpperCase()}
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>{p.ruleName}</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text2)' }}>
-                      <span style={{ fontFamily: 'monospace' }}>{p.metric}</span>
-                      {' = '}
-                      <b style={{ color: 'var(--err)' }}>{Number(p.value).toFixed(2)}</b>
-                      {' '}(threshold {Number(p.threshold).toFixed(2)})
-                    </div>
-                    {p.description && (
-                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-                        {p.description}
-                      </div>
-                    )}
-                    {/* v0.9.530 — ProblemExplainer'ın proaktif kök-sebep
-                        cümlesi. Alan bundle'da ZATEN geliyordu (Problem[]),
-                        yalnız çizilmiyordu; ek istek yok.
-                        description ile AYNI tonda basılamaz: bu bir LLM
-                        çıkarımı, o bir kural metni. Köken işareti + yaş,
-                        Inbox satırıyla aynı muamele. İki satıra çivili —
-                        özet çok bölümlü bir blok ve kart 50 probleme kadar
-                        çizilebiliyor (bundle Limit=50), sınırsız bırakmak
-                        sekmeleri sayfanın çok altına iterdi. */}
-                    {p.aiSummary && (
-                      <div
-                        // v0.9.696 — KIRPILMIŞ yüzey (2 satır) + title
-                        // özniteliği: markdown düzleştiriliyor, Inbox
-                        // kartıyla aynı gerekçe.
-                        title={p.aiSummaryAt
-                          ? `${stripMarkdown(p.aiSummary)}\n\nAI çıkarımı · ${fmtAgoNs(p.aiSummaryAt)}`
-                          : stripMarkdown(p.aiSummary)}
-                        style={{
-                          fontSize: 11, color: 'var(--text2)', marginTop: 4,
-                          padding: '4px 8px', borderRadius: 'var(--radius-sm)',
-                          background: 'var(--accent-soft)',
-                          borderLeft: '2px solid var(--accent)',
-                          display: '-webkit-box', WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                        }}
-                      >
-                        <IconSparkles size={10} /> {stripMarkdown(p.aiSummary)}
-                        {p.aiSummaryAt && (
-                          <span style={{ color: 'var(--text3)' }}> · {fmtAgoNs(p.aiSummaryAt)}</span>
-                        )}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, fontFamily: 'monospace' }}>
-                      since {tsLong(p.startedAt)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* v0.10.784 — dikkat şeridi: Inbox sıralı, tıklanabilir problem /
+            exception satırları; SLO burn-rate dipnot. Eski callout (bundle
+            problemleri, SLO kartları, tıklanmaz) kalktı — operatör 2026-09-18. */}
+        <ServiceAttentionStrip service={svc} fallbackProblems={problems} />
 
         {loading && <Spinner />}
         {!loading && bundleErr && (
@@ -731,7 +644,7 @@ function ServiceDetailInner() {
                 yer kaplıyor"). Artık içeriğin en altında: SLO'lar hâlâ
                 her sekmede görünür, ama triage tablosu tepeyi alır. */}
             {slos.length > 0 && (
-              <div style={{
+              <div id="svc-slos" style={{
                 border: '1px solid var(--border)', background: 'var(--bg1)',
                 borderRadius: 6, padding: 12, marginTop: 14,
               }}>

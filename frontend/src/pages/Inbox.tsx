@@ -21,6 +21,7 @@ import { FacetMultiSelect } from '@/components/ui/FacetMultiSelect';
 import { InboxTriageDrawer } from '@/components/InboxTriageDrawer';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { resolveSelectedItem } from '@/lib/inboxDrawer';
+import { inboxItemHref, isInboxExcFamily } from '@/lib/inboxHref';
 // v0.9.837 (operator-reported) — "Alert rules" bölümü Exceptions
 // sayfasından buraya taşındı: alert kuralları triage kuyruğunun
 // parçası, exception kuyruğunun değil. Modül yolundan import (barrel
@@ -74,8 +75,9 @@ const KIND_LABEL: Record<InboxKind, string> = {
 
 // exception ailesi — httperror satırları da exception payload'u taşır
 // (aynı store, aynı fingerprint yolu); drawer/drill-in/toplu-ack ortak.
-const isExcFamily = (it: InboxItem): boolean =>
-  (it.kind === 'exception' || it.kind === 'httperror') && !!it.exception;
+// v0.10.784 — exception-ailesi yüklemi ve "kaynağa git" adresleri
+// lib/inboxHref'te (servis dikkat şeridiyle tek kaynak).
+const isExcFamily = isInboxExcFamily;
 
 // teamChipTitle — ekip rozetinin title'ı (v0.9.1345).
 //
@@ -344,9 +346,14 @@ export default function InboxPage() {
   // Other kinds keep the drawer: it exists so a Problem or an anomaly can be
   // acked without leaving the queue (v0.8.292), and neither has a richer
   // destination that the drawer is hiding.
+  // Satırın kaynağına git — adres lib/inboxHref'ten (v0.10.784).
+  const goTo = (it: InboxItem) => {
+    const href = inboxItemHref(it);
+    if (href) navigate(href);
+  };
   const openDrawer = (it: InboxItem) => {
     if (isExcFamily(it)) {
-      navigate(`/problems?exc=${encodeURIComponent(it.exception!.fingerprint)}`);
+      goTo(it);
       return;
     }
     setParam('item', it.id);
@@ -467,12 +474,12 @@ export default function InboxPage() {
     } else if (isExcFamily(it)) {
       navigate(`/problems?tab=open&exception=${encodeURIComponent(it.exception!.fingerprint)}`);
     } else if (it.kind === 'anomaly' && it.anomaly) {
-      navigate(`/anomalies?event=${encodeURIComponent(it.anomaly.id)}`);
+      goTo(it);
     } else if (it.kind === 'incident' && it.incident) {
       // The incident DETAIL route (/incident?id=), not the list — the row
       // already told the operator the incident exists; the click is a request
       // for the response timeline.
-      navigate(`/incident?id=${encodeURIComponent(it.incident.id)}`);
+      goTo(it);
     }
   };
 
