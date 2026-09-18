@@ -458,8 +458,9 @@ func EndpointSplitDims() []string {
 // EndpointSplit groups the endpoint's spans by one whitelisted
 // attribute and returns the top `limit` values by call volume with
 // RED each. Bounded raw GROUP BY: the scope predicate rides the
-// (service_name, time) PK + route filter, quantileTDigest keeps the
-// per-group quantile memory flat, LIMIT + max_execution_time cap the
+// (service_name, time) PK + route filter, ONE quantilesTDigest accumulator
+// (p50 + p99, v0.10.786; two single-quantile calls held two digests per
+// group) keeps the per-group quantile memory flat, LIMIT + max_execution_time cap the
 // rest. `by` outside the whitelist is a caller bug → error (handler
 // 400s).
 func (s *Store) EndpointSplit(ctx context.Context, q EndpointDetailQuery, by string, limit int) ([]EndpointSplitRow, error) {
@@ -484,8 +485,8 @@ func (s *Store) EndpointSplit(ctx context.Context, q EndpointDetailQuery, by str
 		       count()                                    AS calls,
 		       countIf(status_code = 'error')             AS errors,
 		       sum(duration) / nullIf(count(), 0) / 1e6   AS avg_ms,
-		       quantileTDigest(0.50)(duration) / 1e6      AS p50_ms,
-		       quantileTDigest(0.99)(duration) / 1e6      AS p99_ms
+		       arrayElement(quantilesTDigest(0.5, 0.99)(duration), 1) / 1e6 AS p50_ms,
+		       arrayElement(quantilesTDigest(0.5, 0.99)(duration), 2) / 1e6 AS p99_ms
 		FROM spans
 		`+wc.sql()+`
 		GROUP BY v

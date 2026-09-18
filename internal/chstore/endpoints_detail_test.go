@@ -1,6 +1,7 @@
 package chstore
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -18,6 +19,9 @@ import (
 //   • EndpointSplitDims — the split-by whitelist stays sorted + closed
 //     (frontend select and the 400 message read it; a free-form `by`
 //     must never reach SQL identity).
+//   • TestEndpointSplitSingleQuantilesAccumulator — v0.10.786: p50 + p99
+//     come from ONE quantilesTDigest(0.5, 0.99) call (arrayElement), not
+//     two single-quantile digests per group (v0.10.785 review).
 
 func TestCollapseLatencyHistogram(t *testing.T) {
 	cases := []struct {
@@ -160,4 +164,36 @@ func sortStringsIsSorted(s []string) bool {
 		}
 	}
 	return true
+}
+
+// v0.10.786 — the split query's p50/p99 share one tDigest accumulator.
+// Two `quantileTDigest(q)(duration)` calls build two digests per group on a
+// raw-spans GROUP BY; `quantilesTDigest(0.5, 0.99)` builds one and
+// arrayElement picks. Source pin: the SQL lives in a Go string, nothing
+// else enforces the shape.
+func TestEndpointSplitSingleQuantilesAccumulator(t *testing.T) {
+	src, err := os.ReadFile("endpoints_detail.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := string(src)
+	i := strings.Index(fn, "func (s *Store) EndpointSplit(")
+	if i < 0 {
+		t.Fatal("EndpointSplit not found")
+	}
+	fn = fn[i:]
+	if j := strings.Index(fn, "\nfunc "); j > 0 {
+		fn = fn[:j]
+	}
+	for _, want := range []string{
+		"arrayElement(quantilesTDigest(0.5, 0.99)(duration), 1) / 1e6 AS p50_ms",
+		"arrayElement(quantilesTDigest(0.5, 0.99)(duration), 2) / 1e6 AS p99_ms",
+	} {
+		if !strings.Contains(fn, want) {
+			t.Errorf("EndpointSplit SQL lacks %q", want)
+		}
+	}
+	if strings.Contains(fn, "quantileTDigest(0.") {
+		t.Error("EndpointSplit still calls a single-quantile quantileTDigest — use the shared quantilesTDigest accumulator")
+	}
 }

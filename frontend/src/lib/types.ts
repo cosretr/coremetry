@@ -4885,7 +4885,9 @@ export interface EndpointSplitValue {
   errors: number;
   errorRate: number;
   avgMs: number;
-  p50Ms: number;
+  // v0.10.785 eklendi; v0.10.786 isteğe bağlı: yanıt 30 sn cache'li (SWR
+  // 90 sn), deploy sonrası eski gövdelerde alan yok — okuyan "—" basar.
+  p50Ms?: number;
   p99Ms: number;
 }
 
