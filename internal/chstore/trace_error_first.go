@@ -52,17 +52,39 @@ func errorFirstSQL(whereSQL string) string {
 }
 
 // errorFirstFilter — aday sorgusunun filtresi: pencere + servis + env/cluster
-// KALIR; span-düzeyi öteki yüklemler (filtre/arama/kök/süre) DÜŞER — onlar
-// aşama 1/2'de tam listeyle koşar. HasError kapatılıp `status_code =
-// 'error'` açıkça eklenir (WHERE; idx_status budar).
+// KALIR; HasError kapatılıp `status_code = 'error'` açıkça eklenir (WHERE;
+// idx_status budar). Arama / kök / RequireServices DÜŞER (trace düzeyi ya da
+// başka kaynaktan) — onlar aşama 1/2'de tam listeyle koşar.
+//
+// v0.10.812 — Operator-reported (prod): servis + Errors + `name = INSERT …`
+// çipi, 3 saat → "No traces found" ama şerit 9 eşleşen hatalı span sayıyor;
+// pencere daraltılınca 3 trace geliyordu. Sebep: adaylar servisin en yeni
+// 6000 HATALI span'inden seçiliyor, çip o adayların ÜSTÜNDE süzülüyordu —
+// yoğun serviste nadir çip 6000'in dışında kalıyordu (feedback:
+// tavanlı liste azınlığı gizler). Şimdi span-düzeyi WHERE yüklemleri —
+// çipler (arama yokken; v0.10.341 aramada HAVING'e taşıyor) ve minMs/maxMs —
+// aday sorgusunda da kalır: nihai anlam zaten "çipe uyan hatalı span"
+// (WHERE çip + HAVING hata aynı satır kümesi), yani aday kümesi KESİN, üst
+// küme bile değil; tavan artık EŞLEŞEN hatalı span'ler üzerinde.
 func errorFirstFilter(f TraceFilter) TraceFilter {
 	lf := f
 	lf.HasError = false
-	lf.Filters, lf.FilterRoot, lf.Search = nil, nil, ""
+	if filtersTraceLevel(f) && !f.forceFiltersInWhere {
+		lf.Filters, lf.FilterRoot = nil, nil // trace düzeyi (aramayla) → aday sorgusu bilmez
+	}
+	lf.Search = ""
 	lf.RequireServices, lf.RootOnly = nil, false
-	lf.MinMs, lf.MaxMs = 0, 0
 	lf.TraceIDs, lf.CandidateIDs = nil, nil
 	return lf
+}
+
+// errorFirstIDsAny — []string → []any (stage 2 holders bind listesi).
+func errorFirstIDsAny(ids []string) []any {
+	out := make([]any, len(ids))
+	for i, id := range ids {
+		out[i] = id
+	}
+	return out
 }
 
 // errorFirstCandidates — (idler, tavana çarptı mı, hata).

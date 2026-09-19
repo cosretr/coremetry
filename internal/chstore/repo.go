@@ -3741,6 +3741,30 @@ func (s *Store) getTracesFromMV(ctx context.Context, f TraceFilter) ([]TraceRow,
 				*f.RankedWithin = 0
 			}
 		}
+	} else if f.Service != "" && f.HasError {
+		// v0.10.812 — Operator-reported (prod): servis + Errors, MV yolu.
+		// Adaylar servis indeksinin en yeni N trace'iydi (hata bilmez), hata
+		// yalnız stage 2 HAVING'inde süzülüyordu → yoğun serviste nadir
+		// hatalar en yeni 5000'in dışında kalıp liste BOŞ dönüyordu (şerit
+		// hataları sayarken). Şimdi adaylar servisin en yeni hatalı
+		// span'lerinden (spans, PK servis + idx_status; hata-önce yolu, tavan
+		// traceStage2MaxIDs); stage 2 HAVING kesin dip çizgisi. Hiç hatalı
+		// span yoksa boş ve doğru. Tavana çarpılırsa RankedWithin = "en yeni
+		// N hatalı trace".
+		ids, bounded, err := s.errorFirstCandidates(ctx, f)
+		if err != nil {
+			return nil, 0, false, fmt.Errorf("stage1 error-first: %w", err)
+		}
+		f.Explain.note("stage1=error-first (spans idx_status) ids=%d bounded=%v", len(ids), bounded)
+		if len(ids) == 0 {
+			return []TraceRow{}, 0, false, nil
+		}
+		traceIDs = errorFirstIDsAny(ids)
+		holders = strings.Repeat("?,", len(ids))
+		holders = holders[:len(holders)-1]
+		if bounded && f.RankedWithin != nil {
+			*f.RankedWithin = len(ids)
+		}
 	} else if f.Service != "" {
 		want, sliceOrder, sliced := serviceSlicePlan(f, pageLimit, stage1Limit)
 		s1f := f

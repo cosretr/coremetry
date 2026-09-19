@@ -38,13 +38,15 @@ func TestErrorFirstFilterAndSQL(t *testing.T) {
 	f := TraceFilter{Service: "svc", HasError: true, From: from, To: to, Env: "prod",
 		Filters: []FilterExpr{{Key: "name", Op: "=", Values: []string{"POST"}}}, Search: "x", RootOnly: true, MinMs: 5}
 	lf := errorFirstFilter(f)
-	if lf.HasError || lf.Filters != nil || lf.Search != "" || lf.RootOnly || lf.MinMs != 0 || lf.Service != "svc" || lf.Env != "prod" {
-		t.Errorf("errorFirstFilter yalnız pencere+servis+env/cluster taşımalı: %+v", lf)
+	// v0.10.812 — arama VARKEN çipler trace düzeyi (HAVING) → aday sorgusundan
+	// düşer; minMs span-düzeyi WHERE → KALIR (nihai WHERE ile aynı).
+	if lf.HasError || lf.Filters != nil || lf.Search != "" || lf.RootOnly || lf.MinMs != 5 || lf.Service != "svc" || lf.Env != "prod" {
+		t.Errorf("errorFirstFilter (aramalı): pencere+servis+env+süre taşımalı, çip/arama/kök düşmeli: %+v", lf)
 	}
 	wc := buildGetTracesWhere(lf, "")
 	wc.add("status_code = 'error'")
 	sql := errorFirstSQL(wc.sql())
-	for _, want := range []string{"time >= ?", "time <= ?", "service_name = ?", "deploy_env = ?", "status_code = 'error'", "ORDER BY time DESC", "LIMIT ?", "max_execution_time = 10"} {
+	for _, want := range []string{"time >= ?", "time <= ?", "service_name = ?", "deploy_env = ?", "duration >= ?", "status_code = 'error'", "ORDER BY time DESC", "LIMIT ?", "max_execution_time = 10"} {
 		if !strings.Contains(sql, want) {
 			t.Errorf("%q yok:\n%s", want, sql)
 		}
@@ -53,11 +55,71 @@ func TestErrorFirstFilterAndSQL(t *testing.T) {
 	// sözcük sınırı şart (bkz. gate-kendi-metnini-ısırır dersi).
 	for _, no := range []string{`(^|[^_a-z])name = \?`, `HAVING`, `GROUP BY`, `coremetry\.`} {
 		if regexp.MustCompile(no).MatchString(sql) {
-			t.Errorf("%q olmamalı (span filtreleri aşama 1/2'de):\n%s", no, sql)
+			t.Errorf("%q olmamalı (aramalı şekilde çipler aşama 1/2'de):\n%s", no, sql)
 		}
 	}
 	if strings.Count(sql, "?") != len(wc.args)+1 {
 		t.Errorf("`?` %d ≠ args %d + LIMIT", strings.Count(sql, "?"), len(wc.args))
+	}
+}
+
+// v0.10.812 — Operator-reported (prod): arama YOKKEN çipler span-düzeyi WHERE'dir
+// ve aday sorgusunda KALIR → en yeni N tavanı eşleşen hatalı span'ler üzerinde.
+func TestErrorFirstKeepsSpanLevelChips(t *testing.T) {
+	from := time.Date(2026, 9, 19, 18, 0, 0, 0, time.UTC)
+	f := TraceFilter{Service: "svc", HasError: true, From: from, To: from.Add(3 * time.Hour),
+		Filters: []FilterExpr{{Key: "name", Op: "=", Values: []string{"INSERT x"}}}}
+	lf := errorFirstFilter(f)
+	if len(lf.Filters) != 1 || lf.HasError {
+		t.Fatalf("çip aday filtresinde kalmalı: %+v", lf)
+	}
+	wc := buildGetTracesWhere(lf, "")
+	wc.add("status_code = 'error'")
+	sql := errorFirstSQL(wc.sql())
+	if !regexp.MustCompile(`(^|[^_a-z])name = \?`).MatchString(sql) || !strings.Contains(sql, "status_code = 'error'") {
+		t.Errorf("çip + hata birlikte WHERE'de olmalı:\n%s", sql)
+	}
+	if strings.Count(sql, "?") != len(wc.args)+1 {
+		t.Errorf("`?` %d ≠ args %d + LIMIT", strings.Count(sql, "?"), len(wc.args))
+	}
+	// Gruplu (OR) çip de arama yokken WHERE'dedir → kalır.
+	g := &FilterGroup{Join: "or", Filters: []FilterExpr{{Key: "name", Op: "=", Values: []string{"a"}}, {Key: "name", Op: "=", Values: []string{"b"}}}}
+	f2 := TraceFilter{Service: "svc", HasError: true, From: from, To: from.Add(time.Hour), FilterRoot: g}
+	if errorFirstFilter(f2).FilterRoot == nil {
+		t.Error("OR grubu aramasız → aday sorgusunda kalmalı")
+	}
+	// forceFiltersInWhere: aramalı olsa da WHERE → kalır.
+	f3 := f
+	f3.Search = "x"
+	f3.forceFiltersInWhere = true
+	if len(errorFirstFilter(f3).Filters) != 1 {
+		t.Error("forceFiltersInWhere çipleri korumalı")
+	}
+	if len(errorFirstIDsAny([]string{"a", "b"})) != 2 {
+		t.Error("id dönüşümü")
+	}
+}
+
+// v0.10.812 — MV yolunda servis + Errors: adaylar hata-önce (spans), servis
+// indeksi DEĞİL; hiç hatalı span yoksa boş döner.
+func TestMVServiceErrorsUseErrorFirst(t *testing.T) {
+	b, err := os.ReadFile("repo.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	i := strings.Index(src, "func (s *Store) getTracesFromMV(")
+	body := src[i:]
+	ef := strings.Index(body, `} else if f.Service != "" && f.HasError {`)
+	svc := strings.Index(body, `} else if f.Service != "" {`)
+	if ef < 0 || svc < 0 || ef > svc {
+		t.Fatalf("servis + Errors dalı servis-indeks dalından ÖNCE olmalı: ef=%d svc=%d", ef, svc)
+	}
+	seg := body[ef:svc]
+	for _, want := range []string{"s.errorFirstCandidates(ctx, f)", "return []TraceRow{}, 0, false, nil", "errorFirstIDsAny(ids)", "*f.RankedWithin = len(ids)"} {
+		if !strings.Contains(seg, want) {
+			t.Errorf("servis + Errors dalı eksik: %s", want)
+		}
 	}
 }
 
