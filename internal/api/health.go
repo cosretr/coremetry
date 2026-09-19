@@ -87,10 +87,11 @@ func (s *Server) getHealth(w http.ResponseWriter, r *http.Request) {
 		"otlp_convert_degrades":       otlp.ConvertDegradeCounts(),   // v0.10.388 — sessiz degrade sayaçları
 		"otlp_ingest_rejects":         otlp.IngestRejectCounts(),     // v0.10.754 — sayaçsız kayıp noktaları (decode/oversize/gRPC oversize/boş id/geçersiz damga)
 		// v0.10.300 — attribute hash indeksi: hazır mı, kaç yüklem bloom yolunda.
-		"attr_index_available": chstore.AttrIndexAvailable(),
-		"attr_index_used":      chstore.AttrIndexUsed(),
-		"attr_slice_used":      chstore.AttrSliceUsed(), // v0.10.301 — indeks-güdümlü aday dilimi
-		"clickhouse":           chStatusLabel(chOK, spoolDegraded),
+		"attr_index_available":  chstore.AttrIndexAvailable(),
+		"attr_index_used":       chstore.AttrIndexUsed(),
+		"attr_slice_used":       chstore.AttrSliceUsed(),    // v0.10.301 — indeks-güdümlü aday dilimi
+		"traces_empty_mismatch": tracesEmptyMismatch.Load(), // v0.10.813 — şerit sayıyor, liste boş (aday tavanı sınıfı)
+		"clickhouse":            chStatusLabel(chOK, spoolDegraded),
 		// v0.9.238 — which roles THIS pod actually runs. In distributed mode
 		// the api and ingest Deployments answer the same hostname through
 		// different Services, and until now nothing in the response said

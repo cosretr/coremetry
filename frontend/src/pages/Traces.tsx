@@ -78,7 +78,7 @@ import { traceHref } from '@/lib/traceHref';
 
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatHeaderLabel, type StripStat } from '@/components/traces/stripStat';
-import { stripScope, volumeUnitFor, weightedStatAvg, dataExtent } from '@/components/traces/volumeSeries';
+import { stripScope, volumeUnitFor, weightedStatAvg } from '@/components/traces/volumeSeries';
 import { groupLeaves } from '@/lib/urlState';
 import { LatencyScatter } from '@/components/traces/LatencyScatter';
 import { ShapesView } from '@/components/traces/ShapesView';
@@ -983,12 +983,10 @@ function TracesPageInner() {
     if (toMs - fromMs < 1) return;
     handleZoom(fromMs / 1000, toMs / 1000);
   };
-  // v0.10.738 (operatör: Problems pivotundan sonra pencereyi 6 sa / 24 sa
-  // yapınca "histogram tek bir bar") — veri pencerenin < %25'ine sıkışmışsa
-  // "veriye sığdır": sürükle-seçimle aynı yol (zoom yığını, çift-tık geri).
-  const fitExtent = useMemo(
-    () => dataExtent(volSeries?.count ?? null, listRangeNs.from / 1e9, listRangeNs.to / 1e9),
-    [volSeries, listRangeNs]);
+  // v0.10.813 — "veriye sığdır" düğmesi (v0.10.738) KALDIRILDI (operatör:
+  // "böyle bir seçeneğe gerek yok; her trace gelsin"). Düğme, aday tavanı
+  // hatasını (v0.10.812) maskeleyen bir geçici çareydi; sürükle-seçim ve
+  // çift-tık geri aynen kalır. dataExtent yardımcısı volumeSeries'te durur.
   const clearBrush = handleZoomReset;
 
   // Hover-prefetch the trace spans (server-cached 5m) so the row click is a HIT.
@@ -1231,12 +1229,6 @@ function TracesPageInner() {
               xRange={{ from: listRangeNs.from / 1e9, to: listRangeNs.to / 1e9 }}
               header={vizToggle}
               headerRight={<>{vizStats}
-                {fitExtent && (
-                  <Button variant="secondary" size="sm" onClick={() => applyBrush(fitExtent.fromSec * 1000, fitExtent.toSec * 1000)}
-                    title={`Veri pencerenin %${Math.round(fitExtent.fraction * 100)}'inde: ${tsLong(fitExtent.fromSec * 1e9)} → ${tsLong(fitExtent.toSec * 1e9)}. Pencereyi bu aralığa daralt (çift-tık geri alır).`}>
-                    ⤢ veriye sığdır
-                  </Button>
-                )}
                 {/* v0.10.513 (operatör: "seçilebilir olsun, çok yer kaplamasın,
                     expand yerinde") — yanıt-süresi istatistiği seçici, eski
                     expand düğmesinin yerinde; `.segmented.sg-sm` yoğun rung. */}

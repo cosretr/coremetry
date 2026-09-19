@@ -165,3 +165,54 @@ func TestErrorFirstRunsBeforeRawWhere(t *testing.T) {
 		t.Error("hatalı trace yoksa BOŞ dönmeli — tam taramaya düşmemeli")
 	}
 }
+
+// v0.10.813 — DEĞİŞMEZ: hata-önce aday sorgusunun WHERE'i, nihai liste
+// sorgusunun WHERE'inin ÜST KÜMESİDİR (her nihai span-düzeyi yüklem adayda da
+// var). buildGetTracesWhere'e yeni bir yüklem eklenip errorFirstFilter'da
+// düşürülürse burası kırmızı — v0.10.812 sınıfı (tavan seçici süzgeçten
+// önce) yeniden yaşanmaz. Şekiller: çip, çip+süre, OR grubu, env, aramalı
+// (çipler HAVING'de → nihai WHERE'de de yok), boş çip listesi.
+func TestErrorFirstCandidateWhereSupersetOfFinal(t *testing.T) {
+	from := time.Date(2026, 9, 19, 18, 0, 0, 0, time.UTC)
+	name := FilterExpr{Key: "name", Op: "=", Values: []string{"INSERT x"}}
+	base := TraceFilter{Service: "svc", HasError: true, From: from, To: from.Add(3 * time.Hour)}
+	shapes := map[string]TraceFilter{}
+	f := base
+	f.Filters = []FilterExpr{name}
+	shapes["çip"] = f
+	f = base
+	f.Filters = []FilterExpr{name}
+	f.MinMs, f.MaxMs = 5, 5000
+	shapes["çip+süre"] = f
+	f = base
+	f.FilterRoot = &FilterGroup{Join: "or", Filters: []FilterExpr{name, {Key: "name", Op: "=", Values: []string{"y"}}}}
+	shapes["OR grubu"] = f
+	f = base
+	f.Filters = []FilterExpr{name}
+	f.Env = "prod"
+	shapes["env"] = f
+	f = base
+	f.Filters = []FilterExpr{name}
+	f.Search = "timeout"
+	shapes["aramalı"] = f
+	f = base
+	f.RootOnly = true
+	shapes["kök"] = f
+	for n, sh := range shapes {
+		final := buildGetTracesWhere(sh, "")
+		cand := buildGetTracesWhere(errorFirstFilter(sh), "")
+		cand.add("status_code = 'error'")
+		have := map[string]bool{}
+		for _, c := range cand.conds {
+			have[c] = true
+		}
+		for _, c := range final.conds {
+			if !have[c] {
+				t.Errorf("%s: nihai yüklem adayda yok: %q\n aday=%v", n, c, cand.conds)
+			}
+		}
+		if len(cand.args) < len(final.args) {
+			t.Errorf("%s: aday arg sayısı (%d) nihaiden (%d) az", n, len(cand.args), len(final.args))
+		}
+	}
+}

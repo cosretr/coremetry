@@ -4300,7 +4300,7 @@ func (s *Server) getTraces(w http.ResponseWriter, r *http.Request) {
 		// explain (SQL/arg/ms/satır) — operatör tıklaması gerekmez.
 		if chstore.EmptyDiagWanted(f, len(traces)) {
 			n, cerr := s.store.CountMatchingSpans(ctx, f)
-			diag := map[string]any{"matchingSpans": n}
+			diag := newEmptyDiag(n) // v0.10.813 — eşleşen span var ama liste boş = tavan/sorgu uyuşmazlığı sayacı
 			if cerr != nil {
 				diag["error"] = cerr.Error()
 			}
