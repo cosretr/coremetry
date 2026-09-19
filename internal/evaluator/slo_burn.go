@@ -97,6 +97,10 @@ func (e *Evaluator) evaluateSLOBurn(ctx context.Context, slo chstore.SLO, pol ch
 
 	case breached && hasOpen:
 		open.Value = fastRate
+		// v0.10.800 — şiddet POLİTİKADAN (escalationExempt ile ikinci kelepçe):
+		// daha önce yaş merdiveninin critical'a çektiği warning satırları bir
+		// sonraki tikte bandına döner.
+		open.Severity = pol.Severity
 		_ = e.store.UpsertProblem(ctx, *open)
 
 	case !breached && hasOpen:

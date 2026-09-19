@@ -150,16 +150,22 @@ func TestVolumeSpikeNeverEscalates(t *testing.T) {
 			"critical bekleniyordu — muafiyetin gerekçesini gözden geçir", got)
 	}
 
-	// (2) Muafiyet bu kuralı — ve YALNIZ bunu — kesiyor.
+	// (2) Muafiyet bu kuralı ve SLO burn-rate ailesini (v0.10.800) kesiyor —
+	// başka hiçbir kuralı değil.
 	if !escalationExempt(selfVolumeRuleID) {
 		t.Fatal("self-volume-spike eskalasyondan muaf değil: birkaç saat içinde critical→P1 olur")
 	}
+	for _, rule := range []string{"slo:abc:warning", "slo:abc:critical"} {
+		if !escalationExempt(rule) {
+			t.Fatalf("%q muaf değil — SLO şiddeti politikadan gelir, yaşla artmaz (S1)", rule)
+		}
+	}
 	for _, rule := range []string{
 		selfIngestRuleID, selfSpoolRuleID, selfDiskRuleID, selfChannelRuleID,
-		"exception-storm", "anomaly-auto:abc", "",
+		"exception-storm", "anomaly-auto:abc", "", "slo", "xslo:abc:warning",
 	} {
 		if escalationExempt(rule) {
-			t.Fatalf("%q muaf sayıldı — muafiyet bu kurala özel olmalı", rule)
+			t.Fatalf("%q muaf sayıldı — muafiyet self-volume-spike ve slo: önekine özel olmalı", rule)
 		}
 	}
 }

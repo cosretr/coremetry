@@ -35,6 +35,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -113,7 +114,18 @@ func volumeSpikeDecision(cur, prev, minSpans uint64, factor float64) bool {
 // escalateStaleProblems süpürmesi. Biri unutulursa diğeri tek başına
 // yetmez: süpürme satırı yükseltir, tazeleme geri indirir ve v0.8.309'un
 // bildirim seli aynen geri gelir.
-func escalationExempt(ruleID string) bool { return ruleID == selfVolumeRuleID }
+//
+// v0.10.800 (dış skill denetimi 2026-09-19 S1, Honeycomb slos-and-triggers;
+// operatör onayı) — SLO burn-rate problemleri (`slo:<id>:<severity>`) de
+// muaf: şiddetleri politikadan gelir (critical 1 sa/6 sa, warning 6 sa/24 sa
+// — chstore.BurnPolicies), yaşla ARTMAZ. Yavaş burn tanımı gereği saatlerce
+// açık kalır; merdiven onu 30 dk'da critical'a, 4 sa'de P1'e taşıyor ve
+// "trend" alarmı her zaman pager'a düşüyordu (prod ekranı: warning
+// politikası CRITICAL rozetiyle). Tazeleme dalı (slo_burn.go) da şiddeti
+// politikaya sabitler — iki kelepçe.
+func escalationExempt(ruleID string) bool {
+	return ruleID == selfVolumeRuleID || strings.HasPrefix(ruleID, "slo:")
+}
 
 // ── Tik ─────────────────────────────────────────────────────────────────
 
