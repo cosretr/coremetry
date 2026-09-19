@@ -21,7 +21,7 @@ export function TraceHonesty({
   spans, source, capped, totalSpans,
 }: {
   spans: SpanRow[];
-  source?: 'clickhouse' | 'tempo' | 'mv_only';
+  source?: 'clickhouse' | 'tempo' | 'mv_only' | 'clickhouse_all_replicas';
   // v0.9.457 (dürüstlük A2) — 50k yükleme tavanı doldu: orphan/parent
   // istatistikleri KISMİ listeden türetilir; kesikte şerit önce bunu
   // söyler ki eksik parent'lar instrumentation suçlaması gibi okunmasın.
@@ -103,6 +103,8 @@ export function TraceHonesty({
   // source provenance
   if (source === 'tempo') chips.push({ label: 'source: Tempo fallback', tone: 'info', title: 'Coremetry sampled this trace out; the spans were read from the external Tempo backend.' });
   else if (source === 'mv_only') chips.push({ label: 'source: aggregates only', tone: 'warn', title: 'Raw spans aged out of retention; only the 5-min aggregate remains.' });
+  // v0.10.810 — Distributed okuma 0 span döndü, tüm replikalardan toplandı: replikalar aynı veriyi taşımıyor.
+  else if (source === 'clickhouse_all_replicas') chips.push({ label: 'source: tüm replikalar', tone: 'warn', title: 'Distributed okuma bu trace için 0 span döndü; spanlar clusterAllReplicas ile tüm replikalardan toplandı. ClickHouse replikaları aynı veriyi taşımıyor — Admin → ClickHouse → Replika tutarlılığı.' });
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>

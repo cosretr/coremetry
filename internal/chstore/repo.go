@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"log"
 	"math"
 	"sort"
@@ -4725,11 +4726,7 @@ func (s *Store) GetTrace(ctx context.Context, traceID string) ([]SpanRow, error)
 	}
 
 	rows, err := s.telemetryReadConn().Query(ctx, `
-		SELECT trace_id, span_id, parent_id, name, kind, service_name, host_name,
-		       time, duration, status_code, status_msg,
-		       attr_keys, attr_values, res_keys, res_values,
-		       events, scope_name,
-		       db_system, db_statement, http_method, http_route, http_status, peer_service
+		SELECT `+traceSpanCols+`
 		FROM spans
 		WHERE `+where+`
 		ORDER BY time ASC
@@ -4739,7 +4736,19 @@ func (s *Store) GetTrace(ctx context.Context, traceID string) ([]SpanRow, error)
 		return nil, err
 	}
 	defer rows.Close()
+	return scanSpanRows(rows) // v0.10.810 — tüm-replika yedek okumasıyla ortak
+}
 
+// traceSpanCols — GetTrace ve GetTraceAllReplicas'ın ORTAK kolon listesi
+// (scanSpanRows ile birebir sıra; v0.10.810).
+const traceSpanCols = `trace_id, span_id, parent_id, name, kind, service_name, host_name,
+		       time, duration, status_code, status_msg,
+		       attr_keys, attr_values, res_keys, res_values,
+		       events, scope_name,
+		       db_system, db_statement, http_method, http_route, http_status, peer_service`
+
+// scanSpanRows — traceSpanCols sırasıyla satırları SpanRow'a çevirir.
+func scanSpanRows(rows driver.Rows) ([]SpanRow, error) {
 	var out []SpanRow
 	for rows.Next() {
 		var sp SpanRow

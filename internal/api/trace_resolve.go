@@ -33,6 +33,10 @@ import (
 const (
 	traceSourceCH    = "clickhouse"
 	traceSourceTempo = "tempo"
+	// traceSourceAllReplicas — v0.10.810: Distributed okuma 0 span döndü,
+	// spanlar clusterAllReplicas ile TÜM replikalardan toplandı (replika
+	// ıraksaması). FE PROVENANCE çipi + Replika kartına bağlantı.
+	traceSourceAllReplicas = "clickhouse_all_replicas"
 )
 
 // resolveTraceSpans — bir trace'in span'lerini ClickHouse'tan, orada

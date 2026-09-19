@@ -117,6 +117,9 @@ func TestConnStrategySplit(t *testing.T) {
 func TestTelemetryReadConnCallSurface(t *testing.T) {
 	allowed := map[string]bool{
 		"messaging_clients.go": true, // v0.10.550 — messaging_caller_summary_5m (telemetri MV) servis+rol okuması
+		// v0.10.810 — SAF telemetri: clusterAllReplicas(spans_local) yedek okuması
+		// (replika ıraksaması); state yok.
+		"trace_all_replicas.go": true,
 		// v0.10.563 — SAF telemetri: tek FROM'u messaging_summary_5m
 		// (AggregatingMergeTree telemetri MV'si, state tablosu DEĞİL).
 		// dependencies.go'daki kardeş messaging okumalarıyla aynı havuz —

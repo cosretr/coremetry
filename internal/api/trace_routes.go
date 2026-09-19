@@ -14,6 +14,7 @@ package api
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -93,11 +94,28 @@ func (s *Server) traceDetailPayload(ctx context.Context, id string) (map[string]
 	// hint with the aggregate stats so the operator gets
 	// SOMETHING useful instead of a blank pane.
 	if stub, ok := s.store.GetTraceAggregateStub(ctx, id); ok {
+		// v0.10.810 (operatör hatası, test ortamı): listede duran, 1 saat
+		// önce başlamış bir trace "aged out" kartı alıyordu — TTL 7 gün.
+		// Sebep replika ıraksaması: MV okuması bir replikada, ham okuma
+		// diğerinde. "Aged out" YALNIZ başlangıç TTL'i aşınca; aksi hâlde
+		// tüm replikalardan yedek okuma, o da boşsa dürüst "replika eşsiz".
+		if !s.traceAgedOut(ctx, stub.StartTimeNs) {
+			if rows, rerr := s.store.GetTraceAllReplicas(ctx, id, stub.StartTimeNs, stub.EndTimeNs); rerr == nil && len(rows) > 0 {
+				log.Printf("[trace] %s: Distributed okuma 0 span, tüm replikalardan %d span — replika ıraksaması (Admin → Replika tutarlılığı)", id, len(rows))
+				out := map[string]any{"traceId": id, "spans": rows, "source": traceSourceAllReplicas, "replicaMiss": true}
+				out["analysis"] = chstore.BuildTraceAnalysis(rows, false)
+				return out, rows, nil
+			} else if rerr != nil {
+				log.Printf("[trace] %s: tüm-replika yedek okuması başarısız: %v", id, rerr)
+			}
+			return map[string]any{"traceId": id, "spans": []any{}, "source": "mv_only", "stub": stub, "stubReason": "replica_miss"}, nil, nil
+		}
 		return map[string]any{
-			"traceId": id,
-			"spans":   []any{},
-			"source":  "mv_only",
-			"stub":    stub,
+			"traceId":    id,
+			"spans":      []any{},
+			"source":     "mv_only",
+			"stub":       stub,
+			"stubReason": "aged_out",
 		}, nil, nil
 	}
 	return map[string]any{"traceId": id, "spans": spans, "source": "clickhouse"}, nil, nil

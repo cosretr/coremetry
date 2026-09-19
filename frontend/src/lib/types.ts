@@ -2833,7 +2833,12 @@ export interface TraceDetailResponse {
   // (90-day retention). The frontend renders an honest "trace
   // aged out, only aggregates remain" pane instead of a blank
   // waterfall in that case. `stub` carries the aggregate stats.
-  source?: 'clickhouse' | 'tempo' | 'mv_only';
+  // v0.10.810 — "clickhouse_all_replicas": Distributed okuma 0 span döndü,
+  // spanlar tüm replikalardan toplandı (replika ıraksaması); replicaMiss=true.
+  source?: 'clickhouse' | 'tempo' | 'mv_only' | 'clickhouse_all_replicas';
+  replicaMiss?: boolean;
+  /** v0.10.810 — mv_only sebebi: TTL dışı (aged_out) ya da TTL içinde ama ham span hiçbir replikada yok (replica_miss). */
+  stubReason?: 'aged_out' | 'replica_miss';
   // v0.10.275 (trace view Dilim 1b) — ağaç + kritik yol + öz süre + servis
   // özeti sunucuda (chstore.BuildTraceAnalysis). Eski gövdelerde yok.
   analysis?: TraceAnalysis;

@@ -61,7 +61,9 @@ function TraceDetailInner() {
   // backend (Coremetry sampled it out). Drives the small banner
   // above the waterfall so the operator doesn't mistake "trace
   // resolved" for "Coremetry has full retention".
-  const [source, setSource] = useState<'clickhouse' | 'tempo' | 'mv_only' | undefined>(undefined);
+  const [source, setSource] = useState<'clickhouse' | 'tempo' | 'mv_only' | 'clickhouse_all_replicas' | undefined>(undefined);
+  // v0.10.810 — mv_only sebebi: aged_out (TTL dışı) | replica_miss (TTL içinde, replika ıraksaması).
+  const [stubReason, setStubReason] = useState<'aged_out' | 'replica_miss' | undefined>(undefined);
   const [spanCap, setSpanCap] = useState<{ capped: boolean; total?: number }>({ capped: false });
   // v0.6.34 — aged-out stub: present only when source === 'mv_only'.
   // Carries the aggregate stats trace_summary_5m still holds for
@@ -186,6 +188,7 @@ function TraceDetailInner() {
         setSpans(d.spans ?? []);
         setSource(d.source);
         setStub(d.stub);
+        setStubReason(d.stubReason);
         setAnalysis(d.analysis);
         setSpanCap({ capped: d.spanCapped ?? false, total: d.spanTotal });
       })
@@ -537,18 +540,37 @@ function TraceDetailInner() {
             borderLeft: '3px solid var(--warn)',
             borderRadius: 6, background: 'var(--bg2)',
           }}>
-            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-              Trace aged out of raw spans
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text2)', margin: '4px 0 12px', lineHeight: 1.5 }}>
-              The 5-minute aggregate MV still holds this trace's summary
-              (90-day retention), but the per-span detail data has been
-              evicted by the raw spans TTL (default 30 days). Span
-              waterfall isn't available for this trace anymore. To keep
-              long-tail trace detail, configure Tempo backend in
-              Settings → Tempo, or extend the raw-spans retention in
-              <code> config.yaml</code>.
-            </p>
+            {stubReason === 'replica_miss' ? (
+              /* v0.10.810 — TTL içinde ama ham span hiçbir replikada yok: "yaşlandı" demek yalan olurdu. */
+              <>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                  Ham span'lar bulunamadı — trace TTL içinde
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text2)', margin: '4px 0 12px', lineHeight: 1.5 }}>
+                  5 dakikalık özet MV bu trace'i taşıyor ama ham span satırları
+                  Distributed okumada da tüm replikalarda da bulunamadı; trace
+                  başlangıcı ham span TTL'inin içinde, yani yaşlanma değil.
+                  ClickHouse replikaları aynı veriyi taşımıyor olabilir (kopuk
+                  replikasyon / farklı ZooKeeper yolu). Bkz.{' '}
+                  <Link to="/system/clickhouse">Admin → ClickHouse → Replika tutarlılığı</Link>.
+                </p>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                  Trace aged out of raw spans
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text2)', margin: '4px 0 12px', lineHeight: 1.5 }}>
+                  The 5-minute aggregate MV still holds this trace's summary
+                  (90-day retention), but the per-span detail data has been
+                  evicted by the raw spans TTL (default 30 days). Span
+                  waterfall isn't available for this trace anymore. To keep
+                  long-tail trace detail, configure Tempo backend in
+                  Settings → Tempo, or extend the raw-spans retention in
+                  <code> config.yaml</code>.
+                </p>
+              </>
+            )}
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
               gap: 8, marginTop: 8,
