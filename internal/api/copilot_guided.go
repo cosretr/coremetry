@@ -166,6 +166,8 @@ const (
 	// niyetin tam kılavuz cümlesi olur). Router-içi; sınıflandırıcı
 	// beyaz listesinde değil (parseIntentJSON kendisi üretir).
 	guidedAskService guidedIntent = "ask_service"
+	// v0.10.809 — ürün yol tarifi (copilot_howto.go); tek tık, otomatik geçiş yok.
+	guidedHowTo guidedIntent = "how_to"
 )
 
 type guidedRoute struct {
@@ -1675,6 +1677,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.10.688 — endpoint adayları / trace listesi: LLM'siz (endpoint_traces.go).
 	if route.Intent == guidedEndpointCandidates || route.Intent == guidedEndpointTraces {
 		return s.guidedEndpointAnswer(ctx, emit, route, from, to, rangeS)
+	}
+	if route.Intent == guidedHowTo { // v0.10.809 — LLM'siz yol tarifi
+		return s.guidedHowToAnswer(emit, route, question, ctxService)
 	}
 	if route.Intent == guidedOpenPage {
 		links := dedupLinksByHref(guidedAnswerLinks(route, linkWindowBetween(from, to)))

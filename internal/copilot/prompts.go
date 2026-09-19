@@ -1530,6 +1530,7 @@ Niyetler:
 - trace_by_id / span_by_id: mesajda 32 ya da 16 haneli hex kimlik varsa
 - namespace_services: bir Kubernetes NAMESPACE'indeki servisler/workload'lar ("shop namespace'indeki servisleri getir", "namespace shop") ya da namespace listesi ("hangi namespace'ler var"); namespace slotu mesajdaki yazımıyla
 - find_entity: bir servisi ADIYLA bulma/gösterme ("mobile bff", "checkout servisini göster", "mobile bff'yi bul", "checkout sahibi kim") ya da servis LİSTESİ ("hangi servisler var", "servisleri listele"); veri/sağlık sorusu DEĞİL, yalnız bulma/listeleme
+- how_to: ürünün NASIL kullanılacağı ya da bir bilgiye NEREDEN ulaşılacağı ("hatalı trace'lere nasıl ulaşırım", "logları nereden görürüm", "SLO nasıl tanımlanır", "sana nasıl soru sorarım"); VERİ sorusu değil, yol tarifi. Servis adı geçiyorsa service slotuna yaz.
 - none: hiçbiri — telemetriyle cevaplanamayacak, muğlak ya da konu dışı soru
 
 Kurallar:
@@ -1553,6 +1554,7 @@ Kurallar:
 - "hangi servisler var?" → {"intent":"find_entity","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
 - "shop namespace'indeki servisleri getir" → {"intent":"namespace_services","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":"","namespace":"shop"}
 - "yavaşlığın sebebi ne?" → {"intent":"root_cause","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
+- "checkout servisinin hatalı trace'lerine nasıl ulaşırım?" → {"intent":"how_to","service":"checkout","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
 - "checkout loglarında url.full alanında \"/api/pay\" geçen kayıtlar" → {"intent":"log_field","service":"checkout","env":"","rangeS":0,"traceId":"","spanId":"","team":"","logField":"url.full","logValue":"/api/pay"}
 
 Çıktı şeması: {"intent":"…","service":"…","env":"…","rangeS":0,"traceId":"","spanId":"","team":"","logField":"","logValue":"","searchText":""}`
@@ -1627,7 +1629,9 @@ okunursun: restart, scale, deploy, config değişikliği yapamazsın.
    SLO tanımı yoksa "tanımlı SLO yok" de.
 5. CEVAPLA — kısa özet, sonra dar bir tablo (cluster, namespace, workload/servis,
    pod, hata oranı, p95), sonra build_link ile üretilmiş deep-link. Link asıl
-   çıktıdır, dipnot değil. Ham JSON dökme.
+   çıktıdır, dipnot değil. Ham JSON dökme. Operatör ürünün NASIL kullanılacağını
+   sorarsa product_guide çağır: adımları 1-2 cümleyle aktar ve bağlantıyı ver;
+   sayfayı kendin AÇMA (operatör tıklar), sayfa/sekme adı uydurma.
 
 BAĞLAM KURALLARI:
 - "onun içinde", "bu servisin", "aynı filtreyle", "son 1 saate genişlet", "sadece

@@ -6,7 +6,7 @@ docs/plans/ai-assistant-design-2026-08-16.md §K7)
 
 ## 1. Token üret
 
-Settings → API Tokens → **New token**, rol: **viewer** (56 tool'un
+Settings → API Tokens → **New token**, rol: **viewer** (57 tool'un
 tamamı salt-okunur ve hepsi viewer seviyesinde — editor/admin
 GEREKMEZ). `cmk_…` değeri yalnız oluşturma anında görünür; kasaya
 koy. İptal: aynı ekrandan Revoke (anında, cache invalidation'lı).
@@ -32,7 +32,7 @@ Rol zorlaması nerede: her tool/resource/prompt kaydı bir `MinRole`
 taşır (`internal/mcp`), kapı (`internal/api/mcp_gate.go`) çağrı
 öncesi token rolüyle karşılaştırır. Yetersizse JSON-RPC **-32001** ve
 gereken rolü söyleyen okunur bir metin döner (model boşuna yeniden
-denemez). Bugün 56 tool'un tamamı `MinRole=""` (viewer tabanı; v0.9.1141'ta
+denemez). Bugün 57 tool'un tamamı `MinRole=""` (viewer tabanı; v0.9.1141'ta
 beş keşif tool'u eklendi — list_operations / list_environments /
 list_clusters / list_deploys / find_trace_by_span; v0.9.1142'de
 find_trace_by_request_id — yapılandırılmış kurumsal istek numarası →
@@ -95,6 +95,7 @@ yolu da test edilmiş olur).
 | "Hangi db yavaş" · "kuyruk tarafı nasıl" | `get_db_health`, `get_messaging_health` (filo geneli; consumer-lag ÖLÇÜLMÜYOR) |
 | "Dün gece neler oldu" · vardiya devri | `list_problem_window_events` (açılan + ÇÖZÜLEN; `list_problems` yalnız şu anki kümeyi verir) |
 | İz → log/metrik pivotları | `get_trace`, `get_logs_for_trace`, `get_metrics_for_span` |
+| "Nasıl bakarım / nereden görürüm" · ürün yol tarifi | `product_guide` (sunucu adımları + uygulama bağlantıları; sayfayı açmaz, v0.10.809) |
 | Metrik sorgusu / histogram ucu | `query_metric`, `get_exemplar_traces` |
 | Async zincir takibi | `get_linked_traces` |
 | Olay anlatımı / runbook önerisi | prompt: `explain_problem`, `suggest_runbook` |

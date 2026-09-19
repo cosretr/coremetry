@@ -58,6 +58,9 @@ var intentAllowed = map[string]guidedIntent{
 	"trace_search": guidedTraceSearch,
 	// v0.10.463 (D1) — servisi adıyla bul / servis listesi (find_entity.go).
 	"find_entity": guidedFindEntity,
+	// v0.10.809 — ürün yol tarifi ("nasıl bakarım / nereden görürüm"); LLM'siz
+	// deterministik cevap (copilot_howto.go), tek tık bağlantı, otomatik geçiş yok.
+	"how_to": guidedHowTo,
 	// v0.10.470 (F2-3) — namespace'teki servisler / namespace listesi; `namespace` slotu.
 	"namespace_services": guidedNamespaceServices,
 }

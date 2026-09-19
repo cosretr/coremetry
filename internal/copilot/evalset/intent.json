@@ -195,6 +195,35 @@
         ],
         "maxLatencyMs": 20000
       }
+    },
+    {
+      "id": "intent-how-to-error-traces",
+      "surface": "IntentClassify",
+      "why": "v0.10.809: yol tarifi sorusu veri sorusu değil — how_to; servis slotu mesajdan",
+      "user": "shop-payment-api servisinin hatalı trace'lerine nasıl ulaşırım?",
+      "expect": {
+        "intent": "how_to",
+        "intentService": "shop-payment-api",
+        "knownEntities": [
+          "shop-payment-api",
+          "core-auth"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
+      "id": "intent-how-to-trace-logs",
+      "surface": "IntentClassify",
+      "why": "v0.10.809: 'nereden görürüm' → how_to, servissiz; service_health/log_errors DEĞİL",
+      "user": "bir trace'in loglarını nereden görürüm?",
+      "expect": {
+        "intent": "how_to",
+        "knownEntities": [
+          "shop-payment-api",
+          "core-auth"
+        ],
+        "maxLatencyMs": 20000
+      }
     }
   ]
 }

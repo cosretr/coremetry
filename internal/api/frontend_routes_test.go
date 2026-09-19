@@ -194,7 +194,7 @@ func TestServerEmittedPathsAreRegisteredRoutes(t *testing.T) {
 			}
 			continue
 		}
-		if !routes[p] {
+		if !routeServes(routes, p) {
 			bad = append(bad, p+" ("+strings.Join(srcs, ", ")+")")
 		}
 	}
@@ -203,6 +203,36 @@ func TestServerEmittedPathsAreRegisteredRoutes(t *testing.T) {
 		t.Errorf("KAYITSIZ rota üretiliyor — catch-all operatörü ana sayfaya atar:\n  %s",
 			strings.Join(bad, "\n  "))
 	}
+}
+
+// routeServes — SAF (v0.10.809): tam eşleşme ya da `:param` bölütlü kayıtlı
+// rota (`/settings/:section` → `/settings/channels`). Catch-all'a düşmeyen
+// yol kapıdan geçer; param rotanın kendisi App.tsx'te yoksa yine kayıtsız.
+func routeServes(routes map[string]bool, p string) bool {
+	if routes[p] {
+		return true
+	}
+	segs := strings.Split(strings.Trim(p, "/"), "/")
+	for r := range routes {
+		if r == "*" || !strings.Contains(r, ":") {
+			continue
+		}
+		rs := strings.Split(strings.Trim(r, "/"), "/")
+		if len(rs) != len(segs) {
+			continue
+		}
+		match := true
+		for i := range rs {
+			if !strings.HasPrefix(rs[i], ":") && rs[i] != segs[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 // TestLegacyPageIDsMapToRegisteredRoutes — yönlendirme tablosu, emisyon

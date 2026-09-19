@@ -50,7 +50,9 @@ const shortDescMinBytes = 60
 // katalog sessizce eski ağırlığına dönemez — 33 tool'un her biri 400 B
 // tavanına dayansaydı 13 KB ederdi, yani tool başına tavan TEK BAŞINA
 // yetmiyor.
-const shortCatalogMaxBytes = 9000
+// v0.10.809 — 57 tool (product_guide, 74 B): 9.07 KB; tavan 9.1 KB (tool
+// başına ~160 B ortalama korunuyor; yeni tool eklerken uzunları kırp).
+const shortCatalogMaxBytes = 9100
 
 // TAMLIK — her tool'un kompakt metni olmalı. Yeni bir tool kompakt
 // açıklamasız gemiye giremez (mcp.Tool.ChatDescription() tam metne
