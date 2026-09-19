@@ -251,6 +251,8 @@ type Server struct {
 	// diyordu; kapı rolü HİÇ okumuyordu — yorum yanlıştı, mekanizma
 	// artık var.
 	mcp *mcp.Server
+	// cors — v0.10.804 (M4): Origin allowlist politikası (cors.go).
+	cors corsPolicy
 
 	// Demo deployments only — when true, /api/auth/config returns
 	// initial admin credentials so the login page can pre-fill them.
@@ -693,13 +695,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	if s.mcp != nil {
 		// v0.10.426 (M1) — withMCPRequest: audit satırı kimlik + IP'yi
 		// ctx'e iliştirilen istekten okur.
-		mux.HandleFunc("GET /api/mcp/sse", withMCPRequest(s.mcp.HandleSSE))
-		mux.HandleFunc("POST /api/mcp/messages", withMCPRequest(s.mcp.HandleMessage))
+		mux.HandleFunc("GET /api/mcp/sse", s.cors.requireOrigin(withMCPRequest(s.mcp.HandleSSE)))
+		mux.HandleFunc("POST /api/mcp/messages", s.cors.requireOrigin(withMCPRequest(s.mcp.HandleMessage)))
 		// v0.9.14 — Streamable-HTTP (2025-03-26), stateless: Claude
 		// Code'un birincil `--transport http` yolu; session'sız olduğu
 		// için çok-pod LB'de afinite gerektirmez (audit EK BULGU'nun
 		// kökten çözümü). SSE yolu eski istemciler için aynen kalır.
-		mux.HandleFunc("POST /api/mcp", withMCPRequest(s.mcp.HandleStreamable))
+		mux.HandleFunc("POST /api/mcp", s.cors.requireOrigin(withMCPRequest(s.mcp.HandleStreamable)))
 	}
 	mux.HandleFunc("GET /api/services/{name}/bundle", s.getServiceBundle)
 	mux.HandleFunc("GET /api/services/{name}/structure", s.getServiceStructure)
@@ -1379,7 +1381,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) listen(mux *http.ServeMux) error {
-	handler := otelhttp.NewHandler(cors(s.auth.Middleware(s.presence.middleware(mux))),
+	handler := otelhttp.NewHandler(s.cors.middleware(s.auth.Middleware(s.presence.middleware(mux))),
 		"coremetry-api",
 		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
 			// "GET /api/traces/:id" — method + cardinality-collapsed
@@ -11381,27 +11383,6 @@ func fileExists(root fs.FS, p string) bool {
 	}
 	_ = f.Close()
 	return true
-}
-
-func cors(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Reflect the origin so credentialed requests (cookies) work; the
-		// wildcard '*' is invalid with Allow-Credentials: true.
-		if origin := r.Header.Get("Origin"); origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-		} else {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		h.ServeHTTP(w, r)
-	})
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

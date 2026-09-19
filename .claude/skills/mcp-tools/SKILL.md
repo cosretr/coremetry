@@ -194,6 +194,12 @@ doesn't matter — the LLM gets the full catalogue on `tools/list`.
 
 ### 9. Auth gating
 
+Tarayıcı kökenli istekler için ek kapı (v0.10.804, M4): `/api/mcp*`
+allowlist dışı bir `Origin` taşıyorsa handler'a girmeden 403 döner
+(`internal/api/cors.go` `requireOrigin`; allowlist =
+`COREMETRY_ALLOWED_ORIGINS` + `COREMETRY_PUBLIC_URL` + aynı-origin).
+Origin başlığı olmayan CLI/ajan istemcileri etkilenmez.
+
 MCP tools inherit the api server's JWT middleware: viewer / editor
 / admin roles flow through the same path as REST. The chstore
 method should NOT carry role logic — the route layer does. For a

@@ -1271,6 +1271,7 @@ func main() {
 
 	srv := api.NewServer(cfg.Listen.HTTP, ing, store, logsStore, webFS, authSvc, oidcSvc, ldapSvc, cacheImpl, notifier, copilotSvc, bus)
 	srv.SetRAG(ragSvc)
+	srv.SetAllowedOrigins(cfg.AllowedOrigins, cfg.PublicURL) // v0.10.804 — CORS allowlist (M4)
 	// v0.9.1281 — kanca bağlanır, ANCAK ŞİMDİ döngü başlar. Kanca kendi
 	// kapılarını taşıyor (AutoExplainEnabled / Active / kota devre-kesici
 	// / 30dk dedup), yani burada ek bir koşul yok: kapalı bir Copilot'ta

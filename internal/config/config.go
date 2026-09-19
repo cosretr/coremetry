@@ -42,6 +42,14 @@ type Config struct {
 	// where the URL isn't reachable from the recipient's
 	// network.
 	PublicURL string `yaml:"public_url"`
+	// AllowedOrigins (v0.10.804, dış skill denetimi M4) — tarayıcı
+	// çapraz-origin isteklerine CORS başlığı yazılacak origin'ler
+	// (`https://apm.example.com` biçiminde; COREMETRY_ALLOWED_ORIGINS
+	// virgülle). Boş = yalnız aynı-origin (Origin host == Host) ve
+	// PublicURL'in origin'i. Eskiden her Origin yansıtılıp
+	// Allow-Credentials: true yazılıyordu. Allowlist dışı Origin'de
+	// /api/mcp* 403 döner.
+	AllowedOrigins []string `yaml:"allowed_origins"`
 }
 
 // BackgroundConfig controls the cadence of every internal worker
@@ -698,6 +706,12 @@ func Load(path string) (*Config, error) {
 	if v := os.Getenv("COREMETRY_PUBLIC_URL"); v != "" {
 		cfg.PublicURL = v
 	}
+	// v0.10.804 — COREMETRY_ALLOWED_ORIGINS: virgülle ayrılmış origin
+	// listesi; boşluklar kırpılır, boş parçalar düşer. Dolu env config
+	// dosyasındaki listeyi DEĞİŞTİRİR (birleştirmez).
+	if v := os.Getenv("COREMETRY_ALLOWED_ORIGINS"); v != "" {
+		cfg.AllowedOrigins = splitOrigins(v)
+	}
 	if v := os.Getenv("COREMETRY_GRPC_ADDR"); v != "" {
 		cfg.Listen.GRPC = v
 	}
@@ -969,4 +983,16 @@ func resolveMaxOpenConns(configured, workers int) int {
 		workers = 8
 	}
 	return ingestSignals*workers + 8
+}
+
+// splitOrigins — SAF (v0.10.804): "a, b,,c" → [a b c]; hiç parça yoksa nil
+// (yalnız virgül/boşluk verilmiş env "boş liste" sayılır, allowlist kapanmaz).
+func splitOrigins(v string) []string {
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
