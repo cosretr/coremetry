@@ -335,6 +335,14 @@ type AIProviderStat struct {
 	P95Ms  float64 `json:"p95Ms"`
 }
 
+// newAIStats — v0.10.811 (operatör hatası, prod): pencerede hiç AI çağrısı
+// yokken BySurface/ByProvider nil kalıyor, JSON `null` dönüyordu → /ai
+// sayfası "byProvider is not iterable" ile hata sınırına düşüyordu. Dilimler
+// boş-ama-nil-değil başlar; tel şekli daima dizi.
+func newAIStats() AIStats {
+	return AIStats{BySurface: []AISurfaceStat{}, ByProvider: []AIProviderStat{}}
+}
+
 // ComputeAIStats does the aggregate query for the overview cards.
 // Window-bounded (from..to) so we never scan beyond the TTL.
 func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStats, error) {
@@ -359,7 +367,7 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 		WHERE created_at >= toDateTime64(?, 9, 'UTC')
 		  AND created_at <  toDateTime64(?, 9, 'UTC')`,
 		chDateTime64Arg(from), chDateTime64Arg(to))
-	var st AIStats
+	st := newAIStats() // v0.10.811 — kırılımlar boşken [] (null değil)
 	if err := row.Scan(&st.TotalCalls, &st.OkCalls, &st.ErrorCalls,
 		&st.AvgDurationMs, &st.P50DurationMs, &st.P99DurationMs,
 		&st.InputTokens, &st.OutputTokens, &st.DistinctUsers); err != nil {

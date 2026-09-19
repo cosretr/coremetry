@@ -137,7 +137,7 @@ export default function AIObservabilityPage() {
           // every model was unknown — render "—" instead of $0.
           let totalCost = 0;
           let anyKnown = false;
-          for (const r of stats.byProvider) {
+          for (const r of stats.byProvider ?? []) { // v0.10.811 — eski sunucu null dönebilir
             const c = costForCall(rates, r.model, r.inputTokens, r.outputTokens);
             if (c !== null) {
               totalCost += c;
@@ -195,9 +195,9 @@ export default function AIObservabilityPage() {
 
             {/* Per-surface + per-provider breakdowns */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12, marginTop: 14 }}>
-              {stats.bySurface.length > 0 && (
+              {(stats.bySurface ?? []).length > 0 && (
                 <BreakdownTable title="By surface (which Explain button)"
-                  rows={stats.bySurface.map(r => ({
+                  rows={(stats.bySurface ?? []).map(r => ({
                     a: r.surface, b: fmtNum(r.calls),
                     c: `${(r.errorRate * 100).toFixed(1)}%`,
                     d: `${r.avgMs.toFixed(0)} ms`,
@@ -211,9 +211,9 @@ export default function AIObservabilityPage() {
                   cols={['Surface', 'Calls', 'Err rate', 'Avg ms', 'Memnuniyet']}
                   onPickFirst={v => setSurface(v)} />
               )}
-              {stats.byProvider.length > 0 && (
+              {(stats.byProvider ?? []).length > 0 && (
                 <BreakdownTable title="By provider · model"
-                  rows={stats.byProvider.map(r => ({
+                  rows={(stats.byProvider ?? []).map(r => ({
                     a: `${r.provider} · ${r.model || '—'}`, b: fmtNum(r.calls),
                     // v0.10.400 — model başına hata oranı + p95 gecikme (CoSRE denetimi O5/E3).
                     c: `${r.calls ? ((r.errors ?? 0) / r.calls * 100).toFixed(1) : '0.0'}% · p95 ${fmtNum(Math.round(r.p95Ms ?? 0))} ms`,
