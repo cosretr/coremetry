@@ -110,3 +110,41 @@ func TestReplicaConsistencyQueriesAreBoundedAndOnMainConn(t *testing.T) {
 		t.Errorf("küme geneli sorguların hepsi zaman tavanlı olmalı (bulunan %d)", n)
 	}
 }
+
+// v0.10.792 — hostName() → shard eşlemesi: system.clusters adı YA DA adresi;
+// ikisi de tutmazsa {shard} makrosu (sayısal → sayı, "01" → 1; değilse sıralı
+// ayrık değer sırası). Test ortamı: küme tanımı IP'li, hostName() OS adı —
+// 791 her satırı "eşlenemedi" gösterdi, makrolar doğruyken.
+func TestShardRefFor(t *testing.T) {
+	hosts := []clusterHostRow{
+		{Shard: 1, Replica: 1, Host: "10.0.0.1", Addr: "10.0.0.1"},
+		{Shard: 1, Replica: 2, Host: "ch-02", Addr: "10.0.0.2"},
+		{Shard: 2, Replica: 1, Host: "10.0.0.3", Addr: "10.0.0.3"},
+	}
+	cases := []struct {
+		name    string
+		host    string
+		macros  map[string]string
+		shards  []string
+		wantSh  int
+		wantRep int
+		wantVia string
+	}{
+		{"ad eşleşir", "ch-02", nil, nil, 1, 2, "clusters"},
+		{"adres eşleşir", "10.0.0.3", nil, nil, 2, 1, "clusters"},
+		{"makro sayısal, baştaki sıfır", "ch-01", map[string]string{"shard": "01", "replica": "node1"}, []string{"01", "02"}, 1, 0, "macro"},
+		{"makro sayısal 02", "ch-04", map[string]string{"shard": "02"}, []string{"01", "02"}, 2, 0, "macro"},
+		{"makro sayısal değil → sıralı", "ch-09", map[string]string{"shard": "shb"}, []string{"sha", "shb"}, 2, 0, "macro"},
+		{"makro sıfır", "ch-00", map[string]string{"shard": "00"}, []string{"00"}, 0, 0, "macro"},
+		{"hiçbiri", "ch-99", map[string]string{"replica": "x"}, nil, -1, 0, ""},
+		{"makro yok", "ch-98", nil, nil, -1, 0, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sh, rep, via := shardRefFor(c.host, hosts, c.macros, c.shards)
+			if sh != c.wantSh || rep != c.wantRep || via != c.wantVia {
+				t.Fatalf("got (%d,%d,%q) want (%d,%d,%q)", sh, rep, via, c.wantSh, c.wantRep, c.wantVia)
+			}
+		})
+	}
+}

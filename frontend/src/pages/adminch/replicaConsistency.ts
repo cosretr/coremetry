@@ -40,10 +40,15 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
     if (RANK[t.verdict] > RANK[worst]) worst = t.verdict;
     if (RANK[t.verdict] >= RANK.lagging) bad++;
   }
-  const tone = verdictTone(worst);
+  // v0.10.792 — eşlenemeyen tablo "tutarlı" DEĞİLDİR: karar verilememiştir.
+  // 791 test ortamında (IP'li küme tanımı) 89 tablo "eşlenemedi" iken başlık
+  // "tutarlı" dedi; yanlış güven, yanlış rozetten kötü.
+  const unmapped = r.tables.filter(t => t.verdict === 'unmapped').length;
+  const tone: ReplicaTone = unmapped > 0 && bad === 0 ? 'b-warn' : verdictTone(worst);
   const text = r.tables.length === 0 ? 'Replicated tablo yok'
-    : bad === 0 ? `${r.tables.length} tablo tutarlı`
-    : `${bad}/${r.tables.length} tablo sorunlu · ${verdictLabel(worst)}`;
+    : bad > 0 ? `${bad}/${r.tables.length} tablo sorunlu · ${verdictLabel(worst)}`
+    : unmapped > 0 ? `${unmapped}/${r.tables.length} tablo eşlenemedi · karar yok`
+    : `${r.tables.length} tablo tutarlı`;
   return { tables: r.tables.length, bad, worst, tone, text };
 }
 

@@ -50,8 +50,12 @@ type backfillShard struct {
 type clusterHostRow struct {
 	Shard, Replica int
 	Host           string
-	Port           int
-	Local          bool
+	// Addr — system.clusters.host_address (v0.10.792): küme tanımı IP ile
+	// yazılmışsa host_name de IP olur ve hostName() (OS adı) ile eşleşmez;
+	// replika tutarlılığı kartı ikisini de dener, sonra makrolara düşer.
+	Addr  string
+	Port  int
+	Local bool
 }
 
 // pickShardHosts — shard başına TEK host: is_local varsa o, yoksa en
@@ -107,7 +111,7 @@ func (s *Store) clusterHostRows(ctx context.Context) ([]clusterHostRow, string, 
 
 func (s *Store) clusterHostRowsFor(ctx context.Context, cluster string) ([]clusterHostRow, error) {
 	rows, err := s.conn.Query(ctx, `
-		SELECT shard_num, replica_num, host_name, port, is_local
+		SELECT shard_num, replica_num, host_name, host_address, port, is_local
 		FROM system.clusters WHERE cluster = ?
 		ORDER BY shard_num, replica_num
 		SETTINGS max_execution_time = 5`, cluster)
@@ -121,7 +125,7 @@ func (s *Store) clusterHostRowsFor(ctx context.Context, cluster string) ([]clust
 		var shard, replica uint32
 		var port uint16
 		var local uint8
-		if err := rows.Scan(&shard, &replica, &r.Host, &port, &local); err != nil {
+		if err := rows.Scan(&shard, &replica, &r.Host, &r.Addr, &port, &local); err != nil {
 			return nil, err
 		}
 		r.Shard, r.Replica, r.Port, r.Local = int(shard), int(replica), int(port), local == 1

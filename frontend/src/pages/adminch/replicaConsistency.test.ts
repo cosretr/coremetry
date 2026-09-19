@@ -37,6 +37,10 @@ describe('replicaConsistency — saf', () => {
     expect(s.text).toBe('2/4 tablo sorunlu · replikasyon yok');
     expect(summarize({ tables: [{ table: 'a', shards: [], verdict: 'ok' }] }).text).toBe('1 tablo tutarlı');
     expect(summarize({ tables: [] }).text).toBe('Replicated tablo yok');
+    // v0.10.792 — eşlenemeyen tablo "tutarlı" sayılmaz: karar yok, sarı.
+    const u = summarize({ tables: [{ table: 'a', shards: [], verdict: 'unmapped' }, { table: 'b', shards: [], verdict: 'ok' }] });
+    expect(u.text).toBe('1/2 tablo eşlenemedi · karar yok');
+    expect(u.tone).toBe('b-warn');
   });
 
   it('shortZk: son üç parça', () => {

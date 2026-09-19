@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -209,6 +210,35 @@ func replicaVerdict(rs []ReplicaState) (verdict, hint string, divPart string, di
 	return ReplicaOK, "", "", 0
 }
 
+// shardRefFor — SAF (v0.10.792): hostName() → shard/replika. Öncelik
+// system.clusters (host_name YA DA host_address hostName() ile eşleşir);
+// eşleşmezse makrolar: {shard} sayısal ise o ("01" → 1), değilse sıralı
+// ayrık değerler arasındaki sırası; {replica} yalnız etiket (replika no 0).
+// Test ortamı 2026-09-19: küme tanımı IP ile yazılmıştı, hostName() OS adı;
+// 791 her satırı "eşlenemedi" gösterdi, makrolar doğruyken.
+func shardRefFor(host string, hosts []clusterHostRow, macros map[string]string, macroShards []string) (shard, replica int, via string) {
+	for _, h := range hosts {
+		if h.Host == host || (h.Addr != "" && h.Addr == host) {
+			return h.Shard, h.Replica, "clusters"
+		}
+	}
+	if m, ok := macros["shard"]; ok && strings.TrimSpace(m) != "" {
+		m = strings.TrimSpace(m)
+		if n, err := strconv.Atoi(strings.TrimLeft(m, "0")); err == nil && n > 0 {
+			return n, 0, "macro"
+		}
+		if m == "0" || strings.Trim(m, "0") == "" {
+			return 0, 0, "macro" // "00" gibi: sıfır shard'ı da eşle
+		}
+		for i, v := range macroShards {
+			if v == m {
+				return i + 1, 0, "macro"
+			}
+		}
+	}
+	return -1, 0, ""
+}
+
 func firstNonEmpty(a, b string) string {
 	if strings.TrimSpace(a) != "" {
 		return a
@@ -233,17 +263,10 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 	if err != nil {
 		return nil, fmt.Errorf("system.clusters: %w", err)
 	}
-	shardOf := map[string]clusterHostRow{}
-	for _, h := range hostRows {
-		shardOf[h.Host] = h
-		out.Hosts = append(out.Hosts, ReplicaHost{Host: h.Host, Shard: h.Shard, Replica: h.Replica, Macros: map[string]string{}})
-	}
-	hostIdx := map[string]int{}
-	for i, h := range out.Hosts {
-		hostIdx[h.Host] = i
-	}
 
-	// Makrolar — {shard}/{replica} yapılandırması; yol uyuşmazlığının kökü.
+	// Makrolar — {shard}/{replica} yapılandırması; yol uyuşmazlığının kökü ve
+	// system.clusters IP ile yazılmışsa hostName() → shard eşlemesinin kaynağı.
+	macrosByHost := map[string]map[string]string{}
 	mrows, err := s.conn.Query(ctx, fmt.Sprintf(`
 		SELECT hostName(), macro, substitution
 		FROM clusterAllReplicas('%s', system.macros)
@@ -257,13 +280,58 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 			mrows.Close()
 			return nil, err
 		}
-		if i, ok := hostIdx[host]; ok {
-			out.Hosts[i].Macros[macro] = sub
-		} else {
-			out.Notes = append(out.Notes, fmt.Sprintf("%s system.clusters eşlemesinde yok (makro %s=%s)", host, macro, sub))
+		if macrosByHost[host] == nil {
+			macrosByHost[host] = map[string]string{}
 		}
+		macrosByHost[host][macro] = sub
 	}
 	mrows.Close()
+	macroShardSet := map[string]bool{}
+	for _, m := range macrosByHost {
+		if v := strings.TrimSpace(m["shard"]); v != "" {
+			macroShardSet[v] = true
+		}
+	}
+	macroShards := make([]string, 0, len(macroShardSet))
+	for v := range macroShardSet {
+		macroShards = append(macroShards, v)
+	}
+	sort.Strings(macroShards)
+
+	// hostName() değerleri: makrolardan (her düğüm kendini bildirir).
+	refOf := map[string][2]int{}
+	viaMacro := 0
+	hostNames := make([]string, 0, len(macrosByHost))
+	for h := range macrosByHost {
+		hostNames = append(hostNames, h)
+	}
+	sort.Strings(hostNames)
+	for _, h := range hostNames {
+		sh, rep, via := shardRefFor(h, hostRows, macrosByHost[h], macroShards)
+		refOf[h] = [2]int{sh, rep}
+		if via == "macro" {
+			viaMacro++
+		}
+		out.Hosts = append(out.Hosts, ReplicaHost{Host: h, Shard: sh, Replica: rep, Macros: macrosByHost[h]})
+	}
+	if viaMacro > 0 {
+		out.Notes = append(out.Notes, fmt.Sprintf("system.clusters host adları hostName() ile uyuşmuyor (küme tanımı IP/başka ad); %d host shard'a {shard} makrosuyla eşlendi, replika numarası bilinmiyor.", viaMacro))
+	}
+	for _, h := range hostRows {
+		if _, ok := refOf[h.Host]; ok {
+			continue
+		}
+		if h.Addr != "" {
+			if _, ok := refOf[h.Addr]; ok {
+				continue
+			}
+		}
+		// Küme tanımındaki host hiçbir hostName() ile eşleşmedi — makro
+		// eşlemesi kapsıyorsa sessiz, kapsamıyorsa görünür kalsın.
+		if viaMacro == 0 {
+			out.Hosts = append(out.Hosts, ReplicaHost{Host: h.Host, Shard: h.Shard, Replica: h.Replica})
+		}
+	}
 
 	// Replikalar — bu veritabanının TÜM Replicated tabloları.
 	rrows, err := s.conn.Query(ctx, fmt.Sprintf(`
@@ -292,10 +360,11 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		r.TotalReplicas, r.ActiveReplicas = int(total), int(active)
 		r.ReadOnly, r.SessionExpired = ro == 1, sess == 1
 		r.Rows = map[string]uint64{}
-		if h, ok := shardOf[r.Host]; ok {
-			r.Shard, r.ReplicaNum = h.Shard, h.Replica
+		if ref, ok := refOf[r.Host]; ok {
+			r.Shard, r.ReplicaNum = ref[0], ref[1]
 		} else {
-			r.Shard = -1
+			sh, rep, _ := shardRefFor(r.Host, hostRows, nil, nil)
+			r.Shard, r.ReplicaNum = sh, rep
 		}
 		byTable[table] = append(byTable[table], r)
 	}
