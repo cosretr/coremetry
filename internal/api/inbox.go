@@ -1531,24 +1531,9 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 // incident, so re-deriving it from thresholds would second-guess the only
 // signal here that isn't inferred.
 func incidentToInbox(inc chstore.Incident) InboxItem {
-	prio, reason := "P3", "Declared incident"
-	switch inc.Severity {
-	case "critical":
-		prio, reason = "P1", "Declared incident, critical"
-	case "warning":
-		prio, reason = "P2", "Declared incident, warning"
-	}
-	// An acknowledged incident is BEING worked, which is a weaker claim on
-	// attention than one nobody has picked up — but it is still open, so it
-	// drops one rung rather than out of the queue.
-	if inc.Status == "acknowledged" {
-		switch prio {
-		case "P1":
-			prio, reason = "P2", "Declared incident, critical — acknowledged"
-		case "P2":
-			prio, reason = "P3", "Declared incident, warning — acknowledged"
-		}
-	}
+	// v0.10.796 — merdiven chstore.IncidentPriority'de (liste + detay aynı
+	// işlevi okur); acknowledged bir basamak düşer, kuyruktan düşmez.
+	prio, reason := chstore.IncidentPriority(inc)
 	last := inc.UpdatedAt
 	if last == 0 {
 		last = inc.StartedAt

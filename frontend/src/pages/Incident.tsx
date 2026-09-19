@@ -13,6 +13,7 @@ import {
   useIncident, useIncidentEvents, useIncidentProblems, useServiceDeploys, keys,
 } from '@/lib/queries';
 import { api } from '@/lib/api';
+import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.796
 import { metricQuery } from '@/lib/metricQuery';
 import { tsLong } from '@/lib/utils';
 import type { Incident } from '@/lib/types';
@@ -194,6 +195,8 @@ function Inner() {
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}><ArrowLeft size={14} strokeWidth={1.75} /> Incidents</Link>
           <StatusPill s={inc.status} />
+          {/* v0.10.796 — P rozeti liste ve Inbox ile aynı merdivenden (server). */}
+          {inc.priority && <PriorityBadge p={inc.priority} reason={inc.priorityReason} />}
           <SeverityPill s={inc.severity} />
           <span className="spacer" />
           {/* v0.9.477 — aksiyon çubuğunda buton, cevap sağ AI çekmecesinde

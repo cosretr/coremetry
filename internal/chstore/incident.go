@@ -37,6 +37,11 @@ type Incident struct {
 	// en yüksek güvenli TopSuspect; okuma-anı (incident_rootcause.go).
 	// nil = adı olan / eşiği aşan hipotez yok → FE "—".
 	RootCause *RootCauseSummary `json:"rootCause,omitempty"`
+	// Priority/PriorityReason (v0.10.796) — okuma-anı (incident_priority.go):
+	// ilan edilen şiddet → P1/P2/P3, acknowledged bir basamak düşer. Inbox
+	// ile aynı işlev; DB kolonu yok.
+	Priority       string `json:"priority,omitempty"`
+	PriorityReason string `json:"priorityReason,omitempty"`
 }
 
 type IncidentEvent struct {

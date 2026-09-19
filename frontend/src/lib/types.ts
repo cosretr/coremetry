@@ -238,6 +238,11 @@ export interface Incident {
   // v0.10.698 — bağlı problemlerin hipotezlerinden en yüksek güvenli
   // TopSuspect (server, okuma-anı). Yok = "—" (uydurma yok).
   rootCause?: RootCauseSummary;
+  // v0.10.796 — ilan edilen şiddetten P1/P2/P3 (server, Inbox ile aynı
+  // merdiven; acknowledged bir basamak düşer) + gerekçe. Eski sunucu
+  // göndermezse rozet çizilmez.
+  priority?: 'P1' | 'P2' | 'P3';
+  priorityReason?: string;
 }
 
 export interface IncidentEvent {

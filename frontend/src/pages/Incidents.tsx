@@ -10,6 +10,8 @@ import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
 import { useIncidents, useCreateIncident } from '@/lib/queries';
 import { tsLong, fmtNum } from '@/lib/utils';
+import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.796
+import { priorityRank } from '@/lib/priorityRank'; // v0.10.796
 import { incidentRootCauseLabel, incidentRootCauseSort } from '@/lib/incidentRootCause';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -21,6 +23,8 @@ import { PageShell } from '@/components/ui/PageShell';
 // incidents (no resolvedAt) sort as longest-duration.
 const INCIDENT_COLS: DataTableColumn<Incident>[] = [
   { id: 'status',   label: 'Status',   sortValue: i => i.status,   naturalDir: 'asc', width: 120 },
+  // v0.10.796 — P rozeti (server, Inbox ile aynı merdiven); P1 önce sıralanır.
+  { id: 'priority', label: 'Priority', sortValue: i => priorityRank(i.priority), numeric: true, naturalDir: 'desc', width: 90 },
   { id: 'severity', label: 'Severity', sortValue: i => i.severity, naturalDir: 'asc', width: 120 },
   { id: 'title',    label: 'Title',    sortValue: i => i.title,    naturalDir: 'asc', width: 320 },
   { id: 'service',  label: 'Service',  sortValue: i => i.service,  naturalDir: 'asc', width: 180 },
@@ -144,6 +148,7 @@ export default function IncidentsPage() {
                       onMouseEnter={() => dt.nav.setSelected(idx)}
                       onClick={() => navigate(`/incident?id=${i.id}`)}>
                     <td><StatusPill s={i.status} /></td>
+                    <td>{i.priority ? <PriorityBadge p={i.priority} reason={i.priorityReason} /> : '—'}</td>
                     <td><SeverityPill s={i.severity} /></td>
                     <td>
                       <Link to={`/incident?id=${i.id}`} style={{ fontWeight: 600, color: 'var(--text)' }}
