@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 )
@@ -38,6 +39,22 @@ type ServerSnapshot struct {
 	AllowTools         []string `json:"allowTools,omitempty"`
 	DenyTools          []string `json:"denyTools,omitempty"`
 	InsecureSkipVerify bool     `json:"insecureSkipVerify,omitempty"`
+	// EnvKeys (v0.10.803) — stdio ortam anahtarları; DEĞERLER asla dönmez
+	// (token sözleşmesiyle aynı: hasToken gibi yalnız varlık bilgisi).
+	EnvKeys []string `json:"envKeys,omitempty"`
+}
+
+// EnvKeysOf — SAF: sıralı anahtar listesi (değersiz).
+func EnvKeysOf(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // Snapshot — GET /api/settings/mcp-servers gövdesi: ayar + canlı sağlık.
@@ -145,6 +162,7 @@ func (s *Service) Snapshot() Snapshot {
 			Command: sv.Command, Args: sv.Args, Enabled: sv.Enabled,
 			HasToken: sv.Token != "", AllowTools: sv.AllowTools,
 			DenyTools: sv.DenyTools, InsecureSkipVerify: sv.InsecureSkipVerify,
+			EnvKeys: EnvKeysOf(sv.Env), // v0.10.803 — değer yok
 		})
 	}
 	s.mu.RUnlock()

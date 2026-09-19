@@ -64,6 +64,12 @@ func runStdioHelper() {
 		case "slow":
 			time.Sleep(5 * time.Second)
 			reply(map[string]any{})
+		case "env": // v0.10.803 — alt sürecin gördüğü ortam değişkeni
+			var p struct {
+				Name string `json:"name"`
+			}
+			_ = json.Unmarshal(env.Params, &p)
+			reply(map[string]any{"value": os.Getenv(p.Name)})
 		default:
 			_ = out.Encode(map[string]any{"jsonrpc": "2.0", "id": *env.ID,
 				"error": map[string]any{"code": -32601, "message": "yok"}})
@@ -77,13 +83,15 @@ func helperConfig(t *testing.T) ServerConfig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ServerConfig{Name: "helper", Transport: "stdio", Command: exe, Enabled: true}
+	// v0.10.803: alt süreç üst sürecin ortamını miras almaz — helper kipi
+	// işareti cfg.Env ile geçer (t.Setenv artık çocuğa ulaşmaz).
+	return ServerConfig{Name: "helper", Transport: "stdio", Command: exe, Enabled: true,
+		Env: map[string]string{helperEnv: "1"}}
 }
 
 func newHelperTransport(t *testing.T) *stdioTransport {
 	t.Helper()
 	cfg := helperConfig(t)
-	t.Setenv(helperEnv, "1")
 	tr, err := newStdioTransport(cfg)
 	if err != nil {
 		t.Fatalf("stdio başlatılamadı: %v", err)

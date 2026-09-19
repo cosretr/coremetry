@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseEnvText } from './mcpEnv';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -20,12 +21,15 @@ const SECRET_KEPT = '********';
 
 interface Row extends McpServerInput {
   hasToken: boolean;
+  // v0.10.803 — KEY=VALUE satırları (metin alanı); saklı değer "********".
+  envText: string;
 }
 
 const emptyRow = (): Row => ({
   name: '', transport: 'http', url: '', token: '', command: '', args: [],
-  enabled: true, hasToken: false,
+  enabled: true, hasToken: false, envText: '',
 });
+
 
 export function McpServersTab() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -46,6 +50,7 @@ export function McpServersTab() {
         enabled: sv.enabled, hasToken: sv.hasToken,
         allowTools: sv.allowTools, denyTools: sv.denyTools,
         insecureSkipVerify: sv.insecureSkipVerify,
+        envText: (sv.envKeys || []).map(k => `${k}=${SECRET_KEPT}`).join('\n'),
       })));
       setStatus(s.status || []);
     },
@@ -61,6 +66,7 @@ export function McpServersTab() {
     allowTools: r.allowTools?.length ? r.allowTools : undefined,
     denyTools: r.denyTools?.length ? r.denyTools : undefined,
     insecureSkipVerify: r.insecureSkipVerify || undefined,
+    env: r.transport === 'stdio' && r.envText.trim() ? parseEnvText(r.envText) : undefined,
   });
 
   const save = async () => {
@@ -174,6 +180,17 @@ export function McpServersTab() {
                     upd(i, { command: parts[0] || '', args: parts.slice(1) });
                   }}
                   style={{ width: '100%' }} />
+              </SettingRow>
+            )}
+            {r.transport === 'stdio' && (
+              /* v0.10.803 — alt süreç Coremetry'nin ortamını miras almaz; yalnız
+                 PATH/HOME/LANG/TZ + buradakiler. Değerler saklı (******** korur). */
+              <SettingRow label="Ortam"
+                hint={<>Satır başına <code>KEY=VALUE</code>. Alt süreç yalnız PATH/HOME/LANG/TZ ve buradakileri görür; Coremetry'nin kendi ortamı (anahtarlar, kimlikler) geçmez. Kayıtlı değer {SECRET_KEPT} olarak görünür, aynen bırakmak korur.</>}>
+                <textarea value={r.envText} rows={3} spellCheck={false}
+                  placeholder={'API_KEY=…\nMCP_ROOT=/data'}
+                  onChange={e => upd(i, { envText: e.target.value })}
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12 }} />
               </SettingRow>
             )}
 

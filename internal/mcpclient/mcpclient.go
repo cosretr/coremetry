@@ -66,6 +66,12 @@ type ServerConfig struct {
 	// InsecureSkipVerify — banka içi self-signed uçlar için; devops
 	// istemcisiyle aynı bayrak.
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+	// Env (v0.10.803, dış skill denetimi M3 — agents-mcp "scoped env vars"):
+	// stdio alt sürecine verilen ortam. Alt süreç Coremetry'nin ortamını
+	// MİRAS ALMAZ (AI anahtarı, CH/ES kimliği, JWT sırrı geçmez); yalnız
+	// stdioBaseEnv allowlist'i + buradakiler. Değerler sır gibi saklanır:
+	// snapshot yalnız anahtarları döndürür, PUT'ta "********" saklıyı korur.
+	Env map[string]string `json:"env,omitempty"`
 }
 
 // Transport — iki taşımanın (stdio, streamable HTTP) ortak yüzü.

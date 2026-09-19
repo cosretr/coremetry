@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,6 +62,9 @@ func newStdioTransport(cfg ServerConfig) (*stdioTransport, error) {
 		return nil, fmt.Errorf("stdio sunucusu %q: komut boş", cfg.Name)
 	}
 	cmd := exec.Command(cfg.Command, cfg.Args...)
+	// v0.10.803 — ortam allowlist: exec.Cmd.Env nil iken alt süreç
+	// os.Environ()'ı, yani Coremetry'nin TÜM sırlarını miras alırdı.
+	cmd.Env = stdioEnv(cfg.Env, os.Environ())
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -90,6 +95,44 @@ func newStdioTransport(cfg ServerConfig) (*stdioTransport, error) {
 		_, _ = io.Copy(io.Discard, stderr)
 	}()
 	return t, nil
+}
+
+// stdioBaseEnv — üst süreçten alt sürece geçen TEK anahtarlar: yol,
+// ev dizini, yerel ayar, saat dilimi, geçici dizin. COREMETRY_*, AI/CH/ES
+// kimlikleri, proxy sırları geçmez. Operatörün ihtiyacı olan her şey
+// ServerConfig.Env ile açıkça verilir.
+var stdioBaseEnv = []string{"PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR", "USER"}
+
+// stdioEnv — SAF (v0.10.803): allowlist'teki üst-süreç değerleri + cfg.Env
+// (cfg üstün). Deterministik sıra (anahtar adına göre) — test ve iz için.
+func stdioEnv(extra map[string]string, parent []string) []string {
+	base := map[string]string{}
+	for _, kv := range parent {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		for _, allow := range stdioBaseEnv {
+			if k == allow {
+				base[k] = v
+			}
+		}
+	}
+	for k, v := range extra {
+		if k = strings.TrimSpace(k); k != "" {
+			base[k] = v
+		}
+	}
+	keys := make([]string, 0, len(base))
+	for k := range base {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+"="+base[k])
+	}
+	return out
 }
 
 func (t *stdioTransport) Notifications() <-chan string { return t.notif }

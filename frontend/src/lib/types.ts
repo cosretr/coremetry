@@ -6993,6 +6993,8 @@ export interface McpServerSnapshot {
   allowTools?: string[];
   denyTools?: string[];
   insecureSkipVerify?: boolean;
+  // v0.10.803 — stdio ortam anahtarları; değerler asla dönmez.
+  envKeys?: string[];
 }
 export interface McpServerStatus {
   server: string;
@@ -7017,6 +7019,8 @@ export interface McpServerInput {
   allowTools?: string[];
   denyTools?: string[];
   insecureSkipVerify?: boolean;
+  // v0.10.803 — stdio ortamı KEY→VALUE; "********" saklıyı korur, boş düşürür.
+  env?: Record<string, string>;
 }
 export interface McpServerTestResult {
   ok: boolean;

@@ -51,6 +51,9 @@ type mcpServerInput struct {
 	AllowTools         []string `json:"allowTools"`
 	DenyTools          []string `json:"denyTools"`
 	InsecureSkipVerify bool     `json:"insecureSkipVerify"`
+	// Env (v0.10.803) — stdio ortamı; değer "********" ise saklı korunur,
+	// boş değer anahtarı düşürür (token sözleşmesinin anahtar-başına hâli).
+	Env map[string]string `json:"env"`
 }
 
 // mergeMCPServers — girdi listesini doğrular ve saklı token'ları
@@ -67,9 +70,11 @@ func mergeMCPServers(in []mcpServerInput, cur mcpclient.Settings) (mcpclient.Set
 	if len(in) > maxMCPServers {
 		return mcpclient.Settings{}, "en fazla 8 sunucu tanımlanabilir"
 	}
-	stored := map[string]string{} // sanitize(ad) → token
+	stored := map[string]string{}               // sanitize(ad) → token
+	storedEnv := map[string]map[string]string{} // sanitize(ad) → env (v0.10.803)
 	for _, sv := range cur.Servers {
 		stored[mcpclient.SanitizedName(sv.Name)] = sv.Token
+		storedEnv[mcpclient.SanitizedName(sv.Name)] = sv.Env
 	}
 	seen := map[string]bool{}
 	out := mcpclient.Settings{}
@@ -92,6 +97,7 @@ func mergeMCPServers(in []mcpServerInput, cur mcpclient.Settings) (mcpclient.Set
 			AllowTools:         cleanConventionList(sv.AllowTools),
 			DenyTools:          cleanConventionList(sv.DenyTools),
 			InsecureSkipVerify: sv.InsecureSkipVerify,
+			Env:                mergeEnv(sv.Env, storedEnv[key]),
 		}
 		if cfg.Transport == "" {
 			cfg.Transport = "http"
@@ -121,6 +127,33 @@ func mergeMCPServers(in []mcpServerInput, cur mcpclient.Settings) (mcpclient.Set
 		out.Servers = append(out.Servers, cfg)
 	}
 	return out, ""
+}
+
+// mergeEnv — SAF (v0.10.803): girdi anahtarları kazanır; değer secretKept ise
+// saklı değer korunur (saklı yoksa anahtar düşer), boş değer anahtarı düşürür,
+// girdide olmayan saklı anahtar düşer (form tam liste gönderir). nil = yok.
+func mergeEnv(in, stored map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for k, v := range in {
+		k = strings.TrimSpace(k)
+		if k == "" || v == "" {
+			continue
+		}
+		if v == secretKept {
+			if sv, ok := stored[k]; ok && sv != "" {
+				out[k] = sv
+			}
+			continue
+		}
+		out[k] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *Server) getMCPClientSettings(w http.ResponseWriter, r *http.Request) {
@@ -168,17 +201,18 @@ func (s *Server) putMCPClientSettings(w http.ResponseWriter, r *http.Request) {
 // çünkü "modelin çağırdığı dış uç kim ekledi" sorusu tam bu izin işi.
 func mcpServersAuditDetails(snap mcpclient.Snapshot) []byte {
 	type row struct {
-		Name      string `json:"name"`
-		Transport string `json:"transport"`
-		URL       string `json:"url,omitempty"`
-		Command   string `json:"command,omitempty"`
-		Enabled   bool   `json:"enabled"`
-		HasToken  bool   `json:"hasToken"`
+		Name      string   `json:"name"`
+		Transport string   `json:"transport"`
+		URL       string   `json:"url,omitempty"`
+		Command   string   `json:"command,omitempty"`
+		Enabled   bool     `json:"enabled"`
+		HasToken  bool     `json:"hasToken"`
+		EnvKeys   []string `json:"envKeys,omitempty"` // v0.10.803 — yalnız anahtar
 	}
 	rows := make([]row, 0, len(snap.Servers))
 	for _, sv := range snap.Servers {
 		rows = append(rows, row{Name: sv.Name, Transport: sv.Transport,
-			URL: sv.URL, Command: sv.Command, Enabled: sv.Enabled, HasToken: sv.HasToken})
+			URL: sv.URL, Command: sv.Command, Enabled: sv.Enabled, HasToken: sv.HasToken, EnvKeys: sv.EnvKeys})
 	}
 	b, _ := json.Marshal(map[string]any{"servers": rows, "count": len(rows)})
 	return b
