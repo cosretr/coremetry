@@ -1942,7 +1942,9 @@ function ReplicaConsistencyPanel() {
         <code className="mono"> load_balancing=random</code> her Distributed sorguda shard başına başka replika seçer; aynı shard'ın
         replikaları aynı veriyi taşımıyorsa sonuç okumadan okumaya değişir. Gecikme 0 bunu dışlamaz: iki replika birbirini hiç
         replike etmiyor olabilir ({'{shard}'} makrosu her host'ta farklı, her host kendi ZooKeeper yolunda) ya da bir replika parça
-        kaybetmiştir. Kart küme genelinde system.replicas + system.parts + system.macros okur; karar shard başına, runbook kopyalanır.
+        kaybetmiştir. Kart küme genelinde system.replicas + system.parts + system.macros + system.tables (motor envanteri: düz
+        MergeTree kalmış tablolar da listelenir) + system.clusters (is_local: ON CLUSTER DDL'i işlemeyen host) okur; karar shard
+        başına, runbook kopyalanır.
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <Button variant="accent" size="sm" onClick={() => void scan()} loading={busy}>Ölç</Button>
@@ -1962,6 +1964,8 @@ function ReplicaConsistencyPanel() {
           ))}
         </div>
       )}
+      {/* v0.10.818 — küme düzeyi uyarılar (DDL'i işlemeyen host, erişilemeyen host): kırmızı + metin öneki (renge bağımlı değil). */}
+      {data?.warnings?.map(w => <div key={w} role="alert" className="cell-hint" style={{ color: 'var(--err)' }}>Uyarı: {w}</div>)}
       {data?.notes?.map(n => <div key={n} className="cell-hint">{n}</div>)}
       {data && data.cluster && tables.length > 0 && (
         <table style={{ width: '100%' }}>
@@ -1974,12 +1978,18 @@ function ReplicaConsistencyPanel() {
                   <td className="mono">{t.table}</td>
                   <td className="mono">{sh.shard < 0 ? '—' : sh.shard}</td>
                   <td className="mono" style={{ fontSize: 11 }}>
-                    {sh.replicas.map(r => (
+                    {(sh.replicas ?? []).map(r => (
                       <div key={r.host} title={`${r.zkPath}\nreplica ${r.replicaName} · kayıtlı ${r.totalReplicas} / aktif ${r.activeReplicas}${r.lastException ? `\n${r.lastException}` : ''}`}>
-                        {r.host} · {shortZk(r.zkPath)} · {r.totalReplicas}/{r.activeReplicas}
+                        {r.host} · {shortZk(r.zkPath)} · {r.totalReplicas}/{r.activeReplicas}{r.engine ? ` · ${r.engine}` : ''}
                         {r.readonly ? ' · readonly' : ''}{r.sessionExpired ? ' · oturum düşmüş' : ''}
                         {r.delayS > 0 ? ` · gecikme ${r.delayS}s` : ''}{r.queue > 0 ? ` · kuyruk ${r.queue}` : ''}
                         {` · ${fmtNum(r.totalRows)} satır`}
+                      </div>
+                    ))}
+                    {/* v0.10.818 — kayıtsız host'lar: tablo yok ya da Replicated değil. */}
+                    {sh.missing?.map(m => (
+                      <div key={m.host} style={{ color: 'var(--err)' }}>
+                        {m.host} · {m.engine && !m.engine.startsWith('Replicated') ? `Replicated değil (${m.engine})` : m.engine ? `kayıtsız (${m.engine})` : 'tablo yok'}
                       </div>
                     ))}
                   </td>

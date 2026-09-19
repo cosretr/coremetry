@@ -1,6 +1,7 @@
 package chstore
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -71,11 +72,15 @@ func TestWorstVerdictOrder(t *testing.T) {
 	if got := worstVerdict([]string{ReplicaDivergent, ReplicaNoReplication, ReplicaReadOnly}); got != ReplicaNoReplication {
 		t.Errorf("got %s", got)
 	}
+	// v0.10.818 — yapısal üçlü: no_replication > not_replicated > missing_replica > session_expired.
+	if got := worstVerdict([]string{ReplicaSessionExpired, ReplicaMissing, ReplicaNotReplicated}); got != ReplicaNotReplicated {
+		t.Errorf("got %s", got)
+	}
 	if got := worstVerdict(nil); got != ReplicaOK {
 		t.Errorf("got %s", got)
 	}
 	// Her karar sıralamada — yeni bir sabit eklenip sıraya konmazsa 0 = ok sayılır.
-	for _, v := range []string{ReplicaOK, ReplicaSingle, ReplicaUnmapped, ReplicaLagging, ReplicaDivergent, ReplicaReadOnly, ReplicaSessionExpired, ReplicaNoReplication} {
+	for _, v := range []string{ReplicaOK, ReplicaSingle, ReplicaUnmapped, ReplicaLagging, ReplicaDivergent, ReplicaReadOnly, ReplicaSessionExpired, ReplicaMissing, ReplicaNotReplicated, ReplicaNoReplication} {
 		if _, ok := replicaVerdictRank[v]; !ok {
 			t.Errorf("%s sıralamada yok", v)
 		}
@@ -97,6 +102,7 @@ func TestReplicaConsistencyQueriesAreBoundedAndOnMainConn(t *testing.T) {
 	}
 	for _, want := range []string{
 		"clusterAllReplicas('%s', system.replicas)", "clusterAllReplicas('%s', system.parts)", "clusterAllReplicas('%s', system.macros)",
+		"clusterAllReplicas('%s', system.tables)", "clusterAllReplicas('%s', system.clusters)", // v0.10.818
 		"WHERE database = ?", "WHERE database = ? AND active",
 	} {
 		if !strings.Contains(s, want) {
@@ -108,6 +114,120 @@ func TestReplicaConsistencyQueriesAreBoundedAndOnMainConn(t *testing.T) {
 	}
 	if n := strings.Count(s, "max_execution_time"); n < 3 {
 		t.Errorf("küme geneli sorguların hepsi zaman tavanlı olmalı (bulunan %d)", n)
+	}
+	// v0.10.818 — her clusterAllReplicas okuması TEK TEK: zaman tavanı + erişilemeyen
+	// host'u atlama (sayım karşılaştırması bir yorumla kandırılabilirdi; sorgu
+	// gövdesi backtick'e kadar okunur).
+	segs := strings.Split(s, "clusterAllReplicas('%s'")
+	if len(segs) < 6 { // macros, one, clusters, tables, replicas, parts
+		t.Fatalf("clusterAllReplicas okuması %d (en az 6)", len(segs)-1)
+	}
+	for i, seg := range segs[1:] {
+		end := strings.Index(seg, "`")
+		if end < 0 {
+			end = len(seg)
+		}
+		body := seg[:end]
+		if !strings.Contains(body, "skip_unavailable_shards = 1") || !strings.Contains(body, "max_execution_time") {
+			t.Errorf("clusterAllReplicas okuması #%d ayarsız: %q", i+1, body)
+		}
+	}
+	for _, want := range []string{"system.one)", "trows.Err()", "prows.Err()", "lrows.Err()", "orows.Err()", "mrows.Err()"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("eksik: %s", want)
+		}
+	}
+}
+
+// v0.10.818 — kapsama kararı: beklenen (erişilebilir) host'lar vs kayıtlı.
+func TestShardCoverage(t *testing.T) {
+	known := []ReplicaState{rep("ch-04", "/t/02/x", 1, nil)}
+	// Tablo ch-03'te hiç yok → missing_replica.
+	miss, v, hint, unseen := shardCoverage("x", []string{"ch-03", "ch-04"}, known, map[string]string{"ch-04": "ReplicatedMergeTree"})
+	if v != ReplicaMissing || len(miss) != 1 || miss[0].Host != "ch-03" || miss[0].Engine != "" || !strings.Contains(hint, "ch-03 (tablo yok)") || !strings.Contains(hint, "is_local") || unseen != nil {
+		t.Errorf("tablo yok: v=%s miss=%+v hint=%s unseen=%v", v, miss, hint, unseen)
+	}
+	// Tablo ch-03'te düz MergeTree → not_replicated.
+	miss, v, hint, _ = shardCoverage("x", []string{"ch-03", "ch-04"}, known, map[string]string{"ch-03": "MergeTree", "ch-04": "ReplicatedMergeTree"})
+	if v != ReplicaNotReplicated || len(miss) != 1 || miss[0].Engine != "MergeTree" || !strings.Contains(hint, "engine=MergeTree") {
+		t.Errorf("düz tablo: v=%s miss=%+v hint=%s", v, miss, hint)
+	}
+	// ch-03'te Replicated ama system.replicas satırı yok → karar DEĞİL, unseen notu.
+	miss, v, _, unseen = shardCoverage("x", []string{"ch-03", "ch-04"}, known, map[string]string{"ch-03": "ReplicatedReplacingMergeTree", "ch-04": "ReplicatedReplacingMergeTree"})
+	if v != "" || miss != nil || len(unseen) != 1 || unseen[0] != "ch-03" {
+		t.Errorf("Replicated ama kayıtsız: v=%q miss=%v unseen=%v", v, miss, unseen)
+	}
+	// Herkes kayıtlı → karar yok.
+	if miss, v, _, _ := shardCoverage("x", []string{"ch-04"}, known, nil); v != "" || miss != nil {
+		t.Errorf("tam kapsama: v=%q miss=%v", v, miss)
+	}
+	// Beklenen host yok (roster boş) → karar yok.
+	if _, v, _, _ := shardCoverage("x", nil, known, nil); v != "" {
+		t.Errorf("roster boş: %q", v)
+	}
+	// Kapsama kararı sıralamada replicaVerdict'in üstündedir ama no_replication'ın altında.
+	if replicaVerdictRank[ReplicaMissing] <= replicaVerdictRank[ReplicaSessionExpired] || replicaVerdictRank[ReplicaNotReplicated] >= replicaVerdictRank[ReplicaNoReplication] {
+		t.Error("sıra: session_expired < missing_replica < not_replicated < no_replication")
+	}
+}
+
+// v0.10.818 — müşteri vakası uçtan uca: tek host 1/1 → replicaVerdict "single";
+// kapsama "missing_replica" → birleşim missing_replica (kartın eski "tek
+// replika · tutarlı" yalanı biter). no_replication kapsamaya yenilmez.
+func TestMergeCoverageCustomerCase(t *testing.T) {
+	known := []ReplicaState{rep("ch-04", "/t/02/alert_rules", 1, nil)}
+	base, baseHint, _, _ := replicaVerdict(known)
+	if base != ReplicaSingle {
+		t.Fatalf("taban %s", base)
+	}
+	miss, cv, chint, _ := shardCoverage("alert_rules", []string{"ch-03", "ch-04"}, known, map[string]string{"ch-04": "ReplicatedReplacingMergeTree"})
+	v, hint := mergeCoverage(base, baseHint, cv, chint)
+	if v != ReplicaMissing || hint != chint || len(miss) != 1 {
+		t.Fatalf("birleşim: %s / %s / %+v", v, hint, miss)
+	}
+	if v, h := mergeCoverage(ReplicaNoReplication, "yol", ReplicaMissing, "eksik"); v != ReplicaNoReplication || h != "yol" {
+		t.Errorf("no_replication kapsamaya yenilmemeli: %s %s", v, h)
+	}
+	if v, h := mergeCoverage(ReplicaOK, "", "", ""); v != ReplicaOK || h != "" {
+		t.Errorf("kapsama yokken taban: %s %s", v, h)
+	}
+}
+
+// v0.10.818 — is_local kör host'lar: sayım 0 (kendini görmüyor) ve satır yok (küme adı tanımsız).
+func TestBlindHosts(t *testing.T) {
+	zero, absent := blindHosts([]string{"ch-01", "ch-02", "ch-03", "ch-04"}, map[string]uint32{"ch-01": 1, "ch-02": 0, "ch-04": 1})
+	if len(zero) != 1 || zero[0] != "ch-02" || len(absent) != 1 || absent[0] != "ch-03" {
+		t.Errorf("zero=%v absent=%v", zero, absent)
+	}
+	if z, a := blindHosts(nil, nil); z != nil || a != nil {
+		t.Error("boş roster → boş")
+	}
+}
+
+// v0.10.818 — roster uyarıları: cevap vermeyen (küme tanımı > cevap) ve cevap verip eşlenemeyen ayrı.
+func TestRosterWarnings(t *testing.T) {
+	w := rosterWarnings(4, []string{"ch-01", "ch-02", "ch-04"}, []string{"ch-04"})
+	if len(w) != 2 || !strings.Contains(w[0], "4 host var, 3 host cevap verdi") || !strings.Contains(w[1], "ch-04: cevap verdi ama shard'a eşlenemedi") {
+		t.Errorf("%v", w)
+	}
+	if w := rosterWarnings(2, []string{"a", "b"}, nil); len(w) != 0 {
+		t.Errorf("tam roster → uyarı yok: %v", w)
+	}
+}
+
+// v0.10.818 — düz-MergeTree-her-yerde tablo: replicas JSON `[]` (null FE'yi düşürüyordu).
+func TestReplicaShardReplicasNeverNull(t *testing.T) {
+	var rs []ReplicaState
+	if rs == nil {
+		rs = []ReplicaState{}
+	}
+	b, err := json.Marshal(ReplicaShard{Shard: 2, Replicas: rs, Verdict: ReplicaNotReplicated})
+	if err != nil || !strings.Contains(string(b), `"replicas":[]`) {
+		t.Errorf("%s %v", b, err)
+	}
+	src, _ := os.ReadFile("replica_consistency.go")
+	if !strings.Contains(string(src), "rs = []ReplicaState{} // JSON `[]`") {
+		t.Error("gruplama nil dilimi boş dilime çevirmeli")
 	}
 }
 

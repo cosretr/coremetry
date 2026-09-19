@@ -3546,7 +3546,9 @@ export interface CHDanglingMV { host: string; addr?: string; shard?: number; rep
 export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number }
 export interface CHDanglingMVRepairResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.791 — Replika tutarlılığı (Go chstore.ReplicaConsistencyReport). Salt okuma; karar shard başına sunucuda (replicaVerdict). */
-export type CHReplicaVerdict = 'ok' | 'single' | 'unmapped' | 'lagging' | 'divergent' | 'readonly' | 'session_expired' | 'no_replication';
+export type CHReplicaVerdict = 'ok' | 'single' | 'unmapped' | 'lagging' | 'divergent' | 'readonly' | 'session_expired' | 'missing_replica' | 'not_replicated' | 'no_replication';
+/** v0.10.818 — shard'ın erişilebilir host'u tabloyu kayıtlı göstermiyor; engine boş = tablo yok, dolu = Replicated değil. */
+export interface CHReplicaMissingHost { host: string; engine?: string }
 export interface CHReplicaHost { host: string; shard: number; replica: number; macros?: Record<string, string> }
 export interface CHReplicaState {
   host: string; shard: number; replica: number; zkPath: string; replicaName: string;
@@ -3554,10 +3556,12 @@ export interface CHReplicaState {
   delayS: number; queue: number; lastException?: string;
   rows: Record<string, number>; // partition → aktif parçalardaki satır
   totalRows: number;
+  /** v0.10.818 — system.tables motoru; runbook eksik host'ta aynı aileyi kurar. */
+  engine?: string;
 }
-export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; verdict: CHReplicaVerdict; hint: string; divergentPartition?: string; divergencePct?: number }
+export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; verdict: CHReplicaVerdict; hint: string; divergentPartition?: string; divergencePct?: number; missing?: CHReplicaMissingHost[] }
 export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict }
-export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[] }
+export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[]; warnings?: string[] }
 /** v0.10.757 — Admin "Trace hattı sağlığı" (Go traceHealthResponse). Sayaçlar POD-İÇİ (pod.host). */
 export interface CHTraceHealthResponse {
   generatedAt: number;

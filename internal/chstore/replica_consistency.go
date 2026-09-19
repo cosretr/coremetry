@@ -52,16 +52,30 @@ type ReplicaState struct {
 	LastException  string            `json:"lastException,omitempty"`
 	Rows           map[string]uint64 `json:"rows"` // partition → aktif parçalardaki satır
 	TotalRows      uint64            `json:"totalRows"`
+	// Engine — v0.10.818: system.tables motoru (ReplicatedReplacingMergeTree…);
+	// FE runbook eksik host'ta AYNI aileyi kurar (ReplacingMergeTree(version) /
+	// AggregatingMergeTree eş yola düz ReplicatedMergeTree ile katılamaz).
+	Engine string `json:"engine,omitempty"`
+}
+
+// ReplicaMissingHost — v0.10.818: shard'ın erişilebilir bir host'u bu tablo
+// için system.replicas satırı vermedi. Engine boş = tablo o host'ta YOK;
+// doluysa tablo var ama Replicated değil (düz MergeTree: yalnız kendine
+// yazılanı tutar).
+type ReplicaMissingHost struct {
+	Host   string `json:"host"`
+	Engine string `json:"engine,omitempty"`
 }
 
 // ReplicaShard — bir tablonun bir shard'ı: replikalar + karar.
 type ReplicaShard struct {
-	Shard              int            `json:"shard"`
-	Replicas           []ReplicaState `json:"replicas"`
-	Verdict            string         `json:"verdict"`
-	Hint               string         `json:"hint"`
-	DivergentPartition string         `json:"divergentPartition,omitempty"`
-	DivergencePct      float64        `json:"divergencePct,omitempty"`
+	Shard              int                  `json:"shard"`
+	Replicas           []ReplicaState       `json:"replicas"`
+	Verdict            string               `json:"verdict"`
+	Hint               string               `json:"hint"`
+	DivergentPartition string               `json:"divergentPartition,omitempty"`
+	DivergencePct      float64              `json:"divergencePct,omitempty"`
+	Missing            []ReplicaMissingHost `json:"missing,omitempty"` // v0.10.818
 }
 
 // ReplicaTable — bir Replicated tablo, shard'ları ve en kötü karar.
@@ -80,6 +94,9 @@ type ReplicaConsistencyReport struct {
 	Tables        []ReplicaTable `json:"tables"`
 	GeneratedAt   int64          `json:"generatedAt"`
 	Notes         []string       `json:"notes,omitempty"`
+	// Warnings — v0.10.818: küme düzeyi kırmızı uyarılar (DDL'i işlemeyen host,
+	// erişilemeyen host). Notes bilgi, Warnings eylem ister.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Kararlar — FE rozet/metin bunlara göre (adminch/replicaConsistency.ts).
@@ -92,6 +109,12 @@ const (
 	ReplicaSessionExpired = "session_expired" // Keeper oturumu düşmüş
 	ReplicaNoReplication  = "no_replication"  // farklı ZK yolu / eksik kayıt
 	ReplicaUnmapped       = "unmapped"        // host system.clusters'ta yok
+	// v0.10.818 — test ortamı bulgusu: shard 2'nin state tabloları yalnız bir
+	// host'ta Replicated (1/1), öteki host'ta hiç kayıt yok; kart bunu "tek
+	// replika · tutarlı" sayıyordu. Beklenen host (makro rosteri) ile kayıtlı
+	// host karşılaştırılır:
+	ReplicaMissing       = "missing_replica" // erişilebilir host'ta tablo bu yolda kayıtlı değil (tablo yok)
+	ReplicaNotReplicated = "not_replicated"  // host'ta tablo var ama Replicated değil (düz MergeTree)
 )
 
 // Eşikler — replicaVerdict'in ölçüleri; testte pinli.
@@ -104,7 +127,8 @@ const (
 
 var replicaVerdictRank = map[string]int{
 	ReplicaOK: 0, ReplicaSingle: 1, ReplicaUnmapped: 2, ReplicaLagging: 3,
-	ReplicaDivergent: 4, ReplicaReadOnly: 5, ReplicaSessionExpired: 6, ReplicaNoReplication: 7,
+	ReplicaDivergent: 4, ReplicaReadOnly: 5, ReplicaSessionExpired: 6,
+	ReplicaMissing: 7, ReplicaNotReplicated: 8, ReplicaNoReplication: 9, // v0.10.818 — yapısal üçlü en üstte
 }
 
 // worstVerdict — sıralı en kötü.
@@ -210,6 +234,99 @@ func replicaVerdict(rs []ReplicaState) (verdict, hint string, divPart string, di
 	return ReplicaOK, "", "", 0
 }
 
+// shardCoverage — SAF (v0.10.818): shard'ın erişilebilir host'ları (expected,
+// makro rosteri) içinde bu tablo için system.replicas satırı vermeyenler.
+// engines: host → engine (system.tables; yoksa ""). Bir eksik host'ta tablo
+// düz MergeTree ise not_replicated (veri var ama eşler replike etmez),
+// tablo hiç yoksa missing_replica. Eksik yoksa ("", "").
+// unseen: host'ta tablo Replicated ama system.replicas satırı yok (iki okuma
+// arasında yaratıldı / o host replicas okumasında atlandı) — karar DEĞİL, not.
+func shardCoverage(table string, expected []string, known []ReplicaState, engines map[string]string) (missing []ReplicaMissingHost, verdict, hint string, unseen []string) {
+	have := map[string]bool{}
+	for _, r := range known {
+		have[r.Host] = true
+	}
+	plain := 0
+	for _, h := range expected {
+		if have[h] {
+			continue
+		}
+		eng := engines[h]
+		if strings.HasPrefix(eng, "Replicated") {
+			unseen = append(unseen, h)
+			continue
+		}
+		if eng != "" {
+			plain++
+		}
+		missing = append(missing, ReplicaMissingHost{Host: h, Engine: eng})
+	}
+	sort.Strings(unseen)
+	if len(missing) == 0 {
+		return nil, "", "", unseen
+	}
+	sort.Slice(missing, func(i, j int) bool { return missing[i].Host < missing[j].Host })
+	names := make([]string, 0, len(missing))
+	for _, m := range missing {
+		if m.Engine != "" {
+			names = append(names, fmt.Sprintf("%s (engine=%s)", m.Host, m.Engine))
+		} else {
+			names = append(names, m.Host+" (tablo yok)")
+		}
+	}
+	if plain > 0 {
+		return missing, ReplicaNotReplicated,
+			fmt.Sprintf("%s: tablo %s host'unda Replicated DEĞİL — o host yalnız kendine yazılanı tutar, eşler replike etmez; rastgele replika seçimi her sorguda başka veri gösterir. ON CLUSTER DDL bu host'ta uygulanmamış olabilir (is_local uyarısına bak). Yerel veriyi eş ZK yolunda Replicated tabloya ATTACH edip değiştir — runbook.",
+				table, strings.Join(names, ", ")), unseen
+	}
+	return missing, ReplicaMissing,
+		fmt.Sprintf("%s: tablo %s host'unda YOK — ON CLUSTER DDL bu host'ta uygulanmamış (küme tanımında host kendini is_local görmüyorsa DDL atlanır, boot sessiz geçer) ya da tablo sonradan silinmiş. Eş replikanın SHOW CREATE TABLE'ıyla aynı ZK yolunda yeniden kur — runbook.",
+			table, strings.Join(names, ", ")), unseen
+}
+
+// mergeCoverage — SAF (v0.10.818): kapsama kararı yapısaldır; sıralamada
+// daha kötüyse replicaVerdict'in kararını ve ipucunu değiştirir (farklı ZK
+// yolu = no_replication yine en üstte). Müşteri vakası: tek host 1/1 →
+// replicaVerdict "single", kapsama "missing_replica" → missing_replica.
+func mergeCoverage(base, baseHint, cv, chint string) (string, string) {
+	if cv != "" && replicaVerdictRank[cv] > replicaVerdictRank[base] {
+		return cv, chint
+	}
+	return base, baseHint
+}
+
+// blindHosts — SAF (v0.10.818): is_local sayımı 0 olan host'lar (zero) ve
+// küme tanımında hiç satır vermeyen host'lar (absent: remote_servers bu
+// küme adını içermiyor) — ikisi de ON CLUSTER DDL'i işlemez.
+func blindHosts(roster []string, isLocalCount map[string]uint32) (zero, absent []string) {
+	for _, h := range roster {
+		n, ok := isLocalCount[h]
+		switch {
+		case !ok:
+			absent = append(absent, h)
+		case n == 0:
+			zero = append(zero, h)
+		}
+	}
+	sort.Strings(zero)
+	sort.Strings(absent)
+	return zero, absent
+}
+
+// rosterWarnings — SAF (v0.10.818): küme tanımındaki host sayısı vs cevap
+// veren (system.one) host sayısı; cevap verip shard'a eşlenemeyenler ayrı
+// (kapsama ölçülemedi, "erişilemez" DEĞİL).
+func rosterWarnings(defined int, reachable, unmapped []string) []string {
+	var out []string
+	if len(reachable) < defined {
+		out = append(out, fmt.Sprintf("küme tanımında %d host var, %d host cevap verdi — cevap vermeyen host'lar ölçüme girmedi (skip_unavailable_shards); onların tabloları bu kartta görünmez.", defined, len(reachable)))
+	}
+	if len(unmapped) > 0 {
+		out = append(out, fmt.Sprintf("%s: cevap verdi ama shard'a eşlenemedi ({shard} makrosu yok ya da küme tanımıyla uyuşmuyor) — bu host'ların kapsaması ölçülemedi.", strings.Join(unmapped, ", ")))
+	}
+	return out
+}
+
 // shardRefFor — SAF (v0.10.792): hostName() → shard/replika. Öncelik
 // system.clusters (host_name YA DA host_address hostName() ile eşleşir);
 // eşleşmezse makrolar: {shard} sayısal ise o ("01" → 1), değilse sıralı
@@ -270,7 +387,7 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 	mrows, err := s.conn.Query(ctx, fmt.Sprintf(`
 		SELECT hostName(), macro, substitution
 		FROM clusterAllReplicas('%s', system.macros)
-		SETTINGS max_execution_time = 10`, cluster))
+		SETTINGS max_execution_time = 10, skip_unavailable_shards = 1`, cluster))
 	if err != nil {
 		return nil, fmt.Errorf("system.macros: %w", err)
 	}
@@ -286,6 +403,9 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		macrosByHost[host][macro] = sub
 	}
 	mrows.Close()
+	if err := mrows.Err(); err != nil {
+		return nil, fmt.Errorf("system.macros: %w", err)
+	}
 	macroShardSet := map[string]bool{}
 	for _, m := range macrosByHost {
 		if v := strings.TrimSpace(m["shard"]); v != "" {
@@ -298,11 +418,36 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 	}
 	sort.Strings(macroShards)
 
-	// hostName() değerleri: makrolardan (her düğüm kendini bildirir).
+	// v0.10.818 — erişilebilir roster: system.one her cevap veren host'tan
+	// tam bir satır verir (makrosuz host da sayılır); makro rosteriyle birleşir.
+	reachableSet := map[string]bool{}
+	orows, err := s.conn.Query(ctx, fmt.Sprintf(`
+		SELECT hostName()
+		FROM clusterAllReplicas('%s', system.one)
+		SETTINGS max_execution_time = 10, skip_unavailable_shards = 1`, cluster))
+	if err != nil {
+		return nil, fmt.Errorf("system.one: %w", err)
+	}
+	for orows.Next() {
+		var h string
+		if err := orows.Scan(&h); err != nil {
+			orows.Close()
+			return nil, err
+		}
+		reachableSet[h] = true
+	}
+	orows.Close()
+	if err := orows.Err(); err != nil {
+		return nil, fmt.Errorf("system.one: %w", err)
+	}
+	for h := range macrosByHost {
+		reachableSet[h] = true
+	}
+	// hostName() değerleri: cevap veren her düğüm (makrolu ya da makrosuz).
 	refOf := map[string][2]int{}
 	viaMacro := 0
-	hostNames := make([]string, 0, len(macrosByHost))
-	for h := range macrosByHost {
+	hostNames := make([]string, 0, len(reachableSet))
+	for h := range reachableSet {
 		hostNames = append(hostNames, h)
 	}
 	sort.Strings(hostNames)
@@ -333,6 +478,83 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		}
 	}
 
+	// v0.10.818 — beklenen host'lar: cevap veren VE shard'a eşlenen host'lar;
+	// eşlenemeyenler ayrı uyarı (kapsama ölçülemedi), cevap vermeyenler
+	// (küme tanımı sayısı > cevap) ayrı uyarı — ikisi "erişilemez" diye
+	// karıştırılmaz.
+	expectedByShard := map[int][]string{}
+	var unmappedHosts []string
+	for _, h := range hostNames {
+		if sh := refOf[h][0]; sh >= 0 {
+			expectedByShard[sh] = append(expectedByShard[sh], h)
+		} else {
+			unmappedHosts = append(unmappedHosts, h)
+		}
+	}
+	out.Warnings = append(out.Warnings, rosterWarnings(len(hostRows), hostNames, unmappedHosts)...)
+	// v0.10.818 — is_local: her host'un KENDİ küme görünümünde kendini bulması
+	// gerekir; bulamayan (0) ya da bu küme adını hiç tanımayan (satır yok) host
+	// ON CLUSTER DDL'i işlemez (tablolar eksik / Replicated değil kalır) ve boot
+	// bunu null_status_on_timeout ile sessiz geçer.
+	lrows, err := s.conn.Query(ctx, fmt.Sprintf(`
+		SELECT hostName(), toUInt32(countIf(is_local))
+		FROM clusterAllReplicas('%s', system.clusters)
+		WHERE cluster = ?
+		GROUP BY hostName()
+		SETTINGS max_execution_time = 10, skip_unavailable_shards = 1`, cluster), cluster)
+	if err != nil {
+		out.Notes = append(out.Notes, "is_local denetimi okunamadı: "+err.Error())
+	} else {
+		isLocal := map[string]uint32{}
+		for lrows.Next() {
+			var host string
+			var n uint32
+			if err := lrows.Scan(&host, &n); err != nil {
+				lrows.Close()
+				return nil, err
+			}
+			isLocal[host] = n
+		}
+		lrows.Close()
+		if err := lrows.Err(); err != nil {
+			out.Notes = append(out.Notes, "is_local denetimi yarıda kesildi: "+err.Error())
+		} else {
+			zero, absent := blindHosts(hostNames, isLocal)
+			if len(zero) > 0 {
+				out.Warnings = append(out.Warnings, fmt.Sprintf("%s: küme tanımında kendini is_local görmüyor (remote_servers IP/başka adla yazılmış) — ON CLUSTER DDL bu host'ta UYGULANMAZ; Coremetry'nin boot DDL'i burada tablo yaratmaz/değiştirmez, boot sessiz geçer. Küme tanımını host'un kendi adıyla düzelt.", strings.Join(zero, ", ")))
+			}
+			if len(absent) > 0 {
+				out.Warnings = append(out.Warnings, fmt.Sprintf("%s: küme tanımı (remote_servers) bu host'ta '%s' kümesini içermiyor — ON CLUSTER DDL burada UYGULANMAZ. Küme tanımını her host'a aynı adla yay.", strings.Join(absent, ", "), cluster))
+			}
+		}
+	}
+
+	// v0.10.818 — motor envanteri: hangi host'ta tablo var, Replicated mı.
+	engineOf := map[string]map[string]string{} // table → host → engine
+	trows, err := s.conn.Query(ctx, fmt.Sprintf(`
+		SELECT hostName(), name, engine
+		FROM clusterAllReplicas('%s', system.tables)
+		WHERE database = ? AND engine LIKE '%%MergeTree%%'
+		SETTINGS max_execution_time = 15, skip_unavailable_shards = 1`, cluster), out.Database)
+	if err != nil {
+		return nil, fmt.Errorf("system.tables: %w", err)
+	}
+	for trows.Next() {
+		var host, table, engine string
+		if err := trows.Scan(&host, &table, &engine); err != nil {
+			trows.Close()
+			return nil, err
+		}
+		if engineOf[table] == nil {
+			engineOf[table] = map[string]string{}
+		}
+		engineOf[table][host] = engine
+	}
+	trows.Close()
+	if err := trows.Err(); err != nil {
+		return nil, fmt.Errorf("system.tables: %w", err) // yarım envanter = yanlış "tablo yok"
+	}
+
 	// Replikalar — bu veritabanının TÜM Replicated tabloları.
 	rrows, err := s.conn.Query(ctx, fmt.Sprintf(`
 		SELECT hostName(), table, zookeeper_path, replica_name,
@@ -343,7 +565,7 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		FROM clusterAllReplicas('%s', system.replicas)
 		WHERE database = ?
 		ORDER BY table, hostName()
-		SETTINGS max_execution_time = 15`, cluster), out.Database)
+		SETTINGS max_execution_time = 15, skip_unavailable_shards = 1`, cluster), out.Database)
 	if err != nil {
 		return nil, fmt.Errorf("system.replicas: %w", err)
 	}
@@ -379,7 +601,7 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		FROM clusterAllReplicas('%s', system.parts)
 		WHERE database = ? AND active
 		GROUP BY hostName(), table, partition
-		SETTINGS max_execution_time = 15`, cluster), out.Database)
+		SETTINGS max_execution_time = 15, skip_unavailable_shards = 1`, cluster), out.Database)
 	if err != nil {
 		return nil, fmt.Errorf("system.parts: %w", err)
 	}
@@ -399,10 +621,22 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		}
 	}
 	prows.Close()
+	if err := prows.Err(); err != nil {
+		return nil, fmt.Errorf("system.parts: %w", err) // yarım sayım = sahte ıraksama
+	}
 
-	// Grupla + karar.
-	tables := make([]string, 0, len(byTable))
+	// Grupla + karar. v0.10.818: hiçbir host'ta Replicated olmayan MergeTree
+	// tabloları da listeye girer (engineOf'tan) — eskiden kart onları hiç
+	// görmüyordu (spans_local tamamen düz MergeTree olsa sessizdi).
+	tableSet := map[string]bool{}
 	for t := range byTable {
+		tableSet[t] = true
+	}
+	for t := range engineOf {
+		tableSet[t] = true
+	}
+	tables := make([]string, 0, len(tableSet))
+	for t := range tableSet {
 		tables = append(tables, t)
 	}
 	sort.Strings(tables)
@@ -411,8 +645,24 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		for _, r := range byTable[t] {
 			byShard[r.Shard] = append(byShard[r.Shard], r)
 		}
-		shards := make([]int, 0, len(byShard))
+		// Kapsama: tablonun bulunduğu (Replicated ya da düz) her host'un shard'ı
+		// ve kayıtlı replikaların shard'ları birlikte.
+		shardSet := map[int]bool{}
 		for sh := range byShard {
+			shardSet[sh] = true
+		}
+		for h := range engineOf[t] {
+			if ref, ok := refOf[h]; ok && ref[0] >= 0 {
+				shardSet[ref[0]] = true
+			}
+		}
+		// v0.10.818 — bütün bir shard'da tablo yoksa (DDL o shard'ın iki host'unda
+		// da atlanmış) hiçbir okuma satır vermez; beklenen shard'lar da gezilir.
+		for sh := range expectedByShard {
+			shardSet[sh] = true
+		}
+		shards := make([]int, 0, len(shardSet))
+		for sh := range shardSet {
 			shards = append(shards, sh)
 		}
 		sort.Ints(shards)
@@ -420,12 +670,26 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		var verdicts []string
 		for _, sh := range shards {
 			rs := byShard[sh]
+			if rs == nil {
+				rs = []ReplicaState{} // JSON `[]` — FE sh.replicas[0]/map null'da patlamasın
+			}
 			sort.Slice(rs, func(i, j int) bool { return rs[i].Host < rs[j].Host })
+			for i := range rs {
+				rs[i].Engine = engineOf[t][rs[i].Host] // v0.10.818 — runbook aynı aileyi kurar
+			}
 			rsh := ReplicaShard{Shard: sh, Replicas: rs}
 			if sh < 0 {
 				rsh.Verdict, rsh.Hint = ReplicaUnmapped, "Host system.clusters'taki küme tanımında yok: shard'a eşlenemedi (remote_servers ile hostName() uyuşmuyor)."
 			} else {
 				rsh.Verdict, rsh.Hint, rsh.DivergentPartition, rsh.DivergencePct = replicaVerdict(rs)
+				// v0.10.818 — kapsama kararı yapısaldır; sıralamada daha kötüyse kazanır
+				// (mergeCoverage; farklı ZK yolu = no_replication yine en üstte kalır).
+				missing, cv, chint, unseen := shardCoverage(t, expectedByShard[sh], rs, engineOf[t])
+				rsh.Verdict, rsh.Hint = mergeCoverage(rsh.Verdict, rsh.Hint, cv, chint)
+				rsh.Missing = missing
+				if len(unseen) > 0 {
+					out.Notes = append(out.Notes, fmt.Sprintf("%s · shard %d: %s Replicated ama system.replicas satırı yok (iki okuma arasında yaratıldı ya da o host replicas okumasında atlandı) — yeniden ölç; sürüyorsa SYSTEM RESTART REPLICA.", t, sh, strings.Join(unseen, ", ")))
+				}
 			}
 			verdicts = append(verdicts, rsh.Verdict)
 			tbl.Shards = append(tbl.Shards, rsh)
