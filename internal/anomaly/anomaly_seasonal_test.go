@@ -2,6 +2,7 @@ package anomaly
 
 import (
 	"math"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -239,5 +240,66 @@ func TestSeasonalBaseline_NoFalsePositiveOnDailyRamp(t *testing.T) {
 	seasZ := math.Abs(madScale * (current - sm) / smad)
 	if seasZ >= openZ {
 		t.Errorf("seasonal baseline must NOT fire on the daily ramp; z=%.2f (median=%.1f mad=%.1f)", seasZ, sm, smad)
+	}
+}
+
+// v0.10.799 (dış skill denetimi A1) — hafta sonu sınıfının çeşitlilik eşiği 2:
+// 14 günlük pencere Cumartesi'ye en fazla 2 farklı Cumartesi taşır; eşik 3 iken
+// her hafta sonu mevsimsel taban düşüyor, düz 24 saate iniliyordu.
+func TestSeasonalMinDaysFor(t *testing.T) {
+	if seasonalMinDaysFor("weekday") != seasonalMinDays || seasonalMinDays != 3 {
+		t.Fatalf("hafta içi eşiği 3 kalmalı: %d", seasonalMinDaysFor("weekday"))
+	}
+	for _, c := range []string{"saturday", "sunday"} {
+		if got := seasonalMinDaysFor(c); got != 2 {
+			t.Errorf("%s: %d, istenen 2", c, got)
+		}
+	}
+	if seasonalMinDaysFor("bogus") != 3 {
+		t.Error("bilinmeyen sınıf hafta içi eşiğine düşmeli")
+	}
+}
+
+// 14 g + Cumartesi: iki farklı Cumartesi görülmüşse mevsimsel seri KALIR;
+// hafta içi sınıfı iki günle yine düşer (v0.9.957 sınıfı korunur).
+func TestSeasonalBaseline_WeekendKeepsSeasonalWithTwoDays(t *testing.T) {
+	days := func(ds ...int64) map[int64]struct{} {
+		m := map[int64]struct{}{}
+		for _, d := range ds {
+			m[d] = struct{}{}
+		}
+		return m
+	}
+	sat := time.Date(2026, 9, 19, 22, 30, 0, 0, time.UTC) // Cumartesi
+	if dayClass(sat) != "saturday" {
+		t.Fatalf("fixture: %s", dayClass(sat))
+	}
+	out := map[string][]float64{"svc": {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}}
+	seen := map[string]map[int64]struct{}{"svc": days(20700, 20707)} // 7 ve 14 gün önceki Cumartesiler
+	pruneSeasonalByDayDiversity(out, seen, seasonalMinDaysFor(dayClass(sat)))
+	if _, ok := out["svc"]; !ok {
+		t.Fatal("Cumartesi: iki aynı-sınıf günle mevsimsel seri düşürüldü — hafta sonu düz pencereye iner (A1)")
+	}
+	wd := map[string][]float64{"svc": {1, 2, 3, 4}}
+	pruneSeasonalByDayDiversity(wd, seen, seasonalMinDaysFor("weekday"))
+	if _, ok := wd["svc"]; ok {
+		t.Fatal("hafta içi: iki günle mevsimsel seri kalmamalı")
+	}
+	if len(chooseBaseline(out["svc"], []float64{9, 9, 9}, 12)) != 14 {
+		t.Fatal("chooseBaseline mevsimsel seriyi seçmeli")
+	}
+}
+
+// Her iki tüketici (servis dedektörü + dış metrik tarayıcısı) sınıfa göre
+// eşiği okur; sabit `seasonalMinDays` doğrudan prune'a gitmez.
+func TestSeasonalMinDaysConsumers(t *testing.T) {
+	for _, f := range []string{"anomaly.go", "external.go"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), "pruneSeasonalByDayDiversity(out, daysSeen, seasonalMinDays)") {
+			t.Errorf("%s: prune sabit eşikle çağrılıyor — seasonalMinDaysFor(class) kullan", f)
+		}
 	}
 }

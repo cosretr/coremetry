@@ -1366,15 +1366,36 @@ func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	pruneSeasonalByDayDiversity(out, daysSeen, seasonalMinDays)
+	pruneSeasonalByDayDiversity(out, daysSeen, seasonalMinDaysFor(class))
 	return out, nil
 }
 
 // seasonalMinDays — mevsimsel baseline'ın en az kaç FARKLI günden örnek
 // taşıması gerekir (v0.9.1052, Q2). Davranış motorunun yeterlilik
 // kuralıyla aynı sayı (≥3 farklı gün): tek/iki günün örnekleri "mevsim"
-// değil, o günlerin gürültüsüdür.
+// değil, o günlerin gürültüsüdür. Hafta içi sınıfının eşiği; hafta sonu
+// sınıfları için seasonalMinDaysFor.
 const seasonalMinDays = 3
+
+// seasonalMinDaysFor — SAF (v0.10.799; dış skill denetimi 2026-09-19 A1):
+// gün sınıfına göre çeşitlilik eşiği. Varsayılan 14 günlük pencere hafta
+// içi sınıfına 10 gün taşırken "saturday" / "sunday" sınıfına EN FAZLA 2
+// farklı gün taşır (7 ve 14 gün önce; ikincisi cutoff'ta kısmen). Eşik 3
+// iken her Cumartesi/Pazar seri düşüyor, chooseBaseline düz 24 saatlik
+// ardışık pencereye iniyor ve Cuma gündüz zirvesi + Cumartesi gece dibi aynı
+// pencerede yargılanıyordu — v0.8.250'nin kapattığı diurnal FP sınıfı
+// hafta sonları geri gelmişti (v0.9.1052 Q2'den beri). Hafta sonu için 2
+// gün: iki aynı-sınıf günün ±15 dk slotları (≈14 örnek) medyan+MAD için
+// yeterli ve tek günün gürültüsü değil. Operatör SeasonalDays < 8 seçerse
+// hafta sonu yine düz pencereye düşer (eski davranış, kayıp yok).
+func seasonalMinDaysFor(class string) int {
+	switch class {
+	case "saturday", "sunday":
+		return 2
+	default:
+		return seasonalMinDays
+	}
+}
 
 // pruneSeasonalByDayDiversity — saf, tablo-testli: çeşitliliği yetersiz
 // servislerin mevsimsel serisini haritadan düşürür (ardışık pencereye

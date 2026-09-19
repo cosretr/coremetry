@@ -593,7 +593,7 @@ func (s *ExternalScanner) seasonalFor(ctx context.Context, t ExternalTarget, met
 		log.Printf("[anomaly/external] seasonal %s/%s: %v (ardışık baseline)", t.SourceName, t.Query, err)
 		return nil, minS
 	}
-	pruneSeasonalByDayDiversity(out, daysSeen, seasonalMinDays)
+	pruneSeasonalByDayDiversity(out, daysSeen, seasonalMinDaysFor(dayClass(at))) // v0.10.799 — hafta sonu 2 gün
 	return out, minS
 }
 
