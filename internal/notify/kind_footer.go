@@ -27,13 +27,23 @@ func NotifyKindLabelTR(kind string) string {
 	}
 }
 
-// settingsURL — PublicURL + /settings/<slug>; PublicURL yoksa "".
+// settingsURL — PublicURL + ayar sekmesi; PublicURL yoksa "". Yollar
+// LİTERAL (birleştirme değil): api/frontend_routes_test.go'nun rota kapısı
+// PublicURL() taşıyan gövdelerdeki `base + "/…"` parçalarını App.tsx
+// rotalarıyla (/settings/:section) eşler — "/settings/" + slug kayıtsız
+// görünürdü (v0.10.816 düzeltmesi).
 func (n *Notifier) settingsURL(slug string) string {
 	base := n.PublicURL()
 	if base == "" {
 		return ""
 	}
-	return base + "/settings/" + slug
+	switch slug {
+	case "channels":
+		return base + "/settings/channels"
+	case "team-routing":
+		return base + "/settings/team-routing"
+	}
+	return base + "/settings"
 }
 
 // kindFooterText — düz metin: tür + kapatma adresleri (bağlantı yoksa yol tarifi).
