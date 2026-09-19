@@ -11,6 +11,7 @@ import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/l
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
+import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
@@ -21,6 +22,7 @@ import type {
   CHMeasurePartsRow, // v0.10.683 — ölçüm paneli
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
   CHDanglingMV, // v0.10.762 — sarkan MV onarımı
+  CHReplicaConsistencyResponse, // v0.10.791 — replika tutarlılığı
 } from '@/lib/types';
 
 // AdminClickhouse — v0.5.329. Datadog-style CH self-stats:
@@ -725,6 +727,7 @@ export default function AdminClickhousePage() {
             <RootCoveragePanel />
             <TraceHealthPanel />
             <DanglingMVPanel />
+            <ReplicaConsistencyPanel />
 
             {/* v0.9.770 — rollup kurulum sihirbazı. Topolojinin hemen
                 altında değil BURADA: operatör önce kümenin sağlıklı
@@ -1907,6 +1910,94 @@ function DanglingMVPanel() {
             </p>
           )}
         </Modal>
+      )}
+    </Section>
+  );
+}
+
+// v0.10.791 — "Replika tutarlılığı" (spec onayı 2026-09-19). Salt okuma:
+// system.replicas + system.parts + system.macros küme geneli, shard başına
+// karar sunucudan (chstore.replicaVerdict). Eylemler (SYNC / RESTORE) bir
+// sonraki dilim; bu kart yalnız gösterir ve runbook'u kopyalatır.
+// Operatör vakası (test ortamı): aynı sorgu her yenilemede farklı sayı,
+// dünkü trace MV'de var ham'da yok — rastgele replika seçimi + ıraksama.
+function ReplicaConsistencyPanel() {
+  const [data, setData] = useState<CHReplicaConsistencyResponse | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const scan = async () => {
+    setBusy(true); setErr(null);
+    try { setData(await api.chReplicaConsistency(true)); }
+    catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); setData(null); }
+    finally { setBusy(false); }
+  };
+  const sum = data ? summarize(data) : null;
+  const tables = data
+    ? [...data.tables].sort((a, b) => verdictRank(b.verdict) - verdictRank(a.verdict) || a.table.localeCompare(b.table))
+    : [];
+  return (
+    <Section title="Replika tutarlılığı">
+      <p className="cell-hint">
+        Aynı sorgunun her yenilemede farklı sayı vermesi ve bir trace'in MV'de olup ham tabloda olmaması aynı parmak izi:
+        <code className="mono"> load_balancing=random</code> her Distributed sorguda shard başına başka replika seçer; aynı shard'ın
+        replikaları aynı veriyi taşımıyorsa sonuç okumadan okumaya değişir. Gecikme 0 bunu dışlamaz: iki replika birbirini hiç
+        replike etmiyor olabilir ({'{shard}'} makrosu her host'ta farklı, her host kendi ZooKeeper yolunda) ya da bir replika parça
+        kaybetmiştir. Kart küme genelinde system.replicas + system.parts + system.macros okur; karar shard başına, runbook kopyalanır.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <Button variant="accent" size="sm" onClick={() => void scan()} loading={busy}>Ölç</Button>
+        {data && !data.cluster && <span className="badge b-gray">küme kipi değil</span>}
+        {sum && data?.cluster && <span className={`badge ${sum.tone}`}>{sum.text} · {data.cluster}</span>}
+        {data?.loadBalancing && <span className="badge b-gray" title="Okuma bağlantısının load_balancing ayarı">load_balancing={data.loadBalancing}</span>}
+        {err && <span className="badge b-err" title={err}>ölçülemedi</span>}
+      </div>
+      {data && data.hosts.length > 0 && (
+        <div className="mono" style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
+          {data.hosts.map(h => (
+            <span key={h.host} style={{ marginRight: 12 }}>
+              {h.host} → shard {h.shard}/r{h.replica}
+              {h.macros && ('shard' in h.macros || 'replica' in h.macros)
+                ? ` · makro shard=${h.macros.shard ?? '?'} replica=${h.macros.replica ?? '?'}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+      {data?.notes?.map(n => <div key={n} className="cell-hint">{n}</div>)}
+      {data && data.cluster && tables.length > 0 && (
+        <table style={{ width: '100%' }}>
+          <thead><tr><th>Tablo</th><th>Shard</th><th>Replikalar</th><th>Karar</th></tr></thead>
+          <tbody>
+            {tables.flatMap(t => t.shards.map(sh => {
+              const rb = runbook(data.cluster, data.database, t.table, sh);
+              return (
+                <tr key={`${t.table}/${sh.shard}`}>
+                  <td className="mono">{t.table}</td>
+                  <td className="mono">{sh.shard < 0 ? '—' : sh.shard}</td>
+                  <td className="mono" style={{ fontSize: 11 }}>
+                    {sh.replicas.map(r => (
+                      <div key={r.host} title={`${r.zkPath}\nreplica ${r.replicaName} · kayıtlı ${r.totalReplicas} / aktif ${r.activeReplicas}${r.lastException ? `\n${r.lastException}` : ''}`}>
+                        {r.host} · {shortZk(r.zkPath)} · {r.totalReplicas}/{r.activeReplicas}
+                        {r.readonly ? ' · readonly' : ''}{r.sessionExpired ? ' · oturum düşmüş' : ''}
+                        {r.delayS > 0 ? ` · gecikme ${r.delayS}s` : ''}{r.queue > 0 ? ` · kuyruk ${r.queue}` : ''}
+                        {` · ${fmtNum(r.totalRows)} satır`}
+                      </div>
+                    ))}
+                  </td>
+                  <td>
+                    <span className={`badge ${verdictTone(sh.verdict)}`} title={sh.hint || undefined}>{verdictLabel(sh.verdict)}</span>
+                    {sh.hint && <div className="cell-hint" style={{ marginTop: 4 }}>{sh.hint}</div>}
+                    {rb && (
+                      <details style={{ marginTop: 4 }}>
+                        <summary style={{ cursor: 'pointer', fontSize: 11 }}>Runbook (SQL)</summary>
+                        <pre className="mono" style={{ fontSize: 11, whiteSpace: 'pre-wrap', margin: '4px 0 0' }}>{rb}</pre>
+                      </details>
+                    )}
+                  </td>
+                </tr>
+              );
+            }))}
+          </tbody>
+        </table>
       )}
     </Section>
   );

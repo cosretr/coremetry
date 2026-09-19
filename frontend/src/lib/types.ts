@@ -3526,6 +3526,19 @@ export interface CHRootCoverageResponse {
 export interface CHDanglingMV { host: string; addr?: string; shard?: number; replica?: number; view: string; uuid: string; viewUuid?: string; canonical: boolean; peerHost?: string; peerAddr?: string }
 export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number }
 export interface CHDanglingMVRepairResult { ok: boolean; host: string; view: string; steps: string[] }
+/** v0.10.791 — Replika tutarlılığı (Go chstore.ReplicaConsistencyReport). Salt okuma; karar shard başına sunucuda (replicaVerdict). */
+export type CHReplicaVerdict = 'ok' | 'single' | 'unmapped' | 'lagging' | 'divergent' | 'readonly' | 'session_expired' | 'no_replication';
+export interface CHReplicaHost { host: string; shard: number; replica: number; macros?: Record<string, string> }
+export interface CHReplicaState {
+  host: string; shard: number; replica: number; zkPath: string; replicaName: string;
+  totalReplicas: number; activeReplicas: number; readonly: boolean; sessionExpired: boolean;
+  delayS: number; queue: number; lastException?: string;
+  rows: Record<string, number>; // partition → aktif parçalardaki satır
+  totalRows: number;
+}
+export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; verdict: CHReplicaVerdict; hint: string; divergentPartition?: string; divergencePct?: number }
+export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict }
+export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[] }
 /** v0.10.757 — Admin "Trace hattı sağlığı" (Go traceHealthResponse). Sayaçlar POD-İÇİ (pod.host). */
 export interface CHTraceHealthResponse {
   generatedAt: number;

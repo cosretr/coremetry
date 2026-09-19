@@ -3379,6 +3379,9 @@ export const api = {
     request<import('./types').CHDanglingMVRepairResult>('/api/admin/clickhouse/dangling-mv/repair', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view }),
     }),
+  // v0.10.791 — Replika tutarlılığı (Admin ClickHouse): küme geneli system.replicas/parts/macros + shard başına karar (30 sn cache; refresh zorlar).
+  chReplicaConsistency: (refresh = false, signal?: AbortSignal) =>
+    get<import('./types').CHReplicaConsistencyResponse>(`/api/admin/clickhouse/replica-consistency${refresh ? '?refresh=1' : ''}`, signal),
   // v0.10.757 — Trace hattı sağlığı (Admin ClickHouse): pod-içi ingest sayaçları + MV ölçüleri, bölüm başına hata.
   chTraceHealth: (rangeS: number, signal?: AbortSignal) =>
     get<import('./types').CHTraceHealthResponse>(`/api/admin/clickhouse/trace-health?range_s=${rangeS}`, signal),
