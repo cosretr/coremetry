@@ -4,8 +4,9 @@ import { resolve } from 'node:path';
 
 // v0.10.454 (operatör 2026-09-06) — /endpoints listesi VARSAYILAN SPAN;
 // ?src=metric zorlar; kendiliğinden span'a düşme (v0.10.361) kalktı.
-// Detay sayfası belirli endpoint için ?src=metric sunar; not dürüst.
-describe('endpoints source defaults (v0.10.454)', () => {
+// v0.10.788 (ekip isteği, operatör onayı 2026-09-19) — DETAY varsayılanı
+// METRİK (VM); ?src=span zorlar; entry=rpc'de kaynak span. Liste değişmedi.
+describe('endpoints source defaults (v0.10.454 + v0.10.788)', () => {
   const list = readFileSync(resolve(__dirname, 'Endpoints.tsx'), 'utf8');
   const detail = readFileSync(resolve(__dirname, 'EndpointDetail.tsx'), 'utf8');
   it('list page defaults to span and only explicit ?src=metric forces metric', () => {
@@ -13,11 +14,11 @@ describe('endpoints source defaults (v0.10.454)', () => {
     expect(list).not.toContain('autoSpan');
     expect(list).toContain("const metricNote = src === 'metric' ? (rowsQ.data?.note ?? null) : null;");
   });
-  it('detail page offers a per-endpoint metric source and labels its scope', () => {
-    expect(detail).toContain("params.get('src') === 'metric' && !entry ? 'metric' : 'span'");
+  it('detail page defaults to metric, ?src=span forces span, rpc entries stay span', () => {
+    expect(detail).toContain("params.get('src') === 'span' || entry ? 'span' : 'metric'");
     expect(detail).toContain("...(detailSrc === 'metric' ? { src: 'metric' as const } : {})");
     expect(detail).toContain('<option value="metric">Kaynak: metrik</option>');
     expect(detail).toContain('grafikler ve alt bölümler span türevli');
-    expect(detail).toContain("next.set('src', 'metric'); else next.delete('src');");
+    expect(detail).toContain("next.set('src', 'span'); else next.delete('src');");
   });
 });

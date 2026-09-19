@@ -64,14 +64,19 @@ export default function EndpointDetailPage() {
   const compare = params.get('compare') === '1';
   const entry = params.get('entry') === 'rpc' ? 'rpc' : undefined;
   // v0.10.454 (operatör 2026-09-06) — detayda BELİRLİ endpoint metrikten
-  // okunabilir: ?src=metric → üst RED şeridi /api/endpoints/metric'ten
-  // (OTel HTTP server histogramı, örneklemeden bağımsız); grafikler ve alt
-  // bölümler span türevli kalır — not bunu söyler. Varsayılan span (liste
-  // ile aynı). URL = tek gerçek kaynak; replace:true, yabancı param korunur.
-  const detailSrc: 'span' | 'metric' = params.get('src') === 'metric' && !entry ? 'metric' : 'span';
+  // okunabilir: üst RED şeridi /api/endpoints/metric'ten (OTel HTTP server
+  // histogramı, örneklemeden bağımsız); grafikler ve alt bölümler span
+  // türevli kalır — not bunu söyler.
+  // v0.10.788 (ekip isteği, operatör onayı 2026-09-19): detay VARSAYILANI
+  // METRİK — "default ClickHouse span metriklerini gösteriyor, kaynak
+  // metrik (VM) olsun". ?src=span zorlar; RPC & Messaging girişinde
+  // (entry=rpc) metrik yok, kaynak span kalır. Liste sayfası 454'teki
+  // gibi span varsayılanında (ayrı karar). URL = tek gerçek kaynak;
+  // replace:true, yabancı param korunur.
+  const detailSrc: 'span' | 'metric' = params.get('src') === 'span' || entry ? 'span' : 'metric';
   const setDetailSrc = (v: 'span' | 'metric') => setParams(prev => {
     const next = new URLSearchParams(prev);
-    if (v === 'metric') next.set('src', 'metric'); else next.delete('src');
+    if (v === 'span') next.set('src', 'span'); else next.delete('src');
     return next;
   }, { replace: true });
   const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
