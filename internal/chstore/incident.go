@@ -438,6 +438,27 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 			matched = ""
 		} else {
 			inc = *got
+			// v0.10.802 (dış skill denetimi I1, oncall-irm / incident-response:
+			// incident şiddeti alert grubuyla yaşar, SEV yeniden değerlendirilir;
+			// operatör onayı). Öncesi şiddet ilk problemden bir kez yazılıyor,
+			// sonra bağlanan critical problem warning incident'ı YÜKSELTMİYORDU:
+			// bildirim P2'de, Inbox P2'de, liste warning pilinde kalıyordu.
+			// Yalnız yukarı: düşürme yok (P1 yapışkanlık ilkesiyle aynı yön).
+			// Tam-satır upsert (inc GetIncident kopyası — invariant #4).
+			// isKnownSeverity: severityRank bilinmeyeni warning sayar (2) — boş
+			// ya da yabancı bir şiddet info incident'ı "" ile ezmesin.
+			if isKnownSeverity(p.Severity) && severityRank(p.Severity) > severityRank(inc.Severity) {
+				old := inc.Severity
+				inc.Severity = p.Severity
+				if err := s.UpsertIncident(ctx, &inc); err != nil {
+					return nil, fmt.Errorf("raise incident severity: %w", err)
+				}
+				_ = s.AppendIncidentLifecycle(ctx, inc, IncidentEvent{
+					IncidentID: inc.ID, Kind: "severity_raised", Actor: "system",
+					Body:  old + " → " + p.Severity + " (" + p.RuleName + ")",
+					RefID: p.ID,
+				})
+			}
 		}
 	}
 	if matched == "" {
@@ -495,6 +516,12 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 		RefID:      p.ID,
 	})
 	return &inc, nil
+}
+
+// isKnownSeverity — SAF (v0.10.802): yalnız üç bilinen seviye; şiddet
+// yükseltme kapısı bunu şart koşar (severityRank bilinmeyeni warning sayar).
+func isKnownSeverity(s string) bool {
+	return s == "critical" || s == "warning" || s == "info"
 }
 
 // IncidentProblems lists all problem ids attached to an incident.

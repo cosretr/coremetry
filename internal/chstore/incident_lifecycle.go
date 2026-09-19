@@ -28,10 +28,12 @@ func (s *Store) SetIncidentLifecycleHook(h IncidentLifecycleHook) {
 }
 
 // incidentLifecycleNotifies — SAF: hangi olay türü bildirim üretir.
-// created + resolved. ack / note / problem_attached / problem_resolved
-// üretmez: ack zaten "biri baktı" demek, diğerleri kanal gürültüsü.
+// created + resolved + severity_raised (v0.10.802: warning→critical geçişi
+// P1 olarak sayfaya düşmeli; dedup şiddet artışını geçirir). ack / note /
+// problem_attached / problem_resolved üretmez: ack zaten "biri baktı"
+// demek, diğerleri kanal gürültüsü.
 func incidentLifecycleNotifies(kind string) bool {
-	return kind == "created" || kind == "resolved"
+	return kind == "created" || kind == "resolved" || kind == "severity_raised"
 }
 
 // AppendIncidentLifecycle — olayı yazar, sonra kancayı çağırır. Olay

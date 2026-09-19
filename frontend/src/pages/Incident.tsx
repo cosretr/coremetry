@@ -444,6 +444,7 @@ function kindLabel(k: string): string {
     case 'note':             return 'Note';
     case 'problem_attached': return 'Problem attached';
     case 'problem_resolved': return 'Problem resolved';
+    case 'severity_raised':  return 'Severity raised'; // v0.10.802
     default:                 return k;
   }
 }
@@ -457,6 +458,7 @@ function eventStyle(kind: string, severity: string): { icon: ReactNode; token: s
     case 'note':             return { icon: <MessageSquare size={16} />, token: '--accent' };
     case 'problem_attached': return { icon: <AlertTriangle size={16} />, token: '--err' };
     case 'problem_resolved': return { icon: <Check size={16} />, token: '--ok' };
+    case 'severity_raised':  return { icon: <AlertTriangle size={16} />, token: '--err' }; // v0.10.802
     default:                 return { icon: <Zap size={16} />, token: '--text3' };
   }
 }

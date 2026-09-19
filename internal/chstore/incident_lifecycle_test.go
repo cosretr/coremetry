@@ -14,7 +14,7 @@ import (
 
 func TestIncidentLifecycleNotifies(t *testing.T) {
 	for kind, want := range map[string]bool{
-		"created": true, "resolved": true,
+		"created": true, "resolved": true, "severity_raised": true, // v0.10.802
 		"ack": false, "note": false, "problem_attached": false, "problem_resolved": false, "": false,
 	} {
 		if got := incidentLifecycleNotifies(kind); got != want {
@@ -47,7 +47,7 @@ func TestIncidentLifecycleReachable(t *testing.T) {
 		call string
 		want int
 	}{
-		{"incident.go", "s.AppendIncidentLifecycle(ctx, inc,", 1},    // otomatik korelasyon açılışı
+		{"incident.go", "s.AppendIncidentLifecycle(ctx, inc,", 2},    // otomatik korelasyon açılışı + şiddet yükselişi (v0.10.802)
 		{"../api/api_incidents.go", "AppendIncidentLifecycle(", 2},   // manuel açılış + manuel çözüm
 		{"../evaluator/evaluator.go", "AppendIncidentLifecycle(", 1}, // otomatik kademeli çözüm
 		{"../../main.go", "SetIncidentLifecycleHook(notifier.IncidentLifecycle)", 1},
@@ -65,7 +65,7 @@ func TestIncidentLifecycleReachable(t *testing.T) {
 	for _, path := range []string{"incident.go", "../api/api_incidents.go", "../evaluator/evaluator.go"} {
 		src, _ := os.ReadFile(path)
 		s := string(src)
-		for _, kind := range []string{`Kind: "created"`, `Kind:       "resolved"`, `Kind: "resolved"`} {
+		for _, kind := range []string{`Kind: "created"`, `Kind:       "resolved"`, `Kind: "resolved"`, `Kind: "severity_raised"`} {
 			i := strings.Index(s, kind)
 			for i >= 0 {
 				head := s[max(0, i-220):i]
