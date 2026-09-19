@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useServicesMetadata } from '@/lib/queries';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import type { TeamContacts } from '@/lib/types';
+import { NOTIFY_KIND_OPTIONS, normalizeKinds, toggleKind } from '@/lib/notifyKinds'; // v0.10.814
 import { Field, FlashBox, humanize } from './shared';
 
 // ── Team routing tab (v0.8.429) ─────────────────────────────────────────────
@@ -143,6 +144,24 @@ export function TeamRoutingTab() {
             {missing} takımın e-postası eksik
           </span>
         )}
+      </div>
+
+      {/* v0.10.814 (operatör: "anomali mailleri çok false pozitif, kapatabilmeliyim") —
+          ekip maili kanal süzgecinden BAĞIMSIZ gidiyordu; kanalda Anomali tiki
+          kaldırılsa da owner/SRE mail alıyordu. Aynı gramer, boş = hepsi.
+          Exception grupları bu yola hiç girmez (kanal işi), o yüzden seçenekte yok. */}
+      <div style={{ marginBottom: 14 }}>
+        <Field label="Olay türleri (boş = hepsi)">
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+            {NOTIFY_KIND_OPTIONS.filter(o => o.value !== 'exception').map(o => (
+              <label key={o.value} title={o.hint} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="checkbox" checked={normalizeKinds(tc.kinds).includes(o.value)}
+                  onChange={() => setTc({ ...tc, kinds: toggleKind(normalizeKinds(tc.kinds), o.value) })} />
+                {o.label}
+              </label>
+            ))}
+          </div>
+        </Field>
       </div>
 
       {rows.length === 0 ? (

@@ -25,3 +25,15 @@ func TestAnomalyRuleIDsClassifyAsAnomaly(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.814 — dış kaynak sağlığı deterministik: "anomaly:ext-down:" ANOMALİ
+// DEĞİL problem (Anomali tikini kaldıran operatör kaynak-düştü alarmını
+// kaybetmemeli); "ext-cap" istatistik motorunun taşma özeti → anomali kalır.
+func TestExternalHealthRuleIDsClassify(t *testing.T) {
+	if got := chstore.ProblemNotifyKind(chstore.Problem{RuleID: chstore.RuleExtDownPrefix + "extsrc/OP1"}); got != chstore.NotifyKindProblem {
+		t.Errorf("ext-down → %q, problem bekleniyordu", got)
+	}
+	if got := chstore.ProblemNotifyKind(chstore.Problem{RuleID: chstore.RuleExtCapPrefix + "extsrc/OP1:ext:fail_count"}); got != chstore.NotifyKindAnomaly {
+		t.Errorf("ext-cap → %q, anomaly bekleniyordu", got)
+	}
+}

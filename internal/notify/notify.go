@@ -510,10 +510,13 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 	// döndürmüyordu; "mail gitti mi" bilgisi çağıranda YOKTU, dolayısıyla
 	// "bu problem kimseye gitmedi" sorusu sorulamıyordu bile.
 	var facts routingFacts
+	// v0.10.814 — olay türü BİR kez, iki kapı için (ekip maili + kanal süzgeci).
+	// Eskiden yalnız kanal döngüsü türe bakıyordu; ekip maili türsüz gidiyordu.
+	kind := chstore.ProblemNotifyKind(p)
 	// v0.10.782 — exception grubu bildirimleri YALNIZ kanallara: ekip maili
 	// P1 anonsunun (exception_notifier, ≥500 oluşum) işi, iki kez maillenmesin.
 	if p.Status == "open" && !strings.HasPrefix(p.RuleID, chstore.ExceptionGroupRulePrefix) {
-		facts.Team = n.sendTeamMail(ctx, p, n.teamMetadata(ctx, p, md), n.ruleNotifyFor(ctx, p))
+		facts.Team = n.sendTeamMail(ctx, p, n.teamMetadata(ctx, p, md), n.ruleNotifyFor(ctx, p), kind)
 	}
 	// relKind yukarı taşındı (v0.9.1344): kanal listesi boş çıktığında da
 	// yönlendirme işareti yazılabilmesi için gerekli. Yalnız p.Metric'i
@@ -559,7 +562,7 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 		// hesaplandı; kanal döngüsü boyunca sabit.
 		Priority: p.Priority,
 		// v0.10.747 — olay türü süzgeci (kanal başına problem/anomaly).
-		Kind: chstore.ProblemNotifyKind(p),
+		Kind: kind,
 	}
 	// v0.9.587 — çözülme, o problem hakkındaki bastırma durumunu
 	// geçersiz kılar: aynı kimlikle yeniden açılırsa (flap) o meşru bir
@@ -862,13 +865,18 @@ func (n *Notifier) ruleNotifyFor(ctx context.Context, p chstore.Problem) *chstor
 	return r.Notify
 }
 
-func (n *Notifier) sendTeamMail(ctx context.Context, p chstore.Problem, md *chstore.ServiceMetadata, rn *chstore.RuleNotify) teamMailOutcome {
+func (n *Notifier) sendTeamMail(ctx context.Context, p chstore.Problem, md *chstore.ServiceMetadata, rn *chstore.RuleNotify, kind string) teamMailOutcome {
 	tc, err := n.store.GetTeamContacts(ctx)
 	if err != nil {
 		// Ayar okunamadı — vidanın açık mı kapalı mı olduğunu BİLMİYORUZ.
 		// teamMailOff en tutucu cevap: tek başına bir kusur iddiası
 		// üretmez (kanal tarafı eşleştiyse sonuç yine "delivered").
 		log.Printf("[notify] team-routing settings: %v", err)
+		return teamMailOff
+	}
+	// v0.10.814 — tür süzgeci alıcı çözümünden ÖNCE: operatör "anomali"yi
+	// kapattıysa bu tür için ekip yönlendirmesi KAPALI sayılır (teamMailOff).
+	if !tc.KindAllows(kind) {
 		return teamMailOff
 	}
 	to, reach := teamMailReachRule(tc, md, p.Severity, rn)
@@ -1315,6 +1323,9 @@ func (n *Notifier) buildEmailBodyWith(p chstore.Problem, rc *chstore.RootCauseHy
 	if ignore != "" {
 		fmt.Fprintf(&b, "Sustur:     %s\n", ignore)
 	}
+	// v0.10.814 — olay türü + nereden kapatılır (operatör: "anomali maillerini
+	// kapatabilmeliyim" — anahtar vardı, mailde adresi yoktu).
+	b.WriteString(n.kindFooterText(chstore.ProblemNotifyKind(p)))
 	// v0.9.513 — AI kök-sebep özeti. Boşsa hiçbir şey basılmaz (mevcut
 	// mail biçimi birebir korunur). "AI" etiketi BİLEREK duruyor: özet
 	// bir modelin yorumu, ölçülmüş bir gerçek değil — okuyan ekip farkı
@@ -1473,7 +1484,10 @@ func (n *Notifier) buildEmailHTMLWith(p chstore.Problem, rc *chstore.RootCauseHy
 		b.WriteString(`</tr></table>`)
 	}
 	b.WriteString(`</td></tr></table>`)
-	b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="` + font + `;padding:12px 0 0;font-size:11px;color:#9ca3af" align="center">Coremetry problem alert</td></tr></table>`)
+	// v0.10.814 — ikinci altbilgi satırı: olay türü + kapatma bağlantıları
+	// (Outlook: iç içe tablo satırı, <div>/<p> yok, <a> stilinde padding yok).
+	b.WriteString(`<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="` + font + `;padding:12px 0 0;font-size:11px;color:#9ca3af" align="center">Coremetry problem alert</td></tr>` +
+		`<tr><td style="` + font + `;padding:4px 0 0;font-size:11px;color:#9ca3af" align="center">` + n.kindFooterHTML(chstore.ProblemNotifyKind(p), font) + `</td></tr></table>`)
 	b.WriteString(`</td></tr></table></body></html>`)
 	return b.String()
 }

@@ -23,6 +23,12 @@ func TestEvaluatorRuleIDsClassify(t *testing.T) {
 		{"slo:slo-1:critical", chstore.NotifyKindProblem},
 		{"builtin-error-rate", chstore.NotifyKindProblem},
 		{"r-1a2b3c", chstore.NotifyKindProblem}, // operatör kuralı (r.ID)
+		// v0.10.814 — desen anomalisi terfisi: "anomaly-auto:" `anomaly:` önekini
+		// ıskalıyordu → kural sayılıyordu; operatör Anomali tikini kaldırsa da mail gidiyordu.
+		{promoteAnomalyRuleID + "ev-1", chstore.NotifyKindAnomaly},
+	}
+	if promoteAnomalyRuleID != chstore.PromotedAnomalyRulePrefix {
+		t.Fatalf("promoteAnomalyRuleID %q ≠ chstore.PromotedAnomalyRulePrefix %q — sınıflandırıcı sabiti sahibinden koptu", promoteAnomalyRuleID, chstore.PromotedAnomalyRulePrefix)
 	}
 	for _, c := range cases {
 		if got := chstore.ProblemNotifyKind(chstore.Problem{RuleID: c.ruleID}); got != c.want {

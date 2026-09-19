@@ -522,6 +522,26 @@ type TeamContacts struct {
 	// may be comma-separated for multi-recipient teams. Lookup is
 	// case-insensitive (mixed-casing team attrs, v0.8.330 lesson).
 	Contacts map[string]string `json:"contacts"`
+	// Kinds — v0.10.814 (operatör: "anomali mailleri kapatabilmeliyim; çok
+	// false pozitif"): ekip mailinin OLAY TÜRÜ süzgeci (problem | anomaly |
+	// incident), kanal matchRules.kinds ile aynı gramer. Boş = hepsi (eski
+	// davranış). Ekip maili kanal süzgecinden BAĞIMSIZ ve ÖNCE gidiyordu —
+	// kanalda Anomali tiki kaldırılsa da owner/SRE mail alıyordu.
+	Kinds []string `json:"kinds,omitempty"`
+}
+
+// KindAllows — SAF (v0.10.814): boş süzgeç her türü geçirir; doluysa yalnız
+// listedekiler. Exception grupları bu yola hiç girmez (çağıran eler).
+func (tc TeamContacts) KindAllows(kind string) bool {
+	if len(tc.Kinds) == 0 {
+		return true
+	}
+	for _, k := range tc.Kinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // SeverityAllows reports whether a problem of severity sev clears the
@@ -579,6 +599,13 @@ func (s *Store) GetTeamContacts(ctx context.Context) (TeamContacts, error) {
 // PutTeamContacts persists the blob (admin PUT path; audited at the
 // API layer like every settings write).
 func (s *Store) PutTeamContacts(ctx context.Context, tc TeamContacts) error {
+	// v0.10.814 — tür listesi kanal kaydıyla aynı doğrulama: bilinmeyen değer
+	// HATA (sessiz düşürme "anomaliyi kapattım ama geliyor"u gizlerdi).
+	kinds, err := NormalizeNotifyKinds(tc.Kinds)
+	if err != nil {
+		return err
+	}
+	tc.Kinds = kinds
 	raw, err := json.Marshal(tc)
 	if err != nil {
 		return err

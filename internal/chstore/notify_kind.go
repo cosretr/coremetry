@@ -38,6 +38,13 @@ const (
 // NotifyKindsAll — geçerli değerler, UI sırasıyla.
 var NotifyKindsAll = []string{NotifyKindProblem, NotifyKindAnomaly, NotifyKindIncident, NotifyKindException}
 
+// PromotedAnomalyRulePrefix — v0.10.814: log/trace desen anomalilerinden
+// terfi eden problemler (evaluator promoteStrongAnomalies, "Anomaly · <desen>").
+// Operatör hatası: "anomaly-auto:" `HasPrefix("anomaly:")`i BİR karakterle
+// ıskalıyordu → "problem" türü → kanalda Anomali tiki kaldırılsa da mail
+// gidiyordu. evaluator kendi sabitini bununla pinler (notify_kind_pin_test).
+const PromotedAnomalyRulePrefix = "anomaly-auto:"
+
 // ExceptionGroupRulePrefix — exception grubu bildirimlerinin RuleID öneki
 // (v0.10.782); Problem tablosuna yazılmaz (notify-only), computePriority
 // önceden hesaplanmış merdiven önceliğini korur, ProblemNotifyKind "exception" der.
@@ -65,8 +72,16 @@ func ProblemNotifyKind(p Problem) string {
 		return NotifyKindException
 	case strings.HasPrefix(rid, "incident:"): // v0.10.748 notify.incidentAsProblem
 		return NotifyKindIncident
+	case strings.HasPrefix(rid, RuleExtDownPrefix):
+		// v0.10.814 — dış kaynak erişilemez (N ardışık başarısız poll):
+		// deterministik sağlık alarmı, istatistiksel anomali değil. "anomaly:"
+		// önekini taşıması tarihsel; Anomali tikini kaldıran operatör bunu
+		// KAYBETMEMELİ. (ext-cap tersine: istatistik motorunun taşma özeti,
+		// anomali kalır — çelişkili doğrulama 2026-09-19.)
+		return NotifyKindProblem
 	case strings.HasPrefix(rid, "anomaly:"),
 		strings.HasPrefix(rid, "anomaly-cluster:"),
+		strings.HasPrefix(rid, PromotedAnomalyRulePrefix), // v0.10.814
 		rid == "exception-storm",
 		strings.HasPrefix(rid, "exception:"):
 		return NotifyKindAnomaly

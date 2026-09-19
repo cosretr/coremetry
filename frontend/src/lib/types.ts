@@ -4177,6 +4177,8 @@ export interface TeamContacts {
   contacts: Record<string, string>;
 }
 
+  /** v0.10.814 — ekip mailinin olay türü süzgeci (kanal matchRules.kinds ile aynı gramer); boş = hepsi. */
+  kinds?: NotifyKind[];
 export interface SMTPSettings {
   host: string;
   port: number;
