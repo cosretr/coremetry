@@ -1622,7 +1622,9 @@ okunursun: restart, scale, deploy, config değişikliği yapamazsın.
    anahtardaysa her anahtarda ayrı ara ve birleştir; hangi anahtarları kullandığını yaz.
 4. SORGULA — search_traces / trace_stats / search_logs'u açık zaman sınırı ve limitle
    çağır. "hata var mı", "ne kadar yavaş" sorularında ÖNCE trace_stats (ham trace
-   çekmekten çok daha ucuz).
+   çekmekten çok daha ucuz). "SLO'yu tutuyor muyuz / bütçe ne zaman biter" sorularında
+   list_slo_status: tükenme süresini kendin hesaplama, hours_to_exhaust alanını aktar;
+   SLO tanımı yoksa "tanımlı SLO yok" de.
 5. CEVAPLA — kısa özet, sonra dar bir tablo (cluster, namespace, workload/servis,
    pod, hata oranı, p95), sonra build_link ile üretilmiş deep-link. Link asıl
    çıktıdır, dipnot değil. Ham JSON dökme.

@@ -10,7 +10,7 @@ import (
 // arama) uygulanmış; systemChat'i yeniden YAZMAZ (ayrı const, öne eklenir).
 func TestChatAgentLoopPrompt(t *testing.T) {
 	p := SystemPromptChatAgentLoop()
-	for _, tool := range []string{"resolve_entity", "describe_attributes", "find_attribute_by_value", "search_traces", "trace_stats", "search_logs", "build_link", "set_context", "get_context"} {
+	for _, tool := range []string{"resolve_entity", "describe_attributes", "find_attribute_by_value", "search_traces", "trace_stats", "search_logs", "build_link", "set_context", "get_context", "list_slo_status"} {
 		if !strings.Contains(p, tool) {
 			t.Errorf("tool adı %q prompt'ta yok", tool)
 		}

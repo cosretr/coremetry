@@ -428,16 +428,25 @@ func projectBurnHours(budgetRemaining, windowHours, rate float64) (hours float64
 // CH reads — both bounded by service+time WHEREs so total cost
 // is tiny.
 func (s *Store) ComputeSLOForecast(ctx context.Context, o SLO, burnWindow time.Duration) (*SLOForecast, error) {
+	_, fc, err := s.ComputeSLOOutlook(ctx, o, burnWindow)
+	return fc, err
+}
+
+// ComputeSLOOutlook — v0.10.808 (dış skill denetimi V4): durum + tahmin TEK
+// durum taramasıyla. ComputeSLOForecast durumu içeride hesaplayıp atıyordu;
+// hem durumu (SLI/NoData/Hint) hem tükenmeyi isteyen çağıran (CoSRE guided
+// SLO adımı) 30 günlük taramayı iki kez satın alıyordu.
+func (s *Store) ComputeSLOOutlook(ctx context.Context, o SLO, burnWindow time.Duration) (*SLOStatus, *SLOForecast, error) {
 	if burnWindow <= 0 {
 		burnWindow = time.Hour
 	}
 	status, err := s.ComputeSLOStatus(ctx, o)
 	if err != nil {
-		return nil, fmt.Errorf("slo status: %w", err)
+		return nil, nil, fmt.Errorf("slo status: %w", err)
 	}
 	rate, _, err := s.ComputeSLOBurnRate(ctx, o, burnWindow)
 	if err != nil {
-		return nil, fmt.Errorf("slo burn rate: %w", err)
+		return status, nil, fmt.Errorf("slo burn rate: %w", err)
 	}
 	out := &SLOForecast{
 		BurnRate:        rate,
@@ -449,7 +458,7 @@ func (s *Store) ComputeSLOForecast(ctx context.Context, o SLO, burnWindow time.D
 	out.HoursToExhaust = hours
 	out.SafeBurn = safe
 	out.WillBreachWithin24h = within24h
-	return out, nil
+	return status, out, nil
 }
 
 // ComputeSLOBurnRate calculates the burn rate over a SHORT

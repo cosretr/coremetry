@@ -2103,6 +2103,10 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 	var b strings.Builder
 	fmt.Fprintf(&b, "SORU ŞEKLİ: nedensellik — %q servisinde NE OLDU değil NEDEN OLDU sorusu.\n\n", service)
 
+	// v0.10.808 (dış skill denetimi V4 — Honeycomb: oryantasyon SLO'yla
+	// başlar): hedef/bütçe/tükenme, problemlerden ÖNCE.
+	s.guidedSLOStep(ctx, emit, &b, service)
+
 	nProb := emitGuidedStep(emit, "list_problems", withEnvArg(`{"service":"`+service+`","status":"open"}`, env))
 	probs, probTotal, perr := s.guidedProblemsWithTotal(ctx, guidedProblemFilter(service, env, 10))
 	if perr == nil && len(probs) > 0 {
@@ -2178,7 +2182,7 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 		"Onu anlat ve güven skorunu birlikte ver. Hipotez yoksa ya da güveni düşükse sebep UYDURMA — " +
 		"hangi kanıta baktığını yaz ve 'kesin sebep için yeterli kanıt yok' de.\n")
 
-	src := fmt.Sprintf("kök-neden hipotezi + açık problemler + servis RED değişimi + deploy geçmişi + pencere değişiklikleri (rollout) + log desenleri (son %s)", fmtAgoTR(rangeS))
+	src := fmt.Sprintf("SLO durumu + kök-neden hipotezi + açık problemler + servis RED değişimi + deploy geçmişi + pencere değişiklikleri (rollout) + log desenleri (son %s)", fmtAgoTR(rangeS))
 	if env != "" {
 		src += fmt.Sprintf("; problemler ortam: %s", env)
 	}
@@ -2220,9 +2224,10 @@ func (s *Server) guidedProblemsBundle(ctx context.Context, emit func(string, any
 // sub-read and prepends an honest one-liner so the model attributes
 // the RED numbers correctly instead of claiming they're env-scoped.
 func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string, any), service, env string, from, to time.Time, rangeS int64) (string, string, error) {
+	var b strings.Builder
+	s.guidedSLOStep(ctx, emit, &b, service) // v0.10.808 (V4) — oryantasyon SLO'yla başlar
 	nCtx := emitGuidedStep(emit, "service_context", `{"service":"`+service+`"}`)
 	cx := s.buildServiceContext(ctx, service, from, to)
-	var b strings.Builder
 	if env != "" {
 		fmt.Fprintf(&b, "Not: RED değerleri tüm ortamların toplamı (servis bağlamı ortam kırılımı yapmıyor); açık problemler %q ortamına daraltıldı.\n", env)
 	}
@@ -2258,7 +2263,7 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 	// versin diye server iki kart basar; serbest döngüdeki eşdeğeri
 	// render_chart tool'udur (copilot_chat.go).
 	b.WriteString(chartFence(guidedChartSpec{Title: service + " · p99", Service: service, Agg: "p99", RangeS: rangeS}))
-	src := fmt.Sprintf("servis RED özeti + baseline + en sık hatalar + deploy işaretçileri + açık problemler + grafikler (son %s)", fmtAgoTR(rangeS))
+	src := fmt.Sprintf("SLO durumu + servis RED özeti + baseline + en sık hatalar + deploy işaretçileri + açık problemler + grafikler (son %s)", fmtAgoTR(rangeS))
 	if env != "" {
 		src += fmt.Sprintf("; RED tüm ortamlar, problemler ortam: %s", env)
 	}
