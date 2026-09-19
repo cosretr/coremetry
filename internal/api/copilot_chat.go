@@ -465,6 +465,13 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	if chip := screenContextChipTR(screenCtx); chip != "" {
 		emit("step", map[string]string{"label": chip})
 	}
+	// v0.10.806 (dış skill denetimi L2) — SIRA BİLİNÇLİ BÖYLE KALDI: skill
+	// "sabit önek önce" der ama v0.10.33 kuralı (chat_screen_context_test)
+	// ekran önsözünün sohbet çekirdeğinden ÖNCE gelmesini ister — küçük
+	// model çelişkide ilk gördüğünü izler (çekirdeğin 1800 s varsayılanı).
+	// Bugün önbelleklenebilir önek = ajan döngüsü bloğu; tam sabit-önce
+	// sıra ancak evalset kanıtıyla (operatör kararı). Ölçüm: ai_calls
+	// cached_tokens (v0.10.807).
 	loopPrompt := copilot.SystemPromptChatAgentLoop() + // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A)
 		screenContextPreambleTR(screenCtx) +
 		agentctx.PreambleTR(pageCtx, agentctx.Sanitize(req.Context.PinnedPage)) + // v0.10.539 — sayfa bağlamı (pin önce)
@@ -674,7 +681,10 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		// taşındı (SystemPromptChatRoundCap = taban + ek). Sicil
 		// accessor'lardan türediğinden bu ek artık dil kapısının kapsamında.
 		if round == chatMaxToolRounds-1 {
-			capPrompt := withAddressee(addressee, copilot.SystemPromptChatRoundCap())
+			// v0.10.806 — tavan eki döngü prompt'unun SONUNA: önek aynı kalır
+			// (önbellek isabeti) ve tavan turu bağlam önsözlerini de görür
+			// (eskiden yalnız hitap + sohbet çekirdeği + ek gidiyordu).
+			capPrompt := loopPrompt + copilot.ChatRoundCapAddendum()
 			tctx2, endTurn2 := cspan.turn(ctx, round, false) // v0.10.425 — tur tavanı da bir tur
 			turn2, err2 := s.copilot.ChatWithTools(tctx2, capPrompt, conv, nil)
 			endTurn2(turn2.InputTokens, turn2.OutputTokens, err2)

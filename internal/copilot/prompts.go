@@ -1466,10 +1466,19 @@ CEVAP:
 // kapısının) DIŞINDAYDI: sicil accessor'lardan türer, satır-içi ek
 // hiçbir accessor'dan geçmiyordu. Taban + ek deseni systemException /
 // systemExceptionCode ikizinin aynısı — ek, tabanı yeniden yazmaz.
-const systemChatRoundCap = systemChat + `
+const systemChatRoundCap = systemChat + systemChatRoundCapAddendum
+
+// systemChatRoundCapAddendum — v0.10.806 (dış skill denetimi L2): tavan
+// eki tek başına da erişilebilir; serbest döngü onu tam döngü prompt'unun
+// (sabit önek + bağlamlar) SONUNA ekler ki sağlayıcının önek önbelleği
+// tavan turunda da isabet etsin (bkz. api.chatSystemPrompt).
+const systemChatRoundCapAddendum = `
 
 TUR TAVANI: tool çağrı hakkın bitti. Artık tool ÇAĞIRMA; şu ana kadar
 topladığın veriyle şimdi cevap ver. Toplayamadığın kısmı açıkça belirt.`
+
+// ChatRoundCapAddendum — yalnız tavan eki (systemChat'siz).
+func ChatRoundCapAddendum() string { return systemChatRoundCapAddendum }
 
 // SystemPromptServiceAnalysis — POST /api/copilot/analyze-service
 // yüzeyi (copilot_aianalyze.go). Strict-JSON: şema çağrı yerinde
