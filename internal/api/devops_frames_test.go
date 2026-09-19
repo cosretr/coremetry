@@ -248,6 +248,10 @@ func TestRevisionWarningText(t *testing.T) {
 	if w == "" || strings.Contains(w, "  branş") {
 		t.Errorf("boş branşta uyarı=%q", w)
 	}
+	// v0.10.815 — operatör: "numaraları kaymış olabilir ibaresine gerek yok".
+	if strings.Contains(w, "kaymış") || strings.Contains(w, "doğrulanamıyor") {
+		t.Errorf("uyarı yalnız bağlantı hedefini söylemeli: %q", w)
+	}
 	if !strings.Contains(w, "varsayılan") {
 		t.Errorf("boş branşta ne kullanıldığı söylenmiyor: %q", w)
 	}

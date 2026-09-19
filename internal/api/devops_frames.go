@@ -162,13 +162,16 @@ func devopsSettingsDigest(sn devops.Snapshot) string {
 // revisionWarningText — SAF. Branş boşsa deponun varsayılanı
 // kullanılmıştır (resolveBranch sözleşmesi); "" yazmak yerine ne
 // olduğunu söyle.
+//
+// v0.10.815 (operatör, prod exception detayı): "satır numaraları kaymış
+// olabilir" ibaresine gerek yok — cümle yalnız bağlantının nereye gittiğini
+// söyler; sürüm çözüldüğünde Revision.Verified zaten onayı taşır.
 func revisionWarningText(branch string) string {
 	b := strings.TrimSpace(branch)
 	if b == "" {
 		b = "deponun varsayılan"
 	}
-	return "Bağlantılar " + b + " branşının ucuna gider; olay anındaki " +
-		"sürüm doğrulanamıyor, satır numaraları kaymış olabilir."
+	return "Bağlantılar " + b + " branşının ucuna gider."
 }
 
 // parseStackFrames — SAF: kanonik çözümleyici + her frame'in HAM
