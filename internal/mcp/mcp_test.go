@@ -303,3 +303,28 @@ func TestWedgedConsumerDrop(t *testing.T) {
 		t.Fatalf("sendTimeout davranışı beklenen aralıkta değil: %v", elapsed)
 	}
 }
+
+// v0.10.795 — tools/list ada göre sıralı (deterministik): kayıt sırası ve map
+// sırası ne olursa olsun istemci aynı listeyi görür (katalog hash/diff).
+func TestToolsListSortedByName(t *testing.T) {
+	srv := New("coremetry-test", "v0.0.0-test")
+	for _, n := range []string{"zeta_tool", "alpha_tool", "mid_tool"} {
+		srv.RegisterTool(Tool{Name: n, Description: n, Handler: func(context.Context, json.RawMessage) (any, error) { return nil, nil }})
+	}
+	for i := 0; i < 5; i++ {
+		resp := srv.handleToolsList(&Request{JSONRPC: "2.0", ID: json.RawMessage(`1`), Method: "tools/list"})
+		var out struct {
+			Tools []struct{ Name string } `json:"tools"`
+		}
+		if err := json.Unmarshal(resp.Result, &out); err != nil {
+			t.Fatal(err)
+		}
+		got := []string{}
+		for _, e := range out.Tools {
+			got = append(got, e.Name)
+		}
+		if len(got) != 3 || got[0] != "alpha_tool" || got[1] != "mid_tool" || got[2] != "zeta_tool" {
+			t.Fatalf("sıra %v", got)
+		}
+	}
+}

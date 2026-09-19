@@ -5,9 +5,14 @@ description: Add a tool, resource or prompt to Coremetry's OWN MCP server (inter
 
 # /mcp-tools — add a Model Context Protocol tool
 
-Coremetry exposes a JSON-RPC 2.0 MCP server (spec 2024-11-05) over
-HTTP+SSE so external LLMs (Claude Desktop, agent frameworks) can
-query telemetry. Infrastructure shipped v0.6.4-v0.6.7:
+Coremetry exposes a JSON-RPC 2.0 MCP server so external LLMs (Claude
+Desktop/Code, agent frameworks) can query telemetry. Two transports
+(v0.10.795 doc fix): **Streamable-HTTP `POST /api/mcp` (2025-03-26,
+stateless, primary)** and legacy HTTP+SSE `/api/mcp/sse` (2024-11-05,
+pod-local session, deprecated by the 2026-07-28 spec). `tools/list` is
+sorted by name. The 2026-07-28 `server/discover` + `_meta` contract is
+not implemented yet (audit 2026-09-19 M1/M2). Infrastructure shipped
+v0.6.4-v0.6.7, Streamable v0.9.14:
 
 | Concern | Where |
 |---|---|

@@ -53,10 +53,18 @@
 // (GET /api/anomalies/active). The mechanism above is what makes
 // the sentence true; keep them in sync.
 //
-// Transport choice: this implementation uses the original
-// HTTP+SSE transport (MCP spec 2024-11-05). Newer Streamable-HTTP
-// (2025-03-26) is similar but uses a single endpoint + session
-// header; can layer it on later without breaking existing clients.
+// Transports (v0.10.795 — yorum güncellendi, dış skill denetimi M9):
+//   - Streamable-HTTP `POST /api/mcp` (ProtocolVersionStreamable,
+//     2025-03-26) — BİRİNCİL, stateless: her POST bağımsız, session
+//     başlığı üretilmez, initialize zorunlu değil (çok-pod LB'de afinite
+//     gerekmez).
+//   - HTTP+SSE `/api/mcp/sse` + `/api/mcp/messages` (ProtocolVersion,
+//     2024-11-05) — legacy, pod-lokal session; 2026-07-28 spec'inde
+//     Deprecated. Yeni istemciler Streamable yolu kullanır.
+//
+// 2026-07-28'in `server/discover` + `_meta` sözleşmesi henüz yok (denetim
+// M1/M2); sunucu sampling/roots/logging kullanmadığı için o spec'in
+// kaldırma saati bu sunucuyu ilgilendirmez.
 //
 // References:
 //   - https://modelcontextprotocol.io
@@ -74,6 +82,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 )
@@ -1038,6 +1047,10 @@ func (s *Server) handleToolsList(req *Request) *Response {
 		})
 	}
 	s.mu.RUnlock()
+	// v0.10.795 — deterministik sıra (mcp-builder): map sırası her çağrıda
+	// değişiyordu; istemci katalog hash'i / diff'i ve golden testler ada
+	// göre sabit liste ister.
+	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
 	return successResp(req.ID, map[string]any{"tools": tools})
 }
 
