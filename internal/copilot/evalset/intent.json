@@ -49,10 +49,10 @@
     {
       "id": "intent-none-offtopic",
       "surface": "IntentClassify",
-      "why": "yanlış niyet none'dan kötü: kapsam dışı soru none olmalı",
+      "why": "v0.10.819: konu dışı artık off_topic (sunucu deterministik sınır + yol tarifi); none yalnız muğlak/telemetriye yakın",
       "user": "bugün hava nasıl?",
       "expect": {
-        "intent": "none",
+        "intent": "off_topic",
         "knownEntities": [
           "checkout",
           "payments",
@@ -218,6 +218,76 @@
       "user": "bir trace'in loglarını nereden görürüm?",
       "expect": {
         "intent": "how_to",
+        "knownEntities": [
+          "shop-payment-api",
+          "core-auth"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
+      "id": "intent-offtopic-president",
+      "surface": "IntentClassify",
+      "why": "v0.10.819 prod kullanıcı sorusu: genel bilgi → off_topic, model cevabı yok",
+      "user": "Şu anki Amerikan başkanı kimdir?",
+      "expect": {
+        "intent": "off_topic",
+        "knownEntities": [
+          "shop-payment-api",
+          "core-auth"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
+      "id": "intent-offtopic-population",
+      "surface": "IntentClassify",
+      "why": "v0.10.819 prod kullanıcı sorusu: coğrafya/istatistik → off_topic",
+      "user": "Türkiye nüfusu kaçtır?",
+      "expect": {
+        "intent": "off_topic",
+        "knownEntities": [
+          "shop-payment-api",
+          "core-auth"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
+      "id": "intent-offtopic-riddle",
+      "surface": "IntentClassify",
+      "why": "v0.10.819 prod kullanıcı sorusu: bilmece → off_topic (2B model aritmetiği güvenilmez)",
+      "user": "Ahmet'in 3 kız kardeşi var, her kız kardeşin 2 erkek kardeşi var. Ahmet'in kaç erkek kardeşi var?",
+      "expect": {
+        "intent": "off_topic",
+        "knownEntities": [
+          "shop-payment-api",
+          "core-auth"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
+      "id": "intent-offtopic-negative-errors",
+      "surface": "IntentClassify",
+      "why": "v0.10.819 karşıt vaka: servissiz ama telemetri sözcüklü soru off_topic DEĞİL (yanlış off_topic = gerçek soruyu reddetmek)",
+      "user": "son 3 saatte kaç hata oldu?",
+      "expect": {
+        "intent": "problems",
+        "knownEntities": [
+          "shop-payment-api",
+          "core-auth"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
+      "id": "intent-offtopic-negative-pods",
+      "surface": "IntentClassify",
+      "why": "v0.10.819 karşıt vaka: pod sorusu off_topic değil",
+      "user": "kaç pod restart oldu?",
+      "expect": {
+        "intent": "pod_health",
         "knownEntities": [
           "shop-payment-api",
           "core-auth"

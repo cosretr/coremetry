@@ -168,6 +168,9 @@ const (
 	guidedAskService guidedIntent = "ask_service"
 	// v0.10.809 — ürün yol tarifi (copilot_howto.go); tek tık, otomatik geçiş yok.
 	guidedHowTo guidedIntent = "how_to"
+	// v0.10.819 — konu dışı: kibar sınır + ürün yol tarifi (copilot_offtopic.go);
+	// sınıflandırıcı üretir, sunucu vetolar. Router regex'i YOK.
+	guidedOffTopic guidedIntent = "off_topic"
 )
 
 type guidedRoute struct {
@@ -235,6 +238,10 @@ type guidedRoute struct {
 	LogValue    string
 	LogContains bool
 	LogQuery    string
+	// ExceptionTerm (v0.10.819, copilot_pasted_error.go) — yapıştırılan hata
+	// metninden çıkarılan arama terimi; log_field cevabına Inbox exception
+	// grubu bağlantısı ekler. Sınıflandırıcı üretmez.
+	ExceptionTerm string
 	// Page (v0.10.434, D7b) — open_page hedefi: overview|problems|logs|traces|endpoints.
 	Page string
 	// v0.10.436 (D2) — pair_requests: PairFrom servis, PairTo servis ya da
@@ -368,8 +375,15 @@ func hasProblemSignal(tokens []string) bool {
 }
 
 func hasHealthSignal(tokens []string) bool {
-	return tokenHasPrefix(tokens, "sağl", "health", "durum", "nasıl", "yavaş", "slow",
-		"gecikme", "latency", "performan", "p99", "p95", "iyi")
+	return hasHealthDomainSignal(tokens) || tokenHasPrefix(tokens, "durum", "nasıl", "iyi")
+}
+
+// hasHealthDomainSignal (v0.10.819) — hasHealthSignal'ın ALAN yarısı: generic
+// "durum/nasıl/iyi" dışarıda ("Amerikan başkanı nasıl seçilir" sağlık sinyali
+// değildir). hasHealthSignal bayt-bayt aynı davranır; off_topic vetosu bunu okur.
+func hasHealthDomainSignal(tokens []string) bool {
+	return tokenHasPrefix(tokens, "sağl", "health", "yavaş", "slow",
+		"gecikme", "latency", "performan", "p99", "p95")
 }
 
 // hasShiftSignal (v0.9.416) — vardiya-özeti şekilleri: "vardiya",
@@ -601,14 +615,11 @@ func indexBounded(msg, sub string) int {
 	}
 }
 
-// extractServiceEntity matches the message against the LIVE service
-// list (never a guess): first the longest bounded full-name substring
-// (so the suffixed "mobile-bff-uat" beats its "mobile-bff" prefix
-// sibling), then a unique-prefix token fallback so "checkout servisi"
-// resolves to "checkout-service" when exactly one service starts with
-// that token. Ambiguous prefixes (2+ matches) return "" — deterministic
-// beats clever.
-func extractServiceEntity(msg string, services, envs []string) string {
+// extractServiceFullName (v0.10.819, extractServiceEntity'den ayrıldı; davranış
+// aynı) — YALNIZ sınırlı tam-ad geçişi, önek tahmini yok. Yapıştırılan hata
+// metni için: "not"/"file"/"load" gibi İngilizce sözcükler bir servis önekine
+// çözülmemeli (copilot_pasted_error.go).
+func extractServiceFullName(msg string, services []string) string {
 	best := ""
 	for _, svc := range services {
 		ls := strings.ToLower(svc)
@@ -619,7 +630,18 @@ func extractServiceEntity(msg string, services, envs []string) string {
 			best = svc
 		}
 	}
-	if best != "" {
+	return best
+}
+
+// extractServiceEntity matches the message against the LIVE service
+// list (never a guess): first the longest bounded full-name substring
+// (so the suffixed "mobile-bff-uat" beats its "mobile-bff" prefix
+// sibling), then a unique-prefix token fallback so "checkout servisi"
+// resolves to "checkout-service" when exactly one service starts with
+// that token. Ambiguous prefixes (2+ matches) return "" — deterministic
+// beats clever.
+func extractServiceEntity(msg string, services, envs []string) string {
+	if best := extractServiceFullName(msg, services); best != "" {
 		return best
 	}
 	// v0.8.398 — a token that names a LIVE deployment environment is
@@ -932,6 +954,13 @@ func routeGuidedIntent(raw string, services, envs, teams []string, ctxService st
 	// örüntüleri o uzunlukta bir alnum bloğunun içinde eşleşemez.
 	if tok, ok := reqid.FindToken(raw); ok {
 		return guidedRoute{Intent: guidedRequestID, RequestID: tok}
+	}
+	// v0.10.819 — YAPIŞTIRILAN hata/stack trace metni (copilot_pasted_error.go):
+	// 16-hex span kontrolünden ÖNCE — .NET assembly kimliğindeki PublicKeyToken
+	// 16-hex'tir ve span sanılıp "Span … BULUNAMADI" deniyordu; 32-hex trace ve
+	// yapılandırılmış istek kimliği (yukarıda) yine kazanır.
+	if r, ok := routePastedError(raw, msg, toks, services); ok {
+		return r
 	}
 	// v0.9.548 — 16-hex SPAN id'si. SIRA önemli: 32-hex önce denendi,
 	// yani bir trace ID'nin içindeki 16'lık dizi buraya düşemez.
@@ -1456,7 +1485,10 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	// keser).
 	findCue := hasFindSignal(guidedTokens(norm))
 	affirm := isAffirmative(norm) // v0.10.688 — çıplak "evet" bağlamdaki aday turunu onaylar
-	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !affirm {
+	// v0.10.819 — yapıştırılan hata metni ("Caused by: java.lang…") hata/log
+	// sözcüğü taşımayabilir; şekli katalog okumasını hak eder (copilot_pasted_error.go).
+	pasted := looksLikePastedError(question)
+	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !affirm && !pasted {
 		return false, false // zero-cost fast path: no catalogue read
 	}
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
@@ -1564,7 +1596,9 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	// v0.10.437 (D6) — mutlak pencere(ler): tek pencere çıpayı ve uzunluğu
 	// ezer (hangi rota olursa olsun), iki pencere window_compare olur.
 	// Rota none olsa da geçerli ("… arası servis süreleri" sinyalsiz).
-	if absShape {
+	// v0.10.819 — yapıştırılan hata metnindeki log damgaları (iki tarih) rotayı
+	// window_compare/ask_service'e ÇEVİRMEZ (inceleme 2026-09-19).
+	if absShape && !(pasted && route.Intent == guidedLogField) {
 		loc := chatLocationNamed(tzName, tzOffsetMin)
 		if wins, ok := extractAbsoluteWindows(question, time.Now(), loc); ok {
 			var label string
@@ -1677,6 +1711,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.10.688 — endpoint adayları / trace listesi: LLM'siz (endpoint_traces.go).
 	if route.Intent == guidedEndpointCandidates || route.Intent == guidedEndpointTraces {
 		return s.guidedEndpointAnswer(ctx, emit, route, from, to, rangeS)
+	}
+	if route.Intent == guidedOffTopic { // v0.10.819 — LLM'siz kibar sınır + yol tarifi
+		return s.guidedOffTopicAnswer(emit, question, ctxService)
 	}
 	if route.Intent == guidedHowTo { // v0.10.809 — LLM'siz yol tarifi
 		return s.guidedHowToAnswer(emit, route, question, ctxService)

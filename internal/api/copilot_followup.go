@@ -521,7 +521,15 @@ func guidedAnswerLinkTargets(route guidedRoute) []guidedAnswerLink {
 		if svc != "" {
 			href += "&service=" + svcQ
 		}
-		return []guidedAnswerLink{{Label: "Loglar (" + route.LogField + ")", Href: href}}
+		links := []guidedAnswerLink{{Label: "Loglar (" + route.LogField + ")", Href: href}}
+		if route.ExceptionTerm != "" { // v0.10.819 — yapıştırılan hata (tür-şekilli terim): exception grupları da, aynı servis kapsamıyla
+			ih := "/inbox?kind=exception&q=" + url.QueryEscape(route.ExceptionTerm)
+			if svc != "" {
+				ih += "&service=" + svcQ
+			}
+			links = append(links, guidedAnswerLink{Label: "Exception grupları (" + route.ExceptionTerm + ")", Href: ih})
+		}
+		return links
 	case guidedFamilyHealth:
 		return []guidedAnswerLink{{Label: "Servisler", Href: "/services"}}
 	case guidedMyServices:

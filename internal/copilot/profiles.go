@@ -222,7 +222,16 @@ func (s *Service) resolveProfileLocked(ctx context.Context) *profileRuntime {
 			return rt
 		}
 	}
-	if id := s.surfaceProfiles[MetaFromContext(ctx).Surface]; id != "" {
+	surface := MetaFromContext(ctx).Surface
+	if id := s.surfaceProfiles[surface]; id != "" {
+		if rt := s.profiles[id]; rt != nil {
+			return rt
+		}
+	}
+	// v0.10.819 — yüzey haritada yoksa GRUBUNUN kayıtlı bir kardeşi: kayıtlı
+	// harita yeni yüzeyi (chat-offtopic) bilmez; grup kaydedildiğinde genişler
+	// ama eski kayıtlarda kardeş yüzeyin profili geçerli sayılır (inceleme).
+	if id := s.groupSiblingProfileLocked(surface); id != "" {
 		if rt := s.profiles[id]; rt != nil {
 			return rt
 		}
@@ -232,6 +241,30 @@ func (s *Service) resolveProfileLocked(ctx context.Context) *profileRuntime {
 	}
 	// Profil kümesi boş (yalnız eski düz alanlar) → geçici aynadan.
 	return &profileRuntime{cfg: ModelProfile{ID: DefaultProfileID, Provider: s.provider, APIKey: s.apiKey, Model: s.model, BaseURL: s.baseURL, SkipTLS: s.skipTLS}, cli: s.cli, cliSkipTLS: s.cliSkipTLS}
+}
+
+// groupSiblingProfileLocked — SAF (kilit altında): yüzeyin grubundaki ilk
+// kayıtlı kardeşin profil kimliği; grup yoksa ya da hiçbir kardeş kayıtlı
+// değilse "".
+func (s *Service) groupSiblingProfileLocked(surface string) string {
+	for _, members := range surfaceGroups {
+		in := false
+		for _, m := range members {
+			if m == surface {
+				in = true
+				break
+			}
+		}
+		if !in {
+			continue
+		}
+		for _, m := range members {
+			if id := s.surfaceProfiles[m]; id != "" {
+				return id
+			}
+		}
+	}
+	return ""
 }
 
 // clientForLocked — varsayılan profil için AYNA (s.cli) yetkilidir: eski
@@ -503,7 +536,7 @@ const (
 )
 
 var surfaceGroups = map[string][]string{
-	SurfaceGroupIntent:     {"chat-intent", "chat-intent-none"}, // none satırı da aynı profille yazılır (#6)
+	SurfaceGroupIntent:     {"chat-intent", "chat-intent-none", "chat-offtopic"}, // none/off_topic satırı da aynı profille yazılır (#6, v0.10.819)
 	SurfaceGroupBackground: {"problem-auto-explain", "exception-auto-explain"},
 }
 

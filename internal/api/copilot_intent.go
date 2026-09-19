@@ -61,6 +61,10 @@ var intentAllowed = map[string]guidedIntent{
 	// v0.10.809 — ürün yol tarifi ("nasıl bakarım / nereden görürüm"); LLM'siz
 	// deterministik cevap (copilot_howto.go), tek tık bağlantı, otomatik geçiş yok.
 	"how_to": guidedHowTo,
+	// v0.10.819 — konu dışı (copilot_offtopic.go): deterministik kibar sınır +
+	// yol tarifi; sunucu vetosu (servis/ortam/takım adı, kimlik, telemetri
+	// sözcüğü) none'a düşürür. Slotlar okunmaz.
+	"off_topic": guidedOffTopic,
 	// v0.10.470 (F2-3) — namespace'teki servisler / namespace listesi; `namespace` slotu.
 	"namespace_services": guidedNamespaceServices,
 }
@@ -175,6 +179,9 @@ func parseIntentJSON(raw string, services, envs, teams []string, ctxService stri
 		return guidedRoute{}, 0, false
 	}
 	route := guidedRoute{Intent: intent}
+	if intent == guidedOffTopic { // v0.10.819 — slot yok; servis adı çelişkisini veto (copilotChatIntent) çözer
+		return route, 0, true
+	}
 	// v0.10.443 — slotlar ÖNCE: "hangisini kastettin?" rotası parçayı/alanı
 	// taşımalı, yoksa çip boş sorguyla dönüp serbest döngüye düşüyordu.
 	if intent == guidedTraceSearch { // v0.10.436 (D2b) — parça boş olamaz
@@ -392,10 +399,21 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		return false, false
 	}
 	route, rangeS, matched := parseIntentJSON(raw, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx), ctxService)
+	// v0.10.819 — off_topic SUNUCU VETOSU: mesajda canlı servis/ortam/takım adı,
+	// kimlik ya da telemetri sözcüğü varsa sınıflandırıcıya inanılmaz → none
+	// (mevcut yol: on_no_loop'ta genel cevap, on'da serbest döngü). Yanlış
+	// off_topic gerçek telemetri sorusunu reddederdi; yanlış veto eski cevap.
+	vetoNote := ""
+	if matched && route.Intent == guidedOffTopic {
+		if why, vetoed := offTopicVeto(question, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx)); vetoed {
+			route, matched = guidedRoute{}, false
+			vetoNote = " · off_topic vetosu: " + why
+		}
+	}
 	if i > 0 {
 		// Özet + modelin HAM JSON'u: yanlış-ama-geçerli niyette operatör
 		// modelin ne dediğini görür (#10); süre 161 panel sözleşmesi.
-		text := intentSummary(route, rangeS, matched) + "\n" + strings.TrimSpace(raw)
+		text := intentSummary(route, rangeS, matched) + vetoNote + "\n" + strings.TrimSpace(raw)
 		preview, trunc := clipStepPreview(text)
 		emit("step-result", map[string]any{
 			"i": i, "tool": tool, "ok": true, "preview": preview, "truncated": trunc,
@@ -454,6 +472,13 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		// general değilse exchangeId YOK: deterministik sunucu metni oylanamaz (#3).
 		emit("answer", ans)
 		return true, true
+	}
+	if route.Intent == guidedOffTopic {
+		// Konu dışı satırı ayrı yüzeyle (chat-offtopic): /ai kullanım listesi
+		// kullanıcıların ne sorduğunu türüyle görür; model koşmadı (0 token),
+		// exchange'siz (oylanmaz). Cevap runGuidedRoute → guidedOffTopicAnswer.
+		s.copilot.RecordUsage(copilot.WithMeta(ctx, copilot.CallMeta{Surface: "chat-offtopic", UserID: m.UserID, UserEmail: m.UserEmail}), t0,
+			0, 0, 0, "ok", "", question, offTopicAnswerText(question, ctxService))
 	}
 	if route.Env == "" && ctxEnv != "" {
 		route.Env = ctxEnv

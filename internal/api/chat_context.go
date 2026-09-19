@@ -180,13 +180,18 @@ func contextPatchFromRoute(c ChatContext, route guidedRoute, rangeS int64, expli
 			c.Filters = append(c.Filters, chstore.FilterExpr{Key: k, Op: "=", Values: []string{route.SearchText}})
 		}
 	}
-	if rangeS > 0 {
+	// v0.10.819 — cevap-yalnız niyetler (konu dışı sınır, yol tarifi) pencereyi
+	// ve son rotayı DEĞİŞTİRMEZ: LastRoute'a yazılsalardı "son 1 saate genişlet"
+	// takibi sınırı/yol tarifini yeniden oynatır, sentezlenen pencere operatörün
+	// açık penceresini ezerdi (çelişkili inceleme 2026-09-19). Servis yaması kalır.
+	answerOnly := route.Intent == guidedOffTopic || route.Intent == guidedHowTo
+	if rangeS > 0 && !answerOnly {
 		c.RangeS = rangeS
 		if explicitRange {
 			c.RangeExplicit = true
 		}
 	}
-	if route.Intent != guidedNone {
+	if route.Intent != guidedNone && !answerOnly {
 		c.LastIntent = string(route.Intent)
 		lr := route
 		c.LastRoute = &lr

@@ -147,6 +147,15 @@ func TestRouteGuidedIntent(t *testing.T) {
 		{"env with deploy is honest-envless later but still routed", "uat ortamında son deploy etkisi", guidedDeployImpact, "", "uat"},
 		{"env with log errors routed", "uat ortamındaki log hataları", guidedLogErrors, "", "uat"},
 
+		// v0.10.819 — yapıştırılan hata metni → log_field (message alanında terim);
+		// .NET PublicKeyToken 16-hex'i span sanılmaz; sözcük düzeyi hata sorusu
+		// eski sahibinde kalır (copilot_pasted_error_test.go ayrıntı).
+		{"pasted dotnet yellow page", pastedDotNet, guidedLogField, "", ""},
+		{"pasted java caused-by", pastedJava, guidedLogField, "", ""},
+		{"pasted python traceback", pastedPython, guidedLogField, "", ""},
+		{"pasted fqcn single line", "com.shop.payment.TimeoutException: read timed out", guidedLogField, "", ""},
+		{"pasted with named service", "checkout-service loglarında şu hata var:\n" + pastedJava, guidedLogField, "checkout-service", ""},
+
 		// No match → fall through to the free tool loop.
 		{"greeting", "merhaba", guidedNone, "", ""},
 		{"smalltalk with health word but no entity", "bugün hava nasıl", guidedNone, "", ""},

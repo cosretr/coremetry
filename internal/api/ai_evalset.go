@@ -102,7 +102,7 @@ func evalSurfaceFromLabel(label string) string {
 		return "RCAVerdict"
 	case "explain-charts":
 		return "ServiceCharts"
-	case "chat-general", "chat-intent-none":
+	case "chat-general", "chat-intent-none", "chat-offtopic": // chat-offtopic v0.10.819 (oylanmaz; tamlık)
 		return "GeneralChat"
 	case "chat", "chat-guided", "chat-drawer":
 		return "Chat"

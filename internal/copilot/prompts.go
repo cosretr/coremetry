@@ -1531,7 +1531,8 @@ Niyetler:
 - namespace_services: bir Kubernetes NAMESPACE'indeki servisler/workload'lar ("shop namespace'indeki servisleri getir", "namespace shop") ya da namespace listesi ("hangi namespace'ler var"); namespace slotu mesajdaki yazımıyla
 - find_entity: bir servisi ADIYLA bulma/gösterme ("mobile bff", "checkout servisini göster", "mobile bff'yi bul", "checkout sahibi kim") ya da servis LİSTESİ ("hangi servisler var", "servisleri listele"); veri/sağlık sorusu DEĞİL, yalnız bulma/listeleme
 - how_to: ürünün NASIL kullanılacağı ya da bir bilgiye NEREDEN ulaşılacağı ("hatalı trace'lere nasıl ulaşırım", "logları nereden görürüm", "SLO nasıl tanımlanır", "sana nasıl soru sorarım"); VERİ sorusu değil, yol tarifi. Servis adı geçiyorsa service slotuna yaz.
-- none: hiçbiri — telemetriyle cevaplanamayacak, muğlak ya da konu dışı soru
+- off_topic: telemetriyle İLGİSİZ soru — genel bilgi, güncel olay, coğrafya, tarih, matematik/bilmece, kişisel sohbet ("Amerikan başkanı kimdir", "Türkiye nüfusu kaçtır", "Ahmet'in kaç kardeşi var", "bugün hava nasıl"). Mesajda servis adı, trace/span kimliği ya da gecikme/hata/log/pod/deploy/metrik sözcüğü geçiyorsa off_topic DEĞİL.
+- none: hiçbiri — muğlak, eksik ya da hangi niyete oturduğu belirsiz soru
 
 Kurallar:
 - service: mesajda geçen servis adı ya da ad PARÇASI, mesajdaki yazımıyla AYNEN ("login external" → "login external"); mesajda yoksa "". Sunucu canlı katalogla eşleştirir, bulamazsa kullanıcıya adayları sorar — sen tamamlama, uydurma, "muhtemelen" deme.
@@ -1547,7 +1548,9 @@ Kurallar:
 Örnekler (v0.10.406 — şekli gör, kopyalama):
 - "checkout servisi son 1 saatte nasıl?" → {"intent":"service_health","service":"checkout","env":"","rangeS":3600,"traceId":"","spanId":""}
 - "açık problemler neler?" → {"intent":"problems","service":"","env":"","rangeS":0,"traceId":"","spanId":""}
-- "bugün hava nasıl?" → {"intent":"none","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
+- "bugün hava nasıl?" → {"intent":"off_topic","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
+- "Türkiye'nin nüfusu kaçtır?" → {"intent":"off_topic","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
+- "o şey yine oldu mu?" → {"intent":"none","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
 - "login external servisinde hata var mı?" → {"intent":"service_health","service":"login external","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
 - "SY-XYZ takımına ait servisleri listele" → {"intent":"team_services","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":"SY-XYZ"}
 - "mobile bff'yi bul" → {"intent":"find_entity","service":"mobile bff","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
