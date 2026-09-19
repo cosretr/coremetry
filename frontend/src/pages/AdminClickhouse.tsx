@@ -11,7 +11,7 @@ import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/l
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
-import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
+import { canRepair, repairModeLabel, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
@@ -22,7 +22,7 @@ import type {
   CHMeasurePartsRow, // v0.10.683 — ölçüm paneli
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
   CHDanglingMV, // v0.10.762 — sarkan MV onarımı
-  CHReplicaConsistencyResponse, // v0.10.791 — replika tutarlılığı
+  CHReplicaConsistencyResponse, CHReplicaRepairPlan, // v0.10.791 — replika tutarlılığı
 } from '@/lib/types';
 
 // AdminClickhouse — v0.5.329. Datadog-style CH self-stats:
@@ -1931,6 +1931,64 @@ function ReplicaConsistencyPanel() {
     catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); setData(null); }
     finally { setBusy(false); }
   };
+  // v0.10.820 — Replika onarımı: Onar → plan (salt okuma, Modal) → Uygula (audit'li DDL,
+  // onay kutusu) → düz tabloda Temizle (_fix düşür, ayrı onay). Aynı anda tek onarım.
+  const [plan, setPlan] = useState<CHReplicaRepairPlan | null>(null);
+  const [planBusy, setPlanBusy] = useState<string | null>(null);
+  const [ack, setAck] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [cleanupFor, setCleanupFor] = useState<{ table: string; shard: number; host: string; cleanup: string[] } | null>(null);
+  const [cleanupConfirm, setCleanupConfirm] = useState(false);
+  const [repairResult, setRepairResult] = useState<{ key: string; ok: boolean; text: string; steps?: string[] } | null>(null);
+  const repairKey = (table: string, shard: number, host: string) => `${table}/${shard}/${host}`;
+  const openPlan = async (table: string, shard: number, host: string) => {
+    const k = repairKey(table, shard, host);
+    setPlanBusy(k); setPlan(null); setAck(false); setRepairResult(null);
+    try {
+      const p = await api.chReplicaRepairPlan(table, shard, host);
+      setPlan(p);
+      // Temizle SUNUCU durumundan: `_fix` duruyorsa (yarım kalmış onarım / eski düz
+      // tablo) düğme plan engelli olsa da satırda (inceleme 2026-09-19).
+      if (p.fixExists) setCleanupFor({ table, shard, host, cleanup: p.cleanup ?? [] });
+    } catch (e: unknown) { setRepairResult({ key: k, ok: false, text: `plan: ${e instanceof Error ? e.message : String(e)}` }); }
+    finally { setPlanBusy(null); }
+  };
+  const applyPlan = async () => {
+    if (!plan) return;
+    const { table, shard, host, cleanup, zkPath, mode } = plan;
+    const k = repairKey(table, shard, host);
+    setApplying(true);
+    try {
+      const r = await api.chReplicaRepairApply(table, shard, host);
+      const v = r.verify;
+      setRepairResult({
+        key: k, ok: true, steps: r.steps,
+        text: (r.verifyError
+          ? `DDL koştu, doğrulama okunamadı (${r.verifyError}) — kartı yeniden ölç`
+          : `onarıldı — ${v.zkPath ?? zkPath} · kayıtlı ${v.totalReplicas} / aktif ${v.activeReplicas}`)
+          + (r.syncPending ? ' · SYNC sürüyor (parçalar arka planda çekiliyor)' : '')
+          + (r.mode === 'plain' ? ' · eski düz tablo _fix adında: sayımlar eşitlenince Temizle' : ''),
+      });
+      if (r.mode === 'plain' && cleanup?.length) setCleanupFor({ table, shard, host, cleanup });
+    } catch (e: unknown) {
+      setRepairResult({ key: k, ok: false, text: e instanceof Error ? e.message : String(e) });
+      // Yarım kalan düz-tablo onarımı `_fix` bırakmış olabilir: Temizle yine ulaşılabilir.
+      if (mode === 'plain' && cleanup?.length) setCleanupFor({ table, shard, host, cleanup });
+    } finally { setApplying(false); setPlan(null); setAck(false); void scan(); }
+  };
+  const runCleanup = async () => {
+    if (!cleanupFor) return;
+    const { table, shard, host } = cleanupFor;
+    const k = repairKey(table, shard, host);
+    setApplying(true);
+    try {
+      const r = await api.chReplicaRepairCleanup(table, shard, host);
+      setRepairResult({ key: k, ok: true, steps: r.steps, text: `_fix düşürüldü${r.verify.registered ? ` · kayıtlı ${r.verify.totalReplicas} / aktif ${r.verify.activeReplicas}` : ''}` });
+      setCleanupFor(null);
+    } catch (e: unknown) {
+      setRepairResult({ key: k, ok: false, text: `temizlik: ${e instanceof Error ? e.message : String(e)}` });
+    } finally { setApplying(false); setCleanupConfirm(false); void scan(); }
+  };
   const sum = data ? summarize(data) : null;
   const tables = data
     ? [...data.tables].sort((a, b) => verdictRank(b.verdict) - verdictRank(a.verdict) || a.table.localeCompare(b.table))
@@ -1987,11 +2045,28 @@ function ReplicaConsistencyPanel() {
                       </div>
                     ))}
                     {/* v0.10.818 — kayıtsız host'lar: tablo yok ya da Replicated değil. */}
-                    {sh.missing?.map(m => (
-                      <div key={m.host} style={{ color: 'var(--err)' }}>
-                        {m.host} · {m.engine && !m.engine.startsWith('Replicated') ? `Replicated değil (${m.engine})` : m.engine ? `kayıtsız (${m.engine})` : 'tablo yok'}
+                    {sh.missing?.map(m => {
+                      const k = repairKey(t.table, sh.shard, m.host);
+                      return (
+                        <div key={m.host} style={{ color: 'var(--err)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span>{m.host} · {m.engine && !m.engine.startsWith('Replicated') ? `Replicated değil (${m.engine})` : m.engine ? `kayıtsız (${m.engine})` : 'tablo yok'}</span>
+                          {/* v0.10.820 — Onar: plan salt okuma; Uygula ayrı onay kutusuyla. */}
+                          {canRepair(t.table, sh, m) && (
+                            <Button variant="accent" size="xs" disabled={planBusy !== null || applying} loading={planBusy === k}
+                              title="Plan (salt okuma): eşten DDL, eşin ZK yolu, makro/znode çakışması, DB motoru, kolon ve partition kontrolü; Uygula ayrı onay ister"
+                              onClick={() => void openPlan(t.table, sh.shard, m.host)}>Onar</Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {repairResult && repairResult.key.startsWith(`${t.table}/${sh.shard}/`) && (
+                      <div className={repairResult.ok ? 'ok' : 'err'} style={{ fontSize: 11, marginTop: 4 }} title={repairResult.steps?.join('\n')}>{repairResult.text}</div>
+                    )}
+                    {cleanupFor && cleanupFor.table === t.table && cleanupFor.shard === sh.shard && (
+                      <div style={{ marginTop: 4 }}>
+                        <Button variant="danger" size="xs" disabled={applying} title={cleanupFor.cleanup.join('\n')} onClick={() => setCleanupConfirm(true)}>Temizle (_fix düşür)</Button>
                       </div>
-                    ))}
+                    )}
                   </td>
                   <td>
                     <span className={`badge ${verdictTone(sh.verdict)}`} title={sh.hint || undefined}>{verdictLabel(sh.verdict)}</span>
@@ -2008,6 +2083,51 @@ function ReplicaConsistencyPanel() {
             }))}
           </tbody>
         </table>
+      )}
+      {plan && (
+        <Modal open title={`Replika onarımı — ${plan.table} · shard ${plan.shard} @ ${plan.host}`} onClose={() => { setPlan(null); setAck(false); }} footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => { setPlan(null); setAck(false); }}>Vazgeç</Button>
+            <Button variant="danger" size="sm" disabled={!ack || (plan.blocked?.length ?? 0) > 0 || applying} loading={applying} onClick={() => void applyPlan()}>Uygula (DDL koşar)</Button>
+          </>
+        }>
+          <p style={{ fontSize: 12 }}>
+            {repairModeLabel(plan.mode)}. Eş <code className="mono">{plan.peer}</code> ({plan.peerReplica}) · yol <code className="mono">{plan.zkPath}</code> ·
+            hedef replika adı <code className="mono">{plan.targetReplica}</code> · motor <code className="mono">{plan.engine}</code>.
+            {plan.mode === 'plain' && <> Taşınacak: {(plan.partitions ?? []).length} partition · {fmtNum(plan.totalRows)} satır · {fmtBytes(plan.totalBytes)}.</>}
+            {' '}Eşten klonlanacak: {fmtBytes(plan.peerBytes)} · hedefte boş: {plan.targetFreeBytes ? fmtBytes(plan.targetFreeBytes) : 'okunamadı'}.
+            {' '}Hedefe düğüm-yerel bağlantı (ON CLUSTER yok); audit'e düşer.
+          </p>
+          {plan.blocked?.map(b => <div key={b} role="alert" className="cell-hint" style={{ color: 'var(--err)' }}>Engel: {b}</div>)}
+          {plan.warnings?.map(w => <div key={w} className="cell-hint" style={{ color: 'var(--warn)' }}>Uyarı: {w}</div>)}
+          {(plan.checks ?? []).map(c => <div key={c} className="cell-hint">✓ {c}</div>)}
+          {plan.fixExists && <div className="cell-hint">Hedefte <code className="mono">_fix</code> duruyor: bu pencereyi kapatınca satırdaki <b>Temizle</b> ile düşür, sonra yeniden planla.</div>}
+          <details open={!(plan.blocked?.length)} style={{ marginTop: 6 }}>
+            <summary style={{ cursor: 'pointer', fontSize: 11 }}>Koşacak adımlar ({(plan.steps ?? []).length})</summary>
+            <pre className="mono" style={{ fontSize: 11, whiteSpace: 'pre-wrap', margin: '4px 0 0' }}>{(plan.steps ?? []).join(';\n\n')}</pre>
+          </details>
+          {plan.cleanup && plan.cleanup.length > 0 && (
+            <p className="cell-hint">Sonra, ayrı adım (Temizle): <code className="mono">{plan.cleanup.join('; ')}</code></p>
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 8 }}>
+            <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} disabled={(plan.blocked?.length ?? 0) > 0} />
+            DBA gözetiminde koşuyorum; bu prosedür veri taşır ve önce test ortamında denendi.
+          </label>
+        </Modal>
+      )}
+      {cleanupConfirm && cleanupFor && (
+        <Modal open title={`_fix temizliği — ${cleanupFor.table} · shard ${cleanupFor.shard} @ ${cleanupFor.host}`} onClose={() => setCleanupConfirm(false)} footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setCleanupConfirm(false)}>Vazgeç</Button>
+            <Button variant="danger" size="sm" loading={applying} onClick={() => void runCleanup()}>Düşür (DROP koşar)</Button>
+          </>
+        }>
+          <p style={{ fontSize: 12 }}>
+            Motorlar DROP'tan hemen önce yeniden okunur: canlı tablo Replicated, <code className="mono">_fix</code> düz ise eski düz tablo düşer;
+            EXCHANGE olmamışsa Replicated <code className="mono">_fix</code> düşer (geri alma). İkisi de aynı aileyse reddedilir. Önce sayımları karşılaştır.
+          </p>
+          <pre className="mono" style={{ fontSize: 11, whiteSpace: 'pre-wrap' }}>{cleanupFor.cleanup.join('\n')}</pre>
+        </Modal>
       )}
     </Section>
   );

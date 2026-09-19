@@ -3385,6 +3385,19 @@ export const api = {
   // v0.10.791 — Replika tutarlılığı (Admin ClickHouse): küme geneli system.replicas/parts/macros + shard başına karar (30 sn cache; refresh zorlar).
   chReplicaConsistency: (refresh = false, signal?: AbortSignal) =>
     get<import('./types').CHReplicaConsistencyResponse>(`/api/admin/clickhouse/replica-consistency${refresh ? '?refresh=1' : ''}`, signal),
+  // v0.10.820 — Replika onarımı: plan (salt okuma; eşten SHOW CREATE + yoklama) / apply (audit'li DDL) / cleanup (audit'li DROP _fix). Uzun DDL için timeoutMs.
+  chReplicaRepairPlan: (table: string, shard: number, host: string) =>
+    request<import('./types').CHReplicaRepairPlan>('/api/admin/clickhouse/replica-consistency/repair/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host }), timeoutMs: 120_000,
+    }),
+  chReplicaRepairApply: (table: string, shard: number, host: string) =>
+    request<import('./types').CHReplicaRepairResult>('/api/admin/clickhouse/replica-consistency/repair/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host, confirm: true }), timeoutMs: 600_000,
+    }),
+  chReplicaRepairCleanup: (table: string, shard: number, host: string) =>
+    request<import('./types').CHReplicaRepairResult>('/api/admin/clickhouse/replica-consistency/repair/cleanup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host, confirm: true }), timeoutMs: 300_000,
+    }),
   // v0.10.757 — Trace hattı sağlığı (Admin ClickHouse): pod-içi ingest sayaçları + MV ölçüleri, bölüm başına hata.
   chTraceHealth: (rangeS: number, signal?: AbortSignal) =>
     get<import('./types').CHTraceHealthResponse>(`/api/admin/clickhouse/trace-health?range_s=${rangeS}`, signal),

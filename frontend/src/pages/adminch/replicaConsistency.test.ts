@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './replicaConsistency';
+import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, repairModeLabel } from './replicaConsistency';
 import type { CHReplicaShard, CHReplicaState, CHReplicaVerdict } from '@/lib/types';
 
 const VERDICTS: CHReplicaVerdict[] = ['ok', 'single', 'unmapped', 'lagging', 'divergent', 'readonly', 'session_expired', 'missing_replica', 'not_replicated', 'no_replication'];
@@ -101,11 +101,47 @@ describe('replicaConsistency — saf', () => {
   });
 });
 
+describe('canRepair / repairModeLabel — v0.10.820 Replika onarımı', () => {
+  const peer = rep('h2', '/t/02/t', { engine: 'ReplicatedReplacingMergeTree', replicaName: 'node2' });
+  it('yalnız eksik/replike-olmayan kararda, düz/yok host için, sağlam Replicated eş varken', () => {
+    expect(canRepair('t', shard('missing_replica', [peer], { missing: [{ host: 'h1' }] }), { host: 'h1' })).toBe(true);
+    expect(canRepair('t', shard('not_replicated', [peer], { missing: [{ host: 'h1', engine: 'MergeTree' }] }), { host: 'h1', engine: 'MergeTree' })).toBe(true);
+    // Replicated-ama-kayıtsız host onarılmaz (yeniden ölç); MV iç tablosu hariç; başka karar hariç.
+    expect(canRepair('t', shard('missing_replica', [peer]), { host: 'h1', engine: 'ReplicatedMergeTree' })).toBe(false);
+    expect(canRepair('.inner_id.abc', shard('missing_replica', [peer]), { host: 'h1' })).toBe(false);
+    expect(canRepair('t_fix', shard('not_replicated', [peer], { missing: [{ host: 'h1', engine: 'MergeTree' }] }), { host: 'h1', engine: 'MergeTree' })).toBe(false); // sihirbazın geçici tablosu
+    expect(canRepair('t', shard('single', [peer]), { host: 'h1' })).toBe(false);
+    expect(canRepair('t', shard('no_replication', [peer]), { host: 'h1' })).toBe(false);
+    // Eş motoru bilinmiyor / readonly / yok → kaynak DDL yok.
+    expect(canRepair('t', shard('missing_replica', [rep('h2', '/t/02/t')]), { host: 'h1' })).toBe(false);
+    expect(canRepair('t', shard('missing_replica', [rep('h2', '/t/02/t', { engine: 'ReplicatedMergeTree', readonly: true })]), { host: 'h1' })).toBe(false);
+    expect(canRepair('t', shard('missing_replica', []), { host: 'h1' })).toBe(false);
+  });
+  it('mod etiketi iki kipi ayırır', () => {
+    expect(repairModeLabel('plain')).toContain('EXCHANGE');
+    expect(repairModeLabel('missing')).toContain('klon');
+  });
+});
+
 describe('replicaConsistency — kablolama pini', () => {
   const page = readFileSync(resolve(__dirname, '../AdminClickhouse.tsx'), 'utf8');
   it('panel Admin → ClickHouse sayfasında mount edilir ve Ölç ile okur', () => {
     expect(page).toContain('<ReplicaConsistencyPanel />');
     expect(page).toContain('api.chReplicaConsistency(');
     expect(page).toContain("from './adminch/replicaConsistency'");
+  });
+  // v0.10.820 — Onar: plan → Modal → Uygula (onay kutusu) → Temizle; istemci + tip + rota literalleri.
+  it('Onar akışı kablolu: plan/apply/cleanup istemcileri, Modal, onay kutusu; api.ts rotaları; types', () => {
+    for (const s of ['api.chReplicaRepairPlan(', 'api.chReplicaRepairApply(', 'api.chReplicaRepairCleanup(', 'canRepair(', 'Replika onarımı —', 'Uygula (DDL koşar)', 'DBA gözetiminde', '_fix temizliği', 'p.fixExists', 'r.verifyError', '(plan.steps ?? [])']) {
+      expect(page).toContain(s);
+    }
+    const apiSrc = readFileSync(resolve(__dirname, '../../lib/api.ts'), 'utf8');
+    for (const r of ['/api/admin/clickhouse/replica-consistency/repair/plan', '/api/admin/clickhouse/replica-consistency/repair/apply', '/api/admin/clickhouse/replica-consistency/repair/cleanup']) {
+      expect(apiSrc).toContain(r);
+    }
+    expect(apiSrc).toContain('confirm: true');
+    const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
+    expect(types).toContain('export interface CHReplicaRepairPlan');
+    expect(types).toContain('export interface CHReplicaRepairResult');
   });
 });

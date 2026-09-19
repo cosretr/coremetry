@@ -3562,6 +3562,20 @@ export interface CHReplicaState {
 export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; verdict: CHReplicaVerdict; hint: string; divergentPartition?: string; divergencePct?: number; missing?: CHReplicaMissingHost[] }
 export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict }
 export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[]; warnings?: string[] }
+/** v0.10.820 — Replika onarımı (Go chstore.ReplicaRepairPlan / ReplicaRepairResult). blocked dolu = Uygula reddedilir; mode plain = düz tablo (_fix + ATTACH + EXCHANGE), missing = tablo yok (eşten klon). */
+export interface CHReplicaRepairPartition { id: string; parts: number; rows: number; bytes: number }
+export interface CHReplicaRepairPlan {
+  table: string; shard: number; host: string; database: string; mode: 'missing' | 'plain';
+  peer: string; zkPath: string; peerReplica: string; targetReplica: string; engine: string;
+  partitions: CHReplicaRepairPartition[]; totalRows: number; totalBytes: number;
+  steps: string[]; cleanup?: string[]; blocked?: string[]; warnings?: string[]; checks: string[];
+  /** Hedefte `<t>_fix` duruyor (yarım kalmış onarım / EXCHANGE sonrası eski düz tablo) → Temizle sunucu durumundan. */
+  fixExists: boolean;
+  /** Eşin tablo boyutu (klonlanacak) ve hedefin boş alanı; 0 = okunamadı. */
+  peerBytes: number; targetFreeBytes: number;
+}
+export interface CHReplicaRepairVerify { registered: boolean; zkPath?: string; replicaName?: string; totalReplicas: number; activeReplicas: number; readonly: boolean; engine?: string }
+export interface CHReplicaRepairResult { ok: boolean; table: string; shard: number; host: string; mode: string; steps: string[]; syncPending: boolean; verify: CHReplicaRepairVerify; verifyError?: string }
 /** v0.10.757 — Admin "Trace hattı sağlığı" (Go traceHealthResponse). Sayaçlar POD-İÇİ (pod.host). */
 export interface CHTraceHealthResponse {
   generatedAt: number;

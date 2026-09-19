@@ -4,7 +4,7 @@
  * özet ve kararın runbook metni. Runbook operatörün kopyalayıp DBA ile
  * koşacağı SQL: ürün ZK yolu uyuşmazlığını kendi düzeltmez (veri taşıma).
  */
-import type { CHReplicaConsistencyResponse, CHReplicaShard, CHReplicaVerdict } from '@/lib/types';
+import type { CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaShard, CHReplicaVerdict } from '@/lib/types';
 
 export type ReplicaTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
 
@@ -58,6 +58,21 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
     : `${r.tables.length} tablo tutarlı`;
   return { tables: r.tables.length, bad, single, worst, tone, text };
 }
+
+/**
+ * v0.10.820 — "Onar" görünürlüğü: yalnız eksik/replike-olmayan kararda, o host'ta
+ * tablo yok ya da düz (Replicated-ama-kayıtsız host onarılmaz, yeniden ölçülür),
+ * shard'da sağlam Replicated eş var (kaynak DDL), MV iç tablosu değil.
+ */
+export function canRepair(table: string, sh: CHReplicaShard, m: CHReplicaMissingHost): boolean {
+  if (table.startsWith('.inner') || table.endsWith('_fix')) return false; // `_fix` sihirbazın geçici tablosu: sahibinin satırında Temizle
+  if (sh.verdict !== 'missing_replica' && sh.verdict !== 'not_replicated') return false;
+  if (m.engine && m.engine.startsWith('Replicated')) return false;
+  return (sh.replicas ?? []).some(r => (r.engine ?? '').startsWith('Replicated') && !r.readonly && !r.sessionExpired);
+}
+
+export const repairModeLabel = (mode: string): string =>
+  mode === 'plain' ? 'düz tablo → Replicated: `_fix` kur, partition\'ları ATTACH et, EXCHANGE ile değiştir' : 'tablo yok → eşten klon: aynı ZK yolunda CREATE, parçalar eşten çekilir';
 
 /** ZK yolunun son üç parçası — tabloda okunur; tamamı title'da. */
 export function shortZk(path: string): string {
