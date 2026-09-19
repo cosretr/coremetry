@@ -9,7 +9,7 @@ import { TableSkeleton } from '@/components/Skeleton';
 import { DependenciesTable, type DepRow } from '@/components/DependenciesTable';
 import { api } from '@/lib/api';
 import { timeRangeToNs } from '@/lib/utils';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { encodeDestinationParam, decodeDestinationParam } from './messaging/destinationParam';
 import { depRowKey } from '@/lib/depsTable';
 import type { MessagingInstance, MessagingOverview } from '@/lib/types';
@@ -34,7 +34,7 @@ import { PageShell } from '@/components/ui/PageShell';
 //   • ?destination= URL param drives the topic detail drawer
 //     (URL-first house rule; replace:true, Esc/✕ clears).
 export default function MessagingPage() {
-  const [range, setRange] = useUrlRange('1h');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [params, setParams] = useSearchParams();
   // Prior-window comparison — off by default (second CH scan);
   // session-local like the endpoints toggle.

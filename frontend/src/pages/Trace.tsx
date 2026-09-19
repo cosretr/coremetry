@@ -23,7 +23,7 @@ import { IconButton, MenuItem } from '@/components/ui'; // v0.10.568 — kimlik 
 import { useAuth } from '@/components/AuthProvider';
 import { useShortcuts } from '@/lib/keyboard';
 import { api } from '@/lib/api';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { logsRangeParam } from '@/lib/logsUrl';
 import { raceGuard } from '@/lib/raceGuard';
 import { useOutsideClose } from '@/lib/useOutsideClose';
@@ -52,7 +52,7 @@ function TraceDetailInner() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get('id') ?? '';
 
-  const [range, setRange] = useUrlRange('30m');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [spans, setSpans] = useState<SpanRow[] | null | undefined>(undefined);
   // v0.10.276 (Dilim 1c) — sunucu analizi (ağaç/kritik yol/öz süre/servis özeti).
   const [analysis, setAnalysis] = useState<TraceAnalysis | undefined>(undefined);

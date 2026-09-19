@@ -127,8 +127,9 @@ describe('D4 — /system/* kabuk hizalaması', () => {
     expect(sys, 'needsRange bayrağı kayboldu — Query sekmesi aralık seçicisiz kalır')
       .toMatch(/slug: 'query'[^}]*needsRange: true/);
     expect(sys).toMatch(/active\.needsRange \? \{ range, onRangeChange: setRange \}/);
-    const dSys = /useUrlRange\('([^']+)'\)/.exec(sys)?.[1];
-    const dQ = /useUrlRange\('([^']+)'\)/.exec(q)?.[1];
+    // v0.10.787 — varsayılan artık DEFAULT_RANGE_PRESET sabiti; literal ya da sabit, ikisi de eşit olmalı.
+    const dSys = /useUrlRange\(('[^']+'|DEFAULT_RANGE_PRESET)\)/.exec(sys)?.[1];
+    const dQ = /useUrlRange\(('[^']+'|DEFAULT_RANGE_PRESET)\)/.exec(q)?.[1];
     expect(dSys, 'System.tsx useUrlRange çağrısı kayboldu').toBeTruthy();
     expect(dSys, `varsayılanlar ayrıştı: kabuk ${dSys}, sekme ${dQ}`).toBe(dQ);
   });

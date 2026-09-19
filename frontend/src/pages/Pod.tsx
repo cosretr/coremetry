@@ -1,4 +1,5 @@
 import { Suspense, lazy, useMemo, useState, useCallback } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import type { SpanMetricSeries } from '@/lib/types';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
@@ -98,7 +99,7 @@ function PodDetail() {
   const backTab = toPods ? 'pods' : 'infra';
   const backLabel = toPods ? 'Pods' : 'Infrastructure';
   // v0.9.429 — zoom-yığını paylaşılan usePageZoomRange hook'unda.
-  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange('1h');
+  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   const xRange = useMemo(() => ({ from: from / 1e9, to: to / 1e9 }), [from, to]);
   // v0.9.945 (D2/K10) — SAYFANIN TEK crosshair grubu.

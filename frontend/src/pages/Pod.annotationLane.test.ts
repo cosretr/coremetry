@@ -21,6 +21,6 @@ describe('Pod annotation şeridi', () => {
   it('Service.tsx ile aynı sözleşme: onZoomTo sayfa zoom yığınına gider', () => {
     expect(svc).toContain('<ServiceAnnotationLane service={svc} fromNs={rangeNs.from} toNs={rangeNs.to}');
     expect(svc).toMatch(/<ServiceAnnotationLane[^>]*\n?[^>]*onZoomTo=\{handleZoom\}/);
-    expect(src).toContain("usePageZoomRange('1h')");
+    expect(src).toContain('usePageZoomRange(DEFAULT_RANGE_PRESET)'); // v0.10.787 — genel varsayılan sabitten
   });
 });

@@ -45,7 +45,7 @@ import { traceHref } from '@/lib/traceHref';
 import { navHref } from '@/lib/navHref';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { fmtNum, fmtNs, timeRangeToNs } from '@/lib/utils';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { parseTopicRef, parseTopicTab, type MsgTopicTab } from './messaging/topicHref';
 import type { DBOpStat, MsgOperationStat, TimeRange } from '@/lib/types';
 
@@ -63,7 +63,7 @@ function msOrDash(v?: number): string {
 
 export default function MessagingTopicPage() {
   const [params, setParams] = useSearchParams();
-  const [range, setRange] = useUrlRange('1h');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // `search` bir STRING: memo kimliği ancak URL gerçekten değişince değişir
   // (useSearchParams her render'da yeni bir nesne verir).
   const search = params.toString();

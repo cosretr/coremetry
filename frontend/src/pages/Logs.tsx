@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -151,7 +152,7 @@ function LogsInner() {
   // pencerede çift-tık default preset'e dönüyor (diğer sayfalarla
   // aynı sözleşme). resetPaging her iki yönde (v0.7.81 kuralı) —
   // closure çağrı anında değerlendirilir, TDZ yok.
-  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange('30m', () => resetPaging());
+  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET, () => resetPaging());
   // v0.9.291 — the window handed to the KQL autocomplete. Memoised on
   // the range, never computed bare in JSX (v0.5.184: a bare
   // range→duration call in the tree is a new object each render and

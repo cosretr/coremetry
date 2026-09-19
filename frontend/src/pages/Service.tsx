@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { TabStrip as UiTabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5) — sayfanın yerel TabStrip sarmalayıcısıyla ad çakışmasın
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { navHref } from '@/lib/navHref';
@@ -80,7 +81,7 @@ function ServiceDetailInner() {
   // v0.9.429 — zoom-yığını deseni (bu dosyanın v0.9.199 referans
   // implementasyonu) paylaşılan usePageZoomRange hook'una taşındı;
   // davranış sözleşmesi hook başlığında, birebir aynı.
-  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange('30m');
+  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   // v0.9.1041 (env(a)) — env is now APPLIED, not just forwarded to the
   // Endpoints drill: it narrows the bundle (KPI + operations), the Overview
   // span+metric RED (tiles + charts), ServiceCharts and the latency heatmap
@@ -505,7 +506,7 @@ function ServiceDetailInner() {
             {tab === 'operations' && (
               <OperationsTable service={svc} rows={displayedOps} range={range}
                 preset={range.preset}
-                onWiden={() => setRange({ preset: '1h' })}
+                onWiden={() => setRange({ preset: DEFAULT_RANGE_PRESET })}
                 normalized={normalized}
                 onToggleNormalized={setNormalized}
                 onZoom={handleZoom} onZoomReset={handleZoomReset}

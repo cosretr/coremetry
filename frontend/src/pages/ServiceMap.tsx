@@ -15,7 +15,7 @@ import { api } from '@/lib/api';
 import { serviceGraphToMap } from '@/lib/serviceGraphAdapter';
 import { serviceMapNodeClick } from '@/lib/serviceMapNodeClick';
 import { fmtNum, rangeToSince, timeRangeToNs } from '@/lib/utils';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import type { ServiceMap } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
@@ -48,7 +48,7 @@ const DIFF_PRESETS: { key: string; label: string }[] = [
 ];
 
 export default function ServiceMapPage() {
-  const [range, setRange] = useUrlRange('30m');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [samples, setSamples] = useState(200);
   // v0.8.219 — /topology was folded into /service-map; honour its ?focus=<svc>
   // deep-link (from Endpoints / service tabs / the redirect) by seeding focus

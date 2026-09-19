@@ -13,7 +13,7 @@ import { MetricQueryEditor } from '@/components/viz/MetricQueryEditor';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import { useDebouncedValue } from '@/lib/perf/useDebouncedValue';
 import { api } from '@/lib/api';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { classifyMetric } from '@/lib/metricTemplates';
 import { METRIC_SOURCE_LABELS, METRIC_SOURCE_PARAM, parseMetricSource } from '@/lib/metricSource';
 import { metricCatalogueHref } from './explore/urlCodec';
@@ -84,7 +84,7 @@ export default function MetricsPage() {
   // seçimi paylaşılabilir). Eskiden useState idi: gelen `?range=` bir
   // kez okunuyor, seçilen aralık URL'e HİÇ yazılmıyordu — kopyalanan
   // link operatörün baktığı pencereyi taşımıyordu.
-  const [range, setRange] = useUrlRange('30m');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
 
   // Katalog seçimleri URL'de: paylaşılabilir + geri/ileri tutarlı.
   // Arama kutusu tek istisna — yazarken her tuşta URL yazmak yerine

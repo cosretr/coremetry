@@ -5,6 +5,7 @@
 // altındaki servisler ve pod'lar (entity_seen_5m). Ölü entity 404 DEĞİL:
 // "artık mevcut değil, son görülme X" + tarihçe. Bayrak kapalı → açık ilan.
 import { useMemo, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -30,7 +31,7 @@ export default function EntityDetail() {
   const [sp] = useSearchParams();
   const id = sp.get('id') ?? '';
   const at = Number(sp.get('at') ?? 0) || 0;
-  const { range, setRange } = usePageZoomRange('1h');
+  const { range, setRange } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   const { enabled, loading } = useEntityEnabled();
   const entQ = useEntity(id, at || undefined, enabled && !!id);

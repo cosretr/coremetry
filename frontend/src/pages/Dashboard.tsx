@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useEscLayer } from '@/lib/escLayer';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -47,7 +48,7 @@ function Inner() {
   // v0.9.429 — zoom-yığını deseni paylaşılan usePageZoomRange hook'unda
   // (Dynatrace-style drag-to-zoom: her panel global range'i yazar, tüm
   // paneller yeni pencereyle refetch; çift-tık bir adım geri).
-  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange('30m');
+  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const [doc, setDoc] = useState<Dashboard | null | undefined>(undefined);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Dashboard | null>(null);

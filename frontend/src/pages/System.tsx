@@ -3,7 +3,7 @@ import { useParams, Navigate, NavLink } from 'react-router-dom';
 import { useAuth } from '@/components/AuthProvider';
 import { Spinner } from '@/components/Spinner';
 import { Topbar } from '@/components/Topbar';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { PageShell } from '@/components/ui/PageShell';
 
 // System — the consolidated admin area (v0.8.9). The ten former /admin/*
@@ -64,7 +64,7 @@ export default function System() {
   // Koşulsuz çağrı (hook kuralı); yalnız KULLANIMI koşullu. Varsayılan
   // AdminQuery'nin kendi varsayılanıyla aynı olmak ZORUNDA, aksi hâlde
   // picker sekmenin gerçekte sorguladığı pencereden farklı görünür.
-  const [range, setRange] = useUrlRange('30m');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const isAdmin = user?.role === 'admin';
   const visible = TABS.filter(t => !t.adminOnly || isAdmin);
 

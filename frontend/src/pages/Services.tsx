@@ -24,7 +24,7 @@ import { fmtNum, fmtFixed, timeRangeToNs, rowClickHandlers, tsLong, fmtAgoNs } f
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { encodeRange, encodeFilters, buildQuery } from '@/lib/urlState';
 import { servicesFilterSearch } from '@/lib/servicesFilterParams';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { getItem, setItem } from '@/lib/storage';
 import { getPinnedServices, isServicePinned, toggleServicePin } from '@/lib/recentServices';
@@ -43,7 +43,7 @@ import { Pager } from '@/components/Pager';
 
 export default function ServicesPage() {
   const navigate = useNavigate();
-  const [range, setRange] = useUrlRange('30m');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // Global env filter (v0.8.385, env-separation Phase 2) — written by
   // the Topbar EnvPicker, read here and forwarded to /api/services.
   // Non-empty env forces the backend's bounded raw-spans path (the

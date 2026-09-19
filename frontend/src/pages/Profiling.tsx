@@ -9,7 +9,7 @@ import { BreakdownBar, KindBadge } from '@/components/KindBadge';
 import { useProfiles, useProfileHotspots } from '@/lib/queries';
 import { copyToClipboard } from '@/lib/clipboard';
 import { tsShort, timeRangeToNs, fmtNum } from '@/lib/utils';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { ProfileRow, ProfileHotspotsResponse, TimeRange } from '@/lib/types';
@@ -48,7 +48,7 @@ export default function ProfilingPage() {
   // and bookmarks aren't time-stable anyway.
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [range, setRange] = useUrlRange('30m');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const service = params.get('service') || '';
   const ptype = params.get('type') || '';
   // `view` toggles between the per-profile list (default) and

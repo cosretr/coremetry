@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useEscLayer } from '@/lib/escLayer';
 import type { TimeRange } from '@/lib/types';
 import { PRESET_SECONDS } from '@/lib/utils';
@@ -297,7 +298,7 @@ export function TimeRangePicker({ value, onChange }: {
                   <div className="trp-section-title">{t('trp.recentRanges')}</div>
                   {recents.map(enc => (
                     <button key={enc} className="trp-preset"
-                      onClick={() => apply(decodeRange(enc, { preset: '30m' }))}>
+                      onClick={() => apply(decodeRange(enc, { preset: DEFAULT_RANGE_PRESET }))}>
                       {rangeLabel(decodeRange(enc, { preset: enc }))}
                     </button>
                   ))}

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui';
 import { useSlowQueries } from '@/lib/queries';
 import { timeRangeToNs, fmtNum } from '@/lib/utils';
 import { slowQueryTracesHref } from '@/pages/slowqueries/tracesHref';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
@@ -77,7 +77,7 @@ const SLOW_COLS: DataTableColumn<SlowQueryRow>[] = [
 // what's actually worth fixing. A 5ms query running a million
 // times beats a 5s query running once.
 export default function SlowQueriesPage() {
-  const [range, setRange] = useUrlRange('1h');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // v0.9.399 (desen paritesi) — aynı filtre çifti /databases'te URL'de
   // (dbsys/dbname), kardeş sayfada oturum state'indeydi. Aynı adlarla
   // URL'e alındı; copy-link filtreleri taşır.

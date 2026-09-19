@@ -21,7 +21,7 @@ import { heatmapBucketCount } from '@/lib/chartStep';
 import { timeRangeToNs, fmtNum, fmtClock } from '@/lib/utils';
 import { raceGuard } from '@/lib/raceGuard';
 import { encodeRange, decodeRange, encodeFilters, decodeFilters, buildQuery, rebuildPreserving } from '@/lib/urlState';
-import { storedRangeString } from '@/lib/useUrlRange';
+import { storedRangeString, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
 import type { TimeRange, FilterExpr, LatencyHeatmap as Heatmap } from '@/lib/types';
 import {
@@ -106,7 +106,7 @@ function ExploreInner({ onSelfWrite }: {
     return 'metric';
   });
   const [range, setRange] = useState<TimeRange>(
-    () => decodeRange(searchParams.get('range') ?? storedRangeString(), { preset: '30m' }));
+    () => decodeRange(searchParams.get('range') ?? storedRangeString(), { preset: DEFAULT_RANGE_PRESET }));
 
   // Legacy viz passthrough for the metrics/logs source panels only — the
   // spans builder has its own ExploreViz inside BuilderState.

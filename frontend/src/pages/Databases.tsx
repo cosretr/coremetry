@@ -12,7 +12,7 @@ import { depRowMatches, normalizeDepSearch } from '@/lib/depRowFilter';
 import { databaseDetailHref, legacyDatabaseRowTarget } from '@/pages/databases/databaseParam';
 import { receiverHorizonNotice, spanHorizonNotice } from '@/pages/databases/horizonNotice';
 import { api } from '@/lib/api';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { timeRangeToNs } from '@/lib/utils';
@@ -55,7 +55,7 @@ import { PageShell } from '@/components/ui/PageShell';
 // vs receiver-driven) from colliding in one list; each
 // audience scans the panel that matches their question.
 export default function DatabasesPage() {
-  const [range, setRange] = useUrlRange('1h');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // v0.9.86 (operatör talebi) — db tipi (?dbsys=) + db.name (?dbname=)
   // filtreleri. URL source-of-truth (replace:true, yabancı paramlar
   // korunur); seçenekler zaten çekilmiş satırlardan türetilir — ekstra

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { Link, useSearchParams } from 'react-router-dom';
 import { navHref } from '@/lib/navHref';
 import { Topbar } from '@/components/Topbar';
@@ -73,7 +74,7 @@ export default function EndpointDetailPage() {
     if (v === 'metric') next.set('src', 'metric'); else next.delete('src');
     return next;
   }, { replace: true });
-  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange('1h');
+  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   // v0.10.705 — route hedefli alarm modalı; yalnız yazma rolü görür.
   const { user } = useAuth();
   const canEditRules = user?.role === 'admin' || user?.role === 'editor';

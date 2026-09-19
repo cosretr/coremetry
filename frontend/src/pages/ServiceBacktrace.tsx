@@ -10,7 +10,7 @@ import { fmtNum, tsLong, rangeToSince } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { CallerRow, TimeRange } from '@/lib/types';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
@@ -44,7 +44,7 @@ function BacktraceInner() {
   const [searchParams] = useSearchParams();
   const svc = searchParams.get('name') ?? '';
 
-  const [range, setRange] = useUrlRange('30m');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [filter, setFilter] = useState('');
 
   // Keyed on (service, since) — the hook skips the fetch entirely

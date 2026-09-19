@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { Button } from '@/components/ui/Button';
 import { StatementAlertModal } from './alerts/StatementAlertModal';
 import { useAuth } from '@/components/AuthProvider';
@@ -45,7 +46,7 @@ export default function StatementDetailPage() {
   const [params, setParams] = useSearchParams();
   const search = params.toString();
   const refObj = useMemo(() => decodeStmtParam(params.get('stmt')), [params]);
-  const { range, setRange } = usePageZoomRange('1h');
+  const { range, setRange } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
 
   // Compare toggle rides the URL (house rule §4): ?stmtcmp=1,

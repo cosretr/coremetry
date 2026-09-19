@@ -55,6 +55,15 @@ import { STORAGE_KEYS, getSessionRaw, setSessionRaw } from './storage';
 //     görünüyor, seçici bir şey söylemiyor, ama sayfa geçmişte. Artık
 //     `?range=custom:…` URL'de duruyor ve seçici onu gösteriyor: donmuş
 //     durum görünür ve tek tıkla geri alınır.
+// DEFAULT_RANGE_PRESET (v0.10.787) — Coremetry'nin GENEL varsayılan
+// penceresi. Operatör (2026-09-19): "default last 3 hour interval göstersin".
+// Öncesi sayfa başına dağınıktı (8 sayfa 30m, 10 sayfa 1h). Sahip
+// sayfalar bu sabiti verir; bilinçli istisnalar sabiti KULLANMAZ ve
+// defaultRange.pin.test.ts'te listelidir (Hosts/Clusters 15m — canlı
+// altyapı görünümü; Events/Rollouts/AI 24h — olay listeleri).
+// PRESET_SECONDS anahtarı olmak zorunda (pin).
+export const DEFAULT_RANGE_PRESET = '3h';
+
 const RANGE_STORE_KEY = STORAGE_KEYS.lastRange;
 
 function readStoredRange(): string | null {
@@ -102,13 +111,13 @@ export function rememberRange(enc: string): void {
 // bir cevap. Filtreyi burada bırakmak, hook ile bu saf fonksiyonun
 // AYRIŞMASI demek olurdu — ikisi tek zinciri anlatmak zorunda.
 export function pickRangeString(
-  urlRaw: string | null, stored: string | null, defaultPreset = '30m',
+  urlRaw: string | null, stored: string | null, defaultPreset = DEFAULT_RANGE_PRESET,
 ): string {
   return urlRaw ?? stored ?? defaultPreset;
 }
 
 /** Resolved TimeRange for a non-hook caller. `search` = location.search. */
-export function currentRange(search: string, defaultPreset = '30m'): TimeRange {
+export function currentRange(search: string, defaultPreset = DEFAULT_RANGE_PRESET): TimeRange {
   const raw = new URLSearchParams(search).get('range');
   return decodeRange(pickRangeString(raw, readStoredRange(), defaultPreset), { preset: defaultPreset });
 }
@@ -130,7 +139,7 @@ export function useUrlRange(
 ): [TimeRange, (r: TimeRange | ((prev: TimeRange) => TimeRange)) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
   const owns = defaultPreset !== undefined;
-  const preset = defaultPreset ?? '30m';
+  const preset = defaultPreset ?? DEFAULT_RANGE_PRESET;
   const raw = searchParams.get('range');
   const stored = readStoredRange();
   const effective = raw ?? stored ?? preset;

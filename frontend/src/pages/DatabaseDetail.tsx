@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { navHref } from '@/lib/navHref';
 import { useQuery } from '@tanstack/react-query';
@@ -66,7 +67,7 @@ export default function DatabaseDetailPage() {
   const search = params.toString();
   const refObj = useMemo(() => parseDatabasePageRef(search), [search]);
   const [env] = useUrlEnv();
-  const { range, setRange } = usePageZoomRange('1h');
+  const { range, setRange } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   const xRange = useMemo(() => ({ from: from / 1e9, to: to / 1e9 }), [from, to]);
 

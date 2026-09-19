@@ -18,6 +18,7 @@
 // only ever runs inside a useMemo([range]) (the v0.5.184 trap).
 
 import { useEffect, useMemo, useRef, useState, Suspense, Fragment } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { rowActivation } from '@/lib/a11y';
 import { attrKeyWindowParams } from '@/lib/attrKeyWindow';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -235,7 +236,7 @@ function TracesPageInner() {
   // v0.9.430 — zoom-yığını hook'u; sayfalama her zoom/geri adımında
   // sıfırlanır (onChange; setPage sonradan tanımlı — closure çağrı
   // anında değerlendirilir, TDZ yok).
-  const { range, setRange, handleZoom, handleZoomReset, zoomDepth } = usePageZoomRange('30m', () => setPage(0));
+  const { range, setRange, handleZoom, handleZoomReset, zoomDepth } = usePageZoomRange(DEFAULT_RANGE_PRESET, () => setPage(0));
   // v0.10.251 — ContextBar (Topbar yuvası). Aralık sahibi usePageZoomRange
   // KALIR (sayfa sıfırlama + zoom); çubuğun set()'i aralığı oraya, kalanı
   // URL'ye (cluster) yönlendirir. İki yazıcı aynı useUrlRange kanalından

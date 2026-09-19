@@ -8,7 +8,7 @@ import { TableSkeleton } from '@/components/Skeleton';
 import { Drawer, DrawerSection, DrawerTrendRow } from '@/components/ui';
 import { api } from '@/lib/api';
 import { timeRangeToNs, fmtNum, fmtFixed } from '@/lib/utils';
-import { useUrlRange } from '@/lib/useUrlRange';
+import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import { ExternalPaths } from '@/components/ExternalPaths';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -60,7 +60,7 @@ const EXT_COLS: DataTableColumn<ExternalHost>[] = [
 ];
 
 export default function ExternalPage() {
-  const [range, setRange] = useUrlRange('1h');
+  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // Memoized on range identity — the v0.5.184 incident shape.
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   const windowMin = Math.max((to - from) / 60e9, 1);

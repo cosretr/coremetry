@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Zap, ChevronRight, ChevronDown } from 'lucide-react';
@@ -178,7 +179,7 @@ export default function EndpointsPage() {
   // v0.9.429 — zoom-yığını paylaşılan usePageZoomRange hook'unda
   // (üstelik handler'lar artık useCallback-stabil — buradaki inline
   // kopya panel alt-ağacını her render'da yeniden çiziyordu).
-  const { range, setRange } = usePageZoomRange('30m');
+  const { range, setRange } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   // Global env filter (v0.8.385, env-separation Phase 2) — written by
   // the Topbar EnvPicker. Forwarded to /api/endpoints, where it forces
   // the bounded raw-spans path with a deploy_env conjunct (the
