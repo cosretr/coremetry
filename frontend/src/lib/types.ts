@@ -4315,7 +4315,11 @@ export interface SLOStatus {
   sli: number;
   budgetRemaining: number; // 0..1
   burnRate: number;        // > 1 means consuming faster than budget allows
-  healthy: boolean;
+  healthy: boolean;        // NoData'da false
+  // v0.10.801 — pencerede olay yok (ne sağlıklı ne ihlal: gri "Olay yok") ve
+  // SLI tanım ipucu (olay yok / hiç başarısız olmuyor / her olay başarısız).
+  noData?: boolean;
+  hint?: string;
 }
 export interface SLORow extends SLO {
   status?: SLOStatus | null;

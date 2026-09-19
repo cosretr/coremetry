@@ -50,7 +50,8 @@ export default function SLOsPage() {
     { id: 'burn',     label: 'Burn rate',   sortValue: o => o.status?.burnRate ?? null,      naturalDir: 'desc', width: 110 },
     { id: 'forecast', label: 'Forecast',    width: 120 },
     { id: 'trend',    label: '7d trend',    width: 100 },
-    { id: 'status',   label: 'Status',      sortValue: o => (o.status ? (o.status.healthy ? 1 : 0) : null), naturalDir: 'desc', width: 110 },
+    // v0.10.801 — sıra: ihlal (0) → olay yok (0.5) → sağlıklı (1); durum yoksa null.
+    { id: 'status',   label: 'Status',      sortValue: o => (o.status ? (o.status.noData ? 0.5 : o.status.healthy ? 1 : 0) : null), naturalDir: 'desc', width: 110 },
     ...(isAdmin ? [{ id: 'actions', label: '', width: 130 } as DataTableColumn<SLORow>] : []),
   ], [windowDays, isAdmin]);
 
@@ -124,14 +125,16 @@ export default function SLOsPage() {
                     </td>
                     <td className="mono">{o.service}</td>
                     <td className="mono">{(o.target * 100).toFixed(2)}%</td>
-                    <td className="mono">
-                      {o.status ? (o.status.sli * 100).toFixed(3) + '%' : '—'}
+                    <td className="mono" title={o.status?.hint || undefined}>
+                      {/* v0.10.801 — olaysız pencere %100 değil "—"; ipucu varsa ⚠ (title). */}
+                      {o.status && !o.status.noData ? (o.status.sli * 100).toFixed(3) + '%' : '—'}
+                      {o.status?.hint && !o.status.noData && <span className="badge b-warn" style={{ marginLeft: 6, fontSize: 10 }}>⚠ tanım</span>}
                     </td>
                     <td className="mono">
-                      {o.status ? <BudgetBar value={o.status.budgetRemaining} /> : '—'}
+                      {o.status && !o.status.noData ? <BudgetBar value={o.status.budgetRemaining} /> : '—'}
                     </td>
                     <td className="mono">
-                      {o.status ? <BurnBadge rate={o.status.burnRate} /> : '—'}
+                      {o.status && !o.status.noData ? <BurnBadge rate={o.status.burnRate} /> : '—'}
                     </td>
                     <td>
                       <ForecastChip sloId={o.id} />
@@ -140,9 +143,12 @@ export default function SLOsPage() {
                       <BurnSparkline sloId={o.id} />
                     </td>
                     <td>
-                      {o.status?.healthy
-                        ? <span className="badge b-ok">Healthy</span>
-                        : <span className="badge b-err">Breached</span>}
+                      {/* v0.10.801 — Honeycomb "No Events": olaysız SLO ne sağlıklı ne ihlal. */}
+                      {o.status?.noData
+                        ? <span className="badge b-gray" title={o.status.hint}>Olay yok</span>
+                        : o.status?.healthy
+                          ? <span className="badge b-ok">Healthy</span>
+                          : <span className="badge b-err">Breached</span>}
                     </td>
                     {isAdmin && (
                       <td><div className="cell-actions">

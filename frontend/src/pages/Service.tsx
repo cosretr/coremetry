@@ -678,7 +678,9 @@ function ServiceDetailInner() {
 // strip stays a simple .map(); links to /slos for full management.
 function ServiceSLOChip({ slo }: { slo: SLORow }) {
   const st = slo.status;
-  const healthy = st?.healthy ?? true;
+  // v0.10.801 — olaysız pencere (noData) gri: ne sağlıklı ne ihlal.
+  const noData = !!st?.noData;
+  const healthy = noData ? false : (st?.healthy ?? true);
   const budget = st ? Math.max(0, Math.min(1, st.budgetRemaining)) : 1;
   // Budget bar tint: green > 25% left, amber 0–25%, red exhausted.
   const budgetCls = budget > 0.25 ? 'var(--ok)' : budget > 0 ? 'var(--warn)' : 'var(--err)';
@@ -687,21 +689,21 @@ function ServiceSLOChip({ slo }: { slo: SLORow }) {
     <div style={{
       padding: 10, borderRadius: 6,
       background: 'var(--bg2)', border: '1px solid var(--border)',
-      borderLeft: `3px solid ${healthy ? 'var(--ok)' : 'var(--err)'}`,
+      borderLeft: `3px solid ${noData ? 'var(--border)' : healthy ? 'var(--ok)' : 'var(--err)'}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 12, fontWeight: 600 }}>{slo.name}</span>
         <span style={{ flex: 1 }} />
-        <span className={`badge ${healthy ? 'b-ok' : 'b-err'}`} style={{ fontSize: 10 }}>
-          {healthy ? 'Healthy' : 'Breached'}
+        <span className={`badge ${noData ? 'b-gray' : healthy ? 'b-ok' : 'b-err'}`} style={{ fontSize: 10 }} title={st?.hint || undefined}>
+          {noData ? 'Olay yok' : healthy ? 'Healthy' : 'Breached'}
         </span>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6 }}>
         {slo.sliType === 'latency' ? `latency ≤ ${slo.thresholdMs}ms` : 'availability'}
         {' · target '}<b>{(slo.target * 100).toFixed(2)}%</b>
-        {st && <> · SLI <b style={{ color: healthy ? 'var(--ok)' : 'var(--err)' }}>{(st.sli * 100).toFixed(2)}%</b></>}
+        {st && !noData && <> · SLI <b style={{ color: healthy ? 'var(--ok)' : 'var(--err)' }}>{(st.sli * 100).toFixed(2)}%</b></>}
       </div>
-      {st && (
+      {st && !noData && (
         <>
           {/* Budget-remaining bar */}
           <div style={{ height: 6, borderRadius: 3, background: 'var(--bg0)', overflow: 'hidden', marginBottom: 4 }}>

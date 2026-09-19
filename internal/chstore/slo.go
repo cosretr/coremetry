@@ -35,7 +35,55 @@ type SLOStatus struct {
 	SLI             float64 `json:"sli"`             // good/total, 0..1
 	BudgetRemaining float64 `json:"budgetRemaining"` // 0..1, share of error budget left
 	BurnRate        float64 `json:"burnRate"`        // current_error_rate / (1 - target)
-	Healthy         bool    `json:"healthy"`         // SLI >= target
+	Healthy         bool    `json:"healthy"`         // SLI >= target; NoData'da false
+	// NoData (v0.10.801, denetim S2 — Honeycomb "No Events"): pencerede
+	// hiç olay yok. Öncesi SLI 1.0 + Healthy=true "vacuously" yeşildi; yanlış
+	// operasyon adı / servis adı değişimi kalıcı %100 gösteriyordu. Ne
+	// sağlıklı ne ihlal: FE gri "Olay yok".
+	NoData bool `json:"noData,omitempty"`
+	// Hint (v0.10.801) — SLI tanım kontrolü ipucu: olay yok / hiç başarısız
+	// olmuyor / her olay başarısız. Boş = ipucu yok.
+	Hint string `json:"hint,omitempty"`
+}
+
+// sloNeverFailsMinTotal — "SLI hiç başarısız olmuyor" ipucu için taban:
+// küçük pencerelerde %100 doğaldır; bu kadar olay görüp sıfır kötü, tanımı
+// sorgulatır (Honeycomb: "%100 sonsuza dek = yanlış SLI").
+const sloNeverFailsMinTotal = 1000
+
+// sloStatusFrom — SAF (v0.10.801): sayımlardan durum. ComputeSLOStatus
+// yalnız sayar, matematik ve ipuçları burada; tablo-testli.
+func sloStatusFrom(total, good uint64, target float64) SLOStatus {
+	st := SLOStatus{Total: total, Good: good}
+	if total > 0 {
+		st.Bad = total - good
+		st.SLI = float64(good) / float64(total)
+	} else {
+		// Olay yok: SLI 1.0 bütçe matematiğini bozmasın diye kalır, ama
+		// sağlıklı DEĞİL — pencere boşsa hedef "karşılanmış" sayılmaz.
+		st.SLI = 1.0
+		st.NoData = true
+		st.Hint = "Olay yok: servis / operasyon adı ve pencereyi kontrol et (yanlış ad kalıcı yeşil görünürdü)"
+	}
+	st.Healthy = !st.NoData && st.SLI >= target
+	if !st.NoData {
+		switch {
+		case st.Bad == 0 && st.Total >= sloNeverFailsMinTotal:
+			st.Hint = "SLI hiç başarısız olmuyor: eşik / operasyon tanımını kontrol et"
+		case st.Bad == st.Total:
+			st.Hint = "Her olay başarısız: SLI mantığı ters olabilir"
+		}
+	}
+	budget := 1.0 - target
+	if budget > 0 {
+		used := 1.0 - st.SLI
+		st.BudgetRemaining = 1.0 - (used / budget)
+		if st.BudgetRemaining < 0 {
+			st.BudgetRemaining = 0
+		}
+		st.BurnRate = used / budget
+	}
+	return st
 }
 
 func (s *Store) ListSLOs(ctx context.Context) ([]SLO, error) {
@@ -188,27 +236,8 @@ func (s *Store) ComputeSLOStatus(ctx context.Context, o SLO) (*SLOStatus, error)
 		return nil, fmt.Errorf("unknown sli_type: %s", o.SLIType)
 	}
 
-	st := &SLOStatus{Total: total, Good: good}
-	if total > 0 {
-		st.Bad = total - good
-		st.SLI = float64(good) / float64(total)
-	} else {
-		st.SLI = 1.0 // no traffic → vacuously meeting target
-	}
-	st.Healthy = st.SLI >= o.Target
-
-	// Error budget: how much of the allowed-failure share is left.
-	budget := 1.0 - o.Target
-	if budget > 0 {
-		used := 1.0 - st.SLI
-		st.BudgetRemaining = 1.0 - (used / budget)
-		if st.BudgetRemaining < 0 {
-			st.BudgetRemaining = 0
-		}
-		// Burn rate over the entire window. > 1 → faster than budget allows.
-		st.BurnRate = used / budget
-	}
-	return st, nil
+	st := sloStatusFrom(total, good, o.Target) // v0.10.801 — saf matematik + NoData/ipucu
+	return &st, nil
 }
 
 // BurnPoint is one bucket of the per-day burn-rate timeseries
