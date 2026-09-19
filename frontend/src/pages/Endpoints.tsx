@@ -889,8 +889,9 @@ export default function EndpointsPage() {
                               hâle geldi: `search` serbest metindi ve
                               `/api/pay` araması `/api/payment-retry`yi de
                               getiriyordu. Link artık yapısal
-                              `http.route = <path>` filtresi + `rootOnly=auto`
-                              taşıyor (üretici: endpoints/links.ts). */}
+                              `http.route = <path>` filtresi + `rootOnly=false`
+                              (v0.10.789; 1372-788 arası `auto`) taşıyor
+                              (üretici: endpoints/links.ts). */}
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                             {/* v0.9.1257 (operatör: "Traces butonu çok
                                 belirgin değil, View yazıyor sadece") —

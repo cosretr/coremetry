@@ -38,6 +38,15 @@ import type { TimeRange } from '@/lib/types';
  *     tüketicilerinin ve iç servislerin ortasında yaşıyorlar ve root
  *     filtresi onlarda her zaman sıfır döndürür. `auto` niyeti taşıyor,
  *     kararı /traces sonuca bakarak veriyor (`traces/rootOnlyFallback`).
+ *
+ * v0.10.789 (ekip isteği, operatör onayı 2026-09-19) — `auto` → `false`.
+ *     "Traces tıklandığında Root tikli sayfaya yönlendiriyor ve daha az
+ *     trace geliyor; Root seçili olmasın." `auto` yalnız SIFIR sonuçta
+ *     düşüyordu; root'u olan ama çoğu trace'i root olmayan bir endpoint'te
+ *     liste küçük kalıyordu (endpoint'in kendi span'i genellikle root
+ *     değil: gateway → servis). Pivot artık endpoint'in TÜM trace'lerini
+ *     açar; Root kutusu /traces'te bir tık uzakta. 1372'nin (a) yarısı
+ *     (yapısal http.route filtresi) aynen.
  */
 export function tracesLink(
   r: { service: string; path: string }, range: TimeRange, env?: string, cluster?: string,
@@ -50,7 +59,7 @@ export function tracesLink(
     ['env', env ?? ''],
     ['cluster', cluster ?? ''],
     ['view', 'list'],
-    ['rootOnly', 'auto'],
+    ['rootOnly', 'false'],
   ])}`;
 }
 

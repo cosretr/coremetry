@@ -76,12 +76,13 @@ describe('endpoints → traces pivot', () => {
     expect(decoded[0].v).toEqual(['/api/pay']);
   });
 
-  it('rootOnly=auto gönderir — root seçili açılır, boşsa sessizce düşer', () => {
+  it("rootOnly=false gönderir — endpoint'in TÜM trace'leri, Root tiksiz (v0.10.789)", () => {
+    // v0.9.1372 `auto` gönderiyordu (root açık, sıfır sonuçta düş); ekip
+    // isteği + operatör onayı 2026-09-19: root tikli liste eksik geliyordu
+    // (endpoint'in span'i çoğu trace'te root değil). Açık 'false' —
+    // /traces'in kendi varsayılanına (root) bırakılmaz.
     const p = new URL(T('checkout', '/api/orders'), 'http://x').searchParams;
-    expect(p.get('rootOnly')).toBe('auto');
-    // 'true' OLMAMALI: o, operatörün kendi seçimini ifade eder ve
-    // /traces onu sessizce düşürmez (rootOnlyFallback sözleşmesi).
-    expect(p.get('rootOnly')).not.toBe('true');
+    expect(p.get('rootOnly')).toBe('false');
   });
 
   it('servis filtresini ve liste görünümünü korur', () => {
