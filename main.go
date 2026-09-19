@@ -2076,6 +2076,7 @@ func (r aiCallRecorder) RecordCall(ctx context.Context, c copilot.CallRecord) {
 		DurationMs:     c.DurationMs,
 		InputTokens:    c.InputTokens,
 		OutputTokens:   c.OutputTokens,
+		CachedTokens:   c.CachedTokens, // v0.10.807
 		Status:         c.Status,
 		ErrorMsg:       c.ErrorMsg,
 		PromptChars:    c.PromptChars,

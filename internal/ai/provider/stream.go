@@ -159,6 +159,7 @@ type openAIStreamAccum struct {
 	finish    string          // son boş-olmayan finish_reason
 	inTokens  int             // varsa son parçadaki usage
 	outTokens int
+	cached    int // v0.10.807 — prompt_tokens_details.cached_tokens
 }
 
 // feed tek bir SSE satırını çözer. Bozuk data satırları atlanır — bir
@@ -182,8 +183,9 @@ func (a *openAIStreamAccum) feed(line string) string {
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
 		Usage *struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
+			PromptTokens        int                `json:"prompt_tokens"`
+			CompletionTokens    int                `json:"completion_tokens"`
+			PromptTokensDetails promptTokensDetail `json:"prompt_tokens_details"` // v0.10.807
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
@@ -193,6 +195,9 @@ func (a *openAIStreamAccum) feed(line string) string {
 	if chunk.Usage != nil {
 		if chunk.Usage.PromptTokens > 0 {
 			a.inTokens = chunk.Usage.PromptTokens
+		}
+		if chunk.Usage.PromptTokensDetails.CachedTokens > 0 {
+			a.cached = chunk.Usage.PromptTokensDetails.CachedTokens
 		}
 		if chunk.Usage.CompletionTokens > 0 {
 			a.outTokens = chunk.Usage.CompletionTokens
@@ -297,6 +302,7 @@ type anthropicStreamAccum struct {
 	errMsg    string // error olayının yükü
 	inTokens  int
 	outTokens int
+	cached    int // v0.10.807 — cache_read_input_tokens
 }
 
 func (a *anthropicStreamAccum) feed(line string) string {
@@ -308,7 +314,8 @@ func (a *anthropicStreamAccum) feed(line string) string {
 		Type    string `json:"type"`
 		Message *struct {
 			Usage struct {
-				InputTokens int `json:"input_tokens"`
+				InputTokens          int `json:"input_tokens"`
+				CacheReadInputTokens int `json:"cache_read_input_tokens"` // v0.10.807
 			} `json:"usage"`
 		} `json:"message"`
 		Delta *struct {
@@ -331,6 +338,7 @@ func (a *anthropicStreamAccum) feed(line string) string {
 	case "message_start":
 		if ev.Message != nil {
 			a.inTokens = ev.Message.Usage.InputTokens
+			a.cached = ev.Message.Usage.CacheReadInputTokens
 		}
 	case "content_block_delta":
 		if ev.Delta == nil {
@@ -481,7 +489,7 @@ func StreamOpenAI(ctx context.Context, cfg Config, req Request, onDelta func(str
 			Provider: labelOpenAI, Err: scanErr,
 		}
 	}
-	usage := Response{InputTokens: acc.inTokens, OutputTokens: acc.outTokens}
+	usage := Response{InputTokens: acc.inTokens, OutputTokens: acc.outTokens, CachedTokens: acc.cached}
 	if scanErr != nil {
 		// Veri aktıktan SONRA kopma — geri düşüş yok (parçalar istemciye
 		// ulaştı); hatayı yüzeye çıkar.
@@ -584,7 +592,7 @@ func StreamAnthropic(ctx context.Context, cfg Config, req Request, onDelta func(
 			Provider: labelAnthropic, Err: scanErr,
 		}
 	}
-	usage := Response{InputTokens: acc.inTokens, OutputTokens: acc.outTokens}
+	usage := Response{InputTokens: acc.inTokens, OutputTokens: acc.outTokens, CachedTokens: acc.cached}
 	if scanErr != nil {
 		return usage, fmt.Errorf("anthropic stream read: %w", scanErr)
 	}

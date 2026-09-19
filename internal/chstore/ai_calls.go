@@ -16,16 +16,20 @@ import (
 // are size-capped at the record path (see SamplePromptCap) so a
 // runaway prompt can't blow up the row size.
 type AICall struct {
-	ID             string `json:"id"`
-	CreatedAt      int64  `json:"createdAt"`            // unix ns
-	Surface        string `json:"surface"`              // explain-span, explain-slo, …
-	ExchangeID     string `json:"exchangeId,omitempty"` // v0.8.399 — feedback correlation key ('' pre-v0.8.399 / non-chat)
-	Provider       string `json:"provider"`             // openai | anthropic | github
-	Model          string `json:"model"`
-	BaseURL        string `json:"baseUrl,omitempty"`
-	DurationMs     uint32 `json:"durationMs"`
-	InputTokens    uint32 `json:"inputTokens"`
-	OutputTokens   uint32 `json:"outputTokens"`
+	ID           string `json:"id"`
+	CreatedAt    int64  `json:"createdAt"`            // unix ns
+	Surface      string `json:"surface"`              // explain-span, explain-slo, …
+	ExchangeID   string `json:"exchangeId,omitempty"` // v0.8.399 — feedback correlation key ('' pre-v0.8.399 / non-chat)
+	Provider     string `json:"provider"`             // openai | anthropic | github
+	Model        string `json:"model"`
+	BaseURL      string `json:"baseUrl,omitempty"`
+	DurationMs   uint32 `json:"durationMs"`
+	InputTokens  uint32 `json:"inputTokens"`
+	OutputTokens uint32 `json:"outputTokens"`
+	// CachedTokens — v0.10.807 (dış skill denetimi L2): sağlayıcının önek
+	// önbelleğinden okuduğu giriş token'ı (InputTokens'ın alt kümesi).
+	// 0 = önbellek yok YA DA uç bildirmiyor (Ollama). Kolon ayrı probe ile.
+	CachedTokens   uint32 `json:"cachedTokens,omitempty"`
 	Status         string `json:"status"` // ok | error
 	ErrorMsg       string `json:"errorMsg,omitempty"`
 	PromptChars    uint32 `json:"promptChars"`
@@ -54,6 +58,24 @@ var aiCallsExtended atomic.Bool
 
 // AICallsExtended — /admin/stats + stats sorguları için.
 func AICallsExtended() bool { return aiCallsExtended.Load() }
+
+// aiCallsCachedCol — v0.10.807 cached_tokens kolonu INSERT hedefinde var mı.
+var aiCallsCachedCol atomic.Bool
+
+// AICallsCachedCol — okuma/istatistik sorguları için.
+func AICallsCachedCol() bool { return aiCallsCachedCol.Load() }
+
+// probeAICallsCachedColumn — v0.10.807; probeAICallsColumns ile aynı
+// sözleşme (yalnız INSERT hedefi ai_calls).
+func (s *Store) probeAICallsCachedColumn(ctx context.Context) bool {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'ai_calls' AND name = 'cached_tokens'`).Scan(&n)
+	ok := err == nil && n > 0
+	aiCallsCachedCol.Store(ok)
+	return ok
+}
 
 // probeAICallsColumns — INSERT hedefi olan ai_calls'ta (küme kipinde
 // Distributed) error_class var mı. Yalnız INSERT hedefine bakılır: yerel
@@ -89,17 +111,23 @@ const aiCallsBaseCols = `id, created_at, surface, exchange_id, provider, model, 
 
 const aiCallsExtCols = `prompt_version, profile_id, error_class, ttft_ms, stream_fallback, shield_hits`
 
-// aiCallsInsertSQL — saf: kolon listesi bayrağa göre (ai_calls_insert_test).
-func aiCallsInsertSQL(extended bool) string {
+// aiCallsCachedCols — v0.10.807; kendi bayrağıyla (aiCallsCachedCol).
+const aiCallsCachedCols = `cached_tokens`
+
+// aiCallsInsertSQL — saf: kolon listesi bayraklara göre (ai_calls_insert_test).
+func aiCallsInsertSQL(extended, cached bool) string {
 	cols := aiCallsBaseCols
 	if extended {
 		cols += ",\n\t\t " + aiCallsExtCols
+	}
+	if cached {
+		cols += ",\n\t\t " + aiCallsCachedCols
 	}
 	return "INSERT INTO ai_calls (" + cols + ")"
 }
 
 // aiCallsInsertArgs — saf: aiCallsInsertSQL kolon sırasıyla birebir.
-func aiCallsInsertArgs(c AICall, created time.Time, extended bool) []any {
+func aiCallsInsertArgs(c AICall, created time.Time, extended, cached bool) []any {
 	args := []any{c.ID, created, c.Surface, c.ExchangeID, c.Provider, c.Model, c.BaseURL,
 		c.DurationMs, c.InputTokens, c.OutputTokens, c.Status,
 		c.ErrorMsg, c.PromptChars, c.ResponseChars,
@@ -107,7 +135,36 @@ func aiCallsInsertArgs(c AICall, created time.Time, extended bool) []any {
 	if extended {
 		args = append(args, c.PromptVersion, c.ProfileID, c.ErrorClass, c.TTFTMs, boolU8(c.StreamFallback), c.ShieldHits)
 	}
+	if cached {
+		args = append(args, c.CachedTokens)
+	}
 	return args
+}
+
+// aiCallsRowSelect / aiCallsRowScan — v0.10.807: liste ve nokta okuması
+// cached_tokens'ı yalnız kolon varsa seçer (SQL kolon sayısı == Scan hedefi).
+func aiCallsRowSelect(cached bool) string {
+	q := `SELECT id, toUnixTimestamp64Nano(created_at), surface, exchange_id, provider, model, base_url,
+		       duration_ms, input_tokens, output_tokens, status, error_msg,
+		       prompt_chars, response_chars, user_id, user_email,
+		       prompt_sample, response_sample`
+	if cached {
+		q += `, cached_tokens`
+	}
+	return q
+}
+
+func aiCallsRowScan(c *AICall, cached bool) []any {
+	dest := []any{
+		&c.ID, &c.CreatedAt, &c.Surface, &c.ExchangeID, &c.Provider, &c.Model, &c.BaseURL,
+		&c.DurationMs, &c.InputTokens, &c.OutputTokens, &c.Status, &c.ErrorMsg,
+		&c.PromptChars, &c.ResponseChars, &c.UserID, &c.UserEmail,
+		&c.PromptSample, &c.ResponseSample,
+	}
+	if cached {
+		dest = append(dest, &c.CachedTokens)
+	}
+	return dest
 }
 
 func (s *Store) InsertAICall(ctx context.Context, c AICall) error {
@@ -124,13 +181,13 @@ func (s *Store) InsertAICall(ctx context.Context, c AICall) error {
 	if len(c.ResponseSample) > SamplePromptCap {
 		c.ResponseSample = c.ResponseSample[:SamplePromptCap]
 	}
-	// v0.10.409 — tek dal, bayrak yalnız kolon listesini seçer.
-	ext := aiCallsExtended.Load()
-	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext))
+	// v0.10.409 — tek dal, bayraklar yalnız kolon listesini seçer.
+	ext, cached := aiCallsExtended.Load(), aiCallsCachedCol.Load()
+	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext, cached))
 	if err != nil {
 		return err
 	}
-	if err := batch.Append(aiCallsInsertArgs(c, created, ext)...); err != nil {
+	if err := batch.Append(aiCallsInsertArgs(c, created, ext, cached)...); err != nil {
 		return err
 	}
 	return batch.Send()
@@ -169,11 +226,8 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	if p.Status != "" {
 		wc.add("status = ?", p.Status)
 	}
-	q := `
-		SELECT id, toUnixTimestamp64Nano(created_at), surface, exchange_id, provider, model, base_url,
-		       duration_ms, input_tokens, output_tokens, status, error_msg,
-		       prompt_chars, response_chars, user_id, user_email,
-		       prompt_sample, response_sample
+	cached := aiCallsCachedCol.Load() // v0.10.807
+	q := aiCallsRowSelect(cached) + `
 		FROM ai_calls ` + wc.sql() + `
 		ORDER BY created_at DESC
 		LIMIT ?`
@@ -186,12 +240,7 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	out := make([]AICall, 0, p.Limit)
 	for rows.Next() {
 		var c AICall
-		if err := rows.Scan(
-			&c.ID, &c.CreatedAt, &c.Surface, &c.ExchangeID, &c.Provider, &c.Model, &c.BaseURL,
-			&c.DurationMs, &c.InputTokens, &c.OutputTokens, &c.Status, &c.ErrorMsg,
-			&c.PromptChars, &c.ResponseChars, &c.UserID, &c.UserEmail,
-			&c.PromptSample, &c.ResponseSample,
-		); err != nil {
+		if err := rows.Scan(aiCallsRowScan(&c, cached)...); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -205,20 +254,12 @@ func (s *Store) GetAICall(ctx context.Context, id string) (*AICall, error) {
 	if id == "" {
 		return nil, nil
 	}
-	row := s.conn.QueryRow(ctx, `
-		SELECT id, toUnixTimestamp64Nano(created_at), surface, exchange_id, provider, model, base_url,
-		       duration_ms, input_tokens, output_tokens, status, error_msg,
-		       prompt_chars, response_chars, user_id, user_email,
-		       prompt_sample, response_sample
+	cached := aiCallsCachedCol.Load() // v0.10.807
+	row := s.conn.QueryRow(ctx, aiCallsRowSelect(cached)+`
 		FROM ai_calls
 		WHERE id = ? LIMIT 1`, id)
 	var c AICall
-	if err := row.Scan(
-		&c.ID, &c.CreatedAt, &c.Surface, &c.ExchangeID, &c.Provider, &c.Model, &c.BaseURL,
-		&c.DurationMs, &c.InputTokens, &c.OutputTokens, &c.Status, &c.ErrorMsg,
-		&c.PromptChars, &c.ResponseChars, &c.UserID, &c.UserEmail,
-		&c.PromptSample, &c.ResponseSample,
-	); err != nil {
+	if err := row.Scan(aiCallsRowScan(&c, cached)...); err != nil {
 		if strings.Contains(err.Error(), "no rows") {
 			return nil, nil
 		}
@@ -253,6 +294,10 @@ type AIStats struct {
 	ShieldHitCalls uint64 `json:"shieldHitCalls,omitempty"`
 	ShieldHits     uint64 `json:"shieldHits,omitempty"`
 	Extended       bool   `json:"extended"`
+	// v0.10.807 — önek önbelleğinden okunan giriş token toplamı (yalnız
+	// cached_tokens kolonu varken; CachedCol=false → alan yok).
+	CachedTokens uint64 `json:"cachedTokens,omitempty"`
+	CachedCol    bool   `json:"cachedCol,omitempty"`
 }
 
 type AISurfaceStat struct {
@@ -281,6 +326,7 @@ type AIProviderStat struct {
 	Calls        uint64 `json:"calls"`
 	InputTokens  uint64 `json:"inputTokens"`
 	OutputTokens uint64 `json:"outputTokens"`
+	CachedTokens uint64 `json:"cachedTokens,omitempty"` // v0.10.807
 	// v0.10.400 (CoSRE denetimi O5/E3) — model başına kalite: iki profil
 	// (yerel + bulut) yan yana koşarken "hangisi yavaş, hangisi hata
 	// veriyor" sorusu bu üç alandan okunur.
@@ -436,6 +482,41 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 			  AND created_at <  toDateTime64(?, 9, 'UTC')`,
 			chDateTime64Arg(from), chDateTime64Arg(to)).Scan(&st.ShieldHitCalls, &st.ShieldHits); err != nil {
 			log.Printf("[ai_calls] kalkan isabeti okunamadı: %v", err)
+		}
+	}
+	// v0.10.807 — önek önbelleği toplamı + model başına (kolon varsa).
+	if aiCallsCachedCol.Load() {
+		st.CachedCol = true
+		if err := s.conn.QueryRow(ctx, `
+			SELECT toUInt64(sum(cached_tokens))
+			FROM ai_calls
+			WHERE created_at >= toDateTime64(?, 9, 'UTC')
+			  AND created_at <  toDateTime64(?, 9, 'UTC')`,
+			chDateTime64Arg(from), chDateTime64Arg(to)).Scan(&st.CachedTokens); err != nil {
+			log.Printf("[ai_calls] cached_tokens toplamı okunamadı: %v", err)
+		}
+		cRows, err := s.conn.Query(ctx, `
+			SELECT provider, model, toUInt64(sum(cached_tokens))
+			FROM ai_calls
+			WHERE created_at >= toDateTime64(?, 9, 'UTC')
+			  AND created_at <  toDateTime64(?, 9, 'UTC')
+			GROUP BY provider, model`,
+			chDateTime64Arg(from), chDateTime64Arg(to))
+		if err != nil {
+			log.Printf("[ai_calls] model başına cached_tokens okunamadı: %v", err)
+		} else {
+			byKey := map[string]uint64{}
+			for cRows.Next() {
+				var prov, model string
+				var n uint64
+				if err := cRows.Scan(&prov, &model, &n); err == nil {
+					byKey[prov+"\x00"+model] = n
+				}
+			}
+			cRows.Close()
+			for i := range st.ByProvider {
+				st.ByProvider[i].CachedTokens = byKey[st.ByProvider[i].Provider+"\x00"+st.ByProvider[i].Model]
+			}
 		}
 	}
 	return &st, nil

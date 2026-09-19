@@ -14,26 +14,44 @@ import (
 )
 
 func TestAICallsInsertBranches(t *testing.T) {
-	c := AICall{ID: "x", PromptVersion: "v", ErrorClass: "timeout", TTFTMs: 12, StreamFallback: true, ShieldHits: 1}
+	c := AICall{ID: "x", PromptVersion: "v", ErrorClass: "timeout", TTFTMs: 12, StreamFallback: true, ShieldHits: 1, CachedTokens: 77}
+	// v0.10.807 — dört kombinasyon: ext × cached (ayrı probe, ayrı bayrak).
 	for _, ext := range []bool{false, true} {
-		sql := aiCallsInsertSQL(ext)
-		inner := sql[strings.Index(sql, "(")+1 : strings.LastIndex(sql, ")")]
-		n := len(strings.Split(inner, ","))
-		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), ext)
-		if n != len(args) {
-			t.Fatalf("ext=%v: SQL %d kolon, %d arg", ext, n, len(args))
-		}
-		for _, col := range strings.Split(aiCallsExtCols, ", ") {
-			if strings.Contains(inner, col) != ext {
-				t.Errorf("ext=%v: kolon %q beklenmedik durumda", ext, col)
+		for _, cached := range []bool{false, true} {
+			sql := aiCallsInsertSQL(ext, cached)
+			inner := sql[strings.Index(sql, "(")+1 : strings.LastIndex(sql, ")")]
+			n := len(strings.Split(inner, ","))
+			args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), ext, cached)
+			if n != len(args) {
+				t.Fatalf("ext=%v cached=%v: SQL %d kolon, %d arg", ext, cached, n, len(args))
+			}
+			for _, col := range strings.Split(aiCallsExtCols, ", ") {
+				if strings.Contains(inner, col) != ext {
+					t.Errorf("ext=%v: kolon %q beklenmedik durumda", ext, col)
+				}
+			}
+			if strings.Contains(inner, "cached_tokens") != cached {
+				t.Errorf("cached=%v: cached_tokens kolonu beklenmedik durumda", cached)
+			}
+			if cached && args[len(args)-1] != uint32(77) {
+				t.Errorf("cached_tokens son arg olmalı, %v", args[len(args)-1])
+			}
+			if ext && !cached && args[len(args)-2] != uint8(1) {
+				t.Errorf("stream_fallback UInt8(1) olmalı, %v", args[len(args)-2])
 			}
 		}
-		if ext && args[len(args)-2] != uint8(1) {
-			t.Errorf("stream_fallback UInt8(1) olmalı, %v", args[len(args)-2])
-		}
 	}
-	if aiCallsInsertSQL(false) == aiCallsInsertSQL(true) {
-		t.Fatal("iki dal aynı SQL'i üretiyor")
+	if aiCallsInsertSQL(false, false) == aiCallsInsertSQL(true, false) || aiCallsInsertSQL(false, false) == aiCallsInsertSQL(false, true) {
+		t.Fatal("dallar aynı SQL'i üretiyor")
+	}
+	// Satır okuması da bayrağa uyar: SELECT kolon sayısı == Scan hedefi.
+	for _, cached := range []bool{false, true} {
+		sel := aiCallsRowSelect(cached)
+		n := len(strings.Split(strings.TrimPrefix(sel, "SELECT "), ","))
+		var row AICall
+		if got := len(aiCallsRowScan(&row, cached)); got != n {
+			t.Errorf("cached=%v: SELECT %d kolon, Scan %d hedef", cached, n, got)
+		}
 	}
 }
 
@@ -50,6 +68,9 @@ func TestAICallsProbeTargetsInsertTable(t *testing.T) {
 	}
 	if !strings.Contains(src, "table = 'ai_calls' AND name = 'error_class'") {
 		t.Fatal("probe `table = 'ai_calls'` yüklemini taşımalı")
+	}
+	if !strings.Contains(src, "table = 'ai_calls' AND name = 'cached_tokens'") { // v0.10.807
+		t.Fatal("cached_tokens probe'u da INSERT hedefine bakmalı")
 	}
 }
 

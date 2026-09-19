@@ -417,7 +417,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// v0.10.29 — döngü boyunca çağrılan araçlar; cevabın altındaki
 	// deterministik "Kaynak:" künyesini besliyor (chat_source_note.go).
 	var calledTools []string
-	var totalIn, totalOut uint32
+	var totalIn, totalOut, totalCached uint32 // v0.10.807 — cached: önek önbelleği toplamı
 	var lastErr error
 	var finalText string
 	// v0.9.1181 (Faz 4.3) — ⚙ çipi ile onun "veriyi göster" bloğunu eşleyen
@@ -497,7 +497,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	for round := 0; round < chatMaxToolRounds; round++ {
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		turn, err := s.copilot.ChatWithTools(tctx, loopPrompt, conv, specs)
-		endTurn(turn.InputTokens, turn.OutputTokens, err)
+		endTurn(turn.InputTokens, turn.OutputTokens, turn.CachedTokens, err)
 		if turn.ToolCallsFromText {
 			// v0.10.545 — sunucu tool_calls üretmedi, çağrı metinden ayrıştırıldı:
 			// operatör çipte görür, /ai için log. Sürekli görünüyorsa serving
@@ -506,6 +506,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			emit("step", map[string]string{"label": "tool çağrısı metinden ayrıştırıldı (sunucu parser yok)"})
 		}
 		totalIn += turn.InputTokens
+		totalCached += turn.CachedTokens
 		totalOut += turn.OutputTokens
 		// v0.10.26 — BAĞLAM TAŞMASI. isContextOverflowErr yazılı ve
 		// tablo-testliydi ama tek çağrı yeri copilot_code.go'ydu; sohbet
@@ -687,8 +688,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			capPrompt := loopPrompt + copilot.ChatRoundCapAddendum()
 			tctx2, endTurn2 := cspan.turn(ctx, round, false) // v0.10.425 — tur tavanı da bir tur
 			turn2, err2 := s.copilot.ChatWithTools(tctx2, capPrompt, conv, nil)
-			endTurn2(turn2.InputTokens, turn2.OutputTokens, err2)
+			endTurn2(turn2.InputTokens, turn2.OutputTokens, turn2.CachedTokens, err2)
 			totalIn += turn2.InputTokens
+			totalCached += turn2.CachedTokens
 			totalOut += turn2.OutputTokens
 			if err2 != nil {
 				lastErr = err2
@@ -739,8 +741,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	if lastErr != nil {
 		status, errMsg = "error", lastErr.Error()
 	}
-	cspan.finish(totalIn, totalOut, lastErr) // v0.10.425 — span ve satır aynı toplamlar
-	s.copilot.RecordUsage(ctx, chatT0, totalIn, totalOut, status, errMsg, lastUserText(req.Messages), finalText)
+	cspan.finish(totalIn, totalOut, totalCached, lastErr) // v0.10.425 — span ve satır aynı toplamlar
+	s.copilot.RecordUsage(ctx, chatT0, totalIn, totalOut, totalCached, status, errMsg, lastUserText(req.Messages), finalText)
 
 	emit("done", map[string]bool{"ok": lastErr == nil})
 }

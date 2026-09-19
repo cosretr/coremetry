@@ -107,8 +107,9 @@ func ParseGitHubChat(respBody []byte) (Response, error) {
 			} `json:"message"`
 		} `json:"choices"`
 		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
+			PromptTokens        int                `json:"prompt_tokens"`
+			CompletionTokens    int                `json:"completion_tokens"`
+			PromptTokensDetails promptTokensDetail `json:"prompt_tokens_details"` // v0.10.807
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
@@ -117,6 +118,7 @@ func ParseGitHubChat(respBody []byte) (Response, error) {
 	usage := Response{
 		InputTokens:  parsed.Usage.PromptTokens,
 		OutputTokens: parsed.Usage.CompletionTokens,
+		CachedTokens: parsed.Usage.PromptTokensDetails.CachedTokens,
 	}
 	if len(parsed.Choices) == 0 {
 		return usage, errors.New("github copilot: empty response")

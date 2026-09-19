@@ -101,6 +101,7 @@ type ChatResponse struct {
 	ToolCallsFromText bool
 	InputTokens       int
 	OutputTokens      int
+	CachedTokens      int // v0.10.807 — bkz. Response.CachedTokens
 }
 
 func (r ChatRequest) resolvedModel(cfg Config, fallback string) string {
@@ -210,14 +211,16 @@ func parseAnthropicToolsChat(respBody []byte) (ChatResponse, error) {
 			Input json.RawMessage `json:"input"`
 		} `json:"content"`
 		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+			InputTokens          int `json:"input_tokens"`
+			OutputTokens         int `json:"output_tokens"`
+			CacheReadInputTokens int `json:"cache_read_input_tokens"` // v0.10.807
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return ChatResponse{}, fmt.Errorf("decode anthropic chat: %w", err)
 	}
-	out := ChatResponse{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens}
+	out := ChatResponse{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens,
+		CachedTokens: parsed.Usage.CacheReadInputTokens}
 	var text strings.Builder
 	for _, c := range parsed.Content {
 		switch c.Type {
@@ -386,14 +389,16 @@ func parseOpenAIToolsChat(respBody []byte, label string) (ChatResponse, error) {
 			} `json:"message"`
 		} `json:"choices"`
 		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
+			PromptTokens        int                `json:"prompt_tokens"`
+			CompletionTokens    int                `json:"completion_tokens"`
+			PromptTokensDetails promptTokensDetail `json:"prompt_tokens_details"` // v0.10.807
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return ChatResponse{}, fmt.Errorf("decode openai-compat chat: %w", err)
 	}
-	out := ChatResponse{InputTokens: parsed.Usage.PromptTokens, OutputTokens: parsed.Usage.CompletionTokens}
+	out := ChatResponse{InputTokens: parsed.Usage.PromptTokens, OutputTokens: parsed.Usage.CompletionTokens,
+		CachedTokens: parsed.Usage.PromptTokensDetails.CachedTokens}
 	if len(parsed.Choices) == 0 {
 		// Metin eski yazılışıyla aynı: openai-compat için
 		// "openai-compat: empty response". GitHub yolu bu kodlayıcıyı

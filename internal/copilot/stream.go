@@ -179,6 +179,7 @@ func (s *Service) streamOpenAIWithUsage(ctx context.Context, systemPrompt, userP
 	}
 
 	resp, err := aiprov.StreamOpenAI(ctx, cfg, req, onDelta)
+	noteCachedTokens(ctx, resp.CachedTokens) // v0.10.807 (düşüşte buffered çağrı üzerine yazar)
 	var fe *aiprov.StreamFallbackError
 	if errors.As(err, &fe) {
 		markStreamFallback(ctx)
@@ -208,6 +209,7 @@ func (s *Service) streamAnthropicWithUsage(ctx context.Context, systemPrompt, us
 	}
 
 	resp, err := aiprov.StreamAnthropic(ctx, cfg, req, onDelta)
+	noteCachedTokens(ctx, resp.CachedTokens) // v0.10.807
 	var fe *aiprov.StreamFallbackError
 	if errors.As(err, &fe) {
 		markStreamFallback(ctx)

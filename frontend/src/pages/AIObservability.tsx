@@ -4,6 +4,7 @@ import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button, Drawer, DrawerSection } from '@/components/ui';
 import { api } from '@/lib/api';
+import { cachedPctLabel } from './ai/cachedTokens';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
 import type { RCAVerdictQuality, AIBudgetStatus } from '@/lib/types';
@@ -168,6 +169,12 @@ export default function AIObservabilityPage() {
               <KPI label="P99 latency" value={`${stats.p99DurationMs.toFixed(0)} ms`} />
               <KPI label="Input tokens" value={fmtNum(stats.inputTokens)} />
               <KPI label="Output tokens" value={fmtNum(stats.outputTokens)} />
+              {/* v0.10.807 (L2) — önek önbelleği: giriş token'ının yüzde kaçı önbellekten geldi.
+                  0 iken de gösterilir (kolon varsa): "uç bildirmiyor ya da önbellek kapalı" sinyali. */}
+              {stats.cachedCol && (
+                <KPI label="Önbellek (giriş)" value={cachedPctLabel(stats.cachedTokens ?? 0, stats.inputTokens)}
+                  cls={(stats.cachedTokens ?? 0) > 0 ? 'ok' : undefined} />
+              )}
               <KPI label="Est cost" value={totalCostLabel} />
               <KPI label="Bütçe (24 sa)" value={bv.text} cls={budgetCls(bv)} />
               {/* v0.10.421 (E6) — uydurma oranı; v0.10.409'un ilk-token karosu da burada. */}
@@ -297,8 +304,9 @@ export default function AIObservabilityPage() {
                         : <span className="badge b-err">error</span>}
                     </td>
                     <td className="num mono">{c.durationMs} ms</td>
-                    <td className="num mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
-                      {c.inputTokens} / {c.outputTokens}
+                    <td className="num mono" style={{ fontSize: 11, color: 'var(--text3)' }}
+                      title={c.cachedTokens ? `${c.cachedTokens} giriş token'ı önek önbelleğinden` : undefined}>
+                      {c.inputTokens}{c.cachedTokens ? <span style={{ color: 'var(--ok)' }}> ({cachedPctLabel(c.cachedTokens, c.inputTokens)})</span> : null} / {c.outputTokens}
                     </td>
                     <td className="num mono" style={{
                       fontSize: 11,

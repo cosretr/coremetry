@@ -41,6 +41,7 @@ type chatSpan struct {
 	rounds int
 	tools  int
 	in     uint32
+	cached uint32 // v0.10.807
 	out    uint32
 	err    error
 }
@@ -74,8 +75,8 @@ func (c *chatSpan) tier(name string, ok bool) {
 
 // finish — serbest döngünün toplamları; RecordUsage ile AYNI değerler
 // (span ile ai_calls satırı ayrışamaz).
-func (c *chatSpan) finish(in, out uint32, err error) {
-	c.in, c.out, c.err = in, out, err
+func (c *chatSpan) finish(in, out, cached uint32, err error) {
+	c.in, c.out, c.cached, c.err = in, out, cached, err
 }
 
 // end — defer ile; dört erken dönüşte de kapanır.
@@ -86,6 +87,7 @@ func (c *chatSpan) end() {
 		attribute.Int("coremetry.ai.chat.tools", c.tools),
 		attribute.Int("gen_ai.usage.input_tokens", int(c.in)),
 		attribute.Int("gen_ai.usage.output_tokens", int(c.out)),
+		attribute.Int("gen_ai.usage.cache_read.input_tokens", int(c.cached)), // v0.10.807
 		attribute.String("coremetry.ai.status", statusOf(c.err)),
 	)
 	if c.err != nil {
@@ -97,7 +99,7 @@ func (c *chatSpan) end() {
 
 // turn — bir ChatWithTools turu (ai.chat.turn). İki çağrı yeri de bunu
 // kullanır (döngü + tur tavanı; chat_roundcap_parity sınıfı).
-func (c *chatSpan) turn(ctx context.Context, round int, retry bool) (context.Context, func(in, out uint32, err error)) {
+func (c *chatSpan) turn(ctx context.Context, round int, retry bool) (context.Context, func(in, out, cached uint32, err error)) {
 	c.rounds++
 	ctx, span := c.s.tracerOrDefault().Start(ctx, "ai.chat.turn",
 		trace.WithSpanKind(trace.SpanKindInternal),
@@ -105,10 +107,11 @@ func (c *chatSpan) turn(ctx context.Context, round int, retry bool) (context.Con
 			attribute.Int("coremetry.ai.turn.round", round),
 			attribute.Bool("coremetry.ai.turn.retry", retry),
 		))
-	return ctx, func(in, out uint32, err error) {
+	return ctx, func(in, out, cached uint32, err error) {
 		span.SetAttributes(
 			attribute.Int("gen_ai.usage.input_tokens", int(in)),
 			attribute.Int("gen_ai.usage.output_tokens", int(out)),
+			attribute.Int("gen_ai.usage.cache_read.input_tokens", int(cached)), // v0.10.807
 			attribute.String("coremetry.ai.status", statusOf(err)),
 		)
 		if err != nil {
@@ -162,6 +165,7 @@ func (s *Server) beginExplainSpanCtx(ctx context.Context) (context.Context, func
 			attribute.String("gen_ai.request.model", u.Model),
 			attribute.Int("gen_ai.usage.input_tokens", int(u.InputTokens)),
 			attribute.Int("gen_ai.usage.output_tokens", int(u.OutputTokens)),
+			attribute.Int("gen_ai.usage.cache_read.input_tokens", int(u.CachedTokens)), // v0.10.807
 			attribute.Int("coremetry.ai.duration_ms", int(u.DurationMs)),
 			attribute.String("coremetry.ai.status", u.Status),
 		)

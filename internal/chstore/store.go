@@ -2657,6 +2657,10 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS ttft_ms UInt32 DEFAULT 0`,
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS stream_fallback UInt8 DEFAULT 0`,
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS shield_hits UInt8 DEFAULT 0`,
+		// v0.10.807 (dış skill denetimi L2) — önek önbelleğinden gelen giriş
+		// token'ı; aynı iki-boot sözleşmesi, AYRI probe (409 kolonları var,
+		// bu yokken INSERT kırılmasın).
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS cached_tokens UInt32 DEFAULT 0`,
 
 		// rca_verdicts — kök-neden hakem kararının KALICI kaydı
 		// (v0.9.591). Öncesinde verdict istek başına üretilip
@@ -4253,6 +4257,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	registerAttrIndex(s.probeAttrIndex(ctx))
 	// v0.10.409 — ai_calls genişletilmiş kolon probe'u (iki-boot).
 	s.probeAICallsColumns(ctx)
+	s.probeAICallsCachedColumn(ctx) // v0.10.807
 
 	// v0.10.127 — entity_seen MV'leri k8s_pod terfi kolonunu OKUR; kolon
 	// yoksa (dış Distributed: repairPromotedAttrCols atlandı, ya da DDL

@@ -102,6 +102,7 @@ func (s *Server) beginExplainSpan(r *http.Request, ctx context.Context) (context
 			attribute.String("gen_ai.request.model", u.Model),
 			attribute.Int("gen_ai.usage.input_tokens", int(u.InputTokens)),
 			attribute.Int("gen_ai.usage.output_tokens", int(u.OutputTokens)),
+			attribute.Int("gen_ai.usage.cache_read.input_tokens", int(u.CachedTokens)), // v0.10.807
 			attribute.Int("coremetry.ai.duration_ms", int(u.DurationMs)),
 			attribute.String("coremetry.ai.status", u.Status),
 		)

@@ -87,6 +87,11 @@ type Response struct {
 	Text         string
 	InputTokens  int
 	OutputTokens int
+	// CachedTokens — v0.10.807 (dış skill denetimi L2): önek önbelleğinden
+	// gelen giriş token'ı. OpenAI/vLLM/llama.cpp `usage.prompt_tokens_details.
+	// cached_tokens`, Anthropic `usage.cache_read_input_tokens`. Yollamayan uç
+	// (Ollama) 0 bırakır — 0 "önbellek yok" DEĞİL "ölçülmedi" demektir.
+	CachedTokens int
 }
 
 // Config — çağrı anındaki yapılandırma SNAPSHOT'ı.

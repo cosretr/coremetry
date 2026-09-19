@@ -186,6 +186,27 @@ type streamStats struct {
 	started  time.Time
 	first    time.Time
 	fallback bool
+	// cached — v0.10.807 (dış skill denetimi L2): sağlayıcının bildirdiği
+	// önek-önbellek giriş token'ı (son yazan kazanır: akış düşüşünde
+	// buffered çağrının değeri). Tuple imzaları (metin, in, out, err)
+	// değişmesin diye v0.10.409'un TTFT taşıyıcısıyla aynı kanal.
+	cached uint32
+}
+
+// noteCachedTokens — sağlayıcı cevabı geldiği yerde çağrılır; taşıyıcı
+// yoksa (ChatWithTools yolu ChatTurn.CachedTokens ile doğrudan taşır) sessiz.
+func noteCachedTokens(ctx context.Context, n int) {
+	if st := streamStatsFromContext(ctx); st != nil {
+		st.mu.Lock()
+		st.cached = clampTokens(n)
+		st.mu.Unlock()
+	}
+}
+
+func (st *streamStats) cachedTokens() uint32 {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.cached
 }
 
 func (st *streamStats) markFirst() {

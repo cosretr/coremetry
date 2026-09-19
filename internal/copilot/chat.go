@@ -55,6 +55,7 @@ type ChatTurn struct {
 	ToolCalls    []ToolCall
 	InputTokens  uint32
 	OutputTokens uint32
+	CachedTokens uint32 // v0.10.807 — önek önbelleği; tur başına, döngü toplar
 	// ToolCallsFromText — v0.10.545: bkz. provider.ChatResponse.ToolCallsFromText.
 	ToolCallsFromText bool
 }
@@ -86,7 +87,7 @@ func (s *Service) ChatWithTools(ctx context.Context, system string, msgs []ChatM
 // RecordUsage — v0.10.397 (CoSRE denetimi O1): `started` çağrının
 // başlangıcı; sıfır değer DurationMs'i 0 bırakır (eski davranış). Sohbet
 // döngüsü en pahalı yüzeyken /ai gecikme KPI'ları onu 0 sayıyordu.
-func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, outTok uint32, status, errMsg, promptSample, respSample string) {
+func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, outTok, cachedTok uint32, status, errMsg, promptSample, respSample string) {
 	if s.recorder == nil {
 		return
 	}
@@ -101,6 +102,7 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 		BaseURL:        baseURL,
 		InputTokens:    inTok,
 		OutputTokens:   outTok,
+		CachedTokens:   cachedTok, // v0.10.807
 		DurationMs:     durationMsSince(started),
 		Status:         status,
 		PromptChars:    uint32(len(promptSample)),
@@ -146,6 +148,7 @@ func chatTurnFrom(r aiprov.ChatResponse) ChatTurn {
 		ToolCalls:         r.ToolCalls,
 		InputTokens:       clampTokens(r.InputTokens),
 		OutputTokens:      clampTokens(r.OutputTokens),
+		CachedTokens:      clampTokens(r.CachedTokens), // v0.10.807
 		ToolCallsFromText: r.ToolCallsFromText,
 	}
 }

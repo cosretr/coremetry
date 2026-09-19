@@ -31,14 +31,14 @@ func TestChatSpanTreeShape(t *testing.T) {
 	ctx := copilot.WithMeta(context.Background(), copilot.CallMeta{Surface: "chat"})
 	ctx, cs := s.beginChatSpan(ctx, "xid-1")
 	tctx, endTurn := cs.turn(ctx, 0, false)
-	endTurn(10, 5, nil)
+	endTurn(10, 5, 0, nil)
 	_ = tctx
 	toolCtx, endTool := cs.tool(ctx, "list_problems", false)
 	_ = toolCtx
 	endTool(1234, false)
 	_, endTool2 := cs.tool(ctx, "ext_search", true)
 	endTool2(0, true)
-	cs.finish(10, 5, errors.New("sağlayıcı \xff bozuk"))
+	cs.finish(10, 5, 0, errors.New("sağlayıcı \xff bozuk"))
 	cs.end()
 
 	spans := exp.GetSpans()

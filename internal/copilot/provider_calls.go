@@ -149,6 +149,7 @@ func (s *Service) explainOpenAIAtLevel(ctx context.Context, cfg provider.Config,
 		req.JSONSchemaName, req.JSONSchema = spec.Name, spec.Schema
 	}
 	resp, err := provider.DoOpenAI(ctx, cfg, req)
+	noteCachedTokens(ctx, resp.CachedTokens) // v0.10.807
 	if err != nil {
 		var he *provider.HTTPError
 		if lvl > jsonNone && errors.As(err, &he) && jsonModeVerdictStatus(he.Status) {
@@ -199,6 +200,7 @@ func (s *Service) explainAnthropic(ctx context.Context, systemPrompt, userPrompt
 		req.JSONLevel, req.JSONSchema, req.JSONSchemaName = provider.JSONPlain, nil, ""
 		resp, err = provider.DoAnthropic(ctx, cfg, req)
 	}
+	noteCachedTokens(ctx, resp.CachedTokens) // v0.10.807
 	return resp.Text, clampTokens(resp.InputTokens), clampTokens(resp.OutputTokens), err
 }
 
@@ -235,6 +237,7 @@ func (s *Service) explainGitHub(ctx context.Context, systemPrompt, userPrompt st
 	req.System, req.User = systemPrompt, userPrompt
 	req.JSONLevel = provider.JSONPlain
 	resp, err := provider.DoGitHub(ctx, cfg, req)
+	noteCachedTokens(ctx, resp.CachedTokens) // v0.10.807
 	return resp.Text, clampTokens(resp.InputTokens), clampTokens(resp.OutputTokens), err
 }
 

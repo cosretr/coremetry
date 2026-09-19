@@ -207,6 +207,7 @@ type CallRecord struct {
 	DurationMs     uint32
 	InputTokens    uint32
 	OutputTokens   uint32
+	CachedTokens   uint32 // v0.10.807 — önek önbelleğinden gelen giriş token'ı (0 = yok/ölçülmedi)
 	Status         string
 	ErrorMsg       string
 	PromptChars    uint32
@@ -279,6 +280,7 @@ type Usage struct {
 	Status       string // ok | error
 	InputTokens  uint32
 	OutputTokens uint32
+	CachedTokens uint32 // v0.10.807
 	DurationMs   uint32
 	Err          error
 }
@@ -707,6 +709,9 @@ func (s *Service) explain(ctx context.Context, systemPrompt, userPrompt string, 
 	provider, model, baseURL := s.profileIdentity(ctx) // v0.10.175 — çağrının profili
 
 	started := time.Now()
+	// v0.10.807 — cached_tokens taşıyıcısı (buffered yolda TTFT 0 kalır,
+	// düşüş bayrağı yazılmaz; recordNarration için nil ile aynı).
+	ctx = withStreamStats(ctx, &streamStats{started: started})
 	var (
 		out          string
 		err          error
@@ -779,11 +784,15 @@ func (s *Service) recordNarration(ctx context.Context, started time.Time,
 	provider, model, baseURL, systemPrompt, userPrompt, out string,
 	inputTokens, outputTokens uint32, err error) {
 	meta := MetaFromContext(ctx)
+	var cachedTokens uint32 // v0.10.807
+	if st := streamStatsFromContext(ctx); st != nil {
+		cachedTokens = st.cachedTokens()
+	}
 	// v0.10.114 — gözlemci RECORDER'DAN BAĞIMSIZ ve SENKRON: span
 	// attribute'ları çağıranın elindeki span kapanmadan yazılmalı.
 	if meta.Observe != nil {
 		u := Usage{Provider: provider, Model: model, Status: "ok",
-			InputTokens: inputTokens, OutputTokens: outputTokens,
+			InputTokens: inputTokens, OutputTokens: outputTokens, CachedTokens: cachedTokens,
 			DurationMs: uint32(time.Since(started).Milliseconds()), Err: err}
 		if err != nil {
 			u.Status = "error"
@@ -812,6 +821,7 @@ func (s *Service) recordNarration(ctx context.Context, started time.Time,
 		DurationMs:     uint32(time.Since(started).Milliseconds()),
 		InputTokens:    inputTokens,
 		OutputTokens:   outputTokens,
+		CachedTokens:   cachedTokens, // v0.10.807
 		Status:         "ok",
 		PromptChars:    uint32(len(fullPrompt)),
 		ResponseChars:  uint32(len(out)),

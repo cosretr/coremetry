@@ -2426,6 +2426,8 @@ export interface AICall {
   durationMs: number;
   inputTokens: number;
   outputTokens: number;
+  /** v0.10.807 — önek önbelleğinden okunan giriş token'ı (inputTokens'ın alt kümesi); yok/ölçülmedi = alan yok. */
+  cachedTokens?: number;
   status: 'ok' | 'error';
   errorMsg?: string;
   promptChars: number;
@@ -2453,7 +2455,7 @@ export interface AIStats {
   // feedbackCount > 0; an omitted rate with count > 0 means 0%).
   bySurface: Array<{ surface: string; calls: number; errorRate: number; avgMs: number; feedbackCount?: number; thumbsUpRate?: number }>;
   // v0.10.400 — model başına hata sayısı ve gecikme (ms) (CoSRE denetimi O5/E3).
-  byProvider: Array<{ provider: string; model: string; calls: number; inputTokens: number; outputTokens: number; errors: number; avgMs: number; p95Ms: number }>;
+  byProvider: Array<{ provider: string; model: string; calls: number; inputTokens: number; outputTokens: number; errors: number; avgMs: number; p95Ms: number; cachedTokens?: number }>;
   /** v0.10.409 — hata sınıfı kırılımı + TTFT; yalnız genişletilmiş kolonlar varken (extended). */
   byErrorClass?: Array<{ class: string; calls: number }>;
   avgTtftMs?: number;
@@ -2461,6 +2463,9 @@ export interface AIStats {
   shieldHitCalls?: number;
   shieldHits?: number;
   extended: boolean;
+  /** v0.10.807 — önek önbelleği toplamı; yalnız cached_tokens kolonu varken (cachedCol). */
+  cachedTokens?: number;
+  cachedCol?: boolean;
 }
 
 // AI cost rates (v0.5.167). USD per 1M tokens, per model.

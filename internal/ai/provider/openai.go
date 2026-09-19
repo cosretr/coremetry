@@ -163,8 +163,9 @@ func ParseOpenAIChat(respBody []byte) (Response, error) {
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
 		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
+			PromptTokens        int                `json:"prompt_tokens"`
+			CompletionTokens    int                `json:"completion_tokens"`
+			PromptTokensDetails promptTokensDetail `json:"prompt_tokens_details"` // v0.10.807
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
@@ -173,6 +174,7 @@ func ParseOpenAIChat(respBody []byte) (Response, error) {
 	usage := Response{
 		InputTokens:  parsed.Usage.PromptTokens,
 		OutputTokens: parsed.Usage.CompletionTokens,
+		CachedTokens: parsed.Usage.PromptTokensDetails.CachedTokens,
 	}
 	if len(parsed.Choices) == 0 {
 		return usage, errors.New("openai-compat: empty response")
@@ -195,4 +197,10 @@ func ParseOpenAIChat(respBody []byte) (Response, error) {
 	}
 	usage.Text = out
 	return usage, nil
+}
+
+// promptTokensDetail — v0.10.807: OpenAI uyumlu `usage.prompt_tokens_details`
+// (OpenAI, vLLM --enable-prefix-caching, llama.cpp cache_prompt). Yoksa 0.
+type promptTokensDetail struct {
+	CachedTokens int `json:"cached_tokens"`
 }

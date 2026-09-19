@@ -126,8 +126,9 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 		} `json:"content"`
 		StopReason string `json:"stop_reason"`
 		Usage      struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+			InputTokens          int `json:"input_tokens"`
+			OutputTokens         int `json:"output_tokens"`
+			CacheReadInputTokens int `json:"cache_read_input_tokens"` // v0.10.807
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
@@ -137,7 +138,7 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 	// metin + stop_reason=refusal döner. Boş panel değil, açık hata —
 	// çağıran salvage/yeniden deneme yerine operatöre söyler.
 	if parsed.StopReason == "refusal" {
-		return Response{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens},
+		return Response{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens, CachedTokens: parsed.Usage.CacheReadInputTokens},
 			errors.New("anthropic: model isteği reddetti (stop_reason=refusal)")
 	}
 	var out strings.Builder
@@ -153,5 +154,6 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 		Text:         out.String(),
 		InputTokens:  parsed.Usage.InputTokens,
 		OutputTokens: parsed.Usage.OutputTokens,
+		CachedTokens: parsed.Usage.CacheReadInputTokens, // v0.10.807
 	}, nil
 }
