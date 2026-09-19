@@ -23,6 +23,7 @@ describe('v0.10.796 — incident priority badge', () => {
   });
   it('Incident type carries priority + reason from the server', () => {
     const t = read('../lib/types.ts');
-    expect(t).toContain("priority?: 'P1' | 'P2' | 'P3';\n  priorityReason?: string;\n}");
+    // v0.10.797 sonrası alanların ardından başka alanlar gelebilir; yalnız ikisini pinle.
+    expect(t).toContain("priority?: 'P1' | 'P2' | 'P3';\n  priorityReason?: string;");
   });
 });

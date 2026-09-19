@@ -27,8 +27,9 @@ func (s *Server) listIncidents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows = s.store.EnrichIncidentsWithClusters(r.Context(), rows, time.Hour)
-	rows = s.store.EnrichIncidentsWithRootCause(r.Context(), rows) // v0.10.698
-	rows = chstore.EnrichIncidentsWithPriority(rows)               // v0.10.796 — P rozeti (Inbox ile aynı merdiven)
+	rows = s.store.EnrichIncidentsWithRootCause(r.Context(), rows)     // v0.10.698
+	rows = chstore.EnrichIncidentsWithPriority(rows)                   // v0.10.796 — P rozeti (Inbox ile aynı merdiven)
+	rows = s.store.EnrichIncidentsWithProblemCounts(r.Context(), rows) // v0.10.797 — "Problems 3 (2 açık)" sütunu
 	// v0.9.456 (dürüstlük A4) — zarf: en-yeni-200 penceresi dolunca
 	// sayfa söylesin; durum sayıları kesik sayfadan değil SQL'den.
 	// Sayım hatası soft-fail (nil map = frontend sayfa-türevine düşer)

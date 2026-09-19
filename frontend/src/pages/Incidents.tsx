@@ -28,6 +28,8 @@ const INCIDENT_COLS: DataTableColumn<Incident>[] = [
   { id: 'severity', label: 'Severity', sortValue: i => i.severity, naturalDir: 'asc', width: 120 },
   { id: 'title',    label: 'Title',    sortValue: i => i.title,    naturalDir: 'asc', width: 320 },
   { id: 'service',  label: 'Service',  sortValue: i => i.service,  naturalDir: 'asc', width: 180 },
+  // v0.10.797 — bağlı problemler "3 (2 açık)"; açık olan önce, sonra toplam.
+  { id: 'problems', label: 'Problems', sortValue: i => (i.unresolvedProblems ?? -1) * 1000 + (i.problemCount ?? 0), numeric: true, naturalDir: 'desc', width: 110 },
   // v0.10.698 — bağlı problemlerin en güvenli hipotezi (server); yoksa "—".
   { id: 'cause',    label: 'Root cause', sortValue: i => incidentRootCauseSort(i.rootCause), numeric: true, naturalDir: 'desc', width: 200 },
   { id: 'started',  label: 'Started',  sortValue: i => i.startedAt, naturalDir: 'desc', width: 170 },
@@ -164,6 +166,9 @@ export default function IncidentsPage() {
                     <td className="mono" style={{ fontSize: 12 }}>
                       {i.service || '—'}
                       <ClusterChipsRef clusters={i.clusters} />
+                    </td>
+                    <td className="mono" style={{ fontSize: 12 }} title={i.problemCount === undefined ? undefined : `${i.problemCount} bağlı problem, ${i.unresolvedProblems ?? 0} açık`}>
+                      {i.problemCount === undefined ? '—' : `${i.problemCount}${i.unresolvedProblems ? ` (${i.unresolvedProblems} açık)` : ''}`}
                     </td>
                     <td className="mono" style={{ fontSize: 12 }}>
                       <IncidentCause rc={i.rootCause} />

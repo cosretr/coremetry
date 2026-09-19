@@ -243,6 +243,10 @@ export interface Incident {
   // göndermezse rozet çizilmez.
   priority?: 'P1' | 'P2' | 'P3';
   priorityReason?: string;
+  // v0.10.797 — yalnız liste ucu: bağlı problem toplamı / çözülmemişi
+  // (server, LEFT JOIN — yaşı geçmiş problem sayılmaz). Yok = "—".
+  problemCount?: number;
+  unresolvedProblems?: number;
 }
 
 export interface IncidentEvent {

@@ -42,6 +42,11 @@ type Incident struct {
 	// ile aynı işlev; DB kolonu yok.
 	Priority       string `json:"priority,omitempty"`
 	PriorityReason string `json:"priorityReason,omitempty"`
+	// ProblemCount/UnresolvedProblems (v0.10.797) — okuma-anı, yalnız liste
+	// (incident_problem_counts.go): bağlı problem toplamı ve çözülmemişi;
+	// nil = zenginleştirilmedi (detay/eski sunucu) → FE "—".
+	ProblemCount       *int `json:"problemCount,omitempty"`
+	UnresolvedProblems *int `json:"unresolvedProblems,omitempty"`
 }
 
 type IncidentEvent struct {
