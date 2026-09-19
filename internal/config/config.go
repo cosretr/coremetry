@@ -345,6 +345,30 @@ type CHConfig struct {
 	// düşmez) ve ingest podunun insert'i shard'ların MV kaskadını bekler. Eski
 	// spool davranışı için env 0. Kod varsayılanı kapalı (env yoksa).
 	InsertDistributedSync bool `yaml:"insert_distributed_sync"`
+	// v0.10.790 — replika-duyarlı okuma/yazma ayarları (operatör 2026-09-19,
+	// test ortamı: aynı sorgu her yenilemede farklı sayı; replikalar
+	// ıraksamıştı). Deployment bu ayarları taşımayabilir; imaj varsayılanı
+	// taşır, chart/ortam env'i ezer.
+	//
+	// ReadMaxReplicaDelayS (COREMETRY_CH_READ_MAX_REPLICA_DELAY, saniye) —
+	// Distributed SELECT'te replikasyon gecikmesi bu eşiği aşan replika
+	// seçimden düşer (max_replica_delay_for_distributed_queries; CH varsayılanı
+	// 300). İmajda 60. Tüm replikalar geçmişse yine de bayat olan kullanılır
+	// (fallback_to_stale_replicas_for_distributed_queries=1, CH varsayılanı) —
+	// erişilebilirlik korunur. 0 = CH varsayılanı. AYRI ZK yolunda yaşayan
+	// (birbirini replike etmeyen) replikalara çare DEĞİL; o küme yapılandırması.
+	ReadMaxReplicaDelayS int `yaml:"read_max_replica_delay_s"`
+	// MVDedupBlocks (COREMETRY_CH_MV_DEDUP_BLOCKS) — Replicated tablo aynı
+	// bloğu ikinci kez görünce (zaman aşımı sonrası yeniden deneme) ham satırı
+	// tekilleştirir; MV'ler bunu VARSAYILANDA yapmaz ve MV sayımı ham'ı aşar.
+	// deduplicate_blocks_in_dependent_materialized_views=1 ikisini hizalar.
+	// İmajda 1.
+	MVDedupBlocks bool `yaml:"mv_dedup_blocks"`
+	// InsertQuorum (COREMETRY_CH_INSERT_QUORUM, ≥2) — INSERT en az N
+	// replikaya yazılana dek döner (insert_quorum, paralel, 60 sn). Replika
+	// düşükken INSERT hata verir (write_failed); erişilebilirlik bedeli
+	// olduğu için İMAJDA AÇIK DEĞİL, bilinçli opt-in. 0/1 = kapalı.
+	InsertQuorum int `yaml:"insert_quorum"`
 
 	// Per-query memory limits (v0.9.184) — env-tunable so a large
 	// external cluster can raise the conservative built-in defaults
@@ -621,6 +645,25 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("COREMETRY_CH_INSERT_DISTRIBUTED_SYNC"); v == "true" || v == "1" {
 		cfg.ClickHouse.InsertDistributedSync = true // v0.10.778 — geçici köprü, bkz. CHConfig
+	}
+	// v0.10.790 — replika-duyarlı ayarlar (bkz. CHConfig). Sayısal değer
+	// bozuksa uyar ve yok say (chBytesEnv ile aynı dürüstlük).
+	if v := os.Getenv("COREMETRY_CH_READ_MAX_REPLICA_DELAY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.ClickHouse.ReadMaxReplicaDelayS = n
+		} else {
+			log.Printf("[config] COREMETRY_CH_READ_MAX_REPLICA_DELAY=%q geçersiz (saniye, ≥0) — yok sayıldı", v)
+		}
+	}
+	if v := os.Getenv("COREMETRY_CH_MV_DEDUP_BLOCKS"); v == "true" || v == "1" {
+		cfg.ClickHouse.MVDedupBlocks = true
+	}
+	if v := os.Getenv("COREMETRY_CH_INSERT_QUORUM"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.ClickHouse.InsertQuorum = n
+		} else {
+			log.Printf("[config] COREMETRY_CH_INSERT_QUORUM=%q geçersiz (tam sayı, ≥2 açar) — yok sayıldı", v)
+		}
 	}
 	// v0.9.184 — per-query CH memory limits, env-tunable (bytes). Prod's
 	// external cluster raises these to match node RAM; local/default keep

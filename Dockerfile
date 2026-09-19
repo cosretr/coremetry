@@ -64,6 +64,14 @@ ENV COREMETRY_TZ=Europe/Istanbul
 # Bedel: hedef shard yanıt vermezse INSERT hata verir (write_failed), spool'a
 # düşmez. Eski davranış için chart/ortam env'i 0 yapar. Tek düğümde etkisiz.
 ENV COREMETRY_CH_INSERT_DISTRIBUTED_SYNC=1
+# v0.10.790 (operatör 2026-09-19) — replika-duyarlı okuma/yazma varsayılanları;
+# deployment bu ayarları taşımayabilir, imaj taşır. Gecikmesi 60 sn'yi aşan
+# replika Distributed SELECT'ten düşer (tümü geçmişse bayat olan kullanılır);
+# yeniden denenen aynı blok MV'lerde de tekilleştirilir (MV sayımı ham'ı
+# aşmasın). insert_quorum BİLEREK yok: erişilebilirlik bedeli, opt-in
+# (COREMETRY_CH_INSERT_QUORUM). Tek düğümde etkisiz.
+ENV COREMETRY_CH_READ_MAX_REPLICA_DELAY=60
+ENV COREMETRY_CH_MV_DEDUP_BLOCKS=1
 # Re-declare VERSION inside this stage — Docker ARGs are
 # scoped per-stage, so the value passed into stage 2 isn't
 # visible here without this line.

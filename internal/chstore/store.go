@@ -632,6 +632,10 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	if cfg.InsertDistributedSync {
 		log.Printf("[chstore] insert_distributed_sync=1 (COREMETRY_CH_INSERT_DISTRIBUTED_SYNC; imaj varsayılanı v0.10.779) — Distributed INSERT'ler senkron, yerel spool'a yazılmaz")
 	}
+	// v0.10.790 — replika-duyarlı ayarlar boot'ta görünür (prod'da hangi
+	// değerle koştuğumuz tek satırdan okunsun).
+	log.Printf("[chstore] max_replica_delay_for_distributed_queries=%d (0 = CH varsayılanı 300; COREMETRY_CH_READ_MAX_REPLICA_DELAY) mv_dedup_blocks=%v (COREMETRY_CH_MV_DEDUP_BLOCKS) insert_quorum=%d (COREMETRY_CH_INSERT_QUORUM; <2 kapalı)",
+		cfg.ReadMaxReplicaDelayS, cfg.MVDedupBlocks, cfg.InsertQuorum)
 	log.Printf("[chstore] parallel_view_processing=%d (COREMETRY_CH_PARALLEL_VIEWS; v0.10.511 ölçüm anahtarı)", map[bool]int{true: 1, false: 0}[!cfg.DisableParallelViews])
 	maxMem, extGroupBy, extSort := memPlan.MaxMemory, memPlan.GroupBy, memPlan.Sort
 	// v0.9.185 — surface the EFFECTIVE per-query limits at boot so an
@@ -732,6 +736,19 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 		if cfg.InsertDistributedSync {
 			o.Settings["insert_distributed_sync"] = 1
 			o.Settings["insert_distributed_timeout"] = 60
+		}
+		// v0.10.790 — replika-duyarlı ayarlar; her biri kendi bayrağının
+		// altında, gerekçe config.CHConfig. Aynı haritada: her havuz taşır.
+		if cfg.ReadMaxReplicaDelayS > 0 {
+			o.Settings["max_replica_delay_for_distributed_queries"] = cfg.ReadMaxReplicaDelayS
+		}
+		if cfg.MVDedupBlocks {
+			o.Settings["deduplicate_blocks_in_dependent_materialized_views"] = 1
+		}
+		if cfg.InsertQuorum >= 2 {
+			o.Settings["insert_quorum"] = cfg.InsertQuorum
+			o.Settings["insert_quorum_parallel"] = 1
+			o.Settings["insert_quorum_timeout"] = 60000 // ms
 		}
 		return o
 	}
