@@ -75,6 +75,19 @@ func TestBuildEmailHTML(t *testing.T) {
 		}
 	})
 
+	t.Run("on-call link only when set (v0.10.798)", func(t *testing.T) {
+		p := testProblem()
+		out := New(nil).buildEmailHTML(p, nil)
+		if strings.Contains(out, "On-call") {
+			t.Fatal("on-call row rendered without a URL")
+		}
+		p.OncallURL = "https://oncall.example.com/rota"
+		out = New(nil).buildEmailHTML(p, nil)
+		if !strings.Contains(out, `href="https://oncall.example.com/rota"`) || !strings.Contains(out, "On-call") {
+			t.Fatal("on-call link missing")
+		}
+	})
+
 	t.Run("runbook link only when set", func(t *testing.T) {
 		p := testProblem()
 		out := New(nil).buildEmailHTML(p, nil)

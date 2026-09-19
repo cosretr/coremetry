@@ -493,6 +493,12 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 	if md2, err := n.store.GetServiceMetadata(ctx, p.Service); err == nil {
 		md = md2
 	}
+	// v0.10.798 (dış skill denetimi I9a, oncall-irm) — katalogdaki nöbet
+	// bağlantısı bildirime girer; şablonlar Runbook alanıyla aynı yerde
+	// "On-call ↗" basar. Yalnız katalogda varsa; yoksa alan yok.
+	if p.OncallURL == "" && md != nil && md.OncallURL != "" {
+		p.OncallURL = md.OncallURL
+	}
 	// Team routing (v0.8.429) — a NEW problem's first open mails the
 	// firing service's owner (ug) + SRE (sy) teams, addresses resolved
 	// from the team_contacts settings blob. Independent of the
@@ -1300,6 +1306,9 @@ func (n *Notifier) buildEmailBodyWith(p chstore.Problem, rc *chstore.RootCauseHy
 	if p.RunbookURL != "" {
 		fmt.Fprintf(&b, "Runbook:    %s\n", p.RunbookURL)
 	}
+	if p.OncallURL != "" {
+		fmt.Fprintf(&b, "On-call:    %s\n", p.OncallURL) // v0.10.798
+	}
 	if u := n.subjectURL(p); u != "" {
 		fmt.Fprintf(&b, "Open:       %s\n", u)
 	}
@@ -1404,6 +1413,9 @@ func (n *Notifier) buildEmailHTMLWith(p chstore.Problem, rc *chstore.RootCauseHy
 	b.WriteString(row("Started at", esc(t)))
 	if p.RunbookURL != "" {
 		b.WriteString(row("Runbook", `<a href="`+esc(p.RunbookURL)+`" style="color:#2563eb">`+esc(p.RunbookURL)+`</a>`))
+	}
+	if p.OncallURL != "" { // v0.10.798
+		b.WriteString(row("On-call", `<a href="`+esc(p.OncallURL)+`" style="color:#2563eb">`+esc(p.OncallURL)+`</a>`))
 	}
 	b.WriteString(`</table>`)
 	// v0.9.513 — AI kök-sebep özeti. Word-güvenli: kart içinde bir tablo
@@ -1597,6 +1609,13 @@ func (n *Notifier) sendSlack(ctx context.Context, c chstore.NotificationChannel,
 			"short": false,
 		})
 	}
+	if p.OncallURL != "" { // v0.10.798 — nöbetçiye tek dokunuş
+		fields = append(fields, map[string]any{
+			"title": "On-call",
+			"value": fmt.Sprintf("<%s|On-call ↗>", p.OncallURL),
+			"short": false,
+		})
+	}
 	if u := n.subjectURL(p); u != "" {
 		fields = append(fields, map[string]any{
 			"title": "Coremetry",
@@ -1666,6 +1685,15 @@ func (n *Notifier) sendTeams(ctx context.Context, c chstore.NotificationChannel,
 			"name":  "Open runbook",
 			"targets": []map[string]string{
 				{"os": "default", "uri": p.RunbookURL},
+			},
+		})
+	}
+	if p.OncallURL != "" { // v0.10.798
+		actions = append(actions, map[string]any{
+			"@type": "OpenUri",
+			"name":  "On-call",
+			"targets": []map[string]string{
+				{"os": "default", "uri": p.OncallURL},
 			},
 		})
 	}

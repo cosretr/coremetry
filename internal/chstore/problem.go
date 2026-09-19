@@ -180,6 +180,11 @@ type Problem struct {
 	// the problem opened and when an oncall reads it. NEVER
 	// scanned from CH — populated by EnrichProblems.
 	RunbookURL string `json:"runbookUrl,omitempty"`
+	// OncallURL (v0.10.798) — servis kataloğundaki nöbet bağlantısı
+	// (ServiceMetadata.OncallURL); bildirim şablonlarına "On-call ↗" alanı
+	// olarak girer. RunbookURL gibi okuma-anı, CH'den taranmaz; notify
+	// SendProblemAlert doldurur.
+	OncallURL string `json:"oncallUrl,omitempty"`
 	// Clusters — k8s/openshift cluster names this problem's
 	// service was active in around the time of the alert.
 	// Populated at READ time from recent span activity (NOT
