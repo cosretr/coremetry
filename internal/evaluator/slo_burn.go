@@ -9,37 +9,9 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-// 2-window burn-rate alarm thresholds (Google SRE Workbook §5).
-// The fast window catches a sudden burst that would exhaust the
-// month's budget in a couple of days; the slow window catches
-// the steady drip that takes a week to do the same. Both must
-// agree before we open a problem — that's the whole point of
-// the dual-window pattern: it suppresses single-bucket
-// anomalies that would otherwise wake the oncall every other
-// minute.
-//
-// Defaults are the SRE-book values for a 30-day SLO window:
-//   - Fast: 1h burn > 14.4 → exhausts a 30d budget in ~2 days
-//   - Slow: 6h burn >  6   → exhausts a 30d budget in ~5 days
-//
-// Critical severity needs both fast AND slow ≥ critical band.
-// Warning band is half: 6 / 1 over the same windows.
-type burnPolicy struct {
-	severity   string
-	fastWindow time.Duration
-	fastRate   float64
-	slowWindow time.Duration
-	slowRate   float64
-}
-
-var burnPolicies = []burnPolicy{
-	{severity: "critical",
-		fastWindow: 1 * time.Hour, fastRate: 14.4,
-		slowWindow: 6 * time.Hour, slowRate: 6.0},
-	{severity: "warning",
-		fastWindow: 6 * time.Hour, fastRate: 6.0,
-		slowWindow: 24 * time.Hour, slowRate: 3.0},
-}
+// Burn pencereleri ve eşikleri chstore.BurnPolicies'te yaşar (v0.10.794,
+// tek kaynak): evaluator alarmı, /api/copilot/explain-slo ve SLO modalı
+// aynı çifti okur. Gerekçe ve SRE Workbook değerleri orada.
 
 // evaluateSLOs runs the burn-rate alarm pass — fired by the
 // main evaluator tick. Single-leader gating is already in place
@@ -52,7 +24,7 @@ func (e *Evaluator) evaluateSLOs(ctx context.Context) {
 		return
 	}
 	for _, slo := range slos {
-		for _, pol := range burnPolicies {
+		for _, pol := range chstore.BurnPolicies {
 			e.evaluateSLOBurn(ctx, slo, pol)
 		}
 	}
@@ -63,13 +35,13 @@ func (e *Evaluator) evaluateSLOs(ctx context.Context) {
 // Problem accordingly. The Problem's rule_id is
 // "slo:<id>:<severity>" so each (SLO × severity band) maps to
 // at most one open Problem at a time.
-func (e *Evaluator) evaluateSLOBurn(ctx context.Context, slo chstore.SLO, pol burnPolicy) {
-	fastRate, fastTotal, err := e.store.ComputeSLOBurnRate(ctx, slo, pol.fastWindow)
+func (e *Evaluator) evaluateSLOBurn(ctx context.Context, slo chstore.SLO, pol chstore.BurnPolicy) {
+	fastRate, fastTotal, err := e.store.ComputeSLOBurnRate(ctx, slo, pol.FastWindow)
 	if err != nil {
 		log.Printf("[evaluator/slo] %s fast burn: %v", slo.ID, err)
 		return
 	}
-	slowRate, slowTotal, err := e.store.ComputeSLOBurnRate(ctx, slo, pol.slowWindow)
+	slowRate, slowTotal, err := e.store.ComputeSLOBurnRate(ctx, slo, pol.SlowWindow)
 	if err != nil {
 		log.Printf("[evaluator/slo] %s slow burn: %v", slo.ID, err)
 		return
@@ -81,9 +53,9 @@ func (e *Evaluator) evaluateSLOBurn(ctx context.Context, slo chstore.SLO, pol bu
 	// burn-rate division by total=0 isn't sane anyway.
 	const minSpans = 50
 	hasTraffic := fastTotal >= minSpans && slowTotal >= minSpans
-	breached := hasTraffic && fastRate >= pol.fastRate && slowRate >= pol.slowRate
+	breached := hasTraffic && fastRate >= pol.FastRate && slowRate >= pol.SlowRate
 
-	ruleID := fmt.Sprintf("slo:%s:%s", slo.ID, pol.severity)
+	ruleID := fmt.Sprintf("slo:%s:%s", slo.ID, pol.Severity)
 	open, _ := e.findOpenViaSnapshot(ctx, ruleID, slo.Service) // v0.10.156 — snapshot
 	hasOpen := open != nil && open.ID != ""
 
@@ -92,20 +64,20 @@ func (e *Evaluator) evaluateSLOBurn(ctx context.Context, slo chstore.SLO, pol bu
 		p := chstore.Problem{
 			ID:        newID(),
 			RuleID:    ruleID,
-			RuleName:  fmt.Sprintf("SLO burn-rate %s — %s", pol.severity, slo.Name),
-			Severity:  pol.severity,
+			RuleName:  fmt.Sprintf("SLO burn-rate %s — %s", pol.Severity, slo.Name),
+			Severity:  pol.Severity,
 			Service:   slo.Service,
-			Metric:    fmt.Sprintf("burn_rate_%dm", int(pol.fastWindow.Minutes())),
+			Metric:    fmt.Sprintf("burn_rate_%dm", int(pol.FastWindow.Minutes())),
 			Value:     fastRate,
-			Threshold: pol.fastRate,
+			Threshold: pol.FastRate,
 			Status:    "open",
 			Description: fmt.Sprintf(
 				"Burn rate above %s threshold for SLO %q (target %.2f%%). "+
 					"Last %s: %.1fx — %s: %.1fx. At this rate the error budget "+
 					"would be exhausted in days, not the SLO's %d-day window.",
-				pol.severity, slo.Name, slo.Target*100,
-				pol.fastWindow, fastRate,
-				pol.slowWindow, slowRate,
+				pol.Severity, slo.Name, slo.Target*100,
+				pol.FastWindow, fastRate,
+				pol.SlowWindow, slowRate,
 				slo.WindowDays),
 			StartedAt: time.Now().UnixNano(),
 		}
@@ -115,7 +87,7 @@ func (e *Evaluator) evaluateSLOBurn(ctx context.Context, slo chstore.SLO, pol bu
 		}
 		e.countOpened() // v0.9.550 — kalp atışı sayacı
 		log.Printf("[evaluator/slo] PROBLEM OPENED: %s %s burn=%.1fx/%.1fx",
-			slo.Service, pol.severity, fastRate, slowRate)
+			slo.Service, pol.Severity, fastRate, slowRate)
 		if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
 			log.Printf("[evaluator/slo] incident attach: %v", err)
 		}
@@ -138,6 +110,6 @@ func (e *Evaluator) evaluateSLOBurn(ctx context.Context, slo chstore.SLO, pol bu
 		_ = e.store.UpsertProblem(ctx, *open)
 		e.countResolved() // v0.9.550 — kalp atışı sayacı
 		log.Printf("[evaluator/slo] PROBLEM RESOLVED: %s %s burn=%.1fx/%.1fx",
-			slo.Service, pol.severity, fastRate, slowRate)
+			slo.Service, pol.Severity, fastRate, slowRate)
 	}
 }

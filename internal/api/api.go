@@ -9448,66 +9448,6 @@ func (s *Server) copilotDeployImpact(w http.ResponseWriter, r *http.Request) {
 // Google SRE Workbook multi-burn-rate windows) and asks the
 // model whether the budget is on track, burning fast, or
 // already breached.
-func (s *Server) copilotExplainSLO(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	slo, err := s.store.GetSLO(r.Context(), id)
-	if err != nil || slo == nil {
-		http.Error(w, "SLO not found", http.StatusNotFound)
-		return
-	}
-	status, _ := s.store.ComputeSLOStatus(r.Context(), *slo)
-	// Two-window burn samples — Workbook multi-burn-rate
-	// pattern. Fast window catches sudden cliff drops; slow
-	// window catches steady drift that wouldn't trip the fast
-	// alarm but eats the budget over hours.
-	fastRate, fastTotal, _ := s.store.ComputeSLOBurnRate(r.Context(), *slo, 5*time.Minute)
-	slowRate, slowTotal, _ := s.store.ComputeSLOBurnRate(r.Context(), *slo, 1*time.Hour)
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "SLO: %s (service=%s)\n", slo.Name, slo.Service)
-	switch slo.SLIType {
-	case "latency":
-		fmt.Fprintf(&sb, "Type: latency, threshold=%.0fms\n", slo.ThresholdMs)
-	default:
-		fmt.Fprintf(&sb, "Type: %s\n", slo.SLIType)
-	}
-	fmt.Fprintf(&sb, "Target: %.3f%% over %d-day rolling window\n",
-		slo.Target*100, slo.WindowDays)
-	if slo.Operation != "" {
-		fmt.Fprintf(&sb, "Scope: operation=%q\n", slo.Operation)
-	}
-	if status != nil {
-		fmt.Fprintf(&sb,
-			"Current: SLI=%.3f%% (%d good / %d total) · budget remaining=%.2f%% · long-window burn=%.2f · healthy=%v\n",
-			status.SLI*100, status.Good, status.Total,
-			status.BudgetRemaining*100, status.BurnRate, status.Healthy)
-	}
-	fmt.Fprintf(&sb, "Fast burn (5 min): rate=%.2f, n=%d\n", fastRate, fastTotal)
-	fmt.Fprintf(&sb, "Slow burn (1 hr):  rate=%.2f, n=%d\n", slowRate, slowTotal)
-	// v0.9.1083 (F3.4) — yörünge artık DETERMİNİSTİK girdide: /forecast
-	// ve /burn-series uçları vardı ama anlatım beslemesi yoktu; prompt
-	// "Y hours to exhaustion" isteyince model Y'yi UYDURUYORDU. Soft-
-	// fail: üretilemezse kanıt bunu açıkça söyler, model de öyle der.
-	fc, _ := s.store.ComputeSLOForecast(r.Context(), *slo, time.Hour)
-	series, _ := s.store.ComputeSLOBurnSeries(r.Context(), *slo, 7)
-	sb.WriteString(sloTrajectoryEvidence(fc, series))
-
-	r, xid := withExchange(r)
-	out, err := s.copilotExplain(r,
-		copilot.SystemPromptSLOBurn(), sb.String())
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	writeJSON(w, map[string]any{
-		"explanation": out,
-		"exchangeId":  xid,
-		"status":      status,
-		"fastBurn":    fastRate,
-		"slowBurn":    slowRate,
-	})
-}
-
 func maxInt(a, b int) int {
 	if a > b {
 		return a

@@ -2423,6 +2423,9 @@ export const api = {
       exchangeId?: string;
       status: import('./types').SLOStatus | null;
       fastBurn: number;
+      // v0.10.794 — evaluator critical bandının pencereleri/eşikleri (etiket için);
+      // eski sunucu göndermez → etiketsiz düşer.
+      fastWindowS?: number; slowWindowS?: number; fastRate?: number; slowRate?: number;
       slowBurn: number;
     }>(`/api/copilot/explain-slo/${id}`, { method: 'POST' }),
   copilotDeployImpact: (body: {

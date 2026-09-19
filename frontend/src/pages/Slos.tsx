@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, FormEvent } from 'react';
+import { burnWinLabel } from './slos/burnWindow'; // v0.10.794
 import { Hourglass } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -509,8 +510,10 @@ function BurnExplainButton({ sloId }: { sloId: string }) {
                 color: 'var(--text3)', marginBottom: 10,
                 fontFamily: 'ui-monospace, monospace',
               }}>
-                <span>fast burn: {resp.fastBurn.toFixed(2)}×</span>
-                <span>slow burn: {resp.slowBurn.toFixed(2)}×</span>
+                {/* v0.10.794 — pencere etiketi sunucudan (evaluator alarmıyla aynı çift);
+                    öncesi 5 dk / 1 sa ölçülüp etiketsiz basılıyordu, problemde 1 sa / 6 sa. */}
+                <span title={resp.fastRate ? `alarm eşiği ${resp.fastRate}×` : undefined}>fast burn{burnWinLabel(resp.fastWindowS)}: {resp.fastBurn.toFixed(2)}×</span>
+                <span title={resp.slowRate ? `alarm eşiği ${resp.slowRate}×` : undefined}>slow burn{burnWinLabel(resp.slowWindowS)}: {resp.slowBurn.toFixed(2)}×</span>
                 {resp.status && (
                   <>
                     <span>SLI: {(resp.status.sli * 100).toFixed(3)}%</span>
