@@ -66,6 +66,16 @@ type Store struct {
 	// sözleşme; okuma da aynı zincirden (execDDL → adaptDDL).
 	stateObs stateObservation
 
+	// canonicalTableDDL (v0.10.829) — migrate()'in kurduğu tablo
+	// kataloğunun HAM CREATE metinleri. "İlk replikayı kur" sihirbazı
+	// (replica_repair.go seedCanonicalArgs) ZK yolu sözleşmesini
+	// buradan + adaptDDL'den okur, tahmin etmez.
+	//
+	// stateObs ile AYNI sözleşme: yalnız boot/migrate goroutine'i yazar,
+	// sonrası salt okuma. Sıfır değeri (Store{} kuran testler) = katalog
+	// yok = sihirbaz her tabloyu engeller (fail-closed).
+	canonicalTableDDL []string
+
 	// metricExclusions (v0.9.797) — operatörün route dışlama kuralları,
 	// DERLENMİŞ hâlde. Okuma yolları (buildMetricQuerySQL, queryRateFrom,
 	// route-tier) her sorguda buradan okur, yani bir CH okuması sıcak
@@ -3414,6 +3424,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		ORDER BY (signal, pod, bucket)
 		TTL bucket + INTERVAL 30 DAY`,
 	}
+
+	// v0.10.829 — kanonik tablo kataloğu, boot sonrası da erişilebilir.
+	// "İlk replikayı kur" sihirbazı (replica_repair.go) bir tablonun ZK
+	// yolu sözleşmesini UYDURMAZ: katalogdaki CREATE'i adaptDDL'den
+	// geçirir ve motor argümanlarını ORADAN okur. Katalogda olmayan ad
+	// engeldir. Dilim burada yazılır, sonra yalnız OKUNUR (aynı sözleşme:
+	// deferDDL/stateObs — tek boot goroutine'i yazar).
+	s.canonicalTableDDL = tables
 
 	// v0.9.1308 — state tablolarının ZK yolu KODDAN değil KÜMEDEN
 	// okunur (state_replication.go). Bu boot'un İLK DDL'inden ÖNCE

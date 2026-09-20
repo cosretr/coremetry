@@ -453,12 +453,29 @@ func TestSkipIndexGate(t *testing.T) {
 	}
 }
 
+// v0.10.829 — imza değişti: gereken alan KİPE göre hesaplanır
+// (repairHeadroomNeed). 820 kiplerinin aritmetiği aynen pinli kalır; seed
+// kiplerinde ATTACH sabit bağ kurduğu için yerel veri ÖLÇÜT DEĞİLDİR.
 func TestDiskHeadroomOK(t *testing.T) {
-	if !diskHeadroomOK(0, 100, 100) {
+	need := func(mode string, peer, local uint64) uint64 { return repairHeadroomNeed(mode, peer, local) }
+	if !diskHeadroomOK(0, need(replicaRepairModePlain, 100, 100)) {
 		t.Error("okunamayan boş alan (0) karar vermez")
 	}
-	if !diskHeadroomOK(230, 100, 100) || diskHeadroomOK(219, 100, 100) {
-		t.Error("eş + yerel + %10 payı")
+	// 820: eş + yerel + %10.
+	if !diskHeadroomOK(230, need(replicaRepairModeMissing, 100, 100)) || diskHeadroomOK(219, need(replicaRepairModeMissing, 100, 100)) {
+		t.Error("eş + yerel + %10 payı (820 kipleri)")
+	}
+	// seed: yerel veri BÜYÜKLÜĞÜ engel değil — yalnız sabit pay aranır.
+	for _, mode := range []string{replicaRepairModeSeed, replicaRepairModeSeedEmpty} {
+		if got := need(mode, 0, 1<<40); got != replicaRepairSeedHeadroom {
+			t.Errorf("%s: 1 TiB yerel veri için %d bayt isteniyor, sabit pay olmalı", mode, got)
+		}
+		if !diskHeadroomOK(replicaRepairSeedHeadroom, need(mode, 0, 1<<40)) {
+			t.Errorf("%s: sabit pay kadar boş alan YETERLİ olmalı (kopya yok)", mode)
+		}
+		if diskHeadroomOK(replicaRepairSeedHeadroom-1, need(mode, 0, 0)) {
+			t.Errorf("%s: sabit payın altı engellenmeli", mode)
+		}
 	}
 }
 

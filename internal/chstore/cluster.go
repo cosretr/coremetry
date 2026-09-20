@@ -1093,27 +1093,7 @@ func (s *Store) adaptDDL(sql string) []string {
 	// counterparts. Only on CREATE statements (ALTER doesn't
 	// have an ENGINE clause).
 	if kind == "table" || kind == "mv" {
-		rewritten = reEngine.ReplaceAllStringFunc(rewritten, func(m string) string {
-			parts := reEngine.FindStringSubmatch(m)
-			base := parts[1]
-			argList := strings.TrimSpace(parts[2]) // includes parens or empty
-			zkPath := replicatedArgs(zkPrefix, name, unified)
-			// Splice the ZK args in front of any existing args.
-			var newArgs string
-			switch {
-			case argList == "" || argList == "()":
-				newArgs = "(" + zkPath + ")"
-			default:
-				inside := strings.TrimSuffix(strings.TrimPrefix(argList, "("), ")")
-				inside = strings.TrimSpace(inside)
-				if inside == "" {
-					newArgs = "(" + zkPath + ")"
-				} else {
-					newArgs = "(" + zkPath + ", " + inside + ")"
-				}
-			}
-			return "ENGINE = Replicated" + base + newArgs
-		})
+		rewritten = spliceReplicatedEngine(rewritten, replicatedArgs(zkPrefix, name, unified))
 	}
 
 	out := []string{rewritten}
@@ -1143,6 +1123,39 @@ func (s *Store) adaptDDL(sql string) []string {
 		out = append(out, bareAlter)
 	}
 	return out
+}
+
+// spliceReplicatedEngine — SAF: `ENGINE = <Aile>MergeTree(args?)` cümlesini
+// `ENGINE = Replicated<Aile>MergeTree(<zkArgs>, args…)` hâline getirir; ZK
+// argümanları var olan argümanların ÖNÜNE girer (ReplacingMergeTree(version)
+// → ReplicatedReplacingMergeTree('<yol>', '<replika>', version)).
+//
+// TEK GÖVDE (v0.10.829). adaptDDL'in 2. adımıydı; "İlk replikayı kur"
+// sihirbazı (replica_repair.go) hedefin KENDİ SHOW CREATE'ini aynı kuraldan
+// geçirmek zorunda — iki kopya yazım zamanla ayrışır ve kimse fark etmez
+// (v0.9.1358 dersi). Replicated bir motoru EŞLEMEZ: reEngine yalnız düz
+// aileyi tanır, yani ikinci kez çağırmak çifte önek yazamaz.
+func spliceReplicatedEngine(sql, zkArgs string) string {
+	return reEngine.ReplaceAllStringFunc(sql, func(m string) string {
+		parts := reEngine.FindStringSubmatch(m)
+		base := parts[1]
+		argList := strings.TrimSpace(parts[2]) // includes parens or empty
+		// Splice the ZK args in front of any existing args.
+		var newArgs string
+		switch {
+		case argList == "" || argList == "()":
+			newArgs = "(" + zkArgs + ")"
+		default:
+			inside := strings.TrimSuffix(strings.TrimPrefix(argList, "("), ")")
+			inside = strings.TrimSpace(inside)
+			if inside == "" {
+				newArgs = "(" + zkArgs + ")"
+			} else {
+				newArgs = "(" + zkArgs + ", " + inside + ")"
+			}
+		}
+		return "ENGINE = Replicated" + base + newArgs
+	})
 }
 
 // execDDL adapts a DDL statement for cluster mode and runs every

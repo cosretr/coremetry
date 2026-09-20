@@ -11,7 +11,7 @@ import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/l
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
-import { canRepair, innerViewLabel, repairModeLabel, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
+import { canRepair, canSeedFirstReplica, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
@@ -24,7 +24,7 @@ import type {
   CHDanglingMV, // v0.10.762 — sarkan MV onarımı
   CHMVHostState, CHMVState, // v0.10.825 — MV kapsaması (ok | plain | dangling | missing)
   CHMVLeftover, CHMVLeftoverKind, // v0.10.830 — artık (çıplak MV kalıntısı | sahipsiz iç tablo)
-  CHReplicaConsistencyResponse, CHReplicaRepairPlan, // v0.10.791 — replika tutarlılığı
+  CHReplicaConsistencyResponse, CHReplicaRepairMode, CHReplicaRepairPlan, // v0.10.791 — replika tutarlılığı (829: kip)
 } from '@/lib/types';
 
 // AdminClickhouse — v0.5.329. Datadog-style CH self-stats:
@@ -2121,11 +2121,12 @@ function ReplicaConsistencyPanel() {
   const [cleanupConfirm, setCleanupConfirm] = useState(false);
   const [repairResult, setRepairResult] = useState<{ key: string; ok: boolean; text: string; steps?: string[] } | null>(null);
   const repairKey = (table: string, shard: number, host: string) => `${table}/${shard}/${host}`;
-  const openPlan = async (table: string, shard: number, host: string) => {
+  // v0.10.829 — mode: undefined = "Onar" (eşe katıl), 'seed' = "İlk replikayı kur".
+  const openPlan = async (table: string, shard: number, host: string, mode?: CHReplicaRepairMode) => {
     const k = repairKey(table, shard, host);
     setPlanBusy(k); setPlan(null); setAck(false); setRepairResult(null);
     try {
-      const p = await api.chReplicaRepairPlan(table, shard, host);
+      const p = await api.chReplicaRepairPlan(table, shard, host, mode);
       setPlan(p);
       // Temizle SUNUCU durumundan: `_fix` duruyorsa (yarım kalmış onarım / eski düz
       // tablo) düğme plan engelli olsa da satırda (inceleme 2026-09-19).
@@ -2139,21 +2140,23 @@ function ReplicaConsistencyPanel() {
     const k = repairKey(table, shard, host);
     setApplying(true);
     try {
-      const r = await api.chReplicaRepairApply(table, shard, host);
+      const r = await api.chReplicaRepairApply(table, shard, host, repairRequestMode(mode));
       const v = r.verify;
       setRepairResult({
         key: k, ok: true, steps: r.steps,
         text: (r.verifyError
           ? `DDL koştu, doğrulama okunamadı (${r.verifyError}) — kartı yeniden ölç`
-          : `onarıldı — ${v.zkPath ?? zkPath} · kayıtlı ${v.totalReplicas} / aktif ${v.activeReplicas}`)
+          : `${r.mode.startsWith('seed') ? 'ilk replika kuruldu' : 'onarıldı'} — ${v.zkPath ?? zkPath} · kayıtlı ${v.totalReplicas} / aktif ${v.activeReplicas}`)
           + (r.syncPending ? ' · SYNC sürüyor (parçalar arka planda çekiliyor)' : '')
-          + (r.mode === 'plain' ? ' · eski düz tablo _fix adında: sayımlar eşitlenince Temizle' : ''),
+          + (leavesFixTable(r.mode) ? ' · eski düz tablo _fix adında: sayımlar eşitlenince Temizle' : '')
+          // v0.10.829 — iş yarıda: öteki host hâlâ kendi satırlarını tutuyor.
+          + (r.mode.startsWith('seed') ? ' · shard\'ın öteki host(lar)ını şimdi "Onar" ile bu yola katın' : ''),
       });
-      if (r.mode === 'plain' && cleanup?.length) setCleanupFor({ table, shard, host, cleanup });
+      if (leavesFixTable(r.mode) && cleanup?.length) setCleanupFor({ table, shard, host, cleanup });
     } catch (e: unknown) {
       setRepairResult({ key: k, ok: false, text: e instanceof Error ? e.message : String(e) });
       // Yarım kalan düz-tablo onarımı `_fix` bırakmış olabilir: Temizle yine ulaşılabilir.
-      if (mode === 'plain' && cleanup?.length) setCleanupFor({ table, shard, host, cleanup });
+      if (leavesFixTable(mode) && cleanup?.length) setCleanupFor({ table, shard, host, cleanup });
     } finally { setApplying(false); setPlan(null); setAck(false); void scan(); }
   };
   const runCleanup = async () => {
@@ -2248,6 +2251,15 @@ function ReplicaConsistencyPanel() {
                               title="Plan (salt okuma): eşten DDL, eşin ZK yolu, makro/znode çakışması, DB motoru, kolon ve partition kontrolü; Uygula ayrı onay ister"
                               onClick={() => void openPlan(t.table, sh.shard, m.host)}>Onar</Button>
                           )}
+                          {/* v0.10.829 — shard'da HİÇ Replicated replika yoksa katılacak eş yoktur:
+                              bu host düz tablosuyla shard'ın İLK replikası olur. Ötekiler sonra "Onar". */}
+                          {canSeedFirstReplica(t.table, sh, m) && (
+                            <Button variant="danger" size="xs" disabled={planBusy !== null || applying} loading={planBusy === k}
+                              title={m.engine
+                                ? "Shard'da Replicated replika YOK: bu host'un düz tablosu kanonik ZK yolunda Replicated tabloya çevrilir (1/1, yedeklilik yok). Plan salt okuma; Uygula ayrı onay ister. Shard'ın öteki host'ları sonra Onar ile katılır."
+                                : "Shard'ın hiçbir host'unda tablo yok: bu host'ta kanonik ZK yolunda BOŞ Replicated tablo kurulur (1/1, veri taşınmaz). Plan salt okuma; Uygula ayrı onay ister. Shard'ın öteki host'u sonra Onar ile katılır."}
+                              onClick={() => void openPlan(t.table, sh.shard, m.host, 'seed')}>İlk replikayı kur</Button>
+                          )}
                         </div>
                       );
                     })}
@@ -2277,17 +2289,24 @@ function ReplicaConsistencyPanel() {
         </table>
       )}
       {plan && (
-        <Modal open title={`Replika onarımı — ${plan.table} · shard ${plan.shard} @ ${plan.host}`} onClose={() => { setPlan(null); setAck(false); }} footer={
+        <Modal open title={`${plan.mode.startsWith('seed') ? 'İlk replika kurulumu' : 'Replika onarımı'} — ${plan.table} · shard ${plan.shard} @ ${plan.host}`} onClose={() => { setPlan(null); setAck(false); }} footer={
           <>
             <Button variant="secondary" size="sm" onClick={() => { setPlan(null); setAck(false); }}>Vazgeç</Button>
             <Button variant="danger" size="sm" disabled={!ack || (plan.blocked?.length ?? 0) > 0 || applying} loading={applying} onClick={() => void applyPlan()}>Uygula (DDL koşar)</Button>
           </>
         }>
           <p style={{ fontSize: 12 }}>
-            {repairModeLabel(plan.mode)}. Eş <code className="mono">{plan.peer}</code> ({plan.peerReplica}) · yol <code className="mono">{plan.zkPath}</code> ·
-            hedef replika adı <code className="mono">{plan.targetReplica}</code> · motor <code className="mono">{plan.engine}</code>.
-            {plan.mode === 'plain' && <> Taşınacak: {(plan.partitions ?? []).length} partition · {fmtNum(plan.totalRows)} satır · {fmtBytes(plan.totalBytes)}.</>}
-            {' '}Eşten klonlanacak: {fmtBytes(plan.peerBytes)} · hedefte boş: {plan.targetFreeBytes ? fmtBytes(plan.targetFreeBytes) : 'okunamadı'}.
+            {repairModeLabel(plan.mode)}.{' '}
+            {plan.mode.startsWith('seed')
+              ? <>Eş YOK (shard'da Replicated replika yok) · yol <code className="mono">{plan.zkPath}</code> (kanonik katalogdan) ·</>
+              : <>Eş <code className="mono">{plan.peer}</code> ({plan.peerReplica}) · yol <code className="mono">{plan.zkPath}</code> ·</>}
+            {' '}hedef replika adı <code className="mono">{plan.targetReplica}</code> · motor <code className="mono">{plan.engine}</code>.
+            {leavesFixTable(plan.mode) && <> Taşınacak: {(plan.partitions ?? []).length} partition · {fmtNum(plan.totalRows)} satır · {fmtBytes(plan.totalBytes)}.</>}
+            {plan.mode === 'seed_empty'
+              ? <> Veri TAŞINMAZ: bu host'ta tablo yok, boş Replicated tablo kurulur (tek CREATE + SYNC) · hedefte boş: {plan.targetFreeBytes ? fmtBytes(plan.targetFreeBytes) : 'okunamadı'}.</>
+              : plan.mode === 'seed'
+                ? <> Eşten çekilecek parça yok (bu host ilk replika olur) · hedefte boş: {plan.targetFreeBytes ? fmtBytes(plan.targetFreeBytes) : 'okunamadı'}.</>
+                : <> Eşten klonlanacak: {fmtBytes(plan.peerBytes)} · hedefte boş: {plan.targetFreeBytes ? fmtBytes(plan.targetFreeBytes) : 'okunamadı'}.</>}
             {' '}Hedefe düğüm-yerel bağlantı (ON CLUSTER yok); audit'e düşer.
           </p>
           {plan.blocked?.map(b => <div key={b} role="alert" className="cell-hint" style={{ color: 'var(--err)' }}>Engel: {b}</div>)}

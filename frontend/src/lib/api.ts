@@ -3406,13 +3406,15 @@ export const api = {
   chReplicaConsistency: (refresh = false, signal?: AbortSignal) =>
     get<import('./types').CHReplicaConsistencyResponse>(`/api/admin/clickhouse/replica-consistency${refresh ? '?refresh=1' : ''}`, signal),
   // v0.10.820 — Replika onarımı: plan (salt okuma; eşten SHOW CREATE + yoklama) / apply (audit'li DDL) / cleanup (audit'li DROP _fix). Uzun DDL için timeoutMs.
-  chReplicaRepairPlan: (table: string, shard: number, host: string) =>
+  // v0.10.829 — mode: undefined = eşe katıl (820), 'seed' = ilk replikayı kur.
+  // AYNI üç uç: kip gövdede, ikinci bir rota (ikinci kapı + ikinci audit) yok.
+  chReplicaRepairPlan: (table: string, shard: number, host: string, mode?: import('./types').CHReplicaRepairMode) =>
     request<import('./types').CHReplicaRepairPlan>('/api/admin/clickhouse/replica-consistency/repair/plan', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host }), timeoutMs: 120_000,
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host, ...(mode ? { mode } : {}) }), timeoutMs: 120_000,
     }),
-  chReplicaRepairApply: (table: string, shard: number, host: string) =>
+  chReplicaRepairApply: (table: string, shard: number, host: string, mode?: import('./types').CHReplicaRepairMode) =>
     request<import('./types').CHReplicaRepairResult>('/api/admin/clickhouse/replica-consistency/repair/apply', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host, confirm: true }), timeoutMs: 600_000,
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host, confirm: true, ...(mode ? { mode } : {}) }), timeoutMs: 600_000,
     }),
   chReplicaRepairCleanup: (table: string, shard: number, host: string) =>
     request<import('./types').CHReplicaRepairResult>('/api/admin/clickhouse/replica-consistency/repair/cleanup', {

@@ -24,16 +24,28 @@ func TestReplicaRepairAdminRoutes(t *testing.T) {
 		`s.audit(r, "clickhouse.replica_repair"`, "http.StatusConflict",
 		`s.cacheInvalidate(r.Context(), "admin:ch:replica-consistency")`,
 		"confirm:true zorunlu",
+		// v0.10.829 — "İlk replikayı kur" AYNI üç uçtan geçer: kip gövdede,
+		// allowlist'li; tanınmayan kip 400 (sessizce eşe-katılmaya düşmez).
+		"replicaRepairModes", `"seed": true`, "Mode: in.Mode", "geçersiz mode",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("%q yok", want)
 		}
 	}
+	// SAYILAR BİLEREK DEĞİŞMEDİ (v0.10.829). Seed kipi yeni rota AÇMAZ:
+	// üç uç, üç admin kapısı, dört audit literali. Yeni bir rota eklenseydi
+	// bu sayılar 4/6 olurdu ve o zaman kapı/audit/önbellek üçlüsünün her
+	// biri ikinci kez yazılmak zorunda kalırdı — kip alanı tam da bunu
+	// önlemek için seçildi.
 	if strings.Count(src, "auth.RequireRole(auth.RoleAdmin") != 3 {
-		t.Error("üç uç da admin kapılı olmalı")
+		t.Error("üç uç da admin kapılı olmalı (seed kipi yeni rota açmaz)")
 	}
 	if strings.Count(src, `s.audit(r, "clickhouse.replica_repair"`) != 4 {
-		t.Error("apply ve cleanup: başarı VE hata audit'e düşmeli (4)")
+		t.Error("apply ve cleanup: başarı VE hata audit'e düşmeli (4); seed kipi audit literalini çoğaltmaz")
+	}
+	// Audit hedefi kipi taşır: iki farklı eylem audit'te ayırt edilebilmeli.
+	if !strings.Contains(src, `req.Table, req.Shard, req.Host, req.Mode`) {
+		t.Error("audit hedefi kipi de yazmalı (aynı literal + aynı hedef = ayırt edilemez satır)")
 	}
 	if strings.Count(src, `s.cacheInvalidate(r.Context(), "admin:ch:replica-consistency")`) != 2 {
 		t.Error("apply ve cleanup kartın önbelleğini düşürmeli")

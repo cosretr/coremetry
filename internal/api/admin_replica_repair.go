@@ -4,9 +4,14 @@ package api
 // (Admin → ClickHouse → Replika tutarlılığı; spec onayı 2026-09-19).
 // Mekanizma internal/chstore/replica_repair.go.
 //
-//	POST /api/admin/clickhouse/replica-consistency/repair/plan     (admin) {table, shard, host} — salt okuma
+//	POST /api/admin/clickhouse/replica-consistency/repair/plan     (admin) {table, shard, host, mode?} — salt okuma
 //	POST /api/admin/clickhouse/replica-consistency/repair/apply    (admin) {…, confirm:true} — audit'li, DDL koşar
 //	POST /api/admin/clickhouse/replica-consistency/repair/cleanup  (admin) {…, confirm:true} — audit'li, `_fix` düşer
+//
+// v0.10.829 — `mode` alanı ("" | "seed") AYNI üç uçtan geçer: "İlk replikayı
+// kur" ikinci bir rota DEĞİL, aynı sihirbazın kipi. İki rota iki kapı, iki
+// audit literali ve iki önbellek düşürme demek olurdu; uygunluk zaten
+// sunucuda taze raporla doğrulanıyor (chstore.PlanReplicaRepair).
 //
 // Kendi dosyası: admin_replica_consistency.go salt okuma pinli (POST yok),
 // api.go BÜYÜMEZ (route defteri). Apply/cleanup sonrası kartın 30 sn
@@ -35,8 +40,14 @@ type replicaRepairInput struct {
 	Table   string `json:"table"`
 	Shard   int    `json:"shard"`
 	Host    string `json:"host"`
+	Mode    string `json:"mode"`
 	Confirm bool   `json:"confirm"`
 }
+
+// replicaRepairModes — v0.10.829: istemciden gelebilecek kip değerleri.
+// Allowlist BİLEREK: tanınmayan bir kip sessizce "" (eşe katılma) sayılsaydı,
+// "İlk replikayı kur" düğmesi bir yazım hatasıyla BAŞKA bir onarımı koşardı.
+var replicaRepairModes = map[string]bool{"": true, "seed": true}
 
 // decodeReplicaRepairInput — gövde + zorunlu alanlar; needConfirm ise
 // confirm:true şart (yanlışlıkla POST DDL koşturmasın).
@@ -46,19 +57,28 @@ func decodeReplicaRepairInput(w http.ResponseWriter, r *http.Request, needConfir
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
 		return chstore.ReplicaRepairRequest{}, false
 	}
-	in.Table, in.Host = strings.TrimSpace(in.Table), strings.TrimSpace(in.Host)
+	in.Table, in.Host, in.Mode = strings.TrimSpace(in.Table), strings.TrimSpace(in.Host), strings.TrimSpace(in.Mode)
 	if in.Table == "" || in.Host == "" {
 		writeJSONError(w, http.StatusBadRequest, "table ve host zorunlu")
+		return chstore.ReplicaRepairRequest{}, false
+	}
+	if !replicaRepairModes[in.Mode] {
+		writeJSONError(w, http.StatusBadRequest, "geçersiz mode: boş (eşe katıl) ya da seed (ilk replikayı kur)")
 		return chstore.ReplicaRepairRequest{}, false
 	}
 	if needConfirm && !in.Confirm {
 		writeJSONError(w, http.StatusBadRequest, "confirm:true zorunlu — bu uç DDL koşar")
 		return chstore.ReplicaRepairRequest{}, false
 	}
-	return chstore.ReplicaRepairRequest{Table: in.Table, Shard: in.Shard, Host: in.Host}, true
+	return chstore.ReplicaRepairRequest{Table: in.Table, Shard: in.Shard, Host: in.Host, Mode: in.Mode}, true
 }
 
+// replicaRepairTarget — audit kaynağı. v0.10.829: kip de yazılır, yoksa iki
+// farklı eylem audit'te AYNI satır olurdu (aynı literal, aynı hedef).
 func replicaRepairTarget(req chstore.ReplicaRepairRequest) string {
+	if req.Mode != "" {
+		return fmt.Sprintf("%s/%d@%s#%s", req.Table, req.Shard, req.Host, req.Mode)
+	}
 	return fmt.Sprintf("%s/%d@%s", req.Table, req.Shard, req.Host)
 }
 

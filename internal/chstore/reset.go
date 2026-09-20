@@ -220,7 +220,9 @@ func dropReplicaZkStmt(replica, tablePath string) string {
 // system.zookeeper. Returns an error if the path doesn't exist (ZNONODE) so the
 // caller can skip — that's the normal "already clean" signal.
 func zkChildren(ctx context.Context, conn clickhouse.Conn, path string) ([]string, error) {
-	rows, err := conn.Query(ctx, "SELECT name FROM system.zookeeper WHERE path = ?", path)
+	// v0.10.829 — tavan: takılı bir Keeper plan isteğini (ve reset akışını)
+	// askıda bırakmasın. 5 sn, diğer system.* okumalarıyla aynı disiplin.
+	rows, err := conn.Query(ctx, "SELECT name FROM system.zookeeper WHERE path = ? SETTINGS max_execution_time = 5", path)
 	if err != nil {
 		return nil, err
 	}

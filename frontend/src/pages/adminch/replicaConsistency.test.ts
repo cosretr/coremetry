@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, repairModeLabel, isInnerTable } from './replicaConsistency';
+import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, canSeedFirstReplica, leavesFixTable, repairModeLabel, repairRequestMode, isInnerTable } from './replicaConsistency';
 import type { CHReplicaShard, CHReplicaState, CHReplicaVerdict } from '@/lib/types';
 
 const VERDICTS: CHReplicaVerdict[] = ['ok', 'single', 'unmapped', 'lagging', 'divergent', 'readonly', 'session_expired', 'missing_replica', 'not_replicated', 'no_replication'];
@@ -168,9 +168,74 @@ describe('canRepair / repairModeLabel — v0.10.820 Replika onarımı', () => {
     expect(canRepair('t', shard('missing_replica', [rep('h2', '/t/02/t', { engine: 'ReplicatedMergeTree', readonly: true })]), { host: 'h1' })).toBe(false);
     expect(canRepair('t', shard('missing_replica', []), { host: 'h1' })).toBe(false);
   });
-  it('mod etiketi iki kipi ayırır', () => {
+  it('mod etiketi kipleri ayırır', () => {
     expect(repairModeLabel('plain')).toContain('EXCHANGE');
     expect(repairModeLabel('missing')).toContain('klon');
+    // v0.10.829 — seed etiketi iki şeyi SÖYLEMEK zorunda: 1/1 (yedeklilik yok)
+    // ve ötekilerin sonra "Onar" ile katılması.
+    expect(repairModeLabel('seed')).toContain('1/1');
+    expect(repairModeLabel('seed')).toContain('Onar');
+  });
+});
+
+// v0.10.829 — "İlk replikayı kur": shard'da HİÇ Replicated replika yokken
+// (operatör vakası: events · shard 1, iki host da düz ReplacingMergeTree)
+// düz tablosu olan host shard'ın İLK replikası olur.
+describe('canSeedFirstReplica / leavesFixTable — v0.10.829 ilk replika', () => {
+  const plain = { host: 'h1', engine: 'ReplacingMergeTree' };
+  const peer = rep('h2', '/t/01/t', { engine: 'ReplicatedMergeTree' });
+  it('operatör vakası: Replicated replika yok + düz tablo → düğme çıkar', () => {
+    expect(canSeedFirstReplica('events', shard('not_replicated', [], { missing: [plain, { host: 'h2', engine: 'ReplacingMergeTree' }] }), plain)).toBe(true);
+    expect(canSeedFirstReplica('events', shard('missing_replica', [], { missing: [plain] }), plain)).toBe(true);
+  });
+  it('shard\'da Replicated replika VARSA çıkmaz — orada doğru eylem "Onar"', () => {
+    expect(canSeedFirstReplica('events', shard('not_replicated', [peer], { missing: [plain] }), plain)).toBe(false);
+    // İki düğme aynı satırda asla birlikte çıkmaz (koşullar birbirini dışlar).
+    const withPeer = shard('not_replicated', [peer], { missing: [plain] });
+    const noPeer = shard('not_replicated', [], { missing: [plain] });
+    expect(canRepair('events', withPeer, plain) && canSeedFirstReplica('events', withPeer, plain)).toBe(false);
+    expect(canRepair('events', noPeer, plain) && canSeedFirstReplica('events', noPeer, plain)).toBe(false);
+  });
+  // v0.10.829 boş-shard dalı — operatör: span_links_reverse · shard 2, İKİ host da "tablo yok".
+  it('shard\'ın hepsi "tablo yok" → düğme çıkar (boş Replicated tablo kurulur)', () => {
+    const empty = { host: 'h9' }; // plain h1'de: AYRI host olmalı, yoksa "başka host" kuralı ısırmaz
+    expect(canSeedFirstReplica('span_links_reverse', shard('missing_replica', [], { missing: [empty, { host: 'h2' }] }), empty)).toBe(true);
+    // Ama shard'da düz tablo taşıyan BAŞKA host varsa: ilk replika ORADA kurulur.
+    expect(canSeedFirstReplica('span_links_reverse', shard('not_replicated', [], { missing: [empty, plain] }), empty)).toBe(false);
+    // O düz host'un kendi satırında düğme ÇIKAR (tohum verisi onda).
+    expect(canSeedFirstReplica('span_links_reverse', shard('not_replicated', [], { missing: [empty, plain] }), plain)).toBe(true);
+    // Replicated replika varsa boş host için de çıkmaz (Onar eşe katar).
+    expect(canSeedFirstReplica('span_links_reverse', shard('missing_replica', [peer], { missing: [empty] }), empty)).toBe(false);
+  });
+  it('kapsam dışı satırlarda çıkmaz', () => {
+    // Replicated ama kayıtsız → yeniden ölç.
+    expect(canSeedFirstReplica('events', shard('missing_replica', []), { host: 'h1', engine: 'ReplicatedMergeTree' })).toBe(false);
+    // MV iç tablosu ve sihirbazın `_fix` tablosu kapsam dışı.
+    expect(canSeedFirstReplica('.inner_id.abc', shard('not_replicated', []), plain)).toBe(false);
+    expect(canSeedFirstReplica('events_fix', shard('not_replicated', []), plain)).toBe(false);
+    // Yapısal olmayan kararlar (ıraksama / readonly / tek replika) başka hastalık.
+    for (const v of ['divergent', 'readonly', 'session_expired', 'single', 'lagging', 'no_replication', 'ok'] as const) {
+      expect(canSeedFirstReplica('events', shard(v, []), plain)).toBe(false);
+    }
+  });
+  it('leavesFixTable: EXCHANGE\'li kipler `_fix` bırakır, boş dal bırakmaz', () => {
+    expect(leavesFixTable('plain')).toBe(true);
+    expect(leavesFixTable('seed')).toBe(true);
+    expect(leavesFixTable('seed_empty')).toBe(false); // `_fix` hiç kurulmaz
+    expect(leavesFixTable('missing')).toBe(false);
+    expect(leavesFixTable('')).toBe(false);
+  });
+  it('repairRequestMode: seed_empty bir PLAN kipi, istek yine "seed"', () => {
+    expect(repairRequestMode('seed')).toBe('seed');
+    expect(repairRequestMode('seed_empty')).toBe('seed');
+    expect(repairRequestMode('plain')).toBeUndefined();
+    expect(repairRequestMode('missing')).toBeUndefined();
+  });
+  it('mod etiketi boş dalın veri taşımadığını söyler', () => {
+    const l = repairModeLabel('seed_empty');
+    expect(l).toContain('VERİ TAŞINMAZ');
+    expect(l).toContain('Onar');
+    expect(l).not.toContain('ATTACH edilir');
   });
 });
 
@@ -183,7 +248,7 @@ describe('replicaConsistency — kablolama pini', () => {
   });
   // v0.10.820 — Onar: plan → Modal → Uygula (onay kutusu) → Temizle; istemci + tip + rota literalleri.
   it('Onar akışı kablolu: plan/apply/cleanup istemcileri, Modal, onay kutusu; api.ts rotaları; types', () => {
-    for (const s of ['api.chReplicaRepairPlan(', 'api.chReplicaRepairApply(', 'api.chReplicaRepairCleanup(', 'canRepair(', 'Replika onarımı —', 'Uygula (DDL koşar)', 'DBA gözetiminde', '_fix temizliği', 'p.fixExists', 'r.verifyError', '(plan.steps ?? [])']) {
+    for (const s of ['api.chReplicaRepairPlan(', 'api.chReplicaRepairApply(', 'api.chReplicaRepairCleanup(', 'canRepair(', "'Replika onarımı'", 'Uygula (DDL koşar)', 'DBA gözetiminde', '_fix temizliği', 'p.fixExists', 'r.verifyError', '(plan.steps ?? [])']) {
       expect(page).toContain(s);
     }
     const apiSrc = readFileSync(resolve(__dirname, '../../lib/api.ts'), 'utf8');
@@ -194,6 +259,32 @@ describe('replicaConsistency — kablolama pini', () => {
     const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
     expect(types).toContain('export interface CHReplicaRepairPlan');
     expect(types).toContain('export interface CHReplicaRepairResult');
+  });
+  // v0.10.829 — "İlk replikayı kur" satır düğmesi + kip tek koda bağlı:
+  // AYNI üç uç, kip gövdede (ikinci rota yok), `_fix` kararı leavesFixTable'dan.
+  it('İlk replikayı kur kablolu: düğme, seed kipi, tek rota, mod etiketi', () => {
+    for (const s of ['canSeedFirstReplica(', 'İlk replikayı kur', "openPlan(t.table, sh.shard, m.host, 'seed')", "'İlk replika kurulumu'", 'leavesFixTable(', "repairRequestMode(mode)"]) {
+      expect(page).toContain(s);
+    }
+    // Düğme tehlikeli: danger varyantı (accent "Onar"dan ayrılır).
+    // v0.10.829 incelemesi (5): ALTERNASYON YOK — `/…|İlk replikayı kur/`
+    // yazımında çıplak literal her zaman eşleşiyordu, yani pin boştu.
+    // Düğmenin JSX dilimi kesilir ve varyant ORADA aranır.
+    const seedBtn = page.slice(page.indexOf('canSeedFirstReplica(t.table, sh, m) && ('), page.indexOf('İlk replikayı kur</Button>'));
+    expect(seedBtn.length).toBeGreaterThan(0);
+    expect(seedBtn).toContain('variant="danger"');
+    expect(seedBtn).not.toContain('variant="accent"');
+    const apiSrc = readFileSync(resolve(__dirname, '../../lib/api.ts'), 'utf8');
+    expect(apiSrc).toContain('mode?: import(\'./types\').CHReplicaRepairMode');
+    expect(apiSrc).toContain('...(mode ? { mode } : {})');
+    // Seed kipi YENİ rota açmaz: üç repair rotası, hepsi bu kadar.
+    expect((apiSrc.match(/\/api\/admin\/clickhouse\/replica-consistency\/repair\//g) ?? []).length).toBe(3);
+    const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
+    expect(types).toContain("mode: 'missing' | 'plain' | 'seed' | 'seed_empty'");
+    expect(types).toContain('export type CHReplicaRepairMode');
+    // v0.10.829 boş dal: modal metni veri taşımadığını söyler, `_fix` geçmez.
+    expect(page).toContain("plan.mode === 'seed_empty'");
+    expect(page).toContain('Veri TAŞINMAZ');
   });
   // v0.10.824 — iç tablo satırı hangi MV'nin hedefi olduğunu söyler ve runbook
   // view adını ALIR (almazsa DROP/CREATE satırları yer tutucuyla kalır).

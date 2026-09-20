@@ -4,7 +4,7 @@
  * özet ve kararın runbook metni. Runbook operatörün kopyalayıp DBA ile
  * koşacağı SQL: ürün ZK yolu uyuşmazlığını kendi düzeltmez (veri taşıma).
  */
-import type { CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaShard, CHReplicaVerdict } from '@/lib/types';
+import type { CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaVerdict } from '@/lib/types';
 
 export type ReplicaTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
 
@@ -71,8 +71,47 @@ export function canRepair(table: string, sh: CHReplicaShard, m: CHReplicaMissing
   return (sh.replicas ?? []).some(r => (r.engine ?? '').startsWith('Replicated') && !r.readonly && !r.sessionExpired);
 }
 
+/**
+ * v0.10.829 — "İlk replikayı kur" görünürlüğü. canRepair'in kardeşi ama TERS
+ * koşul: canRepair shard'da sağlam bir Replicated EŞ ister (ona katılır), bu
+ * ise shard'da HİÇ Replicated replika OLMAMASINI ister (bu host ilk replika
+ * olur). İkisi aynı satırda asla birlikte çıkmaz.
+ *
+ * Host'un DÜZ tablosu olmalı: tablosu olmayan host'un tohumlayacak verisi
+ * yoktur, o host ilk replika doğduktan SONRA sıradan "Onar" ile kurulur.
+ * Sunucudaki seedEligibility aynı dört kuralı okur — burası yalnız düğmeyi
+ * gizler, kararı sunucu TAZE raporla verir.
+ */
+export function canSeedFirstReplica(table: string, sh: CHReplicaShard, m: CHReplicaMissingHost): boolean {
+  if (table.startsWith('.inner') || table.endsWith('_fix')) return false;
+  if (sh.verdict !== 'missing_replica' && sh.verdict !== 'not_replicated') return false;
+  if ((sh.replicas ?? []).length > 0) return false; // shard'da Replicated replika VAR → "Onar" (eşe katıl)
+  if (m.engine?.startsWith('Replicated')) return false; // kayıtsız-ama-Replicated → yeniden ölç
+  // v0.10.829 boş-shard dalı: host'ta tablo YOK. Shard'da düz tablo taşıyan
+  // BAŞKA bir host varsa ilk replika ORADA kurulmalı (veri oradan gelsin);
+  // burada boş tablo kurmak dolu host'u ikinci sıraya düşürürdü.
+  if (!m.engine && (sh.missing ?? []).some(o => o.host !== m.host && !!o.engine && !o.engine.startsWith('Replicated'))) return false;
+  return true;
+}
+
+/**
+ * v0.10.829 — EXCHANGE'li kipler `_fix`'i geride bırakır (Temizle satırda).
+ * `seed_empty` bırakmaz: o dalda `_fix` hiç kurulmaz, veri taşınmaz.
+ */
+export const leavesFixTable = (mode: string): boolean => mode === 'plain' || mode === 'seed';
+
+/**
+ * v0.10.829 — PLAN kipi → İSTEK kipi. `seed_empty` bir plan kipidir; istek
+ * allowlist'i yalnız "" | "seed" tanır, dalı sunucu taze raporla seçer.
+ */
+export const repairRequestMode = (planMode: string): CHReplicaRepairMode | undefined =>
+  planMode.startsWith('seed') ? 'seed' : undefined;
+
 export const repairModeLabel = (mode: string): string =>
-  mode === 'plain' ? 'düz tablo → Replicated: `_fix` kur, partition\'ları ATTACH et, EXCHANGE ile değiştir' : 'tablo yok → eşten klon: aynı ZK yolunda CREATE, parçalar eşten çekilir';
+  mode === 'seed_empty' ? 'shard\'ın HİÇBİR host\'unda tablo yok → bu host\'ta boş Replicated tablo kurulur (1/1, yedeklilik yok): VERİ TAŞINMAZ, `_fix`/ATTACH/EXCHANGE/Temizle yok; shard\'ın öteki host\'u sonra "Onar" ile katılır'
+  : mode === 'seed' ? 'shard\'da Replicated replika YOK → bu host İLK replika olur (1/1, yedeklilik yok): `_fix` kanonik ZK yolunda kurulur, partition\'lar ATTACH edilir, EXCHANGE ile değiştirilir; shard\'ın öteki host\'ları KENDİ satırlarını tutmaya devam eder ve sonra "Onar" ile katılmalı'
+  : mode === 'plain' ? 'düz tablo → Replicated: `_fix` kur, partition\'ları ATTACH et, EXCHANGE ile değiştir'
+  : 'tablo yok → eşten klon: aynı ZK yolunda CREATE, parçalar eşten çekilir';
 
 /** ZK yolunun son üç parçası — tabloda okunur; tamamı title'da. */
 export function shortZk(path: string): string {

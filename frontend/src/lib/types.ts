@@ -3598,10 +3598,19 @@ export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; ver
  *  viewHosts = sahibin gerçekten bulunduğu host'lar — "view: X" satırı X'in O HOST'ta durduğunu kanıtlamaz. */
 export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict; view?: string; inner?: boolean; orphan?: boolean; viewHosts?: string[] }
 export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[]; warnings?: string[] }
-/** v0.10.820 — Replika onarımı (Go chstore.ReplicaRepairPlan / ReplicaRepairResult). blocked dolu = Uygula reddedilir; mode plain = düz tablo (_fix + ATTACH + EXCHANGE), missing = tablo yok (eşten klon). */
+/**
+ * v0.10.820 — Replika onarımı (Go chstore.ReplicaRepairPlan / ReplicaRepairResult).
+ * blocked dolu = Uygula reddedilir; mode plain = düz tablo (_fix + ATTACH +
+ * EXCHANGE), missing = tablo yok (eşten klon), seed = shard'da HİÇ Replicated
+ * replika yok, bu host İLK replika olur (v0.10.829; eş yok → peer/peerReplica
+ * boş, peerBytes 0), seed_empty = shard hiç tablo taşımıyor (veri TAŞINMAZ:
+ * _fix/ATTACH/EXCHANGE/Temizle yok, tek CREATE + SYNC).
+ */
 export interface CHReplicaRepairPartition { id: string; parts: number; rows: number; bytes: number }
+/** v0.10.829 — istek kipi: boş/undefined = eşe katıl, 'seed' = ilk replikayı kur. */
+export type CHReplicaRepairMode = 'seed';
 export interface CHReplicaRepairPlan {
-  table: string; shard: number; host: string; database: string; mode: 'missing' | 'plain';
+  table: string; shard: number; host: string; database: string; mode: 'missing' | 'plain' | 'seed' | 'seed_empty';
   peer: string; zkPath: string; peerReplica: string; targetReplica: string; engine: string;
   partitions: CHReplicaRepairPartition[]; totalRows: number; totalBytes: number;
   steps: string[]; cleanup?: string[]; blocked?: string[]; warnings?: string[]; checks: string[];
