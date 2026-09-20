@@ -7,7 +7,7 @@ import { isMessagingDep, fmtNum } from '@/lib/utils';
 import { edgeWeights } from '@/lib/edgeWeight';
 import { edgeArrow } from '@/lib/topoArrow';
 import { fitViewport, readableFit, zoomAt, zoomRange, type Viewport } from '@/lib/topoViewport';
-import { depPillLines } from '@/lib/topoLabels';
+import { depPillLinesMap } from '@/lib/topoLabels';
 import { Button } from '@/components/ui/Button';
 import { useServicesMetadata } from '@/lib/queries';
 import {
@@ -113,6 +113,18 @@ export function TopologyFlowGraph({
   const { data, groups, bundled } = useMemo(
     () => foldTopology(preFold, nsOf, collapsed),
     [preFold, nsOf, collapsed],
+  );
+
+  // v0.10.837 (Operatör-bildirimli, prod: "altı Oracle düğümü, hepsinin
+  // başlığı aynı") — bağımlılık pili etiketleri KÜME-DUYARLI hesaplanır.
+  // Tek düğüme bakan depPillLines "bu db.name ayırt edici mi?" sorusunu
+  // cevaplayamıyordu; aynı db.name farklı sunucularda tekrarlanınca altı pil
+  // aynı yazıyı taşıyordu. Eşlem render edilen KÜMENİN tamamından doğar
+  // (katlama sonrası `data.nodes`) — bu yüzden TopologyFlowGraph'ın her
+  // çağrı yeri (/service-map ve servis Topology sekmesi) aynı yoldan geçer.
+  const depPills = useMemo(
+    () => depPillLinesMap(data.nodes, n => depLabel(n.kind!)),
+    [data.nodes],
   );
   const writeFold = (next: ReadonlySet<string>) => setParams(prev => {
     const p = new URLSearchParams(prev);
@@ -503,6 +515,10 @@ export function TopologyFlowGraph({
           );
         }
         const isDep = !!n.kind;
+        // Eşlem `data.nodes`ten doğuyor ve burada gezilen liste de o —
+        // yani isDep olan her düğümün kaydı vardır. `?? null` yalnızca
+        // tipin zorunlu kıldığı savunma.
+        const pill = isDep ? (depPills.get(n.service) ?? null) : null;
         return (
           <div key={n.service}
             className={
@@ -529,16 +545,18 @@ export function TopologyFlowGraph({
             <div style={{ minWidth: 0 }}>
               {/* v0.10.517 (operatör: "oracle altta, db name üstte") — bağımlılık
                   pilinde somut kimlik (db.name / @instance) BAŞLIK, sistem adı
-                  alt satır (lib/topoLabels depPillLines). */}
+                  alt satır. v0.10.837: o "somut kimlik" kümeye göre seçiliyor
+                  (lib/topoLabels depPillLinesMap) — aynı db.name farklı
+                  sunucularda tekrarlanıyorsa başlığa ana makine adı çıkar. */}
               <div className="topo-name">
-                {isDep ? depPillLines(n, depLabel(n.kind!)).title : displayLabel(n)}
+                {pill ? pill.title : displayLabel(n)}
                 {/* v0.8.383 — env chip: lights up on the MV path where the
                     adapter carries GraphNode.env (deploy_env-led derive,
                     v0.8.380). The sampled global map has no env → no chip. */}
                 {n.env && <span className="topo-envchip">{n.env}</span>}
               </div>
               <div className="topo-sub">
-                {isDep ? depPillLines(n, depLabel(n.kind!)).sub : `${n.spanCount.toLocaleString()} span`}
+                {pill ? pill.sub : `${n.spanCount.toLocaleString()} span`}
               </div>
             </div>
           </div>
