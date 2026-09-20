@@ -69,6 +69,23 @@ export function fleetVerdict(f: FleetLike): { tone: LossTone; text: string; pct:
   return { tone: pct >= 99.5 ? 'b-ok' : pct >= 97 ? 'b-warn' : 'b-err', text: `%${num} saklandı`, pct };
 }
 
+// v0.10.823 — ham sayım satırları. Şard ETİKETLENİR: aynı shard'ın host'ları
+// kıyaslanabilir, farklı shard'larınki KIYASLANAMAZ (shard anahtarı veriyi
+// zaten böler). Eşlenemeyen host (shard < 0) "?" ile işaretlenir ve
+// sunucudaki kıyasa da girmemiştir.
+export interface RawHostLike { host: string; shard: number; count: number }
+
+/** Satır etiketi: "ham · shard 1 · ch-01"; eşlenemeyen host "shard ?". */
+export function rawHostLabel(h: RawHostLike): string {
+  return `ham · shard ${h.shard < 0 ? '?' : h.shard} · ${h.host}`;
+}
+
+/** Önce shard (eşlenemeyenler EN SONA), sonra host adı. Girdi kopyalanır. */
+export function sortRawHosts(hs: RawHostLike[]): RawHostLike[] {
+  const rank = (s: number) => (s < 0 ? Number.MAX_SAFE_INTEGER : s);
+  return [...hs].sort((a, b) => rank(a.shard) - rank(b.shard) || a.host.localeCompare(b.host));
+}
+
 // stalePods — son örneği maxAgeS'den eski pod sayısı (defter kalp atışı 60 s).
 export function stalePods(pods: { lastSampleAt: number }[], nowNs: number, maxAgeS = 180): number {
   return pods.filter(p => nowNs - p.lastSampleAt > maxAgeS * 1e9).length;

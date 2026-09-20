@@ -3,7 +3,15 @@ package api
 // trace_health.go — v0.10.757 "Trace hattı sağlığı" paneli (trace bütünlüğü
 // denetimi 2026-09-17; operatör onayı: sihirbaz değil panel, önce pod-içi).
 //
-//	GET /api/admin/clickhouse/trace-health?range_s=3600   (admin; serveCached 30 s)
+//	GET /api/admin/clickhouse/trace-health?range_s=3600[&raw=1]  (admin; serveCached 30 s)
+//
+// raw=1 (v0.10.823) İSTEĞE BAĞLIDIR ve öyle kalmalı: "agregat için ham
+// spans okumak bug"tır, panelin VARSAYILAN sayısı service_summary_5m'den
+// gelmeye devam eder. Ham sayım bir agregat değil, MV sayısının
+// DOĞRULAMASIDIR — MV kaybı ile replika ayrışmasını ayırt eder (test
+// kümesi, 2026-09-19: mutabakat %25.8, sebebi kayıp değil, shard'ın
+// replikalarının birbirini replike etmemesiydi). Pencere MV sayısıyla
+// AYNI (traceHealthWindow) ve önbellek anahtarı bayrağı taşır.
 //
 // Üç kart, bölüm başına YUMUŞAK hata (bir CH sorgusu düşerse öteki kartlar
 // gelir, `errors` alanı hangisinin düştüğünü söyler):
@@ -114,7 +122,18 @@ type traceHealthResponse struct {
 	Fleet         traceHealthFleet             `json:"fleet"`
 	Coverage      traceHealthCoverage          `json:"coverage"`
 	Names         chstore.OperationNameQuality `json:"names"`
-	Errors        map[string]string            `json:"errors,omitempty"`
+	// Raw — v0.10.823, yalnız raw=1 istendiğinde. Yokluğu "ham sayım
+	// istenmedi" demektir; sorgu düşerse errors["raw"] dolar.
+	Raw    *chstore.RawSpanCount `json:"raw,omitempty"`
+	Errors map[string]string     `json:"errors,omitempty"`
+}
+
+// traceHealthWindow — SAF: MV sayımının da ham sayımın da gördüğü pencere
+// [from, to). Alt uç 5 dk kovasına hizalı (MV kovası bölünemez), üst uç
+// now. İki sayı FARKLI pencereden okunursa fark "kayıp" gibi görünürdü —
+// bu yüzden tek yerde üretilir.
+func traceHealthWindow(now time.Time, rangeS int) (from, to time.Time) {
+	return now.Add(-time.Duration(rangeS) * time.Second).Truncate(5 * time.Minute), now
 }
 
 // sumStored — SAF.
@@ -192,7 +211,11 @@ func ledgerMissing(err error) bool {
 
 func (s *Server) getTraceHealth(w http.ResponseWriter, r *http.Request) {
 	rangeS := traceHealthRange(r.URL.Query().Get("range_s"))
-	key := "admin:trace-health:range=" + strconv.Itoa(rangeS)
+	// v0.10.823 — anahtar TÜM girdileri taşır: raw bayrağı cevabın şeklini
+	// değiştirir, anahtara girmezse ham sayım isteyen ile istemeyen aynı
+	// kaydı paylaşır (v0.5.187 sınıfı çapraz zehirlenme).
+	raw := parseBoolParam(r.URL.Query().Get("raw"))
+	key := "admin:trace-health:range=" + strconv.Itoa(rangeS) + ":raw=" + strconv.FormatBool(raw)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		now := time.Now()
 		host, _ := os.Hostname()
@@ -215,11 +238,20 @@ func (s *Server) getTraceHealth(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Spool, resp.SpoolDegraded, resp.SpoolDetail = s.distributionBacklog()
 
-		from := now.Add(-time.Duration(rangeS) * time.Second).Truncate(5 * time.Minute)
-		if b, err := s.store.StoredSpanBuckets(ctx, from, now); err != nil {
+		from, to := traceHealthWindow(now, rangeS)
+		if b, err := s.store.StoredSpanBuckets(ctx, from, to); err != nil {
 			resp.Errors["stored"] = err.Error()
 		} else {
 			resp.Stored, resp.StoredTotal = b, sumStored(b)
+		}
+
+		// v0.10.823 — ham sayım AYNI pencerede, yalnız istendiğinde.
+		if raw {
+			if rc, err := s.store.RawSpanCounts(ctx, from, to); err != nil {
+				resp.Errors["raw"] = err.Error()
+			} else {
+				resp.Raw = &rc
+			}
 		}
 
 		// v0.10.767 (Faz B) — filo mutabakatı, yerleşmiş pencere.

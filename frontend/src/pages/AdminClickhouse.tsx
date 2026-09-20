@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { fmtNum, fmtBytes, fmtClock, fmtDateTime, tsLong } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
 import { useQuery } from '@tanstack/react-query';
-import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, staleVerdict } from './adminch/traceHealth'; // v0.10.757
+import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, rawHostLabel, sortRawHosts, staleVerdict } from './adminch/traceHealth'; // v0.10.757, ham sayım v0.10.823
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
@@ -2136,9 +2136,12 @@ function ReplicaConsistencyPanel() {
 function TraceHealthPanel() {
   const [rangeS, setRangeS] = useState(3600);
   const [armed, setArmed] = useState<number | null>(null);
+  // v0.10.823 — ham sayım isteğe bağlı (pahalı: MV'yi atlar, spans'ı tarar).
+  // Anahtarın parçası: işaretlenince aynı pencere ham sayımla yeniden çekilir.
+  const [raw, setRaw] = useState(false);
   const q = useQuery({
-    queryKey: ['ch-trace-health', armed],
-    queryFn: ({ signal }) => api.chTraceHealth(armed ?? 3600, signal),
+    queryKey: ['ch-trace-health', armed, raw],
+    queryFn: ({ signal }) => api.chTraceHealth(armed ?? 3600, raw, signal),
     enabled: armed !== null,
     staleTime: 30_000,
   });
@@ -2174,6 +2177,10 @@ function TraceHealthPanel() {
           <option value={86400}>son 24 saat</option>
         </select>
         <Button variant="accent" size="sm" onClick={() => setArmed(rangeS)} loading={armed !== null && q.isPending}>Çalıştır</Button>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+          title="MV'yi atlayıp ham spans'ı sayar (Distributed toplam + küme kipinde host başına spans_local). Pahalı: yalnız MV sayısını doğrulamak için.">
+          <input type="checkbox" checked={raw} onChange={e => setRaw(e.target.checked)} /> Ham sayım (spans, host başına)
+        </label>
         {data && <span className="badge b-gray" title="Sayaçlar pod-içi; bu cevabı veren pod">pod: {data.pod.host}</span>}
         {data?.errors && Object.entries(data.errors).map(([k, v]) => (
           <span key={k} className="badge b-err" title={v}>{k} okunamadı</span>
@@ -2202,6 +2209,26 @@ function TraceHealthPanel() {
             {data.spool && !data.spool.measured && kv('spool', <span className="badge b-warn" title={data.spool.probeError}>ölçülemedi</span>)}
             {data.spoolDegraded && kv('spool durumu', <span className="badge b-err" title={data.spoolDetail}>tıkalı</span>)}
             {kv(`CH'de saklanan (son ${Math.round(data.rangeS / 60)} dk)`, fmtNum(data.storedTotal))}
+            {/* v0.10.823 — isteğe bağlı ham sayım; MV sayısının yanında, aynı pencerede.
+                Satırlar SHARD'a göre gruplu: farklı shard'ların farklı olması normaldir. */}
+            {data.raw && kv('Ham spans (Distributed)', fmtNum(data.raw.total))}
+            {data.raw?.byHostError && (
+              <div className="cell-hint" style={{ marginTop: 4 }}>
+                <span className="badge b-err" title={data.raw.byHostError}>host başına sayım okunamadı</span>{' '}
+                Distributed toplam geçerli, host kırılımı yok.
+              </div>
+            )}
+            {data.raw && sortRawHosts(data.raw.byHost).map(h => kv(rawHostLabel(h), fmtNum(h.count)))}
+            {data.raw?.notes?.map(n => <div key={n} className="cell-hint" style={{ marginTop: 4 }}>{n}</div>)}
+            {data.raw && (
+              <div className="cell-hint" style={{ marginTop: 4 }} title={data.raw.source}>
+                AYNI shard'ın host'ları birbirinden farklıysa o shard'ın replikaları ayrışmış; farklı shard'ların
+                farklı olması normaldir (shard anahtarı).{' '}
+                {(data.raw.notes?.length ?? 0) > 0
+                  ? 'Replikalar uyumsuzken MV/ham kıyası anlamsız — önce replikaları onar.'
+                  : 'MV sayımı ham sayımdan küçükse MV/kaskad kaybı.'}
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 40, marginTop: 6 }} aria-label="5 dk kovası başına saklanan span">
               {bars.map(b => (
                 <div key={b.t} title={`${hhmm(b.t)} · ${fmtNum(b.spans)} span`}

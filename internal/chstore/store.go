@@ -904,6 +904,10 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	// v0.10.762 — sarkan MV dedektörü (log; onarım sihirbazdan). Boot'u
 	// bloklamaz: 10 s tavan, hata yalnız log.
 	s.LogDanglingMVs(ctx)
+	// v0.10.823 — küme tanımında kendini is_local görmeyen host: ON CLUSTER
+	// DDL orada SESSİZCE atlanır (tablo hiç kurulmaz / düz MergeTree kalır).
+	// Aynı yaşam döngüsü: 10 s tavan, DDL koşmaz, hata yalnız log.
+	s.LogDDLBlindHosts(ctx)
 	// v0.5.421 — boot-time reconciliation. In cluster mode the
 	// migration loop normally creates both the `<name>_local`
 	// table and its Distributed wrapper at `<name>`. If a prior

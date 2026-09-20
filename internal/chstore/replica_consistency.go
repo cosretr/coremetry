@@ -356,6 +356,70 @@ func shardRefFor(host string, hosts []clusterHostRow, macros map[string]string, 
 	return -1, 0, ""
 }
 
+// clusterMacrosByHost — küme geneli {shard}/{replica} makroları ve sıralı
+// ayrık {shard} değerleri (v0.10.823'te ReplicaConsistency'nin içinden
+// çıkarıldı). shardRefFor'un ikinci ve üçüncü girdisi buradan gelir:
+// küme tanımı IP ile yazılmışsa hostName() → shard eşlemesinin TEK kaynağı
+// makrolardır, ve iki yüzeyin aynı numarayı vermesi şarttır.
+func (s *Store) clusterMacrosByHost(ctx context.Context, cluster string) (map[string]map[string]string, []string, error) {
+	macrosByHost := map[string]map[string]string{}
+	mrows, err := s.conn.Query(ctx, fmt.Sprintf(`
+		SELECT hostName(), macro, substitution
+		FROM clusterAllReplicas('%s', system.macros)
+		SETTINGS max_execution_time = 10, skip_unavailable_shards = 1`, cluster))
+	if err != nil {
+		return nil, nil, fmt.Errorf("system.macros: %w", err)
+	}
+	for mrows.Next() {
+		var host, macro, sub string
+		if err := mrows.Scan(&host, &macro, &sub); err != nil {
+			mrows.Close()
+			return nil, nil, err
+		}
+		if macrosByHost[host] == nil {
+			macrosByHost[host] = map[string]string{}
+		}
+		macrosByHost[host][macro] = sub
+	}
+	mrows.Close()
+	if err := mrows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("system.macros: %w", err)
+	}
+	set := map[string]bool{}
+	for _, m := range macrosByHost {
+		if v := strings.TrimSpace(m["shard"]); v != "" {
+			set[v] = true
+		}
+	}
+	macroShards := make([]string, 0, len(set))
+	for v := range set {
+		macroShards = append(macroShards, v)
+	}
+	sort.Strings(macroShards)
+	return macrosByHost, macroShards, nil
+}
+
+// hostShardMap — hostName() → shard numarası (eşlenemeyen host YOK sayılmaz,
+// haritaya hiç girmez; çağıran onu -1 sayar). system.clusters + makrolar,
+// karar shardRefFor'da (v0.10.792 IP-tanımlı küme dersi).
+func (s *Store) hostShardMap(ctx context.Context, cluster string, hosts []string) (map[string]int, error) {
+	hostRows, err := s.clusterHostRowsFor(ctx, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("system.clusters: %w", err)
+	}
+	macrosByHost, macroShards, err := s.clusterMacrosByHost(ctx, cluster)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(hosts))
+	for _, h := range hosts {
+		if sh, _, via := shardRefFor(h, hostRows, macrosByHost[h], macroShards); via != "" && sh >= 0 {
+			out[h] = sh
+		}
+	}
+	return out, nil
+}
+
 func firstNonEmpty(a, b string) string {
 	if strings.TrimSpace(a) != "" {
 		return a
@@ -383,40 +447,13 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 
 	// Makrolar — {shard}/{replica} yapılandırması; yol uyuşmazlığının kökü ve
 	// system.clusters IP ile yazılmışsa hostName() → shard eşlemesinin kaynağı.
-	macrosByHost := map[string]map[string]string{}
-	mrows, err := s.conn.Query(ctx, fmt.Sprintf(`
-		SELECT hostName(), macro, substitution
-		FROM clusterAllReplicas('%s', system.macros)
-		SETTINGS max_execution_time = 10, skip_unavailable_shards = 1`, cluster))
+	// v0.10.823: okuma + sıralı ayrık {shard} listesi clusterMacrosByHost'a
+	// ÇIKARILDI — ham sayım kartı da aynı eşlemeyi kullanır, iki kopya iki
+	// farklı shard numarası üretirdi.
+	macrosByHost, macroShards, err := s.clusterMacrosByHost(ctx, cluster)
 	if err != nil {
-		return nil, fmt.Errorf("system.macros: %w", err)
+		return nil, err
 	}
-	for mrows.Next() {
-		var host, macro, sub string
-		if err := mrows.Scan(&host, &macro, &sub); err != nil {
-			mrows.Close()
-			return nil, err
-		}
-		if macrosByHost[host] == nil {
-			macrosByHost[host] = map[string]string{}
-		}
-		macrosByHost[host][macro] = sub
-	}
-	mrows.Close()
-	if err := mrows.Err(); err != nil {
-		return nil, fmt.Errorf("system.macros: %w", err)
-	}
-	macroShardSet := map[string]bool{}
-	for _, m := range macrosByHost {
-		if v := strings.TrimSpace(m["shard"]); v != "" {
-			macroShardSet[v] = true
-		}
-	}
-	macroShards := make([]string, 0, len(macroShardSet))
-	for v := range macroShardSet {
-		macroShards = append(macroShards, v)
-	}
-	sort.Strings(macroShards)
 
 	// v0.10.818 — erişilebilir roster: system.one her cevap veren host'tan
 	// tam bir satır verir (makrosuz host da sayılır); makro rosteriyle birleşir.

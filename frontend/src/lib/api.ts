@@ -3399,8 +3399,10 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host, confirm: true }), timeoutMs: 300_000,
     }),
   // v0.10.757 — Trace hattı sağlığı (Admin ClickHouse): pod-içi ingest sayaçları + MV ölçüleri, bölüm başına hata.
-  chTraceHealth: (rangeS: number, signal?: AbortSignal) =>
-    get<import('./types').CHTraceHealthResponse>(`/api/admin/clickhouse/trace-health?range_s=${rangeS}`, signal),
+  // raw=1 (v0.10.823) isteğe bağlı ham sayım; bayrak yalnız true ise yazılır
+  // (false'ta URL — ve sunucu önbellek anahtarı — aynen eski hâlinde kalır).
+  chTraceHealth: (rangeS: number, raw?: boolean, signal?: AbortSignal) =>
+    get<import('./types').CHTraceHealthResponse>(`/api/admin/clickhouse/trace-health?range_s=${rangeS}${raw ? '&raw=1' : ''}`, signal),
   // v0.10.733 — kök tanımı (strict | entry); GET tüm roller, PUT admin.
   getTraceRootDef: (signal?: AbortSignal) =>
     get<import('./types').TraceRootDefSettings>('/api/settings/trace-root-def', signal),

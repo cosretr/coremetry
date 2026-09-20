@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, podRSHash, stalePods, staleVerdict } from './traceHealth';
+import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, podRSHash, rawHostLabel, sortRawHosts, stalePods, staleVerdict } from './traceHealth';
 
 describe('traceHealth — saf', () => {
   it('lossVerdict: kalıcı kayıp err, kalite işareti warn, temiz ok', () => {
@@ -89,5 +89,48 @@ describe('traceHealth — bayat pod hükmü', () => {
     expect(staleVerdict([old('coremetry-ingest-5f88b4fd-x')], now)?.tone).toBe('b-err');
     expect(staleVerdict([fresh('coremetry-ingest-5f88b4fd-x')], now)).toBeNull();
     expect(stalePods([old('a-b-c')], now)).toBe(1);
+  });
+});
+
+// v0.10.823 — isteğe bağlı HAM sayım (spans, host başına). MV sayısı
+// varsayılan kalır; kutucuk işaretlenince aynı pencere raw=1 ile çekilir.
+describe('traceHealth — ham sayım kablolaması', () => {
+  const page = readFileSync(resolve(__dirname, '../AdminClickhouse.tsx'), 'utf8');
+  const api = readFileSync(resolve(__dirname, '../../lib/api.ts'), 'utf8');
+  const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
+  it('kutucuk + raw sorgu anahtarı + istemci ucu + tip', () => {
+    expect(page).toContain('Ham sayım (spans, host başına)');
+    expect(page).toContain("queryKey: ['ch-trace-health', armed, raw]");
+    expect(page).toContain('api.chTraceHealth(armed ?? 3600, raw, signal)');
+    expect(page).toContain('Ham spans (Distributed)');
+    expect(api).toContain("${raw ? '&raw=1' : ''}");
+    expect(types).toContain('byHost: { host: string; shard: number; count: number }[]');
+    expect(types).toContain('byShard: { shard: number; hosts: number; min: number; max: number; spreadPct: number }[]');
+  });
+  // İnceleme #2 — şard bilinci: kıyas AYNI shard içinde; MV/ham cümlesi
+  // replikalar uyumsuzken KURULMAZ (iki bağımsız rastgele-replika okuması).
+  it('şard bilincli metin + koşullu MV/ham cümlesi + kısmi hata satırı', () => {
+    expect(page).toContain("AYNI shard'ın host'ları birbirinden farklıysa o shard'ın replikaları ayrışmış");
+    expect(page).toContain("farklı olması normaldir (shard anahtarı)");
+    expect(page).toContain("Replikalar uyumsuzken MV/ham kıyası anlamsız — önce replikaları onar.");
+    expect(page).toContain("'MV sayımı ham sayımdan küçükse MV/kaskad kaybı.'");
+    expect(page).toContain('sortRawHosts(data.raw.byHost).map(h => kv(rawHostLabel(h)');
+    expect(page).toContain('host başına sayım okunamadı');
+  });
+  it('rawHostLabel / sortRawHosts: shard etiketi, eşlenemeyen sona', () => {
+    expect(rawHostLabel({ host: 'ch-01', shard: 1, count: 9 })).toBe('ham · shard 1 · ch-01');
+    expect(rawHostLabel({ host: 'ch-05', shard: -1, count: 9 })).toBe('ham · shard ? · ch-05');
+    const hs = [
+      { host: 'ch-05', shard: -1, count: 1 }, { host: 'ch-03', shard: 2, count: 2 },
+      { host: 'ch-02', shard: 1, count: 3 }, { host: 'ch-01', shard: 1, count: 4 },
+    ];
+    expect(sortRawHosts(hs).map(h => h.host)).toEqual(['ch-01', 'ch-02', 'ch-03', 'ch-05']);
+    expect(hs[0].host).toBe('ch-05'); // girdi kopyalanır, yerinde sıralanmaz
+  });
+  it('varsayılan (işaretsiz) istek eski URL ile birebir aynı', () => {
+    const build = (rangeS: number, raw?: boolean) => `/api/admin/clickhouse/trace-health?range_s=${rangeS}${raw ? '&raw=1' : ''}`;
+    expect(build(3600)).toBe('/api/admin/clickhouse/trace-health?range_s=3600');
+    expect(build(3600, false)).toBe('/api/admin/clickhouse/trace-health?range_s=3600');
+    expect(build(900, true)).toBe('/api/admin/clickhouse/trace-health?range_s=900&raw=1');
   });
 });

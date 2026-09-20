@@ -3601,6 +3601,20 @@ export interface CHTraceHealthResponse {
   };
   coverage: { def: TraceRootDef; gapDays: string[]; rangeS: number; source?: string; traces: number; withRoot: number; withEntryRoot: number };
   names: { totalSpans: number; bareMethodSpans: number; emptyNameSpans: number; distinctNames: number; topCardinality: { service: string; distinctNames: number }[] };
+  /**
+   * v0.10.823 — YALNIZ raw=1 istendiğinde gelir: ham span sayımı.
+   * total = Distributed (shard başına BİR replika); byHost = her replika ayrı
+   * (sağlıklı RF=2'de toplamı total'in iki katıdır — normal). Ayrışma sinyali
+   * şard İÇİ yayılım (byShard.spreadPct); notes onu ve Distributed toplamın
+   * shard bandı dışına düşmesini anlatır. byHostError = fan-out düştü ama
+   * total geçerli (kısmi sonuç).
+   */
+  raw?: {
+    total: number;
+    byHost: { host: string; shard: number; count: number }[];
+    byShard: { shard: number; hosts: number; min: number; max: number; spreadPct: number }[];
+    windowS: number; source: string; notes?: string[]; byHostError?: string;
+  };
   errors?: Record<string, string>;
 }
 // v0.10.733 — kök tanımı ayarı (Go chstore.TraceRootDef; system_settings trace_root_def).

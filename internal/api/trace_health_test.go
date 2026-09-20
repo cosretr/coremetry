@@ -3,6 +3,7 @@ package api
 // trace_health_test.go — v0.10.757: saf yardımcılar + route/kayıt pinleri.
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -106,6 +107,116 @@ func TestLedgerCoveredFrom(t *testing.T) {
 	early := time.Date(2026, 9, 17, 13, 0, 0, 0, time.UTC)
 	if got := ledgerCoveredFrom(sf, early.UnixNano()); !got.Equal(sf) {
 		t.Errorf("pencereden eski örnek → pencere başı: %v", got)
+	}
+}
+
+// v0.10.823 — isteğe bağlı ham sayım: pencere MV ile AYNI, anahtar bayrağı
+// taşır, istenmediğinde cevapta `raw` alanı HİÇ olmaz.
+func TestTraceHealthWindow(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 7, 30, 0, time.UTC)
+	cases := []struct {
+		rangeS   int
+		wantFrom time.Time
+	}{
+		{300, time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)},
+		{900, time.Date(2026, 9, 19, 11, 50, 0, 0, time.UTC)},
+		{3600, time.Date(2026, 9, 19, 11, 5, 0, 0, time.UTC)},
+		{21600, time.Date(2026, 9, 19, 6, 5, 0, 0, time.UTC)},
+		{86400, time.Date(2026, 9, 18, 12, 5, 0, 0, time.UTC)},
+	}
+	for _, c := range cases {
+		from, to := traceHealthWindow(now, c.rangeS)
+		if !from.Equal(c.wantFrom) {
+			t.Errorf("range_s=%d: from %v, istenen %v", c.rangeS, from, c.wantFrom)
+		}
+		if !to.Equal(now) {
+			t.Errorf("range_s=%d: to now olmalı, %v", c.rangeS, to)
+		}
+		// Alt uç HER pencerede 5 dk kovasına hizalı (MV kovası bölünemez).
+		if from.Truncate(5*time.Minute).UnixNano() != from.UnixNano() {
+			t.Errorf("range_s=%d: from 5 dk'ya hizalı değil: %v", c.rangeS, from)
+		}
+	}
+}
+
+func TestTraceHealthCacheKeyIncludesRaw(t *testing.T) {
+	src, err := os.ReadFile("trace_health.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	for _, want := range []string{
+		`parseBoolParam(r.URL.Query().Get("raw"))`,
+		`":raw=" + strconv.FormatBool(raw)`,          // anahtar TÜM girdileri taşır (v0.5.187)
+		"from, to := traceHealthWindow(now, rangeS)", // ham sayım MV ile aynı pencerede
+		"s.store.RawSpanCounts(ctx, from, to)",
+		`resp.Errors["raw"]`, // bölüm başına yumuşak hata
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("trace_health.go %q içermeli", want)
+		}
+	}
+}
+
+func TestTraceHealthRawOmittedWhenNotRequested(t *testing.T) {
+	var resp traceHealthResponse
+	b, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"raw"`) {
+		t.Errorf("raw istenmediğinde alan HİÇ olmamalı: %s", b)
+	}
+	resp.Raw = &chstore.RawSpanCount{
+		Total:   7,
+		ByHost:  []chstore.RawSpanHost{{Host: "ch-01", Shard: 0, Count: 7}},
+		ByShard: []chstore.RawShardSpread{{Shard: 0, Hosts: 1, Min: 7, Max: 7}},
+		WindowS: 3600, Source: "spans (tek düğüm)",
+	}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"raw"`, `"byHost"`, `"byShard"`, `"shard":0`, `"windowS":3600`, `"total":7`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("raw istendiğinde %q olmalı: %s", want, b)
+		}
+	}
+	// byHost/byShard ASLA null: FE koşulsuz map'ler.
+	resp.Raw = &chstore.RawSpanCount{ByHost: []chstore.RawSpanHost{}, ByShard: []chstore.RawShardSpread{}}
+	b, _ = json.Marshal(resp)
+	for _, bad := range []string{`"byHost":null`, `"byShard":null`} {
+		if strings.Contains(string(b), bad) {
+			t.Errorf("boş dizi olmalı, null değil (%s): %s", bad, b)
+		}
+	}
+}
+
+// v0.10.823 (inceleme #3) — host başına fan-out düşerse HESAPLANMIŞ
+// Distributed toplam korunur: kısmi sonuç > hiç sonuç. errors["raw"]
+// yalnız TOPLAM düştüğünde dolar.
+func TestTraceHealthRawPartialWhenByHostFails(t *testing.T) {
+	resp := traceHealthResponse{Raw: &chstore.RawSpanCount{
+		Total: 123, ByHost: []chstore.RawSpanHost{}, ByShard: []chstore.RawShardSpread{},
+		ByHostError: "code: 159, Timeout exceeded",
+	}}
+	b, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"total":123`, `"byHostError"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("kısmi sonuçta %q olmalı: %s", want, b)
+		}
+	}
+	if strings.Contains(string(b), `"errors"`) {
+		t.Errorf("host başına hata errors[raw]'a düşmemeli: %s", b)
+	}
+	// Sağlıklı sonuçta alan hiç görünmemeli (omitempty).
+	resp.Raw.ByHostError = ""
+	b, _ = json.Marshal(resp)
+	if strings.Contains(string(b), `"byHostError"`) {
+		t.Errorf("hata yokken alan olmamalı: %s", b)
 	}
 }
 
