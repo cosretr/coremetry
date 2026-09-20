@@ -636,6 +636,16 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	// değerle koştuğumuz tek satırdan okunsun).
 	log.Printf("[chstore] max_replica_delay_for_distributed_queries=%d (0 = CH varsayılanı 300; COREMETRY_CH_READ_MAX_REPLICA_DELAY) mv_dedup_blocks=%v (COREMETRY_CH_MV_DEDUP_BLOCKS) insert_quorum=%d (COREMETRY_CH_INSERT_QUORUM; <2 kapalı)",
 		cfg.ReadMaxReplicaDelayS, cfg.MVDedupBlocks, cfg.InsertQuorum)
+	// v0.10.822 — okuma tarafı replika seçimi. ETKİN değer loglanır (geçersiz
+	// bir env "uygulanmış" gibi görünmesin) ve ayarlar aşağıda YALNIZ ana
+	// bağlantı + okuma havuzuna eklenir; ingest havuzu dokunulmaz.
+	readBalancing, rbWarns := chReadBalancingSettings(cfg.ReadLoadBalancing, cfg.ReadPreferLocalhost)
+	for _, w := range rbWarns {
+		log.Printf("[chstore] WARNING: %s", w)
+	}
+	rbLB, rbPrefer := chReadBalancingEffective(readBalancing)
+	log.Printf("[chstore] okuma replika seçimi: load_balancing=%s prefer_localhost_replica=%s (ETKİN; COREMETRY_CH_READ_LOAD_BALANCING / COREMETRY_CH_READ_PREFER_LOCALHOST) — yalnız ana bağlantı + okuma havuzu, ingest havuzuna uygulanmaz. Deterministik okuma için İKİSİ birlikte: in_order + 0 (varsayılan 1, koordinatörün kendi shard'ında load_balancing'i devre dışı bırakır). Iraksamış replikaları GİZLER, düzeltmez: Admin → ClickHouse → Replika tutarlılığı / Replika onarımı",
+		rbLB, rbPrefer)
 	log.Printf("[chstore] parallel_view_processing=%d (COREMETRY_CH_PARALLEL_VIEWS; v0.10.511 ölçüm anahtarı)", map[bool]int{true: 1, false: 0}[!cfg.DisableParallelViews])
 	maxMem, extGroupBy, extSort := memPlan.MaxMemory, memPlan.GroupBy, memPlan.Sort
 	// v0.9.185 — surface the EFFECTIVE per-query limits at boot so an
@@ -750,6 +760,11 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 			o.Settings["insert_quorum_parallel"] = 1
 			o.Settings["insert_quorum_timeout"] = 60000 // ms
 		}
+		// v0.10.822 — okuma tarafı replika seçimi BU PAYLAŞILAN kapanışta
+		// UYGULANMAZ: buradan ingest havuzu da doğardı ve her iki ayar
+		// Distributed INSERT'te de replika seçer (gerekçe:
+		// read_balancing.go başlığı). Ana bağlantı + okuma havuzu için
+		// aşağıda applyReadBalancing ile eklenir.
 		return o
 	}
 	// Main conn: strategy DELIBERATELY left at the driver default
@@ -763,7 +778,9 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	// RoundRobin'i ANA bağlantıya koyunca her state okuması farklı node'un
 	// kopyasına düştü. State doğruluğu > okuma dağıtımı: ana bağlantı
 	// in-order kalır, RoundRobin aşağıdaki ingest havuzuna taşındı.
-	conn, err := clickhouse.Open(chOpts())
+	mainOpts := chOpts()
+	applyReadBalancing(mainOpts, readBalancing) // v0.10.822
+	conn, err := clickhouse.Open(mainOpts)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
@@ -816,6 +833,10 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	readOpts := chOpts()
 	readOpts.ConnOpenStrategy = clickhouse.ConnOpenRoundRobin
 	readOpts.ConnMaxLifetime = roundRobinConnLifetime
+	// v0.10.822 — replika seçimi burada devreye girer: RoundRobin
+	// koordinatörü döndürür, prefer_localhost_replica=0 + in_order olmadan
+	// ardışık SELECT'ler farklı replikalardan cevaplanır.
+	applyReadBalancing(readOpts, readBalancing)
 	readConn, err := clickhouse.Open(readOpts)
 	if err != nil {
 		conn.Close()

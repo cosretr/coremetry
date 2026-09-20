@@ -377,6 +377,23 @@ type CHConfig struct {
 	// düşükken INSERT hata verir (write_failed); erişilebilirlik bedeli
 	// olduğu için İMAJDA AÇIK DEĞİL, bilinçli opt-in. 0/1 = kapalı.
 	InsertQuorum int `yaml:"insert_quorum"`
+	// v0.10.822 — OKUMA tarafında replika SEÇİMİ (operatör 2026-09-19, test
+	// kümesi: aynı sorgu her yenilemede farklı sayı). Iraksamayı DÜZELTMEZ,
+	// okumayı deterministik yapar — ıraksama Admin → ClickHouse → "Replika
+	// tutarlılığı" ile ölçülür, "Replika onarımı" ile giderilir. Tek düğümde
+	// etkisiz. İmaj varsayılanı YOK: CH varsayılanı kalır.
+	//
+	// ReadLoadBalancing (COREMETRY_CH_READ_LOAD_BALANCING) — CH'nin
+	// load_balancing ayarı. Boş = gönderilmez. İzin listesi ve uyarı TEK
+	// gövdede, chstore.chReadBalancingSettings içinde (ayarı uygulayan yer);
+	// burası yalnız TAŞIR — boşluk kırpar, küçük harfe indirir. Geçersiz
+	// değer aynen saklanır ve boot'ta chstore WARNING'ine düşer.
+	ReadLoadBalancing string `yaml:"read_load_balancing"`
+	// ReadPreferLocalhost (COREMETRY_CH_READ_PREFER_LOCALHOST) — üç durumlu
+	// dize: ayarsız/boş = ayar gönderilmez, 0/false = prefer_localhost_replica=0
+	// (yerel replikayı kayırma, dengeleme politikası tek söz sahibi),
+	// 1/true = 1. Yine chstore doğrular.
+	ReadPreferLocalhost string `yaml:"read_prefer_localhost"`
 
 	// Per-query memory limits (v0.9.184) — env-tunable so a large
 	// external cluster can raise the conservative built-in defaults
@@ -672,6 +689,15 @@ func Load(path string) (*Config, error) {
 		} else {
 			log.Printf("[config] COREMETRY_CH_INSERT_QUORUM=%q geçersiz (tam sayı, ≥2 açar) — yok sayıldı", v)
 		}
+	}
+	// v0.10.822 — okuma tarafı replika seçimi (bkz. CHConfig). Burada
+	// DOĞRULAMA YOK: izin listesi ayarı uygulayan chstore'da tek gövdede
+	// yaşar; bu satırlar yalnız normalize edip taşır.
+	if v, ok := os.LookupEnv("COREMETRY_CH_READ_LOAD_BALANCING"); ok {
+		cfg.ClickHouse.ReadLoadBalancing = strings.ToLower(strings.TrimSpace(v))
+	}
+	if v, ok := os.LookupEnv("COREMETRY_CH_READ_PREFER_LOCALHOST"); ok {
+		cfg.ClickHouse.ReadPreferLocalhost = strings.ToLower(strings.TrimSpace(v))
 	}
 	// v0.9.184 — per-query CH memory limits, env-tunable (bytes). Prod's
 	// external cluster raises these to match node RAM; local/default keep

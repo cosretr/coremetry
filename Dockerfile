@@ -72,6 +72,24 @@ ENV COREMETRY_CH_INSERT_DISTRIBUTED_SYNC=1
 # (COREMETRY_CH_INSERT_QUORUM). Tek düğümde etkisiz.
 ENV COREMETRY_CH_READ_MAX_REPLICA_DELAY=60
 ENV COREMETRY_CH_MV_DEDUP_BLOCKS=1
+# v0.10.822 (operatör 2026-09-19) — okuma tarafı replika SEÇİMİ. İMAJDA
+# VARSAYILAN YOK, bilerek: bu iki anahtar ClickHouse varsayılanını değiştirir
+# ve ıraksamış replikaları GİZLER, veriyi DÜZELTMEZ.
+#   COREMETRY_CH_READ_LOAD_BALANCING=in_order|first_or_random|random|
+#       nearest_hostname|round_robin  (boş = CH varsayılanı random)
+#   COREMETRY_CH_READ_PREFER_LOCALHOST=0|1  (boş = CH varsayılanı 1)
+# Belirti: aynı sorgu her yenilemede farklı sayı — load_balancing=random her
+# Distributed SELECT'te shard başına başka replika seçiyor ve replikalar
+# ıraksamış. Test kümesi önerisi: in_order + 0 — İKİSİ BİRLİKTE.
+# prefer_localhost_replica VARSAYILAN 1'dir ve koordinatörün kendi
+# barındırdığı shard'da load_balancing'e hiç bakılmadan yerel plan seçilir;
+# okuma havuzu RoundRobin olduğu için koordinatör her sorguda değişir ve sayı
+# yalnız in_order ile de zıplamaya devam eder. Ayarlar YALNIZ ana bağlantı +
+# okuma havuzuna uygulanır, ingest havuzuna DEĞİL (aynı ayarlar Distributed
+# INSERT'te de replika seçer; yazma dağılımı bozulmasın).
+# Bu yalnız okumayı deterministik yapar; ayrışmanın kendisi Admin →
+# ClickHouse → "Replika tutarlılığı" ile ölçülür, "Replika onarımı"
+# sihirbazıyla giderilir. Tek düğümde etkisiz.
 # Re-declare VERSION inside this stage — Docker ARGs are
 # scoped per-stage, so the value passed into stage 2 isn't
 # visible here without this line.
