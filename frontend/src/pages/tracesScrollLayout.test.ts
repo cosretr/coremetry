@@ -63,14 +63,21 @@ describe('/traces şerit katlama (v0.10.724)', () => {
   });
 });
 
-// v0.10.727 — "Last ⇥" sıralamayı ters çevirip sayfa 1'e döner (kesin son
-// sayfa numarası tavanlı sayıda türetilemez); o kipte etiket "Sondan sayfa".
-describe('/traces ters sıra sayfa etiketi (v0.10.727)', () => {
-  it('order asc iken pageLabel verilir, desc iken verilmez', () => {
-    expect(traces).toContain("pageLabel={order === 'asc'");
-    expect(traces).toContain('>Sondan sayfa</span>');
-    expect(traces).toContain(': undefined}');
-    // Etiket ile bitiş düğmesi AYNI koşulu okur (ikisi de ters sırayı tarif eder).
+// v0.10.727 → v0.10.831 — "Last ⇥" sıralamayı ters çevirip sayfa 1'e döner
+// (kesin son sayfa numarası tavanlı sayıda türetilemez). 727 o kipte girdinin
+// ETİKETİNİ değiştirmişti; operatör aynı şikâyeti tekrarlayınca 831'de kutu
+// tümden kalktı ve konum SONDAN yazılıyor (Pager `reverse`).
+//
+// Bu yalnız BAĞLANMA pini; DAVRANIŞ ölçümü pages/tracesReversePager.test.tsx
+// (gerçek sayfa, gerçek tık) — kaynak grep'i repro sayılmaz (827 dersi).
+describe('/traces ters sıra konum göstergesi (v0.10.831)', () => {
+  it('reverse YALNIZ doğal eksende (zaman) artan sırada; eski pageLabel yolu KALKTI', () => {
+    // v0.10.831 inceleme: yalnız `order`a bakmak süreye/ada göre artan
+    // sıralamayı da "ters kip" sayıyor ve numara kutusunu kaldırıyordu.
+    expect(traces).toContain("reverse={order === 'asc' && sort === 'time'}");
+    expect(traces).toContain('reverseTitle="Liste ters sıralı');
+    expect(traces).not.toContain('pageLabel=');
+    // Konum ile bitiş düğmesi AYNI koşulu okur (ikisi de ters sırayı tarif eder).
     expect(traces).toContain("endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}");
   });
 });

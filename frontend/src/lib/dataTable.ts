@@ -185,6 +185,30 @@ export function parseSortParam(s: string | null): SortState | null {
   return { id: s.slice(0, i), dir: dir as SortDir };
 }
 
+// sortIdKnown — bu TABLO böyle bir sıralanabilir kolon tanıdı mı?
+// (v0.10.831, operatör-bildirimli /traces incelemesinin yan bulgusu)
+//
+// parseSortParam bir KODEK: "<id>.<yön>" biçimini doğrular, kimliğin
+// ANLAMINI değil. Bayat ya da elle yazılmış bir `?s_<key>=` (eski bir
+// yapıdan kalan 'startTime', silinmiş bir kolon, başka bir tablonun
+// kimliği) böylece tablonun sıralama DURUMU oluyordu ve iki yerde sessizce
+// yalan söylüyordu:
+//   · hiçbir başlık aktif görünmüyor — operatör listenin neye göre sıralı
+//     olduğunu göremiyor (aria-sort hiçbir th'de 'ascending'/'descending'
+//     değil),
+//   · sunucu-sıralı sayfalarda (Traces listesi) sayfanın dt.sort → sunucu
+//     çevirici efekti tanımadığı kimlikte erken dönüyor, yani paylaşılan
+//     link bir sıralama VAAT EDİYOR ama sunucu kendi varsayılanıyla çekiyor.
+//
+// `knownIds` verilmezse doğrulama YAPILMAZ (çağıranların çoğu kolon
+// kümesini bilmez; sözleşme geriye dönük aynı). `null` kimlik = "sıralama
+// yok" ve her zaman geçerli.
+export function sortIdKnown(id: string | null, knownIds?: readonly string[]): boolean {
+  if (!knownIds) return true;
+  if (id === null) return true;
+  return knownIds.includes(id);
+}
+
 // formatSortParam — SortState → "<colId>.<dir>" URL value; null when no
 // column is active (the hook deletes the param instead of writing it).
 // Inverse of parseSortParam for every non-empty id, including ids that

@@ -10,7 +10,7 @@ import { useShortcuts } from '@/lib/keyboard';
 import { useIsNarrow } from '@/lib/useNarrow';
 import {
   columnLayoutSig, computeSortedRows, fitColumnWidths, formatSortParam,
-  parseSortParam, readPersistedWidths, resolveToggle, visibleColumns,
+  parseSortParam, readPersistedWidths, resolveToggle, sortIdKnown, visibleColumns,
   type DataTableColumn, type SortState,
   stickyLeftOffsets,
 } from '@/lib/dataTable';
@@ -100,7 +100,7 @@ export interface DataTableServer {
   onSort?: (s: SortState) => void;
 }
 
-export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, initialSort, persistSort = true, serverSort, onSortChange, urlSortFallback, onOpen, searchRef, columnModel, selection: selectionOpt, server, getRowHref }: {
+export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, initialSort, persistSort = true, sortIds, serverSort, onSortChange, urlSortFallback, onOpen, searchRef, columnModel, selection: selectionOpt, server, getRowHref }: {
   storageKey: string;
   columns: DataTableColumn<T>[];
   rows: T[];
@@ -110,6 +110,24 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   // yeni ziyaret initialSort'a döner. Traces gibi "en yeni önce" anlamı
   // taşıyan tablolar için; genişlikler etkilenmez. Varsayılan true.
   persistSort?: boolean;
+  // sortIds (v0.10.831) — SUNUCUNUN/SAYFANIN kabul ettiği sıralama kimlikleri.
+  //
+  // Verildiğinde `s_<storageKey>`, urlSortFallback ve localStorage
+  // basamaklarının KİMLİĞİ doğrulanır; tanınmayan değer bir sonraki basamağa
+  // düşer ve en dipte `initialSort` durur. Reddedilen parametre URL'de
+  // BIRAKILIR (inceleme kararı 2026-09-20: yeniden yazmak churn'dü) — durum
+  // ve başlık okları zaten etkin sıralamayı gösterir.
+  //
+  // Operatör-bildirimli gerekçe (/traces): bayat bir
+  // `?s_traces-list=startTime.desc` tablonun sıralama durumu oluyordu; hiçbir
+  // başlık aktif görünmüyor, sayfanın dt.sort → sunucu çevirici efekti
+  // tanımadığı kimlikte erken dönüyor ve sunucu kendi varsayılanıyla
+  // çekiyordu. Sessiz ıraksama.
+  //
+  // OPT-IN, çünkü kolon listesi bir kimlik kümesi DEĞİL: /endpoints hook'a
+  // yalnız GÖRÜNÜR kolonları verir ve gizli bir kolona göre sıralama bilerek
+  // yaşar. Küme verilmeyen 67 tablo bayt bayt eski davranışta kalır.
+  sortIds?: readonly string[];
   /** v0.10.249 — sıra/gizli modeli (lib/columnModel). Genişlik imzası bildirilen kolonlardan. */
   columnModel?: { value: ColumnModel | null; onChange?: (next: ColumnModel) => void };
   /** v0.10.249 — satır seçimi; getRowId zorunlu (indeks anahtarı sıralamada kırılır). */
@@ -161,8 +179,17 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   const [searchParams, setSearchParams] = useSearchParams();
   const urlKey = `s_${storageKey}`;
   const urlSort = searchParams.get(urlKey);
+  // v0.10.831 — `sortIds` OPT-IN ve kimlik BURADA TÜRETİLMEZ.
+  //
+  // İlk taslak kümeyi `declaredColumns`tan türetiyordu ve bu /endpoints'in
+  // yazılı sözleşmesini kırıyordu (Endpoints.tsx:431-434): o sayfa hook'a
+  // YALNIZ görünür kolonları veriyor ve gizlenmiş bir kolona göre sıralama
+  // BİLEREK yaşıyor ("serverSort forwards the persisted sort id to the fetch
+  // regardless of visibility"). Yani kolon listesi "geçerli kimlikler" kümesi
+  // DEĞİL; kümeyi ancak sunucunun ne kabul ettiğini bilen SAYFA verebilir.
+  const knownSortSig = sortIds ? sortIds.join('|') : '';
   const [sort, setSortState] = useState<SortState>(() =>
-    resolveInitialSort(storageKey, urlSort, initialSort, urlSortFallback, persistSort));
+    resolveInitialSort(storageKey, urlSort, initialSort, urlSortFallback, persistSort, sortIds));
   // v0.9.695 — kalıcı genişlikler KOLON TANIMINA MÜHÜRLÜ.
   //
   // İmza, yakalandığı kolon kümesiyle uyuşmuyorsa genişlikler atılıyor.
@@ -173,9 +200,19 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   const [colWidths, setColWidths] = useState<Record<string, number>>(() =>
     readPersistedWidths(getItem<unknown>(widthLSKey, null), layoutSig));
 
-  useEffect(() => {
-    if (persistSort) setItem(sortLSKey, sort); // v0.10.669 — persistSort:false yazmaz
-  }, [sort, sortLSKey, persistSort]);
+  // v0.10.831 — kalıcılık OPERATÖRÜN EYLEMİNE bağlı, `sort` state'ine değil.
+  //
+  // Önceden bu bir efektti ve `sort` her değiştiğinde — MOUNT DAHİL —
+  // yazıyordu. Üç sessiz sonucu vardı: (a) paylaşılan bir linkin sıralaması
+  // ziyaretçinin KİŞİSEL varsayılanını kalıcı olarak eziyordu, (b) bayat bir
+  // kimlik doğrulamayla reddedilince kayıt `initialSort`la eziliyordu —
+  // self-heal yalnız URL için vardı, localStorage için YOKTU, (c) kayıt
+  // "operatör ne seçti" değil "tablo en son ne gösterdi" oluyordu.
+  // Artık tek yazıcı `setSort`: başlık tıklaması, klavye ve sayfanın
+  // programatik çağrısı (Inbox ön-ayarları) — hepsi gerçek birer eylem.
+  const persist = useCallback((s: SortState) => {
+    if (persistSort) setItem(sortLSKey, s); // v0.10.669 — persistSort:false yazmaz
+  }, [persistSort, sortLSKey]);
   useEffect(() => {
     setItem(widthLSKey, { sig: layoutSig, widths: colWidths });
   }, [colWidths, widthLSKey, layoutSig]);
@@ -184,6 +221,7 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   // re-fetch off this — or off the returned `sort`, same thing).
   const setSort = useCallback((s: SortState) => {
     setSortState(s);
+    persist(s); // v0.10.831 — kalıcılık yalnız BURADA (gerçek bir eylem)
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
       const v = formatSortParam(s);
@@ -193,20 +231,31 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
     }, { replace: true });
     onSortChange?.(s);
     server?.onSort?.(s);
-  }, [setSearchParams, urlKey, onSortChange, server]);
+  }, [setSearchParams, urlKey, onSortChange, server, persist]);
 
   // Back/forward — or an inbound shared link — changes the URL sort: restore
   // it into state. Guarded to fire only on a genuine difference, which also
   // stops a loop with setSort's own write. onSortChange fires here too so a
   // serverSort page that relies on the callback re-fetches on back/forward.
+  //
+  // v0.10.831 — `sortIds` verilmişse burada da DOĞRULAMA var: mount kapısını
+  // geçen bayat bir kimlik geri/ileri ya da gelen bir linkle ikinci kapıdan
+  // sızamaz. Reddedilen parametre URL'de OLDUĞU GİBİ BIRAKILIYOR (inceleme
+  // kararı 2026-09-20): yeniden yazmak her bayat linkte fazladan bir URL
+  // yazımı demekti ve görünen hiçbir şeyi düzeltmiyordu — durum ve başlık
+  // zaten doğru. `knownSortSig` bağımlılık: kümeyi sonradan büyüten bir sayfa
+  // ilk turda reddettiği geçerli sıralamayı küme gelince SAHİPLENİR.
+  // Kalıcılık burada ÇAĞRILMIYOR — gelen bir link operatörün kişisel
+  // varsayılanı değildir.
   useEffect(() => {
     const fromUrl = parseSortParam(urlSort);
-    if (fromUrl && (fromUrl.id !== sort.id || fromUrl.dir !== sort.dir)) {
-      setSortState(fromUrl);
-      onSortChange?.(fromUrl);
+    const valid = fromUrl && sortIdKnown(fromUrl.id, sortIds) ? fromUrl : null;
+    if (valid && (valid.id !== sort.id || valid.dir !== sort.dir)) {
+      setSortState(valid);
+      onSortChange?.(valid);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlSort]);
+  }, [urlSort, knownSortSig]);
 
   const toggleSort = useCallback((id: string) => {
     // resolveToggle is the pure half (lib/dataTable.ts): null = column
@@ -355,16 +404,28 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
 //
 // v0.10.669 — persist=false: localStorage basamağı atlanır (URL > fallback >
 // initialSort). Traces "her ziyarette start time desc" için.
+// v0.10.831 — `knownSortIds`: SAYFANIN beyan ettiği kabul edilebilir sıralama
+// kimlikleri (hook'ta `sortIds` prop'u). Verildiğinde her basamak (URL /
+// köprü / localStorage) kimliğe göre DOĞRULANIR ve tanınmayan değer bir
+// sonraki basamağa düşer; en sonda sayfanın kendi `initialSort`u durur —
+// tablo asla "sırasız" görünmez. Verilmezse davranış bayt bayt eskisi
+// (lib/dataTable sortIdKnown). Küme KOLON LİSTESİNDEN TÜRETİLMEZ: /endpoints
+// hook'a yalnız görünür kolonları verir ve gizli kolona göre sıralama bilerek
+// yaşar (Endpoints.tsx:431-434).
 export function resolveInitialSort(
   storageKey: string,
   urlSort: string | null,
   initialSort?: SortState,
   urlSortFallback?: SortState | null,
   persist = true,
+  knownSortIds?: readonly string[],
 ): SortState {
   const fallback = initialSort ?? { id: null, dir: 'desc' };
-  return parseSortParam(urlSort) ?? urlSortFallback
-    ?? (persist ? getItem(dtSortKey(storageKey), fallback) : fallback);
+  const ok = (s: SortState | null | undefined): SortState | null =>
+    (s && sortIdKnown(s.id, knownSortIds) ? s : null);
+  return ok(parseSortParam(urlSort)) ?? ok(urlSortFallback)
+    ?? ok(persist ? getItem<SortState>(dtSortKey(storageKey), fallback) : null)
+    ?? fallback;
 }
 
 // ColResizeHandle — drop-in resize grip for tables that keep their OWN

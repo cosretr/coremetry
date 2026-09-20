@@ -46,7 +46,8 @@ export function lastReachablePage(
 // operatör hangi sayfada olduğunu anlayamıyor.
 //
 // KÖK NEDEN: tık ile GÖSTERGE farklı kaynaklar okuyordu. Tık
-// `dt.setSort(...)` yazıyordu; göstergenin etiketi (`pageLabel`, v0.10.727)
+// `dt.setSort(...)` yazıyordu; göstergenin etiketi (v0.10.727'nin `pageLabel`i;
+// v0.10.831'de Pager'ın `reverse` kipiyle konum metnine dönüştü)
 // ise sayfanın `order` state'ini okuyor. Aradaki TEK köprü `dt.sort`u sunucu
 // sırasına çeviren efektti ve o efektin iki sessiz erken-dönüşü var
 // (`if (!id) return;` / `if (!server) return;`). Tık `dt.sort.id ?? 'startTime'`

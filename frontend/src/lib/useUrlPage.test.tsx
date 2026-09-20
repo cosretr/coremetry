@@ -84,6 +84,38 @@ function ServicesPagerHarness() {
   );
 }
 
+// v0.10.831 — FONKSİYON biçimi (setPage(p => p + 1)) kendi kapısını kazandı.
+//
+// Yukarıdaki testler setter'ı yalnız SAYI ile sürüyordu, yani closure'dan
+// hesaplayan bir uygulama (`next(page)`) da yeşil kalırdı: tek tıkta fark
+// görünmez, fark ancak İKİ güncelleme AYNI React turunda birleşince ortaya
+// çıkar — ikincisi bayat closure'ı okur ve bir adım KAYBOLUR. Hook'un
+// yorumu bunu zaten vaat ediyor ("URL'deki DEĞERDEN hesaplıyor"); bu kapı
+// vaadi ÖLÇÜYOR.
+let bump: ((n: number | ((p: number) => number)) => void) | null = null;
+function FunctionalUpdaterHarness() {
+  const [page, setPage] = useUrlPage();
+  bump = setPage;
+  return <div data-testid="page">{page}</div>;
+}
+
+describe('useUrlPage — fonksiyon biçimi (v0.10.831)', () => {
+  it('tek turda iki artış İKİ sayfa ilerletir (closure bayatlamaz)', () => {
+    render(<BrowserRouter><FunctionalUpdaterHarness /></BrowserRouter>);
+    act(() => { bump!(p => p + 1); bump!(p => p + 1); });
+    expect(window.location.search).toBe('?page=2');
+    expect(shownPage()).toBe('2');
+  });
+
+  it("fonksiyon biçimi 0'a inince `?page=` SİLİNİR", () => {
+    window.history.replaceState(null, '', '/services?page=1&range=3h');
+    render(<BrowserRouter><FunctionalUpdaterHarness /></BrowserRouter>);
+    act(() => { bump!(p => p - 1); });
+    expect(new URLSearchParams(window.location.search).has('page')).toBe(false);
+    expect(new URLSearchParams(window.location.search).get('range')).toBe('3h');
+  });
+});
+
 describe('react-router sözleşmesi (düzeltmenin gerekçesi)', () => {
   it('setSearchParams kimliği bir URL yazımından sonra DEĞİŞİR', () => {
     sawIdentities = [];

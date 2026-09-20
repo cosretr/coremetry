@@ -1,5 +1,9 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { Button } from './ui/Button';
+// v0.10.831 — konum metni saf çekirdekte (lib/pagerPosition.ts): bileşen
+// modülünden export etmek uyarı tabanını büyütürdü, ve kural zaten sayfadan
+// bağımsız.
+import { pagePositionLabel } from '@/lib/pagerPosition';
 
 // Pager — depodaki TEK "daha fazla satır nasıl gelir" yüzeyi.
 //
@@ -78,13 +82,28 @@ interface OffsetOnly {
   // etiket/başlık çağıranın (ters sıradayken "⇤ First").
   onEnd?: () => void;
   endLabel?: string;
-  // v0.10.727 (operator-reported: "Last diyince sayfa numarası hâlâ 1
-  // gözüküyor") — sayfa girdisinin ETİKETİ; varsayılan 'Page'. onEnd yolu
-  // listeyi TERS sıraya çevirip sayfa 1'e döner (kesin son sayfa numarası
-  // tavanlı sayıda türetilemez, v0.9.638), yani o kipte girdideki 1
-  // "baştan 1" değil "SONDAN 1"dir. Çağıran bunu söyleyen bir etiket
-  // verir; sayı uydurulmaz, anlamı yazılır.
-  pageLabel?: React.ReactNode;
+  // v0.10.831 (operator-reported, İKİNCİ kez: "Last diyince sayfa numarası
+  // hâlâ 1 gözüküyor") — TERS kip beyanı.
+  //
+  // v0.10.727 bu sorunu girdinin yanına bir ETİKET koyarak ("Sondan sayfa")
+  // çözmeye çalışmıştı; kutu yine "1" yazıyordu ve operatör aynı şikâyeti
+  // tekrarladı. Ölçüm (pages/tracesReversePager.test.tsx) şikâyeti doğruladı:
+  // sıra gerçekten dönüyor, YANILTAN şey göstergenin KENDİSİ — ters kipte
+  // "1" "listenin başındayım" diye okunuyor.
+  //
+  // Karar (operatör onayı 2026-09-20): ters kipte numara kutusu HİÇ
+  // çizilmez, konum SONDAN yazılır — 1 → "Son sayfa", 2 → "Sondan 2.".
+  // Sayı eklenmiyor, uydurulmuyor: toplam sayfa sayısı tavanlı sayımda
+  // zaten TÜRETİLEMEZ (v0.9.638) ve /traces onu bilerek istemiyor.
+  //
+  // Kutunun gitmesi bir kayıp değil kasıt: ters kipte "N. sayfaya git"
+  // operatörün karşılığını bilmediği bir koordinat (N sondan mı baştan mı?).
+  // İleri kipe dönüş tek tık ("⇤ First") ve orada kutu aynen duruyor.
+  reverse?: boolean;
+  // Ters kipteki konum metninin açıklaması (title) — cümle çağıranın,
+  // çünkü "son"un ne demek olduğunu (hangi sıra, neden numara yok) yalnız
+  // sayfa bilir.
+  reverseTitle?: string;
   endTitle?: string;
 }
 
@@ -178,7 +197,7 @@ export function Pager(props: PagerProps) {
 }
 
 function OffsetPager({
-  page, pageSize, hasMore, onPage, lastReachablePage, onEnd, endLabel, endTitle, pageLabel, count, total, extras, cls, label,
+  page, pageSize, hasMore, onPage, lastReachablePage, onEnd, endLabel, endTitle, reverse, reverseTitle, count, total, extras, cls, label,
 }: PagerCommon & CountDecl & OffsetOnly & { cls: string; label: string | null }) {
   const [draft, setDraft] = useState(String(page + 1));
 
@@ -187,6 +206,23 @@ function OffsetPager({
 
   const lastPage = derivedLastPage(count, total, pageSize);
   const atEnd = lastPage !== null ? page >= lastPage : !hasMore;
+  // v0.10.831 — ters kipte konum metni; ileri kipte null (kutu çizilir).
+  const position = pagePositionLabel(page, reverse === true);
+  // v0.10.831 (inceleme, 2026-09-20) — BİTİŞ YUVASI ters kipte `onEnd`e bağlı.
+  //
+  // Ölçülen tuzak: ters kipte kesin bir `lastReachablePage` varken o düğme
+  // `onPage(lastReachablePage)` çağırıyordu; tık sayfayı 5'e götürüyor,
+  // gösterge "Sondan 6." diyor, sıra HÂLÂ ters ve `lastReachablePage > page`
+  // artık yanlış olduğu için İKİ bitiş düğmesi birden kayboluyordu — şeritten
+  // geri dönüş yolu kalmıyordu (Prev×5 ya da başlığa iki tık).
+  //
+  // Ters kipte "başa dön" bir SAYFA SIÇRAMASI değil bir SIRA işlemidir: onu
+  // yalnız `onEnd` yapabilir (çağıran sırayı düzeltip sayfa 0'a döner).
+  // Dolayısıyla ters kipte tek bitiş düğmesi çizilir ve sayısal sıçrama dalı
+  // hiç çizilmez. İleri kip bayt bayt aynı.
+  const endAction = onEnd && (reverse === true || lastReachablePage === undefined);
+  const showJump = !reverse && !endAction
+    && lastReachablePage !== undefined && lastReachablePage > page;
 
   const commit = (e?: FormEvent) => {
     if (e) e.preventDefault();
@@ -201,13 +237,33 @@ function OffsetPager({
 
   return (
     <div className={cls} data-pager-mode="offset">
+      {/* v0.10.831 — ters kipte yön BELİRSİZ kalmasın. Metin yalnız KONUM
+          sözcükleriyle konuşuyor ("sondan N."), zaman sözcükleriyle değil:
+          atom hangi eksende sıralandığını BİLMEZ ve "daha eski/yeni kayıtlar"
+          demek yalnız zaman ekseninde doğru olurdu (çağıranın `reverseTitle`i
+          bilerek sıra-nötr). Davranış aynı kaldı, söylenen değişti. */}
       <Button variant="secondary" size="sm"
-        onClick={() => onPage(Math.max(0, page - 1))} disabled={page === 0}>
+        onClick={() => onPage(Math.max(0, page - 1))} disabled={page === 0}
+        title={reverse ? '"Son sayfa" yönünde bir konum geri' : undefined}>
         ← Prev
       </Button>
 
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-        <span>{pageLabel ?? 'Page'}</span>
+        {position !== null ? (
+          // Ters kip: SAYI KUTUSU YOK. Konum sondan yazılır — operatörün
+          // şikâyeti tam olarak kutudaki "1"di (v0.10.727 → v0.10.831).
+          // v0.10.831 (inceleme) — KESİN toplam ters kipte de görünür:
+          // "sayı türetilemez" gerekçesi yalnız TAVANLI sayımda geçerli,
+          // `lastPage` zaten yalnız `count === 'exact'` iken doluyor.
+          <>
+            <span title={reverseTitle} style={{ fontVariantNumeric: 'tabular-nums' }}>{position}</span>
+            {lastPage !== null && (
+              <span style={{ color: 'var(--text3)' }}>/ {lastPage + 1}</span>
+            )}
+          </>
+        ) : (
+        <>
+        <span>Page</span>
         <form onSubmit={commit} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <input value={draft}
             onChange={e => setDraft(e.target.value)}
@@ -229,6 +285,8 @@ function OffsetPager({
             <span style={{ color: 'var(--text3)' }}>/ {lastPage + 1}</span>
           )}
         </form>
+        </>
+        )}
         {/* Tavanlı/yaklaşık sayı son sayfayı SÜRMEZ ama görünür kalır. */}
         {lastPage === null && label && (
           <span style={{ color: 'var(--text2)' }}>· {label}</span>
@@ -237,18 +295,19 @@ function OffsetPager({
       </span>
 
       {/* Gutenberg: ileri eylemi SAĞDA ve şeritteki TEK vurgulu kontrol. */}
-      <Button variant="primary" size="sm" onClick={() => onPage(page + 1)} disabled={atEnd}>
+      <Button variant="primary" size="sm" onClick={() => onPage(page + 1)} disabled={atEnd}
+        title={reverse ? 'Sondan bir sonraki sayfa (listenin başına doğru)' : undefined}>
         Next →
       </Button>
       {/* v0.10.711 — kesin son sayfa yoksa "sona git" (sıra tersi) düğmesi;
           kesin sayfa varsa o kazanır (aynı yerde tek düğme). */}
-      {lastReachablePage === undefined && onEnd && (
+      {endAction && (
         <Button variant="secondary" size="sm" onClick={onEnd}
           title={endTitle ?? 'Listenin sonuna git'}>
           {endLabel ?? 'Last ⇥'}
         </Button>
       )}
-      {lastReachablePage !== undefined && lastReachablePage > page && (
+      {showJump && (
         <Button variant="secondary" size="sm" onClick={() => onPage(lastReachablePage)}
           title={`Son sayfaya git (${lastReachablePage + 1})`}>
           Last ⇥

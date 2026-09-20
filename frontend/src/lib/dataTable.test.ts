@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   nextSort, sortRows,
-  parseSortParam, formatSortParam, resolveToggle, computeSortedRows,
+  parseSortParam, formatSortParam, resolveToggle, sortIdKnown, computeSortedRows,
   type DataTableColumn, type SortState, stickyLeftOffsets,
 } from './dataTable';
 
@@ -102,6 +102,28 @@ describe('parseSortParam / formatSortParam — URL `s_<storageKey>` codec (v0.8.
     expect(parseSortParam('.asc')).toBeNull();        // empty id
     expect(parseSortParam('calls.up')).toBeNull();    // bogus direction
   });
+});
+
+// v0.10.831 — kodek biçimi doğrular, ANLAMI değil: kimliğin bu tabloya ait
+// olup olmadığını soran kapı ayrı ve saf. Tablo, iki dalı da (küme verildi /
+// verilmedi) ve sınırı (null kimlik = "sıralama yok") geziyor.
+describe('sortIdKnown — bayat / elle yazılmış `s_<key>` kimliği (v0.10.831)', () => {
+  const known = ['time', 'duration', 'http.status_code'];
+  const cases: [string, string | null, readonly string[] | undefined, boolean][] = [
+    ['tanınan kimlik',                      'duration',          known,     true],
+    ['noktali tanınan kimlik',              'http.status_code',  known,     true],
+    ['eski yapıdan kalan kimlik',           'startTime',         known,     false],
+    ['başka tablonun kimliği',              'p99',               known,     false],
+    ['boş kimlik',                          '',                  known,     false],
+    ['sıralama yok (null) — her zaman ok',  null,                known,     true],
+    ['küme verilmedi: doğrulama YOK',       'startTime',         undefined, true],
+    ['küme verilmedi + null',               null,                undefined, true],
+    ['BOŞ küme: hiçbir kimlik tanınmaz',    'time',              [],        false],
+    ['BOŞ küme + null',                     null,                [],        true],
+  ];
+  for (const [name, id, ids, want] of cases) {
+    it(name, () => { expect(sortIdKnown(id, ids)).toBe(want); });
+  }
 });
 
 describe('resolveToggle — the sort every header click applies / onSortChange reports (v0.8.251)', () => {

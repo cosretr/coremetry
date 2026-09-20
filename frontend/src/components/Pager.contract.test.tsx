@@ -190,21 +190,87 @@ describe('Pager — offset kipi', () => {
   });
 });
 
-// v0.10.727 (operator-reported: "Last diyince sayfa numarası hâlâ 1
-// gözüküyor") — onEnd yolu listeyi ters çevirip sayfa 1'e döndüğü için
-// girdideki sayı SONDAN sayılır; etiket bunu söyleyebilmeli.
-describe('Pager — sayfa etiketi (v0.10.727)', () => {
-  it("varsayılan 'Page'; çağıran ters-sıra kipinde kendi etiketini verir", () => {
+// v0.10.727 → v0.10.831 (operator-reported, İKİ kez: "Last diyince sayfa
+// numarası hâlâ 1 gözüküyor").
+//
+// 727 girdinin yanına bir ETİKET koymuştu ("Sondan sayfa") ama kutu yine
+// "1" yazıyordu ve operatör aynı şikâyeti tekrarladı. 831'de kutu ters
+// kipte HİÇ çizilmiyor: konum SONDAN yazılıyor.
+//
+// Saf yarı (pagePositionLabel) tablo-güdümlü ve İKİ kipi de geziyor —
+// v0.6.36 birim-karışımı dersinin yön hâli: aynı `page` iki kipte iki ayrı
+// şey demek, o yüzden ileri dal da, ters dal da, kipin döndüğü sınır da
+// test ediliyor.
+describe('Pager — sayfa göstergesi (v0.10.831)', () => {
+  it("ileri kip: 'Page' + numara kutusu (değişmedi)", () => {
     render(<Pager mode="offset" count="skip" page={0} pageSize={50} hasMore onPage={() => {}} />);
     expect(host!.textContent).toContain('Page');
-    act(() => { root!.unmount(); });
-    host!.remove();
-    render(<Pager mode="offset" count="skip" page={0} pageSize={50} hasMore onPage={() => {}}
-      pageLabel={<span title="ters sıra">Sondan sayfa</span>} />);
-    expect(host!.textContent).toContain('Sondan sayfa');
-    expect(host!.textContent).not.toMatch(/\bPage\b/);
-    // Etiket girdinin ANLAMINI değiştirir, değerini değil: hâlâ 1 yazar.
     expect(host!.querySelector('input')!.value).toBe('1');
+    // İleri kipte Prev/Next başlıksız — ters kip açıklamaları sızmasın.
+    expect(btn('Prev').getAttribute('title')).toBeNull();
+    expect(btn('Next').getAttribute('title')).toBeNull();
+  });
+
+  it('ters kip: numara kutusu YOK, konum sondan yazılır', () => {
+    render(<Pager mode="offset" count="skip" page={0} pageSize={50} hasMore onPage={() => {}}
+      reverse reverseTitle="ters sıra" />);
+    expect(host!.querySelector('input')).toBeNull();
+    expect(host!.textContent).toContain('Son sayfa');
+    expect(host!.textContent).not.toMatch(/\bPage\b/);
+    expect(host!.querySelector('[title="ters sıra"]')).not.toBeNull();
+  });
+
+  // v0.10.831 (inceleme, 2026-09-20) — ters kipte SAYISAL SIÇRAMA dalı hiç
+  // çizilmez. Ölçülen tuzak: `onPage(lastReachablePage)` tıkı sayfayı 5'e
+  // götürüyor, gösterge "Sondan 6." diyor, sıra HÂLÂ ters ve
+  // `lastReachablePage > page` yanlışa döndüğü için İKİ bitiş düğmesi birden
+  // kayboluyordu — şeritten geri dönüş yolu kalmıyordu. Ters kipte "başa dön"
+  // bir sayfa sıçraması değil bir SIRA işlemi: yalnız `onEnd` yapabilir.
+  it('ters kipte bitiş yuvası onEnd e bağlı; sayısal sıçrama ÇİZİLMEZ', () => {
+    const pages: number[] = [];
+    let ends = 0;
+    render(<Pager mode="offset" count="exact" total={300} page={1} pageSize={50}
+      onPage={p => pages.push(p)} lastReachablePage={5}
+      onEnd={() => { ends++; }} endLabel="⇤ First" endTitle="başa dön" reverse />);
+    const ends_buttons = [...host!.querySelectorAll('button')].map(b => b.textContent ?? '');
+    expect(ends_buttons.filter(l => l.includes('⇤ First') || l.includes('Last ⇥'))).toHaveLength(1);
+    const back = btn('⇤ First');
+    expect(back.getAttribute('title')).toBe('başa dön');
+    act(() => { back.click(); });
+    expect(ends).toBe(1);
+    expect(pages).toEqual([]);   // sayfa sıçraması YOK — sırayı çağıran düzeltir
+  });
+
+  it('ileri kipte sayısal sıçrama bayt bayt eskisi', () => {
+    const pages: number[] = [];
+    render(<Pager mode="offset" count="exact" total={500} page={1} pageSize={50}
+      onPage={p => pages.push(p)} lastReachablePage={9} />);
+    const jump = btn('Last ⇥');
+    expect(jump.getAttribute('title')).toBe('Son sayfaya git (10)');
+    act(() => { jump.click(); });
+    expect(pages).toEqual([9]);
+  });
+
+  // v0.10.831 (inceleme) — KESİN toplam ters kipte de görünür; "türetilemez"
+  // gerekçesi yalnız TAVANLI sayımda geçerliydi.
+  it('kesin sayımda ters kip toplamı da yazar: "Sondan 2. / 7"', () => {
+    render(<Pager mode="offset" count="exact" total={340} page={1} pageSize={50}
+      onPage={() => {}} reverse />);
+    expect(host!.textContent).toContain('Sondan 2.');
+    expect(host!.textContent).toContain('/ 7');
+  });
+
+  it('ters kipte Prev/Next başlıkları YÖNÜ söyler (davranış aynı)', () => {
+    const pages: number[] = [];
+    render(<Pager mode="offset" count="skip" page={1} pageSize={50} hasMore
+      onPage={p => pages.push(p)} reverse />);
+    expect(host!.textContent).toContain('Sondan 2.');
+    expect(btn('Prev').getAttribute('title')).toContain('"Son sayfa" yönünde');
+    expect(btn('Next').getAttribute('title')).toContain('Sondan');
+    act(() => { btn('Next').click(); });
+    act(() => { btn('Prev').click(); });
+    // Ters kip SAYFA MATEMATİĞİNİ değiştirmiyor: Next ileri, Prev geri.
+    expect(pages).toEqual([2, 0]);
   });
 });
 

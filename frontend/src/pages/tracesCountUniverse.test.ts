@@ -36,7 +36,14 @@ describe('/traces teşhis linki', () => {
   it('Pager extras içinde explainHref varsa "teşhis" linki; boş sonuç bileşeninde de kalır', () => {
     const i = src.indexOf('<Pager mode="offset" count="skip"');
     expect(i).toBeGreaterThan(0);
-    const extras = src.slice(i, src.indexOf('</Pager>', i) > 0 ? src.indexOf('</Pager>', i) : i + 4000);
+    // v0.10.831 — pencere ARTIK sabit 4000 karakter değil: Pager kendini
+    // kapatıyor (`</Pager>` hiç yok), yani eski kapı sihirli bir sayıya
+    // dayanıyordu ve elemana eklenen her yeni prop/şerh onu sessizce
+    // daraltıyordu — 831'in `reverse`/`reverseTitle`i tam olarak bunu yaptı.
+    // Sınır artık elemanın GERÇEK kapanışı (`extras={<>…</>}` + `} />`).
+    const close = src.indexOf('} />', i);
+    expect(close, 'Pager elemanının kapanışı bulunamadı').toBeGreaterThan(i);
+    const extras = src.slice(i, close);
     expect(extras).toContain('{explainHref && (');
     expect(extras).toContain('>teşhis</a>');
     expect(src).toContain('Teşhis (explain) →');

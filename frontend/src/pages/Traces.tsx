@@ -193,6 +193,12 @@ const SERVER_SORTABLE: Partial<Record<string, SortColumn>> = {
   time: 'time', service: 'service', operation: 'operation',
   duration: 'duration', spans: 'spans', status: 'status',
 };
+// v0.10.831 — primitife verilen KABUL EDİLEBİLİR kimlikler kümesi. Tek kaynak
+// SERVER_SORTABLE: çevirici efektin tanıdığı ile tablonun kabul ettiği aynı
+// listeden gelsin, aksi hâlde bayat bir `?s_traces-list` kimliği sıralama
+// durumu olur, hiçbir başlık aktif görünmez ve sunucu kendi varsayılanıyla
+// çeker (operatör-bildirimli sessiz ıraksama).
+const SERVER_SORTABLE_IDS = Object.keys(SERVER_SORTABLE);
 
 // sortAccessor — the client-side sort value matching each server sort column.
 // On a server-paged list this is a no-op (the server already returns rows in
@@ -1056,6 +1062,10 @@ function TracesPageInner() {
     columns,
     rows: displayRows,
     initialSort: { id: sort, dir: order },
+    // v0.10.831 — bu tablonun kabul ettiği sıralama kimlikleri; bayat bir
+    // `?s_traces-list=<bilinmeyen>` artık sıralama durumu olamaz (opt-in:
+    // kümeyi yalnız sunucunun ne kabul ettiğini bilen sayfa verir).
+    sortIds: SERVER_SORTABLE_IDS,
     // v0.10.669 (operatör: "liste start time desc olsun") — trace gezgini için
     // "en yeni önce" bir tercih değil sayfanın anlamı: localStorage'daki eski
     // başlık tıklaması yeni ziyareti ezmesin. URL `s_traces-list` yine kazanır.
@@ -1600,9 +1610,21 @@ function TracesPageInner() {
               endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}
               // v0.10.727 (operator-reported) — ters sırada girdideki sayı
               // SONDAN sayılır; "Page 1" listenin başı sanılıyordu.
-              pageLabel={order === 'asc'
-                ? <span title="Liste ters sıralı (en eski önce): bu kipte 1 = SON sayfa, 2 = sondan ikinci. Kesin son sayfa NUMARASI gösterilemez çünkü sayım tavanlı (10.000+) ve aşama-1 kimlik bütçesi sınırlı — ⇤ First başa döner.">Sondan sayfa</span>
-                : undefined}
+              // v0.10.831 (operator-reported, İKİNCİ kez) — etiket yetmedi:
+              // kutu yine "1" yazıyordu. Ters kipte Pager artık kutuyu hiç
+              // çizmiyor, konumu yazıyor ("Son sayfa" / "Sondan 2.").
+              //
+              // Koşul v0.10.727'den DAR: yalnız DOĞAL EKSEN dönünce. Bu
+              // sayfanın doğal sırası zaman/desc; süreye ya da ada göre ARTAN
+              // sıralamanın "sondan N." diye bir anlamı yok. Sadece `order`a
+              // bakmak, operatör Service'e A→Z tıkladığında 1. sayfaya "Son
+              // sayfa" dedirtir ve numara kutusunu kaldırırdı — etiket eklemek
+              // zararsızdı (727), kutuyu KALDIRMAK olurdu (inceleme bulgusu).
+              reverse={order === 'asc' && sort === 'time'}
+              // Metin SIRA-NÖTR: ters kip artan sıralamanın her türünde
+              // (zaman, süre, ad…) geçerli — "en eski önce" yalnız zamana
+              // göre sıralarken doğru olurdu.
+              reverseTitle="Liste ters sıralı (artan sıra): konum SONDAN sayılıyor — 1 = son sayfa, 2 = sondan ikinci. Kesin sayfa NUMARASI gösterilemez çünkü sayım tavanlı (10.000+) ve aşama-1 kimlik bütçesi sınırlı — ⇤ First listenin başına döner."
               endTitle={order === 'desc'
                 ? 'Listenin sonuna git: sıralama tersine döner (en eski önce), sayfa 1'
                 : 'Listenin başına dön: sıralama yeniden en yeni önce, sayfa 1'}
