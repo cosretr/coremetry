@@ -120,42 +120,336 @@ func TestCleanupGate(t *testing.T) {
 	}
 }
 
+// TestColumnsDiff — v0.10.828 (operatör bildirimi, test kümesi 2026-09-20):
+// `exception_groups · shard 2` onarım planı TEK engelle kilitlenmişti —
+// "kolonlar eşle aynı değil … kolon sırası farklı". Oysa ATTACH PARTITION
+// FROM kolon KÜMESİNİ karşılaştırır (CH v26.2.4.23:
+// MergeTreeData::checkStructureAndGetMergeTreeData →
+// getAllPhysical().sizeOfDifference(...) → NamesAndTypesList::sizeOfDifference
+// iki listeyi birleştirip SIRALAR). Sıra farkı artık engel değil, NOT.
 func TestColumnsDiff(t *testing.T) {
-	a := []chColumn{{"id", "String"}, {"version", "UInt64"}}
-	if d := columnsDiff(a, a); len(d) != 0 {
-		t.Errorf("aynı liste fark vermemeli: %v", d)
+	ab := []chColumn{{"id", "String"}, {"version", "UInt64"}}
+	cases := []struct {
+		name           string
+		peer, target   []chColumn
+		wantBlocking   []string // her biri alt dize olarak aranır
+		wantNoteSubstr string   // "" → not beklenmiyor
+	}{
+		{name: "aynı liste", peer: ab, target: ab},
+		{
+			name: "hedefte eksik kolon", peer: ab, target: []chColumn{{"id", "String"}},
+			wantBlocking: []string{"hedefte yok: version"},
+		},
+		{
+			name: "eşte olmayan fazla kolon", peer: ab,
+			target:       []chColumn{{"id", "String"}, {"version", "UInt64"}, {"extra", "UInt8"}},
+			wantBlocking: []string{"eşte yok: extra"},
+		},
+		{
+			name: "tip farkı", peer: ab, target: []chColumn{{"id", "String"}, {"version", "UInt32"}},
+			wantBlocking: []string{"tip farklı: version (UInt64 ≠ UInt32)"},
+		},
+		{
+			name: "yalnız sıra farkı", peer: ab, target: []chColumn{{"version", "UInt64"}, {"id", "String"}},
+			wantNoteSubstr: "kolon sırası farklı (ilk fark #1: eşte id, hedefte version)",
+		},
+		{
+			// Sıra VE tip birlikte: kümeyi düşüren fark engeller, sıra notu
+			// aranmaz (küme zaten eşleşmiyor).
+			name: "sıra + tip", peer: ab, target: []chColumn{{"version", "UInt32"}, {"id", "String"}},
+			wantBlocking: []string{"tip farklı: version"},
+		},
 	}
-	if d := columnsDiff(a, []chColumn{{"id", "String"}}); len(d) != 1 || !strings.Contains(d[0], "hedefte yok: version") {
-		t.Errorf("eksik kolon: %v", d)
-	}
-	if d := columnsDiff(a, []chColumn{{"id", "String"}, {"version", "UInt32"}}); len(d) != 1 || !strings.Contains(d[0], "tip farklı") {
-		t.Errorf("tip farkı: %v", d)
-	}
-	if d := columnsDiff(a, []chColumn{{"version", "UInt64"}, {"id", "String"}}); len(d) != 1 || d[0] != "kolon sırası farklı" {
-		t.Errorf("sıra farkı: %v", d)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			blocking, notes := columnsDiff(c.peer, c.target)
+			if len(blocking) != len(c.wantBlocking) {
+				t.Fatalf("engel kovası %v, want %v", blocking, c.wantBlocking)
+			}
+			for i, want := range c.wantBlocking {
+				if !strings.Contains(blocking[i], want) {
+					t.Errorf("engel[%d] = %q, %q içermeli", i, blocking[i], want)
+				}
+			}
+			switch {
+			case c.wantNoteSubstr == "" && len(notes) != 0:
+				t.Errorf("not beklenmiyordu: %v", notes)
+			case c.wantNoteSubstr != "":
+				if len(notes) != 1 || !strings.Contains(notes[0], c.wantNoteSubstr) {
+					t.Errorf("not kovası %v, %q içeren TEK not olmalı", notes, c.wantNoteSubstr)
+				}
+			}
+		})
 	}
 }
 
-func TestTableKeysAndIndexDiff(t *testing.T) {
-	a := chTableKeys{PartitionKey: "toDate(time)", SortingKey: "service_name, time", PrimaryKey: "service_name, time", StoragePolicy: "default"}
-	if d := tableKeysDiff(a, a); len(d) != 0 {
-		t.Errorf("aynı anahtarlar fark vermemeli: %v", d)
+// TestColumnGate — v0.10.828: plan düzeyi sözleşme. Yalnız-sıra farkı SIFIR
+// engel + TEK uyarı üretir (ve ✓ satırı sırayı doğruladığını iddia ETMEZ);
+// ad/tip farkı engeller ve o durumda ✓ satırı yazılmaz.
+func TestColumnGate(t *testing.T) {
+	ab := []chColumn{{"id", "String"}, {"version", "UInt64"}}
+	cases := []struct {
+		name          string
+		peer, target  []chColumn
+		wantBlocked   int
+		wantWarnings  int
+		wantCheckSeen bool
+	}{
+		{name: "aynı", peer: ab, target: ab, wantCheckSeen: true},
+		{
+			name: "yalnız sıra", peer: ab, target: []chColumn{{"version", "UInt64"}, {"id", "String"}},
+			wantWarnings: 1, wantCheckSeen: true,
+		},
+		{
+			name: "tip farkı", peer: ab, target: []chColumn{{"id", "String"}, {"version", "UInt32"}},
+			wantBlocked: 1,
+		},
+		{
+			name: "eksik kolon", peer: ab, target: []chColumn{{"id", "String"}},
+			wantBlocked: 1,
+		},
 	}
-	b := a
-	b.SortingKey = "service_name, time, trace_id"
-	if d := tableKeysDiff(a, b); len(d) != 1 || !strings.Contains(d[0], "ORDER BY") {
-		t.Errorf("ORDER BY farkı: %v", d)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			blocked, warnings, check := columnGate(c.peer, c.target, "exception_groups_fix")
+			if len(blocked) != c.wantBlocked {
+				t.Errorf("engel %d (%v), want %d", len(blocked), blocked, c.wantBlocked)
+			}
+			if len(warnings) != c.wantWarnings {
+				t.Errorf("uyarı %d (%v), want %d", len(warnings), warnings, c.wantWarnings)
+			}
+			if (check != "") != c.wantCheckSeen {
+				t.Errorf("✓ satırı %q, beklenen görünürlük %v", check, c.wantCheckSeen)
+			}
+			if check != "" && !strings.Contains(check, "KÜMESİ") {
+				t.Errorf("✓ satırı neyin karşılaştırıldığını söylemeli: %q", check)
+			}
+		})
 	}
-	c := a
-	c.PartitionKey, c.StoragePolicy = "toYYYYMM(time)", "hot"
-	if d := tableKeysDiff(a, c); len(d) != 2 {
-		t.Errorf("iki fark: %v", d)
+	// Uyarı metni: gerekçe + `_fix`'in sırayı eşten aldığı.
+	_, warnings, _ := columnGate(ab, []chColumn{{"version", "UInt64"}, {"id", "String"}}, "exception_groups_fix")
+	for _, want := range []string{"engel değil", "KÜMESİNİ karşılaştırır", "`exception_groups_fix`"} {
+		if !strings.Contains(warnings[0], want) {
+			t.Errorf("uyarı %q, %q içermeli", warnings[0], want)
+		}
 	}
-	if d := skipIndexDiff([]string{"i1|bloom_filter|x"}, []string{"i1|bloom_filter|x"}); len(d) != 0 {
-		t.Errorf("aynı indeksler: %v", d)
+}
+
+// TestDiffsAreOnlyReachedThroughGates — v0.10.828 kaynak pini: planlayıcı
+// kolon/anahtar/indeks kararını YALNIZ *Gate seam'lerinden verir. Bir diff
+// doğrudan çağrılırsa (tek kovaymış gibi) engel-olmayan fark yine engele
+// dönerdi — 828'i doğuran hata tam buydu.
+func TestDiffsAreOnlyReachedThroughGates(t *testing.T) {
+	b, err := os.ReadFile("replica_repair.go")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if d := skipIndexDiff([]string{"i1|bloom_filter|x"}, nil); len(d) != 1 || !strings.Contains(d[0], "hedefte yok") {
-		t.Errorf("eksik indeks: %v", d)
+	src := string(b)
+	plan := funcBody(t, "replica_repair.go", "func (s *Store) PlanReplicaRepair(")
+	for _, c := range []struct{ diff, gate, call string }{
+		{"columnsDiff(", "func columnGate(", "columnGate(pc, tc, fixName)"},
+		{"tableKeysDiff(", "func tableKeysGate(", "tableKeysGate(pk, tk)"},
+		{"skipIndexDiff(", "func skipIndexGate(", "skipIndexGate(pi, ti, strictIndexMatch(strictVal), strictKnown)"},
+	} {
+		if gate := funcBody(t, "replica_repair.go", c.gate); !strings.Contains(gate, c.diff) {
+			t.Errorf("%s %s çağırmalı", c.gate, c.diff)
+		}
+		// Tanım + kapı içindeki tek çağrı = 2. Fazlası başka bir çağrandır.
+		if n := strings.Count(src, c.diff); n != 2 {
+			t.Errorf("%s %d yerde geçiyor (tanım + kapı = 2); başka çağıran engel-olmayan farkı yeniden engele çevirebilir", c.diff, n)
+		}
+		if !strings.Contains(plan, c.call) {
+			t.Errorf("PlanReplicaRepair kapıyı %s ile kurmalı", c.call)
+		}
+		if strings.Contains(plan, c.diff) {
+			t.Errorf("PlanReplicaRepair %s'i doğrudan çağırmamalı", c.diff)
+		}
+	}
+	// Ayarın etkin değeri ATTACH HEDEFİNDE (`_fix`) geçerli olandır → targetConn.
+	if !strings.Contains(plan, `targetConn.QueryRow(ctx, "SELECT value FROM system.merge_tree_settings`) {
+		t.Error("enforce_index_structure_match_on_partition_manipulation hedef bağlantıda okunmalı")
+	}
+}
+
+// TestTableKeysDiff — v0.10.828: partition/ORDER BY/PRIMARY KEY ENGEL kalır
+// (checkStructureAndGetMergeTreeData bunları AST metni olarak karşılaştırır),
+// DEPOLAMA POLİTİKASI engelden nota iner: ATTACH yolunda politika hiç
+// karşılaştırılmaz (StorageReplicatedMergeTree::replacePartitionFrom;
+// UNKNOWN_POLICY fırlatması movePartitionToTable'da).
+func TestTableKeysDiff(t *testing.T) {
+	base := chTableKeys{PartitionKey: "toDate(time)", SortingKey: "service_name, time", PrimaryKey: "service_name, time", StoragePolicy: "default"}
+	mut := func(f func(*chTableKeys)) chTableKeys {
+		c := base
+		f(&c)
+		return c
+	}
+	cases := []struct {
+		name                    string
+		target                  chTableKeys
+		wantBlocking, wantNotes int
+		blockSubstr, noteSubstr string
+	}{
+		{name: "aynı", target: base},
+		{
+			name: "ORDER BY farkı", target: mut(func(c *chTableKeys) { c.SortingKey += ", trace_id" }),
+			wantBlocking: 1, blockSubstr: "ORDER BY",
+		},
+		{
+			name: "partition key farkı", target: mut(func(c *chTableKeys) { c.PartitionKey = "toYYYYMM(time)" }),
+			wantBlocking: 1, blockSubstr: "partition key",
+		},
+		{
+			name: "PRIMARY KEY farkı", target: mut(func(c *chTableKeys) { c.PrimaryKey = "service_name" }),
+			wantBlocking: 1, blockSubstr: "PRIMARY KEY",
+		},
+		{
+			name: "yalnız depolama politikası", target: mut(func(c *chTableKeys) { c.StoragePolicy = "hot" }),
+			wantNotes: 1, noteSubstr: "depolama politikası farklı",
+		},
+		{
+			name: "politika + partition", target: mut(func(c *chTableKeys) { c.StoragePolicy, c.PartitionKey = "hot", "toYYYYMM(time)" }),
+			wantBlocking: 1, wantNotes: 1, blockSubstr: "partition key", noteSubstr: "depolama politikası",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			blocking, notes := tableKeysDiff(base, c.target)
+			if len(blocking) != c.wantBlocking || len(notes) != c.wantNotes {
+				t.Fatalf("engel %v / not %v, want %d / %d", blocking, notes, c.wantBlocking, c.wantNotes)
+			}
+			if c.blockSubstr != "" && !strings.Contains(blocking[0], c.blockSubstr) {
+				t.Errorf("engel %q, %q içermeli", blocking[0], c.blockSubstr)
+			}
+			if c.noteSubstr != "" && !strings.Contains(notes[0], c.noteSubstr) {
+				t.Errorf("not %q, %q içermeli", notes[0], c.noteSubstr)
+			}
+		})
+	}
+}
+
+// TestTableKeysGate — yalnız politika farkı: 0 engel + 1 uyarı. ✓ satırı artık
+// "depolama politikası eşle aynı" DİYEMEZ (karşılaştırmıyoruz sayılır).
+func TestTableKeysGate(t *testing.T) {
+	base := chTableKeys{PartitionKey: "toDate(time)", SortingKey: "service_name, time", PrimaryKey: "service_name, time", StoragePolicy: "default"}
+	policy := base
+	policy.StoragePolicy = "hot"
+	blocked, warnings, check := tableKeysGate(base, policy)
+	if len(blocked) != 0 || len(warnings) != 1 || check == "" {
+		t.Fatalf("yalnız politika: engel %v, uyarı %v, ✓ %q", blocked, warnings, check)
+	}
+	for _, want := range []string{"engel değil", "MOVE PARTITION TO TABLE"} {
+		if !strings.Contains(warnings[0], want) {
+			t.Errorf("uyarı %q, %q içermeli", warnings[0], want)
+		}
+	}
+	if strings.Contains(check, "depolama politikası eşle aynı") {
+		t.Errorf("✓ satırı politikayı doğruladığını iddia etmemeli: %q", check)
+	}
+	if !strings.Contains(check, "ATTACH'ın şartı değil") {
+		t.Errorf("✓ satırı neyin karşılaştırıldığını söylemeli: %q", check)
+	}
+	order := base
+	order.SortingKey += ", trace_id"
+	blocked, warnings, check = tableKeysGate(base, order)
+	if len(blocked) != 1 || len(warnings) != 0 || check != "" {
+		t.Fatalf("ORDER BY farkı engel olmalı: engel %v, uyarı %v, ✓ %q", blocked, warnings, check)
+	}
+}
+
+// TestSkipIndexDiffDirection — v0.10.828 YÖN sözleşmesi. Koşulan ifade
+// `ALTER TABLE t_fix ATTACH … FROM t`: ATTACH HEDEFİ `_fix` = EŞİN indeksleri,
+// ATTACH KAYNAĞI düz `t` = HEDEFİN indeksleri. check_definitions hedefin
+// kaynağın ÜST KÜMESİ olmasını ister → düz tablodaki fazla indeks HATA,
+// eşteki fazla indeks serbest.
+func TestSkipIndexDiffDirection(t *testing.T) {
+	i1, i2 := "i1|bloom_filter|x", "i2|minmax|y"
+	cases := []struct {
+		name                    string
+		peer, target            []string
+		wantBlocking, wantNotes int
+	}{
+		{name: "aynı", peer: []string{i1}, target: []string{i1}},
+		{name: "yalnız eşte (ATTACH hedefi fazla) → not", peer: []string{i1, i2}, target: []string{i1}, wantNotes: 1},
+		{name: "yalnız düz tabloda (ATTACH kaynağı fazla) → engel", peer: []string{i1}, target: []string{i1, i2}, wantBlocking: 1},
+		{name: "her iki yön", peer: []string{i1}, target: []string{i2}, wantBlocking: 1, wantNotes: 1},
+		{name: "ikisi de boş", peer: nil, target: nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			blocking, notes := skipIndexDiff(c.peer, c.target)
+			if len(blocking) != c.wantBlocking || len(notes) != c.wantNotes {
+				t.Fatalf("engel %v / not %v, want %d / %d", blocking, notes, c.wantBlocking, c.wantNotes)
+			}
+			if c.wantBlocking == 1 && !strings.Contains(blocking[0], "eşte yok") {
+				t.Errorf("engel metni yönü söylemeli: %q", blocking[0])
+			}
+			if c.wantNotes == 1 && !strings.Contains(notes[0], "yalnız eşte var") {
+				t.Errorf("not metni yönü söylemeli: %q", notes[0])
+			}
+		})
+	}
+}
+
+// TestStrictIndexMatch — system.merge_tree_settings.value → bool.
+func TestStrictIndexMatch(t *testing.T) {
+	for in, want := range map[string]bool{"1": true, "true": true, "TRUE": true, "0": false, "": false, "false": false} {
+		if got := strictIndexMatch(in); got != want {
+			t.Errorf("%q → %v, want %v", in, got, want)
+		}
+	}
+}
+
+// TestSkipIndexGate — eşteki fazla indeks ayar KAPALI/BİLİNMİYOR iken uyarı,
+// AÇIK iken engel; düz tablodaki fazla indeks her durumda engel.
+func TestSkipIndexGate(t *testing.T) {
+	i1, i2 := "i1|bloom_filter|x", "i2|minmax|y"
+	cases := []struct {
+		name                     string
+		peer, target             []string
+		strictOn, strictKnown    bool
+		wantBlocked, wantWarning int
+		wantCheck                bool
+		warnSubstr               string
+	}{
+		{name: "aynı · ayar bilinmiyor", peer: []string{i1}, target: []string{i1}, wantCheck: true},
+		{
+			name: "eşte fazla · ayar okunamadı", peer: []string{i1, i2}, target: []string{i1},
+			wantWarning: 1, wantCheck: true, warnSubstr: "açıksa ATTACH yine düşebilir",
+		},
+		{
+			name: "eşte fazla · ayar kapalı", peer: []string{i1, i2}, target: []string{i1}, strictKnown: true,
+			wantWarning: 1, wantCheck: true, warnSubstr: "kapalı okundu",
+		},
+		{
+			name: "eşte fazla · ayar AÇIK", peer: []string{i1, i2}, target: []string{i1}, strictOn: true, strictKnown: true,
+			wantBlocked: 1,
+		},
+		{
+			name: "düz tabloda fazla · ayar kapalı", peer: []string{i1}, target: []string{i1, i2}, strictKnown: true,
+			wantBlocked: 1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			blocked, warnings, check := skipIndexGate(c.peer, c.target, c.strictOn, c.strictKnown)
+			if len(blocked) != c.wantBlocked || len(warnings) != c.wantWarning {
+				t.Fatalf("engel %v / uyarı %v, want %d / %d", blocked, warnings, c.wantBlocked, c.wantWarning)
+			}
+			if (check != "") != c.wantCheck {
+				t.Errorf("✓ satırı %q, beklenen görünürlük %v", check, c.wantCheck)
+			}
+			if c.warnSubstr != "" && !strings.Contains(warnings[0], c.warnSubstr) {
+				t.Errorf("uyarı %q, %q içermeli", warnings[0], c.warnSubstr)
+			}
+			if c.wantBlocked == 1 && !strings.Contains(blocked[0], "ÜST kümesi") && !strings.Contains(blocked[0], "BİREBİR") {
+				t.Errorf("engel metni gerekçeyi söylemeli: %q", blocked[0])
+			}
+		})
+	}
+	// ✓ satırı neyin karşılaştırıldığını söyler (tam eşitlik İDDİA ETMEZ).
+	_, _, check := skipIndexGate([]string{i1, i2}, []string{i1}, false, true)
+	if !strings.Contains(check, "fazlası ATTACH'ın şartı değil") {
+		t.Errorf("✓ satırı: %q", check)
 	}
 }
 

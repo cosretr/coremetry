@@ -226,31 +226,75 @@ func cleanupGate(engineT, engineFix string) (note string, err error) {
 
 type chColumn struct{ Name, Type string }
 
-// chTableKeys — ATTACH PARTITION FROM'un kolonların ötesinde istediği eşitlik:
-// partition/sıralama/birincil anahtar + depolama politikası (system.tables).
+// chTableKeys — ATTACH PARTITION FROM'un kolonların ötesinde baktığı alanlar:
+// partition/sıralama/birincil anahtar (ŞART) + depolama politikası (ŞART DEĞİL,
+// v0.10.828) — hepsi system.tables'tan.
 type chTableKeys struct{ PartitionKey, SortingKey, PrimaryKey, StoragePolicy string }
 
-// tableKeysDiff — SAF: eş ile hedef anahtar farkı (adı geçer).
-func tableKeysDiff(peer, target chTableKeys) []string {
-	var out []string
+// tableKeysDiff — SAF: eş ile hedef anahtar farkı, İKİ KOVAYA ayrılmış.
+//
+// blocking: partition key / ORDER BY / PRIMARY KEY. Bunlar gerçekten
+// checkStructureAndGetMergeTreeData'da, AST METNİ olarak tam eşitlik ister
+// (MergeTreeData.cpp: "Tables have different ordering / partition key /
+// primary key") — yani burada sıra da önemli.
+//
+// notes: DEPOLAMA POLİTİKASI. v0.10.828: politika eşitliği ATTACH'ın şartı
+// DEĞİL. Bizim yolumuzda ATTACH hedefi `_fix` (Replicated) olduğu için
+// StorageReplicatedMergeTree::replacePartitionFrom (satır 8757, v26.2.4.23)
+// koşar: orada politika hiç karşılaştırılmaz, ATTACH dalı parçayı
+// `must_on_same_disk=false` ile klonlar ("Attach can work on another disk",
+// satır ~8972). UNKNOWN_POLICY fırlatması movePartitionToTable'da
+// (satır 9102/9111) — o BAŞKA ifade (MOVE PARTITION TO TABLE). Düz motorda da
+// aynı: StorageMergeTree::replacePartitionFrom (2553) politika uyumunu yalnız
+// must_on_same_disk'i gevşetmek için hesaplar, fırlatma movePartitionToTable'da
+// (2704).
+func tableKeysDiff(peer, target chTableKeys) (blocking, notes []string) {
 	if peer.PartitionKey != target.PartitionKey {
-		out = append(out, fmt.Sprintf("partition key: eş %q ≠ hedef %q", peer.PartitionKey, target.PartitionKey))
+		blocking = append(blocking, fmt.Sprintf("partition key: eş %q ≠ hedef %q", peer.PartitionKey, target.PartitionKey))
 	}
 	if peer.SortingKey != target.SortingKey {
-		out = append(out, fmt.Sprintf("ORDER BY: eş %q ≠ hedef %q", peer.SortingKey, target.SortingKey))
+		blocking = append(blocking, fmt.Sprintf("ORDER BY: eş %q ≠ hedef %q", peer.SortingKey, target.SortingKey))
 	}
 	if peer.PrimaryKey != target.PrimaryKey {
-		out = append(out, fmt.Sprintf("PRIMARY KEY: eş %q ≠ hedef %q", peer.PrimaryKey, target.PrimaryKey))
+		blocking = append(blocking, fmt.Sprintf("PRIMARY KEY: eş %q ≠ hedef %q", peer.PrimaryKey, target.PrimaryKey))
 	}
 	if peer.StoragePolicy != target.StoragePolicy {
-		out = append(out, fmt.Sprintf("depolama politikası: eş %q ≠ hedef %q", peer.StoragePolicy, target.StoragePolicy))
+		notes = append(notes, fmt.Sprintf("depolama politikası farklı: eş %q ≠ hedef %q", peer.StoragePolicy, target.StoragePolicy))
 	}
-	return out
+	return blocking, notes
 }
 
-// skipIndexDiff — SAF: atlama indeksleri (ad|tür|ifade) kümesi farkı.
-func skipIndexDiff(peer, target []string) []string {
-	var out []string
+// tableKeysGate — SAF: anahtar karşılaştırmasının plan çıktısı (engel · uyarı · ✓).
+func tableKeysGate(peer, target chTableKeys) (blocked, warnings []string, check string) {
+	blocking, notes := tableKeysDiff(peer, target)
+	if len(blocking) > 0 {
+		blocked = append(blocked, "anahtarlar eşle aynı değil (ATTACH PARTITION FROM başarısız olur): "+strings.Join(blocking, "; "))
+	}
+	for _, n := range notes {
+		warnings = append(warnings, n+" (ATTACH için engel değil: politika eşitliğini yalnız MOVE PARTITION TO TABLE ister; ATTACH parçayı başka diske klonlayabilir) — disk payı hesabı hedefin politikasındaki diskleri okur")
+	}
+	if len(blocking) == 0 {
+		check = "partition/ORDER BY/PRIMARY KEY eşle aynı (depolama politikası ATTACH'ın şartı değil, projeksiyonlar karşılaştırılmadı)"
+	}
+	return blocked, warnings, check
+}
+
+// skipIndexDiff — SAF: atlama indeksleri (ad|tür|ifade) kümesi farkı, İKİ KOVA.
+//
+// YÖN ÖNEMLİ. Koştuğumuz ifade `ALTER TABLE <t>_fix ATTACH PARTITION … FROM <t>`:
+// ATTACH HEDEFİ `_fix` (eşin DDL'i → EŞİN indeksleri), ATTACH KAYNAĞI hedef
+// host'taki düz `<t>` (HEDEFİN indeksleri). CH v26.2.4.23,
+// MergeTreeData::checkStructureAndGetMergeTreeData içindeki check_definitions
+// lambda'sı `(my_descriptions=ATTACH hedefi, src_descriptions=ATTACH kaynağı)`
+// ile çağrılır ve şunu ister: hedef, kaynağın ÜST KÜMESİ olmalı
+// (`my.size() < src.size()` → false; kaynaktaki her tanım hedefte de olmalı).
+// Hedefteki FAZLA indeks serbesttir — TAM eşitlik yalnız
+// enforce_index_structure_match_on_partition_manipulation açıkken istenir
+// (MergeTreeSettings.cpp:739, varsayılan false).
+//
+// blocking: düz tabloda (ATTACH kaynağı) olup eşte (ATTACH hedefi) olmayan.
+// notes:    eşte olup düz tabloda olmayan — ayar kapalıyken engel değil.
+func skipIndexDiff(peer, target []string) (blocking, notes []string) {
 	pm, tm := map[string]bool{}, map[string]bool{}
 	for _, x := range peer {
 		pm[x] = true
@@ -260,15 +304,46 @@ func skipIndexDiff(peer, target []string) []string {
 	}
 	for _, x := range peer {
 		if !tm[x] {
-			out = append(out, "hedefte yok: "+x)
+			notes = append(notes, "yalnız eşte var: "+x)
 		}
 	}
 	for _, x := range target {
 		if !pm[x] {
-			out = append(out, "eşte yok: "+x)
+			blocking = append(blocking, "eşte yok: "+x)
 		}
 	}
-	return out
+	return blocking, notes
+}
+
+// strictIndexMatch — SAF: system.merge_tree_settings.value → bool.
+// enforce_index_structure_match_on_partition_manipulation açıksa ATTACH
+// indeks/projeksiyon kümelerinin BİREBİR aynı olmasını ister.
+func strictIndexMatch(value string) bool {
+	return value == "1" || strings.EqualFold(value, "true")
+}
+
+// skipIndexGate — SAF: indeks karşılaştırmasının plan çıktısı (engel · uyarı · ✓).
+// strictKnown=false → ayar okunamadı; fazla indeks engel sayılmaz ama uyarı
+// riski söyler (küme ayarı açıksa ATTACH yine düşer).
+func skipIndexGate(peer, target []string, strictOn, strictKnown bool) (blocked, warnings []string, check string) {
+	blocking, notes := skipIndexDiff(peer, target)
+	if len(blocking) > 0 {
+		blocked = append(blocked, "atlama indeksleri: düz tabloda olup eşte olmayan indeks ATTACH'ı düşürür (ATTACH hedefi kaynağın ÜST kümesi olmalı): "+strings.Join(blocking, "; "))
+	}
+	for _, n := range notes {
+		switch {
+		case strictKnown && strictOn:
+			blocked = append(blocked, n+" — enforce_index_structure_match_on_partition_manipulation hedefte AÇIK: ATTACH indeks kümelerinin BİREBİR aynı olmasını ister")
+		case strictKnown:
+			warnings = append(warnings, n+" (ATTACH için engel değil: ATTACH hedefi kaynağın ÜST kümesi olabilir; enforce_index_structure_match_on_partition_manipulation hedefte kapalı okundu)")
+		default:
+			warnings = append(warnings, n+" (ATTACH için engel değil: ATTACH hedefi kaynağın ÜST kümesi olabilir); ayar okunamadı — küme `enforce_index_structure_match_on_partition_manipulation` açıksa ATTACH yine düşebilir")
+		}
+	}
+	if len(blocked) == 0 {
+		check = fmt.Sprintf("atlama indeksleri: düz tablonun %d indeksinin hepsi eşte de var (eşte %d; fazlası ATTACH'ın şartı değil)", len(target), len(peer))
+	}
+	return blocked, warnings, check
 }
 
 // diskHeadroomOK — SAF: hedefin boş alanı klonlanacak eş verisi + yerel veri
@@ -281,9 +356,26 @@ func diskHeadroomOK(free, peerBytes, localBytes uint64) bool {
 	return free >= need+need/10
 }
 
-// columnsDiff — SAF: eş ile hedefin kolon listesi (sıra dahil) farkı.
-func columnsDiff(peer, target []chColumn) []string {
-	var out []string
+// columnsDiff — SAF: eş ile hedefin kolon listesi farkı, İKİ KOVAYA ayrılmış:
+//
+//	blocking — ATTACH PARTITION FROM'u gerçekten düşüren farklar: eksik/fazla
+//	           kolon ve tip uyuşmazlığı.
+//	notes    — engel OLMAYAN farklar; şimdilik yalnız kolon SIRASI.
+//
+// v0.10.828 (operatör bildirimi): sıra farkı ENGEL DEĞİL. Sabitlenen sunucu
+// sürümünün kaynağı (v26.2.4.23, src/Storages/MergeTree/MergeTreeData.cpp,
+// MergeTreeData::checkStructureAndGetMergeTreeData) yapıyı TEK satırda
+// karşılaştırır: getColumns().getAllPhysical().sizeOfDifference(...).
+// src/Core/NamesAndTypes.cpp'deki NamesAndTypesList::sizeOfDifference iki
+// listeyi tek vektörde birleştirip SIRALAR (::sort) ve tekil sayısından
+// simetrik fark büyüklüğünü çıkarır → karşılaştırma (ad, tip) KÜMESİ
+// üzerinedir, sıra hiç görülmez. Parça dosyaları kolon ADIYLA anahtarlı ve
+// her parça kendi columns.txt'siyle klonlanır; hedefin kendi kolon sırası
+// (ki `_fix` eşin DDL'iyle kurulduğu için zaten eşin sırasıdır) ATTACH'ı
+// etkilemez. ColumnsDescription::getAllPhysical ALIAS/EPHEMERAL kolonları
+// dışarıda bırakır — kanonik şemada öyle kolon yok, readColumns hepsini
+// okur, yani bu kapı CH'den yalnız o yönde katı kalabilir.
+func columnsDiff(peer, target []chColumn) (blocking, notes []string) {
 	pm := map[string]string{}
 	for _, c := range peer {
 		pm[c.Name] = c.Type
@@ -294,25 +386,45 @@ func columnsDiff(peer, target []chColumn) []string {
 	}
 	for _, c := range peer {
 		if t, ok := tm[c.Name]; !ok {
-			out = append(out, "hedefte yok: "+c.Name)
+			blocking = append(blocking, "hedefte yok: "+c.Name)
 		} else if t != c.Type {
-			out = append(out, fmt.Sprintf("tip farklı: %s (%s ≠ %s)", c.Name, c.Type, t))
+			blocking = append(blocking, fmt.Sprintf("tip farklı: %s (%s ≠ %s)", c.Name, c.Type, t))
 		}
 	}
 	for _, c := range target {
 		if _, ok := pm[c.Name]; !ok {
-			out = append(out, "eşte yok: "+c.Name)
+			blocking = append(blocking, "eşte yok: "+c.Name)
 		}
 	}
-	if len(out) == 0 && len(peer) == len(target) {
+	// Küme aynıysa sırayı da söyle — engel değil ama ilk farkı adlandır.
+	if len(blocking) == 0 && len(peer) == len(target) {
 		for i := range peer {
 			if peer[i].Name != target[i].Name {
-				out = append(out, "kolon sırası farklı")
+				notes = append(notes, fmt.Sprintf("kolon sırası farklı (ilk fark #%d: eşte %s, hedefte %s)", i+1, peer[i].Name, target[i].Name))
 				break
 			}
 		}
 	}
-	return out
+	return blocking, notes
+}
+
+// columnGate — SAF: kolon karşılaştırmasının plan çıktısı (engel · uyarı · ✓).
+// v0.10.828: ENGEL yalnız blocking kovasından doğar; sıra farkı UYARIYA gider,
+// çünkü ATTACH PARTITION FROM kolon KÜMESİNİ karşılaştırır (gerekçe:
+// columnsDiff başlığındaki kaynak alıntısı). ✓ satırı neyin karşılaştırıldığını
+// söyler — "kolonlar aynı" demek sırayı da doğruladığımızı ima ederdi.
+func columnGate(peer, target []chColumn, fixName string) (blocked, warnings []string, check string) {
+	blocking, notes := columnsDiff(peer, target)
+	if len(blocking) > 0 {
+		blocked = append(blocked, "kolonlar eşle aynı değil (ATTACH PARTITION FROM başarısız olur): "+strings.Join(blocking, "; "))
+	}
+	for _, n := range notes {
+		warnings = append(warnings, n+" (ATTACH için engel değil: ClickHouse kolon KÜMESİNİ karşılaştırır); `"+fixName+"` tablosu eşin kolon sırasını alır")
+	}
+	if len(blocking) == 0 {
+		check = fmt.Sprintf("%d kolon eşle aynı (ad+tip KÜMESİ; ATTACH sırayı karşılaştırmaz)", len(peer))
+	}
+	return blocked, warnings, check
 }
 
 func isCHTimeout(err error) bool {
@@ -553,9 +665,10 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 			plan.FixExists = true
 			block("hedefte `%s` zaten var (yarım kalmış onarım ya da EXCHANGE sonrası eski düz tablo) — önce Temizle", fixName)
 		}
-		// Kolonlar + anahtarlar: ATTACH PARTITION FROM aynı yapıyı, aynı
-		// partition/ORDER BY/PRIMARY KEY'i, aynı depolama politikasını ister
-		// (`_fix` eşin DDL'iyle kurulur → hedefin düz tablosu eşle karşılaştırılır).
+		// Kolonlar + anahtarlar: ATTACH PARTITION FROM aynı kolon KÜMESİNİ
+		// (ad+tip; SIRA değil — v0.10.828), aynı partition/ORDER BY/PRIMARY
+		// KEY'i ve aynı depolama politikasını ister (`_fix` eşin DDL'iyle
+		// kurulur → hedefin düz tablosu eşle karşılaştırılır).
 		pc, err := readColumns(ctx, peerConn, rep.Database, req.Table)
 		if err != nil {
 			return nil, fmt.Errorf("eş system.columns: %w", err)
@@ -564,10 +677,13 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 		if err != nil {
 			return nil, fmt.Errorf("hedef system.columns: %w", err)
 		}
-		if diff := columnsDiff(pc, tc); len(diff) > 0 {
-			block("kolonlar eşle aynı değil (ATTACH PARTITION FROM başarısız olur): %s", strings.Join(diff, "; "))
-		} else {
-			check("%d kolon eşle aynı", len(pc))
+		colBlocked, colWarnings, colCheck := columnGate(pc, tc, fixName)
+		for _, m := range colBlocked {
+			block("%s", m)
+		}
+		plan.Warnings = append(plan.Warnings, colWarnings...)
+		if colCheck != "" {
+			check("%s", colCheck)
 		}
 		pk, err := readTableKeys(ctx, peerConn, rep.Database, req.Table)
 		if err != nil {
@@ -577,10 +693,13 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 		if err != nil {
 			return nil, fmt.Errorf("hedef system.tables anahtarları: %w", err)
 		}
-		if diff := tableKeysDiff(pk, tk); len(diff) > 0 {
-			block("anahtarlar eşle aynı değil (ATTACH PARTITION FROM başarısız olur): %s", strings.Join(diff, "; "))
-		} else {
-			check("partition/ORDER BY/PRIMARY KEY/depolama politikası eşle aynı (projeksiyonlar karşılaştırılmadı)")
+		keyBlocked, keyWarnings, keyCheck := tableKeysGate(pk, tk)
+		for _, m := range keyBlocked {
+			block("%s", m)
+		}
+		plan.Warnings = append(plan.Warnings, keyWarnings...)
+		if keyCheck != "" {
+			check("%s", keyCheck)
 		}
 		pi, perr := readSkipIndices(ctx, peerConn, rep.Database, req.Table)
 		ti, terr := readSkipIndices(ctx, targetConn, rep.Database, req.Table)
@@ -588,8 +707,18 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 		case perr != nil || terr != nil:
 			plan.Warnings = append(plan.Warnings, "atlama indeksleri karşılaştırılamadı (system.data_skipping_indices okunamadı)")
 		default:
-			if diff := skipIndexDiff(pi, ti); len(diff) > 0 {
-				block("atlama indeksleri eşle aynı değil (ATTACH PARTITION FROM başarısız olur): %s", strings.Join(diff, "; "))
+			// Ayarın ETKİN değeri ATTACH HEDEFİNDE (`_fix`, hedef host) geçerli
+			// olandır — o yüzden targetConn. Sunucu varsayılanı okunur; eşin
+			// DDL'i SETTINGS ile ezerse plan iyimser kalır (uyarı bunu söyler).
+			var strictVal string
+			strictKnown := targetConn.QueryRow(ctx, "SELECT value FROM system.merge_tree_settings WHERE name = 'enforce_index_structure_match_on_partition_manipulation' SETTINGS max_execution_time = 5").Scan(&strictVal) == nil
+			idxBlocked, idxWarnings, idxCheck := skipIndexGate(pi, ti, strictIndexMatch(strictVal), strictKnown)
+			for _, m := range idxBlocked {
+				block("%s", m)
+			}
+			plan.Warnings = append(plan.Warnings, idxWarnings...)
+			if idxCheck != "" {
+				check("%s", idxCheck)
 			}
 		}
 		// Hedefin boş alanı: tablonun depolama politikasındaki diskler.
