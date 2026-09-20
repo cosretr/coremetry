@@ -149,27 +149,28 @@ type innerOwner struct {
 // mvOwnersByHost — SAF, TEK GÖVDE: host → `.inner_id.<uuid>` → o host'ta o
 // iç tabloyu adresleyen MV'nin adı.
 //
-// uuid kaynağı innerUUIDFor: Atomic DB'de MV DDL'i `TO INNER UUID '…'` taşır,
-// eski biçimde view'ın kendi uuid'si (v0.10.780 dersi — view uuid'sine bakan
-// 762 prod'daki sarkan view'ı hiç göremedi). `TO <tablo>` biçimli MV'nin
-// gizli iç tablosu YOKTUR, haritaya girmez.
+// Ad kaynağı innerTableName: iç tablonun adı DAİMA VIEW'ın uuid'sinden doğar
+// (v0.10.832). `TO <tablo>` biçimli MV'nin gizli iç tablosu YOKTUR, haritaya
+// girmez (mvHasInnerTable).
+//
+// v0.10.832 — ad DDL'deki `TO INNER UUID` değerinden kuruluyordu; o NESNE
+// uuid'sidir ve ADA hiç girmez. Ayar açık bir profilde harita var olmayan
+// adlarla dolar, mvLeftoversFromRows CANLI her iç tabloyu `oksuz` sınıflar
+// ve DropOrphanInner'ın üç kapısı da (taze ölçüm / distributedRefs / son
+// replika) bu zehirli haritadan geçtiği için DROP koşardı.
 func mvOwnersByHost(rows []mvTableRow) map[string]map[string]string {
 	out := map[string]map[string]string{}
 	for _, r := range rows {
-		if r.Engine != "MaterializedView" || r.UUID == "" || r.UUID == zeroUUID {
+		if r.Engine != "MaterializedView" || !validUUID(r.UUID) {
 			continue
 		}
-		if !reInnerUUID.MatchString(r.CreateQuery) && reMVWithTO.MatchString(r.CreateQuery) {
+		if !mvHasInnerTable(r.CreateQuery) {
 			continue // TO <tablo>: hedefi gerçek tablo
-		}
-		iu := innerUUIDFor(r.CreateQuery, r.UUID)
-		if iu == "" || iu == zeroUUID {
-			continue
 		}
 		if out[r.Host] == nil {
 			out[r.Host] = map[string]string{}
 		}
-		name := innerTablePrefix + strings.ToLower(iu)
+		name := innerTableName(r.UUID)
 		// Aynı host'ta aynı uuid'yi iki view adresleyemez; yine de
 		// deterministik ol (ada göre küçük olan).
 		if cur, ok := out[r.Host][name]; !ok || r.Name < cur {
@@ -522,7 +523,7 @@ func (s *Store) DropOrphanInner(ctx context.Context, host, uuid string) ([]strin
 	if !mvUUIDRe.MatchString(uuid) {
 		return nil, fmt.Errorf("geçersiz uuid %q", uuid)
 	}
-	inner := innerTablePrefix + uuid // ad SUNUCUDA kurulur
+	inner := innerTableName(uuid) // ad SUNUCUDA, tek gövdeden kurulur (v0.10.832)
 	list, cluster, err := s.MVLeftovers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("tespit: %w", err)

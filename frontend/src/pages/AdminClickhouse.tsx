@@ -2077,11 +2077,18 @@ function DanglingMVPanel() {
             </Button>
           </>
         }>
+          {/* v0.10.832 — iki uuid AYRI: ADI view'ın uuid'sidir, NESNE uuid'si
+              MV'nin TO INNER UUID'sidir. Eski metin ikisini tek şey sanıyordu
+              ve dal gerçekten de adın uuid'sini nesne uuid'si olarak gömüyordu
+              → kart yeşile dönerdi, ingest "Target table … doesn't exist"
+              demeye devam ederdi. */}
           {peerable(confirm) ? (
             <p style={{ fontSize: 12 }}>
               Eş replika <code className="mono">{confirm.peerHost}</code>&apos;ten iç tablonun DDL&apos;i alınır ve o node&apos;da
-              <code className="mono"> CREATE TABLE `.inner_id.{confirm.uuid}` UUID &apos;…&apos;</code> ile AYNI uuid&apos;yle kurulur. View
-              düşmez; Replicated iç tablo aynı yola katılır ve tarihçeyi eşten çeker. Spans&apos;e dokunulmaz. Audit&apos;e düşer.
+              <code className="mono"> CREATE TABLE `.inner_id.{confirm.uuid}`</code> olarak kurulur — ad view&apos;ın uuid&apos;sinden,
+              tablonun <b>nesne uuid&apos;si</b> ise bu host&apos;taki MV&apos;nin <code className="mono">TO INNER UUID</code> değerinden
+              (sunucu onu o sorguda okur; okunamazsa ya da eşinkiyle tutmazsa eylem <b>reddedilir</b>). View düşmez; Replicated iç
+              tablo aynı yola katılır ve tarihçeyi eşten çeker. Spans&apos;e dokunulmaz. Audit&apos;e düşer.
             </p>
           ) : (
             <p style={{ fontSize: 12 }}>

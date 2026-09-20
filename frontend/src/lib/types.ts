@@ -3541,8 +3541,10 @@ export interface CHRootCoverageResponse {
   capped: boolean;
 }
 /** v0.10.762 — Sarkan MV onarımı (Go chstore.DanglingMV): view var, `.inner_id.<uuid>` yok. */
-/** uuid = eksik iç tablonun uuid'si (hata metnindeki); peerHost = aynı shard'da sağlam eş (onarım oradan, tarihçe korunur) — v0.10.780. */
-export interface CHDanglingMV { host: string; addr?: string; shard?: number; replica?: number; view: string; uuid: string; viewUuid?: string; canonical: boolean; peerHost?: string; peerAddr?: string }
+/** uuid = eksik iç tablonun ADINDAKİ uuid = VIEW'ın uuid'si (hata metnindeki ad); iç tablonun KENDİ
+ *  nesne uuid'si (MV'nin `TO INNER UUID`'si) AYRI bir değerdir ve burada taşınmaz — v0.10.832.
+ *  peerHost = aynı shard'da sağlam eş (onarım oradan, tarihçe korunur) — v0.10.780. */
+export interface CHDanglingMV { host: string; addr?: string; shard?: number; replica?: number; view: string; uuid: string; canonical: boolean; peerHost?: string; peerAddr?: string }
 /** v0.10.825 — MV kapsaması (Go chstore.MVHostState). ok = view + iç tablo (kümede Replicated);
  *  plain = iç tablo var ama Replicated DEĞİL; dangling = iç tablo yok; missing = view o host'ta yok. */
 export type CHMVState = 'ok' | 'plain' | 'dangling' | 'missing';

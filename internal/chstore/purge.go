@@ -192,6 +192,13 @@ func (s *Store) truncateStmt(ctx context.Context, name string) (stmt string, ski
 			return "TRUNCATE TABLE IF EXISTS " + local + onCluster + purgeGuard, false, nil
 		}
 		if lEngine == "MaterializedView" {
+			// v0.10.832 — AYNI kapı aşağıdaki MaterializedView dalında vardı,
+			// burada YOKTU. Sıfır uuid'de `.inner_id.0000…` TRUNCATE edilir,
+			// `IF EXISTS` yüzünden SESSİZ no-op olur ve purge "başarılı" yazar:
+			// silinmeyen veri silinmiş sayılır. Hata daha ucuz.
+			if !validUUID(lUUID) {
+				return "", false, fmt.Errorf("MaterializedView %s has no inner storage uuid", local)
+			}
 			return "TRUNCATE TABLE IF EXISTS " + innerName(lUUID) + onCluster + purgeGuard, false, nil
 		}
 		return "TRUNCATE TABLE IF EXISTS " + local + onCluster + purgeGuard, false, nil
@@ -219,7 +226,10 @@ func (s *Store) lookupTable(ctx context.Context, name string) (engine, engineFul
 	return engine, engineFull, uuid, cnt > 0, nil
 }
 
-func innerName(uuid string) string { return "`.inner_id." + uuid + "`" }
+// innerName — backtick'li iç tablo adı. Ad TEK GÖVDEDEN (innerTableName,
+// v0.10.832): buradaki uuid zaten system.tables'ın VIEW satırının uuid
+// KOLONU, yani adın doğru kaynağı.
+func innerName(uuid string) string { return "`" + innerTableName(uuid) + "`" }
 
 func validUUID(u string) bool {
 	return u != "" && u != "00000000-0000-0000-0000-000000000000"

@@ -18,19 +18,25 @@ import (
 )
 
 const (
-	mvTestView  = "11111111-1111-1111-1111-111111111111"
+	// mvTestView — VIEW'ın uuid'si: iç tablonun ADI bundan doğar.
+	mvTestView = "11111111-1111-1111-1111-111111111111"
+	// mvTestInner — iç tablonun KENDİ nesne uuid'si (`TO INNER UUID`).
+	// v0.10.832: ADA girmez, yalnız uuid KOLONUNDA durur.
 	mvTestInner = "22222222-2222-2222-2222-222222222222"
 )
 
-// combinedMVRow — Atomic DB'de combined MV satırı (iç tablo ayrı uuid).
+// combinedMVRow — Atomic DB'de combined MV satırı, ayar AÇIK biçimi (metin
+// hem view uuid'sini hem nesne uuid'sini taşır).
 func combinedMVRow(host, name string) mvTableRow {
 	return mvTableRow{Host: host, Name: name, UUID: mvTestView, Engine: "MaterializedView",
 		CreateQuery: "CREATE MATERIALIZED VIEW coremetry." + name + " UUID '" + mvTestView +
 			"' TO INNER UUID '" + mvTestInner + "' (x Int) ENGINE = ReplicatedAggregatingMergeTree AS SELECT 1"}
 }
 
+// innerRow — CANLI iç tablo: adı VIEW uuid'sinden, uuid KOLONU nesne uuid'si
+// (gerçek system.tables satırı böyle gelir).
 func innerRow(host, engine string) mvTableRow {
-	return mvTableRow{Host: host, Name: innerTablePrefix + mvTestInner, Engine: engine}
+	return mvTableRow{Host: host, Name: innerTablePrefix + mvTestView, UUID: mvTestInner, Engine: engine}
 }
 
 func stateOf(t *testing.T, got []MVHostState, view, host string) MVHostState {

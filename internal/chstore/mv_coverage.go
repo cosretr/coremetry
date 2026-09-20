@@ -133,19 +133,24 @@ func mvCoverageFromRows(rows []mvTableRow, canonical []string, hosts []string, r
 			// gerçek bir tablo) ve uuid'si okunamayanlar (Ordinary DB:
 			// iç tablo `.inner.<ad>`, bu envanterde yok). View duruyorsa
 			// kanıtlanabilir bir hastalık yok → ok.
-			if v.UUID == "" || v.UUID == zeroUUID ||
-				(!reInnerUUID.MatchString(v.CreateQuery) && reMVWithTO.MatchString(v.CreateQuery)) {
+			if !validUUID(v.UUID) || !mvHasInnerTable(v.CreateQuery) {
 				st.State = MVStateOK
 				out = append(out, st)
 				continue
 			}
-			iu := innerUUIDFor(v.CreateQuery, v.UUID)
-			st.UUID = iu
-			eng, has := inner[host][innerTablePrefix+iu]
+			// v0.10.832 — ad VIEW uuid'sinden doğar. Burası DDL'deki
+			// `TO INNER UUID` değerini kullanıyordu; o NESNE uuid'sidir ve
+			// öyle adlandırılmış bir tablo HİÇ yoktur — ayar açık bir
+			// profilde HER hücre `dangling` çıkıyor, "Yeniden kur" kapısı
+			// (State == ok değil) açılıyor ve DROP … SYNC + purgeGuard
+			// CANLI iç tabloyu tarihçesiyle götürüyordu.
+			name := innerTableName(v.UUID)
+			st.UUID = strings.ToLower(v.UUID)
+			eng, has := inner[host][name]
 			switch {
 			case !has:
 				st.State = MVStateDangling
-				st.PeerHost = replicatedInnerPeer(inner, host, innerTablePrefix+iu, shardOf)
+				st.PeerHost = replicatedInnerPeer(inner, host, name, shardOf)
 			case !replicatedInner || strings.HasPrefix(eng, "Replicated"):
 				st.State = MVStateOK
 			default:
@@ -200,12 +205,18 @@ func (s *Store) mvInventory(ctx context.Context) ([]mvTableRow, string, error) {
 	if err := s.conn.QueryRow(ctx, "SELECT currentDatabase()").Scan(&db); err != nil {
 		return nil, cluster, fmt.Errorf("currentDatabase: %w", err)
 	}
+	// v0.10.832 — ayar BİZ SABİTLİYORUZ. Sınıflandırma create_table_query'nin
+	// BİÇİMİNE bakar (`TO <tablo>` var mı); profil
+	// show_table_uuid_in_table_create_query_if_not_nil = 1 ise CH araya
+	// `UUID '…'` token'ı koyar ve aynı metin başka bir şeye benzer. Doğruluğun
+	// bizim olmayan bir ayara asılı kalmaması için okuma onu 0'a çiviler:
+	// hangi profilde koşarsak koşalım metin AYNI gelir.
 	rows, err := s.conn.Query(ctx, `
 		SELECT hostName(), name, toString(uuid), engine, substring(create_table_query, 1, 400)
 		FROM `+src+`
 		WHERE database = ?
 		  AND (engine = 'MaterializedView' OR name LIKE '.inner_id.%')
-		SETTINGS max_execution_time = 15`, db)
+		SETTINGS max_execution_time = 15, show_table_uuid_in_table_create_query_if_not_nil = 0`, db)
 	if err != nil {
 		return nil, cluster, err
 	}
@@ -382,14 +393,27 @@ func (s *Store) rebuildMVOnConn(ctx context.Context, conn driver.Conn, view, nam
 // değil: DDL koştu, başarılı bir onarımı okuma hatası yüzünden "başarısız"
 // göstermek v0.10.820'nin düzelttiği sınıftır (ReplicaRepairResult.VerifyError).
 func (s *Store) verifyMVRebuild(ctx context.Context, conn driver.Conn, view string, steps []string) ([]string, error) {
+	// Ayar mvInventory ile AYNI şekilde 0'a çivili: iki yüzey aynı metni
+	// görmezse aynı MV'yi farklı sınıflar (v0.10.832).
 	var uuid, cq string
-	if err := conn.QueryRow(ctx, "SELECT toString(uuid), substring(create_table_query, 1, 400) FROM system.tables WHERE database = currentDatabase() AND name = ? SETTINGS max_execution_time = 10", view).Scan(&uuid, &cq); err != nil {
+	if err := conn.QueryRow(ctx, "SELECT toString(uuid), substring(create_table_query, 1, 400) FROM system.tables WHERE database = currentDatabase() AND name = ? SETTINGS max_execution_time = 10, show_table_uuid_in_table_create_query_if_not_nil = 0", view).Scan(&uuid, &cq); err != nil {
 		return steps, fmt.Errorf("doğrulama (view): %w", err)
 	}
-	if reMVWithTO.MatchString(cq) && !reInnerUUID.MatchString(cq) {
+	if !mvHasInnerTable(cq) {
 		return steps, nil // TO'lu MV: gizli iç tablosu yok
 	}
-	innerName := innerTablePrefix + innerUUIDFor(cq, uuid)
+	// v0.10.832 incelemesi (KÜÇÜK): innerTableName'in ilan ettiği validUUID
+	// sözleşmesi BURADA YOKTU. Ordinary DB'de MV uuid'si sıfırdır ve iç tablo
+	// `.inner.<ad>` olarak yaşar; `.inner_id.0000…` aranınca BAŞARILI bir
+	// kurulum "iç tablo doğmadı" diye raporlanıyordu. Sıfır uuid HATA değil,
+	// DOĞRULANAMAZ demektir — sessizce de geçilmez, adımda yazar.
+	if !validUUID(uuid) {
+		return append(steps, "-- uyarı: view'ın uuid'si okunamadı/sıfır (Ordinary DB: iç tablo `.inner.<ad>`) — DDL koştu, iç tablo doğrulaması atlandı"), nil
+	}
+	// Ad VIEW uuid'sinden (system.tables.uuid kolonu), DDL metnindeki nesne
+	// uuid'sinden DEĞİL: yanlış adı arayan doğrulama taze kurulmuş SAĞLAM bir
+	// MV'yi "iç tablo doğmadı" diye reddederdi.
+	innerName := innerTableName(uuid)
 	var innerEngine string
 	if err := conn.QueryRow(ctx, "SELECT engine FROM system.tables WHERE database = currentDatabase() AND name = ? SETTINGS max_execution_time = 10", innerName).Scan(&innerEngine); err != nil || innerEngine == "" {
 		return steps, fmt.Errorf("doğrulama: iç tablo doğmadı (%v)", err)

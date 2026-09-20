@@ -20,21 +20,31 @@ import (
 	"testing"
 )
 
+// v0.10.832 — bu sabitler VIEW uuid'leridir: iç tablonun ADI onlardan doğar
+// (`.inner_id.<view uuid>`). Nesne uuid'si (`TO INNER UUID`) ayrı bir
+// değerdir ve ada hiç girmez — lfObjectOf ile türetilir.
 const (
-	lfCurInner  = "aaaaaaaa-1111-2222-3333-444444444444"
-	lfBareInner = "bbbbbbbb-1111-2222-3333-444444444444"
-	lfOrphan    = "cccccccc-1111-2222-3333-444444444444"
+	lfCurView  = "aaaaaaaa-1111-2222-3333-444444444444"
+	lfBareView = "bbbbbbbb-1111-2222-3333-444444444444"
+	lfOrphan   = "cccccccc-1111-2222-3333-444444444444"
 )
 
-// mvRowFor — Atomic DB'de combined MV satırı (iç tablo ayrı uuid).
-func mvRowFor(host, name, innerUUID string) mvTableRow {
-	return mvTableRow{Host: host, Name: name, UUID: mvTestView, Engine: "MaterializedView",
-		CreateQuery: "CREATE MATERIALIZED VIEW coremetry." + name + " UUID '" + mvTestView +
-			"' TO INNER UUID '" + innerUUID + "' (x Int) ENGINE = ReplicatedAggregatingMergeTree AS SELECT 1"}
+// lfObjectOf — view uuid'sinden TÜREYEN, ona ASLA eşit olmayan nesne uuid'si
+// (CH `to_inner_uuid == view uuid` durumunu yasaklar).
+func lfObjectOf(viewUUID string) string { return "9" + viewUUID[1:] }
+
+// mvRowFor — Atomic DB'de combined MV satırı, ayar AÇIK biçimi: metin hem
+// view uuid'sini (ADIN kaynağı) hem nesne uuid'sini taşır.
+func mvRowFor(host, name, viewUUID string) mvTableRow {
+	return mvTableRow{Host: host, Name: name, UUID: viewUUID, Engine: "MaterializedView",
+		CreateQuery: "CREATE MATERIALIZED VIEW coremetry." + name + " UUID '" + viewUUID +
+			"' TO INNER UUID '" + lfObjectOf(viewUUID) + "' (x Int) ENGINE = ReplicatedAggregatingMergeTree AS SELECT 1"}
 }
 
-func innerRowFor(host, innerUUID, engine string) mvTableRow {
-	return mvTableRow{Host: host, Name: innerTablePrefix + innerUUID, Engine: engine}
+// innerRowFor — CANLI iç tablo: adı VIEW uuid'sinden, uuid KOLONU nesne
+// uuid'si.
+func innerRowFor(host, viewUUID, engine string) mvTableRow {
+	return mvTableRow{Host: host, Name: innerTablePrefix + viewUUID, UUID: lfObjectOf(viewUUID), Engine: engine}
 }
 
 // testStorage — mvStorageName'in saf ikizi: highVolume adlar küme kipinde
@@ -61,32 +71,32 @@ func TestMVLeftoversFromRows(t *testing.T) {
 		{
 			name: "güncel _local bulgu değil",
 			rows: []mvTableRow{
-				mvRowFor("ch-01", "db_summary_5m_local", lfCurInner),
-				innerRowFor("ch-01", lfCurInner, "ReplicatedAggregatingMergeTree"),
+				mvRowFor("ch-01", "db_summary_5m_local", lfCurView),
+				innerRowFor("ch-01", lfCurView, "ReplicatedAggregatingMergeTree"),
 			},
 			cluster: true,
-			want:    map[string]string{"ch-01/" + lfCurInner: ""},
+			want:    map[string]string{"ch-01/" + lfCurView: ""},
 		},
 		{
 			name: "çıplak MV = kalıntı; _local yanında dursa bile",
 			rows: []mvTableRow{
-				mvRowFor("ch-02", "db_summary_5m_local", lfCurInner),
-				innerRowFor("ch-02", lfCurInner, "ReplicatedAggregatingMergeTree"),
-				mvRowFor("ch-02", "db_summary_5m", lfBareInner),
-				innerRowFor("ch-02", lfBareInner, "AggregatingMergeTree"),
+				mvRowFor("ch-02", "db_summary_5m_local", lfCurView),
+				innerRowFor("ch-02", lfCurView, "ReplicatedAggregatingMergeTree"),
+				mvRowFor("ch-02", "db_summary_5m", lfBareView),
+				innerRowFor("ch-02", lfBareView, "AggregatingMergeTree"),
 			},
 			cluster: true,
 			want: map[string]string{
-				"ch-02/" + lfCurInner:  "",
-				"ch-02/" + lfBareInner: MVLeftoverBare,
+				"ch-02/" + lfCurView:  "",
+				"ch-02/" + lfBareView: MVLeftoverBare,
 			},
-			view: map[string]string{"ch-02/" + lfBareInner: "db_summary_5m"},
+			view: map[string]string{"ch-02/" + lfBareView: "db_summary_5m"},
 		},
 		{
 			name: "sahibi hiç yok → öksüz",
 			rows: []mvTableRow{
-				mvRowFor("ch-01", "db_summary_5m_local", lfCurInner),
-				innerRowFor("ch-01", lfCurInner, "ReplicatedAggregatingMergeTree"),
+				mvRowFor("ch-01", "db_summary_5m_local", lfCurView),
+				innerRowFor("ch-01", lfCurView, "ReplicatedAggregatingMergeTree"),
 				innerRowFor("ch-01", lfOrphan, "AggregatingMergeTree"),
 			},
 			cluster: true,
@@ -99,14 +109,14 @@ func TestMVLeftoversFromRows(t *testing.T) {
 			// "eksik MV"dir ve kapsama kartının işidir.
 			name: "sahip BAŞKA host'ta → burada öksüz DEĞİL",
 			rows: []mvTableRow{
-				mvRowFor("ch-01", "db_summary_5m_local", lfCurInner),
-				innerRowFor("ch-01", lfCurInner, "ReplicatedAggregatingMergeTree"),
-				innerRowFor("ch-02", lfCurInner, "ReplicatedAggregatingMergeTree"),
+				mvRowFor("ch-01", "db_summary_5m_local", lfCurView),
+				innerRowFor("ch-01", lfCurView, "ReplicatedAggregatingMergeTree"),
+				innerRowFor("ch-02", lfCurView, "ReplicatedAggregatingMergeTree"),
 			},
 			cluster: true,
 			want: map[string]string{
-				"ch-01/" + lfCurInner: "",
-				"ch-02/" + lfCurInner: "",
+				"ch-01/" + lfCurView: "",
+				"ch-02/" + lfCurView: "",
 			},
 		},
 		{
@@ -114,11 +124,11 @@ func TestMVLeftoversFromRows(t *testing.T) {
 			// üretilemez. (Sahipsiz iç tablo tek düğümde de öksüzdür.)
 			name: "tek düğüm kalıntı ÜRETMEZ",
 			rows: []mvTableRow{
-				mvRowFor("ch-01", "db_summary_5m", lfBareInner),
-				innerRowFor("ch-01", lfBareInner, "AggregatingMergeTree"),
+				mvRowFor("ch-01", "db_summary_5m", lfBareView),
+				innerRowFor("ch-01", lfBareView, "AggregatingMergeTree"),
 			},
 			cluster: false,
-			want:    map[string]string{"ch-01/" + lfBareInner: ""},
+			want:    map[string]string{"ch-01/" + lfBareView: ""},
 		},
 		{
 			// `TO <tablo>` biçimli MV'nin gizli iç tablosu YOKTUR: ne sahip
@@ -134,11 +144,11 @@ func TestMVLeftoversFromRows(t *testing.T) {
 			// bilinmiyor, kalıntı diye YARGILANMAZ.
 			name: "kanonik olmayan MV yargılanmaz",
 			rows: []mvTableRow{
-				mvRowFor("ch-01", "rollup_custom_mv", lfBareInner),
-				innerRowFor("ch-01", lfBareInner, "AggregatingMergeTree"),
+				mvRowFor("ch-01", "rollup_custom_mv", lfBareView),
+				innerRowFor("ch-01", lfBareView, "AggregatingMergeTree"),
 			},
 			cluster: true,
-			want:    map[string]string{"ch-01/" + lfBareInner: ""},
+			want:    map[string]string{"ch-01/" + lfBareView: ""},
 		},
 	}
 	for _, c := range cases {
@@ -200,10 +210,10 @@ func TestMVLeftoversFromRows(t *testing.T) {
 func TestMVLeftoverGuardedHasNoAction(t *testing.T) {
 	hv := map[string]bool{"db_statement_summary_5m": true, "db_summary_5m": true}
 	rows := []mvTableRow{
-		mvRowFor("ch-01", "db_statement_summary_5m", lfBareInner),
-		innerRowFor("ch-01", lfBareInner, "AggregatingMergeTree"),
-		mvRowFor("ch-01", "db_summary_5m", lfCurInner),
-		innerRowFor("ch-01", lfCurInner, "AggregatingMergeTree"),
+		mvRowFor("ch-01", "db_statement_summary_5m", lfBareView),
+		innerRowFor("ch-01", lfBareView, "AggregatingMergeTree"),
+		mvRowFor("ch-01", "db_summary_5m", lfCurView),
+		innerRowFor("ch-01", lfCurView, "AggregatingMergeTree"),
 	}
 	guarded := func(base string) bool { return base == "db_statement_summary_5m" }
 	got := mvLeftoversFromRows(rows, true, testStorage(hv, true), guarded)
@@ -324,24 +334,24 @@ func TestLeftoverDataGate(t *testing.T) {
 // DEĞİLDİR — 830'un kalıcı kırmızı satırının kökü buydu).
 func TestMVOwnersByHostSingleBody(t *testing.T) {
 	rows := []mvTableRow{
-		mvRowFor("ch-01", "db_summary_5m_local", lfCurInner),
-		mvRowFor("ch-02", "db_summary_5m", lfBareInner),
-		innerRowFor("ch-02", lfBareInner, "AggregatingMergeTree"),
+		mvRowFor("ch-01", "db_summary_5m_local", lfCurView),
+		mvRowFor("ch-02", "db_summary_5m", lfBareView),
+		innerRowFor("ch-02", lfBareView, "AggregatingMergeTree"),
 	}
 	owners := mvOwnersByHost(rows)
-	if owners["ch-01"][innerTablePrefix+lfCurInner] != "db_summary_5m_local" {
+	if owners["ch-01"][innerTablePrefix+lfCurView] != "db_summary_5m_local" {
 		t.Errorf("ch-01 sahibi: %v", owners["ch-01"])
 	}
-	if _, has := owners["ch-01"][innerTablePrefix+lfBareInner]; has {
+	if _, has := owners["ch-01"][innerTablePrefix+lfBareView]; has {
 		t.Error("ch-02'nin çıplak MV'si ch-01'e sızdı — host ekseni kayboldu")
 	}
 	all := innerTableOwners(rows)
-	o := all[innerTablePrefix+lfBareInner]
+	o := all[innerTablePrefix+lfBareView]
 	if o.View != "db_summary_5m" || strings.Join(o.Hosts, ",") != "ch-02" {
 		t.Errorf("küme geneli sahip: %+v", o)
 	}
 	// innerTableViews düzleştirmedir: aynı gövde, aynı sonuç.
-	if innerTableViews(rows)[innerTablePrefix+lfCurInner] != "db_summary_5m_local" {
+	if innerTableViews(rows)[innerTablePrefix+lfCurView] != "db_summary_5m_local" {
 		t.Error("innerTableViews artık aynı gövdeden türemiyor")
 	}
 }
@@ -428,10 +438,10 @@ func TestMVLeftoverActionPins(t *testing.T) {
 	orph := funcBody(t, "mv_leftover.go", "func (s *Store) DropOrphanInner(")
 	for _, want := range []string{
 		"mvUUIDRe.MatchString(uuid)",
-		"innerTablePrefix + uuid", // ad SUNUCUDA kurulur
-		"s.MVLeftovers(ctx)",      // küme geneli sıfır referans, TAZE
-		"MVLeftoverOrphan",        // yalnız öksüz sınıfı
-		"s.distributedRefs(ctx,",  // sarmalayıcı denetimi
+		"innerTableName(uuid)",   // ad SUNUCUDA, tek gövdeden kurulur
+		"s.MVLeftovers(ctx)",     // küme geneli sıfır referans, TAZE
+		"MVLeftoverOrphan",       // yalnız öksüz sınıfı
+		"s.distributedRefs(ctx,", // sarmalayıcı denetimi
 		`strings.HasPrefix(row.InnerEngine, "Replicated")`,
 		"total <= 1", // son kayıtlı replika düşürülmez
 	} {

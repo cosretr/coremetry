@@ -126,13 +126,27 @@ describe('runbook — v0.10.824 MV iç tablosu', () => {
   it('view bilinmiyorsa başlıkta yer tutucu + arama SQL\'i; biliniyorsa arama yok', () => {
     const missing = shard('missing_replica', [peer], { missing: [{ host: 'ch-03' }] });
     const unknown = runbook('c1', 'db', INNER, missing);
-    expect(unknown).toContain("<MV adı: system.tables'ta TO INNER UUID ile bul>");
-    expect(unknown).toContain("create_table_query LIKE '%11111111-1111-1111-1111-111111111111%'");
+    // v0.10.832 — ad VIEW'ın uuid'sidir: MV'yi system.tables.uuid ile bulunur.
+    // Eski reçete "TO INNER UUID ile bul" + `create_table_query LIKE '%uuid%'`
+    // diyordu; ikisi de yanlış (o uuid ada girmez ve varsayılan ayarda metinde
+    // hiç görünmez, yani arama HİÇBİR ZAMAN eşleşmezdi).
+    expect(unknown).toContain("<MV adı: adın uuid'si VIEW'ın uuid'sidir — system.tables.uuid ile bul>");
+    expect(unknown).toContain("engine = 'MaterializedView' AND toString(uuid) = '11111111-1111-1111-1111-111111111111'");
+    expect(unknown).not.toContain('create_table_query LIKE');
     expect(unknown).toContain('ch-03 · iç tablo YOK');
     const known = runbook('c1', 'db', INNER, missing, 'db_summary_5m');
     expect(known).toContain('-- MV: db_summary_5m');
-    expect(known).not.toContain('create_table_query LIKE');
+    expect(known).not.toContain('toString(uuid) =');
     expect(known).toContain('DROP TABLE `db`.`db_summary_5m` SYNC;');
+  });
+
+  // v0.10.832 — metin iki uuid'yi AYIRIR ve nesne uuid'sini görmek için
+  // ayarın O SORGUDA açılması gerektiğini söyler.
+  it("iki uuid ayrı: ad = view uuid'si, eşleşme = system.tables.uuid == TO INNER UUID", () => {
+    const rb = runbook('c1', 'db', INNER, shard('not_replicated', [peer], { missing: [{ host: 'ch-03', engine: 'AggregatingMergeTree' }] }), 'db_summary_5m');
+    expect(rb).toContain("İki uuid AYRIDIR");
+    expect(rb).toContain("system.tables.uuid ('.inner_id.11111111-1111-1111-1111-111111111111' satırında) == MV'nin TO INNER UUID'si");
+    expect(rb).toContain('SETTINGS show_table_uuid_in_table_create_query_if_not_nil = 1');
   });
   it('replikasyon yok: eksik host yerine ZK yolları ve makro sorgusu; yine merdiven yok', () => {
     const nr = runbook('c1', 'db', INNER, shard('no_replication', [rep('ch-01', '/t/a/x'), rep('ch-02', '/t/b/x')]), 'spanmetrics_1m');

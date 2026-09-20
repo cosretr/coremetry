@@ -271,10 +271,13 @@ func TestShardRefFor(t *testing.T) {
 
 // v0.10.824 — `.inner_id.<uuid>` → view eşlemesi (operatör, test kümesi
 // 2026-09-20: kart iç tabloya `_fix` + ATTACH PARTITION + EXCHANGE
-// merdivenini bastı). Sözleşme: Atomic `TO INNER UUID` biçimi DE eski
-// biçim (iç uuid = view uuid) DE çözülür; `TO <tablo>` MV'sinin gizli iç
-// tablosu YOKTUR; MV olmayan satırlar eşlemeye girmez; MV satırı hiç
-// gelmemişse iç tablo çözülmez (View boş kalır, uydurulmaz).
+// merdivenini bastı).
+//
+// v0.10.832 — sözleşme netleşti: ad HER İKİ biçimde de VIEW'ın uuid'sinden
+// doğar. DDL'de `TO INNER UUID '<x>'` dursa bile ad ONDAN kurulmaz (o, iç
+// tablonun NESNE uuid'sidir). `TO <tablo>` MV'sinin gizli iç tablosu
+// YOKTUR; MV olmayan satırlar eşlemeye girmez; MV satırı hiç gelmemişse iç
+// tablo çözülmez (View boş kalır, uydurulmaz).
 func TestInnerTableViews(t *testing.T) {
 	const (
 		viewUUID  = "11111111-1111-1111-1111-111111111111"
@@ -283,25 +286,31 @@ func TestInnerTableViews(t *testing.T) {
 		toTable   = "44444444-4444-4444-4444-444444444444"
 	)
 	rows := []mvTableRow{
-		// Atomic combined MV: iç tablo AYRI uuid taşır (v0.10.780 dersi).
+		// Atomic combined MV: metin AYRI bir NESNE uuid'si taşır, ad yine
+		// VIEW uuid'sinden doğar (v0.10.832).
 		{Host: "ch-01", Name: "service_summary_5m", Engine: "MaterializedView", UUID: viewUUID,
-			CreateQuery: "CREATE MATERIALIZED VIEW db.service_summary_5m TO INNER UUID '" + innerUUID + "' (`time_bucket` DateTime) AS SELECT 1"},
-		// Eski biçim: DDL'de TO yok → iç uuid = view uuid.
+			CreateQuery: "CREATE MATERIALIZED VIEW db.service_summary_5m UUID '" + viewUUID + "' TO INNER UUID '" + innerUUID + "' (`time_bucket` DateTime) AS SELECT 1"},
+		// Varsayılan ayar biçimi: metinde uuid YOK, ad yine view uuid'sinden.
 		{Host: "ch-01", Name: "operation_summary_5m", Engine: "MaterializedView", UUID: legacy,
 			CreateQuery: "CREATE MATERIALIZED VIEW db.operation_summary_5m (`time_bucket` DateTime) ENGINE = AggregatingMergeTree AS SELECT 1"},
 		// TO <tablo> MV: hedefi gerçek tablo, gizli iç tablo yok.
 		{Host: "ch-01", Name: "span_links_reverse_mv", Engine: "MaterializedView", UUID: toTable,
 			CreateQuery: "CREATE MATERIALIZED VIEW db.span_links_reverse_mv TO db.span_links_reverse AS SELECT 1"},
-		// MV olmayan satırlar (iç tablonun kendisi dahil) eşlemeye girmez.
-		{Host: "ch-01", Name: ".inner_id." + innerUUID, Engine: "AggregatingMergeTree", UUID: innerUUID},
+		// MV olmayan satırlar (iç tablonun kendisi dahil) eşlemeye girmez;
+		// iç tablonun uuid KOLONU nesne uuid'sidir.
+		{Host: "ch-01", Name: ".inner_id." + viewUUID, Engine: "AggregatingMergeTree", UUID: innerUUID},
 		{Host: "ch-02", Name: "spans_local", Engine: "ReplicatedMergeTree", UUID: "55555555-5555-5555-5555-555555555555"},
 		// uuid'siz MV (Ordinary DB) çözülemez.
 		{Host: "ch-02", Name: "legacy_mv", Engine: "MaterializedView", UUID: zeroUUID, CreateQuery: "CREATE MATERIALIZED VIEW db.legacy_mv AS SELECT 1"},
 	}
 	got := innerTableViews(rows)
 	want := map[string]string{
-		".inner_id." + innerUUID: "service_summary_5m",
-		".inner_id." + legacy:    "operation_summary_5m",
+		".inner_id." + viewUUID: "service_summary_5m",
+		".inner_id." + legacy:   "operation_summary_5m",
+	}
+	// NESNE uuid'siyle adlandırılmış bir anahtar ASLA doğmaz.
+	if v := got[".inner_id."+innerUUID]; v != "" {
+		t.Errorf("ad nesne uuid'sinden kurulmuş: %q", v)
 	}
 	if len(got) != len(want) {
 		t.Fatalf("eşleme %d girdi: %v", len(got), got)
@@ -399,16 +408,17 @@ func TestReplicaInventoryCarriesMVIdentity(t *testing.T) {
 	if n := strings.Count(s, "MV iç tablosu: ATTACH/EXCHANGE uygulanmaz"); n != 1 {
 		t.Errorf("ipucu metni %d yerde (tek sabit olmalı)", n)
 	}
-	// v0.10.830 — iç uuid çözümü mv_leftover.go'nun sahip haritasına taşındı
-	// (mvOwnersByHost → innerUUIDFor); bu dosya ikinci bir gövde TUTMAZ.
-	if strings.Contains(s, "innerUUIDFor(") {
-		t.Error("iç uuid çözümü burada ikinci kez yazılmış — tek gövde mvOwnersByHost")
+	// v0.10.830 — eşleme mv_leftover.go'nun sahip haritasından türer; bu dosya
+	// ikinci bir gövde TUTMAZ. v0.10.832: ad çözümü de tek gövde
+	// (innerTableName) — burada elle `.inner_id.` + uuid kurulmaz.
+	if strings.Contains(s, "innerTablePrefix +") {
+		t.Error("iç tablo adı burada elle kuruluyor — tek gövde innerTableName")
 	}
 	l, lerr := os.ReadFile("mv_leftover.go")
 	if lerr != nil {
 		t.Fatal(lerr)
 	}
-	if !strings.Contains(string(l), "innerUUIDFor(") {
-		t.Error("iç uuid çözümü dangling_mv_admin ile aynı gövdeden gelmeli (innerUUIDFor)")
+	if !strings.Contains(string(l), "innerTableName(r.UUID)") {
+		t.Error("sahip haritasının anahtarı VIEW uuid'sinden, tek gövdeden (innerTableName) kurulmalı")
 	}
 }

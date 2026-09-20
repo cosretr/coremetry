@@ -154,6 +154,16 @@ export function innerViewLabel(t: { inner?: boolean; view?: string; orphan?: boo
  * burada ONARMAZ: EXCHANGE tabloların uuid'sini TAŞIMAZ, MV DDL'i
  * `TO INNER UUID '<uuid>'` ile eski tabloyu adresler ve oraya yazmaya devam
  * eder. Onarım MV düzeyindedir — kanonik DDL ile o host'ta yeniden kur.
+ *
+ * v0.10.832 — iki uuid AYRI şeydir ve bu metin yanlış reçete öğretiyordu:
+ *   - `.inner_id.<uuid>` ADI, VIEW'ın uuid'sidir (CH
+ *     generateInnerTableName(view_id)). MV'yi bulmanın yolu `uuid = '<x>'`;
+ *     eski metin "TO INNER UUID ile bul" diyordu.
+ *   - İç tablonun KENDİ nesne uuid'si MV'nin `TO INNER UUID`'sidir ve
+ *     `system.tables.uuid` kolonunda durur. Varsayılan ayarda
+ *     (show_table_uuid_in_table_create_query_if_not_nil = 0) DDL METNİNDE
+ *     HİÇ GÖRÜNMEZ, o yüzden eski `create_table_query LIKE '%uuid%'` araması
+ *     hiçbir şey bulamazdı.
  */
 function innerRunbook(cluster: string, db: string, table: string, sh: CHReplicaShard, view?: string): string {
   const q = (s: string) => `\`${db}\`.\`${s}\``;
@@ -163,8 +173,8 @@ function innerRunbook(cluster: string, db: string, table: string, sh: CHReplicaS
   const head = named
     ? [`-- MV: ${named} (combined MaterializedView'ın gizli hedefi)`]
     : [
-        `-- MV: <MV adı: system.tables'ta TO INNER UUID ile bul>`,
-        `SELECT name FROM system.tables WHERE database = '${db}' AND create_table_query LIKE '%${uuid}%';`,
+        `-- MV: <MV adı: adın uuid'si VIEW'ın uuid'sidir — system.tables.uuid ile bul>`,
+        `SELECT name FROM system.tables WHERE database = '${db}' AND engine = 'MaterializedView' AND toString(uuid) = '${uuid}';`,
       ];
   const missing = (sh.missing ?? []).filter(m => !m.engine || !m.engine.startsWith('Replicated'));
   const perHost = missing.length > 0
@@ -192,6 +202,12 @@ function innerRunbook(cluster: string, db: string, table: string, sh: CHReplicaS
     `-- Bu host'ta MV tarihçesi sıfırlanır; yalnız yeni yazımlarla dolar (geçmiş pencere için MV backfill gerekir). Diğer host'lara dokunma.`,
     `-- Doğrula (view ve iç tablo her host'ta var mı):`,
     `SELECT hostName(), name, engine FROM clusterAllReplicas('${cluster}', system.tables) WHERE database = '${db}' AND (name = '${mv}' OR name LIKE '${INNER_PREFIX}%') ORDER BY 1, 2;`,
+    // v0.10.832 — eşleşme kuralı: AD view uuid'sinden, NESNE uuid'si
+    // (system.tables.uuid) MV'nin TO INNER UUID'si. İkinci uuid'yi GÖRMEK
+    // için ayarı O SORGUDA açmak gerekir; varsayılanda metin onu siler.
+    `-- İki uuid AYRIDIR: ad = '${INNER_PREFIX}' + VIEW uuid'si; iç tablonun KENDİ (nesne) uuid'si = MV'nin TO INNER UUID'si.`,
+    `--   Eşleşme: system.tables.uuid ('${table}' satırında) == MV'nin TO INNER UUID'si. İkincisi varsayılan ayarda DDL metninde GÖRÜNMEZ:`,
+    `SELECT create_table_query FROM system.tables WHERE database = '${db}' AND name = '${mv}' SETTINGS show_table_uuid_in_table_create_query_if_not_nil = 1;`,
     `-- İç tabloya doğrudan dokunma: EXCHANGE uuid'yi taşımaz, MV eski tabloya yazmaya devam eder. DBA gözetiminde, önce test ortamında.`,
   ].join('\n');
 }

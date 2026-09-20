@@ -283,7 +283,9 @@ func (s *Store) mvInnerTable(ctx context.Context, mv string) (string, bool) {
 		uuid == "00000000-0000-0000-0000-000000000000" {
 		return "", false
 	}
-	return ".inner_id." + uuid, true
+	// Ad TEK GÖVDEDEN (innerTableName, v0.10.832); uuid burada VIEW satırının
+	// uuid kolonudur, yani adın doğru kaynağı.
+	return innerTableName(uuid), true
 }
 
 // columnType reads a column's CURRENT declared type — see exemplarColTTLStmt

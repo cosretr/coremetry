@@ -1052,7 +1052,9 @@ func mvDDLByName(mvs []string, name string) string {
 // max_partition_size_to_drop = 0 so the drop succeeds no matter how
 // large the MV's inner storage has grown. Pure for testability.
 func innerDropStmt(uuid, onCluster string) string {
-	return "DROP TABLE IF EXISTS `.inner_id." + uuid + "`" + onCluster + " SYNC" +
+	// Ad TEK GÖVDEDEN (innerTableName, v0.10.832): uuid VIEW satırının uuid
+	// kolonundan gelir, DDL metnindeki nesne uuid'sinden değil.
+	return "DROP TABLE IF EXISTS `" + innerTableName(uuid) + "`" + onCluster + " SYNC" +
 		" SETTINGS max_table_size_to_drop = 0, max_partition_size_to_drop = 0"
 }
 
