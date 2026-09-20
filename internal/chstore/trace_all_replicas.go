@@ -45,13 +45,33 @@ func (s *Store) DefaultSpansDays() int { return s.ret.SpansDays }
 
 // traceAllReplicasSQL — SAF: pencereli, tavanlı, erişilemeyen shard'ı
 // atlayan tüm-replika okuması (tablo yerel parça, Distributed değil).
-func traceAllReplicasSQL(cluster string) string {
+//
+// v0.10.826 — operatör hatası (test kümesi): tablo argümanı ÇIPLAK
+// `spans_local` yazılmıştı ve ClickHouse her çağrıyı reddediyordu:
+// "Table name was not found in function arguments" (kod 42). Tablo
+// fonksiyonu KULLANICI tablosunu veritabanıyla nitelenmiş ister;
+// system.* adları veritabanını kendi taşıdığı için kardeş okumalar
+// çalışıyordu. Sonuç: yedek okuma kümede HİÇ koşmadı — başlatıcının
+// replikasında bulunmayan her trace "replica_miss / aged-out" kartına
+// düştü. Aynı şekil v0.10.823'te ham sayıma kopyalanmıştı
+// (trace_health_raw.go); ikisi de bu sürümde nitelendi ve
+// cluster_all_replicas_args_test.go ile kaynaktan pinlendi.
+//
+// currentDatabase() BİLEREK yok (replica_consistency.go disiplini):
+// tablo fonksiyonunun argümanı başlatan düğümde çözülür, uzak düğümde
+// başka bir veritabanına işaret edebilir. Yapılandırılmış ad chObjRe
+// ile doğrulanıp backtick'le nitelenir — doğrulama düşerse SQL hiç
+// kurulmaz, ad tırnaksız eklenmez.
+func traceAllReplicasSQL(cluster, db string) (string, error) {
+	if !chObjRe.MatchString(db) {
+		return "", fmt.Errorf("geçersiz veritabanı adı %q — clusterAllReplicas argümanına eklenmedi", db)
+	}
 	return `SELECT ` + traceSpanCols + `
-		FROM clusterAllReplicas('` + cluster + `', spans_local)
+		FROM clusterAllReplicas('` + cluster + "', `" + db + "`.`spans_local`" + `)
 		WHERE trace_id = ? AND time >= ? AND time <= ?
 		ORDER BY time ASC
 		LIMIT 50000
-		SETTINGS max_execution_time = 20, skip_unavailable_shards = 1`
+		SETTINGS max_execution_time = 20, skip_unavailable_shards = 1`, nil
 }
 
 // traceReplicaWindow — SAF: stub penceresi ± 60 sn (span time'ı MV kova
@@ -71,8 +91,12 @@ func (s *Store) GetTraceAllReplicas(ctx context.Context, traceID string, startNs
 	if s.cfg.ClusterName == "" || traceID == "" {
 		return nil, nil
 	}
+	q, qerr := traceAllReplicasSQL(s.cfg.ClusterName, s.cfg.Database)
+	if qerr != nil {
+		return nil, fmt.Errorf("trace all-replica read: %w", qerr)
+	}
 	lo, hi := traceReplicaWindow(startNs, endNs)
-	rows, err := s.telemetryReadConn().Query(ctx, traceAllReplicasSQL(s.cfg.ClusterName),
+	rows, err := s.telemetryReadConn().Query(ctx, q,
 		traceID, chDateTime64Arg(lo), chDateTime64Arg(hi))
 	if err != nil {
 		return nil, fmt.Errorf("trace all-replica read: %w", err)

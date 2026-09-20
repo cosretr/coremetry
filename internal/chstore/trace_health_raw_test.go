@@ -32,9 +32,15 @@ func TestRawSpanSQLBounded(t *testing.T) {
 			t.Errorf("toplam sorgusu %q içermeli:\n%s", w, total)
 		}
 	}
-	byHost := rawSpanByHostSQL("uptrace_all", "spans_local")
+	// v0.10.826 — tablo argümanı VERİTABANIYLA nitelenmiş: çıplak
+	// `spans_local` ClickHouse'ta kod 42 ile reddediliyordu (operatör,
+	// v0.10.824). Şekil cluster_all_replicas_args_test.go ile de pinli.
+	byHost, err := rawSpanByHostSQL("uptrace_all", "coremetry", "spans_local")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, w := range []string{
-		"clusterAllReplicas('uptrace_all', spans_local)",
+		"clusterAllReplicas('uptrace_all', `coremetry`.`spans_local`)",
 		"hostName()",
 		"time >= toDateTime64(?, 9, 'UTC') AND time < toDateTime64(?, 9, 'UTC')",
 		"GROUP BY 1",
@@ -50,8 +56,18 @@ func TestRawSpanSQLBounded(t *testing.T) {
 	if strings.Contains(byHost, "currentDatabase()") {
 		t.Error("küme geneli sorgu currentDatabase() ÇÖZMEMELİ (her düğüm kendi varsayılanını kullanır)")
 	}
-	if s := rawSpanByHostSQL("c", "spans"); !strings.Contains(s, "max_execution_time = 15") {
+	s, err := rawSpanByHostSQL("c", "cm", "spans")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(s, "max_execution_time = 15") {
 		t.Errorf("tek düğüm adıyla da bütçeli olmalı:\n%s", s)
+	}
+	// v0.10.826 — doğrulanmayan ad SQL'e HİÇ eklenmez (tırnaksız splice yok).
+	for _, bad := range [][2]string{{"", "spans_local"}, {"cm", ""}, {"cm-1", "spans_local"}, {"cm", "spans_local;DROP"}, {"cm", "`spans`"}} {
+		if _, err := rawSpanByHostSQL("c", bad[0], bad[1]); err == nil {
+			t.Errorf("geçersiz ad çifti %v doğrulamadan geçti", bad)
+		}
 	}
 }
 
@@ -62,8 +78,11 @@ func TestRawSpanCountsSourceContract(t *testing.T) {
 	}
 	src := string(b)
 	for _, w := range []string{
-		"rows.Err()",                                 // yarım liste = uydurma ayrışma
-		"s.conn.Query(ctx, rawSpanByHostSQL(",        // ana bağlantı (hostName() kimliği)
+		"rows.Err()", // yarım liste = uydurma ayrışma
+		// v0.10.826 — SQL önce kurulur (db doğrulaması hata dönebilir), okuma
+		// yine ANA bağlantıda (hostName() kimliği taşır).
+		"rawSpanByHostSQL(cluster, s.cfg.Database, local)",
+		"s.conn.Query(ctx, byHostQ, lo, hi)",
 		"s.hostShardMap(ctx, cluster, names)",        // eşleme Replika kartıyla AYNI makineden
 		"out.ByHostError = ",                         // kısmi sonuç
 		"replicaDivergeMinRows", "replicaDivergePct", // eşikler ödünç

@@ -186,17 +186,32 @@ func rawSpanTotalSQL() string {
 
 // rawSpanByHostSQL — SAF: küme geneli host başına yerel sayım. Tablo adı
 // LocalTableName'den gelir (spans → spans_local), küme adı literal —
-// clusterAllReplicas ilk argümanı bağlanamaz. currentDatabase() YOK: küme
-// genelinde her düğüm kendi varsayılan veritabanını çözer.
-func rawSpanByHostSQL(cluster, localTable string) string {
+// clusterAllReplicas ilk argümanı bağlanamaz.
+//
+// v0.10.826 — operatör hatası: tablo argümanı ÇIPLAK `spans_local`
+// geçiliyordu, ClickHouse kod 42 ile reddediyordu ("Table name was not
+// found in function arguments"). KULLANICI tablosu veritabanıyla
+// nitelenmiş olmalı; system.* adları veritabanını kendi taşıdığı için
+// kardeş okumalar çalışıyordu. Şekil v0.10.810'daki yedek okumadan
+// kopyalanmıştı — ikisi de burada nitelendi.
+//
+// currentDatabase() YOK: tablo fonksiyonunun argümanı BAŞLATAN düğümde
+// çözülür, uzak düğümde başka bir veritabanına işaret edebilir
+// (replica_consistency.go ile aynı disiplin). Yapılandırılmış ad ve
+// tablo adı chObjRe ile doğrulanıp backtick'le nitelenir; doğrulama
+// düşerse SQL kurulmaz — çağıran hatayı ByHostError'a yazar.
+func rawSpanByHostSQL(cluster, db, localTable string) (string, error) {
+	if !chObjRe.MatchString(db) || !chObjRe.MatchString(localTable) {
+		return "", fmt.Errorf("geçersiz ad (db %q, tablo %q) — clusterAllReplicas argümanına eklenmedi", db, localTable)
+	}
 	return `
 		SELECT hostName() AS host, count() AS n
-		FROM clusterAllReplicas('` + cluster + `', ` + localTable + `)
+		FROM clusterAllReplicas('` + cluster + "', `" + db + "`.`" + localTable + "`" + `)
 		WHERE time >= toDateTime64(?, 9, 'UTC') AND time < toDateTime64(?, 9, 'UTC')
 		GROUP BY 1
 		ORDER BY 1
 		LIMIT 1000
-		SETTINGS max_execution_time = 15, skip_unavailable_shards = 1`
+		SETTINGS max_execution_time = 15, skip_unavailable_shards = 1`, nil
 }
 
 // RawSpanCounts — [from, to) penceresinde ham span sayımı. Pencere
@@ -230,11 +245,19 @@ func (s *Store) RawSpanCounts(ctx context.Context, from, to time.Time) (RawSpanC
 	}
 	cluster := s.cfg.ClusterName
 	local := s.LocalTableName("spans")
-	out.Source = "spans (Distributed, shard başına bir replika) + clusterAllReplicas(" + local + ", her replika)"
+	// Etiket BİLEREK ayraçsız: "clusterAllReplicas(" düzyazısı kaynak
+	// pininin (cluster_all_replicas_args_test.go, v0.10.826) taradığı
+	// şekilden ayrılmalı — gate kendi metnini ısırmasın.
+	out.Source = "spans (Distributed, shard başına bir replika) + clusterAllReplicas · " + local + " (her replika)"
 	// system.* okumalarıyla aynı gerekçe (replica_consistency.go): hostName()
 	// kimliği taşıyan küme geneli okuma ANA bağlantıda koşar, RoundRobin
 	// telemetri havuzunda değil.
-	rows, err := s.conn.Query(ctx, rawSpanByHostSQL(cluster, local), lo, hi)
+	byHostQ, qerr := rawSpanByHostSQL(cluster, s.cfg.Database, local)
+	if qerr != nil {
+		out.ByHostError = qerr.Error()
+		return out, nil
+	}
+	rows, err := s.conn.Query(ctx, byHostQ, lo, hi)
 	if err != nil {
 		out.ByHostError = err.Error()
 		return out, nil

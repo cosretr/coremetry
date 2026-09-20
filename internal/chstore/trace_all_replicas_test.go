@@ -38,14 +38,30 @@ func TestTraceAgedOut(t *testing.T) {
 }
 
 func TestTraceAllReplicasSQLBounded(t *testing.T) {
-	q := traceAllReplicasSQL("prod-eu")
-	for _, want := range []string{"clusterAllReplicas('prod-eu', spans_local)", "trace_id = ?", "time >= ?", "time <= ?", "LIMIT 50000", "max_execution_time = 20", "skip_unavailable_shards = 1", traceSpanCols} {
+	// v0.10.826 — tablo argümanı VERİTABANIYLA nitelenmiş olmalı; çıplak
+	// `spans_local` ClickHouse'ta kod 42 ("Table name was not found in
+	// function arguments") ile reddediliyordu ve yedek okuma kümede hiç
+	// koşmadı. Şekil ayrıca cluster_all_replicas_args_test.go ile
+	// kaynaktan pinli.
+	q, err := traceAllReplicasSQL("prod-eu", "coremetry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"clusterAllReplicas('prod-eu', `coremetry`.`spans_local`)", "trace_id = ?", "time >= ?", "time <= ?", "LIMIT 50000", "max_execution_time = 20", "skip_unavailable_shards = 1", traceSpanCols} {
 		if !strings.Contains(q, want) {
 			t.Errorf("SQL eksik: %s", want)
 		}
 	}
+	if strings.Contains(q, "currentDatabase()") {
+		t.Error("tablo fonksiyonunun argümanı başlatan düğümde çözülür — currentDatabase() uzak düğümde başka DB'ye işaret edebilir")
+	}
 	if strings.Contains(q, "FROM spans\n") || strings.Contains(q, "FROM spans ") {
 		t.Error("yedek okuma Distributed sarmalayıcıya gitmemeli")
+	}
+	for _, bad := range []string{"", "coremetry;DROP", "cm-1", "1db", "`cm`"} {
+		if _, err := traceAllReplicasSQL("prod-eu", bad); err == nil {
+			t.Errorf("geçersiz db %q doğrulamadan geçti — ad tırnaksız eklenmemeli", bad)
+		}
 	}
 	lo, hi := traceReplicaWindow(1_000_000_000_000, 2_000_000_000_000)
 	if lo.UnixNano() != 1_000_000_000_000-int64(time.Minute) || hi.UnixNano() != 2_000_000_000_000+int64(time.Minute) {
