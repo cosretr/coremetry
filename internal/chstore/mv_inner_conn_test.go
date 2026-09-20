@@ -76,6 +76,23 @@ type scriptConn struct {
 	queries []string
 	execs   []string
 	execErr error
+	// execRules — v0.10.835: Exec ARTIK tek bir sonuç değil. Hedef uuid
+	// onarımı aynı bağlantıda ÜÇ farklı ifade koşar (boş adın DROP'u, iç
+	// tablonun CREATE'i ve doğrulamanın `SELECT 1 … LIMIT 0` yoklaması) ve
+	// doğrulamanın 2. şartı ancak YOKLAMA tek başına düşerken ölçülebilir.
+	// Tek `execErr` ile o hücre yazılamıyordu. Sıra değil EŞLEŞME: ilk eşleşen
+	// kural kazanır, eşleşme yoksa execErr.
+	execRules []scriptExec
+}
+
+// scriptExec — Exec için kural. `match` semantiği scriptStep ile AYNI olmak
+// ZORUNDA (v0.10.835 incelemesi): orada boş `match` "kısıt yok" demektir,
+// burada önce "hiç ısırma" demek oluyordu. Aynı alan adı iki ters anlam
+// taşıyınca unutulan bir `match` kuralı SESSİZCE etkisiz kalır ve testi
+// yanlış sebepten yeşil gösterir. Artık boş `match` HER ifadeye uyar.
+type scriptExec struct {
+	match string
+	err   error
 }
 
 func (c *scriptConn) QueryRow(ctx context.Context, q string, args ...any) driver.Row {
@@ -93,6 +110,11 @@ func (c *scriptConn) QueryRow(ctx context.Context, q string, args ...any) driver
 
 func (c *scriptConn) Exec(ctx context.Context, q string, args ...any) error {
 	c.execs = append(c.execs, q)
+	for _, r := range c.execRules {
+		if r.match == "" || strings.Contains(q, r.match) {
+			return r.err
+		}
+	}
 	return c.execErr
 }
 

@@ -380,6 +380,27 @@ export function isCanceled(e: unknown): boolean {
   return e instanceof CanceledError || (e as Error)?.name === 'CanceledError';
 }
 
+/** v0.10.835 — request() hata gövdesini `HTTP 409: {json}` metnine GÖMER.
+ *
+ *  Yarım kalan bir yönetim işleminin (MV hedef uuid onarımı) KOŞAN DDL adımları
+ *  o gövdededir ve ekranda görünmeden operatör nerede durduğunu bilemez. Bu
+ *  ayrıştırıcı gövdeyi açar: `error` alanı varsa mesaj olarak onu döndürür
+ *  (ham `HTTP 409: {"error":…}` gürültüsü yerine) ve `steps` dizisini taşır.
+ *  Gövde JSON değilse ham mesaj aynen döner — hiçbir hata YUTULMAZ. */
+export function apiErrorDetail(e: unknown): { message: string; steps?: string[] } {
+  const raw = e instanceof Error ? e.message : String(e);
+  const at = raw.indexOf('{');
+  if (!raw.startsWith('HTTP ') || at < 0) return { message: raw };
+  try {
+    const body: unknown = JSON.parse(raw.slice(at));
+    if (typeof body !== 'object' || body === null) return { message: raw };
+    const rec = body as Record<string, unknown>;
+    const msg = typeof rec.error === 'string' && rec.error ? rec.error : raw;
+    const steps = Array.isArray(rec.steps) ? rec.steps.filter((s): s is string => typeof s === 'string') : undefined;
+    return { message: msg, steps: steps?.length ? steps : undefined };
+  } catch { return { message: raw }; }
+}
+
 async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return request<T>(path, signal ? { signal } : undefined);
 }
@@ -3390,6 +3411,15 @@ export const api = {
   chMVRebuild: (host: string, view: string) =>
     request<import('./types').CHMVRebuildResult>('/api/admin/clickhouse/dangling-mv/rebuild', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view, confirm: true }), timeoutMs: 300_000,
+    }),
+  // v0.10.835 — hedef uuid onarımı (ŞEKİL-1: MV hedefini ÇÖZEMİYOR, ingest o host'ta düşüyor).
+  // YARIM bir onarımın KOŞAN adımları 409 gövdesinde döner; çağıran onları apiErrorDetail ile okur.
+  // peer: EKRANDA hangi dal yazıyorsa (eşten → tarihçe gelir / kanonik → tarihçe SIFIR); sunucu
+  // sözü tutamıyorsa 409 ile REDDEDER, sessizce öteki dala düşmez. dropEmpty: `.inner_id.<view uuid>`
+  // adını tutan BOŞ tablonun düşürülmesine AYRI onay — dolu tabloda sunucu yine reddeder.
+  chMVTargetRepair: (host: string, view: string, peer: boolean, dropEmpty: boolean) =>
+    request<import('./types').CHMVTargetRepairResult>('/api/admin/clickhouse/mv-target/repair', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view, peer, dropEmpty, confirm: true }), timeoutMs: 300_000,
     }),
   // v0.10.830 — MV artığı temizliği: terfi öncesi ÇIPLAK MV (kaskadla gizli iç tablosunu da götürür,
   // `<mv>_local` çalışmaya devam eder) ve SAHİPSİZ iç tablo. İkisi de YALNIZ o host'ta koşar (ON CLUSTER yok),

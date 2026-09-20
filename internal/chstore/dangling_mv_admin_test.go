@@ -208,7 +208,16 @@ func TestInnerObjectUUIDOnIsFailClosed(t *testing.T) {
 // TestRepairInnerOnPins — v0.10.832 KAYNAK pini, davranış testinin YANINDA
 // (yerine değil — mv_inner_peer_test.go): sıralama ve fail-closed kapıları.
 func TestRepairInnerOnPins(t *testing.T) {
-	fn := funcBody(t, "dangling_mv_admin.go", "func (s *Store) repairInnerOn(")
+	// v0.10.835 — merdiven İKİYE ayrıldı: hazırlık SALT OKUMA
+	// (prepareInnerFromPeer), uygulama DEĞİŞTİRİR (applyInnerFromPeer).
+	// Gerekçe: hedef uuid onarımı yıkıcı adımı bu üç okumanın ÖNÜNE
+	// koyuyordu ve okuma düştüğünde ad boşalmış, tablo kurulmamış kalıyordu.
+	// Sözleşme DAĞILMADI, yeri değişti — pin ikisini birlikte tarar.
+	// Yorumlar sökülür: muhafız kendi gerekçe metnini ısırmasın.
+	prep := stripGoComments(funcBody(t, "dangling_mv_admin.go", "func (s *Store) prepareInnerFromPeer("))
+	app := stripGoComments(funcBody(t, "dangling_mv_admin.go", "func (s *Store) applyInnerFromPeer("))
+	ladder := stripGoComments(funcBody(t, "dangling_mv_admin.go", "func (s *Store) repairInnerOn("))
+	fn := prep + "\n" + app
 	for _, want := range []string{
 		"innerTableName(row.UUID)",          // ad VIEW uuid'sinden
 		"s.innerObjectUUIDOn(ctx, conn,",    // nesne uuid'si YEREL MV'den, açıkça
@@ -218,14 +227,23 @@ func TestRepairInnerOnPins(t *testing.T) {
 		"s.verifyPeerZKPath(", // tarihçeyi belirleyen şey de ölçülür
 	} {
 		if !strings.Contains(fn, want) {
-			t.Errorf("repairInnerOn içinde eksik: %s", want)
+			t.Errorf("eşten kurulum merdiveninde eksik: %s", want)
 		}
 	}
-	// Fail-closed: uuid okunamazsa / eşinki tutmazsa Exec'e GİDİLMEZ.
+	// HAZIRLIK HİÇBİR ŞEY DEĞİŞTİRMEZ — bütün ayrımın sebebi bu.
+	if strings.Contains(prep, ".Exec(") {
+		t.Error("hazırlık DDL koşuyor — salt okuma olmalı, yoksa çağıran onu yıkıcı adımın önüne koyamaz")
+	}
+	// Fail-closed: iki kapı da HAZIRLIKTA, yani Exec'ten önce.
 	for _, gate := range []string{"s.innerObjectUUIDOn(ctx, conn,", "EqualFold(peerRaw,"} {
-		if i, j := strings.Index(fn, gate), strings.Index(fn, "conn.Exec("); i < 0 || j < 0 || i > j {
-			t.Errorf("%s kapısı Exec'ten ÖNCE olmalı (fail-closed)", gate)
+		if !strings.Contains(prep, gate) {
+			t.Errorf("%s kapısı hazırlıkta olmalı (fail-closed: Exec'e hiç gidilmez)", gate)
 		}
+	}
+	// TEK GÖVDE sözleşmesi: eski çağıranlar için repairInnerOn ikisini SIRAYLA
+	// çağırmayı sürdürür.
+	if i, j := strings.Index(ladder, "s.prepareInnerFromPeer("), strings.Index(ladder, "s.applyInnerFromPeer("); i < 0 || j < 0 || i > j {
+		t.Error("repairInnerOn hazırla → uygula sırasını korumalı")
 	}
 	// Yalnız count()>0 bakan doğrulama YALAN söyler: yanlış uuid'li bir tablo
 	// da bir satırdır ve kaskad kırık kalır.
@@ -236,7 +254,7 @@ func TestRepairInnerOnPins(t *testing.T) {
 	if strings.Contains(fn, "injectTableUUID(ddl, inner, row.UUID)") {
 		t.Error("ad uuid'si nesne uuid'si olarak kullanılmış — MV hedefini bulamaz")
 	}
-	// Eş bağlantısı ÇÖZÜMÜ dışarıda: bu gövde test edilebilir kalmalı.
+	// Eş bağlantısı ÇÖZÜMÜ dışarıda: bu gövdeler test edilebilir kalmalı.
 	if strings.Contains(fn, "s.shardConn(") {
 		t.Error("eş bağlantısı bu gövdede çözülüyor — dal yine test edilemez hâle gelir")
 	}

@@ -80,8 +80,12 @@ type MVHostState struct {
 	TargetResolves *bool `json:"targetResolves,omitempty"`
 	// TargetNote — ölçülememe ya da bulgu sebebi, operatör diliyle.
 	TargetNote string `json:"targetNote,omitempty"`
-	// PeerHost/PeerAddr — yalnız dangling'de ve yalnız eşin iç tablosu
-	// REPLICATED ise: düz bir eşten kopyalamak düz tabloyu çoğaltır.
+	// PeerHost/PeerAddr — aynı shard'da iç tablosu REPLICATED olan eş host
+	// (düz bir eşten kopyalamak düz tabloyu çoğaltır, başka shard'daki eş
+	// başka veriyi tutar). v0.10.835'e kadar YALNIZ dangling satırında
+	// doluydu; hedef uuid onarımı adı VAR olan bir hücrede koştuğu için artık
+	// iç tablosu okunabilen her hücrede dolar. "Eşten kur" düğmesinin kapısı
+	// FE'de hâlâ state === 'dangling'dir — düğme yayılmaz.
 	PeerHost string `json:"peerHost,omitempty"`
 	PeerAddr string `json:"peerAddr,omitempty"`
 }
@@ -185,10 +189,18 @@ func mvCoverageFromRows(rows []mvTableRow, canonical []string, hosts []string, r
 			// v0.10.833 — karşılaştırmanın ENVANTER tarafı: o adı taşıyan
 			// tablonun KENDİ nesne uuid'si. Kararı mvTargetVerdict verir.
 			st.InnerUUID = strings.ToLower(it.UUID)
+			// v0.10.835 — eş adayı ARTIK yalnız `dangling` satırında değil:
+			// hedef uuid onarımı (şekil-1) ADI VAR OLAN bir hücrede koşar ve
+			// tarihçeyi eşten getirebilmek için aynı eşe ihtiyaç duyar. Eşi
+			// yalnız o dalda hesaplamak, onarımı sessizce tarihçesiz kanonik
+			// dala mahkûm ederdi. Hesap TEK GÖVDE (replicatedInnerPeer) ve
+			// kapıları aynı: düz eş aday değil, başka shard aday değil.
+			// FE'nin "Eşten kur" düğmesi state === 'dangling' istediği için o
+			// düğmenin çizildiği satırlar DEĞİŞMEZ.
+			st.PeerHost = replicatedInnerPeer(inner, host, name, shardOf)
 			switch {
 			case !has:
 				st.State = MVStateDangling
-				st.PeerHost = replicatedInnerPeer(inner, host, name, shardOf)
 			case !replicatedInner || strings.HasPrefix(it.Engine, "Replicated"):
 				st.State = MVStateOK
 			default:

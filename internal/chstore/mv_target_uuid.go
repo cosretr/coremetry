@@ -300,7 +300,21 @@ func mvTargetCheckPlan(cells []MVHostState) (run, capped []int) {
 		if !mvTargetNeedsCheck(c.State, c.Target, c.TargetUUID) {
 			continue
 		}
-		if len(run) >= mvTargetCheckTotal || perHost[c.Host] >= mvTargetCheckPerHost {
+		// v0.10.835 — host kapağı `mismatch` satırlarını MUAF tutar.
+		//
+		// NEDEN (ölçüldü, 835 incelemesi): 833'te bu ölçüm yalnız bir
+		// ETİKETTİ ve kapak zararsızdı. 835 EYLEMİ ölçüme bağladı
+		// (ölçülmemiş satırda onarım koşmaz), yani kapak bir EYLEM KAPISINA
+		// dönüştü. Host başına tek slot iki şekilde kilitliyordu: (a) aynı
+		// host'taki ikinci `mismatch` satırı hiç ölçülmüyor ve plan
+		// DETERMİNİSTİK olduğu için "Ölç" kaç kez basılırsa basılsın hep
+		// aynısı seçiliyordu; (b) hedefini ÇÖZEN (şekil-2 — asla
+		// onarılmayacak, kalıcı) bir satır o tek slotu SONSUZA DEK tutuyordu.
+		// Muafiyet `mismatch` ile sınırlı: `dangling` satırlarının kartta
+		// zaten eylemi var ve onlar kapakta kalır. Bedeli toplam satır tavanı
+		// + toplam bütçe sınırlamaya devam ediyor.
+		exempt := c.Target == MVTargetMismatch
+		if len(run) >= mvTargetCheckTotal || (!exempt && perHost[c.Host] >= mvTargetCheckPerHost) {
 			capped = append(capped, i)
 			continue
 		}

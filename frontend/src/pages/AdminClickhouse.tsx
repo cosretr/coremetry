@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
-import { api } from '@/lib/api';
+import { api, apiErrorDetail } from '@/lib/api';
 import { fmtNum, fmtBytes, fmtClock, fmtDateTime, tsLong } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
 import { useQuery } from '@tanstack/react-query';
@@ -1889,6 +1889,11 @@ const MV_FINDING_COLS: DataTableColumn<MVTargetFinding>[] = [
   { id: 'inner', label: 'İç tablonun uuid’si', sortValue: f => f.row.innerUUID ?? '', naturalDir: 'asc', width: 280 },
   { id: 'target', label: 'MV’nin hedefi', sortValue: f => f.row.targetUUID ?? '', naturalDir: 'asc', width: 280 },
   { id: 'finding', label: 'Bulgu', sortValue: f => f.kind, naturalDir: 'asc', width: 260 },
+  // v0.10.835 — eylem kolonu. Düğme YALNIZ `broken` satırında çizilir; `live`
+  // (MV topluyor) ve `unknown` (ölçülemedi) satırları v0.10.833'ün kararıyla
+  // DÜĞMESİZ kalır ve gerekçeyi rozet olarak taşır. Sıralanabilir değil
+  // (sortValue yok): eylem bir veri boyutu değil.
+  { id: 'action', label: '', width: 170 },
 ];
 const mvLeftoverKey = (l: CHMVLeftover) => `${l.host}/${l.inner}`;
 /** İç tablonun boyutu; okunamadıysa dürüst "boyut okunamadı" (0 satır DEĞİL). */
@@ -1935,6 +1940,35 @@ function DanglingMVPanel() {
       setResult({ key: k, ok: true, text: l.kind === 'artik' ? 'kalıntı düşürüldü (iç tablo kaskadla gitti)' : 'öksüz iç tablo düşürüldü', steps: res.steps });
     } catch (e: unknown) {
       setResult({ key: k, ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally { setRepairing(null); void scan(); }
+  };
+  // v0.10.835 — hedef uuid ONARIMI (yalnız şekil-1). Onay penceresi iki uuid'i,
+  // dalı ve tarihçenin gelip gelmeyeceğini söyler; boş adın DROP'u AYRI bir
+  // kutudur (sunucu dolu tabloda onu da reddeder).
+  const [targetConfirm, setTargetConfirm] = useState<MVTargetFinding | null>(null);
+  const [targetDropEmpty, setTargetDropEmpty] = useState(false);
+  // canonicalAck — eş VAR ama ADRESİ çözülemediğinde tarihçesiz kanonik
+  // kurulum VARSAYILAN eylem olamaz (v0.10.835 incelemesi): "eş yok" bir
+  // OLGU iddiasıdır, "adresi çözülemedi" ise bizim körlüğümüz. Operatör o
+  // hâlde tarihçe kaybını AÇIKÇA seçer.
+  const [canonicalAck, setCanonicalAck] = useState(false);
+  const repairTarget = async (f: MVTargetFinding) => {
+    const k = `tgt:${f.key}`;
+    // Dal kararı SUNUCUNUN kapısıyla AYNI alandan: eş ADI çözülüp ADRESİ
+    // çözülemediğinde (resolveHostAddrs yarım) sunucu "eşten"i reddeder ve
+    // ekranda eşten yazdığı için operatör ilerleyemezdi — v0.10.825'in
+    // peerRefused sınıfı. peerAddr sunucunun gerçekten bağlanabileceği tek
+    // kanıttır; ikinci bir kurtarma durumu (peerRefused) gerekmez.
+    const fromPeer = !!f.row.peerAddr;
+    setTargetConfirm(null); setRepairing(k); setResult(null);
+    try {
+      const res = await api.chMVTargetRepair(f.row.host, f.row.view, fromPeer, fromPeer && targetDropEmpty);
+      setResult({ key: k, ok: true, text: fromPeer ? 'hedef onarıldı — iç tablo eşten kuruldu' : 'hedef onarıldı — kanonik DDL (tarihçe bu host’ta sıfırlandı)', steps: res.steps });
+    } catch (e: unknown) {
+      // YARIM bir onarımın KOŞAN adımları 409 gövdesindedir: mesajla birlikte
+      // ekrana da düşer (title'da), yoksa operatör nerede durduğunu bilemez.
+      const d = apiErrorDetail(e);
+      setResult({ key: k, ok: false, text: d.message, steps: d.steps });
     } finally { setRepairing(null); void scan(); }
   };
   // peerRefused — sunucu "Eşten kur"u reddettiyse (aynı shard'da Replicated eş
@@ -2154,18 +2188,50 @@ function DanglingMVPanel() {
               <DataTableColgroup dt={findingDt} />
               <DataTableHead dt={findingDt} />
               <tbody>
-                {findingDt.sortedRows.map(f => (
-                  <tr key={f.key} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
-                    <td className="mono" title={f.row.host}>{f.row.host}</td>
-                    <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.row.view}>{f.row.view}</td>
-                    <td className="mono" style={{ fontSize: 11 }} title={f.row.innerUUID || 'okunamadı'}>{f.row.innerUUID || '—'}</td>
-                    <td className="mono" style={{ fontSize: 11 }} title={f.row.targetUUID || 'okunamadı'}>{f.row.targetUUID || '—'}</td>
-                    <td style={{ fontSize: 11 }}>
-                      <span className={`badge ${MV_FINDING_TONE[f.kind]}`}>{MV_FINDING_LABEL[f.kind]}</span>
-                      {f.row.targetNote && <div className="cell-hint" style={{ fontSize: 11 }}>{f.row.targetNote}</div>}
-                    </td>
-                  </tr>
-                ))}
+                {findingDt.sortedRows.map(f => {
+                  // v0.10.835 — eylem YALNIZ şekil-1'de. `live` satırında MV
+                  // topluyor (DROP canlı veriyi siler), `unknown` satırında
+                  // ölçüm YOK ve ölçülmemiş bir satırda onarım koşmaz:
+                  // ikisi de düğmesiz kalır, gerekçeyi rozet söyler.
+                  const tres = result?.key === `tgt:${f.key}` ? result : null;
+                  const tblocked = !!cluster && !f.row.addr;
+                  return (
+                    <tr key={f.key} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
+                      <td className="mono" title={f.row.host}>{f.row.host}{tblocked ? ' · adres çözülemedi' : ''}</td>
+                      <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.row.view}>{f.row.view}</td>
+                      <td className="mono" style={{ fontSize: 11 }} title={f.row.innerUUID || 'okunamadı'}>{f.row.innerUUID || '—'}</td>
+                      <td className="mono" style={{ fontSize: 11 }} title={f.row.targetUUID || 'okunamadı'}>{f.row.targetUUID || '—'}</td>
+                      <td style={{ fontSize: 11 }}>
+                        <span className={`badge ${MV_FINDING_TONE[f.kind]}`}>{MV_FINDING_LABEL[f.kind]}</span>
+                        {f.row.targetNote && <div className="cell-hint" style={{ fontSize: 11 }}>{f.row.targetNote}</div>}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {/* SATIR BAŞINA TEK YIKICI EYLEM (v0.10.825 duruşu):
+                            kapsaması `ok` OLMAYAN hücre (örn. `plain` +
+                            `mismatch`) üstteki onarım tablosunda ZATEN
+                            "Yeniden kur" taşıyor ve o yol hedef uuid'sini de
+                            düzeltir. Sunucu da aynı kapıyı koyar. */}
+                        {f.kind === 'broken' && f.row.state === 'ok'
+                          ? <Button variant="danger" size="sm" disabled={repairing !== null || tblocked} loading={repairing === `tgt:${f.key}`}
+                              title={f.row.peerAddr
+                                ? `İç tablo eş replikadan (${f.row.peerHost}) MV'nin TO INNER UUID'siyle kurulur; view düşmez, tarihçe replikasyondan gelir`
+                                : f.row.peerHost
+                                  ? `Eş (${f.row.peerHost}) VAR ama adresi çözülemedi — tarihçesiz kanonik kurulum bilerek onaylanmalı`
+                                  : 'Eş yok: bu host’ta view düşürülüp kanonik DDL ile kurulur — MV tarihçesi bu host’ta SIFIRLANIR'}
+                              onClick={() => { setTargetDropEmpty(false); setCanonicalAck(false); setTargetConfirm(f); }}>Hedefi onar</Button>
+                          : <span className="badge b-warn"
+                              title={f.kind === 'broken'
+                                ? `Bu satırın durumu "${f.row.state}" — yıkıcı eylemi üstteki onarım tablosunda ("Yeniden kur") ve o yol hedef uuid'sini de düzeltir; satır başına tek eylem`
+                                : f.kind === 'live'
+                                  ? 'MV hedefini ÇÖZÜYOR ve topluyor — onarım bu satırda CANLI veriyi siler; yapılacak iş ölü kopyanın temizliği (aşağıdaki runbook)'
+                                  : 'Hedefin çözülüp çözülmediği ÖLÇÜLMEDİ — ölçülmemiş bir satırda onarım koşmaz; kartı yeniden Ölç'}>
+                              {f.kind === 'broken' ? 'üstteki tabloda' : 'eylem yok'}
+                            </span>}
+                        {tres && <div className={tres.ok ? 'ok' : 'err'} style={{ fontSize: 11, marginTop: 4 }} title={tres.steps?.join('\n')}>{tres.text}</div>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -2187,7 +2253,13 @@ function DanglingMVPanel() {
           )}
           {targetBroken.length > 0 && (
             <div className="cell-hint" style={{ fontSize: 11, marginTop: 8 }}>
-              <b>Hedefi ÇÖZÜLMEYEN satırlar (ingest düşüyor) — elle, yalnız o host&apos;ta; bu sürüm onarmaz.</b> Sırayı bozma:
+              {/* v0.10.835 — bu satırların onarımı artık ÜRÜNDE: satırdaki
+                  <b>Hedefi onar</b>. Elle reçete DURUYOR ama ikincil — sunucu
+                  reddettiğinde (dolu ad, ölçülemeyen satır) operatörün elinde
+                  kalan tek yol odur. */}
+              <b>Hedefi ÇÖZÜLMEYEN satırlar (ingest düşüyor): satırdaki <i>Hedefi onar</i> düğmesi bunu yapar</b> — yalnız o host&apos;ta,
+              ölçer, boş adı ayrı onayla düşürür, iç tabloyu MV&apos;nin <code className="mono">TO INNER UUID</code>&apos;siyle kurar ve
+              iki şartlı doğrular. Düğme reddederse (ad DOLU, satır ölçülememiş) elle sıra şudur ve bozulmaz:
               <ol style={{ margin: '4px 0 0 16px' }}>
                 <li>Kanıtı tazele: <code className="mono">SHOW CREATE TABLE {'<view>'} SETTINGS show_table_uuid_in_table_create_query_if_not_nil = 1</code> → <code className="mono">TO INNER UUID</code>;
                   karşılığı <code className="mono">SELECT uuid FROM system.tables WHERE database = currentDatabase() AND name = &apos;.inner_id.{'<view uuid>'}&apos;</code>.</li>
@@ -2199,11 +2271,74 @@ function DanglingMVPanel() {
                 <li>Tarihçeyi taşı: <code className="mono">INSERT INTO `.inner_id.{'<view uuid>'}` SELECT * FROM mv_hedef_yanlis_{'<view>'}</code>.</li>
                 <li>Kartı yeniden <b>Ölç</b>; yeşile döndükten sonra yeniden adlandırılan kopyayı düşür.</li>
               </ol>
-              Tarihçe bu host&apos;ta feda edilebilirse kısa yol: view&apos;ı düşür + kanonik DDL&apos;i ON CLUSTER&apos;sız kur (kapsama <i>sağlıklı</i> göründüğü için
-              satırda onarım düğmesi çizilmez — bu bilinçli: bu sürüm yalnız saptar).
+              Tarihçe bu host&apos;ta feda edilebilirse kısa yol: view&apos;ı düşür + kanonik DDL&apos;i ON CLUSTER&apos;sız kur — <i>Hedefi onar</i> aynı
+              shard&apos;da sağlam bir eş bulamadığında zaten bunu yapar ve onay penceresi tarihçenin sıfırlanacağını AÇIKÇA söyler.
             </div>
           )}
         </details>
+      )}
+      {/* v0.10.835 — hedef uuid onarımı onayı: İKİ uuid, hangi dal, tarihçe
+          gelir mi gelmez mi, yalnız bu host, ON CLUSTER YOK, audit. Boş adın
+          DROP'u AYRI bir kutudur — sunucu onsuz reddeder ve dolu bir adı bu
+          kutu işaretliyken de reddeder (onay bir niyet, doluluk bir olgu). */}
+      {targetConfirm && (
+        <Modal open title={`Hedef uuid onarımı — ${targetConfirm.row.view} @ ${targetConfirm.row.host}`}
+          onClose={() => setTargetConfirm(null)} footer={
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setTargetConfirm(null)}>Vazgeç</Button>
+              <Button variant="danger" size="sm"
+                disabled={!targetConfirm.row.peerAddr && !!targetConfirm.row.peerHost && !canonicalAck}
+                onClick={() => void repairTarget(targetConfirm)}>Hedefi onar (DDL koşar)</Button>
+            </>
+          }>
+          <p style={{ fontSize: 12 }}>
+            Bu host&apos;ta MV hedefini <b>çözemiyor</b>: düğüm-yerel <code className="mono">SELECT 1 FROM {targetConfirm.row.view} LIMIT 0</code> kod 60
+            veriyor, INSERT kaskadı düşüyor ve Distributed spool büyüyor. İki uuid AYRI şeydir —
+            <code className="mono"> .inner_id.{targetConfirm.row.uuid}</code> adındaki tablonun kendi nesne uuid&apos;si
+            <code className="mono"> {targetConfirm.row.innerUUID || 'okunamadı'}</code>, MV ise
+            <code className="mono"> {targetConfirm.row.targetUUID}</code> hedefliyor.
+          </p>
+          <p style={{ fontSize: 12 }}>
+            {/* v0.10.835 — ÜÇ dal, çünkü "eş yok" bir OLGU iddiasıdır ve
+                adres çözülememesi o olgu DEĞİLDİR: eş orada olabilir, biz
+                bağlanamıyoruzdur. O hâlde tarihçesiz kurulum VARSAYILAN
+                eylem olamaz, operatör açıkça seçer. */}
+            {targetConfirm.row.peerAddr
+              ? <>Dal: <b>eşten kurulum</b> (<code className="mono">{targetConfirm.row.peerHost}</code>). View DÜŞMEZ; iç tablo eşin DDL&apos;iyle ve
+                MV&apos;nin <code className="mono">TO INNER UUID</code>&apos;siyle kurulur, aynı ZooKeeper yoluna katılır ve <b>tarihçeyi eşten çeker</b>.
+                Eşin nesne uuid&apos;si tutmazsa ya da ZK yolu ayrışmışsa eylem <b>reddedilir</b>.</>
+              : targetConfirm.row.peerHost
+                ? <>Dal: <b>kanonik kurulum</b> — aynı shard&apos;da iç tablosu Replicated bir eş <b>VAR</b> (<code className="mono">{targetConfirm.row.peerHost}</code>)
+                  ama <b>adresi system.clusters&apos;tan çözülemedi</b>, yani ona bağlanamıyoruz. Bu bir OLGU değil bizim körlüğümüz: eş kurulumu bu
+                  yüzden seçilemiyor. Devam edersen view düşürülür ve kanonik DDL kurulur — <b>MV tarihçesi bu host&apos;ta SIFIRLANIR</b>. Önce
+                  Replika tutarlılığı kartındaki adres/is_local uyarısına bakmak isteyebilirsin.</>
+                : <>Dal: <b>kanonik kurulum</b> — aynı shard&apos;da iç tablosu Replicated bir eş YOK. View düşürülür ve kanonik DDL ON CLUSTER&apos;sız
+                  kurulur: <b>MV tarihçesi bu host&apos;ta SIFIRLANIR</b>, yalnız yeni yazımlarla dolar. Eski
+                  <code className="mono"> .inner_id.{targetConfirm.row.uuid}</code> adı bu dalda KULLANILMAZ ve dokunulmaz: sahipsiz iç tablo olarak
+                  yukarıdaki artık listesine düşer, temizliği ayrı bir karardır.</>}
+          </p>
+          {!targetConfirm.row.peerAddr && !!targetConfirm.row.peerHost && (
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12, marginTop: 8 }}>
+              <input type="checkbox" checked={canonicalAck} onChange={e => setCanonicalAck(e.target.checked)} />
+              <span>Eşe bağlanılamadığını biliyorum; <b>tarihçesiz kanonik kurulumu</b> bilerek seçiyorum.</span>
+            </label>
+          )}
+          {targetConfirm.row.peerAddr && (
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12, marginTop: 8 }}>
+              <input type="checkbox" checked={targetDropEmpty} onChange={e => setTargetDropEmpty(e.target.checked)} />
+              <span>
+                <code className="mono">.inner_id.{targetConfirm.row.uuid}</code> adını tutan tablo <b>boşsa</b> düşürülsün — eşten kurulacak tablo tam
+                olarak bu adı ister. Sunucu tazeden ÖLÇER ve şunların herhangi birinde <b>reddeder</b>: satır varsa, <b>DETACHED parça</b> varsa
+                (<code className="mono">system.parts</code> onları göstermez), motoru MergeTree ailesinden değilse ya da o nesne <b>başka bir MV&apos;nin
+                hedefiyse</b>. Bu düğme veri TAŞIMAZ.
+              </span>
+            </label>
+          )}
+          <p style={{ fontSize: 12 }}>
+            Komut <b>YALNIZ bu host&apos;ta</b> koşar (ON CLUSTER yok), diğer düğümlere dokunulmaz. Kurulumdan sonra sunucu İKİ ŞARTI da doğrular
+            (nesne uuid&apos;si = MV&apos;nin hedefi VE düğüm-yerel okuma başarılı); biri tutmazsa sonuç <b>YARIM</b> raporlanır. Audit&apos;e düşer.
+          </p>
+        </Modal>
       )}
       {leftoverConfirm && (
         <Modal open title={`MV artığı — ${leftoverConfirm.kind === 'artik' ? leftoverConfirm.view : leftoverConfirm.inner} @ ${leftoverConfirm.host}`}

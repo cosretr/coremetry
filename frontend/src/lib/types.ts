@@ -3572,7 +3572,10 @@ export interface CHMVHostState {
   targetResolves?: boolean;
   /** ölçülememe ya da bulgu sebebi, operatör diliyle (satırda düğme YOK, detayda okunur). */
   targetNote?: string;
-  /** yalnız dangling'de ve yalnız eşin iç tablosu Replicated ise (düz eşten kurmak düz tabloyu çoğaltır). */
+  /** aynı shard'da iç tablosu Replicated olan eş host (düz eşten kurmak düz tabloyu çoğaltır, başka
+   *  shard'daki eş başka veriyi tutar). v0.10.835'e kadar YALNIZ dangling satırında doluydu; hedef uuid
+   *  onarımı adı VAR olan bir hücrede koştuğu için artık iç tablosu okunabilen her hücrede dolar.
+   *  "Eşten kur" düğmesinin kapısı hâlâ state === 'dangling' — düğme yayılmaz. */
   peerHost?: string; peerAddr?: string;
 }
 /** v0.10.830 — MV artığı (Go chstore.MVLeftover). `artik` = terfi öncesi ÇIPLAK MV (kendi iç tablosuyla;
@@ -3599,6 +3602,11 @@ export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; g
 export interface CHDanglingMVRepairResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.825 — host'a özel yeniden kurulum (DROP + kanonik DDL, ON CLUSTER'sız). */
 export interface CHMVRebuildResult { ok: boolean; host: string; view: string; steps: string[] }
+/** v0.10.835 — hedef uuid onarımı (ŞEKİL-1: `targetResolves === false`, MV hedefini ÇÖZEMİYOR ve
+ *  ingest o host'ta düşüyor). Şekil-2'de (`targetResolves === true`) MV topluyor ve bu uç REDDEDER;
+ *  ölçülmemiş (`undefined`) satır da REDDEDİLİR — fail-closed. `dropEmpty`, `.inner_id.<view uuid>`
+ *  adını tutan BOŞ tablonun düşürülmesine verilen AYRI onaydır (dolu tabloda etkisiz). */
+export interface CHMVTargetRepairResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.791 — Replika tutarlılığı (Go chstore.ReplicaConsistencyReport). Salt okuma; karar shard başına sunucuda (replicaVerdict). */
 export type CHReplicaVerdict = 'ok' | 'single' | 'unmapped' | 'lagging' | 'divergent' | 'readonly' | 'session_expired' | 'missing_replica' | 'not_replicated' | 'no_replication';
 /** v0.10.818 — shard'ın erişilebilir host'u tabloyu kayıtlı göstermiyor; engine boş = tablo yok, dolu = Replicated değil. */

@@ -414,6 +414,34 @@ func (s *Store) repairInnerFromPeer(ctx context.Context, conn driver.Conn, row *
 // eşinki tutmuyorsa ya da ZK yolu tutmuyorsa eylem REDDEDİLİR/hata döner ve
 // operatör "Yeniden kur"u bilerek seçer.
 func (s *Store) repairInnerOn(ctx context.Context, conn, peer driver.Conn, row *DanglingMV) ([]string, error) {
+	p, err := s.prepareInnerFromPeer(ctx, conn, peer, row)
+	if err != nil {
+		return nil, err
+	}
+	return s.applyInnerFromPeer(ctx, conn, peer, row, p)
+}
+
+// innerPeerPlan — eşten kurulumun HAZIRLIK çıktısı (v0.10.835): koşulmaya
+// hazır CREATE metni + hedef uuid + adım önsözü. SAF OKUMAdan doğar.
+type innerPeerPlan struct {
+	Inner string          // `.inner_id.<view uuid>` — ad VIEW uuid'sinden
+	Want  innerObjectUUID // yerel MV'nin TO INNER UUID'si
+	DDL   string          // nesne uuid'si gömülü, ON CLUSTER'sız CREATE
+	Steps []string        // audit + ekran için önsöz (başlık + DDL)
+}
+
+// prepareInnerFromPeer — v0.10.835: merdivenin SALT OKUMA yarısı. Yerel
+// MV'nin hedefi, eşin (uuid, DDL) okuması ve iki uuid'nin eşliği; hiçbir şey
+// değiştirmez, hiçbir DDL koşmaz.
+//
+// NEDEN AYRI GÖVDE (ölçüldü, v0.10.835 incelemesi): hedef uuid onarımı bu üç
+// okumadan ÖNCE bir DROP koşuyordu. Eşin uuid'si tutmadığında, eşe
+// bağlanılıp okuma düştüğünde ya da yerel okuma zaman aşımına uğradığında
+// sonuç `[DROP TABLE … SYNC]`tan ibaret kalıyordu: ad boş, tablo yok, MV
+// hâlâ hedefini çözemiyor. Yıkıcı adım artık yalnız KESİN kurulabilecek bir
+// CREATE'in önünde koşar. "Aynalı kural tek gövde ister" bozulmadı — hazırlık
+// da uygulama da bu dosyada, çağıranlar sırayı seçer.
+func (s *Store) prepareInnerFromPeer(ctx context.Context, conn, peer driver.Conn, row *DanglingMV) (*innerPeerPlan, error) {
 	inner := innerTableName(row.UUID)
 	// 1. YEREL MV'nin hedefi. Tahmin yok — okunamazsa RET.
 	want, err := s.innerObjectUUIDOn(ctx, conn, row.View)
@@ -439,27 +467,33 @@ func (s *Store) repairInnerOn(ctx context.Context, conn, peer driver.Conn, row *
 		return nil, fmt.Errorf("eş %s'in iç tablosu %s nesne uuid'sini taşıyor, %s@%s ise %s hedefliyor — kopyalanan tabloyu bu host'taki MV BULAMAZ; 'Yeniden kur' ile devam et", row.PeerHost, peerUUID, row.View, row.Host, want)
 	}
 	ddl = injectTableUUID(ddl, inner, want)
-	steps := []string{
+	return &innerPeerPlan{Inner: inner, Want: want, DDL: ddl, Steps: []string{
 		fmt.Sprintf("-- eş replika %s'ten; ad `%s` (VIEW uuid'si), nesne uuid'si %s (%s MV'sinin TO INNER UUID'si):", row.PeerHost, inner, want, row.View),
 		ddl,
-	}
+	}}, nil
+}
+
+// applyInnerFromPeer — merdivenin DEĞİŞTİREN yarısı: hazırlanan metni koşar
+// ve doğrular. Hazırlık geçmeden buraya gelinmez.
+func (s *Store) applyInnerFromPeer(ctx context.Context, conn, peer driver.Conn, row *DanglingMV, p *innerPeerPlan) ([]string, error) {
+	steps := p.Steps
 	ectx, cancel := context.WithTimeout(ctx, mvRebuildStepTimeout)
-	err = conn.Exec(ectx, ddl)
+	err := conn.Exec(ectx, p.DDL)
 	cancel()
 	if err != nil {
 		return steps, fmt.Errorf("iç tablo kurulamadı: %w", err)
 	}
-	// 4. DOĞRULAMA: satırın uuid KOLONU istenen nesne uuid'si olmalı. Yalnız
+	// DOĞRULAMA: satırın uuid KOLONU istenen nesne uuid'si olmalı. Yalnız
 	// count()>0 bakmak yalan söylüyordu — yanlış uuid'li bir tablo da bir
 	// satırdır ve kaskad yine kırık kalırdı.
 	var got string
-	if err := conn.QueryRow(ctx, "SELECT toString(uuid) FROM system.tables WHERE database = currentDatabase() AND name = ? SETTINGS max_execution_time = 10", inner).Scan(&got); err != nil {
+	if err := conn.QueryRow(ctx, "SELECT toString(uuid) FROM system.tables WHERE database = currentDatabase() AND name = ? SETTINGS max_execution_time = 10", p.Inner).Scan(&got); err != nil {
 		return steps, fmt.Errorf("doğrulama: iç tablo doğmadı (%v)", err)
 	}
-	if !strings.EqualFold(got, string(want)) {
-		return steps, fmt.Errorf("doğrulama: `%s` nesne uuid'si %s, beklenen %s — MV hedefini bulamaz, elle düşürüp yeniden kur", inner, got, want)
+	if !strings.EqualFold(got, string(p.Want)) {
+		return steps, fmt.Errorf("doğrulama: `%s` nesne uuid'si %s, beklenen %s — MV hedefini bulamaz, elle düşürüp yeniden kur", p.Inner, got, p.Want)
 	}
-	return s.verifyPeerZKPath(ctx, conn, peer, row, inner, steps)
+	return s.verifyPeerZKPath(ctx, conn, peer, row, p.Inner, steps)
 }
 
 // verifyPeerZKPath — v0.10.832 incelemesi: TARİHÇENİN GELMESİ neye bağlıysa

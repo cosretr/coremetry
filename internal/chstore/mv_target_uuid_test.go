@@ -583,13 +583,36 @@ func TestMVTargetCheckPlan(t *testing.T) {
 	if len(run)+len(capped) != len(cells) {
 		t.Errorf("her aday ya ölçülür ya kapağa takılır: %d + %d ≠ %d", len(run), len(capped), len(cells))
 	}
+	// v0.10.835 — `mismatch` satırları HOST kapağından MUAF. Yukarıdaki
+	// hücrelerin hepsi mismatch, yani host başına birden çok satır ölçülmesi
+	// BEKLENEN davranıştır: 833'te ölçüm bir etiketti, 835'te bir EYLEM
+	// kapısı ve host başına tek slot aynı satırı sonsuza dek seçiyordu.
 	perHost := map[string]int{}
 	for _, i := range run {
 		perHost[cells[i].Host]++
 	}
-	for h, n := range perHost {
+	if len(perHost) == len(run) {
+		t.Errorf("mismatch satırları host kapağına takılmış görünüyor — muafiyet çalışmıyor (%d host, %d satır)", len(perHost), len(run))
+	}
+	// Muafiyet SADECE mismatch'e ait: `dangling` satırları kapakta kalır
+	// (kartta zaten eylemleri var).
+	var dang []MVHostState
+	for h := 1; h <= 6; h++ {
+		for v := 0; v < 3; v++ {
+			dang = append(dang, MVHostState{
+				Host: fmt.Sprintf("ch-%02d", h), View: fmt.Sprintf("d_%d", v),
+				State: MVStateDangling, Target: MVTargetUnmeasured, TargetUUID: tgtRight,
+			})
+		}
+	}
+	dRun, _ := mvTargetCheckPlan(dang)
+	dPerHost := map[string]int{}
+	for _, i := range dRun {
+		dPerHost[dang[i].Host]++
+	}
+	for h, n := range dPerHost {
 		if n > mvTargetCheckPerHost {
-			t.Errorf("%s: host başına %d satır ölçüldü (kapak %d)", h, n, mvTargetCheckPerHost)
+			t.Errorf("%s: sarkan satırlarda host kapağı KALKMIŞ (%d > %d) — muafiyet yalnız mismatch'e ait", h, n, mvTargetCheckPerHost)
 		}
 	}
 	// Kapağa takılan satır SESSİZ kalmaz ve metadata kanıtını KORUR.

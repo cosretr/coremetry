@@ -50,6 +50,59 @@ func stateOf(t *testing.T, got []MVHostState, view, host string) MVHostState {
 	return MVHostState{}
 }
 
+// TestMVCoveragePeerOutsideDangling — v0.10.835: eş adayı ARTIK yalnız
+// `dangling` satırında hesaplanmıyor.
+//
+// NEDEN (835 incelemesi, davranışsal pin): hedef uuid onarımı ADI VAR OLAN
+// bir hücrede koşar (şekil-1'in durumu `ok`'tur) ve tarihçeyi eşten
+// getirebilmek için aynı eşe ihtiyaç duyar. Eş yalnız dangling dalında
+// hesaplanırken o hücrenin PeerHost'u BOŞ geliyordu ve onarım sessizce
+// tarihçesiz kanonik dala mahkûm oluyordu — geri alındığında tüm paket YEŞİL
+// kalıyordu, yani değişiklik pinsizdi.
+//
+// Kapılar TEK GÖVDEDEN (replicatedInnerPeer) gelmeye devam eder: düz eş aday
+// değil, başka shard'daki eş aday değil. FE'nin "Eşten kur" düğmesi hâlâ
+// state === 'dangling' istiyor (danglingMv.test.ts) — düğme YAYILMAZ.
+func TestMVCoveragePeerOutsideDangling(t *testing.T) {
+	const view = "db_summary_5m_local"
+	hosts := []string{"ch-01", "ch-02", "ch-03"}
+	sameShard := map[string]int{"ch-01": 1, "ch-02": 1, "ch-03": 1}
+	rows := []mvTableRow{
+		combinedMVRow("ch-01", view), innerRow("ch-01", "ReplicatedAggregatingMergeTree"),
+		combinedMVRow("ch-02", view), innerRow("ch-02", "ReplicatedAggregatingMergeTree"),
+		combinedMVRow("ch-03", view), innerRow("ch-03", "AggregatingMergeTree"), // düz
+	}
+	got := mvCoverageFromRows(rows, []string{view}, hosts, true, sameShard)
+	ok := stateOf(t, got, view, "ch-01")
+	if ok.State != MVStateOK {
+		t.Fatalf("ch-01 sağlıklı olmalıydı: %+v", ok)
+	}
+	if ok.PeerHost != "ch-02" {
+		t.Errorf("`ok` hücresinde eş adayı BOŞ — hedef uuid onarımı eşi göremez ve tarihçesiz dala düşer: %q", ok.PeerHost)
+	}
+	plain := stateOf(t, got, view, "ch-03")
+	if plain.State != MVStatePlain || plain.PeerHost != "ch-01" {
+		t.Errorf("`plain` hücresi de eş adayı taşımalı (deterministik: ada göre ilk): %+v", plain)
+	}
+	// Kapılar tek gövdeden: düz iç tablolu ch-03 kimseye eş OLMAZ.
+	only := mvCoverageFromRows([]mvTableRow{
+		combinedMVRow("ch-01", view), innerRow("ch-01", "ReplicatedAggregatingMergeTree"),
+		combinedMVRow("ch-03", view), innerRow("ch-03", "AggregatingMergeTree"),
+	}, []string{view}, []string{"ch-01", "ch-03"}, true, map[string]int{"ch-01": 1, "ch-03": 1})
+	if st := stateOf(t, only, view, "ch-03"); st.PeerHost != "ch-01" {
+		t.Errorf("düz hücrenin eşi Replicated olan ch-01 olmalı: %q", st.PeerHost)
+	}
+	if st := stateOf(t, only, view, "ch-01"); st.PeerHost != "" {
+		t.Errorf("DÜZ iç tablolu bir host eş adayı OLAMAZ (düz tabloyu çoğaltır): %q", st.PeerHost)
+	}
+	// Başka shard'daki eş hâlâ aday DEĞİL.
+	split := mvCoverageFromRows(rows[:4], []string{view}, []string{"ch-01", "ch-02"}, true,
+		map[string]int{"ch-01": 1, "ch-02": 2})
+	if st := stateOf(t, split, view, "ch-01"); st.PeerHost != "" {
+		t.Errorf("başka shard'daki host eş sayılmış — tarihçe sözü tutulamaz: %q", st.PeerHost)
+	}
+}
+
 func TestMVCoverageFromRows(t *testing.T) {
 	const view = "service_summary_5m_local"
 	cases := []struct {
