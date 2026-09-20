@@ -169,7 +169,7 @@ func TestMVLeftoversLiveInnerIsNotOrphan(t *testing.T) {
 		inMVRow("ch-01", "db_summary_5m_local"),
 		inInnerRow("ch-01", "ReplicatedAggregatingMergeTree"),
 	}
-	got := mvLeftoversFromRows(rows, true, storage, nil)
+	got := mvLeftoversFromRows(rows, true, storage, nil, MVTargetSet{})
 	for _, l := range got {
 		if l.Kind == MVLeftoverOrphan {
 			t.Errorf("CANLI iç tablo öksüz sınıflandı (%s@%s) — sahibi db_summary_5m_local, DROP veriyi götürürdü", l.Inner, l.Host)
@@ -181,7 +181,7 @@ func TestMVLeftoversLiveInnerIsNotOrphan(t *testing.T) {
 	// Gerçekten sahipsiz bir iç tablo HÂLÂ öksüzdür (tanı körelmesin).
 	orphan := mvTableRow{Host: "ch-01", Name: ".inner_id.33333333-aaaa-4bbb-8ccc-333333333333",
 		UUID: "44444444-aaaa-4bbb-8ccc-444444444444", Engine: "AggregatingMergeTree"}
-	got = mvLeftoversFromRows(append(rows, orphan), true, storage, nil)
+	got = mvLeftoversFromRows(append(rows, orphan), true, storage, nil, MVTargetSet{})
 	if len(got) != 1 || got[0].Kind != MVLeftoverOrphan || got[0].Inner != orphan.Name {
 		t.Errorf("sahipsiz iç tablo öksüz kalmalı: %+v", got)
 	}

@@ -3548,11 +3548,30 @@ export interface CHDanglingMV { host: string; addr?: string; shard?: number; rep
 /** v0.10.825 — MV kapsaması (Go chstore.MVHostState). ok = view + iç tablo (kümede Replicated);
  *  plain = iç tablo var ama Replicated DEĞİL; dangling = iç tablo yok; missing = view o host'ta yok. */
 export type CHMVState = 'ok' | 'plain' | 'dangling' | 'missing';
+/** v0.10.833 — hedef uuid kararı (Go MVTarget*). State'e DİK bir soru: MV gizli iç tablosunu ADLA değil
+ *  `TO INNER UUID` ile çözer, yani ad doğruyken hedef yanlış olabilir ve kapsama yine `ok` der.
+ *  ok = iki uuid de okundu ve aynı; mismatch = ikisi de okundu ve FARKLI (BULGU); byname = hedef ADLA
+ *  çözülür (to_inner_uuid Nil / TO'lu MV) — bulgu DEĞİL; unmeasured = ölçülemedi (ayar uzak düğümde
+ *  sessizce kırpılmış, okuma düşmüş ya da karşılaştırmanın bir tarafı yok). BOŞ ASLA uyuşmazlık değildir. */
+export type CHMVTarget = 'ok' | 'mismatch' | 'byname' | 'unmeasured';
 export interface CHMVHostState {
   host: string; addr?: string; view: string; state: CHMVState;
   /** yalnız plain'de dolu: iç tablonun motoru (neden düz). */
   innerEngine?: string;
+  /** iç tablonun ADINDAKİ uuid = VIEW'ın uuid'si (v0.10.832). */
   uuid?: string;
+  /** o adı taşıyan tablonun KENDİ nesne uuid'si (envanterden). */
+  innerUUID?: string;
+  /** MV'nin `TO INNER UUID`'si — hedef olarak ÇÖZDÜĞÜ nesne. */
+  targetUUID?: string;
+  target: CHMVTarget;
+  /** düğüm-yerel ÖLÇÜM (`SELECT 1 FROM <view> LIMIT 0`): MV hedefini gerçekten çözüyor mu.
+   *  ÜÇ HÂL: true = çözüyor, veri akıyor (gerçek CH 24.8'de uyuşmazlık MV'yi durdurmayabiliyor);
+   *  false = kod 60, ingest bu host'ta düşüyor; undefined = ölçülmedi (kapak/bütçe/adres yok).
+   *  YIKICI EYLEM UYGUNLUĞU buna bağlı — `true` olan satırda düğme çizilmez. */
+  targetResolves?: boolean;
+  /** ölçülememe ya da bulgu sebebi, operatör diliyle (satırda düğme YOK, detayda okunur). */
+  targetNote?: string;
   /** yalnız dangling'de ve yalnız eşin iç tablosu Replicated ise (düz eşten kurmak düz tabloyu çoğaltır). */
   peerHost?: string; peerAddr?: string;
 }
@@ -3574,7 +3593,9 @@ export interface CHMVLeftover {
   blocked?: string;
 }
 export interface CHMVLeftoverResult { ok: boolean; host: string; target: string; steps: string[] }
-export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number; coverage?: CHMVHostState[]; coverageError?: string; leftovers: CHMVLeftover[]; leftoverError?: string }
+/** targetError — v0.10.833: hedef uuid okuması düştü. Kapsama sınıfları DURUR (hücreler `unmeasured`
+ *  olur); yeşil rozet bu alan doluyken BASILMAZ — ölçülmemiş bir şey sağlıklı ilan edilemez. */
+export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number; coverage?: CHMVHostState[]; coverageError?: string; targetError?: string; leftovers: CHMVLeftover[]; leftoverError?: string }
 export interface CHDanglingMVRepairResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.825 — host'a özel yeniden kurulum (DROP + kanonik DDL, ON CLUSTER'sız). */
 export interface CHMVRebuildResult { ok: boolean; host: string; view: string; steps: string[] }

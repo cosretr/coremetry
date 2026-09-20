@@ -63,6 +63,15 @@ type mvTableRow struct {
 	Host, Name, UUID, Engine, CreateQuery string
 }
 
+// mvInnerTable — bir host'taki `.inner_id.<uuid>` tablosu hakkında
+// envanterden BEDAVA gelen iki gerçek (v0.10.833). Eskiden yalnız motor
+// taşınıyordu ve uuid atılıyordu; "ad doğru, nesne uuid'si yanlış"
+// karşılaştırmasının bir tarafı tam da o atılan değerdir.
+type mvInnerTable struct {
+	Engine string
+	UUID   string // tablonun KENDİ nesne uuid'si (ADINDAKİ uuid DEĞİL)
+}
+
 const zeroUUID = "00000000-0000-0000-0000-000000000000"
 
 // reMVWithTO — "CREATE MATERIALIZED VIEW db.x TO db.t …": iç tablosu yok,
@@ -186,14 +195,14 @@ func injectTableUUID(ddl, name string, objectUUID innerObjectUUID) string {
 // iki host birbirini hiç replike etmez ve kart bunu "onarıldı" sayardı.
 // shardOf boşsa (tek düğüm ya da küme eşlemesi okunamadı) eş YOKTUR.
 func danglingFromRows(rows []mvTableRow, shardOf map[string]int) []DanglingMV {
-	inner := map[string]map[string]string{}
+	inner := map[string]map[string]mvInnerTable{}
 	var views []mvTableRow
 	for _, r := range rows {
 		if isInnerTable(r.Name) {
 			if inner[r.Host] == nil {
-				inner[r.Host] = map[string]string{}
+				inner[r.Host] = map[string]mvInnerTable{}
 			}
-			inner[r.Host][r.Name] = r.Engine
+			inner[r.Host][r.Name] = mvInnerTable{Engine: r.Engine, UUID: r.UUID}
 			continue
 		}
 		if r.Engine == "MaterializedView" {
@@ -257,7 +266,7 @@ func stripOnCluster(sql string) string { return reOnCluster.ReplaceAllString(sql
 // Envanter okuması v0.10.825'te mvInventory'ye çıkarıldı: MV kapsama kartı
 // (mv_coverage.go) AYNI satırları okur, iki kopya sorgu iki gerçek üretirdi.
 func (s *Store) DanglingMVs(ctx context.Context) ([]DanglingMV, string, error) {
-	in, cluster, err := s.mvInventory(ctx)
+	in, cluster, _, err := s.mvInventory(ctx)
 	if err != nil {
 		return nil, cluster, err
 	}

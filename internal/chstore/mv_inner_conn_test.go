@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -102,21 +103,22 @@ func (c *scriptConn) Exec(ctx context.Context, q string, args ...any) error {
 // PROFİLE bağımlıydı. Regex düzeltmesi kemer, bu askı: envanter ve doğrulama
 // okumaları ayarı 0'a SABİTLER, böylece hangi profilde koşarsak koşalım
 // create_table_query metni AYNI biçimde gelir.
+// v0.10.833 — kapı GERÇEK SÖZLEŞMEYE çevrildi: "State'i belirleyen metin
+// YALNIZ pinlenmiş-0 okumasından gelir". İki kör noktası kapatıldı:
+//
+//	(1) sabiti ADIYLA kullanmak — `q + chInnerUUIDSettings` kapıyı yeşil
+//	    geçerdi ama sunucuya 1 gönderirdi. Artık ayarı 1 yapan HER sabitin
+//	    adı pakette bulunup sınıflandırma dosyasında ARANIR.
+//	(2) okumayı YENİ bir dosyaya koymak — kapı tek dosyaya bakıyordu. Artık
+//	    ayar=1 yazan dosyaların KÜMESİ beyaz listeye karşı doğrulanır.
 func TestClassificationReadsPinTheUUIDSetting(t *testing.T) {
-	// Muhafız KENDİ metnini ısırmasın: yorumlarda ayarın adı ve "= 1" biçimi
-	// GEÇER (gerekçeyi anlatır), aranan şey SQL'deki ATAMADIR.
-	code := func(file string) string {
-		var out []string
-		for _, line := range strings.Split(readGoSource(t, file), "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "//") {
-				continue
-			}
-			out = append(out, line)
-		}
-		return strings.Join(out, "\n")
-	}
-	const pin0 = "show_table_uuid_in_table_create_query_if_not_nil = 0"
-	const pin1 = "show_table_uuid_in_table_create_query_if_not_nil = 1"
+	const setting = "show_table_uuid_in_table_create_query_if_not_nil"
+	// İKİ normalizasyon: (a) yorumlar sökülür — muhafız KENDİ gerekçe metnini
+	// ısırmasın; (b) boşluklar sökülür — `=1` ile `= 1` aynı ayardır ve kapı
+	// normalize etmezse ikinci yazım onu atlatır (v0.10.833 F-ii).
+	code := func(file string) string { return squashSpace(stripGoComments(readGoSource(t, file))) }
+	pin0, pin1 := setting+"=0", setting+"=1"
+
 	cov := code("mv_coverage.go")
 	if n := strings.Count(cov, pin0); n < 2 {
 		t.Errorf("mv_coverage.go: sınıflandırma okumaları (mvInventory + verifyMVRebuild) ayarı 0'a sabitlemeli; bulunan %d", n)
@@ -124,10 +126,22 @@ func TestClassificationReadsPinTheUUIDSetting(t *testing.T) {
 	if strings.Contains(cov, pin1) {
 		t.Error("sınıflandırma dosyası ayarı 1 yapmamalı — metin biçimi değişir, aynı MV başka sınıflanır")
 	}
-	// Nesne uuid'sini İSTEYEN tek yer ayarı 1 yapar (dangling_mv_admin.go).
-	if !strings.Contains(code("dangling_mv_admin.go"), pin1) {
-		t.Error("nesne uuid'si okuması ayarı 1 yapmalı — varsayılanda metin uuid taşımaz")
+
+	// Sabiti ADIYLA kullanmak da kapıya takılır (v0.10.833 F-ii): `q +
+	// chInnerUUIDSettings` metinde pin1 içermez ama sunucuya 1 gönderir.
+	// Sabit adları PAKET GENELİNDEN toplanır, tek dosyadan değil.
+	names := settingConstNames(t, 1)
+	sort.Strings(names)
+	for _, n := range names {
+		if strings.Contains(cov, n) {
+			t.Errorf("sınıflandırma dosyası %s sabitini kullanıyor — sunucuya ayar 1 gider, metin biçimi değişir", n)
+		}
 	}
+	if len(names) < 2 {
+		t.Errorf("ayarı 1 yapan sabit sayısı %d — probe kendi tavanını (15 sn) taşıyan AYRI bir sabit kullanmalı (chInnerUUIDSettings 10 sn taşır)", len(names))
+	}
+	// Dosya KÜMESİ ve "her DDL okuması pinli" sözleşmesi paket geneli kapıda:
+	// TestClassificationTextIsPinnedPackageWide (mv_target_uuid_test.go).
 }
 
 // ── item 8 + 5a: verifyMVRebuild ─────────────────────────────────────

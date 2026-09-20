@@ -1842,6 +1842,14 @@ type MVRepairRow = {
 };
 const MV_STATE_LABEL: Record<CHMVState, string> = { ok: 'sağlıklı', plain: 'düz', dangling: 'sarkan', missing: 'yok' };
 const MV_STATE_TONE: Record<CHMVState, string> = { ok: 'b-ok', plain: 'b-warn', dangling: 'b-err', missing: 'b-err' };
+// v0.10.833 — satırın EYLEMİ artık exhaustive bir Record'dan gelir. Eskiden
+// karar `r.canonical` ise DANGER "Yeniden kur" basmaktı; CHMVState'e yeni bir
+// değer eklemek yıkıcı düğmeyi SESSİZCE açardı. Bu haritayla yeni bir değer
+// derleyiciyi durdurur ve yazarı bilinçli karar vermeye zorlar.
+const MV_STATE_ACTION: Record<CHMVState, 'rebuild' | 'manual'> = {
+  ok: 'manual', // sağlıklı satır zaten çizilmez; yine de yıkıcı eylem ALMAZ
+  plain: 'rebuild', dangling: 'rebuild', missing: 'rebuild',
+};
 function mvStateTitle(r: MVRepairRow): string {
   if (r.state === 'plain') return `iç tablo Replicated değil (${r.innerEngine || 'bilinmiyor'}) — bu host yalnız kendine yazılanı tutar, eşler replike etmez`;
   if (r.state === 'dangling') return 'view duruyor, gizli iç tablosu yok — bu host INSERT kaskadını reddeder, Distributed spool büyür';
@@ -1856,6 +1864,32 @@ const MV_LEFTOVER_LABEL: Record<CHMVLeftoverKind, string> = {
   oksuz: 'sahipsiz iç tablo (view yok)',
 };
 const MV_LEFTOVER_TONE: Record<CHMVLeftoverKind, string> = { artik: 'b-warn', oksuz: 'b-err' };
+// v0.10.833 — hedef uuid bulgusunun ÜÇ sınıfı. Gerçek CH 24.8 ölçümü: aynı
+// metadata uyuşmazlığı hem ingest'i düşüren şekli (kod 60) hem MV'nin
+// TOPLAMAYA DEVAM ettiği şekli üretiyor, ve ikincisinde yıkıcı eylem CANLI
+// veriyi siler. "Uyuşmazlık = bozuk" varsayımı ölçülebilir şekilde yanlıştı.
+type MVTargetFindingKind = 'broken' | 'live' | 'unknown';
+type MVTargetFinding = { key: string; row: CHMVHostState; kind: MVTargetFindingKind };
+const MV_FINDING_LABEL: Record<MVTargetFindingKind, string> = {
+  broken: 'hedef ÇÖZÜLMÜYOR', live: 'hedef çözülüyor · ad beklenen değil', unknown: 'ölçülemedi',
+};
+const MV_FINDING_TONE: Record<MVTargetFindingKind, string> = { broken: 'b-err', live: 'b-warn', unknown: 'b-warn' };
+/** Hücre → bulgu sınıfı; null = bulgu yok (çizilmez). */
+function mvTargetFinding(c: CHMVHostState): MVTargetFindingKind | null {
+  if (c.targetResolves === true) return 'live';
+  if (c.target === 'mismatch') return c.targetResolves === false ? 'broken' : 'unknown';
+  // Sağlıklı görünen bir hücrede hedef ölçülemediyse YEŞİL diyemeyiz; sarkan
+  // satırda hedef uuid okunmuşsa o satır CANLI olabilir ve ölçüm gerekir.
+  if (c.target === 'unmeasured' && (c.state === 'ok' || (c.state === 'dangling' && !!c.targetUUID))) return 'unknown';
+  return null;
+}
+const MV_FINDING_COLS: DataTableColumn<MVTargetFinding>[] = [
+  { id: 'host', label: 'Node', sortValue: f => f.row.host, naturalDir: 'asc', width: 150 },
+  { id: 'view', label: 'MV', sortValue: f => f.row.view, naturalDir: 'asc', flex: true },
+  { id: 'inner', label: 'İç tablonun uuid’si', sortValue: f => f.row.innerUUID ?? '', naturalDir: 'asc', width: 280 },
+  { id: 'target', label: 'MV’nin hedefi', sortValue: f => f.row.targetUUID ?? '', naturalDir: 'asc', width: 280 },
+  { id: 'finding', label: 'Bulgu', sortValue: f => f.kind, naturalDir: 'asc', width: 260 },
+];
 const mvLeftoverKey = (l: CHMVLeftover) => `${l.host}/${l.inner}`;
 /** İç tablonun boyutu; okunamadıysa dürüst "boyut okunamadı" (0 satır DEĞİL). */
 const mvLeftoverSize = (l: CHMVLeftover): string =>
@@ -1868,6 +1902,7 @@ function DanglingMVPanel() {
   const [rows, setRows] = useState<CHDanglingMV[] | null>(null);
   const [coverage, setCoverage] = useState<CHMVHostState[] | null>(null);
   const [coverageError, setCoverageError] = useState<string | null>(null);
+  const [targetError, setTargetError] = useState<string | null>(null);
   const [leftovers, setLeftovers] = useState<CHMVLeftover[] | null>(null);
   const [leftoverError, setLeftoverError] = useState<string | null>(null);
   const [cluster, setCluster] = useState('');
@@ -1881,10 +1916,11 @@ function DanglingMVPanel() {
     try {
       const r = await api.chDanglingMVs();
       setRows(r.rows); setCoverage(r.coverage ?? null); setCoverageError(r.coverageError ?? null); setCluster(r.cluster);
+      setTargetError(r.targetError ?? null);
       setLeftovers(r.leftovers ?? []); setLeftoverError(r.leftoverError ?? null);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e)); setRows(null); setCoverage(null); setCoverageError(null);
-      setLeftovers(null); setLeftoverError(null);
+      setTargetError(null); setLeftovers(null); setLeftoverError(null);
     } finally { setBusy(false); }
   };
   // Artık temizliği: tek onay penceresi, aynı anda tek iş, sonrasında yeniden Ölç.
@@ -1925,6 +1961,13 @@ function DanglingMVPanel() {
   const repairRows: MVRepairRow[] = [];
   for (const c of coverage ?? []) {
     if (c.state === 'ok') continue;
+    // v0.10.833 — ÖLÇÜLDÜ: hedefini çözen bir satır CANLIDIR. Durum `dangling`
+    // KALIR (ad olgusu değişmedi) ama satır onarım tablosuna GİRMEZ ve iki
+    // danger düğme (DROP … SYNC / "Öksüzü temizle") çizilmez — v0.10.780–831
+    // "Eşten kur" yolunun bıraktığı şekil tam olarak budur ve ingest
+    // çalıştığı için operatörün karşı sinyali yoktur. Bulgu aşağıdaki
+    // katlanır listede görünür.
+    if (c.targetResolves === true) { seen.add(`${c.host}/${c.view}`); continue; }
     seen.add(`${c.host}/${c.view}`);
     repairRows.push({ key: `${c.host}/${c.view}`, host: c.host, view: c.view, state: c.state, addr: c.addr, uuid: c.uuid, innerEngine: c.innerEngine, peerHost: c.peerHost, canonical: true });
   }
@@ -1941,6 +1984,33 @@ function DanglingMVPanel() {
   const leftoverRows = leftovers ?? [];
   const bareCount = leftoverRows.filter(l => l.kind === 'artik').length;
   const orphanCount = leftoverRows.filter(l => l.kind === 'oksuz').length;
+  // v0.10.833 — hedef uuid bulguları. `mismatch` hücrelerinin DURUMU `ok`
+  // olduğu için onarım tablosunda HİÇ çizilmezler: rozet + katlanır liste tek
+  // görünürlükleri. "Ölçülemedi" sayımı yalnız SAĞLIKLI görünen hücrelerde
+  // anlamlı — zaten kırmızı olan bir satırda "hedefi de ölçemedik" gürültüdür.
+  const covRows = coverage ?? [];
+  const findings: MVTargetFinding[] = [];
+  for (const c of covRows) {
+    const kind = mvTargetFinding(c);
+    if (kind) findings.push({ key: `${c.host}/${c.view}`, row: c, kind });
+  }
+  const targetBroken = findings.filter(f => f.kind === 'broken');
+  const targetLive = findings.filter(f => f.kind === 'live');
+  const targetUnknown = findings.filter(f => f.kind === 'unknown');
+  // v0.10.833 E — 409 onay modalından SONRA geliyordu: hedefini ÇÖZEMEYEN bir
+  // kanonik depolama adının kalıntısı düşürülemez, düğme BAŞTAN kapalı olsun
+  // (sunucu reddi savunmanın ikinci katmanı olarak kalır).
+  const brokenStorage = new Set(targetBroken.map(f => `${f.row.host}/${f.row.view}`));
+  // Bulgu tablosu depo kuralına uyar (sıralama + sütun genişliği kalıcı):
+  // 21 MV × 6 host = 126 satıra çıkabilir, elle yazılmış bir tablo değil.
+  const findingDt = useDataTable<MVTargetFinding>({
+    storageKey: 'ch-mv-target-findings', columns: MV_FINDING_COLS,
+    rows: findings, initialSort: { id: 'finding', dir: 'asc' },
+  });
+  const leftoverBlockedBy = (l: CHMVLeftover): string =>
+    l.storage && brokenStorage.has(`${l.host}/${l.storage}`)
+      ? `${l.storage} bu host'ta MV hedefini ÇÖZEMİYOR (düğüm-yerel okuma kod 60) — kalıntıyı düşürmek bu düğümü toplamasız bırakır; önce hedef-uuid runbook'u`
+      : '';
   return (
     <Section title="MV onarımı (sarkan · düz · eksik)">
       <p className="cell-hint">
@@ -1959,9 +2029,32 @@ function DanglingMVPanel() {
         {/* v0.10.830 — yeşil rozet ARTIK YOKLUĞUNU da ister: kalıntı/öksüz
             ölçülmediyse ya da varsa "sağlıklı" demek, replika kartının kalıcı
             kırmızı satırını yalanlar. */}
-        {coverage && !coverageError && leftovers && !leftoverError && repairRows.length === 0 && leftoverRows.length === 0 && (
+        {/* v0.10.833 — yeşil rozet artık "ÖLÇÜLDÜ VE bulgu yok" ister: hedef
+            uuid'si hiç ölçülememiş bir kurulumu sağlıklı ilan etmek, kartın
+            tam da bu sürümde kapattığı yalanı sürdürürdü. */}
+        {coverage && !coverageError && !targetError && leftovers && !leftoverError && repairRows.length === 0 && leftoverRows.length === 0 &&
+          findings.length === 0 && (
           <span className="badge b-ok">MV&apos;ler sağlıklı · {mvCount} MV × {hostCount} host{cluster ? ` · ${cluster}` : ''}</span>
         )}
+        {/* v0.10.833 — rozet İKİYE ayrıldı: uyuşmazlığın sonucu ÖLÇÜLÜR.
+            Şekil-1'de ingest düşer (kod 60), şekil-2'de MV başka adlı bir
+            nesneye yazar ve TOPLAR. İkisine aynı kırmızıyı basmak yanlıştı. */}
+        {targetBroken.length > 0 && (
+          <span className="badge b-err" title="Düğüm-yerel okuma kod 60 (UNKNOWN_TABLE) verdi: MV hedefini çözemiyor, bu host'ta INSERT kaskadı düşer ve Distributed spool büyür. Ayrıntı aşağıda.">
+            {targetBroken.length} MV hedefini bulamıyor — ingest bu host&apos;ta düşüyor
+          </span>
+        )}
+        {targetLive.length > 0 && (
+          <span className="badge b-warn" title="MV hedefini ÇÖZÜYOR ve topluyor, ama hedeflediği tablonun adı beklenen `.inner_id.<view uuid>` değil. Veri akıyor; yıkıcı eylemler bu satırlarda KAPALI.">
+            {targetLive.length} MV başka adlı nesneye yazıyor (veri akıyor)
+          </span>
+        )}
+        {targetUnknown.length > 0 && (
+          <span className="badge b-warn" title={targetUnknown[0].row.targetNote || 'hedef uuid karşılaştırması bu hücrelerde yapılamadı'}>
+            hedef uuid ölçülemedi: {targetUnknown.length} hücre
+          </span>
+        )}
+        {targetError && <span className="badge b-warn" title={targetError}>hedef uuid okunamadı — kapsama sınıfları geçerli</span>}
         {rows && rows.length > 0 && <span className="badge b-err">{rows.length} sarkan view</span>}
         {plainCount > 0 && <span className="badge b-warn">{plainCount} düz iç tablo</span>}
         {missingCount > 0 && <span className="badge b-err">{missingCount} eksik MV</span>}
@@ -1988,7 +2081,7 @@ function DanglingMVPanel() {
                     {r.state === 'plain' && <div className="cell-hint" style={{ fontSize: 11 }}>iç tablo Replicated değil ({r.innerEngine || '?'})</div>}
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    {fromPeer || r.canonical
+                    {fromPeer || (r.canonical && MV_STATE_ACTION[r.state] === 'rebuild')
                       ? <Button variant={fromPeer ? 'accent' : 'danger'} size="sm" disabled={repairing !== null || blocked} loading={repairing === r.key}
                           title={fromPeer
                             ? `İç tablo eş replikadan (${r.peerHost}) aynı UUID ile kurulur; view düşmez, tarihçe replikasyondan gelir`
@@ -2006,6 +2099,9 @@ function DanglingMVPanel() {
               const k = mvLeftoverKey(l);
               const res = result?.key === k ? result : null;
               const blocked = !!cluster && !l.addr;
+              // v0.10.833 E — sunucunun 409'u ONAY MODALINDAN SONRA geliyordu.
+              // Kapı artık düğmenin kendisinde: sunucu reddi ikinci katman.
+              const stopped = l.blocked || leftoverBlockedBy(l);
               return (
                 <tr key={k} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
                   <td className="mono">{l.host}{blocked ? ' · adres çözülemedi' : ''}</td>
@@ -2026,8 +2122,8 @@ function DanglingMVPanel() {
                     {/* v0.10.830 inceleme: guarded MV'nin kanonik `_local`'i bu
                         kurulumda HİÇ doğmaz — kapı asla geçmez. Düğme çizip
                         409 atmak var olmayan bir düğmeyi işaret ediyordu. */}
-                    {l.blocked
-                      ? <span className="badge b-warn" title={l.blocked}>elle</span>
+                    {stopped
+                      ? <span className="badge b-warn" title={stopped}>elle</span>
                       : <Button variant="danger" size="sm" disabled={repairing !== null || blocked} loading={repairing === k}
                           title={l.kind === 'artik'
                             ? `Bu host’ta ${l.view} düşürülür; kaskadla gizli iç tablosu gider ve çıplak ad AYNI adımda Distributed sarmalayıcı olarak geri kurulur, ${l.storage} çalışmaya devam eder`
@@ -2042,6 +2138,72 @@ function DanglingMVPanel() {
             })}
           </tbody>
         </table>
+      )}
+      {/* v0.10.833 — hedef uuid bulguları: SATIRDA DÜĞME YOK (bu sürüm yalnız
+          saptar; gerçek onarım ayrı sürüm). Detayda iki uuid ve runbook.
+          Runbook ÇIPLAK `CREATE TABLE .inner_id.<uuid>` ÖNERMEZ: bu arızayı
+          üreten reçete tam olarak oydu — nesne uuid'si verilmeden kurulan
+          tablo rastgele bir uuid alır ve MV onu yine bulamaz. */}
+      {findings.length > 0 && (
+        <details style={{ marginTop: 10 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 12 }}>
+            Hedef uuid bulguları — {targetBroken.length} çözülmüyor, {targetLive.length} başka nesneye yazıyor, {targetUnknown.length} ölçülemedi
+          </summary>
+          <div className="table-wrap is-fit" style={{ marginTop: 8 }}>
+            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <DataTableColgroup dt={findingDt} />
+              <DataTableHead dt={findingDt} />
+              <tbody>
+                {findingDt.sortedRows.map(f => (
+                  <tr key={f.key} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
+                    <td className="mono" title={f.row.host}>{f.row.host}</td>
+                    <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.row.view}>{f.row.view}</td>
+                    <td className="mono" style={{ fontSize: 11 }} title={f.row.innerUUID || 'okunamadı'}>{f.row.innerUUID || '—'}</td>
+                    <td className="mono" style={{ fontSize: 11 }} title={f.row.targetUUID || 'okunamadı'}>{f.row.targetUUID || '—'}</td>
+                    <td style={{ fontSize: 11 }}>
+                      <span className={`badge ${MV_FINDING_TONE[f.kind]}`}>{MV_FINDING_LABEL[f.kind]}</span>
+                      {f.row.targetNote && <div className="cell-hint" style={{ fontSize: 11 }}>{f.row.targetNote}</div>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* v0.10.833 — runbook ŞEKLE GÖRE dallanır. ÖLÇÜLDÜ: çözülen şekilde
+              6 adımlı reçetenin 4. adımı "Code: 57 … Directory for table data
+              store/… already exists" ile düşer, çünkü o nesne uuid'si MV'nin
+              GERÇEKTEN yazdığı tabloya aittir; hata mesajı tablo ADI vermez ve
+              operatörün refleksi "engeli düşürmek" olabilir. */}
+          {targetLive.length > 0 && (
+            <div className="cell-hint" style={{ fontSize: 11, marginTop: 8 }}>
+              <b>Hedefi ÇÖZÜLEN satırlar (veri akıyor) — yıkıcı adım YOK.</b> MV zaten topluyor; yapılacak tek iş ölü kopyayı temizlemek:
+              <ol style={{ margin: '4px 0 0 16px' }}>
+                <li>Ölü kopyayı ölç: <code className="mono">SELECT count() FROM `.inner_id.{'<view uuid>'}`</code> (o ad varsa) — <b>MV&apos;nin yazdığı tablo bu DEĞİL</b>.</li>
+                <li>Boşsa düşür, doluysa <code className="mono">RENAME TABLE</code> ile kenara al ve içeriğini MV&apos;nin gerçek hedefine taşımayı ayrıca değerlendir.</li>
+                <li><b>Yeni tablo KURMA</b> ve <code className="mono">CREATE … UUID</code> deneme: o nesne uuid&apos;si zaten kullanımda, CH <code className="mono">Code: 57 (TABLE_ALREADY_EXISTS)</code> döner — hata mesajı tablo adı vermez, engel sandığın şey MV&apos;nin çalışan hedefidir.</li>
+                <li>Kartı yeniden <b>Ölç</b>.</li>
+              </ol>
+            </div>
+          )}
+          {targetBroken.length > 0 && (
+            <div className="cell-hint" style={{ fontSize: 11, marginTop: 8 }}>
+              <b>Hedefi ÇÖZÜLMEYEN satırlar (ingest düşüyor) — elle, yalnız o host&apos;ta; bu sürüm onarmaz.</b> Sırayı bozma:
+              <ol style={{ margin: '4px 0 0 16px' }}>
+                <li>Kanıtı tazele: <code className="mono">SHOW CREATE TABLE {'<view>'} SETTINGS show_table_uuid_in_table_create_query_if_not_nil = 1</code> → <code className="mono">TO INNER UUID</code>;
+                  karşılığı <code className="mono">SELECT uuid FROM system.tables WHERE database = currentDatabase() AND name = &apos;.inner_id.{'<view uuid>'}&apos;</code>.</li>
+                <li>Hangi tablonun DOLU olduğunu ölç (<code className="mono">SELECT count() FROM `.inner_id.{'<view uuid>'}`</code>) — ölçmeden hiçbir şey düşürme.</li>
+                <li>Adı boşalt, veriyi kaybetme: <code className="mono">RENAME TABLE `.inner_id.{'<view uuid>'}` TO mv_hedef_yanlis_{'<view>'}</code>.</li>
+                <li>Hedefi <b>MV&apos;nin beklediği NESNE uuid&apos;siyle</b> kur: sağlam bir eşten <code className="mono">SHOW CREATE</code> al ve tablo adından hemen sonra
+                  <code className="mono"> UUID &apos;{'<TO INNER UUID>'}&apos;</code> EKLE. Bu parça atlanırsa tablo rastgele bir nesne uuid&apos;si alır ve MV onu yine bulamaz.
+                  <br /><b>Kod 57 (TABLE_ALREADY_EXISTS) alırsan DUR:</b> o hedef uuid BAŞKA bir tabloda yaşıyor demektir ve o tablo MV&apos;nin çalışan hedefidir — düşürme, kartı yeniden Ölç.</li>
+                <li>Tarihçeyi taşı: <code className="mono">INSERT INTO `.inner_id.{'<view uuid>'}` SELECT * FROM mv_hedef_yanlis_{'<view>'}</code>.</li>
+                <li>Kartı yeniden <b>Ölç</b>; yeşile döndükten sonra yeniden adlandırılan kopyayı düşür.</li>
+              </ol>
+              Tarihçe bu host&apos;ta feda edilebilirse kısa yol: view&apos;ı düşür + kanonik DDL&apos;i ON CLUSTER&apos;sız kur (kapsama <i>sağlıklı</i> göründüğü için
+              satırda onarım düğmesi çizilmez — bu bilinçli: bu sürüm yalnız saptar).
+            </div>
+          )}
+        </details>
       )}
       {leftoverConfirm && (
         <Modal open title={`MV artığı — ${leftoverConfirm.kind === 'artik' ? leftoverConfirm.view : leftoverConfirm.inner} @ ${leftoverConfirm.host}`}

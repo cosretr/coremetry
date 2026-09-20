@@ -55,7 +55,31 @@ type MVHostState struct {
 	State string `json:"state"`
 	// InnerEngine — yalnız plain'de dolu (operatöre "neden düz" der).
 	InnerEngine string `json:"innerEngine,omitempty"`
-	UUID        string `json:"uuid,omitempty"` // iç tablonun uuid'si
+	UUID        string `json:"uuid,omitempty"` // iç tablonun ADINDAKİ uuid = VIEW'ın uuid'si
+	// v0.10.833 — ÜÇ uuid var ve üçü AYRI şeydir; adları bilerek uzun:
+	//
+	//	UUID       → view'ın uuid'si; iç tablonun ADI bundan doğar (v0.10.832)
+	//	InnerUUID  → o adı taşıyan tablonun KENDİ nesne uuid'si (envanterden BEDAVA)
+	//	TargetUUID → MV'nin `TO INNER UUID`'si, yani hedef olarak ÇÖZDÜĞÜ nesne
+	//
+	// InnerUUID ≠ TargetUUID ise ad doğru, hedef yanlış: kart `ok` der, MV
+	// hedefini bulamaz, ingest "Target table … doesn't exist" demeye devam eder.
+	InnerUUID  string `json:"innerUUID,omitempty"`
+	TargetUUID string `json:"targetUUID,omitempty"`
+	// Target — ok | mismatch | byname | unmeasured (mv_target_uuid.go). State'e
+	// DİK bir karar: State'i ne değiştirir ne de ondan türer.
+	Target string `json:"target"`
+	// TargetResolves — düğüm-yerel ÖLÇÜM: MV hedefini gerçekten çözüyor mu.
+	// ÜÇ HÂL ve üçü de farklı (bu yüzden işaretçi): true = çözüyor, veri
+	// akıyor; false = kod 60, ingest bu host'ta düşüyor; nil = ölçülmedi.
+	//
+	// Metadata uyuşmazlığının SONUCU buradan okunur, Target'tan DEĞİL: gerçek
+	// CH 24.8'de aynı uyuşmazlık hem ingest'i düşüren hem MV'nin toplamaya
+	// devam ettiği şekli üretiyor. YIKICI EYLEM UYGUNLUĞU bu alana bağlı —
+	// hedefini çözen bir satırda düğme çizilmez (mvRebuildAllowed).
+	TargetResolves *bool `json:"targetResolves,omitempty"`
+	// TargetNote — ölçülememe ya da bulgu sebebi, operatör diliyle.
+	TargetNote string `json:"targetNote,omitempty"`
 	// PeerHost/PeerAddr — yalnız dangling'de ve yalnız eşin iç tablosu
 	// REPLICATED ise: düz bir eşten kopyalamak düz tabloyu çoğaltır.
 	PeerHost string `json:"peerHost,omitempty"`
@@ -83,14 +107,17 @@ func mvCoverageFromRows(rows []mvTableRow, canonical []string, hosts []string, r
 			canon[n] = true
 		}
 	}
-	inner := map[string]map[string]string{}     // host → `.inner_id.<uuid>` → engine
-	views := map[string]map[string]mvTableRow{} // host → view adı → satır
+	inner := map[string]map[string]mvInnerTable{} // host → `.inner_id.<uuid>` → motor + KENDİ uuid'si
+	views := map[string]map[string]mvTableRow{}   // host → view adı → satır
 	for _, r := range rows {
 		if isInnerTable(r.Name) {
 			if inner[r.Host] == nil {
-				inner[r.Host] = map[string]string{}
+				inner[r.Host] = map[string]mvInnerTable{}
 			}
-			inner[r.Host][r.Name] = r.Engine
+			// v0.10.833 — uuid ARTIK ATILMIYOR. Karşılaştırmanın bir tarafı
+			// envanterde zaten geliyordu (`toString(uuid)`) ve tam burada
+			// düşürülüyordu; ikinci bir sorgu açmadan bedava.
+			inner[r.Host][r.Name] = mvInnerTable{Engine: r.Engine, UUID: r.UUID}
 			continue
 		}
 		// Kanonik olmayan view'lar kapsama EKSENİNE girmez: onların "eksik"
@@ -135,6 +162,14 @@ func mvCoverageFromRows(rows []mvTableRow, canonical []string, hosts []string, r
 			// kanıtlanabilir bir hastalık yok → ok.
 			if !validUUID(v.UUID) || !mvHasInnerTable(v.CreateQuery) {
 				st.State = MVStateOK
+				// v0.10.833 — hedef uuid sorusu bu hücrede GEÇERSİZ: `TO
+				// <tablo>` biçimli MV'nin hedefi gerçek bir tablodur, Ordinary
+				// DB'de iç tablo `.inner.<ad>` olarak yaşar — ikisinde de CH
+				// hedefi ADLA çözer. Karar BURADA verilir (kanıt burada) ve
+				// probe geçişi onu EZMEZ; aksi hâlde TO'lu her kanonik MV
+				// kalıcı "ölçülemedi" sayılır, yeşil rozet hiç dönmezdi.
+				st.Target = MVTargetByName
+				st.TargetNote = "gizli iç tablo yok (TO'lu MV ya da Ordinary DB) — CH hedefi ADLA çözer"
 				out = append(out, st)
 				continue
 			}
@@ -146,15 +181,18 @@ func mvCoverageFromRows(rows []mvTableRow, canonical []string, hosts []string, r
 			// CANLI iç tabloyu tarihçesiyle götürüyordu.
 			name := innerTableName(v.UUID)
 			st.UUID = strings.ToLower(v.UUID)
-			eng, has := inner[host][name]
+			it, has := inner[host][name]
+			// v0.10.833 — karşılaştırmanın ENVANTER tarafı: o adı taşıyan
+			// tablonun KENDİ nesne uuid'si. Kararı mvTargetVerdict verir.
+			st.InnerUUID = strings.ToLower(it.UUID)
 			switch {
 			case !has:
 				st.State = MVStateDangling
 				st.PeerHost = replicatedInnerPeer(inner, host, name, shardOf)
-			case !replicatedInner || strings.HasPrefix(eng, "Replicated"):
+			case !replicatedInner || strings.HasPrefix(it.Engine, "Replicated"):
 				st.State = MVStateOK
 			default:
-				st.State, st.InnerEngine = MVStatePlain, eng
+				st.State, st.InnerEngine = MVStatePlain, it.Engine
 			}
 			out = append(out, st)
 		}
@@ -171,14 +209,14 @@ func mvCoverageFromRows(rows []mvTableRow, canonical []string, hosts []string, r
 //
 // shardOf nil ya da taraflardan biri eşlenemiyorsa eş YOKTUR: "bilinmiyor"
 // bu kartta "uygun" demek değildir (v0.10.825 incelemesi).
-func replicatedInnerPeer(inner map[string]map[string]string, self, innerName string, shardOf map[string]int) string {
+func replicatedInnerPeer(inner map[string]map[string]mvInnerTable, self, innerName string, shardOf map[string]int) string {
 	sh, ok := shardOf[self]
 	if !ok {
 		return ""
 	}
 	best := ""
 	for h, set := range inner {
-		if h == self || !strings.HasPrefix(set[innerName], "Replicated") {
+		if h == self || !strings.HasPrefix(set[innerName].Engine, "Replicated") {
 			continue
 		}
 		if psh, pok := shardOf[h]; !pok || psh != sh {
@@ -194,7 +232,9 @@ func replicatedInnerPeer(inner map[string]map[string]string, self, innerName str
 // mvInventory — küme geneli (ya da tek node) MV + iç tablo envanteri.
 // v0.10.825'te DanglingMVs'in içinden ÇIKARILDI: kapsama ölçümü ve sarkan
 // tespiti aynı satırları okur, iki kopya sorgu iki farklı gerçek üretirdi.
-func (s *Store) mvInventory(ctx context.Context) ([]mvTableRow, string, error) {
+// db DA döner (v0.10.833): hedef uuid probe'u aynı adı BAĞLI parametre olarak
+// ister ve ikinci bir `SELECT currentDatabase()` açmak bedava değil.
+func (s *Store) mvInventory(ctx context.Context) ([]mvTableRow, string, string, error) {
 	cluster := ""
 	src := "system.tables"
 	if s.clusterMode() {
@@ -203,7 +243,7 @@ func (s *Store) mvInventory(ctx context.Context) ([]mvTableRow, string, error) {
 	}
 	var db string
 	if err := s.conn.QueryRow(ctx, "SELECT currentDatabase()").Scan(&db); err != nil {
-		return nil, cluster, fmt.Errorf("currentDatabase: %w", err)
+		return nil, cluster, "", fmt.Errorf("currentDatabase: %w", err)
 	}
 	// v0.10.832 — ayar BİZ SABİTLİYORUZ. Sınıflandırma create_table_query'nin
 	// BİÇİMİNE bakar (`TO <tablo>` var mı); profil
@@ -218,21 +258,21 @@ func (s *Store) mvInventory(ctx context.Context) ([]mvTableRow, string, error) {
 		  AND (engine = 'MaterializedView' OR name LIKE '.inner_id.%')
 		SETTINGS max_execution_time = 15, show_table_uuid_in_table_create_query_if_not_nil = 0`, db)
 	if err != nil {
-		return nil, cluster, err
+		return nil, cluster, db, err
 	}
 	defer rows.Close()
 	var out []mvTableRow
 	for rows.Next() {
 		var r mvTableRow
 		if err := rows.Scan(&r.Host, &r.Name, &r.UUID, &r.Engine, &r.CreateQuery); err != nil {
-			return nil, cluster, err
+			return nil, cluster, db, err
 		}
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, cluster, err // yarım envanter = sahte "eksik MV"
+		return nil, cluster, db, err // yarım envanter = sahte "eksik MV"
 	}
-	return out, cluster, nil
+	return out, cluster, db, nil
 }
 
 // mvHostRoster — kapsamanın HOST ekseni: küme kipinde cevap veren her düğüm
@@ -259,19 +299,45 @@ func (s *Store) mvHostRoster(ctx context.Context, cluster string) ([]string, err
 	return out, rows.Err()
 }
 
+// MVCoverageReport — kapsama + hedef uuid okumasının sonucu (v0.10.833).
+// TargetError AYRI bir alan, hata DEĞİL: hedef uuid okuması düşerse kapsama
+// sınıfları (ok|plain|dangling|missing) AYNEN durur, yalnız her hücrenin
+// hedef kararı `unmeasured` olur — okuma hatası ≠ iş başarısız (v0.10.820).
+type MVCoverageReport struct {
+	Rows        []MVHostState `json:"rows"`
+	Cluster     string        `json:"cluster"`
+	TargetError string        `json:"targetError,omitempty"`
+	// Targets — probe'un gördüğü to_inner_uuid kümesi. Artık kartı (öksüz
+	// kararı) BU kümeye bakar: nesne uuid'si burada olan bir iç tablo CANLI
+	// bir MV'nin hedefidir, öksüz DEĞİLDİR. İkinci bir sorgu açmamak için
+	// kapsamadan taşınır.
+	Targets MVTargetSet `json:"-"`
+}
+
 // MVCoverage — kanonik MV kataloğu × erişilebilir host: hücre başına durum.
 // Adresler resolveHostAddrs ile (v0.10.820): küme tanımı IP ile yazılmışsa
 // system.clusters.host_name hostName() ile UYUŞMAZ, tek güvenilir yol her
 // satıra bağlanıp hostName() sormaktır. Adres çözülemezse Addr boş kalır ve
 // FE düğmeyi "adres çözülemedi" ile kapatır.
-func (s *Store) MVCoverage(ctx context.Context) ([]MVHostState, string, error) {
-	rows, cluster, err := s.mvInventory(ctx)
+func (s *Store) MVCoverage(ctx context.Context) (MVCoverageReport, error) {
+	return s.mvCoverageReport(ctx, true)
+}
+
+// mvCoverage — harden=false: düğüm-yerel doğrulama SÜPÜRMESİ koşmaz.
+// Eylem yolları (RebuildMVOnHost / DropLeftoverMV) bunu kullanır ve yalnız
+// DOKUNACAKLARI satırı mvHardenCell ile ölçer: karar yine ölçülür ama 126
+// hücrelik tarama tıklama başına İKİ KEZ ödenmez (FE onarımdan sonra yeniden
+// tarar). Ölçüldü: kapaksız süpürme 6 host × 21 MV'de en kötü 21 dk.
+func (s *Store) mvCoverageReport(ctx context.Context, harden bool) (MVCoverageReport, error) {
+	rep := MVCoverageReport{Rows: []MVHostState{}}
+	rows, cluster, db, err := s.mvInventory(ctx)
+	rep.Cluster = cluster
 	if err != nil {
-		return nil, cluster, fmt.Errorf("system.tables: %w", err)
+		return rep, fmt.Errorf("system.tables: %w", err)
 	}
 	hosts, err := s.mvHostRoster(ctx, cluster)
 	if err != nil {
-		return nil, cluster, fmt.Errorf("host rosteri: %w", err)
+		return rep, fmt.Errorf("host rosteri: %w", err)
 	}
 	names := canonicalMVNames()
 	canonical := make([]string, 0, len(names))
@@ -296,12 +362,25 @@ func (s *Store) MVCoverage(ctx context.Context) ([]MVHostState, string, error) {
 		}
 	}
 	out := mvCoverageFromRows(rows, canonical, hosts, cluster != "", shardOf)
+	// v0.10.833 — hedef uuid okuması: KÜME GENELİ TEK sorgu, yalnız MV
+	// satırları, AYARI 1 YAPAN tek yer (mv_target_uuid.go). Buraya konuldu
+	// çünkü mvInventory bir kart yenilemesinde ÜÇ KEZ koşuyor (DanglingMVs +
+	// MVCoverage + MVLeftovers) — okumayı oraya koymak +1 değil +3 fan-out
+	// ederdi.
+	probe := s.mvTargetUUIDs(ctx, db)
+	rep.TargetError, rep.Targets = probe.Err, probe.Targets
+	mvApplyTargetVerdict(out, probe)
+	rep.Rows = out
 	if cluster == "" {
-		return out, cluster, nil
+		// Tek düğümde adres yok; sertleştirme s.conn üzerinden koşar.
+		if harden {
+			s.mvCheckTargetResolution(ctx, rep.Rows, cluster)
+		}
+		return rep, nil
 	}
 	addrs, _, aerr := s.resolveHostAddrs(ctx)
 	if aerr != nil {
-		return out, cluster, nil // adres yok: satırlar kalır, eylem kapanır
+		return rep, nil // adres yok: satırlar kalır, eylem kapanır
 	}
 	for i := range out {
 		out[i].Addr = addrs[out[i].Host]
@@ -309,7 +388,36 @@ func (s *Store) MVCoverage(ctx context.Context) ([]MVHostState, string, error) {
 			out[i].PeerAddr = addrs[out[i].PeerHost]
 		}
 	}
-	return out, cluster, nil
+	// Sertleştirme adresleri ÇÖZÜLDÜKTEN sonra: düğüm-yerel bağlantı ister.
+	if harden {
+		s.mvCheckTargetResolution(ctx, rep.Rows, cluster)
+	}
+	return rep, nil
+}
+
+// mvRebuildAllowed — SAF ALLOWLIST + ÖLÇÜLMÜŞ VETO (v0.10.833).
+//
+// Allowlist: eskiden kapı DENYLIST'ti ("durum ok ise reddet") ve State'e
+// eklenecek HER yeni değer varsayılan olarak YIKICI eylemi (DROP … SYNC +
+// kanonik CREATE) açardı. Artık yeni bir durum varsayılan olarak REDDEDİLİR.
+//
+// Veto: `dangling` bir satır CANLI olabilir. v0.10.780–831 arası "Eşten kur"
+// yolunun bıraktığı şekilde iç tablo MV'nin hedeflediği NESNE uuid'siyle VAR
+// ve MV ona YAZIYOR, yalnız ADI `.inner_id.<view uuid>` değil. Durum ADLA
+// ilgili bir OLGUDUR ve `dangling` kalır (sessizce `ok`'a çevirmek kartı
+// yalan söyletirdi) — ama hedefin ÇÖZÜLDÜĞÜ ÖLÇÜLDÜYSE DROP o düğümün
+// çalışan tek toplamasını götürür. nil (ölçülmedi) veto DEĞİLDİR: yalnız
+// kanıt kapıyı kapatır.
+func mvRebuildAllowed(state string, targetResolves *bool) bool {
+	if targetResolves != nil && *targetResolves {
+		return false
+	}
+	switch state {
+	case MVStatePlain, MVStateDangling, MVStateMissing:
+		return true
+	default:
+		return false
+	}
 }
 
 // mvRebuildStepTimeout — adım başına tavan (replica_repair.go ile aynı).
@@ -332,10 +440,14 @@ func (s *Store) RebuildMVOnHost(ctx context.Context, host, view string) ([]strin
 	if !ok {
 		return nil, fmt.Errorf("%s için kanonik DDL yok (migrations/*.sql MV'si) — elle", view)
 	}
-	cov, cluster, err := s.MVCoverage(ctx)
+	// Süpürme ATLANIR (harden=false): bu yolda gereken tek ölçüm DOKUNULACAK
+	// satırındır ve onu aşağıda tek tek yaparız — 126 hücrelik tarama
+	// tıklama başına iki kez ödenmez.
+	rep, err := s.mvCoverageReport(ctx, false)
 	if err != nil {
 		return nil, fmt.Errorf("tespit: %w", err)
 	}
+	cov, cluster := rep.Rows, rep.Cluster
 	var row *MVHostState
 	for i := range cov {
 		if cov[i].Host == host && cov[i].View == view {
@@ -346,8 +458,20 @@ func (s *Store) RebuildMVOnHost(ctx context.Context, host, view string) ([]strin
 	if row == nil {
 		return nil, fmt.Errorf("%s/%s kapsama raporunda yok — yeniden Ölç", host, view)
 	}
-	if row.State == MVStateOK {
-		return nil, fmt.Errorf("%s/%s zaten sağlıklı — yeniden Ölç", host, view)
+	// v0.10.833 — kapının ikinci kolu ÖLÇÜLÜR: satır `dangling` görünse bile
+	// MV hedefini çözüyor olabilir (ad beklenen değil ama tablo CANLI).
+	// Ölçüm yalnız BU satır için koşar.
+	s.mvHardenCell(ctx, row, cluster)
+	// TEK KAPI ve ALLOWLIST (mvRebuildAllowed). Mesaj kozmetik, kararı
+	// allowlist + ölçülmüş veto verir.
+	if !mvRebuildAllowed(row.State, row.TargetResolves) {
+		switch {
+		case mvTargetResolved(row):
+			return nil, fmt.Errorf("%s/%s: iç tablonun ADI beklenen değil ama MV hedefini ÇÖZÜYOR (düğüm-yerel okuma başarılı) — veri akıyor, DROP bu host'un çalışan tek toplamasını götürürdü. MV kartındaki hedef-uuid runbook'unu izle", host, view)
+		case row.State == MVStateOK:
+			return nil, fmt.Errorf("%s/%s zaten sağlıklı — yeniden Ölç", host, view)
+		}
+		return nil, fmt.Errorf("%s/%s durumu %q için yeniden kurulum TANIMLI DEĞİL (izinli: düz · sarkan · eksik) — kartı yeniden Ölç", host, view, row.State)
 	}
 	conn := s.conn
 	if cluster != "" {

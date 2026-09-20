@@ -64,7 +64,9 @@ func TestMVLeftoverAdminRoutes(t *testing.T) {
 		t.Error("admin_dangling_mv.go iki kapısını korumalı")
 	}
 	for _, want := range []string{
-		"s.store.MVLeftovers(r.Context())",
+		// v0.10.833 — öksüz kararı kapsamanın topladığı `TO INNER UUID`
+		// kümesine bakar; küme İKİNCİ bir probe açmadan zarftan taşınır.
+		"s.store.MVLeftovers(r.Context(), rep.Targets)",
 		`out["leftoverError"]`,
 		`out["leftovers"] = lo`,
 		"lo = []chstore.MVLeftover{}", // null DEĞİL: kart "yok"u "ölçülmedi"den ayırır

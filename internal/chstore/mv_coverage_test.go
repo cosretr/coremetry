@@ -276,7 +276,10 @@ func TestMVRebuildSourcePins(t *testing.T) {
 	// Durum yeniden ölçümü: RebuildMVOnHost kendi gövdesinde Exec KOŞMAZ,
 	// önce MVCoverage'tan taze durumu okur (pencere komşu fonksiyona taşmasın).
 	fn := funcBody(t, "mv_coverage.go", "func (s *Store) RebuildMVOnHost(")
-	for _, want := range []string{"s.MVCoverage(ctx)", "MVStateOK", "canonicalMVForObject(view)", "chObjRe.MatchString(view)"} {
+	// v0.10.833 — kapı DENYLIST'ten ("durum ok ise reddet") ALLOWLIST'e geçti
+	// (mvRebuildAllowed): State'e eklenecek yeni bir değer yıkıcı eylemi
+	// kendiliğinden AÇMAMALI. Pin sabitin YAZIMINA değil KAPININ KENDİSİNE.
+	for _, want := range []string{"s.mvCoverageReport(ctx, false)", "mvRebuildAllowed(row.State, row.TargetResolves)", "canonicalMVForObject(view)", "chObjRe.MatchString(view)"} {
 		if !strings.Contains(fn, want) {
 			t.Errorf("RebuildMVOnHost içinde eksik: %s", want)
 		}
@@ -284,8 +287,8 @@ func TestMVRebuildSourcePins(t *testing.T) {
 	if strings.Contains(fn, "conn.Exec(") {
 		t.Error("RebuildMVOnHost durumu ölçmeden DDL koşmamalı — Exec paylaşılan gövdede")
 	}
-	if i, j := strings.Index(fn, "MVStateOK"), strings.Index(fn, "s.rebuildMVOnConn("); i < 0 || j < 0 || i > j {
-		t.Error("'zaten sağlıklı' kapısı onarım çağrısından ÖNCE olmalı")
+	if i, j := strings.Index(fn, "mvRebuildAllowed("), strings.Index(fn, "s.rebuildMVOnConn("); i < 0 || j < 0 || i > j {
+		t.Error("izin kapısı onarım çağrısından ÖNCE olmalı")
 	}
 	// Tek gövde: sarkan onarımın kanonik dalı aynı fonksiyonu çağırır ve
 	// ikinci bir DROP + kanonik DDL merdiveni tutmaz.

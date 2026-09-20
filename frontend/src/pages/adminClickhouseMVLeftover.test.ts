@@ -72,9 +72,18 @@ describe('MV artığı — kart (v0.10.830)', () => {
   // bir kapıya bağlı düğme çıkarmak, 409'u var olmayan bir düğmeye yolluyordu.
   it('blocked satır düğme çizmez, nedeni gösterir', () => {
     const i = page.indexOf('{leftoverRows.map(l => {');
-    const block = page.slice(i, i + 2000);
-    expect(block).toContain('l.blocked');
-    expect(block).toContain('title={l.blocked}');
+    // v0.10.833 — pencere satırın GERÇEK sonuna kadar (düğme + pay), sihirli
+    // 2000 karakter değil: 831'de aynı sınıf (tracesCountUniverse) yeni bir
+    // prop'u pencerenin dışına itmişti.
+    const end = page.indexOf('Kalıntıyı düşür', i);
+    expect(end).toBeGreaterThan(i);
+    const block = page.slice(i, end + 400);
+    // v0.10.833 — neden artık tek kaynaktan gelmiyor: sunucunun `blocked`ı
+    // VE istemcinin hedef-uuid kapısı (leftoverBlockedBy) tek `stopped`
+    // değerinde birleşir; title o değeri gösterir. Pin yeni yazımı izler ama
+    // sözleşme aynı: sunucu sebebi HÂLÂ ilk kaynaktır.
+    expect(block).toContain('const stopped = l.blocked || leftoverBlockedBy(l)');
+    expect(block).toContain('title={stopped}');
     const btn = block.indexOf('Kalıntıyı düşür');
     expect(block.slice(0, btn)).toContain('? <span className="badge b-warn"');
   });

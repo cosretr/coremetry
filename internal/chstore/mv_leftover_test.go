@@ -47,6 +47,16 @@ func innerRowFor(host, viewUUID, engine string) mvTableRow {
 	return mvTableRow{Host: host, Name: innerTablePrefix + viewUUID, UUID: lfObjectOf(viewUUID), Engine: engine}
 }
 
+// testTargetSet — ÖLÇÜLMÜŞ hedef kümesi (v0.10.833). uuids unexported
+// olduğu için paket dışından kurulamaz; testler de tek gövdeden kurar.
+func testTargetSet(objectUUIDs ...string) MVTargetSet {
+	m := map[innerObjectUUID]bool{}
+	for _, u := range objectUUIDs {
+		m[innerObjectUUID(strings.ToLower(u))] = true
+	}
+	return MVTargetSet{Measured: true, uuids: m}
+}
+
 // testStorage — mvStorageName'in saf ikizi: highVolume adlar küme kipinde
 // `_local`. Gerçek gövde cluster.go'da; burada tablo sürücüsü.
 func testStorage(highVolume map[string]bool, cluster bool) func(string) string {
@@ -64,9 +74,14 @@ func TestMVLeftoversFromRows(t *testing.T) {
 		name    string
 		rows    []mvTableRow
 		cluster bool
+		// targets — v0.10.833: MV'lerin `TO INNER UUID` kümesi. Sıfır değer =
+		// ÖLÇÜLMEDİ; o hâlde öksüz satırı görünür ama DÜĞMESİZ (Blocked).
+		targets MVTargetSet
 		// want: host/iç tablo → sınıf ("" = bulgu YOK)
 		want map[string]string
 		view map[string]string // host/iç tablo → beklenen view adı (kalıntıda)
+		// wantBlocked: host/iç tablo → Blocked metninin içermesi gereken parça
+		wantBlocked map[string]string
 	}{
 		{
 			name: "güncel _local bulgu değil",
@@ -100,7 +115,38 @@ func TestMVLeftoversFromRows(t *testing.T) {
 				innerRowFor("ch-01", lfOrphan, "AggregatingMergeTree"),
 			},
 			cluster: true,
+			targets: testTargetSet(lfObjectOf(lfCurView)),
 			want:    map[string]string{"ch-01/" + lfOrphan: MVLeftoverOrphan},
+		},
+		{
+			// v0.10.833 — ASIL TEHLİKE: adı kimsenin adreslemediği iç tablo,
+			// NESNE uuid'siyle bir MV'nin HEDEFİ. MV ona YAZIYOR; "Öksüzü
+			// temizle" CANLI toplamayı silerdi. v0.10.780–831 "Eşten kur"
+			// yolunun bıraktığı şekil tam olarak budur.
+			name: "nesne uuid'si bir MV'nin HEDEFİ → öksüz DEĞİL",
+			rows: []mvTableRow{
+				mvRowFor("ch-01", "db_summary_5m_local", lfCurView),
+				innerRowFor("ch-01", lfCurView, "ReplicatedAggregatingMergeTree"),
+				// adı `.inner_id.<lfOrphan>` ama uuid KOLONU lfCurView'ın hedefi
+				{Host: "ch-01", Name: innerTablePrefix + lfOrphan, UUID: lfObjectOf(lfCurView), Engine: "ReplicatedAggregatingMergeTree"},
+			},
+			cluster: true,
+			targets: testTargetSet(lfObjectOf(lfCurView)),
+			want:    map[string]string{"ch-01/" + lfOrphan: ""},
+		},
+		{
+			// Küme ÖLÇÜLMEDİYSE öksüz kararı verilmez: boş küme "hiçbir MV
+			// hedeflemiyor" DEMEK DEĞİLDİR. Satır görünür, düğmesi YOK.
+			name: "hedef kümesi ölçülmedi → öksüz ama DÜĞMESİZ",
+			rows: []mvTableRow{
+				mvRowFor("ch-01", "db_summary_5m_local", lfCurView),
+				innerRowFor("ch-01", lfCurView, "ReplicatedAggregatingMergeTree"),
+				innerRowFor("ch-01", lfOrphan, "AggregatingMergeTree"),
+			},
+			cluster:     true,
+			targets:     MVTargetSet{},
+			want:        map[string]string{"ch-01/" + lfOrphan: MVLeftoverOrphan},
+			wantBlocked: map[string]string{"ch-01/" + lfOrphan: "ÖLÇÜLMEDİ"},
 		},
 		{
 			// KÜME GENELİ kural: ch-02'de sahip yok ama ch-01'de VAR → ch-02'de
@@ -153,7 +199,7 @@ func TestMVLeftoversFromRows(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := mvLeftoversFromRows(c.rows, c.cluster, testStorage(hv, c.cluster), nil)
+			got := mvLeftoversFromRows(c.rows, c.cluster, testStorage(hv, c.cluster), nil, c.targets)
 			byKey := map[string]MVLeftover{}
 			for _, l := range got {
 				byKey[l.Host+"/"+l.UUID] = l
@@ -174,6 +220,16 @@ func TestMVLeftoversFromRows(t *testing.T) {
 				}
 				if l.Inner != innerTablePrefix+strings.Split(key, "/")[1] {
 					t.Errorf("%s: iç tablo adı %q", key, l.Inner)
+				}
+			}
+			for key, want := range c.wantBlocked {
+				if l := byKey[key]; !strings.Contains(l.Blocked, want) {
+					t.Errorf("%s: Blocked %q, %q içermeliydi (ölçülmemiş küme EYLEM AÇMAZ)", key, l.Blocked, want)
+				}
+			}
+			for key, l := range byKey {
+				if c.wantBlocked[key] == "" && l.Kind == MVLeftoverOrphan && l.Blocked != "" {
+					t.Errorf("%s: ÖLÇÜLMÜŞ kümede öksüz satırı düğmesiz kalmamalı: %q", key, l.Blocked)
 				}
 			}
 			for key, wantView := range c.view {
@@ -197,7 +253,7 @@ func TestMVLeftoversFromRows(t *testing.T) {
 			}
 		})
 	}
-	if got := mvLeftoversFromRows(nil, true, testStorage(hv, true), nil); got == nil || len(got) != 0 {
+	if got := mvLeftoversFromRows(nil, true, testStorage(hv, true), nil, MVTargetSet{}); got == nil || len(got) != 0 {
 		t.Errorf("boş girdi → BOŞ DİZİ (null değil): %+v", got)
 	}
 }
@@ -216,7 +272,7 @@ func TestMVLeftoverGuardedHasNoAction(t *testing.T) {
 		innerRowFor("ch-01", lfCurView, "AggregatingMergeTree"),
 	}
 	guarded := func(base string) bool { return base == "db_statement_summary_5m" }
-	got := mvLeftoversFromRows(rows, true, testStorage(hv, true), guarded)
+	got := mvLeftoversFromRows(rows, true, testStorage(hv, true), guarded, MVTargetSet{})
 	if len(got) != 2 {
 		t.Fatalf("iki kalıntı beklenir: %+v", got)
 	}
@@ -236,7 +292,7 @@ func TestMVLeftoverGuardedHasNoAction(t *testing.T) {
 		}
 	}
 	// guarded=nil (eski çağrı biçimi) hiçbir satırı engellemez.
-	for _, l := range mvLeftoversFromRows(rows, true, testStorage(hv, true), nil) {
+	for _, l := range mvLeftoversFromRows(rows, true, testStorage(hv, true), nil, MVTargetSet{}) {
 		if l.Blocked != "" {
 			t.Errorf("guarded yokken engel olmamalı: %+v", l)
 		}
@@ -403,10 +459,11 @@ func TestMVLeftoverActionPins(t *testing.T) {
 		"s.mvGuardedOff(base)",       // guarded MV'nin _local'i hiç doğmaz
 		"distributedWrapperStmt(",    // sarmalayıcı ifadesi (tek gövde: adaptDDL)
 		"s.adaptDDL(canonicalMVDDL(base))",
-		"s.MVLeftovers(ctx)",              // TAZE tespit
-		"s.MVCoverage(ctx)",               // TAZE kapsama (varlık + motor)
-		"MVStateOK",                       // <base>_local sağlıklı olmalı
-		"s.innerTableSizes(ctx, cluster)", // VERİ kapısı, hata denetimli
+		"s.MVLeftovers(ctx, rep.Targets)",  // TAZE tespit + hedef kümesi (v0.10.833)
+		"s.mvCoverageReport(ctx, false)",   // TAZE kapsama; kapaklı SÜPÜRME atlanır (D)
+		"s.mvHardenCell(ctx, storageCell,", // kapının hedef kolu ÖLÇÜLÜR
+		"mvLeftoverStorageGate(storage, ",  // <base>_local sağlıklı VE hedefini çözebiliyor olmalı
+		"s.innerTableSizes(ctx, cluster)",  // VERİ kapısı, hata denetimli
 		"leftoverDataGate(",
 		"leftoverDropStmts(view, wrapper)",
 		`engine != "MaterializedView"`, // Distributed sarmalayıcıya dokunma
@@ -419,7 +476,7 @@ func TestMVLeftoverActionPins(t *testing.T) {
 	}
 	// Kapıların HEPSİ Exec'ten ÖNCE — sarmalayıcı ve veri kapısı dahil.
 	for _, gate := range []string{
-		"MVStateOK", `engine != "MaterializedView"`, "s.MVLeftovers(ctx)",
+		"mvLeftoverStorageGate(storage, ", `engine != "MaterializedView"`, "s.MVLeftovers(ctx, rep.Targets)",
 		"distributedWrapperStmt(", "leftoverDataGate(", "s.mvGuardedOff(base)",
 	} {
 		if i, j := strings.Index(drop, gate), strings.Index(drop, "conn.Exec("); i < 0 || j < 0 || i > j {
@@ -438,10 +495,10 @@ func TestMVLeftoverActionPins(t *testing.T) {
 	orph := funcBody(t, "mv_leftover.go", "func (s *Store) DropOrphanInner(")
 	for _, want := range []string{
 		"mvUUIDRe.MatchString(uuid)",
-		"innerTableName(uuid)",   // ad SUNUCUDA, tek gövdeden kurulur
-		"s.MVLeftovers(ctx)",     // küme geneli sıfır referans, TAZE
-		"MVLeftoverOrphan",       // yalnız öksüz sınıfı
-		"s.distributedRefs(ctx,", // sarmalayıcı denetimi
+		"innerTableName(uuid)",            // ad SUNUCUDA, tek gövdeden kurulur
+		"s.MVLeftovers(ctx, rep.Targets)", // küme geneli sıfır referans + hedef kümesi, TAZE
+		"MVLeftoverOrphan",                // yalnız öksüz sınıfı
+		"s.distributedRefs(ctx,",          // sarmalayıcı denetimi
 		`strings.HasPrefix(row.InnerEngine, "Replicated")`,
 		"total <= 1", // son kayıtlı replika düşürülmez
 	} {

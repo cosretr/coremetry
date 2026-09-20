@@ -49,10 +49,55 @@ describe('MV onarımı — kablolama', () => {
     // Yeşil rozet ÖLÇÜLMÜŞ kapsama ister: kapsama yoksa/hatalıysa "0 MV × 0 host"
     // diye sağlıklı denmez; hata b-err rozetiyle mesajıyla birlikte görünür.
     // v0.10.830 — kapı büyüdü: artık (kalıntı/öksüz) ÖLÇÜLMÜŞ ve BOŞ olmalı.
-    expect(page).toContain('{coverage && !coverageError && leftovers && !leftoverError && repairRows.length === 0 && leftoverRows.length === 0 && (');
+    // v0.10.833 — hedef uuid de ÖLÇÜLMÜŞ ve bulgusuz olmalı: kapsaması `ok`
+    // olan bir hücre hedefini bulamıyor olabilir ve eski koşul onu yeşile boyardı.
+    expect(page).toContain('{coverage && !coverageError && !targetError && leftovers && !leftoverError && repairRows.length === 0 && leftoverRows.length === 0 &&');
+    expect(page).toContain('findings.length === 0 && (');
     expect(page).toContain('MV&apos;ler sağlıklı · {mvCount} MV × {hostCount} host');
     expect(page).toContain('<span className="badge b-err" title={coverageError}>kapsama ölçülemedi: {coverageError}</span>');
     expect(page).not.toContain('const scanned =');
+  });
+  // v0.10.833 — hedef uuid'nin İKİ yönü: "ad doğru, nesne uuid'si yanlış"
+  // (kapsama `ok` der) ve "nesne uuid'si doğru, ad beklenen değil" (kapsama
+  // `dangling` der ve CANLI bir tabloya iki danger düğme doğrultur).
+  // Uyuşmazlığın SONUCU ölçülür: gerçek CH 24.8'de MV toplamaya devam
+  // edebiliyor. Bu sürüm YALNIZ saptar.
+  it('hedef uuid bulgusu rozet + katlanır listede, satırda DÜĞME YOK', () => {
+    expect(types).toContain("export type CHMVTarget = 'ok' | 'mismatch' | 'byname' | 'unmeasured';");
+    expect(types).toContain('target: CHMVTarget;');
+    expect(types).toContain('targetResolves?: boolean;');
+    expect(types).toContain('targetError?: string');
+    // Üç sınıf ve TONLARI: çözülmeyen kırmızı, çözülen sarı (veri akıyor).
+    expect(page).toContain("if (c.targetResolves === true) return 'live';");
+    expect(page).toContain("if (c.target === 'mismatch') return c.targetResolves === false ? 'broken' : 'unknown';");
+    expect(page).toContain("const MV_FINDING_TONE: Record<MVTargetFindingKind, string> = { broken: 'b-err', live: 'b-warn', unknown: 'b-warn' };");
+    expect(page).toContain('MV hedefini bulamıyor — ingest bu host&apos;ta düşüyor');
+    expect(page).toContain('MV başka adlı nesneye yazıyor (veri akıyor)');
+    expect(page).toContain('hedef uuid ölçülemedi: {targetUnknown.length} hücre');
+    // A — hedefini ÇÖZEN satır onarım tablosuna GİRMEZ: iki danger düğme
+    // (DROP … SYNC / Öksüzü temizle) CANLI veriye doğrultulmaz.
+    expect(page).toContain("if (c.targetResolves === true) { seen.add(`${c.host}/${c.view}`); continue; }");
+    // Bulgu listesinde düğme yoktur.
+    const details = page.slice(page.indexOf('Hedef uuid bulguları'), page.indexOf('{leftoverConfirm && ('));
+    expect(details).not.toContain('<Button');
+    // Depo kuralı: bu tablo da useDataTable (sıralanabilir + genişletilebilir).
+    expect(page).toContain("storageKey: 'ch-mv-target-findings'");
+    expect(details).toContain('<DataTableColgroup dt={findingDt} />');
+    // C — runbook ŞEKLE göre dallanır; çözülen dalda CREATE … UUID YOK,
+    // çözülmeyen dalda kod 57 uyarısı VAR.
+    const live = details.slice(details.indexOf('Hedefi ÇÖZÜLEN'), details.indexOf('Hedefi ÇÖZÜLMEYEN'));
+    expect(live).toContain('Yeni tablo KURMA');
+    expect(live).not.toContain('INSERT INTO `.inner_id');
+    const broken = details.slice(details.indexOf('Hedefi ÇÖZÜLMEYEN'));
+    expect(broken).toContain("UUID &apos;{'<TO INNER UUID>'}&apos;");
+    expect(broken).toContain('RENAME TABLE');
+    expect(broken).toContain('Kod 57 (TABLE_ALREADY_EXISTS) alırsan DUR');
+    // E — 409 onay modalından SONRA gelmesin: düğme baştan kapalı.
+    expect(page).toContain('const stopped = l.blocked || leftoverBlockedBy(l);');
+    expect(page).toContain('{stopped\n                      ? <span className="badge b-warn" title={stopped}>elle</span>');
+    // Yıkıcı eylem kapısı exhaustive: yeni bir CHMVState değeri derleyiciyi durdurur.
+    expect(page).toContain("const MV_STATE_ACTION: Record<CHMVState, 'rebuild' | 'manual'> = {");
+    expect(page).toContain("{fromPeer || (r.canonical && MV_STATE_ACTION[r.state] === 'rebuild')");
   });
   it('yeniden kurma onayı tarihçe kaybını söyler', () => {
     expect(page).toContain('MV tarihçesi bu host&apos;ta sıfırlanır; yalnız yeni yazımlarla dolar. Audit&apos;e düşer.');

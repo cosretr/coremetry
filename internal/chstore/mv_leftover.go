@@ -227,7 +227,14 @@ func innerTableOwners(rows []mvTableRow) map[string]innerOwner {
 // kanonik `_local` HİÇ doğmayacağı için "_local sağlıklı" kapısı asla
 // geçmez. Bulgu görünür kalır ama DÜĞMESİZDİR (Blocked): eylem gösterip
 // sonra 409 atmak, var olmayan bir düğmeye yollayan bir metin üretiyordu.
-func mvLeftoversFromRows(rows []mvTableRow, cluster bool, storage func(string) string, guarded func(string) bool) []MVLeftover {
+// targets (v0.10.833): probe'un küme genelinde gördüğü `TO INNER UUID`
+// KÜMESİ. Nesne uuid'si bu kümede olan bir iç tablo CANLI bir MV'nin
+// hedefidir — adı beklenen `.inner_id.<view uuid>` olmasa bile ÖKSÜZ
+// DEĞİLDİR ve "Öksüzü temizle" onun üzerine çizilemez (v0.10.780–831
+// "Eşten kur" yolu tam da bu şekli bırakıyordu). Küme ÖLÇÜLMEDİYSE karar
+// verilmez: satır görünür kalır ama DÜĞMESİZ (Blocked) — "hiçbir MV
+// hedeflemiyor" ile "ölçemedik" aynı şey değildir.
+func mvLeftoversFromRows(rows []mvTableRow, cluster bool, storage func(string) string, guarded func(string) bool, targets MVTargetSet) []MVLeftover {
 	owners := mvOwnersByHost(rows)
 	referenced := map[string]bool{}
 	for _, byInner := range owners {
@@ -258,8 +265,18 @@ func mvLeftoversFromRows(rows []mvTableRow, cluster bool, storage func(string) s
 				// kapsama kartının işi. Buradan DÜŞÜRÜLMEZ.
 				continue
 			}
-			out = append(out, MVLeftover{Host: r.Host, Kind: MVLeftoverOrphan,
-				Inner: r.Name, UUID: uuid, InnerEngine: r.Engine})
+			// v0.10.833 — ADI kimsenin adreslemediği bir iç tablo, NESNE
+			// uuid'siyle pekâlâ bir MV'nin hedefi olabilir: MV hedefini adla
+			// değil uuid'yle çözer. O tablo CANLIDIR.
+			if targets.Has(r.UUID) {
+				continue
+			}
+			o := MVLeftover{Host: r.Host, Kind: MVLeftoverOrphan,
+				Inner: r.Name, UUID: uuid, InnerEngine: r.Engine}
+			if !targets.Measured {
+				o.Blocked = "nesne uuid'si bir MV'nin hedefi olabilir — hedef kümesi ÖLÇÜLMEDİ; kartı yeniden Ölç"
+			}
+			out = append(out, o)
 			continue
 		}
 		if !cluster {
@@ -293,12 +310,17 @@ func mvLeftoversFromRows(rows []mvTableRow, cluster bool, storage func(string) s
 // MVLeftovers — küme geneli (ya da tek node) artık listesi. Envanter
 // mvInventory'den: MV kapsaması ve sarkan liste ile AYNI satırlar, üç kart
 // üç farklı gerçek üretmesin.
-func (s *Store) MVLeftovers(ctx context.Context) ([]MVLeftover, string, error) {
-	rows, cluster, err := s.mvInventory(ctx)
+//
+// targets ÇAĞIRANDAN gelir (MVCoverage'ın raporundan): öksüz kararı MV'lerin
+// `TO INNER UUID` kümesine bakar ve o küme yalnız probe'tan çıkar. İkinci bir
+// probe açmamak için taşınır; ölçülmemiş bir küme (sıfır değer) öksüz kararı
+// VERDİRMEZ, satırı düğmesiz bırakır.
+func (s *Store) MVLeftovers(ctx context.Context, targets MVTargetSet) ([]MVLeftover, string, error) {
+	rows, cluster, _, err := s.mvInventory(ctx)
 	if err != nil {
 		return nil, cluster, fmt.Errorf("system.tables: %w", err)
 	}
-	out := mvLeftoversFromRows(rows, s.clusterMode(), s.mvStorageName, s.mvGuardedOff)
+	out := mvLeftoversFromRows(rows, s.clusterMode(), s.mvStorageName, s.mvGuardedOff, targets)
 	if len(out) == 0 {
 		return out, cluster, nil
 	}
@@ -409,7 +431,14 @@ func (s *Store) DropLeftoverMV(ctx context.Context, host, view string) ([]string
 	if wrapper == "" {
 		return nil, fmt.Errorf("%s için Distributed sarmalayıcı ifadesi üretilemedi — DROP tek başına çıplak adı bu host'ta yok ederdi (sonraki okumalar UNKNOWN_TABLE); elle", view)
 	}
-	list, cluster, err := s.MVLeftovers(ctx)
+	// Kapsama ÖNCE: hedef uuid kümesi (öksüz kararı) ve kanonik depolama
+	// adının sağlığı ondan gelir. Süpürme ATLANIR (v0.10.833) — yalnız
+	// dokunacağımız satırı ölçeriz.
+	rep, cerr := s.mvCoverageReport(ctx, false)
+	if cerr != nil {
+		return nil, fmt.Errorf("kapsama: %w", cerr)
+	}
+	list, cluster, err := s.MVLeftovers(ctx, rep.Targets)
 	if err != nil {
 		return nil, fmt.Errorf("tespit: %w", err)
 	}
@@ -426,19 +455,23 @@ func (s *Store) DropLeftoverMV(ctx context.Context, host, view string) ([]string
 	if row.Blocked != "" {
 		return nil, errors.New(row.Blocked)
 	}
-	cov, _, cerr := s.MVCoverage(ctx)
-	if cerr != nil {
-		return nil, fmt.Errorf("kapsama: %w", cerr)
-	}
-	localOK := false
-	for _, c := range cov {
-		if c.Host == host && c.View == storage && c.State == MVStateOK {
-			localOK = true
+	var storageCell *MVHostState
+	for i := range rep.Rows {
+		if rep.Rows[i].Host == host && rep.Rows[i].View == storage {
+			storageCell = &rep.Rows[i]
 			break
 		}
 	}
-	if !localOK {
-		return nil, fmt.Errorf("%s bu host'ta sağlıklı değil — kalıntıyı düşürmek bu düğümün TEK toplamasını siler; önce MV onarımı ('Yeniden kur')", storage)
+	state, target := "", ""
+	if storageCell != nil {
+		// Kapının hedef kolu ÖLÇÜLÜR, varsayılmaz: uyuşmazlık hem ingest'i
+		// düşüren hem MV'nin toplamaya devam ettiği şekli üretebiliyor
+		// (gerçek CH 24.8 ölçümü) ve yalnız ilki temizliği engellemeli.
+		s.mvHardenCell(ctx, storageCell, cluster)
+		state, target = storageCell.State, storageCell.Target
+	}
+	if msg := mvLeftoverStorageGate(storage, state, target, storageResolves(storageCell)); msg != "" {
+		return nil, errors.New(msg)
 	}
 	// VERİ kapısı (v0.10.830 incelemesi, MAJOR): kapsama `ok` yalnız VARLIK
 	// ve motor ailesini ölçer — yeni kurulmuş boş bir `_local` de "ok"tur.
@@ -524,7 +557,15 @@ func (s *Store) DropOrphanInner(ctx context.Context, host, uuid string) ([]strin
 		return nil, fmt.Errorf("geçersiz uuid %q", uuid)
 	}
 	inner := innerTableName(uuid) // ad SUNUCUDA, tek gövdeden kurulur (v0.10.832)
-	list, cluster, err := s.MVLeftovers(ctx)
+	// v0.10.833 — öksüzlük kararı MV'lerin `TO INNER UUID` KÜMESİNE bakar:
+	// adı kimsenin adreslemediği bir iç tablo NESNE uuid'siyle CANLI bir
+	// MV'nin hedefi olabilir. Küme ölçülemezse satır Blocked gelir ve aşağıdaki
+	// kapı eylemi reddeder — bilinmeyen bir şey silinmez.
+	rep, cerr := s.mvCoverageReport(ctx, false)
+	if cerr != nil {
+		return nil, fmt.Errorf("kapsama: %w", cerr)
+	}
+	list, cluster, err := s.MVLeftovers(ctx, rep.Targets)
 	if err != nil {
 		return nil, fmt.Errorf("tespit: %w", err)
 	}
@@ -536,7 +577,10 @@ func (s *Store) DropOrphanInner(ctx context.Context, host, uuid string) ([]strin
 		}
 	}
 	if row == nil {
-		return nil, fmt.Errorf("%s@%s şu an öksüz değil (bir MV onu adresliyor ya da host ölçüme girmedi) — yeniden Ölç", inner, host)
+		return nil, fmt.Errorf("%s@%s şu an öksüz değil (bir MV onu ADLA ya da NESNE uuid'siyle adresliyor, ya da host ölçüme girmedi) — yeniden Ölç", inner, host)
+	}
+	if row.Blocked != "" {
+		return nil, errors.New(row.Blocked)
 	}
 	refs, rerr := s.distributedRefs(ctx, cluster, inner)
 	if rerr != nil {
@@ -601,6 +645,6 @@ func (s *Store) distributedRefs(ctx context.Context, cluster, name string) (uint
 		SELECT count() FROM `+src+`
 		WHERE database = currentDatabase() AND engine = 'Distributed'
 		  AND position(create_table_query, ?) > 0
-		SETTINGS max_execution_time = 10`, name).Scan(&n)
+		SETTINGS max_execution_time = 10, show_table_uuid_in_table_create_query_if_not_nil = 0`, name).Scan(&n)
 	return n, err
 }

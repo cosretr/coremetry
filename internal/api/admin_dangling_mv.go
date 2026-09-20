@@ -40,15 +40,28 @@ func (s *Server) getDanglingMVs(w http.ResponseWriter, r *http.Request) {
 	// kart artık "view var, iç tablo yok"un yanında "iç tablo DÜZ" ve "view
 	// YOK" durumlarını da gösterir. Kapsama hatası sarkan listeyi DÜŞÜRMEZ
 	// (kartın eski yarısı çalışmaya devam eder, hata rozetle görünür).
-	if cov, _, cerr := s.store.MVCoverage(r.Context()); cerr != nil {
+	// v0.10.833 — targetError AYRI: hedef uuid okuması düşse bile kapsama
+	// sınıfları durur (hücreler `unmeasured` olur). Zarfta ayrı bir alan
+	// olması FE'nin YEŞİL rozeti "ölçüldü VE bulgu yok" koşuluna bağlaması
+	// içindir — ölçülmemiş bir şey sağlıklı ilan edilemez.
+	rep, cerr := s.store.MVCoverage(r.Context())
+	if cerr != nil {
 		out["coverageError"] = cerr.Error()
 	} else {
-		out["coverage"] = cov
+		out["coverage"] = rep.Rows
+		if rep.TargetError != "" {
+			out["targetError"] = rep.TargetError
+		}
 	}
 	// v0.10.830 — artıklar (terfi öncesi çıplak MV + sahipsiz iç tablo) aynı
 	// çağrıda. Liste HER ZAMAN dizidir (null değil): kart "kalıntı yok"u
 	// "ölçülmedi"den ayırt edemezse yeşil rozeti yanlış basar.
-	lo, _, lerr := s.store.MVLeftovers(r.Context())
+	//
+	// v0.10.833 — öksüz kararı kapsamanın topladığı `TO INNER UUID` kümesine
+	// bakar (ikinci bir probe AÇILMAZ): nesne uuid'si o kümede olan iç tablo
+	// CANLI bir MV'nin hedefidir. Kapsama düştüyse küme ölçülmemiştir ve
+	// öksüz satırları düğmesiz (Blocked) gelir.
+	lo, _, lerr := s.store.MVLeftovers(r.Context(), rep.Targets)
 	if lerr != nil {
 		out["leftoverError"] = lerr.Error()
 	}
