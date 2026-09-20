@@ -22,6 +22,7 @@ import type {
   CHMeasurePartsRow, // v0.10.683 — ölçüm paneli
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
   CHDanglingMV, // v0.10.762 — sarkan MV onarımı
+  CHMVHostState, CHMVState, // v0.10.825 — MV kapsaması (ok | plain | dangling | missing)
   CHReplicaConsistencyResponse, CHReplicaRepairPlan, // v0.10.791 — replika tutarlılığı
 } from '@/lib/types';
 
@@ -1824,63 +1825,131 @@ function rootTone(pct: number): string { return pct >= 90 ? 'b-ok' : pct >= 50 ?
 // spool'u 398 GiB). Tespit küme geneli; onarım YALNIZ o node'da (view düşür +
 // kanonik DDL'i ON CLUSTER'sız kur; Replicated iç tablo verisini eş
 // replikadan çeker). Onay diyaloğu: DDL koşar, audit'e düşer.
+//
+// v0.10.825 — kart "MV onarımı"na genişledi (operatör vakası 2026-09-20, test
+// kümesi): kanonik spanmetrics_hist_5m bir host'ta DÜZ iç tabloyla (Replicated
+// değil), öteki host'ta HİÇ YOK duruyordu — ikisi de "view var, iç tablo yok"
+// olmadığı için kart "sarkan MV yok" diyordu. Kökü ON CLUSTER DDL'in o
+// host'lara hiç ulaşmaması (is_local kör host; Replika tutarlılığı kartının
+// uyarısı). Tek tablo üç hastalığı gösterir — sarkan · düz · yok — ve satır
+// başına tek eylem: Replicated eşi olan sarkan satır "Eşten kur" (tarihçe
+// replikasyondan gelir), diğerleri "Yeniden kur" (o host'ta DROP + kanonik
+// DDL; MV tarihçesi o host'ta sıfırlanır).
+type MVRepairRow = {
+  key: string; host: string; view: string; state: CHMVState;
+  addr?: string; uuid?: string; innerEngine?: string; peerHost?: string; canonical: boolean;
+};
+const MV_STATE_LABEL: Record<CHMVState, string> = { ok: 'sağlıklı', plain: 'düz', dangling: 'sarkan', missing: 'yok' };
+const MV_STATE_TONE: Record<CHMVState, string> = { ok: 'b-ok', plain: 'b-warn', dangling: 'b-err', missing: 'b-err' };
+function mvStateTitle(r: MVRepairRow): string {
+  if (r.state === 'plain') return `iç tablo Replicated değil (${r.innerEngine || 'bilinmiyor'}) — bu host yalnız kendine yazılanı tutar, eşler replike etmez`;
+  if (r.state === 'dangling') return 'view duruyor, gizli iç tablosu yok — bu host INSERT kaskadını reddeder, Distributed spool büyür';
+  return 'MV bu host’ta hiç yok — ON CLUSTER DDL buraya ulaşmamış (is_local kör host)';
+}
 function DanglingMVPanel() {
   const [rows, setRows] = useState<CHDanglingMV[] | null>(null);
+  const [coverage, setCoverage] = useState<CHMVHostState[] | null>(null);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
   const [cluster, setCluster] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<CHDanglingMV | null>(null);
+  const [confirm, setConfirm] = useState<MVRepairRow | null>(null);
   const [repairing, setRepairing] = useState<string | null>(null);
   const [result, setResult] = useState<{ key: string; ok: boolean; text: string; steps?: string[] } | null>(null);
-  const keyOf = (d: CHDanglingMV) => `${d.host}/${d.view}`;
   const scan = async () => {
     setBusy(true); setErr(null);
-    try { const r = await api.chDanglingMVs(); setRows(r.rows); setCluster(r.cluster); }
-    catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); setRows(null); }
-    finally { setBusy(false); }
-  };
-  const repair = async (d: CHDanglingMV) => {
-    setConfirm(null); setRepairing(keyOf(d)); setResult(null);
     try {
-      const r = await api.chDanglingMVRepair(d.host, d.view);
-      setResult({ key: keyOf(d), ok: true, text: 'onarıldı — iç tablo doğdu', steps: r.steps });
+      const r = await api.chDanglingMVs();
+      setRows(r.rows); setCoverage(r.coverage ?? null); setCoverageError(r.coverageError ?? null); setCluster(r.cluster);
     } catch (e: unknown) {
-      setResult({ key: keyOf(d), ok: false, text: e instanceof Error ? e.message : String(e) });
+      setErr(e instanceof Error ? e.message : String(e)); setRows(null); setCoverage(null); setCoverageError(null);
+    } finally { setBusy(false); }
+  };
+  // peerRefused — sunucu "Eşten kur"u reddettiyse (aynı shard'da Replicated eş
+  // çözülemedi) o satır "Yeniden kur"a geçer: aksi hâlde operatör aynı reddi
+  // sonsuza dek alır ve ilerleyemezdi (v0.10.825 incelemesi).
+  const [peerRefused, setPeerRefused] = useState<Set<string>>(new Set());
+  const peerable = (r: MVRepairRow) => r.state === 'dangling' && !!r.peerHost && !peerRefused.has(r.key);
+  const repair = async (r: MVRepairRow) => {
+    const fromPeer = peerable(r);
+    setConfirm(null); setRepairing(r.key); setResult(null);
+    try {
+      const res = fromPeer ? await api.chDanglingMVRepair(r.host, r.view, true) : await api.chMVRebuild(r.host, r.view);
+      setResult({ key: r.key, ok: true, text: fromPeer ? 'eşten kuruldu — iç tablo doğdu' : 'yeniden kuruldu', steps: res.steps });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (fromPeer && msg.includes('eş yok')) setPeerRefused(prev => new Set(prev).add(r.key));
+      setResult({ key: r.key, ok: false, text: msg });
     } finally { setRepairing(null); void scan(); }
   };
+  // Tek tablo, iki kaynak: kapsama (kanonik katalog × host) sağlıklı olmayan
+  // hücreleri verir; eski sarkan liste kanonik OLMAYAN (migrations/*.sql)
+  // view'ları taşır — kapsama ekseninde yerleri yok. Aynı MV İKİ KEZ çizilmez.
+  const seen = new Set<string>();
+  const repairRows: MVRepairRow[] = [];
+  for (const c of coverage ?? []) {
+    if (c.state === 'ok') continue;
+    seen.add(`${c.host}/${c.view}`);
+    repairRows.push({ key: `${c.host}/${c.view}`, host: c.host, view: c.view, state: c.state, addr: c.addr, uuid: c.uuid, innerEngine: c.innerEngine, peerHost: c.peerHost, canonical: true });
+  }
+  for (const d of rows ?? []) {
+    if (seen.has(`${d.host}/${d.view}`)) continue;
+    seen.add(`${d.host}/${d.view}`);
+    repairRows.push({ key: `${d.host}/${d.view}`, host: d.host, view: d.view, state: 'dangling', addr: d.addr, uuid: d.uuid, peerHost: d.peerHost, canonical: d.canonical });
+  }
+  repairRows.sort((a, b) => a.view.localeCompare(b.view) || a.host.localeCompare(b.host));
+  const mvCount = new Set((coverage ?? []).map(c => c.view)).size;
+  const hostCount = new Set((coverage ?? []).map(c => c.host)).size;
+  const plainCount = repairRows.filter(r => r.state === 'plain').length;
+  const missingCount = repairRows.filter(r => r.state === 'missing').length;
   return (
-    <Section title="Sarkan MV onarımı">
+    <Section title="MV onarımı (sarkan · düz · eksik)">
       <p className="cell-hint">
-        Combined bir MV'nin (TO'suz) iç tablosu (<code className="mono">.inner_id.&lt;uuid&gt;</code>) bir node'da silinmiş ama
-        view nesnesi kalmışsa o node INSERT kaskadında &quot;Target table … of view … doesn't exist&quot; ile HER INSERT'i reddeder;
-        Distributed spool o shard için büyür, span'lerin bir kısmı aranamaz. Tespit küme genelinde; onarım yalnız o node'da:
-        view düşürülür, kanonik DDL ON CLUSTER'sız kurulur, Replicated iç tablo verisini eş replikadan çeker. Sonra spool'da
-        &quot;Göndericiyi başlat&quot;.
+        Kanonik MV kataloğu her host&apos;ta duruyor mu, iç tablosu (<code className="mono">.inner_id.&lt;uuid&gt;</code>) var mı ve
+        Replicated mi — üç hastalık: <b>sarkan</b> (view var, iç tablo yok: o node INSERT kaskadını &quot;Target table … of view …
+        doesn&apos;t exist&quot; ile reddeder, Distributed spool büyür), <b>düz</b> (iç tablo Replicated değil: o host yalnız kendine
+        yazılanı tutar, rastgele replika seçimi her sorguda başka veri gösterir), <b>yok</b> (MV o host&apos;ta hiç kurulmamış — ON
+        CLUSTER DDL oraya ulaşmamış; Replika tutarlılığı kartındaki is_local uyarısına bak). Onarım YALNIZ o node&apos;da koşar.
+        Sonra spool&apos;da &quot;Göndericiyi başlat&quot;.
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <Button variant="accent" size="sm" onClick={() => void scan()} loading={busy}>Ölç</Button>
-        {rows && rows.length === 0 && <span className="badge b-ok">sarkan MV yok{cluster ? ` · ${cluster}` : ''}</span>}
+        {/* v0.10.825 incelemesi: yeşil rozet ÖLÇÜLMÜŞ kapsama ister. Eskiden
+            kapsama hiç gelmediğinde ya da hata verdiğinde kart "MV'ler sağlıklı ·
+            0 MV × 0 host" diyordu — ölçülmemiş bir şey sağlıklı sayılamaz. */}
+        {coverage && !coverageError && repairRows.length === 0 && (
+          <span className="badge b-ok">MV&apos;ler sağlıklı · {mvCount} MV × {hostCount} host{cluster ? ` · ${cluster}` : ''}</span>
+        )}
         {rows && rows.length > 0 && <span className="badge b-err">{rows.length} sarkan view</span>}
+        {plainCount > 0 && <span className="badge b-warn">{plainCount} düz iç tablo</span>}
+        {missingCount > 0 && <span className="badge b-err">{missingCount} eksik MV</span>}
         {err && <span className="badge b-err" title={err}>ölçülemedi</span>}
+        {coverageError && <span className="badge b-err" title={coverageError}>kapsama ölçülemedi: {coverageError}</span>}
       </div>
-      {rows && rows.length > 0 && (
+      {repairRows.length > 0 && (
         <table style={{ width: '100%' }}>
-          <thead><tr><th>Node</th><th>View</th><th>UUID</th><th></th></tr></thead>
+          <thead><tr><th>Node</th><th>MV</th><th>Durum</th><th></th></tr></thead>
           <tbody>
-            {rows.map(d => {
-              const k = keyOf(d);
-              const res = result?.key === k ? result : null;
+            {repairRows.map(r => {
+              const res = result?.key === r.key ? result : null;
+              const fromPeer = peerable(r);
+              const blocked = !!cluster && !r.addr;
               return (
-                <tr key={k}>
-                  <td className="mono">{d.host}{d.shard ? ` (shard ${d.shard}/r${d.replica})` : ''}{!d.addr && cluster ? ' · adres çözülemedi' : ''}</td>
-                  <td className="mono">{d.view}</td>
-                  <td className="mono" style={{ fontSize: 11 }}>{d.uuid}</td>
+                <tr key={r.key} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
+                  <td className="mono">{r.host}{blocked ? ' · adres çözülemedi' : ''}</td>
+                  <td className="mono" style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.uuid ? `${r.view} · iç tablo uuid ${r.uuid}` : r.view}>{r.view}</td>
+                  <td>
+                    <span className={`badge ${MV_STATE_TONE[r.state]}`} title={mvStateTitle(r)}>{MV_STATE_LABEL[r.state]}</span>
+                    {r.state === 'plain' && <div className="cell-hint" style={{ fontSize: 11 }}>iç tablo Replicated değil ({r.innerEngine || '?'})</div>}
+                  </td>
                   <td style={{ textAlign: 'right' }}>
-                    {d.canonical || d.peerHost
-                      ? <Button variant={d.peerHost ? 'accent' : 'danger'} size="sm" disabled={repairing !== null || (!!cluster && !d.addr)} loading={repairing === k}
-                          title={d.peerHost ? `İç tablo eş replikadan (${d.peerHost}) aynı UUID ile kurulur; view düşmez, tarihçe replikasyondan gelir` : 'View düşürülüp kanonik DDL ile yeniden kurulur; bu replikada MV tarihçesi sıfırlanır'}
-                          onClick={() => setConfirm(d)}>{d.peerHost ? 'Eşten kur' : 'Yeniden kur'}</Button>
-                      : <span className="badge b-warn" title="Kanonik DDL yok (migrations/*.sql MV'si) ve eş replika bulunamadı — elle onar">elle</span>}
+                    {fromPeer || r.canonical
+                      ? <Button variant={fromPeer ? 'accent' : 'danger'} size="sm" disabled={repairing !== null || blocked} loading={repairing === r.key}
+                          title={fromPeer
+                            ? `İç tablo eş replikadan (${r.peerHost}) aynı UUID ile kurulur; view düşmez, tarihçe replikasyondan gelir`
+                            : 'Bu host’ta view düşürülüp kanonik DDL ile yeniden kurulur; MV tarihçesi bu host’ta sıfırlanır'}
+                          onClick={() => setConfirm(r)}>{fromPeer ? 'Eşten kur' : 'Yeniden kur'}</Button>
+                      : <span className="badge b-warn" title="Kanonik DDL yok (migrations/*.sql MV&apos;si) ve Replicated eş replika bulunamadı — elle onar">elle</span>}
                     {res && <div className={res.ok ? 'ok' : 'err'} style={{ fontSize: 11, marginTop: 4 }} title={res.steps?.join('\n')}>{res.text}</div>}
                   </td>
                 </tr>
@@ -1890,23 +1959,24 @@ function DanglingMVPanel() {
         </table>
       )}
       {confirm && (
-        <Modal open title={`Sarkan view'ı onar — ${confirm.view} @ ${confirm.host}`} onClose={() => setConfirm(null)} footer={
+        <Modal open title={`MV onarımı — ${confirm.view} @ ${confirm.host}`} onClose={() => setConfirm(null)} footer={
           <>
             <Button variant="secondary" size="sm" onClick={() => setConfirm(null)}>Vazgeç</Button>
-            <Button variant={confirm.peerHost ? 'accent' : 'danger'} size="sm" onClick={() => void repair(confirm)}>{confirm.peerHost ? 'Eşten kur (DDL koşar)' : 'Yeniden kur (DDL koşar)'}</Button>
+            <Button variant={peerable(confirm) ? 'accent' : 'danger'} size="sm" onClick={() => void repair(confirm)}>
+              {peerable(confirm) ? 'Eşten kur (DDL koşar)' : 'Yeniden kur (DDL koşar)'}
+            </Button>
           </>
         }>
-          {confirm.peerHost ? (
+          {peerable(confirm) ? (
             <p style={{ fontSize: 12 }}>
-              Eş replika <code className="mono">{confirm.peerHost}</code>'ten iç tablonun DDL'i alınır ve o node'da
-              <code className="mono"> CREATE TABLE `.inner_id.{confirm.uuid}` UUID '…'</code> ile AYNI uuid'yle kurulur. View
-              düşmez; Replicated iç tablo aynı yola katılır ve tarihçeyi eşten çeker. Spans'e dokunulmaz. Audit'e düşer.
+              Eş replika <code className="mono">{confirm.peerHost}</code>&apos;ten iç tablonun DDL&apos;i alınır ve o node&apos;da
+              <code className="mono"> CREATE TABLE `.inner_id.{confirm.uuid}` UUID &apos;…&apos;</code> ile AYNI uuid&apos;yle kurulur. View
+              düşmez; Replicated iç tablo aynı yola katılır ve tarihçeyi eşten çeker. Spans&apos;e dokunulmaz. Audit&apos;e düşer.
             </p>
           ) : (
             <p style={{ fontSize: 12 }}>
-              O node'da <code className="mono">DROP TABLE {confirm.view} SYNC</code> ve ardından kanonik
-              <code className="mono"> CREATE MATERIALIZED VIEW IF NOT EXISTS</code> (ON CLUSTER'sız) koşar. İç tablo taze doğar
-              (yeni uuid): bu replikada MV tarihçesi sıfırlanır. Spans'e dokunulmaz. Audit'e düşer.
+              Bu host&apos;ta <code className="mono">DROP TABLE {confirm.view} SYNC</code> + kanonik DDL (ON CLUSTER&apos;sız, Replicated).
+              MV tarihçesi bu host&apos;ta sıfırlanır; yalnız yeni yazımlarla dolar. Audit&apos;e düşer.
             </p>
           )}
         </Modal>

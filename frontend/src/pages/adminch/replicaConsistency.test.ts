@@ -104,10 +104,12 @@ describe('replicaConsistency — saf', () => {
 describe('runbook — v0.10.824 MV iç tablosu', () => {
   const peer = rep('ch-04', '/t/01/inner', { engine: 'ReplicatedAggregatingMergeTree', replicaName: 'ch-04' });
   const INNER = '.inner_id.11111111-1111-1111-1111-111111111111';
-  it('iç tabloda tablo merdiveni YOK; MV düzeyi onarım ve Sarkan MV kartı', () => {
+  it('iç tabloda tablo merdiveni YOK; MV düzeyi onarım ve MV onarımı kartı', () => {
     const rb = runbook('c1', 'db', INNER, shard('not_replicated', [peer], { missing: [{ host: 'ch-03', engine: 'AggregatingMergeTree' }] }), 'service_summary_5m');
     expect(rb).toContain('MV İÇ TABLOSU');
-    expect(rb).toContain('Sarkan MV');
+    // v0.10.825 — kart adı "MV onarımı"; runbook oraya yollar (sarkan · düz · eksik).
+    expect(rb).toContain('MV onarımı kartı');
+    expect(rb).not.toContain('Sarkan MV onarımı');
     expect(rb).toContain('DROP TABLE `db`.`service_summary_5m` SYNC;');
     expect(rb).toContain('CREATE MATERIALIZED VIEW `db`.`service_summary_5m`');
     // MV geri doldurmaz: yeniden kurulan view'a YALNIZ yeni yazımlar akar.

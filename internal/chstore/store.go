@@ -1938,6 +1938,58 @@ func canonicalMVs() []string {
 // (mvDDLByName: "spanmetrics_1" asla "spanmetrics_1m" ile eşleşmez).
 func canonicalMVDDL(name string) string { return mvDDLByName(canonicalMVs(), name) }
 
+// mvNameFromDDL — SAF: "CREATE MATERIALIZED VIEW IF NOT EXISTS <ad>" önekinden
+// nesne adı ("" = tanınmayan biçim). mvDDLByName'in TERS yönü; ikisi aynı
+// öneki okur, ayrışamazlar.
+func mvNameFromDDL(ddl string) string {
+	const pfx = "CREATE MATERIALIZED VIEW IF NOT EXISTS "
+	i := strings.Index(ddl, pfx)
+	if i < 0 {
+		return ""
+	}
+	rest := ddl[i+len(pfx):]
+	if j := strings.IndexAny(rest, " \t\r\n("); j >= 0 {
+		rest = rest[:j]
+	}
+	return rest
+}
+
+// mvGuardedOff — bir kanonik MV boot'ta BİLEREK atlanıyor mu (kaynak
+// kolonu yok). migrate()'in create döngüsündeki iki kapının TEK GÖVDESİ:
+//
+//	operation_group_summary_5m — SELECT'i op_group okur (v0.8.186)
+//	db_statement_summary_5m    — SELECT'i db_stmt_hash okur (v0.8.375)
+//
+// Kolon yokken bu MV'leri yaratmak insert-trigger'ı kod 16 ile düşürür ve
+// TÜM ingest'i bloklar. v0.10.825: MV kapsama kartı (mv_coverage.go) aynı
+// kararı okumak ZORUNDA — okumazsa kolonu olmayan kurulumda iki MV her
+// host'ta "eksik" görünür ve "Yeniden kur" düğmesi tam da burada
+// engellenen DDL'i koşar. İki kopya kural ayrışır; tek gövde.
+func (s *Store) mvGuardedOff(name string) bool {
+	switch name {
+	case "operation_group_summary_5m":
+		return !s.hasOpGroupCol
+	case "db_statement_summary_5m":
+		return !s.hasDBStmtHashCol
+	}
+	return false
+}
+
+// canonicalMVNames — SAF: katalogdaki her MV'nin nesne adı (boot'taki
+// sırayla). v0.10.825 MV kapsama kartının EKSENİ: katalogda olup bir
+// host'ta bulunmayan MV "eksik"tir; katalog dışındakinin eksikliği diye
+// bir şey yoktur. Küme depolama adı için çağıran s.mvStorageName uygular.
+func canonicalMVNames() []string {
+	mvs := canonicalMVs()
+	out := make([]string, 0, len(mvs))
+	for _, ddl := range mvs {
+		if n := mvNameFromDDL(ddl); n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 func (s *Store) migrate(ctx context.Context) error {
 	sd, ld, md := s.ret.SpansDays, s.ret.LogsDays, s.ret.MetricsDays
 	if sd == 0 {
@@ -4392,15 +4444,17 @@ func (s *Store) migrate(ctx context.Context) error {
 		// stale copy; don't recreate what we just dropped. Every other MV is
 		// op_group-agnostic and created unconditionally. Cheap substring
 		// match on the CREATE — the MV name is unique in the statement.
-		if !s.hasOpGroupCol && strings.Contains(q, "operation_group_summary_5m") {
-			continue
-		}
 		// Same guard class for db_statement_summary_5m (v0.8.375, Stage-2
 		// D1): its SELECT reads db_stmt_hash — creating it while the column
 		// is absent (external Distributed cluster, cluster_name unset) would
 		// block ALL ingest with code 16. The defensive DROP above already
 		// removed any stale copy.
-		if !s.hasDBStmtHashCol && strings.Contains(q, "db_statement_summary_5m") {
+		//
+		// v0.10.825 — iki kapı mvGuardedOff'a çıkarıldı: MV kapsama kartı
+		// (mv_coverage.go) AYNI kararı okumak zorunda, yoksa kolonu olmayan
+		// kurulumda bu iki MV'yi her host'ta "eksik" gösterir ve "Yeniden
+		// kur" düğmesi tam da burada engellenen DDL'i koşardı.
+		if s.mvGuardedOff(mvNameFromDDL(q)) {
 			continue
 		}
 		if err := s.execDDL(ctx, q); err != nil {

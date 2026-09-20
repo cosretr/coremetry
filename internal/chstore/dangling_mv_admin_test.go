@@ -27,7 +27,7 @@ func TestDanglingFromRows(t *testing.T) {
 		// kanonik olmayan sarkan (migrations MV'si) → listelenir, Canonical=false
 		{Host: "n2", Name: "rollup_custom_mv", UUID: "dddd", Engine: "MaterializedView", CreateQuery: "CREATE MATERIALIZED VIEW coremetry.rollup_custom_mv ENGINE = AggregatingMergeTree AS SELECT"},
 	}
-	got := danglingFromRows(rows)
+	got := danglingFromRows(rows, map[string]int{"n1": 1, "n2": 1})
 	if len(got) != 2 {
 		t.Fatalf("2 sarkan bekleniyordu, %d: %+v", len(got), got)
 	}
@@ -123,7 +123,8 @@ func TestDanglingFromRowsUsesInnerUUID(t *testing.T) {
 		mv("h2"),                                                                                 // iç tablo YOK → sarkan; hata metnindeki uuid = inner
 		mv("h3"), {Host: "h3", Name: ".inner_id." + v, Engine: "ReplicatedAggregatingMergeTree"}, // view uuid'li tablo iç tablo DEĞİL → sarkan
 	}
-	got := danglingFromRows(rows)
+	// v0.10.825 — eş AYNI shard'da olmalı; üç host da shard 1.
+	got := danglingFromRows(rows, map[string]int{"h1": 1, "h2": 1, "h3": 1})
 	if len(got) != 2 || got[0].Host != "h2" || got[0].UUID != inner || got[0].ViewUUID != v || got[1].Host != "h3" {
 		t.Fatalf("beklenen h2 ve h3 (inner uuid ile): %+v", got)
 	}

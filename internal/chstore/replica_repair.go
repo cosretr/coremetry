@@ -369,7 +369,7 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 		return nil, fmt.Errorf("geçersiz tablo adı %q", req.Table)
 	}
 	if strings.HasPrefix(req.Table, ".inner") || req.Host == "" {
-		return nil, errors.New("MV iç tabloları bu sihirbazın kapsamı dışında (Sarkan MV onarımı) / host zorunlu")
+		return nil, errors.New("MV iç tabloları bu sihirbazın kapsamı dışında (MV onarımı kartı) / host zorunlu")
 	}
 	if strings.HasSuffix(req.Table, replicaRepairFixSuffix) {
 		return nil, fmt.Errorf("%s sihirbazın geçici tablosu — onarılmaz; sahibi tablonun satırında Temizle", req.Table)

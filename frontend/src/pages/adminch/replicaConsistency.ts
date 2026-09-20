@@ -110,7 +110,7 @@ function innerRunbook(cluster: string, db: string, table: string, sh: CHReplicaS
       : [
           `-- ${m.host} · iç tablo YOK: view o host'ta duruyor mu?`,
           `SELECT name, engine FROM system.tables WHERE database = '${db}' AND name = '${mv}';  -- ${m.host} üzerinde (düğüm-yerel)`,
-          `--   VARSA → Sarkan MV onarımı kartı ("Yeniden kur"); YOKSA → MV'yi kanonik DDL ile o host'ta kur (aşağıda).`,
+          `--   Her iki durumda da: Admin → ClickHouse → MV onarımı kartı ("Yeniden kur") bu host'ta düşürür ve kanonik DDL ile kurar; elle yol aşağıda.`,
         ])
     : [
         `-- Replikalar aynı shard'da FARKLI ZooKeeper yolunda:`,
@@ -122,7 +122,7 @@ function innerRunbook(cluster: string, db: string, table: string, sh: CHReplicaS
     `-- ${table} · shard ${sh.shard}: MV İÇ TABLOSU — tablo düzeyi onarım uygulanmaz`,
     ...head,
     ...perHost,
-    `-- MV duruyor ama iç tablosu yoksa: Admin → ClickHouse → Sarkan MV onarımı kartı aynı işi tek tıkla yapar.`,
+    `-- İç tablo yoksa ya da DÜZ ise (Replicated değil): Admin → ClickHouse → MV onarımı kartı aynı işi tek tıkla yapar.`,
     `-- Kanonik yeniden kurulum (YALNIZ etkilenen host'ta, ON CLUSTER'sız):`,
     `DROP TABLE ${q(mv)} SYNC;`,
     `CREATE MATERIALIZED VIEW ${q(mv)} … AS SELECT …;  -- kanonik DDL (store.go / migrations), ON CLUSTER'sız`,

@@ -34,12 +34,26 @@ func (s *Server) getDanglingMVs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, map[string]any{"cluster": cluster, "rows": rows, "generatedAt": time.Now().UnixNano()})
+	out := map[string]any{"cluster": cluster, "rows": rows, "generatedAt": time.Now().UnixNano()}
+	// v0.10.825 — kapsama (ok | plain | dangling | missing) aynı çağrıda:
+	// kart artık "view var, iç tablo yok"un yanında "iç tablo DÜZ" ve "view
+	// YOK" durumlarını da gösterir. Kapsama hatası sarkan listeyi DÜŞÜRMEZ
+	// (kartın eski yarısı çalışmaya devam eder, hata rozetle görünür).
+	if cov, _, cerr := s.store.MVCoverage(r.Context()); cerr != nil {
+		out["coverageError"] = cerr.Error()
+	} else {
+		out["coverage"] = cov
+	}
+	writeJSON(w, out)
 }
 
 type danglingMVRepairInput struct {
 	Host string `json:"host"`
 	View string `json:"view"`
+	// Peer — v0.10.825: EKRANDA "Eşten kur" yazıyordu. Sunucu eşi
+	// çözemezse istek 409 ile REDDEDİLİR; sessizce "Yeniden kur"a (DROP +
+	// kanonik CREATE, tarihçe sıfırlanır) düşmez — operatör onu görmedi.
+	Peer bool `json:"peer"`
 }
 
 func (s *Server) postDanglingMVRepair(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +67,7 @@ func (s *Server) postDanglingMVRepair(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "view zorunlu")
 		return
 	}
-	steps, err := s.store.RepairDanglingMV(r.Context(), in.Host, in.View)
+	steps, err := s.store.RepairDanglingMV(r.Context(), in.Host, in.View, in.Peer)
 	target := in.View + "@" + in.Host
 	if err != nil {
 		s.audit(r, "clickhouse.dangling_mv_repair", "clickhouse", target, fmt.Sprintf(`{"ok":false,"error":%q,"steps":%d}`, err.Error(), len(steps)))

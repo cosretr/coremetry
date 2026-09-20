@@ -3378,9 +3378,18 @@ export const api = {
   // v0.10.762 — Sarkan MV onarım sihirbazı: tespit (önbelleksiz) + node'a özel onarım (audit'li).
   chDanglingMVs: (signal?: AbortSignal) =>
     get<import('./types').CHDanglingMVResponse>('/api/admin/clickhouse/dangling-mv', signal),
-  chDanglingMVRepair: (host: string, view: string) =>
+  // v0.10.825 — peer: EKRANDA "Eşten kur" yazıyorsa true. Sunucu aynı shard'da
+  // Replicated eş çözemezse istek 409 ile REDDEDİLİR; sessizce DROP + kanonik
+  // CREATE'e (tarihçe sıfırlanır) düşmez — operatör o eylemi görmedi.
+  chDanglingMVRepair: (host: string, view: string, peer: boolean) =>
     request<import('./types').CHDanglingMVRepairResult>('/api/admin/clickhouse/dangling-mv/repair', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view, peer }),
+    }),
+  // v0.10.825 — MV onarımı: bu host'ta DROP TABLE <view> SYNC + kanonik DDL (ON CLUSTER'sız).
+  // Sarkan · düz · eksik üç durumu da kapsar; confirm:true zorunlu (uç DDL koşar), uzun DDL için timeoutMs.
+  chMVRebuild: (host: string, view: string) =>
+    request<import('./types').CHMVRebuildResult>('/api/admin/clickhouse/dangling-mv/rebuild', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view, confirm: true }), timeoutMs: 300_000,
     }),
   // v0.10.791 — Replika tutarlılığı (Admin ClickHouse): küme geneli system.replicas/parts/macros + shard başına karar (30 sn cache; refresh zorlar).
   chReplicaConsistency: (refresh = false, signal?: AbortSignal) =>

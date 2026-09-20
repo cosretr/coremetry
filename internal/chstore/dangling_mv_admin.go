@@ -95,15 +95,21 @@ func injectTableUUID(ddl, uuid string) string {
 
 // danglingFromRows — SAF: host başına view uuid'si için `.inner_id.<uuid>`
 // var mı. Çıktı host, view sıralı.
-func danglingFromRows(rows []mvTableRow) []DanglingMV {
-	inner := map[string]map[string]bool{}
+//
+// v0.10.825: iç tablo haritası artık MOTORU da taşır — eş replika adayı
+// yalnız iç tablosu REPLICATED olan host olabilir. Düz (AggregatingMergeTree)
+// bir eşten SHOW CREATE ile kurmak düz tabloyu ÇOĞALTIR: kaskad düzelir ama
+// iki host birbirini hiç replike etmez ve kart bunu "onarıldı" sayardı.
+// shardOf boşsa (tek düğüm ya da küme eşlemesi okunamadı) eş YOKTUR.
+func danglingFromRows(rows []mvTableRow, shardOf map[string]int) []DanglingMV {
+	inner := map[string]map[string]string{}
 	var views []mvTableRow
 	for _, r := range rows {
-		if strings.HasPrefix(r.Name, ".inner_id.") {
+		if isInnerTable(r.Name) {
 			if inner[r.Host] == nil {
-				inner[r.Host] = map[string]bool{}
+				inner[r.Host] = map[string]string{}
 			}
-			inner[r.Host][r.Name] = true
+			inner[r.Host][r.Name] = r.Engine
 			continue
 		}
 		if r.Engine == "MaterializedView" {
@@ -116,19 +122,18 @@ func danglingFromRows(rows []mvTableRow) []DanglingMV {
 			continue
 		}
 		iu := innerUUIDFor(v.CreateQuery, v.UUID)
-		if inner[v.Host][".inner_id."+iu] {
-			continue
+		if _, has := inner[v.Host][innerTablePrefix+iu]; has {
+			continue // iç tablo VAR (düz olabilir — o "plain", mv_coverage.go)
 		}
 		_, canon := canonicalMVForObject(v.Name)
 		d := DanglingMV{Host: v.Host, View: v.Name, UUID: iu, ViewUUID: v.UUID, Canonical: canon}
-		// Eş replika adayı: iç tablo başka bir host'ta duruyor mu (shard eşleşmesi
-		// DanglingMVs'te adreslerle yapılır; burada yalnız aday listesi).
-		for h, set := range inner {
-			if h != v.Host && set[".inner_id."+iu] {
-				d.PeerHost = h
-				break
-			}
-		}
+		// Eş replika adayı: iç tablo başka bir host'ta REPLICATED duruyor mu
+		// (shard eşleşmesi DanglingMVs'te adreslerle yapılır; burada yalnız
+		// aday listesi). Deterministik: ada göre ilk.
+		// Eş replika: AYNI shard'da iç tablosu REPLICATED olan host.
+		// v0.10.825 — kural TEK GÖVDE (replicatedInnerPeer): DanglingMVs'in
+		// içindeki ikiz döngü silindi, kapsama kartı da aynı gövdeyi okur.
+		d.PeerHost = replicatedInnerPeer(inner, v.Host, innerTablePrefix+iu, shardOf)
 		out = append(out, d)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -160,59 +165,42 @@ var reOnCluster = regexp.MustCompile("(?i)\\s+ON\\s+CLUSTER\\s+`?[A-Za-z0-9_.-]+
 func stripOnCluster(sql string) string { return reOnCluster.ReplaceAllString(sql, "") }
 
 // DanglingMVs — küme geneli (ya da tek node) sarkan view listesi.
+// Envanter okuması v0.10.825'te mvInventory'ye çıkarıldı: MV kapsama kartı
+// (mv_coverage.go) AYNI satırları okur, iki kopya sorgu iki gerçek üretirdi.
 func (s *Store) DanglingMVs(ctx context.Context) ([]DanglingMV, string, error) {
-	cluster := ""
-	src := "system.tables"
-	if s.clusterMode() {
-		cluster = strings.TrimSpace(s.cfg.ClusterName)
-		src = fmt.Sprintf("clusterAllReplicas('%s', system.tables)", cluster)
-	}
-	rows, err := s.conn.Query(ctx, `
-		SELECT hostName(), name, toString(uuid), engine, substring(create_table_query, 1, 400)
-		FROM `+src+`
-		WHERE database = currentDatabase()
-		  AND (engine = 'MaterializedView' OR name LIKE '.inner_id.%')
-		SETTINGS max_execution_time = 10`)
+	in, cluster, err := s.mvInventory(ctx)
 	if err != nil {
 		return nil, cluster, err
 	}
-	defer rows.Close()
-	var in []mvTableRow
-	for rows.Next() {
-		var r mvTableRow
-		if err := rows.Scan(&r.Host, &r.Name, &r.UUID, &r.Engine, &r.CreateQuery); err != nil {
-			return nil, cluster, err
-		}
-		in = append(in, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, cluster, err
-	}
-	out := danglingFromRows(in)
-	if cluster != "" && len(out) > 0 {
-		hosts, _, herr := s.clusterHostRows(ctx)
-		if herr == nil {
-			byHost := map[string]clusterHostRow{}
+	// Shard ekseni ÖNCE: eş kararı saf gövdede verilir (replicatedInnerPeer),
+	// burada yalnız adres eklenir. shard 0 = system.clusters'ta eşleşmedi →
+	// haritaya girmez → o host eş olamaz (eski `Shard != 0` kuralı).
+	shardOf := map[string]int{}
+	byHost := map[string]clusterHostRow{}
+	if cluster != "" {
+		if hosts, _, herr := s.clusterHostRows(ctx); herr == nil {
 			for _, h := range hosts {
 				byHost[h.Host] = h
-			}
-			for i := range out {
-				if h, ok := byHost[out[i].Host]; ok {
-					out[i].Addr, out[i].Shard, out[i].Replica = fmt.Sprintf("%s:%d", h.Host, h.Port), h.Shard, h.Replica
-				}
-				// Eş replika: AYNI shard'da iç tablosu sağlam bir host (ilk aday
-				// başka shard'daysa yeniden ara).
-				out[i].PeerHost, out[i].PeerAddr = "", ""
-				for _, r := range in {
-					if r.Host == out[i].Host || r.Name != ".inner_id."+out[i].UUID {
-						continue
-					}
-					if ph, ok := byHost[r.Host]; ok && ph.Shard == out[i].Shard && out[i].Shard != 0 {
-						out[i].PeerHost, out[i].PeerAddr = ph.Host, fmt.Sprintf("%s:%d", ph.Host, ph.Port)
-						break
-					}
+				if h.Shard != 0 {
+					shardOf[h.Host] = h.Shard
 				}
 			}
+		}
+	}
+	out := danglingFromRows(in, shardOf)
+	for i := range out {
+		if h, ok := byHost[out[i].Host]; ok {
+			out[i].Addr, out[i].Shard, out[i].Replica = fmt.Sprintf("%s:%d", h.Host, h.Port), h.Shard, h.Replica
+		}
+		// Adresi çözülemeyen eş EŞ DEĞİLDİR: onarım ona bağlanamaz ve
+		// "Eşten kur" sözü tutulamazdı (v0.10.825 incelemesi).
+		if out[i].PeerHost == "" {
+			continue
+		}
+		if ph, ok := byHost[out[i].PeerHost]; ok {
+			out[i].PeerAddr = fmt.Sprintf("%s:%d", ph.Host, ph.Port)
+		} else {
+			out[i].PeerHost = ""
 		}
 	}
 	return out, cluster, nil
@@ -221,7 +209,14 @@ func (s *Store) DanglingMVs(ctx context.Context) ([]DanglingMV, string, error) {
 // RepairDanglingMV — o node'da: view'ı düşür (iç tablo zaten yok), kanonik
 // DDL'i ON CLUSTER'sız kur, iç tablonun doğduğunu doğrula. Koşulan
 // ifadeler döner (audit + ekran).
-func (s *Store) RepairDanglingMV(ctx context.Context, host, view string) ([]string, error) {
+//
+// wantPeer — operatörün EKRANDA gördüğü eylem (v0.10.825 incelemesi):
+// true ise kartta "Eşten kur" yazıyordu ve modal "view düşmez, tarihçeyi
+// eşten çeker" sözünü verdi. O söz tutulamıyorsa (aynı shard'da Replicated
+// eş çözülemedi) bu fonksiyon SESSİZCE DROP + kanonik CREATE'e DÜŞMEZ —
+// hata döner, operatör "Yeniden kur"u bilerek seçer. Eski kod tam burada
+// düşüyor ve tarihçeyi onay alınmamış bir eylemle yakıyordu.
+func (s *Store) RepairDanglingMV(ctx context.Context, host, view string, wantPeer bool) ([]string, error) {
 	if !chObjRe.MatchString(view) {
 		return nil, fmt.Errorf("geçersiz nesne adı %q", view)
 	}
@@ -253,7 +248,10 @@ func (s *Store) RepairDanglingMV(ctx context.Context, host, view string) ([]stri
 	// v0.10.780 — TERCİH: iç tabloyu eş replikadan AYNI UUID ile kur. View
 	// düşmez, iç tablo {uuid}'li Replicated yoluna katılır ve tarihçeyi eşten
 	// çeker; kaskad anında düzelir. Eş yoksa eski yol (view'ı yeniden kur).
-	if row.PeerAddr != "" && s.clusterMode() {
+	if wantPeer && (row.PeerAddr == "" || !s.clusterMode()) {
+		return nil, fmt.Errorf("aynı shard'da Replicated eş yok — 'Yeniden kur' ile devam et (tarihçe bu host'ta sıfırlanır)")
+	}
+	if wantPeer {
 		peer, err := s.shardConn(ctx, row.PeerAddr)
 		if err != nil {
 			return nil, fmt.Errorf("eş replika bağlantısı (%s): %w", row.PeerHost, err)
@@ -280,28 +278,9 @@ func (s *Store) RepairDanglingMV(ctx context.Context, host, view string) ([]stri
 	if !ok {
 		return nil, fmt.Errorf("%s için kanonik DDL yok (migrations/*.sql MV'si) ve eş replika bulunamadı — elle onar", view)
 	}
-	steps := []string{"DROP TABLE IF EXISTS `" + view + "` SYNC"}
-	for _, st := range s.adaptDDL(canonicalMVDDL(name)) {
-		steps = append(steps, stripOnCluster(st))
-	}
-	for _, st := range steps {
-		ectx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		err := conn.Exec(ectx, st)
-		cancel()
-		if err != nil {
-			return steps, fmt.Errorf("%s: %w", firstWords(st, 4), err)
-		}
-	}
-	// Doğrulama: view var ve iç tablosu doğdu.
-	var uuid, cq string
-	if err := conn.QueryRow(ctx, "SELECT toString(uuid), substring(create_table_query, 1, 400) FROM system.tables WHERE database = currentDatabase() AND name = ?", view).Scan(&uuid, &cq); err != nil {
-		return steps, fmt.Errorf("doğrulama (view): %w", err)
-	}
-	var n uint64
-	if err := conn.QueryRow(ctx, "SELECT count() FROM system.tables WHERE database = currentDatabase() AND name = ?", ".inner_id."+innerUUIDFor(cq, uuid)).Scan(&n); err != nil || n == 0 {
-		return steps, fmt.Errorf("doğrulama: iç tablo doğmadı (%v)", err)
-	}
-	return steps, nil
+	// v0.10.825 — kanonik dal TEK GÖVDE: "Yeniden kur" (RebuildMVOnHost) ile
+	// aynı adımlar ve aynı doğrulama. İkinci bir kopya ayrışırdı.
+	return s.rebuildMVOnConn(ctx, conn, view, name)
 }
 
 func firstWords(s string, n int) string {
@@ -358,6 +337,6 @@ func (s *Store) LogDanglingMVs(ctx context.Context) {
 		return
 	}
 	for _, d := range list {
-		log.Printf("[chstore] SARKAN MV: %s@%s (uuid %s) — INSERT kaskadı bu node'da DÜŞER, Distributed spool büyür; Admin → ClickHouse → Sarkan MV onarımı", d.View, d.Host, d.UUID)
+		log.Printf("[chstore] SARKAN MV: %s@%s (uuid %s) — INSERT kaskadı bu node'da DÜŞER, Distributed spool büyür; Admin → ClickHouse → MV onarımı", d.View, d.Host, d.UUID)
 	}
 }

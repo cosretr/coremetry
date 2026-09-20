@@ -313,7 +313,7 @@ func mergeCoverage(base, baseHint, cv, chint string) (string, string) {
 // sihirbazı `.inner*` tablolarını zaten reddediyordu; eksik olan metindi).
 const (
 	innerTablePrefix = ".inner_id."
-	innerTableHint   = "MV iç tablosu: ATTACH/EXCHANGE uygulanmaz — MV'yi kanonik DDL ile o host'ta (yeniden) kur; Sarkan MV onarımı kartı"
+	innerTableHint   = "MV iç tablosu: ATTACH/EXCHANGE uygulanmaz — MV'yi kanonik DDL ile o host'ta (yeniden) kur; Admin → ClickHouse → MV onarımı kartı bunu tek tıkla yapar"
 )
 
 // isInnerTable — SAF: ad gizli MV iç tablosu mu.

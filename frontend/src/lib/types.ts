@@ -3543,8 +3543,21 @@ export interface CHRootCoverageResponse {
 /** v0.10.762 — Sarkan MV onarımı (Go chstore.DanglingMV): view var, `.inner_id.<uuid>` yok. */
 /** uuid = eksik iç tablonun uuid'si (hata metnindeki); peerHost = aynı shard'da sağlam eş (onarım oradan, tarihçe korunur) — v0.10.780. */
 export interface CHDanglingMV { host: string; addr?: string; shard?: number; replica?: number; view: string; uuid: string; viewUuid?: string; canonical: boolean; peerHost?: string; peerAddr?: string }
-export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number }
+/** v0.10.825 — MV kapsaması (Go chstore.MVHostState). ok = view + iç tablo (kümede Replicated);
+ *  plain = iç tablo var ama Replicated DEĞİL; dangling = iç tablo yok; missing = view o host'ta yok. */
+export type CHMVState = 'ok' | 'plain' | 'dangling' | 'missing';
+export interface CHMVHostState {
+  host: string; addr?: string; view: string; state: CHMVState;
+  /** yalnız plain'de dolu: iç tablonun motoru (neden düz). */
+  innerEngine?: string;
+  uuid?: string;
+  /** yalnız dangling'de ve yalnız eşin iç tablosu Replicated ise (düz eşten kurmak düz tabloyu çoğaltır). */
+  peerHost?: string; peerAddr?: string;
+}
+export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number; coverage?: CHMVHostState[]; coverageError?: string }
 export interface CHDanglingMVRepairResult { ok: boolean; host: string; view: string; steps: string[] }
+/** v0.10.825 — host'a özel yeniden kurulum (DROP + kanonik DDL, ON CLUSTER'sız). */
+export interface CHMVRebuildResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.791 — Replika tutarlılığı (Go chstore.ReplicaConsistencyReport). Salt okuma; karar shard başına sunucuda (replicaVerdict). */
 export type CHReplicaVerdict = 'ok' | 'single' | 'unmapped' | 'lagging' | 'divergent' | 'readonly' | 'session_expired' | 'missing_replica' | 'not_replicated' | 'no_replication';
 /** v0.10.818 — shard'ın erişilebilir host'u tabloyu kayıtlı göstermiyor; engine boş = tablo yok, dolu = Replicated değil. */
