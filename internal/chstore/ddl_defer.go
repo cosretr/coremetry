@@ -46,37 +46,18 @@ func deferMigrationDDL(clusterMode, spansExists bool) bool {
 	return clusterMode && spansExists
 }
 
-// ddlDeferred — execDDL şu an ÇALIŞTIRIYOR mu, BİRİKTİRİYOR mu?
+// v0.9.633'ün `ddlDeferred` + `ddlAppliedOrQueued` çifti v0.10.834'te
+// KALDIRILDI (kalıntı bırakmıyoruz, CLAUDE.md).
 //
-// v0.9.633 (denetim bulgusu, daraltılmış) — erteleme kipinde execDDL
-// nil döndüğü için çağıranların "başarılı" dalı koşuyor ve YANLIŞ
-// şeyler söylüyor:
+// Neden vardı: erteleme kipinde execDDL nil döndüğü için ingest-kurtarma
+// dalı "dropped … MV" yazıyordu; halbuki DROP kuyruğa alınmıştı ve MV
+// hâlâ oradaydı — boot krizinde yanlış yere baktıran bir yalan. Çift, o
+// cümleyi "uygulandı / kuyruğa alındı" diye dürüstleştirmek içindi.
 //
-//	"[chstore] dropped operation_group_summary_5m MV (op_group absent
-//	 — its insert trigger would block ingest)"
-//
-// DROP çalışmadı, KUYRUĞA ALINDI. Operatör "ingest'i tıkayan MV
-// düştü" okuyor; halbuki MV hâlâ orada ve tetikleyicisi hâlâ her span
-// INSERT'ünü reddedebilir. Bu, boot krizinde yanlış yere baktıracak
-// cinsten bir yalan.
-//
-// Denetimin ÖNERDİĞİ düzeltme (execDDL erteleme kipinde hata döndürsün)
-// UYGULANMADI: v0.9.614'ün tüm amacı boot'u DDL'e bağlamamaktı, hata
-// döndürmek onu geri alırdı. Gereken tek şey çağıranın DOĞRU cümleyi
-// kurabilmesi.
-//
-// SADECE boot/migrate goroutine'inden çağrılır — deferDDL alanı
-// kilitsiz ve aynı sözleşme execDDL için de geçerli.
-func (s *Store) ddlDeferred() bool { return s.deferDDL }
-
-// ddlAppliedOrQueued — bir DDL'in ne olduğunu anlatan doğru fiil.
-// SAF (tablo testli).
-func ddlAppliedOrQueued(deferred bool) string {
-	if deferred {
-		return "kuyruğa alındı (arka planda uygulanacak)"
-	}
-	return "uygulandı"
-}
+// Neden gerek kalmadı: tek tüketicisi olan iki ham `DROP VIEW` çağrısı
+// v0.10.834'te dropIngestBlockingMV'ye (mv_shape_guard.go) dönüştü ve o
+// yol `dropCombinedMV` üzerinden DOĞRUDAN `s.conn.Exec` koşar — hiç
+// ertelenmez. Log artık koşulsuz doğru; ayırt edecek bir şey kalmadı.
 
 // finishDeferredDDL — birikenleri devralır ve durumu TEMİZLER.
 //

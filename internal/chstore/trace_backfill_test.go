@@ -202,29 +202,43 @@ func TestBackfillLadderForVolume(t *testing.T) {
 // v0.10.110 — Operator-reported (test ortamı): bayat trace_summary_5m
 // DROP'u 211 GB inner'a cascade edip code 359'la boot'u kilitledi.
 // Her iki düşürme de hacim-guard'ı taşımak ZORUNDA.
+//
+// v0.10.834 — KAPSAM + BOŞ-YEŞİL onarımı. entry_service göç dalının gövdesi
+// store.go'dan mv_shape_guard.go'ya taşındı; dosya listesi güncellenmeseydi
+// bu kapı VAKUMDA yeşil kalırdı (aradığı metin hiçbir dosyada bulunmaz, döngü
+// hiç dönmez, test geçer). Artık her ifadenin EN AZ BİR kez bulunması da
+// iddia: kapı "hiç bulamadım"ı başarı saymaz.
 func TestTraceDropStatementsCarryVolumeGuard(t *testing.T) {
-	for _, f := range []string{"trace_backfill.go", "store.go"} {
+	stmts := []string{
+		`DROP PARTITION '"+day+"'"`,
+		`DROP TABLE IF EXISTS trace_summary_5m"+s.onCluster()+" SYNC"`,
+	}
+	found := map[string]int{}
+	for _, f := range []string{"trace_backfill.go", "store.go", "mv_shape_guard.go"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
 		}
 		src := string(b)
-		for _, stmt := range []string{
-			`DROP PARTITION '"+day+"'"`,
-			`DROP TABLE IF EXISTS trace_summary_5m"+s.onCluster()+" SYNC"`,
-		} {
+		for _, stmt := range stmts {
 			for i := 0; ; {
 				j := strings.Index(src[i:], stmt)
 				if j < 0 {
 					break
 				}
 				i += j + len(stmt)
+				found[stmt]++
 				// İfadenin devamında aynı satır zincirinde purgeGuard olmalı.
 				tail := src[i:min(i+80, len(src))]
 				if !strings.Contains(tail, "purgeGuard") {
 					t.Errorf("%s: %q guard'sız — 359 sınıfı (50 GB drop sınırı)", f, stmt)
 				}
 			}
+		}
+	}
+	for _, stmt := range stmts {
+		if found[stmt] == 0 {
+			t.Errorf("%q hiçbir dosyada bulunamadı — kapı boşa dönüyor; ifade taşındıysa dosya listesi de taşınmalı", stmt)
 		}
 	}
 }

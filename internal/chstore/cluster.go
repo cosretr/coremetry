@@ -1182,6 +1182,25 @@ func (s *Store) execDDL(ctx context.Context, sql string) error {
 	if strings.TrimSpace(sql) == "" {
 		return fmt.Errorf("execDDL: boş DDL — çağıran taraf bir MV/tablo adını çözemedi")
 	}
+	// v0.10.834 — YAPISAL MUHAFIZ (inceleme, KRİTİK 1). adaptDDL yalnız
+	// CREATE TABLE / ALTER TABLE / CREATE MATERIALIZED VIEW desenlerini tanır
+	// (identifyDDLTarget aşağıda), yani ham bir `DROP VIEW IF EXISTS <mv>`
+	// buradan DEĞİŞTİRİLMEDEN geçiyordu: `_local`'a çevrilmiyor, ON CLUSTER
+	// almıyor ve mv_shape_guard.go'daki şekil kapısının yanından bile
+	// geçmiyordu. Tek düğüm şeklindeki bir kurulumda o ifade gerçek MV'yi
+	// düşürüp gizli iç tabloya kaskad ediyordu. Erteleme kontrolünden ÖNCE:
+	// defer kipinde kuyruğa girip nil dönmek en sessiz dal olurdu.
+	//
+	// Yıkıcı işlemin doğru yolu dropCombinedMV(s.resolvedStorageName(...)):
+	// şekli ÖLÇER, iç tabloyu hacim-guard'ıyla düşürür, artık view'ları
+	// temizler. Bu muhafız o yolu disiplin olmaktan çıkarıp ZORUNLU kılar.
+	if s.clusterMode() {
+		if n := bareDestructiveTarget(sql); n != "" {
+			return fmt.Errorf("execDDL: küme kipinde `%s` ÇIPLAK adını düşüren/boşaltan DDL REDDEDİLDİ "+
+				"(adaptDDL DROP/TRUNCATE'i yeniden yazmaz, ifade şekil kapısını atlardı) — "+
+				"dropCombinedMV(s.resolvedStorageName(ctx, %q)) kullan\nSQL: %.120s", n, n, sql)
+		}
+	}
 	// v0.9.614 — erteleme kipi (ddl_defer.go): şema yerindeyken boot
 	// DDL'i ÇALIŞTIRMAZ, biriktirir. HAM sql saklanır — adaptDDL
 	// yürütme anında uygulanır, böylece ertelenen ifade de normal

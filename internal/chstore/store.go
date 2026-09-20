@@ -4056,19 +4056,36 @@ func (s *Store) migrate(ctx context.Context) error {
 		return fmt.Errorf("alter table (op_group): %w", err)
 	}
 
-	// Probe whether op_group is genuinely present on the table the WRITE
-	// path inserts into. In distributed mode this select routes to
-	// spans_local, so it correctly returns false when the column never
-	// reached the shard (the skipped-ALTER case above, OR an external
-	// install that pre-dates the column). Mirrors the hasClusterCol probe
-	// shape at the bottom of migrate(); uses maybeCloseRows so a query
-	// error never nil-derefs Close() (v0.8.185 boot-panic discipline).
-	ogRows, ogErr := s.conn.Query(ctx,
-		`SELECT op_group FROM spans WHERE time >= now() - INTERVAL 1 SECOND LIMIT 1 SETTINGS max_execution_time = 3`)
-	maybeCloseRows(ogRows, ogErr)
-	s.hasOpGroupCol = ogErr == nil
+	// op_group VARLIK probe'u — v0.10.834 (inceleme, KRİTİK 1): METADATA'dan.
+	//
+	// Eskiden bu bir VERİ okumasıydı (`SELECT op_group FROM spans … LIMIT 1
+	// SETTINGS max_execution_time = 3`) ve `hasOpGroupCol = err == nil`
+	// deniyordu. Tek bir geçici hata — kod 159 zaman aşımı, 241 bellek, 202
+	// eşzamanlılık, readonly replika — "kolon YOK" anlamına geliyordu; o
+	// boot'ta aşağıdaki kurtarma dalı ateşleyip MV'yi düşürüyor,
+	// hasOpGroupCol=false olduğu için aynı boot'ta yeniden kurulmasını da
+	// engelliyordu → tarihçe geri gelmiyordu. Emsal: hasTraceEntrySvcCol
+	// (v0.10.111) aynı sebeple system.columns'a çevrilmişti.
+	//
+	// Hedef ŞEKLİ ÖLÇÜLMÜŞ depo adı: küme kipinde `spans_local`, AMA yalnız
+	// çıplak `spans` gerçekten Distributed sarmalayıcıysa. Uyuşmazlıkta
+	// (cluster_name dolu + tek düğüm şekli) `mvStorageName` var olmayan
+	// `spans_local`e sorar, "kolon yok" cevabı üretir ve kurtarmayı YANLIŞ
+	// yere ateşlerdi.
+	//
+	// HATA = "BİLMİYORUM": hasOpGroupCol false'a düşer (INSERT kolonu atlar,
+	// ingest güvende) ama ogProbeErr dolu kalır ve yıkıcı dal KOŞMAZ.
+	var ogProbeErr error
+	ogTarget, ogShapeErr := s.resolvedStorageName(ctx, "spans")
+	if ogShapeErr != nil {
+		ogProbeErr = ogShapeErr
+	} else {
+		present, err := s.columnPresentAllHosts(ctx, ogTarget, "op_group")
+		ogProbeErr = err
+		s.hasOpGroupCol = err == nil && present
+	}
 	if !s.hasOpGroupCol {
-		log.Printf("[chstore] `op_group` column not present on spans (%v) — INSERT omits it, operation_group_summary_5m MV disabled, normalized operations read falls back to raw operation names (expected on an external Distributed cluster with cluster_name unset)", ogErr)
+		log.Printf("[chstore] `op_group` column not present on %s (probe err: %v) — INSERT omits it, operation_group_summary_5m MV disabled, normalized operations read falls back to raw operation names (expected on an external Distributed cluster with cluster_name unset)", ogTarget, ogProbeErr)
 	}
 
 	// Boot self-heal (v0.8.187): op_group absent on spans_local while `spans` is
@@ -4124,20 +4141,18 @@ func (s *Store) migrate(ctx context.Context) error {
 	// spans land again. Idempotent; only fires when the column is truly
 	// missing so the healthy path never touches the MV. The creation loop
 	// below also skips recreating it while hasOpGroupCol is false.
-	if !s.hasOpGroupCol {
-		if err := s.execDDL(ctx, `DROP VIEW IF EXISTS operation_group_summary_5m`); err != nil {
-			// Non-fatal: log + continue. A failed DROP must not crash-loop
-			// the pod; the worst case is the MV trigger keeps failing, but
-			// that's the pre-existing broken state, not a regression from
-			// this guard. Most installs won't have the MV at all (DROP is a
-			// no-op via IF EXISTS).
-			log.Printf("[chstore] could not drop stale operation_group_summary_5m MV (op_group absent): %v", err)
-		} else {
-			// v0.9.633 — erteleme kipinde DROP KOŞMADI, kuyruğa alındı.
-			// "dropped" demek operatöre "ingest'i tıkayan MV düştü"
-			// dedirtiyordu; halbuki MV hâlâ orada.
-			log.Printf("[chstore] operation_group_summary_5m MV DROP %s (op_group absent — its insert trigger would block ingest)", ddlAppliedOrQueued(s.ddlDeferred()))
-		}
+	//
+	// v0.10.834 (inceleme, KRİTİK 1) — iki değişiklik:
+	//   • `ogProbeErr == nil` ŞARTI: "kolon yok" kararı GERÇEKTEN okunmuş
+	//     olmalı. Geçici bir probe hatası artık MV düşürmez.
+	//   • ham `DROP VIEW <çıplak ad>` yerine dropIngestBlockingMV: şekli ölçer
+	//     (resolvedStorageName) ve guard-safe dropCombinedMV'den geçer. Eski
+	//     ifade execDDL'den değiştirilmeden geçiyordu (adaptDDL DROP tanımaz),
+	//     yani `_local`'a çevrilmiyor, ON CLUSTER almıyor ve şekil kapısının
+	//     yanından bile geçmiyordu. execDDL artık o şekli yapısal olarak
+	//     reddediyor (bareDestructiveTarget).
+	if !s.hasOpGroupCol && ogProbeErr == nil {
+		s.dropIngestBlockingMV(ctx, "operation_group_summary_5m", "op_group")
 	}
 
 	// series_fingerprint — v0.8.328 cross-signal pivot: the persisted metric
@@ -4226,16 +4241,22 @@ func (s *Store) migrate(ctx context.Context) error {
 		return fmt.Errorf("alter table (db_stmt_hash): %w", err)
 	}
 
-	// Probe whether db_stmt_hash is genuinely resolvable on the table reads
-	// hit — in distributed mode this routes to spans_local, so it correctly
-	// reads false when the column never reached the shards (skipped ALTER
-	// above, or an operator-managed schema that pre-dates it). Mirrors the
-	// hasOpGroupCol / hasSeriesFpCol probes exactly, incl. the
-	// maybeCloseRows error-path discipline (v0.8.185 boot-panic).
-	dhRows, dhErr := s.conn.Query(ctx,
-		`SELECT db_stmt_hash FROM spans WHERE time >= now() - INTERVAL 1 SECOND LIMIT 1 SETTINGS max_execution_time = 3`)
-	maybeCloseRows(dhRows, dhErr)
-	s.hasDBStmtHashCol = dhErr == nil
+	// db_stmt_hash VARLIK probe'u — v0.10.834 (inceleme, KRİTİK 1): op_group
+	// ile AYNI sözleşme, aynı sebeple METADATA'dan (geçici bir okuma hatası
+	// "kolon yok" sayılıp aşağıdaki kurtarma dalını ateşliyordu). Hedef şekli
+	// ölçülmüş depo adı; HATA = "bilmiyorum" → bayrak false (okuma ham yola
+	// düşer) ama yıkıcı dal KOŞMAZ. db_stmt_hash MATERIALIZED bir kolon ve
+	// system.columns onu da listeler.
+	var dhProbeErr error
+	dhTarget, dhShapeErr := s.resolvedStorageName(ctx, "spans")
+	if dhShapeErr != nil {
+		dhProbeErr = dhShapeErr
+	} else {
+		present, err := s.columnPresentAllHosts(ctx, dhTarget, "db_stmt_hash")
+		dhProbeErr = err
+		s.hasDBStmtHashCol = err == nil && present
+	}
+	dhErr := dhProbeErr
 	// v0.10.331 — alert_rules.target_json probu: küme kipinde kolon ertelenmiş
 	// DDL ile bir sonraki boot'ta gelir; gelene dek hedefli kural kaydı 409,
 	// okumalar '' ile sürer (iki-boot sözleşmesi, CLAUDE.md §3).
@@ -4383,12 +4404,12 @@ func (s *Store) migrate(ctx context.Context) error {
 	// ingest. Idempotent; only fires when the column is truly missing, so
 	// the healthy path never touches the MV. The creation loop below also
 	// skips recreating it while hasDBStmtHashCol is false.
-	if !s.hasDBStmtHashCol {
-		if err := s.execDDL(ctx, `DROP VIEW IF EXISTS db_statement_summary_5m`); err != nil {
-			log.Printf("[chstore] could not drop stale db_statement_summary_5m MV (db_stmt_hash absent): %v", err)
-		} else {
-			log.Printf("[chstore] db_statement_summary_5m MV DROP %s (db_stmt_hash absent — its insert trigger would block ingest)", ddlAppliedOrQueued(s.ddlDeferred()))
-		}
+	//
+	// v0.10.834 (inceleme, KRİTİK 1) — op_group kardeşiyle AYNI iki değişiklik:
+	// karar gerçekten okunmuş olmalı (`dhProbeErr == nil`) ve düşürme şekli
+	// ölçen, guard-safe yoldan geçmeli (dropIngestBlockingMV).
+	if !s.hasDBStmtHashCol && dhProbeErr == nil {
+		s.dropIngestBlockingMV(ctx, "db_statement_summary_5m", "db_stmt_hash")
 	}
 
 	// Materialized views — katalog canonicalMVs() içinde (v0.10.564: sihirbaz
@@ -4497,13 +4518,26 @@ func (s *Store) migrate(ctx context.Context) error {
 	// `INSERT INTO service_summary_5m SELECT ... FROM spans WHERE
 	// time < <cutoff>` can restore them if the operator wants.
 	var hasApdex uint8
-	probeSQL := `
+	// v0.10.834 (inceleme, ÖNEMLİ 4) — probe hedefi STORAGE adı.
+	// Çıplak ad küme kipinde Distributed sarmalayıcıdır ve YOK olabilir
+	// (ensureDistributedWrappers migrate'ten SONRA koşar). Çıplak ada soran
+	// probe o pencerede 0 satır görüp "kolon eksik" der; dal ateşler ve
+	// dropCombinedMV CANLI `_local`i emniyet KAPALI düşürür — yamanın
+	// kapatmak için yazıldığı kaybın AYNISI, roller ters. Emsal: v0.9.1098
+	// bu sınıfı db_statement için kapatmıştı.
+	probeSQL := fmt.Sprintf(`
 		SELECT count() > 0
 		FROM system.columns
 		WHERE database = currentDatabase()
-		  AND table    = 'service_summary_5m'
-		  AND name     = 'apdex_satisfied_state'`
-	if err := s.conn.QueryRow(ctx, probeSQL).Scan(&hasApdex); err == nil && hasApdex == 0 {
+		  AND table    = '%s'
+		  AND name     = 'apdex_satisfied_state'`, s.mvStorageName("service_summary_5m"))
+	// v0.10.834 — AYNI SINIF, ikinci yarı: bu dal çıplak adı DROP etmiyor
+	// ama küme şeklini VARSAYIYOR. Tek düğüm şeklinde (cluster_name dolu,
+	// `_local` yok) dropCombinedMV("…_local") sessiz no-op olur ve
+	// execDDL gövdesi `FROM spans_local` olan ÖLÜ bir `_local` MV kurar —
+	// gerçek MV'nin yanında, kimsenin okumadığı. Kapı dalı tümden keser.
+	if err := s.conn.QueryRow(ctx, probeSQL).Scan(&hasApdex); err == nil && hasApdex == 0 &&
+		s.mvMigrationShapeOK(ctx, "service_summary_5m", effectApdex) {
 		log.Println("[chstore] upgrading service_summary_5m MV (adding apdex states) — past summary buckets will be dropped")
 		// In cluster mode the local table is named with a _local
 		// suffix, so we drop both flavours; DROP IF EXISTS makes
@@ -4534,41 +4568,26 @@ func (s *Store) migrate(ctx context.Context) error {
 	// sonraki birleşme döngüsünde (~5 dk) kapanır.
 	for _, m := range mvDimMigrations {
 		var hasCol uint8
-		// Probe ÇIPLAK adla: cluster modunda çıplak ad Distributed
-		// sarmalayıcı olsa bile kolon listesi yerel tabloyla aynıdır
-		// (v0.5.436'nın create_table_query probe'unu yakan tuzak
-		// system.columns'ta YOK).
+		// v0.10.834 (inceleme, ÖNEMLİ 4) — probe hedefi STORAGE adı.
+		// Eski yorum "çıplak adın kolon listesi yerel tabloyla aynıdır"
+		// diyordu; doğru ama EKSİK: sarmalayıcı HİÇ YOKSA (henüz kurulmadı)
+		// probe 0 satır görüp "kolon eksik" der, dal ateşler ve
+		// dropCombinedMV CANLI `_local`i emniyet KAPALI düşürür.
 		probe := fmt.Sprintf(`
 			SELECT count() > 0
 			FROM system.columns
 			WHERE database = currentDatabase()
 			  AND table    = '%s'
-			  AND name     = '%s'`, m.Table, m.Column)
+			  AND name     = '%s'`, s.mvStorageName(m.Table), m.Column)
 		if err := s.conn.QueryRow(ctx, probe).Scan(&hasCol); err == nil && mvDimNeedsMigration(hasCol != 0) {
-			log.Printf("[chstore] upgrading %s MV (adding %s dim) — past 5-min buckets will be dropped", m.Table, m.Dim)
-			dropTarget := m.Table
-			if s.clusterMode() {
-				dropTarget = m.Table + "_local"
-				// v0.10.563 — DAĞITIK GÜVENLİK. Cluster modunda çıplak
-				// ad bir Distributed SARMALAYICI ve o sarmalayıcı KENDİ
-				// kolon listesini taşır. adaptDDL sarmalayıcıyı
-				// `CREATE TABLE IF NOT EXISTS` ile yeniden kurar, yani
-				// eskisi ayakta kalırsa recreate NO-OP olur: `_local`
-				// yeni kolonu kazanır, sarmalayıcı KAZANMAZ ve çıplak
-				// addan gelen her `SELECT operation` CH kod 47
-				// ("Identifier … cannot be resolved") verir — v0.8.162
-				// sınıfı, prod'u iki kez kıran şekil. Sarmalayıcı
-				// metadata-only (0 bayt), drop'u veri kaybı DEĞİL.
-				if e := s.conn.Exec(ctx, "DROP TABLE IF EXISTS "+m.Table+s.onCluster()+" SYNC"); e != nil {
-					return fmt.Errorf("drop distributed wrapper of %s: %w", m.Table, e)
-				}
-			}
-			// v0.5.436 — SYNC; see apdex upgrade above.
-			if err := s.dropCombinedMV(ctx, dropTarget); err != nil {
-				return fmt.Errorf("drop old %s for upgrade: %w", m.Table, err)
-			}
-			if err := s.execDDL(ctx, findMV(m.Table)); err != nil {
-				return fmt.Errorf("recreate %s with %s: %w", m.Table, m.Column, err)
+			// v0.10.834 — göç dalının GÖVDESİ mv_shape_guard.go'da
+			// (upgradeMVDim). İki sebep: (1) dal çıplak adı DROP ediyor,
+			// yani "küme kipindeyim → çıplak ad sarmalayıcıdır" varsayımı
+			// yanlışsa VERİ KAYBI; kapı orada. (2) migrate() tek parça
+			// olduğu için dalın davranışı test edilemiyordu — ayrı metot
+			// sahte driver.Conn ile koşturulabiliyor.
+			if err := s.upgradeMVDim(ctx, m, findMV(m.Table)); err != nil {
+				return err
 			}
 		}
 	}
@@ -4599,7 +4618,9 @@ func (s *Store) migrate(ctx context.Context) error {
 			  AND table    = '%s'
 			  AND name     = 'slow_exemplar_state'`,
 			s.mvStorageName("db_statement_summary_5m"))
-		if err := s.conn.QueryRow(ctx, exProbe).Scan(&hasEx); err == nil && hasEx == 0 {
+		// v0.10.834 — şekil kapısı (aynı sınıf; gerekçe mv_shape_guard.go).
+		if err := s.conn.QueryRow(ctx, exProbe).Scan(&hasEx); err == nil && hasEx == 0 &&
+			s.mvMigrationShapeOK(ctx, "db_statement_summary_5m", effectDBStmtEx) {
 			log.Println("[chstore] upgrading db_statement_summary_5m MV (adding exemplar states) — past 5-min buckets will be dropped")
 			if err := s.dropCombinedMV(ctx, s.mvStorageName("db_statement_summary_5m")); err != nil {
 				return fmt.Errorf("drop old db_statement_summary_5m for upgrade: %w", err)
@@ -4628,7 +4649,12 @@ func (s *Store) migrate(ctx context.Context) error {
 				WHERE database = currentDatabase()
 				  AND table    = 'db_statement_summary_5m'
 				  AND name     = 'slow_exemplar_state'`).Scan(&wrapperHas)
-			if localHas == 1 && wrapperHas == 0 {
+			// v0.10.834 — şekil kapısı: aşağıdaki DROP çıplak ADI hedefler.
+			// localHas==1 şartı çoğu hâlde şekli zaten kanıtlar, ama YARIM
+			// TERFİ edilmiş kurulumda (`_local` VAR + çıplak ad hâlâ gerçek
+			// MV, v0.10.830 "kalıntı MV" sınıfı) o DROP iç tabloya kaskad
+			// ederdi. Kapı çıplak adın Distributed olduğunu şart koşar.
+			if localHas == 1 && wrapperHas == 0 && s.mvMigrationShapeOK(ctx, "db_statement_summary_5m", effectDBStmtDrift) {
 				log.Println("[chstore] db_statement_summary_5m wrapper kolon kayması — _local'da exemplar state var, wrapper'da yok; wrapper yenileniyor")
 				// v0.9.1099 — DOĞRUDAN s.conn.Exec, execDDL DEĞİL (canlı
 				// doğrulamanın yakaladığı 1098 regresyonu): bu iki ifade
@@ -4671,13 +4697,17 @@ func (s *Store) migrate(ctx context.Context) error {
 	// guard no-ops when the column is already present, so an install migrated
 	// in-place keeps its history.
 	var hasEntryRoute uint8
-	entryRouteProbe := `
+	// v0.10.834 (inceleme, ÖNEMLİ 4) — probe hedefi STORAGE adı; gerekçe
+	// apdex probe'unda.
+	entryRouteProbe := fmt.Sprintf(`
 		SELECT count() > 0
 		FROM system.columns
 		WHERE database = currentDatabase()
-		  AND table    = 'trace_summary_5m'
-		  AND name     = 'entry_route_state'`
-	if err := s.conn.QueryRow(ctx, entryRouteProbe).Scan(&hasEntryRoute); err == nil && hasEntryRoute == 0 {
+		  AND table    = '%s'
+		  AND name     = 'entry_route_state'`, s.mvStorageName("trace_summary_5m"))
+	// v0.10.834 — şekil kapısı (aynı sınıf; gerekçe mv_shape_guard.go).
+	if err := s.conn.QueryRow(ctx, entryRouteProbe).Scan(&hasEntryRoute); err == nil && hasEntryRoute == 0 &&
+		s.mvMigrationShapeOK(ctx, "trace_summary_5m", effectEntryRoute) {
 		log.Println("[chstore] upgrading trace_summary_5m MV (adding entry_route_state) — past 5-min buckets will be dropped")
 		dropTarget := "trace_summary_5m"
 		if s.clusterMode() {
@@ -4720,26 +4750,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		  AND name     = 'entry_service_state'`
 	}
 	if err := s.conn.QueryRow(ctx, entrySvcProbe).Scan(&hasEntrySvc); err == nil && hasEntrySvc == 0 {
-		log.Println("[chstore] upgrading trace_summary_5m MV (adding entry_service_state) — past 5-min buckets will be dropped; in-place recipe preserves them (see v0.8.52 note)")
-		dropTarget := "trace_summary_5m"
-		if s.clusterMode() {
-			dropTarget = "trace_summary_5m_local"
-		}
-		if err := s.dropCombinedMV(ctx, dropTarget); err != nil {
-			return fmt.Errorf("drop old trace_summary_5m for entry_service upgrade: %w", err)
-		}
-		if s.clusterMode() {
-			// v0.10.110 — purgeGuard ŞART (operatör, test ortamı):
-			// bu ad eski kurulumda İNCE wrapper değil TO'suz MV'nin
-			// kendisi olabilir; DROP inner'a cascade eder ve 50 GB
-			// max_table_size_to_drop sınırında code 359 ile boot
-			// sonsuz döngüye girer (211 GB inner, canlıda ölçüldü).
-			if err := s.conn.Exec(ctx, "DROP TABLE IF EXISTS trace_summary_5m"+s.onCluster()+" SYNC"+purgeGuard); err != nil {
-				return fmt.Errorf("drop stale trace_summary_5m wrapper: %w", err)
-			}
-		}
-		if err := s.execDDL(ctx, findMV("trace_summary_5m")); err != nil {
-			return fmt.Errorf("recreate trace_summary_5m with entry_service: %w", err)
+		// v0.10.834 — göç dalının GÖVDESİ mv_shape_guard.go'da
+		// (upgradeTraceSummaryEntryService). Bu dal sınıfın en
+		// tehlikelisiydi: küme kipinde probe `trace_summary_5m_local`e
+		// bakıyor, o tablo YOKSA (tek düğüm şekli) "kolon eksik" çıkıyor,
+		// dal ateşliyor ve çıplak `trace_summary_5m` purgeGuard ile
+		// DROP ediliyordu — 90 günlük trace tarihçesi, sessizce.
+		if err := s.upgradeTraceSummaryEntryService(ctx, findMV("trace_summary_5m")); err != nil {
+			return err
 		}
 	}
 
@@ -4788,7 +4806,12 @@ func (s *Store) migrate(ctx context.Context) error {
 			WHERE database = currentDatabase()
 			  AND name     = '%s'
 			  AND positionUTF8(create_table_query, 'server.address') > 0`, probeTarget)
-		if err := s.conn.QueryRow(ctx, probe).Scan(&hasNewFallback); err == nil && hasNewFallback == 0 {
+		// v0.10.834 — şekil kapısı (aynı sınıf; gerekçe mv_shape_guard.go).
+		// Bu dalda tetikleme çift yönlü: tek düğüm şeklinde `_local` YOK,
+		// probe 0 satır görür ve "eski fallback zinciri" sanıp HER BOOT
+		// ateşler.
+		if err := s.conn.QueryRow(ctx, probe).Scan(&hasNewFallback); err == nil && hasNewFallback == 0 &&
+			s.mvMigrationShapeOK(ctx, table, effectPeerChain) {
 			log.Printf("[chstore] upgrading %s MV (peer.service fallback chain) — past 5-min buckets will be dropped", table)
 			dropTarget := table
 			if s.clusterMode() {
@@ -4843,7 +4866,9 @@ func (s *Store) migrate(ctx context.Context) error {
 			  AND table    = '%s'
 			  AND name     = 'duration_q_state'
 			  AND positionUTF8(type, 'TDigest') > 0`, probeTarget)
-		if err := s.conn.QueryRow(ctx, probe).Scan(&isTDigest); err == nil && isTDigest == 0 {
+		// v0.10.834 — şekil kapısı (aynı sınıf; gerekçe mv_shape_guard.go).
+		if err := s.conn.QueryRow(ctx, probe).Scan(&isTDigest); err == nil && isTDigest == 0 &&
+			s.mvMigrationShapeOK(ctx, mv, effectTDigest) {
 			log.Printf("[chstore] upgrading %s MV (reservoir quantilesState → quantilesTDigestState, ~15x smaller) — past buckets dropped", mv)
 			dropTarget := s.mvStorageName(mv)
 			if err := s.dropCombinedMV(ctx, dropTarget); err != nil {

@@ -289,23 +289,44 @@ func TestMVDimMigrationWiring(t *testing.T) {
 	}
 }
 
-// mvDimLoopBody — store.go'daki `for _, m := range mvDimMigrations {`
-// döngüsünün GÖVDESİ, süslü parantez sayarak. Pencereyi kapatmak gate'in
-// kendisi kadar önemli (bkz. yukarıdaki not).
+// mvDimLoopBody — geçişin İKİ YARISI birlikte: store.go'daki
+// `for _, m := range mvDimMigrations {` döngüsünün gövdesi + o döngünün
+// çağırdığı `upgradeMVDim` gövdesi (mv_shape_guard.go). Pencereyi kapatmak
+// gate'in kendisi kadar önemli (bkz. yukarıdaki not).
+//
+// v0.10.834 — geçiş gövdesi migrate()'ten mv_shape_guard.go'ya taşındı
+// (çıplak-ad DROP'una şekil kapısı eklenebilsin ve dal sahte bir
+// driver.Conn ile davranışsal olarak test edilebilsin diye). Bu yardımcı
+// TEK dosyaya bakmaya devam etseydi gate sessizce körelirdi
+// ([[feedback-tested-but-unreachable]]), o yüzden önce BAĞLANTIYI pinler.
 func mvDimLoopBody(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile("store.go")
+	loop := braceBody(t, "store.go", "for _, m := range mvDimMigrations {",
+		"migrate() mvDimMigrations defterini DÖNMÜYOR — defter dekoratif kalır, hiçbir geçiş koşmaz")
+	// Bağlantı: döngü geçiş gövdesini GERÇEKTEN çağırmalı.
+	if !strings.Contains(loop, "s.upgradeMVDim(ctx, m, findMV(m.Table))") {
+		t.Fatal("döngü upgradeMVDim'i çağırmıyor — geçiş gövdesi ulaşılamaz, defter dekoratif kalır")
+	}
+	fn := braceBody(t, "mv_shape_guard.go", "func (s *Store) upgradeMVDim(",
+		"upgradeMVDim gövdesi mv_shape_guard.go'da yok — geçiş nereye taşındıysa bu gate oraya taşınmalı")
+	return loop + "\n" + fn
+}
+
+// braceBody — bir dosyada `head` ile başlayan bloğun gövdesini süslü
+// parantez sayarak keser. İki yarıyı aynı dar pencereyle ölçmek için.
+func braceBody(t *testing.T, file, head, missing string) string {
+	t.Helper()
+	b, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := string(b)
-	head := "for _, m := range mvDimMigrations {"
 	i := strings.Index(src, head)
 	if i < 0 {
-		t.Fatal("migrate() mvDimMigrations defterini DÖNMÜYOR — defter dekoratif kalır, hiçbir geçiş koşmaz")
+		t.Fatal(missing)
 	}
 	depth := 0
-	for j := i + len(head) - 1; j < len(src); j++ {
+	for j := i; j < len(src); j++ {
 		switch src[j] {
 		case '{':
 			depth++
@@ -316,7 +337,7 @@ func mvDimLoopBody(t *testing.T) string {
 			}
 		}
 	}
-	t.Fatal("mvDimMigrations döngüsünün kapanışı bulunamadı")
+	t.Fatalf("%s: bloğun kapanışı bulunamadı", head)
 	return ""
 }
 

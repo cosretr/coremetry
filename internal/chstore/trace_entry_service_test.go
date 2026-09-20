@@ -60,8 +60,25 @@ func TestEntryServiceContractSites(t *testing.T) {
 	// Dağıtık ikinci yarı: cluster upgrade'i BARE sarmalayıcıyı da
 	// düşürmeli — düşürmezse yeni kolonu okuyan her sorgu UNKNOWN_COLUMN
 	// ([[feedback-distributed-column-safety]]; bu sınıf prod'u iki kez kırdı).
-	if !strings.Contains(ddl, `"DROP TABLE IF EXISTS trace_summary_5m"+s.onCluster()`) {
+	//
+	// v0.10.834 — geçiş gövdesi mv_shape_guard.go'ya taşındı (çıplak-ad
+	// DROP'una şekil kapısı eklendi: tek düğüm şeklinde o ad VERİNİN
+	// KENDİSİ ve purgeGuard'lı DROP tarihçeyi yakıyordu). Kapı tek dosyaya
+	// bakmaya devam etseydi sessizce körelirdi, o yüzden önce BAĞLANTI
+	// store.go'da, sonra DROP taşındığı dosyada pinleniyor.
+	if !strings.Contains(ddl, `s.upgradeTraceSummaryEntryService(ctx, findMV("trace_summary_5m"))`) {
+		t.Error("entry_service geçişi migrate()'ten çağrılmıyor — gövde ulaşılamaz")
+	}
+	guard := read("mv_shape_guard.go")
+	if !strings.Contains(guard, `"DROP TABLE IF EXISTS trace_summary_5m"+s.onCluster()`) {
 		t.Error("entry_service migration'ı bayat Distributed sarmalayıcıyı düşürmüyor")
+	}
+	// …ve o DROP artık KANITLANMIŞ şekil olmadan koşmamalı (v0.10.834).
+	// Kapının VARLIĞI burada, DAVRANIŞI mv_shape_guard_test.go'da; kapsama
+	// iddiası (her yıkıcı dal şekli ölçer) AST ile sayılır
+	// (TestEveryDestructiveBranchIsShapeMeasured).
+	if !strings.Contains(guard, "if !s.mvMigrationShapeOK(ctx, mv, effectEntrySvc) {") {
+		t.Error("entry_service dalı şekil kapısını kaybetmiş — tek düğüm şeklinde çıplak ad purgeGuard'la DROP edilir, 90 günlük trace tarihçesi gider")
 	}
 	// Görüntü zinciri TEK yazımdan beş sitede: liste + facet key/extra +
 	// aggregate iç SELECT (repo.go 4) ve stub (1). Sayı iddiaya çevrildi
