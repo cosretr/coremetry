@@ -161,31 +161,48 @@ func TestEmbed_RecordsOneCallPerBatch(t *testing.T) {
 		}
 		return uint32(s)
 	}
-	wantChars := []uint32{sum(0, 64), sum(64, 128), sum(128, 130)}
-	for i, r := range recs {
-		if r.PromptChars != wantChars[i] {
-			t.Errorf("kayıt[%d].PromptChars = %d, beklenen %d (batch toplamı)", i, r.PromptChars, wantChars[i])
+	// v0.10.841 — PromptChars ÇOKLU KÜME olarak karşılaştırılır, SIRAYLA
+	// DEĞİL. Sözleşme "batch başına BİR kayıt"tır; "kayıtlar batch
+	// sırasında gelir" DEĞİL: recorder.go her satırı kendi goroutine'inde
+	// gönderiyor (`go func(r Recorder, rec CallRecord)`), yani üç kayıt
+	// yarışır ve varış sırası tanım gereği belirsizdir. Sıraya bağlı eski
+	// hâli CI'da v0.10.837 sürümünü düşürdü (kayıt[1] ve kayıt[2] yer
+	// değiştirmişti) ve yerelde 8 koşuda bir kez bile üretilemedi.
+	//
+	// Testin GÜCÜ korunuyor: üç toplam birbirinden farklı (metin uzunlukları
+	// indeksle artıyor), dolayısıyla "hepsi işin toplamı" ya da "chunk
+	// başına" gibi bir hata çoklu kümeyi yine tutturamaz.
+	wantChars := map[uint32]int{sum(0, 64): 1, sum(64, 128): 1, sum(128, 130): 1}
+	for _, r := range recs {
+		if wantChars[r.PromptChars] == 0 {
+			t.Errorf("PromptChars = %d beklenen batch toplamlarından biri değil (ya da iki kez geldi); beklenenler: %d, %d, %d",
+				r.PromptChars, sum(0, 64), sum(64, 128), sum(128, 130))
 		}
+		wantChars[r.PromptChars]--
+	}
+	// Alan iddiaları kayıt BAŞINA ve sıradan bağımsız; hata mesajı kaydı
+	// indeksle değil PromptChars'ıyla adlandırır (indeks anlamsız oldu).
+	for _, r := range recs {
 		if r.Surface != SurfaceEmbedding {
-			t.Errorf("kayıt[%d].Surface = %q, beklenen %q", i, r.Surface, SurfaceEmbedding)
+			t.Errorf("kayıt(%d).Surface = %q, beklenen %q", r.PromptChars, r.Surface, SurfaceEmbedding)
 		}
 		if r.Provider != "openai" {
-			t.Errorf("kayıt[%d].Provider = %q", i, r.Provider)
+			t.Errorf("kayıt(%d).Provider = %q", r.PromptChars, r.Provider)
 		}
 		if r.Model != "BAAI/bge-m3" {
-			t.Errorf("kayıt[%d].Model = %q", i, r.Model)
+			t.Errorf("kayıt(%d).Model = %q", r.PromptChars, r.Model)
 		}
 		if r.BaseURL != srv.URL+"/v1" {
-			t.Errorf("kayıt[%d].BaseURL = %q", i, r.BaseURL)
+			t.Errorf("kayıt(%d).BaseURL = %q", r.PromptChars, r.BaseURL)
 		}
 		if r.Status != "ok" {
-			t.Errorf("kayıt[%d].Status = %q", i, r.Status)
+			t.Errorf("kayıt(%d).Status = %q", r.PromptChars, r.Status)
 		}
 		if r.InputTokens != 11 {
-			t.Errorf("kayıt[%d].InputTokens = %d, beklenen 11 (usage.prompt_tokens)", i, r.InputTokens)
+			t.Errorf("kayıt(%d).InputTokens = %d, beklenen 11 (usage.prompt_tokens)", r.PromptChars, r.InputTokens)
 		}
 		if r.CreatedAt.IsZero() {
-			t.Errorf("kayıt[%d].CreatedAt boş", i)
+			t.Errorf("kayıt(%d).CreatedAt boş", r.PromptChars)
 		}
 	}
 }
