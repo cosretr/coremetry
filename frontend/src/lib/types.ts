@@ -3560,7 +3560,10 @@ export interface CHReplicaState {
   engine?: string;
 }
 export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; verdict: CHReplicaVerdict; hint: string; divergentPartition?: string; divergencePct?: number; missing?: CHReplicaMissingHost[] }
-export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict }
+// v0.10.824 — inner: ad `.inner_id.` önekli (combined MV'nin gizli hedefi);
+// view: çözülebildiyse MV'nin adı. Tablo düzeyi onarım merdiveni (ATTACH
+// PARTITION + EXCHANGE) burada UYGULANMAZ — EXCHANGE uuid'yi taşımaz.
+export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict; view?: string; inner?: boolean }
 export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[]; warnings?: string[] }
 /** v0.10.820 — Replika onarımı (Go chstore.ReplicaRepairPlan / ReplicaRepairResult). blocked dolu = Uygula reddedilir; mode plain = düz tablo (_fix + ATTACH + EXCHANGE), missing = tablo yok (eşten klon). */
 export interface CHReplicaRepairPartition { id: string; parts: number; rows: number; bytes: number }

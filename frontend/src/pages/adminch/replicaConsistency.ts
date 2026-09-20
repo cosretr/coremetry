@@ -80,8 +80,67 @@ export function shortZk(path: string): string {
   return parts.length > 3 ? '…/' + parts.slice(-3).join('/') : path;
 }
 
+const INNER_PREFIX = '.inner_id.';
+
+/** Ad gizli MV iç tablosu mu (sunucudaki isInnerTable ile aynı önek). */
+export const isInnerTable = (table: string): boolean => table.startsWith(INNER_PREFIX);
+
+/**
+ * v0.10.824 — MV iç tablosuna ÖZEL runbook (operatör, test kümesi
+ * 2026-09-20). 818'in `_fix` + ATTACH PARTITION + EXCHANGE TABLES merdiveni
+ * burada ONARMAZ: EXCHANGE tabloların uuid'sini TAŞIMAZ, MV DDL'i
+ * `TO INNER UUID '<uuid>'` ile eski tabloyu adresler ve oraya yazmaya devam
+ * eder. Onarım MV düzeyindedir — kanonik DDL ile o host'ta yeniden kur.
+ */
+function innerRunbook(cluster: string, db: string, table: string, sh: CHReplicaShard, view?: string): string {
+  const q = (s: string) => `\`${db}\`.\`${s}\``;
+  const uuid = table.slice(INNER_PREFIX.length);
+  const named = (view ?? '').trim();
+  const mv = named || '<MV adı>';
+  const head = named
+    ? [`-- MV: ${named} (combined MaterializedView'ın gizli hedefi)`]
+    : [
+        `-- MV: <MV adı: system.tables'ta TO INNER UUID ile bul>`,
+        `SELECT name FROM system.tables WHERE database = '${db}' AND create_table_query LIKE '%${uuid}%';`,
+      ];
+  const missing = (sh.missing ?? []).filter(m => !m.engine || !m.engine.startsWith('Replicated'));
+  const perHost = missing.length > 0
+    ? missing.flatMap(m => m.engine
+      ? [`-- ${m.host} · iç tablo DÜZ (engine=${m.engine}): MV'yi BU host'ta düşür ve kanonik DDL ile Replicated kur (aşağıdaki iki adım).`]
+      : [
+          `-- ${m.host} · iç tablo YOK: view o host'ta duruyor mu?`,
+          `SELECT name, engine FROM system.tables WHERE database = '${db}' AND name = '${mv}';  -- ${m.host} üzerinde (düğüm-yerel)`,
+          `--   VARSA → Sarkan MV onarımı kartı ("Yeniden kur"); YOKSA → MV'yi kanonik DDL ile o host'ta kur (aşağıda).`,
+        ])
+    : [
+        `-- Replikalar aynı shard'da FARKLI ZooKeeper yolunda:`,
+        ...(sh.replicas ?? []).map(r => `--   ${r.host}: ${r.zkPath}`),
+        `-- İç tablonun yolu MV DDL'inin {shard}/{replica}/{uuid} makrolarından türer: yolu düzeltmek = MV'yi o host'ta yeniden kurmak.`,
+        `SELECT hostName(), macro, substitution FROM clusterAllReplicas('${cluster}', system.macros) WHERE macro IN ('shard','replica') ORDER BY 1, 2;`,
+      ];
+  return [
+    `-- ${table} · shard ${sh.shard}: MV İÇ TABLOSU — tablo düzeyi onarım uygulanmaz`,
+    ...head,
+    ...perHost,
+    `-- MV duruyor ama iç tablosu yoksa: Admin → ClickHouse → Sarkan MV onarımı kartı aynı işi tek tıkla yapar.`,
+    `-- Kanonik yeniden kurulum (YALNIZ etkilenen host'ta, ON CLUSTER'sız):`,
+    `DROP TABLE ${q(mv)} SYNC;`,
+    `CREATE MATERIALIZED VIEW ${q(mv)} … AS SELECT …;  -- kanonik DDL (store.go / migrations), ON CLUSTER'sız`,
+    `-- Bu host'ta MV tarihçesi sıfırlanır; yalnız yeni yazımlarla dolar (geçmiş pencere için MV backfill gerekir). Diğer host'lara dokunma.`,
+    `-- Doğrula (view ve iç tablo her host'ta var mı):`,
+    `SELECT hostName(), name, engine FROM clusterAllReplicas('${cluster}', system.tables) WHERE database = '${db}' AND (name = '${mv}' OR name LIKE '${INNER_PREFIX}%') ORDER BY 1, 2;`,
+    `-- İç tabloya doğrudan dokunma: EXCHANGE uuid'yi taşımaz, MV eski tabloya yazmaya devam eder. DBA gözetiminde, önce test ortamında.`,
+  ].join('\n');
+}
+
 /** Kararın runbook'u; ok/single/unmapped için boş. */
-export function runbook(cluster: string, db: string, table: string, sh: CHReplicaShard): string {
+export function runbook(cluster: string, db: string, table: string, sh: CHReplicaShard, view?: string): string {
+  // v0.10.824 — yapısal kararda iç tablo KENDİ runbook'unu alır; ıraksama /
+  // readonly / oturum kararları aşağıda kalır (SYSTEM SYNC / RESTORE REPLICA
+  // iç tabloda da doğrudur, uuid'yi değiştirmez).
+  if (isInnerTable(table) && (sh.verdict === 'missing_replica' || sh.verdict === 'not_replicated' || sh.verdict === 'no_replication')) {
+    return innerRunbook(cluster, db, table, sh, view);
+  }
   const q = (s: string) => `\`${db}\`.\`${s}\``;
   const hosts = sh.replicas.map(r => r.host).join(', ');
   switch (sh.verdict) {

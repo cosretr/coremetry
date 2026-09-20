@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, repairModeLabel } from './replicaConsistency';
+import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, repairModeLabel, isInnerTable } from './replicaConsistency';
 import type { CHReplicaShard, CHReplicaState, CHReplicaVerdict } from '@/lib/types';
 
 const VERDICTS: CHReplicaVerdict[] = ['ok', 'single', 'unmapped', 'lagging', 'divergent', 'readonly', 'session_expired', 'missing_replica', 'not_replicated', 'no_replication'];
@@ -101,6 +101,55 @@ describe('replicaConsistency — saf', () => {
   });
 });
 
+describe('runbook — v0.10.824 MV iç tablosu', () => {
+  const peer = rep('ch-04', '/t/01/inner', { engine: 'ReplicatedAggregatingMergeTree', replicaName: 'ch-04' });
+  const INNER = '.inner_id.11111111-1111-1111-1111-111111111111';
+  it('iç tabloda tablo merdiveni YOK; MV düzeyi onarım ve Sarkan MV kartı', () => {
+    const rb = runbook('c1', 'db', INNER, shard('not_replicated', [peer], { missing: [{ host: 'ch-03', engine: 'AggregatingMergeTree' }] }), 'service_summary_5m');
+    expect(rb).toContain('MV İÇ TABLOSU');
+    expect(rb).toContain('Sarkan MV');
+    expect(rb).toContain('DROP TABLE `db`.`service_summary_5m` SYNC;');
+    expect(rb).toContain('CREATE MATERIALIZED VIEW `db`.`service_summary_5m`');
+    // MV geri doldurmaz: yeniden kurulan view'a YALNIZ yeni yazımlar akar.
+    expect(rb).toContain('yalnız yeni yazımlarla dolar (geçmiş pencere için MV backfill gerekir)');
+    expect(rb).not.toContain("ham spans'ten yeniden dolar");
+    // 818 merdiveni BURADA yanlış: EXCHANGE uuid'yi taşımaz (kapanış satırı bunu
+    // açıklar, ama çalıştırılacak tek bir takas/ATTACH ifadesi kalmaz).
+    expect(rb).not.toContain('_fix');
+    expect(rb).not.toContain('EXCHANGE TABLES');
+    expect(rb).not.toContain('ATTACH PARTITION');
+    expect(rb).not.toContain('RENAME');
+    expect(rb).toContain("İç tabloya doğrudan dokunma: EXCHANGE uuid'yi taşımaz, MV eski tabloya yazmaya devam eder. DBA gözetiminde, önce test ortamında.");
+  });
+  it('view bilinmiyorsa başlıkta yer tutucu + arama SQL\'i; biliniyorsa arama yok', () => {
+    const missing = shard('missing_replica', [peer], { missing: [{ host: 'ch-03' }] });
+    const unknown = runbook('c1', 'db', INNER, missing);
+    expect(unknown).toContain("<MV adı: system.tables'ta TO INNER UUID ile bul>");
+    expect(unknown).toContain("create_table_query LIKE '%11111111-1111-1111-1111-111111111111%'");
+    expect(unknown).toContain('ch-03 · iç tablo YOK');
+    const known = runbook('c1', 'db', INNER, missing, 'db_summary_5m');
+    expect(known).toContain('-- MV: db_summary_5m');
+    expect(known).not.toContain('create_table_query LIKE');
+    expect(known).toContain('DROP TABLE `db`.`db_summary_5m` SYNC;');
+  });
+  it('replikasyon yok: eksik host yerine ZK yolları ve makro sorgusu; yine merdiven yok', () => {
+    const nr = runbook('c1', 'db', INNER, shard('no_replication', [rep('ch-01', '/t/a/x'), rep('ch-02', '/t/b/x')]), 'spanmetrics_1m');
+    expect(nr).toContain('FARKLI ZooKeeper yolunda');
+    expect(nr).toContain('--   ch-01: /t/a/x');
+    expect(nr).toContain("clusterAllReplicas('c1', system.macros)");
+    expect(nr).not.toContain('_fix');
+    expect(nr).not.toContain('EXCHANGE TABLES');
+  });
+  it('yapısal olmayan kararlarda iç tablo genel runbook\'ta kalır (SYNC/RESTORE uuid değiştirmez)', () => {
+    const d = runbook('c1', 'db', INNER, shard('divergent', [rep('ch-01', '/p', { totalRows: 100 }), rep('ch-02', '/p', { totalRows: 40 })], { divergentPartition: 'p', divergencePct: 60 }));
+    expect(d).toContain('SYSTEM SYNC REPLICA');
+    expect(d).not.toContain('MV İÇ TABLOSU');
+    expect(runbook('c1', 'db', INNER, shard('ok', [peer]))).toBe('');
+    expect(isInnerTable(INNER)).toBe(true);
+    expect(isInnerTable('spans_local')).toBe(false);
+  });
+});
+
 describe('canRepair / repairModeLabel — v0.10.820 Replika onarımı', () => {
   const peer = rep('h2', '/t/02/t', { engine: 'ReplicatedReplacingMergeTree', replicaName: 'node2' });
   it('yalnız eksik/replike-olmayan kararda, düz/yok host için, sağlam Replicated eş varken', () => {
@@ -143,5 +192,14 @@ describe('replicaConsistency — kablolama pini', () => {
     const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
     expect(types).toContain('export interface CHReplicaRepairPlan');
     expect(types).toContain('export interface CHReplicaRepairResult');
+  });
+  // v0.10.824 — iç tablo satırı hangi MV'nin hedefi olduğunu söyler ve runbook
+  // view adını ALIR (almazsa DROP/CREATE satırları yer tutucuyla kalır).
+  it('iç tablo satırı MV adını gösterir ve runbook view alır', () => {
+    expect(page).toContain('MV iç tablosu · ');
+    expect(page).toContain('view çözülemedi');
+    expect(page).toContain('t.table, sh, t.view)');
+    const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
+    expect(types).toContain('view?: string; inner?: boolean');
   });
 });

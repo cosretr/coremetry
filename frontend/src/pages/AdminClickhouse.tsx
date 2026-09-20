@@ -2030,10 +2030,19 @@ function ReplicaConsistencyPanel() {
           <thead><tr><th>Tablo</th><th>Shard</th><th>Replikalar</th><th>Karar</th></tr></thead>
           <tbody>
             {tables.flatMap(t => t.shards.map(sh => {
-              const rb = runbook(data.cluster, data.database, t.table, sh);
+              const rb = runbook(data.cluster, data.database, t.table, sh, t.view);
               return (
                 <tr key={`${t.table}/${sh.shard}`}>
-                  <td className="mono">{t.table}</td>
+                  <td className="mono">
+                    {t.table}
+                    {/* v0.10.824 — `.inner_id.<uuid>` satırı okunmaz bir uuid'dir; hangi MV'nin
+                        gizli hedefi olduğunu söylemeden operatör tablo merdivenine gider. */}
+                    {t.inner && (
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }} title="Combined MaterializedView'ın gizli hedef tablosu: onarım MV düzeyinde yapılır (EXCHANGE uuid'yi taşımaz)">
+                        MV iç tablosu · {t.view ? `view: ${t.view}` : 'view çözülemedi'}
+                      </div>
+                    )}
+                  </td>
                   <td className="mono">{sh.shard < 0 ? '—' : sh.shard}</td>
                   <td className="mono" style={{ fontSize: 11 }}>
                     {(sh.replicas ?? []).map(r => (

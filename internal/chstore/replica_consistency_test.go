@@ -268,3 +268,124 @@ func TestShardRefFor(t *testing.T) {
 		})
 	}
 }
+
+// v0.10.824 — `.inner_id.<uuid>` → view eşlemesi (operatör, test kümesi
+// 2026-09-20: kart iç tabloya `_fix` + ATTACH PARTITION + EXCHANGE
+// merdivenini bastı). Sözleşme: Atomic `TO INNER UUID` biçimi DE eski
+// biçim (iç uuid = view uuid) DE çözülür; `TO <tablo>` MV'sinin gizli iç
+// tablosu YOKTUR; MV olmayan satırlar eşlemeye girmez; MV satırı hiç
+// gelmemişse iç tablo çözülmez (View boş kalır, uydurulmaz).
+func TestInnerTableViews(t *testing.T) {
+	const (
+		viewUUID  = "11111111-1111-1111-1111-111111111111"
+		innerUUID = "22222222-2222-2222-2222-222222222222"
+		legacy    = "33333333-3333-3333-3333-333333333333"
+		toTable   = "44444444-4444-4444-4444-444444444444"
+	)
+	rows := []mvTableRow{
+		// Atomic combined MV: iç tablo AYRI uuid taşır (v0.10.780 dersi).
+		{Host: "ch-01", Name: "service_summary_5m", Engine: "MaterializedView", UUID: viewUUID,
+			CreateQuery: "CREATE MATERIALIZED VIEW db.service_summary_5m TO INNER UUID '" + innerUUID + "' (`time_bucket` DateTime) AS SELECT 1"},
+		// Eski biçim: DDL'de TO yok → iç uuid = view uuid.
+		{Host: "ch-01", Name: "operation_summary_5m", Engine: "MaterializedView", UUID: legacy,
+			CreateQuery: "CREATE MATERIALIZED VIEW db.operation_summary_5m (`time_bucket` DateTime) ENGINE = AggregatingMergeTree AS SELECT 1"},
+		// TO <tablo> MV: hedefi gerçek tablo, gizli iç tablo yok.
+		{Host: "ch-01", Name: "span_links_reverse_mv", Engine: "MaterializedView", UUID: toTable,
+			CreateQuery: "CREATE MATERIALIZED VIEW db.span_links_reverse_mv TO db.span_links_reverse AS SELECT 1"},
+		// MV olmayan satırlar (iç tablonun kendisi dahil) eşlemeye girmez.
+		{Host: "ch-01", Name: ".inner_id." + innerUUID, Engine: "AggregatingMergeTree", UUID: innerUUID},
+		{Host: "ch-02", Name: "spans_local", Engine: "ReplicatedMergeTree", UUID: "55555555-5555-5555-5555-555555555555"},
+		// uuid'siz MV (Ordinary DB) çözülemez.
+		{Host: "ch-02", Name: "legacy_mv", Engine: "MaterializedView", UUID: zeroUUID, CreateQuery: "CREATE MATERIALIZED VIEW db.legacy_mv AS SELECT 1"},
+	}
+	got := innerTableViews(rows)
+	want := map[string]string{
+		".inner_id." + innerUUID: "service_summary_5m",
+		".inner_id." + legacy:    "operation_summary_5m",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("eşleme %d girdi: %v", len(got), got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s → %q, istenen %q", k, got[k], v)
+		}
+	}
+	if _, ok := got[".inner_id."+toTable]; ok {
+		t.Error("TO <tablo> MV'si iç tablo eşlemesine girmemeli")
+	}
+	// Çözülemeyen iç tablo: MV satırı hiç gelmediyse (o host MV'yi kaybetmiş)
+	// eşlemede yok — çağıran View'ı boş bırakır.
+	if v := got[".inner_id.99999999-9999-9999-9999-999999999999"]; v != "" {
+		t.Errorf("çözülemeyen iç tablo uydurulmamalı: %q", v)
+	}
+	if len(innerTableViews(nil)) != 0 {
+		t.Error("boş girdi → boş eşleme")
+	}
+	if !isInnerTable(".inner_id.abc") || isInnerTable("spans_local") || isInnerTable("inner_id.abc") {
+		t.Error("isInnerTable öneki")
+	}
+}
+
+// v0.10.824 — iç tablo ipucu YALNIZ yapısal üç kararda eklenir; ıraksama /
+// readonly / oturum kararlarında SYSTEM SYNC/RESTORE doğru kalır (uuid
+// değişmez), yanlış olan tablo takasıdır.
+// Taban ipucu DEĞİŞTİRİLİR, eklenmez: 818'in "ATTACH edip değiştir" reçetesi
+// MV uyarısının yanında dursaydı tek cümle kendiyle çelişirdi.
+func TestInnerShardHint(t *testing.T) {
+	// Gerçek taban: shardCoverage'ın not_replicated ipucu (tablo merdivenini anlatır).
+	_, _, base, _ := shardCoverage(".inner_id.abc", []string{"ch-03", "ch-04"},
+		[]ReplicaState{rep("ch-04", "/t/01/x", 1, nil)}, map[string]string{"ch-03": "AggregatingMergeTree", "ch-04": "ReplicatedAggregatingMergeTree"})
+	if !strings.Contains(base, "ATTACH edip") {
+		t.Fatalf("taban artık tablo merdivenini anlatmıyor, test anlamsızlaştı: %q", base)
+	}
+	for _, v := range []string{ReplicaMissing, ReplicaNotReplicated, ReplicaNoReplication} {
+		got := innerShardHint(base, true, v)
+		if got != innerTableHint {
+			t.Errorf("%s: %q", v, got)
+		}
+		if strings.Contains(got, "ATTACH edip") {
+			t.Errorf("%s: çelişen tablo reçetesi kaldı: %q", v, got)
+		}
+		if got := innerShardHint("", true, v); got != innerTableHint {
+			t.Errorf("%s boş taban: %q", v, got)
+		}
+	}
+	for _, v := range []string{ReplicaOK, ReplicaSingle, ReplicaUnmapped, ReplicaLagging, ReplicaDivergent, ReplicaReadOnly, ReplicaSessionExpired} {
+		if got := innerShardHint(base, true, v); got != base {
+			t.Errorf("%s ipucuna dokunmamalı: %q", v, got)
+		}
+	}
+	if got := innerShardHint(base, false, ReplicaNotReplicated); got != base {
+		t.Errorf("iç tablo değil: %q", got)
+	}
+}
+
+// v0.10.824 — kaynak pini: motor envanteri MV kimliğini AYNI okumada taşır
+// (ikinci küme geneli sorgu açılmadı) ve yapısal kararda iç tablo ipucu
+// uygulanır. Metin kaybolursa kart yine EXCHANGE merdivenini basar.
+func TestReplicaInventoryCarriesMVIdentity(t *testing.T) {
+	src, err := os.ReadFile("replica_consistency.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	for _, want := range []string{
+		"create_table_query",                        // MV DDL'i envanterde
+		"engine = 'MaterializedView'",               // MV satırları da çekilir
+		"innerTableViews(mvRows)",                   // eşleme kuruluyor
+		"tbl.Inner, tbl.View = true, innerViews[t]", // satıra bağlanıyor
+		"rsh.Hint = innerShardHint(",                // ipucu uygulanıyor
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("eksik: %s", want)
+		}
+	}
+	// İpucu metni TEK sabitte; ikinci bir gövde sapardı.
+	if n := strings.Count(s, "MV iç tablosu: ATTACH/EXCHANGE uygulanmaz"); n != 1 {
+		t.Errorf("ipucu metni %d yerde (tek sabit olmalı)", n)
+	}
+	if !strings.Contains(s, "innerUUIDFor(") {
+		t.Error("iç uuid çözümü dangling_mv_admin ile aynı gövdeden gelmeli (innerUUIDFor)")
+	}
+}

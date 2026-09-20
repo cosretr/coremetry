@@ -83,6 +83,13 @@ type ReplicaTable struct {
 	Table   string         `json:"table"`
 	Shards  []ReplicaShard `json:"shards"`
 	Verdict string         `json:"verdict"`
+	// View/Inner — v0.10.824: `.inner_id.<uuid>` satırı bir combined
+	// MaterializedView'ın GİZLİ hedefidir; tablo düzeyi onarım (ATTACH
+	// PARTITION + EXCHANGE TABLES) burada YANLIŞTIR — EXCHANGE uuid'yi
+	// taşımaz, MV `TO INNER UUID '<uuid>'` ile eski tabloya yazmaya devam
+	// eder. View çözülemezse (MV satırı gelmedi) View boş kalır.
+	View  string `json:"view,omitempty"`
+	Inner bool   `json:"inner,omitempty"`
 }
 
 // ReplicaConsistencyReport — kartın tamamı.
@@ -293,6 +300,65 @@ func mergeCoverage(base, baseHint, cv, chint string) (string, string) {
 		return cv, chint
 	}
 	return base, baseHint
+}
+
+// innerTablePrefix / innerTableHint — v0.10.824 (operatör, test kümesi
+// ekran görüntüsü 2026-09-20): shard 1'de bir `.inner_id.<uuid>` satırı bir
+// host'ta "Replicated değil (AggregatingMergeTree)", ötekinde "tablo yok"
+// çıktı ve kart 818'in `_fix` + ATTACH PARTITION + EXCHANGE TABLES
+// merdivenini bastı. Bu merdiven MV iç tablosunda YANLIŞTIR: EXCHANGE
+// tabloların uuid'sini TAŞIMAZ, MV DDL'i `TO INNER UUID '<uuid>'` ile eski
+// (düz) tabloyu adresler ve oraya yazmaya devam eder — operatör "onardım"
+// sanır, kaskad eski tabloya akar. Onarım MV düzeyindedir (820 onarım
+// sihirbazı `.inner*` tablolarını zaten reddediyordu; eksik olan metindi).
+const (
+	innerTablePrefix = ".inner_id."
+	innerTableHint   = "MV iç tablosu: ATTACH/EXCHANGE uygulanmaz — MV'yi kanonik DDL ile o host'ta (yeniden) kur; Sarkan MV onarımı kartı"
+)
+
+// isInnerTable — SAF: ad gizli MV iç tablosu mu.
+func isInnerTable(name string) bool { return strings.HasPrefix(name, innerTablePrefix) }
+
+// innerTableViews — SAF (v0.10.824): system.tables envanterindeki MV
+// satırlarından `.inner_id.<uuid>` → view adı eşlemesi. İç tablonun uuid'si
+// DDL'deki `TO INNER UUID` (Atomic) ya da view'ın kendi uuid'si (eski
+// biçim) — innerUUIDFor ile, dangling_mv_admin ile TEK gövde. `TO <tablo>`
+// biçimli MV'nin gizli iç tablosu yoktur, eşlemeye girmez.
+func innerTableViews(rows []mvTableRow) map[string]string {
+	out := map[string]string{}
+	for _, r := range rows {
+		if r.Engine != "MaterializedView" || r.UUID == "" || r.UUID == zeroUUID {
+			continue
+		}
+		if !reInnerUUID.MatchString(r.CreateQuery) && reMVWithTO.MatchString(r.CreateQuery) {
+			continue // TO <tablo>: hedefi gerçek tablo, gizli iç tablo yok
+		}
+		iu := innerUUIDFor(r.CreateQuery, r.UUID)
+		if iu == "" || iu == zeroUUID {
+			continue
+		}
+		out[innerTablePrefix+strings.ToLower(iu)] = r.Name
+	}
+	return out
+}
+
+// innerShardHint — SAF (v0.10.824): iç tablo satırında YAPISAL kararların
+// ipucunu MV uyarısıyla DEĞİŞTİRİR (eklemez). Ekleme, taban ipucunun
+// reçetesiyle ("… ATTACH edip değiştir — runbook.") tek cümlede çelişirdi;
+// operatör ilk reçeteyi okur. Etkilenen host listesi kaybolmaz: kart onu
+// Replikalar kolonunda sh.missing satırlarında zaten gösterir.
+// Iraksama/readonly/oturum kararlarına dokunmaz: SYSTEM SYNC / RESTORE
+// REPLICA iç tabloda da doğrudur (uuid değişmez), yanlış olan tablo
+// TAKASIDIR.
+func innerShardHint(base string, inner bool, verdict string) string {
+	if !inner {
+		return base
+	}
+	switch verdict {
+	case ReplicaMissing, ReplicaNotReplicated, ReplicaNoReplication:
+		return innerTableHint
+	}
+	return base
 }
 
 // blindHosts — SAF (v0.10.818): is_local sayımı 0 olan host'lar (zero) ve
@@ -567,30 +633,41 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 	}
 
 	// v0.10.818 — motor envanteri: hangi host'ta tablo var, Replicated mı.
+	// v0.10.824 — AYNI okuma MV kimliğini de taşır (uuid + DDL öneki): iç
+	// tablo → view eşlemesi buradan çıkar, ikinci bir küme geneli okuma
+	// açılmaz. create_table_query yalnız MV satırlarında taşınır (ham tablo
+	// DDL'i kilobaytlarca ve işe yaramaz).
 	engineOf := map[string]map[string]string{} // table → host → engine
+	var mvRows []mvTableRow                    // v0.10.824 — yalnız engine = 'MaterializedView'
 	trows, err := s.conn.Query(ctx, fmt.Sprintf(`
-		SELECT hostName(), name, engine
+		SELECT hostName(), name, engine, toString(uuid),
+		       if(engine = 'MaterializedView', substring(create_table_query, 1, 400), '')
 		FROM clusterAllReplicas('%s', system.tables)
-		WHERE database = ? AND engine LIKE '%%MergeTree%%'
+		WHERE database = ? AND (engine LIKE '%%MergeTree%%' OR engine = 'MaterializedView')
 		SETTINGS max_execution_time = 15, skip_unavailable_shards = 1`, cluster), out.Database)
 	if err != nil {
 		return nil, fmt.Errorf("system.tables: %w", err)
 	}
 	for trows.Next() {
-		var host, table, engine string
-		if err := trows.Scan(&host, &table, &engine); err != nil {
+		var r mvTableRow
+		if err := trows.Scan(&r.Host, &r.Name, &r.Engine, &r.UUID, &r.CreateQuery); err != nil {
 			trows.Close()
 			return nil, err
 		}
-		if engineOf[table] == nil {
-			engineOf[table] = map[string]string{}
+		if r.Engine == "MaterializedView" {
+			mvRows = append(mvRows, r) // MV NESNESİ tablo satırı değil: kartta listelenmez
+			continue
 		}
-		engineOf[table][host] = engine
+		if engineOf[r.Name] == nil {
+			engineOf[r.Name] = map[string]string{}
+		}
+		engineOf[r.Name][r.Host] = r.Engine
 	}
 	trows.Close()
 	if err := trows.Err(); err != nil {
 		return nil, fmt.Errorf("system.tables: %w", err) // yarım envanter = yanlış "tablo yok"
 	}
+	innerViews := innerTableViews(mvRows)
 
 	// Replikalar — bu veritabanının TÜM Replicated tabloları.
 	rrows, err := s.conn.Query(ctx, fmt.Sprintf(`
@@ -704,6 +781,11 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		}
 		sort.Ints(shards)
 		tbl := ReplicaTable{Table: t}
+		// v0.10.824 — iç tablo satırı: FE runbook'u tablo merdivenine değil MV
+		// onarımına yollasın diye view adı (çözülebildiyse) satırda taşınır.
+		if isInnerTable(t) {
+			tbl.Inner, tbl.View = true, innerViews[t]
+		}
 		var verdicts []string
 		for _, sh := range shards {
 			rs := byShard[sh]
@@ -727,6 +809,8 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 				if len(unseen) > 0 {
 					out.Notes = append(out.Notes, fmt.Sprintf("%s · shard %d: %s Replicated ama system.replicas satırı yok (iki okuma arasında yaratıldı ya da o host replicas okumasında atlandı) — yeniden ölç; sürüyorsa SYSTEM RESTART REPLICA.", t, sh, strings.Join(unseen, ", ")))
 				}
+				// v0.10.824 — yapısal kararda iç tabloya tablo merdiveni yazılmaz.
+				rsh.Hint = innerShardHint(rsh.Hint, tbl.Inner, rsh.Verdict)
 			}
 			verdicts = append(verdicts, rsh.Verdict)
 			tbl.Shards = append(tbl.Shards, rsh)
