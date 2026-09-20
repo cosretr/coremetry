@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { sparkMaxSlotsForWidth, SPARK_DEFAULT_WIDTH } from '@/lib/sparkline';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TrendDelta } from '@/components/TrendDelta';
@@ -26,6 +26,7 @@ import { encodeRange, encodeFilters, buildQuery } from '@/lib/urlState';
 import { servicesFilterSearch } from '@/lib/servicesFilterParams';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useUrlEnv } from '@/lib/useUrlEnv';
+import { useUrlPage } from '@/lib/useUrlPage';
 import { getItem, setItem } from '@/lib/storage';
 import { getPinnedServices, isServicePinned, toggleServicePin } from '@/lib/recentServices';
 import type { Service, SparklineBucket, TimeRange, SpanAgg } from '@/lib/types';
@@ -119,23 +120,21 @@ export default function ServicesPage() {
   // sayfa üçlünün eksik ayağıydı.
   //
   // `prev`ten DEĞİL `window.location.search`ten tohumlanıyor — bu
-  // sayfanın kendi paramları (cluster/namespace, satır 127/135) ham
-  // okumayla geliyor ve `useUrlRange` de aynı gerekçeyi taşıyor:
-  // router'ın `prev`i ham yazımlardan sonra BAYAT bir alt küme olabilir
-  // ve yabancı paramları sessizce silerdi.
+  // sayfanın kendi paramları (cluster/namespace) ham okumayla geliyor ve
+  // `useUrlRange` de aynı gerekçeyi taşıyor: router'ın `prev`i ham
+  // yazımlardan sonra BAYAT bir alt küme olabilir ve yabancı paramları
+  // sessizce silerdi.
+  //
+  // v0.10.827 (operatör-bildirimli: "alttaki Next/Last hiçbir şey
+  // yapmıyor") — okuma+yazma `useUrlPage`e taşındı. Buradaki satır içi
+  // sürüm `useCallback(…, [setSearchParams])` idi ve react-router 6.30
+  // o setter'ın kimliğini HER URL yazımında değiştiriyor; aşağıdaki
+  // sayfa-sıfırlama efekti `setPage`i deps'inde taşıdığı için (v0.9.1111)
+  // tıkın KENDİ yazımı efekti yeniden tetikliyor ve `setPage(0)` sayfayı
+  // geri alıyordu. Hook'un setter'ı kimliğini korur; gerekçe + ölçüm:
+  // lib/useUrlPage.ts + lib/useUrlPage.test.tsx.
   const [searchParams, setSearchParams] = useSearchParams();
-  const page = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10) || 0);
-  const setPage = useCallback((next: number | ((p: number) => number)) => {
-    setSearchParams(() => {
-      const p = new URLSearchParams(window.location.search);
-      const cur = Math.max(0, parseInt(p.get('page') ?? '0', 10) || 0);
-      const v = typeof next === 'function' ? next(cur) : next;
-      // Fonksiyon biçimi URL'deki DEĞERDEN hesaplıyor, closure'daki
-      // `page`ten değil: iki hızlı "Next" tıkı arasında closure bayatlar.
-      if (v > 0) p.set('page', String(v)); else p.delete('page');
-      return p;
-    }, { replace: true });
-  }, [setSearchParams]);
+  const [page, setPage] = useUrlPage();
   const [hasMore, setHasMore] = useState(false);
   // v0.7.44 — distinct-service total (opt-in ?withTotal=1) drives the First/Last
   // pager. null when unknown (e.g. cluster filter → raw path returns no total).

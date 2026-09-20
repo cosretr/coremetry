@@ -100,13 +100,27 @@ describe('Pager benimseme', () => {
   // yazılıyordu — hayır, tam tersi de olabilirdi. Tek yönlü okuma bu
   // depoda tekrar eden bir hata sınıfı (v0.8.256/265/267), o yüzden
   // İKİ yarı da ayrı ayrı iddia ediliyor.
+  // v0.10.827 — İKİNCİ YAZILIŞ: paylaşılan `useUrlPage` hook'u. Kapı yalnız
+  // satır içi `get('page')` yazılışını tanısaydı, hook'u benimseyen bir sayfa
+  // (Services, v0.10.827) sözleşmeyi SÜRDÜRDÜĞÜ hâlde kırmızı yanardı — ve
+  // bu, "kapı tek yazılışa bağlı" sınıfının ta kendisi. Delegasyon boşluk
+  // açmıyor: hook'un KENDİSİ aynı iki yarıyla ayrıca iddia ediliyor.
+  const HOOK = 'lib/useUrlPage.ts';
+  const readsPage = (src: string) => /get\('page'\)/.test(src) || /useUrlPage\(/.test(src);
+  const writesPage = (src: string) => /set\('page'|\['page',/.test(src) || /useUrlPage\(/.test(src);
+
   it('offset yüzeylerinde sayfa URL\'de — HEM okunuyor HEM yazılıyor', () => {
     for (const f of OFFSET) {
       const src = read(f);
-      expect(src, `${f}: ?page= OKUNMUYOR`).toMatch(/get\('page'\)/);
-      expect(src, `${f}: ?page= YAZILMIYOR (tek yönlü okuma)`)
-        .toMatch(/set\('page'|\['page',/);
+      expect(readsPage(src), `${f}: ?page= OKUNMUYOR`).toBe(true);
+      expect(writesPage(src), `${f}: ?page= YAZILMIYOR (tek yönlü okuma)`).toBe(true);
     }
+  });
+
+  it('paylaşılan useUrlPage hook\'u iki yarıyı da yapıyor', () => {
+    const src = read(HOOK);
+    expect(src, 'useUrlPage: ?page= OKUNMUYOR').toMatch(/get\(param\)/);
+    expect(src, 'useUrlPage: ?page= YAZILMIYOR').toMatch(/set\(param,/);
   });
 
   it('cursor yüzeyleri imleci URL\'e YAZMIYOR — bilinçli', () => {

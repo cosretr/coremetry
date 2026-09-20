@@ -1,3 +1,5 @@
+import type { SortColumn, SortOrder } from './types';
+
 // v0.9.645 — trace listesinin sayfalamayla ULAŞABİLDİĞİ tavan.
 //
 // MV hızlı yolu aşama-1'de topladığı trace kimliklerini aşama-2'ye bir
@@ -34,4 +36,36 @@ export function lastReachablePage(
   if (total <= 0) return undefined;
   if (total > TRACE_STAGE2_MAX_IDS) return undefined;
   return Math.max(0, Math.ceil(total / pageSize) - 1);
+}
+
+// ── "Listenin sonu" = ters sıranın ilk sayfası ──────────────────────────────
+//
+// reverseEndSort — v0.10.827 (operatör-bildirimli, 2026-09-20).
+//
+// SEMPTOM: /traces'te "Last ⇥"e basınca sayfa göstergesi hâlâ "1" diyor,
+// operatör hangi sayfada olduğunu anlayamıyor.
+//
+// KÖK NEDEN: tık ile GÖSTERGE farklı kaynaklar okuyordu. Tık
+// `dt.setSort(...)` yazıyordu; göstergenin etiketi (`pageLabel`, v0.10.727)
+// ise sayfanın `order` state'ini okuyor. Aradaki TEK köprü `dt.sort`u sunucu
+// sırasına çeviren efektti ve o efektin iki sessiz erken-dönüşü var
+// (`if (!id) return;` / `if (!server) return;`). Tık `dt.sort.id ?? 'startTime'`
+// yazıyordu — 'startTime' bir KOLON KİMLİĞİ DEĞİL (kolon `time`), SortColumn
+// birleşiminde de yok, SERVER_SORTABLE'da da. O dal seçildiğinde sıra terse
+// DÖNMÜYOR, `order` DEĞİŞMİYOR, etiket "Page" kalıyor ve gösterge 1'de
+// duruyor — v0.10.727'nin düzelttiği yanılgı geri geliyor. Üstelik yanlış
+// kimlik `?s_traces-list=startTime.asc` olarak URL'e yazıldığı için hâl
+// YAPIŞKAN: sonraki her "Last ⇥" de sessizce yutulur.
+//
+// Çözüm sınıfı kapatıyor: hedef sıra SAF ve TİP DÜZEYİNDE `SortColumn` —
+// sunucunun sıralayabildiği kolonlar dışında bir kimlik ÜRETİLEMEZ (Pager'ın
+// `CountDecl` felsefesi: statik tarama tahmin eder, `tsc` ZORLAR). Çağıran
+// dönüşü hem tabloya hem `order`a yazıyor, yani göstergenin okuduğu kaynak
+// tıkla AYNI turda güncelleniyor — efektin erken-dönüşlerine bağlı değil.
+//
+// SAF — tablo testli (her SortColumn × her yön).
+export function reverseEndSort(
+  sort: SortColumn, order: SortOrder,
+): { id: SortColumn; dir: SortOrder } {
+  return { id: sort, dir: order === 'desc' ? 'asc' : 'desc' };
 }

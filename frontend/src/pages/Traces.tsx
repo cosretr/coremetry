@@ -52,7 +52,7 @@ import { alignTraceWindow } from '@/lib/traceWindow';
 import { suggestAttrKey, type AttrKeySuggestion } from '@/lib/attrKeySuggest';
 import { traceCountReasonHint } from '@/lib/traceCountReason';
 import { effectiveTraceSearch } from '@/lib/traceSearchTerm';
-import { lastReachablePage } from '@/lib/traceReach';
+import { lastReachablePage, reverseEndSort } from '@/lib/traceReach';
 import type { TraceCountResponse } from '@/lib/types';
 import { encodeRange, encodeFilters, decodeFilters, encodeFilterGroup, decodeFilterGroup, buildQuery, rebuildPreserving } from '@/lib/urlState';
 import { parseHavingParam, encodeHavingParam, HAVING_METRICS, HAVING_OPS, type HavingRow, type HavingMetric, type HavingOp } from '@/lib/havingParam';
@@ -1578,9 +1578,23 @@ function TracesPageInner() {
               onEnd={() => {
                 // v0.10.711 — kesin son sayfa sunulamıyorsa (sayım 10.000+
                 // tavanlı ya da 6.000 id bütçesi ötesinde) listenin sonu =
-                // ters sıranın ilk sayfası. Sıra DataTable üzerinden çevrilir
-                // ki başlık okları ve URL (order=) aynı efektle senkron kalsın.
-                dt.setSort({ id: dt.sort.id ?? 'startTime', dir: order === 'desc' ? 'asc' : 'desc' });
+                // ters sıranın ilk sayfası. Sıra DataTable üzerinden de
+                // çevriliyor ki başlık okları ve `s_traces-list` senkron kalsın.
+                //
+                // v0.10.827 (operatör-bildirimli: "Last'a basınca gösterge
+                // hâlâ 1 diyor") — hedef sıra artık SAF ve tip düzeyinde
+                // SortColumn (lib/traceReach.ts reverseEndSort). Öncesinde
+                // `dt.sort.id ?? 'startTime'` yazılıyordu ve 'startTime' bir
+                // kolon kimliği DEĞİL: aşağıdaki sunucu-sırası efekti onu
+                // SERVER_SORTABLE'da bulamayıp sessizce dönüyor, `order` hiç
+                // değişmiyor, etiket "Page" kalıyordu. Ayrıca `order`/`sort`
+                // burada DOĞRUDAN yazılıyor — göstergenin okuduğu kaynak
+                // tıkla aynı turda değişsin, bir efektin erken-dönüşüne
+                // asılı kalmasın.
+                const next = reverseEndSort(sort, order);
+                dt.setSort(next);
+                setSort(next.id);
+                setOrder(next.dir);
                 setPage(0);
               }}
               endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}
