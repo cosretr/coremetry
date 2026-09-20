@@ -48,7 +48,8 @@ describe('MV onarımı — kablolama', () => {
     expect(page).toContain('if (seen.has(`${d.host}/${d.view}`)) continue;');
     // Yeşil rozet ÖLÇÜLMÜŞ kapsama ister: kapsama yoksa/hatalıysa "0 MV × 0 host"
     // diye sağlıklı denmez; hata b-err rozetiyle mesajıyla birlikte görünür.
-    expect(page).toContain('{coverage && !coverageError && repairRows.length === 0 && (');
+    // v0.10.830 — kapı büyüdü: artık (kalıntı/öksüz) ÖLÇÜLMÜŞ ve BOŞ olmalı.
+    expect(page).toContain('{coverage && !coverageError && leftovers && !leftoverError && repairRows.length === 0 && leftoverRows.length === 0 && (');
     expect(page).toContain('MV&apos;ler sağlıklı · {mvCount} MV × {hostCount} host');
     expect(page).toContain('<span className="badge b-err" title={coverageError}>kapsama ölçülemedi: {coverageError}</span>');
     expect(page).not.toContain('const scanned =');

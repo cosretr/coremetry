@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 func init() { registerRoutesExtra("dangling-mv", (*Server).registerDanglingMVRoutes) }
@@ -44,6 +45,17 @@ func (s *Server) getDanglingMVs(w http.ResponseWriter, r *http.Request) {
 	} else {
 		out["coverage"] = cov
 	}
+	// v0.10.830 — artıklar (terfi öncesi çıplak MV + sahipsiz iç tablo) aynı
+	// çağrıda. Liste HER ZAMAN dizidir (null değil): kart "kalıntı yok"u
+	// "ölçülmedi"den ayırt edemezse yeşil rozeti yanlış basar.
+	lo, _, lerr := s.store.MVLeftovers(r.Context())
+	if lerr != nil {
+		out["leftoverError"] = lerr.Error()
+	}
+	if lo == nil {
+		lo = []chstore.MVLeftover{}
+	}
+	out["leftovers"] = lo
 	writeJSON(w, out)
 }
 

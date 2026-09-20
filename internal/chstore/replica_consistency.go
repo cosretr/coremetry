@@ -90,6 +90,17 @@ type ReplicaTable struct {
 	// eder. View çözülemezse (MV satırı gelmedi) View boş kalır.
 	View  string `json:"view,omitempty"`
 	Inner bool   `json:"inner,omitempty"`
+	// Orphan/ViewHosts — v0.10.830. 824'ün eşlemesi KÜME GENELİ ve host'tan
+	// bağımsızdı: "view: X" satırı X'in O HOST'ta durduğunu KANITLAMAZ.
+	// ViewHosts sahibin gerçekten bulunduğu host'lar; Orphan = küme
+	// genelinde HİÇBİR MV bu uuid'yi adreslemiyor (sahipsiz iç tablo).
+	//
+	// Orphan YALNIZ roster eksiksizken (küme tanımındaki her host cevap
+	// verdi) doldurulur: bu okuma skip_unavailable_shards taşır ve sessizce
+	// düşen bir host'un MV satırı "sahibi yok" diye okunurdu. Kesin ölçüm
+	// MV onarımı kartındadır (mvInventory — skip YOK); eylem orada.
+	Orphan    bool     `json:"orphan,omitempty"`
+	ViewHosts []string `json:"viewHosts,omitempty"`
 }
 
 // ReplicaConsistencyReport — kartın tamamı.
@@ -314,30 +325,23 @@ func mergeCoverage(base, baseHint, cv, chint string) (string, string) {
 const (
 	innerTablePrefix = ".inner_id."
 	innerTableHint   = "MV iç tablosu: ATTACH/EXCHANGE uygulanmaz — MV'yi kanonik DDL ile o host'ta (yeniden) kur; Admin → ClickHouse → MV onarımı kartı bunu tek tıkla yapar"
+	// innerOrphanHint — v0.10.830: sahipsiz iç tablo. Yeniden KURULACAK bir
+	// MV yok; bu satır kalıcı kırmızıydı ve hiçbir eylem taşımıyordu. Tek
+	// doğru reçete o host'ta düşürmek — MV onarımı kartı yapar.
+	innerOrphanHint = "Sahipsiz MV iç tablosu: küme genelinde hiçbir view bu uuid'yi adreslemiyor — ATTACH/EXCHANGE de kanonik yeniden kurulum da uygulanmaz. Admin → ClickHouse → MV onarımı kartından temizlenir (yalnız o host'ta düşer)"
 )
 
 // isInnerTable — SAF: ad gizli MV iç tablosu mu.
 func isInnerTable(name string) bool { return strings.HasPrefix(name, innerTablePrefix) }
 
-// innerTableViews — SAF (v0.10.824): system.tables envanterindeki MV
-// satırlarından `.inner_id.<uuid>` → view adı eşlemesi. İç tablonun uuid'si
-// DDL'deki `TO INNER UUID` (Atomic) ya da view'ın kendi uuid'si (eski
-// biçim) — innerUUIDFor ile, dangling_mv_admin ile TEK gövde. `TO <tablo>`
-// biçimli MV'nin gizli iç tablosu yoktur, eşlemeye girmez.
+// innerTableViews — SAF (v0.10.824): `.inner_id.<uuid>` → view adı eşlemesi.
+// v0.10.830'da gövde mv_leftover.go'ya TAŞINDI (mvOwnersByHost): artık
+// sınıflandırması ve bu kart AYNI sahip haritasını okur — ikiz harita
+// ayrışırdı ve kimse fark etmezdi. Burada yalnız küme geneli düzleştirme.
 func innerTableViews(rows []mvTableRow) map[string]string {
 	out := map[string]string{}
-	for _, r := range rows {
-		if r.Engine != "MaterializedView" || r.UUID == "" || r.UUID == zeroUUID {
-			continue
-		}
-		if !reInnerUUID.MatchString(r.CreateQuery) && reMVWithTO.MatchString(r.CreateQuery) {
-			continue // TO <tablo>: hedefi gerçek tablo, gizli iç tablo yok
-		}
-		iu := innerUUIDFor(r.CreateQuery, r.UUID)
-		if iu == "" || iu == zeroUUID {
-			continue
-		}
-		out[innerTablePrefix+strings.ToLower(iu)] = r.Name
+	for inner, o := range innerTableOwners(rows) {
+		out[inner] = o.View
 	}
 	return out
 }
@@ -350,12 +354,17 @@ func innerTableViews(rows []mvTableRow) map[string]string {
 // Iraksama/readonly/oturum kararlarına dokunmaz: SYSTEM SYNC / RESTORE
 // REPLICA iç tabloda da doğrudur (uuid değişmez), yanlış olan tablo
 // TAKASIDIR.
-func innerShardHint(base string, inner bool, verdict string) string {
+// v0.10.830 — sahipsiz iç tablo AYRI reçete ister: "MV'yi yeniden kur"
+// orada YALAN olur (kurulacak MV yok), satır kalıcı kırmızı kalır.
+func innerShardHint(base string, inner, orphan bool, verdict string) string {
 	if !inner {
 		return base
 	}
 	switch verdict {
 	case ReplicaMissing, ReplicaNotReplicated, ReplicaNoReplication:
+		if orphan {
+			return innerOrphanHint
+		}
 		return innerTableHint
 	}
 	return base
@@ -667,7 +676,13 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 	if err := trows.Err(); err != nil {
 		return nil, fmt.Errorf("system.tables: %w", err) // yarım envanter = yanlış "tablo yok"
 	}
-	innerViews := innerTableViews(mvRows)
+	innerOwners := innerTableOwners(mvRows)
+	// v0.10.830 — "sahibi yok" iddiası ancak KÜME TANIMINDAKİ her host cevap
+	// verdiyse kurulabilir: bu okuma skip_unavailable_shards taşır, sessizce
+	// düşen bir host'un MV satırı eksik gelir ve sahipli bir iç tablo
+	// "öksüz" görünürdü. Eksik rosterde Orphan hep false kalır (kart
+	// "çözülemedi" der); kesin ölçüm MV onarımı kartındadır.
+	ownersComplete := len(hostNames) >= len(hostRows)
 
 	// Replikalar — bu veritabanının TÜM Replicated tabloları.
 	rrows, err := s.conn.Query(ctx, fmt.Sprintf(`
@@ -784,7 +799,9 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		// v0.10.824 — iç tablo satırı: FE runbook'u tablo merdivenine değil MV
 		// onarımına yollasın diye view adı (çözülebildiyse) satırda taşınır.
 		if isInnerTable(t) {
-			tbl.Inner, tbl.View = true, innerViews[t]
+			o := innerOwners[t]
+			tbl.Inner, tbl.View, tbl.ViewHosts = true, o.View, o.Hosts
+			tbl.Orphan = o.View == "" && ownersComplete
 		}
 		var verdicts []string
 		for _, sh := range shards {
@@ -810,7 +827,7 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 					out.Notes = append(out.Notes, fmt.Sprintf("%s · shard %d: %s Replicated ama system.replicas satırı yok (iki okuma arasında yaratıldı ya da o host replicas okumasında atlandı) — yeniden ölç; sürüyorsa SYSTEM RESTART REPLICA.", t, sh, strings.Join(unseen, ", ")))
 				}
 				// v0.10.824 — yapısal kararda iç tabloya tablo merdiveni yazılmaz.
-				rsh.Hint = innerShardHint(rsh.Hint, tbl.Inner, rsh.Verdict)
+				rsh.Hint = innerShardHint(rsh.Hint, tbl.Inner, tbl.Orphan, rsh.Verdict)
 			}
 			verdicts = append(verdicts, rsh.Verdict)
 			tbl.Shards = append(tbl.Shards, rsh)

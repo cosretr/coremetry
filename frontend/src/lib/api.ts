@@ -3391,6 +3391,17 @@ export const api = {
     request<import('./types').CHMVRebuildResult>('/api/admin/clickhouse/dangling-mv/rebuild', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view, confirm: true }), timeoutMs: 300_000,
     }),
+  // v0.10.830 — MV artığı temizliği: terfi öncesi ÇIPLAK MV (kaskadla gizli iç tablosunu da götürür,
+  // `<mv>_local` çalışmaya devam eder) ve SAHİPSİZ iç tablo. İkisi de YALNIZ o host'ta koşar (ON CLUSTER yok),
+  // confirm:true zorunlu, audit'e düşer. Öksüz ucu iç tablo ADI değil UUID alır — adı sunucu kurar.
+  chMVLeftoverDropView: (host: string, view: string) =>
+    request<import('./types').CHMVLeftoverResult>('/api/admin/clickhouse/mv-leftover/drop-view', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, view, confirm: true }), timeoutMs: 300_000,
+    }),
+  chMVLeftoverDropInner: (host: string, uuid: string) =>
+    request<import('./types').CHMVLeftoverResult>('/api/admin/clickhouse/mv-leftover/drop-inner', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, uuid, confirm: true }), timeoutMs: 300_000,
+    }),
   // v0.10.791 — Replika tutarlılığı (Admin ClickHouse): küme geneli system.replicas/parts/macros + shard başına karar (30 sn cache; refresh zorlar).
   chReplicaConsistency: (refresh = false, signal?: AbortSignal) =>
     get<import('./types').CHReplicaConsistencyResponse>(`/api/admin/clickhouse/replica-consistency${refresh ? '?refresh=1' : ''}`, signal),

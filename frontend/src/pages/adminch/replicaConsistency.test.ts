@@ -197,9 +197,12 @@ describe('replicaConsistency — kablolama pini', () => {
   });
   // v0.10.824 — iç tablo satırı hangi MV'nin hedefi olduğunu söyler ve runbook
   // view adını ALIR (almazsa DROP/CREATE satırları yer tutucuyla kalır).
+  // v0.10.830 — metin saf gövdeye (innerViewLabel) taşındı; sayfa onu çağırır.
   it('iç tablo satırı MV adını gösterir ve runbook view alır', () => {
-    expect(page).toContain('MV iç tablosu · ');
-    expect(page).toContain('view çözülemedi');
+    const helper = readFileSync(resolve(__dirname, 'replicaConsistency.ts'), 'utf8');
+    expect(helper).toContain('MV iç tablosu · ');
+    expect(helper).toContain('view çözülemedi');
+    expect(page).toContain('{innerViewLabel(t)}');
     expect(page).toContain('t.table, sh, t.view)');
     const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
     expect(types).toContain('view?: string; inner?: boolean');

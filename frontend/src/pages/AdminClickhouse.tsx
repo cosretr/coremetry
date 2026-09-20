@@ -11,7 +11,7 @@ import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/l
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
-import { canRepair, repairModeLabel, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
+import { canRepair, innerViewLabel, repairModeLabel, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
@@ -23,6 +23,7 @@ import type {
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
   CHDanglingMV, // v0.10.762 — sarkan MV onarımı
   CHMVHostState, CHMVState, // v0.10.825 — MV kapsaması (ok | plain | dangling | missing)
+  CHMVLeftover, CHMVLeftoverKind, // v0.10.830 — artık (çıplak MV kalıntısı | sahipsiz iç tablo)
   CHReplicaConsistencyResponse, CHReplicaRepairPlan, // v0.10.791 — replika tutarlılığı
 } from '@/lib/types';
 
@@ -1846,10 +1847,29 @@ function mvStateTitle(r: MVRepairRow): string {
   if (r.state === 'dangling') return 'view duruyor, gizli iç tablosu yok — bu host INSERT kaskadını reddeder, Distributed spool büyür';
   return 'MV bu host’ta hiç yok — ON CLUSTER DDL buraya ulaşmamış (is_local kör host)';
 }
+// v0.10.830 — artık sınıfları: terfi öncesi ÇIPLAK MV (kalıntı) ve SAHİPSİZ
+// iç tablo (öksüz). İkisi de v0.10.825 kapsamasının EKSENİ DIŞINDA kaldığı
+// için kart "MV'ler sağlıklı" derken replika kartı kalıcı kırmızı satır
+// gösteriyordu. Eylemler düğüm-yerel ve audit'li; kart ikisini de sahiplenir.
+const MV_LEFTOVER_LABEL: Record<CHMVLeftoverKind, string> = {
+  artik: 'terfi öncesi çıplak MV (kalıntı)',
+  oksuz: 'sahipsiz iç tablo (view yok)',
+};
+const MV_LEFTOVER_TONE: Record<CHMVLeftoverKind, string> = { artik: 'b-warn', oksuz: 'b-err' };
+const mvLeftoverKey = (l: CHMVLeftover) => `${l.host}/${l.inner}`;
+/** İç tablonun boyutu; okunamadıysa dürüst "boyut okunamadı" (0 satır DEĞİL). */
+const mvLeftoverSize = (l: CHMVLeftover): string =>
+  l.rows || l.bytes ? `${fmtNum(l.rows ?? 0)} satır · ${fmtBytes(l.bytes ?? 0)}` : 'boyut okunamadı';
+/** v0.10.830 inceleme: kanonik `<base>_local`'in boyutu — "ne HAYATTA KALIYOR". */
+const mvLeftoverStorageSize = (l: CHMVLeftover): string =>
+  l.storageRows || l.storageBytes ? `${fmtNum(l.storageRows ?? 0)} satır · ${fmtBytes(l.storageBytes ?? 0)}` : 'BOŞ (0 satır)';
+
 function DanglingMVPanel() {
   const [rows, setRows] = useState<CHDanglingMV[] | null>(null);
   const [coverage, setCoverage] = useState<CHMVHostState[] | null>(null);
   const [coverageError, setCoverageError] = useState<string | null>(null);
+  const [leftovers, setLeftovers] = useState<CHMVLeftover[] | null>(null);
+  const [leftoverError, setLeftoverError] = useState<string | null>(null);
   const [cluster, setCluster] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1861,9 +1881,25 @@ function DanglingMVPanel() {
     try {
       const r = await api.chDanglingMVs();
       setRows(r.rows); setCoverage(r.coverage ?? null); setCoverageError(r.coverageError ?? null); setCluster(r.cluster);
+      setLeftovers(r.leftovers ?? []); setLeftoverError(r.leftoverError ?? null);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e)); setRows(null); setCoverage(null); setCoverageError(null);
+      setLeftovers(null); setLeftoverError(null);
     } finally { setBusy(false); }
+  };
+  // Artık temizliği: tek onay penceresi, aynı anda tek iş, sonrasında yeniden Ölç.
+  const [leftoverConfirm, setLeftoverConfirm] = useState<CHMVLeftover | null>(null);
+  const dropLeftover = async (l: CHMVLeftover) => {
+    const k = mvLeftoverKey(l);
+    setLeftoverConfirm(null); setRepairing(k); setResult(null);
+    try {
+      const res = l.kind === 'artik'
+        ? await api.chMVLeftoverDropView(l.host, l.view ?? '')
+        : await api.chMVLeftoverDropInner(l.host, l.uuid);
+      setResult({ key: k, ok: true, text: l.kind === 'artik' ? 'kalıntı düşürüldü (iç tablo kaskadla gitti)' : 'öksüz iç tablo düşürüldü', steps: res.steps });
+    } catch (e: unknown) {
+      setResult({ key: k, ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally { setRepairing(null); void scan(); }
   };
   // peerRefused — sunucu "Eşten kur"u reddettiyse (aynı shard'da Replicated eş
   // çözülemedi) o satır "Yeniden kur"a geçer: aksi hâlde operatör aynı reddi
@@ -1902,6 +1938,9 @@ function DanglingMVPanel() {
   const hostCount = new Set((coverage ?? []).map(c => c.host)).size;
   const plainCount = repairRows.filter(r => r.state === 'plain').length;
   const missingCount = repairRows.filter(r => r.state === 'missing').length;
+  const leftoverRows = leftovers ?? [];
+  const bareCount = leftoverRows.filter(l => l.kind === 'artik').length;
+  const orphanCount = leftoverRows.filter(l => l.kind === 'oksuz').length;
   return (
     <Section title="MV onarımı (sarkan · düz · eksik)">
       <p className="cell-hint">
@@ -1917,16 +1956,22 @@ function DanglingMVPanel() {
         {/* v0.10.825 incelemesi: yeşil rozet ÖLÇÜLMÜŞ kapsama ister. Eskiden
             kapsama hiç gelmediğinde ya da hata verdiğinde kart "MV'ler sağlıklı ·
             0 MV × 0 host" diyordu — ölçülmemiş bir şey sağlıklı sayılamaz. */}
-        {coverage && !coverageError && repairRows.length === 0 && (
+        {/* v0.10.830 — yeşil rozet ARTIK YOKLUĞUNU da ister: kalıntı/öksüz
+            ölçülmediyse ya da varsa "sağlıklı" demek, replika kartının kalıcı
+            kırmızı satırını yalanlar. */}
+        {coverage && !coverageError && leftovers && !leftoverError && repairRows.length === 0 && leftoverRows.length === 0 && (
           <span className="badge b-ok">MV&apos;ler sağlıklı · {mvCount} MV × {hostCount} host{cluster ? ` · ${cluster}` : ''}</span>
         )}
         {rows && rows.length > 0 && <span className="badge b-err">{rows.length} sarkan view</span>}
         {plainCount > 0 && <span className="badge b-warn">{plainCount} düz iç tablo</span>}
         {missingCount > 0 && <span className="badge b-err">{missingCount} eksik MV</span>}
+        {bareCount > 0 && <span className="badge b-warn">{bareCount} kalıntı MV</span>}
+        {orphanCount > 0 && <span className="badge b-err">{orphanCount} sahipsiz iç tablo</span>}
         {err && <span className="badge b-err" title={err}>ölçülemedi</span>}
         {coverageError && <span className="badge b-err" title={coverageError}>kapsama ölçülemedi: {coverageError}</span>}
+        {leftoverError && <span className="badge b-err" title={leftoverError}>artık ölçülemedi: {leftoverError}</span>}
       </div>
-      {repairRows.length > 0 && (
+      {(repairRows.length > 0 || leftoverRows.length > 0) && (
         <table style={{ width: '100%' }}>
           <thead><tr><th>Node</th><th>MV</th><th>Durum</th><th></th></tr></thead>
           <tbody>
@@ -1955,8 +2000,73 @@ function DanglingMVPanel() {
                 </tr>
               );
             })}
+            {/* v0.10.830 — artık satırları aynı tablonun altında: operatör tek
+                yerde bakar, satır başına tek eylem, hepsi YALNIZ o host'ta. */}
+            {leftoverRows.map(l => {
+              const k = mvLeftoverKey(l);
+              const res = result?.key === k ? result : null;
+              const blocked = !!cluster && !l.addr;
+              return (
+                <tr key={k} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
+                  <td className="mono">{l.host}{blocked ? ' · adres çözülemedi' : ''}</td>
+                  <td className="mono" style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    title={`${l.inner}${l.innerEngine ? ` · ${l.innerEngine}` : ''} · ${mvLeftoverSize(l)}`}>
+                    {l.kind === 'artik' ? l.view : l.inner}
+                  </td>
+                  <td>
+                    <span className={`badge ${MV_LEFTOVER_TONE[l.kind]}`}
+                      title={l.kind === 'artik'
+                        ? `Bu ad kümede kanonik depolama adı değil (kanonik: ${l.storage}); terfi/sarmalayıcı yolları combined MV'yi taşımaz, o yüzden kalıcıdır. Kendi gizli iç tablosuna yazmayı sürdürür.`
+                        : 'Küme genelinde hiçbir view bu uuid’yi adreslemiyor: kimse yazmaz, kimse okumaz — yalnız disk tutar ve replika kartında kalıcı kırmızı satır üretir'}>
+                      {MV_LEFTOVER_LABEL[l.kind]}
+                    </span>
+                    <div className="cell-hint" style={{ fontSize: 11 }}>{mvLeftoverSize(l)}</div>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {/* v0.10.830 inceleme: guarded MV'nin kanonik `_local`'i bu
+                        kurulumda HİÇ doğmaz — kapı asla geçmez. Düğme çizip
+                        409 atmak var olmayan bir düğmeyi işaret ediyordu. */}
+                    {l.blocked
+                      ? <span className="badge b-warn" title={l.blocked}>elle</span>
+                      : <Button variant="danger" size="sm" disabled={repairing !== null || blocked} loading={repairing === k}
+                          title={l.kind === 'artik'
+                            ? `Bu host’ta ${l.view} düşürülür; kaskadla gizli iç tablosu gider ve çıplak ad AYNI adımda Distributed sarmalayıcı olarak geri kurulur, ${l.storage} çalışmaya devam eder`
+                            : 'Bu host’ta sahipsiz iç tablo düşürülür; hiçbir MV ona yazmıyor'}
+                          onClick={() => setLeftoverConfirm(l)}>
+                          {l.kind === 'artik' ? 'Kalıntıyı düşür' : 'Öksüzü temizle'}
+                        </Button>}
+                    {res && <div className={res.ok ? 'ok' : 'err'} style={{ fontSize: 11, marginTop: 4 }} title={res.steps?.join('\n')}>{res.text}</div>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+      )}
+      {leftoverConfirm && (
+        <Modal open title={`MV artığı — ${leftoverConfirm.kind === 'artik' ? leftoverConfirm.view : leftoverConfirm.inner} @ ${leftoverConfirm.host}`}
+          onClose={() => setLeftoverConfirm(null)} footer={
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setLeftoverConfirm(null)}>Vazgeç</Button>
+              <Button variant="danger" size="sm" onClick={() => void dropLeftover(leftoverConfirm)}>
+                {leftoverConfirm.kind === 'artik' ? 'Kalıntıyı düşür (DDL koşar)' : 'Öksüzü temizle (DDL koşar)'}
+              </Button>
+            </>
+          }>
+          <p style={{ fontSize: 12 }}>
+            Host <code className="mono">{leftoverConfirm.host}</code> üzerinde
+            <code className="mono"> DROP TABLE {leftoverConfirm.kind === 'artik' ? leftoverConfirm.view : leftoverConfirm.inner} SYNC</code> koşar.
+            {leftoverConfirm.kind === 'artik'
+              ? <> DROP <b>kaskadla gizli iç tablosunu</b> (<code className="mono">{leftoverConfirm.inner}</code> · {mvLeftoverSize(leftoverConfirm)}) da götürür;
+                ardından AYNI adım listesinde <b>çıplak ad Distributed sarmalayıcı olarak yeniden kurulur</b> — ürün o adı sorguluyor, tek başına DROP
+                bu host&apos;ta <code className="mono">UNKNOWN_TABLE</code> bırakırdı. Hayatta kalan: <code className="mono">{leftoverConfirm.storage}</code>
+                {' · '}{mvLeftoverStorageSize(leftoverConfirm)}. Sunucu hem sağlığı hem <b>veriyi</b> tazeden doğrular: kalıntı doluyken kanonik boşsa
+                istek reddedilir (bu düğme veriyi TAŞIMAZ).</>
+              : <> Silinecek: <code className="mono">{leftoverConfirm.inner}</code> · {mvLeftoverSize(leftoverConfirm)}. Küme genelinde hiçbir MV bu uuid&apos;yi
+                adreslemiyor; sunucu bunu tazeden doğrular ve Replicated ise son kayıtlı replikayı düşürmez.</>}
+            {' '}Komut <b>YALNIZ bu host&apos;ta</b> koşar (ON CLUSTER yok), diğer düğümlere dokunulmaz. Audit&apos;e düşer.
+          </p>
+        </Modal>
       )}
       {confirm && (
         <Modal open title={`MV onarımı — ${confirm.view} @ ${confirm.host}`} onClose={() => setConfirm(null)} footer={
@@ -2107,9 +2217,12 @@ function ReplicaConsistencyPanel() {
                     {t.table}
                     {/* v0.10.824 — `.inner_id.<uuid>` satırı okunmaz bir uuid'dir; hangi MV'nin
                         gizli hedefi olduğunu söylemeden operatör tablo merdivenine gider. */}
+                    {/* v0.10.830 — etiket host'a duyarlı: küme geneli "view: X"
+                        o view'ın BU host'ta durduğunu kanıtlamaz; sahibi hiç
+                        olmayan uuid ise "öksüz". Kart SALT OKUNUR kalır. */}
                     {t.inner && (
                       <div style={{ fontSize: 11, color: 'var(--text3)' }} title="Combined MaterializedView'ın gizli hedef tablosu: onarım MV düzeyinde yapılır (EXCHANGE uuid'yi taşımaz)">
-                        MV iç tablosu · {t.view ? `view: ${t.view}` : 'view çözülemedi'}
+                        {innerViewLabel(t)}
                       </div>
                     )}
                   </td>

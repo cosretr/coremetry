@@ -86,6 +86,30 @@ const INNER_PREFIX = '.inner_id.';
 export const isInnerTable = (table: string): boolean => table.startsWith(INNER_PREFIX);
 
 /**
+ * innerViewLabel — SAF (v0.10.830). v0.10.824'ün etiketi KÜME GENELİ bir
+ * uuid→view eşlemesinden geliyordu: "view: db_summary_5m" satırı o view'ın
+ * SORUNLU HOST'ta durduğunu KANITLAMIYORDU. Operatörün test kümesinde tam da
+ * bu oldu — iç tablo tek bir host'ta çıplak MV'siyle duruyordu, öteki üç host
+ * kırmızıydı ve etiket "view: db_summary_5m" diyerek yeniden kurulacak bir MV
+ * varmış gibi gösteriyordu.
+ *
+ * Kart SALT OKUNUR kalır (canRepair değişmedi, `.inner*` hâlâ false): tek
+ * değişen metindir ve hepsi eylemin MV onarımı kartında olduğunu söyler.
+ */
+export function innerViewLabel(t: { inner?: boolean; view?: string; orphan?: boolean; viewHosts?: string[]; shards?: CHReplicaShard[] }): string {
+  if (!t.inner) return '';
+  const tail = ' — MV onarımı kartından temizlenir';
+  if (t.orphan) return `MV iç tablosu · sahibi yok (öksüz)${tail}`;
+  if (!t.view) return 'MV iç tablosu · view çözülemedi';
+  const on = new Set(t.viewHosts ?? []);
+  const affected = (t.shards ?? []).flatMap(sh => (sh.missing ?? []).map(m => m.host));
+  // Sorunlu host'ların HİÇBİRİNDE sahip yoksa bunu SÖYLE: "view: X" tek
+  // başına operatörü o host'ta duran bir MV aramaya gönderiyordu.
+  const here = affected.length === 0 || affected.some(h => on.has(h));
+  return `MV iç tablosu · view: ${t.view}${here ? '' : " (bu host'ta yok)"}${tail}`;
+}
+
+/**
  * v0.10.824 — MV iç tablosuna ÖZEL runbook (operatör, test kümesi
  * 2026-09-20). 818'in `_fix` + ATTACH PARTITION + EXCHANGE TABLES merdiveni
  * burada ONARMAZ: EXCHANGE tabloların uuid'sini TAŞIMAZ, MV DDL'i

@@ -340,24 +340,38 @@ func TestInnerShardHint(t *testing.T) {
 		t.Fatalf("taban artık tablo merdivenini anlatmıyor, test anlamsızlaştı: %q", base)
 	}
 	for _, v := range []string{ReplicaMissing, ReplicaNotReplicated, ReplicaNoReplication} {
-		got := innerShardHint(base, true, v)
+		got := innerShardHint(base, true, false, v)
 		if got != innerTableHint {
 			t.Errorf("%s: %q", v, got)
 		}
 		if strings.Contains(got, "ATTACH edip") {
 			t.Errorf("%s: çelişen tablo reçetesi kaldı: %q", v, got)
 		}
-		if got := innerShardHint("", true, v); got != innerTableHint {
+		if got := innerShardHint("", true, false, v); got != innerTableHint {
 			t.Errorf("%s boş taban: %q", v, got)
 		}
 	}
 	for _, v := range []string{ReplicaOK, ReplicaSingle, ReplicaUnmapped, ReplicaLagging, ReplicaDivergent, ReplicaReadOnly, ReplicaSessionExpired} {
-		if got := innerShardHint(base, true, v); got != base {
+		if got := innerShardHint(base, true, false, v); got != base {
 			t.Errorf("%s ipucuna dokunmamalı: %q", v, got)
 		}
 	}
-	if got := innerShardHint(base, false, ReplicaNotReplicated); got != base {
+	if got := innerShardHint(base, false, false, ReplicaNotReplicated); got != base {
 		t.Errorf("iç tablo değil: %q", got)
+	}
+	// v0.10.830 — SAHİPSİZ iç tablo ayrı reçete: "MV'yi yeniden kur" orada
+	// yalan olurdu (kurulacak MV yok) ve satır kalıcı kırmızı kalırdı.
+	for _, v := range []string{ReplicaMissing, ReplicaNotReplicated, ReplicaNoReplication} {
+		got := innerShardHint(base, true, true, v)
+		if got != innerOrphanHint {
+			t.Errorf("%s öksüz: %q", v, got)
+		}
+		if strings.Contains(got, "kanonik DDL ile o host'ta (yeniden) kur") {
+			t.Errorf("%s: öksüze yeniden-kurulum reçetesi yazıldı: %q", v, got)
+		}
+	}
+	if got := innerShardHint(base, true, true, ReplicaDivergent); got != base {
+		t.Errorf("öksüz olsa da ıraksama ipucuna dokunulmamalı: %q", got)
 	}
 }
 
@@ -371,11 +385,11 @@ func TestReplicaInventoryCarriesMVIdentity(t *testing.T) {
 	}
 	s := string(src)
 	for _, want := range []string{
-		"create_table_query",                        // MV DDL'i envanterde
-		"engine = 'MaterializedView'",               // MV satırları da çekilir
-		"innerTableViews(mvRows)",                   // eşleme kuruluyor
-		"tbl.Inner, tbl.View = true, innerViews[t]", // satıra bağlanıyor
-		"rsh.Hint = innerShardHint(",                // ipucu uygulanıyor
+		"create_table_query",                                         // MV DDL'i envanterde
+		"engine = 'MaterializedView'",                                // MV satırları da çekilir
+		"innerTableOwners(mvRows)",                                   // eşleme kuruluyor (v0.10.830: sahip haritası tek gövde)
+		"tbl.Inner, tbl.View, tbl.ViewHosts = true, o.View, o.Hosts", // satıra bağlanıyor
+		"rsh.Hint = innerShardHint(",                                 // ipucu uygulanıyor
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("eksik: %s", want)
@@ -385,7 +399,16 @@ func TestReplicaInventoryCarriesMVIdentity(t *testing.T) {
 	if n := strings.Count(s, "MV iç tablosu: ATTACH/EXCHANGE uygulanmaz"); n != 1 {
 		t.Errorf("ipucu metni %d yerde (tek sabit olmalı)", n)
 	}
-	if !strings.Contains(s, "innerUUIDFor(") {
+	// v0.10.830 — iç uuid çözümü mv_leftover.go'nun sahip haritasına taşındı
+	// (mvOwnersByHost → innerUUIDFor); bu dosya ikinci bir gövde TUTMAZ.
+	if strings.Contains(s, "innerUUIDFor(") {
+		t.Error("iç uuid çözümü burada ikinci kez yazılmış — tek gövde mvOwnersByHost")
+	}
+	l, lerr := os.ReadFile("mv_leftover.go")
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	if !strings.Contains(string(l), "innerUUIDFor(") {
 		t.Error("iç uuid çözümü dangling_mv_admin ile aynı gövdeden gelmeli (innerUUIDFor)")
 	}
 }

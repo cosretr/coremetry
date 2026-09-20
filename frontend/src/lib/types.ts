@@ -3554,7 +3554,25 @@ export interface CHMVHostState {
   /** yalnız dangling'de ve yalnız eşin iç tablosu Replicated ise (düz eşten kurmak düz tabloyu çoğaltır). */
   peerHost?: string; peerAddr?: string;
 }
-export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number; coverage?: CHMVHostState[]; coverageError?: string }
+/** v0.10.830 — MV artığı (Go chstore.MVLeftover). `artik` = terfi öncesi ÇIPLAK MV (kendi iç tablosuyla;
+ *  kümede kanonik depolama adı `<mv>_local` olduğu için hiçbir terfi/sarmalayıcı yolu onu taşımaz —
+ *  YAPISAL olarak kalıcı). `oksuz` = küme genelinde hiçbir view'ın adreslemediği iç tablo. */
+export type CHMVLeftoverKind = 'artik' | 'oksuz';
+export interface CHMVLeftover {
+  host: string; addr?: string; kind: CHMVLeftoverKind;
+  /** gizli iç tablonun adı (`.inner_id.<uuid>`). */
+  inner: string; uuid: string; innerEngine?: string;
+  /** yalnız artik: o host'taki çıplak view (düşürülecek nesne) ve kanonik depolama adı (çalışmaya devam eder). */
+  view?: string; storage?: string;
+  /** iç tablonun aktif parçaları; okunamazsa 0 (boyut süs, sınıflandırma ona bağlı değil). */
+  rows?: number; bytes?: number;
+  /** kanonik `<base>_local`'in iç tablosu ve boyutu — "ne siliniyor" kadar "ne HAYATTA KALIYOR" (v0.10.830 inceleme). */
+  storageInner?: string; storageRows?: number; storageBytes?: number;
+  /** doluysa satırın EYLEMİ YOK (guarded MV: kanonik `_local` bu kurulumda hiç doğmaz); metin sunucunun reddiyle aynı. */
+  blocked?: string;
+}
+export interface CHMVLeftoverResult { ok: boolean; host: string; target: string; steps: string[] }
+export interface CHDanglingMVResponse { cluster: string; rows: CHDanglingMV[]; generatedAt: number; coverage?: CHMVHostState[]; coverageError?: string; leftovers: CHMVLeftover[]; leftoverError?: string }
 export interface CHDanglingMVRepairResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.825 — host'a özel yeniden kurulum (DROP + kanonik DDL, ON CLUSTER'sız). */
 export interface CHMVRebuildResult { ok: boolean; host: string; view: string; steps: string[] }
@@ -3576,7 +3594,9 @@ export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; ver
 // v0.10.824 — inner: ad `.inner_id.` önekli (combined MV'nin gizli hedefi);
 // view: çözülebildiyse MV'nin adı. Tablo düzeyi onarım merdiveni (ATTACH
 // PARTITION + EXCHANGE) burada UYGULANMAZ — EXCHANGE uuid'yi taşımaz.
-export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict; view?: string; inner?: boolean }
+/** v0.10.830 — orphan = küme genelinde hiçbir MV bu uuid'yi adreslemiyor (roster eksikse HİÇ doldurulmaz);
+ *  viewHosts = sahibin gerçekten bulunduğu host'lar — "view: X" satırı X'in O HOST'ta durduğunu kanıtlamaz. */
+export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict; view?: string; inner?: boolean; orphan?: boolean; viewHosts?: string[] }
 export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[]; warnings?: string[] }
 /** v0.10.820 — Replika onarımı (Go chstore.ReplicaRepairPlan / ReplicaRepairResult). blocked dolu = Uygula reddedilir; mode plain = düz tablo (_fix + ATTACH + EXCHANGE), missing = tablo yok (eşten klon). */
 export interface CHReplicaRepairPartition { id: string; parts: number; rows: number; bytes: number }
