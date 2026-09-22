@@ -108,7 +108,10 @@ func errorRatePercent(rate, errs []chstore.SpanMetricSeries) []chstore.SpanMetri
 			errAt[p.Time] += p.Value
 		}
 	}
-	out := chstore.SpanMetricSeries{GroupKey: []string{}}
+	// v0.10.842 — Operator-reported: boşta servis (rate hep 0) → hiç nokta
+	// eklenmez, nil dilim JSON'a `null` yazılır, Overview .map üstünde düşer.
+	// Seri varsa points DİZİDİR (/api-route ev kuralı: nil → []T{}).
+	out := chstore.SpanMetricSeries{GroupKey: []string{}, Points: []chstore.SpanMetricPoint{}}
 	for _, s := range rate {
 		for _, p := range s.Points {
 			if p.Value <= 0 || math.IsNaN(p.Value) || math.IsInf(p.Value, 0) {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -154,5 +155,32 @@ func TestServiceMetricREDRouteIsInTheRegistry(t *testing.T) {
 	}
 	if src := readRepoFile(t, "api.go"); strings.Contains(src, "metric-red") {
 		t.Fatal("api.go bu rotayı bilmemeli")
+	}
+}
+
+// v0.10.842 — Operator-reported: /service?name=<batch-servis>&range=3h
+// "TypeError: Cannot read properties of null (reading 'map')" ile hata
+// sınırına düştü (test ortamı). Kök neden: pencerede hiç istek yoksa (boşta
+// batch işi) rate serisinin her noktası 0 → errorRatePercent hepsini atlar,
+// out.Points nil kalır → JSON'a `"points":null` yazılır → Overview vals()
+// null üstünde .map çağırır. Sözleşme: seri VARSA points bir dizidir ([]),
+// asla null — /api-route ev kuralı (nil dilim → []T{}).
+func TestErrorRatePercent_IdleWindowPointsNeverNull(t *testing.T) {
+	from, _ := epFixtureWindow()
+	rate := []chstore.SpanMetricSeries{epConst(nil, from, 60, 3, 0)} // boşta: rate hep 0
+	errs := []chstore.SpanMetricSeries{epConst(nil, from, 60, 3, 0)}
+	out := errorRatePercent(rate, errs)
+	if len(out) != 1 {
+		t.Fatalf("tek seri beklenir: %+v", out)
+	}
+	if out[0].Points == nil {
+		t.Fatalf("points nil: JSON'a null yazılır, frontend .map üstünde düşer")
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"points":[]`) {
+		t.Fatalf("JSON points boş dizi olmalı: %s", b)
 	}
 }

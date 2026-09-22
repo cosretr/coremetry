@@ -6,6 +6,8 @@
 // headline numbers fall back to the live series when the summary is null, and
 // only to 0 when neither exists — never NaN, never a blank panel.
 
+import type { SpanMetricSeries } from '@/lib/types';
+
 // firstNum returns the first FINITE number in the preference list, else 0.
 // Note: 0 is a valid value (0% errors, 0 req/s), so it is returned as-is;
 // undefined / null / NaN / Infinity are skipped.
@@ -14,4 +16,13 @@ export function firstNum(...vals: Array<number | null | undefined>): number {
     if (typeof v === 'number' && Number.isFinite(v)) return v;
   }
   return 0;
+}
+
+// vals — seri listesinin İLK serisinin değerleri (KPI karo sparkline + delta).
+// v0.10.842 — Operator-reported: boşta batch servisinde /metric-red error_rate
+// `points: null` geldi ve .map hata sınırını tetikledi (TÜM sayfa düştü). Go
+// tarafı artık [] yazar (errorRatePercent); `?? []` ikinci katman — React hata
+// sınırı sayfa düzeyinde, tek karonun null'u tüm Overview'u alıyordu.
+export function vals(s?: SpanMetricSeries[] | null): number[] {
+  return s && s[0] ? (s[0].points ?? []).map(p => p.value) : [];
 }

@@ -46,7 +46,7 @@ import { MetricPanel } from '@/components/MetricPanel';
 import { AIAnalysisPanel } from '@/components/AIAnalysisPanel';
 import { ServiceNeighbors } from '@/components/ServiceNeighbors';
 import { metricQuery, type MetricQuery } from '@/lib/metricQuery';
-import { firstNum } from './overviewKpi';
+import { firstNum, vals } from './overviewKpi';
 
 // Service Overview (v0.7.92+) — Dynatrace-style at-a-glance APM view, ported
 // from the design handoff. The new tab on /service?name=<svc> (becomes the
@@ -97,10 +97,6 @@ interface Props {
   // the five headline tiles + three RED charts win env together — never
   // some env-scoped and some all-env (the ikili-hâl the brief forbids).
   env?: string;
-}
-
-function vals(s?: SpanMetricSeries[] | null): number[] {
-  return s && s[0] ? s[0].points.map(p => p.value) : [];
 }
 
 // Trend delta vs the prior window — mean of the first third vs the last

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { firstNum } from './overviewKpi';
+import { firstNum, vals } from './overviewKpi';
+import type { SpanMetricSeries } from '@/lib/types';
 
 // Guards the v0.9.170 fix — operator-reported: services with an unresolved /
 // missing cluster attribute (e.g. `${openshift.cluster}`) had a null summary
@@ -28,5 +29,23 @@ describe('firstNum', () => {
   it('supports both info-first and series-first orderings', () => {
     expect(firstNum(2.0, 9.9)).toBe(2.0);      // summary preferred (throughput/failure)
     expect(firstNum(undefined, 88)).toBe(88);  // live series preferred (latency), summary fallback
+  });
+});
+
+// v0.10.842 — Operator-reported: boşta bir batch servisinde (3h pencere, rate
+// hep 0) /metric-red error_rate serisi `points: null` ile geldi; vals()
+// null üstünde .map çağırdı ve React hata sınırı TÜM /service sayfasını
+// aldı. Go tarafı artık [] yazar; burası ikinci katman (sayfa-düzeyi sınır).
+describe('vals', () => {
+  it('points null gelirse boş dizi döner, fırlatmaz', () => {
+    const nullPoints = [{ groupKey: [], points: null }] as unknown as SpanMetricSeries[];
+    expect(vals(nullPoints)).toEqual([]);
+  });
+
+  it('ilk serinin değerlerini sırayla verir; seri yoksa boş', () => {
+    expect(vals([{ groupKey: [], points: [{ time: 1, value: 2 }, { time: 2, value: 3 }] }])).toEqual([2, 3]);
+    expect(vals(undefined)).toEqual([]);
+    expect(vals(null)).toEqual([]);
+    expect(vals([])).toEqual([]);
   });
 });
