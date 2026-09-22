@@ -188,6 +188,13 @@ type ExceptionExplainInput struct {
 	TraceID string          // örnek hata trace'i (kartın "Örnek trace" çipi)
 	Trend   *ExceptionTrend // occurrence özeti (User içindeki trend satırının kaynağı)
 	Deploys []NearbyDeploy  // deployBlock'un YAPISAL hâli (yön bayraklı)
+
+	// Pods (v0.10.847, operatör-bildirimli) — pod/instance yoğunlaşması:
+	// User içindeki bloğun YAPISAL hâli. Stack/Trend/Deploys ile aynı
+	// gerekçe: seçim ve karar BURADA veriliyor, o yüzden karar ham
+	// olarak da taşınıyor — kart ile modelin gördüğü ayrışamasın.
+	// Kind boşsa hiç hesaplanmadı (prompt bloğu da basılmaz).
+	Pods PodConcentration
 }
 
 // ExceptionTrend — occurrence serisinin sıkıştırılmış hâli (v0.9.1129).
@@ -446,8 +453,14 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 		}
 	}
 
+	// v0.10.847 (operatör-bildirimli) — pod/instance yoğunlaşması. En
+	// sonda: iki okuma da yumuşak düşer ve düştüklerinde yalnız bu
+	// kanıt "ölçülemedi" olur; prompt'un geri kalanı etkilenmez.
+	pods := buildPodConcentration(ctx, store, g.Fingerprint, g.Service)
+
 	return ExceptionExplainInput{
-		User:         assembleExceptionPrompt(g, loc, trend, stackForPrompt, traceBlock, logsBlock, deployBlock),
+		User: assembleExceptionPrompt(g, loc, trend, stackForPrompt, traceBlock, logsBlock, deployBlock,
+			renderPodConcentration(pods)),
 		EvTraces:     evTraces,
 		EvSpans:      evSpans,
 		LogsBlock:    logsBlock,
@@ -458,6 +471,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 		TraceID:      traceID,
 		Trend:        trendRef,
 		Deploys:      nearby,
+		Pods:         pods,
 	}
 }
 
@@ -535,7 +549,11 @@ func renderNearbyDeploys(nd []NearbyDeploy) []string {
 // assembleExceptionPrompt — saf montaj; boş bloklar atlanır. Damgalar
 // loc'ta (RFC3339 ofsetli: "…T01:30:00+03:00") ve meta.timezone konumun
 // adı — sistem prompt'u modele "dilim çevirme, olduğu gibi aktar" der.
-func assembleExceptionPrompt(g *chstore.ExceptionGroup, loc *time.Location, trend, stack, traceBlock, logsBlock, deployBlock string) string {
+// podsBlock (v0.10.847) deploy bloğundan SONRA, kapanış talimatından
+// ÖNCE basılır: kapanış cümlesi "stack + trace + logları birlikte
+// yorumla" diyor ve yeni kanıtın o cümlenin ardında kalması, modelin
+// onu talimat kapsamı dışında saymasına yol açardı.
+func assembleExceptionPrompt(g *chstore.ExceptionGroup, loc *time.Location, trend, stack, traceBlock, logsBlock, deployBlock, podsBlock string) string {
 	if loc == nil {
 		loc = time.UTC
 	}
@@ -558,6 +576,7 @@ func assembleExceptionPrompt(g *chstore.ExceptionGroup, loc *time.Location, tren
 	sb.WriteString(traceBlock)
 	sb.WriteString(logsBlock)
 	sb.WriteString(deployBlock)
+	sb.WriteString(podsBlock)
 	sb.WriteString("\n\nStacktrace + trace + logları BİRLİKTE yorumla: kök nedeni stack'in EN DERİN \"Caused by\" bölümündeki ilk uygulama-frame'ine (yoksa en üst uygulama-frame'ine) ve trace'te hatanın DOĞDUĞU (en derin error) span'a dayandır; yayılan (propagate) hataları kök sanma.")
 	return sb.String()
 }

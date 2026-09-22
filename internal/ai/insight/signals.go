@@ -37,6 +37,34 @@ type DeployCandidate struct {
 	After     bool
 }
 
+// PodConcentration — pod/instance yoğunlaşmasının KART projeksiyonu
+// (v0.10.847, operatör-bildirimli). anomaly.PodConcentration'ın aynası:
+// bu paket chstore'a (ve dolayısıyla anomaly'ye) BAĞLANMAZ — kanıtın
+// LLM'siz de doğru olması için store'suz kalması gerekiyor, aynı
+// DeployCandidate gerekçesi. Yazımların ayrışmadığı api tarafında
+// çivili (TestPodConcKindSpellingsMatch).
+//
+// Instances = 0 → payda ÖLÇÜLEMEDİ; sıfır bir sayı gibi davranıp
+// "0 instance" diye okunmasın diye kind ayrıca taşınır.
+type PodConcentration struct {
+	Kind           string
+	TopPod         string
+	TopNode        string
+	TopHostOnly    bool
+	TopOccurrences int64
+	Attributed     int64
+	Share          float64
+	PodsWithHits   int
+	Instances      int
+}
+
+// Kind değerleri — anomaly paketindeki yazımların AYNASI.
+const (
+	PodConcYogunlasma = "yogunlasma"
+	PodConcDagilmis   = "dagilmis"
+	PodConcOlculemedi = "olculemedi"
+)
+
 // ExceptionEvidence — exception grubu kartının deterministik girdisi.
 // Alanların hepsi anomaly.BuildExceptionExplainInput'un ZATEN okuduğu
 // veriden gelir; kart için ikinci bir sorgu YOK (yeniden okumak, modelin
@@ -54,6 +82,10 @@ type ExceptionEvidence struct {
 	LastSeenNs  int64
 	Deploys     []DeployCandidate
 	TraceID     string
+	// Pods — pod/instance yoğunlaşması; nil = hiç hesaplanmadı (kart
+	// satırı çizilmez). "Ölçülemedi" AYRI bir hâl ve kart onu YAZAR:
+	// operatör "bakıldı, ölçülemedi" ile "hiç bakılmadı"yı ayırmalı.
+	Pods *PodConcentration
 	// NowNs — bağıl süreleri hesaplayan referans an. Parametre olması
 	// ŞART: time.Now() okuyan bir projeksiyon test edilemez ve
 	// "şimdi"yi iki kez okuyup iki farklı yaş basma riski taşır.
@@ -115,7 +147,45 @@ func ExceptionSignals(ev ExceptionEvidence) (out []Signal, truncated bool) {
 		add(SignalDeploy, "Yakın deploy",
 			d.Version+" · grup başlangıcından "+FmtDurTR(d.OffsetSec)+" önce", SevWarn)
 	}
+
+	// v0.10.847 — pod/instance yoğunlaşması. Kart ve model AYNI kararı
+	// görür (bu paketin kuruluş ilkesi): operatör kartta "tek pod"
+	// okurken modelin bambaşka bir kök neden anlatması tam olarak
+	// şikâyetin kendisiydi.
+	if val, sev, ok := podConcentrationRow(ev.Pods); ok {
+		add(SignalGeneric, "Pod dağılımı", val, sev)
+	}
 	return out, false
+}
+
+// podConcentrationRow — kartın pod satırı. Üç kind ÜÇ AYRI cümle:
+// "ölçülemedi" hiçbir koşulda "dağılmış" gibi okunmaz ve pod adı
+// SIZDIRMAZ (paydasız bir pod adı, olmayan bir sinyali ima eder).
+func podConcentrationRow(pc *PodConcentration) (value, sev string, ok bool) {
+	if pc == nil || pc.Kind == "" {
+		return "", "", false
+	}
+	switch pc.Kind {
+	case PodConcYogunlasma:
+		return fmt.Sprintf("%s · tek instance'ta %s (%s/%s oluşum) · ölçülen %d instance",
+			pc.TopPod, pctFloorTR(pc.Share), fmtNum(uint64(pc.TopOccurrences)),
+			fmtNum(uint64(pc.Attributed)), pc.Instances), SevWarn, true
+	case PodConcDagilmis:
+		if pc.Instances <= 1 {
+			return "servisin tek instance'ı — ayırt edici değil", "", true
+		}
+		return fmt.Sprintf("%d instance'ın %d tanesine yayılmış · en yoğun %s",
+			pc.Instances, pc.PodsWithHits, pctFloorTR(pc.Share)), "", true
+	default:
+		return "ölçülemedi (dağılmış DEMEK DEĞİL)", "", true
+	}
+}
+
+// pctFloorTR — yüzde, Türkçe yazımla ve AŞAĞI yuvarlayarak. %99.6'yı
+// "%100" yapmak operatöre "istisnasız hepsi" der; ölçmediğimiz bir
+// kesinliği yazmayız. (anomaly tarafındaki ikiziyle aynı gerekçe.)
+func pctFloorTR(share float64) string {
+	return fmt.Sprintf("%%%d", int(math.Floor(share*100)))
 }
 
 // NearestDeployBefore — başlangıçtan ÖNCEKİ (After=false) en YAKIN

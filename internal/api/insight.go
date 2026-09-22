@@ -153,6 +153,17 @@ func exceptionEvidence(g *chstore.ExceptionGroup, in anomaly.ExceptionExplainInp
 		ev.Deploys = append(ev.Deploys, insight.DeployCandidate{
 			Version: d.Version, OffsetSec: d.OffsetSec, After: d.After})
 	}
+	// v0.10.847 (operatör-bildirimli) — pod/instance yoğunlaşması.
+	// Kind boşsa hiç hesaplanmadı: nil bırakılır ki kart "ölçülemedi"
+	// ile "hiç bakılmadı"yı aynı satırda göstermesin.
+	if in.Pods.Kind != "" {
+		p := in.Pods
+		ev.Pods = &insight.PodConcentration{
+			Kind: p.Kind, TopPod: p.TopPod, TopNode: p.TopNode, TopHostOnly: p.TopHostOnly,
+			TopOccurrences: p.TopOccurrences, Attributed: p.Attributed, Share: p.Share,
+			PodsWithHits: p.PodsWithHits, Instances: p.Instances,
+		}
+	}
 	return ev
 }
 

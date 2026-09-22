@@ -65,10 +65,10 @@ func TestAssembleExceptionPrompt(t *testing.T) {
 		LastSeen:  time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC).UnixNano(),
 	}
 	// Tüm bloklar dolu → hepsi sırayla yer alır.
-	p := assembleExceptionPrompt(g, time.UTC, "toplam=700", "at com.x.Y.z(Y.java:1)", "\n\nTRACE_BLOK", "\n\nLOG_BLOK", "\n\nDEPLOY_BLOK")
+	p := assembleExceptionPrompt(g, time.UTC, "toplam=700", "at com.x.Y.z(Y.java:1)", "\n\nTRACE_BLOK", "\n\nLOG_BLOK", "\n\nDEPLOY_BLOK", "\n\nPOD_BLOK")
 	for _, want := range []string{
 		"java.lang.NullPointerException", "checkout", "Occurrence trendi: toplam=700",
-		"Temsilî STACKTRACE", "TRACE_BLOK", "LOG_BLOK", "DEPLOY_BLOK",
+		"Temsilî STACKTRACE", "TRACE_BLOK", "LOG_BLOK", "DEPLOY_BLOK", "POD_BLOK",
 		"yayılan (propagate) hataları kök sanma",
 		// v0.10.745 — UTC'de bile dilim adı ve Z damgası açık.
 		`"timezone":"UTC"`, `"firstSeen":"2026-07-30T10:00:00Z"`,
@@ -82,7 +82,7 @@ func TestAssembleExceptionPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tzdata: %v", err)
 	}
-	pi := assembleExceptionPrompt(g, ist, "", "", "", "", "")
+	pi := assembleExceptionPrompt(g, ist, "", "", "", "", "", "")
 	for _, want := range []string{
 		`"timezone":"Europe/Istanbul"`, `"firstSeen":"2026-07-30T13:00:00+03:00"`, `"lastSeen":"2026-07-30T15:00:00+03:00"`,
 	} {
@@ -94,11 +94,11 @@ func TestAssembleExceptionPrompt(t *testing.T) {
 		t.Errorf("İstanbul prompt UTC damgası taşımamalı:\n%s", pi)
 	}
 	// nil konum → UTC (arka plan açıklayıcı).
-	if pn := assembleExceptionPrompt(g, nil, "", "", "", "", ""); !strings.Contains(pn, `"timezone":"UTC"`) {
+	if pn := assembleExceptionPrompt(g, nil, "", "", "", "", "", ""); !strings.Contains(pn, `"timezone":"UTC"`) {
 		t.Errorf("nil konum UTC etiketi taşımalı:\n%s", pn)
 	}
 	// Boş bloklar başlık bırakmaz.
-	p2 := assembleExceptionPrompt(g, time.UTC, "", "", "", "", "")
+	p2 := assembleExceptionPrompt(g, time.UTC, "", "", "", "", "", "")
 	if strings.Contains(p2, "Occurrence trendi") || strings.Contains(p2, "STACKTRACE") {
 		t.Errorf("boş bloklar başlık üretmemeli:\n%s", p2)
 	}
