@@ -1,6 +1,6 @@
 # Audit — Problem ↔ Deployment/Rollout korelasyonu
 
-**Tarih:** 2026-09-02 · **Durum:** ONAY BEKLİYOR — kod değişikliği yok
+**Tarih:** 2026-09-02 · **Durum:** GEMİDE — D1+D2 v0.10.242 · D3 v0.10.243 · D4 v0.10.244 (durum satırı 2026-09-23'te güncellendi; gövde tarihî plan)
 **Hedef:** bir Problem açıldığında etkilenen service/namespace/pod'larda son
 N dakikada rollout olup olmadığını tespit edip kanıta *"olası neden:
 <deployment> rollout'u, <zaman>"* satırı eklemek; Problem detayında
