@@ -21,16 +21,9 @@ export function useServices(
   });
 }
 
-export function useServiceNames(q?: string) {
-  return useQuery({
-    queryKey: keys.services.names(q),
-    queryFn: () => api.serviceNames(q),
-    // Picker dropdown — debounced upstream by the input handler;
-    // a 5-min stale-time means typing the same prefix again
-    // doesn't refetch.
-    staleTime: 5 * 60_000,
-  });
-}
+// v0.10.865 (scale-audit) — useServiceNames(q?) SİLİNDİ: çağıranı yoktu ve q'suz
+// çağrı tam kataloğu (200) 5 dk önbellekliyordu — yüklü tuzak. Picker'lar
+// ServicePicker (sunucu aramalı) kullanır; ad tamamlama useNameCompletion'da.
 
 export function useServiceMap(since: GoDuration, samples: number, diff?: string, topN = 0) {
   // `diff` (e.g. "24h", "1h") asks the backend to also return a
