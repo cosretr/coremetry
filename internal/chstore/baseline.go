@@ -55,139 +55,79 @@ func (s *Store) GetMetricBaseline(
 		Service:   service,
 		WindowSec: int64(lookback / time.Second),
 	}
-	from := time.Now().Add(-lookback)
+	// v0.10.866 (scale-audit 2026-09-23) — dört dal da HAM spans'ı 7 gün tarıyordu
+	// (üst zaman sınırı yok, servis boşken tüm-servis quantile, tek fren 10 s):
+	// invariant #3 ihlali — service_summary_5m bu toplamları 5-dk state olarak
+	// zaten taşıyor. Gecikme: quantilesTDigestMerge(0.5,0.95,0.99,1) (q(1) ≈ max,
+	// t-digest uç centroid'i); oran/sayı: kova başına merge'ler üstünde quantile.
+	// SampleCount: gecikmede span, oranlarda 5-dk kova sayısı (eskiden dakika).
+	to := time.Now()
+	from := to.Add(-lookback)
+	sqlText, latency, ok := baselineSQL(metric, service != "")
+	if !ok {
+		return nil, fmt.Errorf("baseline not supported for metric %q", metric)
+	}
+	args := []any{from, to}
+	if service != "" {
+		args = append(args, service)
+	}
+	row := s.conn.QueryRow(ctx, sqlText, args...)
+	var n uint64
+	if latency {
+		var q []float64
+		if err := row.Scan(&q, &out.Mean, &n); err != nil {
+			return nil, fmt.Errorf("scan %s baseline: %w", metric, err)
+		}
+		if n > 0 && len(q) == 4 {
+			out.P50, out.P95, out.P99, out.Max = q[0]/1e6, q[1]/1e6, q[2]/1e6, q[3]/1e6
+		}
+	} else if err := row.Scan(&out.P50, &out.P95, &out.P99, &out.Max, &out.Mean, &n); err != nil {
+		return nil, fmt.Errorf("scan %s baseline: %w", metric, err)
+	}
+	if n == 0 { // boş pencere: quantile NaN döner; sıfır dürüst (FE n=0'ı "veri yok" okur)
+		out.P50, out.P95, out.P99, out.Max, out.Mean = 0, 0, 0, 0, 0
+	}
+	out.SampleCount = int64(n)
+	return out, nil
+}
 
-	// Latency metrics: query the spans table directly, span-
-	// level percentiles. Includes a sample-count so the UI
-	// can dim the suggestion when there's not enough data
-	// to be statistically meaningful.
+// baselineWhere — service_summary_5m penceresi: [from, to) + isteğe bağlı servis.
+func baselineWhere(withService bool) string {
+	w := " WHERE time_bucket >= ? AND time_bucket < ?"
+	if withService {
+		w += " AND service_name = ?"
+	}
+	return w
+}
+
+// baselineSQL — SAF (v0.10.866): metrik → MV sorgusu. latency=true ise satır
+// (q Array(Float64), mean, n); değilse (p50, p95, p99, max, mean, n).
+func baselineSQL(metric string, withService bool) (sqlText string, latency, ok bool) {
 	switch metric {
 	case "p50_ms", "p95_ms", "p99_ms", "avg_ms":
-		svcFilter := ""
-		var args []any
-		args = append(args, from)
-		if service != "" {
-			svcFilter = " AND service_name = ?"
-			args = append(args, service)
-		}
-		row := s.conn.QueryRow(ctx, `
-			SELECT quantile(0.5)(duration)  / 1e6 AS p50,
-			       quantile(0.95)(duration) / 1e6 AS p95,
-			       quantile(0.99)(duration) / 1e6 AS p99,
-			       max(duration)            / 1e6 AS mx,
-			       avg(duration)            / 1e6 AS mean,
-			       count()                       AS n
-			FROM spans
-			WHERE time >= ?`+svcFilter+`
-			SETTINGS max_execution_time = 10`, args...)
-		var n uint64
-		if err := row.Scan(&out.P50, &out.P95, &out.P99, &out.Max, &out.Mean, &n); err != nil {
-			return nil, fmt.Errorf("scan latency baseline: %w", err)
-		}
-		out.SampleCount = int64(n)
-		return out, nil
-
+		return `SELECT quantilesTDigestMerge(0.5, 0.95, 0.99, 1)(duration_q_state) AS q,
+		       ifNull(sumMerge(duration_sum_state) / nullIf(countMerge(span_count_state), 0), 0) / 1e6 AS mean,
+		       countMerge(span_count_state) AS n
+		FROM service_summary_5m` + baselineWhere(withService) + `
+		SETTINGS max_execution_time = 10`, true, true
 	case "error_rate":
-		// Bucketed: per-minute error % over the window, then
-		// percentiles of the minute rates. Mirrors the
-		// evaluator's "windowSec rolling" semantic better than
-		// a single global percentage which would smooth over
-		// the spike shape.
-		svcFilter := ""
-		var args []any
-		args = append(args, from)
-		if service != "" {
-			svcFilter = " AND service_name = ?"
-			args = append(args, service)
-		}
-		row := s.conn.QueryRow(ctx, `
-			WITH per_min AS (
-				SELECT toStartOfMinute(time) AS t,
-				       countIf(status_code = 'error') / nullIf(count(), 0) * 100 AS rate
-				FROM spans
-				WHERE time >= ?`+svcFilter+`
-				GROUP BY t
-			)
-			SELECT quantile(0.5)(rate),
-			       quantile(0.95)(rate),
-			       quantile(0.99)(rate),
-			       max(rate),
-			       avg(rate),
-			       count()
-			FROM per_min
-			SETTINGS max_execution_time = 10`, args...)
-		var n uint64
-		if err := row.Scan(&out.P50, &out.P95, &out.P99, &out.Max, &out.Mean, &n); err != nil {
-			return nil, fmt.Errorf("scan error_rate baseline: %w", err)
-		}
-		out.SampleCount = int64(n)
-		return out, nil
-
+		return baselineBucketSQL("countMerge(error_count_state) / nullIf(countMerge(span_count_state), 0) * 100", withService), false, true
 	case "request_rate":
-		// Spans-per-second computed per minute (count / 60).
-		svcFilter := ""
-		var args []any
-		args = append(args, from)
-		if service != "" {
-			svcFilter = " AND service_name = ?"
-			args = append(args, service)
-		}
-		row := s.conn.QueryRow(ctx, `
-			WITH per_min AS (
-				SELECT toStartOfMinute(time) AS t,
-				       count() / 60.0 AS rps
-				FROM spans
-				WHERE time >= ?`+svcFilter+`
-				GROUP BY t
-			)
-			SELECT quantile(0.5)(rps),
-			       quantile(0.95)(rps),
-			       quantile(0.99)(rps),
-			       max(rps),
-			       avg(rps),
-			       count()
-			FROM per_min
-			SETTINGS max_execution_time = 10`, args...)
-		var n uint64
-		if err := row.Scan(&out.P50, &out.P95, &out.P99, &out.Max, &out.Mean, &n); err != nil {
-			return nil, fmt.Errorf("scan request_rate baseline: %w", err)
-		}
-		out.SampleCount = int64(n)
-		return out, nil
-
+		return baselineBucketSQL("countMerge(span_count_state) / 300.0", withService), false, true
 	case "error_count":
-		// Absolute count per 5-min window (the evaluator's
-		// default WindowSec for count-mode rules).
-		svcFilter := ""
-		var args []any
-		args = append(args, from)
-		if service != "" {
-			svcFilter = " AND service_name = ?"
-			args = append(args, service)
-		}
-		row := s.conn.QueryRow(ctx, `
-			WITH per_bucket AS (
-				SELECT toStartOfInterval(time, INTERVAL 5 MINUTE) AS t,
-				       countIf(status_code = 'error') AS c
-				FROM spans
-				WHERE time >= ?`+svcFilter+`
-				GROUP BY t
-			)
-			SELECT quantile(0.5)(c),
-			       quantile(0.95)(c),
-			       quantile(0.99)(c),
-			       max(c),
-			       avg(c),
-			       count()
-			FROM per_bucket
-			SETTINGS max_execution_time = 10`, args...)
-		var n uint64
-		if err := row.Scan(&out.P50, &out.P95, &out.P99, &out.Max, &out.Mean, &n); err != nil {
-			return nil, fmt.Errorf("scan error_count baseline: %w", err)
-		}
-		out.SampleCount = int64(n)
-		return out, nil
+		return baselineBucketSQL("countMerge(error_count_state)", withService), false, true
 	}
+	return "", false, false
+}
 
-	return nil, fmt.Errorf("baseline not supported for metric %q", metric)
+// baselineBucketSQL — kova başına değer → kovalar üstünde dağılım.
+func baselineBucketSQL(expr string, withService bool) string {
+	return `WITH per_bucket AS (
+			SELECT time_bucket AS t, ` + expr + ` AS v
+			FROM service_summary_5m` + baselineWhere(withService) + `
+			GROUP BY t
+		)
+		SELECT quantile(0.5)(v), quantile(0.95)(v), quantile(0.99)(v), max(v), avg(v), count()
+		FROM per_bucket
+		SETTINGS max_execution_time = 10`
 }
