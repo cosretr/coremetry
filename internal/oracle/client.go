@@ -296,11 +296,14 @@ type TestResult struct {
 	Hint string `json:"hint,omitempty"`
 	// v0.10.768 — operatör "önce test edelim": pencere, poller'ın koşacağı
 	// sorgu + bind değerleri, sözlükten tam-tarama kanıtı, pencere özeti.
-	WindowMin int            `json:"windowMin"`
-	PollQuery string         `json:"pollQuery,omitempty"`
-	PollBinds []string       `json:"pollBinds,omitempty"`
-	Scan      *ScanCheck     `json:"scan,omitempty"`
-	Summary   *WindowSummary `json:"summary,omitempty"`
+	WindowMin int        `json:"windowMin"`
+	PollQuery string     `json:"pollQuery,omitempty"`
+	PollBinds []string   `json:"pollBinds,omitempty"`
+	Scan      *ScanCheck `json:"scan,omitempty"`
+	// v0.10.845 — LONG/LONG RAW kolon ön kontrolü; örnek sorgudan ÖNCE koşar
+	// ki ORA-00997 düşse bile operatör sebebi görsün.
+	Long    *LongCheck     `json:"long,omitempty"`
+	Summary *WindowSummary `json:"summary,omitempty"`
 }
 
 // ── v0.10.768 — tam-tarama ön kontrolü, pencere özeti ────────────────────
@@ -365,6 +368,63 @@ type ScanCheck struct {
 
 // FullScanRisk — SAF: tablo bulundu, zaman kolonu ne indeksli ne partition
 // anahtarı → her poll tam tarama.
+// LongCheck — v0.10.845 (operatör: "long data hatası"): tabloda LONG / LONG
+// RAW kolon var mı? Oracle FETCH FIRST'ü inline view + ROW_NUMBER ile yeniden
+// yazar ve select listesinde LONG kolon varken ORA-00997 verir. SELECT *
+// (selectMappedOnly kapalı) her LONG kolonu listeye alır; açıkken yalnız
+// EŞLENEN bir LONG kolon düşürür. Selected = sorgunun listesine giren LONG
+// kolonlar; MappedOnly = kontrolün baktığı kip (hüküm forma değil koşan
+// teste bağlı). Sözlük okunamazsa Checked=false, hüküm yok.
+type LongCheck struct {
+	Checked    bool     `json:"checked"`
+	Error      string   `json:"error,omitempty"`
+	MappedOnly bool     `json:"mappedOnly"`
+	Columns    []string `json:"columns"`  // tablodaki LONG/LONG RAW kolonlar (büyük harf, COLUMN_ID sırası)
+	Selected   []string `json:"selected"` // select listesine GİREN LONG kolonlar
+}
+
+func longColumnSQL() string {
+	return `SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS WHERE OWNER = :1 AND TABLE_NAME = :2 AND DATA_TYPE IN ('LONG', 'LONG RAW') ORDER BY COLUMN_ID`
+}
+
+// longCheckFromRows — SAF. rows: ALL_TAB_COLUMNS satırları (COLUMN_NAME).
+func longCheckFromRows(cfg SourceConfig, rows []map[string]any) LongCheck {
+	c := LongCheck{Checked: true, MappedOnly: cfg.SelectMappedOnly, Columns: []string{}, Selected: []string{}}
+	inList := func(string) bool { return true } // SELECT *: her kolon listede
+	if cfg.SelectMappedOnly {
+		mapped := map[string]bool{}
+		if cols, err := ResolveColumns(cfg); err == nil {
+			for _, col := range cols {
+				if col != "" {
+					mapped[strings.ToUpper(col)] = true
+				}
+			}
+		}
+		inList = func(name string) bool { return mapped[name] }
+	}
+	for _, r := range rows {
+		name := strings.ToUpper(strings.TrimSpace(cellString(firstCell(r))))
+		if name == "" {
+			continue
+		}
+		c.Columns = append(c.Columns, name)
+		if inList(name) {
+			c.Selected = append(c.Selected, name)
+		}
+	}
+	return c
+}
+
+func runLongCheck(ctx context.Context, db sqlDB, cfg SourceConfig, budget time.Duration, secret string) *LongCheck {
+	owner, table := strings.ToUpper(cfg.Schema), strings.ToUpper(cfg.Table)
+	_, rows, err := runRows(ctx, db, longColumnSQL(), []any{owner, table}, budget, secret)
+	if err != nil {
+		return &LongCheck{Error: "sözlük (ALL_TAB_COLUMNS): " + err.Error(), MappedOnly: cfg.SelectMappedOnly, Columns: []string{}, Selected: []string{}}
+	}
+	c := longCheckFromRows(cfg, rows)
+	return &c
+}
+
 func (c ScanCheck) FullScanRisk() bool {
 	return c.Checked && c.Found && !c.Indexed && !c.Partitioned
 }
@@ -663,6 +723,9 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 		res.Error = "bağlantı: " + redactSecrets(err.Error(), secret)
 		return res
 	}
+
+	// v0.10.845 — örnek sorgudan ÖNCE: ORA-00997 düşerse sebebi yanında dursun.
+	res.Long = runLongCheck(ctx, db, src, budget, secret)
 
 	cols, sample, qerr := runSample(ctx, db, sqlText, args, budget, secret)
 	res.LatencyMs = time.Since(start).Milliseconds()

@@ -39,3 +39,29 @@ describe('oracleProbe — tam tarama hükmü', () => {
     expect(src).toContain('pr.pollQuery');
   });
 });
+
+// v0.10.845 — LONG kolon hükmü: SELECT * kipinde kırmızı + kutuyu aç; eşlenen
+// kipte yalnız eşlenen LONG kırmızı; LONG yoksa hüküm yok; sözlük okunamadıysa gri.
+import { longVerdict } from './oracleProbe';
+import type { OracleLongCheck } from '@/lib/types';
+
+describe('oracleProbe — LONG kolon hükmü', () => {
+  const l = (o: Partial<OracleLongCheck>): OracleLongCheck => ({ checked: true, mappedOnly: false, columns: [], selected: [], ...o });
+  it('SELECT * kipinde LONG kolon kırmızı ve kutuyu açmayı söyler', () => {
+    const v = longVerdict(l({ columns: ['MCA_ERR_DETAIL'], selected: ['MCA_ERR_DETAIL'] }));
+    expect(v?.tone).toBe('b-err');
+    expect(v?.text).toContain('MCA_ERR_DETAIL');
+    expect(v?.detail).toContain('yalnız eşlenen kolonlar');
+  });
+  it('eşlenen kipte: eşlenen LONG kırmızı, eşlenmemiş LONG yeşil', () => {
+    expect(longVerdict(l({ mappedOnly: true, columns: ['D'], selected: ['D'] }))?.tone).toBe('b-err');
+    const ok = longVerdict(l({ mappedOnly: true, columns: ['D'], selected: [] }));
+    expect(ok?.tone).toBe('b-ok');
+    expect(ok?.detail).toBe('D');
+  });
+  it('LONG yoksa null; kontrol yoksa gri; sonuç yoksa null', () => {
+    expect(longVerdict(l({}))).toBeNull();
+    expect(longVerdict(l({ checked: false, error: 'ORA-00942' }))).toMatchObject({ tone: 'b-gray', detail: 'ORA-00942' });
+    expect(longVerdict(undefined)).toBeNull();
+  });
+});

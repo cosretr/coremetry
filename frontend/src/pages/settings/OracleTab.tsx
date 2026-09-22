@@ -26,7 +26,7 @@ import { Badge, Button, Field, SelectField, TextareaField } from '@/components/u
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
 import { useSettingsLoad, SettingsLoadError, FlashBox } from './shared';
-import { ORACLE_TEST_WINDOWS, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768
+import { ORACLE_TEST_WINDOWS, longVerdict, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768, longVerdict v0.10.845
 import {
   emptyOracleSource, sourceFromSnapshot, sourceForSave, validateOracleSource,
   hasOracleErrors, parseTypeFilter, typeFilterToText, numFromForm, numToForm,
@@ -443,6 +443,17 @@ export function OracleTab() {
                     {' · '}şifre {pr.passwordResolved ? 'çözüldü' : 'çözülemedi'}
                     {pr.latencyMs !== undefined && <> · {pr.latencyMs} ms</>}
                   </FlashBox>
+                  {/* v0.10.845 — LONG kolon hükmü; test DÜŞSE de görünür (ORA-00997'nin
+                      sebebi hatanın yanında dursun). */}
+                  {(() => {
+                    const lv = longVerdict(pr.long);
+                    return lv && (
+                      <div className="oracle-scan">
+                        <span className={`badge ${lv.tone}`} title={lv.detail}>{lv.text}</span>
+                        <span className="is-quiet"> {lv.detail}</span>
+                      </div>
+                    );
+                  })()}
                   {(pr.columns?.length ?? 0) > 0 && (
                     <div className="oracle-scroll">
                       <div className="oracle-sub">Kolonlar ({pr.columns!.length})</div>

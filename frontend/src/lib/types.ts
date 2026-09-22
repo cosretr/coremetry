@@ -1605,6 +1605,14 @@ export interface OracleTestResult {
   pollBinds?: string[];
   scan?: OracleScanCheck;
   summary?: OracleWindowSummary;
+  /** v0.10.845 — LONG/LONG RAW kolon ön kontrolü (örnek sorgudan ÖNCE koşar;
+   *  hata durumunda da dolu gelir). */
+  long?: OracleLongCheck;
+}
+/** oracle.LongCheck — selected = sorgunun select listesine giren LONG kolonlar;
+ *  mappedOnly = kontrolün baktığı kip. checked=false → sözlük okunamadı. */
+export interface OracleLongCheck {
+  checked: boolean; error?: string; mappedOnly: boolean; columns: string[]; selected: string[];
 }
 /** oracle.ScanCheck — zaman kolonu indeksli / partition anahtarı mı (ALL_IND_COLUMNS,
  *  ALL_PART_KEY_COLUMNS, ALL_TABLES). checked=false → sözlük okunamadı, hüküm yok. */

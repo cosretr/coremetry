@@ -546,3 +546,38 @@ func TestSelectListMappedOnly(t *testing.T) {
 		t.Fatalf("kapalı kip eski şekil değil: %q %v", q, err)
 	}
 }
+
+// v0.10.845 — Operatör: "long data hatası". LONG/LONG RAW kolon + FETCH FIRST
+// = ORA-00997. Kontrol SAF: SELECT * kipinde tablodaki her LONG kolon
+// listededir; eşlenen kipte yalnız eşlemeye giren LONG kolon. Dilimler hiç
+// nil kalmaz (tel: []), sözlük sorgusu ALL_TAB_COLUMNS'a iki tipi de sorar.
+func TestLongCheckFromRows(t *testing.T) {
+	if q := longColumnSQL(); !strings.Contains(q, "ALL_TAB_COLUMNS") || !strings.Contains(q, "'LONG RAW'") || !strings.Contains(q, "'LONG'") {
+		t.Fatalf("sözlük sorgusu: %s", q)
+	}
+	rows := []map[string]any{{"COLUMN_NAME": "mca_err_detail"}, {"COLUMN_NAME": "MCA_ERR_DUMP"}, {"COLUMN_NAME": "  "}}
+	cfg := cfgFor(t)
+
+	c := longCheckFromRows(cfg, nil)
+	if !c.Checked || c.Columns == nil || c.Selected == nil || len(c.Columns) != 0 {
+		t.Fatalf("boş sözlük: %+v", c)
+	}
+
+	c = longCheckFromRows(cfg, rows) // SELECT *
+	if c.MappedOnly || len(c.Columns) != 2 || len(c.Selected) != 2 || c.Columns[0] != "MCA_ERR_DETAIL" {
+		t.Fatalf("SELECT * kipi: %+v", c)
+	}
+
+	cfg.SelectMappedOnly = true
+	cfg.Columns = map[string]string{FieldMessage: "MCA_ERR_MESSAGE"}
+	c = longCheckFromRows(cfg, rows)
+	if !c.MappedOnly || len(c.Columns) != 2 || len(c.Selected) != 0 {
+		t.Fatalf("eşlenen kip, LONG eşlenmemiş: %+v", c)
+	}
+
+	cfg.Columns = map[string]string{FieldMessage: "mca_err_detail"} // LONG kolon eşlemeye girdi
+	c = longCheckFromRows(cfg, rows)
+	if len(c.Selected) != 1 || c.Selected[0] != "MCA_ERR_DETAIL" {
+		t.Fatalf("eşlenen LONG yakalanmadı: %+v", c)
+	}
+}
