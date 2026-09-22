@@ -18,8 +18,14 @@ func TracesEmptyMismatch() uint64 { return tracesEmptyMismatch.Load() }
 
 // newEmptyDiag — SAF dışı tek yan etki sayaç: eşleşen span > 0 iken liste
 // boşsa capMismatch=true + sayaç + uyarı satırı.
-func newEmptyDiag[N int | int64 | uint64](matching N) map[string]any {
+//
+// v0.10.852 — capped: trace-düzeyi sayım tavana (chstore traceCountCap) çarptı,
+// matching kırpılmış; FE "≥" yazar. api.go büyümesin diye bayrak BURADA.
+func newEmptyDiag[N int | int64 | uint64](matching N, capped bool) map[string]any {
 	diag := map[string]any{"matchingSpans": matching}
+	if capped {
+		diag["matchingCapped"] = true
+	}
 	if matching > 0 {
 		diag["capMismatch"] = true
 		tracesEmptyMismatch.Add(1)

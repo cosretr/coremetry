@@ -1440,6 +1440,7 @@ function TracesPageInner() {
           <TracesEmpty service={filter.service} search={filter.search} traceId={filter.traceId} range={range} onSwitchView={() => setView('aggregate')}
             explainHref={explainHref ?? undefined}
             matchingSpans={data?.emptyDiag?.matchingSpans}
+            matchingCapped={data?.emptyDiag?.matchingCapped}
             serviceSpans={data?.emptyDiag?.serviceSpans}
             promotedDiag={data?.emptyDiag}
             identity={data?.identity}
@@ -1886,7 +1887,7 @@ export default function TracesPage() {
 
 // TracesEmpty — distinguishes "aged out of raw spans (MV still has it)" from
 // "search matched nothing" so the operator gets the right next step.
-function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narrowedFromNs, explainHref, matchingSpans, serviceSpans, promotedDiag, identity }: {
+function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narrowedFromNs, explainHref, matchingSpans, matchingCapped, serviceSpans, promotedDiag, identity }: {
   service: string; search: string; range: TimeRange; onSwitchView: () => void;
   // v0.10.753 — ?traceId= ile gelen boş liste: metin kimlik çıpasına göre (emptyReason.ts).
   traceId?: string;
@@ -1900,6 +1901,8 @@ function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narro
   explainHref?: string;
   // v0.10.329 — sunucu öz-teşhisi: aynı filtreyle eşleşen span sayısı (boş listede).
   matchingSpans?: number;
+  // v0.10.852 — sayım tavana çarptı (trace-düzeyi, 10.000): "≥" ile dürüst göster.
+  matchingCapped?: boolean;
   // v0.10.530 — servisin YÜKLEMSİZ ham span sayısı; "TTL" ile "yüklem"i ayırır.
   serviceSpans?: number;
 }) {
@@ -1981,7 +1984,7 @@ function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narro
       {matchingSpans !== undefined && (
         <div style={{ marginTop: 10, fontSize: 11, color: matchingSpans > 0 ? 'var(--warn)' : 'var(--text3)' }}>
           {matchingSpans > 0
-            ? <>Diagnostic: <b>{matchingSpans.toLocaleString()}</b> spans in this window match the filter, yet the trace list came back empty — the backend logged the query plan (<span className="mono">[traces] EMPTY list</span>).</>
+            ? <>Diagnostic: <b>{matchingCapped ? '≥ ' : ''}{matchingSpans.toLocaleString()}</b> spans in this window match the filter, yet the trace list came back empty — the backend logged the query plan (<span className="mono">[traces] EMPTY list</span>).</>
             : <>Diagnostic: nothing in this window matches search + filters (trace-level: a span matching the search and spans matching each chip, anywhere in the trace) — the data or the predicate, not the list query.</>}
         </div>
       )}

@@ -2724,6 +2724,8 @@ export interface TracesResponse {
   // v0.10.329 — boş liste öz-teşhisi: aynı filtreyle eşleşen SPAN sayısı (yalnız boş sonuçta).
   emptyDiag?: {
     matchingSpans: number; error?: string;
+    /** v0.10.852 — trace-düzeyi sayım tavana (10.000) çarptı; matchingSpans kırpılmış, "≥" göster. */
+    matchingCapped?: boolean;
     // v0.10.530 — servisin YÜKLEMSİZ ham span sayısı (yalnız servis seçili ∧
     // matchingSpans=0): >0 = yüklem (arama/çip) eşleşmiyor, 0 = ham veri bu
     // pencerede yok (saklama/ingest). undefined = ölçülmedi.

@@ -89,8 +89,15 @@ func TestTraceLevelHavingForGroups(t *testing.T) {
 		t.Fatal("boş kök çip sayılmaz")
 	}
 	sql := countMatchingTracesSQL("WHERE service_name = ?", " HAVING countIf(x) > 0")
-	if !strings.HasPrefix(sql, "SELECT count() FROM (SELECT trace_id FROM spans WHERE") || !strings.Contains(sql, "GROUP BY trace_id HAVING countIf(x) > 0)") {
+	if !strings.HasPrefix(sql, "SELECT count() FROM (SELECT trace_id FROM spans WHERE") || !strings.Contains(sql, "GROUP BY trace_id HAVING countIf(x) > 0 LIMIT 10001)") {
 		t.Fatalf("trace sayım SQL: %s", sql)
+	}
+	// v0.10.852 (scale-audit 🔴) — kapsız GROUP BY tüm pencereyi okurdu: erken
+	// durma vidaları + tek iş parçacığı + alt sorgu LIMIT'i ŞART.
+	for _, w := range []string{"max_rows_to_group_by = 10000", "group_by_overflow_mode = 'break'", "max_threads = 1", "max_execution_time = 10"} {
+		if !strings.Contains(sql, w) {
+			t.Fatalf("trace sayım SQL %q taşımıyor: %s", w, sql)
+		}
 	}
 }
 

@@ -87,7 +87,10 @@ func countMatchingSpansSQL(whereSQL string) string {
 
 // CountMatchingSpans — bkz. üst yorum. Hata teşhisin parçası: hata dönerse
 // çağıran onu da kaydeder.
-func (s *Store) CountMatchingSpans(ctx context.Context, f TraceFilter) (uint64, error) {
+//
+// v0.10.852 — capped: trace-düzeyi dal tavana (traceCountCap) çarptı; n tavana
+// kırpılmış döner. Span-düzeyi dal düz count(), hiç tavanlanmaz (capped=false).
+func (s *Store) CountMatchingSpans(ctx context.Context, f TraceFilter) (n uint64, capped bool, err error) {
 	lf := f
 	lf.CandidateIDs = nil
 	// v0.10.341 — arama + çip: liste artık TRACE düzeyi (çipler HAVING'de);
@@ -105,10 +108,12 @@ func (s *Store) CountMatchingSpans(ctx context.Context, f TraceFilter) (uint64, 
 		t0 := time.Now()
 		sql := countMatchingTracesSQL(wc.sql(), " HAVING "+strings.Join(parts, " AND "))
 		args := append(append([]any{}, wc.args...), hargs...)
-		var n uint64
-		err := s.telemetryReadConn().QueryRow(ctx, sql, args...).Scan(&n)
+		err = s.telemetryReadConn().QueryRow(ctx, sql, args...).Scan(&n)
 		f.Explain.step("empty-diag-trace-count", sql, args, t0, int(n), err)
-		return n, err
+		if n > traceCountCap {
+			n, capped = traceCountCap, true
+		}
+		return n, capped, err
 	}
 	wc := buildGetTracesWhere(lf, s.clusterExpr())
 	if pred, pargs := searchPredicate(f.Search); pred != "" {
@@ -119,10 +124,9 @@ func (s *Store) CountMatchingSpans(ctx context.Context, f TraceFilter) (uint64, 
 	}
 	t0 := time.Now()
 	sql := countMatchingSpansSQL(wc.sql())
-	var n uint64
-	err := s.telemetryReadConn().QueryRow(ctx, sql, wc.args...).Scan(&n)
+	err = s.telemetryReadConn().QueryRow(ctx, sql, wc.args...).Scan(&n)
 	f.Explain.step("empty-diag-count", sql, wc.args, t0, int(n), err)
-	return n, err
+	return n, false, err
 }
 
 // ── v0.10.530 — "TTL'i aştı" ipucu için ikinci sayım ─────────────────────
@@ -160,8 +164,22 @@ func (s *Store) CountServiceSpans(ctx context.Context, f TraceFilter) (uint64, e
 }
 
 // countMatchingTracesSQL — v0.10.341: trace-düzeyi teşhis sayımı.
+//
+// v0.10.852 (scale-audit 2026-09-23 🔴) — kapsız `GROUP BY trace_id` tüm
+// pencereyi okuyordu; ikizi buildTraceCountSQL bunu v0.9.633'te ÖLÇÜP
+// DISTINCT+LIMIT'e geçmişti, bu kopya kapsız kaldı — ve her BOŞ /api/traces
+// cevabında otomatik koşuyor. HAVING (kök/arama/hata yüklemleri) yüzünden
+// DISTINCT'e geçilemez; erken durma GROUP BY'ın kendi vidasıyla:
+// max_rows_to_group_by = cap + 'break' → cap kadar ayrık trace görülünce
+// toplama DURUR ve kısmi sonuç döner; LIMIT cap+1 dış sayımı da tavanlar;
+// max_threads=1 erken durmayı keskinleştirir (ikizdeki ölçüm). Teşhis sayımı
+// ("eşleşen trace VAR ama liste boş") yaklaşık olabilir — çağıran cap'i
+// aşan değeri `capped` ile işaretler, FE "≥" yazar. Kısmi HAVING bazı
+// grupları düşürebilir: sayım aşağı yönlü yaklaşıktır, sıfır/sıfır-değil
+// ayrımı (teşhisin asıl sorusu) korunur.
 func countMatchingTracesSQL(whereSQL, havingSQL string) string {
-	return `SELECT count() FROM (SELECT trace_id FROM spans ` + whereSQL + ` GROUP BY trace_id` + havingSQL + `) SETTINGS max_execution_time = 10`
+	return fmt.Sprintf(`SELECT count() FROM (SELECT trace_id FROM spans %s GROUP BY trace_id%s LIMIT %d) SETTINGS max_execution_time = 10, max_threads = 1, max_rows_to_group_by = %d, group_by_overflow_mode = 'break'`,
+		whereSQL, havingSQL, traceCountCap+1, traceCountCap)
 }
 
 // v0.10.339 — terfi kolonu uyuşmazlık probu (promoted_attr.go §v0.10.339).

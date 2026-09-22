@@ -4299,8 +4299,8 @@ func (s *Server) getTraces(w http.ResponseWriter, r *http.Request) {
 		// kaybediyor, N=0 = veri/yüklem. Yanıta emptyDiag, pod loguna
 		// explain (SQL/arg/ms/satır) — operatör tıklaması gerekmez.
 		if chstore.EmptyDiagWanted(f, len(traces)) {
-			n, cerr := s.store.CountMatchingSpans(ctx, f)
-			diag := newEmptyDiag(n) // v0.10.813 — eşleşen span var ama liste boş = tavan/sorgu uyuşmazlığı sayacı
+			n, capped, cerr := s.store.CountMatchingSpans(ctx, f)
+			diag := newEmptyDiag(n, capped) // v0.10.813 — eşleşen span var ama liste boş = tavan/sorgu uyuşmazlığı sayacı; v0.10.852 capped
 			if cerr != nil {
 				diag["error"] = cerr.Error()
 			}
