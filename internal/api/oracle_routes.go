@@ -28,6 +28,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -129,7 +130,10 @@ func (s *Server) testOracleSource(w http.ResponseWriter, r *http.Request) {
 	if s.store != nil {
 		opt.TraceLookup = s.store.TraceServicesByIDs
 	}
-	writeJSON(w, s.oracle.TestWith(r.Context(), cfg.Sources[0], opt))
+	res := s.oracle.TestWith(r.Context(), cfg.Sources[0], opt)
+	// v0.10.855 (scale-audit) — canlı Oracle bağlantısı, operatör DSN/şifresiyle: iz bırakır.
+	s.audit(r, "settings.oracle.test", "settings", cfg.Sources[0].Name, fmt.Sprintf("ok=%v windowMin=%d", res.OK, opt.WindowMin))
+	writeJSON(w, res)
 }
 
 // oracleStatusPayload — Aşama 1 dürüstlüğü: poller YOK, dolayısıyla

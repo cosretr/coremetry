@@ -21,6 +21,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -236,5 +237,8 @@ func (s *Server) testMCPClientServer(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, badReq)
 		return
 	}
-	writeJSON(w, s.mcpClient.Test(r.Context(), cfg.Servers[0]))
+	res := s.mcpClient.Test(r.Context(), cfg.Servers[0])
+	// v0.10.855 (scale-audit) — operatör-sağlanan kimlik bilgisiyle dış bağlantı: iz bırakır (AI profil testi emsali).
+	s.audit(r, "settings.mcp.test", "settings", cfg.Servers[0].Name, fmt.Sprintf("ok=%v", res.OK))
+	writeJSON(w, res)
 }

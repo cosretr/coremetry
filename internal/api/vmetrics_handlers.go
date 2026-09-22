@@ -205,7 +205,10 @@ func (s *Server) testVMSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, badReq, http.StatusBadRequest)
 		return
 	}
-	if err := s.vmetrics.Test(r.Context(), cfg); err != nil {
+	err := s.vmetrics.Test(r.Context(), cfg)
+	// v0.10.855 (scale-audit) — dış metrik deposuna operatör kimlik bilgisiyle bağlantı: iz bırakır.
+	s.audit(r, "settings.vm.test", "settings", "victoria-metrics", fmt.Sprintf("ok=%v", err == nil))
+	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
