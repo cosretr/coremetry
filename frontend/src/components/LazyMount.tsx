@@ -20,10 +20,14 @@ export function LazyMount({
   children,
   minHeight = 120,
   rootMargin = '200px 0px',
+  compact = false,
 }: {
   children: React.ReactNode;
   minHeight?: number | string;
   rootMargin?: string;
+  /** v0.10.854 — hücre içi kullanım: çizgili panel kutusu yerine küçük "…" yer tutucu
+   *  (tablo satırındaki çipler; satır başına fetch'i görünür satırla sınırlar). */
+  compact?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -53,6 +57,9 @@ export function LazyMount({
   }, [mounted, rootMargin]);
 
   if (mounted) return <>{children}</>;
+  if (compact) {
+    return <div ref={ref} style={{ display: 'inline-block', minHeight, minWidth: 24, color: 'var(--text3)', fontSize: 11 }}>…</div>;
+  }
   return (
     <div ref={ref} style={{
       minHeight,

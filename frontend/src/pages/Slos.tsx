@@ -9,6 +9,8 @@ import { IconSparkles } from '@/components/icons';
 import { Button, Field, Modal, SelectField, Stack, useConfirm } from '@/components/ui';
 import { useSLOs, useCreateSLO, useDeleteSLO } from '@/lib/queries';
 import { api } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { LazyMount } from '@/components/LazyMount'; // v0.10.854
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { SLIType, SLORow } from '@/lib/types';
@@ -113,7 +115,8 @@ export default function SLOsPage() {
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(o => (
-                  <tr key={o.id}>
+                  // v0.10.854 (scale-audit 🔴) — >100 satırda content-visibility (ev kuralı).
+                  <tr key={o.id} style={dt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 44px' } : undefined}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{o.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
@@ -136,11 +139,13 @@ export default function SLOsPage() {
                     <td className="mono">
                       {o.status && !o.status.noData ? <BurnBadge rate={o.status.burnRate} /> : '—'}
                     </td>
+                    {/* v0.10.854 (scale-audit 🔴) — satır başına iki istek yalnız GÖRÜNÜR
+                        satırda (LazyMount); autocreate ≤200 SLO × 2 = 400 istek/yükleme idi. */}
                     <td>
-                      <ForecastChip sloId={o.id} />
+                      <LazyMount compact minHeight={18}><ForecastChip sloId={o.id} /></LazyMount>
                     </td>
                     <td>
-                      <BurnSparkline sloId={o.id} />
+                      <LazyMount compact minHeight={18}><BurnSparkline sloId={o.id} /></LazyMount>
                     </td>
                     <td>
                       {/* v0.10.801 — Honeycomb "No Events": olaysız SLO ne sağlıklı ne ihlal. */}
@@ -325,15 +330,12 @@ function BurnBadge({ rate }: { rate: number }) {
 // Tooltip carries the projected hours so the operator can pick
 // "12h" out of the amber chip's "soon" qualitative read.
 function ForecastChip({ sloId }: { sloId: string }) {
-  const [data, setData] = useState<{
-    burnRate: number; hoursToExhaust: number;
-    willBreachWithin24h: boolean; safeBurn: boolean;
-  } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    api.sloForecast(sloId).then(d => { if (!cancelled) setData(d); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [sloId]);
+  // v0.10.854 — ham useEffect → useQuery: dedup + staleTime (sunucu TTL 60 s) + sıralamada iptal.
+  const { data } = useQuery({
+    queryKey: ['slo-forecast', sloId],
+    queryFn: () => api.sloForecast(sloId),
+    staleTime: 60_000,
+  });
   if (!data) return <span style={{ color: 'var(--text3)' }}>…</span>;
   if (data.safeBurn) {
     return (
@@ -545,17 +547,14 @@ function BurnExplainButton({ sloId }: { sloId: string }) {
 // opening the detail view. Endpoint serves a 60s-cached series
 // so even 30 SLOs only hit the chstore once a minute.
 function BurnSparkline({ sloId }: { sloId: string }) {
-  type Pt = { time: number; total: number; good: number; burnRate: number };
-  const [series, setSeries] = useState<Pt[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    api.sloBurnSeries(sloId, 7)
-      .then(d => { if (!cancelled) setSeries(d.series ?? []); })
-      .catch(() => { if (!cancelled) setFailed(true); });
-    return () => { cancelled = true; };
-  }, [sloId]);
-  if (failed) return <span style={{ color: 'var(--text3)' }}>—</span>;
+  // v0.10.854 — ham useEffect → useQuery (bkz. ForecastChip).
+  const q = useQuery({
+    queryKey: ['slo-burn', sloId, 7],
+    queryFn: () => api.sloBurnSeries(sloId, 7),
+    staleTime: 60_000,
+  });
+  const series = q.data ? (q.data.series ?? []) : null;
+  if (q.isError) return <span style={{ color: 'var(--text3)' }}>—</span>;
   if (!series) return <span style={{ color: 'var(--text3)', fontSize: 11 }}>…</span>;
   if (series.length === 0) return <span style={{ color: 'var(--text3)' }}>—</span>;
 
