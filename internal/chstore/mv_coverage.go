@@ -341,12 +341,19 @@ func (s *Store) MVCoverage(ctx context.Context) (MVCoverageReport, error) {
 // hücrelik tarama tıklama başına İKİ KEZ ödenmez (FE onarımdan sonra yeniden
 // tarar). Ölçüldü: kapaksız süpürme 6 host × 21 MV'de en kötü 21 dk.
 func (s *Store) mvCoverageReport(ctx context.Context, harden bool) (MVCoverageReport, error) {
-	rep := MVCoverageReport{Rows: []MVHostState{}}
-	rows, cluster, db, err := s.mvInventory(ctx)
-	rep.Cluster = cluster
+	snap, err := s.mvInventorySnap(ctx)
 	if err != nil {
-		return rep, fmt.Errorf("system.tables: %w", err)
+		return MVCoverageReport{Rows: []MVHostState{}, Cluster: snap.cluster}, fmt.Errorf("system.tables: %w", err)
 	}
+	return s.mvCoverageReportFrom(ctx, snap, harden, s.hostAddrsOnce(ctx))
+}
+
+// mvCoverageReportFrom — v0.10.848: envanter ve adres çözücü ÇAĞIRANDAN
+// (mv_admin_report.go tek istekte üç okuyucuya aynı snapshot'ı verir).
+func (s *Store) mvCoverageReportFrom(ctx context.Context, snap mvInventorySnap, harden bool, addrsOf func() (map[string]string, error)) (MVCoverageReport, error) {
+	rep := MVCoverageReport{Rows: []MVHostState{}}
+	rows, cluster, db := snap.rows, snap.cluster, snap.db
+	rep.Cluster = cluster
 	hosts, err := s.mvHostRoster(ctx, cluster)
 	if err != nil {
 		return rep, fmt.Errorf("host rosteri: %w", err)
@@ -390,7 +397,7 @@ func (s *Store) mvCoverageReport(ctx context.Context, harden bool) (MVCoverageRe
 		}
 		return rep, nil
 	}
-	addrs, _, aerr := s.resolveHostAddrs(ctx)
+	addrs, aerr := addrsOf()
 	if aerr != nil {
 		return rep, nil // adres yok: satırlar kalır, eylem kapanır
 	}

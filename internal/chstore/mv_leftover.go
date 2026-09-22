@@ -316,16 +316,24 @@ func mvLeftoversFromRows(rows []mvTableRow, cluster bool, storage func(string) s
 // probe açmamak için taşınır; ölçülmemiş bir küme (sıfır değer) öksüz kararı
 // VERDİRMEZ, satırı düğmesiz bırakır.
 func (s *Store) MVLeftovers(ctx context.Context, targets MVTargetSet) ([]MVLeftover, string, error) {
-	rows, cluster, _, err := s.mvInventory(ctx)
+	snap, err := s.mvInventorySnap(ctx)
 	if err != nil {
-		return nil, cluster, fmt.Errorf("system.tables: %w", err)
+		return nil, snap.cluster, fmt.Errorf("system.tables: %w", err)
 	}
+	out, err := s.mvLeftoversFrom(ctx, snap, targets, s.hostAddrsOnce(ctx))
+	return out, snap.cluster, err
+}
+
+// mvLeftoversFrom — v0.10.848: envanter ve adres çözücü ÇAĞIRANDAN
+// (mv_admin_report.go). Gövde MVLeftovers'tan taşındı, karar aynı.
+func (s *Store) mvLeftoversFrom(ctx context.Context, snap mvInventorySnap, targets MVTargetSet, addrsOf func() (map[string]string, error)) ([]MVLeftover, error) {
+	rows, cluster := snap.rows, snap.cluster
 	out := mvLeftoversFromRows(rows, s.clusterMode(), s.mvStorageName, s.mvGuardedOff, targets)
 	if len(out) == 0 {
-		return out, cluster, nil
+		return out, nil
 	}
 	if cluster != "" {
-		if addrs, _, aerr := s.resolveHostAddrs(ctx); aerr == nil {
+		if addrs, aerr := addrsOf(); aerr == nil {
 			for i := range out {
 				out[i].Addr = addrs[out[i].Host]
 			}
@@ -346,7 +354,7 @@ func (s *Store) MVLeftovers(ctx context.Context, targets MVTargetSet) ([]MVLefto
 			}
 		}
 	}
-	return out, cluster, nil
+	return out, nil
 }
 
 // innerTableSizes — host → `.inner_id.*` → {satır, disk baytı} (aktif parçalar).

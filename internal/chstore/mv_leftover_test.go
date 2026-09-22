@@ -513,7 +513,7 @@ func TestMVLeftoverActionPins(t *testing.T) {
 	}
 	// Envanter TEK kaynak: ikinci bir system.tables taraması açılmadı
 	// (mvInventory — skip_unavailable_shards YOK, erişilemeyen host HATA).
-	if !strings.Contains(src, "s.mvInventory(ctx)") {
+	if !strings.Contains(src, "s.mvInventorySnap(ctx)") { // v0.10.848 — snapshot sarmalayıcısı, kaynak yine mvInventory
 		t.Error("MVLeftovers mvInventory'den okumalı")
 	}
 	// Muhafız KENDİ metnini ısırmasın: yorumlarda ayarın adı geçer, ARANAN

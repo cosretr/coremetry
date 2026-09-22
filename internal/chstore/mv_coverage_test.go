@@ -312,11 +312,16 @@ func TestMVRebuildSourcePins(t *testing.T) {
 		"DROP TABLE IF EXISTS `", "` SYNC", // SYNC eki: kaskad iç tabloyu da götürür
 		"context.WithTimeout(ctx, mvRebuildStepTimeout)",
 		"toUInt32(total_replicas), toUInt32(active_replicas), toUInt8(is_readonly)",
-		"clusterAllReplicas('%s', system.one)", "resolveHostAddrs(",
+		"clusterAllReplicas('%s', system.one)", "hostAddrsOnce(", // v0.10.848 — resolveHostAddrs'ın tek-seferlik sarmalayıcısı (mv_admin_report.go)
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("eksik: %s", want)
 		}
+	}
+	// v0.10.848 — adresler yine bağlan-ve-hostName-sor yolundan (v0.10.820):
+	// sarmalayıcı resolveHostAddrs'ı çağırır, başka bir kaynağı değil.
+	if w, err := os.ReadFile("mv_admin_report.go"); err != nil || !strings.Contains(string(w), "s.resolveHostAddrs(ctx)") {
+		t.Errorf("hostAddrsOnce resolveHostAddrs'a inmeli: %v", err)
 	}
 	// Koşulan ifadelerde ON CLUSTER yok (yorumlar serbest).
 	for _, m := range regexp.MustCompile(`"[^"\n]*ON CLUSTER[^"\n]*"`).FindAllString(src, -1) {

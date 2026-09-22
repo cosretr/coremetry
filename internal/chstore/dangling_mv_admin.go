@@ -266,10 +266,17 @@ func stripOnCluster(sql string) string { return reOnCluster.ReplaceAllString(sql
 // Envanter okuması v0.10.825'te mvInventory'ye çıkarıldı: MV kapsama kartı
 // (mv_coverage.go) AYNI satırları okur, iki kopya sorgu iki gerçek üretirdi.
 func (s *Store) DanglingMVs(ctx context.Context) ([]DanglingMV, string, error) {
-	in, cluster, _, err := s.mvInventory(ctx)
+	snap, err := s.mvInventorySnap(ctx)
 	if err != nil {
-		return nil, cluster, err
+		return nil, snap.cluster, err
 	}
+	return s.danglingMVsFrom(ctx, snap), snap.cluster, nil
+}
+
+// danglingMVsFrom — v0.10.848: envanter ÇAĞIRANDAN gelir (tek istek, tek
+// okuma; mv_admin_report.go). Gövde DanglingMVs'ten taşındı, karar aynı.
+func (s *Store) danglingMVsFrom(ctx context.Context, snap mvInventorySnap) []DanglingMV {
+	in, cluster := snap.rows, snap.cluster
 	// Shard ekseni ÖNCE: eş kararı saf gövdede verilir (replicatedInnerPeer),
 	// burada yalnız adres eklenir. shard 0 = system.clusters'ta eşleşmedi →
 	// haritaya girmez → o host eş olamaz (eski `Shard != 0` kuralı).
@@ -301,7 +308,7 @@ func (s *Store) DanglingMVs(ctx context.Context) ([]DanglingMV, string, error) {
 			out[i].PeerHost = ""
 		}
 	}
-	return out, cluster, nil
+	return out
 }
 
 // RepairDanglingMV — o node'da: view'ı düşür (iç tablo zaten yok), kanonik

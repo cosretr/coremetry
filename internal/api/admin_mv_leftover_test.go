@@ -66,7 +66,7 @@ func TestMVLeftoverAdminRoutes(t *testing.T) {
 	for _, want := range []string{
 		// v0.10.833 — öksüz kararı kapsamanın topladığı `TO INNER UUID`
 		// kümesine bakar; küme İKİNCİ bir probe açmadan zarftan taşınır.
-		"s.store.MVLeftovers(r.Context(), rep.Targets)",
+		"s.store.MVAdminReport(r.Context())", // v0.10.848 — tek envanter zarfı
 		`out["leftoverError"]`,
 		`out["leftovers"] = lo`,
 		"lo = []chstore.MVLeftover{}", // null DEĞİL: kart "yok"u "ölçülmedi"den ayırır
@@ -74,5 +74,17 @@ func TestMVLeftoverAdminRoutes(t *testing.T) {
 		if !strings.Contains(dsrc, want) {
 			t.Errorf("GET cevabında eksik: %s", want)
 		}
+	}
+}
+
+// v0.10.848 — zarf tek envanterden üçünü kurar; artıklar kapsamanın hedef
+// kümesini alır (833: ikinci probe YOK). Pin chstore tarafında yaşar.
+func TestMVAdminReportPassesCoverageTargetsToLeftovers(t *testing.T) {
+	d, err := os.ReadFile("../chstore/mv_admin_report.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(d), "s.mvLeftoversFrom(ctx, snap, r.Coverage.Targets, addrs)") {
+		t.Error("artıklar kapsamanın Targets kümesini almalı (ikinci probe yok)")
 	}
 }

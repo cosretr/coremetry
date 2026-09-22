@@ -179,7 +179,7 @@ func TestMVCoverageNeverEmitsGuardedRows(t *testing.T) {
 		}
 	}
 	// Elemenin GÖVDEDE durduğunu da çivile: kanonik listeyi kuran döngü.
-	fn := funcBody(t, "mv_coverage.go", "func (s *Store) mvCoverageReport(")
+	fn := funcBody(t, "mv_coverage.go", "func (s *Store) mvCoverageReportFrom(") // v0.10.848 — gövde snapshot alan varyanta taşındı
 	if !strings.Contains(fn, "s.mvGuardedOff(n)") {
 		t.Error("mvCoverageReport guarded MV'leri kanonik eksenden ELEMELİ — eleme kalkarsa guarded hücreler yıkıcı düğme kapısına girer")
 	}

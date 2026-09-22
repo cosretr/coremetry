@@ -54,7 +54,7 @@ func TestMVRebuildAdminRoute(t *testing.T) {
 	if strings.Count(dsrc, "auth.RequireRole(auth.RoleAdmin") != 2 {
 		t.Error("admin_dangling_mv.go iki kapısını korumalı")
 	}
-	if !strings.Contains(dsrc, "s.store.MVCoverage(r.Context())") || !strings.Contains(dsrc, `out["coverageError"]`) {
+	if !strings.Contains(dsrc, "s.store.MVAdminReport(r.Context())") || !strings.Contains(dsrc, `out["coverageError"]`) {
 		t.Error("GET cevabı kapsamayı ve kapsama hatasını taşımalı")
 	}
 }

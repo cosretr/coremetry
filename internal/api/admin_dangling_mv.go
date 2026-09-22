@@ -30,12 +30,14 @@ func (s *Server) registerDanglingMVRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) getDanglingMVs(w http.ResponseWriter, r *http.Request) {
-	rows, cluster, err := s.store.DanglingMVs(r.Context())
+	// v0.10.848 — üç okuyucu TEK envanter snapshot'ından (chstore.MVAdminReport):
+	// istek başına 1 system.tables taraması + en çok 1 adres turu (eskiden 3 + 2).
+	rep0, err := s.store.MVAdminReport(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	out := map[string]any{"cluster": cluster, "rows": rows, "generatedAt": time.Now().UnixNano()}
+	out := map[string]any{"cluster": rep0.Cluster, "rows": rep0.Dangling, "generatedAt": time.Now().UnixNano()}
 	// v0.10.825 — kapsama (ok | plain | dangling | missing) aynı çağrıda:
 	// kart artık "view var, iç tablo yok"un yanında "iç tablo DÜZ" ve "view
 	// YOK" durumlarını da gösterir. Kapsama hatası sarkan listeyi DÜŞÜRMEZ
@@ -44,7 +46,7 @@ func (s *Server) getDanglingMVs(w http.ResponseWriter, r *http.Request) {
 	// sınıfları durur (hücreler `unmeasured` olur). Zarfta ayrı bir alan
 	// olması FE'nin YEŞİL rozeti "ölçüldü VE bulgu yok" koşuluna bağlaması
 	// içindir — ölçülmemiş bir şey sağlıklı ilan edilemez.
-	rep, cerr := s.store.MVCoverage(r.Context())
+	rep, cerr := rep0.Coverage, rep0.CoverageErr
 	if cerr != nil {
 		out["coverageError"] = cerr.Error()
 	} else {
@@ -61,7 +63,7 @@ func (s *Server) getDanglingMVs(w http.ResponseWriter, r *http.Request) {
 	// bakar (ikinci bir probe AÇILMAZ): nesne uuid'si o kümede olan iç tablo
 	// CANLI bir MV'nin hedefidir. Kapsama düştüyse küme ölçülmemiştir ve
 	// öksüz satırları düğmesiz (Blocked) gelir.
-	lo, _, lerr := s.store.MVLeftovers(r.Context(), rep.Targets)
+	lo, lerr := rep0.Leftovers, rep0.LeftoverErr
 	if lerr != nil {
 		out["leftoverError"] = lerr.Error()
 	}
