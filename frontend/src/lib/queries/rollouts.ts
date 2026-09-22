@@ -1,6 +1,6 @@
 // queries/rollouts.ts — v0.10.201 (ROLLOUTS Faz 4). Liste/istatistik/koşu
 // hook'ları: her anahtar TÜM girdileri taşır (keys.rollouts), staleTime
-// sunucu TTL'iyle aynı (15 s / 60 s), refetchInterval ≥ 10 s (poll = SSE
+// refetchInterval ile hizalı (≥ sunucu TTL'i; v0.10.856), refetchInterval ≥ 10 s (poll = SSE
 // kayıp toleransı; `event: rollout` invalidation'ı erken tazeler —
 // eventInvalidations.ts). Hidden sekmede RQ varsayılanı duraklatır.
 import { useQuery } from '@tanstack/react-query';
@@ -43,7 +43,7 @@ export function useRolloutRuns(enabled = true) {
   return useQuery<RolloutRunsResponse>({
     queryKey: keys.rollouts.runs(),
     queryFn: ({ signal }) => api.rolloutRuns(signal),
-    staleTime: 10_000,
+    staleTime: 30_000, // v0.10.856 (scale-audit) — aralıkla hizalı (sunucu TTL 10 s; remount'ta çift fetch yok)
     refetchInterval: 30_000,
     enabled,
   });

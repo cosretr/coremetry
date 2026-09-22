@@ -297,7 +297,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
       sreTeam: sreTeam || undefined,
       cluster: cluster || undefined,
     }),
-    staleTime: 5_000,
+    staleTime: 30_000, // v0.10.856 (scale-audit) — aralıkla hizalı; 5 s her remount'ta ek fetch açıyordu (kardeşler 30/25 s)
     refetchInterval: 30_000,
   });
   // Cluster filter options (v0.9.181) — distinct clusters across the loaded
