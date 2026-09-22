@@ -17,11 +17,12 @@ func TestNewEmptyDiagCounts(t *testing.T) {
 	if _, has := d["matchingCapped"]; has {
 		t.Fatal("tavansız sayımda matchingCapped olmamalı")
 	}
-	if c := newEmptyDiag(10000, true); c["matchingCapped"] != true { // v0.10.852
-		t.Fatalf("tavanlı sayım işaretlenmeli: %v", c)
-	}
 	if d["capMismatch"] != true || d["matchingSpans"] != 9 || TracesEmptyMismatch() != before+1 {
 		t.Errorf("eşleşen 9 → capMismatch + sayaç: %+v", d)
+	}
+	// v0.10.852/853 — tavanlı sayım işaretlenir; sayaç kontrolünden SONRA (o da artırır).
+	if c := newEmptyDiag(10000, true); c["matchingCapped"] != true {
+		t.Fatalf("tavanlı sayım işaretlenmeli: %v", c)
 	}
 	h, err := os.ReadFile("health.go")
 	if err != nil {
