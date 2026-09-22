@@ -263,7 +263,7 @@ func TestDbInstanceExprOrderPinned(t *testing.T) {
 
 // TestDbNodeNamingBoundToSharedIdentity — Ç10'un İKİZ-YAZIM KAPISI.
 //
-// topology.go'da `db:` düğüm adı ÜÇ yerde kuruluyor. Bir kapı yalnız
+// topology.go'da `db:` düğüm adı İKİ yerde kuruluyor (v0.10.859 öncesi üç). Bir kapı yalnız
 // birini ölçseydi, öteki iki yazım muaf kalırdı. Bu yüzden test SİTE
 // SAYISINI da pinliyor: dördüncü bir `concat('db:'` belirirse kırılır ve
 // yazarı sınıflandırmak zorunda kalır.
@@ -274,7 +274,9 @@ func TestDbNodeNamingBoundToSharedIdentity(t *testing.T) {
 	}
 	src := string(b)
 
-	const sites = 3
+	// v0.10.859 — üçüncü site ölü GetServiceTopologyEdges idi (çağıranı yok,
+	// ham spans JOIN = topology_edges_5m'in ikizi); scale-audit 09-23 sildi.
+	const sites = 2
 	if got := strings.Count(src, "concat('db:'"); got != sites {
 		t.Fatalf("topology.go %d yerde db: düğümü kuruyor, %d bekleniyordu.\n"+
 			"YENİ bir site eklendiyse: MV yazıcısı mı (dbInstanceExpr ŞART, yoksa\n"+
@@ -304,16 +306,17 @@ func TestDbNodeNamingBoundToSharedIdentity(t *testing.T) {
 		t.Error("db düğümü hâlâ infra_host'tan adlandırılıyor — Ç10 geri gelmiş")
 	}
 
-	// (2)+(3) AD-HOC OKUMA YOLLARI — GetFlowTopology ve GetTopologyEdges.
+	// (2) AD-HOC OKUMA YOLU — GetFlowTopology (v0.10.859: GetServiceTopologyEdges
+	// ölü kod olarak silindi, scale-audit 09-23; önceden (2)+(3) idi).
 	// Bunlar düz `db:<system>` üretiyor ve BİLİNÇLİ öyle bırakıldı:
 	// doğrulandı ki çıktıları (TopologyResponse.childNode) frontend'de
 	// hiçbir detay linkine yem olmuyor — splitDbNodeName'in tek tüketicisi
 	// FocusedNeighborhood ve o /api/servicegraph okuyor, yani (1)'i.
 	// Bu muafiyet linke yem OLMADIKLARI sürece geçerli; olurlarsa aynı
 	// çıkmaz-link sınıfı orada da doğar.
-	if got := strings.Count(src, "concat('db:',    db_system),"); got != 2 {
-		t.Errorf("düz db: siteleri %d, 2 bekleniyordu — muafiyetin dayanağı\n"+
-			"bu iki yolun link kurmuyor olması; sayı değiştiyse gerekçeyi\n"+
+	if got := strings.Count(src, "concat('db:',    db_system),"); got != 1 {
+		t.Errorf("düz db: siteleri %d, 1 bekleniyordu — muafiyetin dayanağı\n"+
+			"bu yolun link kurmuyor olması; sayı değiştiyse gerekçeyi\n"+
 			"yeniden doğrula", got)
 	}
 }
