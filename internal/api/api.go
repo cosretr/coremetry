@@ -2809,8 +2809,7 @@ func (s *Server) getServiceDeploys(w http.ResponseWriter, r *http.Request) {
 		to = time.Now()
 		from = to.Add(-1 * time.Hour)
 	}
-	key := fmt.Sprintf("service-deploys:svc=%s:from=%d:to=%d",
-		name, from.UnixNano(), to.UnixNano())
+	key := serviceDeploysKey(name, from, to) // v0.10.860 — 5 dk kova (svc-deploys:v1 kardeşi gibi)
 	s.serveCached(w, r, key, time.Minute, func(ctx context.Context) (any, error) {
 		return s.store.GetServiceDeploys(ctx, name, from, to)
 	})
@@ -3959,7 +3958,7 @@ func (s *Server) getAttributeValues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cacheKey := fmt.Sprintf("attr-values:%s:since=%s:from=%s:to=%s:limit=%d:q=%s", rawKey, q.Get("since"), q.Get("from"), q.Get("to"), limit, pattern)
+	cacheKey := attrValuesKey(rawKey, q.Get("since"), from, to, limit, pattern) // v0.10.860 — attr-keys ile aynı grid
 	s.serveCached(w, r, cacheKey, 60*time.Second, func(ctx context.Context) (any, error) {
 		// Decide projection. The HTTP-layer attribute-key picker is
 		// allowed to send `resource.X` and `span.X` prefixes; strip

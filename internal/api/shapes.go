@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -32,8 +31,7 @@ func (s *Server) getTraceShapes(w http.ResponseWriter, r *http.Request) {
 	service := q.Get("service")
 	limit := parseInt(q.Get("limit"), 30)
 
-	key := fmt.Sprintf("trace-shapes:from=%d:to=%d:svc=%s:lim=%d",
-		from.UnixNano(), to.UnixNano(), service, limit)
+	key := traceShapesKey(from, to, service, limit) // v0.10.860 — 30 s kova (ham UnixNano her isteği MISS ediyordu)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		return s.store.GetTraceShapes(ctx, chstore.TraceShapesFilter{
 			From: from, To: to, Service: service, Limit: limit,
