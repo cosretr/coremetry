@@ -54,6 +54,12 @@ const (
 	MVLeftoverOrphan = "oksuz"
 )
 
+// leftoverFixReason — v0.10.849 (833 kuyruk iii): `.inner_id.<uuid>_fix`
+// Replika onarımı sihirbazının geçici tablosudur (replicaRepairFixSuffix);
+// sahibi olmadığı için öksüz görünür ama sihirbazın ATTACH/EXCHANGE
+// merdiveninin yarım kalmış adımıdır — buradan düşürmek merdiveni koparır.
+const leftoverFixReason = "Replika onarımı sihirbazının geçici `_fix` tablosu — buradan düşürülmez; yarım kalmış onarımı Replika tutarlılığı kartından bitir ya da oradaki Temizle ile kaldır"
+
 // MVLeftover — bir HOST'taki bir artık.
 type MVLeftover struct {
 	Host string `json:"host"`
@@ -275,6 +281,11 @@ func mvLeftoversFromRows(rows []mvTableRow, cluster bool, storage func(string) s
 				Inner: r.Name, UUID: uuid, InnerEngine: r.Engine}
 			if !targets.Measured {
 				o.Blocked = "nesne uuid'si bir MV'nin hedefi olabilir — hedef kümesi ÖLÇÜLMEDİ; kartı yeniden Ölç"
+			}
+			// v0.10.849 — sihirbazın `_fix` tablosu: ÖLÇÜLMEDİ gerekçesini ezer,
+			// küme ölçülse de düğme almaz (doğru eylem sihirbazın kendi Temizle'si).
+			if strings.HasSuffix(r.Name, replicaRepairFixSuffix) {
+				o.Blocked = leftoverFixReason
 			}
 			out = append(out, o)
 			continue

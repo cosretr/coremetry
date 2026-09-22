@@ -196,6 +196,20 @@ func TestMVLeftoversFromRows(t *testing.T) {
 			cluster: true,
 			want:    map[string]string{"ch-01/" + lfBareView: ""},
 		},
+		{
+			// v0.10.849 (833 kuyruk iii) — sihirbazın `_fix` iç tablosu öksüz
+			// görünür ama DÜĞMESİZ; ölçülmüş kümede bile. Eylem Replika kartında.
+			name: "onarım sihirbazının _fix iç tablosu → öksüz ama Blocked",
+			rows: []mvTableRow{
+				mvRowFor("ch-01", "db_summary_5m_local", lfCurView),
+				innerRowFor("ch-01", lfCurView, "ReplicatedAggregatingMergeTree"),
+				{Host: "ch-01", Name: innerTablePrefix + lfOrphan + replicaRepairFixSuffix, UUID: lfObjectOf(lfOrphan), Engine: "ReplicatedAggregatingMergeTree"},
+			},
+			cluster:     true,
+			targets:     testTargetSet(lfObjectOf(lfCurView)),
+			want:        map[string]string{"ch-01/" + lfOrphan + replicaRepairFixSuffix: MVLeftoverOrphan},
+			wantBlocked: map[string]string{"ch-01/" + lfOrphan + replicaRepairFixSuffix: "_fix"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
