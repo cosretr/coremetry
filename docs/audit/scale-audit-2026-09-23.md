@@ -179,10 +179,27 @@ Backend — doğruluk (cache değil)
 - Trace-id fan-out şekilleri (neighbors/service_map/endpoints_downstream)
   LIMIT'siz ama örneklenmiş id listesiyle sınırlı (v0.9.231).
 
-## Sonraki adım
-Sürümler (her mantıksal birim ayrı): 851 rapor · 852 trace sayım tavanı (🔴)
-· 853 SLOs fan-out (🔴) · 854 settings test audit ×3 · 855 staleTime ×2 ·
-856 cv ×3 + katalog limiti · 857 CH tavanları (countOnePattern, replica
-paths, metricNames LIMIT) · 858 ölü topoloji okuyucuları · 859 cache kovaları
-×3 · kuyruk: trace sayım/liste kök tanımı tutarlılığı, GetFlowTopology CTE,
-baseline üst sınır, metricLabels `q`.
+## Sonuç (2026-09-23, aynı gün)
+
+| Sürüm | Bulgu |
+|---|---|
+| 852 (+853 ileri düzeltme) | 🔴 countMatchingTracesSQL kapağı — max_rows_to_group_by + break + LIMIT cap+1 + max_threads=1; `matchingCapped` → FE "≥" |
+| 854 | 🔴 Slos.tsx — useQuery + LazyMount `compact` + cv |
+| 855 | mcp/oracle/vm test rotaları audit |
+| 856 | ProblemsSection / useRolloutRuns staleTime 30 s |
+| 857 | EntityDetail cv ×2 + AdminCatalog serviceNames 1000 (*AdminCatalog "cv yok" iddiası yanlıştı*) |
+| 858 | countOnePattern = 10 · replicaPathsSQL = 10 · metricNamesRaw sayfasız LIMIT 5000 |
+| 859 | GetRootFlows + GetServiceTopologyEdges silindi (Ç10 pinleri 3→2, 2→1) |
+| 860 | traceShapesKey / serviceDeploysKey / attrValuesKey kovaları (`_windows.go` GOOS tuzağı → `_window.go`) |
+| 861 | trace sayımı ↔ liste kök tanımı (traceCountRootPred + anahtar soneki) |
+| 863 | GetFlowTopology root_traces CTE LIMIT 20k (yazıcı CTE'ye dokunulmadı) |
+| 865 | useServiceNames silindi |
+| 866 | baseline.go → service_summary_5m (dört dal; tdigest q(1) ≈ max) |
+
+**Düşen bulgular:** entityServices LIMIT — handler cluster tipini `errBadRequest` ile
+reddediyor, namespace/workload yolunda pod listesi 500'e kelepçeli → sınırlı (yanlış
+pozitif). explain-charts anahtarı, trace-root-def GET, backfill 2 s poll → ⚪.
+
+**Kuyrukta:** metricLabels `q`/`limit` — `metricSource` arayüzü (CH + VM + Thanos) üç
+uygulamada değişir (~1 saat); attr-values `q`li dalın örnek LIMIT'i (v0.9.242 belgeli
+ödünleşim); DetailsMetricsSection `service` boş olamaz pini.
