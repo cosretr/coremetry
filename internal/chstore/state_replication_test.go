@@ -263,3 +263,17 @@ func TestStateProbeTable(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.858 (scale-audit) — replika yolu taraması tavanlı; skip bayrağı ayarı
+// ekler, kaldırmaz.
+func TestReplicaPathsQueryIsCapped(t *testing.T) {
+	for _, skip := range []bool{false, true} {
+		q := replicaPathsSQL("clusterAllReplicas('c', system.replicas)", skip)
+		if !strings.Contains(q, "max_execution_time = 10") {
+			t.Fatalf("skip=%v tavansız: %s", skip, q)
+		}
+		if strings.Contains(q, "skip_unavailable_shards = 1") != skip {
+			t.Fatalf("skip=%v ayarı yanlış: %s", skip, q)
+		}
+	}
+}

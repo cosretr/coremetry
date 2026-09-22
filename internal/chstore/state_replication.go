@@ -271,11 +271,18 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 
 // queryReplicaPaths — <src>'ten (tablo → zookeeper_path) okur, yalnız
 // state adaylarını tutar.
-func (s *Store) queryReplicaPaths(ctx context.Context, src string, skipUnavailable bool) (map[string]string, error) {
-	q := "SELECT DISTINCT table, zookeeper_path FROM " + src + " WHERE database = currentDatabase()"
+// replicaPathsSQL — SAF (v0.10.858): küme geneli system.replicas taraması
+// tavansızdı (diğer clusterAllReplicas(system.*) okumalarının hepsi tavanlı).
+func replicaPathsSQL(src string, skipUnavailable bool) string {
+	q := "SELECT DISTINCT table, zookeeper_path FROM " + src + " WHERE database = currentDatabase() SETTINGS max_execution_time = 10"
 	if skipUnavailable {
-		q += " SETTINGS skip_unavailable_shards = 1"
+		q += ", skip_unavailable_shards = 1"
 	}
+	return q
+}
+
+func (s *Store) queryReplicaPaths(ctx context.Context, src string, skipUnavailable bool) (map[string]string, error) {
+	q := replicaPathsSQL(src, skipUnavailable)
 	rows, err := s.conn.Query(ctx, q)
 	if err != nil {
 		return nil, err

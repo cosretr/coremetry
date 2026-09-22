@@ -434,7 +434,13 @@ func (s *CHStore) countOnePattern(
 		  anyIf(body, time >= ?)                                  AS sample,
 		  toUnixTimestamp64Nano(maxIf(time, time >= ?))           AS last_ns
 		FROM logs
-		WHERE ` + where
+		WHERE ` + where + `
+		SETTINGS max_execution_time = 10`
+	// v0.10.858 (scale-audit) — ana toplama tavansızdı; 20 satır altındaki
+	// servis kırılımı `= 5` taşıyordu. Dedektör tikinde desen başına sıralı
+	// koşar: N tavansız regex taraması. Tavan aşımı hata döner ve tik düşer
+	// (CountPatterns sözleşmesi) — sessiz eksik sayımdan (timeout 'break')
+	// daha dürüst; diğer dedektör okumalarıyla aynı 10 s.
 	err := s.store.Conn().QueryRow(ctx, sql,
 		curStart, curStart, curStart, curStart, curStart,
 		baseStart, now, pat.Regex,

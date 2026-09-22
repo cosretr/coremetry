@@ -5394,9 +5394,18 @@ func metricNamesRawSelectSQL(where string, paged bool) string {
 		 GROUP BY metric ORDER BY metric`
 	if paged {
 		q += " LIMIT ? OFFSET ?"
+	} else {
+		// v0.10.858 (scale-audit) — picker ön-çekimi (defaultUnlimited) 7 günlük
+		// pencerede LIMIT'siz GROUP BY metric koşuyordu; belgeli katalog→ham düşüşü
+		// ama sonuç kümesi sınırsızdı. 5000 her gerçekçi metrik sayısının üstünde,
+		// yine de bir sınır.
+		q += " LIMIT " + strconv.Itoa(metricNamesRawUnpagedCap)
 	}
 	return q + " SETTINGS max_execution_time = 25"
 }
+
+// metricNamesRawUnpagedCap — v0.10.858: sayfasız ham metrik listesi tavanı.
+const metricNamesRawUnpagedCap = 5000
 
 // listMetricNamesFromCatalog is the metric_catalog fast path
 // (v0.8.396): a few thousand catalog rows instead of the raw

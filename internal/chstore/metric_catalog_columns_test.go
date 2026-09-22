@@ -147,3 +147,16 @@ func TestMetricNameSelectsEmbedWhere(t *testing.T) {
 		})
 	}
 }
+
+// v0.10.858 (scale-audit) — sayfasız ham düşüş de sınırlı: LIMIT metinde,
+// sayfalı dalın bind'li LIMIT'i değişmedi.
+func TestMetricNamesRawUnpagedIsCapped(t *testing.T) {
+	unpaged := metricNamesRawSelectSQL("WHERE time >= ?", false)
+	if !strings.Contains(unpaged, " LIMIT 5000 SETTINGS") {
+		t.Fatalf("sayfasız ham liste tavansız: %s", unpaged)
+	}
+	paged := metricNamesRawSelectSQL("WHERE time >= ?", true)
+	if !strings.Contains(paged, " LIMIT ? OFFSET ? SETTINGS") || strings.Contains(paged, "5000") {
+		t.Fatalf("sayfalı dal değişmemeli: %s", paged)
+	}
+}
