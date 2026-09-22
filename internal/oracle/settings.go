@@ -115,6 +115,12 @@ type SourceConfig struct {
 	Timezone         string            `json:"timezone,omitempty"`
 	TimestampHasZone bool              `json:"timestampHasZone,omitempty"`
 	Columns          map[string]string `json:"columns,omitempty"`
+	// SelectMappedOnly — v0.10.843 (operatör): SELECT listesi `*` yerine
+	// eşlenen kolonlar (zaman + tip + Columns'da açık alanlar, fieldOrder
+	// sırasıyla). Kurum tablosunda SELECT * sürücüde düşüyordu; Grafana
+	// panosu 16 kolonu adıyla seçiyor. Bu kipte eşlenmeyen kolonlar
+	// attribute olarak GELMEZ. Varsayılan kapalı — mevcut kaynaklar aynı.
+	SelectMappedOnly bool `json:"selectMappedOnly,omitempty"`
 
 	// ExtraWhere — operatörün ek yüklemi, sorguya AND (…) olarak girer.
 	// Bind edilemez (serbest ifade), bu yüzden noktalı virgül ve yorum
@@ -448,6 +454,7 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 			Timezone:         strings.TrimSpace(src.Timezone),
 			TimestampHasZone: src.TimestampHasZone,
 			Columns:          cloneColumns(src.Columns),
+			SelectMappedOnly: src.SelectMappedOnly,
 			ExtraWhere:       strings.TrimSpace(src.ExtraWhere),
 			MaxOpenConns:     src.MaxOpenConns,
 			QueryTimeoutSec:  src.QueryTimeoutSec,

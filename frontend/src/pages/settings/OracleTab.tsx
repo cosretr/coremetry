@@ -376,6 +376,13 @@ export function OracleTab() {
                   {showCols[i] ? 'gizle' : 'göster'}
                 </Button>
               </div>
+              {/* v0.10.843 (operatör) — kurum tablosunda SELECT * sürücüde
+                  düşüyordu; eşleme zaten kolon listesidir, SELECT onu kullansın. */}
+              <label className="oracle-check">
+                <input type="checkbox" checked={!!src.selectMappedOnly}
+                  onChange={e => patch(i, { selectMappedOnly: e.target.checked })} />
+                <span>SELECT yalnız eşlenen kolonlar (<code>SELECT *</code> yerine) — eşlenmeyen kolonlar attribute olmaz</span>
+              </label>
               {showCols[i] && (
                 <>
                   <div className="oracle-q">

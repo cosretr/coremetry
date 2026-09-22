@@ -481,3 +481,68 @@ func TestDistinctTraceIDsCapped(t *testing.T) {
 		t.Errorf("tavan/sıra: %v", got)
 	}
 }
+
+// v0.10.843 — Operatör: kurum tablosunda SELECT * sürücüde düşüyordu; Grafana
+// panosu 16 kolonu adıyla seçiyor. selectMappedOnly açıkken SELECT listesi
+// eşlenen kolonlardır: fieldOrder sırası, kapalı alan yok, yinelenen kolon
+// bir kez, `*` yok; iki kurucu da (poll + örnek) aynı listeyi kullanır ve
+// Normalize bayrağı düşürmez. Kapalıyken bayt-bayt eski `SELECT *`.
+func TestSelectListMappedOnly(t *testing.T) {
+	cfg := cfgFor(t)
+	if got, err := selectList(cfg); err != nil || got != "*" {
+		t.Fatalf("kapalı → *: %q %v", got, err)
+	}
+	cfg.SelectMappedOnly = true
+	cfg.TimestampColumn = "MCA_ERR_TIMESTAMP"
+	cfg.TypeColumn = "MCA_ERR_TYPE"
+	cfg.Columns = map[string]string{
+		FieldSeverity: "MCA_ERR_SEVERITY", FieldMessage: "MCA_ERR_MESSAGE", FieldTraceID: "MCA_ERR_TRACEID",
+		FieldLocation: "",                // tabloda yok
+		FieldTellerID: "mca_err_traceid", // aynı kolon iki alana → bir kez (harf büyüklüğü fark etmez)
+	}
+	got, err := selectList(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "*") {
+		t.Fatalf("yıldız kaldı: %s", got)
+	}
+	if !strings.HasPrefix(got, "MCA_ERR_TIMESTAMP, MCA_ERR_SEVERITY, MCA_ERR_MESSAGE, MCA_ERR_TRACEID, ") {
+		t.Fatalf("sıra fieldOrder değil: %s", got)
+	}
+	if strings.Count(strings.ToUpper(got), "MCA_ERR_TRACEID") != 1 {
+		t.Fatalf("yinelenen kolon: %s", got)
+	}
+	if strings.Contains(got, "ERR_LOCATION") {
+		t.Fatalf("kapalı alan listede: %s", got)
+	}
+	if !strings.Contains(got, ", MCA_ERR_TYPE,") {
+		t.Fatalf("tip kolonu listede yok: %s", got)
+	}
+	from := time.Date(2026, 9, 22, 21, 0, 0, 0, time.UTC)
+	for name, build := range map[string]func() (string, error){
+		"poll":   func() (string, error) { q, _, e := buildPollQuery(cfg, from, from.Add(time.Hour), 10); return q, e },
+		"sample": func() (string, error) { q, _, e := buildSampleQuery(cfg, from, from.Add(time.Hour), 5); return q, e },
+	} {
+		q, err := build()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.HasPrefix(q, "SELECT "+got+" FROM ") {
+			t.Fatalf("%s sorgusu listeyi kullanmıyor:\n%s", name, q)
+		}
+		assertSingleSelect(t, q)
+	}
+	norm, err := Normalize(one(cfg), Settings{}, NewSourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !norm.Sources[0].SelectMappedOnly {
+		t.Fatal("Normalize bayrağı düşürdü")
+	}
+	cfg.SelectMappedOnly = false
+	q, _, err := buildPollQuery(cfg, from, from.Add(time.Hour), 10)
+	if err != nil || !strings.HasPrefix(q, "SELECT * FROM ") {
+		t.Fatalf("kapalı kip eski şekil değil: %q %v", q, err)
+	}
+}

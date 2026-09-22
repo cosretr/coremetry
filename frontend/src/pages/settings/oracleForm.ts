@@ -143,6 +143,7 @@ export function emptyOracleSource(): OracleSource {
     timezone: '',
     timestampHasZone: false,
     columns: {},
+    selectMappedOnly: false,
     enabled: false,
   };
 }
@@ -364,6 +365,7 @@ export function sourceForSave(
   const tz = trim(src.timezone);
   if (tz) out.timezone = tz;
   if (src.timestampHasZone) out.timestampHasZone = true;
+  if (src.selectMappedOnly) out.selectMappedOnly = true;
   const cols: Record<string, string> = {};
   for (const [field, raw] of Object.entries(src.columns ?? {})) {
     const v = trim(raw);
@@ -400,6 +402,7 @@ export function sourceFromSnapshot(s: OracleSourceSnapshot): OracleSource {
     intervalSec: s.intervalSec,
     timezone: s.timezone ?? '',
     timestampHasZone: !!s.timestampHasZone,
+    selectMappedOnly: !!s.selectMappedOnly,
     // "" (kapalı alan) formda `-` olarak görünür — boş kutuyla (varsayılan)
     // karışmasın.
     columns: Object.fromEntries(Object.entries(s.columns ?? {}).map(([k, v]) => [k, v === '' ? ORACLE_COLUMN_DISABLED : v])),

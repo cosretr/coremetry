@@ -336,3 +336,19 @@ describe('v0.10.603 — zaman dilimi + kolon eşlemesi', () => {
     expect(sourceForSave(form).columns).toEqual({ tellerId: '', code: 'ERR_CODE' });
   });
 });
+
+// v0.10.843 — selectMappedOnly: kapalıyken gövdede anahtar YOK (sunucu
+// varsayılanı = SELECT *), açıkken true; snapshot → form → gövde yolunda korunur.
+describe('sourceForSave — selectMappedOnly', () => {
+  it('kapalıyken anahtar gövdeye girmez, açıkken true gider', () => {
+    expect('selectMappedOnly' in sourceForSave(goodSource())).toBe(false);
+    expect(sourceForSave(goodSource({ selectMappedOnly: true })).selectMappedOnly).toBe(true);
+  });
+  it('snapshot\'tan forma ve gövdeye taşınır', () => {
+    const snap: OracleSourceSnapshot = {
+      ...goodSource({ selectMappedOnly: true }), id: 'o-1', hasPassword: true, passwordResolved: true,
+    };
+    expect(sourceFromSnapshot(snap).selectMappedOnly).toBe(true);
+    expect(sourceForSave(sourceFromSnapshot(snap), snap).selectMappedOnly).toBe(true);
+  });
+});

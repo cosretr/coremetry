@@ -1572,6 +1572,9 @@ export interface OracleSource {
   /** v0.10.600 — alan → Oracle kolonu geçersiz kılmaları (oracle.DefaultColumns
    *  tabanı); "" = alan tabloda yok. timestamp/type kendi kutularından gelir. */
   columns?: Record<string, string>;
+  /** v0.10.843 — SELECT listesi `*` yerine eşlenen kolonlar (zaman + tip +
+   *  açık alanlar). Eşlenmeyen kolonlar bu kipte attribute olmaz. */
+  selectMappedOnly?: boolean;
   enabled: boolean;
 }
 /** oracle.SourceSnapshot — GET görünümü: password MASKELİ, rozet alanları eklidir. */

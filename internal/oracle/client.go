@@ -95,7 +95,11 @@ func buildSampleQuery(cfg SourceConfig, from, to time.Time, limit int) (string, 
 	var b strings.Builder
 	// Kolon listesi yerine * : Aşama 2'nin alan eşlemesini yazacak operatör
 	// tablonun GERÇEK kolonlarını testte görmeli (FETCH FIRST tavanı zaten var).
-	fmt.Fprintf(&b, "SELECT * FROM %s.%s\nWHERE %s >= :1 AND %s < :2", cfg.Schema, cfg.Table, tsCol, tsCol)
+	sel, err := selectList(cfg)
+	if err != nil {
+		return "", nil, err
+	}
+	fmt.Fprintf(&b, "SELECT %s FROM %s.%s\nWHERE %s >= :1 AND %s < :2", sel, cfg.Schema, cfg.Table, tsCol, tsCol)
 	binds := make([]string, 0, len(types))
 	for _, t := range types {
 		args = append(args, t)
@@ -111,6 +115,31 @@ func buildSampleQuery(cfg SourceConfig, from, to time.Time, limit int) (string, 
 
 // queryParts — SAF: iki sorgu üreticisinin (örnek + poll) ortak doğrulaması:
 // identifier'lar, extraWhere kapısı, tip listesi. Metin üretmez.
+// selectList — SAF (v0.10.843): SELECT listesi. Bayrak kapalıysa `*`
+// (bugünkü davranış); açıksa eşlenen kolonlar fieldOrder sırasıyla, kapalı
+// alan ("") atlanır, aynı kolon iki alana eşlenmişse bir kez. ResolveColumns
+// identifier kapısını geçirir — listeye serbest metin girmez.
+func selectList(cfg SourceConfig) (string, error) {
+	if !cfg.SelectMappedOnly {
+		return "*", nil
+	}
+	cols, err := ResolveColumns(cfg)
+	if err != nil {
+		return "", err
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(fieldOrder))
+	for _, f := range fieldOrder {
+		c := cols[f]
+		if c == "" || seen[strings.ToUpper(c)] {
+			continue
+		}
+		seen[strings.ToUpper(c)] = true
+		out = append(out, c)
+	}
+	return strings.Join(out, ", "), nil
+}
+
 func queryParts(cfg SourceConfig) (tsCol, typCol string, types []string, err error) {
 	tsCol = cfg.TimestampColumn
 	if tsCol == "" {
@@ -157,7 +186,11 @@ func buildPollQuery(cfg SourceConfig, from, to time.Time, limit int) (string, []
 	}
 	args := []any{bindTime(from, loc, cfg.TimestampHasZone), bindTime(to, loc, cfg.TimestampHasZone)}
 	var b strings.Builder
-	fmt.Fprintf(&b, "SELECT * FROM %s.%s\nWHERE %s > :1 AND %s <= :2", cfg.Schema, cfg.Table, tsCol, tsCol)
+	sel, err := selectList(cfg)
+	if err != nil {
+		return "", nil, err
+	}
+	fmt.Fprintf(&b, "SELECT %s FROM %s.%s\nWHERE %s > :1 AND %s <= :2", sel, cfg.Schema, cfg.Table, tsCol, tsCol)
 	binds := make([]string, 0, len(types))
 	for _, t := range types {
 		args = append(args, t)
