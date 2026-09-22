@@ -158,6 +158,15 @@ type RootFlow struct {
 // to traces whose root span matches (rootService, rootOp). Same
 // shape as GetServiceTopologyEdges so the renderer reuses one
 // code path. Used by the flow-detail view.
+// flowRootTraceSample — v0.10.863 (scale-audit): root_traces CTE'si LIMIT'sizdi ve
+// iki geçişte GLOBAL IN'e besleniyordu — küme genelinde yayınlanan id kümesi
+// sınırsızdı, tek fren 60 s tavan. Kenar grafiği bir ÖRNEKLEMDEN de temsil
+// edilir (trace sayımı doktrini: sıralama yok, keyfi alt küme, zaman tabanı
+// iddia edilmez); 20.000 kök trace 5.000 kenar tavanının çok üstünde.
+const flowRootTraceSample = 20000
+
+var flowRootTraceSampleSQL = strconv.Itoa(flowRootTraceSample)
+
 func (s *Store) GetFlowTopology(ctx context.Context, from, to time.Time, rootService, rootOp string, limit int) ([]ServiceTopologyEdge, error) {
 	if limit <= 0 || limit > 100000 {
 		limit = 20000
@@ -172,6 +181,7 @@ func (s *Store) GetFlowTopology(ctx context.Context, from, to time.Time, rootSer
 			WHERE parent_id = ''
 			  AND service_name = ? AND name = ?
 			  AND time >= ? AND time <= ?
+			LIMIT `+flowRootTraceSampleSQL+`
 		),
 		multiIf(
 			c.db_system  != '', 'db',
@@ -247,6 +257,7 @@ func (s *Store) GetFlowTopology(ctx context.Context, from, to time.Time, rootSer
 			WHERE parent_id = ''
 			  AND service_name = ? AND name = ?
 			  AND time >= ? AND time <= ?
+			LIMIT `+flowRootTraceSampleSQL+`
 		),
 		multiIf(
 			db_system  != '', concat('db:',    db_system),
