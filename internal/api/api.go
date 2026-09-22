@@ -4521,7 +4521,7 @@ func (s *Server) getTracesCount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, ferr.Error(), http.StatusBadRequest)
 		return
 	}
-	s.serveCached(w, r, "traces-count:"+cacheRawQuery(r), 20*time.Second,
+	s.serveCached(w, r, "traces-count:"+cacheRawQuery(r)+tracesRootDefKeySuffix(q, s.store.TraceRootDef()), 20*time.Second, // v0.10.861 — liste anahtarıyla aynı kök tanımı soneki
 		func(ctx context.Context) (any, error) {
 			return s.store.CountTracesCapped(ctx, f)
 		})

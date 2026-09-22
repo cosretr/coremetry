@@ -40,7 +40,7 @@ func TestTraceCountRefusesWhateverListCannotServeFromMV(t *testing.T) {
 		if tracesMVEligible(f) {
 			t.Fatalf("%s: ön koşul — bu filtre MV'yi kapatmalı", name)
 		}
-		_, _, _, reason := traceCountPlan(f)
+		_, _, _, reason := traceCountPlan(f, TraceRootDefStrict, false)
 		if reason != traceCountReasonRawPath {
 			t.Errorf("%s: sayım reddetmeliydi, alınan reason=%q", name, reason)
 		}
@@ -53,12 +53,12 @@ func TestTraceCountRefusesWhateverListCannotServeFromMV(t *testing.T) {
 func TestTraceCountRefusesExpensiveShapes(t *testing.T) {
 	f := okFilter()
 	f.MinMs = 100
-	if _, _, _, r := traceCountPlan(f); r != traceCountReasonDuration {
+	if _, _, _, r := traceCountPlan(f, TraceRootDefStrict, false); r != traceCountReasonDuration {
 		t.Errorf("minMs reddedilmeli, alınan %q", r)
 	}
 	f = okFilter()
 	f.MaxMs = 100
-	if _, _, _, r := traceCountPlan(f); r != traceCountReasonDuration {
+	if _, _, _, r := traceCountPlan(f, TraceRootDefStrict, false); r != traceCountReasonDuration {
 		t.Errorf("maxMs reddedilmeli, alınan %q", r)
 	}
 	f = okFilter()
@@ -67,7 +67,7 @@ func TestTraceCountRefusesExpensiveShapes(t *testing.T) {
 	if !tracePostAggFiltered(f) {
 		t.Fatal("ön koşul: bu filtre post-agg sayılmalı")
 	}
-	if _, _, _, r := traceCountPlan(f); r != traceCountReasonSvcAgg {
+	if _, _, _, r := traceCountPlan(f, TraceRootDefStrict, false); r != traceCountReasonSvcAgg {
 		t.Errorf("servis+post-agg reddedilmeli, alınan %q", r)
 	}
 }
@@ -75,12 +75,12 @@ func TestTraceCountRefusesExpensiveShapes(t *testing.T) {
 // Kaynak seçimi listenin dallarıyla eşleşmeli.
 func TestTraceCountSourceMatchesListBranch(t *testing.T) {
 	f := okFilter()
-	if src, _, _, r := traceCountPlan(f); src != "trace_summary_5m" || r != "" {
+	if src, _, _, r := traceCountPlan(f, TraceRootDefStrict, false); src != "trace_summary_5m" || r != "" {
 		t.Errorf("servissiz yol trace_summary_5m olmalı, alınan %q/%q", src, r)
 	}
 	f = okFilter()
 	f.Service = "checkout"
-	if src, _, args, r := traceCountPlan(f); src != "trace_service_index_5m" || r != "" {
+	if src, _, args, r := traceCountPlan(f, TraceRootDefStrict, false); src != "trace_service_index_5m" || r != "" {
 		t.Errorf("servis yolu trace_service_index_5m olmalı, alınan %q/%q", src, r)
 	} else if len(args) != 3 || args[0] != "checkout" {
 		t.Errorf("servis bind edilmeli, alınan %v", args)
@@ -92,13 +92,13 @@ func TestTraceCountSourceMatchesListBranch(t *testing.T) {
 func TestTraceCountAppliesPostAggPredicates(t *testing.T) {
 	f := okFilter()
 	f.HasError = true
-	_, preds, _, _ := traceCountPlan(f)
+	_, preds, _, _ := traceCountPlan(f, TraceRootDefStrict, false)
 	if !strings.Contains(strings.Join(preds, " "), "error_count_state") {
 		t.Errorf("hasError sayıma inmeli: %v", preds)
 	}
 	f = okFilter()
 	f.RootOnly = true
-	_, preds, _, _ = traceCountPlan(f)
+	_, preds, _, _ = traceCountPlan(f, TraceRootDefStrict, false)
 	if !strings.Contains(strings.Join(preds, " "), "root_service_state") {
 		t.Errorf("rootOnly sayıma inmeli: %v", preds)
 	}
@@ -160,5 +160,29 @@ func TestTraceCountPlanCallsListGateNotACopy(t *testing.T) {
 		if strings.Contains(body, leaked) {
 			t.Errorf("liste kapısının koşulu sayım tarafına KOPYALANMIŞ (%q) — ayrışma riski", leaked)
 		}
+	}
+}
+
+// v0.10.861 (scale-audit 09-23) — sayımın kök yüklemi LİSTENİN kuralını izler:
+// rootHavingMV hangi state kolonlarını okuyorsa sayım da onları okur. def=entry
+// + entry kolonu varken sayım strict kalsaydı rozet listeden eksik sayardı.
+func TestTraceCountRootPredicateMatchesListDefinition(t *testing.T) {
+	for _, c := range []struct {
+		def      TraceRootDef
+		entryCol bool
+	}{{TraceRootDefStrict, false}, {TraceRootDefStrict, true}, {TraceRootDefEntry, false}, {TraceRootDefEntry, true}} {
+		cnt := traceCountRootPred(c.def, c.entryCol)
+		list := rootHavingMV(c.def, c.entryCol)
+		for _, col := range []string{"root_service_state", "entry_service_state"} {
+			if strings.Contains(cnt, col) != strings.Contains(list, col) {
+				t.Fatalf("def=%s entryCol=%v: sayım %q, liste %q — %s ayrışıyor", c.def, c.entryCol, cnt, list, col)
+			}
+		}
+	}
+	base := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	f := TraceFilter{RootOnly: true, From: base, To: base.Add(time.Hour)}
+	_, preds, _, reason := traceCountPlan(f, TraceRootDefEntry, true)
+	if reason != "" || !strings.Contains(strings.Join(preds, " "), "entry_service_state") {
+		t.Fatalf("entry tanımı MV planına girmedi: %v %q", preds, reason)
 	}
 }

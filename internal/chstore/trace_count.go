@@ -67,7 +67,19 @@ const (
 // saymıştı; beşincisi stage2NeedsSafetySlice (aşama-1 hiç kimlik
 // üretmediğinde devreye giren recency slice). Kaçırılan bir dal, o
 // filtre kombinasyonunda SESSİZCE yanlış sayı demekti.
-func traceCountPlan(f TraceFilter) (source string, preds []string, args []any, reason string) {
+// traceCountRootPred — SAF (v0.10.861, scale-audit 09-23): kök yüklemi LİSTEYLE
+// AYNI kural (rootHavingMV'nin DISTINCT+satır biçimi — sayım GROUP BY yapmaz,
+// kök/entry span'ı taşıyan 5-dk satırı DISTINCT'e yeter). strict → yalnız
+// root_service_state; entry + entry kolonu → root VEYA entry_service_state.
+// Eskiden sayım hep strict okuyordu: def=entry'de rozet listeden EKSİK sayardı.
+func traceCountRootPred(def TraceRootDef, entryCol bool) string {
+	if def == TraceRootDefEntry && entryCol {
+		return "(finalizeAggregation(root_service_state) != '' OR finalizeAggregation(entry_service_state) != '')"
+	}
+	return "finalizeAggregation(root_service_state) != ''"
+}
+
+func traceCountPlan(f TraceFilter, def TraceRootDef, entryCol bool) (source string, preds []string, args []any, reason string) {
 	if !tracesMVEligible(f) {
 		return "", nil, nil, traceCountReasonRawPath
 	}
@@ -101,7 +113,7 @@ func traceCountPlan(f TraceFilter) (source string, preds []string, args []any, r
 		preds = append(preds, "finalizeAggregation(error_count_state) > 0")
 	}
 	if f.RootOnly {
-		preds = append(preds, "finalizeAggregation(root_service_state) != ''")
+		preds = append(preds, traceCountRootPred(def, entryCol))
 	}
 	return "trace_summary_5m", preds, args, ""
 }
@@ -136,7 +148,7 @@ func buildTraceCountSQL(source string, preds []string) string {
 func (s *Store) CountTracesCapped(ctx context.Context, f TraceFilter) (TraceCount, error) {
 	// v0.10.124 — liste ile AYNI kapı: MV boşluğunda plan ham yola düşer.
 	f.MVGap = s.TraceMVGap(ctx, f.From, f.To)
-	source, preds, args, reason := traceCountPlan(f)
+	source, preds, args, reason := traceCountPlan(f, s.TraceRootDef(), s.hasTraceEntrySvcCol) // v0.10.861 — listeyle aynı kök tanımı
 	if reason != "" {
 		return TraceCount{Reason: reason}, nil
 	}

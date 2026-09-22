@@ -39,7 +39,7 @@ func TestTraceWindowTouchesGap(t *testing.T) {
 	if tracesMVEligible(f) {
 		t.Error("MVGap MV yolunu düşürmedi")
 	}
-	if _, _, _, reason := traceCountPlan(f); reason != traceCountReasonRawPath {
+	if _, _, _, reason := traceCountPlan(f, TraceRootDefStrict, false); reason != traceCountReasonRawPath {
 		t.Errorf("sayım planı ham yola düşmedi: %q", reason)
 	}
 }

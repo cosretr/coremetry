@@ -89,7 +89,7 @@ func TestSelectionBoundsAreExclusive(t *testing.T) {
 	f := TraceFilter{From: base.Add(-time.Hour), To: base, Service: "payments-api"}
 
 	// Sayım yolu — saf planlayıcı.
-	_, preds, _, reason := traceCountPlan(f)
+	_, preds, _, reason := traceCountPlan(f, TraceRootDefStrict, false)
 	if reason != "" {
 		t.Fatalf("sayım MV yolunu seçmedi (%s) — test kurgusu bozuk", reason)
 	}
