@@ -28,3 +28,17 @@ import "embed"
 //
 //go:embed 0001_rollup_narrow.sql 0003_rollup_metrics.sql 0008_rollup_metrics_route.sql 0011_entity_layer.sql 0012_rollout_layer.sql 0013_function_id.sql 0013_function_id_rollback.sql 0014_attr_kvh.sql 0014_attr_kvh_rollback.sql
 var FS embed.FS
+
+// AllSQL — TÜM migration dosyaları, YALNIZ AD ÇIKARMAK için (v0.10.846).
+//
+// Neden ayrı ve neden hepsi: replika tutarlılığı kartı artık "bu tabloyu
+// Coremetry yönetiyor mu" sorusunu cevaplıyor (chstore/table_catalog.go) ve
+// boot'un kanonik tablo kataloğu bu soruya TEK BAŞINA yanlış cevap verir —
+// rollup aileleri (0001/0002/0003/0008), entity (0011) ve rollouts (0012)
+// tabloları operatörün koştuğu migration'larla doğar, kartta gerçek
+// tablolar olarak görünür ve "ürün kataloğunda yok" etiketi onlar için
+// YALAN olurdu. Sihirbazın okuduğu alt küme (FS) DEĞİŞMEDİ: sihirbaz
+// dosyayı adıyla okur, bu değişken yalnız CREATE adlarını taramak için var.
+//
+//go:embed *.sql
+var AllSQL embed.FS

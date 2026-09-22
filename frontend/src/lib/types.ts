@@ -3619,7 +3619,10 @@ export interface CHMVRebuildResult { ok: boolean; host: string; view: string; st
  *  adını tutan BOŞ tablonun düşürülmesine verilen AYRI onaydır (dolu tabloda etkisiz). */
 export interface CHMVTargetRepairResult { ok: boolean; host: string; view: string; steps: string[] }
 /** v0.10.791 — Replika tutarlılığı (Go chstore.ReplicaConsistencyReport). Salt okuma; karar shard başına sunucuda (replicaVerdict). */
-export type CHReplicaVerdict = 'ok' | 'single' | 'unmapped' | 'lagging' | 'divergent' | 'readonly' | 'session_expired' | 'missing_replica' | 'not_replicated' | 'no_replication';
+// v0.10.846 — 'removed' | 'unmanaged': ürün kataloğu kararları. Kapsama ölçüsü
+// ("shard'ın her host'unda olmalı") yalnız ürünün kurduğu tablolar için
+// tanımlı; bu ikisi KIRMIZI değil bilgi kararıdır ve satırda eylem çizilmez.
+export type CHReplicaVerdict = 'ok' | 'removed' | 'unmanaged' | 'single' | 'unmapped' | 'lagging' | 'divergent' | 'readonly' | 'session_expired' | 'missing_replica' | 'not_replicated' | 'no_replication';
 /** v0.10.818 — shard'ın erişilebilir host'u tabloyu kayıtlı göstermiyor; engine boş = tablo yok, dolu = Replicated değil. */
 export interface CHReplicaMissingHost { host: string; engine?: string }
 export interface CHReplicaHost { host: string; shard: number; replica: number; macros?: Record<string, string> }
@@ -3638,7 +3641,16 @@ export interface CHReplicaShard { shard: number; replicas: CHReplicaState[]; ver
 // PARTITION + EXCHANGE) burada UYGULANMAZ — EXCHANGE uuid'yi taşımaz.
 /** v0.10.830 — orphan = küme genelinde hiçbir MV bu uuid'yi adreslemiyor (roster eksikse HİÇ doldurulmaz);
  *  viewHosts = sahibin gerçekten bulunduğu host'lar — "view: X" satırı X'in O HOST'ta durduğunu kanıtlamaz. */
-export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict; view?: string; inner?: boolean; orphan?: boolean; viewHosts?: string[] }
+/** v0.10.846 — catalog: tablonun ÜRÜN KATALOĞUNDAKİ yeri. 'removed' = ürünün
+ *  kaldırdığı tablo (removedSince o sürüm), bir sonraki boot küme genelinde
+ *  siler; 'unmanaged' = Coremetry yönetmiyor. İkisinde de kapsama ölçüsü
+ *  koşmaz (shard.missing boş gelir) ve satırda onarım/seed çizilmez. */
+export type CHReplicaCatalog = 'removed' | 'unmanaged';
+/** v0.10.846 — seedable: sunucu bu ad için KANONİK bir tanım bulabiliyor mu
+ *  (chstore.seedCanonicalArgs)? "İlk replikayı kur" düğmesi bu ÖLÇÜLMÜŞ
+ *  cevaba bakar. Önceden FE ada bakıp tahmin ediyordu ve `<ürün>_old` gibi
+ *  göç yedeklerinde düğmeyi çiziyordu, sunucu ise reddediyordu. */
+export interface CHReplicaTable { table: string; shards: CHReplicaShard[]; verdict: CHReplicaVerdict; view?: string; inner?: boolean; orphan?: boolean; viewHosts?: string[]; catalog?: CHReplicaCatalog; removedSince?: string; seedable?: boolean }
 export interface CHReplicaConsistencyResponse { cluster: string; database: string; loadBalancing: string; hosts: CHReplicaHost[]; tables: CHReplicaTable[]; generatedAt: number; notes?: string[]; warnings?: string[] }
 /**
  * v0.10.820 — Replika onarımı (Go chstore.ReplicaRepairPlan / ReplicaRepairResult).

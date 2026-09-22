@@ -104,15 +104,16 @@ func stateTableDDL(name, kind string) bool {
 //     dışarıda: `_old` göç sonrası doğrulama bitene dek YAŞAR ve
 //     eski (shard'lı) yolda durur — sayılsaydı kuşak kararını
 //     "göç öncesi"ne kilitlerdi.
+//
+// v0.10.846 — liste BURADA BİTMİYORDU: 0010'un `…_repart` / `…_pathfix` /
+// `…_pathfix_old` aileleri ile onarım sihirbazının `…_fix` tablosu
+// eleniyordu sanılıyordu, elenmiyordu. Aynı soruyu soran ikinci bir liste
+// (table_catalog.go catalogSuffixes) vardı ve ikisi ayrışmıştı — hiçbir kapı
+// onları birbirine bağlamıyordu. Artık TEK GÖVDE: catalogDerivedName.
+// Yeni elenenler aynı gerekçenin kapsamındadır: hepsi eski (shard'lı) yolda
+// duran göç/onarım yedekleridir ve kuşak kararını geriye kilitlerlerdi.
 func stateProbeTable(name string) bool {
-	switch {
-	case strings.HasPrefix(name, ".inner"):
-		return false
-	case strings.HasSuffix(name, "_local"):
-		return false
-	case strings.HasSuffix(name, "_old"):
-		return false
-	case strings.HasSuffix(name, "_unified"):
+	if catalogInnerName(name) || catalogDerivedName(name) {
 		return false
 	}
 	return stateTableDDL(name, "table")

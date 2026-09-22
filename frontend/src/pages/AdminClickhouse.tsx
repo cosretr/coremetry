@@ -11,7 +11,7 @@ import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/l
 import { Button, Modal } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
-import { canRepair, canSeedFirstReplica, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
+import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
@@ -2532,6 +2532,15 @@ function ReplicaConsistencyPanel() {
                         {innerViewLabel(t)}
                       </div>
                     )}
+                    {/* v0.10.846 — operatör-bildirimli: kart `feedbacks` için "eksik replika"
+                        diyordu; oysa tablo ürünün v0.8.240'ta KALDIRDIĞI bir kalıntıydı ve
+                        eski DROP ON CLUSTER taşımadığı için yalnız bir shard'da koşmuştu.
+                        Satır artık DURUM bildirir, eylem önermez. */}
+                    {t.catalog && (
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }} title="Kapsama ölçüsü (shard'ın her host'unda olmalı) yalnız ürünün kurduğu tablolar için tanımlıdır">
+                        {catalogLabel(t)}
+                      </div>
+                    )}
                   </td>
                   <td className="mono">{sh.shard < 0 ? '—' : sh.shard}</td>
                   <td className="mono" style={{ fontSize: 11 }}>
@@ -2550,14 +2559,14 @@ function ReplicaConsistencyPanel() {
                         <div key={m.host} style={{ color: 'var(--err)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span>{m.host} · {m.engine && !m.engine.startsWith('Replicated') ? `Replicated değil (${m.engine})` : m.engine ? `kayıtsız (${m.engine})` : 'tablo yok'}</span>
                           {/* v0.10.820 — Onar: plan salt okuma; Uygula ayrı onay kutusuyla. */}
-                          {canRepair(t.table, sh, m) && (
+                          {canRepair(t, sh, m) && (
                             <Button variant="accent" size="xs" disabled={planBusy !== null || applying} loading={planBusy === k}
                               title="Plan (salt okuma): eşten DDL, eşin ZK yolu, makro/znode çakışması, DB motoru, kolon ve partition kontrolü; Uygula ayrı onay ister"
                               onClick={() => void openPlan(t.table, sh.shard, m.host)}>Onar</Button>
                           )}
                           {/* v0.10.829 — shard'da HİÇ Replicated replika yoksa katılacak eş yoktur:
                               bu host düz tablosuyla shard'ın İLK replikası olur. Ötekiler sonra "Onar". */}
-                          {canSeedFirstReplica(t.table, sh, m) && (
+                          {canSeedFirstReplica(t, sh, m) && (
                             <Button variant="danger" size="xs" disabled={planBusy !== null || applying} loading={planBusy === k}
                               title={m.engine
                                 ? "Shard'da Replicated replika YOK: bu host'un düz tablosu kanonik ZK yolunda Replicated tabloya çevrilir (1/1, yedeklilik yok). Plan salt okuma; Uygula ayrı onay ister. Shard'ın öteki host'ları sonra Onar ile katılır."

@@ -101,6 +101,23 @@ type ReplicaTable struct {
 	// MV onarımı kartındadır (mvInventory — skip YOK); eylem orada.
 	Orphan    bool     `json:"orphan,omitempty"`
 	ViewHosts []string `json:"viewHosts,omitempty"`
+	// Catalog/RemovedSince — v0.10.846. Tablonun ÜRÜN KATALOĞUNDAKİ yeri
+	// (table_catalog.go): "" yönetiliyor, "removed" ürünün kaldırdığı bir
+	// kalıntı, "unmanaged" Coremetry'nin yönetmediği bir tablo. FE bu alana
+	// bakarak satır etiketini yazar ve onarım/seed düğmelerini çizmez;
+	// sunucu tarafında ret PlanReplicaRepair'de (düğme gizlemek yetmez).
+	Catalog      string `json:"catalog,omitempty"`
+	RemovedSince string `json:"removedSince,omitempty"`
+	// Seedable — v0.10.846. "İlk replikayı kur" sihirbazı bu ad için
+	// KANONİK bir tanım bulabiliyor mu (seedCanonicalArgs)? FE düğmeyi bu
+	// ÖLÇÜLMÜŞ cevaba göre çizer, ada bakarak tahmin etmez.
+	//
+	// Kusur sınıfı: `<ürün>_old` (0009/0010 göçünün canlı yedeği) katalog
+	// aramasında `_old` soyulduğu için "yönetiliyor" çıkıyordu, düğme
+	// çiziliyordu, sunucu ise `tableDDLByName(..., "problems_old")` boş
+	// dönünce "kanonik tanım yok" diye REDDEDİYORDU. Düğme ile sunucu aynı
+	// kararı vermeli; tek gerçek kaynağı sunucudur.
+	Seedable bool `json:"seedable"`
 }
 
 // ReplicaConsistencyReport — kartın tamamı.
@@ -133,6 +150,12 @@ const (
 	// host karşılaştırılır:
 	ReplicaMissing       = "missing_replica" // erişilebilir host'ta tablo bu yolda kayıtlı değil (tablo yok)
 	ReplicaNotReplicated = "not_replicated"  // host'ta tablo var ama Replicated değil (düz MergeTree)
+	// v0.10.846 — KATALOG kararları (table_catalog.go). Kapsama ölçüsü
+	// ("shard'ın her host'unda olmalı") yalnız ürünün kurduğu tablolar için
+	// tanımlıdır; bu iki sınıfta ölçü geçersizdir, o yüzden KIRMIZI değil
+	// bilgi kararıdır ve satırda eylem önerilmez.
+	ReplicaRemoved   = "removed"   // ürünün kaldırdığı tablo: kalıntı, bir sonraki boot küme genelinde siler
+	ReplicaUnmanaged = "unmanaged" // ürün kataloğunda yok: Coremetry yönetmiyor
 )
 
 // Eşikler — replicaVerdict'in ölçüleri; testte pinli.
@@ -143,10 +166,18 @@ const (
 	replicaDivergeMinRows = 5000 // yüzdenin anlamlı olduğu taban
 )
 
+// replicaVerdictRank — "en kötü" sıralaması. Yalnız GÖRECELİ karşılaştırma
+// için kullanılır (worstVerdict, mergeCoverage); sayılar sözleşme değil.
+//
+// v0.10.846 — katalog kararları EN ALTA, `lagging`in ALTINA yerleşti: FE
+// özeti "sorunlu" saymayı `lagging` eşiğinden başlatıyor (summarize), yani
+// bir kalıntı tablo kartın başlığını kırmızıya boyamaz. `ok`un ÜSTÜNDELER
+// çünkü "tutarlı" da değiller: ölçülmüş bir sağlık değil, ölçünün
+// uygulanmadığı bir hâl.
 var replicaVerdictRank = map[string]int{
-	ReplicaOK: 0, ReplicaSingle: 1, ReplicaUnmapped: 2, ReplicaLagging: 3,
-	ReplicaDivergent: 4, ReplicaReadOnly: 5, ReplicaSessionExpired: 6,
-	ReplicaMissing: 7, ReplicaNotReplicated: 8, ReplicaNoReplication: 9, // v0.10.818 — yapısal üçlü en üstte
+	ReplicaOK: 0, ReplicaRemoved: 1, ReplicaUnmanaged: 2, ReplicaSingle: 3, ReplicaUnmapped: 4,
+	ReplicaLagging: 5, ReplicaDivergent: 6, ReplicaReadOnly: 7, ReplicaSessionExpired: 8,
+	ReplicaMissing: 9, ReplicaNotReplicated: 10, ReplicaNoReplication: 11, // v0.10.818 — yapısal üçlü en üstte
 }
 
 // worstVerdict — sıralı en kötü.
@@ -311,6 +342,45 @@ func mergeCoverage(base, baseHint, cv, chint string) (string, string) {
 		return cv, chint
 	}
 	return base, baseHint
+}
+
+// shardDecision — SAF (v0.10.846): bir (tablo × shard) satırının SON kararı.
+//
+// Gövde ReplicaConsistency'nin İÇİNDEN ÇIKARILDI, kopyalanmadı: karar zinciri
+// (ölçüm → kapsama → katalog) tek yerde yaşasın ve testler kaynak metne değil
+// GERÇEK gövdeye baksın. Çağıran yalnız `sh < 0` (eşlenemeyen host) dalını ve
+// iç tablo ipucunu (innerShardHint — tbl.Inner/Orphan gerektirir) kendisi
+// kurar.
+//
+// class: table_catalog.go'nun kararı ("" | ReplicaRemoved | ReplicaUnmanaged).
+// Kapsama ölçüsü ("shard'ın her host'unda olmalı") YALNIZ ürünün kurduğu
+// tablolar için tanımlı olduğundan katalog dışı sınıflarda HİÇ koşmaz —
+// bu yüzden o satırlarda `Missing` de boş kalır ve FE'nin onarım/seed
+// düğmeleri (kapıları sh.missing + karar) çizilecek bir şey bulamaz.
+//
+// shard < 0 (host shard'a eşlenemedi) dalı da BURADA: v0.10.846 incelemesi
+// o dalın katalog kararını tamamen atladığını saptadı — eşlenemeyen bir
+// host'taki KALINTI da kalıntıdır, "eşlenemedi" demek onu gizler.
+func shardDecision(table, class, since string, shard int, expected []string,
+	rs []ReplicaState, engines map[string]string) (rsh ReplicaShard, unseen []string) {
+	rsh = ReplicaShard{Shard: shard, Replicas: rs}
+	if shard < 0 {
+		rsh.Verdict, rsh.Hint = ReplicaUnmapped, "Host system.clusters'taki küme tanımında yok: shard'a eşlenemedi (remote_servers ile hostName() uyuşmuyor)."
+	} else {
+		rsh.Verdict, rsh.Hint, rsh.DivergentPartition, rsh.DivergencePct = replicaVerdict(rs)
+		if !catalogSuppressesCoverage(class) {
+			var cv, chint string
+			rsh.Missing, cv, chint, unseen = shardCoverage(table, expected, rs, engines)
+			// v0.10.818 — kapsama kararı yapısaldır; sıralamada daha kötüyse kazanır
+			// (farklı ZK yolu = no_replication yine en üstte kalır).
+			rsh.Verdict, rsh.Hint = mergeCoverage(rsh.Verdict, rsh.Hint, cv, chint)
+		}
+	}
+	if v, override := catalogShardVerdict(class, len(rs)); override {
+		rsh.Verdict, rsh.Hint = v, catalogHint(table, v, since)
+		rsh.DivergentPartition, rsh.DivergencePct = "", 0
+	}
+	return rsh, unseen
 }
 
 // innerTablePrefix / innerTableHint — v0.10.824 (operatör, test kümesi
@@ -769,6 +839,12 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		tables = append(tables, t)
 	}
 	sort.Strings(tables)
+	// v0.10.846 — ürün kataloğu bir KEZ kurulur (kanonik boot DDL'i +
+	// gömülü migration'lar). nil dönerse (migrate koşmamış / gömülü dosyalar
+	// okunamamış) sınıflandırma KAPALI kalır: yanlış bir "yönetmiyoruz"
+	// kararı gerçek bir eksik replikayı gizlerdi (table_catalog.go).
+	managedTables := s.productTableNames()
+	var unmanagedSeen []string
 	for _, t := range tables {
 		byShard := map[int][]ReplicaState{}
 		for _, r := range byTable[t] {
@@ -796,6 +872,23 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		}
 		sort.Ints(shards)
 		tbl := ReplicaTable{Table: t}
+		// v0.10.846 — ürün bu tabloyu yönetiyor mu? Karar shard'lardan ÖNCE
+		// verilir, çünkü kapsama ölçüsünün koşup koşmayacağını o belirler.
+		tbl.Catalog, tbl.RemovedSince = catalogVerdictFor(t, managedTables)
+		if tbl.Catalog == ReplicaUnmanaged {
+			unmanagedSeen = append(unmanagedSeen, t)
+		}
+		// v0.10.846 — "İlk replikayı kur" ÖLÇÜLMÜŞ cevap: sihirbazın bu ad
+		// için kanonik tanımı var mı? Katalog dışı satırda sormuyoruz bile
+		// (o satırda düğme zaten çizilmez) — bedava değil, katalog üzerinde
+		// regex koşuyor.
+		// catalogInnerName (GENİŞ `.inner` öneki) bilerek: Ordinary motorlu
+		// bir veritabanında iç tablo `.inner.<view>` olur ve dar `.inner_id.`
+		// biçimiyle eşleşmezdi — sihirbaz orada kanonik tanım aramaya kalkardı.
+		if tbl.Catalog == "" && !catalogInnerName(t) {
+			_, serr := s.seedCanonicalArgs(t)
+			tbl.Seedable = serr == nil
+		}
 		// v0.10.824 — iç tablo satırı: FE runbook'u tablo merdivenine değil MV
 		// onarımına yollasın diye view adı (çözülebildiyse) satırda taşınır.
 		if isInnerTable(t) {
@@ -813,27 +906,27 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 			for i := range rs {
 				rs[i].Engine = engineOf[t][rs[i].Host] // v0.10.818 — runbook aynı aileyi kurar
 			}
-			rsh := ReplicaShard{Shard: sh, Replicas: rs}
-			if sh < 0 {
-				rsh.Verdict, rsh.Hint = ReplicaUnmapped, "Host system.clusters'taki küme tanımında yok: shard'a eşlenemedi (remote_servers ile hostName() uyuşmuyor)."
-			} else {
-				rsh.Verdict, rsh.Hint, rsh.DivergentPartition, rsh.DivergencePct = replicaVerdict(rs)
-				// v0.10.818 — kapsama kararı yapısaldır; sıralamada daha kötüyse kazanır
-				// (mergeCoverage; farklı ZK yolu = no_replication yine en üstte kalır).
-				missing, cv, chint, unseen := shardCoverage(t, expectedByShard[sh], rs, engineOf[t])
-				rsh.Verdict, rsh.Hint = mergeCoverage(rsh.Verdict, rsh.Hint, cv, chint)
-				rsh.Missing = missing
-				if len(unseen) > 0 {
-					out.Notes = append(out.Notes, fmt.Sprintf("%s · shard %d: %s Replicated ama system.replicas satırı yok (iki okuma arasında yaratıldı ya da o host replicas okumasında atlandı) — yeniden ölç; sürüyorsa SYSTEM RESTART REPLICA.", t, sh, strings.Join(unseen, ", ")))
-				}
-				// v0.10.824 — yapısal kararda iç tabloya tablo merdiveni yazılmaz.
-				rsh.Hint = innerShardHint(rsh.Hint, tbl.Inner, tbl.Orphan, rsh.Verdict)
+			// v0.10.846 — ölçüm + kapsama + katalog kararı (ve eşlenemeyen
+			// host dalı) tek SAF gövdede: shardDecision. Katalog dışı
+			// tabloda kapsama HİÇ koşmaz.
+			rsh, unseen := shardDecision(t, tbl.Catalog, tbl.RemovedSince, sh, expectedByShard[sh], rs, engineOf[t])
+			if len(unseen) > 0 {
+				out.Notes = append(out.Notes, fmt.Sprintf("%s · shard %d: %s Replicated ama system.replicas satırı yok (iki okuma arasında yaratıldı ya da o host replicas okumasında atlandı) — yeniden ölç; sürüyorsa SYSTEM RESTART REPLICA.", t, sh, strings.Join(unseen, ", ")))
 			}
+			// v0.10.824 — yapısal kararda iç tabloya tablo merdiveni yazılmaz.
+			rsh.Hint = innerShardHint(rsh.Hint, tbl.Inner, tbl.Orphan, rsh.Verdict)
 			verdicts = append(verdicts, rsh.Verdict)
 			tbl.Shards = append(tbl.Shards, rsh)
 		}
 		tbl.Verdict = worstVerdict(verdicts)
 		out.Tables = append(out.Tables, tbl)
+	}
+	// v0.10.846 — katalog dışı sayılan adlar NOT olarak yazılır. Bu karar bir
+	// ölçüyü (kapsama) KAPATIYOR: yanlış bir "yönetmiyoruz" gerçek bir eksik
+	// replikayı gizlerdi, o yüzden görünmez kalmamalı — operatör listede
+	// ürünün bir tablosunu görürse katalog eksiktir ve bu bir hatadır.
+	if len(unmanagedSeen) > 0 {
+		out.Notes = append(out.Notes, fmt.Sprintf("%s: ürün kataloğunda yok (Coremetry yönetmiyor) — kapsama ölçüsü bu tablolarda koşmadı, satırlarında onarım önerilmez. Listede ürünün bir tablosunu görüyorsan bunu bildir.", strings.Join(unmanagedSeen, ", ")))
 	}
 	if out.LoadBalancing == "random" || out.LoadBalancing == "" {
 		out.Notes = append(out.Notes, "load_balancing=random: her Distributed sorgu shard başına rastgele replika seçer; replikalar ıraksamışsa sonuç okumadan okumaya değişir.")

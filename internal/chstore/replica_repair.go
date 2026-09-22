@@ -966,11 +966,23 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 	if !chObjRe.MatchString(req.Table) {
 		return nil, fmt.Errorf("geçersiz tablo adı %q", req.Table)
 	}
-	if strings.HasPrefix(req.Table, ".inner") || req.Host == "" {
+	// v0.10.846 — GENİŞ `.inner` öneki (catalogInnerName ile ortak gövde):
+	// Ordinary motorlu veritabanında iç tablo `.inner.<view>` olur.
+	if catalogInnerName(req.Table) || req.Host == "" {
 		return nil, errors.New("MV iç tabloları bu sihirbazın kapsamı dışında (MV onarımı kartı) / host zorunlu")
 	}
 	if strings.HasSuffix(req.Table, replicaRepairFixSuffix) {
 		return nil, fmt.Errorf("%s sihirbazın geçici tablosu — onarılmaz; sahibi tablonun satırında Temizle", req.Table)
+	}
+	// v0.10.846 — ÜRÜN KATALOĞU kapısı. Kaldırılmış (removed_tables.go) ya da
+	// ürünün yönetmediği bir tabloda onarım/ilk-replika YANLIŞ işlerdir:
+	// birincisinin doğru eylemi temizlemek (bir sonraki boot ON CLUSTER …
+	// SYNC ile yapar), ikincisinin kanonik tanımı ÜRÜNDE YOK. FE düğmeyi
+	// zaten çizmez ama düğme gizlemek YETMEZ: istemci uydurabilir, bayat bir
+	// sekme eski raporla POST atabilir. Kapı raporu OKUMADAN ÖNCE: karar
+	// yalnız ADA ve katalogda bağlı, küme durumuna değil.
+	if cls, since := catalogVerdictFor(req.Table, s.productTableNames()); cls != "" {
+		return nil, errors.New(catalogRepairReject(req.Table, cls, since))
 	}
 	if !s.clusterMode() {
 		return nil, errors.New("küme kipi değil")

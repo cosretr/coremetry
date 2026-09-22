@@ -2,10 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, canSeedFirstReplica, leavesFixTable, repairModeLabel, repairRequestMode, isInnerTable } from './replicaConsistency';
+import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, canSeedFirstReplica, catalogLabel, leavesFixTable, repairModeLabel, repairRequestMode, isInnerTable } from './replicaConsistency';
 import type { CHReplicaShard, CHReplicaState, CHReplicaVerdict } from '@/lib/types';
 
-const VERDICTS: CHReplicaVerdict[] = ['ok', 'single', 'unmapped', 'lagging', 'divergent', 'readonly', 'session_expired', 'missing_replica', 'not_replicated', 'no_replication'];
+const VERDICTS: CHReplicaVerdict[] = ['ok', 'removed', 'unmanaged', 'single', 'unmapped', 'lagging', 'divergent', 'readonly', 'session_expired', 'missing_replica', 'not_replicated', 'no_replication'];
 
 function rep(host: string, zkPath: string, over: Partial<CHReplicaState> = {}): CHReplicaState {
   return { host, shard: 1, replica: 1, zkPath, replicaName: host, totalReplicas: 2, activeReplicas: 2, readonly: false, sessionExpired: false, delayS: 0, queue: 0, rows: {}, totalRows: 0, ...over };
@@ -169,18 +169,18 @@ describe('runbook — v0.10.824 MV iç tablosu', () => {
 describe('canRepair / repairModeLabel — v0.10.820 Replika onarımı', () => {
   const peer = rep('h2', '/t/02/t', { engine: 'ReplicatedReplacingMergeTree', replicaName: 'node2' });
   it('yalnız eksik/replike-olmayan kararda, düz/yok host için, sağlam Replicated eş varken', () => {
-    expect(canRepair('t', shard('missing_replica', [peer], { missing: [{ host: 'h1' }] }), { host: 'h1' })).toBe(true);
-    expect(canRepair('t', shard('not_replicated', [peer], { missing: [{ host: 'h1', engine: 'MergeTree' }] }), { host: 'h1', engine: 'MergeTree' })).toBe(true);
+    expect(canRepair({ table: 't' }, shard('missing_replica', [peer], { missing: [{ host: 'h1' }] }), { host: 'h1' })).toBe(true);
+    expect(canRepair({ table: 't' }, shard('not_replicated', [peer], { missing: [{ host: 'h1', engine: 'MergeTree' }] }), { host: 'h1', engine: 'MergeTree' })).toBe(true);
     // Replicated-ama-kayıtsız host onarılmaz (yeniden ölç); MV iç tablosu hariç; başka karar hariç.
-    expect(canRepair('t', shard('missing_replica', [peer]), { host: 'h1', engine: 'ReplicatedMergeTree' })).toBe(false);
-    expect(canRepair('.inner_id.abc', shard('missing_replica', [peer]), { host: 'h1' })).toBe(false);
-    expect(canRepair('t_fix', shard('not_replicated', [peer], { missing: [{ host: 'h1', engine: 'MergeTree' }] }), { host: 'h1', engine: 'MergeTree' })).toBe(false); // sihirbazın geçici tablosu
-    expect(canRepair('t', shard('single', [peer]), { host: 'h1' })).toBe(false);
-    expect(canRepair('t', shard('no_replication', [peer]), { host: 'h1' })).toBe(false);
+    expect(canRepair({ table: 't' }, shard('missing_replica', [peer]), { host: 'h1', engine: 'ReplicatedMergeTree' })).toBe(false);
+    expect(canRepair({ table: '.inner_id.abc' }, shard('missing_replica', [peer]), { host: 'h1' })).toBe(false);
+    expect(canRepair({ table: 't_fix' }, shard('not_replicated', [peer], { missing: [{ host: 'h1', engine: 'MergeTree' }] }), { host: 'h1', engine: 'MergeTree' })).toBe(false); // sihirbazın geçici tablosu
+    expect(canRepair({ table: 't' }, shard('single', [peer]), { host: 'h1' })).toBe(false);
+    expect(canRepair({ table: 't' }, shard('no_replication', [peer]), { host: 'h1' })).toBe(false);
     // Eş motoru bilinmiyor / readonly / yok → kaynak DDL yok.
-    expect(canRepair('t', shard('missing_replica', [rep('h2', '/t/02/t')]), { host: 'h1' })).toBe(false);
-    expect(canRepair('t', shard('missing_replica', [rep('h2', '/t/02/t', { engine: 'ReplicatedMergeTree', readonly: true })]), { host: 'h1' })).toBe(false);
-    expect(canRepair('t', shard('missing_replica', []), { host: 'h1' })).toBe(false);
+    expect(canRepair({ table: 't' }, shard('missing_replica', [rep('h2', '/t/02/t')]), { host: 'h1' })).toBe(false);
+    expect(canRepair({ table: 't' }, shard('missing_replica', [rep('h2', '/t/02/t', { engine: 'ReplicatedMergeTree', readonly: true })]), { host: 'h1' })).toBe(false);
+    expect(canRepair({ table: 't' }, shard('missing_replica', []), { host: 'h1' })).toBe(false);
   });
   it('mod etiketi kipleri ayırır', () => {
     expect(repairModeLabel('plain')).toContain('EXCHANGE');
@@ -199,37 +199,37 @@ describe('canSeedFirstReplica / leavesFixTable — v0.10.829 ilk replika', () =>
   const plain = { host: 'h1', engine: 'ReplacingMergeTree' };
   const peer = rep('h2', '/t/01/t', { engine: 'ReplicatedMergeTree' });
   it('operatör vakası: Replicated replika yok + düz tablo → düğme çıkar', () => {
-    expect(canSeedFirstReplica('events', shard('not_replicated', [], { missing: [plain, { host: 'h2', engine: 'ReplacingMergeTree' }] }), plain)).toBe(true);
-    expect(canSeedFirstReplica('events', shard('missing_replica', [], { missing: [plain] }), plain)).toBe(true);
+    expect(canSeedFirstReplica({ table: 'events' }, shard('not_replicated', [], { missing: [plain, { host: 'h2', engine: 'ReplacingMergeTree' }] }), plain)).toBe(true);
+    expect(canSeedFirstReplica({ table: 'events' }, shard('missing_replica', [], { missing: [plain] }), plain)).toBe(true);
   });
   it('shard\'da Replicated replika VARSA çıkmaz — orada doğru eylem "Onar"', () => {
-    expect(canSeedFirstReplica('events', shard('not_replicated', [peer], { missing: [plain] }), plain)).toBe(false);
+    expect(canSeedFirstReplica({ table: 'events' }, shard('not_replicated', [peer], { missing: [plain] }), plain)).toBe(false);
     // İki düğme aynı satırda asla birlikte çıkmaz (koşullar birbirini dışlar).
     const withPeer = shard('not_replicated', [peer], { missing: [plain] });
     const noPeer = shard('not_replicated', [], { missing: [plain] });
-    expect(canRepair('events', withPeer, plain) && canSeedFirstReplica('events', withPeer, plain)).toBe(false);
-    expect(canRepair('events', noPeer, plain) && canSeedFirstReplica('events', noPeer, plain)).toBe(false);
+    expect(canRepair({ table: 'events' }, withPeer, plain) && canSeedFirstReplica({ table: 'events' }, withPeer, plain)).toBe(false);
+    expect(canRepair({ table: 'events' }, noPeer, plain) && canSeedFirstReplica({ table: 'events' }, noPeer, plain)).toBe(false);
   });
   // v0.10.829 boş-shard dalı — operatör: span_links_reverse · shard 2, İKİ host da "tablo yok".
   it('shard\'ın hepsi "tablo yok" → düğme çıkar (boş Replicated tablo kurulur)', () => {
     const empty = { host: 'h9' }; // plain h1'de: AYRI host olmalı, yoksa "başka host" kuralı ısırmaz
-    expect(canSeedFirstReplica('span_links_reverse', shard('missing_replica', [], { missing: [empty, { host: 'h2' }] }), empty)).toBe(true);
+    expect(canSeedFirstReplica({ table: 'span_links_reverse' }, shard('missing_replica', [], { missing: [empty, { host: 'h2' }] }), empty)).toBe(true);
     // Ama shard'da düz tablo taşıyan BAŞKA host varsa: ilk replika ORADA kurulur.
-    expect(canSeedFirstReplica('span_links_reverse', shard('not_replicated', [], { missing: [empty, plain] }), empty)).toBe(false);
+    expect(canSeedFirstReplica({ table: 'span_links_reverse' }, shard('not_replicated', [], { missing: [empty, plain] }), empty)).toBe(false);
     // O düz host'un kendi satırında düğme ÇIKAR (tohum verisi onda).
-    expect(canSeedFirstReplica('span_links_reverse', shard('not_replicated', [], { missing: [empty, plain] }), plain)).toBe(true);
+    expect(canSeedFirstReplica({ table: 'span_links_reverse' }, shard('not_replicated', [], { missing: [empty, plain] }), plain)).toBe(true);
     // Replicated replika varsa boş host için de çıkmaz (Onar eşe katar).
-    expect(canSeedFirstReplica('span_links_reverse', shard('missing_replica', [peer], { missing: [empty] }), empty)).toBe(false);
+    expect(canSeedFirstReplica({ table: 'span_links_reverse' }, shard('missing_replica', [peer], { missing: [empty] }), empty)).toBe(false);
   });
   it('kapsam dışı satırlarda çıkmaz', () => {
     // Replicated ama kayıtsız → yeniden ölç.
-    expect(canSeedFirstReplica('events', shard('missing_replica', []), { host: 'h1', engine: 'ReplicatedMergeTree' })).toBe(false);
+    expect(canSeedFirstReplica({ table: 'events' }, shard('missing_replica', []), { host: 'h1', engine: 'ReplicatedMergeTree' })).toBe(false);
     // MV iç tablosu ve sihirbazın `_fix` tablosu kapsam dışı.
-    expect(canSeedFirstReplica('.inner_id.abc', shard('not_replicated', []), plain)).toBe(false);
-    expect(canSeedFirstReplica('events_fix', shard('not_replicated', []), plain)).toBe(false);
+    expect(canSeedFirstReplica({ table: '.inner_id.abc' }, shard('not_replicated', []), plain)).toBe(false);
+    expect(canSeedFirstReplica({ table: 'events_fix' }, shard('not_replicated', []), plain)).toBe(false);
     // Yapısal olmayan kararlar (ıraksama / readonly / tek replika) başka hastalık.
     for (const v of ['divergent', 'readonly', 'session_expired', 'single', 'lagging', 'no_replication', 'ok'] as const) {
-      expect(canSeedFirstReplica('events', shard(v, []), plain)).toBe(false);
+      expect(canSeedFirstReplica({ table: 'events' }, shard(v, []), plain)).toBe(false);
     }
   });
   it('leavesFixTable: EXCHANGE\'li kipler `_fix` bırakır, boş dal bırakmaz', () => {
@@ -284,7 +284,7 @@ describe('replicaConsistency — kablolama pini', () => {
     // v0.10.829 incelemesi (5): ALTERNASYON YOK — `/…|İlk replikayı kur/`
     // yazımında çıplak literal her zaman eşleşiyordu, yani pin boştu.
     // Düğmenin JSX dilimi kesilir ve varyant ORADA aranır.
-    const seedBtn = page.slice(page.indexOf('canSeedFirstReplica(t.table, sh, m) && ('), page.indexOf('İlk replikayı kur</Button>'));
+    const seedBtn = page.slice(page.indexOf('canSeedFirstReplica(t, sh, m) && ('), page.indexOf('İlk replikayı kur</Button>'));
     expect(seedBtn.length).toBeGreaterThan(0);
     expect(seedBtn).toContain('variant="danger"');
     expect(seedBtn).not.toContain('variant="accent"');
@@ -311,5 +311,124 @@ describe('replicaConsistency — kablolama pini', () => {
     expect(page).toContain('t.table, sh, t.view)');
     const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
     expect(types).toContain('view?: string; inner?: boolean');
+  });
+
+  // ── v0.10.846 — KALDIRILMIŞ tablonun kalıntısı ────────────────────────
+  //
+  // Operatör-bildirimli (prod, 2026-09-20, ekran görüntüsü): kart
+  // "1/90 tablo sorunlu · eksik replika" dedi; tek sorunlu tablo `feedbacks`
+  // ve shard 1'in İKİ host'unda da yoktu ("İlk replikayı kur" düğmesiyle),
+  // shard 2'de 2/2 Replicated duruyordu.
+  //
+  // `feedbacks` ürünün v0.8.240'ta KALDIRDIĞI bir tablo. Eski boot DROP'u
+  // ON CLUSTER taşımıyordu (adaptDDL DROP'u yeniden yazmaz), o yüzden yalnız
+  // koordinatör host'ta koştu: bir shard temizlendi, öteki shard'da tablo
+  // kaldı. "Eksik replika" sanılan şey YARIM KALMIŞ SİLME'ydi; düğme zaten
+  // çalışamıyordu (kanonik tanım yok) — yani YANILTICIydı.
+  it('kart satırı katalog etiketini çizer ve düğme kapılarına TABLOYU verir', () => {
+    // Kapı `t.table` değil `t` alır: katalog sınıfı TABLO düzeyinde yaşıyor.
+    expect(page).toContain('{catalogLabel(t)}');
+    expect(page).toContain('{t.catalog && (');
+    expect(page).toContain('canRepair(t, sh, m)');
+    expect(page).toContain('canSeedFirstReplica(t, sh, m)');
+    const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
+    expect(types).toContain("export type CHReplicaCatalog = 'removed' | 'unmanaged';");
+    expect(types).toContain('catalog?: CHReplicaCatalog; removedSince?: string');
+  });
+});
+
+// v0.10.846 — katalog kararlarının DAVRANIŞI (ton, etiket, özet, düğme kapısı).
+describe('katalog kararları — v0.10.846', () => {
+  const plain = { host: 'ch-01', engine: 'ReplacingMergeTree' };
+  const peer = rep('ch-03', '/clickhouse/tables/2/feedbacks', { engine: 'ReplicatedMergeTree' });
+
+  it('kaldırılmış ve yönetilmeyen kararlar GRİ, `lagging` eşiğinin altında', () => {
+    expect(verdictTone('removed')).toBe('b-gray');
+    expect(verdictTone('unmanaged')).toBe('b-gray');
+    expect(verdictLabel('removed')).toBe('kaldırıldı');
+    expect(verdictLabel('unmanaged')).toBe('katalog dışı');
+    expect(verdictRank('removed')).toBeLessThan(verdictRank('lagging'));
+    expect(verdictRank('unmanaged')).toBeLessThan(verdictRank('lagging'));
+    expect(verdictRank('removed')).toBeGreaterThan(verdictRank('ok'));
+  });
+
+  it('özet kalıntıyı "sorunlu" saymaz ama "tutarlı" da demez', () => {
+    // Prod şekli: 89 ölçülmüş tablo + 1 kaldırılmış kalıntı (ekran: 1/90).
+    const tables = Array.from({ length: 89 }, (_, i) => ({ table: `t${i}`, shards: [], verdict: 'ok' as const }));
+    const s = summarize({ tables: [...tables, { table: 'feedbacks', shards: [], verdict: 'removed', catalog: 'removed', removedSince: 'v0.8.240' }] });
+    expect(s.bad).toBe(0);
+    expect(s.removed).toBe(1);
+    expect(s.tone).toBe('b-gray');
+    expect(s.text).toBe('89 tablo tutarlı · 1 kalıntı (ürün kaldırdı)');
+    expect(s.text).not.toContain('sorunlu');
+  });
+
+  // v0.10.846 incelemesi — sayaç KARARA değil `catalog` ALANINA bakmalı:
+  // kapsaması susturulmuş ama replikaları sağlıklı bir tablonun kararı `ok`
+  // olur ve karara bakan sayaç onu "tutarlı" sayardı (ölçülmemiş bir şeyi
+  // ölçülmüş göstermek).
+  it('kapsaması susturulmuş ama kararı ok olan tablo "tutarlı" sayılmaz', () => {
+    const s = summarize({ tables: [
+      { table: 'a', shards: [], verdict: 'ok' },
+      { table: 'musteri_deneme', shards: [], verdict: 'ok', catalog: 'unmanaged' },
+    ] });
+    expect(s.unmanaged).toBe(1);
+    expect(s.text).toBe('1 tablo tutarlı · 1 katalog dışı');
+  });
+
+  // İKİSİ FARKLI ŞEY: `removed` geçici (bir sonraki boot siler) ve rozeti
+  // boyar; `unmanaged` kalıcı (operatörün kendi tablosu) ve kartı sonsuza
+  // dek griye kilitlememeli.
+  it('kalıcı katalog-dışı rozeti kilitlemez, geçici kalıntı boyar', () => {
+    const only = summarize({ tables: [
+      { table: 'a', shards: [], verdict: 'ok' },
+      { table: 'musteri_deneme', shards: [], verdict: 'ok', catalog: 'unmanaged' },
+    ] });
+    expect(only.tone).toBe('b-ok');
+    const withRemoved = summarize({ tables: [
+      { table: 'a', shards: [], verdict: 'ok' },
+      { table: 'feedbacks', shards: [], verdict: 'removed', catalog: 'removed', removedSince: 'v0.8.240' },
+    ] });
+    expect(withRemoved.tone).toBe('b-gray');
+    const both = summarize({ tables: [
+      { table: 'a', shards: [], verdict: 'ok' },
+      { table: 'feedbacks', shards: [], verdict: 'removed', catalog: 'removed', removedSince: 'v0.8.240' },
+      { table: 'musteri_deneme', shards: [], verdict: 'ok', catalog: 'unmanaged' },
+    ] });
+    expect(both.text).toBe('1 tablo tutarlı · 1 kalıntı (ürün kaldırdı) · 1 katalog dışı');
+  });
+
+  // v0.10.846 incelemesi — düğme ile sunucu aynı kararı vermeli: sihirbaz
+  // kanonik tanım bulamadığında (`<ürün>_old` göç yedeği) sunucu zaten
+  // reddediyordu, FE ise ada bakıp düğmeyi çiziyordu.
+  it('kanonik tanımı olmayan satırda "İlk replikayı kur" çizilmez', () => {
+    const missing = shard('missing_replica', [], { missing: [plain] });
+    expect(canSeedFirstReplica({ table: 'problems_old', seedable: false }, missing, plain)).toBe(false);
+    expect(canSeedFirstReplica({ table: 'problems', seedable: true }, missing, plain)).toBe(true);
+  });
+
+  it('etiket DURUM bildirir, eylem önermez', () => {
+    expect(catalogLabel({ catalog: 'removed', removedSince: 'v0.8.240' }))
+      .toBe('ürün bu tabloyu KALDIRDI (v0.8.240) — kalıntı; bir sonraki boot küme genelinde temizler');
+    expect(catalogLabel({ catalog: 'unmanaged' })).toContain('Coremetry yönetmiyor');
+    expect(catalogLabel({})).toBe('');
+  });
+
+  it('kaldırılmış/yönetilmeyen satırda ONAR ve İLK REPLİKAYI KUR çizilmez', () => {
+    // KONTROL satırları: aynı shard şekli katalog bilgisi OLMADAN düğmeyi
+    // çizer — yani kapı adın kendisinde değil, tablonun katalog sınıfında.
+    const missing = shard('missing_replica', [], { missing: [plain] });
+    expect(canSeedFirstReplica({ table: 'feedbacks' }, missing, plain)).toBe(true);
+    expect(canSeedFirstReplica({ table: 'feedbacks', catalog: 'removed' }, missing, plain)).toBe(false);
+    expect(canSeedFirstReplica({ table: 'musteri_deneme', catalog: 'unmanaged' }, missing, plain)).toBe(false);
+    const withPeer = shard('not_replicated', [peer], { missing: [plain] });
+    expect(canRepair({ table: 'feedbacks' }, withPeer, plain)).toBe(true);
+    expect(canRepair({ table: 'feedbacks', catalog: 'removed' }, withPeer, plain)).toBe(false);
+    expect(canRepair({ table: 'musteri_deneme', catalog: 'unmanaged' }, withPeer, plain)).toBe(false);
+  });
+
+  it('katalog kararında runbook YOK (kopyalanacak SQL yok)', () => {
+    expect(runbook('shop_cluster', 'shop', 'feedbacks', shard('removed', []))).toBe('');
+    expect(runbook('shop_cluster', 'shop', 'musteri_deneme', shard('unmanaged', []))).toBe('');
   });
 });

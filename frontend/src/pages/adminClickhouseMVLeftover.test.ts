@@ -133,7 +133,7 @@ describe('replika kartı iç tablo etiketi (v0.10.830)', () => {
   });
   it('iç tablo değilse etiket yok; onarım düğmesi hâlâ kapalı', () => {
     expect(innerViewLabel({ inner: false, view: 'x' })).toBe('');
-    expect(canRepair('.inner_id.aaaaaaaa-1111-2222-3333-444444444444', shard([{ host: 'ch-02' }]), { host: 'ch-02' })).toBe(false);
+    expect(canRepair({ table: '.inner_id.aaaaaaaa-1111-2222-3333-444444444444' }, shard([{ host: 'ch-02' }]), { host: 'ch-02' })).toBe(false);
   });
   it('kart etiketi saf gövdeden gelir (ikinci metin yok)', () => {
     expect(page).toContain('{innerViewLabel(t)}');

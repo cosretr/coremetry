@@ -4,13 +4,18 @@
  * özet ve kararın runbook metni. Runbook operatörün kopyalayıp DBA ile
  * koşacağı SQL: ürün ZK yolu uyuşmazlığını kendi düzeltmez (veri taşıma).
  */
-import type { CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaVerdict } from '@/lib/types';
+import type { CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaTable, CHReplicaVerdict } from '@/lib/types';
 
 export type ReplicaTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
 
 export function verdictTone(v: CHReplicaVerdict): ReplicaTone {
   switch (v) {
     case 'ok': return 'b-ok';
+    // v0.10.846 — katalog kararları GRİ: ölçülmüş bir sağlık değil, ölçünün
+    // uygulanmadığı bir hâl. Kırmızı olsalardı operatör var olmayan bir işe
+    // bakardı (prod 2026-09-20: `feedbacks` "eksik replika" diyordu).
+    case 'removed':
+    case 'unmanaged':
     case 'single':
     case 'unmapped': return 'b-gray';
     case 'lagging': return 'b-warn';
@@ -22,17 +27,20 @@ const LABEL: Record<CHReplicaVerdict, string> = {
   ok: 'tutarlı', single: 'tek replika', unmapped: 'eşlenemedi', lagging: 'geride',
   divergent: 'ıraksama', readonly: 'readonly', session_expired: 'oturum düşmüş',
   missing_replica: 'eksik replika', not_replicated: 'replike değil', no_replication: 'replikasyon yok', // v0.10.818
+  removed: 'kaldırıldı', unmanaged: 'katalog dışı', // v0.10.846
 };
 export const verdictLabel = (v: CHReplicaVerdict): string => LABEL[v];
 
 // Sıralama: sunucudaki replicaVerdictRank ile aynı (kötü önce listelenir).
+// v0.10.846 — katalog kararları `lagging` eşiğinin ALTINDA: summarize
+// "sorunlu"yu oradan saymaya başlar, bir kalıntı tablo başlığı boyamamalı.
 const RANK: Record<CHReplicaVerdict, number> = {
-  ok: 0, single: 1, unmapped: 2, lagging: 3, divergent: 4, readonly: 5, session_expired: 6,
-  missing_replica: 7, not_replicated: 8, no_replication: 9, // v0.10.818
+  ok: 0, removed: 1, unmanaged: 2, single: 3, unmapped: 4, lagging: 5, divergent: 6,
+  readonly: 7, session_expired: 8, missing_replica: 9, not_replicated: 10, no_replication: 11, // v0.10.818
 };
 export const verdictRank = (v: CHReplicaVerdict) => RANK[v];
 
-export interface ReplicaSummary { tables: number; bad: number; single: number; worst: CHReplicaVerdict; tone: ReplicaTone; text: string }
+export interface ReplicaSummary { tables: number; bad: number; single: number; removed: number; unmanaged: number; worst: CHReplicaVerdict; tone: ReplicaTone; text: string }
 
 /** Kart başlığı: kaç tablo, kaçı sorunlu, en kötü karar. */
 export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): ReplicaSummary {
@@ -50,13 +58,53 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
   // ölçülemez. (2×2 kümede eksik eş artık missing_replica/not_replicated → sorunlu;
   // single yalnız gerçekten tek-replikalı shard'larda kalır.)
   const single = r.tables.filter(t => t.verdict === 'single').length;
-  const tone: ReplicaTone = (unmapped > 0 || single > 0) && bad === 0 ? 'b-warn' : verdictTone(worst);
+  // v0.10.846 — katalog dışı satırlar ne "sorunlu" ne "tutarlı": kapsama
+  // ölçüsü onlarda hiç koşmadı. Sayaç `catalog` ALANINA bakar, karara
+  // DEĞİL (inceleme bulgusu): ölçüsü susturulmuş ama replikaları sağlıklı
+  // bir tablonun kararı `ok` olur ve karara bakan sayaç onu "tutarlı"
+  // sayardı — ölçülmemiş bir şeyi ölçülmüş göstermek.
+  //
+  // İKİSİ FARKLI ŞEY, ayrı sayılır:
+  //   removed   → GEÇİCİ: bir sonraki boot küme genelinde siler.
+  //   unmanaged → KALICI: operatörün kendi tablosu, hiç gitmeyecek.
+  const removed = r.tables.filter(t => t.catalog === 'removed').length;
+  const unmanaged = r.tables.filter(t => t.catalog === 'unmanaged').length;
+  const measured = r.tables.length - removed - unmanaged;
+  // `unmanaged` rozeti BOYAMAZ: kalıcı bir olgu için kartı sonsuza dek
+  // griye kilitlemek, ürün sağlıklıyken yanlış bir tedirginlik üretirdi.
+  // `removed` boyar — o bir kalıntı ve gidecek.
+  const tone: ReplicaTone = (unmapped > 0 || single > 0) && bad === 0
+    ? 'b-warn'
+    : verdictTone(worst === 'unmanaged' ? 'ok' : worst);
+  const leftovers = [
+    ...(removed > 0 ? [`${removed} kalıntı (ürün kaldırdı)`] : []),
+    ...(unmanaged > 0 ? [`${unmanaged} katalog dışı`] : []),
+  ].join(' · ');
   const text = r.tables.length === 0 ? 'MergeTree tablo yok'
     : bad > 0 ? `${bad}/${r.tables.length} tablo sorunlu · ${verdictLabel(worst)}`
     : unmapped > 0 ? `${unmapped}/${r.tables.length} tablo eşlenemedi · karar yok${single > 0 ? ` · ${single} tek replika` : ''}`
     : single > 0 ? `${single}/${r.tables.length} tablo tek replika · yedeklilik yok`
+    : leftovers ? `${measured} tablo tutarlı · ${leftovers}`
     : `${r.tables.length} tablo tutarlı`;
-  return { tables: r.tables.length, bad, single, worst, tone, text };
+  return { tables: r.tables.length, bad, single, removed, unmanaged, worst, tone, text };
+}
+
+/**
+ * catalogLabel — SAF (v0.10.846): tablo adının altındaki açıklama satırı.
+ *
+ * Operatör-bildirimli (prod 2026-09-20): kart `feedbacks` için "eksik replika"
+ * diyordu. `feedbacks` ürünün v0.8.240'ta KALDIRDIĞI bir tablo — doğru eylem
+ * kurmak değil temizlemekti ve temizliği bir sonraki boot küme genelinde
+ * (ON CLUSTER … SYNC) yapıyor. Etiket bu yüzden EYLEM DEĞİL DURUM bildirir.
+ */
+export function catalogLabel(t: Pick<CHReplicaTable, 'catalog' | 'removedSince'>): string {
+  if (t.catalog === 'removed') {
+    return `ürün bu tabloyu KALDIRDI (${t.removedSince ?? 'eski sürüm'}) — kalıntı; bir sonraki boot küme genelinde temizler`;
+  }
+  if (t.catalog === 'unmanaged') {
+    return 'ürün kataloğunda YOK — bu tabloyu Coremetry yönetmiyor; kapsama ölçüsü koşmadı, eylem önerilmez';
+  }
+  return '';
 }
 
 /**
@@ -64,8 +112,14 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
  * tablo yok ya da düz (Replicated-ama-kayıtsız host onarılmaz, yeniden ölçülür),
  * shard'da sağlam Replicated eş var (kaynak DDL), MV iç tablosu değil.
  */
-export function canRepair(table: string, sh: CHReplicaShard, m: CHReplicaMissingHost): boolean {
+export function canRepair(t: Pick<CHReplicaTable, 'table' | 'catalog'>, sh: CHReplicaShard, m: CHReplicaMissingHost): boolean {
+  const table = t.table;
   if (table.startsWith('.inner') || table.endsWith('_fix')) return false; // `_fix` sihirbazın geçici tablosu: sahibinin satırında Temizle
+  // v0.10.846 — katalog dışı satırda onarım YOK: kaldırılmış tabloyu kurmak
+  // yarım kalmış silmeyi geri alırdı, yönetilmeyen tablonun kanonik tanımı
+  // üründe yok. Sunucu da reddediyor (PlanReplicaRepair) — düğmeyi gizlemek
+  // tek başına yeterli değil, istemci uydurabilir.
+  if (t.catalog) return false;
   if (sh.verdict !== 'missing_replica' && sh.verdict !== 'not_replicated') return false;
   if (m.engine && m.engine.startsWith('Replicated')) return false;
   return (sh.replicas ?? []).some(r => (r.engine ?? '').startsWith('Replicated') && !r.readonly && !r.sessionExpired);
@@ -82,8 +136,16 @@ export function canRepair(table: string, sh: CHReplicaShard, m: CHReplicaMissing
  * Sunucudaki seedEligibility aynı dört kuralı okur — burası yalnız düğmeyi
  * gizler, kararı sunucu TAZE raporla verir.
  */
-export function canSeedFirstReplica(table: string, sh: CHReplicaShard, m: CHReplicaMissingHost): boolean {
+export function canSeedFirstReplica(t: Pick<CHReplicaTable, 'table' | 'catalog' | 'seedable'>, sh: CHReplicaShard, m: CHReplicaMissingHost): boolean {
+  const table = t.table;
   if (table.startsWith('.inner') || table.endsWith('_fix')) return false;
+  if (t.catalog) return false; // v0.10.846 — kaldırılmış/yönetilmeyen tabloda ilk replika kurulmaz
+  // v0.10.846 — DÜĞME İLE SUNUCU AYNI KARARI VERİR. Sihirbaz kanonik bir
+  // tanım bulamıyorsa (`<ürün>_old` göç yedekleri, Distributed sarmalayıcı
+  // kalmış yüksek hacimli ad…) sunucu zaten reddediyordu; FE ada bakıp
+  // tahmin ettiği için düğmeyi yine de çiziyordu. Cevap artık ÖLÇÜLMÜŞ
+  // geliyor (ReplicaTable.seedable).
+  if (t.seedable === false) return false;
   if (sh.verdict !== 'missing_replica' && sh.verdict !== 'not_replicated') return false;
   if ((sh.replicas ?? []).length > 0) return false; // shard'da Replicated replika VAR → "Onar" (eşe katıl)
   if (m.engine?.startsWith('Replicated')) return false; // kayıtsız-ama-Replicated → yeniden ölç

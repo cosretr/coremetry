@@ -2002,18 +2002,21 @@ func canonicalMVNames() []string {
 	return out
 }
 
-func (s *Store) migrate(ctx context.Context) error {
-	sd, ld, md := s.ret.SpansDays, s.ret.LogsDays, s.ret.MetricsDays
-	if sd == 0 {
-		sd = 30
-	}
-	if ld == 0 {
-		ld = 30
-	}
-	if md == 0 {
-		md = 7
-	}
-
+// canonicalTables — boot'ta yaratılan TABLO kataloğu (TEK GÖVDE, v0.10.846).
+//
+// canonicalMVs()'in emsali ve aynı gerekçe: katalog paket düzeyinde
+// erişilebilir olmadan ÖLÇÜLEMİYORDU. Somut ihtiyaç, kaldırılmış tablolar
+// defteriyle (removed_tables.go) arasındaki KESİŞİM KAPISI:
+//
+//	dropRemovedTables, `tables` dilimi KOŞTUKTAN SONRA çalışır. Deftere
+//	YAŞAYAN bir ad düşerse boot o tabloyu KURAR ve hemen ardından
+//	`DROP … ON CLUSTER … SYNC` ile küme genelinde SİLER — her boot,
+//	sessizce, hata vermeden. Bugün kesişim yok ama bunu tutan bir şey
+//	YOKTU; TestLedgerNeverNamesALivingTable artık GERÇEK katalogla tutuyor.
+//
+// SAF: tek girdisi saklama gün sayıları (sd/ld/md), tek çıktısı DDL metinleri.
+// migrate() gövdesinden TAŞINDI, metni değişmedi.
+func canonicalTables(sd, ld, md int) []string {
 	tables := []string{
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS spans (
 			trace_id      String       CODEC(ZSTD(3)),
@@ -3177,11 +3180,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		PARTITION BY toDate(time_bucket)
 		ORDER BY (time_bucket, root_service, root_op)
 		TTL toDate(time_bucket) + INTERVAL 14 DAY`,
-		// v0.8.240 — community-feedback feature REMOVED (operator
-		// request). The `feedbacks` table (added v0.8.106) is dropped
-		// on upgrade; the data was in-app messages with no external
-		// consumer. No compat shims per CLAUDE.md.
-		`DROP TABLE IF EXISTS feedbacks`,
+		// v0.8.240 — community-feedback özelliği KALDIRILDI (operatör
+		// isteği). `feedbacks` tablosunun (v0.8.106) düşürülmesi artık
+		// BURADA satır içi bir dize DEĞİL: removed_tables.go defterinden
+		// üretiliyor ve küme kipinde ON CLUSTER + SYNC koşuyor
+		// (v0.10.846). Satır içi hâli ON CLUSTER taşımıyordu ve adaptDDL
+		// DROP'u yeniden yazmaz — kaldırma yalnız koordinatör host'ta
+		// koşmuş, prod'da bir shard temizlenip öteki shard'da tablo
+		// kalmıştı; kart bunu "eksik replika" diye raporluyordu.
 		// v0.9.1301 — BU BEŞ CREATE TABLE `alters` LİSTESİNDEYDİ, buraya
 		// TAŞINDI. DDL metni AYNEN korundu; değişen tek şey hangi dilimde
 		// durdukları.
@@ -3426,6 +3432,22 @@ func (s *Store) migrate(ctx context.Context) error {
 		ORDER BY (signal, pod, bucket)
 		TTL bucket + INTERVAL 30 DAY`,
 	}
+	return tables
+}
+
+func (s *Store) migrate(ctx context.Context) error {
+	sd, ld, md := s.ret.SpansDays, s.ret.LogsDays, s.ret.MetricsDays
+	if sd == 0 {
+		sd = 30
+	}
+	if ld == 0 {
+		ld = 30
+	}
+	if md == 0 {
+		md = 7
+	}
+
+	tables := canonicalTables(sd, ld, md)
 
 	// v0.10.829 — kanonik tablo kataloğu, boot sonrası da erişilebilir.
 	// "İlk replikayı kur" sihirbazı (replica_repair.go) bir tablonun ZK
@@ -3488,6 +3510,19 @@ func (s *Store) migrate(ctx context.Context) error {
 			return fmt.Errorf("create table: %w", err)
 		}
 	}
+
+	// v0.10.846 — ÜRÜNÜN KALDIRDIĞI tabloların temizliği (removed_tables.go).
+	// `tables` diliminden SONRA: kaldırma yaratmanın tersidir, sıra okunur
+	// kalsın. `alters` diliminin anlık görüntüsünden ÖNCE: o plan kendi
+	// system.tables/system.columns okumasını aşağıda TAZE yapıyor, yani
+	// burada düşen bir nesne bayat bir "zaten var" kaydıyla elenemez
+	// (store.go'daki "İKİ ANLIK GÖRÜNTÜ DE BURADA TAZE OKUNUYOR" sözleşmesi).
+	//
+	// HATA DÖNDÜRMEZ: temizlik bir onarım değil; okuyucusu olmayan bir
+	// kalıntının kalması boot'u düşürmeyi hak etmiyor (erteleme KAPALI
+	// kipte — taze kurulum / RESET_SCHEMA — düşürürdü). Yüksek sesle
+	// loglanır, bir sonraki boot yeniden dener.
+	s.dropRemovedTables(ctx)
 
 	// In-place column additions for upgrades. ADD COLUMN IF NOT EXISTS is a
 	// no-op on fresh installs (column already in CREATE TABLE) and on
@@ -3905,7 +3940,9 @@ func (s *Store) migrate(ctx context.Context) error {
 	//
 	// İKİ ANLIK GÖRÜNTÜ DE BURADA TAZE OKUNUYOR, `tables` diliminin
 	// kümeleri yeniden KULLANILMIYOR: aradaki DDL nesne/kolon yaratmış ya
-	// da DÜŞÜRMÜŞ olabilir (örn. `DROP TABLE IF EXISTS feedbacks`) ve bayat
+	// da DÜŞÜRMÜŞ olabilir (v0.10.846'dan beri bunun adı var:
+	// dropRemovedTables, removed_tables.go — `tables` ile bu satır ARASINDA
+	// koşuyor, tam da bu tazeliğe dayanarak) ve bayat
 	// bir "zaten var" kaydı, düşürülmüş bir nesnenin CREATE'ini eler —
 	// sessiz ve kalıcı kayıp. Taze okuma her zaman güvenli taraf; iki
 	// system-tablosu sorgusunun boot'taki maliyeti ölçülemez.
