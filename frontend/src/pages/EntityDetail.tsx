@@ -121,8 +121,9 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
         <table>
           <thead><tr><th>service</th><th>pods</th><th>spans</th><th>errors</th><th>avg ms</th></tr></thead>
           <tbody>
+            {/* v0.10.857 (scale-audit) — cluster entity'sinde penceredeki her servis gelir: >100 satırda content-visibility. */}
             {svc.services.map(s => (
-              <tr key={s.service}>
+              <tr key={s.service} style={svc.services.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
                 <td><Link to={serviceHref(s.service, { range: pageRange })} className="sec">{s.service}</Link></td>
                 <td className="mono">{s.pods}</td>
                 <td className="mono">{s.spans}</td>
@@ -142,7 +143,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
             <thead><tr><th>pod</th><th>namespace</th><th>service</th><th>spans</th><th>errors</th><th>avg ms</th><th>last seen</th></tr></thead>
             <tbody>
               {rows.slice(0, 200).map(r => (
-                <tr key={`${r.namespace}/${r.pod}/${r.service}`}>
+                <tr key={`${r.namespace}/${r.pod}/${r.service}`} style={rows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
                   <td>
                     {r.namespace ? (
                       <Link to={entityHref({ type: 'pod', id: `pod:${entity.clusterId}/${r.namespace}/${r.pod}`, name: r.pod, namespace: r.namespace, clusterId: entity.clusterId }, hrefOpts)} className="sec"

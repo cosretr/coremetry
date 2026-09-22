@@ -38,11 +38,10 @@ Frontend — tablolar / pickers
 - [EntityDetail.tsx:144](../../frontend/src/pages/EntityDetail.tsx#L144) —
   `rows.slice(0, 200)` sınırlı ama >100 satır cv'siz (ev kuralı:
   `DBQueriesPanel.tsx:213` / `Profiling.tsx:176` kalıbı). **Fix:** cv.
-- [AdminCatalog.tsx:188](../../frontend/src/pages/AdminCatalog.tsx#L188) —
-  satırlar `serviceNames(top-200) ∪ servicesMetadata()` (limitsiz harita);
-  cv yok; `maxHeight+overflow` layout/paint maliyetini sınırlamaz. Ayrıca
-  `serviceNames` varsayılan 200 → katalog 200 serviste SESSİZCE kırpılır
-  (doğruluk). **Fix:** cv + `serviceNames(…, 2000)` ya da sunucu sayfalama.
+- [AdminCatalog.tsx:67](../../frontend/src/pages/AdminCatalog.tsx#L67) —
+  `serviceNames()` varsayılan 200 → katalog 200 serviste SESSİZCE kırpılır
+  (doğruluk). Düzeltme (857): sunucu tavanı 1000. *Ajanın "cv yok" iddiası
+  YANLIŞTI: cv `DisplayRow` içinde v0.5.199'dan beri var (map noktasına bakılmış).*
 - [lib/queries/services.ts:24](../../frontend/src/lib/queries/services.ts#L24) —
   `useServiceNames(q?)` `q`siz çağrılınca tam katalog (200) 5 dk önbellek;
   bugün SIFIR çağıran — yüklü tuzak. **Fix:** `q` zorunlu ya da hook'u sil.

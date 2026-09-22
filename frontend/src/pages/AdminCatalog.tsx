@@ -64,7 +64,8 @@ export default function AdminCatalogPage() {
     setRows(undefined);
     try {
       const [svcResp, mdMap] = await Promise.all([
-        api.serviceNames(),
+        // v0.10.857 (scale-audit) — varsayılan 200 kataloğu SESSİZCE kırpıyordu; sunucu tavanı 1000.
+        api.serviceNames(undefined, 1000),
         api.servicesMetadata(),
       ]);
       const trafficSet = new Set<string>(svcResp?.names ?? []);
