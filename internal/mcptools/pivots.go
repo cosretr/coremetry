@@ -92,8 +92,8 @@ type getLogsForTraceArgs struct {
 func getLogsForTraceTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "get_logs_for_trace",
-		ShortDescription: "Bir trace'in bağlamını taşıyan log satırları (trace→log pivotu); span_id ile tek span'a daralt. degraded=true = log backend'i yetişemedi, 'log YOK' demek değil.",
-		Description:      "Fetch the log lines that carry one trace's context — the trace→log pivot. Pass span_id to narrow to a single span's logs. Runs under a 3-second budget: if the log backend is slow or unreachable the result comes back with degraded=true and empty logs instead of an error, so treat degraded=true as 'logs unavailable right now', not 'no logs exist'. Use after get_trace to see what the failing span logged; chain interesting log attributes into search_logs for a wider look.",
+		ShortDescription: "Bir trace'in log satırları (trace→log pivotu); pencere trace'in kendi zamanına oturur. span_id ile daralt. degraded=true = backend yetişemedi, 'log YOK' değil.",
+		Description:      "Fetch the log lines that carry one trace's context — the trace→log pivot. The time window is anchored on the TRACE's own span times (±range_s padding, default 30 min), so old traces are found without widening anything; only when the trace's window is unknown does it fall back to the chat anchor minus range_s (result says anchored=anchor). Pass span_id to narrow to a single span's logs. Runs under a 3-second budget: if the log backend is slow or unreachable the result comes back with degraded=true and empty logs instead of an error, so treat degraded=true as 'logs unavailable right now', not 'no logs exist'. Log bodies may embed JSON (e.g. traceRecords with customerId) — read them. Use after get_trace to see what the failing span logged; chain interesting log attributes into search_logs for a wider look.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -109,7 +109,7 @@ func getLogsForTraceTool(d Deps) mcp.Tool {
 					"type":        "integer",
 					"minimum":     0,
 					"maximum":     604800,
-					"description": "Lookback window in seconds bracketing the trace. Default 1800 (30min), max 604800 (7d). Widen it when the trace is older than 30 minutes.",
+					"description": "Padding in seconds around the trace's own time window (default 1800, max 604800). Only when the trace window is unknown does this become a lookback from the chat anchor.",
 				},
 				"limit": map[string]any{
 					"type":        "integer",
@@ -136,7 +136,7 @@ func getLogsForTraceTool(d Deps) mcp.Tool {
 			if spanID != "" && !isHexLen(spanID, 16) {
 				return nil, fmt.Errorf("span_id must be 16 hex chars, got %q", a.SpanID)
 			}
-			from, to := rangeWindow(ctx, a.RangeS)
+			from, to, anchored := traceLogsWindow(ctx, d, traceID, a.RangeS)
 			limit := clampLimit(a.Limit, 100, 500)
 			var page *logstore.Page
 			if spanID != "" {
@@ -158,16 +158,50 @@ func getLogsForTraceTool(d Deps) mcp.Tool {
 				}
 				return nil, err
 			}
-			return map[string]any{
+			res := map[string]any{
 				"degraded": false,
 				"trace_id": traceID,
 				"logs":     page.Logs,
 				"count":    len(page.Logs),
 				"total":    page.Total,
 				"has_more": len(page.Logs) >= limit || page.NextCursor != "", // v0.10.407 — sayfa doluysa "hepsi bu" değil (CoSRE denetimi M3)
-			}, nil
+				// v0.10.895 — pencere dürüstlüğü: model neye baktığını bilsin.
+				"window":   map[string]any{"from": from.UTC().Format(time.RFC3339), "to": to.UTC().Format(time.RFC3339)},
+				"anchored": anchored,
+			}
+			if anchored == "anchor" {
+				res["hint"] = "trace penceresi bulunamadı (trace_summary_5m'de yok ya da çok eski); pencere sohbet çıpasından geriye range_s. Eski bir trace için range_s'i büyüt."
+			}
+			return res, nil
 		},
 	}
+}
+
+// traceLogsWindow — v0.10.895 (operatör-bildirimli: CoSRE 36 saatlik trace'in
+// logunu bulamadı, Trace › Logs sekmesi gösteriyordu). Eski pencere sohbet
+// çıpasından geriye 30 dk idi — trace'ten bağımsız. Şimdi Trace › Logs
+// sekmesinin traceLogWindow'u gibi: [trace başı − pad, trace sonu + pad]
+// (pad = range_s, varsayılan 30 dk). Pencere bulunamazsa eski davranış ve
+// anchored="anchor" (cevap bunu söyler).
+func traceLogsWindow(ctx context.Context, d Deps, traceID string, rangeS int) (from, to time.Time, anchored string) {
+	pad := rangeS
+	if pad <= 0 {
+		pad = 1800
+	}
+	if pad > 7*86400 {
+		pad = 7 * 86400
+	}
+	tw := d.TraceWindow
+	if tw == nil && d.Store != nil {
+		tw = d.Store.TraceWindow
+	}
+	if tw != nil {
+		if lo, hi, ok := tw(ctx, traceID); ok && !lo.IsZero() && !hi.Before(lo) {
+			return lo.Add(-time.Duration(pad) * time.Second), hi.Add(time.Duration(pad) * time.Second), "trace"
+		}
+	}
+	from, to = rangeWindow(ctx, rangeS)
+	return from, to, "anchor"
 }
 
 // ─── get_exemplar_traces ───────────────────────────────────────

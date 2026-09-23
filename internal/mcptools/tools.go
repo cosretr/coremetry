@@ -182,6 +182,11 @@ import (
 type Deps struct {
 	Store    *chstore.Store
 	LogStore logstore.Store
+	// TraceWindow — v0.10.895 (operatör: CoSRE 36 saatlik trace'in logunu
+	// bulamadı): get_logs_for_trace penceresini TRACE'İN KENDİ zamanına
+	// oturtur (Trace › Logs sekmesinin traceLogWindow'u gibi). nil → Store.
+	// TraceWindow; o da yoksa sohbet çıpasından geriye range_s (eski davranış).
+	TraceWindow func(ctx context.Context, traceID string) (lo, hi time.Time, ok bool)
 	// RuntimePods — v0.10.374 (VM dilim 3c): JVM heap / GC pod reads;
 	// nil → Store. main.go hands vmetrics.RuntimePodsOr so a
 	// VictoriaMetrics-primary install's pod-health tool is not empty.

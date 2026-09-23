@@ -297,3 +297,37 @@ func TestGetLogsForTracePlumbing(t *testing.T) {
 		})
 	}
 }
+
+// v0.10.895 (operatör: CoSRE 36 saatlik trace'in logunu bulamadı) — pencere
+// trace'in kendi zamanına oturur: [lo−pad, hi+pad], anchored="trace"; pencere
+// yoksa eski davranış (çıpa − range_s) + anchored="anchor" + hint.
+func TestGetLogsForTraceWindowAnchoredOnTrace(t *testing.T) {
+	lo := time.Date(2026, 9, 22, 1, 33, 44, 0, time.UTC)
+	hi := lo.Add(2 * time.Second)
+	stub := &stubLogStore{page: &logstore.Page{Total: 1}}
+	deps := Deps{LogStore: stub, TraceWindow: func(context.Context, string) (time.Time, time.Time, bool) { return lo, hi, true }}
+	res, err := callTool(t, deps, "get_logs_for_trace", `{"trace_id":"`+validTID+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := stub.gotFilter
+	if !f.From.Equal(lo.Add(-30*time.Minute)) || !f.To.Equal(hi.Add(30*time.Minute)) {
+		t.Fatalf("pencere trace'e oturmalı: %v..%v", f.From, f.To)
+	}
+	m := res.(map[string]any)
+	if m["anchored"] != "trace" || m["hint"] != nil {
+		t.Fatalf("anchored=trace, hint yok: %v", m)
+	}
+	// range_s = pad.
+	_, _ = callTool(t, deps, "get_logs_for_trace", `{"trace_id":"`+validTID+`","range_s":60}`)
+	if !stub.gotFilter.From.Equal(lo.Add(-time.Minute)) {
+		t.Fatalf("range_s pad olmalı: %v", stub.gotFilter.From)
+	}
+	// Pencere yok → çıpa − range_s, anchored=anchor + hint.
+	deps.TraceWindow = func(context.Context, string) (time.Time, time.Time, bool) { return time.Time{}, time.Time{}, false }
+	res, _ = callTool(t, deps, "get_logs_for_trace", `{"trace_id":"`+validTID+`"}`)
+	m = res.(map[string]any)
+	if m["anchored"] != "anchor" || m["hint"] == nil {
+		t.Fatalf("düşüş dürüst olmalı: %v", m)
+	}
+}
