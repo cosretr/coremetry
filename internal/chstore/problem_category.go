@@ -44,7 +44,9 @@ func ProblemCategory(p Problem) string {
 		return CategoryAvailability
 	case strings.HasPrefix(rule, "anomaly:ext-cap:"):
 		return CategoryResource
-	case p.Kind == ProblemKindExternal:
+	// v0.10.894 — dış seri Problem'i özne melez olsa da (Kind=service, gerçek
+	// servis) aynı kategoride kalır: ruleID öneki tip sistemidir.
+	case p.Kind == ProblemKindExternal || strings.HasPrefix(rule, RuleExtSeriesPrefix):
 		return CategoryCustom
 	// Sentetik monitör, susan servis, trafik çöküşü, platform sağlığı.
 	case strings.HasPrefix(rule, "monitor:") || metric == "uptime":

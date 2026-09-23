@@ -22,6 +22,10 @@ func TestSynthesizerSkipsExternalProblems(t *testing.T) {
 			t.Fatalf("kind %q must still be synthesized", k)
 		}
 	}
+	// v0.10.894 — melez özne: Kind=service ama ruleID dış seri öneği → atlanır.
+	if !synthesizerSkipsProblem(chstore.Problem{Kind: chstore.ProblemKindService, Service: "loan-svc", RuleID: "anomaly:ext:oracle-prod/OP/E1/MOB/-:ext:error_count"}) {
+		t.Fatal("hybrid-subject external series anchor must be skipped (rule prefix)")
+	}
 	src, err := os.ReadFile("rootcause_worker.go")
 	if err != nil {
 		t.Fatal(err)

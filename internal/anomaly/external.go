@@ -59,6 +59,21 @@ type ExternalTarget struct {
 	// sürerken externalEnrichEvery'de bir, tik başına ≤externalEnrichPerTick.
 	// main.go'da influx.Enricher'a bağlanır; nil = kanıt yok (yalnız Problem).
 	OnEvidence func(ctx context.Context, ev ExternalEvent)
+	// Subject (v0.10.894, Oracle Aşama 3 dilim B) — özne çözücü: yalnız
+	// AÇILIŞTA çağrılır (values = GroupBy sırasıyla seri değerleri); dolu
+	// Service dönerse Problem.Service gerçek servis + Kind service olur,
+	// ruleID sentetik kalır (dedup ruleID'den, ByRule). Tazeleme/touch/
+	// resolve açık satırı olduğu gibi yazar → özne ömür boyu SABİT. nil ya
+	// da boş Service = bugünkü davranış (sentetik ext: özne, Kind external).
+	Subject func(ctx context.Context, values []string) ExternalSubjectResolution
+}
+
+// ExternalSubjectResolution — çözücünün cevabı. Source: "trace" | "learned" |
+// "" (bilinmiyor); Note açıklamaya eklenir ("trace'ten (7/9)").
+type ExternalSubjectResolution struct {
+	Service string
+	Source  string
+	Note    string
 }
 
 // ExternalEvent — Problem + karar sayıları + pencere [startedAt−2m, now].
@@ -270,7 +285,9 @@ func (s *ExternalScanner) Scan(ctx context.Context, t ExternalTarget) (ExternalS
 		buckets := padMinuteSlots(sr.Points, start, end)
 		subject := ExternalSubject(t.SourceName, sr.GroupKey)
 		ruleID := "anomaly:" + subject + ":" + metric
-		open := openSnap.ByKey(ruleID, subject)
+		// v0.10.894 — ruleID ile arama: özne melez (gerçek servis / ext:) olsa da
+		// açık satır bulunur; ruleID sentetik ve tek olduğundan dedup korunur.
+		open := openSnap.ByRule(ruleID)
 		hasOpen := open != nil && open.ID != ""
 		// seasonalMin ≥ 1, ASLA 0: chooseBaseline `len(seasonal) >= min` ile
 		// seçer; 0 geçilirse BOŞ mevsimsel dizi kazanır, medyan 0 olur ve her
@@ -638,6 +655,18 @@ func (s *ExternalScanner) apply(ctx context.Context, rep *ExternalScanReport, t 
 			Status:      "open",
 			Description: desc,
 			StartedAt:   now.UnixNano(),
+		}
+		// v0.10.894 — melez özne, yalnız açılışta (sabitleme): çözülürse gerçek
+		// servis + Kind service (takım/cluster/servis sayfası); değilse sentetik.
+		if t.Subject != nil {
+			res := t.Subject(ctx, values)
+			if svc := strings.TrimSpace(res.Service); svc != "" {
+				p.Service = svc
+				p.Kind = chstore.ProblemKindService
+			}
+			if res.Note != "" {
+				p.Description = desc + " Subject: " + res.Note + "."
+			}
 		}
 		if err := s.store.UpsertProblem(ctx, p); err != nil {
 			log.Printf("[anomaly/external] open %s: %v", ruleID, err)

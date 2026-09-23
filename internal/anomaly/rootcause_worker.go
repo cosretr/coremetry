@@ -546,5 +546,8 @@ func appendNodeCauses(dst *correlator.SynthesisInput, in evidenceInputs, anchor 
 // external anchor, influx.Enricher'ın yazdığı DeepEvidence'ı SİLERDİ.
 // SAF; rootcause_worker_external_test.go pinler.
 func synthesizerSkipsProblem(p chstore.Problem) bool {
-	return p.Kind == chstore.ProblemKindExternal
+	// v0.10.894 — dış seri Problem'i özne melezken (Kind=service) de atlanır:
+	// sentezleyici UpsertHypothesis TAM-SATIR yazıp enricher'ın DeepEvidence'ını
+	// silerdi. Önek tip sistemidir (chstore.RuleExtSeriesPrefix).
+	return p.Kind == chstore.ProblemKindExternal || strings.HasPrefix(p.RuleID, chstore.RuleExtSeriesPrefix)
 }

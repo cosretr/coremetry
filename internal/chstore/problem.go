@@ -110,8 +110,12 @@ const (
 	// "source silent" diye kapanıp bir sonraki poll'da yeniden açılırdı —
 	// ayara bağlı flapping. Seri Problem'leri (anomaly:ext:<kaynak>/…) BİLEREK
 	// dışarıda: kaynak susunca onların "source silent" kapanışı DÜRÜST sinyal.
-	RuleExtDownPrefix = "anomaly:ext-down:"
-	RuleExtCapPrefix  = "anomaly:ext-cap:"
+	// RuleExtSeriesPrefix — v0.10.894: dış SERİ Problem'i (anomaly.ExternalSubject
+	// tabanlı ruleID: "anomaly:ext:<kaynak>/<v1>/…:<metrik>"). Özne melez olunca
+	// Kind yerine bu önek tip sistemidir (synthesizer atlaması, kategori).
+	RuleExtSeriesPrefix = "anomaly:ext:"
+	RuleExtDownPrefix   = "anomaly:ext-down:"
+	RuleExtCapPrefix    = "anomaly:ext-cap:"
 )
 
 // ProblemSubjectKind — bir satırın özne türü, boş değeri normalize eder.
@@ -1524,14 +1528,23 @@ func PollerOwnedSubject(ruleID string) (string, bool) {
 // KOPYALANIR — çağıranın dilimi snapshot'la işaretçi paylaşmaz (v0.10.156
 // dersi: paylaşılan işaretçi sessiz mutasyon).
 func NewOpenProblems(ps []Problem) *OpenProblems {
-	out := &OpenProblems{byKey: map[string]*Problem{}, byID: map[string]*Problem{}}
+	out := &OpenProblems{byKey: map[string]*Problem{}, byID: map[string]*Problem{}, byRule: map[string]*Problem{}}
 	for i := range ps {
 		p := ps[i]
 		reduceLatestProblem(out.byKey, &p)
+		reduceLatestByRule(out.byRule, &p)
 		out.byID[p.ID] = &p
 		out.all = append(out.all, &p)
 	}
 	return out
+}
+
+// reduceLatestByRule — v0.10.894: aynı rule_id'de started_at en yeni kazanır.
+func reduceLatestByRule(m map[string]*Problem, p *Problem) {
+	if cur, ok := m[p.RuleID]; ok && cur.StartedAt >= p.StartedAt {
+		return
+	}
+	m[p.RuleID] = p
 }
 
 // reduceLatestProblem — aynı (rule,service) anahtarına düşen satırlardan
@@ -1582,7 +1595,13 @@ func reduceLatestProblem(m map[string]*Problem, p *Problem) {
 type OpenProblems struct {
 	byKey map[string]*Problem // rule_id|service — kural-bazlı denetimler
 	byID  map[string]*Problem // problem ID     — deterministik-ID üreticiler
-	all   []*Problem          // dolaşım için, TEKRARSIZ
+	// byRule (v0.10.894, Oracle Aşama 3 dilim B) — rule_id tek: dış hattın
+	// sentetik ruleID'si (op/kod/kanal) zaten tek; Service melez (gerçek
+	// servis ya da ext: özne) olunca ByKey(ruleID, özne) satırı bulamazdı
+	// (özneyi bilmek için satır gerek — tavuk-yumurta). Aynı ruleID'de
+	// started_at en yeni kazanır.
+	byRule map[string]*Problem
+	all    []*Problem // dolaşım için, TEKRARSIZ
 }
 
 // ByKey — (kural, servis) araması. nil alıcı güvenli: snapshot hatasında
@@ -1597,6 +1616,20 @@ func (o *OpenProblems) ByKey(ruleID, service string) *Problem {
 		return nil
 	}
 	p, ok := o.byKey[OpenProblemKey(ruleID, service)]
+	if !ok || p == nil {
+		return nil
+	}
+	q := *p
+	return &q
+}
+
+// ByRule — v0.10.894: yalnız rule_id ile arama (dış hat: ruleID sentetik ve
+// tek; Service melez). nil alıcı güvenli; KOPYA döner (ByKey gerekçesi).
+func (o *OpenProblems) ByRule(ruleID string) *Problem {
+	if o == nil {
+		return nil
+	}
+	p, ok := o.byRule[ruleID]
 	if !ok || p == nil {
 		return nil
 	}
@@ -1700,7 +1733,7 @@ func (s *Store) openProblemsSnapshotUncached(ctx context.Context) (*OpenProblems
 		return nil, err
 	}
 	defer rows.Close()
-	out := &OpenProblems{byKey: map[string]*Problem{}, byID: map[string]*Problem{}}
+	out := &OpenProblems{byKey: map[string]*Problem{}, byID: map[string]*Problem{}, byRule: map[string]*Problem{}}
 	for rows.Next() {
 		p, err := scanProblemRow(rows, s.problemCols())
 		if err != nil {
@@ -1710,6 +1743,7 @@ func (s *Store) openProblemsSnapshotUncached(ctx context.Context) (*OpenProblems
 		// değişken, &p almak güvenli (dışarıda tanımlı olsaydı tüm
 		// işaretçiler son satıra aliaslanırdı).
 		reduceLatestProblem(out.byKey, &p)
+		reduceLatestByRule(out.byRule, &p)
 		out.byID[p.ID] = &p
 		out.all = append(out.all, &p)
 	}

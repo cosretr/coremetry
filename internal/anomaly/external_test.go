@@ -403,3 +403,49 @@ func TestExternalScan_SeasonalBaselinePreventsFalseOpen(t *testing.T) {
 		t.Fatalf("single-day seasonal history must be pruned: %+v", rep)
 	}
 }
+
+// v0.10.894 (Oracle Aşama 3 dilim B) — Subject çözücü: açılışta gerçek servis +
+// Kind service, ruleID sentetik; ikinci tikte çözücü FARKLI cevap verse de açık
+// satır ByRule ile bulunur, tazeleme özneyi değiştirmez (sabitleme), ikinci
+// Problem açılmaz; çözücü boş dönerse bugünkü davranış (ext: + external).
+func TestExternalScan_SubjectResolverPinsRealService(t *testing.T) {
+	cfg := chstore.DefaultAnomalySensitivity()
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	vals := append(baselineVals(30), repeat(60, cfg.DwellBuckets)...)
+	f := &fakeExtStore{cfg: cfg, series: []chstore.SpanMetricSeries{extSeries(vals, now, "OP1", "E1")}}
+	calls := 0
+	target := extTarget
+	target.Subject = func(_ context.Context, values []string) ExternalSubjectResolution {
+		calls++
+		if calls == 1 {
+			return ExternalSubjectResolution{Service: "loan-svc", Source: "trace", Note: "trace'ten (7/9)"}
+		}
+		return ExternalSubjectResolution{Service: "other-svc", Source: "learned"}
+	}
+	sc := newExtScanner(f, now)
+	if _, err := sc.Scan(context.Background(), target); err != nil {
+		t.Fatal(err)
+	}
+	p := f.upserts[0]
+	if p.Service != "loan-svc" || p.Kind != chstore.ProblemKindService || p.RuleID != "anomaly:ext:extsrc/OP1/E1:ext:fail_count" || !strings.Contains(p.Description, "Subject: trace'ten (7/9)") {
+		t.Fatalf("melez özne: %+v", p)
+	}
+	// İkinci tik: satır açık (gerçek servisle) — ByRule bulur, tazeleme özneyi korur.
+	f.open = []chstore.Problem{p}
+	f.upserts = nil
+	rep, _ := sc.Scan(context.Background(), target)
+	if rep.Opened != 0 || rep.Refreshed != 1 || len(f.upserts) != 1 || f.upserts[0].Service != "loan-svc" || f.upserts[0].ID != p.ID || calls != 1 {
+		t.Fatalf("sabitleme: rep=%+v upserts=%+v calls=%d", rep, f.upserts, calls)
+	}
+	// Çözücü boş → sentetik özne + external (bugünkü davranış).
+	g := &fakeExtStore{cfg: cfg, series: []chstore.SpanMetricSeries{extSeries(vals, now, "OP1", "E1")}}
+	target.Subject = func(context.Context, []string) ExternalSubjectResolution {
+		return ExternalSubjectResolution{Note: "servis bilinmiyor"}
+	}
+	if _, err := newExtScanner(g, now).Scan(context.Background(), target); err != nil {
+		t.Fatal(err)
+	}
+	if q := g.upserts[0]; q.Service != "ext:extsrc/OP1/E1" || q.Kind != chstore.ProblemKindExternal || !strings.Contains(q.Description, "servis bilinmiyor") {
+		t.Fatalf("çözülemeyen özne: %+v", q)
+	}
+}
