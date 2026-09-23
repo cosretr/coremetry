@@ -107,3 +107,16 @@ func TestPruneLearnedCap(t *testing.T) {
 		t.Fatalf("tavan: dropped=%d n=%d", d, len(m.Entries))
 	}
 }
+
+// v0.10.899 — Observe bu poll'un trace → exception tipini de tutar (qualifier).
+func TestSubjectExTypeFor(t *testing.T) {
+	r := NewSubjectResolver(&fakeState{kv: map[string][]byte{}}, func(_ context.Context, ids []string, _, _ time.Time) (map[string]chstore.TraceFact, error) {
+		return map[string]chstore.TraceFact{"t1": {Service: "s", ExType: "java.sql.SQLTimeoutException"}, "t2": {Service: "s"}}, nil
+	}, nil)
+	src := SourceConfig{ID: "o-1", Name: "o"}
+	r.Observe(context.Background(), src, []chstore.OracleErrorRow{{OperationCode: "OP", TraceID: "t1"}, {OperationCode: "OP", TraceID: "t2"}}, time.Now().Add(-time.Minute), time.Now())
+	ex := r.ExTypeFor("o-1")
+	if ex("t1") != "java.sql.SQLTimeoutException" || ex("t2") != "" || ex("yok") != "" || r.ExTypeFor("o-2")("t1") != "" {
+		t.Fatal("ExTypeFor")
+	}
+}

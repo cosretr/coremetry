@@ -1108,7 +1108,11 @@ func main() {
 		oracleWorker.SetRowsHook(func(ctx context.Context, src oracle.SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time) {
 			hctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			defer cancel()
-			oracleCounter.Handle(hctx, src, rows, from, to, oracle.IgnoreSet(src))
+			// v0.10.899 — önce trace gerçekleri (özne oyları + jenerik kod qualifier'ı
+			// için exception tipi), sonra sayaç (qualifier ile), sonra tarama.
+			oracleSubjects.Observe(hctx, src, rows, from, to)
+			oracleCounter.Handle(hctx, src, rows, from, to, oracle.IgnoreSet(src),
+				oracle.QualifierFor(oracle.GenericSet(src), oracleSubjects.ExTypeFor(src.ID)))
 			// v0.10.897 — kaynak kipi: off = sayaç yazar, tarayıcı koşmaz (açık
 			// satırlar süpürmede "source silent" kapanır); shadow = Problem, alarm
 			// yok; live = bildirimli tarayıcı (extScanner).
@@ -1116,7 +1120,6 @@ func main() {
 			if mode == oracle.ProblemModeOff {
 				return
 			}
-			oracleSubjects.Observe(hctx, src, rows, from, to)
 			scanner := oracleShadow
 			if mode == oracle.ProblemModeLive {
 				scanner = extScanner

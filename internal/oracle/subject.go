@@ -80,10 +80,11 @@ type LearnedMap struct {
 
 // tickFacts — bu poll'dan çözülen gerçekler (Resolve bunları okur).
 type tickFacts struct {
-	votes  map[string]map[string]int // op → servis → oy
-	totals map[string]int            // op → oy
-	looked int
-	found  int
+	votes   map[string]map[string]int // op → servis → oy
+	totals  map[string]int            // op → oy
+	exTypes map[string]string         // v0.10.899 — trace id → exception tipi (jenerik kod qualifier'ı)
+	looked  int
+	found   int
 }
 
 // ObserveResult — Observe özeti (log/istatistik).
@@ -115,6 +116,18 @@ func NewSubjectResolver(state StateStore, lookup TraceLookup, alive AliveCheck) 
 	return &SubjectResolver{state: state, lookup: lookup, alive: alive, now: time.Now,
 		maps: map[string]*LearnedMap{}, loadedAt: map[string]time.Time{}, dirty: map[string]bool{}, tick: map[string]*tickFacts{},
 		lastRes: map[string]anomaly.ExternalSubjectResolution{}}
+}
+
+// ExTypeFor — v0.10.899: bu poll'da çözülen trace'in exception tipi ("" = yok).
+func (r *SubjectResolver) ExTypeFor(sourceID string) func(traceID string) string {
+	return func(traceID string) string {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if tf := r.tick[sourceID]; tf != nil {
+			return tf.exTypes[traceID]
+		}
+		return ""
+	}
 }
 
 // LastResolution — v0.10.898: (kaynak, op) için son çözüm (kanıt cümlesi).
@@ -224,7 +237,7 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m := r.mapFor(ctx, src.ID)
-	tf := &tickFacts{votes: map[string]map[string]int{}, totals: map[string]int{}}
+	tf := &tickFacts{votes: map[string]map[string]int{}, totals: map[string]int{}, exTypes: map[string]string{}}
 	r.tick[src.ID] = tf
 	for _, row := range rows {
 		if row.TraceID != "" {
@@ -240,6 +253,11 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 			res.Error = "trace araması: " + err.Error()
 			log.Printf("[oracle/subject] %s: %s", src.Name, res.Error)
 		} else {
+			for id, f := range facts {
+				if f.ExType != "" {
+					tf.exTypes[id] = f.ExType
+				}
+			}
 			for _, row := range rows {
 				f, ok := facts[row.TraceID]
 				if !ok || f.Service == "" {

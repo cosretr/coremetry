@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,7 +31,11 @@ import (
 // üstü sessizce kırpılırdı. Aktif anahtarlar önce (sıfır alabilsinler),
 // yeni anahtarlar sayıya göre; taşanlar tek "diğer" serisinde toplanır.
 //
-// Qualifier bu dilimde hep "-" (jenerik kod ayırt edicisi dilim F).
+// QUALIFIER (v0.10.899, dilim F; audit §6.1): jenerik kodda (kaynak ayarı
+// genericCodes) ikincil ayırt edici sırayla external_code → trace'teki
+// exception tipi → "generic" (jenerik kova; ayırt edici yok — başlıkta dürüst);
+// jenerik OLMAYAN kodda "-". (op, kod, kanal) başına ≤ counterMaxQualifiers
+// farklı qualifier; fazlası "_other" qualifier'ında toplanır.
 // Sayaç saftır (BucketRows); yazım Counter.Handle'da, hata poll'u ve
 // watermark'ı ETKİLEMEZ (satırlar zaten oracle_error_log'da).
 
@@ -42,10 +47,33 @@ const (
 	CounterMaxKeys = 200
 	// counterActiveWindow — bu kadar süredir görülmeyen anahtar sıfır almaz,
 	// düşer (dış tarayıcı penceresi 240 dk).
-	counterActiveWindow  = 4 * time.Hour
-	counterQualifierNone = "-"
-	counterOtherCode     = "_other"
+	counterActiveWindow     = 4 * time.Hour
+	counterQualifierNone    = "-"
+	counterQualifierGeneric = "generic"
+	counterOtherCode        = "_other"
+	counterMaxQualifiers    = 50
 )
+
+// QualifierFn — satır → error.qualifier (nil → hep "-").
+type QualifierFn func(r chstore.OracleErrorRow) string
+
+// QualifierFor — SAF: jenerik kod kümesi + trace→exception tipi arayıcısı.
+func QualifierFor(generic map[string]bool, exType func(traceID string) string) QualifierFn {
+	return func(r chstore.OracleErrorRow) string {
+		if !generic[strings.ToUpper(strings.TrimSpace(r.ErrorCode))] {
+			return counterQualifierNone
+		}
+		if v := strings.ToUpper(strings.TrimSpace(r.ExternalCode)); v != "" {
+			return v
+		}
+		if exType != nil && r.TraceID != "" {
+			if v := strings.TrimSpace(exType(r.TraceID)); v != "" {
+				return v
+			}
+		}
+		return counterQualifierGeneric
+	}
+}
 
 // CounterGroupBy — ExternalTarget.GroupBy ile birebir aynı sıra (attr adları).
 var CounterGroupBy = []string{"operation.code", "error.code", "channel.code", "error.qualifier"}
@@ -74,13 +102,14 @@ type BucketResult struct {
 // penceresi (dakikaya yuvarlanır, to'nun dakikası da yazılır — overlap'te
 // max ile tamamlanır); active: kaynağın aktif anahtarları (sıfır alırlar);
 // ignore: sayılmayacak hata kodları; maxKeys: seri tavanı (≤0 → tavan yok).
-func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time, active map[CounterKey]time.Time, ignore map[string]bool, maxKeys int) BucketResult {
+func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time, active map[CounterKey]time.Time, ignore map[string]bool, maxKeys int, qualifier QualifierFn) BucketResult {
 	res := BucketResult{Seen: map[CounterKey]time.Time{}}
 	if source == "" || !to.After(from) && !to.Equal(from) {
 		return res
 	}
 	m0, m1 := from.UTC().Truncate(time.Minute), to.UTC().Truncate(time.Minute)
 	counts := map[CounterKey]map[time.Time]float64{}
+	qualSeen := map[CounterKey]map[string]bool{} // (op,kod,kanal) → qualifier kümesi (tavan)
 	for _, r := range rows {
 		if ignore[r.ErrorCode] {
 			res.Ignored++
@@ -90,7 +119,24 @@ func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 		if t.Before(m0) || t.After(m1) {
 			continue // pencere dışı (overlap dışında geç gelen satır — bir sonraki poll)
 		}
-		k := CounterKey{Op: r.OperationCode, Code: r.ErrorCode, Channel: r.ChannelCode, Qualifier: counterQualifierNone}
+		q := counterQualifierNone
+		if qualifier != nil {
+			q = qualifier(r)
+		}
+		base := CounterKey{Op: r.OperationCode, Code: r.ErrorCode, Channel: r.ChannelCode, Qualifier: counterQualifierNone}
+		if q != counterQualifierNone {
+			if qualSeen[base] == nil {
+				qualSeen[base] = map[string]bool{}
+			}
+			if !qualSeen[base][q] {
+				if len(qualSeen[base]) >= counterMaxQualifiers {
+					q = counterOtherCode // (op,kod,kanal) başına qualifier tavanı
+				} else {
+					qualSeen[base][q] = true
+				}
+			}
+		}
+		k := CounterKey{Op: r.OperationCode, Code: r.ErrorCode, Channel: r.ChannelCode, Qualifier: q}
 		if counts[k] == nil {
 			counts[k] = map[time.Time]float64{}
 		}
@@ -242,7 +288,7 @@ func NewCounter(sink MetricSink) *Counter {
 
 // Handle — poll sonrası kanca gövdesi (satır yoksa da çağrılır: aktif
 // anahtarlara sıfır yazılır, kapanış mümkün olsun). Hata poll'u düşürmez.
-func (c *Counter) Handle(ctx context.Context, src SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, ignore map[string]bool) BucketResult {
+func (c *Counter) Handle(ctx context.Context, src SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, ignore map[string]bool, qualifier QualifierFn) BucketResult {
 	if c == nil || c.sink == nil || src.ID == "" {
 		return BucketResult{}
 	}
@@ -265,7 +311,7 @@ func (c *Counter) Handle(ctx context.Context, src SourceConfig, rows []chstore.O
 	}
 	c.mu.Unlock()
 
-	res := BucketRows(src.Name, rows, from, to, snapshot, ignore, CounterMaxKeys)
+	res := BucketRows(src.Name, rows, from, to, snapshot, ignore, CounterMaxKeys, qualifier)
 	st := CounterStats{At: now.Unix(), Points: len(res.Points), Keys: res.Keys, Overflow: res.Overflow, Ignored: res.Ignored}
 	if len(res.Points) > 0 {
 		if err := c.sink.InsertMetrics(ctx, res.Points); err != nil {
