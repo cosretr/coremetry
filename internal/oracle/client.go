@@ -714,6 +714,10 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 	res.Query = sqlText
 
 	budget := queryTimeout(src)
+	// v0.10.845 — LONG kontrolü örnek sorgudan ÖNCE (ORA-00997 düşse de sebep
+	// görünsün); v0.10.878 (inceleme) — gecikme ölçümünün DIŞINDA: sözlük
+	// turu bağlantı+örnek süresine karışmasın.
+	res.Long = runLongCheck(ctx, db, src, budget, secret)
 	start := time.Now()
 	pctx, pcancel := context.WithTimeout(ctx, budget)
 	err = db.PingContext(pctx)
@@ -723,9 +727,6 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 		res.Error = "bağlantı: " + redactSecrets(err.Error(), secret)
 		return res
 	}
-
-	// v0.10.845 — örnek sorgudan ÖNCE: ORA-00997 düşerse sebebi yanında dursun.
-	res.Long = runLongCheck(ctx, db, src, budget, secret)
 
 	cols, sample, qerr := runSample(ctx, db, sqlText, args, budget, secret)
 	res.LatencyMs = time.Since(start).Milliseconds()

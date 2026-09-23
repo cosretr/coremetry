@@ -163,6 +163,11 @@ type RootFlow struct {
 // sınırsızdı, tek fren 60 s tavan. Kenar grafiği bir ÖRNEKLEMDEN de temsil
 // edilir (trace sayımı doktrini: sıralama yok, keyfi alt küme, zaman tabanı
 // iddia edilmez); 20.000 kök trace 5.000 kenar tavanının çok üstünde.
+// v0.10.878 (inceleme) — iki geçiş AYRI sorgular, örneklemleri sıralamasız
+// ve BAĞIMSIZ: tavana çarpan pencerede infra kenarı servis kenarı olmayan
+// bir kökten gelebilir. Kabul edildi: ORDER BY'lı deterministik örneklem
+// maliyeti pencereye bağlar (trace sayımı ölçümü); tek id kümesini iki
+// sorguya taşımak 20k×32 B parametre. Tavanın altında iki geçiş özdeştir.
 const flowRootTraceSample = 20000
 
 var flowRootTraceSampleSQL = strconv.Itoa(flowRootTraceSample)

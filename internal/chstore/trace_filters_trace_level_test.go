@@ -94,7 +94,7 @@ func TestTraceLevelHavingForGroups(t *testing.T) {
 	}
 	// v0.10.852 (scale-audit 🔴) — kapsız GROUP BY tüm pencereyi okurdu: erken
 	// durma vidaları + tek iş parçacığı + alt sorgu LIMIT'i ŞART.
-	for _, w := range []string{"max_rows_to_group_by = 10000", "group_by_overflow_mode = 'break'", "max_threads = 1", "max_execution_time = 10"} {
+	for _, w := range []string{"max_rows_to_group_by = 10000", "group_by_overflow_mode = 'break'", "max_threads = 1", "max_execution_time = 10", "max_block_size = 8192"} { // 878 — ikizin ölçtüğü ikinci vida
 		if !strings.Contains(sql, w) {
 			t.Fatalf("trace sayım SQL %q taşımıyor: %s", w, sql)
 		}

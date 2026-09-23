@@ -604,8 +604,11 @@ func (s *Service) MetricLabelValues(ctx context.Context, metric, key string, sin
 	if label == "" {
 		return nil, nil
 	}
-	if limit < 1 || limit > 1000 {
+	if limit < 1 {
 		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000 // v0.10.878 — CH ile aynı kelepçe (ikisi ayrı cevap vermesin)
 	}
 	now := time.Now()
 	params := url.Values{

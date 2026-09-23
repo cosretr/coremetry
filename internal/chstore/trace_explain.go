@@ -178,7 +178,7 @@ func (s *Store) CountServiceSpans(ctx context.Context, f TraceFilter) (uint64, e
 // grupları düşürebilir: sayım aşağı yönlü yaklaşıktır, sıfır/sıfır-değil
 // ayrımı (teşhisin asıl sorusu) korunur.
 func countMatchingTracesSQL(whereSQL, havingSQL string) string {
-	return fmt.Sprintf(`SELECT count() FROM (SELECT trace_id FROM spans %s GROUP BY trace_id%s LIMIT %d) SETTINGS max_execution_time = 10, max_threads = 1, max_rows_to_group_by = %d, group_by_overflow_mode = 'break'`,
+	return fmt.Sprintf(`SELECT count() FROM (SELECT trace_id FROM spans %s GROUP BY trace_id%s LIMIT %d) SETTINGS max_execution_time = 10, max_threads = 1, max_rows_to_group_by = %d, group_by_overflow_mode = 'break', max_block_size = 8192`,
 		whereSQL, havingSQL, traceCountCap+1, traceCountCap)
 }
 
