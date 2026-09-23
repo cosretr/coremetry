@@ -882,9 +882,18 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 // chip'leri üzerinden tek tıkla ulaşılır. Yalnız GÖRÜNÜM: kaynağın kendi
 // Priority'si (Problem drawer'ı, bildirim yönlendirme, /problems eski
 // yüzeyi) değişmez; PriorityReason zorlamayı açıkça söyler.
+//
+// v0.10.884 (operatör-bildirimli, prod 2026-09-23) — "httperror" MUAF.
+// bsa-investment-equity-order 503: 929 olay / 57 dk, merdiven P1 demiş
+// ("929 total · stopped 10h ago"), tür kuralı P3'e çivilemiş. HTTP error
+// grubu exception grubunun ta kendisi (v0.9.443 — aynı store, error.type
+// fallback'i; aynı merdiven exceptionPriorityAt), yalnız ADI farklı: "503"
+// bir sınıf adı olmadığı için ayrı tür chip'i aldı. Kural exception'ları
+// "operatörün triage sinyali" diye korurken aynı sinyalin HTTP yarısını
+// kesiyordu. Kural problem/anomaly/incident için aynen sürer.
 func forceNonExceptionP3(items []InboxItem) {
 	for i := range items {
-		if items[i].Kind == "exception" {
+		if items[i].Kind == "exception" || items[i].Kind == "httperror" {
 			continue
 		}
 		if items[i].Priority == "P3" {
@@ -892,7 +901,7 @@ func forceNonExceptionP3(items []InboxItem) {
 		}
 		orig := items[i].Priority
 		items[i].Priority = "P3"
-		items[i].PriorityReason = "tür kuralı: exception dışı kalemler inbox'ta P3 (kaynak önceliği " + orig + ")"
+		items[i].PriorityReason = "tür kuralı: exception/HTTP error dışı kalemler inbox'ta P3 (kaynak önceliği " + orig + ")"
 	}
 }
 

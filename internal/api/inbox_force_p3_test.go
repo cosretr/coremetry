@@ -9,6 +9,9 @@ import (
 // onlar hep P3 olsun, defaultta sadece P1'ler gözüksün": exception dışındaki
 // her tür inbox'ta P3'e sabitlenir; exception satırlarının önceliği ve
 // halihazırda P3 olan satırların reason'ı DOKUNULMAZ.
+//
+// v0.10.884 — httperror da exception ailesi (aynı store, aynı merdiven):
+// 929 olaylık 503 grubu P1'den P3'e çivilenmişti (prod, 2026-09-23). Muaf.
 func TestForceNonExceptionP3(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -23,7 +26,8 @@ func TestForceNonExceptionP3(t *testing.T) {
 		{"exception P3 dokunulmaz", "exception", "P3", "az occurrence", "P3", ""},
 		{"problem P1 → P3", "problem", "P1", "critical + 2x threshold", "P3", "kaynak önceliği P1"},
 		{"problem P2 → P3", "problem", "P2", "today", "P3", "kaynak önceliği P2"},
-		{"httperror P1 → P3", "httperror", "P1", "849 occ", "P3", "kaynak önceliği P1"},
+		{"httperror P1 dokunulmaz (884)", "httperror", "P1", "929 total · stopped 10h ago", "P1", ""},
+		{"httperror P2 dokunulmaz (884)", "httperror", "P2", "regressed", "P2", ""},
 		{"anomaly P2 → P3", "anomaly", "P2", "spike", "P3", "kaynak önceliği P2"},
 		{"incident P1 → P3", "incident", "P1", "declared sev", "P3", "kaynak önceliği P1"},
 		// Zaten P3 olan exception-dışı satır: reason'ı ezilmez — zorlama
