@@ -56,6 +56,10 @@ type PodConcentration struct {
 	Share          float64
 	PodsWithHits   int
 	Instances      int
+	// Notes — v0.10.879 (inceleme): ölçüm sınırları (tarama tavanı, oran
+	// YAKLAŞIK, bağlamsız oluşumlar). Prompt bunları modele söylüyordu, kart
+	// söylemiyordu — "kart ve model aynı kararı görür" bunsuz yarımdı.
+	Notes []string
 }
 
 // Kind değerleri — anomaly paketindeki yazımların AYNASI.
@@ -167,18 +171,36 @@ func podConcentrationRow(pc *PodConcentration) (value, sev string, ok bool) {
 	}
 	switch pc.Kind {
 	case PodConcYogunlasma:
-		return fmt.Sprintf("%s · tek instance'ta %s (%s/%s oluşum) · ölçülen %d instance",
-			pc.TopPod, pctFloorTR(pc.Share), fmtNum(uint64(pc.TopOccurrences)),
-			fmtNum(uint64(pc.Attributed)), pc.Instances), SevWarn, true
+		// v0.10.879 — anomaly.podLabel'ın sözcük anahtarı: host.name yedeği "pod"
+		// diye anılmaz (prompt da modele aynı şeyi söylüyor); node eki varsa yazılır.
+		word := "pod"
+		if pc.TopHostOnly {
+			word = "host"
+		}
+		label := word + " " + pc.TopPod
+		if pc.TopNode != "" {
+			label += " (node " + pc.TopNode + ")"
+		}
+		return withNotes(fmt.Sprintf("%s · tek instance'ta %s (%s/%s oluşum) · ölçülen %d instance",
+			label, pctFloorTR(pc.Share), fmtNum(uint64(pc.TopOccurrences)),
+			fmtNum(uint64(pc.Attributed)), pc.Instances), pc.Notes), SevWarn, true
 	case PodConcDagilmis:
 		if pc.Instances <= 1 {
 			return "servisin tek instance'ı — ayırt edici değil", "", true
 		}
-		return fmt.Sprintf("%d instance'ın %d tanesine yayılmış · en yoğun %s",
-			pc.Instances, pc.PodsWithHits, pctFloorTR(pc.Share)), "", true
+		return withNotes(fmt.Sprintf("%d instance'ın %d tanesine yayılmış · en yoğun %s",
+			pc.Instances, pc.PodsWithHits, pctFloorTR(pc.Share)), pc.Notes), "", true
 	default:
-		return "ölçülemedi (dağılmış DEMEK DEĞİL)", "", true
+		return withNotes("ölçülemedi (dağılmış DEMEK DEĞİL)", pc.Notes), "", true
 	}
+}
+
+// withNotes — ölçüm sınırları satırın kuyruğunda; yoksa satır aynen.
+func withNotes(value string, notes []string) string {
+	if len(notes) == 0 {
+		return value
+	}
+	return value + " · " + strings.Join(notes, " · ")
 }
 
 // pctFloorTR — yüzde, Türkçe yazımla ve AŞAĞI yuvarlayarak. %99.6'yı

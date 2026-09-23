@@ -162,6 +162,7 @@ func exceptionEvidence(g *chstore.ExceptionGroup, in anomaly.ExceptionExplainInp
 			Kind: p.Kind, TopPod: p.TopPod, TopNode: p.TopNode, TopHostOnly: p.TopHostOnly,
 			TopOccurrences: p.TopOccurrences, Attributed: p.Attributed, Share: p.Share,
 			PodsWithHits: p.PodsWithHits, Instances: p.Instances,
+			Notes: append([]string(nil), p.Notes...), // v0.10.879 — ölçüm sınırları karta
 		}
 	}
 	return ev
