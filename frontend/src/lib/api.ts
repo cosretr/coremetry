@@ -3114,6 +3114,8 @@ export const api = {
       p50: number; p95: number; p99: number;
       max: number; mean: number;
       sampleCount: number; windowSec: number;
+      /** v0.10.877 — oran/sayı dağılımlarının kova genişliği (300 = 5 dk); gecikme 0. */
+      bucketSec?: number;
       suggestedWarning: number; suggestedCritical: number;
     }>(`/api/alert-rules/baseline?${qs.toString()}`);
   },

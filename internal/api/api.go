@@ -10474,10 +10474,9 @@ func (s *Server) getAlertBaseline(w http.ResponseWriter, r *http.Request) {
 		}
 		warn, crit := suggestThresholds(b, comparator)
 		return map[string]any{
-			"metric":            b.Metric,
-			"service":           b.Service,
-			"p50":               b.P50,
-			"p95":               b.P95,
+			"metric":  b.Metric,
+			"service": b.Service,
+			"p50":     b.P50, "p95": b.P95, "bucketSec": b.BucketSec, // v0.10.877 — oran dağılımlarının kova genişliği (300; gecikme 0)
 			"p99":               b.P99,
 			"max":               b.Max,
 			"mean":              b.Mean,

@@ -30,8 +30,13 @@ type MetricBaseline struct {
 	P99         float64 `json:"p99"`
 	Max         float64 `json:"max"`
 	Mean        float64 `json:"mean"`
-	SampleCount int64   `json:"sampleCount"` // # of spans / minutes scanned
-	WindowSec   int64   `json:"windowSec"`   // lookback the percentiles were computed over
+	SampleCount int64   `json:"sampleCount"` // # of spans (gecikme) / 5-dk kova (oranlar)
+	// BucketSec — v0.10.877 (inceleme): oran/sayı dağılımlarının hesaplandığı kova
+	// genişliği (service_summary_5m → 300). 866 öncesi 60 s ham dakikaydı; 5-dk
+	// ortalama spiky serviste dakika tepesinin altında kalır — öneri UI'ı bunu
+	// SÖYLER, gizlemez. Gecikme dalı span-düzeyi t-digest: 0 (kova yok).
+	BucketSec int64 `json:"bucketSec"`
+	WindowSec int64 `json:"windowSec"` // lookback the percentiles were computed over
 }
 
 // GetMetricBaseline runs the right percentile query for the
@@ -84,12 +89,18 @@ func (s *Store) GetMetricBaseline(
 	} else if err := row.Scan(&out.P50, &out.P95, &out.P99, &out.Max, &out.Mean, &n); err != nil {
 		return nil, fmt.Errorf("scan %s baseline: %w", metric, err)
 	}
+	if !latency {
+		out.BucketSec = baselineBucketSec
+	}
 	if n == 0 { // boş pencere: quantile NaN döner; sıfır dürüst (FE n=0'ı "veri yok" okur)
 		out.P50, out.P95, out.P99, out.Max, out.Mean = 0, 0, 0, 0, 0
 	}
 	out.SampleCount = int64(n)
 	return out, nil
 }
+
+// baselineBucketSec — service_summary_5m kovası; oran/sayı dağılımlarının tabanı.
+const baselineBucketSec = 300
 
 // baselineWhere — service_summary_5m penceresi: [from, to) + isteğe bağlı servis.
 func baselineWhere(withService bool) string {

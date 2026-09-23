@@ -34,3 +34,16 @@ func TestBaselineSQLReadsSummaryMV(t *testing.T) {
 		t.Fatal("bilinmeyen metrik desteklenmemeli")
 	}
 }
+
+// v0.10.877 (inceleme 🔴) — oran/sayı dağılımları 5-dk kova üstünde; bu genişlik
+// yanıta gider (bucketSec=300), gecikme dalı kovasız (0). Kova genişliği
+// değişirse (MV yeniden tanımlanırsa) bu pin kırılır ve UI metni güncellenir.
+func TestBaselineBucketWidthIsExplicit(t *testing.T) {
+	if baselineBucketSec != 300 {
+		t.Fatalf("kova genişliği %d — service_summary_5m 5 dk", baselineBucketSec)
+	}
+	q, _, _ := baselineSQL("error_rate", false)
+	if !strings.Contains(q, "SELECT time_bucket AS t") || !strings.Contains(q, "GROUP BY t") {
+		t.Fatalf("oran dalı kova başına gruplamıyor: %s", q)
+	}
+}

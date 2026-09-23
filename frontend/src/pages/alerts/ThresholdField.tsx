@@ -81,6 +81,8 @@ export function ThresholdField({ value, service, metric, comparator, onChange, o
           <div style={{ color: 'var(--text3)' }}>
             Last 7d{service ? ` · ${service}` : ' · all services'}
             {data.sampleCount > 0 && ` · n=${data.sampleCount.toLocaleString()}`}
+            {/* v0.10.877 — p95/p99 5-dk kova ORTALAMALARI üstünde: dakika tepesi daha yüksek olabilir; operatör bunu görerek uygular. */}
+            {(data.bucketSec ?? 0) > 0 && ` · ${(data.bucketSec ?? 0) / 60}-dk kova ortalamaları üstünde`}
             {data.sampleCount < 100 && data.sampleCount > 0 && (
               <span style={{ marginLeft: 6, color: 'var(--warn)' }}>· thin data</span>
             )}
