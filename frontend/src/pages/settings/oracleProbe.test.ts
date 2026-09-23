@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ORACLE_TEST_WINDOWS, scanVerdict, summaryHeadline } from './oracleProbe';
-import type { OracleScanCheck, OracleWindowSummary } from '@/lib/types';
+import { ORACLE_TEST_WINDOWS, mappingVerdict, scanVerdict, summaryHeadline } from './oracleProbe';
+import type { OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
 
 const base: OracleScanCheck = { checked: true, tsColumn: 'ERR_TIMESTAMP', found: true, indexed: false, partitioned: false, numRows: 12000000 };
 
@@ -63,5 +63,29 @@ describe('oracleProbe — LONG kolon hükmü', () => {
     expect(longVerdict(l({}))).toBeNull();
     expect(longVerdict(l({ checked: false, error: 'ORA-00942' }))).toMatchObject({ tone: 'b-gray', detail: 'ORA-00942' });
     expect(longVerdict(undefined)).toBeNull();
+  });
+});
+
+// v0.10.886 — eşleme hükmü: trace/servis/kod eksikse kırmızı + öneri cümlesi;
+// yalnız yan alan eksikse sarı; eksik yoksa null; kontrol yoksa gri.
+describe('oracleProbe — eşleme hükmü', () => {
+  const ok: OracleMappingCheck = { checked: true, present: 16, missing: [] };
+  it('eksik yoksa null, kontrol yoksa gri', () => {
+    expect(mappingVerdict(ok)).toBeNull();
+    expect(mappingVerdict(undefined)).toBeNull();
+    expect(mappingVerdict({ ...ok, checked: false, error: 'yetki' })?.tone).toBe('b-gray');
+  });
+  it('traceId eksik → kırmızı, önekli öneri metinde', () => {
+    const v = mappingVerdict({ checked: true, present: 2, prefix: 'MCA_',
+      missing: [{ field: 'traceId', column: 'ERR_TRACEID', suggest: 'MCA_ERR_TRACEID' }, { field: 'host', column: 'ERR_HOSTNAME' }] });
+    expect(v?.tone).toBe('b-err');
+    expect(v?.text).toContain('trace/servis/hata kodu okunmaz');
+    expect(v?.detail).toContain('traceId→ERR_TRACEID');
+    expect(v?.detail).toContain('MCA_ önekli karşılıkları var (1/2)');
+  });
+  it('yalnız yan alan eksik → sarı, öneri yoksa eşleme formuna yönlendirir', () => {
+    const v = mappingVerdict({ checked: true, present: 15, missing: [{ field: 'location', column: 'ERR_LOCATION' }] });
+    expect(v?.tone).toBe('b-warn');
+    expect(v?.detail).toContain('Alan eşlemesi');
   });
 });

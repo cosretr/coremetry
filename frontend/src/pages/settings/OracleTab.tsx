@@ -26,7 +26,7 @@ import { Badge, Button, Field, SelectField, TextareaField } from '@/components/u
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
 import { useSettingsLoad, SettingsLoadError, FlashBox } from './shared';
-import { ORACLE_TEST_WINDOWS, longVerdict, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768, longVerdict v0.10.845
+import { ORACLE_TEST_WINDOWS, longVerdict, mappingVerdict, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768, longVerdict v0.10.845, mappingVerdict v0.10.886
 import {
   emptyOracleSource, sourceFromSnapshot, sourceForSave, validateOracleSource,
   hasOracleErrors, parseTypeFilter, typeFilterToText, numFromForm, numToForm,
@@ -451,6 +451,25 @@ export function OracleTab() {
                       <div className="oracle-scan">
                         <span className={`badge ${lv.tone}`} title={lv.detail}>{lv.text}</span>
                         <span className="is-quiet"> {lv.detail}</span>
+                      </div>
+                    );
+                  })()}
+                  {/* v0.10.886 (operatör) — "trace bulunamadı diyor ama var, kolon adlarından mı?"
+                      Eşlenen kolon tabloda yoksa burada söylenir; önekli karşılık tek tıkla. */}
+                  {(() => {
+                    const mv = mappingVerdict(pr.mapping);
+                    if (!mv) return null;
+                    const suggest = Object.fromEntries((pr.mapping?.missing ?? []).filter(x => x.suggest).map(x => [x.field, x.suggest!]));
+                    return (
+                      <div className="oracle-scan">
+                        <span className={`badge ${mv.tone}`} title={mv.detail}>{mv.text}</span>
+                        <span className="is-quiet"> {mv.detail}</span>
+                        {Object.keys(suggest).length > 0 && (
+                          <Button size="sm" variant="secondary" style={{ marginLeft: 8 }}
+                            onClick={() => patch(i, { columns: { ...(src.columns ?? {}), ...suggest } })}>
+                            Önerilen eşlemeyi uygula
+                          </Button>
+                        )}
                       </div>
                     );
                   })()}

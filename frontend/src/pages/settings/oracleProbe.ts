@@ -3,7 +3,7 @@
 // Operatör: "full scan / kilitli sorgu atmasın, önce test edelim, sorgu
 // görünür olsun; test ederken hangi servis/operasyon/trace geldiğini
 // göreyim". Hüküm metinleri burada, kablolama OracleTab'da (pinli).
-import type { OracleLongCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
+import type { OracleLongCheck, OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
 
 export const ORACLE_TEST_WINDOWS = [5, 15, 60] as const;
 export type OracleTestWindow = (typeof ORACLE_TEST_WINDOWS)[number];
@@ -70,4 +70,30 @@ export function longVerdict(l: OracleLongCheck | undefined): { tone: ScanTone; t
     };
   }
   return { tone: 'b-ok', text: 'LONG kolonlar select dışında', detail: l.columns.join(', ') };
+}
+
+/** v0.10.886 — eşleme hükmü. null = gösterilecek bir şey yok (sözlük okundu, her
+ *  eşlenen kolon tabloda). traceId/service/code eksikse kırmızı (özet "trace
+ *  bulunamadı" derdi — sebep bu); diğer alanlar eksikse sarı. */
+export const ORACLE_MATCH_FIELDS = ['traceId', 'service', 'code'] as const;
+export function mappingVerdict(m: OracleMappingCheck | undefined): { tone: ScanTone; text: string; detail: string } | null {
+  if (!m) return null;
+  if (!m.checked) {
+    return { tone: 'b-gray', text: 'eşleme kontrolü yapılamadı', detail: m.error ?? 'sözlük okunmadı' };
+  }
+  if (m.missing.length === 0) return null;
+  const critical = m.missing.filter(x => (ORACLE_MATCH_FIELDS as readonly string[]).includes(x.field));
+  const list = m.missing.map(x => `${x.field}→${x.column}`).join(', ');
+  const suggested = m.missing.filter(x => x.suggest).length;
+  const hint = suggested > 0
+    ? ` · tabloda ${m.prefix} önekli karşılıkları var (${suggested}/${m.missing.length}) — "Önerilen eşlemeyi uygula"`
+    : ' · Alan eşlemesi → göster ve kolon adlarını yaz';
+  if (critical.length > 0) {
+    return {
+      tone: 'b-err',
+      text: `eşlenen ${m.missing.length} kolon tabloda yok — trace/servis/hata kodu okunmaz`,
+      detail: list + hint,
+    };
+  }
+  return { tone: 'b-warn', text: `eşlenen ${m.missing.length} kolon tabloda yok`, detail: list + hint };
 }

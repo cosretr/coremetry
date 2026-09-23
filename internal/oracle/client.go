@@ -307,6 +307,9 @@ type TestResult struct {
 	// ki ORA-00997 düşse bile operatör sebebi görsün.
 	Long    *LongCheck     `json:"long,omitempty"`
 	Summary *WindowSummary `json:"summary,omitempty"`
+	// v0.10.886 — eşlenen kolonlar tabloda var mı (sözlük); LONG gibi örnek
+	// sorgudan önce koşar, test düşse de görünür.
+	Mapping *MappingCheck `json:"mapping,omitempty"`
 }
 
 // ── v0.10.768 — tam-tarama ön kontrolü, pencere özeti ────────────────────
@@ -729,6 +732,7 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 	// görünsün); v0.10.878 (inceleme) — gecikme ölçümünün DIŞINDA: sözlük
 	// turu bağlantı+örnek süresine karışmasın.
 	res.Long = runLongCheck(ctx, db, src, budget, secret)
+	res.Mapping = runMappingCheck(ctx, db, src, budget, secret) // v0.10.886
 	start := time.Now()
 	pctx, pcancel := context.WithTimeout(ctx, budget)
 	err = db.PingContext(pctx)

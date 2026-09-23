@@ -1613,6 +1613,12 @@ export interface OracleTestResult {
   /** v0.10.845 — LONG/LONG RAW kolon ön kontrolü (örnek sorgudan ÖNCE koşar;
    *  hata durumunda da dolu gelir). */
   long?: OracleLongCheck;
+  /** v0.10.886 — eşlenen kolonlar tabloda var mı; önekli öneri (MCA_ERR_*). */
+  mapping?: OracleMappingCheck;
+}
+export interface OracleMappingMiss { field: string; column: string; suggest?: string }
+export interface OracleMappingCheck {
+  checked: boolean; error?: string; present: number; missing: OracleMappingMiss[]; prefix?: string;
 }
 /** oracle.LongCheck — selected = sorgunun select listesine giren LONG kolonlar;
  *  mappedOnly = kontrolün baktığı kip. checked=false → sözlük okunamadı. */
