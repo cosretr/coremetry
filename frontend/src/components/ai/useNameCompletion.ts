@@ -28,7 +28,7 @@ export function useNameCompletion(text: string, caret: number): NameCompletion {
     return () => clearTimeout(t);
   }, [live]);
   const q = useQuery({
-    queryKey: keys.services.names(dq),
+    queryKey: keys.services.names(dq, 20), // v0.10.874 — anahtar gerçek limiti taşır (istek 20)
     queryFn: () => api.serviceNames(dq, 20),
     enabled: dq.length > 0,
     staleTime: 5 * 60_000,

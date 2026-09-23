@@ -288,7 +288,10 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
   // v0.9.474 (dürüstlük A16) — team/cluster chip'lere de iner: yorumun
   // "mirrors every OTHER filter" iddiası bu ikisi için yanlıştı.
   const bucketsQ = useQuery({
-    queryKey: ['problem-buckets', statusFilter, serviceFilter, env, ownerTeam, sreTeam, cluster],
+    // v0.10.874 (inceleme) — ham anahtar keys.problems ağacının DIŞINDAYDI: hiçbir
+    // invalidation ulaşmıyordu; 856'nın 30 s staleTime'ıyla ack/resolve sonrası
+    // çipler 30 s satırlarla çelişirdi. Artık ['problems','buckets',…].
+    queryKey: keys.problems.buckets({ status: statusFilter, service: serviceFilter, env, ownerTeam, sreTeam, cluster }),
     queryFn: () => api.problemBuckets({
       status: statusFilter === 'all' ? undefined : statusFilter,
       service: serviceFilter || undefined,
