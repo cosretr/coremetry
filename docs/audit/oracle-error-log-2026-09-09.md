@@ -393,3 +393,51 @@ kelepçe, capped tik; oy trace başına; reset görünür; süpürme muafiyeti �
 sentetik. §6.5 sel: tavan 20 (587) + seri tavanı 200/kaynak + qualifier tavanı 50/anahtar.
 Açık: kod bazında eşik (sorgu düzeyinde), Inbox'ta pod/özne rozeti, canlı kipte P1 oranı
 (computePriority Threshold=medyan) — gölge gözlemi sonrası karar.
+
+## 10. Özel SQL sorgu kipi — operatörün ön-toplanmış master-log sorgusu (v0.10.902, 2026-09-23)
+
+**Tetikleyici:** operatör Oracle konsolunda son sorgusunu gösterdi ("sorgunun son hâli
+bu, ona göre gerekli güncellemeleri yap"). Sorgu, §3'teki üretilmiş tablo sorgusuna
+sığmıyor: master log ⋈ hata kodu sözlüğü (`ERRORTYPE = 'T' OR ERROR_CODE IS NULL`),
+başarı kodları hariç, **dakika × kanal × fonksiyon × operasyon × host** başına
+ön-toplanmış (`Adet`, `TraceIdAdet`, `DURATION`), trace id'ler `XMLAGG` ile tek
+`TRACEIDS` listesi (≤4000 kr), `HAVING COUNT(*) > 1`, pencere `TRUNC(SYSDATE,'MI') −
+INTERVAL '15' MINUTE .. TRUNC(SYSDATE,'MI')` (bind yok), `TimeSlice` = epoch saniye
+(−10800 ile TZ sorguda düzeltilmiş), `Zaman` = `DD.MM.YYYY HH24:MI`, `Sonuc = 'TFAIL'`
+sabiti. Hata kodu kolonu çıktıda YOK; ~6 s.
+
+**Karar — sorgu olduğu gibi koşar (kip `custom`):** poller şema/tablo sorgusu
+üretmez; operatör metni konsolun (v0.10.742) salt-okunur kapısından geçer (tek
+SELECT/WITH, FOR UPDATE / ikinci ifade ret, ≤8000 kr) ve `SELECT * FROM (…) FETCH FIRST
+5000 ROWS ONLY` sarmalayıcısında **bind'siz** koşar. Pencere sorgunun kendi işi;
+Coremetry sayaç/özet için `windowMin` (varsayılan 15) varsayar — operatör bu sayıyı
+sorgusundaki INTERVAL ile aynı tutar. Her poll aynı pencereyi yeniden okur: aynı satır
+aynı `row_id` ile RMT'de tek satıra iner, sayaç dakika başına aynı sayıyı yeniden yazar
+(idempotent). Watermark yalnız durum.
+
+**Ön-toplanmış satır eşlemesi (mapping.go):**
+- `count` alanı (`ADET`) → sayaç ağırlığı (`OracleErrorRow.Weight`, kolon DEĞİL;
+  kolon attribute olarak da kalır — Trace › Logs "ADET: 2").
+- `traceIds` alanı (`TRACEIDS`) → ayırıcılı liste **trace başına satıra patlatılır**
+  (ağırlık 1); `Adet − geçerli id` artan sayı trace'siz tek satırda; geçersiz parça
+  (kesik id) sayılır, satır açmaz. Trace › Logs birleşimi, özne oyları (trace başına)
+  ve kanıt trace listesi böylece çalışır.
+- Zaman: sayısal epoch (≥1e9 sn; ms/µs/ns ölçek büyüklükten; **localize edilmez**)
+  ya da `DD.MM.YYYY HH24:MI[:SS]` (kaynağın dilimi). `TIMESLICE` zaman kolonu
+  kutusuna, `SONUC` tip kutusuna yazılır.
+- Önerilen eşleme: `operation.code ← OPERATIONCODE`, `error.code ← FUNCTIONCODE`
+  (hata kodu yok; fonksiyon kodu ikinci boyut — Inbox başlığında `error.code=FSR0002`
+  görünür, hint bunu söyler), `channel.code ← KANALKOD`, `host ← HOSTNAME`.
+  `ZAMAN / DURATION / TRACEIDADET` attribute.
+
+**Test/önizleme:** özel kipte sözlük kontrolleri (LONG / tam tarama / önekli öneri)
+koşmaz; eşleme kontrolü sorgunun **çıktı kolonlarına** karşı, yalnız açıkça eşlenen
+alanlar (`source: "query"`); özet trace aramasıyla; "poller'ın koşacağı sorgu — bind
+yok"; durum satırı "N satır okundu, M yazıldı (K trace listesinden)".
+
+**Bilinen sınırlar / dürüstlük:** `HAVING COUNT(*) > 1` → dakikada tek hata sayaçta 0
+görünür (operatörün gürültü süzgeci; taban buna göre oluşur). `windowMin` sorgunun
+INTERVAL'inden BÜYÜK yazılırsa fazla dakikalara sıfır yazılır (sahte "düzeldi") —
+form ipucu uyarır. Ağırlık CH'ye yazılmadığından yeniden başlatmada sayaç geçmişi
+`metric_points`'ten (zaten yazılmış) okunur, satırdan değil. VM/CH farkı yok (dış hat
+metric_points'e yazar).
