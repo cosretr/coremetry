@@ -4035,35 +4035,29 @@ func (s *Server) getAttributeValues(w http.ResponseWriter, r *http.Request) {
 				args = append([]any{key}, timeArgs...)
 				args = append(args, key, limit)
 			} else {
-				// Explicit q — exact filtered scan (ILIKE + has + time bound +
-				// max_execution_time keep it bounded), so a long-tail value on a
-				// high-cardinality key is always reachable.
-				// v0.9.242 (scale-audit M4) — the ILIKE used to sit in HAVING,
-				// i.e. AFTER the GROUP BY: ClickHouse built a hash table over
-				// EVERY distinct value of the key and only then threw away the
-				// non-matching ones. On a high-cardinality key that grouping is
-				// the whole cost, and this is a typeahead running under a 30s
-				// ceiling — 150× the hot-endpoint budget.
-				//
-				// Moving the predicate ahead of the GROUP BY is exact, not an
-				// approximation: same rows in, same rows out (verified against
-				// live CH, identical result sets). The sibling no-q branch
-				// above still needs its sample bound because it has no
-				// predicate to narrow with; this one does.
+				// Explicit q — v0.9.242 (scale-audit M4) moved the ILIKE ahead of the
+				// GROUP BY (exact: same rows in/out; grouping EVERY distinct value of
+				// a high-cardinality key was the whole cost). v0.10.869 (scale-audit
+				// 09-23) — the inner scan itself had no bound: ILIKE is now pushed
+				// into the scan WHERE and the scan is sample-capped AFTER filtering,
+				// so a long-tail value stays reachable (the sample holds only
+				// matching rows) while the read stops at attrValuesSampleRows
+				// matches; counts above the cap are approximate — a typeahead.
 				sql = fmt.Sprintf(`
 					SELECT v, count() AS c FROM (
 					    SELECT %s[indexOf(%s, ?)] AS v
 					    FROM spans
 					    WHERE %s
-					      AND has(%s, ?)
+					      AND has(%s, ?) AND %s[indexOf(%s, ?)] ILIKE ?
+					    LIMIT %d
 					)
-					WHERE v != '' AND v ILIKE ?
+					WHERE v != ''
 					GROUP BY v
 					ORDER BY c DESC
 					LIMIT ?
-					SETTINGS max_execution_time = 25`, arrVals, arrKeys, timeWhere, arrKeys)
+					SETTINGS max_execution_time = 25`, arrVals, arrKeys, timeWhere, arrKeys, arrVals, arrKeys, attrValuesSampleRows)
 				args = append([]any{key}, timeArgs...)
-				args = append(args, key, likeFilter, limit)
+				args = append(args, key, key, likeFilter, limit)
 			}
 		}
 
