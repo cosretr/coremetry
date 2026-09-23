@@ -335,6 +335,11 @@ function ForecastChip({ sloId }: { sloId: string }) {
     queryKey: ['slo-forecast', sloId],
     queryFn: () => api.sloForecast(sloId),
     staleTime: 60_000,
+    // v0.10.873 (inceleme) — LazyMount bir kez mount olunca kalıyor: odak
+    // dönüşünde >60 s bayat N×2 çip aynı anda refetch ederdi (global
+    // refetchOnWindowFocus). Sekme dönüşü bu çipleri tazelemez; retry yok.
+    refetchOnWindowFocus: false,
+    retry: false,
   });
   if (!data) return <span style={{ color: 'var(--text3)' }}>…</span>;
   if (data.safeBurn) {
@@ -552,6 +557,8 @@ function BurnSparkline({ sloId }: { sloId: string }) {
     queryKey: ['slo-burn', sloId, 7],
     queryFn: () => api.sloBurnSeries(sloId, 7),
     staleTime: 60_000,
+    refetchOnWindowFocus: false, // v0.10.873 — bkz. ForecastChip
+    retry: false,
   });
   const series = q.data ? (q.data.series ?? []) : null;
   if (q.isError) return <span style={{ color: 'var(--text3)' }}>—</span>;
