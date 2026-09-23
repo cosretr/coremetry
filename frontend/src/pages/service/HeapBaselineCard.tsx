@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { fmtClock } from '@/lib/utils'; // v0.10.891 — tek saat biçimleyici (24 sa kilidi)
 import { useServiceDeploys } from '@/lib/queries';
 import { TimeSeriesPanel, type TSSeries, type TSThreshold } from '@/components/viz/TimeSeriesPanel';
 import { rowActivation } from '@/lib/a11y';
@@ -112,6 +113,12 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
           {pods.length > LINES_MAX && <span>{LINES_MAX} / {pods.length} pod çizildi</span>}
           {data.truncated > 0 && <span>· {data.truncated} pod kesildi</span>}
           {data.capped && <span className="badge b-warn" title="Kaynak satır tavanına çarpıldı (ClickHouse LIMIT); bazı pod'lar eksik ya da kısmi olabilir.">kaynak satır tavanı</span>}
+          {/* v0.10.891 — dedektörün gölge hükmü: "açılırdı" (Problem yazılmadı). Canlı kip 892. */}
+          {data.mode !== 'off' && data.verdict?.wouldOpen && (
+            <span className="badge b-warn" title={`dedektör (${data.verdict.source}, kip ${data.verdict.mode}): pod ${data.verdict.pod} · z ${data.verdict.z.toFixed(1)} · ${fmtPct(data.verdict.current)} vs medyan ${fmtPct(data.verdict.median)} · ${fmtClock(data.verdict.at * 1000)}${data.verdict.wouldP1 ? ' · P1 olurdu' : ' · P2 olurdu'}`}>
+              ◐ gölge: problem AÇILIRDI · {data.verdict.pod}{data.verdict.wouldP1 ? ' · P1' : ''}
+            </span>
+          )}
         </span>
       </div>
       <div className="ov-card-b" style={{ paddingTop: 10, paddingBottom: 10 }}>
@@ -162,7 +169,10 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
         <div className="kc-line" style={{ marginTop: 6 }}>
           Bant = bu pod'un son {data.historyHours} saatteki GC-sonrası heap doluluğu
           (jvm.memory.used_after_last_gc / jvm.memory.limit), {Math.round(data.bucketSec / 60)}-dk kova, kaynak: {sourceName}.
-          Bu kart problem açmaz.
+          Bu kart problem açmaz.{' '}
+          {data.mode === 'shadow' || data.mode === 'on'
+            ? <>Problem kipi: <b>{data.mode === 'on' ? 'açık (bu sürümde gölge gibi)' : 'gölge'}</b> — dedektör hükmü rozette (Settings › Anomaly).</>
+            : <>Problem kipi kapalı (Settings › Anomaly › JVM heap bandı).</>}
         </div>
       </div>
     </div>

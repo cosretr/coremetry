@@ -155,6 +155,12 @@ func ReadHeapPods(ctx context.Context, src HeapSource, service string, from, to 
 	if !ok {
 		return HeapRead{Reason: "metric yok: " + HeapMetricPostGC}, nil
 	}
+	return ReadHeapPodsNoProbe(ctx, src, service, from, to)
+}
+
+// ReadHeapPodsNoProbe — MetricExists probu olmadan (dedektörün parçalı
+// okumasında servis başına 2 sorgu; varlık zaten filo okumasından biliniyor).
+func ReadHeapPodsNoProbe(ctx context.Context, src HeapSource, service string, from, to time.Time) (HeapRead, error) {
 	read := func(metric string) ([]chstore.SpanMetricSeries, error) {
 		return src.QueryMetric(ctx, chstore.MetricQueryFilter{
 			Name: metric, Service: service, Aggregation: "sum", GroupBy: HeapPodGroupBy, Filters: HeapTypeFilter,
@@ -174,4 +180,87 @@ func ReadHeapPods(ctx context.Context, src HeapSource, service string, from, to 
 		r.Reason = "pencerede satır yok"
 	}
 	return r, nil
+}
+
+// ── v0.10.891 — filo-geneli (servis+pod) okuma, dedektör için ──────────────
+
+// HeapFleetGroupBy — servis ilk yuvada, ardından pod üçlüsü.
+var HeapFleetGroupBy = append([]string{"resource.service.name"}, HeapPodGroupBy...)
+
+// HeapPctByPodSvc — SAF: HeapPctByPod'un servisli hâli: svc → pod → unix s → %.
+// Grup anahtarının ilk yuvası servis; pod üçlü sıradan (HeapPodKey).
+func HeapPctByPodSvc(postgc, limit []chstore.SpanMetricSeries) map[string]map[string]map[int64]float64 {
+	key := func(gk []string) (string, string) {
+		if len(gk) == 0 || strings.TrimSpace(gk[0]) == "" {
+			return "", ""
+		}
+		return gk[0], HeapPodKey(gk[1:])
+	}
+	lim := map[string]map[int64]float64{}
+	for _, ser := range limit {
+		svc, pod := key(ser.GroupKey)
+		if svc == "" || pod == "" {
+			continue
+		}
+		k := svc + "\x00" + pod
+		if lim[k] == nil {
+			lim[k] = map[int64]float64{}
+		}
+		for _, p := range ser.Points {
+			lim[k][p.Time/1e9] = p.Value
+		}
+	}
+	out := map[string]map[string]map[int64]float64{}
+	for _, ser := range postgc {
+		svc, pod := key(ser.GroupKey)
+		if svc == "" || pod == "" || lim[svc+"\x00"+pod] == nil {
+			continue
+		}
+		for _, p := range ser.Points {
+			l := lim[svc+"\x00"+pod][p.Time/1e9]
+			if l <= 0 || p.Value <= 0 {
+				continue
+			}
+			if out[svc] == nil {
+				out[svc] = map[string]map[int64]float64{}
+			}
+			if out[svc][pod] == nil {
+				out[svc][pod] = map[int64]float64{}
+			}
+			out[svc][pod][p.Time/1e9] = p.Value / l * 100
+		}
+	}
+	return out
+}
+
+// HeapVMSeriesCap — promapi.DecodeSeries'in SESSİZ seri tavanı (1000): tek
+// sorguda bu kadar seri döndüyse sonrası düşmüş olabilir → parçalı okuma.
+const HeapVMSeriesCap = 1000
+
+// HeapFleetRead — filo-geneli okuma sonucu.
+type HeapFleetRead struct {
+	Pct    map[string]map[string]map[int64]float64
+	Capped bool // CH satır tavanı ya da VM seri tavanı → çağıran servis-parçalı okumaya düşer
+}
+
+// ReadHeapFleet — [from, to] penceresini TÜM servisler için tek çift sorguyla
+// okur (Service süzgeçsiz, GroupBy servis+pod). Tavana çarpınca Capped=true.
+func ReadHeapFleet(ctx context.Context, src HeapSource, from, to time.Time) (HeapFleetRead, error) {
+	read := func(metric string) ([]chstore.SpanMetricSeries, error) {
+		return src.QueryMetric(ctx, chstore.MetricQueryFilter{
+			Name: metric, Aggregation: "sum", GroupBy: HeapFleetGroupBy, Filters: HeapTypeFilter,
+			From: from, To: to, StepSeconds: int(HeapBucketSec), MaxDataPoints: int(to.Sub(from).Seconds()/float64(HeapBucketSec)) + 2,
+		})
+	}
+	postgc, err := read(HeapMetricPostGC)
+	if err != nil {
+		return HeapFleetRead{}, err
+	}
+	limit, err := read(HeapMetricLimit)
+	if err != nil {
+		return HeapFleetRead{}, err
+	}
+	capped := chstore.SeriesRowsCapped(postgc) || chstore.SeriesRowsCapped(limit) ||
+		len(postgc) >= HeapVMSeriesCap || len(limit) >= HeapVMSeriesCap
+	return HeapFleetRead{Pct: HeapPctByPodSvc(postgc, limit), Capped: capped}, nil
 }

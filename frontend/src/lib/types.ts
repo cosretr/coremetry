@@ -432,6 +432,14 @@ export interface HeapBaselinePod { pod: string; band: HeapBand; series: { t: num
 export interface HeapBaselineResponse {
   source: string; metric: string; historyHours: number; bucketSec: number; needBuckets: number;
   from: number; to: number; pods: HeapBaselinePod[]; truncated: number; capped: boolean; worst?: string; reason?: string;
+  /** v0.10.891 — dedektörün kipi ve (varsa) gölge/canlı hükmü (Redis, 15 dk). */
+  mode?: 'off' | 'shadow' | 'on';
+  verdict?: HeapVerdict;
+}
+/** anomaly.HeapVerdict — dedektör fazının servis hükmü (kart rozeti). */
+export interface HeapVerdict {
+  service: string; status: HeapBandStatus; pod?: string; z: number; current: number; median: number;
+  mode: string; source: string; at: number; wouldOpen: boolean; wouldP1: boolean; livePods: number;
 }
 
 // DBDetail / MessagingDetail — full payloads for the drawer

@@ -18,6 +18,11 @@ describe('HeapBaselineCard — dürüstlük pinleri', () => {
     expect(src).toContain('rowActivation(() => setFocus(p.pod))');
     expect(src).toContain('sessiz · ');
     expect(src).toContain('Bu kart problem açmaz.');
+    expect(src).toContain('gölge: problem AÇILIRDI'); // v0.10.891 — dedektör hükmü rozeti
+    expect(src).toContain("data.mode !== 'off' && data.verdict?.wouldOpen"); // off'ta bayat rozet yok
+    expect(src).toContain('fmtClock(data.verdict.at * 1000)'); // 24 sa kilidi
+    expect(src).not.toContain('toLocaleTimeString');
+    expect(src).toContain("data.mode === 'shadow' || data.mode === 'on'");
     expect(src).toContain("queryKey: ['svc-heap-baseline', service, from, to]");
   });
   it('Pods sekmesinde yalnız JVM ailesi', () => {

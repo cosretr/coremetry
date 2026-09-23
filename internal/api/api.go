@@ -2124,7 +2124,7 @@ func (s *Server) getSystemStats(w http.ResponseWriter, r *http.Request) {
 		// v0.9.936 — davranış motorunun tik ölçümü. Süreç-içi atomikler
 		// (ingest sayaçlarıyla aynı kablo): motor bu pod'da koşmuyorsa
 		// (COREMETRY_MODE=api, ya da lider başka pod) sıfır kalır ve bu
-		// DOĞRU cevaptır — o pod gerçekten tarama yapmıyor.
+		st.Heap = anomaly.HeapObservability() // v0.10.891 — heap bandı fazı, aynı kablo (lider dışı sıfır = doğru cevap)
 		obs := anomaly.BehaviorObservability()
 		st.Behavior = chstore.BehaviorDetectorStats{
 			Ticks:          obs.Ticks,

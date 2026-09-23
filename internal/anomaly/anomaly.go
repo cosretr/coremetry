@@ -410,6 +410,10 @@ type Detector struct {
 	// indiğini logtan doğrulayabilmeli — çok-pod kurulumlarda "PUT hangi
 	// pod'a düştü, dedektör gördü mü" sorusunun tek cevabı bu satır.
 	lastSensitivity string
+	// v0.10.891 — heap bandı fazı: kaynak/önbellek kablosu (atomik, Start
+	// sonrası takılabilir) ve lider belleği (halka; kip off'ta nil).
+	heapWire heapWiring
+	heap     *heapState
 }
 
 // sensitivityLogLine — hassasiyet ayarının tek satırlık, KARARLI özeti.
@@ -691,6 +695,11 @@ func (d *Detector) scan(ctx context.Context) {
 	//
 	// AYNI `now`: kova hesabı ve pencere sınırı yukarıdaki okumalarla
 	// hizalı kalsın (v0.8.507 tik-tutarlılığı).
+	// v0.10.891 — JVM HEAP BANDI fazı (paritesi #4 dilim 2, gölge): kümeleme
+	// SONRASI (pending'e girmez, RED kümesi bastıramaz), davranış motoru
+	// ÖNCESİ; kendi içinde soft-fail. Kip off'ta hiç koşmaz.
+	d.scanHeap(ctx, now, snap, sens)
+
 	d.scanBehavior(ctx, now, sens)
 
 	// v0.9.1194 — FIRTINA dedektörü, aynı tikin sonunda ve aynı gerekçeyle:

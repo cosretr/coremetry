@@ -649,6 +649,7 @@ func main() {
 	// v0.9.550 — kalp atışına binary kimliği gömülür; bir dağıtım
 	// sonrası eski pod'un bıraktığı bayat kaydı taze sanmamak için.
 	evalr.SetVersion(BuildVersion)
+	var anomDet *anomaly.Detector // v0.10.891 — heap kaynağı vmSvc'den sonra takılır
 	if mode.worker {
 		// ── Alert evaluator (background — opens & resolves problems) ─────
 		go evalr.Start(chstore.WithQueryTag(ctx, "worker:evaluator")) // v0.10.254 — log_comment
@@ -659,7 +660,11 @@ func main() {
 		store.SetNeighborProvider(corr)
 
 		// ── Anomaly detector (Watchdog-style baseline check) ────────────
-		go anomaly.New(store, cfg.Background.AnomalyInterval, lockImpl, notifier).Start(chstore.WithQueryTag(ctx, "worker:anomaly"))
+		// v0.10.891 — heap bandı fazının kaynağı (VM/CH) aşağıda vmSvc kurulunca
+		// takılır (atomik setter, Start sonrası güvenli); önbellek burada.
+		anomDet = anomaly.New(store, cfg.Background.AnomalyInterval, lockImpl, notifier)
+		anomDet.SetHeapCache(cacheImpl)
+		go anomDet.Start(chstore.WithQueryTag(ctx, "worker:anomaly"))
 
 		// ── Synthetic monitor runner (HTTP probes + heartbeat absence) ──
 		go monitor.New(store, notifier, lockImpl).Start(chstore.WithQueryTag(ctx, "worker:monitor"))
@@ -1258,6 +1263,11 @@ func main() {
 		// v0.10.374 — VM dilim 3c: JVM heap / GC kanıtı VM yapılandırılmışsa
 		// VictoriaMetrics'ten (çağrı anında karar), değilse ClickHouse.
 		rcSynth.SetRuntimePods(vmetrics.RuntimePodsOr(vmSvc, store))
+		// v0.10.891 — heap bandı fazı: VM yapılandırılmışsa VM, değilse CH
+		// (çağrı anında; anomaly_sensitivity.runtime.heapSource zorlayabilir).
+		if anomDet != nil {
+			anomDet.SetHeapSource(anomaly.NewHeapSource(vmSvc, store))
+		}
 	}
 
 	// ── HTTP server (OTLP + API + UI) ─────────────────────────────────────────

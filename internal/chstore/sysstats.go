@@ -46,6 +46,9 @@ type SystemStats struct {
 	// cevabı da yok; sessizce 20 saniyeye çıkmış bir tarama hiçbir
 	// ekranda iz bırakmazdı.
 	Behavior BehaviorDetectorStats `json:"behavior"`
+	// Heap (v0.10.891) — JVM heap bandı fazının (paritesi #4 dilim 2) tik
+	// ölçümü; Behavior ile AYNI kablo (süreç-içi atomikler, lider dışı sıfır).
+	Heap HeapDetectorStats `json:"heap"`
 	// CodeFetch (v0.9.1241) — "Kodu da incele" kod-çekme sonuçları.
 	// Behavior ile AYNI kablo: API getSystemStats handler'ı süreç-içi
 	// atomiklerden doldurur, GetSystemStats (yalnız CH) sıfır bırakır —
@@ -713,4 +716,24 @@ func allTimeRowCounts(tables []TableStat) (spans, logs, metrics, profiles uint64
 		}
 	}
 	return
+}
+
+// HeapDetectorStats — v0.10.891: anomaly.HeapObservability() anlık görüntüsü.
+type HeapDetectorStats struct {
+	Mode              string `json:"mode"`   // off | shadow | on
+	Source            string `json:"source"` // vm | ch
+	Ticks             int64  `json:"ticks"`
+	RingPods          int64  `json:"ringPods"`
+	RingServices      int64  `json:"ringServices"`
+	Backfilled        bool   `json:"backfilled"`
+	BackfillPending   int64  `json:"backfillPending"`
+	WouldOpenNow      int64  `json:"wouldOpenNow"`
+	WouldOpenTotal    int64  `json:"wouldOpenTotal"`
+	WouldResolveTotal int64  `json:"wouldResolveTotal"`
+	WouldP1Now        int64  `json:"wouldP1Now"`
+	Capped            bool   `json:"capped"`     // kaynak tavanı → servis-parçalı okuma
+	RingCapped        bool   `json:"ringCapped"` // pod tavanı: yeni pod izlenmiyor
+	LastDurationMs    int64  `json:"lastDurationMs"`
+	LastUnix          int64  `json:"lastUnix"`
+	LastError         string `json:"lastError,omitempty"`
 }

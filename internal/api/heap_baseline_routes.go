@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -68,6 +69,10 @@ type HeapBaselineResponse struct {
 	Worst  string `json:"worst,omitempty"`
 	// Reason — pods boşken neden (metrik yok / satır yok); FE göstermez, log/teşhis.
 	Reason string `json:"reason,omitempty"`
+	// Verdict — v0.10.891: dedektörün gölge/canlı hükmü (Redis, 15 dk; lider
+	// yazar, her pod okur). Yoksa kip off / Noop cache / henüz hüküm yok.
+	Verdict *anomaly.HeapVerdict `json:"verdict,omitempty"`
+	Mode    string               `json:"mode"` // anomaly_sensitivity.runtime.heapMode (normalize)
 }
 
 func (s *Server) getServiceHeapBaseline(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +89,36 @@ func (s *Server) getServiceHeapBaseline(w http.ResponseWriter, r *http.Request) 
 	}
 	// Anahtar 5-dk ızgarada: veri yalnız tam kova ilerledikçe değişir (son eksik
 	// kova atılır); 30 s tik / zoom aynı kovada aynı cevabı okur.
-	pol := anomaly.HeapPolicyFrom(s.store.AnomalySensitivity()) // v0.10.890 — canlı vida, kartla dedektör aynı bant
-	key := fmt.Sprintf("heap-baseline:%s:%s:%d:%d:%v", src.Name(), name, from.Unix()/anomaly.HeapBucketSec, to.Unix()/anomaly.HeapBucketSec, pol)
+	sens := s.store.AnomalySensitivity()
+	pol, mode := anomaly.HeapPolicyFrom(sens), sens.HeapMode() // v0.10.890 — canlı vida, kartla dedektör aynı bant
+	key := fmt.Sprintf("heap-baseline:%s:%s:%d:%d:%v:%s", src.Name(), name, from.Unix()/anomaly.HeapBucketSec, to.Unix()/anomaly.HeapBucketSec, pol, mode)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		return buildHeapBaseline(ctx, src, name, from, to, pol)
+		res, err := buildHeapBaseline(ctx, src, name, from, to, pol)
+		if err != nil {
+			return nil, err
+		}
+		res.Mode = mode
+		if mode != chstore.HeapModeOff { // off'ta bayat verdict (TTL 15 dk) servis edilmez
+			res.Verdict = s.heapVerdictFor(ctx, name)
+		}
+		return res, nil
 	})
+}
+
+// heapVerdictFor — dedektörün önbelleğe yazdığı hüküm; yoksa nil (dürüst).
+func (s *Server) heapVerdictFor(ctx context.Context, service string) *anomaly.HeapVerdict {
+	if s.cache == nil {
+		return nil
+	}
+	b, ok, err := s.cache.Get(ctx, anomaly.HeapVerdictKey(service))
+	if err != nil || !ok || len(b) == 0 {
+		return nil
+	}
+	var v anomaly.HeapVerdict
+	if json.Unmarshal(b, &v) != nil {
+		return nil
+	}
+	return &v
 }
 
 func buildHeapBaseline(ctx context.Context, src anomaly.HeapSource, service string, from, to time.Time, pol anomaly.HeapBandPolicy) (*HeapBaselineResponse, error) {
