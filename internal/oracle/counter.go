@@ -145,6 +145,9 @@ func bucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 	}
 	counts := map[CounterKey]map[time.Time]float64{}
 	qualSeen := map[CounterKey]map[string]bool{} // (op,kod,kanal) → qualifier kümesi (tavan)
+	if qualifier != nil {
+		qualifier = unifyAggregatedQualifier(rows, qualifier) // v0.10.906
+	}
 	for _, r := range rows {
 		code := strings.TrimSpace(r.ErrorCode) // Oracle CHAR dolgusu ayrı seri açmasın
 		if ignore[strings.ToUpper(code)] {     // ignore listesi upper (settings normalize)
@@ -249,6 +252,66 @@ func rowWeight(r chstore.OracleErrorRow) float64 {
 		return float64(r.Weight)
 	}
 	return 1
+}
+
+// aggGroupKey — ön-toplanmış kaynak satırının kimliği: patlatılmış parçalar
+// (trace başına + artan) TraceID ve Weight dışında aynı tipli alanları taşır.
+type aggGroupKey struct {
+	t                                   time.Time
+	op, code, channel, host, ext, etype string
+}
+
+func aggKeyOf(r chstore.OracleErrorRow) aggGroupKey {
+	return aggGroupKey{t: r.Time, op: r.OperationCode, code: r.ErrorCode, channel: r.ChannelCode, host: r.HostName, ext: r.ExternalCode, etype: r.ErrorType}
+}
+
+// unifyAggregatedQualifier — SAF (v0.10.906): özel SQL kipinde bir Oracle
+// satırı trace başına satırlara patlatılır; qualifier parça başına çözülünce
+// trace'li parçalar exception tipine, trace'siz artan satır (çoğu zaman
+// Adet'in büyük kısmı) "generic"e düşüyor ve TEK Oracle grubu birkaç seriye
+// bölünüyordu. Ön-toplanmış satırlar (Weight > 0) kaynak satırına göre
+// gruplanır; grubun qualifier'ı parçaların jenerik-olmayan qualifier'larının
+// ağırlıklı ÇOĞUNLUĞU (eşitlikte alfabetik), hiçbiri yoksa parçanın kendi
+// sonucu. Tablo kipi satırları (Weight 0) aynen.
+func unifyAggregatedQualifier(rows []chstore.OracleErrorRow, q QualifierFn) QualifierFn {
+	votes := map[aggGroupKey]map[string]int{}
+	for _, r := range rows {
+		if r.Weight == 0 {
+			continue
+		}
+		v := q(r)
+		if v == counterQualifierNone || v == counterQualifierGeneric {
+			continue
+		}
+		k := aggKeyOf(r)
+		if votes[k] == nil {
+			votes[k] = map[string]int{}
+		}
+		votes[k][v] += int(r.Weight)
+	}
+	if len(votes) == 0 {
+		return q
+	}
+	chosen := make(map[aggGroupKey]string, len(votes))
+	for k, byQ := range votes {
+		best, bestN := "", 0
+		for v, n := range byQ {
+			if n > bestN || (n == bestN && v < best) {
+				best, bestN = v, n
+			}
+		}
+		chosen[k] = best
+	}
+	return func(r chstore.OracleErrorRow) string {
+		own := q(r)
+		if r.Weight == 0 || own == counterQualifierNone {
+			return own // jenerik olmayan kod ayrılmaz
+		}
+		if c, ok := chosen[aggKeyOf(r)]; ok {
+			return c
+		}
+		return own
+	}
 }
 
 func sumCounts(m map[time.Time]float64) float64 {
