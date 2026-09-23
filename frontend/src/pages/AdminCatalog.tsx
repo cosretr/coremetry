@@ -56,6 +56,8 @@ export default function AdminCatalogPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<ServiceMetadata | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // v0.10.876 (inceleme) — sunucu tavanı 1000: hasMore/total okunmadan etiket kataloğun tamamı gibi okunuyordu.
+  const [svcTrunc, setSvcTrunc] = useState<{ total: number } | null>(null);
 
   // Composite load — services-list (for the service set)
   // + services-metadata (for the catalog rows). Two parallel
@@ -69,6 +71,7 @@ export default function AdminCatalogPage() {
         api.servicesMetadata(),
       ]);
       const trafficSet = new Set<string>(svcResp?.names ?? []);
+      setSvcTrunc(svcResp?.hasMore ? { total: svcResp.total } : null);
       // Include catalog rows whose service no longer has
       // recent traffic (operator-curated history); flag them
       // visually so it's clear they're "stale".
@@ -158,7 +161,7 @@ export default function AdminCatalogPage() {
             style={{ minWidth: 280, fontSize: 13, padding: '4px 8px' }} />
           <span style={{ flex: 1 }} />
           <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-            {rows ? `${rows.length} services` : 'Loading…'}
+            {rows ? `${rows.length} services${svcTrunc ? ` · trafikli ilk 1000 / ${svcTrunc.total} (sunucu tavanı — liste EKSİK)` : ''}` : 'Loading…'}
             {' · '}
             {rows ? `${rows.filter(r => r.meta.ownerTeam || r.meta.sreTeam).length} curated` : ''}
           </span>

@@ -18,3 +18,12 @@ describe('büyük tablolar — content-visibility + katalog limiti', () => {
     expect(src).not.toContain('api.serviceNames(),');
   });
 });
+
+// v0.10.876 — sunucu tavanına çarpınca etiket "liste EKSİK" der (hasMore/total okunur).
+describe('AdminCatalog — tavan dürüstlüğü', () => {
+  it('hasMore okunur ve etikete yansır', () => {
+    const src = readFileSync(resolve(__dirname, 'AdminCatalog.tsx'), 'utf8');
+    expect(src).toContain('svcResp?.hasMore');
+    expect(src).toContain('liste EKSİK');
+  });
+});
