@@ -236,6 +236,9 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 	now := r.now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// v0.10.900 — her poll'da blob YENİDEN okunur (küçük; API'den sıfırlama
+	// bellekteki eski kopyayla geri yazılmasın — read-modify-write).
+	delete(r.loadedAt, src.ID)
 	m := r.mapFor(ctx, src.ID)
 	tf := &tickFacts{votes: map[string]map[string]int{}, totals: map[string]int{}, exTypes: map[string]string{}}
 	r.tick[src.ID] = tf
@@ -258,11 +261,19 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 					tf.exTypes[id] = f.ExType
 				}
 			}
+			// v0.10.900 — oy TRACE başına: aynı trace'in birden çok satırı (tek istek
+			// birkaç hata satırı loglar) tek oy; yoksa tek trace "üç teyit" olurdu.
+			voted := map[string]bool{}
 			for _, row := range rows {
 				f, ok := facts[row.TraceID]
 				if !ok || f.Service == "" {
 					continue
 				}
+				vk := row.OperationCode + "\x00" + row.TraceID
+				if voted[vk] {
+					continue
+				}
+				voted[vk] = true
 				if tf.votes[row.OperationCode] == nil {
 					tf.votes[row.OperationCode] = map[string]int{}
 				}
@@ -298,12 +309,18 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 			changed = true
 			res.Learned++
 		default:
-			// Farklı servis: yalnız bu tikte tek başına onay eşiğini geçiyorsa döner
-			// (≥3 oy ve ≥%70); aksi hâlde girdi zayıflar (Total artar, Hits değil).
+			// Farklı servis çoğunlukta: yalnız bu tikte tek başına onay eşiğini
+			// geçiyorsa (≥3 oy ve ≥%70) girdi döner. Aksi hâlde MEVCUT servise
+			// giden oylar da sayılır (v0.10.900: karışık tikte girdi haksız
+			// düşmesin), pay Total üzerinden doğal olarak azalır.
 			if bestN >= learnedMinHits && float64(bestN)/float64(total) >= learnedMinShare {
 				log.Printf("[oracle/subject] %s: %s → %s (eskisi %s, %d/%d)", src.Name, op, best, e.Service, bestN, total)
 				m.Entries[op] = &LearnedEntry{Service: best, Hits: bestN, Total: total, FirstSeen: e.FirstSeen, LastConfirmed: now.UnixNano()}
 			} else {
+				if mine := byS[e.Service]; mine > 0 {
+					e.Hits += mine
+					e.LastConfirmed = now.UnixNano()
+				}
 				e.Total += total
 			}
 			changed = true

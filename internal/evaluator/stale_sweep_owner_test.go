@@ -20,7 +20,7 @@ func TestStaleSweepCandidates(t *testing.T) {
 	stale := []chstore.Problem{
 		{ID: "a", RuleID: "anomaly:shop-payment:p99_ms"},
 		{ID: "b", RuleID: chstore.RuleExtDownPrefix + "ext:oracle-errlog"},
-		{ID: "c", RuleID: "anomaly:ext:extsrc/OP1/E1:ext:fail_count"}, // seri Problem'i — SÜPÜRÜLÜR
+		{ID: "c", RuleID: "anomaly:ext:extsrc/OP1/E1:ext:fail_count"}, // seri Problem'i — v0.10.900: kaynak yaşarken MUAF (nil = yaşıyor)
 		{ID: "d", RuleID: chstore.RuleExtCapPrefix + "ext:extsrc:ext:fail_count"},
 	}
 	toClose, skipped := staleSweepCandidates(stale, nil) // nil = 592 davranışı
@@ -31,11 +31,16 @@ func TestStaleSweepCandidates(t *testing.T) {
 		}
 		return strings.Join(b, ",")
 	}
-	if got := ids(toClose); got != "a,c" {
-		t.Fatalf("süpürülecekler a,c olmalı (seri Problem'i dahil), %q", got)
+	if got := ids(toClose); got != "a" {
+		t.Fatalf("süpürülecek yalnız a olmalı (seri Problem'i kaynak yaşarken muaf, v0.10.900), %q", got)
 	}
-	if got := ids(skipped); got != "b,d" {
-		t.Fatalf("atlananlar b,d (ext-down, ext-cap), %q", got)
+	if got := ids(skipped); got != "b,c,d" {
+		t.Fatalf("atlananlar b,c,d (ext-down, seri, ext-cap), %q", got)
+	}
+	// Kaynak yaşamıyorsa seri/küme satırları da süpürülür.
+	dead := func(string) bool { return false }
+	if tc, _ := staleSweepCandidates(append(stale, chstore.Problem{ID: "e", RuleID: chstore.RuleExtClusterPrefix + "extsrc/OP1"}), dead); ids(tc) != "a,b,c,d,e" {
+		t.Fatalf("ölü kaynakta hepsi süpürülür: %q", ids(tc))
 	}
 	if tc, sk := staleSweepCandidates(nil, nil); len(tc) != 0 || len(sk) != 0 {
 		t.Fatal("boş girdi boş çıktı")

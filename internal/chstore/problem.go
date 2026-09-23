@@ -114,8 +114,10 @@ const (
 	// tabanlı ruleID: "anomaly:ext:<kaynak>/<v1>/…:<metrik>"). Özne melez olunca
 	// Kind yerine bu önek tip sistemidir (synthesizer atlaması, kategori).
 	RuleExtSeriesPrefix = "anomaly:ext:"
-	RuleExtDownPrefix   = "anomaly:ext-down:"
-	RuleExtCapPrefix    = "anomaly:ext-cap:"
+	// RuleExtClusterPrefix — v0.10.900: dış seri KÜMESİ ("anomaly-cluster:ext:<kaynak>/<op>").
+	RuleExtClusterPrefix = "anomaly-cluster:ext:"
+	RuleExtDownPrefix    = "anomaly:ext-down:"
+	RuleExtCapPrefix     = "anomaly:ext-cap:"
 )
 
 // ProblemSubjectKind — bir satırın özne türü, boş değeri normalize eder.
@@ -1497,7 +1499,8 @@ func OpenProblemKey(ruleID, service string) string { return ruleID + "|" + servi
 // PollerOwnedRule — SAF: kuralın yaşam döngüsü poller'a mı ait (bayat süpürme
 // dışı). Yalnız ext-down / ext-cap; seri kuralı (anomaly:ext:…) DEĞİL.
 func PollerOwnedRule(ruleID string) bool {
-	return strings.HasPrefix(ruleID, RuleExtDownPrefix) || strings.HasPrefix(ruleID, RuleExtCapPrefix)
+	_, ok := PollerOwnedSubject(ruleID)
+	return ok
 }
 
 // PollerOwnedSubject — v0.10.605: poller-sahipli kuralın ÖZNESİ (`ext:<kaynak
@@ -1510,6 +1513,24 @@ func PollerOwnedRule(ruleID string) bool {
 func PollerOwnedSubject(ruleID string) (string, bool) {
 	if rest, ok := strings.CutPrefix(ruleID, RuleExtDownPrefix); ok {
 		return rest, rest != ""
+	}
+	// v0.10.900 — dış SERİ ve KÜME satırları da kaynak yaşadıkça poller-sahipli:
+	// yaşam döngüleri tarayıcıda (dense sıfır → resolve, 893), kaynak aralığı
+	// 3 dk'yı aşınca (IntervalSec ≤ 3600) süpürme "source silent" diye her
+	// poll'da kapatıp yeniden açtırırdı (flapping, canlı kipte alarm seli).
+	// v0.10.592'nin "seri bilerek süpürülür" kararı bu yüzden değişti; kaynak
+	// gerçekten susarsa ext-down (588) söyler, silinirse muafiyet düşer.
+	for _, pfx := range []string{RuleExtSeriesPrefix, RuleExtClusterPrefix} {
+		if rest, ok := strings.CutPrefix(ruleID, pfx); ok {
+			src := rest
+			if i := strings.IndexByte(rest, '/'); i >= 0 {
+				src = rest[:i]
+			}
+			if src == "" {
+				return "", false
+			}
+			return "ext:" + src, true
+		}
 	}
 	rest, ok := strings.CutPrefix(ruleID, RuleExtCapPrefix)
 	if !ok {

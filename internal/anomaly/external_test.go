@@ -449,3 +449,31 @@ func TestExternalScan_SubjectResolverPinsRealService(t *testing.T) {
 		t.Fatalf("çözülemeyen özne: %+v", q)
 	}
 }
+
+// v0.10.900 — tazeleme özne notunu korur; ResolveSource yalnız o kaynağın
+// seri/küme/tavan satırlarını kapatır (ext-down ve başka kaynak dokunulmaz).
+func TestExternalKeepSubjectNoteAndResolveSource(t *testing.T) {
+	if got := keepSubjectNote("old reason. Subject: trace'ten (7/9).", "new reason."); got != "new reason. Subject: trace'ten (7/9)." {
+		t.Fatalf("keepSubjectNote: %q", got)
+	}
+	if got := keepSubjectNote("old reason.", "new reason."); got != "new reason." {
+		t.Fatalf("notsuz: %q", got)
+	}
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	f := &fakeExtStore{cfg: chstore.DefaultAnomalySensitivity(), open: []chstore.Problem{
+		{ID: "s1", RuleID: "anomaly:ext:extsrc/OP1/E1:ext:fail_count", Service: "loan-svc", Status: "open"},
+		{ID: "c1", RuleID: chstore.RuleExtClusterPrefix + "extsrc/OP1", Service: "ext:extsrc/OP1", Status: "open"},
+		{ID: "cap", RuleID: chstore.RuleExtCapPrefix + "ext:extsrc:ext:fail_count", Service: "ext:extsrc", Status: "open"},
+		{ID: "down", RuleID: chstore.RuleExtDownPrefix + "ext:extsrc", Service: "ext:extsrc", Status: "open"},
+		{ID: "other", RuleID: "anomaly:ext:othersrc/OP1/E1:ext:fail_count", Service: "ext:othersrc/OP1/E1", Status: "open"},
+	}}
+	n := newExtScanner(f, now).ResolveSource(context.Background(), "extsrc", "problem mode off")
+	if n != 3 || len(f.upserts) != 3 {
+		t.Fatalf("3 satır kapanmalı (seri, küme, tavan): n=%d upserts=%d", n, len(f.upserts))
+	}
+	for _, u := range f.upserts {
+		if u.Status != "resolved" || !strings.Contains(u.Description, "problem mode off") || u.ID == "down" || u.ID == "other" {
+			t.Fatalf("kapanış: %+v", u)
+		}
+	}
+}

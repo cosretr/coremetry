@@ -1118,6 +1118,9 @@ func main() {
 			// yok; live = bildirimli tarayıcı (extScanner).
 			mode := oracle.ProblemModeOf(src)
 			if mode == oracle.ProblemModeOff {
+				// v0.10.900 — off: açık seri/küme/tavan Problem'leri dürüst gerekçeyle
+				// kapanır (süpürme artık bu satırları kaynak yaşarken atlıyor).
+				oracleShadow.ResolveSource(hctx, src.Name, "problem mode off (Settings › Oracle)")
 				return
 			}
 			scanner := oracleShadow

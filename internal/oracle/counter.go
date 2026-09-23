@@ -107,11 +107,39 @@ func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 	if source == "" || !to.After(from) && !to.Equal(from) {
 		return res
 	}
-	m0, m1 := from.UTC().Truncate(time.Minute), to.UTC().Truncate(time.Minute)
+	// v0.10.900 (inceleme) — YALNIZ TAMAMLANMIŞ dakikalar: to'nun (= now) kısmi
+	// dakikası yazılırsa Scan aynı kancada onu son kova sayar, z gerçek hızın
+	// kesrinden çıkar → erken resolve/flapping. Kısmi dakika bir sonraki
+	// poll'un overlap'inde (max) tamamlanır.
+	m0, m1 := from.UTC().Truncate(time.Minute), to.UTC().Truncate(time.Minute).Add(-time.Minute)
+	// Catch-up kelepçesi: watermark günler geride olsa da (yeniden başlatma /
+	// capped yakalama) pencere en çok aktif pencere kadar (240 dk) — dış
+	// tarayıcı zaten daha eskisini okumuyor; ötesi metric_points'e boş yük.
+	if lo := m1.Add(-counterActiveWindow + time.Minute); m0.Before(lo) { // tam 240 dakika
+		m0 = lo
+	}
+	// Capped tik (poll tavanı doldu): satırların bittiği dakikadan sonrası
+	// GÖZLENMEMİŞ — oraya sıfır basmak sahte "düzeldi" olur; m1 son satırın
+	// dakikasına çekilir (kalan satırlar sonraki granülde gelir).
+	if len(rows) >= pollRowCap {
+		var last time.Time
+		for _, r := range rows {
+			if r.Time.After(last) {
+				last = r.Time
+			}
+		}
+		if lm := last.UTC().Truncate(time.Minute); !last.IsZero() && lm.Before(m1) {
+			m1 = lm
+		}
+	}
+	if m1.Before(m0) {
+		return res
+	}
 	counts := map[CounterKey]map[time.Time]float64{}
 	qualSeen := map[CounterKey]map[string]bool{} // (op,kod,kanal) → qualifier kümesi (tavan)
 	for _, r := range rows {
-		if ignore[r.ErrorCode] {
+		code := strings.TrimSpace(r.ErrorCode) // Oracle CHAR dolgusu ayrı seri açmasın
+		if ignore[strings.ToUpper(code)] {     // ignore listesi upper (settings normalize)
 			res.Ignored++
 			continue
 		}
@@ -123,7 +151,7 @@ func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 		if qualifier != nil {
 			q = qualifier(r)
 		}
-		base := CounterKey{Op: r.OperationCode, Code: r.ErrorCode, Channel: r.ChannelCode, Qualifier: counterQualifierNone}
+		base := CounterKey{Op: strings.TrimSpace(r.OperationCode), Code: code, Channel: strings.TrimSpace(r.ChannelCode), Qualifier: counterQualifierNone}
 		if q != counterQualifierNone {
 			if qualSeen[base] == nil {
 				qualSeen[base] = map[string]bool{}
@@ -136,7 +164,7 @@ func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 				}
 			}
 		}
-		k := CounterKey{Op: r.OperationCode, Code: r.ErrorCode, Channel: r.ChannelCode, Qualifier: q}
+		k := CounterKey{Op: base.Op, Code: base.Code, Channel: base.Channel, Qualifier: q}
 		if counts[k] == nil {
 			counts[k] = map[time.Time]float64{}
 		}

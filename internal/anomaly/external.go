@@ -437,7 +437,7 @@ func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalT
 		if activeKeys[k] {
 			continue
 		}
-		if open := openSnap.ByKey(clusterRulePrefix+k, k); open != nil && open.ID != "" {
+		if open := openSnap.ByRule(clusterRulePrefix + k); open != nil && open.ID != "" { // v0.10.900 — özne melez olabilir
 			chstore.MarkResolved(open, now.UnixNano())
 			if err := s.store.UpsertProblem(ctx, *open); err != nil {
 				log.Printf("[anomaly/external] cluster-resolve %s: %v", k, err)
@@ -466,7 +466,7 @@ func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalT
 		}
 		desc += fmt.Sprintf(". Kaynak %s · sorgu %s.", t.SourceName, t.Query)
 		sev := clusterSeverity(members, "")
-		if open := openSnap.ByKey(clusterRulePrefix+k, k); open != nil && open.ID != "" {
+		if open := openSnap.ByRule(clusterRulePrefix + k); open != nil && open.ID != "" { // v0.10.900 — özne melez olabilir
 			open.Value = float64(len(idx))
 			open.Severity = sev
 			open.Description = desc
@@ -489,6 +489,17 @@ func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalT
 			Status:      "open",
 			Description: desc,
 			StartedAt:   now.UnixNano(),
+		}
+		// v0.10.900 — küme de melez özne alır (ilk boyut = operasyon): çözülürse
+		// gerçek servis + Kind service; ruleID sentetik kalır (ByRule).
+		if t.Subject != nil && len(idx) > 0 && len(pending[idx[0]].sr.GroupKey) > 0 {
+			if res := t.Subject(ctx, pending[idx[0]].sr.GroupKey[:1]); strings.TrimSpace(res.Service) != "" {
+				p.Service = strings.TrimSpace(res.Service)
+				p.Kind = chstore.ProblemKindService
+				if res.Note != "" {
+					p.Description = desc + subjectNoteSep + res.Note + "."
+				}
+			}
 		}
 		if err := s.store.UpsertProblem(ctx, p); err != nil {
 			log.Printf("[anomaly/external] cluster-open %s: %v", k, err)
@@ -633,7 +644,7 @@ func (s *ExternalScanner) apply(ctx context.Context, rep *ExternalScanReport, t 
 		if hasOpen {
 			open.Value = oc.Current
 			open.Comparator = anomalyComparator(oc.Direction)
-			open.Description = desc
+			open.Description = keepSubjectNote(open.Description, desc) // v0.10.900 — özne notu tazelemede kalır
 			if err := s.store.UpsertProblem(ctx, *open); err != nil {
 				log.Printf("[anomaly/external] refresh %s: %v", ruleID, err)
 				return nil
@@ -665,7 +676,7 @@ func (s *ExternalScanner) apply(ctx context.Context, rep *ExternalScanReport, t 
 				p.Kind = chstore.ProblemKindService
 			}
 			if res.Note != "" {
-				p.Description = desc + " Subject: " + res.Note + "."
+				p.Description = desc + subjectNoteSep + res.Note + "."
 			}
 		}
 		if err := s.store.UpsertProblem(ctx, p); err != nil {
@@ -707,6 +718,18 @@ func (s *ExternalScanner) apply(ctx context.Context, rep *ExternalScanReport, t 
 		rep.Touched++
 		return open
 	}
+}
+
+// subjectNoteSep — açılışta Description'a eklenen özne cümlesinin ayracı.
+const subjectNoteSep = " Subject: "
+
+// keepSubjectNote — SAF (v0.10.900): tazelemede yeni gerekçe yazılırken eski
+// açıklamadaki " Subject: …" eki korunur (özne açılışta sabit, cümlesi de).
+func keepSubjectNote(oldDesc, newDesc string) string {
+	if i := strings.Index(oldDesc, subjectNoteSep); i >= 0 {
+		return newDesc + oldDesc[i:]
+	}
+	return newDesc
 }
 
 // ExternalSubject — Problem.Service: `ext:<kaynak>/<v1>/<v2>` (db: emsali).
@@ -825,4 +848,39 @@ func ones(n int) []float64 {
 		r[i] = 1
 	}
 	return r
+}
+
+// ResolveSource — v0.10.900 (kaynak kipi off): kaynağın açık dış SERİ, KÜME ve
+// tavan (ext-cap) Problem'lerini "problem mode off" gerekçesiyle kapatır.
+// ext-down (kaynak sağlığı) dokunulmaz — onu ReportSourceHealth yönetir.
+// İdempotent: her off poll'unda çağrılabilir; açık satır yoksa iş yok.
+func (s *ExternalScanner) ResolveSource(ctx context.Context, sourceName, reason string) int {
+	snap, err := s.store.OpenProblemsSnapshot(ctx)
+	if err != nil || snap == nil {
+		return 0
+	}
+	subject := ExternalSubject(sourceName, nil)
+	n := 0
+	for _, p := range snap.All() {
+		if p == nil || p.ID == "" {
+			continue
+		}
+		owned, ok := chstore.PollerOwnedSubject(p.RuleID)
+		if !ok || owned != subject || strings.HasPrefix(p.RuleID, chstore.RuleExtDownPrefix) {
+			continue
+		}
+		row := *p
+		row.Description = strings.TrimRight(row.Description, " ") + " Resolved: " + reason + "."
+		chstore.MarkResolved(&row, s.now().UnixNano())
+		if err := s.store.UpsertProblem(ctx, row); err != nil {
+			log.Printf("[anomaly/external] resolve-source %s: %v", p.RuleID, err)
+			continue
+		}
+		delete(s.lastEnriched, p.RuleID)
+		n++
+	}
+	if n > 0 {
+		log.Printf("[anomaly/external] %s: %d açık Problem kapatıldı (%s)", sourceName, n, reason)
+	}
+	return n
 }

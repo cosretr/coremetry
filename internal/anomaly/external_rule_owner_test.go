@@ -2,6 +2,7 @@ package anomaly
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,15 +28,21 @@ func TestPollerOwnedRuleIDsAreRecognised(t *testing.T) {
 	if _, err := newExtScanner(f2, now).Scan(context.Background(), extTarget); err != nil {
 		t.Fatal(err)
 	}
+	// v0.10.900 — seri Problem'i de kaynak yaşarken poller-sahipli (süpürme
+	// muafiyeti; yaşam döngüsü tarayıcıda). Tavan özeti ext-cap, seri anomaly:ext:.
 	var cap, series int
 	for _, p := range f2.upserts {
-		if chstore.PollerOwnedRule(p.RuleID) {
+		if !chstore.PollerOwnedRule(p.RuleID) {
+			t.Fatalf("dış hat Problem'i poller-sahipli olmalı: %s", p.RuleID)
+		}
+		switch {
+		case strings.HasPrefix(p.RuleID, chstore.RuleExtCapPrefix):
 			cap++
-		} else {
+		case strings.HasPrefix(p.RuleID, chstore.RuleExtSeriesPrefix):
 			series++
 		}
 	}
 	if cap != 1 || series != 1 {
-		t.Fatalf("özet Problem poller'a ait (1), seri Problem'i değil (1): cap=%d series=%d", cap, series)
+		t.Fatalf("özet Problem (1) + seri Problem'i (1): cap=%d series=%d", cap, series)
 	}
 }

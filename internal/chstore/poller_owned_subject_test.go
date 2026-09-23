@@ -19,7 +19,9 @@ func TestPollerOwnedSubject(t *testing.T) {
 		{RuleExtCapPrefix + "ext:prod-eu", "ext:prod-eu", true}, // metriksiz (savunma)
 		{RuleExtDownPrefix, "", false},
 		{RuleExtCapPrefix + ":x", "", false},
-		{"anomaly:ext:prod-eu/OP1:ext:fail_count", "", false}, // seri Problem'i — sahipli değil
+		{"anomaly:ext:prod-eu/OP1:ext:fail_count", "ext:prod-eu", true}, // seri Problem'i — v0.10.900: kaynak yaşarken sahipli
+		{RuleExtClusterPrefix + "prod-eu/OP1", "ext:prod-eu", true},     // küme Problem'i
+		{RuleExtSeriesPrefix + "/OP1:ext:fail_count", "", false},        // kaynak adı boş
 		{"anomaly:shop:p99_ms", "", false},
 		{"", "", false},
 	}

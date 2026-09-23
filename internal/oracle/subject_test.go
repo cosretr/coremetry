@@ -120,3 +120,52 @@ func TestSubjectExTypeFor(t *testing.T) {
 		t.Fatal("ExTypeFor")
 	}
 }
+
+// v0.10.900 (inceleme) — oy trace başına (aynı trace'in 3 satırı = 1 oy); karışık
+// tikte mevcut servisin oyları Hits'e eklenir (girdi haksız düşmez); API'den
+// sıfırlanan blob bir sonraki Observe'da bellekteki kopyayı ezer.
+func TestSubjectVotesPerTraceAndMixedTick(t *testing.T) {
+	now := time.Date(2026, 9, 23, 13, 0, 0, 0, time.UTC)
+	state := &fakeState{kv: map[string][]byte{}}
+	facts := map[string]chstore.TraceFact{"t1": {Service: "loan"}, "t2": {Service: "loan"}, "t3": {Service: "loan"}, "t4": {Service: "crm"}, "t5": {Service: "crm"}}
+	lookup := func(_ context.Context, ids []string, _, _ time.Time) (map[string]chstore.TraceFact, error) {
+		out := map[string]chstore.TraceFact{}
+		for _, id := range ids {
+			if f, ok := facts[id]; ok {
+				out[id] = f
+			}
+		}
+		return out, nil
+	}
+	r := NewSubjectResolver(state, lookup, nil)
+	r.now = func() time.Time { return now }
+	src := SourceConfig{ID: "o-1", Name: "o"}
+	// Aynı trace'in 3 satırı → tek oy.
+	r.Observe(context.Background(), src, []chstore.OracleErrorRow{{OperationCode: "OP", TraceID: "t1"}, {OperationCode: "OP", TraceID: "t1"}, {OperationCode: "OP", TraceID: "t1"}}, now, now)
+	if e := r.Learned(context.Background(), "o-1").Entries["OP"]; e == nil || e.Hits != 1 || e.Total != 1 || e.Confirmed(now) {
+		t.Fatalf("trace başına oy: %+v", e)
+	}
+	// İki tik daha loan → 3/3 onaylı.
+	r.Observe(context.Background(), src, []chstore.OracleErrorRow{{OperationCode: "OP", TraceID: "t2"}}, now, now)
+	r.Observe(context.Background(), src, []chstore.OracleErrorRow{{OperationCode: "OP", TraceID: "t3"}}, now, now)
+	if e := r.Learned(context.Background(), "o-1").Entries["OP"]; e == nil || !e.Confirmed(now) {
+		t.Fatalf("onay: %+v", e)
+	}
+	// Karışık tik: loan 2 (t1, t2 yeniden) vs crm 1 — crm eşiği geçmez; loan oyları Hits'e girer (5/6 onaylı kalır).
+	r.Observe(context.Background(), src, []chstore.OracleErrorRow{{OperationCode: "OP", TraceID: "t1"}, {OperationCode: "OP", TraceID: "t2"}, {OperationCode: "OP", TraceID: "t4"}}, now, now)
+	e := r.Learned(context.Background(), "o-1").Entries["OP"]
+	if e == nil || e.Service != "loan" || e.Hits != 5 || e.Total != 6 || !e.Confirmed(now) {
+		t.Fatalf("karışık tik: %+v", e)
+	}
+	// Karışık tikte rakip çoğunlukta ama eşik altı (crm 2 vs loan 1): mevcut servis kalır, Hits 6/9.
+	r.Observe(context.Background(), src, []chstore.OracleErrorRow{{OperationCode: "OP", TraceID: "t3"}, {OperationCode: "OP", TraceID: "t4"}, {OperationCode: "OP", TraceID: "t5"}}, now, now)
+	if e := r.Learned(context.Background(), "o-1").Entries["OP"]; e == nil || e.Service != "loan" || e.Hits != 6 || e.Total != 9 {
+		t.Fatalf("rakip eşik altı: %+v", e)
+	}
+	// API sıfırlaması (blob boş) → sonraki Observe bellekteki haritayı ezer.
+	state.kv[learnedKey("o-1")] = []byte(`{"v":1,"entries":{}}`)
+	r.Observe(context.Background(), src, nil, now, now)
+	if len(r.Learned(context.Background(), "o-1").Entries) != 0 {
+		t.Fatal("sıfırlama görünmeli")
+	}
+}
