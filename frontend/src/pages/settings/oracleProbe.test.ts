@@ -102,3 +102,17 @@ describe('mappingVerdict — sorgu çıktısı kaynağı', () => {
     expect(h?.tone).toBe('b-warn');
   });
 });
+
+// v0.10.907 — eşlenmemiş alan (kolon boş) "eşlenmedi (öneri X)" yazar, kırmızı.
+describe('mappingVerdict — eşlenmemiş alanlar', () => {
+  it('kolonsuz eksikler: kırmızı, öneri + buton ipucu', () => {
+    const v = mappingVerdict({ checked: true, present: 1, source: 'query', missing: [
+      { field: 'traceIds', column: '', suggest: 'TRACEIDS' },
+      { field: 'service', column: '', suggest: 'OPERATIONCODE' },
+    ] });
+    expect(v?.tone).toBe('b-err');
+    expect(v?.text).toMatch(/eşlenmemiş/);
+    expect(v?.detail).toMatch(/traceIds: eşlenmedi \(öneri TRACEIDS\)/);
+    expect(v?.detail).toMatch(/Önerilen eşlemeyi uygula/);
+  });
+});

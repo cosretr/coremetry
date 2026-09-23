@@ -150,9 +150,59 @@ func mappingCheckFromColumns(cfg SourceConfig, outCols []string) MappingCheck {
 			c.Present++
 			continue
 		}
-		c.Missing = append(c.Missing, MappingMiss{Field: f, Column: col})
+		c.Missing = append(c.Missing, MappingMiss{Field: f, Column: col, Suggest: suggestFromOutput(f, have)})
+	}
+	// v0.10.907 (operatör-bildirimli, prod: "0/0 trace, operasyon kodu (boş)"):
+	// HİÇ eşlenmemiş kritik alanlar da eksiktir — yalnız açık eşlemeleri
+	// denetlemek, operatör eşlemeyi hiç doldurmadığında testi SUSTURUYORDU.
+	// Kolon boş ("eşlenmedi"); sorgu çıktısında tanıdık bir takma ad varsa öneri.
+	for _, f := range customRequiredFields(explicit) {
+		c.Missing = append(c.Missing, MappingMiss{Field: f, Suggest: suggestFromOutput(f, have)})
+	}
+	// Kanal/host zorunlu değil ama eşlenmemişse ve çıktıda karşılığı varsa
+	// öneri listesine girer (buton hepsini tek seferde doldursun).
+	for _, f := range []string{FieldChannel, FieldHost} {
+		if sg := suggestFromOutput(f, have); !explicit[f] && sg != "" {
+			c.Missing = append(c.Missing, MappingMiss{Field: f, Suggest: sg})
+		}
 	}
 	return c
+}
+
+// customRequiredFields — SAF: özel SQL kipinde eşlenmemişse satırların işe
+// yaramadığı alanlar. Trace: traceIds (liste) YA DA traceId (tekil) yeter.
+func customRequiredFields(explicit map[string]bool) []string {
+	var out []string
+	if !explicit[FieldTraceIDs] && !explicit[FieldTraceID] {
+		out = append(out, FieldTraceIDs)
+	}
+	for _, f := range []string{FieldService, FieldCode, FieldCount} {
+		if !explicit[f] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// outputAliases — alan → sorgu çıktısında aranan tanıdık takma adlar (sıra =
+// öncelik). Yalnız çıktıda VAR olan ad önerilir; uydurma yok.
+var outputAliases = map[string][]string{
+	FieldTraceIDs: {"TRACEIDS", "TRACE_IDS", "TRACEID_LIST"},
+	FieldTraceID:  {"TRACEID", "TRACE_ID"},
+	FieldService:  {"OPERATIONCODE", "OPERATION_CODE", "OPCODE", "SERVICE"},
+	FieldCode:     {"ERRORCODE", "ERROR_CODE", "ERRCODE", "FUNCTIONCODE", "FUNCTION_CODE"},
+	FieldChannel:  {"KANALKOD", "CHANNELCODE", "CHANNEL_CODE", "CHANNEL"},
+	FieldHost:     {"HOSTNAME", "HOST_NAME", "HOST"},
+	FieldCount:    {"ADET", "COUNT", "CNT", "ERRORCOUNT", "ERROR_COUNT"},
+}
+
+func suggestFromOutput(field string, have map[string]bool) string {
+	for _, a := range outputAliases[field] {
+		if have[a] {
+			return a
+		}
+	}
+	return ""
 }
 
 // testCustom — TestWith'in özel kip dalı (db açılmış, şifre çözülmüş).

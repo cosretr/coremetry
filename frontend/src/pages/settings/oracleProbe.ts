@@ -86,20 +86,25 @@ export function mappingVerdict(m: OracleMappingCheck | undefined): { tone: ScanT
   // her satır düşer, liste yoksa hiçbir trace bağlanmaz.
   const critical = m.missing.filter(x => (ORACLE_MATCH_FIELDS as readonly string[]).includes(x.field)
     || (m.source === 'query' && (x.field === 'timestamp' || x.field === 'traceIds')));
-  const list = m.missing.map(x => `${x.field}→${x.column}`).join(', ');
+  // v0.10.907 — kolon boş = alan hiç eşlenmemiş (özel SQL kipi).
+  const list = m.missing.map(x => x.column ? `${x.field}→${x.column}` : `${x.field}: eşlenmedi${x.suggest ? ` (öneri ${x.suggest})` : ''}`).join(', ');
   const suggested = m.missing.filter(x => x.suggest).length;
   // v0.10.902 — özel SQL kipinde karşılaştırma sorgunun ÇIKTI kolonlarına (takma
   // adlar); "tabloda yok" cümlesi orada yanlış olurdu.
   const where = m.source === 'query' ? 'sorgu çıktısında' : 'tabloda';
   const hint = suggested > 0
-    ? ` · tabloda ${m.prefix} önekli karşılıkları var (${suggested}/${m.missing.length}) — "Önerilen eşlemeyi uygula"`
+    ? m.source === 'query'
+      ? ` · sorgu çıktısında karşılıkları var (${suggested}/${m.missing.length}) — "Önerilen eşlemeyi uygula", sonra Kaydet`
+      : ` · tabloda ${m.prefix} önekli karşılıkları var (${suggested}/${m.missing.length}) — "Önerilen eşlemeyi uygula"`
     : m.source === 'query'
       ? ' · sorgunun SELECT takma adlarını (büyük harf) kolon kutularına yaz'
       : ' · Alan eşlemesi → göster ve kolon adlarını yaz';
   if (critical.length > 0) {
     return {
       tone: 'b-err',
-      text: `eşlenen ${m.missing.length} kolon ${where} yok — ${m.source === 'query' ? 'zaman/trace/servis/hata kodu' : 'trace/servis/hata kodu'} okunmaz`,
+      text: m.missing.some(x => !x.column)
+        ? `${m.missing.length} alan eşlenmemiş ya da ${where} yok — trace/operasyon/hata kodu okunmaz`
+        : `eşlenen ${m.missing.length} kolon ${where} yok — ${m.source === 'query' ? 'zaman/trace/servis/hata kodu' : 'trace/servis/hata kodu'} okunmaz`,
       detail: list + hint,
     };
   }
