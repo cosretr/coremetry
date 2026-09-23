@@ -590,3 +590,20 @@ girmez — jenerik ad kullanılır.
   `COREMETRY_*`, yokken davranış + rol + secret bayrağı),
   `docs/local-dev.md`. Kod: `.github/workflows/ci.yml`,
   `.github/workflows/release.yml`, `.github/CODEOWNERS`.
+
+## 2026-09-23 — Dış seri Problem'leri kaynak yaşarken süpürülmez (v0.10.900; v0.10.592 kararının tersi)
+
+**Karar:** `anomaly:ext:<kaynak>/…` (seri) ve `anomaly-cluster:ext:<kaynak>/…` (küme)
+satırları, kaynak etkin olduğu sürece evaluator'ın bayat süpürmesinden MUAF (ext-down /
+ext-cap ile aynı `PollerOwnedSubject`). Yaşam döngüsü tarayıcıda: sayaç her poll'da aktif
+anahtarlara sıfır yazar (v0.10.893), tarayıcı resolve eder; kaynak gerçekten susarsa ext-down
+(v0.10.588) söyler; kaynak silinince muafiyet düşer.
+
+**Neden 592 tersine döndü:** 592'de "seri bilerek süpürülür — 'source silent' dürüst sinyal"
+denmişti. Oracle kaynağı aralığı 3600 s'ye kadar izinli; touch yalnız poll anında atılır;
+süpürme eşiği 3×1 dk. >3 dk aralıkta her poll seri Problem'i "source silent" diye kapanıp
+yeniden açılıyordu — canlı kipte alarm seli, gerekçe de yalan (kaynak susmamıştı). Dense
+sıfır yazımı geldiğinde süpürmenin işi kalmadı.
+
+**Kapsam:** yalnız dış hat. RED anomalileri (`anomaly:<svc>:<metric>`) süpürülmeye devam
+eder; onların histerezis touch'u v0.10.889.

@@ -375,3 +375,21 @@ kapanmaz).
 | O6 | Sel tavanı 20 uygun mu? | §6.5 |
 
 **Onaydan önce implementasyona geçilmeyecek.**
+
+## 9. Uygulama notları — Aşama 3 (v0.10.893–900, 2026-09-23)
+
+Spec Onay'lı (operatör "Ok"). Dilimler: **A 893** sayaç → `ext:error_count` (dense sıfır,
+≤200 seri/kaynak, "_other") · **B 894** dış hatta `ByRule` + `Subject` kancası (özne açılışta
+sabit; `anomaly:ext:` öneki tip sistemi: synthesizer atlaması, kategori) · **C 896** özne
+çözücü (trace → öğrenilmiş harita `oracle_opsvc:<id>` → bilinmiyor) + gölge tarayıcı ·
+**D 897** kaynak kipi off|shadow|live, genericCodes/ignoreCodes, learned GET/reset ·
+**E 898** kanıt (OracleErrorsByKey → trace listesi/dağılımlar/özne kaynağı → hipotez; FE
+panel) · **F 899** jenerik qualifier (external_code → exception tipi → "generic") ·
+**900** inceleme turu düzeltmeleri (§6.5'e ek: yalnız tamamlanmış dakikalar, 240 dk
+kelepçe, capped tik; oy trace başına; reset görünür; süpürme muafiyeti — DECISIONS
+2026-09-23; off kapanışı; özne notu; küme melez özne).
+
+§6.2 O5 cevabı uygulandı: melez Kind (service/external) + açılışta sabitleme; ruleID
+sentetik. §6.5 sel: tavan 20 (587) + seri tavanı 200/kaynak + qualifier tavanı 50/anahtar.
+Açık: kod bazında eşik (sorgu düzeyinde), Inbox'ta pod/özne rozeti, canlı kipte P1 oranı
+(computePriority Threshold=medyan) — gölge gözlemi sonrası karar.
