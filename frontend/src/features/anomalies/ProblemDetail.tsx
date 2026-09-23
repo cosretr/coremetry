@@ -793,6 +793,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   // ilk iki link pinli ve dokunulmadı.
   const logsPatternsLink = logsHref({ window: probWindow, service: problem.service, panel: 'patterns' });
   const isExternal = subjectKind(problem.service, problem.kind) === 'external';
+  // v0.10.898 — dış SERİ Problem'i özne melezken (kind=service, gerçek servis) de
+  // dış kanıt panelini alır (ruleID öneki tip sistemi; sentezleyici bu anchor'ı atlar).
+  const isExtSeries = isExternal || (problem.ruleId ?? '').startsWith('anomaly:ext:');
 
   return (
     <PageShell>
@@ -837,7 +840,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
             {/* v0.10.230 (Influx D5) — dış kaynak öznesinde topoloji/servis
                 tabanlı analiz yok; kanıt zinciri (metrik şeridi, trace'ler,
                 pod'lar, log imzaları) D4'ün yazdığı hipotezden çizilir. */}
-            {isExternal
+            {isExtSeries
               ? <ExternalEvidencePanel problem={problem} window={probWindow} />
               : <RootCausePanel problemId={problem.id} service={problem.service} window={probWindow}
                   onLoaded={rc => setRcRollouts(rc?.hypothesis?.deep?.rollouts ?? [])} />}

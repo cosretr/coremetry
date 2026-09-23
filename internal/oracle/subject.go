@@ -105,6 +105,7 @@ type SubjectResolver struct {
 	loadedAt map[string]time.Time // v0.10.897 — API'den sıfırlama görünsün diye 5 dk'da bir yeniden okunur
 	dirty    map[string]bool
 	tick     map[string]*tickFacts
+	lastRes  map[string]anomaly.ExternalSubjectResolution // v0.10.898 — kanıt notu için (kaynak\x00op)
 	aliveSet map[string]bool
 	aliveAt  time.Time
 	aliveErr bool
@@ -112,7 +113,16 @@ type SubjectResolver struct {
 
 func NewSubjectResolver(state StateStore, lookup TraceLookup, alive AliveCheck) *SubjectResolver {
 	return &SubjectResolver{state: state, lookup: lookup, alive: alive, now: time.Now,
-		maps: map[string]*LearnedMap{}, loadedAt: map[string]time.Time{}, dirty: map[string]bool{}, tick: map[string]*tickFacts{}}
+		maps: map[string]*LearnedMap{}, loadedAt: map[string]time.Time{}, dirty: map[string]bool{}, tick: map[string]*tickFacts{},
+		lastRes: map[string]anomaly.ExternalSubjectResolution{}}
+}
+
+// LastResolution — v0.10.898: (kaynak, op) için son çözüm (kanıt cümlesi).
+func (r *SubjectResolver) LastResolution(sourceID, op string) (anomaly.ExternalSubjectResolution, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	res, ok := r.lastRes[sourceID+"\x00"+op]
+	return res, ok
 }
 
 const learnedReloadEvery = 5 * time.Minute
@@ -374,10 +384,16 @@ func (r *SubjectResolver) Resolve(ctx context.Context, sourceID string, values [
 	return anomaly.ExternalSubjectResolution{Note: "operasyon seviyesi — servis bilinmiyor"}
 }
 
-// ResolveFor — kaynağa bağlı çözücü (ExternalTarget.Subject).
+// ResolveFor — kaynağa bağlı çözücü (ExternalTarget.Subject); son çözümü saklar.
 func (r *SubjectResolver) ResolveFor(sourceID string) func(ctx context.Context, values []string) anomaly.ExternalSubjectResolution {
 	return func(ctx context.Context, values []string) anomaly.ExternalSubjectResolution {
-		return r.Resolve(ctx, sourceID, values)
+		res := r.Resolve(ctx, sourceID, values)
+		if len(values) > 0 {
+			r.mu.Lock()
+			r.lastRes[sourceID+"\x00"+values[0]] = res
+			r.mu.Unlock()
+		}
+		return res
 	}
 }
 

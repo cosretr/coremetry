@@ -133,6 +133,22 @@ export function ExternalEvidencePanel({ problem, window: win }: {
             <span key={k} className="pb-pill"><span className="mono">{k}={values[i]}</span></span>
           ))}
         </div>
+        {/* v0.10.898 (Oracle Aşama 3 dilim E) — özne kaynağı dürüstçe: trace'ten / ≈ öğrenilmiş / bilinmiyor. */}
+        {ext.subjectNote && (
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+            özne: {ext.subjectSource === 'learned' ? '≈ ' : ''}{ext.subjectNote}
+          </div>
+        )}
+        {ext.distributions && Object.keys(ext.distributions).length > 0 && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {Object.entries(ext.distributions).map(([field, list]) => (
+              <div key={field} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'baseline', fontSize: 12 }}>
+                <span style={{ color: 'var(--text3)', minWidth: 96 }}>{field}</span>
+                {list.map(vc => <span key={vc.value} className="pb-pill"><span className="mono">{vc.value}</span> · {vc.count}</span>)}
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ marginTop: 8 }}>
           {mq.isPending ? <Spinner /> : chart ? (
             <TimeChart
@@ -169,7 +185,7 @@ export function ExternalEvidencePanel({ problem, window: win }: {
                 {dtT.sortedRows.map(r => (
                   <tr key={r.traceId}>
                     <td className="mono">{r.startNs > 0 ? fmtDateTime(new Date(r.startNs / 1e6)) : '—'}</td>
-                    <td className="mono"><Link to={traceHref(r.traceId)} className="sec" title={r.traceId}>{r.traceId.slice(0, 12)}…</Link></td>
+                    <td className="mono"><Link to={traceHref(r.traceId, { tab: 'logs' })} className="sec" title={`${r.traceId} — Logs sekmesi (Oracle satırları)`}>{r.traceId.slice(0, 12)}…</Link></td>
                     <td title={`${r.rootService ?? ''} ${r.rootOp ?? ''}`} style={ellipsis}>{r.rootService ? <>{r.rootService} <span style={{ color: 'var(--text3)' }}>· {r.rootOp}</span></> : '—'}</td>
                     <td title={`${r.errorService ?? ''} ${r.errorOp ?? ''}`} style={ellipsis}>{r.errorService ? <>{r.errorService} <span style={{ color: 'var(--text3)' }}>· {r.errorOp}</span></> : '—'}</td>
                     <td className="num mono">{r.durationNs > 0 ? fmtDur(r.durationNs / 1e6) : '—'}</td>

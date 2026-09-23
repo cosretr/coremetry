@@ -1104,6 +1104,7 @@ func main() {
 		// Kip/kod listeleri kaynak ayarı dilim D. Kaynak başına 15 s bütçe.
 		oracleSubjects := oracle.NewSubjectResolver(store, store.TraceFactsByIDs, store.ListActiveServiceNames)
 		oracleShadow := anomaly.NewExternalScanner(store, nil)
+		oracleEnricher := oracle.NewEnricher(store, oracleSubjects) // v0.10.898 — kanıt (satırlar, trace'ler, dağılımlar)
 		oracleWorker.SetRowsHook(func(ctx context.Context, src oracle.SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time) {
 			hctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			defer cancel()
@@ -1122,7 +1123,8 @@ func main() {
 			}
 			rep, err := scanner.Scan(hctx, anomaly.ExternalTarget{
 				SourceID: src.ID, SourceName: src.Name, Query: oracle.CounterQuery, GroupBy: oracle.CounterGroupBy,
-				Subject: oracleSubjects.ResolveFor(src.ID),
+				Subject:    oracleSubjects.ResolveFor(src.ID),
+				OnEvidence: oracleEnricher.OnEvidence,
 			})
 			if err != nil {
 				log.Printf("[oracle/%s] %s: tarama düştü: %v", mode, src.Name, err)

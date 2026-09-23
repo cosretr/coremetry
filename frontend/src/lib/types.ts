@@ -1085,6 +1085,10 @@ export interface ExternalMetricEvidence {
   notes?: string[];
   spanSummary?: TraceSpanSummary[];
   updatedNs: number;
+  /** v0.10.898 — Oracle kanıtı: alan başına top-N dağılım + özne kaynağı. */
+  distributions?: Record<string, { value: string; count: number }[]>;
+  subjectSource?: 'trace' | 'learned' | 'unknown' | string;
+  subjectNote?: string;
 }
 
 // TraceSpanSummary — Go chstore.TraceSpanSummary aynası.

@@ -107,6 +107,18 @@ type ExternalMetricEvidence struct {
 	// SpanSummary — trace başına CH özeti (en yeni önce, ≤50).
 	SpanSummary []TraceSpanSummary `json:"spanSummary,omitempty"`
 	UpdatedNs   int64              `json:"updatedNs"`
+	// v0.10.898 (Oracle Aşama 3 dilim E) — alan başına top-N değer dağılımı
+	// (external_code, error_type, instance, host, channel, task) ve öznenin
+	// kaynağı: "trace" | "learned" | "unknown" + cümlesi ("trace'ten (7/9)").
+	Distributions map[string][]ValueCount `json:"distributions,omitempty"`
+	SubjectSource string                  `json:"subjectSource,omitempty"`
+	SubjectNote   string                  `json:"subjectNote,omitempty"`
+}
+
+// ValueCount — dağılım satırı.
+type ValueCount struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
 }
 
 // PodHit — INSTANCE_TAG (k8s.pod.name) sayımı; Problem.Pod tek string olduğu

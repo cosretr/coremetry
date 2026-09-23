@@ -140,3 +140,18 @@ func TestOracleErrorLogDDLRegistered(t *testing.T) {
 		t.Error("oracleErrorLogDDL `tables` diliminde anılmalı (CREATE TABLE tables dilimine — /clickhouse-schema §8)")
 	}
 }
+
+// v0.10.898 — (kaynak, op, kod, kanal) okuması: FINAL, PK öneki + üç eşitlik,
+// en yeni önce, tavan + bütçe; kolon listesi ByTrace ile birebir (Scan sırası).
+func TestOracleErrorsByKeySQLContract(t *testing.T) {
+	q := oracleErrorsByKeySQL(500)
+	for _, must := range []string{"FROM oracle_error_log FINAL", "source_id = ? AND time >= ? AND time < ?", "operation_code = ? AND error_code = ? AND channel_code = ?", "ORDER BY time DESC", "LIMIT 500", "max_execution_time"} {
+		if !strings.Contains(q, must) {
+			t.Errorf("%q yok:\n%s", must, q)
+		}
+	}
+	sel := func(s string) string { return strings.SplitN(s, "FROM", 2)[0] }
+	if sel(q) != sel(oracleErrorsByTraceSQL(500)) {
+		t.Error("kolon listesi ByTrace ile aynı olmalı (Scan sırası)")
+	}
+}

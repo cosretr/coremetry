@@ -185,6 +185,45 @@ func (s *Store) OracleErrorsByTrace(ctx context.Context, traceID string, from, t
 	return out, rows.Err()
 }
 
+// oracleErrorsByKeySQL — v0.10.898 (Aşama 3 dilim E): (kaynak, op, kod, kanal)
+// satırları — PK öneki (source_id, time) taraması + üç LowCardinality eşitlik.
+func oracleErrorsByKeySQL(limit int) string {
+	return fmt.Sprintf(`SELECT source_id, time, row_id, severity_num, severity_text, body, trace_id, span_id,
+			host_name, instance_id, operation_code, error_code, external_code, error_type, channel_code, task_code,
+			request_id, customer_id, teller_id, location, attr_keys, attr_values
+		FROM oracle_error_log FINAL
+		WHERE source_id = ? AND time >= ? AND time < ?
+		  AND operation_code = ? AND error_code = ? AND channel_code = ?
+		ORDER BY time DESC
+		LIMIT %d
+		SETTINGS max_execution_time = %d`, clampOracleErrorsLimit(limit), oracleErrorsMaxExecSec)
+}
+
+// OracleErrorsByKey — kanıt için (op, kod, kanal) satırları, en yeni önce.
+func (s *Store) OracleErrorsByKey(ctx context.Context, sourceID, op, code, channel string, from, to time.Time, limit int) ([]OracleErrorRow, error) {
+	if sourceID == "" || !to.After(from) {
+		return []OracleErrorRow{}, nil
+	}
+	rows, err := s.conn.Query(ctx, oracleErrorsByKeySQL(limit), sourceID, from, to, op, code, channel)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []OracleErrorRow{}
+	for rows.Next() {
+		var r OracleErrorRow
+		if err := rows.Scan(
+			&r.SourceID, &r.Time, &r.RowID, &r.SeverityNum, &r.SeverityText, &r.Body, &r.TraceID, &r.SpanID,
+			&r.HostName, &r.InstanceID, &r.OperationCode, &r.ErrorCode, &r.ExternalCode, &r.ErrorType, &r.ChannelCode, &r.TaskCode,
+			&r.RequestID, &r.CustomerID, &r.TellerID, &r.Location, &r.AttrKeys, &r.AttrValues,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // oracleErrorLogColumnCount — DDL'deki kolon sayısı (version + INDEX hariç)
 // ile INSERT listesinin eşleştiğini testin kanıtlaması için.
 func oracleErrorLogColumnCount() int {
