@@ -753,10 +753,24 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 	ruleID := "anomaly:" + service + ":" + metric
 	// v0.9.691 — tik başına TEK snapshot'tan arama (bkz. scan()).
 	open := openSnap.ByKey(ruleID, service)
+	hasOpen := open != nil && open.ID != ""
 	if oc.Action == "skip" || oc.Action == "none" {
+		// v0.10.889 — HİSTEREZİS BANDINDA TOUCH. "none" = açık problem var, z
+		// resolveZ(1.5) ile openZ(3.5) arasında: karar "sürüyor". Eskiden satıra
+		// dokunulmuyordu → updated_at donuyor → evaluator'ın bayat süpürmesi
+		// (3×1 dk) problemi "kaynak sustu" diye KAPATIYORDU; z yeniden
+		// yükselince yeni satır + yeni bildirim. Histerezis fiilen yoktu.
+		// Dış tarayıcının aynı sınıf için yaptığı touch (external.go "none |
+		// skip" dalı; feedback-slow-detectors-vs-problem-lifecycle) buraya
+		// da: snapshot satırı OLDUĞU GİBİ yeniden yazılır (tam satır — Status/
+		// Assignee/Pod/AISummary satırın kendisinde), yalnız updated_at tazelenir.
+		if oc.Action == "none" && hasOpen {
+			if err := d.store.UpsertProblem(ctx, *open); err != nil {
+				log.Printf("[anomaly] touch %s: %v", ruleID, err)
+			}
+		}
 		return
 	}
-	hasOpen := open != nil && open.ID != ""
 	current, median, mad, z, dwell := oc.Current, oc.Median, oc.MAD, oc.Z, oc.Dwell
 	action := oc.Action
 	if action == "open" {
