@@ -48,6 +48,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -578,17 +579,20 @@ func (s *Service) QueryMetricNoted(ctx context.Context, f chstore.MetricQueryFil
 	return out, "", nil
 }
 
-// MetricLabelValues answers the filter-value suggestion list.
-// Capped at the same 200 the CH sibling uses so the picker behaves
-// identically on both backends.
-//
-// v0.9.1159 — the `match[]` scope is a candidate ALTERNATION
-// (discoveryNameCandidates). Label discovery had the same spelling bug as the
-// query path, plus one that bites harder: a histogram metric has no base
-// series in VM, so the suggestion list came back empty for exactly the metric
-// the operator was trying to filter, and an empty picker asserts "no such
-// values" rather than "wrong name".
-func (s *Service) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration) ([]string, error) {
+// labelValuesMatch — SAF (v0.10.868): q doluysa etiket regex'i eklenir
+// (büyük/küçük harf duyarsız alt dize; PromQL raw string, kaçış yok — backtick
+// düşürülür). q boşken seçici bayt-bayt eski şekil (aday alternation'ı).
+func labelValuesMatch(nameSel, label, q string) string {
+	q = strings.ReplaceAll(strings.TrimSpace(q), "`", "")
+	if q == "" {
+		return "{" + nameSel + "}"
+	}
+	return "{" + nameSel + ", " + label + "=~`(?i).*" + regexp.QuoteMeta(q) + ".*`}"
+}
+
+// MetricLabelValues — /api/v1/label/<k>/values, aday alternation'ıyla
+// kapsamlı (v0.9.1159). v0.10.868: q → etiket regex'i, limit → sunucu `limit`.
+func (s *Service) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration, q string, limit int) ([]string, error) {
 	if metric == "" || key == "" {
 		return nil, nil
 	}
@@ -600,34 +604,27 @@ func (s *Service) MetricLabelValues(ctx context.Context, metric, key string, sin
 	if label == "" {
 		return nil, nil
 	}
+	if limit < 1 || limit > 1000 {
+		limit = 200
+	}
 	now := time.Now()
 	params := url.Values{
 		"start":   {promTime(now.Add(-since))},
 		"end":     {promTime(now)},
-		"match[]": {"{" + nameMatcher(discoveryNameCandidates(metric)) + "}"},
+		"match[]": {labelValuesMatch(nameMatcher(discoveryNameCandidates(metric)), label, q)},
+		"limit":   {strconv.Itoa(limit)}, // Prometheus 2.x / VM: sunucu tarafı tavan
 	}
 	vals, err := promapi.QueryStrings(ctx, s.request("/api/v1/label/"+url.PathEscape(label)+"/values", params, cfg))
 	if err != nil {
 		return nil, err
 	}
 	sort.Strings(vals)
-	if len(vals) > 200 {
-		vals = vals[:200]
+	if len(vals) > limit {
+		vals = vals[:limit]
 	}
 	return vals, nil
 }
 
-// MetricAttrKeys answers "what can I write inside {}?".
-//
-// __name__ is dropped: it is not an attribute key, and the CH sibling
-// (which reads the attr_keys array) never returns it. Leaving it in would
-// offer the operator a filter key that duplicates the metric selector.
-//
-// v0.9.1159 — same candidate alternation as MetricLabelValues, and the reason
-// discoveryNameCandidates stands the histogram family up on `_count` rather
-// than `_bucket` lands HERE: `le` is a label on the bucket series, so a
-// `_bucket` scope would hand the operator the histogram's own internal
-// dimension as if it were one of their attributes.
 func (s *Service) MetricAttrKeys(ctx context.Context, metric, service string, since time.Duration) ([]string, error) {
 	if metric == "" {
 		return nil, nil

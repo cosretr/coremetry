@@ -198,7 +198,7 @@ func TestReadyRefusesUnconfigured(t *testing.T) {
 	if _, err := s.QueryMetric(ctx, chstore.MetricQueryFilter{Name: "m"}); err == nil {
 		t.Fatal("QueryMetric must error when unconfigured")
 	}
-	if _, err := s.MetricLabelValues(ctx, "m", "pod", time.Hour); err == nil {
+	if _, err := s.MetricLabelValues(ctx, "m", "pod", time.Hour, "", 0); err == nil {
 		t.Fatal("MetricLabelValues must error when unconfigured")
 	}
 	if _, err := s.MetricAttrKeys(ctx, "m", "", time.Hour); err == nil {
@@ -228,7 +228,7 @@ func TestMetricLabelValuesScopesTheCandidateAlternation(t *testing.T) {
 	s := New()
 	s.Configure(Settings{BaseURL: srv.URL})
 	if _, err := s.MetricLabelValues(context.Background(),
-		"http.server.request.duration", "pod", time.Hour); err != nil {
+		"http.server.request.duration", "pod", time.Hour, "", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if gotPath != "/api/v1/label/pod/values" {
@@ -303,5 +303,19 @@ func TestPromTime(t *testing.T) {
 	got := promTime(time.Unix(1700000000, 500*int64(time.Millisecond)))
 	if got != "1700000000.500" {
 		t.Fatalf("promTime = %q", got)
+	}
+}
+
+// v0.10.868 — q doluysa seçiciye etiket regex'i (raw string, QuoteMeta) eklenir;
+// boşken seçici bayt-bayt aynı (aday alternation'ı testi bunu zaten pinler).
+func TestLabelValuesMatchAddsSubstringMatcher(t *testing.T) {
+	sel := `__name__=~"a|b"`
+	if got := labelValuesMatch(sel, "pod", ""); got != "{"+sel+"}" {
+		t.Fatalf("q boşken seçici değişmemeli: %s", got)
+	}
+	got := labelValuesMatch(sel, "pod", " api.1` ")
+	want := "{" + sel + ", pod=~`(?i).*api\\.1.*`}"
+	if got != want {
+		t.Fatalf("q'lu seçici:\n%s\n%s", got, want)
 	}
 }

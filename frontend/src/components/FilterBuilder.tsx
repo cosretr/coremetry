@@ -183,10 +183,11 @@ function DraftEditor({ draft, onSave, onCancel, suggestedValues, keyOptions, top
     setLiveLoading(true);
     const handle = setTimeout(() => {
       // v0.9.1200 — metrik modunda değerler metriğin ETİKET uzayından
-      // (metricLabels; VM'de /api/v1/label/<k>/values). Uçta substring
-      // paramı yok (tavan 200) — daraltma istemcide.
+      // (metricLabels; VM'de /api/v1/label/<k>/values). v0.10.868 — yazılan
+      // metin sunucuya q olarak gider (uzun kuyruk ulaşılır); istemci süzgeci
+      // ikinci katman.
       const fetchValues: Promise<string[]> = metricName
-        ? api.metricLabels(metricName, k).then(vals => {
+        ? api.metricLabels(metricName, k, '24h', typedValue).then(vals => {
             const t = typedValue.toLowerCase();
             const all = vals ?? [];
             return t ? all.filter(v => v.toLowerCase().includes(t)) : all;

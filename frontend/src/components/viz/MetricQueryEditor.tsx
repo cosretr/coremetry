@@ -289,10 +289,11 @@ function FilterEditor({ metric, filters, onChange }: {
     if (!adding || !metric || !k) { setVals([]); return; }
     let cancelled = false;
     const t = window.setTimeout(() => {
-      api.metricLabels(metric, k, '24h').then(r => { if (!cancelled) setVals(r ?? []); }).catch(() => { if (!cancelled) setVals([]); });
+      // v0.10.868 — yazılan değer sunucuya q olarak gider; deps'e v eklendi (150 ms debounce).
+      api.metricLabels(metric, k, '24h', v).then(r => { if (!cancelled) setVals(r ?? []); }).catch(() => { if (!cancelled) setVals([]); });
     }, 150);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [adding, metric, k]);
+  }, [adding, metric, k, v]);
 
   const add = () => {
     if (!v.trim()) return;

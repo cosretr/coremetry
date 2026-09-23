@@ -2858,8 +2858,9 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table }),
     }),
-  metricLabels: (metric: string, key: string, since: GoDuration = '24h') =>
-    get<string[] | null>(withMetricSource(`/api/metrics/labels?metric=${encodeURIComponent(metric)}&key=${encodeURIComponent(key)}&since=${since}`)),
+  // v0.10.868 — q sunucuda süzülür (alt dize), limit 1..1000: uzun kuyruk yazdıkça gelir.
+  metricLabels: (metric: string, key: string, since: GoDuration = '24h', q = '', limit = 200) =>
+    get<string[] | null>(withMetricSource(`/api/metrics/labels?metric=${encodeURIComponent(metric)}&key=${encodeURIComponent(key)}&since=${since}&q=${encodeURIComponent(q)}&limit=${limit}`)),
   // v0.9.771 — metricLabels'in anahtar yarısı: bir metrikte GÖRÜLMÜŞ datapoint
   // attribute anahtarları. PromQL editöründe `{` yazınca ne yazılabileceğini
   // sunucudan öğrenmek için (sabit LABEL_KEYS listesi tahmin, bu ölçüm).

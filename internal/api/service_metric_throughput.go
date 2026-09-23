@@ -569,7 +569,7 @@ func (s *Server) getServiceMetricThroughput(w http.ResponseWriter, r *http.Reque
 		if probeLabel == "" {
 			probeLabel = chstore.JobLabelDefault
 		}
-		vals, err := src.MetricLabelValues(ctx, resolved, probeLabel, to.Sub(from))
+		vals, err := src.MetricLabelValues(ctx, resolved, probeLabel, to.Sub(from), "", 0) // v0.10.868 — q yok, varsayılan tavan
 		if err == nil {
 			if len(vals) > metricThroughputSampleJobs {
 				vals = vals[:metricThroughputSampleJobs]

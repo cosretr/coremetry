@@ -71,6 +71,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -162,7 +163,8 @@ type metricSource interface {
 
 	ListMetricNames(ctx context.Context, service, pattern string, limit, offset int) ([]chstore.MetricInfo, int, error)
 	QueryMetric(ctx context.Context, f chstore.MetricQueryFilter) ([]chstore.SpanMetricSeries, error)
-	MetricLabelValues(ctx context.Context, metric, key string, since time.Duration) ([]string, error)
+	// v0.10.868 — q: sunucu tarafı alt dize (büyük/küçük harf duyarsız), limit 1..1000.
+	MetricLabelValues(ctx context.Context, metric, key string, since time.Duration, q string, limit int) ([]string, error)
 	MetricAttrKeys(ctx context.Context, metric, service string, since time.Duration) ([]string, error)
 
 	// QueryMetricHistogram — the time × bucket heatmap behind
@@ -339,8 +341,8 @@ func (c chMetricSource) QueryMetric(ctx context.Context, f chstore.MetricQueryFi
 	return c.store.QueryMetric(ctx, f)
 }
 
-func (c chMetricSource) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration) ([]string, error) {
-	return c.store.MetricLabelValues(ctx, metric, key, since)
+func (c chMetricSource) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration, q string, limit int) ([]string, error) {
+	return c.store.MetricLabelValues(ctx, metric, key, since, q, limit)
 }
 
 func (c chMetricSource) MetricAttrKeys(ctx context.Context, metric, service string, since time.Duration) ([]string, error) {
@@ -531,8 +533,8 @@ func (v vmMetricSource) QueryMetric(ctx context.Context, f chstore.MetricQueryFi
 	return out, upstream(err)
 }
 
-func (v vmMetricSource) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration) ([]string, error) {
-	out, err := v.svc.MetricLabelValues(ctx, metric, key, since)
+func (v vmMetricSource) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration, q string, limit int) ([]string, error) {
+	out, err := v.svc.MetricLabelValues(ctx, metric, key, since, q, limit)
 	return out, upstream(err)
 }
 
@@ -763,4 +765,19 @@ func (s *Server) metricSourceFor(r *http.Request) (metricSource, error) {
 	default:
 		return s.metricSource(), nil
 	}
+}
+
+// labelValuesParams — v0.10.868 (scale-audit): /api/metrics/labels ?q= alt dize
+// (sunucu tarafında süzülür; eskiden tam liste gelip istemcide daraltılıyordu,
+// 200 tavanı yüzünden uzun kuyruk ulaşılamıyordu) ve ?limit= 1..1000 (varsayılan
+// 200). api.go büyümesin diye burada.
+func labelValuesParams(q url.Values) (string, int) {
+	limit := parseInt(q.Get("limit"), 200)
+	if limit < 1 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	return strings.TrimSpace(q.Get("q")), limit
 }

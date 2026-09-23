@@ -390,37 +390,45 @@ func (s *Store) MetricAttrKeys(ctx context.Context, metric, service string, sinc
 	return out, rows.Err()
 }
 
-// MetricLabelValues returns distinct values for a single attribute key
-// observed in the given metric — fuels the value-suggestions in the UI.
-func (s *Store) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration) ([]string, error) {
+// metricLabelValuesSQL — SAF (v0.10.868): q doluysa alt dize sunucuda
+// (positionCaseInsensitive; expr ikinci kez bağlandığı için args tekrarlanır),
+// LIMIT bağlı. DISTINCT'i LIMIT sınırlamaz — tavan max_execution_time
+// (metric_query_bounds_test bu şekli pinler).
+func metricLabelValuesSQL(expr string, withQ bool) string {
+	q := `SELECT DISTINCT ` + expr + ` AS v
+		 FROM metric_points
+		 WHERE metric = ? AND time >= ? AND time <= ?`
+	if withQ {
+		q += ` AND positionCaseInsensitive(` + expr + `, ?) > 0`
+	}
+	return q + `
+		 ORDER BY v
+		 LIMIT ?
+		 SETTINGS max_execution_time = 5`
+}
+
+// MetricLabelValues — bir metriğin bir etiketinde GÖRÜLMÜŞ değerler (öneri
+// listesi). v0.10.868: q (alt dize, sunucuda) + limit (1..1000, 0 → 200).
+func (s *Store) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration, q string, limit int) ([]string, error) {
 	if metric == "" || key == "" {
 		return nil, nil
 	}
+	if limit < 1 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	q = strings.TrimSpace(q)
 	expr, args := groupKeyExprMetric(key)
-	// v0.9.275 — this query had NONE of the three bounds its sibling
-	// MetricAttrKeys carries ten lines above (time <= ?, LIMIT,
-	// max_execution_time). The LIMIT it did have bounds nothing that matters:
-	// ClickHouse computes the DISTINCT over the whole window BEFORE applying
-	// LIMIT 200, so the work scales with the window, not with the answer.
-	//
-	// The real bound is max_execution_time. On a 1000-service install a shared
-	// metric (jvm.memory.used) means a multi-GB Array(String) read, and the
-	// SWR refresh runs on a 20s background context — so the ceiling was 20
-	// seconds of ClickHouse, not infinity, but nothing was stopping it sooner.
-	//
-	// time <= ? is honest parity rather than protection: metric_points is
-	// PARTITION BY toDate(time) and there are no future partitions, so it
-	// prunes nothing. Included so the two siblings read the same.
 	now := time.Now()
 	cutoff := now.Add(-since)
-	queryArgs := append(args, metric, cutoff, now)
-	rows, err := s.conn.Query(ctx,
-		`SELECT DISTINCT `+expr+` AS v
-		 FROM metric_points
-		 WHERE metric = ? AND time >= ? AND time <= ?
-		 ORDER BY v
-		 LIMIT 200
-		 SETTINGS max_execution_time = 5`, queryArgs...)
+	queryArgs := append(append([]any{}, args...), metric, cutoff, now)
+	if q != "" {
+		queryArgs = append(append(queryArgs, args...), q)
+	}
+	queryArgs = append(queryArgs, limit)
+	rows, err := s.conn.Query(ctx, metricLabelValuesSQL(expr, q != ""), queryArgs...)
 	if err != nil {
 		return nil, err
 	}

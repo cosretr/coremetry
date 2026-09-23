@@ -349,7 +349,7 @@ func TestVMSourceTagsEveryError(t *testing.T) {
 
 	_, _, errNames := v.ListMetricNames(ctx, "", "", 10, 0)
 	_, errQuery := v.QueryMetric(ctx, chstore.MetricQueryFilter{Name: "m"})
-	_, errLabels := v.MetricLabelValues(ctx, "m", "pod", time.Hour)
+	_, errLabels := v.MetricLabelValues(ctx, "m", "pod", time.Hour, "", 0)
 	_, errKeys := v.MetricAttrKeys(ctx, "m", "", time.Hour)
 
 	for name, err := range map[string]error{
@@ -475,7 +475,7 @@ func TestCHSourceDelegationIsArgumentIdentical(t *testing.T) {
 		// dokunmadı, ve dokunulmadığının kanıtı da burada dursun.
 		"return c.store.QueryMetric(ctx, f)",
 		"return c.store.QueryMetricHistogram(ctx, f)",
-		"return c.store.MetricLabelValues(ctx, metric, key, since)",
+		"return c.store.MetricLabelValues(ctx, metric, key, since, q, limit)", // v0.10.868 — q + limit
 		"return c.store.MetricAttrKeys(ctx, metric, service, since)",
 		"return c.store.ListMetricNames(ctx, service, pattern, limit, offset)",
 	} {

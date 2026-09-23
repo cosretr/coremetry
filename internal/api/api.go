@@ -5102,8 +5102,8 @@ func (s *Server) getMetricLabelValues(w http.ResponseWriter, r *http.Request) {
 		since = 7 * 24 * time.Hour
 	}
 	metric, lkey := q.Get("metric"), q.Get("key")
-	// v0.9.1150 — src anahtarda (bkz. getMetricNames'in gerekçesi).
-	// v0.9.1151 — ?metricsrc= deneme modu.
+	// v0.9.1150 — src anahtarda (bkz. getMetricNames'in gerekçesi); v0.9.1151 — ?metricsrc= deneme modu.
+	lq, llimit := labelValuesParams(q) // v0.10.868 — sunucu tarafı alt dize + tavan (anahtarda)
 	src, err := s.metricSourceFor(r)
 	if err != nil {
 		writeErr(w, err)
@@ -5112,10 +5112,10 @@ func (s *Server) getMetricLabelValues(w http.ResponseWriter, r *http.Request) {
 	// v0.9.1159 — etiket keşfi de aday alternation'ıyla kapsamlanıyor, yani
 	// VM'de dönen liste değişti; damga yalnız VM tarafına (CH'nin DISTINCT
 	// taraması bu anahtarın var olma sebebi, boşuna ısıtılmaz).
-	key := fmt.Sprintf("metric-labels%s:src=%s:m=%s:k=%s:since=%s",
-		s.metricNameRuleTag(src), src.Name(), metric, lkey, since)
+	key := fmt.Sprintf("metric-labels%s:src=%s:m=%s:k=%s:since=%s:q=%s:limit=%d",
+		s.metricNameRuleTag(src), src.Name(), metric, lkey, since, lq, llimit)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		return src.MetricLabelValues(ctx, metric, lkey, since)
+		return src.MetricLabelValues(ctx, metric, lkey, since, lq, llimit)
 	})
 }
 
