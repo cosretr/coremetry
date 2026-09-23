@@ -4,6 +4,7 @@ import { useEscLayer } from '@/lib/escLayer';
 import { Combobox } from './Combobox';
 import { ActionRow, Button, Chip } from '@/components/ui';
 import { api } from '@/lib/api';
+import { metricLabelQ } from '@/lib/metricLabelQuery'; // v0.10.875
 import type { FilterExpr, FilterOp } from '@/lib/types';
 import { useAttributeKeys } from '@/lib/useAttributeKeys';
 import { useUrlRange } from '@/lib/useUrlRange';
@@ -187,7 +188,7 @@ function DraftEditor({ draft, onSave, onCancel, suggestedValues, keyOptions, top
       // metin sunucuya q olarak gider (uzun kuyruk ulaşılır); istemci süzgeci
       // ikinci katman.
       const fetchValues: Promise<string[]> = metricName
-        ? api.metricLabels(metricName, k, '24h', typedValue).then(vals => {
+        ? api.metricLabels(metricName, k, '24h', metricLabelQ(typedValue)).then(vals => { // v0.10.875 — ≥3 karakter rungu
             const t = typedValue.toLowerCase();
             const all = vals ?? [];
             return t ? all.filter(v => v.toLowerCase().includes(t)) : all;

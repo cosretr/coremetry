@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { metricLabelQ } from '@/lib/metricLabelQuery'; // v0.10.875
 import { encodeFilters } from '@/lib/urlState';
 import {
   promqlTokenAt, replaceToken, promqlLabelContext, applyLabelKey, applyLabelValue,
@@ -290,7 +291,7 @@ function FilterEditor({ metric, filters, onChange }: {
     let cancelled = false;
     const t = window.setTimeout(() => {
       // v0.10.868 — yazılan değer sunucuya q olarak gider; deps'e v eklendi (150 ms debounce).
-      api.metricLabels(metric, k, '24h', v).then(r => { if (!cancelled) setVals(r ?? []); }).catch(() => { if (!cancelled) setVals([]); });
+      api.metricLabels(metric, k, '24h', metricLabelQ(v)).then(r => { if (!cancelled) setVals(r ?? []); }).catch(() => { if (!cancelled) setVals([]); }); // v0.10.875 — ≥3 karakter rungu
     }, 150);
     return () => { cancelled = true; clearTimeout(t); };
   }, [adding, metric, k, v]);
@@ -323,7 +324,7 @@ function FilterEditor({ metric, filters, onChange }: {
               yüksekliği aynı. onBlurCommit BİLEREK yok: çipin açık bir
               "Add" düğmesi var ve eski davranış da odaktan çıkışta
               filtre EKLEMİYORDU. */}
-          <Combobox value={v} onChange={setV} options={vals.slice(0, 100)}
+          <Combobox value={v} onChange={setV} options={vals.slice(0, 100)} serverFiltered={metricLabelQ(v) !== ''} // v0.10.875 — q gittiyse istemci yeniden süzmez (atom sözleşmesi)
             placeholder="value" autoFocus
             onEnter={add} onEscape={() => setAdding(false)} />
           <button type="button" className="mqe-chip-add" onClick={add}>Add</button>
@@ -614,7 +615,7 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
     if (labelPhase && labelMetric && (labelPhase === 'key' || labelKey)) {
       const p = labelPhase === 'key'
         ? cachedSugList(`k\0${labelMetric}`, () => api.metricAttrKeys(labelMetric, '', '24h'))
-        : cachedSugList(`v\0${labelMetric}\0${labelKey}`, () => api.metricLabels(labelMetric, labelKey, '24h'));
+        : cachedSugList(`v\0${labelMetric}\0${labelKey}\0${metricLabelQ(labelPartial)}`, () => api.metricLabels(labelMetric, labelKey, '24h', metricLabelQ(labelPartial))); // v0.10.875 — 868 bu siteyi kaçırmıştı
       p.then(all => { if (alive) { setSug(filterSugList(all, labelPartial)); setSugIdx(0); } })
         .catch(() => { if (alive) setSug([]); });
       return () => { alive = false; };

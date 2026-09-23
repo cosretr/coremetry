@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Chip } from '@/components/ui';
 import { api } from '@/lib/api';
+import { metricLabelQ } from '@/lib/metricLabelQuery'; // v0.10.875
 import { useEscLayer } from '@/lib/escLayer';
 import { attrKeyWindowParams } from '@/lib/attrKeyWindow';
 import { useAttributeKeys } from '@/lib/useAttributeKeys';
@@ -114,7 +115,7 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
     setLiveLoading(true);
     const handle = setTimeout(() => {
       const fetch: Promise<ValueRow[]> = metricMode
-        ? api.metricLabels(metricName!.trim(), draftKey).then(vals => {
+        ? api.metricLabels(metricName!.trim(), draftKey, '24h', metricLabelQ(typed)).then(vals => { // v0.10.875 — 868 bu siteyi kaçırmıştı; ≥3 karakter rungu
             const t = typed.toLowerCase();
             return (vals ?? []).filter(v => !t || v.toLowerCase().includes(t)).map(v => ({ value: v, count: 0 }));
           })
