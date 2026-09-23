@@ -245,10 +245,11 @@ var tablesWithoutTraceID = map[string]bool{
 	"metric_points": true,
 	"profiles":      true,
 	// MVs — none of these project trace_id in their SELECT.
-	"trace_summary_1d":     true, // only (day, trace_count_state)
-	"service_summary_5m":   true,
-	"db_summary_5m":        true,
-	"db_caller_summary_5m": true,
+	"trace_summary_1d":       true, // only (day, trace_count_state)
+	"service_summary_5m":     true,
+	"service_env_summary_5m": true, // v0.10.881
+	"db_summary_5m":          true,
+	"db_caller_summary_5m":   true,
 	// v0.8.375 — statement-identity MV projects stmt_hash, never trace_id.
 	"db_statement_summary_5m": true,
 	// v0.8.396 — metric-name catalog: (service, metric) rows, no trace_id.
@@ -361,10 +362,11 @@ var defaultShardPolicy = map[string]string{
 	// Shard by day so read patterns (per-day uniqMerge) land
 	// locally. Bucketing by day is also low-cardinality so this
 	// is effectively a per-day write distribution.
-	"trace_summary_1d":     "cityHash64(day)",
-	"service_summary_5m":   "cityHash64(service_name)",
-	"topology_edges_5m":    "cityHash64(parent_service)",
-	"topology_op_edges_5m": "cityHash64(parent_service)",
+	"trace_summary_1d":       "cityHash64(day)",
+	"service_summary_5m":     "cityHash64(service_name)",
+	"service_env_summary_5m": "cityHash64(service_name)", // v0.10.881 — kardeşiyle aynı shard
+	"topology_edges_5m":      "cityHash64(parent_service)",
+	"topology_op_edges_5m":   "cityHash64(parent_service)",
 	// v0.5.422 — db_summary_5m doesn't project service_name (it
 	// aggregates per db_system / instance / db_name only —
 	// caller-aware variant lives in db_caller_summary_5m). Shard
@@ -910,8 +912,9 @@ var highVolumeTables = map[string]bool{
 	// Materialized views feeding off the high-volume base tables —
 	// each shard aggregates its own slice, the Distributed wrapper
 	// fans queries out across shards and merges.
-	"service_summary_5m": true,
-	"trace_summary_1d":   true,
+	"service_summary_5m":     true,
+	"service_env_summary_5m": true, // v0.10.881 — kardeşi gibi `_local` + Distributed
+	"trace_summary_1d":       true,
 	// v0.5.426 — bug-fix: defaultShardPolicy was extended to these
 	// in v0.5.419 but highVolumeTables wasn't, so adaptDDL never
 	// renamed them to `_local` and the Distributed wrapper was

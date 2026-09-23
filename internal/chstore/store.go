@@ -315,6 +315,8 @@ type Store struct {
 	// hasTraceEntrySvcCol — trace_summary_5m.entry_service_state okunabilir
 	// mi (v0.10.97). false iken /traces okumaları eski zinciri kullanır.
 	hasTraceEntrySvcCol bool
+	// envSummary — v0.10.881: service_env_summary_5m kapsama probu (60 s).
+	envSummary envSummaryProbe
 
 	// neighborProvider is the optional 1-hop topology lookup used
 	// by AttachProblemToIncident for rule 3 (cluster a new
@@ -1941,6 +1943,35 @@ func canonicalMVs() []string {
 		   maxState(time)  AS last_seen_state
 		 FROM spans
 		 GROUP BY service_name`,
+
+		// v0.10.881 (Dynatrace paritesi #8, spec onaylı 2026-09-23) — service_summary_5m'in
+		// cluster + deploy_env boyutlu ikizi. /api/services cluster/env filtresiyle ve
+		// /api/services/{name}/clusters bugün ham spans tarıyor (servicesUseMV: "MV'de
+		// boyut yok"); bu MV o iki okumaya MV-first yol açar (dilim 2/3). State kolonları
+		// kardeşle BİREBİR (aynı *Merge okuyucuları; service_env_summary_test pinler).
+		// cluster: messaging MV'leriyle aynı sınıf türetme (clusterDeriveExpr — MATERIALIZED
+		// kolona bağımlı değil, harici CH'de de doğar). deploy_env ingest'in koşulsuz
+		// yazdığı kolon. DİLİMİN SONUNDA: konumsal indeks pinleri eski sırayı korur.
+		// Geriye dolmaz: okuyucular EnvSummaryCovers ile pencereyi ölçer, kapsamıyorsa ham yol.
+		fmt.Sprintf(`CREATE MATERIALIZED VIEW IF NOT EXISTS service_env_summary_5m
+		 ENGINE = AggregatingMergeTree
+		 PARTITION BY toDate(time_bucket)
+		 ORDER BY (service_name, cluster, deploy_env, time_bucket)
+		 TTL toDate(time_bucket) + INTERVAL 90 DAY
+		 SETTINGS index_granularity = 8192
+		 AS SELECT
+		   service_name,
+		   ifNull(%s, '') AS cluster,
+		   deploy_env,
+		   toStartOfInterval(time, INTERVAL 5 MINUTE)  AS time_bucket,
+		   countState()                                AS span_count_state,
+		   countIfState(status_code = 'error')         AS error_count_state,
+		   sumState(duration)                          AS duration_sum_state,
+		   quantilesTDigestState(0.5, 0.95, 0.99)(duration)   AS duration_q_state,
+		   countIfState(duration <= %d)                AS apdex_satisfied_state,
+		   countIfState(duration > %d AND duration <= %d) AS apdex_tolerating_state
+		 FROM spans
+		 GROUP BY service_name, cluster, deploy_env, time_bucket`, clusterDeriveExpr, apdexT, apdexT, apdex4T),
 	}
 	return mvs
 }
