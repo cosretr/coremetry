@@ -7,6 +7,7 @@ import { IconButton, SectionHead, Row } from '@/components/ui';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, Empty } from '@/components/Spinner';
 import { RuntimeCharts, familyOf } from './RuntimeCharts';
+import { HeapBaselineCard } from './HeapBaselineCard'; // v0.10.887 — paritesi #4 dilim 1
 import { PodResourceCharts } from './PodResourceCharts';
 import { ServicePodsTable } from './ServicePodsTable';
 import { useServicePods } from './useServicePods';
@@ -223,6 +224,11 @@ export function ServicePodsTab({ service, range, onZoom, onZoomReset }: {
         </>}
         meta={runtimeQ.data?.language ? <span className="mono">{runtimeQ.data.language}</span> : undefined} />
       <RuntimeCharts service={service} from={th.from} to={th.to} onZoom={onZoom} onZoomReset={onZoomReset} hideHeader />
+      {/* v0.10.887 (paritesi #4 dilim 1, Onay 2026-09-23) — yalnız JVM: heap-after-GC pod
+          başına adaptif bant; problem açmaz; JVM pod / metrik yoksa kart yok. */}
+      {runtimeFamily === 'jvm' && (
+        <HeapBaselineCard service={service} from={th.from} to={th.to} onZoom={onZoom} onZoomReset={onZoomReset} />
+      )}
       {!runtimeQ.isPending && !runtimeFamily && (
         <div className="kc-line" title="Dil-runtime ailesi tanınmıyor (Node.js, Python ya da dil raporlanmıyor) — yerine pod başına Thanos kaynak grafikleri.">
           ◌ runtime ailesi yok{runtimeQ.data?.language ? ` (${runtimeQ.data.language})` : ''} — aşağıda Thanos kaynak grafikleri

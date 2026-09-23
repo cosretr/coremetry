@@ -418,6 +418,22 @@ export interface ServiceClusterStat {
   series?: number[];
 }
 
+/** v0.10.887 (paritesi #4 dilim 1) — anomaly.HeapBand: pod başına heap-after-GC
+ *  (% limit) adaptif bant; status no_baseline → bant yok (lower/upper 0, çizilmez). */
+export type HeapBandStatus = 'no_baseline' | 'ok' | 'deviating' | 'critical';
+export interface HeapBand {
+  status: HeapBandStatus; current: number; median: number; mad: number;
+  lower: number; upper: number; z: number; n: number; dwell: number; need?: number;
+}
+/** lastTs = verisi olan son tam kovanın başı (unix s) — bayatlık rozeti buradan. */
+export interface HeapBaselinePod { pod: string; band: HeapBand; series: { t: number; v: number }[]; lastTs: number }
+/** api.HeapBaselineResponse — pods boş = kart yok (metrik akmıyor / JVM pod yok);
+ *  capped = kaynak satır tavanı (bazı pod'lar eksik olabilir). */
+export interface HeapBaselineResponse {
+  source: string; metric: string; historyHours: number; bucketSec: number; needBuckets: number;
+  from: number; to: number; pods: HeapBaselinePod[]; truncated: number; capped: boolean; worst?: string; reason?: string;
+}
+
 // DBDetail / MessagingDetail — full payloads for the drawer
 // behind a /databases or /messaging row click.
 /** v0.10.19 — bkz. DBDetail.physicalAddrs. */

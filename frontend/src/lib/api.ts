@@ -499,6 +499,11 @@ export const api = {
   serviceClusters: (svc: string, fromNs: number, toNs: number) =>
     get<{ clusters: import('./types').ServiceClusterStat[]; source?: 'mv' | 'spans' } | null>( // v0.10.883 — source
       `/api/services/${encodeURIComponent(svc)}/clusters?from=${fromNs}&to=${toNs}`),
+
+  /** v0.10.887 — heap-after-GC pod başına bant (paritesi #4 dilim 1). Her zaman 200; pods boş = kart yok. */
+  serviceHeapBaseline: (svc: string, fromNs: number, toNs: number) =>
+    get<import('./types').HeapBaselineResponse>(
+      `/api/services/${encodeURIComponent(svc)}/heap-baseline?from=${fromNs}&to=${toNs}`),
   // Servis throughput'u METRİKTEN (v0.9.665). `metric` boş bırakılırsa
   // ayardaki ad kullanılıyor; operatör doğru adı ararken her denemede
   // ayar kaydetmek zorunda kalmasın diye sorgudan da geçilebiliyor.
