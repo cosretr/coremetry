@@ -159,7 +159,12 @@ type MapStats struct {
 	// Expanded — v0.10.902: trace listesinden patlatılan satır sayısı (Mapped
 	// kaynak satırı sayar; çıktı dilimi Mapped − listeli + Expanded uzunlukta).
 	Expanded int
+	// ExpandCapped — v0.10.905: maxExpandedPerBatch doldu, kalan listeler patlatılmadı.
+	ExpandCapped bool
 }
+
+// maxExpandedPerBatch — v0.10.905: bir partide patlatılan satır tavanı.
+const maxExpandedPerBatch = 50_000
 
 // Mapper — bir kaynağın çözülmüş eşlemesi. NewMapper ayarı bir kez çözer;
 // Map/MapAll saf.
@@ -320,6 +325,15 @@ func (m *Mapper) MapAll(rows []map[string]any) ([]chstore.OracleErrorRow, MapSta
 				r = stampWeight(r)
 			}
 			out = append(out, r)
+			continue
+		}
+		// v0.10.905 — parti başına patlatma tavanı: 5000 grup × ≤500 id bir
+		// poll'da milyonlarca satır olabilirdi. Tavan dolunca kalan gruplar
+		// trace'siz tek satır (ağırlık korunur, sayaç doğru; trace bağlantısı
+		// o poll için kaybolur — ExpandCapped söyler).
+		if st.Expanded >= maxExpandedPerBatch {
+			st.ExpandCapped = true
+			out = append(out, stampWeight(r))
 			continue
 		}
 		ex, badN := expandTraceList(r, list, m.cols[FieldTraceIDs] != "" && traceListTruncated(row, m.cols[FieldTraceIDs]))

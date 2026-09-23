@@ -1715,6 +1715,9 @@ export interface OraclePollStatus {
   lastBadTraceId: number;
   /** v0.10.902 — trace listesinden patlatılan satır (özel SQL kipi); lastMapped = yazılan satır. */
   lastExpanded?: number;
+  /** v0.10.905 — özel SQL: değişmediği için yeniden yazılmayan satır; patlatma tavanı doldu. */
+  lastSkipped?: number;
+  expandCapped?: boolean;
   capped?: boolean;
   lastError?: string;
 }

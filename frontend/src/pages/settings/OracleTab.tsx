@@ -228,6 +228,8 @@ export function OracleTab() {
                         Son okuma <b>{fmtDateTime(ps.lastPollAt)}</b>
                         {' · '}{ps.lastRows} satır okundu, {ps.lastMapped} yazıldı
                         {(ps.lastExpanded ?? 0) > 0 && <> ({ps.lastExpanded} trace listesinden)</>}
+                        {(ps.lastSkipped ?? 0) > 0 && <>, {ps.lastSkipped} değişmediği için yeniden yazılmadı</>}
+                        {ps.expandCapped && <> · <span className="badge b-warn" title="Bir poll'da en çok 50.000 satır trace listesinden açılır; kalan gruplar trace'siz yazıldı (sayı doğru, trace bağlantısı kısmi).">trace listesi tavanı</span></>}
                         {ps.lastNoTimestamp > 0 && <> · <span className="is-err">{ps.lastNoTimestamp} zamansız satır düştü</span></>}
                         {ps.lastBadTraceId > 0 && <> · {ps.lastBadTraceId} geçersiz trace id</>}
                         {' · '}watermark <b>{fmtDateTime(ps.watermarkNs / 1e6)}</b>

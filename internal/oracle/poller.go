@@ -93,7 +93,12 @@ type PollStatus struct {
 	LastBadTraceID  int    `json:"lastBadTraceId"`
 	// LastExpanded — v0.10.902: trace listesinden patlatılan satır (özel SQL
 	// kipi); LastMapped artık YAZILAN satır sayısıdır (kaynak satırı değil).
-	LastExpanded int    `json:"lastExpanded,omitempty"`
+	LastExpanded int `json:"lastExpanded,omitempty"`
+	// LastSkipped — v0.10.905: özel SQL kipinde değişmediği için yeniden
+	// YAZILMAYAN satır (LastMapped = yazılabilir toplam).
+	LastSkipped int `json:"lastSkipped,omitempty"`
+	// ExpandCapped — v0.10.905: patlatma tavanı doldu (trace bağlantısı kısmi).
+	ExpandCapped bool   `json:"expandCapped,omitempty"`
 	Capped       bool   `json:"capped,omitempty"`
 	LastError    string `json:"lastError,omitempty"`
 }
@@ -151,6 +156,10 @@ type Worker struct {
 	status    map[string]PollStatus
 	watermark map[string]time.Time
 	tsTypes   map[string]tsTypeEntry
+	// written — v0.10.905: özel SQL kipinde kaynak başına yazılmış satırlar
+	// (row_id → ağırlık + satır zamanı). Her poll aynı pencereyi yeniden okur;
+	// değişmemiş satır CH'ye yeniden yazılmaz (bkz. freshRows).
+	written map[string]map[uint64]writtenRow
 
 	mPolls, mRows, mDropped, mErrors metric.Int64Counter
 }
@@ -167,6 +176,7 @@ func NewWorker(svc *Service, sink RowSink, state StateStore) *Worker {
 	w.queryRows = w.defaultQueryRows
 	w.probeTsType = svc.probeTsType
 	w.tsTypes = map[string]tsTypeEntry{}
+	w.written = map[string]map[uint64]writtenRow{}
 	m := selfobs.Meter()
 	var err error
 	if w.mPolls, err = m.Int64Counter("oracle_polls_total", metric.WithDescription("Oracle hata tablosu poll sorguları")); err != nil {
@@ -278,6 +288,7 @@ func (w *Worker) Tick(ctx context.Context) {
 			delete(w.status, id)
 			delete(w.nextDue, id)
 			delete(w.watermark, id)
+			delete(w.written, id)
 		}
 	}
 	w.mu.Unlock()
@@ -418,14 +429,28 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 	mapped, ms := mapper.MapAll(rows)
 	batch.rows = mapped
 	st.LastMapped, st.LastNoTimestamp, st.LastBadTraceID, st.LastExpanded = len(mapped), ms.NoTimestamp, ms.BadTraceID, ms.Expanded
+	st.ExpandCapped = ms.ExpandCapped
+	if ms.ExpandCapped {
+		log.Printf("[oracle] %s: trace listesi patlatma tavanı (%d satır) doldu — kalan gruplar trace'siz yazıldı", src.Name, maxExpandedPerBatch)
+	}
 	if ms.NoTimestamp > 0 {
 		w.count(w.mDropped, ctx, int64(ms.NoTimestamp), attrs)
 	}
-	if len(mapped) > 0 {
-		if err := w.sink.InsertOracleErrors(ctx, mapped); err != nil {
+	// v0.10.905 — özel SQL kipinde yalnız YENİ ya da ağırlığı DEĞİŞMİŞ satır
+	// yazılır (kanca/sayaç yine tüm satırları görür — idempotent sayım).
+	toWrite := mapped
+	if IsCustom(src) {
+		toWrite = w.freshRows(src.ID, mapped, from)
+		st.LastSkipped = len(mapped) - len(toWrite)
+	}
+	if len(toWrite) > 0 {
+		if err := w.sink.InsertOracleErrors(ctx, toWrite); err != nil {
 			return fail("CH yazımı: " + err.Error())
 		}
-		w.count(w.mRows, ctx, int64(len(mapped)), attrs)
+		if IsCustom(src) {
+			w.markWritten(src.ID, toWrite)
+		}
+		w.count(w.mRows, ctx, int64(len(toWrite)), attrs)
 	}
 	st.Capped = len(rows) >= pollRowCap // KAYNAK satırı (patlatma öncesi)
 	if st.Capped && IsCustom(src) {
@@ -520,4 +545,58 @@ func (w *Worker) tsTypeFor(ctx context.Context, src SourceConfig, now time.Time)
 	w.tsTypes[key] = tsTypeEntry{typ: typ, ok: err == nil, at: now}
 	w.mu.Unlock()
 	return typ
+}
+
+// writtenRow — freshRows belleği: son yazılan ağırlık + satır zamanı (budama).
+type writtenRow struct {
+	weight uint32
+	at     time.Time
+}
+
+// writtenMaxPerSource — kaynak başına bellek tavanı (patlatma tavanı ×3 ≈
+// üç poll'luk tam pencere); aşılırsa bellek sıfırlanır (bir kez fazla yazım,
+// sızıntı yok).
+const writtenMaxPerSource = 3 * maxExpandedPerBatch
+
+// freshRows — özel SQL kipi: bu kaynakta aynı row_id AYNI ağırlıkla daha önce
+// yazıldıysa satır atlanır; yeni ya da ağırlığı değişmiş (geç commit Adet'i
+// değiştirdi — RMT son sürümü tutar) satır geçer. from'dan eski girdiler
+// budanır (pencere dışına çıkan satır bir daha gelmez). Lider değişiminde
+// bellek boştur → bir kez tam yazım (RMT tekilleştirir).
+func (w *Worker) freshRows(sourceID string, rows []chstore.OracleErrorRow, from time.Time) []chstore.OracleErrorRow {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	seen := w.written[sourceID]
+	if seen == nil {
+		seen = map[uint64]writtenRow{}
+		w.written[sourceID] = seen
+	}
+	cutoff := from.Add(-time.Minute)
+	for id, e := range seen {
+		if e.at.Before(cutoff) {
+			delete(seen, id)
+		}
+	}
+	out := make([]chstore.OracleErrorRow, 0, len(rows))
+	for _, r := range rows {
+		if e, ok := seen[r.RowID]; ok && e.weight == uint32(r.EffectiveWeight()) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// markWritten — başarılı yazımdan SONRA (hata olursa bir sonraki poll yeniden dener).
+func (w *Worker) markWritten(sourceID string, rows []chstore.OracleErrorRow) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	seen := w.written[sourceID]
+	if seen == nil || len(seen)+len(rows) > writtenMaxPerSource {
+		seen = map[uint64]writtenRow{}
+		w.written[sourceID] = seen
+	}
+	for _, r := range rows {
+		seen[r.RowID] = writtenRow{weight: uint32(r.EffectiveWeight()), at: r.Time}
+	}
 }
