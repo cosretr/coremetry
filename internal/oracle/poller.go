@@ -36,6 +36,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -129,6 +130,14 @@ type Worker struct {
 	queryRows func(ctx context.Context, src SourceConfig, sqlText string, args []any) ([]map[string]any, error)
 
 	healthHook func(ctx context.Context, src SourceConfig, lastError string)
+	// rowsHook — v0.10.893 (Aşama 3 dilim A): başarılı her poll'dan sonra
+	// (satır yoksa da — aktif anahtarlara sıfır yazılsın) eşlenmiş satırlar
+	// + poll penceresi. Hata poll'u/watermark'ı etkilemez; sayaç ve (dilim C)
+	// dış tarayıcı buradan beslenir. main.go bağlar.
+	rowsHook RowsHook
+	// inFlight — Run (5 s) ve lider OnAcquire eşzamanlı Tick çağırabilir;
+	// iki tik aynı kaynağı iki kez poll'layıp kancayı iki kez koşturmasın.
+	inFlight atomic.Bool
 	// probeTsType — v0.10.885: zaman kolonunun sözlük tipi (tsbind.go);
 	// enjekte edilebilir. Sonuç kaynak başına önbellekte; hata 10 dk sonra
 	// yeniden denenir, o arada "" (kutuya göre varsayılan ifade).
@@ -173,6 +182,12 @@ func NewWorker(svc *Service, sink RowSink, state StateStore) *Worker {
 }
 
 // SetHealthHook — poll-sonrası sağlık çağrısı, başarı da hata da. Start'tan ÖNCE.
+// RowsHook — poll sonrası satır kancası (bkz. Worker.rowsHook).
+type RowsHook func(ctx context.Context, src SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time)
+
+// SetRowsHook — v0.10.893.
+func (w *Worker) SetRowsHook(h RowsHook) { w.rowsHook = h }
+
 func (w *Worker) SetHealthHook(h func(ctx context.Context, src SourceConfig, lastError string)) {
 	w.healthHook = h
 }
@@ -207,6 +222,10 @@ func (w *Worker) Tick(ctx context.Context) {
 	if w.svc == nil {
 		return
 	}
+	if !w.inFlight.CompareAndSwap(false, true) {
+		return // v0.10.893 — eşzamanlı tik (Run + OnAcquire) atlanır
+	}
+	defer w.inFlight.Store(false)
 	cfg := w.svc.CurrentSettings()
 	now := w.now()
 	polled := false
@@ -220,7 +239,7 @@ func (w *Worker) Tick(ctx context.Context) {
 		if seen && now.Before(due) {
 			continue
 		}
-		st := w.pollSource(ctx, src, now)
+		st, batch := w.pollSource(ctx, src, now)
 		polled = true
 		next := now.Add(pollInterval(src))
 		if st.Capped && st.LastError == "" {
@@ -229,6 +248,9 @@ func (w *Worker) Tick(ctx context.Context) {
 		st.NextDueAt = next.UnixMilli()
 		if w.healthHook != nil {
 			w.healthHook(ctx, src, st.LastError)
+		}
+		if w.rowsHook != nil && st.LastError == "" {
+			w.rowsHook(ctx, src, batch.rows, batch.from, batch.to) // v0.10.893 — yalnız başarılı poll
 		}
 		w.mu.Lock()
 		w.nextDue[src.ID] = next
@@ -341,14 +363,21 @@ func (w *Worker) defaultQueryRows(ctx context.Context, src SourceConfig, sqlText
 	return rows, err
 }
 
-func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time) PollStatus {
+// pollBatch — v0.10.893: rowsHook'a giden eşlenmiş satırlar + pencere.
+type pollBatch struct {
+	rows     []chstore.OracleErrorRow
+	from, to time.Time
+}
+
+func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time) (PollStatus, pollBatch) {
 	st := PollStatus{SourceID: src.ID, Name: src.Name, LastPollAt: now.UnixMilli()}
 	attrs := metric.WithAttributes(attribute.String("source", selfobs.SafeAttr(src.Name)))
-	fail := func(msg string) PollStatus {
+	var batch pollBatch
+	fail := func(msg string) (PollStatus, pollBatch) {
 		st.LastError = msg
 		w.count(w.mErrors, ctx, 1, attrs)
 		log.Printf("[oracle] %s: %s", src.Name, msg)
-		return st
+		return st, pollBatch{}
 	}
 	mapper, err := NewMapper(src)
 	if err != nil {
@@ -357,6 +386,7 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 	wm := w.watermarkFor(ctx, src.ID, now)
 	st.WatermarkNs = wm.UnixNano()
 	from, to := pollWindow(wm, now)
+	batch.from, batch.to = from, to
 	sqlText, args, err := buildPollQuery(src, from, to, pollRowCap, w.tsTypeFor(ctx, src, now))
 	if err != nil {
 		return fail("sorgu: " + err.Error())
@@ -368,6 +398,7 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 	}
 	st.LastRows = len(rows)
 	mapped, ms := mapper.MapAll(rows)
+	batch.rows = mapped
 	st.LastMapped, st.LastNoTimestamp, st.LastBadTraceID = ms.Mapped, ms.NoTimestamp, ms.BadTraceID
 	if ms.NoTimestamp > 0 {
 		w.count(w.mDropped, ctx, int64(ms.NoTimestamp), attrs)
@@ -388,7 +419,7 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 		log.Printf("[oracle] %s: %d satır, %d yazıldı, %d zamansız düştü, %d geçersiz trace id",
 			src.Name, len(rows), len(mapped), ms.NoTimestamp, ms.BadTraceID)
 	}
-	return st
+	return st, batch
 }
 
 func (w *Worker) count(c metric.Int64Counter, ctx context.Context, n int64, opts ...metric.AddOption) {

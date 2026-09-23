@@ -360,3 +360,41 @@ func TestBuildPollQueryRejectsBadConfig(t *testing.T) {
 		t.Errorf("extraWhere parantezli + limit 0 → tavan: %v\n%s", err, q)
 	}
 }
+
+// v0.10.893 — rowsHook: başarılı poll'dan sonra eşlenmiş satırlar + pencere ile
+// çağrılır (satır yoksa da), hatalı poll'da çağrılmaz; Tick eşzamanlılık
+// kilidi ikinci tiki atlar.
+func TestPollRowsHook(t *testing.T) {
+	state := &fakeState{}
+	w, _, calls, now := newTestWorker(t, testSource(), state, func(int, []any) ([]map[string]any, error) {
+		return []map[string]any{oracleRow(time.Date(2026, 9, 10, 11, 58, 0, 0, time.UTC), "a")}, nil
+	})
+	var got []int
+	var gotFrom, gotTo time.Time
+	w.SetRowsHook(func(_ context.Context, _ SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time) {
+		got = append(got, len(rows))
+		gotFrom, gotTo = from, to
+	})
+	w.Tick(context.Background())
+	if len(got) != 1 || got[0] != 1 || gotTo.IsZero() || !gotFrom.Before(gotTo) || len(*calls) != 1 {
+		t.Fatalf("kanca: %v from=%v to=%v", got, gotFrom, gotTo)
+	}
+	// Hatalı poll → kanca yok.
+	*now = now.Add(20 * time.Minute)
+	w.queryRows = func(context.Context, SourceConfig, string, []any) ([]map[string]any, error) {
+		return nil, errors.New("ORA-12541")
+	}
+	w.Tick(context.Background())
+	if len(got) != 1 {
+		t.Fatal("hatalı poll kancayı çağırmamalı")
+	}
+	// Eşzamanlı tik kilidi: inFlight iken Tick hiç poll'lamaz.
+	before := len(*calls)
+	w.inFlight.Store(true)
+	*now = now.Add(20 * time.Minute)
+	w.Tick(context.Background())
+	if len(*calls) != before || len(got) != 1 {
+		t.Fatal("inFlight tikte poll/kanca olmamalı")
+	}
+	w.inFlight.Store(false)
+}

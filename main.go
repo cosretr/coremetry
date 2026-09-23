@@ -1094,6 +1094,14 @@ func main() {
 		// (v0.9.730 dersi), 5 s granülde kaynak aralığı. Sağlık kancası dış
 		// tarayıcıya gider → 3 ardışık hata "kaynak düştü" Problem'i (588).
 		oracleWorker := oracle.NewWorker(oracleSvc, store, store)
+		// v0.10.893 — Aşama 3 dilim A: her başarılı poll'dan sonra satırlar
+		// (op, kod, kanal, qualifier) dakika kovalarına sayılıp metric_points'e
+		// `ext:error_count` olarak yazılır (dış tarayıcının okuduğu şekil);
+		// Scan kablosu dilim C. Hata poll'u/watermark'ı etkilemez.
+		oracleCounter := oracle.NewCounter(store)
+		oracleWorker.SetRowsHook(func(ctx context.Context, src oracle.SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time) {
+			oracleCounter.Handle(ctx, src, rows, from, to, nil)
+		})
 		oracleWorker.SetHealthHook(func(ctx context.Context, src oracle.SourceConfig, lastErr string) {
 			extScanner.ReportSourceHealth(ctx, src.ID, src.Name, lastErr, time.Now())
 		})
