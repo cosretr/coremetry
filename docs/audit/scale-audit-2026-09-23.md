@@ -204,3 +204,22 @@ reddediyor, namespace/workload yolunda pod listesi 500'e kelepçeli → sınırl
 pozitif). explain-charts anahtarı, trace-root-def GET, backfill 2 s poll → ⚪.
 
 **Kuyrukta:** — (audit'in bütün maddeleri kapandı; kalan yalnız operatör tarafı: Oracle 843/845 canlı test, Traces D5 ölçümü).
+
+## İnceleme turu (aynı gün) — `/review-changes` v0.10.841→871 diff'i üstünde
+
+İki Explore ajanı (Go 69 dosya, FE 28 dosya), bulgular ana oturumda doğrulandı:
+
+| Sürüm | Bulgu |
+|---|---|
+| 872 🔴 | 846'nın ikinci yarısı: replikalı `unmanaged` tablo gerçek kararıyla gelir; özet boyuyor, runbook SQL basıyordu → summarize/runbook katalog kapısı + replika tablosuna cv |
+| 873 | 854 çipleri global `refetchOnWindowFocus`'u miras aldı → odak dönüşünde N×2 refetch; kapatıldı |
+| 874 | `['problem-buckets']` anahtarı `keys.problems` ağacı dışında (invalidation ulaşmıyor); `useNameCompletion` anahtarı gerçek limiti taşır |
+| 875 | 868 iki çağrı sitesini kaçırmıştı (FilterQueryBox, PromQL `{}`); `q` ≥3 karakter rungu (`metricLabelQ`); Combobox `serverFiltered` |
+| 876 | 857 kırpmayı 200→1000'e taşımıştı; `hasMore` okunur, "liste EKSİK" |
+| 877 🔴 | 866 oran dallarını 1-dk'dan 5-dk kovaya taşıdı → spiky serviste p95/p99 daha düşük; `bucketSec` yanıta + "5-dk kova ortalamaları üstünde" etiketi |
+| 878 | Oracle gecikme ölçümü sözlük turunu kapsıyordu; `max_block_size` yarım kopya; VM tavanı; iki-geçiş örneklem notu |
+| 879 | 847 kartı host.name yedeğini "pod" diyor, notları düşürüyordu → pod/host sözcüğü, node eki, notlar |
+
+**Ders:** aynı gün çıkan düzeltmelerin dördü (846, 854, 857, 866, 868) "ikinci
+yarı" eksikti — sözleşme 2-5 yerde yaşar ([[feedback-fixes-have-second-halves]]);
+MV'ye taşırken kova genişliği semantiği değişir, yanıta yazılmalı.
