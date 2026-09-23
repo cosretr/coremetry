@@ -78,7 +78,7 @@ func distributions(rows []chstore.OracleErrorRow, topN int) map[string][]chstore
 		counts := map[string]int{}
 		for _, r := range rows {
 			if v := strings.TrimSpace(f.get(r)); v != "" {
-				counts[v]++
+				counts[v] += r.EffectiveWeight() // v0.10.904 — sayaçla aynı birim (hata, satır değil)
 			}
 		}
 		if len(counts) == 0 {
@@ -100,6 +100,16 @@ func distributions(rows []chstore.OracleErrorRow, topN int) map[string][]chstore
 		out[f.name] = list
 	}
 	return out
+}
+
+// weightedErrors — SAF (v0.10.904): satırların temsil ettiği hata sayısı.
+// Tablo kipinde satır sayısına eşittir; özel SQL kipinde (Adet) sayaçla aynı.
+func weightedErrors(rows []chstore.OracleErrorRow) int {
+	n := 0
+	for _, r := range rows {
+		n += r.EffectiveWeight()
+	}
+	return n
 }
 
 // traceIDsNewestFirst — SAF: tekrarsız, en yeni satır önce, ≤max.
@@ -175,6 +185,7 @@ func (e *Enricher) OnEvidence(ctx context.Context, ev anomaly.ExternalEvent) {
 		WindowFromNs: ev.From.UnixNano(), WindowToNs: ev.To.UnixNano(),
 		Rows: len(rows), SpanSummary: summaries, UpdatedNs: now.UnixNano(),
 		Distributions: distributions(rows, enrichTopN),
+		Errors:        weightedErrors(rows),
 	}
 	if e.subjects != nil {
 		if res, ok := e.subjects.LastResolution(ev.Target.SourceID, op); ok {

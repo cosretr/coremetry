@@ -25,6 +25,7 @@ package chstore
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -60,9 +61,33 @@ type OracleErrorRow struct {
 	AttrValues []string
 
 	// Weight — v0.10.902: ön-toplanmış Oracle satırının (özel SQL kipi, `count`
-	// alanı) sayaç ağırlığı. KOLON DEĞİL: oracle_error_log'a yazılmaz (INSERT
-	// listesi değişmez), yalnız poll-sonrası kancada (counter) okunur; 0 = 1.
+	// alanı) sayaç ağırlığı. KOLON DEĞİL: INSERT listesi değişmez; v0.10.904'ten
+	// beri satıra OracleWeightAttr attribute'u olarak da yazılır ki CH'den geri
+	// okuyan kanıt paneli sayacın saydığını saysın (EffectiveWeight). 0 = 1.
 	Weight uint32
+}
+
+// OracleWeightAttr — v0.10.904: ön-toplanmış satırın ağırlığının attribute
+// anahtarı. Şema değişikliği yok (attr_keys/attr_values); ön-toplanmış satır
+// kimliği attribute içermediğinden (oracle.rowIDTyped) row_id'yi bozmaz.
+const OracleWeightAttr = "coremetry.weight"
+
+// EffectiveWeight — SAF: satırın kaç hatayı temsil ettiği. Bellekteki Weight
+// önce; yoksa CH'den okunmuş satırın OracleWeightAttr'ı; ikisi de yoksa 1
+// (tablo kipi satırı = tek hata).
+func (r OracleErrorRow) EffectiveWeight() int {
+	if r.Weight > 0 {
+		return int(r.Weight)
+	}
+	for i, k := range r.AttrKeys {
+		if k != OracleWeightAttr || i >= len(r.AttrValues) {
+			continue
+		}
+		if n, err := strconv.Atoi(strings.TrimSpace(r.AttrValues[i])); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 1
 }
 
 const oracleErrorLogDDL = `CREATE TABLE IF NOT EXISTS oracle_error_log (

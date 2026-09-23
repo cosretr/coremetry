@@ -35,6 +35,8 @@ export function evidenceCounts(deep: DeepEvidence | undefined) {
     pods: deep?.affectedPods?.length ?? 0,
     signatures: deep?.logSignatures?.length ?? 0,
     rows: deep?.external?.rows ?? 0,
+    // v0.10.904 — ön-toplanmış satırlar: hata sayısı satır sayısından büyük olabilir.
+    errors: deep?.external?.errors ?? 0,
     invalid: deep?.external?.invalidIds ?? 0,
   };
 }

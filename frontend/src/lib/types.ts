@@ -1082,6 +1082,8 @@ export interface ExternalMetricEvidence {
   windowToNs: number;
   rows: number;
   invalidIds?: number;
+  /** v0.10.904 — satırların temsil ettiği hata sayısı (Oracle özel SQL: Adet). */
+  errors?: number;
   notes?: string[];
   spanSummary?: TraceSpanSummary[];
   updatedNs: number;

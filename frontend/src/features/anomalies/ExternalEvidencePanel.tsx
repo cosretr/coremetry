@@ -166,7 +166,7 @@ export function ExternalEvidencePanel({ problem, window: win }: {
 
       {/* 2. Dürüstlük şeridi */}
       <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-        SORGU 2: {c.rows} satır · {c.traces} trace id{c.invalid > 0 ? ` (${c.invalid} geçersiz düşürüldü)` : ''} · {c.withSpans} trace CH'de bulundu · {c.pods} pod · {c.signatures} log imzası
+        SORGU 2: {c.errors > c.rows ? `${c.errors} hata (${c.rows} satır)` : `${c.rows} satır`} · {c.traces} trace id{c.invalid > 0 ? ` (${c.invalid} geçersiz düşürüldü)` : ''} · {c.withSpans} trace CH'de bulundu · {c.pods} pod · {c.signatures} log imzası
         {(ext.notes ?? []).length > 0 && (
           <ul style={{ margin: '4px 0 0 16px', padding: 0, color: 'var(--text3)' }}>
             {ext.notes!.map((n, i) => <li key={i}>{n}</li>)}

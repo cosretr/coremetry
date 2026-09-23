@@ -213,9 +213,14 @@ func heapWorstByStatus(bands map[string]HeapBand) string {
 // heapWouldP1 — SAF: gölgede açılsaydı öncelik P1 olur muydu (computePriority
 // aynı sentetik satırla; StartedAt şimdi → yaş kolu yok, yalnız oran kolu).
 func heapWouldP1(service string, b HeapBand, now time.Time) bool {
+	// v0.10.904 — StartedAt GERÇEK saat: öncelik merdiveni açık-kalma süresini
+	// time.Now()'dan ölçer; tik anı (now) ile karışınca sabit saatli test gün
+	// içinde 4 saat sonra "4 sa açık → P1" koluna düşüyordu (saatli bomba).
+	// "Şimdi açılırdı" satırı şimdi açılır — üretimde fark yok.
+	_ = now
 	p := chstore.Problem{RuleID: "anomaly:" + service + ":" + HeapBandMetric, RuleName: "Anomaly · JVM heap after GC",
 		Severity: "critical", Service: service, Metric: HeapBandMetric, Value: b.Current, Threshold: b.Median, Comparator: ">",
-		Status: "open", StartedAt: now.UnixNano()}
+		Status: "open", StartedAt: time.Now().UnixNano()}
 	return chstore.EnrichProblemsWithPriority([]chstore.Problem{p})[0].Priority == "P1"
 }
 

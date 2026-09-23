@@ -316,15 +316,47 @@ func (m *Mapper) MapAll(rows []map[string]any) ([]chstore.OracleErrorRow, MapSta
 		}
 		st.Mapped++
 		if len(list) == 0 {
+			if m.aggregated {
+				r = stampWeight(r)
+			}
 			out = append(out, r)
 			continue
 		}
 		ex, badN := expandTraceList(r, list, m.cols[FieldTraceIDs] != "" && traceListTruncated(row, m.cols[FieldTraceIDs]))
 		st.BadTraceID += badN
 		st.Expanded += len(ex)
-		out = append(out, ex...)
+		for _, e := range ex {
+			out = append(out, stampWeight(e))
+		}
 	}
 	return out, st
+}
+
+// stampWeight — SAF (v0.10.904): ön-toplanmış satırın ağırlığını
+// chstore.OracleWeightAttr attribute'una yazar (sıralı anahtar düzeni
+// korunur; varsa üzerine yazar). Kimlik (rowIDTyped) attribute içermez →
+// row_id değişmez. CH'den geri okuyan kanıt paneli EffectiveWeight ile
+// sayacın saydığını sayar.
+func stampWeight(r chstore.OracleErrorRow) chstore.OracleErrorRow {
+	w := strconv.Itoa(r.EffectiveWeight())
+	keys := make([]string, 0, len(r.AttrKeys)+1)
+	vals := make([]string, 0, len(r.AttrKeys)+1)
+	placed := false
+	for i, k := range r.AttrKeys {
+		switch {
+		case k == chstore.OracleWeightAttr:
+			continue
+		case !placed && k > chstore.OracleWeightAttr:
+			keys, vals = append(keys, chstore.OracleWeightAttr), append(vals, w)
+			placed = true
+		}
+		keys, vals = append(keys, k), append(vals, r.AttrValues[i])
+	}
+	if !placed {
+		keys, vals = append(keys, chstore.OracleWeightAttr), append(vals, w)
+	}
+	r.AttrKeys, r.AttrValues = keys, vals
+	return r
 }
 
 // maxTraceListLen — bir satırdan patlatılan trace tavanı (4000 karakterlik

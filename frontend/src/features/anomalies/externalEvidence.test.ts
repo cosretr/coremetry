@@ -33,8 +33,11 @@ describe('traceRows', () => {
 
 describe('evidenceCounts', () => {
   it('sayımları ve geçersiz id dürüstlüğünü taşır', () => {
-    expect(evidenceCounts(deep)).toEqual({ traces: 2, withSpans: 2, pods: 1, signatures: 1, rows: 4, invalid: 1 });
+    expect(evidenceCounts(deep)).toEqual({ traces: 2, withSpans: 2, pods: 1, signatures: 1, rows: 4, errors: 0, invalid: 1 });
     expect(evidenceCounts(undefined).traces).toBe(0);
+    // v0.10.904 — ön-toplanmış Oracle satırları: hata sayısı (Adet) satırdan büyük.
+    const agg = { ...deep, external: { ...deep.external!, rows: 3, errors: 9 } };
+    expect(evidenceCounts(agg).errors).toBe(9);
   });
 });
 

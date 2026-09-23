@@ -101,9 +101,13 @@ type ExternalMetricEvidence struct {
 	WindowToNs   int64             `json:"windowToNs"`
 	// Rows / InvalidIDs — SORGU 2 satır sayısı ve geçersiz trace id sayısı
 	// ("12/50 id geçersiz" dürüstlüğü, audit R12).
-	Rows       int      `json:"rows"`
-	InvalidIDs int      `json:"invalidIds,omitempty"`
-	Notes      []string `json:"notes,omitempty"`
+	Rows       int `json:"rows"`
+	InvalidIDs int `json:"invalidIds,omitempty"`
+	// Errors — v0.10.904: satırların temsil ettiği HATA sayısı (Oracle özel
+	// SQL kipinde ön-toplanmış satır = Adet hata). Rows'tan büyükse FE "N hata
+	// (M satır)" yazar; eşitse görünmez.
+	Errors int      `json:"errors,omitempty"`
+	Notes  []string `json:"notes,omitempty"`
 	// SpanSummary — trace başına CH özeti (en yeni önce, ≤50).
 	SpanSummary []TraceSpanSummary `json:"spanSummary,omitempty"`
 	UpdatedNs   int64              `json:"updatedNs"`
