@@ -179,3 +179,31 @@ Spec onayı: operatör "go" (spec gösterildi ve soruldu). Üç dilim, hepsi MV-
 - **883 — /api/services/{name}/clusters:** MV yolunda p50/p95/p99 (arrayElement ile tdigest, Array(Float32) scan tuzağı yok) + cluster başına çağrı serisi (5 dk katı adım, ≤288 nokta, 0-dolgu); ham yolda eski davranış (p50/p95/seri yok). Cevap `source: mv|spans`, FE rozet + P50/P95 kolonları + Trend Sparkline. Önbellek anahtarı `v2 … mv=%t`.
 
 Dürüstlük: MV kapsam dışıyken UI "spans" rozetini gösterir, kolonlar "—". Kapsam dolunca kendiliğinden MV'ye geçer (probe 60 sn). #8 KAPALI.
+
+## 11. #4 uygulama notları — dilim 1 (v0.10.887, 2026-09-23)
+
+Spec süreci: 4 okuyucu kod haritası → 3 bağımsız tasarım (motor-öncelikli /
+VM-offset bant / en küçük dürüst dilim) → 2 jüri; "en küçük dürüst dilim"
+13/15 ile kazandı, operatör "Onay" (2026-09-23). Uygulama sonrası 4 mercekli
+inceleme + çürütücü turu; doğrulanan 12 bulgu 887'nin içinde kapandı.
+
+- **Kapsam:** JVM heap-after-GC (% limit) pod başına 5-dk kova serisi + 24 s
+  ardışık pencereden bant (medyan ± 3.5·MAD/0.6745; minMAD 2 puan, floorPct
+  .10, minAbsDelta 5, dwell 3, criticalZ 6, yön yalnız yukarı). Yalnız
+  görünürlük — Problem/bildirim yok. Pods › Runtime, yalnız JVM ailesi.
+- **Veri:** `GET /api/services/{name}/heap-baseline` (route defteri, api.go
+  0 satır), metricSource dikişi (VM/CH), `jvm.memory.used_after_last_gc` /
+  `jvm.memory.limit` {type=heap}, GroupBy pod→host→instance[:8] (`cluster`
+  hariç), kaynaktan 5-dk adım (CH LIMIT 50k tuzağı), `capped` bayrağı, en çok
+  50 pod, önbellek 5-dk ızgarada.
+- **Dürüstlük:** metrik/JVM pod yoksa kart yok; n<15 → "baseline yok (< 75 dk
+  veri)"; rozet "bant: ardışık 24s · n"; ölmüş pod "sessiz · N dk önce"; hata
+  tek satır; alt cümle kaynağı ve "problem açmaz"ı söyler.
+- **Dilim 2/3 (ayrı Onay):** Problem (`runtime.jvm_heap_pct` → RESOURCE,
+  servis başına 1 Problem + suçlu pod, Threshold = bant üstü, 1 hafta
+  would-open logu, varsayılan kapalı; Inbox'ta kind=problem hâlâ P3 çivili);
+  VM'de pod ön-seçimi; `cluster` anahtarı; mevsimsel (kaydırmalı okuma) +
+  GC pause. CPU kaynağı Thanos cAdvisor — bu hatla gelmiyor.
+- **Operatör teyidi bekleyen:** prod JBoss pod'ları OTel `jvm.memory.*`
+  basıyor mu (basmıyorsa kart hiç çıkmaz — Thanos JMX yolu ayrı iş); prod
+  metrik deposu VM mi.
