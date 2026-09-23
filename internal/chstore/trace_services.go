@@ -23,26 +23,52 @@ import (
 const traceServicesMaxIDs = 200
 
 // traceServicesSQL — SAF: iki zaman sınırı + IN listesi + LIMIT + bütçe.
-func traceServicesSQL(n int) string {
+// v0.10.895 — beşinci kolon ex_type: trace'te en geç başlayan exception'ın
+// tipi (Oracle jenerik kodun ikincil ayırt edicisi, audit §6.1 2. basamak);
+// exFragments ile — MATERIALIZED kolon yoksa JSON_VALUE ifadesine düşer.
+func traceServicesSQL(n int) string { return traceFactsSQL(n, exFragments(false)) }
+
+func traceFactsSQL(n int, frag exFrag) string {
 	holders := strings.TrimSuffix(strings.Repeat("?,", n), ",")
 	return fmt.Sprintf(`
 		SELECT trace_id,
 		       argMaxIf(service_name, time, status_code = 'error') AS err_svc,
 		       anyIf(service_name, parent_id = '')                  AS root_svc,
-		       any(service_name)                                    AS any_svc
+		       any(service_name)                                    AS any_svc,
+		       argMaxIf(%s, time, %s)                                AS ex_type
 		FROM spans
 		WHERE time >= ? AND time <= ?
 		  AND trace_id IN (%s)
 		GROUP BY trace_id
 		LIMIT %d
-		SETTINGS max_execution_time = 5`, holders, traceServicesMaxIDs)
+		SETTINGS max_execution_time = 5`, frag.Type, frag.Match, holders, traceServicesMaxIDs)
+}
+
+// TraceFact — v0.10.895: trace id → servis (pickTraceService) + exception tipi.
+type TraceFact struct {
+	Service string `json:"service"`
+	ExType  string `json:"exType,omitempty"`
 }
 
 // TraceServicesByIDs — ids ≤200 (fazlası kırpılır). Bulunmayan id haritada
 // yoktur; bulunan ama servissiz (olmamalı) "" ile döner. Değer: hata span'ının
 // servisi → kök → herhangi (pickTraceService).
 func (s *Store) TraceServicesByIDs(ctx context.Context, ids []string, from, to time.Time) (map[string]string, error) {
-	out := map[string]string{}
+	facts, err := s.TraceFactsByIDs(ctx, ids, from, to)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(facts))
+	for id, f := range facts {
+		out[id] = f.Service
+	}
+	return out, nil
+}
+
+// TraceFactsByIDs — v0.10.895: servis + exception tipi tek sorguda (Oracle
+// özne çözücüsü ve jenerik kod ayırt edicisi). ids ≤200 (fazlası kırpılır).
+func (s *Store) TraceFactsByIDs(ctx context.Context, ids []string, from, to time.Time) (map[string]TraceFact, error) {
+	out := map[string]TraceFact{}
 	if len(ids) == 0 {
 		return out, nil
 	}
@@ -54,17 +80,17 @@ func (s *Store) TraceServicesByIDs(ctx context.Context, ids []string, from, to t
 	for _, id := range ids {
 		args = append(args, id)
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, traceServicesSQL(len(ids)), args...)
+	rows, err := s.telemetryReadConn().Query(ctx, traceFactsSQL(len(ids), exFragments(s.hasExCols)), args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, errS, root, anyS string
-		if err := rows.Scan(&id, &errS, &root, &anyS); err != nil {
+		var id, errS, root, anyS, exType string
+		if err := rows.Scan(&id, &errS, &root, &anyS, &exType); err != nil {
 			return nil, err
 		}
-		out[id] = pickTraceService(errS, root, anyS)
+		out[id] = TraceFact{Service: pickTraceService(errS, root, anyS), ExType: exType}
 	}
 	return out, rows.Err()
 }

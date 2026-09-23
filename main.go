@@ -1099,8 +1099,26 @@ func main() {
 		// `ext:error_count` olarak yazılır (dış tarayıcının okuduğu şekil);
 		// Scan kablosu dilim C. Hata poll'u/watermark'ı etkilemez.
 		oracleCounter := oracle.NewCounter(store)
+		// v0.10.896 — Aşama 3 dilim C: özne çözücü (trace → öğrenilmiş → sentetik)
+		// + GÖLGE tarayıcı (notifier nil: Problem açılır, alarm gitmez; audit §6.4).
+		// Kip/kod listeleri kaynak ayarı dilim D. Kaynak başına 15 s bütçe.
+		oracleSubjects := oracle.NewSubjectResolver(store, store.TraceFactsByIDs, store.ListActiveServiceNames)
+		oracleShadow := anomaly.NewExternalScanner(store, nil)
 		oracleWorker.SetRowsHook(func(ctx context.Context, src oracle.SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time) {
-			oracleCounter.Handle(ctx, src, rows, from, to, nil)
+			hctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			oracleCounter.Handle(hctx, src, rows, from, to, nil)
+			oracleSubjects.Observe(hctx, src, rows, from, to)
+			rep, err := oracleShadow.Scan(hctx, anomaly.ExternalTarget{
+				SourceID: src.ID, SourceName: src.Name, Query: oracle.CounterQuery, GroupBy: oracle.CounterGroupBy,
+				Subject: oracleSubjects.ResolveFor(src.ID),
+			})
+			if err != nil {
+				log.Printf("[oracle/shadow] %s: tarama düştü: %v", src.Name, err)
+			} else if rep.Opened+rep.Resolved+rep.Capped+rep.Clustered > 0 {
+				log.Printf("[oracle/shadow] %s: seri=%d açıldı=%d tazelendi=%d çözüldü=%d touch=%d tavan=%d küme=%d (gölge — alarm yok)",
+					src.Name, rep.Series, rep.Opened, rep.Refreshed, rep.Resolved, rep.Touched, rep.Capped, rep.Clustered)
+			}
 		})
 		oracleWorker.SetHealthHook(func(ctx context.Context, src oracle.SourceConfig, lastErr string) {
 			extScanner.ReportSourceHealth(ctx, src.ID, src.Name, lastErr, time.Now())

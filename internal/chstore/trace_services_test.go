@@ -20,8 +20,15 @@ func TestTraceServicesSQLBounded(t *testing.T) {
 	if strings.Count(q, "?") != 5 {
 		t.Errorf("5 bind bekleniyordu: %s", q)
 	}
-	if strings.Index(q, "AS err_svc") > strings.Index(q, "AS root_svc") {
-		t.Error("kolon sırası err_svc, root_svc, any_svc (Scan sırası)")
+	if strings.Index(q, "AS err_svc") > strings.Index(q, "AS root_svc") || strings.Index(q, "AS any_svc") > strings.Index(q, "AS ex_type") {
+		t.Error("kolon sırası err_svc, root_svc, any_svc, ex_type (Scan sırası)")
+	}
+	// v0.10.895 — ex_type: MATERIALIZED kolon varsa doğrudan, yoksa JSON_VALUE.
+	if q2 := traceFactsSQL(1, exFragments(true)); !strings.Contains(q2, "argMaxIf(ex_type, time, ex_match = 1)") {
+		t.Errorf("ex kolonlu biçim: %s", q2)
+	}
+	if !strings.Contains(q, "JSON_VALUE") || strings.Count(q, "?") != 5 {
+		t.Errorf("kolonsuz biçim JSON_VALUE'ya düşer, bind sayısı değişmez: %s", q)
 	}
 }
 
