@@ -24,20 +24,24 @@ func TestServicesUseMV_EnvDisqualifies(t *testing.T) {
 		window  time.Duration
 		cluster string
 		env     string
+		envMV   bool // v0.10.882 — service_env_summary_5m pencereyi kapsıyor
 		want    bool
 	}{
-		{"wide window, no filters — MV", time.Hour, "", "", true},
-		{"env set — raw", time.Hour, "", "uat", false},
-		{"cluster set — raw (pre-existing)", time.Hour, "prod-eu", "", false},
-		{"both set — raw", time.Hour, "prod-eu", "uat", false},
-		{"sub-5m window — raw even unfiltered", 2 * time.Minute, "", "", false},
-		{"exactly 5m — MV", 5 * time.Minute, "", "", true},
+		{"wide window, no filters — MV", time.Hour, "", "", false, true},
+		{"env set, env MV kapsamıyor — raw", time.Hour, "", "uat", false, false},
+		{"cluster set, env MV kapsamıyor — raw", time.Hour, "prod-eu", "", false, false},
+		{"both set, env MV kapsamıyor — raw", time.Hour, "prod-eu", "uat", false, false},
+		{"env set, env MV KAPSIYOR — MV (v0.10.882)", time.Hour, "", "uat", true, true},
+		{"both set, env MV KAPSIYOR — MV", time.Hour, "prod-eu", "uat", true, true},
+		{"sub-5m window — raw even unfiltered", 2 * time.Minute, "", "", false, false},
+		{"sub-5m window — raw even with env MV", 2 * time.Minute, "", "uat", true, false},
+		{"exactly 5m — MV", 5 * time.Minute, "", "", false, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := servicesUseMV(tc.window, tc.cluster, tc.env); got != tc.want {
-				t.Fatalf("servicesUseMV(%v, %q, %q) = %v, want %v",
-					tc.window, tc.cluster, tc.env, got, tc.want)
+			if got := servicesUseMV(tc.window, tc.cluster, tc.env, tc.envMV); got != tc.want {
+				t.Fatalf("servicesUseMV(%v, %q, %q, %v) = %v, want %v",
+					tc.window, tc.cluster, tc.env, tc.envMV, got, tc.want)
 			}
 		})
 	}

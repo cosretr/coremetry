@@ -435,7 +435,26 @@ func servicesAggSortExpr(sort, dir string) string {
 // (no per-service aggregation). Kept OPT-IN at the handler (?withTotal=1) so the
 // default hot path stays count-free per the /api/services p99<50ms budget
 // (v0.7.44).
+// CountServicesEnvAgg — v0.10.882: cluster/env kapsamlı ayrık servis sayımı
+// (withTotal pager'ı); kapsam boşsa CountServicesAgg ile aynı sorgu.
+func (s *Store) CountServicesEnvAgg(ctx context.Context, from, to time.Time, nameMatch string, serviceIn []string, cluster, env string) (int, error) {
+	return s.countServicesAggFrom(ctx, servicesAggSource(cluster, env), cluster, env, from, to, nameMatch, serviceIn)
+}
+
 func (s *Store) CountServicesAgg(ctx context.Context, from, to time.Time, nameMatch string, serviceIn []string) (int, error) {
+	return s.countServicesAggFrom(ctx, "service_summary_5m", "", "", from, to, nameMatch, serviceIn)
+}
+
+// countServicesAggSQL — SAF (test pinler).
+func countServicesAggSQL(source, scopeClause, nameClause string) string {
+	return `
+		SELECT toUInt64(uniqExact(service_name))
+		FROM ` + source + `
+		WHERE time_bucket >= ? AND time_bucket < ?` + scopeClause + nameClause + `
+		SETTINGS max_execution_time = 25`
+}
+
+func (s *Store) countServicesAggFrom(ctx context.Context, source, cluster, env string, from, to time.Time, nameMatch string, serviceIn []string) (int, error) {
 	// v0.9.555 — MV kovaları başlangıçlarıyla etiketli; [from,to]
 	// aralığını kapsamak için from kova başına inmeli, yoksa
 	// baştaki kısmi kova tamamen elenir (bkz. alignBucketStart).
@@ -448,6 +467,8 @@ func (s *Store) CountServicesAgg(ctx context.Context, from, to time.Time, nameMa
 	}
 	nameClause := ""
 	args := []any{from, to}
+	scopeClause, scopeArgs := envScopeClause(cluster, env) // v0.10.882
+	args = append(args, scopeArgs...)
 	if nameMatch != "" {
 		nameClause = " AND positionCaseInsensitive(service_name, ?) > 0"
 		args = append(args, nameMatch)
@@ -461,12 +482,7 @@ func (s *Store) CountServicesAgg(ctx context.Context, from, to time.Time, nameMa
 		nameClause += " AND service_name IN (" + strings.Join(holders, ",") + ")"
 	}
 	var n uint64
-	err := s.telemetryReadConn().QueryRow(ctx, `
-		SELECT toUInt64(uniqExact(service_name))
-		FROM service_summary_5m
-		WHERE time_bucket >= ? AND time_bucket < ?`+nameClause+`
-		SETTINGS max_execution_time = 25`,
-		args...).Scan(&n)
+	err := s.telemetryReadConn().QueryRow(ctx, countServicesAggSQL(source, scopeClause, nameClause), args...).Scan(&n)
 	if err != nil {
 		return 0, err
 	}
@@ -505,7 +521,61 @@ func (s *Store) GetServicesAggFilteredIn(ctx context.Context, from, to time.Time
 // aliases passed in — the two paths cannot drift into disagreeing about what
 // "Errors only" means, which matters because the operator flips between them
 // just by picking a cluster or an env.
+// envScopeClause — SAF (v0.10.882): cluster/env yüklemi. Boş kapsam = yüklem yok
+// (kardeş service_summary_5m okunur); dolu kapsam service_env_summary_5m'in
+// boyutlarına biner. Tek boyut verilirse öteki boyut merge'de toplanır.
+func envScopeClause(cluster, env string) (string, []any) {
+	var clause string
+	var args []any
+	if cluster != "" {
+		clause += " AND cluster = ?"
+		args = append(args, cluster)
+	}
+	if env != "" {
+		clause += " AND deploy_env = ?"
+		args = append(args, env)
+	}
+	return clause, args
+}
+
+// servicesAggSource — SAF: kapsam boşsa kardeş MV, doluysa boyutlu MV.
+func servicesAggSource(cluster, env string) string {
+	if cluster == "" && env == "" {
+		return "service_summary_5m"
+	}
+	return "service_env_summary_5m"
+}
+
+// servicesAggSQL — SAF: /api/services MV okumasının metni (test pinler).
+func servicesAggSQL(source, scopeClause, nameClause, aggHaving, orderBy, limitClause string) string {
+	return `
+		SELECT service_name,
+		       countMerge(span_count_state)                                            AS spans,
+		       countIfMerge(error_count_state)                                         AS errs,
+		       sumMerge(duration_sum_state) / nullIf(spans, 0) / 1e6                   AS avg_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms,
+		       (countIfMerge(apdex_satisfied_state) + countIfMerge(apdex_tolerating_state) / 2)
+		         / nullIf(spans, 0)                                                     AS apdex
+		FROM ` + source + `
+		WHERE time_bucket >= ? AND time_bucket < ?` + scopeClause + nameClause + `
+		GROUP BY service_name` + aggHaving + `
+		ORDER BY ` + orderBy + limitClause + `
+		SETTINGS max_execution_time = 25, ` + mvQuantileMemSettings
+}
+
+// GetServicesEnvAggFiltered — v0.10.882 (paritesi #8 dilim 2): cluster/env
+// kapsamlı /api/services okuması service_env_summary_5m'den; kapsam boşsa
+// GetServicesAggFiltered2 ile bayt-bayt aynı sorgu. Çağıran (handler)
+// EnvSummaryCovers ile pencereyi ölçmüş olmalı — geriye dolmayan MV.
+func (s *Store) GetServicesEnvAggFiltered(ctx context.Context, from, to time.Time, nameMatch string, serviceIn []string, sort, dir string, limit, offset int, display ServiceDisplayFilters, cluster, env string) ([]ServiceSummary, error) {
+	return s.servicesAggFrom(ctx, servicesAggSource(cluster, env), cluster, env, from, to, nameMatch, serviceIn, sort, dir, limit, offset, display)
+}
+
 func (s *Store) GetServicesAggFiltered2(ctx context.Context, from, to time.Time, nameMatch string, serviceIn []string, sort, dir string, limit, offset int, display ServiceDisplayFilters) ([]ServiceSummary, error) {
+	return s.servicesAggFrom(ctx, "service_summary_5m", "", "", from, to, nameMatch, serviceIn, sort, dir, limit, offset, display)
+}
+
+func (s *Store) servicesAggFrom(ctx context.Context, source, cluster, env string, from, to time.Time, nameMatch string, serviceIn []string, sort, dir string, limit, offset int, display ServiceDisplayFilters) ([]ServiceSummary, error) {
 	// v0.9.555 — MV kovaları başlangıçlarıyla etiketli; [from,to]
 	// aralığını kapsamak için from kova başına inmeli, yoksa
 	// baştaki kısmi kova tamamen elenir (bkz. alignBucketStart).
@@ -523,6 +593,8 @@ func (s *Store) GetServicesAggFiltered2(ctx context.Context, from, to time.Time,
 	const apdexT = 200.0
 	nameClause := ""
 	args := []any{from, to}
+	scopeClause, scopeArgs := envScopeClause(cluster, env) // v0.10.882 — yüklem sırası: zaman, kapsam, ad
+	args = append(args, scopeArgs...)
 	if nameMatch != "" {
 		// Case-insensitive substring match — matches what the
 		// service-names autocomplete does.
@@ -547,20 +619,7 @@ func (s *Store) GetServicesAggFiltered2(ctx context.Context, from, to time.Time,
 	aggHaving, havingArgs := display.having("spans", "errs", "p99_ms")
 	args = append(args, havingArgs...)
 
-	rows, err := s.telemetryReadConn().Query(ctx, `
-		SELECT service_name,
-		       countMerge(span_count_state)                                            AS spans,
-		       countIfMerge(error_count_state)                                         AS errs,
-		       sumMerge(duration_sum_state) / nullIf(spans, 0) / 1e6                   AS avg_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms,
-		       (countIfMerge(apdex_satisfied_state) + countIfMerge(apdex_tolerating_state) / 2)
-		         / nullIf(spans, 0)                                                     AS apdex
-		FROM service_summary_5m
-		WHERE time_bucket >= ? AND time_bucket < ?`+nameClause+`
-		GROUP BY service_name`+aggHaving+`
-		ORDER BY `+servicesAggSortExpr(sort, dir)+limitClause+`
-		SETTINGS max_execution_time = 25, `+mvQuantileMemSettings,
-		args...)
+	rows, err := s.telemetryReadConn().Query(ctx, servicesAggSQL(source, scopeClause, nameClause, aggHaving, servicesAggSortExpr(sort, dir), limitClause), args...)
 	if err != nil {
 		return nil, err
 	}

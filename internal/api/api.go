@@ -1763,17 +1763,6 @@ func (s *Server) getServiceEnvironments(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// servicesUseMV is the /api/services MV fast-path gate. The
-// service_summary_5m MV writes a row every 5 minutes (sub-5m windows
-// would read empty) and carries NEITHER a cluster NOR an env
-// dimension — either filter disqualifies the MV and the read falls
-// to the bounded raw-spans path (cluster since v0.5.372, env since
-// v0.8.385 — env-separation Phase 2, cluster-parity raw-fallback,
-// NO MV changes). Factored pure so env_gate_test.go pins it.
-func servicesUseMV(window time.Duration, cluster, env string) bool {
-	return window >= 5*time.Minute && cluster == "" && env == ""
-}
-
 // servicesListKey builds the /api/services cache key from ALL
 // inputs (hash-all-inputs rule; the v0.5.187 class). env joined in
 // v0.8.385 — without it an env-filtered page would cross-poison the
@@ -1899,7 +1888,7 @@ func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
 	// scan when either filter is set. Trade-off: full scan over the
 	// window, but bounded by the filter so the cost stays
 	// proportional to the chosen slice's traffic.
-	useMV := servicesUseMV(to.Sub(from), cluster, env)
+	useMV := servicesUseMV(to.Sub(from), cluster, env, (cluster != "" || env != "") && s.store.EnvSummaryCovers(r.Context(), from)) // v0.10.882 — boyutlu MV kapsıyorsa MV yolu
 	// Bucket from/to to 30s alignment for the cache key. The
 	// raw `q.Get("from")` is wall-clock ns and changes every
 	// request, so the legacy key was effectively per-request
@@ -1978,7 +1967,7 @@ func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
 		var rows []chstore.ServiceSummary
 		var err error
 		if useMV {
-			rows, err = s.store.GetServicesAggFiltered2(ctx, from, to, nameMatch, serviceIn, baseSort, baseDir, probeLimit, offset, display)
+			rows, err = s.store.GetServicesEnvAggFiltered(ctx, from, to, nameMatch, serviceIn, baseSort, baseDir, probeLimit, offset, display, cluster, env) // v0.10.882 — kapsam boşsa kardeş MV
 		} else {
 			rows, err = s.store.GetServicesQuery(ctx, chstore.ServicesQuery{
 				Since: since, From: from, To: to, NameMatch: nameMatch, ServiceIn: serviceIn,
@@ -2050,7 +2039,7 @@ func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
 		// v0.7.44 — opt-in distinct-service count for the First/Last pager.
 		// MV path only (cheap uniqExact over service_summary_5m).
 		if withTotal && useMV {
-			if total, terr := s.store.CountServicesAgg(ctx, from, to, nameMatch, serviceIn); terr == nil {
+			if total, terr := s.store.CountServicesEnvAgg(ctx, from, to, nameMatch, serviceIn, cluster, env); terr == nil { // v0.10.882
 				resp["total"] = total
 			}
 		}

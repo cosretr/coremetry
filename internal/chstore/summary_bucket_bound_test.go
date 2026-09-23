@@ -71,10 +71,14 @@ func servicesBucketReads(t *testing.T) []struct {
 		name string
 		sql  string
 	}{
+		// v0.10.882 — iki okuma da saf SQL kurucu + gövde çiftine ayrıldı (kapsamlı
+		// varyant aynı gövdeyi kullanır); pin ikisinin toplamına bakar.
 		{"CountServicesAgg (sayım)",
-			funcBody(t, "summary.go", "func (s *Store) CountServicesAgg(")},
+			funcBody(t, "summary.go", "func (s *Store) countServicesAggFrom(") +
+				funcBody(t, "summary.go", "func countServicesAggSQL(")},
 		{"GetServicesAggFiltered2 (liste)",
-			funcBody(t, "summary.go", "func (s *Store) GetServicesAggFiltered2(")},
+			funcBody(t, "summary.go", "func (s *Store) servicesAggFrom(") +
+				funcBody(t, "summary.go", "func servicesAggSQL(")},
 		{"GetServiceSummary5mFor (çok-servis sparkline)",
 			funcBody(t, "summary.go", "func (s *Store) GetServiceSummary5mFor(")},
 		// v0.10.269 — SQL saf kurucuda (serviceSummarySlotsSQL), hizalama
