@@ -6,7 +6,6 @@ import (
 	"math"
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/anomaly"
@@ -34,23 +33,14 @@ import (
 // `lastTs` ile gelir (FE "sessiz · N dk önce"); en kötü pod 50 kesiminden
 // ÖNCE hesaplanır; cevap kaynağı ve pencereyi söyler. api.go'ya sıfır satır.
 
-const (
-	heapBaselineHistory   = 24 * time.Hour // ardışık baseline penceresi (anomaly historyHours)
-	heapBaselineBucketSec = 300            // anomaly bucketSeconds — kaynaktan da bu adımla istenir
-	heapSilentBuckets     = 3              // son kova bundan eskiyse pod "sessiz" (canlılar önce sıralanır)
-	heapBaselineMaxPods   = 50             // son değere göre en yüksek N; üstü `truncated`
-	heapMetricPostGC      = "jvm.memory.used_after_last_gc"
-	heapMetricLimit       = "jvm.memory.limit"
-)
-
-var heapPodGroupBy = []string{"resource.k8s.pod.name", "resource.host.name", "resource.service.instance.id"}
-var heapTypeFilter = []chstore.FilterExpr{{Key: "jvm.memory.type", Op: "=", Values: []string{"heap"}}}
-
 func init() { registerRoutesExtra("heap-baseline", (*Server).registerHeapBaselineRoutes) }
 
 func (s *Server) registerHeapBaselineRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/services/{name}/heap-baseline", s.getServiceHeapBaseline)
 }
+
+// (v0.10.890) Okuyucu sabitleri/yardımcıları anomaly/heap_read.go'da — kart ve
+// dedektör aynı okuyucu, aynı politika (HeapPolicyFrom canlı bloktan).
 
 // HeapBaselinePod — bir pod: bant + görüntü penceresindeki kova serisi.
 type HeapBaselinePod struct {
@@ -94,52 +84,34 @@ func (s *Server) getServiceHeapBaseline(w http.ResponseWriter, r *http.Request) 
 	}
 	// Anahtar 5-dk ızgarada: veri yalnız tam kova ilerledikçe değişir (son eksik
 	// kova atılır); 30 s tik / zoom aynı kovada aynı cevabı okur.
-	key := fmt.Sprintf("heap-baseline:%s:%s:%d:%d", src.Name(), name, from.Unix()/heapBaselineBucketSec, to.Unix()/heapBaselineBucketSec)
+	pol := anomaly.HeapPolicyFrom(s.store.AnomalySensitivity()) // v0.10.890 — canlı vida, kartla dedektör aynı bant
+	key := fmt.Sprintf("heap-baseline:%s:%s:%d:%d:%v", src.Name(), name, from.Unix()/anomaly.HeapBucketSec, to.Unix()/anomaly.HeapBucketSec, pol)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		return buildHeapBaseline(ctx, src, name, from, to)
+		return buildHeapBaseline(ctx, src, name, from, to, pol)
 	})
 }
 
-func buildHeapBaseline(ctx context.Context, src metricSource, service string, from, to time.Time) (*HeapBaselineResponse, error) {
+func buildHeapBaseline(ctx context.Context, src anomaly.HeapSource, service string, from, to time.Time, pol anomaly.HeapBandPolicy) (*HeapBaselineResponse, error) {
 	res := &HeapBaselineResponse{
-		Source: src.Name(), Metric: anomaly.HeapBandMetric, HistoryHours: int(heapBaselineHistory.Hours()),
-		BucketSec: heapBaselineBucketSec, NeedBuckets: anomaly.HeapBandMinBuckets(),
+		Source: src.Name(), Metric: anomaly.HeapBandMetric, HistoryHours: int(anomaly.HeapHistory.Hours()),
+		BucketSec: int(anomaly.HeapBucketSec), NeedBuckets: anomaly.HeapBandMinBuckets(),
 		FromNs: from.UnixNano(), ToNs: to.UnixNano(), Pods: []HeapBaselinePod{},
 	}
-	ok, err := src.MetricExists(ctx, heapMetricPostGC)
+	rd, err := anomaly.ReadHeapPods(ctx, src, service, to.Add(-anomaly.HeapHistory), to)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		res.Reason = "metric yok: " + heapMetricPostGC
+	res.Capped, res.Reason = rd.Capped, rd.Reason
+	if len(rd.Pct) == 0 {
 		return res, nil
 	}
-	histFrom := to.Add(-heapBaselineHistory)
-	read := func(metric string) ([]chstore.SpanMetricSeries, error) {
-		return src.QueryMetric(ctx, chstore.MetricQueryFilter{
-			Name: metric, Service: service, Aggregation: "sum", GroupBy: heapPodGroupBy, Filters: heapTypeFilter,
-			From: histFrom, To: to, StepSeconds: heapBaselineBucketSec, MaxDataPoints: int(heapBaselineHistory.Seconds())/heapBaselineBucketSec + 2,
-		})
-	}
-	postgc, err := read(heapMetricPostGC)
-	if err != nil {
-		return nil, err
-	}
-	limit, err := read(heapMetricLimit)
-	if err != nil {
-		return nil, err
-	}
-	res.Capped = chstore.SeriesRowsCapped(postgc) || chstore.SeriesRowsCapped(limit)
-	pct := heapPctByPod(postgc, limit)
-	if len(pct) == 0 {
-		res.Reason = "pencerede satır yok"
-		return res, nil
-	}
-	lastComplete := to.Unix()/heapBaselineBucketSec*heapBaselineBucketSec - heapBaselineBucketSec // son TAM kovanın başı
-	pods := make([]HeapBaselinePod, 0, len(pct))
-	for pod, minutes := range pct {
-		bucketTimes, buckets := heapBuckets(minutes, lastComplete)
-		p := HeapBaselinePod{Pod: pod, Band: anomaly.ComputeHeapBand(buckets), Series: []chstore.Point{}}
+	lastComplete := anomaly.HeapLastComplete(to) // son TAM kovanın başı
+	pods := make([]HeapBaselinePod, 0, len(rd.Pct))
+	bands := make(map[string]anomaly.HeapBand, len(rd.Pct))
+	for pod, minutes := range rd.Pct {
+		bucketTimes, buckets := anomaly.HeapBuckets(minutes, lastComplete)
+		p := HeapBaselinePod{Pod: pod, Band: anomaly.ComputeHeapBandWith(buckets, pol), Series: []chstore.Point{}}
+		bands[pod] = p.Band
 		if n := len(bucketTimes); n > 0 {
 			p.LastTs = bucketTimes[n-1]
 		}
@@ -150,8 +122,8 @@ func buildHeapBaseline(ctx context.Context, src metricSource, service string, fr
 		}
 		pods = append(pods, p)
 	}
-	res.Worst = heapWorstPod(pods) // kesimden ÖNCE
-	silentBefore := lastComplete - heapSilentBuckets*heapBaselineBucketSec
+	res.Worst = anomaly.HeapWorstPod(bands) // kesimden ÖNCE
+	silentBefore := lastComplete - int64(heapSilentBuckets)*anomaly.HeapBucketSec
 	sort.Slice(pods, func(i, j int) bool {
 		li, lj := pods[i].LastTs >= silentBefore, pods[j].LastTs >= silentBefore
 		if li != lj {
@@ -162,107 +134,13 @@ func buildHeapBaseline(ctx context.Context, src metricSource, service string, fr
 		}
 		return pods[i].Pod < pods[j].Pod
 	})
-	if len(pods) > heapBaselineMaxPods {
-		res.Truncated = len(pods) - heapBaselineMaxPods
-		pods = pods[:heapBaselineMaxPods]
+	if len(pods) > anomaly.HeapMaxPods {
+		res.Truncated = len(pods) - anomaly.HeapMaxPods
+		pods = pods[:anomaly.HeapMaxPods]
 	}
 	res.Pods = pods
 	return res, nil
 }
 
-// heapPodKey — SAF: grup anahtarından pod kimliği (k8s.pod.name → host.name →
-// service.instance.id[:8]); vmetrics.PodFromTuple ile aynı sıra, servis
-// yuvası yok (Service süzgeci ayrı).
-func heapPodKey(groupKey []string) string {
-	for i, v := range groupKey {
-		v = strings.TrimSpace(v)
-		if v == "" {
-			continue
-		}
-		if i == 2 {
-			if r := []rune(v); len(r) > 8 {
-				return string(r[:8])
-			}
-		}
-		return v
-	}
-	return ""
-}
-
-// heapPctByPod — SAF: dakika → postgc/limit×100 (limit > 0), pod başına.
-func heapPctByPod(postgc, limit []chstore.SpanMetricSeries) map[string]map[int64]float64 {
-	lim := map[string]map[int64]float64{}
-	for _, ser := range limit {
-		pod := heapPodKey(ser.GroupKey)
-		if pod == "" {
-			continue
-		}
-		m := lim[pod]
-		if m == nil {
-			m = map[int64]float64{}
-			lim[pod] = m
-		}
-		for _, p := range ser.Points {
-			m[p.Time/1e9] = p.Value
-		}
-	}
-	out := map[string]map[int64]float64{}
-	for _, ser := range postgc {
-		pod := heapPodKey(ser.GroupKey)
-		if pod == "" || lim[pod] == nil {
-			continue
-		}
-		for _, p := range ser.Points {
-			l := lim[pod][p.Time/1e9]
-			if l <= 0 || p.Value <= 0 {
-				continue
-			}
-			if out[pod] == nil {
-				out[pod] = map[int64]float64{}
-			}
-			out[pod][p.Time/1e9] = p.Value / l * 100
-		}
-	}
-	return out
-}
-
-// heapBuckets — SAF: dakika değerleri → 5-dk kova ortalamaları, eskiden
-// yeniye, yalnız mevcut kovalar (boşluk atlanır) ve yalnız lastComplete'e
-// kadar (son eksik kova atılır — anomaly lastCompleteBucketStart kuralı).
-func heapBuckets(minutes map[int64]float64, lastComplete int64) (times []int64, values []float64) {
-	sum := map[int64]float64{}
-	n := map[int64]int{}
-	for sec, v := range minutes {
-		b := sec / heapBaselineBucketSec * heapBaselineBucketSec
-		if b > lastComplete {
-			continue
-		}
-		sum[b] += v
-		n[b]++
-	}
-	times = make([]int64, 0, len(sum))
-	for b := range sum {
-		times = append(times, b)
-	}
-	sort.Slice(times, func(i, j int) bool { return times[i] < times[j] })
-	values = make([]float64, len(times))
-	for i, b := range times {
-		values[i] = sum[b] / float64(n[b])
-	}
-	return times, values
-}
-
-// heapWorstPod — SAF: en yüksek z'li bant sahibi pod (bantsızlar sayılmaz);
-// hiç bant yoksa "".
-func heapWorstPod(pods []HeapBaselinePod) string {
-	worst, best := "", 0.0
-	for _, p := range pods {
-		if p.Band.Status == anomaly.HeapBandNoBaseline {
-			continue
-		}
-		if worst == "" || p.Band.Z > best {
-			worst, best = p.Pod, p.Band.Z
-		}
-	}
-	return worst
-}
+// heapSilentBuckets — son kova bundan eskiyse pod "sessiz" (canlılar önce sıralanır).
+const heapSilentBuckets = 3

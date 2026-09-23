@@ -427,6 +427,9 @@ func sensitivityLogLine(c chstore.AnomalySensitivityConfig) string {
 	// ikinci bir "değişti mi" takibi demek olurdu; operatörün sorusu
 	// tek: "vidalarım canlıya indi mi?".
 	b.WriteString(behaviorLogLine(c.Behavior))
+	r := c.Runtime // v0.10.890 — heap bandı vidaları aynı satırda
+	fmt.Fprintf(&b, " | runtime heapMode=%s heapSource=%s minMAD=%.1f floorPct=%.2f minAbsDelta=%.1f silent=%d maxPods=%d",
+		r.HeapMode, r.HeapSource, r.HeapMinMAD, r.HeapFloorPct, r.HeapMinAbsDelta, r.HeapSilentBuckets, r.HeapMaxPods)
 	return b.String()
 }
 

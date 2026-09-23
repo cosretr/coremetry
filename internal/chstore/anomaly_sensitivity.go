@@ -86,6 +86,9 @@ type AnomalySensitivityConfig struct {
 	// hafta izlenir; "on" = Score = Structural × (0.5 + 0.5·t), baş
 	// şüpheli değişebilir. Bilinmeyen değer Normalize'da shadow'a iner.
 	TemporalRanking string `json:"temporalRanking,omitempty"`
+	// Runtime — v0.10.890 (paritesi #4 dilim 2): JVM heap bandı → Problem
+	// vidaları (anomaly_sensitivity_runtime.go). Varsayılan kip off.
+	Runtime AnomalyRuntimeConfig `json:"runtime"`
 }
 
 const (
@@ -375,7 +378,8 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// sürümü: var olan davranışı kapatılabilir yapıyor, kendiliğinden
 		// değiştirmiyor.
 		AttachToIncident: boolPtr(true),
-		ServiceSilent:    boolPtr(false), // v0.10.543 — operatör kararı
+		ServiceSilent:    boolPtr(false),          // v0.10.543 — operatör kararı
+		Runtime:          DefaultAnomalyRuntime(), // v0.10.890 — heap kipi off
 	}
 }
 
@@ -407,6 +411,7 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// alır: sıfır-değerli bir AnomalyBehaviorConfig aralık dışıdır,
 		// dolayısıyla Normalize onu varsayılanlara doldurur.
 		Behavior: NormalizeAnomalyBehavior(c.Behavior),
+		Runtime:  NormalizeAnomalyRuntime(c.Runtime), // v0.10.890 — kopyalanmazsa PUT'ta düşer
 	}
 	for _, m := range AnomalySensitivityMetrics {
 		def := d.Metrics[m]

@@ -3,6 +3,8 @@ package anomaly
 import (
 	"math"
 	"testing"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // v0.10.887 (paritesi #4 dilim 1) — heap bandı: n < minSamples+dwell → bant
@@ -55,5 +57,32 @@ func TestComputeHeapBandGates(t *testing.T) {
 	}
 	if hb := ComputeHeapBand(nil); hb.Status != HeapBandNoBaseline || hb.Lower != 0 {
 		t.Fatalf("boş: %+v", hb)
+	}
+}
+
+// v0.10.890 — politika vidadan: varsayılan politika 887 sabitleriyle aynı;
+// floorPct/minAbsDelta 0 → yalnız istatistik; dwell 1 → tek kova sıçrama açar.
+func TestHeapPolicyFromAndWith(t *testing.T) {
+	def := HeapPolicyFrom(chstore.DefaultAnomalySensitivity())
+	if def.MinMAD != HeapBandMinMAD || def.FloorPct != 0.10 || def.MinAbsDelta != 5 || def.Dwell != 3 || def.CriticalZ != 6 {
+		t.Fatalf("varsayılan politika: %+v", def)
+	}
+	flat := make([]float64, 40)
+	for i := range flat {
+		flat[i] = 60 + float64(i%3)
+	}
+	one := append(append([]float64{}, flat[:39]...), 92)
+	if hb := ComputeHeapBandWith(one, HeapBandPolicy{MinMAD: 2, Dwell: 1, CriticalZ: 6}); hb.Status != HeapBandCritical {
+		t.Fatalf("dwell 1 → tek kova critical: %+v", hb)
+	}
+	c := chstore.DefaultAnomalySensitivity()
+	c.Runtime.HeapMinMAD, c.Runtime.HeapFloorPct, c.Runtime.HeapMinAbsDelta = 10, 0, 0
+	pol := HeapPolicyFrom(c)
+	if pol.MinMAD != 10 || pol.FloorPct != 0 || pol.MinAbsDelta != 0 {
+		t.Fatalf("vida taşınmalı: %+v", pol)
+	}
+	spike := append(append([]float64{}, flat[:37]...), 90, 91, 92)
+	if hb := ComputeHeapBandWith(spike, pol); hb.MAD != 10 || hb.Status != HeapBandOK { // MAD 10 → z = .6745·30/10 ≈ 2 → ok
+		t.Fatalf("minMAD 10 sapmayı bastırmalı: %+v", hb)
 	}
 }

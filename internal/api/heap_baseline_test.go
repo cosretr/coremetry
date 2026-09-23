@@ -16,7 +16,7 @@ import (
 // ortalaması + son eksik kova atılır + boşluk atlanır, en kötü pod z'ye göre
 // (bantsız sayılmaz); rota defterde, api.go'da değil.
 func TestHeapBaselineHelpers(t *testing.T) {
-	if heapPodKey([]string{"", "", "abcdefghijkl"}) != "abcdefgh" || heapPodKey([]string{"p1", "h", "i"}) != "p1" || heapPodKey([]string{"", "host-a", ""}) != "host-a" || heapPodKey(nil) != "" {
+	if anomaly.HeapPodKey([]string{"", "", "abcdefghijkl"}) != "abcdefgh" || anomaly.HeapPodKey([]string{"p1", "h", "i"}) != "p1" || anomaly.HeapPodKey([]string{"", "host-a", ""}) != "host-a" || anomaly.HeapPodKey(nil) != "" {
 		t.Fatal("pod anahtarı sırası")
 	}
 	ser := func(pod string, pts ...[2]float64) chstore.SpanMetricSeries {
@@ -26,7 +26,7 @@ func TestHeapBaselineHelpers(t *testing.T) {
 		}
 		return s
 	}
-	pct := heapPctByPod(
+	pct := anomaly.HeapPctByPod(
 		[]chstore.SpanMetricSeries{ser("a", [2]float64{60, 30}, [2]float64{120, 60}, [2]float64{180, 0}), ser("b", [2]float64{60, 10})},
 		[]chstore.SpanMetricSeries{ser("a", [2]float64{60, 100}, [2]float64{120, 100}, [2]float64{180, 100})},
 	)
@@ -34,16 +34,16 @@ func TestHeapBaselineHelpers(t *testing.T) {
 		t.Fatalf("pct: %v (b limitsiz düşer, 0 postgc düşer)", pct)
 	}
 	minutes := map[int64]float64{0: 10, 60: 20, 300: 50, 900: 70, 1200: 99}
-	times, vals := heapBuckets(minutes, 900)
+	times, vals := anomaly.HeapBuckets(minutes, 900)
 	if len(times) != 3 || times[0] != 0 || vals[0] != 15 || times[1] != 300 || vals[1] != 50 || times[2] != 900 || vals[2] != 70 {
 		t.Fatalf("kovalar: %v %v (600 boşluk atlanır, 1200 eksik kova atılır)", times, vals)
 	}
-	pods := []HeapBaselinePod{
-		{Pod: "x", Band: anomaly.HeapBand{Status: anomaly.HeapBandNoBaseline, Z: 99}},
-		{Pod: "y", Band: anomaly.HeapBand{Status: anomaly.HeapBandOK, Z: 0.4}},
-		{Pod: "z", Band: anomaly.HeapBand{Status: anomaly.HeapBandCritical, Z: 7.8}},
+	bands := map[string]anomaly.HeapBand{
+		"x": {Status: anomaly.HeapBandNoBaseline, Z: 99},
+		"y": {Status: anomaly.HeapBandOK, Z: 0.4},
+		"z": {Status: anomaly.HeapBandCritical, Z: 7.8},
 	}
-	if heapWorstPod(pods) != "z" || heapWorstPod(pods[:1]) != "" {
+	if anomaly.HeapWorstPod(bands) != "z" || anomaly.HeapWorstPod(map[string]anomaly.HeapBand{"x": bands["x"]}) != "" {
 		t.Fatal("en kötü pod")
 	}
 	if _, ok := extraRouteRegistrars["heap-baseline"]; !ok {
@@ -90,14 +90,15 @@ func TestBuildHeapBaselineShape(t *testing.T) {
 	}
 	live[285] = 95
 	dead := all(70, 200) // 200. kovadan sonra sustu
-	src := &fakeHostSource{name: "vm", exists: map[string]bool{heapMetricPostGC: true},
+	src := &fakeHostSource{name: "vm", exists: map[string]bool{anomaly.HeapMetricPostGC: true},
 		queryFn: func(f chstore.MetricQueryFilter) ([]chstore.SpanMetricSeries, error) {
-			if f.Name == heapMetricLimit {
+			if f.Name == anomaly.HeapMetricLimit {
 				return []chstore.SpanMetricSeries{mk("live-1", all(100, 288)), mk("dead-1", all(100, 288))}, nil
 			}
 			return []chstore.SpanMetricSeries{mk("live-1", live), mk("dead-1", dead)}, nil
 		}}
-	res, err := buildHeapBaseline(context.Background(), src, "svc", from, to)
+	pol := anomaly.HeapPolicyFrom(chstore.DefaultAnomalySensitivity())
+	res, err := buildHeapBaseline(context.Background(), src, "svc", from, to, pol)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestBuildHeapBaselineShape(t *testing.T) {
 	}
 	// metrik yok → pods boş, tek exists çağrısı, sorgu yok
 	none := &fakeHostSource{name: "ch", exists: map[string]bool{}}
-	r2, err := buildHeapBaseline(context.Background(), none, "svc", from, to)
+	r2, err := buildHeapBaseline(context.Background(), none, "svc", from, to, pol)
 	if err != nil || len(r2.Pods) != 0 || r2.Reason == "" || len(none.filters) != 0 {
 		t.Fatalf("metrik yok: %+v %v", r2, err)
 	}

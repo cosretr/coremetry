@@ -6932,6 +6932,10 @@ export interface AnomalySensitivityConfig {
   // v0.10.700 — kök neden hipotezinde zamansal çarpan: 'shadow' (varsayılan,
   // yok dahil) yalnız yazar, 'on' skoru çarpar. Okuma `=== 'on'`.
   temporalRanking?: 'shadow' | 'on';
+  /** v0.10.890 (paritesi #4 dilim 2) — JVM heap bandı → Problem vidaları
+   *  (chstore.AnomalyRuntimeConfig). heapMode varsayılan 'off'; 'on' Problem'i
+   *  v0.10.892'den itibaren açar (öncesinde gölge gibi). */
+  runtime?: AnomalyRuntimeConfig;
   // v0.9.936 — davranış motoru AŞAMA 1'in vidaları. Üstteki alanlar
   // ANİ sapmayı (5-dk pencere, 24s geçmiş) ayarlıyor; bu bölüm KALICI
   // davranış değişimini (haftanın saati baseline'ı, 28 gün).
@@ -6949,6 +6953,15 @@ export interface AnomalySensitivityConfig {
 // "bu servis artık başka türlü mü davranıyor" aynı eşikle
 // cevaplanmaz. Bir rejim kayması 1.5× ile gerçektir ve 6σ'ya hiç
 // ulaşmayabilir.
+export interface AnomalyRuntimeConfig {
+  heapMode?: 'off' | 'shadow' | 'on';
+  heapSource?: 'auto' | 'vm' | 'ch';
+  heapMinMAD: number;        // puan (varsayılan 2)
+  heapFloorPct: number;      // 0..1 (varsayılan 0.10)
+  heapMinAbsDelta: number;   // puan (varsayılan 5)
+  heapSilentBuckets: number; // kova (varsayılan 3)
+  heapMaxPods: number;       // halka/okuma tavanı (varsayılan 5000)
+}
 export interface AnomalyBehaviorConfig {
   // Motor koşsun mu? OPSİYONEL çünkü backend'de *bool ve varsayılan
   // AÇIK — okuma daima `!== false` ile yapılmalı (attachToIncident ile

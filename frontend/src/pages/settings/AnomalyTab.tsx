@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { AnomalyRuntimeConfig } from '@/lib/types'; // v0.10.890
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -431,6 +432,13 @@ function SensitivitySection() {
           <BehaviorSubsection
             behavior={cfg.behavior}
             onChange={b => setCfg({ ...cfg, behavior: b })}
+          />
+          {/* v0.10.890 (paritesi #4 dilim 2, Onay 2026-09-23) — JVM heap bandı → Problem
+              vidaları. Bu sürümde yalnız vida: kip varsayılan KAPALI, hiçbir davranış
+              değişmez; gölge sayaçları 891, canlı kip 892. */}
+          <RuntimeSubsection
+            runtime={cfg.runtime}
+            onChange={r => setCfg({ ...cfg, runtime: r })}
           />
 
           {/* v0.9.827 — dedektör → incident kapısı.
@@ -1142,6 +1150,61 @@ function DBSlowQuerySection() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// RuntimeSubsection — v0.10.890: JVM heap bandı → Problem vidaları (Settings ›
+// Anomaly). Sunucu Normalize'da daima doldurur; düşüş yalnız eski backend için.
+function RuntimeSubsection({ runtime, onChange }: {
+  runtime?: AnomalyRuntimeConfig;
+  onChange: (r: AnomalyRuntimeConfig) => void;
+}) {
+  const r: AnomalyRuntimeConfig = runtime ?? {
+    heapMode: 'off', heapSource: 'auto', heapMinMAD: 2, heapFloorPct: 0.10,
+    heapMinAbsDelta: 5, heapSilentBuckets: 3, heapMaxPods: 5000,
+  };
+  const set = (patch: Partial<AnomalyRuntimeConfig>) => onChange({ ...r, ...patch });
+  const num = (label: string, key: keyof AnomalyRuntimeConfig, step: number, hint: string) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }} title={hint}>
+      <span style={{ color: 'var(--text2)' }}>{label}</span>
+      <input type="number" step={step} value={Number(r[key] ?? 0)} style={{ width: 96 }}
+        onChange={e => set({ [key]: Number(e.target.value) } as Partial<AnomalyRuntimeConfig>)} />
+    </label>
+  );
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4, marginBottom: 18 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
+        JVM heap bandı → Problem (<code>runtime.jvm_heap_pct</code>)
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.55 }}>
+        Pods sekmesindeki heap-after-GC bandı (pod başına, 24 saat, medyan ± 3.5·MAD) kritik sapmada
+        servis başına <b>bir</b> Problem açar (suçlu pod alanda). Varsayılan <b>kapalı</b>; önce
+        <b> gölge</b>: hüküm hesaplanır, sayılır, Problem/bildirim yok. Açık kip v0.10.892 ile gelir.
+      </p>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+          <span style={{ color: 'var(--text2)' }}>Kip</span>
+          <select value={r.heapMode ?? 'off'} onChange={e => set({ heapMode: e.target.value as AnomalyRuntimeConfig['heapMode'] })}>
+            <option value="off">Kapalı</option>
+            <option value="shadow">Gölge — ölç, Problem açma</option>
+            <option value="on">Açık — Problem açar (v0.10.892+; öncesinde gölge gibi)</option>
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+          <span style={{ color: 'var(--text2)' }}>Kaynak</span>
+          <select value={r.heapSource ?? 'auto'} onChange={e => set({ heapSource: e.target.value as AnomalyRuntimeConfig['heapSource'] })}>
+            <option value="auto">Otomatik — VM yapılandırılmışsa VM, değilse ClickHouse</option>
+            <option value="vm">VictoriaMetrics</option>
+            <option value="ch">ClickHouse</option>
+          </select>
+        </label>
+        {num('Min MAD (puan)', 'heapMinMAD', 0.5, 'Düz seyreden heap\'te MAD≈0 tuzağı; 0 = taban yok')}
+        {num('Taban (0–1)', 'heapFloorPct', 0.05, 'Medyanın bu oran üstü şart; 0 = yalnız istatistik')}
+        {num('Min fark (puan)', 'heapMinAbsDelta', 1, 'Medyandan en az bu kadar puan üstü; 0 = kapı yok')}
+        {num('Sessiz kova', 'heapSilentBuckets', 1, 'Pod bu kadar 5-dk kova yazmadıysa "sessiz" (1–12)')}
+        {num('Pod tavanı', 'heapMaxPods', 100, 'Halka/okuma tavanı (100–50000)')}
+      </div>
     </div>
   );
 }

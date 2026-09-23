@@ -23,9 +23,9 @@ import "github.com/cilcenk/coremetry/internal/chstore"
 //   - yön yalnız YUKARI: heap'in düşmesi alarm değildir.
 
 const (
-	HeapBandMinMAD      = 2.0
-	heapBandFloorPct    = 0.10
-	heapBandMinAbsDelta = 5.0
+	// HeapBandMinMAD — 887 sabiti; v0.10.890'dan itibaren varsayılan değer
+	// chstore.DefaultAnomalyRuntime() (aynı sayı), test pini burada kalır.
+	HeapBandMinMAD = 2.0
 	// HeapBandMetric — cevaptaki metrik adı; `runtime.` öneki dilim 2'de
 	// ProblemCategory RESOURCE'u bedava verir (problem_category.go).
 	HeapBandMetric = "runtime.jvm_heap_pct"
@@ -60,12 +60,47 @@ func HeapBandMinBuckets() int {
 	return minSamples + chstore.DefaultAnomalySensitivity().DwellBuckets
 }
 
-// ComputeHeapBand — SAF. buckets: 5-dk kova ortalamaları, ESKİDEN YENİYE,
+// HeapBandPolicy — v0.10.890: bant kapıları artık VİDA (anomaly_sensitivity
+// runtime bloğu + dwell/criticalZ blobdan). Kart ve dedektör aynı politikayı
+// HeapPolicyFrom ile türetir — iki gerçek yok.
+type HeapBandPolicy struct {
+	MinMAD      float64
+	FloorPct    float64
+	MinAbsDelta float64
+	Dwell       int
+	CriticalZ   float64
+}
+
+// HeapPolicyFrom — canlı bloktan politika (normalize edilmiş okuma).
+func HeapPolicyFrom(c chstore.AnomalySensitivityConfig) HeapBandPolicy {
+	r := chstore.NormalizeAnomalyRuntime(c.Runtime)
+	dwell, cz := c.DwellBuckets, c.CriticalZ
+	if dwell <= 0 {
+		dwell = chstore.DefaultAnomalySensitivity().DwellBuckets
+	}
+	if cz <= 0 {
+		cz = chstore.DefaultAnomalySensitivity().CriticalZ
+	}
+	return HeapBandPolicy{MinMAD: r.HeapMinMAD, FloorPct: r.HeapFloorPct, MinAbsDelta: r.HeapMinAbsDelta, Dwell: dwell, CriticalZ: cz}
+}
+
+// ComputeHeapBand — varsayılan politika (887 sabitleri); testler ve
+// politika-dışı çağıranlar için. Dedektör/kart ComputeHeapBandWith kullanır.
+func ComputeHeapBand(buckets []float64) HeapBand {
+	return ComputeHeapBandWith(buckets, HeapPolicyFrom(chstore.DefaultAnomalySensitivity()))
+}
+
+// ComputeHeapBandWith — SAF. buckets: 5-dk kova ortalamaları, ESKİDEN YENİYE,
 // yalnız TAM kovalar (çağıran son eksik kovayı atar). Bölme motorla aynı:
 // son dwell kova değerlendirme penceresi, öncesi baseline.
-func ComputeHeapBand(buckets []float64) HeapBand {
-	def := chstore.DefaultAnomalySensitivity()
-	dwell, criticalZ := def.DwellBuckets, def.CriticalZ
+func ComputeHeapBandWith(buckets []float64, pol HeapBandPolicy) HeapBand {
+	dwell, criticalZ := pol.Dwell, pol.CriticalZ
+	if dwell <= 0 {
+		dwell = chstore.DefaultAnomalySensitivity().DwellBuckets
+	}
+	if criticalZ <= 0 {
+		criticalZ = chstore.DefaultAnomalySensitivity().CriticalZ
+	}
 	n := len(buckets)
 	need := minSamples + dwell
 	if n < need {
@@ -78,7 +113,7 @@ func ComputeHeapBand(buckets []float64) HeapBand {
 	split := n - dwell
 	baseline, window := buckets[:split], buckets[split:]
 	median, rawMAD := medianMAD(baseline)
-	mad := effectiveMAD(HeapBandMetric, median, rawMAD, HeapBandMinMAD)
+	mad := effectiveMAD(HeapBandMetric, median, rawMAD, pol.MinMAD)
 	zOf := func(v float64) float64 { return madScale * (v - median) / mad }
 	half := openZ * mad / madScale
 	hb := HeapBand{
@@ -90,7 +125,7 @@ func ComputeHeapBand(buckets []float64) HeapBand {
 	allDev, allCrit := true, true
 	for _, v := range window {
 		z := zOf(v)
-		gate := v >= median*(1+heapBandFloorPct) && v-median >= heapBandMinAbsDelta
+		gate := v >= median*(1+pol.FloorPct) && v-median >= pol.MinAbsDelta
 		if !(gate && z >= openZ) {
 			allDev = false
 		}
