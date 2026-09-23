@@ -371,7 +371,7 @@ func TestPollRowsHook(t *testing.T) {
 	})
 	var got []int
 	var gotFrom, gotTo time.Time
-	w.SetRowsHook(func(_ context.Context, _ SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time) {
+	w.SetRowsHook(func(_ context.Context, _ SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, _ bool) {
 		got = append(got, len(rows))
 		gotFrom, gotTo = from, to
 	})

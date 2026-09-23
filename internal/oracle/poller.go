@@ -91,8 +91,11 @@ type PollStatus struct {
 	LastMapped      int    `json:"lastMapped"`
 	LastNoTimestamp int    `json:"lastNoTimestamp"`
 	LastBadTraceID  int    `json:"lastBadTraceId"`
-	Capped          bool   `json:"capped,omitempty"`
-	LastError       string `json:"lastError,omitempty"`
+	// LastExpanded — v0.10.902: trace listesinden patlatılan satır (özel SQL
+	// kipi); LastMapped artık YAZILAN satır sayısıdır (kaynak satırı değil).
+	LastExpanded int    `json:"lastExpanded,omitempty"`
+	Capped       bool   `json:"capped,omitempty"`
+	LastError    string `json:"lastError,omitempty"`
 }
 
 // WorkerStatusSnapshot — paylaşılan durum blobu (influx v0.10.333 şekli).
@@ -183,7 +186,9 @@ func NewWorker(svc *Service, sink RowSink, state StateStore) *Worker {
 
 // SetHealthHook — poll-sonrası sağlık çağrısı, başarı da hata da. Start'tan ÖNCE.
 // RowsHook — poll sonrası satır kancası (bkz. Worker.rowsHook).
-type RowsHook func(ctx context.Context, src SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time)
+// capped (v0.10.902) — KAYNAK satır sayısı tavana dayandı (patlatılmış satır
+// sayısı değil); sayaç son satır dakikasından sonrasına sıfır basmaz.
+type RowsHook func(ctx context.Context, src SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, capped bool)
 
 // SetRowsHook — v0.10.893.
 func (w *Worker) SetRowsHook(h RowsHook) { w.rowsHook = h }
@@ -242,15 +247,19 @@ func (w *Worker) Tick(ctx context.Context) {
 		st, batch := w.pollSource(ctx, src, now)
 		polled = true
 		next := now.Add(pollInterval(src))
-		if st.Capped && st.LastError == "" {
-			next = now // arkada satır var — bir sonraki granülde devam
+		// Arkada satır var — bir sonraki granülde devam. v0.10.902: özel SQL
+		// kipinde DEĞİL: pencere SYSDATE'e bağlı, watermark bind'i yok; hemen
+		// yeniden koşmak aynı 5000 satırı döndürür ve ağır aggregate'i 5 s'de
+		// bir bankanın DB'sinde koşturur. Tavan orada yalnız durumdur.
+		if st.Capped && st.LastError == "" && !IsCustom(src) {
+			next = now
 		}
 		st.NextDueAt = next.UnixMilli()
 		if w.healthHook != nil {
 			w.healthHook(ctx, src, st.LastError)
 		}
 		if w.rowsHook != nil && st.LastError == "" {
-			w.rowsHook(ctx, src, batch.rows, batch.from, batch.to) // v0.10.893 — yalnız başarılı poll
+			w.rowsHook(ctx, src, batch.rows, batch.from, batch.to, st.Capped) // v0.10.893 — yalnız başarılı poll
 		}
 		w.mu.Lock()
 		w.nextDue[src.ID] = next
@@ -386,11 +395,20 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 	wm := w.watermarkFor(ctx, src.ID, now)
 	st.WatermarkNs = wm.UnixNano()
 	from, to := pollWindow(wm, now)
-	batch.from, batch.to = from, to
-	sqlText, args, err := buildPollQuery(src, from, to, pollRowCap, w.tsTypeFor(ctx, src, now))
-	if err != nil {
-		return fail("sorgu: " + err.Error())
+	var sqlText string
+	var args []any
+	if IsCustom(src) {
+		// v0.10.902 — özel SQL: sorgu kendi penceresini tanımlar (bind yok);
+		// sayaç/özet penceresi [now − WindowMin, now]. Watermark yalnız durum.
+		from, to = customWindow(src, now)
+		sqlText = buildCustomPollQuery(src, pollRowCap)
+	} else {
+		sqlText, args, err = buildPollQuery(src, from, to, pollRowCap, w.tsTypeFor(ctx, src, now))
+		if err != nil {
+			return fail("sorgu: " + err.Error())
+		}
 	}
+	batch.from, batch.to = from, to
 	w.count(w.mPolls, ctx, 1, attrs)
 	rows, err := w.queryRows(ctx, src, sqlText, args)
 	if err != nil {
@@ -399,7 +417,7 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 	st.LastRows = len(rows)
 	mapped, ms := mapper.MapAll(rows)
 	batch.rows = mapped
-	st.LastMapped, st.LastNoTimestamp, st.LastBadTraceID = ms.Mapped, ms.NoTimestamp, ms.BadTraceID
+	st.LastMapped, st.LastNoTimestamp, st.LastBadTraceID, st.LastExpanded = len(mapped), ms.NoTimestamp, ms.BadTraceID, ms.Expanded
 	if ms.NoTimestamp > 0 {
 		w.count(w.mDropped, ctx, int64(ms.NoTimestamp), attrs)
 	}
@@ -409,15 +427,18 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 		}
 		w.count(w.mRows, ctx, int64(len(mapped)), attrs)
 	}
-	st.Capped = len(rows) >= pollRowCap
+	st.Capped = len(rows) >= pollRowCap // KAYNAK satırı (patlatma öncesi)
+	if st.Capped && IsCustom(src) {
+		log.Printf("[oracle] %s: özel sorgu %d satır tavanına dayandı — pencere sonu gözlenmedi; sorgunun INTERVAL'ini/HAVING'ini daraltın", src.Name, pollRowCap)
+	}
 	newWM := advanceWatermark(wm, mapped, to, st.Capped)
 	if !newWM.Equal(wm) {
 		w.saveWatermark(ctx, src.ID, newWM, now)
 	}
 	st.WatermarkNs = newWM.UnixNano()
-	if ms.NoTimestamp > 0 || ms.BadTraceID > 0 {
-		log.Printf("[oracle] %s: %d satır, %d yazıldı, %d zamansız düştü, %d geçersiz trace id",
-			src.Name, len(rows), len(mapped), ms.NoTimestamp, ms.BadTraceID)
+	if ms.NoTimestamp > 0 || ms.BadTraceID > 0 || ms.Expanded > 0 {
+		log.Printf("[oracle] %s: %d satır, %d yazıldı (%d trace listesinden), %d zamansız düştü, %d geçersiz trace id",
+			src.Name, len(rows), len(mapped), ms.Expanded, ms.NoTimestamp, ms.BadTraceID)
 	}
 	return st, batch
 }

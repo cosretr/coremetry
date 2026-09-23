@@ -58,6 +58,11 @@ type OracleErrorRow struct {
 
 	AttrKeys   []string
 	AttrValues []string
+
+	// Weight — v0.10.902: ön-toplanmış Oracle satırının (özel SQL kipi, `count`
+	// alanı) sayaç ağırlığı. KOLON DEĞİL: oracle_error_log'a yazılmaz (INSERT
+	// listesi değişmez), yalnız poll-sonrası kancada (counter) okunur; 0 = 1.
+	Weight uint32
 }
 
 const oracleErrorLogDDL = `CREATE TABLE IF NOT EXISTS oracle_error_log (

@@ -143,6 +143,15 @@ type SourceConfig struct {
 	GenericCodes []string `json:"genericCodes,omitempty"`
 	IgnoreCodes  []string `json:"ignoreCodes,omitempty"`
 
+	// v0.10.902 (operatör) — ÖZEL SQL kipi (custom.go): QueryMode "custom"
+	// ise poller şema/tablo sorgusunu üretmez, CustomSQL'i salt-okunur
+	// sarmalayıcıda koşar (bind yok; sorgu kendi penceresini tanımlar).
+	// WindowMin sayaç/özet penceresi (dk) — sorgunun INTERVAL'iyle aynı
+	// tutulur. Boş kip = tablo (eski bloblar değişmez).
+	QueryMode string `json:"queryMode,omitempty"`
+	CustomSQL string `json:"customSql,omitempty"`
+	WindowMin int    `json:"windowMin,omitempty"`
+
 	Enabled bool `json:"enabled"`
 }
 
@@ -535,6 +544,9 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 			QueryTimeoutSec:  src.QueryTimeoutSec,
 			IntervalSec:      src.IntervalSec,
 			ProblemMode:      normalizeProblemMode(src.ProblemMode), // v0.10.897
+			QueryMode:        normalizeQueryMode(src.QueryMode),     // v0.10.902
+			CustomSQL:        strings.TrimSpace(src.CustomSQL),
+			WindowMin:        src.WindowMin,
 			Enabled:          src.Enabled,
 		}
 		if s.Name == "" {
@@ -606,6 +618,21 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 				return Settings{}, fmt.Errorf("%s: %s adı Oracle identifier'ı olmalı (harfle başlar, harf/rakam/_$# , ≤30)", label, f.name)
 			}
 		}
+		// v0.10.902 (inceleme) — özel SQL kipinde zaman kolonu ZORUNLU: boş kutu
+		// ERR_TIMESTAMP'e düşer, sorgu çıktısında o ad yok, her satır zamansız
+		// düşerdi. Tablo kipinde özel-kip alanları (count/traceIds) atılır:
+		// kip değişince gizli kutularda kalıp selectMappedOnly listesine girer
+		// ve ORA-00904 verirdi.
+		if normalizeQueryMode(src.QueryMode) == QueryModeCustom && s.TimestampColumn == "" && s.CustomSQL != "" {
+			return Settings{}, fmt.Errorf("%s: özel SQL kipinde timestampColumn zorunlu (sorgunun zaman takma adı, ör. TIMESLICE)", label)
+		}
+		if normalizeQueryMode(src.QueryMode) != QueryModeCustom && s.Columns != nil {
+			delete(s.Columns, FieldCount)
+			delete(s.Columns, FieldTraceIDs)
+			if len(s.Columns) == 0 {
+				s.Columns = nil
+			}
+		}
 		if s.TimestampColumn == "" {
 			s.TimestampColumn = DefaultTimestampColumn
 		}
@@ -615,6 +642,17 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 
 		if err := validateExtraWhere(s.ExtraWhere, label); err != nil {
 			return Settings{}, err
+		}
+		// v0.10.902 — özel SQL: konsol allow-list'i + uzunluk; pencere kelepçesi
+		// (0 = varsayılan, aralık dışı = hata — sessiz kırpma yok).
+		if err := validateCustomSQL(s.CustomSQL, label); err != nil {
+			return Settings{}, err
+		}
+		if s.WindowMin == 0 {
+			s.WindowMin = DefaultWindowMin
+		}
+		if s.WindowMin < MinWindowMin || s.WindowMin > MaxWindowMin {
+			return Settings{}, fmt.Errorf("%s: windowMin %d-%d dk arasında olmalı", label, MinWindowMin, MaxWindowMin)
 		}
 		// v0.10.600 — Aşama 2 eşleme ayarları kayıtta doğrulanır: kötü TZ /
 		// bilinmeyen alan / identifier olmayan kolon poller'da değil burada
@@ -680,7 +718,11 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 					return Settings{}, fmt.Errorf("%s: şifre zorunlu — şifre girin ya da passwordRef (env:/file:) verin", label)
 				}
 			}
-			if s.Schema == "" || s.Table == "" {
+			if IsCustom(s) {
+				if s.CustomSQL == "" {
+					return Settings{}, fmt.Errorf("%s: özel SQL kipinde customSql zorunlu", label)
+				}
+			} else if s.Schema == "" || s.Table == "" {
 				return Settings{}, fmt.Errorf("%s: şema ve tablo zorunlu", label)
 			}
 		}

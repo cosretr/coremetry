@@ -103,6 +103,14 @@ type BucketResult struct {
 // max ile tamamlanır); active: kaynağın aktif anahtarları (sıfır alırlar);
 // ignore: sayılmayacak hata kodları; maxKeys: seri tavanı (≤0 → tavan yok).
 func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time, active map[CounterKey]time.Time, ignore map[string]bool, maxKeys int, qualifier QualifierFn) BucketResult {
+	return bucketRows(source, rows, from, to, active, ignore, maxKeys, qualifier, len(rows) >= pollRowCap)
+}
+
+// bucketRows — v0.10.902: tavan bilgisi AÇIK. Özel SQL kipinde rows trace
+// listesinden patlatılmıştır; len(rows) kaynak satır sayısı değildir (birkaç yüz
+// grup 5000 patlatılmış satıra ulaşır, yanlış tavan dense sıfırı keserdi).
+// Poller kaynak satırından hesapladığı Capped'i verir.
+func bucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time, active map[CounterKey]time.Time, ignore map[string]bool, maxKeys int, qualifier QualifierFn, capped bool) BucketResult {
 	res := BucketResult{Seen: map[CounterKey]time.Time{}}
 	if source == "" || !to.After(from) && !to.Equal(from) {
 		return res
@@ -121,7 +129,7 @@ func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 	// Capped tik (poll tavanı doldu): satırların bittiği dakikadan sonrası
 	// GÖZLENMEMİŞ — oraya sıfır basmak sahte "düzeldi" olur; m1 son satırın
 	// dakikasına çekilir (kalan satırlar sonraki granülde gelir).
-	if len(rows) >= pollRowCap {
+	if capped {
 		var last time.Time
 		for _, r := range rows {
 			if r.Time.After(last) {
@@ -168,7 +176,7 @@ func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 		if counts[k] == nil {
 			counts[k] = map[time.Time]float64{}
 		}
-		counts[k][t]++
+		counts[k][t] += rowWeight(r) // v0.10.902 — ön-toplanmış satır (count alanı) ağırlığıyla
 		if r.Time.After(res.Seen[k]) {
 			res.Seen[k] = r.Time
 		}
@@ -231,6 +239,16 @@ func BucketRows(source string, rows []chstore.OracleErrorRow, from, to time.Time
 		}
 	}
 	return res
+}
+
+// rowWeight — SAF: satırın sayaç ağırlığı. Tablo kipi satır = 1; özel SQL
+// kipinde `count` alanı (Adet) — trace listesinden patlatılan satır 1,
+// artan sayı trace'siz satırda (mapping.go expandTraceList). 0 = 1.
+func rowWeight(r chstore.OracleErrorRow) float64 {
+	if r.Weight > 0 {
+		return float64(r.Weight)
+	}
+	return 1
 }
 
 func sumCounts(m map[time.Time]float64) float64 {
@@ -316,7 +334,7 @@ func NewCounter(sink MetricSink) *Counter {
 
 // Handle — poll sonrası kanca gövdesi (satır yoksa da çağrılır: aktif
 // anahtarlara sıfır yazılır, kapanış mümkün olsun). Hata poll'u düşürmez.
-func (c *Counter) Handle(ctx context.Context, src SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, ignore map[string]bool, qualifier QualifierFn) BucketResult {
+func (c *Counter) Handle(ctx context.Context, src SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, capped bool, ignore map[string]bool, qualifier QualifierFn) BucketResult {
 	if c == nil || c.sink == nil || src.ID == "" {
 		return BucketResult{}
 	}
@@ -339,7 +357,7 @@ func (c *Counter) Handle(ctx context.Context, src SourceConfig, rows []chstore.O
 	}
 	c.mu.Unlock()
 
-	res := BucketRows(src.Name, rows, from, to, snapshot, ignore, CounterMaxKeys, qualifier)
+	res := bucketRows(src.Name, rows, from, to, snapshot, ignore, CounterMaxKeys, qualifier, capped)
 	st := CounterStats{At: now.Unix(), Points: len(res.Points), Keys: res.Keys, Overflow: res.Overflow, Ignored: res.Ignored}
 	if len(res.Points) > 0 {
 		if err := c.sink.InsertMetrics(ctx, res.Points); err != nil {

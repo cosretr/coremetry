@@ -286,14 +286,18 @@ describe('v0.10.603 — zaman dilimi + kolon eşlemesi', () => {
     expect(e.timestampHasZone).toBe(false);
     expect(e.columns).toEqual({});
   });
-  it('ORACLE_MAPPING_FIELDS 14 alan; timestamp/type LİSTEDE DEĞİL (kendi kutuları var)', () => {
-    expect(ORACLE_MAPPING_FIELDS.length).toBe(14);
+  it('ORACLE_MAPPING_FIELDS 14 tablo alanı + 2 özel SQL alanı (v0.10.902); timestamp/type LİSTEDE DEĞİL (kendi kutuları var)', () => {
+    expect(ORACLE_MAPPING_FIELDS.length).toBe(16);
     const fields = ORACLE_MAPPING_FIELDS.map(f => f.field);
     expect(fields).not.toContain('timestamp');
     expect(fields).not.toContain('type');
-    expect(new Set(fields).size).toBe(14);
+    expect(new Set(fields).size).toBe(16);
     expect(ORACLE_MAPPING_FIELDS.find(f => f.field === 'service')?.target).toBe('operation.code');
-    for (const f of ORACLE_MAPPING_FIELDS) expect(f.column).toMatch(/^ERR_[A-Z_]+$/);
+    // Tablo alanları ERR_* varsayılanı taşır; count/traceIds varsayılan KAPALI ("(kapalı)" yer tutucusu).
+    for (const f of ORACLE_MAPPING_FIELDS) {
+      if (f.field === 'count' || f.field === 'traceIds') expect(f.column).toBe('(kapalı)');
+      else expect(f.column).toMatch(/^ERR_[A-Z_]+$/);
+    }
   });
   it('dilim biçimi: IANA adları geçer, serbest metin reddedilir', () => {
     for (const tz of ['Europe/Istanbul', 'UTC', 'Etc/GMT+3', 'America/Argentina/Buenos_Aires']) {
@@ -350,5 +354,100 @@ describe('sourceForSave — selectMappedOnly', () => {
     };
     expect(sourceFromSnapshot(snap).selectMappedOnly).toBe(true);
     expect(sourceForSave(sourceFromSnapshot(snap), snap).selectMappedOnly).toBe(true);
+  });
+});
+
+// v0.10.902 — özel SQL kipi (operatör: "sorgunun son hâli bu, ona göre güncelle").
+describe('validateOracleSource — özel SQL kipi', () => {
+  const custom = (over: Partial<OracleSource> = {}) => goodSource({
+    queryMode: 'custom', schema: '', table: '', windowMin: 15, timestampColumn: 'TIMESLICE',
+    customSql: "SELECT TRUNC(ts,'MI') AS TimeSlice, COUNT(*) AS Adet FROM APPOWNER.MASTER_LOG WHERE ts >= TRUNC(SYSDATE,'MI') - INTERVAL '15' MINUTE GROUP BY TRUNC(ts,'MI') HAVING COUNT(*) > 1 ORDER BY 1;",
+    ...over,
+  });
+  it('şema/tablo zorunlu DEĞİL; metin + pencere geçerli → hata yok', () => {
+    expect(validateOracleSource(custom())).toEqual({});
+  });
+  it('etkin özel kaynakta metin zorunlu', () => {
+    expect(validateOracleSource(custom({ customSql: '' })).customSql).toMatch(/zorunlu/);
+    expect(validateOracleSource(custom({ customSql: '', enabled: false })).customSql).toBeUndefined();
+  });
+  it('allow-list: DML / çoklu ifade / FOR UPDATE / uzunluk reddedilir; yorum + tek son ; geçer', () => {
+    expect(validateOracleSource(custom({ customSql: 'DELETE FROM t' })).customSql).toMatch(/SELECT ya da WITH/);
+    expect(validateOracleSource(custom({ customSql: 'SELECT 1 FROM dual; DROP TABLE t' })).customSql).toMatch(/tek bir ifade/);
+    expect(validateOracleSource(custom({ customSql: 'SELECT * FROM t FOR UPDATE' })).customSql).toMatch(/FOR UPDATE/);
+    expect(validateOracleSource(custom({ customSql: 'SELECT ' + 'x'.repeat(9000) + ' FROM dual' })).customSql).toMatch(/8000/);
+    expect(validateOracleSource(custom({ customSql: '-- not\nWITH x AS (SELECT 1 FROM dual) SELECT * FROM x;' })).customSql).toBeUndefined();
+    expect(validateOracleSource(custom({ customSql: 'SELECT(1) FROM dual' })).customSql).toBeUndefined();
+  });
+  it('pencere 1-240; 0/boş = varsayılan', () => {
+    expect(validateOracleSource(custom({ windowMin: 0 })).windowMin).toBeUndefined();
+    expect(validateOracleSource(custom({ windowMin: 241 })).windowMin).toMatch(/1-240/);
+    expect(validateOracleSource(custom({ windowMin: 2.5 })).windowMin).toMatch(/tam sayı/);
+  });
+  it('tablo kipinde şema/tablo hâlâ zorunlu ve özel SQL metni yok sayılır', () => {
+    const e = validateOracleSource(goodSource({ schema: '', customSql: 'DELETE FROM t' }));
+    expect(e.schema).toMatch(/zorunlu/);
+    expect(e.customSql).toBeUndefined();
+  });
+  it('count / traceIds alanları eşlemede tanınır', () => {
+    expect(validateOracleSource(custom({ columns: { count: 'ADET', traceIds: 'TRACEIDS' } })).columns).toBeUndefined();
+    expect(ORACLE_MAPPING_FIELDS.some(f => f.field === 'count')).toBe(true);
+    expect(ORACLE_MAPPING_FIELDS.some(f => f.field === 'traceIds')).toBe(true);
+  });
+});
+
+describe('sourceForSave / sourceFromSnapshot — özel SQL kipi', () => {
+  it('kip yalnız custom iken gövdeye girer; metin kırpılır; pencere > 0 ise', () => {
+    const out = sourceForSave(goodSource({ queryMode: 'custom', schema: '', table: '', customSql: '  SELECT 1 FROM dual  ', windowMin: 30 }));
+    expect(out.queryMode).toBe('custom');
+    expect(out.customSql).toBe('SELECT 1 FROM dual');
+    expect(out.windowMin).toBe(30);
+    const tbl = sourceForSave(goodSource({ customSql: 'SELECT 1 FROM dual', windowMin: 30 }));
+    expect(tbl.queryMode).toBeUndefined();
+    expect(tbl.customSql).toBeUndefined();
+    expect(tbl.windowMin).toBeUndefined();
+  });
+  it('snapshot → form: custom kip, metin ve pencere taşınır; boş kip tablo', () => {
+    const snap = { ...goodSource(), hasPassword: true, passwordResolved: true, queryMode: 'custom', customSql: 'SELECT 1 FROM dual', windowMin: 20 } as OracleSourceSnapshot;
+    const s = sourceFromSnapshot(snap);
+    expect(s.queryMode).toBe('custom');
+    expect(s.customSql).toBe('SELECT 1 FROM dual');
+    expect(s.windowMin).toBe(20);
+    const t = sourceFromSnapshot({ ...goodSource(), hasPassword: true, passwordResolved: true } as OracleSourceSnapshot);
+    expect(t.queryMode).toBe('table');
+    expect(t.customSql).toBe('');
+  });
+});
+
+// v0.10.902 inceleme turu — gizli alanlar gövdeye girmez, zaman kolonu zorunlu,
+// bayt ölçüsü, yalnız-yorum metni.
+describe('özel SQL kipi — inceleme regresyonları', () => {
+  const custom = (over: Partial<OracleSource> = {}) => goodSource({
+    queryMode: 'custom', timestampColumn: 'TIMESLICE', windowMin: 15,
+    customSql: 'SELECT 1 AS TIMESLICE FROM dual', ...over,
+  });
+  it('özel kipte zaman kolonu zorunlu', () => {
+    expect(validateOracleSource(custom({ timestampColumn: '' })).timestampColumn).toMatch(/zorunlu/);
+    expect(validateOracleSource(custom()).timestampColumn).toBeUndefined();
+  });
+  it('özel kipte gizli tablo alanları ne doğrulanır ne gönderilir', () => {
+    const src = custom({ schema: 'bad schema', table: 'x y', extraWhere: 'a -- b', typeFilter: ['X'], selectMappedOnly: true });
+    expect(validateOracleSource(src)).toEqual({});
+    const out = sourceForSave(src);
+    expect(out.schema).toBe('');
+    expect(out.table).toBe('');
+    expect(out.extraWhere).toBeUndefined();
+    expect(out.typeFilter).toBeUndefined();
+    expect(out.selectMappedOnly).toBeUndefined();
+  });
+  it('tablo kipinde count/traceIds eşlemesi gövdeye girmez', () => {
+    const out = sourceForSave(goodSource({ columns: { count: 'ADET', traceIds: 'TRACEIDS', code: 'MCA_ERR_CODE' } }));
+    expect(out.columns).toEqual({ code: 'MCA_ERR_CODE' });
+    const c = sourceForSave(custom({ columns: { count: 'ADET', traceIds: 'TRACEIDS' } }));
+    expect(c.columns).toEqual({ count: 'ADET', traceIds: 'TRACEIDS' });
+  });
+  it('uzunluk BAYT sayılır (sunucu ile aynı); yalnız-yorum metni reddedilir', () => {
+    expect(validateOracleSource(custom({ customSql: "SELECT '" + 'ş'.repeat(4001) + "' FROM dual" })).customSql).toMatch(/bayt/);
+    expect(validateOracleSource(custom({ customSql: '-- yalnız not' })).customSql).toMatch(/yorum/);
   });
 });

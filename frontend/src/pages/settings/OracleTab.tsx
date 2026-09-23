@@ -34,6 +34,7 @@ import {
   ORACLE_DEFAULT_PORT, ORACLE_DEFAULT_TIMESTAMP_COLUMN, ORACLE_DEFAULT_TYPE_COLUMN,
   ORACLE_DEFAULT_MAX_OPEN_CONNS, ORACLE_DEFAULT_QUERY_TIMEOUT_SEC, ORACLE_DEFAULT_INTERVAL_SEC,
   ORACLE_DEFAULT_TIMEZONE, ORACLE_MAPPING_FIELDS, ORACLE_COLUMN_DISABLED,
+  ORACLE_DEFAULT_WINDOW_MIN, ORACLE_CUSTOM_ONLY_FIELDS, isCustomQuery,
   type OracleFieldErrors,
 } from './oracleForm';
 import type {
@@ -226,6 +227,7 @@ export function OracleTab() {
                       <>
                         Son okuma <b>{fmtDateTime(ps.lastPollAt)}</b>
                         {' · '}{ps.lastRows} satır okundu, {ps.lastMapped} yazıldı
+                        {(ps.lastExpanded ?? 0) > 0 && <> ({ps.lastExpanded} trace listesinden)</>}
                         {ps.lastNoTimestamp > 0 && <> · <span className="is-err">{ps.lastNoTimestamp} zamansız satır düştü</span></>}
                         {ps.lastBadTraceId > 0 && <> · {ps.lastBadTraceId} geçersiz trace id</>}
                         {' · '}watermark <b>{fmtDateTime(ps.watermarkNs / 1e6)}</b>
@@ -322,39 +324,77 @@ export function OracleTab() {
                 )}
               </div>
 
-              <div className="oracle-sub">Tablo</div>
+              <div className="oracle-sub">Sorgu</div>
+              {/* v0.10.902 (operatör) — özel SQL kipi: sorgu operatörün metni,
+                  salt-okunur sarmalayıcıda (tek SELECT/WITH, FETCH FIRST tavanı);
+                  bind yok, pencere sorgunun kendi SYSDATE aralığı. Şema/tablo/tip
+                  süzgeci/ek koşul o kipte anlamsız → gizli. */}
               <div className="oracle-row">
-                <Field label="Şema" value={src.schema} error={err.schema}
-                  onChange={e => patch(i, { schema: e.target.value })}
-                  placeholder="APPOWNER" />
-                <Field label="Tablo" value={src.table} error={err.table}
-                  onChange={e => patch(i, { table: e.target.value })}
-                  placeholder="ERROR_LOG" />
-                <Field label="Zaman kolonu" value={src.timestampColumn ?? ''} error={err.timestampColumn}
+                <SelectField label="Sorgu kipi" className="is-narrow" value={isCustomQuery(src) ? 'custom' : 'table'}
+                  onChange={e => patch(i, { queryMode: e.target.value === 'custom' ? 'custom' : 'table' })}
+                  hint="Tablo: şema/tablo/zaman kolonundan üretilen pencereli sorgu. Özel SQL: sizin metniniz, olduğu gibi.">
+                  <option value="table">Tablo (üretilen sorgu)</option>
+                  <option value="custom">Özel SQL (ön-toplanmış / JOIN'li)</option>
+                </SelectField>
+                {!isCustomQuery(src) && (
+                  <>
+                    <Field label="Şema" value={src.schema} error={err.schema}
+                      onChange={e => patch(i, { schema: e.target.value })}
+                      placeholder="APPOWNER" />
+                    <Field label="Tablo" value={src.table} error={err.table}
+                      onChange={e => patch(i, { table: e.target.value })}
+                      placeholder="ERROR_LOG" />
+                  </>
+                )}
+                <Field label={isCustomQuery(src) ? 'Zaman kolonu (çıktı takma adı)' : 'Zaman kolonu'} value={src.timestampColumn ?? ''} error={err.timestampColumn}
                   onChange={e => patch(i, { timestampColumn: e.target.value })}
-                  placeholder={ORACLE_DEFAULT_TIMESTAMP_COLUMN}
-                  hint={err.timestampColumn ? undefined : `boş = ${ORACLE_DEFAULT_TIMESTAMP_COLUMN}`} />
-                <Field label="Tip kolonu" value={src.typeColumn ?? ''} error={err.typeColumn}
+                  placeholder={isCustomQuery(src) ? 'TIMESLICE' : ORACLE_DEFAULT_TIMESTAMP_COLUMN}
+                  hint={err.timestampColumn ? undefined
+                    : isCustomQuery(src) ? 'Zorunlu — epoch saniye (TimeSlice) ya da DD.MM.YYYY HH24:MI (Zaman, kaynağın dilimi)'
+                      : `boş = ${ORACLE_DEFAULT_TIMESTAMP_COLUMN}`} />
+                <Field label={isCustomQuery(src) ? 'Tip kolonu (çıktı takma adı)' : 'Tip kolonu'} value={src.typeColumn ?? ''} error={err.typeColumn}
                   onChange={e => patch(i, { typeColumn: e.target.value })}
-                  placeholder={ORACLE_DEFAULT_TYPE_COLUMN}
-                  hint={err.typeColumn ? undefined : `boş = ${ORACLE_DEFAULT_TYPE_COLUMN}`} />
+                  placeholder={isCustomQuery(src) ? 'SONUC' : ORACLE_DEFAULT_TYPE_COLUMN}
+                  hint={err.typeColumn ? undefined : isCustomQuery(src) ? 'Yalnız gösterim (süzgeç sorgunuzda)' : `boş = ${ORACLE_DEFAULT_TYPE_COLUMN}`} />
               </div>
-              <div className="oracle-row">
-                <Field label="Tip süzgeci" error={err.typeFilter}
-                  value={typeFilterToText(src.typeFilter)}
-                  onChange={e => patch(i, { typeFilter: parseTypeFilter(e.target.value) })}
-                  placeholder="T"
-                  hint={err.typeFilter ? undefined
-                    : 'Virgülle ayrılmış tip kolonu değerleri (bind edilir); boş = T.'} />
-              </div>
-              <div className="oracle-q">
-                <TextareaField label="Ek koşul (WHERE'e AND ile eklenir)" rows={2}
-                  value={src.extraWhere ?? ''} error={err.extraWhere}
-                  onChange={e => patch(i, { extraWhere: e.target.value })}
-                  placeholder="ERR_CODE NOT IN ('ERR_020')"
-                  hint={err.extraWhere ? undefined
-                    : "Serbest ifade; `;` `--` `/*` yasak — bunlar sorgunun zaman yüklemini ve satır tavanını susturur."} />
-              </div>
+              {isCustomQuery(src) ? (
+                <>
+                  <div className="oracle-q">
+                    <TextareaField label="Özel SQL (tek SELECT / WITH; olduğu gibi koşar)" rows={14}
+                      value={src.customSql ?? ''} error={err.customSql}
+                      onChange={e => patch(i, { customSql: e.target.value })}
+                      placeholder={"SELECT ROUND((TRUNC(ts,'MI') - DATE '1970-01-01') * 86400) - 10800 AS TimeSlice, …, COUNT(*) AS Adet, … AS TRACEIDS\nFROM …\nWHERE ts >= TRUNC(SYSDATE,'MI') - INTERVAL '15' MINUTE AND ts < TRUNC(SYSDATE,'MI')\nGROUP BY … HAVING COUNT(*) > 1"}
+                      hint={err.customSql ? undefined
+                        : 'Bind eklenmez: pencereyi (SYSDATE aralığı) ve süzgeçleri sorgu belirler. `SELECT * FROM (…) FETCH FIRST 5000 ROWS ONLY` ile sarılır (yorum ve /*+ ipuçları korunur); sondaki `;` düşer. Alan eşlemesi → göster, kutulara çıktı TAKMA ADLARINI yazın (Oracle büyük harfe çevirir): count (sayaç ağırlığı) ← ADET, trace_id listesi ← TRACEIDS, operation.code ← OPERATIONCODE, error.code ← FUNCTIONCODE (sorguda hata kodu yok; fonksiyon kodu Problem başlığında error.code olarak görünür), channel.code ← KANALKOD, host.name ← HOSTNAME. HAVING COUNT(*) > 1 varsa dakikada tek hata sayaçta 0 görünür. Hesap yalnız SELECT yetkili olmalı: sorgu içinden çağrılan fonksiyonların yan etkisini Coremetry kesemez.'} />
+                  </div>
+                  <div className="oracle-row">
+                    <Field label="Pencere (dk)" className="is-narrow" inputMode="numeric" error={err.windowMin}
+                      value={numToForm(src.windowMin)}
+                      onChange={e => patch(i, { windowMin: numFromForm(e.target.value) })}
+                      placeholder={String(ORACLE_DEFAULT_WINDOW_MIN)}
+                      hint={err.windowMin ? undefined : `Sorgunuzun INTERVAL'i ile AYNI olmalı — büyük yazılırsa sorgunun görmediği dakikalara 0 yazılır (sahte "düzeldi"); 1-240, boş = ${ORACLE_DEFAULT_WINDOW_MIN}`} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="oracle-row">
+                    <Field label="Tip süzgeci" error={err.typeFilter}
+                      value={typeFilterToText(src.typeFilter)}
+                      onChange={e => patch(i, { typeFilter: parseTypeFilter(e.target.value) })}
+                      placeholder="T"
+                      hint={err.typeFilter ? undefined
+                        : 'Virgülle ayrılmış tip kolonu değerleri (bind edilir); boş = T.'} />
+                  </div>
+                  <div className="oracle-q">
+                    <TextareaField label="Ek koşul (WHERE'e AND ile eklenir)" rows={2}
+                      value={src.extraWhere ?? ''} error={err.extraWhere}
+                      onChange={e => patch(i, { extraWhere: e.target.value })}
+                      placeholder="ERR_CODE NOT IN ('ERR_020')"
+                      hint={err.extraWhere ? undefined
+                        : "Serbest ifade; `;` `--` `/*` yasak — bunlar sorgunun zaman yüklemini ve satır tavanını susturur."} />
+                  </div>
+                </>
+              )}
 
               <div className="oracle-sub">Zaman</div>
               <div className="oracle-row">
@@ -379,11 +419,13 @@ export function OracleTab() {
               </div>
               {/* v0.10.843 (operatör) — kurum tablosunda SELECT * sürücüde
                   düşüyordu; eşleme zaten kolon listesidir, SELECT onu kullansın. */}
-              <label className="oracle-check">
-                <input type="checkbox" checked={!!src.selectMappedOnly}
-                  onChange={e => patch(i, { selectMappedOnly: e.target.checked })} />
-                <span>SELECT yalnız eşlenen kolonlar (<code>SELECT *</code> yerine) — eşlenmeyen kolonlar attribute olmaz</span>
-              </label>
+              {!isCustomQuery(src) && (
+                <label className="oracle-check">
+                  <input type="checkbox" checked={!!src.selectMappedOnly}
+                    onChange={e => patch(i, { selectMappedOnly: e.target.checked })} />
+                  <span>SELECT yalnız eşlenen kolonlar (<code>SELECT *</code> yerine) — eşlenmeyen kolonlar attribute olmaz</span>
+                </label>
+              )}
               {/* v0.10.897 (Aşama 3 dilim D) — Problem üretimi: kip / jenerik kodlar /
                   sayılmayan kodlar + öğrenilmiş op→servis haritası (görüntüle · sıfırla). */}
               <div className="oracle-sub" style={{ marginTop: 12 }}>Problem üretimi</div>
@@ -407,13 +449,19 @@ export function OracleTab() {
               {showCols[i] && (
                 <>
                   <div className="oracle-q">
-                    Boş kutu = varsayılan kolon; <code>{ORACLE_COLUMN_DISABLED}</code> = bu alan
-                    tabloda yok. Zaman ve tip kolonları yukarıdaki kutulardan. Tüketilmeyen her
-                    kolon satırda olduğu gibi attribute olarak kalır.
+                    {isCustomQuery(src)
+                      ? <>Kolon = sorgunun <b>çıktı takma adı</b> (Oracle büyük harfe çevirir). Boş kutu = alan
+                        eşlenmemiş (count/traceIds için kapalı; diğerleri için varsayılan ERR_* adı aranır). Zaman ve
+                        tip kolonları yukarıdaki kutulardan. <b>count</b> sayaç ağırlığıdır (Adet; attribute olarak da
+                        kalır), <b>traceIds</b> ayırıcılı liste — trace başına satıra patlatılır. Tüketilmeyen her
+                        kolon (ZAMAN, DURATION…) attribute olarak kalır.</>
+                      : <>Boş kutu = varsayılan kolon; <code>{ORACLE_COLUMN_DISABLED}</code> = bu alan
+                        tabloda yok. Zaman ve tip kolonları yukarıdaki kutulardan. Tüketilmeyen her
+                        kolon satırda olduğu gibi attribute olarak kalır.</>}
                   </div>
                   {err.columns && <div className="oracle-q is-err">{err.columns}</div>}
                   <div className="oracle-row">
-                    {ORACLE_MAPPING_FIELDS.map(f => (
+                    {ORACLE_MAPPING_FIELDS.filter(f => isCustomQuery(src) || !ORACLE_CUSTOM_ONLY_FIELDS.has(f.field)).map(f => (
                       <Field key={f.field} label={f.target} className="is-narrow"
                         value={src.columns?.[f.field] ?? ''}
                         onChange={e => patch(i, { columns: { ...(src.columns ?? {}), [f.field]: e.target.value } })}
@@ -448,10 +496,14 @@ export function OracleTab() {
                   onClick={() => runTest(i)}>
                   Bağlantıyı dene
                 </Button>
-                <select value={testWindow} onChange={e => setTestWindow(Number(e.target.value) as OracleTestWindow)}
-                  aria-label="Test penceresi" disabled={busy}>
-                  {ORACLE_TEST_WINDOWS.map(m => <option key={m} value={m}>son {m} dk</option>)}
-                </select>
+                {isCustomQuery(src) ? (
+                  <span className="is-quiet">pencere: sorgunun SYSDATE aralığı ({src.windowMin || ORACLE_DEFAULT_WINDOW_MIN} dk)</span>
+                ) : (
+                  <select value={testWindow} onChange={e => setTestWindow(Number(e.target.value) as OracleTestWindow)}
+                    aria-label="Test penceresi" disabled={busy}>
+                    {ORACLE_TEST_WINDOWS.map(m => <option key={m} value={m}>son {m} dk</option>)}
+                  </select>
+                )}
                 {pr && 'pending' in pr && <span className="is-quiet">deneniyor…</span>}
               </div>
 
@@ -464,6 +516,7 @@ export function OracleTab() {
                     {' · '}şifre {pr.passwordResolved ? 'çözüldü' : 'çözülemedi'}
                     {pr.latencyMs !== undefined && <> · {pr.latencyMs} ms</>}
                   </FlashBox>
+                  {pr.hint && <div className="oracle-q is-quiet">{pr.hint}</div>}
                   {/* v0.10.845 — LONG kolon hükmü; test DÜŞSE de görünür (ORA-00997'nin
                       sebebi hatanın yanında dursun). */}
                   {(() => {
@@ -521,7 +574,7 @@ export function OracleTab() {
                   {/* v0.10.768 — tam tarama hükmü + pencere özeti + poller sorgusu.
                       Operatör: "full scan / kilit olmasın, önce test edelim, sorgu
                       görünür olsun; hangi servis/operasyon/trace geldi". */}
-                  {pr.ok && (() => {
+                  {pr.ok && pr.scan && (() => {
                     const sv = scanVerdict(pr.scan);
                     return (
                       <div className="oracle-scan">
@@ -542,7 +595,7 @@ export function OracleTab() {
                   })()}
                   {pr.ok && pr.summary && (
                     <div className="oracle-summary">
-                      <div className="oracle-sub">{summaryHeadline(pr.summary)}</div>
+                      <div className="oracle-sub">{summaryHeadline(pr.summary)}{(pr.summary.expanded ?? 0) > 0 && <> · {pr.summary.expanded} satır trace listesinden</>}</div>
                       {!pr.summary.error && (
                         <div className="oracle-row">
                           <div>
@@ -577,7 +630,7 @@ export function OracleTab() {
                   )}
                   {pr.pollQuery && (
                     <>
-                      <div className="oracle-sub">Poller'ın koşacağı sorgu (bind: {(pr.pollBinds ?? []).join(' · ')})</div>
+                      <div className="oracle-sub">Poller'ın koşacağı sorgu ({(pr.pollBinds?.length ?? 0) > 0 ? `bind: ${pr.pollBinds!.join(' · ')}` : 'bind yok — pencere sorgunun kendi SYSDATE aralığı'})</div>
                       <pre className="oracle-sql">{pr.pollQuery}</pre>
                     </>
                   )}

@@ -31,6 +31,9 @@ type MappingCheck struct {
 	// Prefix — önerilerin türetildiği önek (zaman/tip kolonu varsayılanın
 	// önekli hâliyse, ör. MCA_ERR_TIMESTAMP → "MCA_"). Boş = öneri yok.
 	Prefix string `json:"prefix,omitempty"`
+	// Source — v0.10.902: "query" = özel SQL kipinde sorgunun çıktı kolonlarına
+	// karşı (sözlük değil); boş = tablo sözlüğü (ALL_TAB_COLUMNS).
+	Source string `json:"source,omitempty"`
 }
 
 func tableColumnsSQL() string {

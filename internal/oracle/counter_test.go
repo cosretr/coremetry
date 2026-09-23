@@ -92,25 +92,25 @@ func TestCounterHandleCarriesActiveKeys(t *testing.T) {
 	src := SourceConfig{ID: "o-1", Name: "oracle-prod"}
 	from, to := now.Add(-3*time.Minute), now
 	rows := []chstore.OracleErrorRow{{Time: now.Add(-time.Minute), OperationCode: "OP", ErrorCode: "E", ChannelCode: "C"}}
-	r1 := c.Handle(context.Background(), src, rows, from, to, nil, nil)
+	r1 := c.Handle(context.Background(), src, rows, from, to, false, nil, nil)
 	if r1.Keys != 1 || len(sink.calls) != 1 || c.ActiveKeys("o-1") != 1 {
 		t.Fatalf("ilk tik: %+v aktif=%d", r1, c.ActiveKeys("o-1"))
 	}
 	// İkinci tik: satır yok → aktif anahtara sıfır yazılır (kapanış için).
 	now = now.Add(time.Minute)
-	r2 := c.Handle(context.Background(), src, nil, from.Add(time.Minute), to.Add(time.Minute), nil, nil)
+	r2 := c.Handle(context.Background(), src, nil, from.Add(time.Minute), to.Add(time.Minute), false, nil, nil)
 	if r2.Keys != 1 || len(r2.Points) == 0 || r2.Points[0].Value != 0 {
 		t.Fatalf("satırsız tik sıfır yazmalı: %+v", r2)
 	}
 	// Yazım hatası: poll düşmez, istatistikte görünür.
 	sink.err = errors.New("ch down")
-	c.Handle(context.Background(), src, rows, from, to, nil, nil)
+	c.Handle(context.Background(), src, rows, from, to, false, nil, nil)
 	if st, ok := c.Stats("o-1"); !ok || st.Error == "" || c.errors.Load() != 1 {
 		t.Fatalf("hata istatistiği: %+v", st)
 	}
 	// 4 saat görülmeyen anahtar düşer.
 	now = now.Add(5 * time.Hour)
-	c.Handle(context.Background(), src, nil, now.Add(-time.Minute), now, nil, nil)
+	c.Handle(context.Background(), src, nil, now.Add(-time.Minute), now, false, nil, nil)
 	if c.ActiveKeys("o-1") != 0 {
 		t.Fatal("bayat anahtar düşmeli")
 	}

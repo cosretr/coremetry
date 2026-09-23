@@ -571,6 +571,9 @@ type WindowSummary struct {
 	TracesFound int         `json:"tracesFound"`
 	Services    []NameCount `json:"services"`
 	Error       string      `json:"error,omitempty"`
+	// Expanded — v0.10.902: trace listesinden PATLATILAN satır sayısı (özel
+	// SQL kipi; "N satır → M satır yazıldı" cümlesinin açıklaması).
+	Expanded int `json:"expanded,omitempty"`
 }
 
 // topCounts — SAF: sayıya göre azalan, eşitlikte ada göre; ilk n.
@@ -720,6 +723,9 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 	defer db.Close()
 
 	budget := queryTimeout(src)
+	if IsCustom(src) {
+		return s.testCustom(ctx, src, opt, db, secret, budget, res) // v0.10.902 — özel SQL kipi (custom.go)
+	}
 	// v0.10.885 — zaman kolonunun tipi sözlükten; bind ifadesi ona göre
 	// (partition budaması). Okunamazsa "" → TimestampHasZone kutusu karar verir.
 	tsType, tsErr := runTsTypeProbe(ctx, db, src, budget, secret)

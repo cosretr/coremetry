@@ -98,12 +98,29 @@ func IsSafeConsoleSQL(q string) bool {
 // WrapConsoleSQL — SAF: operatör metnini salt-okunur sarmalayıcıya alır.
 // Sondaki ';' düşer (Oracle alt sorguda kabul etmez). n ≤ 0 ya da tavan
 // üstü → ConsoleMaxRows.
+//
+// v0.10.902 (inceleme): çalıştırılan metin artık YORUMLARI KORUR. Eskiden
+// stripSQLComments'ten geçiyordu; regex literal-bilinçsiz olduğundan
+// /*+ INDEX … */ optimizer ipuçları sessizce düşüyor (her dakika koşan özel
+// sorguda tam tarama riski) ve '…--…' içeren bir dize literalinin arkası
+// (SYSDATE penceresi dâhil) kesiliyordu. Sıyırma yalnız IsSafeConsoleSQL
+// DENETİMİNDE kalır; Oracle yorumu kendisi yorum sayar, sarmalayıcıdaki
+// satır sonları satır yorumunu kapatır.
 func WrapConsoleSQL(q string, n int) string {
 	if n <= 0 || n > ConsoleMaxRows {
 		n = ConsoleMaxRows
 	}
-	clean := strings.TrimRight(stripSQLComments(q), "; \t\r\n")
-	return fmt.Sprintf("SELECT * FROM (\n%s\n) FETCH FIRST %d ROWS ONLY", clean, n)
+	return fmt.Sprintf("SELECT * FROM (\n%s\n) FETCH FIRST %d ROWS ONLY", trimTrailingTerminator(q), n)
+}
+
+// trimTrailingTerminator — SAF: sondaki boşluk ve ';' düşer; ';' ile metin
+// sonu arasında YALNIZ yorum/boşluk varsa (SELECT …; -- not) o ';' de düşer.
+func trimTrailingTerminator(q string) string {
+	body := strings.TrimRight(q, "; \t\r\n")
+	if i := strings.LastIndex(body, ";"); i >= 0 && stripSQLComments(body[i+1:]) == "" {
+		body = strings.TrimRight(body[:i], "; \t\r\n")
+	}
+	return body
 }
 
 // consoleCell — SAF: sürücü değerini JSON-dostu hâle çevirir; kırpma YOK

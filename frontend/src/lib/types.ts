@@ -1612,6 +1612,13 @@ export interface OracleSource {
   problemMode?: 'off' | 'shadow' | 'live';
   genericCodes?: string[];
   ignoreCodes?: string[];
+  /** v0.10.902 — ÖZEL SQL kipi: poller şema/tablo sorgusu üretmez, customSql'i
+   *  salt-okunur sarmalayıcıda koşar (tek SELECT/WITH; bind yok — sorgu kendi
+   *  penceresini SYSDATE ile tanımlar). windowMin = sayaç/özet penceresi (dk),
+   *  sorgunun INTERVAL'iyle aynı tutulur. Boş kip = tablo. */
+  queryMode?: 'table' | 'custom';
+  customSql?: string;
+  windowMin?: number;
   enabled: boolean;
 }
 /** oracle.SourceSnapshot — GET görünümü: password MASKELİ, rozet alanları eklidir. */
@@ -1647,10 +1654,15 @@ export interface OracleTestResult {
   long?: OracleLongCheck;
   /** v0.10.886 — eşlenen kolonlar tabloda var mı; önekli öneri (MCA_ERR_*). */
   mapping?: OracleMappingCheck;
+  /** "hata yok + satır yok" açıklaması (tablo kipi geniş pencere / özel kip). */
+  hint?: string;
+  wideWindow?: boolean;
 }
 export interface OracleMappingMiss { field: string; column: string; suggest?: string }
 export interface OracleMappingCheck {
   checked: boolean; error?: string; present: number; missing: OracleMappingMiss[]; prefix?: string;
+  /** v0.10.902 — "query": özel SQL kipinde sorgunun çıktı kolonlarına karşı (sözlük değil). */
+  source?: 'query';
 }
 /** oracle.LongCheck — selected = sorgunun select listesine giren LONG kolonlar;
  *  mappedOnly = kontrolün baktığı kip. checked=false → sözlük okunamadı. */
@@ -1673,6 +1685,8 @@ export interface OracleWindowSummary {
   operations: OracleNameCount[]; errorCodes: OracleNameCount[];
   traceIds: number; lookupDone: boolean; lookupError?: string; tracesFound: number; services: OracleNameCount[];
   error?: string;
+  /** v0.10.902 — trace listesinden patlatılan satır sayısı (özel SQL kipi). */
+  expanded?: number;
 }
 /** oracle.SourceStatus — GET /api/oracle/status satırı. ŞİFRESİZ. Aşama 1'de
  *  poller YOK: "son kontrol" o pod'da koşmuş bağlantı testinin izidir. */
@@ -1697,6 +1711,8 @@ export interface OraclePollStatus {
   lastMapped: number;
   lastNoTimestamp: number;
   lastBadTraceId: number;
+  /** v0.10.902 — trace listesinden patlatılan satır (özel SQL kipi); lastMapped = yazılan satır. */
+  lastExpanded?: number;
   capped?: boolean;
   lastError?: string;
 }

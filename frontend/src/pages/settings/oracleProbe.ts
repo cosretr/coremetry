@@ -82,18 +82,26 @@ export function mappingVerdict(m: OracleMappingCheck | undefined): { tone: ScanT
     return { tone: 'b-gray', text: 'eşleme kontrolü yapılamadı', detail: m.error ?? 'sözlük okunmadı' };
   }
   if (m.missing.length === 0) return null;
-  const critical = m.missing.filter(x => (ORACLE_MATCH_FIELDS as readonly string[]).includes(x.field));
+  // v0.10.902 — özel SQL kipinde zaman ve trace LİSTESİ de kritik: zaman yoksa
+  // her satır düşer, liste yoksa hiçbir trace bağlanmaz.
+  const critical = m.missing.filter(x => (ORACLE_MATCH_FIELDS as readonly string[]).includes(x.field)
+    || (m.source === 'query' && (x.field === 'timestamp' || x.field === 'traceIds')));
   const list = m.missing.map(x => `${x.field}→${x.column}`).join(', ');
   const suggested = m.missing.filter(x => x.suggest).length;
+  // v0.10.902 — özel SQL kipinde karşılaştırma sorgunun ÇIKTI kolonlarına (takma
+  // adlar); "tabloda yok" cümlesi orada yanlış olurdu.
+  const where = m.source === 'query' ? 'sorgu çıktısında' : 'tabloda';
   const hint = suggested > 0
     ? ` · tabloda ${m.prefix} önekli karşılıkları var (${suggested}/${m.missing.length}) — "Önerilen eşlemeyi uygula"`
-    : ' · Alan eşlemesi → göster ve kolon adlarını yaz';
+    : m.source === 'query'
+      ? ' · sorgunun SELECT takma adlarını (büyük harf) kolon kutularına yaz'
+      : ' · Alan eşlemesi → göster ve kolon adlarını yaz';
   if (critical.length > 0) {
     return {
       tone: 'b-err',
-      text: `eşlenen ${m.missing.length} kolon tabloda yok — trace/servis/hata kodu okunmaz`,
+      text: `eşlenen ${m.missing.length} kolon ${where} yok — ${m.source === 'query' ? 'zaman/trace/servis/hata kodu' : 'trace/servis/hata kodu'} okunmaz`,
       detail: list + hint,
     };
   }
-  return { tone: 'b-warn', text: `eşlenen ${m.missing.length} kolon tabloda yok`, detail: list + hint };
+  return { tone: 'b-warn', text: `eşlenen ${m.missing.length} kolon ${where} yok`, detail: list + hint };
 }

@@ -89,3 +89,16 @@ describe('oracleProbe — eşleme hükmü', () => {
     expect(v?.detail).toContain('Alan eşlemesi');
   });
 });
+
+// v0.10.902 — özel kipte zaman / trace listesi eksikliği kırmızı.
+describe('mappingVerdict — sorgu çıktısı kaynağı', () => {
+  it('traceIds ya da timestamp eksikse b-err, cümle "sorgu çıktısında"', () => {
+    const v = mappingVerdict({ checked: true, present: 5, source: 'query', missing: [{ field: 'traceIds', column: 'TRACEIDS' }] });
+    expect(v?.tone).toBe('b-err');
+    expect(v?.text).toMatch(/sorgu çıktısında/);
+    const t = mappingVerdict({ checked: true, present: 5, source: 'query', missing: [{ field: 'timestamp', column: 'TIMESLICE' }] });
+    expect(t?.tone).toBe('b-err');
+    const h = mappingVerdict({ checked: true, present: 5, source: 'query', missing: [{ field: 'host', column: 'HOSTNAME' }] });
+    expect(h?.tone).toBe('b-warn');
+  });
+});

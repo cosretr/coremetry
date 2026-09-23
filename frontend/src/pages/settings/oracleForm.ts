@@ -48,6 +48,11 @@ export const ORACLE_MAX_EXTRA_WHERE = 500;
 export const ORACLE_MAX_TYPE_FILTER = 16;
 export const ORACLE_MAX_TYPE_VALUE_LEN = 32;
 export const ORACLE_MAX_NAME_LEN = 64;
+// v0.10.902 — özel SQL kipi (internal/oracle/custom.go aynası).
+export const ORACLE_DEFAULT_WINDOW_MIN = 15;
+export const ORACLE_MIN_WINDOW_MIN = 1;
+export const ORACLE_MAX_WINDOW_MIN = 240;
+export const ORACLE_MAX_CUSTOM_SQL = 8000;
 // v0.10.603 — Aşama 2 eşleme ayarları (internal/oracle/mapping.go aynası).
 export const ORACLE_DEFAULT_TIMEZONE = 'Europe/Istanbul';
 /** Form kutusunda `-` = "bu alan tabloda yok" → tel'de "" (sunucu alanı kapatır).
@@ -70,7 +75,13 @@ export const ORACLE_MAPPING_FIELDS: ReadonlyArray<{ field: string; target: strin
   { field: 'customerId',   target: 'customer.id',         column: 'ERR_CUSTOMERID' },
   { field: 'tellerId',     target: 'teller.id',           column: 'ERR_TELLERID' },
   { field: 'location',     target: 'location',            column: 'ERR_LOCATION' },
+  // v0.10.902 — ön-toplanmış satır (özel SQL kipi): varsayılan KAPALI.
+  { field: 'count',        target: 'count (sayaç ağırlığı)', column: '(kapalı)' },
+  { field: 'traceIds',     target: 'trace_id listesi',    column: '(kapalı)' },
 ];
+/** v0.10.902 — özel SQL kipinde eşlenmeyen alan yok sayılır; bu iki alan yalnız
+ *  o kipte anlamlı. Kolon = sorgunun ÇIKTI takma adı (Oracle büyük harfe çevirir). */
+export const ORACLE_CUSTOM_ONLY_FIELDS: ReadonlySet<string> = new Set(['count', 'traceIds']);
 // IANA dilim adı biçimi (Europe/Istanbul, UTC, Etc/GMT+3). Gerçek varlık
 // kontrolü sunucuda (time.LoadLocation): burada yalnız biçim.
 const TZ_RE = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$/;
@@ -101,7 +112,7 @@ export type OracleField =
   | 'name' | 'dsn' | 'host' | 'port' | 'serviceName' | 'user' | 'password'
   | 'passwordRef' | 'schema' | 'table' | 'timestampColumn' | 'typeColumn'
   | 'extraWhere' | 'typeFilter' | 'maxOpenConns' | 'queryTimeoutSec' | 'intervalSec'
-  | 'timezone' | 'columns';
+  | 'timezone' | 'columns' | 'customSql' | 'windowMin';
 
 export type OracleFieldErrors = Partial<Record<OracleField, string>>;
 
@@ -147,8 +158,36 @@ export function emptyOracleSource(): OracleSource {
     problemMode: 'shadow', // v0.10.897 — gölge: Problem açılır, alarm yok
     genericCodes: ['ERR_020'],
     ignoreCodes: [],
+    queryMode: 'table', // v0.10.902
+    customSql: '',
+    windowMin: ORACLE_DEFAULT_WINDOW_MIN,
     enabled: false,
   };
+}
+
+/** v0.10.902 — kaynak özel SQL kipinde mi (form + kaydetme kapısı). */
+export function isCustomQuery(src: Pick<OracleSource, 'queryMode'>): boolean {
+  return src.queryMode === 'custom';
+}
+
+// Konsol allow-list'inin aynası (internal/oracle/console.go IsSafeConsoleSQL):
+// yorumlar sıyrılır, tek SON ';' hoş görülür, içeride ';' = çoklu ifade,
+// SELECT/WITH öneki, FOR UPDATE reddi. Gerçek kapı sunucuda; burada operatör
+// yapıştırdığı anda görsün.
+const SQL_LINE_COMMENT_RE = /--[^\n]*/g;
+const SQL_BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+const SQL_FOR_UPDATE_RE = /\bFOR\s+UPDATE\b/i;
+export function customSqlError(raw: string): string | undefined {
+  const text = raw.replace(SQL_BLOCK_COMMENT_RE, ' ').replace(SQL_LINE_COMMENT_RE, ' ').trim();
+  if (!text) return raw.trim() ? 'Özel SQL SELECT ya da WITH ile başlamalı (yalnız yorum var).' : undefined;
+  // Sunucu kırpılmış metnin BAYT sayısını ölçer (Go len) — aynı ölçü.
+  const bytes = new TextEncoder().encode(raw.trim()).length;
+  if (bytes > ORACLE_MAX_CUSTOM_SQL) return `Özel SQL en çok ${ORACLE_MAX_CUSTOM_SQL} bayt olabilir (şu an ${bytes}).`;
+  const body = text.replace(/[;\s]+$/, '');
+  if (body.includes(';')) return 'Özel SQL tek bir ifade olmalı — içerideki `;` ikinci bir ifade açar.';
+  if (SQL_FOR_UPDATE_RE.test(body)) return 'Özel SQL FOR UPDATE içeremez (kilit alan tek okuma; salt-okunur sözleşme).';
+  if (!/^(select|with)(\s|\()/i.test(body)) return 'Özel SQL SELECT ya da WITH ile başlamalı (DML/DDL/PL-SQL reddedilir).';
+  return undefined;
 }
 
 const trim = (v: string | undefined | null): string => (v ?? '').trim();
@@ -228,10 +267,25 @@ export function validateOracleSource(
     e.password = 'Şifre zorunlu — şifre girin ya da passwordRef (env:/file:) verin.';
   }
 
+  // ── v0.10.902 — özel SQL kipi: metin + pencere; şema/tablo zorunlu DEĞİL ─
+  const custom = isCustomQuery(src);
+  if (custom) {
+    const sqlErr = customSqlError(src.customSql ?? '');
+    if (sqlErr) e.customSql = sqlErr;
+    else if (mustBeComplete && !trim(src.customSql)) e.customSql = 'Özel SQL kipinde sorgu metni zorunlu.';
+    const wm = clampError(src.windowMin, ORACLE_MIN_WINDOW_MIN, ORACLE_MAX_WINDOW_MIN, 'Pencere (dk)');
+    if (wm) e.windowMin = wm;
+    // Boş zaman kutusu sunucuda ERR_TIMESTAMP'e düşer; sorgu çıktısında o ad
+    // yok → her satır zamansız düşerdi (sunucu da reddeder).
+    if (trim(src.customSql) && !trim(src.timestampColumn)) {
+      e.timestampColumn = 'Özel SQL kipinde zaman kolonu zorunlu — sorgunun zaman takma adı (ör. TIMESLICE).';
+    }
+  }
+
   // ── identifier'lar: biçim HER ZAMAN, zorunluluk yalnız etkin kaynakta ──
+  // Özel kipte şema/tablo gizli ve gövdeye girmez — biçimleri de denetlenmez.
   const idents: ReadonlyArray<readonly [OracleField, string, string, boolean]> = [
-    ['schema', trim(src.schema), 'Şema', true],
-    ['table', trim(src.table), 'Tablo', true],
+    ...(custom ? [] : [['schema', trim(src.schema), 'Şema', true], ['table', trim(src.table), 'Tablo', true]] as const),
     ['timestampColumn', trim(src.timestampColumn), 'Zaman kolonu', false],
     ['typeColumn', trim(src.typeColumn), 'Tip kolonu', false],
   ];
@@ -245,8 +299,8 @@ export function validateOracleSource(
     }
   }
 
-  // ── extraWhere: uzunluk + enjeksiyon kalıpları ─────────────────────────
-  const where = trim(src.extraWhere);
+  // ── extraWhere: uzunluk + enjeksiyon kalıpları (özel kipte gizli, gönderilmez) ─
+  const where = custom ? '' : trim(src.extraWhere);
   if (where.length > ORACLE_MAX_EXTRA_WHERE) {
     e.extraWhere = `Ek koşul en çok ${ORACLE_MAX_EXTRA_WHERE} karakter olabilir (şu an ${where.length}).`;
   } else {
@@ -259,7 +313,7 @@ export function validateOracleSource(
   }
 
   // ── tip süzgeci ────────────────────────────────────────────────────────
-  const types = (src.typeFilter ?? []).map(t => t.trim()).filter(Boolean);
+  const types = custom ? [] : (src.typeFilter ?? []).map(t => t.trim()).filter(Boolean);
   if (types.length > ORACLE_MAX_TYPE_FILTER) {
     e.typeFilter = `En çok ${ORACLE_MAX_TYPE_FILTER} tip değeri verilebilir.`;
   } else if (types.some(t => t.length > ORACLE_MAX_TYPE_VALUE_LEN)) {
@@ -314,11 +368,15 @@ export function sourceForSave(
   snapshot?: OracleSourceSnapshot | null,
 ): OracleSource {
   const dsn = trim(src.dsn);
+  // v0.10.902 — özel kipte gizli tablo alanları (şema/tablo/ek koşul/tip
+  // süzgeci/selectMappedOnly) gövdeye GİRMEZ; tablo kipinde özel-kip eşlemeleri
+  // (count/traceIds) girmez.
+  const custom = isCustomQuery(src);
   const out: OracleSource = {
     name: trim(src.name),
     user: trim(src.user),
-    schema: trim(src.schema),
-    table: trim(src.table),
+    schema: custom ? '' : trim(src.schema),
+    table: custom ? '' : trim(src.table),
     enabled: !!src.enabled,
   };
 
@@ -349,10 +407,10 @@ export function sourceForSave(
   const tc = trim(src.typeColumn);
   if (tc) out.typeColumn = tc;
   const where = trim(src.extraWhere);
-  if (where) out.extraWhere = where;
+  if (where && !custom) out.extraWhere = where;
 
   const types: string[] = [];
-  for (const t of src.typeFilter ?? []) {
+  for (const t of custom ? [] : src.typeFilter ?? []) {
     const v = t.trim();
     if (v && !types.includes(v)) types.push(v);
   }
@@ -368,7 +426,15 @@ export function sourceForSave(
   const tz = trim(src.timezone);
   if (tz) out.timezone = tz;
   if (src.timestampHasZone) out.timestampHasZone = true;
-  if (src.selectMappedOnly) out.selectMappedOnly = true;
+  if (src.selectMappedOnly && !custom) out.selectMappedOnly = true;
+  // v0.10.902 — özel SQL: kip yalnız custom iken gider (boş = tablo); metin
+  // kırpılmış; pencere > 0 ise.
+  if (isCustomQuery(src)) {
+    out.queryMode = 'custom';
+    const q = trim(src.customSql);
+    if (q) out.customSql = q;
+    if (Number.isFinite(src.windowMin) && (src.windowMin ?? 0) > 0) out.windowMin = src.windowMin;
+  }
   // v0.10.897 — kip her zaman gider (sunucu boşu shadow'a normalize eder); kod
   // listeleri kırpılmış + tekrarsız, boşsa gövdeye girmez.
   out.problemMode = src.problemMode === 'off' || src.problemMode === 'live' ? src.problemMode : 'shadow';
@@ -380,6 +446,7 @@ export function sourceForSave(
   for (const [field, raw] of Object.entries(src.columns ?? {})) {
     const v = trim(raw);
     if (!v) continue;
+    if (!custom && ORACLE_CUSTOM_ONLY_FIELDS.has(field)) continue;
     cols[field] = v === ORACLE_COLUMN_DISABLED ? '' : v;
   }
   if (Object.keys(cols).length) out.columns = cols;
@@ -416,6 +483,9 @@ export function sourceFromSnapshot(s: OracleSourceSnapshot): OracleSource {
     problemMode: s.problemMode === 'off' || s.problemMode === 'live' ? s.problemMode : 'shadow',
     genericCodes: [...(s.genericCodes ?? ['ERR_020'])],
     ignoreCodes: [...(s.ignoreCodes ?? [])],
+    queryMode: s.queryMode === 'custom' ? 'custom' : 'table', // v0.10.902
+    customSql: s.customSql ?? '',
+    windowMin: s.windowMin,
     // "" (kapalı alan) formda `-` olarak görünür — boş kutuyla (varsayılan)
     // karışmasın.
     columns: Object.fromEntries(Object.entries(s.columns ?? {}).map(([k, v]) => [k, v === '' ? ORACLE_COLUMN_DISABLED : v])),

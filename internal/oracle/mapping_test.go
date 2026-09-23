@@ -54,6 +54,7 @@ func TestDefaultColumnsMatchAudit(t *testing.T) {
 		"type": "ERR_TYPE", "channel": "ERR_CHANNELCODE", "task": "ERR_TASKCODE",
 		"requestId": "ERR_REQUESTID", "customerId": "ERR_CUSTOMERID", "tellerId": "ERR_TELLERID",
 		"location": "ERR_LOCATION",
+		"count":    "", "traceIds": "", // v0.10.902 — özel SQL alanları, varsayılan KAPALI
 	}
 	got := DefaultColumns()
 	if len(got) != len(want) || len(fieldOrder) != len(want) {

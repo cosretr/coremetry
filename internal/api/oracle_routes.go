@@ -27,6 +27,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -97,15 +98,23 @@ func (s *Server) putOracleSettings(w http.ResponseWriter, r *http.Request) {
 	s.publishConfigReload(r.Context(), "oracle")
 	names := make([]string, 0, len(cfg.Sources))
 	enabled := 0
+	// v0.10.902 — özel SQL her aralıkta üretim DB'sinde koşar: "kim, ne zaman,
+	// hangi sorgu" izlenebilsin diye kaynak başına kip + metnin özeti (metnin
+	// kendisi değil).
+	queries := map[string]string{}
 	for _, src := range cfg.Sources {
 		names = append(names, src.Name)
 		if src.Enabled {
 			enabled++
 		}
+		if oracle.IsCustom(src) {
+			sum := sha256.Sum256([]byte(src.CustomSQL))
+			queries[src.Name] = fmt.Sprintf("custom sha=%x len=%d window=%d", sum[:6], len(src.CustomSQL), src.WindowMin)
+		}
 	}
 	// details'a ŞİFRE/DSN girmez — yalnız sayılar ve adlar.
 	details, _ := json.Marshal(map[string]any{
-		"sources": len(cfg.Sources), "enabled": enabled, "names": names,
+		"sources": len(cfg.Sources), "enabled": enabled, "names": names, "customQueries": queries,
 	})
 	s.audit(r, "settings.oracle.update", "settings", "oracle_sources", string(details))
 	writeJSON(w, s.oracle.Snapshot())
