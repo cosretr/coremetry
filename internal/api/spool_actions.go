@@ -98,10 +98,11 @@ func (s *Server) getSpoolState(w http.ResponseWriter, r *http.Request) {
 	disks, derr := s.store.CollectDisks(ctx)
 	tables, terr := s.store.ListDistributedTables(ctx)
 	resp := map[string]any{
-		"queue":   queue, // nil = tek düğüm (kavram yok) — FE panel çizmez
-		"disks":   disks,
-		"tables":  tables,
-		"flights": s.spoolFlights.snapshot(),
+		"queue":    queue, // nil = tek düğüm (kavram yok) — FE panel çizmez
+		"disks":    disks,
+		"tables":   tables,
+		"flights":  s.spoolFlights.snapshot(),
+		"batching": s.store.DistributedBatchingState(ctx), // v0.10.888 — batch modu gerçek durumu (boot logu kaybolur, panel kalır)
 	}
 	if derr != nil {
 		resp["disksError"] = derr.Error()

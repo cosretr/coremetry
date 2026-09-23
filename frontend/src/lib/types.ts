@@ -6112,6 +6112,12 @@ export interface SpoolState {
   tables: string[] | null;
   tablesError?: string;
   flights: SpoolFlight[];
+  /** v0.10.888 — chstore.BatchingState: Distributed gönderici batch modu gerçek durumu. */
+  batching?: SpoolBatching;
+}
+export interface SpoolBatching {
+  profileValue: number; profileError?: string; tablesTotal: number; tablesWithSetting: number;
+  effective: boolean; hint: string;
 }
 
 // AiConversationSummary (v0.9.1139, AI Faz 4.1) — FAB çekmecesindeki

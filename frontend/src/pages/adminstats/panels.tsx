@@ -789,6 +789,18 @@ function SpoolRunbook() {
             {/* v0.10.761 (operatör prod ekranı) — kuyruğu olan tablo başa, satırda
                 bekleyen/bozuk dosya rozeti: 30 tablolık listede hangi düğmeye
                 basılacağı üstteki panele bakmadan görünsün. */}
+            {/* v0.10.888 (operatör "açılış logu hatası") — batch modu gerçek durumu: boot
+                logu "motor ALTER desteklemiyor" der ve kaybolur; asıl bilgi (spool tek-dosya
+                modunda mı) burada kalıcı. Çare metni sunucudan (batchingVerdict). */}
+            {state.batching && state.batching.tablesTotal > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                <span className={`badge ${state.batching.effective ? 'b-ok' : 'b-err'}`}
+                  title={`profil distributed_background_insert_batch=${state.batching.profileValue < 0 ? 'okunamadı' : state.batching.profileValue} · tablo ayarı ${state.batching.tablesWithSetting}/${state.batching.tablesTotal}`}>
+                  batch gönderim {state.batching.effective ? 'etkin' : 'KAPALI'}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>{state.batching.hint}</span>
+              </div>
+            )}
             {orderSpoolTables(state.tables, state.queue?.tables).map(row => {
               const t = row.table;
               const fl = state.flights.find(f => f.table === t && !f.doneAt);

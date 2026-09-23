@@ -213,3 +213,31 @@ func TestBatchingEffectiveFirstAndCode36Bails(t *testing.T) {
 type errStr string
 
 func (e errStr) Error() string { return string(e) }
+
+// v0.10.888 (operatör: "açılış logu hatası") — hüküm saf: tablo yok → etkin;
+// her tabloda ayar → etkin; profil 1 → etkin; profil 0 → KAPALI + çare
+// (restart/DETACH-ATTACH, ALTER olmaz); profil okunamadı → doğrulanamıyor.
+// Log cümlesi "≥24 varsayılanı 1" demez (CH 26.2 varsayılanı 0).
+func TestBatchingVerdictAndLogHonesty(t *testing.T) {
+	cases := []struct {
+		profile, with, total int
+		want                 bool
+		frag                 string
+	}{
+		{0, 0, 0, true, "tek düğüm"}, {0, 3, 3, true, "tablo ayarı var"}, {1, 0, 3, true, "profil düzeyi"},
+		{0, 1, 3, false, "KAPALI"}, {-1, 0, 3, false, "doğrulanamıyor"},
+	}
+	for _, c := range cases {
+		ok, hint := batchingVerdict(c.profile, c.with, c.total)
+		if ok != c.want || !strings.Contains(hint, c.frag) {
+			t.Errorf("(%d,%d,%d) → %v %q", c.profile, c.with, c.total, ok, hint)
+		}
+	}
+	if _, hint := batchingVerdict(0, 0, 2); !strings.Contains(hint, "yeniden başlat") || !strings.Contains(hint, "DETACH/ATTACH") {
+		t.Error("KAPALI çaresi restart/attach'ı söylemeli")
+	}
+	b, _ := os.ReadFile("distributed_batching.go")
+	if strings.Contains(string(b), "varsayılanı zaten 1") || strings.Contains(string(b), "hot-reload") {
+		t.Error("log yanlış iddia taşıyor (CH 26.2 varsayılanı 0; attach anında okunur)")
+	}
+}

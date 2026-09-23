@@ -146,6 +146,11 @@ func (s *Store) ensureDistributedBatching(ctx context.Context) {
 	if err := s.conn.QueryRow(ctx, effectiveBatchingSQL).Scan(&effective); err == nil && effective >= 1 {
 		log.Printf("[chstore] distributed batching profil düzeyinde ZATEN ETKİN (distributed_background_insert_batch=1) — tablo ALTER'ı gereksiz, atlanıyor")
 		return
+	} else if err != nil {
+		// v0.10.888 — okunamadı ile 0 ayrı cümle: operatör hangisine baktığını bilsin.
+		log.Printf("[chstore] profil düzeyi distributed_background_insert_batch OKUNAMADI (%v) — tablo ALTER'ı denenecek", err)
+	} else {
+		log.Printf("[chstore] profil düzeyi distributed_background_insert_batch=%d (CH varsayılanı 0: spool dosyaları TEK TEK gönderilir) — tablo ALTER'ı denenecek", effective)
 	}
 	rows, err := s.conn.Query(ctx, `SELECT name, engine_full FROM system.tables
 		WHERE database = currentDatabase() AND engine = 'Distributed'
@@ -183,7 +188,13 @@ func (s *Store) ensureDistributedBatching(ctx context.Context) {
 			if isSettingsChangeUnsupported(err) {
 				// Motor fiili reddediyor — kalan ad/kapsam denemeleri de,
 				// kalan TABLOLAR da aynı duvara çarpar. Tek dürüst özet:
-				log.Printf("[chstore] bu CH sürümünde Distributed motoru ALTER MODIFY SETTING desteklemiyor (Code 36/48) — tablo tablo denenmedi. Kalıcı çare CH tarafında: default profile'a distributed_background_insert_batch=1 ve distributed_background_insert_split_batch_on_failure=1 (users.xml, hot-reload; CH ≥24 varsayılanı zaten 1)")
+				// v0.10.888 (operatör: "açılış logu hatası") — cümle düzeltildi: CH 26.2
+				// varsayılanı 0 (canlı doğrulama clickhouse-local 26.2, system.settings),
+				// "≥24 varsayılanı 1" yanlıştı; Distributed tablo ayarı ATTACH anında
+				// profil değerinden türer → users.xml değişikliği tek başına yetmez,
+				// CH yeniden başlatılmalı ya da Distributed tablolar DETACH/ATTACH
+				// edilmeli. Aynı durum Admin › ClickHouse › spool panelinde de görünür.
+				log.Printf("[chstore] UYARI: Distributed spool batch modu KAPALI — motor ALTER MODIFY SETTING desteklemiyor (Code 36/48; tablo ayarı yalnız CREATE'te), tablo tablo denenmedi. Kalıcı çare CH tarafında: users.xml default profile'a distributed_background_insert_batch=1 ve distributed_background_insert_split_batch_on_failure=1, ardından CH yeniden başlat (ya da Distributed tabloları DETACH/ATTACH — ayar attach anında okunur). Etkisi: spool dosyaları tek tek gönderilir; derin spool'da drenaj sürünür (2026-07-31 olayı)")
 				return
 			}
 		}
@@ -193,4 +204,66 @@ func (s *Store) ensureDistributedBatching(ctx context.Context) {
 			log.Printf("[chstore] distributed batching açılamadı %s (boot sürüyor): %v", t.name, lastErr)
 		}
 	}
+}
+
+// BatchingState — v0.10.888: Admin › ClickHouse › spool paneli için batch
+// modunun GERÇEK durumu (boot logu kaybolur; panel kalır). Profil değeri
+// system.settings'ten (bağlı kullanıcının etkin değeri — göndericinin
+// default profile'ından farklı olabilir, o yüzden "büyük ihtimalle" değil,
+// okunan değer aynen yazılır), tablo başına engine_full'daki SETTINGS.
+type BatchingState struct {
+	ProfileValue      int    `json:"profileValue"` // -1 = okunamadı
+	ProfileError      string `json:"profileError,omitempty"`
+	TablesTotal       int    `json:"tablesTotal"`
+	TablesWithSetting int    `json:"tablesWithSetting"`
+	Effective         bool   `json:"effective"`
+	Hint              string `json:"hint"`
+}
+
+// batchingVerdict — SAF: etkin mi + operatör cümlesi.
+func batchingVerdict(profile, withSetting, total int) (bool, string) {
+	switch {
+	case total == 0:
+		return true, "Distributed tablo yok (tek düğüm) — spool kavramı yok"
+	case withSetting == total:
+		return true, "her Distributed tabloda background_insert_batch tablo ayarı var"
+	case profile >= 1:
+		return true, "profil düzeyi distributed_background_insert_batch=1 — tablo ayarı gerekmez"
+	case profile < 0:
+		return false, "profil değeri okunamadı; tablolarda ayar yok — batch modu doğrulanamıyor. users.xml default profile: distributed_background_insert_batch=1 + split_batch_on_failure=1, sonra CH yeniden başlat (ya da DETACH/ATTACH)"
+	default:
+		return false, "KAPALI: spool dosyaları tek tek gönderilir (derin spool'da drenaj sürünür). users.xml default profile: distributed_background_insert_batch=1 + distributed_background_insert_split_batch_on_failure=1, sonra CH yeniden başlat (ya da Distributed tabloları DETACH/ATTACH — ayar attach anında okunur); motor ALTER MODIFY SETTING kabul etmez"
+	}
+}
+
+// DistributedBatchingState — spool paneli için; hiçbir dal hata döndürmez,
+// okunamayan parça cümleye yazılır.
+func (s *Store) DistributedBatchingState(ctx context.Context) BatchingState {
+	st := BatchingState{ProfileValue: -1}
+	var effective uint8
+	if err := s.conn.QueryRow(ctx, effectiveBatchingSQL).Scan(&effective); err != nil {
+		st.ProfileError = err.Error()
+	} else {
+		st.ProfileValue = int(effective)
+	}
+	rows, err := s.conn.Query(ctx, `SELECT engine_full FROM system.tables
+		WHERE database = currentDatabase() AND engine = 'Distributed'
+		SETTINGS max_execution_time = 5`)
+	if err != nil {
+		st.Hint = "Distributed tablo listesi okunamadı: " + err.Error()
+		return st
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ef string
+		if err := rows.Scan(&ef); err != nil {
+			break
+		}
+		st.TablesTotal++
+		if hasDistributedBatching(ef) {
+			st.TablesWithSetting++
+		}
+	}
+	st.Effective, st.Hint = batchingVerdict(st.ProfileValue, st.TablesWithSetting, st.TablesTotal)
+	return st
 }
