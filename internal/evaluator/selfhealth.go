@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/forecast"
 )
 
 // ── Kimlikler ───────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ import (
 const (
 	selfIngestRuleID  = "self-ingest-stall"
 	selfSpoolRuleID   = "self-spool-depth"
-	selfDiskRuleID    = "self-disk-eta"
+	selfDiskRuleID    = chstore.SelfDiskRuleID // v0.10.901: sysstats forecast aynı sabiti okur
 	selfChannelRuleID = "self-channel-broken"
 )
 
@@ -165,57 +166,55 @@ func spoolBreachDecision(files, bytes, maxFiles, maxBytes uint64) selfSpoolDim {
 // gürültülü son örnekten değil (capacityETA ile aynı gerekçe).
 // Doğrunun bugünü zaten kapasiteyi aşıyorsa cevap 0 gündür — "dolu"
 // bir diskte tahmin yok demek, alarmın kaçırılması demekti.
+//
+// v0.10.901 (paritesi #6 dilim 1): matematik internal/forecast'a indi;
+// kapılar aynı sabitler, kayan-nokta sırası birebir (TestDiskETADays
+// 0.0001 toleransı değişmeden geçer). StatusAtLimit burada 0 gün.
 func diskETADays(points []diskSample, capacityBytes uint64) (days float64, ok bool) {
-	n := len(points)
-	if n < selfDiskMinPoints || capacityBytes == 0 {
+	if capacityBytes == 0 {
 		return 0, false
 	}
-	if points[n-1].tSec-points[0].tSec < selfDiskMinSpanS {
-		return 0, false
+	pts := make([]forecast.Point, len(points))
+	for i, p := range points {
+		pts[i] = forecast.Point{TSec: p.tSec, V: p.used}
 	}
-	limit := float64(capacityBytes)
-
-	// Doğrusal regresyon (x = ilk örneğe göre saniye — taşma önlemi).
-	x0 := points[0].tSec
-	var sx, sy, sxx, sxy float64
-	for _, p := range points {
-		x := float64(p.tSec - x0)
-		sx += x
-		sy += p.used
-		sxx += x * x
-		sxy += x * p.used
-	}
-	fn := float64(n)
-	den := fn*sxx - sx*sx
-	if den == 0 {
-		return 0, false // tüm örnekler aynı anda — eğim tanımsız
-	}
-	slope := (fn*sxy - sx*sy) / den // bayt/saniye
-	if slope <= 0 {
-		return 0, false // düz ya da eriyor
-	}
-	intercept := (sy - slope*sx) / fn
-
-	// R² = 1 − SSres/SStot.
-	meanY := sy / fn
-	var ssRes, ssTot float64
-	for _, p := range points {
-		fit := intercept + slope*float64(p.tSec-x0)
-		ssRes += (p.used - fit) * (p.used - fit)
-		ssTot += (p.used - meanY) * (p.used - meanY)
-	}
-	if ssTot == 0 {
-		return 0, false // sabit seri — eğim iddiası kurulamaz
-	}
-	if r2 := 1 - ssRes/ssTot; r2 < selfDiskMinR2 {
-		return 0, false
-	}
-
-	lastFit := intercept + slope*float64(points[n-1].tSec-x0)
-	if lastFit >= limit {
+	r := forecast.Fit(pts, float64(capacityBytes), forecast.Opts{
+		MinPoints: selfDiskMinPoints,
+		MinSpanS:  selfDiskMinSpanS,
+		MinR2:     selfDiskMinR2,
+	})
+	switch r.Status {
+	case forecast.StatusAtLimit:
 		return 0, true // doğru zaten tavanda: sıfır gün
+	case forecast.StatusOK:
+		return r.ETASec / 86400, true
 	}
-	return (limit - lastFit) / slope / 86400, true
+	return 0, false
+}
+
+// diskSeriesWarm — SAF: seri henüz tahmin üretemeyecek kadar kısa mı (nokta
+// ya da zaman aralığı kapısının altında)? diskETADays'in ok=false'unu
+// "ısınma" ile "gerçekten eğilim yok"tan ayırır (v0.10.901 taşıma kapısı).
+func diskSeriesWarm(points []diskSample) bool {
+	n := len(points)
+	return n < selfDiskMinPoints || points[n-1].tSec-points[0].tSec < selfDiskMinSpanS
+}
+
+// diskCarryOver — SAF: açık satırı son değer/gerekçe/ciddiyetiyle aynen
+// yeniden sun (StartedAt reconcile'da korunur; ciddiyet yaş kelepçesinden
+// geçer, düşmez). Comparator kuralın sözleşmesi ("<"), satırdan değil.
+func diskCarryOver(p *chstore.Problem) selfProblem {
+	return selfProblem{
+		id:          p.ID,
+		ruleID:      selfDiskRuleID,
+		ruleName:    p.RuleName,
+		metric:      p.Metric,
+		comparator:  "<",
+		severity:    p.Severity,
+		value:       p.Value,
+		threshold:   p.Threshold,
+		description: p.Description,
+	}
 }
 
 // channelBrokenDecision — bir bildirim kanalı ÖLÜ mü?
@@ -287,7 +286,7 @@ func (e *Evaluator) evaluateSelfHealth(ctx context.Context, snap *chstore.OpenPr
 		covered[selfSpoolRuleID] = true
 		want = append(want, p...)
 	}
-	if p, ok := e.selfDiskETA(ctx, cfg); ok {
+	if p, ok := e.selfDiskETA(ctx, cfg, snap); ok {
 		covered[selfDiskRuleID] = true
 		want = append(want, p...)
 	}
@@ -449,7 +448,15 @@ func spoolReason(q *chstore.DistributionQueue, dim selfSpoolDim, cfg chstore.Sel
 
 // ── (3) self-disk-eta ───────────────────────────────────────────────────
 
-func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfig) ([]selfProblem, bool) {
+// v0.10.901 (inceleme turu): snap ısınma taşıması için — seri henüz eğilim
+// taşıyamıyorken (lider değişimi / yeniden başlatma: bellek-içi seri sıfır)
+// açık satır SON değeriyle yeniden sunulur (diskCarryOver; v0.9.1294
+// volCache "son ölçümü yeniden sun" deseni). Aksi hâlde yeni liderin ilk
+// tiki satırı "çözüldü" diye kapatıyor, yarım saat sonra aynı disk yeni
+// StartedAt + yeni bildirimle yeniden açılıyordu — her deploy'da bir sahte
+// çözülme ve bir mükerrer sayfalama. Taşıma yalnız ISINMADA: seri yeterli
+// olup uydurma "düz/eriyor/gürültülü" diyorsa satır gerçekten kapanır.
+func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfig, snap *chstore.OpenProblems) ([]selfProblem, bool) {
 	disks, err := e.store.CollectDisks(ctx)
 	if err != nil {
 		log.Printf("[evaluator] self-health disk okunamadı: %v", err)
@@ -493,7 +500,15 @@ func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfi
 		}
 		k := chstore.DiskKey(d.Host, d.Disk)
 		days, ok := diskETADays(series[k], d.Total)
-		if !ok || days >= cfg.DiskEtaDays {
+		if !ok {
+			if diskSeriesWarm(series[k]) {
+				if p := snap.ByID(selfDiskRuleID + ":" + k); p != nil {
+					out = append(out, diskCarryOver(p))
+				}
+			}
+			continue
+		}
+		if days >= cfg.DiskEtaDays {
 			continue
 		}
 		usedPct := float64(d.Total-d.Free) / float64(d.Total) * 100
@@ -527,7 +542,7 @@ func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfi
 // selfDiskCriticalDays — bunun altındaki koşu payı kritiktir (operatör
 // hedefi: "ETA < 2 gün ise P1"). Ayrı sabit, çünkü açılış eşiği
 // (cfg.DiskEtaDays) operatör vidası, bu ise şiddet sınırı.
-const selfDiskCriticalDays = 2.0
+const selfDiskCriticalDays = chstore.SelfDiskCriticalDays // v0.10.901: /admin/stats rozeti aynı eşiği okur
 
 // diskReason — SAF gerekçe (tablo testli). Yüzde + kalan alan + ETA
 // birlikte: yalnız ETA "ne kadar yer kaldı"yı, yalnız yüzde "ne zaman"ı

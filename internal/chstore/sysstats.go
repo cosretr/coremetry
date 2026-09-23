@@ -375,6 +375,9 @@ type DiskStat struct {
 	// KeepFreeBytes — the operator-configured reserve CH refuses to
 	// dip into. Effective capacity is TotalBytes - KeepFreeBytes.
 	KeepFreeBytes uint64 `json:"keepFreeBytes"`
+	// Forecast — v0.10.901 (paritesi #6 dilim 2): açık self-disk-eta
+	// probleminden "kaç gün kaldı"; satır yoksa alan YOK (sysstats_forecast.go).
+	Forecast *DiskForecast `json:"forecast,omitempty"`
 }
 
 // UsedBytes is the occupied portion of the volume.
@@ -516,15 +519,19 @@ func (s *Store) GetSystemStats(ctx context.Context) (*SystemStats, error) {
 	// just leaves the section empty, exactly like the storage query
 	// above. /admin/stats must never go blank over an optional panel.
 	disksSource, diskHost := "system.disks", "''"
+	diskSettings := "max_execution_time = 5"
 	if cn := strings.TrimSpace(s.cfg.ClusterName); cn != "" {
 		disksSource, diskHost = "clusterAllReplicas('"+cn+"', system.disks)", "hostName()"
+		// v0.10.901 — CollectDisks (spool_ops.go) ile parite: bir düğüm
+		// erişilemezken panel (ve v0.10.901 disk rozetleri) topluca düşmesin.
+		diskSettings = "skip_unavailable_shards = 1, max_execution_time = 5"
 	}
 	if drows, derr := s.conn.Query(ctx, fmt.Sprintf(`
 		SELECT %s AS host, name, path,
 		       total_space, free_space, unreserved_space, keep_free_space
 		FROM %s
 		ORDER BY host, name
-		SETTINGS max_execution_time = 5`, diskHost, disksSource)); derr == nil {
+		SETTINGS %s`, diskHost, disksSource, diskSettings)); derr == nil {
 		for drows.Next() {
 			var d DiskStat
 			if err := drows.Scan(&d.Host, &d.Name, &d.Path,
@@ -536,6 +543,16 @@ func (s *Store) GetSystemStats(ctx context.Context) (*SystemStats, error) {
 		drows.Close()
 	} else {
 		log.Printf("[sysstats] disks query: %v — surfacing dashboard without disk capacity", derr)
+	}
+	// v0.10.901 — disk satırına "kaç gün kaldı": evaluator'ın açık
+	// self-disk-eta satırından (5 s memo'lu snapshot; ek sorgu yok, her
+	// pod'dan okunur). Soft-fail: snapshot düşerse chip yok, panel kalır.
+	if len(out.Disks) > 0 {
+		if snap, serr := s.OpenProblemsSnapshot(ctx); serr == nil {
+			attachDiskForecast(out.Disks, snap.All())
+		} else {
+			log.Printf("[sysstats] disk forecast: açık problem snapshot'ı okunamadı: %v", serr)
+		}
 	}
 
 	// ── Server utilisation (v0.9.290, operator ask) ─────────────

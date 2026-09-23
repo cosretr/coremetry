@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui';
-import { useSystemStats, useTraceContext, keys } from '@/lib/queries';
+import { useSystemStats, useTraceContext, useEvaluatorHealth, keys } from '@/lib/queries';
 import { api } from '@/lib/api';
 import { fmtNum, fmtClock, tsLong } from '@/lib/utils';
+import { etaChipLabel, evaluatorQuietLabel } from '@/lib/fmtEta';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type {
@@ -66,6 +67,13 @@ export default function AdminStatsPage() {
     staleTime: 25_000,
   });
   const status = statusQ.isLoading ? undefined : statusQ.isError ? null : statusQ.data;
+
+  // v0.10.901 — disk ⏳ rozetinin sayısı değerlendiricinin son tikinden
+  // gelir; kalp atışı (v0.9.550, mevcut 30 s hook, Redis'ten tek GET) ok
+  // değilse rozet soluklaşır ve "N dk sessiz" yazar — donmuş bir sayı
+  // taze gibi görünmesin.
+  const evalHealthQ = useEvaluatorHealth();
+  const evalQuiet = evaluatorQuietLabel(evalHealthQ.data);
 
   // System stats — 60s cached on the server, 60s polled on the
   // client. Refresh button invalidates the cache via the
@@ -495,7 +503,7 @@ export default function AdminStatsPage() {
               }}>
                 <SectionHeader
                   title="ClickHouse disk capacity"
-                  sub="Filesystem-level, from system.disks — covers everything on the volume, not just Coremetry's tables." />
+                  sub="Filesystem-level, from system.disks — covers everything on the volume, not just Coremetry's tables. ⏳ rozeti yalnız açık «disk dolacak» problemi varken (eşik 7 gün); yoksa tahmin ya eşiğin üstünde ya da kurulamadı." />
                 <div style={{ display: 'grid', gap: 12 }}>
                   {data.disks.map((d, i) => {
                     const used = Math.max(0, d.totalBytes - d.freeBytes);
@@ -519,6 +527,24 @@ export default function AdminStatsPage() {
                           <span style={{ color: tone, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                             {pct.toFixed(1)}% full
                           </span>
+                          {/* v0.10.901 (parite #6 dilim 2) — "kaç gün kaldı":
+                              evaluator'ın çözülmemiş self-disk-eta satırından;
+                              satır yoksa chip yok. Sayı satırdan aynen (R²
+                              satırda yok → yazılmaz). Ton days<2'den (satır
+                              ciddiyeti yaşla critical'a çıkar, o Inbox'ın
+                              işi). Değerlendirici sessizse sayı donmuştur:
+                              rozet soluk + "N dk sessiz". */}
+                          {d.forecast && (
+                            <Link
+                              to={`/problems?problem=${encodeURIComponent(d.forecast.problemId)}`}
+                              className={`badge ${evalQuiet ? 'b-gray' : d.forecast.critical ? 'b-err' : 'b-warn'}`}
+                              title={[d.forecast.note, evalQuiet
+                                ? 'Sayı değerlendiricinin son tikinden gelir; değerlendirici sessizken bayat olabilir.'
+                                : ''].filter(Boolean).join('\n') || undefined}
+                              style={{ textDecoration: 'none' }}>
+                              ⏳ {etaChipLabel(d.forecast.days)}{evalQuiet ? ` · ${evalQuiet}` : ''}
+                            </Link>
+                          )}
                           <span style={{ color: 'var(--text2)', fontVariantNumeric: 'tabular-nums' }}>
                             {fmtBytes(used)} / {fmtBytes(d.totalBytes)}
                           </span>

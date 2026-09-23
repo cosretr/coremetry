@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/forecast"
 )
 
 // db_capacity.go — capacity / saturation alerting off DB-receiver gauges
@@ -61,64 +62,31 @@ const (
 	capacityEtaOpenHours = 6.0
 )
 
-// capacityETA — saf regresyon çekirdeği (tablo-testli). points zaman
-// artan sıralı 5dk-ortalama doluluk; limit pozitif. ok=false: tahmin
-// yok (kısa seri, düşmeyen/duran eğim, zayıf uyum ya da >24h ufuk).
-// ETA, regresyon doğrusunun SON noktadaki değerinden limit'e kalan
-// süredir — cari gürültülü örnek yerine uydurulmuş değer.
+// capacityETA — regresyon çekirdeği (tablo-testli). points zaman artan
+// sıralı 5dk-ortalama doluluk; limit pozitif. ok=false: tahmin yok (kısa
+// seri, düşmeyen/duran eğim, zayıf uyum ya da >24h ufuk). ETA, regresyon
+// doğrusunun SON noktadaki değerinden limit'e kalan süredir — cari
+// gürültülü örnek yerine uydurulmuş değer.
+//
+// v0.10.901 (paritesi #6 dilim 1): matematik internal/forecast'a indi;
+// kapılar aynı sabitler, kayan-nokta sırası birebir (forecast paket
+// başlığı). "Zaten limitte" burada TAHMİN YOK kalır — eşik dalı konuşur
+// (diskETADays'in 0-gün sözleşmesinin tersi; karar çağıranda).
 func capacityETA(points []chstore.CapacityTrendPoint, limit float64) (etaHours, r2 float64, ok bool) {
-	n := len(points)
-	if n < capacityEtaMinPoints || limit <= 0 {
-		return 0, 0, false
+	pts := make([]forecast.Point, len(points))
+	for i, p := range points {
+		pts[i] = forecast.Point{TSec: p.TSec, V: p.Usage}
 	}
-	if points[n-1].TSec-points[0].TSec < capacityEtaMinSpanS {
-		return 0, 0, false
+	r := forecast.Fit(pts, limit, forecast.Opts{
+		MinPoints: capacityEtaMinPoints,
+		MinSpanS:  capacityEtaMinSpanS,
+		MinR2:     capacityEtaMinR2,
+		HorizonS:  capacityEtaMaxHours * 3600,
+	})
+	if r.Status != forecast.StatusOK {
+		return 0, r.R2, false
 	}
-	// Doğrusal regresyon (x=saniye, taşmaya karşı ilk noktaya göre).
-	x0 := points[0].TSec
-	var sx, sy, sxx, sxy float64
-	for _, p := range points {
-		x := float64(p.TSec - x0)
-		sx += x
-		sy += p.Usage
-		sxx += x * x
-		sxy += x * p.Usage
-	}
-	fn := float64(n)
-	den := fn*sxx - sx*sx
-	if den == 0 {
-		return 0, 0, false
-	}
-	slope := (fn*sxy - sx*sy) / den // birim/saniye
-	if slope <= 0 {
-		return 0, 0, false
-	}
-	intercept := (sy - slope*sx) / fn
-	// R² = 1 − SSres/SStot.
-	meanY := sy / fn
-	var ssRes, ssTot float64
-	for _, p := range points {
-		x := float64(p.TSec - x0)
-		fit := intercept + slope*x
-		ssRes += (p.Usage - fit) * (p.Usage - fit)
-		ssTot += (p.Usage - meanY) * (p.Usage - meanY)
-	}
-	if ssTot == 0 {
-		return 0, 0, false // düz seri — eğim iddiası kurulamaz
-	}
-	r2 = 1 - ssRes/ssTot
-	if r2 < capacityEtaMinR2 {
-		return 0, r2, false
-	}
-	lastFit := intercept + slope*float64(points[n-1].TSec-x0)
-	if lastFit >= limit {
-		return 0, r2, false // zaten limitte — eşik dalı konuşur
-	}
-	etaHours = (limit - lastFit) / slope / 3600
-	if etaHours > capacityEtaMaxHours {
-		return 0, r2, false
-	}
-	return etaHours, r2, true
+	return r.ETASec / 3600, r.R2, true
 }
 
 // capacityPredictiveOpen — erken-açma kapısı (saf): eşik dalı açmadıysa

@@ -5550,6 +5550,16 @@ export interface SystemStats {
     unreservedBytes: number;
     // operator-configured reserve CH refuses to dip into
     keepFreeBytes: number;
+    // v0.10.901 (parite #6 dilim 2) — açık self-disk-eta probleminden
+    // "kaç gün kaldı"; satır yoksa alan yok (chip çizilmez)
+    forecast?: {
+      days: number;            // 0 = projeksiyon tavanda ("dolu")
+      critical: boolean;       // days < 2 (rozet tonu; severity yaş-eskalasyonlu, ton için değil)
+      severity: string;        // satırın anlık ciddiyeti (Inbox ile aynı)
+      thresholdDays?: number;  // problemin açıldığı eşik (gün)
+      note?: string;           // diskReason cümlesi (tooltip)
+      problemId: string;
+    };
   }[];
   // v0.9.290 (operator ask) — live per-node pressure, from
   // system.asynchronous_metrics / system.metrics / system.server_settings.

@@ -53,7 +53,7 @@ func ProblemCategory(p Problem) string {
 		return CategoryAvailability
 	case strings.HasSuffix(rule, ":service_silent"):
 		return CategoryAvailability
-	case rule == "self-disk-eta" || rule == "self-spool-depth":
+	case rule == SelfDiskRuleID || rule == "self-spool-depth":
 		return CategoryResource
 	case strings.HasPrefix(rule, "self-"):
 		return CategoryAvailability

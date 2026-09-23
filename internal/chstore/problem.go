@@ -724,7 +724,7 @@ func (s *Store) EnrichProblemsWithRunbooks(ctx context.Context, problems []Probl
 // çalışmayan bir bağlantı, bağlantı olmamasından kötüdür).
 var selfHealthRunbooks = map[string]string{
 	"self-spool-depth":    "/admin/stats",
-	"self-disk-eta":       "/admin/stats",
+	SelfDiskRuleID:        "/admin/stats",
 	"self-ingest-stall":   "/admin/stats",
 	"self-channel-broken": "/settings/channels",
 	// v0.9.1294 — hacim sıçramasının müdahale ekranı kardinalite

@@ -82,7 +82,9 @@ type Evaluator struct {
 	// bir pencere onu cevaplıyor. Lider değişimi seriyi sıfırlar →
 	// yarım saat tahmin üretilmez (watcherLastRun ile aynı ömür
 	// sözleşmesi: kabul edilmiş, sessiz-değil tarafta hata yapan bir
-	// takas). diskMu, breachMu ile aynı gerekçeyle var.
+	// takas); v0.10.901'den beri o pencerede AÇIK satır son değeriyle
+	// taşınır (selfhealth.go diskCarryOver), kapanıp yeniden açılmaz.
+	// diskMu, breachMu ile aynı gerekçeyle var.
 	diskMu     sync.Mutex
 	diskSeries map[string][]diskSample
 
