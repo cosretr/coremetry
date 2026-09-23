@@ -232,10 +232,10 @@ gölge→canlı ölçütü 7 gün / ≤5 would-open/gün.
   atomik setter). Problem YAZILMAZ; sayaçlar `/api/stats.heap`; would-open
   geçişinde tek log; would-P1 (computePriority sentetik satır); verdict Redis
   15 dk → kart rozeti "◐ gölge: problem AÇILIRDI". `on` bu sürümde gölge gibi.
-- **892 (canlı, ≥1 hafta gölge sonrası, operatör kararı):** applyOutcome'a Pod +
+- **Canlı kip dilimi (≥1 hafta gölge sonrası, operatör kararı; sürüm numarası o gün):** applyOutcome'a Pod +
   touch, resolve gerekçeleri ("no live JVM pod"), off → "detector disabled"
   kapanışı, notify_kind pin satırı, displayMetric/unitOf '%', ProblemDetail pill
-  "en kötü pod", kartta açık problem bağlantısı; opsiyonel 893 Inbox pod rozeti.
+  "en kötü pod", kartta açık problem bağlantısı; opsiyonel Inbox pod rozeti dilimi.
 - **Bilinen sınırlar:** `cluster` kimlik anahtarında yok; CH sum-kova oran
   belirsizliği (limit seyrekse); VM ≥1000 seri tavanı parçalı okumayla aşılıyor
   (rotasyon); lider değişiminde açık satır touch boşluğu (892'de RED ile aynı).
