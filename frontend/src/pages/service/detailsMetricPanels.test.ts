@@ -303,3 +303,17 @@ describe('buildDetailsMetricPanels — gerçek kataloglar', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 });
+
+// v0.10.870 (scale-audit 09-23) — katalog sorgusu servis boşken HİÇ atılmaz:
+// `metricNamesSearch('', '', 500)` tüm kurulumun kataloğu olurdu. Guard v0.9'dan
+// beri var; bu pin onu sözleşmeye çevirir.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+describe('useDetailsMetricPanels — servis boşken sorgu yok', () => {
+  it('useQuery enabled koşulu !!service taşır', () => {
+    const src = readFileSync(resolve(__dirname, 'DetailsMetricsSection.tsx'), 'utf8');
+    expect(src).toContain('enabled: enabled && !!service,');
+    expect(src).toContain("queryFn: () => api.metricNamesSearch(service, '', 500),");
+  });
+});
