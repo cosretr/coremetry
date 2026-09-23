@@ -607,3 +607,39 @@ sıfır yazımı geldiğinde süpürmenin işi kalmadı.
 
 **Kapsam:** yalnız dış hat. RED anomalileri (`anomaly:<svc>:<metric>`) süpürülmeye devam
 eder; onların histerezis touch'u v0.10.889.
+
+## 2026-09-23 — Forecast çekirdeği: "zaten limitte" bir DURUMDUR, kararı çağıran verir; disk "kaç gün" rozeti Problem satırından beslenir (v0.10.901; parite #6 dilim 1+2)
+
+**Karar 1 — `forecast.StatusAtLimit`:** `internal/forecast.Fit` regresyon doğrusu limitin
+üstündeyse tahmin yerine `StatusAtLimit` döner; anlamı ÇAĞIRAN verir. `capacityETA` (DB
+kapasitesi) → tahmin yok (eşik dalı zaten alarmı açar; ikinci bir "0 saat" cümlesi gürültü),
+`diskETADays` (CH diski) → 0 gün, ok=true (dolu diskte susmak alarmı kaçırmaktı; v0.9.1279).
+İki test dosyası (capacity_eta_test, selfhealth_test:176) zıt sözleşmeyi pinler ve ikisi de
+delegasyon sonrası DEĞİŞMEDİ. Paket bu ikiliği tek davranışa indirmez — birleştirilecek her
+yeni çağıran (dilim 3 chip, dilim 4 Hosts/Clusters/heap) kendi çevirisini açıkça yazar.
+
+**Karar 2 — kayan-nokta sırası pinli:** paket iki eski çekirdeğin sx/sy/sxx/sxy birikimini,
+den/slope/intercept'i, SSres/SStot döngüsünü ve lastFit'i BİREBİR aynı sırada hesaplar;
+`linear_test` eski gövdeyi `==` ile karşılaştırır (ufuk sınırı ±ulp dâhil). Eski testler kaba
+(aralık kontrolü / 0.001 tolerans) olduğundan "temizlik" onlardan sessizce geçerdi. Tek
+bilinçli sapma: NaN/±Inf örnek "geçersiz" (eskiden ok=true + "~NaNh").
+
+**Karar 3 — "kaç gün kaldı" rozeti Problem satırından, yeni yüzey/polling YOK:** /admin/stats
+disk rozeti yalnız `OpenProblemsSnapshot`'taki çözülmemiş `self-disk-eta` satırını okur
+(sayı = `Problem.Value`, gün). Gerekçe: seri evaluator belleğinde ve yalnız liderde
+(`COREMETRY_MODE=api` pod'unda sıfır); satır her pod'dan okunur, snapshot 5 s memo'lu, zarf
+zaten 60 s önbellekli → ek sorgu sıfır. Bedeli dürüstçe beyan: chip yalnız eşiğin (7 gün)
+altında görünür, "tahmin var ama problem yok" hâli görünmez (dilim 4: kalıcı seri). Satırda
+olmayan sayı (R², band) chip'e YAZILMAZ.
+
+**Karar 4 — rozet tonu SAYIDAN, satır ciddiyetinden değil:** `Severity` yaş eskalasyonuyla
+30 dk'da critical'a çıkar (Inbox sözleşmesi, self-disk-eta muaf değil). "Kırmızı = 2 günden
+az" cümlesi ancak `days < SelfDiskCriticalDays` ile doğru kalır; `severity` payload'da kalır
+ama ton için okunmaz.
+
+**Karar 5 — lider değişiminde açık satır taşınır:** bellek-içi disk serisi yeni liderde
+boşken (ısınma: <4 örnek ya da <30 dk) açık satır son değeriyle yeniden sunulur
+(`diskCarryOver`; v0.9.1294 volCache "son ölçümü yeniden sun" deseniyle aynı gerekçe).
+Aksi hâlde her deploy bir sahte "çözüldü" + 30 dk sonra mükerrer bildirim üretiyordu.
+Isınma dışında "eğilim yok" satırı yine kapatır — taşıma bir yaşam döngüsü uzatması değil,
+kör pencerenin köprüsüdür.

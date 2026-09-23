@@ -59,7 +59,7 @@ Sıralama ölçütü: operatörün Dynatrace alışkanlığında en çok arayaca
 | 3 | **Endpoint/route hedefli alert rule** — **GEMİDE** v0.10.705 (`http_route` hedefi, spanmetrics_1m ölçüsü, Endpoints ⚠ + detay düğmesi) | `RuleTarget`'a `http_route` türü; ölçü `spanmetrics_1m` (service, route) state'lerinden; Endpoints satırından "alarm kur" | S-M | kısmen |
 | 4 | **OTLP/infra metrikleri için adaptif baseline** | `metricPolicies` desenine `jvm_heap_pct`, `gc_pause_ms`, `cpu_pct` (metricSource seam'i); mevcut dwell/seasonal kapıları aynen | M | ✔ (infra anomalisi hipoteze kanıt) |
 | 5 | **Problem modeli: kategori + görüntü kimliği + etkilenen varlıklar** — **GEMİDE** v0.10.706 (kategori + `P-xxxxx`) + v0.10.707 (`/api/problems/{id}/affected`: çağıranlar ∪ hipotez pod'ları ∪ cluster'lar; çekmece + detay) | `rule_id` önek → `category` türetici (okuma anı, saf); `display_id` sıralı sayaç (boot-ALTER, iki-boot); `affectedEntities[]` = blast-radius callers ∪ AffectedPods ∪ cluster üyeleri | S-M | kısmen |
-| 6 | **Genel forecast primitifi + "kaç gün" chip'i** | `capacityETA` + `diskETADays` → tek `forecast` paketi (lineer + haftalık mevsimsel ortalama, R² kapısı, ±band); Hosts/Clusters/AdminClickhouse'da chip; `self-*` ailesine host-disk/pod-heap ETA | M | ✘ |
+| 6 | **Genel forecast primitifi + "kaç gün" chip'i** | `capacityETA` + `diskETADays` → tek `forecast` paketi (lineer + haftalık mevsimsel ortalama, R² kapısı, ±band); Hosts/Clusters/AdminClickhouse'da chip; `self-*` ailesine host-disk/pod-heap ETA | M | GEMİDE dilim 1+2 (v0.10.901: `internal/forecast` + AdminStats disk rozeti — AdminClickhouse değil, disk paneli orada yok; §13); dilim 3/4 ayrı Onay |
 | 7 | **MTTR/MTTA + problem zaman serisi** | `/api/problems/series` (`noisy_rules` medyan süre mantığı), Problems sayfasında trend şeridi | S | ✘ |
 | 8 | **Cluster/env boyutlu RED rollup** | `service_env_summary_5m` (cluster, deploy_env) MV; `servicesUseMV` kapısı kalkar; ClusterBreakdown'a p50/p95 + seri; `/clickhouse-schema` iki-boot | L | ✘ |
 | 9 | **Node.js / Python runtime kartları + Go goroutines** | `RuntimeCharts.tsx` FAMILIES'e nodejs (eventloop.delay/utilization, heap) ve python | S | ✘ |
@@ -239,3 +239,64 @@ gölge→canlı ölçütü 7 gün / ≤5 would-open/gün.
 - **Bilinen sınırlar:** `cluster` kimlik anahtarında yok; CH sum-kova oran
   belirsizliği (limit seyrekse); VM ≥1000 seri tavanı parçalı okumayla aşılıyor
   (rotasyon); lider değişiminde açık satır touch boşluğu (892'de RED ile aynı).
+
+## 13. #6 uygulama notları — dilim 1+2 (v0.10.901, 2026-09-23)
+
+Spec süreci: 3 okuyucu (ETA çekirdekleri, tüketici yüzeyler, veri kaynakları/
+maliyet) → 2 tasarım ("tek forecast paketi" / "en küçük dürüst dilim") → jüri:
+tek paket tasarımı kazandı, diğerinden iki aşı — ilk yüzey Problem satırından
+beslensin (sıfır ek sorgu), sayı satırda yoksa yazılmasın. Spec + mockup
+gösterildi; operatör "devam" (gösterilmiş spec'e cevap = onay). İnceleme turu:
+5 mercek → 30 bulgu, 13 onaylı (3 major), hepsi bu sürümde kapatıldı.
+
+- **Dilim 1 — `internal/forecast` (davranış değişimi sıfır):** iki kopya
+  OLS+R² bloğu (`evaluator.capacityETA` saat, `evaluator.diskETADays` gün)
+  tek saf `forecast.Fit(points, limit, Opts) Result` çağrısına indi. Kapılar
+  (min nokta / aralık / R² / ufuk) çağırandan; **"zaten limitte" bir DURUM**
+  (`StatusAtLimit`): capacityETA tahmin yok (eşik dalı konuşur), diskETADays
+  0 gün — iki zıt test pini korunur (docs/DECISIONS.md). Kayan-nokta birikim
+  sırası birebir; `linear_test` eski gövdeyi `==` ile tutturur (ufuk sınırı
+  ±ulp, R² düşük dal dâhil). Tek bilinçli sapma: NaN/±Inf örnek "geçersiz"
+  (eskiden `ok=true` + "~NaNh"). Yeni: ±band (delta yöntemi — Var ŷₙ + Var b +
+  kovaryans; kantil t(n−2); eğim sıfırdan ayırt edilemiyorsa üst sınır +Inf) ve
+  `Reason` cümlesi. Band R² kapısının ÜSTÜNE gelir, yerine değil; bu sürümde
+  hiçbir yüzeyde yok (Monte Carlo kapsama pini ≥%85/88/90, sabit tohum).
+- **Dilim 2 — /admin/stats "ClickHouse disk capacity" ⏳ rozeti:** kaynak
+  YALNIZ `OpenProblemsSnapshot`'taki çözülmemiş (open|acknowledged)
+  `self-disk-eta` satırı (`Value` = gün; 5 s memo, zarf 60 s serveCached).
+  Yeni rota yok, polling yok, hesap yok, api.go dokunulmadı. `disks[].forecast
+  {days, critical, severity, thresholdDays, note, problemId}`; rozet
+  `/problems?problem=<id>`; tooltip `diskReason` cümlesi. Yüzey **AdminStats**
+  (§4 satırı "AdminClickhouse" demişti; orada disk paneli yok). Tek düğümde
+  anahtar uyuşmazlığı (CollectDisks her dalda `hostName()`, sysstats `''`) →
+  "/<disk>" son-ek eşlemesi, yalnız tek aday varsa.
+- **Dürüstlük kuralları (inceleme turu):** rozet TONU `days < 2`'den
+  (`chstore.SelfDiskCriticalDays`), satırın `Severity`'sinden değil —
+  Severity yaş eskalasyonuyla 30 dk'da critical'a çıkar (Inbox sözleşmesi);
+  tavanda (0 gün) "dolu (projeksiyon tavanda)", "≈ 0 dakika kaldı" değil;
+  değerlendirici kalp atışı ok değilse rozet soluk + "değerlendirici N dk
+  sessiz" (satır donar — süpürme de değerlendiricinin içinde koşar); FE
+  `fmtEtaDays` Go `fmtDays` ile tam-ikili yarımlarda da aynı (yarım-çift);
+  alt yazı "rozet yoksa tahmin ya eşiğin üstünde ya da kurulamadı".
+- **Lider değişimi (major bulgu, düzeltildi):** yeni liderin boş bellek-içi
+  serisi ilk tikte açık satırı "çözüldü" diye kapatıp 30 dk sonra yeni
+  StartedAt + yeni bildirimle yeniden açıyordu → ısınma penceresinde
+  (`diskSeriesWarm`) açık satır son değeriyle taşınır (`diskCarryOver`,
+  v0.9.1294 volCache deseni). Isınma dışı "eğilim yok" satırı yine kapatır.
+- **Yan düzeltmeler:** sysstats küme disk sorgusuna `skip_unavailable_shards`
+  (CollectDisks paritesi); `self-disk-eta` literal'leri `chstore.SelfDiskRuleID`.
+- **Bilinen sınırlar:** chip yalnız açık satır varken — "tahmin var ama
+  problem yok" (>7 gün) görünmez (dilim 4); R² satırda yok → yazılmaz; ±band
+  yüzeyde yok; VM 5 dk MAX / CH 5 dk avg kova farkı olduğu gibi (dilim 3
+  istek-anı hesabında `Method`/title taşımalı).
+- **Sonraki dilimler (her biri ayrı mockup + Onay):** 3 = `problems.
+  forecast_hours` kolonu (migration kapılı) → DB kapasite ETA'sı metinden
+  sayıya, Oracle/Postgres `GaugeStat` "≈ N saat kaldı" + ProblemDetail rozeti;
+  ön şart panel `?instance` ↔ `CapacitySample.Instance` eşleme testi. 4 =
+  disk tarihçesi kalıcılaştırma (liderde `self.disk_used_bytes` gauge →
+  metric_points, rollup otomatik; operatör kararı) → "tahmin var ama problem
+  yok" + haftalık mevsimsel; Hosts/Clusters CPU-mem chip (6 sa pencere, yalnız
+  lineer, ufuk pencere×N); JVM heap ETA. Host DİSK kaynağı yok (ayrı iş).
+- **Kapsam dışı bulgu:** vitest tam koşuda önceden var olan
+  `resetLayoutAdoption` 70>69 hatası (HEAD v0.10.900'de de kırmızı; bu
+  diff'ten bağımsız) — kuyruğa.
