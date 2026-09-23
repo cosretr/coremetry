@@ -4,7 +4,7 @@
  * özet ve kararın runbook metni. Runbook operatörün kopyalayıp DBA ile
  * koşacağı SQL: ürün ZK yolu uyuşmazlığını kendi düzeltmez (veri taşıma).
  */
-import type { CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaTable, CHReplicaVerdict } from '@/lib/types';
+import type { CHReplicaCatalog, CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaTable, CHReplicaVerdict } from '@/lib/types';
 
 export type ReplicaTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
 
@@ -47,6 +47,12 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
   let worst: CHReplicaVerdict = 'ok';
   let bad = 0;
   for (const t of r.tables) {
+    // v0.10.872 (inceleme) — yönetilmeyen tablo ÖLÇÜLMEMİŞTİR: sunucu kararı
+    // yalnız replikasız hâlde ezer, replikalı `unmanaged` satır `divergent`/
+    // `readonly` taşıyabilir ve 846 öncesi gibi başlığı kırmızıya boyardı —
+    // "eylem önerilmez" diyen satır "sorunlu" sayılamaz. `removed` kalır:
+    // sunucu her zaman ezer (rank < lagging), boyar ama sayılmaz.
+    if (t.catalog === 'unmanaged') continue;
     if (RANK[t.verdict] > RANK[worst]) worst = t.verdict;
     if (RANK[t.verdict] >= RANK.lagging) bad++;
   }
@@ -75,7 +81,7 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
   // `removed` boyar — o bir kalıntı ve gidecek.
   const tone: ReplicaTone = (unmapped > 0 || single > 0) && bad === 0
     ? 'b-warn'
-    : verdictTone(worst === 'unmanaged' ? 'ok' : worst);
+    : verdictTone(worst); // v0.10.872 — `unmanaged` döngüde atlandığı için worst'e giremez
   const leftovers = [
     ...(removed > 0 ? [`${removed} kalıntı (ürün kaldırdı)`] : []),
     ...(unmanaged > 0 ? [`${unmanaged} katalog dışı`] : []),
@@ -275,7 +281,12 @@ function innerRunbook(cluster: string, db: string, table: string, sh: CHReplicaS
 }
 
 /** Kararın runbook'u; ok/single/unmapped için boş. */
-export function runbook(cluster: string, db: string, table: string, sh: CHReplicaShard, view?: string): string {
+export function runbook(cluster: string, db: string, table: string, sh: CHReplicaShard, view?: string, catalog?: CHReplicaCatalog): string {
+  // v0.10.872 (inceleme) — katalog dışı satır (removed/unmanaged) runbook
+  // ALMAZ: replikalı `unmanaged` tablo `divergent` kararıyla buraya iniyor ve
+  // Coremetry'nin yönetmediği tablo için SYNC/RESTORE REPLICA hatta `_fix` +
+  // ATTACH/EXCHANGE merdiveni basıyordu — düğmeler gizliyken bile.
+  if (catalog) return '';
   // v0.10.824 — yapısal kararda iç tablo KENDİ runbook'unu alır; ıraksama /
   // readonly / oturum kararları aşağıda kalır (SYSTEM SYNC / RESTORE REPLICA
   // iç tabloda da doğrudur, uuid'yi değiştirmez).

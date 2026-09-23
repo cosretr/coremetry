@@ -2517,9 +2517,10 @@ function ReplicaConsistencyPanel() {
           <thead><tr><th>Tablo</th><th>Shard</th><th>Replikalar</th><th>Karar</th></tr></thead>
           <tbody>
             {tables.flatMap(t => t.shards.map(sh => {
-              const rb = runbook(data.cluster, data.database, t.table, sh, t.view);
+              const rb = runbook(data.cluster, data.database, t.table, sh, t.view, t.catalog); // v0.10.872 — katalog dışı: runbook yok
               return (
-                <tr key={`${t.table}/${sh.shard}`}>
+                // v0.10.872 — tablo×shard ~180 satır (90 tablo × 2), kardeş tablolar gibi cv.
+                <tr key={`${t.table}/${sh.shard}`} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}>
                   <td className="mono">
                     {t.table}
                     {/* v0.10.824 — `.inner_id.<uuid>` satırı okunmaz bir uuid'dir; hangi MV'nin

@@ -308,7 +308,7 @@ describe('replicaConsistency — kablolama pini', () => {
     expect(helper).toContain('MV iç tablosu · ');
     expect(helper).toContain('view çözülemedi');
     expect(page).toContain('{innerViewLabel(t)}');
-    expect(page).toContain('t.table, sh, t.view)');
+    expect(page).toContain('t.table, sh, t.view, t.catalog)'); // v0.10.872 — katalog dışı satır runbook almaz
     const types = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
     expect(types).toContain('view?: string; inner?: boolean');
   });
@@ -430,5 +430,30 @@ describe('katalog kararları — v0.10.846', () => {
   it('katalog kararında runbook YOK (kopyalanacak SQL yok)', () => {
     expect(runbook('shop_cluster', 'shop', 'feedbacks', shard('removed', []))).toBe('');
     expect(runbook('shop_cluster', 'shop', 'musteri_deneme', shard('unmanaged', []))).toBe('');
+  });
+});
+
+// v0.10.872 (inceleme) — 846'nın katalog kararı özete ve runbook'a TAŞINDI:
+// replikalı `unmanaged` tablo sunucudan gerçek kararla (divergent) gelir; özet
+// onu "sorunlu" saymaz, başlığı boyamaz, runbook basmaz. Eski pin yalnız
+// ulaşılamaz `default` kolunu (shard verdict = 'unmanaged') tutuyordu.
+describe('katalog dışı satır — replikalı unmanaged (v0.10.872)', () => {
+  const managedOk = { table: 'problems', shards: [], verdict: 'ok' as const };
+  const unmanagedDiv = {
+    table: 'musteri_deneme', verdict: 'divergent' as const, catalog: 'unmanaged' as const,
+    shards: [shard('divergent', [{ host: 'ch-01' } as CHReplicaState, { host: 'ch-02' } as CHReplicaState])],
+  };
+  it('özet: sorunlu saymaz, en kötüyü belirlemez, boyamaz', () => {
+    const s = summarize({ tables: [managedOk, unmanagedDiv] });
+    expect(s.bad).toBe(0);
+    expect(s.worst).toBe('ok');
+    expect(s.tone).toBe('b-ok');
+    expect(s.unmanaged).toBe(1);
+  });
+  it('runbook: divergent shard bile olsa katalog dışı satır SQL basmaz', () => {
+    expect(runbook('shop_cluster', 'shop', 'musteri_deneme', unmanagedDiv.shards[0], undefined, 'unmanaged')).toBe('');
+    expect(runbook('shop_cluster', 'shop', 'feedbacks', unmanagedDiv.shards[0], undefined, 'removed')).toBe('');
+    // katalogsuz aynı shard runbook ALIR (kapı yalnız kataloğa bakar)
+    expect(runbook('shop_cluster', 'shop', 'problems', unmanagedDiv.shards[0])).not.toBe('');
   });
 });
