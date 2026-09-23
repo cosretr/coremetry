@@ -5,7 +5,7 @@ import { fmtClock } from '@/lib/utils'; // v0.10.891 — tek saat biçimleyici (
 import { useServiceDeploys } from '@/lib/queries';
 import { TimeSeriesPanel, type TSSeries, type TSThreshold } from '@/components/viz/TimeSeriesPanel';
 import { rowActivation } from '@/lib/a11y';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 
@@ -119,6 +119,8 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
               ◐ gölge: problem AÇILIRDI · {data.verdict.pod}{data.verdict.wouldP1 ? ' · P1' : ''}
             </span>
           )}
+          {/* v0.10.903 — sürüklenmiş kolon genişliğinin çıkış yolu (resetLayoutAdoption muhasebesi). */}
+          <ResetLayoutButton dt={dt} />
         </span>
       </div>
       <div className="ov-card-b" style={{ paddingTop: 10, paddingBottom: 10 }}>
