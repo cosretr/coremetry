@@ -207,3 +207,35 @@ inceleme + çürütücü turu; doğrulanan 12 bulgu 887'nin içinde kapandı.
 - **Operatör teyidi bekleyen:** prod JBoss pod'ları OTel `jvm.memory.*`
   basıyor mu (basmıyorsa kart hiç çıkmaz — Thanos JMX yolu ayrı iş); prod
   metrik deposu VM mi.
+
+## 12. #4 uygulama notları — dilim 2 (v0.10.889–891, 2026-09-23)
+
+Spec süreci: 4 okuyucu (dedektör tiki, yaşam döngüsü tüketicileri, ayar vidası,
+FE) → 2 tasarım (artımlı halka / 10-dk epoch 24 s okuma) → 2 jüri (bölündü) →
+hibrit: halka + lider başlangıcında tek seferlik doldurma. Operatör "Onay".
+Cevapsız sorularda varsayılan: P1 politikası RED ile aynı (gölge **would-P1**
+ölçer), elle kapatma → RED gibi yeniden açılır, Inbox tür kuralı olduğu gibi,
+gölge→canlı ölçütü 7 gün / ≤5 would-open/gün.
+
+- **889 (yan kazanım):** RED anomalisinin histerezis ("none") dalı açık satırı
+  touch etmiyordu → süpürme 3 dk'da "kaynak sustu" diye kapatıyordu; resolveZ
+  histerezisi fiilen yoktu. Düzeltildi (external.go emsali).
+- **890:** `anomaly_sensitivity.runtime` alt bloğu (heapMode off|shadow|on —
+  varsayılan off, heapSource auto|vm|ch, minMAD/floorPct/minAbsDelta/silent/
+  maxPods); HeapBandPolicy; okuyucu `anomaly/heap_read.go`'ya taşındı — kart ve
+  dedektör aynı okuyucu + aynı politika. Settings › Anomaly alt bölümü.
+- **891 (gölge):** dedektör tikinde `scanHeap` (kümeleme sonrası, davranış
+  öncesi, soft-fail). (servis,pod) halkası 288 kova; tik başına son 2 kova
+  filo-geneli tek çift sorgu (GroupBy servis+pod), tavanda filo sonucu korunur +
+  ≤60 servis/tik parçalı; lider başlangıcında parçalı 24 s doldurma (≤60
+  servis/tik, 45 s bütçe); kaynak HeapSourceOr (VM/CH çağrı anında, main.go
+  atomik setter). Problem YAZILMAZ; sayaçlar `/api/stats.heap`; would-open
+  geçişinde tek log; would-P1 (computePriority sentetik satır); verdict Redis
+  15 dk → kart rozeti "◐ gölge: problem AÇILIRDI". `on` bu sürümde gölge gibi.
+- **892 (canlı, ≥1 hafta gölge sonrası, operatör kararı):** applyOutcome'a Pod +
+  touch, resolve gerekçeleri ("no live JVM pod"), off → "detector disabled"
+  kapanışı, notify_kind pin satırı, displayMetric/unitOf '%', ProblemDetail pill
+  "en kötü pod", kartta açık problem bağlantısı; opsiyonel 893 Inbox pod rozeti.
+- **Bilinen sınırlar:** `cluster` kimlik anahtarında yok; CH sum-kova oran
+  belirsizliği (limit seyrekse); VM ≥1000 seri tavanı parçalı okumayla aşılıyor
+  (rotasyon); lider değişiminde açık satır touch boşluğu (892'de RED ile aynı).
