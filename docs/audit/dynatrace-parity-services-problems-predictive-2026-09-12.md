@@ -169,3 +169,13 @@ Karar operatörde; öneri **B** (mockup ile).
   ∪ `Clusters`, tekrarsız, özne dışarıda. FE `AffectedEntitiesList` çekmece
   (yalnız problem satırı) + detay Blast radius bölümünde; servissiz problem
   dürüst "—". #5 KAPANDI (küme üyeleri yapısal alan olarak ertelendi).
+
+## 10. #8 uygulama notları (v0.10.881–883, 2026-09-23)
+
+Spec onayı: operatör "go" (spec gösterildi ve soruldu). Üç dilim, hepsi MV-first invariantı içinde:
+
+- **881 — `service_env_summary_5m`:** AggregatingMergeTree, `ORDER BY (service_name, cluster, deploy_env, time_bucket)`, 5-dk kova, 90 gün TTL; cluster `clusterDeriveExpr` ile MV'de doğar (ham yol `clusterExpr` ile aynı türetme). State: count/countIf(error)/sum(duration)/tdigest(0.5,0.95,0.99)/apdex sat+tol. `canonicalMVs()` sonuna eklendi (mv_positional), cluster modunda `_local`+Distributed (highVolumeTables, shard `cityHash64(service_name)`), purge listesinde. `EnvSummaryCovers(from)` probu: `min(time_bucket)` 60 sn önbellekli — MV pencerenin başını kapsamıyorsa çağıranlar ham yola düşer (yeni MV geriye dolmaz; ilk 5 dk/gün boş).
+- **882 — /api/services cluster/env filtresi:** `servicesUseMV(window, cluster, env, envMV)` kapısı (services_mv_gate.go): <5 dk her zaman ham; filtre yokken service_summary_5m; filtre varken yalnız env MV kapsıyorsa MV. `GetServicesEnvAggFiltered`/`CountServicesEnvAgg` — `envScopeClause` saf kurucu; clickhouse-local 26.2'de stub spans + MV DDL ile doğrulandı.
+- **883 — /api/services/{name}/clusters:** MV yolunda p50/p95/p99 (arrayElement ile tdigest, Array(Float32) scan tuzağı yok) + cluster başına çağrı serisi (5 dk katı adım, ≤288 nokta, 0-dolgu); ham yolda eski davranış (p50/p95/seri yok). Cevap `source: mv|spans`, FE rozet + P50/P95 kolonları + Trend Sparkline. Önbellek anahtarı `v2 … mv=%t`.
+
+Dürüstlük: MV kapsam dışıyken UI "spans" rozetini gösterir, kolonlar "—". Kapsam dolunca kendiliğinden MV'ye geçer (probe 60 sn). #8 KAPALI.
