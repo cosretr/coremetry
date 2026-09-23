@@ -195,11 +195,12 @@ Backend — doğruluk (cache değil)
 | 863 | GetFlowTopology root_traces CTE LIMIT 20k (yazıcı CTE'ye dokunulmadı) |
 | 865 | useServiceNames silindi |
 | 866 | baseline.go → service_summary_5m (dört dal; tdigest q(1) ≈ max) |
+| 868 | metricLabels ?q=/?limit= — metricSource arayüzü (CH positionCaseInsensitive · VM match[] regex + limit), FE iki çağrı sitesi |
+| 869 | attr-values q'lu dalı: ILIKE iç taramada, süzgeçten SONRA attrValuesSampleRows |
+| 870 | DetailsMetricsSection `!!service` guard pini (guard zaten vardı) |
 
 **Düşen bulgular:** entityServices LIMIT — handler cluster tipini `errBadRequest` ile
 reddediyor, namespace/workload yolunda pod listesi 500'e kelepçeli → sınırlı (yanlış
 pozitif). explain-charts anahtarı, trace-root-def GET, backfill 2 s poll → ⚪.
 
-**Kuyrukta:** metricLabels `q`/`limit` — `metricSource` arayüzü (CH + VM + Thanos) üç
-uygulamada değişir (~1 saat); attr-values `q`li dalın örnek LIMIT'i (v0.9.242 belgeli
-ödünleşim); DetailsMetricsSection `service` boş olamaz pini.
+**Kuyrukta:** — (audit'in bütün maddeleri kapandı; kalan yalnız operatör tarafı: Oracle 843/845 canlı test, Traces D5 ölçümü).
