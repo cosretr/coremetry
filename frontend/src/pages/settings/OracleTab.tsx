@@ -537,7 +537,7 @@ export function OracleTab() {
                               : pr.summary.errorCodes.map(o => <div key={o.name} className="mono">{o.name} · {o.count}</div>)}
                           </div>
                           <div>
-                            <div className="oracle-sub">Servis (eşleşen trace'in Coremetry servisi)</div>
+                            <div className="oracle-sub" title="v0.10.892 — trace'te hata veren en derin span'ın servisi; hata span'ı yoksa kök servis (kanal). Kök tek başına hep giriş noktasını gösteriyordu.">Servis (trace'te hata veren span'ın servisi; yoksa kök)</div>
                             {!pr.summary.lookupDone
                               ? <span className="is-quiet">arama yapılmadı</span>
                               : pr.summary.services.length === 0

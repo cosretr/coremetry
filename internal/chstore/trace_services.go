@@ -1,9 +1,17 @@
 package chstore
 
 // trace_services.go — v0.10.768 (Oracle test özeti). Trace id → Coremetry
-// servisi: kök span'ın servisi, kök yoksa herhangi bir span'ınki. "Bu trace
-// Coremetry'de var mı, hangi servis?" sorusu için; ids tavanlı, pencere
-// [from, to], LIMIT + bütçe. Yalnız spans (telemetri) → telemetryReadConn.
+// servisi. "Bu trace Coremetry'de var mı, hangi servis?" sorusu için; ids
+// tavanlı, pencere [from, to], LIMIT + bütçe. Yalnız spans → telemetryReadConn.
+//
+// v0.10.892 (operatör, prod 2026-09-23: "hep aynı servisler geliyor") — SEÇİM
+// KURALI DEĞİŞTİ. Eski kural kök span'ın servisiydi; kök hemen her trace'te
+// GİRİŞ NOKTASIDIR (apigateway-*, yarp, onlineintegration, loginivr) → Oracle
+// hatası hangi serviste doğmuş olursa olsun hep aynı birkaç kanal servisi
+// listeleniyordu. Yeni sıra: (1) trace'te HATA veren span'lardan EN GEÇ
+// başlayanının servisi (zincirde en derin hata = hatanın doğduğu yer;
+// yukarıya yayılan hatalar daha erken başlar), (2) yoksa kök, (3) yoksa
+// herhangi bir span. Kök ayrıca döner ki özet "kanal"ı da gösterebilsin.
 
 import (
 	"context"
@@ -19,8 +27,9 @@ func traceServicesSQL(n int) string {
 	holders := strings.TrimSuffix(strings.Repeat("?,", n), ",")
 	return fmt.Sprintf(`
 		SELECT trace_id,
-		       anyIf(service_name, parent_id = '') AS root_svc,
-		       any(service_name)                  AS any_svc
+		       argMaxIf(service_name, time, status_code = 'error') AS err_svc,
+		       anyIf(service_name, parent_id = '')                  AS root_svc,
+		       any(service_name)                                    AS any_svc
 		FROM spans
 		WHERE time >= ? AND time <= ?
 		  AND trace_id IN (%s)
@@ -30,7 +39,8 @@ func traceServicesSQL(n int) string {
 }
 
 // TraceServicesByIDs — ids ≤200 (fazlası kırpılır). Bulunmayan id haritada
-// yoktur; bulunan ama servissiz (olmamalı) "" ile döner.
+// yoktur; bulunan ama servissiz (olmamalı) "" ile döner. Değer: hata span'ının
+// servisi → kök → herhangi (pickTraceService).
 func (s *Store) TraceServicesByIDs(ctx context.Context, ids []string, from, to time.Time) (map[string]string, error) {
 	out := map[string]string{}
 	if len(ids) == 0 {
@@ -50,14 +60,22 @@ func (s *Store) TraceServicesByIDs(ctx context.Context, ids []string, from, to t
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, root, anyS string
-		if err := rows.Scan(&id, &root, &anyS); err != nil {
+		var id, errS, root, anyS string
+		if err := rows.Scan(&id, &errS, &root, &anyS); err != nil {
 			return nil, err
 		}
-		if root == "" {
-			root = anyS
-		}
-		out[id] = root
+		out[id] = pickTraceService(errS, root, anyS)
 	}
 	return out, rows.Err()
+}
+
+// pickTraceService — SAF (tablo testli): hata span'ı → kök → herhangi.
+func pickTraceService(errSvc, rootSvc, anySvc string) string {
+	switch {
+	case errSvc != "":
+		return errSvc
+	case rootSvc != "":
+		return rootSvc
+	}
+	return anySvc
 }

@@ -1659,7 +1659,7 @@ export interface OracleScanCheck {
   tsType?: string; tsBind?: string;
 }
 export interface OracleNameCount { name: string; count: number }
-/** oracle.WindowSummary — pencerede ne geldi; "servis" = eşleşen trace'in Coremetry servisi. */
+/** oracle.WindowSummary — pencerede ne geldi; "servis" = eşleşen trace'te hata veren span'ın servisi (yoksa kök; v0.10.892). */
 export interface OracleWindowSummary {
   windowMin: number; rows: number; capped: boolean; mapped: number; noTimestamp: number; badTraceId: number;
   operations: OracleNameCount[]; errorCodes: OracleNameCount[];

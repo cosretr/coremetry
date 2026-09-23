@@ -553,7 +553,9 @@ type NameCount struct {
 // WindowSummary — pencerede ne geldi: satır, eşleme sayıları, operasyon
 // kodları, ayrık trace id sayısı ve kaçının Coremetry'de bulunduğu +
 // o trace'lerin servisleri. "Servis" Oracle satırında yoktur; eşleşen
-// trace'in Coremetry servisidir (operatör onayı 2026-09-17).
+// trace'in Coremetry servisidir (operatör onayı 2026-09-17); v0.10.892: o
+// trace'te HATA veren (en derin) span'ın servisi, yoksa kök — kök hep giriş
+// noktasıydı ("hep aynı servisler", operatör 2026-09-23).
 type WindowSummary struct {
 	WindowMin   int         `json:"windowMin"`
 	Rows        int         `json:"rows"`
