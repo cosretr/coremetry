@@ -34,6 +34,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -128,11 +129,16 @@ type Worker struct {
 	queryRows func(ctx context.Context, src SourceConfig, sqlText string, args []any) ([]map[string]any, error)
 
 	healthHook func(ctx context.Context, src SourceConfig, lastError string)
+	// probeTsType — v0.10.885: zaman kolonunun sözlük tipi (tsbind.go);
+	// enjekte edilebilir. Sonuç kaynak başına önbellekte; hata 10 dk sonra
+	// yeniden denenir, o arada "" (kutuya göre varsayılan ifade).
+	probeTsType func(ctx context.Context, src SourceConfig) (string, error)
 
 	mu        sync.Mutex
 	nextDue   map[string]time.Time
 	status    map[string]PollStatus
 	watermark map[string]time.Time
+	tsTypes   map[string]tsTypeEntry
 
 	mPolls, mRows, mDropped, mErrors metric.Int64Counter
 }
@@ -147,6 +153,8 @@ func NewWorker(svc *Service, sink RowSink, state StateStore) *Worker {
 		watermark: map[string]time.Time{},
 	}
 	w.queryRows = w.defaultQueryRows
+	w.probeTsType = svc.probeTsType
+	w.tsTypes = map[string]tsTypeEntry{}
 	m := selfobs.Meter()
 	var err error
 	if w.mPolls, err = m.Int64Counter("oracle_polls_total", metric.WithDescription("Oracle hata tablosu poll sorguları")); err != nil {
@@ -349,7 +357,7 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 	wm := w.watermarkFor(ctx, src.ID, now)
 	st.WatermarkNs = wm.UnixNano()
 	from, to := pollWindow(wm, now)
-	sqlText, args, err := buildPollQuery(src, from, to, pollRowCap)
+	sqlText, args, err := buildPollQuery(src, from, to, pollRowCap, w.tsTypeFor(ctx, src, now))
 	if err != nil {
 		return fail("sorgu: " + err.Error())
 	}
@@ -426,4 +434,38 @@ func (w *Worker) publishStatus(ctx context.Context, at time.Time) {
 func (st PollStatus) String() string {
 	return fmt.Sprintf("%s rows=%d mapped=%d wm=%s err=%q", st.SourceID, st.LastRows, st.LastMapped,
 		time.Unix(0, st.WatermarkNs).UTC().Format(time.RFC3339), st.LastError)
+}
+
+// tsTypeEntry — v0.10.885: kaynak başına sözlük tipi önbelleği.
+type tsTypeEntry struct {
+	typ string
+	ok  bool
+	at  time.Time
+}
+
+const tsTypeRetry = 10 * time.Minute
+
+// tsTypeFor — önbellekten; yoksa (ya da hata eskidiyse) sözlük okur. Hata
+// poll'u DÜŞÜRMEZ: "" ile devam (TimestampHasZone kutusuna göre ifade), tek
+// log satırı, 10 dk sonra tekrar.
+func (w *Worker) tsTypeFor(ctx context.Context, src SourceConfig, now time.Time) string {
+	key := src.ID + "|" + strings.ToUpper(src.Schema+"."+src.Table+"."+src.TimestampColumn)
+	w.mu.Lock()
+	e, ok := w.tsTypes[key]
+	w.mu.Unlock()
+	if ok && (e.ok || now.Sub(e.at) < tsTypeRetry) {
+		return e.typ
+	}
+	if w.probeTsType == nil {
+		return ""
+	}
+	typ, err := w.probeTsType(ctx, src)
+	if err != nil {
+		log.Printf("[oracle] %s: zaman kolonu tipi okunamadı (%s), bind ifadesi kutuya göre: %v", src.Name, src.TimestampColumn, err)
+		typ = ""
+	}
+	w.mu.Lock()
+	w.tsTypes[key] = tsTypeEntry{typ: typ, ok: err == nil, at: now}
+	w.mu.Unlock()
+	return typ
 }

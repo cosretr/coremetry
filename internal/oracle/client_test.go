@@ -87,21 +87,22 @@ func TestBuildSampleQuery_Contract(t *testing.T) {
 	from := time.Date(2026, 9, 9, 10, 0, 0, 0, time.UTC)
 	to := from.Add(15 * time.Minute)
 
-	sqlText, args, err := buildSampleQuery(cfg, from, to, testSampleLimit)
+	sqlText, args, err := buildSampleQuery(cfg, from, to, testSampleLimit, "")
 	if err != nil {
 		t.Fatalf("builder: %v", err)
 	}
 	assertSingleSelect(t, sqlText)
 
-	// Zaman aralığı ZORUNLU ve bind'li.
-	if !strings.Contains(sqlText, "WHERE ERR_TIMESTAMP >= :1 AND ERR_TIMESTAMP < :2") {
-		t.Fatalf("zaman yüklemi bind'li değil: %q", sqlText)
+	// Zaman aralığı ZORUNLU ve bind'li. v0.10.885 — bind, kolon tipine göre SQL
+	// fonksiyonuyla (tip bilinmiyor + dilimsiz → TO_TIMESTAMP): kolon ifadenin
+	// DIŞINDA kalır ki partition budaması/indeks düşmesin.
+	if !strings.Contains(sqlText, "WHERE ERR_TIMESTAMP >= TO_TIMESTAMP(:1, 'YYYY-MM-DD HH24:MI:SS.FF6') AND ERR_TIMESTAMP < TO_TIMESTAMP(:2, 'YYYY-MM-DD HH24:MI:SS.FF6')") {
+		t.Fatalf("zaman yüklemi tipli bind değil: %q", sqlText)
 	}
-	// v0.10.601 — bind değerleri kaynağın DUVAR SAATİ (bindTime): go-ora
-	// time.Time'ı bileşenleriyle gönderir, dilimsiz kolona UTC anı bağlamak
-	// 3 saat kaydırırdı. Varsayılan dilim Europe/Istanbul.
+	// v0.10.601 — bind değerleri kaynağın DUVAR SAATİ (bindTime); v0.10.885 —
+	// dize biçiminde. Varsayılan dilim Europe/Istanbul.
 	loc, _ := time.LoadLocation(DefaultTimezone)
-	if len(args) != 3 || args[0] != any(bindTime(from, loc, false)) || args[1] != any(bindTime(to, loc, false)) || args[2] != any("T") {
+	if len(args) != 3 || args[0] != any(bindTime(from, loc, false).Format(tsFmtTimestamp)) || args[1] != any(bindTime(to, loc, false).Format(tsFmtTimestamp)) || args[2] != any("T") {
 		t.Fatalf("arg sırası: %#v", args)
 	}
 	// Tip süzgeci bind'li.
@@ -131,7 +132,7 @@ func TestBuildSampleQuery_Contract(t *testing.T) {
 func TestBuildSampleQuery_ValuesNeverInterpolated(t *testing.T) {
 	cfg := cfgFor(t)
 	cfg.TypeFilter = []string{"T", "O'REILLY", "X') OR 1=1 --"}
-	sqlText, args, err := buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), 5)
+	sqlText, args, err := buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), 5, "")
 	if err != nil {
 		t.Fatalf("builder: %v", err)
 	}
@@ -154,7 +155,7 @@ func TestBuildSampleQuery_ValuesNeverInterpolated(t *testing.T) {
 func TestBuildSampleQuery_TypeFilterComesFromSettings(t *testing.T) {
 	cfg := cfgFor(t)
 	cfg.TypeFilter = []string{"E"}
-	_, args, err := buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), 5)
+	_, args, err := buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), 5, "")
 	if err != nil {
 		t.Fatalf("builder: %v", err)
 	}
@@ -163,7 +164,7 @@ func TestBuildSampleQuery_TypeFilterComesFromSettings(t *testing.T) {
 	}
 	// Boş bırakılırsa varsayılan (ve YALNIZ o zaman).
 	cfg.TypeFilter = nil
-	_, args, err = buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), 5)
+	_, args, err = buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), 5, "")
 	if err != nil {
 		t.Fatalf("builder: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestBuildSampleQuery_RejectsUnvalidatedConfig(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if sqlText, _, err := buildSampleQuery(c.cfg, time.Now().Add(-time.Hour), time.Now(), 5); err == nil {
+			if sqlText, _, err := buildSampleQuery(c.cfg, time.Now().Add(-time.Hour), time.Now(), 5, ""); err == nil {
 				t.Fatalf("doğrulanmamış cfg SQL üretti: %q", sqlText)
 			}
 		})
@@ -208,7 +209,7 @@ func TestBuildSampleQuery_LimitClamped(t *testing.T) {
 		{maxSampleLimit, "FETCH FIRST 50 ROWS ONLY"},
 		{10000, "FETCH FIRST 50 ROWS ONLY"},
 	} {
-		sqlText, _, err := buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), c.in)
+		sqlText, _, err := buildSampleQuery(cfg, time.Now().Add(-time.Hour), time.Now(), c.in, "")
 		if err != nil {
 			t.Fatalf("builder: %v", err)
 		}
@@ -415,8 +416,8 @@ func TestClampTestWindow(t *testing.T) {
 func TestPollPreviewShowsBinds(t *testing.T) {
 	cfg := cfgFor(t)
 	from := time.Date(2026, 9, 17, 22, 0, 0, 0, time.UTC)
-	q, binds := pollPreview(cfg, from, from.Add(15*time.Minute))
-	want, args, err := buildPollQuery(cfg, from, from.Add(15*time.Minute), pollRowCap)
+	q, binds := pollPreview(cfg, from, from.Add(15*time.Minute), "")
+	want, args, err := buildPollQuery(cfg, from, from.Add(15*time.Minute), pollRowCap, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,8 +522,11 @@ func TestSelectListMappedOnly(t *testing.T) {
 	}
 	from := time.Date(2026, 9, 22, 21, 0, 0, 0, time.UTC)
 	for name, build := range map[string]func() (string, error){
-		"poll":   func() (string, error) { q, _, e := buildPollQuery(cfg, from, from.Add(time.Hour), 10); return q, e },
-		"sample": func() (string, error) { q, _, e := buildSampleQuery(cfg, from, from.Add(time.Hour), 5); return q, e },
+		"poll": func() (string, error) { q, _, e := buildPollQuery(cfg, from, from.Add(time.Hour), 10, ""); return q, e },
+		"sample": func() (string, error) {
+			q, _, e := buildSampleQuery(cfg, from, from.Add(time.Hour), 5, "")
+			return q, e
+		},
 	} {
 		q, err := build()
 		if err != nil {
@@ -541,7 +545,7 @@ func TestSelectListMappedOnly(t *testing.T) {
 		t.Fatal("Normalize bayrağı düşürdü")
 	}
 	cfg.SelectMappedOnly = false
-	q, _, err := buildPollQuery(cfg, from, from.Add(time.Hour), 10)
+	q, _, err := buildPollQuery(cfg, from, from.Add(time.Hour), 10, "")
 	if err != nil || !strings.HasPrefix(q, "SELECT * FROM ") {
 		t.Fatalf("kapalı kip eski şekil değil: %q %v", q, err)
 	}

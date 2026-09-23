@@ -89,6 +89,7 @@ func newTestWorker(t *testing.T, src SourceConfig, state *fakeState, rows func(c
 	w.now = func() time.Time { return now }
 	calls := &[]queryCall{}
 	n := 0
+	w.probeTsType = func(context.Context, SourceConfig) (string, error) { return "TIMESTAMP(3)", nil } // v0.10.885 — sözlük sahte
 	w.queryRows = func(_ context.Context, _ SourceConfig, sqlText string, args []any) ([]map[string]any, error) {
 		n++
 		*calls = append(*calls, queryCall{sql: sqlText, args: args})
@@ -107,16 +108,16 @@ func TestPollFirstWindowAndBindWallClock(t *testing.T) {
 		t.Fatalf("1 sorgu bekleniyor, %d", len(*calls))
 	}
 	c := (*calls)[0]
-	for _, want := range []string{"FROM SHOP.ERROR_LOG", "ERR_TIMESTAMP > :1 AND ERR_TIMESTAMP <= :2", "ERR_TYPE IN (:3)", "ORDER BY ERR_TIMESTAMP ASC", "FETCH FIRST 5000 ROWS ONLY"} {
+	for _, want := range []string{"FROM SHOP.ERROR_LOG", "ERR_TIMESTAMP > TO_TIMESTAMP(:1, 'YYYY-MM-DD HH24:MI:SS.FF6') AND ERR_TIMESTAMP <= TO_TIMESTAMP(:2, 'YYYY-MM-DD HH24:MI:SS.FF6')", "ERR_TYPE IN (:3)", "ORDER BY ERR_TIMESTAMP ASC", "FETCH FIRST 5000 ROWS ONLY"} {
 		if !strings.Contains(c.sql, want) {
 			t.Errorf("poll SQL %q içermeli:\n%s", want, c.sql)
 		}
 	}
 	// İlk pencere: (now−15dk−overlap, now] — bind değerleri İstanbul duvar saati.
-	from, to := c.args[0].(time.Time), c.args[1].(time.Time)
-	wantFrom := time.Date(2026, 9, 10, 11, 43, 0, 0, time.UTC) // 09:00Z−17dk = 08:43Z = 11:43 İstanbul
-	wantTo := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
-	if !from.Equal(wantFrom) || !to.Equal(wantTo) {
+	from, to := c.args[0].(string), c.args[1].(string) // v0.10.885 — dize (TO_TIMESTAMP FF6)
+	wantFrom := "2026-09-10 11:43:00.000000"           // 09:00Z−17dk = 08:43Z = 11:43 İstanbul
+	wantTo := "2026-09-10 12:00:00.000000"
+	if from != wantFrom || to != wantTo {
 		t.Errorf("bind: from=%v to=%v, want %v..%v", from, to, wantFrom, wantTo)
 	}
 	if c.args[2] != "T" {
@@ -173,8 +174,8 @@ func TestPollOverlapResumeAndIdempotent(t *testing.T) {
 		t.Fatalf("2 sorgu bekleniyor, %d", len(*calls))
 	}
 	// İkinci pencere watermark(08:58Z)−overlap = 08:56Z = 11:56 İstanbul.
-	from := (*calls)[1].args[0].(time.Time)
-	if !from.Equal(time.Date(2026, 9, 10, 11, 56, 0, 0, time.UTC)) {
+	from := (*calls)[1].args[0].(string) // v0.10.885 — dize (TO_TIMESTAMP FF6)
+	if from != "2026-09-10 11:56:00.000000" {
 		t.Errorf("overlap penceresi from=%v", from)
 	}
 	// İdempotent: aynı Oracle satırı iki tikte aynı row_id.
@@ -195,8 +196,8 @@ func TestPollOverlapResumeAndIdempotent(t *testing.T) {
 	if len(*calls2) != 1 {
 		t.Fatal("yeni worker poll'lamalı")
 	}
-	from2 := (*calls2)[0].args[0].(time.Time)
-	if !from2.Equal(time.Date(2026, 9, 10, 11, 58, 30, 0, time.UTC)) { // 09:00:30Z−2dk = 08:58:30Z = 11:58:30 İstanbul
+	from2 := (*calls2)[0].args[0].(string)
+	if from2 != "2026-09-10 11:58:30.000000" { // 09:00:30Z−2dk = 08:58:30Z = 11:58:30 İstanbul
 		t.Errorf("kalıcı watermark'tan devam etmeli, from=%v", from2)
 	}
 }
@@ -284,8 +285,8 @@ func TestPollEmptyTickFloorsWatermark(t *testing.T) {
 	w, _, calls, now := newTestWorker(t, testSource(), state, func(int, []any) ([]map[string]any, error) { return nil, nil })
 	w.Tick(context.Background())
 	// Eski watermark'tan başlar (kalıcı değer okundu)…
-	from := (*calls)[0].args[0].(time.Time)
-	if from.Year() != 2025 {
+	from := (*calls)[0].args[0].(string) // v0.10.885 — dize bind
+	if !strings.HasPrefix(from, "2025-") {
 		t.Errorf("kalıcı eski watermark okunmalı, from=%v", from)
 	}
 	// …boş tik sonrası taban: now−15dk.
@@ -344,17 +345,17 @@ func TestPollIntervalClamp(t *testing.T) {
 func TestBuildPollQueryRejectsBadConfig(t *testing.T) {
 	src := testSource()
 	src.ExtraWhere = "1=1; DROP TABLE x"
-	if _, _, err := buildPollQuery(src, time.Now(), time.Now(), 10); err == nil {
+	if _, _, err := buildPollQuery(src, time.Now(), time.Now(), 10, ""); err == nil {
 		t.Error("extraWhere kapısı poll sorgusunda da çalışmalı")
 	}
 	src = testSource()
 	src.Table = "bad-name"
-	if _, _, err := buildPollQuery(src, time.Now(), time.Now(), 10); err == nil {
+	if _, _, err := buildPollQuery(src, time.Now(), time.Now(), 10, ""); err == nil {
 		t.Error("identifier kapısı")
 	}
 	src = testSource()
 	src.ExtraWhere = "ERR_CHANNELCODE = 'MOB'"
-	q, _, err := buildPollQuery(src, time.Now(), time.Now(), 0)
+	q, _, err := buildPollQuery(src, time.Now(), time.Now(), 0, "")
 	if err != nil || !strings.Contains(q, "AND (ERR_CHANNELCODE = 'MOB')") || !strings.Contains(q, "FETCH FIRST 5000") {
 		t.Errorf("extraWhere parantezli + limit 0 → tavan: %v\n%s", err, q)
 	}

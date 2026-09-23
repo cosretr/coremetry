@@ -487,6 +487,10 @@ export function OracleTab() {
                       <div className="oracle-scan">
                         <span className={`badge ${sv.tone}`} title={sv.detail}>{sv.text}</span>
                         <span className="is-quiet"> {sv.detail}</span>
+                        {/* v0.10.885 — pencere bind'i kolon tipine göre; sözlük okunamadıysa söyle. */}
+                        {pr.scan?.tsBind && (
+                          <span className="is-quiet"> · zaman bind'i: {pr.scan.tsType || 'tip okunamadı, kutuya göre'} → {pr.scan.tsBind}(:1)</span>
+                        )}
                         {sv.tone === 'b-err' && (
                           <div className="is-quiet">
                             Kaynağı etkinleştirmeden önce zaman kolonuna indeks (ya da partition) ekletin; yoksa her

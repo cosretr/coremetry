@@ -1625,6 +1625,8 @@ export interface OracleScanCheck {
   checked: boolean; error?: string; tsColumn: string; found: boolean;
   indexed: boolean; indexName?: string; partitioned: boolean; partitionKey?: string;
   numRows: number; lastAnalyzed?: string;
+  /** v0.10.885 — zaman kolonunun sözlük tipi + pencere bind fonksiyonu. */
+  tsType?: string; tsBind?: string;
 }
 export interface OracleNameCount { name: string; count: number }
 /** oracle.WindowSummary — pencerede ne geldi; "servis" = eşleşen trace'in Coremetry servisi. */

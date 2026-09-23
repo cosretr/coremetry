@@ -72,7 +72,7 @@ const (
 // doğrulanmış. limit bir int'tir ve %d ile basılır — enjekte edilecek bir
 // dize yoktur (bind edilmemesinin sebebi: FETCH FIRST bind'i sürücüden
 // sürücüye değişiyor, sayıysa hiçbir riski yok).
-func buildSampleQuery(cfg SourceConfig, from, to time.Time, limit int) (string, []any, error) {
+func buildSampleQuery(cfg SourceConfig, from, to time.Time, limit int, tsType string) (string, []any, error) {
 	if limit < 1 {
 		limit = 1
 	}
@@ -88,10 +88,12 @@ func buildSampleQuery(cfg SourceConfig, from, to time.Time, limit int) (string, 
 		return "", nil, err
 	}
 
-	// v0.10.601 — bind değerleri kaynağın duvar saatine (bindTime): go-ora
-	// time.Time'ı BİLEŞENLERİYLE gönderir, UTC anı bağlamak dilimsiz kolonda
-	// 3 saat kaydırırdı. Poll sorgusuyla aynı yol — iki gerçek yok.
-	args := []any{bindTime(from, loc, cfg.TimestampHasZone), bindTime(to, loc, cfg.TimestampHasZone)}
+	// v0.10.601 — bind değerleri kaynağın duvar saatine (bindTime); v0.10.885 —
+	// DİZE olarak, tipi SQL tarafındaki TO_TIMESTAMP/TO_DATE/TO_TIMESTAMP_TZ
+	// verir (tsbind.go: go-ora'nın TZ'li time.Time bind'i partition budamasını
+	// düşürüyordu). Poll sorgusuyla aynı yol — iki gerçek yok.
+	kind := tsKindOf(tsType, cfg.TimestampHasZone)
+	args := []any{kind.bindValue(from, loc), kind.bindValue(to, loc)}
 	var b strings.Builder
 	// Kolon listesi yerine * : Aşama 2'nin alan eşlemesini yazacak operatör
 	// tablonun GERÇEK kolonlarını testte görmeli (FETCH FIRST tavanı zaten var).
@@ -99,7 +101,7 @@ func buildSampleQuery(cfg SourceConfig, from, to time.Time, limit int) (string, 
 	if err != nil {
 		return "", nil, err
 	}
-	fmt.Fprintf(&b, "SELECT %s FROM %s.%s\nWHERE %s >= :1 AND %s < :2", sel, cfg.Schema, cfg.Table, tsCol, tsCol)
+	fmt.Fprintf(&b, "SELECT %s FROM %s.%s\nWHERE %s >= %s AND %s < %s", sel, cfg.Schema, cfg.Table, tsCol, kind.bindExpr(1), tsCol, kind.bindExpr(2))
 	binds := make([]string, 0, len(types))
 	for _, t := range types {
 		args = append(args, t)
@@ -172,7 +174,7 @@ func queryParts(cfg SourceConfig) (tsCol, typCol string, types []string, err err
 // ARTAN sıra (watermark en büyük görülen zamana ilerler), tavan pollRowCap
 // (tavana çarpan tik "capped" ilan eder, bir sonraki granülde devam eder).
 // Zaman/tip bind, identifier'lar doğrulanmış, limit %d ile basılan bir int.
-func buildPollQuery(cfg SourceConfig, from, to time.Time, limit int) (string, []any, error) {
+func buildPollQuery(cfg SourceConfig, from, to time.Time, limit int, tsType string) (string, []any, error) {
 	if limit < 1 || limit > pollRowCap {
 		limit = pollRowCap
 	}
@@ -184,13 +186,14 @@ func buildPollQuery(cfg SourceConfig, from, to time.Time, limit int) (string, []
 	if err != nil {
 		return "", nil, err
 	}
-	args := []any{bindTime(from, loc, cfg.TimestampHasZone), bindTime(to, loc, cfg.TimestampHasZone)}
+	kind := tsKindOf(tsType, cfg.TimestampHasZone) // v0.10.885 — tipli bind (tsbind.go)
+	args := []any{kind.bindValue(from, loc), kind.bindValue(to, loc)}
 	var b strings.Builder
 	sel, err := selectList(cfg)
 	if err != nil {
 		return "", nil, err
 	}
-	fmt.Fprintf(&b, "SELECT %s FROM %s.%s\nWHERE %s > :1 AND %s <= :2", sel, cfg.Schema, cfg.Table, tsCol, tsCol)
+	fmt.Fprintf(&b, "SELECT %s FROM %s.%s\nWHERE %s > %s AND %s <= %s", sel, cfg.Schema, cfg.Table, tsCol, kind.bindExpr(1), tsCol, kind.bindExpr(2))
 	binds := make([]string, 0, len(types))
 	for _, t := range types {
 		args = append(args, t)
@@ -364,6 +367,11 @@ type ScanCheck struct {
 	PartitionKey string `json:"partitionKey,omitempty"`
 	NumRows      int64  `json:"numRows"`
 	LastAnalyzed string `json:"lastAnalyzed,omitempty"`
+	// v0.10.885 — zaman kolonunun sözlük tipi ve pencere bind'inin SQL
+	// fonksiyonu (TO_TIMESTAMP / TO_DATE / TO_TIMESTAMP_TZ). Boş TsType =
+	// sözlük okunamadı, kutuya göre varsayıldı.
+	TsType string `json:"tsType,omitempty"`
+	TsBind string `json:"tsBind,omitempty"`
 }
 
 // FullScanRisk — SAF: tablo bulundu, zaman kolonu ne indeksli ne partition
@@ -521,8 +529,8 @@ func runScanCheck(ctx context.Context, db sqlDB, cfg SourceConfig, budget time.D
 
 // pollPreview — SAF: poller'ın bu pencere için koşacağı TAM sorgu + bind
 // değerleri (operatör/DBA gözüyle inceleme için; şifre/DSN yok).
-func pollPreview(cfg SourceConfig, from, to time.Time) (string, []string) {
-	q, args, err := buildPollQuery(cfg, from, to, pollRowCap)
+func pollPreview(cfg SourceConfig, from, to time.Time, tsType string) (string, []string) {
+	q, args, err := buildPollQuery(cfg, from, to, pollRowCap, tsType)
 	if err != nil {
 		return "", nil
 	}
@@ -639,8 +647,8 @@ func summarizeWindow(windowMin int, rows []chstore.OracleErrorRow, st MapStats, 
 
 // runWindowSummary — poller sorgusunun aynısı (tavan summaryRowCap), eşleme
 // (mapping.go), CH arama; hata özetin içinde, testi düşürmez.
-func runWindowSummary(ctx context.Context, db sqlDB, cfg SourceConfig, budget time.Duration, secret string, from, to time.Time, opt TestOptions) *WindowSummary {
-	q, args, err := buildPollQuery(cfg, from, to, summaryRowCap)
+func runWindowSummary(ctx context.Context, db sqlDB, cfg SourceConfig, budget time.Duration, secret string, from, to time.Time, opt TestOptions, tsType string) *WindowSummary {
+	q, args, err := buildPollQuery(cfg, from, to, summaryRowCap, tsType)
 	if err != nil {
 		return &WindowSummary{WindowMin: opt.WindowMin, Error: err.Error()}
 	}
@@ -706,14 +714,17 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 	}
 	defer db.Close()
 
-	sqlText, args, err := buildSampleQuery(src, time.Now().Add(-testWindow), time.Now(), testSampleLimit)
+	budget := queryTimeout(src)
+	// v0.10.885 — zaman kolonunun tipi sözlükten; bind ifadesi ona göre
+	// (partition budaması). Okunamazsa "" → TimestampHasZone kutusu karar verir.
+	tsType, tsErr := runTsTypeProbe(ctx, db, src, budget, secret)
+	sqlText, args, err := buildSampleQuery(src, time.Now().Add(-testWindow), time.Now(), testSampleLimit, tsType)
 	if err != nil {
 		res.Error = err.Error()
 		return res
 	}
 	res.Query = sqlText
 
-	budget := queryTimeout(src)
 	// v0.10.845 — LONG kontrolü örnek sorgudan ÖNCE (ORA-00997 düşse de sebep
 	// görünsün); v0.10.878 (inceleme) — gecikme ölçümünün DIŞINDA: sözlük
 	// turu bağlantı+örnek süresine karışmasın.
@@ -743,7 +754,7 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 	// örnek satırları da getirir: alan eşlemesini yazacak operatör
 	// tablonun gerçek zaman damgası biçimini burada görür.
 	if len(sample) == 0 {
-		wideSQL, wideArgs, werr := buildSampleQuery(src, time.Now().Add(-wideTestWindow), time.Now(), testSampleLimit)
+		wideSQL, wideArgs, werr := buildSampleQuery(src, time.Now().Add(-wideTestWindow), time.Now(), testSampleLimit, tsType)
 		if werr == nil {
 			wcols, wsample, werr2 := runSample(ctx, db, wideSQL, wideArgs, budget, secret)
 			hint, useWide := emptyProbeHint(opt.WindowMin, len(wsample), werr2)
@@ -758,8 +769,12 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 	// sorgu görünür olsun; hangi servis/operasyon/trace geldiğini göreyim".
 	now := time.Now()
 	res.Scan = runScanCheck(ctx, db, src, budget, secret)
-	res.PollQuery, res.PollBinds = pollPreview(src, now.Add(-testWindow), now)
-	res.Summary = runWindowSummary(ctx, db, src, budget, secret, now.Add(-testWindow), now, opt)
+	res.Scan.TsType, res.Scan.TsBind = tsType, tsKindOf(tsType, src.TimestampHasZone).label()
+	if tsErr != nil && res.Scan.Error == "" {
+		res.Scan.Error = "sözlük (DATA_TYPE): " + tsErr.Error()
+	}
+	res.PollQuery, res.PollBinds = pollPreview(src, now.Add(-testWindow), now, tsType)
+	res.Summary = runWindowSummary(ctx, db, src, budget, secret, now.Add(-testWindow), now, opt, tsType)
 
 	res.OK = true
 	return res
