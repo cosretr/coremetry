@@ -134,7 +134,82 @@ type SourceConfig struct {
 	QueryTimeoutSec int `json:"queryTimeoutSec,omitempty"`
 	IntervalSec     int `json:"intervalSec,omitempty"`
 
+	// v0.10.897 (Aşama 3 dilim D) — Problem üretimi: ProblemMode off|shadow|
+	// live (boş/bilinmeyen → shadow: Problem açılır, alarm gitmez; live =
+	// bildirim; off = sayaç yazar, tarayıcı koşmaz). GenericCodes: jenerik
+	// hata kodları (ikincil ayırt edici; audit §6.1; varsayılan ERR_020).
+	// IgnoreCodes: sayılmayan hata kodları (satır oracle_error_log'da kalır).
+	ProblemMode  string   `json:"problemMode,omitempty"`
+	GenericCodes []string `json:"genericCodes,omitempty"`
+	IgnoreCodes  []string `json:"ignoreCodes,omitempty"`
+
 	Enabled bool `json:"enabled"`
+}
+
+// Problem kipi değerleri.
+const (
+	ProblemModeOff    = "off"
+	ProblemModeShadow = "shadow"
+	ProblemModeLive   = "live"
+	maxCodeList       = 50
+	maxCodeLen        = 64
+)
+
+// DefaultGenericCodes — audit §6.1 başlangıç listesi.
+func DefaultGenericCodes() []string { return []string{"ERR_020"} }
+
+// normalizeProblemMode — SAF: bilinmeyen/boş → shadow.
+func normalizeProblemMode(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case ProblemModeOff:
+		return ProblemModeOff
+	case ProblemModeLive:
+		return ProblemModeLive
+	}
+	return ProblemModeShadow
+}
+
+// normalizeCodes — SAF: trim + upper, tekrarsız, boş atılır; ≤maxCodeList
+// girdi, ≤maxCodeLen karakter (fazlası hata).
+func normalizeCodes(in []string, label, field string) ([]string, error) {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, c := range in {
+		v := strings.ToUpper(strings.TrimSpace(c))
+		if v == "" || seen[v] {
+			continue
+		}
+		if len(v) > maxCodeLen {
+			return nil, fmt.Errorf("%s: %s kodu %d karakteri aşıyor", label, field, maxCodeLen)
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	if len(out) > maxCodeList {
+		return nil, fmt.Errorf("%s: %s en çok %d kod", label, field, maxCodeList)
+	}
+	return out, nil
+}
+
+// ProblemModeOf — normalize edilmiş kip (eski blob → shadow).
+func ProblemModeOf(src SourceConfig) string { return normalizeProblemMode(src.ProblemMode) }
+
+// IgnoreSet / GenericSet — kanca ve sayaç için kümeler.
+func IgnoreSet(src SourceConfig) map[string]bool { return codeSet(src.IgnoreCodes) }
+func GenericSet(src SourceConfig) map[string]bool {
+	if len(src.GenericCodes) == 0 {
+		return codeSet(DefaultGenericCodes())
+	}
+	return codeSet(src.GenericCodes)
+}
+func codeSet(list []string) map[string]bool {
+	m := make(map[string]bool, len(list))
+	for _, c := range list {
+		if v := strings.ToUpper(strings.TrimSpace(c)); v != "" {
+			m[v] = true
+		}
+	}
+	return m
 }
 
 // Settings — kalıcı blob: tüm liste atomik yazılır (influx/thanos sözleşmesi;
@@ -459,10 +534,18 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 			MaxOpenConns:     src.MaxOpenConns,
 			QueryTimeoutSec:  src.QueryTimeoutSec,
 			IntervalSec:      src.IntervalSec,
+			ProblemMode:      normalizeProblemMode(src.ProblemMode), // v0.10.897
 			Enabled:          src.Enabled,
 		}
 		if s.Name == "" {
 			return Settings{}, fmt.Errorf("%s: ad zorunlu", label)
+		}
+		var cerr error
+		if s.GenericCodes, cerr = normalizeCodes(src.GenericCodes, label, "genericCodes"); cerr != nil {
+			return Settings{}, cerr
+		}
+		if s.IgnoreCodes, cerr = normalizeCodes(src.IgnoreCodes, label, "ignoreCodes"); cerr != nil {
+			return Settings{}, cerr
 		}
 		if !sourceNameRe.MatchString(s.Name) {
 			return Settings{}, fmt.Errorf("%s: ad yalnız harf/rakam/._- içerebilir (≤%d)", label, maxNameLen)

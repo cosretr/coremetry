@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/auth"
@@ -43,6 +44,10 @@ func (s *Server) registerOracleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/settings/oracle", auth.RequireRole(auth.RoleAdmin, s.putOracleSettings))
 	mux.HandleFunc("POST /api/settings/oracle/test", auth.RequireRole(auth.RoleAdmin, s.testOracleSource))
 	mux.HandleFunc("GET /api/oracle/status", s.getOracleStatus)
+	// v0.10.897 (Aşama 3 dilim D) — öğrenilmiş op→servis haritası: salt okuma +
+	// sıfırlama (blob system_settings'te; worker 5 dk'da bir yeniden okur).
+	mux.HandleFunc("GET /api/settings/oracle/{id}/learned", auth.RequireRole(auth.RoleAdmin, s.getOracleLearned))
+	mux.HandleFunc("POST /api/settings/oracle/{id}/learned/reset", auth.RequireRole(auth.RoleAdmin, s.resetOracleLearned))
 }
 
 // SetOracle — Oracle kaynak servisi (v0.10.580; main.go her rolde çağırır,
@@ -175,4 +180,41 @@ func (s *Server) oraclePollStatus(ctx context.Context) *oracle.WorkerStatusSnaps
 		return nil
 	}
 	return snap
+}
+
+// getOracleLearned — v0.10.897: kaynağın öğrenilmiş op→servis haritası (blob).
+func (s *Server) getOracleLearned(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		http.Error(w, "source id required", http.StatusBadRequest)
+		return
+	}
+	raw, err := s.store.GetSetting(r.Context(), "oracle_opsvc:"+id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	m := oracle.LearnedMap{V: 1, Entries: map[string]*oracle.LearnedEntry{}}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &m)
+	}
+	if m.Entries == nil {
+		m.Entries = map[string]*oracle.LearnedEntry{}
+	}
+	writeJSON(w, map[string]any{"sourceId": id, "count": len(m.Entries), "entries": m.Entries})
+}
+
+// resetOracleLearned — v0.10.897: haritayı boşaltır (audit).
+func (s *Server) resetOracleLearned(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		http.Error(w, "source id required", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.PutSetting(r.Context(), "oracle_opsvc:"+id, []byte(`{"v":1,"entries":{}}`)); err != nil {
+		writeErr(w, err)
+		return
+	}
+	s.audit(r, "settings.oracle.learned_reset", "settings", id, "op→servis haritası sıfırlandı")
+	writeJSON(w, map[string]any{"ok": true, "sourceId": id})
 }

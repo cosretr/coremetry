@@ -1107,17 +1107,28 @@ func main() {
 		oracleWorker.SetRowsHook(func(ctx context.Context, src oracle.SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time) {
 			hctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			defer cancel()
-			oracleCounter.Handle(hctx, src, rows, from, to, nil)
+			oracleCounter.Handle(hctx, src, rows, from, to, oracle.IgnoreSet(src))
+			// v0.10.897 — kaynak kipi: off = sayaç yazar, tarayıcı koşmaz (açık
+			// satırlar süpürmede "source silent" kapanır); shadow = Problem, alarm
+			// yok; live = bildirimli tarayıcı (extScanner).
+			mode := oracle.ProblemModeOf(src)
+			if mode == oracle.ProblemModeOff {
+				return
+			}
 			oracleSubjects.Observe(hctx, src, rows, from, to)
-			rep, err := oracleShadow.Scan(hctx, anomaly.ExternalTarget{
+			scanner := oracleShadow
+			if mode == oracle.ProblemModeLive {
+				scanner = extScanner
+			}
+			rep, err := scanner.Scan(hctx, anomaly.ExternalTarget{
 				SourceID: src.ID, SourceName: src.Name, Query: oracle.CounterQuery, GroupBy: oracle.CounterGroupBy,
 				Subject: oracleSubjects.ResolveFor(src.ID),
 			})
 			if err != nil {
-				log.Printf("[oracle/shadow] %s: tarama düştü: %v", src.Name, err)
+				log.Printf("[oracle/%s] %s: tarama düştü: %v", mode, src.Name, err)
 			} else if rep.Opened+rep.Resolved+rep.Capped+rep.Clustered > 0 {
-				log.Printf("[oracle/shadow] %s: seri=%d açıldı=%d tazelendi=%d çözüldü=%d touch=%d tavan=%d küme=%d (gölge — alarm yok)",
-					src.Name, rep.Series, rep.Opened, rep.Refreshed, rep.Resolved, rep.Touched, rep.Capped, rep.Clustered)
+				log.Printf("[oracle/%s] %s: seri=%d açıldı=%d tazelendi=%d çözüldü=%d touch=%d tavan=%d küme=%d",
+					mode, src.Name, rep.Series, rep.Opened, rep.Refreshed, rep.Resolved, rep.Touched, rep.Capped, rep.Clustered)
 			}
 		})
 		oracleWorker.SetHealthHook(func(ctx context.Context, src oracle.SourceConfig, lastErr string) {

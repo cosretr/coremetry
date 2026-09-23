@@ -21,6 +21,7 @@
 // hatası DEĞİL, operatörün sorusuna verilmiş başarılı bir cevaptır — kırmızı
 // rozet + gerekçe metni olarak çizilir, "istek başarısız" olarak değil.
 import { useEffect, useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query'; // v0.10.897 — öğrenilmiş harita
 import { Spinner } from '@/components/Spinner';
 import { Badge, Button, Field, SelectField, TextareaField } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -383,6 +384,26 @@ export function OracleTab() {
                   onChange={e => patch(i, { selectMappedOnly: e.target.checked })} />
                 <span>SELECT yalnız eşlenen kolonlar (<code>SELECT *</code> yerine) — eşlenmeyen kolonlar attribute olmaz</span>
               </label>
+              {/* v0.10.897 (Aşama 3 dilim D) — Problem üretimi: kip / jenerik kodlar /
+                  sayılmayan kodlar + öğrenilmiş op→servis haritası (görüntüle · sıfırla). */}
+              <div className="oracle-sub" style={{ marginTop: 12 }}>Problem üretimi</div>
+              <div className="oracle-row">
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                  <span style={{ color: 'var(--text2)' }}>Kip</span>
+                  <select value={src.problemMode ?? 'shadow'} onChange={e => patch(i, { problemMode: e.target.value as OracleSource['problemMode'] })}>
+                    <option value="off">Kapalı — sayaç yazar, Problem yok</option>
+                    <option value="shadow">Gölge — Problem açılır, alarm yok</option>
+                    <option value="live">Canlı — Problem + bildirim</option>
+                  </select>
+                </label>
+                <Field label="Jenerik kodlar (virgül)" className="is-narrow" value={(src.genericCodes ?? []).join(', ')}
+                  onChange={e => patch(i, { genericCodes: parseTypeFilter(e.target.value) })}
+                  hint="external_code / exception tipiyle ayrılan kodlar (ör. ERR_020, BSA_020)" />
+                <Field label="Sayılmayan kodlar (virgül)" className="is-narrow" value={(src.ignoreCodes ?? []).join(', ')}
+                  onChange={e => patch(i, { ignoreCodes: parseTypeFilter(e.target.value) })}
+                  hint="Problem üretmez; satır Trace › Logs'ta yine görünür" />
+              </div>
+              {src.id && <OracleLearnedLine id={src.id} />}
               {showCols[i] && (
                 <>
                   <div className="oracle-q">
@@ -581,6 +602,32 @@ export function OracleTab() {
           {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
         </div>
       </form>
+    </div>
+  );
+}
+
+// OracleLearnedLine — v0.10.897: öğrenilmiş op→servis haritası (kaynak
+// kaydedildikten sonra; blob sunucuda). Sıfırlama audit'li.
+function OracleLearnedLine({ id }: { id: string }) {
+  const q = useQuery({ queryKey: ['oracle-learned', id], queryFn: () => api.oracleLearned(id), staleTime: 60_000 });
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (q.isError) return <div className="oracle-q is-err">öğrenilmiş harita okunamadı</div>;
+  const n = q.data?.count ?? 0;
+  const entries = Object.entries(q.data?.entries ?? {}).sort((a, b) => b[1].hits - a[1].hits);
+  return (
+    <div className="oracle-q" style={{ marginTop: 6 }}>
+      Öğrenilmiş eşleme: <b>{n}</b> operasyon → servis
+      {n > 0 && <> · <Button size="sm" variant="ghost" onClick={() => setOpen(o => !o)}>{open ? 'gizle' : 'görüntüle'}</Button></>}
+      {' '}<Button size="sm" variant="ghost-danger" disabled={busy || n === 0}
+        onClick={() => { setBusy(true); void api.oracleLearnedReset(id).finally(() => { setBusy(false); void q.refetch(); }); }}>sıfırla</Button>
+      {open && entries.length > 0 && (
+        <div className="oracle-scroll" style={{ marginTop: 6 }}>
+          {entries.slice(0, 200).map(([op, e]) => (
+            <div key={op} className="mono">{op} → {e.service} · {e.hits}/{e.total}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

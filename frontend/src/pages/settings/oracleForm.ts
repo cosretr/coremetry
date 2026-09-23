@@ -144,6 +144,9 @@ export function emptyOracleSource(): OracleSource {
     timestampHasZone: false,
     columns: {},
     selectMappedOnly: false,
+    problemMode: 'shadow', // v0.10.897 — gölge: Problem açılır, alarm yok
+    genericCodes: ['ERR_020'],
+    ignoreCodes: [],
     enabled: false,
   };
 }
@@ -366,6 +369,13 @@ export function sourceForSave(
   if (tz) out.timezone = tz;
   if (src.timestampHasZone) out.timestampHasZone = true;
   if (src.selectMappedOnly) out.selectMappedOnly = true;
+  // v0.10.897 — kip her zaman gider (sunucu boşu shadow'a normalize eder); kod
+  // listeleri kırpılmış + tekrarsız, boşsa gövdeye girmez.
+  out.problemMode = src.problemMode === 'off' || src.problemMode === 'live' ? src.problemMode : 'shadow';
+  const gen = parseTypeFilter((src.genericCodes ?? []).join(','));
+  if (gen.length) out.genericCodes = gen;
+  const ign = parseTypeFilter((src.ignoreCodes ?? []).join(','));
+  if (ign.length) out.ignoreCodes = ign;
   const cols: Record<string, string> = {};
   for (const [field, raw] of Object.entries(src.columns ?? {})) {
     const v = trim(raw);
@@ -403,6 +413,9 @@ export function sourceFromSnapshot(s: OracleSourceSnapshot): OracleSource {
     timezone: s.timezone ?? '',
     timestampHasZone: !!s.timestampHasZone,
     selectMappedOnly: !!s.selectMappedOnly,
+    problemMode: s.problemMode === 'off' || s.problemMode === 'live' ? s.problemMode : 'shadow',
+    genericCodes: [...(s.genericCodes ?? ['ERR_020'])],
+    ignoreCodes: [...(s.ignoreCodes ?? [])],
     // "" (kapalı alan) formda `-` olarak görünür — boş kutuyla (varsayılan)
     // karışmasın.
     columns: Object.fromEntries(Object.entries(s.columns ?? {}).map(([k, v]) => [k, v === '' ? ORACLE_COLUMN_DISABLED : v])),

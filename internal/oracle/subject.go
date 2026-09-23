@@ -102,6 +102,7 @@ type SubjectResolver struct {
 
 	mu       sync.Mutex
 	maps     map[string]*LearnedMap
+	loadedAt map[string]time.Time // v0.10.897 — API'den sıfırlama görünsün diye 5 dk'da bir yeniden okunur
 	dirty    map[string]bool
 	tick     map[string]*tickFacts
 	aliveSet map[string]bool
@@ -111,17 +112,20 @@ type SubjectResolver struct {
 
 func NewSubjectResolver(state StateStore, lookup TraceLookup, alive AliveCheck) *SubjectResolver {
 	return &SubjectResolver{state: state, lookup: lookup, alive: alive, now: time.Now,
-		maps: map[string]*LearnedMap{}, dirty: map[string]bool{}, tick: map[string]*tickFacts{}}
+		maps: map[string]*LearnedMap{}, loadedAt: map[string]time.Time{}, dirty: map[string]bool{}, tick: map[string]*tickFacts{}}
 }
+
+const learnedReloadEvery = 5 * time.Minute
 
 // learnedKey — system_settings anahtarı.
 func learnedKey(sourceID string) string { return learnedKeyPrefix + sourceID }
 
 func (r *SubjectResolver) mapFor(ctx context.Context, sourceID string) *LearnedMap {
-	if m, ok := r.maps[sourceID]; ok {
+	if m, ok := r.maps[sourceID]; ok && r.now().Sub(r.loadedAt[sourceID]) < learnedReloadEvery {
 		return m
 	}
 	m := &LearnedMap{V: 1, Entries: map[string]*LearnedEntry{}}
+	r.loadedAt[sourceID] = r.now()
 	if r.state != nil {
 		if raw, err := r.state.GetSetting(ctx, learnedKey(sourceID)); err == nil && len(raw) > 0 {
 			var loaded LearnedMap

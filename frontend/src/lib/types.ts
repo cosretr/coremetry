@@ -1604,6 +1604,10 @@ export interface OracleSource {
   /** v0.10.843 — SELECT listesi `*` yerine eşlenen kolonlar (zaman + tip +
    *  açık alanlar). Eşlenmeyen kolonlar bu kipte attribute olmaz. */
   selectMappedOnly?: boolean;
+  /** v0.10.897 — Problem üretimi: kip (boş = gölge), jenerik kodlar (ikincil ayırt edici), sayılmayan kodlar. */
+  problemMode?: 'off' | 'shadow' | 'live';
+  genericCodes?: string[];
+  ignoreCodes?: string[];
   enabled: boolean;
 }
 /** oracle.SourceSnapshot — GET görünümü: password MASKELİ, rozet alanları eklidir. */

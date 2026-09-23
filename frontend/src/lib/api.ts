@@ -1751,6 +1751,12 @@ export const api = {
   // JSON gövdeyle gidiyor, sorgu dizesiyle değil.
   /** Snapshot: password MASKELİ (hasPassword rozeti), passwordRef görünür. */
   oracleSettings: () => get<OracleSnapshot>(`/api/settings/oracle`),
+  /** v0.10.897 — öğrenilmiş op→servis haritası (admin). */
+  oracleLearned: (id: string) =>
+    get<{ sourceId: string; count: number; entries: Record<string, { service: string; hits: number; total: number; lastConfirmed: number; lastUsed?: number }> }>(
+      `/api/settings/oracle/${encodeURIComponent(id)}/learned`),
+  oracleLearnedReset: (id: string) =>
+    request<{ ok: boolean }>(`/api/settings/oracle/${encodeURIComponent(id)}/learned/reset`, { method: 'POST' }),
   /** Tüm liste atomik; sunucu Normalize'dan geçirip yeni snapshot döndürür. */
   putOracleSettings: (s: OracleSettingsInput) =>
     request<OracleSnapshot>(`/api/settings/oracle`, {
