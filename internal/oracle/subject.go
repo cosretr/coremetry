@@ -26,6 +26,11 @@ import (
 //	   ≥%70 çoğunlukla "onaylı"; 30 gün teyitsiz düşer; 2000 girdi tavanı
 //	   (en eski kullanılan düşer). Sabitlemeden önce servis son 24 saatte
 //	   CANLI mı (spans) — ölü link yazılmaz (problemSubject.ts dersi).
+//	①b POD ADINDAN (v0.10.908, operatör önerisi): satırın instance kolonu
+//	   (pod adı) → ReplicaSet/pod eki atılır, "…-prod" öneki denenir
+//	   (podservice.go); yalnız son 24 saatte CANLI servis adı kabul edilir.
+//	   Trace'siz op'ta çoğunluk (≥%50) → "pod adından (v/n)"; haritayı da
+//	   besler (trace oyu olmayan op'ta).
 //	③ BİLİNMİYOR: boş servis → sentetik ext: özne + "operasyon seviyesi —
 //	   servis bilinmiyor" (çok servisli op'ta "çok servisli operasyon").
 //
@@ -83,8 +88,11 @@ type tickFacts struct {
 	votes   map[string]map[string]int // op → servis → oy
 	totals  map[string]int            // op → oy
 	exTypes map[string]string         // v0.10.899 — trace id → exception tipi (jenerik kod qualifier'ı)
-	looked  int
-	found   int
+	// v0.10.908 — pod adından türetilmiş servis oyları (op → servis → oy; (op,pod) başına bir oy).
+	podVotes  map[string]map[string]int
+	podTotals map[string]int
+	looked    int
+	found     int
 }
 
 // ObserveResult — Observe özeti (log/istatistik).
@@ -240,7 +248,8 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 	// bellekteki eski kopyayla geri yazılmasın — read-modify-write).
 	delete(r.loadedAt, src.ID)
 	m := r.mapFor(ctx, src.ID)
-	tf := &tickFacts{votes: map[string]map[string]int{}, totals: map[string]int{}, exTypes: map[string]string{}}
+	tf := &tickFacts{votes: map[string]map[string]int{}, totals: map[string]int{}, exTypes: map[string]string{},
+		podVotes: map[string]map[string]int{}, podTotals: map[string]int{}}
 	r.tick[src.ID] = tf
 	for _, row := range rows {
 		if row.TraceID != "" {
@@ -284,10 +293,52 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 			res.Found = len(facts)
 		}
 	}
-	// Harita güncellemesi: op başına bu tikin çoğunluğu.
+	// v0.10.908 — pod adından oylar: (op, pod) başına bir oy; yalnız doğrulanmış
+	// canlı servis adı (canlılık listesi okunamazsa pod oyu YOK — uydurma yok).
+	if alive := r.aliveSetVerified(ctx); len(alive) > 0 {
+		podSvc := map[string]string{}
+		voted := map[string]bool{}
+		for _, row := range rows {
+			if row.InstanceID == "" {
+				continue
+			}
+			vk := row.OperationCode + "\x00" + row.InstanceID
+			if voted[vk] {
+				continue
+			}
+			voted[vk] = true
+			svc, ok := podSvc[row.InstanceID]
+			if !ok {
+				svc = podService(row.InstanceID, alive)
+				podSvc[row.InstanceID] = svc
+			}
+			if svc == "" {
+				continue
+			}
+			if tf.podVotes[row.OperationCode] == nil {
+				tf.podVotes[row.OperationCode] = map[string]int{}
+			}
+			tf.podVotes[row.OperationCode][svc]++
+			tf.podTotals[row.OperationCode]++
+		}
+	}
+	// Harita güncellemesi: op başına bu tikin çoğunluğu (trace oyu yoksa pod oyu).
+	learnVotes, learnTotals := tf.votes, tf.totals
+	if len(tf.podVotes) > 0 {
+		learnVotes = make(map[string]map[string]int, len(tf.votes)+len(tf.podVotes))
+		learnTotals = make(map[string]int, len(tf.totals)+len(tf.podTotals))
+		for op, v := range tf.votes {
+			learnVotes[op], learnTotals[op] = v, tf.totals[op]
+		}
+		for op, v := range tf.podVotes {
+			if _, has := learnVotes[op]; !has {
+				learnVotes[op], learnTotals[op] = v, tf.podTotals[op]
+			}
+		}
+	}
 	changed := false
-	for op, byS := range tf.votes {
-		best, bestN, total := "", 0, tf.totals[op]
+	for op, byS := range learnVotes {
+		best, bestN, total := "", 0, learnTotals[op]
 		for s, n := range byS {
 			if n > bestN || (n == bestN && s < best) {
 				best, bestN = s, n
@@ -354,6 +405,20 @@ func (r *SubjectResolver) isAlive(ctx context.Context, service string) bool {
 	if r.alive == nil {
 		return true
 	}
+	set := r.aliveSetVerified(ctx)
+	if set == nil {
+		return true
+	}
+	return set[service]
+}
+
+// aliveSetVerified — v0.10.908: canlı servis kümesi; OKUNAMAZSA nil (isAlive
+// o durumda canlı varsayar, pod türetmesi ise HİÇ oy vermez — bir adı
+// doğrulamadan servis ilan etmek uydurma olurdu).
+func (r *SubjectResolver) aliveSetVerified(ctx context.Context) map[string]bool {
+	if r.alive == nil {
+		return nil
+	}
 	now := r.now()
 	if r.aliveSet == nil || now.Sub(r.aliveAt) > subjectAliveTTL {
 		names, err := r.alive(ctx, subjectAliveSince)
@@ -362,7 +427,7 @@ func (r *SubjectResolver) isAlive(ctx context.Context, service string) bool {
 				log.Printf("[oracle/subject] canlı servis listesi okunamadı, canlı varsayılıyor: %v", err)
 			}
 			r.aliveErr = true
-			return true
+			return nil
 		}
 		r.aliveErr = false
 		r.aliveSet = make(map[string]bool, len(names))
@@ -371,7 +436,10 @@ func (r *SubjectResolver) isAlive(ctx context.Context, service string) bool {
 		}
 		r.aliveAt = now
 	}
-	return r.aliveSet[service]
+	if r.aliveErr {
+		return nil
+	}
+	return r.aliveSet
 }
 
 // Resolve — ExternalTarget.Subject gövdesi; values[0] = operasyon kodu.
@@ -399,6 +467,18 @@ func (r *SubjectResolver) Resolve(ctx context.Context, sourceID string, values [
 				return anomaly.ExternalSubjectResolution{Service: best, Source: "trace", Note: fmt.Sprintf("trace'ten (%d/%d)", bestN, total)}
 			}
 			return anomaly.ExternalSubjectResolution{Note: fmt.Sprintf("çok servisli operasyon (%d trace, çoğunluk yok)", total)}
+		}
+		// ①b pod adından (bu tik; trace'siz op)
+		if total := tf.podTotals[op]; total > 0 {
+			best, bestN := "", 0
+			for s, n := range tf.podVotes[op] {
+				if n > bestN || (n == bestN && s < best) {
+					best, bestN = s, n
+				}
+			}
+			if best != "" && float64(bestN)/float64(total) >= 0.5 {
+				return anomaly.ExternalSubjectResolution{Service: best, Source: "pod", Note: fmt.Sprintf("pod adından (%d/%d pod)", bestN, total)}
+			}
 		}
 	}
 	// ② öğrenilmiş

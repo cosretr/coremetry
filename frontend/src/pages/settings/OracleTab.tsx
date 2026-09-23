@@ -619,6 +619,14 @@ export function OracleTab() {
                               : pr.summary.services.length === 0
                                 ? <span className="is-quiet">trace bulunamadı</span>
                                 : pr.summary.services.map(o => <div key={o.name} className="mono">{o.name} · {o.count} trace</div>)}
+                            {/* v0.10.908 — instance kolonundaki pod adından (canlı doğrulanmış) */}
+                            {(pr.summary.podsSeen ?? 0) > 0 && (
+                              <>
+                                <div className="oracle-sub" style={{ marginTop: 8 }} title="Pod adından ReplicaSet/pod eki atılır, '-prod' öneki denenir; yalnız Coremetry'de son 24 saatte canlı servis adı kabul edilir.">Pod adından servis</div>
+                                {(pr.summary.podServices ?? []).map(o => <div key={o.name} className="mono">{o.name} · {o.count} pod</div>)}
+                                {(pr.summary.podsUnmatched ?? 0) > 0 && <div className="is-quiet">{pr.summary.podsUnmatched} pod Coremetry'deki bir servisle eşleşmedi</div>}
+                              </>
+                            )}
                           </div>
                         </div>
                       )}

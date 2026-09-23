@@ -143,6 +143,7 @@ func (s *Server) testOracleSource(w http.ResponseWriter, r *http.Request) {
 	opt := oracle.TestOptions{WindowMin: oracle.ClampTestWindow(parseInt(r.URL.Query().Get("windowMin"), 0))}
 	if s.store != nil {
 		opt.TraceLookup = s.store.TraceServicesByIDs
+		opt.AliveServices = s.store.ListActiveServiceNames // v0.10.908 — pod adından servis
 	}
 	res := s.oracle.TestWith(r.Context(), cfg.Sources[0], opt)
 	// v0.10.855 (scale-audit) — canlı Oracle bağlantısı, operatör DSN/şifresiyle: iz bırakır.

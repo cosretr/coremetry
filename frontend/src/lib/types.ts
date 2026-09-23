@@ -1089,7 +1089,7 @@ export interface ExternalMetricEvidence {
   updatedNs: number;
   /** v0.10.898 — Oracle kanıtı: alan başına top-N dağılım + özne kaynağı. */
   distributions?: Record<string, { value: string; count: number }[]>;
-  subjectSource?: 'trace' | 'learned' | 'unknown' | string;
+  subjectSource?: 'trace' | 'pod' | 'learned' | 'unknown' | string;
   subjectNote?: string;
 }
 
@@ -1689,6 +1689,10 @@ export interface OracleWindowSummary {
   error?: string;
   /** v0.10.902 — trace listesinden patlatılan satır sayısı (özel SQL kipi). */
   expanded?: number;
+  /** v0.10.908 — instance (pod adı) → canlı doğrulanmış servis; ayrık pod sayıları. */
+  podServices?: OracleNameCount[];
+  podsSeen?: number;
+  podsUnmatched?: number;
 }
 /** oracle.SourceStatus — GET /api/oracle/status satırı. ŞİFRESİZ. Aşama 1'de
  *  poller YOK: "son kontrol" o pod'da koşmuş bağlantı testinin izidir. */

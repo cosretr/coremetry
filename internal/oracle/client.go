@@ -333,6 +333,9 @@ type TestOptions struct {
 	// TraceLookup — trace id → Coremetry servisi ([from, to] penceresinde).
 	// nil → arama yapılmaz, özet bunu söyler.
 	TraceLookup func(ctx context.Context, ids []string, from, to time.Time) (map[string]string, error)
+	// AliveServices — v0.10.908: son 24 saatte canlı servisler (pod adından
+	// servis türetmesinin doğrulaması). nil → pod özeti yok.
+	AliveServices func(ctx context.Context, since time.Duration) ([]string, error)
 }
 
 const (
@@ -574,6 +577,48 @@ type WindowSummary struct {
 	// Expanded — v0.10.902: trace listesinden PATLATILAN satır sayısı (özel
 	// SQL kipi; "N satır → M satır yazıldı" cümlesinin açıklaması).
 	Expanded int `json:"expanded,omitempty"`
+	// PodServices — v0.10.908: instance kolonundaki pod adlarından türetilmiş
+	// ve Coremetry'de CANLI doğrulanmış servisler (ayrık pod sayısıyla);
+	// PodsSeen pod adı taşıyan ayrık değer, PodsUnmatched canlı karşılığı yok.
+	PodServices   []NameCount `json:"podServices,omitempty"`
+	PodsSeen      int         `json:"podsSeen,omitempty"`
+	PodsUnmatched int         `json:"podsUnmatched,omitempty"`
+}
+
+// attachPodServices — v0.10.908: özete pod adından servis dağılımı ekler.
+func attachPodServices(ctx context.Context, out *WindowSummary, rows []chstore.OracleErrorRow, opt TestOptions, budget time.Duration) {
+	if opt.AliveServices == nil {
+		return
+	}
+	pods := map[string]bool{}
+	for _, r := range rows {
+		if r.InstanceID != "" {
+			pods[r.InstanceID] = true
+		}
+	}
+	if len(pods) == 0 {
+		return
+	}
+	actx, cancel := context.WithTimeout(ctx, budget)
+	names, err := opt.AliveServices(actx, subjectAliveSince)
+	cancel()
+	if err != nil || len(names) == 0 {
+		return
+	}
+	alive := make(map[string]bool, len(names))
+	for _, n := range names {
+		alive[n] = true
+	}
+	counts := map[string]int{}
+	out.PodsSeen = len(pods)
+	for p := range pods {
+		if s := podService(p, alive); s != "" {
+			counts[s]++
+		} else {
+			out.PodsUnmatched++
+		}
+	}
+	out.PodServices = topCounts(counts, summaryTopN)
 }
 
 // topCounts — SAF: sayıya göre azalan, eşitlikte ada göre; ilk n.
@@ -684,6 +729,7 @@ func runWindowSummary(ctx context.Context, db sqlDB, cfg SourceConfig, budget ti
 		done = lerr == nil
 	}
 	out := summarizeWindow(opt.WindowMin, rows, st, len(raw) >= summaryRowCap, lookup, done, lerr)
+	attachPodServices(ctx, &out, rows, opt, budget)
 	return &out
 }
 

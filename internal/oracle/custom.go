@@ -161,7 +161,7 @@ func mappingCheckFromColumns(cfg SourceConfig, outCols []string) MappingCheck {
 	}
 	// Kanal/host zorunlu değil ama eşlenmemişse ve çıktıda karşılığı varsa
 	// öneri listesine girer (buton hepsini tek seferde doldursun).
-	for _, f := range []string{FieldChannel, FieldHost} {
+	for _, f := range []string{FieldChannel, FieldHost, FieldInstance} {
 		if sg := suggestFromOutput(f, have); !explicit[f] && sg != "" {
 			c.Missing = append(c.Missing, MappingMiss{Field: f, Suggest: sg})
 		}
@@ -193,6 +193,7 @@ var outputAliases = map[string][]string{
 	FieldCode:     {"ERRORCODE", "ERROR_CODE", "ERRCODE", "FUNCTIONCODE", "FUNCTION_CODE"},
 	FieldChannel:  {"KANALKOD", "CHANNELCODE", "CHANNEL_CODE", "CHANNEL"},
 	FieldHost:     {"HOSTNAME", "HOST_NAME", "HOST"},
+	FieldInstance: {"INSTANCEID", "INSTANCE_ID", "PODNAME", "POD_NAME", "POD"}, // v0.10.908 — pod adından servis
 	FieldCount:    {"ADET", "COUNT", "CNT", "ERRORCOUNT", "ERROR_COUNT"},
 }
 
@@ -282,6 +283,7 @@ func summarizeCustomRows(ctx context.Context, src SourceConfig, raw []map[string
 		done = lerr == nil
 	}
 	out := summarizeWindow(wm, rows, st, len(raw) >= summaryRowCap, lookup, done, lerr)
+	attachPodServices(ctx, &out, rows, opt, budget)
 	out.Expanded = st.Expanded
 	return &out
 }
