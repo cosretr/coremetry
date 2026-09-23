@@ -497,7 +497,7 @@ export const api = {
   // Per-cluster RED breakdown for one service. Used by the
   // Service detail page when traffic spans 2+ clusters.
   serviceClusters: (svc: string, fromNs: number, toNs: number) =>
-    get<{ clusters: import('./types').ServiceClusterStat[] } | null>(
+    get<{ clusters: import('./types').ServiceClusterStat[]; source?: 'mv' | 'spans' } | null>( // v0.10.883 — source
       `/api/services/${encodeURIComponent(svc)}/clusters?from=${fromNs}&to=${toNs}`),
   // Servis throughput'u METRİKTEN (v0.9.665). `metric` boş bırakılırsa
   // ayardaki ad kullanılıyor; operatör doğru adı ararken her denemede

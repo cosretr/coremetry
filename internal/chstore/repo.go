@@ -691,6 +691,11 @@ type ServiceClusterStat struct {
 	ErrorRate  float64 `json:"errorRate"`
 	AvgMs      float64 `json:"avgDurationMs"`
 	P99Ms      float64 `json:"p99DurationMs"`
+	// v0.10.883 — yalnız MV yolunda (service_env_summary_5m): p50/p95 tdigest,
+	// çağrı serisi (5 dk katı kova, ≤288 nokta). Ham yolda sıfır/boş.
+	P50Ms  float64  `json:"p50DurationMs,omitempty"`
+	P95Ms  float64  `json:"p95DurationMs,omitempty"`
+	Series []uint64 `json:"series,omitempty"`
 }
 
 // GetServiceClusterBreakdown returns RED stats per cluster for

@@ -128,6 +128,7 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		"store.go":                     true, // tanım + fallback
 		"rollout_problem_telemetry.go": true, // workload_revision_activity_1m + spans pod→revizyon (v0.10.241 Problem↔Rollout)
 		"summary.go":                   true, // service_summary_5m / operation_summary_5m / spans (v0.9.496 dilim 1)
+		"service_cluster_mv.go":        true, // v0.10.883 — service_env_summary_5m (telemetri MV), state yok
 		// v0.9.497 dilim 2 — üçü de SAF telemetri (aşağıdaki testle pinli):
 		"repo.go":              true, // spans / logs / metric_points / trace_*_5m / topology_edges_5m
 		"topology.go":          true, // topology_*_5m / service_summary_5m / spans / root_traces

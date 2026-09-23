@@ -2294,13 +2294,13 @@ func (s *Server) getCardinality(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getServiceClusterBreakdown(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	from, to := parseFromTo(r, time.Hour)
-	key := fmt.Sprintf("service-clusters:%s:%s", name, cacheBucket(from, to))
+	key := fmt.Sprintf("service-clusters:v2:%s:%s:mv=%t", name, cacheBucket(from, to), s.store.EnvSummaryCovers(r.Context(), from)) // v0.10.883 — kaynak anahtarda
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		rows, err := s.store.GetServiceClusterBreakdown(ctx, name, from, to)
+		rows, src, err := s.store.GetServiceClusterBreakdownSourced(ctx, name, from, to) // v0.10.883 — MV kapsıyorsa p50/p95 + seri
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"clusters": rows}, nil
+		return map[string]any{"clusters": rows, "source": src}, nil
 	})
 }
 

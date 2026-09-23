@@ -411,6 +411,11 @@ export interface ServiceClusterStat {
   errorRate: number;
   avgDurationMs: number;
   p99DurationMs: number;
+  /** v0.10.883 — yalnız MV yolunda (service_env_summary_5m). */
+  p50DurationMs?: number;
+  p95DurationMs?: number;
+  /** çağrı sayısı kova serisi (5 dk katı adım, ≤288 nokta). */
+  series?: number[];
 }
 
 // DBDetail / MessagingDetail — full payloads for the drawer

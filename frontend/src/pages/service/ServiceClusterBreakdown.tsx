@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Sparkline } from '@/components/Sparkline'; // v0.10.883
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
@@ -18,8 +19,11 @@ import { serviceHref } from '@/lib/serviceHref';
 const CLUSTER_COLS: DataTableColumn<import('@/lib/types').ServiceClusterStat>[] = [
   { id: 'cluster', label: 'Cluster', sortValue: r => r.cluster,       naturalDir: 'asc', width: 220 },
   { id: 'calls',   label: 'Calls',   sortValue: r => r.spanCount,     numeric: true,     width: 110 },
+  { id: 'trend',   label: 'Trend',   width: 130 }, // v0.10.883 — çağrı serisi (MV yolu)
   { id: 'errRate', label: 'Err %',   sortValue: r => r.errorRate,     numeric: true,     width: 90 },
   { id: 'avg',     label: 'Avg',     sortValue: r => r.avgDurationMs, numeric: true,     width: 90 },
+  { id: 'p50',     label: 'P50',     sortValue: r => r.p50DurationMs ?? -1, numeric: true, width: 80 }, // v0.10.883
+  { id: 'p95',     label: 'P95',     sortValue: r => r.p95DurationMs ?? -1, numeric: true, width: 80 },
   { id: 'p99',     label: 'P99',     sortValue: r => r.p99DurationMs, numeric: true,     width: 90 },
 ];
 
@@ -108,6 +112,13 @@ export function ServiceClusterBreakdown({ service, range }: {
         Per-cluster breakdown <span style={{
           fontWeight: 400, color: 'var(--text3)', textTransform: 'none',
         }}>· {clusters.length} cluster{clusters.length === 1 ? '' : 's'} with traces</span>
+        {/* v0.10.883 — kaynak dürüstlüğü: MV pencereyi kapsamıyorsa ham spans (p50/p95/seri yok). */}
+        {q.data?.source && (
+          <span className={`badge ${q.data.source === 'mv' ? 'b-ok' : 'b-gray'}`} style={{ marginLeft: 8, fontWeight: 400, textTransform: 'none' }}
+            title={q.data.source === 'mv' ? 'service_env_summary_5m' : 'MV bu pencereyi kapsamıyor — ham spans; p50/p95 ve seri yok'}>
+            {q.data.source === 'mv' ? 'MV' : 'spans'}
+          </span>
+        )}
       </div>
       <div className="table-wrap is-fit">
         <table style={{ tableLayout: 'fixed', width: '100%' }}>
@@ -126,10 +137,15 @@ export function ServiceClusterBreakdown({ service, range }: {
                     </Link>
                   </td>
                   <td className="num mono">{fmtNum(c.spanCount)}</td>
+                  <td>{c.series && c.series.length > 1
+                    ? <Sparkline values={c.series} width={120} height={18} title="çağrı / kova (service_env_summary_5m)" />
+                    : <span className="is-quiet" title="seri yalnız MV yolunda">—</span>}</td>
                   <td className="num mono">
                     <span className={`badge b-${errCls}`}>{c.errorRate.toFixed(2)}%</span>
                   </td>
                   <td className="num mono">{c.avgDurationMs.toFixed(1)}ms</td>
+                  <td className="num mono">{c.p50DurationMs != null ? `${c.p50DurationMs.toFixed(1)}ms` : '—'}</td>
+                  <td className="num mono">{c.p95DurationMs != null ? `${c.p95DurationMs.toFixed(1)}ms` : '—'}</td>
                   <td className="num mono">{c.p99DurationMs.toFixed(1)}ms</td>
                   {hasPivot && (
                     <td>
