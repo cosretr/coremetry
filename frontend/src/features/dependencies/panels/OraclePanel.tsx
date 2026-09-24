@@ -79,13 +79,13 @@ export function OraclePanel({ instance, range }: { instance: string; range: Time
             gap: 8, marginBottom: 12,
           }}>
             <GaugeStat label="Sessions"
-              usage={data.sessions.usage} limit={data.sessions.limit}
+              usage={data.sessions.usage} limit={data.sessions.limit} forecast={data.sessions.forecast}
               sub={data.sessions.active > 0 || data.sessions.inactive > 0
                 ? `${fmtNum(data.sessions.active)} active · ${fmtNum(data.sessions.inactive)} idle`
                 : undefined}
               onClick={() => setDrill({ metric: 'oracledb.sessions.usage', label: 'Sessions' })} />
             <GaugeStat label="Processes"
-              usage={data.processes.usage} limit={data.processes.limit}
+              usage={data.processes.usage} limit={data.processes.limit} forecast={data.processes.forecast}
               onClick={() => setDrill({ metric: 'oracledb.processes.usage', label: 'Processes' })} />
             <Stat label="Logical reads/s"  value={fmtNum(data.logicalReadsPerSec)}
               onClick={() => setDrill({ metric: 'oracledb.logical_reads', label: 'Logical reads', unit: '/s' })} />

@@ -68,7 +68,7 @@ export function PostgresPanel({ instance, range }: { instance: string; range: Ti
             gap: 8, marginBottom: 12,
           }}>
             <GaugeStat label="Backends"
-              usage={data.backends.usage} limit={data.backends.limit}
+              usage={data.backends.usage} limit={data.backends.limit} forecast={data.backends.forecast}
               onClick={() => setDrill({ metric: 'postgresql.backends', label: 'Backends' })} />
             <Stat label="Commits/s" value={fmtNum(data.commitsPerSec)}
               onClick={() => setDrill({ metric: 'postgresql.commits', label: 'Commits', unit: '/s' })} />

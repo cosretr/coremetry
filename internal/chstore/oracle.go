@@ -80,6 +80,9 @@ type OracleSessions struct {
 	Limit    float64 `json:"limit"`
 	Active   float64 `json:"active"`
 	Inactive float64 `json:"inactive"`
+	// Forecast — v0.10.909 (parite #6 dilim 3): "kaç saat kaldı"; api
+	// katmanı istek anında doldurur (db_capacity_forecast.go).
+	Forecast *DBForecast `json:"forecast,omitempty"`
 }
 
 // OracleWaitClass is one row of the wait-class distribution.
@@ -111,8 +114,9 @@ type OracleSQL struct {
 // progress bar so the operator sees "67/200 sessions" at a
 // glance.
 type OracleGaugeWithCap struct {
-	Usage float64 `json:"usage"`
-	Limit float64 `json:"limit"`
+	Usage    float64     `json:"usage"`
+	Limit    float64     `json:"limit"`
+	Forecast *DBForecast `json:"forecast,omitempty"` // v0.10.909
 }
 
 // OracleTablespace is one row of the per-tablespace size table.

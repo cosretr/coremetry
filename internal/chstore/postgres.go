@@ -55,8 +55,9 @@ type PostgresMetrics struct {
 // Oracle's panel. Frontend renders as a progress bar so the
 // operator sees "47/100 connections" at a glance.
 type PGGaugeWithCap struct {
-	Usage float64 `json:"usage"`
-	Limit float64 `json:"limit"`
+	Usage    float64     `json:"usage"`
+	Limit    float64     `json:"limit"`
+	Forecast *DBForecast `json:"forecast,omitempty"` // v0.10.909
 }
 
 // PGBgwriter is the background-writer slice that drives buffer

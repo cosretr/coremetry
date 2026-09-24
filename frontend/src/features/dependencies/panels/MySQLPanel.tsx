@@ -39,7 +39,7 @@ export function MySQLPanel({ instance, range }: { instance: string; range: TimeR
             gap: 8, marginBottom: 12,
           }}>
             <GaugeStat label="Connections"
-              usage={data.connections.usage} limit={data.connections.limit}
+              usage={data.connections.usage} limit={data.connections.limit} forecast={data.connections.forecast}
               onClick={() => setDrill({ metric: 'mysql.connection.count', label: 'Connections' })} />
             <Stat label="Threads connected" value={fmtNum(data.threads.connected)}
               sub={`${fmtNum(data.threads.running)} running`}

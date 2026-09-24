@@ -170,7 +170,12 @@ func (s *Server) getOracleMetrics(w http.ResponseWriter, r *http.Request) {
 	from, to := parseFromTo(r, time.Hour)
 	key := fmt.Sprintf("oracle:%s:%s", instance, cacheBucket(from, to))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		return s.store.GetOracleMetrics(ctx, instance, from, to)
+		m, err := s.store.GetOracleMetrics(ctx, instance, from, to)
+		if err == nil && m != nil && !m.Synthetic { // v0.10.909 — "kaç saat kaldı"
+			m.Sessions.Forecast = s.dbForecast(ctx, "oracledb.sessions.usage", instance, m.Sessions.Limit)
+			m.Processes.Forecast = s.dbForecast(ctx, "oracledb.processes.usage", instance, m.Processes.Limit)
+		}
+		return m, err
 	})
 }
 
@@ -183,7 +188,11 @@ func (s *Server) getPostgresMetrics(w http.ResponseWriter, r *http.Request) {
 	from, to := parseFromTo(r, time.Hour)
 	key := fmt.Sprintf("postgres:%s:%s", instance, cacheBucket(from, to))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		return s.store.GetPostgresMetrics(ctx, instance, from, to)
+		m, err := s.store.GetPostgresMetrics(ctx, instance, from, to)
+		if err == nil && m != nil { // v0.10.909
+			m.Backends.Forecast = s.dbForecast(ctx, "postgresql.backends", instance, m.Backends.Limit)
+		}
+		return m, err
 	})
 }
 
@@ -194,7 +203,11 @@ func (s *Server) getMySQLMetrics(w http.ResponseWriter, r *http.Request) {
 	from, to := parseFromTo(r, time.Hour)
 	key := fmt.Sprintf("mysql:%s:%s", instance, cacheBucket(from, to))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		return s.store.GetMySQLMetrics(ctx, instance, from, to)
+		m, err := s.store.GetMySQLMetrics(ctx, instance, from, to)
+		if err == nil && m != nil { // v0.10.909
+			m.Connections.Forecast = s.dbForecast(ctx, "mysql.connection.count", instance, m.Connections.Limit)
+		}
+		return m, err
 	})
 }
 

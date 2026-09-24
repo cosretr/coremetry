@@ -5,7 +5,8 @@ import { MultiLineChart } from '@/components/MultiLineChart';
 import { api } from '@/lib/api';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import { encodeFilters } from '@/lib/urlState';
-import type { FilterExpr } from '@/lib/types';
+import type { DBForecast, FilterExpr } from '@/lib/types';
+import { dbEtaChip } from '@/lib/fmtEtaHours';
 import { serviceHref } from '@/lib/serviceHref';
 import { statementTracesHref } from '@/lib/pivotHref';
 import { metricCatalogueHref } from '@/pages/explore/urlCodec';
@@ -119,10 +120,13 @@ export function Stat({ label, value, tone, onClick, sub }: {
   );
 }
 
-export function GaugeStat({ label, usage, limit, sub, onClick }: {
+export function GaugeStat({ label, usage, limit, sub, onClick, forecast }: {
   label: string; usage: number; limit: number; sub?: string;
   onClick?: () => void;
+  /** v0.10.909 (parite #6 dilim 3) — "kaç saat kaldı" (istek anı projeksiyonu). */
+  forecast?: DBForecast;
 }) {
+  const eta = dbEtaChip(forecast);
   const pct = limit > 0 ? (usage / limit) * 100 : 0;
   const tone: 'ok' | 'warn' | 'err' =
     pct >= 90 ? 'err' : pct >= 75 ? 'warn' : 'ok';
@@ -159,6 +163,13 @@ export function GaugeStat({ label, usage, limit, sub, onClick }: {
           fontSize: 10, color: 'var(--text3)', marginTop: 4,
           fontFamily: 'ui-monospace, SFMono-Regular, monospace',
         }}>{sub}</div>
+      )}
+      {eta && (
+        <div style={{ marginTop: 4 }} title={eta.title}>
+          {eta.badge
+            ? <span className={`badge ${eta.tone}`}>{eta.text}</span>
+            : <span style={{ fontSize: 10, color: 'var(--text3)' }}>{eta.text}</span>}
+        </div>
       )}
     </>
   );

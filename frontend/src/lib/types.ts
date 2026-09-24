@@ -580,6 +580,22 @@ export interface MsgE2EPoint {
 // receiver isn't wired up, backend fills these with deterministic
 // synthetic values and flips synthetic=true so the UI shows a
 // "demo data" badge.
+/** v0.10.909 (parite #6 dilim 3) — chstore.DBForecast: DB kapasite göstergesinin
+ *  "kaç saat kaldı" projeksiyonu (istek anında, son 2 saat, doğrusal). */
+export interface DBForecast {
+  status: 'ok' | 'at_limit' | 'none';
+  hours?: number;
+  loHours?: number;
+  hiHours?: number;
+  hiOpen?: boolean;
+  wide?: boolean;
+  r2?: number;
+  points: number;
+  reason?: string;
+  source: string;   // vm | ch
+  windowH: number;
+}
+
 export interface OracleMetrics {
   /**
    * v0.10.11 — okuma BOZULDU. true iken aşağıdaki sayılar EKSİK, "sıfır"
@@ -599,8 +615,8 @@ export interface OracleMetrics {
   synthetic?: boolean;
   windowSeconds: number;
   status: 'up' | 'down';
-  sessions:  { usage: number; limit: number; active: number; inactive: number };
-  processes: { usage: number; limit: number };
+  sessions:  { usage: number; limit: number; active: number; inactive: number; forecast?: DBForecast };
+  processes: { usage: number; limit: number; forecast?: DBForecast };
   cpuTimeSec: number;
   pgaMemoryBytes: number;
   sgaMemoryBytes: number;
@@ -637,7 +653,7 @@ export interface PostgresMetrics {
   instance: string;
   status: 'up' | 'down';
   windowSeconds: number;
-  backends: { usage: number; limit: number };
+  backends: { usage: number; limit: number; forecast?: DBForecast };
   commitsPerSec: number;
   rollbacksPerSec: number;
   deadlocksPerSec: number;
@@ -682,7 +698,7 @@ export interface MySQLMetrics {
   status: 'up' | 'down';
   windowSeconds: number;
   threads: { connected: number; running: number; createdPerSec: number };
-  connections: { usage: number; limit: number };
+  connections: { usage: number; limit: number; forecast?: DBForecast };
   questionsPerSec: number;
   slowQueriesPerSec: number;
   rowLockWaitsPerSec: number;
