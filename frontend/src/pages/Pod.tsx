@@ -46,6 +46,7 @@ import { PodIdentityLine, type PodPivot } from '@/pages/pod/PodIdentityLine';
 import { PodKpiStrip, type RedState } from '@/pages/pod/PodKpiStrip';
 import { PodServicesTable } from '@/pages/pod/PodServicesTable';
 import { PodTracesTable } from '@/pages/pod/PodTracesTable';
+import { PodLogsSection } from '@/pages/pod/PodLogsSection';
 import { PodContainersTable, PodSiblingsTable, PodLabelsTable, PodLifetimesTable } from '@/pages/pod/PodContextTables';
 import { windowTotals, windowP95, joinSiblings } from '@/pages/pod/podPage';
 
@@ -508,6 +509,10 @@ function PodDetail() {
           {multiSpanCluster && <div className="pod-cap">Cluster kaydı birden çok span değeri taşıyor ({spanCluster}) — trace süzgecinde cluster UYGULANMADI; grafikler hepsini ölçer.</div>}
           <PodTracesTable ctx={{ pod, from, to, cluster: traceCluster, service }} p95Ms={p95Ms} />
         </div>
+
+        {/* v0.10.910 — bu pod'un logları (varsayılan kapalı; açılınca yüklenir) */}
+        <PodLogsSection pod={pod} from={from} to={to} service={service || undefined} cluster={traceCluster || undefined}
+          logsLink={logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill })} />
 
         {/* Konteynerler — Thanos KSM anlık (canlı pod) */}
         {entityOn && detail && live !== 'gone' && (
