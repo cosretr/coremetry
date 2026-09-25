@@ -5,10 +5,14 @@
      a lighter, easier dark while the elevation contrast (page<card<hover) and
      the brand/accent/semantic hues are unchanged. Operator: "biraz daha light
      dark". */
-  --bg0: #1c2128;
-  --bg1: #22272e;
-  --bg2: #2d333b;
-  --bg3: #373e47;
+  /* v0.10.920 (sade palet, operatör onayı 2026-09-25) — değerler OKLCH ile
+     karşıtlık hedeflerine göre çözüldü (296 WCAG + renk farkı denetimi,
+     0 başarısız). Merdiven: sayfa < yüzey < hover < basılı; metin üç
+     kademe (12.5 / 9.0 / 6.0 yüzeyde), --text-faint yalnız devre dışı. */
+  --bg0: #1e2124;
+  --bg1: #24272b;
+  --bg2: #2c3035;
+  --bg3: #363a40;
   /* --bg alias = YÜKSELTİLMİŞ YÜZEY, `--bg1` ile aynı değer.
      Anlamı v0.9.990'da (D7) sabitlendi; `styles/surfaceTokens.test.ts`
      üç temada da `--bg == --bg1` olduğunu çiviliyor.
@@ -31,34 +35,57 @@
          yaptığı şeye yaklaştırır — redhat'te `--bg` bu satırdan önce de
          `#ffffff` = `--bg1` idi. Yani operatörün varsayılan teması
          (redhat) tek piksel oynamadı; dark/light ona hizalandı. */
-  --bg:  #22272e;
-  --border: #444c56;
-  --text: #d5dde5;
-  --text2: #909dab;
-  --text3: #85909d;  /* v0.10.450 (dış denetim D1) — 2.90:1 → 4.63:1 on --bg1 (AA); 4.99 on --bg0; text2 (#909dab) hâlâ bir kademe açık */
+  --bg:  #24272b;
+  --border: #41454a;
+  --text: #e6ebf1;
+  --text2: #c2c9d1;
+  --text3: #9fa5ad;  /* v0.10.920 — ≥4.56 her zeminde (bg3 dahil); v0.10.450'de yalnız bg0/bg1'de geçiyordu */
 
   /* Brand — Corporate red, used sparingly: logo, primary CTAs, key brand surfaces. */
   --brand:  #E30613;
   --brand2: #ff2333;
 
-  /* Accent — interactive blue for links, focus rings, active sort, selections. */
-  --accent:  #388bfd;
-  --accent2: #58a6ff;
+  /* Accent — tek etkileşim mavisi. v0.10.920: --accent DOLGU (beyaz yazı
+     4.61), --accent2 bağlantı/vurgu METNİ (her zeminde ≥4.61),
+     --accent-hover DOLGUNUN üzerine gelme hâli (koyulaşır — eskiden
+     --accent2'ye açılıyor ve beyaz yazı 2.53'e düşüyordu), --focus odak
+     halkası (hiçbir mavi hem beyaz yazıyı hem 3:1 halkayı taşıyamıyor). */
+  --accent:  #2d73d8;
+  --accent2: #6ba6fb;
+  --accent-hover: #1d65c9;
+  --focus:   #6ba6fb;
 
-  --ok:   #3fb950;
-  --err:  #ff5252;
-  --warn: #d29922;
-  --info: #79c0ff;
+  /* Durum — metin, nokta ve çizgi için TEK değer (≥4.5 her zeminde).
+     --*-bg: rozet/banner zemini, yüzeye ÖNCEDEN karıştırılmış tek ton
+     (eskiden 26 farklı color-mix yüzdesi). --err-solid: beyaz yazılı dolu
+     kırmızı (sayaç rozeti, tehlike butonu). Renk körlüğünde ok/uyarı/hata
+     ayrımı AA içinde çözülemiyor → durum her zaman ikon/yazıyla. */
+  --ok:   #4db96b;
+  --err:  #fe7f73;
+  --warn: #f3b94c;   /* K2 (operatör): sakin altın; parlak #ffc762 yerine */
+  /* --warn-solid: METİN DEĞİL dolgu (nokta, ray, çubuk, ısı haritası basamağı).
+     Açık temalarda --warn koyu kahve metin tonu; dolguda renk körlüğünde
+     kırmızıya yaklaşıyordu. Dolgu altın kalır: ≥3:1 (1.4.11), hata/ok'tan
+     renk körlüğünde ayrışır. Koyuda metin tonu zaten dolgu olarak da uygun. */
+  --warn-solid: #f3b94c;
+  --info: #6ba6fb;
+  --ok-bg:   #293933;
+  --warn-bg: #3d392f;
+  --err-bg:  #3e3234;
+  --info-bg: #253040;
+  --err-solid: #cc4740;
 
   /* Chart-series + Service-Overview accents (v0.7.92). Not interactive —
      used only for multi-series chart lines, KPI accent stripes, and the
      flow-map. Tuned brighter for the dark canvas. */
   --purple: #a371f7;
   --indigo: #a371f7;
-  --orange: #f0883e;
+  --orange: #d76f04;  /* v0.10.920 — yeni --err (#fe7f73) ile ΔE 7 idi; grafik yuvası 6 ile aynı (ΔE 11.7) */
   --teal:   #39c5cf;
+  /* v0.10.920 — YARI SAYDAM kalır: bg2 üstündeki seçimler (SegmentedControl,
+     odak halkaları) ton olarak yığılır. Sabit seçim zemini --accent-bg. */
   --accent-soft:   color-mix(in srgb, var(--accent) 16%, transparent);
-  --border-strong: #545d68;
+  --border-strong: #6d7379;  /* v0.10.920 — form alanı kenarı ≥3:1 (WCAG 1.4.11) */
   --shadow-pop:    0 8px 24px rgba(0, 0, 0, .45);
   --shadow-sm:     0 1px 2px rgba(0, 0, 0, .25);
 
@@ -70,9 +97,9 @@
        --green→--ok  --amber→--warn  --red→--err  --primary→--accent
        --text-2→--text2  --text-3→--text3 (faintest → --text-faint below)
      Only the genuinely-missing levels are defined here, in both themes. */
-  --accent-bg:     #22314a;  /* soft solid accent fill — focus ring, selected-row rail, active chip (design --primary-bg) */
-  --accent-border: #2c4a70;  /* accent hairline — selected-row / active border (design --primary-border) */
-  --text-faint:    #545d68;  /* 4th text level below --text3 — micro labels, disabled hints (design --text-faint) */
+  --accent-bg:     #253040;  /* soft solid accent fill — focus ring, selected-row rail, active chip (design --primary-bg) */
+  --accent-border: #294d82;  /* accent hairline — selected-row / active border (design --primary-border) */
+  --text-faint:    #71777d;  /* v0.10.920 — YALNIZ devre dışı metin (3.31:1); okunacak metin --text3 */
   --shadow-md:     0 6px 20px rgba(0, 0, 0, .45);  /* drawers / popovers, between --shadow-sm and --shadow-pop */
 
   /* ── mK6 (v0.9.906) — the four leaks that had no token to land on ───────
@@ -94,7 +121,7 @@
                     smeared grey mud under light-theme dialogs. */
   --on-accent:     #ffffff;
   --backdrop:      rgba(0, 0, 0, .55);
-  --fatal:         #ff6b6b;
+  --fatal:         #fe7f73;  /* v0.10.920 — koyuda --err'den kırmızı AA geçen değer yok; ayrım `.s-fatal`ın --err-solid hapında */
   --shadow-modal:  0 20px 60px rgba(0, 0, 0, .5);
   /* MK1 (v0.9.908) — dört rung. --radius-xs mikro yüzeyler için
      (rozet, ince tutamak, 1-2 satırlık banner). Rapor 4px'i --radius-sm'e
@@ -188,47 +215,53 @@
    stronger borders for separation against bright surfaces. Brand red is
    kept (Corporate identity). */
 [data-theme="light"] {
-  --bg0: #ffffff;
-  --bg1: #f6f8fa;
-  --bg2: #eaeef2;
-  --bg3: #d0d7de;
-  /* v0.9.990 (D7) — alias `--bg1`e sabitlendi; gerekçe :root'taki blokta.
-     light'ın merdiveni TERS (`--bg1 #f6f8fa` < `--bg0 #ffffff`), yani
-     burada yükseltilmiş yüzey sayfadan KOYU. Bu D7'nin ürettiği bir
-     durum değil: `.card` ve `.modal-dialog` light'ta zaten `--bg1`.
-     Alias'ı `--bg0`da bırakmak çekmeceyi modal'dan FARKLI yapardı.
-     Ters merdivenin kendisi denetimde bilinçli kapsam dışı (§6.1). */
-  --bg:  #f6f8fa;
-  --border: #d0d7de;
-  --text:  #1f2328;
-  --text2: #59636e;
-  --text3: #667080;  /* v0.10.450 (dış denetim D1) — 3.24:1 → 4.70:1 on --bg1 (AA); 5.01 on white; text2 (#59636e) hâlâ bir kademe koyu */
+  /* v0.10.920 (K1, operatör onayı) — BEYAZ KART, GRİ SAYFA. Ters merdiven
+     (kart sayfadan koyu, v0.9.990 §6.1) kapandı: artık üç temada da
+     yükseltme yönü aynı (sayfa < yüzey). */
+  --bg0: #f4f6f8;
+  --bg1: #ffffff;
+  --bg2: #f0f3f6;
+  --bg3: #e4e8ed;
+  /* v0.9.990 (D7) — alias `--bg1`e sabitlendi; gerekçe :root'taki blokta. */
+  --bg:  #ffffff;
+  --border: #dde2e9;
+  --text:  #212429;
+  --text2: #474c54;
+  --text3: #62676f;  /* v0.10.920 — ≥4.63 her zeminde (bg3 ve durum tonları dahil) */
 
   --brand:  #E30613;
   --brand2: #ff2333;
 
-  --accent:  #0969da;
-  --accent2: #0550ae;
+  --accent:  #2572de;
+  --accent2: #1263cd;
+  --accent-hover: #1364ce;
+  --focus:   #2572de;
 
-  --ok:   #1a7f37;
-  --err:  #cf222e;
-  --warn: #9a6700;
-  --info: #0969da;
+  --ok:   #047735;
+  --err:  #c42a28;
+  --warn: #8f5c04;
+  --warn-solid: #b98206;
+  --info: #1263cd;
+  --ok-bg:   #e8f3ed;
+  --warn-bg: #f5f0e8;
+  --err-bg:  #faecec;
+  --info-bg: #ebf2fc;
+  --err-solid: #c42a28;
 
   /* Chart-series + Service-Overview accents (v0.7.92) — Primer light. */
   --purple: #8250df;
   --indigo: #8250df;
   --orange: #bc4c00;
   --teal:   #137775;
-  --accent-soft:   rgba(9, 105, 218, .10);
-  --border-strong: #afb8c1;
+  --accent-soft:   rgba(37, 114, 222, .10);
+  --border-strong: #8d939a;
   --shadow-pop:    0 8px 24px rgba(20, 30, 45, .14);
   --shadow-sm:     0 1px 2px rgba(20, 30, 45, .05);
 
   /* design-system reconciliation (light) — see :root block for the mapping. */
-  --accent-bg:     #ddf4ff;  /* design --primary-bg (light) */
-  --accent-border: #b6e3ff;  /* design --primary-border (light) */
-  --text-faint:    #a9b1ba;  /* design --text-faint (light) */
+  --accent-bg:     #ebf2fc;  /* design --primary-bg (light) */
+  --accent-border: #b3cef3;  /* design --primary-border (light) */
+  --text-faint:    #888e95;  /* yalnız devre dışı metin (3.31:1) */
   --shadow-md:     0 4px 16px rgba(20, 30, 45, .08);
   /* mK6 — see :root for the role of each. --on-accent / --backdrop are
      deliberately NOT overridden: white-on-solid-blue and a black scrim are
@@ -261,25 +294,35 @@
   --border: #d2d2d2;
   --text:  #151515;
   --text2: #4f5255;
-  --text3: #6a6e73;
+  --text3: #676b70;  /* v0.10.920 — PF #6a6e73'ün fark edilmez koyusu: --bg3 ve durum tonları üzerinde 4.5 */
 
   --brand:  #ee0000;  /* Red Hat red */
   --brand2: #e30613;
 
+  /* v0.10.920 (K4, operatör: "PatternFly güzel tema") — PF kimliği korunur;
+     yalnız GEÇMEYEN çiftler PF'nin kendi metin tonlarıyla düzeltildi. */
   --accent:  #0066cc; /* PF primary blue */
   --accent2: #0066cc;
+  --accent-hover: #004080;  /* PF link/buton hover — eskiden --accent2 ile aynıydı, hover görünmüyordu */
+  --focus:   #0066cc;
 
-  --ok:   #3e8635;    /* PF success green */
+  --ok:   #317928;    /* PF success, metin için bir kademe koyu (bg0'da 3.95 → ≥4.5) */
   --err:  #c9190b;    /* PF danger red */
-  --warn: #f0ab00;    /* PF gold */
-  --info: #2b9af3;
+  --warn: #795600;    /* PF warning-color--200 (metin); altın #f0ab00 beyazda 1.99 idi */
+  --warn-solid: #b08307;  /* PF altınının 3:1 koyusu — dolgu (nokta/çubuk/ray); renk körlüğünde hatadan ayrışır */
+  --info: #0066cc;    /* bilgi = vurgu ailesi; #2b9af3 beyazda 2.99 idi */
+  --ok-bg:   #eef4ed;
+  --warn-bg: #fdf5e0;  /* PF altın tonu zeminde kalır, metin koyu */
+  --err-bg:  #fbefee;
+  --info-bg: #e7f1fa;
+  --err-solid: #c9190b;
 
   --purple: #8476d1;
   --indigo: #8476d1;
   --orange: #ec7a08;
   --teal:   #009596;
   --accent-soft:   rgba(0, 102, 204, .08);
-  --border-strong: #b8bbbe;
+  --border-strong: #8a8d90;  /* PF form kenarı; #b8bbbe beyazda 1.93 idi (1.4.11 ≥3) */
   --shadow-pop:    0 8px 24px rgba(21, 21, 21, .16);
   --shadow-sm:     0 1px 2px rgba(21, 21, 21, .08);
 
@@ -314,9 +357,16 @@
   --border: #3c3f42;
   --text:  #ffffff;
   --text2: #d2d2d2;
-  --text3: #8a8d90;
+  --text3: #989b9e;   /* v0.10.920 — koyu basamaklarda ≥4.5 */
   --text-faint: #6a6e73;
   --accent-soft: rgba(115, 188, 247, .14);
+  /* v0.10.920 — seçili menü öğesi `--accent2` okuyor; eşlenmediği için
+     #0066cc koyu zeminde 2.62:1 kalıyordu. PF blue-200. */
+  --accent2: #73bcf7;
+  --focus:   #73bcf7;
+  --info:    #73bcf7;
+  --accent-bg: #253040;
+  --info-bg:   #253040;
   background: var(--bg1);
   color-scheme: dark;
 }
@@ -366,7 +416,7 @@ code, pre, .mono { font-family: monospace; font-size: 12px; }
 #nav a .icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: currentColor; }
 .nav-label { overflow: hidden; text-overflow: ellipsis; }
 .nav-badge {
-  margin-left: auto; background: var(--err); color: var(--on-accent);
+  margin-left: auto; background: var(--err-solid); color: var(--on-accent);
   font-size: 10px; font-weight: 700; padding: 1px 6px;
   border-radius: 10px; min-width: 18px; text-align: center;
 }
@@ -493,14 +543,14 @@ input, select {
   border-radius: var(--radius-sm); padding: 5px 10px; font-size: 13px; outline: none;
   transition: border-color .15s; font-family: inherit;
 }
-input:focus, select:focus { border-color: var(--accent); }
+input:focus, select:focus { border-color: var(--focus); }
 select option { background: var(--bg2); }
 button {
   background: var(--accent); color: var(--on-accent); border: none;
   border-radius: var(--radius-sm); padding: 5px 14px; font-size: 13px; cursor: pointer;
   transition: background .15s; font-family: inherit;
 }
-button:hover:not(:disabled) { background: var(--accent2); }
+button:hover:not(:disabled) { background: var(--accent-hover); }
 button:disabled { opacity: .4; cursor: not-allowed; }
 /* MB3 (v0.9.925) — YÜKLENEN buton solmaz. `Button` atomu `loading`
    iken `disabled` de basıyor (tıkı yutmak için), dolayısıyla yukarıdaki
@@ -533,7 +583,7 @@ summary:focus-visible,
 [role="tab"]:focus-visible,
 [role="link"]:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -579,8 +629,10 @@ a.accent {
   text-decoration: none; transition: background .15s, border-color .12s;
 }
 a.accent:hover { border-color: var(--accent); }
-button.danger { background: var(--err); color: var(--on-accent); }
-button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--err) 88%, white); }
+/* v0.10.920 — dolu kırmızı üstünde beyaz yazı --err-solid ile (koyuda --err artık
+   metin tonu: açık mercan, beyaz yazıyı taşımaz). Hover koyulaşır. */
+button.danger { background: var(--err-solid); color: var(--on-accent); }
+button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--err-solid) 85%, black); }
 button.ghost { background: transparent; color: var(--text2); border: 1px solid transparent; }
 button.ghost:hover:not(:disabled) { background: var(--bg2); color: var(--text); }
 button.sm { padding: 3px 9px; font-size: 11px; border-radius: var(--radius-xs); }
@@ -708,7 +760,7 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
 /* `bare` is the honest replacement for `all: unset`: no chrome at all,
    but the focus ring and a colour hover survive. */
 /* `background` here is NOT decoration — it is the fix for v0.9.895.
-   The element-level `button:hover:not(:disabled) { background: var(--accent2) }`
+   The element-level `button:hover:not(:disabled) { background: var(--accent-hover) }`
    has specificity (0,2,1); `.btn-icon { background: transparent }` is only
    (0,1,0) and is not a :hover rule at all, so on hover it lost and all
    twelve `variant="bare"` sites (log rows, Services pin, Clusters,
@@ -732,7 +784,7 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
   background: color-mix(in srgb, var(--err) 12%, transparent);
 }
 .btn-icon.ib-accent { color: var(--accent2); }
-.btn-icon.ib-accent:hover:not(:disabled) { color: var(--accent); background: var(--bg2); }
+.btn-icon.ib-accent:hover:not(:disabled) { color: var(--accent2); background: var(--bg2); }
 /* `ib-add` / `ib-not` (v0.9.892) — the ⊕ / ⊖ filter pills, MB7.
    The same affordance spoke two dialects that are visible AT THE SAME
    TIME on /logs: a tinted pill in the log row, a bare glyph in the
@@ -904,11 +956,8 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
    the row hovers brighter than normal so it's obvious which
    row Enter/o will open. */
 .row-selected {
-  background: color-mix(in srgb, var(--accent) 10%, transparent) !important;
+  background: var(--accent-bg) !important;  /* v0.10.920 — tek seçim tonu, üç temada */
   box-shadow: inset 3px 0 0 var(--accent);
-}
-[data-theme="light"] .row-selected {
-  background: color-mix(in srgb, var(--accent) 8%, transparent) !important;
 }
 
 /* ── Modal / dialog primitive ──────────────────────────────────
@@ -1014,7 +1063,7 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
   background: transparent;
 }
 .tab-strip > button.active {
-  color: var(--accent);
+  color: var(--accent2);
   font-weight: 600;
   border-bottom-color: var(--accent);
 }
@@ -1063,7 +1112,7 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 }
 .segmented > button.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent2);
   font-weight: 600;
 }
 /* `sg-sm` (v0.9.901, MB9) — the dense rung. Two card headers had already
@@ -1140,17 +1189,17 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
    odak sırasından da çıkarır, dolayısıyla Tab onu hiç bulamazdı.
    :focus-within satırın içindeki butona Tab'la ulaşıldığında da
    gösteriyor — fare kullanmayan operatör için tek erişim yolu. */
-.fsel-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fsel-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* `.sb-user-trigger` (v0.9.923) — sidebar kullanıcı menüsünün tetiği.
    `background` HER kuralda açıkça bildiriliyor: element seviyesindeki
-   `button:hover:not(:disabled) { background: var(--accent2) }` (0,2,1)
+   `button:hover:not(:disabled) { background: var(--accent-hover) }` (0,2,1)
    bir :hover kuralı ve bu sınıfın (0,1,0) taban bildirimi onu YENEMEZ —
    modifier :hover'ı background yazmazsa tetik dolu mavi olur.
    v0.9.895'te ib-bare'in 12 sitesi tam böyle kırılmıştı. */
 .sb-user-trigger { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; border-radius: 0; }
 .sb-user-trigger:hover:not(:disabled) { background: var(--bg2); }
-.sb-user-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sb-user-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .fsel-sep { border-top: 1px solid var(--border); margin: 5px 0; }
 .fsel-all { display: block; width: 100%; text-align: left; font-size: 11.5px;
   color: var(--accent2); background: none; border: none; cursor: pointer;
@@ -1314,7 +1363,7 @@ tbody td.row-cell, [data-density] tbody td.row-cell { padding: 0; }
 .vt-scroll tbody td.row-cell > .row-link { box-sizing: border-box; height: 36px; line-height: 18px; padding: 9px 12px; }
 .row-link:hover { text-decoration: none; }
 .row-link--name:hover { color: var(--accent2); text-decoration: underline; text-underline-offset: 3px; }
-.row-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.row-link:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 /* Settings → dış kaynak sekmeleri (Influx v0.10.222, Oracle v0.10.580):
    kaynak kartı + alt blok. İkinci sekme kendi nüshasını yazmıyor —
    iki ad AYNI kurala bağlı; üçüncü bir kaynak sekmesi de buraya eklenir. */
@@ -1404,12 +1453,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    inline-flex + gap so an icon/dot sits flush with the label; tabular-nums for
    numeric badges (error %, counts). Density modes below shrink these. */
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.b-ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
-.b-err { background: color-mix(in srgb, var(--err) 15%, transparent); color: var(--err); }
+.b-ok { background: var(--ok-bg); color: var(--ok); }
+.b-err { background: var(--err-bg); color: var(--err); }
 /* Rozetin yanındaki sessiz sayı ipucu ("ERROR · 3 span", v0.10.218). */
 .cell-hint { margin-left: var(--sp-3); color: var(--text3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
-.b-warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
-.b-info { background: color-mix(in srgb, var(--info) 15%, transparent); color: var(--info); }
+/* v0.10.920 — rozet zemini önceden karıştırılmış --*-bg: açık ve redhat'te
+   %15 tonda metin 1.80–3.97'ye düşüyordu (hepsi AA altı); şimdi ≥4.5. */
+.b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-info { background: var(--info-bg); color: var(--info); }
 .b-mut { background: var(--accent-soft); color: var(--text2); }
 .b-gray { background: var(--bg3); color: var(--text2); }
 /* Watcher-sourced rows (/watchers page + /events chip, v0.9.196) —
@@ -1419,7 +1470,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Severity */
 .s-trace { color: var(--text3); } .s-debug { color: var(--text2); } .s-info { color: var(--info); }
-.s-warn { color: var(--warn); } .s-error { color: var(--err); } .s-fatal { color: var(--fatal); font-weight: 700; }
+.s-warn { color: var(--warn); } .s-error { color: var(--err); }
+/* v0.10.920 — FATAL dolu kırmızı hap: renk tonu tek başına ayırmıyor (koyuda
+   --err'den kırmızı olup AA geçen değer yok; bazı listeler her seviyeyi kalın
+   çiziyor). Beyaz yazı --err-solid üstünde ≥4.62 her temada. */
+.s-fatal { color: var(--on-accent); background: var(--err-solid); font-weight: 700; padding: 0 4px; border-radius: var(--radius-xs); }
 
 /* Pagination */
 .pager { display: flex; gap: 8px; margin-top: 10px; align-items: center; color: var(--text2); font-size: 12px; }
@@ -1886,7 +1941,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .status-dot-operational { background: var(--ok); box-shadow: 0 0 6px color-mix(in srgb, var(--ok) 45%, transparent); }
-.status-dot-degraded    { background: var(--warn); box-shadow: 0 0 6px color-mix(in srgb, var(--warn) 45%, transparent); }
+.status-dot-degraded    { background: var(--warn-solid); box-shadow: 0 0 6px color-mix(in srgb, var(--warn-solid) 45%, transparent); }
 .status-dot-outage      { background: var(--err); box-shadow: 0 0 6px color-mix(in srgb, var(--err) 45%, transparent); }
 
 .status-grid { margin-top: 18px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -2164,7 +2219,7 @@ canvas { max-width: 100%; }
 
 /* Live tail button (pulsing) */
 .live-on {
-  background: var(--err); color: var(--on-accent); border: 0;
+  background: var(--err-solid); color: var(--on-accent); border: 0;
   position: relative; padding-left: 22px;
 }
 .live-on::before {
@@ -2379,8 +2434,9 @@ tbody tr.wf-evidence:hover > td { background: color-mix(in srgb, var(--warn) 14%
    fill, which moves it TOWARD the dark accent2 text and LOWERS
    contrast on the light-family themes. `--accent-bg` is measured AA
    in all three and is surface-independent:
-     dark #58a6ff on #15243b = 6.17:1 · light #0550ae on #ddf4ff =
-     6.68:1 · redhat #0066cc on #e7f1fa = 4.87:1.
+     v0.10.920 değerleriyle: dark #6ba6fb on #253040 = 5.38:1 · light
+     #1263cd on #ebf2fc = 5.05:1 · redhat #0066cc on #e7f1fa = 4.87:1
+     (styles/contrastTokens.test.ts çiviliyor).
    Border keeps the 35% mix for presence — it carries no text, so it
    cannot affect the contrast result. */
 button.accent {
@@ -2482,7 +2538,7 @@ button.accent.copied {
   padding: 10px 12px; font-family: monospace; font-size: 12px;
   line-height: 1.55; outline: none; tab-size: 2;
 }
-.adv-query textarea:focus { border-color: var(--accent); }
+.adv-query textarea:focus { border-color: var(--focus); }
 
 /* Filter builder (Dynatrace-style chips + end form) */
 .fb { width: 100%; margin-bottom: 10px; }
@@ -2508,7 +2564,7 @@ button.accent.copied {
 .fq { position: relative; }
 .fq-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 36px; padding: 4px 8px 4px 10px;
   background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: text; }
-.fq-bar.is-open, .fq-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.fq-bar.is-open, .fq-bar:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px var(--accent-soft); }
 .fq-lens { color: var(--text3); font-size: 13px; }
 .fq-chip { display: inline-flex; align-items: stretch; height: 24px; border-radius: var(--radius-xs); overflow: hidden; border: 1px solid var(--border); background: var(--bg1); font-size: 12px; max-width: 420px; }
 .fq-chip > span { padding: 0 7px; display: inline-flex; align-items: center; cursor: pointer; }
@@ -2528,7 +2584,7 @@ button.accent.copied {
 .fq-pop { position: absolute; top: calc(100% + 6px); left: 0; width: min(640px, 100%); background: var(--bg1); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop); z-index: var(--z-popover); overflow: hidden; }
 .fq-steps { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); }
 .fq-steps > div { padding: 6px 12px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); border-right: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
-.fq-steps > div.on { color: var(--accent); font-weight: 700; background: var(--accent-soft); }
+.fq-steps > div.on { color: var(--accent2); font-weight: 700; background: var(--accent-soft); }
 .fq-steps > div.done { color: var(--text2); }
 .fq-steps .mono { text-transform: none; letter-spacing: 0; color: var(--text); }
 .fq-list { max-height: 262px; overflow: auto; padding: 6px 0; }
@@ -2561,7 +2617,7 @@ button.accent.copied {
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.fb-chip-x:hover, .btn-chip-x:hover { background: var(--err); color: var(--on-accent); }
+.fb-chip-x:hover, .btn-chip-x:hover { background: var(--err-solid); color: var(--on-accent); }
 .fb-add {
   background: transparent; border: 1px dashed var(--border); color: var(--text2);
   padding: 3px 10px; font-size: 12px; cursor: pointer; border-radius: var(--radius-lg);
@@ -2798,7 +2854,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .trp-cal-day.today { box-shadow: inset 0 0 0 1px var(--accent); }
 .trp-cal-day.inrange { background: var(--accent-soft); border-radius: 0; }
 .trp-cal-day.sel { background: var(--accent); color: var(--on-accent); font-weight: 600; }
-.trp-cal-day.sel:hover:not(:disabled) { background: var(--accent2); }
+.trp-cal-day.sel:hover:not(:disabled) { background: var(--accent-hover); }
 .trp-actions { display: flex; gap: 6px; }
 .trp-recents { display: flex; flex-direction: column; gap: 2px; }
 .trp-error {
@@ -2964,7 +3020,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.toast-info .toast-icon { color: var(--accent); font-weight: bold; }
+.toast-info .toast-icon { color: var(--accent2); font-weight: bold; }
 /* v0.8.303 (quality bar U4) — warning severity, PF AlertGroup parity */
 .toast-warning {
   background: color-mix(in srgb, var(--warn) 15%, transparent);
@@ -3192,7 +3248,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .ov-tag { display: inline-block; padding: 1px 5px; border-radius: var(--radius-xs); font-size: 9.5px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg2); color: var(--text2); margin-right: 7px; vertical-align: middle; }
 .ov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .ov-dot.green { background: var(--ok); }
-.ov-dot.amber { background: var(--warn); }
+.ov-dot.amber { background: var(--warn-solid); }
 .ov-dot.red { background: var(--err); }
 
 /* Aggregate topology — tiered pill-card node-link graph (prototype .topo-*) */
@@ -3233,10 +3289,10 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .topo-nshdr .caret { opacity: .6; font-size: 9px; }
 .topo-nsnode { border-width: 1.5px; background: var(--bg2); }
 .topo-nsnode .topo-name { text-transform: uppercase; letter-spacing: .3px; font-weight: 700; }
-.topo-envchip { display: inline-block; margin-left: 5px; padding: 0 4px; font-size: 8.5px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--accent); background: var(--accent-bg); border: 1px solid var(--border); border-radius: 3px; vertical-align: 1px; }
+.topo-envchip { display: inline-block; margin-left: 5px; padding: 0 4px; font-size: 8.5px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--accent2); background: var(--accent-bg); border: 1px solid var(--border); border-radius: 3px; vertical-align: 1px; }
 .topo-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .topo-dot.green { background: var(--ok); }
-.topo-dot.amber { background: var(--warn); }
+.topo-dot.amber { background: var(--warn-solid); }
 .topo-dot.red { background: var(--err); }
 /* v0.8.281 — kenar RED chip'i (hacim/dk · p99 · err%). Pill'lerin altında
    kalsın diye z-index aynı (DOM sırası: chip'ler node'lardan önce);
@@ -3255,7 +3311,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .mqe-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
 .mqe-row.off { opacity: .55; }
 .mqe-id { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text2); cursor: pointer; }
-.mqe-id-letter { font-weight: 700; font-size: 12px; color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mqe-id-letter { font-weight: 700; font-size: 12px; color: var(--accent2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mqe-eye { font-size: 11px; color: var(--text3); }
 .mqe-picker { position: relative; }
 .mqe-pickbtn { display: inline-flex; align-items: center; gap: 8px; min-width: 190px; max-width: 280px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text); cursor: pointer; font-size: 12.5px; }
@@ -3267,7 +3323,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .mqe-search { width: 100%; }
 .mqe-facets { display: flex; gap: 4px; flex-wrap: wrap; }
 .mqe-facet { padding: 3px 8px; border: 1px solid var(--border); border-radius: 20px; background: var(--bg2); color: var(--text2); font-size: 10.5px; font-weight: 600; cursor: pointer; }
-.mqe-facet.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.mqe-facet.on { border-color: var(--accent); color: var(--accent2); background: var(--accent-soft); }
 .mqe-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .mqe-hint { padding: 12px; font-size: 11.5px; color: var(--text3); text-align: center; }
 .mqe-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: none; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; text-align: left; }
@@ -3285,20 +3341,20 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .mqe-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg2); font-size: 11px; }
 .mqe-chip-k { color: var(--text2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mqe-chip-op { color: var(--text3); }
-.mqe-chip-v { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mqe-chip-v { color: var(--accent2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mqe-chip-x { all: unset; cursor: pointer; color: var(--text3); padding: 0 4px; border-radius: 50%; line-height: 1; }
 .mqe-chip-x:hover { color: var(--err); background: color-mix(in oklab, var(--err) 14%, transparent); }
 .mqe-chip-edit { gap: 5px; padding: 3px 6px; }
 .mqe-chip-edit select, .mqe-chip-edit input { font-size: 11px; }
 .mqe-chip-edit input { width: 96px; }
-.mqe-chip-add { all: unset; cursor: pointer; color: var(--accent); font-size: 11px; font-weight: 600; padding: 0 4px; }
+.mqe-chip-add { all: unset; cursor: pointer; color: var(--accent2); font-size: 11px; font-weight: 600; padding: 0 4px; }
 .mqe-addfilter { padding: 2px 8px; border: 1px dashed var(--border-strong); border-radius: 14px; background: transparent; color: var(--text3); font-size: 11px; cursor: pointer; }
-.mqe-addfilter:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.mqe-addfilter:hover:not(:disabled) { color: var(--accent2); border-color: var(--accent); }
 .mqe-addfilter:disabled { opacity: .5; cursor: not-allowed; }
 .mqe-groupby { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .mqe-lbl { font-size: 11px; color: var(--text3); }
 .mqe-gchip { padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg2); color: var(--text2); font-size: 10.5px; cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.mqe-gchip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.mqe-gchip.on { border-color: var(--accent); color: var(--accent2); background: var(--accent-soft); }
 /* `.row-actions` (v0.9.902, MB8) — was `.mqe-rowact`, renamed because it
    is not a metric-editor thing: the two sibling query editors (Explore's
    QueryRow and MetricQueryEditor) carry the SAME ⧉ / × row actions, and
@@ -3322,7 +3378,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 td > .cell-actions { display: flex; gap: var(--sp-3); align-items: center; }
 td > .cell-actions.end { justify-content: flex-end; }
 .mqe-addq { align-self: flex-start; padding: 6px 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; }
-.mqe-addq:hover { color: var(--accent); border-color: var(--accent); }
+.mqe-addq:hover { color: var(--accent2); border-color: var(--accent); }
 .mqe-code { display: flex; flex-direction: column; gap: 4px; }
 .mqe-code textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.6; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); color: var(--text); resize: vertical; }
 .mqe-code-foot { font-size: 11px; }
@@ -3332,7 +3388,7 @@ td > .cell-actions.end { justify-content: flex-end; }
 .mqe-lb { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
 .mqe-lb-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; cursor: pointer; font-size: 11.5px; color: var(--text2); }
 .mqe-lb-toggle:hover { color: var(--text); }
-.mqe-lb-metric { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.mqe-lb-metric { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--accent2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
 .mqe-lb-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 10px 10px; border-top: 1px solid var(--border); }
 .mqe-lb-pick { display: flex; align-items: center; gap: 6px; padding-top: 8px; }
 .mqe-lb-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding-top: 8px; }
@@ -3388,7 +3444,7 @@ td > .cell-actions.end { justify-content: flex-end; }
 .metric-row:hover:not(:disabled) { background: var(--bg2); }
 .metric-row.active { background: var(--accent-soft); }
 .metric-row-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.metric-row.active .metric-row-name { color: var(--accent); }
+.metric-row.active .metric-row-name { color: var(--accent2); }
 .metric-row-meta { font-size: 10px; color: var(--text3); margin-top: 2px; }
 .metric-spark-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .metric-spark { display: block; text-align: left; padding: 12px; cursor: pointer; }
@@ -3489,7 +3545,7 @@ td > .cell-actions.end { justify-content: flex-end; }
 .sys-subnav-item:hover { background: var(--bg2); color: var(--text); }
 .sys-subnav-item.active {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent); border-left-color: var(--accent); font-weight: 600;
+  color: var(--accent2); border-left-color: var(--accent); font-weight: 600;
 }
 .sys-content { flex: 1 1 auto; min-width: 0; align-self: stretch; }
 
@@ -3527,7 +3583,7 @@ thead th:hover .th-remove { opacity: 1; }
 .pb-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .pb-tile { background: var(--bg1); border: 1px solid var(--border); border-left: 3px solid var(--text3); border-radius: var(--radius-sm); padding: 10px 12px; min-width: 0; }
 .pb-tile.err { border-left-color: var(--err); }
-.pb-tile.warn { border-left-color: var(--warn); }
+.pb-tile.warn { border-left-color: var(--warn-solid); }
 .pb-tile.ok { border-left-color: var(--ok); }
 .pb-tile.accent { border-left-color: var(--accent); }
 .pb-tile .n { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
@@ -3535,9 +3591,9 @@ thead th:hover .th-remove { opacity: 1; }
 /* Problem card: 4px severity rail on the left edge. */
 .pb-card { display: flex; gap: 12px; background: var(--bg1); border: 1px solid var(--border); border-left: 4px solid var(--text3); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 8px; cursor: pointer; min-width: 0; }
 .pb-card:hover { background: var(--bg2); }
-.pb-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pb-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .pb-card.err { border-left-color: var(--err); }
-.pb-card.warn { border-left-color: var(--warn); }
+.pb-card.warn { border-left-color: var(--warn-solid); }
 .pb-card.ok { border-left-color: var(--ok); }
 .pb-card.gray { border-left-color: var(--text3); }
 .pb-card .pb-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -3563,7 +3619,7 @@ thead th:hover .th-remove { opacity: 1; }
 .pb-tl li:last-child::before { display: none; }
 .pb-tl li::after { content: ''; position: absolute; left: 1px; top: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--text3); }
 .pb-tl li.err::after { background: var(--err); }
-.pb-tl li.warn::after { background: var(--warn); }
+.pb-tl li.warn::after { background: var(--warn-solid); }
 .pb-tl li.ok::after { background: var(--ok); }
 .pb-tl li.accent::after { background: var(--accent); }
 
@@ -4273,8 +4329,8 @@ a.ins-val:hover { text-decoration: underline; }
 /* v0.10.715 — bölüm başlığında küçük parçalı anahtar (birleşik | cluster başına). */
 .seg-mini { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; text-transform: none; letter-spacing: 0; }
 .seg-mini button { border: 0; background: var(--bg1); color: var(--text2); padding: 1px 8px; font: inherit; font-size: 11px; cursor: pointer; }
-.seg-mini button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
-.seg-mini button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.seg-mini button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent2); font-weight: 600; }
+.seg-mini button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* v0.10.718 — Infrastructure dilim 1: KPI StatTile ızgarası (Kafka şeridiyle
    aynı atom), tıklanabilir tile (grafiğe kaydır / Pods'a git) ve tile alt
@@ -4282,7 +4338,7 @@ a.ins-val:hover { text-decoration: underline; }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
 .stat-click { cursor: pointer; border-radius: var(--radius-sm); }
 .stat-click:hover { box-shadow: 0 0 0 1px var(--accent) inset; }
-.stat-click:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stat-click:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .stat-sub { font-size: var(--fs-2xs); font-weight: 400; color: var(--text3); margin-top: var(--sp-1); font-family: inherit; }
 .stat-sub .mono { font-size: inherit; }
 
@@ -4291,7 +4347,7 @@ a.ins-val:hover { text-decoration: underline; }
 .pods-group td { background: var(--bg2); padding: var(--sp-3) var(--sp-4); }
 .pods-group__row { display: flex; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); color: var(--text3); flex-wrap: wrap; }
 .pods-group__caret { border: 0; background: transparent; color: var(--text3); cursor: pointer; font: inherit; padding: 0 var(--sp-1); }
-.pods-group__caret:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: var(--radius-xs); }
+.pods-group__caret:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: var(--radius-xs); }
 .pods-group__name { font-weight: 600; font-size: var(--fs-sm); color: var(--text); }
 .pods-group__stats { display: inline-flex; gap: var(--sp-5); align-items: center; }
 .pods-group__stats b { color: var(--text); font-weight: 600; }

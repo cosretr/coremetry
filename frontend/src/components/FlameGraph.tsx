@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { seriesColor } from '@/lib/chartFmt';
+import { seriesColor, inkOn } from '@/lib/chartFmt';
 import type { FlameNode } from '@/lib/types';
 
 interface Box {
@@ -64,7 +64,7 @@ export function FlameGraph({ root, totalWidth = 1100 }: { root: FlameNode; total
                 <rect x={x} y={y} width={w} height={ROW_H - 2}
                   fill={color} fillOpacity={0.85} stroke="#0d1117" strokeWidth={0.5} />
                 {showText && (
-                  <text x={x + 4} y={y + 12} fill="#0d1117" fontSize={11} fontWeight={600}>
+                  <text x={x + 4} y={y + 12} fill={inkOn(color) === '#ffffff' ? '#ffffff' : '#0d1117'} fontSize={11} fontWeight={600}>
                     {clipText(b.node.name, w - 8)} ({pct.toFixed(1)}%)
                   </text>
                 )}

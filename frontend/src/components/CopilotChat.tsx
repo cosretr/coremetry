@@ -399,7 +399,7 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
             <span aria-hidden="true" style={{
               position: 'absolute', top: -3, right: -3,
               minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box',
-              borderRadius: 9, background: 'var(--err)', color: '#fff',
+              borderRadius: 9, background: 'var(--err-solid)', color: 'var(--on-accent)',
               fontSize: 10, fontWeight: 700, lineHeight: '14px',
               display: 'grid', placeItems: 'center',
               border: '2px solid var(--bg1)',

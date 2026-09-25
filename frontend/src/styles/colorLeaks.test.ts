@@ -200,4 +200,28 @@ describe('mK6 token tanımları', () => {
     // "fatal" ile "error" ekranda ayırt edilemez hâle gelir.
     expect(/--fatal:\s*var\(--err\)/.test(CSS)).toBe(false);
   });
+
+  // v0.10.920 — koyu temada --fatal ile --err aynı literal (daha kırmızısı AA
+  // geçmiyor). Ayrım o yüzden RENGE değil biçime bağlı: `.s-fatal` dolu
+  // --err-solid hap. İnceleme turu: yukarıdaki iddia yalnız `var(--err)`
+  // yazımını reddediyordu, literal eşitliği göremiyordu.
+  it('.s-fatal, .s-error\'dan BİÇİMLE ayrışır (dolu --err-solid hap)', () => {
+    const m = /\.s-fatal\s*\{([^}]*)\}/.exec(CSS);
+    expect(m, '.s-fatal kuralı yok').not.toBeNull();
+    expect(m![1]).toMatch(/background:\s*var\(--err-solid\)/);
+    expect(m![1]).toMatch(/color:\s*var\(--on-accent\)/);
+  });
+
+  // v0.10.920 — yeni rol token'ları: bir temada eksik kalırsa o tema KOYU
+  // değeri devralır (redhat rozeti koyu zeminle çizilir) ve hiçbir kapı
+  // kızarmaz. Her renk token'ı light ve redhat'te de yazılı olmalı.
+  it('v0.10.920 rol token\'ları her üç temada tanımlı', () => {
+    const light = CSS.slice(CSS.indexOf('[data-theme="light"]'), CSS.indexOf('[data-theme="redhat"]'));
+    const redhat = CSS.slice(CSS.indexOf('[data-theme="redhat"]'), CSS.indexOf('[data-theme="redhat"] body'));
+    for (const t of ['--accent-hover', '--focus', '--ok-bg', '--warn-bg', '--err-bg', '--info-bg', '--err-solid', '--warn-solid']) {
+      expect(rootBlock.includes(`${t}:`), `${t} :root'ta yok`).toBe(true);
+      expect(light.includes(`${t}:`), `${t} light'ta yok`).toBe(true);
+      expect(redhat.includes(`${t}:`), `${t} redhat'te yok`).toBe(true);
+    }
+  });
 });

@@ -23,7 +23,7 @@ export const svcBadgeBg = (name: string): string =>
 export function durColor(ms: number, err: boolean): string {
   if (err) return 'var(--err)';
   if (ms > 1000) return 'var(--err)';
-  if (ms > 400) return 'var(--warn)';
+  if (ms > 400) return 'var(--warn-solid)'; // v0.10.920 — mini çubuk dolgusu
   return 'var(--ok)';
 }
 

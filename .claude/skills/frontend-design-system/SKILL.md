@@ -266,8 +266,19 @@ Blokların **%91,6'sı %100 statik** — satır içi olmak için hiçbir
 
 **Hardcode renk:** `.tsx`'te yeni hex/rgba **yasak**. Tek istisna canvas
 `getPropertyValue` fallback'i — ve **fallback token'ın GERÇEK değeriyle
-eşleşmeli** (`var(--warn, #facc15)` reddedilir; gerçek `--warn` =
-`#d29922`). Motor marka rengi ise dosya-içi gerekçe yorumu şart.
+eşleşmeli** (`var(--warn, #facc15)` reddedilir; yedek, :root'taki gerçek
+`--warn` değeri olmalı — `styles/contrastTokens.test.ts` heatmapRamp ve
+TraceMinimap yedeklerini :root'a karşı çiviliyor). Motor marka rengi ise
+dosya-içi gerekçe yorumu şart.
+
+**Renk rolleri (v0.10.920, sade palet):** `--accent` = DOLGU (birincil
+buton, seçim rayı; üstünde `--on-accent`), `--accent2` = bağlantı/vurgu
+METNİ, `--accent-hover` = dolgunun hover'ı, `--focus` = odak halkası ve
+odaklı input kenarı, `--*-bg` = rozet/banner zemini (elle `color-mix`
+yazma), `--err-solid` = beyaz yazılı dolu kırmızı (sayaç, tehlike butonu,
+fatal hapı), `--text-faint` = yalnız devre dışı metin. Metinde
+`var(--accent)` ve dolgu+beyaz yazıda `var(--accent2|--err|--ok)` kullanma.
+Renk yalnız sapma, seçim, odak, bağlantı ve veri için; sağlıklı durum nötr.
 🔴 **Aktif drift:** `#0d1117` 6 yerde — v0.9.167'de terk edilen eski dark
 zemin; flame graph'lerde kontur+metin rengi olarak basılıyor, yani
 light/redhat temada yazı neredeyse siyah.

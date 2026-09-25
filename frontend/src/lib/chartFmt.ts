@@ -149,11 +149,40 @@ function trim(v: number): string {
 // lejant/tooltip (≥2 serili her grafik taşır). Koyulaştırılmış varyant
 // denendi: renk körlüğü ayrımı 8'in altına iniyordu, reddedildi.
 export type ChartTheme = 'dark' | 'light' | 'redhat';
+// v0.10.920 (sade palet, operatör onayı) — yeniden çözüldü: her renk
+// bg0-bg2'ye ≥3:1, durum renklerinden (ok/uyarı/hata) OKLab ≥0.10 uzak.
+// Eski palette yeşil (#008300) ve kırmızı (#e66767) seriler durum rengi
+// gibi okunuyordu (OKLab 0.025-0.052). Yuva 1 artık vurgu TOKEN'ı değil
+// (mavi seriler vurgu tonuna yakın kalabilir; seçim grafikte renkle değil
+// çerçeve/kalınlıkla gösterilir). Sıra: mavi, turkuaz, gül, limon, çevre
+// mavisi, turuncu, mor, orkide. Doğrulama: styles/contrastTokens.test.ts.
 export const SERIES_PALETTES: Record<ChartTheme, readonly string[]> = {
-  dark:   ['#388bfd', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
-  light:  ['#0969da', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
-  redhat: ['#0066cc', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
+  dark:   ['#288dd4', '#06d8d9', '#cb4f73', '#b5b614', '#95b6fe', '#d76f04', '#ac78d2', '#fca0e8'],
+  light:  ['#045c93', '#0c9999', '#921545', '#898905', '#567cd3', '#d46e07', '#7b489e', '#bf68ae'],
+  redhat: ['#045c93', '#0c9999', '#921545', '#898905', '#567cd3', '#d46e07', '#7b489e', '#bf68ae'],
 };
+
+// inkOn — SAF (v0.10.920): dolu bir renk üstüne yazılacak metin için
+// siyah ya da beyazdan WCAG karşıtlığı yüksek olanı. Şelale bar etiketi
+// her zaman beyazdı; yeni koyu paletteki açık seriler (turkuaz, limon,
+// orkide) üstünde beyaz ~1.7:1 kalırdı. Hex olmayan girdi (var(--x))
+// için beyaz — çağıranın eski davranışı.
+export const INK_DARK = '#15171a';
+function relLum(hex6: string): number {
+  const lin = (i: number) => {
+    const c = parseInt(hex6.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
+}
+export function inkOn(fill: string): '#ffffff' | '#15171a' {
+  const m = /^#([0-9a-f]{6})$/i.exec(fill.trim());
+  if (!m) return '#ffffff';
+  const L = relLum(m[1]);
+  const onWhite = 1.05 / (L + 0.05);
+  const onDark = (L + 0.05) / (relLum(INK_DARK.slice(1)) + 0.05);
+  return onDark > onWhite ? INK_DARK : '#ffffff';
+}
 export const SERIES_SLOTS = 8;
 
 // chartTheme — <html data-theme>'den; yalnız light/redhat token setini

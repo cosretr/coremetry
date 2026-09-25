@@ -205,7 +205,7 @@ export function Sparkline({
     if (mode === 'bars' && threshold !== undefined) {
       const cls = classifyThreshold(v, threshold);
       if (cls === 'err') return { fill: 'var(--err)', opacity: 0.92 };
-      if (cls === 'warn') return { fill: 'var(--warn)', opacity: 0.88 };
+      if (cls === 'warn') return { fill: 'var(--warn-solid)', opacity: 0.88 };
       // Soluk gri normal bucket — mockup'taki rgba(text3,.55) muadili.
       return { fill: 'var(--text3)', opacity: 0.45 };
     }

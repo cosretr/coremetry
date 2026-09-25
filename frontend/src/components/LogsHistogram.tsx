@@ -457,7 +457,7 @@ export function collapse(input: Series[], severityFiltered = false) {
       // rarest, most actionable data, not the background traffic.
       color: 'color-mix(in srgb, var(--text3) 45%, transparent)',
     },
-    { key: 'warn', label: 'warn+', data: warnErr, type: 'bar', axis: 'left', color: 'var(--warn)' },
+    { key: 'warn', label: 'warn+', data: warnErr, type: 'bar', axis: 'left', color: 'var(--warn-solid)' },
     { key: 'error', label: 'errors', data: err, type: 'bar', axis: 'left', color: 'var(--err)' },
     {
       key: 'rate', label: 'error rate', data: rate, type: 'line', axis: 'right',

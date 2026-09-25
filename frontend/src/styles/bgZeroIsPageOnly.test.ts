@@ -4,11 +4,13 @@
 // (kart, popover, pill, kod bloğu) zemin diye vermek yasaktır.
 //
 // Neden kural bu: yükseltme YÖNÜ temadan temaya değişiyor.
-//   dark    --bg0 #1c2128  <  --bg1 #22272e   (yüzey daha AÇIK)
-//   light   --bg0 #ffffff  >  --bg1 #f6f8fa   (yüzey daha KOYU — ters!)
-//   redhat  --bg0 #f0f0f0  <  --bg1 #ffffff   (yüzey daha AÇIK)
-// Yani `--bg0`la boyanmış bir yüzey dark'ta "geri çekilmiş", light'ta
-// "öne çıkmış" görünür. Aynı satır üç temada üç farklı anlam taşıyor.
+//   v0.9.978'de light TERSTİ (sayfa #ffffff, yüzey #f6f8fa); v0.10.920
+//   (K1, operatör) light'ı beyaz kart / gri sayfaya çevirdi:
+//   dark    --bg0 #1e2124  <  --bg1 #24272b
+//   light   --bg0 #f4f6f8  <  --bg1 #ffffff
+//   redhat  --bg0 #f0f0f0  <  --bg1 #ffffff
+// Yön artık üç temada AYNI; kural yine geçerli: `--bg0` sayfa zeminidir,
+// bir yüzeye verilince yüzey sayfaya karışır (kartın kenarı kaybolur).
 // Denetimin KN-3'ü tam olarak budur ve `colorLeaks` bunu göremez:
 // `--bg0` TANIMLI ve meşru bir token, yalnız YANLIŞ YERDE.
 //
@@ -77,16 +79,17 @@ describe('D1 — --bg0 yalnız sayfa zemini', () => {
   // Merdiven yönünün temaya göre döndüğünün KANITI; kuralın neden var
   // olduğunu tek bir assert'te tutuyor. Tema blokları değişirse bu
   // test kırmızıya döner ve kuralın gerekçesi yeniden düşünülür.
-  it('yükseltme yönü light temada TERS — kuralın gerekçesi', () => {
+  it('yükseltme yönü üç temada aynı: sayfa < yüzey (v0.10.920 K1)', () => {
     const val = (theme: string, token: string) => {
       const block = theme === 'dark'
         ? /:root\s*\{([\s\S]*?)\}/.exec(CSS)![1]
         : new RegExp(`\\[data-theme="${theme}"\\]\\s*\\{([\\s\\S]*?)\\}`).exec(CSS)![1];
       return new RegExp(`${token}\\s*:\\s*([^;]+)`).exec(block)![1].trim();
     };
-    expect(val('dark', '--bg0')).not.toBe(val('dark', '--bg1'));
-    expect(val('light', '--bg0')).toBe('#ffffff');
-    expect(val('light', '--bg1')).toBe('#f6f8fa');   // bg1 < bg0 → ters merdiven
+    expect(val('dark', '--bg0')).toBe('#1e2124');
+    expect(val('dark', '--bg1')).toBe('#24272b');
+    expect(val('light', '--bg0')).toBe('#f4f6f8');
+    expect(val('light', '--bg1')).toBe('#ffffff');   // beyaz kart, gri sayfa
     expect(val('redhat', '--bg0')).toBe('#f0f0f0');
     expect(val('redhat', '--bg1')).toBe('#ffffff');
   });

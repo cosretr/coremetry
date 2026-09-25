@@ -682,3 +682,27 @@ portal değil), yüklenirken genişlik koruyan `Button`, yalnız geliştirmede `
 
 **Geri dönüş:** Atom arayüzleri korunduğu için ileride shadcn'e geçiş atomların İÇİNİ
 değiştirmek demek; çağrı yerleri değişmez. Ters yön (A'dan B'ye) pahalı olurdu.
+
+## 2026-09-25 — Sade palet: renk yalnız sapma, seçim ve veri için (v0.10.920 adım 0)
+
+**Karar (operatör, mockup üzerinden):** K1 açık tema beyaz kart / gri sayfa (ters merdiven kapandı);
+K2 koyu temada uyarı rengi sakin altın `#f3b94c`; K3 grafik serisi rengi isimden gelmeye devam eder
+(açıklama/ipucu zorunlu); K4 redhat PatternFly kimliğini korur (nötrler, `#0066cc`, kare köşeler,
+koyu kenar çubuğu) ve yalnız geçmeyen çiftler PF'nin kendi metin tonlarıyla düzeltilir
+(uyarı `#795600`, form kenarı `#8a8d90`, hover `#004080`); K5 sağlıklı durum nötr, yeşil yalnız
+"düzeldi" (adım 1); K6 Coremetry kırmızısı yalnız logoda (adım 1).
+
+**Neden:** Varsayılan redhat temasında uyarı metni 1,99:1, bilgi 2,99:1, kenar çubuğunda seçili
+menü 2,62:1 idi; bugünkü tokenlarda 130 çift WCAG'den kalıyordu. Rengin çoğu "sağlıklı" durumu
+işaretliyordu. Değerler OKLCH ile karşıtlık hedeflerine göre çözüldü; 296 denetim, 0 başarısız
+(kalan 5 uyarı: renk körlüğünde ok/uyarı/hata ayrımı AA içinde çözülemiyor → durum her zaman
+ikon/yazıyla).
+
+**Adım 0 kapsamı:** yalnız token değerleri + yeni tokenlar (`--accent-hover`, `--focus`,
+`--*-bg`, `--err-solid`, `--warn-solid`) + kural düzeltmeleri + grafik paleti (durum renklerinden
+OKLab ≥0,10). Rol ayrımı: `--accent` dolgu / `--accent2` metin; `--warn` metin / `--warn-solid`
+dolgu (açık temalarda metin kahvesi renk körlüğünde kırmızıya yaklaşıyordu). İnceleme turu
+(3 mercek + kuşkucu) 14 gerçek bulgu çıkardı; hepsi düzeltildi ve `styles/contrastTokens.test.ts`
+tüm WCAG çift tablosunu artık doğrudan globals.css'ten denetliyor.
+Bileşenlerden renk çekme (adım 1), yapı sadeleştirme (adım 2), hex/ton ratchet'i (adım 3) ve
+yazı ölçeği (adım 4) ayrı onayla. Mockup: claude.ai artifact "Coremetry Sade Palet".

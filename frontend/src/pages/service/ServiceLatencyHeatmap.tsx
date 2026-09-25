@@ -240,7 +240,7 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
                     <Link to={tracesHref} style={{ textDecoration: 'none' }}>Traces →</Link>
                     <span onClick={() => setShowDiff(v => !v)}
                       title="Bu banttaki span'ları servisin bu penceredeki tamamıyla kıyasla — hangi attribute'lar farklı?"
-                      style={{ cursor: 'pointer', color: 'var(--accent)' }}>
+                      style={{ cursor: 'pointer', color: 'var(--accent2)' }}>
                       Ne farklı?
                     </span>
                     <span onClick={() => { setBoxSel(null); setShowDiff(false); }}

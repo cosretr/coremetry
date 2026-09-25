@@ -482,7 +482,8 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
       <div onClick={onBodyClick} className={isUser ? undefined : 'ai-answer-card'} style={isUser ? {
         padding: '8px 11px', borderRadius: 10, fontSize: 13, lineHeight: 1.5,
         whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        background: 'var(--accent2)', color: '#fff', border: 'none',
+        // v0.10.920 — dolgu --accent (beyaz ≥4.61); --accent2 bağlantı METNİ tonu, beyaz 2.48 idi.
+        background: 'var(--accent)', color: 'var(--on-accent)', border: 'none',
       } : { whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
         {/* Tool-call progress chips (assistant only). v0.9.1181 (Faz 4.3):
             veri gelmişse çip TIKLANABİLİR ve altında kanıt bloğu açılır. */}
@@ -634,7 +635,7 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
 function ChatErrorLine({ error, isUser }: { error: string; isUser: boolean }) {
   const ev = chatErrorText(error);
   return (
-    <span style={{ color: isUser ? '#fff' : 'var(--err)' }} title={ev.raw ?? undefined}>
+    <span style={{ color: isUser ? 'var(--on-accent)' : 'var(--err)' }} title={ev.raw ?? undefined}>
       ⚠ {ev.text}
     </span>
   );

@@ -175,9 +175,9 @@ describe("D7 — --bg alias'ı yükseltilmiş yüzeye sabit", () => {
     const theme = (t: string) => t === 'dark'
       ? /:root\s*\{([\s\S]*?)\n\}/.exec(CLEAN)![1]
       : new RegExp(`\\[data-theme="${t}"\\]\\s*\\{([\\s\\S]*?)\\n\\}`).exec(CLEAN)![1];
-    // dark #1c2128→#22272e · light #ffffff→#f6f8fa · redhat DEĞİŞMEDİ
-    expect(declOf(theme('dark'), '--bg\\b')).toBe('#22272e');
-    expect(declOf(theme('light'), '--bg\\b')).toBe('#f6f8fa');
+    // v0.10.920 (sade palet): dark #24272b · light #ffffff (K1: beyaz kart) · redhat DEĞİŞMEDİ
+    expect(declOf(theme('dark'), '--bg\\b')).toBe('#24272b');
+    expect(declOf(theme('light'), '--bg\\b')).toBe('#ffffff');
     expect(declOf(theme('redhat'), '--bg\\b')).toBe('#ffffff');
   });
 

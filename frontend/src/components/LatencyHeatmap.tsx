@@ -35,7 +35,7 @@ function resolveRampTokens(): RampTokens {
   const pick = (name: string, fb: string) => css.getPropertyValue(name).trim() || fb;
   return {
     accent: pick('--accent', DEFAULT_RAMP_TOKENS.accent),
-    warn: pick('--warn', DEFAULT_RAMP_TOKENS.warn),
+    warn: pick('--warn-solid', DEFAULT_RAMP_TOKENS.warn), // v0.10.920 — dolgu tonu (açık temalarda --warn metin kahvesi)
     err: pick('--err', DEFAULT_RAMP_TOKENS.err),
   };
 }

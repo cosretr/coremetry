@@ -37,7 +37,8 @@ export function KindBadge({ kind }: { kind: ProfileFrameKind }) {
     <span style={{
       fontSize: 10, fontWeight: 700, padding: '1px 6px',
       marginLeft: 6,
-      background: c, color: 'white',
+      // v0.10.920 — sleep açık gri zemin (--text2); koyuda beyaz 1.67 idi.
+      background: c, color: kind === 'sleep' ? 'var(--bg1)' : 'white',
       borderRadius: 3, fontFamily: 'monospace',
       verticalAlign: 'middle',
     }}>

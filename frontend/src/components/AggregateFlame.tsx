@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { seriesColor } from '@/lib/chartFmt';
+import { seriesColor, inkOn } from '@/lib/chartFmt';
 import { fmtNum } from '@/lib/utils';
 import type { AggSpanNode } from '@/lib/types';
 
@@ -151,7 +151,7 @@ export function AggregateFlame({ roots, totalWidth = 1100 }: {
                   stroke="var(--bg1)" strokeWidth={1} />
                 {showText && (
                   <text x={x + 5} y={y + 14}
-                        fill="#0d1117" fontSize={11} fontWeight={600}>
+                        fill={!isErr && inkOn(baseColor) === '#ffffff' ? '#ffffff' : '#0d1117'} fontSize={11} fontWeight={600}>
                     {clipText(label, w - 10)}{w > 110 ? ` · ${pct.toFixed(0)}%` : ''}
                   </text>
                 )}

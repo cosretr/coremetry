@@ -17,7 +17,7 @@ export interface RampTokens { accent: string; warn: string; err: string }
 
 // DEFAULT_RAMP_TOKENS — token çözülemezse (test ortamı, çok erken çizim)
 // koyu temanın değerleri; sessiz siyah rampa yerine okunur bir rampa.
-export const DEFAULT_RAMP_TOKENS: RampTokens = { accent: '#388bfd', warn: '#d29922', err: '#ff5252' };
+export const DEFAULT_RAMP_TOKENS: RampTokens = { accent: '#2d73d8', warn: '#f3b94c', err: '#fe7f73' }; // v0.10.920 koyu tokenlar
 
 const rgba = (hex: string, fallback: string, a: number) => {
   const c = hexToRgb(hex) ?? hexToRgb(fallback)!;

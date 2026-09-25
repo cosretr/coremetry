@@ -7,6 +7,7 @@ import type { SpanRow, TraceAnalysis, TraceNode, TraceServiceSummary } from '@/l
 import { collectSubtreeIds, groupParentOf, clusterBadge } from './traceWaterfall.tree';
 import { resolveResource } from '@/lib/otel/semconv';
 import { fmtNs, displaySpanName } from '@/lib/utils';
+import { inkOn } from '@/lib/chartFmt';
 import { nameColWidth, NAME_MIN, NAME_MAX, INDENT_PX } from '@/lib/traceNameCol';
 
 // v0.10.278 — sanal satır eşiği ve harita eşiği (ölçüm: 1000-1500 satır arası
@@ -95,7 +96,7 @@ function categoryOf(s: SpanRow): SpanCategory | null {
   if (a['messaging.system']) return { tag: 'MQ',   color: 'var(--teal)' };   // cyan/teal
   if (a['rpc.system'])       return { tag: 'RPC',  color: 'var(--purple)' }; // violet
   if (a['http.method'] || a['http.request.method']) {
-    return { tag: 'HTTP', color: 'var(--accent)' };                          // blue
+    return { tag: 'HTTP', color: 'var(--accent2)' };                          // blue
   }
   return null;
 }
@@ -705,6 +706,7 @@ export function TraceWaterfall({
         const anyId = (set: Set<string> | undefined) =>
           set !== undefined && realIds.some(id => set.has(id));
         const color = colorFor(s);
+        const ink = inkOn(color); // v0.10.920 — etiket ve öz-süre gölgesi bu mürekkebe göre
         const cat = categoryOf(s);
         // v0.8.549 — the cluster chip marks SERVICE ENTRY, not just the
         // root: it rides the row where the trace hands off into a new
@@ -940,9 +942,19 @@ export function TraceWaterfall({
               >
                 {/* v0.10.276 — öz süre payı (sunucu analizi): koyu iç şerit. */}
                 {node && dur > 0 && node.selfNs < dur && (
-                  <span className="wf-bar-self" style={{ width: `${Math.max(0, Math.min(100, (node.selfNs / dur) * 100))}%` }} />
+                  <span className="wf-bar-self" style={{
+                    width: `${Math.max(0, Math.min(100, (node.selfNs / dur) * 100))}%`,
+                    // v0.10.920 — gölge mürekkepten UZAKLAŞIR: koyu mürekkepte açık, beyaz mürekkepte koyu.
+                    background: ink === '#ffffff' ? 'color-mix(in srgb, black 30%, transparent)' : 'color-mix(in srgb, white 35%, transparent)',
+                  }} />
                 )}
-                {labelInside && <span className="wf-bar-label">{fmtNs(dur)}</span>}
+                {labelInside && (
+                  // v0.10.920 — mürekkep bar rengine göre (inkOn); açık seri renklerinde beyaz okunmazdı.
+                  <span className="wf-bar-label"
+                    style={ink === '#ffffff' ? undefined : { color: ink, textShadow: 'none' }}>
+                    {fmtNs(dur)}
+                  </span>
+                )}
               </div>
               {excLeftPct !== null && (
                 <span className="wf-ev" style={{ left: `${excLeftPct}%` }}

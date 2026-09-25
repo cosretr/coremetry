@@ -700,7 +700,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                     style={{ cursor: s.traceId ? 'pointer' : 'default' }}
                     {...(s.traceId ? rowActivation(() => navigate(traceHref(s.traceId!))) : {})}>
                     <td className="mono" style={{ paddingLeft: 14 }}>
-                      <span style={{ color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: 150 }}>
+                      <span style={{ color: 'var(--accent2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: 150 }}>
                         {s.traceId ? s.traceId.slice(0, 16) + '…' : '—'}
                       </span>
                     </td>

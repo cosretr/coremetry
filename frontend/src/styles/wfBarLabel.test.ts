@@ -20,3 +20,15 @@ describe('.wf-bar-label öz-süre gölgesinin üstünde ve beyaz (v0.10.356)', (
     expect(self![1]).not.toMatch(/z-index/);
   });
 });
+
+// v0.10.920 — etiket mürekkebi bar rengine göre seçilir; CSS varsayılanı
+// (beyaz) yalnız koyu barlar için kalır.
+describe('şelale bar etiketi mürekkebi (v0.10.920)', () => {
+  it('TraceWaterfall etikette inkOn kullanıyor', () => {
+    const src = readFileSync(resolve(__dirname, '..', 'components', 'TraceWaterfall.tsx'), 'utf8');
+    expect(src).toContain('const ink = inkOn(color);');
+    expect(src).toMatch(/className="wf-bar-label"[\s\S]{0,120}ink === '#ffffff'/);
+    // öz-süre gölgesi mürekkepten uzaklaşır (inceleme turu: açıkta koyu mürekkebi gömüyordu)
+    expect(src).toMatch(/className="wf-bar-self"[\s\S]{0,300}ink === '#ffffff'/);
+  });
+});

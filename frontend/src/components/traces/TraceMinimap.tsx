@@ -41,7 +41,7 @@ export function TraceMinimap({ spans, minT, totalNs, colorFor, range, onSeek, he
       }
       ctx.globalAlpha = 1;
       if (range) {
-        const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#388bfd';
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#2d73d8';
         const y0 = (range[0] / n) * height, y1 = ((range[1] + 1) / n) * height;
         ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
         ctx.strokeRect(0.75, y0 + 0.75, w - 1.5, Math.max(2, y1 - y0 - 1.5));

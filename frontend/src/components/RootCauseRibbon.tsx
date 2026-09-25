@@ -280,7 +280,7 @@ function ExpandedBody({ rc, window: win }: {
               padding: '6px 10px', borderRadius: 6, textDecoration: 'none',
               background: 'var(--bg2)', border: '1px solid var(--border)', fontSize: 12,
             }}>
-            <span aria-hidden="true" style={{ color: 'var(--accent)' }}>◆</span>
+            <span aria-hidden="true" style={{ color: 'var(--accent2)' }}>◆</span>
             {rc.exemplar.statusCode === 'error'
               ? <span className="badge b-err">ERROR</span>
               : <span className="badge b-ok">OK</span>}
