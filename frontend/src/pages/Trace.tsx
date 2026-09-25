@@ -12,6 +12,8 @@ import { computeCriticalPath } from '@/lib/criticalPath';
 import { traceRepeatGroups, type TraceRepeatGroup } from '@/lib/traceRepeats';
 import { CopyButton } from '@/components/CopyButton';
 import { TraceLogsPanel } from './trace/TraceLogsPanel'; // v0.10.675 — kiosk ile paylaşılan panel
+import { TraceMetricsPanel } from './trace/TraceMetricsPanel'; // v0.10.913 — pod metrikleri sekmesi
+import { tracePods } from './trace/traceMetrics';
 import { toggleSpanSelection } from './trace/kioskModel'; // v0.10.693
 import { TraceKiosk } from './TraceKiosk'; // v0.10.675 — ?kiosk=1 dalı
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
@@ -96,8 +98,9 @@ function TraceDetailInner() {
   // matching this trace_id, Uptrace-style). Logs are fetched lazily
   // on first tab click so the trace page stays fast for users who
   // never need them.
-  const [tab, setTab] = useState<'trace' | 'logs'>(
-    () => (searchParams.get('tab') === 'logs' ? 'logs' : 'trace'));
+  // v0.10.913 — 'metrics': trace'in geçtiği pod'ların CPU/bellek grafikleri.
+  const [tab, setTab] = useState<'trace' | 'logs' | 'metrics'>(
+    () => { const t = searchParams.get('tab'); return t === 'logs' || t === 'metrics' ? t : 'trace'; });
   // v0.9.1277 (Dynatrace-parite #6) — ×N gruplama. URL'de yaşıyor (?xn=1)
   // çünkü paylaşılan bir trace linki "şu N+1 desenine bak" demek zorunda:
   // gruplama kapalı gelen bir link, göndereni ikna eden görüntüyü ALMAZ.
@@ -117,6 +120,8 @@ function TraceDetailInner() {
   // they become pseudo log rows for the Logs tab and, combined with
   // whatever the lazy ES fetch has cached, per-span waterfall chips.
   const eventRows = useMemo(() => spanEventLogRows(spans ?? []), [spans]);
+  // v0.10.913 — Metrics sekmesi etiketi: trace'in geçtiği pod sayısı (span'lardan).
+  const tracePodCount = useMemo(() => tracePods(spans ?? []).length, [spans]);
 
   // v0.10.577 — gRPC per-message event'leri (SENT/RECEIVED) Logs sekmesinde
   // VARSAYILAN GİZLİ. Operatörün getirdiği trace'te 253 tanesi 11 gerçek log
@@ -214,8 +219,9 @@ function TraceDetailInner() {
     const url = new URL(window.location.href);
     if (selectedId) url.searchParams.set('span', selectedId);
     else url.searchParams.delete('span');
-    if (tab === 'logs') url.searchParams.set('tab', 'logs');
+    if (tab === 'logs' || tab === 'metrics') url.searchParams.set('tab', tab);
     else url.searchParams.delete('tab');
+    if (tab !== 'metrics') { url.searchParams.delete('mpod'); url.searchParams.delete('mwin'); }
     if (groupSimilar) url.searchParams.set('xn', '1');
     else url.searchParams.delete('xn');
     window.history.replaceState({}, '', url.toString());
@@ -643,6 +649,8 @@ function TraceDetailInner() {
                 : shownEventRows.length > 0
                   ? <span style={{ color: 'var(--text3)', marginLeft: 4 }} title={`Bu trace'te ${shownEventRows.length} span event'i var`}>●</span>
                   : null}</> },
+              // v0.10.913 — pod sayısı span'lardan (ek sorgu yok); pod'suz trace'te "—".
+              { key: 'metrics', label: <>Metrics <span style={{ color: 'var(--text3)', marginLeft: 4 }}>{tracePodCount > 0 ? `${tracePodCount} pod` : '—'}</span></> },
             ]} />
 
             {tab === 'trace' && (
@@ -681,6 +689,8 @@ function TraceDetailInner() {
                 </div>
               </>
             )}
+
+            {tab === 'metrics' && <TraceMetricsPanel spans={spans ?? []} />}
 
             {tab === 'logs' && (
               <TraceLogsPanel logs={logs} degraded={logsDegraded}
