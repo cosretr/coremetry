@@ -15,6 +15,7 @@ import { MultiLineChart, type DeployMarker } from '@/components/MultiLineChart';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Chip, SegmentedControl } from '@/components/ui';
 import { podDetailPath } from '@/pages/service/podDetailPath';
+import { TraceJvmPanel } from './TraceJvmPanel';
 import {
   tracePods, podsByService, defaultPodSelection, togglePod, traceMetricsWindow, resolveCluster, shortPod,
   TRACE_METRICS_WINDOWS, TRACE_METRICS_DEFAULT_WINDOW, TRACE_METRICS_MAX_PODS, type TraceMetricsWindow,
@@ -122,6 +123,9 @@ export function TraceMetricsPanel({ spans }: { spans: SpanRow[] }) {
               <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>CPU (cores)</div>
               <MultiLineChart series={cpu} height={180} syncKey={`trace-metrics-${selSvc}`} unit="cores" deploys={marker} xRange={xRange} zeroBase />
             </div>
+            {/* v0.10.923 — JVM heap (GC sonrası) + GC duraklaması; servis JVM değilse çizilmez. */}
+            <TraceJvmPanel service={selSvc} pods={selected} from={from} to={to}
+              syncKey={`trace-metrics-${selSvc}`} deploys={marker} xRange={xRange} />
             <div className="pod-cap">
               kaynak Thanos (Pod sayfasıyla aynı uç) · "trace" işareti trace başlangıcı
               {notes.length > 0 && <> · {notes.join(' · ')}</>}

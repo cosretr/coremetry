@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SpanRow } from '@/lib/types';
-import { tracePods, podsByService, defaultPodSelection, togglePod, traceMetricsWindow, resolveCluster, shortPod, TRACE_METRICS_MAX_PODS } from './traceMetrics';
+import { tracePods, podsByService, defaultPodSelection, togglePod, traceMetricsWindow, resolveCluster, shortPod, TRACE_METRICS_MAX_PODS, jvmPodSeries } from './traceMetrics';
 
 // v0.10.913 — Trace "Metrics" sekmesi: pod çıkarma, servise göre gruplama,
 // varsayılan seçim (hata veren en derin span'ın servisi), aynı-servis kuralı
@@ -66,5 +66,35 @@ describe('TraceMetricsPanel düzeni', () => {
     const src = readFileSync(resolve(__dirname, 'TraceMetricsPanel.tsx'), 'utf8');
     expect(src.indexOf('Memory (bytes)')).toBeLessThan(src.indexOf('CPU (cores)'));
     expect(src.match(/<MultiLineChart[^>]*zeroBase \/>/g)?.length).toBe(2);
+  });
+});
+
+// v0.10.923 — JVM paneli seri hazırlığı (saf) + panel bağlantısı (kaynak pini).
+describe('jvmPodSeries', () => {
+  const s = (pod: string, vals: number[]) => ({ groupKey: [pod], points: vals.map((v, i) => ({ time: i * 1e9, value: v })) });
+  it('boş seriler düşer, etiket kısa pod, tam ad fullKey', () => {
+    const out = jvmPodSeries([s('checkout-api-7c8977f965-7hrqz', [1, 2]), s('checkout-api-7c8977f965-empty', [])]);
+    expect(out).toHaveLength(1);
+    expect(out[0].groupKey).toEqual([shortPod('checkout-api-7c8977f965-7hrqz')]);
+    expect(out[0].fullKey).toEqual(['checkout-api-7c8977f965-7hrqz']);
+  });
+  it('ölçek uygulanır (GC saniye → ms), 1 iken noktalar aynen', () => {
+    expect(jvmPodSeries([s('p-a-b', [0.012])], 1000)[0].points[0].value).toBeCloseTo(12);
+    const pts = [{ time: 0, value: 5 }];
+    expect(jvmPodSeries([{ groupKey: ['x-y-z'], points: pts }])[0].points).toBe(pts);
+  });
+  it('null/undefined güvenli', () => {
+    expect(jvmPodSeries(null)).toEqual([]);
+    expect(jvmPodSeries(undefined)).toEqual([]);
+  });
+  it('panel Trace Metrics\'e CPU\'nun altında bağlı; GC sonrası heap önce, anlık kullanım yedek', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const panel = readFileSync(resolve(__dirname, 'TraceMetricsPanel.tsx'), 'utf8');
+    expect(panel.indexOf('CPU (cores)')).toBeLessThan(panel.indexOf('<TraceJvmPanel'));
+    const jvm = readFileSync(resolve(__dirname, 'TraceJvmPanel.tsx'), 'utf8');
+    expect(jvm.indexOf("'jvm.memory.used_after_last_gc'")).toBeLessThan(jvm.indexOf("'jvm.memory.used'"));
+    expect(jvm).toContain("'jvm.gc.duration'");
+    expect(jvm).toMatch(/familyOf\(runtimeQ\.data\?\.language\) === 'jvm'/);
   });
 });

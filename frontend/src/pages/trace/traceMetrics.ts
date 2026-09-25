@@ -2,7 +2,7 @@
 // metriklerine yeni bir sekmede erişilsin"; revize mockup Onay: aynı servisin
 // pod'ları üst üste, en çok 4). Trace sayfası "Metrics" sekmesinin SAF
 // yardımcıları (tablo testli).
-import type { EntityClusterInfo, SpanRow } from '@/lib/types';
+import type { EntityClusterInfo, SpanMetricSeries, SpanRow } from '@/lib/types';
 
 export const TRACE_METRICS_MAX_PODS = 4;
 export const TRACE_METRICS_WINDOWS = [5, 15, 60] as const;
@@ -138,4 +138,22 @@ export function resolveCluster(value: string, clusters: EntityClusterInfo[]): st
 export function shortPod(pod: string): string {
   const parts = pod.split('-');
   return parts.length > 2 ? '…' + parts.slice(-2).join('-') : pod;
+}
+
+// jvmPodSeries — v0.10.923 (operatör: "sonra JVM GC metriğine bakarız"):
+// pod kırılımlı metrik serilerini Trace Metrics grafiğine hazırlar — boş
+// seriler düşer, etiket kısa pod adı (tam ad fullKey'de, tooltip/lejant
+// title'ında), değer ölçeklenir (GC süresi saniye → ms). SAF.
+export function jvmPodSeries(series: SpanMetricSeries[] | null | undefined, scale = 1): SpanMetricSeries[] {
+  return (series ?? [])
+    .filter(s => s.points.length > 0)
+    .map(s => {
+      const pod = s.groupKey[0] ?? '';
+      return {
+        ...s,
+        groupKey: [shortPod(pod)],
+        fullKey: [pod],
+        points: scale === 1 ? s.points : s.points.map(p => ({ time: p.time, value: p.value * scale })),
+      };
+    });
 }
