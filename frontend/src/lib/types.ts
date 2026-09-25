@@ -5599,7 +5599,17 @@ export interface SystemStats {
       severity: string;        // satırın anlık ciddiyeti (Inbox ile aynı)
       thresholdDays?: number;  // problemin açıldığı eşik (gün)
       note?: string;           // diskReason cümlesi (tooltip)
-      problemId: string;
+      problemId?: string;      // boş = tarihçe tahmini (v0.10.911, problem yok)
+      // v0.10.911 (parite #6 dilim 4) — 7 günlük kalıcı tarihçeden tahmin
+      status?: 'ok' | 'at_limit' | 'none';
+      reason?: string;
+      r2?: number;
+      loDays?: number;
+      hiDays?: number;
+      hiOpen?: boolean;
+      wide?: boolean;
+      points?: number;
+      windowDays?: number;
     };
   }[];
   // v0.9.290 (operator ask) — live per-node pressure, from

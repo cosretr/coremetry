@@ -6,7 +6,7 @@ import { Button } from '@/components/ui';
 import { useSystemStats, useTraceContext, useEvaluatorHealth, keys } from '@/lib/queries';
 import { api } from '@/lib/api';
 import { fmtNum, fmtClock, tsLong } from '@/lib/utils';
-import { etaChipLabel, evaluatorQuietLabel } from '@/lib/fmtEta';
+import { etaChipLabel, evaluatorQuietLabel, diskHistoryChip } from '@/lib/fmtEta';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type {
@@ -503,7 +503,7 @@ export default function AdminStatsPage() {
               }}>
                 <SectionHeader
                   title="ClickHouse disk capacity"
-                  sub="Filesystem-level, from system.disks — covers everything on the volume, not just Coremetry's tables. ⏳ rozeti yalnız açık «disk dolacak» problemi varken (eşik 7 gün); yoksa tahmin ya eşiğin üstünde ya da kurulamadı." />
+                  sub="Filesystem-level, from system.disks — covers everything on the volume, not just Coremetry's tables. ⏳ rozeti: açık «disk dolacak» problemi varsa onun sayısı (tıkla → problem); yoksa son 7 günün eğiliminden tahmin (ufuk 30 gün)." />
                 <div style={{ display: 'grid', gap: 12 }}>
                   {data.disks.map((d, i) => {
                     const used = Math.max(0, d.totalBytes - d.freeBytes);
@@ -534,7 +534,15 @@ export default function AdminStatsPage() {
                               ciddiyeti yaşla critical'a çıkar, o Inbox'ın
                               işi). Değerlendirici sessizse sayı donmuştur:
                               rozet soluk + "N dk sessiz". */}
-                          {d.forecast && (
+                          {/* v0.10.911 (parite #6 dilim 4) — problem YOKKEN 7 günlük
+                              kalıcı tarihçe tahmini (değerlendirici yazar → sessizse soluk). */}
+                          {d.forecast && !d.forecast.problemId && (() => {
+                            const c = diskHistoryChip(d.forecast);
+                            return c.badge
+                              ? <span className={`badge ${evalQuiet ? 'b-gray' : c.tone}`} title={c.title}>{c.text}{evalQuiet ? ` · ${evalQuiet}` : ''}</span>
+                              : <span style={{ fontSize: 11, color: 'var(--text3)' }} title={c.title}>{c.text}</span>;
+                          })()}
+                          {d.forecast?.problemId && (
                             <Link
                               to={`/problems?problem=${encodeURIComponent(d.forecast.problemId)}`}
                               className={`badge ${evalQuiet ? 'b-gray' : d.forecast.critical ? 'b-err' : 'b-warn'}`}

@@ -553,6 +553,8 @@ func (s *Store) GetSystemStats(ctx context.Context) (*SystemStats, error) {
 		} else {
 			log.Printf("[sysstats] disk forecast: açık problem snapshot'ı okunamadı: %v", serr)
 		}
+		// v0.10.911 — problemsiz disklere 7 günlük tarihçe tahmini.
+		s.attachDiskHistory(ctx, out.Disks, time.Now())
 	}
 
 	// ── Server utilisation (v0.9.290, operator ask) ─────────────

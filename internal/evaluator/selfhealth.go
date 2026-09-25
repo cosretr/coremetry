@@ -88,11 +88,11 @@ const (
 )
 
 // diskSample — bir volume'ün tek ölçümü. Seri BELLEKTE ve YALNIZ
-// liderde yaşar; lider değişiminde sıfırlanır ve yarım saat boyunca
-// tahmin üretilmez. Bu bir eksiklik değil, tercih: disk doluluk
-// geçmişini kalıcılaştırmak yeni bir tablo + yeni bir yazma yolu
-// demekti, oysa soru "önümüzdeki günlerde dolar mı" — altı saatlik
-// bellek-içi pencere onu cevaplar.
+// liderde yaşar; lider değişiminde sıfırlanır (açık satır ısınmada
+// taşınır, v0.10.901). v0.10.911'den beri aynı okuma ayrıca KALICI seri
+// olarak da yazılır (chstore/self_disk_series.go, operatör onayı — bkz.
+// DECISIONS.md); bu kural hâlâ bellek serisinden karar verir, /admin/stats
+// rozeti problem yokken 7 günlük kalıcı tarihçeden tahmin eder.
 type diskSample struct {
 	tSec int64
 	used float64
@@ -461,6 +461,15 @@ func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfi
 	if err != nil {
 		log.Printf("[evaluator] self-health disk okunamadı: %v", err)
 		return nil, false
+	}
+	// v0.10.911 (parite #6 dilim 4, operatör onayı 2026-09-25) — aynı okuma
+	// KALICI seri olarak da yazılır (chstore/self_disk_series.go): /admin/stats
+	// rozeti problem yokken 7 günlük tarihçeden tahmin eder. Yazım hatası
+	// kuralı ETKİLEMEZ (bellek serisi aynen çalışır).
+	if pts := e.store.SelfDiskPoints(disks, time.Now()); len(pts) > 0 {
+		if werr := e.store.InsertMetrics(ctx, pts); werr != nil {
+			log.Printf("[evaluator] self-health disk serisi yazılamadı (kural etkilenmez): %v", werr)
+		}
 	}
 	now := time.Now().Unix()
 	e.diskMu.Lock()

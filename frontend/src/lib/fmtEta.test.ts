@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtEtaDays, fixedHalfEven, etaChipLabel, evaluatorQuietLabel } from './fmtEta';
+import { fmtEtaDays, fixedHalfEven, etaChipLabel, evaluatorQuietLabel, diskHistoryChip } from './fmtEta';
 
 // v0.10.901 — fmtDays (Go) ile aynı tablo: her birim bir vaka; tam-ikili
 // yarımlar Go'nun çifte yuvarlamasıyla (10.5 saat → "10", 1.25 → "1.2").
@@ -69,5 +69,20 @@ describe('evaluatorQuietLabel', () => {
     expect(evaluatorQuietLabel({ status: 'stale', ageSec: -1 })).toBe('değerlendirici sessiz');
     expect(evaluatorQuietLabel({ status: 'failing', ageSec: 5 })).toBe('değerlendirici hata veriyor');
     expect(evaluatorQuietLabel({ status: 'unknown', ageSec: -1 })).toBe('değerlendirici durumu bilinmiyor');
+  });
+});
+
+// v0.10.911 — tarihçe rozeti: ton sayıdan, geniş band "N+", tavanda dolu, yoksa soluk sebep.
+describe('diskHistoryChip', () => {
+  it('ton sınırları 2 / 7 gün', () => {
+    expect(diskHistoryChip({ days: 1.5, critical: true, status: 'ok', r2: 0.9 }).tone).toBe('b-err');
+    expect(diskHistoryChip({ days: 4, critical: false, status: 'ok', r2: 0.9 }).tone).toBe('b-warn');
+    expect(diskHistoryChip({ days: 20, critical: false, status: 'ok', r2: 0.88 })).toMatchObject({ tone: 'b-gray', badge: true, text: '⏳ ≈ 20 gün · R² 0.88' });
+  });
+  it('geniş band, tavanda, tahmin yok', () => {
+    expect(diskHistoryChip({ days: 20, critical: false, status: 'ok', wide: true, loDays: 12, hiOpen: true, r2: 0.7 }).text).toBe('⏳ 12 gün+ · R² 0.70');
+    expect(diskHistoryChip({ days: 0, critical: true, status: 'at_limit' })).toMatchObject({ badge: true, tone: 'b-err' });
+    expect(diskHistoryChip({ days: 0, critical: false, status: 'none', reason: 'tarihçe birikiyor (3 saat; en az 6 saat gerekli)' }))
+      .toMatchObject({ badge: false, text: '⏳ yok · tarihçe birikiyor (3 saat; en az 6 saat gerekli)' });
   });
 });

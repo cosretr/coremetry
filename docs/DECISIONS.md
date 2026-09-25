@@ -643,3 +643,21 @@ boşken (ısınma: <4 örnek ya da <30 dk) açık satır son değeriyle yeniden 
 Aksi hâlde her deploy bir sahte "çözüldü" + 30 dk sonra mükerrer bildirim üretiyordu.
 Isınma dışında "eğilim yok" satırı yine kapatır — taşıma bir yaşam döngüsü uzatması değil,
 kör pencerenin köprüsüdür.
+
+## 2026-09-25 — CH disk doluluğu kalıcı seri olarak yazılır (v0.10.911; v0.9.1279 kararının tersi)
+
+**Karar:** Evaluator lideri her tikte zaten okuduğu `system.disks` değerini `metric_points`'e
+`coremetry.self.disk_used_bytes` gauge'ı olarak da yazar (service_name `coremetry-self/<disk>`
+tek düğümde, `coremetry-self/<host>/<disk>` kümede — rollup şeması attr'ları katladığı için
+kimlik service_name'de). /admin/stats disk rozeti açık problem YOKKEN son 7 günün saatlik
+serisinden (rollup_metrics_1h) `forecast.Fit` ile tahmin eder (ufuk ≤30 gün, R² ≥ 0.6).
+
+**Neden 1279 tersine döndü:** 1279 "kalıcılaştırmak yeni tablo + yeni yazma yolu demek, 6
+saatlik bellek penceresi yeter" demişti. Yeter değildi: rozet yalnız 7 günün altındaki açık
+problemden besleniyordu ("20 gün sonra dolacak" hiçbir yerde yoktu), deploy'da 30 dk kör pencere
+vardı, mevsimsellik imkânsızdı. Yeni TABLO yok (metric_points + otomatik rollup); hacim dakikada
+düğüm × disk satırı. Operatör onayı 2026-09-25 (parite #6 dilim 4 Karar 1).
+
+**Kapsam:** self-disk-eta KURALI hâlâ bellek serisinden karar verir (davranış değişmedi; yazım
+hatası kuralı etkilemez). Hosts/Clusters çipi ve heap ETA bu karara dahil değil. Haftalık
+mevsimsellik ≥14 gün tarihçe biriktikten sonra ayrı adım.

@@ -55,8 +55,20 @@ type DiskForecast struct {
 	ThresholdDays float64 `json:"thresholdDays,omitempty"`
 	// Note — diskReason cümlesi (tooltip): "… diski 9 saat içinde DOLACAK …".
 	Note string `json:"note,omitempty"`
-	// ProblemID — Inbox'a köprü (/problems?problem=<id>).
-	ProblemID string `json:"problemId"`
+	// ProblemID — Inbox'a köprü (/problems?problem=<id>). Boş = tarihçe
+	// tahmini (problem yok; v0.10.911).
+	ProblemID string `json:"problemId,omitempty"`
+	// v0.10.911 (dilim 4) — tarihçe tahmini (problem yokken): Status ok |
+	// at_limit | none; none'da Reason. R2/band/kaynak title içindir.
+	Status     string  `json:"status,omitempty"`
+	Reason     string  `json:"reason,omitempty"`
+	R2         float64 `json:"r2,omitempty"`
+	LoDays     float64 `json:"loDays,omitempty"`
+	HiDays     float64 `json:"hiDays,omitempty"`
+	HiOpen     bool    `json:"hiOpen,omitempty"`
+	Wide       bool    `json:"wide,omitempty"`
+	Points     int     `json:"points,omitempty"`
+	WindowDays int     `json:"windowDays,omitempty"`
 }
 
 // attachDiskForecast — SAF (tablo-testli). open: snapshot'ın çözülmemiş

@@ -42,6 +42,29 @@ export function etaChipLabel(days: number): string {
   return `≈ ${fmtEtaDays(days)} kaldı`;
 }
 
+// diskHistoryChip — v0.10.911 (parite #6 dilim 4): problem YOKKEN 7 günlük
+// kalıcı tarihçe tahmininin rozeti. Ton sayıdan: <2 gün kırmızı, <7 gün sarı
+// (açık problem eşiğiyle aynı sınır), üstü gri; geniş bandda "N+"; tahmin
+// yoksa rozet değil soluk "⏳ yok · sebep".
+export interface DiskHistoryFc {
+  days: number; critical: boolean; status?: string; reason?: string; r2?: number;
+  loDays?: number; hiDays?: number; hiOpen?: boolean; wide?: boolean; points?: number; windowDays?: number;
+}
+export function diskHistoryChip(f: DiskHistoryFc): { text: string; tone: 'b-err' | 'b-warn' | 'b-gray'; badge: boolean; title: string } {
+  const base = `Son ${f.windowDays || 7} günün doğrusal eğilimi (${f.points ?? 0} saatlik nokta) · kalıcı disk serisi.`;
+  if (f.status === 'at_limit') return { text: '⏳ dolu (eğilim tavanda)', tone: 'b-err', badge: true, title: base };
+  if (f.status !== 'ok') {
+    return { text: `⏳ yok · ${f.reason || 'tahmin kurulamadı'}`, tone: 'b-gray', badge: false,
+      title: `${base} Tahmin yalnız eğim pozitif, uyum R² ≥ 0.6 ve ufuk ≤ 30 günse gösterilir.` };
+  }
+  const tone = f.days < 2 ? 'b-err' : f.days < 7 ? 'b-warn' : 'b-gray';
+  const r2 = f.r2 !== undefined ? ` · R² ${f.r2.toFixed(2)}` : '';
+  const range = f.loDays !== undefined && f.loDays > 0
+    ? ` Aralık ${fmtEtaDays(f.loDays)} – ${f.hiOpen ? 'üst sınır yok' : fmtEtaDays(f.hiDays ?? f.days)}.` : '';
+  const text = f.wide ? `⏳ ${fmtEtaDays(f.loDays ?? f.days)}+` : `⏳ ≈ ${fmtEtaDays(f.days)}`;
+  return { text: text + r2, tone, badge: true, title: base + range };
+}
+
 // evaluatorQuietLabel — rozetin sayısı değerlendiricinin son tikinden
 // gelir; değerlendirici susarsa satır (ve rozet) donar. Kalp atışı
 // (/api/problems/evaluator, v0.9.550) ok değilse rozet soluklaşır ve bu
