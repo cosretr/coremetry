@@ -2290,7 +2290,7 @@ export const api = {
   // VERİLMEYİNCE gövde de davranış da bayt bayt eskisi — akan kip bir
   // TALEP, sözleşme değişikliği değil.
   copilotExplainTrace:   (id: string, includeCode?: boolean, opts?: ExplainStreamOpts) =>
-    explainCall<import('./types').ExplainAnswerBase & { evidenceSpanIds?: string[]; code?: import('./types').AICodeContext }>(
+    explainCall<import('./types').ExplainAnswerBase & { evidenceSpanIds?: string[]; code?: import('./types').AICodeContext; oracleRows?: number }>(
       `/api/copilot/explain-trace/${id}`, explainInit(includeCode), opts),
   // Per-span explain (v0.5.144). Backend pulls target span +
   // parent + children + error siblings for a focused prompt.

@@ -60,7 +60,9 @@ const AnswerInTurkish = "\n\n" + answerInTurkishLine
 const systemTraceBody = `You are a senior SRE assistant inside an APM tool. You are given a JSON
 representation of a single distributed trace (spans with service, name,
 parent, duration, status) and, when available, the trace's correlated
-LOGS (severity, body, exception.type, exception.stacktrace).
+LOGS (severity, body, exception.type, exception.stacktrace) and ORACLE
+error-table rows (operation, error code, channel, host, time). A row with
+a "count" is an aggregate for that minute, not a single event.
 
 Produce a DEEP, evidence-grounded analysis — the operator clicked
 Explain precisely to avoid reading the waterfall and logs line by line.
@@ -72,7 +74,7 @@ section entirely when its evidence is absent:
 
 **İşlem Akışı ve Veri Özeti** — bullets covering: the user-facing
 operation and the initiating service; the critical failure point
-(service + exact error code/message from the logs); notable or faulty
+(service + exact error code/message from the logs or the Oracle rows); notable or faulty
 business data visible in log bodies (input values, IDs); the slowest
 component and the share of total trace time it consumed; the chain of
 errors across services (which service surfaced what upward). Do NOT

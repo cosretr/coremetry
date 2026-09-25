@@ -205,6 +205,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
       } else {
         const r = kind === 'trace'          ? await api.copilotExplainTrace(id, withCode, opts).then(rr => {
                                                   if (rr.evidenceSpanIds?.length) { onEvidence?.(rr.evidenceSpanIds); setEvidence(e => ({ ...e, spans: rr.evidenceSpanIds?.length ?? 0 })); }
+                                                  if (rr.oracleRows) setEvidence(e => ({ ...e, oracle: rr.oracleRows })); // v0.10.921
                                                   setCode(rr.code ?? null);
                                                   setLinks(rr.links);
                                                   return rr;

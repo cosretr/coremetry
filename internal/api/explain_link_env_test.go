@@ -68,7 +68,9 @@ func TestTraceExplainUsesRootService(t *testing.T) {
 	}
 
 	api := readSourceFile(t, "api.go")
-	if !strings.Contains(api, "}, run, in.RootService, cacheKey)") {
+	// v0.10.921 — meta haritası traceExplainExtra'ya taşındı; iddia kök
+	// servisin deliverExplain'e GEÇMESİ, haritanın biçimi değil.
+	if !strings.Contains(api, ", run, in.RootService, cacheKey)") {
 		t.Error("trace explain kök servisi deliverExplain'e GEÇİRMİYOR — " +
 			"prod-dışı trace'in linki yanlış ortama gider")
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/logstore"
@@ -93,6 +94,9 @@ type traceExplainInput struct {
 	// şema kanıtının girdisi (api/schema_catalog.go buildSchemaEvidence).
 	DBStatements []string
 	ErrorText    string
+	// OracleRows — v0.10.921 (Kademe A): prompt'a giren Oracle hata satırı
+	// sayısı (UI kanıt satırı için); 0 = Oracle kapalı / satır yok.
+	OracleRows int
 }
 
 // buildTraceExplainInput — trace'in span'lerini çekip kompakt JSON'a
@@ -179,6 +183,25 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// truncate'li (2B prompt bütçesi). Log store yok/yavaş/boşsa sessizce
 	// trace-only'e düşer — explain'i asla düşürmez.
 	var logsBlock, rawStack, stackService string
+	// v0.10.921 (Kademe A) — Oracle hata satırları loglarla PARALEL okunur
+	// (ClickHouse kopyası; canlı Oracle sorgusu yok). Aynı ±1 dk pencere,
+	// kendi 4 sn bütçesi, sessiz düşüş: Explain'i asla düşürmez.
+	var oracleBlock string
+	var oracleRows int
+	var oracleWG sync.WaitGroup
+	if s.oracle != nil && s.oracle.HasEnabledSources() && s.store != nil {
+		ofrom := time.Unix(0, minT).Add(-time.Minute)
+		oto := time.Unix(0, maxT).Add(time.Minute)
+		oracleWG.Add(1)
+		go func() {
+			defer oracleWG.Done()
+			octx, ocancel := context.WithTimeout(ctx, oracleExplainFetchTimeout)
+			defer ocancel()
+			if rows, oerr := s.store.OracleErrorsByTrace(octx, strings.ToLower(id), ofrom, oto, oracleExplainMaxRows*5); oerr == nil {
+				oracleBlock, oracleRows = oracleExplainBlock(rows, s.oracleSourceNames())
+			}
+		}()
+	}
 	if s.logs != nil {
 		from := time.Unix(0, minT).Add(-time.Minute)
 		to := time.Unix(0, maxT).Add(time.Minute)
@@ -254,10 +277,15 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 		cancel()
 	}
 
+	oracleWG.Wait()
+	// Oracle bloğu logların ARKASINA; çekmece kırpması (clampDrawerEvidence)
+	// bu kuyruğu bütün tutar, span listesini keser.
+	tail := logsBlock + oracleBlock
 	return traceExplainInput{
-		User:         traceExplainUser(id, len(compact), totalSpans, string(payload), logsBlock),
+		User:         traceExplainUser(id, len(compact), totalSpans, string(payload), tail),
 		Evidence:     traceEvidenceSpanIDs(compact),
-		LogsBlock:    logsBlock,
+		LogsBlock:    tail,
+		OracleRows:   oracleRows,
 		Stack:        rawStack,
 		StackService: stackService,
 		RootService:  rootService,

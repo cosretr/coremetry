@@ -16,7 +16,8 @@ import { RenderedMarkdown, CodeBlock } from '@/components/Markdown';
 import type { IdLink } from '@/components/ai/inlineIdLinks';
 import { verdictLine, hoistCodeQuotes, dropVerdictSentence } from './explainAnatomy';
 
-export interface ExplainEvidence { spans: number; traces: number }
+// oracle — v0.10.921 (Kademe A): Explain'e giren Oracle hata satırı sayısı.
+export interface ExplainEvidence { spans: number; traces: number; oracle?: number }
 
 export function ExplainBody({ text, busy, links, evidence, verdict: wantVerdict = true }: {
   text: string;
@@ -33,7 +34,7 @@ export function ExplainBody({ text, busy, links, evidence, verdict: wantVerdict 
     const h = hoistCodeQuotes(text);
     return verdict ? { quotes: h.quotes, rest: dropVerdictSentence(h.rest, verdict) } : h;
   }, [busy, text, verdict]);
-  const ev = evidence && (evidence.spans > 0 || evidence.traces > 0) ? evidence : null;
+  const ev = evidence && (evidence.spans > 0 || evidence.traces > 0 || (evidence.oracle ?? 0) > 0) ? evidence : null;
   return (
     <>
       {verdict && (
@@ -41,7 +42,11 @@ export function ExplainBody({ text, busy, links, evidence, verdict: wantVerdict 
       )}
       {!busy && ev && (
         <div className="cx-evidence">
-          Kanıt: {ev.spans > 0 ? `${ev.spans} span` : ''}{ev.spans > 0 && ev.traces > 0 ? ' · ' : ''}{ev.traces > 0 ? `${ev.traces} trace` : ''}
+          Kanıt: {[
+            ev.spans > 0 ? `${ev.spans} span` : '',
+            ev.traces > 0 ? `${ev.traces} trace` : '',
+            (ev.oracle ?? 0) > 0 ? `${ev.oracle} Oracle satırı` : '',
+          ].filter(Boolean).join(' · ')}
           <span className="field-hint"> · kimlikler çekmecenin altında, satır satır</span>
         </div>
       )}

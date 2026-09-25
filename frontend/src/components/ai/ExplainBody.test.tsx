@@ -73,4 +73,10 @@ describe('ExplainBody (v0.10.165)', () => {
     expect(h).not.toContain('cx-evidence');
     expect(h).not.toContain('cx-verdict');
   });
+  it('v0.10.921 — Oracle satırı sayısı kanıt satırına girer; tek başına da satır çizer', () => {
+    const h = renderToStaticMarkup(<ExplainBody text={TEXT} busy={false} evidence={{ spans: 19, traces: 0, oracle: 2 }} />);
+    expect(h).toContain('Kanıt: 19 span · 2 Oracle satırı');
+    const only = renderToStaticMarkup(<ExplainBody text={TEXT} busy={false} evidence={{ spans: 0, traces: 0, oracle: 1 }} />);
+    expect(only).toContain('Kanıt: 1 Oracle satırı');
+  });
 });

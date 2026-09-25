@@ -8634,10 +8634,7 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	// v0.9.1127 (Faz 1.5) — cevabın çıkışı tek yerden (deliverExplain).
-	s.deliverExplain(w, r, xid, map[string]any{
-		"evidenceSpanIds": in.Evidence,
-		"code":            codePayload(cc, opts.IncludeCode),
-	}, run, in.RootService, cacheKey)
+	s.deliverExplain(w, r, xid, traceExplainExtra(in, cc, opts.IncludeCode), run, in.RootService, cacheKey)
 }
 
 // copilotExplainSpan focuses the LLM on ONE span instead of the
