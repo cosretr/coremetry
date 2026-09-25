@@ -8,9 +8,9 @@ import type { HTMLAttributes, ReactNode } from 'react';
 // Tone semantics:
 //   neutral  - default grey (.b-gray) — counts, untyped labels
 //   info     - blue (.b-info)         — informational, anomaly meta
-//   success  - green (.b-ok)          - resolved, healthy
+//   success  - green (.b-ok)          - resolved / recovered (GEÇİŞ; v0.10.922: sağlıklı durum nötr)
 //   warning  - yellow (.b-warn)       - warning severity
-//   danger   - red (.b-err)           - critical, error, open
+//   danger   - red (.b-err)           - critical, error (v0.10.922: 'open' durumu nötr, b-gray)
 //   accent   - default (no .b-* cls)  — uses --accent — for app
 //                                       chrome (preset, sampled)
 

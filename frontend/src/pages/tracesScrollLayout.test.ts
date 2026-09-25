@@ -31,14 +31,18 @@ describe('/traces sayfa kaydırır, kutu değil (v0.10.726; 722 geri alındı)',
 });
 
 // v0.10.723 — Start time sola sabit: kolon tanımı stickyLeft, kümülatif
-// ofset (Endpoints deseni), gövde hücresi sınıf + left, hata tonu opak.
+// ofset (Endpoints deseni), gövde hücresi sınıf + left.
+// v0.10.922 (sade palet adım 1) — hatalı satırın kırmızı zemin tonu (ve
+// sabit hücre için --bg1'e karışan opak varyantı) söküldü; sabit hücrenin
+// opak zemini artık yalnız CSS kuralından (td.sticky-left → --bg1).
 describe('/traces Start time sticky-left (v0.10.723)', () => {
   it('yalnız time kolonu sabit; ofsetler saf çekirdekten; hücre sınıf + left', () => {
     expect(traces).toContain("stickyLeft: id === 'time',");
     expect(traces).toContain('const leftOffs = stickyLeftOffsets(dt.visibleColumns, dt.colWidths, ATTR_W);');
     expect(traces).toContain("stickyL !== undefined ? 'sticky-left' : ''");
-    expect(traces).toContain("${stickyL !== undefined ? 'var(--bg1)' : 'transparent'}");
+    expect(traces).toContain('style={{ left: stickyL }}>');
     expect(css).toMatch(/th\.sticky-left, td\.sticky-left \{[^}]*position: sticky/);
+    expect(css).toMatch(/th\.sticky-left, td\.sticky-left \{[^}]*background: var\(--bg1\)/);
   });
 });
 

@@ -30,6 +30,7 @@ import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import type { ExceptionGroup, ExceptionGroupState, Problem, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
+import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.922 (sade palet adım 1)
 import { PageShell } from '@/components/ui/PageShell';
 import { ShareButton } from '@/components/ShareButton';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -58,13 +59,48 @@ import { subjectKind, derivedTeamTitle } from '../../lib/problemSubject';
 // row carries recentDeploy — no placeholder, no extra fetch.
 
 const STATE_LABEL: Record<ExceptionGroupState, string> = {
-  // 'new' renders OPEN (v0.8.382): NEW is reserved for the yellow
-  // first-seen-recently badge on the list — same rule as StateBadge.
-  new: 'OPEN', regressed: 'REGRESSED', acknowledged: 'ACK', resolved: 'RESOLVED', ignored: 'IGNORED',
+  // v0.10.922 (sade palet adım 1) — 'new' artık NEW basıyor. v0.8.382'nin
+  // OPEN'ı, listedeki sarı "ilk görülme" çipiyle çakışmayı önlemek içindi;
+  // o çip v0.9.314'te "<1h" oldu ve liste (StateBadge) NEW'e döndü — detay
+  // geride kalmıştı. Tek ton sözlüğüyle "OPEN" iki ayrı tonda (exception
+  // detayında amber, alarm detayında nötr) basılırdı.
+  new: 'NEW', regressed: 'REGRESSED', acknowledged: 'ACK', resolved: 'RESOLVED', ignored: 'IGNORED',
 };
-const STATE_BADGE: Record<ExceptionGroupState, string> = {
-  new: 'b-err', regressed: 'b-err', acknowledged: 'b-warn', resolved: 'b-ok', ignored: 'b-gray',
+
+// v0.10.922 (sade palet adım 1) — TEK durum → ton sözlüğü (operatör K5:
+// normal/sağlıklı durum NÖTR, yeşil yalnız bir GEÇİŞ için). Dört yüzey
+// (Inbox, Problems satırı, Exceptions listesi, bu detay) aynı durumu dört
+// ayrı tonda basıyordu: "open" Inbox'ta amber, Problems'ta kırmızı;
+// "acknowledged" Inbox/Exceptions'ta mavi, burada amber; "regressed"
+// kırmızı/amber; "new" kırmızı/amber/mavi. Eşleme BURADA yaşıyor çünkü
+// ProblemsSection ve AnomaliesPage bu dosyayı zaten içe aktarıyor, Inbox
+// da ProblemsSection üzerinden aynı parçada (yeni chunk bağımlılığı yok).
+//   open / active / acknowledged / ignored / muted → nötr (b-gray)
+//   resolved              → b-ok  (geçiş: düzeldi)
+//   regressed / new       → b-warn (dikkat, alarm değil)
+// Aciliyetin rengi ÖNCELİK rozetinde (P1 kırmızı); durum onu tekrar etmez.
+// Renk hiçbir yerde tek taşıyıcı değil — rozetin kelimesi aynen kalıyor.
+// Bilinmeyen durum GİZLENMEZ, nötr tonda ham kelimesiyle basılır.
+const STATUS_TONE: Record<string, string> = {
+  open: 'b-gray', active: 'b-gray', acknowledged: 'b-gray', ignored: 'b-gray', muted: 'b-gray',
+  resolved: 'b-ok',
+  regressed: 'b-warn', new: 'b-warn',
 };
+
+export function TriageStatusBadge({ s, label, title }: { s: string; label: string; title?: string }) {
+  return <span className={`badge ${STATUS_TONE[s.toLowerCase()] ?? 'b-gray'}`} title={title}>{label}</span>;
+}
+
+// Alarm problemlerinin (problems tablosu) üç durumu — liste satırı ve detay
+// şeridi aynı kelimeyi basar; tanımadığı durumda eskisi gibi hiçbir şey.
+const PROBLEM_STATUS_LABEL: Record<string, string> = {
+  open: 'OPEN', acknowledged: 'ACK', resolved: 'RESOLVED',
+};
+
+export function ProblemStatusBadge({ status }: { status: string }) {
+  const label = PROBLEM_STATUS_LABEL[status];
+  return label ? <TriageStatusBadge s={status} label={label} /> : null;
+}
 
 // ShareButton (shared, v0.8.540 — was a local copy here) copies the
 // current address-bar URL. The URL is already the canonical shareable
@@ -166,7 +202,9 @@ function ProblemOffenders({ problem }: { problem: Problem }) {
                 <td className="num">{fmtNum(o.spanCount)}</td>
                 <td className="num mono">{o.p99DurationMs.toFixed(0)} ms</td>
                 <td className="num">
-                  <span className={`badge ${o.errorRate > 5 ? 'b-err' : o.errorRate > 1 ? 'b-warn' : 'b-ok'}`}>
+                  {/* v0.10.922 (sade palet adım 1, K5) — ≤%1 SAĞLIKLI, yeşil
+                      değil nötr: yeşil yalnız bir geçişi (düzeldi) anlatır. */}
+                  <span className={`badge ${o.errorRate > 5 ? 'b-err' : o.errorRate > 1 ? 'b-warn' : 'b-gray'}`}>
                     {o.errorRate.toFixed(1)}%
                   </span>
                 </td>
@@ -491,7 +529,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         <Button variant="secondary" onClick={onBack} leftIcon={<ArrowLeft size={14} strokeWidth={1.75} />}>
           Problems
         </Button>
-        <span className={`badge ${STATE_BADGE[state]}`}>{STATE_LABEL[state]}</span>
+        <TriageStatusBadge s={state} label={STATE_LABEL[state]} />
         <span className="badge b-gray">{group.occurrences.toLocaleString()} occurrences</span>
         <span className="spacer" />
         <ShareButton copiedLabel="Copied" />
@@ -704,7 +742,12 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                         {s.traceId ? s.traceId.slice(0, 16) + '…' : '—'}
                       </span>
                     </td>
-                    <td><span className="badge b-err">ERROR</span>{isEv && <span className="badge b-warn" style={{ marginLeft: 6 }}>kanıt</span>}</td>
+                    {/* v0.10.922 (sade palet adım 1) — her satırdaki kırmızı
+                        "ERROR" rozeti KALKTI: tablo yalnız hata örneklerini
+                        listeliyor, sabit rozet bilgi taşımıyordu. "kanıt"
+                        kelimesi kalır ama nötr — satırın rengini zaten
+                        .wf-evidence veriyor (bir olgu = bir sinyal). */}
+                    <td>{isEv && <span className="badge b-gray">kanıt</span>}</td>
                     <td className="mono" style={{ textAlign: 'right', paddingRight: 14, fontSize: 11, color: 'var(--text3)' }}>{tsLong(s.time)}</td>
                   </tr>
                   );
@@ -731,7 +774,6 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   const [acking, setAcking] = useState(false);
   const isAnomaly = problem.ruleId?.startsWith('anomaly:');
   const endNs = problem.resolvedAt || Date.now() * 1e6;
-  const sevCls = problem.severity === 'critical' ? 'b-err' : problem.severity === 'warning' ? 'b-warn' : 'b-info';
 
   const ack = async () => {
     setAcking(true);
@@ -803,12 +845,13 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <Button variant="secondary" onClick={onBack} leftIcon={<ArrowLeft size={14} strokeWidth={1.75} />}>
           Problems
         </Button>
-        <span className={`badge ${sevCls}`}>{problem.severity.toUpperCase()}</span>
-        {problem.status === 'open' && <span className="badge b-err">OPEN</span>}
-        {problem.status === 'acknowledged' && <span className="badge b-warn">ACK</span>}
-        {problem.status === 'resolved' && <span className="badge b-ok">RESOLVED</span>}
-        {problem.priority && <span className={`badge ${problem.priority === 'P1' ? 'b-err' : problem.priority === 'P2' ? 'b-warn' : 'b-gray'}`}
-          title={problem.priorityReason ? `${problem.priority} — ${problem.priorityReason}` : problem.priority}>{problem.priority}</span>}
+        {/* v0.10.922 (sade palet adım 1) — CRITICAL + OPEN + P1 üçü de
+            kırmızıydı: aynı aciliyet üç kez. Renk yalnız ÖNCELİKTE (paylaşılan
+            PriorityBadge atomu, elle kopyası kalktı); şiddet nötr kelime,
+            durum tek ton sözlüğünden (TriageStatusBadge). */}
+        <span className="badge b-gray">{problem.severity.toUpperCase()}</span>
+        <ProblemStatusBadge status={problem.status} />
+        {problem.priority && <PriorityBadge p={problem.priority} reason={problem.priorityReason} />}
         <span className="badge b-gray mono">{problem.id.slice(0, 12)}</span>
         <span className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
           Started {fmtStartedTs(problem.startedAt)} · {fmtDurationNs(endNs - problem.startedAt)}
@@ -834,7 +877,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <div style={{ minWidth: 0 }}>
           <Sect title="Root cause analysis" accent>
             <div style={{ fontSize: 13, marginBottom: 8 }}>
-              {isAnomaly && <span className="badge b-info" style={{ marginRight: 6 }}>ANOMALY</span>}
+              {/* v0.10.922 (sade palet adım 1) — ANOMALY bir tür etiketi
+                  (üst veri), mavi değil nötr. */}
+              {isAnomaly && <span className="badge b-gray" style={{ marginRight: 6 }}>ANOMALY</span>}
               <b>{problem.ruleName}</b>
             </div>
             {/* v0.10.230 (Influx D5) — dış kaynak öznesinde topoloji/servis
@@ -895,7 +940,10 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   <Link to={rolloutEvidenceHref(ev)} className="mono" title={ev.reason}>
                     {ev.namespace}/{ev.workload}{ev.imageTag ? ` → ${ev.imageTag}` : ''}
                   </Link>
-                  {ev.matchedBy === 'pod' && <span className="badge b-warn" style={{ marginLeft: 6 }}>POD</span>}
+                  {/* v0.10.922 (sade palet adım 1) — POD bir eşleşme TÜRÜ
+                      (kategori), sapma değil: nötr. Satırın önemi zaten
+                      li.warn noktasında (band=high). */}
+                  {ev.matchedBy === 'pod' && <span className="badge b-gray" style={{ marginLeft: 6 }}>POD</span>}
                   <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>
                     {fmtStartedTs(ev.startedAtNs)}
                   </span>

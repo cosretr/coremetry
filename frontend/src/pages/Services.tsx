@@ -509,6 +509,11 @@ export default function ServicesPage() {
         p99Ms: v.p99Max,
       }));
   }, [sorted, sparklines]);
+  // v0.10.922 (sade palet adım 1) — toplam hata serisi bir kez türetilir:
+  // hem çizilir hem rengini (errSparkColor) belirler.
+  const aggErrSeries = useMemo(
+    () => aggBuckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null),
+    [aggBuckets]);
 
   const goToService = (svc: string) =>
     navigate(serviceHref(svc, { range }));
@@ -739,21 +744,20 @@ export default function ServicesPage() {
                           </span>
                         )}
                       </td>
+                      {/* v0.10.922 (sade palet adım 1) — toplam satırının
+                          mini-grafikleri de satırlarla aynı kuralda: nötr
+                          SPARK_NEUTRAL, hata serisi yalnız >0 kovada kırmızı. */}
                       <td className="mono" style={{ textAlign: 'right' }}>
                         <SparkCell value={fmtNum(agg.spans)}
                                    spark={aggBuckets.map(b => b.spans)}
-                                   color="var(--accent2)"
+                                   color={SPARK_NEUTRAL}
                                    title="Total spans/5m across visible services"
                                    onClick={() => goToExplore('', 'rate')} />
                       </td>
                       <td className="mono" style={{ textAlign: 'right' }}>
-                        <SparkCell value={
-                          <span className={`badge b-${agg.errorRate > 5 ? 'err' : agg.errorRate > 0 ? 'warn' : 'ok'}`}>
-                            {fmtFixed(agg.errorRate, 2)}%
-                          </span>
-                        }
-                        spark={aggBuckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null)}
-                        color="var(--err)"
+                        <SparkCell value={<ErrRateValue pct={agg.errorRate} />}
+                        spark={aggErrSeries}
+                        color={errSparkColor(aggErrSeries)}
                         title="Aggregate error rate (weighted by spans)"
                         // v0.9.499 — çizgi moduna geri (operatör: "eskiden
                         // spans ile aynı şekilde chart'tı, bar görünümüne
@@ -765,14 +769,14 @@ export default function ServicesPage() {
                       <td className="mono" style={{ textAlign: 'right' }}>
                         <SparkCell value={`${fmtFixed(agg.avgMs, 1)}ms`}
                                    spark={aggBuckets.map(b => b.avgMs)}
-                                   color="var(--accent)"
+                                   color={SPARK_NEUTRAL}
                                    title="Aggregate avg latency (weighted by spans)"
                                    onClick={() => goToExplore('', 'avg')} />
                       </td>
                       <td className="mono" style={{ textAlign: 'right' }}>
                         <SparkCell value={`${fmtFixed(agg.p99Ms, 1)}ms`}
                                    spark={aggBuckets.map(b => b.p99Ms)}
-                                   color="var(--warn)"
+                                   color={SPARK_NEUTRAL}
                                    title="Worst-service P99 in each bucket"
                                    onClick={() => goToExplore('', 'p99')} />
                       </td>
@@ -786,8 +790,10 @@ export default function ServicesPage() {
                     </tr>
                   )}
                   {sorted.map((s, i) => {
-                    const errCls = s.errorRate > 5 ? 'err' : s.errorRate > 0 ? 'warn' : 'ok';
                     const buckets = sparklines[s.name] ?? [];
+                    // v0.10.922 (sade palet adım 1) — hata serisi bir kez
+                    // hesaplanır: hem çizilir hem rengini (errSparkColor) belirler.
+                    const errSeries = buckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null);
                     const isSelected = tableNav.selected === i;
                     return (
                       <tr key={s.name}
@@ -857,18 +863,14 @@ export default function ServicesPage() {
                         <td className="mono" style={{ textAlign: 'right' }}>
                           <SparkCell value={fmtNum(s.spanCount)}
                                      spark={buckets.map(b => b.spans)}
-                                     color="var(--accent2)"
+                                     color={SPARK_NEUTRAL}
                                      title={`Spans/5m for ${s.name}`}
                                      onClick={() => goToExplore(s.name, 'rate')} />
                         </td>
                         <td className="mono" style={{ textAlign: 'right' }}>
-                          <SparkCell value={
-                            <span className={`badge b-${errCls === 'err' ? 'err' : errCls === 'warn' ? 'warn' : 'ok'}`}>
-                              {fmtFixed(s.errorRate, 2)}%
-                            </span>
-                          }
-                          spark={buckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null)}
-                          color="var(--err)"
+                          <SparkCell value={<ErrRateValue pct={s.errorRate} />}
+                          spark={errSeries}
+                          color={errSparkColor(errSeries)}
                           title={`Error rate (%) for ${s.name}`}
                           // v0.9.499 — çizgi moduna geri (bkz. agg satırı).
                           onClick={() => goToExplore(s.name, 'error_rate')} />
@@ -876,14 +878,14 @@ export default function ServicesPage() {
                         <td className="mono" style={{ textAlign: 'right' }}>
                           <SparkCell value={`${fmtFixed(s.avgDurationMs, 1)}ms`}
                                      spark={buckets.map(b => b.avgMs)}
-                                     color="var(--accent)"
+                                     color={SPARK_NEUTRAL}
                                      title={`Avg latency (ms) for ${s.name}`}
                                      onClick={() => goToExplore(s.name, 'avg')} />
                         </td>
                         <td className="mono" style={{ textAlign: 'right' }}>
                           <SparkCell value={`${fmtFixed(s.p99DurationMs, 1)}ms`}
                                      spark={buckets.map(b => b.p99Ms)}
-                                     color="var(--warn)"
+                                     color={SPARK_NEUTRAL}
                                      title={`P99 latency (ms) for ${s.name}`}
                                      onClick={() => goToExplore(s.name, 'p99')} />
                         </td>
@@ -996,18 +998,50 @@ function SparkCell({
   );
 }
 
-// Apdex score → coloured badge.
-//   ≥ 0.94  Excellent (ok)
-//   ≥ 0.85  Good (info)
-//   ≥ 0.70  Fair (warn)
-//   <  0.70 Poor (err)
+// v0.10.922 (sade palet adım 1) — satır mini-grafiklerinin TEK nötr
+// çizgisi. Spans/avg/p99 eskiden accent2 / accent / warn ile ayrı
+// renklerdeydi: renk kolon KATEGORİSİNİ kodluyordu, sapmayı değil — p99
+// yalnız p99 olduğu için amber okunuyordu. Kolon başlığı zaten ne
+// olduğunu söylüyor; renk artık yalnız sapmaya ayrılıyor.
+const SPARK_NEUTRAL = 'var(--text3)';
+
+// v0.10.922 (sade palet adım 1) — hata serisi YALNIZ pencerede >0 bir
+// kova varsa --err; düz sıfır seri nötr (K5: sağlıklı durum renk almaz).
+// Kova yoksa/hepsi null ise de nötr — Sparkline zaten "—" basar.
+function errSparkColor(series: (number | null)[]): string {
+  return series.some(v => v != null && v > 0) ? 'var(--err)' : SPARK_NEUTRAL;
+}
+
+// v0.10.922 (sade palet adım 1) — Err% değeri. 0.00% sağlıklı/normal
+// durum: K5 gereği yeşil `b-ok` rozeti YOK, düz --text3 metin. >0 eski ton
+// kuralını (>5 err, >0 warn) aynen korur ve rozet TEK sinyaldir (hücreye
+// ayrıca renkli değer/zemin eklenmez). Sayı her durumda yazılı — renk tek
+// başına bilgi taşımaz.
+function ErrRateValue({ pct }: { pct: number }) {
+  if (!(pct > 0)) return <span style={{ color: 'var(--text3)' }}>{fmtFixed(pct, 2)}%</span>;
+  return <span className={`badge ${pct > 5 ? 'b-err' : 'b-warn'}`}>{fmtFixed(pct, 2)}%</span>;
+}
+
+// Apdex score → yalnız ZAYIF skorlar sinyal taşır.
+//   ≥ 0.94  Excellent (nötr --text2 metin)
+//   ≥ 0.85  Good      (nötr --text2 metin)
+//   ≥ 0.70  Fair      (warn rozet)
+//   <  0.70 Poor      (err rozet)
+// v0.10.922 (sade palet adım 1) — eski yeşil `b-ok` (≥0.94) ve mavi
+// `b-info` (0.85–0.94) bantları kalktı: K5 gereği sağlıklı durum nötr,
+// "iyi" ile "çok iyi" arasındaki fark renk değil sayı. Bant adı title'da
+// yazılı — renk tek başına bilgi taşımasın.
 function ApdexBadge({ value }: { value: number }) {
   if (value == null || isNaN(value)) return <span style={{ color: 'var(--text3)' }}>—</span>;
-  const cls = value >= 0.94 ? 'b-ok'
-            : value >= 0.85 ? 'b-info'
-            : value >= 0.70 ? 'b-warn'
-            : 'b-err';
-  return <span className={`badge ${cls}`}>{fmtFixed(value, 2)}</span>;
+  const band = value >= 0.94 ? 'Excellent'
+             : value >= 0.85 ? 'Good'
+             : value >= 0.70 ? 'Fair'
+             : 'Poor';
+  const title = `Apdex ${fmtFixed(value, 2)} — ${band}`;
+  if (value >= 0.85) {
+    return <span style={{ color: 'var(--text2)' }} title={title}>{fmtFixed(value, 2)}</span>;
+  }
+  return <span className={`badge ${value >= 0.70 ? 'b-warn' : 'b-err'}`} title={title}>{fmtFixed(value, 2)}</span>;
 }
 
 // HealthDot — v0.5.274 Datadog-Watchdog-style service health
@@ -1015,6 +1049,12 @@ function ApdexBadge({ value }: { value: number }) {
 // tooltip surfaces the firing rule so the operator can argue
 // with the badge. Missing health (older row / problem-count
 // lookup failed) renders nothing — fail-soft.
+//
+// v0.10.922 (sade palet adım 1) — 'green' artık NÖTR (K5: sağlıklı durum
+// renk almaz; --ok yalnız bir GEÇİŞ için — resolved/recovered). 50 satırın
+// 50'sinde yeşil nokta bilgi taşımıyordu, gerçek sapmayı (kırmızı/sarı)
+// kalabalıkta kaybettiriyordu. Nokta yerinde durur (isimler hizalı kalır),
+// soluk bir --border-strong halkası olarak; kelime title'da.
 function HealthDot({ health, reason, openProblems }: {
   health?: 'green' | 'yellow' | 'red';
   reason?: string;
@@ -1023,7 +1063,7 @@ function HealthDot({ health, reason, openProblems }: {
   if (!health) return null;
   const color = health === 'red' ? 'var(--err)'
               : health === 'yellow' ? 'var(--warn)'
-              : 'var(--ok)';
+              : 'transparent';
   const title = reason
     ? `${health.toUpperCase()} · ${reason}${openProblems ? ` · ${openProblems} open problem${openProblems === 1 ? '' : 's'}` : ''}`
     : `${health.toUpperCase()} · healthy${openProblems ? ` · ${openProblems} open` : ''}`;
@@ -1037,7 +1077,7 @@ function HealthDot({ health, reason, openProblems }: {
           ? '0 0 0 2px color-mix(in srgb, var(--err) 20%, transparent)'
           : health === 'yellow'
           ? '0 0 0 2px color-mix(in srgb, var(--warn) 18%, transparent)'
-          : 'none',
+          : 'inset 0 0 0 1px var(--border-strong)',
       }} />
   );
 }
@@ -1046,19 +1086,21 @@ function HealthDot({ health, reason, openProblems }: {
 // `extras` yuvasında. v0.9.1015'e kadar sayfalama tablonun ÜSTÜNDE
 // (filtre barında) ve özet ALTINDA duruyordu: aynı sorunun iki yarısı
 // ekranın iki ucundaydı. Tek şeritte birleştiler.
+// v0.10.922 (sade palet adım 1) — sortBy/env vurgusu --accent2 idi ama
+// ikisi de link DEĞİL (--accent2 yalnız linklere); vurgu kalın --text.
 function ServicesPagerExtras({ shown, sortBy, sortDir, env }: {
   shown: number; sortBy: string; sortDir: string; env: string;
 }) {
   return (
     <>
-      {shown} services · sorted by <b style={{ color: 'var(--accent2)' }}>{sortBy}</b> {sortDir}
+      {shown} services · sorted by <b style={{ color: 'var(--text)' }}>{sortBy}</b> {sortDir}
       {/* v0.8.385 — empty-state honesty: the sparkline source
           (5m summary MV) has no env dimension, so under an env
           filter the thumbnails are omitted rather than showing
           all-environment shapes next to env-filtered numbers. */}
       {env && (
         <span title="Sparklines aggregate across all environments (their materialized view has no env dimension), so they are hidden while an environment filter is active.">
-          {' '}· env <b style={{ color: 'var(--accent2)' }}>{env}</b> — sparklines hidden (all-environment source)
+          {' '}· env <b style={{ color: 'var(--text)' }}>{env}</b> — sparklines hidden (all-environment source)
         </span>
       )}
     </>

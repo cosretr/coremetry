@@ -132,7 +132,8 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.map((r, i) => {
-              const errCls = r.errorRate > 5 ? 'b-err' : r.errorRate > 0 ? 'b-warn' : 'b-ok';
+              // v0.10.922 (sade palet adım 1, K5) — %0 hata nötr; agg görünümüyle aynı.
+              const errCls = r.errorRate > 5 ? 'b-err' : r.errorRate > 0 ? 'b-warn' : 'b-gray';
               return (
                 <tr key={r.signature}
                   {...dt.rowProps(i)}

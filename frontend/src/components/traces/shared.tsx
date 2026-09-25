@@ -18,13 +18,13 @@ export const svcBadgeBg = (name: string): string =>
   `color-mix(in srgb, ${svcColor(name)} 16%, transparent)`;
 
 // durColor — duration → token colour. Errors are always red; otherwise a
-// green/amber/red ramp by absolute latency. Mirrors the APM convention
-// (Datadog/Honeycomb): sub-400ms green, sub-1s amber, ≥1s red.
+// neutral/amber/red ramp by absolute latency: sub-400ms NEUTRAL (v0.10.922 (sade palet adım 1), K5 —
+// sağlıklı durum renk almaz; eskiden yeşildi), sub-1s amber, ≥1s red.
 export function durColor(ms: number, err: boolean): string {
   if (err) return 'var(--err)';
   if (ms > 1000) return 'var(--err)';
   if (ms > 400) return 'var(--warn-solid)'; // v0.10.920 — mini çubuk dolgusu
-  return 'var(--ok)';
+  return 'var(--text3)';
 }
 
 // fmtDur — compact duration label (ms under 1s, s above). Two decimals so
@@ -66,7 +66,8 @@ export function DurationBar({ ms, err, max }: { ms: number; err: boolean; max: n
   const pct = max > 0 ? Math.max(2, Math.min(100, (ms / max) * 100)) : 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-      <span className="mono" style={{ minWidth: 58, color: err ? 'var(--err)' : 'var(--text)' }}>
+      {/* v0.10.922 (sade palet adım 1) — değer metni nötr: hata zaten çubuk rengi + ERROR rozetinde (tek olgu, tek işaret). */}
+      <span className="mono" style={{ minWidth: 58, color: 'var(--text)' }}>
         {fmtDur(ms)}
       </span>
       <span className="ov-minibar" style={{ maxWidth: 110, flex: 1 }}>

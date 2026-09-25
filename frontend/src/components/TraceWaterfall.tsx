@@ -82,21 +82,19 @@ interface Row {
 // queue/topic span, etc. Order matters — e.g. an HTTP span calling a
 // gRPC server has both `rpc.system` and (rarely) `http.method`; we
 // pick RPC first because that's what's actually being executed.
-type SpanCategory = { tag: string; color: string };
-// v0.5.249 — modern category chip palette aligned to the
-// Tailwind v3 -500 family (matches the new hashColor palette
-// + the rest of the UI's modern hue stack). The previous muted
-// Tempo-classic chips lacked saturation; on dark UI they
-// blended into the bar band. The -500 shades have consistent
-// lightness so all four categories read at the same visual
-// weight regardless of which one is most common in a trace.
+// v0.10.922 (sade palet adım 1) — kategori RENKSİZ. v0.5.249'un
+// kategori paleti (DB amber = --warn, MQ teal, RPC mor, HTTP mavi) söküldü:
+// kategori bir sapma değil, sınıf — ayrımı etiketin KELİMESİ taşıyor.
+// DB'nin --warn ile boyanması ayrıca "uyarı" gibi okunuyordu. Tüm
+// etiketler nötr: metin --text2, --border ince çizgi (render yerinde).
+type SpanCategory = { tag: 'DB' | 'MQ' | 'RPC' | 'HTTP' };
 function categoryOf(s: SpanRow): SpanCategory | null {
   const a = s.attributes ?? {};
-  if (a['db.system'])        return { tag: 'DB',   color: 'var(--warn)' };   // amber
-  if (a['messaging.system']) return { tag: 'MQ',   color: 'var(--teal)' };   // cyan/teal
-  if (a['rpc.system'])       return { tag: 'RPC',  color: 'var(--purple)' }; // violet
+  if (a['db.system'])        return { tag: 'DB' };
+  if (a['messaging.system']) return { tag: 'MQ' };
+  if (a['rpc.system'])       return { tag: 'RPC' };
   if (a['http.method'] || a['http.request.method']) {
-    return { tag: 'HTTP', color: 'var(--accent2)' };                          // blue
+    return { tag: 'HTTP' };
   }
   return null;
 }
@@ -844,9 +842,11 @@ export function TraceWaterfall({
                   <span className="wf-svc-dot" style={{ background: color }} />
                   {s.serviceName}
                 </span>
+                {/* v0.10.922 (sade palet adım 1) — kategori başına renk yok;
+                    nötr ton globals.css .wf-cat'te; satır-içi stil yalnız onu yansıtır. */}
                 {cat && (
                   <span className="wf-cat" title={`Category: ${cat.tag}`}
-                        style={{ color: cat.color, borderColor: cat.color }}>
+                        style={{ color: 'var(--text2)', borderColor: 'var(--border)' }}>
                     {cat.tag}
                   </span>
                 )}

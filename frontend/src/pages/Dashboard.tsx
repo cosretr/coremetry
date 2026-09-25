@@ -585,9 +585,12 @@ function RefreshControl({ seconds, onChange, disabled }: {
         onClick={() => onChange(on ? 0 : 60)}
         title={why}
         style={{ whiteSpace: 'nowrap' }}
+        // v0.10.922 (sade palet adım 1) — etkinlik göstergesi, sağlık sinyali
+        // değil: Clusters LiveToggle gibi nötr nokta; açık/kapalı nabız +
+        // etiket (Auto/Paused) taşır.
         leftIcon={<span className={on && !disabled ? 'pulse-dot' : ''} style={{
           display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-          background: on && !disabled ? 'var(--ok)' : 'var(--text3)',
+          background: 'var(--text3)',
         }} />}>
         {on ? 'Auto' : 'Paused'}
       </Button>

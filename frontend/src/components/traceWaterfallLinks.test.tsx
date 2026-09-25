@@ -35,3 +35,24 @@ describe('TraceWaterfall × span link rozeti', () => {
     expect(host.querySelectorAll('.wf-link').length).toBe(0);
   });
 });
+
+// v0.10.922 (sade palet adım 1) — kategori etiketi (DB/MQ/RPC/HTTP) renksiz:
+// kategori sapma değil, sınıf. Dört etiketin HEPSİ aynı nötr tonu taşır;
+// ayrımı kelime yapar (renk tek başına bilgi taşımaz).
+describe('TraceWaterfall × kategori etiketi nötr', () => {
+  it('DB/MQ/RPC/HTTP: metin --text2, çizgi --border; kategori rengi yok', () => {
+    const cats = [
+      span({ spanId: 'root', name: 'GET /x', startTime: 0, endTime: 100_000_000, attributes: { 'http.request.method': 'GET' } }),
+      span({ spanId: 'db', parentSpanId: 'root', name: 'SELECT', attributes: { 'db.system': 'postgresql' } }),
+      span({ spanId: 'mq', parentSpanId: 'root', name: 'publish', attributes: { 'messaging.system': 'kafka' } }),
+      span({ spanId: 'rpc', parentSpanId: 'root', name: 'Get', attributes: { 'rpc.system': 'grpc' } }),
+    ];
+    act(() => { root.render(<TraceWaterfall spans={cats} selectedId={null} onSelect={() => {}} />); });
+    const tags = Array.from(host.querySelectorAll<HTMLElement>('.wf-cat'));
+    expect(tags.map(t => t.textContent).sort()).toEqual(['DB', 'HTTP', 'MQ', 'RPC']);
+    for (const t of tags) {
+      expect(t.style.color).toBe('var(--text2)');
+      expect(t.style.borderColor).toBe('var(--border)');
+    }
+  });
+});

@@ -51,7 +51,13 @@ export function FlameGraph({ root, totalWidth = 1100 }: { root: FlameNode; total
            onMouseLeave={() => setHover(null)}>
         <svg width={totalWidth} height={height} style={{ display: 'block', fontFamily: 'monospace' }}>
           {boxes.map((b, i) => {
-            const color = b.node === focus ? '#E30613' : seriesColor(b.node.name);
+            // v0.10.922 (sade palet adım 1) — K6: marka kırmızısı yalnız
+            // logoda. Odak çerçevesi kendi seri rengini korur; odak 2px
+            // --focus kontur ile işaretlenir (kontur kutunun İÇİNE 1px
+            // içeri alınır — kök satır tam genişlikte, kenarda kırpılmasın).
+            // inkOn dolgu rengini alır, etiket mürekkebi değişmez.
+            const focused = b.node === focus;
+            const color = seriesColor(b.node.name);
             const w = Math.max(0.5, b.width);
             const x = b.x;
             const y = PAD_TOP + b.depth * ROW_H;
@@ -61,8 +67,11 @@ export function FlameGraph({ root, totalWidth = 1100 }: { root: FlameNode; total
               <g key={i} onClick={() => setFocus(b.node)}
                 onMouseEnter={ev => setHover({ x: ev.clientX, y: ev.clientY, node: b.node })}
                 style={{ cursor: 'pointer' }}>
-                <rect x={x} y={y} width={w} height={ROW_H - 2}
-                  fill={color} fillOpacity={0.85} stroke="#0d1117" strokeWidth={0.5} />
+                {focused
+                  ? <rect x={x + 1} y={y + 1} width={Math.max(0.5, w - 2)} height={ROW_H - 4}
+                      fill={color} fillOpacity={0.85} stroke="var(--focus)" strokeWidth={2} />
+                  : <rect x={x} y={y} width={w} height={ROW_H - 2}
+                      fill={color} fillOpacity={0.85} stroke="#0d1117" strokeWidth={0.5} />}
                 {showText && (
                   <text x={x + 4} y={y + 12} fill={inkOn(color) === '#ffffff' ? '#ffffff' : '#0d1117'} fontSize={11} fontWeight={600}>
                     {clipText(b.node.name, w - 8)} ({pct.toFixed(1)}%)

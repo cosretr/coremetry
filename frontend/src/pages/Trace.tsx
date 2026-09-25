@@ -517,7 +517,12 @@ function TraceDetailInner() {
           </code>
           {spans && spans.length > 0 && (
             <>
-              <span className={`badge ${hasErr ? 'b-err' : 'b-ok'}`}>{hasErr ? 'ERROR' : 'OK'}</span>
+              {/* v0.10.922 (sade palet adım 1) — K5: sağlıklı trace NÖTR; yeşil
+                  "OK" rozeti kalktı, görsel sinyal yalnız sapmada (ERROR). Kelime
+                  ekran okuyucuya kalır (sr-only) — bilgi renge/yokluğa bırakılmaz. */}
+              {hasErr
+                ? <span className="badge b-err">ERROR</span>
+                : <span className="sr-only">OK</span>}
               {errSpans > 0 && <span className="cell-hint">{errSpans} error span{errSpans === 1 ? '' : 's'}</span>}
               {/* v0.10.678 (operatör: "trace'in toplam süresini daha net görebilsek") —
                   süre gri sayım satırından ayrıldı; tarih gibi (v0.10.347) şeridin

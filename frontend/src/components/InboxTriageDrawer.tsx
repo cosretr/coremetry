@@ -79,8 +79,10 @@ export function InboxTriageDrawer({ item, onClose, onOpenSource }: {
           <SubjectLink service={item.service} subjectKind={item.subjectKind} href={serviceHref(item.service, { range: inboxItemWindow(item) })}
             style={{ fontWeight: 700, fontSize: 14 }} />
         )}
+        {/* v0.10.922 (sade palet adım 1) — atanan kişi metadata: Inbox
+            satırındaki AssigneePill gibi nötr (mavi değil). */}
         {item?.assignee && (
-          <span className="badge b-info" style={{ fontSize: 10 }}>
+          <span className="badge b-gray" style={{ fontSize: 10 }}>
             {!item.assignee.includes('@') && <Users size={11} strokeWidth={1.75} />}{item.assignee}
           </span>
         )}

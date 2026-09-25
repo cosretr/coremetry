@@ -27,6 +27,9 @@ import { inboxItemHref, isInboxExcFamily } from '@/lib/inboxHref';
 // parçası, exception kuyruğunun değil. Modül yolundan import (barrel
 // değil): barrel AnomaliesPage'i de /inbox chunk'ına sürüklerdi.
 import { ProblemsSection, AlertProblemHost } from '@/features/anomalies/ProblemsSection';
+// v0.10.922 (sade palet adım 1) — tek durum sözlüğü; ProblemDetail zaten bu
+// parçada (ProblemsSection → ProblemDetail), yeni chunk bağımlılığı yok.
+import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
 import { withProblemParam } from '@/features/anomalies/problemLink';
 import { useAuth } from '@/components/AuthProvider';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -749,8 +752,9 @@ export default function InboxPage() {
           {/* Env hint chip (v0.8.387) — non-interactive; the pick lives
               in the Topbar EnvPicker. Surfaces the service-scoped
               semantics so the operator doesn't read rows as per-env. */}
+          {/* v0.10.922 (sade palet adım 1) — bilgi çipi üst veri: nötr. */}
           {env && (
-            <span className="badge b-info" style={{ cursor: 'help' }}
+            <span className="badge b-gray" style={{ cursor: 'help' }}
               title={`Showing items on services seen in "${env}" during the last hour (global environment picker). Triage rows carry no environment of their own — a row on a multi-env service still shows, and service-less (global) alerts always show.`}>
               env: {env} — service-scoped
             </span>
@@ -1043,9 +1047,10 @@ export default function InboxPage() {
                             (v0.9.255). Operatörün bir satırda ilk aradığı şeyler:
                             "runbook var mı" ve "az önce deploy oldu mu". */}
                         {it.runbookUrl && (
+                          // v0.10.922 (sade palet adım 1) — üst veri: nötr.
                           <a href={it.runbookUrl} target="_blank" rel="noreferrer"
                             onClick={e => e.stopPropagation()}
-                            className="badge b-info" title="Runbook aç">📕 runbook</a>
+                            className="badge b-gray" title="Runbook aç">📕 runbook</a>
                         )}
                         {it.recentDeploy && (
                           <span className="badge b-warn"
@@ -1136,23 +1141,22 @@ export default function InboxPage() {
 // kaynağa göre değil. Bilinmeyen bir durum GİZLENMEZ — ham hâliyle gri basılır,
 // çünkü tanımadığımız bir durumu yok saymak operatöre satırın durumu yokmuş
 // gibi gösterirdi.
+// v0.10.922 (sade palet adım 1) — ton eşlemesi buradan KALKTI, tek sözlük
+// ProblemDetail'de (TriageStatusBadge / STATUS_TONE): open/active/
+// acknowledged/ignored nötr, new/regressed amber, resolved yeşil (geçiş).
+// Eskiden "open" burada amber, Problems satırında kırmızıydı; "acknowledged"
+// burada mavi, detayda amberdi. Kelime (ham durum) aynen basılıyor.
 function StatusBadge({ s }: { s?: string }) {
   if (!s) return null;
   const k = s.toLowerCase();
-  const tone =
-    k === 'resolved' ? 'b-ok'
-      : k === 'ignored' ? 'b-gray'
-        : k === 'acknowledged' ? 'b-info'
-          : k === 'regressed' ? 'b-err'
-            : k === 'open' || k === 'active' || k === 'new' ? 'b-warn'
-              : 'b-gray';
-  return <span className={`badge ${tone}`} title={`Durum: ${s}`}>{k}</span>;
+  return <TriageStatusBadge s={k} label={k} title={`Durum: ${s}`} />;
 }
 
+// v0.10.922 (sade palet adım 1) — atanan kişi/takım üst veri: mavi değil nötr.
 function AssigneePill({ v }: { v: string }) {
   const isTeam = !v.includes('@');
   return (
-    <span className="badge b-info">
+    <span className="badge b-gray">
       {isTeam && <Users size={11} strokeWidth={1.75} />}{v}
     </span>
   );
@@ -1218,7 +1222,9 @@ function DetailLine({ it }: { it: InboxItem }) {
       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
         <span className="mono">{it.problem.metric}</span>
         {' = '}
-        <span className="mono"><b style={{ color: 'var(--err)' }}>{fmtFixed(it.problem.value, 2)}</b></span>
+        {/* v0.10.922 (sade palet adım 1) — değer düz metin (--text, 600),
+            Problems satırıyla aynı: aciliyet rengi P rozetinde. */}
+        <span className="mono"><b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(it.problem.value, 2)}</b></span>
         <span className="mono" style={{ color: 'var(--text3)' }}> / {fmtFixed(it.problem.threshold, 2)}</span>
         {it.priorityReason && <span> · {it.priorityReason}</span>}
       </div>

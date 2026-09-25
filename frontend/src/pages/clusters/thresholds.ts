@@ -2,11 +2,12 @@
 // "Thresholds (pctColor)"). Tema-farkında CSS var token'ları
 // döndürür (globals.css: --err/--warn/--ok); hardcoded hex YOK.
 
-// pctColor — kullanım yüzdesi: >85 err, >65 warn, else ok.
+// pctColor — kullanım yüzdesi: >85 err, >65 warn, else NÖTR (v0.10.922 (sade palet adım 1), K5 —
+// normal doluluk renk almaz; eskiden yeşildi).
 export function pctColor(pct: number): string {
   if (pct > 85) return 'var(--err)';
   if (pct > 65) return 'var(--warn)';
-  return 'var(--ok)';
+  return 'var(--text3)';
 }
 
 // restartColor — restart sayısı: >8 err, >2 warn, else muted.
@@ -44,8 +45,8 @@ export function fmtBps(v: number): string {
 // v0.9.51'de taşındı — Clusters tabloları + Service→Infra ortak).
 export function podPhaseBadge(phase: string): string {
   switch (phase) {
-    case 'Running': return 'b-ok';
-    case 'Succeeded': return 'b-info';
+    case 'Running': return 'b-gray';   // v0.10.922 (K5) — normal faz renk almaz
+    case 'Succeeded': return 'b-gray';
     case 'Pending': return 'b-warn';
     case 'Failed': case 'Unknown': return 'b-err';
     default: return 'b-gray';

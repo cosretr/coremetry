@@ -393,7 +393,7 @@ code, pre, .mono { font-family: monospace; font-size: 12px; }
 #sidebar-header {
   padding: 14px 16px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 10px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 10%, transparent) 0%, transparent 100%);
+  /* v0.10.922 (K6) — marka kırmızısı yalnız logoda; başlık gradyanı kalktı. */
   min-height: 0;
 }
 #sidebar[data-collapsed="true"] #sidebar-header { padding: 14px 0; justify-content: center; }
@@ -817,7 +817,7 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
    on hover without adding a per-row JS handler. */
 .btn-icon.ib-star { font-size: 14px; color: var(--text3); opacity: .45; }
 .btn-icon.ib-star:hover:not(:disabled) { opacity: 1; color: var(--text2); background: transparent; }
-.btn-icon.ib-star.active { color: var(--warn); opacity: 1; background: transparent; border-color: transparent; }
+.btn-icon.ib-star.active { color: var(--accent2); opacity: 1; background: transparent; border-color: transparent; } /* v0.10.922 — sabitleme bir SEÇİM, uyarı değil */
 
 /* ── DisclosureButton (v0.9.898) — mB3 ──────────────────────────────
    Six sites hand-rolled this; five of them shipped without
@@ -1461,12 +1461,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    %15 tonda metin 1.80–3.97'ye düşüyordu (hepsi AA altı); şimdi ≥4.5. */
 .b-warn { background: var(--warn-bg); color: var(--warn); }
 .b-info { background: var(--info-bg); color: var(--info); }
-.b-mut { background: var(--accent-soft); color: var(--text2); }
+/* v0.10.922 (K5) — .b-mut nötr: mavi ton "seçili" gibi okunuyordu. */
+.b-mut { background: var(--bg3); color: var(--text2); }
 .b-gray { background: var(--bg3); color: var(--text2); }
-/* Watcher-sourced rows (/watchers page + /events chip, v0.9.196) —
-   purple keeps them visually distinct from problem (err) and channel
-   (info) badges; token-level, re-resolves per theme like every b-*. */
-.b-watcher { background: color-mix(in srgb, var(--purple) 15%, transparent); color: var(--purple); }
+/* Watcher-sourced rows (/watchers page + /events chip, v0.9.196).
+   v0.10.922 (sade palet) — kategori renk almaz: mor ton kaldırıldı, nötr
+   rozet + "WATCHER" yazısı ayrımı taşır. Sınıf adı çağıranlar için kalır. */
+.b-watcher { background: var(--bg3); color: var(--text2); }
 
 /* Severity */
 .s-trace { color: var(--text3); } .s-debug { color: var(--text2); } .s-info { color: var(--info); }
@@ -1679,8 +1680,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Span category chip — DB / HTTP / RPC / MQ. Outlined-pill instead
    of filled; same low-contrast band as the new service style so the
-   row stays calm. Background transparent; border + foreground take
-   the per-category colour set inline by the component. */
+   row stays calm. Background transparent. v0.10.922 — kategori rengi
+   kalktı: kenar + yazı burada nötr (--border / --text2). */
 .wf-cat {
   font-size: 9px;
   font-weight: 700;
@@ -1692,7 +1693,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   text-transform: uppercase;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   background: transparent;
-  border: 1px solid;     /* colour set inline */
+  /* v0.10.922 (sade palet adım 1) — kategori renk almaz: DB/MQ/RPC/HTTP nötr. */
+  border: 1px solid var(--border);
+  color: var(--text2);
   line-height: 1.4;
 }
 
@@ -2248,9 +2251,10 @@ canvas { max-width: 100%; }
    outline'ı WebKit'te tr üzerinde çizilmez → td-tabanlı arka plan + sol
    aksan; hover'da kimlik kaybolmaz (tbody tr:hover tr arka planını ezer,
    td arka planı üstte kalır). */
-tr.wf-evidence > td { background: color-mix(in srgb, var(--warn) 9%, transparent); }
-tr.wf-evidence > td:first-child { border-left: 3px solid var(--warn); }
-tbody tr.wf-evidence:hover > td { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+/* v0.10.922 (sade palet adım 1) — kanıt işareti uyarı DEĞİL, seçim de
+   değil: dolgu yok (dolgu = seçili satır), yalnız kesikli --accent2 sol
+   kenar — seçim/odak dilinde (düz --accent, dolgu) kullanılmayan biçim. */
+tr.wf-evidence > td:first-child { border-left: 3px dashed var(--accent2); }
 @keyframes ai-attn-pulse {
   0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent2) 50%, transparent); }
   70%  { box-shadow: 0 0 0 8px transparent; }
@@ -3106,9 +3110,12 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .sec-head .sec-head__meta { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11px; color: var(--text3); }
 .sec-head .sec-head__actions { display: inline-flex; gap: 6px; text-transform: none; letter-spacing: 0; font-weight: 400; }
 /* v0.9.408 — Explain kanıt kutusu: kök-neden soruşturulacak span'ler
-   waterfall'da amber çerçeveyle kutulanır (kritik-yol şeridinin ÜSTÜNE
-   binebilir; ikisi farklı soruya cevap verir). */
-.wf-evidence { outline: 1.5px solid var(--warn); outline-offset: -1.5px; background: color-mix(in srgb, var(--warn) 7%, transparent); }
+   waterfall'da çerçeveyle kutulanır (kritik-yol şeridinin ÜSTÜNE
+   binebilir; ikisi farklı soruya cevap verir).
+   v0.10.922 — amber → kesikli --accent2, dolgusuz: dolgu seçili satırın
+   (.wf-sel), düz --accent çerçeve odak halkasının (light/redhat'te
+   --accent == --focus) dili; kanıt ikisine de benzemez. */
+.wf-evidence { outline: 1.5px dashed var(--accent2); outline-offset: -1.5px; }
 
 /* v0.9.380 (redesign D4) — Details ToC rayı yalnız geniş ekranda;
    dar ekranda içerik tam genişlik kalır, ray sessizce düşer. */
@@ -3151,7 +3158,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .ov-legend { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .ov-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text2); }
 .ov-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
-.ov-deploy-flag { position: absolute; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--purple); transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
+.ov-deploy-flag { position: absolute; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text2); transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
 
 /* Service flow */
 .ov-flow { position: relative; }
@@ -3602,7 +3609,7 @@ thead th:hover .th-remove { opacity: 1; }
 .pb-id { font-size: 10.5px; color: var(--text3); }
 .pb-rc { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pb-rc .k { color: var(--text3); font-weight: 600; }
-.pb-headline { font-size: 15px; font-weight: 700; color: var(--err); font-variant-numeric: tabular-nums; }
+.pb-headline { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; } /* v0.10.922 — önceliği rozet söyler; değer kırmızıyla tekrarlanmaz */
 /* Blast-radius pill: dot + service name. */
 .pb-pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg2); font-size: 11px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pb-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }

@@ -117,7 +117,9 @@ export function LatencyScatter({
     // Read tokenised colours from CSS variables (theme-aware).
     const cs = getComputedStyle(canvas);
     const cBorder = cs.getPropertyValue('--border').trim() || '#3338';
-    const cAccent = cs.getPropertyValue('--accent').trim() || '#3b82f6';
+    // v0.10.922 (sade palet adım 1) — "ok" noktaları NÖTR (sağlıklı durum renk almaz; vurgu grafik
+    // alanında görünmez). Yedek :root --text3 ile aynı.
+    const cOk = cs.getPropertyValue('--text3').trim() || '#9fa5ad';
     const cErr = cs.getPropertyValue('--err').trim() || '#dc2626';
 
     // Log gridlines at 25/50/75/100% of max duration.
@@ -141,7 +143,7 @@ export function LatencyScatter({
       pts.push({ px, py, row });
       ctx.beginPath();
       ctx.arc(px, py, row.hasError ? 3.4 : 2.6, 0, Math.PI * 2);
-      ctx.fillStyle = row.hasError ? cErr : cAccent;
+      ctx.fillStyle = row.hasError ? cErr : cOk;
       ctx.globalAlpha = row.hasError ? 0.95 : 0.5;
       ctx.fill();
     }
@@ -274,7 +276,7 @@ export function LatencyScatter({
           <div style={{ color: 'var(--text2)' }}>{hover.p.row.serviceName}</div>
           <div className="mono">{fmtDur(hover.p.row.durationMs)} · {tsShort(hover.p.row.startTime)}</div>
           <div style={{ marginTop: 2 }}>
-            <span className={`badge ${hover.p.row.hasError ? 'b-err' : 'b-ok'}`} style={{ fontSize: 9 }}>
+            <span className={`badge ${hover.p.row.hasError ? 'b-err' : 'b-gray'}`} style={{ fontSize: 9 }}>
               {hover.p.row.hasError ? 'ERROR' : 'OK'}
             </span>
           </div>

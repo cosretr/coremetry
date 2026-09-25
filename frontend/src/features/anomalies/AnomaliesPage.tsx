@@ -24,7 +24,7 @@ import type {
   ExceptionGroup, ExceptionGroupState, ExceptionSample,
 } from '@/lib/types';
 import { SearchField } from '@/components/ui/SearchField';
-import { ProblemDetail } from './ProblemDetail';
+import { ProblemDetail, TriageStatusBadge } from './ProblemDetail';
 import { withProblemParam, withExcParam, excDetailHref } from './problemLink';
 import { emptySamplesNote, type SampleScanEnvelope } from './exceptionSamples';
 import { PageControls } from '@/components/ui/PageControls';
@@ -871,12 +871,12 @@ function ActionButtons({ g, onSet }: {
 }
 
 function StateBadge({ s }: { s: ExceptionGroupState }) {
-  const cls =
-    s === 'new'          ? 'b-err'  :
-    s === 'regressed'    ? 'b-warn' :
-    s === 'acknowledged' ? 'b-info' :
-    s === 'resolved'     ? 'b-ok'   :
-                           'b-gray';
+  // v0.10.922 (sade palet adım 1) — ton artık tek sözlükten
+  // (ProblemDetail STATUS_TONE, Inbox + Problems + detay ile aynı):
+  // new/regressed amber (dikkat, alarm değil), acknowledged/ignored nötr,
+  // resolved yeşil (geçiş). Eskiden new kırmızı, acknowledged maviydi —
+  // aynı durum detay sayfasında başka tonda basılıyordu.
+  //
   // v0.9.314 (operatör) — untriaged reads NEW again, which is what the
   // column actually stores (exception_groups.state DEFAULT 'new').
   //
@@ -888,7 +888,7 @@ function StateBadge({ s }: { s: ExceptionGroupState }) {
   // "<1h" in the same change. One word, one meaning: NEW = nobody has
   // triaged this; <1h = this did not exist an hour ago.
   const label = s.toUpperCase();
-  return <span className={`badge ${cls}`} title={s === 'new' ? 'Untriaged — nobody has acknowledged, resolved or ignored this yet' : undefined}>{label}</span>;
+  return <TriageStatusBadge s={s} label={label} title={s === 'new' ? 'Untriaged — nobody has acknowledged, resolved or ignored this yet' : undefined} />;
 }
 
 function humanize(err: unknown): string {

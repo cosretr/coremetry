@@ -5,7 +5,7 @@
 // saat yönünde dizilir.
 
 const SEGMENTS = [
-  { key: 'running', label: 'Running', color: 'var(--ok)' },
+  { key: 'running', label: 'Running', color: 'var(--text3)' }, // v0.10.922 (K5) — normal faz nötr
   { key: 'pending', label: 'Pending', color: 'var(--warn)' },
   { key: 'failed', label: 'Failed', color: 'var(--err)' },
 ] as const;

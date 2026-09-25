@@ -43,6 +43,12 @@ import { downsampleXY } from '@/lib/perf/lttb';
 // sub-pixel bars over the threshold colouring. See lib/sparkline.ts
 // downsampleBuckets for the reducer semantics.
 
+// v0.10.922 (sade palet adım 1) — "zero" modunun (ölçüm var, hepsi sıfır)
+// sabit nötr çizgisi; çağıranın `color`'ı burada kullanılmaz. Eşik-tabanlı
+// warn/err kova renklendirmesi (barFill) ve area modunun eşik-geçme
+// kırmızısı DOKUNULMADI — onlar gerçek sapma sinyali.
+const ZERO_STROKE = 'var(--text3)';
+
 interface Props {
   values: (number | null)[]; // y-values; index = time bucket; null = veri yok (v0.10.385)
   width?: number;        // default 80
@@ -108,13 +114,16 @@ export function Sparkline({
   if (renderMode === 'zero') {
     // Gerçek ölçüm, tamamen sıfır → tabanda düz çizgi. Sağlıklı bir
     // "hiç hata yok" penceresi böyle okunur; "—" ise ölçüm yokluğudur.
+    // v0.10.922 (sade palet adım 1) — düz sıfır çizgisi çağıranın rengini
+    // (ör. hata serisinin --err'i) TAŞIMAZ: sapma yok, renk de yok (K5).
+    // Kırmızı bir "0" çizgisi "hata var" diye okunuyordu. Her zaman nötr.
     const y = height - 1.5;
     return (
       <svg width={width} height={height} className={className}
            role="img" aria-label={title || 'all zero'} style={{ display: 'inline-block' }}>
         <title>{title || 'sıfır — ölçüm var, değer yok'}</title>
         <line x1={1} y1={y} x2={width - 1} y2={y}
-              stroke={baseStroke} strokeWidth={1.5} strokeLinecap="round" opacity={0.55} />
+              stroke={ZERO_STROKE} strokeWidth={1.5} strokeLinecap="round" opacity={0.55} />
       </svg>
     );
   }
@@ -335,10 +344,12 @@ export function Sparkline({
   );
 
   if (!showDelta || deltaPct === null) return wrapped;
-  const deltaColour =
-    Math.abs(deltaPct) < 5 ? 'var(--text3)'
-    : deltaPct > 0 ? 'rgb(220,38,38)'
-    : 'rgb(46,160,67)';
+  // v0.10.922 (sade palet adım 1) — yön rengi kalktı. ↑ sabit kırmızı /
+  // ↓ sabit yeşil (rgb literal'leri) metriğin anlamını bilmeden "kötü/iyi"
+  // diyordu: throughput düşüşü yeşil okunuyordu, ve yeşil yalnız bir
+  // GEÇİŞE (resolved/recovered) ayrıldı (K5). Yön ok + yüzde metninde
+  // yazılı; renk nötr (≈5% altı daha soluk).
+  const deltaColour = Math.abs(deltaPct) < 5 ? 'var(--text3)' : 'var(--text2)';
   const arrow = Math.abs(deltaPct) < 5 ? '~' : deltaPct > 0 ? '↑' : '↓';
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

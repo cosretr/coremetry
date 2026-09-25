@@ -41,7 +41,8 @@ import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useDataTable, DataTableColgroup, DataTableHead, ResetLayoutButton } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { Problem } from '@/lib/types';
-import { AlertProblemDetail } from './ProblemDetail';
+import { AlertProblemDetail, ProblemStatusBadge } from './ProblemDetail';
+import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.922 (sade palet adım 1) — yerel kopya yerine atom
 import { withProblemParam, problemDetailHref } from './problemLink';
 import { findProblemInCaches } from './problemResolve';
 import { RenderedMarkdown, stripMarkdown } from '@/components/Markdown';
@@ -61,6 +62,8 @@ const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 // border; the f-err/f-warn tints keep the urgency cue at rest. The
 // old per-chip color-mix palette (v0.5.469) was replaced when these
 // moved onto the shared facetbar in v0.8.39.
+// v0.10.922 (sade palet adım 1) — tint YALNIZ öncelik çiplerinde; şiddet
+// çipleri nötr (satırdaki şiddet rozeti de nötr, aciliyet rengi P'de).
 
 // Alert-rules columns — shared DataTable primitive, CLIENT sort: the
 // section is a single capped fetch (limit 200, no pager), so the rows
@@ -408,15 +411,15 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
             the unfiltered status-tab result so the operator sees how
             many would land if they toggle a chip back on. At least one
             chip stays on at all times (toggleSev guard) — empty table
-            looks broken. Severity tint (f-err/f-warn) keeps the urgency
-            cue even when the chip is off. */}
+            looks broken. v0.10.922 (sade palet adım 1) — severity tint
+            (f-err/f-warn) KALKTI: aciliyet rengi öncelik çiplerinde, burada
+            tekrar etmesi aynı olguyu iki kez boyuyordu. */}
         {(['critical', 'warning', 'info'] as const).map(s => {
           const on = sevSet.has(s);
-          const tint = s === 'critical' ? ' f-err' : s === 'warning' ? ' f-warn' : '';
           return (
             <span key={s} onClick={() => toggleSev(s)}
               title={on ? `Hide ${s}` : `Show ${s} only — click again to add`}
-              className={`facet${tint}${on ? ' on' : ''}`}>
+              className={`facet${on ? ' on' : ''}`}>
               {s} <span className="n">{sevCounts[s] ?? 0}</span>
             </span>
           );
@@ -483,8 +486,9 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
         {/* Env hint chip (v0.8.387) — non-interactive: the pick lives in
             the Topbar EnvPicker; this only surfaces the SEMANTICS so an
             operator doesn't read the rows as per-env values. */}
+        {/* v0.10.922 (sade palet adım 1) — bilgi çipi üst veri: mavi değil nötr. */}
         {env && (
-          <span className="badge b-info" style={{ cursor: 'help' }}
+          <span className="badge b-gray" style={{ cursor: 'help' }}
             title={`Showing problems on services seen in "${env}" during the last hour (global environment picker). Problems carry no environment of their own — a problem on a multi-env service still shows, and service-less (global) alerts always show. The exception inbox above is not env-scoped yet.`}>
             env: {env} — service-scoped
           </span>
@@ -624,10 +628,10 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                       role="button"
                       style={{
                         cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 44px',
-                        // Subtle err tint on open critical firings (prototype cue).
-                        background: p.status === 'open' && p.severity === 'critical'
-                          ? 'color-mix(in srgb, var(--err) 7%, transparent)'
-                          : undefined,
+                        // v0.10.922 (sade palet adım 1) — açık kritik satırın
+                        // kırmızı zemini KALKTI. Aynı olgu beş kez boyanıyordu
+                        // (zemin + P1 + CRITICAL + kırmızı değer + OPEN); renk
+                        // artık yalnız öncelik rozetinde.
                       }}>
                       <td onClick={e => e.stopPropagation()}>
                         <input type="checkbox"
@@ -641,7 +645,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                             });
                           }} />
                       </td>
-                      <td className="row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}><PriorityBadge p={p.priority} reason={p.priorityReason} /></Link></td>
+                      <td className="row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{p.priority ? <PriorityBadge p={p.priority} reason={p.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>
                       <td className="row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}><SeverityBadge s={p.severity} /></Link></td>
                       <td>
                         {/* v0.9.966 — problemin ömrü: onset−1h → (çözüm |
@@ -660,20 +664,27 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                       <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{p.metric}</Link></td>
                       <td className="mono row-cell" style={{ textAlign: 'right' }}>
                         <Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>
-                          <b style={{ color: 'var(--err)' }}>{fmtFixed(p.value, 2)}</b>
+                          {/* v0.10.922 (sade palet adım 1) — değer düz metin
+                              (--text, 600); eşiği aştığını satırın varlığı ve
+                              P rozeti zaten söylüyor. */}
+                          <b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(p.value, 2)}</b>
                           <span style={{ color: 'var(--text3)' }}> / {fmtFixed(p.threshold, 2)}</span>
                         </Link>
                       </td>
                       <td style={{ fontSize: 12 }}>
+                        {/* v0.10.922 (sade palet adım 1) — ANOMALY / Runbook /
+                            AI insight / blast-radius çipleri ÜST VERİ: mavi
+                            (b-info) değil nötr (b-gray). Renk yalnız sapmada
+                            (cascading amber kalır). */}
                         {isAnomaly && (
-                          <span className="badge b-info" style={{ marginRight: 6 }}>ANOMALY</span>
+                          <span className="badge b-gray" style={{ marginRight: 6 }}>ANOMALY</span>
                         )}
                         <Link to={href} replace className="row-link row-link--inline" onClick={e => e.stopPropagation()}>{p.ruleName}</Link>
                         {p.runbookUrl && (
                           <a href={p.runbookUrl} target="_blank" rel="noopener"
                             onClick={e => e.stopPropagation()}
                             title="Open team runbook"
-                            className="badge b-info"
+                            className="badge b-gray"
                             style={{ marginLeft: 8, textDecoration: 'none' }}>
                             Runbook ↗
                           </a>
@@ -701,7 +712,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                           // clicking through. The IconSparkles glyph is
                           // the "Copilot output" visual anchor, matching
                           // the existing operator-clicked Explain affordances.
-                          <span className="badge b-info"
+                          <span className="badge b-gray"
                             onClick={e => e.stopPropagation()}
                             title={stripMarkdown(p.aiSummary)}
                             style={{ marginLeft: 8, cursor: 'help' }}>
@@ -763,10 +774,11 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                       </td>
                       <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(p.startedAt)}</Link></td>
                       <td className="row-cell">
+                        {/* v0.10.922 (sade palet adım 1) — durum tonu tek
+                            sözlükten (ProblemDetail STATUS_TONE): OPEN/ACK
+                            nötr, RESOLVED yeşil (geçiş). */}
                         <Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>
-                          {p.status === 'open' && <span className="badge b-err">OPEN</span>}
-                          {p.status === 'acknowledged' && <span className="badge b-warn">ACK</span>}
-                          {p.status === 'resolved' && <span className="badge b-ok">RESOLVED</span>}
+                          <ProblemStatusBadge status={p.status} />
                         </Link>
                       </td>
                       <td onClick={e => e.stopPropagation()} style={{ fontSize: 12 }}>
@@ -906,25 +918,17 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
   );
 }
 
+// v0.10.922 (sade palet adım 1) — şiddet NÖTR kelime. Aciliyetin rengi
+// öncelik rozetinde (P1 kırmızı); CRITICAL'ı da kırmızı basmak aynı olguyu
+// iki kez söylüyordu. Kelime aynen kalır — bilgi renge emanet değil.
 function SeverityBadge({ s }: { s: string }) {
-  const cls = s === 'critical' ? 'b-err' : s === 'warning' ? 'b-warn' : 'b-info';
-  return <span className={`badge ${cls}`}>{s.toUpperCase()}</span>;
+  return <span className="badge b-gray">{s.toUpperCase()}</span>;
 }
 
-// PriorityBadge — v0.5.210 triage column. P1 / P2 / P3 pill with
-// a colour that matches the urgency stack (red/amber/grey).
-// `reason` flows into the title attribute so an operator can
-// hover and see WHY the bucket was picked ("critical + deploy
-// 4m before") — the blend formula is transparent, not magic.
-function PriorityBadge({ p, reason }: { p?: 'P1' | 'P2' | 'P3'; reason?: string }) {
-  if (!p) return <span style={{ color: 'var(--text3)' }}>—</span>;
-  const cls = p === 'P1' ? 'b-err' : p === 'P2' ? 'b-warn' : 'b-gray';
-  return (
-    <span className={`badge ${cls}`} title={reason ? `${p} — ${reason}` : p}>
-      {p}
-    </span>
-  );
-}
+// PriorityBadge — v0.5.210 triage column. v0.10.922 (sade palet adım 1):
+// buradaki yerel kopya KALKTI, paylaşılan ui/PriorityBadge atomu kullanılıyor
+// (Inbox + Exceptions ile tek kaynak; tonlar ve `reason` title'ı birebir aynı).
+// Önceliksiz satır "—" basar (çağrı yerinde, AnomaliesPage ile aynı).
 
 // AssigneeCell — v0.5.209 triage column. Renders the current
 // assignee (team name auto-set on open from service_metadata.
@@ -963,9 +967,12 @@ function AssigneeCell({ problem, currentUserEmail, onChanged }: {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       {assignee
         ? (
+          // v0.10.922 (sade palet adım 1) — atanan kişi üst veri: nötr.
+          // "Bana atanmış" bilgisi yeşilde değil metnin kendisinde (kendi
+          // e-postan) ve "Take it" düğmesinin yokluğunda.
           <span onClick={editPrompt}
             title="Click to reassign or clear"
-            className={`badge ${isSelf ? 'b-ok' : 'b-info'}`}
+            className="badge b-gray"
             style={{ cursor: 'pointer' }}>
             {isTeam && <Users size={11} strokeWidth={1.75} />}{assignee}
           </span>
@@ -1004,6 +1011,8 @@ function fmtAge(sec: number): string {
 // so the operator sees "this isn't isolated — 3 downstream
 // services are already firing too" without expanding the row.
 // v0.10.260 — veri toplu uçtan (useBlastRadiusBatch) gelir; çip fetch yapmaz.
+// v0.10.922 (sade palet adım 1) — çağıran sayısı üst veri: nötr (b-gray,
+// eskiden mavi). Yalnız cascading (sapma) amber; kelimesi çipin metninde.
 function BlastRadiusChip({ data }: { data: import('@/lib/types').BlastRadius | null }) {
   if (!data || data.totalCallers === 0) return null;
   const cascading = data.cascadingCallers > 0;
@@ -1020,7 +1029,7 @@ function BlastRadiusChip({ data }: { data: import('@/lib/types').BlastRadius | n
     <span
       title={tooltipLines}
       onClick={e => e.stopPropagation()}
-      className={`badge ${cascading ? 'b-warn' : 'b-info'}`}
+      className={`badge ${cascading ? 'b-warn' : 'b-gray'}`}
       style={{ marginLeft: 8, cursor: 'help' }}>
       <CornerDownRight size={11} strokeWidth={1.75} />
       {data.totalCallers} svc{data.totalCallers === 1 ? '' : 's'} · {data.totalRps.toFixed(0)} rps

@@ -218,9 +218,12 @@ function sortAccessor(col: SortColumn): (r: TraceRow) => number | string {
 
 // HeaderStat — one mono stat in the header group right of the Volume|Latency
 // toggle (TOTAL · ERRORS · ERR RATE · P99 MAX). Replaces the deleted standalone
-// RED panel; `tone` colours the value (err → red, warn → amber).
-function HeaderStat({ label, value, tone, title }: { label: string; value: string; tone?: 'err' | 'warn'; title?: string }) {
-  const color = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : 'var(--text)';
+// RED panel; `tone` colours the value (err → red).
+// v0.10.922 (sade palet adım 1) — 'warn' tonu kalktı: tek kullanıcısı yanıt
+// süresiydi ve eşiksiz, HER ZAMAN amber'di (sapma değil, sabit boya). Değer
+// artık nötr --text; renk yalnız gerçek sapmada (hata > 0).
+function HeaderStat({ label, value, tone, title }: { label: string; value: string; tone?: 'err'; title?: string }) {
+  const color = tone === 'err' ? 'var(--err)' : 'var(--text)';
   return (
     <div title={title} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 44 }}>
       <span style={{
@@ -1216,7 +1219,7 @@ function TracesPageInner() {
                 tone={headerStats.err > 0 ? 'err' : undefined}
                 title="Seçili pencerenin tamamındaki hatalı giriş span'ı sayısı — yüklü satırlardan bağımsız, gerçek trafiği tarif eder." />
               <HeaderStat label="ERR RATE" value={`${headerStats.errRate.toFixed(2)}%`} tone={headerStats.errRate > 0 ? 'err' : undefined} />
-              <HeaderStat label={stripStatHeaderLabel(stripStat)} value={headerStats.rtAvg ? fmtDur(headerStats.rtAvg) : '—'} tone="warn"
+              <HeaderStat label={stripStatHeaderLabel(stripStat)} value={headerStats.rtAvg ? fmtDur(headerStats.rtAvg) : '—'}
                 title={`Giriş span'ı ${stripStat} yanıt süresinin penceredeki en yüksek kovası.`} />
             </>
           );
@@ -1252,8 +1255,11 @@ function TracesPageInner() {
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, padding: '0 2px', flexWrap: 'wrap' }}>
                 {vizToggle}
+                {/* v0.10.922 (sade palet adım 1) — lejant, LatencyScatter.tsx'in
+                    nokta renkleriyle aynı ton (noktalar yarı saydam çizilir): ok
+                    nötr (--text3), hata kırmızı. */}
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text3)' }}>
-                  <span style={{ width: 8, height: 8, background: 'var(--accent)', borderRadius: 8 }} /> ok
+                  <span style={{ width: 8, height: 8, background: 'var(--text3)', borderRadius: 8 }} /> ok
                   <span style={{ width: 8, height: 8, background: 'var(--err)', borderRadius: 8, marginLeft: 8 }} /> error
                   <span style={{ marginLeft: 8 }}>· drag to brush · y = duration (log)</span>
                 </span>
@@ -1538,9 +1544,11 @@ function TracesPageInner() {
                       return (
                         <td key={id} onMouseEnter={() => prefetchTrace(t.traceId)}
                           className={[ownLink ? '' : 'row-cell', stickyL !== undefined ? 'sticky-left' : ''].filter(Boolean).join(' ') || undefined}
-                          // Sabit hücre opak olmak zorunda (altından satır kayar): hata tonu
-                          // transparent yerine kabın zemini (--bg1) üzerine karışır.
-                          style={{ background: t.hasError ? `color-mix(in srgb, var(--err) 8%, ${stickyL !== undefined ? 'var(--bg1)' : 'transparent'})` : undefined, left: stickyL }}>
+                          // v0.10.922 (sade palet adım 1) — hatalı satırın kırmızı zemin
+                          // tonu SÖKÜLDÜ: aynı gerçeği STATUS'taki ERROR rozeti zaten
+                          // söylüyor (bir gerçek = bir sinyal). Sabit hücrenin opak
+                          // zemini globals.css td.sticky-left (--bg1) kuralından gelir.
+                          style={{ left: stickyL }}>
                           {ownLink ? cell : <Link to={href} state={{ from: loc.pathname + loc.search }} className={id === 'operation' ? 'row-link row-link--name' : 'row-link'}>{cell}</Link>}
                           {/* v0.10.676 — kiosk modu: NAME hücresinde hover/odakta görünen
                               ⧉ düğmesi, /trace?id=…&kiosk=1'i YENİ PENCEREDE açar (kromsuz
@@ -1790,9 +1798,12 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { cl
     case 'spans':     return <>{t.spanCount}</>;
     // v0.10.218 (D3) — hata rozetinin yanında hatalı span SAYISI (Dynatrace
     // düzeni); alan yoksa (0 ya da eski önbellek yanıtı) yalnız rozet.
+    // v0.10.922 (sade palet adım 1) — K5: sağlıklı satır NÖTR; her satırdaki
+    // yeşil "OK" rozeti kalktı, hücre görsel olarak boş (sapma olmayan satır
+    // sinyal taşımaz). Kelime ekran okuyucuya kalır (sr-only).
     case 'status':    return t.hasError
       ? <><span className="badge b-err">ERROR</span>{t.errorSpans ? <span className="cell-hint">{t.errorSpans} span</span> : null}</>
-      : <span className="badge b-ok">OK</span>;
+      : <span className="sr-only">OK</span>;
     default: {
       // Attribute-column values render at the SAME size as every other cell
       // (v0.9.243 — operator-reported: channel_code / function_code looked
@@ -1824,7 +1835,9 @@ function AggregateTable({ agg, groupBy, dt, onDrill }: {
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.map(a => {
-              const errCls = a.errorRate > 5 ? 'b-err' : a.errorRate > 0 ? 'b-warn' : 'b-ok';
+              // v0.10.922 (sade palet adım 1) — K5: %0 hata sağlıklı hâl → nötr
+              // b-gray (eskiden yeşil b-ok); renk yalnız sapmada (warn/err).
+              const errCls = a.errorRate > 5 ? 'b-err' : a.errorRate > 0 ? 'b-warn' : 'b-gray';
               const drillable = a.withRawAvailable ?? a.traceCount;
               const missingRaw = a.traceCount - drillable;
               return (

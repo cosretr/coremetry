@@ -1,23 +1,17 @@
 import type { ProfileFrameKind, ProfileCategoryBreakdown } from '@/lib/types';
+import { seriesPalette } from '@/lib/chartFmt';
 
-// Shared visual language for frame kinds. Operators learn one
-// colour mapping and read both the per-row badges and the
-// breakdown bar without re-mapping in their head.
+// Shared vocabulary for frame kinds (CPU / Lock / IO / Sleep / GC).
 //
-// CPU   → green   (work is happening)
-// Lock  → red     (contention — first thing to chase on a perf bug)
-// IO    → blue    (syscall / network wait)
-// Sleep → grey    (intentional pause)
-// GC    → orange  (runtime overhead — JVM GC, Go gc, etc.)
-// Token-mapped (theme-adaptive): the raw values were an exact match for
-// these globals.css tokens, so the badge now flips correctly in light/dark.
-const COLORS: Record<ProfileFrameKind, string> = {
-  cpu:   'var(--ok)',
-  lock:  'var(--brand)',
-  io:    'var(--accent)',
-  sleep: 'var(--text2)',
-  gc:    'var(--orange)',
-};
+// v0.10.922 (sade palet adım 1) — tür bir KATEGORİ, durum değil:
+// satır rozeti her tür için tek nötr stil (--bg3 zemin, --text2 yazı),
+// ayrımı etiket taşır. Eski eşleme (cpu --ok yeşil, lock --brand
+// kırmızı, io --accent, gc --orange) durum/marka renklerini kategoriye
+// harcıyordu (K5: yeşil yalnız geçiş; K6: marka kırmızısı yalnız logo).
+// Dağılım çubuğu bir GRAFİK: dilimler ayırt edilmeli, o yüzden seri
+// paletinden sabit yuva alır (durum renkleri paletin dışında) — lejant
+// etiket + yüzde yazdığı için renk tek taşıyıcı değil.
+const ORDER: ProfileFrameKind[] = ['cpu', 'lock', 'io', 'sleep', 'gc'];
 
 const LABELS: Record<ProfileFrameKind, string> = {
   cpu:   'CPU',
@@ -27,18 +21,23 @@ const LABELS: Record<ProfileFrameKind, string> = {
   gc:    'GC',
 };
 
-export function kindColor(k: ProfileFrameKind): string { return COLORS[k]; }
+// kindColor — YALNIZ dağılım çubuğu (grafik) için: türün sabit seri
+// yuvası, tema-farkında. Rozet renk almaz.
+export function kindColor(k: ProfileFrameKind): string {
+  const pal = seriesPalette();
+  return pal[ORDER.indexOf(k) % pal.length];
+}
 export function kindLabel(k: ProfileFrameKind): string { return LABELS[k]; }
 
 export function KindBadge({ kind }: { kind: ProfileFrameKind }) {
   if (kind === 'cpu') return null; // CPU is the default; reduce visual noise
-  const c = COLORS[kind];
   return (
     <span style={{
       fontSize: 10, fontWeight: 700, padding: '1px 6px',
       marginLeft: 6,
-      // v0.10.920 — sleep açık gri zemin (--text2); koyuda beyaz 1.67 idi.
-      background: c, color: kind === 'sleep' ? 'var(--bg1)' : 'white',
+      // v0.10.922 (sade palet adım 1) — her tür aynı nötr stil; v0.10.920
+      // sleep mürekkep istisnası artık gereksiz (--text2 her zeminde okunur).
+      background: 'var(--bg3)', color: 'var(--text2)',
       borderRadius: 3, fontFamily: 'monospace',
       verticalAlign: 'middle',
     }}>
@@ -56,7 +55,7 @@ export function BreakdownBar({ b }: { b: ProfileCategoryBreakdown | undefined })
   if (!b) return null;
   const total = b.cpu + b.lock + b.io + b.sleep + b.gc;
   if (total <= 0) return null;
-  const order: ProfileFrameKind[] = ['cpu', 'lock', 'io', 'sleep', 'gc'];
+  const order = ORDER;
   const pct = (n: number) => (n / total) * 100;
   return (
     <div style={{
@@ -73,7 +72,7 @@ export function BreakdownBar({ b }: { b: ProfileCategoryBreakdown | undefined })
           if (w <= 0) return null;
           return (
             <div key={k} title={`${LABELS[k]}: ${w.toFixed(1)}%`} style={{
-              width: w + '%', background: COLORS[k], minWidth: 1,
+              width: w + '%', background: kindColor(k), minWidth: 1,
             }} />
           );
         })}
@@ -84,7 +83,7 @@ export function BreakdownBar({ b }: { b: ProfileCategoryBreakdown | undefined })
           if (w <= 0) return null;
           return (
             <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: COLORS[k] }} />
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: kindColor(k) }} />
               <b style={{ color: 'var(--text)' }}>{LABELS[k]}</b>
               <span style={{ color: 'var(--text2)' }}>{w.toFixed(1)}%</span>
             </span>

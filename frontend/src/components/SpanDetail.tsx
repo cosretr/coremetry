@@ -270,9 +270,11 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
       <div id="span-panel-head">
         <div className="ps-title" title={displaySpanName(span) === span.name ? span.name : `raw: ${span.name}`}>
           {displaySpanName(span)}{' '}
-          <span className={`badge ${span.statusCode === 'error' ? 'b-err' : 'b-ok'}`} style={{ marginLeft: 4 }}>
-            {span.statusCode === 'error' ? 'ERROR' : 'OK'}
-          </span>
+          {/* v0.10.922 (sade palet adım 1, K5) — Trace başlığıyla aynı kural:
+              renk yalnız sapmada; sağlıklı span'de kelime sr-only. */}
+          {span.statusCode === 'error'
+            ? <span className="badge b-err" style={{ marginLeft: 4 }}>ERROR</span>
+            : <span className="sr-only">OK</span>}
         </div>
         <button className="ps-close" onClick={onClose}>✕</button>
       </div>
@@ -304,7 +306,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
               <b>Baseline p50 (24h):</b> {baseP50 >= 1000 ? `${(baseP50 / 1000).toFixed(2)} s` : `${baseP50.toFixed(baseP50 < 10 ? 2 : 0)} ms`}{' '}
               {span.durationMs / baseP50 >= 1.5
                 ? <span className="badge b-err">×{(span.durationMs / baseP50).toFixed(1)} slower</span>
-                : <span className="badge b-ok">normal</span>}
+                : <span className="badge b-gray">normal</span>}
             </span>
           )}
         </div>

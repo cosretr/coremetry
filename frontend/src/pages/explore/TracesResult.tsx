@@ -164,9 +164,10 @@ export function TracesResult({
                     <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(t.spanCount)}</td>
                     <td className="mono ib-when">{tsLong(t.startTime)}</td>{/* v0.10.739 — 13 px damga */}
                     <td>
+                      {/* v0.10.922 (sade palet adım 1, K5) — /traces ile aynı: sağlıklı → sr-only. */}
                       {t.hasError
                         ? <span className="badge b-err">ERROR</span>
-                        : <span className="badge b-ok">OK</span>}
+                        : <span className="sr-only">OK</span>}
                     </td>
                     {extraCols.map(k => {
                       const v = t.extras?.[k] ?? '';

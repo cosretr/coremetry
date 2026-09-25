@@ -601,11 +601,13 @@ export default function ClustersPage() {
                   const cpuP = sum ? safePct(sum.cpuUsedCores, sum.cpuCapacityCores) : null;
                   const memP = sum ? safePct(sum.memUsedBytes, sum.memCapacityBytes) : null;
                   // Status: unreachable > degraded (crit alert) > healthy.
+                  // v0.10.922 (sade palet adım 1) — K5: sağlıklı durum
+                  // NÖTR; yeşil rozet yok, kelime --text3 metin olarak kalır.
                   const statusBadge = unreachable
                     ? <span className="badge b-err">unreachable</span>
                     : (sum?.alertsCritical ?? 0) > 0
                       ? <span className="badge b-warn">degraded</span>
-                      : <span className="badge b-ok">healthy</span>;
+                      : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>;
                   return (
                     <Card key={name}
                       onClick={() => openCluster(name)}
@@ -681,23 +683,26 @@ export default function ClustersPage() {
                 ? <span className="badge b-err">unreachable</span>
                 : (observed.size > 0 && !observed.has(clusterParam))
                   ? <span className="badge b-warn" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
-                  : <span className="badge b-ok">reachable</span>}
+                  : <span style={{ fontSize: 11, color: 'var(--text3)' }}>reachable</span>}
+              {/* v0.10.922 (sade palet adım 1) — K5: erişilebilir = normal
+                  durum, NÖTR metin (yeşil rozet yok). Süzgeç çipleri
+                  kategori, durum değil → b-gray (davranış aynı). */}
               {nsFilter && (
-                <span className="badge b-info" style={{ cursor: 'pointer' }}
+                <span className="badge b-gray" style={{ cursor: 'pointer' }}
                   onClick={clearNs}
                   title="Namespace filter (service-page pivot) — click to clear">
                   namespace: {nsFilter} ✕
                 </span>
               )}
               {depFilter && (
-                <span className="badge b-info" style={{ cursor: 'pointer' }}
+                <span className="badge b-gray" style={{ cursor: 'pointer' }}
                   onClick={clearDep}
                   title="Workload filter — click to clear">
                   workload: {depFilter} ✕
                 </span>
               )}
               {svcFilter && (
-                <span className="badge b-info" style={{ cursor: 'pointer' }}
+                <span className="badge b-gray" style={{ cursor: 'pointer' }}
                   onClick={clearSvc}
                   title="Service filter (service-page pivot) — click to clear">
                   service: {svcFilter} ✕
@@ -725,8 +730,9 @@ export default function ClustersPage() {
                   geçer; native select DEĞİL. */}
               <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* v0.9.38 — auto-refresh toggle (design handoff §2):
-                    açıkken yeşil pulse + "Live · 10s", kapalıyken gri
-                    nokta + "Paused · Ns ago". Durum ?live=1 URL'de. */}
+                    açıkken nabız atan nokta + "Live · 10s", kapalıyken
+                    duran nokta + "Paused · Ns ago" (v0.10.922: ikisi de
+                    --text3, yeşil yok). Durum ?live=1 URL'de. */}
                 <LiveToggle live={live} onToggle={toggleLive}
                   updatedAt={detailSummaryQ.dataUpdatedAt} />
                 <NamespaceCombobox
@@ -773,8 +779,10 @@ export default function ClustersPage() {
                                   {r.node}
                                 </span>
                               </td>
+                              {/* v0.10.922 (sade palet adım 1) — rol bir
+                                  kategori: control-plane dahil hepsi nötr. */}
                               <td>{r.role
-                                ? <span className={`badge ${r.role === 'master' || r.role === 'control-plane' ? 'b-info' : 'b-gray'}`}>{r.role}</span>
+                                ? <span className="badge b-gray">{r.role}</span>
                                 : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
                               <td className="num mono">{fmtCores(r.cpuCores)}</td>
                               <td className="num mono" style={{
@@ -828,9 +836,12 @@ export default function ClustersPage() {
                                   yoksa '—'. v0.9.42: surge'de (ready>desired,
                                   backend Available der) rozet de yeşil —
                                   strict eşitlik aynı satırda sarı 4/3 + yeşil
-                                  Available çelişkisi üretiyordu. */}
+                                  Available çelişkisi üretiyordu.
+                                  v0.10.922 (sade palet adım 1) — K5: tam
+                                  hazır = normal durum, rozet NÖTR (b-gray);
+                                  yalnız eksik replika b-warn kalır. */}
                               <td>{r.status
-                                ? <span className={`badge ${r.readyReplicas >= r.desiredReplicas ? 'b-ok' : 'b-warn'}`}>
+                                ? <span className={`badge ${r.readyReplicas >= r.desiredReplicas ? 'b-gray' : 'b-warn'}`}>
                                     {r.readyReplicas}/{r.desiredReplicas}
                                   </span>
                                 : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
@@ -879,13 +890,15 @@ export default function ClustersPage() {
                                 <td className="num mono">{r.pods ? fmtNum(r.pods) : '—'}</td>
                                 <td className="num mono">{fmtCores(r.cpuCores)}</td>
                                 <td className="num mono">{fmtBytes(r.memBytes)}</td>
-                                {/* v0.9.37 (B4/F6) — restart toplamı + health. */}
+                                {/* v0.9.37 (B4/F6) — restart toplamı + health.
+                                    v0.10.922 (sade palet adım 1) — K5: sağlıklı
+                                    NÖTR metin; yalnız failing b-err rozet. */}
                                 <td className="num mono" style={{ color: restartColor(r.restarts ?? 0) }}>
                                   {r.restarts != null ? fmtNum(r.restarts) : '—'}</td>
                                 <td className="num" onClick={e => e.stopPropagation()}>
                                   {(r.failing ?? 0) > 0
                                     ? <span className="badge b-err">{r.failing} failing</span>
-                                    : <span className="badge b-ok">healthy</span>}
+                                    : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>}
                                 </td>
                                 <td style={{ textAlign: 'center' }}>
                                   {/* v0.9.5 — trend drawer'ı; satırın filtre
@@ -1055,7 +1068,9 @@ export default function ClustersPage() {
                     </Card>
                     {phaseTotal > 0 && (
                       <Card density="tight" header="Running pods">
-                        <div className="mono" style={{ ...kpiVal, color: 'var(--ok)' }}>
+                        {/* v0.10.922 (sade palet adım 1) — K5: çalışan pod
+                            sayısı normal durum; hep-yeşil KPI NÖTR. */}
+                        <div className="mono" style={kpiVal}>
                           {fmtNum(d?.podsRunning ?? 0)}
                         </div>
                         <div style={kpiSub}>
@@ -1063,16 +1078,18 @@ export default function ClustersPage() {
                         </div>
                       </Card>
                     )}
-                    {/* v0.9.44 — yeşil 0'ın sınırı title'da: ALERTS
+                    {/* v0.9.44 — 0'ın sınırı title'da: ALERTS
                         serisi yalnız firing/pending alarm varken var
                         olur; kural tanımsız cluster ile alarmsız
-                        sağlıklı cluster ayırt EDİLEMEZ. */}
+                        sağlıklı cluster ayırt EDİLEMEZ.
+                        v0.10.922 (sade palet adım 1) — K5: 0 alarm
+                        NÖTR (yeşil değil); yalnız crit/warn renkli. */}
                     {showAlerts && (
                       <Card density="tight" header="Active alerts"
                         title="Counts firing/pending ALERTS series from Prometheus. 0 also appears when the cluster has no alerting rules configured — the ALERTS metric cannot distinguish the two.">
                         <div className="mono" style={{
                           ...kpiVal,
-                          color: alertCrit > 0 ? 'var(--err)' : alertWarn > 0 ? 'var(--warn)' : 'var(--ok)',
+                          color: alertCrit > 0 ? 'var(--err)' : alertWarn > 0 ? 'var(--warn)' : undefined,
                         }}>
                           {fmtNum(alertCrit + alertWarn)}
                         </div>
@@ -1120,8 +1137,11 @@ export default function ClustersPage() {
                           <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16, paddingTop: 6 }}>
                             <Gauge pct={cpuP} label="CPU" sub="utilized" />
                             <Gauge pct={memP} label="Memory" sub="utilized" />
+                            {/* v0.10.922 (sade palet adım 1) — K5: >95
+                                running normal durum → nötr yay; yalnız
+                                sapma (≤95) --warn (CPU/Mem yaylarıyla aynı). */}
                             <Gauge pct={healthP} label="Pod health" sub="running"
-                              color={healthP != null && healthP > 95 ? 'var(--ok)' : 'var(--warn)'} />
+                              color={healthP != null && healthP > 95 ? 'var(--text3)' : 'var(--warn)'} />
                           </div>
                         </Card>
                       )}
@@ -1300,6 +1320,9 @@ function LiveToggle({ live, onToggle, updatedAt }: {
   // efektif veri tazeliği ~60s. Etiket "Live", ayrıntı title'da.
   const label = live ? 'Live'
     : updatedAt ? `Paused · ${ago} ago` : 'Paused';
+  // v0.10.922 (sade palet adım 1) — nokta bir etkinlik göstergesi,
+  // sağlık sinyali değil: yeşil yok; canlı/duraklatılmış farkı nabız
+  // + etiket ("Live"/"Paused") taşır, renk hep --text3.
   return (
     <Button variant="secondary" size="sm" onClick={onToggle}
       title={live
@@ -1308,7 +1331,7 @@ function LiveToggle({ live, onToggle, updatedAt }: {
       style={{ whiteSpace: 'nowrap' }}
       leftIcon={<span className={live ? 'pulse-dot' : ''} style={{
         display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-        background: live ? 'var(--ok)' : 'var(--text3)',
+        background: 'var(--text3)',
       }} />}>
       {label}
     </Button>
@@ -1373,9 +1396,11 @@ function AlertsPanel({ alerts, criticalOnly, onToggle }: {
 
 // podPhaseBadge — kube_pod_status_phase → badge sınıfı (v0.9.37).
 // depStatusBadge — Deployment statü rozeti (v0.9.39, handoff §5):
-// Available yeşil, Progressing sarı (rollout sürüyor), Degraded kırmızı.
+// Progressing sarı (rollout sürüyor), Degraded kırmızı.
+// v0.10.922 (sade palet adım 1) — K5: Available normal durum → NÖTR
+// (b-gray); kelime kalır, yeşil rozet yok.
 function depStatusBadge(status: string): string {
-  if (status === 'Available') return 'b-ok';
+  if (status === 'Available') return 'b-gray';
   if (status === 'Progressing') return 'b-warn';
   return 'b-err';
 }

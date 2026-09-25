@@ -13,6 +13,11 @@
 //
 // Everything is best-effort: a field only renders when the underlying signal is
 // present. Pure derivation from the span list; no fetch.
+//
+// v0.10.922 (sade palet adım 1) — K5: sağlıklı/normal hâl NÖTR ve sessiz.
+// Yeşil "W3C tracecontext: complete" çipi söküldü; şerit yalnız sapmayı
+// (kesik, kök yok / çok kök, orphan, dropped, fallback kaynak) ve nötr
+// örnekleme bilgisini söyler. Hiç çip kalmazsa Provenance satırı çizilmez.
 
 import { useMemo } from 'react';
 import type { SpanRow } from '@/lib/types';
@@ -60,7 +65,7 @@ export function TraceHonesty({
 
   if (spans.length === 0) return null;
 
-  const chips: Array<{ label: string; tone: 'ok' | 'warn' | 'err' | 'info'; title: string }> = [];
+  const chips: Array<{ label: string; tone: ChipTone; title: string }> = [];
 
   // v0.9.457 — kesik trace ÖNCE söylenir: aşağıdaki orphan/root
   // istatistikleri kısmi listeden türetilir; kesikte instrumentation
@@ -76,11 +81,15 @@ export function TraceHonesty({
   }
 
   // tracecontext integrity
-  if (facts.roots === 1) {
-    chips.push({ label: 'W3C tracecontext: complete', tone: 'ok', title: 'A single root span landed and every other span links to a present parent.' });
+  // v0.10.922 (sade palet adım 1) — tek kök + orphan yok sağlıklı hâldir:
+  // yeşil değil NÖTR çip (bilgi renge/yokluğa bırakılmaz). Eski yeşil
+  // "complete" çipi orphan varken bile "complete" diyordu; artık yalnız
+  // zincir gerçekten tamsa söylenir.
+  if (facts.roots === 1 && facts.orphans === 0) {
+    chips.push({ label: 'W3C tracecontext: complete', tone: 'neutral', title: 'A single root span landed and every other span links to a present parent.' });
   } else if (facts.roots === 0) {
     chips.push({ label: 'No root span', tone: 'warn', title: 'No span without a parent — the trace root never landed in storage (sampled out or dropped). The waterfall shows fragments.' });
-  } else {
+  } else if (facts.roots > 1) {
     chips.push({ label: `${facts.roots} roots`, tone: 'warn', title: 'More than one root — context wasn\'t propagated as a single chain, or multiple entry points merged under one trace id.' });
   }
   if (facts.orphans > 0) {
@@ -88,11 +97,13 @@ export function TraceHonesty({
   }
 
   // sampling
+  // v0.10.922 (sade palet adım 1) — örnekleme kaydı sapma değil, bilgi:
+  // mavi 'info' yerine nötr çip (metin --text2, --border çizgi, noktasız).
   if (facts.samplingPriority != null) {
-    chips.push({ label: `sampling.priority ${facts.samplingPriority}`, tone: 'info', title: 'Head-sampling priority recorded on the root span.' });
+    chips.push({ label: `sampling.priority ${facts.samplingPriority}`, tone: 'neutral', title: 'Head-sampling priority recorded on the root span.' });
   }
   if (facts.samplerName) {
-    chips.push({ label: `sampler ${facts.samplerName}${facts.samplerRatio ? ` @ ${facts.samplerRatio}` : ''}`, tone: 'info', title: 'OTel head sampler recorded on the root span.' });
+    chips.push({ label: `sampler ${facts.samplerName}${facts.samplerRatio ? ` @ ${facts.samplerRatio}` : ''}`, tone: 'neutral', title: 'OTel head sampler recorded on the root span.' });
   }
 
   // dropped counts
@@ -106,6 +117,8 @@ export function TraceHonesty({
   // v0.10.810 — Distributed okuma 0 span döndü, tüm replikalardan toplandı: replikalar aynı veriyi taşımıyor.
   else if (source === 'clickhouse_all_replicas') chips.push({ label: 'source: tüm replikalar', tone: 'warn', title: 'Distributed okuma bu trace için 0 span döndü; spanlar clusterAllReplicas ile tüm replikalardan toplandı. ClickHouse replikaları aynı veriyi taşımıyor — Admin → ClickHouse → Replika tutarlılığı.' });
 
+  if (chips.length === 0) return null;
+
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
       <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.4px', color: 'var(--text3)', textTransform: 'uppercase', marginRight: 2 }}>
@@ -116,8 +129,24 @@ export function TraceHonesty({
   );
 }
 
-function Chip({ label, tone, title }: { label: string; tone: 'ok' | 'warn' | 'err' | 'info'; title: string }) {
-  const color = tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--warn)' : tone === 'err' ? 'var(--err)' : 'var(--info)';
+// v0.10.922 (sade palet adım 1) — 'ok' tonu kalktı (sağlıklı hâl nötr
+// çiple söylenir); 'neutral' renksiz bilgi çipi: --text2 metin, --border çizgi.
+type ChipTone = 'warn' | 'err' | 'info' | 'neutral';
+
+function Chip({ label, tone, title }: { label: string; tone: ChipTone; title: string }) {
+  if (tone === 'neutral') {
+    return (
+      <span title={title} style={{
+        display: 'inline-flex', alignItems: 'center',
+        fontSize: 10.5, padding: '2px 8px', borderRadius: 12,
+        color: 'var(--text2)', border: '1px solid var(--border)',
+        whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </span>
+    );
+  }
+  const color = tone === 'warn' ? 'var(--warn)' : tone === 'err' ? 'var(--err)' : 'var(--info)';
   return (
     <span title={title} style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
