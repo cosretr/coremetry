@@ -92,6 +92,8 @@ export interface MultiLineChartProps {
   // logScale — v0.5.484. SRE'ler metrik büyüklük mertebesi atlarken log'a
   // geçer (HTTP durum sayıları, kuyruk derinlikleri, 5ms→5s yüzdelikler).
   logScale?: boolean;
+  // v0.10.916 — y tabanı 0 (kaynak panelleri; gerekçe CorePanel.zeroBase).
+  zeroBase?: boolean;
   // v0.9.83 — x-eksenini sorgu penceresine sabitle (unix sec); zoom isteği
   // aynen geçer. Verilmezse veriden türetilir.
   xRange?: XPin | null;
@@ -114,7 +116,7 @@ export function MultiLineChart(props: MultiLineChartProps) {
   const {
     series, unit, height = 320, deploys, thresholds, regions, syncKey,
     onZoom, onZoomReset, onCursorTime, xRange, legendStorageKey, defaultHidden,
-    compareSeries, onBucketClick, logScale, maxSeries,
+    compareSeries, onBucketClick, logScale, zeroBase, maxSeries,
   } = props;
   // v0.9.807 — "others" katlaması. v0.9.789'da v2 kapısı açılırken bu adım
   // atlanmıştı: v1 gövdesi >N seriyi katlarken v2 yolu HEPSİNİ çiziyordu
@@ -154,6 +156,7 @@ export function MultiLineChart(props: MultiLineChartProps) {
         defaultHidden={defaultHidden ? [...defaultHidden] : undefined}
         xRange={xRange}
         logScale={logScale}
+        zeroBase={zeroBase}
         regions={[
           ...(regions ?? []),
           ...(deploys ?? []).map(d => ({

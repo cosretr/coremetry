@@ -414,3 +414,12 @@ export function exemplarAt(
   }
   return best;
 }
+
+// yScaleSoftMin — v0.10.916 (operator-reported, Trace Metrics bellek
+// grafiği iki kez: 505.26–505.83 MiB "zirve", 4.997–5.006 GiB "basamak").
+// Çubuk ailesi ve zeroBase isteyen çizgi paneli tabanı 0'a çeker; soft
+// olduğu için negatif veri kırpılmaz. Log ölçekte 0 tanımsız → yok.
+export function yScaleSoftMin(o: { bars: boolean; zeroBase?: boolean; log: boolean }): number | undefined {
+  if (o.bars) return 0;
+  return o.zeroBase && !o.log ? 0 : undefined;
+}

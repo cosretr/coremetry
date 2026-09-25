@@ -112,13 +112,15 @@ export function TraceMetricsPanel({ spans }: { spans: SpanRow[] }) {
         : cpu.length === 0 ? <Empty icon="—" title="Seçili pod'lar için metrik yok.">{notes.join(' · ')}</Empty>
         : (
           <>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>CPU (cores)</div>
-              <MultiLineChart series={cpu} height={180} syncKey={`trace-metrics-${selSvc}`} unit="cores" deploys={marker} xRange={xRange} />
-            </div>
+            {/* v0.10.916 (operator-reported) — bellek üstte; iki panel de y
+                tabanı 0 (zeroBase): %0.1'lik oynama zirve gibi çizilmesin. */}
             <div>
               <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>Memory (bytes)</div>
-              <MultiLineChart series={mem} height={180} syncKey={`trace-metrics-${selSvc}`} unit="bytes" deploys={marker} xRange={xRange} />
+              <MultiLineChart series={mem} height={180} syncKey={`trace-metrics-${selSvc}`} unit="bytes" deploys={marker} xRange={xRange} zeroBase />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>CPU (cores)</div>
+              <MultiLineChart series={cpu} height={180} syncKey={`trace-metrics-${selSvc}`} unit="cores" deploys={marker} xRange={xRange} zeroBase />
             </div>
             <div className="pod-cap">
               kaynak Thanos (Pod sayfasıyla aynı uç) · "trace" işareti trace başlangıcı

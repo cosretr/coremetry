@@ -52,7 +52,7 @@ import {
 } from '@/lib/chart/legendVisibility';
 import { resolveVar } from '@/lib/chart/resolveVar';
 import {
-  drawThresholds, drawTimeRegions, drawExemplars, exemplarAt, regionAt, fmtRegionSpan, thresholdSoftRange,
+  drawThresholds, drawTimeRegions, drawExemplars, exemplarAt, regionAt, fmtRegionSpan, thresholdSoftRange, yScaleSoftMin,
   type ChartThreshold, type ChartTimeRegion, type ChartExemplar,
 } from '@/lib/chart/overlays';
 import {
@@ -136,6 +136,12 @@ export interface CorePanelProps {
   // senkronu (spec: senkron crosshair).
   syncKey?: string;
   logScale?: boolean;
+  // v0.10.916 (operator-reported: Trace Metrics bellek grafiği) — çizgi
+  // panelde de y tabanı 0. Varsayılan otomatik aralık veriye oturur:
+  // 505.26–505.83 MiB arasında gezen bir seri paneli boydan boya dolduran
+  // "zirveler" gibi çizilir, oysa değişim %0.1. Kaynak (CPU/bellek)
+  // panelleri miktardır; Datadog/Dynatrace bunları sıfırdan çizer.
+  zeroBase?: boolean;
   // Legend tablosunun localStorage kimliği (resolveLegendCollapsed).
   storageKey: string;
   // Eşikler KONFİGÜRASYONDAN gelir (spec: hard-coded değil). Çizgi +
@@ -265,7 +271,7 @@ function fullNameOf(frame: { meta?: { custom?: Record<string, unknown> } } | und
 }
 
 export function CorePanel({
-  title, data, height = 200, roles, onZoom, onZoomReset, syncKey, logScale, storageKey,
+  title, data, height = 200, roles, onZoom, onZoomReset, syncKey, logScale, zeroBase, storageKey,
   thresholds, regions, queryText,
   defaultHidden, xRange, note, onExpandClick, exemplars, onExemplarClick, onRegionClick, regionClickHint,
   onBucketClick, hiddenNames, hideLegend, onCursorTime, dashed, viz = 'line',
@@ -641,7 +647,7 @@ export function CorePanel({
       // ve uPlot yalnız veri minimumu ≥ 0 iken tabanı 0'a çeker; negatif
       // veride soft limit yok sayılır. Log ölçekte de güvenli: builder
       // softMin ≤ 0'ı Log dağılımında null'lar (sıfır log'da tanımsız).
-      softMin: bars ? 0 : undefined,
+      softMin: yScaleSoftMin({ bars, zeroBase, log: effLog }),
       // v0.10.384 (dış skill denetimi A8) — eşik ölçeğe girer; aksi hâlde
       // seri eşiğin altındayken thresholdVisible çizgiyi eler ve panel
       // "eşik yok" gibi görünür (alarm önizlemesi, pod CPU limiti).
@@ -995,7 +1001,7 @@ export function CorePanel({
     //                değil ÖLÇÜ; mandal yüzünden yalnız büyür, yani
     //                rebuild seyrek ve gerçekten gerekli olduğunda olur.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aligned.names.join(' '), roles?.join(), syncKey, effLog, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), yGutter.px]);
+  }, [aligned.names.join(' '), roles?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), yGutter.px]);
 
   // ── v0.9.793 — focusedLabel (lejant hover vurgusu) ───────────────────────
   //

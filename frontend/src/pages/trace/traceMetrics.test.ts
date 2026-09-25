@@ -57,3 +57,14 @@ describe('traceMetrics', () => {
     expect(shortPod('bsa-mobile-login-prod-7b9949bb74-l4bg5')).toBe('…7b9949bb74-l4bg5');
   });
 });
+
+// v0.10.916 — operator-reported: bellek üstte, iki panel de y tabanı 0.
+describe('TraceMetricsPanel düzeni', () => {
+  it('Memory CPU\'dan önce; ikisi de zeroBase', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(__dirname, 'TraceMetricsPanel.tsx'), 'utf8');
+    expect(src.indexOf('Memory (bytes)')).toBeLessThan(src.indexOf('CPU (cores)'));
+    expect(src.match(/<MultiLineChart[^>]*zeroBase \/>/g)?.length).toBe(2);
+  });
+});

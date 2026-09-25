@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { clampRegion, fitLabel, thresholdVisible, thresholdSoftRange, regionsToScale, assignLanes, mergeIntervals, regionLaneHit, fmtRegionSpan, LANE_H } from './overlays';
+import { yScaleSoftMin } from './overlays';
 
 // overlays.test.ts (Grafana-parite M3) — paylaşımlı threshold/bölge çizim
 // çekirdeğinin SAF yardımcılarını sabitler. Çizim fonksiyonlarının kendisi
@@ -160,4 +161,15 @@ describe('thresholdSoftRange — eşik ölçeğe girer', () => {
     expect(thresholdSoftRange([], { log: false, bars: false })).toEqual({});
     expect(thresholdSoftRange([{ value: NaN }], { log: false, bars: false })).toEqual({});
   });
+});
+
+// v0.10.916 — operator-reported: kaynak panelinde %0.1'lik oynama zirve /
+// basamak gibi çiziliyordu; zeroBase tabanı 0'a çeker.
+describe('yScaleSoftMin', () => {
+  it.each([
+    [{ bars: true, log: false }, 0],
+    [{ bars: false, log: false }, undefined],
+    [{ bars: false, zeroBase: true, log: false }, 0],
+    [{ bars: false, zeroBase: true, log: true }, undefined],
+  ])('%o → %s', (o, want) => { expect(yScaleSoftMin(o)).toBe(want); });
 });

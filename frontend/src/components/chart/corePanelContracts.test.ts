@@ -364,7 +364,8 @@ describe('CorePanel çubuk tabanı (v0.9.811)', () => {
   ).replace(/\/\/.*$/gm, '');
 
   it('🔴 y ölçeği çubuk ailesinde softMin 0 alır', () => {
-    expect(src).toMatch(/softMin: bars \? 0 : undefined/);
+    // v0.10.916 — kural yScaleSoftMin'e taşındı (bars → 0, tablo-testli overlays.test).
+    expect(src).toMatch(/softMin: yScaleSoftMin\(\{ bars, zeroBase, log: effLog \}\)/);
   });
 
   it('🔴 `min: 0` YASAK — negatif taşıyan seriyi kırpardı', () => {
