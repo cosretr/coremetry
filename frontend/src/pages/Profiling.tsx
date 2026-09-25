@@ -14,6 +14,7 @@ import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { ProfileRow, ProfileHotspotsResponse, TimeRange } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
+import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 
 // Columns for the shared sortable + resizable DataTable.
 const PROFILE_COLS: DataTableColumn<ProfileRow>[] = [
@@ -120,10 +121,8 @@ export default function ProfilingPage() {
               window. Hotspot tab needs a service; the empty
               state nudges the operator if they switch without
               picking one. */}
-          <div className="segmented">
-            <ViewTab cur={view} v="list"     label="Profiles"  onClick={setView} />
-            <ViewTab cur={view} v="hotspots" label="Hotspots"  onClick={setView} />
-          </div>
+          <SegmentedControl aria-label="Profil görünümü" value={view} onChange={setView}
+            options={[{ value: 'list', label: 'Profiles' }, { value: 'hotspots', label: 'Hotspots' }]} />
           <ServicePicker value={service} onChange={setService}
             placeholder="Service…" width={170} />
           <select value={ptype} onChange={e => setPtype(e.target.value)}>
@@ -204,15 +203,6 @@ export default function ProfilingPage() {
 // v0.8.307 (quality bar P5) — the shared .segmented anatomy instead of a
 // hand-rolled accent-filled toggle; the active marker now rides the theme
 // tokens like every other view toggle.
-function ViewTab({ cur, v, label, onClick }:
-  { cur: 'list' | 'hotspots'; v: 'list' | 'hotspots'; label: string;
-    onClick: (v: 'list' | 'hotspots') => void }) {
-  return (
-    <button onClick={() => onClick(v)} className={cur === v ? 'active' : ''}>
-      {label}
-    </button>
-  );
-}
 
 // HotspotsPanel — service-level aggregated hotspots. The
 // backend merges every profile in the window into a virtual

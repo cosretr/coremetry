@@ -28,7 +28,7 @@ import { MetricNamePicker } from '@/components/MetricNamePicker';
 import { seriesColor } from '@/lib/chartFmt';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui';
+import { Modal, SegmentedControl } from '@/components/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from '@/lib/toast';
 import type { MetricInfo, SpanMetricSeries, FilterExpr, TimeRange, Panel, DashboardSummary } from '@/lib/types';
@@ -936,11 +936,9 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
   return (
     <div className="mqe">
       <div className="mqe-toolbar">
-        <div className="segmented">
-          <button className={view === 'builder' ? 'active' : ''} onClick={() => setView('builder')}>Builder</button>
-          <button className={view === 'code' ? 'active' : ''} onClick={openCode}>Code</button>
-          <button className={view === 'promql' ? 'active' : ''} onClick={() => setView('promql')}>PromQL</button>
-        </div>
+        <SegmentedControl aria-label="Sorgu görünümü" value={view}
+          onChange={v => { if (v === 'code') openCode(); else setView(v); }}
+          options={[{ value: 'builder', label: 'Builder' }, { value: 'code', label: 'Code' }, { value: 'promql', label: 'PromQL' }]} />
         <span className="mqe-spacer" />
         <label className="mqe-topn" title="Override the y-axis unit (e.g. % for a ratio formula)">
           unit

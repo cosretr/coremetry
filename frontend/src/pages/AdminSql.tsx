@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query'; // v0.10.742 — Oracle kaynak listesi
 import { Empty, Spinner } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
-import { VirtualList, Button } from '@/components/ui';
+import { VirtualList, Button, SegmentedControl } from '@/components/ui';
 import { useDataTable } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { api } from '@/lib/api';
@@ -367,25 +367,11 @@ export default function SQLPlaygroundPage() {
                 reload. Swaps sample queries + run path; the
                 starter query is replaced to avoid a parse error
                 on first run. */}
-            <div className="segmented" style={{ fontSize: 11 }}>
-              <button type="button"
-                onClick={() => switchBackend('clickhouse')}
-                className={backend === 'clickhouse' ? 'active' : ''}>
-                ClickHouse
-              </button>
-              <button type="button"
-                onClick={() => switchBackend('elasticsearch')}
-                className={backend === 'elasticsearch' ? 'active' : ''}
-                title="Forwards the SQL to Elasticsearch's _sql endpoint. Requires the logs backend to be Elasticsearch.">
-                Elasticsearch
-              </button>
-              <button type="button"
-                onClick={() => switchBackend('oracle')}
-                className={backend === 'oracle' ? 'active' : ''}
-                title="Settings → Oracle'daki bir kaynağa salt-okunur sorgu: tek SELECT/WITH, 10k satır tavanı, kaynağın zaman aşımı.">
-                Oracle
-              </button>
-            </div>
+            <SegmentedControl size="sm" aria-label="Sorgu arka ucu" value={backend} onChange={switchBackend} options={[
+              { value: 'clickhouse', label: 'ClickHouse' },
+              { value: 'elasticsearch', label: 'Elasticsearch', title: "Forwards the SQL to Elasticsearch's _sql endpoint. Requires the logs backend to be Elasticsearch." },
+              { value: 'oracle', label: 'Oracle', title: "Settings → Oracle'daki bir kaynağa salt-okunur sorgu: tek SELECT/WITH, 10k satır tavanı, kaynağın zaman aşımı." },
+            ]} />
             {backend === 'oracle' && (
               /* v0.10.742 — kaynak seçici (Settings → Oracle listesi). */
               <select value={oracleSource} onChange={e => pickOracleSource(e.target.value)}

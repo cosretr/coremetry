@@ -10,6 +10,7 @@ import { TopologyFlowGraph } from '@/components/TopologyFlowGraph';
 import type { TimeRange, ServiceGraphResponse, GraphNode, GraphEdge, ServiceMap } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 import { nodeDetailHref } from '@/components/topology/nodeDetailHref';
 import { nodeLinkLabel } from '@/components/topology/nodeLinkLabel';
 import { ExternalPaths } from '@/components/ExternalPaths';
@@ -318,10 +319,9 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
                 HOP SEÇİMİ GÖRSEL OLARAK AYIRT EDİLEMİYORDU — topolojide "kaç
                 hop bakıyorum" sorusunun tek cevabı bu çift. Ev deseni
                 `.segmented` + `.active` (globals.css:510-537). */}
-            <div className="segmented">
-              <button className={hops === 1 ? 'active' : ''} onClick={() => onHops(1)}>1 hop</button>
-              <button className={hops === 2 ? 'active' : ''} onClick={() => onHops(2)}>2 hops</button>
-            </div>
+            <SegmentedControl aria-label="Komşuluk derinliği" value={String(hops)}
+              onChange={v => onHops(v === '2' ? 2 : 1)}
+              options={[{ value: '1', label: '1 hop' }, { value: '2', label: '2 hops' }]} />
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>
               <input type="checkbox" checked={errorsOnly} onChange={e => onErrorsOnly(e.target.checked)} /> Errors only
             </label>

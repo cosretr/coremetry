@@ -6,6 +6,7 @@ import { IconShield } from '@/components/icons';
 import { ServicePicker } from '@/components/ServicePicker';
 import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 import {
   useMonitors,
   useStatusPageConfig, useUpdateStatusPageConfig,
@@ -228,10 +229,8 @@ function ComponentModal({ initial, monitors, onClose, onSaved }: {
               placeholder="One-line context for end users" style={{ width: '100%' }} />
           </Field>
           <Field label="Status source">
-            <div className="segmented">
-              <button type="button" className={source === 'monitor' ? 'active' : ''} onClick={() => setSource('monitor')}>Monitor probe</button>
-              <button type="button" className={source === 'service' ? 'active' : ''} onClick={() => setSource('service')}>Open Problems on service</button>
-            </div>
+            <SegmentedControl aria-label="Bileşen kaynağı" value={source} onChange={setSource}
+              options={[{ value: 'monitor', label: 'Monitor probe' }, { value: 'service', label: 'Open Problems on service' }]} />
           </Field>
           {source === 'monitor' && (
             <Field label="Monitor">

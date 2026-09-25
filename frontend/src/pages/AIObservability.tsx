@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Button, Drawer, DrawerSection } from '@/components/ui';
+import { Button, Drawer, DrawerSection, SegmentedControl } from '@/components/ui';
 import { api } from '@/lib/api';
 import { cachedPctLabel } from './ai/cachedTokens';
 import { useUrlRange } from '@/lib/useUrlRange';
@@ -486,11 +486,10 @@ function RouterGapsPanel() {
         <span className="ov-sub">
           guided intent'e OTURMAYAN sorular — serbest tool döngüsüne düştüler ya da sınıflandırıcı «none» dedi (v0.10.172)
         </span>
-        <span className="segmented sg-sm" style={{ marginLeft: 'auto' }}>
-          {([1, 7, 30] as const).map(d => (
-            <button key={d} type="button" onClick={() => setDays(d)}
-              className={days === d ? 'active' : ''}>{d}g</button>
-          ))}
+        <span style={{ marginLeft: 'auto' }}>
+          <SegmentedControl size="sm" aria-label="Gün penceresi" value={String(days)}
+            onChange={v => setDays(v === '30' ? 30 : v === '7' ? 7 : 1)}
+            options={([1, 7, 30] as const).map(d => ({ value: String(d), label: `${d}g` }))} />
         </span>
       </div>
       <div className="ov-card-b">

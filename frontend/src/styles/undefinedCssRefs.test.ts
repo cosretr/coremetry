@@ -133,9 +133,9 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
   it('BB1 ve mT9 düzeltmeleri yerinde', () => {
     // Nokta iddialar: bu iki site tam olarak neyi kaybetmişti.
     const fn = readFileSync(resolve(SRC, 'components/topology/FocusedNeighborhood.tsx'), 'utf8');
-    expect(fn).toContain('className="segmented"');
+    // v0.10.915 — elle .segmented yerine SegmentedControl atomu (sınıfı o basar).
+    expect(fn).toContain('<SegmentedControl aria-label="Komşuluk derinliği"');
     expect(fn).not.toContain('className="seg"');
-    expect(fn).toMatch(/hops === 1 \? 'active'/);
 
     const cb = readFileSync(resolve(SRC, 'pages/service/ServiceClusterBreakdown.tsx'), 'utf8');
     expect(stripComments(cb)).not.toContain('var(--muted)');

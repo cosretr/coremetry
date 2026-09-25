@@ -1,4 +1,4 @@
-import { Card } from '@/components/ui';
+import { Card, SegmentedControl } from '@/components/ui';
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { namedSeriesToSeries } from '@/pages/clusters/trendSeries';
 import type { XPin } from '@/lib/chart/xRange';
@@ -73,12 +73,10 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
           )}
         </span>
         {onToggle && byLabel && (
-          <span className="segmented sg-sm">
-            {([[totalLabel, false], [byLabel, true]] as const).map(([label, v]) => (
-              <button key={label} type="button"
-                className={by === v ? 'active' : ''}
-                onClick={e => { e.stopPropagation(); onToggle(v); }}>{label}</button>
-            ))}
+          <span onClick={e => e.stopPropagation()}>
+            <SegmentedControl size="sm" aria-label="Kırılım" value={by ? 'by' : 'total'}
+              onChange={v => onToggle(v === 'by')}
+              options={[{ value: 'total', label: totalLabel }, { value: 'by', label: byLabel }]} />
           </span>
         )}
       </div>

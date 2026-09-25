@@ -3,7 +3,7 @@ import { ServicePicker } from '@/components/ServicePicker';
 import { FilterQueryBox } from '@/components/FilterQueryBox';
 import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui';
+import { IconButton, SegmentedControl } from '@/components/ui';
 import { GroupedMetricPicker } from '@/components/viz/GroupedMetricPicker';
 import { AGG_OPTIONS } from './presets';
 import { SplitByPicker } from './SplitByPicker';
@@ -82,15 +82,11 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
         {q.letter}
       </button>
 
-      <div className="segmented" style={{ marginTop: 1 }}>
-        <button type="button" className={q.source === 'span' ? 'active' : ''}
-          onClick={() => setSource('span')} title="Span sinyalleri (rate / error_rate / persentiller)">
-          Spans
-        </button>
-        <button type="button" className={q.source === 'metric' ? 'active' : ''}
-          onClick={() => setSource('metric')} title="Katalog metriği (OTel metric_points)">
-          Metric
-        </button>
+      <div style={{ marginTop: 1 }}>
+        <SegmentedControl aria-label="Sorgu kaynağı" value={q.source} onChange={setSource} options={[
+          { value: 'span', label: 'Spans', title: 'Span sinyalleri (rate / error_rate / persentiller)' },
+          { value: 'metric', label: 'Metric', title: 'Katalog metriği (OTel metric_points)' },
+        ]} />
       </div>
 
       {q.source === 'span' ? (

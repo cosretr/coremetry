@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 import { IconSparkles } from '@/components/icons';
 import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -102,12 +103,8 @@ export default function ShiftPage() {
     <PageShell>
       <Topbar title="Vardiya özeti" />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0 16px' }}>
-        <span className="segmented sg-sm">
-          {SHIFT_WINDOWS.map(win => (
-            <button key={win} type="button" className={w === win ? 'active' : ''}
-              onClick={() => setW(win)}>Son {win}</button>
-          ))}
-        </span>
+        <SegmentedControl size="sm" aria-label="Vardiya penceresi" value={w} onChange={setW}
+          options={SHIFT_WINDOWS.map(win => ({ value: win, label: `Son ${win}` }))} />
         <Button variant="secondary" size="sm" onClick={explain} disabled={ai.busy}
           title="Bu pencerenin hazır kanıt paketini AI anlatır">
           <IconSparkles /> Vardiyayı anlat

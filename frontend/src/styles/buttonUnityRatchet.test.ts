@@ -12,9 +12,11 @@ import { resolve, join } from 'node:path';
 // KAPI: iki sayı yalnız AŞAĞI iner. Bir dilim sayıyı düşürdüğünde tavan da
 // aynı commit'te düşürülür; artış = atom kullan. Tabanlar v0.10.914:
 // 125 ham `<button` (ui atomları hariç), 13 dosyada elle `className="segmented"`.
+// v0.10.915 (dilim 2): 97 ham `<button`, elle `.segmented` 0 — tüm tek
+// seçimli gruplar SegmentedControl.
 const SRC = resolve(__dirname, '..');
-const MAX_RAW_BUTTONS = 125;
-const MAX_SEGMENTED_FILES = 13;
+const MAX_RAW_BUTTONS = 97;
+const MAX_SEGMENTED_FILES = 0;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {

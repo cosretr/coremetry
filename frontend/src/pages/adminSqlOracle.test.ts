@@ -13,7 +13,8 @@ const storage = readFileSync(resolve(__dirname, '../lib/storage.ts'), 'utf8');
 describe('Admin SQL — Oracle backend (v0.10.742)', () => {
   it('üç backend; Oracle düğmesi ve kaynak seçici', () => {
     expect(page).toContain("type Backend = 'clickhouse' | 'elasticsearch' | 'oracle';");
-    expect(page).toContain("onClick={() => switchBackend('oracle')}");
+    expect(page).toContain('value={backend} onChange={switchBackend}'); // v0.10.915 SegmentedControl
+    expect(page).toContain("{ value: 'oracle', label: 'Oracle'");
     expect(page).toContain('aria-label="Oracle kaynağı"');
     expect(page).toContain("enabled: isAdmin && backend === 'oracle'"); // yalnız sekme açıkken çekilir
   });

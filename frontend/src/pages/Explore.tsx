@@ -61,6 +61,7 @@ import { FormulaRow } from './explore/FormulaRow';
 import { VizRail } from './explore/VizRail';
 import { SplitByPicker } from './explore/SplitByPicker';
 import { Button } from '@/components/ui/Button';
+import { Chip, SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 import { PageShell } from '@/components/ui/PageShell';
 
 // Explore (explore-v2 Phase 2) — the metric result mode is now the
@@ -770,15 +771,8 @@ function ExploreInner({ onSelfWrite }: {
           {/* SOURCE zone */}
           <div style={ZONE_FIRST}>
             <span style={ZONE_LABEL}>Source</span>
-            <div className="segmented">
-              {(['spans', 'metrics', 'logs'] as Source[]).map(s => (
-                <button key={s} type="button" onClick={() => setSource(s)}
-                  className={source === s ? 'active' : ''}
-                  style={{ textTransform: 'capitalize' }}>
-                  {s}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl aria-label="Veri kaynağı" value={source} onChange={setSource}
+              options={(['spans', 'metrics', 'logs'] as Source[]).map(s => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))} />
             <span style={{ flex: 1 }} />
             {/* v0.9.849 — halka artık GÖRÜNÜR. Kayıtlı görünümlerin yanı,
                 çünkü ikisi de "daha önce kurduğum sorguya dön" ailesinden;
@@ -795,21 +789,11 @@ function ExploreInner({ onSelfWrite }: {
           {/* SHOW zone — result mode + (metric mode) viz rail + step */}
           <div style={ZONE}>
             <span style={ZONE_LABEL}>Show</span>
-            <div className="segmented">
-              <button type="button" onClick={() => switchResultMode('traces')}
-                className={resultMode === 'traces' ? 'active' : ''}>
-                ⋮ Traces
-              </button>
-              <button type="button" onClick={() => switchResultMode('metric')}
-                className={resultMode === 'metric' ? 'active' : ''}>
-                ∿ Metric
-              </button>
-              <button type="button" onClick={() => switchResultMode('repeats')}
-                className={resultMode === 'repeats' ? 'active' : ''}
-                title="Find traces where the same span shape repeats N+ times (N+1 / chatty-RPC detector)">
-                ⟳ Repeats
-              </button>
-            </div>
+            <SegmentedControl aria-label="Sonuç kipi" value={resultMode} onChange={switchResultMode} options={[
+              { value: 'traces', label: '⋮ Traces' },
+              { value: 'metric', label: '∿ Metric' },
+              { value: 'repeats', label: '⟳ Repeats', title: 'Find traces where the same span shape repeats N+ times (N+1 / chatty-RPC detector)' },
+            ]} />
             {resultMode === 'metric' && (
               <>
                 <span style={VDIV} />
@@ -842,15 +826,11 @@ function ExploreInner({ onSelfWrite }: {
                     kalmış olabilir; görünmeyen bir anahtarın sessizce
                     çalışması daha kötü olurdu). */}
                 {(builder.viz === 'line' || builder.viz === 'area' || builder.viz === 'bars') && (
-                  <div className="segmented" style={{ marginLeft: 4 }}>
-                    <button type="button"
-                      onClick={() => setBuilder(b => ({ ...b, logY: !b.logY || undefined }))}
-                      aria-pressed={!!builder.logY}
-                      className={builder.logY ? 'active' : ''}
-                      title="Logaritmik y-ekseni — on/off. Kademeler arası (ör. 5ms p50 ile 3s p99) serileri aynı panelde okunur kılar.">
-                      log y
-                    </button>
-                  </div>
+                  <Chip active={!!builder.logY} tone="accent" style={{ marginLeft: 4 }}
+                    onClick={() => setBuilder(b => ({ ...b, logY: !b.logY || undefined }))}
+                    title="Logaritmik y-ekseni — on/off. Kademeler arası (ör. 5ms p50 ile 3s p99) serileri aynı panelde okunur kılar.">
+                    log y
+                  </Chip>
                 )}
                 {/* v0.9.824 — önceki döneme karşılaştırma. VARSAYILAN KAPALI
                     ve maliyeti başlıkta YAZIYOR: açık her kip, üreten her
@@ -859,25 +839,13 @@ function ExploreInner({ onSelfWrite }: {
                     iki dönem üst üste binmez, mod seçilince şerit çıkmaz). */}
                 {builder.viz !== 'heatmap' && (<>
                   <span style={{ color: 'var(--text2)', fontSize: 12, marginLeft: 4 }}>Karşılaştır:</span>
-                  <div className="segmented">
-                    <button type="button"
-                      onClick={() => setBuilder(b => ({ ...b, cmp: undefined }))}
-                      aria-pressed={!builder.cmp}
-                      className={!builder.cmp ? 'active' : ''}
-                      title="Karşılaştırma kapalı — tek sorgu turu (varsayılan)">
-                      Kapalı
-                    </button>
-                    {EXPLORE_COMPARE.map(m => (
-                      <button key={m} type="button"
-                        onClick={() => setBuilder(b => ({ ...b, cmp: m }))}
-                        aria-pressed={builder.cmp === m}
-                        className={builder.cmp === m ? 'active' : ''}
-                        title={`${compareLabel(m)} ile karşılaştır — kesikli soluk hayalet çizgiler + Δ %. `
-                          + 'Sorgu maliyetini İKİYE KATLAR: her sorgu bir de kaydırılmış pencerede koşar.'}>
-                        {m === 'prev' ? 'Önceki' : m}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl aria-label="Karşılaştırma" value={builder.cmp ?? 'off'}
+                    onChange={v => setBuilder(b => ({ ...b, cmp: v === 'off' ? undefined : v }))} options={[
+                      { value: 'off' as const, label: 'Kapalı', title: 'Karşılaştırma kapalı — tek sorgu turu (varsayılan)' },
+                      ...EXPLORE_COMPARE.map(m => ({ value: m, label: m === 'prev' ? 'Önceki' : m,
+                        title: `${compareLabel(m)} ile karşılaştır — kesikli soluk hayalet çizgiler + Δ %. `
+                          + 'Sorgu maliyetini İKİYE KATLAR: her sorgu bir de kaydırılmış pencerede koşar.' })),
+                    ]} />
                 </>)}
               </>
             )}
@@ -933,15 +901,9 @@ function ExploreInner({ onSelfWrite }: {
           {resultMode !== 'metric' && (
             <div style={{ ...ZONE, alignItems: 'flex-start' }}>
               <span style={{ ...ZONE_LABEL, marginTop: 5 }}>Filter</span>
-              <div className="segmented" style={{ marginTop: 1 }}>
-                <button type="button" onClick={() => setMode('builder')}
-                  className={mode === 'builder' ? 'active' : ''}>
-                  Builder
-                </button>
-                <button type="button" onClick={() => setMode('advanced')}
-                  className={mode === 'advanced' ? 'active' : ''}>
-                  Advanced
-                </button>
+              <div style={{ marginTop: 1 }}>
+                <SegmentedControl aria-label="Filtre kipi" value={mode} onChange={setMode}
+                  options={[{ value: 'builder', label: 'Builder' }, { value: 'advanced', label: 'Advanced' }]} />
               </div>
               <div style={{ flex: 1, minWidth: 240 }}>
                 {mode === 'builder' && (

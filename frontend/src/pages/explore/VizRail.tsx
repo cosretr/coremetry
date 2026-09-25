@@ -1,4 +1,5 @@
 import { EXPLORE_VIZ, type ExploreViz } from './model';
+import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 
 // VizRail — the builder's viz mode picker.
 // line / area / bars render on TimeSeriesPanel; stat / toplist render the
@@ -24,16 +25,11 @@ export function VizRail({ value, onChange, disabled }: {
   disabled?: Partial<Record<ExploreViz, string>>;
 }) {
   return (
-    <div className="segmented">
-      {EXPLORE_VIZ.map(v => (
-        <button key={v} type="button" title={disabled?.[v] ?? VIZ_META[v].hint}
-          className={value === v ? 'active' : ''}
-          disabled={!!disabled?.[v] && value !== v}
-          aria-disabled={!!disabled?.[v] || undefined}
-          onClick={() => onChange(v)}>
-          {VIZ_META[v].icon} {VIZ_META[v].label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl aria-label="Görselleştirme" value={value} onChange={onChange}
+      options={EXPLORE_VIZ.map(v => ({
+        value: v, label: `${VIZ_META[v].icon} ${VIZ_META[v].label}`,
+        title: disabled?.[v] ?? VIZ_META[v].hint,
+        disabled: !!disabled?.[v] && value !== v,
+      }))} />
   );
 }

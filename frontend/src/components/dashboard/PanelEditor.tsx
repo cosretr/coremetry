@@ -1,6 +1,6 @@
 import { UnitSelect } from './UnitSelect'; // v0.10.506 (D9)
 import { MetricNamePicker } from '../MetricNamePicker';
-import { ActionRow, Button } from '@/components/ui';
+import { ActionRow, Button, SegmentedControl } from '@/components/ui';
 import { STEP_OPTIONS } from '@/pages/explore/presets';
 import type {
   Panel, PanelType, PanelWidth, PanelHeight,
@@ -254,11 +254,10 @@ function MetricFields({ cfg, onChange }: {
   const promqlMode = cfg.promql !== undefined;
   return (
     <>
-      <div className="segmented" style={{ marginBottom: 8 }}>
-        <button type="button" className={!promqlMode ? 'active' : ''}
-          onClick={() => update('promql', undefined)}>Builder</button>
-        <button type="button" className={promqlMode ? 'active' : ''}
-          onClick={() => { if (cfg.promql === undefined) update('promql', ''); }}>PromQL / MetricsQL</button>
+      <div style={{ marginBottom: 8 }}>
+        <SegmentedControl aria-label="Sorgu kipi" value={promqlMode ? 'promql' : 'builder'}
+          onChange={v => { if (v === 'builder') update('promql', undefined); else if (cfg.promql === undefined) update('promql', ''); }}
+          options={[{ value: 'builder', label: 'Builder' }, { value: 'promql', label: 'PromQL / MetricsQL' }]} />
       </div>
       {promqlMode ? (
         <Field label="PromQL / MetricsQL query">
