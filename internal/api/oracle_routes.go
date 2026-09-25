@@ -142,7 +142,7 @@ func (s *Server) testOracleSource(w http.ResponseWriter, r *http.Request) {
 	// v0.10.768 — pencere (5/15/60) + CH trace araması (özet "hangi servis").
 	opt := oracle.TestOptions{WindowMin: oracle.ClampTestWindow(parseInt(r.URL.Query().Get("windowMin"), 0))}
 	if s.store != nil {
-		opt.TraceLookup = s.store.TraceServicesByIDs
+		opt.TraceLookup = s.oracleTraceLookup              // v0.10.917 — CH + Tempo emniyet ağı
 		opt.AliveServices = s.store.ListActiveServiceNames // v0.10.908 — pod adından servis
 	}
 	res := s.oracle.TestWith(r.Context(), cfg.Sources[0], opt)

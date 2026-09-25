@@ -721,7 +721,8 @@ func runWindowSummary(ctx context.Context, db sqlDB, cfg SourceConfig, budget ti
 		ids := distinctTraceIDs(rows, summaryLookupIDs)
 		if len(ids) > 0 {
 			lctx, cancel := context.WithTimeout(ctx, budget)
-			lookup, lerr = opt.TraceLookup(lctx, ids, from.Add(-summaryLookupPad), to.Add(summaryLookupPad))
+			lo, hi := lookupWindow(rows, from, to, summaryLookupPad) // v0.10.917
+			lookup, lerr = opt.TraceLookup(lctx, ids, lo, hi)
 			cancel()
 		} else {
 			lookup = map[string]string{}

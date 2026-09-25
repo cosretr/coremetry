@@ -260,7 +260,8 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 	tf.looked = len(ids)
 	res.Looked = len(ids)
 	if len(ids) > 0 && r.lookup != nil {
-		facts, err := r.lookup(ctx, ids, from.Add(-subjectLookupPad), to.Add(subjectLookupPad))
+		lo, hi := lookupWindow(rows, from, to, subjectLookupPad) // v0.10.917
+		facts, err := r.lookup(ctx, ids, lo, hi)
 		if err != nil {
 			res.Error = "trace araması: " + err.Error()
 			log.Printf("[oracle/subject] %s: %s", src.Name, res.Error)
