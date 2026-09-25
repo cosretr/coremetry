@@ -25,7 +25,7 @@ describe('stripStat', () => {
     expect(src).toContain("parseStripStat(searchParams.get('rt'))");
     expect(src).toContain("['rt',       stripStat !== STRIP_STAT_DEFAULT ? stripStat : '']");
     expect(src).toContain("{ name: 'rt', agg: stripStat, field: 'duration_ms' }");
-    expect(src).toContain('className="segmented sg-sm"');
+    expect(src).toMatch(/<SegmentedControl size="sm" aria-label="Yanıt süresi istatistiği"/); // v0.10.914
     expect(src).not.toMatch(/chartTall|toggleChartTall|⌄ expand|⌃ shrink/);
     const storage = readFileSync(resolve(__dirname, '../../lib/storage.ts'), 'utf8');
     expect(storage).not.toContain('tracesChartTall');

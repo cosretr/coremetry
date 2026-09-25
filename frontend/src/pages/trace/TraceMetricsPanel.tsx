@@ -13,6 +13,7 @@ import type { SpanMetricSeries, SpanRow } from '@/lib/types';
 import { useEntityEnabled } from '@/lib/queries';
 import { MultiLineChart, type DeployMarker } from '@/components/MultiLineChart';
 import { Spinner, Empty } from '@/components/Spinner';
+import { Chip, SegmentedControl } from '@/components/ui';
 import { podDetailPath } from '@/pages/service/podDetailPath';
 import {
   tracePods, podsByService, defaultPodSelection, togglePod, traceMetricsWindow, resolveCluster, shortPod,
@@ -84,12 +85,11 @@ export function TraceMetricsPanel({ spans }: { spans: SpanRow[] }) {
             {g.pods.map(p => {
               const on = selected.includes(p.pod);
               return (
-                <button key={p.pod} type="button" aria-pressed={on}
-                  className={`ov-facet${on ? ' on' : ''}`} style={{ font: 'inherit', cursor: 'pointer' }}
+                <Chip key={p.pod} active={on} tone="accent"
                   title={`${p.pod} · ${p.spans} span${p.errors ? ` · ${p.errors} hata` : ''}`}
                   onClick={() => set('mpod', togglePod(selected, p.pod, pods).join(','))}>
-                  {shortPod(p.pod)}<span className="n"> {p.spans}</span>{p.errors > 0 && <span style={{ color: 'var(--err)' }}> ⚠{p.errors}</span>}
-                </button>
+                  {shortPod(p.pod)} · {p.spans}{p.errors > 0 && <span style={{ color: 'var(--err)' }}> ⚠{p.errors}</span>}
+                </Chip>
               );
             })}
           </div>
@@ -97,12 +97,9 @@ export function TraceMetricsPanel({ spans }: { spans: SpanRow[] }) {
       </div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, flexWrap: 'wrap' }}>
         <span style={{ color: 'var(--text3)' }}>pencere: trace ±</span>
-        {TRACE_METRICS_WINDOWS.map(w => (
-          <button key={w} type="button" aria-pressed={w === win} className={`ov-facet${w === win ? ' on' : ''}`}
-            style={{ font: 'inherit', cursor: 'pointer' }} onClick={() => set('mwin', w === TRACE_METRICS_DEFAULT_WINDOW ? null : String(w))}>
-            {w === 60 ? '1 sa' : `${w} dk`}
-          </button>
-        ))}
+        <SegmentedControl size="sm" aria-label="Metrik penceresi" value={String(win)}
+          onChange={v => set('mwin', Number(v) === TRACE_METRICS_DEFAULT_WINDOW ? null : v)}
+          options={TRACE_METRICS_WINDOWS.map(w => ({ value: String(w), label: w === 60 ? '1 sa' : `${w} dk` }))} />
         <span style={{ flex: 1 }} />
         <span style={{ color: 'var(--text3)' }}>{selSvc} · {selected.length}/{TRACE_METRICS_MAX_PODS} pod · aynı servisin pod'ları üst üste</span>
         {targets[0]?.cluster && (

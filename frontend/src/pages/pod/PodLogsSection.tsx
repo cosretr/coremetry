@@ -9,7 +9,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { LogRow } from '@/lib/types';
-import { Card, DisclosureButton } from '@/components/ui';
+import { Card, DisclosureButton, SegmentedControl } from '@/components/ui';
 import { PanelTitle } from '@/components/ui/PanelTitle';
 import { Spinner, Empty } from '@/components/Spinner';
 import { LogTable } from '@/components/LogTable';
@@ -55,15 +55,8 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
   const rows = q.data?.logs ?? [];
   const counts = useMemo(() => levelCounts(rows), [rows]);
 
-  // Servis log sekmesinin seviye facet'iyle aynı görsel dil (.ov-facet);
-  // erişilebilirlik için düğme (aria-pressed), görünüm sıfırlanır.
-  const chip = (v: PodLogLevel, label: string, n?: number) => (
-    <button type="button" className={`ov-facet${lvl === v ? ' on' : ''}`} aria-pressed={lvl === v}
-      style={{ font: 'inherit', cursor: 'pointer' }}
-      onClick={() => setParam('plvl', v === 'all' ? null : v)}>
-      {label}{n !== undefined && <span className="n"> {n}</span>}
-    </button>
-  );
+  // v0.10.914 (buton bütünlüğü) — tek seçimli seviye: ortak SegmentedControl.
+  const lvlLabel = (label: string, n?: number) => (n !== undefined ? `${label} · ${n}` : label);
 
   return (
     <div className="pod-sec">
@@ -75,9 +68,12 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
         {open && (
           <div className="pod-ek-body">
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-              {chip('all', 'Tümü')}
-              {chip('error', 'ERROR', lvl === 'all' && rows.length ? counts.error : undefined)}
-              {chip('warn', 'WARN+', lvl === 'all' && rows.length ? counts.warn : undefined)}
+              <SegmentedControl size="sm" aria-label="Log seviyesi" value={lvl}
+                onChange={v => setParam('plvl', v === 'all' ? null : v)} options={[
+                  { value: 'all', label: 'Tümü' },
+                  { value: 'error', label: lvlLabel('ERROR', lvl === 'all' && rows.length ? counts.error : undefined) },
+                  { value: 'warn', label: lvlLabel('WARN+', lvl === 'all' && rows.length ? counts.warn : undefined) },
+                ]} />
               <input className="field" style={{ flex: '1 1 240px', maxWidth: 360 }} placeholder="Ara (mesaj içinde)…"
                 value={input} onChange={e => setInput(e.target.value)} aria-label="Pod logları içinde ara" />
             </div>

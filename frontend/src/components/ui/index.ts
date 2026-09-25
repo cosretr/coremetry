@@ -25,6 +25,8 @@ export type { ChipProps } from './Chip';
 
 export { DisclosureButton } from './DisclosureButton';
 export { TabStrip } from './TabStrip';
+export { SegmentedControl } from './SegmentedControl'; // v0.10.914
+export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl';
 export type { TabItem } from './TabStrip';
 export type { DisclosureButtonProps } from './DisclosureButton';
 

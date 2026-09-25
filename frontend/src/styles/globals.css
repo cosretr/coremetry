@@ -2450,18 +2450,9 @@ button.accent.copied {
   width: 320px; padding: 5px 4px;
 }
 .trace-lookup input::placeholder { color: var(--text3); font-style: italic; }
-.trace-lookup .tl-clear {
-  background: transparent; border: 0; color: var(--text2);
-  cursor: pointer; padding: 0 6px; font-size: 12px;
-  border-radius: 3px;
-}
-.trace-lookup .tl-clear:hover { background: var(--bg3); color: var(--text); }
-.trace-lookup .tl-go {
-  background: var(--accent); color: var(--on-accent); border: 0;
-  padding: 4px 12px; font-size: 12px; font-weight: 600;
-  border-radius: var(--radius-xs); margin-left: 4px; cursor: pointer;
-}
-.trace-lookup .tl-go:hover { background: var(--accent2); }
+/* v0.10.914 (buton bütünlüğü) — tl-go / tl-clear sayfaya özel stilleri
+   kalktı; kutu içindeki ortak Button/IconButton'a yalnız aralık verilir. */
+.trace-lookup > button { margin-left: 4px; }
 
 /* Copy-to-clipboard button (inline next to IDs / hashes) */
 .copy-btn {

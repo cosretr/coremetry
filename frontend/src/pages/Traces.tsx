@@ -32,7 +32,7 @@ import { ServicePicker } from '@/components/ServicePicker';
 import { FilterQueryBox } from '@/components/FilterQueryBox';
 import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui'; // v0.10.676 — satır-içi kiosk düğmesi
+import { IconButton, SegmentedControl } from '@/components/ui'; // v0.10.676 — satır-içi kiosk düğmesi; v0.10.914 SegmentedControl
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ColumnManager } from '@/components/ColumnManager';
@@ -1123,11 +1123,14 @@ function TracesPageInner() {
                 value={draft.traceId}
                 onChange={e => setDraft({ ...draft, traceId: e.target.value })}
                 onKeyDown={e => e.key === 'Enter' && apply()} />
+              {/* v0.10.914 (buton bütünlüğü) — sayfaya özel Go/Clear sınıfları
+                  yerine ortak atomlar: IconButton (temizle) + Button primary sm (git). */}
               {draft.traceId && (
-                <button className="tl-clear" type="button" title="Clear"
-                  onClick={() => { setDraft({ ...draft, traceId: '' }); setFilter({ ...filter, traceId: '' }); }}>✕</button>
+                <IconButton size="sm" variant="ghost" aria-label="Trace ID'yi temizle" title="Clear"
+                  icon={<span aria-hidden="true">✕</span>}
+                  onClick={() => { setDraft({ ...draft, traceId: '' }); setFilter({ ...filter, traceId: '' }); }} />
               )}
-              <button className="tl-go" type="button" onClick={() => apply()}>Go</button>
+              <Button variant="primary" size="sm" onClick={() => apply()}>Go</Button>
             </div>
         </div>
 
@@ -1187,10 +1190,9 @@ function TracesPageInner() {
                 title={stripCollapsed ? 'Grafiği göster' : 'Grafiği katla — yalnız istatistik şeridi kalır (tarayıcıda hatırlanır)'}
                 icon={<span aria-hidden="true">{stripCollapsed ? '▸' : '▾'}</span>}
                 onClick={toggleStrip} />
-              <div className="segmented">
-                <button className={viz === 'volume' ? 'active' : ''} onClick={() => setViz('volume')}>Volume</button>
-                <button className={viz === 'latency' ? 'active' : ''} onClick={() => setViz('latency')}>Latency</button>
-              </div>
+              <SegmentedControl aria-label="Grafik türü" value={viz} onChange={setViz} options={[
+                { value: 'volume', label: 'Volume' }, { value: 'latency', label: 'Latency' },
+              ]} />
               {zoomDepth > 0 && (
                 <Button variant="secondary" size="sm" onClick={clearBrush}
                   title="Zoom back one step (double-click on the chart does the same)">
@@ -1242,13 +1244,9 @@ function TracesPageInner() {
                 {/* v0.10.513 (operatör: "seçilebilir olsun, çok yer kaplamasın,
                     expand yerinde") — yanıt-süresi istatistiği seçici, eski
                     expand düğmesinin yerinde; `.segmented.sg-sm` yoğun rung. */}
-                <div className="segmented sg-sm" role="group" aria-label="Yanıt süresi istatistiği"
-                  title="Çizgi ve başlıktaki MAX bu istatistiği gösterir (URL ?rt=)">
-                  {STRIP_STATS.map(st => (
-                    <button key={st} type="button" className={stripStat === st ? 'active' : ''}
-                      onClick={() => setStripStat(st)}>{st}</button>
-                  ))}
-                </div>
+                <SegmentedControl size="sm" aria-label="Yanıt süresi istatistiği" value={stripStat} onChange={setStripStat}
+                  title="Çizgi ve başlıktaki MAX bu istatistiği gösterir (URL ?rt=)"
+                  options={STRIP_STATS.map(st => ({ value: st, label: st }))} />
               </>} />
           ) : (
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 10 }}>
@@ -1274,14 +1272,11 @@ function TracesPageInner() {
             yanıtladığı için tek şeritte topluluyor (~43px kazanç). `.controls`
             zaten flex-wrap, dar ekranda ikinci satıra kırılır. */}
         <PageControls sticky style={{ marginBottom: 8, alignItems: 'center' }}>
-          <div className="segmented">
-            <button onClick={() => setView('list')} className={view === 'list' ? 'active' : ''}>Traces</button>
-            <button onClick={() => setView('aggregate')} className={view === 'aggregate' ? 'active' : ''}>Aggregated</button>
-            <button onClick={() => setView('shapes')} className={view === 'shapes' ? 'active' : ''}
-              title="Cluster traces by their (service, operation) signature — find dominant call patterns at a glance">
-              Shapes
-            </button>
-          </div>
+          <SegmentedControl aria-label="Trace görünümü" value={view} onChange={setView} options={[
+            { value: 'list', label: 'Traces' },
+            { value: 'aggregate', label: 'Aggregated' },
+            { value: 'shapes', label: 'Shapes', title: 'Cluster traces by their (service, operation) signature — find dominant call patterns at a glance' },
+          ]} />
           {view === 'aggregate' && (
             <>
               <span style={{ color: 'var(--text2)', fontSize: 12 }}>Group by:</span>
