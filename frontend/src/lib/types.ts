@@ -2189,6 +2189,16 @@ export interface ClusterSummary {
   podsFailed?: number;
   alertsCritical?: number;
   alertsWarning?: number;
+  /** v0.10.912 (parite #6 dilim 4 Karar 2) — "kaç gün kaldı" (son 7 gün, Thanos). */
+  cpuForecast?: CapacityForecastDays;
+  memForecast?: CapacityForecastDays;
+}
+
+/** api.CapacityForecastDays — kapasite projeksiyonu (gün). */
+export interface CapacityForecastDays {
+  status: 'ok' | 'at_limit' | 'none';
+  days?: number; loDays?: number; hiDays?: number; hiOpen?: boolean; wide?: boolean;
+  r2?: number; points: number; stepMin?: number; windowDays: number; reason?: string;
 }
 // v0.9.23 — namespace içi iş yükü rollup satırı (Deployment/STS/DS;
 // "(unassigned)" = eşlenemeyen pod'lar). podNames pod tablosunun

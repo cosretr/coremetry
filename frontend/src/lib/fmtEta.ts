@@ -50,12 +50,12 @@ export interface DiskHistoryFc {
   days: number; critical: boolean; status?: string; reason?: string; r2?: number;
   loDays?: number; hiDays?: number; hiOpen?: boolean; wide?: boolean; points?: number; windowDays?: number;
 }
-export function diskHistoryChip(f: DiskHistoryFc): { text: string; tone: 'b-err' | 'b-warn' | 'b-gray'; badge: boolean; title: string } {
-  const base = `Son ${f.windowDays || 7} günün doğrusal eğilimi (${f.points ?? 0} saatlik nokta) · kalıcı disk serisi.`;
+export function diskHistoryChip(f: DiskHistoryFc, source = 'kalıcı disk serisi', horizonDays = 30): { text: string; tone: 'b-err' | 'b-warn' | 'b-gray'; badge: boolean; title: string } {
+  const base = `Son ${f.windowDays || 7} günün doğrusal eğilimi (${f.points ?? 0} nokta) · ${source}.`;
   if (f.status === 'at_limit') return { text: '⏳ dolu (eğilim tavanda)', tone: 'b-err', badge: true, title: base };
   if (f.status !== 'ok') {
     return { text: `⏳ yok · ${f.reason || 'tahmin kurulamadı'}`, tone: 'b-gray', badge: false,
-      title: `${base} Tahmin yalnız eğim pozitif, uyum R² ≥ 0.6 ve ufuk ≤ 30 günse gösterilir.` };
+      title: `${base} Tahmin yalnız eğim pozitif, uyum R² ≥ 0.6 ve ufuk ≤ ${horizonDays} günse gösterilir.` };
   }
   const tone = f.days < 2 ? 'b-err' : f.days < 7 ? 'b-warn' : 'b-gray';
   const r2 = f.r2 !== undefined ? ` · R² ${f.r2.toFixed(2)}` : '';
@@ -63,6 +63,16 @@ export function diskHistoryChip(f: DiskHistoryFc): { text: string; tone: 'b-err'
     ? ` Aralık ${fmtEtaDays(f.loDays)} – ${f.hiOpen ? 'üst sınır yok' : fmtEtaDays(f.hiDays ?? f.days)}.` : '';
   const text = f.wide ? `⏳ ${fmtEtaDays(f.loDays ?? f.days)}+` : `⏳ ≈ ${fmtEtaDays(f.days)}`;
   return { text: text + r2, tone, badge: true, title: base + range };
+}
+
+// clusterCapacityChip — v0.10.912: Clusters KPI kartı; disk rozetiyle aynı dil.
+export function clusterCapacityChip(f: {
+  status: string; days?: number; loDays?: number; hiDays?: number; hiOpen?: boolean; wide?: boolean;
+  r2?: number; points: number; stepMin?: number; windowDays: number; reason?: string;
+} | undefined) {
+  if (!f) return null;
+  const step = f.stepMin ? `${f.stepMin} dk adım, ` : '';
+  return diskHistoryChip({ ...f, days: f.days ?? 0, critical: (f.days ?? 0) < 2 }, `${step}Thanos küme toplamı; kapasite = allocatable`, 30);
 }
 
 // evaluatorQuietLabel — rozetin sayısı değerlendiricinin son tikinden

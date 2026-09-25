@@ -26,13 +26,14 @@ import { Button, Card, Drawer, DrawerSection, IconButton, LinkButton } from '@/c
 import { api } from '@/lib/api';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum } from '@/lib/utils';
+import { clusterCapacityChip } from '@/lib/fmtEta'; // v0.10.912 — "kaç gün kaldı"
 import { clampThanosWindow, clampSuffix } from '@/lib/thanosWindow';
 import { useUrlRange, rememberRange } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
-import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterAlertRow, ClusterSummary, TimeRange } from '@/lib/types';
+import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterAlertRow, ClusterSummary, TimeRange, CapacityForecastDays } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -1040,6 +1041,7 @@ export default function ClustersPage() {
                           d?.nodes ? `${fmtNum(d.nodes)} nodes` : '',
                         ].filter(Boolean).join(' · ')}
                       </div>
+                      <CapacityEtaLine f={d?.cpuForecast} />
                     </Card>
                     <Card density="tight" header="Memory used">
                       <div className="mono" style={kpiVal}>
@@ -1049,6 +1051,7 @@ export default function ClustersPage() {
                         {d?.memCapacityBytes ? `of ${fmtBytes(d.memCapacityBytes)}`
                           : d?.pods ? `${fmtNum(d.pods)} pods` : ''}
                       </div>
+                      <CapacityEtaLine f={d?.memForecast} />
                     </Card>
                     {phaseTotal > 0 && (
                       <Card density="tight" header="Running pods">
@@ -1378,3 +1381,18 @@ function depStatusBadge(status: string): string {
 }
 
 // podPhaseBadge v0.9.51'de thresholds.ts'e taşındı.
+
+// CapacityEtaLine — v0.10.912 (parite #6 dilim 4 Karar 2): KPI kartında
+// "⌛ ≈ N gün" (son 7 günün küme toplamı; kapasite yoksa hiç çizilmez).
+function CapacityEtaLine({ f }: { f: CapacityForecastDays | undefined }) {
+  const c = clusterCapacityChip(f);
+  if (!c) return null;
+  const text = c.text.replace('⏳', '⌛');
+  return (
+    <div style={{ marginTop: 4 }} title={c.title}>
+      {c.badge
+        ? <span className={`badge ${c.tone}`}>{text}</span>
+        : <span style={{ fontSize: 11, color: 'var(--text3)' }}>{text}</span>}
+    </div>
+  );
+}

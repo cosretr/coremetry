@@ -675,7 +675,14 @@ func (s *Server) getClusterSummary(w http.ResponseWriter, r *http.Request) {
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		qctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		return s.thanos.Summary(qctx, cfg)
+		sum, err := s.thanos.Summary(qctx, cfg)
+		if err != nil {
+			return sum, err
+		}
+		// v0.10.912 — KPI "kaç gün" çipleri (cluster_capacity_forecast.go).
+		out := clusterSummaryWithForecast{ClusterSummary: sum}
+		out.CPUForecast, out.MemForecast = s.clusterCapacityForecasts(ctx, cfg, sum)
+		return out, nil
 	})
 }
 

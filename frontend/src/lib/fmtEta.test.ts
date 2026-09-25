@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtEtaDays, fixedHalfEven, etaChipLabel, evaluatorQuietLabel, diskHistoryChip } from './fmtEta';
+import { fmtEtaDays, fixedHalfEven, etaChipLabel, evaluatorQuietLabel, diskHistoryChip, clusterCapacityChip } from './fmtEta';
 
 // v0.10.901 — fmtDays (Go) ile aynı tablo: her birim bir vaka; tam-ikili
 // yarımlar Go'nun çifte yuvarlamasıyla (10.5 saat → "10", 1.25 → "1.2").
@@ -84,5 +84,18 @@ describe('diskHistoryChip', () => {
     expect(diskHistoryChip({ days: 0, critical: true, status: 'at_limit' })).toMatchObject({ badge: true, tone: 'b-err' });
     expect(diskHistoryChip({ days: 0, critical: false, status: 'none', reason: 'tarihçe birikiyor (3 saat; en az 6 saat gerekli)' }))
       .toMatchObject({ badge: false, text: '⏳ yok · tarihçe birikiyor (3 saat; en az 6 saat gerekli)' });
+  });
+});
+
+// v0.10.912 — Clusters KPI çipi: disk rozetiyle aynı dil, kaynak title'da.
+describe('clusterCapacityChip', () => {
+  it('ok / yok / alan yok', () => {
+    const c = clusterCapacityChip({ status: 'ok', days: 9, loDays: 6, hiDays: 14, r2: 0.81, points: 336, stepMin: 30, windowDays: 7 });
+    expect(c).toMatchObject({ badge: true, tone: 'b-gray', text: '⏳ ≈ 9.0 gün · R² 0.81' });
+    expect(c?.title).toMatch(/30 dk adım, Thanos küme toplamı/);
+    expect(c?.title).toMatch(/Aralık 6.0 gün – 14 gün/);
+    expect(clusterCapacityChip({ status: 'none', reason: 'uyum zayıf (R² 0.41)', points: 336, windowDays: 7 }))
+      .toMatchObject({ badge: false, text: '⏳ yok · uyum zayıf (R² 0.41)' });
+    expect(clusterCapacityChip(undefined)).toBeNull();
   });
 });
