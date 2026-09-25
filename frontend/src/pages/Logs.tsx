@@ -1174,12 +1174,13 @@ function LogsInner() {
           // v0.10.924 — buton bütünlüğü Faz 2: elle boyanan
           // `span role=button` (chipBase/onStyle) yerine Chip atomu —
           // `active` aria-pressed'i de basıyor, Enter/Space yerel.
-          const LevelChip = ({
-            keyName, children, count, title,
-          }: { keyName: string; children: ReactNode; count: number; title: string }) => {
+          // v0.10.925 — bileşen DEĞİL, render fonksiyonu: render içinde
+          // tanımlanan bileşen her render'da yeni tiptir → çip yeniden
+          // bağlanır ve klavyeyle seçince odak kaybolurdu.
+          const levelChip = (keyName: string, count: number, title: string, children: ReactNode) => {
             const on = activeKey === keyName;
             return (
-              <Chip pill active={on}
+              <Chip key={keyName} pill active={on}
                 title={title}
                 onClick={() => setSeverity(keyName === 'all' ? 0 : LVL_FACETS.find(f => f.key === keyName)!.min)}>
                 {children}
@@ -1198,20 +1199,15 @@ function LogsInner() {
                 display: 'flex', alignItems: 'center', gap: 8,
                 flexWrap: 'wrap', marginBottom: 12,
               }}>
-              <LevelChip keyName="all" count={facetCounts.all}
-                title="Show all severities">
-                <span style={{ color: activeKey === 'all' ? 'var(--accent2)' : 'var(--text2)' }}>All</span>
-              </LevelChip>
-              {LVL_FACETS.map(f => (
-                <LevelChip key={f.key} keyName={f.key} count={facetCounts[f.key] ?? 0}
-                  title={`Show ${f.label} and above (min severity ${f.min})`}>
-                  <span className={`badge ${
-                    f.key === 'error' ? 'b-err'
-                    : f.key === 'warn' ? 'b-warn'
-                    : f.key === 'info' ? 'b-info'
-                    : 'b-gray'}`}>{f.label}</span>
-                </LevelChip>
-              ))}
+              {levelChip('all', facetCounts.all, 'Show all severities',
+                <span style={{ color: activeKey === 'all' ? 'var(--accent2)' : 'var(--text2)' }}>All</span>)}
+              {LVL_FACETS.map(f => levelChip(f.key, facetCounts[f.key] ?? 0,
+                `Show ${f.label} and above (min severity ${f.min})`,
+                <span className={`badge ${
+                  f.key === 'error' ? 'b-err'
+                  : f.key === 'warn' ? 'b-warn'
+                  : f.key === 'info' ? 'b-info'
+                  : 'b-gray'}`}>{f.label}</span>))}
               {!volumeEnabled && (
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>
                   counts need a bounded time range

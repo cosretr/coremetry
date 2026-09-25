@@ -555,16 +555,9 @@ export default function ProblemsPage() {
                   return (
                     <Fragment key={g.fingerprint}>
                       <tr {...rowActivation(() => openExcDetail(g))}
-                        onKeyDown={(e) => {
-                          // Enter/Space opens the full detail (keyboard parity
-                          // with the click). The caret cell handles the inline
-                          // quick-peek separately.
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            openExcDetail(g);
-                          }
-                        }}
-                        tabIndex={0}
+                        // v0.10.925 — ayrı onKeyDown rowActivation'ınkini eziyordu
+                        // (hedef denetimsiz): caret/eylem düğmesindeki Enter detayı
+                        // açıyordu. Enter/Boşluk → detay, yalnız satır odaktayken.
                         // v0.10.924 — buton rolü rowActivation yayılımından geliyor
                         // (tıklanabilir <tr> sözleşmesi, D3); tekrar eden literal kalktı.
                         aria-expanded={open}

@@ -615,15 +615,11 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                   <Fragment key={p.id}>
                   <tr {...dt.rowProps(i)}
                       {...rowActivation(() => openDetail(p.id))}
-                      onKeyDown={(e) => {
-                        // Keyboard accessibility — Enter/Space opens the same
-                        // Variant-B full-page detail the click does (the
-                        // service column keeps its own /service link).
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          openDetail(p.id);
-                        }
-                      }}
+                      // v0.10.925 — satırın kendi onKeyDown'ı rowActivation'ınkini
+                      // EZİYORDU ve hedef denetimi yoktu: satır içindeki bir
+                      // düğmeye (onay kutusu, eylem) basılan Enter/Boşluk da
+                      // detayı açıyordu. rowActivation aynı eylemi yalnız satırın
+                      // KENDİSİ odaktayken yapar.
                       // v0.10.924 — buton rolü + tabIndex yukarıdaki rowActivation
                       // yayılımından geliyor (tıklanabilir <tr> sözleşmesi, D3);
                       // aynı değeri tekrarlayan literal öznitelik kaldırıldı.

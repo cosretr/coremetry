@@ -185,7 +185,6 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                     return (
                       <tr key={r.hash} className="lp-row" title={r.sample}
                         {...rowActivation(() => { if (r.query) onSearch(r.query); })}
-                        onKeyDown={e => { if (e.key === 'Enter' && r.query) { e.preventDefault(); onSearch(r.query); } }}
                         style={rowStyle(!!r.query)}>
                         <td className="mono" style={cellEllipsis}>{r.template}</td>
                         <td className="num">
@@ -249,7 +248,6 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                     return (
                       <tr key={r.id} className="lp-row" title={r.sample}
                         {...rowActivation(() => { if (r.query) onSearch(r.query); })}
-                        onKeyDown={e => { if (e.key === 'Enter' && r.query) { e.preventDefault(); onSearch(r.query); } }}
                         style={rowStyle(!!r.query)}>
                         <td className="mono" style={cellEllipsis}>
                           {r.exceptionType && <span className="badge b-err" style={{ marginRight: 6 }}>{r.exceptionType}</span>}

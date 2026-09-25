@@ -675,7 +675,11 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
 
 // headKeyDown — v0.10.249: başlık klavye sözleşmesi (jsdom testli).
 export const HEAD_RESIZE_STEP_PX = 8;
-export function headKeyDown<T>(e: { key: string; shiftKey: boolean; preventDefault: () => void }, dt: DataTable<T>, colId: string) {
+export function headKeyDown<T>(e: { key: string; shiftKey: boolean; preventDefault: () => void; target?: EventTarget | null; currentTarget?: EventTarget | null }, dt: DataTable<T>, colId: string) {
+  // v0.10.925 — başlık İÇİNDEKİ bir düğmenin (LogTable kolon-kaldır ×)
+  // Enter/Boşluk'u kabarcıklanıp sıralamaya dönüyordu: klavye kolonu
+  // kaldıramıyordu. Sıralama yalnız başlığın KENDİSİ odaktayken.
+  if ((e.key === 'Enter' || e.key === ' ') && e.target !== e.currentTarget) return;
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
     dt.toggleSort(colId);

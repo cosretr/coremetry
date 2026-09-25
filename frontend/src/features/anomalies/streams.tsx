@@ -319,14 +319,17 @@ function HistorySection({ items, meta }: {
   // (always visible, loud red badges); cleared rows go into
   // a collapsible "Cleared" group that defaults to collapsed
   // when there are >10 of them.
-  const [showCleared, setShowCleared] = useState(false);
+  // v0.10.925 — null = kullanıcı henüz seçmedi (varsayılan kural geçerli).
+  // Eskiden seçim ile varsayılan VEYA'lanıyordu: ≤10 satırda grup zorla
+  // açıktı ve başlık tıkı hiçbir şey yapmıyordu.
+  const [showCleared, setShowCleared] = useState<boolean | null>(null);
   if (items === undefined || items.length === 0) return null;
   const active  = items.filter(e => e.status === 'active');
   const cleared = items.filter(e => e.status === 'cleared');
   // Default expanded when the cleared set is small enough to
   // glance at; collapsed when it's noisy.
   const defaultExpanded = cleared.length <= 10;
-  const expanded = showCleared || defaultExpanded;
+  const expanded = showCleared ?? defaultExpanded;
   return (
     <AnomalyShell
       title="Anomaly history (last 24h)"
@@ -360,7 +363,7 @@ function HistorySection({ items, meta }: {
           {/* v0.10.924 — buton bütünlüğü Faz 2: `all: unset` başlık →
               DisclosureButton (aria-expanded + ev ▸/▾ glifi). */}
           <DisclosureButton expanded={expanded}
-            onClick={() => setShowCleared(v => !v)}
+            onClick={() => setShowCleared(!expanded)}
             style={{ fontSize: 12, fontWeight: 600, padding: '6px 0', gap: 6 }}>
             Cleared ({cleared.length})
             <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 4 }}>

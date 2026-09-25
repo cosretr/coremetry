@@ -31,6 +31,25 @@ describe('clickable rows use rowActivation (D3)', () => {
     }
     expect(offenders).toEqual([]);
   });
+  // v0.10.925 — rowActivation'dan SONRA yazılan onKeyDown yayılımın
+  // işleyicisini EZER ve hedef denetimini (`e.target !== e.currentTarget`)
+  // kaybettirir: satır içindeki düğmeye basılan Enter/Boşluk satırı açıyordu
+  // (ProblemsSection, AnomaliesPage, LogPatternsPanel ×2).
+  it('rowActivation handler is not overridden by a later onKeyDown on the same tag', () => {
+    const offenders: string[] = [];
+    for (const f of walk(root)) {
+      const src = readFileSync(f, 'utf8');
+      let i = src.indexOf('{...rowActivation(');
+      while (i >= 0) {
+        const rest = src.slice(i);
+        const child = rest.search(/\n\s*<[A-Za-z]/); // açılış etiketinin sonu ≈ ilk çocuk eleman
+        const tag = rest.slice(0, child < 0 ? 1200 : child);
+        if (/\sonKeyDown=/.test(tag)) offenders.push(`${f.slice(root.length + 1)}:${src.slice(0, i).split('\n').length}`);
+        i = src.indexOf('{...rowActivation(', i + 1);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
   it('the D3 sites adopted the helper', () => {
     for (const f of ['components/DBQueriesPanel.tsx', 'features/anomalies/AnomaliesPage.tsx', 'pages/AIObservability.tsx', 'pages/AdminElastic.tsx', 'pages/Profiling.tsx', 'pages/service/ServicePodsTable.tsx', 'pages/Clusters.tsx', 'pages/Inbox.tsx', 'pages/Hosts.tsx', 'pages/Databases.tsx', 'pages/SlowQueries.tsx', 'pages/service/OverviewTables.tsx', 'components/LogPatternsPanel.tsx']) {
       expect(readFileSync(join(root, f), 'utf8')).toContain('{...rowActivation(');
