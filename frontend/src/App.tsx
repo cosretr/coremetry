@@ -82,6 +82,13 @@ const PublicTrace       = lazy(() => import('./pages/PublicTrace'));
 // v0.8.9 — the ten /admin/* pages are consolidated into one System area
 // (lazy-loaded per-tab inside pages/System.tsx, not routed individually here).
 const System            = lazy(() => import('./pages/System'));
+// v0.10.919 — YALNIZ GELİŞTİRME: düğme ailesi kataloğu (/design). Kapı
+// İÇE AKTARMA noktasında: `vite build` import.meta.env.DEV'i false yapar,
+// üçlü null'a katlanır ve import('./pages/Design') ölü kod olur — parça
+// ÜRETİLMEZ. Kapıyı sayfanın içine koymak yetmezdi (PerfMeter dersi: hook
+// erken dönüşten önce koştuğu için üretimde kaldı). Sidebar / ⌘K /
+// routePrefetch'e EKLENMEZ — prefetch girdisi parçayı üretime çekerdi.
+const Design            = import.meta.env.DEV ? lazy(() => import('./pages/Design')) : null;
 
 // Each lazy module's default export is the page component.
 // React Router doesn't enforce any naming convention beyond
@@ -218,6 +225,7 @@ export default function App() {
                 hits a dead route. The AuthProvider gates whether
                 the user actually sees Home or gets redirected to
                 /login. */}
+            {Design && <Route path="/design" element={<Design />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

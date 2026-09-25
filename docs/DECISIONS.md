@@ -661,3 +661,24 @@ düğüm × disk satırı. Operatör onayı 2026-09-25 (parite #6 dilim 4 Karar 
 **Kapsam:** self-disk-eta KURALI hâlâ bellek serisinden karar verir (davranış değişmedi; yazım
 hatası kuralı etkilemez). Hosts/Clusters çipi ve heap ETA bu karara dahil değil. Haftalık
 mevsimsellik ≥14 gün tarihçe biriktikten sonra ayrı adım.
+
+## 2026-09-25 — Buton bütünlüğü: shadcn/Tailwind DEĞİL, mevcut atomlar (Seçenek B, v0.10.919)
+
+**Karar:** Buton/bileşen tutarlılığı mevcut `components/ui` atomları üzerinde kurulur;
+Tailwind + shadcn/ui eklenmez. Operatör onayı 2026-09-25 ("Onay", audit:
+`docs/frontend/shadcn-audit.md` §6).
+
+**Neden:** Sorun görünüm farkıydı (sayfaya özel ham düğmeler), stil motoru değil. Tailwind
+4.3k satırlık global CSS'in yanına ikinci bir stil sistemi getirirdi; `button.sm` gibi
+eleman kuralları (0,1,1) tek Tailwind yardımcısını (0,1,0) sessizce yener. İstenen
+özelliklerin çoğu zaten vardı (zorunlu `variant`, `loading`, IconButton'da tip düzeyinde
+`aria-label`); A seçeneği bunları yeniden yazıp ~700 çağrı yerini değiştirecek, ~20–35 KB gz
+ekleyecekti. Üç tema (`data-theme` dark/light/redhat) shadcn'in `.dark` sözleşmesine uymuyor.
+
+**Ne geldi (Seçenek B temeli):** ESLint `ui/no-raw-button` (+ `eslint-suppressions.json`
+mevcut 102 ihlali sayar, yalnız azalır; istisna `-- gerekçe` ister), `ButtonGroup`,
+`Tooltip` (ağaçta `position: fixed` — `--z-tooltip` çekmece/modal altında kaldığı için
+portal değil), yüklenirken genişlik koruyan `Button`, yalnız geliştirmede `/design` kataloğu.
+
+**Geri dönüş:** Atom arayüzleri korunduğu için ileride shadcn'e geçiş atomların İÇİNİ
+değiştirmek demek; çağrı yerleri değişmez. Ters yön (A'dan B'ye) pahalı olurdu.

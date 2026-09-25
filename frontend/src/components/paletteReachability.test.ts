@@ -62,6 +62,7 @@ const INTENTIONALLY_UNLISTED: Record<string, string> = {
   '/status': 'emekli rota, yönlendirme',
   '/topology': 'emekli rota → /service-map',
   '/trace': 'detay — trace listesinden / ⌘K trace-id ile açılır',
+  '/design': 'yalnız geliştirme — App.tsx import.meta.env.DEV kapısı; üretim paketinde yok (v0.10.919)',
   '/databases/slow-queries': 'alt-sayfa — /databases üstündeki "Slow queries" linkinden ve DatabaseDetail’den açılır',
 };
 

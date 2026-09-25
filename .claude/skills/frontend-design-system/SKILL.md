@@ -76,7 +76,9 @@ saklanmasıydı); (2) **barrel'a ekle**; (3) CSS adını sahiplen.
 `CopyButton` · `PageLoader` — hepsi `components/` altında.
 
 **🔴 Atom BOŞLUĞU (kanonik yok):** `Stat` (95 kullanım, **6 tanım**) ·
-`Tooltip` (0 bileşen, 7 DOM implementasyonu + 1299 native `title=`) ·
+~~`Tooltip`~~ → **`ui/Tooltip.tsx` (v0.10.919)**; göç: butonlardaki ~320
+`title=` (önce IconButton'lar) · **`ui/ButtonGroup.tsx` (v0.10.919)** eş
+eylem kümesi (tek seçim → SegmentedControl, commit → ActionRow) ·
 gezinme butonu (`Button` polimorfik değil, 36 sahipsiz site) ·
 `Section` (5 tanım).
 
@@ -95,7 +97,7 @@ kolon alanı (mekanizma kurulu, 0 tüketici).
 | K4 | **`Badge`** | atom vs elle sınıf | 14 vs **297** | `ui/Badge.tsx` (union eksik — AS-2) |
 | K5 | Boş durum / yükleniyor | 29 + 9 elle | — | `Spinner`/`Empty` |
 | K6 | Chart lejantı | 3 kopya | — | `chart/StatsLegend.tsx` |
-| K7 | Tooltip | 7 DOM impl. | 1299 `title=` | **yok** |
+| K7 | Tooltip | 7 DOM impl. | 1299 `title=` | **`ui/Tooltip.tsx`** (v0.10.919; ağaçta `position:fixed`, portal değil) |
 | K8 | `Chip`/`Pill` | 5 tanım + 5 CSS pill | 25 | `ui/Chip.tsx` |
 | K9 | **Sayfalama** | **1** ✅ | 7 | `components/Pager.tsx` — **şablon budur** |
 
@@ -132,9 +134,12 @@ vakası) · pickerlar.
 | Onay isteyen | `useConfirm()` — native `confirm()` testle yasak |
 
 `variant` **zorunlu prop** (451/451 sitede yazılı) — bu aileyi bozma.
-**Ham `<button>` meşru tek yer:** `.tab-strip` sekmesi, `.facet` (belgeli),
-primitif gövdeleri. Bugün `ui/` dışında **136 ham `<button>`** var;
-yenisi eklenmez.
+**Ham `<button>` / `role="button"` `ui/` dışında YASAK** (v0.10.919, ESLint
+`ui/no-raw-button`). Mevcutlar `frontend/eslint-suppressions.json`da sayılı
+(85 ham + 18 role, yalnız azalır; `buttonUnityRatchet` aynı tavanlar).
+Primitif gövdesi `ui/` altına taşınır; tek seçim → `SegmentedControl`,
+eş eylemler → `ButtonGroup`. Gerçekten gerekiyorsa satır istisnası
+gerekçeyle: `eslint-disable-next-line ui/no-raw-button -- <neden>`.
 
 ## 5. Tablo karar tablosu
 
@@ -233,7 +238,11 @@ ile ölçüyor, bizde Inter yok → kırpma).
 **Tooltip:** saf çekirdekler paylaşılıyor (`tooltipModel.ts`,
 `placeTooltip`, `tooltipPin.ts`) — bu iyi. HTML üretimi paylaşılmıyor:
 `.ov-tt` şablonu 3 kez byte-benzer yazılmış. **Yeni tooltip yazma**,
-çekirdeği kullan.
+çekirdeği kullan. Grafik DIŞI (buton/eleman ipucu) için tek atom
+`ui/Tooltip.tsx` (v0.10.919) + saf yerleşim `lib/tipPlacement.ts`.
+Buton ailesinin tüm varyant × boyut × durumu geliştirmede `/design`
+sayfasında (yalnız `vite dev`; üretimde yok). Ham `<button>` /
+`role="button"` ui/ dışında ESLint `ui/no-raw-button` ile yasak.
 
 ## 8. Token disiplini
 
@@ -280,7 +289,7 @@ import eklenince kayar, v0.9.887).
 
 ## 9. Review çıtası — reddedilecek 10 madde
 
-1. **Yeni ham `<button>`** (`.tab-strip`/`.facet`/primitif gövdesi hariç).
+1. **Yeni ham `<button>` / `role="button"`** (ESLint `ui/no-raw-button`; istisna yalnız `-- gerekçe` ile).
 2. **Yeni `Field`/`Stat`/`Chip` tanımı** — kanonik varken 8./7./6. kopya.
 3. **`ui/` dışına atom yazmak** — yeni primitif `ui/` altına + barrel'a.
 4. **`aria-label`'sız `IconButton`**, `htmlFor`/`useId`'siz form alanı.

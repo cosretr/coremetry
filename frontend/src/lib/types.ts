@@ -7714,7 +7714,7 @@ export type PageId =
   | 'dashboards' | 'dashboard' | 'service-map' | 'topology' | 'messaging' | 'external' | 'profiling'
   | 'slos' | 'alerts' | 'monitors' | 'watchers' | 'incidents' | 'incident' | 'runbooks' | 'runbook'
   | 'runbook-exec' | 'shift' | 'status' | 'system' | 'admin' | 'ai' | 'settings' | 'users' | 'profile'
-  | 'login' | 'public-trace' | 'public-status' | 'unknown';
+  | 'login' | 'public-trace' | 'public-status' | 'design' | 'unknown';
 /** Kodek bağımsız filtre: op FilterOp ya da EXISTS / NOT EXISTS. */
 export interface PageFilter { k: string; op: string; v: string[] }
 export interface PageContext {

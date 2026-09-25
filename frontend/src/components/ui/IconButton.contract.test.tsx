@@ -154,3 +154,14 @@ describe('IconButton — davranış', () => {
     expect(b.getAttribute('data-testid')).toBe('q');
   });
 });
+
+// v0.10.919 — aria-label'ın TİP düzeyinde zorunluluğu çivili (Button'un
+// `variant` kapısının ikizi): biri prop'u opsiyonel yaparsa bu test kızarır.
+describe('IconButton — aria-label tip kapısı', () => {
+  it('aria-label olmadan derlenmez', () => {
+    // @ts-expect-error — glif tek başına erişilebilir ad taşımaz
+    const node = <IconButton icon="×" />;
+    expect(node).toBeTruthy();
+  });
+});
+

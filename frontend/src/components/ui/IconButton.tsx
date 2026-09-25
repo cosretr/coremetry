@@ -1,4 +1,5 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useContext, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { ButtonGroupSizeContext } from './buttonGroupContext';
 
 // IconButton — the square, glyph-only affordance (v0.9.884 dalgası, MB4).
 //
@@ -57,14 +58,17 @@ const sizeClass: Record<Size, string> = {
 };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, variant = 'ghost', size = 'sm', active, className,
+  { icon, variant = 'ghost', size, active, className,
     type = 'button', ...rest },
   ref,
 ) {
+  // v0.10.919 — ButtonGroup `size` verirse devralınır; açık prop kazanır.
+  const groupSize = useContext(ButtonGroupSizeContext);
+  const effSize: Size = size ?? groupSize ?? 'sm';
   const classes = [
     'btn-icon',
     variantClass[variant],
-    sizeClass[size],
+    sizeClass[effSize],
     active ? 'active' : '',
     className,
   ].filter(Boolean).join(' ');

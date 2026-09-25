@@ -1,4 +1,5 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useContext, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { ButtonGroupSizeContext } from './buttonGroupContext';
 
 // Button is the typed shell for the existing globals.css button
 // rules. Maps `variant`/`size` props to the same class names the
@@ -70,16 +71,28 @@ const sizeClass: Record<Size, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant, size = 'md', loading, leftIcon, rightIcon,
+  { variant, size, loading, leftIcon, rightIcon,
     className, disabled, children, type = 'button', ...rest },
   ref,
 ) {
+  // v0.10.919 — ButtonGroup `size` verirse çocuk onu devralır; açık prop kazanır.
+  const groupSize = useContext(ButtonGroupSizeContext);
+  const effSize: Size = size ?? groupSize ?? 'md';
   const classes = [
     variantClass[variant],
-    sizeClass[size],
+    sizeClass[effSize],
+    loading ? 'is-loading' : '',
     className,
   ].filter(Boolean).join(' ');
 
+  // v0.10.919 (buton bütünlüğü, Seçenek B) — GENİŞLİK KORUNUR. Eskiden
+  // yükleme dalı `[spinner][etiket]` basıyordu: ikonsuz bir buton istek
+  // anında 18px büyüyor (10px spinner + 8px gap), ikonlu olanın sağ ikonu
+  // düşüyordu — operatör tam beklerken satır kayıyordu. Artık etiket
+  // (ikonlarıyla) yerinde kalır ve `opacity: 0` ile gizlenir; spinner
+  // üstüne ortalanır (`button.is-loading`, globals.css). `visibility`
+  // DEĞİL `opacity`: etiket erişilebilirlik ağacında kalsın, buton
+  // yüklenirken adını kaybetmesin.
   return (
     <button
       ref={ref}
@@ -88,19 +101,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       {...rest}>
-      {loading ? <span className="row gap-2">
-        {/* v0.9.884: was a static `…`, which read as "truncated label"
-            rather than "working". Teams took one look and went back to
-            hand-rolling `{busy ? 'Saving…' : 'Save'}` instead of using
-            `loading` — 12 sites did exactly that. `.spinner.sm` is the
-            sub-14px variant sized for a button's line box. */}
-        <span className="spinner sm" aria-hidden="true" />
-        {children}
-      </span> : <span className="row gap-2">
+      <span className="row gap-2">
         {leftIcon}
         {children}
         {rightIcon}
-      </span>}
+      </span>
+      {/* v0.9.884: was a static `…`, which read as "truncated label"
+          rather than "working". `.spinner.sm` is the sub-14px variant
+          sized for a button's line box. */}
+      {loading && <span className="spinner sm" aria-hidden="true" />}
     </button>
   );
 });

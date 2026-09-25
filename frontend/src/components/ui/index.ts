@@ -53,6 +53,14 @@ export type { SearchFieldProps } from './SearchField';
 export { ActionRow } from './ActionRow';
 export type { ActionRowProps } from './ActionRow';
 
+// v0.10.919 (buton bütünlüğü, Seçenek B) — eş eylem kümesi + ipucu.
+export { ButtonGroup } from './ButtonGroup';
+export type { ButtonGroupProps } from './ButtonGroup';
+export type { ButtonGroupSize } from './buttonGroupContext';
+
+export { Tooltip } from './Tooltip';
+export type { TooltipProps } from './Tooltip';
+
 // Tabs — REMOVED v0.9.904. A typed `.tab-strip` wrapper existed here
 // from the design-system push but never gained a single consumer: all
 // 11 `.tab-strip` surfaces write the plain `<div className="tab-strip">`

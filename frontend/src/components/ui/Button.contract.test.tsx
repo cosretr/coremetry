@@ -219,6 +219,42 @@ describe('Button — loading / disabled', () => {
   });
 });
 
+// ── v0.10.919 — yüklenirken GENİŞLİK KORUNUR ───────────────────────────
+// Eskiden yükleme dalı `[spinner][etiket]` basıyordu: ikonsuz buton istek
+// anında 18px büyüyor, ikonlu olanın sağ ikonu düşüyordu. Artık etiket
+// (ikonlarıyla) yerinde kalır, spinner ÜSTÜNE biner. jsdom genişlik
+// ölçemez — sözleşme DOM şekli + CSS kuralı olarak çivili.
+describe('Button — loading genişlik koruması (v0.10.919)', () => {
+  it('yüklenirken etiket sarmalayıcısı ve ikonlar yerinde kalır', () => {
+    const b = btn(render(
+      <Button variant="primary" loading leftIcon={<i>L</i>} rightIcon={<i>R</i>}>Mid</Button>));
+    expect(b.firstElementChild?.className).toBe('row gap-2');
+    expect(b.firstElementChild?.textContent).toBe('LMidR');
+  });
+
+  it('spinner etiketin KARDEŞİ (içinde değil) ve button is-loading taşır', () => {
+    const b = btn(render(<Button variant="secondary" loading>Save</Button>));
+    expect(b.classList.contains('is-loading')).toBe(true);
+    expect(b.querySelector(':scope > .spinner')).not.toBeNull();
+    expect(b.querySelector('.row .spinner')).toBeNull();
+  });
+
+  it('boşta is-loading ve spinner yok', () => {
+    const b = btn(render(<Button variant="secondary">Save</Button>));
+    expect(b.classList.contains('is-loading')).toBe(false);
+    expect(b.querySelector('.spinner')).toBeNull();
+  });
+
+  it('CSS: etiket opacity ile gizlenir (visibility DEĞİL — erişilebilir ad kalır), spinner ortalanır', () => {
+    const css = readFileSync(resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8');
+    expect(css).toMatch(/button\.is-loading \{ position: relative; \}/);
+    const label = /button\.is-loading > \.row \{([^}]*)\}/.exec(css);
+    expect(label?.[1]).toMatch(/opacity: 0/);
+    expect(label?.[1]).not.toMatch(/visibility/);
+    expect(css).toMatch(/button\.is-loading > \.spinner \{[^}]*position: absolute;[^}]*inset: 0;[^}]*margin: auto/);
+  });
+});
+
 describe('Button — icons and passthrough', () => {
   // R2. Atom children'ı `<span className="row gap-2">` ile SARAR. Göç
   // edilen bazı siteler bu sarmalayıcıya duyarlı (flex:1 span, ::before

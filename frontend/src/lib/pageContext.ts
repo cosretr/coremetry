@@ -46,11 +46,13 @@ export const ROUTE_PAGES: Record<string, PageId> = {
   '/admin/:tab': 'admin', '/ai': 'ai', '/settings': 'settings', '/settings/:section': 'settings',
   '/users': 'users', '/profile': 'profile', '/login': 'login',
   '/public/trace': 'public-trace', '/public-status': 'public-status',
+  '/design': 'design', // v0.10.919 — yalnız geliştirme kataloğu
 };
 
 /** Bağlam TAŞIMAYAN sayfalar: yalnız page + path (kimlik/ayar/kabuk yüzeyleri). */
 export const NO_CONTEXT_PAGES: ReadonlySet<PageId> = new Set<PageId>([
   'login', 'settings', 'admin', 'users', 'profile', 'ai', 'system', 'status', 'public-status', 'public-trace', 'dashboards',
+  'design',
 ]);
 
 /** Servisi ?service= yerine başka param'dan okuyan sayfalar. */

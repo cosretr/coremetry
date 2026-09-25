@@ -509,6 +509,14 @@ button:disabled { opacity: .4; cursor: not-allowed; }
    durumu ayırt eden tek işaret — "kullanılamaz" ile "şu an çalışıyor"
    aynı şey değil ve aynı görünmemeli. */
 button[aria-busy="true"]:disabled { opacity: 1; cursor: wait; }
+/* v0.10.919 — yüklenen buton GENİŞLİK KORUR. Etiket yerinde kalır ama
+   görünmez (`opacity`, `visibility` DEĞİL: erişilebilir ad düşmesin);
+   spinner üstüne ortalanır. Eskiden spinner etiketin SOLUNA ekleniyordu
+   ve ikonsuz buton istek anında 18px büyüyordu. Ortalama `inset + margin
+   auto` ile — transform yok (spin animasyonu transform'u zaten kullanıyor). */
+button.is-loading { position: relative; }
+button.is-loading > .row { opacity: 0; }
+button.is-loading > .spinner { position: absolute; inset: 0; margin: auto; }
 /* a11y (v0.7.86) — a visible keyboard focus ring on EVERY focusable
    element, not just <button>. Operators who drive by keyboard (and
    screen-reader users) need to see where focus is on links, nav items,
@@ -2587,6 +2595,55 @@ button.accent.copied {
 /* Yıkıcı yuvayı sağ kümeden ayıran esneme öğesi. */
 .action-row-gap { flex: 1 1 auto; }
 .action-row.is-inline .action-row-gap { flex: 0 0 0; }
+
+/* ButtonGroup (v0.10.919, Seçenek B) — eş eylem/araç kümesi; gerekçe
+   ui/ButtonGroup.tsx. Aralık `--sp-3` (6px): elle kurulan kapların
+   (.cell-actions, .crumbs-actions, .trp-actions, .sec-head__actions)
+   ölçülen ortak değeri. `overflow: hidden` YOK — `.segmented`in aksine
+   global :focus-visible halkası kırpılmasın. Bitişik kipte birleşim her
+   butonun kendi 1px kenarının -1px bindirmesi; iç köşeler düzleşir, dış
+   köşeler butonun kendi radius'undan gelir (redhat'in kare basamakları
+   kendiliğinden uyar). `:first-of-type/:last-of-type` — kardeş bir
+   Tooltip kutusu (<span>) `:last-child`i çalmasın. */
+.btn-group { display: inline-flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.btn-group.is-attached { gap: 0; flex-wrap: nowrap; }
+.btn-group.is-attached > button { position: relative; }
+.btn-group.is-attached > button:not(:first-of-type) {
+  margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0;
+}
+.btn-group.is-attached > button:not(:last-of-type) {
+  border-top-right-radius: 0; border-bottom-right-radius: 0;
+}
+/* Odaklanan buton komşusunun üstüne çıkar: -1px bindirmede sağdaki kardeş
+   aksi hâlde odak halkasının kenarını örterdi. */
+.btn-group.is-attached > button:focus-visible { z-index: 1; }
+
+/* Tooltip (v0.10.919, Seçenek B) — gerekçe ui/Tooltip.tsx. Ağaçta,
+   `position: fixed`: tetiğin yığın bağlamını devralır (çekmece/modal
+   içinde üstte kalır) ve #main/#content kırpmasından kaçar. left/top
+   JS'ten (lib/tipPlacement.ts, kıstırılmış) — transform ile ortalama
+   YOK (v0.9.631 dersi). `is-measuring`: ölçülürken görünmez. */
+.tip {
+  position: fixed; z-index: var(--z-tooltip);
+  max-width: min(320px, calc(100vw - 24px));
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg1); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-xs); line-height: 1.35; font-weight: 400;
+  font-style: normal; text-transform: none; letter-spacing: normal;
+  white-space: normal; overflow-wrap: anywhere; text-align: left;
+  pointer-events: auto;
+  animation: fadeIn .12s ease-out;
+}
+.tip.is-measuring { visibility: hidden; left: 0; top: 0; }
+/* Yapışkan hücre/başlık (sticky + z-index) kendi yığın bağlamını kurar;
+   içindeki .tip'in z'si yalnız o bağlamda sayılır ve sonraki satırın sabit
+   hücresi / yapışkan thead ipucunu örter (inceleme turu, Chromium'da
+   ölçüldü). İpucu AÇIKKEN ata hücre ipucu basamağına çıkar. */
+th.sticky-right:has(.tip), td.sticky-right:has(.tip),
+th.sticky-left:has(.tip), td.sticky-left:has(.tip),
+.table-wrap.is-scroll thead th:has(.tip) { z-index: var(--z-tooltip); }
 
 /* Combobox — input + custom dropdown panel + clear/caret affordance.
    Replaces native <datalist> for filtered/typeahead pickers; this

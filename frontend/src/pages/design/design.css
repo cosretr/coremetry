@@ -1,0 +1,20 @@
+/* Design catalog — v0.10.919 (yalnız geliştirme, /design).
+   globals.css'te DEĞİL: bu dosyayı yalnız pages/Design.tsx içe aktarır ve
+   o modül üretimde ölü kod (App.tsx DEV kapısı) — stil de sayfayla birlikte
+   üretim paketinin dışında kalır. */
+.dc-note { margin: 0 0 var(--sp-4); color: var(--text2); font-size: var(--fs-sm); }
+.dc-row {
+  display: grid; grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center; gap: var(--sp-4);
+}
+.dc-label { font-size: var(--fs-xs); color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dc-matrix {
+  display: grid; grid-template-columns: 120px repeat(4, max-content);
+  align-items: center; justify-items: start; gap: var(--sp-4) var(--sp-6);
+}
+.dc-matrix.dc-matrix-3 { grid-template-columns: 120px repeat(3, max-content); }
+
+@media (max-width: 640px) {
+  .dc-row { grid-template-columns: 1fr; gap: var(--sp-2); }
+  .dc-matrix, .dc-matrix.dc-matrix-3 { grid-template-columns: repeat(2, max-content); }
+}

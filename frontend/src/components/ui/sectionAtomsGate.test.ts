@@ -49,6 +49,18 @@ const ATOMS: { name: string; home: string; since: string }[] = [
       + 'kopyası `right` yuvasını kaybetmişti. Terfi gelişmiş sürüme yapıldı; '
       + 'kapı üçüncüsünün doğmasını engelliyor.',
   },
+  {
+    name: 'ButtonGroup',
+    home: 'components/ui/ButtonGroup.tsx',
+    since: 'v0.10.919 — buton bütünlüğü Seçenek B: 115 çok-butonlu kabın 47\'si '
+      + 'elle kuruluyordu (inline-flex span, {\' \'} düğümleri, sayfaya özel sınıflar).',
+  },
+  {
+    name: 'Tooltip',
+    home: 'components/ui/Tooltip.tsx',
+    since: 'v0.10.919 — kanonik tooltip yoktu (skill K7: 7 DOM uygulaması); '
+      + 'ikinci bir yerel kopya doğmasın.',
+  },
 ];
 
 /**
