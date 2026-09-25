@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { IconButton } from '@/components/ui/IconButton';
 
 /**
  * Free-text input with a custom dropdown panel that filters as you
@@ -229,9 +230,12 @@ export function Combobox({
         spellCheck={false}
       />
       {/* Caret indicator + clear button. Caret only when value is
-          empty so the affordance pair isn't redundant. */}
+          empty so the affordance pair isn't redundant.
+          v0.10.924 — buton bütünlüğü Faz 2: IconButton ghost; `cb-clear`/
+          `cb-caret` yalnız girdinin içine mutlak YERLEŞİM için. onMouseDown
+          preventDefault odağı girdide tutar — kaldırılmamalı. */}
       {value ? (
-        <button className="cb-clear" type="button"
+        <IconButton variant="ghost" size="xs" className="cb-clear"
           aria-label="Clear"
           title="Clear"
           onClick={() => {
@@ -241,16 +245,14 @@ export function Combobox({
             inputRef.current?.focus();
             setOpen(true);
           }}
-          onMouseDown={e => e.preventDefault()}>
-          ✕
-        </button>
+          onMouseDown={e => e.preventDefault()}
+          icon="✕" />
       ) : disabled ? null : (
-        <button className="cb-caret" type="button" tabIndex={-1}
+        <IconButton variant="ghost" size="xs" className="cb-caret" tabIndex={-1}
           aria-label={open ? 'Close' : 'Open'}
           onClick={() => { setOpen(o => !o); inputRef.current?.focus(); }}
-          onMouseDown={e => e.preventDefault()}>
-          ▾
-        </button>
+          onMouseDown={e => e.preventDefault()}
+          icon="▾" />
       )}
 
       {/* `disabled` liste render'ını da kapatır: alan AÇIK LİSTEYLE

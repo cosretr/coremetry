@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner } from '@/components/Spinner';
+import { Button, Chip } from '@/components/ui';
 import { getRecentMetrics, recordMetricPick } from '@/lib/recentMetrics';
 import type { MetricInfo } from '@/lib/types';
 
@@ -83,20 +84,24 @@ export function GroupedMetricPicker({ value, unit, onPick }: {
 
   return (
     <div className="mqe-picker" ref={ref}>
-      <button type="button" className="mqe-pickbtn" onClick={() => setOpen(o => !o)}
-        aria-label={value ? `Metric: ${value}` : 'Pick a metric'} aria-expanded={open} title={value || 'Pick a metric'}>
+      {/* v0.10.924 — buton bütünlüğü Faz 2: select-benzeri tetik Button
+          secondary. Genişlik bandı (190–280) yerleşim olarak kalıyor; atomun
+          iç `.row` şeridi butonu doldurur, ad `flex:1` ile kısalır. */}
+      <Button variant="secondary" onClick={() => setOpen(o => !o)}
+        aria-label={value ? `Metric: ${value}` : 'Pick a metric'} aria-expanded={open} title={value || 'Pick a metric'}
+        style={{ minWidth: 190, maxWidth: 280 }}>
         <span className="mqe-pickname">{value || 'Select metric…'}</span>
         {unit && <span className="mqe-unit">{unit}</span>}
         <span className="mqe-caret">▾</span>
-      </button>
+      </Button>
       {open && (
         <div className="mqe-pop">
           <input autoFocus className="mqe-search" placeholder="Search metrics…" value={q}
             onChange={e => setQ(e.target.value)} />
           <div className="mqe-facets">
             {GROUP_FACETS.map(f => (
-              <button key={f.key} type="button" className={'mqe-facet' + (facet === f.key ? ' on' : '')}
-                onClick={() => setFacet(f.key)}>{f.label}</button>
+              <Chip key={f.key} size="xs" pill active={facet === f.key}
+                onClick={() => setFacet(f.key)}>{f.label}</Chip>
             ))}
           </div>
           <div className="mqe-list">
@@ -104,6 +109,7 @@ export function GroupedMetricPicker({ value, unit, onPick }: {
               <>
                 <div className="mqe-sect">Recent</div>
                 {recents.map(m => (
+                  // eslint-disable-next-line ui/no-raw-button -- seçim listesi satırı: tam genişlik iki sütun + seçili hâl; ui/'da liste-seçeneği atomu yok
                   <button key={'r:' + m.name} type="button"
                     className={'mqe-opt' + (m.name === value ? ' on' : '')}
                     title={m.description || m.name}
@@ -122,6 +128,7 @@ export function GroupedMetricPicker({ value, unit, onPick }: {
               : filtered.length === 0 ? <div className="mqe-hint">No metrics match.</div>
               : <>
                 {filtered.map(m => (
+                  // eslint-disable-next-line ui/no-raw-button -- seçim listesi satırı: tam genişlik iki sütun + seçili hâl; ui/'da liste-seçeneği atomu yok
                   <button key={m.name} type="button" className={'mqe-opt' + (m.name === value ? ' on' : '')}
                     title={m.description || m.name}
                     onClick={() => pick(m)}>

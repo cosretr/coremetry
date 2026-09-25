@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { seriesColor, inkOn } from '@/lib/chartFmt';
 import { fmtNum } from '@/lib/utils';
 import type { AggSpanNode } from '@/lib/types';
+import { LinkButton } from './ui/LinkButton';
 
 // Aggregate flamegraph for a service across many traces. Same
 // idea as a profiler flame chart, applied to span trees instead
@@ -107,16 +108,15 @@ export function AggregateFlame({ roots, totalWidth = 1100 }: {
         display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center',
       }}>
         {path.map((n, i) => (
-          <span key={i}>
+          // v0.10.924 — buton bütünlüğü Faz 2: kırıntı = LinkButton (font: inherit;
+          // monospace sarmalayıcı .mono'dan). Son kırıntı "buradasın": muted, alt çizgisiz.
+          <span key={i} className="mono">
             {i > 0 && <span style={{ color: 'var(--text3)' }}> › </span>}
-            <button onClick={() => setFocus(n)}
-              style={{
-                background: 'transparent', border: 0,
-                color: i === path.length - 1 ? 'var(--text)' : 'var(--accent2)',
-                fontFamily: 'monospace', fontSize: 12, cursor: 'pointer', padding: 0,
-              }}>
+            <LinkButton onClick={() => setFocus(n)}
+              tone={i === path.length - 1 ? 'muted' : 'accent'}
+              underline={i === path.length - 1 ? 'none' : 'hover'}>
               {n.operation || n.service}
-            </button>
+            </LinkButton>
           </span>
         ))}
         <span style={{ flex: 1 }} />

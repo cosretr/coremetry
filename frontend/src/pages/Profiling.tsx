@@ -14,7 +14,7 @@ import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { ProfileRow, ProfileHotspotsResponse, TimeRange } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
-import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
+import { Button, SegmentedControl, TabStrip } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü); v0.10.924 Faz 2
 
 // Columns for the shared sortable + resizable DataTable.
 const PROFILE_COLS: DataTableColumn<ProfileRow>[] = [
@@ -143,10 +143,12 @@ export default function ProfilingPage() {
                       display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <IconFlame size={14} /> Open Pyroscope ↗
           </a>
-          <button onClick={() => setSetupOpen(o => !o)} className="sec"
-                  style={{ padding: '5px 12px', fontSize: 12 }}>
+          {/* v0.10.924 — buton bütünlüğü Faz 2: elle boyanmış `.sec` yerine
+              Button (md = araç çubuğundaki select/segmented yüksekliği). */}
+          <Button variant="secondary" aria-expanded={setupOpen}
+            onClick={() => setSetupOpen(o => !o)}>
             {setupOpen ? '× Close setup' : '⌘ Setup recipes'}
-          </button>
+          </Button>
         </div>
 
         {setupOpen && <SetupRecipes />}
@@ -347,20 +349,11 @@ function SetupRecipes() {
           POST pprof bytes to <code>/v1/profiles</code> · headers carry the metadata · no agent / collector required
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 12,
-                    borderBottom: '1px solid var(--border)' }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setActive(t.key)}
-            style={{
-              padding: '5px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: 'transparent', border: 'none', borderBottom: '2px solid',
-              borderColor: active === t.key ? 'var(--accent)' : 'transparent',
-              color: active === t.key ? 'var(--text)' : 'var(--text3)',
-            }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* v0.10.924 — buton bütünlüğü Faz 2: elle çizilmiş alt-çizgili sekmeler
+          yerine TabStrip (role=tablist/tab, ←/→ gezinme; alt kenarlık +
+          12px alt boşluk `.tab-strip`ten). */}
+      <TabStrip ariaLabel="Kurulum tarifi dili" tabs={tabs}
+        value={active} onChange={setActive} />
       {cur.body}
       <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
         Required headers on every push: <code>X-Coremetry-Service</code>,
@@ -385,13 +378,12 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   };
   return (
     <div style={{ position: 'relative' }}>
-      <button onClick={onCopy} className="sec"
-        style={{
-          position: 'absolute', top: 6, right: 6, fontSize: 10, padding: '2px 8px',
-          background: 'var(--bg3)',
-        }}>
+      {/* v0.10.924 — buton bütünlüğü Faz 2: Button xs; satır-içi stil
+          yalnız konum (kod bloğunun sağ üst köşesi). */}
+      <Button variant="secondary" size="xs" onClick={onCopy}
+        style={{ position: 'absolute', top: 6, right: 6 }}>
         {copied ? '✓ copied' : 'Copy'}
-      </button>
+      </Button>
       <pre style={{
         margin: 0, padding: 12, background: 'var(--bg)',
         border: '1px solid var(--border)', borderRadius: 4,

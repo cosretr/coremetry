@@ -72,6 +72,7 @@ export function RecentQueries({ history, onApply }: {
             boxShadow: '0 8px 24px rgba(0,0,0,.28)',
           }}>
           {items.map((it, i) => (
+            // eslint-disable-next-line ui/no-raw-button -- role="option" listbox satırı: atomlar button rolü/iç sarmalayıcı basar, seçenek ham kalır
             <button key={`${it.text}:${i}`} type="button" role="option"
               aria-selected={false}
               disabled={!it.search}

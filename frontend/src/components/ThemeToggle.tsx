@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { setRaw } from '@/lib/storage';
+import { IconButton } from '@/components/ui/IconButton';
 
 // v0.8.268 — third palette: 'redhat' (PatternFly-flavoured light +
 // OpenShift-style dark nav; operator: "tasarım Red Hat ürünlerine
@@ -37,11 +38,13 @@ export function ThemeToggle() {
     setRaw(STORAGE_KEY, next);
   };
 
+  // v0.10.924 — buton bütünlüğü Faz 2: IconButton (ghost, md = 28px kare).
+  // `.theme-toggle` kalıyor: .topbar-prefs üçlüsünü tek bitişik grup yapan
+  // kenarlık/radius kuralları ona bağlı (Lang/Density ile aynı kalıp).
   return (
-    <button className="theme-toggle" onClick={toggle}
+    <IconButton variant="ghost" size="md" className="theme-toggle" onClick={toggle}
       aria-label={`Theme: ${LABEL[theme]} — switch to ${LABEL[NEXT[theme]]}`}
-      title={`Theme: ${LABEL[theme]} — click for ${LABEL[NEXT[theme]]}`}>
-      {GLYPH[theme]}
-    </button>
+      title={`Theme: ${LABEL[theme]} — click for ${LABEL[NEXT[theme]]}`}
+      icon={GLYPH[theme]} />
   );
 }

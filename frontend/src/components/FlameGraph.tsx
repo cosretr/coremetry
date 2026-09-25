@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { seriesColor, inkOn } from '@/lib/chartFmt';
 import type { FlameNode } from '@/lib/types';
+import { LinkButton } from './ui/LinkButton';
 
 interface Box {
   node: FlameNode;
@@ -33,13 +34,15 @@ export function FlameGraph({ root, totalWidth = 1100 }: { root: FlameNode; total
       {/* Breadcrumbs */}
       <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--text2)', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {path.map((n, i) => (
-          <span key={i}>
+          // v0.10.924 — buton bütünlüğü Faz 2: kırıntı = LinkButton (font: inherit;
+          // monospace sarmalayıcı .mono'dan). Son kırıntı "buradasın": muted, alt çizgisiz.
+          <span key={i} className="mono">
             {i > 0 && <span style={{ color: 'var(--text3)' }}> › </span>}
-            <button onClick={() => setFocus(n)}
-              style={{
-                background: 'transparent', border: 0, color: i === path.length - 1 ? 'var(--text)' : 'var(--accent2)',
-                fontFamily: 'monospace', fontSize: 12, cursor: 'pointer', padding: 0,
-              }}>{n.name}</button>
+            <LinkButton onClick={() => setFocus(n)}
+              tone={i === path.length - 1 ? 'muted' : 'accent'}
+              underline={i === path.length - 1 ? 'none' : 'hover'}>
+              {n.name}
+            </LinkButton>
           </span>
         ))}
         <span style={{ marginLeft: 'auto', color: 'var(--text3)' }}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { Spinner, Empty } from './Spinner';
 import { IconFlame } from './icons';
 import { api } from '@/lib/api';
@@ -105,21 +106,16 @@ export function RootCauseRibbon({
           SATIRINDA: komşu affordance (`trailing`) buraya girer, gövde
           ise her zaman satırın ALTINDA kalır. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-      <button
-        type="button"
+      {/* v0.10.924 — buton bütünlüğü Faz 2: `all: unset` + satır-içi accent
+          formülü → Chip (tone accent = neden bulundu). aria-expanded eklendi:
+          çip altındaki gövdeyi açıp kapatıyor. */}
+      <Chip size="xs" pill tone={hasCause ? 'accent' : 'neutral'}
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        aria-expanded={showBody}
         title={hasCause
           ? `Likely cause: ${summary!.topSuspect} · confidence ${pct(conf)} — click to expand the ranked candidates`
           : 'No clear cause synthesized yet — click for the full root-cause analysis'}
-        style={{
-          all: 'unset', cursor: 'pointer',
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          fontSize: 11, lineHeight: 1.3,
-          padding: '2px 8px', borderRadius: 10,
-          border: `1px solid ${hasCause ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'var(--border)'}`,
-          background: hasCause ? 'var(--accent-soft)' : 'var(--bg2)',
-          color: 'var(--text2)', maxWidth: '100%',
-        }}>
+        style={{ gap: 6 }}>
         <span style={{
           fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
           fontSize: 9.5, color: hasCause ? 'var(--accent)' : 'var(--text3)',
@@ -143,7 +139,7 @@ export function RootCauseRibbon({
           </span>
         )}
         <span style={{ color: 'var(--text3)', transition: 'transform .12s', transform: showBody ? 'rotate(90deg)' : 'none' }}>▸</span>
-      </button>
+      </Chip>
       {trailing}
       </div>
 

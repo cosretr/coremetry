@@ -11,6 +11,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { statementTracesHref } from '@/lib/pivotHref';
 import { metricCatalogueHref } from '@/pages/explore/urlCodec';
 import { Button } from '@/components/ui/Button';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
@@ -89,11 +90,14 @@ export function Stat({ label, value, tone, onClick, sub }: {
     </>
   );
   if (onClick) {
+    // v0.10.924 — buton bütünlüğü Faz 2: gerekçeli istisna (karo atomu yok).
+    // `all: 'unset'` → `.btn-bare`: aynı görünüm, odak halkası geri geliyor.
     return (
-      <button type="button" onClick={onClick}
+      // eslint-disable-next-line ui/no-raw-button -- tıklanabilir stat karosu: çerçevesi aynı ızgaradaki statik div ikiziyle aynı kalmalı, Button çocukları yatay .row span içine sarar
+      <button type="button" onClick={onClick} className="btn-bare"
         title="Open metric chart"
         style={{
-          all: 'unset', display: 'block', cursor: 'pointer',
+          display: 'block', cursor: 'pointer',
           padding: '8px 10px', borderRadius: 4,
           background: 'var(--bg2)', border: '1px solid var(--border)',
           transition: 'border-color 0.12s, background 0.12s',
@@ -174,11 +178,14 @@ export function GaugeStat({ label, usage, limit, sub, onClick, forecast }: {
     </>
   );
   if (onClick) {
+    // v0.10.924 — buton bütünlüğü Faz 2: gerekçeli istisna (karo atomu yok).
+    // `all: 'unset'` → `.btn-bare`: aynı görünüm, odak halkası geri geliyor.
     return (
-      <button type="button" onClick={onClick}
+      // eslint-disable-next-line ui/no-raw-button -- tıklanabilir stat karosu: çerçevesi aynı ızgaradaki statik div ikiziyle aynı kalmalı, Button çocukları yatay .row span içine sarar
+      <button type="button" onClick={onClick} className="btn-bare"
         title="Open metric chart"
         style={{
-          all: 'unset', display: 'block', cursor: 'pointer',
+          display: 'block', cursor: 'pointer',
           padding: '8px 10px', borderRadius: 4,
           background: 'var(--bg2)', border: '1px solid var(--border)',
           transition: 'border-color 0.12s, background 0.12s',
@@ -608,16 +615,13 @@ export function WaitClassesBar({ waits, onClickClass }: {
               </>
             );
             if (handleClick) {
+              // v0.10.924 — buton bütünlüğü Faz 2: `all: unset` lejant girdisi →
+              // LinkButton muted/none (inline-flex · gap 4 · text2 atomdan).
               return (
-                <button key={w.name} type="button" onClick={handleClick}
-                  title={`Chart wait time · ${w.name}`}
-                  style={{
-                    all: 'unset', cursor: 'pointer',
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    color: 'var(--text2)',
-                  }}>
+                <LinkButton key={w.name} tone="muted" underline="none" onClick={handleClick}
+                  title={`Chart wait time · ${w.name}`}>
                   {labelInner}
-                </button>
+                </LinkButton>
               );
             }
             return (

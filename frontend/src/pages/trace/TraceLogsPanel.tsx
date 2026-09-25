@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner, Empty } from '@/components/Spinner';
 import { LogTable } from '@/components/LogTable';
+import { Chip } from '@/components/ui/Chip';
 import { traceServicesWithoutTraceField } from '@/lib/traceEventLogs';
 import type { LogRow } from '@/lib/types';
 
@@ -39,21 +40,18 @@ export function TraceLogsPanel({ logs, degraded, logsTotal, eventRows, oracleRow
   onToggleGrpcMsgs: () => void;
   traceServices: string[];
 }) {
-  // v0.10.577 — gizlenen event'leri geri getiren çip. Sayfanın kendi dili
-  // (.facet + aria-pressed + klavye dalı); emsali "Critical path focus".
-  // Yalnız gizlenen VARSA ya da tercih açıkken çizilir — hiçbir gRPC event'i
-  // olmayan bir trace'te ekranda anlamsız bir düğme durmasın.
+  // v0.10.577 — gizlenen event'leri geri getiren çip; emsali "Critical path
+  // focus". Yalnız gizlenen VARSA ya da tercih açıkken çizilir — hiçbir gRPC
+  // event'i olmayan bir trace'te ekranda anlamsız bir düğme durmasın.
+  // v0.10.924 — buton bütünlüğü Faz 2: `.facet` + role=button + elle klavye
+  // dalı yerine Chip (gerçek düğme; `active` aria-pressed basar).
   const grpcChip = (hiddenGrpcMsgs > 0 || showGrpcMsgs) ? (
-    <span className={'facet' + (showGrpcMsgs ? ' on' : '')}
-      role="button" tabIndex={0} aria-pressed={showGrpcMsgs}
+    <Chip pill active={showGrpcMsgs}
       title="Bilgi taşımayan span event'leri: gRPC SENT/RECEIVED mesajları ve hiç attribute taşımayan işaretçiler (redis.encode.start gibi). ERROR ve üstü asla gizlenmez."
-      onClick={onToggleGrpcMsgs}
-      onKeyDown={e => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleGrpcMsgs(); }
-      }}>
+      onClick={onToggleGrpcMsgs}>
       Gürültü event'leri
-      {hiddenGrpcMsgs > 0 && <span className="n">{hiddenGrpcMsgs}</span>}
-    </span>
+      {hiddenGrpcMsgs > 0 && <span className="mono">{hiddenGrpcMsgs}</span>}
+    </Chip>
   ) : null;
 
   if (logs === undefined) return <Spinner />;

@@ -14,6 +14,8 @@ import { serviceHref } from '@/lib/serviceHref';
 import { spanAttrHref, spanEndpointHref, type SpanLinkCtx } from './spanEntityLinks';
 import { IconFlame, IconSparkles } from './icons';
 import { CopyButton } from './CopyButton';
+import { IconButton } from './ui/IconButton';
+import { DisclosureButton } from './ui/DisclosureButton';
 import { AIExplainButton } from './ai/AIExplainButton';
 import { BreakdownBar, KindBadge } from './KindBadge';
 import { useEntityEnabled, useStackFrameLinks } from '@/lib/queries';
@@ -276,7 +278,10 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             ? <span className="badge b-err" style={{ marginLeft: 4 }}>ERROR</span>
             : <span className="sr-only">OK</span>}
         </div>
-        <button className="ps-close" onClick={onClose}>✕</button>
+        {/* v0.10.924 — buton bütünlüğü Faz 2: ham `.ps-close` yerine
+            IconButton (glif-only; erişilebilir ad artık aria-label'da). */}
+        <IconButton variant="ghost" size="sm" aria-label="Close span details"
+          icon="✕" onClick={onClose} />
       </div>
       <div id="span-panel-body">
         {/* v0.10.692 (operatör: "kiosk'taki span attribute gösterimi daha güzel;
@@ -618,12 +623,12 @@ function ExceptionView({ service, resourceAttributes, type, message, stacktrace,
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
           {time && <span style={{ color: 'var(--text3)', fontSize: 11 }}>{tsLong(time)}</span>}
           {stack && <CopyButton value={stack} title="Copy stacktrace" />}
+          {/* v0.10.924 — buton bütünlüğü Faz 2: DisclosureButton (aria-expanded;
+              glif ▸/▾ atomdan). Glif aria-hidden olduğu için ad aria-label'da. */}
           {stack && (
-            <button className="ex-toggle" type="button"
+            <DisclosureButton expanded={!collapsed} aria-label="Stack trace"
               onClick={() => setCollapsed(c => !c)}
-              title={collapsed ? 'Expand' : 'Collapse'}>
-              {collapsed ? '▸' : '▾'}
-            </button>
+              title={collapsed ? 'Expand' : 'Collapse'} />
           )}
         </div>
       </div>

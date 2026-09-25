@@ -3,7 +3,7 @@ import { useEscLayer } from '@/lib/escLayer';
 import type { ReactNode, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CopyButton } from '@/components/CopyButton';
-import { Button, IconButton, MenuItem } from '@/components/ui';
+import { Button, IconButton, LinkButton, MenuItem } from '@/components/ui';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
   describeMetricQuery,
@@ -264,20 +264,19 @@ export function MetricPanel(props: MetricPanelProps) {
           so the doorway is just the floating ⋮ below + the body click. */}
       {!compact && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <button
-            type="button"
+          {/* v0.10.924 — buton bütünlüğü Faz 2: elle sıfırlanmış buton yerine
+              LinkButton (muted: dinlenmede sessiz başlık, hover'da altı çizili
+              "burası Explore'a gider"). Atom `font: inherit` bekliyor — başlık
+              tipografisi burada bağlam olarak veriliyor, zemin/renk atomda. */}
+          <LinkButton
+            tone="muted"
             onClick={explore}
             title={`Explore — ${describeMetricQuery(mq)} (press e)`}
-            style={{
-              background: 'transparent', border: 'none', padding: 0,
-              font: 'inherit', color: 'var(--text)', fontWeight: 600,
-              fontSize: 13, cursor: 'pointer', textAlign: 'left',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}
+            style={{ fontWeight: 600, fontSize: 13 }}
             className="metric-panel-title"
           >
             {title}
-          </button>
+          </LinkButton>
           <span style={{ flex: 1 }} />
           {!suppressMenu && overflow}
         </div>

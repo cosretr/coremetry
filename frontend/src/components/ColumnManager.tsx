@@ -3,6 +3,7 @@ import { attrKeyWindowParams } from '@/lib/attrKeyWindow';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { api } from '@/lib/api';
 import { canAddCustomColumn } from '@/lib/customColumn';
+import { Button } from '@/components/ui/Button';
 
 // ColumnManager — "+ Column" affordance shared by trace tables on
 // /traces and /explore. Click opens a Combobox-style picker fed by
@@ -85,22 +86,17 @@ export function ColumnManager({ cols, onAdd }: {
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button type="button" disabled={atLimit}
+      {/* v0.8.78 — operator-reported: the picker trigger was too faint.
+          v0.10.924 — buton bütünlüğü Faz 2: elle boyanan accent-tint yerine
+          `accent` varyantı (tint zemin + accent metin, "primary değil ama
+          vurgulu" katmanı) — soluklaşma riski atomda kapalı; limit hâlini
+          `disabled` boyar. */}
+      <Button variant="accent" size="sm" disabled={atLimit}
         onClick={() => setOpen(o => !o)}
         title={atLimit ? 'Column limit reached (8)' : 'Add an attribute column'}
-        style={{
-          // v0.8.78 — operator-reported: the picker trigger was too faint.
-          // Primary text + dashed primary border + a faint primary-tint fill so
-          // it reads as an actionable affordance, not disabled chrome.
-          padding: '4px 12px', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap',
-          background: atLimit ? 'transparent' : 'color-mix(in srgb, var(--accent) 8%, transparent)',
-          color: 'var(--accent2)',
-          border: '1px dashed var(--accent)', borderRadius: 5,
-          cursor: atLimit ? 'not-allowed' : 'pointer',
-          opacity: atLimit ? 0.5 : 1,
-        }}>
+        style={{ whiteSpace: 'nowrap' }}>
         + Add column
-      </button>
+      </Button>
       {open && (
         <div style={{
           // v0.8.76 — operator-reported: the picker "didn't appear" on /traces.
@@ -157,14 +153,12 @@ export function ColumnManager({ cols, onAdd }: {
             ))}
           </div>
           {canAddCustom && (
-            <button type="button"
+            <Button variant="primary" size="sm"
               onClick={addCustom}
-              style={{
-                width: '100%', marginTop: 4, fontSize: 11,
-                padding: '4px 8px',
-              }}>
-              Add custom column &quot;{query.trim()}&quot;
-            </button>
+              style={{ width: '100%', marginTop: 4 }}>
+              {/* Tam genişlik: Button'ın iç .row'u içeriği başa yaslar; etiket ortada kalsın. */}
+              <span style={{ flex: 1, textAlign: 'center' }}>Add custom column &quot;{query.trim()}&quot;</span>
+            </Button>
           )}
           <div style={{ fontSize: 10, color: 'var(--text3)', padding: '6px 8px 0', borderTop: '1px solid var(--border)', marginTop: 6 }}>
             keys from spans seen in the last 1h

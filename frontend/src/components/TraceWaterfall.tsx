@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { useVirtualizer, observeElementRect, observeElementOffset, elementScroll, observeWindowRect, observeWindowOffset, windowScroll, type VirtualizerOptions } from '@tanstack/react-virtual';
 import { findScrollParent, offsetWithinScrollParent } from '@/lib/scrollParent';
 import { TraceMinimap } from './traces/TraceMinimap';
+import { Chip } from './ui/Chip';
+import { DisclosureButton } from './ui/DisclosureButton';
 import type { SpanRow, TraceAnalysis, TraceNode, TraceServiceSummary } from '@/lib/types';
 import { collectSubtreeIds, groupParentOf, clusterBadge } from './traceWaterfall.tree';
 import { resolveResource } from '@/lib/otel/semconv';
@@ -610,26 +612,20 @@ export function TraceWaterfall({
           {/* v0.9.1277 — ×N gruplama anahtarı. Yapışkan başlıkta duruyor
               çünkü uzun bir şelalede aşağı kaydırdıktan sonra "bu satırlar
               neden katlanmış?" sorusunun cevabı görünür kalmalı. Görsel
-              dil kritik-yol çipiyle aynı (`.facet` / `.facet.on`); <span
-              role="button"> BİLİNÇLİ: `.facet:hover` (0,2,0) element
-              seviyesindeki `button:hover:not(:disabled)` (0,2,1) kuralını
-              yenemez, yani gerçek bir <button> hover'da dolu mavi olurdu
-              (v0.9.895'te ib-bare'in 12 sitesini kıran tuzak). */}
+              dil kritik-yol çipiyle aynı (Chip pill). v0.10.924 — buton
+              bütünlüğü Faz 2: eski span + `role=button` gerekçesi
+              (`.facet:hover` element seviyesindeki `button:hover` kuralını
+              yenemiyordu) Chip atomunda yok — `.btn-chip` her :hover'da
+              zemini yeniden beyan ediyor. `wf-grp-toggle` yalnız yerleşim
+              (margin-left:auto) için kalır. */}
           {onGroupSimilarChange && (
-            <span className={'facet wf-grp-toggle' + (groupSimilar ? ' on' : '')}
-              role="button" tabIndex={0} aria-pressed={groupSimilar}
+            <Chip pill size="xs" className="wf-grp-toggle" active={groupSimilar}
               title={groupSimilar
                 ? 'Gruplama AÇIK — aynı (servis, işlem) kardeş span\'ler tek ×N satırında. Kapatmak için tıkla.'
                 : 'Aynı (servis, işlem) kardeş span\'leri tek ×N satırında katla — N+1 desenlerini okunur kılar.'}
-              onClick={e => { e.stopPropagation(); onGroupSimilarChange(!groupSimilar); }}
-              onKeyDown={e => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onGroupSimilarChange(!groupSimilar);
-                }
-              }}>
+              onClick={e => { e.stopPropagation(); onGroupSimilarChange(!groupSimilar); }}>
               ×N grupla
-            </span>
+            </Chip>
           )}
         </div>
         <div className="wf-resizer"
@@ -822,14 +818,16 @@ export function TraceWaterfall({
               )}
 
               <div className="wf-row-name-inner" style={{ paddingLeft: depth * INDENT_PX + 8 }}>
+                {/* v0.10.924 — buton bütünlüğü Faz 2: DisclosureButton
+                    (aria-expanded + tek glif çifti ▸/▾). `wf-toggle` yalnız
+                    16px kolon genişliği için kalır — `.wf-leaf` ile hizalı. */}
                 {hasChildren
-                  ? <button className="wf-toggle" onClick={e => toggle(s.spanId, e, repSpanId)}
+                  ? <DisclosureButton className="wf-toggle" expanded={!isCol}
+                            onClick={e => toggle(s.spanId, e, repSpanId)}
                             aria-label={isCol ? 'Expand · ⌥/Alt+click for whole subtree'
                                               : 'Collapse · ⌥/Alt+click for whole subtree'}
                             title={isCol ? 'Expand · ⌥/Alt+click for whole subtree'
-                                         : 'Collapse · ⌥/Alt+click for whole subtree'}>
-                      {isCol ? '▶' : '▼'}
-                    </button>
+                                         : 'Collapse · ⌥/Alt+click for whole subtree'} />
                   : <div className="wf-leaf" />}
                 {/* Service identifier — Tempo-style soft underline.
                     The service name reads as plain text with a 2px

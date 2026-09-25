@@ -299,9 +299,14 @@ export function LogTable({
             ? c.label
             : <>
                 {c.label}
-                <button type="button" className="th-remove"
+                {/* v0.10.924 — buton bütünlüğü Faz 2: IconButton bare
+                    (Explore TracesResult'taki kolon-× ile aynı). `th-remove`
+                    yalnız başlık-hover'da belirme (opacity) + boşluk için. */}
+                <IconButton variant="bare" size="xs" className="th-remove"
                   onClick={e => { e.stopPropagation(); onRemoveColumn(c.id); }}
-                  title={`Remove the ${c.label} column`}>×</button>
+                  title={`Remove the ${c.label} column`}
+                  aria-label={`Remove the ${c.label} column`}
+                  icon="×" />
               </>
         ) : undefined} />
         <tbody>

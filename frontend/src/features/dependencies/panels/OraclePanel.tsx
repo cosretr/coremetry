@@ -3,6 +3,7 @@ import { Spinner } from '@/components/Spinner';
 import { api } from '@/lib/api';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import type { TimeRange, OracleMetrics, FilterExpr } from '@/lib/types';
+import { Button } from '@/components/ui/Button';
 import {
   Stat, GaugeStat, OracleMetricDrillModal, TopSQLTable, HostLink, fmtBytes,
   WaitClassesBar,
@@ -183,7 +184,7 @@ function TablespaceBar({ ts, onClick }: {
   const inner = (
     <div style={{
       display: 'grid', gridTemplateColumns: '120px 1fr 90px 60px 18px', gap: 10,
-      alignItems: 'center', fontSize: 11,
+      alignItems: 'center', fontSize: 11, width: '100%',
       fontFamily: 'ui-monospace, SFMono-Regular, monospace',
     }}>
       <span style={{ color: 'var(--text)', fontWeight: 600 }}>{ts.name}</span>
@@ -208,18 +209,16 @@ function TablespaceBar({ ts, onClick }: {
     </div>
   );
   if (onClick) {
+    // v0.10.924 — buton bütünlüğü Faz 2: `all: unset` + JS hover satırı →
+    // Button ghost sm (zemin/hover/odak atomdan). Stil yalnız yerleşim:
+    // satır ızgara hücresini doldurur, ad sütunu sola yaslı kalır (ızgara
+    // `width: 100%` ile Button'ın iç `.row` span'ini doldurur).
     return (
-      <button type="button" onClick={onClick}
+      <Button variant="ghost" size="sm" onClick={onClick}
         title={`Open ${ts.name} usage chart`}
-        style={{
-          all: 'unset', display: 'block', cursor: 'pointer',
-          padding: '3px 6px', borderRadius: 3,
-          transition: 'background 0.12s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg3)')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+        style={{ width: '100%', textAlign: 'left' }}>
         {inner}
-      </button>
+      </Button>
     );
   }
   return inner;

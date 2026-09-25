@@ -4,6 +4,7 @@ import { logFieldGlyph } from '@/lib/logFieldTypes';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { getRaw, setRaw } from '@/lib/storage';
 import { liftBadge } from '@/lib/logFieldLift'; // v0.10.509 (C5)
 import type { CSSProperties } from 'react';
@@ -254,20 +255,20 @@ export function LogFieldsPanel({
   }, [columns, needle]);
 
   if (!open) {
-    // Deliberately NOT the shared <Button> atom: this is the collapsed
-    // rail affordance (vertical writing-mode, stretches the panel edge),
-    // a structural anatomy the atom's variants can't express (U1 batch 2).
+    // Collapsed rail affordance (vertical writing-mode, stretches the
+    // panel edge). v0.10.924 — buton bütünlüğü Faz 2: yüzey artık
+    // `secondary` atomdan; satır içi yalnız ray YERLEŞİMİ (genişlik,
+    // dikey yazım, sıfır dolgu) kaldı — writing-mode atomun iç `.row`
+    // span'ine miras geçer, etiket dikey akar.
     return (
-      <button type="button" onClick={toggleOpen}
+      <Button variant="secondary" size="xs" onClick={toggleOpen}
         title="Show the fields panel"
         style={{
-          alignSelf: 'stretch', width: 24, border: '1px solid var(--border)',
-          borderRadius: 6, background: 'var(--bg1)', cursor: 'pointer',
-          color: 'var(--text3)', fontSize: 11, padding: 0,
+          alignSelf: 'stretch', width: 24, padding: 0,
           writingMode: 'vertical-rl',
         }}>
         ƒ Fields
-      </button>
+      </Button>
     );
   }
 
@@ -277,15 +278,15 @@ export function LogFieldsPanel({
   };
   const fieldRow = (f: string, removable: boolean) => (
     <div key={f}>
-      <div
-        role="button" tabIndex={0}
+      {/* v0.10.924 — buton bütünlüğü Faz 2: `div role=button` + elle
+          ▸/▾ yerine DisclosureButton (aria-expanded + ev glifi, satır
+          başında — ailenin tek anatomisi). Enter/Space yerel. */}
+      <DisclosureButton
+        expanded={expandedField === f}
         onClick={() => setExpandedField(cur => (cur === f ? null : f))}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedField(cur => (cur === f ? null : f)); } }}
         title={`${f} — click for top values`}
         style={{
-          display: 'flex', alignItems: 'center', gap: 4,
-          padding: '2px 4px', borderRadius: 4, cursor: 'pointer',
-          fontSize: 11.5,
+          width: '100%', borderRadius: 4,
           // v0.9.292 — the rail is a >100-row list inside a 70vh
           // scroller and was rendering flat: no virtualisation, no
           // content-visibility, no cap. It was the ONE place on /logs
@@ -295,7 +296,7 @@ export function LogFieldsPanel({
           contentVisibility: 'auto',
           containIntrinsicSize: '0 22px',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          background: expandedField === f ? 'var(--accent-soft)' : 'transparent',
+          background: expandedField === f ? 'var(--accent-soft)' : undefined,
           color: removable ? 'var(--accent2)' : 'var(--text2)',
         }}>
         {(() => { const g = logFieldGlyph(types?.[f]); return g ? <span className="lf-type" title={g.label} aria-label={g.label}>{g.glyph}</span> : null; })()}
@@ -303,8 +304,7 @@ export function LogFieldsPanel({
           flex: 1, minWidth: 0, overflow: 'hidden',
           textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{f}</span>
-        <span style={{ color: 'var(--text3)', fontSize: 10 }}>{expandedField === f ? '▾' : '▸'}</span>
-      </div>
+      </DisclosureButton>
       {expandedField === f && (
         <FieldAccordion field={f} scope={scope} lift={lift}
           onExists={onExists} windowTotal={windowTotal}

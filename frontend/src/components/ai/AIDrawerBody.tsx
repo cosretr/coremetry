@@ -254,18 +254,17 @@ function AIDrawerChat({ subject, explainText, spanIds, traceIds }: {
 
 // Kanıt satırı — sayfadaki kutulanmış satırla AYNI görsel dil (.wf-evidence),
 // böylece çekmecedeki liste ile waterfall'daki kutu aynı şeyi anlatır.
+// v0.10.924 — buton bütünlüğü Faz 2: `div role=button` + elle Enter/Space →
+// gerçek ghost Button (klavye yerleşik). Atom çocukları `.row` flex'ine
+// sardığı için kırpma (ellipsis) id'nin kendi span'inde.
 function EvidenceRow({ id, title, onClick }: { id: string; title: string; onClick: () => void }) {
   return (
-    <div className="wf-evidence mono" role="button" tabIndex={0}
+    <Button variant="ghost" size="sm" className="wf-evidence mono"
       title={title}
       onClick={onClick}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
-      style={{
-        cursor: 'pointer', fontSize: 11, padding: '5px 8px', marginBottom: 4,
-        borderRadius: 'var(--radius-sm)', color: 'var(--text)',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
-      {id} <span style={{ color: 'var(--text3)' }}>→</span>
-    </div>
+      rightIcon={<span style={{ color: 'var(--text3)' }}>→</span>}
+      style={{ display: 'block', width: '100%', marginBottom: 4 }}>
+      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id}</span>
+    </Button>
   );
 }

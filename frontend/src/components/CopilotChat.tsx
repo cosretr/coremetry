@@ -8,6 +8,7 @@ import { hasPinnableContext, legacyFromPinned, pinLabelTR, readPin, writePin } f
 import type { PageContext } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { IconButton } from '@/components/ui/IconButton';
 import { Drawer } from '@/components/ui/Drawer';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useOpenCriticalCount, useProblems } from '@/lib/queries';
@@ -378,10 +379,13 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
   return (
     <>
       {/* Launcher — markalı animasyonlu sparkline (varyant B). Yuvarlak FAB
-          kendi anatomisi; shared <Button> atomu uygulanmaz (U1 batch-2 kararı). */}
+          kendi anatomisi; shared <Button> atomu uygulanmaz (U1 batch-2 kararı).
+          v0.10.924 — buton bütünlüğü Faz 2: kabuk glif-only IconButton (bare;
+          aria-label sözleşmesi + odak halkası). 48px yuvarlak gradyan anatomisi
+          atomda bir rung değil, satır-içi kalır; `bare` zemin boyamaz. */}
       {launcher && !drawerOpen && <TraceExplainNudge />}{/* v0.10.432 (D8) — FAB'ın üstündeki baloncuk */}
       {launcher && !drawerOpen && (
-        <button
+        <IconButton variant="bare"
           className={criticalOpen > 0 ? 'cm-ai-fab is-alert' : 'cm-ai-fab'}
           onClick={() => setOpen(true)}
           title={criticalOpen > 0 ? `CoSRE — ${criticalOpen} açık kritik problem` : "CoSRE'ye sor"}
@@ -393,19 +397,20 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
             border: '1px solid var(--accent2)',
             display: 'grid', placeItems: 'center',
             cursor: 'pointer', boxShadow: '0 2px 14px rgba(0,0,0,0.3)',
-          }}>
-          <AiMark size={26} />
-          {criticalOpen > 0 && (
-            <span aria-hidden="true" style={{
-              position: 'absolute', top: -3, right: -3,
-              minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box',
-              borderRadius: 9, background: 'var(--err-solid)', color: 'var(--on-accent)',
-              fontSize: 10, fontWeight: 700, lineHeight: '14px',
-              display: 'grid', placeItems: 'center',
-              border: '2px solid var(--bg1)',
-            }}>{criticalOpen > 9 ? '9+' : criticalOpen}</span>
-          )}
-        </button>
+          }}
+          icon={<>
+            <AiMark size={26} />
+            {criticalOpen > 0 && (
+              <span aria-hidden="true" style={{
+                position: 'absolute', top: -3, right: -3,
+                minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box',
+                borderRadius: 9, background: 'var(--err-solid)', color: 'var(--on-accent)',
+                fontSize: 10, fontWeight: 700, lineHeight: '14px',
+                display: 'grid', placeItems: 'center',
+                border: '2px solid var(--bg1)',
+              }}>{criticalOpen > 9 ? '9+' : criticalOpen}</span>
+            )}
+          </>} />
       )}
 
       {/* v0.9.654 (operatör: "CoSRE drawer gibi çıksa … Chat'ten devam et

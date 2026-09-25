@@ -39,7 +39,9 @@ describe('kök tanımı (v0.10.733)', () => {
     expect(page).toContain('giriş kökü {entryPct === null');
     expect(page).toContain('tam kök {pct === null');
     expect(page).toContain('aria-label="Kök tanımı"');
-    expect(page).toContain("saveDef.mutate('entry')");
+    // v0.10.924 — seçici SegmentedControl: 'entry' seçeneği + seçim kaydeder.
+    expect(page).toContain("{ value: 'entry', label: 'giriş kökü'");
+    expect(page).toContain('if (v !== def) saveDef.mutate(v);');
     expect(page).toContain('sonuç eski tanımla');
     expect(page).toContain("import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries';");
     expect(page).toContain("import { entryRootOf } from '@/lib/rootCoverage';");

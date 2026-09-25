@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { attrKeyWindowParams } from '@/lib/attrKeyWindow';
 import { useEscLayer } from '@/lib/escLayer';
 import { Combobox } from './Combobox';
-import { ActionRow, Button, Chip } from '@/components/ui';
+import { ActionRow, Button, Chip, IconButton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { metricLabelQ } from '@/lib/metricLabelQuery'; // v0.10.875
 import type { FilterExpr, FilterOp } from '@/lib/types';
@@ -101,16 +101,19 @@ export function FilterBuilder({ value, onChange, suggestedValues, metricName, me
             {NEEDS_VALUE[f.op] && (
               <span className="fb-chip-val">{formatValues(f.v, f.op)}</span>
             )}
-            <button className="fb-chip-x" type="button"
+            {/* v0.10.924 — buton bütünlüğü Faz 2: ham `fb-chip-x` /
+                `fb-add` yerine IconButton ghost + kesikli "ekle" çipi
+                (`ch-dashed`, `.fb-add`in atomdaki halefi). */}
+            <IconButton variant="ghost" size="xs"
               onClick={e => { e.stopPropagation(); removeAt(i); }}
-              aria-label="Remove filter">✕</button>
+              aria-label="Remove filter" icon="✕" />
           </span>
         ))}
         {!draft && (
-          <button className="fb-add" type="button"
+          <Chip pill className="ch-dashed"
             onClick={() => setDraft({ k: '', op: '=', v: [''] })}>
             + Add filter
-          </button>
+          </Chip>
         )}
       </div>
       {draft && (

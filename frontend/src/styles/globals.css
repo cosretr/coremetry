@@ -809,6 +809,8 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
   border-color: color-mix(in srgb, var(--err) 55%, transparent);
 }
 .btn-icon.active { color: var(--accent2); background: var(--accent-bg); border-color: var(--accent-border); }
+/* v0.10.924 — açık anahtar hover'da tint'ini kaybetmesin (`.ib-sec:hover` 0,4,0). */
+.btn-icon.active:hover:not(:disabled) { background: var(--accent-bg); }
 /* `ib-star` — the favourite/pin modifier. The generic `.active` accent
    tint is right for filter-ish toggles (negate, pin-a-column) but WRONG
    here: a starred row is amber in every tool an operator has used, and
@@ -900,7 +902,7 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
 .btn-chip.ch-accent:hover:not(:disabled),
 .btn-chip.active:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); }
 /* `ch-dashed` — the "nothing assigned yet, click to add" chip. Dashed
-   border is the established affordance for it (see .fb-add). */
+   border is the established affordance for it (see Chip `ch-dashed`). */
 .btn-chip.ch-dashed { background: transparent; color: var(--text3); border-style: dashed; }
 .btn-chip.ch-dashed:hover:not(:disabled) { background: transparent; color: var(--accent2); border-color: var(--accent); }
 /* Wrapper form (onRemove): the box itself is not clickable, only the
@@ -1605,7 +1607,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wf-row-name { flex-shrink: 0; position: relative; display: flex; align-items: center; border-right: 1px solid var(--border); overflow: hidden; }
 .wf-row-name-inner { display: flex; align-items: center; gap: 2px; flex: 1; padding-right: 8px; min-width: 0; }
 .wf-toggle { width: 16px; height: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text2); cursor: pointer; border-radius: 2px; background: transparent; border: 0; padding: 0; }
-.wf-toggle:hover { background: var(--bg3); color: var(--text); }
+/* v0.10.924 — düğme DisclosureButton; `.btn-disclose:hover` (0,3,0) zemini
+   şeffaf yapıp bu kuralı yeniyordu → aynı özgüllük + sonra gelen sıra. */
+.btn-disclose.wf-toggle:hover:not(:disabled) { background: var(--bg3); }
+.btn-disclose.wf-toggle:hover .dsc-glyph { color: var(--text); }
 .wf-leaf { width: 16px; flex-shrink: 0; }
 .wf-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); margin-left: 3px; min-width: 0; }
 /* Service badge — leading chip in every waterfall row. Background
@@ -1985,8 +1990,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .span-panel-resizer:active { background: var(--accent); }
 #span-panel-head { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; position: sticky; top: 0; background: var(--bg1); z-index: var(--z-sticky-bar); }
 .ps-title { font-size: 13px; font-weight: 600; word-break: break-word; flex: 1; padding-right: 8px; }
-.ps-close { cursor: pointer; color: var(--text2); font-size: 16px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 3px; flex-shrink: 0; background: transparent; border: none; padding: 0; }
-.ps-close:hover { background: var(--bg3); color: var(--text); }
 #span-panel-body { padding: 12px 14px; }
 /* v0.10.691 (operatör: "inline gösterim trace'te iyiymiş, Coremetry içindeki
    trace'lerde de yapalım") — SpanDetail satır-içi kip: sağda yüzen panel
@@ -2182,11 +2185,6 @@ canvas { max-width: 100%; }
   font-size: 13px;
   line-height: 1.45;
 }
-.ex-toggle {
-  background: transparent; border: 0; color: var(--text2);
-  cursor: pointer; padding: 0 4px; font-size: 11px;
-}
-.ex-toggle:hover { color: var(--text); }
 /* v0.9.978 (D1.7) — `--bg2`, `--bg1` DEĞİL. Denetim bu kuralı "8 yanlış
    token" listesine koyup topluca `--bg1` öneriyordu; burada YANLIŞ
    olurdu: `.ex-stack`ın tek çağrı yeri `SpanDetail.tsx` ve o panel
@@ -2449,7 +2447,7 @@ button.accent {
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   transition: background .12s, border-color .12s, color .12s;
 }
-/* Border-only hover (precedent: `.fb-add:hover`). Darkening the fill
+/* Border-only hover (precedent: the dashed "add" chip). Darkening the fill
    on hover would push redhat back under 4.5:1, so the hover delta
    rides the hairline: 35% mix -> solid accent. */
 button.accent:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); }
@@ -2522,16 +2520,6 @@ button.accent.copied {
    kalktı; kutu içindeki ortak Button/IconButton'a yalnız aralık verilir. */
 .trace-lookup > button { margin-left: 4px; }
 
-/* Copy-to-clipboard button (inline next to IDs / hashes) */
-.copy-btn {
-  background: transparent; border: 0; color: var(--text2);
-  cursor: pointer; padding: 1px 5px; font-size: 12px;
-  border-radius: 3px; line-height: 1;
-  margin-left: 4px; vertical-align: middle;
-  transition: background .1s, color .1s;
-}
-.copy-btn:hover { background: var(--bg3); color: var(--text); }
-.copy-btn.copied { color: var(--ok); }
 
 /* Advanced query DSL (Explore → Advanced) */
 .adv-query { width: 100%; margin-bottom: 10px; }
@@ -2577,7 +2565,7 @@ button.accent.copied {
 .fq-chip .fq-v { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .fq-chip .fq-n { color: var(--accent2); font-weight: 600; margin-left: 4px; }
 .fq-chip .fq-x { color: var(--text3); padding: 0 6px; border: none; border-left: 1px solid var(--border); background: transparent; cursor: pointer; font: inherit; font-size: 11px; }
-.fq-chip .fq-x:hover { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
+.fq-chip .fq-x.btn-icon:hover:not(:disabled) { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); } /* v0.10.924 — IconButton ghost hover'ını (0,4,0) yener */
 .fq-chip:hover { border-color: var(--accent); }
 .fq-chip.is-editing, .fq-chip.is-draft { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .fq-chip.is-draft .fq-o { border-right: none; }
@@ -2612,21 +2600,16 @@ button.accent.copied {
 /* `.btn-chip-x` is the same affordance under the Chip atom's namespace
    (v0.9.894, MB6). One rule, two selectors — an alias rather than a copy,
    so the two can never drift the way the four hand-rolled `×` buttons did.
-   FilterBuilder / SplitByPicker keep the `fb-` name because their chip
-   body (`.fb-chip`) is a documented house pattern, not an atom site. */
-.fb-chip-x, .btn-chip-x {
+   v0.10.924 (buton bütünlüğü Faz 2) — `.fb-chip-x` takma adı kalktı:
+   FilterBuilder / SplitByPicker / QueryRow artık atomun ×'ini kullanıyor. */
+.btn-chip-x {
   background: transparent; border: 0; color: var(--text2);
   cursor: pointer; padding: 0 4px; line-height: 1; border-radius: 50%;
   width: 18px; height: 18px;
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.fb-chip-x:hover, .btn-chip-x:hover { background: var(--err-solid); color: var(--on-accent); }
-.fb-add {
-  background: transparent; border: 1px dashed var(--border); color: var(--text2);
-  padding: 3px 10px; font-size: 12px; cursor: pointer; border-radius: var(--radius-lg);
-}
-.fb-add:hover { border-color: var(--accent); color: var(--accent2); }
+.btn-chip-x:hover:not(:disabled) { background: var(--err-solid); color: var(--on-accent); } /* v0.10.924 — `:not(:disabled)`: `button:hover:not(:disabled)` (0,2,1) mavi dolguyla yeniyordu */
 .fb-form {
   background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 10px; margin-top: 6px;
@@ -2717,7 +2700,6 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   cursor: pointer; padding: 0 6px; line-height: 1;
   font-size: 13px; border-radius: 3px; height: 20px;
 }
-.cb-clear:hover, .cb-caret:hover { color: var(--text); background: var(--bg3); }
 .cb-caret { font-size: 10px; opacity: 0.7; }
 .cb-list {
   position: absolute; left: 0; top: calc(100% + 4px); z-index: var(--z-dropdown);
@@ -2811,13 +2793,6 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   max-height: 440px; overflow-y: auto;
   border-left: 1px solid var(--border); padding-left: 16px;
 }
-.trp-preset {
-  background: transparent; color: var(--text); border: 0;
-  padding: 5px 8px; border-radius: var(--radius-xs); font-size: 12px;
-  text-align: left; cursor: pointer;
-}
-.trp-preset:hover { background: var(--bg2); }
-.trp-preset.active { background: var(--bg3); color: var(--accent2); font-weight: 600; }
 /* Left column — absolute range. */
 .trp-custom { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 300px; }
 .trp-custom label {
@@ -2838,11 +2813,6 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .trp-calwrap { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; }
 .trp-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .trp-cal-title { font-size: 11px; font-weight: 600; color: var(--text); }
-.trp-cal-nav {
-  background: transparent; border: 0; color: var(--text2); cursor: pointer;
-  font-size: 14px; line-height: 1; padding: 2px 8px; border-radius: var(--radius-xs);
-}
-.trp-cal-nav:hover:not(:disabled) { background: var(--bg2); color: var(--text); }
 .trp-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 1px; }
 .trp-cal-dow {
   font-size: 9px; color: var(--text3); text-align: center;
@@ -3096,6 +3066,9 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   font-size: 10.5px; font-weight: 700; letter-spacing: 1.1px;
   text-transform: uppercase; color: var(--text3); }
 .dtl-sech::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+/* v0.10.924 — `.seg-mini` büyük harfli başlıkta kendi sıfırlamasını taşıyordu;
+   SegmentedControl'e geçince aynı koruma burada (Firefox UA'sı sıfırlamayabilir). */
+.dtl-sech .segmented, .sec-head .segmented { text-transform: none; letter-spacing: 0; }
 /* v0.10.715 — SectionHead atomu: .dtl-sech dili + slotlar (kaynak rozeti,
    çizgi, sağda meta/eylem). Çizgi ::after yerine kendi elemanı ki sağ
    slotlar çizginin SONRASINDA dursun. */
@@ -3317,20 +3290,15 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .mqe-rows { display: flex; flex-direction: column; gap: 8px; }
 .mqe-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
 .mqe-row.off { opacity: .55; }
-.mqe-id { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text2); cursor: pointer; }
 .mqe-id-letter { font-weight: 700; font-size: 12px; color: var(--accent2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mqe-eye { font-size: 11px; color: var(--text3); }
 .mqe-picker { position: relative; }
-.mqe-pickbtn { display: inline-flex; align-items: center; gap: 8px; min-width: 190px; max-width: 280px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text); cursor: pointer; font-size: 12.5px; }
-.mqe-pickbtn:hover { border-color: var(--border-strong); }
 .mqe-pickname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .mqe-unit { font-size: 10px; color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg3); padding: 1px 5px; border-radius: var(--radius-xs); }
 .mqe-caret { color: var(--text3); font-size: 10px; }
 .mqe-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-nav); width: 320px; max-width: 92vw; background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-pop); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
 .mqe-search { width: 100%; }
 .mqe-facets { display: flex; gap: 4px; flex-wrap: wrap; }
-.mqe-facet { padding: 3px 8px; border: 1px solid var(--border); border-radius: 20px; background: var(--bg2); color: var(--text2); font-size: 10.5px; font-weight: 600; cursor: pointer; }
-.mqe-facet.on { border-color: var(--accent); color: var(--accent2); background: var(--accent-soft); }
 .mqe-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .mqe-hint { padding: 12px; font-size: 11.5px; color: var(--text3); text-align: center; }
 .mqe-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: none; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; text-align: left; }
@@ -3349,19 +3317,11 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .mqe-chip-k { color: var(--text2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mqe-chip-op { color: var(--text3); }
 .mqe-chip-v { color: var(--accent2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.mqe-chip-x { all: unset; cursor: pointer; color: var(--text3); padding: 0 4px; border-radius: 50%; line-height: 1; }
-.mqe-chip-x:hover { color: var(--err); background: color-mix(in oklab, var(--err) 14%, transparent); }
 .mqe-chip-edit { gap: 5px; padding: 3px 6px; }
 .mqe-chip-edit select, .mqe-chip-edit input { font-size: 11px; }
 .mqe-chip-edit input { width: 96px; }
-.mqe-chip-add { all: unset; cursor: pointer; color: var(--accent2); font-size: 11px; font-weight: 600; padding: 0 4px; }
-.mqe-addfilter { padding: 2px 8px; border: 1px dashed var(--border-strong); border-radius: 14px; background: transparent; color: var(--text3); font-size: 11px; cursor: pointer; }
-.mqe-addfilter:hover:not(:disabled) { color: var(--accent2); border-color: var(--accent); }
-.mqe-addfilter:disabled { opacity: .5; cursor: not-allowed; }
 .mqe-groupby { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .mqe-lbl { font-size: 11px; color: var(--text3); }
-.mqe-gchip { padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg2); color: var(--text2); font-size: 10.5px; cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.mqe-gchip.on { border-color: var(--accent); color: var(--accent2); background: var(--accent-soft); }
 /* `.row-actions` (v0.9.902, MB8) — was `.mqe-rowact`, renamed because it
    is not a metric-editor thing: the two sibling query editors (Explore's
    QueryRow and MetricQueryEditor) carry the SAME ⧉ / × row actions, and
@@ -3384,26 +3344,21 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    sarmalayıcıya iner. */
 td > .cell-actions { display: flex; gap: var(--sp-3); align-items: center; }
 td > .cell-actions.end { justify-content: flex-end; }
-.mqe-addq { align-self: flex-start; padding: 6px 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; }
-.mqe-addq:hover { color: var(--accent2); border-color: var(--accent); }
 .mqe-code { display: flex; flex-direction: column; gap: 4px; }
 .mqe-code textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.6; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); color: var(--text); resize: vertical; }
 .mqe-code-foot { font-size: 11px; }
 .mqe-code-err { color: var(--err); font-size: 11.5px; }
 /* v0.9.782 — PromQL etiket gezgini: katlanabilir anahtar/değer sütunları.
-   Chip'ler .mqe-gchip'i paylaşır (group-by chip'iyle tek dil). */
+   Chip'ler ui/Chip (group-by chip'iyle tek dil; v0.10.924). */
 .mqe-lb { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
-.mqe-lb-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; cursor: pointer; font-size: 11.5px; color: var(--text2); }
-.mqe-lb-toggle:hover { color: var(--text); }
 .mqe-lb-metric { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--accent2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
-.mqe-lb-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 10px 10px; border-top: 1px solid var(--border); }
+.mqe-lb-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 10px 10px; } /* v0.10.924 — üst çizgi DisclosureButton bölüm anatomisinden gelir; ikisi 2px'e yığılıyordu */
 .mqe-lb-pick { display: flex; align-items: center; gap: 6px; padding-top: 8px; }
 .mqe-lb-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding-top: 8px; }
 .mqe-lb-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .mqe-lb-colhead { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .mqe-lb-search { width: 96px; font-size: 11px; }
 .mqe-lb-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 132px; overflow-y: auto; }
-.mqe-lb-chips .mqe-gchip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mqe-lb-hint { font-size: 10.5px; color: var(--text3); }
 .mqe-chart { padding: 12px; }
 .mqe-dash-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 3px 0; font-size: 13px; }
@@ -3415,7 +3370,6 @@ td > .cell-actions.end { justify-content: flex-end; }
 .mqe-color { position: relative; display: inline-flex; align-items: center; }
 .mqe-color input[type=color] { width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--bg2); cursor: pointer; opacity: .5; }
 .mqe-color.set input[type=color] { opacity: 1; }
-.mqe-color-x { position: absolute; top: -6px; right: -6px; width: 14px; height: 14px; line-height: 11px; text-align: center; border: 1px solid var(--border); border-radius: 50%; background: var(--bg2); color: var(--text3); font-size: 10px; cursor: pointer; padding: 0; }
 
 /* Tinted monospace log table (v0.7.130) — the prototype .logtbl treatment,
    applied to the shared LogTable so /logs AND the Service Logs tab both get it.
@@ -3564,14 +3518,14 @@ td > .cell-actions.end { justify-content: flex-end; }
 
 /* Dynamic log-table columns (Discover revamp step 3) — hover-× on a
    removable column header. Mirrors the .kv-actions reveal pattern. */
+/* v0.10.924 — düğme IconButton (bare, xs); burada yalnız açığa çıkma +
+   aralık kalır. Klavye odağı görünmez düğmeye inmesin: focus-visible da açar. */
 .th-remove {
-  opacity: 0; margin-left: 4px; padding: 0 2px;
-  border: none; background: none; cursor: pointer;
-  font-size: 12px; line-height: 1; color: var(--text3);
+  opacity: 0; margin-left: 4px;
   transition: opacity 80ms ease-out;
 }
-thead th:hover .th-remove { opacity: 1; }
-.th-remove:hover { color: var(--err); }
+thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
+.btn-icon.th-remove:hover:not(:disabled) { color: var(--err); } /* yıkıcı: ib-bare'in accent hover'ı değil */
 
 /* Search-term highlight in the /logs message cell (Discover revamp
    6/7) — warn-soft wash, text colour untouched so severity-tinted
@@ -3841,7 +3795,6 @@ thead th:hover .th-remove { opacity: 1; }
 .trend-spark .ts-p99 { fill: none; stroke: var(--teal); stroke-width: 1.5; stroke-linejoin: round; }
 .trend-spark .ts-cur { fill: var(--teal); }
 .trend-spark__tt { position: absolute; left: 0; bottom: calc(100% + 4px); z-index: var(--z-tooltip); white-space: nowrap; font-size: var(--fs-3xs); color: var(--text); background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 2px 6px; box-shadow: var(--shadow-pop); pointer-events: none; }
-.trend-spark-btn { padding: 1px 2px; }
 tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 
 /* ══ DAR EKRAN KATMANI (v0.9.980) ══════════════════════════════════════
@@ -4016,6 +3969,13 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
      başlığında — `width/height` beyanları yerinde kalsın diye yalnız
      `min-height` ekleniyor, masaüstünde tek piksel değişmiyor. */
   button.sm, button.xs { min-height: 36px; }
+  /* v0.10.924 (buton bütünlüğü Faz 2) — girdinin/çipin İÇİNE mutlak
+     konumlu ya da metin satırına gömülü küçük tetikler 36px tabanından
+     muaf: taban onları girdi metninin üstüne taşırıyor (Combobox ✕ metnin
+     13px'ini örtüyordu), çipin 24px'lik kutusunda kırpılıyor, ID
+     satırlarını 36px'e şişiriyordu. Önceden ham düğme olarak zaten muaftılar. */
+  .btn-icon.cb-clear, .btn-icon.cb-caret, .fq-chip .btn-icon.fq-x, .btn-icon.th-remove,
+  button.xs.copy-btn { min-width: 0; min-height: 0; }
 
   /* D6.3 (v0.9.988) — çekmece dar ekranda TAM EKRAN. Genişliği zaten
      `min(width, 100vw)` (Drawer.tsx) hallediyordu; eksik olan iç
@@ -4333,12 +4293,6 @@ a.ins-val:hover { text-decoration: underline; }
 /* v0.10.575 — Kafka istemci bölümünün KAPSAM beyanı (scope='services'). */
 .kc-scope { font-size: var(--fs-2xs); color: var(--warn); margin-bottom: var(--sp-2); }
 
-/* v0.10.715 — bölüm başlığında küçük parçalı anahtar (birleşik | cluster başına). */
-.seg-mini { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; text-transform: none; letter-spacing: 0; }
-.seg-mini button { border: 0; background: var(--bg1); color: var(--text2); padding: 1px 8px; font: inherit; font-size: 11px; cursor: pointer; }
-.seg-mini button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent2); font-weight: 600; }
-.seg-mini button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-
 /* v0.10.718 — Infrastructure dilim 1: KPI StatTile ızgarası (Kafka şeridiyle
    aynı atom), tıklanabilir tile (grafiğe kaydır / Pods'a git) ve tile alt
    satırı (limit oranı, "en çok restart"). Token merdiveni, ham sayı yok. */
@@ -4353,8 +4307,6 @@ a.ins-val:hover { text-decoration: underline; }
    eylemler), satır açma oku, sonlanma sebebi rozeti. Token merdiveni. */
 .pods-group td { background: var(--bg2); padding: var(--sp-3) var(--sp-4); }
 .pods-group__row { display: flex; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); color: var(--text3); flex-wrap: wrap; }
-.pods-group__caret { border: 0; background: transparent; color: var(--text3); cursor: pointer; font: inherit; padding: 0 var(--sp-1); }
-.pods-group__caret:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: var(--radius-xs); }
 .pods-group__name { font-weight: 600; font-size: var(--fs-sm); color: var(--text); }
 .pods-group__stats { display: inline-flex; gap: var(--sp-5); align-items: center; }
 .pods-group__stats b { color: var(--text); font-weight: 600; }

@@ -66,21 +66,17 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
       padding: '8px 12px', borderTop: '1px solid var(--border)',
       opacity: q.enabled ? 1 : 0.5,
     }}>
-      {/* Letter badge — click toggles the query on/off */}
-      <button type="button"
+      {/* Letter badge — click toggles the query on/off.
+          v0.10.924 — buton bütünlüğü Faz 2: `all: unset` + satır-içi dolu
+          accent yerine IconButton `active` (aria-pressed, atomun tint'i);
+          MetricQueryEditor'daki kardeş rozetle tek dil. Ad sabit, durum
+          pressed'den okunur. */}
+      <IconButton variant="secondary" active={q.enabled}
+        icon={<b>{q.letter}</b>}
+        aria-label={`Sorgu ${q.letter}`}
         onClick={() => onChange({ ...q, enabled: !q.enabled })}
         title={q.enabled ? 'Sorguyu kapat' : 'Sorguyu aç'}
-        style={{
-          all: 'unset', cursor: 'pointer', display: 'inline-flex',
-          alignItems: 'center', justifyContent: 'center',
-          width: 22, height: 22, borderRadius: 4, flexShrink: 0, marginTop: 2,
-          background: q.enabled ? 'var(--accent2)' : 'var(--bg3)',
-          color: q.enabled ? 'var(--bg)' : 'var(--text3)',
-          fontSize: 12, fontWeight: 700,
-          border: '1px solid ' + (q.enabled ? 'var(--accent2)' : 'var(--border)'),
-        }}>
-        {q.letter}
-      </button>
+        style={{ marginTop: 2 }} />
 
       <div style={{ marginTop: 1 }}>
         <SegmentedControl aria-label="Sorgu kaynağı" value={q.source} onChange={setSource} options={[
@@ -158,8 +154,8 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
               onChange={e => onChange({ ...q, dsl: e.target.value })}
               style={{ flex: 1, fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11.5 }}
               title="Gelişmiş DSL — chip filtreleriyle AND'lenir (eski derin linklerden gelir)" />
-            <button className="fb-chip-x" type="button" aria-label="DSL'i kaldır"
-              onClick={() => onChange({ ...q, dsl: '' })}>✕</button>
+            <IconButton size="xs" icon="✕" aria-label="DSL'i kaldır"
+              onClick={() => onChange({ ...q, dsl: '' })} />
           </div>
         )}
       </div>

@@ -492,13 +492,14 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                         kırmızı pay hata, çizgi p99, hover'da kova değerleri. Veri aynı
                         (sparkline / errorsSparkline / p99Sparkline, yeni sorgu yok). Tık:
                         modal (calls odağı; errors/p99 sekmeleri modalda). Mockup onaylı;
-                        tek commit, geri alması tek adım. */}
-                    <button type="button"
+                        tek commit, geri alması tek adım.
+                        v0.10.924 — buton bütünlüğü Faz 2: ham `.btn-bare` sarmalayıcı →
+                        Button ghost xs (zeminsiz; hover'da bg2 tıklanabilirliği söyler). */}
+                    <Button variant="ghost" size="xs" style={{ padding: '1px 2px', border: 0 }}
                       onClick={() => { setOpFocus('calls'); setOpDetail(op); }}
-                      title={`Calls ${fmtNum(op.spanCount)} · Err %${op.errorRate.toFixed(2)} · P99 ${op.p99DurationMs.toFixed(0)}ms · tıkla: grafik`}
-                      className="btn-bare trend-spark-btn">
+                      title={`Calls ${fmtNum(op.spanCount)} · Err %${op.errorRate.toFixed(2)} · P99 ${op.p99DurationMs.toFixed(0)}ms · tıkla: grafik`}>
                       <TrendSpark calls={op.sparkline ?? []} errors={op.errorsSparkline ?? []} p99={op.p99Sparkline ?? []} width={TREND_W} />
-                    </button>
+                    </Button>
                   </td>
                   <td className="mono" style={{ textAlign: 'right' }}>
                     <ImpactBar value={impactOf(op)}

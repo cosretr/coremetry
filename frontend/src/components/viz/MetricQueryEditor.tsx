@@ -10,7 +10,7 @@ import {
   type PromqlToken, type PromqlLabelCtx,
 } from '@/lib/promqlToken';
 import { timeRangeToNs } from '@/lib/utils';
-import { IconButton } from '@/components/ui';
+import { Chip, DisclosureButton, IconButton, LinkButton } from '@/components/ui';
 import { Combobox } from '@/components/Combobox';
 import { evalExpr, exprRefs } from '@/lib/metricFormula';
 import { TimeSeriesPanel, type TSSeries, type TSMode } from '@/components/viz/TimeSeriesPanel';
@@ -304,14 +304,17 @@ function FilterEditor({ metric, filters, onChange }: {
 
   return (
     <div className="mqe-filters">
+      {/* v0.10.924 — buton bütünlüğü Faz 2: elle kurulmuş `.mqe-chip` + ham ×
+          yerine Chip onRemove (× atomun `.btn-chip-x`i). Etiket gövdesi
+          inline olduğu için eski flex gap'in yerini boşluk alıyor. */}
       {filters.map((f, i) => (
-        <span key={i} className="mqe-chip" title={`${f.k} ${f.op} ${f.v.join(', ')}`}>
-          <span className="mqe-chip-k">{f.k}</span>
-          <span className="mqe-chip-op">{f.op}</span>
+        <Chip key={i} size="xs" pill title={`${f.k} ${f.op} ${f.v.join(', ')}`}
+          removeLabel="Remove filter"
+          onRemove={() => onChange(filters.filter((_, j) => j !== i))}>
+          <span className="mqe-chip-k">{f.k}</span>{' '}
+          <span className="mqe-chip-op">{f.op}</span>{' '}
           <span className="mqe-chip-v">{f.v.join(', ')}</span>
-          <button type="button" className="mqe-chip-x" aria-label="Remove filter"
-            onClick={() => onChange(filters.filter((_, j) => j !== i))}>×</button>
-        </span>
+        </Chip>
       ))}
       {adding ? (
         <span className="mqe-chip mqe-chip-edit">
@@ -327,11 +330,11 @@ function FilterEditor({ metric, filters, onChange }: {
           <Combobox value={v} onChange={setV} options={vals.slice(0, 100)} serverFiltered={metricLabelQ(v) !== ''} // v0.10.875 — q gittiyse istemci yeniden süzmez (atom sözleşmesi)
             placeholder="value" autoFocus
             onEnter={add} onEscape={() => setAdding(false)} />
-          <button type="button" className="mqe-chip-add" onClick={add}>Add</button>
+          <LinkButton onClick={add}>Add</LinkButton>
         </span>
       ) : (
-        <button type="button" className="mqe-addfilter" onClick={() => setAdding(true)} disabled={!metric}
-          title={metric ? 'Add a label filter' : 'Pick a metric first'}>+ filter</button>
+        <Chip size="xs" pill className="ch-dashed" onClick={() => setAdding(true)} disabled={!metric}
+          title={metric ? 'Add a label filter' : 'Pick a metric first'}>+ filter</Chip>
       )}
     </div>
   );
@@ -344,8 +347,8 @@ function GroupByEditor({ value, onChange }: { value: string[]; onChange: (g: str
     <div className="mqe-groupby">
       <span className="mqe-lbl">by</span>
       {LABEL_KEYS.slice(0, 8).map(key => (
-        <button key={key} type="button" className={'mqe-gchip' + (value.includes(key) ? ' on' : '')}
-          onClick={() => toggle(key)}>{key.replace(/^.*\./, '')}</button>
+        <Chip key={key} size="xs" pill className="mono" active={value.includes(key)}
+          onClick={() => toggle(key)}>{key.replace(/^.*\./, '')}</Chip>
       ))}
     </div>
   );
@@ -417,11 +420,13 @@ function LabelBrowser({ cursorMetric, onApply }: {
 
   return (
     <div className="mqe-lb">
-      <button type="button" className="mqe-lb-toggle" onClick={toggle} aria-expanded={open}>
-        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+      {/* v0.10.924 — buton bütünlüğü Faz 2: elle ▸/▾ + aria-expanded yerine
+          DisclosureButton (kart-başlığı anatomisi; glif atomdan). */}
+      <DisclosureButton anatomy="section" expanded={open} onClick={toggle}
+        style={{ padding: '6px 10px', gap: 6, fontSize: 11.5 }}>
         Etiket gezgini
         {metric && <span className="mqe-lb-metric" title={metric}>{metric}</span>}
-      </button>
+      </DisclosureButton>
       {open && (
         <div className="mqe-lb-body">
           {!cursorMetric && (
@@ -450,10 +455,12 @@ function LabelBrowser({ cursorMetric, onApply }: {
                     ? <div className="mqe-lb-hint">{keys.length ? 'Eşleşen anahtar yok.' : 'Bu metrikte ölçülmüş etiket yok.'}</div>
                     : (
                       <div className="mqe-lb-chips">
+                        {/* Uzun anahtar/değer tek satırda kısalır — eski
+                            `.mqe-lb-chips .mqe-gchip` kırpmasının karşılığı. */}
                         {shownKeys.map(k => (
-                          <button key={k} type="button" title={k}
-                            className={'mqe-gchip' + (k === key ? ' on' : '')}
-                            onClick={() => setKey(k)}>{k}</button>
+                          <Chip key={k} size="xs" pill className="mono" title={k}
+                            active={k === key}
+                            onClick={() => setKey(k)}><span className="cell-ellipsis">{k}</span></Chip>
                         ))}
                       </div>
                     )}
@@ -472,9 +479,8 @@ function LabelBrowser({ cursorMetric, onApply }: {
                       : (
                         <div className="mqe-lb-chips">
                           {shownVals.map(v => (
-                            <button key={v} type="button" title={`${key}="${v}" ekle`}
-                              className="mqe-gchip"
-                              onClick={() => onApply(metric, key, v)}>{v}</button>
+                            <Chip key={v} size="xs" pill className="mono" title={`${key}="${v}" ekle`}
+                              onClick={() => onApply(metric, key, v)}><span className="cell-ellipsis">{v}</span></Chip>
                           ))}
                         </div>
                       )}
@@ -496,11 +502,18 @@ function QueryRow({ q, canRemove, onChange, onDuplicate, onRemove }: {
   const isFormula = q.kind === 'formula';
   return (
     <div className={'mqe-row' + (q.enabled ? '' : ' off') + (isFormula ? ' formula' : '')}>
-      <button type="button" className="mqe-id" title={q.enabled ? 'Disable query' : 'Enable query'}
-        onClick={() => onChange({ ...q, enabled: !q.enabled })}>
-        <span className="mqe-id-letter">{q.id}</span>
-        <span className="mqe-eye">{q.enabled ? '◉' : '○'}</span>
-      </button>
+      {/* v0.10.924 — buton bütünlüğü Faz 2: harf rozeti bir aç/kapa
+          anahtarı → IconButton `active` (aria-pressed). Ad sabit ("Query A"),
+          durum pressed'den okunur; Explore QueryRow'daki kardeşiyle tek dil.
+          İki glif (harf + göz) sığsın diye md. */}
+      <IconButton variant="secondary" size="md" active={q.enabled}
+        aria-label={`Query ${q.id}`} title={q.enabled ? 'Disable query' : 'Enable query'}
+        style={{ width: 'auto', minWidth: 28, padding: '0 6px' }}
+        onClick={() => onChange({ ...q, enabled: !q.enabled })}
+        icon={<>
+          <span className="mqe-id-letter">{q.id}</span>
+          <span className="mqe-eye">{q.enabled ? '◉' : '○'}</span>
+        </>} />
       {isFormula ? (
         <input className="mqe-expr" value={q.expr} aria-label="Formula expression"
           placeholder="formula over other queries, e.g.  A / B * 100"
@@ -524,8 +537,11 @@ function QueryRow({ q, canRemove, onChange, onDuplicate, onRemove }: {
       <label className={'mqe-color' + (q.color ? ' set' : '')} title="Series colour override (blank = auto palette)">
         <input type="color" value={q.color || '#7d8590'} aria-label="Series colour"
           onChange={e => onChange({ ...q, color: e.target.value })} />
-        {q.color && <button type="button" className="mqe-color-x" aria-label="Clear colour"
-          onClick={e => { e.preventDefault(); onChange({ ...q, color: '' }); }}>×</button>}
+        {/* v0.10.924 — buton bütünlüğü Faz 2: köşeye bindirilmiş 14px ×
+            yerine swatch'ın YANINDA xs IconButton (20px'lik atom köşede
+            swatch'ı örterdi). preventDefault aynen: label rengi açmasın. */}
+        {q.color && <IconButton size="xs" icon="×" aria-label="Clear colour"
+          onClick={e => { e.preventDefault(); onChange({ ...q, color: '' }); }} />}
       </label>
       <div className="row-actions">
         <IconButton icon="⧉" title="Duplicate" aria-label="Duplicate query" onClick={onDuplicate} />
@@ -975,8 +991,10 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
               onChange={nq => setQuery(i, nq)} onDuplicate={() => dupQuery(i)} onRemove={() => removeQuery(i)} />
           ))}
           <div className="row" style={{ gap: 8 }}>
-            <button type="button" className="mqe-addq" onClick={addQuery}>+ Add query</button>
-            <button type="button" className="mqe-addq" onClick={addFormula}>+ Add formula</button>
+            {/* v0.10.924 — buton bütünlüğü Faz 2: kesikli "ekle" yuvası
+                Chip `ch-dashed` değiştiricisinin tanımlı işi. */}
+            <Chip className="ch-dashed" onClick={addQuery}>+ Add query</Chip>
+            <Chip className="ch-dashed" onClick={addFormula}>+ Add formula</Chip>
           </div>
         </div>
       ) : view === 'code' ? (

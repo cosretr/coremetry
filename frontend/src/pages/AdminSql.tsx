@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query'; // v0.10.742 — Oracle kaynak listesi
 import { Empty, Spinner } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
-import { VirtualList, Button, SegmentedControl } from '@/components/ui';
+import { VirtualList, Button, SegmentedControl, DisclosureButton, LinkButton } from '@/components/ui';
 import { useDataTable } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { api } from '@/lib/api';
@@ -311,45 +311,42 @@ export default function SQLPlaygroundPage() {
             return (
               <div key={t.table} style={{ marginBottom: 2 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <button type="button"
+                  {/* v0.10.924 — buton bütünlüğü Faz 2: şema ağacı atomlarda.
+                      ▸/▾ DisclosureButton (aria-expanded artık var); tablo ve
+                      sütun adları sessiz LinkButton (muted) — zemin/kenarlık yok. */}
+                  <DisclosureButton expanded={open}
+                    aria-label={`${t.table} columns`}
                     onClick={() => setOpenTables(s => {
                       const next = new Set(s);
                       if (open) next.delete(t.table); else next.add(t.table);
                       return next;
                     })}
-                    style={{
-                      background: 'transparent', border: 'none', cursor: 'pointer',
-                      color: 'var(--text2)', fontSize: 10, padding: 0, width: 14,
-                    }}>
-                    {open ? '▾' : '▸'}
-                  </button>
-                  <button type="button"
+                    style={{ padding: 0, width: 14 }} />
+                  <LinkButton tone="muted"
                     onClick={() => setQuery(`SELECT * FROM ${t.table} LIMIT 100`)}
                     title={`Replace editor with: SELECT * FROM ${t.table} LIMIT 100`}
                     style={{
                       flex: 1, textAlign: 'left',
-                      background: 'transparent', border: 'none', cursor: 'pointer',
-                      color: 'var(--text)', fontSize: 11, padding: '2px 0',
+                      fontSize: 11, padding: '2px 0',
                       fontFamily: 'monospace',
                     }}>
                     {t.table}
-                  </button>
+                  </LinkButton>
                 </div>
                 {open && (
                   <div style={{ paddingLeft: 18 }}>
                     {t.columns.map(c => (
-                      <button key={c.name} type="button"
+                      <LinkButton key={c.name} tone="muted"
                         onClick={() => insertAtCursor(c.name)}
                         style={{
                           display: 'block', width: '100%',
-                          background: 'transparent', border: 'none', cursor: 'pointer',
                           textAlign: 'left', padding: '1px 0',
-                          fontSize: 10, color: 'var(--text2)',
+                          fontSize: 10,
                           fontFamily: 'monospace',
                         }}
                         title={c.type}>
                         {c.name} <span style={{ color: 'var(--text3)' }}>{c.type}</span>
-                      </button>
+                      </LinkButton>
                     ))}
                   </div>
                 )}

@@ -53,6 +53,7 @@ export function PanelLegend({
             {stats.map((s, i) => (
               <tr key={`${i}:${s.name}`}
                 tabIndex={0}
+                // eslint-disable-next-line ui/no-raw-button -- lejant <tr>'si satır boyu tık hedefi; Enter=izole / Boşluk=gizle AYRI eylem (rowKeyboard tek eylemli), <tr> bir button atomu olamaz
                 role="button"
                 aria-pressed={vis[i] !== false}
                 aria-label={`${s.name} — Enter: izole et, Boşluk: gizle/göster`}

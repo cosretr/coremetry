@@ -166,7 +166,10 @@ describe('TraceWaterfall × ×N grupla anahtarı', () => {
 
     render({ groupSimilar: true, onGroupSimilarChange: v => seen.push(v) });
     const t2 = host.querySelector('.wf-grp-toggle') as HTMLElement;
-    expect(t2.className).toContain('on');
+    // v0.10.924 — buton bütünlüğü Faz 2: anahtar artık Chip (gerçek
+    // <button>); açık durum sınıfı `.on` değil `.active`.
+    expect(t2.tagName).toBe('BUTTON');
+    expect(t2.className).toContain('active');
     expect(t2.getAttribute('aria-pressed')).toBe('true');
     act(() => { t2.click(); });
     expect(seen).toEqual([true, false]);

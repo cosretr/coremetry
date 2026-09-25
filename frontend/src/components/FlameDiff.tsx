@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { DiffNode } from '@/lib/flameDiff';
 import { diffColor } from '@/lib/flameDiff';
+import { LinkButton } from './ui/LinkButton';
 
 // FlameDiff — overlay of two profiles' flame trees with each
 // frame coloured by its percentage change between baseline
@@ -43,16 +44,15 @@ export function FlameDiff({ root, totalWidth = 1100 }: {
         display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center',
       }}>
         {path.map((n, i) => (
-          <span key={i}>
+          // v0.10.924 — buton bütünlüğü Faz 2: kırıntı = LinkButton (font: inherit;
+          // monospace sarmalayıcı .mono'dan). Son kırıntı "buradasın": muted, alt çizgisiz.
+          <span key={i} className="mono">
             {i > 0 && <span style={{ color: 'var(--text3)' }}> › </span>}
-            <button onClick={() => setFocus(n)}
-              style={{
-                background: 'transparent', border: 0,
-                color: i === path.length - 1 ? 'var(--text)' : 'var(--accent2)',
-                fontFamily: 'monospace', fontSize: 12, cursor: 'pointer', padding: 0,
-              }}>
+            <LinkButton onClick={() => setFocus(n)}
+              tone={i === path.length - 1 ? 'muted' : 'accent'}
+              underline={i === path.length - 1 ? 'none' : 'hover'}>
               {n.name}
-            </button>
+            </LinkButton>
           </span>
         ))}
         <span style={{ flex: 1 }} />

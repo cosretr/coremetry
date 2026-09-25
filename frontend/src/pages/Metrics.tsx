@@ -7,6 +7,7 @@ import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ServicePicker } from '@/components/ServicePicker';
 import { MetricQueryEditor } from '@/components/viz/MetricQueryEditor';
@@ -327,14 +328,19 @@ export default function MetricsPage() {
                 title={countsComplete
                   ? 'Facet counts cover every matching metric.'
                   : 'Facet counts cover the LISTED rows only — the catalogue is longer than what is loaded. Load more, or narrow with search / service.'}>
+                {/* v0.10.924 — buton bütünlüğü Faz 2: düğme taklidi span +
+                    elle Enter/Space yerine Chip `active` (gerçek düğme, klavye
+                    doğal; seçili hâl aria-pressed). Sayaç `.ov-facet .n`
+                    tonunu satır içinde taşıyor. */}
                 {METRIC_FACETS.map(g => (
-                  <span key={g.key}
-                    className={'ov-facet' + (facet === g.key ? ' on' : '')}
-                    role="button" tabIndex={0}
-                    onClick={() => writeParams({ facet: g.key })}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); writeParams({ facet: g.key }); } }}>
-                    {g.label}{g.key !== 'all' && <span className="n">{counts[g.key] ?? 0}</span>}
-                  </span>
+                  <Chip key={g.key} active={facet === g.key}
+                    onClick={() => writeParams({ facet: g.key })}>
+                    {g.label}{g.key !== 'all' && (
+                      <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text3)', fontWeight: 600 }}>
+                        {counts[g.key] ?? 0}
+                      </span>
+                    )}
+                  </Chip>
                 ))}
               </div>
               <div style={{ flex: 1 }} />

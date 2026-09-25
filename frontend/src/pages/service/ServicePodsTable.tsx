@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DataTableHead, DataTableColgroup, type DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
+import { DisclosureButton } from '@/components/ui';
 import { PodJmxInline } from './PodJmxInline';
 import { rowActivation } from '@/lib/a11y';
 import { fmtCores, fmtBps, podPhaseBadge, restartColor } from '@/pages/clusters/thresholds';
@@ -115,11 +116,11 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                   <tr className="pods-group" id={`pods-group-${g.cluster}`}>
                     <td colSpan={colCount}>
                       <div className="pods-group__row">
-                        <button type="button" className="pods-group__caret" aria-expanded={!isCol}
+                        {/* v0.10.924 — buton bütünlüğü Faz 2: elle caret → DisclosureButton
+                            (aynı ▸/▾ çifti + aria-expanded atomdan). */}
+                        <DisclosureButton expanded={!isCol}
                           aria-label={isCol ? `${g.cluster} grubunu aç` : `${g.cluster} grubunu kapat`}
-                          onClick={() => setCollapsed(s => ({ ...s, [g.cluster]: !s[g.cluster] }))}>
-                          {isCol ? '▸' : '▾'}
-                        </button>
+                          onClick={() => setCollapsed(s => ({ ...s, [g.cluster]: !s[g.cluster] }))} />
                         <Link to={entityHref({ type: 'cluster', id: g.cluster, name: g.cluster, clusterId: g.cluster }, { range })}
                           className="mono pods-group__name" title="Cluster detayı">{g.cluster}</Link>
                         <span className={`badge ${t.phaseKnown ? (t.failing > 0 ? 'b-err' : 'b-ok') : 'b-gray'}`}>

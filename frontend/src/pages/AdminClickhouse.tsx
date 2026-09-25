@@ -8,7 +8,7 @@ import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupSta
 import { useQuery } from '@tanstack/react-query';
 import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, rawHostLabel, sortRawHosts, staleVerdict } from './adminch/traceHealth'; // v0.10.757, ham sayım v0.10.823
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
-import { Button, Modal } from '@/components/ui';
+import { Button, Modal, SegmentedControl } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
@@ -2869,14 +2869,18 @@ function RootCoveragePanel() {
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <span className="cell-hint">Kök tanımı (Root süzgeci + şerit + bu ölçü):</span>
-        <span className="seg-mini" role="group" aria-label="Kök tanımı">
-          <button type="button" className={def === 'strict' ? 'on' : ''} disabled={saveDef.isPending}
-            title="Tam kök: parent boş + ad dolu + servis dolu (v0.10.732 öncesi tek tanım)"
-            onClick={() => def !== 'strict' && saveDef.mutate('strict')}>tam kök</button>
-          <button type="button" className={def === 'entry' ? 'on' : ''} disabled={saveDef.isPending}
-            title="Giriş kökü: tam kök YA DA en az bir server/consumer giriş span'i. Öksüzlük şart değil."
-            onClick={() => def !== 'entry' && saveDef.mutate('entry')}>giriş kökü</button>
-        </span>
+        {/* v0.10.924 — buton bütünlüğü Faz 2: elle `.seg-mini` çifti →
+            SegmentedControl (radiogroup). Seçili olana tık yine no-op. Seçim
+            küme genelinde KAYDEDER → activation="manual": oklar yalnız odağı
+            taşır, kayıt tık/Enter/Boşluk ile (inceleme bulgusu). */}
+        <SegmentedControl size="sm" activation="manual" aria-label="Kök tanımı" value={def}
+          onChange={v => { if (v !== def) saveDef.mutate(v); }}
+          options={[
+            { value: 'strict', label: 'tam kök', disabled: saveDef.isPending,
+              title: 'Tam kök: parent boş + ad dolu + servis dolu (v0.10.732 öncesi tek tanım)' },
+            { value: 'entry', label: 'giriş kökü', disabled: saveDef.isPending,
+              title: "Giriş kökü: tam kök YA DA en az bir server/consumer giriş span'i. Öksüzlük şart değil." },
+          ]} />
         {defQ.isError && <span className="badge b-err" title={String(defQ.error)}>tanım okunamadı</span>}
         {saveDef.isError && <span className="badge b-err" title={String(saveDef.error)}>kaydedilemedi</span>}
         {data && data.def !== def && !saveDef.isPending && (

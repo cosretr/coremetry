@@ -434,6 +434,7 @@ export function Sidebar() {
                 `button:hover:not(:disabled) { background: var(--accent2) }`
                 (özgüllük 0,2,1) aksi hâlde kazanır ve tetik üstüne
                 gelindiğinde DOLU MAVİ olur — v0.9.895'in birebir aynısı. */}
+            {/* eslint-disable-next-line ui/no-raw-button -- tam genişlik menü tetiği: avatar + iki satırlı kimlik bloğu; Button çocukları .row'a sarar, flex:1 kırpma ve dar raydaki ortalı avatar kurulamaz */}
             <button type="button" className="sb-user-trigger"
               aria-haspopup="menu" aria-expanded={menuOpen}
               aria-label={user.fullName || user.email}

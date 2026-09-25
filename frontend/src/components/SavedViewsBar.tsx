@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/ui/Button';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { useShortcuts, type Shortcut } from '@/lib/keyboard';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -194,11 +195,10 @@ export function SavedViewsBar({ page, right }: {
               ? '1px solid rgba(187,128,9,.55)'
               : v.ownerId === '' ? '1px solid color-mix(in srgb, var(--accent) 35%, transparent)' : '1px solid var(--border)',
         }}>
-          <button type="button" onClick={() => apply(v)}
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: 'var(--text)', padding: 0, fontSize: 11,
-            }}
+          {/* v0.10.924 — buton bütünlüğü Faz 2: elle şeffaflaştırılmış
+              ham düğme yerine LinkButton (hap zaten görsel düğme; etiket
+              metin gibi durur). Glif boşluğu artık atomun `gap`i. */}
+          <LinkButton tone="muted" underline="none" onClick={() => apply(v)}
             title={(() => {
               const base = v.ownerId === '' ? 'Team-shared view' : 'Your view';
               const shortcut = i < 9 ? ` · press ${i + 1}` : '';
@@ -206,19 +206,19 @@ export function SavedViewsBar({ page, right }: {
               if (isModified) return `${base} · drifted; click to restore${shortcut}`;
               return base + shortcut;
             })()}>
-            {isActive && <span style={{ fontSize: 9, marginRight: 4, color: 'rgb(46,160,67)' }}>✓</span>}
-            {isModified && <span style={{ fontSize: 9, marginRight: 4, color: 'rgb(187,128,9)' }}>●</span>}
-            {!isActive && !isModified && v.ownerId === '' && <span style={{ fontSize: 9, marginRight: 4 }}>★</span>}
+            {isActive && <span style={{ fontSize: 9, color: 'rgb(46,160,67)' }}>✓</span>}
+            {isModified && <span style={{ fontSize: 9, color: 'rgb(187,128,9)' }}>●</span>}
+            {!isActive && !isModified && v.ownerId === '' && <span style={{ fontSize: 9 }}>★</span>}
             {v.name}
             {i < 9 && (
               <span style={{
                 fontSize: 9, color: 'var(--text3)',
-                marginLeft: 6, padding: '0 4px',
+                marginLeft: 2, padding: '0 4px',
                 border: '1px solid var(--border)', borderRadius: 2,
                 fontFamily: 'ui-monospace, monospace',
               }}>{i + 1}</span>
             )}
-          </button>
+          </LinkButton>
           {isModified && (
             <Button variant="ghost" size="sm" onClick={() => apply(v)}
               title="Revert to saved filter"
@@ -231,15 +231,10 @@ export function SavedViewsBar({ page, right }: {
         </span>
         );
       })}
-      <button type="button"
-        onClick={() => setShowSaver(s => !s)}
-        style={{
-          padding: '2px 8px', fontSize: 11, borderRadius: 3,
-          background: 'var(--bg3)', border: '1px solid var(--border)',
-          color: 'var(--accent2)', cursor: 'pointer',
-        }}>
+      <Button variant="secondary" size="sm"
+        onClick={() => setShowSaver(s => !s)}>
         {showSaver ? '✕ Cancel' : '＋ Save current view'}
-      </button>
+      </Button>
 
       {showSaver && (
         <span style={{

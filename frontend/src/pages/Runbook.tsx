@@ -564,18 +564,17 @@ function KindCards({ canEdit, onAdd, hero }: {
         {KIND_META.map(k => {
           const Glyph = k.icon;
           return (
-            <button key={k.kind} type="button" onClick={() => onAdd(k.kind)}
-              style={{
-                all: 'unset', cursor: 'pointer', border: '1px solid var(--border)',
-                borderRadius: 8, padding: 12, background: 'var(--bg1)',
-                transition: 'border-color .12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
-              <span style={{ color: 'var(--text2)', display: 'inline-flex' }}><Glyph size={20} strokeWidth={1.75} /></span>
-              <div style={{ fontWeight: 700, marginTop: 8 }}>{k.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4, lineHeight: 1.4 }}>{k.desc}</div>
-            </button>
+            // v0.10.924 — buton bütünlüğü Faz 2: `all: unset` + JS hover
+            // kutusu → secondary Button (odak halkası + CSS hover). Atom
+            // çocukları yatay `.row`a sarar; dikey kart düzeni tek sütun span'de.
+            <Button key={k.kind} variant="secondary" onClick={() => onAdd(k.kind)}
+              style={{ padding: 12, textAlign: 'left' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ color: 'var(--text2)', display: 'inline-flex' }}><Glyph size={20} strokeWidth={1.75} /></span>
+                <span style={{ fontWeight: 700, marginTop: 8 }}>{k.label}</span>
+                <span style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4, lineHeight: 1.4 }}>{k.desc}</span>
+              </span>
+            </Button>
           );
         })}
       </div>

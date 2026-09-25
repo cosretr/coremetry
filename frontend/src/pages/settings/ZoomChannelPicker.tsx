@@ -113,15 +113,15 @@ export function ZoomChannelPicker({
 
   return (
     <>
-      <button type="button" className="sec"
+      <Button variant="secondary"
         disabled={!canFetch}
         title={canFetch
           ? 'List channels via the configured S2S OAuth app'
           : 'Enter Account ID / Client ID / Client Secret (or save first), then try again'}
         onClick={onOpen}
-        style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+        style={{ whiteSpace: 'nowrap' }}>
         List my channels…
-      </button>
+      </Button>
       {open && (
         <div onClick={() => setOpen(false)} style={{
           position: 'fixed', inset: 0, background: 'var(--backdrop)',

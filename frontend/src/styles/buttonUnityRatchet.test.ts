@@ -24,9 +24,14 @@ import { stripTsComments } from './zLayers.test';
 // taklidi) ve ESLint `ui/no-raw-button` kuralı ikisini de satırında
 // gösteriyor (eslint-suppressions.json mevcutları sayar). Koşullu rol
 // (`role={x ? 'button' : …}`) de sayılınca role tabanı 18.
+// v0.10.924 (Faz 2): 85 → 0 ham `<button`, 18 → 0 `role="button"`. Atoma
+// dönüşemeyen 17 yer (liste seçeneği, graf düğümü, <td>/<tr>, düğme içeren
+// başlık) gerekçeli satır istisnası taşıyor; o sayı da yalnız AŞAĞI iner —
+// istisna, tavanı sıfırlanmış kapının arka kapısı olmasın.
 const SRC = resolve(__dirname, '..');
-const MAX_RAW_BUTTONS = 85;
-const MAX_ROLE_BUTTON = 18;
+const MAX_RAW_BUTTONS = 0;
+const MAX_ROLE_BUTTON = 0;
+const MAX_REASONED_EXEMPTIONS = 17;
 const MAX_SEGMENTED_FILES = 0;
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -68,6 +73,10 @@ describe('buton bütünlüğü mandalı', () => {
     // kuralıyla aynı küme.
     const n = count(/(?<=\s)role=(?:"button"|\{[^}]*['"`]button['"`][^}]*\})/g);
     expect(n, 'tıklanabilir span/div yerine Button/IconButton ya da btn-bare kullan').toBeLessThanOrEqual(MAX_ROLE_BUTTON);
+  });
+  it('gerekçeli istisna sayısı tavanı aşmaz', () => {
+    const n = files.reduce((a, p) => a + readFileSync(p, 'utf8').split('\n').filter(l => REASONED.test(l)).length, 0);
+    expect(n, 'istisna yerine atom kullan; gerçekten gerekiyorsa tavanı gerekçeyle artır').toBeLessThanOrEqual(MAX_REASONED_EXEMPTIONS);
   });
   it('elle .segmented kuran dosya sayısı tavanı aşmaz', () => {
     const n = files.filter(p => /className="segmented/.test(code.get(p)!)).length;

@@ -113,8 +113,7 @@ export function LogPillEditor({ filter, since, onApply, onCancel }: {
           {suggestions.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {suggestions.map(sv => (
-                <button key={sv} type="button" className="sec"
-                  style={{ fontSize: 10.5, padding: '1px 7px' }}
+                <Button key={sv} variant="secondary" size="xs"
                   onClick={() => setVal(v => {
                     if (op === 'one_of' || op === 'not_one_of') {
                       const parts = v.split(',').map(x => x.trim()).filter(Boolean);
@@ -124,7 +123,7 @@ export function LogPillEditor({ filter, since, onApply, onCancel }: {
                     return sv;
                   })}>
                   {sv}
-                </button>
+                </Button>
               ))}
             </div>
           )}

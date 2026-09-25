@@ -429,14 +429,11 @@ function Inner() {
           çalışır (yukarıdaki dinleyici), ama görünmeyen bir kısayol tek
           çıkış olamaz: bir TV'de kimse ESC'i bilmiyor. */}
       {kiosk && (
-        <button className="sec" type="button" onClick={() => setKiosk(false)}
+        <Button variant="secondary" size="sm" onClick={() => setKiosk(false)}
           title="Kiosk modundan çık (ESC)"
-          style={{
-            position: 'fixed', top: 10, right: 12, zIndex: 'var(--z-fab)',
-            fontSize: 11, padding: '3px 8px', borderRadius: 'var(--radius-sm)',
-          }}>
+          style={{ position: 'fixed', top: 10, right: 12, zIndex: 'var(--z-fab)' }}>
           Kiosk'tan çık ✕
-        </button>
+        </Button>
       )}
       <PageShell>
         <div className="controls" style={{ marginBottom: 14 }}>
@@ -844,6 +841,7 @@ function DashboardGrid({
                        setCollapsed(next);
                      }
                    }}
+                   // eslint-disable-next-line ui/no-raw-button -- satır başlığı düzenleme kipinde Edit/Delete düğmelerini sarıyor; düğme içinde düğme olamaz
                    role="button"
                    tabIndex={0}
                    aria-expanded={!isCollapsed}>

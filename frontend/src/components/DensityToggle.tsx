@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getRaw, setRaw } from '@/lib/storage';
+import { IconButton } from '@/components/ui/IconButton';
 
 // Density toggle — global UI density level. Datadog has 2 levels
 // (compact/comfortable), Grafana has 3, Salesforce has 4. The
@@ -61,12 +62,13 @@ export function DensityToggle() {
   };
 
   const tip = `Density: ${LABEL[density]} — click to cycle`;
+  // v0.10.924 — buton bütünlüğü Faz 2: ThemeToggle ile aynı IconButton kalıbı.
+  // Satır-içi `fontSize: 14, lineHeight: 1` kalktı: glif boyu artık kardeşleri
+  // gibi atomun md rung'undan (üçü aynı boyda).
   return (
-    <button className="theme-toggle" onClick={cycle}
+    <IconButton variant="ghost" size="md" className="theme-toggle" onClick={cycle}
       aria-label={tip}
       title={tip}
-      style={{ fontSize: 14, lineHeight: 1 }}>
-      {GLYPH[density]}
-    </button>
+      icon={GLYPH[density]} />
   );
 }

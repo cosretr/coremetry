@@ -22,6 +22,7 @@ import { useAiEvidence, useAiFocus } from '@/components/ai/aiEvents';
 import { IconLink, IconCheck, IconDownload, IconSparkles } from '@/components/icons';
 import { Button } from '@/components/ui/Button';
 import { IconButton, MenuItem } from '@/components/ui'; // v0.10.568 — kimlik menüsü tetiği + satırları
+import { Chip } from '@/components/ui/Chip'; // v0.10.924 — buton bütünlüğü Faz 2
 import { useAuth } from '@/components/AuthProvider';
 import { useShortcuts } from '@/lib/keyboard';
 import { api } from '@/lib/api';
@@ -800,23 +801,22 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
           ? `${matches} / ${spans.length} matching`
           : `${spans.length} span${spans.length === 1 ? '' : 's'}`}
       </span>
+      {/* v0.10.924 — buton bütünlüğü Faz 2: `.facet` + role=button
+          taklidi yerine gerçek düğme (Chip); Enter/Space'i tarayıcı verir,
+          `active` aria-pressed basar. */}
       {onCritFocus && (critCount ?? 0) > 0 && (
-        <span className={'facet' + (critFocus ? ' on' : '')}
-          role="button" tabIndex={0}
+        <Chip pill active={!!critFocus}
           title="Dim every span that is NOT on the critical path"
-          onClick={() => onCritFocus(!critFocus)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCritFocus(!critFocus); }
-          }}>
-          Critical path focus <span className="n">{critCount}</span>
-        </span>
+          onClick={() => onCritFocus(!critFocus)}>
+          Critical path focus <span className="mono">{critCount}</span>
+        </Chip>
       )}
       {/* v0.9.1277 — N+1 uyarı çipi. En pahalı tekrar desenini adıyla
           söyler; tıklayınca span filtresini o ada kurar VE ×N gruplamayı
           açar, yani tek tıkla "20 satırlık gürültü → tek ×20 satırı".
-          `.facet.f-warn` kapalıyken bile amber okur (uyarı tonu at rest),
-          tıklandığında filtre alanı zaten dolduğu için `.on` durumu bu
-          çipe uygulanmaz — çip bir anahtar değil, bir SIÇRAMA. */}
+          Uyarı tonu at rest ⚠ glifinde (v0.10.924: Chip'te warn tonu yok,
+          gövde nötr); `active` verilmez — çip bir anahtar değil, bir
+          SIÇRAMA (filtre alanı zaten dolar). */}
       {onRepeatChip && repeatGroups && repeatGroups.length > 0 && (() => {
         const top = repeatGroups[0];
         const extra = repeatGroups.length - 1;
@@ -828,16 +828,11 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
           ...(repeatGroups.length > 5 ? [`… +${repeatGroups.length - 5} desen daha`] : []),
         ].join('\n');
         return (
-          <span className="facet f-warn" role="button" tabIndex={0}
-            title={tip}
-            onClick={() => onRepeatChip(top)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRepeatChip(top); }
-            }}>
-            ⚠ {shortName(top.name)} <span className="n">×{top.count}</span>
-            <span className="n">· {repeatTotalLabel(top.totalMs)}</span>
-            {extra > 0 && <span className="n">+{extra} desen</span>}
-          </span>
+          <Chip pill title={tip} onClick={() => onRepeatChip(top)}>
+            <span className="s-warn">⚠</span> {shortName(top.name)} <span className="mono">×{top.count}</span>
+            <span className="mono">· {repeatTotalLabel(top.totalMs)}</span>
+            {extra > 0 && <span className="mono">+{extra} desen</span>}
+          </Chip>
         );
       })()}
     </div>

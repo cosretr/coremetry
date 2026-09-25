@@ -3,7 +3,7 @@ import { attrKeyWindowParams } from '@/lib/attrKeyWindow';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { useQuery } from '@tanstack/react-query';
 import { Combobox } from '@/components/Combobox';
-import { Button } from '@/components/ui';
+import { Button, Chip } from '@/components/ui';
 import { api } from '@/lib/api';
 import { SUGGESTED_GROUPBY } from './presets';
 
@@ -84,12 +84,13 @@ export function SplitByPicker({ value, onChange, metric, service }: {
 
   return (
     <>
+      {/* v0.10.924 — buton bütünlüğü Faz 2: elle `.fb-chip` + ham ✕ yerine
+          Chip onRemove — atomun ×'i (`.btn-chip-x`) `.fb-chip-x`le aynı kural. */}
       {value.map(k => (
-        <span key={k} className="fb-chip">
+        <Chip key={k} pill removeLabel="Remove"
+          onRemove={() => onChange(value.filter(x => x !== k))}>
           <b>{k}</b>
-          <button className="fb-chip-x" type="button"
-            onClick={() => onChange(value.filter(x => x !== k))} aria-label="Remove">✕</button>
-        </span>
+        </Chip>
       ))}
       <Combobox value={draft} onChange={setDraft}
         options={options}

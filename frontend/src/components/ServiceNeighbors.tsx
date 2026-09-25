@@ -84,6 +84,7 @@ export function ServiceNeighbors({ service, since = '10m', capped = false, defau
         <span style={{ flex: 1 }} />
         {open && data !== undefined && (
           <span
+            // eslint-disable-next-line ui/no-raw-button -- DisclosureButton başlığının İÇİNDE: button içine button konamaz; dışarı almak başlık yerleşimini yeniden kurmak demek
             role="button"
             tabIndex={0}
             onClick={e => { e.stopPropagation(); setRefreshTick(t => t + 1); }}

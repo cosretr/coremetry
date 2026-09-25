@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Modal } from '@/components/ui';
+import { Modal, Button } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { IconLink } from '@/components/icons';
 import { MultiLineChart } from '@/components/MultiLineChart';
@@ -108,22 +108,12 @@ export function CorrelationContextDrawer({
         <span style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <IconLink size={14} />
           Correlated signals
+          {/* v0.10.924 — buton bütünlüğü Faz 2: elle çerçeveli küçük düğme → Button secondary xs. */}
           {prev && (
-            <button
-              type="button"
-              onClick={goBack}
-              title="Back to the previous anchor"
-              style={{
-                fontSize: 11,
-                padding: '1px 8px',
-                borderRadius: 4,
-                border: '1px solid var(--border)',
-                background: 'var(--bg2)',
-                color: 'var(--text2)',
-                cursor: 'pointer',
-              }}>
+            <Button variant="secondary" size="xs" onClick={goBack}
+              title="Back to the previous anchor">
               ← back
-            </button>
+            </Button>
           )}
         </span>
       }>
@@ -358,24 +348,17 @@ function LogsLens({ ctx, onReAnchor }: { ctx: CorrelationContext; onReAnchor: (a
       {pivotTraceIds.length > 0 && (
         <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontSize: 10, color: 'var(--text3)' }}>Pivot to trace:</span>
+          {/* v0.10.924 — buton bütünlüğü Faz 2: accent metinli elle çip → Button accent xs. */}
           {pivotTraceIds.map((tid) => (
-            <button
+            <Button
               key={tid}
-              type="button"
+              variant="accent"
+              size="xs"
               onClick={() => onReAnchor({ kind: 'trace', traceId: tid })}
               className="mono"
-              title={`Re-anchor the drawer on trace ${tid}`}
-              style={{
-                fontSize: 10.5,
-                padding: '2px 7px',
-                borderRadius: 4,
-                border: '1px solid var(--border)',
-                background: 'var(--bg2)',
-                color: 'var(--accent2)',
-                cursor: 'pointer',
-              }}>
+              title={`Re-anchor the drawer on trace ${tid}`}>
               {tid.slice(0, 10)}…
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -502,21 +485,15 @@ function MetricsLens({ ctx, onReAnchor }: { ctx: CorrelationContext; onReAnchor:
           {ctx.exemplar.durationNs > 0 && (
             <span style={{ color: 'var(--text3)' }}>{(ctx.exemplar.durationNs / 1e6).toFixed(0)}ms</span>
           )}
-          <button
-            type="button"
+          {/* v0.10.924 — buton bütünlüğü Faz 2: → Button accent sm (vurgulu ama
+              birincil değil); satır-içi stil yalnız yerleşim (sağa it). */}
+          <Button
+            variant="accent"
+            size="sm"
             onClick={() => onReAnchor({ kind: 'trace', traceId: ctx.exemplar!.traceId })}
-            style={{
-              marginLeft: 'auto',
-              fontSize: 11,
-              padding: '2px 8px',
-              borderRadius: 4,
-              border: '1px solid var(--border)',
-              background: 'var(--bg1)',
-              color: 'var(--accent2)',
-              cursor: 'pointer',
-            }}>
+            style={{ marginLeft: 'auto' }}>
             Pivot into this trace ◆
-          </button>
+          </Button>
         </div>
       )}
     </Lens>

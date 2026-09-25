@@ -15,7 +15,7 @@
 // Saf çekirdek lib/filterQuery.ts (testli); burada yalnız durum + DOM.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Chip } from '@/components/ui';
+import { Chip, IconButton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { metricLabelQ } from '@/lib/metricLabelQuery'; // v0.10.875
 import { useEscLayer } from '@/lib/escLayer';
@@ -266,7 +266,13 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
                 {(f.op === 'IN' || f.op === 'NOT IN') && f.v.length > 1 && <span className="fq-n">{f.v.length}</span>}
               </span>
             )}
-            <button type="button" className="fq-x" aria-label={`Filtreyi kaldır: ${f.k}`} onClick={e => { e.stopPropagation(); removeAt(i); }}>✕</button>
+            {/* v0.10.924 — buton bütünlüğü Faz 2: IconButton. `fq-x` birleşik
+                çipin ayraç segmenti; `height: auto` onu çipin iç yüksekliğine
+                gerer (`.fq-chip` align-items: stretch — sabit 20px kare
+                ayraçta 2px çentik bırakırdı). */}
+            <IconButton variant="ghost" size="xs" className="fq-x" style={{ height: 'auto' }}
+              aria-label={`Filtreyi kaldır: ${f.k}`} onClick={e => { e.stopPropagation(); removeAt(i); }}
+              icon="✕" />
           </span>
         ))}
         {draft && draft.step !== 'key' && (
@@ -305,6 +311,7 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
             {draft.step === 'op' && (
               <div className="fq-ops" role="presentation">
                 {opMatches.map((op, i) => (
+                  // eslint-disable-next-line ui/no-raw-button -- listbox seçeneği (role=option + aria-selected, girdinin aria-activedescendant'ı yönetir; onMouseDown odağı girdide tutar) — komut düğmesi değil; `.fq-ops button` kuralları boyuyor
                   <button key={op} type="button" id={`${listId}-${i}`} role="option" aria-selected={i === hi}
                     className={i === hi ? 'sel mono' : 'mono'} title={op}
                     onMouseEnter={() => setHi(i)}

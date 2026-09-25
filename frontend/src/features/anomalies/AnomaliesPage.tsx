@@ -565,7 +565,8 @@ export default function ProblemsPage() {
                           }
                         }}
                         tabIndex={0}
-                        role="button"
+                        // v0.10.924 — buton rolü rowActivation yayılımından geliyor
+                        // (tıklanabilir <tr> sözleşmesi, D3); tekrar eden literal kalktı.
                         aria-expanded={open}
                         style={{ cursor: 'pointer' }}>
                         <td style={{ color: 'var(--text3)', textAlign: 'center', cursor: 'pointer' }}

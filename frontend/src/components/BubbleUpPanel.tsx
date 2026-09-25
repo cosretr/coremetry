@@ -3,6 +3,7 @@ import type { BubbleUpResult, FilterExpr } from '@/lib/types';
 import { api } from '@/lib/api';
 import { encodeFilters } from '@/lib/urlState';
 import { Spinner } from './Spinner';
+import { Chip } from './ui/Chip';
 import { fmtNum } from '@/lib/utils';
 
 // BubbleUp panel — Honeycomb's "what's special about THESE
@@ -163,8 +164,11 @@ function AttributeBlock({ attr, onApply }: {
           const onClick = onApply
             ? () => onApply({ k: attr.key, op: '=', v: [v.value] })
             : undefined;
+          // v0.10.924 — buton bütünlüğü Faz 2: "bu değeri filtre yap" bir
+          // filtre çipi → Chip (kenarlık/zemin/hover atomdan, font .mono'dan).
+          // Satır-içi stil YALNIZ yerleşim: üç kolonlu ızgara + tam genişlik.
           return (
-            <button key={v.value} type="button"
+            <Chip key={v.value} className="mono"
               onClick={onClick}
               disabled={!onClick}
               title={onClick ? `Filter ${attr.key} = ${v.value}` : undefined}
@@ -172,13 +176,6 @@ function AttributeBlock({ attr, onApply }: {
                 display: 'grid',
                 gridTemplateColumns: '1fr 90px 60px',
                 alignItems: 'center', gap: 8,
-                padding: '3px 8px',
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                cursor: onClick ? 'pointer' : 'default',
-                fontFamily: 'ui-monospace, monospace',
-                fontSize: 11, color: 'var(--text)',
                 textAlign: 'left',
                 width: '100%',
               }}>
@@ -206,7 +203,7 @@ function AttributeBlock({ attr, onApply }: {
               }}>
                 {positive ? '+' : ''}{(score * 100).toFixed(1)}%
               </span>
-            </button>
+            </Chip>
           );
         })}
       </div>

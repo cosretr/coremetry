@@ -624,8 +624,9 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                           openDetail(p.id);
                         }
                       }}
-                     
-                      role="button"
+                      // v0.10.924 — buton rolü + tabIndex yukarıdaki rowActivation
+                      // yayılımından geliyor (tıklanabilir <tr> sözleşmesi, D3);
+                      // aynı değeri tekrarlayan literal öznitelik kaldırıldı.
                       style={{
                         cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 44px',
                         // v0.10.922 (sade palet adım 1) — açık kritik satırın

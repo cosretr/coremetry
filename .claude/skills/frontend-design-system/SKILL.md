@@ -135,11 +135,14 @@ vakası) · pickerlar.
 
 `variant` **zorunlu prop** (451/451 sitede yazılı) — bu aileyi bozma.
 **Ham `<button>` / `role="button"` `ui/` dışında YASAK** (v0.10.919, ESLint
-`ui/no-raw-button`). Mevcutlar `frontend/eslint-suppressions.json`da sayılı
-(85 ham + 18 role, yalnız azalır; `buttonUnityRatchet` aynı tavanlar).
+`ui/no-raw-button`). v0.10.924'ten beri tavan **0 ham + 0 role**, bastırma
+yok; atoma sığmayan 17 yer gerekçeli satır istisnası taşır ve istisna
+sayısının da tavanı var (`buttonUnityRatchet`, yalnız azalır).
 Primitif gövdesi `ui/` altına taşınır; tek seçim → `SegmentedControl`,
-eş eylemler → `ButtonGroup`. Gerçekten gerekiyorsa satır istisnası
-gerekçeyle: `eslint-disable-next-line ui/no-raw-button -- <neden>`.
+eş eylemler → `ButtonGroup`, aç/kapa → `DisclosureButton`, sekme →
+`TabStrip`. Gerçekten gerekiyorsa satır istisnası gerekçeyle:
+`eslint-disable-next-line ui/no-raw-button -- <neden>` — liste seçeneği
+(`role=option`), graf düğümü, `<td>`/`<tr>` hedefi, düğme İÇEREN başlık.
 
 ## 5. Tablo karar tablosu
 

@@ -50,6 +50,7 @@ export function StatementPicker({ value, onChange, service = '' }: { value?: Rul
       {rows && rows.length > 0 && (
         <div style={{ marginTop: 6, maxHeight: 220, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
           {rows.map(r => (
+            // eslint-disable-next-line ui/no-raw-button -- arama sonucu satırı: tam genişlik üç sütunlu seçenek; ui/'da liste-seçeneği atomu yok
             <button key={`${r.dbSystem}|${r.dbName}|${r.stmtHash}`} type="button" className="stmt-pick-row" onClick={() => onChange(statementTargetOf(r))}
               title={`${r.sample}\n${r.execs.toLocaleString()} yürütme/24s · p95 ${Math.round(r.p95Ms)} ms · ${r.services.join(', ')}`}>
               <span className="badge b-gray mono" style={{ fontSize: 10 }}>{r.dbSystem}{r.dbName && r.dbName !== 'default' ? ` · ${r.dbName}` : ''}</span>

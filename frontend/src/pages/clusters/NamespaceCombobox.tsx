@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { IconButton } from '@/components/ui';
 
 // NamespaceCombobox — namespace typeahead (v0.9.34, design handoff
 // "Namespace typeahead"). Native <select> DEĞİL (yüzlerce seçenek):
@@ -48,13 +49,13 @@ export function NamespaceCombobox({ namespaces, value, onPick, onClear }: {
           background: 'var(--bg)', color: 'var(--text)',
           border: '1px solid var(--border)', borderRadius: 4,
         }} />
+      {/* v0.10.924 — buton bütünlüğü Faz 2: `all: unset` ✕ → IconButton bare
+          (odak halkası geri geliyor). Eski satır-içi `position: absolute`
+          `all: unset`ten ÖNCE yazıldığı için hiç uygulanmıyordu — ✕ girdinin
+          yanında akıyordu; o yerleşim korunur. */}
       {value && !open && (
-        <button type="button" onClick={onClear}
-          title="Clear namespace"
-          style={{
-            position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-            all: 'unset', cursor: 'pointer', color: 'var(--text3)', fontSize: 12,
-          }}>✕</button>
+        <IconButton variant="bare" size="xs" icon="✕" onClick={onClear}
+          aria-label="Clear namespace" title="Clear namespace" />
       )}
       {open && (
         <div style={{

@@ -25,6 +25,7 @@ import { openCommandPalette } from './CommandPalette';
 // Mockup: artifact 665d2658 (operatör onayı 2026-08-14).
 export function TopbarSearch() {
   return (
+    // eslint-disable-next-line ui/no-raw-button -- arama-alanı görünümlü palet tetiği (mockup 665d2658): .tb-search input yüzeyini (bg2 + kenarlık + metin imleci) her atom varyantı yeniden boyar, Button'ın iç .row sarmalayıcısı da flex-1 yer tutucu + sağa yaslı kbd yerleşimini kırar
     <button type="button" className="tb-search" onClick={() => openCommandPalette()}
       // Erişilebilir ad görünen metinden DAHA fazlasını söylüyor: görme
       // engelli bir kullanıcı için "Servis, trace ID… ara" bir yer

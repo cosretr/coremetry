@@ -15,6 +15,7 @@ import { CosreChart, type CosreChartSpec } from '@/components/CosreChart';
 import { parseChatBlocks, type ChatBlock } from './chatMarkdown';
 import { parseStepPreview, fmtPreviewBytes } from './stepPreview';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
+import { Chip } from '@/components/ui/Chip';
 import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS } from './toolSteps';
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
@@ -255,14 +256,17 @@ function ToolChips({ steps, details, hasText, evId, setEvId }: {
             border: '1px solid transparent',
           };
           if (!ready) return <span key={i} style={chipStyle}>⚙ {s}</span>;
+          // v0.10.924 — buton bütünlüğü Faz 2: elle boyanmış çip → Chip atomu.
+          // Açıklık `tone` ile boyanır, `active` ile DEĞİL: durum aria-expanded'da;
+          // `active` bir de aria-pressed basar ve ekran okuyucu iki durum duyardı.
           return (
-            <button key={i} type="button"
+            <Chip key={i} size="xs" pill tone={isOpen ? 'accent' : 'neutral'}
               onClick={() => setOpenIdx(isOpen ? null : i)}
               aria-expanded={isOpen}
               title={d?.ok === false ? 'Tool hata döndürdü — veriyi göster' : 'Bu adımın verisini göster'}
-              style={{ ...chipStyle, cursor: 'pointer' }}>
+              style={{ fontFamily: chipStyle.fontFamily }}>
               ⚙ {s} {d?.ok === false ? '⚠' : ''}{isOpen ? '▾' : '▸'}
-            </button>
+            </Chip>
           );
         })}
       </div>

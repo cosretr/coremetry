@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Tiny clipboard button. Renders a small icon next to copyable text;
@@ -23,15 +24,21 @@ export function CopyButton({ value, title }: { value: string; title?: string }) 
     }
   };
 
+  // v0.10.924 — buton bütünlüğü Faz 2: `.copy-btn` → ghost xs Button.
+  // Kopyalandı tonu evin `is-ok` değiştiricisi (ChatBubble'ın ⧉/✓'ü ile aynı):
+  // `button.ghost` hover'ından SONRA bildirildiği için imleç üstündeyken de
+  // yeşil kalır. Satır-içi yalnız eski `.copy-btn`in yerleşimi (margin/hiza)
+  // ve glif ölçüsü (12px, line-height 1): ID/hash satırlarındaki ~25 çağrı
+  // yerinde satır yüksekliği ve glif boyu değişmesin.
   return (
-    <button
-      type="button"
+    <Button variant="ghost" size="xs"
       onClick={onClick}
       title={title ?? (copied ? 'Copied!' : 'Copy to clipboard')}
-      className={'copy-btn' + (copied ? ' copied' : '')}
+      className={copied ? 'copy-btn is-ok' : 'copy-btn'}
       aria-label="Copy"
+      style={{ marginLeft: 4, verticalAlign: 'middle', fontSize: 12, lineHeight: 1 }}
     >
       {copied ? '✓' : '⧉'}
-    </button>
+    </Button>
   );
 }

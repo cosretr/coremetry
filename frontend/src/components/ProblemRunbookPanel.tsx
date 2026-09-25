@@ -154,22 +154,20 @@ function RunbookPicker({ problemId, onDone }: { problemId: string; onDone: () =>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
+          {/* v0.10.924 — buton bütünlüğü Faz 2: elle boyanmış satır → secondary
+              Button. Atom çocukları `.row` flex'ine sarar; başlık `flex: 1` ile
+              genişler, sayaç sağa itilir (kolon kabı düğmeyi tam genişliğe gerer). */}
           {matches.map(rb => (
-            <button key={rb.id} disabled={execute.isPending}
+            <Button key={rb.id} variant="secondary" disabled={execute.isPending}
               onClick={() => run(rb)}
-              style={{
-                textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-                padding: '6px 8px', borderRadius: 4, fontSize: 12,
-                border: '1px solid var(--border)', background: 'var(--bg)',
-                color: 'var(--text)', cursor: execute.isPending ? 'wait' : 'pointer',
-              }}>
+              style={{ textAlign: 'left' }}>
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {rb.title}
               </span>
               <span style={{ color: 'var(--text3)', whiteSpace: 'nowrap' }}>
                 {rb.steps.length} step{rb.steps.length === 1 ? '' : 's'} ▶
               </span>
-            </button>
+            </Button>
           ))}
         </div>
       )}

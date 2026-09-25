@@ -6,7 +6,6 @@
 // service keeps ONE colour across the whole product — the operator's eye never
 // recalibrates. Everything here is CSS-var-only (light + dark safe).
 
-import type { ReactNode } from 'react';
 import { seriesColor } from '@/lib/chartFmt';
 
 // svcColor — the shared per-service hue. Empty / unknown collapses to a stable
@@ -77,50 +76,9 @@ export function DurationBar({ ms, err, max }: { ms: number; err: boolean; max: n
   );
 }
 
-// QuickChip — a clickable pill for the quick-filter row. `dot` paints a leading
-// service-colour swatch; `tone="err"` reads the label red (the error count).
-// Deliberately NOT the shared <Button> atom or .segmented (U1 batch 2
-// judgement): this is the facet-chip anatomy (.facet/.on in globals.css).
-// It stays hand-rolled because it's a real <button> for keyboard semantics,
-// and the global `button:hover` rule out-specifies `.facet:hover` — the
-// existing .facet chips are all <span role="button">s for that reason.
-export function QuickChip({
-  active, onClick, children, dot, tone, title,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  dot?: string;
-  tone?: 'err';
-  // v0.9.222 — a chip's count is scoped to the LOADED rows; when a
-  // window-wide stat sits nearby the two look contradictory unless the
-  // scope is stated.
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '3px 10px',
-        borderRadius: 20,
-        fontSize: 11.5,
-        cursor: 'pointer',
-        border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-        background: active ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'var(--bg2)',
-        color: active ? 'var(--accent2)' : tone === 'err' ? 'var(--err)' : 'var(--text2)',
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-      }}>
-      {dot && <span style={{ width: 7, height: 7, borderRadius: 7, background: dot, flex: 'none' }} />}
-      {children}
-    </button>
-  );
-}
+// v0.10.924 — buton bütünlüğü Faz 2: QuickChip (elle boyanmış ham düğme)
+// silindi; son çağıranı v0.9.304'te kısayol şeridiyle gitmişti. Hızlı filtre
+// çipi gerekirse `ui/Chip` (pill + active).
 
 // SpanKindChip — a compact, normalised span-kind label (server/client/
 // producer/consumer/internal). Tokenised so it reads in both themes.

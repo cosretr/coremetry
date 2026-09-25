@@ -1472,13 +1472,14 @@ function TracesPageInner() {
                 <Button type="button" variant="ghost" size="xs" title="k8s.namespace.name · k8s.pod.name · k8s.node.name · cluster kolonlarını ekle (8 kolon tavanı)"
                   onClick={() => setExtraCols(withK8sColumns(extraCols))}>+ K8s columns</Button>
               )}
+              {/* v0.10.924 — buton bütünlüğü Faz 2: elle kurulmuş kolon
+                  çipi + ham × yerine Chip onRemove (× içselleştirilmiş,
+                  erişilebilir adı removeLabel). */}
               {extraCols.map(c => (
-                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 4, background: 'var(--bg3)', border: '1px solid var(--border)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>
+                <Chip key={c} size="xs" className="mono" removeLabel={`Remove the ${c} column`}
+                  onRemove={() => setExtraCols(extraCols.filter(x => x !== c))}>
                   {c}
-                  <button type="button" title="Remove column"
-                    onClick={() => setExtraCols(extraCols.filter(x => x !== c))}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1 }}>×</button>
-                </span>
+                </Chip>
               ))}
             </div>
               {/* v0.9.645 — operatör-bildirimli: "traceleri iframe içinde gibi

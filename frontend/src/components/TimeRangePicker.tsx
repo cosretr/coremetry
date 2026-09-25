@@ -13,6 +13,7 @@ import {
   utcOffsetLabel, withTimeOfDay, zoomOutRange, type CalCell,
 } from '@/lib/rangePicker';
 import { Button } from './ui/Button';
+import { IconButton } from './ui/IconButton';
 import { IconClock, IconZoomOut } from './icons';
 
 // Grafana-parity global time picker (2026-07-24 brief). One button shows the
@@ -268,17 +269,19 @@ export function TimeRangePicker({ value, onChange }: {
 
               <div className="trp-calwrap">
                 <div className="trp-cal-head">
-                  <button className="trp-cal-nav" aria-label={t('trp.prevMonth')}
-                    onClick={() => shiftMonth(-1)}>‹</button>
+                  {/* v0.10.924 — buton bütünlüğü Faz 2: ay gezinme okları IconButton. */}
+                  <IconButton variant="ghost" size="sm" aria-label={t('trp.prevMonth')}
+                    onClick={() => shiftMonth(-1)} icon="‹" />
                   <span className="trp-cal-title">{MONTHS_LONG[lang][cal.m]} {cal.y}</span>
-                  <button className="trp-cal-nav" aria-label={t('trp.nextMonth')}
-                    onClick={() => shiftMonth(1)}>›</button>
+                  <IconButton variant="ghost" size="sm" aria-label={t('trp.nextMonth')}
+                    onClick={() => shiftMonth(1)} icon="›" />
                 </div>
                 <div className="trp-cal-grid">
                   {DOW_SHORT[lang].map(d => (
                     <span key={d} className="trp-cal-dow">{d}</span>
                   ))}
                   {cells.map(c => (
+                    // eslint-disable-next-line ui/no-raw-button -- takvim gün hücresi: 1fr ızgara kolonuna gerilir ve sel/inrange/today durum sınıfları onu boyar (kesintisiz aralık bandı); hiçbir atom tarih-hücresi durumu taşımaz, IconButton'ın sabit karesi bandı kırardı
                     <button key={`${c.y}-${c.m}-${c.d}`} className={dayCellClass(c)}
                       onClick={() => onDayClick(c)}>
                       {c.d}
@@ -297,10 +300,10 @@ export function TimeRangePicker({ value, onChange }: {
                 <div className="trp-recents">
                   <div className="trp-section-title">{t('trp.recentRanges')}</div>
                   {recents.map(enc => (
-                    <button key={enc} className="trp-preset"
+                    <Button key={enc} variant="ghost" size="sm"
                       onClick={() => apply(decodeRange(enc, { preset: DEFAULT_RANGE_PRESET }))}>
                       {rangeLabel(decodeRange(enc, { preset: enc }))}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}
@@ -308,14 +311,18 @@ export function TimeRangePicker({ value, onChange }: {
 
             <div className="trp-presets">
               <div className="trp-section-title">{t('trp.quickRanges')}</div>
+              {/* v0.10.924 — buton bütünlüğü Faz 2: `.trp-preset` ham düğmeleri
+                  yerine Button ghost; seçili aralık `accent` (CompareToggle
+                  emsali) + aria-current. Ref + ok tuşu gezinmesi aynen. */}
               {QUICK_PRESETS.map((p, i) => (
-                <button key={p}
+                <Button key={p} size="sm"
+                  variant={value.preset === p ? 'accent' : 'ghost'}
+                  aria-current={value.preset === p ? 'true' : undefined}
                   ref={el => { presetRefs.current[i] = el; }}
-                  className={'trp-preset' + (value.preset === p ? ' active' : '')}
                   onClick={() => apply({ preset: p })}
                   onKeyDown={onPresetKey(i)}>
                   {t('range.' + p)}
-                </button>
+                </Button>
               ))}
             </div>
           </div>

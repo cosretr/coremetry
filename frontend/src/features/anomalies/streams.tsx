@@ -12,8 +12,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Check, ChevronRight, ChevronDown, ArrowDownToLine } from 'lucide-react';
-import { Badge, Button, Card, Row, useConfirm } from '@/components/ui';
+import { Check, ArrowDownToLine } from 'lucide-react';
+import { Badge, Button, Card, DisclosureButton, Row, useConfirm } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { ClusterChips } from '@/components/ClusterChips';
@@ -357,21 +357,16 @@ function HistorySection({ items, meta }: {
       )}
       {cleared.length > 0 && (
         <div style={{ marginTop: active.length > 0 ? 14 : 0 }}>
-          <button type="button"
+          {/* v0.10.924 — buton bütünlüğü Faz 2: `all: unset` başlık →
+              DisclosureButton (aria-expanded + ev ▸/▾ glifi). */}
+          <DisclosureButton expanded={expanded}
             onClick={() => setShowCleared(v => !v)}
-            style={{
-              all: 'unset', cursor: 'pointer',
-              fontSize: 12, fontWeight: 600, color: 'var(--text2)',
-              padding: '6px 0', display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
-            {expanded
-              ? <ChevronDown size={13} strokeWidth={1.75} />
-              : <ChevronRight size={13} strokeWidth={1.75} />}
+            style={{ fontSize: 12, fontWeight: 600, padding: '6px 0', gap: 6 }}>
             Cleared ({cleared.length})
             <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 4 }}>
               — resolved anomalies, kept for forensics
             </span>
-          </button>
+          </DisclosureButton>
           {expanded && (
             <div style={{ marginTop: 6, opacity: 0.85 }}>
               <AnomalyTable rows={cleared}

@@ -271,6 +271,7 @@ export default function AuditPage() {
                               toggleExpand(e.id);
                             }
                           }}
+                          // eslint-disable-next-line ui/no-raw-button -- tablo hücresi: <td> düğmeye dönüşemez ve açılan JSON seçilip kopyalanabilir metin kalmalı
                           role={e.details ? 'button' : undefined}
                           tabIndex={e.details ? 0 : undefined}
                           aria-expanded={e.details ? isExpanded : undefined}

@@ -27,10 +27,15 @@ export interface SegmentedControlProps<T extends string> {
   size?: 'md' | 'sm';
   title?: string;
   className?: string;
+  /** v0.10.924 — 'manual': oklar yalnız ODAĞI taşır, seçim tık/Enter/Boşluk
+   *  ile. Seçimin yan etkisi olan gruplar (sunucuya kaydeden ayar) için:
+   *  otomatik kipte ↓ ile sayfayı kaydırmak isteyen operatör küme genelindeki
+   *  ayarı sessizce değiştiriyordu. Varsayılan 'auto' (WAI-ARIA radio). */
+  activation?: 'auto' | 'manual';
 }
 
 export function SegmentedControl<T extends string>({
-  value, onChange, options, size = 'md', title, className, ...aria
+  value, onChange, options, size = 'md', title, className, activation = 'auto', ...aria
 }: SegmentedControlProps<T>) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
   const enabled = options.map((o, i) => (o.disabled ? -1 : i)).filter(i => i >= 0);
@@ -44,7 +49,7 @@ export function SegmentedControl<T extends string>({
       const pos = enabled.indexOf(from);
       idx = enabled[(pos + dir + enabled.length) % enabled.length];
     }
-    onChange(options[idx].value);
+    if (activation === 'auto') onChange(options[idx].value);
     refs.current[idx]?.focus();
   };
 
@@ -58,7 +63,11 @@ export function SegmentedControl<T extends string>({
     move(i, d);
   };
 
-  const selectedIdx = Math.max(0, options.findIndex(o => o.value === value));
+  // Gezici Tab durağı: seçili seçenek — ama o DEVRE DIŞIYSA ilk etkin
+  // seçenek (v0.10.924). Aksi hâlde tabIndex=0 taşıyan tek düğme disabled
+  // olur ve grup klavyeyle hiç erişilemez (ServicePodsTab `entity` kapalıyken).
+  const sel = options.findIndex(o => o.value === value);
+  const selectedIdx = sel >= 0 && !options[sel].disabled ? sel : (enabled[0] ?? 0);
   return (
     <div role="radiogroup" aria-label={aria['aria-label']} title={title}
       className={['segmented', size === 'sm' ? 'sg-sm' : '', className].filter(Boolean).join(' ')}>

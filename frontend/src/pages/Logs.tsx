@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -23,6 +23,8 @@ import {
 import { LogFieldsPanel } from '@/components/LogFieldsPanel';
 import { LogPatternsPanel, type PanelTab } from '@/components/LogPatternsPanel';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { RenderedMarkdown } from '@/components/Markdown';
 import { Pager } from '@/components/Pager';
 import { ShareButton } from '@/components/ShareButton';
@@ -1085,15 +1087,17 @@ function LogsInner() {
                   opacity: f.disabled ? 0.5 : 1,
                 }}>
                   {/* v0.9.1219 — metne tıkla = yerinde düzenle (Kibana
-                      edit-filter). Silip yeniden ekleme devri kapandı. */}
-                  <span role="button" tabIndex={0}
+                      edit-filter). Silip yeniden ekleme devri kapandı.
+                      v0.10.924 — buton bütünlüğü Faz 2: `span role=button`
+                      yerine LinkButton (metin gibi görünür, gerçek düğme;
+                      Enter/Space yerel). Ton rengi durum olduğu için satır içi. */}
+                  <LinkButton
                     onClick={() => setEditPill(editPill === i ? null : i)}
-                    onKeyDown={e => { if (e.key === 'Enter') setEditPill(editPill === i ? null : i); }}
                     title="Düzenle — alan/operatör/değer"
                     style={{
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                      color: tone, cursor: 'pointer',
-                      textDecoration: f.disabled ? 'line-through' : 'none',
+                      color: tone,
+                      textDecoration: f.disabled ? 'line-through' : undefined,
                     }}>
                     {f.negated && <b>NOT </b>}
                     {f.exists ? <>∃ {f.key}</>
@@ -1101,7 +1105,7 @@ function LogsInner() {
                       : f.values && f.values.length > 1
                         ? <>{f.key} ∈ ({f.values.join(', ')})</>
                         : <>{f.key}: {f.value}</>}
-                  </span>
+                  </LinkButton>
                   {editPill === i && (
                     <LogPillEditor filter={f} since={autocompleteSince}
                       onApply={next => { setEditPill(null); applyPills(replaceFilterAt(filters, i, next)); }}
@@ -1167,28 +1171,17 @@ function LogsInner() {
             writeUrl({ ...filter, severity: next }, filters);
             resetPaging();
           };
-          const chipBase: CSSProperties = {
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '5px 10px', borderRadius: 20, fontSize: 11.5,
-            fontWeight: 600, cursor: 'pointer', userSelect: 'none',
-            border: '1px solid var(--border)', background: 'var(--bg1)',
-            color: 'var(--text2)', lineHeight: 1.4,
-          };
-          const onStyle: CSSProperties = {
-            borderColor: 'var(--accent)', color: 'var(--accent2)',
-            background: 'var(--accent-soft)',
-          };
-          const Chip = ({
+          // v0.10.924 — buton bütünlüğü Faz 2: elle boyanan
+          // `span role=button` (chipBase/onStyle) yerine Chip atomu —
+          // `active` aria-pressed'i de basıyor, Enter/Space yerel.
+          const LevelChip = ({
             keyName, children, count, title,
           }: { keyName: string; children: ReactNode; count: number; title: string }) => {
             const on = activeKey === keyName;
             return (
-              <span role="button" tabIndex={0}
-                aria-pressed={on}
+              <Chip pill active={on}
                 title={title}
-                onClick={() => setSeverity(keyName === 'all' ? 0 : LVL_FACETS.find(f => f.key === keyName)!.min)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSeverity(keyName === 'all' ? 0 : LVL_FACETS.find(f => f.key === keyName)!.min); } }}
-                style={{ ...chipBase, ...(on ? onStyle : {}) }}>
+                onClick={() => setSeverity(keyName === 'all' ? 0 : LVL_FACETS.find(f => f.key === keyName)!.min)}>
                 {children}
                 <span style={{
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -1196,7 +1189,7 @@ function LogsInner() {
                 }}>
                   {facetLoading ? '·' : count.toLocaleString()}
                 </span>
-              </span>
+              </Chip>
             );
           };
           return (
@@ -1205,19 +1198,19 @@ function LogsInner() {
                 display: 'flex', alignItems: 'center', gap: 8,
                 flexWrap: 'wrap', marginBottom: 12,
               }}>
-              <Chip keyName="all" count={facetCounts.all}
+              <LevelChip keyName="all" count={facetCounts.all}
                 title="Show all severities">
                 <span style={{ color: activeKey === 'all' ? 'var(--accent2)' : 'var(--text2)' }}>All</span>
-              </Chip>
+              </LevelChip>
               {LVL_FACETS.map(f => (
-                <Chip key={f.key} keyName={f.key} count={facetCounts[f.key] ?? 0}
+                <LevelChip key={f.key} keyName={f.key} count={facetCounts[f.key] ?? 0}
                   title={`Show ${f.label} and above (min severity ${f.min})`}>
                   <span className={`badge ${
                     f.key === 'error' ? 'b-err'
                     : f.key === 'warn' ? 'b-warn'
                     : f.key === 'info' ? 'b-info'
                     : 'b-gray'}`}>{f.label}</span>
-                </Chip>
+                </LevelChip>
               ))}
               {!volumeEnabled && (
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>

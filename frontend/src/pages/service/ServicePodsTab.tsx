@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useDataTable, ResetLayoutButton } from '@/components/ui/DataTable';
-import { IconButton, SectionHead, Row } from '@/components/ui';
+import { IconButton, SectionHead, Row, SegmentedControl } from '@/components/ui';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, Empty } from '@/components/Spinner';
 import { RuntimeCharts, familyOf } from './RuntimeCharts';
@@ -147,18 +147,21 @@ export function ServicePodsTab({ service, range, onZoom, onZoomReset }: {
       <SectionHead id="pods-sec" title="Pods"
         source={entityEnabled ? 'entity_seen_5m ∪ Thanos · kube-state' : 'Thanos · kube-state'}
         badges={<>
-          <span className="seg-mini" role="group" aria-label="Pod kaynağı">
-            {([['all', 'hepsi'], ['entity', 'yalnız entity'], ['thanos', 'yalnız Thanos']] as const).map(([v, label]) => (
-              <button key={v} type="button" className={source === v ? 'on' : ''} onClick={() => setMode('psrc', v, 'all')}
-                disabled={v === 'entity' && !entityEnabled}
-                title={v === 'entity' ? "Span'lerin gördüğü pod'lar (entity katmanı)" : v === 'thanos' ? 'kube-state/cAdvisor envanteri' : 'İki kaynağın birleşimi'}>{label}</button>
-            ))}
-          </span>
-          <span className="seg-mini" role="group" aria-label="Pod görünümü">
-            <button type="button" className={view === 'flat' ? 'on' : ''} onClick={() => setMode('pview', 'flat', 'cluster')}>düz</button>
-            <button type="button" className={view === 'cluster' ? 'on' : ''} onClick={() => setMode('pview', 'cluster', 'cluster')}
-              title="Cluster başlık satırı ara toplam taşır (running, ↻, CPU/Mem, spans)">cluster&#39;a göre grupla</button>
-          </span>
+          {/* v0.10.924 — buton bütünlüğü Faz 2: iki elle `.seg-mini` grubu →
+              SegmentedControl (tek seçim; URL yazımı setMode'da aynen). */}
+          <SegmentedControl size="sm" aria-label="Pod kaynağı" value={source}
+            onChange={v => setMode('psrc', v, 'all')}
+            options={[
+              { value: 'all', label: 'hepsi', title: 'İki kaynağın birleşimi' },
+              { value: 'entity', label: 'yalnız entity', title: "Span'lerin gördüğü pod'lar (entity katmanı)", disabled: !entityEnabled },
+              { value: 'thanos', label: 'yalnız Thanos', title: 'kube-state/cAdvisor envanteri' },
+            ]} />
+          <SegmentedControl size="sm" aria-label="Pod görünümü" value={view}
+            onChange={v => setMode('pview', v, 'cluster')}
+            options={[
+              { value: 'flat', label: 'düz' },
+              { value: 'cluster', label: "cluster'a göre grupla", title: 'Cluster başlık satırı ara toplam taşır (running, ↻, CPU/Mem, spans)' },
+            ]} />
           {entityQ.data?.clusterAmbiguous && entityQ.data.clusterAmbiguous.length > 1 && (
             <Badge tone="warning" title="Aynı servis adı birden çok cluster'da — Topbar Cluster seçicisiyle daralt">
               {entityQ.data.clusterAmbiguous.length} clusters
