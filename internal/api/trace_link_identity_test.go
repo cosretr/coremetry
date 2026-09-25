@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -49,6 +50,34 @@ func (f *scriptLogStore) Search(_ context.Context, flt logstore.Filter) (*logsto
 		return nil, f.err
 	}
 	recs := f.bySpan[flt.SpanID]
+	if flt.SpanID == "" {
+		// v0.10.918 — gerçek backend gibi: trace-geneli geçiş trace'in
+		// TÜM kayıtlarını döndürür (span_id'liler dahil), tavanla kırpılır.
+		recs = append([]*logstore.LogRecord(nil), f.bySpan[""]...)
+		keys := make([]string, 0, len(f.bySpan))
+		for k := range f.bySpan {
+			if k != "" {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			for _, r := range f.bySpan[k] {
+				if r == nil {
+					recs = append(recs, nil)
+					continue
+				}
+				c := *r
+				if c.SpanID == "" {
+					c.SpanID = k
+				}
+				recs = append(recs, &c)
+			}
+		}
+		if flt.Limit > 0 && len(recs) > flt.Limit {
+			recs = recs[:flt.Limit]
+		}
+	}
 	return &logstore.Page{Total: len(recs), Logs: recs}, nil
 }
 func (f *scriptLogStore) Backend() string { return "test" }
@@ -273,8 +302,9 @@ func TestResolveTraceLinkIdentity_TraceWidePass(t *testing.T) {
 	if got.SpanID != "" {
 		t.Fatalf("span_id'siz kayıt için span uydurulmamalı: %q", got.SpanID)
 	}
-	// Maliyet tavanı: 2 span probu + TEK trace geçişi.
-	if len(f.calls) != 3 || f.calls[2] != "" {
+	// v0.10.918 — maliyet: sayfa dolmadı → TEK trace-geneli sorgu, span
+	// sorgusu yok (adaylar yerelde süzülür).
+	if len(f.calls) != 1 || f.calls[0] != "" {
 		t.Fatalf("çağrı sırası/sayısı = %v", f.calls)
 	}
 }
@@ -292,9 +322,9 @@ func TestResolveTraceLinkIdentity_ProbeCap(t *testing.T) {
 	if len(got.Candidates) != linkIdentitySpanProbe {
 		t.Fatalf("aday sayısı = %d, tavan %d", len(got.Candidates), linkIdentitySpanProbe)
 	}
-	if len(f.calls) != linkIdentitySpanProbe+1 {
-		t.Fatalf("log çağrısı = %d (%v), beklenen %d span + 1 trace geçişi",
-			len(f.calls), f.calls, linkIdentitySpanProbe)
+	// v0.10.918 — boş trace: tek trace-geneli sorgu (eskiden 5 span + 1).
+	if len(f.calls) != 1 || f.calls[0] != "" {
+		t.Fatalf("log çağrısı = %d (%v), beklenen tek trace-geneli geçiş", len(f.calls), f.calls)
 	}
 	if !strings.Contains(got.Note, "ilk 5 adayı tarandı") {
 		t.Fatalf("not tavanı söylemeli: %q", got.Note)
@@ -839,8 +869,8 @@ func TestResolveTraceLinkIdentity_IdentitiesIgnoreProbeCap(t *testing.T) {
 	spans = append(spans, lidSpan("r", "", 50, "ok", map[string]string{"fn": "F-ROOT"}))
 	f := &scriptLogStore{}
 	got := (&Server{logs: f}).resolveTraceLinkIdentity(context.Background(), "abc", "", spans, "", []string{"fn"})
-	// Log maliyeti DEĞİŞMEDİ: 5 span probu + 1 trace geçişi.
-	if len(f.calls) != linkIdentitySpanProbe+1 || len(got.Candidates) != linkIdentitySpanProbe {
+	// Log maliyeti: tek trace-geneli geçiş (v0.10.918); aday tavanı aynı.
+	if len(f.calls) != 1 || len(got.Candidates) != linkIdentitySpanProbe {
 		t.Fatalf("log maliyeti değişmiş: calls=%v candidates=%v", f.calls, got.Candidates)
 	}
 	// Ama aday listesi 10 span'in hepsini gördü (tavan tam 10).
@@ -1035,4 +1065,36 @@ func TestResolveTraceLinkIdentity_LogKeyIsRealFieldName(t *testing.T) {
 		}
 	}
 	t.Fatal("log adayı yok")
+}
+
+// v0.10.918 — prod logu: trace başına 6 "[es-debug] zero hits". Trace-geneli
+// sayfa TAVANA ÇARPTIYSA (konuşkan trace) span başına sorgulara düşülür ve
+// adayın kimliği yine bulunur; çarpmadıysa span sorgusu hiç atılmaz.
+func TestResolveTraceLinkIdentity_SaturatedFallsBackToSpans(t *testing.T) {
+	var noise []*logstore.LogRecord
+	for i := 0; i < linkIdentityLogsPerTrace; i++ {
+		noise = append(noise, lidRec("", "gürültü satırı"))
+	}
+	f := &scriptLogStore{bySpan: map[string][]*logstore.LogRecord{
+		"":  noise,
+		"b": {lidRec("b", "islem tamam id="+ridA)},
+	}}
+	got := (&Server{logs: f}).resolveTraceLinkIdentity(context.Background(), "abc", "", linkIdentitySpans(), "", nil)
+	if got.Source != linkIdentitySourceLog || got.RequestID != ridA || got.SpanID != "b" {
+		t.Fatalf("doygun sayfada span sorgusu kimliği bulmalı: %+v", got)
+	}
+	if len(f.calls) != 2 || f.calls[0] != "" || f.calls[1] != "b" {
+		t.Fatalf("çağrı sırası = %v, beklenen [\"\" b]", f.calls)
+	}
+}
+
+func TestLinkIdentitySpanPage(t *testing.T) {
+	page := &logstore.Page{Logs: []*logstore.LogRecord{lidRec("a", "1"), nil, lidRec("b", "2"), lidRec("a", "3")}}
+	got := linkIdentitySpanPage(page, "a")
+	if len(got.Logs) != 2 || got.Logs[0].Body != "1" || got.Logs[1].Body != "3" {
+		t.Fatalf("süzme/sıra hatalı: %+v", got.Logs)
+	}
+	if linkIdentitySpanPage(nil, "a") != nil {
+		t.Fatal("nil sayfa nil kalmalı")
+	}
 }

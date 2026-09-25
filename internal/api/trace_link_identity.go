@@ -837,32 +837,46 @@ func (s *Server) resolveTraceLinkIdentity(ctx context.Context, traceID, selected
 		return winID, winSpan, found
 	}
 
+	// v0.10.918 — trace-geneli geçiş ÖNCE. Eskiden aday span başına bir ES
+	// sorgusu (≤5) + sonda trace-geneli bir sorgu koşuyordu; prod logunda
+	// trace başına 6 "[es-debug] zero hits" satırı. Trace-geneli sayfa
+	// TAVANA ÇARPMADIYSA (< linkIdentityLogsPerTrace) trace'in penceredeki
+	// TÜM logları elde: span sorguları bu sayfanın alt kümesidir, aynı
+	// öncelik sırası yerelde süzülerek uygulanır (linkIdentitySpanPages).
+	// Yalnız sayfa doluysa (konuşkan trace) span başına sorgulara düşülür.
+	logFail := func(err error) traceLinkIdentity {
+		// Log tarafı düştü: fatal DEĞİL. Attribute yolu ayakta,
+		// ama "kimlik yok" demiyoruz — "bakamadım" diyoruz.
+		out.Partial = true
+		out.Note = "log okuması başarısız (" + err.Error() + ") — kimlik span attribute'larından"
+		return finish(out)
+	}
+	page, err := logstore.LogsForTrace(ctx, s.logs, traceID, from, to, linkIdentityLogsPerTrace)
+	if err != nil {
+		return logFail(err)
+	}
+	complete := page == nil || len(page.Logs) < linkIdentityLogsPerTrace
 	for _, sp := range probe {
 		if sp.SpanID == "" {
 			continue
 		}
-		page, err := logstore.LogsForSpan(ctx, s.logs, traceID, sp.SpanID, from, to, linkIdentityLogsPerSpan)
-		if err != nil {
-			// Log tarafı düştü: fatal DEĞİL. Attribute yolu ayakta,
-			// ama "kimlik yok" demiyoruz — "bakamadım" diyoruz.
-			out.Partial = true
-			out.Note = "log okuması başarısız (" + err.Error() + ") — kimlik span attribute'larından"
-			return finish(out)
+		var spPage *logstore.Page
+		if complete {
+			spPage = linkIdentitySpanPage(page, sp.SpanID)
+		} else {
+			spPage, err = logstore.LogsForSpan(ctx, s.logs, traceID, sp.SpanID, from, to, linkIdentityLogsPerSpan)
+			if err != nil {
+				return logFail(err)
+			}
 		}
-		if id, spanID, ok := scan(page, sp.SpanID); ok {
+		if id, spanID, ok := scan(spPage, sp.SpanID); ok {
 			out.RequestID, out.SpanID, out.Source = id, spanID, linkIdentitySourceLog
 			out.DistinctRequestIDs = len(hits)
 			out.Note = linkIdentityNote(out, len(ordered))
 			return finish(out)
 		}
 	}
-	// span_id taşımayan loglar için TEK trace-geneli geçiş.
-	page, err := logstore.LogsForTrace(ctx, s.logs, traceID, from, to, linkIdentityLogsPerTrace)
-	if err != nil {
-		out.Partial = true
-		out.Note = "log okuması başarısız (" + err.Error() + ") — kimlik span attribute'larından"
-		return finish(out)
-	}
+	// span_id taşımayan loglar: aynı trace-geneli sayfa (ek tur yok).
 	if id, spanID, ok := scan(page, ""); ok {
 		out.RequestID, out.SpanID, out.Source = id, spanID, linkIdentitySourceLog
 	}
@@ -906,4 +920,20 @@ func linkIdentityNote(id traceLinkIdentity, spanCount int) string {
 		fmt.Fprintf(&b, "; %d span'in ilk %d adayı tarandı", spanCount, linkIdentitySpanProbe)
 	}
 	return b.String()
+}
+
+// linkIdentitySpanPage — SAF (v0.10.918): trace-geneli sayfadan tek span'in
+// kayıtları, sıra korunur. Sayfa tavana çarpmadıysa bu, eski span başına
+// ES sorgusunun döndüreceği kümenin üst kümesidir.
+func linkIdentitySpanPage(page *logstore.Page, spanID string) *logstore.Page {
+	if page == nil {
+		return nil
+	}
+	out := &logstore.Page{}
+	for _, rec := range page.Logs {
+		if rec != nil && rec.SpanID == spanID {
+			out.Logs = append(out.Logs, rec)
+		}
+	}
+	return out
 }

@@ -1600,7 +1600,7 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	// Only logs the empty-result case so steady-state traffic
 	// stays quiet.
 	// v0.10.414 — len(out) (Total sayılmamış olabilir; SkipTotal'da 0 döner).
-	if len(out) == 0 && (f.TraceID != "" || f.SpanID != "" || f.Service != "") {
+	if len(out) == 0 && (f.TraceID != "" || f.SpanID != "" || f.Service != "") && esDebugGate.allow(esDebugKey(f), time.Now()) { // v0.10.918 — anahtar başına 10 dk'da bir
 		// v0.8.239 — service-scoped queries joined the diagnostic: the
 		// service-detail Logs tab going empty was silent (0 hits is not
 		// an ES error, so /admin/elastic showed nothing). Now the exact

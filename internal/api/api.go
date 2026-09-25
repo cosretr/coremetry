@@ -1381,7 +1381,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) listen(mux *http.ServeMux) error {
-	handler := otelhttp.NewHandler(s.cors.middleware(s.auth.Middleware(s.presence.middleware(mux))),
+	handler := otelhttp.NewHandler(s.cors.middleware(s.auth.Middleware(s.presence.middleware(withReqTag(mux)))),
 		"coremetry-api",
 		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
 			// "GET /api/traces/:id" — method + cardinality-collapsed
@@ -11450,7 +11450,7 @@ func writeErr(w http.ResponseWriter, err error) {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
-	log.Printf("[api] error: %v", err)
+	log.Printf("[api] error%s: %v", reqTagSuffix(w), err) // v0.10.918 — uç etiketi (req_tag.go)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
