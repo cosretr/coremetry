@@ -451,6 +451,16 @@ var metricPointsWellKnown = map[string]string{
 	"cluster": metricClusterExpr,
 }
 
+// IsMetricPointsWellKnownKey — v0.10.944: anahtar metric_points'in kolon-
+// destekli iyi bilinen anahtarlarından mı (service.name, host.name,
+// deployment.environment[.name], cluster …). mcptools query_metric CH yolu
+// bu anahtarları etiket keşfi listesinde (MetricAttrKeys yalnız veri noktası
+// öznitelikleri) göremez; harita KOPYALANMAZ — iki kopya zamanla ayrışırdı.
+func IsMetricPointsWellKnownKey(k string) bool {
+	_, ok := metricPointsWellKnown[k]
+	return ok
+}
+
 const metricEnvExpr = "coalesce(nullIf(res_values[indexOf(res_keys, 'deployment.environment.name')], ''), " +
 	"res_values[indexOf(res_keys, 'deployment.environment')])"
 

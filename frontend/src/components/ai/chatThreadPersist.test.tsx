@@ -17,10 +17,13 @@
 //   (4) "Temizle" kalıcı kimliği de düşürür — yoksa temizlenmiş ekranın
 //       ilk cevabı arşivdeki DOLU thread'in üstüne yazılır;
 //   (5) Geçmiş listesi çekmece açılışında çekilir, satıra tıklamak
-//       konuşmayı EKRANA getirir (turlar gerçekten çizilir).
+//       konuşmayı EKRANA getirir (turlar gerçekten çizilir);
+//   (6) v0.10.944 — başka konuşmayı devralmak (adopt) bekleyen kaydı
+//       İPTAL etmez, önceki konuşmaya yazar; o kaydın yanıtı yeni
+//       konuşmanın kimliğini ezmez.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { act, useEffect, useRef } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -226,6 +229,77 @@ describe('useChatThread — kalıcılık', () => {
     await flushPersist();
     expect(save.mock.calls[1][0].id).toBeUndefined();
     expect(save.mock.calls[1][0].messages).toHaveLength(2);
+  });
+});
+
+// ── (6) v0.10.944 — devralma bekleyen kaydı düşürmez. AIDrawerChat'in
+// devralma effect'i [resume, adopt, busy]'de koşar: akış sürerken gelen
+// resume reddedilir, akış bitince (busy=false) adopt olur — tam da send'in
+// finally'de 600 ms'lik kaydı kurduğu an. adopt eskiden zamanlayıcıyı
+// yalnız siliyordu: C1'in SON alışverişi (soru2) hiç yazılmıyordu.
+function AdoptProbe({ resume }: { resume: AiConversation | null }) {
+  thread = useChatThread({ persist: true, title: 'Explain trace · 0af76519…' });
+  const { adopt, busy } = thread;
+  const adoptedRef = useRef('');
+  useEffect(() => {
+    if (!resume || adoptedRef.current === resume.id) return;
+    if (adopt(resume)) adoptedRef.current = resume.id;
+  }, [resume, adopt, busy]);
+  return null;
+}
+
+describe('useChatThread — devralma bekleyen kaydı yazar (v0.10.944)', () => {
+  it('akış sonunda devralınan C2, C1\'in son alışverişini düşürmez; kimlik C2 kalır', async () => {
+    vi.useFakeTimers();
+    let release: () => void = () => {};
+    let call = 0;
+    vi.spyOn(api, 'copilotChat').mockImplementation(async (_m, onEvent: (e: ChatStreamEvent) => void) => {
+      call++;
+      if (call === 2) await new Promise<void>(r => { release = r; });
+      onEvent({ kind: 'answer', text: `cevap${call}`, exchangeId: `x${call}` });
+      onEvent({ kind: 'done', ok: true });
+    });
+    // Sunucu gelen kimliği geri basar; ilk yazım (id yok) C1 açar.
+    const save = vi.spyOn(api, 'saveAiConversation')
+      .mockImplementation(async b => conv({ id: b.id ?? 'C1' }));
+
+    await act(async () => { root.render(<AdoptProbe resume={null} />); });
+    await act(async () => { await thread.send('soru1'); });
+    await flushPersist();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(thread.conversationId).toBe('C1');
+
+    let p: Promise<void> = Promise.resolve();
+    await act(async () => { p = thread.send('soru2'); });
+    expect(thread.busy).toBe(true);
+    const C2 = conv({ id: 'C2', messages: [{ role: 'user', text: 'eski' }, { role: 'assistant', text: 'eski cevap' }] });
+    await act(async () => { root.render(<AdoptProbe resume={C2} />); });
+    expect(thread.conversationId).toBe('C1'); // akış sürerken reddedildi
+
+    await act(async () => { release(); await p; });
+    expect(thread.conversationId).toBe('C2'); // busy=false → devralındı
+    await flushPersist();
+
+    // C1'in son alışverişi (soru1+cevap1+soru2+cevap2) yazıldı…
+    const c1 = save.mock.calls.filter(c => c[0].id === 'C1');
+    expect(c1.map(c => c[0].messages.length)).toContain(4);
+    // …ve o kaydın yanıtı (id C1) yeni konuşmanın kimliğini EZMEDİ.
+    expect(thread.conversationId).toBe('C2');
+    expect(thread.turns.map(t => t.text)).toEqual(['eski', 'eski cevap']);
+  });
+
+  it('"Temizle" sonrası uçuştaki kayıt eski kimliği geri takmaz', async () => {
+    vi.useFakeTimers();
+    stubChat();
+    let resolveSave: (c: AiConversation) => void = () => {};
+    vi.spyOn(api, 'saveAiConversation')
+      .mockImplementation(() => new Promise<AiConversation>(r => { resolveSave = r; }));
+    await mountProbe();
+    await act(async () => { await thread.send('ilk soru'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); }); // kayıt uçuşta
+    await act(async () => { thread.clear(); });
+    await act(async () => { resolveSave(conv({ id: 'eski-1' })); await Promise.resolve(); });
+    expect(thread.conversationId).toBeNull();
   });
 });
 

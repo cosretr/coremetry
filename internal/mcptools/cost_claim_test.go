@@ -38,6 +38,8 @@ import (
 // Bir tool bu listede yoksa ama açıklamasında ön-toplam iddiası varsa
 // test kırmızıya döner.
 var mvCostClaims = map[string]string{
+	"compare_periods": "spanmetrics_1m — periodSpanmetricsGate koşullu (env/cluster/namespace yok + kapsama); " +
+		"aksi hâlde ham spans; açıklama koşulu, read_source/percentile_method da okunan yolu söylüyor (v0.10.944)",
 	"list_services": "service_summary_5m — readServices(), range_s>=300 ve env=='' kapısı; " +
 		"aksi hâlde ham spans ve açıklama bunu SÖYLÜYOR (v0.10.25)",
 	"get_service_health": "list_services ile AYNI MV kapısı (readServicesIn — tam ad; alt-dize değil)",

@@ -118,10 +118,18 @@ func emitStepEvidence(emit func(string, any), i int, tool, text string, err erro
 		return
 	}
 	preview, truncated := clipStepPreview(text)
-	emit("step-result", map[string]any{
+	ev := map[string]any{
 		"i": i, "tool": tool, "ok": ok,
 		"preview": preview, "truncated": truncated, "bytes": len(text),
-	})
+	}
+	// v0.10.944 — başarılı kanıtın kaynak durumu (chat_step_sources.go).
+	if ok {
+		// v0.10.944 — boş dilim de gider: "okundu, durum yok" (nil = denetlenemedi).
+		if srcs := stepSourceStatuses(text); srcs != nil {
+			ev["sources"] = srcs
+		}
+	}
+	emit("step-result", ev)
 }
 
 // withBlockSeq — v0.10.557 (CoSRE Faz 4c): guided demetlerin yapısal kanıtı TEK

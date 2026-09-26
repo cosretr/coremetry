@@ -21,6 +21,8 @@ import (
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
+
+	"github.com/cilcenk/coremetry/internal/sourcestate"
 )
 
 // encodeESCursor serialises a hit's `sort` values array as the
@@ -175,6 +177,22 @@ func esTimeoutFromEnv(def string) string {
 	return def
 }
 
+// esSoftTimeout — v0.10.944: Search/searchForward gövdesinin yumuşak
+// `timeout`u. hint (Filter.SoftTimeout) ≤0 → bugünkü esTimeoutFromEnv
+// ("10s"); ipucu yalnız KISALTIR — operatörün daha düşük env değeri
+// asla yükseltilmez. 1 ms altı ipucu yok sayılır ("0ms" ES'e gitmez).
+// SAF (env okuması dışında), tablo testli.
+func esSoftTimeout(hint time.Duration) string {
+	def := esTimeoutFromEnv("10s")
+	if hint.Milliseconds() <= 0 {
+		return def
+	}
+	if d, err := time.ParseDuration(def); err == nil && d <= hint {
+		return def
+	}
+	return fmt.Sprintf("%dms", hint.Milliseconds())
+}
+
 // esTimeseriesTimeoutFromEnv is the Histogram sibling of
 // esTimeoutFromEnv (v0.8.3). Kept on its OWN env knob so the
 // timeseries/histogram ES soft-timeout isn't silently coupled to the
@@ -223,6 +241,11 @@ type ESConfig struct {
 	// config so any shipping pipeline (Filebeat, Logstash, OTel
 	// Collector → ES exporter) can be queried without re-indexing.
 	Fields ESFieldMap
+
+	// fieldsAuthoritative — v0.10.944: ESManager.build'in işareti. Fields
+	// ya NewESManager'da env ile tohumlanmış boot haritası ya da blob/PUT
+	// değeri; NewES env'i YENİDEN uygulamaz (açık "" = keşfe dön kalır).
+	fieldsAuthoritative bool
 }
 
 // ESFieldMap carries the document field paths. JSON tags (v0.8.232)
@@ -242,6 +265,16 @@ type ESFieldMap struct {
 	// (es_env_field.go); set it only when the pipeline uses a path the
 	// candidates don't cover.
 	Env string `json:"env,omitempty"`
+	// v0.10.944 — çapraz-kaynak eşleme (CoSRE Faz A): cluster / namespace /
+	// pod / version rollerinin belge alanı. Boş = bugünkü aday listeleri +
+	// field_caps keşfi (esClusterFields / esNamespaceFields / esPodFields /
+	// esVersionFields); dolu = keşifsiz, AYNEN güvenilir (Env sözleşmesi).
+	// Env anahtarı: COREMETRY_ES_FIELD_{CLUSTER,NAMESPACE,POD,VERSION}
+	// (withESFieldEnv); persist: logstore_es blob'unun `fields` nesnesi.
+	Cluster   string `json:"cluster,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Pod       string `json:"pod,omitempty"`
+	Version   string `json:"version,omitempty"`
 }
 
 func (c *ESConfig) defaults() {
@@ -276,6 +309,13 @@ type ESStore struct {
 	cli    *elasticsearch.Client
 	cfg    ESConfig
 	fields ESFieldMap
+	// rawFields — v0.10.944: defaults() ÖNCESİ alan haritası. "configured"
+	// ile "varsayılan" ayrımı yalnız buradan okunur (fields'ta trace.id
+	// varsayılanı ile operatörün yazdığı trace.id ayırt edilemez).
+	rawFields ESFieldMap
+	// roleFields — v0.10.944 rol keşfi kararı (field_mapping.go); env
+	// önbelleği deseni, tek field_caps / fieldRoleTTL.
+	roleFields esRoleFieldCache
 	// idxCache backs queryIndices (es_indices.go) — concrete index
 	// names for the configured pattern, refreshed every 5 min.
 	idxCache esIndexCache
@@ -395,6 +435,14 @@ func esAuthMode(apiKey, username string) string {
 }
 
 func NewES(cfg ESConfig) (*ESStore, error) {
+	// v0.10.944 — yeni rol alanları için env tohumu YALNIZ doğrudan
+	// çağıranda (main.go boot kurulumu + boot-retry): ESManager'ın haritası
+	// zaten NewESManager'da tohumlandı, sonrasında blob/PUT değeri OTORİTE —
+	// açık "" (keşfe dön) env ile geri doldurulmaz. Sonra ham harita saklanır.
+	if !cfg.fieldsAuthoritative {
+		cfg.Fields = withESFieldEnv(cfg.Fields)
+	}
+	rawFields := cfg.Fields
 	cfg.defaults()
 
 	// v0.8.350 (HA 🟡6) — client-side network bounds. A bare Transport
@@ -484,10 +532,13 @@ func NewES(cfg ESConfig) (*ESStore, error) {
 		envFieldLabel = "(self-discover)" // v0.8.400 — es_env_field.go
 	}
 	log.Printf("[logstore-es] field map — timestamp=%q trace_id=%q span_id=%q service=%q message=%q severity_text=%q severity_number=%q env=%s "+
+		"cluster=%s namespace=%s pod=%s version=%s "+
 		"(override via COREMETRY_ES_FIELD_* to match your log mapping)",
 		cfg.Fields.Timestamp, cfg.Fields.TraceID, cfg.Fields.SpanID, cfg.Fields.Service,
-		cfg.Fields.Body, cfg.Fields.SeverityTx, cfg.Fields.SeverityNo, envFieldLabel)
-	return &ESStore{cli: cli, cfg: cfg, fields: cfg.Fields}, nil
+		cfg.Fields.Body, cfg.Fields.SeverityTx, cfg.Fields.SeverityNo, envFieldLabel,
+		fieldOrDiscover(cfg.Fields.Cluster), fieldOrDiscover(cfg.Fields.Namespace),
+		fieldOrDiscover(cfg.Fields.Pod), fieldOrDiscover(cfg.Fields.Version))
+	return &ESStore{cli: cli, cfg: cfg, fields: cfg.Fields, rawFields: rawFields}, nil
 }
 
 func (s *ESStore) Backend() string { return "elasticsearch" }
@@ -558,7 +609,9 @@ func (s *ESStore) ListFieldsBounded(ctx context.Context) (ListFieldsResult, erro
 	}
 	defer res.Body.Close()
 	if res.IsError() {
-		return ListFieldsResult{}, fmt.Errorf("get mapping: %s", res.String())
+		// v0.10.944 — 401/403 tipli (sourcestate.ErrUnauthorized): alan
+		// listesi tool'u "yetki yok"u "erişilemedi"den ayırsın.
+		return ListFieldsResult{}, esStatusErr(res.StatusCode, fmt.Errorf("get mapping: %s", res.String()))
 	}
 	var body map[string]struct {
 		Mappings struct {
@@ -1278,7 +1331,7 @@ func (s *ESStore) Ping(ctx context.Context) error {
 	}
 	defer res.Body.Close()
 	if res.IsError() {
-		return fmt.Errorf("ES info: %s", res.Status())
+		return esStatusErr(res.StatusCode, fmt.Errorf("ES info: %s", res.Status())) // v0.10.944 — 401/403 tipli
 	}
 	return nil
 }
@@ -1301,6 +1354,7 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		if page != nil {
 			page.EnvUnapplied = envUnapplied
 			page.HasTraceUnapplied = hasTraceUnapplied
+			page.UnappliedFilters = esSearchUnapplied(f, s.fields) // v0.10.944
 		}
 		return page, err
 	}
@@ -1449,7 +1503,7 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		// buildHistogramBody, which already carry these guards — this Search
 		// was the CH-vs-ES divergence laggard. v0.8.x.
 		"track_total_hits": esTrackTotalHits(f.SkipTotal), // v0.10.414 — çağıran okumayacaksa false
-		"timeout":          esTimeoutFromEnv("10s"),
+		"timeout":          esSoftTimeout(f.SoftTimeout),  // v0.10.944 — çağıranın bütçesine sığan yumuşak süre
 	}
 	if f.LeanSource {
 		// v0.10.500 (A4) — yalnız gövde/zaman/severity: desen örneklemesi
@@ -1625,10 +1679,24 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		NextCursor:        next,
 		EnvUnapplied:      envUnapplied,
 		HasTraceUnapplied: hasTraceUnapplied,
+		UnappliedFilters:  esSearchUnapplied(f, s.fields), // v0.10.944
 		Partial:           raw.partial(),
 		ShardsFailed:      raw.Shards.Failed,
 		TotalIsLowerBound: lowerBound,
 	}, nil
+}
+
+// esSearchUnapplied — v0.10.944 (CoSRE kaynak durumu), SAF: ES aramasının
+// istenip UYGULAMADIĞI filtreler. SeverityMin yalnız sayısal seviye alanı
+// (fields.severityNo) yapılandırılmışsa range olarak gider (buildQuery);
+// varsayılan kurulumda "yalnız hatalar" isteği sessizce TÜM seviyeleri
+// döndürüyordu. Davranış değişmez (metin seviyesine çeviri /logs'un
+// sözleşmesini değiştirirdi) — yalnız itiraf edilir.
+func esSearchUnapplied(f Filter, fields ESFieldMap) []string {
+	if f.SeverityMin > 0 && fields.SeverityNo == "" {
+		return []string{FilterSeverity}
+	}
+	return nil
 }
 
 // searchForward is the live-tail read (Filter.SinceNs > 0): a plain
@@ -1666,7 +1734,7 @@ func (s *ESStore) searchForward(ctx context.Context, f Filter) (*Page, error) {
 			map[string]any{"field": s.fields.Timestamp, "format": "epoch_millis"},
 		},
 		"track_total_hits": false,
-		"timeout":          esTimeoutFromEnv("10s"),
+		"timeout":          esSoftTimeout(f.SoftTimeout), // v0.10.944 — Search ile simetrik
 	}
 	body, err := json.Marshal(searchBody)
 	if err != nil {
@@ -2672,8 +2740,14 @@ func (s *ESStore) buildQuery(f Filter) map[string]any {
 		// alanla eşleşiyor; üç OTel yolu bu indekste hiç yok — filtre o
 		// yüzden hiçbir kaydı bulamıyordu. exists-guard'lı should zinciri
 		// eksik alanlı indekslerde zararsız (mevcut sözleşme).
-		for _, fld := range esClusterFields {
-			clShould = append(clShould, exactTermsBothShapes(fld, f.Cluster)...)
+		if s.fields.Cluster == "" {
+			for _, fld := range esClusterFields {
+				clShould = append(clShould, exactTermsBothShapes(fld, f.Cluster)...)
+			}
+		} else {
+			// v0.10.944 — operatör fields.cluster yapılandırdıysa YALNIZ o
+			// alan (Env sözleşmesi: yapılandırılan kazanır, aday yok).
+			clShould = exactTermsBothShapes(s.fields.Cluster, f.Cluster)
 		}
 		filter = append(filter, map[string]any{
 			"bool": map[string]any{
@@ -2691,13 +2765,33 @@ func (s *ESStore) buildQuery(f Filter) map[string]any {
 	// v0.8.265 sınıfı bir yalan olur. Eksik alanlı indekste zararsız:
 	// should dalı eşleşmez, sorgu patlamaz.
 	if f.Pod != "" {
-		podShould := make([]any, 0, len(esPodFields)*2)
-		for _, fld := range esPodFields {
+		podFields := roleFilterFields(s.fields.Pod, esPodFields) // v0.10.944 — yapılandırılan kazanır
+		podShould := make([]any, 0, len(podFields)*2)
+		for _, fld := range podFields {
 			podShould = append(podShould, exactTermsBothShapes(fld, f.Pod)...)
 		}
 		filter = append(filter, map[string]any{
 			"bool": map[string]any{
 				"should":               podShould,
+				"minimum_should_match": 1,
+			},
+		})
+	}
+	// v0.10.944 — namespace filtresi (CoSRE search_logs `namespace` arg'ı).
+	// Aday liste esNamespaceFields — `namespace:` kısaltmasıyla ve histogram
+	// kırılımıyla TEK sözleşme (bulunan namespace süzülebilir olmalı,
+	// v0.8.265 sınıfı); yapılandırılmış fields.namespace varsa yalnız o.
+	// Cluster/pod ile aynı exists-guard'lı should zinciri: eksik alanlı
+	// indekste zararsız.
+	if f.Namespace != "" {
+		nsFields := roleFilterFields(s.fields.Namespace, esNamespaceFields)
+		nsShould := make([]any, 0, len(nsFields)*2)
+		for _, fld := range nsFields {
+			nsShould = append(nsShould, exactTermsBothShapes(fld, f.Namespace)...)
+		}
+		filter = append(filter, map[string]any{
+			"bool": map[string]any{
+				"should":               nsShould,
 				"minimum_should_match": 1,
 			},
 		})
@@ -3193,10 +3287,33 @@ func isESPermissionStatus(code int) bool { return code == 401 || code == 403 }
 func catIndicesError(statusCode int, res *esapi.Response, configuredIndex string) error {
 	if isESPermissionStatus(statusCode) {
 		return fmt.Errorf(
-			"apikey lacks the cluster `monitor` privilege required for _cat/indices (status %d) — index inventory unavailable; /logs search is unaffected",
-			statusCode)
+			"apikey lacks the cluster `monitor` privilege required for _cat/indices (status %d) — index inventory unavailable; /logs search is unaffected: %w",
+			statusCode, sourcestate.ErrUnauthorized)
 	}
 	return parseESError("cat indices", res, configuredIndex)
+}
+
+// esStatusErr — v0.10.944 (CoSRE kaynak durumu): adaptörün durum kodunu
+// GÖRDÜĞÜ yerde 401/403'ü sourcestate.ErrUnauthorized ile sarar. Metin
+// eşlemesi (sourcestate.IsUnauthorizedText) yalnız sarmalanmamış eski
+// yollar için yedek; tipli sarmalama "yetki yok"u "erişilemedi"den
+// kesin ayırır. Diğer kodlar hatayı aynen döndürür.
+func esStatusErr(status int, err error) error {
+	if err == nil || !isESPermissionStatus(status) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", err, sourcestate.ErrUnauthorized)
+}
+
+// esBadQueryType — v0.10.944: ES'in sorgu SÖZDİZİMİ reddi tipleri (400).
+// Yalnız bunlar ErrBadQuery olur; diğer 400'ler (ör. illegal_argument —
+// bizim gövdemiz) tipsiz kalır.
+func esBadQueryType(t string) bool {
+	switch t {
+	case "query_shard_exception", "parse_exception", "query_parsing_exception", "x_content_parse_exception":
+		return true
+	}
+	return false
 }
 
 func parseESError(op string, res *esapi.Response, configuredIndex string) error {
@@ -3206,6 +3323,13 @@ func parseESError(op string, res *esapi.Response, configuredIndex string) error 
 			Reason    string `json:"reason"`
 			IndexUUID string `json:"index_uuid"`
 			Index     string `json:"index"`
+			// v0.10.944 — asıl gerekçe çoğu zaman burada: üst seviye
+			// "all shards failed (search_phase_execution_exception)" yalnız
+			// sarmalayıcı; "Failed to parse query [...]" root_cause'ta.
+			RootCause []struct {
+				Type   string `json:"type"`
+				Reason string `json:"reason"`
+			} `json:"root_cause"`
 		} `json:"error"`
 		Status int `json:"status"`
 	}
@@ -3217,15 +3341,31 @@ func parseESError(op string, res *esapi.Response, configuredIndex string) error 
 				"ES %s: index %q not found — check `logs.elasticsearch.index` in your config (current value %q). Run `curl <es>/_cat/indices?v=true` against your cluster to see what's available",
 				op, parsed.Error.Index, configuredIndex)
 		case res.StatusCode == 401 || res.StatusCode == 403:
-			return fmt.Errorf(
+			// v0.10.944 — tipli yetki reddi (sourcestate.ErrUnauthorized):
+			// CoSRE tool'ları bunu "unauthorized" durumuna çevirir, metin
+			// tahminine kalmaz.
+			return esStatusErr(res.StatusCode, fmt.Errorf(
 				"ES %s: %s (status %d) — check API key / username + password and that the credential has read access to %q",
-				op, parsed.Error.Reason, res.StatusCode, configuredIndex)
+				op, parsed.Error.Reason, res.StatusCode, configuredIndex))
 		default:
-			return fmt.Errorf("ES %s %d: %s (%s)",
-				op, res.StatusCode, parsed.Error.Reason, parsed.Error.Type)
+			// v0.10.944 — root_cause gerekçesi korunur; 400 sözdizimi reddi tipli (ErrBadQuery): tool katmanı bunu backend arızası değil argüman hatası sayar.
+			msg := fmt.Sprintf("%s (%s)", parsed.Error.Reason, parsed.Error.Type)
+			badQuery := esBadQueryType(parsed.Error.Type)
+			for i, rc := range parsed.Error.RootCause {
+				badQuery = badQuery || esBadQueryType(rc.Type)
+				if i == 0 && rc.Reason != "" && rc.Reason != parsed.Error.Reason {
+					msg += fmt.Sprintf(": %s (%s)", rc.Reason, rc.Type)
+				}
+			}
+			err := fmt.Errorf("ES %s %d: %s", op, res.StatusCode, msg)
+			if res.StatusCode == 400 && badQuery {
+				return fmt.Errorf("%w: %w", err, ErrBadQuery)
+			}
+			return err
 		}
 	}
-	return fmt.Errorf("ES %s %s: %s", op, res.Status(), string(body))
+	// v0.10.944 — JSON zarfı olmayan 401/403 (araya giren proxy) da tipli.
+	return esStatusErr(res.StatusCode, fmt.Errorf("ES %s %s: %s", op, res.Status(), string(body)))
 }
 
 // stringToInt64ID is a 64-bit FNV-1a so React keys stay numeric. Not a

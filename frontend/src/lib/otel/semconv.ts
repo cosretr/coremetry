@@ -51,7 +51,10 @@ export function resolveResource(attrs: Record<string, string> | undefined | null
     serviceNamespace: first(a, 'service.namespace'),
     serviceVersion: first(a, 'service.version'),
     serviceInstanceId: first(a, 'service.instance.id'),
-    deploymentEnvironment: first(a, 'deployment.environment', 'deployment.environment.name'),
+    // v0.10.944 — sıra ingest'le AYNI (internal/otlp/convert.go deploy_env: önce
+    // güncel `.name`, sonra eski anahtar). Ters sıra, iki anahtar farklı değer
+    // taşıdığında deploy_env'de olmayan bir ortamı gösterip CoSRE'ye gönderiyordu.
+    deploymentEnvironment: first(a, 'deployment.environment.name', 'deployment.environment'),
     hostName: first(a, 'host.name'),
     cluster: first(a, 'k8s.cluster.name', 'openshift.cluster.name', 'cluster'),
     k8s: {

@@ -141,12 +141,14 @@ func mergeToolLinks(acc []guidedAnswerLink, l guidedAnswerLink) []guidedAnswerLi
 // Kök-göreli /traces? dışı her şey yok sayılır (model çıktısı değil ama
 // sınır aynı: href asla dış adres olmaz). Saf, tablo testli.
 func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
-	var label string
+	var label, prefix string
 	switch tool {
 	case "search_traces":
-		label = "Traces'te aç"
+		label, prefix = "Traces'te aç", "/traces?"
 	case "trace_stats":
-		label = "Aggregated'de aç"
+		label, prefix = "Aggregated'de aç", "/traces?"
+	case "search_logs": // v0.10.944 — okunan sorgunun birebir /logs bağlantısı
+		label, prefix = "Loglar'da aç", "/logs?"
 	default:
 		return guidedAnswerLink{}, false
 	}
@@ -156,10 +158,22 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 	if err := json.Unmarshal([]byte(content), &r); err != nil {
 		return guidedAnswerLink{}, false
 	}
-	if !strings.HasPrefix(r.DeepLink, "/traces?") || len(r.DeepLink) > 4096 {
+	if !strings.HasPrefix(r.DeepLink, prefix) || len(r.DeepLink) > 4096 {
 		return guidedAnswerLink{}, false
 	}
 	return guidedAnswerLink{Label: label, Href: r.DeepLink}, true
+}
+
+// nextLoopOpen — v0.10.944: search_logs bağlantısı ÖNCEDEN yakalanmış bir
+// trace bağlantısını EZMEZ; yalnız boş yuvayı doldurur. "trace'leri getir"
+// sorusu log ile de doğrulandığında arkadaki sayfa yine Traces'e gider
+// (search_logs eskiden toolCallLink'ten geçiyordu ve `open` hiç yazmıyordu).
+// Diğer araçlar için son yazan kazanır (v0.10.495 davranışı). Saf.
+func nextLoopOpen(cur, tool, href string) string {
+	if tool == "search_logs" && cur != "" {
+		return cur
+	}
+	return href
 }
 
 // buildLinkResultLink — build_link'in href'i deep_link gibi çip/link bloğu

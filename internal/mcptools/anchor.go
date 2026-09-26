@@ -83,3 +83,10 @@ func nowOrAnchor(ctx context.Context) time.Time {
 	}
 	return time.Now()
 }
+
+// wallNow — v0.10.944 — duvar saati; YALNIZ doğrulama için (pencere gelecekte
+// mi, veri taze mi), pencere KURMAZ: pencereler rangeWindow / nowOrAnchor'dan
+// geçer. anchor.go AST kapısından muaf olduğu için tek meşru ham time.Now()
+// ikinci kez burada durur; çıpalı bir sohbette "şimdi" ile "veri kaynağındaki
+// en yeni an" ayrı sorulardır ve ikincisi çıpayı değil saati ister.
+func wallNow() time.Time { return time.Now() }

@@ -18,6 +18,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
 	"github.com/cilcenk/coremetry/internal/reqid"
+	"github.com/cilcenk/coremetry/internal/sourcestate"
 )
 
 // Guided chat mode (v0.8.397 — AI audit A3, Davis-CoPilot-style).
@@ -1459,6 +1460,18 @@ func fmtAgoTR(seconds int64) string {
 // bağlamı; boşken bu fonksiyonun davranışı bayt-bayt eskisidir.
 // ctxRangeS (v0.9.529) — operatörün EKRANDAKİ zaman aralığı, saniye.
 // 0 = bilgi yok (eski istemci); o hâlde davranış bayt-bayt eskisidir.
+// guidedInheritsScreenTrace — v0.10.944: ekrandaki trace kimliği "bu trace"
+// sorusuna trace_by_id rotası olarak devredilsin mi. Çekmecede Explain
+// bağlamı VARSA hayır: çekmece zaten o trace'in açıklamasını ve kanıtını
+// taşıyor (drawer katmanı cevaplar). Devralınan TraceID, drawerSuppressesGuided'ın
+// YAPIŞTIRILMIŞ kimlik muafiyetine takılıp soruyu çekmeceden koparıyor ve
+// açıklama-biçimli soruya "Explain açılıyor" hazır cevabı döndürüyordu
+// (v0.10.944 çekmece bağlamı her turda `trace` göndermeye başlayınca).
+// Soruya YAPIŞTIRILAN kimlik bu kapıdan geçmez; muafiyeti aynen durur.
+func guidedInheritsScreenTrace(ctxTrace, explain string) bool {
+	return ctxTrace != "" && strings.TrimSpace(explain) == ""
+}
+
 // ctxTrace (v0.9.537) — ekrandaki trace ID'si (/trace?id=), "" = yok.
 func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, ctxService, ctxOperation, explain string, ctxRangeS int64, ctxTrace, ctxEnv string, anchorTo time.Time, tzOffsetMin int, tzName string) (handled, ok bool) {
 	question := strings.TrimSpace(lastUserText(msgs))
@@ -1551,10 +1564,11 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	// Ayrım şu: "en yavaş trace'ler" bir LİSTE sorusu, "bu trace neden
 	// yavaş?" EKRANDAKİ şeyi soruyor. İşaret zamiri o ayrımı taşıyan
 	// tek sinyal.
-	if ctxTrace != "" && hasDemonstrativeTrace(norm) {
+	inheritTrace := guidedInheritsScreenTrace(ctxTrace, explain) // v0.10.944
+	if inheritTrace && hasDemonstrativeTrace(norm) {
 		route = guidedRoute{Intent: guidedTraceByID, TraceID: ctxTrace}
 		emitGuidedContextStep(emit, "bağlam: ekrandaki trace ("+ctxTrace+")")
-	} else if route.Intent == guidedNone && ctxTrace != "" && tokenHasPrefix(guidedTokens(norm), "trace") {
+	} else if route.Intent == guidedNone && inheritTrace && tokenHasPrefix(guidedTokens(norm), "trace") {
 		route = guidedRoute{Intent: guidedTraceByID, TraceID: ctxTrace}
 		emitGuidedContextStep(emit, "bağlam: ekrandaki trace ("+ctxTrace+")")
 	}
@@ -2164,8 +2178,10 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 	s.guidedSLOStep(ctx, emit, &b, service)
 
 	nProb := emitGuidedStep(emit, "list_problems", withEnvArg(`{"service":"`+service+`","status":"open"}`, env))
-	probs, probTotal, perr := s.guidedProblemsWithTotal(ctx, guidedProblemFilter(service, env, 10))
-	if perr == nil && len(probs) > 0 {
+	// v0.10.944 — probErr ayrı ad: aşağıdaki desen okuması `perr`'i yeniden
+	// atıyor; kanıt bloğu problem okumasının KENDİ hatasını görmeli.
+	probs, probTotal, probErr := s.guidedProblemsWithTotal(ctx, guidedProblemFilter(service, env, 10))
+	if probErr == nil && len(probs) > 0 {
 		probs = s.enrichProblemsForRead(ctx, probs) // v0.9.553 — deploy+öncelik, sırası sabit
 		// v0.9.1229 — okumanın kanıtı hipotez EKLENMEDEN önceki bloktur;
 		// sıradaki çip aynı listeyi hipotezle gösteriyor, yani
@@ -2177,21 +2193,32 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 		blk := renderProblemsEvidenceTR(probs, service, env, evidenceAsOf(to), probTotal)
 		emitGuidedStepResult(emit, nRC, "root_cause_hypotheses", blk, nil)
 		b.WriteString(blk)
+	} else if probErr != nil {
+		// v0.10.944 — okuma hatası "problem yok" değil (service_context ile aynı sınıf).
+		emitGuidedStepResult(emit, nProb, "list_problems", "", probErr)
+		b.WriteString(guidedRootCauseNoProblemsTR(probErr))
 	} else {
-		none := "Bu serviste AÇIK PROBLEM YOK — dolayısıyla kayıtlı bir kök-neden hipotezi de yok. " +
-			"Aşağıdaki değişim verisiyle cevap ver ve hipotez olmadığını AÇIKÇA söyle; sebep uydurma.\n\n"
-		emitGuidedStepResult(emit, nProb, "list_problems", none, perr)
+		none := guidedRootCauseNoProblemsTR(nil)
+		emitGuidedStepResult(emit, nProb, "list_problems", none, nil)
 		b.WriteString(none)
 	}
 
 	nCtx := emitGuidedStep(emit, "service_context", `{"service":"`+service+`"}`)
 	cx := s.buildServiceContext(ctx, service, from, to)
+	// v0.10.944 — servis bağlamı (service_summary_5m) ortam kırılımı yapmıyor;
+	// problemler env'e daraltılıyor. Kardeş sağlık demeti gibi söylenir; not
+	// prompt'ta kalır, service_context çip segmentine girmez (atCtx sonra).
+	if env != "" {
+		fmt.Fprintf(&b, "Not: RED değerleri tüm ortamların toplamı (servis bağlamı ortam kırılımı yapmıyor); açık problemler %q ortamına daraltıldı.\n", env)
+	}
 	atCtx := b.Len()
 	b.WriteString(renderServiceSnapshot(cx))
-	if cx.Current.Spans == 0 {
+	// v0.10.944 — okuma hatası "span yok" değil: snapshot OKUNAMADI der, çip
+	// hata sınıfını gösterir (yalnız baseline düştüyse adım başarılı kalır).
+	if cx.curErr == nil && cx.Current.Spans == 0 {
 		b.WriteString("Bu pencerede span verisi yok — değişim de okunamıyor.\n")
 	}
-	emitGuidedStepResult(emit, nCtx, "service_context", guidedStepSegment(&b, atCtx), nil)
+	emitGuidedStepResult(emit, nCtx, "service_context", guidedStepSegment(&b, atCtx), cx.curErr)
 
 	// Deploy: "neden bozuldu" sorusunun en sık cevabı. Ayrı bir adım
 	// olarak emit ediliyor ki operatör hangi kanıtın çekildiğini görsün.
@@ -2232,7 +2259,7 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 	}
 
 	// v0.10.557 — yapısal kanıt bloğu (FE kartı; anlatımdan bağımsız, tek sıralayıcı).
-	emit("evidence", guidedEvidencePayload(service, rangeS, cx, probs, changes, pats))
+	emit("evidence", guidedEvidencePayload(service, rangeS, cx, probs, probErr, changes, pats))
 
 	b.WriteString("\nKURAL: Yukarıdaki kök-neden hipotezi HESAPLANMIŞ bir sıralamadır, tahmin değil. " +
 		"Onu anlat ve güven skorunu birlikte ver. Hipotez yoksa ya da güveni düşükse sebep UYDURMA — " +
@@ -2240,9 +2267,22 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 
 	src := fmt.Sprintf("SLO durumu + kök-neden hipotezi + açık problemler + servis RED değişimi + deploy geçmişi + pencere değişiklikleri (rollout) + log desenleri (son %s)", fmtAgoTR(rangeS))
 	if env != "" {
-		src += fmt.Sprintf("; problemler ortam: %s", env)
+		src += fmt.Sprintf("; RED tüm ortamlar, problemler ortam: %s", env) // v0.10.944 — sağlık demetiyle aynı
 	}
 	return b.String(), src, nil
+}
+
+// guidedRootCauseNoProblemsTR — SAF (v0.10.944): kök-neden demetinde problem
+// listesi BOŞ ya da OKUNAMADI iken prompt'a giden metin. Okuma hatası asla
+// "AÇIK PROBLEM YOK" demez: hata ≠ boş (service_context düzeltmesiyle aynı
+// sınıf). Tablo testli.
+func guidedRootCauseNoProblemsTR(perr error) string {
+	if perr != nil {
+		return fmt.Sprintf("Problem kayıtları OKUNAMADI (%s) — bu 'açık problem yok' DEMEK DEĞİL; kayıtlı kök-neden hipotezi de okunamadı. "+
+			"Aşağıdaki değişim verisiyle cevap ver, problem/hipotez varlığı hakkında sonuç çıkarma ve sebep uydurma.\n\n", sourcestate.Classify(perr))
+	}
+	return "Bu serviste AÇIK PROBLEM YOK — dolayısıyla kayıtlı bir kök-neden hipotezi de yok. " +
+		"Aşağıdaki değişim verisiyle cevap ver ve hipotez olmadığını AÇIKÇA söyle; sebep uydurma.\n\n"
 }
 
 // asOf (v0.10.65) — kanıt YAŞLARININ dayanağı. Diğer paketler pencere
@@ -2289,10 +2329,10 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 	}
 	atSnap := b.Len()
 	b.WriteString(renderServiceSnapshot(cx))
-	if cx.Current.Spans == 0 {
+	if cx.curErr == nil && cx.Current.Spans == 0 { // v0.10.944 — hata "veri yok" değil
 		b.WriteString("Bu pencerede span verisi yok.\n")
 	}
-	emitGuidedStepResult(emit, nCtx, "service_context", guidedStepSegment(&b, atSnap), nil)
+	emitGuidedStepResult(emit, nCtx, "service_context", guidedStepSegment(&b, atSnap), cx.curErr)
 	nProb := emitGuidedStep(emit, "list_problems", withEnvArg(`{"service":"`+service+`"}`, env))
 	probs, probTotal, perr := s.guidedProblemsWithTotal(ctx, guidedProblemFilter(service, env, 10))
 	if perr == nil {
@@ -2809,7 +2849,8 @@ func (s *Server) guidedFamilyHealthBundle(ctx context.Context, emit func(string,
 		if winSec > 0 {
 			rate = float64(r.SpanCount) / winSec
 		}
-		fmt.Fprintf(&b, "- %s: rate=%.1f req/s, error=%.2f%% (%d hata), p99=%.0fms\n",
+		// v0.10.944 — SpanCount/pencere: tüm span türleri, istek hızı değil.
+		fmt.Fprintf(&b, "- %s: rate=%.1f span/s, error=%.2f%% (%d hata), p99=%.0fms\n",
 			r.Name, rate, r.ErrorRate, r.ErrorCount, r.P99Ms)
 	}
 	if len(rows) == 0 {
@@ -3367,13 +3408,29 @@ func renderLogPatternsTR(pats []anomaly.LogPatternAnomaly, service string, range
 // (event: block, type evidence). Anlatım metninin ikizi değil, FE kartının verisi:
 // RED şimdi/taban, açık problemler + hipotez, penceredeki değişiklikler, log
 // desenleri; hipotez yoksa verdict bunu söyler. SAF (test pinli), listeler tavanlı.
-func guidedEvidencePayload(service string, rangeS int64, cx *aiServiceContext, probs []chstore.Problem, changes []mcptools.ChangeRow, pats []anomaly.LogPatternAnomaly) map[string]any {
+//
+// v0.10.944 — okunamayan RED penceresi sıfır DEĞİL: current/baseline yerine
+// currentUnavailable/baselineUnavailable (hata sınıfı) gider — FE kartı sıfırı
+// ölçüm diye çiziyordu. Problem okuması düştüyse (probErr) verdict "açık
+// problem yok" DEMEZ.
+func guidedEvidencePayload(service string, rangeS int64, cx *aiServiceContext, probs []chstore.Problem, probErr error, changes []mcptools.ChangeRow, pats []anomaly.LogPatternAnomaly) map[string]any {
 	out := map[string]any{"question": "root_cause", "service": service, "rangeS": rangeS}
 	if cx != nil {
 		red := func(r aiRED) map[string]any {
 			return map[string]any{"spans": r.Spans, "rate": r.Rate, "errorRate": r.ErrorRate, "p95Ms": r.P95Ms, "p99Ms": r.P99Ms}
 		}
-		out["red"] = map[string]any{"current": red(cx.Current), "baseline": red(cx.Baseline)}
+		redM := map[string]any{}
+		if cx.curErr != nil {
+			redM["currentUnavailable"] = string(sourcestate.Classify(cx.curErr))
+		} else {
+			redM["current"] = red(cx.Current)
+		}
+		if cx.baseErr != nil {
+			redM["baselineUnavailable"] = string(sourcestate.Classify(cx.baseErr))
+		} else {
+			redM["baseline"] = red(cx.Baseline)
+		}
+		out["red"] = redM
 	}
 	pl := make([]map[string]any, 0, len(probs))
 	for i, p := range probs {
@@ -3401,10 +3458,14 @@ func guidedEvidencePayload(service string, rangeS int64, cx *aiServiceContext, p
 	}
 	out["logPatterns"] = ll
 	verdict := "hipotez yok — açık problem yok ya da korelatör henüz hesaplamadı"
-	for _, p := range probs {
-		if p.RootCause != nil && p.RootCause.TopSuspect != "" {
-			verdict = fmt.Sprintf("kök-neden şüphelisi %s (güven %.2f)", p.RootCause.TopSuspect, p.RootCause.Confidence)
-			break
+	if probErr != nil {
+		verdict = fmt.Sprintf("problem kayıtları okunamadı (%s) — hipotez durumu bilinmiyor", sourcestate.Classify(probErr))
+	} else {
+		for _, p := range probs {
+			if p.RootCause != nil && p.RootCause.TopSuspect != "" {
+				verdict = fmt.Sprintf("kök-neden şüphelisi %s (güven %.2f)", p.RootCause.TopSuspect, p.RootCause.Confidence)
+				break
+			}
 		}
 	}
 	out["verdict"] = verdict
@@ -3838,29 +3899,53 @@ func (s *Server) guidedAskServiceEvidence(ctx context.Context, route *guidedRout
 }
 
 // guidedWindowCompareBundle — v0.10.437 (D6): aynı servisin iki mutlak
-// penceredeki RED'i (buildServiceContext → service_summary_5m). Konum
-// rotadaki pencerelerin kendi konumu (tarayıcı ofseti).
+// penceredeki RED'i (service_summary_5m; v0.10.944 — env verilmiş ve
+// kapsıyorsa service_env_summary_5m). Konum rotadaki pencerelerin kendi
+// konumu (tarayıcı ofseti).
 func (s *Server) guidedWindowCompareBundle(ctx context.Context, emit func(string, any), route *guidedRoute) (string, string, error) {
 	if len(route.Windows) != 2 || route.Service == "" {
 		return "", "", fmt.Errorf("window_compare: iki pencere ve servis gerekli")
 	}
 	loc := route.Windows[0].From.Location()
+	// v0.10.944 — ortam: service_summary_5m deploy_env taşımaz, route.Env
+	// yok sayılıyordu (prod + uat aynı adla birleşiyordu). env verilmiş ve
+	// service_env_summary_5m İKİ pencerenin en erken başını kapsıyorsa ikisi
+	// de ortamlı okunur; değilse ikisi de birleşik + dürüst not. Bir pencere
+	// ortamlı, diğeri birleşik OKUNMAZ.
+	earliest := route.Windows[0].From
+	if route.Windows[1].From.Before(earliest) {
+		earliest = route.Windows[1].From
+	}
+	scoped := route.Env != "" && s.store.EnvSummaryCovers(ctx, earliest)
 	reds := make([]aiRED, 0, 2)
 	for i, w := range route.Windows {
 		// v0.10.444 — yalnız RED (service_summary_5m): buildServiceContext
 		// pencere başına 8 okuma yapıyordu (exception ham tarama, komşu
 		// örnekleme, deploy…) ve 7'si atılıyordu — 24 saatlik iki pencere
 		// için iki tam-gün ham spans taraması.
-		n := emitGuidedStep(emit, "service_red", fmt.Sprintf(`{"service":%q,"window":%q}`, route.Service, absWindowLabel(w, loc)))
-		rows, err := s.store.GetServiceSummary5m(ctx, route.Service, w.From, w.To)
+		// v0.10.944 — pencere başına TEK satır: p50/p95/p99 kovaların tdigest
+		// durumlarının birleşimi (ServiceWindowRED). Eskisi 5 dk kovaları
+		// çekip yüzdeliklerini span ağırlıklı ortalıyordu (aggRED).
+		stepArgs := fmt.Sprintf(`{"service":%q,"window":%q}`, route.Service, absWindowLabel(w, loc))
+		var wr chstore.ServiceWindowRED
+		var err error
+		if scoped {
+			stepArgs = withEnvArg(stepArgs, route.Env) // yalnız UYGULANAN süzgeç çipte görünür
+		}
+		n := emitGuidedStep(emit, "service_red", stepArgs)
+		if scoped {
+			wr, err = s.store.ServiceEnvWindowRED(ctx, route.Service, route.Env, w.From, w.To)
+		} else {
+			wr, err = s.store.ServiceWindowRED(ctx, route.Service, w.From, w.To)
+		}
 		if err != nil {
 			emitGuidedStepResult(emit, n, "service_red", "", err)
 			return "", "", err
 		}
-		red := aggRED(rows, w.To.Sub(w.From).Seconds())
+		red := windowRED(wr, w.To.Sub(w.From).Seconds())
 		reds = append(reds, red)
 		emitGuidedStepResult(emit, n, "service_red", fmt.Sprintf("pencere %d: %d span", i+1, red.Spans), nil)
 	}
-	src := fmt.Sprintf("service_summary_5m (iki pencere: %s ↔ %s, %s)", absWindowLabel(route.Windows[0], loc), absWindowLabel(route.Windows[1], loc), loc.String())
-	return renderWindowCompareTR(route.Service, route.Windows, reds, loc), src, nil
+	ev, src := windowCompareEvidenceTR(route.Service, route.Env, scoped, route.Windows, reds, loc)
+	return ev, src, nil
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	agentctx "github.com/cilcenk/coremetry/internal/ai/agent/context"
 )
 
 // chat_screen_context.go — serbest tool döngüsüne EKRAN BAĞLAMI
@@ -62,6 +64,22 @@ func (c ChatScreenContext) Empty() bool {
 		strings.TrimSpace(c.Operation) == "" &&
 		strings.TrimSpace(c.Env) == "" &&
 		c.RangeS <= 0
+}
+
+// freeLoopScreenService — v0.10.944: trace çekmecesi odaklı span'in servisini
+// YALNIZ page.service'te gönderir (context.service bilerek boş — guided
+// yönlendirme değişmesin) ve PreambleTR(full=false) sayfa servisini yazmaz;
+// düşüm olmadan "Bağlam" şeridinde görünen servis modele hiç ulaşmıyordu.
+// Pin varsa boş servis "kapsamsız" demektir, ekrandan doldurulmaz
+// (CopilotChat.tsx pinnedLegacy). SAF.
+func freeLoopScreenService(ctxSvc string, page, pinned *agentctx.PageContext) string {
+	if s := strings.TrimSpace(ctxSvc); s != "" {
+		return s
+	}
+	if pinned != nil || page == nil {
+		return ""
+	}
+	return strings.TrimSpace(page.Service)
 }
 
 // screenContextPreambleTR — döngü prompt'unun başına eklenen önsöz.

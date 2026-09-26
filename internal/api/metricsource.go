@@ -624,6 +624,41 @@ func (vmMetricSource) EnvFilterExpr(string) (chstore.FilterExpr, bool) {
 	return chstore.FilterExpr{}, false
 }
 
+// ── CoSRE araç kabiliyetleri (v0.10.944) ───────────────────────────────────
+//
+// mcptools'un query_metric / list_metric_labels araçları bu yöntemleri TİP
+// İDDİASIYLA arar (metricNoteSource deseni, mcptools/metrics_tools.go): VM
+// kaynağı keşif + LabelMap + bayraklı sorgu sunar; CH kaynağı yalnız adını
+// söyler ve araç ClickHouse konvansiyon yoluna düşer. Hepsi delegasyon, hata
+// upstream() ile etiketli — tipli 401 (sourcestate.ErrUnauthorized) zincirde
+// korunur (errors.Is iki %w'yi de görür).
+
+// MetricBackend — ClickHouse kaynağının adı (sourcestate.Status.Backend).
+func (chMetricSource) MetricBackend() string { return "clickhouse" }
+
+func (v vmMetricSource) MetricBackend() string { return v.svc.MetricBackend() }
+
+// v0.10.944 — ikinci dönüş VM `isPartial` (etiket uçları): araç eksik bir
+// kümeyi "etiket yok" diye reddetmesin diye aynen iletilir.
+func (v vmMetricSource) MetricLabelNamesIn(ctx context.Context, metric string, from, to time.Time) ([]string, bool, error) {
+	out, partial, err := v.svc.MetricLabelNamesIn(ctx, metric, from, to)
+	return out, partial, upstream(err)
+}
+
+func (v vmMetricSource) MetricLabelValuesIn(ctx context.Context, metric, label string, from, to time.Time, limit int) ([]string, bool, error) {
+	out, partial, err := v.svc.MetricLabelValuesIn(ctx, metric, label, from, to, limit)
+	return out, partial, upstream(err)
+}
+
+func (v vmMetricSource) MetricLabelMap() vmetrics.LabelMap { return v.svc.MetricLabelMap() }
+
+// QueryMetricDetailed — operatörün route dışlamaları (excluded) burada da
+// uygulanır: araç ile Explore aynı seriyi okumalı.
+func (v vmMetricSource) QueryMetricDetailed(ctx context.Context, f chstore.MetricQueryFilter) (vmetrics.QueryDetail, error) {
+	out, err := v.svc.QueryMetricDetailed(ctx, v.excluded(f))
+	return out, upstream(err)
+}
+
 // QueryMetricNoted satisfies the OPTIONAL metricNoteSource capability — the
 // VM source is its only implementer. Same upstream() tagging as every other
 // method: an untagged error 500s and reads as a Coremetry bug.

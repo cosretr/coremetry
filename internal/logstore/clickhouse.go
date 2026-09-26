@@ -100,7 +100,24 @@ func (s *CHStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	// v0.10.382 — GetLogs sayacı LogsCountCap'e kadar sayar; tavana çarpan
 	// toplam "en az" demektir (ES'in track_total_hits tavanıyla aynı ilan).
 	// v0.10.414 — SkipTotal'da total 0 "sayılmadı"dır; tavan bayrağı da kurulmaz.
-	return &Page{Total: int(total), TotalIsLowerBound: !f.SkipTotal && total >= chstore.LogsCountCap, Logs: out, NextCursor: next}, nil
+	return &Page{Total: int(total), TotalIsLowerBound: !f.SkipTotal && total >= chstore.LogsCountCap, Logs: out, NextCursor: next,
+		UnappliedFilters: chSearchUnapplied(f)}, nil // v0.10.944
+}
+
+// chSearchUnapplied — v0.10.944 (CoSRE kaynak durumu), SAF: CH Search'ün
+// YAPISAL olarak uygulayamadığı istenmiş filtreler. chstore.LogFilter'da
+// Cluster ve Namespace alanı yok (Histogram/FieldStats bu dosyada
+// uyguluyor, liste okuması uygulamıyor) — sonuçlar o boyutta süzülmemiş
+// döner; bayrak bunu çağırana söyler, sessiz no-op kalmaz.
+func chSearchUnapplied(f Filter) []string {
+	var out []string
+	if f.Cluster != "" {
+		out = append(out, RoleCluster)
+	}
+	if f.Namespace != "" {
+		out = append(out, RoleNamespace)
+	}
+	return out
 }
 
 // ── logs-table attribute lookups (v0.8.400) ─────────────────────────────────
@@ -284,6 +301,11 @@ func (s *CHStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupB
 		// diğerinde yok sayılamaz (sessiz no-op sınıfı).
 		wc += " AND " + chLogsPodExpr + " = ?"
 		args = append(args, f.Pod)
+	}
+	if f.Namespace != "" {
+		// v0.10.944 — namespace kapsamı (kırılım ekseninin süzgeç ikizi).
+		wc += " AND " + chLogsNamespaceExpr + " = ?"
+		args = append(args, f.Namespace)
 	}
 	if f.Env != "" {
 		// v0.8.400 — env-separation Phase 4: the global ?env= filter.
@@ -608,6 +630,11 @@ func (s *CHStore) FieldStats(ctx context.Context, f Filter, field string, limit 
 		// v0.9.1249 — pod kapsamı (bkz. Histogram'daki aynı conjunct).
 		wc += " AND " + chLogsPodExpr + " = ?"
 		args = append(args, f.Pod)
+	}
+	if f.Namespace != "" {
+		// v0.10.944 — namespace kapsamı (Histogram'daki aynı conjunct).
+		wc += " AND " + chLogsNamespaceExpr + " = ?"
+		args = append(args, f.Namespace)
 	}
 	if f.Env != "" {
 		// v0.8.400 — env-separation Phase 4.

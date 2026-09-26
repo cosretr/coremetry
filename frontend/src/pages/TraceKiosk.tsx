@@ -19,6 +19,8 @@ import { spanHasError } from '@/lib/otel';
 import { fmtNs, tsLong, displaySpanName } from '@/lib/utils';
 import { logsHref } from '@/lib/logsUrl';
 import { useBranding } from '@/lib/branding';
+import { useT } from '@/lib/i18n';
+import { clearTraceAiContext, publishTraceAiContext, traceChatContext } from '@/lib/traceAiContext'; // v0.10.944
 import { TelescopeIcon } from '@/components/TelescopeIcon';
 import { Wordmark } from '@/components/Wordmark';
 
@@ -43,6 +45,7 @@ export function TraceKiosk() {
   // logosu/adı, yoksa OTel işareti + iki tonlu Wordmark (PublicTrace/Sidebar
   // ile aynı öğeler).
   const brand = useBranding();
+  const tr = useT();
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('span'));
   const [revealSpanId] = useState<string | null>(() => searchParams.get('span'));
   // "Daha fazla" = limit 500 → 1000 (sunucu tavanı); anahtar değişir, eski
@@ -70,6 +73,13 @@ export function TraceKiosk() {
   useEffect(() => {
     document.title = root ? `${displaySpanName(root)} · Trace kiosk` : 'Trace kiosk';
   }, [root]);
+
+  // v0.10.944 — /trace ile aynı: sayfa-yerel CoSRE çekmecesinin bağlam
+  // şeridi ve takip turlarının page/env/pencere alanları (lib/traceAiContext).
+  useEffect(() => {
+    publishTraceAiContext(traceChatContext(spans, { traceId: id, spanId: selectedId }));
+  }, [spans, id, selectedId]);
+  useEffect(() => () => clearTraceAiContext(id), [id]);
 
   // Span event'leri (sıfır-ES bacağı) + gRPC gürültü süzgeci — Trace.tsx ile
   // aynı tercih anahtarı (küresel, trace başına değil).
@@ -134,8 +144,10 @@ export function TraceKiosk() {
             (v0.10.731 kısa biçim, id sayfanın ?id='sinden), çekmeceyi aşağıdaki
             sayfa-yerel CopilotChat (launcher kapalı) açar. copilot kapalıysa
             buton kendini gizler. */}
+        {/* v0.10.944 — /trace ile aynı ad ve ipucu (i18n). */}
         <AIExplainButton subject={{ kind: 'trace', id }} size="sm"
-          label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>Explain this trace</span></>} />
+          title={tr('ai.askCosreTraceHint')}
+          label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>{tr('ai.askCosre')}</span></>} />
         <a className="trace-kiosk__brand-link" href={allLogsHref} target="_blank" rel="noopener noreferrer"
           title="Bu trace'in loglarını Logs sayfasında aç (yeni pencere)">≡ Logs ↗</a>
       </div>

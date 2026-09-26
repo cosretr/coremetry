@@ -18,15 +18,50 @@ import (
 // keep the stored value (rotate by pasting a new one) — same contract
 // as the tempo token.
 type esSettingsInput struct {
-	Backend            string              `json:"backend"`
-	Addresses          []string            `json:"addresses"`
-	Username           string              `json:"username"`
-	Password           string              `json:"password"`
-	APIKey             string              `json:"apiKey"`
-	InsecureSkipVerify bool                `json:"insecureSkipVerify"`
-	Index              string              `json:"index"`
-	IndexTemplate      string              `json:"indexTemplate"`
-	Fields             logstore.ESFieldMap `json:"fields"`
+	Backend            string          `json:"backend"`
+	Addresses          []string        `json:"addresses"`
+	Username           string          `json:"username"`
+	Password           string          `json:"password"`
+	APIKey             string          `json:"apiKey"`
+	InsecureSkipVerify bool            `json:"insecureSkipVerify"`
+	Index              string          `json:"index"`
+	IndexTemplate      string          `json:"indexTemplate"`
+	Fields             esFieldMapInput `json:"fields"`
+}
+
+// esFieldMapInput — v0.10.944 (CoSRE çapraz-kaynak eşleme, Faz A yalnız
+// backend): PUT gövdesinin `fields` nesnesi. Mevcut üyeler aynen
+// (logstore.ESFieldMap gömülü); yeni rol alanları (cluster / namespace /
+// pod / version) İŞARETÇİ — anahtarın HİÇ gönderilmemesi "saklı değeri
+// koru", boş dize "temizle → keşfe dön" demek. Neden: Faz A'da Settings
+// formu bu dört anahtarı bilmiyor ve alanları tek tek toplayıp gönderiyor;
+// düz string olsaydı UI'dan yapılan her kayıt API/env ile yazılmış
+// eşlemeyi sessizce silerdi. Dış seviye alanlar gömülü ESFieldMap'teki
+// aynı JSON adlarını gölgeler (encoding/json sığ-derinlik kuralı).
+type esFieldMapInput struct {
+	logstore.ESFieldMap
+	Cluster   *string `json:"cluster,omitempty"`
+	Namespace *string `json:"namespace,omitempty"`
+	Pod       *string `json:"pod,omitempty"`
+	Version   *string `json:"version,omitempty"`
+}
+
+// mergeESFieldMap — SAF: girdi alan haritasını saklı haritanın üstüne
+// katlar. Mevcut üyeler bugünkü sözleşmeyle (gönderilen değer aynen);
+// yeni rol alanları gönderildiyse kırpılmış değer, gönderilmediyse saklı.
+func mergeESFieldMap(in esFieldMapInput, cur logstore.ESFieldMap) logstore.ESFieldMap {
+	out := in.ESFieldMap
+	pick := func(p *string, stored string) string {
+		if p == nil {
+			return stored
+		}
+		return strings.TrimSpace(*p)
+	}
+	out.Cluster = pick(in.Cluster, cur.Cluster)
+	out.Namespace = pick(in.Namespace, cur.Namespace)
+	out.Pod = pick(in.Pod, cur.Pod)
+	out.Version = pick(in.Version, cur.Version)
+	return out
 }
 
 // mergeESSettings validates the input and folds it over the current
@@ -60,7 +95,7 @@ func mergeESSettings(in esSettingsInput, cur logstore.ESSettings) (logstore.ESSe
 		InsecureSkipVerify: in.InsecureSkipVerify,
 		Index:              strings.TrimSpace(in.Index),
 		IndexTemplate:      strings.TrimSpace(in.IndexTemplate),
-		Fields:             in.Fields,
+		Fields:             mergeESFieldMap(in.Fields, cur.Fields), // v0.10.944
 	}
 	if cfg.Password == "" {
 		cfg.Password = cur.Password
@@ -116,6 +151,7 @@ func (s *Server) putLogstoreESSettings(w http.ResponseWriter, r *http.Request) {
 		"index":              snap.Index,
 		"indexTemplate":      snap.IndexTemplate,
 		"insecureSkipVerify": snap.InsecureSkipVerify,
+		"fields":             snap.Fields, // v0.10.944 — alan eşlemesi değişikliği de izli (sır içermez)
 	})
 	s.audit(r, "settings.logstore.update", "settings", "logstore_es", string(details))
 	writeJSON(w, snap)

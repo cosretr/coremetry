@@ -48,6 +48,12 @@ func TestClassifyToolError(t *testing.T) {
 		{"ctx deadline", context.DeadlineExceeded, ToolErrTimeout, true},
 		{"ctx canceled → cancelled, tekrar yok (v0.10.430)", context.Canceled, ToolErrCancelled, false},
 		{"sarmalanmış iptal", fmt.Errorf("ch query: %w", context.Canceled), ToolErrCancelled, false},
+		{"ES 401 → unauthorized, tekrar yok (v0.10.944)", errors.New("ES search: security_exception (status 401) — check API key"), ToolErrUnauthorized, false},
+		{"VM 403 → unauthorized", errors.New("victoriametrics: HTTP 403: forbidden"), ToolErrUnauthorized, false},
+		{"sarmalanmış yetki reddi", fmt.Errorf("logs: %w", errors.New("source unauthorized")), ToolErrUnauthorized, false},
+		// v0.10.944 — ES root_cause reason'ı sorguyu yankılar; sorguda geçen
+		// "Unauthorized" kelimesi yetki hatası DEĞİL.
+		{"ES 400 sorgu yankısı → unauthorized değil", errors.New(`ES histogram 400: all shards failed (search_phase_execution_exception): Failed to parse query [level:error AND "Unauthorized] (query_shard_exception): backend rejected query syntax`), ToolErrInternal, false},
 		{"sarmalanmış deadline", fmt.Errorf("clickhouse: read block: %w", context.DeadlineExceeded),
 			ToolErrTimeout, true},
 		{"CH 159", errors.New("code: 159, message: Timeout exceeded: elapsed 30.1 seconds, maximum: 30"),

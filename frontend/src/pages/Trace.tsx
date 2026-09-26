@@ -46,6 +46,8 @@ import { indexSpanLinks, linkedSpanIds } from '@/lib/spanLinks';
 import { traceHref } from '@/lib/traceHref';
 import { PageShell } from '@/components/ui/PageShell';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { useT } from '@/lib/i18n';
+import { clearTraceAiContext, publishTraceAiContext, traceChatContext } from '@/lib/traceAiContext'; // v0.10.944
 
 function TraceDetailInner() {
   // v0.10.219 — breadcrumb'ın "Traces" halkası: /traces satırının Link
@@ -54,6 +56,7 @@ function TraceDetailInner() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const id = searchParams.get('id') ?? '';
+  const tr = useT();
 
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [spans, setSpans] = useState<SpanRow[] | null | undefined>(undefined);
@@ -227,6 +230,16 @@ function TraceDetailInner() {
     else url.searchParams.delete('xn');
     window.history.replaceState({}, '', url.toString());
   }, [selectedId, tab, id, groupSimilar]);
+
+  // v0.10.944 (CoSRE Faz A) — CoSRE çekmecesinin "Bağlam" şeridi + her
+  // takip turunun page/env/pencere alanları: yüklü span'lerden ve seçili
+  // span'den türer (EK İSTEK YOK). Çekmece AppShell'de, sayfanın çocuğu
+  // değil — prop yerine küçük bir depo (lib/traceAiContext). Sayfa
+  // ayrılırken yuva yalnız hâlâ bu trace'inse boşalır.
+  useEffect(() => {
+    publishTraceAiContext(traceChatContext(spans, { traceId: id, spanId: selectedId }));
+  }, [spans, id, selectedId]);
+  useEffect(() => () => clearTraceAiContext(id), [id]);
 
   // Visible-order span list for j/k navigation. Same DFS the
   // waterfall renders — sort all spans by parent + start
@@ -429,15 +442,15 @@ function TraceDetailInner() {
   const traceActions = spans && spans.length > 0 ? (
 
               <>
-                {/* Critical path summary — when computed, the
-                    chain's total duration tells the operator
-                    how much of the trace's wall-clock time
-                    happens on the dominant path. Toggle hides
-                    the highlight without recomputing. */}
-                {criticalPath && criticalPath.ids.size > 0 && (
+                {/* Critical path summary — zincirin span sayısı + kök
+                    span'in duvar süresi. v0.10.944 — eski "toplam"
+                    (zincirdeki sürelerin TOPLAMI) kaldırıldı: halkalar iç
+                    içe, çocuk ebeveyninin süresinin içinde; toplamak aynı
+                    duvar saatini iki kez sayıyordu (lib/criticalPath.ts). */}
+                {criticalPath && criticalPath.spanCount > 0 && (
                   <span style={{ fontSize: 11, color: 'var(--text2)', marginRight: 4, whiteSpace: 'nowrap' }}
-                    title={`${criticalPath.ids.size} spans summing to ${fmtNs(criticalPath.totalNs)}. Odaklamak için alttaki "Critical path focus" düğmesi.`}>
-                    Critical path · {fmtNs(criticalPath.totalNs)}
+                    title={`Kritik yol: kökten yaprağa ${criticalPath.spanCount} span; kök span duvar süresi ${fmtNs(criticalPath.rootWallNs)}. İç içe span süreleri toplanmaz. Odaklamak için alttaki "Critical path focus" düğmesi.`}>
+                    Critical path · {criticalPath.spanCount} span{criticalPath.spanCount === 1 ? '' : 's'} · root {fmtNs(criticalPath.rootWallNs)}
                   </span>
                 )}
                 {/* Compare button — bumped to primary-accent in
@@ -626,8 +639,12 @@ function TraceDetailInner() {
                   K4 (grup başına tek birincil) korunur; compare formu
                   açıldığında kendi `Compare` submit'i alt SATIRA sarılır
                   (width:100%), form-içi birincil ayrı bir gruptur. */}
+              {/* v0.10.944 (operatör) — görünen ad "CoSRE'ye sor" / "Ask CoSRE"
+                  (i18n); erişilebilir ad metinden gelir (ikon aria-hidden),
+                  ipucu title'da. Davranış aynı: ?ai=trace:<id>. */}
               <AIExplainButton subject={{ kind: 'trace', id }} emphasis="strong"
-                label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>Explain this trace</span></>} />
+                title={tr('ai.askCosreTraceHint')}
+                label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>{tr('ai.askCosre')}</span></>} />
               {/* v0.10.347 (operatör) — alt "Compare with…" (AI karşılaştırma formu)
                   KALDIRILDI: üst şeritteki "↔ Compare trace" zaten var, ikisi aynı
                   soruyu iki yerde soruyordu. */}

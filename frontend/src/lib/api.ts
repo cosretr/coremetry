@@ -1334,8 +1334,11 @@ export const api = {
   // yanıttaki id sonraki yazımlarda taşınır. Başlık gönderilmezse
   // sunucu ilk kullanıcı mesajından türetir (ve sonraki kaydetmelerde
   // DEĞİŞTİRMEZ).
+  // v0.10.944 — `context`: konuşmanın bağlam anlık görüntüsü (PageContext,
+  // ≤2 KB; sunucu da tavanlar). Gönderilmezse satırdaki mevcut görüntü korunur.
   saveAiConversation: (body: {
     id?: string; title?: string; subject?: string;
+    context?: import('./types').PageContext;
     messages: import('./types').ChatMessage[];
   }) =>
     request<import('./types').AiConversation>(`/api/ai/conversations`, {

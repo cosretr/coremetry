@@ -16,7 +16,7 @@ import { parseChatBlocks, type ChatBlock } from './chatMarkdown';
 import { parseStepPreview, fmtPreviewBytes } from './stepPreview';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { Chip } from '@/components/ui/Chip';
-import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS } from './toolSteps';
+import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, sourceStateTone, stateUnknown, stepRunning, toolErrorLabel, windowPrefix, type SourceStateView } from './toolSteps';
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
 // buraya taşındı: AI çekmecesi içindeki sohbet (AIDrawer) aynı balonu
@@ -225,10 +225,35 @@ export function renderMessage(text: string, streaming = false, typed?: ChatTyped
 // detay taşımaz (chatPersist yalnız {role,text} saklar) ve eski bir sunucuya
 // karşı akan FE de taşımaz; ikisinde de çip eskisi gibi düz bir etiket kalır.
 // Boş açılan bir "veriyi göster" ölü affordance olurdu (v0.9.592 dersi).
-function ToolChips({ steps, details, hasText, evId, setEvId }: {
+// v0.10.944 (CoSRE Faz A) — DÜRÜST İLERLEME: çip, sonucu gelene dek
+// "çalışıyor…" der (sunucu çipi aracı çalıştırmadan ÖNCE yayınlar; çip
+// "denendi" demektir, "yürütüldü" değil); sonuç `source.state` taşıyorsa
+// durum rozeti (boş · erişilemedi · yetki yok · zaman aşımı · kısmi ·
+// gecikmeli · limitli), `skipped:true` ise "yürütülmedi". Bağlam etiketleri
+// (araç adı olmayan) "çalışıyor…" demez — onlara hiç sonuç gelmez.
+// v0.10.944 — kaynak öneki yalnız BİRDEN ÇOK kaynak varken: tek kaynağın
+// ikincil bayrakları (kısmi + limitli) "logs · " tekrarı taşımaz.
+// v0.10.944 — pencere öneki (compare_periods: "sorun · " / "referans · ")
+// detail'den; aynı kaynaklı iki rozet başlığa inmeden ayırt edilir.
+function StateBadges({ states }: { states: SourceStateView[] }) {
+  if (states.length === 0) return null;
+  const multi = new Set(states.map(st => st.source)).size > 1;
+  return (<>
+    {states.map((st, k) => (
+      <span key={k} className={`badge b-${sourceStateTone(st.state)}`}
+        title={`${st.source || 'kaynak'}: ${st.label}${st.detail ? ` — ${st.detail}` : ''}`}>
+        {multi && st.source ? `${st.source} · ` : ''}{windowPrefix(st.detail)}{st.label}
+      </span>
+    ))}
+  </>);
+}
+
+function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
   steps: string[];
   details?: ChatStepDetail[];
   hasText: boolean;
+  /** v0.10.944 — tur bitti: sonucu gelmemiş çip artık "çalışıyor…" demez. */
+  turnDone: boolean;
   /** v0.10.161 — açık kanıtın adım kimliği (d.i), şeffaflık paneliyle PAYLAŞILIR: aynı kanıt iki kez açılmaz. */
   evId: number | null;
   setEvId: (i: number | null) => void;
@@ -255,18 +280,28 @@ function ToolChips({ steps, details, hasText, evId, setEvId }: {
             color: isOpen ? 'var(--accent2)' : 'var(--text3)',
             border: '1px solid transparent',
           };
-          if (!ready) return <span key={i} style={chipStyle}>⚙ {s}</span>;
+          if (!ready) {
+            return (
+              <span key={i} style={chipStyle}>
+                ⚙ {s}{stepRunning(d, turnDone) && <span> · çalışıyor…</span>}
+              </span>
+            );
+          }
+          const states = d?.skipped ? [] : sourceStates(d?.preview, d?.sources); // v0.10.944 — yapısal durum önce
           // v0.10.924 — buton bütünlüğü Faz 2: elle boyanmış çip → Chip atomu.
           // Açıklık `tone` ile boyanır, `active` ile DEĞİL: durum aria-expanded'da;
           // `active` bir de aria-pressed basar ve ekran okuyucu iki durum duyardı.
           return (
-            <Chip key={i} size="xs" pill tone={isOpen ? 'accent' : 'neutral'}
-              onClick={() => setOpenIdx(isOpen ? null : i)}
-              aria-expanded={isOpen}
-              title={d?.ok === false ? 'Tool hata döndürdü — veriyi göster' : 'Bu adımın verisini göster'}
-              style={{ fontFamily: chipStyle.fontFamily }}>
-              ⚙ {s} {d?.ok === false ? '⚠' : ''}{isOpen ? '▾' : '▸'}
-            </Chip>
+            <Fragment key={i}>
+              <Chip size="xs" pill tone={isOpen ? 'accent' : 'neutral'}
+                onClick={() => setOpenIdx(isOpen ? null : i)}
+                aria-expanded={isOpen}
+                title={d?.skipped ? 'Sunucu bu çağrıyı yürütmedi — nedenini göster' : d?.ok === false ? 'Tool hata döndürdü — veriyi göster' : 'Bu adımın verisini göster'}
+                style={{ fontFamily: chipStyle.fontFamily }}>
+                ⚙ {s} {d?.skipped ? '· yürütülmedi ' : d?.ok === false ? '⚠' : ''}{isOpen ? '▾' : '▸'}
+              </Chip>
+              <StateBadges states={states} />
+            </Fragment>
           );
         })}
       </div>
@@ -373,6 +408,7 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
           title={sum.totalMs === null ? 'Toplam süre: en az bir adımın süresi ölçülmedi' : 'Araç sürelerinin toplamı (model süresi hariç)'}>
           ⚙ {sum.count} araç
           {sum.errors > 0 && <> · <span style={{ color: 'var(--err)' }}>{sum.errors} hata</span></>}
+          {sum.skipped > 0 && <> · {sum.skipped} yürütülmedi</>}
           {sum.pending > 0 && <> · {sum.pending} sürüyor</>}
           {sum.noEvidence > 0 && <> · {sum.noEvidence} kanıtsız</>}
           {' · '}{sum.totalMs === null ? '—' : fmtMs(sum.totalMs)}
@@ -387,14 +423,15 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
             <thead><tr><th>#</th><th>Araç</th><th>Argümanlar</th><th className="num">Süre</th><th>Sonuç</th><th>Durum</th></tr></thead>
             <tbody>
               {rows.map(d => {
-                const err = d.ok === false ? parseToolError(d.preview) : null;
+                const err = d.ok === false && !d.skipped ? parseToolError(d.preview) : null;
+                const states = d.skipped ? [] : sourceStates(d.preview, d.sources); // v0.10.944 — yapısal durum önce
                 const isOpen = evId === d.i;
                 const settled = d.preview !== undefined;
                 const noEv = !settled && turnDone; // kanıt hiç yayınlanmadı (boş metin)
                 const first = err ? `${err.cls}${err.hint ? ` — ${err.hint}` : ''}` : previewFirstLine(d.preview, 90);
                 return (
                   <Fragment key={d.i}>
-                    <tr className={[d.ok === false ? 'is-err' : '', isOpen ? 'is-open' : ''].filter(Boolean).join(' ')}>
+                    <tr className={[d.ok === false && !d.skipped ? 'is-err' : '', isOpen ? 'is-open' : ''].filter(Boolean).join(' ')}>
                       <td className="num">{d.i}</td>
                       <td className="cm-steps-tool">
                         {/* Gerçek düğme (aria-expanded) — çiplerle aynı çıta; DisclosureButton ATOMU
@@ -417,8 +454,13 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {!settled ? <span className="badge b-gray">{noEv ? 'kanıt yok' : '…'}</span>
-                          : d.ok === false ? <span className="badge b-err" title={err?.retryable ? 'tekrar denenebilir' : undefined}>⚠ hata{err?.retryable ? ' · tekrar' : ''}</span>
+                          : d.skipped ? <span className="badge b-gray" title="Sunucu bu çağrıyı yürütmedi (süre ölçüm değildir)">yürütülmedi</span>
+                          : d.ok === false ? <span className="badge b-err" title={`${err ? toolErrorLabel(err.cls) : 'hata'}${err?.retryable ? ' · tekrar denenebilir' : ''}`}>⚠ {err?.cls === 'unauthorized' ? 'yetki yok' : 'hata'}{err?.retryable ? ' · tekrar' : ''}</span>
+                          : states.length > 0 ? null
+                          // v0.10.944 — kırpık JSON'da durum görünmüyorsa nötr «ok» YALAN olurdu (Go map sırası: veri anahtarları `source`tan önce)
+                          : stateUnknown(d) ? <span className="badge b-warn" title="önizleme kırpık; kaynak durumu önizlemede yok">durum okunamadı</span>
                           : <span className="badge b-gray">ok</span> /* v0.10.929 (K5) — sohbet geçmişinde kalıcı: nötr */}
+                        {settled && <StateBadges states={states} />}
                         {d.truncated && <span className="badge b-warn" style={{ marginLeft: 4 }} title={`önizleme 4 KB'a kırpıldı; gerçek boy ${fmtPreviewBytes(d.bytes ?? 0)}`}>kırpık</span>}
                       </td>
                     </tr>
@@ -492,7 +534,7 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
         {/* Tool-call progress chips (assistant only). v0.9.1181 (Faz 4.3):
             veri gelmişse çip TIKLANABİLİR ve altında kanıt bloğu açılır. */}
         {!isUser && turn.steps && turn.steps.length > 0 && (
-          <ToolChips steps={turn.steps} details={turn.stepDetails} hasText={!!turn.text} evId={evId} setEvId={setEvId} />
+          <ToolChips steps={turn.steps} details={turn.stepDetails} hasText={!!turn.text} turnDone={!turn.pending} evId={evId} setEvId={setEvId} />
         )}
         {/* v0.10.161 — şeffaflık paneli yalnız detay (i'li step) varken; açık kanıt çiplerle ortak. */}
         {!isUser && !!turn.stepDetails?.length && (

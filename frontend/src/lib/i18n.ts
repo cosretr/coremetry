@@ -155,6 +155,24 @@ const EN: Catalog = {
   'range.2d':  'Last 2 days',
   'range.7d':  'Last 7 days',
   'range.30d': 'Last 30 days',
+
+  // v0.10.944 (operatör) — trace sayfasının ✨ Explain düğmesi "CoSRE'ye sor"
+  // adını aldı. Görünen ad + ipucu yalnız ARAYÜZ metni: ?ai=trace:<id>,
+  // explain-trace yüzeyi ve AIExplainButton aynı kalır.
+  'ai.askCosre':          'Ask CoSRE',
+  'ai.askCosreTraceHint': 'Ask CoSRE about this trace.',
+
+  // v0.10.944 (CoSRE Faz A) — çekmecenin "Bağlam" şeridi: sohbetin hangi
+  // trace/span/servis/ortam/cluster/namespace ve pencereye kapsandığı.
+  'ai.ctx.label':     'Context',
+  'ai.ctx.aria':      'CoSRE conversation context',
+  'ai.ctx.trace':     'Trace',
+  'ai.ctx.span':      'Span',
+  'ai.ctx.service':   'Service',
+  'ai.ctx.env':       'Env',
+  'ai.ctx.clusterNs': 'Cluster / namespace',
+  'ai.ctx.window':    'Window',
+  'ai.ctx.saved':     'Saved with the conversation — the live page may differ.',
 };
 
 const TR: Catalog = {
@@ -291,6 +309,19 @@ const TR: Catalog = {
   'range.2d':  'Son 2 gün',
   'range.7d':  'Son 7 gün',
   'range.30d': 'Son 30 gün',
+
+  'ai.askCosre':          'CoSRE’ye sor',
+  'ai.askCosreTraceHint': 'Bu trace hakkında CoSRE’ye soru sor.',
+
+  'ai.ctx.label':     'Bağlam',
+  'ai.ctx.aria':      'CoSRE sohbet bağlamı',
+  'ai.ctx.trace':     'Trace',
+  'ai.ctx.span':      'Span',
+  'ai.ctx.service':   'Servis',
+  'ai.ctx.env':       'Ortam',
+  'ai.ctx.clusterNs': 'Cluster / namespace',
+  'ai.ctx.window':    'Pencere',
+  'ai.ctx.saved':     'Konuşmayla kaydedilen bağlam — canlı sayfa farklı olabilir.',
 };
 
 const CATALOGS: Record<Lang, Catalog> = { en: EN, tr: TR };

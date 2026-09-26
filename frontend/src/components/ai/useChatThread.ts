@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { appendChatBlock } from '@/lib/chatBlocks';
-import type { PageContext } from '@/lib/types';
+import type { AiConversation, PageContext } from '@/lib/types';
 import type { ChatMessage, ChatTurn } from '@/lib/types';
+import { capPageContext } from '@/lib/traceAiContext';
 import { isAbortError, settleStoppedTurn, settleTruncatedTurn } from './chatAbort';
 import { failedQuestion, dropFailedTail } from './chatRetry';
 import {
@@ -86,6 +87,12 @@ export interface ChatThreadOpts {
   /** v0.10.539 — sayfa bağlamı (lib/pageContext, her turda) ve sabitlenmiş bağlam. */
   page?: PageContext;
   pinnedPage?: PageContext;
+  // persistContext (v0.10.944, CoSRE Faz A) — konuşmayla SAKLANAN bağlam
+  // anlık görüntüsü (≤2 KB, capPageContext). Çekmece trace öznesinde
+  // trace/span/servis/env/cluster/namespace/pod + pencereyi koyar; geçmişten
+  // yeniden açılınca şerit bunu gösterir. Boşsa sunucu satırdaki mevcut
+  // görüntüyü KORUR (ai_conversations.go) — gönderilmemesi silmek değildir.
+  persistContext?: PageContext;
 }
 
 export function useChatThread(opts: ChatThreadOpts = {}) {
@@ -122,27 +129,41 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
   // aynı yolda değil. Hata sessiz yutuluyor — sonraki tur tüm geçmişi
   // yeniden yazacağı için kayıp kendini onarır; bir toast, çalışan
   // sohbetin ortasında yanlış alarm olurdu.
+  //
+  // v0.10.944 — kaydetme gövdesi `saveNow`a ayrıldı: anlık görüntü + kimlik
+  // ÇAĞRI ANINDA okunur, yanıtın kimliği yalnız arada konuşma DEĞİŞMEDİYSE
+  // (genRef: adopt/clear her geçişte artırır) devralınır. Eskiden adopt
+  // bekleyen zamanlayıcıyı yalnız iptal ediyordu: çekmecenin devralma
+  // effect'i akış bitince (busy=false) koşup send'in finally'de kurduğu
+  // 600 ms'lik kaydı siliyordu → önceki konuşmanın SON alışverişi hiç
+  // yazılmıyordu. Artık geçişte bekleyen kayıt İPTAL değil, hemen yazılır.
+  const genRef = useRef(0);
+  const saveNow = useCallback(() => {
+    const snapshot = turnsRef.current;
+    if (!hasCompletedExchange(snapshot)) return;
+    const gen = genRef.current;
+    void api.saveAiConversation({
+      id: convIdRef.current ?? undefined,
+      title: optsRef.current.title || undefined,
+      subject: optsRef.current.subject || undefined,
+      context: capPageContext(optsRef.current.persistContext) ?? undefined, // v0.10.944
+      messages: persistMessages(snapshot),
+    }).then(c => {
+      // Arada başka konuşmaya geçildiyse (adopt/clear) yeni kimlik korunur.
+      if (gen !== genRef.current) return;
+      // Kimliği SUNUCU basar. Aynı thread'e yazmaya devam etmek için
+      // yanıttan devralıyoruz — silinmiş bir thread'e yazım sunucuda
+      // YENİ kimlikle açılır ve o kimlik de buradan devralınır.
+      convIdRef.current = c.id;
+      setConversationId(c.id);
+    }).catch(() => { /* sessiz — sonraki tur yeniden dener */ });
+  }, []);
+
   const schedulePersist = useCallback(() => {
     if (!optsRef.current.persist) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      saveTimerRef.current = null;
-      const snapshot = turnsRef.current;
-      if (!hasCompletedExchange(snapshot)) return;
-      void api.saveAiConversation({
-        id: convIdRef.current ?? undefined,
-        title: optsRef.current.title || undefined,
-        subject: optsRef.current.subject || undefined,
-        messages: persistMessages(snapshot),
-      }).then(c => {
-        // Kimliği SUNUCU basar. Aynı thread'e yazmaya devam etmek için
-        // yanıttan devralıyoruz — silinmiş bir thread'e yazım sunucuda
-        // YENİ kimlikle açılır ve o kimlik de buradan devralınır.
-        convIdRef.current = c.id;
-        setConversationId(c.id);
-      }).catch(() => { /* sessiz — sonraki tur yeniden dener */ });
-    }, PERSIST_DEBOUNCE_MS);
-  }, []);
+    saveTimerRef.current = setTimeout(() => { saveTimerRef.current = null; saveNow(); }, PERSIST_DEBOUNCE_MS);
+  }, [saveNow]);
 
   const send = useCallback(async (text: string) => {
     const q = text.trim();
@@ -211,7 +232,7 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
             ...t,
             stepDetails: (t.stepDetails ?? []).map(d =>
               d.i === e.i
-                ? { ...d, ok: e.ok, preview: e.preview, truncated: e.truncated, bytes: e.bytes, href: e.href, durationMs: e.durationMs }
+                ? { ...d, ok: e.ok, preview: e.preview, truncated: e.truncated, bytes: e.bytes, href: e.href, durationMs: e.durationMs, skipped: e.skipped || undefined, sources: e.sources } // v0.10.944 — tam çıktıdan kaynak durumu
                 : d),
           }));
         } else if (e.kind === 'block') {
@@ -267,12 +288,14 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
   // yanında kalıcı kimlik de düşer: aksi hâlde "Temizle" sonrası ilk
   // yazım, arşivdeki dolu thread'in ÜSTÜNE boş/yeni bir gövde yazardı.
   // Bekleyen bir kaydetme de iptal edilir (o zamanlayıcı silinmiş
-  // turları yazmak üzereydi).
+  // turları yazmak üzereydi). v0.10.944 — kuşak da artar: uçuştaki bir
+  // kayıt "Temizle" sonrası eski kimliği geri takmasın.
   const clear = useCallback(() => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    genRef.current++;
     setTurns([]);
     convIdRef.current = null;
     setConversationId(null);
@@ -281,17 +304,37 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
   // load — arşivden bir thread'i ekrana getirir. Akış sürerken
   // yüklemiyoruz: yarı yazılmış bir cevabın üstüne başka bir konuşmayı
   // basmak, gelen SSE parçalarının yanlış thread'e yapışması demekti.
-  const load = useCallback(async (id: string) => {
-    if (busyRef.current) return;
+  //
+  // v0.10.944 — iki yarıya ayrıldı: `adopt` elde OLAN bir konuşmayı ekrana
+  // koyar (çekmece, geçmişten açılan özneli thread'i kabuktan hazır alır —
+  // ikinci okuma yok); `load` okur + adopt eder ve konuşmayı DÖNDÜRÜR ki
+  // çağıran öznesini/bağlamını da kullanabilsin. Akış sürerken ikisi de
+  // reddeder (false/null).
+  // v0.10.944 — geçişte bekleyen kayıt İPTAL edilmez, önceki konuşmaya
+  // HEMEN yazılır (saveNow kimliği/turları şimdi okur); sonra kuşak artar ki
+  // o kaydın yanıtı yeni konuşmanın kimliğini ezmesin. load ayrıca iptal
+  // etmiyor: adopt'un boşaltması tek yol.
+  const adopt = useCallback((c: AiConversation): boolean => {
+    if (busyRef.current) return false;
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
+      saveNow();
     }
-    const c = await api.aiConversation(id);
-    setTurns(restoreTurns(c.messages));
+    genRef.current++;
+    const restored = restoreTurns(c.messages);
+    turnsRef.current = restored;
+    setTurns(restored);
     convIdRef.current = c.id;
     setConversationId(c.id);
-  }, []);
+    return true;
+  }, [saveNow]);
+
+  const load = useCallback(async (id: string): Promise<AiConversation | null> => {
+    if (busyRef.current) return null;
+    const c = await api.aiConversation(id);
+    return adopt(c) ? c : null;
+  }, [adopt]);
 
   // Takip çipleri yalnız son tur TAMAMLANMIŞ bir asistan cevabıysa görünür.
   const last = turns[turns.length - 1];
@@ -318,5 +361,5 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
     abortRef.current?.abort();
   }, []);
 
-  return { turns, busy, send, retry, stop, clear, load, conversationId, last, showFollowups };
+  return { turns, busy, send, retry, stop, clear, load, adopt, conversationId, last, showFollowups };
 }

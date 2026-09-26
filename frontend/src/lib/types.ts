@@ -6307,7 +6307,9 @@ export interface ChatEvidence {
   question: string;
   service: string;
   rangeS: number;
-  red?: { current: ChatEvidenceRED; baseline: ChatEvidenceRED };
+  // v0.10.944 — okunamayan pencere sıfır ölçüm olarak gelmez: current/baseline
+  // yoksa *Unavailable hata sınıfını taşır (timeout / unreachable …).
+  red?: { current?: ChatEvidenceRED; baseline?: ChatEvidenceRED; currentUnavailable?: string; baselineUnavailable?: string };
   problems: Array<{ id: string; ruleName: string; severity: string; status: string; startedAt: number; metric: string; value: number; threshold: number; topSuspect?: string; confidence?: number }>;
   changes: Array<{ source: string; timeUnixNs: number; workload?: string; service?: string; version?: string; status?: string; namespace?: string }>;
   logPatterns: Array<{ pattern: string; kind: string; currentCount: number; baselineCount: number; ratio: number; service: string }>;
@@ -6398,6 +6400,11 @@ export interface AiConversation {
   title: string;
   updatedAt: number;
   subject?: string;
+  // v0.10.944 (CoSRE Faz A) — konuşmanın BAĞLAM anlık görüntüsü (≤2 KB;
+  // trace çekmecesinde trace/span/servis/env/cluster/namespace/pod + trace
+  // penceresi). Geçmişten yeniden açılınca şerit bunu gösterir. Go aynası:
+  // internal/api/ai_conversations.go aiChatBlob.Context (agentctx.PageContext).
+  context?: PageContext;
   messages: ChatMessage[];
 }
 
@@ -6410,6 +6417,17 @@ export interface AiConversation {
 //
 // `i`, `step` ile `step-result` olaylarını eşler; istek boyunca tekildir
 // (çipler tur döngüsü boyunca birikiyor, tur-içi indeks çakışırdı).
+// v0.10.944 — ChatStepSourceState: sunucunun araç çıktısının TAMAMINDAN
+// okuduğu kaynak durumu (internal/sourcestate.Status'un rozet alt kümesi).
+// 4 KB önizleme Go map anahtar sırasında `source`tan önce kırpılabildiği
+// için rozet önizlemeden değil öncelikle bundan çizilir.
+export interface ChatStepSourceState {
+  source: string;
+  state: string;
+  flags?: string[];
+  detail?: string;
+}
+
 export interface ChatStepDetail {
   i: number;
   tool: string;
@@ -6427,13 +6445,19 @@ export interface ChatStepDetail {
   origin?: string;
   /** v0.10.161 — etiket adımı (araç değil): `tool` boş, panel bu satırı çizmez. */
   label?: string;
+  /** v0.10.944 — sunucu çağrıyı YÜRÜTMEDİ (bilinmeyen ad, tekrar koruması, kapsam reddi); hata değil, «yürütülmedi». */
+  skipped?: boolean;
+  /** v0.10.944 — tam çıktıdan okunan kaynak durumları (varsa önizlemeden önce gelir). */
+  sources?: ChatStepSourceState[];
 }
 
 export type ChatStreamEvent =
   // v0.10.161 — `tool`suz etiket adımları da gelir (ekran bağlamı / pencere
   // çapası / taşma yeniden denemesi: {label}); şeffaflık paneli onları saymaz.
   | { kind: 'step'; i?: number; tool?: string; label?: string; args?: string; origin?: string }
-  | { kind: 'step-result'; i: number; tool: string; ok: boolean; preview: string; truncated: boolean; bytes: number; href?: string; durationMs?: number }
+  // skipped (v0.10.944, Faz B sunucusu) — çağrı yürütülmedi; süre ölçüm değildir.
+  // sources (v0.10.944) — sunucunun TAM çıktıdan okuduğu kaynak durumları (kırpık önizlemeden bağımsız).
+  | { kind: 'step-result'; i: number; tool: string; ok: boolean; preview: string; truncated: boolean; bytes: number; href?: string; durationMs?: number; skipped?: boolean; sources?: ChatStepSourceState[] }
   | { kind: 'delta'; text: string }
   // suggestions (v0.9.411) — guided cevabın rotasından türetilen
   // konuya-duyarlı takip önerileri; yoksa frontend statik listesine düşer.

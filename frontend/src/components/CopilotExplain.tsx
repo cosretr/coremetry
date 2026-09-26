@@ -377,9 +377,17 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
         // v0.10.152 (operatör): küçük köşe spinner'ı yerine gövde ortasında
         // BÜYÜK, OTel işaretli yükleniyor durumu — "loading page" gibi.
         <div style={{ display: 'grid', placeItems: 'center', width: '100%', alignSelf: 'stretch', minHeight: 'min(60vh, 420px)', padding: '32px 16px' }}>
+          {/* v0.10.944 (CoSRE Faz A) — iki ipucu da artık NÖTR bekleme metni:
+             eski "Kanıt span'leri ve trace bağlamı üzerinden…" hiçbir olaydan
+             gelmeyen SABİT bir iddiaydı (log/metrik kaynağı erişilemezken de
+             aynısını söylüyordu); kodlu varyantın "…ve ilgili kaynak kodu
+             birlikte inceleniyor"u da öyleydi — kod çözümü başarısız olabilir
+             (pin/konvansiyon deposu yok) ya da önbellekten gelir ve arayüz
+             bunu ancak çağrı bitince öğrenir ("Kod okunamadı" uyarısı). Kodlu
+             ipucu yalnız İSTENENİ söyler, yapılanı değil. */}
           <LoaderMark size="lg"
             label={includeCode ? 'CoSRE kodu okuyor…' : 'CoSRE düşünüyor…'}
-            hint={includeCode ? 'Kanıt span\'leri, trace ve ilgili kaynak kodu birlikte inceleniyor.' : 'Kanıt span\'leri ve trace bağlamı üzerinden açıklama üretiliyor.'} />
+            hint={includeCode ? 'Kaynak kodu da istendi; cevap bekleniyor — ilk bölüm gelince burada görünür.' : 'Cevap bekleniyor — ilk bölüm gelince burada görünür.'} />
         </div>
       )}
       {showButton && (
@@ -539,7 +547,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           </div>
           {codeBusy && codeText === null && (
             <div style={{ display: 'grid', placeItems: 'center', minHeight: 200, padding: '24px 16px' }}>
-              <LoaderMark size="lg" label="CoSRE kodu okuyor…" hint="Kanıt span'leri, trace ve ilgili kaynak kodu birlikte inceleniyor." />
+              {/* v0.10.944 — nötr ipucu (gerekçe yukarıdaki yükleniyor bloğunda): istenen söylenir, yapılan değil. */}
+              <LoaderMark size="lg" label="CoSRE kodu okuyor…" hint="Kaynak kodu da istendi; cevap bekleniyor — ilk bölüm gelince burada görünür." />
             </div>
           )}
           {codeError && (

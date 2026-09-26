@@ -2,8 +2,9 @@ package chstore
 
 // tracetree_test.go — v0.10.275 sözleşmesi (docs/audit/trace-view.md §7.1):
 // lineer / paralel / async (ikinci kök) / hatalı / yetim / sıfır-negatif süre /
-// derin 10k (özyineleme yok) / kesik. Kritik yol lib/criticalPath.ts, öz süre
-// lib/selfTime.ts ile AYNI sayıları vermeli.
+// derin 10k (özyineleme yok) / kesik. Kritik yol SEÇİMİ lib/criticalPath.ts, öz
+// süre lib/selfTime.ts ile AYNI sayıları vermeli. v0.10.944 — CriticalNs kök
+// süresidir (iç içe süreler toplanmaz).
 
 import (
 	"fmt"
@@ -32,8 +33,11 @@ func TestTraceAnalysisLinear(t *testing.T) {
 	if len(a.Nodes) != 3 || a.RootSpanID != "a" || a.OrphanCount != 0 {
 		t.Fatalf("ağaç: %+v", a)
 	}
-	if fmt.Sprint(a.CriticalIDs) != "[a b c]" || a.CriticalNs != 100+80+30 {
-		t.Errorf("kritik yol: %v %d", a.CriticalIDs, a.CriticalNs)
+	// v0.10.944 — eski pin `CriticalNs == 100+80+30` idi: iç içe span'lerin
+	// süreleri toplanıyordu ve 100 birimlik bir trace "210 birim kritik yol"
+	// raporluyordu. b a'nın, c b'nin İÇİNDE; yolun duvar saati kökün süresi.
+	if fmt.Sprint(a.CriticalIDs) != "[a b c]" || a.CriticalNs != 100 {
+		t.Errorf("kritik yol: %v %d (istenen kök süresi 100)", a.CriticalIDs, a.CriticalNs)
 	}
 	if nodeByID(a, "a").SelfNs != 20 || nodeByID(a, "b").SelfNs != 50 || nodeByID(a, "c").SelfNs != 30 {
 		t.Errorf("öz süre: a=%d b=%d c=%d", nodeByID(a, "a").SelfNs, nodeByID(a, "b").SelfNs, nodeByID(a, "c").SelfNs)
@@ -100,6 +104,56 @@ func TestTraceAnalysisAsyncSecondRootAndOrphan(t *testing.T) {
 		if s.Service == "consumer" && (s.EntryCount != 1 || s.SpanCount != 2 || s.ErrorCount != 1) {
 			t.Errorf("consumer özeti: %+v", s)
 		}
+	}
+}
+
+// v0.10.944 — kritik yol süresi hiçbir şekilde kökün duvar saatini AŞAMAZ:
+// iç içe ve paralel çocuklar, çoklu kök, derin zincir. Zincir SEÇİMİ değişmedi
+// (lib/criticalPath.ts paritesi); yalnız dışarı çıkan sayı toplam değil.
+func TestTraceAnalysisCriticalNsNeverExceedsRootWall(t *testing.T) {
+	cases := []struct {
+		name  string
+		spans []SpanRow
+		want  int64
+		ids   string
+	}{
+		{"iç içe zincir", []SpanRow{
+			sp("a", "", "api", 0, 100, "ok"),
+			sp("b", "a", "orders", 10, 90, "ok"),
+			sp("c", "b", "db", 20, 50, "ok"),
+		}, 100, "[a b c]"},
+		{"paralel çocuklar", []SpanRow{
+			sp("a", "", "api", 0, 100, "ok"),
+			sp("b", "a", "x", 5, 95, "ok"),
+			sp("c", "a", "y", 5, 94, "ok"),
+			sp("d", "b", "z", 10, 90, "ok"),
+		}, 100, "[a b d]"},
+		{"ikinci kök daha uzun", []SpanRow{
+			sp("p", "", "producer", 0, 50, "ok"),
+			sp("c", "", "consumer", 60, 200, "ok"),
+			sp("cc", "c", "consumer", 70, 190, "ok"),
+		}, 140, "[c cc]"},
+	}
+	for _, tc := range cases {
+		a := BuildTraceAnalysis(tc.spans, false)
+		if a.CriticalNs != tc.want {
+			t.Errorf("%s: CriticalNs=%d, istenen kök süresi %d", tc.name, a.CriticalNs, tc.want)
+		}
+		if got := fmt.Sprint(a.CriticalIDs); got != tc.ids {
+			t.Errorf("%s: zincir seçimi değişmemeli: %s, istenen %s", tc.name, got, tc.ids)
+		}
+		if a.Version != 2 {
+			t.Errorf("%s: alan anlamı değişti, Version 2 olmalı: %d", tc.name, a.Version)
+		}
+	}
+	// derin zincir: 10k seviye toplamı değil kök süresi
+	n := 1000
+	spans := []SpanRow{sp("s0", "", "svc", 0, int64(n)*10, "ok")}
+	for i := 1; i < n; i++ {
+		spans = append(spans, sp(fmt.Sprintf("s%d", i), fmt.Sprintf("s%d", i-1), "svc", int64(i), int64(n)*10-int64(i), "ok"))
+	}
+	if a := BuildTraceAnalysis(spans, false); a.CriticalNs != int64(n)*10 {
+		t.Errorf("derin zincir CriticalNs=%d, istenen %d", a.CriticalNs, int64(n)*10)
 	}
 }
 

@@ -73,6 +73,7 @@ package mcptools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -796,8 +797,8 @@ func getLogHistogramTool(d Deps) mcp.Tool {
 			"guards. Do not loop it to build a wider picture: raise range_s once. " +
 			"SPARSE: buckets with zero matches are OMITTED, so a missing bucket means 'nothing matched', not 'no data'. " +
 			"PARTIALITY: this shape carries NO partial flag — on a slow or shard-degraded backend a DIP can be the timeout rather than a traffic drop. If a " +
-			"dip carries your conclusion, confirm it with search_logs, whose response does report partial / shardsFailed. " +
-			"There is no environment argument (search_logs has none either): narrow by service instead, and never claim the counts are env-scoped.",
+			"dip carries your conclusion, confirm it with search_logs over the dip's own window (≤24 h), whose `source` reports partial/timeout/unreachable with notes. " +
+			"This tool has no environment argument and its counts are NOT env-scoped — narrow by service here; search_logs does accept env/cluster/namespace/pod when the question is environment-specific.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -859,6 +860,11 @@ func getLogHistogramTool(d Deps) mcp.Tool {
 				To:      to,
 			}, bucketS, "severity")
 			if err != nil {
+				// v0.10.944 — sözdizimi reddi arka uç arızası değil argüman hatası
+				// (search_logs ile aynı): ES root_cause sorguyu yankılar.
+				if query != "" && errors.Is(err, logstore.ErrBadQuery) {
+					return nil, logsBadQueryErr(query, err)
+				}
 				return nil, err
 			}
 			return logHistogramPayload(service, query, d.LogStore.Backend(), windowS, bucketS, series), nil

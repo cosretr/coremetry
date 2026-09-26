@@ -21,6 +21,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
+	"github.com/cilcenk/coremetry/internal/sourcestate"
 )
 
 type searchTracesArgs struct {
@@ -200,7 +201,34 @@ func searchTracesTool(d Deps) mcp.Tool {
 			if !narrowed.IsZero() {
 				out["narrowed_from_iso"] = narrowed.UTC().Format(time.RFC3339)
 			}
+			out["source"] = searchTracesSource(len(rows), limit, hasMore, ranked, from, to, gate.Reason, narrowed)
 			return out, nil
 		},
 	}
+}
+
+// searchTracesSource — v0.10.944 (CoSRE kaynak durumu): mevcut dürüstlük
+// zarflarının (has_more, ranked_within, window_clamped_reason,
+// narrowed_from_iso) TEK sözlükteki karşılığı. SAF. Dolu sayfa = truncated
+// (limitte kesildi); kapı ya da kaynak baskısı pencereyi daralttıysa cevap
+// istenenden AZ zamanı kapsar = partial; sıralama/süzme yalnız en yeni N aday
+// trace'lik yenilik dilimi içinde yapıldıysa da partial (sort=duration'ın
+// "en yavaşlar"ı pencerenin değil dilimin en yavaşlarıdır). Boş sonuç empty:
+// "bu filtre + pencerede trace yok", "hata yok" değil. Davranış değişmedi —
+// alan yalnız eklendi. WithWindow İSTENEN pencere; taranan dilim notta.
+func searchTracesSource(returned, limit int, hasMore bool, ranked int, from, to time.Time, clampReason string, narrowed time.Time) sourcestate.Status {
+	st := sourcestate.Result("traces", "clickhouse", sourcestate.Outcome{Returned: returned, Limit: limit, Truncated: hasMore}).WithWindow(from, to)
+	if clampReason != "" {
+		st = st.WithNote("pencere kapı tarafından daraltıldı: "+clampReason, true)
+	}
+	// v0.10.944 — RankedWithin sort=time'ın hata-önce / kimlik-önce
+	// tavanlarında da dolar (chstore/repo.go): not bu yüzden genel, "süre
+	// sıralaması" demez.
+	if ranked > 0 {
+		st = st.WithNote(fmt.Sprintf("sıralama/süzme yalnız en yeni %d aday trace içinde yapıldı; pencerenin tamamı değil", ranked), true)
+	}
+	if !narrowed.IsZero() {
+		st = st.WithNote("kaynak baskısıyla pencere daraltıldı; yalnız "+narrowed.UTC().Format(time.RFC3339)+" sonrası tarandı", true)
+	}
+	return st
 }

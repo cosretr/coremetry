@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agentctx "github.com/cilcenk/coremetry/internal/ai/agent/context"
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -75,6 +76,12 @@ const (
 	aiChatTitleMaxRunes = 60
 	// aiChatMaxSubjectRunes — çekmece öznesi kodeği (formatAiParam).
 	aiChatMaxSubjectRunes = 200
+	// aiChatMaxContextBytes — v0.10.944 (CoSRE Faz A): bağlam anlık
+	// görüntüsünün (PageContext) JSON tavanı. Trace çekmecesinin görüntüsü
+	// (trace/span/servis/env/cluster/namespace/pod + pencere) ~400 byte;
+	// 2 KB bol pay, ama blob'un 64 KB'ını mesajlardan çalacak kadar değil.
+	// İstemci de aynı tavanı uygular (lib/traceAiContext capPageContext).
+	aiChatMaxContextBytes = 2 << 10
 )
 
 // aiChatMessage — blob'daki tek mesaj. FE'deki ChatMessage ile birebir
@@ -91,6 +98,12 @@ type aiChatBlob struct {
 	// pencere boş bırakır; alan ileriye dönük (Faz 4 tasarımı) ve
 	// listede kaynak etiketi olarak gösterilebilir.
 	Subject string `json:"subject,omitempty"`
+	// Context — v0.10.944 (CoSRE Faz A): konuşmanın BAĞLAM anlık görüntüsü
+	// (sohbet isteğinin `page` alanıyla aynı şekil, agentctx.PageContext).
+	// Geçmişten yeniden açılan çekmece sohbeti "Bağlam" şeridini bundan
+	// kurar. omitempty: bağlamsız (global pencere) satırların gövdesi
+	// bayt-bayt eskisi gibi kalır; eski satırlarda alan yok = bağlam yok.
+	Context *agentctx.PageContext `json:"context,omitempty"`
 	// UpdatedAt — unix ns; satırın created_at'iyle aynı damga.
 	UpdatedAt int64 `json:"updatedAt"`
 }
@@ -108,11 +121,12 @@ type aiConversationSummary struct {
 
 // aiConversation — tekil okuma + upsert yanıtı (mesajlarla birlikte).
 type aiConversation struct {
-	ID        string          `json:"id"`
-	Title     string          `json:"title"`
-	UpdatedAt int64           `json:"updatedAt"`
-	Subject   string          `json:"subject,omitempty"`
-	Messages  []aiChatMessage `json:"messages"`
+	ID        string                `json:"id"`
+	Title     string                `json:"title"`
+	UpdatedAt int64                 `json:"updatedAt"`
+	Subject   string                `json:"subject,omitempty"`
+	Context   *agentctx.PageContext `json:"context,omitempty"` // v0.10.944
+	Messages  []aiChatMessage       `json:"messages"`
 }
 
 // ── Saf yardımcılar (table-driven testli: ai_conversations_test.go) ──
@@ -216,6 +230,56 @@ func fitChatBlob(blob aiChatBlob, maxMsgs, maxBytes int) (aiChatBlob, string, er
 		}
 		blob.Messages = blob.Messages[1:]
 	}
+}
+
+// fitChatContext — v0.10.944: istemcinin gönderdiği bağlam anlık
+// görüntüsünü DEPOLANABİLİR hâle indirir. Önce agentctx.Sanitize (kontrol
+// karakteri düşer, alan başına 200 rune, filtre tavanları; sayfa adı boşsa
+// nil — sohbet isteğinin `page`iyle AYNI kapı, ikinci bir doğrulayıcı yok).
+// JSON tavanı aşılırsa önce en az bilgi taşıyan boyutlar (filtreler, arama)
+// düşer; yine sığmıyorsa nil.
+//
+// Neden 413 DEĞİL de düşürme: fitChatBlob'un gerekçesi — bağlam yüzünden
+// reddedilen bir kaydetme, konuşmanın kalıcılığını sessizce öldürürdü.
+// Bağlam yardımcı bilgi; mesajlar asıl içerik.
+func fitChatContext(p *agentctx.PageContext, maxBytes int) *agentctx.PageContext {
+	c := agentctx.Sanitize(p)
+	if c == nil {
+		return nil
+	}
+	fits := func(x *agentctx.PageContext) bool {
+		raw, err := json.Marshal(x)
+		return err == nil && len(raw) <= maxBytes
+	}
+	if fits(c) {
+		return c
+	}
+	c.Filters = nil
+	c.Search = ""
+	if fits(c) {
+		return c
+	}
+	return nil
+}
+
+// resolveChatContext — kaydedilecek bağlam: gelen (tavanlanmış) görüntü
+// varsa o; yoksa satırda ZATEN duran görüntü İLERİ TAŞINIR (invariant #4:
+// ReplacingMergeTree tam-satır değiştirir, taşınmayan alan SIFIRLANIR).
+// Gönderilmemiş bağlam "sil" demek değildir: çekmece bağlamı henüz yokken
+// (sayfa dışı açılış) yapılan bir kaydetme, geçmişten açılan konuşmanın
+// görüntüsünü silmemeli. Bozuk/eski gövde → nil.
+func resolveChatContext(incoming *agentctx.PageContext, existingBlob string, maxBytes int) *agentctx.PageContext {
+	if c := fitChatContext(incoming, maxBytes); c != nil {
+		return c
+	}
+	if strings.TrimSpace(existingBlob) == "" {
+		return nil
+	}
+	var prev aiChatBlob
+	if err := json.Unmarshal([]byte(existingBlob), &prev); err != nil {
+		return nil
+	}
+	return fitChatContext(prev.Context, maxBytes)
 }
 
 // metaToSummary (v0.9.1192) — CH-tarafı projeksiyon → liste öğesi.
@@ -333,7 +397,7 @@ func (s *Server) getAIConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, aiConversation{
-		ID: cur.ID, Title: cur.Name, Subject: blob.Subject,
+		ID: cur.ID, Title: cur.Name, Subject: blob.Subject, Context: blob.Context,
 		UpdatedAt: conversationStamp(blob.UpdatedAt, cur.CreatedAt),
 		Messages:  blob.Messages,
 	})
@@ -368,10 +432,13 @@ func (s *Server) upsertAIConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, aiChatMaxRequestBytes)
 	var body struct {
-		ID       string          `json:"id"`
-		Title    string          `json:"title"`
-		Subject  string          `json:"subject"`
-		Messages []aiChatMessage `json:"messages"`
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Subject string `json:"subject"`
+		// Context — v0.10.944: isteğe bağlı bağlam anlık görüntüsü
+		// (fitChatContext tavanlar; yoksa satırdaki ileri taşınır).
+		Context  *agentctx.PageContext `json:"context"`
+		Messages []aiChatMessage       `json:"messages"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSONError(w, http.StatusRequestEntityTooLarge,
@@ -414,13 +481,15 @@ func (s *Server) upsertAIConversation(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UnixNano()
 	existingTitle := ""
+	existingBlob := ""
 	pinned := false
 	if cur != nil {
-		existingTitle, pinned = cur.Name, cur.Pinned
+		existingTitle, pinned, existingBlob = cur.Name, cur.Pinned, cur.QueryString
 	}
 	blob := aiChatBlob{
 		Messages:  msgs,
 		Subject:   clampChatRunes(body.Subject, aiChatMaxSubjectRunes),
+		Context:   resolveChatContext(body.Context, existingBlob, aiChatMaxContextBytes), // v0.10.944
 		UpdatedAt: now,
 	}
 	fitted, raw, err := fitChatBlob(blob, aiChatMaxMessages, aiChatMaxBlobBytes)
@@ -449,7 +518,7 @@ func (s *Server) upsertAIConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, aiConversation{
-		ID: id, Title: title, Subject: fitted.Subject,
+		ID: id, Title: title, Subject: fitted.Subject, Context: fitted.Context,
 		UpdatedAt: now, Messages: fitted.Messages,
 	})
 }

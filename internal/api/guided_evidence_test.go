@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -50,7 +52,7 @@ func TestGuidedEvidencePayload(t *testing.T) {
 	for i := range changes {
 		changes[i] = mcptools.ChangeRow{Source: "rollout", Workload: "w"}
 	}
-	out := guidedEvidencePayload("svc", 3600, cx, probs, changes, []anomaly.LogPatternAnomaly{{Pattern: "x", Kind: "new", CurrentCount: 2}})
+	out := guidedEvidencePayload("svc", 3600, cx, probs, nil, changes, []anomaly.LogPatternAnomaly{{Pattern: "x", Kind: "new", CurrentCount: 2}})
 	if out["service"] != "svc" || len(out["problems"].([]map[string]any)) != 5 || len(out["changes"].([]map[string]any)) != 8 || len(out["logPatterns"].([]map[string]any)) != 1 {
 		t.Fatalf("tavanlar: %+v", out)
 	}
@@ -61,7 +63,7 @@ func TestGuidedEvidencePayload(t *testing.T) {
 	if red["errorRate"] != 12.5 || red["p95Ms"] != float64(900) {
 		t.Fatalf("red: %+v", red)
 	}
-	if v := guidedEvidencePayload("svc", 60, nil, nil, nil, nil)["verdict"].(string); !strings.Contains(v, "hipotez yok") {
+	if v := guidedEvidencePayload("svc", 60, nil, nil, nil, nil, nil)["verdict"].(string); !strings.Contains(v, "hipotez yok") {
 		t.Fatalf("hipotezsiz verdict: %s", v)
 	}
 }
@@ -116,5 +118,71 @@ func TestRootCauseBundleEmitsEvidence(t *testing.T) {
 	chat, _ := os.ReadFile("copilot_chat.go")
 	if strings.Count(string(chat), "var blockSeq blocks.Sequencer") != 1 || !strings.Contains(string(chat), "emit = withBlockSeq(emit, &blockSeq)") {
 		t.Fatal("chat tek blockSeq + withBlockSeq sarmalı")
+	}
+}
+
+// TestGuidedEvidencePayloadReadFailures — v0.10.944: okunamayan RED penceresi
+// sıfır ölçüm olarak GİTMEZ (…Unavailable alanı); problem okuması düştüyse
+// verdict "açık problem yok" demez.
+func TestGuidedEvidencePayloadReadFailures(t *testing.T) {
+	cx := &aiServiceContext{Current: aiRED{Spans: 10, ErrorRate: 12.5}, baseErr: context.DeadlineExceeded}
+	red := guidedEvidencePayload("svc", 3600, cx, nil, nil, nil, nil)["red"].(map[string]any)
+	if _, has := red["baseline"]; has || red["baselineUnavailable"] != "timeout" || red["current"] == nil {
+		t.Errorf("taban okunamadı: %+v", red)
+	}
+	cx = &aiServiceContext{curErr: errors.New("dial tcp 10.0.0.9:9000: connect: connection refused")}
+	red = guidedEvidencePayload("svc", 3600, cx, nil, nil, nil, nil)["red"].(map[string]any)
+	if _, has := red["current"]; has || red["currentUnavailable"] != "unreachable" || red["baseline"] == nil {
+		t.Errorf("şimdi okunamadı: %+v", red)
+	}
+	v := guidedEvidencePayload("svc", 3600, nil, nil, context.DeadlineExceeded, nil, nil)["verdict"].(string)
+	if !strings.Contains(v, "okunamadı") || strings.Contains(v, "açık problem yok") {
+		t.Errorf("problem okuma hatası verdict: %s", v)
+	}
+}
+
+// TestGuidedRootCauseNoProblemsTR — v0.10.944: okuma hatası asla "AÇIK
+// PROBLEM YOK" üretmez; gerçek boş liste üretir.
+func TestGuidedRootCauseNoProblemsTR(t *testing.T) {
+	cases := []struct {
+		name    string
+		err     error
+		want    string
+		mustNot string
+	}{
+		{"boş liste", nil, "AÇIK PROBLEM YOK", "OKUNAMADI"},
+		{"zaman aşımı", context.DeadlineExceeded, "Problem kayıtları OKUNAMADI (timeout)", "AÇIK PROBLEM YOK"},
+		{"erişilemedi", errors.New("dial tcp 10.0.0.9:9000: connect: connection refused"), "OKUNAMADI (unreachable)", "AÇIK PROBLEM YOK"},
+	}
+	for _, c := range cases {
+		got := guidedRootCauseNoProblemsTR(c.err)
+		if !strings.Contains(got, c.want) || strings.Contains(got, c.mustNot) {
+			t.Errorf("%s: %q", c.name, got)
+		}
+	}
+}
+
+// TestGuidedRCBundleEnvNoteAndProbErr — v0.10.944 kaynak pini: kök-neden demeti
+// RED'in tüm ortamların toplamı olduğunu (sağlık demeti gibi) söyler ve problem
+// okuma hatasını kanıt bloğuna ayrı adla (probErr) taşır.
+func TestGuidedRCBundleEnvNoteAndProbErr(t *testing.T) {
+	src, err := os.ReadFile("copilot_guided.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(src)
+	for _, fnName := range []string{"guidedRootCauseBundle(", "guidedServiceHealthBundle("} {
+		i := strings.Index(body, "func (s *Server) "+fnName)
+		j := strings.Index(body[i:], "\nfunc ")
+		if fn := body[i : i+j]; !strings.Contains(fn, "tüm ortamların toplamı") {
+			t.Errorf("%s RED'in tüm ortamların toplamı olduğunu söylemeli", fnName)
+		}
+	}
+	i := strings.Index(body, "func (s *Server) guidedRootCauseBundle(")
+	fn := body[i : i+strings.Index(body[i:], "\nfunc ")]
+	for _, w := range []string{"probs, probTotal, probErr := s.guidedProblemsWithTotal(", "guidedEvidencePayload(service, rangeS, cx, probs, probErr, changes, pats)", "guidedRootCauseNoProblemsTR(probErr)"} {
+		if !strings.Contains(fn, w) {
+			t.Errorf("kök-neden demeti %q taşımalı", w)
+		}
 	}
 }

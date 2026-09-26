@@ -1285,7 +1285,7 @@ KURALLAR:
 
 ÖRNEK GİRDİ:
 Servis: payment-service (son 30 dakika)
-RED: rate=42.0 req/s, error=8.30% (1240 hata), p50=85ms, p95=410ms, p99=1850ms
+RED: rate=42.0 span/s (tüm span türleri), error=8.30% (1240 hata), p50=85ms, p95=410ms, p99=1850ms
 Baseline (önceki 30 dk): error=0.40%, p99=210ms
 En sık hatalar: SQLTimeoutException ×980, HttpServerErrorException ×210
 Deploy: v1.4.0 (12 dk önce)

@@ -93,8 +93,12 @@ func TestEnvArgAdditive(t *testing.T) {
 	// The deliberate env-less set: their reads carry no env path yet
 	// (logs/anomalies/metrics — env-separation Phase 4 pending) or are
 	// id-anchored point lookups where env is meaningless.
+	// v0.10.944 — search_logs ve query_metric listeden ÇIKTI: ikisi de env'i
+	// okumaya bağlıyor (logstore.Filter.Env / etiket eşlemesi) ve UYGULANAMADIĞINDA
+	// bunu sonucun source.state=partial + notuyla RAPOR ediyor — bu testin
+	// itirazı "rapor edilemeyen yarım destek"ti, o artık yok.
 	envBlind := []string{
-		"list_anomalies", "search_logs", "get_trace", "query_metric",
+		"list_anomalies", "get_trace",
 		"get_logs_for_trace", "get_exemplar_traces", "get_linked_traces",
 		"get_metrics_for_span",
 		// CoSRE Faz-2 — render_chart's spanMetricBatch read (frontend)

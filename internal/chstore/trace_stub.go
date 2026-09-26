@@ -35,9 +35,22 @@ type TraceAggregateStub struct {
 // the lookup index-friendly when combined with the trace_id
 // equality.
 func (s *Store) GetTraceAggregateStub(ctx context.Context, traceID string) (TraceAggregateStub, bool) {
+	st, ok, _ := s.GetTraceAggregateStubErr(ctx, traceID)
+	return st, ok
+}
+
+// GetTraceAggregateStubErr — v0.10.944: err != nil okumanın BAŞARISIZ
+// olduğunu söyler (zaman aşımı / limit / erişilemedi), trace'in yokluğunu
+// DEĞİL. Temiz ıskalama (zero, false, nil); SpanCount==0 yokluk sinyali
+// olarak kalır (GROUP BY'sız toplama her zaman bir satır döner).
+// trace_summary_5m ORDER BY (time_bucket, trace_id): `FINAL WHERE trace_id=?`
+// anahtarı kullanamaz ve max_execution_time=5 altında büyük ölçekte zaman
+// aşımına düşebilir — get_trace bunu "hiç ulaşmamış" diye bildiriyordu.
+// GetTraceAggregateStub (REST çağıranları) bu çekirdeğin ince sarmalayıcısı.
+func (s *Store) GetTraceAggregateStubErr(ctx context.Context, traceID string) (TraceAggregateStub, bool, error) {
 	var stub TraceAggregateStub
 	if traceID == "" {
-		return stub, false
+		return stub, false, nil
 	}
 	// argMaxIfMerge over the per-bucket states; min/max merge over
 	// the time states. countMerge for span + error counts.
@@ -56,14 +69,14 @@ func (s *Store) GetTraceAggregateStub(ctx context.Context, traceID string) (Trac
 	var startNs, endNs int64
 	if err := row.Scan(&stub.RootService, &stub.RootName,
 		&startNs, &endNs, &stub.SpanCount, &stub.ErrorCount); err != nil {
-		return stub, false
+		return stub, false, err
 	}
 	// SpanCount == 0 means the trace_id had no aggregate state at
 	// all — i.e. genuinely unknown to the MV, not just aged out.
 	// Return false so the caller surfaces a clean "not found" vs
 	// the aged-out hint.
 	if stub.SpanCount == 0 {
-		return stub, false
+		return stub, false, nil
 	}
 	stub.StartTimeNs = startNs
 	stub.EndTimeNs = endNs
@@ -71,5 +84,5 @@ func (s *Store) GetTraceAggregateStub(ctx context.Context, traceID string) (Trac
 	if stub.DurationMs < 0 {
 		stub.DurationMs = 0
 	}
-	return stub, true
+	return stub, true, nil
 }

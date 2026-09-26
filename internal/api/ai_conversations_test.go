@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	agentctx "github.com/cilcenk/coremetry/internal/ai/agent/context"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -303,5 +304,183 @@ func TestAIConversationRoutesNotCopilotGated(t *testing.T) {
 	}
 	if found != 4 {
 		t.Errorf("ai_routes.go'da %d konuşma route'u bulundu, beklenen 4 (list/upsert/get/delete)", found)
+	}
+}
+
+// v0.10.944 (CoSRE Faz A) — konuşmanın BAĞLAM anlık görüntüsü. Üç iddia:
+//
+//  1. TAVAN sunucuda (2 KB) ve kaydetmeyi ÖLDÜRMEZ: taşan görüntü önce
+//     filtre/arama bırakır, yine sığmazsa DÜŞER — 413 yok (fitChatBlob'un
+//     "kalıcılık sessizce ölmesin" gerekçesi);
+//  2. DOĞRULAMA sohbet isteğinin `page`iyle aynı kapıdan (agentctx.Sanitize):
+//     sayfa adı yoksa görüntü yok, kontrol karakteri düşer;
+//  3. İLERİ TAŞIMA: gönderilmemiş bağlam satırdakini SİLMEZ (invariant #4 —
+//     ReplacingMergeTree tam-satır değiştirir); bozuk gövde nil.
+func TestConversationContextFit(t *testing.T) {
+	trace := &agentctx.PageContext{
+		Page: "trace", Path: "/trace", TraceID: "0af7651916cd43dd8448eb211c80319c",
+		SpanID: "b7ad6b7169203331", Service: "payments", Env: "prod",
+		Cluster: "cluster-a", Namespace: "billing", Pod: "payments-0",
+		TimeRange: &agentctx.PageRange{Preset: "custom", FromMs: 1790000000000, ToMs: 1790000001200},
+	}
+	bigFilters := make([]agentctx.PageFilter, 0, 20)
+	for i := 0; i < 20; i++ {
+		bigFilters = append(bigFilters, agentctx.PageFilter{K: "service", Op: "=", V: []string{strings.Repeat("checkout", 20)}})
+	}
+	tests := []struct {
+		name    string
+		in      *agentctx.PageContext
+		wantNil bool
+		// dropsExtras — filtreler + arama düşmüş olmalı (taşma yolu).
+		dropsExtras bool
+		check       func(t *testing.T, c *agentctx.PageContext)
+	}{
+		{name: "nil → nil", in: nil, wantNil: true},
+		{name: "sayfa adı boş → nil (sohbet kapısıyla aynı)", in: &agentctx.PageContext{TraceID: "x"}, wantNil: true},
+		{
+			name: "trace görüntüsü olduğu gibi sığar", in: trace,
+			check: func(t *testing.T, c *agentctx.PageContext) {
+				if c.TraceID != trace.TraceID || c.Env != "prod" || c.TimeRange == nil || c.TimeRange.ToMs != 1790000001200 {
+					t.Fatalf("görüntü bozuldu: %+v", c)
+				}
+			},
+		},
+		{
+			name: "kontrol karakteri düşer",
+			in:   &agentctx.PageContext{Page: "trace", Service: "pay\nments\x00"},
+			check: func(t *testing.T, c *agentctx.PageContext) {
+				if c.Service != "payments" {
+					t.Fatalf("servis = %q", c.Service)
+				}
+			},
+		},
+		{
+			name: "taşan görüntü önce filtre + arama bırakır",
+			in: &agentctx.PageContext{
+				Page: "traces", Path: "/traces", TraceID: "0af7651916cd43dd8448eb211c80319c",
+				Search: strings.Repeat("s", 150), Filters: bigFilters,
+			},
+			dropsExtras: true,
+			check: func(t *testing.T, c *agentctx.PageContext) {
+				if c.TraceID == "" {
+					t.Fatalf("kimlik düşmemeliydi: %+v", c)
+				}
+			},
+		},
+		{
+			name: "filtresiz bile sığmıyorsa DÜŞER (413 yok)",
+			in: &agentctx.PageContext{
+				Page: "trace", Path: strings.Repeat("ç", 200), Env: strings.Repeat("ş", 200),
+				Cluster: strings.Repeat("ğ", 200), Namespace: strings.Repeat("ü", 200),
+				Service: strings.Repeat("ö", 200), Workload: strings.Repeat("ı", 200),
+				Pod: strings.Repeat("İ", 200), Operation: strings.Repeat("Ş", 200),
+			},
+			wantNil: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := fitChatContext(tc.in, aiChatMaxContextBytes)
+			if tc.wantNil {
+				if got != nil {
+					t.Fatalf("nil bekleniyordu, %+v döndü", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("görüntü düştü, beklenmiyordu")
+			}
+			raw, _ := json.Marshal(got)
+			if len(raw) > aiChatMaxContextBytes {
+				t.Fatalf("görüntü %d byte > %d", len(raw), aiChatMaxContextBytes)
+			}
+			if tc.dropsExtras && (got.Search != "" || len(got.Filters) != 0) {
+				t.Errorf("taşmada arama/filtre düşmeliydi: arama=%q filtre=%d", got.Search, len(got.Filters))
+			}
+			if tc.check != nil {
+				tc.check(t, got)
+			}
+			if got == tc.in {
+				t.Error("girdi yerinde değişti — Sanitize kopya döndürmeli")
+			}
+		})
+	}
+}
+
+func TestConversationContextCarryForward(t *testing.T) {
+	prev := aiChatBlob{
+		Messages: chatMsgs(2),
+		Subject:  "trace:0af7651916cd43dd8448eb211c80319c",
+		Context:  &agentctx.PageContext{Page: "trace", TraceID: "0af7651916cd43dd8448eb211c80319c", Env: "uat"},
+	}
+	rawPrev, _ := json.Marshal(prev)
+	fresh := &agentctx.PageContext{Page: "trace", TraceID: "0af7651916cd43dd8448eb211c80319c", Env: "prod"}
+
+	tests := []struct {
+		name     string
+		incoming *agentctx.PageContext
+		existing string
+		wantEnv  string // "" = nil bekleniyor
+	}{
+		{name: "gelen görüntü kazanır", incoming: fresh, existing: string(rawPrev), wantEnv: "prod"},
+		{name: "gönderilmemiş bağlam satırdakini SİLMEZ", incoming: nil, existing: string(rawPrev), wantEnv: "uat"},
+		{name: "geçersiz gelen (sayfasız) → satırdaki", incoming: &agentctx.PageContext{Env: "x"}, existing: string(rawPrev), wantEnv: "uat"},
+		{name: "yeni satır, bağlam yok → nil", incoming: nil, existing: ""},
+		{name: "bozuk gövde → nil", incoming: nil, existing: "{bozuk"},
+		{name: "bağlamsız eski satır → nil", incoming: nil, existing: `{"messages":[],"updatedAt":1}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveChatContext(tc.incoming, tc.existing, aiChatMaxContextBytes)
+			if tc.wantEnv == "" {
+				if got != nil {
+					t.Fatalf("nil bekleniyordu, %+v", got)
+				}
+				return
+			}
+			if got == nil || got.Env != tc.wantEnv {
+				t.Fatalf("env = %+v, beklenen %q", got, tc.wantEnv)
+			}
+		})
+	}
+}
+
+// TestConversationContextJSON — tel sözleşmesi: bağlamlı satır `context`
+// anahtarını FE'nin PageContext alan adlarıyla taşır; bağlamsız satır
+// anahtarı HİÇ yazmaz (omitempty — global pencere gövdeleri değişmez) ve
+// fitChatBlob'un bayt ölçümü bağlamı da kapsar.
+func TestConversationContextJSON(t *testing.T) {
+	ctx := &agentctx.PageContext{
+		Page: "trace", Path: "/trace", TraceID: "0af7651916cd43dd8448eb211c80319c", SpanID: "b7ad6b7169203331",
+		Service: "checkout", Env: "prod", Cluster: "cluster-a", Namespace: "shop", Pod: "checkout-0",
+		TimeRange: &agentctx.PageRange{Preset: "custom", FromMs: 1790000000000, ToMs: 1790000001200},
+	}
+	_, raw, err := fitChatBlob(aiChatBlob{Messages: chatMsgs(2), Context: ctx, UpdatedAt: 1}, aiChatMaxMessages, aiChatMaxBlobBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"context":{`, `"traceId":"0af7651916cd43dd8448eb211c80319c"`, `"spanId":"b7ad6b7169203331"`,
+		`"env":"prod"`, `"cluster":"cluster-a"`, `"namespace":"shop"`, `"pod":"checkout-0"`,
+		`"timeRange":{"preset":"custom","fromMs":1790000000000,"toMs":1790000001200}`} {
+		if !strings.Contains(raw, want) {
+			t.Errorf("gövde %q taşımıyor: %s", want, raw)
+		}
+	}
+	var back aiChatBlob
+	if err := json.Unmarshal([]byte(raw), &back); err != nil || back.Context == nil || back.Context.Service != "checkout" {
+		t.Fatalf("geri okuma bozuk: %+v err=%v", back.Context, err)
+	}
+
+	_, plain, err := fitChatBlob(aiChatBlob{Messages: chatMsgs(2), UpdatedAt: 1}, aiChatMaxMessages, aiChatMaxBlobBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(plain, `"context"`) {
+		t.Errorf("bağlamsız gövde context anahtarı yazmamalı: %s", plain)
+	}
+
+	resp, _ := json.Marshal(aiConversation{ID: "c1", Title: "t", Context: ctx, Messages: chatMsgs(1)})
+	if !strings.Contains(string(resp), `"context":{"page":"trace"`) {
+		t.Errorf("yanıt bağlamı taşımıyor: %s", resp)
 	}
 }

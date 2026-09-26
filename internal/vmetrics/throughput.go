@@ -82,6 +82,18 @@ func normalizeQueryWindow(f chstore.MetricQueryFilter) chstore.MetricQueryFilter
 // property buildPromQL's own comment names as the reason it recomputes rather
 // than accepts a step argument.
 func (s *Service) runRangeQuery(ctx context.Context, cfg Settings, q string, f chstore.MetricQueryFilter) ([]chstore.SpanMetricSeries, error) {
+	d, err := s.runRangeQueryDetailed(ctx, cfg, q, f)
+	if err != nil {
+		return nil, err
+	}
+	return d.Series, nil
+}
+
+// runRangeQueryDetailed — v0.10.944 — runRangeQuery'nin gövdesi, cevabın veri
+// DIŞI yarısıyla (isPartial, 1000 seri tavanı, adım, cevap anı). Eski yol bu
+// fonksiyonu çağırıp yalnız serileri alır: nokta döngüsü TEK, iki yol
+// ayrışamaz.
+func (s *Service) runRangeQueryDetailed(ctx context.Context, cfg Settings, q string, f chstore.MetricQueryFilter) (QueryDetail, error) {
 	step := promStep(f.From, f.To, f.StepSeconds, f.MaxDataPoints)
 	params := url.Values{
 		"query": {q},
@@ -89,10 +101,24 @@ func (s *Service) runRangeQuery(ctx context.Context, cfg Settings, q string, f c
 		"end":   {promTime(f.To)},
 		"step":  {strconv.Itoa(step) + "s"},
 	}
-	series, err := promapi.QuerySeries(ctx, s.request("/api/v1/query_range", params, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query_range", params, cfg))
 	if err != nil {
-		return nil, err
+		return QueryDetail{}, err
 	}
+	return QueryDetail{
+		Series:      rangeSeries(res.Series, f, step),
+		Step:        step,
+		Partial:     res.IsPartial,
+		Truncated:   res.Truncated,
+		TotalSeries: res.Total,
+		AnsweredAt:  time.Now().UTC(),
+	}, nil
+}
+
+// rangeSeries — matrisi Coremetry seri şekline çevirir (kova başlangıcı,
+// sonlu olmayan örnek düşer, start'taki kısmi kova düşer). v0.10.944'te
+// runRangeQuery'den AYNEN çıkarıldı.
+func rangeSeries(series []promapi.Series, f chstore.MetricQueryFilter, step int) []chstore.SpanMetricSeries {
 	out := make([]chstore.SpanMetricSeries, 0, len(series))
 	startSec := float64(f.From.Unix())
 	for _, sr := range series {
@@ -119,7 +145,7 @@ func (s *Service) runRangeQuery(ctx context.Context, cfg Settings, q string, f c
 		}
 		out = append(out, row)
 	}
-	return out, nil
+	return out
 }
 
 // bucketStartNs — v0.10.504 (dış skill denetimi A6): Prometheus/VM
@@ -474,29 +500,39 @@ func (s *Service) labelNames(ctx context.Context, metric, service string, since 
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now()
+	out, _, err := s.labelNamesBetween(ctx, cfg, metric, service, now.Add(-since), now)
+	return out, err
+}
+
+// labelNamesBetween — v0.10.944 — labelNames'in MUTLAK pencereli gövdesi
+// (CoSRE araçları sohbet çıpasına bağlı pencereyle keşfeder). Parametreler
+// labelNames yolunda bayt-aynı. partial = VM `isPartial` (vmselect etiket
+// uçlarında da döndürür): liste eksik olabilir, "yok" kanıtı değildir.
+// labelNames bayrağı düşürür (eski çağıranların sözleşmesi).
+func (s *Service) labelNamesBetween(ctx context.Context, cfg Settings, metric, service string, from, to time.Time) (vals []string, partial bool, err error) {
 	matchers := []string{nameMatcher(discoveryNameCandidates(metric))}
 	if svc := strings.TrimSpace(service); svc != "" {
 		matchers = append(matchers, serviceLabel()+"="+quotePromString(svc))
 	}
-	now := time.Now()
 	params := url.Values{
-		"start":   {promTime(now.Add(-since))},
-		"end":     {promTime(now)},
+		"start":   {promTime(from)},
+		"end":     {promTime(to)},
 		"match[]": {"{" + strings.Join(matchers, ", ") + "}"},
 	}
-	keys, err := promapi.QueryStrings(ctx, s.request("/api/v1/labels", params, cfg))
+	res, err := promapi.QueryStringsMeta(ctx, s.request("/api/v1/labels", params, cfg))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	out := make([]string, 0, len(keys))
-	for _, k := range keys {
+	out := make([]string, 0, len(res.Values))
+	for _, k := range res.Values {
 		if k == "" || k == "__name__" {
 			continue
 		}
 		out = append(out, k)
 	}
 	sort.Strings(out)
-	return out, nil
+	return out, res.IsPartial, nil
 }
 
 // MetricPresentKeys — which of the asked-about keys this metric actually

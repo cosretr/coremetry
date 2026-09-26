@@ -57,7 +57,7 @@
 //     doğru çağrının koşulu, orada kazanılan bayt yanlış argümanla
 //     harcanan bir tura değmez.
 //
-// Tool catalogue (57 tools; v0.10.809 — 56 → 57: product_guide.go; v0.10.559 — 54 → 56: knowledge_tools.go get_runbook / search_knowledge; v0.10.556 — 52 → 54: signal_tools.go log_patterns / cluster_metric; v0.10.555 — 48 → 52: problem_tools.go get_problem / get_correlation_evidence / similar_problems / get_capabilities; v0.10.545 — 47 → 48: list_deployments.go; v0.10.478 — 44 → 47: context_tools.go; v0.10.475 — 43 → 44: build_link.go; v0.10.474 — 42 → 43: trace_stats.go; v0.10.472 — 40 → 42: attr_discovery.go; v0.10.469 — 39 → 40: resolve_entity.go; v0.10.468 — 36 → 39: entity_catalog.go list_namespaces / list_workloads / list_pods; sayım v0.9.1050'de düzeltildi — blok
+// Tool catalogue (60 tools; v0.10.944 — 57 → 60: logs_tools.go list_log_fields, metrics_tools.go list_metric_labels, compare_periods.go; search_logs / query_metric / get_trace yeni dosyalarında; v0.10.809 — 56 → 57: product_guide.go; v0.10.559 — 54 → 56: knowledge_tools.go get_runbook / search_knowledge; v0.10.556 — 52 → 54: signal_tools.go log_patterns / cluster_metric; v0.10.555 — 48 → 52: problem_tools.go get_problem / get_correlation_evidence / similar_problems / get_capabilities; v0.10.545 — 47 → 48: list_deployments.go; v0.10.478 — 44 → 47: context_tools.go; v0.10.475 — 43 → 44: build_link.go; v0.10.474 — 42 → 43: trace_stats.go; v0.10.472 — 40 → 42: attr_discovery.go; v0.10.469 — 39 → 40: resolve_entity.go; v0.10.468 — 36 → 39: entity_catalog.go list_namespaces / list_workloads / list_pods; sayım v0.9.1050'de düzeltildi — blok
 // v0.6.5'te kalmıştı, get_problem_root_cause/render_chart sayılmıyordu;
 // v0.9.1227'de get_operation_health ile 33; v0.9.1233'te
 // get_exception_samples ile 34; v0.9.1244'te list_teams +
@@ -148,11 +148,13 @@
 // environment, spans.deploy_env — int/uat/prep style values) because
 // their underlying reads already support it (GetServicesFilteredIn's
 // env conjunct v0.8.385; ProblemFilter.Env service-scoped semantics
-// v0.8.387). Results echo the applied env. The other tools stay
-// env-less ON PURPOSE: search_logs/list_anomalies/query_metric reads
-// carry no env path yet (env-separation Phase 4 pending) and
-// get_trace/pivot tools are id-anchored point lookups — no silent
-// half-support.
+// v0.8.387). Results echo the applied env.
+// v0.10.944 — search_logs (logs_tools.go) ve query_metric (metrics_tools.go)
+// da isteğe bağlı env alır: backend'in alan/etiket eşlemesiyle uygulanır ya
+// da uygulanamazsa notla partial raporlanır (asla sessizce düşmez);
+// compare_periods env alır ve servis birden çok ortamdaysa ZORUNLU tutar.
+// list_anomalies ile kimlik-çapalı get_trace/pivot araçları BİLEREK env'siz
+// kalır — sessiz yarım destek yok.
 //
 // v0.9.1141 — keşif tool'larında env kararı tool başına gözden geçirildi:
 // list_environments/list_clusters env boyutunun KENDİSİNİ listeler (arg
@@ -305,7 +307,10 @@ func ToolList(d Deps) []mcp.Tool {
 		listProblemWindowEventsTool(d),
 		getProblemRootCauseTool(d),
 		listAnomaliesTool(d),
-		searchLogsTool(d),
+		// v0.10.944 (CoSRE araştırma asistanı) — search_logs kaynak durumlu sürüm
+		// + list_log_fields: alan adı VARSAYILMAZ, canlı log arka ucundan okunur.
+		searchLogsV2Tool(d),
+		listLogFieldsTool(d),
 		// v0.9.1141 (Faz 3.2) — search_logs'un `cluster` arg'ının eşi;
 		// env keşfi list_services üçlüsünün yanında, cluster keşfi TEK
 		// tüketicisinin yanında duruyor.
@@ -324,7 +329,7 @@ func ToolList(d Deps) []mcp.Tool {
 		// v0.10.472 (Faz 3, F3-1) — attribute keşfi (attr_discovery.go): search_traces süzgecinden ÖNCE.
 		describeAttributesTool(d),
 		findAttributeByValueTool(d),
-		getTraceTool(d),
+		getTraceAnalyzedTool(d), // v0.10.944 — analizli get_trace (trace_tools.go)
 		// v0.9.1087 (Faz 4) — id'siz giriş: trace ID'yi BULMANIN yolu.
 		searchTracesTool(d),
 		// v0.10.474 (Faz 3, F3-3) — ham listeden ÖNCE sayı: trace_stats (trace_stats.go), aramanın hemen yanında.
@@ -339,9 +344,11 @@ func ToolList(d Deps) []mcp.Tool {
 		findTraceByRequestIDTool(d),
 		// v0.9.1089 (Faz 4) — SLO durum+yörünge; tükenme uydurması biter.
 		listSLOStatusTool(d),
-		queryMetricTool(d),
+		queryMetricInvestigateTool(d), // v0.10.944 — etiket eşlemeli query_metric (metrics_tools.go)
 		// v0.9.1090 (Faz 4) — query_metric'in eşi: ad uydurmayı bitirir.
 		listMetricNamesTool(d),
+		// v0.10.944 — etiket adı da uydurulmaz: canlı etiket kümesi (metrics_tools.go).
+		listMetricLabelsTool(d),
 		// v0.9.1141 (Faz 3.2) — katalog ikizi: render_chart'ın
 		// `operation` arg'ının (ve "hangi endpoint'ler var" sorusunun) eşi.
 		listOperationsTool(d),
@@ -356,6 +363,10 @@ func ToolList(d Deps) []mcp.Tool {
 		getCorrelatedChangesTool(d),
 		// v0.9.1092 (Faz 4) — deploy önce/sonra RED kıyası.
 		getDeployDiffTool(d),
+		// v0.10.944 (CoSRE araştırma asistanı) — sorunlu dönem ↔ referans dönem:
+		// trafik, hata, tüm-pencere yüzdelikleri, trafik karışımı, bağımlılık,
+		// pod/sürüm farkı (compare_periods.go). Deploy kıyasının genel ikizi.
+		comparePeriodsTool(d),
 		// v0.9.1141 (Faz 3.2) — get_deploy_diff'in eşi: sürümü tool
 		// kendisi seçiyordu, model "dün gece ne çıktı"yı soramıyordu.
 		listDeploysTool(d),
@@ -1047,64 +1058,10 @@ func listAnomaliesTool(d Deps) mcp.Tool {
 
 // ─── search_logs ───────────────────────────────────────────────
 
-type searchLogsArgs struct {
-	Query       string `json:"query,omitempty"`
-	Service     string `json:"service,omitempty"`
-	Cluster     string `json:"cluster,omitempty"`
-	TraceID     string `json:"trace_id,omitempty"`
-	SeverityMin int    `json:"severity_min,omitempty"`
-	RangeS      int    `json:"range_s,omitempty"`
-	Limit       int    `json:"limit,omitempty"`
-}
-
-func searchLogsTool(d Deps) mcp.Tool {
-	return mcp.Tool{
-		Name:             "search_logs",
-		ShortDescription: "Loglarda tam metin + yapısal arama (CH ya da ES). trace_id ile bir trace'in tüm satırları, severity_min=17 yalnız hatalar. partial / totalIsLowerBound bayraklarını cevaba taşı.",
-		Description:      "Full-text + structured search across logs. Routes to whichever backend Coremetry is configured for (ClickHouse or Elasticsearch). Use trace_id to pull every log line belonging to one trace. Use severity_min=17 for errors only (OTel severity number; 17=ERROR, 21=FATAL). HONESTY ENVELOPE: the response may carry partial=true (soft timeout / failed shards — rows are a SUBSET of the true answer), shardsFailed>0, and totalIsLowerBound=true (total is 'at least', not exact). There is no env argument: rows always span every environment. Never present a partial result as complete; say so.",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"query":        map[string]any{"type": "string", "description": "Free text and/or field terms in the /logs search language (e.g. `level:error timeout`). Elasticsearch: Lucene query_string. ClickHouse: the same field syntax compiled server-side (free text matched in the body)."},
-				"service":      map[string]any{"type": "string", "description": "Exact service name filter. Empty = all services."},
-				"cluster":      map[string]any{"type": "string", "description": "k8s cluster name from resource attrs."},
-				"trace_id":     map[string]any{"type": "string", "description": "Pull all logs for one trace."},
-				"severity_min": map[string]any{"type": "integer", "minimum": 0, "maximum": 24, "description": "OTel severity number floor. 17=ERROR."},
-				"range_s":      map[string]any{"type": "integer", "minimum": 0, "maximum": 604800, "description": "Lookback seconds. Default 1800."},
-				"limit":        map[string]any{"type": "integer", "minimum": 1, "maximum": 500, "description": "Default 50."},
-			},
-		},
-		Handler: func(ctx context.Context, raw json.RawMessage) (any, error) {
-			var a searchLogsArgs
-			if len(raw) > 0 {
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return nil, fmt.Errorf("decode args: %w", err)
-				}
-			}
-			from, to := rangeWindow(ctx, a.RangeS)
-			page, err := d.LogStore.Search(ctx, logstore.Filter{
-				Service:     a.Service,
-				Cluster:     a.Cluster,
-				Search:      a.Query,
-				TraceID:     a.TraceID,
-				From:        from,
-				To:          to,
-				SeverityMin: uint8(a.SeverityMin),
-				Limit:       clampLimit(a.Limit, 50, 500),
-			})
-			if err != nil {
-				return nil, err
-			}
-			return page, nil
-		},
-	}
-}
+// v0.10.944 — search_logs artık logs_tools.go'da (searchLogsV2Tool): kaynak
+// durumu, ortam/cluster/namespace/pod süzgeci, eşleme raporu, UTC ISO zaman.
 
 // ─── get_trace ─────────────────────────────────────────────────
-
-type getTraceArgs struct {
-	TraceID string `json:"trace_id"`
-}
 
 // getTraceSpanCap — get_trace'in gövde tavanı (v0.9.1050, Faz 0.10).
 // GetTrace LIMIT 50000'e dek span döndürür ve her span attr+resource
@@ -1165,111 +1122,14 @@ func traceBodyPayload(traceID string, spans []chstore.SpanRow) map[string]any {
 	}
 }
 
-func getTraceTool(d Deps) mcp.Tool {
-	return mcp.Tool{
-		Name:             "get_trace",
-		ShortDescription: "Bir trace ID'sinin span şelalesi (servis, operasyon, süre, hata, parent_span_id). En çok 200 span; truncated=true iken 'tüm trace'i gördüm' deme.",
-		Description:      "Fetch the spans of one trace ID as a waterfall: service, operation, duration, error status, parent_span_id. Use after search_logs surfaces a trace ID, or directly from a problem's correlated traces. Bounded: at most 200 spans are returned — all ERROR spans are kept first, then the slowest ones; when the trace is larger, truncated=true and total_span_count carries the real size, so never claim to have seen the whole trace while truncated is true.",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"trace_id": map[string]any{"type": "string", "description": "32-char hex trace ID."},
-			},
-			"required": []string{"trace_id"},
-		},
-		Handler: func(ctx context.Context, raw json.RawMessage) (any, error) {
-			var a getTraceArgs
-			if err := json.Unmarshal(raw, &a); err != nil {
-				return nil, fmt.Errorf("decode args: %w", err)
-			}
-			if a.TraceID == "" {
-				return nil, fmt.Errorf("trace_id is required")
-			}
-			spans, err := d.Store.GetTrace(ctx, a.TraceID)
-			if err != nil {
-				return nil, err
-			}
-			return traceBodyPayload(a.TraceID, spans), nil
-		},
-	}
-}
+// v0.10.944 — get_trace artık trace_tools.go'da (getTraceAnalyzedTool): aynı 200
+// span tavanı + analiz (öz süre, kritik yol toplanmadan, bağlam) + kaynak durumu.
 
 // ─── query_metric ──────────────────────────────────────────────
 
-type queryMetricArgs struct {
-	Name        string `json:"name"`
-	Service     string `json:"service,omitempty"`
-	Aggregation string `json:"aggregation,omitempty"`
-	GroupBy     string `json:"group_by,omitempty"`
-	RangeS      int    `json:"range_s,omitempty"`
-	StepS       int    `json:"step_s,omitempty"`
-}
-
-// query_metric sonuç sınırları (açıklamada ilan edilir).
-const queryMetricMaxSeries, queryMetricMaxPoints = 20, 120
-
-func queryMetricTool(d Deps) mcp.Tool {
-	return mcp.Tool{
-		Name:             "query_metric",
-		ShortDescription: "Ingest edilmiş OTel metriklerinde zaman kovalı sorgu → {time, value} serileri. p99 gecikme histogramı, sum sayaç, avg gauge için.",
-		Description:      "Run a time-bucketed query against ingested OTel metrics (ClickHouse, or VictoriaMetrics when the operator made it the metric backend) and get series of {time (unix ns), value}, one per group_by combination. Use aggregation='p99' for latency histograms, 'sum' for counters, 'avg' for gauges (e.g. http.server.request.duration → p99). The name must exist: a guessed semconv name returns an empty series, not an error — take it from list_metric_names. BOUNDS: at most 20 series (truncated + total_series say so) and ~120 points each; keep group_by narrow. No env argument.",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"name":        map[string]any{"type": "string", "description": "OTel metric name."},
-				"service":     map[string]any{"type": "string", "description": "Exact service name filter. Empty = all services."},
-				"aggregation": map[string]any{"type": "string", "enum": []string{"avg", "sum", "min", "max", "last", "p50", "p95", "p99"}, "description": "Default 'avg'."},
-				"group_by":    map[string]any{"type": "string", "description": "Comma-separated attribute keys (e.g. 'http.route,http.status_code')."},
-				"range_s":     map[string]any{"type": "integer", "minimum": 0, "maximum": 604800, "description": "Lookback seconds. Default 1800."},
-				"step_s":      map[string]any{"type": "integer", "description": "Bucket size seconds. 0 = auto."},
-			},
-			"required": []string{"name"},
-		},
-		Handler: func(ctx context.Context, raw json.RawMessage) (any, error) {
-			var a queryMetricArgs
-			if err := json.Unmarshal(raw, &a); err != nil {
-				return nil, fmt.Errorf("decode args: %w", err)
-			}
-			if a.Name == "" {
-				return nil, fmt.Errorf("name is required")
-			}
-			agg := a.Aggregation
-			if agg == "" {
-				agg = "avg"
-			}
-			from, to := rangeWindow(ctx, a.RangeS)
-			var groups []string
-			if a.GroupBy != "" {
-				groups = append(groups, splitCSV(a.GroupBy)...)
-			}
-			// v0.9.1150 — metrik okuma ROUTER'ından (CH ya da VM).
-			series, err := d.metrics().QueryMetric(ctx, chstore.MetricQueryFilter{
-				Name:          a.Name,
-				Service:       a.Service,
-				Aggregation:   agg,
-				GroupBy:       groups,
-				From:          from,
-				To:            to,
-				StepSeconds:   a.StepS,
-				MaxDataPoints: queryMetricMaxPoints, // otomatik adımda kova sayısı hedefi
-			})
-			if err != nil {
-				return nil, err
-			}
-			// Sonuç SINIRLI (get_trace emsali): yüksek kardinaliteli group_by tek
-			// tools/call'da on binlerce nokta döndürebiliyordu; dış yolda
-			// clampToolResultForModel yok. Kesme cevapta SÖYLENİR.
-			total := len(series)
-			if len(series) > queryMetricMaxSeries {
-				series = series[:queryMetricMaxSeries]
-			}
-			for i := range series {
-				series[i].Points = thinEvery(series[i].Points, queryMetricMaxPoints)
-			}
-			return map[string]any{"series": series, "count": len(series), "total_series": total, "truncated": total > len(series)}, nil
-		},
-	}
-}
+// v0.10.944 — query_metric artık metrics_tools.go'da (queryMetricInvestigateTool):
+// ortam/cluster/namespace/pod etiket eşlemesi, keşifle doğrulanan etiketler,
+// trace_id etiket reddi, kaynak durumu, UTC ISO zaman.
 
 // ─── render_chart ──────────────────────────────────────────────
 // CoSRE Faz-2 — MCP-backed structured chart cards. The model calls

@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/cilcenk/coremetry/internal/tzdefault"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -134,5 +135,66 @@ func TestApplyAbsoluteWindowsAndRender(t *testing.T) {
 		if routeGuidedIntent(sg, []string{"checkout"}, nil, nil, "").Intent == guidedNone {
 			t.Errorf("öneri yönlenmeli: %q", sg)
 		}
+	}
+}
+
+// v0.10.944 (inceleme) — guided window_compare route.Env'i yok sayıyordu:
+// service_summary_5m ortam taşımaz, prod + uat birleşiyordu ve kanıt bunu
+// söylemiyordu. Ortamlı okuma (service_env_summary_5m) ya da açık not.
+func TestWindowCompareEvidenceEnv(t *testing.T) {
+	ist := time.FixedZone("TRT", 3*3600)
+	w1 := absWindow{From: time.Date(2026, 9, 25, 10, 0, 0, 0, ist), To: time.Date(2026, 9, 25, 11, 0, 0, 0, ist)}
+	w2 := absWindow{From: time.Date(2026, 9, 26, 10, 0, 0, 0, ist), To: time.Date(2026, 9, 26, 11, 0, 0, 0, ist)}
+	reds := []aiRED{{Spans: 100, P99Ms: 900}, {Spans: 120, P99Ms: 1200}}
+	wins := []absWindow{w1, w2}
+
+	// env yok: eski kanıt + kaynak satırı birebir.
+	ev, src := windowCompareEvidenceTR("checkout", "", false, wins, reds, ist)
+	if ev != renderWindowCompareTR("checkout", wins, reds, ist) || !strings.HasPrefix(src, "service_summary_5m (iki pencere: ") || strings.Contains(src, "ortam") {
+		t.Errorf("env'siz kanıt değişmemeli: %q", src)
+	}
+	// env istendi ama MV kapsamıyor: birleşik okuma + açık not.
+	ev, src = windowCompareEvidenceTR("checkout", "uat", false, wins, reds, ist)
+	if !strings.HasPrefix(ev, `Not: RED değerleri tüm ortamların toplamı — "uat" ortam süzgeci uygulanmadı`) || !strings.Contains(ev, "farkı uat ortamına atfetme") {
+		t.Errorf("uygulanmayan env notu yok:\n%s", ev)
+	}
+	if !strings.HasSuffix(src, ", ortam: uat (uygulanmadı — tüm ortamlar)") {
+		t.Errorf("kaynak satırı: %q", src)
+	}
+	// env + kapsama: iki pencere de ortamlı; kaynak notu okunan tabloyu söyler.
+	ev, src = windowCompareEvidenceTR("checkout", "uat", true, wins, reds, ist)
+	if strings.Contains(ev, "uygulanmadı") || !strings.Contains(ev, `yalnız "uat" ortamından`) ||
+		!strings.Contains(ev, "sayılar service_env_summary_5m ön-toplamından") || strings.Contains(ev, "sayılar service_summary_5m") {
+		t.Errorf("ortamlı kanıt:\n%s", ev)
+	}
+	if !strings.HasPrefix(src, "service_env_summary_5m (ortam: uat; iki pencere: ") {
+		t.Errorf("ortamlı kaynak satırı: %q", src)
+	}
+}
+
+// Kaynaktan pin: bundle env'i ya İKİ pencerede uygular ya hiç (karışık
+// okuma yok) ve çipte yalnız uygulanan süzgeç görünür.
+func TestWindowCompareBundleEnvIsAllOrNothing(t *testing.T) {
+	b, err := os.ReadFile("copilot_guided.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	i := strings.Index(src, "func (s *Server) guidedWindowCompareBundle(")
+	if i < 0 {
+		t.Fatal("bundle yok")
+	}
+	body := src[i:]
+	if j := strings.Index(body, "\n}\n"); j > 0 {
+		body = body[:j]
+	}
+	for _, want := range []string{"s.store.EnvSummaryCovers(ctx, earliest)", "s.store.ServiceEnvWindowRED(", "withEnvArg(stepArgs, route.Env)", "windowCompareEvidenceTR("} {
+		if !strings.Contains(body, want) {
+			t.Errorf("bundle %q içermeli", want)
+		}
+	}
+	// kapsama kararı döngüden ÖNCE, tek kez (pencere başına ayrı karar karışık okuma üretirdi)
+	if strings.Index(body, "scoped :=") > strings.Index(body, "for i, w := range route.Windows") {
+		t.Error("ortam kararı pencere döngüsünden önce verilmeli")
 	}
 }

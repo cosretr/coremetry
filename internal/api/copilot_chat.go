@@ -450,6 +450,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	var loopLinks []guidedAnswerLink
 	// v0.10.495 — döngünün SON trace araması (birebir deep_link); cevabın
 	// `open` alanı bundan türer (answerOpenHref: fiil kapısı).
+	// v0.10.944 — /logs? bağlantısı da taşıyabilir, ama YALNIZ döngüde trace
+	// araması olmadıysa (nextLoopOpen, chat_tool_links.go).
 	var loopOpen string
 	// v0.9.528 Faz 2 — serbest döngünün sistem prompt'u da kiminle
 	// konuşulduğunu taşır. Ön-söz boşsa sabitin aynısı.
@@ -458,8 +460,10 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// söylemedikçe 1800 (30 dk) kullan" diyor. Ekranda checkout-service
 	// açık ve 6 saatlik pencere seçiliyken sorulan soru filo geneline ve
 	// 30 dakikaya gidiyordu (chat_screen_context.go).
+	// v0.10.944 — pin bir kez temizlenir; hem servis düşümü hem sayfa önsözü kullanır.
+	pinnedCtx := agentctx.Sanitize(req.Context.PinnedPage)
 	screenCtx := ChatScreenContext{
-		Service:   req.Context.Service,
+		Service:   freeLoopScreenService(req.Context.Service, pageCtx, pinnedCtx),
 		Operation: req.Context.Operation,
 		Env:       req.Context.Env,
 		RangeS:    req.Context.RangeS,
@@ -493,7 +497,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// cached_tokens (v0.10.807).
 	loopPrompt := copilot.SystemPromptChatAgentLoop() + // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A)
 		screenContextPreambleTR(screenCtx) +
-		agentctx.PreambleTR(pageCtx, agentctx.Sanitize(req.Context.PinnedPage)) + // v0.10.539 — sayfa bağlamı (pin önce)
+		agentctx.PreambleTR(pageCtx, pinnedCtx) + // v0.10.539 — sayfa bağlamı (pin önce)
 		chatContextPreambleTR(cst.ctx) + // v0.10.478 — aktif sohbet bağlamı (Ek A ACTIVE_CONTEXT)
 		withAddressee(addressee, copilot.SystemPromptChat())
 
@@ -642,8 +646,14 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			tr := copilot.ToolResult{CallID: tc.ID, Name: tc.Name, IsError: oc.IsError, Content: oc.Content}
-			if !tr.IsError {
+			// v0.10.944 — kaynak durumu çıktının TAMAMINDAN (önizleme 4 KB'ta
+			// kırpılır; rozet oradan okunamayabilir). chat_step_sources.go.
+			// Bir kez çözülür: künye ve çip aynı sonucu kullanır.
+			srcs := stepSourceStatuses(tr.Content)
+			if !tr.IsError && !stepSourcesAllFailed(srcs) {
 				// v0.10.53 — künyeye YALNIZ buradan: araç vardı, çalıştı, veri döndürdü.
+				// v0.10.944 — kaynak hatası artık Go hatası değil, source.state'li
+				// başarılı sonuç; tüm kaynakları hata sınıfındaysa veri yok, künyeye girmez.
 				calledTools = append(calledTools, tc.Name)
 			}
 			preview, truncated := clipStepPreview(tr.Content)
@@ -651,6 +661,12 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				"i": stepN, "tool": tc.Name, "ok": !tr.IsError,
 				"preview": preview, "truncated": truncated, "bytes": len(tr.Content),
 				"durationMs": toolDur.Milliseconds(),
+			}
+			// v0.10.944 — denetlenmiş çıktı (nil değil) boş olsa da gönderilir:
+			// `sources: []` "okundu, durum yok" demek; eksik alan FE'de "eski
+			// sunucu" sayılır. Hata sonucunda gönderilmez (hata rozeti kazanır).
+			if srcs != nil && !tr.IsError {
+				stepEv["sources"] = srcs
 			}
 			// v0.9.1228 — çipe ürün köprüsü: başarılı çağrının hedef
 			// görünümü (K4-denetimli harita, chat_tool_links.go). Eski FE
@@ -665,7 +681,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				if l, ok := toolResultDeepLink(tc.Name, tr.Content); ok {
 					stepEv["href"] = l.Href
 					loopLinks = mergeToolLinks(loopLinks, l)
-					loopOpen = l.Href
+					loopOpen = nextLoopOpen(loopOpen, tc.Name, l.Href)
 					emit("block", blockSeq.Next(blocks.TypeLink, l)) // v0.10.541
 					if act, ok := actionForLink(l, pagePath); ok {
 						emit("block", blockSeq.Next(blocks.TypeAction, act)) // v0.10.542

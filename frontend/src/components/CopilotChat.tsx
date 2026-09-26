@@ -31,9 +31,11 @@ import { useCopilotConfig } from './ai/useCopilotEnabled'; // v0.10.483
 import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
 import { AIDrawerBody } from './ai/AIDrawerBody'; // v0.10.483 — ✨ Explain gövdesi aynı çekmecede
 import { useAiSubject } from './ai/useAiSubject';
-import { aiSubjectSubtitle, aiSubjectTitle, formatAiParam } from '@/lib/aiSubject';
+import { aiSubjectSubtitle, aiSubjectTitle, formatAiParam, parseAiParam } from '@/lib/aiSubject';
 import { greetHello, greetStatus } from './ai/greeting';
-import type { AiConversationSummary } from '@/lib/types';
+import type { AiConversation, AiConversationSummary } from '@/lib/types';
+import { traceContextFromPage, useTraceAiContext } from '@/lib/traceAiContext'; // v0.10.944
+import { TraceContextStrip } from './ai/TraceContextStrip'; // v0.10.944
 
 // CopilotChat (v0.6.53, v0.9.163 interaktif) — global in-app AI assistant.
 // Sağ-alt animasyonlu sparkline logo (operatör seçimi B) bir drawer açar;
@@ -122,7 +124,40 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
   // kipinde (AIDrawerBody); genel sohbet kipi öznesizken. Tek kabuk.
   const [subject, setSubject] = useAiSubject();
   const drawerOpen = open || subject !== null;
-  const closeDrawer = () => { setSubject(null); setOpen(false); };
+  // v0.10.944 (CoSRE Faz A) — geçmişten açılan ÖZNELİ konuşma. Çekmece
+  // sohbeti onu BİR KEZ devralır (`consumed`); öznesi/bağlamı ise şerit için
+  // durur. Çekmece kapanınca düşer — sonraki "CoSRE'ye sor" yeni sohbettir.
+  const [resume, setResume] = useState<{ conv: AiConversation; consumed: boolean } | null>(null);
+  const closeDrawer = () => { setSubject(null); setOpen(false); setResume(null); };
+  const markResumed = useCallback((id: string) => {
+    setResume(r => (r && r.conv.id === id ? { ...r, consumed: true } : r));
+  }, []);
+  // Devralma yalnız AYNI özne açıkken (kanonik kodek eşitliği).
+  const resumeFor = resume && subject && formatAiParam(subject) === (resume.conv.subject ?? '') ? resume : null;
+  // v0.10.944 — özne kipinden çıkılınca (gezinme/geri ?ai='yi düşürdü) devralma da düşer;
+  // yalnız closeDrawer'a bağlı kalsaydı aynı özne sonra bayat konuşmayı/bağlamı devralırdı
+  // (eski span/env/pencere YENİ konuşmanın bağlamı olarak gider ve saklanırdı). Yalnız
+  // devralmanın KENDİ öznesinden ayrılınca düşer — openThread A→B geçişinde yeni resume'un
+  // öznesi B'dir (önceki A değil), korunur; setResume ile router güncellemesinin aynı
+  // render'a düşmesine de bağlı değil.
+  const subjectKey = subject ? formatAiParam(subject) : '';
+  const prevSubjectKeyRef = useRef(subjectKey);
+  useEffect(() => {
+    const prev = prevSubjectKeyRef.current;
+    prevSubjectKeyRef.current = subjectKey;
+    if (prev === subjectKey) return;
+    setResume(r => (r && r.conv.subject === prev && r.conv.subject !== subjectKey ? null : r));
+  }, [subjectKey]);
+  // v0.10.944 — trace öznesinin bağlamı: sayfanın CANLI yayını (Trace.tsx /
+  // TraceKiosk.tsx → lib/traceAiContext), yoksa konuşmanın kayıtlı anlık
+  // görüntüsü. Şerit ve çekmece sohbetinin her turu AYNI nesneyi okur.
+  const traceSubjectId = subject?.kind === 'trace' ? subject.id : null;
+  const liveTraceCtx = useTraceAiContext(traceSubjectId);
+  const savedTraceCtx = useMemo(() => {
+    const c = resumeFor ? traceContextFromPage(resumeFor.conv.context) : null;
+    return c && c.traceId === traceSubjectId ? c : null;
+  }, [resumeFor, traceSubjectId]);
+  const drawerTraceCtx = liveTraceCtx ?? savedTraceCtx;
   const navigate = useNavigate(); // v0.10.434 (D7b) — "sayfasını aç" cevabı SPA içinde gezer
   // v0.9.169 — proaktif rozet: açık KRİTİK problem sayısı (chat kapalıyken
   // FAB'da kırmızı rozet). Yalnız copilot açıkken pollar; RQ tab gizliyken durur.
@@ -284,10 +319,24 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
     return () => { alive = false; };
   }, [open]);
 
-  const openThread = async (id: string) => {
+  const openThread = async (t: AiConversationSummary) => {
     try {
-      setSubject(null); // v0.10.483 — arşivden konuşma açmak genel kipe döner
-      await load(id);
+      // v0.10.944 (CoSRE Faz A) — ÖZNELİ konuşma (çekmece sohbeti, ör.
+      // `trace:<id>`) özne kipini YENİDEN açar: çekmece o özneye döner,
+      // sohbet konuşmayı devralır (aynı kimliğe yazmaya devam eder) ve
+      // bağlam şeridi kayıtlı anlık görüntüyü gösterir. Eskiden özne
+      // düşüyor, turlar genel pencereye bağlamsız yükleniyordu.
+      const subj = parseAiParam(t.subject ?? '');
+      if (subj) {
+        const c = await api.aiConversation(t.id);
+        setResume({ conv: { ...c, subject: c.subject || t.subject }, consumed: false });
+        setSubject(subj);
+        setShowHistory(false);
+        return;
+      }
+      setSubject(null); // v0.10.483 — öznesiz konuşma genel kipe döner
+      setResume(null);
+      await load(t.id);
       setShowHistory(false);
     } catch (e) {
       setHistErr(e instanceof Error ? e.message : String(e));
@@ -500,6 +549,14 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
             </div>
           }>
 
+          {/* v0.10.944 (CoSRE Faz A) — "Bağlam" şeridi: başlık satırının hemen
+              altında, trace öznesinde. Başlığın TEK SATIR kararı (v0.10.483)
+              korunur; şerit kendi satırında sarar. */}
+          {subject?.kind === 'trace' && (
+            <TraceContextStrip traceId={subject.id} ctx={drawerTraceCtx}
+              saved={!liveTraceCtx && !!savedTraceCtx} />
+          )}
+
           {/* Geçmiş bölümü (v0.9.1139) — başlık + son etkinlik + mesaj
               sayısı. Satıra tıklamak konuşmayı YÜKLER; satır sonundaki
               quiet-destructive düğme onaydan sonra siler. Yükleniyor /
@@ -543,7 +600,7 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
                   background: t.id === conversationId ? 'var(--accent-soft)' : undefined,
                 }}>
                   <Button variant="ghost" size="sm"
-                    onClick={() => void openThread(t.id)}
+                    onClick={() => void openThread(t)}
                     title={t.title}
                     style={{
                       flex: 1, minWidth: 0, justifyContent: 'flex-start',
@@ -571,7 +628,10 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
               çekmece sohbeti (AIDrawerBody). key: özne değişince sıfırlanır. */}
           {subject ? (
             <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--sp-7)' }}>
-              <AIDrawerBody key={formatAiParam(subject)} subject={subject} onClose={closeDrawer} />
+              <AIDrawerBody key={formatAiParam(subject)} subject={subject} onClose={closeDrawer}
+                traceCtx={drawerTraceCtx}
+                resume={resumeFor && !resumeFor.consumed ? resumeFor.conv : null}
+                onResumed={markResumed} />
             </div>
           ) : (<>
           {/* Messages */}

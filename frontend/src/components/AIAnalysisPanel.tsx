@@ -274,7 +274,7 @@ function ContextView({ ctx }: { ctx: NonNullable<ServiceAnalysisResponse['contex
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, padding: 12, fontSize: 11.5 }}>
       <div style={{ fontWeight: 700, color: 'var(--text2)', marginBottom: 6 }}>Modele gönderilen özet</div>
-      {row('rate', `${c.rate.toFixed(1)} req/s`)}
+      {row('rate', `${c.rate.toFixed(1)} span/s`)}
       {row('error', `${c.errorRate.toFixed(2)}% (${c.errorCount})`)}
       {row('p50 · p95 · p99', `${c.p50Ms.toFixed(0)} · ${c.p95Ms.toFixed(0)} · ${c.p99Ms.toFixed(0)} ms`)}
       {b.spans > 0 && row('baseline error · p99', `${b.errorRate.toFixed(2)}% · ${b.p99Ms.toFixed(0)} ms`)}

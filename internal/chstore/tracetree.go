@@ -8,8 +8,12 @@ package chstore
 // aralık birleşimi) — tek tanım burada: öz süre = süre − doğrudan çocukların
 // ARALIK BİRLEŞİMİ (ebeveyne kırpılmış), asla negatif (lib/selfTime.ts sözleşmesi).
 // Kritik yol = lib/criticalPath.ts ile aynı kural: en uzun kök; her adımda
-// ebeveynin bitişini AŞMAYAN en uzun zincirli çocuk; toplam = zincir sürelerinin
-// toplamı. Özyineleme YOK (50k tavanı, derin trace): DFS yığınla, birikimler
+// ebeveynin bitişini AŞMAYAN en uzun zincirli çocuk. v0.10.944 — CriticalNs
+// artık zincirin DUVAR SAATİ kapsamı = kök süresi: zincir iç içe span'lerden
+// oluşur (her çocuk ebeveyninin içinde biter), süreleri toplamak aynı anı
+// iki-üç kez sayıyordu (100 ms'lik trace'e "210 ms kritik yol"). İç zincir
+// toplamı (chainNs) YALNIZ çocuk SEÇİMİNDE kullanılır, dışarı sayı olarak
+// çıkmaz. Özyineleme YOK (50k tavanı, derin trace): DFS yığınla, birikimler
 // DFS sırasının tersiyle. Tablo-testli (tracetree_test.go).
 
 import "sort"
@@ -51,7 +55,8 @@ type TraceAnalysis struct {
 	Truncated   bool                  `json:"truncated"`
 }
 
-const traceAnalysisVersion = 1
+// v0.10.944 — 1 → 2: CriticalNs'in ANLAMI değişti (zincir toplamı → kök süresi).
+const traceAnalysisVersion = 2
 
 type ttNode struct {
 	idx      int
@@ -61,7 +66,7 @@ type ttNode struct {
 	subCount, subErr uint32
 	subMin, subMax   int64
 	selfNs           int64
-	chainNs          int64 // kritik zincir toplamı (bu düğümden aşağı)
+	chainNs          int64 // kritik zincir SEÇİM skoru (bu düğümden aşağı; dışarı sayı olarak çıkmaz)
 	chainNext        int   // -1 = yaprak
 }
 
@@ -209,7 +214,11 @@ func BuildTraceAnalysis(spans []SpanRow, truncated bool) TraceAnalysis {
 			}
 		}
 		out.RootSpanID = spans[best].SpanID
-		out.CriticalNs = nodes[best].chainNs
+		// v0.10.944 — zincirin duvar saati = kök süresi. Zincirdeki her
+		// çocuk ebeveyninin bitişini aşamaz (seçim kuralı), yani yolun sonu
+		// kökün sonudur; iç içe süreleri toplamak (eski chainNs) paralel ve
+		// iç içe zamanı birden çok kez sayardı.
+		out.CriticalNs = spanDur(&spans[best])
 		for cur := best; cur >= 0; cur = nodes[cur].chainNext {
 			critical[cur] = true
 			out.CriticalIDs = append(out.CriticalIDs, spans[cur].SpanID)

@@ -764,3 +764,29 @@ vakaları hiç koşulmamıştı. Puanlama ve vaka yolu CLI ile ORTAK (`runEvalse
 panel ile `go test -tags evalset` aynı şeyi ölçer; CLI özel Service'iyle sıcaklık 0'da ve
 `ai_calls`'a yazmadan kalır. Aynı anda tek koşu (süreç + taze `running` satırı), 15 dk
 güncellenmeyen koşu "yarım kaldı" sayılır; son yazım başarısızsa sonuç bellekte tutulur.
+
+## 2026-09-26 — CoSRE araştırma asistanı, Faz A: kaynak durumu, eşleme, hesap doğruluğu (v0.10.944)
+
+**Karar (operatör: CoSRE trace/log/metrik kaynaklarını birlikte inceleyen, kanıt gösteren ve takip
+sorularıyla süren bir asistana dönüşsün; "yalnızca plan sunma, uygula"):** Mevcut sağlayıcı ve
+mimari korunur; araçlar sohbet ile MCP'nin ORTAK kayıt defterinde kalır. Her araç sonucu veriden
+ayrı bir kaynak durumu taşır (`internal/sourcestate`: ok · empty · unreachable · unauthorized ·
+timeout · partial · delayed · truncated · not_configured); erişilemeyen kaynak boş sonuç gibi
+görünmez, "log yok" "hata yok" diye okunmaz. Yeni araç hata sınıfı `unauthorized` (401/403: tekrar
+deneme, kapsam dışı olduğunu söyle). `search_logs` / `query_metric` / `get_trace` yenilendi,
+`list_log_fields` / `list_metric_labels` / `compare_periods` eklendi (57 → 60 araç). ES alan ve VM
+etiket eşlemesi yapılandırılabilir (servis, ortam, cluster, namespace, pod, sürüm); öncelik
+yapılandırma > keşif > yok ve araç hangisini kullandığını söyler. Trace↔log eşleşmesi kimlikle
+ise `match=trace_id/span_id`, servis/pod/zamanla ise `contextual`; trace kimliği metrik etiketi
+olamaz (exemplar). Karşılaştırma tüm pencere yüzdeliği kullanır (p95 ortalaması YOK), çok ortamlı
+serviste env ister, trafik karışımı / örnek sayısı / kapsama / örnekleme notu taşır; kritik yol
+toplamı iç içe süreleri toplamaz. Çekmecede görünür bağlam şeridi (trace, span, servis, ortam,
+cluster/namespace, pencere) her turda gönderilir ve konuşmayla saklanır.
+
+**Neden:** Haritalama (6 okuyucu) mevcut araçların kaynak hatalarını sessizce boş sonuca, 401/403'ü
+`internal`'a çevirdiğini; alanların kodda sabit aday listeleriyle çözüldüğünü; kritik yol
+toplamının ve iki AI karşılaştırma yolunun (aggRED, guided window_compare) yanlış hesapladığını
+gösterdi. **Sınırlar (mevcut kararlar):** üründe veri maskeleme yok (maskeleme collector'da;
+yalnız DataNotInstruction çerçevesi ve FenceSafe); tenant modeli yok (rol tabanlı yetki, yeni
+araçlar viewer, REST eşleriyle aynı). Faz B: seçili trace için kanıta dayalı inceleme akışı ve
+takip sorularının araç döngüsüne bağlanması.

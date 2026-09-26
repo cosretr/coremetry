@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/sourcestate"
 )
 
 // Per-entity AI analysis (v0.8.85). SINGLE-SHOT, provider-neutral — the model
@@ -37,7 +38,7 @@ type serviceAnalysis struct {
 
 type aiRED struct {
 	Spans      uint64  `json:"spans"`
-	Rate       float64 `json:"rate"` // req/s
+	Rate       float64 `json:"rate"` // v0.10.944 — span/s (tüm span türleri, service_summary_5m); istek hızı değil
 	ErrorRate  float64 `json:"errorRate"`
 	ErrorCount uint64  `json:"errorCount"`
 	AvgMs      float64 `json:"avgMs"`
@@ -75,6 +76,13 @@ type aiServiceContext struct {
 	// onu alıp kendi log'una, kaydına, çağrı merkezine gider.
 	Business    map[string][]chstore.BusinessSlice `json:"business,omitempty"`
 	Correlation []chstore.CorrelationSample        `json:"correlation,omitempty"`
+
+	// v0.10.944 — pencere RED okumalarının hatası (dışa aktarılmaz: JSON
+	// sözleşmesi ve lib/types.ts değişmez). Zaman aşımı ya da erişilemeyen
+	// okuma artık Current/Baseline'ı sessizce sıfır bırakıp "veri yok"
+	// diye sunulmaz; renderServiceSnapshot ve guided adımları bunu okur.
+	curErr  error
+	baseErr error
 }
 
 // aiAnalyzeResponse is the endpoint payload.
@@ -150,6 +158,12 @@ func (s *Server) copilotAnalyzeService(w http.ResponseWriter, r *http.Request) {
 	from := to.Add(-time.Duration(rangeS) * time.Second)
 
 	cx := s.buildServiceContext(r.Context(), service, from, to)
+	// v0.10.944 — güncel pencere OKUNAMADIYSA boş bağlam değil, hata: "veri
+	// yok" (Parsed:false) ile karışmasın.
+	if cx.curErr != nil {
+		writeErr(w, cx.curErr)
+		return
+	}
 	if cx.Current.Spans == 0 {
 		writeJSON(w, aiAnalyzeResponse{Context: cx, Parsed: false, Raw: "", Analysis: nil})
 		return
@@ -189,7 +203,10 @@ func (s *Server) copilotAnalyzeService(w http.ResponseWriter, r *http.Request) {
 		resp.CorrelationLinks = correlationLinks(cx.Correlation, service, s.correlationLinkTemplates(r.Context()))
 	}
 
-	if b, err := json.Marshal(resp); err == nil {
+	// v0.10.944 — baseline okunamadıysa cevap önbelleğe ALINMAZ: geçici bir
+	// zaman aşımı 5 dakika boyunca "baseline okunamadı" analizi olarak
+	// servis edilmesin.
+	if b, err := json.Marshal(resp); err == nil && cx.baseErr == nil {
 		_ = s.cache.Set(r.Context(), cacheKey, b, 5*time.Minute)
 	}
 	writeJSON(w, resp)
@@ -222,11 +239,20 @@ func (s *Server) buildServiceContext(ctx context.Context, service string, from, 
 	}
 
 	// RED — current window + the immediately-preceding baseline window.
-	if rows, err := s.store.GetServiceSummary5m(ctx, service, from, to); err == nil {
-		cx.Current = aggRED(rows, span.Seconds())
+	// v0.10.944 — TEK pencere okuması (tdigest durumlarının birleşimi); eskisi
+	// 5 dk kovaları çekip yüzdeliklerini span ağırlıklı ORTALIYORDU (aggRED).
+	// v0.10.944 (inceleme) — hata artık atılmıyor: ServiceWindowRED 15 s
+	// max_execution_time taşıyor, zaman aşımı yolu gerçek; atılan hata
+	// Current/Baseline'ı sıfır bırakıp prompt'ta "veri yok" diye sunuluyordu.
+	if w, err := s.store.ServiceWindowRED(ctx, service, from, to); err == nil {
+		cx.Current = windowRED(w, span.Seconds())
+	} else {
+		cx.curErr = err
 	}
-	if rows, err := s.store.GetServiceSummary5m(ctx, service, from.Add(-span), from); err == nil {
-		cx.Baseline = aggRED(rows, span.Seconds())
+	if w, err := s.store.ServiceWindowRED(ctx, service, from.Add(-span), from); err == nil {
+		cx.Baseline = windowRED(w, span.Seconds())
+	} else {
+		cx.baseErr = err
 	}
 
 	// v0.9.580 — iş boyutu kırılımı + örnek istek kimlikleri. İkisi de
@@ -278,31 +304,22 @@ func (s *Server) buildServiceContext(ctx context.Context, service string, from, 
 	return cx
 }
 
-// aggRED collapses the 5-min buckets into one window RED summary. Percentiles
-// are span-weighted means of the per-bucket percentiles — an approximation, but
-// the right granularity for a language-layer summary.
-func aggRED(rows []chstore.ServiceSummaryRow, windowSec float64) aiRED {
-	var red aiRED
-	var wP50, wP95, wP99, wAvg float64
-	for _, r := range rows {
-		red.Spans += r.SpanCount
-		red.ErrorCount += r.ErrorCount
-		w := float64(r.SpanCount)
-		wP50 += r.P50Ms * w
-		wP95 += r.P95Ms * w
-		wP99 += r.P99Ms * w
-		wAvg += r.AvgMs * w
-	}
-	if red.Spans > 0 {
-		f := float64(red.Spans)
-		red.ErrorRate = float64(red.ErrorCount) / f * 100
-		red.P50Ms = wP50 / f
-		red.P95Ms = wP95 / f
-		red.P99Ms = wP99 / f
-		red.AvgMs = wAvg / f
+// windowRED — v0.10.944: tek pencerenin RED özeti (chstore.ServiceWindowRED)
+// → aiRED. Yüzdelikler OLDUĞU GİBİ geçer: service_summary_5m kovalarının
+// tdigest durumları SQL'de birleştirildi (quantilesTDigestMerge), yani değer
+// pencerenin TAMAMININ yüzdeliğidir. Eski aggRED kova yüzdeliklerinin span
+// ağırlıklı ortalamasını alıyordu — bir kovanın p99'u ile diğerinin p99'unun
+// ortalaması hiçbir popülasyonun p99'u değildir (kısa bir patlamayı sulandırır)
+// ve bu sayı AI prompt'larına "p99" diye giriyordu. Popülasyon MV'nin kendisi:
+// servisin TÜM span'leri (kind ayrımı yok) — Rate de span/s'dir.
+func windowRED(w chstore.ServiceWindowRED, windowSec float64) aiRED {
+	red := aiRED{Spans: w.Spans, ErrorCount: w.Errors}
+	if w.Spans > 0 {
+		red.ErrorRate = float64(w.Errors) / float64(w.Spans) * 100
+		red.AvgMs, red.P50Ms, red.P95Ms, red.P99Ms = w.AvgMs, w.P50Ms, w.P95Ms, w.P99Ms
 	}
 	if windowSec > 0 {
-		red.Rate = float64(red.Spans) / windowSec
+		red.Rate = float64(w.Spans) / windowSec
 	}
 	return red
 }
@@ -313,13 +330,24 @@ func renderServiceSnapshot(cx *aiServiceContext) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Servis: %s (son %d dakika)\n", cx.Service, cx.RangeS/60)
 	c := cx.Current
-	fmt.Fprintf(&b, "RED: rate=%.1f req/s, error=%.2f%% (%d hata), p50=%.0fms, p95=%.0fms, p99=%.0fms\n",
-		c.Rate, c.ErrorRate, c.ErrorCount, c.P50Ms, c.P95Ms, c.P99Ms)
+	// v0.10.944 — okuma hatası "veri yok" DEĞİL: sınıfı (timeout/unreachable…)
+	// söylenir ve model sayı uydurmaz.
+	if cx.curErr != nil {
+		fmt.Fprintf(&b, "RED: mevcut pencere OKUNAMADI (%s) — veri yok DEĞİL; sayı uydurma.\n", sourcestate.Classify(cx.curErr))
+	} else {
+		// v0.10.944 — birim span/s: değer tüm span türleri üzerinden (guided
+		// window_compare ile aynı etiket); "req/s" istek hızını abartıyordu.
+		fmt.Fprintf(&b, "RED: rate=%.1f span/s (tüm span türleri), error=%.2f%% (%d hata), p50=%.0fms, p95=%.0fms, p99=%.0fms\n",
+			c.Rate, c.ErrorRate, c.ErrorCount, c.P50Ms, c.P95Ms, c.P99Ms)
+	}
 	bl := cx.Baseline
-	if bl.Spans > 0 {
+	switch {
+	case cx.baseErr != nil:
+		fmt.Fprintf(&b, "Baseline: önceki pencere OKUNAMADI (%s) — 'veri yok' değil; baseline hakkında sonuç çıkarma.\n", sourcestate.Classify(cx.baseErr))
+	case bl.Spans > 0:
 		fmt.Fprintf(&b, "Baseline (önceki %d dk): error=%.2f%%, p99=%.0fms, p50=%.0fms\n",
 			cx.RangeS/60, bl.ErrorRate, bl.P99Ms, bl.P50Ms)
-	} else {
+	default:
 		b.WriteString("Baseline: önceki pencerede veri yok.\n")
 	}
 	if len(cx.TopErrors) > 0 {

@@ -16,7 +16,7 @@ func TestLimitedToolEnvelopesCarryHasMore(t *testing.T) {
 		"tools.go":             {`"services": rows, "count": len(rows), "source": src, "has_more"`, `"problems": rows, "count": len(rows), "has_more": hasMore`, `"anomalies": rows, "count": len(rows), "has_more"`},
 		"list_slo_status.go":   {`"total": total, "has_more": total > len(out)`},
 		"list_metric_names.go": {`"total": total, "has_more": total > len(names)`},
-		"pivots.go":            {`"has_more": len(page.Logs) >= limit`, `"items": items, "count": len(items), "has_more"`},
+		"pivots.go":            {`HasMore: hasMore, // v0.10.407`, `"items": items, "count": len(items), "has_more"`}, // v0.10.944 — get_logs_for_trace sıralı struct döner (kaynak durumu önce)
 		"team_ownership.go":    {`"has_more":         hasMore,`},
 		"guided_parity.go":     {`"has_more":       data.HeapTruncated`},
 		"analysis.go":          {`"has_more":`},

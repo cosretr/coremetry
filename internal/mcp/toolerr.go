@@ -57,11 +57,15 @@ import (
 	"time"
 )
 
-// Tool hata sınıfları. ALTI tane, bilerek: her biri modelin
-// yapabileceği FARKLI bir eyleme karşılık gelir. Yedinci bir sınıf
-// ancak yedinci bir eylem varsa eklenmeli. (Altıncı — cancelled —
+// Tool hata sınıfları. YEDİ tane, bilerek: her biri modelin
+// yapabileceği FARKLI bir eyleme karşılık gelir. Sekizinci bir sınıf
+// ancak sekizinci bir eylem varsa eklenmeli. (Altıncı — cancelled —
 // v0.10.430'da geldi: M4 istemci iptali ile "iptal = bütçe doldu"
-// varsayımı düştü; eylem "tekrar deneme, kullanıcı vazgeçti".)
+// varsayımı düştü; eylem "tekrar deneme, kullanıcı vazgeçti". Yedinci —
+// unauthorized — v0.10.944: ES/VM 401/403 eskiden internal'a düşüyordu;
+// eylem "tekrar deneme, bu kaynağın kapsam dışı kaldığını söyle, diğer
+// kaynaklarla devam et" — backend_unavailable'ın "bir kez daha dene"sinden
+// ve internal'ın belirsizliğinden farklı.)
 const (
 	// ToolErrTimeout — okuma bütçeyi aştı (ctx deadline, CH 159,
 	// max_execution_time). Eylem: pencereyi daralt, tekrar dene.
@@ -86,6 +90,10 @@ const (
 	// görünmemeli, tool-timeout oranını şişirmemeli (v0.10.430). Eylem:
 	// tekrar deneme; cevap zaten beklenmiyor.
 	ToolErrCancelled = "cancelled"
+	// ToolErrUnauthorized — kaynak kimlik/izin reddi verdi (ES/VM 401/403,
+	// sourcestate.ErrUnauthorized). Eylem: tekrar deneme; kaynağın kapsam
+	// dışı kaldığını SÖYLE, diğer kaynaklarla devam et.
+	ToolErrUnauthorized = "unauthorized"
 )
 
 // toolErrDetailMaxRunes — ham hata metninin modele giden tavanı.
@@ -147,6 +155,9 @@ var toolErrPolicy = map[string]struct {
 	ToolErrCancelled: {false,
 		"çağrı istemci tarafından iptal edildi (notifications/cancelled ya da kopan bağlantı) — " +
 			"aynı tool'u tekrar çağırma; cevap beklenmiyor"},
+	ToolErrUnauthorized: {false,
+		"kaynak yetki reddetti (401/403) — tekrar deneme; bu kaynağın kapsam DIŞI kaldığını SÖYLE, " +
+			"kanıta başka bir tool ile ulaş (ör. log yoksa get_trace / query_metric)"},
 }
 
 // ClassifyToolError — bir handler hatasını sözleşmeye çevirir. SAF:
@@ -217,6 +228,17 @@ func classifyToolErrorClass(err error) string {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return ToolErrTimeout
 	}
+	// v0.10.944 — yetki reddi taşıma hatalarından ÖNCE: bir 401 cevabı
+	// "HTTP" metni taşır ve aşağıdaki sinyallerden birine yanlışlıkla
+	// düşebilirdi. Liste sourcestate'teki ile AYNI olmalı (bu paket
+	// depolama paketlerini içe aktaramaz; eşitlik sourcestate testinde
+	// pinli). sourcestate.ErrUnauthorized metni de "unauthorized" taşır.
+	ls := strings.ToLower(err.Error())
+	for _, sig := range ToolErrUnauthorizedSignals {
+		if strings.Contains(ls, sig) {
+			return ToolErrUnauthorized
+		}
+	}
 	var nerr net.Error
 	if errors.As(err, &nerr) && nerr.Timeout() {
 		return ToolErrTimeout
@@ -260,6 +282,20 @@ func classifyToolErrorClass(err error) string {
 // QUERIES), ES/HTTP taşıma metinleri, logstore.ErrBackendSlow'un
 // sentinel metni ve mcptools handler'larının doğrulama cümleleri
 // (hem "is required" hem "zorunlu" — katalog iki dilli).
+// ToolErrUnauthorizedSignals — 401/403 metin sinyalleri (küçük harf).
+// Exported: sourcestate testi kendi listesiyle eşitliğini doğrular.
+// v0.10.944 — çıplak kelimeler ("unauthorized", "forbidden", "yetkisiz")
+// YOK: parseESError artık root_cause reason'ını ekliyor ve query_string
+// hatasında o metin operatörün sorgusunu yankılıyor — sorguda "Unauthorized"
+// geçen her ES 400'ü yetki hatası sayılıyordu. Yalnız durum-kodlu kalıplar
+// ve ErrUnauthorized sentinel metni.
+var ToolErrUnauthorizedSignals = []string{
+	"status 401", "status 403", "http 401", "http 403",
+	"status: 401", "status: 403", "401 unauthorized", "403 forbidden",
+	"security_exception", "authentication_exception",
+	"source unauthorized", // sourcestate.ErrUnauthorized sentinel metni
+}
+
 var (
 	toolErrTimeoutSignals = []string{
 		"timeout exceeded", "timeout_exceeded", "code: 159",

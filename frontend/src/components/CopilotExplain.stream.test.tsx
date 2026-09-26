@@ -363,6 +363,9 @@ describe('CopilotExplain — "Kodu da inceleyeyim mi?" (v0.10.153)', () => {
     expect(f.call(1).includeCode).toBe(true);
     expect(panelText()).toContain('Kod incelemesi');
     expect(panelText()).toContain('CoSRE kodu okuyor');       // ilk token'a kadar
+    // v0.10.944 — ipucu yapılanı değil İSTENENİ söyler: "…kaynak kodu birlikte
+    // inceleniyor" hiçbir olaydan gelmeyen sabit iddiaydı (kod çözümü düşebilir).
+    expect(panelText()).not.toContain('inceleniyor');
     await f.call(1).emit('kodda: ');
     await f.call(1).emit('maxPoolSize=5');
     expect(panelText()).toContain('kodda: maxPoolSize=5');
@@ -385,6 +388,9 @@ describe('CopilotExplain — "Kodu da inceleyeyim mi?" (v0.10.153)', () => {
     await act(async () => { rerunButton()!.click(); });
     expect(panelText()).not.toContain('kod turu');
     expect(panelText()).not.toContain('Kod incelemesi');
+    // v0.10.944 — kodlu ANA yükleniyor ipucu da nötr (istenen söylenir).
+    expect(panelText()).toContain('Kaynak kodu da istendi');
+    expect(panelText()).not.toContain('inceleniyor');
     // Evet kutuyu işaretlediği için "Yeniden sor" tek turda KODLU gider,
     // soru gerekmez.
     expect(f.call(2).includeCode).toBe(true);

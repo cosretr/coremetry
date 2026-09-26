@@ -106,6 +106,11 @@ type Settings struct {
 	// the protection can only be removed by an explicit admin decision
 	// that lands in audit_log. See guardBucketScan for the decision table.
 	AllowUnfilteredPercentiles bool `json:"allowUnfilteredPercentiles,omitempty"`
+	// LabelMap — v0.10.944 (CoSRE çapraz kaynak eşlemesi): rol → VM etiket
+	// adı (service/env/cluster/namespace/pod/version). Boş alan = bugünkü
+	// kurallar (service_name konvansiyonu, diğerleri yalnız keşifle). omitzero:
+	// eşlemesiz blob eskisiyle bayt-aynı kalır. Bkz. labelmap.go.
+	LabelMap LabelMap `json:"labelMap,omitzero"`
 }
 
 // Snapshot is what GET /api/settings/victoria-metrics returns: Settings
@@ -129,6 +134,9 @@ type Snapshot struct {
 	// v0.10.292 — çift yazım alanları (secret değil, tam tur).
 	WriteURL     string `json:"writeUrl,omitempty"`
 	WriteEnabled bool   `json:"writeEnabled"`
+	// v0.10.944 — etiket eşlemesi tam tur (secret değil); form (Faz B)
+	// kendi değerini okuyabilmeli, yoksa ilgisiz her kayıt boş gönderir.
+	LabelMap LabelMap `json:"labelMap"`
 }
 
 // Service is the per-process VM client. Config is swapped under an
@@ -312,6 +320,7 @@ func (s *Service) Snapshot() Snapshot {
 		AllowUnfilteredPercentiles: s.cfg.AllowUnfilteredPercentiles,
 		WriteURL:                   s.cfg.WriteURL,
 		WriteEnabled:               s.cfg.WriteEnabled,
+		LabelMap:                   s.cfg.LabelMap.Normalized(),
 	}
 }
 
@@ -549,16 +558,22 @@ func (s *Service) QueryMetricNoted(ctx context.Context, f chstore.MetricQueryFil
 	if err != nil {
 		return nil, "", err
 	}
+	return out, emptyResultNote(f, len(out)), nil
+}
+
+// emptyResultNote — QueryMetricNoted'ın not kararı (v0.10.944'te çıkarıldı ki
+// QueryMetricDetailed AYNI notu üretsin; iki kopya ayrışırdı).
+func emptyResultNote(f chstore.MetricQueryFilter, n int) string {
 	// The note is attached only on the empty PERCENTILE outcome — see the
 	// header. Everything else returns "" and the envelope carries no note
 	// field at all.
-	if len(out) == 0 {
+	if n == 0 {
 		// Recomputed from the same pure function buildPromQL used, so a note
 		// cannot name a spelling the query did not try (the promStep precedent:
 		// pure + same inputs, therefore incapable of drifting).
 		cands := nameCandidates(f.Name, f.Aggregation)
 		if _, isPercentile := promPercentile(f.Aggregation); isPercentile {
-			return out, emptyBucketNote(cands), nil
+			return emptyBucketNote(cands)
 		}
 		// v0.9.1160 — every OTHER aggregation earns a note too, on ONE
 		// condition: the translation guessed more than one spelling. The live
@@ -573,10 +588,10 @@ func (s *Service) QueryMetricNoted(ctx context.Context, f chstore.MetricQueryFil
 		// A note there would be noise on every quiet gauge — which is why
 		// v0.9.1159 scoped notes to percentiles in the first place.
 		if len(cands) > 1 {
-			return out, emptyNameNote(cands), nil
+			return emptyNameNote(cands)
 		}
 	}
-	return out, "", nil
+	return ""
 }
 
 // labelValuesMatch — SAF (v0.10.868): q doluysa etiket regex'i eklenir
@@ -600,9 +615,18 @@ func (s *Service) MetricLabelValues(ctx context.Context, metric, key string, sin
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now()
+	out, _, err := s.labelValuesBetween(ctx, cfg, metric, key, now.Add(-since), now, q, limit)
+	return out, err
+}
+
+// labelValuesBetween — v0.10.944 — MetricLabelValues'un MUTLAK pencereli
+// gövdesi (parametreler eski yolda bayt-aynı). partial = VM `isPartial`;
+// MetricLabelValues bayrağı düşürür (eski sözleşme).
+func (s *Service) labelValuesBetween(ctx context.Context, cfg Settings, metric, key string, from, to time.Time, q string, limit int) (vals []string, partial bool, err error) {
 	label := promLabel(key)
 	if label == "" {
-		return nil, nil
+		return nil, false, nil
 	}
 	if limit < 1 {
 		limit = 200
@@ -610,22 +634,22 @@ func (s *Service) MetricLabelValues(ctx context.Context, metric, key string, sin
 	if limit > 1000 {
 		limit = 1000 // v0.10.878 — CH ile aynı kelepçe (ikisi ayrı cevap vermesin)
 	}
-	now := time.Now()
 	params := url.Values{
-		"start":   {promTime(now.Add(-since))},
-		"end":     {promTime(now)},
+		"start":   {promTime(from)},
+		"end":     {promTime(to)},
 		"match[]": {labelValuesMatch(nameMatcher(discoveryNameCandidates(metric)), label, q)},
 		"limit":   {strconv.Itoa(limit)}, // Prometheus 2.x / VM: sunucu tarafı tavan
 	}
-	vals, err := promapi.QueryStrings(ctx, s.request("/api/v1/label/"+url.PathEscape(label)+"/values", params, cfg))
+	res, err := promapi.QueryStringsMeta(ctx, s.request("/api/v1/label/"+url.PathEscape(label)+"/values", params, cfg))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
+	vals = res.Values
 	sort.Strings(vals)
 	if len(vals) > limit {
 		vals = vals[:limit]
 	}
-	return vals, nil
+	return vals, res.IsPartial, nil
 }
 
 func (s *Service) MetricAttrKeys(ctx context.Context, metric, service string, since time.Duration) ([]string, error) {

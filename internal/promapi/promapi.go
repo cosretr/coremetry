@@ -60,6 +60,10 @@ type envelope struct {
 	ErrorType string          `json:"errorType"`
 	Error     string          `json:"error"`
 	Data      json.RawMessage `json:"data"`
+	// IsPartial — v0.10.944 — VictoriaMetrics cluster'ının "bazı vmstorage
+	// düğümleri cevap vermedi" işareti (üst düzey alan, data'nın yanında).
+	// Eskiden hiç çözülmüyordu: kısmi bir cevap tam cevap gibi okunuyordu.
+	IsPartial bool `json:"isPartial"`
 }
 
 type seriesData struct {
@@ -78,57 +82,49 @@ const MaxSeriesParsed = 1000
 // rather fail than allocate.
 const MaxBodyBytes = 8 << 20
 
-// decodeEnvelope is the shared status check. Extracted so both decoders
+// decodeEnvelopeFull is the shared status check. Extracted so both decoders
 // produce byte-identical error text for the same failure.
-func decodeEnvelope(label string, body []byte) (json.RawMessage, error) {
+//
+// v0.10.944 — isPartial'ı da döndürür; iki decoder da (seri + metin) artık
+// yalnız bunu çağırır, eski data-döndüren sarmalayıcı kaldırıldı (tek gövde).
+func decodeEnvelopeFull(label string, body []byte) (envelope, error) {
 	var env envelope
 	if err := json.Unmarshal(body, &env); err != nil {
-		return nil, fmt.Errorf("%s decode: %w", label, err)
+		return envelope{}, fmt.Errorf("%s decode: %w", label, err)
 	}
 	if env.Status != "success" {
 		// Both halves in the message: errorType alone ("bad_data") does
 		// not tell the operator WHICH label was wrong.
-		return nil, fmt.Errorf("%s: %s: %s", label, env.ErrorType, env.Error)
+		return envelope{}, fmt.Errorf("%s: %s: %s", label, env.ErrorType, env.Error)
 	}
-	return env.Data, nil
+	return env, nil
 }
 
 // DecodeSeries parses a query / query_range body into series. Pure —
 // table-tested in promapi_test.go.
+//
+// v0.10.944 — gövde DecodeSeriesMeta'da; bu sarmalayıcı yalnız serileri
+// döndürür (tavan ve kısmi bayrağı düşer — eski çağıranların sözleşmesi).
 func DecodeSeries(label string, body []byte) ([]Series, error) {
-	data, err := decodeEnvelope(label, body)
+	res, err := DecodeSeriesMeta(label, body)
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 {
-		return nil, nil
-	}
-	var sd seriesData
-	if err := json.Unmarshal(data, &sd); err != nil {
-		return nil, fmt.Errorf("%s decode data: %w", label, err)
-	}
-	if len(sd.Result) > MaxSeriesParsed {
-		sd.Result = sd.Result[:MaxSeriesParsed]
-	}
-	return sd.Result, nil
+	return res.Series, nil
 }
 
 // DecodeStrings parses a labels / label-values body — data is a plain
 // string array. `"data": null` decodes to an empty slice, not an error:
 // a metric with no labels is a legitimate answer.
+//
+// v0.10.944 — gövde DecodeStringsMeta'da; bu sarmalayıcı yalnız değerleri
+// döndürür (isPartial düşer — eski çağıranların sözleşmesi).
 func DecodeStrings(label string, body []byte) ([]string, error) {
-	data, err := decodeEnvelope(label, body)
+	res, err := DecodeStringsMeta(label, body)
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 {
-		return nil, nil
-	}
-	var out []string
-	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("%s decode data: %w", label, err)
-	}
-	return out, nil
+	return res.Values, nil
 }
 
 // Sample decodes one [timestamp, "value"] pair.
@@ -247,8 +243,10 @@ func Do(ctx context.Context, req Request) ([]byte, error) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, MaxBodyBytes))
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%s: HTTP %d: %s", label, resp.StatusCode,
-			strings.TrimSpace(FirstN(string(body), 200)))
+		// v0.10.944 — tipli hata; metin eskisiyle bayt-aynı, 401/403
+		// sourcestate.ErrUnauthorized'a açılır (HTTPError.Unwrap).
+		return nil, &HTTPError{Label: label, Status: resp.StatusCode,
+			Body: strings.TrimSpace(FirstN(string(body), 200))}
 	}
 	return body, nil
 }

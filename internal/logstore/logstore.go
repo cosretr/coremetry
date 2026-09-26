@@ -49,6 +49,12 @@ type Filter struct {
 	// field that one method applies and another ignores is this repo's
 	// recurring silent-no-op bug class.
 	Pod string
+	// Namespace (v0.10.944 — CoSRE search_logs `namespace` arg'ı) — k8s
+	// namespace, boş = hepsi. ES: esNamespaceFields (ya da yapılandırılmış
+	// fields.namespace) üzerinde exact-term should; CH Histogram/FieldStats:
+	// chLogsNamespaceExpr. CH Search (chstore.GetLogs) bu alanı TAŞIMIYOR —
+	// o yol Page.UnappliedFilters'a "namespace" yazar (sessiz no-op yok).
+	Namespace string
 	// Env (v0.8.400 — env-separation Phase 4) — the global ?env=
 	// deployment-environment filter. CH backend: bounded res-array
 	// lookup over BOTH semconv spellings (deployment.environment.name
@@ -137,6 +143,13 @@ type Filter struct {
 	// ES `_source` includes ile dar çekilir (2000 doküman × tam _source
 	// → üç alan). CH backend'inde etkisiz (zaten yalnız gereken kolonlar).
 	LeanSource bool
+	// SoftTimeout — v0.10.944 (CoSRE search_logs): ES gövdesindeki yumuşak
+	// `timeout` için çağıranın ipucu (LeanSource gibi yalnız ES). 0 = bugünkü
+	// esTimeoutFromEnv("10s"). İstemci deadline'ı ES'in yumuşak bütçesinden
+	// kısaysa ES timed_out:true (Page.Partial) yoluna HİÇ ulaşamıyor: yavaş
+	// sorgu 0 satırlı timeout olarak bitiyordu. Operatörün daha düşük env
+	// değerini asla yükseltmez (esSoftTimeout). CH backend'inde etkisiz.
+	SoftTimeout time.Duration
 
 	// envField (v0.8.400, ES-internal) — the resolved document field
 	// the Env term filter targets, stamped by ESStore.applyEnvResolution
@@ -187,6 +200,13 @@ type Page struct {
 	// eşleşemez; sessiz boş yerine dürüst bayrak (EnvUnapplied sınıfı).
 	// CH backend'i asla set etmez (trace_id kolonu hep var).
 	HasTraceUnapplied bool `json:"hasTraceUnapplied,omitempty"`
+	// UnappliedFilters (v0.10.944 — CoSRE kaynak durumu) — backend'in
+	// YAPISAL olarak uygulayamadığı istenmiş filtreler: CH Search'te
+	// "cluster"/"namespace" (chstore.LogFilter taşımıyor), ES'te
+	// "severity" (sayısal seviye alanı yapılandırılmamış). Sonuçlar o
+	// boyutta SÜZÜLMEMİŞTİR. EnvUnapplied'in çoğul ikizi; env kendi
+	// bayrağında kalır (mevcut /logs sözleşmesi).
+	UnappliedFilters []string `json:"unappliedFilters,omitempty"`
 	// ── Honesty envelope (v0.9.288) ─────────────────────────────────
 	// Every ES log query carries a SOFT timeout (10s). The entire point
 	// of a soft timeout is that ES returns what it has computed so far
@@ -589,6 +609,12 @@ type LogPoint struct {
 // query error. The trace view must never block on the log backend (audit §3);
 // callers return a partial result with a degraded flag instead of 5xx.
 var ErrBackendSlow = errors.New("log backend slow/unreachable")
+
+// ErrBadQuery — v0.10.944: arka uç sorgu SÖZDİZİMİNİ reddetti (ES 400
+// query_shard_exception / parse_exception …). Kaynak arızası değil,
+// argüman hatası: CoSRE search_logs bunu bad_args tool hatasına çevirir
+// ki model "log kaynağı bozuk" değil "query'mi düzelteyim" okusun.
+var ErrBadQuery = errors.New("backend rejected query syntax")
 
 // PivotTimeout is the default per-request budget for pivot log reads. 3s —
 // tighter than the backends' own 10s query knobs on purpose: a pivot is one

@@ -32,7 +32,9 @@ describe('çekmece sohbeti hep açık', () => {
     const src = drawer();
     // Bağlamsız sohbet muhafızı DURUYOR (bağlam kurulamadıysa sohbet yok
     // — v0.9.479'un operatör raporu); onun ötesinde kapı yok.
-    expect(src).toContain('if (!explain) return null;');
+    // v0.10.944 — tek istisna geçmişten devralınan konuşma (bağlamı özne +
+    // kayıtlı turlar); çalışma zamanı kanıtı drawerTraceContext.test.tsx.
+    expect(src).toContain('if (!explain && !resumed) return null;');
   });
 
   it('satır-içi köprü (CopilotExplain !auto) korunuyor — o kapı değil navigasyon', () => {

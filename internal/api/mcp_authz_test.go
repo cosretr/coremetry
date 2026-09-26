@@ -267,8 +267,9 @@ func TestAllShippedToolsAreViewerLevel(t *testing.T) {
 	// v0.10.475 — 43 → 44: build_link (saf link üretici, okuma yok).
 	// v0.10.478 — 44 → 47: set/get/clear_context (kişisel sohbet durumu, viewer).
 	// v0.10.545 — 47 → 48: list_deployments (REST eşi GET /api/changes, viewer).
-	if len(tools) != 57 { // v0.10.809 — product_guide (viewer; REST eşi yok, salt statik rehber)
-		t.Errorf("katalog %d tool (48 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
+	// v0.10.809 — product_guide (viewer; REST eşi yok, salt statik rehber).
+	if len(tools) != 60 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
+		t.Errorf("katalog %d tool (60 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
 			"RequireAnyRole) kontrol et, MinRole'ü ona eşitle, sonra bu sayıyı güncelle", len(tools))
 	}
 	for _, tool := range tools {

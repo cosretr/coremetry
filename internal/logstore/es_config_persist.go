@@ -84,6 +84,10 @@ func NewESManager(sw *Switchable, chFallback Store, resolver func(ctx context.Co
 	if boot.Backend == "" {
 		boot.Backend = "clickhouse"
 	}
+	// v0.10.944 — cluster/namespace/pod/version env anahtarları config
+	// paketinde yok; tohum burada doldurulur ki GET snapshot'ı (source
+	// "env") etkin alanı göstersin.
+	boot.Fields = withESFieldEnv(boot.Fields)
 	return &ESManager{sw: sw, chFallback: chFallback, resolver: resolver, cfg: boot, source: "env"}
 }
 
@@ -137,6 +141,9 @@ func (m *ESManager) build(cfg ESSettings) (Store, error) {
 			Index:              cfg.Index,
 			IndexTemplate:      cfg.IndexTemplate,
 			Fields:             cfg.Fields,
+			// v0.10.944 — Fields otorite (boot'ta env ile tohumlandı ya da
+			// blob/PUT değeri): NewES env'i yeniden uygulamaz, açık "" kalır.
+			fieldsAuthoritative: true,
 		})
 		if err != nil {
 			return nil, err

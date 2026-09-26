@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	agentctx "github.com/cilcenk/coremetry/internal/ai/agent/context"
 )
 
 // v0.10.32 — Copilot denetiminin #1 SIRADAKİ sınırı: serbest tool
@@ -155,7 +157,9 @@ func TestChatWiresScreenContext(t *testing.T) {
 		"screenCtx := ChatScreenContext{",
 		"screenContextPreambleTR(screenCtx)",
 		"screenContextChipTR(screenCtx)",
-		"Service:   req.Context.Service",
+		// v0.10.944 — servis context.service'ten, yoksa (pin yokken) page.service'ten.
+		"Service:   freeLoopScreenService(req.Context.Service, pageCtx, pinnedCtx)",
+		"agentctx.PreambleTR(pageCtx, pinnedCtx)",
 		"RangeS:    req.Context.RangeS",
 	} {
 		if !strings.Contains(src, must) {
@@ -168,5 +172,33 @@ func TestChatWiresScreenContext(t *testing.T) {
 	iPre := strings.Index(src, "screenContextPreambleTR(screenCtx) +")
 	if iPre < 0 {
 		t.Error("önsöz prompt'un ÖNÜNE eklenmiyor")
+	}
+}
+
+// TestFreeLoopScreenService — v0.10.944: trace çekmecesinin servisi yalnız
+// page.service'te; serbest döngü onu ekran bağlamına düşürmeli. Pin varsa
+// boş servis "kapsamsız"dır, ekrandan doldurulmaz.
+func TestFreeLoopScreenService(t *testing.T) {
+	trace := &agentctx.PageContext{Page: "trace", Service: "svc-a"}
+	cases := []struct {
+		name   string
+		ctxSvc string
+		page   *agentctx.PageContext
+		pinned *agentctx.PageContext
+		want   string
+	}{
+		{"context.service kazanır", "svc-x", trace, nil, "svc-x"},
+		{"trace sayfası, pin yok → page.service", "", trace, nil, "svc-a"},
+		{"pin var → boş (kapsamsız)", "", &agentctx.PageContext{Page: "trace", Service: "svc-b"}, &agentctx.PageContext{Page: "services"}, ""},
+		{"sayfa yok", "", nil, nil, ""},
+	}
+	for _, c := range cases {
+		if got := freeLoopScreenService(c.ctxSvc, c.page, c.pinned); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
+	}
+	pre := screenContextPreambleTR(ChatScreenContext{Service: freeLoopScreenService("", trace, nil)})
+	if !strings.Contains(pre, "- servis: svc-a") {
+		t.Fatalf("önsöz çekmece servisini taşımıyor: %q", pre)
 	}
 }

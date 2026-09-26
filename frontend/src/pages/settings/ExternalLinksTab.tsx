@@ -60,7 +60,7 @@ export function ExternalLinksTab() {
   return (
     <Stack gap={4}>
       <div className="field-hint">
-        Trace sayfasında "Explain this trace" yanında düğme olarak görünür; şablondaki attribute'lar trace'in
+        Trace sayfasında "CoSRE’ye sor" yanında düğme olarak görünür; şablondaki attribute'lar trace'in
         span'lerinde çözülürse etkin, çözülmezse eksikleri söyleyerek pasif. Değişkenler:{' '}
         <code>{'{{attr.KEY}}'}</code> · <code>{'{{attrTime.KEY:FMT}}'}</code> (değerin içindeki yyyyMMddHHmmss, yeniden biçimlenir) ·{' '}
         <code>{'{{time:FMT}}'}</code> (trace başlangıcı, tarayıcı saati — dakika pencereli log platformları için bunu kullanın; kimlik içindeki zaman isteğin üretim anıdır, trace'ten önce kalabilir) · <code>{'{{endTime:FMT}}'}</code> (trace bitişi) · <code>{'{{traceId}}'}</code> · <code>{'{{service}}'}</code> ·{' '}

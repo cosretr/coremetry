@@ -43,6 +43,12 @@ type vmSettingsInput struct {
 	// boş writeUrl = BaseURL'e yaz; false = yazım kapalı (bugünkü davranış).
 	WriteURL     string `json:"writeUrl"`
 	WriteEnabled bool   `json:"writeEnabled"`
+	// LabelMap — v0.10.944 (CoSRE çapraz kaynak eşlemesi): rol → VM etiket
+	// adı. İŞARETÇİ, çünkü YOKLUK anlamlı: bugünkü form (Faz A'da UI yok) bu
+	// alanı göndermez ve nil = "saklı eşlemeyi koru" — aksi hâlde ilgisiz her
+	// kayıt eşlemeyi sessizce silerdi (aiTuning sınıfı). Boş nesne `{}` =
+	// bilinçli temizleme.
+	LabelMap *vmetrics.LabelMap `json:"labelMap"`
 }
 
 // mergeVMSettings validates the input and folds it over the CURRENT full
@@ -90,6 +96,15 @@ func mergeVMSettings(in vmSettingsInput, cur vmetrics.Settings) (vmetrics.Settin
 	if in.WriteEnabled && in.WriteURL == "" && in.BaseURL == "" {
 		return vmetrics.Settings{}, "writeEnabled requires writeUrl or baseUrl"
 	}
+	// v0.10.944 — eşleme doğrulaması vmetrics'in TEK yazımından (noktalı ad
+	// reddedilir, doğru yazım önerilir); nil = saklı olan korunur.
+	labelMap := cur.LabelMap
+	if in.LabelMap != nil {
+		if p := vmetrics.LabelMapProblem(*in.LabelMap); p != "" {
+			return vmetrics.Settings{}, p
+		}
+		labelMap = in.LabelMap.Normalized()
+	}
 	cfg := vmetrics.Settings{
 		WriteURL:                   in.WriteURL,
 		WriteEnabled:               in.WriteEnabled,
@@ -101,6 +116,7 @@ func mergeVMSettings(in vmSettingsInput, cur vmetrics.Settings) (vmetrics.Settin
 		InsecureSkipVerify:         in.InsecureSkipVerify,
 		RateWindowFloorS:           in.RateWindowFloorS,
 		AllowUnfilteredPercentiles: in.AllowUnfilteredPercentiles,
+		LabelMap:                   labelMap,
 	}
 	if cfg.Token == "" {
 		cfg.Token = cur.Token
@@ -170,6 +186,9 @@ func (s *Server) putVMSettings(w http.ResponseWriter, r *http.Request) {
 		// gereken soru (VM'e giden trafiğin kaynağı).
 		"writeUrl":     snap.WriteURL,
 		"writeEnabled": snap.WriteEnabled,
+		// v0.10.944 — etiket eşlemesi: "env süzgeci neden şu etikete gitti"
+		// sorusunun cevabı audit'te.
+		"labelMap": snap.LabelMap,
 	})
 	// Action name follows the external-backend siblings
 	// (settings.tempo.update / settings.thanos.update /

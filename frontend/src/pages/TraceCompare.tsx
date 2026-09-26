@@ -232,9 +232,12 @@ function TraceSide({ label, id, q, otherQ }: {
             <span style={{ color: 'var(--text2)', fontSize: 12 }}>
               {spans.length} spans · {fmtNs(totalNs)}
             </span>
-            {critical && (
-              <span style={{ color: 'var(--text3)', fontSize: 11 }}>
-                critical {fmtNs(critical.totalNs)}
+            {/* v0.10.944 — iç içe sürelerin TOPLAMI yerine zincir uzunluğu +
+                kök duvar süresi (lib/criticalPath.ts gerekçesi). */}
+            {critical && critical.spanCount > 0 && (
+              <span style={{ color: 'var(--text3)', fontSize: 11 }}
+                title="Kritik yol: kökten yaprağa span sayısı ve kök span duvar süresi; iç içe süreler toplanmaz">
+                critical path · {critical.spanCount} span{critical.spanCount === 1 ? '' : 's'} · root {fmtNs(critical.rootWallNs)}
               </span>
             )}
             {label === 'B' && otherQ.data && (

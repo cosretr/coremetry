@@ -25,26 +25,37 @@ export function fmtDelta(now: number, base: number): EvidenceDelta {
 
 // v0.10.929 (K5) — satır başına YÖN bayrağı: `upIsBad` yükselişin sapma
 // olup olmadığını söyler. Hata oranı / gecikme artışı kötü (kırmızı kalır);
-// throughput (istek/sn) artışı sağlık sinyali değil — nötr basılır.
+// throughput (span/sn) artışı sağlık sinyali değil — nötr basılır.
 export interface EvidenceRedRow { key: string; label: string; now: string; base: string; delta: EvidenceDelta; upIsBad: boolean }
 
 const fmtPct = (v: number) => `%${v >= 10 ? v.toFixed(0) : v.toFixed(1)}`;
 const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${Math.round(v)} ms`);
 const fmtRate = (v: number) => (v >= 10 ? v.toFixed(0) : v.toFixed(1));
 
+// v0.10.944 — okunamayan pencere asla 0 diye biçimlenmez: şimdi yoksa satır
+// yok (fark anlamsız); taban yoksa taban '—' ve Δ 'taban okunamadı' (tonsuz —
+// '▲ yeni' sapma rengi almaz). Oran etiketi span/sn: değer service_summary_5m'in
+// TÜM span türleri üzerinden hızıdır, istek hızı değil.
 export function redRows(red: ChatEvidence['red']): EvidenceRedRow[] {
-  if (!red) return [];
-  const c: ChatEvidenceRED = red.current, b: ChatEvidenceRED = red.baseline;
+  if (!red?.current) return [];
+  const c: ChatEvidenceRED = red.current;
+  const b: ChatEvidenceRED | undefined = red.baseline;
+  const row = (key: string, label: string, now: number, base: number | undefined, fmt: (v: number) => string, upIsBad: boolean): EvidenceRedRow => ({
+    key, label, now: fmt(now),
+    base: base === undefined ? '—' : fmt(base),
+    delta: base === undefined ? { dir: 'flat', text: 'taban okunamadı' } : fmtDelta(now, base),
+    upIsBad,
+  });
   return [
-    { key: 'errorRate', label: 'hata oranı', now: fmtPct(c.errorRate), base: fmtPct(b.errorRate), delta: fmtDelta(c.errorRate, b.errorRate), upIsBad: true },
-    { key: 'p95', label: 'p95', now: fmtMs(c.p95Ms), base: fmtMs(b.p95Ms), delta: fmtDelta(c.p95Ms, b.p95Ms), upIsBad: true },
-    { key: 'rate', label: 'istek/sn', now: fmtRate(c.rate), base: fmtRate(b.rate), delta: fmtDelta(c.rate, b.rate), upIsBad: false },
+    row('errorRate', 'hata oranı', c.errorRate, b?.errorRate, fmtPct, true),
+    row('p95', 'p95', c.p95Ms, b?.p95Ms, fmtMs, true),
+    row('rate', 'span/sn', c.rate, b?.rate, fmtRate, false),
   ];
 }
 
 // v0.10.929 (K5) — Δ hücresinin sınıfı. Yükseliş (▲ ×N ya da ▲ yeni) YALNIZ
 // `upIsBad` satırında sapma tonunu (.ev-delta--up kırmızı / --new amber)
-// alır; yükselişin iyi olduğu satırda (istek/sn) değiştirici YOK → hücre
+// alır; yükselişin iyi olduğu satırda (span/sn) değiştirici YOK → hücre
 // .ev-table td'nin nötr rengini (--text2, .ev-delta--down ile aynı) taşır.
 // Düşüş ve ~ her satırda kendi (nötr) sınıflarını korur.
 export function evidenceDeltaClass(r: Pick<EvidenceRedRow, 'delta' | 'upIsBad'>): string {

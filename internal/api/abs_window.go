@@ -312,12 +312,25 @@ func pctDelta(a, b float64) string {
 }
 
 // renderWindowCompareTR — SAF: iki pencerenin RED'i yan yana + fark.
+//
+// v0.10.944 — son satır eskiden "sayılar 5 dk ön-toplamdan (tam sayım)"
+// diyordu: yüzdelikler tdigest (yaklaşık) ve o sırada kova ortalamasıydı;
+// sayımlar da Coremetry'ye ULAŞAN span'lerdir (upstream örnekleme varsa
+// trafiğin tamamı değil). Hız "req/s" değil span/s: service_summary_5m kind
+// ayrımı taşımaz, her span sayılır.
 func renderWindowCompareTR(service string, wins []absWindow, reds []aiRED, loc *time.Location) string {
+	return renderWindowCompareFromTR(service, wins, reds, loc, "service_summary_5m")
+}
+
+// renderWindowCompareFromTR — renderWindowCompareTR'nin kaynak tablosu
+// parametreli hâli (v0.10.944: ortamlı okuma service_env_summary_5m'den;
+// kaynak notu okunan tabloyu söylemeli).
+func renderWindowCompareFromTR(service string, wins []absWindow, reds []aiRED, loc *time.Location, table string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s — iki pencere kıyası (saatler %s):\n", service, loc.String())
 	for i := range wins {
 		r := reds[i]
-		fmt.Fprintf(&b, "- Pencere %d %s: %d span, %.2f req/s, hata %%%.2f (%d), p50 %s, p95 %s, p99 %s\n",
+		fmt.Fprintf(&b, "- Pencere %d %s: %d span, %.2f span/s, hata %%%.2f (%d), p50 %s, p95 %s, p99 %s\n",
 			i+1, absWindowLabel(wins[i], loc), r.Spans, r.Rate, r.ErrorRate, r.ErrorCount, fmtMs(r.P50Ms), fmtMs(r.P95Ms), fmtMs(r.P99Ms))
 	}
 	if len(reds) == 2 {
@@ -329,6 +342,29 @@ func renderWindowCompareTR(service string, wins []absWindow, reds []aiRED, loc *
 		fmt.Fprintf(&b, "Fark (2 − 1): trafik %s, p95 %s, p99 %s, hata oranı %.2f → %.2f puan.\n",
 			pctDelta(a.Rate, c.Rate), pctDelta(a.P95Ms, c.P95Ms), pctDelta(a.P99Ms, c.P99Ms), a.ErrorRate, c.ErrorRate)
 	}
-	b.WriteString("Yorum: hangi pencerenin daha yavaş/hatalı olduğunu ve farkın büyüklüğünü söyle; kanıtta olmayan sayı uydurma; sayılar 5 dk ön-toplamdan (tam sayım).\n")
+	b.WriteString("Yorum: hangi pencerenin daha yavaş/hatalı olduğunu ve farkın büyüklüğünü söyle; kanıtta olmayan sayı uydurma.\n")
+	fmt.Fprintf(&b, "Kaynak notu: sayılar %s ön-toplamından ve servisin TÜM span'lerini sayar (yalnız giriş istekleri değil); p50/p95/p99 her pencerenin tamamı üzerinden tdigest birleşimi — YAKLAŞIK değer; sayımlar Coremetry'ye ulaşan span'lerdir, upstream örnekleme varsa toplam trafik değildir.\n", table)
 	return b.String()
+}
+
+// windowCompareEvidenceTR — SAF (v0.10.944): guided window_compare kanıtı +
+// kaynak satırı, ortam kararına göre. scoped: iki pencere de
+// service_env_summary_5m'den env ile okundu. Değilse ve env istendiyse
+// değerler tüm ortamların toplamıdır — komşu guidedServiceHealthBundle
+// emsaliyle bu açıkça söylenir; model farkı o ortama atfetmez.
+func windowCompareEvidenceTR(service, env string, scoped bool, wins []absWindow, reds []aiRED, loc *time.Location) (string, string) {
+	pair := fmt.Sprintf("%s ↔ %s, %s", absWindowLabel(wins[0], loc), absWindowLabel(wins[1], loc), loc.String())
+	if scoped {
+		ev := fmt.Sprintf("Not: RED değerleri yalnız %q ortamından (service_env_summary_5m; o ortamın cluster'ları birleşik).\n", env) +
+			renderWindowCompareFromTR(service, wins, reds, loc, "service_env_summary_5m")
+		return ev, fmt.Sprintf("service_env_summary_5m (ortam: %s; iki pencere: %s)", env, pair)
+	}
+	ev := renderWindowCompareTR(service, wins, reds, loc)
+	src := fmt.Sprintf("service_summary_5m (iki pencere: %s)", pair)
+	if env != "" {
+		// v0.10.944 — service_summary_5m ortam boyutu taşımaz: env süzgeci uygulanmadı (komşu guidedServiceHealthBundle emsali).
+		ev = fmt.Sprintf("Not: RED değerleri tüm ortamların toplamı — %q ortam süzgeci uygulanmadı (service_summary_5m ortam kırılımı yapmıyor); farkı %s ortamına atfetme.\n", env, env) + ev
+		src += fmt.Sprintf(", ortam: %s (uygulanmadı — tüm ortamlar)", env)
+	}
+	return ev, src
 }
