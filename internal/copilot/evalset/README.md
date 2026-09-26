@@ -57,6 +57,8 @@ RCA hakemi vakaları (v0.10.424): `surface: "RCAVerdict"` + `user` yerine
 `minEvidenceCitationRate` (K2'den geçen atıf / toplam atıf),
 `maxUnknownEntities` (K3). Kalkan raporu (rcaShieldReport) skor satırıdır.
 
+Prompt denetimi R3 önce/sonra vakaları (P-L15): `slo_burn.json` (P-F3), `ch_query_optimize.json` (P-F2), `slow_query.json` (P-F12); `user` metinleri canlı kurucularla aynı (copilot_explain_slo.go, insight.SlowQueryPromptUser, copilot_ch_optimize.go).
+
 Vaka kaynağı: elle yazılmış sentetik (demo sözlüğü: checkout, payments,
 inventory). Prod 👎 satırları müşteri adı taşıyabilir ve repoya GİRMEZ;
 `GET /api/ai/evalset/export` (E5) indirilen dosya repoya elle ve

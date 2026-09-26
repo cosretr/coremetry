@@ -3720,22 +3720,9 @@ func evidenceAsOf(anchorTo time.Time) time.Time {
 }
 
 // problemMetricUnitTR — v0.10.405 (CoSRE denetimi P4): problem kanıt
-// satırındaki sayının BİRİMİ. error_rate yüzde (anomaly.go "error_rate(%)"),
-// gecikme aileleri ms, throughput req/s; tanınmayan metrik birimsiz kalır
-// (tahmin yok — yanlış birim birimsizden kötü).
-func problemMetricUnitTR(metric string) string {
-	m := strings.ToLower(metric)
-	switch {
-	case strings.Contains(m, "error_rate") || strings.HasSuffix(m, "_pct") || strings.Contains(m, "percent"):
-		return "%"
-	case strings.Contains(m, "p50") || strings.Contains(m, "p95") || strings.Contains(m, "p99") ||
-		strings.Contains(m, "latency") || strings.Contains(m, "duration"):
-		return " ms"
-	case m == "rps" || strings.Contains(m, "throughput") || strings.Contains(m, "req_per_s"):
-		return " req/s"
-	}
-	return ""
-}
+// satırındaki sayının BİRİMİ; tek kaynak chstore.ProblemMetricUnit (arka
+// plan açıklayıcısı da aynı birimi yazsın diye oraya taşındı).
+func problemMetricUnitTR(metric string) string { return chstore.ProblemMetricUnit(metric) }
 
 // serviceIntentFor — v0.10.429 (D1): mesaj servis-kapsamlı bir kılavuz
 // niyet taşıyor mu ve hangisi (router switch'inin servisli dallarıyla AYNI

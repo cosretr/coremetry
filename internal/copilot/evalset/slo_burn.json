@@ -1,0 +1,41 @@
+{
+  "schema": "coremetry.evalset/1",
+  "cases": [
+    {
+      "id": "slo-burn-below-alarm-no-escalation",
+      "surface": "SLOBurn",
+      "why": "P-F3 (R3): hızlı yakım 12.40x, girdide basılı alarm eşiği 14.4x'in ALTINDA (eski sabit >=10'un üstünde); kırmızı = model eski '>=10' eşiğini ya da Workbook'u anıp alarm çalmadan eskalasyon öneriyor",
+      "user": "SLO: checkout-availability (service=checkout)\nType: availability\nTarget: 99.900% over 30-day rolling window\nCurrent: SLI=99.971% (24992800 good / 25000000 total) · budget remaining=71.20% · long-window burn=0.29 · healthy=true\nFast burn (1h0m0s): rate=12.40, n=34650 (alarm threshold 14.4x)\nSlow burn (6h0m0s): rate=4.85, n=209400 (alarm threshold 6.0x)\nExhaustion forecast: 41.3 hours at current burn (rate=12.40 over 60m window, breach within 24h: false)\nDaily burn trend (oldest→newest): 0.21, 0.18, 0.25, 0.19, 0.22, 0.31, 1.46 — 1/7 day(s) above 1.0\n",
+      "expect": {
+        "mustNotContain": [">=10", ">= 10", "≥10", "≥ 10", "10x", "10×", "10'un üzerinde", "workbook", "eskale edin", "eskale edilmeli", "eskalasyon önerilir"],
+        "knownEntities": ["checkout"],
+        "maxUnknownEntities": 0,
+        "maxLatencyMs": 30000
+      }
+    },
+    {
+      "id": "slo-burn-above-alarm-cites-threshold",
+      "surface": "SLOBurn",
+      "why": "P-F3 (R3): 16.80x hızlı / 7.20x yavaş yakım iki alarm eşiğinin (14.4x / 6.0x) de ÜSTÜNDE; kırmızı = cevap girdideki 14.4 eşiğini anmıyor (14,4 yazımı da geçer — girdide başka 14 yok) ya da eski sabit '>=10' eşiğine dayanıyor",
+      "user": "SLO: payments-latency (service=payments)\nType: latency, threshold=800ms\nTarget: 99.500% over 30-day rolling window\nCurrent: SLI=99.692% (8573512 good / 8600000 total) · budget remaining=38.40% · long-window burn=0.62 · healthy=true\nFast burn (1h0m0s): rate=16.80, n=11950 (alarm threshold 14.4x)\nSlow burn (6h0m0s): rate=7.20, n=71640 (alarm threshold 6.0x)\nExhaustion forecast: 16.5 hours at current burn (rate=16.80 over 60m window, breach within 24h: true)\nDaily burn trend (oldest→newest): 0.35, 0.41, 0.38, 0.52, 0.47, 0.44, 2.93 — 1/7 day(s) above 1.0\n",
+      "expect": {
+        "mustContain": ["14"],
+        "mustNotContain": [">=10", ">= 10", "≥10", "≥ 10", "10x", "10×", "10'un üzerinde", "workbook"],
+        "knownEntities": ["payments"],
+        "maxUnknownEntities": 0,
+        "maxLatencyMs": 30000
+      }
+    },
+    {
+      "id": "slo-burn-scoped-latency-below-alarm",
+      "surface": "SLOBurn",
+      "why": "P-F3 (R3): operasyon kapsamlı gecikme SLO'su, 11.20x hızlı / 5.40x yavaş yakım iki alarm eşiğinin de ALTINDA; kırmızı = eski '>=10' eşiğiyle eskalasyon ya da kanıtta olmayan servis adı",
+      "user": "SLO: inventory-reserve-latency (service=inventory)\nType: latency, threshold=500ms\nTarget: 99.000% over 30-day rolling window\nScope: operation=\"POST /reserve\"\nCurrent: SLI=99.530% (3184960 good / 3200000 total) · budget remaining=53.00% · long-window burn=0.47 · healthy=true\nFast burn (1h0m0s): rate=11.20, n=4380 (alarm threshold 14.4x)\nSlow burn (6h0m0s): rate=5.40, n=26150 (alarm threshold 6.0x)\nExhaustion forecast: 34.1 hours at current burn (rate=11.20 over 60m window, breach within 24h: false)\nDaily burn trend (oldest→newest): 0.32, 0.29, 0.35, 0.33, 0.38, 0.41, 1.87 — 1/7 day(s) above 1.0\n",
+      "expect": {
+        "mustNotContain": [">=10", ">= 10", "≥10", "≥ 10", "10x", "10×", "10'un üzerinde", "workbook", "eskale edin", "eskale edilmeli", "eskalasyon önerilir"],
+        "knownEntities": ["inventory"],
+        "maxUnknownEntities": 0
+      }
+    }
+  ]
+}

@@ -60,7 +60,26 @@ func chatMessageTexts(msgs []copilot.ChatMessage) []string {
 const (
 	chatMaxToolRounds = 5  // guardrail: cap the agentic loop so a model can't fan tool calls forever
 	chatMaxMessages   = 40 // cap conversation length fed back to the LLM (token budget)
+	// chatMaxToolCalls — N6 (docs/audit/cosre-telemetry-agent.md): alışveriş
+	// başına tool-çağrı tavanı. Ajan döngüsü prompt'undaki "en çok 6 tool
+	// çağrısı" burada zorlanır; prompt yalnız hatırlatır.
+	chatMaxToolCalls = 6
 )
+
+// chatCallCapContent — tavan dolunca çalıştırılmayan çağrının sonucu.
+const chatCallCapContent = `{"error":"tool çağrı tavanı doldu — çağrı çalıştırılmadı; eldekini raporla"}`
+
+// splitByCallBudget — SAF: bir turun çağrılarını kalan bütçeye göre ikiye
+// ayırır (çalışacaklar, çalışmayacaklar). Sıra korunur.
+func splitByCallBudget(calls []copilot.ToolCall, left int) (run, over []copilot.ToolCall) {
+	if left < 0 {
+		left = 0
+	}
+	if len(calls) <= left {
+		return calls, nil
+	}
+	return calls[:left], calls[left:]
+}
 
 type chatRequest struct {
 	Messages []copilot.ChatMessage `json:"messages"`
@@ -494,6 +513,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	callsLeft := chatMaxToolCalls
 	for round := 0; round < chatMaxToolRounds; round++ {
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		turn, err := s.copilot.ChatWithTools(tctx, loopPrompt, conv, specs)
@@ -564,7 +584,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			Role: "assistant", Text: turn.Text, ToolCalls: turn.ToolCalls,
 		})
 		results := make([]copilot.ToolResult, 0, len(turn.ToolCalls))
-		for _, tc := range turn.ToolCalls {
+		run, over := splitByCallBudget(turn.ToolCalls, callsLeft)
+		callsLeft -= len(run)
+		for _, tc := range run {
 			// v0.9.1181 (Faz 4.3) — çipin kimliği. `step` tool ÇALIŞMADAN
 			// önce çıkar (ilerleme geri bildirimi), sonuç ise çalıştıktan
 			// sonra ayrı bir olayla; ikisini bu sayı eşler. Tur içindeki
@@ -677,6 +699,15 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			tr.Content, _ = clampToolResultForModel(tr.Content)
 			results = append(results, tr)
 		}
+		if len(over) > 0 {
+			// N6 — tavanı aşan çağrılar ÇALIŞTIRILMAZ; her birine hata sonucu
+			// döner (sağlayıcı sahipsiz tool_call kabul etmez) ve döngü tavan
+			// turuna geçer.
+			emit("step", map[string]string{"label": fmt.Sprintf("tool-çağrı tavanı (%d) doldu — %d çağrı çalıştırılmadı", chatMaxToolCalls, len(over))})
+			for _, tc := range over {
+				results = append(results, copilot.ToolResult{CallID: tc.ID, Name: tc.Name, IsError: true, Content: chatCallCapContent})
+			}
+		}
 		conv = append(conv, copilot.ChatMessage{Role: "user", ToolResults: results})
 
 		// Hit the round cap with tool calls still pending → ask the
@@ -687,7 +718,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		// literaldi; prompt METNİ olduğu için internal/copilot/prompts.go'ya
 		// taşındı (SystemPromptChatRoundCap = taban + ek). Sicil
 		// accessor'lardan türediğinden bu ek artık dil kapısının kapsamında.
-		if round == chatMaxToolRounds-1 {
+		if round == chatMaxToolRounds-1 || callsLeft <= 0 {
 			// v0.10.806 — tavan eki döngü prompt'unun SONUNA: önek aynı kalır
 			// (önbellek isabeti) ve tavan turu bağlam önsözlerini de görür
 			// (eskiden yalnız hitap + sohbet çekirdeği + ek gidiyordu).
@@ -743,6 +774,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				emit("answer", chatAnswerEvent(finalText, exchangeID, links,
 					answerOpenHref(lastUserText(req.Messages), loopOpen)))
 			}
+			break // tavan turu son turdur (tur ya da çağrı tavanı)
 		}
 	}
 

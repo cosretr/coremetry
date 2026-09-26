@@ -1,0 +1,36 @@
+{
+  "schema": "coremetry.evalset/1",
+  "cases": [
+    {
+      "id": "slow-query-mysql-no-postgres-advice",
+      "surface": "SlowQuery",
+      "why": "P-F12 (R3): iyi yapılı tek satır UPDATE, sorun kuyrukta (avg 3ms / p99 640ms), motor MySQL; kırmızı = motora uymayan Postgres tavsiyesi (autovacuum/vacuum, pg_stat) — eski sabit 'locking / autovacuum / cache hit rate' kalıbı",
+      "user": "DB engine: mysql\nDatabase: inventory (statement grouping folds db.name — the class may span more)\nWindow: 1sa\nCalls in window: 182.400\nErrors: 214 (0.1%)\nLatency: avg=3ms · p95=9ms · p99=640ms · max=5.2sn\nTotal wall-clock time spent in this query class: 10.3dk\nCalling services (by total time):\n  • inventory — 120.000 calls, p95=11ms, total=7.1dk\n  • checkout — 62.400 calls, p95=8ms, total=3.2dk\n\nNormalized statement (literals replaced with ?):\nUPDATE inventory_stock SET reserved_qty = reserved_qty + ? WHERE sku_id = ?\n\nReal sample with literals:\nUPDATE inventory_stock SET reserved_qty = reserved_qty + 1 WHERE sku_id = 48213\n\nAnchor on the data above. Don't invent schema columns, services or numbers you weren't shown.\n",
+      "expect": {
+        "mustNotContain": ["vacuum", "pg_stat"],
+        "knownEntities": ["inventory", "checkout"],
+        "maxLatencyMs": 30000
+      }
+    },
+    {
+      "id": "slow-query-redis-no-sql-advice",
+      "surface": "SlowQuery",
+      "why": "P-F12 (R3): Redis GET iyi yapılı, sorun kuyrukta (avg 1ms / p99 180ms); kırmızı = Redis'e Postgres tavsiyesi (autovacuum/vacuum, pg_stat) — sonraki adım bu motora göre olmalı",
+      "user": "DB engine: redis\nWindow: 1sa\nCalls in window: 2.140.000\nLatency: avg=1ms · p95=2ms · p99=180ms · max=1.4sn\nTotal wall-clock time spent in this query class: 39.2dk\nCalling services (by total time):\n  • checkout — 1.520.000 calls, p95=2ms, total=27.9dk\n  • payments — 620.000 calls, p95=2ms, total=11.4dk\n\nNormalized statement (literals replaced with ?):\nGET session:?\n\nReal sample with literals:\nGET session:48213\n\nAnchor on the data above. Don't invent schema columns, services or numbers you weren't shown.\n",
+      "expect": {
+        "mustNotContain": ["vacuum", "pg_stat"],
+        "knownEntities": ["checkout", "payments"]
+      }
+    },
+    {
+      "id": "slow-query-postgres-hazard-quoted",
+      "surface": "SlowQuery",
+      "why": "kontrol vakası (P-F12 yanı): gerçek tehlike var (WHERE'de sütun üstünde fonksiyon); kırmızı = 'looks fine' dalına kaçıp lower(email) cümlesini alıntılamıyor ya da ifade indeksi DDL'i (CREATE INDEX) vermiyor",
+      "user": "DB engine: postgresql\nDatabase: shop (statement grouping folds db.name — the class may span more)\nWindow: 1sa\nCalls in window: 41.800\nLatency: avg=380ms · p95=720ms · p99=1.1sn · max=2.9sn\nTotal wall-clock time spent in this query class: 264.7dk\nCalling services (by total time):\n  • checkout — 41.800 calls, p95=720ms, total=264.7dk\n\nNormalized statement (literals replaced with ?):\nSELECT id, email, status FROM customers WHERE lower(email) = ?\n\nReal sample with literals:\nSELECT id, email, status FROM customers WHERE lower(email) = 'user4711@example.com'\n\nAnchor on the data above. Don't invent schema columns, services or numbers you weren't shown.\n",
+      "expect": {
+        "mustContain": ["lower(email)", "create index"],
+        "knownEntities": ["checkout"]
+      }
+    }
+  ]
+}

@@ -85,7 +85,7 @@ func registerPrompts(srv *mcp.Server, d Deps) {
 
 	srv.RegisterPrompt(mcp.Prompt{
 		Name:        "suggest_runbook",
-		Description: "Coremetry SRE: numbered executable runbook for handling an open Problem. Anchors steps in past resolution times so fast-resolving rules surface quick paths first.",
+		Description: "Coremetry SRE: numbered executable runbook for an open Problem, built from its rule, metric and service (past resolution times are not attached on this path).",
 		Arguments: []mcp.PromptArgument{
 			{Name: "problem_id", Description: "Problem row ID.", Required: true},
 		},

@@ -8893,8 +8893,8 @@ func (s *Server) copilotExplainIncident(w http.ResponseWriter, r *http.Request) 
 	var probLines string
 	for _, p := range probs {
 		probLines += fmt.Sprintf(
-			"  • [%s] %s — %s: value=%.2f threshold=%.2f\n",
-			strings.ToUpper(p.Severity), p.Service, p.RuleName, p.Value, p.Threshold)
+			"  • [%s] %s — %s: value=%.2f%s threshold=%.2f%s\n",
+			strings.ToUpper(p.Severity), p.Service, p.RuleName, p.Value, problemMetricUnitTR(p.Metric), p.Threshold, problemMetricUnitTR(p.Metric))
 	}
 	user := fmt.Sprintf(
 		"Incident: %s\nService: %s\nSeverity: %s\nStatus: %s\nSummary: %s\nAttached problems (%d):\n%s",
@@ -9080,8 +9080,8 @@ func (s *Server) copilotExplainServiceHealth(w http.ResponseWriter, r *http.Requ
 	})
 	var probLines string
 	for _, p := range probs {
-		probLines += fmt.Sprintf("  • [%s] %s — %s: value=%.2f threshold=%.2f\n",
-			strings.ToUpper(p.Severity), p.RuleName, p.Metric, p.Value, p.Threshold)
+		probLines += fmt.Sprintf("  • [%s] %s — %s: value=%.2f%s threshold=%.2f%s\n",
+			strings.ToUpper(p.Severity), p.RuleName, p.Metric, p.Value, problemMetricUnitTR(p.Metric), p.Threshold, problemMetricUnitTR(p.Metric))
 	}
 
 	payload, _ := json.Marshal(map[string]any{
@@ -9168,9 +9168,9 @@ func (s *Server) copilotRunbook(w http.ResponseWriter, r *http.Request) {
 				ttrSeen++
 			}
 			fmt.Fprintf(&sb,
-				"  • opened %s — peak value %.2f (sev %s) — resolved in %s\n",
+				"  • opened %s — peak value %.2f%s (sev %s) — resolved in %s\n",
 				time.Unix(0, sp.StartedAt).Format("2006-01-02 15:04"),
-				sp.Value, sp.Severity, ttr,
+				sp.Value, problemMetricUnitTR(sp.Metric), sp.Severity, ttr,
 			)
 		}
 		if ttrSeen > 0 {

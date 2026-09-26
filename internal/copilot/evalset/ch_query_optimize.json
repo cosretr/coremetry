@@ -1,0 +1,37 @@
+{
+  "schema": "coremetry.evalset/1",
+  "cases": [
+    {
+      "id": "ch-optimize-logs-sort-key",
+      "surface": "CHQueryOptimize",
+      "why": "P-F2 (R3): logs ORDER BY (service_name, severity_num, time); kırmızı = logs için '(service_name, time)' diye yanlış sıralama anahtarı anlatılıyor ya da zaman sınırı (time >=) / LIMIT eklenmiyor",
+      "user": "SELECT time, severity_text, body, trace_id\nFROM logs\nWHERE service_name = 'checkout'\n  AND body LIKE '%timeout%'\nORDER BY time DESC",
+      "expect": {
+        "mustContain": ["time >", "limit"],
+        "mustNotContain": ["service_name, time)", "service_name,time)"],
+        "knownEntities": ["checkout"],
+        "maxLatencyMs": 30000
+      }
+    },
+    {
+      "id": "ch-optimize-pin-service-from-intent",
+      "surface": "CHQueryOptimize",
+      "why": "P-F2 (R3): soru tek servis (yorumda checkout) ama WHERE'de service_name yok; kırmızı = sıralama anahtarının başı service_name = 'checkout' ile sabitlenmiyor ya da LIMIT eklenmiyor",
+      "user": "-- checkout servisinin son 1 saatteki en yavaş POST /pay span'ları\nSELECT trace_id, span_id, duration\nFROM spans\nWHERE name = 'POST /pay'\n  AND time >= now() - INTERVAL 1 HOUR\nORDER BY duration DESC",
+      "expect": {
+        "mustContain": ["'checkout'", "limit"],
+        "knownEntities": ["checkout"]
+      }
+    },
+    {
+      "id": "ch-optimize-cross-service-no-pin",
+      "surface": "CHQueryOptimize",
+      "why": "P-F2 (R3): sorgu zaten güvenli (time sınırı, LIMIT, SETTINGS) ve bilerek TÜM servisleri grupluyor; kırmızı = eski 'MUST time AND service_name' kuralıyla servis filtresi ekleniyor (sorgunun anlamı bozuluyor), GROUP BY düşüyor ya da logs sıralaması yanlış anlatılıyor",
+      "user": "SELECT service_name, count() AS errors\nFROM logs\nWHERE time >= now() - INTERVAL 1 HOUR\n  AND severity_num >= 17\nGROUP BY service_name\nORDER BY errors DESC\nLIMIT 20\nSETTINGS max_execution_time = 30",
+      "expect": {
+        "mustContain": ["group by service_name"],
+        "mustNotContain": ["and service_name =", "and service_name=", "where service_name =", "where service_name=", "service_name, time)", "service_name,time)"]
+      }
+    }
+  ]
+}

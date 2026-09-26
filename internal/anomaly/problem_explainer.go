@@ -246,7 +246,8 @@ func buildProblemPrompt(p chstore.Problem, bundle EvidenceBundle, hyp *chstore.R
 	fmt.Fprintf(&sb, "Service: %s\n", p.Service)
 	fmt.Fprintf(&sb, "Severity: %s\n", p.Severity)
 	fmt.Fprintf(&sb, "Metric: %s\n", p.Metric)
-	fmt.Fprintf(&sb, "Value: %.4g (threshold %.4g)\n", p.Value, p.Threshold)
+	unit := chstore.ProblemMetricUnit(p.Metric) // tık yoluyla aynı birim (error_rate yüzde puanı)
+	fmt.Fprintf(&sb, "Value: %.4g%s (threshold %.4g%s)\n", p.Value, unit, p.Threshold, unit)
 	fmt.Fprintf(&sb, "Started: %s (%s)\n", time.Unix(0, p.StartedAt).In(loc).Format(time.RFC3339), loc.String())
 	if p.Description != "" {
 		fmt.Fprintf(&sb, "Description: %s\n", p.Description)
