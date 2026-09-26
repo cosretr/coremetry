@@ -652,7 +652,7 @@ export default function AdminStatsPage() {
                           <td className="num">{fmtNum(d.traces)}</td>
                           <td className="num">{fmtNum(d.spans)}</td>
                           <td className="num">{fmtNum(d.errors)}</td>
-                          <td className={`num ${errPct >= 5 ? 'err' : errPct > 0 ? 'warn' : ''}`}>
+                          <td className={`num ${errPct >= 5 ? 'cell-err' : errPct > 0 ? 'cell-warn' : ''}`}>
                             {errPct.toFixed(2)}%
                           </td>
                           <td className="num">{d.services}</td>

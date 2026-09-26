@@ -169,7 +169,7 @@ function BacktraceInner() {
                         )}
                       </td>
                       <td className="num">{fmtNum(r.calls)}</td>
-                      <td className={`num ${errBad ? 'err' : errWarn ? 'warn' : ''}`}>
+                      <td className={`num ${errBad ? 'cell-err' : errWarn ? 'cell-warn' : ''}`}>
                         {r.errorRate.toFixed(2)}%
                       </td>
                       <td className="num">{r.p50Ms.toFixed(1)}ms</td>

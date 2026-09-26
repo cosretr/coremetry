@@ -1534,6 +1534,12 @@ tr.row-selected td.sticky-right {
 }
 /* Numeric columns — right-align + tabular figures so digits line up by place value. */
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* v0.10.931 (tablo standardı T9) — sapan değer yalnız METİN rengiyle,
+   dolgu yok. Eskiden iki tablo `num err` / `num warn` basıyordu; `.err`
+   ve `.warn` yalnız bileşik seçicilerde (.pb-pill.err …) tanımlı olduğu
+   için hücreye hiç boya gelmiyordu. */
+.cell-err  { color: var(--err); }
+.cell-warn { color: var(--warn); }
 
 /* Badges — sized to the design handoff's .pill (2px8px / radius6 / 11px / 700).
    inline-flex + gap so an icon/dot sits flush with the label; tabular-nums for
