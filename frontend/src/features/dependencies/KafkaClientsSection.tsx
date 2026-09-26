@@ -181,7 +181,7 @@ function KafkaLastTable({ storageKey, title, keyLabel, rows, cols }: {
         <div className="kc-empty">seri yok</div>
       ) : (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>

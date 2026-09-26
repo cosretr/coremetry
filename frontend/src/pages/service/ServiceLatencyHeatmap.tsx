@@ -137,7 +137,7 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
           <span title="Scoped to the operation picked in the RED charts above (?op=)."
             style={{
               fontSize: 11, color: 'var(--text2)',
-              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+              fontFamily: 'var(--font-mono)',
               background: 'var(--bg2)', border: '1px solid var(--border)',
               borderRadius: 3, padding: '1px 6px',
               maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis',

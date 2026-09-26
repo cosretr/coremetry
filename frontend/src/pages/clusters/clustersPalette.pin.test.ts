@@ -28,7 +28,10 @@ describe('Clusters — sade palet adım 1', () => {
   it('sapma renkleri korunur (unreachable/failing b-err, >85 --err)', () => {
     expect(src).toContain('<span className="badge b-err">unreachable</span>');
     expect(src).toContain('failing</span>');
-    expect(src).toContain("(r.cpuPct ?? 0) > 85 ? 'var(--err)'");
+    // v0.10.943 (tablo standardı dilim 3) — eşik rengi satır içi üçlüden kolon
+    // tonuna taşındı (`pctTone` → .cell-err/.cell-warn/.cell-faint); eşikler aynı.
+    expect(src).toContain("(p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint'");
+    expect(src.match(/tone: r => pctTone\(r\.(cpuPct|memPct)\)/g)?.length).toBe(4);
   });
   it('Live noktası nabız atar ama renk nötr', () => {
     expect(src).toContain("leftIcon={<span className={live ? 'pulse-dot' : ''}");

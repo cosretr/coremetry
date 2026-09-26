@@ -56,13 +56,13 @@ export function OraclePanel({ instance, range }: { instance: string; range: Time
                     ? 'var(--bg3)'
                     : 'color-mix(in srgb, var(--err) 15%, transparent)',
                   color: data.status === 'up' ? 'var(--text2)' : 'var(--err)',
-                  fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                  fontFamily: 'var(--font-mono)',
                   textTransform: 'uppercase', letterSpacing: '.5px',
                 }}>{data.status}</span>
         )}
         <span style={{
           marginLeft: 'auto', fontSize: 10, color: 'var(--text3)',
-          fontWeight: 400, fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          fontWeight: 400, fontFamily: 'var(--font-mono)',
         }}>
           instance: {instance || '(unknown)'}
         </span>
@@ -187,7 +187,7 @@ function TablespaceBar({ ts, onClick }: {
     <div style={{
       display: 'grid', gridTemplateColumns: '120px 1fr 90px 60px 18px', gap: 10,
       alignItems: 'center', fontSize: 11, width: '100%',
-      fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+      fontFamily: 'var(--font-mono)',
     }}>
       <span style={{ color: 'var(--text)', fontWeight: 600 }}>{ts.name}</span>
       <div style={{

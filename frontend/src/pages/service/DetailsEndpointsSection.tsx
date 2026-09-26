@@ -123,8 +123,8 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
             <Empty compact icon="◯" title="Bu pencerede giriş endpoint'i yok">Servis server/consumer span üretmiyor ya da kapsam dışı.</Empty>
           )}
           {rows.length > 0 && (
-            <div className="table-wrap is-fit">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <div className="table-wrap">
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
@@ -140,14 +140,14 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
                             : '—'}
                         </td>
                       )}
-                      <td className="num mono">{fmtCount(r.calls)}</td>
+                      <td className="num">{fmtCount(r.calls)}</td>
                       <td className="num"><span className={errBadge(r.errorRate)}>{r.errorRate.toFixed(1)}%</span></td>
-                      <td className="num mono">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>
-                      <td className="num mono">{r.p99Ms.toFixed(0)} ms</td>
+                      <td className="num">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>
+                      <td className="num">{r.p99Ms.toFixed(0)} ms</td>
                       <td><div title={`pencere içi toplam süre ≈ ${(r.calls * r.avgMs / 60000).toFixed(1)} dk`}
                         style={{ height: 7, borderRadius: 2, width: `${Math.max(4, shareBar(r, rows) * 100)}%`,
                           background: r.errorRate > 1 ? 'var(--warn)' : 'var(--teal)' }} /></td>
-                      <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                      <td onClick={e => e.stopPropagation()}>
                         <Link to={tracesLink(r, range, env || undefined, (r.cluster || scopeCluster) || undefined)} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}>Traces →</Link>
                         {canEditRules && (
                           <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"

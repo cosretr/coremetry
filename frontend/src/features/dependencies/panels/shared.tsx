@@ -13,15 +13,14 @@ import { metricCatalogueHref } from '@/pages/explore/urlCodec';
 import { Button } from '@/components/ui/Button';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { TileButton } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
 
 // v0.9.873 (tutarlılık denetimi BT9) — tek dokunuş ÜÇ paneli düzeltiyor:
 // TopSQLTable Oracle / Postgres / MySQL tarafından paylaşılıyor.
 export type TopSQLRow = { sql: string; elapsedSec: number; executions: number; avgElapsedMs: number };
 
-const TOPSQL_COLS: DataTableColumn<TopSQLRow>[] = [
+const TOPSQL_COLS: ColumnDef<TopSQLRow>[] = [
   { id: 'sql',     label: 'SQL',     sortValue: r => r.sql,          naturalDir: 'asc', flex: true },
   { id: 'elapsed', label: 'Elapsed', sortValue: r => r.elapsedSec,   numeric: true, width: 110 },
   { id: 'execs',   label: 'Execs',   sortValue: r => r.executions,   numeric: true, width: 110 },
@@ -81,14 +80,14 @@ export function Stat({ label, value, tone, onClick, sub }: {
         )}
       </span>
       <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color,
-                     fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+                     fontFamily: 'var(--font-mono)' }}>
         {value}
       </span>
       {sub && (
         <span style={{
           display: 'block',
           fontSize: 10, color: 'var(--text3)', marginTop: 2,
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          fontFamily: 'var(--font-mono)',
         }}>{sub}</span>
       )}
     </>
@@ -144,7 +143,7 @@ export function GaugeStat({ label, usage, limit, sub, onClick, forecast }: {
       <span style={{
         display: 'block',
         fontSize: 14, fontWeight: 700,
-        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+        fontFamily: 'var(--font-mono)',
         marginBottom: 4,
       }}>
         {fmtNum(usage)} <span style={{ color: 'var(--text3)', fontWeight: 400 }}>/ {fmtNum(limit)}</span>
@@ -163,7 +162,7 @@ export function GaugeStat({ label, usage, limit, sub, onClick, forecast }: {
         <span style={{
           display: 'block',
           fontSize: 10, color: 'var(--text3)', marginTop: 4,
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          fontFamily: 'var(--font-mono)',
         }}>{sub}</span>
       )}
       {eta && (
@@ -251,10 +250,7 @@ export function OracleMetricDrillModal({ drill, range, instance, engine, onClose
           display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14,
         }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>{drill.label}</div>
-          <code style={{
-            fontSize: 11, color: 'var(--text3)',
-            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-          }}>{drill.metric}</code>
+          <code style={{ fontSize: 11, color: 'var(--text3)' }}>{drill.metric}</code>
           {drill.filters && drill.filters.length > 0 && (
             <span style={{ fontSize: 10, color: 'var(--text3)' }}>
               {drill.filters.map(f => `${f.k} ${f.op} "${f.v.join(', ')}"`).join(' · ')}
@@ -316,17 +312,17 @@ export function TopSQLTable({ rows, instance, range }: {
       </div>
       {/* is-scroll: iç kaydırmalı kapta yapışkan başlık. `is-fit` DEĞİL
           (top: var(--controls-h) burada yanlış referans — R7/v0.9.697). */}
-      <div className="table-wrap is-scroll" style={{ maxHeight: 240, overflowY: 'auto' }}>
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <div className="table-wrap is-scroll" style={{ maxHeight: 240 }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.map((r, i) => (
               <tr key={i}>
-                <td style={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11,
-                  maxWidth: 600, wordBreak: 'break-word',
-                }}>
+                {/* v0.10.943 (tablo standardı dilim 3) — SQL kimlik hücresi: 11px
+                    düştü, renk eklenmedi. maxWidth sabit düzende etkisizdi
+                    (genişlik colgroup'ta), wordBreak nowrap altında ölüydü. */}
+                <td className="mono">
                   {r.sql
                     ? (
                       <>
@@ -349,9 +345,9 @@ export function TopSQLTable({ rows, instance, range }: {
                     )
                     : <span style={{ color: 'var(--text3)' }}>(unknown)</span>}
                 </td>
-                <td className="num mono">{r.elapsedSec.toFixed(1)}s</td>
-                <td className="num mono">{fmtNum(r.executions)}</td>
-                <td className="num mono">{r.avgElapsedMs.toFixed(1)}ms</td>
+                <DataTableCell dt={dt} col="elapsed" row={r} value={`${r.elapsedSec.toFixed(1)}s`} />
+                <DataTableCell dt={dt} col="execs" row={r} value={fmtNum(r.executions)} />
+                <DataTableCell dt={dt} col="avg" row={r} value={`${r.avgElapsedMs.toFixed(1)}ms`} />
               </tr>
             ))}
           </tbody>
@@ -449,7 +445,7 @@ export function PanelHeader({ engineLabel, instance, status, color, extraBadge, 
               ? 'var(--bg3)'
               : 'color-mix(in srgb, var(--err) 15%, transparent)',
             color: status === 'up' ? 'var(--text2)' : 'var(--err)',
-            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            fontFamily: 'var(--font-mono)',
             textTransform: 'uppercase', letterSpacing: '.5px',
           }}>{status}</span>
       )}
@@ -457,13 +453,13 @@ export function PanelHeader({ engineLabel, instance, status, color, extraBadge, 
         <span style={{
           fontSize: 9, padding: '1px 6px', borderRadius: 3,
           background: 'rgba(120,120,120,0.15)', color: 'var(--text2)',
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          fontFamily: 'var(--font-mono)',
           textTransform: 'uppercase', letterSpacing: '.5px',
         }}>{extraBadge}</span>
       )}
       <span style={{
         marginLeft: 'auto', fontSize: 10, color: 'var(--text3)',
-        fontWeight: 400, fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+        fontWeight: 400, fontFamily: 'var(--font-mono)',
       }}>
         instance: {instance || '(unknown)'}
       </span>
@@ -486,7 +482,7 @@ export function HostLink({ instance, range }: { instance: string; range?: TimeRa
       title="Open this host / service in the infra view"
       style={{
         fontSize: 10, fontWeight: 500, color: 'var(--accent2)',
-        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+        fontFamily: 'var(--font-mono)',
       }}>
       host ↗
     </Link>
@@ -550,7 +546,7 @@ export function WaitClassesBar({ waits, onClickClass }: {
         System wait classes
         <span style={{
           fontWeight: 400, color: 'var(--text3)',
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          fontFamily: 'var(--font-mono)',
           textTransform: 'none', letterSpacing: 0,
         }}>
           total {total.toFixed(2)} s/s
@@ -589,7 +585,7 @@ export function WaitClassesBar({ waits, onClickClass }: {
                   width: 8, height: 8, borderRadius: 2,
                   background: colorOf(w.name),
                 }} />
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>
                   {w.name}
                 </span>
                 <span style={{ color: 'var(--text3)' }}>

@@ -434,8 +434,10 @@ export function DependenciesTable({
         </span>
       </div>
 
+      {/* v0.10.943 (tablo standardı dilim 3) — sayı hücreleri `num` (arayüz
+          fontu, S2); ikincil hücreler 11px yerine renkle (S3). */}
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} leading={[24]} />
           <DataTableHead dt={dt} stickyLeftBase={24} leading={<th className="sticky-left" style={{ width: 24, left: 0 }} aria-label="Expand"></th>} />
           <tbody>
@@ -455,16 +457,15 @@ export function DependenciesTable({
               const isOpen = !onRowNavigate && openKey === rowKey;
               return (
                 <Fragment key={`${rowKey}|${i}`}>
+                  {/* scale-audit v0.8.203 — skip off-screen rows (cv-row); at a
+                      bank with many DB schemas this list reaches 1000s. */}
                   <tr {...rowActivation(() => (onRowNavigate
                         ? onRowNavigate(r)
                         : setOpen(isOpen ? null : r, isOpen ? null : rowKey)))}
-                      style={{
-                               // scale-audit v0.8.203 — skip off-screen rows
-                               // (matches the instance table below); at a bank
-                               // with many DB schemas this list reaches 1000s.
-                               contentVisibility: 'auto', containIntrinsicSize: 'auto 32px',
-                               background: isOpen ? 'var(--bg2)' : undefined }}>
-                    <td className="sticky-left" style={{ color: 'var(--text3)', width: 24, textAlign: 'center', left: 0 }}
+                      className="cv-row"
+                      style={isOpen ? { background: 'var(--bg2)' } : undefined}>
+                    {/* v0.10.943 — genişlik 24 colgroup'ta (leading); ortalama ve sabit ofset satır içi kalır. */}
+                    <td className="sticky-left cell-faint" style={{ textAlign: 'center', left: 0 }}
                         title={onRowNavigate ? 'Open the detail page' : undefined}>
                       {onRowNavigate ? '›' : isOpen ? '▾' : '▸'}
                     </td>
@@ -477,14 +478,14 @@ export function DependenciesTable({
                                 borderRadius: 3, fontWeight: 600,
                                 background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
                                 color: 'var(--accent2)',
-                                fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                                fontFamily: 'var(--font-mono)',
                                 textTransform: 'uppercase', letterSpacing: '.5px',
                                 verticalAlign: 'middle',
                               }}>via receiver</span>
                       )}
                     </td>
                     {hasClusterCol && (
-                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text2)' }}>
+                      <td className="mono cell-muted">
                         {r.cluster === '(default)' ? (
                           <span style={{ color: 'var(--text3)' }}>—</span>
                         ) : (
@@ -512,7 +513,7 @@ export function DependenciesTable({
                               background: 'var(--bg3)',
                               border: '1px solid var(--border)',
                               color: 'var(--text2)',
-                              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                              fontFamily: 'var(--font-mono)',
                               verticalAlign: 'middle',
                             }}>
                             ⛁ {r.dbName}
@@ -523,8 +524,8 @@ export function DependenciesTable({
                       </td>
                     )}
                     <td onClick={e => e.stopPropagation()}>
-                      <Link to={exploreHref(r)}
-                            style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 500 }}
+                      <Link to={exploreHref(r)} className="mono"
+                            style={{ fontWeight: 500 }}
                             title={r.instance === 'unknown'
                               ? `peer.service was empty on these spans — label sourced from ${r.dbName && r.dbName !== 'default' ? 'db.name' : 'fallback'}`
                               : kind === 'queue'
@@ -563,7 +564,7 @@ export function DependenciesTable({
                         </span>
                       )}
                     </td>
-                    <td className="mono" style={{ textAlign: 'right' }}>
+                    <td className="num">
                       {fmtNum(r.spanCount)}
                       {compare && <TrendDelta cur={r.spanCount} prior={r.priorSpanCount} kind="neutral" />}
                     </td>
@@ -589,7 +590,7 @@ export function DependenciesTable({
                         <KindP95Cell v={r.consumeP95Ms} what="işleme (process)" />
                       </>
                     )}
-                    <td className="mono" style={{ textAlign: 'right' }}>
+                    <td className="num">
                       <span className={`badge b-${errCls}`}>{r.errorRate.toFixed(2)}%</span>
                       {compare && <TrendDelta cur={r.errorCount} prior={r.priorErrorCount} kind="lowerBetter" />}
                     </td>
@@ -638,13 +639,12 @@ export function DependenciesTable({
                           : <TrendCell trend={trendFor(r)} loading={trends === undefined} />}
                       </td>
                     )}
-                    <td style={{ fontSize: 11 }} onClick={e => e.stopPropagation()}>
+                    <td className="cell-muted" onClick={e => e.stopPropagation()}>
                       {r.callers.length === 0
                         ? <span style={{ color: 'var(--text3)' }}>—</span>
                         : r.callers.slice(0, 3).map((c, idx) => (
                             <span key={c}>
-                              <Link to={serviceHref(c, { range })}
-                                    style={{ fontFamily: 'monospace' }}>{c}</Link>
+                              <Link to={serviceHref(c, { range })} className="mono">{c}</Link>
                               {idx < Math.min(2, r.callers.length - 1) && <span style={{ color: 'var(--text3)' }}>, </span>}
                             </span>
                           ))}
@@ -662,7 +662,9 @@ export function DependenciesTable({
                           columns — which browsers silently clamp, so it
                           never showed. Making the Trend column conditional
                           would have skewed it again; depCols is the single
-                          source the header and colgroup already use. */}
+                          source the header and colgroup already use.
+                          v0.10.943 — `row-detail` DEĞİL: zemin bg1 (sınıf bg2
+                          çizer; çekmecenin bg2 karoları o zeminde kaybolurdu). */}
                       <td colSpan={depCols.length} style={{
                         background: 'var(--bg1)', padding: '12px 16px',
                         borderTop: '1px solid var(--divider)',
@@ -730,7 +732,7 @@ function KindRateCell({ perMin, count, errors, priorPerMin, compare, what }: {
   const errPct = count && count > 0 && errors ? (errors / count) * 100 : 0;
   const errTone = errPct > 5 ? 'err' : errPct > 0 ? 'warn' : null;
   return (
-    <td className="mono" style={{ textAlign: 'right' }}>
+    <td className="num">
       {fmtPerMin(perMin)}
       {errTone && (
         <span className={`badge b-${errTone}`} style={{ marginLeft: 4, fontSize: 9 }}
@@ -752,14 +754,14 @@ function KindRateCell({ perMin, count, errors, priorPerMin, compare, what }: {
 function KindP95Cell({ v, what }: { v?: number; what: string }) {
   if (v === undefined || v === null || !(v > 0)) {
     return (
-      <td className="mono" style={{ textAlign: 'right' }}>
+      <td className="num">
         <span style={{ color: 'var(--text3)' }}
           title={`Bu pencerede ${what} span'i ölçülmedi.`}>—</span>
       </td>
     );
   }
   return (
-    <td className="mono" style={{ textAlign: 'right' }}
+    <td className="num"
       title={`${what} span süresi, p95`}>
       {v.toFixed(1)}ms
     </td>
@@ -775,7 +777,7 @@ function P99DeltaCell({ cur, prior, compare }: {
   const d = msgP99Delta(cur, prior);
   if (d === null) {
     return (
-      <td className="mono" style={{ textAlign: 'right' }}>
+      <td className="num">
         <span style={{ color: 'var(--text3)' }}
           title={compare
             ? 'Önceki pencerede bu destination yok — karşılaştırılacak taban değeri de yok.'
@@ -785,16 +787,15 @@ function P99DeltaCell({ cur, prior, compare }: {
   }
   const pct = d * 100;
   // v0.10.929 (K5) — iyileşme nötr --text2 (Sparkline emsali); kötüleşme renkli kalır.
-  const tone = pct >= 20 ? 'var(--err)' : pct >= 5 ? 'var(--warn)' : 'var(--text2)';
   return (
-    <td className="mono" style={{ textAlign: 'right', color: tone }}
+    <td className={`num ${pct >= 20 ? 'cell-err' : pct >= 5 ? 'cell-warn' : 'cell-muted'}`}
       title={`p99 ${cur.toFixed(1)}ms · önceki ${(prior ?? 0).toFixed(1)}ms`}>
       {pct > 0 ? '+' : ''}{Math.abs(pct) < 10 ? pct.toFixed(1) : pct.toFixed(0)}%
     </td>
   );
 }
 
-// LatencyCell — one right-aligned monospace duration cell, with the honest
+// LatencyCell — one right-aligned (`num`) duration cell, with the honest
 // no-data case built in (v0.9.262).
 //
 // Two distinct absences collapse to the same '—':
@@ -814,7 +815,7 @@ function LatencyCell({ v, row, delta }: {
 }) {
   const present = latencyPresent(row.source, v);
   return (
-    <td className="mono" style={{ textAlign: 'right' }}>
+    <td className="num">
       {present
         ? <>{v.toFixed(1)}ms</>
         : <span style={{ color: 'var(--text3)' }}
@@ -933,7 +934,7 @@ function SystemBadge({ system, kind }: { system: string; kind: 'db' | 'queue' })
       // v0.10.714 (operatör: "biraz daha büyük font olabilir") — 11 → 13,
       // Database rozetiyle aynı ölçek; satır metniyle hizalı okunur.
       padding: '2px 8px', borderRadius: 4, fontSize: 13, fontWeight: 600,
-      fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+      fontFamily: 'var(--font-mono)',
       background: t.bg, color: t.fg,
       border: `1px solid ${t.fg}33`,
     }}>

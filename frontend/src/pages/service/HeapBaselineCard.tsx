@@ -5,8 +5,7 @@ import { fmtClock } from '@/lib/utils'; // v0.10.891 — tek saat biçimleyici (
 import { useServiceDeploys } from '@/lib/queries';
 import { TimeSeriesPanel, type TSSeries, type TSThreshold } from '@/components/viz/TimeSeriesPanel';
 import { rowActivation } from '@/lib/a11y';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 
 // HeapBaselineCard — v0.10.887 (Dynatrace paritesi #4, dilim 1; spec Onay
@@ -42,7 +41,7 @@ export function heapBandSentence(p: HeapBaselinePod | undefined, d: Pick<HeapBas
 
 const fmtPct = (v: number) => `${v.toFixed(0)} %`;
 
-const COLS: DataTableColumn<HeapBaselinePod>[] = [
+const COLS: ColumnDef<HeapBaselinePod>[] = [
   { id: 'pod',    label: 'Pod',        sortValue: r => r.pod,          naturalDir: 'asc', width: 240 },
   { id: 'last',   label: 'Son',        sortValue: r => r.band.current, numeric: true,     width: 80 },
   { id: 'band',   label: 'Bant (24s)', width: 120 },
@@ -139,8 +138,8 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
             {focused.band.status !== 'no_baseline' && <> · z {focused.band.z.toFixed(1)} · bant {fmtPct(focused.band.lower)}–{fmtPct(focused.band.upper)}</>}
           </div>
         )}
-        <div className="table-wrap is-fit" style={{ marginTop: 8 }}>
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap" style={{ marginTop: 8 }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -148,14 +147,17 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
                 const st = HEAP_STATUS[p.band.status] ?? HEAP_STATUS.no_baseline;
                 const noBand = p.band.status === 'no_baseline';
                 /* v0.10.933 (tablo standardı T2) — odaklı pod satırı satır içi
-                   bg3 zemin yerine tek seçili görünüm `.row-selected`. */
+                   bg3 zemin yerine tek seçili görünüm `.row-selected`.
+                   v0.10.943 (T7) — "odakla" ipucu satırdan kimlik hücresine; odaklı
+                   satır AT'ye aria-current ile. */
                 return (
-                  <tr key={p.pod} {...rowActivation(() => setFocus(p.pod))} title="Bandı bu poda odakla"
-                      className={focused?.pod === p.pod ? 'row-selected' : undefined}>
-                    <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pod}</td>
-                    <td className="num mono">{fmtPct(p.band.current)}</td>
-                    <td className="num mono">{noBand ? '—' : `${fmtPct(p.band.lower)}–${fmtPct(p.band.upper)}`}</td>
-                    <td className="num mono">{noBand ? '—' : p.band.z.toFixed(1)}</td>
+                  <tr key={p.pod} {...rowActivation(() => setFocus(p.pod))}
+                      className={focused?.pod === p.pod ? 'row-selected' : undefined}
+                      aria-current={focused?.pod === p.pod ? 'true' : undefined}>
+                    <td className="mono" title="Bandı bu poda odakla">{p.pod}</td>
+                    <td className="num">{fmtPct(p.band.current)}</td>
+                    <td className="num">{noBand ? '—' : `${fmtPct(p.band.lower)}–${fmtPct(p.band.upper)}`}</td>
+                    <td className="num">{noBand ? '—' : p.band.z.toFixed(1)}</td>
                     <td>
                       <span className={`badge ${st.tone}`}>{st.icon} {st.label}</span>
                       {!noBand && p.band.status !== 'ok' && <span style={{ color: 'var(--text3)' }}> · {p.band.dwell} kova</span>}

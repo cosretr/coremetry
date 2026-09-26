@@ -724,7 +724,7 @@ export default function EndpointsPage() {
               }}>{fmtNum(listed.errors)}</b> hata ({listed.errorRate.toFixed(2)}%)
             </div>
             <div className="table-wrap">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} leading={[22]} />
                 <DataTableHead dt={dt} leading={<th style={{ width: 22 }} />} />
                 <tbody>
@@ -738,12 +738,14 @@ export default function EndpointsPage() {
                     // (service, path).
                     const rowKey = endpointRowKey(r.service, r.path);
                     const isExpanded = expandedRows.has(rowKey);
+                    // v0.10.943 — cv-row rowProps sınıfıyla BİRLEŞİR; tek başına className row-selected'ı ezerdi.
+                    const rp = dt.rowProps(i);
                     return (
                       // v0.10.378 (dış skill denetimi C11) — anahtar YALNIZ rowKey:
                       // `|${i}` eki sıralamada her satırın anahtarını değiştirip
                       // tüm tbody'yi remount ediyordu (açık şerit + odak kaybı).
                       <React.Fragment key={rowKey}>
-                      <tr {...dt.rowProps(i)}
+                      <tr {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
                         // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
                         data-row-action
                         onMouseEnter={() => dt.nav.setSelected(i)}
@@ -756,9 +758,7 @@ export default function EndpointsPage() {
                           if ((e.target as HTMLElement).closest('a, button')) return;
                           openEndpointPage(r);
                         }}
-                        title="Open the endpoint detail page (RED series, latency distribution, callers, failing traces)"
                         style={{
-                          contentVisibility: 'auto', containIntrinsicSize: 'auto 32px',
                           // Subtle err tint on broken endpoints (prototype cue).
                           background: r.errorRate >= 5
                             ? 'color-mix(in srgb, var(--err) 7%, transparent)'
@@ -793,18 +793,17 @@ export default function EndpointsPage() {
                             lockstep with ENDPOINT_COLS so the colgroup and
                             body never misalign. */}
                         {visibleCols.has('service') && <td className="sticky-left" style={{ left: leftOffs['service'] }}>
-                          <Link to={serviceHref(r.service, { range, env })}
-                                style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                          <Link to={serviceHref(r.service, { range, env })} className="mono">
                             {r.service}
                           </Link>
                         </td>}
-                        {visibleCols.has('path') && <td className="mono sticky-left" style={{ fontSize: 12, left: leftOffs['path'] }} title={r.path}>
+                        {visibleCols.has('path') && <td className="mono sticky-left" style={{ left: leftOffs['path'] }} title={r.path}>
                           {r.path}
                         </td>}
-                        {visibleCols.has('method') && <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>
+                        {visibleCols.has('method') && <td className="mono cell-muted">
                           {r.method || '—'}
                         </td>}
-                        {visibleCols.has('calls') && <td className="num mono">
+                        {visibleCols.has('calls') && <td className="num">
                           {fmtNum(r.calls)}
                           {/* v0.9.642 — Req/min varsayılandan çıktı; hızı
                               BURADA taşıyoruz ki bilgi kaybolmasın. Ayrı
@@ -817,11 +816,11 @@ export default function EndpointsPage() {
                           )}
                           {compare && <TrendDelta cur={r.calls} prior={r.priorCalls} kind="neutral" />}
                         </td>}
-                        {visibleCols.has('errors') && <td className="num mono">
+                        {visibleCols.has('errors') && <td className="num">
                           {fmtNum(r.errors)}
                           {compare && <TrendDelta cur={r.errors} prior={r.priorErrors} kind="lowerBetter" />}
                         </td>}
-                        {visibleCols.has('errorRate') && <td className="num mono">
+                        {visibleCols.has('errorRate') && <td className="num">
                           <span className={`badge ${errCls}`}>{r.errorRate.toFixed(2)}%</span>
                           {/* v0.9.642 — Errors varsayılandan çıktı; mutlak
                               sayı BURADA. Oran tek başına ölçek saklıyor:
@@ -834,19 +833,19 @@ export default function EndpointsPage() {
                           )}
                         </td>}
                         {visibleCols.has('status') && <td><StatusBreakdown r={r} /></td>}
-                        {visibleCols.has('reqPerMin') && <td className="num mono">{fmtRate(r.reqPerMin)}</td>}
-                        {visibleCols.has('avgMs') && <td className="num mono">
+                        {visibleCols.has('reqPerMin') && <td className="num">{fmtRate(r.reqPerMin)}</td>}
+                        {visibleCols.has('avgMs') && <td className="num">
                           {r.avgMs.toFixed(1)} ms
                           {compare && <TrendDelta cur={r.avgMs} prior={r.priorAvgMs} kind="lowerBetter" />}
                         </td>}
-                        {visibleCols.has('p50Ms') && <td className="num mono">{fmtMs(r.p50Ms)}</td>}
-                        {visibleCols.has('p90Ms') && <td className="num mono">{fmtMs(r.p90Ms)}</td>}
-                        {visibleCols.has('p95Ms') && <td className="num mono">{fmtMs(r.p95Ms)}</td>}
-                        {visibleCols.has('p99Ms') && <td className="num mono">
+                        {visibleCols.has('p50Ms') && <td className="num">{fmtMs(r.p50Ms)}</td>}
+                        {visibleCols.has('p90Ms') && <td className="num">{fmtMs(r.p90Ms)}</td>}
+                        {visibleCols.has('p95Ms') && <td className="num">{fmtMs(r.p95Ms)}</td>}
+                        {visibleCols.has('p99Ms') && <td className="num">
                           {r.p99Ms.toFixed(0)} ms
                           {compare && <TrendDelta cur={r.p99Ms} prior={r.priorP99Ms} kind="lowerBetter" />}
                         </td>}
-                        {visibleCols.has('p99Delta') && <td className="num mono">
+                        {visibleCols.has('p99Delta') && <td className="num">
                           {(() => {
                             // v0.9.818 — "YENİ" YALANDI. Prior okuma da
                             // top-N (api.go getEndpoints prior taraması aynı
@@ -865,7 +864,7 @@ export default function EndpointsPage() {
                             return <b style={{ color: cls }}>{d.pct > 0 ? '▲' : d.pct < 0 ? '▼' : ''}{Math.abs(d.pct).toFixed(0)}%</b>;
                           })()}
                         </td>}
-                        {visibleCols.has('spread') && <td className="num mono"
+                        {visibleCols.has('spread') && <td className="num"
                           title="p99 ÷ p50 — the SHAPE of the latency, not its level.\nNear 1: the whole distribution moved, every caller is slow (dependency, pool, node).\nHigh: most calls are fine and a tail is dragging (retries, GC, cold cache, one bad shard).\nSame p99, opposite causes.">
                           {(() => {
                             const sp = spreadOf(r);
@@ -1132,7 +1131,7 @@ function DependencyStrip({ service, window: win, capped, entry, range }: {
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '3px 8px', borderRadius: 12,
               background: 'var(--bg2)', border: '1px solid var(--border)',
-              color: 'var(--text2)', fontFamily: 'ui-monospace, monospace',
+              color: 'var(--text2)', fontFamily: 'var(--font-mono)',
               fontSize: 10, textDecoration: 'none',
             }}>
             <span style={{ fontWeight: 600 }}>{d.service}</span>

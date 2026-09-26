@@ -6,8 +6,7 @@ import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
 import { useDepDetail } from '@/lib/queries/dependencies';
 import { fmtNum, fmtNs, timeRangeToNs } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { TimeRange, DBDetail, MessagingDetail, DBOpStat, MsgOperationStat } from '@/lib/types';
 import { Stat } from './panels/shared';
 import { traceHref } from '@/lib/traceHref';
@@ -118,13 +117,15 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
   // yüzden storageKey de türetiliyor (R2 / `deps-callers-${tone}` emsali):
   // aynı anahtar altında iki farklı kolon kümesi saklanırsa kaydedilen
   // genişlikler diğer kipe taşar.
-  const topOpsCols = useMemo<DataTableColumn<DBOpStat>[]>(() => [
+  // v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında
+  // (numeric / mono / tone); 11px hücreler tablo boyunda, ikincil olan renkle (S3).
+  const topOpsCols = useMemo<ColumnDef<DBOpStat>[]>(() => [
     { id: 'statement', label: kind === 'db' ? 'Statement' : 'Operation',
       sortValue: o => o.statement, naturalDir: 'asc', flex: true },
     // v0.10.553 — messaging: operasyon türü (messaging.operation.type → .name
     // → .operation, okuma-anında coalesce). DB kipinde kolon yok.
     ...(kind === 'queue'
-      ? [{ id: 'op', label: 'Type', sortValue: (o: DBOpStat) => o.operation ?? '', naturalDir: 'asc', width: 96 } as DataTableColumn<DBOpStat>]
+      ? [{ id: 'op', label: 'Type', sortValue: (o: DBOpStat) => o.operation ?? '', naturalDir: 'asc', width: 96, mono: true, tone: () => 'muted' } as ColumnDef<DBOpStat>]
       : []),
     { id: 'count', label: 'Count', sortValue: o => o.count,          numeric: true, width: 110 },
     { id: 'avg',   label: 'Avg',   sortValue: o => o.avgDurationMs,  numeric: true, width: 110 },
@@ -146,8 +147,9 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
   // Kolonlar SABİT (kind'e bağlı değil): tablo yalnız queue dalında
   // render ediliyor, o yüzden storageKey'i türetmeye gerek yok — tek
   // kolon kümesi, tek anahtar.
-  const msgOpsCols = useMemo<DataTableColumn<MsgOperationStat>[]>(() => [
-    { id: 'operation', label: 'Operasyon', sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140 },
+  const msgOpsCols = useMemo<ColumnDef<MsgOperationStat>[]>(() => [
+    { id: 'operation', label: 'Operasyon', sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140,
+      mono: true, tone: o => (isOpMissing(o.operation) ? 'faint' : 'muted') },
     { id: 'count',   label: 'Calls', sortValue: o => o.spanCount,      numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'errRate', label: 'Err %', sortValue: o => o.errorRate,      numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'avg',     label: 'Avg',   sortValue: o => o.avgDurationMs,  numeric: true, naturalDir: 'desc', width: 84 },
@@ -374,13 +376,13 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="badge b-gray" style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+              <span className="badge b-gray" style={{ fontFamily: 'var(--font-mono)' }}>
                 p50 {fmtNs(e2e.p50Ms * 1e6)}
               </span>
-              <span className="badge b-gray" style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+              <span className="badge b-gray" style={{ fontFamily: 'var(--font-mono)' }}>
                 p95 {fmtNs(e2e.p95Ms * 1e6)}
               </span>
-              <span className="badge b-gray" style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+              <span className="badge b-gray" style={{ fontFamily: 'var(--font-mono)' }}>
                 p99 {fmtNs(e2e.p99Ms * 1e6)}
               </span>
               <span style={{ fontSize: 11, color: 'var(--text3)' }}>
@@ -479,7 +481,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               </div>
             ) : (
               <div className="table-wrap">
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <table {...msgOpsDt.tableProps}>
                   <DataTableColgroup dt={msgOpsDt} />
                   <DataTableHead dt={msgOpsDt} />
                   <tbody>
@@ -489,23 +491,21 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                       const missing = isOpMissing(o.operation);
                       return (
                         <tr key={`${o.operation}|${i}`}>
-                          <td className="mono" style={{
-                            fontSize: 11,
-                            color: missing ? 'var(--text3)' : 'var(--text2)',
-                          }} title={missing ? OP_MISSING_TITLE : o.operation}>
+                          <DataTableCell dt={msgOpsDt} col="operation" row={o}
+                            title={missing ? OP_MISSING_TITLE : o.operation}>
                             {opLabelTR(o.operation)}
-                          </td>
-                          <td className="num mono">{fmtNum(o.spanCount)}</td>
-                          <td className="num mono">
+                          </DataTableCell>
+                          <DataTableCell dt={msgOpsDt} col="count" row={o} value={fmtNum(o.spanCount)} />
+                          <DataTableCell dt={msgOpsDt} col="errRate" row={o}>
                             <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
                                   title={`${fmtNum(o.errorCount)} hatalı span`}>
                               {o.errorRate.toFixed(2)}%
                             </span>
-                          </td>
-                          <td className="num mono">{o.avgDurationMs.toFixed(1)}ms</td>
-                          <td className="num mono">{o.p50DurationMs.toFixed(1)}ms</td>
-                          <td className="num mono">{o.p95DurationMs.toFixed(1)}ms</td>
-                          <td className="num mono">{o.p99DurationMs.toFixed(1)}ms</td>
+                          </DataTableCell>
+                          <DataTableCell dt={msgOpsDt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
+                          <DataTableCell dt={msgOpsDt} col="p50" row={o} value={`${o.p50DurationMs.toFixed(1)}ms`} />
+                          <DataTableCell dt={msgOpsDt} col="p95" row={o} value={`${o.p95DurationMs.toFixed(1)}ms`} />
+                          <DataTableCell dt={msgOpsDt} col="p99" row={o} value={`${o.p99DurationMs.toFixed(1)}ms`} />
                         </tr>
                       );
                     })}
@@ -563,17 +563,17 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               v0.9.697'den beri position'ı satır içi yazmıyor) — bu dosyanın
               kendi MT5 itirafının tekrarı olurdu. `is-fit` DEĞİL: kaydırma
               bu kabın İÇİNDE, referans sayfa barı değil. */}
-          <div className="table-wrap is-scroll" style={{ maxHeight: 240, overflowY: 'auto' }}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap is-scroll" style={{ maxHeight: 240 }}>
+            <table {...topOpsDt.tableProps}>
               <DataTableColgroup dt={topOpsDt} />
               <DataTableHead dt={topOpsDt} />
               <tbody>
                 {topOpsDt.sortedRows.map((o, i) => (
                   <tr key={i}>
-                    <td style={{
-                      fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                      fontSize: 11, wordBreak: 'break-word', maxWidth: 600,
-                    }}>
+                    {/* v0.10.943 — kimlik hücresi: 11px düştü, renk EKLENMEDİ (ifade
+                        ikincil değil). maxWidth sabit düzende etkisizdi (genişlik
+                        colgroup'ta), wordBreak da nowrap altında ölüydü. */}
+                    <td className="mono">
                       {o.statement
                         ? (
                           <>
@@ -610,10 +610,10 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                         : <span style={{ color: 'var(--text3)' }}>(empty)</span>}
                     </td>
                     {kind === 'queue' && (
-                      <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>{o.operation ?? '—'}</td>
+                      <DataTableCell dt={topOpsDt} col="op" row={o} value={o.operation} />
                     )}
-                    <td className="num mono">{fmtNum(o.count)}</td>
-                    <td className="num mono">{o.avgDurationMs.toFixed(1)}ms</td>
+                    <DataTableCell dt={topOpsDt} col="count" row={o} value={fmtNum(o.count)} />
+                    <DataTableCell dt={topOpsDt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
                   </tr>
                 ))}
               </tbody>

@@ -19,13 +19,12 @@ import { timeRangeToNs } from '@/lib/utils';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
 import type { SlowQueryRow } from '@/lib/types';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 
 // v0.9.874 (tutarlılık denetimi MT12) — "En pahalı ifadeler" tablosu.
 // Kardeşi /slow-queries çoktan primitifte; bu tablo hem sıralanamıyordu
 // hem de tanımsız `.tbl` sınıfıyla, kapsız çiziliyordu.
-const DB_STMT_COLS: DataTableColumn<SlowQueryRow>[] = [
+const DB_STMT_COLS: ColumnDef<SlowQueryRow>[] = [
   { id: 'statement', label: 'İfade',  sortValue: r => r.statement, naturalDir: 'asc', flex: true },
   { id: 'service',   label: 'Service', sortValue: r => r.service,  naturalDir: 'asc', width: 170 },
   { id: 'count',     label: 'Çağrı',  sortValue: r => r.count,     numeric: true, width: 95 },
@@ -450,24 +449,25 @@ export default function DatabasesPage() {
                 // ve `.table-wrap` kabı da YOKTU. Sabit düzen + kap yokluğu
                 // = dar ekranda sayfanın yatay taşması (v0.9.640 sızıntısı).
                 <div className="table-wrap">
-                  <table style={{ width: '100%', fontSize: 12, tableLayout: 'fixed' }}>
+                  <table {...stmtDt.tableProps}>
                     <DataTableColgroup dt={stmtDt} />
                     <DataTableHead dt={stmtDt} />
                   <tbody>
                     {stmtDt.sortedRows.map((r, i) => (
                       /* v0.10.933 (tablo standardı T2) — stmtHash'siz satır açılmaz:
                          rowActivation (role=button → el imleci + hover) yalnız
-                         açılan satıra; satır içi koşullu cursor kalktı. */
+                         açılan satıra; satır içi koşullu cursor kalktı.
+                         v0.10.943 (T7) — tam ifade ipucu satırdan ifade hücresine;
+                         maxWidth sabit düzende etkisizdi (genişlik colgroup'ta). */
                       <tr key={r.stmtHash ?? i}
-                        {...(r.stmtHash ? rowActivation(() => openStmt(r)) : {})}
-                        title={r.sampleStatement || r.statement}>
-                        <td className="mono" style={{ maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {...(r.stmtHash ? rowActivation(() => openStmt(r)) : {})}>
+                        <td className="mono" title={r.sampleStatement || r.statement}>
                           {r.statement}
                         </td>
                         <td>{r.service}</td>
-                        <td className="num mono">{r.count}</td>
-                        <td className="num mono">{r.p95Ms.toFixed(1)} ms</td>
-                        <td className="num mono"><b>{(r.totalMs / 1000).toFixed(1)} s</b></td>
+                        <DataTableCell dt={stmtDt} col="count" row={r} value={r.count} />
+                        <DataTableCell dt={stmtDt} col="p95" row={r} value={`${r.p95Ms.toFixed(1)} ms`} />
+                        <DataTableCell dt={stmtDt} col="total" row={r}><b>{(r.totalMs / 1000).toFixed(1)} s</b></DataTableCell>
                         {/* v0.9.821 — ÇOK-DB BELİRSİZLİK İŞARETİ geri
                             geldi. SlowQueries sayfası bunu v0.9.272'den
                             beri çiziyordu ama bu KARDEŞ tablo yalnız adı

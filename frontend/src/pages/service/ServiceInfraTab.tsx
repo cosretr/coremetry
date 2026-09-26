@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { LinkButton, IconButton, SectionHead, Button } from '@/components/ui';
 import { StatTile } from '@/components/ui/StatTile';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { MetricArea } from '@/pages/clusters/MetricArea';
 import { servicePodRegex } from '@/pages/clusters/podWorkload';
 import { fmtCores } from '@/pages/clusters/thresholds';
@@ -18,7 +18,6 @@ import { tracesPivotHref } from '@/lib/pivotHref';
 import { useServicePods } from '@/pages/service/useServicePods';
 import { useEntityEnabled, useClusters } from '@/lib/queries';
 import { summarizeInfraClusters, podTotals, pctOfLimit, clusterStatus, mergeClusterSeries, limitThreshold, type InfraClusterRow } from './infraClusters';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange } from '@/lib/types';
 import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.552
 
@@ -50,7 +49,7 @@ import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.
 // "tümü" iken CPU/Mem/HAProxy cluster başına seri; tek cluster'da pod limit
 // toplamı çizgisi (envanterden, sunucu değişikliği yok).
 
-const CL_COLS: DataTableColumn<InfraClusterRow>[] = [
+const CL_COLS: ColumnDef<InfraClusterRow>[] = [
   { id: 'cluster',  label: 'Cluster',     sortValue: r => r.cluster, naturalDir: 'asc', flex: true, minWidth: 150 },
   { id: 'ns',       label: 'Namespace',   sortValue: r => r.namespace, naturalDir: 'asc', width: 140 },
   { id: 'pods',     label: 'Pods',        sortValue: r => r.pods, numeric: true, width: 90 },
@@ -58,7 +57,9 @@ const CL_COLS: DataTableColumn<InfraClusterRow>[] = [
   { id: 'mem',      label: 'Memory',      sortValue: r => r.memBytes, numeric: true, width: 100 },
   { id: 'restarts', label: 'Restarts',    sortValue: r => r.restarts ?? -1, numeric: true, width: 86 },
   { id: 'status',   label: 'Durum',       sortValue: r => (r.phaseKnown ? r.failing : -1), width: 140 },
-  { id: 'act',      label: '',            width: 150 },
+  // v0.10.943 (tablo standardı dilim 3) — satır eylemleri (Pods →, Traces →)
+  // `kind: 'actions'` kolonu (T8); id/width aynı → kayıtlı genişlik korunur.
+  { id: 'act',      label: 'Eylemler',    kind: 'actions', width: 150 },
 ];
 
 type QLike = { isError: boolean; error: unknown; refetch: () => unknown };
@@ -296,8 +297,8 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
             <IconButton size="sm" icon={<span aria-hidden="true">↻</span>} aria-label="Pod envanterini yenile"
               tooltip="Tüm cluster'ları yeniden oku" disabled={podsFetching} onClick={refetchPods} />
           </>} />
-        <div className="table-wrap is-fit" style={{ marginBottom: 14 }}>
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap" style={{ marginBottom: 14 }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -308,28 +309,31 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                 return (
                   <tr key={r.cluster} {...rp}
                       className={[rp.className, sel ? 'row-selected' : ''].filter(Boolean).join(' ') || undefined}
-                      title={sel ? 'Kapsamı kaldırmak için tıkla' : 'Bu cluster\'a daralt'}
+                      aria-pressed={sel}
                       {...rowActivation(() => setICluster(sel ? '' : r.cluster))}>
                     <td className="mono" onClick={e => e.stopPropagation()}>
                       <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })}
                         className="row-link" title="Cluster detayı" style={{ fontWeight: 600 }}>{r.cluster}</Link>
                     </td>
-                    <td className="mono">{r.namespace || '—'}</td>
-                    <td className="num mono">{r.phaseKnown ? `${r.running} / ${r.pods}` : fmtNum(r.pods)}</td>
-                    <td className="num mono">{fmtCores(r.cpuCores)}</td>
-                    <td className="num mono">{fmtBytes(r.memBytes)}</td>
-                    <td className="num mono" title={r.restarts == null ? 'kube-state-metrics görünmüyor' : undefined}>
+                    {/* v0.10.943 — kapsam ipucu satırdan ilk satır-tıkı hücresine (T7): cluster
+                        hücresi entity linki, tıkı satıra ulaşmaz. Seçim durumu AT'ye satırdaki
+                        aria-pressed ile. */}
+                    <td className="mono" title={sel ? 'Kapsamı kaldırmak için tıkla' : 'Bu cluster\'a daralt'}>{r.namespace || '—'}</td>
+                    <td className="num">{r.phaseKnown ? `${r.running} / ${r.pods}` : fmtNum(r.pods)}</td>
+                    <td className="num">{fmtCores(r.cpuCores)}</td>
+                    <td className="num">{fmtBytes(r.memBytes)}</td>
+                    <td className="num" title={r.restarts == null ? 'kube-state-metrics görünmüyor' : undefined}>
                       {r.restarts == null ? '—' : fmtNum(r.restarts)}
                     </td>
                     <td><span className={`badge b-${st.tone}`}>{st.text}</span></td>
-                    <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                    <DataTableCell dt={dt} col="act" row={r} onClick={e => e.stopPropagation()}>
                       <Link to={podsTabWithParams} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}
                         title="Pods sekmesi (cluster'a göre gruplu)">Pods →</Link>
                       {spanClusters.includes(r.cluster) && (
                         <Link to={tracesFor(r.cluster)} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}
                           title="Bu cluster'ın span'leri">Traces →</Link>
                       )}
-                    </td>
+                    </DataTableCell>
                   </tr>
                 );
               })}

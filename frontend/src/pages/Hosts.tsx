@@ -9,8 +9,7 @@ import { Drawer, DrawerSection, DrawerTrendRow } from '@/components/ui';
 import { api } from '@/lib/api';
 import { timeRangeToNs, fmtBytes, fmtAgoNs } from '@/lib/utils';
 import { useUrlRange } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { HostRow, HostDetail, HostServiceRow, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
@@ -18,7 +17,7 @@ import { PageShell } from '@/components/ui/PageShell';
 // v0.9.873 (tutarlılık denetimi BT12) — HostDrawer'ın servis tablosu.
 // Yoğun bir host'ta "CPU'yu kim yiyor" sorusu bugün göz taramasıyla
 // cevaplanıyordu; sıralama yoktu.
-const HOST_SVC_COLS: DataTableColumn<HostServiceRow>[] = [
+const HOST_SVC_COLS: ColumnDef<HostServiceRow>[] = [
   { id: 'service', label: 'Service', sortValue: s => s.service,  naturalDir: 'asc', flex: true },
   { id: 'cpu',     label: 'CPU %',   sortValue: s => s.cpuPct,   numeric: true, width: 100 },
   { id: 'mem',     label: 'Memory',  sortValue: s => s.memBytes, numeric: true, width: 110 },
@@ -32,15 +31,19 @@ const HOST_SVC_COLS: DataTableColumn<HostServiceRow>[] = [
 // per-service breakdown. Window clamps to ≤6h server-side — this page
 // answers "what runs where NOW", not archaeology.
 
-const HOST_COLS: DataTableColumn<HostRow>[] = [
+// v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında:
+// 11px ikincil hücreler tablo boyunda, hiyerarşi renkle (S3); % eşik rengi ton.
+const HOST_COLS: ColumnDef<HostRow>[] = [
   { id: 'host',     label: 'Host',      sortValue: r => r.host,      naturalDir: 'asc', width: 230 },
-  { id: 'zone',     label: 'Zone',      sortValue: r => r.zone ?? '', naturalDir: 'asc', width: 100 },
+  { id: 'zone',     label: 'Zone',      sortValue: r => r.zone ?? '', naturalDir: 'asc', width: 100, tone: () => 'muted' },
   { id: 'services', label: 'Services',  sortValue: r => r.services.join(','), naturalDir: 'asc', width: 220 },
-  { id: 'cpuPct',   label: 'CPU %',     sortValue: r => r.cpuPct,    numeric: true, width: 90 },
+  { id: 'cpuPct',   label: 'CPU %',     sortValue: r => r.cpuPct,    numeric: true, width: 90,
+    tone: r => (r.cpuPct > 85 ? 'err' : r.cpuPct > 60 ? 'warn' : undefined) },
   { id: 'memBytes', label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100 },
-  { id: 'memPct',   label: 'Mem %',     sortValue: r => r.memPct,    numeric: true, width: 80 },
+  { id: 'memPct',   label: 'Mem %',     sortValue: r => r.memPct,    numeric: true, width: 80,
+    tone: r => (r.memPct > 85 ? 'err' : r.memPct > 60 ? 'warn' : 'faint') },
   { id: 'up',       label: 'Status',    sortValue: r => (r.up ? 1 : 0), numeric: true, width: 80 },
-  { id: 'lastSeen', label: 'Last seen', sortValue: r => r.lastSeen,  numeric: true, width: 110 },
+  { id: 'lastSeen', label: 'Last seen', sortValue: r => r.lastSeen,  numeric: true, width: 110, tone: () => 'faint' },
 ];
 
 export default function HostsPage() {
@@ -97,51 +100,46 @@ export default function HostsPage() {
           </Empty>
         )}
         {rows && rows.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
-                {dt.sortedRows.map((r, i) => (
-                  <tr key={r.host} {...dt.rowProps(i)}
-                    {...rowActivation(() => openHost(r.host))}
-                    style={{
-                      contentVisibility: 'auto',
-                      containIntrinsicSize: 'auto 36px',
-                    }}>
-                    <td>
-                      <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, fontWeight: 500 }}>
-                        {r.host}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text2)' }}>{r.zone || '—'}</td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <span style={{ fontSize: 11, color: 'var(--text2)' }} title={r.services.join(', ')}>
-                        {r.services.slice(0, 2).map((s, i) => (
-                          <span key={s}>
-                            {i > 0 && ', '}
-                            <Link to={serviceHref(s, { range })} style={{ fontSize: 11 }}>{s}</Link>
-                          </span>
-                        ))}
-                        {r.services.length > 2 && ` +${r.services.length - 2}`}
-                      </span>
-                    </td>
-                    <td className="num mono" style={{
-                      color: r.cpuPct > 85 ? 'var(--err)' : r.cpuPct > 60 ? 'var(--warn)' : undefined,
-                    }}>{r.cpuPct.toFixed(1)}</td>
-                    <td className="num mono">{fmtBytes(r.memBytes)}</td>
-                    <td className="num mono" style={{
-                      color: r.memPct > 85 ? 'var(--err)' : r.memPct > 60 ? 'var(--warn)' : 'var(--text3)',
-                    }}>{r.memPct > 0 ? r.memPct.toFixed(0) : '—'}</td>
-                    <td>
-                      {/* v0.10.929 (K5) — 'up' sağlıklı durum: nötr; 'stale' bir sapma → amber. */}
-                      <span className={`badge ${r.up ? 'b-gray' : 'b-warn'}`}>{r.up ? 'up' : 'stale'}</span>
-                    </td>
-                    <td className="num mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
-                      {fmtAgoNs(r.lastSeen)}
-                    </td>
-                  </tr>
-                ))}
+                {dt.sortedRows.map((r, i) => {
+                  // v0.10.943 — rowProps'un `row-selected`i ile `cv-row` tek className (§2c).
+                  const rp = dt.rowProps(i);
+                  return (
+                    <tr key={r.host} {...rp}
+                      className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
+                      {...rowActivation(() => openHost(r.host))}>
+                      <td>
+                        <span className="mono" style={{ fontWeight: 500 }}>
+                          {r.host}
+                        </span>
+                      </td>
+                      <DataTableCell dt={dt} col="zone" row={r} value={r.zone} />
+                      <td onClick={e => e.stopPropagation()}>
+                        <span style={{ fontSize: 11, color: 'var(--text2)' }} title={r.services.join(', ')}>
+                          {r.services.slice(0, 2).map((s, i) => (
+                            <span key={s}>
+                              {i > 0 && ', '}
+                              <Link to={serviceHref(s, { range })} style={{ fontSize: 11 }}>{s}</Link>
+                            </span>
+                          ))}
+                          {r.services.length > 2 && ` +${r.services.length - 2}`}
+                        </span>
+                      </td>
+                      <DataTableCell dt={dt} col="cpuPct" row={r} value={r.cpuPct.toFixed(1)} />
+                      <DataTableCell dt={dt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                      <DataTableCell dt={dt} col="memPct" row={r} value={r.memPct > 0 ? r.memPct.toFixed(0) : '—'} />
+                      <td>
+                        {/* v0.10.929 (K5) — 'up' sağlıklı durum: nötr; 'stale' bir sapma → amber. */}
+                        <span className={`badge ${r.up ? 'b-gray' : 'b-warn'}`}>{r.up ? 'up' : 'stale'}</span>
+                      </td>
+                      <DataTableCell dt={dt} col="lastSeen" row={r} value={fmtAgoNs(r.lastSeen)} />
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -181,7 +179,7 @@ function HostDrawer({ host, range, onClose }: {
   return (
     <Drawer onClose={onClose} header={
       <>
-        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14, fontWeight: 600 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
           {host}
         </span>
         {detail?.zone && (
@@ -208,20 +206,19 @@ function HostDrawer({ host, range, onClose }: {
               {detail.services.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>No services in this window.</div>
               ) : (
-                <table style={{ width: '100%', fontSize: 12, tableLayout: 'fixed' }}>
+                <table {...svcDt.tableProps}>
                   <DataTableColgroup dt={svcDt} />
                   <DataTableHead dt={svcDt} />
                   <tbody>
                     {svcDt.sortedRows.map(s => (
                       <tr key={s.service}>
                         <td>
-                          <Link to={serviceHref(s.service, { range })}
-                            style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
+                          <Link to={serviceHref(s.service, { range })} className="mono">
                             {s.service}
                           </Link>
                         </td>
-                        <td className="num mono">{s.cpuPct.toFixed(1)}</td>
-                        <td className="num mono">{fmtBytes(s.memBytes)}</td>
+                        <DataTableCell dt={svcDt} col="cpu" row={s} value={s.cpuPct.toFixed(1)} />
+                        <DataTableCell dt={svcDt} col="mem" row={s} value={fmtBytes(s.memBytes)} />
                       </tr>
                     ))}
                   </tbody>

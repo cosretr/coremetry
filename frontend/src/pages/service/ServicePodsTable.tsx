@@ -104,7 +104,7 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
 
   return (
     <div className="table-wrap">
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
@@ -156,11 +156,14 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                   return (
                     <Fragment key={r.key}>
                       <tr id={`pod-row-${r.pod}`} {...rowActivation(onRow)}
-                        title={expandable ? 'Metrikleri göster · JVM · GC · datasource' : 'Pod detayı'}
-                        style={many ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' } : undefined}>
-                        <td className="mono sticky-left" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        aria-expanded={expandable ? open : undefined}
+                        className={many ? 'cv-row' : undefined}>
+                        <td className="mono sticky-left"
                           title={`${r.cluster} / ${r.namespace || '?'} / ${r.pod}`} onClick={e => e.stopPropagation()}>
-                          {expandable && <span className="pods-caret" aria-hidden="true" onClick={() => setOpenKey(open ? null : r.key)}>{open ? '▾' : '▸'}</span>}
+                          {/* v0.10.943 — satır title'ı (T7) kalktı; açılır satırın açıklaması işarete, durumu aria-expanded'a taşındı (§3.10). */}
+                          {expandable && <span className="pods-caret" aria-hidden="true"
+                            title={open ? 'Metrikleri gizle' : 'Metrikleri göster · JVM · GC · datasource'}
+                            onClick={() => setOpenKey(open ? null : r.key)}>{open ? '▾' : '▸'}</span>}
                           <Link to={podHref(r)} className="row-link">{r.pod}</Link>
                           {live === 'gone' && <Badge tone="danger" style={{ marginLeft: 6 }} title={`Artık mevcut değil · son görülme ${fmtDateTime(new Date(r.entity!.entity!.lastSeen))}`}>gone</Badge>}
                           {live === 'stale' && <Badge tone="warning" style={{ marginLeft: 6 }} title="Son senkronda görülmedi">stale</Badge>}
@@ -168,7 +171,7 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                         <td>{r.statusKnown && r.phase
                           ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
                           : <span className="field-hint" title="Thanos'ta bu pod için seri yok (ölü ya da KSM dışı) — durum bilinmiyor">—</span>}</td>
-                        <td className="num mono"
+                        <td className="num"
                           title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}
                           style={{ color: r.restartsUnknown ? 'var(--text3)' : restartColor(r.restarts ?? 0) }}>
                           {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
@@ -192,14 +195,14 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                             ? <Link to={entityHref({ type: 'workload', id: r.workload.id, name: r.workload.name, namespace: r.workload.namespace, clusterId: r.workload.clusterId }, { range })} className="sec">{r.workload.kind}/{r.workload.name}</Link>
                             : <span className="field-hint">{r.entity?.entity?.parentId?.startsWith('ns:') ? '(no workload)' : '—'}</span>}
                         </td>
-                        <td className="num mono">{r.cpuCores != null ? fmtCores(r.cpuCores) : '—'}</td>
-                        <td className="num mono">{r.memBytes != null ? fmtBytes(r.memBytes) : '—'}</td>
-                        <td className="num mono">{(r.netInBps ?? 0) > 0 || (r.netOutBps ?? 0) > 0
+                        <td className="num">{r.cpuCores != null ? fmtCores(r.cpuCores) : '—'}</td>
+                        <td className="num">{r.memBytes != null ? fmtBytes(r.memBytes) : '—'}</td>
+                        <td className="num">{(r.netInBps ?? 0) > 0 || (r.netOutBps ?? 0) > 0
                           ? `${fmtBps(r.netInBps ?? 0)} / ${fmtBps(r.netOutBps ?? 0)}` : '—'}</td>
-                        <td className="num mono" title={r.spans == null ? 'Bu pencerede span görülmedi (entity katmanı)' : undefined}>{r.spans == null ? '—' : fmtNum(r.spans)}</td>
-                        <td className="num mono" style={errPct != null && errPct >= 5 ? { color: 'var(--err)' } : undefined}>{errPct == null ? '—' : errPct.toFixed(1)}</td>
-                        <td className="num mono">{ms(r.p95Ms)}</td>
-                        <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                        <td className="num" title={r.spans == null ? 'Bu pencerede span görülmedi (entity katmanı)' : undefined}>{r.spans == null ? '—' : fmtNum(r.spans)}</td>
+                        <td className={`num ${errPct != null && errPct >= 5 ? 'cell-err' : ''}`}>{errPct == null ? '—' : errPct.toFixed(1)}</td>
+                        <td className="num">{ms(r.p95Ms)}</td>
+                        <td onClick={e => e.stopPropagation()}>
                           {r.spans != null && <Link to={tracesHref(r)} className="accent" style={{ fontSize: 11, padding: '2px 6px' }}>Traces</Link>}
                           <Link to={logsHref({ window: rangeParam ?? range, service, filters: podFilters(r) })} className="accent" style={{ fontSize: 11, padding: '2px 6px' }}>Logs</Link>
                           <Link to={podHref(r)} className="accent" style={{ fontSize: 11, padding: '2px 6px' }} title="Pod detay sayfası">/pod →</Link>

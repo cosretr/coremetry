@@ -118,7 +118,7 @@ function HandlerChip({ label, v, warn }: { label: string; v: number; warn?: bool
       fontSize: 11, padding: '3px 8px', borderRadius: 3,
       background: warn ? 'color-mix(in srgb, var(--warn) 15%, transparent)' : 'var(--bg3)',
       color: warn ? 'var(--warn)' : 'var(--text2)',
-      fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+      fontFamily: 'var(--font-mono)',
     }}>
       {label} <span style={{ opacity: 0.7 }}>{fmtNum(v)}/s</span>
     </span>

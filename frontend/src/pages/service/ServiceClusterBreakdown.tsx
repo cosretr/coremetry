@@ -123,8 +123,8 @@ export function ServiceClusterBreakdown({ service, range }: {
           </span>
         )}
       </div>
-      <div className="table-wrap is-fit">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -132,24 +132,23 @@ export function ServiceClusterBreakdown({ service, range }: {
               const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray'; // v0.10.929 (K5)
               return (
                 <tr key={c.cluster}>
-                  <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <Link to={`/services?cluster=${encodeURIComponent(c.cluster)}`}
-                          style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
+                  <td>
+                    <Link to={`/services?cluster=${encodeURIComponent(c.cluster)}`} className="mono"
                           title={`Filter /services to cluster ${c.cluster}`}>
                       {c.cluster}
                     </Link>
                   </td>
-                  <td className="num mono">{fmtNum(c.spanCount)}</td>
+                  <td className="num">{fmtNum(c.spanCount)}</td>
                   <td>{c.series && c.series.length > 1
                     ? <Sparkline values={c.series} width={120} height={18} title="çağrı / kova (service_env_summary_5m)" />
                     : <span className="is-quiet" title="seri yalnız MV yolunda">—</span>}</td>
-                  <td className="num mono">
+                  <td className="num">
                     <span className={`badge b-${errCls}`}>{c.errorRate.toFixed(2)}%</span>
                   </td>
-                  <td className="num mono">{c.avgDurationMs.toFixed(1)}ms</td>
-                  <td className="num mono">{c.p50DurationMs != null ? `${c.p50DurationMs.toFixed(1)}ms` : '—'}</td>
-                  <td className="num mono">{c.p95DurationMs != null ? `${c.p95DurationMs.toFixed(1)}ms` : '—'}</td>
-                  <td className="num mono">{c.p99DurationMs.toFixed(1)}ms</td>
+                  <td className="num">{c.avgDurationMs.toFixed(1)}ms</td>
+                  <td className="num">{c.p50DurationMs != null ? `${c.p50DurationMs.toFixed(1)}ms` : '—'}</td>
+                  <td className="num">{c.p95DurationMs != null ? `${c.p95DurationMs.toFixed(1)}ms` : '—'}</td>
+                  <td className="num">{c.p99DurationMs.toFixed(1)}ms</td>
                   {hasPivot && (
                     <td>
                       {thanosSet.has(c.cluster) ? (

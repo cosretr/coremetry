@@ -134,8 +134,8 @@ function BacktraceInner() {
           } />
         )}
         {data && filtered.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
@@ -144,7 +144,7 @@ function BacktraceInner() {
                   const errBad = r.errorRate >= 5;
                   const errWarn = !errBad && r.errorRate > 0;
                   return (
-                    <tr key={i} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 44px' }}>
+                    <tr key={i} className="cv-row">
                       <td>
                         <Link to={serviceHref(r.callerService, { range })}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text)', textDecoration: 'none' }}>
@@ -152,7 +152,8 @@ function BacktraceInner() {
                           {r.callerService}
                         </Link>
                       </td>
-                      <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
+                      {/* v0.10.943 — host/IP kimliği satırın birincil adının (caller) yanında ikincil: 11px → renk (S3). */}
+                      <td className="mono cell-muted">
                         <div>{r.callerHost || <em style={{ color: 'var(--text3)' }}>—</em>}</div>
                         {r.callerInstance && (
                           <div style={{ color: 'var(--text3)', fontSize: 10 }} title={r.callerInstance}>
@@ -160,7 +161,7 @@ function BacktraceInner() {
                           </div>
                         )}
                       </td>
-                      <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
+                      <td className="mono cell-muted">
                         <div>{r.clientAddress || <em style={{ color: 'var(--text3)' }}>—</em>}</div>
                         {r.userAgent && (
                           <div style={{ color: 'var(--text3)', fontSize: 10 }} title={r.userAgent}>
@@ -175,7 +176,7 @@ function BacktraceInner() {
                       <td className="num">{r.p50Ms.toFixed(1)}ms</td>
                       <td className="num">{r.p95Ms.toFixed(1)}ms</td>
                       <td className="num">{r.p99Ms.toFixed(1)}ms</td>
-                      <td title={tsLong(r.lastSeenNs)} style={{ color: 'var(--text2)', fontSize: 11 }}>
+                      <td className="cell-muted" title={tsLong(r.lastSeenNs)}>
                         {tsLong(r.lastSeenNs)}
                       </td>
                       <td>

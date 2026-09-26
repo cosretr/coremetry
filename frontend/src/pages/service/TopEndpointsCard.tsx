@@ -92,7 +92,7 @@ export function TopEndpointsCard({ service, range, endpoints }: {
         </span>
       </div>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -104,8 +104,8 @@ export function TopEndpointsCard({ service, range, endpoints }: {
                   <td><span className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.path}>{r.path}</span></td>
                   <td className="num">{fmtCount(r.calls)}</td>
                   <td className="num"><span className={errBadge(r.errorRate)}>{r.errorRate.toFixed(1)}%</span></td>
-                  <td className="num mono">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>
-                  <td className="num mono">{r.p99Ms.toFixed(0)} ms</td>
+                  <td className="num">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>
+                  <td className="num">{r.p99Ms.toFixed(0)} ms</td>
                   <td>
                     <div title={`pencere içi toplam süre ≈ ${(totalTimeOf(r) / 60000).toFixed(1)} dk`}
                       style={{

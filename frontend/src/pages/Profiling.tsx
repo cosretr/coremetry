@@ -10,14 +10,13 @@ import { useProfiles, useProfileHotspots } from '@/lib/queries';
 import { copyToClipboard } from '@/lib/clipboard';
 import { tsShort, timeRangeToNs, fmtNum } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import type { ProfileRow, ProfileHotspotsResponse, TimeRange } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
 import { Button, SegmentedControl, TabStrip } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü); v0.10.924 Faz 2
 
 // Columns for the shared sortable + resizable DataTable.
-const PROFILE_COLS: DataTableColumn<ProfileRow>[] = [
+const PROFILE_COLS: ColumnDef<ProfileRow>[] = [
   { id: 'time',    label: 'Time',    sortValue: p => p.startTime,        naturalDir: 'desc', width: 170 },
   { id: 'service', label: 'Service', sortValue: p => p.serviceName,      naturalDir: 'asc',  width: 200 },
   { id: 'type',    label: 'Type',    sortValue: p => p.profileType,      naturalDir: 'asc',  width: 110 },
@@ -26,7 +25,7 @@ const PROFILE_COLS: DataTableColumn<ProfileRow>[] = [
   { id: 'host',    label: 'Host',    sortValue: p => p.hostName ?? '',   naturalDir: 'asc',  width: 180 },
 ];
 type HotspotRow = ProfileHotspotsResponse['hotspots'][number];
-const HOTSPOT_COLS: DataTableColumn<HotspotRow>[] = [
+const HOTSPOT_COLS: ColumnDef<HotspotRow>[] = [
   { id: 'method',   label: 'Method',   sortValue: h => h.name,        naturalDir: 'asc',  width: 280 },
   { id: 'location', label: 'Location', sortValue: h => h.file ?? '',  naturalDir: 'asc',  width: 240 },
   { id: 'self',     label: 'Self',     sortValue: h => h.self,  numeric: true, naturalDir: 'desc', width: 160 },
@@ -168,26 +167,32 @@ export default function ProfilingPage() {
               </Empty>
             )}
             {data && data.length > 0 && (
-              <div className="table-wrap is-fit">
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <div className="table-wrap">
+                <table {...profileDt.tableProps}>
                   <DataTableColgroup dt={profileDt} />
                   <DataTableHead dt={profileDt} />
                   <tbody>
-                    {profileDt.sortedRows.map((p, i) => (
-                      <tr key={p.profileId} {...profileDt.rowProps(i)} {...rowActivation(() => navigate(`/profile?id=${p.profileId}`))}
-                        style={profileDt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
-                        <td className="mono">{tsShort(p.startTime)}</td>
-                        <td>
-                          <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--bg3)', borderRadius: 3, fontFamily: 'monospace' }}>
-                            {p.serviceName}
-                          </span>
-                        </td>
-                        <td><span className="badge b-info">{p.profileType.toUpperCase()}</span></td>
-                        <td className="mono">{p.durationMs > 0 ? `${(p.durationMs/1000).toFixed(1)}s` : '—'}</td>
-                        <td>{fmtNum(p.sampleCount)}</td>
-                        <td className="mono" style={{ color: 'var(--text2)' }}>{p.hostName || '—'}</td>
-                      </tr>
-                    ))}
+                    {profileDt.sortedRows.map((p, i) => {
+                      // v0.10.943 — rowProps'un `row-selected`i ile `cv-row` tek className (§2c).
+                      const rp = profileDt.rowProps(i);
+                      return (
+                        <tr key={p.profileId} {...rp}
+                          className={[rp.className, profileDt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
+                          {...rowActivation(() => navigate(`/profile?id=${p.profileId}`))}>
+                          <td className="mono">{tsShort(p.startTime)}</td>
+                          <td>
+                            <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--bg3)', borderRadius: 3, fontFamily: 'var(--font-mono)' }}>
+                              {p.serviceName}
+                            </span>
+                          </td>
+                          <td><span className="badge b-info">{p.profileType.toUpperCase()}</span></td>
+                          {/* v0.10.943 — sayı kolonu (S2/T4): arayüz fontu, başlıkla aynı sağa hiza. */}
+                          <td className="num">{p.durationMs > 0 ? `${(p.durationMs/1000).toFixed(1)}s` : '—'}</td>
+                          <td className="num">{fmtNum(p.sampleCount)}</td>
+                          <td className="mono cell-muted">{p.hostName || '—'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -263,8 +268,8 @@ function HotspotsPanel({ service, hotspots }: {
           </span>
         )}
       </div>
-      <div className="table-wrap is-fit">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <div className="table-wrap">
+        <table {...hsDt.tableProps}>
           <DataTableColgroup dt={hsDt} />
           <DataTableHead dt={hsDt} />
           <tbody>
@@ -272,16 +277,16 @@ function HotspotsPanel({ service, hotspots }: {
               const selfPct = (h.self / totalSamples) * 100;
               const totalPct = (h.total / totalSamples) * 100;
               return (
-                <tr key={i} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
-                  <td className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                <tr key={i} className="cv-row">
+                  <td className="mono">
                     {h.name}<KindBadge kind={h.kind} />
                   </td>
-                  <td className="mono" style={{ fontSize: 11, color: 'var(--text2)', wordBreak: 'break-all' }}>
+                  <td className="mono cell-muted">
                     {h.file ? `${h.file}${h.line ? `:${h.line}` : ''}` : '—'}
                   </td>
-                  <td className="num mono"><HotspotBar pct={selfPct} value={h.self} /></td>
-                  <td className="num mono"><HotspotBar pct={totalPct} value={h.total} /></td>
-                  <td className="num mono">{h.paths.toLocaleString()}</td>
+                  <td className="num"><HotspotBar pct={selfPct} value={h.self} /></td>
+                  <td className="num"><HotspotBar pct={totalPct} value={h.total} /></td>
+                  <td className="num">{h.paths.toLocaleString()}</td>
                 </tr>
               );
             })}
@@ -391,7 +396,6 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
         margin: 0, padding: 12, background: 'var(--bg)',
         border: '1px solid var(--border)', borderRadius: 4,
         fontSize: 11, lineHeight: 1.55, overflowX: 'auto',
-        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
       }} data-lang={lang}>
         <code>{code}</code>
       </pre>

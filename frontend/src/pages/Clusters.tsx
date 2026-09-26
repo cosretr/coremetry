@@ -32,8 +32,7 @@ import { clampThanosWindow, clampSuffix } from '@/lib/thanosWindow';
 import { useUrlRange, rememberRange } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef, type CellTone } from '@/components/ui/DataTable';
 import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterAlertRow, ClusterSummary, TimeRange, CapacityForecastDays } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
@@ -52,14 +51,19 @@ import { PageShell } from '@/components/ui/PageShell';
 // "erişilemiyor"); detayda YALNIZ o cluster'ın nodes+pods sorguları
 // koşar (fetch-on-open).
 
-const NODE_COLS: DataTableColumn<ClusterNodeRow>[] = [
-  { id: 'cluster',  label: 'Cluster', sortValue: r => r.cluster,  naturalDir: 'asc', width: 130 },
+// v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında:
+// 11px ikincil hücre yerine ton (S3), sayılar arayüz fontunda (S2), % eşik
+// rengi `pctTone` (>85 err, >60 warn, altı soluk — eski satır içi üçlü).
+const pctTone = (p?: number): CellTone => ((p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint');
+
+const NODE_COLS: ColumnDef<ClusterNodeRow>[] = [
+  { id: 'cluster',  label: 'Cluster', sortValue: r => r.cluster,  naturalDir: 'asc', width: 130, tone: () => 'muted' },
   { id: 'node',     label: 'Node',    sortValue: r => r.node,     naturalDir: 'asc', width: 260 },
   { id: 'role',     label: 'Role',    sortValue: r => r.role ?? '', naturalDir: 'asc', width: 90 },
   { id: 'cpuCores', label: 'CPU',     sortValue: r => r.cpuCores, numeric: true, width: 90 },
-  { id: 'cpuPct',   label: 'CPU %',   sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80 },
+  { id: 'cpuPct',   label: 'CPU %',   sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.cpuPct) },
   { id: 'memBytes', label: 'Memory',  sortValue: r => r.memBytes, numeric: true, width: 100 },
-  { id: 'memPct',   label: 'Mem %',   sortValue: r => r.memPct ?? 0, numeric: true, width: 80 },
+  { id: 'memPct',   label: 'Mem %',   sortValue: r => r.memPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.memPct) },
   // v0.9.10 — network (best-effort; seri yoksa hücre '—').
   { id: 'netIn',    label: 'Net in',  sortValue: r => r.netInBps ?? 0, numeric: true, width: 90 },
   { id: 'netOut',   label: 'Net out', sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90 },
@@ -67,19 +71,20 @@ const NODE_COLS: DataTableColumn<ClusterNodeRow>[] = [
 
 // v0.8.588 — namespace rollup (satır tıklaması ?namespace= yazar);
 // v0.9.5 — satır sonunda trend-drawer ikonu (filtreyle çakışmaz).
-const NS_COLS: DataTableColumn<ClusterNamespaceRow>[] = [
-  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 220 },
+const NS_COLS: ColumnDef<ClusterNamespaceRow>[] = [
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 220, mono: true },
   { id: 'pods',      label: 'Pods',      sortValue: r => r.pods ?? 0, numeric: true, width: 80 },
   { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90 },
   { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100 },
   { id: 'restarts',  label: 'Restarts',  sortValue: r => r.restarts ?? 0, numeric: true, width: 84 },
   { id: 'health',    label: 'Health',    sortValue: r => r.failing ?? 0, numeric: true, width: 90 },
-  { id: 'trend',     label: '',          width: 44 },
+  // v0.10.943 — trend düğmesi satırın eylemi (T8): `kind: 'actions'`; id/width aynı.
+  { id: 'trend',     label: 'Actions',   kind: 'actions', width: 44 },
 ];
 
 // v0.9.23 — namespace içi iş yükü kademesi (Namespace → Deployment → Pod).
-const DEP_COLS: DataTableColumn<ClusterDeploymentRow>[] = [
-  { id: 'deployment', label: 'Workload', sortValue: r => r.deployment, naturalDir: 'asc', width: 240 },
+const DEP_COLS: ColumnDef<ClusterDeploymentRow>[] = [
+  { id: 'deployment', label: 'Workload', sortValue: r => r.deployment, naturalDir: 'asc', width: 240, mono: true },
   // v0.9.39 — KSM replicas/status (handoff §5). status boş = '—'.
   // v0.9.42 — scale-to-zero (0/0) sağlıklıdır: tam kesintinin (0/3=0)
   // yanına sıralanmasın diye ratio 1 sayılır.
@@ -90,19 +95,19 @@ const DEP_COLS: DataTableColumn<ClusterDeploymentRow>[] = [
   { id: 'memBytes',   label: 'Memory',   sortValue: r => r.memBytes,   numeric: true, width: 100 },
 ];
 
-const POD_COLS: DataTableColumn<ClusterPodRow>[] = [
-  { id: 'cluster',   label: 'Cluster',   sortValue: r => r.cluster,   naturalDir: 'asc', width: 130 },
+const POD_COLS: ColumnDef<ClusterPodRow>[] = [
+  { id: 'cluster',   label: 'Cluster',   sortValue: r => r.cluster,   naturalDir: 'asc', width: 130, tone: () => 'muted' },
   // v0.9.649 — ikinci ESNEK kolon: pod tek başına 1154px bırakıyordu
   // (eşik 1150). Namespace de değişken uzunlukta, artanı paylaşıyorlar.
-  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', flex: true },
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', flex: true, tone: () => 'muted' },
   { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true },
   // v0.9.12 — Coremetry servis eşleşmesi (korelasyon audit'i).
   { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 150 },
   { id: 'phase',     label: 'Status',    sortValue: r => r.phase ?? '', naturalDir: 'asc', width: 100 },
   { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90 },
-  { id: 'cpuPct',    label: 'CPU %',     sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80 },
+  { id: 'cpuPct',    label: 'CPU %',     sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.cpuPct) },
   { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100 },
-  { id: 'memPct',    label: 'Mem %',     sortValue: r => r.memPct ?? 0, numeric: true, width: 80 },
+  { id: 'memPct',    label: 'Mem %',     sortValue: r => r.memPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.memPct) },
   // v0.9.10 — network (best-effort).
   { id: 'netIn',     label: 'Net in',    sortValue: r => r.netInBps ?? 0, numeric: true, width: 90 },
   { id: 'netOut',    label: 'Net out',   sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90 },
@@ -610,7 +615,7 @@ export default function ClustersPage() {
                       replace
                       header={
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: 'ui-monospace, monospace' }}>{name}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{name}</span>
                           <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             {!unreachable && !seen && (
                               <span className="badge b-gray" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
@@ -672,7 +677,7 @@ export default function ClustersPage() {
               <LinkButton onClick={backToOverview} style={{ fontSize: 12 }}>
                 ← All clusters
               </LinkButton>
-              <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14, fontWeight: 600 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
                 {clusterParam}
               </span>
               {detailSummaryQ.isError
@@ -760,18 +765,16 @@ export default function ClustersPage() {
                     </Empty>
                   )}
                   {nodeRows.length > 0 && (
-                    <div className="table-wrap is-fit">
-                      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <div className="table-wrap">
+                      <table {...ndt.tableProps}>
                         <DataTableColgroup dt={ndt} />
                         <DataTableHead dt={ndt} />
                         <tbody>
                           {ndt.sortedRows.map(r => (
-                            <tr key={`${r.cluster}|${r.node}`}
-                              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
-                              <td style={{ fontSize: 11, color: 'var(--text2)' }}>{r.cluster}</td>
+                            <tr key={`${r.cluster}|${r.node}`} className="cv-row">
+                              <DataTableCell dt={ndt} col="cluster" row={r} value={r.cluster} />
                               <td>
-                                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, fontWeight: 500 }}
-                                  title={r.node}>
+                                <span className="mono" style={{ fontWeight: 500 }} title={r.node}>
                                   {r.node}
                                 </span>
                               </td>
@@ -780,16 +783,12 @@ export default function ClustersPage() {
                               <td>{r.role
                                 ? <span className="badge b-gray">{r.role}</span>
                                 : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                              <td className="num mono">{fmtCores(r.cpuCores)}</td>
-                              <td className="num mono" style={{
-                                color: (r.cpuPct ?? 0) > 85 ? 'var(--err)' : (r.cpuPct ?? 0) > 60 ? 'var(--warn)' : 'var(--text3)',
-                              }}>{r.cpuPct ? r.cpuPct.toFixed(0) : '—'}</td>
-                              <td className="num mono">{fmtBytes(r.memBytes)}</td>
-                              <td className="num mono" style={{
-                                color: (r.memPct ?? 0) > 85 ? 'var(--err)' : (r.memPct ?? 0) > 60 ? 'var(--warn)' : 'var(--text3)',
-                              }}>{r.memPct ? r.memPct.toFixed(0) : '—'}</td>
-                              <td className="num mono">{r.netInBps ? fmtBps(r.netInBps) : '—'}</td>
-                              <td className="num mono">{r.netOutBps ? fmtBps(r.netOutBps) : '—'}</td>
+                              <DataTableCell dt={ndt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
+                              <DataTableCell dt={ndt} col="cpuPct" row={r} value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
+                              <DataTableCell dt={ndt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                              <DataTableCell dt={ndt} col="memPct" row={r} value={r.memPct ? r.memPct.toFixed(0) : '—'} />
+                              <DataTableCell dt={ndt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
+                              <DataTableCell dt={ndt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
                             </tr>
                           ))}
                         </tbody>
@@ -816,18 +815,17 @@ export default function ClustersPage() {
                     </div>
                   )}
                   {depRows.length > 0 && (
-                    <div className="table-wrap is-fit">
-                      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <div className="table-wrap">
+                      <table {...depdt.tableProps}>
                         <DataTableColgroup dt={depdt} />
                         <DataTableHead dt={depdt} />
                         <tbody>
                           {depdt.sortedRows.map(r => (
+                            // v0.10.943 — talimat ipucu (satır title) kalktı (T7); seçili + cv-row tek className.
                             <tr key={r.deployment}
-                              className={r.deployment === depFilter ? 'row-selected' : undefined}
-                              {...rowActivation(() => setSection('pods', p => p.set('deployment', r.deployment)))}
-                              title="Open the pod list filtered to this workload"
-                              style={depdt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : undefined}>
-                              <td className="mono" style={{ fontSize: 12 }}>{r.deployment}</td>
+                              className={[r.deployment === depFilter ? 'row-selected' : '', depdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
+                              {...rowActivation(() => setSection('pods', p => p.set('deployment', r.deployment)))}>
+                              <DataTableCell dt={depdt} col="deployment" row={r} value={r.deployment} />
                               {/* v0.9.39 — ready/desired rozeti + statü; KSM
                                   yoksa '—'. v0.9.42: surge'de (ready>desired,
                                   backend Available der) rozet de yeşil —
@@ -844,9 +842,9 @@ export default function ClustersPage() {
                               <td>{r.status
                                 ? <span className={`badge ${depStatusBadge(r.status)}`}>{r.status}</span>
                                 : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                              <td className="num mono">{fmtNum(r.pods)}</td>
-                              <td className="num mono">{fmtCores(r.cpuCores)}</td>
-                              <td className="num mono">{fmtBytes(r.memBytes)}</td>
+                              <DataTableCell dt={depdt} col="pods" row={r} value={fmtNum(r.pods)} />
+                              <DataTableCell dt={depdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
+                              <DataTableCell dt={depdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
                             </tr>
                           ))}
                         </tbody>
@@ -861,8 +859,8 @@ export default function ClustersPage() {
                     </div>
                   )}
                   {nsRows.length > 0 && (
-                    <div className="table-wrap is-fit">
-                      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <div className="table-wrap">
+                      <table {...nsdt.tableProps}>
                         <DataTableColgroup dt={nsdt} />
                         <DataTableHead dt={nsdt} />
                         <tbody>
@@ -870,33 +868,34 @@ export default function ClustersPage() {
                             const selected = r.namespace === nsFilter;
                             return (
                               <tr key={r.namespace}
-                                className={selected ? 'row-selected' : undefined}
+                                className={[selected ? 'row-selected' : '', nsdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
+                                aria-pressed={selected}
                                 {...rowActivation(() => setSection('namespaces', p => {
                                   // v0.9.23 — ara kademe: seçim iş yükü
                                   // rollup'unu açar (pods'a atlamaz);
                                   // deployment seçimi pods'a götürür.
                                   if (selected) { p.delete('namespace'); p.delete('deployment'); }
                                   else { p.set('namespace', r.namespace); p.delete('deployment'); }
-                                }))}
-                                title={selected
-                                  ? 'Clear the namespace selection'
-                                  : 'Show workloads in this namespace'}
-                                style={nsdt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : undefined}>
-                                <td className="mono" style={{ fontSize: 12 }}>{r.namespace}</td>
-                                <td className="num mono">{r.pods ? fmtNum(r.pods) : '—'}</td>
-                                <td className="num mono">{fmtCores(r.cpuCores)}</td>
-                                <td className="num mono">{fmtBytes(r.memBytes)}</td>
+                                }))}>
+                                {/* v0.10.943 — duruma bağlı ipucu satırdan kimlik hücresine (T7); seçili filtre durumu AT'ye satırdaki aria-pressed ile. */}
+                                <DataTableCell dt={nsdt} col="namespace" row={r} value={r.namespace}
+                                  title={selected
+                                    ? 'Clear the namespace selection'
+                                    : 'Show workloads in this namespace'} />
+                                <DataTableCell dt={nsdt} col="pods" row={r} value={r.pods ? fmtNum(r.pods) : '—'} />
+                                <DataTableCell dt={nsdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
+                                <DataTableCell dt={nsdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
                                 {/* v0.9.37 (B4/F6) — restart toplamı + health.
                                     v0.10.922 (sade palet adım 1) — K5: sağlıklı
                                     NÖTR metin; yalnız failing b-err rozet. */}
-                                <td className="num mono" style={{ color: restartColor(r.restarts ?? 0) }}>
-                                  {r.restarts != null ? fmtNum(r.restarts) : '—'}</td>
+                                <DataTableCell dt={nsdt} col="restarts" row={r} style={{ color: restartColor(r.restarts ?? 0) }}
+                                  value={r.restarts != null ? fmtNum(r.restarts) : '—'} />
                                 <td className="num" onClick={e => e.stopPropagation()}>
                                   {(r.failing ?? 0) > 0
                                     ? <span className="badge b-err">{r.failing} failing</span>
                                     : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>}
                                 </td>
-                                <td style={{ textAlign: 'center' }}>
+                                <DataTableCell dt={nsdt} col="trend" row={r}>
                                   {/* v0.9.5 — trend drawer'ı; satırın filtre
                                       davranışına karışmaz (stopPropagation). */}
                                   <IconButton
@@ -906,7 +905,7 @@ export default function ClustersPage() {
                                     // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
                                     tooltip="Per-pod trend charts for this namespace"
                                     icon={<ChartSpline size={14} strokeWidth={1.75} />} />
-                                </td>
+                                </DataTableCell>
                               </tr>
                             );
                           })}
@@ -944,23 +943,18 @@ export default function ClustersPage() {
                     </div>
                   )}
                   {rows.length > 0 && (
-                    <div className="table-wrap is-fit">
-                      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <div className="table-wrap">
+                      <table {...dt.tableProps}>
                         <DataTableColgroup dt={dt} />
                         <DataTableHead dt={dt} />
                         <tbody>
                           {dt.sortedRows.map(r => (
-                            <tr key={`${r.cluster}|${r.namespace}|${r.pod}`}
-                              {...rowActivation(() => openPod(r))}
-                              style={{
-                                contentVisibility: 'auto',
-                                containIntrinsicSize: 'auto 36px',
-                              }}>
-                              <td style={{ fontSize: 11, color: 'var(--text2)' }}>{r.cluster}</td>
-                              <td style={{ fontSize: 11, color: 'var(--text2)' }}>{r.namespace}</td>
+                            <tr key={`${r.cluster}|${r.namespace}|${r.pod}`} className="cv-row"
+                              {...rowActivation(() => openPod(r))}>
+                              <DataTableCell dt={dt} col="cluster" row={r} value={r.cluster} />
+                              <DataTableCell dt={dt} col="namespace" row={r} value={r.namespace} />
                               <td>
-                                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, fontWeight: 500 }}
-                                  title={r.pod}>
+                                <span className="mono" style={{ fontWeight: 500 }} title={r.pod}>
                                   {r.pod}
                                 </span>
                               </td>
@@ -977,27 +971,23 @@ export default function ClustersPage() {
                               <td>{r.phase
                                 ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
                                 : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                              <td className="num mono">{fmtCores(r.cpuCores)}</td>
+                              <DataTableCell dt={dt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
                               {/* v0.8.580 — % hücresi limit-bazlı; request
                                   ekseni title'da (clamp'siz, aşım sinyal). */}
-                              <td className="num mono" style={{
-                                color: (r.cpuPct ?? 0) > 85 ? 'var(--err)' : (r.cpuPct ?? 0) > 60 ? 'var(--warn)' : 'var(--text3)',
-                              }} title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>
-                                {r.cpuPct ? r.cpuPct.toFixed(0) : '—'}</td>
-                              <td className="num mono">{fmtBytes(r.memBytes)}</td>
-                              <td className="num mono" style={{
-                                color: (r.memPct ?? 0) > 85 ? 'var(--err)' : (r.memPct ?? 0) > 60 ? 'var(--warn)' : 'var(--text3)',
-                              }} title={pctTitle('Memory', r.memPct, r.memPctOfReq)}>
-                                {r.memPct ? r.memPct.toFixed(0) : '—'}</td>
-                              <td className="num mono">{r.netInBps ? fmtBps(r.netInBps) : '—'}</td>
-                              <td className="num mono">{r.netOutBps ? fmtBps(r.netOutBps) : '—'}</td>
+                              <DataTableCell dt={dt} col="cpuPct" row={r} title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}
+                                value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
+                              <DataTableCell dt={dt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                              <DataTableCell dt={dt} col="memPct" row={r} title={pctTitle('Memory', r.memPct, r.memPctOfReq)}
+                                value={r.memPct ? r.memPct.toFixed(0) : '—'} />
+                              <DataTableCell dt={dt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
+                              <DataTableCell dt={dt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
                               {/* v0.9.1276 — restart SAYISININ yanında son
                                   sonlanma SEBEBİ: OOMKilled'ı görmek için
                                   kubectl'e düşmek gerekmiyor artık. Sebep
                                   serisi yoksa rozet hiç çizilmez (sessiz
                                   düşüş doğru davranış — '—' zaten ayrı bir
                                   bilinmezlik sinyali, restartsUnknown). */}
-                              <td className="num mono"
+                              <DataTableCell dt={dt} col="restarts" row={r}
                                 title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}
                                 style={{ color: r.restartsUnknown ? 'var(--text3)' : restartColor(r.restarts ?? 0) }}>
                                 {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
@@ -1010,7 +1000,7 @@ export default function ClustersPage() {
                                     }}
                                     title={`${r.lastTermReason} · Son sonlanma sebebi (kube-state-metrics)`}>
                                     {r.lastTermReason}</span>
-                                )}</td>
+                                )}</DataTableCell>
                             </tr>
                           ))}
                         </tbody>
@@ -1252,7 +1242,7 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
   return (
     <Drawer onClose={onClose} header={
       <>
-        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14, fontWeight: 600 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
           {namespace}
         </span>
         <span className="badge b-gray" title="cluster">{cluster}</span>

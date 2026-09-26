@@ -14,10 +14,9 @@ import { useSlowQueries } from '@/lib/queries';
 import { timeRangeToNs, fmtNum } from '@/lib/utils';
 import { slowQueryTracesHref } from '@/pages/slowqueries/tracesHref';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { SlowQueryRow, TimeRange } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 import { serviceHref } from '@/lib/serviceHref';
@@ -28,21 +27,25 @@ import { PageShell } from '@/components/ui/PageShell';
 // Columns for the shared sortable + resizable DataTable primitive.
 // Default order matches the backend's total-wall-clock sort so the
 // first paint is unchanged; the operator can now re-sort/resize any.
-const SLOW_COLS: DataTableColumn<SlowQueryRow>[] = [
-  { id: 'service',    label: 'Service',                sortValue: r => r.service,    naturalDir: 'asc', width: 180 },
+// v0.10.943 — tablo standardı dilim 3: hücre görünümü kolon bayraklarında
+// (mono / numeric / tone); satır içi küçük punto yerine renk (S3).
+const SLOW_COLS: ColumnDef<SlowQueryRow>[] = [
+  { id: 'service',    label: 'Service',                sortValue: r => r.service,    naturalDir: 'asc', width: 180, mono: true },
   { id: 'dbSystem',   label: 'Engine',                 sortValue: r => r.dbSystem,   naturalDir: 'asc', width: 90 },
   // v0.9.272 — the column that used to say "oracle" on every row now says
   // which database it actually was. 'Engine' above keeps the old value under
   // an honest label rather than being repurposed.
-  { id: 'dbName',     label: 'Database',               sortValue: r => r.dbName ?? '', naturalDir: 'asc', width: 130 },
-  { id: 'statement',  label: 'Statement (normalised)', sortValue: r => r.statement,  naturalDir: 'asc', flex: true },
+  { id: 'dbName',     label: 'Database',               sortValue: r => r.dbName ?? '', naturalDir: 'asc', width: 130, mono: true, tone: () => 'muted' },
+  { id: 'statement',  label: 'Statement (normalised)', sortValue: r => r.statement,  naturalDir: 'asc', flex: true, mono: true },
   { id: 'count',      label: 'Calls',      sortValue: r => r.count,      numeric: true, width: 90 },
   { id: 'avgMs',      label: 'Avg ms',     sortValue: r => r.avgMs,      numeric: true, width: 90 },
   // v0.9.265 — P50 next to Avg so a row reads "typical" then "tail".
   { id: 'p50Ms',      label: 'P50 ms',     sortValue: r => r.p50Ms,      numeric: true, width: 90 },
-  { id: 'p99Ms',      label: 'P99 ms',     sortValue: r => r.p99Ms,      numeric: true, width: 90 },
+  { id: 'p99Ms',      label: 'P99 ms',     sortValue: r => r.p99Ms,      numeric: true, width: 90,
+    tone: r => (r.p99Ms > 1000 ? 'err' : r.p99Ms > 200 ? 'warn' : undefined) },
   { id: 'totalMs',    label: 'Total time', sortValue: r => r.totalMs,    numeric: true, width: 110 },
-  { id: 'errorCount', label: 'Errors',     sortValue: r => r.errorCount, numeric: true, width: 90 },
+  { id: 'errorCount', label: 'Errors',     sortValue: r => r.errorCount, numeric: true, width: 90,
+    tone: r => (r.errorCount > 0 ? 'err' : 'faint') },
   // v0.10.652 (operatör) — trace araması satırın kendisinde, en sağda; link kolonu sıralanmaz.
   { id: 'traces',     label: 'Traces',     width: 80 },
 ];
@@ -194,8 +197,8 @@ export default function SlowQueriesPage() {
         )}
         {rows && rows.length > 0 && (
           <>
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} leading={[36]} />
               <DataTableHead dt={dt} leading={<th style={{ width: 36 }}></th>} />
               <tbody>
@@ -208,8 +211,6 @@ export default function SlowQueriesPage() {
                     : totalSec >= 1
                     ? `${totalSec.toFixed(1)} s`
                     : `${r.totalMs.toFixed(0)} ms`;
-                  const p99Color = r.p99Ms > 1000 ? 'var(--err)'
-                    : r.p99Ms > 200 ? 'var(--warn)' : undefined;
                   return (
                     // v0.9.869 (tutarlılık denetimi MT4) — burası keyless bir
                     // <> fragment'ıydı: key içteki <tr>'lerdeydi, listenin
@@ -227,7 +228,7 @@ export default function SlowQueriesPage() {
                         {...rowActivation(() => r.stmtHash
                           ? openStmt(r)
                           : setExpanded(isExpanded ? null : key))}
-                        style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' } as React.CSSProperties}>
+                        className="cv-row">
                         <td onClick={e => {
                           e.stopPropagation();
                           setExpanded(isExpanded ? null : key);
@@ -237,21 +238,20 @@ export default function SlowQueriesPage() {
                             {isExpanded ? '▼' : '▶'}
                           </span>
                         </td>
-                        <td>
+                        <DataTableCell dt={dt} col="service" row={r} value={r.service}>
                           <Link to={serviceHref(r.service, { range })}
-                            onClick={e => e.stopPropagation()}
-                            style={{ fontSize: 12, fontFamily: 'ui-monospace, monospace' }}>
+                            onClick={e => e.stopPropagation()}>
                             {r.service}
                           </Link>
-                        </td>
-                        <td>
+                        </DataTableCell>
+                        <DataTableCell dt={dt} col="dbSystem" row={r}>
                           <span className="badge b-gray mono">{r.dbSystem || '?'}</span>
-                        </td>
+                        </DataTableCell>
                         {/* v0.9.272 — the database itself. dbNameCount > 1 means this
                             (service, statement) pair ran against more than one, and the
                             name shown is one of them: grouping still folds db_name, so
                             the ambiguity is stated instead of silently resolved. */}
-                        <td className="mono" style={{ fontSize: 11 }}>
+                        <DataTableCell dt={dt} col="dbName" row={r} value={r.dbName}>
                           {r.dbName
                             ? <>
                                 {r.dbName}
@@ -262,31 +262,23 @@ export default function SlowQueriesPage() {
                                   </span>
                                 )}
                               </>
-                            : <span style={{ color: 'var(--text3)' }}>—</span>}
-                        </td>
-                        <td style={{
-                          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                          fontSize: 11, color: 'var(--text)',
-                          maxWidth: 540, overflow: 'hidden', textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}>{r.statement}</td>
-                        <td className="num mono">{fmtNum(r.count)}</td>
-                        <td className="num mono">{r.avgMs.toFixed(1)}</td>
-                        <td className="num mono">{r.p50Ms.toFixed(1)}</td>
-                        <td className="num mono" style={{ color: p99Color }}>
-                          {r.p99Ms.toFixed(0)}
-                        </td>
-                        <td className="num mono" style={{ fontWeight: 600 }}>{totalLabel}</td>
-                        <td className="num mono" style={{
-                          color: r.errorCount > 0 ? 'var(--err)' : 'var(--text3)',
-                        }}>{fmtNum(r.errorCount)}</td>
+                            : undefined}
+                        </DataTableCell>
+                        {/* v0.10.943 — maxWidth yerleşim (sınıf karşılığı yok), satır içinde kalır. */}
+                        <td {...dt.cellProps(r, 'statement', r.statement)} style={{ maxWidth: 540 }}>{r.statement}</td>
+                        <DataTableCell dt={dt} col="count" row={r} value={fmtNum(r.count)} />
+                        <DataTableCell dt={dt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
+                        <DataTableCell dt={dt} col="p50Ms" row={r} value={r.p50Ms.toFixed(1)} />
+                        <DataTableCell dt={dt} col="p99Ms" row={r} value={r.p99Ms.toFixed(0)} />
+                        <DataTableCell dt={dt} col="totalMs" row={r} value={totalLabel} className="cell-strong" />
+                        <DataTableCell dt={dt} col="errorCount" row={r} value={fmtNum(r.errorCount)} />
                         {/* v0.10.652 (operatör) — trace araması her satırda, en sağda. */}
-                        <td>
+                        <DataTableCell dt={dt} col="traces" row={r}>
                           <Link to={slowQueryTracesHref(r, range)} onClick={e => e.stopPropagation()}
                             title="Bu sorguyu içeren trace'leri ara" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
                             Traces →
                           </Link>
-                        </td>
+                        </DataTableCell>
                       </tr>
                       {isExpanded && (
                         <tr key={key + ':sample'}>
@@ -300,8 +292,7 @@ export default function SlowQueriesPage() {
                               marginBottom: 4,
                             }}>Real sample (literals shown)</div>
                             <pre style={{
-                              margin: 0, fontSize: 12,
-                              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                              margin: 0,
                               whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                               color: 'var(--text2)',
                             }}>{r.sampleStatement}</pre>

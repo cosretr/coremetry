@@ -373,11 +373,11 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
           inner scroll isn't earning its keep.
           v0.7.54 — header is now the shared <DataTableHead> (sortable
           + per-column resize); fixed layout via the <colgroup> +
-          tableLayout:fixed. Body cell order tracks OP_COLS:
+          dt.tableProps (table.dt). Body cell order tracks OP_COLS:
           Operation · Trend · Impact · Calls · Err% · Avg · P50 · P95 ·
           P99 · Apdex. */}
-      <div className="table-wrap is-fit" ref={wrapRef}>
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <div className="table-wrap" ref={wrapRef}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           {/* v0.9.498 — Trend başlığı üç serinin lejantını taşıyor. Lejant
               satırlara değil BAŞLIĞA konuyor: 79 satırda her satıra
@@ -419,19 +419,19 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                       a self-link wouldn't help anyway. */}
                   <Sparkline values={aggSparkline} title={`total calls/bucket × ${rows.length} ops`} />
                 </td>
-                <td className="mono" style={{ textAlign: 'right', fontWeight: 700 }}>
+                <td className="num" style={{ fontWeight: 700 }}>
                   {fmtImpact(rows.reduce((n, r) => n + impactOf(r), 0))}
                 </td>
-                <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(agg.spans)}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>
+                <td className="num">{fmtNum(agg.spans)}</td>
+                <td className="num">
                   <span className={`badge b-${agg.errorRate > 5 ? 'err' : agg.errorRate > 0 ? 'warn' : 'gray'}`}>
                     {agg.errorRate.toFixed(2)}%
                   </span>
                 </td>
-                <td className="mono" style={{ textAlign: 'right' }}>{agg.avgMs.toFixed(1)}ms</td>
-                <td className="mono" style={{ textAlign: 'right', color: 'var(--text3)' }}>—</td>
-                <td className="mono" style={{ textAlign: 'right', color: 'var(--text3)' }}>—</td>
-                <td className="mono" style={{ textAlign: 'right' }}>{agg.p99Ms.toFixed(1)}ms</td>
+                <td className="num">{agg.avgMs.toFixed(1)}ms</td>
+                <td className="num cell-faint">—</td>
+                <td className="num cell-faint">—</td>
+                <td className="num">{agg.p99Ms.toFixed(1)}ms</td>
               </tr>
             )}
             {dt.sortedRows.map((op, i) => {
@@ -456,7 +456,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
               return (
                 <tr key={op.name} {...rp}
                     {...rowClickHandlers(opHref(op.name), () => navigate(opHref(op.name)))}
-                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
+                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                   <td>
                     <Link
                       to={opHref(op.name)}
@@ -517,20 +517,20 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                       <TrendSpark calls={op.sparkline ?? []} errors={op.errorsSparkline ?? []} p99={op.p99Sparkline ?? []} width={TREND_W} />
                     </Button>
                   </td>
-                  <td className="mono" style={{ textAlign: 'right' }}>
+                  <td className="num">
                     <ImpactBar value={impactOf(op)}
                                max={Math.max(...rows.map(impactOf))} />
                   </td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(op.spanCount)}</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>
+                  <td className="num">{fmtNum(op.spanCount)}</td>
+                  <td className="num">
                     <span className={`badge b-${errCls}`}>
                       {op.errorRate.toFixed(2)}%
                     </span>
                   </td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{op.avgDurationMs.toFixed(1)}ms</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{op.p50DurationMs.toFixed(1)}ms</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{op.p95DurationMs.toFixed(1)}ms</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{op.p99DurationMs.toFixed(1)}ms</td>
+                  <td className="num">{op.avgDurationMs.toFixed(1)}ms</td>
+                  <td className="num">{op.p50DurationMs.toFixed(1)}ms</td>
+                  <td className="num">{op.p95DurationMs.toFixed(1)}ms</td>
+                  <td className="num">{op.p99DurationMs.toFixed(1)}ms</td>
                 </tr>
               );
             }).flatMap((rowEl, i) => {

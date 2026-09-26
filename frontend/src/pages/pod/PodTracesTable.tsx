@@ -13,23 +13,24 @@ import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Chip, Button, Badge } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtDateTime } from '@/lib/utils';
 import { fmtDur } from '@/components/traces/shared';
 import { traceHref } from '@/lib/traceHref';
 import type { TraceRow } from '@/lib/types';
 import { parseSpansParam, writeSpansParam, podTraceParams, POD_TRACE_PAGE, type PodTraceCtx, type SpansMode } from './podPage';
 
-const COLS: DataTableColumn<TraceRow>[] = [
+const COLS: ColumnDef<TraceRow>[] = [
   { id: 'time', label: 'Zaman', width: 176 }, // v0.10.191 — fmtDateTime 19 karakter mono; 150'de saniye kırpılıyordu (operatör, prod)
   { id: 'trace', label: 'Trace', width: 150 },
   { id: 'service', label: 'Servis', width: 180 },
   { id: 'op', label: 'Operasyon', width: 320 },
-  { id: 'dur', label: 'Süre', width: 90, numeric: true },
+  // v0.10.943 (tablo standardı dilim 3) — hatalı trace'in süresi kolon tonu (T9).
+  { id: 'dur', label: 'Süre', width: 90, numeric: true, tone: r => (r.hasError ? 'err' : undefined) },
   { id: 'spans', label: 'Span', width: 70, numeric: true },
   { id: 'status', label: 'Durum', width: 90 },
-  { id: 'links', label: '', width: 50 },
+  // v0.10.943 — satır sonu "→" bağlantısı eylem kolonu (T8); id/width aynı.
+  { id: 'links', label: 'Eylemler', kind: 'actions', width: 50 },
 ];
 
 export function PodTracesTable({ ctx, p95Ms }: {
@@ -95,23 +96,23 @@ export function PodTracesTable({ ctx, p95Ms }: {
         </Empty>
       ) : (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(r => (
-                <tr key={r.traceId} style={rows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: '0 32px' } : undefined}>
+                <tr key={r.traceId} className={rows.length > 100 ? 'cv-row' : undefined}>
                   <td className="mono">{fmtDateTime(new Date(r.startTime / 1e6))}</td>
                   <td className="mono"><Link to={traceHref(r.traceId)} className="sec" title={r.traceId}>{r.traceId.slice(0, 12)}…</Link></td>
                   <td title={r.serviceName}>{r.serviceName}</td>
-                  <td title={r.rootName} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.rootName || '—'}</td>
-                  <td className="num mono" style={r.hasError ? { color: 'var(--err)' } : undefined}>{fmtDur(r.durationMs)}</td>
+                  <td title={r.rootName}>{r.rootName || '—'}</td>
+                  <DataTableCell dt={dt} col="dur" row={r} value={fmtDur(r.durationMs)} />
                   <td className="num">{r.spanCount}</td>
                   {/* v0.10.929 (K5) — sağlıklı satır görsel boş, kelime sr-only (Traces listesi emsali). */}
                   <td>{r.hasError
                     ? <span className="badge b-err">error</span>
                     : <span className="sr-only">ok</span>}</td>
-                  <td><Link to={traceHref(r.traceId)} className="sec" title="Trace'i aç">→</Link></td>
+                  <DataTableCell dt={dt} col="links" row={r}><Link to={traceHref(r.traceId)} className="sec" title="Trace'i aç">→</Link></DataTableCell>
                 </tr>
               ))}
             </tbody>

@@ -90,8 +90,8 @@ export function MethodHotspots({ root }: { root: FlameNode }) {
           }}
         />
       </div>
-      <div className="table-wrap is-fit">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -136,16 +136,16 @@ function HotspotRow({ h, totalValue }: { h: MethodHotspot; totalValue: number })
   const selfPct = (h.self / totalValue) * 100;
   const totalPct = (h.total / totalValue) * 100;
   return (
-    <tr style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
-      <td className="mono" style={{ wordBreak: 'break-all', fontSize: 12 }} title={h.name}>
+    <tr className="cv-row">
+      <td className="mono" title={h.name}>
         {h.name}<KindBadge kind={h.kind} />
       </td>
-      <td className="mono" style={{ fontSize: 11, color: 'var(--text2)', wordBreak: 'break-all' }}>
+      <td className="mono cell-muted">
         {h.file ? `${h.file}${h.line ? `:${h.line}` : ''}` : '—'}
       </td>
-      <td className="num mono"><Bar pct={selfPct} value={h.self} /></td>
-      <td className="num mono"><Bar pct={totalPct} value={h.total} /></td>
-      <td className="num mono">{h.paths.toLocaleString()}</td>
+      <td className="num"><Bar pct={selfPct} value={h.self} /></td>
+      <td className="num"><Bar pct={totalPct} value={h.total} /></td>
+      <td className="num">{h.paths.toLocaleString()}</td>
     </tr>
   );
 }

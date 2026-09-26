@@ -6,8 +6,7 @@
 // bu pod'a süzülmüş Traces.
 import { Link } from 'react-router-dom';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtNum, fmtDateTime } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
@@ -15,14 +14,16 @@ import type { EntityServicesResponse, TimeRange } from '@/lib/types';
 
 interface Row { service: string; spans: number; errors: number; avgMs: number; lastSeen?: string }
 
-const COLS: DataTableColumn<Row>[] = [
+// v0.10.943 (tablo standardı dilim 3) — hata sayısı kolon tonu (T9); satır
+// sonu "Traces →" bağlantısı eylem kolonu (T8, id/width aynı).
+const COLS: ColumnDef<Row>[] = [
   { id: 'service', label: 'Servis', width: 260, sortValue: r => r.service, naturalDir: 'asc' },
   { id: 'spans', label: 'Span', width: 100, numeric: true, sortValue: r => r.spans },
-  { id: 'errors', label: 'Hata', width: 90, numeric: true, sortValue: r => r.errors },
+  { id: 'errors', label: 'Hata', width: 90, numeric: true, sortValue: r => r.errors, tone: r => (r.errors > 0 ? 'err' : undefined) },
   { id: 'errpct', label: 'Hata %', width: 90, numeric: true, sortValue: r => (r.spans ? r.errors / r.spans : 0) },
   { id: 'avg', label: 'Ort. ms', width: 90, numeric: true, sortValue: r => r.avgMs },
   { id: 'last', label: 'Son görülme', width: 160, sortValue: r => r.lastSeen ?? '' },
-  { id: 'links', label: '', width: 120 },
+  { id: 'links', label: 'Eylemler', kind: 'actions', width: 120 },
 ];
 
 function ms(v: number): string {
@@ -59,7 +60,7 @@ export function PodServicesTable({ data, pending, error, pod, spanCluster, pageR
         <div className="pod-cap">{data!.nsMissingRows} satır namespace'siz span'lerden (bu cluster'ın collector'ı k8s.namespace.name basmıyor) — pod adı cluster içinde tek varsayıldı.</div>
       )}
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -71,11 +72,11 @@ export function PodServicesTable({ data, pending, error, pod, spanCluster, pageR
                 <tr key={r.service}>
                   <td><Link to={serviceHref(r.service, { range: pageRange })} className="sec">{r.service}</Link></td>
                   <td className="num">{fmtNum(r.spans)}</td>
-                  <td className="num" style={r.errors > 0 ? { color: 'var(--err)' } : undefined}>{fmtNum(r.errors)}</td>
+                  <DataTableCell dt={dt} col="errors" row={r} value={fmtNum(r.errors)} />
                   <td className="num">{errPct.toFixed(2)}%</td>
-                  <td className="num mono">{ms(r.avgMs)}</td>
+                  <td className="num">{ms(r.avgMs)}</td>
                   <td className="mono">{r.lastSeen ? fmtDateTime(new Date(r.lastSeen)) : '—'}</td>
-                  <td><Link to={tracesHref} className="sec" title="Bu servisin bu pod'daki trace'leri">Traces →</Link></td>
+                  <DataTableCell dt={dt} col="links" row={r}><Link to={tracesHref} className="sec" title="Bu servisin bu pod'daki trace'leri">Traces →</Link></DataTableCell>
                 </tr>
               );
             })}

@@ -14,8 +14,7 @@
 // kalktı: "Kolonları sıfırla" her tablonun başlık ⋯ menüsünde (DataTableHead).
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { DBCallerBreakdown, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { podDetailPath } from '@/pages/service/podDetailPath';
@@ -87,11 +86,13 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
   // Caller columns mirror the prior CallerSortTh sort keys +
   // CALLER_NATURAL directions. Role is conditional on hasRole
   // (messaging-only). Default sort = Calls desc (preserved).
-  const callerCols = useMemo<DataTableColumn<Caller>[]>(() => [
+  // v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında;
+  // pod 11px yerine renkle ikincil (S3), sayılar arayüz fontunda (S2).
+  const callerCols = useMemo<ColumnDef<Caller>[]>(() => [
     { id: 'service', label: 'Service',    sortValue: r => r.service, naturalDir: 'asc', width: 200 },
-    { id: 'pod',     label: 'Pod / host', sortValue: r => r.pod,     naturalDir: 'asc', width: 200 },
+    { id: 'pod',     label: 'Pod / host', sortValue: r => r.pod,     naturalDir: 'asc', width: 200, mono: true, tone: () => 'muted' },
     ...(hasRole
-      ? [{ id: 'role', label: 'Role', sortValue: (r: Caller) => r.role ?? '', naturalDir: 'asc', width: 110 } as DataTableColumn<Caller>]
+      ? [{ id: 'role', label: 'Role', sortValue: (r: Caller) => r.role ?? '', naturalDir: 'asc', width: 110 } as ColumnDef<Caller>]
       : []),
     { id: 'calls',   label: 'Calls', sortValue: r => r.spanCount,     numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'errRate', label: 'Err %', sortValue: r => r.errorRate,     numeric: true, naturalDir: 'desc', width: 90 },
@@ -149,7 +150,7 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
         // "tables > 100 rows" guidance, matching the Service.tsx (v0.7.54)
         // adopter pattern.
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -157,15 +158,13 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
                 // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
                 const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray';
                 return (
-                  <tr key={`${c.service}|${c.pod}|${c.role ?? ''}|${i}`}
-                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
+                  <tr key={`${c.service}|${c.pod}|${c.role ?? ''}|${i}`} className="cv-row">
                     <td>
-                      <Link to={serviceHref(c.service, { range })}
-                            style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                      <Link to={serviceHref(c.service, { range })} className="mono">
                         {c.service}
                       </Link>
                     </td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text2)' }}>
+                    <DataTableCell dt={dt} col="pod" row={c}>
                       {/* v0.10.551 — pod hücresi pivot (audit E11): host_name = pod adı;
                           bilinmeyen/boş pod düz metin kalır. */}
                       {c.pod && c.pod !== '(unknown)' ? (
@@ -174,30 +173,24 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
                           {c.pod}
                         </Link>
                       ) : c.pod}
-                    </td>
+                    </DataTableCell>
                     {hasRole && (
                       <td>
                         {c.role && <RoleBadge role={c.role} />}
                       </td>
                     )}
-                    <td className="num mono">{fmtNum(c.spanCount)}</td>
-                    <td className="num mono">
+                    <DataTableCell dt={dt} col="calls" row={c} value={fmtNum(c.spanCount)} />
+                    <DataTableCell dt={dt} col="errRate" row={c}>
                       <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}>
                         {c.errorRate.toFixed(2)}%
                       </span>
-                    </td>
-                    <td className="num mono">{c.avgDurationMs.toFixed(1)}ms</td>
-                    <td className="num mono">
-                      {c.p50DurationMs === undefined
-                        ? <span style={{ color: 'var(--text3)' }}>—</span>
-                        : <>{c.p50DurationMs.toFixed(1)}ms</>}
-                    </td>
-                    <td className="num mono">
-                      {c.p95DurationMs === undefined
-                        ? <span style={{ color: 'var(--text3)' }}>—</span>
-                        : <>{c.p95DurationMs.toFixed(1)}ms</>}
-                    </td>
-                    <td className="num mono">{c.p99DurationMs.toFixed(1)}ms</td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="avg" row={c} value={`${c.avgDurationMs.toFixed(1)}ms`} />
+                    <DataTableCell dt={dt} col="p50" row={c}
+                      value={c.p50DurationMs === undefined ? null : `${c.p50DurationMs.toFixed(1)}ms`} />
+                    <DataTableCell dt={dt} col="p95" row={c}
+                      value={c.p95DurationMs === undefined ? null : `${c.p95DurationMs.toFixed(1)}ms`} />
+                    <DataTableCell dt={dt} col="p99" row={c} value={`${c.p99DurationMs.toFixed(1)}ms`} />
                   </tr>
                 );
               })}
@@ -220,7 +213,7 @@ function RoleBadge({ role }: { role: string }) {
   return (
     <span style={{
       fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 600,
-      fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+      fontFamily: 'var(--font-mono)',
       background: tone.bg, color: tone.fg,
       textTransform: 'uppercase', letterSpacing: '.5px',
     }}>{role}</span>

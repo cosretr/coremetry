@@ -30,8 +30,7 @@ import { PageShell } from '@/components/ui/PageShell';
 import { StatTile, TabStrip } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { CallerSection } from '@/features/dependencies/CallerSection';
 import { KafkaClientsSection } from '@/features/dependencies/KafkaClientsSection';
 import { PartitionLagTable } from '@/features/dependencies/PartitionLagTable'; // v0.10.589
@@ -361,8 +360,10 @@ function E2EPanel({ e2e, range, xRange, syncKey }: {
 // ── Operasyonlar (messaging_summary_5m'in operation boyutu) ─────────────────
 
 function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
-  const cols = useMemo<DataTableColumn<MsgOperationStat>[]>(() => [
-    { id: 'operation', label: 'Operasyon', sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140 },
+  // v0.10.943 — tablo standardı dilim 3: kimlik kolonu `mono` bayrağında;
+  // sayılar arayüz fontunda (S2), >100 satır `cv-row`.
+  const cols = useMemo<ColumnDef<MsgOperationStat>[]>(() => [
+    { id: 'operation', label: 'Operasyon', sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140, mono: true },
     { id: 'count',   label: 'Calls', sortValue: o => o.spanCount,     numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'errRate', label: 'Err %', sortValue: o => o.errorRate,     numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'avg',     label: 'Avg',   sortValue: o => o.avgDurationMs, numeric: true, naturalDir: 'desc', width: 84 },
@@ -390,7 +391,7 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
         <div className="mtp-empty">Bu pencerede MV&#39;de operasyon satırı yok.</div>
       ) : (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -399,23 +400,23 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
                 const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
                 const missing = isOpMissing(o.operation);
                 return (
-                  <tr key={`${o.operation}|${i}`}
-                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
-                    <td className={missing ? 'mono mtp-op-missing' : 'mono mtp-op'}
+                  <tr key={`${o.operation}|${i}`} className="cv-row">
+                    <DataTableCell dt={dt} col="operation" row={o}
+                        className={missing ? 'mtp-op-missing' : 'mtp-op'}
                         title={missing ? OP_MISSING_TITLE : o.operation}>
                       {opLabelTR(o.operation)}
-                    </td>
-                    <td className="num mono">{fmtNum(o.spanCount)}</td>
-                    <td className="num mono">
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.spanCount)} />
+                    <DataTableCell dt={dt} col="errRate" row={o}>
                       <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
                             title={`${fmtNum(o.errorCount)} hatalı span`}>
                         {o.errorRate.toFixed(2)}%
                       </span>
-                    </td>
-                    <td className="num mono">{o.avgDurationMs.toFixed(1)}ms</td>
-                    <td className="num mono">{o.p50DurationMs.toFixed(1)}ms</td>
-                    <td className="num mono">{o.p95DurationMs.toFixed(1)}ms</td>
-                    <td className="num mono">{o.p99DurationMs.toFixed(1)}ms</td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
+                    <DataTableCell dt={dt} col="p50" row={o} value={`${o.p50DurationMs.toFixed(1)}ms`} />
+                    <DataTableCell dt={dt} col="p95" row={o} value={`${o.p95DurationMs.toFixed(1)}ms`} />
+                    <DataTableCell dt={dt} col="p99" row={o} value={`${o.p99DurationMs.toFixed(1)}ms`} />
                   </tr>
                 );
               })}
@@ -439,9 +440,9 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
 function SpanNamesTable({ rows, range, system, destination }: {
   rows: DBOpStat[]; range: TimeRange; system: string; destination: string;
 }) {
-  const cols = useMemo<DataTableColumn<DBOpStat>[]>(() => [
-    { id: 'statement', label: 'Span adı', sortValue: o => o.statement, naturalDir: 'asc', flex: true, minWidth: 200 },
-    { id: 'op', label: 'Type', sortValue: o => o.operation ?? '', naturalDir: 'asc', width: 96 },
+  const cols = useMemo<ColumnDef<DBOpStat>[]>(() => [
+    { id: 'statement', label: 'Span adı', sortValue: o => o.statement, naturalDir: 'asc', flex: true, minWidth: 200, mono: true },
+    { id: 'op', label: 'Type', sortValue: o => o.operation ?? '', naturalDir: 'asc', width: 96, mono: true },
     { id: 'count', label: 'Count', sortValue: o => o.count, numeric: true, naturalDir: 'desc', width: 110 },
     { id: 'avg', label: 'Avg', sortValue: o => o.avgDurationMs, numeric: true, naturalDir: 'desc', width: 110 },
   ], []);
@@ -459,14 +460,13 @@ function SpanNamesTable({ rows, range, system, destination }: {
         <div className="mtp-empty">Bu pencerede span adı satırı yok.</div>
       ) : (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map((o, i) => (
-                <tr key={`${o.statement}|${i}`}
-                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
-                  <td className="mono mtp-span-name">
+                <tr key={`${o.statement}|${i}`} className="cv-row">
+                  <DataTableCell dt={dt} col="statement" row={o} className="mtp-span-name">
                     {o.statement
                       ? (
                         <>
@@ -483,10 +483,10 @@ function SpanNamesTable({ rows, range, system, destination }: {
                         </>
                       )
                       : <span className="mtp-op-missing">(boş)</span>}
-                  </td>
-                  <td className="mono mtp-op">{o.operation ?? '—'}</td>
-                  <td className="num mono">{fmtNum(o.count)}</td>
-                  <td className="num mono">{o.avgDurationMs.toFixed(1)}ms</td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="op" row={o} className="mtp-op">{o.operation ?? '—'}</DataTableCell>
+                  <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.count)} />
+                  <DataTableCell dt={dt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
                 </tr>
               ))}
             </tbody>

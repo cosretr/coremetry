@@ -714,10 +714,10 @@ export default function ServicesPage() {
         )}
         {sorted && sorted.length > 0 && (
           <>
-            <div className="table-wrap is-fit"
+            <div className="table-wrap"
               style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
               aria-busy={refreshing}>
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 {/* v0.8.251 — shared primitive header (serverSort mode): same
                     click-to-re-fetch semantics as the old SortTh row, plus the
@@ -747,14 +747,14 @@ export default function ServicesPage() {
                       {/* v0.10.922 (sade palet adım 1) — toplam satırının
                           mini-grafikleri de satırlarla aynı kuralda: nötr
                           SPARK_NEUTRAL, hata serisi yalnız >0 kovada kırmızı. */}
-                      <td className="mono" style={{ textAlign: 'right' }}>
+                      <td className="num">
                         <SparkCell value={fmtNum(agg.spans)}
                                    spark={aggBuckets.map(b => b.spans)}
                                    color={SPARK_NEUTRAL}
                                    title="Total spans/5m across visible services"
                                    onClick={() => goToExplore('', 'rate')} />
                       </td>
-                      <td className="mono" style={{ textAlign: 'right' }}>
+                      <td className="num">
                         <SparkCell value={<ErrRateValue pct={agg.errorRate} />}
                         spark={aggErrSeries}
                         color={errSparkColor(aggErrSeries)}
@@ -766,14 +766,14 @@ export default function ServicesPage() {
                         // eşik sinyali zaten Err% rozetinde okunuyor.
                         onClick={() => goToExplore('', 'error_rate')} />
                       </td>
-                      <td className="mono" style={{ textAlign: 'right' }}>
+                      <td className="num">
                         <SparkCell value={`${fmtFixed(agg.avgMs, 1)}ms`}
                                    spark={aggBuckets.map(b => b.avgMs)}
                                    color={SPARK_NEUTRAL}
                                    title="Aggregate avg latency (weighted by spans)"
                                    onClick={() => goToExplore('', 'avg')} />
                       </td>
-                      <td className="mono" style={{ textAlign: 'right' }}>
+                      <td className="num">
                         <SparkCell value={`${fmtFixed(agg.p99Ms, 1)}ms`}
                                    spark={aggBuckets.map(b => b.p99Ms)}
                                    color={SPARK_NEUTRAL}
@@ -782,7 +782,7 @@ export default function ServicesPage() {
                       </td>
                       {/* P99 Δ — sayfa-toplamı satırında anlamsız, boş. */}
                       <td />
-                      <td className="mono" style={{ textAlign: 'right' }}>
+                      <td className="num">
                         <ApdexBadge value={agg.apdex} />
                       </td>
                       {/* Last seen — sayfa toplamının yaşam döngüsü yok. */}
@@ -860,14 +860,14 @@ export default function ServicesPage() {
                                                  style={{ marginLeft: 8 }} />
                           )}
                         </td>
-                        <td className="mono" style={{ textAlign: 'right' }}>
+                        <td className="num">
                           <SparkCell value={fmtNum(s.spanCount)}
                                      spark={buckets.map(b => b.spans)}
                                      color={SPARK_NEUTRAL}
                                      title={`Spans/5m for ${s.name}`}
                                      onClick={() => goToExplore(s.name, 'rate')} />
                         </td>
-                        <td className="mono" style={{ textAlign: 'right' }}>
+                        <td className="num">
                           <SparkCell value={<ErrRateValue pct={s.errorRate} />}
                           spark={errSeries}
                           color={errSparkColor(errSeries)}
@@ -875,27 +875,27 @@ export default function ServicesPage() {
                           // v0.9.499 — çizgi moduna geri (bkz. agg satırı).
                           onClick={() => goToExplore(s.name, 'error_rate')} />
                         </td>
-                        <td className="mono" style={{ textAlign: 'right' }}>
+                        <td className="num">
                           <SparkCell value={`${fmtFixed(s.avgDurationMs, 1)}ms`}
                                      spark={buckets.map(b => b.avgMs)}
                                      color={SPARK_NEUTRAL}
                                      title={`Avg latency (ms) for ${s.name}`}
                                      onClick={() => goToExplore(s.name, 'avg')} />
                         </td>
-                        <td className="mono" style={{ textAlign: 'right' }}>
+                        <td className="num">
                           <SparkCell value={`${fmtFixed(s.p99DurationMs, 1)}ms`}
                                      spark={buckets.map(b => b.p99Ms)}
                                      color={SPARK_NEUTRAL}
                                      title={`P99 latency (ms) for ${s.name}`}
                                      onClick={() => goToExplore(s.name, 'p99')} />
                         </td>
-                        <td className="mono" style={{ textAlign: 'right' }}>
+                        <td className="num">
                           {compare
                             ? <TrendDelta cur={s.p99DurationMs} prior={s.priorP99Ms} kind="lowerBetter" />
                             : <span style={{ color: 'var(--text3)' }}
                                 title="Önceki pencereyle kıyas için Δ prior'u aç ya da bu kolonu sırala">—</span>}
                         </td>
-                        <td className="mono" style={{ textAlign: 'right' }}>
+                        <td className="num">
                           <ApdexBadge value={s.apdex} />
                         </td>
                         {/* v0.9.1317 — service_seen MV'sinden "Last seen".
@@ -905,13 +905,14 @@ export default function ServicesPage() {
                             göndermiyor — burada uydurulacak bir tarih yok.
                             v0.9.1329 — başlık+gövde İngilizceye alındı
                             (sayfanın diğer yedi başlığıyla tutarlılık). */}
-                        <td className="mono" style={{ textAlign: 'right' }}>
+                        {/* v0.10.943 — hizası `num`dan; zaman damgası mono kalır (S2 yalnız sayı hücresi). */}
+                        <td className="num">
                           {s.lastSeen
-                            ? <span title={`Last seen: ${tsLong(s.lastSeen)}\nFirst seen: ${
+                            ? <span className="mono" title={`Last seen: ${tsLong(s.lastSeen)}\nFirst seen: ${
                                 s.firstSeen ? tsLong(s.firstSeen) : 'unknown (this service was already running before we started recording)'}`}>
                                 {fmtAgoNs(s.lastSeen)}
                               </span>
-                            : <span style={{ color: 'var(--text3)' }}
+                            : <span className="mono" style={{ color: 'var(--text3)' }}
                                 title="No lifecycle record yet — the service_seen MV fills in from a service's first span onward">—</span>}
                         </td>
                       </tr>

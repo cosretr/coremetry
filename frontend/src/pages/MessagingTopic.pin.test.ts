@@ -128,7 +128,8 @@ describe('paylaşılan gövde — CallerSection', () => {
     // v0.10.939 (S8) — sıfırlama DataTableHead ⋯ menüsünde, sayfada düğme yok.
     expect(page).not.toContain('<ResetLayout' + 'Button');
     // >100 satır ihtimali olan her tablo content-visibility taşır.
-    expect(page.match(/contentVisibility: 'auto'/g)?.length ?? 0).toBe(2);
+    // v0.10.943 — tablo standardı T6: satır içi stil yerine tek sınıf `cv-row`.
+    expect(page.match(/<tr [^>]*className="cv-row"/g)?.length ?? 0).toBe(2);
   });
   it('grafik panelleri AYRI storageKey (çekmece ikizini ezmesin)', () => {
     expect(page).toContain("storageKey=\"msg-topic-e2e\"");

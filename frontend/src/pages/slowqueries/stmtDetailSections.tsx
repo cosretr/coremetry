@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom';
 import { SectionUnavailable, StatTile } from '@/components/ui';
 import { Sparkline } from '@/components/Sparkline';
 import { TrendDelta } from '@/components/TrendDelta';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtNum } from '@/lib/utils';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange, DBStmtDetail, DBStmtCaller } from '@/lib/types';
 import { densifyTrend } from './stmtParam';
 import { serviceHref } from '@/lib/serviceHref';
@@ -49,8 +48,7 @@ export function StmtText({ statement, sample }: { statement: string; sample: str
     <>
       {statement ? (
         <pre style={{
-          margin: '0 0 10px', fontSize: 12,
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          margin: '0 0 10px',
           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           color: 'var(--text)', maxHeight: 260, overflowY: 'auto',
           padding: 12, background: 'var(--bg1)',
@@ -69,7 +67,6 @@ export function StmtText({ statement, sample }: { statement: string; sample: str
           </summary>
           <pre style={{
             margin: '6px 0 0', fontSize: 11,
-            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
             whiteSpace: 'pre-wrap', wordBreak: 'break-word',
             color: 'var(--text2)', maxHeight: 200, overflowY: 'auto',
             padding: 8, background: 'var(--bg2)', borderRadius: 4,
@@ -183,10 +180,13 @@ function TrendRow({ label, values, color, unit, width }: {
   );
 }
 
-const CALLER_COLS: DataTableColumn<DBStmtCaller>[] = [
+// v0.10.943 — tablo standardı dilim 3: hücre görünümü kolon bayraklarında
+// (numeric / tone); sayılar arayüz fontunda (S2).
+const CALLER_COLS: ColumnDef<DBStmtCaller>[] = [
   { id: 'service', label: 'Service',    sortValue: r => r.service, naturalDir: 'asc', width: 170 },
   { id: 'calls',   label: 'Calls',      sortValue: r => r.calls,   numeric: true, width: 76 },
-  { id: 'errors',  label: 'Errors',     sortValue: r => r.errors,  numeric: true, width: 66 },
+  { id: 'errors',  label: 'Errors',     sortValue: r => r.errors,  numeric: true, width: 66,
+    tone: r => (r.errors > 0 ? 'err' : 'faint') },
   { id: 'avgMs',   label: 'Avg',        sortValue: r => r.avgMs,   numeric: true, width: 70 },
   { id: 'p95Ms',   label: 'P95',        sortValue: r => r.p95Ms,   numeric: true, width: 70 },
   { id: 'totalMs', label: 'Total time', sortValue: r => r.totalMs, numeric: true, width: 90 },
@@ -219,31 +219,29 @@ export function StmtCallersSection({ detail, compare, range }: {
       )}
       {rows.length > 0 && (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(c => (
                 <tr key={c.service}>
-                  <td>
+                  <DataTableCell dt={dt} col="service" row={c}>
                     <Link to={serviceHref(c.service, { range })}
                       className="mono" style={{ fontSize: 11 }}>
                       {c.service}
                     </Link>
-                  </td>
-                  <td className="num mono">
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="calls" row={c}>
                     {fmtNum(c.calls)}
                     {compare && <TrendDelta cur={c.calls} prior={c.priorCalls} kind="neutral" />}
-                  </td>
-                  <td className="num mono" style={{
-                    color: c.errors > 0 ? 'var(--err)' : 'var(--text3)',
-                  }}>{fmtNum(c.errors)}</td>
-                  <td className="num mono">
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="errors" row={c} value={fmtNum(c.errors)} />
+                  <DataTableCell dt={dt} col="avgMs" row={c}>
                     {c.avgMs.toFixed(1)}
                     {compare && <TrendDelta cur={c.avgMs} prior={c.priorAvgMs} kind="lowerBetter" />}
-                  </td>
-                  <td className="num mono">{c.p95Ms.toFixed(0)}</td>
-                  <td className="num mono" style={{ fontWeight: 600 }}>{fmtTotal(c.totalMs)}</td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="p95Ms" row={c} value={c.p95Ms.toFixed(0)} />
+                  <DataTableCell dt={dt} col="totalMs" row={c} value={fmtTotal(c.totalMs)} className="cell-strong" />
                 </tr>
               ))}
             </tbody>

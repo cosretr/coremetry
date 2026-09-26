@@ -3,14 +3,13 @@ import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan
 import { Link } from 'react-router-dom';
 import { Spinner, Empty } from './Spinner';
 import { DisclosureButton } from '@/components/ui';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { useQueries } from '@tanstack/react-query';
 import { useClusters } from '@/lib/queries';
 import { entityHref } from '@/lib/entityHref';
 import { fmtNum } from '@/lib/utils';
 import { encodeFilters, windowRangeParam } from '@/lib/urlState';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { DBQueryStat, FilterExpr, TimeRange } from '@/lib/types';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
@@ -35,7 +34,7 @@ import { databasesFilterHref } from '@/pages/databases/databaseParam';
 // sorting for free. The trailing Traces-drill column is layout-only
 // (no sortValue → not clickable, still resizable).
 type DBRow = DBQueryStat & { cluster?: string }; // v0.10.717 — cluster başına kipte damga
-const DBQ_COLS: DataTableColumn<DBRow>[] = [
+const DBQ_COLS: ColumnDef<DBRow>[] = [
   { id: 'statement',  label: 'Statement', sortValue: r => r.statement,      naturalDir: 'asc', flex: true, minWidth: 160 },
   { id: 'dbSystem',   label: 'DB',        sortValue: r => r.dbSystem || '', naturalDir: 'asc', width: 90 },
   { id: 'count',      label: '×N',     sortValue: r => r.count,      numeric: true, width: 80 },
@@ -53,7 +52,7 @@ const DBQ_COLS: DataTableColumn<DBRow>[] = [
   { id: 'traces',     label: '',       width: 90 },
 ];
 // v0.10.717 — cluster başına kipte araya giren sütun (Statement'tan sonra).
-const DBQ_CLUSTER_COL: DataTableColumn<DBRow> = { id: 'cluster', label: 'Cluster', sortValue: r => r.cluster ?? '', width: 120 };
+const DBQ_CLUSTER_COL: ColumnDef<DBRow> = { id: 'cluster', label: 'Cluster', sortValue: r => r.cluster ?? '', width: 120 };
 
 // Kaç normalleştirilmiş statement gösterilir. Sunucu ağırlığa göre sıralı
 // döndürüyor, yani kırpılan kuyruk EN HAFİF olanlar — ama bu, kırpmanın
@@ -192,7 +191,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
           )}
           {view && view.length > 0 && (
             <div className="table-wrap">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
@@ -210,12 +209,11 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                     return (
                       <Row key={i}>
                         <tr {...rowActivation(() => setExpandedIdx(e => e === i ? null : i))}
-                            style={dt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
-                          <td className="mono"
-                              style={{ maxWidth: 540, overflow: 'hidden',
-                                       textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                       fontSize: 12 }}
-                              title={r.statement}>
+                            className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
+                          {/* v0.10.943 (tablo standardı dilim 3) — maxWidth sabit
+                              düzende etkisizdi (genişlik colgroup'ta); kırpma ve
+                              12px tablo tabanından. Sayılar `num` (S2). */}
+                          <td className="mono" title={r.statement}>
                             {r.statement}
                           </td>
                           {byCluster && (
@@ -241,7 +239,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                                     style={{
                                       fontSize: 11, padding: '1px 6px',
                                       background: 'var(--bg3)', borderRadius: 3,
-                                      fontFamily: 'monospace',
+                                      fontFamily: 'var(--font-mono)',
                                       color: 'var(--accent2)', textDecoration: 'none',
                                     }}>
                                 {r.dbSystem}
@@ -250,16 +248,16 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                               <span style={{
                                 fontSize: 11, padding: '1px 6px',
                                 background: 'var(--bg3)', borderRadius: 3,
-                                fontFamily: 'monospace',
+                                fontFamily: 'var(--font-mono)',
                               }}>—</span>
                             )}
                           </td>
-                          <td className="mono num">{fmtNum(r.count)}</td>
-                          <td className="mono num">{fmtMs(r.totalMs)}</td>
-                          <td className="mono num">{fmtMs(r.avgMs)}</td>
-                          <td className="mono num">{fmtMs(r.p95Ms)}</td>
-                          <td className="mono num">{fmtMs(r.p99Ms)}</td>
-                          <td className="mono num">{fmtMs(r.maxMs)}</td>
+                          <DataTableCell dt={dt} col="count" row={r} value={fmtNum(r.count)} />
+                          <DataTableCell dt={dt} col="totalMs" row={r} value={fmtMs(r.totalMs)} />
+                          <DataTableCell dt={dt} col="avgMs" row={r} value={fmtMs(r.avgMs)} />
+                          <DataTableCell dt={dt} col="p95Ms" row={r} value={fmtMs(r.p95Ms)} />
+                          <DataTableCell dt={dt} col="p99Ms" row={r} value={fmtMs(r.p99Ms)} />
+                          <DataTableCell dt={dt} col="maxMs" row={r} value={fmtMs(r.maxMs)} />
                           <td className="num">
                             {r.errorCount > 0
                               ? <span className={`badge ${errCls}`}>{r.errorCount} ({errPct.toFixed(1)}%)</span>
@@ -319,7 +317,9 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                           <tr>
                             {/* Spans every column — derived, not a literal:
                                 the previous hardcoded 10 would have gone
-                                stale the moment a column was added. */}
+                                stale the moment a column was added.
+                                v0.10.943 — `row-detail` DEĞİL: zemin bg0 ve üst
+                                çizgi yok (sınıf bg2 + çizgi çizer, görünür fark). */}
                             <td colSpan={cols.length}
                                 style={{ background: 'var(--bg0)', padding: '12px 16px' }}>
                               <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
@@ -333,7 +333,6 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                                 border: '1px solid var(--border)',
                                 borderRadius: 6,
                                 padding: '10px 12px',
-                                fontFamily: 'monospace',
                               }}>
                                 {r.sampleStatement}
                               </pre>
@@ -377,7 +376,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
       <span style={{ color: 'var(--text3)' }}>{label}</span>
-      <span style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{value}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{value}</span>
     </span>
   );
 }

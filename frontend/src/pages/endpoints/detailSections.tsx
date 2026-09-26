@@ -113,7 +113,7 @@ export function HistogramSection({ detail }: { detail: EndpointDetail }) {
           </div>
           <div style={{
             display: 'flex', justifyContent: 'space-between',
-            fontSize: 9, color: 'var(--text3)', fontFamily: 'ui-monospace, monospace',
+            fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--font-mono)',
             marginTop: 2,
           }}>
             <span>{fmtMsShort(t.bins.length > 1 ? t.bins[0] : 0)}</span>
@@ -284,14 +284,14 @@ export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
         </div>
       )}
       {traces && traces.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ width: '100%', tableLayout: 'fixed' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(t => (
                 <tr key={t.traceId}>
-                  <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
+                  <td className="mono cell-faint">
                     {tsLong(t.timeNs)}
                   </td>
                   <td>
@@ -301,10 +301,8 @@ export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
                       {t.traceId.slice(0, 16)}… →
                     </Link>
                   </td>
-                  <td style={{
-                    fontSize: 11.5, maxWidth: 0,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }} title={t.statusMsg || t.spanName}>
+                  {/* v0.10.943 — hata metni satırın asıl içeriği: 11.5px düştü, ikincil ton almadı. */}
+                  <td style={{ maxWidth: 0 }} title={t.statusMsg || t.spanName}>
                     {t.httpStatus ? (
                       <span className={`badge ${t.httpStatus >= 500 ? 'b-err' : 'b-warn'}`}
                         style={{ fontSize: 9, marginRight: 6 }}>
@@ -314,7 +312,7 @@ export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
                     {t.statusMsg || t.spanName}
                     {t.errorSpans > 1 ? ` · ${t.errorSpans} error spans` : ''}
                   </td>
-                  <td className="num mono">{t.durationMs.toFixed(1)} ms</td>
+                  <td className="num">{t.durationMs.toFixed(1)} ms</td>
                 </tr>
               ))}
             </tbody>
@@ -406,8 +404,8 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
         </div>
       )}
       {by && rows.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -416,17 +414,17 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
                 const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
                 return (
                   <tr key={`${r.value}|${i}`}>
-                    <td className="mono" style={{ fontSize: 11 }} title={r.value}>{r.value}</td>
-                    <td className="num mono">{fmtNum(r.calls)}</td>
-                    <td className="num mono">{fmtNum(r.errors)}</td>
-                    <td className="num mono">
+                    <td className="mono" title={r.value}>{r.value}</td>
+                    <td className="num">{fmtNum(r.calls)}</td>
+                    <td className="num">{fmtNum(r.errors)}</td>
+                    <td className="num">
                       <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
                         {r.errorRate.toFixed(2)}%
                       </span>
                     </td>
-                    <td className="num mono">{r.avgMs.toFixed(1)}ms</td>
-                    <td className="num mono">{r.p50Ms != null ? `${r.p50Ms.toFixed(1)}ms` : '—'}</td>
-                    <td className="num mono">{r.p99Ms.toFixed(1)}ms</td>
+                    <td className="num">{r.avgMs.toFixed(1)}ms</td>
+                    <td className="num">{r.p50Ms != null ? `${r.p50Ms.toFixed(1)}ms` : '—'}</td>
+                    <td className="num">{r.p99Ms.toFixed(1)}ms</td>
                   </tr>
                 );
               })}
@@ -627,8 +625,8 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
         </Empty>
       )}
       {rows.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -637,22 +635,20 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
                 const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
                 return (
                   <tr key={r.service}>
-                    <td style={{
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }} title={r.service}>
+                    <td title={r.service}>
                       <Link to={serviceHref(r.service, { range: { fromNs: from, toNs: to } })}
                         className="mono" style={{ fontSize: 11.5 }}>
                         {r.service}
                       </Link>
                     </td>
-                    <td className="num mono">{fmtNum(r.calls)}</td>
-                    <td className="num mono">
+                    <td className="num">{fmtNum(r.calls)}</td>
+                    <td className="num">
                       <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
                         {r.errorRate.toFixed(2)}%
                       </span>
                     </td>
-                    <td className="num mono">{r.p95Ms.toFixed(1)} ms</td>
-                    <td className="num mono"
+                    <td className="num">{r.p95Ms.toFixed(1)} ms</td>
+                    <td className="num"
                       title="Bu çağıranın bu rotanın toplam süresinden aldığı pay. Sunucudan geliyor; payda rotanın kendi toplamı (databases tarafındaki kardeşinin paydası yüklenmiş satırlar).">
                       {r.sharePct.toFixed(1)}%</td>
                   </tr>

@@ -29,7 +29,9 @@ describe('KafkaClientsSection yerleşimi', () => {
   });
   it('v0.10.553 — Top-ops operasyon türü kolonu yalnız queue kipinde', () => {
     expect(drawer).toContain("kind === 'queue'\n      ? [{ id: 'op', label: 'Type'");
-    expect(drawer).toContain("{o.operation ?? '—'}");
+    // v0.10.943 (tablo standardı dilim 3) — hücre DataTableCell: boş tür
+    // (undefined) primitifin soluk "—" glifiyle çizilir (T4), `?? '—'` yerine.
+    expect(drawer).toContain('<DataTableCell dt={topOpsDt} col="op" row={o} value={o.operation} />');
   });
   it('liste sayfasına grafik/bölüm girmez', () => {
     expect(list).not.toContain('KafkaClientsSection');

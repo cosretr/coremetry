@@ -80,7 +80,7 @@ export function OpsCard({ service, range, operations }: {
         </span>
       </div>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -90,7 +90,7 @@ export function OpsCard({ service, range, operations }: {
                 <td><span className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.name}>{r.name}</span></td>
                 <td className="num">{r.spanCount >= 1000 ? `${(r.spanCount / 1000).toFixed(1)}K` : r.spanCount}</td>
                 <td className="num"><span className={errBadge(r.errorRate)}>{r.errorRate.toFixed(2)}%</span></td>
-                <td className="num mono">{r.p99DurationMs.toFixed(0)} ms</td>
+                <td className="num">{r.p99DurationMs.toFixed(0)} ms</td>
                 <td><div style={{ width: 84, marginLeft: 'auto' }}><Sparkline values={r.sparkline ?? []} width={84} height={22} /></div></td>
               </tr>
             ))}
@@ -169,7 +169,7 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -194,10 +194,11 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
                     </div>
                   </td>
                   <td className="num">{r.count >= 1000 ? `${(r.count / 1000).toFixed(1)}K` : r.count}</td>
-                  <td className="num mono">{r.p99Ms.toFixed(0)} ms</td>
-                  <td>
+                  <td className="num">{r.p99Ms.toFixed(0)} ms</td>
+                  {/* v0.10.943 — sayı arayüz fontunda (S2); tabular-nums hücrenin `num`undan. */}
+                  <td className="num">
                     <div className="ov-barcell">
-                      <span className="mono" style={{ minWidth: 52 }}>{r.avgMs.toFixed(1)} ms</span>
+                      <span style={{ minWidth: 52 }}>{r.avgMs.toFixed(1)} ms</span>
                       <span className="ov-minibar"><i style={{ width: `${(r.avgMs / maxTime) * 100}%`, background: r.errorCount > 0 ? 'var(--warn)' : 'var(--teal)' }} /></span>
                     </div>
                   </td>

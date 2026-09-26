@@ -9,10 +9,9 @@ import { Drawer, DrawerSection, DrawerTrendRow } from '@/components/ui';
 import { api } from '@/lib/api';
 import { timeRangeToNs, fmtNum, fmtFixed } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { ExternalPaths } from '@/components/ExternalPaths';
-import type { DataTableColumn } from '@/lib/dataTable';
-import type { ExternalHost, ExternalHostDetail, TimeRange } from '@/lib/types';
+import type { ExternalCaller, ExternalHost, ExternalHostDetail, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -34,15 +33,31 @@ function CategoryBadge({ category }: { category?: string }) {
   return <span className="badge b-gray">{category}</span>;
 }
 
-const EXT_COLS: DataTableColumn<ExternalHost>[] = [
-  { id: 'host',      label: 'Host',       sortValue: r => r.display || r.host, naturalDir: 'asc', width: 260 },
+// v0.10.943 — tablo standardı dilim 3: hücre görünümü kolon bayraklarında
+// (mono / numeric / tone); sayılar arayüz fontunda (S2).
+const EXT_COLS: ColumnDef<ExternalHost>[] = [
+  { id: 'host',      label: 'Host',       sortValue: r => r.display || r.host, naturalDir: 'asc', width: 260, mono: true },
   { id: 'category',  label: 'Category',   sortValue: r => r.category ?? '',    naturalDir: 'asc', width: 110 },
   { id: 'calls',     label: 'Calls',      sortValue: r => r.calls,     numeric: true, width: 100 },
   { id: 'rpm',       label: 'Req/min',    sortValue: r => r.calls,     numeric: true, width: 90 },
-  { id: 'errorRate', label: 'Error %',    sortValue: r => r.errorRate, numeric: true, width: 90 },
+  { id: 'errorRate', label: 'Error %',    sortValue: r => r.errorRate, numeric: true, width: 90,
+    tone: r => (r.errorRate > 5 ? 'err' : r.errorRate > 1 ? 'warn' : 'faint') },
   { id: 'avgMs',     label: 'Avg ms',     sortValue: r => r.avgMs,     numeric: true, width: 90 },
-  { id: 'p99Ms',     label: 'P99 ms',     sortValue: r => r.p99Ms,     numeric: true, width: 90 },
+  { id: 'p99Ms',     label: 'P99 ms',     sortValue: r => r.p99Ms,     numeric: true, width: 90,
+    tone: r => (r.p99Ms > 1000 ? 'err' : r.p99Ms > 200 ? 'warn' : undefined) },
   { id: 'callers',   label: 'Callers',    sortValue: r => r.callers,   numeric: true, width: 200 },
+];
+
+// v0.10.943 — tablo standardı T1: host'u çağıran servisler (sunucu en çok
+// 100) kayıt listesi → useDataTable. initialSort yok: satırlar sunucunun sırasında.
+// Sayı kolonları değere göre dar (≤7 karakter): kalan genişlik esnek Service'e.
+const CALLER_COLS: ColumnDef<ExternalCaller>[] = [
+  { id: 'service',   label: 'Service', sortValue: c => c.service,   naturalDir: 'asc', flex: true, mono: true },
+  { id: 'calls',     label: 'Calls',   sortValue: c => c.calls,     numeric: true, naturalDir: 'desc', width: 76 },
+  { id: 'errorRate', label: 'Err %',   sortValue: c => c.errorRate, numeric: true, naturalDir: 'desc', width: 70,
+    tone: c => (c.errorRate > 5 ? 'err' : c.errorRate > 1 ? 'warn' : 'faint') },
+  { id: 'avgMs',     label: 'Avg',     sortValue: c => c.avgMs,     numeric: true, naturalDir: 'desc', width: 76 },
+  { id: 'p99Ms',     label: 'P99',     sortValue: c => c.p99Ms,     numeric: true, naturalDir: 'desc', width: 70 },
 ];
 
 export default function ExternalPage() {
@@ -108,54 +123,50 @@ export default function ExternalPage() {
           </Empty>
         )}
         {rows && rows.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
-                {dt.sortedRows.map((r, i) => (
-                  <tr key={r.host} {...dt.rowProps(i)}
-                    {...rowActivation(() => openHost(r.host))}
-                    style={{
-                      contentVisibility: 'auto',
-                      containIntrinsicSize: 'auto 36px',
-                    }}>
-                    <td>
-                      <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, fontWeight: 500 }}
-                        title={r.topLabels.length ? `Top operations:\n${r.topLabels.join('\n')}` : r.host}>
-                        {r.display
-                          ? <>{r.display} <span style={{ color: 'var(--text3)', fontWeight: 400 }}>({r.host})</span></>
-                          : r.host}
-                      </span>
-                    </td>
-                    <td><CategoryBadge category={r.category} /></td>
-                    <td className="num mono">{fmtNum(r.calls)}</td>
-                    <td className="num mono">{fmtFixed(r.calls / windowMin, 1)}</td>
-                    <td className="num mono" style={{
-                      color: r.errorRate > 5 ? 'var(--err)'
-                        : r.errorRate > 1 ? 'var(--warn)' : 'var(--text3)',
-                    }}>{r.errorRate.toFixed(2)}</td>
-                    <td className="num mono">{r.avgMs.toFixed(1)}</td>
-                    <td className="num mono" style={{
-                      color: r.p99Ms > 1000 ? 'var(--err)'
-                        : r.p99Ms > 200 ? 'var(--warn)' : undefined,
-                    }}>{r.p99Ms.toFixed(0)}</td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <span style={{ fontSize: 11, color: 'var(--text2)' }}
-                        title={r.callerNames.join(', ')}>
-                        {r.callers}{' · '}
-                        {r.callerNames.slice(0, 3).map((c, i) => (
-                          <span key={c}>
-                            {i > 0 && ', '}
-                            <Link to={serviceHref(c, { range })}
-                              style={{ fontSize: 11 }}>{c}</Link>
-                          </span>
-                        ))}
-                        {r.callers > 3 && ` +${r.callers - 3}`}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {dt.sortedRows.map((r, i) => {
+                  const rp = dt.rowProps(i, r);
+                  return (
+                    <tr key={r.host} {...rp}
+                      {...rowActivation(() => openHost(r.host))}
+                      className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                      <DataTableCell dt={dt} col="host" row={r}>
+                        <span style={{ fontWeight: 500 }}
+                          title={r.topLabels.length ? `Top operations:\n${r.topLabels.join('\n')}` : r.host}>
+                          {r.display
+                            ? <>{r.display} <span style={{ color: 'var(--text3)', fontWeight: 400 }}>({r.host})</span></>
+                            : r.host}
+                        </span>
+                      </DataTableCell>
+                      <DataTableCell dt={dt} col="category" row={r}><CategoryBadge category={r.category} /></DataTableCell>
+                      <DataTableCell dt={dt} col="calls" row={r} value={fmtNum(r.calls)} />
+                      <DataTableCell dt={dt} col="rpm" row={r} value={fmtFixed(r.calls / windowMin, 1)} />
+                      <DataTableCell dt={dt} col="errorRate" row={r} value={r.errorRate.toFixed(2)} />
+                      <DataTableCell dt={dt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
+                      <DataTableCell dt={dt} col="p99Ms" row={r} value={r.p99Ms.toFixed(0)} />
+                      {/* v0.10.943 — kolon `numeric` (başlık sağda) ama hücre bugünkü gibi
+                          sola yaslı metin: cellProps'un `num`u burada kullanılmaz. */}
+                      <td onClick={e => e.stopPropagation()}>
+                        <span style={{ fontSize: 11, color: 'var(--text2)' }}
+                          title={r.callerNames.join(', ')}>
+                          {r.callers}{' · '}
+                          {r.callerNames.slice(0, 3).map((c, i) => (
+                            <span key={c}>
+                              {i > 0 && ', '}
+                              <Link to={serviceHref(c, { range })}
+                                style={{ fontSize: 11 }}>{c}</Link>
+                            </span>
+                          ))}
+                          {r.callers > 3 && ` +${r.callers - 3}`}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -187,6 +198,7 @@ function ExternalHostDrawer({ host, range, onClose }: {
   });
   const detail: ExternalHostDetail | null | undefined =
     q.isPending ? undefined : q.isError ? null : q.data;
+  const callersDt = useDataTable<ExternalCaller>({ storageKey: 'external-host-callers', columns: CALLER_COLS, rows: detail?.callers ?? [] });
 
   // Explore pre-filtered to this destination's client spans — the
   // same DSL deep-link shape DependenciesTable uses.
@@ -200,14 +212,14 @@ function ExternalHostDrawer({ host, range, onClose }: {
   return (
     <Drawer onClose={onClose} header={
       <>
-        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14, fontWeight: 600 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
           {detail?.display || host}
         </span>
         <CategoryBadge category={detail?.category} />
       </>
     }>
         {detail?.display && (
-          <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'ui-monospace, monospace', marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
             {host}
           </div>
         )}
@@ -237,33 +249,22 @@ function ExternalHostDrawer({ host, range, onClose }: {
               {detail.callers.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>No callers in this window.</div>
               ) : (
-                <table style={{ width: '100%', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ color: 'var(--text3)', fontSize: 11, textAlign: 'left' }}>
-                      <th>Service</th>
-                      <th className="num">Calls</th>
-                      <th className="num">Err %</th>
-                      <th className="num">Avg</th>
-                      <th className="num">P99</th>
-                    </tr>
-                  </thead>
+                <table {...callersDt.tableProps}>
+                  <DataTableColgroup dt={callersDt} />
+                  <DataTableHead dt={callersDt} />
                   <tbody>
-                    {detail.callers.map(c => (
+                    {callersDt.sortedRows.map(c => (
                       <tr key={c.service}>
-                        <td>
+                        <DataTableCell dt={callersDt} col="service" row={c}>
                           <Link to={serviceHref(c.service, { range })}
-                            title={c.topLabels.join('\n')}
-                            style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
+                            title={[c.service, ...c.topLabels].join('\n')}>
                             {c.service}
                           </Link>
-                        </td>
-                        <td className="num mono">{fmtNum(c.calls)}</td>
-                        <td className="num mono" style={{
-                          color: c.errorRate > 5 ? 'var(--err)'
-                            : c.errorRate > 1 ? 'var(--warn)' : 'var(--text3)',
-                        }}>{c.errorRate.toFixed(2)}</td>
-                        <td className="num mono">{c.avgMs.toFixed(1)}</td>
-                        <td className="num mono">{c.p99Ms.toFixed(0)}</td>
+                        </DataTableCell>
+                        <DataTableCell dt={callersDt} col="calls" row={c} value={fmtNum(c.calls)} />
+                        <DataTableCell dt={callersDt} col="errorRate" row={c} value={c.errorRate.toFixed(2)} />
+                        <DataTableCell dt={callersDt} col="avgMs" row={c} value={c.avgMs.toFixed(1)} />
+                        <DataTableCell dt={callersDt} col="p99Ms" row={c} value={c.p99Ms.toFixed(0)} />
                       </tr>
                     ))}
                   </tbody>

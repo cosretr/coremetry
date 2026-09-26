@@ -3,23 +3,39 @@
 // rolloutHref.test.ts pinler); içerik /api/rollout/detail (30 s sunucu
 // cache'i, staleTime aynı). Eski Deployment Report gövdesinin tek-rollout
 // daraltması: servis başına health verdict + önce/sonra RED + deploy'dan
-// beri problem / anomali / yeni hata. Küçük sabit listeler ham <table>
-// (frontend-conventions: sabit ≤10 satır meşru); 20'de kesilir ve ilgili
-// sayfaya köprü verir.
+// beri problem / anomali / yeni hata. Sinyal listeleri 20'de kesilir ve
+// ilgili sayfaya köprü verir.
+// v0.10.943 — tablo standardı T1: Geçiş öznitelik paneli KeyValue, servis
+// listesi (sunucu en çok 200) useDataTable; sinyal önizlemesi statik tablo.
 import { Link } from 'react-router-dom';
-import { Drawer, DrawerSection, Badge } from '@/components/ui';
+import { Drawer, DrawerSection, Badge, KeyValue, KeyValueRow } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { serviceHref } from '@/lib/serviceHref';
 import { fmtDateTime, fmtNum } from '@/lib/utils';
 import { useRolloutDetail, useEntityClusters } from '@/lib/queries';
 import { CopyButton } from '@/components/CopyButton';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { statusTone, statusLabel, statusTitle, shortRevision, imageDiff, imageRef, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone, rolloutPlaceLabel } from '@/lib/rolloutRow';
 import type { RolloutIdParam } from '@/lib/rolloutRow';
+import type { ServiceReportSection } from '@/lib/types';
 
 function pct(n: number) { return `%${n.toFixed(1)}`; }
 function ms(n: number) { return `${n.toFixed(0)}ms`; }
 function rps(n: number) { return `${n.toFixed(2)}/s`; }
 const CAP = 20;
+
+// v0.10.943 — initialSort yok: satırlar sunucunun sırasında. Önce/sonra
+// hücreleri iki değer taşır; sıralama yalnız ad ve sağlıkta anlamlı. Sabit
+// genişlikte (ve dar ekranda fit küçültünce) "…" sonraki değeri keserdi —
+// hücre ok'tan sarar (truncate 'wrap').
+const HEALTH_RANK: Record<ServiceReportSection['health'], number> = { red: 3, yellow: 2, green: 1, '': 0 };
+const SVC_COLS: ColumnDef<ServiceReportSection>[] = [
+  { id: 'service', label: 'Servis',    sortValue: s => s.service,             naturalDir: 'asc',  flex: true, mono: true },
+  { id: 'health',  label: 'Sağlık',    sortValue: s => HEALTH_RANK[s.health], naturalDir: 'desc', width: 90 },
+  { id: 'err',     label: 'Hata% ö/s', numeric: true, width: 130, truncate: 'wrap' },
+  { id: 'p99',     label: 'p99 ö/s',   numeric: true, width: 140, truncate: 'wrap' },
+  { id: 'rps',     label: 'İstek ö/s', numeric: true, width: 160, truncate: 'wrap' },
+];
 
 export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: () => void }) {
   const q = useRolloutDetail(id);
@@ -29,10 +45,11 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
   // (Rollouts sayfasıyla aynı çözüm); liste yoksa/bayrak kapalıysa ID.
   const clustersQ = useEntityClusters();
   const clusterName = clustersQ.data?.clusters?.find(c => c.id === id.clusterId)?.name;
+  const dt = useDataTable<ServiceReportSection>({ storageKey: 'rollout-drawer-services', columns: SVC_COLS, rows: d?.services ?? [] });
   return (
     <Drawer onClose={onClose} width={760} header={
       <>
-        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14, fontWeight: 600 }}>{id.workload}</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>{id.workload}</span>
         <span className="field-hint" title={`küme ${clusterName || id.clusterId} · namespace ${id.namespace}`}>{clusterName || id.clusterId} · {id.namespace}</span>
         {d && <Badge tone={statusTone(d.rollout.status)}>{statusLabel(d.rollout.status)}</Badge>}
         {d && <span className="field-hint">{shortRevision(d.rollout.revision, d.rollout.workload)} · {imageDiff(d.rollout)} · {fmtDateTime(new Date(d.rollout.startedAt))}</span>}
@@ -50,24 +67,20 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
         // (imaj değişti → Deployment / aynı → config rollout) burada.
         const r = d.rollout;
         const k = rolloutChangeKind(r);
-        // v0.10.338 — Operator-reported: revizyon ve imaj "…" ile kırpılıyordu.
-        // Sebep globals.css'in genel `tbody td { nowrap; max-width:320px;
-        // ellipsis }` kuralı — wordBreak tek başına yetmiyordu. `.td-full`
-        // hücreyi sarar; tam kimlik yanında kopyalama düğmesi.
-        const mono = { fontFamily: 'ui-monospace, monospace' };
+        // v0.10.338 — Operator-reported: revizyon ve imaj "…" ile kırpılıyordu
+        // (genel `tbody td` nowrap + 320px kuralı); tam kimlik yanında kopyalama
+        // düğmesi. v0.10.943 — öznitelik paneli KeyValue: değer kırpılmaz, sarar.
         const curImage = imageRef(r.image, r.imageTag);
         return (
           <DrawerSection title="Geçiş">
-            <table style={{ width: '100%' }}>
-              <tbody>
-                <tr><th style={{ textAlign: 'left', width: 110 }}>tür</th><td className="td-full"><Badge tone={changeKindTone(k)}>{changeKindLabel(k)}</Badge> <span className="field-hint">{changeKindTitle(k)}</span></td></tr>
-                <tr><th style={{ textAlign: 'left' }}>durum</th><td className="td-full"><Badge tone={statusTone(r.status)}>{statusLabel(r.status)}</Badge> <span className="field-hint">{statusTitle(r.status)}</span></td></tr>
-                <tr><th style={{ textAlign: 'left' }}>küme</th><td className="td-full" style={mono} title={`cluster id ${r.clusterId}`}>{rolloutPlaceLabel(r, clusterName)}</td></tr>
-                <tr><th style={{ textAlign: 'left' }}>revizyon</th><td className="td-full" style={mono}>{r.prevRevision || '—'} → <b>{r.revision}</b> <CopyButton value={r.revision} title="Revizyonu kopyala" /></td></tr>
-                <tr><th style={{ textAlign: 'left' }}>imaj</th><td className="td-full" style={mono}>{imageRef(r.prevImage, r.prevImageTag)} → <b>{curImage}</b> {curImage !== '—' && <CopyButton value={curImage} title="İmajı (repo:tag) kopyala" />}</td></tr>
-                <tr><th style={{ textAlign: 'left' }}>zaman</th><td className="td-full field-hint">başladı {fmtDateTime(new Date(r.startedAt))}{r.completedAt > 0 ? ` · tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''}{r.detectedBy ? ` · kaynak ${r.detectedBy}` : ''}</td></tr>
-              </tbody>
-            </table>
+            <KeyValue>
+              <KeyValueRow k="tür" v={<><Badge tone={changeKindTone(k)}>{changeKindLabel(k)}</Badge> <span className="field-hint">{changeKindTitle(k)}</span></>} />
+              <KeyValueRow k="durum" v={<><Badge tone={statusTone(r.status)}>{statusLabel(r.status)}</Badge> <span className="field-hint">{statusTitle(r.status)}</span></>} />
+              <KeyValueRow k="küme" mono title={`cluster id ${r.clusterId}`} v={rolloutPlaceLabel(r, clusterName)} />
+              <KeyValueRow k="revizyon" mono v={<>{r.prevRevision || '—'} → <b>{r.revision}</b> <CopyButton value={r.revision} title="Revizyonu kopyala" /></>} />
+              <KeyValueRow k="imaj" mono v={<>{imageRef(r.prevImage, r.prevImageTag)} → <b>{curImage}</b> {curImage !== '—' && <CopyButton value={curImage} title="İmajı (repo:tag) kopyala" />}</>} />
+              <KeyValueRow k="zaman" v={<span className="field-hint">başladı {fmtDateTime(new Date(r.startedAt))}{r.completedAt > 0 ? ` · tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''}{r.detectedBy ? ` · kaynak ${r.detectedBy}` : ''}</span>} />
+            </KeyValue>
           </DrawerSection>
         );
       })()}
@@ -78,26 +91,29 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
         <>
           <DrawerSection title={`Servis sağlığı — deploy öncesi/sonrası (${d.services.length})`}>
             <div className="table-wrap">
-              <table style={{ width: '100%' }}>
-                <thead><tr><th>Servis</th><th>Sağlık</th><th style={{ textAlign: 'right' }}>Hata% ö/s</th><th style={{ textAlign: 'right' }}>p99 ö/s</th><th style={{ textAlign: 'right' }}>İstek ö/s</th></tr></thead>
+              <table {...dt.tableProps}>
+                <DataTableColgroup dt={dt} />
+                <DataTableHead dt={dt} />
                 <tbody>
-                  {d.services.map(s => (
+                  {dt.sortedRows.map(s => (
                     <tr key={s.service}>
-                      <td className="mono" style={{ fontSize: 12 }}><Link to={serviceHref(s.service, { params: { range: `custom:${Math.round(d.since / 1e6)}-${Math.round(d.generatedAt / 1e6)}` } })} className="sec">{s.service}</Link></td>
+                      <DataTableCell dt={dt} col="service" row={s} value={s.service}>
+                        <Link to={serviceHref(s.service, { params: { range: `custom:${Math.round(d.since / 1e6)}-${Math.round(d.generatedAt / 1e6)}` } })} className="sec">{s.service}</Link>
+                      </DataTableCell>
                       {/* v0.10.929 (K5) — green = sağlıklı durum, nötr; renk yalnız sapmada. */}
-                      <td><Badge tone={s.health === 'red' ? 'danger' : s.health === 'yellow' ? 'warning' : 'neutral'}>{s.health || 'n/a'}</Badge></td>
+                      <DataTableCell dt={dt} col="health" row={s}><Badge tone={s.health === 'red' ? 'danger' : s.health === 'yellow' ? 'warning' : 'neutral'}>{s.health || 'n/a'}</Badge></DataTableCell>
                       {s.after.throughput === 0 ? (
                         <>
                           {/* deploy'dan sonra hiç span yok: sahte %0.0/0ms basma */}
-                          <td className="num mono">{pct(s.before.errorRate)} → <span style={{ color: 'var(--warn)' }}>—</span></td>
-                          <td className="num mono">{ms(s.before.p99Ms)} → <span style={{ color: 'var(--warn)' }}>—</span></td>
-                          <td className="num mono">{rps(s.before.throughput)} → <span style={{ color: 'var(--warn)' }} title="deploy'dan sonra span görülmedi">yok</span></td>
+                          <DataTableCell dt={dt} col="err" row={s}>{pct(s.before.errorRate)} → <span style={{ color: 'var(--warn)' }}>—</span></DataTableCell>
+                          <DataTableCell dt={dt} col="p99" row={s}>{ms(s.before.p99Ms)} → <span style={{ color: 'var(--warn)' }}>—</span></DataTableCell>
+                          <DataTableCell dt={dt} col="rps" row={s}>{rps(s.before.throughput)} → <span style={{ color: 'var(--warn)' }} title="deploy'dan sonra span görülmedi">yok</span></DataTableCell>
                         </>
                       ) : (
                         <>
-                          <td className="num mono">{pct(s.before.errorRate)} → <span style={s.after.errorRate > s.before.errorRate ? { color: 'var(--err)' } : undefined}>{pct(s.after.errorRate)}</span></td>
-                          <td className="num mono">{ms(s.before.p99Ms)} → <span style={s.after.p99Ms > s.before.p99Ms ? { color: 'var(--err)' } : undefined}>{ms(s.after.p99Ms)}</span></td>
-                          <td className="num mono">{rps(s.before.throughput)} → {rps(s.after.throughput)}</td>
+                          <DataTableCell dt={dt} col="err" row={s}>{pct(s.before.errorRate)} → <span style={s.after.errorRate > s.before.errorRate ? { color: 'var(--err)' } : undefined}>{pct(s.after.errorRate)}</span></DataTableCell>
+                          <DataTableCell dt={dt} col="p99" row={s}>{ms(s.before.p99Ms)} → <span style={s.after.p99Ms > s.before.p99Ms ? { color: 'var(--err)' } : undefined}>{ms(s.after.p99Ms)}</span></DataTableCell>
+                          <DataTableCell dt={dt} col="rps" row={s}>{rps(s.before.throughput)} → {rps(s.after.throughput)}</DataTableCell>
                         </>
                       )}
                     </tr>
@@ -122,14 +138,17 @@ function SignalSection({ title, rows, moreHref }: { title: string; rows: { key: 
         <div style={{ fontSize: 12, color: 'var(--text3)' }}>yok</div>
       ) : (
         <div className="table-wrap">
-          <table style={{ width: '100%' }}>
+          {/* v0.10.943 — statik tablo (T1): başlıksız çekmece önizlemesi, en çok
+              CAP satır, sıralanmaz; tam liste moreHref sayfasında. */}
+          <table>
+            <colgroup><col style={{ width: 160 }} /><col style={{ width: 120 }} /><col /><col style={{ width: 150 }} /></colgroup>
             <tbody>
               {rows.slice(0, CAP).map(r => (
                 <tr key={r.key}>
-                  <td className="mono" style={{ fontSize: 12, width: 160 }}>{r.svc}</td>
-                  <td className="field-hint" style={{ width: 120 }}>{r.a}</td>
-                  <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }} title={r.b}>{r.b}</td>
-                  <td className="num mono" style={{ width: 150 }}>{fmtDateTime(new Date(Math.round(r.at / 1e6)))}</td>
+                  <td className="mono">{r.svc}</td>
+                  <td className="field-hint">{r.a}</td>
+                  <td title={r.b}>{r.b}</td>
+                  <td className="num">{fmtDateTime(new Date(Math.round(r.at / 1e6)))}</td>
                 </tr>
               ))}
             </tbody>

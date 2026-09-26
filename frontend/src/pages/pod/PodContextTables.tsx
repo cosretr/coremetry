@@ -4,14 +4,15 @@
 // BİLİNMİYOR), etiketler ve ömür tarihçesi. v0.10.135 PodEntityPanel'in çip/
 // link satırları tabloya terfi etti; kardeş tablosunda «Node» sütunu bilinçli
 // YOK (siblings EntityRecord döner, runs_on yalnız hedef pod için çözülür —
-// inceleme must-fix). Konteyner/etiket tabloları ≤ ~10 satır ve sıralanmaz →
-// ham <table> meşru; kardeşler useDataTable.
+// inceleme must-fix). Konteyner tablosu ≤ ~10 satır ve sıralanmaz → ham
+// <table> meşru; kardeşler useDataTable.
+// v0.10.943 (tablo standardı dilim 3, T1) — etiketler bir öznitelik paneli →
+// KeyValue; ömür tarihçesi statik tablo kalır (gerekçe tablonun içinde).
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Button } from '@/components/ui';
+import { Badge, Button, KeyValue } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtDateTime, fmtBytes } from '@/lib/utils';
 import { fmtCores, podPhaseBadge } from '@/pages/clusters/thresholds';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
@@ -41,6 +42,7 @@ export function PodContainersTable({ ctr, pending, containerRecs }: {
         <div className="pod-cap">KSM serisi yok{containerRecs && containerRecs.length > 0 ? ` · konteynerler: ${containerRecs.map(c => c.name).join(', ')}` : ''}</div>
       ) : (
         <div className="table-wrap">
+          {/* v0.10.943 — statik tablo (T1): pod başına ≤ ~10 konteyner, sıralanmaz. */}
           <table>
             <thead><tr><th>Ad</th><th>Ready</th><th className="num">Restarts</th><th>Waiting</th><th>Son sonlanma</th></tr></thead>
             <tbody>
@@ -48,7 +50,7 @@ export function PodContainersTable({ ctr, pending, containerRecs }: {
                 <tr key={c.name}>
                   <td className="mono">{c.name}</td>
                   <td>{c.readyKnown ? <Badge tone={containerTone(c)}>{c.ready ? 'ready' : 'not ready'}</Badge> : <span className="field-hint" title="kube_pod_container_status_ready serisi yok">?</span>}</td>
-                  <td className="num" style={c.restarts > 0 ? { color: 'var(--warn)' } : undefined}>{c.restarts}</td>
+                  <td className={c.restarts > 0 ? 'num cell-warn' : 'num'}>{c.restarts}</td>
                   {/* v0.10.929 (K5) — olağan başlangıç geçişi (ContainerCreating /
                       PodInitializing) nötr; kubelet arıza nedenleri kırmızı. */}
                   <td>{c.waitingReason ? <Badge tone={waitingReasonTone(c.waitingReason)}>{c.waitingReason}</Badge> : '—'}</td>
@@ -66,11 +68,11 @@ export function PodContainersTable({ ctr, pending, containerRecs }: {
   );
 }
 
-const SIB_COLS: DataTableColumn<SiblingRow>[] = [
+const SIB_COLS: ColumnDef<SiblingRow>[] = [
   { id: 'pod', label: 'Pod', width: 280, sortValue: r => r.name, naturalDir: 'asc' },
   { id: 'status', label: 'Durum', width: 90, sortValue: r => entityLiveness(r.rec) },
   { id: 'phase', label: 'Faz', width: 110, sortValue: r => r.phase ?? '' },
-  { id: 'restarts', label: 'Restarts', width: 90, numeric: true, sortValue: r => r.restarts ?? -1 },
+  { id: 'restarts', label: 'Restarts', width: 90, numeric: true, sortValue: r => r.restarts ?? -1, tone: r => ((r.restarts ?? 0) > 0 ? 'warn' : undefined) },
   { id: 'cpu', label: 'CPU', width: 90, numeric: true, sortValue: r => r.cpuCores ?? -1 },
   { id: 'mem', label: 'Mem', width: 100, numeric: true, sortValue: r => r.memBytes ?? -1 },
 ];
@@ -88,7 +90,7 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
   return (
     <>
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -102,9 +104,9 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
                   </td>
                   <td>{live === 'live' ? <Badge>live</Badge> : live === 'stale' ? <Badge tone="warning">stale</Badge> : <Badge tone="danger">gone</Badge>}</td>
                   <td>{r.known && r.phase ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span> : <span className="field-hint" title="topk 500 listesinde yok — faz bilinmiyor">—</span>}</td>
-                  <td className="num" style={(r.restarts ?? 0) > 0 ? { color: 'var(--warn)' } : undefined} title={r.lastTermReason ? `son: ${r.lastTermReason}` : undefined}>{r.restarts === null ? '—' : r.restarts}</td>
-                  <td className="num mono">{r.cpuCores === null ? '—' : fmtCores(r.cpuCores)}</td>
-                  <td className="num mono">{r.memBytes === null ? '—' : fmtBytes(r.memBytes)}</td>
+                  <DataTableCell dt={dt} col="restarts" row={r} title={r.lastTermReason ? `son: ${r.lastTermReason}` : undefined} value={r.restarts === null ? '—' : r.restarts} />
+                  <DataTableCell dt={dt} col="cpu" row={r} value={r.cpuCores === null ? '—' : fmtCores(r.cpuCores)} />
+                  <DataTableCell dt={dt} col="mem" row={r} value={r.memBytes === null ? '—' : fmtBytes(r.memBytes)} />
                 </tr>
               );
             })}
@@ -125,12 +127,8 @@ export function PodLabelsTable({ labels }: { labels: Record<string, string> | un
   const shown = all ? entries : entries.slice(0, 8);
   return (
     <>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Anahtar</th><th>Değer</th></tr></thead>
-          <tbody>{shown.map(([k, v]) => <tr key={k}><td className="mono">{k}</td><td className="mono">{v}</td></tr>)}</tbody>
-        </table>
-      </div>
+      {/* v0.10.943 — etiket değerleri k8s kimlik belirteçleri (uygulama adı, hash) → mono; anahtar etiket, mono değil. */}
+      <KeyValue labelWidth="wide" items={shown.map(([k, v]) => ({ id: k, k, v, mono: true }))} />
       {entries.length > 8 && (
         <div className="pod-cap"><Button variant="secondary" size="xs" onClick={() => setAll(v => !v)}>{all ? 'daha az' : `+${entries.length - 8} etiket daha`}</Button></div>
       )}
@@ -142,6 +140,7 @@ export function PodLifetimesTable({ lifetimes, atMatch, at }: { lifetimes: Entit
   return (
     <>
       <div className="table-wrap">
+        {/* v0.10.943 — statik tablo (T1): aynı ada ait ömürler, sunucu ≤ 50 (pratikte 1–3), sunucu sırası anlamlı; otomatik düzen zaman damgası + uid'yi tam gösterir, dar yarım kolonda kaydırır. */}
         <table>
           <thead><tr><th>Valid from</th><th>Valid to</th><th>Kaynak</th><th>uid</th></tr></thead>
           <tbody>

@@ -6,18 +6,22 @@
 import { useMemo } from 'react';
 import type { TimeRange } from '@/lib/types';
 import { useMessagingClients } from '@/lib/queries/messaging';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { Spinner, Empty } from '@/components/Spinner';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import { worstPartitions, PARTITION_LAG_ROWS, type PartitionLagRow } from './partitionLag';
 
-const COLS: DataTableColumn<PartitionLagRow>[] = [
+// v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında:
+// partition numarası sayı hücresi (num, S2 — başlık zaten sağa yaslıydı),
+// eşik rengi `tone` ile (T9).
+const COLS: ColumnDef<PartitionLagRow>[] = [
   { id: 'partition', label: 'Partition', width: 100, sortValue: r => Number(r.partition), numeric: true },
   { id: 'service', label: 'Servis', width: 220, sortValue: r => r.service },
-  { id: 'client', label: 'İstemci', width: 260, sortValue: r => r.client },
-  { id: 'lag', label: 'Lag', width: 110, sortValue: r => r.lag ?? -1, numeric: true },
-  { id: 'lead', label: 'Lead', width: 110, sortValue: r => r.lead ?? -1, numeric: true },
+  { id: 'client', label: 'İstemci', width: 260, sortValue: r => r.client, mono: true },
+  { id: 'lag', label: 'Lag', width: 110, sortValue: r => r.lag ?? -1, numeric: true,
+    tone: r => (r.lag !== null && r.lag > 1000 ? 'warn' : undefined) },
+  { id: 'lead', label: 'Lead', width: 110, sortValue: r => r.lead ?? -1, numeric: true,
+    tone: r => (r.lead !== null && r.lead < 100 ? 'err' : undefined) },
 ];
 
 export function PartitionLagTable({ system, cluster, destination, range }: {
@@ -52,11 +56,11 @@ export function PartitionLagTable({ system, cluster, destination, range }: {
           <tbody>
             {dt.sortedRows.map(r => (
               <tr key={`${r.service}|${r.client}|${r.partition}`}>
-                <td style={{ fontFamily: 'monospace' }}>{r.partition}</td>
+                <DataTableCell dt={dt} col="partition" row={r} value={r.partition} />
                 <td>{r.service}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.client}</td>
-                <td className="num mono" style={r.lag !== null && r.lag > 1000 ? { color: 'var(--warn)' } : undefined}>{r.lag === null ? '—' : fmtNum(r.lag)}</td>
-                <td className="num mono" style={r.lead !== null && r.lead < 100 ? { color: 'var(--err)' } : undefined}>{r.lead === null ? '—' : fmtNum(r.lead)}</td>
+                <DataTableCell dt={dt} col="client" row={r} value={r.client} />
+                <DataTableCell dt={dt} col="lag" row={r} value={r.lag === null ? null : fmtNum(r.lag)} />
+                <DataTableCell dt={dt} col="lead" row={r} value={r.lead === null ? null : fmtNum(r.lead)} />
               </tr>
             ))}
           </tbody>

@@ -4,8 +4,7 @@ import { Spinner } from '@/components/Spinner';
 import { api } from '@/lib/api';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import type { TimeRange, PostgresMetrics } from '@/lib/types';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 
 // v0.9.873 (tutarlılık denetimi BT15) — sabit `sizeBytes desc` sıralaması
 // primitife devredildi; artık aynı sıra VARSAYILAN, ama Backends veya
@@ -20,8 +19,10 @@ type PGDatabase = PostgresMetrics['databases'][number];
 // üç literal, biri değişince diğer ikisi sessizce ayrışıyordu.
 const PG_BRAND = '#5b8fb9';
 
-const PG_DB_COLS: DataTableColumn<PGDatabase>[] = [
-  { id: 'name',      label: 'Name',         sortValue: d => d.name,            naturalDir: 'asc', flex: true },
+// v0.10.943 (tablo standardı dilim 3) — ad kimlik hücresi (mono + cell-strong,
+// 11px düştü); sayılar arayüz fontunda (S2).
+const PG_DB_COLS: ColumnDef<PGDatabase>[] = [
+  { id: 'name',      label: 'Name',         sortValue: d => d.name,            naturalDir: 'asc', flex: true, mono: true },
   { id: 'size',      label: 'Size',         sortValue: d => d.sizeBytes,       numeric: true, width: 100 },
   { id: 'backends',  label: 'Backends',     sortValue: d => d.backendCount,    numeric: true, width: 110 },
   { id: 'commits',   label: 'Commits/s',    sortValue: d => d.commitsPerSec,   numeric: true, width: 115 },
@@ -109,8 +110,8 @@ export function PostgresPanel({ instance, range }: { instance: string; range: Ti
           {data.databases.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <SubHeader label={`Databases (${data.databases.length})`} />
-              <div className="table-wrap is-scroll" style={{ maxHeight: 240, overflowY: 'auto' }}>
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <div className="table-wrap is-scroll" style={{ maxHeight: 240 }}>
+                <table {...dbDt.tableProps}>
                   <DataTableColgroup dt={dbDt} />
                   <DataTableHead dt={dbDt} />
                   <tbody>
@@ -122,11 +123,11 @@ export function PostgresPanel({ instance, range }: { instance: string; range: Ti
                           unit: 'B',
                           filters: [{ k: 'database', op: '=', v: [d.name] }],
                         }))}>
-                        <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 }}>{d.name}</td>
-                        <td className="num mono">{fmtBytes(d.sizeBytes)}</td>
-                        <td className="num mono">{fmtNum(d.backendCount)}</td>
-                        <td className="num mono">{fmtNum(d.commitsPerSec)}</td>
-                        <td className="num mono">{fmtNum(d.rollbacksPerSec)}</td>
+                        <DataTableCell dt={dbDt} col="name" row={d} value={d.name} className="cell-strong" />
+                        <DataTableCell dt={dbDt} col="size" row={d} value={fmtBytes(d.sizeBytes)} />
+                        <DataTableCell dt={dbDt} col="backends" row={d} value={fmtNum(d.backendCount)} />
+                        <DataTableCell dt={dbDt} col="commits" row={d} value={fmtNum(d.commitsPerSec)} />
+                        <DataTableCell dt={dbDt} col="rollbacks" row={d} value={fmtNum(d.rollbacksPerSec)} />
                       </tr>
                     ))}
                   </tbody>
@@ -143,7 +144,7 @@ export function PostgresPanel({ instance, range }: { instance: string; range: Ti
                   <span key={l.mode} style={{
                     fontSize: 11, padding: '3px 8px', borderRadius: 3,
                     background: 'var(--bg3)', color: 'var(--text2)',
-                    fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                    fontFamily: 'var(--font-mono)',
                   }}>
                     {l.mode} <span style={{ color: 'var(--text3)' }}>{fmtNum(l.count)}</span>
                   </span>

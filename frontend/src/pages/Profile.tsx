@@ -8,8 +8,7 @@ import { MethodHotspots } from '@/components/MethodHotspots';
 import { BreakdownBar } from '@/components/KindBadge';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/Button';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { raceGuard } from '@/lib/raceGuard';
 import { tsLong, fmtNum } from '@/lib/utils';
@@ -32,14 +31,18 @@ import { PageShell } from '@/components/ui/PageShell';
 // korundu; kazanılan sıralama + yeniden boyutlandırma + kalıcı genişlik —
 // baseline seçerken "en uzun pencere" ya da "en çok örnek" hangisi diye
 // bakmak artık tek tık.
-const BASELINE_COLS: DataTableColumn<ProfileRow>[] = [
+// v0.10.943 (tablo standardı dilim 3) — 11px ikincil hücreler tablo boyunda,
+// hiyerarşi renkle (S3); eylem `kind: 'actions'` kolonu, `minWidth = width`
+// eski sabit `trailing` genişliğinde kilitler (T8).
+const BASELINE_COLS: ColumnDef<ProfileRow>[] = [
   // Zaman mono ve SOLA hizalı kalıyor (numeric:true başlığı sağa iterdi).
-  { id: 'when',     label: 'When',       sortValue: p => p.startTime,      width: 170 },
-  { id: 'id',       label: 'Profile ID', sortValue: p => p.profileId,      naturalDir: 'asc', width: 180 },
+  { id: 'when',     label: 'When',       sortValue: p => p.startTime,      width: 170, tone: () => 'muted' },
+  { id: 'id',       label: 'Profile ID', sortValue: p => p.profileId,      naturalDir: 'asc', width: 180, mono: true, tone: () => 'muted' },
   { id: 'type',     label: 'Type',       sortValue: p => p.profileType,    naturalDir: 'asc', width: 95 },
-  { id: 'host',     label: 'Host',       sortValue: p => p.hostName ?? '', naturalDir: 'asc', flex: true },
+  { id: 'host',     label: 'Host',       sortValue: p => p.hostName ?? '', naturalDir: 'asc', flex: true, tone: () => 'muted' },
   { id: 'duration', label: 'Duration',   sortValue: p => p.durationMs,     numeric: true, width: 110 },
   { id: 'samples',  label: 'Samples',    sortValue: p => p.sampleCount,    numeric: true, width: 110 },
+  { id: 'actions',  label: 'Actions',    kind: 'actions', width: 180, minWidth: 180 },
 ];
 
 function ProfileDetailInner() {
@@ -192,24 +195,24 @@ function ProfileDetailInner() {
               ? <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading…</div>
               : (
                 <div className="table-wrap">
-                  <table style={{ tableLayout: 'fixed', width: '100%' }}>
-                    <DataTableColgroup dt={dt} trailing={[180]} />
-                    <DataTableHead dt={dt} trailing={<th />} />
+                  <table {...dt.tableProps}>
+                    <DataTableColgroup dt={dt} />
+                    <DataTableHead dt={dt} />
                     <tbody>
                       {dt.sortedRows.map(p => (
                           <tr key={p.profileId}>
-                            <td className="mono" style={{ fontSize: 11 }}>{tsLong(p.startTime)}</td>
-                            <td className="mono" style={{ fontSize: 11 }}>{p.profileId.slice(0, 16)}…</td>
-                            <td><span className="badge b-info">{p.profileType.toUpperCase()}</span></td>
-                            <td style={{ fontSize: 11 }}>{p.hostName || '—'}</td>
-                            <td className="num mono">{(p.durationMs / 1000).toFixed(1)}s</td>
-                            <td className="num mono">{fmtNum(p.sampleCount)}</td>
-                            <td>
+                            <DataTableCell dt={dt} col="when" row={p} value={tsLong(p.startTime)} className="mono" />
+                            <DataTableCell dt={dt} col="id" row={p} value={`${p.profileId.slice(0, 16)}…`} title={p.profileId} />
+                            <DataTableCell dt={dt} col="type" row={p}><span className="badge b-info">{p.profileType.toUpperCase()}</span></DataTableCell>
+                            <DataTableCell dt={dt} col="host" row={p} value={p.hostName} />
+                            <DataTableCell dt={dt} col="duration" row={p} value={`${(p.durationMs / 1000).toFixed(1)}s`} />
+                            <DataTableCell dt={dt} col="samples" row={p} value={fmtNum(p.sampleCount)} />
+                            <DataTableCell dt={dt} col="actions" row={p}>
                               <Button variant="secondary" size="sm"
                                 onClick={() => setBaseline(p.profileId)}>
                                 Use as baseline →
                               </Button>
-                            </td>
+                            </DataTableCell>
                           </tr>
                         ))}
                     </tbody>

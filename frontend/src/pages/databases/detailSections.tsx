@@ -8,7 +8,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { QueryError } from '@/components/QueryError';
 import { TableSkeleton } from '@/components/Skeleton';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { logsHref } from '@/lib/logsUrl';
 import { serviceHref } from '@/lib/serviceHref';
@@ -17,7 +17,6 @@ import { OraclePanel } from '@/features/dependencies/panels/OraclePanel';
 import { PostgresPanel } from '@/features/dependencies/panels/PostgresPanel';
 import { MySQLPanel } from '@/features/dependencies/panels/MySQLPanel';
 import { RedisPanel } from '@/features/dependencies/panels/RedisPanel';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type {
   DBCallerBreakdown, DBDetail, DBTrend, SlowQueryRow, SpanMetricSeries, TimeRange,
 } from '@/lib/types';
@@ -308,7 +307,7 @@ export function DatabaseCallersSection({ callers, range, env }: {
         </Empty>
       ) : (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -317,12 +316,9 @@ export function DatabaseCallersSection({ callers, range, env }: {
                 const errCls = c.errorRate > 5 ? 'b-err' : c.errorRate > 0 ? 'b-warn' : 'b-gray';
                 const impact = c.spanCount * c.avgDurationMs;
                 return (
-                  <tr key={`${c.service}|${c.pod}|${i}`}
-                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
-                    <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      title={c.service}>
-                      <Link to={serviceHref(c.service, { range })}
-                        className="mono" style={{ fontSize: 11.5 }}>
+                  <tr key={`${c.service}|${c.pod}|${i}`} className="cv-row">
+                    <td title={c.service}>
+                      <Link to={serviceHref(c.service, { range })} className="mono">
                         {c.service}
                       </Link>
                       {/* v0.9.1367 — LOG PİVOTU. Trace pivotu sayfanın
@@ -340,25 +336,18 @@ export function DatabaseCallersSection({ callers, range, env }: {
                         ≡ logs
                       </Link>
                     </td>
-                    <td className="mono" style={{
-                      fontSize: 11, color: 'var(--text2)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }} title={c.pod}>{c.pod}</td>
-                    <td className="num mono">{fmtNum(c.spanCount)}</td>
-                    <td className="num mono">
+                    <DataTableCell dt={dt} col="pod" row={c} value={c.pod} />
+                    <DataTableCell dt={dt} col="calls" row={c} value={fmtNum(c.spanCount)} />
+                    <DataTableCell dt={dt} col="errRate" row={c}>
                       <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
                         {c.errorRate.toFixed(2)}%
                       </span>
-                    </td>
-                    <td className="num mono">
-                      {c.p95DurationMs === undefined
-                        ? <span style={{ color: 'var(--text3)' }}>—</span>
-                        : `${c.p95DurationMs.toFixed(1)} ms`}
-                    </td>
-                    <td className="num mono"
-                      title={`Bu çağıranın duvar-saati payı (çağrı × ortalama).\n\nPAYDA YÜKLENMİŞ SATIRLAR: yüzdeler bu tablodaki çağıranların toplamına göre, veritabanının tüm trafiğine göre DEĞİL. Satır sayısı değişirse her yüzde değişir.`}>
-                      {total > 0 ? `${((impact / total) * 100).toFixed(1)}%` : '—'}
-                    </td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="p95" row={c}
+                      value={c.p95DurationMs === undefined ? null : `${c.p95DurationMs.toFixed(1)} ms`} />
+                    <DataTableCell dt={dt} col="impact" row={c}
+                      title={`Bu çağıranın duvar-saati payı (çağrı × ortalama).\n\nPAYDA YÜKLENMİŞ SATIRLAR: yüzdeler bu tablodaki çağıranların toplamına göre, veritabanının tüm trafiğine göre DEĞİL. Satır sayısı değişirse her yüzde değişir.`}
+                      value={total > 0 ? `${((impact / total) * 100).toFixed(1)}%` : '—'} />
                   </tr>
                 );
               })}
@@ -440,23 +429,22 @@ export function DatabaseStatementsSection({
       )}
       {(rows ?? []).length > 0 && (
         <div className="table-wrap">
-          <table style={{ width: '100%', fontSize: 12, tableLayout: 'fixed' }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map((r, i) => (
                 /* v0.10.933 (tablo standardı T2) — stmtHash'siz satır açılmaz:
-                   rowActivation yalnız açılan satıra; koşullu cursor kalktı. */
+                   rowActivation yalnız açılan satıra; koşullu cursor kalktı.
+                   v0.10.943 (T7) — tam ifade ipucu satırdan onu gösteren hücreye;
+                   maxWidth: 0 sabit düzende etkisizdi (genişlik colgroup'ta). */
                 <tr key={r.stmtHash ?? i}
-                  {...(r.stmtHash ? rowActivation(() => onOpen(r)) : {})}
-                  title={`${r.sampleStatement || r.statement}\n\ncalled by ${r.service}`}>
-                  <td className="mono" style={{
-                    maxWidth: 0, overflow: 'hidden',
-                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>{r.statement}</td>
-                  <td className="num mono">{fmtNum(r.count)}</td>
-                  <td className="num mono">{r.p95Ms.toFixed(1)} ms</td>
-                  <td className="num mono"><b>{(r.totalMs / 1000).toFixed(1)} s</b></td>
+                  {...(r.stmtHash ? rowActivation(() => onOpen(r)) : {})}>
+                  <td className="mono"
+                    title={`${r.sampleStatement || r.statement}\n\ncalled by ${r.service}`}>{r.statement}</td>
+                  <DataTableCell dt={dt} col="calls" row={r} value={fmtNum(r.count)} />
+                  <DataTableCell dt={dt} col="p95" row={r} value={`${r.p95Ms.toFixed(1)} ms`} />
+                  <DataTableCell dt={dt} col="total" row={r}><b>{(r.totalMs / 1000).toFixed(1)} s</b></DataTableCell>
                 </tr>
               ))}
             </tbody>
@@ -507,16 +495,18 @@ const SERIES_UNIT = { calls: 'reqps', errors: 'percent', p99: 'ms' } as const;
 
 // v0.9.874 (tutarlılık denetimi BT18). Genişlikler eski elle yazılmış
 // <th style={{width}}> değerlerinden AYNEN alındı.
-const DB_DETAIL_STMT_COLS: DataTableColumn<SlowQueryRow>[] = [
+const DB_DETAIL_STMT_COLS: ColumnDef<SlowQueryRow>[] = [
   { id: 'statement', label: 'Statement', sortValue: r => r.statement, naturalDir: 'asc', flex: true },
   { id: 'calls',     label: 'Calls',     sortValue: r => r.count,     numeric: true, width: 80 },
   { id: 'p95',       label: 'P95',       sortValue: r => r.p95Ms,     numeric: true, width: 90 },
   { id: 'total',     label: 'Total',     sortValue: r => r.totalMs,   numeric: true, width: 90 },
 ];
 
-const CALLER_COLS: DataTableColumn<DBCallerBreakdown>[] = [
+// v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında;
+// pod 11px yerine renkle ikincil (S3), sayılar arayüz fontunda (S2).
+const CALLER_COLS: ColumnDef<DBCallerBreakdown>[] = [
   { id: 'service', label: 'Service',    sortValue: r => r.service,        naturalDir: 'asc', width: 190 },
-  { id: 'pod',     label: 'Pod / host', sortValue: r => r.pod,            naturalDir: 'asc', width: 170 },
+  { id: 'pod',     label: 'Pod / host', sortValue: r => r.pod,            naturalDir: 'asc', width: 170, mono: true, tone: () => 'muted' },
   { id: 'calls',   label: 'Calls',      sortValue: r => r.spanCount,      numeric: true, width: 80 },
   { id: 'errRate', label: 'Err %',      sortValue: r => r.errorRate,      numeric: true, width: 76 },
   { id: 'p95',     label: 'P95',        sortValue: r => r.p95DurationMs ?? 0, numeric: true, width: 82 },
