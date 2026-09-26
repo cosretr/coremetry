@@ -19,7 +19,7 @@ import { timeRangeToNs } from '@/lib/utils';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
 import type { SlowQueryRow } from '@/lib/types';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 
 // v0.9.874 (tutarlılık denetimi MT12) — "En pahalı ifadeler" tablosu.
 // Kardeşi /slow-queries çoktan primitifte; bu tablo hem sıralanamıyordu
@@ -123,6 +123,23 @@ export default function DatabasesPage() {
     storageKey: 'databases-top-statements', columns: DB_STMT_COLS,
     rows: stmtsQ.data ?? [], initialSort: { id: 'total', dir: 'desc' },
   });
+  // Tip / db.name süzgeçlerini birlikte siler — "Clear" düğmesi ve tablo
+  // içi "Filtreleri temizle" AYNI URL yazımı (replace:true).
+  const clearFilters = () => setSp(prev => {
+    const next = new URLSearchParams(prev);
+    next.delete('dbsys'); next.delete('dbname');
+    return next;
+  }, { replace: true });
+  // v0.10.954 — tablo standardı T12: ifade tablosunun yükleniyor / hata /
+  // boş durumu tablonun İÇİNDE, başlık durur. dbsys/dbname sunucu isteğine
+  // gidiyor: biri etkinken 0 satır "eşleşme yok" (+ Filtreleri temizle).
+  // Hata eskiden hiçbir şey çizmiyordu; tablo artık her durumda durduğu
+  // için boş sanılmasın diye hata satırı.
+  const stmtState: Omit<DataTableStateProps<SlowQueryRow>, 'dt'> =
+    stmtsQ.isPending ? { kind: 'loading', skeletonRows: 5 }
+    : stmtsQ.isError ? { kind: 'error' }
+    : (dbsys || dbname) ? { kind: 'no-match', message: 'Bu pencerede eşleşen ifade yok', onClearFilters: clearFilters }
+    : { kind: 'empty', message: 'Bu pencerede eşleşen ifade yok' };
 
   // Eski `?stmt=` linkleri (yer imi / paylaşılmış URL) sayfaya taşınır.
   useStmtParamRedirect(range);
@@ -268,12 +285,7 @@ export default function DatabasesPage() {
             {dbNames.map(x => <option key={x} value={x}>{x}</option>)}
           </select>
           {(dbsys || dbname) && (
-            <Button variant="secondary" size="sm"
-              onClick={() => setSp(prev => {
-                const next = new URLSearchParams(prev);
-                next.delete('dbsys'); next.delete('dbname');
-                return next;
-              }, { replace: true })}>Clear</Button>
+            <Button variant="secondary" size="sm" onClick={clearFilters}>Clear</Button>
           )}
           {/* v0.9.433 — Messaging'in compare toggle'ının birebiri. */}
           <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
@@ -367,15 +379,13 @@ export default function DatabasesPage() {
               subtitle={`Derived from spans with a populated `}
               code="db.system"
               tail=" attribute. Satır tıkı veritabanı detay SAYFASINI açar." />
-            {spanRows.length === 0 ? (
-              <EmptyHint>
-                {dbsys || dbname
-                  ? 'No service-called databases match the current filter.'
-                  : 'No service-emitted database spans in this window. Wire an OTel SDK into one of the application services to see this section populate.'}
-              </EmptyHint>
-            ) : (
-              <DependenciesTable rows={tableRows} kind="db" range={range} onRowNavigate={openDatabasePage} />
-            )}
+            {/* v0.10.954 — tablo standardı T12: boş / eşleşme yok paylaşılan
+                tablonun İÇİNDE (DependenciesTable `state`), başlık durur. Tip /
+                db.name süzgeci satırları elediyse "eşleşme yok" + Clear'ın aynısı. */}
+            <DependenciesTable rows={tableRows} kind="db" range={range} onRowNavigate={openDatabasePage}
+              state={dbsys || dbname
+                ? { kind: 'no-match', onClearFilters: clearFilters }
+                : { kind: 'empty', message: "Bu pencerede servislerin yaydığı veritabanı span'i yok — bu bölümün dolması için uygulama servislerinden birine bir OTel SDK bağla." }} />
 
             <div style={{ height: 24 }} />
 
@@ -407,23 +417,25 @@ export default function DatabasesPage() {
                   subtitle="OpenTelemetry database-receiver instances — discovered from "
                   code="oracledb.* / postgresql.* / mysql.* / redis.*"
                   tail=" metric_points. Satır tıkı detay sayfasını açar; motor paneli (oturumlar, wait class'ları, buffer pool, keyspace'ler…) orada." />
-                {receiverRows.length === 0 ? (
+                {/* v0.10.954 — tablo standardı T12: env kapısı ("SORULMADI") tablonun
+                    DIŞINDA kalır — sorgu hiç atılmadı, tablo anlamsız. Diğer boş
+                    hâller paylaşılan tablonun İÇİNDE (DependenciesTable `state`). */}
+                {receiverRows.length === 0 && ov?.receiversSkipped === 'env' ? (
                   <EmptyHint>
-                    {ov?.receiversSkipped === 'env'
-                      ? `env=${env} filtresi açıkken receiver keşfi hiç çalışmıyor (metric_points deploy_env taşımıyor) — bu panel "boş" değil, SORULMADI.`
-                      : dbsys
-                        ? 'No receiver instances match the current filter.'
-                        /* v0.10.18 (F0.9a) — SIRA ÖNEMLİ. Pencere saklama
-                           ufkunu aşıyorsa boş panelin sebebi kurulum DEĞİL,
-                           TTL. Eski metin ("receiver kur") o durumda yanlış
-                           teşhis veriyor ve operatörü var olmayan bir kurulum
-                           sorununu kovalamaya gönderiyordu. */
-                        : receiverNotice?.kind === 'explains-empty'
-                          ? receiverNotice.text
-                          : 'No receiver-detected instances in this window. Point an OpenTelemetry database receiver (oracledb / postgresql / mysql / redis) at one of your databases and the discovered instance will appear here.'}
+                    {`env=${env} filtresi açıkken receiver keşfi hiç çalışmıyor (metric_points deploy_env taşımıyor) — bu panel "boş" değil, SORULMADI.`}
                   </EmptyHint>
                 ) : (
-                  <DependenciesTable rows={receiverRows.map(toRow)} kind="db" range={range} onRowNavigate={openDatabasePage} />
+                  <DependenciesTable rows={receiverRows.map(toRow)} kind="db" range={range} onRowNavigate={openDatabasePage}
+                    state={dbsys
+                      ? { kind: 'no-match', onClearFilters: clearFilters }
+                      /* v0.10.18 (F0.9a) — SIRA ÖNEMLİ. Pencere saklama
+                         ufkunu aşıyorsa boş panelin sebebi kurulum DEĞİL,
+                         TTL. Eski metin ("receiver kur") o durumda yanlış
+                         teşhis veriyor ve operatörü var olmayan bir kurulum
+                         sorununu kovalamaya gönderiyordu. */
+                      : receiverNotice?.kind === 'explains-empty'
+                        ? { kind: 'empty', message: receiverNotice.text }
+                        : { kind: 'empty', message: "Bu pencerede receiver'ın keşfettiği instance yok — veritabanlarından birine bir OpenTelemetry veritabanı receiver'ı (oracledb / postgresql / mysql / redis) yönelt; keşfedilen instance burada görünür." }} />
                 )}
               </>
             )}
@@ -438,22 +450,17 @@ export default function DatabasesPage() {
                 subtitle="Toplam süreye göre; satır tıkı ifade detayını açar ("
                 code="?stmt="
                 tail=" derin-linklenebilir). Tam katalog: Slow queries →" />
-              {stmtsQ.isPending && <TableSkeleton rows={5} cols={6} wideFirst />}
-              {stmtsQ.data && stmtsQ.data.length === 0 && (
-                <EmptyHint>Bu pencerede eşleşen ifade yok.</EmptyHint>
-              )}
-              {(stmtsQ.data ?? []).length > 0 && (
-                // v0.9.874 (tutarlılık denetimi MT12) — ÖNCE KAP, SONRA
-                // PRİMİTİF. Bu tablo `.tbl` sınıfıyla çiziliyordu; o sınıf
-                // globals.css'te TANIMSIZ (ölü sınıf, okuyanı yanıltıyordu)
-                // ve `.table-wrap` kabı da YOKTU. Sabit düzen + kap yokluğu
-                // = dar ekranda sayfanın yatay taşması (v0.9.640 sızıntısı).
-                <div className="table-wrap">
-                  <table {...stmtDt.tableProps}>
-                    <DataTableColgroup dt={stmtDt} />
-                    <DataTableHead dt={stmtDt} />
+              {/* v0.9.874 (tutarlılık denetimi MT12) — ÖNCE KAP, SONRA
+                  PRİMİTİF. Bu tablo `.tbl` sınıfıyla çiziliyordu; o sınıf
+                  globals.css'te TANIMSIZ (ölü sınıf, okuyanı yanıltıyordu)
+                  ve `.table-wrap` kabı da YOKTU. Sabit düzen + kap yokluğu
+                  = dar ekranda sayfanın yatay taşması (v0.9.640 sızıntısı). */}
+              <div className="table-wrap">
+                <table {...stmtDt.tableProps}>
+                  <DataTableColgroup dt={stmtDt} />
+                  <DataTableHead dt={stmtDt} />
                   <tbody>
-                    {stmtDt.sortedRows.map((r, i) => (
+                    {stmtDt.sortedRows.length === 0 ? <DataTableState dt={stmtDt} {...stmtState} /> : stmtDt.sortedRows.map((r, i) => (
                       /* v0.10.933 (tablo standardı T2) — stmtHash'siz satır açılmaz:
                          rowActivation (role=button → el imleci + hover) yalnız
                          açılan satıra; satır içi koşullu cursor kalktı.
@@ -491,10 +498,9 @@ export default function DatabasesPage() {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}

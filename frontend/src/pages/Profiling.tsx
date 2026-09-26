@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
+import { Empty } from '@/components/Spinner';
 import { IconFlame } from '@/components/icons';
 import { ServicePicker } from '@/components/ServicePicker';
 import { BreakdownBar, KindBadge } from '@/components/KindBadge';
@@ -10,7 +10,10 @@ import { useProfiles, useProfileHotspots } from '@/lib/queries';
 import { copyToClipboard } from '@/lib/clipboard';
 import { tsShort, timeRangeToNs, fmtNum } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { ProfileRow, ProfileHotspotsResponse, TimeRange } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
 import { Button, SegmentedControl, TabStrip } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü); v0.10.924 Faz 2
@@ -104,6 +107,14 @@ export default function ProfilingPage() {
     rows: data ?? [], initialSort: { id: 'time', dir: 'desc' },
     onOpen: p => navigate(`/profile?id=${p.profileId}`),
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Servis / tür süzgeci isteğe gidiyor: seçiliyken
+  // boş sonuç "eşleşme yok"; ikisi de boşken liste gerçekten boş.
+  const profileState: Omit<DataTableStateProps<ProfileRow>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error', message: 'Profiller okunamadı — sunucu isteği reddetti; zaman aralığını genişletmeyi dene.' }
+    : (service || ptype) ? { kind: 'no-match', message: 'Bu pencerede süzgeçle eşleşen profil yok' }
+    : { kind: 'empty', message: 'Henüz profil yok — demo her 10 sn\'de bir POST /v1/profiles adresine profil gönderir.' };
   // Setup recipes accordion — empty/no profiles is the common
   // first-run state, and operators end up grepping the demo source
   // to figure out the wire format. Surfacing copy-paste snippets
@@ -154,50 +165,35 @@ export default function ProfilingPage() {
         {setupOpen && <SetupRecipes />}
 
         {view === 'list' && (
-          <>
-            {data === undefined && <Spinner />}
-            {data === null && (
-              <Empty icon="⚠" title="Failed to load profiles">
-                The backend rejected the request — try widening the time range.
-              </Empty>
-            )}
-            {data && data.length === 0 && (
-              <Empty icon={<IconFlame size={28} />} title="No profiles yet">
-                The demo pushes profiles every 10s to <code>POST /v1/profiles</code>.
-              </Empty>
-            )}
-            {data && data.length > 0 && (
-              <div className="table-wrap">
-                <table {...profileDt.tableProps}>
-                  <DataTableColgroup dt={profileDt} />
-                  <DataTableHead dt={profileDt} />
-                  <tbody>
-                    {profileDt.sortedRows.map((p, i) => {
-                      // v0.10.943 — rowProps'un `row-selected`i ile `cv-row` tek className (§2c).
-                      const rp = profileDt.rowProps(i);
-                      return (
-                        <tr key={p.profileId} {...rp}
-                          className={[rp.className, profileDt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
-                          {...rowActivation(() => navigate(`/profile?id=${p.profileId}`))}>
-                          <td className="mono">{tsShort(p.startTime)}</td>
-                          <td>
-                            <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--bg3)', borderRadius: 3, fontFamily: 'var(--font-mono)' }}>
-                              {p.serviceName}
-                            </span>
-                          </td>
-                          <td><span className="badge b-info">{p.profileType.toUpperCase()}</span></td>
-                          {/* v0.10.943 — sayı kolonu (S2/T4): arayüz fontu, başlıkla aynı sağa hiza. */}
-                          <td className="num">{p.durationMs > 0 ? `${(p.durationMs/1000).toFixed(1)}s` : '—'}</td>
-                          <td className="num">{fmtNum(p.sampleCount)}</td>
-                          <td className="mono cell-muted">{p.hostName || '—'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
+          <div className="table-wrap">
+            <table {...profileDt.tableProps}>
+              <DataTableColgroup dt={profileDt} />
+              <DataTableHead dt={profileDt} />
+              <tbody>
+                {profileDt.sortedRows.length === 0 ? <DataTableState dt={profileDt} {...profileState} /> : profileDt.sortedRows.map((p, i) => {
+                  // v0.10.943 — rowProps'un `row-selected`i ile `cv-row` tek className (§2c).
+                  const rp = profileDt.rowProps(i);
+                  return (
+                    <tr key={p.profileId} {...rp}
+                      className={[rp.className, profileDt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
+                      {...rowActivation(() => navigate(`/profile?id=${p.profileId}`))}>
+                      <td className="mono">{tsShort(p.startTime)}</td>
+                      <td>
+                        <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--bg3)', borderRadius: 3, fontFamily: 'var(--font-mono)' }}>
+                          {p.serviceName}
+                        </span>
+                      </td>
+                      <td><span className="badge b-info">{p.profileType.toUpperCase()}</span></td>
+                      {/* v0.10.943 — sayı kolonu (S2/T4): arayüz fontu, başlıkla aynı sağa hiza. */}
+                      <td className="num">{p.durationMs > 0 ? `${(p.durationMs/1000).toFixed(1)}s` : '—'}</td>
+                      <td className="num">{fmtNum(p.sampleCount)}</td>
+                      <td className="mono cell-muted">{p.hostName || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {view === 'hotspots' && (
@@ -234,46 +230,45 @@ function HotspotsPanel({ service, hotspots }: {
       </Empty>
     );
   }
-  if (hotspots === undefined) return <Spinner />;
-  if (hotspots === null) {
-    return (
-      <Empty icon="⚠" title="Failed to load hotspots">
-        The backend rejected the request — try widening the time range.
-      </Empty>
-    );
-  }
-  if (!hotspots.hotspots || hotspots.hotspots.length === 0) {
-    return (
-      <Empty icon={<IconFlame size={28} />} title="No profiles in this window">
-        Widen the time range, or check that the service is pushing profiles.
-      </Empty>
-    );
-  }
-  const totalSamples = hotspots.totalSamples || 1;
+  // v0.10.954 — tablo standardı T12: erken dönüşler (Spinner / Empty)
+  // kalktı; yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. Sıra ve
+  // koşullar eskisiyle aynı. Kırılım çubuğu + özet şeridi satırlardan
+  // türüyor: eskisi gibi yalnız satır varken ("0 profiles merged" demesin).
+  // "Pick a service" bir kapı — erken dönüş olarak kaldı.
+  const showRows = !!hotspots && !!hotspots.hotspots && hotspots.hotspots.length > 0;
+  const hsState: Omit<DataTableStateProps<HotspotRow>, 'dt'> =
+    hotspots === undefined ? { kind: 'loading' }
+    : hotspots === null ? { kind: 'error', message: "Hotspot'lar okunamadı — sunucu isteği reddetti; zaman aralığını genişletmeyi dene." }
+    : { kind: 'empty', message: 'Bu pencerede profil yok — zaman aralığını genişlet ya da servisin profil gönderdiğini kontrol et.' };
+  const totalSamples = hotspots?.totalSamples || 1;
   return (
     <>
-      <BreakdownBar b={hotspots.breakdown} />
-      <div style={{
-        marginBottom: 10, padding: 10, borderRadius: 6,
-        background: 'var(--bg1)', border: '1px solid var(--border)',
-        fontSize: 12, color: 'var(--text2)',
-        display: 'flex', gap: 16, flexWrap: 'wrap',
-      }}>
-        <span><b style={{ color: 'var(--text)' }}>{hotspots.profilesUsed}</b> profiles merged</span>
-        <span><b style={{ color: 'var(--text)' }}>{fmtNum(hotspots.totalSamples)}</b> total samples</span>
-        <span><b style={{ color: 'var(--text)' }}>{hotspots.hotspots.length}</b> unique methods shown</span>
-        {hotspots.profilesFailed > 0 && (
-          <span style={{ color: 'var(--warn)' }}>
-            {hotspots.profilesFailed} unparseable
-          </span>
-        )}
-      </div>
+      {showRows && hotspots && (
+        <>
+          <BreakdownBar b={hotspots.breakdown} />
+          <div style={{
+            marginBottom: 10, padding: 10, borderRadius: 6,
+            background: 'var(--bg1)', border: '1px solid var(--border)',
+            fontSize: 12, color: 'var(--text2)',
+            display: 'flex', gap: 16, flexWrap: 'wrap',
+          }}>
+            <span><b style={{ color: 'var(--text)' }}>{hotspots.profilesUsed}</b> profiles merged</span>
+            <span><b style={{ color: 'var(--text)' }}>{fmtNum(hotspots.totalSamples)}</b> total samples</span>
+            <span><b style={{ color: 'var(--text)' }}>{hotspots.hotspots.length}</b> unique methods shown</span>
+            {hotspots.profilesFailed > 0 && (
+              <span style={{ color: 'var(--warn)' }}>
+                {hotspots.profilesFailed} unparseable
+              </span>
+            )}
+          </div>
+        </>
+      )}
       <div className="table-wrap">
         <table {...hsDt.tableProps}>
           <DataTableColgroup dt={hsDt} />
           <DataTableHead dt={hsDt} />
           <tbody>
-            {hsDt.sortedRows.map((h, i) => {
+            {!showRows ? <DataTableState dt={hsDt} {...hsState} /> : hsDt.sortedRows.map((h, i) => {
               const selfPct = (h.self / totalSamples) * 100;
               const totalPct = (h.total / totalSamples) * 100;
               return (

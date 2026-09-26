@@ -5,7 +5,7 @@ import { api, type PipelineRule } from '@/lib/api';
 import type { MetricExclusionRule } from '@/lib/types';
 import { Field, FlashBox, humanize } from './shared';
 import { buildPipelineRuleBody, describeCondition } from './pipelineRuleBody';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 
 // v0.9.875 (tutarlılık denetimi MT6) — kural tablosu paylaşılan primitife.
 // v0.9.797'den beri türetilmiş-metrik kuralları da buraya yazılıyor ve liste
@@ -119,70 +119,69 @@ export function PipelineTab() {
         }}>{msg.text}</div>
       )}
 
-      {rules.length === 0 ? (
-        <Empty icon="⇉" title="No pipeline rules yet">
-          Create one to drop noisy span traffic at ingest.
-        </Empty>
-      ) : (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(r => (
-                <tr key={r.id}>
-                  <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
-                  <DataTableCell dt={dt} col="kind" row={r}>
-                    <span className={r.kind === 'drop' ? 'badge b-err' : 'badge b-info'}>
-                      {r.kind.toUpperCase()}
+      {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık
+          durur (sekme düzeyindeki yükleniyor / hata dönüşleri kalır). */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? (
+              <DataTableState dt={dt} kind="empty"
+                message="Henüz pipeline kuralı yok — gürültülü span trafiğini ingest'te düşürmek için bir kural oluşturun." />
+            ) : dt.sortedRows.map(r => (
+              <tr key={r.id}>
+                <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
+                <DataTableCell dt={dt} col="kind" row={r}>
+                  <span className={r.kind === 'drop' ? 'badge b-err' : 'badge b-info'}>
+                    {r.kind.toUpperCase()}
+                  </span>
+                </DataTableCell>
+                <DataTableCell dt={dt} col="signal" row={r}>
+                  <code style={{ fontSize: 11 }}>{r.signal}</code>
+                </DataTableCell>
+                <DataTableCell dt={dt} col="predicate" row={r}>
+                  {r.when.key} <b>{r.when.op}</b>{' '}
+                  <span style={{ color: 'var(--text2)' }}>"{r.when.value}"</span>
+                  {/* v0.9.803 — EK koşullar listede de görünür. Yalnız
+                      `when`'i basmak, tek-metrik kısıtlı türetilmiş bir
+                      kuralı "her metrik" gibi okutuyordu. */}
+                  {(r.and ?? []).map((c, i) => (
+                    <span key={i}>
+                      {' '}<b style={{ color: 'var(--text3)' }}>AND</b>{' '}
+                      {c.key} <b>{c.op}</b>{' '}
+                      <span style={{ color: 'var(--text2)' }}>"{c.value}"</span>
                     </span>
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="signal" row={r}>
-                    <code style={{ fontSize: 11 }}>{r.signal}</code>
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="predicate" row={r}>
-                    {r.when.key} <b>{r.when.op}</b>{' '}
-                    <span style={{ color: 'var(--text2)' }}>"{r.when.value}"</span>
-                    {/* v0.9.803 — EK koşullar listede de görünür. Yalnız
-                        `when`'i basmak, tek-metrik kısıtlı türetilmiş bir
-                        kuralı "her metrik" gibi okutuyordu. */}
-                    {(r.and ?? []).map((c, i) => (
-                      <span key={i}>
-                        {' '}<b style={{ color: 'var(--text3)' }}>AND</b>{' '}
-                        {c.key} <b>{c.op}</b>{' '}
-                        <span style={{ color: 'var(--text2)' }}>"{c.value}"</span>
-                      </span>
-                    ))}
-                    {r.kind === 'enrich' && r.setAttributes && Object.entries(r.setAttributes).map(([k, v]) => (
-                      <span key={k} style={{ marginLeft: 8, color: 'var(--accent2)' }}>
-                        → {k}=<b>"{v}"</b>
-                      </span>
-                    ))}
-                    {r.kind === 'sample' && r.rate != null && (
-                      <span style={{ marginLeft: 8, color: 'var(--accent2)' }}>
-                        keep <b>{(r.rate * 100).toFixed(1)}%</b>
-                      </span>
-                    )}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="enabled" row={r}>
-                    <input type="checkbox" checked={r.enabled} onChange={() => toggle(r)} />
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="actions" row={r}>
-                    <ButtonGroup aria-label={`${r.name} actions`} size="sm">
-                      <Button variant="secondary" onClick={() => setEditing(r)}>
-                        Edit
-                      </Button>
-                      <Button variant="ghost-danger" onClick={() => void remove(r)}>
-                        Delete
-                      </Button>
-                    </ButtonGroup>
-                  </DataTableCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  ))}
+                  {r.kind === 'enrich' && r.setAttributes && Object.entries(r.setAttributes).map(([k, v]) => (
+                    <span key={k} style={{ marginLeft: 8, color: 'var(--accent2)' }}>
+                      → {k}=<b>"{v}"</b>
+                    </span>
+                  ))}
+                  {r.kind === 'sample' && r.rate != null && (
+                    <span style={{ marginLeft: 8, color: 'var(--accent2)' }}>
+                      keep <b>{(r.rate * 100).toFixed(1)}%</b>
+                    </span>
+                  )}
+                </DataTableCell>
+                <DataTableCell dt={dt} col="enabled" row={r}>
+                  <input type="checkbox" checked={r.enabled} onChange={() => toggle(r)} />
+                </DataTableCell>
+                <DataTableCell dt={dt} col="actions" row={r}>
+                  <ButtonGroup aria-label={`${r.name} actions`} size="sm">
+                    <Button variant="secondary" onClick={() => setEditing(r)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost-danger" onClick={() => void remove(r)}>
+                      Delete
+                    </Button>
+                  </ButtonGroup>
+                </DataTableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {(creating || editing) && (
         <PipelineRuleModal

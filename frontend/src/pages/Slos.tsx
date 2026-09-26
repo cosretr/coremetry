@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, FormEvent } from 'react';
 import { burnWinLabel } from './slos/burnWindow'; // v0.10.794
 import { Hourglass } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
+import { Spinner } from '@/components/Spinner';
 import { ServicePicker } from '@/components/ServicePicker';
 import { useAuth } from '@/components/AuthProvider';
 import { IconSparkles } from '@/components/icons';
@@ -11,10 +11,9 @@ import { useSLOs, useCreateSLO, useDeleteSLO } from '@/lib/queries';
 import { api } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { LazyMount } from '@/components/LazyMount'; // v0.10.854
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { SLIType, SLORow } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
-import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
 import { PageShell } from '@/components/ui/PageShell';
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
@@ -51,7 +50,9 @@ export default function SLOsPage() {
     { id: 'name',     label: 'Name',        sortValue: o => o.name?.toLowerCase() ?? '',    naturalDir: 'asc', width: 220 },
     { id: 'service',  label: 'Service',     sortValue: o => o.service?.toLowerCase() ?? '', naturalDir: 'asc', width: 150, mono: true },
     { id: 'target',   label: 'Target',      sortValue: o => o.target,                       naturalDir: 'desc', numeric: true, width: 96 },
-    { id: 'sli',      label: `SLI (${windowDays}d)`, sortValue: o => o.status?.sli ?? null,  naturalDir: 'desc', numeric: true, width: 110 },
+    // v0.10.954 — başlık artık yükleniyor/boşken de görünür: pencere satırdan
+    // okunuyor, satır yokken "SLI (0d)" yalan olurdu → yalnız "SLI".
+    { id: 'sli',      label: windowDays ? `SLI (${windowDays}d)` : 'SLI', sortValue: o => o.status?.sli ?? null,  naturalDir: 'desc', numeric: true, width: 110 },
     { id: 'budget',   label: 'Budget left', sortValue: o => o.status?.budgetRemaining ?? null, naturalDir: 'desc', width: 130 },
     { id: 'burn',     label: 'Burn rate',   sortValue: o => o.status?.burnRate ?? null,      naturalDir: 'desc', width: 110 },
     { id: 'forecast', label: 'Forecast',    width: 120 },
@@ -67,6 +68,14 @@ export default function SLOsPage() {
     rows: items ?? [],
     initialSort: { id: 'name', dir: 'asc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Tri-state aynı (v0.9.858: hata ≠ hiç SLO yok);
+  // ↻ aynı refetch.
+  const rs = readState(items);
+  const tableState: Omit<DataTableStateProps<SLORow>, 'dt'> =
+    rs === 'loading' ? { kind: 'loading' }
+    : rs === 'error' ? { kind: 'error', onRetry: () => void slosQ.refetch() }
+    : { kind: 'empty', message: isAdmin ? 'Tanımlı SLO yok — hata bütçesi takibine başlamak için bir tane oluştur.' : 'Tanımlı SLO yok — SLO tanımlaması için bir admin\'e başvur.' };
 
   const onDelete = async (id: string, name: string) => {
     if (!await confirm({
@@ -98,82 +107,69 @@ export default function SLOsPage() {
           )}
         </PageControls>
 
-        {readState(items) === 'loading' && <Spinner />}
         {/* v0.9.858 (UX denetimi K6) — hata dalı "No SLOs defined"e
             eziliyordu: yüklenemeyen SLO listesi hiç tanımlanmamış gibi
-            okunuyordu. */}
-        {readState(items) === 'error' && (
-          <QueryError onRetry={() => slosQ.refetch()}>
-            SLOs could not be loaded — this is a failed read, not an empty list.
-          </QueryError>
-        )}
-        {readState(items) === 'empty' && (
-          <Empty icon="◉" title="No SLOs defined">
-            {isAdmin ? 'Create one to start tracking error budgets.' : 'Ask an admin to define SLOs.'}
-          </Empty>
-        )}
-        {items && items.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(o => (
-                  // v0.10.854 (scale-audit 🔴) — >100 satırda content-visibility (ev kuralı).
-                  <tr key={o.id} className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
-                    <DataTableCell dt={dt} col="name" row={o}>
-                      <div style={{ fontWeight: 600 }}>{o.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                        {o.sliType === 'latency'
-                          ? `latency ≤ ${o.thresholdMs}ms`
-                          : 'availability'}
-                        {o.operation && <> · op=<code>{o.operation}</code></>}
-                      </div>
+            okunuyordu. v0.10.954 — hata satırı artık tablonun içinde. */}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(o => (
+                // v0.10.854 (scale-audit 🔴) — >100 satırda content-visibility (ev kuralı).
+                <tr key={o.id} className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
+                  <DataTableCell dt={dt} col="name" row={o}>
+                    <div style={{ fontWeight: 600 }}>{o.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                      {o.sliType === 'latency'
+                        ? `latency ≤ ${o.thresholdMs}ms`
+                        : 'availability'}
+                      {o.operation && <> · op=<code>{o.operation}</code></>}
+                    </div>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="service" row={o} value={o.service} />
+                  <DataTableCell dt={dt} col="target" row={o} value={`${(o.target * 100).toFixed(2)}%`} />
+                  <DataTableCell dt={dt} col="sli" row={o} title={o.status?.hint || undefined}>
+                    {/* v0.10.801 — olaysız pencere %100 değil "—"; ipucu varsa ⚠ (title). */}
+                    {o.status && !o.status.noData ? (o.status.sli * 100).toFixed(3) + '%' : '—'}
+                    {o.status?.hint && !o.status.noData && <span className="badge b-warn" style={{ marginLeft: 6, fontSize: 10 }}>⚠ tanım</span>}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="budget" row={o} className="mono">
+                    {o.status && !o.status.noData ? <BudgetBar value={o.status.budgetRemaining} /> : '—'}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="burn" row={o} className="mono">
+                    {o.status && !o.status.noData ? <BurnBadge rate={o.status.burnRate} /> : '—'}
+                  </DataTableCell>
+                  {/* v0.10.854 (scale-audit 🔴) — satır başına iki istek yalnız GÖRÜNÜR
+                      satırda (LazyMount); autocreate ≤200 SLO × 2 = 400 istek/yükleme idi. */}
+                  <DataTableCell dt={dt} col="forecast" row={o}>
+                    <LazyMount compact minHeight={18}><ForecastChip sloId={o.id} /></LazyMount>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="trend" row={o}>
+                    <LazyMount compact minHeight={18}><BurnSparkline sloId={o.id} /></LazyMount>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="status" row={o}>
+                    {/* v0.10.801 — Honeycomb "No Events": olaysız SLO ne sağlıklı ne ihlal. */}
+                    {o.status?.noData
+                      ? <span className="badge b-gray" title={o.status.hint}>Olay yok</span>
+                      : o.status?.healthy
+                        // v0.10.929 (K5) — sağlıklı SLO nötr; renk yalnız Breached'te.
+                        ? <span className="badge b-gray">Healthy</span>
+                        : <span className="badge b-err">Breached</span>}
+                  </DataTableCell>
+                  {isAdmin && (
+                    <DataTableCell dt={dt} col="actions" row={o}><div className="cell-actions">
+                      <BurnExplainButton sloId={o.id} />
+                      <Button variant="ghost-danger" size="sm" loading={deleteSLO.isPending}
+                        onClick={() => void onDelete(o.id, o.name)}>Delete</Button>
+                    </div>
                     </DataTableCell>
-                    <DataTableCell dt={dt} col="service" row={o} value={o.service} />
-                    <DataTableCell dt={dt} col="target" row={o} value={`${(o.target * 100).toFixed(2)}%`} />
-                    <DataTableCell dt={dt} col="sli" row={o} title={o.status?.hint || undefined}>
-                      {/* v0.10.801 — olaysız pencere %100 değil "—"; ipucu varsa ⚠ (title). */}
-                      {o.status && !o.status.noData ? (o.status.sli * 100).toFixed(3) + '%' : '—'}
-                      {o.status?.hint && !o.status.noData && <span className="badge b-warn" style={{ marginLeft: 6, fontSize: 10 }}>⚠ tanım</span>}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="budget" row={o} className="mono">
-                      {o.status && !o.status.noData ? <BudgetBar value={o.status.budgetRemaining} /> : '—'}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="burn" row={o} className="mono">
-                      {o.status && !o.status.noData ? <BurnBadge rate={o.status.burnRate} /> : '—'}
-                    </DataTableCell>
-                    {/* v0.10.854 (scale-audit 🔴) — satır başına iki istek yalnız GÖRÜNÜR
-                        satırda (LazyMount); autocreate ≤200 SLO × 2 = 400 istek/yükleme idi. */}
-                    <DataTableCell dt={dt} col="forecast" row={o}>
-                      <LazyMount compact minHeight={18}><ForecastChip sloId={o.id} /></LazyMount>
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="trend" row={o}>
-                      <LazyMount compact minHeight={18}><BurnSparkline sloId={o.id} /></LazyMount>
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="status" row={o}>
-                      {/* v0.10.801 — Honeycomb "No Events": olaysız SLO ne sağlıklı ne ihlal. */}
-                      {o.status?.noData
-                        ? <span className="badge b-gray" title={o.status.hint}>Olay yok</span>
-                        : o.status?.healthy
-                          // v0.10.929 (K5) — sağlıklı SLO nötr; renk yalnız Breached'te.
-                          ? <span className="badge b-gray">Healthy</span>
-                          : <span className="badge b-err">Breached</span>}
-                    </DataTableCell>
-                    {isAdmin && (
-                      <DataTableCell dt={dt} col="actions" row={o}><div className="cell-actions">
-                        <BurnExplainButton sloId={o.id} />
-                        <Button variant="ghost-danger" size="sm" loading={deleteSLO.isPending}
-                          onClick={() => void onDelete(o.id, o.name)}>Delete</Button>
-                      </div>
-                      </DataTableCell>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {showNew && isAdmin && (
           <NewSLOModal
@@ -240,6 +236,12 @@ function AutoSLOModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const proposed = useMemo(() => (preview ? preview.filter(p => !p.skipped) : []), [preview]);
   const skipped = preview ? preview.filter(p => p.skipped) : [];
   const autoDt = useDataTable<AutoSuggestion>({ storageKey: 'slo-autocreate-preview', columns: AUTO_COLS, rows: proposed });
+  // v0.10.954 — tablo standardı T12: önizleme okumasının yükleniyor / hata /
+  // boş durumu tablonun İÇİNDE, başlık durur (hata = sunucunun metni).
+  // Oluşturma (commit) bir eylem: onun spinner'ı ve hata satırı yukarıda kalır.
+  const autoState: Omit<DataTableStateProps<AutoSuggestion>, 'dt'> =
+    preview === null ? (error !== null ? { kind: 'error', message: `Öneriler okunamadı: ${error}` } : { kind: 'loading' })
+    : { kind: 'empty', message: 'Önerilecek SLO yok — ya son 7 günde trafiği olan servis yok ya da her servisin zaten bir availability ve bir latency SLO\'su var.' };
   return (
     <div role="dialog" style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
@@ -265,41 +267,33 @@ function AutoSLOModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           (latency) so a fresh SLO isn't already in the red on day one.
           Existing SLOs are never overwritten.
         </div>
-        {running && <Spinner />}
-        {error && (
+        {running && preview !== null && <Spinner />}
+        {error && preview !== null && (
           <div style={{ color: 'var(--err)', fontSize: 12, marginBottom: 8 }}>{error}</div>
         )}
-        {preview && proposed.length === 0 && (
-          <Empty icon="◇" title="Nothing to propose">
-            Either no services have traffic in the last 7d, or every service
-            already has both an availability and a latency SLO.
-          </Empty>
-        )}
-        {preview && proposed.length > 0 && (
-          <div className="table-wrap is-scroll" style={{ maxHeight: '50vh' }}>
-            {/* v0.10.930 — is-scroll: kap kayar ve başlık yapışkan kalır; eskiden
-                satırlar 50vh'de kaydırma çubuğu olmadan kesiliyordu. */}
-            <table {...autoDt.tableProps}>
-              <DataTableColgroup dt={autoDt} />
-              <DataTableHead dt={autoDt} />
-              <tbody>
-                {autoDt.sortedRows.map(p => (
-                  <tr key={`${p.service}|${p.sliType}`}>
-                    <DataTableCell dt={autoDt} col="service" row={p} value={p.service} />
-                    <DataTableCell dt={autoDt} col="sli" row={p} value={p.sliType} />
-                    <DataTableCell dt={autoDt} col="target" row={p} value={p.sliType === 'latency'
-                      ? `≤ ${p.thresholdMs?.toFixed(0)} ms @ ${(p.target * 100).toFixed(1)}%`
-                      : `${(p.target * 100).toFixed(2)}%`} />
-                    <DataTableCell dt={autoDt} col="baseline" row={p} value={p.sliType === 'latency'
-                      ? `${p.baselineMs?.toFixed(1)} ms`
-                      : `${((p.baselineSli ?? 0) * 100).toFixed(3)}%`} />
-                    <DataTableCell dt={autoDt} col="reason" row={p} value={p.reason} />
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap is-scroll" style={{ maxHeight: '50vh' }}>
+          {/* v0.10.930 — is-scroll: kap kayar ve başlık yapışkan kalır; eskiden
+              satırlar 50vh'de kaydırma çubuğu olmadan kesiliyordu. */}
+          <table {...autoDt.tableProps}>
+            <DataTableColgroup dt={autoDt} />
+            <DataTableHead dt={autoDt} />
+            <tbody>
+              {autoDt.sortedRows.length === 0 ? <DataTableState dt={autoDt} {...autoState} /> : autoDt.sortedRows.map(p => (
+                <tr key={`${p.service}|${p.sliType}`}>
+                  <DataTableCell dt={autoDt} col="service" row={p} value={p.service} />
+                  <DataTableCell dt={autoDt} col="sli" row={p} value={p.sliType} />
+                  <DataTableCell dt={autoDt} col="target" row={p} value={p.sliType === 'latency'
+                    ? `≤ ${p.thresholdMs?.toFixed(0)} ms @ ${(p.target * 100).toFixed(1)}%`
+                    : `${(p.target * 100).toFixed(2)}%`} />
+                  <DataTableCell dt={autoDt} col="baseline" row={p} value={p.sliType === 'latency'
+                    ? `${p.baselineMs?.toFixed(1)} ms`
+                    : `${((p.baselineSli ?? 0) * 100).toFixed(3)}%`} />
+                  <DataTableCell dt={autoDt} col="reason" row={p} value={p.reason} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {preview && skipped.length > 0 && (
           <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
             {skipped.length} service{skipped.length === 1 ? '' : 's'} skipped — existing SLOs not overwritten.

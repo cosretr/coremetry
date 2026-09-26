@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { seriesColor } from '@/lib/chartFmt';
 import { Link } from 'react-router-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -7,7 +7,9 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { useServiceBacktrace } from '@/lib/queries';
 import { fmtNum, tsLong, rangeToSince } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { CallerRow, TimeRange } from '@/lib/types';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
@@ -46,6 +48,7 @@ function BacktraceInner() {
 
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [filter, setFilter] = useState('');
+  const filterRef = useRef<HTMLInputElement>(null);
 
   // Keyed on (service, since) — the hook skips the fetch entirely
   // when svc is empty (the "Missing service name" branch below).
@@ -91,6 +94,16 @@ function BacktraceInner() {
     return t;
   }, [filtered]);
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş / eşleşme yok
+  // tablonun İÇİNDE, sütun başlıkları durur. "Eşleşme yok" yalnız süzgeç
+  // gerçekten etkinken (listeyi süzen AYNI koşul: trim); süzgeç yokken boş
+  // liste pencerenin boşluğudur.
+  const tableState: Omit<DataTableStateProps<CallerRow>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error' }
+    : filter.trim() ? { kind: 'no-match', onClearFilters: () => setFilter(''), returnFocusRef: filterRef }
+    : { kind: 'empty', message: `Bu pencerede ${svc} servisini çağıran görülmedi` };
+
   if (!svc) {
     return (
       <>
@@ -117,102 +130,91 @@ function BacktraceInner() {
         </div>
 
         <div className="controls" style={{ marginBottom: 8 }}>
-          <input placeholder="Filter by service / host / IP / user-agent…"
+          <input ref={filterRef} placeholder="Filter by service / host / IP / user-agent…"
             aria-label="Filter backtrace by service, host, IP, or user-agent"
             value={filter} onChange={e => setFilter(e.target.value)}
             style={{ flex: 1, minWidth: 280 }} />
           {filter && <Button variant="secondary" onClick={() => setFilter('')}>Clear</Button>}
         </div>
 
-        {data === undefined && <Spinner />}
-        {data === null && <Empty icon="⚠" title="Failed to load backtrace" />}
-        {data && filtered.length === 0 && (
-          <Empty icon="—" title={
-            filter
-              ? 'No callers match the filter'
-              : `No inbound callers observed for ${svc} in this window`
-          } />
-        )}
-        {data && filtered.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map((r, i) => {
-                  const color = seriesColor(r.callerService);
-                  const errBad = r.errorRate >= 5;
-                  const errWarn = !errBad && r.errorRate > 0;
-                  return (
-                    <tr key={i} className="cv-row">
-                      <td>
-                        <Link to={serviceHref(r.callerService, { range })}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text)', textDecoration: 'none' }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
-                          {r.callerService}
-                        </Link>
-                      </td>
-                      {/* v0.10.943 — host/IP kimliği satırın birincil adının (caller) yanında ikincil: 11px → renk (S3). */}
-                      <td className="mono cell-muted">
-                        <div>{r.callerHost || <em style={{ color: 'var(--text3)' }}>—</em>}</div>
-                        {r.callerInstance && (
-                          <div style={{ color: 'var(--text3)', fontSize: 10 }} title={r.callerInstance}>
-                            {r.callerInstance.length > 36 ? r.callerInstance.slice(0, 33) + '…' : r.callerInstance}
-                          </div>
-                        )}
-                      </td>
-                      <td className="mono cell-muted">
-                        <div>{r.clientAddress || <em style={{ color: 'var(--text3)' }}>—</em>}</div>
-                        {r.userAgent && (
-                          <div style={{ color: 'var(--text3)', fontSize: 10 }} title={r.userAgent}>
-                            {r.userAgent.length > 40 ? r.userAgent.slice(0, 37) + '…' : r.userAgent}
-                          </div>
-                        )}
-                      </td>
-                      <td className="num">{fmtNum(r.calls)}</td>
-                      <td className={`num ${errBad ? 'cell-err' : errWarn ? 'cell-warn' : ''}`}>
-                        {r.errorRate.toFixed(2)}%
-                      </td>
-                      <td className="num">{r.p50Ms.toFixed(1)}ms</td>
-                      <td className="num">{r.p95Ms.toFixed(1)}ms</td>
-                      <td className="num">{r.p99Ms.toFixed(1)}ms</td>
-                      <td className="cell-muted" title={tsLong(r.lastSeenNs)}>
-                        {tsLong(r.lastSeenNs)}
-                      </td>
-                      <td>
-                        {/* Drill-in: open the trace list filtered to traces
-                            where BOTH services co-occur. ?services=A,B
-                            applies a HAVING-based fan-in check on the
-                            backend so we land on actual caller × callee
-                            traces rather than all traces from either side.
-                            v0.7.42 — Operator-reported: these traces were
-                            hidden because /traces defaults rootOnly=ON, but a
-                            caller→callee hop is mid-trace, not a root span.
-                            Force rootOnly=false so the co-occurring traces
-                            actually show. (view=list is the default tab since
-                            v0.7.37 but kept explicit.) */}
-                        <Link
-                          to={tracesPivotHref({
-                            window: range,
-                            services: [r.callerService, svc],
-                            view: 'list',
-                          })}
-                          title={`Traces where ${r.callerService} called ${svc}`}
-                          style={{
-                            fontSize: 11, padding: '3px 10px',
-                            background: 'var(--bg3)', border: '1px solid var(--border)',
-                            borderRadius: 4, color: 'var(--accent2)', textDecoration: 'none',
-                          }}>
-                          ⋮ Traces
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
+                const color = seriesColor(r.callerService);
+                const errBad = r.errorRate >= 5;
+                const errWarn = !errBad && r.errorRate > 0;
+                return (
+                  <tr key={i} className="cv-row">
+                    <td>
+                      <Link to={serviceHref(r.callerService, { range })}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text)', textDecoration: 'none' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+                        {r.callerService}
+                      </Link>
+                    </td>
+                    {/* v0.10.943 — host/IP kimliği satırın birincil adının (caller) yanında ikincil: 11px → renk (S3). */}
+                    <td className="mono cell-muted">
+                      <div>{r.callerHost || <em style={{ color: 'var(--text3)' }}>—</em>}</div>
+                      {r.callerInstance && (
+                        <div style={{ color: 'var(--text3)', fontSize: 10 }} title={r.callerInstance}>
+                          {r.callerInstance.length > 36 ? r.callerInstance.slice(0, 33) + '…' : r.callerInstance}
+                        </div>
+                      )}
+                    </td>
+                    <td className="mono cell-muted">
+                      <div>{r.clientAddress || <em style={{ color: 'var(--text3)' }}>—</em>}</div>
+                      {r.userAgent && (
+                        <div style={{ color: 'var(--text3)', fontSize: 10 }} title={r.userAgent}>
+                          {r.userAgent.length > 40 ? r.userAgent.slice(0, 37) + '…' : r.userAgent}
+                        </div>
+                      )}
+                    </td>
+                    <td className="num">{fmtNum(r.calls)}</td>
+                    <td className={`num ${errBad ? 'cell-err' : errWarn ? 'cell-warn' : ''}`}>
+                      {r.errorRate.toFixed(2)}%
+                    </td>
+                    <td className="num">{r.p50Ms.toFixed(1)}ms</td>
+                    <td className="num">{r.p95Ms.toFixed(1)}ms</td>
+                    <td className="num">{r.p99Ms.toFixed(1)}ms</td>
+                    <td className="cell-muted" title={tsLong(r.lastSeenNs)}>
+                      {tsLong(r.lastSeenNs)}
+                    </td>
+                    <td>
+                      {/* Drill-in: open the trace list filtered to traces
+                          where BOTH services co-occur. ?services=A,B
+                          applies a HAVING-based fan-in check on the
+                          backend so we land on actual caller × callee
+                          traces rather than all traces from either side.
+                          v0.7.42 — Operator-reported: these traces were
+                          hidden because /traces defaults rootOnly=ON, but a
+                          caller→callee hop is mid-trace, not a root span.
+                          Force rootOnly=false so the co-occurring traces
+                          actually show. (view=list is the default tab since
+                          v0.7.37 but kept explicit.) */}
+                      <Link
+                        to={tracesPivotHref({
+                          window: range,
+                          services: [r.callerService, svc],
+                          view: 'list',
+                        })}
+                        title={`Traces where ${r.callerService} called ${svc}`}
+                        style={{
+                          fontSize: 11, padding: '3px 10px',
+                          background: 'var(--bg3)', border: '1px solid var(--border)',
+                          borderRadius: 4, color: 'var(--accent2)', textDecoration: 'none',
+                        }}>
+                        ⋮ Traces
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </PageShell>
     </>
   );

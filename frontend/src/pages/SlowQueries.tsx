@@ -1,11 +1,9 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { navHref } from '@/lib/navHref';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
 import { Button } from '@/components/ui';
 // `api` importu KALKTI (v0.9.1137): sayfanın tek doğrudan çağrısı
 // api.copilotExplainSlowQuery'ydi ve o insight kartına devredildi. Satır
@@ -14,7 +12,10 @@ import { useSlowQueries } from '@/lib/queries';
 import { timeRangeToNs, fmtNum } from '@/lib/utils';
 import { slowQueryTracesHref } from '@/pages/slowqueries/tracesHref';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
 import type { SlowQueryRow, TimeRange } from '@/lib/types';
@@ -94,6 +95,17 @@ export default function SlowQueriesPage() {
   }, { replace: true });
   const setDbSystem = (v: string) => setUrlParam('dbsys', v);
   const setDbName = (v: string) => setUrlParam('dbname', v);
+  // v0.10.954 — "Clear" düğmesi ve tablo içi "Filtreleri temizle" AYNI eylem,
+  // TEK URL yazımı: iki ayrı setUrlParam çağrısı aynı render'ın bayat
+  // searchParams'ından türüyordu ve ikinci yazım ilkini geri alıyordu
+  // (dbsys silinmiyordu).
+  const clearFilters = () => setSqParams(prev => {
+    const next = new URLSearchParams(prev);
+    next.delete('dbsys');
+    next.delete('dbname');
+    return next;
+  }, { replace: true });
+  const dbSystemRef = useRef<HTMLSelectElement>(null);
   // Bounds memoized on [range] so the query key stays stable across
   // renders (the v0.5.184 incident shape).
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
@@ -146,6 +158,18 @@ export default function SlowQueriesPage() {
     },
   });
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş / eşleşme yok
+  // tablonun İÇİNDE, başlık durur. dbsys/dbname sunucuya giden süzgeç:
+  // seçiliyken boş sonuç "eşleşme yok" + sayfanın kendi Clear eylemi.
+  const tableState: Omit<DataTableStateProps<SlowQueryRow>, 'dt'> =
+    rows === undefined ? { kind: 'loading' }
+    : rows === null ? { kind: 'error' }
+    : (dbSystem || dbName) ? { kind: 'no-match', onClearFilters: clearFilters, returnFocusRef: dbSystemRef }
+    : {
+        kind: 'empty',
+        message: "Bu pencerede DB span'i yok — ya trafik yok ya da enstrümante uygulamalar db.statement özniteliği yaymadı.",
+      };
+
   return (
     <>
       <Topbar title="Slow queries" range={range} onRangeChange={setRange} />
@@ -160,7 +184,7 @@ export default function SlowQueriesPage() {
         <SavedViewsBar page="slowqueries" />
 
         <PageControls sticky style={{ marginBottom: 12 }}>
-          <select value={dbSystem} onChange={e => setDbSystem(e.target.value)}
+          <select ref={dbSystemRef} value={dbSystem} onChange={e => setDbSystem(e.target.value)}
             style={{ fontSize: 12, padding: '3px 8px' }}>
             <option value="">All databases</option>
             {systems.map(s => <option key={s} value={s}>{s}</option>)}
@@ -178,7 +202,7 @@ export default function SlowQueriesPage() {
           </select>
           {(dbSystem || dbName) && (
             <Button variant="secondary" size="sm"
-              onClick={() => { setDbSystem(''); setDbName(''); }}>Clear</Button>
+              onClick={clearFilters}>Clear</Button>
           )}
           {/* v0.9.1320 — geri linki pencereyi + env'i taşır (navHref). */}
           <Link to={navHref('/databases', sqParams.toString())} className="sec"
@@ -187,142 +211,130 @@ export default function SlowQueriesPage() {
           </Link>
         </PageControls>
 
-        {rows === undefined && <TableSkeleton cols={8} wideFirst />}
-        {rows === null && <Empty icon="✗" title="Failed to load slow queries" />}
-        {rows && rows.length === 0 && (
-          <Empty icon="◇" title="No DB spans in this window">
-            Either no traffic, or no db.statement attributes were emitted by
-            the instrumented apps.
-          </Empty>
-        )}
-        {rows && rows.length > 0 && (
-          <>
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} leading={[36]} />
-              <DataTableHead dt={dt} leading={<th style={{ width: 36 }}></th>} />
-              <tbody>
-                {dt.sortedRows.map(r => {
-                  const key = `${r.service}::${r.statement}`;
-                  const isExpanded = expanded === key;
-                  const totalSec = r.totalMs / 1000;
-                  const totalLabel = totalSec >= 60
-                    ? `${(totalSec / 60).toFixed(1)} min`
-                    : totalSec >= 1
-                    ? `${totalSec.toFixed(1)} s`
-                    : `${r.totalMs.toFixed(0)} ms`;
-                  return (
-                    // v0.9.869 (tutarlılık denetimi MT4) — burası keyless bir
-                    // <> fragment'ıydı: key içteki <tr>'lerdeydi, listenin
-                    // ELEMANINDA değil. React uyarı basıyor ve sıralama
-                    // değiştiğinde reconcile yanlış eşleşiyordu — açık olan
-                    // satırın genişletilmiş gövdesi başka bir ifadenin
-                    // altında kalabiliyordu. Fragment key'i dışa taşındı.
-                    <Fragment key={key}>
-                      {/* v0.8.378 — row click opens the statement detail
-                          drawer (URL-first, keyed on stmtHash); the chevron
-                          cell keeps the inline sample+Copilot expand. Rows
-                          from a pre-D1 cache entry (no stmtHash) fall back
-                          to the expand toggle. */}
-                      <tr key={key}
-                        {...rowActivation(() => r.stmtHash
-                          ? openStmt(r)
-                          : setExpanded(isExpanded ? null : key))}
-                        className="cv-row">
-                        <td onClick={e => {
-                          e.stopPropagation();
-                          setExpanded(isExpanded ? null : key);
-                        }}
-                          title={isExpanded ? 'Hide sample' : 'Show a real sample inline'}>
-                          <span style={{ fontSize: 10, color: 'var(--text3)' }}>
-                            {isExpanded ? '▼' : '▶'}
-                          </span>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} leading={[36]} />
+            <DataTableHead dt={dt} leading={<th style={{ width: 36 }}></th>} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} leading={[36]} {...tableState} /> : dt.sortedRows.map(r => {
+                const key = `${r.service}::${r.statement}`;
+                const isExpanded = expanded === key;
+                const totalSec = r.totalMs / 1000;
+                const totalLabel = totalSec >= 60
+                  ? `${(totalSec / 60).toFixed(1)} min`
+                  : totalSec >= 1
+                  ? `${totalSec.toFixed(1)} s`
+                  : `${r.totalMs.toFixed(0)} ms`;
+                return (
+                  // v0.9.869 (tutarlılık denetimi MT4) — burası keyless bir
+                  // <> fragment'ıydı: key içteki <tr>'lerdeydi, listenin
+                  // ELEMANINDA değil. React uyarı basıyor ve sıralama
+                  // değiştiğinde reconcile yanlış eşleşiyordu — açık olan
+                  // satırın genişletilmiş gövdesi başka bir ifadenin
+                  // altında kalabiliyordu. Fragment key'i dışa taşındı.
+                  <Fragment key={key}>
+                    {/* v0.8.378 — row click opens the statement detail
+                        drawer (URL-first, keyed on stmtHash); the chevron
+                        cell keeps the inline sample+Copilot expand. Rows
+                        from a pre-D1 cache entry (no stmtHash) fall back
+                        to the expand toggle. */}
+                    <tr key={key}
+                      {...rowActivation(() => r.stmtHash
+                        ? openStmt(r)
+                        : setExpanded(isExpanded ? null : key))}
+                      className="cv-row">
+                      <td onClick={e => {
+                        e.stopPropagation();
+                        setExpanded(isExpanded ? null : key);
+                      }}
+                        title={isExpanded ? 'Hide sample' : 'Show a real sample inline'}>
+                        <span style={{ fontSize: 10, color: 'var(--text3)' }}>
+                          {isExpanded ? '▼' : '▶'}
+                        </span>
+                      </td>
+                      <DataTableCell dt={dt} col="service" row={r} value={r.service}>
+                        <Link to={serviceHref(r.service, { range })}
+                          onClick={e => e.stopPropagation()}>
+                          {r.service}
+                        </Link>
+                      </DataTableCell>
+                      <DataTableCell dt={dt} col="dbSystem" row={r}>
+                        <span className="badge b-gray mono">{r.dbSystem || '?'}</span>
+                      </DataTableCell>
+                      {/* v0.9.272 — the database itself. dbNameCount > 1 means this
+                          (service, statement) pair ran against more than one, and the
+                          name shown is one of them: grouping still folds db_name, so
+                          the ambiguity is stated instead of silently resolved. */}
+                      <DataTableCell dt={dt} col="dbName" row={r} value={r.dbName}>
+                        {r.dbName
+                          ? <>
+                              {r.dbName}
+                              {r.dbNameCount > 1 && (
+                                <span style={{ color: 'var(--text3)', marginLeft: 4 }}
+                                      title={`This statement ran against ${r.dbNameCount} databases in this window; showing one of them.`}>
+                                  +{r.dbNameCount - 1}
+                                </span>
+                              )}
+                            </>
+                          : undefined}
+                      </DataTableCell>
+                      {/* v0.10.943 — maxWidth yerleşim (sınıf karşılığı yok), satır içinde kalır. */}
+                      <td {...dt.cellProps(r, 'statement', r.statement)} style={{ maxWidth: 540 }}>{r.statement}</td>
+                      <DataTableCell dt={dt} col="count" row={r} value={fmtNum(r.count)} />
+                      <DataTableCell dt={dt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
+                      <DataTableCell dt={dt} col="p50Ms" row={r} value={r.p50Ms.toFixed(1)} />
+                      <DataTableCell dt={dt} col="p99Ms" row={r} value={r.p99Ms.toFixed(0)} />
+                      <DataTableCell dt={dt} col="totalMs" row={r} value={totalLabel} className="cell-strong" />
+                      <DataTableCell dt={dt} col="errorCount" row={r} value={fmtNum(r.errorCount)} />
+                      {/* v0.10.652 (operatör) — trace araması her satırda, en sağda. */}
+                      <DataTableCell dt={dt} col="traces" row={r}>
+                        <Link to={slowQueryTracesHref(r, range)} onClick={e => e.stopPropagation()}
+                          title="Bu sorguyu içeren trace'leri ara" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                          Traces →
+                        </Link>
+                      </DataTableCell>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={key + ':sample'}>
+                        {/* 12 = 1 (chevron) + 11 kolon (v0.10.652 Traces). */}
+                        <td colSpan={12} style={{
+                          background: 'var(--bg2)', padding: 12,
+                        }}>
+                          <div style={{
+                            fontSize: 10, color: 'var(--text3)',
+                            textTransform: 'uppercase', letterSpacing: 0.5,
+                            marginBottom: 4,
+                          }}>Real sample (literals shown)</div>
+                          <pre style={{
+                            margin: 0,
+                            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            color: 'var(--text2)',
+                          }}>{r.sampleStatement}</pre>
+                          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--text3)' }}>
+                            <span>Max: {r.maxMs.toFixed(0)} ms · P95: {r.p95Ms.toFixed(0)} ms · P50: {r.p50Ms.toFixed(0)} ms</span>
+                          </div>
                         </td>
-                        <DataTableCell dt={dt} col="service" row={r} value={r.service}>
-                          <Link to={serviceHref(r.service, { range })}
-                            onClick={e => e.stopPropagation()}>
-                            {r.service}
-                          </Link>
-                        </DataTableCell>
-                        <DataTableCell dt={dt} col="dbSystem" row={r}>
-                          <span className="badge b-gray mono">{r.dbSystem || '?'}</span>
-                        </DataTableCell>
-                        {/* v0.9.272 — the database itself. dbNameCount > 1 means this
-                            (service, statement) pair ran against more than one, and the
-                            name shown is one of them: grouping still folds db_name, so
-                            the ambiguity is stated instead of silently resolved. */}
-                        <DataTableCell dt={dt} col="dbName" row={r} value={r.dbName}>
-                          {r.dbName
-                            ? <>
-                                {r.dbName}
-                                {r.dbNameCount > 1 && (
-                                  <span style={{ color: 'var(--text3)', marginLeft: 4 }}
-                                        title={`This statement ran against ${r.dbNameCount} databases in this window; showing one of them.`}>
-                                    +{r.dbNameCount - 1}
-                                  </span>
-                                )}
-                              </>
-                            : undefined}
-                        </DataTableCell>
-                        {/* v0.10.943 — maxWidth yerleşim (sınıf karşılığı yok), satır içinde kalır. */}
-                        <td {...dt.cellProps(r, 'statement', r.statement)} style={{ maxWidth: 540 }}>{r.statement}</td>
-                        <DataTableCell dt={dt} col="count" row={r} value={fmtNum(r.count)} />
-                        <DataTableCell dt={dt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
-                        <DataTableCell dt={dt} col="p50Ms" row={r} value={r.p50Ms.toFixed(1)} />
-                        <DataTableCell dt={dt} col="p99Ms" row={r} value={r.p99Ms.toFixed(0)} />
-                        <DataTableCell dt={dt} col="totalMs" row={r} value={totalLabel} className="cell-strong" />
-                        <DataTableCell dt={dt} col="errorCount" row={r} value={fmtNum(r.errorCount)} />
-                        {/* v0.10.652 (operatör) — trace araması her satırda, en sağda. */}
-                        <DataTableCell dt={dt} col="traces" row={r}>
-                          <Link to={slowQueryTracesHref(r, range)} onClick={e => e.stopPropagation()}
-                            title="Bu sorguyu içeren trace'leri ara" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                            Traces →
-                          </Link>
-                        </DataTableCell>
                       </tr>
-                      {isExpanded && (
-                        <tr key={key + ':sample'}>
-                          {/* 12 = 1 (chevron) + 11 kolon (v0.10.652 Traces). */}
-                          <td colSpan={12} style={{
-                            background: 'var(--bg2)', padding: 12,
-                          }}>
-                            <div style={{
-                              fontSize: 10, color: 'var(--text3)',
-                              textTransform: 'uppercase', letterSpacing: 0.5,
-                              marginBottom: 4,
-                            }}>Real sample (literals shown)</div>
-                            <pre style={{
-                              margin: 0,
-                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                              color: 'var(--text2)',
-                            }}>{r.sampleStatement}</pre>
-                            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--text3)' }}>
-                              <span>Max: {r.maxMs.toFixed(0)} ms · P95: {r.p95Ms.toFixed(0)} ms · P50: {r.p50Ms.toFixed(0)} ms</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {/* v0.9.1018 — TAVAN BEYANI. Bu sayfa sabit `limit: 200` ile
+            çekiyor ve bunu bugüne kadar SÖYLEMİYORDU: 200 satırlık bir
+            tablo, 200'den fazla yavaş sorgusu olan bir sistemde "hepsi
+            bu" gibi okunuyordu. v0.9.1014'ün `count` sözleşmesiyle aynı
+            dürüstlük kuralı — sayı tavana dayandıysa ekran söyler.
+            Sayfalama YOK ve bu bilinçli: en yavaş 200 sorgu zaten
+            kuyruğun ta kendisi; 201.'yi görmek için doğru hamle
+            pencereyi ya da servisi daraltmak. */}
+        {rows && rows.length >= 200 && (
+          <div className="pager" style={{ color: 'var(--text3)' }}>
+            en yavaş 200 sorgu gösteriliyor — tavana dayandı; daha fazlası
+            için pencereyi veya servisi daraltın
           </div>
-            {/* v0.9.1018 — TAVAN BEYANI. Bu sayfa sabit `limit: 200` ile
-                çekiyor ve bunu bugüne kadar SÖYLEMİYORDU: 200 satırlık bir
-                tablo, 200'den fazla yavaş sorgusu olan bir sistemde "hepsi
-                bu" gibi okunuyordu. v0.9.1014'ün `count` sözleşmesiyle aynı
-                dürüstlük kuralı — sayı tavana dayandıysa ekran söyler.
-                Sayfalama YOK ve bu bilinçli: en yavaş 200 sorgu zaten
-                kuyruğun ta kendisi; 201.'yi görmek için doğru hamle
-                pencereyi ya da servisi daraltmak. */}
-            {rows.length >= 200 && (
-              <div className="pager" style={{ color: 'var(--text3)' }}>
-                en yavaş 200 sorgu gösteriliyor — tavana dayandı; daha fazlası
-                için pencereyi veya servisi daraltın
-              </div>
-            )}
-          </>
         )}
 
       </PageShell>

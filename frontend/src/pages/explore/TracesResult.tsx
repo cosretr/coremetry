@@ -1,10 +1,8 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Spinner, Empty } from '@/components/Spinner';
-import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
 import { ColumnManager } from '@/components/ColumnManager';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { fmtNum, tsLong, rowClickHandlers } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TraceRow } from '@/lib/types';
@@ -90,107 +88,105 @@ export function TracesResult({
     onOpen: t => navigate(traceHref(t.traceId)),
   });
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık (ve sütun yöneticisi) durur. Hata satırı sunucunun
+  // metnini ve "pencereyi daralt" önerisini taşır, ↻ Retry aynı onRetry.
+  const rs = readState(traces);
+  const tableState: Omit<DataTableStateProps<TraceRow>, 'dt'> =
+    rs === 'loading' ? { kind: 'loading' }
+    : rs === 'error' ? {
+      kind: 'error', onRetry,
+      message: `Trace'ler okunamadı${errorText ? `: ${errorText}` : ''} — bu bir hata, boş sonuç değil; pencereyi daraltıp yeniden dene.`,
+    }
+    : { kind: 'empty', message: 'Eşleşen trace yok — filtreleri gevşet ya da zaman aralığını genişlet.' };
+
   return (
     <>
-      {readState(traces) === 'loading' && <Spinner />}
-      {readState(traces) === 'error' && (
-        <QueryError message={errorText} onRetry={onRetry}>
-          Traces could not be loaded — this is a failed read, not an empty
-          result. Try a narrower time range, then retry.
-        </QueryError>
-      )}
-      {readState(traces) === 'empty' && (
-        <Empty icon="⋮" title="No matching traces">
-          Loosen your filters or widen the time range.
-        </Empty>
-      )}
       {traces && traces.length > 0 && (
-        <>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
-            Showing <b style={{ color: 'var(--accent2)' }}>{traces.length}</b>
-            {traceTotal !== undefined ? (
-              <> of {fmtNum(traceTotal)} traces
-                {traces.length < traceTotal && <> · raise the limit to see more</>}</>
-            ) : (
-              <>{traceHasMore ? '+' : ''} traces{' · '}
-                <a href="#" onClick={e => { e.preventDefault(); onShowTotal(); }}
-                  title="Run an exact count(DISTINCT trace_id) over the window — can be slow at scale">
-                  Show total
-                </a></>
-            )}
-          </div>
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} trailing={[120]} />
-              {/* Same column-manager UX as /traces — attribute columns
-                  carry a hover-× remove affordance via renderLabel, and
-                  the "+ Add column" manager keeps its own trailing <th>. */}
-              <DataTableHead dt={dt}
-                renderLabel={c => c.id.startsWith(ATTR_PREFIX)
-                  ? <>
-                      <span className="mono">{c.label}</span>
-                      <IconButton variant="bare" size="xs"
-                        tooltip="Remove column" aria-label={`Remove the ${c.label} column`}
-                        onClick={e => { e.stopPropagation(); setExtraCols(extraCols.filter(x => x !== c.label)); }}
-                        style={{ marginLeft: 6 }}
-                        icon="×" />
-                    </>
-                  : c.label}
-                trailing={
-                  // v0.10.933 (tablo standardı T3) — taban `thead th` artık
-                  // `overflow: hidden` (ellipsis); ColumnManager'ın açılır
-                  // paneli bu th'nin İÇİNDE absolute, kırpılmasın.
-                  <th style={{ whiteSpace: 'nowrap', overflow: 'visible' }}>
-                    <ColumnManager
-                      cols={extraCols}
-                      onAdd={k => { if (!extraCols.includes(k) && extraCols.length < 8) setExtraCols([...extraCols, k]); }} />
-                  </th>
-                } />
-              <tbody>
-                {dt.sortedRows.map((t, i) => {
-                  const rp = dt.rowProps(i);
-                  return (
-                    <tr key={t.traceId} {...rp}
-                        {...rowClickHandlers(traceHref(t.traceId),
-                                             () => navigate(traceHref(t.traceId)))}
-                        className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
-                      <td className="mono">
-                        <Link to={traceHref(t.traceId)}
-                              onClick={e => e.stopPropagation()}
-                              style={{ fontSize: 11 }}>
-                          {t.traceId.slice(0, 12)}…
-                        </Link>
-                      </td>
-                      <td><b>{t.rootName}</b></td>
-                      <td className="mono">{t.serviceName}</td>
-                      <td className="num">
-                        {t.durationMs.toFixed(1)}ms
-                      </td>
-                      <td className="num">{fmtNum(t.spanCount)}</td>
-                      <td className="mono ib-when">{tsLong(t.startTime)}</td>{/* v0.10.739 — 13 px damga */}
-                      <td>
-                        {/* v0.10.922 (sade palet adım 1, K5) — /traces ile aynı: sağlıklı → sr-only. */}
-                        {t.hasError
-                          ? <span className="badge b-err">ERROR</span>
-                          : <span className="sr-only">OK</span>}
-                      </td>
-                      {extraCols.map(k => {
-                        const v = t.extras?.[k] ?? '';
-                        return (
-                          <td key={k} className={v ? 'mono cell-muted' : 'mono cell-faint'} style={{ maxWidth: 280 }} title={v || ''}>
-                            {v || '—'}
-                          </td>
-                        );
-                      })}
-                      <td />
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
+          Showing <b style={{ color: 'var(--accent2)' }}>{traces.length}</b>
+          {traceTotal !== undefined ? (
+            <> of {fmtNum(traceTotal)} traces
+              {traces.length < traceTotal && <> · raise the limit to see more</>}</>
+          ) : (
+            <>{traceHasMore ? '+' : ''} traces{' · '}
+              <a href="#" onClick={e => { e.preventDefault(); onShowTotal(); }}
+                title="Run an exact count(DISTINCT trace_id) over the window — can be slow at scale">
+                Show total
+              </a></>
+          )}
+        </div>
       )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} trailing={[120]} />
+          {/* Same column-manager UX as /traces — attribute columns
+              carry a hover-× remove affordance via renderLabel, and
+              the "+ Add column" manager keeps its own trailing <th>. */}
+          <DataTableHead dt={dt}
+            renderLabel={c => c.id.startsWith(ATTR_PREFIX)
+              ? <>
+                  <span className="mono">{c.label}</span>
+                  <IconButton variant="bare" size="xs"
+                    tooltip="Remove column" aria-label={`Remove the ${c.label} column`}
+                    onClick={e => { e.stopPropagation(); setExtraCols(extraCols.filter(x => x !== c.label)); }}
+                    style={{ marginLeft: 6 }}
+                    icon="×" />
+                </>
+              : c.label}
+            trailing={
+              // v0.10.933 (tablo standardı T3) — taban `thead th` artık
+              // `overflow: hidden` (ellipsis); ColumnManager'ın açılır
+              // paneli bu th'nin İÇİNDE absolute, kırpılmasın.
+              <th style={{ whiteSpace: 'nowrap', overflow: 'visible' }}>
+                <ColumnManager
+                  cols={extraCols}
+                  onAdd={k => { if (!extraCols.includes(k) && extraCols.length < 8) setExtraCols([...extraCols, k]); }} />
+              </th>
+            } />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} trailing={[120]} {...tableState} /> : dt.sortedRows.map((t, i) => {
+              const rp = dt.rowProps(i);
+              return (
+                <tr key={t.traceId} {...rp}
+                    {...rowClickHandlers(traceHref(t.traceId),
+                                         () => navigate(traceHref(t.traceId)))}
+                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                  <td className="mono">
+                    <Link to={traceHref(t.traceId)}
+                          onClick={e => e.stopPropagation()}
+                          style={{ fontSize: 11 }}>
+                      {t.traceId.slice(0, 12)}…
+                    </Link>
+                  </td>
+                  <td><b>{t.rootName}</b></td>
+                  <td className="mono">{t.serviceName}</td>
+                  <td className="num">
+                    {t.durationMs.toFixed(1)}ms
+                  </td>
+                  <td className="num">{fmtNum(t.spanCount)}</td>
+                  <td className="mono ib-when">{tsLong(t.startTime)}</td>{/* v0.10.739 — 13 px damga */}
+                  <td>
+                    {/* v0.10.922 (sade palet adım 1, K5) — /traces ile aynı: sağlıklı → sr-only. */}
+                    {t.hasError
+                      ? <span className="badge b-err">ERROR</span>
+                      : <span className="sr-only">OK</span>}
+                  </td>
+                  {extraCols.map(k => {
+                    const v = t.extras?.[k] ?? '';
+                    return (
+                      <td key={k} className={v ? 'mono cell-muted' : 'mono cell-faint'} style={{ maxWidth: 280 }} title={v || ''}>
+                        {v || '—'}
+                      </td>
+                    );
+                  })}
+                  <td />
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

@@ -6,8 +6,10 @@
 import { useMemo } from 'react';
 import type { TimeRange } from '@/lib/types';
 import { useMessagingClients } from '@/lib/queries/messaging';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
-import { Spinner, Empty } from '@/components/Spinner';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import { worstPartitions, PARTITION_LAG_ROWS, type PartitionLagRow } from './partitionLag';
 
@@ -32,29 +34,31 @@ export function PartitionLagTable({ system, cluster, destination, range }: {
   const { rows, total } = useMemo(() => worstPartitions(q.data?.blocks, PARTITION_LAG_ROWS), [q.data]);
   const dt = useDataTable<PartitionLagRow>({ storageKey: 'msg-topic-partitions', columns: COLS, rows, initialSort: { id: 'lag', dir: 'desc' } });
 
-  if (q.isPending) return <Spinner />;
-  if (q.isError) return <Empty icon="⚠" title="Partition metrikleri okunamadı" />;
-  if (!q.data?.available || rows.length === 0) {
-    return (
-      <Empty icon="◌" title="Partition lag verisi yok">
-        {q.data?.note ?? 'kafka.consumer.records_lag bu topic için VM\'de bulunamadı.'}
-      </Empty>
-    );
-  }
+  // v0.10.954 — tablo standardı T12: erken dönüşler (Spinner / Empty)
+  // kalktı; yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. Sıra ve
+  // koşullar eskisiyle aynı; boş durumun açıklaması (sunucu notu) aynı
+  // satırda başlığın devamı. Sayım satırı yalnız satır varken (0 / 0 demesin).
+  const showRows = !q.isPending && !q.isError && !!q.data?.available && rows.length > 0;
+  const state: Omit<DataTableStateProps<PartitionLagRow>, 'dt'> =
+    q.isPending ? { kind: 'loading' }
+    : q.isError ? { kind: 'error' }
+    : { kind: 'empty', message: `Partition lag verisi yok — ${q.data?.note ?? 'kafka.consumer.records_lag bu topic için VM\'de bulunamadı.'}` };
   const hidden = total - rows.length;
   return (
     <div className="sec">
-      <div className="kc-line">
-        <span>Partition'lar · en kötü {rows.length} / {total}</span>
-        <span style={{ color: 'var(--text3)', marginLeft: 8 }}>son 10 dk · son değer</span>
-        {hidden > 0 && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>({hidden} partition daha)</span>}
-      </div>
+      {showRows && (
+        <div className="kc-line">
+          <span>Partition'lar · en kötü {rows.length} / {total}</span>
+          <span style={{ color: 'var(--text3)', marginLeft: 8 }}>son 10 dk · son değer</span>
+          {hidden > 0 && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>({hidden} partition daha)</span>}
+        </div>
+      )}
       <div className="table-wrap">
         <table>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map(r => (
+            {!showRows ? <DataTableState dt={dt} {...state} /> : dt.sortedRows.map(r => (
               <tr key={`${r.service}|${r.client}|${r.partition}`}>
                 <DataTableCell dt={dt} col="partition" row={r} value={r.partition} />
                 <td>{r.service}</td>

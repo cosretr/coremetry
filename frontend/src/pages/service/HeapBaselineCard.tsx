@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtClock } from '@/lib/utils'; // v0.10.891 — tek saat biçimleyici (24 sa kilidi)
 import { useServiceDeploys } from '@/lib/queries';
 import { TimeSeriesPanel, type TSSeries, type TSThreshold } from '@/components/viz/TimeSeriesPanel';
 import { rowActivation } from '@/lib/a11y';
-import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 
 // HeapBaselineCard — v0.10.887 (Dynatrace paritesi #4, dilim 1; spec Onay
@@ -29,6 +29,7 @@ export const HEAP_STATUS: Record<string, { icon: string; label: string; tone: st
 };
 
 const LINES_MAX = 12; // grafikte çizilen pod sayısı (tablo hepsini listeler)
+const HEAP_TITLE = 'Heap after GC — % of limit (by pod)'; // v0.10.954 — kart ve hata kartı aynı başlık
 
 /** Bant cümlesi — SAF (pin testli): kaynağı ve örnek sayısını söyler, yoksa neden yok. */
 export function heapBandSentence(p: HeapBaselinePod | undefined, d: Pick<HeapBaselineResponse, 'needBuckets' | 'bucketSec' | 'historyHours'>): string {
@@ -93,8 +94,33 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
     initialSort: { id: 'status', dir: 'desc' },
   });
 
+  // v0.10.954 — tablo standardı T12: tablo (başlığıyla) TEK yerde; hata
+  // kartı da aynı tabloyu çizer, durum satırı gövdede.
+  const renderTable = (body: ReactNode) => (
+    <div className="table-wrap" style={{ marginTop: 8 }}>
+      <table {...dt.tableProps}>
+        <DataTableColgroup dt={dt} />
+        <DataTableHead dt={dt} />
+        <tbody>{body}</tbody>
+      </table>
+    </div>
+  );
+
   if (q.isError) { // hata ≠ boş küme: sessizce kaybolmaz (ship checklist #8)
-    return <div className="kc-line" data-testid="heap-baseline-error">heap bandı okunamadı: {q.error instanceof Error ? q.error.message : String(q.error)}</div>;
+    // v0.10.954 — tablo standardı T12: hata artık kartın tablosunun İÇİNDE
+    // (başlık durur); grafik / rozetler / dipnot cevaptan türediği için
+    // hata kartında yok — eski tek satırla aynı bilgi, sunucu metni dahil.
+    return (
+      <div className="card" data-testid="heap-baseline-error">
+        <div className="ov-card-h"><h3>{HEAP_TITLE}</h3></div>
+        <div className="ov-card-b" style={{ paddingTop: 10, paddingBottom: 10 }}>
+          {renderTable(
+            <DataTableState dt={dt} kind="error"
+              message={`heap bandı okunamadı: ${q.error instanceof Error ? q.error.message : String(q.error)}`} />,
+          )}
+        </div>
+      </div>
+    );
   }
   if (!data || pods.length === 0) return null; // metrik akmıyor / JVM pod yok → kart yok
   const silentAfter = 3 * data.bucketSec; // son kova bundan eskiyse "sessiz"
@@ -105,7 +131,7 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
   return (
     <div className="card" data-testid="heap-baseline-card">
       <div className="ov-card-h">
-        <h3>Heap after GC — % of limit (by pod)</h3>
+        <h3>{HEAP_TITLE}</h3>
         <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className="badge b-gray" title={`kaynak: ${sourceName}`}>{data.source}</span>
           {focused && <span className="badge b-gray" title={`odaklı pod: ${focused.pod}`}>{bandTxt}</span>}
@@ -138,38 +164,32 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
             {focused.band.status !== 'no_baseline' && <> · z {focused.band.z.toFixed(1)} · bant {fmtPct(focused.band.lower)}–{fmtPct(focused.band.upper)}</>}
           </div>
         )}
-        <div className="table-wrap" style={{ marginTop: 8 }}>
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(p => {
-                const st = HEAP_STATUS[p.band.status] ?? HEAP_STATUS.no_baseline;
-                const noBand = p.band.status === 'no_baseline';
-                /* v0.10.933 (tablo standardı T2) — odaklı pod satırı satır içi
-                   bg3 zemin yerine tek seçili görünüm `.row-selected`.
-                   v0.10.943 (T7) — "odakla" ipucu satırdan kimlik hücresine; odaklı
-                   satır AT'ye aria-current ile. */
-                return (
-                  <tr key={p.pod} {...rowActivation(() => setFocus(p.pod))}
-                      className={focused?.pod === p.pod ? 'row-selected' : undefined}
-                      aria-current={focused?.pod === p.pod ? 'true' : undefined}>
-                    <td className="mono" title="Bandı bu poda odakla">{p.pod}</td>
-                    <td className="num">{fmtPct(p.band.current)}</td>
-                    <td className="num">{noBand ? '—' : `${fmtPct(p.band.lower)}–${fmtPct(p.band.upper)}`}</td>
-                    <td className="num">{noBand ? '—' : p.band.z.toFixed(1)}</td>
-                    <td>
-                      <span className={`badge ${st.tone}`}>{st.icon} {st.label}</span>
-                      {!noBand && p.band.status !== 'ok' && <span style={{ color: 'var(--text3)' }}> · {p.band.dwell} kova</span>}
-                      {noBand && <span style={{ color: 'var(--text3)' }}> · {heapBandSentence(p, data)}</span>}
-                      {silentFor(p) > silentAfter && <span style={{ color: 'var(--text3)' }}> · sessiz · {Math.round(silentFor(p) / 60)} dk önce</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {renderTable(
+          dt.sortedRows.map(p => {
+            const st = HEAP_STATUS[p.band.status] ?? HEAP_STATUS.no_baseline;
+            const noBand = p.band.status === 'no_baseline';
+            /* v0.10.933 (tablo standardı T2) — odaklı pod satırı satır içi
+               bg3 zemin yerine tek seçili görünüm `.row-selected`.
+               v0.10.943 (T7) — "odakla" ipucu satırdan kimlik hücresine; odaklı
+               satır AT'ye aria-current ile. */
+            return (
+              <tr key={p.pod} {...rowActivation(() => setFocus(p.pod))}
+                  className={focused?.pod === p.pod ? 'row-selected' : undefined}
+                  aria-current={focused?.pod === p.pod ? 'true' : undefined}>
+                <td className="mono" title="Bandı bu poda odakla">{p.pod}</td>
+                <td className="num">{fmtPct(p.band.current)}</td>
+                <td className="num">{noBand ? '—' : `${fmtPct(p.band.lower)}–${fmtPct(p.band.upper)}`}</td>
+                <td className="num">{noBand ? '—' : p.band.z.toFixed(1)}</td>
+                <td>
+                  <span className={`badge ${st.tone}`}>{st.icon} {st.label}</span>
+                  {!noBand && p.band.status !== 'ok' && <span style={{ color: 'var(--text3)' }}> · {p.band.dwell} kova</span>}
+                  {noBand && <span style={{ color: 'var(--text3)' }}> · {heapBandSentence(p, data)}</span>}
+                  {silentFor(p) > silentAfter && <span style={{ color: 'var(--text3)' }}> · sessiz · {Math.round(silentFor(p) / 60)} dk önce</span>}
+                </td>
+              </tr>
+            );
+          }),
+        )}
         <div className="kc-line" style={{ marginTop: 6 }}>
           Bant = bu pod'un son {data.historyHours} saatteki GC-sonrası heap doluluğu
           (jvm.memory.used_after_last_gc / jvm.memory.limit), {Math.round(data.bucketSec / 60)}-dk kova, kaynak: {sourceName}.

@@ -8,12 +8,10 @@ import {
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { QueryError } from '@/components/QueryError';
-import { readState } from '@/lib/readState';
 import { useAuth } from '@/components/AuthProvider';
 import { RenderedMarkdown } from '@/components/Markdown';
 import { Button } from '@/components/ui/Button';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useRunbook, useUpdateRunbook, useDeleteRunbook, useRunbookExecutions, useExecuteRunbook } from '@/lib/queries';
@@ -248,28 +246,23 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
     storageKey: 'runbook-executions', columns: EXEC_COLS, rows: execs ?? [],
     initialSort: { id: 'startedAt', dir: 'desc' },
   });
-  // NOTE: her erken dönüş useDataTable'ın ALTINDA kalmalı — hook sırası.
-  // Erken-dönüş konumunda readState() yerine düz karşılaştırma: TS daraltması
-  // yardımcı fonksiyonun içinden akmıyor (JSX dallarında readState kullanılır).
-  if (execs === undefined) return <Spinner />;
-  if (execs === null) {
-    return (
-      <QueryError onRetry={() => q.refetch()}>
-        Executions could not be loaded — this is a failed read, not an unrun
-        runbook. Past runs are still recorded.
-      </QueryError>
-    );
-  }
-  if (execs.length === 0) {
-    return <Empty icon="▷" title="No runs yet">Click Run to execute this runbook. Every run is recorded here — who ran it, when, and which steps executed.</Empty>;
-  }
+  // v0.10.954 — tablo standardı T12: erken dönüşler (Spinner / QueryError /
+  // Empty) kalktı; yükleniyor / hata / boş tablonun İÇİNDE, başlık durur.
+  // Sıra ve tri-state aynı (v0.9.865: hata ≠ hiç koşulmamış); ↻ aynı refetch.
+  const execState: Omit<DataTableStateProps<RunbookExecution>, 'dt'> =
+    execs === undefined ? { kind: 'loading' }
+    : execs === null ? {
+      kind: 'error', onRetry: () => void q.refetch(),
+      message: 'Koşular okunamadı — bu bir hata, hiç koşulmamış bir runbook değil; geçmiş koşular kayıtlı duruyor.',
+    }
+    : { kind: 'empty', message: 'Henüz koşu yok — çalıştırmak için Run\'a tıkla; her koşu burada kaydedilir: kim, ne zaman, hangi adımlar.' };
   return (
     <div className="table-wrap">
       <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
-          {dt.sortedRows.map((e: RunbookExecution) => {
+          {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...execState} /> : dt.sortedRows.map((e: RunbookExecution) => {
             const done = e.stepStates.filter(s => STEP_TERMINAL.includes(s.status)).length;
             return (
               <tr key={e.id}>
@@ -352,25 +345,19 @@ function AuditTab({ runbookId, isAdmin }: { runbookId: string; isAdmin: boolean 
   // yukarıda kendi dalında; burada `?? []` okuma hatasını "No audit entries"e
   // eziyordu (denetim kaydının kaybolması en pahalı yanlış-boş).
   const rows = q.isLoading ? undefined : q.isError ? null : q.data ?? [];
-  if (rows === undefined) return <Spinner />;
-  if (rows === null) {
-    return (
-      <QueryError onRetry={() => q.refetch()}>
-        The audit log could not be loaded — this is a failed read, not an empty
-        history.
-      </QueryError>
-    );
-  }
-  if (rows.length === 0) {
-    return <Empty icon="▤" title="No audit entries">No recorded changes or runs for this runbook in the last 30 days.</Empty>;
-  }
+  // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur;
+  // "Admin only" kapısı yukarıda kalır (tablo henüz anlamlı değil).
+  const auditState: Omit<DataTableStateProps<AuditEntry>, 'dt'> =
+    rows === undefined ? { kind: 'loading' }
+    : rows === null ? { kind: 'error', onRetry: () => void q.refetch() }
+    : { kind: 'empty', message: 'Denetim kaydı yok — son 30 günde bu runbook için kayıtlı değişiklik ya da koşu yok.' };
   return (
     <div className="table-wrap">
       <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
-          {dt.sortedRows.map(a => (
+          {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...auditState} /> : dt.sortedRows.map(a => (
             <tr key={a.id}>
               <td className="mono cell-muted">{tsLong(a.time)}</td>
               <td className="mono">{a.actorEmail || '—'}</td>

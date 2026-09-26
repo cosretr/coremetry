@@ -4,11 +4,13 @@ import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { Link } from 'react-router-dom';
 import { Turtle } from 'lucide-react';
 import { Card, PanelTitle, StatTile } from '@/components/ui';
-import { Spinner, Empty } from '@/components/Spinner';
+import { Spinner } from '@/components/Spinner';
 import { QueryError } from '@/components/QueryError';
-import { TableSkeleton } from '@/components/Skeleton';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { logsHref } from '@/lib/logsUrl';
 import { serviceHref } from '@/lib/serviceHref';
@@ -300,61 +302,58 @@ export function DatabaseCallersSection({ callers, range, env }: {
   });
   return (
     <Card header={<PanelTitle sub="service · pod, by time share">Who calls this</PanelTitle>}>
-      {callers.length === 0 ? (
-        <Empty icon="↘" title="No caller in this window">
-          No application span reached this database in the selected range —
-          either nothing called it, or the callers are not instrumented.
-        </Empty>
-      ) : (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map((c, i) => {
-                // v0.10.929 (K5) — %0 hata nötr (b-gray); eşikler aynı.
-                const errCls = c.errorRate > 5 ? 'b-err' : c.errorRate > 0 ? 'b-warn' : 'b-gray';
-                const impact = c.spanCount * c.avgDurationMs;
-                return (
-                  <tr key={`${c.service}|${c.pod}|${i}`} className="cv-row">
-                    <td title={c.service}>
-                      <Link to={serviceHref(c.service, { range })} className="mono">
-                        {c.service}
-                      </Link>
-                      {/* v0.9.1367 — LOG PİVOTU. Trace pivotu sayfanın
-                          başlığında zaten vardı (dbTracesHref); eksik olan
-                          buydu. Kolon EKLENMİYOR: glif, v0.9.257'nin
-                          emsali ("bir tık ötedeki eylem, bir kolon
-                          harcamadan görünür olur"). */}
-                      <Link to={logsHref({ window: range, service: c.service, env })}
-                        aria-label={`${c.service} loglarını aç`}
-                        title={`${c.service} loglarını bu pencerede aç.\n\nBUNLAR ÇAĞIRANIN LOGLARI, veritabanının DEĞİL: Coremetry motor logu ingest etmiyor, dolayısıyla bir veritabanının "kendi" logu yok. Bir DB yavaşladığında sorulan soru zaten bu — hangi istemci, ve o istemci bu pencerede ne yazdı.`}
-                        style={{
-                          marginLeft: 6, fontSize: 10, whiteSpace: 'nowrap',
-                          color: 'var(--accent2)', fontWeight: 500,
-                        }}>
-                        ≡ logs
-                      </Link>
-                    </td>
-                    <DataTableCell dt={dt} col="pod" row={c} value={c.pod} />
-                    <DataTableCell dt={dt} col="calls" row={c} value={fmtNum(c.spanCount)} />
-                    <DataTableCell dt={dt} col="errRate" row={c}>
-                      <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
-                        {c.errorRate.toFixed(2)}%
-                      </span>
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="p95" row={c}
-                      value={c.p95DurationMs === undefined ? null : `${c.p95DurationMs.toFixed(1)} ms`} />
-                    <DataTableCell dt={dt} col="impact" row={c}
-                      title={`Bu çağıranın duvar-saati payı (çağrı × ortalama).\n\nPAYDA YÜKLENMİŞ SATIRLAR: yüzdeler bu tablodaki çağıranların toplamına göre, veritabanının tüm trafiğine göre DEĞİL. Satır sayısı değişirse her yüzde değişir.`}
-                      value={total > 0 ? `${((impact / total) * 100).toFixed(1)}%` : '—'} />
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur. */}
+            {dt.sortedRows.length === 0 ? (
+              <DataTableState dt={dt} kind="empty"
+                message="Bu pencerede çağıran yok — seçili aralıkta bu veritabanına hiçbir uygulama span'i ulaşmadı: ya kimse çağırmadı ya da çağıranlar enstrümante değil." />
+            ) : dt.sortedRows.map((c, i) => {
+              // v0.10.929 (K5) — %0 hata nötr (b-gray); eşikler aynı.
+              const errCls = c.errorRate > 5 ? 'b-err' : c.errorRate > 0 ? 'b-warn' : 'b-gray';
+              const impact = c.spanCount * c.avgDurationMs;
+              return (
+                <tr key={`${c.service}|${c.pod}|${i}`} className="cv-row">
+                  <td title={c.service}>
+                    <Link to={serviceHref(c.service, { range })} className="mono">
+                      {c.service}
+                    </Link>
+                    {/* v0.9.1367 — LOG PİVOTU. Trace pivotu sayfanın
+                        başlığında zaten vardı (dbTracesHref); eksik olan
+                        buydu. Kolon EKLENMİYOR: glif, v0.9.257'nin
+                        emsali ("bir tık ötedeki eylem, bir kolon
+                        harcamadan görünür olur"). */}
+                    <Link to={logsHref({ window: range, service: c.service, env })}
+                      aria-label={`${c.service} loglarını aç`}
+                      title={`${c.service} loglarını bu pencerede aç.\n\nBUNLAR ÇAĞIRANIN LOGLARI, veritabanının DEĞİL: Coremetry motor logu ingest etmiyor, dolayısıyla bir veritabanının "kendi" logu yok. Bir DB yavaşladığında sorulan soru zaten bu — hangi istemci, ve o istemci bu pencerede ne yazdı.`}
+                      style={{
+                        marginLeft: 6, fontSize: 10, whiteSpace: 'nowrap',
+                        color: 'var(--accent2)', fontWeight: 500,
+                      }}>
+                      ≡ logs
+                    </Link>
+                  </td>
+                  <DataTableCell dt={dt} col="pod" row={c} value={c.pod} />
+                  <DataTableCell dt={dt} col="calls" row={c} value={fmtNum(c.spanCount)} />
+                  <DataTableCell dt={dt} col="errRate" row={c}>
+                    <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
+                      {c.errorRate.toFixed(2)}%
+                    </span>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="p95" row={c}
+                    value={c.p95DurationMs === undefined ? null : `${c.p95DurationMs.toFixed(1)} ms`} />
+                  <DataTableCell dt={dt} col="impact" row={c}
+                    title={`Bu çağıranın duvar-saati payı (çağrı × ortalama).\n\nPAYDA YÜKLENMİŞ SATIRLAR: yüzdeler bu tablodaki çağıranların toplamına göre, veritabanının tüm trafiğine göre DEĞİL. Satır sayısı değişirse her yüzde değişir.`}
+                    value={total > 0 ? `${((impact / total) * 100).toFixed(1)}%` : '—'} />
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
@@ -392,6 +391,19 @@ export function DatabaseStatementsSection({
     storageKey: 'database-detail-statements', columns: DB_DETAIL_STMT_COLS,
     rows: rows ?? [], initialSort: { id: 'total', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur (eski üç kardeş dal, aynı öncelikle). Sunucu hata
+  // metni satırda kalır; yeniden dene aynı onRetry. Satır VARKEN hata (eski
+  // veriyle başarısız yenileme) eskisi gibi tablonun üstünde kutu — satırlar
+  // kalır, hata gizlenmez.
+  const hasRows = (rows ?? []).length > 0;
+  const tableState: Omit<DataTableStateProps<SlowQueryRow>, 'dt'> =
+    pending ? { kind: 'loading', skeletonRows: 5 }
+    : error ? { kind: 'error', onRetry, message: errorMessage ? `İfade listesi okunamadı: ${errorMessage}` : undefined }
+    : {
+        kind: 'empty',
+        message: `Bu pencerede ifade yok — seçili aralıkta ${refObj.system}${refObj.dbName ? ` / ${refObj.dbName}` : ''} ile eşleşen yok.`,
+      };
   return (
     // v0.9.961 (UX denetimi G6/Ö11) — KAPSAM BEYANI. Bu panel instance'ı
     // HİÇ filtrelemiyor: sorgu yalnız (db_system, db_name) ile gidiyor ve
@@ -408,49 +420,39 @@ export function DatabaseStatementsSection({
         Top statements
       </PanelTitle>
     }>
-      {pending && <TableSkeleton rows={5} cols={4} wideFirst />}
       {/* v0.9.865 (tutarlılık denetimi MT1) — hata dalı HİÇ YOKTU:
           sorgu 500'lediğinde kart gövdesi bomboş kalıyordu (ne
           iskelet, ne mesaj), yani "bu pencerede pahalı ifade yok"
-          diye okunuyordu. Boş dalın kardeşi olarak aynı Empty
-          anatomisini kullanıyoruz. */}
-      {error && (
+          diye okunuyordu. v0.10.954 — satır yokken hata tablonun
+          içinde (tableState); bu kutu yalnız eski satırların üstünde. */}
+      {error && hasRows && (
         <QueryError onRetry={onRetry} message={errorMessage}>
           Top statements could not be loaded — this is a failed read,
           not an idle database.
         </QueryError>
       )}
-      {rows && rows.length === 0 && (
-        <Empty icon="◷" title="No statement in this window">
-          Nothing matched <code>{refObj.system}</code>
-          {refObj.dbName ? <> / <code>{refObj.dbName}</code></> : null} in the
-          selected range.
-        </Empty>
-      )}
-      {(rows ?? []).length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map((r, i) => (
-                /* v0.10.933 (tablo standardı T2) — stmtHash'siz satır açılmaz:
-                   rowActivation yalnız açılan satıra; koşullu cursor kalktı.
-                   v0.10.943 (T7) — tam ifade ipucu satırdan onu gösteren hücreye;
-                   maxWidth: 0 sabit düzende etkisizdi (genişlik colgroup'ta). */
-                <tr key={r.stmtHash ?? i}
-                  {...(r.stmtHash ? rowActivation(() => onOpen(r)) : {})}>
-                  <td className="mono"
-                    title={`${r.sampleStatement || r.statement}\n\ncalled by ${r.service}`}>{r.statement}</td>
-                  <DataTableCell dt={dt} col="calls" row={r} value={fmtNum(r.count)} />
-                  <DataTableCell dt={dt} col="p95" row={r} value={`${r.p95Ms.toFixed(1)} ms`} />
-                  <DataTableCell dt={dt} col="total" row={r}><b>{(r.totalMs / 1000).toFixed(1)} s</b></DataTableCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => (
+              /* v0.10.933 (tablo standardı T2) — stmtHash'siz satır açılmaz:
+                 rowActivation yalnız açılan satıra; koşullu cursor kalktı.
+                 v0.10.943 (T7) — tam ifade ipucu satırdan onu gösteren hücreye;
+                 maxWidth: 0 sabit düzende etkisizdi (genişlik colgroup'ta). */
+              <tr key={r.stmtHash ?? i}
+                {...(r.stmtHash ? rowActivation(() => onOpen(r)) : {})}>
+                <td className="mono"
+                  title={`${r.sampleStatement || r.statement}\n\ncalled by ${r.service}`}>{r.statement}</td>
+                <DataTableCell dt={dt} col="calls" row={r} value={fmtNum(r.count)} />
+                <DataTableCell dt={dt} col="p95" row={r} value={`${r.p95Ms.toFixed(1)} ms`} />
+                <DataTableCell dt={dt} col="total" row={r}><b>{(r.totalMs / 1000).toFixed(1)} s</b></DataTableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }

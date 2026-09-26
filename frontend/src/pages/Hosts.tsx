@@ -4,12 +4,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
 import { Drawer, DrawerSection, DrawerTrendRow } from '@/components/ui';
 import { api } from '@/lib/api';
 import { timeRangeToNs, fmtBytes, fmtAgoNs } from '@/lib/utils';
 import { useUrlRange } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { HostRow, HostDetail, HostServiceRow, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
@@ -81,6 +83,17 @@ export default function HostsPage() {
     onOpen: r => openHost(r.host),
   });
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Koşullar eskisiyle aynı (undefined / null / []);
+  // hata metni genel olduğundan varsayılan satır.
+  const tableState: Omit<DataTableStateProps<HostRow>, 'dt'> =
+    rows === undefined ? { kind: 'loading' }
+    : rows === null ? { kind: 'error' }
+    : {
+      kind: 'empty',
+      message: 'Bu pencerede host metriği yok — host.name etiketli runtime metriği gelmedi. SDK\'larda ya da collector\'da bir OTel resource detector (host / k8s) etkinleştirin.',
+    };
+
   return (
     <>
       <Topbar title="Hosts" range={range} onRangeChange={setRange} />
@@ -91,59 +104,49 @@ export default function HostsPage() {
           per-service breakdown. Windows are capped at 6h.
         </div>
 
-        {rows === undefined && <TableSkeleton cols={8} wideFirst />}
-        {rows === null && <Empty icon="✗" title="Failed to load hosts" />}
-        {rows && rows.length === 0 && (
-          <Empty icon="◇" title="No host metrics in this window">
-            No <code>host.name</code>-tagged runtime metrics arrived. Enable an
-            OTel resource detector (host / k8s) on the SDKs or the collector.
-          </Empty>
-        )}
-        {rows && rows.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map((r, i) => {
-                  // v0.10.943 — rowProps'un `row-selected`i ile `cv-row` tek className (§2c).
-                  const rp = dt.rowProps(i);
-                  return (
-                    <tr key={r.host} {...rp}
-                      className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
-                      {...rowActivation(() => openHost(r.host))}>
-                      <td>
-                        <span className="mono" style={{ fontWeight: 500 }}>
-                          {r.host}
-                        </span>
-                      </td>
-                      <DataTableCell dt={dt} col="zone" row={r} value={r.zone} />
-                      <td onClick={e => e.stopPropagation()}>
-                        <span style={{ fontSize: 11, color: 'var(--text2)' }} title={r.services.join(', ')}>
-                          {r.services.slice(0, 2).map((s, i) => (
-                            <span key={s}>
-                              {i > 0 && ', '}
-                              <Link to={serviceHref(s, { range })} style={{ fontSize: 11 }}>{s}</Link>
-                            </span>
-                          ))}
-                          {r.services.length > 2 && ` +${r.services.length - 2}`}
-                        </span>
-                      </td>
-                      <DataTableCell dt={dt} col="cpuPct" row={r} value={r.cpuPct.toFixed(1)} />
-                      <DataTableCell dt={dt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                      <DataTableCell dt={dt} col="memPct" row={r} value={r.memPct > 0 ? r.memPct.toFixed(0) : '—'} />
-                      <td>
-                        {/* v0.10.929 (K5) — 'up' sağlıklı durum: nötr; 'stale' bir sapma → amber. */}
-                        <span className={`badge ${r.up ? 'b-gray' : 'b-warn'}`}>{r.up ? 'up' : 'stale'}</span>
-                      </td>
-                      <DataTableCell dt={dt} col="lastSeen" row={r} value={fmtAgoNs(r.lastSeen)} />
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
+                // v0.10.943 — rowProps'un `row-selected`i ile `cv-row` tek className (§2c).
+                const rp = dt.rowProps(i);
+                return (
+                  <tr key={r.host} {...rp}
+                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
+                    {...rowActivation(() => openHost(r.host))}>
+                    <td>
+                      <span className="mono" style={{ fontWeight: 500 }}>
+                        {r.host}
+                      </span>
+                    </td>
+                    <DataTableCell dt={dt} col="zone" row={r} value={r.zone} />
+                    <td onClick={e => e.stopPropagation()}>
+                      <span style={{ fontSize: 11, color: 'var(--text2)' }} title={r.services.join(', ')}>
+                        {r.services.slice(0, 2).map((s, i) => (
+                          <span key={s}>
+                            {i > 0 && ', '}
+                            <Link to={serviceHref(s, { range })} style={{ fontSize: 11 }}>{s}</Link>
+                          </span>
+                        ))}
+                        {r.services.length > 2 && ` +${r.services.length - 2}`}
+                      </span>
+                    </td>
+                    <DataTableCell dt={dt} col="cpuPct" row={r} value={r.cpuPct.toFixed(1)} />
+                    <DataTableCell dt={dt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                    <DataTableCell dt={dt} col="memPct" row={r} value={r.memPct > 0 ? r.memPct.toFixed(0) : '—'} />
+                    <td>
+                      {/* v0.10.929 (K5) — 'up' sağlıklı durum: nötr; 'stale' bir sapma → amber. */}
+                      <span className={`badge ${r.up ? 'b-gray' : 'b-warn'}`}>{r.up ? 'up' : 'stale'}</span>
+                    </td>
+                    <DataTableCell dt={dt} col="lastSeen" row={r} value={fmtAgoNs(r.lastSeen)} />
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {openHostParam && (
           <HostDrawer host={openHostParam} range={range} onClose={closeHost} />
@@ -203,27 +206,27 @@ function HostDrawer({ host, range, onClose }: {
             </DrawerSection>
 
             <DrawerSection title={`Services on this host (${detail.services.length})`}>
-              {detail.services.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text3)' }}>No services in this window.</div>
-              ) : (
-                <table {...svcDt.tableProps}>
-                  <DataTableColgroup dt={svcDt} />
-                  <DataTableHead dt={svcDt} />
-                  <tbody>
-                    {svcDt.sortedRows.map(s => (
-                      <tr key={s.service}>
-                        <td>
-                          <Link to={serviceHref(s.service, { range })} className="mono">
-                            {s.service}
-                          </Link>
-                        </td>
-                        <DataTableCell dt={svcDt} col="cpu" row={s} value={s.cpuPct.toFixed(1)} />
-                        <DataTableCell dt={svcDt} col="mem" row={s} value={fmtBytes(s.memBytes)} />
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE
+                  (çekmece düzeyindeki yükleniyor / hata dışarıda kalır). */}
+              <table {...svcDt.tableProps}>
+                <DataTableColgroup dt={svcDt} />
+                <DataTableHead dt={svcDt} />
+                <tbody>
+                  {svcDt.sortedRows.length === 0 ? (
+                    <DataTableState dt={svcDt} kind="empty" message="Bu pencerede servis yok" />
+                  ) : svcDt.sortedRows.map(s => (
+                    <tr key={s.service}>
+                      <td>
+                        <Link to={serviceHref(s.service, { range })} className="mono">
+                          {s.service}
+                        </Link>
+                      </td>
+                      <DataTableCell dt={svcDt} col="cpu" row={s} value={s.cpuPct.toFixed(1)} />
+                      <DataTableCell dt={svcDt} col="mem" row={s} value={fmtBytes(s.memBytes)} />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </DrawerSection>
           </>
         )}

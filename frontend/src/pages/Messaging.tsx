@@ -5,8 +5,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
 import { DependenciesTable, type DepRow } from '@/components/DependenciesTable';
+import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { timeRangeToNs } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
@@ -158,6 +158,24 @@ export default function MessagingPage() {
     });
   }, [list, windowMins]);
 
+  // v0.10.954 — tablo standardı T12 (P6): yükleniyor / hata / boş artık
+  // DependenciesTable'ın İÇİNDE (başlık durur); tablo her durumda çizilir.
+  // Sıra eskisiyle aynı. Eski hata metninin çaresi (ClickHouse bağlantısı,
+  // aralık seçici yeniden çalıştırır) korunur; yeniden dene düğmesi yoktu,
+  // yok. Satır VARKEN hata (eski veriyle başarısız yenileme) eskisi gibi
+  // tablonun üstünde kutu — satırlar kalır, hata gizlenmez.
+  const depState: Omit<DataTableStateProps<DepRow>, 'dt' | 'leading' | 'trailing'> =
+    q.isPending ? { kind: 'loading', skeletonRows: 8 }
+    : q.isError ? {
+        kind: 'error',
+        message: 'Mesajlaşma özeti okunamadı — ClickHouse bağlantısını kontrol edip yeniden dene; üstteki aralık seçici sorguyu yeniden çalıştırır.',
+      }
+    : {
+        kind: 'empty',
+        message: "Bu pencerede mesajlaşma etkinliği yok — seçili aralıkta messaging.system özniteliği taşıyan span gelmedi. "
+          + "Zaman aralığını genişlet ya da bir üretici / tüketiciyi OTel messaging semconv ile enstrümante et; kuyruklar ve topic'ler burada görünür.",
+      };
+
   return (
     <>
       <Topbar title="Messaging" range={range} onRangeChange={setRange} />
@@ -183,18 +201,10 @@ export default function MessagingPage() {
             (operatör: bu metrikler gereksiz). Sayfa tabloya döndü;
             /api/messaging/series ve okuyucusu da silindi — tüketicisi
             kalmayan bir uç, ödenen ama okunmayan bir CH taramasıdır. */}
-        {q.isPending && <TableSkeleton rows={8} cols={9} wideFirst />}
-        {q.isError && (
+        {q.isError && list.length > 0 && (
           <Empty icon="⚠" title="Couldn't load messaging overview">
             The messaging query failed. Check ClickHouse connectivity and retry —
             the range selector above re-runs the fetch.
-          </Empty>
-        )}
-        {q.data && list.length === 0 && (
-          <Empty icon="◯" title="No messaging activity in this window">
-            No spans with a <code>messaging.system</code> attribute landed in the
-            selected range. Widen the time range, or instrument a producer /
-            consumer with the OTel messaging semconv to see queues and topics here.
           </Empty>
         )}
         {/* v0.9.813 — TAVAN ŞERİDİ. Sunucu LIMIT'e dayandığında liste
@@ -212,24 +222,23 @@ export default function MessagingPage() {
             listede yoksa aramayı daralt ya da pencereyi kısalt.
           </div>
         )}
-        {q.data && list.length > 0 && (
-          <DependenciesTable
-            rows={rows}
-            kind="queue"
-            range={range}
-            compare={compare}
-            openRowKey={openRowKey}
-            onOpenRowChange={setOpenRow}
-            extraControls={
-              <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-                title="Compare current window against the immediately-preceding equal-length window. Adds a second backend scan; off by default.">
-                <input type="checkbox"
-                  checked={compare}
-                  onChange={e => setCompare(e.target.checked)} />
-                Compare vs prior
-              </label>
-            } />
-        )}
+        <DependenciesTable
+          rows={rows}
+          kind="queue"
+          range={range}
+          compare={compare}
+          openRowKey={openRowKey}
+          onOpenRowChange={setOpenRow}
+          state={depState}
+          extraControls={
+            <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+              title="Compare current window against the immediately-preceding equal-length window. Adds a second backend scan; off by default.">
+              <input type="checkbox"
+                checked={compare}
+                onChange={e => setCompare(e.target.checked)} />
+              Compare vs prior
+            </label>
+          } />
       </PageShell>
     </>
   );

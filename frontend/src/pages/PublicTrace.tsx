@@ -161,15 +161,11 @@ function PublicTraceInner() {
         </div>
       )}
 
+      {/* v0.10.954 — tablo standardı T12: boş anlık görüntü LogTable'ın
+          İÇİNDE (state), sütun başlıkları durur; sayım satırı yalnız log varken. */}
       {tab === 'logs' && (
-        logs.length === 0 ? (
-          <Empty icon="≡" title="No logs in this snapshot">
-            Logs are frozen into the share when the link is minted. This share
-            was created before log capture existed, or the trace had no
-            correlated log lines at share time.
-          </Empty>
-        ) : (
-          <>
+        <>
+          {logs.length > 0 && (
             <div style={{
               display: 'flex', gap: 10, padding: '6px 10px',
               fontSize: 11, color: 'var(--text3)',
@@ -180,9 +176,13 @@ function PublicTraceInner() {
                   : `${logs.length} log line${logs.length === 1 ? '' : 's'} · captured at share time`}
               </span>
             </div>
-            <LogTable logs={[...logs].sort((a, b) => a.timestamp - b.timestamp)} hideTraceColumn />
-          </>
-        )
+          )}
+          <LogTable logs={[...logs].sort((a, b) => a.timestamp - b.timestamp)} hideTraceColumn
+            state={{
+              kind: 'empty',
+              message: "Bu anlık görüntüde log yok — loglar paylaşım bağlantısı oluşturulurken paylaşıma dondurulur. Bu paylaşım log yakalama gelmeden önce oluşturulmuş ya da trace'in paylaşım anında ilişkili log satırı yoktu.",
+            }} />
+        </>
       )}
     </div>
   );

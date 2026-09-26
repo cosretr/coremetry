@@ -27,9 +27,11 @@ vi.mock('@/lib/api', () => ({ api: { logsPatterns, logsTemplates } }));
 import { LogPatternsPanel, agoLabel, templatesSinceRung } from './LogPatternsPanel';
 
 let host: HTMLDivElement | null = null; let root: Root | null = null;
+// v0.10.954 — testler yenilemeyi (refetch) elle tetikleyebilsin diye dışarıda.
+let qc: QueryClient;
 function render(node: ReactNode): HTMLElement {
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // useDataTable router hook'u kullanır (URL kalıcılığı) → MemoryRouter.
   act(() => { root!.render(<MemoryRouter><QueryClientProvider client={qc}>{node}</QueryClientProvider></MemoryRouter>); });
   return host;
@@ -90,6 +92,38 @@ describe('LogPatternsPanel', () => {
     act(() => { backBtn.click(); });
     await act(async () => { await new Promise(r => setTimeout(r, 30)); });
     expect(el.querySelectorAll('tr.lp-row').length).toBe(2);
+  });
+  // v0.10.954 — yenileme hatası BAYAT satırların altında saklanmaz: eski
+  // Empty dolu tabloda da görünüyordu; T12 göçü hata satırını yalnız boş
+  // tabloya koymuştu. Hata artık eldeki satırların YERİNE geçer.
+  it('desenler: başarılı yüklemeden sonra yenileme hatası satırların yerine geçer', async () => {
+    const el = render(<LogPatternsPanel params={{ service: 'api', from: 1, to: 2 }} open onSearch={() => {}} />);
+    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    expect(el.querySelectorAll('tr.lp-row').length).toBe(2);
+    logsPatterns.mockRejectedValueOnce(new Error('boom'));
+    await act(async () => { await qc.refetchQueries({ queryKey: ['logs', 'patterns'] }); await new Promise(r => setTimeout(r, 30)); });
+    const err = el.querySelector('tr[data-dt-state="error"]');
+    expect(err?.textContent).toContain('Desenler alınamadı: boom');
+    expect(el.querySelectorAll('tr.lp-row').length).toBe(0);
+    // Bayat örnek/toplam sayıları güncel gibi sunulmaz.
+    expect(el.textContent).not.toMatch(/pencere toplamı/);
+  });
+  it('şablonlar: başarılı yüklemeden sonra yenileme hatası satırların yerine geçer', async () => {
+    const now = Date.now();
+    const el = render(<LogPatternsPanel params={{ service: 'svc', from: (now - 5 * 3600 * 1000) * 1e6, to: now * 1e6 }} tab="templates" open onSearch={() => {}} />);
+    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    expect(el.querySelectorAll('tr.lp-row').length).toBe(1);
+    logsTemplates.mockRejectedValueOnce(new Error('boom'));
+    await act(async () => { await qc.refetchQueries({ queryKey: ['logs', 'templates'] }); await new Promise(r => setTimeout(r, 30)); });
+    const err = el.querySelector('tr[data-dt-state="error"]');
+    expect(err?.textContent).toContain('Şablonlar alınamadı: boom');
+    expect(el.querySelectorAll('tr.lp-row').length).toBe(0);
+  });
+  it('mesajsız hata öznesini kaybetmez', async () => {
+    logsPatterns.mockRejectedValueOnce(new Error(''));
+    const el = render(<LogPatternsPanel params={{ service: 'api', from: 1, to: 2 }} open onSearch={() => {}} />);
+    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    expect(el.querySelector('tr[data-dt-state="error"]')?.textContent).toContain('Desenler alınamadı');
   });
   it('templatesSinceRung basamakları', () => {
     const now = 1_000_000_000_000;

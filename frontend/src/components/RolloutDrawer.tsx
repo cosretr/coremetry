@@ -14,7 +14,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { fmtDateTime, fmtNum } from '@/lib/utils';
 import { useRolloutDetail, useEntityClusters } from '@/lib/queries';
 import { CopyButton } from '@/components/CopyButton';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { statusTone, statusLabel, statusTitle, shortRevision, imageDiff, imageRef, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone, rolloutPlaceLabel } from '@/lib/rolloutRow';
 import type { RolloutIdParam } from '@/lib/rolloutRow';
 import type { ServiceReportSection } from '@/lib/types';
@@ -84,18 +84,21 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
           </DrawerSection>
         );
       })()}
-      {d && d.services.length === 0 && (
-        <Empty icon="∅" title="Bu revizyonun servisi çözülemedi">{d.note || 'MV bu revizyon için servis kaydı taşımıyor (etkinlik penceresi geçmiş olabilir).'}</Empty>
-      )}
-      {d && d.services.length > 0 && (
+      {d && (
         <>
+          {/* v0.10.954 — tablo standardı T12: servis çözülemeyince bölüm + başlık
+              durur, açıklama tablonun İÇİNDE boş satır. Çekmece düzeyindeki
+              yükleniyor / hata yukarıda kalır (yanıt çekmecenin yapısını kurar). */}
           <DrawerSection title={`Servis sağlığı — deploy öncesi/sonrası (${d.services.length})`}>
             <div className="table-wrap">
               <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
-                  {dt.sortedRows.map(s => (
+                  {dt.sortedRows.length === 0 ? (
+                    <DataTableState dt={dt} kind="empty"
+                      message={`Bu revizyonun servisi çözülemedi — ${d.note || 'MV bu revizyon için servis kaydı taşımıyor (etkinlik penceresi geçmiş olabilir).'}`} />
+                  ) : dt.sortedRows.map(s => (
                     <tr key={s.service}>
                       <DataTableCell dt={dt} col="service" row={s} value={s.service}>
                         <Link to={serviceHref(s.service, { params: { range: `custom:${Math.round(d.since / 1e6)}-${Math.round(d.generatedAt / 1e6)}` } })} className="sec">{s.service}</Link>
@@ -122,9 +125,14 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
               </table>
             </div>
           </DrawerSection>
-          <SignalSection title="Deploy'dan beri açık problemler" rows={d.services.flatMap(s => s.problems.map(p => ({ key: p.id, svc: s.service, a: p.severity, b: p.ruleName, at: p.startedAt })))} moreHref="/problems" />
-          <SignalSection title="Aktif anomaliler" rows={d.services.flatMap(s => s.anomalies.map(a => ({ key: `${s.service}/${a.id}`, svc: s.service, a: a.kind, b: a.pattern, at: a.startedAt })))} moreHref="/anomalies" />
-          <SignalSection title="Yeni hatalar" rows={d.services.flatMap(s => s.newErrors.map(e => ({ key: `${s.service}/${e.fingerprint}`, svc: s.service, a: e.type, b: e.message, at: e.firstSeen })))} moreHref="/problems" />
+          {/* v0.10.954 — sinyal önizlemeleri servislerden türer; servis yokken eskisi gibi çizilmez. */}
+          {d.services.length > 0 && (
+            <>
+              <SignalSection title="Deploy'dan beri açık problemler" rows={d.services.flatMap(s => s.problems.map(p => ({ key: p.id, svc: s.service, a: p.severity, b: p.ruleName, at: p.startedAt })))} moreHref="/problems" />
+              <SignalSection title="Aktif anomaliler" rows={d.services.flatMap(s => s.anomalies.map(a => ({ key: `${s.service}/${a.id}`, svc: s.service, a: a.kind, b: a.pattern, at: a.startedAt })))} moreHref="/anomalies" />
+              <SignalSection title="Yeni hatalar" rows={d.services.flatMap(s => s.newErrors.map(e => ({ key: `${s.service}/${e.fingerprint}`, svc: s.service, a: e.type, b: e.message, at: e.firstSeen })))} moreHref="/problems" />
+            </>
+          )}
         </>
       )}
     </Drawer>

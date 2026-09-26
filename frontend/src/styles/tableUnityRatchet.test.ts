@@ -54,6 +54,21 @@ const CEILINGS = {
    *  yığın `--font-mono` (globals.css); ikinci yazım yığını çoğaltır, tema /
    *  yoğunluk ayarı ona ulaşamaz. Taban v0.10.933 ölçümü (263); göçü dilim 3. */
   inlineMonoStack: 19, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 92 → 19
+  /** T12 / S6 — durumu tablonun İÇİNDE olmayan DataTable tablosu. Dosya
+   *  başına `max(0, <DataTableHead> − <DataTableState>)` + `state=` almayan
+   *  `<VirtualTable>`. Her DataTable tablosu tam bir DataTableHead basar
+   *  (dt'yi alt bileşene geçiren sayfada da başlık ve durum AYNI dosyada);
+   *  VirtualTable başlığını ve durum satırını kendi basar, benimseme `state=`.
+   *  v0.10.954 — dilim 4 tabanı 139; iki pilot (ServiceBacktrace,
+   *  PartitionLagTable) ile 137.
+   *  v0.10.954 — DİKKAT: explore/GroupTable "benimsedi" sayılır ama göç
+   *  GERÇEK DEĞİL — Explore `state=` vermiyor, `rows.length === 0 && !state`
+   *  hâlâ null döner (kullanıcıya görünen değişiklik yok). Bu -1'e dayanarak
+   *  tavan DÜŞÜRÜLMEZ; Explore `state=` geçtiğinde gerçekleşir ve bu not
+   *  silinir (explore/GroupTable.state.test.tsx notun doğruluğunu çiviler).
+   *  v0.10.954 — dilim 4 göçü: ölçüm 40; tavan 41 = 40 + GroupTable'ın
+   *  gerçek olmayan -1'i (yukarıdaki not). Explore `state=` geçince 40. */
+  dtNoState: 41, // v0.10.954 — dilim 4 (tablo içi durumlar): 137 → 41
 } as const;
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -67,6 +82,24 @@ function walk(dir: string, out: string[] = []): string[] {
 const files = walk(SRC).filter(p => !p.includes(PRIMITIVE));
 const code = files.map(p => stripTsComments(readFileSync(p, 'utf8')));
 const count = (re: RegExp) => code.reduce((a, s) => a + (s.match(re)?.length ?? 0), 0);
+
+// v0.10.954 (tablo standardı T12) — `<VirtualTable<Row>` genel parametresi
+// jsxOpenTags'in ad sınırını (`[\s>/]`) kaçırır: önce düz ada indirilir.
+const VT_GENERIC = /<VirtualTable<(?:[^<>]|<[^<>]*>)*>/g;
+/** Etiketin KENDİ özniteliği mi? `renderRow` içindeki `<Link state={…}>`
+ *  gibi iç JSX derinlik > 0'da kalır ve sayılmaz. */
+function hasTopLevelAttr(tag: string, name: string): boolean {
+  let depth = 0; let q: string | null = null;
+  for (let i = 0; i < tag.length; i++) {
+    const c = tag[i];
+    if (q) { if (c === q) q = null; continue; }
+    if (depth === 0 && (c === '"' || c === "'")) { q = c; continue; }
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (depth === 0 && /\s/.test(c) && tag.startsWith(`${name}=`, i + 1)) return true;
+  }
+  return false;
+}
 
 function tableCounts(): Record<keyof typeof CEILINGS, number> {
   return {
@@ -84,6 +117,13 @@ function tableCounts(): Record<keyof typeof CEILINGS, number> {
     fakeSortable: count(/sortValue:\s*\(\)\s*=>\s*0\b/g),
     trTitle: code.reduce((a, s) => a + jsxOpenTags(s, 'tr').filter(t => /\stitle=/.test(t.tag)).length, 0),
     inlineMonoStack: count(/\bfont(?:Family)?:\s*(['"`])[^'"`\n]*monospace[^'"`\n]*\1/g),
+    dtNoState: code.reduce((a, s) => {
+      const heads = s.match(/<DataTableHead\b/g)?.length ?? 0;
+      const states = s.match(/<DataTableState\b/g)?.length ?? 0;
+      const vtBare = jsxOpenTags(s.replace(VT_GENERIC, '<VirtualTable '), 'VirtualTable')
+        .filter(t => !hasTopLevelAttr(t.tag, 'state')).length;
+      return a + Math.max(0, heads - states) + vtBare;
+    }, 0),
   };
 }
 
@@ -95,4 +135,17 @@ describe('tablo standardı mandalı (v0.10.932)', () => {
         .toBeLessThanOrEqual(CEILINGS[k]);
     });
   }
+});
+
+// v0.10.954 (tablo standardı T12) — dtNoState'in VirtualTable ayrımı çivili:
+// Traces'in `renderRow`'undaki `<Link state={{ from }}>` düz regex'le
+// "benimsendi" sayılıyordu (ilk ölçümde yakalandı).
+describe('dtNoState — VirtualTable `state=` yalnız kendi özniteliğiyse sayılır', () => {
+  const bare = (src: string) => jsxOpenTags(src.replace(VT_GENERIC, '<VirtualTable '), 'VirtualTable')
+    .filter(t => !hasTopLevelAttr(t.tag, 'state')).length;
+  it('iç JSX\'teki state= benimseme değil; kendi state= benimseme', () => {
+    expect(bare(`<VirtualTable<Row> dt={dt} renderRow={t => <Link to={h} state={{ from: x }}>{t.id}</Link>} />`)).toBe(1);
+    expect(bare(`<VirtualTable<Map<string, number>> dt={dt}\n  state={{ kind: 'loading' }} renderRow={r => <td>{r.a}</td>} />`)).toBe(0);
+    expect(bare(`<VirtualTable dt={dt} title="a state=b" />`)).toBe(1);
+  });
 });

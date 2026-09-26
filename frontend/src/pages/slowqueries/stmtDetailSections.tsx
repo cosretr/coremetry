@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom';
 import { SectionUnavailable, StatTile } from '@/components/ui';
 import { Sparkline } from '@/components/Sparkline';
 import { TrendDelta } from '@/components/TrendDelta';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { fmtNum } from '@/lib/utils';
 import type { TimeRange, DBStmtDetail, DBStmtCaller } from '@/lib/types';
 import { densifyTrend } from './stmtParam';
@@ -208,46 +211,44 @@ export function StmtCallersSection({ detail, compare, range }: {
     rows,
     initialSort: { id: 'totalMs', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: bölüm notu tablonun İÇİNDE, başlık
+  // durur. `callers: null` = bölüm okuması düştü (sunucu bölüm başına hata
+  // toleransı; boş sonuç [] döner) → hata satırı; [] → boş.
+  const tableState: Omit<DataTableStateProps<DBStmtCaller>, 'dt'> = !detail.callers
+    ? { kind: 'error' }
+    : { kind: 'empty', message: 'Bu pencerede bu ifadeyi çalıştıran servis yok' };
   return (
     <div>
       <SectionTitle>Callers</SectionTitle>
-      {!detail.callers && <SectionUnavailable what="Caller breakdown" />}
-      {detail.callers && rows.length === 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          No services issued this statement in the window.
-        </div>
-      )}
-      {rows.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(c => (
-                <tr key={c.service}>
-                  <DataTableCell dt={dt} col="service" row={c}>
-                    <Link to={serviceHref(c.service, { range })}
-                      className="mono" style={{ fontSize: 11 }}>
-                      {c.service}
-                    </Link>
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="calls" row={c}>
-                    {fmtNum(c.calls)}
-                    {compare && <TrendDelta cur={c.calls} prior={c.priorCalls} kind="neutral" />}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="errors" row={c} value={fmtNum(c.errors)} />
-                  <DataTableCell dt={dt} col="avgMs" row={c}>
-                    {c.avgMs.toFixed(1)}
-                    {compare && <TrendDelta cur={c.avgMs} prior={c.priorAvgMs} kind="lowerBetter" />}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="p95Ms" row={c} value={c.p95Ms.toFixed(0)} />
-                  <DataTableCell dt={dt} col="totalMs" row={c} value={fmtTotal(c.totalMs)} className="cell-strong" />
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(c => (
+              <tr key={c.service}>
+                <DataTableCell dt={dt} col="service" row={c}>
+                  <Link to={serviceHref(c.service, { range })}
+                    className="mono" style={{ fontSize: 11 }}>
+                    {c.service}
+                  </Link>
+                </DataTableCell>
+                <DataTableCell dt={dt} col="calls" row={c}>
+                  {fmtNum(c.calls)}
+                  {compare && <TrendDelta cur={c.calls} prior={c.priorCalls} kind="neutral" />}
+                </DataTableCell>
+                <DataTableCell dt={dt} col="errors" row={c} value={fmtNum(c.errors)} />
+                <DataTableCell dt={dt} col="avgMs" row={c}>
+                  {c.avgMs.toFixed(1)}
+                  {compare && <TrendDelta cur={c.avgMs} prior={c.priorAvgMs} kind="lowerBetter" />}
+                </DataTableCell>
+                <DataTableCell dt={dt} col="p95Ms" row={c} value={c.p95Ms.toFixed(0)} />
+                <DataTableCell dt={dt} col="totalMs" row={c} value={fmtTotal(c.totalMs)} className="cell-strong" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

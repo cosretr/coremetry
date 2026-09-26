@@ -5,8 +5,10 @@
 // Son görülme rows[] (pod × servis) üzerinden. Her satır → servis sayfası +
 // bu pod'a süzülmüş Traces.
 import { Link } from 'react-router-dom';
-import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { fmtNum, fmtDateTime } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
@@ -44,19 +46,25 @@ export function PodServicesTable({ data, pending, error, pod, spanCluster, pageR
   for (const r of data?.rows ?? []) if (r.pod === pod) lastByService.set(r.service, r.lastSeen);
   const rows: Row[] = (data?.services ?? []).map(s => ({ ...s, lastSeen: lastByService.get(s.service) }));
   const dt = useDataTable<Row>({ storageKey: 'pod-services', columns: COLS, rows, initialSort: { id: 'spans', dir: 'desc' } });
-  if (pending) return <Spinner />;
-  if (error) return <Empty icon="!" title="Servisler yüklenemedi">{String(error)}</Empty>;
-  if (rows.length === 0) {
-    // v0.10.190 — sebep listesi dürüst: MV kurulu değilse (dış Distributed
-    // prod'da 0011 operatör migration'ı) de satır yoktur; alttaki trace
-    // listesi span gösteriyorsa sorun span değil MV'dir.
-    return <Empty icon="∅" title="Bu pencerede bu pod'dan geçen servis yok">entity_seen_5m'de satır yok — boş pencere, k8s.pod.name'siz span'ler, ya da tablo var ama MV beslemiyor (dış Distributed'da 0011 ADIM 6). Alttaki trace listesi bu pod'dan span gösteriyorsa sorun MV'dedir.</Empty>;
-  }
+  // v0.10.954 — tablo standardı T12: erken dönüşler (Spinner / Empty) kalktı;
+  // yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. Sıra ve koşullar
+  // eskisiyle aynı; tablo çevresindeki notlar yalnız satır varken.
+  // v0.10.190 — sebep listesi dürüst: MV kurulu değilse (dış Distributed
+  // prod'da 0011 operatör migration'ı) de satır yoktur; alttaki trace
+  // listesi span gösteriyorsa sorun span değil MV'dir.
+  const showRows = !pending && !error && rows.length > 0;
+  const state: Omit<DataTableStateProps<Row>, 'dt'> =
+    pending ? { kind: 'loading' }
+    : error ? { kind: 'error', message: `Servisler yüklenemedi: ${String(error)}` }
+    : {
+      kind: 'empty',
+      message: "Bu pencerede bu pod'dan geçen servis yok — entity_seen_5m'de satır yok: boş pencere, k8s.pod.name'siz span'ler, ya da tablo var ama MV beslemiyor (dış Distributed'da 0011 ADIM 6). Alttaki trace listesi bu pod'dan span gösteriyorsa sorun MV'dedir.",
+    };
   const filters = JSON.stringify([{ k: 'k8s.pod.name', op: '=', v: [pod] }]);
   return (
     <>
       {/* v0.10.190 — namespace'siz span satırları pod adıyla eşlendi; varsayım ilan edilir */}
-      {(data?.nsMissingRows ?? 0) > 0 && (
+      {showRows && (data?.nsMissingRows ?? 0) > 0 && (
         <div className="pod-cap">{data!.nsMissingRows} satır namespace'siz span'lerden (bu cluster'ın collector'ı k8s.namespace.name basmıyor) — pod adı cluster içinde tek varsayıldı.</div>
       )}
       <div className="table-wrap">
@@ -64,7 +72,7 @@ export function PodServicesTable({ data, pending, error, pod, spanCluster, pageR
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map(r => {
+            {!showRows ? <DataTableState dt={dt} {...state} /> : dt.sortedRows.map(r => {
               // Pencere tracesPivotHref'te ZORUNLU (inceleme #9) — ham ?range= boşken /traces kendi 30m'sine düşerdi.
               const tracesHref = tracesPivotHref({ window: pageRange, service: r.service, cluster: spanCluster || undefined, filters });
               const errPct = r.spans ? (100 * r.errors) / r.spans : 0;
@@ -83,9 +91,11 @@ export function PodServicesTable({ data, pending, error, pod, spanCluster, pageR
           </tbody>
         </table>
       </div>
-      <div className="pod-cap">
-        <code className="mono">GET /api/entity/services</code> · entity_seen_5m · seçili pencere · Hata % ve Ort. ms bu pod'daki span'lerin; yüzdelik yok (pod-başı p95 ancak servis sayfasının Pods sekmesinde).
-      </div>
+      {showRows && (
+        <div className="pod-cap">
+          <code className="mono">GET /api/entity/services</code> · entity_seen_5m · seçili pencere · Hata % ve Ort. ms bu pod'daki span'lerin; yüzdelik yok (pod-başı p95 ancak servis sayfasının Pods sekmesinde).
+        </div>
+      )}
     </>
   );
 }

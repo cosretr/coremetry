@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Spinner, Empty } from '@/components/Spinner';
 import { Button, ButtonGroup, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { ChannelHealthRow, NotificationChannel } from '@/lib/types';
-import { IconBell } from '@/components/icons';
 import { FlashBox, humanize } from './shared';
 import { ChannelModal } from './ChannelModal';
-import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
 import { fmtAgoNs } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { kindsSummary } from '@/lib/notifyKinds'; // v0.10.747
 
 // v0.9.875 (tutarlılık denetimi BT16) — bildirim kanalları paylaşılan
@@ -84,6 +81,18 @@ export function ChannelsTab() {
   };
   useEffect(refresh, []);
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Tri-state aynı (v0.9.858: hata ≠ hiç kanal yok);
+  // ↻ aynı `refresh`.
+  const rs = readState(items);
+  const tableState: Omit<DataTableStateProps<NotificationChannel>, 'dt'> =
+    rs === 'loading' ? { kind: 'loading' }
+    : rs === 'error' ? {
+      kind: 'error', onRetry: refresh,
+      message: 'Kanallar okunamadı — bu bir hata, boş liste değil; mevcut kanallar hâlâ yapılandırılmış olabilir.',
+    }
+    : { kind: 'empty', message: 'Henüz kanal yok — alarm bildirimleri almaya başlamak için bir tane oluştur.' };
+
   // Sunucu 60s cache'liyor; test gönderiminden sonra ?refresh=1 ile
   // ATLAYARAK okuyoruz, yoksa operatör "Test" basıp rozetin bir dakika
   // boyunca kıpırdamadığını görürdü.
@@ -128,67 +137,53 @@ export function ChannelsTab() {
 
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
 
-      {readState(items) === 'loading' && <Spinner />}
       {/* v0.9.858 (UX denetimi K6) — hata "No channels yet" olarak
           sunuluyordu: operatör var olan kanalların üstüne yeni kanal
-          kurmaya yönlendiriliyordu. */}
-      {readState(items) === 'error' && (
-        <QueryError onRetry={refresh}>
-          Channels could not be loaded — this is a failed read, not an empty list.
-          Existing channels may still be configured.
-        </QueryError>
-      )}
-      {readState(items) === 'empty' && (
-        <Empty icon={<IconBell size={28} />} title="No channels yet">
-          Create one to start receiving alert notifications.
-        </Empty>
-      )}
-      {items && items.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead
-              dt={dt}
-              // Kapak-fetch tavanına çarpıldığında sayılar bir ALT sınır;
-              // dürüstlük başlıkta da duruyor, yalnız satır tooltip'inde
-              // değil (operatör kolonu okurken tavanı bilmeli).
-              renderLabel={c => (c.id === 'health' && capped
-                ? <span title="Son 5000 gönderim kaydıyla sınırlı — ardışık hata sayıları bir ALT sınırdır.">Sağlık ⚠</span>
-                : c.label)}
-            />
-            <tbody>
-              {dt.sortedRows.map(c => (
-                <tr key={c.id}>
-                  <DataTableCell dt={dt} col="name" row={c}><b>{c.name}</b></DataTableCell>
-                  <DataTableCell dt={dt} col="type" row={c} value={c.type} className="mono" />
-                  <DataTableCell dt={dt} col="target" row={c} value={summarizeChannel(c)} />
-                  <DataTableCell dt={dt} col="sev" row={c}><SeverityBadge s={c.minSeverity} /></DataTableCell>
-                  <DataTableCell dt={dt} col="kinds" row={c} value={kindsSummary(c.matchRules?.kinds)}
-                    title="Kanalın aldığı olay türleri (boş = hepsi)" />
-                  {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu: iki uç da nötr. */}
-                  <DataTableCell dt={dt} col="status" row={c}>{c.enabled
-                    ? <span className="badge b-gray">ON</span>
-                    : <span className="badge b-gray">OFF</span>}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="health" row={c}>
-                    <HealthCell
-                      h={healthMap.get(healthKey(c.type, c.name))}
-                      state={health.isError ? 'error' : health.isPending ? 'loading' : 'ready'}
-                    />
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="actions" row={c}>
-                    <ButtonGroup aria-label={`${c.name} actions`} size="sm">
-                      <Button variant="secondary" onClick={() => onTest(c)}>Test</Button>
-                      <Button variant="secondary" onClick={() => setEditing(c)}>Edit</Button>
-                      <Button variant="danger" onClick={() => onDelete(c)}>Delete</Button>
-                    </ButtonGroup>
-                  </DataTableCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+          kurmaya yönlendiriliyordu. v0.10.954 — durum satırı tablonun içinde. */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead
+            dt={dt}
+            // Kapak-fetch tavanına çarpıldığında sayılar bir ALT sınır;
+            // dürüstlük başlıkta da duruyor, yalnız satır tooltip'inde
+            // değil (operatör kolonu okurken tavanı bilmeli).
+            renderLabel={c => (c.id === 'health' && capped
+              ? <span title="Son 5000 gönderim kaydıyla sınırlı — ardışık hata sayıları bir ALT sınırdır.">Sağlık ⚠</span>
+              : c.label)}
+          />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(c => (
+              <tr key={c.id}>
+                <DataTableCell dt={dt} col="name" row={c}><b>{c.name}</b></DataTableCell>
+                <DataTableCell dt={dt} col="type" row={c} value={c.type} className="mono" />
+                <DataTableCell dt={dt} col="target" row={c} value={summarizeChannel(c)} />
+                <DataTableCell dt={dt} col="sev" row={c}><SeverityBadge s={c.minSeverity} /></DataTableCell>
+                <DataTableCell dt={dt} col="kinds" row={c} value={kindsSummary(c.matchRules?.kinds)}
+                  title="Kanalın aldığı olay türleri (boş = hepsi)" />
+                {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu: iki uç da nötr. */}
+                <DataTableCell dt={dt} col="status" row={c}>{c.enabled
+                  ? <span className="badge b-gray">ON</span>
+                  : <span className="badge b-gray">OFF</span>}
+                </DataTableCell>
+                <DataTableCell dt={dt} col="health" row={c}>
+                  <HealthCell
+                    h={healthMap.get(healthKey(c.type, c.name))}
+                    state={health.isError ? 'error' : health.isPending ? 'loading' : 'ready'}
+                  />
+                </DataTableCell>
+                <DataTableCell dt={dt} col="actions" row={c}>
+                  <ButtonGroup aria-label={`${c.name} actions`} size="sm">
+                    <Button variant="secondary" onClick={() => onTest(c)}>Test</Button>
+                    <Button variant="secondary" onClick={() => setEditing(c)}>Edit</Button>
+                    <Button variant="danger" onClick={() => onDelete(c)}>Delete</Button>
+                  </ButtonGroup>
+                </DataTableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {editing && (
         <ChannelModal

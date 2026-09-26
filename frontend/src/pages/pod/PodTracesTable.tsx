@@ -12,8 +12,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Chip, Button, Badge } from '@/components/ui';
-import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { Empty } from '@/components/Spinner';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { fmtDateTime } from '@/lib/utils';
 import { fmtDur } from '@/components/traces/shared';
 import { traceHref } from '@/lib/traceHref';
@@ -74,6 +77,21 @@ export function PodTracesTable({ ctx, p95Ms }: {
   const narrowed = qs.find(q => q.data?.narrowedFromNs)?.data?.narrowedFromNs;
   const dt = useDataTable<TraceRow>({ storageKey: 'pod-traces', columns: COLS, rows });
   const slowOff = p95Ms === null;
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur; «p95 eşiği yok» kapısı dışarıda (sorgu atılmadı).
+  // Zincirin sırası aynı: hata, yüklenmiş sayfalar olsa da satırları gizler
+  // (showRows). Hatalı / Yavaş çipi sunucu süzgecidir → sıfır satır "eşleşme
+  // yok"; eski "Tümü çipiyle süzgeci kaldır" önerisi "Filtreleri temizle".
+  const showRows = !error && rows.length > 0;
+  const tableState: Omit<DataTableStateProps<TraceRow>, 'dt'> =
+    rows.length === 0 && loading ? { kind: 'loading' }
+    : error ? { kind: 'error', message: `Trace listesi yüklenemedi: ${String(error)}` }
+    : mode !== 'all' ? {
+      kind: 'no-match',
+      message: mode === 'errors' ? 'Bu pencerede bu pod\'da hatalı trace yok' : 'p95 üstünde trace yok',
+      onClearFilters: () => setMode('all'),
+    }
+    : { kind: 'empty', message: 'Bu pencerede bu pod\'a ait trace yok — span\'ler k8s.pod.name taşımıyor olabilir; Traces sayfasında host.name ile dene.' };
   return (
     <>
       <div className="pod-chips">
@@ -88,19 +106,13 @@ export function PodTracesTable({ ctx, p95Ms }: {
       </div>
       {mode === 'slow' && slowOff ? (
         <Empty icon="—" title="p95 eşiği yok — sorgu atılmadı">RED metrikleri gelmeden «Yavaş» süzgeci çalışmaz (sabit bir ms'e düşmez). Hatalı ya da Tümü çipini seç.</Empty>
-      ) : rows.length === 0 && loading ? <Spinner /> : error ? (
-        <Empty icon="!" title="Trace listesi yüklenemedi">{String(error)}</Empty>
-      ) : rows.length === 0 ? (
-        <Empty icon="∅" title={mode === 'errors' ? 'Bu pencerede bu pod\'da hatalı trace yok' : mode === 'slow' ? 'p95 üstünde trace yok' : 'Bu pencerede bu pod\'a ait trace yok'}>
-          {mode !== 'all' ? 'Tümü çipiyle süzgeci kaldır.' : 'Span\'ler k8s.pod.name taşımıyor olabilir; Traces sayfasında host.name ile dene.'}
-        </Empty>
       ) : (
         <div className="table-wrap">
           <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
-              {dt.sortedRows.map(r => (
+              {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(r => (
                 <tr key={r.traceId} className={rows.length > 100 ? 'cv-row' : undefined}>
                   <td className="mono">{fmtDateTime(new Date(r.startTime / 1e6))}</td>
                   <td className="mono"><Link to={traceHref(r.traceId)} className="sec" title={r.traceId}>{r.traceId.slice(0, 12)}…</Link></td>

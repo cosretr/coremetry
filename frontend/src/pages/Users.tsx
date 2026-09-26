@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState, FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
-import { QueryError } from '@/components/QueryError';
+import { Empty } from '@/components/Spinner';
 import { readState } from '@/lib/readState';
 import { useAuth } from '@/components/AuthProvider';
 import { Button, Chip, Field, Modal, SelectField, Stack, useConfirm } from '@/components/ui';
@@ -10,7 +9,7 @@ import { keys, useUsers, useCustomRoles } from '@/lib/queries';
 import { api, type UserRow, type CustomRole } from '@/lib/api';
 import type { Role } from '@/lib/types';
 import { tsLong, tsMinute, tsRel } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { USER_COLS } from './usersColumns';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
@@ -50,6 +49,7 @@ export default function UsersPage() {
   // changed (react-hooks/rules-of-hooks → "rendered fewer hooks" crash). Hooks
   // must run unconditionally.
   const [teamFilter, setTeamFilter] = useState('');
+  const teamRef = useRef<HTMLSelectElement>(null);
   const teamOptions = useMemo(() => {
     const set = new Set<string>();
     (users ?? []).forEach(u => u.team && set.add(u.team));
@@ -75,6 +75,19 @@ export default function UsersPage() {
     storageKey: 'users', columns: USER_COLS,
     rows: filteredUsers ?? [], initialSort: { id: 'email', dir: 'asc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Tri-state aynı (v0.9.865: hata ≠ boş dizin); ↻ aynı
+  // refetch. Takım süzgeci her satırı elediyse (ör. "Unassigned") artık
+  // sessiz boş gövde değil "eşleşme yok" + temizle.
+  const rs = readState(users);
+  const tableState: Omit<DataTableStateProps<UserRow>, 'dt'> =
+    rs === 'loading' ? { kind: 'loading' }
+    : rs === 'error' ? {
+      kind: 'error', onRetry: () => void usersQ.refetch(),
+      message: 'Kullanıcılar okunamadı — bu bir hata, boş bir dizin değil; mevcut hesaplar etkilenmedi.',
+    }
+    : teamFilter ? { kind: 'no-match', onClearFilters: () => setTeamFilter(''), returnFocusRef: teamRef }
+    : { kind: 'empty', message: 'Henüz kullanıcı yok — başlamak için ilk kullanıcıyı oluştur.' };
 
   // Admin gate: if a viewer somehow lands here, surface a clear message
   // rather than a stack of 401s from listUsers.
@@ -115,7 +128,7 @@ export default function UsersPage() {
         <PageControls sticky>
           <Button variant="primary" onClick={() => setShowNew(true)}>+ New user</Button>
           {teamOptions.length > 0 && (
-            <select value={teamFilter}
+            <select ref={teamRef} value={teamFilter}
               onChange={e => setTeamFilter(e.target.value)}
               title="Filter by team — pulled from the active users' team labels"
               style={{ minWidth: 160 }}>
@@ -153,157 +166,143 @@ export default function UsersPage() {
           </div>
         )}
 
-        {readState(users) === 'loading' && <Spinner />}
         {/* v0.9.865 (tutarlılık denetimi MT1) — `!users` null için de doğru
             olduğundan okuma hatası "No users yet / create the first user"
             oluyordu: dolu bir LDAP filosu boş kullanıcı tabanı gibi
             okunuyor, operatör var olanın üstüne kullanıcı kurmaya
-            yönlendiriliyordu. */}
-        {readState(users) === 'error' && (
-          <QueryError onRetry={() => usersQ.refetch()}>
-            Users could not be loaded — this is a failed read, not an empty
-            directory. Existing accounts are unaffected.
-          </QueryError>
-        )}
-        {readState(users) === 'empty' && (
-          <Empty icon="◯" title="No users yet">
-            Create the first user to get started.
-          </Empty>
-        )}
-        {users && users.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(u => {
-                  const isMe = me?.id === u.id;
-                  const isOIDC = u.authProvider === 'oidc';
-                  return (
-                    <tr key={u.id} className={users.length > 100 ? 'cv-row' : undefined}>
-                      <td>
-                        {/* v0.8.238 — LDAP photo avatar; initials chip
-                            fallback keeps rows aligned. */}
-                        {u.hasPhoto ? (
-                          <img src={`/api/users/${u.id}/photo`} alt=""
-                            style={{
-                              width: 20, height: 20, borderRadius: '50%',
-                              objectFit: 'cover', verticalAlign: 'middle', marginRight: 8,
-                            }}
-                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        ) : (
-                          <span style={{
-                            display: 'inline-grid', placeItems: 'center',
+            yönlendiriliyordu. v0.10.954 — durum satırı tablonun içinde. */}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {!users || dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(u => {
+                const isMe = me?.id === u.id;
+                const isOIDC = u.authProvider === 'oidc';
+                return (
+                  <tr key={u.id} className={users.length > 100 ? 'cv-row' : undefined}>
+                    <td>
+                      {/* v0.8.238 — LDAP photo avatar; initials chip
+                          fallback keeps rows aligned. */}
+                      {u.hasPhoto ? (
+                        <img src={`/api/users/${u.id}/photo`} alt=""
+                          style={{
                             width: 20, height: 20, borderRadius: '50%',
-                            background: 'var(--accent)', color: 'var(--on-accent)',
-                            fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-                            verticalAlign: 'middle', marginRight: 8,
-                          }}>{u.email[0]}</span>
-                        )}
-                        <span style={{ fontWeight: 600 }}>{u.email}</span>
-                        {isMe && (
-                          <span style={{
-                            marginLeft: 8, fontSize: 10, color: 'var(--text3)',
-                            border: '1px solid var(--border)', borderRadius: 3,
-                            padding: '1px 5px', textTransform: 'uppercase',
-                          }}>you</span>
-                        )}
-                        {/* v0.8.266 — directory identity line: full
-                            name + organization from LDAP, refreshed
-                            on each directory login. */}
-                        {(u.fullName || u.org) && (
-                          <div style={{
-                            fontSize: 11, color: 'var(--text3)', marginLeft: 28,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }} title={[u.fullName, u.org].filter(Boolean).join(' · ')}>
-                            {[u.fullName, u.org].filter(Boolean).join(' · ')}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <RoleEditor user={u} isMe={isMe} onChanged={refresh} />
-                      </td>
-                      <td>
-                        <CustomRoleEditor user={u} catalog={customRoles} onChanged={refresh} />
-                      </td>
-                      <td>
-                        <TeamEditor user={u} suggestions={teamOptions} onChanged={refresh} />
-                      </td>
-                      <td>
-                        <span className="badge b-gray" style={{ textTransform: 'uppercase' }}>{u.authProvider || 'local'}</span>
-                      </td>
-                      <td>
-                        {/* v0.8.403 — presence. Online = authenticated API
-                            activity in the last 5 min (open tabs poll, so
-                            logged-in ≈ online). Stamp expires with the
-                            window, so offline rows show the last relative
-                            sighting only while it's still fresh, else "—". */}
-                        {u.online ? (
-                          <span>
-                            <span className="badge b-gray"
-                              title="Authenticated API activity in the last 5 minutes">
-                              ● online
-                            </span>
-                            {/* v0.10.764 — operatör: "son görülme sütunu ekle".
-                                Kolon vardı ama online satır damgayı gizliyordu;
-                                iki admin'in farklı "online" sayısı görmesi 5 dk
-                                penceresinin neresinde olunduğuyla açıklanır —
-                                damga online satırda da yazılır (tam damga title'da). */}
-                            {u.lastSeenAt ? (
-                              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}
-                                title={tsLong(u.lastSeenAt)}>
-                                {tsRel(u.lastSeenAt)}
-                              </div>
-                            ) : null}
+                            objectFit: 'cover', verticalAlign: 'middle', marginRight: 8,
+                          }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <span style={{
+                          display: 'inline-grid', placeItems: 'center',
+                          width: 20, height: 20, borderRadius: '50%',
+                          background: 'var(--accent)', color: 'var(--on-accent)',
+                          fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+                          verticalAlign: 'middle', marginRight: 8,
+                        }}>{u.email[0]}</span>
+                      )}
+                      <span style={{ fontWeight: 600 }}>{u.email}</span>
+                      {isMe && (
+                        <span style={{
+                          marginLeft: 8, fontSize: 10, color: 'var(--text3)',
+                          border: '1px solid var(--border)', borderRadius: 3,
+                          padding: '1px 5px', textTransform: 'uppercase',
+                        }}>you</span>
+                      )}
+                      {/* v0.8.266 — directory identity line: full
+                          name + organization from LDAP, refreshed
+                          on each directory login. */}
+                      {(u.fullName || u.org) && (
+                        <div style={{
+                          fontSize: 11, color: 'var(--text3)', marginLeft: 28,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }} title={[u.fullName, u.org].filter(Boolean).join(' · ')}>
+                          {[u.fullName, u.org].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <RoleEditor user={u} isMe={isMe} onChanged={refresh} />
+                    </td>
+                    <td>
+                      <CustomRoleEditor user={u} catalog={customRoles} onChanged={refresh} />
+                    </td>
+                    <td>
+                      <TeamEditor user={u} suggestions={teamOptions} onChanged={refresh} />
+                    </td>
+                    <td>
+                      <span className="badge b-gray" style={{ textTransform: 'uppercase' }}>{u.authProvider || 'local'}</span>
+                    </td>
+                    <td>
+                      {/* v0.8.403 — presence. Online = authenticated API
+                          activity in the last 5 min (open tabs poll, so
+                          logged-in ≈ online). Stamp expires with the
+                          window, so offline rows show the last relative
+                          sighting only while it's still fresh, else "—". */}
+                      {u.online ? (
+                        <span>
+                          <span className="badge b-gray"
+                            title="Authenticated API activity in the last 5 minutes">
+                            ● online
                           </span>
-                        ) : u.lastSeenAt ? (
-                          <span style={{ color: 'var(--text3)', fontSize: 12 }}
-                            title={tsLong(u.lastSeenAt)}>
-                            {tsRel(u.lastSeenAt)}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text3)' }}
-                            title="No authenticated activity seen (or presence unavailable — requires Redis)">—</span>
-                        )}
-                      </td>
-                      <td>
-                        {u.lastLoginAt ? (
-                          <span className="mono" style={{ color: 'var(--text2)', fontSize: 12 }}
-                            title={tsLong(u.lastLoginAt)}>
-                            {tsRel(u.lastLoginAt)}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text3)' }}
-                            title="Bu sürümden beri hiç giriş yapmadı">—</span>
-                        )}
-                      </td>
-                      <td className="mono cell-faint" title={tsLong(u.createdAt)}>
-                        {/* Saniyesiz — bir hesabın oluşturulma saniyesi
-                            25px kolon genişliğine değmiyor ve o 25px
-                            doğrudan taşmaya gidiyordu (v0.9.660). Tam
-                            damga title'da. */}
-                        {tsMinute(u.createdAt)}
-                      </td>
-                      <td className="col-actions">
-                        <Button variant="secondary" onClick={() => setResetFor(u)}
-                          disabled={isOIDC}
-                          title={isOIDC ? 'OIDC users authenticate via SSO — no local password' : 'Set a new password'}
-                          style={{ marginRight: 6 }}>
-                          Reset password
-                        </Button>
-                        <Button variant="ghost-danger" onClick={() => void onDelete(u)}
-                          disabled={isMe}
-                          title={isMe ? "You can't delete your own account" : 'Disable user'}>
-                          Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                          {/* v0.10.764 — operatör: "son görülme sütunu ekle".
+                              Kolon vardı ama online satır damgayı gizliyordu;
+                              iki admin'in farklı "online" sayısı görmesi 5 dk
+                              penceresinin neresinde olunduğuyla açıklanır —
+                              damga online satırda da yazılır (tam damga title'da). */}
+                          {u.lastSeenAt ? (
+                            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}
+                              title={tsLong(u.lastSeenAt)}>
+                              {tsRel(u.lastSeenAt)}
+                            </div>
+                          ) : null}
+                        </span>
+                      ) : u.lastSeenAt ? (
+                        <span style={{ color: 'var(--text3)', fontSize: 12 }}
+                          title={tsLong(u.lastSeenAt)}>
+                          {tsRel(u.lastSeenAt)}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text3)' }}
+                          title="No authenticated activity seen (or presence unavailable — requires Redis)">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {u.lastLoginAt ? (
+                        <span className="mono" style={{ color: 'var(--text2)', fontSize: 12 }}
+                          title={tsLong(u.lastLoginAt)}>
+                          {tsRel(u.lastLoginAt)}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text3)' }}
+                          title="Bu sürümden beri hiç giriş yapmadı">—</span>
+                      )}
+                    </td>
+                    <td className="mono cell-faint" title={tsLong(u.createdAt)}>
+                      {/* Saniyesiz — bir hesabın oluşturulma saniyesi
+                          25px kolon genişliğine değmiyor ve o 25px
+                          doğrudan taşmaya gidiyordu (v0.9.660). Tam
+                          damga title'da. */}
+                      {tsMinute(u.createdAt)}
+                    </td>
+                    <td className="col-actions">
+                      <Button variant="secondary" onClick={() => setResetFor(u)}
+                        disabled={isOIDC}
+                        title={isOIDC ? 'OIDC users authenticate via SSO — no local password' : 'Set a new password'}
+                        style={{ marginRight: 6 }}>
+                        Reset password
+                      </Button>
+                      <Button variant="ghost-danger" onClick={() => void onDelete(u)}
+                        disabled={isMe}
+                        title={isMe ? "You can't delete your own account" : 'Disable user'}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {showNew && (
           <NewUserModal

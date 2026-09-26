@@ -25,7 +25,7 @@ import { timeRangeToNs, fmtDateTime } from '@/lib/utils';
 import { useEntityEnabled, useEntity, useEntityServices, useEntityLatency } from '@/lib/queries';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { serviceHref } from '@/lib/serviceHref';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { EntityDetailResponse, EntityRecord, EntityServiceRow, EntitySeenAgg, EntityServicesResponse, TimeRange } from '@/lib/types';
 
 export default function EntityDetail() {
@@ -88,6 +88,15 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
   const rows = svc?.rows ?? [];
   const svcDt = useDataTable<EntityServiceRow>({ storageKey: 'entity-detail-services', columns: SVC_COLS, rows: svc?.services ?? [] });
   const podDt = useDataTable<EntitySeenAgg>({ storageKey: 'entity-detail-pod-services', columns: POD_SVC_COLS, rows });
+  // v0.10.954 — tablo standardı T12: servis tablosunun yükleniyor / hata /
+  // boş durumu tablonun İÇİNDE, başlık durur (sunucu hata metni korunur).
+  // Yenileme eski satırlar dururken düşerse hata eskisi gibi tablonun
+  // üstünde (satırlar kazanır). Pod × servis tablosu bilinçli kendini
+  // gizler (boşken çizilmez) — kalır.
+  const svcState: Omit<DataTableStateProps<EntityServiceRow>, 'dt'> =
+    svcError ? { kind: 'error', message: `Servisler okunamadı: ${svcError}` }
+    : !svc ? { kind: 'loading' }
+    : { kind: 'empty', message: 'Bu pencerede bu entity altından span geçmedi' };
   return (
     <Stack gap={4}>
       <Row gap={2} wrap>
@@ -138,33 +147,29 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
         </Row>
       )}
       <h3>Services under this {entity.type}</h3>
-      {!svc && !svcError && <Spinner />}
-      {svcError && <Empty icon="!" title="Servisler yüklenemedi." compact>{svcError}</Empty>}
-      {svc && svc.services.length === 0 && <Empty icon="—" title="Bu pencerede bu entity altından span geçmedi." compact />}
-      {svc && svc.services.length > 0 && (
-        // v0.10.947 — .table-wrap: DataTableColgroup kabı bulamazsa fitColumnWidths
-        // çalışmaz; fixed düzende flex Service kolonu sıfıra inebilir.
-        <div className="table-wrap">
-          <table {...svcDt.tableProps}>
-            <DataTableColgroup dt={svcDt} />
-            <DataTableHead dt={svcDt} />
-            <tbody>
-              {/* v0.10.857 (scale-audit) — cluster entity'sinde penceredeki her servis gelir: >100 satırda content-visibility. */}
-              {svcDt.sortedRows.map(s => (
-                <tr key={s.service} className={svc.services.length > 100 ? 'cv-row' : undefined}>
-                  <DataTableCell dt={svcDt} col="service" row={s} title={s.service}>
-                    <Link to={serviceHref(s.service, { range: pageRange })} className="sec">{s.service}</Link>
-                  </DataTableCell>
-                  <DataTableCell dt={svcDt} col="pods" row={s} value={s.pods} />
-                  <DataTableCell dt={svcDt} col="spans" row={s} value={s.spans} />
-                  <DataTableCell dt={svcDt} col="errors" row={s} value={s.errors} />
-                  <DataTableCell dt={svcDt} col="avgMs" row={s} value={s.avgMs.toFixed(1)} />
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {svcError && svc && svc.services.length > 0 && <Empty icon="!" title="Servisler yüklenemedi." compact>{svcError}</Empty>}
+      {/* v0.10.947 — .table-wrap: DataTableColgroup kabı bulamazsa fitColumnWidths
+          çalışmaz; fixed düzende flex Service kolonu sıfıra inebilir. */}
+      <div className="table-wrap">
+        <table {...svcDt.tableProps}>
+          <DataTableColgroup dt={svcDt} />
+          <DataTableHead dt={svcDt} />
+          <tbody>
+            {/* v0.10.857 (scale-audit) — cluster entity'sinde penceredeki her servis gelir: >100 satırda content-visibility. */}
+            {!svc || svcDt.sortedRows.length === 0 ? <DataTableState dt={svcDt} {...svcState} /> : svcDt.sortedRows.map(s => (
+              <tr key={s.service} className={svc.services.length > 100 ? 'cv-row' : undefined}>
+                <DataTableCell dt={svcDt} col="service" row={s} title={s.service}>
+                  <Link to={serviceHref(s.service, { range: pageRange })} className="sec">{s.service}</Link>
+                </DataTableCell>
+                <DataTableCell dt={svcDt} col="pods" row={s} value={s.pods} />
+                <DataTableCell dt={svcDt} col="spans" row={s} value={s.spans} />
+                <DataTableCell dt={svcDt} col="errors" row={s} value={s.errors} />
+                <DataTableCell dt={svcDt} col="avgMs" row={s} value={s.avgMs.toFixed(1)} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {rows.length > 0 && (
         <>
           <h3>Pods × services ({rows.length})</h3>

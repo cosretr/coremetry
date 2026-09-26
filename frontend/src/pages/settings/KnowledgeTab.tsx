@@ -4,7 +4,10 @@ import { Button, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
 import { Field2, FlashBox, Row } from './shared';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { RagDocument } from '@/lib/types';
 
 // v0.9.871 (tutarlılık denetimi BT17) — RAG doküman kataloğu paylaşılan
@@ -86,6 +89,13 @@ export function KnowledgeTab() {
 
   if (cfg === undefined) return <Spinner />;
   if (cfg === null) return <Empty icon="📄" title="RAG ayarları yüklenemedi" />;
+
+  // v0.10.954 — tablo standardı T12: doküman listesinin yükleniyor / hata /
+  // boş hâli tablonun İÇİNDE, başlık durur (RAG ayar kapısı yukarıda kalır).
+  const docsState: Omit<DataTableStateProps<RagDocument>, 'dt'> =
+    docs === undefined ? { kind: 'loading' }
+    : docs === null ? { kind: 'error' }
+    : { kind: 'empty', message: 'Henüz doküman yok' };
 
   const save = async () => {
     setBusy(true); setMsg(null);
@@ -316,47 +326,40 @@ export function KnowledgeTab() {
         </div>
       )}
 
-      {docs === undefined && <Spinner />}
-      {docs === null && <Empty icon="📄" title="Doküman listesi yüklenemedi" />}
-      {docs && docs.length === 0 && (
-        <Empty compact icon="◯" title="Henüz doküman yok" />
-      )}
-      {docs && docs.length > 0 && (
-        <div className="table-wrap" style={{ marginTop: 8 }}>
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(d => (
-                <tr key={d.docId}>
-                  <DataTableCell dt={dt} col="docName" row={d} value={d.docName} />
-                  <DataTableCell dt={dt} col="source" row={d}><span className="badge b-gray">{d.source}</span></DataTableCell>
-                  <DataTableCell dt={dt} col="chunks" row={d} value={d.chunks} />
-                  <DataTableCell dt={dt} col="bytes" row={d} value={`${(d.bytes / 1024).toFixed(1)} KB`} />
-                  <DataTableCell dt={dt} col="uploadedBy" row={d} value={d.uploadedBy} />
-                  <DataTableCell dt={dt} col="actions" row={d}>
-                    <Button variant="danger" size="sm" type="button" disabled={busy}
-                      onClick={async () => {
-                        if (!await confirm({
-                          title: 'Belge silinsin mi?',
-                          body: <><b>{d.docName}</b> ve ondan üretilmiş
-                            {' '}{d.chunks} parça bilgi tabanından silinecek;
-                            CoSRE artık bu belgeden alıntı yapamaz.</>,
-                          confirmLabel: 'Belgeyi sil',
-                          danger: true,
-                        })) return;
-                        try { await api.deleteRagDocument(d.docId); load(); }
-                        catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) }); }
-                      }}>
-                      Sil
-                    </Button>
-                  </DataTableCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap" style={{ marginTop: 8 }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...docsState} /> : dt.sortedRows.map(d => (
+              <tr key={d.docId}>
+                <DataTableCell dt={dt} col="docName" row={d} value={d.docName} />
+                <DataTableCell dt={dt} col="source" row={d}><span className="badge b-gray">{d.source}</span></DataTableCell>
+                <DataTableCell dt={dt} col="chunks" row={d} value={d.chunks} />
+                <DataTableCell dt={dt} col="bytes" row={d} value={`${(d.bytes / 1024).toFixed(1)} KB`} />
+                <DataTableCell dt={dt} col="uploadedBy" row={d} value={d.uploadedBy} />
+                <DataTableCell dt={dt} col="actions" row={d}>
+                  <Button variant="danger" size="sm" type="button" disabled={busy}
+                    onClick={async () => {
+                      if (!await confirm({
+                        title: 'Belge silinsin mi?',
+                        body: <><b>{d.docName}</b> ve ondan üretilmiş
+                          {' '}{d.chunks} parça bilgi tabanından silinecek;
+                          CoSRE artık bu belgeden alıntı yapamaz.</>,
+                        confirmLabel: 'Belgeyi sil',
+                        danger: true,
+                      })) return;
+                      try { await api.deleteRagDocument(d.docId); load(); }
+                      catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) }); }
+                    }}>
+                    Sil
+                  </Button>
+                </DataTableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
 
       <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '24px 0 18px' }} />

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
+import { Empty } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
 import { IconShield } from '@/components/icons';
 import { api } from '@/lib/api';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { ActionRow } from '@/components/ui/ActionRow';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -114,6 +115,16 @@ export default function AdminCatalogPage() {
     initialSort: { id: 'service', dir: 'asc' },
   });
 
+  // v0.10.954 — tablo standardı T12: iskelet / hata / boş / eşleşme yok
+  // tablonun İÇİNDE, başlık durur. "Eşleşme yok" yalnız arama gerçekten
+  // süzerken (listeyi süzen AYNI koşul: trim); eskiden süzgeç yokken boş
+  // katalog da "No services match your filter" diyordu.
+  const tableState: Omit<DataTableStateProps<Row>, 'dt'> =
+    rows === undefined ? { kind: 'loading', skeletonRows: 12 }
+    : rows === null ? { kind: 'error' }
+    : search.trim() ? { kind: 'no-match' }
+    : { kind: 'empty', message: 'Katalogda servis yok' };
+
   const startEdit = (r: Row) => {
     setEditing(r.service);
     setDraft({ ...r.meta, service: r.service });
@@ -170,41 +181,32 @@ export default function AdminCatalogPage() {
           </Button>
         </div>
 
-        {rows === undefined && <TableSkeleton rows={12} cols={7} />}
-        {rows === null && (
-          <Empty icon="!" title="Failed to load catalog" />
-        )}
-        {filtered && filtered.length === 0 && (
-          <Empty icon="◇" title="No services match your filter" />
-        )}
         {/* v0.9.917 (MT5) — JSX'e gömülü <style> etiketi kalktı. O hack
             her render'da belgeye bir stil düğümü basıyordu ve kuralını
             (z-index: 1) skalanın DIŞINDA bırakıyordu. Ev kuralı
             `.table-wrap.is-scroll thead th` aynı işi --z-sticky-head
             rungunda yapıyor. */}
-        {filtered && filtered.length > 0 && (
-          <div className="table-wrap is-scroll"
-               style={{ maxHeight: 'calc(100vh - 220px)' }}>
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(r => (
-                  editing === r.service && draft
-                    ? <EditRow key={r.service}
-                        draft={draft}
-                        busy={busy === r.service}
-                        onChange={setDraft}
-                        onSave={save}
-                        onCancel={() => { setEditing(null); setDraft(null); }} />
-                    : <DisplayRow key={r.service}
-                        row={r}
-                        onEdit={() => startEdit(r)} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap is-scroll"
+             style={{ maxHeight: 'calc(100vh - 220px)' }}>
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(r => (
+                editing === r.service && draft
+                  ? <EditRow key={r.service}
+                      draft={draft}
+                      busy={busy === r.service}
+                      onChange={setDraft}
+                      onSave={save}
+                      onCancel={() => { setEditing(null); setDraft(null); }} />
+                  : <DisplayRow key={r.service}
+                      row={r}
+                      onEdit={() => startEdit(r)} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

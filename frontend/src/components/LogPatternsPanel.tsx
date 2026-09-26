@@ -16,12 +16,14 @@ import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim
 import { useLogsPatterns, useLogsTemplates } from '@/lib/queries';
 import type { LogsParams } from '@/lib/api';
 import type { LogPatternGroup, LogTemplate } from '@/lib/types';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { trendCell, trendLabel } from '@/lib/logPatternsTrend'; // v0.10.508 (C6)
 import { getItem, setItem } from '@/lib/storage';
 import { IconButton } from '@/components/ui/IconButton'; // v0.10.502 (B6)
-import { Spinner, Empty } from '@/components/Spinner';
 import { sevClass, sevName, tsLong, tsShort } from '@/lib/utils';
 import type { LogPatternsResult } from '@/lib/types';
 import { getRaw, setRaw } from '@/lib/storage';
@@ -135,6 +137,25 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
   const d = q.data;
   const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 0);
   const maxTotal = trows.reduce((m, r) => Math.max(m, r.totalCount), 0);
+  // v0.10.954 — tablo standardı T12: iki sekmenin durumları kendi tablosunun
+  // İÇİNDE, başlık durur. Sıra eskisiyle aynı (bekliyor → hata → boş); hata
+  // satırı sunucunun metnini eskisi gibi taşır. Panelin kendi süzgeci ve
+  // temizleme eylemi yok — boş liste eskisi gibi "boş". Hata, eldeki (bayat)
+  // satırların yerine geçer — Hosts/Events'teki `q.isError ? null` ile aynı
+  // (eski Empty dolu tabloda da görünüyordu; yenileme hatası saklanmaz).
+  // Mesajsız hatada özne ("Desenler alınamadı") yine görünür.
+  const errMsg = (subject: string, e: unknown) => (e instanceof Error && e.message ? `${subject}: ${e.message}` : subject);
+  const patternsState: Omit<DataTableStateProps<LogPatternGroup>, 'dt'> =
+    q.isPending ? { kind: 'loading', message: 'Desenler çıkarılıyor' }
+    : q.isError ? { kind: 'error', message: errMsg('Desenler alınamadı', q.error) }
+    : { kind: 'empty', message: 'Bu pencerede desen yok' };
+  const templatesState: Omit<DataTableStateProps<LogTemplate>, 'dt'> =
+    tq.isPending ? { kind: 'loading', message: 'Şablonlar alınıyor' }
+    : tq.isError ? { kind: 'error', message: errMsg('Şablonlar alınamadı', tq.error) }
+    : {
+      kind: 'empty',
+      message: 'Bu aralıkta kalıcı şablon yok — Templater 5 dakikada bir örnekler; yeni kurulumda ilk şablonlar birkaç dakika sonra görünür.',
+    };
   /* v0.10.933 (tablo standardı T2) — koşullu cursor kalktı: el imleci + hover
      globals.css'ten role=button işaretiyle gelir, işaret yalnız sorgusu olan
      (açılan) satırda. */
@@ -152,7 +173,8 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
           </Button>
         )}
         <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-          {tab === 'patterns' ? (d ? (
+          {/* v0.10.954 — hata anında bayat örnek/toplam sayıları güncel gibi sunulmaz. */}
+          {tab === 'patterns' ? (d && !q.isError ? (
             <>
               {d.sampled.toLocaleString()} örnek satır{d.truncated ? ` (tavan ${d.cap.toLocaleString()})` : ''}
               {' · '}pencere toplamı {d.total.toLocaleString()}{' · '}{d.distinct} desen
@@ -173,109 +195,95 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
       </div>
       {tab === 'patterns' && (
         <>
-          {q.isPending && <Spinner label="Desenler çıkarılıyor…" />}
-          {q.isError && <Empty icon="⚠" title="Desenler alınamadı" compact>{q.error instanceof Error ? q.error.message : ''}</Empty>}
-          {d && rows.length === 0 && !q.isPending && <Empty icon="≡" title="Bu pencerede desen yok" compact />}
-          {rows.length > 0 && (
-            <div className="table-wrap is-scroll">
-              <table {...dt.tableProps}>
-                <DataTableColgroup dt={dt} />
-                <DataTableHead dt={dt} />
-                <tbody>
-                  {dt.sortedRows.map(r => {
-                    const share = maxCount > 0 ? (r.count / maxCount) * 100 : 0;
-                    return (
-                      // v0.10.945 — örnek satır ipucu satırdan şablon hücresine (T7).
-                      <tr key={r.hash} className="lp-row cv-row"
-                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}>
-                        <DataTableCell dt={dt} col="template" row={r} value={r.template} title={r.sample} />
-                        <td className="num">
-                          <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
-                          <span style={{ position: 'relative' }}>{r.count.toLocaleString()}</span>
-                        </td>
-                        <td className="num" title={d?.baseline && !d.baseline.degraded
-                          ? `önceki pencere örneklemesinde ${r.prevCount ?? 0} satır${r.new ? ' (yok → örneklemede yeni)' : ''}`
-                          : 'Trend kapalı ya da taban okunamadı'}>
-                          {(() => { const c = trendCell(r, d?.baseline); return c.kind === 'new'
-                            ? <span className="badge b-warn">YENİ</span>
-                            : <span style={{ color: c.kind === 'ratio' ? (c.up ? 'var(--err)' : 'var(--text2)' /* v0.10.929 (K5) — düşüş nötr */) : 'var(--text3)' }}>{trendLabel(c)}</span>; })()}
-                        </td>
-                        <td><span className={sevClass(r.severity)}>{r.severityText || sevName(r.severity)}</span></td>
-                        <DataTableCell dt={dt} col="services" row={r} title={r.services.join(', ')}
-                          value={`${r.services.join(', ')}${r.serviceCount > r.services.length ? ` +${r.serviceCount - r.services.length}` : ''}`} />
-                        <DataTableCell dt={dt} col="lastSeen" row={r} value={agoLabel(r.lastSeen)} title={tsLong(r.lastSeen)} />
-                        <DataTableCell dt={dt} col="act" row={r}>
-                          {r.query && (
-                            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                              <Button variant="secondary" size="xs" className="lp-search"
-                                title={`Ara: ${r.query}`}
-                                onClick={e => { e.stopPropagation(); onSearch(r.query); }}>Ara</Button>
-                              {/* v0.10.502 (B6) — mevcut metni ezmeden ekle / hariç tut */}
-                              <IconButton variant="bare" size="xs" className="ib-add"
-                                // v0.10.926 — Tooltip (tetiğe ve kutuya boş title basar;
-                                // ata hücre/satır ipucu sızmaz).
-                                tooltip={`Mevcut aramaya ekle: ${r.query}`} aria-label={`Mevcut aramaya ekle: ${r.query}`}
-                                onClick={e => { e.stopPropagation(); onSearch(r.query, 'and'); }} icon="⊕" />
-                              <IconButton variant="bare" size="xs" className="ib-not"
-                                tooltip={`Hariç tut: NOT (${r.query})`} aria-label={`Hariç tut: NOT (${r.query})`}
-                                onClick={e => { e.stopPropagation(); onSearch(r.query, 'not'); }} icon="⊖" />
-                            </span>
-                          )}
-                        </DataTableCell>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="table-wrap is-scroll">
+            <table {...dt.tableProps}>
+              <DataTableColgroup dt={dt} />
+              <DataTableHead dt={dt} />
+              <tbody>
+                {q.isError || dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...patternsState} /> : dt.sortedRows.map(r => {
+                  const share = maxCount > 0 ? (r.count / maxCount) * 100 : 0;
+                  return (
+                    // v0.10.945 — örnek satır ipucu satırdan şablon hücresine (T7).
+                    <tr key={r.hash} className="lp-row cv-row"
+                      {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}>
+                      <DataTableCell dt={dt} col="template" row={r} value={r.template} title={r.sample} />
+                      <td className="num">
+                        <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
+                        <span style={{ position: 'relative' }}>{r.count.toLocaleString()}</span>
+                      </td>
+                      <td className="num" title={d?.baseline && !d.baseline.degraded
+                        ? `önceki pencere örneklemesinde ${r.prevCount ?? 0} satır${r.new ? ' (yok → örneklemede yeni)' : ''}`
+                        : 'Trend kapalı ya da taban okunamadı'}>
+                        {(() => { const c = trendCell(r, d?.baseline); return c.kind === 'new'
+                          ? <span className="badge b-warn">YENİ</span>
+                          : <span style={{ color: c.kind === 'ratio' ? (c.up ? 'var(--err)' : 'var(--text2)' /* v0.10.929 (K5) — düşüş nötr */) : 'var(--text3)' }}>{trendLabel(c)}</span>; })()}
+                      </td>
+                      <td><span className={sevClass(r.severity)}>{r.severityText || sevName(r.severity)}</span></td>
+                      <DataTableCell dt={dt} col="services" row={r} title={r.services.join(', ')}
+                        value={`${r.services.join(', ')}${r.serviceCount > r.services.length ? ` +${r.serviceCount - r.services.length}` : ''}`} />
+                      <DataTableCell dt={dt} col="lastSeen" row={r} value={agoLabel(r.lastSeen)} title={tsLong(r.lastSeen)} />
+                      <DataTableCell dt={dt} col="act" row={r}>
+                        {r.query && (
+                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                            <Button variant="secondary" size="xs" className="lp-search"
+                              title={`Ara: ${r.query}`}
+                              onClick={e => { e.stopPropagation(); onSearch(r.query); }}>Ara</Button>
+                            {/* v0.10.502 (B6) — mevcut metni ezmeden ekle / hariç tut */}
+                            <IconButton variant="bare" size="xs" className="ib-add"
+                              // v0.10.926 — Tooltip (tetiğe ve kutuya boş title basar;
+                              // ata hücre/satır ipucu sızmaz).
+                              tooltip={`Mevcut aramaya ekle: ${r.query}`} aria-label={`Mevcut aramaya ekle: ${r.query}`}
+                              onClick={e => { e.stopPropagation(); onSearch(r.query, 'and'); }} icon="⊕" />
+                            <IconButton variant="bare" size="xs" className="ib-not"
+                              tooltip={`Hariç tut: NOT (${r.query})`} aria-label={`Hariç tut: NOT (${r.query})`}
+                              onClick={e => { e.stopPropagation(); onSearch(r.query, 'not'); }} icon="⊖" />
+                          </span>
+                        )}
+                      </DataTableCell>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
       {tab === 'templates' && (
         <>
-          {tq.isPending && <Spinner label="Şablonlar alınıyor…" />}
-          {tq.isError && <Empty icon="⚠" title="Şablonlar alınamadı" compact>{tq.error instanceof Error ? tq.error.message : ''}</Empty>}
-          {tq.data && trows.length === 0 && !tq.isPending && (
-            <Empty icon="⌗" title="Bu aralıkta kalıcı şablon yok" compact>
-              Templater 5 dakikada bir örnekler; yeni kurulumda ilk şablonlar birkaç dakika sonra görünür.
-            </Empty>
-          )}
-          {trows.length > 0 && (
-            <div className="table-wrap is-scroll">
-              <table {...tdt.tableProps}>
-                <DataTableColgroup dt={tdt} />
-                <DataTableHead dt={tdt} />
-                <tbody>
-                  {tdt.sortedRows.map(r => {
-                    const share = maxTotal > 0 ? (r.totalCount / maxTotal) * 100 : 0;
-                    return (
-                      <tr key={r.id} className="lp-row cv-row"
-                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}>
-                        <DataTableCell dt={tdt} col="template" row={r} title={r.sample}>
-                          {r.exceptionType && <span className="badge b-err" style={{ marginRight: 6 }}>{r.exceptionType}</span>}
-                          {r.template}
-                        </DataTableCell>
-                        <td className="num">
-                          <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
-                          <span style={{ position: 'relative' }}>{r.totalCount.toLocaleString()}</span>
-                        </td>
-                        <DataTableCell dt={tdt} col="services" row={r} value={r.services.join(', ')} />
-                        <DataTableCell dt={tdt} col="firstSeen" row={r} value={agoLabel(r.firstSeen)} title={tsLong(r.firstSeen)} />
-                        <DataTableCell dt={tdt} col="lastSeen" row={r} value={agoLabel(r.lastSeen)} title={tsLong(r.lastSeen)} />
-                        <DataTableCell dt={tdt} col="act" row={r}>
-                          {r.query && (
-                            <Button variant="secondary" size="xs" className="lp-search"
-                              title={`Ara: ${r.query}`}
-                              onClick={e => { e.stopPropagation(); onSearch(r.query); }}>Ara</Button>
-                          )}
-                        </DataTableCell>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="table-wrap is-scroll">
+            <table {...tdt.tableProps}>
+              <DataTableColgroup dt={tdt} />
+              <DataTableHead dt={tdt} />
+              <tbody>
+                {tq.isError || tdt.sortedRows.length === 0 ? <DataTableState dt={tdt} {...templatesState} /> : tdt.sortedRows.map(r => {
+                  const share = maxTotal > 0 ? (r.totalCount / maxTotal) * 100 : 0;
+                  return (
+                    <tr key={r.id} className="lp-row cv-row"
+                      {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}>
+                      <DataTableCell dt={tdt} col="template" row={r} title={r.sample}>
+                        {r.exceptionType && <span className="badge b-err" style={{ marginRight: 6 }}>{r.exceptionType}</span>}
+                        {r.template}
+                      </DataTableCell>
+                      <td className="num">
+                        <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
+                        <span style={{ position: 'relative' }}>{r.totalCount.toLocaleString()}</span>
+                      </td>
+                      <DataTableCell dt={tdt} col="services" row={r} value={r.services.join(', ')} />
+                      <DataTableCell dt={tdt} col="firstSeen" row={r} value={agoLabel(r.firstSeen)} title={tsLong(r.firstSeen)} />
+                      <DataTableCell dt={tdt} col="lastSeen" row={r} value={agoLabel(r.lastSeen)} title={tsLong(r.lastSeen)} />
+                      <DataTableCell dt={tdt} col="act" row={r}>
+                        {r.query && (
+                          <Button variant="secondary" size="xs" className="lp-search"
+                            title={`Ara: ${r.query}`}
+                            onClick={e => { e.stopPropagation(); onSearch(r.query); }}>Ara</Button>
+                        )}
+                      </DataTableCell>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

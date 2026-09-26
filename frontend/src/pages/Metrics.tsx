@@ -4,14 +4,15 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { metricsViewFromParam, metricsViewUrlValue, shouldRedirectLegacyMetric } from './metricsView';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ServicePicker } from '@/components/ServicePicker';
 import { MetricQueryEditor } from '@/components/viz/MetricQueryEditor';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { useDebouncedValue } from '@/lib/perf/useDebouncedValue';
 import { api } from '@/lib/api';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
@@ -27,7 +28,6 @@ import { SearchField } from '@/components/ui/SearchField';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { MetricInfo } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
-import { QueryError } from '@/components/QueryError';
 import { PageShell } from '@/components/ui/PageShell';
 
 // Metrics — v0.8.x Phase-5 collapse. /metrics is now a CATALOGUE: a
@@ -208,6 +208,30 @@ export default function MetricsPage() {
   });
   const cvRows = dt.sortedRows.length > 100;
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / eşleşme yok / boş
+  // tablonun İÇİNDE, başlık durur. Zincirin sırası aynı; hata eskisi gibi
+  // bayat satırları da gizler (showRows). v0.9.858 hata dalı ("No metrics
+  // match" diye okunmasın) sunucu metni + ↻ ile satırda. Arama / servis /
+  // facet süzüyorsa sıfır satır "eşleşme yok" (tek temizle eylemi yok);
+  // hiçbiri yokken katalog boştur.
+  const showRows = !catalogQ.isLoading && !catalogQ.isError && filtered.length > 0;
+  const tableState: Omit<DataTableStateProps<MetricInfo>, 'dt'> =
+    catalogQ.isLoading ? { kind: 'loading' }
+    : catalogQ.isError ? {
+      kind: 'error',
+      onRetry: () => void catalogQ.refetch(),
+      ...(catalogQ.error instanceof Error ? { message: `Metrik kataloğu okunamadı: ${catalogQ.error.message}` } : {}),
+    }
+    : service ? {
+      kind: 'no-match',
+      message: `Katalogda ${service} için${facet !== 'all' ? ' bu facet\'te' : ''}${dq ? ` "${dq}" ile eşleşen` : ''} metrik yok — servis süzgecini temizle ya da servisin metrik gönderdiğini doğrula.`,
+    }
+    : dq || facet !== 'all' ? {
+      kind: 'no-match',
+      message: 'Eşleşme yok — başka bir arama dene ya da uygulamaların OTEL_EXPORTER_OTLP_ENDPOINT\'e metrik gönderdiğini doğrula.',
+    }
+    : { kind: 'empty', message: 'Katalogda metrik yok — uygulamaların OTEL_EXPORTER_OTLP_ENDPOINT\'e metrik gönderdiğini doğrula.' };
+
   if (redirectTo) return <Navigate replace to={redirectTo} />;
 
   // classifyMetric picks the default agg (e.g. p99 for a histogram) so the
@@ -357,120 +381,104 @@ export default function MetricsPage() {
               </span>
             </PageControls>
 
-            {catalogQ.isLoading ? <Spinner />
-              /* v0.9.858 (UX denetimi K6) — hata "No metrics match" olarak
-                 sunuluyordu: katalog sorgusu düştüğünde operatör arama
-                 terimini/servisini suçluyordu. */
-              : catalogQ.isError ? (
-                <QueryError
-                  message={catalogQ.error instanceof Error ? catalogQ.error.message : undefined}
-                  onRetry={() => catalogQ.refetch()}>
-                  The metric catalogue could not be loaded — this is a failed
-                  read, not an empty catalogue.
-                </QueryError>
-              )
-              : filtered.length === 0 ? (
-                <Empty icon="∿" title="No metrics match">
-                  {service
-                    ? <>No metric in the catalogue for <code>{service}</code>{facet !== 'all' ? ' in this facet' : ''}
-                      {dq ? <> matching “{dq}”</> : null}. Clear the service filter, or check that it is pushing metrics.</>
-                    : <>Try a different search, or check <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> apps are pushing.</>}
-                </Empty>
-              ) : (
-                <>
-                  <div className="table-wrap">
-                    <table {...dt.tableProps}>
-                      <DataTableColgroup dt={dt} />
-                      <DataTableHead dt={dt} />
-                      <tbody>
-                        {dt.sortedRows.map((m, i) => {
-                          // v0.10.947 (tablo standardı T6/§2c) — cv-row, rowProps'un
-                          // row-selected sınıfıyla birleşir (sonraki className onu ezerdi).
-                          const rp = dt.rowProps(i);
-                          return (
-                          <tr key={m.name} {...rp}
-                            className={[rp.className, cvRows ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
-                            {...rowKeyboard(() => navigate(metricHref(m)))}
-                            // Değiştirici tuşlu tık satırda YOK SAYILIR: ⌘-tık
-                            // "yeni sekme" demektir ve satır bir link değil, o
-                            // yüzden aynı sekmede gezinmek operatörün istediğinin
-                            // TAM TERSİ olurdu. Yeni sekme isteyen ada tıklar.
-                            onClick={e => {
-                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-                              navigate(metricHref(m));
-                            }}>
-                            <td className="mono" title={m.name}>
-                              {/* Gerçek <a>: ⌘-tık yeni sekme, sağ-tık menüsü,
-                                  Tab+Enter. draggable=false olmasa metin
-                                  seçmeye çalışan operatör linki SÜRÜKLER —
-                                  metrik adını kopyalamak bu sayfanın en sık
-                                  işi. stopPropagation satırın onClick'inin
-                                  ikinci kez gezinmesini engeller. */}
-                              <Link to={metricHref(m)} draggable={false}
-                                onClick={e => e.stopPropagation()}
-                                style={{ color: 'inherit', textDecoration: 'none' }}>
-                                {m.name}
-                              </Link>
-                            </td>
-                            <td>{m.type}</td>
-                            <td className="mono">{m.unit || '·'}</td>
-                            {/* Son veri (v0.9.833). Bilinmeyen "—" basar,
-                                "0s ago" değil — v0.9.833 öncesi bir
-                                sunucu alanı hiç göndermez ve uydurma bir
-                                tazelik en kötü yalandır. */}
-                            <td className={metricIsStale(m.lastSeenNs, nowMs) ? 'cell-faint' : 'cell-muted'} style={{
-                              opacity: metricIsStale(m.lastSeenNs, nowMs) ? 0.65 : 1,
-                              fontVariantNumeric: 'tabular-nums',
-                            }}
-                              title={m.lastSeenNs
-                                ? tsLong(m.lastSeenNs)
-                                  + (metricIsStale(m.lastSeenNs, nowMs) ? ' — no data in the last 24h' : '')
-                                : 'The server did not report a last-seen timestamp for this metric.'}>
-                              {m.lastSeenNs ? fmtAgoNs(m.lastSeenNs) : '—'}
-                            </td>
-                            {showServices && (
-                              <td style={{ fontVariantNumeric: 'tabular-nums' }}
-                                title={m.serviceCount
-                                  ? `${m.serviceCount.toLocaleString()} service${m.serviceCount === 1 ? '' : 's'} reported ${m.name} in the last 7 days`
-                                  : undefined}>
-                                {m.serviceCount ? m.serviceCount.toLocaleString() : '—'}
-                              </td>
-                            )}
-                            <td className="cell-muted" title={m.description}>
-                              {m.description || '—'}
-                            </td>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  {/* v0.9.832 — "refine your search" ARTIK TEK SEÇENEK DEĞİL.
-                      Sunucu prefix'i sayfa sayfa büyür; tavana (1000)
-                      varınca buton kaybolur ve daraltma tavsiyesi kalır. */}
-                  {/* v0.9.1016 — paylaşılan sözleşme (v0.9.1014), cursor
-                      kipi. v0.9.832'nin kararı korunuyor: sunucu prefix'i
-                      sayfa sayfa büyüyor, "refine your search" TEK seçenek
-                      değil. Tavana varınca `hasMore` false'a düşüyor ve
-                      dürüst son `doneLabel` ile daraltma tavsiyesine
-                      dönüyor — buton kaybolduğunda operatör NEDEN
-                      kaybolduğunu okuyor.
-                      Sayı `count`/`loaded` üzerinden atomdan geliyor;
-                      şeritteki `catalogCountLabel` kopyası kalktı (aynı
-                      bilgi başlıkta zaten etiketli hâliyle duruyor). */}
-                  <Pager mode="cursor" count="exact" total={total}
-                    loaded={catalog.length}
-                    hasMore={nextLimit !== null}
-                    onMore={() => { if (nextLimit !== null) setLimit(nextLimit); }}
-                    loading={catalogQ.isFetching}
-                    moreLabel={`↓ Load more`}
-                    doneLabel={hasMore ? (
-                      <span style={{ color: 'var(--warn)' }}>
-                        page cap reached — narrow with search or a service to see the rest
-                      </span>
-                    ) : undefined} />
-                </>
-              )}
+            {/* v0.9.858 (UX denetimi K6) — hata "No metrics match" olarak
+                sunuluyordu: katalog sorgusu düştüğünde operatör arama
+                terimini/servisini suçluyordu. (v0.10.954: `tableState`.) */}
+            <div className="table-wrap">
+              <table {...dt.tableProps}>
+                <DataTableColgroup dt={dt} />
+                <DataTableHead dt={dt} />
+                <tbody>
+                  {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((m, i) => {
+                    // v0.10.947 (tablo standardı T6/§2c) — cv-row, rowProps'un
+                    // row-selected sınıfıyla birleşir (sonraki className onu ezerdi).
+                    const rp = dt.rowProps(i);
+                    return (
+                    <tr key={m.name} {...rp}
+                      className={[rp.className, cvRows ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
+                      {...rowKeyboard(() => navigate(metricHref(m)))}
+                      // Değiştirici tuşlu tık satırda YOK SAYILIR: ⌘-tık
+                      // "yeni sekme" demektir ve satır bir link değil, o
+                      // yüzden aynı sekmede gezinmek operatörün istediğinin
+                      // TAM TERSİ olurdu. Yeni sekme isteyen ada tıklar.
+                      onClick={e => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                        navigate(metricHref(m));
+                      }}>
+                      <td className="mono" title={m.name}>
+                        {/* Gerçek <a>: ⌘-tık yeni sekme, sağ-tık menüsü,
+                            Tab+Enter. draggable=false olmasa metin
+                            seçmeye çalışan operatör linki SÜRÜKLER —
+                            metrik adını kopyalamak bu sayfanın en sık
+                            işi. stopPropagation satırın onClick'inin
+                            ikinci kez gezinmesini engeller. */}
+                        <Link to={metricHref(m)} draggable={false}
+                          onClick={e => e.stopPropagation()}
+                          style={{ color: 'inherit', textDecoration: 'none' }}>
+                          {m.name}
+                        </Link>
+                      </td>
+                      <td>{m.type}</td>
+                      <td className="mono">{m.unit || '·'}</td>
+                      {/* Son veri (v0.9.833). Bilinmeyen "—" basar,
+                          "0s ago" değil — v0.9.833 öncesi bir
+                          sunucu alanı hiç göndermez ve uydurma bir
+                          tazelik en kötü yalandır. */}
+                      <td className={metricIsStale(m.lastSeenNs, nowMs) ? 'cell-faint' : 'cell-muted'} style={{
+                        opacity: metricIsStale(m.lastSeenNs, nowMs) ? 0.65 : 1,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                        title={m.lastSeenNs
+                          ? tsLong(m.lastSeenNs)
+                            + (metricIsStale(m.lastSeenNs, nowMs) ? ' — no data in the last 24h' : '')
+                          : 'The server did not report a last-seen timestamp for this metric.'}>
+                        {m.lastSeenNs ? fmtAgoNs(m.lastSeenNs) : '—'}
+                      </td>
+                      {showServices && (
+                        <td style={{ fontVariantNumeric: 'tabular-nums' }}
+                          title={m.serviceCount
+                            ? `${m.serviceCount.toLocaleString()} service${m.serviceCount === 1 ? '' : 's'} reported ${m.name} in the last 7 days`
+                            : undefined}>
+                          {m.serviceCount ? m.serviceCount.toLocaleString() : '—'}
+                        </td>
+                      )}
+                      <td className="cell-muted" title={m.description}>
+                        {m.description || '—'}
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {showRows && (
+              <>
+                {/* v0.9.832 — "refine your search" ARTIK TEK SEÇENEK DEĞİL.
+                    Sunucu prefix'i sayfa sayfa büyür; tavana (1000)
+                    varınca buton kaybolur ve daraltma tavsiyesi kalır. */}
+                {/* v0.9.1016 — paylaşılan sözleşme (v0.9.1014), cursor
+                    kipi. v0.9.832'nin kararı korunuyor: sunucu prefix'i
+                    sayfa sayfa büyüyor, "refine your search" TEK seçenek
+                    değil. Tavana varınca `hasMore` false'a düşüyor ve
+                    dürüst son `doneLabel` ile daraltma tavsiyesine
+                    dönüyor — buton kaybolduğunda operatör NEDEN
+                    kaybolduğunu okuyor.
+                    Sayı `count`/`loaded` üzerinden atomdan geliyor;
+                    şeritteki `catalogCountLabel` kopyası kalktı (aynı
+                    bilgi başlıkta zaten etiketli hâliyle duruyor). */}
+                <Pager mode="cursor" count="exact" total={total}
+                  loaded={catalog.length}
+                  hasMore={nextLimit !== null}
+                  onMore={() => { if (nextLimit !== null) setLimit(nextLimit); }}
+                  loading={catalogQ.isFetching}
+                  moreLabel={`↓ Load more`}
+                  doneLabel={hasMore ? (
+                    <span style={{ color: 'var(--warn)' }}>
+                      page cap reached — narrow with search or a service to see the rest
+                    </span>
+                  ) : undefined} />
+              </>
+            )}
           </>
         )}
       </PageShell>

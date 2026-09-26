@@ -4,7 +4,7 @@ import { Field } from '@/components/ui/Field';
 import { Stack, Row } from '@/components/ui';
 import { Badge, type Tone } from '@/components/ui/Badge';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { fmtDateTime } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { useEntitySettings, useSaveEntitySettings, useEntitySync, useRunEntitySync } from '@/lib/queries';
@@ -51,6 +51,16 @@ export function EntitiesTab() {
     rows: runs,
     initialSort: { id: 'started', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / boş tablonun İÇİNDE,
+  // başlık durur. Eskisi gibi hata dalı yok (okuma hatası boş liste olarak
+  // görünüyor — ayrı iş, bu dilim yalnız YERİ taşır).
+  const runsState: Omit<DataTableStateProps<EntitySyncRun>, 'dt'> =
+    syncQ.isPending ? { kind: 'loading' }
+    : {
+        kind: 'empty',
+        message: 'Son 24 saatte senkronizasyon çalışması yok — bir Remote Cluster ekle (Settings → Remote clusters) '
+          + 've bir senkronizasyon çalıştır ya da aralığı bekle.',
+      };
   const onSave = async () => {
     setMsg(null);
     try {
@@ -101,35 +111,31 @@ export function EntitiesTab() {
               ticks {obs.Ticks} · clusters ok {obs.ClustersOK} / failed {obs.ClustersFailed} · written {obs.EntitiesWritten} entities, {obs.RelationsWritten} relations · last tick {obs.LastTickMs} ms
             </p>
           )}
-          {syncQ.isPending ? <Spinner /> : runs.length === 0 ? (
-            <Empty icon="∅" title="No sync runs in the last 24 h">Add a Remote Cluster (Settings → Remote clusters) and run a sync, or wait for the interval.</Empty>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table {...dt.tableProps}>
-                <DataTableColgroup dt={dt} />
-                <DataTableHead dt={dt} />
-                <tbody>
-                  {dt.sortedRows.map((r, i) => (
-                    <tr key={`${r.ClusterID}-${r.StartedAt}-${i}`}>
-                      <td className="mono">{r.ClusterID}</td>
-                      <td><Badge tone={statusTone(r.Status)}>{r.Status}</Badge></td>
-                      <td className="mono">{fmtDateTime(new Date(r.StartedAt))}</td>
-                      <td className="num">{r.EntitiesWritten}</td>
-                      <td className="num">{r.RelationsWritten}</td>
-                      <td className="num">{r.Closed}</td>
-                      <td className="num">{r.ThanosMs}</td>
-                      <td className="num">{r.CHMs}</td>
-                      <td>
-                        {r.Error || (r.UnmappedKeys && r.UnmappedKeys.length > 0
-                          ? r.UnmappedKeys.map((k, j) => `${k || '(empty)'}→${r.UnmappedCounts?.[j] ?? 0}`).join(', ')
-                          : '')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div style={{ overflowX: 'auto' }}>
+            <table {...dt.tableProps}>
+              <DataTableColgroup dt={dt} />
+              <DataTableHead dt={dt} />
+              <tbody>
+                {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...runsState} /> : dt.sortedRows.map((r, i) => (
+                  <tr key={`${r.ClusterID}-${r.StartedAt}-${i}`}>
+                    <td className="mono">{r.ClusterID}</td>
+                    <td><Badge tone={statusTone(r.Status)}>{r.Status}</Badge></td>
+                    <td className="mono">{fmtDateTime(new Date(r.StartedAt))}</td>
+                    <td className="num">{r.EntitiesWritten}</td>
+                    <td className="num">{r.RelationsWritten}</td>
+                    <td className="num">{r.Closed}</td>
+                    <td className="num">{r.ThanosMs}</td>
+                    <td className="num">{r.CHMs}</td>
+                    <td>
+                      {r.Error || (r.UnmappedKeys && r.UnmappedKeys.length > 0
+                        ? r.UnmappedKeys.map((k, j) => `${k || '(empty)'}→${r.UnmappedCounts?.[j] ?? 0}`).join(', ')
+                        : '')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </Stack>

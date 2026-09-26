@@ -8,7 +8,7 @@ import { MethodHotspots } from '@/components/MethodHotspots';
 import { BreakdownBar } from '@/components/KindBadge';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/Button';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { raceGuard } from '@/lib/raceGuard';
 import { tsLong, fmtNum } from '@/lib/utils';
@@ -58,7 +58,10 @@ function ProfileDetailInner() {
   // doesn't fan out a /profiles request for every Profile
   // visit (only the ones where the user wants to compare).
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [recentProfiles, setRecentProfiles] = useState<ProfileRow[]>([]);
+  // v0.10.954 — tablo standardı T12: üç hâl (undefined = okunuyor, null =
+  // okunamadı, [] = yok). Eskiden `[]` hem "henüz gelmedi" hem "gerçekten
+  // boş / hata" demekti ve seçici boş sonuçta sonsuza dek "Loading…" derdi.
+  const [recentProfiles, setRecentProfiles] = useState<ProfileRow[] | null | undefined>(undefined);
 
   // v0.9.857 (UX denetimi K7) — Trace.tsx ile aynı yarış deseni; burada iki
   // kopya var (profil + baseline) ve karşılaştırma sayfası olduğu için ikisi
@@ -93,23 +96,28 @@ function ProfileDetailInner() {
   }, [data, baseData]);
 
   // Picker fetch: when the operator opens the picker, fetch
-  // the last 50 profiles for this service. Skips fetch if
-  // already loaded (the list rarely changes within a session).
+  // the last 50 profiles for this service. Skips fetch once a
+  // result is in — an empty result is cached for the session
+  // too (the list rarely changes within a session).
+  // v0.10.954 — koşul "yüklendi mi" (undefined), uzunluk değil: bağımlılık
+  // `recentProfiles?.length` iken boş sonuç undefined → 0 geçişinde efekti
+  // yeniden koşturup ikinci bir /profiles isteği atıyordu. undefined → [] /
+  // null geçişi efekti yine koşturur ama koruma hemen döner (tek istek).
   useEffect(() => {
-    if (!pickerOpen || recentProfiles.length > 0 || !data) return;
+    if (!pickerOpen || recentProfiles !== undefined || !data) return;
     const svc = data.meta.serviceName;
     const now = Date.now() * 1_000_000;
     const since = now - 24 * 60 * 60 * 1_000_000_000; // last 24h in ns
     api.profiles({ service: svc, from: since, to: now, limit: 50 })
       .then(rows => setRecentProfiles(rows ?? []))
-      .catch(() => setRecentProfiles([]));
-  }, [pickerOpen, data, recentProfiles.length]);
+      .catch(() => setRecentProfiles(null));
+  }, [pickerOpen, data, recentProfiles]);
 
   // Aday listesi: kendisiyle diff alınamaz. Filtre JSX'ten çıkıp memoya
   // taşındı — her render'da yeni bir dizi üretmek sortedRows memosunu
   // boşuna geçersiz kılıyordu.
   const baselineRows = useMemo(
-    () => recentProfiles.filter(p => p.profileId !== id),
+    () => (recentProfiles ?? []).filter(p => p.profileId !== id),
     [recentProfiles, id],
   );
   // Varsayılan sıra sunucununkiyle birebir: ListProfiles `ORDER BY
@@ -118,6 +126,12 @@ function ProfileDetailInner() {
     storageKey: 'profile-baseline-picker', columns: BASELINE_COLS, rows: baselineRows,
     initialSort: { id: 'when', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: seçici tablosunun durumu tablonun
+  // İÇİNDE, başlık durur. Boş = son 24 saatte bu profilden başka aday yok.
+  const pickerState: Omit<DataTableStateProps<ProfileRow>, 'dt'> =
+    recentProfiles === undefined ? { kind: 'loading' }
+    : recentProfiles === null ? { kind: 'error' }
+    : { kind: 'empty', message: 'Son 24 saatte bu servis için karşılaştırılacak başka profil yok' };
 
   function setBaseline(profileId: string) {
     const next = new URLSearchParams(searchParams);
@@ -151,7 +165,13 @@ function ProfileDetailInner() {
                   comparison entry on /trace. */}
               {!baselineId && (
                 <Button variant="secondary"
-                  onClick={() => setPickerOpen(o => !o)}>
+                  onClick={() => {
+                    // v0.10.954 — hata sonrası yeniden açış: null → undefined;
+                    // tablo "okunuyor" gösterir, efekt yeniden çeker (bayat
+                    // hata satırı kalmaz).
+                    if (recentProfiles === null) setRecentProfiles(undefined);
+                    setPickerOpen(o => !o);
+                  }}>
                   {pickerOpen ? 'Cancel' : 'Compare with…'}
                 </Button>
               )}
@@ -191,34 +211,30 @@ function ProfileDetailInner() {
               {' '}<b style={{ color: 'var(--text)' }}>{data.meta.serviceName}</b>'s
               {' '}last 24h.
             </div>
-            {recentProfiles.length === 0
-              ? <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading…</div>
-              : (
-                <div className="table-wrap">
-                  <table {...dt.tableProps}>
-                    <DataTableColgroup dt={dt} />
-                    <DataTableHead dt={dt} />
-                    <tbody>
-                      {dt.sortedRows.map(p => (
-                          <tr key={p.profileId}>
-                            <DataTableCell dt={dt} col="when" row={p} value={tsLong(p.startTime)} className="mono" />
-                            <DataTableCell dt={dt} col="id" row={p} value={`${p.profileId.slice(0, 16)}…`} title={p.profileId} />
-                            <DataTableCell dt={dt} col="type" row={p}><span className="badge b-info">{p.profileType.toUpperCase()}</span></DataTableCell>
-                            <DataTableCell dt={dt} col="host" row={p} value={p.hostName} />
-                            <DataTableCell dt={dt} col="duration" row={p} value={`${(p.durationMs / 1000).toFixed(1)}s`} />
-                            <DataTableCell dt={dt} col="samples" row={p} value={fmtNum(p.sampleCount)} />
-                            <DataTableCell dt={dt} col="actions" row={p}>
-                              <Button variant="secondary" size="sm"
-                                onClick={() => setBaseline(p.profileId)}>
-                                Use as baseline →
-                              </Button>
-                            </DataTableCell>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+            <div className="table-wrap">
+              <table {...dt.tableProps}>
+                <DataTableColgroup dt={dt} />
+                <DataTableHead dt={dt} />
+                <tbody>
+                  {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...pickerState} /> : dt.sortedRows.map(p => (
+                    <tr key={p.profileId}>
+                      <DataTableCell dt={dt} col="when" row={p} value={tsLong(p.startTime)} className="mono" />
+                      <DataTableCell dt={dt} col="id" row={p} value={`${p.profileId.slice(0, 16)}…`} title={p.profileId} />
+                      <DataTableCell dt={dt} col="type" row={p}><span className="badge b-info">{p.profileType.toUpperCase()}</span></DataTableCell>
+                      <DataTableCell dt={dt} col="host" row={p} value={p.hostName} />
+                      <DataTableCell dt={dt} col="duration" row={p} value={`${(p.durationMs / 1000).toFixed(1)}s`} />
+                      <DataTableCell dt={dt} col="samples" row={p} value={fmtNum(p.sampleCount)} />
+                      <DataTableCell dt={dt} col="actions" row={p}>
+                        <Button variant="secondary" size="sm"
+                          onClick={() => setBaseline(p.profileId)}>
+                          Use as baseline →
+                        </Button>
+                      </DataTableCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { Link, useNavigate } from 'react-router-dom';
-import { Spinner, Empty } from '@/components/Spinner';
-import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { fmtNum, tsLong } from '@/lib/utils';
 import type { RepeatedSpanRow } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
@@ -55,75 +55,79 @@ export function RepeatsResult({
     onOpen: r => navigate(traceHref(r.traceId)),
   });
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur (readState sırası aynen). Hata satırı sunucu
+  // metnini ve daraltma önerisini taşır, ↻ aynı onRetry'a bağlı; hata dalı
+  // (MT1: "N+1 yok, temiziz" okunmasın) tablonun içinde yaşıyor.
+  const rs = readState(repeats);
+  const tableState: Omit<DataTableStateProps<RepeatedSpanRow>, 'dt'> =
+    rs === 'loading' ? { kind: 'loading' }
+    : rs === 'error' ? {
+      kind: 'error',
+      onRetry,
+      message: errorText
+        ? `Tekrarlanan span desenleri hesaplanamadı: ${errorText} — daha dar bir zaman aralığıyla yeniden dene.`
+        : 'Tekrarlanan span desenleri hesaplanamadı — bu bir hata, temiz sonuç değil. Daha dar bir zaman aralığıyla yeniden dene.',
+    }
+    : {
+      kind: 'empty',
+      message: `Tekrarlanan span deseni bulunamadı — bu pencerede aynı (group-by) deseni ≥ ${repeatMin} kez tekrarlayan trace yok. Eşiği düşürmeyi ya da split-by'ı değiştirmeyi dene (ör. konuşkan RPC için name + peer.service, endpoint fan-out için http.route).`,
+    };
+
   return (
     <>
-      {readState(repeats) === 'loading' && <Spinner />}
-      {readState(repeats) === 'error' && (
-        <QueryError message={errorText} onRetry={onRetry}>
-          Repeated span shapes could not be computed — this is a failed read,
-          not a clean result. Try a narrower time range, then retry.
-        </QueryError>
-      )}
-      {readState(repeats) === 'empty' && (
-        <Empty icon="⟳" title="No repeated span shapes found">
-          No trace has the same (group-by) shape repeating ≥ {repeatMin} times in this window.
-          Try lowering the threshold or switching the split-by (e.g. <code>name</code> + <code>peer.service</code> for chatty RPC, <code>http.route</code> for endpoint fan-out).
-        </Empty>
-      )}
       {repeats && repeats.length > 0 && (
-        <>
-          <div style={{ marginBottom: 6, fontSize: 12, color: 'var(--text2)' }}>
-            {/* v0.9.469 (dürüstlük A17) — len==limit tavan işaretidir:
-                "200 trace" tam sayım gibi okunmasın. */}
-            {repeats.length >= 200
-              ? `ilk ${repeats.length} trace (tavan doldu — daha fazlası olabilir), ≥ ${repeatMin} tekrar, en ağır üstte.`
-              : `${repeats.length} trace${repeats.length === 1 ? '' : 's'} with ≥ ${repeatMin} repeats of the same span shape — heaviest at the top.`}
-          </div>
-          <div className="table-wrap">
-            <table {...repeatsDt.tableProps}>
-              <DataTableColgroup dt={repeatsDt} />
-              <DataTableHead dt={repeatsDt} />
-              <tbody>
-                {repeatsDt.sortedRows.map((r, i) => {
-                  const rp = repeatsDt.rowProps(i);
-                  return (
-                    <tr key={`${r.traceId}|${i}`} {...rp}
-                        {...rowActivation(() => navigate(traceHref(r.traceId)))}
-                        className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
-                      <td className="mono">
-                        <Link to={traceHref(r.traceId)}
-                              onClick={e => e.stopPropagation()}
-                              style={{ fontSize: 11 }}>
-                          {r.traceId.slice(0, 12)}…
-                        </Link>
-                      </td>
-                      <td>
-                        <span style={{ fontWeight: 600 }}>{r.service || '—'}</span>
-                        {r.rootName && (
-                          <span style={{ color: 'var(--text3)' }}> · {r.rootName}</span>
-                        )}
-                      </td>
-                      <td className="mono cell-muted" title={(r.groupValues ?? []).join(' · ')}>
-                        {(r.groupValues ?? []).filter(Boolean).join(' · ') ||
-                          <span style={{ color: 'var(--text3)' }}>(empty)</span>}
-                      </td>
-                      {/* v0.10.945 — 700 ağırlığın sınıfı yok (.cell-strong 600): satır içi kalır. */}
-                      <td className={`num ${r.count >= 50 ? 'cell-err' : r.count >= 20 ? 'cell-warn' : ''}`}
-                        style={{ fontWeight: 700 }}>
-                        {fmtNum(r.count)}
-                      </td>
-                      <td className="num">{r.totalDurationMs.toFixed(1)}ms</td>
-                      <td className="mono cell-faint" title={tsLong(r.startedAt)}>
-                        {tsLong(r.startedAt)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div style={{ marginBottom: 6, fontSize: 12, color: 'var(--text2)' }}>
+          {/* v0.9.469 (dürüstlük A17) — len==limit tavan işaretidir:
+              "200 trace" tam sayım gibi okunmasın. */}
+          {repeats.length >= 200
+            ? `ilk ${repeats.length} trace (tavan doldu — daha fazlası olabilir), ≥ ${repeatMin} tekrar, en ağır üstte.`
+            : `${repeats.length} trace${repeats.length === 1 ? '' : 's'} with ≥ ${repeatMin} repeats of the same span shape — heaviest at the top.`}
+        </div>
       )}
+      <div className="table-wrap">
+        <table {...repeatsDt.tableProps}>
+          <DataTableColgroup dt={repeatsDt} />
+          <DataTableHead dt={repeatsDt} />
+          <tbody>
+            {repeatsDt.sortedRows.length === 0 ? <DataTableState dt={repeatsDt} {...tableState} /> : repeatsDt.sortedRows.map((r, i) => {
+              const rp = repeatsDt.rowProps(i);
+              return (
+                <tr key={`${r.traceId}|${i}`} {...rp}
+                    {...rowActivation(() => navigate(traceHref(r.traceId)))}
+                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                  <td className="mono">
+                    <Link to={traceHref(r.traceId)}
+                          onClick={e => e.stopPropagation()}
+                          style={{ fontSize: 11 }}>
+                      {r.traceId.slice(0, 12)}…
+                    </Link>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 600 }}>{r.service || '—'}</span>
+                    {r.rootName && (
+                      <span style={{ color: 'var(--text3)' }}> · {r.rootName}</span>
+                    )}
+                  </td>
+                  <td className="mono cell-muted" title={(r.groupValues ?? []).join(' · ')}>
+                    {(r.groupValues ?? []).filter(Boolean).join(' · ') ||
+                      <span style={{ color: 'var(--text3)' }}>(empty)</span>}
+                  </td>
+                  {/* v0.10.945 — 700 ağırlığın sınıfı yok (.cell-strong 600): satır içi kalır. */}
+                  <td className={`num ${r.count >= 50 ? 'cell-err' : r.count >= 20 ? 'cell-warn' : ''}`}
+                    style={{ fontWeight: 700 }}>
+                    {fmtNum(r.count)}
+                  </td>
+                  <td className="num">{r.totalDurationMs.toFixed(1)}ms</td>
+                  <td className="mono cell-faint" title={tsLong(r.startedAt)}>
+                    {tsLong(r.startedAt)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

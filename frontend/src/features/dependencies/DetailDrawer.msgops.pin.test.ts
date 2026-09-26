@@ -50,7 +50,9 @@ describe('Operasyonlar · MV bölümü (v0.10.563)', () => {
   });
 
   it('boş dilimde bölüm GİZLENMEZ — soluk satır yazar', () => {
-    expect(drawer).toContain('Bu pencerede MV&#39;de operasyon satırı yok.');
+    // v0.10.954 (tablo standardı T12) — soluk satır artık tablonun İÇİNDE
+    // (DataTableState empty); başlık ve sütunlar durur.
+    expect(drawer).toContain(`<DataTableState dt={msgOpsDt} kind="empty" message="Bu pencerede MV'de operasyon satırı yok" />`);
     // <Empty> bloğu DEĞİL: bölüm başlığı ve satır sayısı görünür kalmalı.
     expect(drawer).not.toContain('Operasyon kırılımı yok');
   });

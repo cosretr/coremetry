@@ -12,9 +12,12 @@
 // verilmezse eskisi gibi `deps-callers-${tone}`. Çekmece propu geçmiyor.
 // v0.10.939 (tablo standardı S8) — sayfaya özel sıfırlama düğmesi propu
 // kalktı: "Kolonları sıfırla" her tablonun başlık ⋯ menüsünde (DataTableHead).
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { DBCallerBreakdown, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { podDetailPath } from '@/pages/service/podDetailPath';
@@ -42,7 +45,7 @@ import { fmtNum } from '@/lib/utils';
 // contract the page-level table above uses). The client-side
 // search filter is preserved and feeds filtered rows into the
 // primitive; sort + column-resize layout persist per-tone.
-export function CallerSection({ title, rows, emptyMessage, tone, range, storageKey }: {
+export function CallerSection({ title, rows, emptyMessage, tone, range, storageKey, state }: {
   title: string;
   rows: DBCallerBreakdown[];
   emptyMessage: string;
@@ -59,6 +62,12 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
    * diğerinin sürüklediği genişlikleri miras alırdı.
    */
   storageKey?: string;
+  /**
+   * v0.10.954 — tablo standardı T12 (P6, VirtualTable emsali): `rows` boşken
+   * tablonun İÇİNDE çizilecek durum. Verilmezse `emptyMessage` ile 'empty'.
+   * Çağıranlar taşındıkça `emptyMessage` düşer (hepsi taşınmadan değil).
+   */
+  state?: Omit<DataTableStateProps<DBCallerBreakdown>, 'dt' | 'leading' | 'trailing'>;
 }) {
   type Caller = DBCallerBreakdown;
   // v0.10.929 (K5) — rol bir kategori, sağlık değil: consumer yeşil değil, nötr.
@@ -74,6 +83,7 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
   // LIMIT 500 (v0.5.12) so filtering 500 rows stays
   // sub-millisecond.
   const [search, setSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
     if (!t) return rows;
@@ -116,6 +126,13 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
     initialSort: { id: 'calls', dir: 'desc' },
   });
 
+  // v0.10.954 — tablo standardı T12: boş mesajı tablonun yerine değil İÇİNE;
+  // başlık durur. Satır yokken çağıranın durumu (yoksa emptyMessage); satır
+  // var ama arama hepsini elediyse "Eşleşme yok" (listeyi süzen AYNI trim).
+  const tableState: Omit<DataTableStateProps<Caller>, 'dt'> =
+    rows.length === 0 ? (state ?? { kind: 'empty', message: emptyMessage || undefined })
+    : { kind: 'no-match', onClearFilters: () => setSearch(''), returnFocusRef: searchRef };
+
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{
@@ -127,7 +144,7 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
         }} />
         {title}
         {rows.length > 10 && (
-          <input value={search} onChange={e => setSearch(e.target.value)}
+          <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search service / pod / role…"
             style={{
               marginLeft: 'auto', fontSize: 11, padding: '3px 8px',
@@ -140,64 +157,60 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
           </span>
         )}
       </div>
-      {rows.length === 0 ? (
-        emptyMessage && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{emptyMessage}</div>
-      ) : (
-        // v0.7.x — adopting the shared primitive retires the inner-scroll
-        // wrapper (its sticky <thead> went with the bespoke header). Rows
-        // are capped at LIMIT 500 server-side; content-visibility:auto on
-        // each row lets the browser skip off-screen ones per CLAUDE.md's
-        // "tables > 100 rows" guidance, matching the Service.tsx (v0.7.54)
-        // adopter pattern.
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map((c, i) => {
-                // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
-                const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray';
-                return (
-                  <tr key={`${c.service}|${c.pod}|${c.role ?? ''}|${i}`} className="cv-row">
-                    <td>
-                      <Link to={serviceHref(c.service, { range })} className="mono">
-                        {c.service}
+      {/* v0.7.x — adopting the shared primitive retires the inner-scroll
+          wrapper (its sticky <thead> went with the bespoke header). Rows
+          are capped at LIMIT 500 server-side; content-visibility:auto on
+          each row lets the browser skip off-screen ones per CLAUDE.md's
+          "tables > 100 rows" guidance, matching the Service.tsx (v0.7.54)
+          adopter pattern. */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((c, i) => {
+              // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
+              const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray';
+              return (
+                <tr key={`${c.service}|${c.pod}|${c.role ?? ''}|${i}`} className="cv-row">
+                  <td>
+                    <Link to={serviceHref(c.service, { range })} className="mono">
+                      {c.service}
+                    </Link>
+                  </td>
+                  <DataTableCell dt={dt} col="pod" row={c}>
+                    {/* v0.10.551 — pod hücresi pivot (audit E11): host_name = pod adı;
+                        bilinmeyen/boş pod düz metin kalır. */}
+                    {c.pod && c.pod !== '(unknown)' ? (
+                      <Link to={podDetailPath({ pod: c.pod, service: c.service, range: encodeRange(range) || null })}
+                            style={{ color: 'inherit' }} title="Pod detayı">
+                        {c.pod}
                       </Link>
+                    ) : c.pod}
+                  </DataTableCell>
+                  {hasRole && (
+                    <td>
+                      {c.role && <RoleBadge role={c.role} />}
                     </td>
-                    <DataTableCell dt={dt} col="pod" row={c}>
-                      {/* v0.10.551 — pod hücresi pivot (audit E11): host_name = pod adı;
-                          bilinmeyen/boş pod düz metin kalır. */}
-                      {c.pod && c.pod !== '(unknown)' ? (
-                        <Link to={podDetailPath({ pod: c.pod, service: c.service, range: encodeRange(range) || null })}
-                              style={{ color: 'inherit' }} title="Pod detayı">
-                          {c.pod}
-                        </Link>
-                      ) : c.pod}
-                    </DataTableCell>
-                    {hasRole && (
-                      <td>
-                        {c.role && <RoleBadge role={c.role} />}
-                      </td>
-                    )}
-                    <DataTableCell dt={dt} col="calls" row={c} value={fmtNum(c.spanCount)} />
-                    <DataTableCell dt={dt} col="errRate" row={c}>
-                      <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}>
-                        {c.errorRate.toFixed(2)}%
-                      </span>
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="avg" row={c} value={`${c.avgDurationMs.toFixed(1)}ms`} />
-                    <DataTableCell dt={dt} col="p50" row={c}
-                      value={c.p50DurationMs === undefined ? null : `${c.p50DurationMs.toFixed(1)}ms`} />
-                    <DataTableCell dt={dt} col="p95" row={c}
-                      value={c.p95DurationMs === undefined ? null : `${c.p95DurationMs.toFixed(1)}ms`} />
-                    <DataTableCell dt={dt} col="p99" row={c} value={`${c.p99DurationMs.toFixed(1)}ms`} />
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  )}
+                  <DataTableCell dt={dt} col="calls" row={c} value={fmtNum(c.spanCount)} />
+                  <DataTableCell dt={dt} col="errRate" row={c}>
+                    <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}>
+                      {c.errorRate.toFixed(2)}%
+                    </span>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="avg" row={c} value={`${c.avgDurationMs.toFixed(1)}ms`} />
+                  <DataTableCell dt={dt} col="p50" row={c}
+                    value={c.p50DurationMs === undefined ? null : `${c.p50DurationMs.toFixed(1)}ms`} />
+                  <DataTableCell dt={dt} col="p95" row={c}
+                    value={c.p95DurationMs === undefined ? null : `${c.p95DurationMs.toFixed(1)}ms`} />
+                  <DataTableCell dt={dt} col="p99" row={c} value={`${c.p99DurationMs.toFixed(1)}ms`} />
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

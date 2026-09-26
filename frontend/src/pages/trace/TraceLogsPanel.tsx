@@ -120,7 +120,11 @@ export function TraceLogsPanel({ logs, degraded, logsTotal, eventRows, oracleRow
         </span>
         {grpcChip}
       </div>
-      <LogTable logs={sorted} hideTraceColumn />
+      {/* v0.10.954 — tablo standardı T12: LogTable satırsızken tablonun
+          İÇİNDE "veri yok" der. Backend bozukken boş liste bir ölçüm değil;
+          boş demek hatayı boş diye sunmak olurdu (MT1/K6). */}
+      <LogTable logs={sorted} hideTraceColumn
+        state={degraded ? { kind: 'error', message: "Log backend'i yavaş/erişilemez — liste boş gösterilmedi." } : undefined} />
     </>
   );
 }

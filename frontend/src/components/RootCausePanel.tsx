@@ -120,52 +120,53 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
       {blast && (
         <Section title="Blast radius"
                  subtitle={`${blast.totalCallers} caller${blast.totalCallers === 1 ? '' : 's'}, ${blast.cascadingCallers} already cascading`}>
-          {(blast.callers ?? []).length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-              No inbound callers in the window — <b>{service}</b> is an entry point.
-            </div>
-          ) : (
-            <div className="table-wrap">
-              {/* v0.10.945 — statik tablo (T1): en çok 6 çağıran, sabit öncelik sırası (hata → RPS); sıralanmaz. */}
-              <table>
-                <thead><tr>
-                  <th>Caller</th>
-                  <th className="num" style={{ width: 70 }}>RPS</th>
-                  <th className="num" style={{ width: 80 }}>Errors</th>
-                  <th style={{ width: 90 }}>State</th>
-                </tr></thead>
-                <tbody>
-                  {[...(blast.callers ?? [])]
-                    .sort((a, b) => b.errorRate - a.errorRate || b.rps - a.rps)
-                    .slice(0, 6)
-                    .map(c => (
-                      <tr key={c.service}>
-                        <td>
-                          <Link to={serviceHref(c.service, { range: win })} style={{ fontWeight: 600 }}>
-                            {c.service}
-                          </Link>
-                        </td>
-                        <td className="num">{c.rps.toFixed(1)}</td>
-                        <td className={`num ${c.errorRate > 0 ? 'cell-err' : 'cell-muted'}`}>
-                          {/* v0.8.317 — BlastRadiusCaller.errorRate is a PERCENT
-                              (chstore/blast_radius.go: errors*100/calls); pct()
-                              multiplies a 0..1 fraction by 100, so a 3%-error
-                              caller read "300%" on the triage drawer. */}
-                          {fmtFixed(c.errorRate, 1)}%
-                        </td>
-                        <td>
-                          {/* v0.10.929 (K5) — açık problem normal durum: STATUS_TONE open → nötr.
-                              Sözlük hafif yaprak modülden (features/anomalies/statusTone) — elle kopya kural yok. */}
-                          {c.hasOpenProblem
-                            ? <TriageStatusBadge s="open" label="OPEN" />
-                            : <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="table-wrap">
+            {/* v0.10.945 — statik tablo (T1): en çok 6 çağıran, sabit öncelik sırası (hata → RPS); sıralanmaz. */}
+            <table>
+              <thead><tr>
+                <th>Caller</th>
+                <th className="num" style={{ width: 70 }}>RPS</th>
+                <th className="num" style={{ width: 80 }}>Errors</th>
+                <th style={{ width: 90 }}>State</th>
+              </tr></thead>
+              <tbody>
+                {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. colSpan = thead'deki 4 <th>. */}
+                {(blast.callers ?? []).length === 0 ? (
+                  <tr data-dt-state="empty">
+                    <td colSpan={4} className="dt-state">
+                      <div className="dt-state-body"><span>Bu pencerede çağıran yok — {service} bir giriş noktası</span></div>
+                    </td>
+                  </tr>
+                ) : [...(blast.callers ?? [])]
+                  .sort((a, b) => b.errorRate - a.errorRate || b.rps - a.rps)
+                  .slice(0, 6)
+                  .map(c => (
+                    <tr key={c.service}>
+                      <td>
+                        <Link to={serviceHref(c.service, { range: win })} style={{ fontWeight: 600 }}>
+                          {c.service}
+                        </Link>
+                      </td>
+                      <td className="num">{c.rps.toFixed(1)}</td>
+                      <td className={`num ${c.errorRate > 0 ? 'cell-err' : 'cell-muted'}`}>
+                        {/* v0.8.317 — BlastRadiusCaller.errorRate is a PERCENT
+                            (chstore/blast_radius.go: errors*100/calls); pct()
+                            multiplies a 0..1 fraction by 100, so a 3%-error
+                            caller read "300%" on the triage drawer. */}
+                        {fmtFixed(c.errorRate, 1)}%
+                      </td>
+                      <td>
+                        {/* v0.10.929 (K5) — açık problem normal durum: STATUS_TONE open → nötr.
+                            Sözlük hafif yaprak modülden (features/anomalies/statusTone) — elle kopya kural yok. */}
+                        {c.hasOpenProblem
+                          ? <TriageStatusBadge s="open" label="OPEN" />
+                          : <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </Section>
       )}
 

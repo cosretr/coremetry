@@ -6,7 +6,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 import { IconSparkles } from '@/components/icons';
-import { useDataTable, DataTableColgroup, DataTableHead, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { tsLong, fmtFixed } from '@/lib/utils';
 import { serviceHref, eventLifespanWindow, exceptionGroupWindow } from '@/lib/serviceHref';
@@ -144,79 +144,69 @@ export default function ShiftPage() {
             sub={q.data.problemsTotal > problems.length
               ? `en yeni ${problems.length} gösteriliyor — kapananlar soluk`
               : 'kapananlar soluk — gece ne oldu, ne kendi kendine düzeldi'}>
-            {problems.length === 0
-              ? <Empty icon="✓" title="Pencerede problem açılmadı">Sakin bir vardiya.</Empty>
-              : (
-                <table {...probT.tableProps}>
-                  <DataTableColgroup dt={probT} />
-                  <DataTableHead dt={probT} />
-                  <tbody>
-                    {probT.sortedRows.map((p: Problem) => (
-                      <tr key={p.id} style={p.resolvedAt ? { opacity: 0.45 } : undefined}>
-                        <td>{p.priority && <span className={`badge ${p.priority === 'P1' ? 'b-err' : p.priority === 'P2' ? 'b-warn' : 'b-info'}`}>{p.priority}</span>}</td>
-                        <td><SubjectLink service={p.service} subjectKind={p.kind} href={serviceHref(p.service, { range: eventLifespanWindow(p) })} /></td>
-                        <td><Link to={`/problems?problem=${encodeURIComponent(p.id)}`}>{p.ruleName}</Link></td>
-                        <td className="mono">{tsLong(p.startedAt)}</td>
-                        <td>{p.resolvedAt ? `kapandı ${tsLong(p.resolvedAt)}` : p.status}</td>
-                        <td title={p.rootCause?.topSuspect ?? ''}>
-                          {p.rootCause?.topSuspect
-                            ? `${p.rootCause.topSuspect} (%${Math.round((p.rootCause.confidence ?? 0) * 100)})`
-                            : p.recentDeploy ? `deploy ${p.recentDeploy.version}` : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+            {/* v0.10.954 — tablo standardı T12: üç bölümün boş hâli tablonun
+                İÇİNDE, başlık durur (özet düzeyi yükleniyor / hata yukarıda). */}
+            <table {...probT.tableProps}>
+              <DataTableColgroup dt={probT} />
+              <DataTableHead dt={probT} />
+              <tbody>
+                {problems.length === 0 ? <DataTableState dt={probT} kind="empty" message="Pencerede problem açılmadı — sakin bir vardiya." /> : probT.sortedRows.map((p: Problem) => (
+                  <tr key={p.id} style={p.resolvedAt ? { opacity: 0.45 } : undefined}>
+                    <td>{p.priority && <span className={`badge ${p.priority === 'P1' ? 'b-err' : p.priority === 'P2' ? 'b-warn' : 'b-info'}`}>{p.priority}</span>}</td>
+                    <td><SubjectLink service={p.service} subjectKind={p.kind} href={serviceHref(p.service, { range: eventLifespanWindow(p) })} /></td>
+                    <td><Link to={`/problems?problem=${encodeURIComponent(p.id)}`}>{p.ruleName}</Link></td>
+                    <td className="mono">{tsLong(p.startedAt)}</td>
+                    <td>{p.resolvedAt ? `kapandı ${tsLong(p.resolvedAt)}` : p.status}</td>
+                    <td title={p.rootCause?.topSuspect ?? ''}>
+                      {p.rootCause?.topSuspect
+                        ? `${p.rootCause.topSuspect} (%${Math.round((p.rootCause.confidence ?? 0) * 100)})`
+                        : p.recentDeploy ? `deploy ${p.recentDeploy.version}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Section>
 
           <Section title="En çok kötüleşen servisler"
             sub="pencere vs önceki eş-boy pencere (MV kıyası)">
-            {worsened.length === 0
-              ? <Empty icon="✓" title="Kayda değer kötüleşme yok">Önceki pencereye göre sapan servis bulunmadı.</Empty>
-              : (
-                <table {...worseT.tableProps}>
-                  <DataTableColgroup dt={worseT} />
-                  <DataTableHead dt={worseT} />
-                  <tbody>
-                    {worseT.sortedRows.map((c: ChangedService) => (
-                      <tr key={c.service}>
-                        <td><Link to={serviceHref(c.service, { range: pageWindow })}>{c.service}</Link></td>
-                        <td className="num">{deltaCell(c.baselineErrorRate * 100, c.currentErrorRate * 100, '%', c.errDeltaPct)}</td>
-                        <td className="num">{deltaCell(c.baselineP99Ms, c.currentP99Ms, 'ms', c.p99DeltaPct)}</td>
-                        <td className="num">{deltaCell(c.baselineRate, c.currentRate, '/s', c.rateDeltaPct)}</td>
-                        <td className="num">{fmtFixed(c.score, 1)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+            <table {...worseT.tableProps}>
+              <DataTableColgroup dt={worseT} />
+              <DataTableHead dt={worseT} />
+              <tbody>
+                {worsened.length === 0 ? <DataTableState dt={worseT} kind="empty" message="Kayda değer kötüleşme yok — önceki pencereye göre sapan servis bulunmadı." /> : worseT.sortedRows.map((c: ChangedService) => (
+                  <tr key={c.service}>
+                    <td><Link to={serviceHref(c.service, { range: pageWindow })}>{c.service}</Link></td>
+                    <td className="num">{deltaCell(c.baselineErrorRate * 100, c.currentErrorRate * 100, '%', c.errDeltaPct)}</td>
+                    <td className="num">{deltaCell(c.baselineP99Ms, c.currentP99Ms, 'ms', c.p99DeltaPct)}</td>
+                    <td className="num">{deltaCell(c.baselineRate, c.currentRate, '/s', c.rateDeltaPct)}</td>
+                    <td className="num">{fmtFixed(c.score, 1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Section>
 
           <Section title={`Yeni exception imzaları (${q.data.newExceptionsTotal})`}
             sub={q.data.newExceptionsTotal > excs.length
               ? `ilk görülme bu pencerede — en yoğun ${excs.length} gösteriliyor`
               : 'ilk görülme bu pencerede'}>
-            {excs.length === 0
-              ? <Empty icon="✓" title="Yeni imza yok">Bu pencerede ilk kez görülen exception grubu bulunmadı.</Empty>
-              : (
-                <table {...excT.tableProps}>
-                  <DataTableColgroup dt={excT} />
-                  <DataTableHead dt={excT} />
-                  <tbody>
-                    {excT.sortedRows.map((g: ExceptionGroup) => (
-                      <tr key={g.fingerprint}>
-                        <td className="mono" title={g.type}>
-                          <Link to={`/problems?exc=${encodeURIComponent(g.fingerprint)}`}>{g.type}</Link>
-                        </td>
-                        <td><Link to={serviceHref(g.service, { range: exceptionGroupWindow(g) })}>{g.service}</Link></td>
-                        <td className="mono">{tsLong(g.firstSeen)}</td>
-                        <td className="num">{g.occurrences}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+            <table {...excT.tableProps}>
+              <DataTableColgroup dt={excT} />
+              <DataTableHead dt={excT} />
+              <tbody>
+                {excs.length === 0 ? <DataTableState dt={excT} kind="empty" message="Yeni imza yok — bu pencerede ilk kez görülen exception grubu bulunmadı." /> : excT.sortedRows.map((g: ExceptionGroup) => (
+                  <tr key={g.fingerprint}>
+                    <td className="mono" title={g.type}>
+                      <Link to={`/problems?exc=${encodeURIComponent(g.fingerprint)}`}>{g.type}</Link>
+                    </td>
+                    <td><Link to={serviceHref(g.service, { range: exceptionGroupWindow(g) })}>{g.service}</Link></td>
+                    <td className="mono">{tsLong(g.firstSeen)}</td>
+                    <td className="num">{g.occurrences}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Section>
         </>
       )}

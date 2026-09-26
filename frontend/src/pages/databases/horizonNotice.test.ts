@@ -110,7 +110,10 @@ describe('Databases.tsx kablolaması', () => {
     // Asıl kusur buydu: pencere saklamayı aştığında boş panel
     // "receiver kur" diyordu. Metin hâlâ var (ufuk içindeyken doğru)
     // ama artık ÖNÜNDE explains-empty dalı olmak zorunda.
-    const misdiagnosis = src.indexOf('Point an OpenTelemetry database receiver');
+    // v0.10.954 — tablo standardı T12: metin durum satırına taşındı ve
+    // Türkçeleşti ("receiver kur" öğüdü aynı); sıra iddiası aynen.
+    const misdiagnosis = src.indexOf("OpenTelemetry veritabanı receiver'ı");
+    expect(misdiagnosis).toBeGreaterThan(-1);
     const guard = src.indexOf("receiverNotice?.kind === 'explains-empty'");
     expect(guard).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(misdiagnosis);

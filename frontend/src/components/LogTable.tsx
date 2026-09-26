@@ -3,7 +3,9 @@ import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y';
 import { Link } from 'react-router-dom';
 import { CopyButton } from './CopyButton';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { highlightSegments } from '@/lib/logFilters';
 import { podOfLog, podEntryOfLog } from '@/lib/logPod';
 import { clusterEntryOfLog } from '@/lib/logCluster'; // v0.10.501 (B4)
@@ -183,6 +185,7 @@ export function LogTable({
   onContextOpen,
   permalink,
   wrap = false,
+  state,
 }: {
   logs: LogRow[];
   hideTraceColumn?: boolean;
@@ -245,6 +248,10 @@ export function LogTable({
   onContextOpen?: (pivot: LogRow) => void;
   // v0.9.1248 — kalıcı doküman linki üreticisi; yalnız /logs geçirir.
   permalink?: (l: LogRow) => string;
+  // v0.10.954 — tablo standardı T12 (VirtualTable `state` emsali): `logs`
+  // boşken tablonun İÇİNDE çizilecek durum. Bugünkü çağıranlar boş listeyi
+  // kendileri kapıda tutuyor; verilmezse genel boş satırı basılır.
+  state?: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'>;
 }) {
   const [localExpanded, setLocalExpanded] = useState<Set<number>>(new Set());
   const expanded = expandedIds ?? localExpanded;
@@ -304,7 +311,7 @@ export function LogTable({
               </>
         ) : undefined} />
         <tbody>
-          {dt.sortedRows.map((l, idx) => {
+          {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...(state ?? { kind: 'empty' })} /> : dt.sortedRows.map((l, idx) => {
             const isExpanded = expanded.has(l.id);
             const isSelected = nav?.selected === idx;
             return (

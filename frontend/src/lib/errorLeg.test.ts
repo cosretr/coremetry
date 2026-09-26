@@ -80,7 +80,16 @@ const CONVERTED: Array<[file: string, release: string, what: string]> = [
 //
 // 2026-08-10'da doğrulandı: dönüştürülmüş 22 dosyanın 22'si de bu imzayı
 // taşıyor, yani daraltma hiçbir gerçek dalı dışarıda bırakmıyor.
+// v0.10.954 — tablo standardı T12 (dilim 4): hata dalı tablonun İÇİNE
+// taşındı. DataTableState'in 'error' türü QueryErrorInline basar
+// (components/ui/DataTable/DataTableState.tsx). İmza hâlâ bileşen ADINA
+// bağlı: ya <QueryError>/<QueryErrorInline>, ya da <DataTableState> İLE
+// birlikte `kind: 'error'` / `kind="error"`. Tek başına kind:'error' yetmez.
 const ERROR_LEG = /<QueryError(Inline)?\b/;
+const TABLE_STATE = /<DataTableState\b/;
+const TABLE_ERROR_KIND = /\bkind:\s*'error'|\bkind="error"/;
+const hasErrorLeg = (src: string): boolean =>
+  ERROR_LEG.test(src) || (TABLE_STATE.test(src) && TABLE_ERROR_KIND.test(src));
 
 function read(rel: string): string {
   return readFileSync(resolve(SRC, rel), 'utf8');
@@ -89,7 +98,7 @@ function read(rel: string): string {
 describe('errorLeg — hata=boş maskesi (tutarlılık denetimi MT1 / UX denetimi K6)', () => {
   it.each(CONVERTED)('%s (%s) hata dalını koruyor — %s', (file, _release, _what) => {
     const src = read(file);
-    expect(ERROR_LEG.test(src), `${file}: <QueryError>/<QueryErrorInline> yok. Okuma hatası BOŞ DURUM olarak sunuluyor olabilir — MT1/K6 sınıfının nüksü.`).toBe(true);
+    expect(hasErrorLeg(src), `${file}: <QueryError>/<QueryErrorInline> ya da <DataTableState kind:'error'> yok. Okuma hatası BOŞ DURUM olarak sunuluyor olabilir — MT1/K6 sınıfının nüksü.`).toBe(true);
   });
 
   it('dönüştürülen yüzeylerde null-yutan guard geri gelmedi', () => {

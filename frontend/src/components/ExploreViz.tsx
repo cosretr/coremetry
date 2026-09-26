@@ -3,7 +3,7 @@ import { seriesColor } from '@/lib/chartFmt';
 import { fmtClock } from '@/lib/utils';
 import { MultiLineChart } from './MultiLineChart';
 import type { ExploreSeries, SpanMetricSeries } from '@/lib/types';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 
 type TopNRow = { name: string; latest: number; total: number };
 
@@ -33,13 +33,16 @@ export function ExploreViz({ series, kind, unit }: {
   kind: ExploreVizKind;
   unit?: string;
 }) {
-  if (!series || series.length === 0) {
+  // v0.10.954 — tablo standardı T12: topN bir tablo; boş pencerede başlık
+  // durur, "veri yok" tablonun İÇİNDE (TopNViz). Grafik / KPI görünümleri
+  // tablo değil — eski not onlarda kalır.
+  if ((!series || series.length === 0) && kind !== 'topN') {
     return <div style={{ color: 'var(--text3)', fontSize: 12 }}>No data in this window.</div>;
   }
   switch (kind) {
     case 'line': return <UPlotLine series={series} unit={unit} />;
     case 'bar':  return <LineViz   series={series} unit={unit} mode="bar" />;
-    case 'topN': return <TopNViz   series={series} unit={unit} />;
+    case 'topN': return <TopNViz   series={series ?? []} unit={unit} />;
     case 'kpi':  return <KpiViz    series={series} unit={unit} />;
   }
 }
@@ -191,7 +194,9 @@ function TopNViz({ series, unit }: { series: ExploreSeries[]; unit?: string }) {
         <DataTableColgroup dt={dt} trailing={[240]} />
         <DataTableHead dt={dt} trailing={<th></th>} />
         <tbody>
-          {dt.sortedRows.map(r => (
+          {dt.sortedRows.length === 0 ? (
+            <DataTableState dt={dt} kind="empty" message="Bu pencerede veri yok" trailing={[240]} />
+          ) : dt.sortedRows.map(r => (
             <tr key={r.name}>
               <td>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

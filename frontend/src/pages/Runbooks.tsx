@@ -1,10 +1,10 @@
 import { useNavigate } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
 import { Button } from '@/components/ui/Button';
-import { Spinner, Empty } from '@/components/Spinner';
-import { QueryError } from '@/components/QueryError';
-import { readState } from '@/lib/readState';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { Runbook } from '@/lib/types';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 
@@ -59,6 +59,18 @@ export default function RunbooksPage() {
     storageKey: 'runbooks', columns: RUNBOOK_COLS, rows: runbooks ?? [],
     initialSort: { id: 'updated', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Hata satırı varsayılan metni taşır ("bu bir hata,
+  // boş sonuç değil" — eski "boş katalog değil" cümlesi); ↻ aynı refetch.
+  const tableState: Omit<DataTableStateProps<Runbook>, 'dt'> =
+    runbooks === undefined ? { kind: 'loading' }
+    : runbooks === null ? { kind: 'error', onRetry: () => void runbooksQ.refetch() }
+    : {
+        kind: 'empty',
+        message: 'Runbook yok — runbook\'lar ekip içi bilgiyi tekrarlanabilir, çalıştırılabilir prosedürlere çevirir: '
+          + 'nöbetçinin gece 3\'te başvurduğu kılavuz. '
+          + (canEdit ? 'İlkini yazmak için + New runbook\'a tıkla.' : 'Bir editörden ya da yöneticiden bir tane yazmasını iste.'),
+      };
 
   const createRb  = useCreateRunbook();
   const deleteRb  = useDeleteRunbook();
@@ -104,89 +116,66 @@ export default function RunbooksPage() {
           )}
         </div>
 
-        {readState(runbooks) === 'loading' && <Spinner />}
-
-        {readState(runbooks) === 'error' && (
-          <QueryError onRetry={() => runbooksQ.refetch()}>
-            Runbooks could not be loaded — this is a failed read, not an empty
-            catalogue. Your runbooks are still there.
-          </QueryError>
-        )}
-
-        {readState(runbooks) === 'empty' && (
-          <Empty icon="▤" title="No runbooks">
-            <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-              Runbooks turn tribal knowledge into repeatable, executable
-              procedures — the playbook your oncall reaches for at 3am.
-              {canEdit
-                ? <> Click <b>+ New runbook</b> to author your first one.</>
-                : <> Ask an editor or admin to author one.</>}
-            </div>
-          </Empty>
-        )}
-
-        {runbooks && runbooks.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(rb => (
-                  <tr key={rb.id}>
-                    <td>
-                      <a href={`/runbook?id=${encodeURIComponent(rb.id)}`}
-                        onClick={e => { e.preventDefault(); navigate(`/runbook?id=${encodeURIComponent(rb.id)}`); }}
-                        style={{ color: 'var(--accent2)', textDecoration: 'none', fontWeight: 600 }}>
-                        {rb.title || '(untitled)'}
-                      </a>
-                    </td>
-                    <td className="num">{rb.steps?.length ?? 0}</td>
-                    {/* v0.10.929 (K5) — açık/kapalı ayar durumu nötr. */}
-                    <td>{rb.enabled
-                      ? <span className="badge b-gray">ON</span>
-                      : <span className="badge b-gray">OFF</span>}</td>
-                    <td>
-                      {(rb.labels ?? []).length === 0
-                        ? <span style={{ color: 'var(--text3)' }}>—</span>
-                        : (
-                          <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-                            {(rb.labels ?? []).map(l => (
-                              <span key={l} className="badge b-gray" style={{ fontSize: 10 }}>{l}</span>
-                            ))}
-                          </span>
-                        )}
-                    </td>
-                    <td className="mono cell-faint">
-                      {tsLong(rb.updatedAt)}
-                    </td>
-                    <DataTableCell dt={dt} col="actions" row={rb}><div className="cell-actions end">
-                      <Button variant="secondary" size="sm"
-                        onClick={() => navigate(`/runbook?id=${encodeURIComponent(rb.id)}`)}>
-                        Open
-                      </Button>
-                      {canEdit && (rb.enabled
-                        ? <Button variant="secondary" size="sm" onClick={() => disableRb.mutateAsync(rb.id)}
-                            title="Stop this runbook from being executable without deleting it">
-                            Disable
-                          </Button>
-                        : <Button variant="secondary" size="sm" onClick={() => enableRb.mutateAsync(rb.id)}>
-                            Enable
-                          </Button>)}
-                      {canEdit && (
-                        <Button variant="ghost-danger" size="sm" loading={deleteRb.isPending}
-                          onClick={() => void remove(rb.id, rb.title)}
-                          title="Remove the runbook entirely">
-                          Delete
-                        </Button>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(rb => (
+                <tr key={rb.id}>
+                  <td>
+                    <a href={`/runbook?id=${encodeURIComponent(rb.id)}`}
+                      onClick={e => { e.preventDefault(); navigate(`/runbook?id=${encodeURIComponent(rb.id)}`); }}
+                      style={{ color: 'var(--accent2)', textDecoration: 'none', fontWeight: 600 }}>
+                      {rb.title || '(untitled)'}
+                    </a>
+                  </td>
+                  <td className="num">{rb.steps?.length ?? 0}</td>
+                  {/* v0.10.929 (K5) — açık/kapalı ayar durumu nötr. */}
+                  <td>{rb.enabled
+                    ? <span className="badge b-gray">ON</span>
+                    : <span className="badge b-gray">OFF</span>}</td>
+                  <td>
+                    {(rb.labels ?? []).length === 0
+                      ? <span style={{ color: 'var(--text3)' }}>—</span>
+                      : (
+                        <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                          {(rb.labels ?? []).map(l => (
+                            <span key={l} className="badge b-gray" style={{ fontSize: 10 }}>{l}</span>
+                          ))}
+                        </span>
                       )}
-                    </div>
-                    </DataTableCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  </td>
+                  <td className="mono cell-faint">
+                    {tsLong(rb.updatedAt)}
+                  </td>
+                  <DataTableCell dt={dt} col="actions" row={rb}><div className="cell-actions end">
+                    <Button variant="secondary" size="sm"
+                      onClick={() => navigate(`/runbook?id=${encodeURIComponent(rb.id)}`)}>
+                      Open
+                    </Button>
+                    {canEdit && (rb.enabled
+                      ? <Button variant="secondary" size="sm" onClick={() => disableRb.mutateAsync(rb.id)}
+                          title="Stop this runbook from being executable without deleting it">
+                          Disable
+                        </Button>
+                      : <Button variant="secondary" size="sm" onClick={() => enableRb.mutateAsync(rb.id)}>
+                          Enable
+                        </Button>)}
+                    {canEdit && (
+                      <Button variant="ghost-danger" size="sm" loading={deleteRb.isPending}
+                        onClick={() => void remove(rb.id, rb.title)}
+                        title="Remove the runbook entirely">
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                  </DataTableCell>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </PageShell>
     </>
   );

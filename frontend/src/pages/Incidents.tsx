@@ -1,19 +1,20 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
 import { ServicePicker } from '@/components/ServicePicker';
 import { ClusterChips as ClusterChipsRef } from '@/components/ClusterChips';
 import { Modal, Button, Field, SelectField, TextareaField, Row } from '@/components/ui';
-import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
 import { useIncidents, useCreateIncident } from '@/lib/queries';
 import { tsLong, fmtNum } from '@/lib/utils';
 import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.796
 import { priorityRank } from '@/lib/priorityRank'; // v0.10.796
 import { incidentRootCauseLabel, incidentRootCauseSort } from '@/lib/incidentRootCause';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { Incident, IncidentStatus } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
@@ -83,6 +84,25 @@ export default function IncidentsPage() {
     for (const i of items ?? []) counts[i.status]++;
   }
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur (readState sırası aynen; v0.9.865 hata dalı —
+  // "açık olay varken olay yok" — ↻ ile tablonun içinde). Durum / servis
+  // süzgeci SUNUCU isteğine giriyor: süzgeç açıkken sıfır satır "eşleşme
+  // yok" (iki ayrı denetim, tek temizle eylemi yok).
+  const rs = readState(items);
+  const tableState: Omit<DataTableStateProps<Incident>, 'dt'> =
+    rs === 'loading' ? { kind: 'loading' }
+    : rs === 'error' ? {
+      kind: 'error',
+      onRetry: () => void incidentsQ.refetch(),
+      message: 'Incident\'lar okunamadı — bu bir hata, "her şey yolunda" değil; açık incident\'lar hâlâ olabilir.',
+    }
+    : statusFilter !== 'all' || serviceFilter ? { kind: 'no-match' }
+    : {
+      kind: 'empty',
+      message: `Incident yok — incident'lar 30 dakika içinde tetiklenen aynı servis + aynı önem derecesindeki Problem'lerden otomatik oluşur.${isAdmin ? ' Elle oluşturmak için "+ Declare incident".' : ''}`,
+    };
+
   return (
     <>
       <Topbar title="Incidents" />
@@ -119,75 +139,61 @@ export default function IncidentsPage() {
             Durum/servis süzgeciyle daralt.
           </div>
         )}
-        {readState(items) === 'loading' && <Spinner />}
         {/* v0.9.865 (tutarlılık denetimi MT1) — `!items` null için de doğru
             olduğundan okuma hatası "No incidents" olarak sunuluyordu:
-            açık bir olay varken sayfa "olay yok" diyordu. */}
-        {readState(items) === 'error' && (
-          <QueryError onRetry={() => incidentsQ.refetch()}>
-            Incidents could not be loaded — this is a failed read, not an
-            all-clear. Open incidents may still exist.
-          </QueryError>
-        )}
-        {readState(items) === 'empty' && (
-          <Empty icon="⚠" title="No incidents">
-            Incidents auto-create from same-service same-severity Problems firing within 30 minutes.
-            {isAdmin && ' Or click "+ Declare incident" to create one manually.'}
-          </Empty>
-        )}
-        {items && items.length > 0 && (
-          // NOT VirtualTable: the Title column wraps long incident titles and
-          // ClusterChips can wrap, so rows are variable-height — incompatible
-          // with VirtualTable's uniform-row assumption. content-visibility
-          // keeps the paint cheap on the (limit 200) list.
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map((i, idx) => {
-                  const rp = dt.rowProps(idx);
-                  return (
-                    <tr key={i.id} {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
-                        // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
-                        data-row-action
-                        onMouseEnter={() => dt.nav.setSelected(idx)}
-                        onClick={() => navigate(`/incident?id=${i.id}`)}>
-                      <DataTableCell dt={dt} col="status" row={i}><StatusPill s={i.status} /></DataTableCell>
-                      {/* v0.10.945 — priority ve kök neden kolonlarında `numeric` yalnız
-                          sıralama için: hücreleri DataTableCell'in `num`unu almaz (hiza aynı). */}
-                      <td>{i.priority ? <PriorityBadge p={i.priority} reason={i.priorityReason} /> : '—'}</td>
-                      <DataTableCell dt={dt} col="severity" row={i}><SeverityPill s={i.severity} /></DataTableCell>
-                      <DataTableCell dt={dt} col="title" row={i}>
-                        <Link to={`/incident?id=${i.id}`} style={{ fontWeight: 600, color: 'var(--text)' }}
-                              onClick={e => e.stopPropagation()}>
-                          {i.title}
-                        </Link>
-                        {i.assignee && (
-                          <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 8 }}>
-                            assigned to {i.assignee}
-                          </span>
-                        )}
-                      </DataTableCell>
-                      <DataTableCell dt={dt} col="service" row={i}>
-                        {i.service || '—'}
-                        <ClusterChipsRef clusters={i.clusters} />
-                      </DataTableCell>
-                      <DataTableCell dt={dt} col="problems" row={i} title={i.problemCount === undefined ? undefined : `${i.problemCount} bağlı problem, ${i.unresolvedProblems ?? 0} açık`}>
-                        {i.problemCount === undefined ? '—' : `${i.problemCount}${i.unresolvedProblems ? ` (${i.unresolvedProblems} açık)` : ''}`}
-                      </DataTableCell>
-                      <td className="mono">
-                        <IncidentCause rc={i.rootCause} />
-                      </td>
-                      <DataTableCell dt={dt} col="started" row={i} value={tsLong(i.startedAt)} className="mono ib-when" />{/* v0.10.739 — 13 px damga */}
-                      <DataTableCell dt={dt} col="duration" row={i} value={fmtDuration(i.startedAt, i.resolvedAt)} />
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+            açık bir olay varken sayfa "olay yok" diyordu. (v0.10.954: üç
+            durum `tableState`te, readState ile.)
+            NOT VirtualTable: the Title column wraps long incident titles and
+            ClusterChips can wrap, so rows are variable-height — incompatible
+            with VirtualTable's uniform-row assumption. content-visibility
+            keeps the paint cheap on the (limit 200) list. */}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((i, idx) => {
+                const rp = dt.rowProps(idx);
+                return (
+                  <tr key={i.id} {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
+                      // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                      data-row-action
+                      onMouseEnter={() => dt.nav.setSelected(idx)}
+                      onClick={() => navigate(`/incident?id=${i.id}`)}>
+                    <DataTableCell dt={dt} col="status" row={i}><StatusPill s={i.status} /></DataTableCell>
+                    {/* v0.10.945 — priority ve kök neden kolonlarında `numeric` yalnız
+                        sıralama için: hücreleri DataTableCell'in `num`unu almaz (hiza aynı). */}
+                    <td>{i.priority ? <PriorityBadge p={i.priority} reason={i.priorityReason} /> : '—'}</td>
+                    <DataTableCell dt={dt} col="severity" row={i}><SeverityPill s={i.severity} /></DataTableCell>
+                    <DataTableCell dt={dt} col="title" row={i}>
+                      <Link to={`/incident?id=${i.id}`} style={{ fontWeight: 600, color: 'var(--text)' }}
+                            onClick={e => e.stopPropagation()}>
+                        {i.title}
+                      </Link>
+                      {i.assignee && (
+                        <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 8 }}>
+                          assigned to {i.assignee}
+                        </span>
+                      )}
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="service" row={i}>
+                      {i.service || '—'}
+                      <ClusterChipsRef clusters={i.clusters} />
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="problems" row={i} title={i.problemCount === undefined ? undefined : `${i.problemCount} bağlı problem, ${i.unresolvedProblems ?? 0} açık`}>
+                      {i.problemCount === undefined ? '—' : `${i.problemCount}${i.unresolvedProblems ? ` (${i.unresolvedProblems} açık)` : ''}`}
+                    </DataTableCell>
+                    <td className="mono">
+                      <IncidentCause rc={i.rootCause} />
+                    </td>
+                    <DataTableCell dt={dt} col="started" row={i} value={tsLong(i.startedAt)} className="mono ib-when" />{/* v0.10.739 — 13 px damga */}
+                    <DataTableCell dt={dt} col="duration" row={i} value={fmtDuration(i.startedAt, i.resolvedAt)} />
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {showNew && (
           <NewIncidentModal onClose={() => setShowNew(false)} onCreated={() => setShowNew(false)} />
         )}

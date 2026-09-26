@@ -6,7 +6,7 @@ import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
 import { useDepDetail } from '@/lib/queries/dependencies';
 import { fmtNum, fmtNs, timeRangeToNs } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import type { TimeRange, DBDetail, MessagingDetail, DBOpStat, MsgOperationStat } from '@/lib/types';
 import { Stat } from './panels/shared';
 import { traceHref } from '@/lib/traceHref';
@@ -436,12 +436,12 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
           <CallerSection
             title={`Publishers · ${producers.length} ${producers.length === 1 ? 'row' : 'rows'}`}
             rows={producers}
-            emptyMessage="No producer spans for this destination in the window."
+            emptyMessage="Bu pencerede bu destination'a üretici span'i yok."
             tone="producer" range={range} />
           <CallerSection
             title={`Consumers · ${consumers.length} ${consumers.length === 1 ? 'row' : 'rows'}`}
             rows={consumers}
-            emptyMessage="No consumer spans for this destination in the window."
+            emptyMessage="Bu pencerede bu destination'a tüketici span'i yok."
             tone="consumer" range={range} />
           {otherClients.length > 0 && (
             <CallerSection
@@ -473,46 +473,44 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               }} />
               Operasyonlar · MV · {msgOps.length} satır
             </div>
-            {msgOps.length === 0 ? (
-              // Bölüm GİZLENMİYOR: yokluğu söylemek, bakılmamış gibi
-              // görünmekten iyidir (boş küme kaybolur, sıfır olmaz).
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                Bu pencerede MV&#39;de operasyon satırı yok.
-              </div>
-            ) : (
-              <div className="table-wrap">
-                <table {...msgOpsDt.tableProps}>
-                  <DataTableColgroup dt={msgOpsDt} />
-                  <DataTableHead dt={msgOpsDt} />
-                  <tbody>
-                    {msgOpsDt.sortedRows.map((o, i) => {
-                      // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
-                      const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
-                      const missing = isOpMissing(o.operation);
-                      return (
-                        <tr key={`${o.operation}|${i}`}>
-                          <DataTableCell dt={msgOpsDt} col="operation" row={o}
-                            title={missing ? OP_MISSING_TITLE : o.operation}>
-                            {opLabelTR(o.operation)}
-                          </DataTableCell>
-                          <DataTableCell dt={msgOpsDt} col="count" row={o} value={fmtNum(o.spanCount)} />
-                          <DataTableCell dt={msgOpsDt} col="errRate" row={o}>
-                            <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
-                                  title={`${fmtNum(o.errorCount)} hatalı span`}>
-                              {o.errorRate.toFixed(2)}%
-                            </span>
-                          </DataTableCell>
-                          <DataTableCell dt={msgOpsDt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
-                          <DataTableCell dt={msgOpsDt} col="p50" row={o} value={`${o.p50DurationMs.toFixed(1)}ms`} />
-                          <DataTableCell dt={msgOpsDt} col="p95" row={o} value={`${o.p95DurationMs.toFixed(1)}ms`} />
-                          <DataTableCell dt={msgOpsDt} col="p99" row={o} value={`${o.p99DurationMs.toFixed(1)}ms`} />
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {/* Bölüm GİZLENMİYOR: yokluğu söylemek, bakılmamış gibi
+                görünmekten iyidir (boş küme kaybolur, sıfır olmaz).
+                v0.10.954 — tablo standardı T12: soluk satır tablonun
+                İÇİNDE, sütun başlıkları durur. */}
+            <div className="table-wrap">
+              <table {...msgOpsDt.tableProps}>
+                <DataTableColgroup dt={msgOpsDt} />
+                <DataTableHead dt={msgOpsDt} />
+                <tbody>
+                  {msgOpsDt.sortedRows.length === 0 ? (
+                    <DataTableState dt={msgOpsDt} kind="empty" message="Bu pencerede MV'de operasyon satırı yok" />
+                  ) : msgOpsDt.sortedRows.map((o, i) => {
+                    // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
+                    const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
+                    const missing = isOpMissing(o.operation);
+                    return (
+                      <tr key={`${o.operation}|${i}`}>
+                        <DataTableCell dt={msgOpsDt} col="operation" row={o}
+                          title={missing ? OP_MISSING_TITLE : o.operation}>
+                          {opLabelTR(o.operation)}
+                        </DataTableCell>
+                        <DataTableCell dt={msgOpsDt} col="count" row={o} value={fmtNum(o.spanCount)} />
+                        <DataTableCell dt={msgOpsDt} col="errRate" row={o}>
+                          <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
+                                title={`${fmtNum(o.errorCount)} hatalı span`}>
+                            {o.errorRate.toFixed(2)}%
+                          </span>
+                        </DataTableCell>
+                        <DataTableCell dt={msgOpsDt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
+                        <DataTableCell dt={msgOpsDt} col="p50" row={o} value={`${o.p50DurationMs.toFixed(1)}ms`} />
+                        <DataTableCell dt={msgOpsDt} col="p95" row={o} value={`${o.p95DurationMs.toFixed(1)}ms`} />
+                        <DataTableCell dt={msgOpsDt} col="p99" row={o} value={`${o.p99DurationMs.toFixed(1)}ms`} />
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
           {/* v0.10.551 — Kafka istemci metrikleri (VM seam): span tarafından
               SONRA, Top operations'tan ÖNCE (operatör mockup onayı). */}
@@ -523,7 +521,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
         <CallerSection
           title={`By client (service + pod) · ${callers.length} ${callers.length === 1 ? 'row' : 'rows'}`}
           rows={callers}
-          emptyMessage="No callers in this window."
+          emptyMessage="Bu pencerede çağıran yok."
           tone="db" range={range} />
       )}
 

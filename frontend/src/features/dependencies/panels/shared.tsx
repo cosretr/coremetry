@@ -13,7 +13,7 @@ import { metricCatalogueHref } from '@/pages/explore/urlCodec';
 import { Button } from '@/components/ui/Button';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { TileButton } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
 
 // v0.9.873 (tutarlılık denetimi BT9) — tek dokunuş ÜÇ paneli düzeltiyor:
@@ -290,13 +290,16 @@ export function OracleMetricDrillModal({ drill, range, instance, engine, onClose
 // Complementary to the span-derived "Top statements" further
 // down: V$SQL sees everything the DB executes, traces only see
 // what the application emits.
-export function TopSQLTable({ rows, instance, range }: {
+export function TopSQLTable({ rows, instance, range, state }: {
   rows: TopSQLRow[];
   instance: string;
   // v0.9.1324 (§3.1 K2) — the statement→/traces exemplar link was the last
   // windowless pivot in this file; HostLink next to it has carried the
   // window since v0.9.968.
   range: TimeRange;
+  // v0.10.954 — tablo standardı T12 (VirtualTable emsali): satır yokken
+  // tablonun İÇİNDE çizilecek durum; verilmezse düz "boş".
+  state?: Omit<DataTableStateProps<TopSQLRow>, 'dt' | 'leading' | 'trailing'>;
 }) {
   const dt = useDataTable<TopSQLRow>({
     storageKey: 'deps-topsql', columns: TOPSQL_COLS, rows,
@@ -317,7 +320,7 @@ export function TopSQLTable({ rows, instance, range }: {
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map((r, i) => (
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...(state ?? { kind: 'empty' })} /> : dt.sortedRows.map((r, i) => (
               <tr key={i}>
                 {/* v0.10.943 (tablo standardı dilim 3) — SQL kimlik hücresi: 11px
                     düştü, renk eklenmedi. maxWidth sabit düzende etkisizdi
@@ -362,32 +365,22 @@ export function TopSQLTable({ rows, instance, range }: {
 // engine-authoritative statement stats when the operator has
 // enabled pg_stat_statements / performance_schema scraping — the
 // common case (and the bundled demo, which only emits Oracle) is
-// zero rows. We render an Empty with a hint pointing at the fix
-// rather than a blank gap, mirroring the no-fake-data policy of
-// the rest of the panel. When rows exist we delegate to the same
-// TopSQLTable the Oracle panel uses, so the v0.7.67 statement→
-// /traces exemplar link is shared across all three engines.
+// zero rows. We render an explicit empty state with a hint pointing at
+// the fix rather than a blank gap, mirroring the no-fake-data policy of
+// the rest of the panel. Always the same TopSQLTable the Oracle panel
+// uses, so the v0.7.67 statement→/traces exemplar link is shared across
+// all three engines.
+// v0.10.954 — tablo standardı T12: boşken Empty tabloyu değiştirmez;
+// başlık durur, ipucu tablonun İÇİNDE boş satırda.
 export function TopSQLSection({ rows, instance, hint, range }: {
   rows: { sql: string; elapsedSec: number; executions: number; avgElapsedMs: number }[];
   instance: string;
   hint: string;
   range: TimeRange;
 }) {
-  if (rows.length > 0) {
-    return <TopSQLTable rows={rows} instance={instance} range={range} />;
-  }
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{
-        fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--text2)',
-        textTransform: 'uppercase', letterSpacing: 0.4,
-      }}>
-        Top SQL by elapsed time
-      </div>
-      <Empty icon="◯" title="No engine-authoritative statement metrics">
-        {hint}
-      </Empty>
-    </div>
+    <TopSQLTable rows={rows} instance={instance} range={range}
+      state={{ kind: 'empty', message: `Motorun kendi statement metrikleri yok — ${hint}` }} />
   );
 }
 

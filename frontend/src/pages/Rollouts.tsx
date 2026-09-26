@@ -22,7 +22,10 @@ import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/ui/PageShell';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Badge, Button, StatTile } from '@/components/ui';
-import { useDataTable, DataTableColgroup, DataTableHead, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableColgroup, DataTableHead, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { timeRangeToNs } from '@/lib/utils';
 import { fmtNum, fmtDateTime, fmtDurShort } from '@/lib/utils';
@@ -108,6 +111,18 @@ export default function RolloutsPage() {
   const disabled = tab === 'live' ? listQ.data?.disabled === true : statsQ.data?.disabled === true;
   const lastRun = runsQ.data?.runs?.[0];
   const drawerId = decodeRolloutParam(sp.get('rollout'));
+  // v0.10.954 — tablo standardı T12: canlı listenin yükleniyor / hata / boş
+  // durumu tablonun İÇİNDE, başlık durur ("Rollouts kapalı" kapısı dışarıda).
+  // Zincir sırası aynı: hata bayat satırları da gizler (showLiveRows).
+  // Cluster / durum / namespace SUNUCU süzgeci → sıfır satır "eşleşme yok"
+  // (üç ayrı denetim, tek temizle eylemi yok); sunucu notu korunur.
+  const liveFiltered = !!(cluster || ns || status);
+  const showLiveRows = !listQ.isPending && !err && rows.length > 0;
+  const liveState: Omit<DataTableStateProps<WorkloadRollout>, 'dt'> =
+    listQ.isPending ? { kind: 'loading' }
+    : err ? { kind: 'error', message: `Rollout listesi yüklenemedi: ${err.message}` }
+    : liveFiltered ? { kind: 'no-match', ...(listQ.data?.note ? { message: `Eşleşme yok — ${listQ.data.note}` } : {}) }
+    : { kind: 'empty', message: `Bu pencerede rollout yok — ${listQ.data?.note ?? 'Reconciler aktif kümeye giren yeni revizyon görmedi (giriş: ≥2 karar kovası + gözlenmiş yokluk).'}` };
   const enable = async () => {
     setEnabling(true);
     setEnableErr('');
@@ -164,61 +179,57 @@ export default function RolloutsPage() {
             Olay tablosu yazılmıyor. {isAdmin ? (enableErr ? `Açılamadı: ${enableErr}` : 'Mevcut ayarlar korunarak açılır.') : 'Bir admin Settings → Rollouts → Enable ile açar.'}
           </Empty>
         ) : tab === 'live' ? (
-          listQ.isPending ? <Spinner /> : err ? <Empty icon="!" title="Rollout listesi yüklenemedi">{err.message}</Empty> : rows.length === 0 ? (
-            <Empty icon="∅" title="Bu pencerede rollout yok">{listQ.data?.note ?? 'Reconciler aktif kümeye giren yeni revizyon görmedi (giriş: ≥2 karar kovası + gözlenmiş yokluk).'}</Empty>
-          ) : (
-            <>
-              {listQ.data?.capped && <div className="pod-cap">Liste sunucuda kesildi (limit 200) — pencereyi daralt.</div>}
-              <div className="table-wrap">
-                <table {...dt.tableProps}>
-                  <DataTableColgroup dt={dt} />
-                  <DataTableHead dt={dt} />
-                  <tbody>
-                    {dt.sortedRows.map(r => {
-                      const cname = clusterName(r.clusterId);
-                      const tracesHref = tracesPivotHref({
-                        window: range, cluster: cname, rootOnly: false,
-                        filters: JSON.stringify(rolloutTracesFilters(r)),
-                      });
-                      const wlHref = entityHref({ type: 'workload', id: `wl:${r.clusterId}/${r.namespace}/${r.kind || 'Deployment'}/${r.workload}`, name: r.workload, namespace: r.namespace, clusterId: r.clusterId }, { range });
-                      return (
-                        <tr key={rolloutKey(r)} className={rows.length > 100 ? 'cv-row' : undefined}
-                          // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
-                          data-row-action
-                          onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; setParam('rollout', encodeRolloutParam(r)); }}>
-                          <DataTableCell dt={dt} col="status" row={r}><Badge tone={statusTone(r.status)} title={[statusTitle(r.status), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></DataTableCell>
-                          <DataTableCell dt={dt} col="workload" row={r} title={`${cname} / ${r.namespace} / ${r.workload}`}>
-                            <Link to={wlHref} className="sec">{r.workload}</Link>
-                            <span className="field-hint"> · {r.namespace}</span>
-                          </DataTableCell>
-                          {/* v0.10.565 — cluster kendi kolonunda; ad çözülemezse ham id (clusterName). */}
-                          <DataTableCell dt={dt} col="cluster" row={r} value={cname} />
-                          <DataTableCell dt={dt} col="kind" row={r} className="field-hint">{r.kind || '—'}</DataTableCell>
-                          <DataTableCell dt={dt} col="change" row={r}>{(() => { const k = rolloutChangeKind(r); return <Badge tone={changeKindTone(k)} title={changeKindTitle(k)}>{changeKindLabel(k)}</Badge>; })()}</DataTableCell>
-                          <DataTableCell dt={dt} col="revision" row={r} title={r.revision}>{shortRevision(r.revision, r.workload)}{r.prevRevision ? <span className="field-hint"> ← {shortRevision(r.prevRevision, r.workload)}</span> : null}</DataTableCell>
-                          <DataTableCell dt={dt} col="image" row={r} title={r.image || undefined}>{imageDiff(r)}</DataTableCell>
-                          {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar); kolon
-                              `numeric` olduğundan DataTableCell `num` basar ve mono'yu nötrlerdi. */}
-                          <td className="mono">{fmtDateTime(new Date(r.startedAt))}</td>
-                          <DataTableCell dt={dt} col="dur" row={r} value={fmtDurShort(rolloutDurationSec(r, Date.now()))} />
-                          <DataTableCell dt={dt} col="spans" row={r} value={fmtNum(r.spanCount)} />
-                          <DataTableCell dt={dt} col="problems" row={r}>{r.problemsCaused
-                            ? <Link to={`?${(() => { const p = new URLSearchParams(sp); p.set('rollout', encodeRolloutParam(r)); return p.toString(); })()}`}
-                                    title="rollout başladığından beri açık problemler (servisleri) — çekmeceyi açar" style={{ textDecoration: 'none' }}>
-                                <Badge tone="danger">{fmtNum(r.problemsCaused)}</Badge>
-                              </Link>
-                            : <span className="field-hint">—</span>}</DataTableCell>
-                          <DataTableCell dt={dt} col="by" row={r} className="field-hint">{r.detectedBy}</DataTableCell>
-                          <DataTableCell dt={dt} col="note" row={r} className="field-hint" title={r.note || undefined}>{r.note || ''}</DataTableCell>
-                          <DataTableCell dt={dt} col="links" row={r}><Link to={tracesHref} className="sec">Traces →</Link></DataTableCell>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )
+          <>
+            {showLiveRows && listQ.data?.capped && <div className="pod-cap">Liste sunucuda kesildi (limit 200) — pencereyi daralt.</div>}
+            <div className="table-wrap">
+              <table {...dt.tableProps}>
+                <DataTableColgroup dt={dt} />
+                <DataTableHead dt={dt} />
+                <tbody>
+                  {!showLiveRows ? <DataTableState dt={dt} {...liveState} /> : dt.sortedRows.map(r => {
+                    const cname = clusterName(r.clusterId);
+                    const tracesHref = tracesPivotHref({
+                      window: range, cluster: cname, rootOnly: false,
+                      filters: JSON.stringify(rolloutTracesFilters(r)),
+                    });
+                    const wlHref = entityHref({ type: 'workload', id: `wl:${r.clusterId}/${r.namespace}/${r.kind || 'Deployment'}/${r.workload}`, name: r.workload, namespace: r.namespace, clusterId: r.clusterId }, { range });
+                    return (
+                      <tr key={rolloutKey(r)} className={rows.length > 100 ? 'cv-row' : undefined}
+                        // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                        data-row-action
+                        onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; setParam('rollout', encodeRolloutParam(r)); }}>
+                        <DataTableCell dt={dt} col="status" row={r}><Badge tone={statusTone(r.status)} title={[statusTitle(r.status), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></DataTableCell>
+                        <DataTableCell dt={dt} col="workload" row={r} title={`${cname} / ${r.namespace} / ${r.workload}`}>
+                          <Link to={wlHref} className="sec">{r.workload}</Link>
+                          <span className="field-hint"> · {r.namespace}</span>
+                        </DataTableCell>
+                        {/* v0.10.565 — cluster kendi kolonunda; ad çözülemezse ham id (clusterName). */}
+                        <DataTableCell dt={dt} col="cluster" row={r} value={cname} />
+                        <DataTableCell dt={dt} col="kind" row={r} className="field-hint">{r.kind || '—'}</DataTableCell>
+                        <DataTableCell dt={dt} col="change" row={r}>{(() => { const k = rolloutChangeKind(r); return <Badge tone={changeKindTone(k)} title={changeKindTitle(k)}>{changeKindLabel(k)}</Badge>; })()}</DataTableCell>
+                        <DataTableCell dt={dt} col="revision" row={r} title={r.revision}>{shortRevision(r.revision, r.workload)}{r.prevRevision ? <span className="field-hint"> ← {shortRevision(r.prevRevision, r.workload)}</span> : null}</DataTableCell>
+                        <DataTableCell dt={dt} col="image" row={r} title={r.image || undefined}>{imageDiff(r)}</DataTableCell>
+                        {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar); kolon
+                            `numeric` olduğundan DataTableCell `num` basar ve mono'yu nötrlerdi. */}
+                        <td className="mono">{fmtDateTime(new Date(r.startedAt))}</td>
+                        <DataTableCell dt={dt} col="dur" row={r} value={fmtDurShort(rolloutDurationSec(r, Date.now()))} />
+                        <DataTableCell dt={dt} col="spans" row={r} value={fmtNum(r.spanCount)} />
+                        <DataTableCell dt={dt} col="problems" row={r}>{r.problemsCaused
+                          ? <Link to={`?${(() => { const p = new URLSearchParams(sp); p.set('rollout', encodeRolloutParam(r)); return p.toString(); })()}`}
+                                  title="rollout başladığından beri açık problemler (servisleri) — çekmeceyi açar" style={{ textDecoration: 'none' }}>
+                              <Badge tone="danger">{fmtNum(r.problemsCaused)}</Badge>
+                            </Link>
+                          : <span className="field-hint">—</span>}</DataTableCell>
+                        <DataTableCell dt={dt} col="by" row={r} className="field-hint">{r.detectedBy}</DataTableCell>
+                        <DataTableCell dt={dt} col="note" row={r} className="field-hint" title={r.note || undefined}>{r.note || ''}</DataTableCell>
+                        <DataTableCell dt={dt} col="links" row={r}><Link to={tracesHref} className="sec">Traces →</Link></DataTableCell>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           statsQ.isPending ? <Spinner /> : err ? <Empty icon="!" title="İstatistik yüklenemedi">{err.message}</Empty> : !statsQ.data || statsQ.data.total === 0 ? (
             <Empty icon="∅" title="Bu pencerede rollout yok" />
@@ -263,7 +274,12 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
           <table>
             <thead><tr><th>Workload</th><th className="num">Rollback</th></tr></thead>
             <tbody>
-              {st.topRollback.length === 0 && <tr><td colSpan={2} className="field-hint">yok</td></tr>}
+              {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. */}
+              {st.topRollback.length === 0 && (
+                <tr data-dt-state="empty">
+                  <td colSpan={2} className="dt-state"><div className="dt-state-body"><span>Bu pencerede rollback alan workload yok</span></div></td>
+                </tr>
+              )}
               {st.topRollback.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
@@ -274,7 +290,12 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
           <table>
             <thead><tr><th>Workload</th><th className="num">Rollout</th></tr></thead>
             <tbody>
-              {st.topDeploy.length === 0 && <tr><td colSpan={2} className="field-hint">yok</td></tr>}
+              {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. */}
+              {st.topDeploy.length === 0 && (
+                <tr data-dt-state="empty">
+                  <td colSpan={2} className="dt-state"><div className="dt-state-body"><span>Bu pencerede deploy alan workload yok</span></div></td>
+                </tr>
+              )}
               {st.topDeploy.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
@@ -285,8 +306,9 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
             <DataTableColgroup dt={dayDt} />
             <DataTableHead dt={dayDt} />
             <tbody>
-              {st.byDay.length === 0 && <tr><td colSpan={3} className="field-hint">yok</td></tr>}
-              {dayDt.sortedRows.map(d => (
+              {/* v0.10.954 — tablo standardı T12: elle yazılmış "yok" satırı yerine
+                  standart durum satırı; colSpan görünür kolonlardan. */}
+              {dayDt.sortedRows.length === 0 ? <DataTableState dt={dayDt} kind="empty" message="Bu pencerede rollout yok" /> : dayDt.sortedRows.map(d => (
                 <tr key={d.day}>
                   {/* v0.10.945 — tarih damgası mono kalır (S2 yalnız sayıyı kapsar). */}
                   <DataTableCell dt={dayDt} col="day" row={d} value={d.day} className="mono" />

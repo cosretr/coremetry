@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { api, apiErrorDetail } from '@/lib/api';
 import { fmtNum, fmtBytes, fmtClock, fmtDateTime, tsLong } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
@@ -272,68 +272,73 @@ function NodeWorkPanel() {
   const view = raw ? nodeWorkView(raw.nodes, baseRef.current, raw.generatedAt) : null;
   const dt = useDataTable<NodeWorkRow>({ storageKey: 'ch-nodework', columns: NODE_WORK_COLS, rows: view?.rows ?? [] });
 
-  if (raw === undefined) return <Section title="Node work spread"><Spinner /></Section>;
-  if (raw === null) {
-    return <Section title="Node work spread">
-      <Empty icon="⚠" title="Ölçüm okunamadı">system.events sorgusu başarısız.</Empty>
-    </Section>;
-  }
+  // v0.10.954 — tablo standardı T12: bölüm erken dönüşleri (Spinner / Empty)
+  // kalktı; yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. Rozet
+  // şeridi ve sunucu notu ölçümden türer — yalnız ölçüm varken.
+  const tableState: Omit<DataTableStateProps<NodeWorkRow>, 'dt'> =
+    raw === undefined ? { kind: 'loading' }
+    : raw === null ? { kind: 'error', message: 'Ölçüm okunamadı — system.events sorgusu başarısız.' }
+    : { kind: 'empty', message: 'Ölçülen node yok' };
 
   const fmt = (v: number | null, d = 2) => v == null ? '—' : v.toFixed(d);
   const fmtInt = (v: number | null) => v == null ? '—' : v.toLocaleString();
 
   return (
     <Section title="Node work spread">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <span className="badge b-info" title={
-          'Sayaçlar sunucu açılışından beri kümülatif; panel ilk okumayı taban alıp FARKI ' +
-          'gösteriyor. Açık kaldıkça pencere büyür ve okuma keskinleşir.'}>
-          delta · {view && view.elapsedMs >= 1000
-            ? (view.elapsedMs < 60_000
-              ? `${Math.round(view.elapsedMs / 1000)}sn`
-              : `${Math.round(view.elapsedMs / 60_000)}dk`)
-            : 'taban alındı'}
-        </span>
-        <Button variant="accent" size="sm" onClick={() => {
-          if (raw) { baseRef.current = makeBaseline(raw.nodes, raw.generatedAt); bump(n => n + 1); }
-        }}>tabanı sıfırla</Button>
-        {/* Dengesizlik rozetleri YALNIZ ölçüm varken. null → '—' + gri:
-            "ölçülemedi" ile "dengeli" aynı şey değil. */}
-        {view?.cpuImbalance != null && (
-          <span className={`badge ${imbalanceTone(view.cpuImbalance)}`}
-            title="Shard İÇİ en yüksek CPU dengesizliği (max/ortalama).">
-            CPU spread ×{view.cpuImbalance.toFixed(2)}
-          </span>
-        )}
-        {view?.insertImbalance != null && (
-          <span className={`badge ${imbalanceTone(view.insertImbalance)}`}
-            title="Shard İÇİ en yüksek insert dengesizliği. CPU ile AYNI yönde ise sebep yazma dağılımıdır.">
-            Insert spread ×{view.insertImbalance.toFixed(2)}
-          </span>
-        )}
-        {view && !view.measurable && (
-          <span className="badge b-gray">henüz ölçüm yok — taban alındı, birkaç saniye bekle</span>
-        )}
-        {!raw.shardsKnown && raw.mode === 'cluster' && (
-          <span className="badge b-warn" title="system.clusters okunamadı; dengesizlik shard İÇİ değil TÜM node'lar üzerinden hesaplandı.">
-            shard bilinmiyor
-          </span>
-        )}
-        {raw.expectedNodes > raw.nodes.length && (
-          <span className="badge b-err">
-            {raw.nodes.length}/{raw.expectedNodes} node — EKSİK, oranlar güvenilmez
-          </span>
-        )}
-      </div>
-      {raw.note && (
-        <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>{raw.note}</div>
+      {raw && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span className="badge b-info" title={
+              'Sayaçlar sunucu açılışından beri kümülatif; panel ilk okumayı taban alıp FARKI ' +
+              'gösteriyor. Açık kaldıkça pencere büyür ve okuma keskinleşir.'}>
+              delta · {view && view.elapsedMs >= 1000
+                ? (view.elapsedMs < 60_000
+                  ? `${Math.round(view.elapsedMs / 1000)}sn`
+                  : `${Math.round(view.elapsedMs / 60_000)}dk`)
+                : 'taban alındı'}
+            </span>
+            <Button variant="accent" size="sm" onClick={() => {
+              if (raw) { baseRef.current = makeBaseline(raw.nodes, raw.generatedAt); bump(n => n + 1); }
+            }}>tabanı sıfırla</Button>
+            {/* Dengesizlik rozetleri YALNIZ ölçüm varken. null → '—' + gri:
+                "ölçülemedi" ile "dengeli" aynı şey değil. */}
+            {view?.cpuImbalance != null && (
+              <span className={`badge ${imbalanceTone(view.cpuImbalance)}`}
+                title="Shard İÇİ en yüksek CPU dengesizliği (max/ortalama).">
+                CPU spread ×{view.cpuImbalance.toFixed(2)}
+              </span>
+            )}
+            {view?.insertImbalance != null && (
+              <span className={`badge ${imbalanceTone(view.insertImbalance)}`}
+                title="Shard İÇİ en yüksek insert dengesizliği. CPU ile AYNI yönde ise sebep yazma dağılımıdır.">
+                Insert spread ×{view.insertImbalance.toFixed(2)}
+              </span>
+            )}
+            {view && !view.measurable && (
+              <span className="badge b-gray">henüz ölçüm yok — taban alındı, birkaç saniye bekle</span>
+            )}
+            {!raw.shardsKnown && raw.mode === 'cluster' && (
+              <span className="badge b-warn" title="system.clusters okunamadı; dengesizlik shard İÇİ değil TÜM node'lar üzerinden hesaplandı.">
+                shard bilinmiyor
+              </span>
+            )}
+            {raw.expectedNodes > raw.nodes.length && (
+              <span className="badge b-err">
+                {raw.nodes.length}/{raw.expectedNodes} node — EKSİK, oranlar güvenilmez
+              </span>
+            )}
+          </div>
+          {raw.note && (
+            <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>{raw.note}</div>
+          )}
+        </>
       )}
       <div className="table-wrap">
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map(r => {
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(r => {
               const shardRep = r.shard ? `${r.shard}${r.replica ? ' / ' + r.replica : ''}` : '—';
               return (
                 <tr key={r.host} style={{ opacity: r.restarted ? 0.55 : 1 }}>
@@ -499,7 +504,8 @@ function DDLQueuePanel() {
 }
 
 // teşhis değeri yok, maliyeti var).
-function CoordinatorPanel() {
+// v0.10.954 — dışa açık yalnız jsdom davranış testi için (AdminClickhouse.tableStates.test.tsx).
+export function CoordinatorPanel() {
   // Pencere sabit basamaklardan seçilir — sunucu cache anahtarına
   // giren parametrenin kardinalitesi sınırlı olmalı (v0.8.270).
   const [windowS, setWindowS] = useState(COORD_WINDOWS[0].s);
@@ -573,6 +579,16 @@ function CoordinatorPanel() {
     storageKey: 'ch-coordinators', columns: COORD_COLS,
     rows: data?.nodes ?? [], initialSort: { id: 'selects', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
+  // events yolunda sunucu HER ZAMAN bilgi notu gönderir ve node'ları da döner;
+  // not satırları gizlememeli (yoksa delta modu hiç görünmez). tableState yalnız
+  // node yokken: sunucu notu kaynak 'none' iken okuma hatası, değilse "boş"un açıklaması.
+  const showRows = !!data && data.nodes.length > 0;
+  const tableState: Omit<DataTableStateProps<Coord>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error' }
+    : data.note ? (data.source === 'none' ? { kind: 'error', message: data.note } : { kind: 'empty', message: data.note })
+    : { kind: 'empty' };
 
   return (
     <Section title="Query coordination spread">
@@ -642,33 +658,32 @@ function CoordinatorPanel() {
           sıfırla ve 15–20 dk bekle.
         </p>
       )}
-      {data === undefined && <Spinner />}
-      {data === null && <EmptyNote text="Failed to load coordination spread" />}
-      {data && data.note && <EmptyNote text={data.note} />}
-      {data && !data.note && data.nodes.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(c => (
-                <tr key={c.host}>
-                  <td className="mono" title={c.host}>{c.host || '—'}</td>
-                  <td className="num"><strong>{fmtNum(c.initial)}</strong></td>
-                  <td className="num">{fmtNum(c.selects)}</td>
-                  <td className="num">{fmtNum(c.inserts)}</td>
-                  <td className="num">{fmtNum(c.other)}</td>
-                  <td className="num">{fmtNum(c.readRows)}</td>
-                  <td className="num">{c.memoryMB.toFixed(0)} MB</td>
-                  <td className="num">{c.p50Ms.toFixed(0)} ms</td>
-                  <td className="num">{c.p95Ms.toFixed(0)} ms</td>
-                  <td className="num">{fmtUptime(c.uptimeS)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* v0.10.954 — satır varken sunucu notu bilgi ipucu (NodeWorkPanel ile aynı biçim). */}
+      {data?.note && data.nodes.length > 0 && (
+        <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>{data.note}</div>
       )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(c => (
+              <tr key={c.host}>
+                <td className="mono" title={c.host}>{c.host || '—'}</td>
+                <td className="num"><strong>{fmtNum(c.initial)}</strong></td>
+                <td className="num">{fmtNum(c.selects)}</td>
+                <td className="num">{fmtNum(c.inserts)}</td>
+                <td className="num">{fmtNum(c.other)}</td>
+                <td className="num">{fmtNum(c.readRows)}</td>
+                <td className="num">{c.memoryMB.toFixed(0)} MB</td>
+                <td className="num">{c.p50Ms.toFixed(0)} ms</td>
+                <td className="num">{c.p95Ms.toFixed(0)} ms</td>
+                <td className="num">{fmtUptime(c.uptimeS)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Section>
   );
 }
@@ -778,82 +793,72 @@ export default function AdminClickhousePage() {
             <TraceBackfillWizardPanel />
 
             <Section title="Slow queries (>500ms, last 1h)">
-              {(!data.slowQueries || data.slowQueries.length === 0)
-                ? <EmptyNote text="No slow queries in the last hour" />
-                : (
-                  <div className="table-wrap">
-                    <table {...slowDt.tableProps}>
-                      <DataTableColgroup dt={slowDt} />
-                      <DataTableHead dt={slowDt} />
-                      <tbody>
-                        {slowDt.sortedRows.map((q, i) => (
-                          <tr key={i}>
-                            <td className="mono cell-faint">
-                              {fmtClock(q.eventTimeNs / 1e6)}
-                            </td>
-                            <td className="mono cell-muted">{q.user || '—'}</td>
-                            <td className="num">{q.elapsedMs.toFixed(0)} ms</td>
-                            <td className="num">{q.memoryMb.toFixed(0)} MB</td>
-                            <td className="num">{fmtNum(q.readRows)}</td>
-                            <td className="mono" title={q.query}>
-                              {q.query.replace(/\s+/g, ' ').slice(0, 200)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur
+                  (sayfa düzeyi yükleniyor / hata yukarıda kalır). */}
+              <div className="table-wrap">
+                <table {...slowDt.tableProps}>
+                  <DataTableColgroup dt={slowDt} />
+                  <DataTableHead dt={slowDt} />
+                  <tbody>
+                    {slowDt.sortedRows.length === 0 ? <DataTableState dt={slowDt} kind="empty" message="Son 1 saatte yavaş sorgu yok" /> : slowDt.sortedRows.map((q, i) => (
+                      <tr key={i}>
+                        <td className="mono cell-faint">
+                          {fmtClock(q.eventTimeNs / 1e6)}
+                        </td>
+                        <td className="mono cell-muted">{q.user || '—'}</td>
+                        <td className="num">{q.elapsedMs.toFixed(0)} ms</td>
+                        <td className="num">{q.memoryMb.toFixed(0)} MB</td>
+                        <td className="num">{fmtNum(q.readRows)}</td>
+                        <td className="mono" title={q.query}>
+                          {q.query.replace(/\s+/g, ' ').slice(0, 200)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
 
             <Section title="In-flight merges">
-              {(!data.merges || data.merges.length === 0)
-                ? <EmptyNote text="No merges in flight — CH idle or up-to-date" />
-                : (
-                  <div className="table-wrap">
-                    <table {...mergeDt.tableProps}>
-                      <DataTableColgroup dt={mergeDt} />
-                      <DataTableHead dt={mergeDt} />
-                      <tbody>
-                        {mergeDt.sortedRows.map((m, i) => (
-                          <tr key={i}>
-                            <td className="mono">{m.host}</td>
-                            <td className="mono">{m.database}</td>
-                            <td className="mono">{m.table}</td>
-                            <td className="num">{m.elapsedSec.toFixed(1)}s</td>
-                            <td className="num">{m.progressPct.toFixed(0)}%</td>
-                            <td className="num">{fmtNum(m.rowsRead)}</td>
-                            <td className="num">{fmtBytes(m.mergedSizeBytes)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              <div className="table-wrap">
+                <table {...mergeDt.tableProps}>
+                  <DataTableColgroup dt={mergeDt} />
+                  <DataTableHead dt={mergeDt} />
+                  <tbody>
+                    {mergeDt.sortedRows.length === 0 ? <DataTableState dt={mergeDt} kind="empty" message="Süren merge yok — CH boşta ya da güncel" /> : mergeDt.sortedRows.map((m, i) => (
+                      <tr key={i}>
+                        <td className="mono">{m.host}</td>
+                        <td className="mono">{m.database}</td>
+                        <td className="mono">{m.table}</td>
+                        <td className="num">{m.elapsedSec.toFixed(1)}s</td>
+                        <td className="num">{m.progressPct.toFixed(0)}%</td>
+                        <td className="num">{fmtNum(m.rowsRead)}</td>
+                        <td className="num">{fmtBytes(m.mergedSizeBytes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
 
             <Section title="Part hotspots (active parts per table, top 15)">
-              {(!data.partHotspots || data.partHotspots.length === 0)
-                ? <EmptyNote text="No part data available" />
-                : (
-                  <div className="table-wrap">
-                    <table {...partDt.tableProps}>
-                      <DataTableColgroup dt={partDt} />
-                      <DataTableHead dt={partDt} />
-                      <tbody>
-                        {partDt.sortedRows.map((p, i) => (
-                          <tr key={i}>
-                            <td className="mono">{p.database}</td>
-                            <td className="mono">{p.table}</td>
-                            <td className={`num ${p.parts > 300 ? 'cell-err cell-strong' : p.parts > 150 ? 'cell-warn cell-strong' : ''}`}>{fmtNum(p.parts)}</td>
-                            <td className="num">{fmtNum(p.rowsTotal)}</td>
-                            <td className="num">{fmtBytes(p.bytesTotal)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              <div className="table-wrap">
+                <table {...partDt.tableProps}>
+                  <DataTableColgroup dt={partDt} />
+                  <DataTableHead dt={partDt} />
+                  <tbody>
+                    {partDt.sortedRows.length === 0 ? <DataTableState dt={partDt} kind="empty" message="Parça verisi yok" /> : partDt.sortedRows.map((p, i) => (
+                      <tr key={i}>
+                        <td className="mono">{p.database}</td>
+                        <td className="mono">{p.table}</td>
+                        <td className={`num ${p.parts > 300 ? 'cell-err cell-strong' : p.parts > 150 ? 'cell-warn cell-strong' : ''}`}>{fmtNum(p.parts)}</td>
+                        <td className="num">{fmtNum(p.rowsTotal)}</td>
+                        <td className="num">{fmtBytes(p.bytesTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
 
             {data.asyncInserts && data.asyncInserts.length > 0 && (
@@ -1003,6 +1008,13 @@ function RollupWizardPanel() {
   const dt = useDataTable<RollupTableStatus>({
     storageKey: 'ch-rollup-status', columns: ROLLUP_COLS, rows,
   });
+  // v0.10.954 — tablo standardı T12: durum okumasının yükleniyor / hata /
+  // boş hâli tablonun İÇİNDE, başlık durur. Yenileme eski satırlar
+  // dururken düşerse hata eskisi gibi tablonun üstünde (satırlar kazanır).
+  const statusState: Omit<DataTableStateProps<RollupTableStatus>, 'dt'> =
+    status.isPending ? { kind: 'loading' }
+    : status.isError ? { kind: 'error' }
+    : { kind: 'empty', message: 'Rollup tablo durumu dönmedi' };
 
   const runPreflight = async () => {
     setPreBusy(true); setPreErr(null);
@@ -1066,35 +1078,32 @@ function RollupWizardPanel() {
       </p>
 
       {/* ── 1. Durum ── */}
-      {status.isPending && <Spinner />}
-      {status.isError && <Empty icon="⚠" title="Rollup durumu okunamadı" />}
-      {status.data && (
-        <div className="table-wrap" style={{ marginBottom: 10 }}>
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(t => (
-                <tr key={t.table}>
-                  <td className="mono">{t.table}</td>
-                  <td className="cell-faint">{t.family}</td>
-                  <td>
-                    {t.err
-                      ? <span className="badge b-warn" title={t.err}>OKUNAMADI</span>
-                      : t.exists
-                        ? <span className="badge b-gray">VAR</span>
-                        : <span className="badge b-gray">YOK</span>}
-                  </td>
-                  <td className="num">{t.exists && !t.err ? fmtNum(t.rows) : '—'}</td>
-                  <td className="mono cell-faint">
-                    {t.minTsMs > 0 ? fmtDateTime(t.minTsMs) : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {status.isError && rows.length > 0 && <Empty icon="⚠" title="Rollup durumu okunamadı" />}
+      <div className="table-wrap" style={{ marginBottom: 10 }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...statusState} /> : dt.sortedRows.map(t => (
+              <tr key={t.table}>
+                <td className="mono">{t.table}</td>
+                <td className="cell-faint">{t.family}</td>
+                <td>
+                  {t.err
+                    ? <span className="badge b-warn" title={t.err}>OKUNAMADI</span>
+                    : t.exists
+                      ? <span className="badge b-gray">VAR</span>
+                      : <span className="badge b-gray">YOK</span>}
+                </td>
+                <td className="num">{t.exists && !t.err ? fmtNum(t.rows) : '—'}</td>
+                <td className="mono cell-faint">
+                  {t.minTsMs > 0 ? fmtDateTime(t.minTsMs) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* ── 2. Ön kontrol ── */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
@@ -1633,6 +1642,15 @@ const ENTITY_LAYER_COLS: ColumnDef<EntityLayerObjectStatus>[] = [
   { id: 'hosts', label: 'Host', width: 90, numeric: true, sortValue: o => o.haveHosts },
 ];
 
+// v0.10.954 — tablo standardı T12: dört şema sihirbazının (0011–0014) durum
+// tablosu aynı üç hâli taşır; hepsi useState okuması (loadStatus). Hata
+// metni sunucudan; okuma bitmeden (ilk render dahil) "yükleniyor".
+function schemaStatusState(loaded: boolean, err: string | null): Omit<DataTableStateProps<EntityLayerObjectStatus>, 'dt'> {
+  if (err) return { kind: 'error', message: `Durum okunamadı: ${err}` };
+  if (!loaded) return { kind: 'loading' };
+  return { kind: 'empty', message: 'Şema nesnesi listesi boş döndü' };
+}
+
 function EntityLayerWizardPanel() {
   const [status, setStatus] = useState<EntityLayerStatusResult | null>(null);
   const [statusErr, setStatusErr] = useState<string | null>(null);
@@ -1685,38 +1703,38 @@ function EntityLayerWizardPanel() {
         hangi host'ta neyin gerçekten indiğini gösterir ve eksiği tamamlar. Sonra: Settings → Remote clusters
         (Thanos etiket + span cluster değeri) → Settings → K8s entity katmanı → Enable.
       </p>
-      {statusBusy && !status && <Spinner />}
-      {statusErr && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
+      {/* v0.10.954 — tablo standardı T12: durum tablosunun yükleniyor / hata / boş
+          hâli tablonun İÇİNDE (schemaStatusState); yenileme eski satırlar
+          dururken düşerse hata eskisi gibi tablonun üstünde (satırlar kazanır). */}
+      {statusErr && rows.length > 0 && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
       {status && (
-        <>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
-            küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
-            {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
-            entity_seen_5m son 15 dk: <span className="mono">{fmtNum(status.seenRows)}</span> satır
-          </div>
-          <div className="table-wrap" style={{ marginBottom: 10 }}>
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(o => (
-                  <tr key={`${o.kind}:${o.name}`}>
-                    <td className="mono">{o.name}</td>
-                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
-                    <td>
-                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
-                        : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
-                        : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
-                        : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
-                    </td>
-                    <td className="num">{o.haveHosts}/{o.hosts}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
+          küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
+          {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+          entity_seen_5m son 15 dk: <span className="mono">{fmtNum(status.seenRows)}</span> satır
+        </div>
       )}
+      <div className="table-wrap" style={{ marginBottom: 10 }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...schemaStatusState(!!status, statusErr)} /> : dt.sortedRows.map(o => (
+              <tr key={`${o.kind}:${o.name}`}>
+                <td className="mono">{o.name}</td>
+                <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                <td>
+                  {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
+                    : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
+                    : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
+                    : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
+                </td>
+                <td className="num">{o.haveHosts}/{o.hosts}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <Button variant="secondary" size="sm" onClick={runPreflight} loading={preBusy}>Ön kontrol</Button>
         <Button variant="ghost" size="sm" onClick={() => void loadStatus()} disabled={statusBusy}>Durumu yenile</Button>
@@ -2896,6 +2914,13 @@ function RootCoveragePanel() {
     storageKey: 'ch-root-coverage', columns: ROOT_COV_COLS,
     rows: data?.rows ?? [], initialSort: { id: 'without', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: çalıştırılmış ölçümün yükleniyor / hata /
+  // boş hâli tablonun İÇİNDE, başlık durur. Hiç çalıştırılmadıysa (armed
+  // null) tablo henüz anlamsız — eskisi gibi çizilmez (girdi kapısı).
+  const tableState: Omit<DataTableStateProps<CHRootCoverageRow>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error', message: 'Kapsama okunamadı — pencereyi daralt.' }
+    : { kind: 'empty', message: 'Pencerede trace yok' };
   const pct = data && data.totalTraces > 0 ? (data.totalWithRoot / data.totalTraces) * 100 : null;
   const entryPct = data && data.totalTraces > 0 ? (data.totalWithEntryRoot / data.totalTraces) * 100 : null;
   // v0.10.733 — kök tanımı seçici (operatör onaylı spec): ayar system_settings'te,
@@ -2960,16 +2985,13 @@ function RootCoveragePanel() {
           </>
         )}
       </div>
-      {data === undefined && <Spinner />}
-      {data === null && armed !== null && <EmptyNote text="Kapsama okunamadı (pencereyi daralt)" />}
-      {data && data.rows.length === 0 && <EmptyNote text="Pencerede trace yok" />}
-      {data && data.rows.length > 0 && (
+      {armed !== null && (
         <div className="table-wrap">
           <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
-              {dt.sortedRows.map(r => {
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(r => {
                 const p = r.traces ? (r.withRoot / r.traces) * 100 : 0;
                 return (
                   <tr key={r.entryService || '(none)'} className="cv-row">
@@ -2992,7 +3014,8 @@ function RootCoveragePanel() {
   );
 }
 
-function MeasurePanel() {
+// v0.10.954 — dışa açık yalnız jsdom davranış testi için (AdminClickhouse.tableStates.test.tsx).
+export function MeasurePanel() {
   const q = useQuery({
     queryKey: ['ch-measure'],
     queryFn: () => api.chMeasure(),
@@ -3009,6 +3032,12 @@ function MeasurePanel() {
   const worstPP = data?.parts.reduce((m, p) => Math.max(m, p.maxPartsPerPartition), 0) ?? 0;
   const delayed = data?.events.reduce((n, e) => n + e.delayedInserts, 0) ?? 0;
   const rejected = data?.events.reduce((n, e) => n + e.rejectedInserts, 0) ?? 0;
+  // v0.10.954 — tablo standardı T12: bölüm düzeyi yükleniyor / hata yukarıda
+  // kalır (rozetler aynı yanıttan); her tablonun boş hâli ve bacak notu
+  // (sunucu: "X okunamadı / çözümlenemedi" = okuma hatası) tablonun İÇİNDE.
+  // Not + kısmi satır birlikte gelirse not eskisi gibi tablonun üstünde.
+  const legState = (note: string | undefined, empty: string): Omit<DataTableStateProps<unknown>, 'dt'> =>
+    note ? { kind: 'error', message: note } : { kind: 'empty', message: empty };
 
   return (
     <Section title="ClickHouse ölçümleri · parça baskısı & batch">
@@ -3042,95 +3071,91 @@ function MeasurePanel() {
           </div>
 
           <h4 style={{ margin: '10px 0 6px' }}>Parça baskısı · host × tablo</h4>
-          {data.partsNote && <EmptyNote text={data.partsNote} />}
-          {data.parts.length > 0 && (
-            <div className="table-wrap">
-              <table {...dt.tableProps}>
-                <DataTableColgroup dt={dt} />
-                <DataTableHead dt={dt} />
-                <tbody>
-                  {dt.sortedRows.map(p => (
-                    <tr key={p.host + '/' + p.table}>
-                      <td className="mono" title={p.host}>{p.host || '—'}</td>
-                      <td className="mono" title={p.table}>{p.table}</td>
-                      <td className="num">{fmtNum(p.partitions)}</td>
-                      <td className="num">{fmtNum(p.parts)}</td>
-                      <td className="num"><span className={`badge ${partsTone(p.maxPartsPerPartition)}`}>{fmtNum(p.maxPartsPerPartition)}</span></td>
-                      <td className="num">{fmtNum(p.rows)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {data.partsNote && data.parts.length > 0 && <EmptyNote text={data.partsNote} />}
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
+              <DataTableColgroup dt={dt} />
+              <DataTableHead dt={dt} />
+              <tbody>
+                {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...legState(data.partsNote, 'Aktif parça yok')} /> : dt.sortedRows.map(p => (
+                  <tr key={p.host + '/' + p.table}>
+                    <td className="mono" title={p.host}>{p.host || '—'}</td>
+                    <td className="mono" title={p.table}>{p.table}</td>
+                    <td className="num">{fmtNum(p.partitions)}</td>
+                    <td className="num">{fmtNum(p.parts)}</td>
+                    <td className="num"><span className={`badge ${partsTone(p.maxPartsPerPartition)}`}>{fmtNum(p.maxPartsPerPartition)}</span></td>
+                    <td className="num">{fmtNum(p.rows)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <h4 style={{ margin: '14px 0 6px' }}>system.events · host başına (kümülatif; /sa = uptime'a bölünmüş)</h4>
-          {data.eventsNote && <EmptyNote text={data.eventsNote} />}
-          {data.events.length > 0 && (
-            <div className="table-wrap">
-              <table {...eventsDt.tableProps}>
-                <DataTableColgroup dt={eventsDt} />
-                <DataTableHead dt={eventsDt} />
-                <tbody>
-                  {eventsDt.sortedRows.map(e => (
-                    <tr key={e.host}>
-                      <td className="mono">{e.host || '—'}</td>
-                      <td className="num">{fmtUptime(e.uptimeS)}</td>
-                      <td className="num"><span className={`badge ${e.delayedInserts > 0 ? 'b-warn' : 'b-gray'}`}>{fmtNum(e.delayedInserts)}</span></td>
-                      <td className="num"><span className={`badge ${e.rejectedInserts > 0 ? 'b-err' : 'b-gray'}`}>{fmtNum(e.rejectedInserts)}</span></td>
-                      <td className="num" title={`kümülatif ${fmtNum(e.insertedRows)}`}>{perHour(e.insertedRows, e.uptimeS)}</td>
-                      <td className="num" title={`kümülatif ${fmtNum(e.mergedRows)}`}>{perHour(e.mergedRows, e.uptimeS)}</td>
-                      <td className="num" title="MergedRows / InsertedRows — yazma çarpanı; MV sayısı ve batch boyutu bunu büyütür/küçültür.">
-                        {e.insertedRows > 0 ? (e.mergedRows / e.insertedRows).toFixed(2) + '×' : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {data.eventsNote && data.events.length > 0 && <EmptyNote text={data.eventsNote} />}
+          <div className="table-wrap">
+            <table {...eventsDt.tableProps}>
+              <DataTableColgroup dt={eventsDt} />
+              <DataTableHead dt={eventsDt} />
+              <tbody>
+                {eventsDt.sortedRows.length === 0 ? <DataTableState dt={eventsDt} {...legState(data.eventsNote, 'system.events host satırı yok')} /> : eventsDt.sortedRows.map(e => (
+                  <tr key={e.host}>
+                    <td className="mono">{e.host || '—'}</td>
+                    <td className="num">{fmtUptime(e.uptimeS)}</td>
+                    <td className="num"><span className={`badge ${e.delayedInserts > 0 ? 'b-warn' : 'b-gray'}`}>{fmtNum(e.delayedInserts)}</span></td>
+                    <td className="num"><span className={`badge ${e.rejectedInserts > 0 ? 'b-err' : 'b-gray'}`}>{fmtNum(e.rejectedInserts)}</span></td>
+                    <td className="num" title={`kümülatif ${fmtNum(e.insertedRows)}`}>{perHour(e.insertedRows, e.uptimeS)}</td>
+                    <td className="num" title={`kümülatif ${fmtNum(e.mergedRows)}`}>{perHour(e.mergedRows, e.uptimeS)}</td>
+                    <td className="num" title="MergedRows / InsertedRows — yazma çarpanı; MV sayısı ve batch boyutu bunu büyütür/küçültür.">
+                      {e.insertedRows > 0 ? (e.mergedRows / e.insertedRows).toFixed(2) + '×' : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <h4 style={{ margin: '14px 0 6px' }}>Async insert tamponları · host başına</h4>
-          {data.asyncNote && <EmptyNote text={data.asyncNote} />}
-          {!data.asyncNote && data.async.length === 0 && <p className="cell-hint">Şu an tamponda bekleyen async insert yok (host listede yoksa tamponu boştur).</p>}
-          {data.async.length > 0 && (
-            <div className="table-wrap">
-              <table {...asyncDt.tableProps}>
-                <DataTableColgroup dt={asyncDt} />
-                <DataTableHead dt={asyncDt} />
-                <tbody>
-                  {asyncDt.sortedRows.map(a => (
-                    <tr key={a.host}>
-                      <td className="mono">{a.host || '—'}</td>
-                      <td className="num">{fmtNum(a.buffers)}</td>
-                      <td className="num">{fmtBytes(a.bytes)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {data.asyncNote && data.async.length > 0 && <EmptyNote text={data.asyncNote} />}
+          <div className="table-wrap">
+            <table {...asyncDt.tableProps}>
+              <DataTableColgroup dt={asyncDt} />
+              <DataTableHead dt={asyncDt} />
+              <tbody>
+                {asyncDt.sortedRows.length === 0 ? <DataTableState dt={asyncDt} {...legState(data.asyncNote, 'Şu an tamponda bekleyen async insert yok (host listede yoksa tamponu boştur).')} /> : asyncDt.sortedRows.map(a => (
+                  <tr key={a.host}>
+                    <td className="mono">{a.host || '—'}</td>
+                    <td className="num">{fmtNum(a.buffers)}</td>
+                    <td className="num">{fmtBytes(a.bytes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <h4 style={{ margin: '14px 0 6px' }}>Insert boyutu · spans, son 1 saat (query_log)</h4>
-          {!data.queryLogAvailable && <EmptyNote text={data.insertSizeNote || 'system.query_log kapalı'} />}
-          {data.queryLogAvailable && data.insertSize.length === 0 && <p className="cell-hint">Son 1 saatte spans insert kaydı yok.</p>}
-          {data.insertSize.length > 0 && (
-            <div className="table-wrap">
-              <table {...insertDt.tableProps}>
-                <DataTableColgroup dt={insertDt} />
-                <DataTableHead dt={insertDt} />
-                <tbody>
-                  {insertDt.sortedRows.map(i => (
-                    <tr key={i.host}>
-                      <td className="mono">{i.host || '—'}</td>
-                      <td className="num" title="Denetim: 10k–100k bandı; 10k alt sınırda.">{fmtNum(Math.round(i.rowsPerInsert))}</td>
-                      <td className="num">{fmtNum(i.inserts)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {data.insertSizeNote && data.insertSize.length > 0 && <EmptyNote text={data.insertSizeNote} />}
+          <div className="table-wrap">
+            <table {...insertDt.tableProps}>
+              <DataTableColgroup dt={insertDt} />
+              <DataTableHead dt={insertDt} />
+              <tbody>
+                {insertDt.sortedRows.length === 0 ? (
+                  // v0.10.954 — not her iki durumda da okuma hatası: query_log kapalı ya da açık ama
+                  // satır çözümlenemedi (sunucu QueryLogAvailable=true sonrası not yazar); not yoksa boş = kayıt yok.
+                  <DataTableState dt={insertDt} {...legState(
+                    data.insertSizeNote || (data.queryLogAvailable ? undefined : 'system.query_log kapalı'),
+                    'Son 1 saatte spans insert kaydı yok.')} />
+                ) : insertDt.sortedRows.map(i => (
+                  <tr key={i.host}>
+                    <td className="mono">{i.host || '—'}</td>
+                    <td className="num" title="Denetim: 10k–100k bandı; 10k alt sınırda.">{fmtNum(Math.round(i.rowsPerInsert))}</td>
+                    <td className="num">{fmtNum(i.inserts)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </Section>
@@ -3462,39 +3487,39 @@ function FunctionIdColumnWizardPanel() {
         ASLA koşmaz (N pod ON CLUSTER yarışı). Kolon eklendikten sonra pod'lar yeniden başlatılınca haritaya alır; eski part'lar okuma anında
         hesaplanır — tam kazanç için MATERIALIZE ayrı eylem (mesai dışı).
       </p>
-      {statusBusy && !status && <Spinner />}
-      {statusErr && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
+      {/* v0.10.954 — tablo standardı T12: durum tablosunun yükleniyor / hata / boş
+          hâli tablonun İÇİNDE (schemaStatusState); yenileme eski satırlar
+          dururken düşerse hata eskisi gibi tablonun üstünde (satırlar kazanır). */}
+      {statusErr && rows.length > 0 && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
       {status && (
-        <>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
-            küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
-            {status.bootManaged ? <span className="badge b-gray" title="spans uygulama yönetimli: boot kolonu kendisi ekler">BOOT YÖNETİYOR</span>
-              : allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
-            doluluk (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
-          </div>
-          <div className="table-wrap" style={{ marginBottom: 10 }}>
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(o => (
-                  <tr key={`${o.kind}:${o.name}`}>
-                    <td className="mono">{o.name}</td>
-                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
-                    <td>
-                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
-                        : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
-                        : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
-                        : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
-                    </td>
-                    <td className="num">{o.haveHosts}/{o.hosts}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
+          küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
+          {status.bootManaged ? <span className="badge b-gray" title="spans uygulama yönetimli: boot kolonu kendisi ekler">BOOT YÖNETİYOR</span>
+            : allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+          doluluk (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
+        </div>
       )}
+      <div className="table-wrap" style={{ marginBottom: 10 }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...schemaStatusState(!!status, statusErr)} /> : dt.sortedRows.map(o => (
+              <tr key={`${o.kind}:${o.name}`}>
+                <td className="mono">{o.name}</td>
+                <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                <td>
+                  {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
+                    : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
+                    : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
+                    : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
+                </td>
+                <td className="num">{o.haveHosts}/{o.hosts}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <Button variant="secondary" size="sm" onClick={runPreflight} loading={preBusy}>Ön kontrol</Button>
         <Button variant="ghost" size="sm" onClick={() => void loadStatus()} disabled={statusBusy}>Durumu yenile</Button>
@@ -3631,41 +3656,41 @@ function AttrIndexWizardPanel() {
         yüklemlerini bloom yoluna alır, kesin eşitlik kalır. Boot bunu dış Distributed'da ASLA koşmaz; uygulama yönetimli kurulumda kendisi ekler
         (ertelenmiş DDL). Pod'lar kolonu probe ile alır; indeks yalnız yeni part'larda — eski part'lar için MATERIALIZE ayrı eylem (mesai dışı).
       </p>
-      {statusBusy && !status && <Spinner />}
-      {statusErr && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
+      {/* v0.10.954 — tablo standardı T12: durum tablosunun yükleniyor / hata / boş
+          hâli tablonun İÇİNDE (schemaStatusState); yenileme eski satırlar
+          dururken düşerse hata eskisi gibi tablonun üstünde (satırlar kazanır). */}
+      {statusErr && rows.length > 0 && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
       {status && (
-        <>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
-            küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
-            {status.bootManaged ? <span className="badge b-gray" title="spans uygulama yönetimli: boot kolonu kendisi ekler">BOOT YÖNETİYOR</span>
-              : allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
-            bu pod: {status.ready ? <span className="badge b-gray" title="probe kolonu gördü — =/IN/EXISTS bloom yolunda">BLOOM YOLU</span> : <span className="badge b-gray" title="kolon görülmedi — dizi yolu (eski davranış, doğru ama yavaş)">DİZİ YOLU</span>}
-            {' '}· bloom yüklemi <span className="mono">{fmtNum(status.used)}</span> ·
-            tutarlılık (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
-          </div>
-          <div className="table-wrap" style={{ marginBottom: 10 }}>
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(o => (
-                  <tr key={`${o.kind}:${o.name}`}>
-                    <td className="mono">{o.name}</td>
-                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
-                    <td>
-                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
-                        : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
-                        : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
-                        : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
-                    </td>
-                    <td className="num">{o.haveHosts}/{o.hosts}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
+          küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
+          {status.bootManaged ? <span className="badge b-gray" title="spans uygulama yönetimli: boot kolonu kendisi ekler">BOOT YÖNETİYOR</span>
+            : allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+          bu pod: {status.ready ? <span className="badge b-gray" title="probe kolonu gördü — =/IN/EXISTS bloom yolunda">BLOOM YOLU</span> : <span className="badge b-gray" title="kolon görülmedi — dizi yolu (eski davranış, doğru ama yavaş)">DİZİ YOLU</span>}
+          {' '}· bloom yüklemi <span className="mono">{fmtNum(status.used)}</span> ·
+          tutarlılık (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
+        </div>
       )}
+      <div className="table-wrap" style={{ marginBottom: 10 }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...schemaStatusState(!!status, statusErr)} /> : dt.sortedRows.map(o => (
+              <tr key={`${o.kind}:${o.name}`}>
+                <td className="mono">{o.name}</td>
+                <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                <td>
+                  {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
+                    : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
+                    : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
+                    : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
+                </td>
+                <td className="num">{o.haveHosts}/{o.hosts}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <Button variant="secondary" size="sm" onClick={runPreflight} loading={preBusy}>Ön kontrol</Button>
         <Button variant="ghost" size="sm" onClick={() => void loadStatus()} disabled={statusBusy}>Durumu yenile</Button>
@@ -3794,38 +3819,38 @@ function RolloutLayerWizardPanel() {
         <code className="mono"> workload_revision_activity_1m</code> MV'si. Ön koşul: 0011 uygulanmış olmalı. MV yalnız kapsama kapısı
         (her cluster'da <code className="mono">k8s.replicaset.name</code> ≥ %95) açıkken kurulur — kapalıysa önce o cluster'ın collector'ı.
       </p>
-      {statusBusy && !status && <Spinner />}
-      {statusErr && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
+      {/* v0.10.954 — tablo standardı T12: durum tablosunun yükleniyor / hata / boş
+          hâli tablonun İÇİNDE (schemaStatusState); yenileme eski satırlar
+          dururken düşerse hata eskisi gibi tablonun üstünde (satırlar kazanır). */}
+      {statusErr && rows.length > 0 && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
       {status && (
-        <>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
-            küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
-            {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
-            workload_revision_activity_1m son 15 dk: <span className="mono">{fmtNum(status.activityRows)}</span> satır
-          </div>
-          <div className="table-wrap" style={{ marginBottom: 10 }}>
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(o => (
-                  <tr key={`${o.kind}:${o.name}`}>
-                    <td className="mono">{o.name}</td>
-                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
-                    <td>
-                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
-                        : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
-                        : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
-                        : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
-                    </td>
-                    <td className="num">{o.haveHosts}/{o.hosts}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
+          küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
+          {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+          workload_revision_activity_1m son 15 dk: <span className="mono">{fmtNum(status.activityRows)}</span> satır
+        </div>
       )}
+      <div className="table-wrap" style={{ marginBottom: 10 }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...schemaStatusState(!!status, statusErr)} /> : dt.sortedRows.map(o => (
+              <tr key={`${o.kind}:${o.name}`}>
+                <td className="mono">{o.name}</td>
+                <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                <td>
+                  {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
+                    : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
+                    : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
+                    : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
+                </td>
+                <td className="num">{o.haveHosts}/{o.hosts}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <Button variant="secondary" size="sm" onClick={runPreflight} loading={preBusy}>Ön kontrol</Button>
         <Button variant="ghost" size="sm" onClick={() => void loadStatus()} disabled={statusBusy}>Durumu yenile</Button>
@@ -3856,8 +3881,16 @@ function RolloutLayerWizardPanel() {
             <table>
               <thead><tr><th>Span cluster değeri</th><th className="num">Span (15 dk)</th><th className="num">Örneklem</th><th className="num">Replicaset</th><th className="num">Image</th><th className="num">Namespace</th></tr></thead>
               <tbody>
-                {(pre.coverage ?? []).length === 0 && <tr><td colSpan={6} className="cell-faint">son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</td></tr>}
-                {(pre.coverage ?? []).map(c => (
+                {(pre.coverage ?? []).length === 0 ? (
+                  // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
+                  <tr data-dt-state="empty">
+                    <td colSpan={6} className="dt-state">
+                      <div className="dt-state-body">
+                        <span>Son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (pre.coverage ?? []).map(c => (
                   <tr key={c.cluster}>
                     {/* '' = cluster'sız (k8s dışı) trafik: görünür, kapıya girmez. sampled=0 = ölçülemedi → kapı kapalı. */}
                     <td className="mono">{c.cluster || '(boş — kapıya girmez)'}</td>

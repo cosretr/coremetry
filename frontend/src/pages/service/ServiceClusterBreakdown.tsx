@@ -4,7 +4,7 @@ import { Sparkline } from '@/components/Sparkline'; // v0.10.883
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { serviceHref } from '@/lib/serviceHref';
 
@@ -83,17 +83,15 @@ export function ServiceClusterBreakdown({ service, range }: {
   // Tanımsız custom property sessizce düşer, renk inherit'e kalır: yani
   // v0.9.363'ün "dürüst çizgisi" gövde metniyle aynı tonda çiziliyor,
   // ikincil bilgi olduğu okunmuyordu. İkincil ton `--text3`.
-  if (q.isError) {
-    return (
-      <div style={{ marginBottom: 14, fontSize: 12, color: 'var(--text3)' }}>
-        ⚠ Cluster kırılımı yüklenemedi — panel gizlenmedi, sorgu başarısız.
-      </div>
-    );
-  }
+  // v0.10.954 — tablo standardı T12: o tek satır artık tablonun İÇİNDE
+  // (DataTableState error, QueryErrorInline tonu); panel başlığı ve sütunlar
+  // durur. Hata eskisi gibi her şeyden önce gelir — bayat satırlar hatayı
+  // gizlemez; sayım ve kaynak rozeti yalnız satırlarla.
+  const showRows = !q.isError;
   // Silent when fewer than 2 clusters — single-cluster (or zero-cluster,
   // e.g. SDK without resource attrs) deployments don't need the panel.
   // Loading state stays quiet for the same reason.
-  if (clusters.length < 2) return null;
+  if (showRows && clusters.length < 2) return null;
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -109,14 +107,14 @@ export function ServiceClusterBreakdown({ service, range }: {
         title={'RED per cluster is computed from traces — only clusters whose ' +
           'traces reach Coremetry appear here. A service running in more clusters ' +
           '(metrics/JMX only) shows those under the Infrastructure tab.'}>
-        Per-cluster breakdown <span style={{
+        Per-cluster breakdown {showRows && <span style={{
           fontWeight: 400, color: 'var(--text3)', textTransform: 'none',
-        }}>· {clusters.length} cluster{clusters.length === 1 ? '' : 's'} with traces</span>
+        }}>· {clusters.length} cluster{clusters.length === 1 ? '' : 's'} with traces</span>}
         {/* v0.10.883 — kaynak dürüstlüğü: MV pencereyi kapsamıyorsa ham spans (p50/p95/seri yok).
             v0.10.929 (K5) — 'MV' normal yol → nötr; 'spans' geri düşüşü GERÇEK
             sapma (p50/p95/seri yok) → amber — Overview'ın "kapsam: tüm span'ler"
             geri düşüşüyle aynı dil. */}
-        {q.data?.source && (
+        {showRows && q.data?.source && (
           <span className={`badge ${q.data.source === 'mv' ? 'b-gray' : 'b-warn'}`} style={{ marginLeft: 8, fontWeight: 400, textTransform: 'none' }}
             title={q.data.source === 'mv' ? 'service_env_summary_5m' : 'MV bu pencereyi kapsamıyor — ham spans; p50/p95 ve seri yok'}>
             {q.data.source === 'mv' ? 'MV' : 'spans'}
@@ -128,7 +126,7 @@ export function ServiceClusterBreakdown({ service, range }: {
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map(c => {
+            {!showRows ? <DataTableState dt={dt} kind="error" /> : dt.sortedRows.map(c => {
               const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray'; // v0.10.929 (K5)
               return (
                 <tr key={c.cluster}>

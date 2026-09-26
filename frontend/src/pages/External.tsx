@@ -4,12 +4,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
 import { Drawer, DrawerSection, DrawerTrendRow } from '@/components/ui';
 import { api } from '@/lib/api';
 import { timeRangeToNs, fmtNum, fmtFixed } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { ExternalPaths } from '@/components/ExternalPaths';
 import type { ExternalCaller, ExternalHost, ExternalHostDetail, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
@@ -100,6 +102,19 @@ export default function ExternalPage() {
     onOpen: r => openHost(r.host),
   });
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Boş satır eski açıklamayı (hangi öznitelikler,
+  // geçmiş geriye doldurulmaz) tek cümlede taşır.
+  const tableState: Omit<DataTableStateProps<ExternalHost>, 'dt'> =
+    rows === undefined ? { kind: 'loading' }
+    : rows === null ? { kind: 'error' }
+    : {
+        kind: 'empty',
+        message: "Bu pencerede dış çağrı yok — hiçbir giden istemci span'i peer.service, server.address ya da net.peer.name "
+          + 'ile üçüncü taraf bir hedef adlandırmadı. SDK\'ların bu öznitelikleri yayıyorsa dış çağrılar burada kendiliğinden '
+          + 'görünür (yalnız yeni trafik — geçmiş geriye doldurulmaz).',
+      };
+
   return (
     <>
       <Topbar title="External APIs" range={range} onRangeChange={setRange} />
@@ -111,66 +126,53 @@ export default function ExternalPage() {
           for the traffic trend and which services depend on it.
         </div>
 
-        {rows === undefined && <TableSkeleton cols={8} wideFirst />}
-        {rows === null && <Empty icon="✗" title="Failed to load external APIs" />}
-        {rows && rows.length === 0 && (
-          <Empty icon="◇" title="No external calls in this window">
-            No outbound client spans named a third-party destination via{' '}
-            <code>peer.service</code>, <code>server.address</code> or{' '}
-            <code>net.peer.name</code>. If your SDKs emit these attributes,
-            external calls appear here automatically (new traffic only —
-            history is not backfilled).
-          </Empty>
-        )}
-        {rows && rows.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map((r, i) => {
-                  const rp = dt.rowProps(i, r);
-                  return (
-                    <tr key={r.host} {...rp}
-                      {...rowActivation(() => openHost(r.host))}
-                      className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
-                      <DataTableCell dt={dt} col="host" row={r}>
-                        <span style={{ fontWeight: 500 }}
-                          title={r.topLabels.length ? `Top operations:\n${r.topLabels.join('\n')}` : r.host}>
-                          {r.display
-                            ? <>{r.display} <span style={{ color: 'var(--text3)', fontWeight: 400 }}>({r.host})</span></>
-                            : r.host}
-                        </span>
-                      </DataTableCell>
-                      <DataTableCell dt={dt} col="category" row={r}><CategoryBadge category={r.category} /></DataTableCell>
-                      <DataTableCell dt={dt} col="calls" row={r} value={fmtNum(r.calls)} />
-                      <DataTableCell dt={dt} col="rpm" row={r} value={fmtFixed(r.calls / windowMin, 1)} />
-                      <DataTableCell dt={dt} col="errorRate" row={r} value={r.errorRate.toFixed(2)} />
-                      <DataTableCell dt={dt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
-                      <DataTableCell dt={dt} col="p99Ms" row={r} value={r.p99Ms.toFixed(0)} />
-                      {/* v0.10.943 — kolon `numeric` (başlık sağda) ama hücre bugünkü gibi
-                          sola yaslı metin: cellProps'un `num`u burada kullanılmaz. */}
-                      <td onClick={e => e.stopPropagation()}>
-                        <span style={{ fontSize: 11, color: 'var(--text2)' }}
-                          title={r.callerNames.join(', ')}>
-                          {r.callers}{' · '}
-                          {r.callerNames.slice(0, 3).map((c, i) => (
-                            <span key={c}>
-                              {i > 0 && ', '}
-                              <Link to={serviceHref(c, { range })}
-                                style={{ fontSize: 11 }}>{c}</Link>
-                            </span>
-                          ))}
-                          {r.callers > 3 && ` +${r.callers - 3}`}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
+                const rp = dt.rowProps(i, r);
+                return (
+                  <tr key={r.host} {...rp}
+                    {...rowActivation(() => openHost(r.host))}
+                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                    <DataTableCell dt={dt} col="host" row={r}>
+                      <span style={{ fontWeight: 500 }}
+                        title={r.topLabels.length ? `Top operations:\n${r.topLabels.join('\n')}` : r.host}>
+                        {r.display
+                          ? <>{r.display} <span style={{ color: 'var(--text3)', fontWeight: 400 }}>({r.host})</span></>
+                          : r.host}
+                      </span>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="category" row={r}><CategoryBadge category={r.category} /></DataTableCell>
+                    <DataTableCell dt={dt} col="calls" row={r} value={fmtNum(r.calls)} />
+                    <DataTableCell dt={dt} col="rpm" row={r} value={fmtFixed(r.calls / windowMin, 1)} />
+                    <DataTableCell dt={dt} col="errorRate" row={r} value={r.errorRate.toFixed(2)} />
+                    <DataTableCell dt={dt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
+                    <DataTableCell dt={dt} col="p99Ms" row={r} value={r.p99Ms.toFixed(0)} />
+                    {/* v0.10.943 — kolon `numeric` (başlık sağda) ama hücre bugünkü gibi
+                        sola yaslı metin: cellProps'un `num`u burada kullanılmaz. */}
+                    <td onClick={e => e.stopPropagation()}>
+                      <span style={{ fontSize: 11, color: 'var(--text2)' }}
+                        title={r.callerNames.join(', ')}>
+                        {r.callers}{' · '}
+                        {r.callerNames.slice(0, 3).map((c, i) => (
+                          <span key={c}>
+                            {i > 0 && ', '}
+                            <Link to={serviceHref(c, { range })}
+                              style={{ fontSize: 11 }}>{c}</Link>
+                          </span>
+                        ))}
+                        {r.callers > 3 && ` +${r.callers - 3}`}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {openHostParam && (
           <ExternalHostDrawer host={openHostParam} range={range} onClose={closeHost} />
@@ -246,30 +248,29 @@ function ExternalHostDrawer({ host, range, onClose }: {
             </DrawerSection>
 
             <DrawerSection title={`Calling services (${detail.callers.length})`}>
-              {detail.callers.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text3)' }}>No callers in this window.</div>
-              ) : (
-                <table {...callersDt.tableProps}>
-                  <DataTableColgroup dt={callersDt} />
-                  <DataTableHead dt={callersDt} />
-                  <tbody>
-                    {callersDt.sortedRows.map(c => (
-                      <tr key={c.service}>
-                        <DataTableCell dt={callersDt} col="service" row={c}>
-                          <Link to={serviceHref(c.service, { range })}
-                            title={[c.service, ...c.topLabels].join('\n')}>
-                            {c.service}
-                          </Link>
-                        </DataTableCell>
-                        <DataTableCell dt={callersDt} col="calls" row={c} value={fmtNum(c.calls)} />
-                        <DataTableCell dt={callersDt} col="errorRate" row={c} value={c.errorRate.toFixed(2)} />
-                        <DataTableCell dt={callersDt} col="avgMs" row={c} value={c.avgMs.toFixed(1)} />
-                        <DataTableCell dt={callersDt} col="p99Ms" row={c} value={c.p99Ms.toFixed(0)} />
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <table {...callersDt.tableProps}>
+                <DataTableColgroup dt={callersDt} />
+                <DataTableHead dt={callersDt} />
+                <tbody>
+                  {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur. */}
+                  {callersDt.sortedRows.length === 0 ? (
+                    <DataTableState dt={callersDt} kind="empty" message="Bu pencerede çağıran yok" />
+                  ) : callersDt.sortedRows.map(c => (
+                    <tr key={c.service}>
+                      <DataTableCell dt={callersDt} col="service" row={c}>
+                        <Link to={serviceHref(c.service, { range })}
+                          title={[c.service, ...c.topLabels].join('\n')}>
+                          {c.service}
+                        </Link>
+                      </DataTableCell>
+                      <DataTableCell dt={callersDt} col="calls" row={c} value={fmtNum(c.calls)} />
+                      <DataTableCell dt={callersDt} col="errorRate" row={c} value={c.errorRate.toFixed(2)} />
+                      <DataTableCell dt={callersDt} col="avgMs" row={c} value={c.avgMs.toFixed(1)} />
+                      <DataTableCell dt={callersDt} col="p99Ms" row={c} value={c.p99Ms.toFixed(0)} />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </DrawerSection>
 
             {/* v0.9.1255 — Operator-reported: dış düğümde host değil

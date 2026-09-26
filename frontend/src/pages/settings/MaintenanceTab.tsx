@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Spinner, Empty } from '@/components/Spinner';
-import { QueryError } from '@/components/QueryError';
-import { readState } from '@/lib/readState';
 import { Button, Modal, Stack, useConfirm } from '@/components/ui';
 import { api, type MaintenanceWindow } from '@/lib/api';
 import { Field, Row } from './shared';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { tsLong } from '@/lib/utils';
 import { formatDateTime, parseDateTime } from '@/lib/rangePicker';
 
@@ -93,6 +93,21 @@ export function MaintenanceTab() {
     storageKey: 'settings-maintenance-windows', columns: WINDOW_COLS, rows: items ?? [],
     initialSort: { id: 'starts', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur; ↻ aynı `load`. v0.9.865 (MT1): hata satırı "boş
+  // liste değil" uyarısını ve en pahalı sonucu (aktif pencere hâlâ
+  // uyarıları susturuyor olabilir) taşımaya devam eder.
+  const tableState: Omit<DataTableStateProps<MaintenanceWindow>, 'dt'> =
+    items === undefined ? { kind: 'loading' }
+    : items === null ? {
+        kind: 'error', onRetry: load,
+        message: 'Bakım pencereleri okunamadı — bu bir hata, boş liste değil. Aktif bir pencere uyarıları hâlâ susturuyor olabilir.',
+      }
+    : {
+        kind: 'empty',
+        message: 'Bakım penceresi yok — planlı bir deploy öncesi etkilenen servislerde uyarıları susturmak için bir pencere tanımla. '
+          + 'Pencereler kendiliğinden sona erer, temizlik gerekmez.',
+      };
   return (
     <div>
       <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text2)' }}>
@@ -119,60 +134,41 @@ export function MaintenanceTab() {
           border: `1px solid ${msg.kind === 'ok' ? 'color-mix(in srgb, var(--ok) 35%, transparent)' : 'color-mix(in srgb, var(--err) 30%, transparent)'}`,
         }}>{msg.text}</div>
       )}
-      {readState(items) === 'loading' && <Spinner />}
-      {/* v0.9.865 (tutarlılık denetimi MT1) — `!items` null için de doğru
-          olduğundan okuma hatası "No maintenance windows" oluyordu. En pahalı
-          yanlış-boş: operatör aktif bir bakım penceresi olmadığını sanıp
-          deploy'a giriyor, susturulacak alarmlar fan-out ediyor. */}
-      {readState(items) === 'error' && (
-        <QueryError onRetry={load}>
-          Maintenance windows could not be loaded — this is a failed read, not
-          an empty list. An active window may still be suppressing alerts.
-        </QueryError>
-      )}
-      {readState(items) === 'empty' && (
-        <Empty icon="◯" title="No maintenance windows">
-          Declare a window before a planned deploy to silence alerts on the
-          affected services. They auto-expire — no clean-up needed.
-        </Empty>
-      )}
-      {items && items.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(w => {
-                const status = maintenanceStatus(w, now);
-                return (
-                  <tr key={w.id}>
-                    <DataTableCell dt={dt} col="service" row={w} value={w.service} className="cell-strong" />
-                    {/* v0.10.942 — büyük harf satır içi textTransform yerine değerde (ASCII enum, lang=en: aynı glifler). */}
-                    <DataTableCell dt={dt} col="severity" row={w} value={w.severity.toUpperCase()} className="mono" />
-                    <DataTableCell dt={dt} col="starts" row={w} value={tsLong(w.startAt)} className="mono" />
-                    <DataTableCell dt={dt} col="ends" row={w} value={tsLong(w.endAt)} className="mono" />
-                    <DataTableCell dt={dt} col="reason" row={w} value={w.reason} />
-                    <DataTableCell dt={dt} col="by" row={w} value={w.createdBy} />
-                    <DataTableCell dt={dt} col="status" row={w}>
-                      {/* v0.10.929 (K5) — DISABLED/PAST geçmiş kayıt: nötr (eskiden kırmızı/yeşil).
-                          ACTIVE amber kalır: şu an uyarıları susturan pencere bir sapma. */}
-                      {status === 'disabled' ? <span className="badge b-gray" style={{ fontSize: 9 }}>DISABLED</span>
-                        : status === 'active'   ? <span className="badge b-warn" style={{ fontSize: 9 }}>ACTIVE</span>
-                        : status === 'upcoming' ? <span className="badge b-info" style={{ fontSize: 9 }}>UPCOMING</span>
-                        :                         <span className="badge b-gray" style={{ fontSize: 9 }}>PAST</span>}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="actions" row={w}>
-                      {!w.disabled && (
-                        <Button variant="danger" size="sm" onClick={() => del(w.id)}>End / delete</Button>
-                      )}
-                    </DataTableCell>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(w => {
+              const status = maintenanceStatus(w, now);
+              return (
+                <tr key={w.id}>
+                  <DataTableCell dt={dt} col="service" row={w} value={w.service} className="cell-strong" />
+                  {/* v0.10.942 — büyük harf satır içi textTransform yerine değerde (ASCII enum, lang=en: aynı glifler). */}
+                  <DataTableCell dt={dt} col="severity" row={w} value={w.severity.toUpperCase()} className="mono" />
+                  <DataTableCell dt={dt} col="starts" row={w} value={tsLong(w.startAt)} className="mono" />
+                  <DataTableCell dt={dt} col="ends" row={w} value={tsLong(w.endAt)} className="mono" />
+                  <DataTableCell dt={dt} col="reason" row={w} value={w.reason} />
+                  <DataTableCell dt={dt} col="by" row={w} value={w.createdBy} />
+                  <DataTableCell dt={dt} col="status" row={w}>
+                    {/* v0.10.929 (K5) — DISABLED/PAST geçmiş kayıt: nötr (eskiden kırmızı/yeşil).
+                        ACTIVE amber kalır: şu an uyarıları susturan pencere bir sapma. */}
+                    {status === 'disabled' ? <span className="badge b-gray" style={{ fontSize: 9 }}>DISABLED</span>
+                      : status === 'active'   ? <span className="badge b-warn" style={{ fontSize: 9 }}>ACTIVE</span>
+                      : status === 'upcoming' ? <span className="badge b-info" style={{ fontSize: 9 }}>UPCOMING</span>
+                      :                         <span className="badge b-gray" style={{ fontSize: 9 }}>PAST</span>}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="actions" row={w}>
+                    {!w.disabled && (
+                      <Button variant="danger" size="sm" onClick={() => del(w.id)}>End / delete</Button>
+                    )}
+                  </DataTableCell>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {creating && (
         <NewMaintenanceModal onClose={() => setCreating(false)}
           onCreated={() => { setCreating(false); load(); setMsg({ kind: 'ok', text: 'Window created' }); }} />

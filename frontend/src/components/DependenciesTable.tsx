@@ -3,14 +3,15 @@ import { rowActivation } from '@/lib/a11y';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { messagingTopicHref } from '@/pages/messaging/topicHref'; // v0.10.586
 import { Link, useSearchParams } from 'react-router-dom';
-import { Empty } from './Spinner';
 import { Sparkline } from './Sparkline';
 import { TrendDelta } from './TrendDelta';
 import { Button } from './ui/Button';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import { trendsEnabled, latencyPresent, depRowKey, resolveTrends } from '@/lib/depsTable';
 import { msgP99Delta } from '@/lib/msgBalance';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { depRowMatches, normalizeDepSearch } from '@/lib/depRowFilter';
 import { stickyLeftOffsets } from '@/lib/dataTable';
 import { DetailDrawer } from '@/features/dependencies/DetailDrawer';
@@ -96,7 +97,7 @@ const NATURAL: Record<SortKey, 'asc' | 'desc'> = {
 // click lands on /explore scoped to that system+instance.
 export function DependenciesTable({
   rows, kind, range, compare, extraControls, openRowKey, onOpenRowChange,
-  onRowNavigate,
+  onRowNavigate, state,
 }: {
   rows: DepRow[];
   // 'db' → uses instance + filters by db.system; 'queue' → uses
@@ -129,6 +130,10 @@ export function DependenciesTable({
   // Both affordances move together: the mouse click and the keyboard
   // Enter/o must never disagree about what opening a row means.
   onRowNavigate?: (row: DepRow) => void;
+  // v0.10.954 — tablo standardı T12 (VirtualTable `state` emsali): `rows`
+  // boşken tablonun İÇİNDE çizilecek durum (ebeveynin yükleniyor / hata /
+  // boş'u). Verilmezse türe özgü boş satırı basılır.
+  state?: Omit<DataTableStateProps<DepRow>, 'dt' | 'leading' | 'trailing'>;
 }) {
   // v0.9.813 — System filtresi + arama URL'e taşındı (?msys= / ?q=).
   //
@@ -358,7 +363,7 @@ export function DependenciesTable({
   };
 
   // #1 + #6 — fetch per-row RED trends on range change. Kept
-  // unconditional (above the rows.length===0 early return) so the
+  // unconditional (above every return) so the
   // hook order is stable. Stores two keys per trend in the Map:
   // the precise (system|instance|dbName) and a looser
   // (system|instance) fallback — db.name on the trend ('' /
@@ -370,12 +375,16 @@ export function DependenciesTable({
   // bayrak yalnız SONUCU yok sayıyordu, istek sunucuda sonuna kadar koşuyordu.
   // Artık aralık/kind değişimi eskisini GERÇEKTEN iptal ediyor (signal).
   //
-  // Hook koşulsuz kalır (hook sırası sabit); kapı `enabled`: /messaging
-  // tarafında sütun zaten çizilmiyor, sorgu hiç kurulmasın.
+  // Hook koşulsuz kalır (hook sırası sabit); kapı `enabled`.
+  // v0.10.954 — T12 tabloyu satırsız da bağlıyor (yükleniyor / hata / boş
+  // artık tablonun İÇİNDE). Satır yokken trend taraması (msgTrends /
+  // dbTrends) birleşecek satır bulamaz: ödenen ama okunmayan CH taraması.
+  // Kapı satıra bağlı → HEAD'in zamanlaması (önce özet, sonra trend) geri gelir.
   const trendsOn = trendsEnabled(kind);
   const trendsWindow = useMemo(() => timeRangeToNs(range), [range]);
   const trendsQ = useDepTrends({
-    kind, fromNs: trendsWindow.from, toNs: trendsWindow.to, enabled: trendsOn,
+    kind, fromNs: trendsWindow.from, toNs: trendsWindow.to,
+    enabled: trendsOn && rows.length > 0,
   });
 
   // Üç durum + join anahtarları SAF fonksiyonda (lib/depsTable.ts) ve testte
@@ -402,37 +411,41 @@ export function DependenciesTable({
         ?? trends.get(`${r.system}|${inst}`);
   };
 
-  if (rows.length === 0) {
-    return (
-      <Empty icon="◯" title={kind === 'db'
-        ? 'No database calls in this window'
-        : 'No messaging activity in this window'}>
-        {kind === 'db'
-          ? 'Coremetry derives this view from spans with a populated db.system attribute.'
-          : 'Derived from spans with a populated messaging.system attribute.'}
-      </Empty>
-    );
-  }
+  // v0.10.954 — tablo standardı T12: `rows.length === 0` erken dönüşü
+  // (Empty) kalktı; durum tablonun İÇİNDE, başlık durur. Satırlar varken
+  // boşalma yalnız System / arama süzgecinden olabilir → eşleşme yok (tek
+  // "temizle" eylemi yok: iki ayrı denetim, ikisi de üstte görünür).
+  const tableState: Omit<DataTableStateProps<DepRow>, 'dt' | 'leading' | 'trailing'> =
+    rows.length > 0 ? { kind: 'no-match' }
+    : state ?? {
+      kind: 'empty',
+      message: kind === 'db'
+        ? 'Bu pencerede veritabanı çağrısı yok — bu görünüm db.system özniteliği dolu span\'lerden türetilir.'
+        : 'Bu pencerede mesajlaşma etkinliği yok — messaging.system özniteliği dolu span\'lerden türetilir.',
+    };
 
   return (
     <>
-      <div className="controls" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ color: 'var(--text2)', fontSize: 12 }}>System:</span>
-        <select value={systemFilter} onChange={e => setSystemFilter(e.target.value)}
-                style={{ fontSize: 12 }}>
-          <option value="">All ({rows.length})</option>
-          {systems.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <input value={search} onChange={e => setSearch(e.target.value)}
-               placeholder={kind === 'db'
-                 ? 'Search system / instance / caller…'
-                 : 'Search system / destination / caller…'}
-               style={{ width: 280 }} />
-        {extraControls}
-        <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 'auto' }}>
-          {dt.sortedRows.length} of {rows.length}
-        </span>
-      </div>
+      {/* Süzgeç şeridi eski koşulunda: satır yokken "All (0)" / "0 of 0" basmaz. */}
+      {rows.length > 0 && (
+        <div className="controls" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ color: 'var(--text2)', fontSize: 12 }}>System:</span>
+          <select value={systemFilter} onChange={e => setSystemFilter(e.target.value)}
+                  style={{ fontSize: 12 }}>
+            <option value="">All ({rows.length})</option>
+            {systems.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+                 placeholder={kind === 'db'
+                   ? 'Search system / instance / caller…'
+                   : 'Search system / destination / caller…'}
+                 style={{ width: 280 }} />
+          {extraControls}
+          <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 'auto' }}>
+            {dt.sortedRows.length} of {rows.length}
+          </span>
+        </div>
+      )}
 
       {/* v0.10.943 (tablo standardı dilim 3) — sayı hücreleri `num` (arayüz
           fontu, S2); ikincil hücreler 11px yerine renkle (S3). */}
@@ -441,7 +454,7 @@ export function DependenciesTable({
           <DataTableColgroup dt={dt} leading={[24]} />
           <DataTableHead dt={dt} stickyLeftBase={24} leading={<th className="sticky-left" style={{ width: 24, left: 0 }} aria-label="Expand"></th>} />
           <tbody>
-            {dt.sortedRows.map((r, i) => {
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} leading={[24]} {...tableState} /> : dt.sortedRows.map((r, i) => {
               // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
               const errCls = r.errorRate > 5 ? 'err' : r.errorRate > 0 ? 'warn' : 'gray';
               // Key includes cluster so two rows with the same

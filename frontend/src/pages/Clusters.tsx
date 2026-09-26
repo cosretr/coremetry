@@ -22,7 +22,6 @@ import { clusterSearch } from '@/pages/clusters/clusterSearch'; // v0.10.928 (Y1
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
 import { Button, Card, CardLink, Drawer, DrawerSection, IconButton, LinkButton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useClusters } from '@/lib/queries';
@@ -32,7 +31,10 @@ import { clampThanosWindow, clampSuffix } from '@/lib/thanosWindow';
 import { useUrlRange, rememberRange } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef, type CellTone } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type CellTone, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterAlertRow, ClusterSummary, TimeRange, CapacityForecastDays } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
@@ -433,6 +435,7 @@ export default function ClustersPage() {
     return next;
   }, { replace: true });
   const qLower = q.trim().toLowerCase();
+  const qRef = useRef<HTMLInputElement>(null);
 
   const nsFilter = params.get('namespace') ?? '';
   const clearNs = () => setParams(prev => {
@@ -553,6 +556,58 @@ export default function ClustersPage() {
     : false;
   const detailUnreachable = isDetail && detailSummaryQ.isError &&
     (section === 'overview' || activeErr);
+
+  // v0.10.954 — tablo standardı T12: dört detay tablosunun yükleniyor / hata /
+  // eşleşme yok / boş durumları tablonun İÇİNDE, başlık durur. Sıra eskisiyle
+  // aynı (bekliyor → hata → boş); ?q= metin süzgeci listeyi boşalttıysa
+  // "eşleşme yok" + temizle (eski metin bu durumda "seri dönmedi" diyordu).
+  // Pod tablosunda çip dalları eski sırayla: iş yükü → servis → namespace.
+  // v0.10.954 — "eşleşme yok" yalnız süzülmemiş kaynakta satır varken (?q=
+  // gerçekten bir şey eledi); kaynak boşsa ?q= olsa da boş-durum çaresi
+  // (runbook / probe / namespace süzgeci) görünür kalır.
+  const clearQ = { onClearFilters: () => setQ(''), returnFocusRef: qRef };
+  const nodeAny = nodeDatas.some(d => (d?.nodes?.length ?? 0) > 0);
+  const nsAny = nsDatas.some(d => (d?.namespaces?.length ?? 0) > 0);
+  const depAny = (depQ.data?.deployments?.length ?? 0) > 0;
+  const podAny = podDatas.some(d => (d?.pods?.length ?? 0) > 0);
+  // v0.10.954 — yenileme hatası: satırlar dururken hata notu da görünür (eski
+  // davranış; T12 yalnız BOŞ tablonun durumunu tabloya aldı). Metinler tek
+  // kopya: boş tablodaki hata satırı ile dolu tablonun üstündeki not aynı.
+  const NODE_ERR = "Node metrikleri okunamadı (muhtemelen tenancy portu — runbook'taki probe adımına bakın).";
+  const DEP_ERR = "İş yükü özeti okunamadı — Settings'teki cluster kaydını kontrol edin.";
+  const POD_ERR = "Pod metrikleri okunamadı — Settings'teki cluster kaydını kontrol edin.";
+  const staleErrNote = (msg: string) => (
+    <div role="status" style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
+      {msg} Son başarılı veri gösteriliyor.
+    </div>
+  );
+  const nodeState: Omit<DataTableStateProps<ClusterNodeRow>, 'dt'> =
+    nodeQs[0]?.isPending ? { kind: 'loading' }
+    : nodeErr ? { kind: 'error', message: NODE_ERR }
+    : qLower && nodeAny ? { kind: 'no-match', ...clearQ }
+    : { kind: 'empty', message: "node-exporter serileri boş döndü — runbook'taki probe adımına bakın" };
+  const depState: Omit<DataTableStateProps<ClusterDeploymentRow>, 'dt'> =
+    depQ.isPending ? { kind: 'loading' }
+    : depQ.isError ? { kind: 'error', message: DEP_ERR }
+    : qLower && depAny ? { kind: 'no-match', ...clearQ }
+    : { kind: 'empty', message: "Bu namespace'te iş yükü örneği yok" };
+  const nsState: Omit<DataTableStateProps<ClusterNamespaceRow>, 'dt'> =
+    nsQs[0]?.isPending ? { kind: 'loading' }
+    : nsErr ? { kind: 'error', message: "Namespace özeti okunamadı — Settings'teki cluster kaydını kontrol edin." }
+    : qLower && nsAny ? { kind: 'no-match', ...clearQ }
+    : { kind: 'empty', message: 'Namespace örneği yok' };
+  const podState: Omit<DataTableStateProps<ClusterPodRow>, 'dt'> =
+    podQs[0]?.isPending ? { kind: 'loading' }
+    : podErr ? { kind: 'error', message: POD_ERR }
+    : depFilter ? { kind: 'no-match', message: `"${depFilter}" iş yükünde pod yok`, onClearFilters: clearDep }
+    : svcFilter ? {
+      kind: 'no-match',
+      message: `"${svcFilter}" servisiyle eşleşen pod yok — etiket Coremetry telemetri eşleştirmesinden gelir (best-effort)`,
+      onClearFilters: clearSvc,
+    }
+    : nsFilter ? { kind: 'no-match', message: `"${nsFilter}" namespace'inde pod örneği yok`, onClearFilters: clearNs }
+    : qLower && podAny ? { kind: 'no-match', ...clearQ }
+    : { kind: 'empty', message: "Sorgular seri döndürmedi — cluster kaydındaki namespace süzgecini kontrol edin" };
 
   return (
     <>
@@ -709,7 +764,7 @@ export default function ClustersPage() {
                   service: {svcFilter} ✕
                 </span>
               )}
-              <input value={q}
+              <input ref={qRef} value={q}
                 onChange={e => setQ(e.target.value)}
                 placeholder="Filter by name…"
                 title="Filters nodes, namespaces and pods by name substring"
@@ -753,48 +808,36 @@ export default function ClustersPage() {
             ) : (
               <>
                 {section === 'nodes' && <>
-                  {nodeQs[0]?.isPending && <TableSkeleton cols={NODE_COLS.length} wideFirst />}
-                  {nodeErr && (
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                      Node metrics unavailable (possibly the tenancy port — see the runbook probe step).
-                    </div>
-                  )}
-                  {!nodeErr && !nodeQs[0]?.isPending && nodeRows.length === 0 && (
-                    <Empty compact icon="◯" title="node-exporter series came back empty">
-                      See the runbook probe step.
-                    </Empty>
-                  )}
-                  {nodeRows.length > 0 && (
-                    <div className="table-wrap">
-                      <table {...ndt.tableProps}>
-                        <DataTableColgroup dt={ndt} />
-                        <DataTableHead dt={ndt} />
-                        <tbody>
-                          {ndt.sortedRows.map(r => (
-                            <tr key={`${r.cluster}|${r.node}`} className="cv-row">
-                              <DataTableCell dt={ndt} col="cluster" row={r} value={r.cluster} />
-                              <td>
-                                <span className="mono" style={{ fontWeight: 500 }} title={r.node}>
-                                  {r.node}
-                                </span>
-                              </td>
-                              {/* v0.10.922 (sade palet adım 1) — rol bir
-                                  kategori: control-plane dahil hepsi nötr. */}
-                              <td>{r.role
-                                ? <span className="badge b-gray">{r.role}</span>
-                                : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                              <DataTableCell dt={ndt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                              <DataTableCell dt={ndt} col="cpuPct" row={r} value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
-                              <DataTableCell dt={ndt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                              <DataTableCell dt={ndt} col="memPct" row={r} value={r.memPct ? r.memPct.toFixed(0) : '—'} />
-                              <DataTableCell dt={ndt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
-                              <DataTableCell dt={ndt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  {nodeErr && ndt.sortedRows.length > 0 && staleErrNote(NODE_ERR)}
+                  <div className="table-wrap">
+                    <table {...ndt.tableProps}>
+                      <DataTableColgroup dt={ndt} />
+                      <DataTableHead dt={ndt} />
+                      <tbody>
+                        {ndt.sortedRows.length === 0 ? <DataTableState dt={ndt} {...nodeState} /> : ndt.sortedRows.map(r => (
+                          <tr key={`${r.cluster}|${r.node}`} className="cv-row">
+                            <DataTableCell dt={ndt} col="cluster" row={r} value={r.cluster} />
+                            <td>
+                              <span className="mono" style={{ fontWeight: 500 }} title={r.node}>
+                                {r.node}
+                              </span>
+                            </td>
+                            {/* v0.10.922 (sade palet adım 1) — rol bir
+                                kategori: control-plane dahil hepsi nötr. */}
+                            <td>{r.role
+                              ? <span className="badge b-gray">{r.role}</span>
+                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
+                            <DataTableCell dt={ndt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
+                            <DataTableCell dt={ndt} col="cpuPct" row={r} value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
+                            <DataTableCell dt={ndt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                            <DataTableCell dt={ndt} col="memPct" row={r} value={r.memPct ? r.memPct.toFixed(0) : '—'} />
+                            <DataTableCell dt={ndt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
+                            <DataTableCell dt={ndt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>}
 
                 {/* v0.8.588 — namespace rollup: TAM toplamlar (pod
@@ -803,210 +846,173 @@ export default function ClustersPage() {
                 {section === 'namespaces' && nsFilter && <>
                   {/* v0.9.23 — Namespace → Deployment ara kademesi:
                       çip nsFilter'ı temizleyip ns listesine döndürür. */}
-                  {depQ.isPending && <TableSkeleton cols={DEP_COLS.length} wideFirst />}
-                  {depQ.isError && (
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                      Workload rollup unavailable — check the cluster entry in Settings.
-                    </div>
-                  )}
-                  {!depQ.isPending && !depQ.isError && depRows.length === 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                      No workload samples in this namespace.
-                    </div>
-                  )}
-                  {depRows.length > 0 && (
-                    <div className="table-wrap">
-                      <table {...depdt.tableProps}>
-                        <DataTableColgroup dt={depdt} />
-                        <DataTableHead dt={depdt} />
-                        <tbody>
-                          {depdt.sortedRows.map(r => (
-                            // v0.10.943 — talimat ipucu (satır title) kalktı (T7); seçili + cv-row tek className.
-                            <tr key={r.deployment}
-                              className={[r.deployment === depFilter ? 'row-selected' : '', depdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
-                              {...rowActivation(() => setSection('pods', p => p.set('deployment', r.deployment)))}>
-                              <DataTableCell dt={depdt} col="deployment" row={r} value={r.deployment} />
-                              {/* v0.9.39 — ready/desired rozeti + statü; KSM
-                                  yoksa '—'. v0.9.42: surge'de (ready>desired,
-                                  backend Available der) rozet de yeşil —
-                                  strict eşitlik aynı satırda sarı 4/3 + yeşil
-                                  Available çelişkisi üretiyordu.
-                                  v0.10.922 (sade palet adım 1) — K5: tam
-                                  hazır = normal durum, rozet NÖTR (b-gray);
-                                  yalnız eksik replika b-warn kalır. */}
-                              <td>{r.status
-                                ? <span className={`badge ${r.readyReplicas >= r.desiredReplicas ? 'b-gray' : 'b-warn'}`}>
-                                    {r.readyReplicas}/{r.desiredReplicas}
-                                  </span>
-                                : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                              <td>{r.status
-                                ? <span className={`badge ${depStatusBadge(r.status)}`}>{r.status}</span>
-                                : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                              <DataTableCell dt={depdt} col="pods" row={r} value={fmtNum(r.pods)} />
-                              <DataTableCell dt={depdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                              <DataTableCell dt={depdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  {depQ.isError && depdt.sortedRows.length > 0 && staleErrNote(DEP_ERR)}
+                  <div className="table-wrap">
+                    <table {...depdt.tableProps}>
+                      <DataTableColgroup dt={depdt} />
+                      <DataTableHead dt={depdt} />
+                      <tbody>
+                        {depdt.sortedRows.length === 0 ? <DataTableState dt={depdt} {...depState} /> : depdt.sortedRows.map(r => (
+                          // v0.10.943 — talimat ipucu (satır title) kalktı (T7); seçili + cv-row tek className.
+                          <tr key={r.deployment}
+                            className={[r.deployment === depFilter ? 'row-selected' : '', depdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
+                            {...rowActivation(() => setSection('pods', p => p.set('deployment', r.deployment)))}>
+                            <DataTableCell dt={depdt} col="deployment" row={r} value={r.deployment} />
+                            {/* v0.9.39 — ready/desired rozeti + statü; KSM
+                                yoksa '—'. v0.9.42: surge'de (ready>desired,
+                                backend Available der) rozet de yeşil —
+                                strict eşitlik aynı satırda sarı 4/3 + yeşil
+                                Available çelişkisi üretiyordu.
+                                v0.10.922 (sade palet adım 1) — K5: tam
+                                hazır = normal durum, rozet NÖTR (b-gray);
+                                yalnız eksik replika b-warn kalır. */}
+                            <td>{r.status
+                              ? <span className={`badge ${r.readyReplicas >= r.desiredReplicas ? 'b-gray' : 'b-warn'}`}>
+                                  {r.readyReplicas}/{r.desiredReplicas}
+                                </span>
+                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
+                            <td>{r.status
+                              ? <span className={`badge ${depStatusBadge(r.status)}`}>{r.status}</span>
+                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
+                            <DataTableCell dt={depdt} col="pods" row={r} value={fmtNum(r.pods)} />
+                            <DataTableCell dt={depdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
+                            <DataTableCell dt={depdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>}
                 {section === 'namespaces' && !nsFilter && <>
-                  {nsRows.length === 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                      {nsQs[0]?.isPending ? 'Loading…' : nsErr ? 'Namespace rollup unavailable — check the cluster entry in Settings.' : 'No namespace samples.'}
-                    </div>
-                  )}
-                  {nsRows.length > 0 && (
-                    <div className="table-wrap">
-                      <table {...nsdt.tableProps}>
-                        <DataTableColgroup dt={nsdt} />
-                        <DataTableHead dt={nsdt} />
-                        <tbody>
-                          {nsdt.sortedRows.map(r => {
-                            const selected = r.namespace === nsFilter;
-                            return (
-                              <tr key={r.namespace}
-                                className={[selected ? 'row-selected' : '', nsdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
-                                aria-pressed={selected}
-                                {...rowActivation(() => setSection('namespaces', p => {
-                                  // v0.9.23 — ara kademe: seçim iş yükü
-                                  // rollup'unu açar (pods'a atlamaz);
-                                  // deployment seçimi pods'a götürür.
-                                  if (selected) { p.delete('namespace'); p.delete('deployment'); }
-                                  else { p.set('namespace', r.namespace); p.delete('deployment'); }
-                                }))}>
-                                {/* v0.10.943 — duruma bağlı ipucu satırdan kimlik hücresine (T7); seçili filtre durumu AT'ye satırdaki aria-pressed ile. */}
-                                <DataTableCell dt={nsdt} col="namespace" row={r} value={r.namespace}
-                                  title={selected
-                                    ? 'Clear the namespace selection'
-                                    : 'Show workloads in this namespace'} />
-                                <DataTableCell dt={nsdt} col="pods" row={r} value={r.pods ? fmtNum(r.pods) : '—'} />
-                                <DataTableCell dt={nsdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                                <DataTableCell dt={nsdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                                {/* v0.9.37 (B4/F6) — restart toplamı + health.
-                                    v0.10.922 (sade palet adım 1) — K5: sağlıklı
-                                    NÖTR metin; yalnız failing b-err rozet. */}
-                                <DataTableCell dt={nsdt} col="restarts" row={r} style={{ color: restartColor(r.restarts ?? 0) }}
-                                  value={r.restarts != null ? fmtNum(r.restarts) : '—'} />
-                                <td className="num" onClick={e => e.stopPropagation()}>
-                                  {(r.failing ?? 0) > 0
-                                    ? <span className="badge b-err">{r.failing} failing</span>
-                                    : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>}
-                                </td>
-                                <DataTableCell dt={nsdt} col="trend" row={r}>
-                                  {/* v0.9.5 — trend drawer'ı; satırın filtre
-                                      davranışına karışmaz (stopPropagation). */}
-                                  <IconButton
-                                    variant="bare" size="xs" className="ib-accent"
-                                    onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
-                                    aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
-                                    // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
-                                    tooltip="Per-pod trend charts for this namespace"
-                                    icon={<ChartSpline size={14} strokeWidth={1.75} />} />
-                                </DataTableCell>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  <div className="table-wrap">
+                    <table {...nsdt.tableProps}>
+                      <DataTableColgroup dt={nsdt} />
+                      <DataTableHead dt={nsdt} />
+                      <tbody>
+                        {nsdt.sortedRows.length === 0 ? <DataTableState dt={nsdt} {...nsState} /> : nsdt.sortedRows.map(r => {
+                          const selected = r.namespace === nsFilter;
+                          return (
+                            <tr key={r.namespace}
+                              className={[selected ? 'row-selected' : '', nsdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
+                              aria-pressed={selected}
+                              {...rowActivation(() => setSection('namespaces', p => {
+                                // v0.9.23 — ara kademe: seçim iş yükü
+                                // rollup'unu açar (pods'a atlamaz);
+                                // deployment seçimi pods'a götürür.
+                                if (selected) { p.delete('namespace'); p.delete('deployment'); }
+                                else { p.set('namespace', r.namespace); p.delete('deployment'); }
+                              }))}>
+                              {/* v0.10.943 — duruma bağlı ipucu satırdan kimlik hücresine (T7); seçili filtre durumu AT'ye satırdaki aria-pressed ile. */}
+                              <DataTableCell dt={nsdt} col="namespace" row={r} value={r.namespace}
+                                title={selected
+                                  ? 'Clear the namespace selection'
+                                  : 'Show workloads in this namespace'} />
+                              <DataTableCell dt={nsdt} col="pods" row={r} value={r.pods ? fmtNum(r.pods) : '—'} />
+                              <DataTableCell dt={nsdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
+                              <DataTableCell dt={nsdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                              {/* v0.9.37 (B4/F6) — restart toplamı + health.
+                                  v0.10.922 (sade palet adım 1) — K5: sağlıklı
+                                  NÖTR metin; yalnız failing b-err rozet. */}
+                              <DataTableCell dt={nsdt} col="restarts" row={r} style={{ color: restartColor(r.restarts ?? 0) }}
+                                value={r.restarts != null ? fmtNum(r.restarts) : '—'} />
+                              <td className="num" onClick={e => e.stopPropagation()}>
+                                {(r.failing ?? 0) > 0
+                                  ? <span className="badge b-err">{r.failing} failing</span>
+                                  : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>}
+                              </td>
+                              <DataTableCell dt={nsdt} col="trend" row={r}>
+                                {/* v0.9.5 — trend drawer'ı; satırın filtre
+                                    davranışına karışmaz (stopPropagation). */}
+                                <IconButton
+                                  variant="bare" size="xs" className="ib-accent"
+                                  onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
+                                  aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
+                                  // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
+                                  tooltip="Per-pod trend charts for this namespace"
+                                  icon={<ChartSpline size={14} strokeWidth={1.75} />} />
+                              </DataTableCell>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </>}
 
                 {section === 'pods' && <>
-                  {podQs[0]?.isPending && <TableSkeleton cols={POD_COLS.length} wideFirst />}
-                  {podErr && (
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                      Pod metrics unavailable — check the cluster entry in Settings.
-                    </div>
-                  )}
                   {/* v0.9.959 (G8/Ö22) — kesik liste BEYAN edilir. Hem dolu
                       hem boş listede: dolu listede "hepsi bu değil", boş
                       listede "yok, kesin değil". */}
+                  {podErr && dt.sortedRows.length > 0 && staleErrNote(POD_ERR)}
                   {!podErr && !podQs[0]?.isPending && truncatedClusters.length > 0 && (
                     <div className="badge b-warn" style={{ marginBottom: 8 }}
                       title={`${truncatedClusters.join(', ')}: sunucu en işlek 500 pod'u döndürdü (topk tavanı) — sakin pod'lar bu listenin dışında kalmış olabilir.`}>
                       kısmi liste — topk(500)
                     </div>
                   )}
-                  {!podErr && !podQs[0]?.isPending && rows.length === 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                      {depFilter
-                        ? `No pods in workload "${depFilter}" — clear the chip to see the namespace.`
-                        : svcFilter
-                        ? `No pods matched service "${svcFilter}" — the label comes from Coremetry telemetry matching (best-effort); clear the chip to see all pods.`
-                        : nsFilter
-                          ? `No pod samples in namespace "${nsFilter}" — clear the chip to see the whole cluster.`
-                          : 'Queries returned no series — check the namespace filter on the cluster entry.'}
-                    </div>
-                  )}
-                  {rows.length > 0 && (
-                    <div className="table-wrap">
-                      <table {...dt.tableProps}>
-                        <DataTableColgroup dt={dt} />
-                        <DataTableHead dt={dt} />
-                        <tbody>
-                          {dt.sortedRows.map(r => (
-                            <tr key={`${r.cluster}|${r.namespace}|${r.pod}`} className="cv-row"
-                              {...rowActivation(() => openPod(r))}>
-                              <DataTableCell dt={dt} col="cluster" row={r} value={r.cluster} />
-                              <DataTableCell dt={dt} col="namespace" row={r} value={r.namespace} />
-                              <td>
-                                <span className="mono" style={{ fontWeight: 500 }} title={r.pod}>
-                                  {r.pod}
-                                </span>
-                              </td>
-                              <td onClick={e => e.stopPropagation()}>
-                                {r.service ? (
-                                  <Link to={serviceHref(r.service, { range })}
-                                    style={{ fontSize: 11 }}>{r.service}</Link>
-                                ) : (
-                                  <span style={{ fontSize: 11, color: 'var(--text3)' }}
-                                    title="No matching Coremetry service (uninstrumented, infra pod, or ambiguous)">—</span>
-                                )}
-                              </td>
-                              {/* v0.9.37 (B4/F6) — Status: kube_pod_status_phase. */}
-                              <td>{r.phase
-                                ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
-                                : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                              <DataTableCell dt={dt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                              {/* v0.8.580 — % hücresi limit-bazlı; request
-                                  ekseni title'da (clamp'siz, aşım sinyal). */}
-                              <DataTableCell dt={dt} col="cpuPct" row={r} title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}
-                                value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
-                              <DataTableCell dt={dt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                              <DataTableCell dt={dt} col="memPct" row={r} title={pctTitle('Memory', r.memPct, r.memPctOfReq)}
-                                value={r.memPct ? r.memPct.toFixed(0) : '—'} />
-                              <DataTableCell dt={dt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
-                              <DataTableCell dt={dt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
-                              {/* v0.9.1276 — restart SAYISININ yanında son
-                                  sonlanma SEBEBİ: OOMKilled'ı görmek için
-                                  kubectl'e düşmek gerekmiyor artık. Sebep
-                                  serisi yoksa rozet hiç çizilmez (sessiz
-                                  düşüş doğru davranış — '—' zaten ayrı bir
-                                  bilinmezlik sinyali, restartsUnknown). */}
-                              <DataTableCell dt={dt} col="restarts" row={r}
-                                title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}
-                                style={{ color: r.restartsUnknown ? 'var(--text3)' : restartColor(r.restarts ?? 0) }}>
-                                {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
-                                {r.lastTermReason && (
-                                  <span className={`badge b-${termReasonTone(r.lastTermReason)}`}
-                                    style={{
-                                      marginLeft: 5, fontSize: 10, verticalAlign: 'middle',
-                                      maxWidth: 96, overflow: 'hidden', textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap', display: 'inline-block',
-                                    }}
-                                    title={`${r.lastTermReason} · Son sonlanma sebebi (kube-state-metrics)`}>
-                                    {r.lastTermReason}</span>
-                                )}</DataTableCell>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  <div className="table-wrap">
+                    <table {...dt.tableProps}>
+                      <DataTableColgroup dt={dt} />
+                      <DataTableHead dt={dt} />
+                      <tbody>
+                        {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...podState} /> : dt.sortedRows.map(r => (
+                          <tr key={`${r.cluster}|${r.namespace}|${r.pod}`} className="cv-row"
+                            {...rowActivation(() => openPod(r))}>
+                            <DataTableCell dt={dt} col="cluster" row={r} value={r.cluster} />
+                            <DataTableCell dt={dt} col="namespace" row={r} value={r.namespace} />
+                            <td>
+                              <span className="mono" style={{ fontWeight: 500 }} title={r.pod}>
+                                {r.pod}
+                              </span>
+                            </td>
+                            <td onClick={e => e.stopPropagation()}>
+                              {r.service ? (
+                                <Link to={serviceHref(r.service, { range })}
+                                  style={{ fontSize: 11 }}>{r.service}</Link>
+                              ) : (
+                                <span style={{ fontSize: 11, color: 'var(--text3)' }}
+                                  title="No matching Coremetry service (uninstrumented, infra pod, or ambiguous)">—</span>
+                              )}
+                            </td>
+                            {/* v0.9.37 (B4/F6) — Status: kube_pod_status_phase. */}
+                            <td>{r.phase
+                              ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
+                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
+                            <DataTableCell dt={dt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
+                            {/* v0.8.580 — % hücresi limit-bazlı; request
+                                ekseni title'da (clamp'siz, aşım sinyal). */}
+                            <DataTableCell dt={dt} col="cpuPct" row={r} title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}
+                              value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
+                            <DataTableCell dt={dt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
+                            <DataTableCell dt={dt} col="memPct" row={r} title={pctTitle('Memory', r.memPct, r.memPctOfReq)}
+                              value={r.memPct ? r.memPct.toFixed(0) : '—'} />
+                            <DataTableCell dt={dt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
+                            <DataTableCell dt={dt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
+                            {/* v0.9.1276 — restart SAYISININ yanında son
+                                sonlanma SEBEBİ: OOMKilled'ı görmek için
+                                kubectl'e düşmek gerekmiyor artık. Sebep
+                                serisi yoksa rozet hiç çizilmez (sessiz
+                                düşüş doğru davranış — '—' zaten ayrı bir
+                                bilinmezlik sinyali, restartsUnknown). */}
+                            <DataTableCell dt={dt} col="restarts" row={r}
+                              title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}
+                              style={{ color: r.restartsUnknown ? 'var(--text3)' : restartColor(r.restarts ?? 0) }}>
+                              {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
+                              {r.lastTermReason && (
+                                <span className={`badge b-${termReasonTone(r.lastTermReason)}`}
+                                  style={{
+                                    marginLeft: 5, fontSize: 10, verticalAlign: 'middle',
+                                    maxWidth: 96, overflow: 'hidden', textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap', display: 'inline-block',
+                                  }}
+                                  title={`${r.lastTermReason} · Son sonlanma sebebi (kube-state-metrics)`}>
+                                  {r.lastTermReason}</span>
+                              )}</DataTableCell>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>}
 
                 {/* v0.9.8 — Overview sekmesi: 2 skaler kart (CPU/Mem;

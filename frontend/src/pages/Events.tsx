@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { Link, useSearchParams } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
 import { ServicePicker } from '@/components/ServicePicker';
 import { useAuth } from '@/components/AuthProvider';
 import { Button, useConfirm } from '@/components/ui';
@@ -10,7 +9,10 @@ import { useOperatorEvents, useDeleteOperatorEvent, useNotificationLog } from '@
 import { timeRangeToNs, tsMinute } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { useUrlRange } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { serviceHref, pointEventWindow } from '@/lib/serviceHref';
 import type { NotificationLogEntry } from '@/lib/types';
 import { UNMATCHED_KIND } from '@/lib/notifyRouting';
@@ -150,6 +152,19 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
     rows: rows ?? [], initialSort: { id: 'time', dir: 'desc' },
   });
 
+  // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
+  // Kanal (sunucu) ya da Related (istemci) süzgeci seçiliyken boş sonuç
+  // "eşleşme yok"tur, pencerenin boşluğu değil; ortak temizleme eylemi yok.
+  const tableState: Omit<DataTableStateProps<NotificationLogEntry>, 'dt'> =
+    rows === undefined ? { kind: 'loading' }
+    : rows === null ? { kind: 'error' }
+    : (kind || related) ? { kind: 'no-match', message: 'Bu pencerede süzgeçle eşleşen bildirim yok' }
+    : {
+        kind: 'empty',
+        message: 'Bu pencerede bildirim yok — bir uyarı kuralı tetiklendiğinde (ya da bir operatör kanal testi gönderdiğinde) '
+          + 'her e-posta / Slack / Teams / Zoom / webhook teslimi sonucuyla burada görünür. Kanallar Settings → Notifications altında yapılandırılır.',
+      };
+
   return (
     <>
       <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -178,72 +193,61 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
         </span>
       </div>
 
-      {rows === undefined && <Spinner />}
-      {rows === null && <Empty icon="⚠" title="Failed to load the notification log" />}
-      {rows && rows.length === 0 && (
-        <Empty icon="✉" title="No notifications in this window">
-          When an alert rule fires (or an operator sends a channel test),
-          every email / Slack / Teams / Zoom / webhook delivery lands here
-          with its outcome. Configure channels under Settings → Notifications.
-        </Empty>
-      )}
-      {rows && rows.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(n => (
-                <tr key={n.id} className="cv-row">
-                  {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar). */}
-                  <DataTableCell dt={dt} col="time" row={n} value={fmtRel(n.sentAt)} className="mono"
-                    title={new Date(n.sentAt / 1_000_000).toISOString()} />
-                  <DataTableCell dt={dt} col="channel" row={n}>
-                    <span className="badge b-info" style={{ marginRight: 6 }}>{n.channelKind}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text2)' }}>{n.channelName}</span>
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="target" row={n} value={n.target} />
-                  <DataTableCell dt={dt} col="subject" row={n} value={n.subject} title={n.bodyPreview || n.subject} />
-                  <DataTableCell dt={dt} col="related" row={n}>
-                    {n.relatedKind === 'problem' && n.relatedId ? (
-                      <Link to={`/problems?problem=${encodeURIComponent(n.relatedId)}`}
-                        style={{ color: 'var(--accent2)', fontSize: 11 }}
-                        title="Open the problem this notification was sent for">
-                        problem ↗
-                      </Link>
-                    ) : n.relatedKind === 'watcher' && n.relatedId ? (
-                      // v0.9.196 — watcher-fired sends: badge marks the
-                      // source; relatedId is still the problem id, so the
-                      // link lands on the problem the fire opened.
-                      <Link to={`/problems?problem=${encodeURIComponent(n.relatedId)}`}
-                        style={{ fontSize: 11, textDecoration: 'none' }}
-                        title="Sent by an imported ES watcher — open the problem the fire opened (the watcher's history lives on /watchers)">
-                        <span className="badge b-watcher">WATCHER</span>
-                        <span style={{ color: 'var(--accent2)', marginLeft: 5 }}>↗</span>
-                      </Link>
-                    ) : (
-                      <span style={{ fontSize: 11, color: 'var(--text3)' }}>{n.relatedKind || '—'}</span>
-                    )}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="status" row={n}>
-                    {/* v0.9.1344 — ÜÇÜNCÜ HÂL. channelKind='none' satırı bir
-                        gönderim değil, "bu problem hiçbir kanalla eşleşmedi"
-                        işareti. `ok ? sent : failed` ikilisi onu "failed"
-                        diye çizerdi ve operatör ölü bir kanal arardı;
-                        GİTMEDİ ile BAŞARISIZ farklı arızalar, farklı
-                        düzeltmeler. */}
-                    {n.channelKind === UNMATCHED_KIND
-                      ? <span className="badge b-err" title={n.error}>kimseye gitmedi</span>
-                      : n.ok
-                        ? <span className="badge b-gray">sent</span>
-                        : <span className="badge b-err" title={n.error}>failed</span>}
-                  </DataTableCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(n => (
+              <tr key={n.id} className="cv-row">
+                {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar). */}
+                <DataTableCell dt={dt} col="time" row={n} value={fmtRel(n.sentAt)} className="mono"
+                  title={new Date(n.sentAt / 1_000_000).toISOString()} />
+                <DataTableCell dt={dt} col="channel" row={n}>
+                  <span className="badge b-info" style={{ marginRight: 6 }}>{n.channelKind}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text2)' }}>{n.channelName}</span>
+                </DataTableCell>
+                <DataTableCell dt={dt} col="target" row={n} value={n.target} />
+                <DataTableCell dt={dt} col="subject" row={n} value={n.subject} title={n.bodyPreview || n.subject} />
+                <DataTableCell dt={dt} col="related" row={n}>
+                  {n.relatedKind === 'problem' && n.relatedId ? (
+                    <Link to={`/problems?problem=${encodeURIComponent(n.relatedId)}`}
+                      style={{ color: 'var(--accent2)', fontSize: 11 }}
+                      title="Open the problem this notification was sent for">
+                      problem ↗
+                    </Link>
+                  ) : n.relatedKind === 'watcher' && n.relatedId ? (
+                    // v0.9.196 — watcher-fired sends: badge marks the
+                    // source; relatedId is still the problem id, so the
+                    // link lands on the problem the fire opened.
+                    <Link to={`/problems?problem=${encodeURIComponent(n.relatedId)}`}
+                      style={{ fontSize: 11, textDecoration: 'none' }}
+                      title="Sent by an imported ES watcher — open the problem the fire opened (the watcher's history lives on /watchers)">
+                      <span className="badge b-watcher">WATCHER</span>
+                      <span style={{ color: 'var(--accent2)', marginLeft: 5 }}>↗</span>
+                    </Link>
+                  ) : (
+                    <span style={{ fontSize: 11, color: 'var(--text3)' }}>{n.relatedKind || '—'}</span>
+                  )}
+                </DataTableCell>
+                <DataTableCell dt={dt} col="status" row={n}>
+                  {/* v0.9.1344 — ÜÇÜNCÜ HÂL. channelKind='none' satırı bir
+                      gönderim değil, "bu problem hiçbir kanalla eşleşmedi"
+                      işareti. `ok ? sent : failed` ikilisi onu "failed"
+                      diye çizerdi ve operatör ölü bir kanal arardı;
+                      GİTMEDİ ile BAŞARISIZ farklı arızalar, farklı
+                      düzeltmeler. */}
+                  {n.channelKind === UNMATCHED_KIND
+                    ? <span className="badge b-err" title={n.error}>kimseye gitmedi</span>
+                    : n.ok
+                      ? <span className="badge b-gray">sent</span>
+                      : <span className="badge b-err" title={n.error}>failed</span>}
+                </DataTableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
@@ -307,6 +311,18 @@ function AnnotationsTab({ from, to }: { from: number; to: number }) {
     rows: data ?? [], initialSort: { id: 'time', dir: 'desc' },
   });
 
+  // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
+  // Servis / Kind süzgeci isteğe gidiyor: seçiliyken boş sonuç "eşleşme yok".
+  const tableState: Omit<DataTableStateProps<Event>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error' }
+    : (serviceFilter || kindFilter) ? { kind: 'no-match', message: 'Bu pencerede süzgeçle eşleşen olay yok' }
+    : {
+        kind: 'empty',
+        message: 'Bu pencerede olay yok — operatörler olayları Cmd-K → "Mark event" ile işaretler; '
+          + 'her zaman serisi grafiğinde dikey işaret olarak görünürler.',
+      };
+
   return (
     <>
         <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -328,75 +344,65 @@ function AnnotationsTab({ from, to }: { from: number; to: number }) {
           </span>
         </div>
 
-        {data === undefined && <Spinner />}
-        {data === null && <Empty icon="⚠" title="Failed to load events" />}
-        {data && data.length === 0 && (
-          <Empty icon="◇" title="No events in this window">
-            Operators mark events from Cmd-K → "Mark event". They show up as
-            vertical markers on every time-series chart.
-          </Empty>
-        )}
-        {data && data.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(ev => (
-                  <tr key={ev.id} className="cv-row">
-                    <DataTableCell dt={dt} col="time" row={ev} value={fmtRel(ev.time)} className="mono"
-                      title={new Date(ev.time / 1_000_000).toISOString()} />
-                    <DataTableCell dt={dt} col="kind" row={ev}>
-                      <span style={{
-                        display: 'inline-block', padding: '2px 8px',
-                        fontSize: 10, fontWeight: 600, borderRadius: 4,
-                        color: KIND_COLOURS[ev.kind] ?? KIND_COLOURS.custom,
-                        border: `1px solid ${KIND_COLOURS[ev.kind] ?? KIND_COLOURS.custom}`,
-                      }}>{ev.kind || 'custom'}</span>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(ev => (
+                <tr key={ev.id} className="cv-row">
+                  <DataTableCell dt={dt} col="time" row={ev} value={fmtRel(ev.time)} className="mono"
+                    title={new Date(ev.time / 1_000_000).toISOString()} />
+                  <DataTableCell dt={dt} col="kind" row={ev}>
+                    <span style={{
+                      display: 'inline-block', padding: '2px 8px',
+                      fontSize: 10, fontWeight: 600, borderRadius: 4,
+                      color: KIND_COLOURS[ev.kind] ?? KIND_COLOURS.custom,
+                      border: `1px solid ${KIND_COLOURS[ev.kind] ?? KIND_COLOURS.custom}`,
+                    }}>{ev.kind || 'custom'}</span>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="label" row={ev} value={ev.label} />
+                  <DataTableCell dt={dt} col="service" row={ev}>
+                    {/* v0.9.966 — anotasyon TEK bir an; servis sayfası o
+                        anın etrafında açılmalı. Şerit zaten "her grafikte
+                        dikey işaret" diye vaat ediyor, link ise "şimdi"yi
+                        açıyordu. */}
+                    {ev.service
+                      ? <Link to={serviceHref(ev.service, { range: pointEventWindow(ev.time) })}
+                           style={{ color: 'var(--accent2)' }}>{ev.service}</Link>
+                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="owner" row={ev} value={ev.owner} />
+                  <DataTableCell dt={dt} col="link" row={ev}>
+                    {ev.link
+                      ? <a href={ev.link} target="_blank" rel="noopener noreferrer"
+                           style={{ color: 'var(--accent2)', fontSize: 11 }}
+                           title={ev.link}>open ↗</a>
+                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                  </DataTableCell>
+                  {canDelete && (
+                    <DataTableCell dt={dt} col="actions" row={ev}>
+                      <Button
+                        variant="ghost-danger"
+                        size="sm"
+                        onClick={() => onDelete(ev.id)}
+                        disabled={busyDelete === ev.id}
+                        title="Delete this event"
+                        aria-label="Delete this event"
+                      >
+                        {/* MB3 (spinner'lı `loading` prop'u) BİLEREK burada
+                            değil — o ailenin 12 çağrı sitesi Dalga 6, tek
+                            commit'te (plan R6). Bu dilim yalnız görünümü
+                            tek sözleşmeye indiriyor. */}
+                        {busyDelete === ev.id ? '…' : '✕'}
+                      </Button>
                     </DataTableCell>
-                    <DataTableCell dt={dt} col="label" row={ev} value={ev.label} />
-                    <DataTableCell dt={dt} col="service" row={ev}>
-                      {/* v0.9.966 — anotasyon TEK bir an; servis sayfası o
-                          anın etrafında açılmalı. Şerit zaten "her grafikte
-                          dikey işaret" diye vaat ediyor, link ise "şimdi"yi
-                          açıyordu. */}
-                      {ev.service
-                        ? <Link to={serviceHref(ev.service, { range: pointEventWindow(ev.time) })}
-                             style={{ color: 'var(--accent2)' }}>{ev.service}</Link>
-                        : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="owner" row={ev} value={ev.owner} />
-                    <DataTableCell dt={dt} col="link" row={ev}>
-                      {ev.link
-                        ? <a href={ev.link} target="_blank" rel="noopener noreferrer"
-                             style={{ color: 'var(--accent2)', fontSize: 11 }}
-                             title={ev.link}>open ↗</a>
-                        : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </DataTableCell>
-                    {canDelete && (
-                      <DataTableCell dt={dt} col="actions" row={ev}>
-                        <Button
-                          variant="ghost-danger"
-                          size="sm"
-                          onClick={() => onDelete(ev.id)}
-                          disabled={busyDelete === ev.id}
-                          title="Delete this event"
-                          aria-label="Delete this event"
-                        >
-                          {/* MB3 (spinner'lı `loading` prop'u) BİLEREK burada
-                              değil — o ailenin 12 çağrı sitesi Dalga 6, tek
-                              commit'te (plan R6). Bu dilim yalnız görünümü
-                              tek sözleşmeye indiriyor. */}
-                          {busyDelete === ev.id ? '…' : '✕'}
-                        </Button>
-                      </DataTableCell>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
     </>
   );
 }

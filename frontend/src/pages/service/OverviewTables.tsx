@@ -4,9 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { encodeRange } from '@/lib/urlState';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Sparkline } from '@/components/Sparkline';
-import { Spinner, Empty } from '@/components/Spinner';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { OperationSummary, DBQueryStat, TimeRange } from '@/lib/types';
 import { operationTracesHref } from '@/lib/pivotHref';
@@ -140,6 +139,14 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
     // onOpen j/k/Enter klavye gezinmesini de açar (OpsCard emsali).
     onOpen: (r) => navigate(dbHref(r)),
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş kartın gövde
+  // kutusu yerine tablonun İÇİNDE, başlık durur (aynı sıra, aynı koşullar).
+  // Eskiden hata, eldeki satırları da gizliyordu: showRows o önceliği korur.
+  const showRows = !dbQ.isLoading && !dbQ.isError && rows.length > 0;
+  const tableState: Omit<DataTableStateProps<DBQueryStat>, 'dt'> =
+    dbQ.isLoading ? { kind: 'loading' }
+    : dbQ.isError ? { kind: 'error' }
+    : { kind: 'empty', message: `Bu pencerede ${service} için db.statement span'i yok` };
   return (
     <div className="card">
       <div className="ov-card-h">
@@ -157,57 +164,45 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
           </span>
         )}
       </div>
-      {dbQ.isLoading ? (
-        <div className="ov-card-b" style={{ display: 'grid', placeItems: 'center', padding: 16 }}><Spinner /></div>
-      ) : dbQ.isError ? (
-        <div className="ov-card-b" style={{ color: 'var(--err)', fontSize: 13 }}>
-          Failed to load DB statements.
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="ov-card-b">
-          <Empty compact icon="◯" title={`No db.statement spans for ${service} in this window`} />
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.slice(0, 8).map((r, i) => (
-                <tr key={i} {...dt.rowProps(i)}
-                    {...rowActivation(() => navigate(dbHref(r)))}>
-                  <td>
-                    <div className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.sampleStatement || r.statement}>{r.statement}</div>
-                    {/* v0.9.964 (UX denetimi Ö9 / G2) — engine sub-label is
-                        the bridge into the database catalogue; the row
-                        itself keeps going to /traces (v0.9.960), so the
-                        click has to stop here. */}
-                    <div>
-                      {r.dbSystem ? (
-                        <Link to={databasesFilterHref(r, { range: encodeRange(range) })}
-                          onClick={e => e.stopPropagation()}
-                          title={`Open the database catalogue filtered to ${r.dbSystem}`}
-                          style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dotted var(--text3)' }}>
-                          {r.dbSystem}
-                        </Link>
-                      ) : '—'}
-                    </div>
-                  </td>
-                  <td className="num">{r.count >= 1000 ? `${(r.count / 1000).toFixed(1)}K` : r.count}</td>
-                  <td className="num">{r.p99Ms.toFixed(0)} ms</td>
-                  {/* v0.10.943 — sayı arayüz fontunda (S2); tabular-nums hücrenin `num`undan. */}
-                  <td className="num">
-                    <div className="ov-barcell">
-                      <span style={{ minWidth: 52 }}>{r.avgMs.toFixed(1)} ms</span>
-                      <span className="ov-minibar"><i style={{ width: `${(r.avgMs / maxTime) * 100}%`, background: r.errorCount > 0 ? 'var(--warn)' : 'var(--teal)' }} /></span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div style={{ overflowX: 'auto' }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.slice(0, 8).map((r, i) => (
+              <tr key={i} {...dt.rowProps(i)}
+                  {...rowActivation(() => navigate(dbHref(r)))}>
+                <td>
+                  <div className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.sampleStatement || r.statement}>{r.statement}</div>
+                  {/* v0.9.964 (UX denetimi Ö9 / G2) — engine sub-label is
+                      the bridge into the database catalogue; the row
+                      itself keeps going to /traces (v0.9.960), so the
+                      click has to stop here. */}
+                  <div>
+                    {r.dbSystem ? (
+                      <Link to={databasesFilterHref(r, { range: encodeRange(range) })}
+                        onClick={e => e.stopPropagation()}
+                        title={`Open the database catalogue filtered to ${r.dbSystem}`}
+                        style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dotted var(--text3)' }}>
+                        {r.dbSystem}
+                      </Link>
+                    ) : '—'}
+                  </div>
+                </td>
+                <td className="num">{r.count >= 1000 ? `${(r.count / 1000).toFixed(1)}K` : r.count}</td>
+                <td className="num">{r.p99Ms.toFixed(0)} ms</td>
+                {/* v0.10.943 — sayı arayüz fontunda (S2); tabular-nums hücrenin `num`undan. */}
+                <td className="num">
+                  <div className="ov-barcell">
+                    <span style={{ minWidth: 52 }}>{r.avgMs.toFixed(1)} ms</span>
+                    <span className="ov-minibar"><i style={{ width: `${(r.avgMs / maxTime) * 100}%`, background: r.errorCount > 0 ? 'var(--warn)' : 'var(--teal)' }} /></span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -58,15 +58,6 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
     );
   }
   const rows = (paths ?? []).slice(0, limit ?? 10);
-  if (rows.length === 0) {
-    return (
-      <div style={muted}>
-        Bu pencerede URL taşıyan istemci span'i yok — yol kırılımı
-        {' '}<span className="mono">url.full</span> / <span className="mono">http.url</span>
-        {' '}/ <span className="mono">url.path</span> attr'ından türer.
-      </div>
-    );
-  }
 
   const total = rows.reduce((a, r) => a + r.calls, 0);
   const maxChars = dense ? 26 : 46;
@@ -87,7 +78,18 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
           </tr>
         </thead>
         <tbody>
-          {rows.map(r => (
+          {rows.length === 0 ? (
+            // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
+            // Boş cümle tablonun İÇİNDE, başlık durur. Hata dalı (üstteki
+            // erken dönüş) P-2'yi bekliyor.
+            <tr data-dt-state="empty">
+              <td colSpan={dense ? 3 : 4} className="dt-state">
+                <div className="dt-state-body">
+                  <span>Bu pencerede URL taşıyan istemci span'i yok — yol kırılımı url.full / http.url / url.path attr'ından türer.</span>
+                </div>
+              </td>
+            </tr>
+          ) : rows.map(r => (
             <tr key={r.path}>
               <td>
                 <span className="mono"
@@ -109,11 +111,13 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
       {/* Pencere kırpması BEYAN edilir: sunucu ham spans okumasını
           kısıtlıyor, yani bu sayılar çekmecenin üst yarısıyla AYNI
           aralığı kapsamayabilir. Gizlenirse operatör seçtiği aralığın
-          tamamına ait bir toplam sanar. */}
-      <div style={{ ...muted, marginTop: 5 }}>
-        {fmtNum(total)} çağrı{windowS ? ` · son ${fmtDurShort(windowS)}` : ''}
-        {' · '}id'ler <span className="mono">{'{id}'}</span> olarak gruplandı
-      </div>
+          tamamına ait bir toplam sanar. (Satır yokken "0 çağrı" demez.) */}
+      {rows.length > 0 && (
+        <div style={{ ...muted, marginTop: 5 }}>
+          {fmtNum(total)} çağrı{windowS ? ` · son ${fmtDurShort(windowS)}` : ''}
+          {' · '}id'ler <span className="mono">{'{id}'}</span> olarak gruplandı
+        </div>
+      )}
     </>
   );
 }

@@ -73,30 +73,33 @@ export function ExternalLinksTab() {
         Hiçbiri çözülmezse grubun ilk linki pasif olarak eksiklerini söyler.
       </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
-      {links.length === 0
-        ? <div className="field-hint">Henüz link yok.</div>
-        : (
-          // v0.10.942 — statik tablo: düzenlenebilir liste; sıra anlamlı (grupta ilk çözülen çizilir), sıralanmaz (T1).
-          <table>
-            <thead><tr><th style={{ textAlign: 'left' }}>Etiket</th><th style={{ textAlign: 'left' }}>Şablon</th><th style={{ textAlign: 'left' }}>Grup</th><th style={{ textAlign: 'left' }}>Gerekli</th><th style={{ textAlign: 'left' }}>Renk</th><th></th></tr></thead>
-            <tbody>
-              {links.map((l, i) => (
-                <tr key={l.label}>
-                  <td>{l.label}</td>
-                  <td className="mono cell-wrap">{l.urlTemplate} <CopyButton value={l.urlTemplate} title="Şablonu kopyala" /></td>
-                  <td>{l.group?.trim()
-                    ? <span className="mono" style={{ fontSize: 12 }}>{l.group.trim()}</span>
-                    : <span className="field-hint">tek başına</span>}</td>
-                  <td className="field-hint">{(l.requires ?? []).join(', ') || '—'}</td>
-                  <td>{l.color
-                    ? <span className="mono" style={{ fontSize: 12 }}><span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: l.color, verticalAlign: 'middle', marginRight: 4 }} />{l.color}</span>
-                    : <span className="field-hint">ikincil</span>}</td>
-                  <td><Button variant="ghost-danger" size="sm" disabled={busy} onClick={() => save(links.filter((_, j) => j !== i))}>Sil</Button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* v0.10.942 — statik tablo: düzenlenebilir liste; sıra anlamlı (grupta ilk çözülen çizilir), sıralanmaz (T1).
+          v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. Boşken başlık kalır (S6). */}
+      <table>
+        <thead><tr><th style={{ textAlign: 'left' }}>Etiket</th><th style={{ textAlign: 'left' }}>Şablon</th><th style={{ textAlign: 'left' }}>Grup</th><th style={{ textAlign: 'left' }}>Gerekli</th><th style={{ textAlign: 'left' }}>Renk</th><th></th></tr></thead>
+        <tbody>
+          {links.length === 0 ? (
+            <tr data-dt-state="empty">
+              <td colSpan={6} className="dt-state">
+                <div className="dt-state-body"><span>Henüz link yok</span></div>
+              </td>
+            </tr>
+          ) : links.map((l, i) => (
+            <tr key={l.label}>
+              <td>{l.label}</td>
+              <td className="mono cell-wrap">{l.urlTemplate} <CopyButton value={l.urlTemplate} title="Şablonu kopyala" /></td>
+              <td>{l.group?.trim()
+                ? <span className="mono" style={{ fontSize: 12 }}>{l.group.trim()}</span>
+                : <span className="field-hint">tek başına</span>}</td>
+              <td className="field-hint">{(l.requires ?? []).join(', ') || '—'}</td>
+              <td>{l.color
+                ? <span className="mono" style={{ fontSize: 12 }}><span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: l.color, verticalAlign: 'middle', marginRight: 4 }} />{l.color}</span>
+                : <span className="field-hint">ikincil</span>}</td>
+              <td><Button variant="ghost-danger" size="sm" disabled={busy} onClick={() => save(links.filter((_, j) => j !== i))}>Sil</Button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <Row gap={3} wrap style={{ alignItems: 'flex-end' }}>
         <Field label="Etiket" value={draft.label} onChange={e => setDraft({ ...draft, label: e.target.value })} placeholder="Log İzleme" style={{ width: 180 }} />
         <Field label="URL şablonu" value={draft.urlTemplate} onChange={e => setDraft({ ...draft, urlTemplate: e.target.value })} placeholder={EXAMPLE} className="mono" style={{ width: 620 }} />

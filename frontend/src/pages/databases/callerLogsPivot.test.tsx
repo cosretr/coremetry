@@ -134,6 +134,10 @@ describe('çağıran satırı → log pivotu', () => {
       );
     });
     expect(logHrefs(host).length).toBe(0);
-    expect(host.textContent).toContain('No caller in this window');
+    // v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE (başlık
+    // durur) ve Türkçe; anlam aynı ("bu pencerede çağıran yok").
+    const state = host.querySelector('tbody tr[data-dt-state="empty"]');
+    expect(state, 'boş durum satırı tablonun içinde').not.toBeNull();
+    expect(state!.textContent).toContain('Bu pencerede çağıran yok');
   });
 });

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { panelsToCSV } from './exploreCsv';
@@ -245,8 +245,15 @@ function SourceButton({ target, onOpen }: { target: SourceTarget; onOpen: () => 
   );
 }
 
-export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFocus, onPivot, sourceTarget, onOpenSource }: {
+export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFocus, onPivot, sourceTarget, onOpenSource, state }: {
   panels: PanelData[];
+  // v0.10.954 — tablo standardı T12 (P6, VirtualTable / LogTable `state`
+  // emsali): seri yokken tablonun İÇİNDE çizilecek durum. Çağıran verirse
+  // tablo başlığıyla kalır; vermezse eskisi gibi hiç çizilmez — Explore
+  // bugün yükleniyor'u tablonun dışında gösteriyor, varsayılan "boş" satırı
+  // yüklenirken yalan olurdu. Explore bugün `state` VERMİYOR: dtNoState
+  // mandalındaki -1 henüz gerçek değil (tableUnityRatchet notu).
+  state?: Omit<DataTableStateProps<GroupRow>, 'dt'>;
   hiddenKeys: Set<string>;
   onToggleHidden: (rowKey: string) => void;
   // v0.9.930 — satırdan KAYNAĞA iniş. Tablo hangi harften hangi çiftlerle
@@ -295,7 +302,7 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
       : undefined,
   });
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && !state) return null;
 
   // v0.8.412 (Data-Explorer parity DE1) — export the full result set
   // (every series point, long format) as CSV. Client-only Blob; no
@@ -312,19 +319,21 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
   return (
     <div className="table-wrap" style={{ marginTop: 12 }}
       onMouseLeave={() => onFocus(null)}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
-        <Button variant="secondary" size="sm" onClick={exportCSV}
-          title={panels.some(p => p.more > 0 || p.rowsCapped)
-            ? 'Görünen serileri indirir (top-N kırpılmış küme) — kırpma CSV içinde # yorum satırıyla işaretlidir'
-            : 'Download every series point (long format: query, series, unit, time, value)'}>
-          ⤓ CSV
-        </Button>
-      </div>
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
+          <Button variant="secondary" size="sm" onClick={exportCSV}
+            title={panels.some(p => p.more > 0 || p.rowsCapped)
+              ? 'Görünen serileri indirir (top-N kırpılmış küme) — kırpma CSV içinde # yorum satırıyla işaretlidir'
+              : 'Download every series point (long format: query, series, unit, time, value)'}>
+            ⤓ CSV
+          </Button>
+        </div>
+      )}
       <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
-          {dt.sortedRows.map((r, i) => {
+          {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...(state ?? { kind: 'empty' })} /> : dt.sortedRows.map((r, i) => {
             const hidden = hiddenKeys.has(r.rowKey);
             const target = sourceTarget?.(r.letter, r.pivot?.pairs ?? []);
             const rp = dt.rowProps(i);

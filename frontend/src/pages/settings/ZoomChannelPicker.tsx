@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { Button } from '@/components/ui';
-import { Empty } from '@/components/Spinner';
 
 // ZoomChannel mirrors the backend ZoomChannel struct.
 interface ZoomChannelRow {
@@ -167,11 +166,6 @@ export function ZoomChannelPicker({
                 background: 'color-mix(in srgb, var(--err) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--err) 30%, transparent)',
               }}>{err}</div>
             )}
-            {rows && rows.length === 0 && !busy && !err && (
-              <Empty compact icon="◯" title="No channels visible to this S2S app">
-                The bot user must be a member of the channel for it to appear here.
-              </Empty>
-            )}
 
             <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 4 }}>
               {/* v0.10.942 — statik tablo: seçici liste, satır tıkı JID'i forma yazar (T1). */}
@@ -184,7 +178,18 @@ export function ZoomChannelPicker({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(r => (
+                  {rows && rows.length === 0 && !busy && !err ? (
+                    // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
+                    // Yalnız boş hâl tabloya indi (koşul aynen); yükleniyor
+                    // satırı ve hata kutusu P-2'yi bekliyor.
+                    <tr data-dt-state="empty">
+                      <td colSpan={3} className="dt-state">
+                        <div className="dt-state-body">
+                          <span>Bu S2S uygulamasına görünen kanal yok — kanalın burada görünmesi için bot kullanıcısının o kanala üye olması gerekir.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filtered.map(r => (
                     <tr key={r.id || r.jid}
                       {...rowActivation(() => { onPick(r.jid); setOpen(false); })}
                       className={filtered.length > 100 ? 'cv-row' : undefined}>

@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, KeyValue } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtDateTime, fmtBytes } from '@/lib/utils';
 import { fmtCores, podPhaseBadge } from '@/pages/clusters/thresholds';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
@@ -38,29 +38,35 @@ export function PodContainersTable({ ctr, pending, containerRecs }: {
   return (
     <>
       {ctr?.error && <div className="pod-cap"><Badge tone="warning" title={ctr.error}>Thanos: durum alınamadı</Badge></div>}
-      {rows.length === 0 ? (
-        <div className="pod-cap">KSM serisi yok{containerRecs && containerRecs.length > 0 ? ` · konteynerler: ${containerRecs.map(c => c.name).join(', ')}` : ''}</div>
-      ) : (
-        <div className="table-wrap">
-          {/* v0.10.943 — statik tablo (T1): pod başına ≤ ~10 konteyner, sıralanmaz. */}
-          <table>
-            <thead><tr><th>Ad</th><th>Ready</th><th className="num">Restarts</th><th>Waiting</th><th>Son sonlanma</th></tr></thead>
-            <tbody>
-              {rows.map(c => (
-                <tr key={c.name}>
-                  <td className="mono">{c.name}</td>
-                  <td>{c.readyKnown ? <Badge tone={containerTone(c)}>{c.ready ? 'ready' : 'not ready'}</Badge> : <span className="field-hint" title="kube_pod_container_status_ready serisi yok">?</span>}</td>
-                  <td className={c.restarts > 0 ? 'num cell-warn' : 'num'}>{c.restarts}</td>
-                  {/* v0.10.929 (K5) — olağan başlangıç geçişi (ContainerCreating /
-                      PodInitializing) nötr; kubelet arıza nedenleri kırmızı. */}
-                  <td>{c.waitingReason ? <Badge tone={waitingReasonTone(c.waitingReason)}>{c.waitingReason}</Badge> : '—'}</td>
-                  <td>{c.lastTermReason ? <Badge tone="warning">{c.lastTermReason}</Badge> : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap">
+        {/* v0.10.943 — statik tablo (T1): pod başına ≤ ~10 konteyner, sıralanmaz. */}
+        <table>
+          <thead><tr><th>Ad</th><th>Ready</th><th className="num">Restarts</th><th>Waiting</th><th>Son sonlanma</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
+              // Başlık durur; yükleniyor hâlâ yukarıdaki erken dönüş (P-2 bekler).
+              <tr data-dt-state="empty">
+                <td colSpan={5} className="dt-state">
+                  <div className="dt-state-body">
+                    <span>KSM serisi yok{containerRecs && containerRecs.length > 0 ? ` · konteynerler: ${containerRecs.map(c => c.name).join(', ')}` : ''}</span>
+                  </div>
+                </td>
+              </tr>
+            ) : rows.map(c => (
+              <tr key={c.name}>
+                <td className="mono">{c.name}</td>
+                <td>{c.readyKnown ? <Badge tone={containerTone(c)}>{c.ready ? 'ready' : 'not ready'}</Badge> : <span className="field-hint" title="kube_pod_container_status_ready serisi yok">?</span>}</td>
+                <td className={c.restarts > 0 ? 'num cell-warn' : 'num'}>{c.restarts}</td>
+                {/* v0.10.929 (K5) — olağan başlangıç geçişi (ContainerCreating /
+                    PodInitializing) nötr; kubelet arıza nedenleri kırmızı. */}
+                <td>{c.waitingReason ? <Badge tone={waitingReasonTone(c.waitingReason)}>{c.waitingReason}</Badge> : '—'}</td>
+                <td>{c.lastTermReason ? <Badge tone="warning">{c.lastTermReason}</Badge> : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div className="pod-cap">
         <code className="mono">GET /api/entity/containers</code> · kube_pod_container_status_{'{'}ready,restarts_total,waiting_reason,last_terminated_reason{'}'} · anlık — konteyner başına zaman serisi yok (CPU/Mem pod toplamıdır).
       </div>
@@ -86,7 +92,8 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
   truncated: boolean;
 }) {
   const dt = useDataTable<SiblingRow>({ storageKey: 'pod-siblings', columns: SIB_COLS, rows, initialSort: { id: 'restarts', dir: 'desc' } });
-  if (rows.length === 0) return <div className="pod-cap">Kardeş pod yok.</div>;
+  // v0.10.954 — tablo standardı T12: boşken erken dönüş kalktı; "kardeş pod
+  // yok" tablonun İÇİNDE, başlık durur. Kaynak notu yalnız satır varken.
   return (
     <>
       <div className="table-wrap">
@@ -94,7 +101,7 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map(r => {
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} kind="empty" message="Kardeş pod yok" /> : dt.sortedRows.map(r => {
               const live = entityLiveness(r.rec);
               return (
                 <tr key={r.rec.id}>
@@ -113,9 +120,11 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
           </tbody>
         </table>
       </div>
-      <div className="pod-cap">
-        Kardeşler <code className="mono">/api/entity</code> (sunucu ≤ 50) · faz/restart/CPU/Mem <code className="mono">/api/clusters/pods</code> (topk 500) ile ad üzerinden{truncated ? ' — liste kesik: «—» yok demek değil' : ''}.
-      </div>
+      {rows.length > 0 && (
+        <div className="pod-cap">
+          Kardeşler <code className="mono">/api/entity</code> (sunucu ≤ 50) · faz/restart/CPU/Mem <code className="mono">/api/clusters/pods</code> (topk 500) ile ad üzerinden{truncated ? ' — liste kesik: «—» yok demek değil' : ''}.
+        </div>
+      )}
     </>
   );
 }

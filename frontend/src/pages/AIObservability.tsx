@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -10,7 +10,7 @@ import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBuck
 import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall } from '@/lib/types';
 import { budgetVerdict, budgetCls } from './ai/aiBudgetView';
 import { timeRangeToNs, tsLong, fmtNum } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import {
   type AIRateTable, mergeRates, costForCall, fmtCost,
 } from '@/lib/ai-rates';
@@ -41,6 +41,7 @@ export default function AIObservabilityPage() {
   const [surface, setSurface] = useState('');
   const [provider, setProvider] = useState('');
   const [status, setStatus] = useState('');
+  const surfaceRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState<AICall | null>(null);
   const [rates, setRates] = useState<AIRateTable>(() => mergeRates(null));
   // v0.10.940 (operatör onayı K2) — Kaynak: Üretim (varsayılan, parametre
@@ -96,6 +97,16 @@ export default function AIObservabilityPage() {
     storageKey: 'ai-calls', columns: callCols, rows: calls ?? [],
     initialSort: { id: 'time', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Yüzey / sağlayıcı / durum süzgeci sunucu
+  // isteğine gider; biri etkinken 0 satır "eşleşme yok"tur ve kurtuluş
+  // yolu "Clear" düğmesiyle AYNI eylem (kaynak bir görünüm, süzgeç değil).
+  const clearCallFilters = () => { setSurface(''); setProvider(''); setStatus(''); };
+  const callsState: Omit<DataTableStateProps<AICall>, 'dt'> =
+    calls === undefined ? { kind: 'loading' }
+    : calls === null ? { kind: 'error' }
+    : (surface || provider || status) ? { kind: 'no-match', onClearFilters: clearCallFilters, returnFocusRef: surfaceRef }
+    : { kind: 'empty', message: 'Bu pencerede AI çağrısı yok — Coremetry\'de herhangi bir "✨ Explain" düğmesine tıkla; çağrı buraya düşer.' };
 
   // Pull operator-set rate overrides; merge over the bundled
   // defaults. Done once per mount — rates change infrequently
@@ -289,7 +300,7 @@ export default function AIObservabilityPage() {
             <option value="">Üretim</option>
             <option value="evalset">Değerlendirme</option>
           </select>
-          <input type="search" placeholder="Filter by surface…" aria-label="Filter by surface"
+          <input ref={surfaceRef} type="search" placeholder="Filter by surface…" aria-label="Filter by surface"
             data-shortcut-search
             value={surface} onChange={e => setSurface(e.target.value)}
             style={{ fontSize: 12, padding: '3px 8px', width: 200 }} />
@@ -310,7 +321,7 @@ export default function AIObservabilityPage() {
           </select>
           {(surface || provider || status) && (
             <Button variant="secondary" size="sm"
-              onClick={() => { setSurface(''); setProvider(''); setStatus(''); }}>Clear</Button>
+              onClick={clearCallFilters}>Clear</Button>
           )}
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
             {calls ? `${calls.length} call${calls.length === 1 ? '' : 's'}` : ''}
@@ -325,62 +336,49 @@ export default function AIObservabilityPage() {
         </PageControls>
 
         {/* Recent calls table */}
-        {calls === undefined && <Spinner />}
-        {calls === null && (
-          <Empty icon="✗" title="Failed to load calls" />
-        )}
-        {calls && calls.length === 0 && (
-          <Empty icon="◇" title="No AI calls in this window">
-            Click an "✨ Explain" button anywhere in Coremetry — it lands here.
-          </Empty>
-        )}
-        {calls && calls.length > 0 && (
-          <>
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(c => {
-                  const cost = costForCall(rates, c.model, c.inputTokens, c.outputTokens);
-                  return (
-                  <tr key={c.id} className="cv-row" {...rowActivation(() => setOpen(c))}>
-                    {/* v0.10.947 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar). */}
-                    <DataTableCell dt={dt} col="time" row={c} value={tsLong(c.createdAt)} className="mono" />
-                    <DataTableCell dt={dt} col="surface" row={c} value={c.surface} />
-                    <DataTableCell dt={dt} col="model" row={c}>
-                      <span style={{ color: 'var(--text2)' }}>{c.provider}</span>
-                      {c.model && <span style={{ color: 'var(--text3)' }}> · {c.model}</span>}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="status" row={c}>
-                      {c.status === 'ok'
-                        ? <span className="badge b-gray">ok</span>
-                        : <span className="badge b-err">error</span>}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="duration" row={c} value={`${c.durationMs} ms`} />
-                    <DataTableCell dt={dt} col="tokens" row={c}
-                      title={c.cachedTokens ? `${c.cachedTokens} giriş token'ı önek önbelleğinden` : undefined}>
-                      {c.inputTokens}{c.cachedTokens ? <span> ({cachedPctLabel(c.cachedTokens, c.inputTokens)})</span> : null} / {c.outputTokens}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="cost" row={c} value={fmtCost(cost)} />
-                    <DataTableCell dt={dt} col="user" row={c} value={c.userEmail || c.userId || null} />
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...callsState} /> : dt.sortedRows.map(c => {
+                const cost = costForCall(rates, c.model, c.inputTokens, c.outputTokens);
+                return (
+                <tr key={c.id} className="cv-row" {...rowActivation(() => setOpen(c))}>
+                  {/* v0.10.947 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar). */}
+                  <DataTableCell dt={dt} col="time" row={c} value={tsLong(c.createdAt)} className="mono" />
+                  <DataTableCell dt={dt} col="surface" row={c} value={c.surface} />
+                  <DataTableCell dt={dt} col="model" row={c}>
+                    <span style={{ color: 'var(--text2)' }}>{c.provider}</span>
+                    {c.model && <span style={{ color: 'var(--text3)' }}> · {c.model}</span>}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="status" row={c}>
+                    {c.status === 'ok'
+                      ? <span className="badge b-gray">ok</span>
+                      : <span className="badge b-err">error</span>}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="duration" row={c} value={`${c.durationMs} ms`} />
+                  <DataTableCell dt={dt} col="tokens" row={c}
+                    title={c.cachedTokens ? `${c.cachedTokens} giriş token'ı önek önbelleğinden` : undefined}>
+                    {c.inputTokens}{c.cachedTokens ? <span> ({cachedPctLabel(c.cachedTokens, c.inputTokens)})</span> : null} / {c.outputTokens}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="cost" row={c} value={fmtCost(cost)} />
+                  <DataTableCell dt={dt} col="user" row={c} value={c.userEmail || c.userId || null} />
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {/* v0.9.1018 — TAVAN BEYANI. Sabit `limit: 200` ekranda hiç
+            geçmiyordu: yoğun bir pencerede tablo sessizce kırpılıyor ve
+            operatör eksik veriyle "AI çağrısı azalmış" diye okuyordu.
+            v0.9.1014'ün `count` sözleşmesiyle aynı dürüstlük kuralı. */}
+        {calls && calls.length >= 200 && (
+          <div className="pager" style={{ color: 'var(--text3)' }}>
+            son 200 çağrı gösteriliyor — tavana dayandı; daha fazlası için
+            pencereyi daraltın
           </div>
-            {/* v0.9.1018 — TAVAN BEYANI. Sabit `limit: 200` ekranda hiç
-                geçmiyordu: yoğun bir pencerede tablo sessizce kırpılıyor ve
-                operatör eksik veriyle "AI çağrısı azalmış" diye okuyordu.
-                v0.9.1014'ün `count` sözleşmesiyle aynı dürüstlük kuralı. */}
-            {calls.length >= 200 && (
-              <div className="pager" style={{ color: 'var(--text3)' }}>
-                son 200 çağrı gösteriliyor — tavana dayandı; daha fazlası için
-                pencereyi daraltın
-              </div>
-            )}
-          </>
         )}
 
         {/* v0.9.423 (CoSRE fikir #6) — 👎 madenciliği: hangi soru
@@ -541,6 +539,11 @@ function RouterGapsPanel() {
     return () => { cancelled = true; };
   }, [days]);
   const gapDt = useDataTable<RouterGap>({ storageKey: 'ai-router-gaps', columns: GAP_COLS, rows: data?.gaps ?? [] });
+  // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
+  const gapState: Omit<DataTableStateProps<RouterGap>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error' }
+    : { kind: 'empty', message: 'Bu pencerede serbest döngüye düşen soru yok — router her soruyu yakalamış.' };
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
@@ -555,39 +558,30 @@ function RouterGapsPanel() {
         </span>
       </div>
       <div className="ov-card-b">
-        {data === undefined && <Spinner />}
-        {data === null && <Empty icon="✗" title="Okunamadı" />}
-        {data && data.gaps.length === 0 && (
-          <div style={{ color: 'var(--text3)', fontSize: 12 }}>
-            Bu pencerede serbest döngüye düşen soru yok — router her soruyu yakalamış.
+        {data && data.gaps.length > 0 && (
+          <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>
+            Toplam <b>{data.totalFallbacks.toLocaleString()}</b> soru serbest döngüye
+            düştü. Sık tekrarlayanlar yeni bir guided intent adayıdır: deterministik
+            prefetch + tek anlatım çağrısı, N turluk tool döngüsünden hem ucuz hem
+            tutarlı olur.
           </div>
         )}
-        {data && data.gaps.length > 0 && (
-          <>
-            <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>
-              Toplam <b>{data.totalFallbacks.toLocaleString()}</b> soru serbest döngüye
-              düştü. Sık tekrarlayanlar yeni bir guided intent adayıdır: deterministik
-              prefetch + tek anlatım çağrısı, N turluk tool döngüsünden hem ucuz hem
-              tutarlı olur.
-            </div>
-            <div className="table-wrap">
-              <table {...gapDt.tableProps}>
-                <DataTableColgroup dt={gapDt} />
-                <DataTableHead dt={gapDt} />
-                <tbody>
-                  {gapDt.sortedRows.map(g => (
-                    <tr key={g.question}>
-                      <DataTableCell dt={gapDt} col="question" row={g} value={g.question} />
-                      <DataTableCell dt={gapDt} col="count" row={g} value={g.count.toLocaleString()} />
-                      <DataTableCell dt={gapDt} col="users" row={g} value={g.users} />
-                      <DataTableCell dt={gapDt} col="last" row={g} value={tsLong(g.lastAt)} className="mono" />
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+        <div className="table-wrap">
+          <table {...gapDt.tableProps}>
+            <DataTableColgroup dt={gapDt} />
+            <DataTableHead dt={gapDt} />
+            <tbody>
+              {gapDt.sortedRows.length === 0 ? <DataTableState dt={gapDt} {...gapState} /> : gapDt.sortedRows.map(g => (
+                <tr key={g.question}>
+                  <DataTableCell dt={gapDt} col="question" row={g} value={g.question} />
+                  <DataTableCell dt={gapDt} col="count" row={g} value={g.count.toLocaleString()} />
+                  <DataTableCell dt={gapDt} col="users" row={g} value={g.users} />
+                  <DataTableCell dt={gapDt} col="last" row={g} value={tsLong(g.lastAt)} className="mono" />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -614,6 +608,11 @@ function NegativeFeedbackPanel() {
     return () => { cancelled = true; };
   }, []);
   const negDt = useDataTable<NegativeFeedbackCall>({ storageKey: 'ai-negative-feedback', columns: NEG_COLS, rows: rows ?? [] });
+  // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
+  const negState: Omit<DataTableStateProps<NegativeFeedbackCall>, 'dt'> =
+    rows === undefined ? { kind: 'loading' }
+    : rows === null ? { kind: 'error' }
+    : { kind: 'empty', message: 'Son 7 günde 👎 yok' };
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
@@ -630,34 +629,27 @@ function NegativeFeedbackPanel() {
         )}
       </div>
       <div className="ov-card-b">
-        {rows === undefined && <Spinner />}
-        {rows === null && <Empty icon="✗" title="Feedback okunamadı" />}
-        {rows && rows.length === 0 && (
-          <div style={{ color: 'var(--text3)', fontSize: 12 }}>Son 7 günde 👎 yok. 🎉</div>
-        )}
-        {rows && rows.length > 0 && (
-          <div className="table-wrap">
-            <table {...negDt.tableProps}>
-              <DataTableColgroup dt={negDt} />
-              <DataTableHead dt={negDt} />
-              <tbody>
-                {negDt.sortedRows.map((r, i) => (
-                  <tr key={i}>
-                    <DataTableCell dt={negDt} col="surface" row={r}><span className="badge b-gray">{r.surface || '—'}</span></DataTableCell>
-                    <DataTableCell dt={negDt} col="prompt" row={r} value={r.prompt || null}
-                      title={r.response ? `Cevap: ${r.response.slice(0, 400)}` : undefined} />
-                    {/* v0.9.1193 — 👎'nin NEDENİ. Kırpma title'da tamamlanır;
-                        yorum çoğu satırda boş kalacak (opsiyonel), '—' ile
-                        "yorum yazılmadı" dürüstçe görünür. */}
-                    <DataTableCell dt={negDt} col="comment" row={r} value={r.comment || null} />
-                    <DataTableCell dt={negDt} col="when" row={r} value={tsLong(r.createdAt)} className="mono" />
-                    <DataTableCell dt={negDt} col="who" row={r} value={r.userEmail || null} />
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...negDt.tableProps}>
+            <DataTableColgroup dt={negDt} />
+            <DataTableHead dt={negDt} />
+            <tbody>
+              {negDt.sortedRows.length === 0 ? <DataTableState dt={negDt} {...negState} /> : negDt.sortedRows.map((r, i) => (
+                <tr key={i}>
+                  <DataTableCell dt={negDt} col="surface" row={r}><span className="badge b-gray">{r.surface || '—'}</span></DataTableCell>
+                  <DataTableCell dt={negDt} col="prompt" row={r} value={r.prompt || null}
+                    title={r.response ? `Cevap: ${r.response.slice(0, 400)}` : undefined} />
+                  {/* v0.9.1193 — 👎'nin NEDENİ. Kırpma title'da tamamlanır;
+                      yorum çoğu satırda boş kalacak (opsiyonel), '—' ile
+                      "yorum yazılmadı" dürüstçe görünür. */}
+                  <DataTableCell dt={negDt} col="comment" row={r} value={r.comment || null} />
+                  <DataTableCell dt={negDt} col="when" row={r} value={tsLong(r.createdAt)} className="mono" />
+                  <DataTableCell dt={negDt} col="who" row={r} value={r.userEmail || null} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

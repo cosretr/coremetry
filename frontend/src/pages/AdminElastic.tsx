@@ -1,12 +1,15 @@
 import { Fragment, useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
-import { Empty, Spinner } from '@/components/Spinner';
+import { Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { fmtNum, fmtBytes, fmtClock } from '@/lib/utils';
 import { useElasticIndices, useElasticErrors, useTraceContext } from '@/lib/queries';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { TraceContextServiceCoverage, ESQueryError } from '@/lib/types';
 import { esErrorKey } from './admin/esErrorKey';
 
@@ -105,47 +108,46 @@ function QueryErrorsPanel() {
           {fmtNum(diag.queryErrors)} since boot · last {errs.length} shown · also in pod log as “[logstore-es] query FAILED”
         </span>
       </div>
-      {errs.length === 0 ? (
-        <Empty icon="✓" title="No failed queries since boot" />
-      ) : (
-        <table {...errDt.tableProps}>
-          <DataTableColgroup dt={errDt} />
-          <DataTableHead dt={errDt} />
-          <tbody>
-            {errDt.sortedRows.map(e => {
-              const k = esErrorKey(e);
-              return (
-              <Fragment key={k}>
-                <tr {...rowActivation(() => setOpen(open === k ? null : k))} className="cv-row">
-                  {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
-                  <DataTableCell dt={errDt} col="time" row={e} value={fmtClock(e.at)} className="mono" />
-                  <DataTableCell dt={errDt} col="op" row={e} value={e.op} />
-                  <DataTableCell dt={errDt} col="status" row={e}>
-                    <span className="badge" style={{ background: 'color-mix(in srgb, var(--err) 22%, transparent)' }}>
-                      {e.status || 'net'}
-                    </span>
-                  </DataTableCell>
-                  <DataTableCell dt={errDt} col="index" row={e} value={e.index} />
-                  <DataTableCell dt={errDt} col="error" row={e} value={e.error} />
+      {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur. */}
+      <table {...errDt.tableProps}>
+        <DataTableColgroup dt={errDt} />
+        <DataTableHead dt={errDt} />
+        <tbody>
+          {errDt.sortedRows.length === 0 ? (
+            <DataTableState dt={errDt} kind="empty" message="Açılıştan beri başarısız sorgu yok" />
+          ) : errDt.sortedRows.map(e => {
+            const k = esErrorKey(e);
+            return (
+            <Fragment key={k}>
+              <tr {...rowActivation(() => setOpen(open === k ? null : k))} className="cv-row">
+                {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
+                <DataTableCell dt={errDt} col="time" row={e} value={fmtClock(e.at)} className="mono" />
+                <DataTableCell dt={errDt} col="op" row={e} value={e.op} />
+                <DataTableCell dt={errDt} col="status" row={e}>
+                  <span className="badge" style={{ background: 'color-mix(in srgb, var(--err) 22%, transparent)' }}>
+                    {e.status || 'net'}
+                  </span>
+                </DataTableCell>
+                <DataTableCell dt={errDt} col="index" row={e} value={e.index} />
+                <DataTableCell dt={errDt} col="error" row={e} value={e.error} />
+              </tr>
+              {open === k && (
+                <tr>
+                  <td colSpan={errDt.columns.length}>
+                    <pre style={{
+                      margin: '4px 0 8px', padding: 8, fontSize: 11, maxHeight: 240,
+                      overflow: 'auto', background: 'var(--bg2)',
+                      border: '1px solid var(--border)', borderRadius: 4,
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                    }}>{e.query}</pre>
+                  </td>
                 </tr>
-                {open === k && (
-                  <tr>
-                    <td colSpan={errDt.columns.length}>
-                      <pre style={{
-                        margin: '4px 0 8px', padding: 8, fontSize: 11, maxHeight: 240,
-                        overflow: 'auto', background: 'var(--bg2)',
-                        border: '1px solid var(--border)', borderRadius: 4,
-                        whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                      }}>{e.query}</pre>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+              )}
+            </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -181,6 +183,7 @@ function TraceContextCard() {
     initialSort: { id: 'total', dir: 'desc' },
   });
   if (!tcQ.data || !report) return null; // loading / fetch error — card is best-effort
+  const noLogs = report.total === 0 && !report.reason;
 
   const verdict = report.pivotReady
     ? { cls: 'b-gray', text: `${report.effectiveType} ✓` } // v0.10.929 (K5) — pivot hazır = sağlıklı, nötr
@@ -259,18 +262,20 @@ function TraceContextCard() {
               {fmtNum(report.withTrace)} of {fmtNum(report.total)} in the last {report.windowHours || 24}h
             </div>
           )}
-          {report.total === 0 && !report.reason && (
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 12 }}>
-              No logs found in the last {report.windowHours || 24}h window.
-            </div>
-          )}
-          {rows.length > 0 && (
+          {/* v0.10.954 — tablo standardı T12: "log bulunamadı" notu kapsama
+              tablosunun İÇİNDE, başlık durur. Tablo eskisi gibi yalnız satır
+              varken ya da o not basılırken çizilir (reason'lı boş rapor
+              sessiz kalır — kırmızı gerekçe zaten üstte). */}
+          {(rows.length > 0 || noLogs) && (
             <div className="table-wrap is-scroll" style={{ marginTop: 10, maxHeight: 320 }}>
               <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
-                  {dt.sortedRows.map(r => (
+                  {dt.sortedRows.length === 0 ? (
+                    <DataTableState dt={dt} kind="empty"
+                      message={`Son ${report.windowHours || 24} sa penceresinde log bulunamadı`} />
+                  ) : dt.sortedRows.map(r => (
                     <tr key={r.service} className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
                       <DataTableCell dt={dt} col="service" row={r} value={r.service} />
                       <DataTableCell dt={dt} col="total" row={r} value={fmtNum(r.total)} />
@@ -303,6 +308,17 @@ export default function AdminElasticPage() {
     rows,
     initialSort: { id: 'sizeBytes', dir: 'desc' },
   });
+
+  // v0.10.954 — tablo standardı T12: envanter tablosunun yükleniyor / hata /
+  // boş durumları tablonun İÇİNDE, başlık durur. Koşullar eskisiyle aynı:
+  // hata her şeyden önce gelir (bayat satır hatayı gizlemez), backend ES
+  // değilse tablo hiç yok (kapı). Sayım satırı yalnız satır varken.
+  const gated = !err && !!data && data.backend !== 'elasticsearch';
+  const showRows = !err && !!data && data.backend === 'elasticsearch' && rows.length > 0;
+  const indexState: Omit<DataTableStateProps<Row>, 'dt'> =
+    err ? { kind: 'error', message: `Index envanteri okunamadı: ${err}` }
+    : data === undefined ? { kind: 'loading', message: 'Index envanteri + ILM yaşam döngüsü okunuyor' }
+    : { kind: 'empty', message: 'Yapılandırılmış kalıpla eşleşen index yok' };
 
   const fileRef = useRef<HTMLInputElement>(null);
   const onImport = async (file: File) => {
@@ -361,18 +377,7 @@ export default function AdminElasticPage() {
           </span>
         </div>
 
-        {err && (
-          <div className="empty" style={{ padding: 24, color: 'var(--err)' }}>
-            <div style={{ marginBottom: 6, fontWeight: 600 }}>Failed to fetch index inventory</div>
-            <div style={{ fontSize: 12 }}>{err}</div>
-          </div>
-        )}
-
-        {!err && data === undefined && (
-          <Spinner label="Fetching index inventory + ILM lifecycle…" hint="_cat/indices + _ilm/explain, ~1-3s depending on cluster size." />
-        )}
-
-        {!err && data && data.backend !== 'elasticsearch' && (
+        {gated && data && (
           <Empty icon="≡" title={`Logs backend is "${data.backend || 'unknown'}", not Elasticsearch`}>
             <div style={{ marginTop: 8, color: 'var(--text2)' }}>
               This page shows ES index inventory + ILM lifecycle.
@@ -382,22 +387,20 @@ export default function AdminElasticPage() {
           </Empty>
         )}
 
-        {!err && data && data.backend === 'elasticsearch' && rows.length === 0 && (
-          <Empty icon="≡" title="No indices match the configured pattern" />
-        )}
-
-        {!err && data && data.backend === 'elasticsearch' && rows.length > 0 && (
+        {!gated && (
           <>
-            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--text2)' }}>
-              {rows.length} {rows.length === 1 ? 'index' : 'indices'} ·{' '}
-              {fmtNum(rows.reduce((s, r) => s + r.docCount, 0))} docs ·{' '}
-              {fmtBytes(rows.reduce((s, r) => s + r.sizeBytes, 0))}
-            </div>
+            {showRows && (
+              <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--text2)' }}>
+                {rows.length} {rows.length === 1 ? 'index' : 'indices'} ·{' '}
+                {fmtNum(rows.reduce((s, r) => s + r.docCount, 0))} docs ·{' '}
+                {fmtBytes(rows.reduce((s, r) => s + r.sizeBytes, 0))}
+              </div>
+            )}
             <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
-                {dt.sortedRows.map(r => (
+                {!showRows ? <DataTableState dt={dt} {...indexState} /> : dt.sortedRows.map(r => (
                   <tr key={r.name} className="cv-row">
                     <DataTableCell dt={dt} col="name" row={r} value={r.name} />
                     <DataTableCell dt={dt} col="health" row={r}>

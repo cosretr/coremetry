@@ -6,7 +6,7 @@ import { useCardinality, useSystemStats, keys } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { fmtBytes, fmtNum } from '@/lib/utils';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 
 // Row shapes for the cardinality data tables. Kept local — these
 // mirror the cardinality report response and aren't shared.
@@ -195,16 +195,15 @@ function AttrKeyTable({ rows }: { rows: AttrKeyRow[] }) {
     rows,
     initialSort: { id: 'distinct', dir: 'desc' },
   });
-  if (rows.length === 0) {
-    return <Empty compact icon="◯" title="No attributes sampled" />;
-  }
+  // v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur
+  // (rapor düzeyindeki yükleniyor / hata sayfada kalır).
   return (
     <div className="table-wrap">
       <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
-          {dt.sortedRows.map((r, i) => {
+          {dt.sortedRows.length === 0 ? <DataTableState dt={dt} kind="empty" message="Örneklenen öznitelik yok" /> : dt.sortedRows.map((r, i) => {
             // Heuristic: > 1000 distinct values in a 100k-span sample
             // is the unbounded-label red flag. Yellow at > 200.
             const tone = r.distinctValues > 1000 ? 'danger'
@@ -437,16 +436,14 @@ function ColumnTable({ rows }: { rows: ColumnRow[] }) {
     rows,
     initialSort: { id: 'compressed', dir: 'desc' },
   });
-  if (rows.length === 0) {
-    return <Empty compact icon="◯" title="system.columns empty" />;
-  }
+  // v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur.
   return (
     <div className="table-wrap">
       <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
-          {dt.sortedRows.map((r, i) => (
+          {dt.sortedRows.length === 0 ? <DataTableState dt={dt} kind="empty" message="system.columns boş" /> : dt.sortedRows.map((r, i) => (
             <tr key={i} className="cv-row">
               <DataTableCell dt={dt} col="table" row={r} value={r.table} />
               <DataTableCell dt={dt} col="column" row={r} value={r.column} />

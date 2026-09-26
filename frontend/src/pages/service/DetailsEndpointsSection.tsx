@@ -4,8 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useEndpoints, useClusters } from '@/lib/queries';
 import { useAuth } from '@/components/AuthProvider';
-import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { SectionHead, IconButton } from '@/components/ui';
 import { LazyMount } from '@/components/LazyMount';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -99,6 +98,13 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
     storageKey: 'svc-dtl-endpoints', columns: cols, rows,
     initialSort: { id: 'share', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Sıra eskisiyle aynı (bekliyor → hata → boş); hata
+  // satırı eskinin çaresini (pencereyi daralt / yeniden dene) taşır.
+  const tableState: Omit<DataTableStateProps<ClusterEndpointRow>, 'dt'> =
+    pending ? { kind: 'loading' }
+    : failed ? { kind: 'error', message: 'Endpoint listesi okunamadı — bu bir boş sonuç değil, okuma hatası; pencereyi daralt ya da yeniden dene.' }
+    : { kind: 'empty', message: "Bu pencerede giriş endpoint'i yok — servis server/consumer span üretmiyor ya da kapsam dışı." };
 
   return (
     <>
@@ -115,51 +121,42 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
         actions={<Link to={`/endpoints?service=${encodeURIComponent(service)}&range=${rangeParam}${scopeCluster ? `&cluster=${encodeURIComponent(scopeCluster)}` : ''}`}>Tüm endpoint&#39;ler →</Link>} />
       <div className="ov-mb">
         <LazyMount minHeight={200}>
-          {pending && rows.length === 0 && <Spinner />}
-          {!pending && failed && rows.length === 0 && (
-            <Empty compact icon="⚠" title="Endpoint listesi okunamadı">Bu bir boş sonuç değil, okuma hatası — pencereyi daralt ya da yeniden dene.</Empty>
-          )}
-          {!pending && !failed && rows.length === 0 && (
-            <Empty compact icon="◯" title="Bu pencerede giriş endpoint'i yok">Servis server/consumer span üretmiyor ya da kapsam dışı.</Empty>
-          )}
-          {rows.length > 0 && (
-            <div className="table-wrap">
-              <table {...dt.tableProps}>
-                <DataTableColgroup dt={dt} />
-                <DataTableHead dt={dt} />
-                <tbody>
-                  {dt.sortedRows.map((r, i) => (
-                    <tr key={`${r.cluster}|${r.path}`} {...dt.rowProps(i)}
-                        {...rowActivation(() => { window.location.assign(gotoEp(r)); })}>
-                      <td><Link to={gotoEp(r)} className="mono row-link" onClick={e => e.stopPropagation()}
-                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.path}>{r.path}</Link></td>
-                      {mode === 'cluster' && (
-                        <td className="mono" onClick={e => e.stopPropagation()}>
-                          {r.cluster
-                            ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
-                            : '—'}
-                        </td>
-                      )}
-                      <td className="num">{fmtCount(r.calls)}</td>
-                      <td className="num"><span className={errBadge(r.errorRate)}>{r.errorRate.toFixed(1)}%</span></td>
-                      <td className="num">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>
-                      <td className="num">{r.p99Ms.toFixed(0)} ms</td>
-                      <td><div title={`pencere içi toplam süre ≈ ${(r.calls * r.avgMs / 60000).toFixed(1)} dk`}
-                        style={{ height: 7, borderRadius: 2, width: `${Math.max(4, shareBar(r, rows) * 100)}%`,
-                          background: r.errorRate > 1 ? 'var(--warn)' : 'var(--teal)' }} /></td>
-                      <td onClick={e => e.stopPropagation()}>
-                        <Link to={tracesLink(r, range, env || undefined, (r.cluster || scopeCluster) || undefined)} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}>Traces →</Link>
-                        {canEditRules && (
-                          <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
-                            tooltip="Bu route için eşik alarmı (p95/p99/hata oranı/hız)" onClick={() => setAlertRow(r)} />
-                        )}
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
+              <DataTableColgroup dt={dt} />
+              <DataTableHead dt={dt} />
+              <tbody>
+                {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => (
+                  <tr key={`${r.cluster}|${r.path}`} {...dt.rowProps(i)}
+                      {...rowActivation(() => { window.location.assign(gotoEp(r)); })}>
+                    <td><Link to={gotoEp(r)} className="mono row-link" onClick={e => e.stopPropagation()}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.path}>{r.path}</Link></td>
+                    {mode === 'cluster' && (
+                      <td className="mono" onClick={e => e.stopPropagation()}>
+                        {r.cluster
+                          ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+                          : '—'}
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    )}
+                    <td className="num">{fmtCount(r.calls)}</td>
+                    <td className="num"><span className={errBadge(r.errorRate)}>{r.errorRate.toFixed(1)}%</span></td>
+                    <td className="num">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>
+                    <td className="num">{r.p99Ms.toFixed(0)} ms</td>
+                    <td><div title={`pencere içi toplam süre ≈ ${(r.calls * r.avgMs / 60000).toFixed(1)} dk`}
+                      style={{ height: 7, borderRadius: 2, width: `${Math.max(4, shareBar(r, rows) * 100)}%`,
+                        background: r.errorRate > 1 ? 'var(--warn)' : 'var(--teal)' }} /></td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <Link to={tracesLink(r, range, env || undefined, (r.cluster || scopeCluster) || undefined)} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}>Traces →</Link>
+                      {canEditRules && (
+                        <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
+                          tooltip="Bu route için eşik alarmı (p95/p99/hata oranı/hız)" onClick={() => setAlertRow(r)} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </LazyMount>
       </div>
       {alertRow && (

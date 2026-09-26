@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button, ButtonGroup, Modal, Stack, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { api, type CustomRole, type AvailablePage } from '@/lib/api';
 
 // v0.9.871 (tutarlılık denetimi BT13) — paylaşılan primitif. Kolon kümesi,
@@ -105,35 +105,34 @@ export function CustomRolesTab() {
         }}>{msg.text}</div>
       )}
 
-      {roles.length === 0 ? (
-        <Empty icon="◇" title="No custom roles yet">
-          Create one to give a viewer access to only a subset of pages.
-        </Empty>
-      ) : (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(r => (
-                <tr key={r.name}>
-                  <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
-                  <DataTableCell dt={dt} col="pages" row={r}
-                    value={r.pages.length === 0 ? '(none — user will see no nav)' : r.pages.join(', ')} />
-                  <DataTableCell dt={dt} col="actions" row={r}>
-                    <ButtonGroup aria-label={`${r.name} actions`} size="sm">
-                      <Button variant="secondary" onClick={() => setEditing(r)}>Edit</Button>
-                      <Button variant="ghost-danger" onClick={() => void remove(r.name)} disabled={busy === r.name}>
-                        Delete
-                      </Button>
-                    </ButtonGroup>
-                  </DataTableCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* v0.10.954 — tablo standardı T12: boş hâl tablonun İÇİNDE, başlık
+          durur (rol + sayfa listesi yükleme kapısı yukarıda kalır). */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {roles.length === 0 ? (
+              <DataTableState dt={dt} kind="empty"
+                message="Henüz özel rol yok — bir viewer'a sayfaların yalnız bir alt kümesini açmak için bir tane oluştur." />
+            ) : dt.sortedRows.map(r => (
+              <tr key={r.name}>
+                <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
+                <DataTableCell dt={dt} col="pages" row={r}
+                  value={r.pages.length === 0 ? '(none — user will see no nav)' : r.pages.join(', ')} />
+                <DataTableCell dt={dt} col="actions" row={r}>
+                  <ButtonGroup aria-label={`${r.name} actions`} size="sm">
+                    <Button variant="secondary" onClick={() => setEditing(r)}>Edit</Button>
+                    <Button variant="ghost-danger" onClick={() => void remove(r.name)} disabled={busy === r.name}>
+                      Delete
+                    </Button>
+                  </ButtonGroup>
+                </DataTableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {(creating || editing) && (
         <RoleEditorModal

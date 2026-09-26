@@ -30,7 +30,7 @@ import { PageShell } from '@/components/ui/PageShell';
 import { StatTile, TabStrip } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { CallerSection } from '@/features/dependencies/CallerSection';
 import { KafkaClientsSection } from '@/features/dependencies/KafkaClientsSection';
 import { PartitionLagTable } from '@/features/dependencies/PartitionLagTable'; // v0.10.589
@@ -386,44 +386,43 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
           buradaki değer ise operasyon TÜRÜ (messaging.operation.type coalesce).
           İkisini eşitleyen link, var olamayacak satırlara giden ölü bir link
           olurdu — v0.9.256'nın kapattığı sınıf. */}
-      {rows.length === 0 ? (
-        // Bölüm GİZLENMİYOR: yokluğu söylemek, bakılmamış gibi görünmekten iyi.
-        <div className="mtp-empty">Bu pencerede MV&#39;de operasyon satırı yok.</div>
-      ) : (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map((o, i) => {
-                // v0.10.929 (K5) — %0 hata sağlıklı durum: nötr rozet, eşikler aynı.
-                const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
-                const missing = isOpMissing(o.operation);
-                return (
-                  <tr key={`${o.operation}|${i}`} className="cv-row">
-                    <DataTableCell dt={dt} col="operation" row={o}
-                        className={missing ? 'mtp-op-missing' : 'mtp-op'}
-                        title={missing ? OP_MISSING_TITLE : o.operation}>
-                      {opLabelTR(o.operation)}
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.spanCount)} />
-                    <DataTableCell dt={dt} col="errRate" row={o}>
-                      <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
-                            title={`${fmtNum(o.errorCount)} hatalı span`}>
-                        {o.errorRate.toFixed(2)}%
-                      </span>
-                    </DataTableCell>
-                    <DataTableCell dt={dt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
-                    <DataTableCell dt={dt} col="p50" row={o} value={`${o.p50DurationMs.toFixed(1)}ms`} />
-                    <DataTableCell dt={dt} col="p95" row={o} value={`${o.p95DurationMs.toFixed(1)}ms`} />
-                    <DataTableCell dt={dt} col="p99" row={o} value={`${o.p99DurationMs.toFixed(1)}ms`} />
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Bölüm GİZLENMİYOR: yokluğu söylemek, bakılmamış gibi görünmekten iyi.
+          v0.10.954 — tablo standardı T12: soluk satır tablonun İÇİNDE, başlık durur. */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? (
+              <DataTableState dt={dt} kind="empty" message="Bu pencerede MV'de operasyon satırı yok" />
+            ) : dt.sortedRows.map((o, i) => {
+              // v0.10.929 (K5) — %0 hata sağlıklı durum: nötr rozet, eşikler aynı.
+              const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
+              const missing = isOpMissing(o.operation);
+              return (
+                <tr key={`${o.operation}|${i}`} className="cv-row">
+                  <DataTableCell dt={dt} col="operation" row={o}
+                      className={missing ? 'mtp-op-missing' : 'mtp-op'}
+                      title={missing ? OP_MISSING_TITLE : o.operation}>
+                    {opLabelTR(o.operation)}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.spanCount)} />
+                  <DataTableCell dt={dt} col="errRate" row={o}>
+                    <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
+                          title={`${fmtNum(o.errorCount)} hatalı span`}>
+                      {o.errorRate.toFixed(2)}%
+                    </span>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
+                  <DataTableCell dt={dt} col="p50" row={o} value={`${o.p50DurationMs.toFixed(1)}ms`} />
+                  <DataTableCell dt={dt} col="p95" row={o} value={`${o.p95DurationMs.toFixed(1)}ms`} />
+                  <DataTableCell dt={dt} col="p99" row={o} value={`${o.p99DurationMs.toFixed(1)}ms`} />
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -456,43 +455,42 @@ function SpanNamesTable({ rows, range, system, destination }: {
         <span aria-hidden className="mtp-dot mtp-dot--span" />
         Span adları · {rows.length} satır
       </div>
-      {rows.length === 0 ? (
-        <div className="mtp-empty">Bu pencerede span adı satırı yok.</div>
-      ) : (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map((o, i) => (
-                <tr key={`${o.statement}|${i}`} className="cv-row">
-                  <DataTableCell dt={dt} col="statement" row={o} className="mtp-span-name">
-                    {o.statement
-                      ? (
-                        <>
-                          {o.statement}
-                          {/* Span ADINA göre pivot — destination + name TAM
-                              EŞLEŞME (v0.9.256'nın onardığı link). */}
-                          <Link to={messagingTracesHref({
-                            window: range, system, destination, operation: o.statement,
-                          })}
-                            title="Bu span adının trace'lerini aç"
-                            className="mtp-row-link">
-                            → traces
-                          </Link>
-                        </>
-                      )
-                      : <span className="mtp-op-missing">(boş)</span>}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="op" row={o} className="mtp-op">{o.operation ?? '—'}</DataTableCell>
-                  <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.count)} />
-                  <DataTableCell dt={dt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur. */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? (
+              <DataTableState dt={dt} kind="empty" message="Bu pencerede span adı satırı yok" />
+            ) : dt.sortedRows.map((o, i) => (
+              <tr key={`${o.statement}|${i}`} className="cv-row">
+                <DataTableCell dt={dt} col="statement" row={o} className="mtp-span-name">
+                  {o.statement
+                    ? (
+                      <>
+                        {o.statement}
+                        {/* Span ADINA göre pivot — destination + name TAM
+                            EŞLEŞME (v0.9.256'nın onardığı link). */}
+                        <Link to={messagingTracesHref({
+                          window: range, system, destination, operation: o.statement,
+                        })}
+                          title="Bu span adının trace'lerini aç"
+                          className="mtp-row-link">
+                          → traces
+                        </Link>
+                      </>
+                    )
+                    : <span className="mtp-op-missing">(boş)</span>}
+                </DataTableCell>
+                <DataTableCell dt={dt} col="op" row={o} className="mtp-op">{o.operation ?? '—'}</DataTableCell>
+                <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.count)} />
+                <DataTableCell dt={dt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

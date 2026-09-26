@@ -18,8 +18,7 @@ import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { percentiles } from '@/lib/perf/transforms';
-import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { timeRangeToNs } from '@/lib/utils';
 import type { TimeRange, TraceRow } from '@/lib/types';
@@ -111,18 +110,13 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
     onOpen: (r) => { if (r.exemplar) navigate(traceHref(r.exemplar, { pageRange: range })); },
   });
 
-  if (rows === undefined) return <Spinner label="Sampling traces to cluster by shape…" />;
-  if (rows === null) return <Empty icon="⚠" title="Failed to sample traces" />;
-  if (shapes.length === 0) {
-    return (
-      <Empty icon="◇" title="No shapes in this window">
-        <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-          The shapes view clusters sampled traces by their (service · operation) signature.
-          Widen the time range or drop the service filter.
-        </div>
-      </Empty>
-    );
-  }
+  // v0.10.954 — tablo standardı T12: erken dönüşler (Spinner / Empty) kalktı;
+  // yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. Sıra ve koşullar
+  // eskisiyle aynı; boş durumun açıklaması + önerisi aynı satırda.
+  const tableState: Omit<DataTableStateProps<ShapeRow>, 'dt'> =
+    rows === undefined ? { kind: 'loading', message: 'İzler şekle göre kümelenmek için örnekleniyor' }
+    : rows === null ? { kind: 'error' }
+    : { kind: 'empty', message: 'Bu pencerede şekil yok — şekil görünümü örneklenen izleri (servis · operasyon) imzasına göre kümeler; zaman aralığını genişlet ya da servis filtresini kaldır.' };
 
   return (
     <>
@@ -131,7 +125,7 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map((r, i) => {
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
               // v0.10.922 (sade palet adım 1, K5) — %0 hata nötr; agg görünümüyle aynı.
               const errCls = r.errorRate > 5 ? 'b-err' : r.errorRate > 0 ? 'b-warn' : 'b-gray';
               const rp = dt.rowProps(i);
@@ -174,9 +168,11 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
           </tbody>
         </table>
       </div>
-      <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
-        {shapes.length} shapes · sampled {rows.length} trace{rows.length === 1 ? '' : 's'} · click a row to open an exemplar
-      </div>
+      {rows && shapes.length > 0 && (
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
+          {shapes.length} shapes · sampled {rows.length} trace{rows.length === 1 ? '' : 's'} · click a row to open an exemplar
+        </div>
+      )}
     </>
   );
 }

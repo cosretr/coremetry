@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal'; // v0.10.554
 import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange } from '@/lib/types';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
@@ -177,27 +177,25 @@ function KafkaLastTable({ storageKey, title, keyLabel, rows, cols }: {
   return (
     <div className="kc-table">
       <div className="kc-subhead">{title} · {rows.length}</div>
-      {rows.length === 0 ? (
-        <div className="kc-empty">seri yok</div>
-      ) : (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(r => (
-                <tr key={r.key}>
-                  <td className="mono kc-key" title={r.key}>{r.key}</td>
-                  {cols.map(c => {
-                    const v = r.values[c.id];
-                    return <td key={c.id} className="num">{v === null || v === undefined ? '—' : fmtNum(v)}</td>;
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* v0.10.954 — tablo standardı T12: "seri yok" paragrafı tablonun
+          İÇİNDE boş satır; başlık durur. */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {rows.length === 0 ? <DataTableState dt={dt} kind="empty" message="Bu pencerede seri yok" /> : dt.sortedRows.map(r => (
+              <tr key={r.key}>
+                <td className="mono kc-key" title={r.key}>{r.key}</td>
+                {cols.map(c => {
+                  const v = r.values[c.id];
+                  return <td key={c.id} className="num">{v === null || v === undefined ? '—' : fmtNum(v)}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

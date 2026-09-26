@@ -1,12 +1,13 @@
-import { useState, useMemo } from 'react';
-import { Spinner, Empty } from '@/components/Spinner';
-import { QueryError } from '@/components/QueryError';
-import { readState } from '@/lib/readState';
-import { Button, LinkButton } from '@/components/ui';
+import { useState, useMemo, useRef } from 'react';
+import { Empty } from '@/components/Spinner';
+import { LinkButton } from '@/components/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { useAuditLog } from '@/lib/queries';
 import { tsLong, type GoDuration } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import type { AuditEntry } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 
@@ -94,6 +95,7 @@ export default function AuditPage() {
   // the operator "grep" within the current window without
   // forcing a full re-query.
   const [search, setSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   // v0.5.348 — expanded-details set. Click a Details cell to
   // toggle the row into a full pre-formatted JSON block. Set-
   // backed so a previously expanded row stays expanded on
@@ -164,6 +166,19 @@ export default function AuditPage() {
     initialSort: { id: 'time', dir: 'desc' },
   });
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş / eşleşme yok
+  // tablonun İÇİNDE, başlık durur. Sıra eskisiyle aynı. İki "eşleşme yok":
+  // veri geldi ama arama hepsini eledi (eski "Clear search" → Filtreleri
+  // temizle); ya da sunucuya giden actor/action/target süzgeci boş döndü —
+  // ortak bir temizleme eylemi yok, düğmesiz. Pencere (since) süzgeç değil.
+  const tableState: Omit<DataTableStateProps<AuditEntry>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error', onRetry: () => void auditQ.refetch() }
+    : data.length > 0 ? { kind: 'no-match', onClearFilters: () => setSearch(''), returnFocusRef: searchRef }
+    : (actor.trim() || action.trim() || target.trim())
+      ? { kind: 'no-match', message: 'Bu aralıkta süzgeçle eşleşen denetim kaydı yok' }
+    : { kind: 'empty', message: 'Bu aralıkta denetim kaydı yok' };
+
   if (!isAdmin) {
     return (
       <>
@@ -193,7 +208,7 @@ export default function AuditPage() {
           </select>
           <input placeholder="Target kind (e.g. alert_rule)" aria-label="Filter by target kind"
             value={target} onChange={e => setTarget(e.target.value)} style={{ width: 200 }} />
-          <input placeholder="Search within results…" aria-label="Search within results"
+          <input ref={searchRef} placeholder="Search within results…" aria-label="Search within results"
             value={search} onChange={e => setSearch(e.target.value)} style={{ width: 220 }} />
           <span style={{ color: 'var(--text3)', fontSize: 12, marginLeft: 'auto' }}>
             {search.trim() && data
@@ -216,92 +231,72 @@ export default function AuditPage() {
           </a>
         </PageControls>
 
-        {readState(data) === 'loading' && <Spinner />}
-        {readState(data) === 'error' && (
-          <QueryError onRetry={() => auditQ.refetch()}>
-            The audit log could not be loaded — this is a failed read, not an
-            empty range. Recorded actions are still there.
-          </QueryError>
-        )}
-        {readState(data) === 'empty' && (
-          <Empty icon="◇" title="No audit entries in this range" />
-        )}
-        {data && data.length > 0 && visible.length === 0 && (
-          <Empty icon="◇" title="No entries match your search">
-            <Button variant="secondary" onClick={() => setSearch('')}
-              style={{ marginTop: 8 }}>
-              Clear search
-            </Button>
-          </Empty>
-        )}
-        {data && visible.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map(e => {
-                  const isExpanded = expanded.has(e.id);
-                  return (
-                    // v0.9.137 (scale-audit 2026-07-20) — server caps to 200
-                    // rows but that's above the 100-row content-visibility
-                    // threshold (CLAUDE.md); skip off-screen row layout.
-                    <tr key={e.id} className="cv-row">
-                      {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
-                      <DataTableCell dt={dt} col="time" row={e} value={tsLong(e.time)} className="mono" />
-                      <DataTableCell dt={dt} col="actor" row={e}>
-                        <div style={{ fontWeight: 600, fontSize: 12 }}>
-                          {e.actorEmail
-                            ? <FilterClick onClick={() => setActor(e.actorEmail)}>{e.actorEmail}</FilterClick>
-                            : '—'}
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.actorRole}</div>
-                      </DataTableCell>
-                      <DataTableCell dt={dt} col="action" row={e}>
-                        <FilterClick onClick={() => setAction(e.action)}>{e.action}</FilterClick>
-                      </DataTableCell>
-                      <DataTableCell dt={dt} col="target" row={e}>
-                        <FilterClick onClick={() => setTarget(e.targetKind)}>{e.targetKind}</FilterClick>
-                        {e.targetId && <span style={{ color: 'var(--text3)' }}> · {e.targetId}</span>}
-                      </DataTableCell>
-                      <td {...dt.cellProps(e, 'details')}
-                          onClick={() => e.details && toggleExpand(e.id)}
-                          onKeyDown={ev => {
-                            // Keyboard parity with the click affordance —
-                            // Enter/Space toggles the expanded JSON the
-                            // same way a click does, when there are details.
-                            if (e.details && (ev.key === 'Enter' || ev.key === ' ')) {
-                              ev.preventDefault();
-                              toggleExpand(e.id);
-                            }
-                          }}
-                          // eslint-disable-next-line ui/no-raw-button -- tablo hücresi: <td> düğmeye dönüşemez ve açılan JSON seçilip kopyalanabilir metin kalmalı
-                          role={e.details ? 'button' : undefined}
-                          tabIndex={e.details ? 0 : undefined}
-                          aria-expanded={e.details ? isExpanded : undefined}
-                          style={{
-                            // Fixed layout governs the column width via
-                            // the colgroup; the global td ellipsis clips
-                            // the collapsed state. Expanded → wrap the
-                            // pretty-printed JSON within the (resizable)
-                            // column so the operator reads it inline.
-                            whiteSpace: isExpanded ? 'pre-wrap' : 'nowrap',
-                            overflowWrap: isExpanded ? 'anywhere' : undefined,
-                            cursor: e.details ? 'pointer' : 'default',
-                          }}
-                          title={isExpanded ? 'Click to collapse' : (e.details || '')}>
-                        {isExpanded
-                          ? <span>{prettyJSON(e.details)}</span>
-                          : (e.details || '—')}
-                      </td>
-                      <DataTableCell dt={dt} col="ip" row={e} value={e.ip} />
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(e => {
+                const isExpanded = expanded.has(e.id);
+                return (
+                  // v0.9.137 (scale-audit 2026-07-20) — server caps to 200
+                  // rows but that's above the 100-row content-visibility
+                  // threshold (CLAUDE.md); skip off-screen row layout.
+                  <tr key={e.id} className="cv-row">
+                    {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
+                    <DataTableCell dt={dt} col="time" row={e} value={tsLong(e.time)} className="mono" />
+                    <DataTableCell dt={dt} col="actor" row={e}>
+                      <div style={{ fontWeight: 600, fontSize: 12 }}>
+                        {e.actorEmail
+                          ? <FilterClick onClick={() => setActor(e.actorEmail)}>{e.actorEmail}</FilterClick>
+                          : '—'}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.actorRole}</div>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="action" row={e}>
+                      <FilterClick onClick={() => setAction(e.action)}>{e.action}</FilterClick>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="target" row={e}>
+                      <FilterClick onClick={() => setTarget(e.targetKind)}>{e.targetKind}</FilterClick>
+                      {e.targetId && <span style={{ color: 'var(--text3)' }}> · {e.targetId}</span>}
+                    </DataTableCell>
+                    <td {...dt.cellProps(e, 'details')}
+                        onClick={() => e.details && toggleExpand(e.id)}
+                        onKeyDown={ev => {
+                          // Keyboard parity with the click affordance —
+                          // Enter/Space toggles the expanded JSON the
+                          // same way a click does, when there are details.
+                          if (e.details && (ev.key === 'Enter' || ev.key === ' ')) {
+                            ev.preventDefault();
+                            toggleExpand(e.id);
+                          }
+                        }}
+                        // eslint-disable-next-line ui/no-raw-button -- tablo hücresi: <td> düğmeye dönüşemez ve açılan JSON seçilip kopyalanabilir metin kalmalı
+                        role={e.details ? 'button' : undefined}
+                        tabIndex={e.details ? 0 : undefined}
+                        aria-expanded={e.details ? isExpanded : undefined}
+                        style={{
+                          // Fixed layout governs the column width via
+                          // the colgroup; the global td ellipsis clips
+                          // the collapsed state. Expanded → wrap the
+                          // pretty-printed JSON within the (resizable)
+                          // column so the operator reads it inline.
+                          whiteSpace: isExpanded ? 'pre-wrap' : 'nowrap',
+                          overflowWrap: isExpanded ? 'anywhere' : undefined,
+                          cursor: e.details ? 'pointer' : 'default',
+                        }}
+                        title={isExpanded ? 'Click to collapse' : (e.details || '')}>
+                      {isExpanded
+                        ? <span>{prettyJSON(e.details)}</span>
+                        : (e.details || '—')}
+                    </td>
+                    <DataTableCell dt={dt} col="ip" row={e} value={e.ip} />
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

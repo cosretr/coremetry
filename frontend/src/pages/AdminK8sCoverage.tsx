@@ -7,7 +7,10 @@ import {
   podSeenWindow, podStabilityWarning, coverageHeaderTitle,
 } from '@/pages/k8s/coverageRows';
 import type { K8sCoverageRow, PodRow } from '@/lib/types';
-import { useDataTable, DataTableColgroup, DataTableHead, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableColgroup, DataTableHead, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 
 // AdminK8sCoverage — K8s bağlam kapsama kartı (v0.10.36, entity Faz 0).
 //
@@ -117,6 +120,15 @@ export default function AdminK8sCoveragePage() {
     );
   }
   const fleet = fleetSummary(rows);
+  // v0.10.954 — tablo standardı T12: iki tablonun durumu tablonun İÇİNDE,
+  // başlık durur. Sayfa düzeyi yükleniyor / hata (örneklem beyanı ve filo
+  // özeti aynı cevaptan) yukarıda kalıyor; servis tablosuna yalnız boş
+  // iner. Pod envanteri kendi sorgusu: üç durumu da tabloya iner, metinler
+  // ("ölçülmedi ≠ pod yok") korunur.
+  const podState: Omit<DataTableStateProps<PodRow>, 'dt'> =
+    pq.isPending ? { kind: 'loading' }
+    : pq.isError ? { kind: 'error', message: 'Pod envanteri okunamadı — /api/k8s/pods isteği hata verdi; bu ÖLÇÜM YAPILMADI demek, "pod yok" demek DEĞİL.' }
+    : { kind: 'empty', message: 'Örneklemde pod görülmedi — span\'ler k8s.pod.name taşımıyor olabilir; üstteki kapsama tablosu hangi servisin yaydığını söylüyor.' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -170,37 +182,34 @@ export default function AdminK8sCoveragePage() {
       </Card>
 
       <Card header={`Servis bazında (${rows.length})`}>
-        {rows.length === 0 ? (
-          <Empty icon="∅" title="Pencerede span yok">
-            Örneklemde hiç span görülmedi — pencereyi genişletin.
-          </Empty>
-        ) : (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} renderLabel={c => <span title={coverageHeaderTitle(c.id)}>{c.label}</span>} />
-              <tbody>
-                {dt.sortedRows.map(r => (
-                  <tr key={r.service} className="cv-row">
-                    <DataTableCell dt={dt} col="service" row={r} value={r.service} />
-                    <DataTableCell dt={dt} col="sampled" row={r} value={r.sampled.toLocaleString()} />
-                    {COVERAGE_FIELDS.map(f => {
-                      const seen = fieldSeen(r, f.key);
-                      const st = fieldState(seen, r.sampled);
-                      const pct = fieldPct(seen, r.sampled);
-                      return (
-                        <td key={f.key} style={{ color: TONE[st].fg }}
-                            title={pct === null ? 'ölçülmedi' : `${seen}/${r.sampled} (%${pct})`}>
-                          {st === 'full' ? '✓' : st === 'none' ? '✗' : st === 'unknown' ? '—' : `%${pct}`}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} renderLabel={c => <span title={coverageHeaderTitle(c.id)}>{c.label}</span>} />
+            <tbody>
+              {rows.length === 0 ? (
+                <DataTableState dt={dt} kind="empty"
+                  message="Pencerede span yok — örneklemde hiç span görülmedi, pencereyi genişletin." />
+              ) : dt.sortedRows.map(r => (
+                <tr key={r.service} className="cv-row">
+                  <DataTableCell dt={dt} col="service" row={r} value={r.service} />
+                  <DataTableCell dt={dt} col="sampled" row={r} value={r.sampled.toLocaleString()} />
+                  {COVERAGE_FIELDS.map(f => {
+                    const seen = fieldSeen(r, f.key);
+                    const st = fieldState(seen, r.sampled);
+                    const pct = fieldPct(seen, r.sampled);
+                    return (
+                      <td key={f.key} style={{ color: TONE[st].fg }}
+                          title={pct === null ? 'ölçülmedi' : `${seen}/${r.sampled} (%${pct})`}>
+                        {st === 'full' ? '✓' : st === 'none' ? '✗' : st === 'unknown' ? '—' : `%${pct}`}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       {/* v0.10.41 — POD ENVANTERİ. Kimlik (namespace, pod adı); uid
@@ -213,50 +222,40 @@ export default function AdminK8sCoveragePage() {
             Ölçüm yapılmadı; "alan yok" demek ölçtüğümüz bir şeyi
             söylemek olurdu — ve operatörü olmayan bir collector
             sorununu aramaya gönderirdi. */}
-        {pq.isPending ? <Spinner /> : pq.isError ? (
-          <Empty icon="⚠" title="Pod envanteri okunamadı">
-            /api/k8s/pods isteği hata verdi — bu ÖLÇÜM YAPILMADI demek,
-            "pod yok" demek DEĞİL.
-          </Empty>
-        ) : pods.length === 0 ? (
-          <Empty icon="∅" title="Örneklemde pod görülmedi">
-            Span'ler k8s.pod.name taşımıyor olabilir — üstteki kapsama
-            tablosu hangi servisin yaydığını söylüyor.
-          </Empty>
-        ) : (
-          <div className="table-wrap">
-            <table {...podDt.tableProps}>
-              <DataTableColgroup dt={podDt} />
-              <DataTableHead dt={podDt} />
-              <tbody>
-                {podDt.sortedRows.map((r: PodRow) => {
-                  const warn = podStabilityWarning(r);
-                  return (
-                    <tr key={`${r.namespace}/${r.pod}`} className="cv-row">
-                      <DataTableCell dt={podDt} col="namespace" row={r} value={r.namespace} />
-                      <DataTableCell dt={podDt} col="pod" row={r}>
-                        {r.pod}
-                        {/* Uyarı satırın İÇİNDE: dipnota atmak, birleşmiş
-                            ömrün sessiz kalması demek olurdu. */}
-                        {warn && (
-                          <span className="badge b-warn" title={warn}
-                                style={{ fontSize: 9, marginLeft: 6 }}>
-                            ömür belirsiz
-                          </span>
-                        )}
-                      </DataTableCell>
-                      <DataTableCell dt={podDt} col="service" row={r} value={r.service} />
-                      <DataTableCell dt={podDt} col="node" row={r} value={r.node} />
-                      <DataTableCell dt={podDt} col="spans" row={r} value={r.spans.toLocaleString()} />
-                      {/* v0.10.942 — `seen` sayısal sıralanır ama cümle basar: sola yaslı kalır (cellProps `num` verirdi). */}
-                      <td className="cell-faint">{podSeenWindow(r)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {/* Pod satırları eski koşulunda: yalnız okuma başarılı ve boş değilken
+            (pq.isError iken bayat satır gösterilmez — eski zincir de öyleydi). */}
+        <div className="table-wrap">
+          <table {...podDt.tableProps}>
+            <DataTableColgroup dt={podDt} />
+            <DataTableHead dt={podDt} />
+            <tbody>
+              {pq.isPending || pq.isError || pods.length === 0 ? <DataTableState dt={podDt} {...podState} /> : podDt.sortedRows.map((r: PodRow) => {
+                const warn = podStabilityWarning(r);
+                return (
+                  <tr key={`${r.namespace}/${r.pod}`} className="cv-row">
+                    <DataTableCell dt={podDt} col="namespace" row={r} value={r.namespace} />
+                    <DataTableCell dt={podDt} col="pod" row={r}>
+                      {r.pod}
+                      {/* Uyarı satırın İÇİNDE: dipnota atmak, birleşmiş
+                          ömrün sessiz kalması demek olurdu. */}
+                      {warn && (
+                        <span className="badge b-warn" title={warn}
+                              style={{ fontSize: 9, marginLeft: 6 }}>
+                          ömür belirsiz
+                        </span>
+                      )}
+                    </DataTableCell>
+                    <DataTableCell dt={podDt} col="service" row={r} value={r.service} />
+                    <DataTableCell dt={podDt} col="node" row={r} value={r.node} />
+                    <DataTableCell dt={podDt} col="spans" row={r} value={r.spans.toLocaleString()} />
+                    {/* v0.10.942 — `seen` sayısal sıralanır ama cümle basar: sola yaslı kalır (cellProps `num` verirdi). */}
+                    <td className="cell-faint">{podSeenWindow(r)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );

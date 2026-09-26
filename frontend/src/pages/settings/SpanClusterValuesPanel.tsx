@@ -50,21 +50,32 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
       <div className="ov-card-b">
         {q.isPending ? <Spinner /> : q.error ? (
           <Empty icon="!" title="Span cluster değerleri yüklenemedi" compact>{String(q.error)}</Empty>
-        ) : rows.length === 0 ? (
-          <Empty icon="∅" title="Span verisinde cluster değeri yok" compact>Span'ler k8s.cluster.name / openshift.cluster.name / cluster taşımıyor.</Empty>
         ) : (
           <>
-            <Row gap={2} wrap>
-              <label className="field-hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <input type="checkbox" checked={backfill} onChange={e => setBackfill(e.target.checked)} />
-                atamada son 24 saati geriye dönük tara (pod/servis entity'leri)
-              </label>
-            </Row>
+            {/* v0.10.954 — geriye dönük tarama anahtarı yalnız atanacak satır varken anlamlı (eskisi gibi). */}
+            {rows.length > 0 && (
+              <Row gap={2} wrap>
+                <label className="field-hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" checked={backfill} onChange={e => setBackfill(e.target.checked)} />
+                  atamada son 24 saati geriye dönük tara (pod/servis entity'leri)
+                </label>
+              </Row>
+            )}
             {/* v0.10.942 — statik tablo: satır başına kayıt seçici + Assign, düzenlenebilir eşleme listesi (T1). */}
             <table>
               <thead><tr><th>Value</th><th className="num">Spans</th><th>First seen</th><th>Last seen</th><th>Bound to</th><th></th></tr></thead>
               <tbody>
-                {rows.map(r => (
+                {rows.length === 0 ? (
+                  // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
+                  // Yükleniyor / hata yukarıda kalır (P-2 bekler).
+                  <tr data-dt-state="empty">
+                    <td colSpan={6} className="dt-state">
+                      <div className="dt-state-body">
+                        <span>Span verisinde cluster değeri yok — span'ler k8s.cluster.name / openshift.cluster.name / cluster taşımıyor.</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : rows.map(r => (
                   <tr key={r.value}>
                     <td className="mono">{r.value}</td>
                     <td className="num">{r.spans.toLocaleString()}</td>

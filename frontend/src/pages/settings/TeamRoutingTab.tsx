@@ -164,42 +164,45 @@ export function TeamRoutingTab() {
         </Field>
       </div>
 
-      {rows.length === 0 ? (
-        <Empty icon="👥" title="Katalogda takım yok">
-          Service catalog'a owner/SRE team girildiğinde takımlar burada listelenir.
-        </Empty>
-      ) : (
-        <div className="table-wrap" style={{ marginBottom: 14 }}>
-          {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi, satır başına adres girişi (T1). */}
-          <table>
-            <thead>
-              <tr><th>Takım</th><th>E-posta adres(ler)i</th></tr>
-            </thead>
-            <tbody>
-              {rows.map(team => {
-                const v = contactFor(team);
-                return (
-                  <tr key={team.toLowerCase()}>
-                    <td className="mono">
-                      {team}
-                      {v.trim() === '' && (
-                        <span className="badge b-warn" style={{ marginLeft: 8, fontSize: 9 }}>eksik</span>
-                      )}
-                    </td>
-                    <td>
-                      <input value={v}
-                        onChange={e => setContact(team, e.target.value)}
-                        placeholder="team@example.com, oncall@example.com"
-                        aria-label={`${team} e-posta`}
-                        style={{ width: '100%', fontSize: 12 }} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap" style={{ marginBottom: 14 }}>
+        {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi, satır başına adres girişi (T1). */}
+        <table>
+          <thead>
+            <tr><th>Takım</th><th>E-posta adres(ler)i</th></tr>
+          </thead>
+          <tbody>
+            {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. colSpan = thead'deki 2 <th>. */}
+            {rows.length === 0 ? (
+              <tr data-dt-state="empty">
+                <td colSpan={2} className="dt-state">
+                  <div className="dt-state-body">
+                    <span>Katalogda takım yok — Service catalog'a owner/SRE team girildiğinde takımlar burada listelenir.</span>
+                  </div>
+                </td>
+              </tr>
+            ) : rows.map(team => {
+              const v = contactFor(team);
+              return (
+                <tr key={team.toLowerCase()}>
+                  <td className="mono">
+                    {team}
+                    {v.trim() === '' && (
+                      <span className="badge b-warn" style={{ marginLeft: 8, fontSize: 9 }}>eksik</span>
+                    )}
+                  </td>
+                  <td>
+                    <input value={v}
+                      onChange={e => setContact(team, e.target.value)}
+                      placeholder="team@example.com, oncall@example.com"
+                      aria-label={`${team} e-posta`}
+                      style={{ width: '100%', fontSize: 12 }} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {/* Katalog dışı takım ekleme — ör. henüz derive edilmemiş bir takım. */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 14 }}>

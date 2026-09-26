@@ -4,8 +4,6 @@ import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Zap, ChevronRight, ChevronDown } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
-import { Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
 import { ServicePicker } from '@/components/ServicePicker';
 import { api } from '@/lib/api';
 import { useEndpoints, useClusters } from '@/lib/queries';
@@ -14,7 +12,7 @@ import { encodeRange } from '@/lib/urlState';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { useUrlEnv } from '@/lib/useUrlEnv';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { stickyLeftOffsets } from '@/lib/dataTable';
 import { TrendDelta } from '@/components/TrendDelta';
 import { endpointDetailHref, legacyEndpointTarget } from '@/pages/endpoints/endpointParam';
@@ -517,6 +515,40 @@ export default function EndpointsPage() {
   // bulunamadıysa da sunucunun cümlesi ekranda, sessiz düşüş yok).
   const metricNote = src === 'metric' ? (rowsQ.data?.note ?? null) : null;
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / eşleşme yok / boş
+  // tablonun İÇİNDE, başlık durur. Koşullar eskisiyle aynı (rows tri-state);
+  // satırlar yalnız eski koşulda (rows dolu) çizilir — hata anında bayat
+  // satır hatayı gizlemez. Sunucuya giden kullanıcı süzgeci (yol araması /
+  // servis / cluster) boş döndürdüyse "eşleşme yok"; tek süzgeç etkinse
+  // temizleme onun kendi setter'ı, birden fazlaysa düğme yok.
+  const hasRows = !!rows && rows.length > 0;
+  const filterClears = [
+    search.trim() ? () => { setSearch(''); setSearchParam(''); } : null,
+    service ? () => setService('') : null,
+    cluster ? () => setCluster('') : null,
+  ].filter((f): f is () => void => f !== null);
+  const rpcNeedsMv = entry === 'rpc' && (cluster || env)
+    ? `RPC & Messaging sekmesi spanmetrics rollup'larını gerektirir; ${cluster && env ? 'cluster ve env' : cluster ? 'cluster' : 'env'} süzgeci bunları devre dışı bırakır. HTTP dışı giriş noktalarını listelemek için süzgeci temizleyin ya da HTTP'ye dönün.`
+    : null;
+  const errDetail = rowsQ.error instanceof Error && rowsQ.error.message ? rowsQ.error.message : '';
+  const tableState: Omit<DataTableStateProps<EndpointRow>, 'dt' | 'leading'> =
+    rows === undefined ? { kind: 'loading' }
+    : rows === null ? {
+      kind: 'error',
+      message: errDetail || rpcNeedsMv
+        ? [`Endpoint listesi okunamadı${errDetail ? `: ${errDetail}` : ''}`, rpcNeedsMv].filter(Boolean).join(' — ')
+        : undefined,
+    }
+    : filterClears.length > 0 ? {
+      kind: 'no-match',
+      onClearFilters: filterClears.length === 1 ? filterClears[0] : undefined,
+      returnFocusRef: searchRef,
+    }
+    : {
+      kind: 'empty',
+      message: "Bu pencerede endpoint yok — http.route / url.path / http.target özniteliği taşıyan span gelmedi. Zaman aralığını genişletin ya da servislerinizin server-kind span'lerde bu özniteliklerden birini yaydığını kontrol edin.",
+    };
+
   return (
     <>
       <Topbar title="Endpoints" range={range} onRangeChange={setRange} envApplies />
@@ -671,38 +703,14 @@ export default function EndpointsPage() {
           </div>
         )}
 
-        {rows === undefined && <TableSkeleton cols={8} wideFirst />}
-        {rows === null && (
-          <Empty icon="⚠" title="Failed to load endpoints">
-            {/* v0.10.362 — Operator-reported: "request errored" sebepsizdi;
-                sunucunun hata metni (süre aşımı / VM hatası) burada. */}
-            {rowsQ.error instanceof Error && rowsQ.error.message && (
-              <p className="mono" style={{ fontSize: 12, color: 'var(--text2)', wordBreak: 'break-word', margin: '6px 0' }}>{rowsQ.error.message}</p>
-            )}
-            {/* v0.9.313 — the RPC surface needs the spanmetrics MV,
-                which a cluster or env filter disables. The backend
-                refuses that combination EXPLICITLY rather than running
-                the HTTP raw query and rendering an empty table under an
-                "RPC & Messaging" heading — "you have no gRPC entry
-                points" when the truth is "this cannot be answered".
-                Surface the reason here so the refusal is actionable. */}
-            {entry === 'rpc' && (cluster || env)
-              ? <>The <b>RPC &amp; Messaging</b> tab needs the spanmetrics rollups, which the
-                  {cluster ? ' cluster' : ''}{cluster && env ? ' and' : ''}{env ? ' env' : ''} filter
-                  disables. Clear it to list non-HTTP entry points, or switch back to HTTP.</>
-              : 'The backend /api/endpoints request errored.'}
-          </Empty>
-        )}
-        {rows && rows.length === 0 && (
-          <Empty icon="∅" title="No endpoints in window">
-            <div style={{ fontSize: 12, color: 'var(--text2)', maxWidth: 520, marginTop: 8, lineHeight: 1.5 }}>
-              No spans with <code>http.route</code> / <code>url.path</code> / <code>http.target</code> attrs
-              landed in this window. Try widening the time range, or check
-              that your services emit one of those attributes on server-kind spans.
-            </div>
-          </Empty>
-        )}
-        {rows && rows.length > 0 && (
+        {/* v0.10.362 — Operator-reported: "request errored" sebepsizdi;
+            sunucunun hata metni (süre aşımı / VM hatası) hata satırında.
+            v0.9.313 — the RPC surface needs the spanmetrics MV, which a
+            cluster or env filter disables. The backend refuses that
+            combination EXPLICITLY rather than rendering an empty table
+            under an "RPC & Messaging" heading; the reason rides the error
+            row (rpcNeedsMv) so the refusal is actionable. */}
+        {hasRows && (
           <>
             {/* v0.9.834 — v0.9.818/819'un KPI şeridi + üç grafiği
                 KALDIRILDI (operatör: bu metrikler gereksiz). Sayfa
@@ -723,224 +731,228 @@ export default function EndpointsPage() {
                   : listed.errorRate >= 1 ? 'var(--warn)' : 'var(--text2)',
               }}>{fmtNum(listed.errors)}</b> hata ({listed.errorRate.toFixed(2)}%)
             </div>
-            <div className="table-wrap">
-              <table {...dt.tableProps}>
-                <DataTableColgroup dt={dt} leading={[22]} />
-                <DataTableHead dt={dt} leading={<th style={{ width: 22 }} />} />
-                <tbody>
-                  {dt.sortedRows.map((r, i) => {
-                    // v0.10.929 (K5) — eşikler aynı; eşik altı sağlıklı dal nötr.
-                    const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
-                    // v0.9.818 — genişletme anahtarı artık KARARLI ve
-                    // URL-güvenli: eskiden satır INDEKSİNİ taşıyordu, yani
-                    // sıralama/filtre değişince açık şerit başka bir satıra
-                    // atlıyordu (ve URL'e yazılamazdı). Kimlik MV grenidir:
-                    // (service, path).
-                    const rowKey = endpointRowKey(r.service, r.path);
-                    const isExpanded = expandedRows.has(rowKey);
-                    // v0.10.943 — cv-row rowProps sınıfıyla BİRLEŞİR; tek başına className row-selected'ı ezerdi.
-                    const rp = dt.rowProps(i);
-                    return (
-                      // v0.10.378 (dış skill denetimi C11) — anahtar YALNIZ rowKey:
-                      // `|${i}` eki sıralamada her satırın anahtarını değiştirip
-                      // tüm tbody'yi remount ediyordu (açık şerit + odak kaybı).
-                      <React.Fragment key={rowKey}>
-                      <tr {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
-                        // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
-                        data-row-action
-                        onMouseEnter={() => dt.nav.setSelected(i)}
-                        onClick={e => {
-                          // v0.9.839 — row click NAVIGATES to the full
-                          // endpoint page (was: the 620px drawer).
-                          // Links / buttons inside the row (service
-                          // link, expander, sparkline, traces →) keep
-                          // their own affordances.
-                          if ((e.target as HTMLElement).closest('a, button')) return;
-                          openEndpointPage(r);
-                        }}
+          </>
+        )}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} leading={[22]} />
+            <DataTableHead dt={dt} leading={<th style={{ width: 22 }} />} />
+            <tbody>
+              {!hasRows ? <DataTableState dt={dt} leading={[22]} {...tableState} /> : dt.sortedRows.map((r, i) => {
+                // v0.10.929 (K5) — eşikler aynı; eşik altı sağlıklı dal nötr.
+                const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
+                // v0.9.818 — genişletme anahtarı artık KARARLI ve
+                // URL-güvenli: eskiden satır INDEKSİNİ taşıyordu, yani
+                // sıralama/filtre değişince açık şerit başka bir satıra
+                // atlıyordu (ve URL'e yazılamazdı). Kimlik MV grenidir:
+                // (service, path).
+                const rowKey = endpointRowKey(r.service, r.path);
+                const isExpanded = expandedRows.has(rowKey);
+                // v0.10.943 — cv-row rowProps sınıfıyla BİRLEŞİR; tek başına className row-selected'ı ezerdi.
+                const rp = dt.rowProps(i);
+                return (
+                  // v0.10.378 (dış skill denetimi C11) — anahtar YALNIZ rowKey:
+                  // `|${i}` eki sıralamada her satırın anahtarını değiştirip
+                  // tüm tbody'yi remount ediyordu (açık şerit + odak kaybı).
+                  <React.Fragment key={rowKey}>
+                  <tr {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
+                    // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                    data-row-action
+                    onMouseEnter={() => dt.nav.setSelected(i)}
+                    onClick={e => {
+                      // v0.9.839 — row click NAVIGATES to the full
+                      // endpoint page (was: the 620px drawer).
+                      // Links / buttons inside the row (service
+                      // link, expander, sparkline, traces →) keep
+                      // their own affordances.
+                      if ((e.target as HTMLElement).closest('a, button')) return;
+                      openEndpointPage(r);
+                    }}
+                    style={{
+                      // Subtle err tint on broken endpoints (prototype cue).
+                      background: r.errorRate >= 5
+                        ? 'color-mix(in srgb, var(--err) 7%, transparent)'
+                        : undefined,
+                    }}>
+                    <td style={{ width: 22, textAlign: 'center' }}>
+                      {/* v0.5.417 — dependency strip expander.
+                          Click ▶ → fetches the service's
+                          downstream neighbours once (cached
+                          per service across rows of same svc)
+                          and renders a strip below the row. */}
+                      <IconButton
+                        variant="bare" size="xs"
+                        onClick={() => onToggleExpand(rowKey)}
+                        // v0.9.887 — `aria-expanded` ilk kez burada: bu
+                        // bir açılır-kapanır tetik ve ekran okuyucu
+                        // bugüne dek durumunu HİÇ duyurmuyordu.
+                        aria-expanded={isExpanded}
+                        aria-label={isExpanded
+                          ? 'Hide downstream dependencies'
+                          : 'Show downstream dependencies'}
+                        // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
+                        tooltip={isExpanded
+                          ? 'Hide downstream dependencies'
+                          : 'Show services / dbs this endpoint\'s service typically calls'}
+                        icon={isExpanded
+                          ? <ChevronDown size={13} strokeWidth={1.75} />
+                          : <ChevronRight size={13} strokeWidth={1.75} />} />
+                    </td>
+                    {/* v0.8.574 — every data cell renders only when
+                        its column is visible (?cols=); order stays in
+                        lockstep with ENDPOINT_COLS so the colgroup and
+                        body never misalign. */}
+                    {visibleCols.has('service') && <td className="sticky-left" style={{ left: leftOffs['service'] }}>
+                      <Link to={serviceHref(r.service, { range, env })} className="mono">
+                        {r.service}
+                      </Link>
+                    </td>}
+                    {visibleCols.has('path') && <td className="mono sticky-left" style={{ left: leftOffs['path'] }} title={r.path}>
+                      {r.path}
+                    </td>}
+                    {visibleCols.has('method') && <td className="mono cell-muted">
+                      {r.method || '—'}
+                    </td>}
+                    {visibleCols.has('calls') && <td className="num">
+                      {fmtNum(r.calls)}
+                      {/* v0.9.642 — Req/min varsayılandan çıktı; hızı
+                          BURADA taşıyoruz ki bilgi kaybolmasın. Ayrı
+                          kolon hâlâ ColumnManager'da (o zaman burada
+                          tekrar etmiyor). */}
+                      {!visibleCols.has('reqPerMin') && r.reqPerMin != null && (
+                        <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
+                          · {fmtRate(r.reqPerMin)}
+                        </span>
+                      )}
+                      {compare && <TrendDelta cur={r.calls} prior={r.priorCalls} kind="neutral" />}
+                    </td>}
+                    {visibleCols.has('errors') && <td className="num">
+                      {fmtNum(r.errors)}
+                      {compare && <TrendDelta cur={r.errors} prior={r.priorErrors} kind="lowerBetter" />}
+                    </td>}
+                    {visibleCols.has('errorRate') && <td className="num">
+                      <span className={`badge ${errCls}`}>{r.errorRate.toFixed(2)}%</span>
+                      {/* v0.9.642 — Errors varsayılandan çıktı; mutlak
+                          sayı BURADA. Oran tek başına ölçek saklıyor:
+                          %50 iki çağrının biri de olabilir, 2M'nin
+                          1M'i de. */}
+                      {!visibleCols.has('errors') && r.errors > 0 && (
+                        <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
+                          · {fmtNum(r.errors)}
+                        </span>
+                      )}
+                    </td>}
+                    {visibleCols.has('status') && <td><StatusBreakdown r={r} /></td>}
+                    {visibleCols.has('reqPerMin') && <td className="num">{fmtRate(r.reqPerMin)}</td>}
+                    {visibleCols.has('avgMs') && <td className="num">
+                      {r.avgMs.toFixed(1)} ms
+                      {compare && <TrendDelta cur={r.avgMs} prior={r.priorAvgMs} kind="lowerBetter" />}
+                    </td>}
+                    {visibleCols.has('p50Ms') && <td className="num">{fmtMs(r.p50Ms)}</td>}
+                    {visibleCols.has('p90Ms') && <td className="num">{fmtMs(r.p90Ms)}</td>}
+                    {visibleCols.has('p95Ms') && <td className="num">{fmtMs(r.p95Ms)}</td>}
+                    {visibleCols.has('p99Ms') && <td className="num">
+                      {r.p99Ms.toFixed(0)} ms
+                      {compare && <TrendDelta cur={r.p99Ms} prior={r.priorP99Ms} kind="lowerBetter" />}
+                    </td>}
+                    {visibleCols.has('p99Delta') && <td className="num">
+                      {(() => {
+                        // v0.9.818 — "YENİ" YALANDI. Prior okuma da
+                        // top-N (api.go getEndpoints prior taraması aynı
+                        // limit/havuzla koşuyor), yani prior alanının boş
+                        // olması "bu endpoint önceki pencerede YOKTU"
+                        // demek değil; "önceki pencerenin LİSTESİNE
+                        // girmemiş" demek. İkisi çok farklı: birincisi
+                        // yeni bir deploy, ikincisi sadece sıralama.
+                        const d = endpointP99Delta(r.p99Ms, r.priorP99Ms);
+                        if (d.kind === 'listNew') {
+                          return <span style={{ color: 'var(--text3)' }}
+                            title={LIST_NEW_TITLE}>{LIST_NEW_LABEL}</span>;
+                        }
+                        // v0.10.929 (K5) — iyileşme nötr --text2 (Sparkline emsali), kötüleşme kırmızı kalır.
+                        const cls = d.pct > 5 ? 'var(--err)' : d.pct < -5 ? 'var(--text2)' : 'var(--text3)';
+                        return <b style={{ color: cls }}>{d.pct > 0 ? '▲' : d.pct < 0 ? '▼' : ''}{Math.abs(d.pct).toFixed(0)}%</b>;
+                      })()}
+                    </td>}
+                    {visibleCols.has('spread') && <td className="num"
+                      title="p99 ÷ p50 — the SHAPE of the latency, not its level.\nNear 1: the whole distribution moved, every caller is slow (dependency, pool, node).\nHigh: most calls are fine and a tail is dragging (retries, GC, cold cache, one bad shard).\nSame p99, opposite causes.">
+                      {(() => {
+                        const sp = spreadOf(r);
+                        if (sp <= 0) return <span style={{ color: 'var(--text3)' }}>—</span>;
+                        // Tone marks SHAPE, never slowness: a fast endpoint
+                        // with a heavy tail should still read as tail-heavy.
+                        const tone = sp >= 10 ? 'var(--err)' : sp >= 4 ? 'var(--warn)' : 'var(--text2)';
+                        return <span style={{ color: tone }}>{sp < 10 ? sp.toFixed(1) : Math.round(sp)}×</span>;
+                      })()}
+                    </td>}
+                    {visibleCols.has('traces') && <td className="sticky-right"
                         style={{
-                          // Subtle err tint on broken endpoints (prototype cue).
+                          // Sticky cells float over scrolled content —
+                          // the err-row tint must be flattened over the
+                          // opaque base here (the tr's inline tint is
+                          // color-mix over TRANSPARENT and would let
+                          // scrolled columns bleed through).
                           background: r.errorRate >= 5
-                            ? 'color-mix(in srgb, var(--err) 7%, transparent)'
+                            ? 'color-mix(in srgb, var(--err) 7%, var(--bg0))'
                             : undefined,
                         }}>
-                        <td style={{ width: 22, textAlign: 'center' }}>
-                          {/* v0.5.417 — dependency strip expander.
-                              Click ▶ → fetches the service's
-                              downstream neighbours once (cached
-                              per service across rows of same svc)
-                              and renders a strip below the row. */}
-                          <IconButton
-                            variant="bare" size="xs"
-                            onClick={() => onToggleExpand(rowKey)}
-                            // v0.9.887 — `aria-expanded` ilk kez burada: bu
-                            // bir açılır-kapanır tetik ve ekran okuyucu
-                            // bugüne dek durumunu HİÇ duyurmuyordu.
-                            aria-expanded={isExpanded}
-                            aria-label={isExpanded
-                              ? 'Hide downstream dependencies'
-                              : 'Show downstream dependencies'}
+                      {/* /traces, bu endpoint'e kapsamlı.
+                          ⚠ Bu şerh v0.9.1372'ye kadar "search=path …
+                          rootOnly=false" diyordu ve o sürümde YANLIŞ
+                          hâle geldi: `search` serbest metindi ve
+                          `/api/pay` araması `/api/payment-retry`yi de
+                          getiriyordu. Link artık yapısal
+                          `http.route = <path>` filtresi + `rootOnly=false`
+                          (v0.10.789; 1372-788 arası `auto`) taşıyor
+                          (üretici: endpoints/links.ts). */}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {/* v0.9.1257 (operatör: "Traces butonu çok
+                            belirgin değil, View yazıyor sadece") —
+                            a.sec düğme anatomisi (v0.9.1210 kuralı).
+                            v0.10.6 (operatör: "mavi olabilir Traces
+                            butonu") — `.sec` → `.accent`, v0.9.1372'de
+                            detay sayfalarının pivotlarına yapılanın
+                            aynısı. */}
+                        <Link to={tracesLink(r, range, env, cluster)} className="accent"
+                              style={{ fontSize: 11, padding: '2px 8px' }}>
+                          Traces →
+                        </Link>
+                        {/* v0.10.946 (operatör: "en sağdaki çarpı ve şimşek ikonlarına gerek
+                            yok, direkt Traces diyebilir") — satırın en yavaş (⚡) ve en
+                            yavaş hatalı (✖) trace kısayolları KALDIRILDI; satırın tek
+                            açılış hedefi Traces (tablo standardı S5). Exemplar kimlikleri
+                            API'de duruyor; endpoint detay sayfası onları göstermeye devam eder. */}
+                        {/* v0.10.705 — bu route için eşik alarmı (editör/admin). */}
+                        {canEditRules && entry === 'http' && (
+                          <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
                             // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
-                            tooltip={isExpanded
-                              ? 'Hide downstream dependencies'
-                              : 'Show services / dbs this endpoint\'s service typically calls'}
-                            icon={isExpanded
-                              ? <ChevronDown size={13} strokeWidth={1.75} />
-                              : <ChevronRight size={13} strokeWidth={1.75} />} />
-                        </td>
-                        {/* v0.8.574 — every data cell renders only when
-                            its column is visible (?cols=); order stays in
-                            lockstep with ENDPOINT_COLS so the colgroup and
-                            body never misalign. */}
-                        {visibleCols.has('service') && <td className="sticky-left" style={{ left: leftOffs['service'] }}>
-                          <Link to={serviceHref(r.service, { range, env })} className="mono">
-                            {r.service}
-                          </Link>
-                        </td>}
-                        {visibleCols.has('path') && <td className="mono sticky-left" style={{ left: leftOffs['path'] }} title={r.path}>
-                          {r.path}
-                        </td>}
-                        {visibleCols.has('method') && <td className="mono cell-muted">
-                          {r.method || '—'}
-                        </td>}
-                        {visibleCols.has('calls') && <td className="num">
-                          {fmtNum(r.calls)}
-                          {/* v0.9.642 — Req/min varsayılandan çıktı; hızı
-                              BURADA taşıyoruz ki bilgi kaybolmasın. Ayrı
-                              kolon hâlâ ColumnManager'da (o zaman burada
-                              tekrar etmiyor). */}
-                          {!visibleCols.has('reqPerMin') && r.reqPerMin != null && (
-                            <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
-                              · {fmtRate(r.reqPerMin)}
-                            </span>
-                          )}
-                          {compare && <TrendDelta cur={r.calls} prior={r.priorCalls} kind="neutral" />}
-                        </td>}
-                        {visibleCols.has('errors') && <td className="num">
-                          {fmtNum(r.errors)}
-                          {compare && <TrendDelta cur={r.errors} prior={r.priorErrors} kind="lowerBetter" />}
-                        </td>}
-                        {visibleCols.has('errorRate') && <td className="num">
-                          <span className={`badge ${errCls}`}>{r.errorRate.toFixed(2)}%</span>
-                          {/* v0.9.642 — Errors varsayılandan çıktı; mutlak
-                              sayı BURADA. Oran tek başına ölçek saklıyor:
-                              %50 iki çağrının biri de olabilir, 2M'nin
-                              1M'i de. */}
-                          {!visibleCols.has('errors') && r.errors > 0 && (
-                            <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
-                              · {fmtNum(r.errors)}
-                            </span>
-                          )}
-                        </td>}
-                        {visibleCols.has('status') && <td><StatusBreakdown r={r} /></td>}
-                        {visibleCols.has('reqPerMin') && <td className="num">{fmtRate(r.reqPerMin)}</td>}
-                        {visibleCols.has('avgMs') && <td className="num">
-                          {r.avgMs.toFixed(1)} ms
-                          {compare && <TrendDelta cur={r.avgMs} prior={r.priorAvgMs} kind="lowerBetter" />}
-                        </td>}
-                        {visibleCols.has('p50Ms') && <td className="num">{fmtMs(r.p50Ms)}</td>}
-                        {visibleCols.has('p90Ms') && <td className="num">{fmtMs(r.p90Ms)}</td>}
-                        {visibleCols.has('p95Ms') && <td className="num">{fmtMs(r.p95Ms)}</td>}
-                        {visibleCols.has('p99Ms') && <td className="num">
-                          {r.p99Ms.toFixed(0)} ms
-                          {compare && <TrendDelta cur={r.p99Ms} prior={r.priorP99Ms} kind="lowerBetter" />}
-                        </td>}
-                        {visibleCols.has('p99Delta') && <td className="num">
-                          {(() => {
-                            // v0.9.818 — "YENİ" YALANDI. Prior okuma da
-                            // top-N (api.go getEndpoints prior taraması aynı
-                            // limit/havuzla koşuyor), yani prior alanının boş
-                            // olması "bu endpoint önceki pencerede YOKTU"
-                            // demek değil; "önceki pencerenin LİSTESİNE
-                            // girmemiş" demek. İkisi çok farklı: birincisi
-                            // yeni bir deploy, ikincisi sadece sıralama.
-                            const d = endpointP99Delta(r.p99Ms, r.priorP99Ms);
-                            if (d.kind === 'listNew') {
-                              return <span style={{ color: 'var(--text3)' }}
-                                title={LIST_NEW_TITLE}>{LIST_NEW_LABEL}</span>;
-                            }
-                            // v0.10.929 (K5) — iyileşme nötr --text2 (Sparkline emsali), kötüleşme kırmızı kalır.
-                            const cls = d.pct > 5 ? 'var(--err)' : d.pct < -5 ? 'var(--text2)' : 'var(--text3)';
-                            return <b style={{ color: cls }}>{d.pct > 0 ? '▲' : d.pct < 0 ? '▼' : ''}{Math.abs(d.pct).toFixed(0)}%</b>;
-                          })()}
-                        </td>}
-                        {visibleCols.has('spread') && <td className="num"
-                          title="p99 ÷ p50 — the SHAPE of the latency, not its level.\nNear 1: the whole distribution moved, every caller is slow (dependency, pool, node).\nHigh: most calls are fine and a tail is dragging (retries, GC, cold cache, one bad shard).\nSame p99, opposite causes.">
-                          {(() => {
-                            const sp = spreadOf(r);
-                            if (sp <= 0) return <span style={{ color: 'var(--text3)' }}>—</span>;
-                            // Tone marks SHAPE, never slowness: a fast endpoint
-                            // with a heavy tail should still read as tail-heavy.
-                            const tone = sp >= 10 ? 'var(--err)' : sp >= 4 ? 'var(--warn)' : 'var(--text2)';
-                            return <span style={{ color: tone }}>{sp < 10 ? sp.toFixed(1) : Math.round(sp)}×</span>;
-                          })()}
-                        </td>}
-                        {visibleCols.has('traces') && <td className="sticky-right"
-                            style={{
-                              // Sticky cells float over scrolled content —
-                              // the err-row tint must be flattened over the
-                              // opaque base here (the tr's inline tint is
-                              // color-mix over TRANSPARENT and would let
-                              // scrolled columns bleed through).
-                              background: r.errorRate >= 5
-                                ? 'color-mix(in srgb, var(--err) 7%, var(--bg0))'
-                                : undefined,
-                            }}>
-                          {/* /traces, bu endpoint'e kapsamlı.
-                              ⚠ Bu şerh v0.9.1372'ye kadar "search=path …
-                              rootOnly=false" diyordu ve o sürümde YANLIŞ
-                              hâle geldi: `search` serbest metindi ve
-                              `/api/pay` araması `/api/payment-retry`yi de
-                              getiriyordu. Link artık yapısal
-                              `http.route = <path>` filtresi + `rootOnly=false`
-                              (v0.10.789; 1372-788 arası `auto`) taşıyor
-                              (üretici: endpoints/links.ts). */}
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            {/* v0.9.1257 (operatör: "Traces butonu çok
-                                belirgin değil, View yazıyor sadece") —
-                                a.sec düğme anatomisi (v0.9.1210 kuralı).
-                                v0.10.6 (operatör: "mavi olabilir Traces
-                                butonu") — `.sec` → `.accent`, v0.9.1372'de
-                                detay sayfalarının pivotlarına yapılanın
-                                aynısı. */}
-                            <Link to={tracesLink(r, range, env, cluster)} className="accent"
-                                  style={{ fontSize: 11, padding: '2px 8px' }}>
-                              Traces →
-                            </Link>
-                            {/* v0.10.946 (operatör: "en sağdaki çarpı ve şimşek ikonlarına gerek
-                                yok, direkt Traces diyebilir") — satırın en yavaş (⚡) ve en
-                                yavaş hatalı (✖) trace kısayolları KALDIRILDI; satırın tek
-                                açılış hedefi Traces (tablo standardı S5). Exemplar kimlikleri
-                                API'de duruyor; endpoint detay sayfası onları göstermeye devam eder. */}
-                            {/* v0.10.705 — bu route için eşik alarmı (editör/admin). */}
-                            {canEditRules && entry === 'http' && (
-                              <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
-                                // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
-                                tooltip="Bu route için eşik alarmı: p95/p99/hata oranı/hız eşiği geçince Problem"
-                                onClick={e => { e.stopPropagation(); setAlertRow(r); }} />
-                            )}
-                          </span>
-                        </td>}
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td />
-                          {/* v0.8.574 — span every VISIBLE data column
-                              (?cols= can hide any of the 14). */}
-                          <td colSpan={visibleCols.size} style={{ background: 'var(--bg0)', padding: '8px 14px' }}>
-                            <DependencyStrip
-                              service={r.service} range={range}
-                              window={dep.since} capped={dep.capped}
-                              entry={depsByService[`${r.service}@${dep.since}`]} />
-                          </td>
-                        </tr>
-                      )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            tooltip="Bu route için eşik alarmı: p95/p99/hata oranı/hız eşiği geçince Problem"
+                            onClick={e => { e.stopPropagation(); setAlertRow(r); }} />
+                        )}
+                      </span>
+                    </td>}
+                  </tr>
+                  {isExpanded && (
+                    <tr>
+                      <td />
+                      {/* v0.8.574 — span every VISIBLE data column
+                          (?cols= can hide any of the 14). */}
+                      <td colSpan={visibleCols.size} style={{ background: 'var(--bg0)', padding: '8px 14px' }}>
+                        <DependencyStrip
+                          service={r.service} range={range}
+                          window={dep.since} capped={dep.capped}
+                          entry={depsByService[`${r.service}@${dep.since}`]} />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {hasRows && (
+          <>
             {/* v0.9.818 — KAYNAK DEĞİŞİMİ ARTIK GÖRÜNÜR. env/cluster
                 seçiliyken okuma spanmetrics MV'sinden HAM spans'e düşüyor
                 (EndpointsQuery.forcesRaw) ve dönen POPÜLASYON değişiyor:

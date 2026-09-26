@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, PanelTitle, SectionUnavailable } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { useEndpointSplit, useEndpointDownstream, useEndpointCallers } from '@/lib/queries';
 import { fmtNum, tsLong } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -254,6 +256,12 @@ export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
     storageKey: 'endpoint-failing-traces', columns: FAILING_TRACE_COLS,
     rows: traces ?? [], initialSort: { id: 'time', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: bölüm yükü gelmediyse (NULL TOLERANCE:
+  // bölüm düştü) hata, boşsa boş — ikisi de tablonun İÇİNDE, başlık durur.
+  // Eski "unavailable for this window" genel bir hata cümlesiydi.
+  const tableState: Omit<DataTableStateProps<EndpointFailingTrace>, 'dt'> = !traces
+    ? { kind: 'error' }
+    : { kind: 'empty', message: 'Bu pencerede bu endpoint\'te hata span\'i yok' };
   return (
     <Card header={
       <PanelTitle sub="worst first" right={
@@ -277,48 +285,40 @@ export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
         ) : undefined
       }>Failing traces</PanelTitle>
     }>
-      {!traces && <SectionUnavailable what="Failing traces" />}
-      {traces && traces.length === 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          No error spans on this endpoint in the window.
-        </div>
-      )}
-      {traces && traces.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(t => (
-                <tr key={t.traceId}>
-                  <td className="mono cell-faint">
-                    {tsLong(t.timeNs)}
-                  </td>
-                  <td>
-                    <Link to={traceHref(t.traceId)}
-                      className="mono" style={{ fontSize: 11, color: 'var(--accent2)' }}
-                      title={`Open trace ${t.traceId}`}>
-                      {t.traceId.slice(0, 16)}… →
-                    </Link>
-                  </td>
-                  {/* v0.10.943 — hata metni satırın asıl içeriği: 11.5px düştü, ikincil ton almadı. */}
-                  <td style={{ maxWidth: 0 }} title={t.statusMsg || t.spanName}>
-                    {t.httpStatus ? (
-                      <span className={`badge ${t.httpStatus >= 500 ? 'b-err' : 'b-warn'}`}
-                        style={{ fontSize: 9, marginRight: 6 }}>
-                        {t.httpStatus}
-                      </span>
-                    ) : null}
-                    {t.statusMsg || t.spanName}
-                    {t.errorSpans > 1 ? ` · ${t.errorSpans} error spans` : ''}
-                  </td>
-                  <td className="num">{t.durationMs.toFixed(1)} ms</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(t => (
+              <tr key={t.traceId}>
+                <td className="mono cell-faint">
+                  {tsLong(t.timeNs)}
+                </td>
+                <td>
+                  <Link to={traceHref(t.traceId)}
+                    className="mono" style={{ fontSize: 11, color: 'var(--accent2)' }}
+                    title={`Open trace ${t.traceId}`}>
+                    {t.traceId.slice(0, 16)}… →
+                  </Link>
+                </td>
+                {/* v0.10.943 — hata metni satırın asıl içeriği: 11.5px düştü, ikincil ton almadı. */}
+                <td style={{ maxWidth: 0 }} title={t.statusMsg || t.spanName}>
+                  {t.httpStatus ? (
+                    <span className={`badge ${t.httpStatus >= 500 ? 'b-err' : 'b-warn'}`}
+                      style={{ fontSize: 9, marginRight: 6 }}>
+                      {t.httpStatus}
+                    </span>
+                  ) : null}
+                  {t.statusMsg || t.spanName}
+                  {t.errorSpans > 1 ? ` · ${t.errorSpans} error spans` : ''}
+                </td>
+                <td className="num">{t.durationMs.toFixed(1)} ms</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
@@ -375,6 +375,16 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
     rows,
     initialSort: { id: 'calls', dir: 'desc' },
   });
+  // v0.10.954 — tablo standardı T12: boyut seçilince tablo hep çizilir;
+  // yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. "Pick a
+  // dimension" kapısı dışarıda kalır (sorgu yok). Hata metni geneldi.
+  // Hata, önbellekteki bayat satırları da gizler (showRows): odak/yeniden-
+  // bağlanma refetch'i düşerse eski değerler hata işaretsiz kalmasın.
+  const showRows = !splitQ.isError && rows.length > 0;
+  const tableState: Omit<DataTableStateProps<EndpointSplitValue>, 'dt'> =
+    splitQ.isPending ? { kind: 'loading' }
+    : splitQ.isError ? { kind: 'error' }
+    : { kind: 'empty', message: `Bu pencerede bu endpoint'te ${by} için değer yok` };
   return (
     <Card header={
       <PanelTitle sub="top 10 values, whitelisted dimensions">Break down by</PanelTitle>
@@ -394,22 +404,13 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
           queried until you do.
         </div>
       )}
-      {by && splitQ.isPending && <Spinner />}
-      {by && splitQ.isError && (
-        <div style={{ fontSize: 11, color: 'var(--err)' }}>Split query failed.</div>
-      )}
-      {by && splitQ.data && rows.length === 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          No values for <code>{by}</code> on this endpoint in the window.
-        </div>
-      )}
-      {by && rows.length > 0 && (
+      {by && (
         <div className="table-wrap">
           <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
-              {dt.sortedRows.map((r, i) => {
+              {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
                 // v0.10.929 (K5) — eşikler aynı; yalnız sağlıklı dal nötr (b-gray).
                 const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
                 return (
@@ -601,6 +602,21 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
     initialSort: { id: 'sharePct', dir: 'desc' },
   });
   const d = q.data;
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Boş dalı iki ayrı teşhisi korur (giriş noktası ≠
+  // çözülemeyen çağıran); hata cümlesi komşu bölümlerin canlı olduğunu söyler.
+  // Hata, önbellekteki eski satırlar olsa da onları gizler (showRows); arka
+  // plan yenilemesi düşerse sessiz kalmasın. Dipnot da aynı kapıya bağlı.
+  const showRows = !q.isError && rows.length > 0;
+  const tableState: Omit<DataTableStateProps<EndpointCaller>, 'dt'> =
+    q.isPending ? { kind: 'loading' }
+    : q.isError ? { kind: 'error', message: 'Çağıran sorgusu başarısız — üstteki bölümler hâlâ geçerli.' }
+    : {
+      kind: 'empty',
+      message: (d?.directEntries ?? 0) > 0
+        ? 'Bu pencerede çağıran görülmedi — örneklenen her çağrı parent span\'siz geldi: bu rota izlenen sisteme bir giriş noktası.'
+        : 'Bu pencerede çağıran görülmedi — çağrıların parent\'ı var ama eşleşen parent span depoda yok: çağıran enstrümante değil, örneklemede düştü ya da saklama süresini aştı.',
+    };
   return (
     <Card header={
       <PanelTitle sub={d
@@ -611,54 +627,39 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
         Who calls this
       </PanelTitle>
     }>
-      {q.isPending && <Spinner />}
-      {q.isError && (
-        <div style={{ fontSize: 11, color: 'var(--err)' }}>
-          Caller query failed — the sections above are still live.
-        </div>
-      )}
-      {d && rows.length === 0 && (
-        <Empty icon="↘" title="No caller seen in this window">
-          {d.directEntries > 0
-            ? 'Every sampled call arrived without a parent span — this route is an entry point into the traced system.'
-            : 'The calls have a parent, but no matching parent span is in the store: the caller is uninstrumented, sampled away, or already past retention.'}
-        </Empty>
-      )}
-      {rows.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(r => {
-                // v0.10.929 (K5) — eşikler aynı; yalnız sağlıklı dal nötr (b-gray).
-                const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
-                return (
-                  <tr key={r.service}>
-                    <td title={r.service}>
-                      <Link to={serviceHref(r.service, { range: { fromNs: from, toNs: to } })}
-                        className="mono" style={{ fontSize: 11.5 }}>
-                        {r.service}
-                      </Link>
-                    </td>
-                    <td className="num">{fmtNum(r.calls)}</td>
-                    <td className="num">
-                      <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
-                        {r.errorRate.toFixed(2)}%
-                      </span>
-                    </td>
-                    <td className="num">{r.p95Ms.toFixed(1)} ms</td>
-                    <td className="num"
-                      title="Bu çağıranın bu rotanın toplam süresinden aldığı pay. Sunucudan geliyor; payda rotanın kendi toplamı (databases tarafındaki kardeşinin paydası yüklenmiş satırlar).">
-                      {r.sharePct.toFixed(1)}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {d && (rows.length > 0) && (d.directEntries > 0 || d.unresolved > 0) && (
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(r => {
+              // v0.10.929 (K5) — eşikler aynı; yalnız sağlıklı dal nötr (b-gray).
+              const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
+              return (
+                <tr key={r.service}>
+                  <td title={r.service}>
+                    <Link to={serviceHref(r.service, { range: { fromNs: from, toNs: to } })}
+                      className="mono" style={{ fontSize: 11.5 }}>
+                      {r.service}
+                    </Link>
+                  </td>
+                  <td className="num">{fmtNum(r.calls)}</td>
+                  <td className="num">
+                    <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
+                      {r.errorRate.toFixed(2)}%
+                    </span>
+                  </td>
+                  <td className="num">{r.p95Ms.toFixed(1)} ms</td>
+                  <td className="num"
+                    title="Bu çağıranın bu rotanın toplam süresinden aldığı pay. Sunucudan geliyor; payda rotanın kendi toplamı (databases tarafındaki kardeşinin paydası yüklenmiş satırlar).">
+                    {r.sharePct.toFixed(1)}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {d && showRows && (d.directEntries > 0 || d.unresolved > 0) && (
         <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 8, lineHeight: 1.5 }}>
           {d.directEntries > 0 && (
             <div title="These calls carried no parent span id at all — the route was entered from outside the traced system (a browser, an external client, a scheduler).">

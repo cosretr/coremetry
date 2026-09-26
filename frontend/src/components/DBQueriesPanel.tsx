@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link } from 'react-router-dom';
-import { Spinner, Empty } from './Spinner';
 import { DisclosureButton } from '@/components/ui';
-import { useDataTable, DataTableColgroup, DataTableHead, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableColgroup, DataTableHead, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { useQueries } from '@tanstack/react-query';
 import { useClusters } from '@/lib/queries';
@@ -141,6 +143,17 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
   // about timeRangeToNs ticking each render; from/to are stable inputs.
   const dbRange = windowRangeParam({ fromNs: from, toNs: to });
 
+  // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
+  // İÇİNDE, başlık durur. Koşullar eskisiyle aynı (undefined / null / []);
+  // hata metni genel olduğundan varsayılan satır.
+  const tableState: Omit<DataTableStateProps<DBRow>, 'dt'> =
+    view === undefined ? { kind: 'loading' }
+    : view === null ? { kind: 'error' }
+    : {
+      kind: 'empty',
+      message: `Bu pencerede veritabanı ifadesi yok — ${service} servisinden gelen hiçbir span db.statement taşımıyor. DB enstrümantasyonu güvenlik için ifadeleri siliyorsa bu beklenen bir durum.`,
+    };
+
   return (
     <div style={{
       background: 'var(--bg1)', border: '1px solid var(--border)',
@@ -173,134 +186,92 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
 
       {open && (
         <div style={{ padding: 14, paddingTop: 10 }}>
-          {view === undefined && (
-            <div style={{ minHeight: 120, display: 'grid', placeItems: 'center' }}>
-              <Spinner />
-            </div>
-          )}
-          {view === null && (
-            <div style={{ fontSize: 12, color: 'var(--err)', padding: '12px 4px' }}>
-              Failed to load DB queries.
-            </div>
-          )}
-          {view && view.length === 0 && (
-            <Empty compact icon="◯" title="No database statements in this window">
-              No spans carry <code>db.statement</code> from <code>{service}</code>.
-              {' '}If your DB instrumentation strips statements for security, that's expected.
-            </Empty>
-          )}
-          {view && view.length > 0 && (
-            <div className="table-wrap">
-              <table {...dt.tableProps}>
-                <DataTableColgroup dt={dt} />
-                <DataTableHead dt={dt} />
-                <tbody>
-                  {dt.sortedRows.map((r, i) => {
-                    const expanded = expandedIdx === i;
-                    const errPct = r.count > 0 ? (r.errorCount / r.count) * 100 : 0;
-                    const errCls = errPct > 5 ? 'b-err' : errPct > 0 ? 'b-warn' : 'b-gray'; // v0.10.929 (K5) — ulaşılmaz dal da yeşil değil
-                    // v0.9.963 (G1-b) — null when the row carries no
-                    // stmtHash (pre-D1 cache entry); the cell then renders a
-                    // dash rather than a link that opens an empty drawer.
-                    const detailHref = stmtDetailHref(
-                      { hash: r.stmtHash, system: r.dbSystem },
-                      { fromNs: from, toNs: to },
-                    );
-                    return (
-                      <Row key={i}>
-                        <tr {...rowActivation(() => setExpandedIdx(e => e === i ? null : i))}
-                            className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
-                          {/* v0.10.943 (tablo standardı dilim 3) — maxWidth sabit
-                              düzende etkisizdi (genişlik colgroup'ta); kırpma ve
-                              12px tablo tabanından. Sayılar `num` (S2). */}
-                          <td className="mono" title={r.statement}>
-                            {r.statement}
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
+              <DataTableColgroup dt={dt} />
+              <DataTableHead dt={dt} />
+              <tbody>
+                {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
+                  const expanded = expandedIdx === i;
+                  const errPct = r.count > 0 ? (r.errorCount / r.count) * 100 : 0;
+                  const errCls = errPct > 5 ? 'b-err' : errPct > 0 ? 'b-warn' : 'b-gray'; // v0.10.929 (K5) — ulaşılmaz dal da yeşil değil
+                  // v0.9.963 (G1-b) — null when the row carries no
+                  // stmtHash (pre-D1 cache entry); the cell then renders a
+                  // dash rather than a link that opens an empty drawer.
+                  const detailHref = stmtDetailHref(
+                    { hash: r.stmtHash, system: r.dbSystem },
+                    { fromNs: from, toNs: to },
+                  );
+                  return (
+                    <Row key={i}>
+                      <tr {...rowActivation(() => setExpandedIdx(e => e === i ? null : i))}
+                          className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
+                        {/* v0.10.943 (tablo standardı dilim 3) — maxWidth sabit
+                            düzende etkisizdi (genişlik colgroup'ta); kırpma ve
+                            12px tablo tabanından. Sayılar `num` (S2). */}
+                        <td className="mono" title={r.statement}>
+                          {r.statement}
+                        </td>
+                        {byCluster && (
+                          <td className="mono" onClick={e => e.stopPropagation()}>
+                            {r.cluster
+                              ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+                              : '—'}
                           </td>
-                          {byCluster && (
-                            <td className="mono" onClick={e => e.stopPropagation()}>
-                              {r.cluster
-                                ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
-                                : '—'}
-                            </td>
+                        )}
+                        {/* v0.9.964 (UX denetimi Ö9 / G2) — the engine
+                            chip is the bridge OUT of the service into the
+                            database catalogue. There was no link at all
+                            from a service to /databases: "which instances
+                            of this engine does my service actually talk
+                            to" meant sidebar → /databases → re-find it by
+                            eye. Narrowed only as far as the row honestly
+                            goes (databasesFilterHref drops the folded /
+                            sentinel db.name). */}
+                        <td onClick={e => e.stopPropagation()}>
+                          {r.dbSystem ? (
+                            <Link to={databasesFilterHref(r, { range: dbRange })}
+                                  title={`Open the database catalogue filtered to ${r.dbSystem}${r.dbName && r.dbName !== 'default' && r.dbNameCount <= 1 ? ` · ${r.dbName}` : ''}`}
+                                  style={{
+                                    fontSize: 11, padding: '1px 6px',
+                                    background: 'var(--bg3)', borderRadius: 3,
+                                    fontFamily: 'var(--font-mono)',
+                                    color: 'var(--accent2)', textDecoration: 'none',
+                                  }}>
+                              {r.dbSystem}
+                            </Link>
+                          ) : (
+                            <span style={{
+                              fontSize: 11, padding: '1px 6px',
+                              background: 'var(--bg3)', borderRadius: 3,
+                              fontFamily: 'var(--font-mono)',
+                            }}>—</span>
                           )}
-                          {/* v0.9.964 (UX denetimi Ö9 / G2) — the engine
-                              chip is the bridge OUT of the service into the
-                              database catalogue. There was no link at all
-                              from a service to /databases: "which instances
-                              of this engine does my service actually talk
-                              to" meant sidebar → /databases → re-find it by
-                              eye. Narrowed only as far as the row honestly
-                              goes (databasesFilterHref drops the folded /
-                              sentinel db.name). */}
-                          <td onClick={e => e.stopPropagation()}>
-                            {r.dbSystem ? (
-                              <Link to={databasesFilterHref(r, { range: dbRange })}
-                                    title={`Open the database catalogue filtered to ${r.dbSystem}${r.dbName && r.dbName !== 'default' && r.dbNameCount <= 1 ? ` · ${r.dbName}` : ''}`}
-                                    style={{
-                                      fontSize: 11, padding: '1px 6px',
-                                      background: 'var(--bg3)', borderRadius: 3,
-                                      fontFamily: 'var(--font-mono)',
-                                      color: 'var(--accent2)', textDecoration: 'none',
-                                    }}>
-                                {r.dbSystem}
-                              </Link>
-                            ) : (
-                              <span style={{
-                                fontSize: 11, padding: '1px 6px',
-                                background: 'var(--bg3)', borderRadius: 3,
-                                fontFamily: 'var(--font-mono)',
-                              }}>—</span>
-                            )}
-                          </td>
-                          <DataTableCell dt={dt} col="count" row={r} value={fmtNum(r.count)} />
-                          <DataTableCell dt={dt} col="totalMs" row={r} value={fmtMs(r.totalMs)} />
-                          <DataTableCell dt={dt} col="avgMs" row={r} value={fmtMs(r.avgMs)} />
-                          <DataTableCell dt={dt} col="p95Ms" row={r} value={fmtMs(r.p95Ms)} />
-                          <DataTableCell dt={dt} col="p99Ms" row={r} value={fmtMs(r.p99Ms)} />
-                          <DataTableCell dt={dt} col="maxMs" row={r} value={fmtMs(r.maxMs)} />
-                          <td className="num">
-                            {r.errorCount > 0
-                              ? <span className={`badge ${errCls}`}>{r.errorCount} ({errPct.toFixed(1)}%)</span>
-                              : <span style={{ color: 'var(--text3)' }}>0</span>}
-                          </td>
-                          {/* v0.9.963 (UX denetimi G1-b) — statement detail
-                              drill. The panel could reach /traces and
-                              nothing else: "who else runs this statement,
-                              and is it worse than last window?" lived only
-                              behind a row click on the FLEET catalog, so
-                              from your own service you had to recognise
-                              your SQL by eye in a cross-service list to get
-                              one page further. */}
-                          <td onClick={e => e.stopPropagation()}>
-                            {detailHref ? (
-                              <Link to={detailHref}
-                                    className="sec"
-                                    title="Open this statement class in the fleet statement-detail drawer — per-service callers, 5m trend, vs-prior compare, exemplar traces."
-                                    style={{
-                                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                                      fontSize: 11, padding: '2px 8px',
-                                      border: '1px solid var(--border)',
-                                      borderRadius: 4,
-                                      color: 'var(--text)', textDecoration: 'none',
-                                      fontFamily: 'inherit',
-                                    }}>
-                                Detail →
-                              </Link>
-                            ) : (
-                              <span style={{ fontSize: 11, color: 'var(--text3)' }}
-                                    title="No statement identity on this row — the response predates the statement-hash column.">—</span>
-                            )}
-                          </td>
-                          {/* Traces drill — link to /traces filtered by
-                              service + db.statement LIKE the normalised
-                              form. The normalised statement's "?"
-                              placeholders are converted to SQL LIKE "%"
-                              wildcards so all literal variants of the
-                              same query class show up in one search. */}
-                          <td onClick={e => e.stopPropagation()}>
-                            <Link to={tracesURL(service, r, { fromNs: from, toNs: to, cluster: cluster || undefined })}
+                        </td>
+                        <DataTableCell dt={dt} col="count" row={r} value={fmtNum(r.count)} />
+                        <DataTableCell dt={dt} col="totalMs" row={r} value={fmtMs(r.totalMs)} />
+                        <DataTableCell dt={dt} col="avgMs" row={r} value={fmtMs(r.avgMs)} />
+                        <DataTableCell dt={dt} col="p95Ms" row={r} value={fmtMs(r.p95Ms)} />
+                        <DataTableCell dt={dt} col="p99Ms" row={r} value={fmtMs(r.p99Ms)} />
+                        <DataTableCell dt={dt} col="maxMs" row={r} value={fmtMs(r.maxMs)} />
+                        <td className="num">
+                          {r.errorCount > 0
+                            ? <span className={`badge ${errCls}`}>{r.errorCount} ({errPct.toFixed(1)}%)</span>
+                            : <span style={{ color: 'var(--text3)' }}>0</span>}
+                        </td>
+                        {/* v0.9.963 (UX denetimi G1-b) — statement detail
+                            drill. The panel could reach /traces and
+                            nothing else: "who else runs this statement,
+                            and is it worse than last window?" lived only
+                            behind a row click on the FLEET catalog, so
+                            from your own service you had to recognise
+                            your SQL by eye in a cross-service list to get
+                            one page further. */}
+                        <td onClick={e => e.stopPropagation()}>
+                          {detailHref ? (
+                            <Link to={detailHref}
                                   className="sec"
-                                  title={`Open /traces filtered to ${service} + this query class`}
+                                  title="Open this statement class in the fleet statement-detail drawer — per-service callers, 5m trend, vs-prior compare, exemplar traces."
                                   style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 4,
                                     fontSize: 11, padding: '2px 8px',
@@ -309,56 +280,80 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                                     color: 'var(--text)', textDecoration: 'none',
                                     fontFamily: 'inherit',
                                   }}>
-                              Traces →
+                              Detail →
                             </Link>
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--text3)' }}
+                                  title="No statement identity on this row — the response predates the statement-hash column.">—</span>
+                          )}
+                        </td>
+                        {/* Traces drill — link to /traces filtered by
+                            service + db.statement LIKE the normalised
+                            form. The normalised statement's "?"
+                            placeholders are converted to SQL LIKE "%"
+                            wildcards so all literal variants of the
+                            same query class show up in one search. */}
+                        <td onClick={e => e.stopPropagation()}>
+                          <Link to={tracesURL(service, r, { fromNs: from, toNs: to, cluster: cluster || undefined })}
+                                className="sec"
+                                title={`Open /traces filtered to ${service} + this query class`}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  fontSize: 11, padding: '2px 8px',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 4,
+                                  color: 'var(--text)', textDecoration: 'none',
+                                  fontFamily: 'inherit',
+                                }}>
+                            Traces →
+                          </Link>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr>
+                          {/* Spans every column — derived, not a literal:
+                              the previous hardcoded 10 would have gone
+                              stale the moment a column was added.
+                              v0.10.943 — `row-detail` DEĞİL: zemin bg0 ve üst
+                              çizgi yok (sınıf bg2 + çizgi çizer, görünür fark). */}
+                          <td colSpan={cols.length}
+                              style={{ background: 'var(--bg0)', padding: '12px 16px' }}>
+                            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
+                              Sample statement (with real literals)
+                            </div>
+                            <pre style={{
+                              margin: 0, fontSize: 12, lineHeight: 1.5,
+                              whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
+                              color: 'var(--text)',
+                              background: 'var(--bg1)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              padding: '10px 12px',
+                            }}>
+                              {r.sampleStatement}
+                            </pre>
+                            <div style={{
+                              marginTop: 8, display: 'flex', gap: 14,
+                              fontSize: 11, color: 'var(--text2)',
+                              flexWrap: 'wrap',
+                            }}>
+                              <Stat label="executions" value={fmtNum(r.count)} />
+                              <Stat label="total"     value={fmtMs(r.totalMs)} />
+                              <Stat label="avg"       value={fmtMs(r.avgMs)} />
+                              <Stat label="p95"       value={fmtMs(r.p95Ms)} />
+                              <Stat label="p99"       value={fmtMs(r.p99Ms)} />
+                              <Stat label="max"       value={fmtMs(r.maxMs)} />
+                              <Stat label="errors"    value={`${r.errorCount} (${errPct.toFixed(2)}%)`} />
+                            </div>
                           </td>
                         </tr>
-                        {expanded && (
-                          <tr>
-                            {/* Spans every column — derived, not a literal:
-                                the previous hardcoded 10 would have gone
-                                stale the moment a column was added.
-                                v0.10.943 — `row-detail` DEĞİL: zemin bg0 ve üst
-                                çizgi yok (sınıf bg2 + çizgi çizer, görünür fark). */}
-                            <td colSpan={cols.length}
-                                style={{ background: 'var(--bg0)', padding: '12px 16px' }}>
-                              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                                Sample statement (with real literals)
-                              </div>
-                              <pre style={{
-                                margin: 0, fontSize: 12, lineHeight: 1.5,
-                                whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-                                color: 'var(--text)',
-                                background: 'var(--bg1)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 6,
-                                padding: '10px 12px',
-                              }}>
-                                {r.sampleStatement}
-                              </pre>
-                              <div style={{
-                                marginTop: 8, display: 'flex', gap: 14,
-                                fontSize: 11, color: 'var(--text2)',
-                                flexWrap: 'wrap',
-                              }}>
-                                <Stat label="executions" value={fmtNum(r.count)} />
-                                <Stat label="total"     value={fmtMs(r.totalMs)} />
-                                <Stat label="avg"       value={fmtMs(r.avgMs)} />
-                                <Stat label="p95"       value={fmtMs(r.p95Ms)} />
-                                <Stat label="p99"       value={fmtMs(r.p99Ms)} />
-                                <Stat label="max"       value={fmtMs(r.maxMs)} />
-                                <Stat label="errors"    value={`${r.errorCount} (${errPct.toFixed(2)}%)`} />
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Row>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      )}
+                    </Row>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

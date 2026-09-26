@@ -7,8 +7,7 @@ import { encodeRange } from '@/lib/urlState';
 import { logsHref } from '@/lib/logsUrl';
 import { timeRangeToNs, fmtNum, isMessagingDep } from '@/lib/utils';
 import type { TimeRange, LogRow, ServiceMap } from '@/lib/types';
-import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
+import { Spinner } from '@/components/Spinner';
 import { LogsHistogram } from '@/components/LogsHistogram';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { LogTable } from '@/components/LogTable';
@@ -17,6 +16,7 @@ import { FocusedNeighborhood } from '@/components/topology/FocusedNeighborhood';
 import { parseTopologyHops, topologyHopsUrlValue } from './topologyHops';
 import { serviceHref } from '@/lib/serviceHref';
 import { Chip } from '@/components/ui'; // v0.10.928 — seviye fasetleri
+import type { DataTableStateProps } from '@/components/ui/DataTable';
 
 // Service-scoped Logs / Topology tabs — the design's tab strip beyond
 // Overview/Operations/Details. All read-only, all reuse the app-wide
@@ -64,6 +64,8 @@ function bandOfName(name: string): Lvl {
 // (>=17 zaten bandın kendisi); warn/info için taban — sayfa o taban ÜSTÜNDEN
 // gelir, istemci bant kesimi görünümü tamamlar.
 const LVL_MIN_SEV: Record<Lvl, number> = { error: 17, warn: 13, info: 9, debug: 0 };
+// v0.10.954 — kararlı boş dizi: satır gösterilmeyen durumlarda LogTable'a.
+const NO_LOGS: LogRow[] = [];
 
 export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }: {
   service: string; range: TimeRange;
@@ -196,6 +198,22 @@ export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }
   }, [bandTotals, logs]);
   const rows = useMemo(() => (lvl === 'all' ? logs : logs.filter(r => levelOf(r) === lvl)), [logs, lvl]);
 
+  // v0.10.954 — tablo standardı T12 (P6): yükleniyor / backend yanıtsız /
+  // boş artık LogTable'ın İÇİNDE, başlık durur. Sıra eskisiyle aynı;
+  // degraded (ES brownout, v0.9.363) "log yok" değil → hata türü, nedeni
+  // satırda. Arama ya da seviye çipi seçiliyken boş sonuç "eşleşme yok"
+  // (ortak temizleme eylemi yok). Eskisi gibi ayrı bir okuma-hatası dalı
+  // yok. showRows eski öncelik: degraded satırları da gizliyordu.
+  const showRows = !q.isLoading && !q.data?.degraded && rows.length > 0;
+  const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
+    q.isLoading ? { kind: 'loading', skeletonRows: 10 }
+    : q.data?.degraded ? {
+        kind: 'error',
+        message: `Log backend'i yanıt veremedi — ${q.data.reason || 'Elasticsearch yavaş ya da erişilemez — pencerede log olmadığı anlamına gelmez.'}`,
+      }
+    : (search || lvl !== 'all') ? { kind: 'no-match', message: `Bu pencerede ${service} için süzgeçle eşleşen log yok` }
+    : { kind: 'empty', message: `Bu pencerede ${service} için log yok` };
+
   return (
     <div style={{ marginTop: 4 }}>
       {/* Filter bar — substring search + level facet chips with counts */}
@@ -240,21 +258,9 @@ export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }
               ` · pencerede ${q.data!.total}${q.data?.totalIsLowerBound ? '+' : ''} satır, en yeni ${logs.length} gösteriliyor`}
           </span>
         </div>
-        {q.isLoading ? (
-          <TableSkeleton rows={10} cols={4} />
-        ) : q.data?.degraded ? (
-          /* v0.9.363 — ES brownout "log yok" DEĞİLDİR. Backend v0.8.350'den
-             beri 200 + degraded/reason gönderiyor; bu sekme onu atıyordu. */
-          <div className="ov-card-b">
-            <Empty icon="⚠" title="Log backend'i yanıt veremedi">
-              {q.data.reason || 'Elasticsearch yavaş ya da erişilemez — pencerede log olmadığı anlamına gelmez.'}
-            </Empty>
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="ov-card-b"><Empty icon="≡" title={`No logs for ${service} in this window`} /></div>
-        ) : (
+        <LogTable logs={showRows ? rows : NO_LOGS} state={logsState} />
+        {showRows && (
           <>
-          <LogTable logs={rows} />
           {/* v0.9.406 — "200 satır daha": kullanıcı-tetiklemeli keyset
               sayfa (otomatik prefetch YOK — ES disiplini). Sayaç üstteki
               başlıkta; burada yalnız eylem + dürüst son. */}

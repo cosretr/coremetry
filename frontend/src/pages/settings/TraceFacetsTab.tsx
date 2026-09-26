@@ -11,9 +11,9 @@ import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Stack, Row } from '@/components/ui';
 import { Badge } from '@/components/ui/Badge';
-import { Spinner, Empty } from '@/components/Spinner';
+import { Spinner } from '@/components/Spinner';
 import { CopyButton } from '@/components/CopyButton';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import type { TraceFacet, TraceFacetStatus, TraceFacetsResponse } from '@/lib/types';
 import { FlashBox, humanize, useSettingsLoad, SettingsLoadError } from './shared';
@@ -112,33 +112,34 @@ export function TraceFacetsTab() {
         </label>
         <Button variant="primary" type="button" disabled={busy || !draft.key.trim()} onClick={add} className="tf-add">Facet ekle</Button>
       </Row>
-      {rows.length === 0 ? (
-        <Empty icon="≡" title="Kayıtlı facet yok" compact>Yerleşik terfi kolonları (channel_code, function_code, k8s.*) kodda; burası operatörün eklediği ek facet'ler.</Empty>
-      ) : (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.map(r => {
-                const st = facetStateLabel(r.status);
-                return (
-                  <tr key={r.key} className="tf-row">
-                    <DataTableCell dt={dt} col="key" row={r} value={r.key} />
-                    <DataTableCell dt={dt} col="spellings" row={r} value={(r.spellings ?? [r.key]).join(', ')} />
-                    <DataTableCell dt={dt} col="scope" row={r} value={r.scope ?? 'span'} />
-                    <DataTableCell dt={dt} col="type" row={r} value={r.type ?? 'lc'} />
-                    <DataTableCell dt={dt} col="column" row={r} value={r.status?.column} />
-                    {/* v0.10.942 — `numeric` yalnız sıralama yönü için: rozet hücresi `num` almaz, solda kalır. */}
-                    <td><Badge tone={st.tone}>{st.text}</Badge></td>
-                    <DataTableCell dt={dt} col="act" row={r}><Button variant="secondary" size="xs" className="tf-remove" disabled={busy} onClick={() => remove(r.key)} title="Kaydı sil (kolon/indeks ClickHouse'ta kalır; rollback SQL'i elle)">Sil</Button></DataTableCell>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık
+          durur (ayar yükleme kapısı yukarıda kalır). */}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? (
+              <DataTableState dt={dt} kind="empty"
+                message="Kayıtlı facet yok — yerleşik terfi kolonları (channel_code, function_code, k8s.*) kodda; burası operatörün eklediği ek facet'ler." />
+            ) : dt.sortedRows.map(r => {
+              const st = facetStateLabel(r.status);
+              return (
+                <tr key={r.key} className="tf-row">
+                  <DataTableCell dt={dt} col="key" row={r} value={r.key} />
+                  <DataTableCell dt={dt} col="spellings" row={r} value={(r.spellings ?? [r.key]).join(', ')} />
+                  <DataTableCell dt={dt} col="scope" row={r} value={r.scope ?? 'span'} />
+                  <DataTableCell dt={dt} col="type" row={r} value={r.type ?? 'lc'} />
+                  <DataTableCell dt={dt} col="column" row={r} value={r.status?.column} />
+                  {/* v0.10.942 — `numeric` yalnız sıralama yönü için: rozet hücresi `num` almaz, solda kalır. */}
+                  <td><Badge tone={st.tone}>{st.text}</Badge></td>
+                  <DataTableCell dt={dt} col="act" row={r}><Button variant="secondary" size="xs" className="tf-remove" disabled={busy} onClick={() => remove(r.key)} title="Kaydı sil (kolon/indeks ClickHouse'ta kalır; rollback SQL'i elle)">Sil</Button></DataTableCell>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       <Row gap={4}>
         <Button variant="secondary" type="button" onClick={() => setShowSql(v => !v)} aria-expanded={showSql}>
           {showSql ? 'SQL\'i gizle' : 'Prod SQL\'ini göster'}
