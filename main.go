@@ -1361,6 +1361,9 @@ func main() {
 	// v0.10.733 — kök tanımı (strict | entry), aynı kablo.
 	srv.LoadTraceRootDef(ctx)
 	go srv.StartTraceRootDefRefresh(ctx, 30*time.Second)
+	// v0.10.952 — PromQL konsolu korkulukları (promql_console), aynı kablo.
+	srv.LoadPromQLConsoleSettings(ctx)
+	go srv.StartPromQLConsoleSettingsRefresh(ctx, 30*time.Second)
 	// v0.9.800 — anomali dedektörünün izlediği metrik seti, AYNI kablo.
 	// request_rate varsayılan KAPALI (operatör: false-pozitif). Dedektör
 	// bu satırdan ÖNCE başlıyor ve kendi Start'ında bir kez hidrate

@@ -535,6 +535,12 @@ func (s *Server) reloadConfigOnSignal(ctx context.Context, svc string) {
 				log.Printf("[cache] config-reload thanos: %v", err)
 			}
 		}
+	case "promql_console":
+		// v0.10.952 — PromQL konsolu korkulukları (promql_console_settings.go
+		// PUT). Case uçla AYNI sürümde (thanos v0.9.237 dersi): dinleyicisiz
+		// publish, peer pod'ların 30 s boyunca eski timeout/limitlerle
+		// konsol sorgusu koşması demek olurdu. Store nil kontrolü Load'da.
+		s.LoadPromQLConsoleSettings(ctx)
 	case "entities":
 		// v0.10.129 — entity katmanı bayrağı/vidaları (entity_routes.go PUT).
 		if s.entitySettings != nil {
