@@ -162,6 +162,25 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 	return guidedAnswerLink{Label: label, Href: r.DeepLink}, true
 }
 
+// buildLinkResultLink — build_link'in href'i deep_link gibi çip/link bloğu
+// olur. Model metnindeki kök-göreli yol mdLite'ta tıklanamaz (yalnız 32-hex
+// kimlikler linklenir), yani bu kaldırma olmadan ajan döngüsünün "asıl
+// çıktısı" ölü metin kalıyordu. href sunucunun kendi buildLink çıktısı; sınır
+// yine de aynı: yalnız kök-göreli, protokol-göreli (// ya da /\) asla. Saf.
+func buildLinkResultLink(tool, content string) (guidedAnswerLink, bool) {
+	if tool != "build_link" {
+		return guidedAnswerLink{}, false
+	}
+	var r struct {
+		Href string `json:"href"`
+	}
+	if json.Unmarshal([]byte(content), &r) != nil || !strings.HasPrefix(r.Href, "/") ||
+		strings.HasPrefix(r.Href, "//") || strings.HasPrefix(r.Href, "/\\") || len(r.Href) > 4096 {
+		return guidedAnswerLink{}, false
+	}
+	return guidedAnswerLink{Label: "Coremetry'de aç", Href: r.Href}, true
+}
+
 // answerOpenHref — v0.10.495 (B): döngü bir trace araması yaptıysa ve
 // operatörün sorusu bir "getir/göster/listele/aç" fiili taşıyorsa (kip
 // sözlüğü mutationVerbs) cevap `open` alanıyla arkadaki sayfayı o aramaya

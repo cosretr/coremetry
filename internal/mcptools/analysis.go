@@ -797,8 +797,7 @@ func getLogHistogramTool(d Deps) mcp.Tool {
 			"SPARSE: buckets with zero matches are OMITTED, so a missing bucket means 'nothing matched', not 'no data'. " +
 			"PARTIALITY: this shape carries NO partial flag — on a slow or shard-degraded backend a DIP can be the timeout rather than a traffic drop. If a " +
 			"dip carries your conclusion, confirm it with search_logs, whose response does report partial / shardsFailed. " +
-			"There is no environment argument: on logs the env filter can silently fail to resolve and this shape has no room for the 'env not applied' " +
-			"flag search_logs carries — narrow by service instead, and never claim the counts are env-scoped.",
+			"There is no environment argument (search_logs has none either): narrow by service instead, and never claim the counts are env-scoped.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -808,9 +807,10 @@ func getLogHistogramTool(d Deps) mcp.Tool {
 				},
 				"query": map[string]any{
 					"type": "string",
-					"description": "Optional free-text / structured narrowing applied BEFORE bucketing. With the Elasticsearch backend this is a Lucene " +
-						"query_string (`level:error`, `timeout AND NOT healthcheck`) with AND as the default operator and leading wildcards rejected; with " +
-						"the ClickHouse backend it is a case-insensitive substring match on the log body. Empty = all lines.",
+					"description": "Optional narrowing applied BEFORE bucketing, in the /logs search language (field terms such as `level:error` plus free text). " +
+						"Elasticsearch runs it as a Lucene query_string (`timeout AND NOT healthcheck`; AND default operator, leading wildcards rejected); " +
+						"ClickHouse compiles the same field syntax server-side — field terms bind to log columns/attributes, free text is matched in the body, " +
+						"and text it cannot parse falls back to a case-insensitive body substring. Empty = all lines.",
 				},
 				"range_s": map[string]any{
 					"type":        "integer",

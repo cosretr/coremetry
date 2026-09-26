@@ -647,6 +647,12 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 					if act, ok := actionForLink(l, pagePath); ok {
 						emit("block", blockSeq.Next(blocks.TypeAction, act)) // v0.10.542
 					}
+				} else if l, ok := buildLinkResultLink(tc.Name, tr.Content); ok {
+					// build_link'in href'i: model metninde tıklanamaz, çip olur.
+					// open YAZILMAZ — build_link sayfayı kendiliğinden değiştirmez.
+					stepEv["href"] = l.Href
+					loopLinks = mergeToolLinks(loopLinks, l)
+					emit("block", blockSeq.Next(blocks.TypeLink, l))
 				} else if l, ok := toolCallLink(tc.Name, tc.Input, time.Now()); ok {
 					stepEv["href"] = l.Href
 					loopLinks = mergeToolLinks(loopLinks, l)

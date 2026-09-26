@@ -72,4 +72,13 @@ func TestOnlyOneMCPDepsConstructionSite(t *testing.T) {
 		t.Fatalf("mcptools.Deps{...} literals found in %v — construct it only in mcp_deps.go "+
 			"so the Metrics router can never be omitted on one path", sites)
 	}
+	// Dış MCP sunucusu da aynı kurucudan geçer: main.go'da literal yok.
+	raw, err := os.ReadFile("../../main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lit.MatchString(stripGoComments(string(raw))) {
+		t.Fatal("main.go mcptools.Deps{...} kuruyor — dış MCP sunucusu srv.MCPDeps() kullanmalı " +
+			"(ayrı literal varlık katmanını, cluster_metric'i ve VM metrik okumasını düşürüyordu)")
+	}
 }

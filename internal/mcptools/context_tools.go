@@ -19,7 +19,7 @@ var contextFieldProps = map[string]any{
 	"workload":    map[string]any{"type": "string"},
 	"service":     map[string]any{"type": "string"},
 	"pod":         map[string]any{"type": "string"},
-	"range_s":     map[string]any{"type": "integer", "minimum": 60, "maximum": 2592000},
+	"range_s":     map[string]any{"type": "integer", "minimum": 60, "maximum": 604800, "description": "Window seconds; every reading tool caps at 7d (604800)."},
 	"errors_only": map[string]any{"type": "boolean"},
 	"filters":     map[string]any{"type": "array", "items": map[string]any{"type": "object"}, "description": "chstore FilterExpr[] ({k,op,v}) — search_traces'in filters_applied çıktısını aynen geç."},
 	"search_text": map[string]any{"type": "string"},
@@ -35,7 +35,7 @@ func setContextTool(d Deps) mcp.Tool {
 		ShortDescription: "Sohbetin AKTİF çalışma kümesini günceller (cluster, namespace, workload, servis, pod, pencere, yalnız-hata, süzgeçler). Her çözüm/aramadan sonra değişeni yaz; hafızana güvenme.",
 		Description: "Update the conversation's active context stored on the server — the working set later turns resolve against (\"onun içinde\", \"aynı filtreyle\", \"son 1 saate genişlet\"). " +
 			"Pass ONLY the fields that changed; unknown fields are rejected. Call it after every successful entity resolution or search. range_s marks the window as explicit " +
-			"(it then beats the screen range). Returns the full context. Not available to external MCP clients (no conversation).",
+			"(it then beats the screen range). Returns the full context.",
 		InputSchema: map[string]any{"type": "object", "properties": contextFieldProps},
 		MinRole:     "",
 		Handler: func(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -87,8 +87,12 @@ func clearContextTool(d Deps) mcp.Tool {
 		ShortDescription: "Aktif çalışma kümesinden alan(lar)ı siler; alan verilmezse hepsini. Operatör konu değiştirdiğinde varlık alanlarını sil, pencereyi koru.",
 		Description: "Clear fields of the conversation's active context (fields[]: cluster, namespace, workload, service, pod, range_s, errors_only, filters, search_text). " +
 			"No fields = clear everything. When the operator switches subject, clear the entity fields but keep range_s unless they changed it.",
-		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"fields": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}},
-		MinRole:     "",
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"fields": map[string]any{
+			"type":        "array",
+			"items":       map[string]any{"type": "string", "enum": []string{"cluster", "namespace", "workload", "service", "pod", "range_s", "errors_only", "filters", "search_text"}},
+			"description": "Context fields to clear; omit to clear everything. Unknown names are rejected.",
+		}}},
+		MinRole: "",
 		Handler: func(ctx context.Context, raw json.RawMessage) (any, error) {
 			if d.CtxClear == nil {
 				return nil, noContextErr()

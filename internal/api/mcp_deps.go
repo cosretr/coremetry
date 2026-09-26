@@ -26,6 +26,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/mcptools"
 	"github.com/cilcenk/coremetry/internal/thanos"
+	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
 // mcpDeps — tool kataloğunun ve ortak veri katmanının kapandığı
@@ -40,6 +41,9 @@ import (
 func (s *Server) mcpDeps() mcptools.Deps {
 	return mcptools.Deps{
 		Store: s.store, LogStore: s.logs, Metrics: s.metricSource(),
+		// JVM heap VM birincil backend'ini İKİ yolda da izler (eskiden yalnız
+		// main.go'nun dış literalinde vardı; sohbet CH-only okuyordu).
+		RuntimePods: vmetrics.RuntimePodsOr(s.vmetrics, s.store),
 		// v0.10.468 (Faz 2, F2-1) — varlık kataloğu tool'ları: etkin Remote
 		// Cluster'lar + entity_layer bayrağı (nil-güvenli; her ikisi de
 		// yoksa tool'lar dürüst disabled/boş döner).
@@ -60,6 +64,10 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		},
 	}
 }
+
+// MCPDeps — TEK Deps kurucusu, dışa açık: main.go'nun dış MCP sunucusu
+// uygulama içi sohbetle aynı kablolamayı kaydeder.
+func (s *Server) MCPDeps() mcptools.Deps { return s.mcpDeps() }
 
 // mcpClusterRefs — thanos.ClusterConfig → mcptools.ClusterRef (yalnız etkin).
 func (s *Server) mcpClusterRefs() []mcptools.ClusterRef {

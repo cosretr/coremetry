@@ -1409,27 +1409,6 @@ func main() {
 	srv.SetLogstoreESManager(logsMgr) // v0.8.232 — Settings → Elasticsearch (UI-managed logs backend)
 	srv.SetCluster(clusterSvc)
 	srv.SetAutocomplete(acStore) // v0.8.80 — picker fast path; nil-safe, falls back to CH
-	// v0.6.4 — Model Context Protocol server. Wired on api/all
-	// modes only — worker / ingest pods don't take operator
-	// traffic so they have no MCP listeners. External LLMs
-	// (Claude Desktop, internal copilots) talk to the api fleet
-	// the same way browsers do.
-	if mode.api {
-		mcpSvc := mcp.New("coremetry", Version)
-		// v0.6.5 — register the telemetry tools so external LLMs
-		// (and our own Copilot) can list_services / search_logs /
-		// get_trace / query_metric / list_problems / list_anomalies
-		// / get_service_health via tools/call.
-		mcptools.Register(mcpSvc, mcptools.Deps{
-			Store:       store,
-			LogStore:    logsStore,
-			RuntimePods: vmetrics.RuntimePodsOr(vmSvc, store), // v0.10.374
-		})
-		staticRes, tplRes := mcpSvc.ResourceCount()
-		log.Printf("[mcp] server ready (%d tools, %d resources, %d templates, %d prompts)",
-			mcpSvc.ToolCount(), staticRes, tplRes, mcpSvc.PromptCount())
-		srv.SetMCP(mcpSvc)
-	}
 	srv.SetPipeline(pipelineEng)
 	srv.SetVersion(Version)
 	srv.SetBuildVersion(BuildVersion)
@@ -1446,6 +1425,31 @@ func main() {
 	srv.SetOracle(oracleSvc) // v0.10.580 — Oracle kaynakları (her rol)
 	srv.SetDevOps(devopsSvc)
 	srv.SetMCPClient(mcpCliSvc)
+	// v0.6.4 — Model Context Protocol server. Wired on api/all
+	// modes only — worker / ingest pods don't take operator
+	// traffic so they have no MCP listeners. External LLMs
+	// (Claude Desktop, internal copilots) talk to the api fleet
+	// the same way browsers do.
+	//
+	// Kayıt, Deps'in okuduğu her Set*'ten (Thanos, Entity, Rollout,
+	// VMetrics) SONRA: dış sunucu uygulama içi sohbetle AYNI kurucuyu
+	// (srv.MCPDeps) kullanır — ayrı bir literal varlık katmanını "kapalı",
+	// cluster_metric'i devre dışı, metrik okumayı CH-only gösteriyordu.
+	// Not: Metrics / ClusterMetrics burada BİR KEZ çözülür; sonradan
+	// Settings'te değişen metrik backend'i sohbet yoluna (istek başına
+	// kurulur) yansır, dış sunucuya yeniden başlatmada.
+	if mode.api {
+		mcpSvc := mcp.New("coremetry", Version)
+		// v0.6.5 — register the telemetry tools so external LLMs
+		// (and our own Copilot) can list_services / search_logs /
+		// get_trace / query_metric / list_problems / list_anomalies
+		// / get_service_health via tools/call.
+		mcptools.Register(mcpSvc, srv.MCPDeps())
+		staticRes, tplRes := mcpSvc.ResourceCount()
+		log.Printf("[mcp] server ready (%d tools, %d resources, %d templates, %d prompts)",
+			mcpSvc.ToolCount(), staticRes, tplRes, mcpSvc.PromptCount())
+		srv.SetMCP(mcpSvc)
+	}
 	// Cross-pod L1 cache invalidation (v0.5.337). Subscribes
 	// to the Redis pub/sub channel so a putBranding /
 	// putTempoSettings / etc. on one pod evicts the cached

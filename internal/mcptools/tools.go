@@ -239,9 +239,10 @@ type MetricSource interface {
 // a nil Metrics yields byte-identical reads to pre-v0.9.1150, which is
 // what test setups and any direct Deps construction want. It is NOT a
 // fail-open that could silently un-apply the operator's choice: the API
-// has exactly one Deps constructor (mcp_deps.go) and it always sets
-// Metrics, pinned by a test there. If a second construction site ever
-// appears, that test is the thing that has to be argued with.
+// has exactly one Deps constructor (mcp_deps.go, exported as MCPDeps for
+// main.go's external server) and it always sets Metrics, pinned by a
+// test there (which also scans main.go). If a second construction site
+// ever appears, that test is the thing that has to be argued with.
 func (d Deps) metrics() MetricSource {
 	if d.Metrics != nil {
 		return d.Metrics
@@ -392,8 +393,15 @@ func ToolList(d Deps) []mcp.Tool {
 	}
 }
 
+// chatOnlyTools — uygulama içi konuşma durumuna muhtaç; düz MCP üzerinden
+// yalnız hata dönebilirler (gizlemek reddetmekten iyi — mcp.go MinRole notu).
+var chatOnlyTools = map[string]bool{"set_context": true, "get_context": true, "clear_context": true}
+
 func Register(srv *mcp.Server, d Deps) {
 	for _, t := range ToolList(d) {
+		if chatOnlyTools[t.Name] {
+			continue
+		}
 		srv.RegisterTool(t)
 	}
 	// v0.6.6 — resources: pinned references the LLM can attach
@@ -485,7 +493,9 @@ func registerResources(srv *mcp.Server, d Deps) {
 				return "", fmt.Errorf("missing service name in URI %q", uri)
 			}
 			from, to := rangeWindow(ctx, 1800)
-			rows, err := d.Store.GetServicesFiltered(ctx, 0, from, to, name, "rps", "desc", 1, 0)
+			// Tam ad (get_service_health ile aynı): GetServicesFiltered'ın ad
+			// argümanı alt-dizedir ve en yoğun eşleşmeyi döndürürdü.
+			rows, _, err := readServicesIn(ctx, d, from, to, []string{name}, "", 1)
 			if err != nil {
 				return "", err
 			}
@@ -680,7 +690,7 @@ func getProblemRootCauseTool(d Deps) mcp.Tool {
 			"properties": map[string]any{
 				"problem_id": map[string]any{
 					"type":        "string",
-					"description": "The Problem id (the 'id' field from list_problems). Required.",
+					"description": "The Problem id (the 'id' field from list_problems) or its display id 'P-xxxxx'. Required.",
 				},
 			},
 			// v0.9.1050 — []any → []string: telde aynı ama tools_test'in
@@ -698,7 +708,11 @@ func getProblemRootCauseTool(d Deps) mcp.Tool {
 			if a.ProblemID == "" {
 				return nil, fmt.Errorf("problem_id is required")
 			}
-			h, err := d.Store.GetHypothesis(ctx, "problem", a.ProblemID)
+			pid, err := resolveProblemRef(ctx, d, a.ProblemID)
+			if err != nil {
+				return nil, err
+			}
+			h, err := d.Store.GetHypothesis(ctx, "problem", pid)
 			if err != nil {
 				return nil, err
 			}
@@ -774,7 +788,7 @@ func getServiceHealthTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "get_service_health",
 		ShortDescription: "TEK servisin RED'i + açık problem sayısı, verilen pencerede. list_services'ten sonraki kazı adımı. env ile tek ortama daralt.",
-		Description:      "Get RED metrics (rate, errors, duration p99) + open problem count for one service over a window. Use after list_services to drill into a specific service's recent health. Pass env to scope both to one deployment environment.",
+		Description:      "Get ONE service's RED summary (request rate, error rate, p99 latency) plus its open-problem count over a window. `service` is matched by exact name as list_services returns it; a case variant or single near-match is resolved and echoed as matched_name, an ambiguous name returns found=false with candidates (resolve partial names with list_services name_contains). COST: the same read as list_services — the 5-minute pre-aggregate when range_s >= 300 and no env is set, otherwise a bounded raw-span scan. Use after list_services to drill into one service; pass env to scope both numbers to one deployment environment.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -804,14 +818,30 @@ func getServiceHealthTool(d Deps) mcp.Tool {
 				return nil, fmt.Errorf("service is required")
 			}
 			from, to := rangeWindow(ctx, a.RangeS)
-			// v0.8.398 — env-capable variant of the same read; env=""
-			// stays byte-identical to the old GetServicesFiltered call.
 			// v0.10.25 — aynı MV kapısı; tek servis de olsa okuma yolu
 			// list_services ile AYNI olmalı, yoksa aynı soru iki farklı
 			// maliyetle cevaplanır.
-			rows, _, err := readServices(ctx, d, from, to, a.Service, a.Env, 1)
+			// TAM ad: readServices'in ad argümanı büyük/küçük harf duyarsız
+			// ALT-DİZEDİR ve en yoğun eşleşme kazanır — "checkout" sorusu
+			// checkout-worker'ın RED'ini checkout adıyla döndürüyordu.
+			name := strings.TrimSpace(a.Service)
+			rows, _, err := readServicesIn(ctx, d, from, to, []string{name}, a.Env, 1)
 			if err != nil {
 				return nil, err
+			}
+			if len(rows) == 0 {
+				// Yazım/takma ad varyantı katalogdan çözülür — asla alt-dize seçimiyle.
+				if exact, cands, ferr := resolveServiceFuzzy(ctx, d, name); ferr == nil {
+					switch {
+					case exact != "" && exact != name:
+						name = exact
+						if rows, _, err = readServicesIn(ctx, d, from, to, []string{name}, a.Env, 1); err != nil {
+							return nil, err
+						}
+					case len(cands) > 0:
+						return map[string]any{"found": false, "service": a.Service, "candidates": cands}, nil
+					}
+				}
 			}
 			if len(rows) == 0 {
 				res := map[string]any{"found": false, "service": a.Service}
@@ -822,13 +852,16 @@ func getServiceHealthTool(d Deps) mcp.Tool {
 			}
 			probs, _ := d.Store.CountProblems(ctx, chstore.ProblemFilter{
 				Status:  "open",
-				Service: a.Service,
+				Service: name,
 				Env:     a.Env, // v0.8.398 — service-scoped env semantics (env_members.go)
 			})
 			res := map[string]any{
 				"found":         true,
 				"summary":       rows[0],
 				"open_problems": probs,
+			}
+			if name != a.Service {
+				res["matched_name"] = name
 			}
 			if a.Env != "" {
 				res["env"] = a.Env // echo the applied narrowing
@@ -1027,12 +1060,12 @@ type searchLogsArgs struct {
 func searchLogsTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "search_logs",
-		ShortDescription: "Loglarda tam metin + yapısal arama (CH ya da ES). trace_id ile bir trace'in tüm satırları, severity_min=17 yalnız hatalar. partial / envUnapplied bayraklarını cevaba taşı.",
-		Description:      "Full-text + structured search across logs. Routes to whichever backend Coremetry is configured for (ClickHouse or Elasticsearch). Use trace_id to pull every log line belonging to one trace. Use severity_min=17 for errors only (OTel severity number; 17=ERROR, 21=FATAL). HONESTY ENVELOPE: the response may carry partial=true (soft timeout / failed shards — rows are a SUBSET of the true answer), shardsFailed>0, totalIsLowerBound=true (total is 'at least', not exact) and envUnapplied=true (an env filter was requested but could not be applied — results are env-UNFILTERED). Never present a partial or env-unfiltered result as complete/narrowed; say so.",
+		ShortDescription: "Loglarda tam metin + yapısal arama (CH ya da ES). trace_id ile bir trace'in tüm satırları, severity_min=17 yalnız hatalar. partial / totalIsLowerBound bayraklarını cevaba taşı.",
+		Description:      "Full-text + structured search across logs. Routes to whichever backend Coremetry is configured for (ClickHouse or Elasticsearch). Use trace_id to pull every log line belonging to one trace. Use severity_min=17 for errors only (OTel severity number; 17=ERROR, 21=FATAL). HONESTY ENVELOPE: the response may carry partial=true (soft timeout / failed shards — rows are a SUBSET of the true answer), shardsFailed>0, and totalIsLowerBound=true (total is 'at least', not exact). There is no env argument: rows always span every environment. Never present a partial result as complete; say so.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"query":        map[string]any{"type": "string", "description": "Free-text or structured query (ES query_string when ES is the backend)."},
+				"query":        map[string]any{"type": "string", "description": "Free text and/or field terms in the /logs search language (e.g. `level:error timeout`). Elasticsearch: Lucene query_string. ClickHouse: the same field syntax compiled server-side (free text matched in the body)."},
 				"service":      map[string]any{"type": "string", "description": "Exact service name filter. Empty = all services."},
 				"cluster":      map[string]any{"type": "string", "description": "k8s cluster name from resource attrs."},
 				"trace_id":     map[string]any{"type": "string", "description": "Pull all logs for one trace."},
@@ -1172,11 +1205,14 @@ type queryMetricArgs struct {
 	StepS       int    `json:"step_s,omitempty"`
 }
 
+// query_metric sonuç sınırları (açıklamada ilan edilir).
+const queryMetricMaxSeries, queryMetricMaxPoints = 20, 120
+
 func queryMetricTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "query_metric",
 		ShortDescription: "Ingest edilmiş OTel metriklerinde zaman kovalı sorgu → {time, value} serileri. p99 gecikme histogramı, sum sayaç, avg gauge için.",
-		Description:      "Run a time-bucketed query against ingested OTel metrics. Returns one or more series of {time, value} points. Use aggregation='p99' for latency histograms, 'sum' for counters, 'avg' for gauges. Pair with the OTel semantic conventions (e.g. http.server.request.duration → p99 / ms).",
+		Description:      "Run a time-bucketed query against ingested OTel metrics (ClickHouse, or VictoriaMetrics when the operator made it the metric backend) and get series of {time (unix ns), value}, one per group_by combination. Use aggregation='p99' for latency histograms, 'sum' for counters, 'avg' for gauges (e.g. http.server.request.duration → p99). The name must exist: a guessed semconv name returns an empty series, not an error — take it from list_metric_names. BOUNDS: at most 20 series (truncated + total_series say so) and ~120 points each; keep group_by narrow. No env argument.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -1208,18 +1244,29 @@ func queryMetricTool(d Deps) mcp.Tool {
 			}
 			// v0.9.1150 — metrik okuma ROUTER'ından (CH ya da VM).
 			series, err := d.metrics().QueryMetric(ctx, chstore.MetricQueryFilter{
-				Name:        a.Name,
-				Service:     a.Service,
-				Aggregation: agg,
-				GroupBy:     groups,
-				From:        from,
-				To:          to,
-				StepSeconds: a.StepS,
+				Name:          a.Name,
+				Service:       a.Service,
+				Aggregation:   agg,
+				GroupBy:       groups,
+				From:          from,
+				To:            to,
+				StepSeconds:   a.StepS,
+				MaxDataPoints: queryMetricMaxPoints, // otomatik adımda kova sayısı hedefi
 			})
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"series": series, "count": len(series)}, nil
+			// Sonuç SINIRLI (get_trace emsali): yüksek kardinaliteli group_by tek
+			// tools/call'da on binlerce nokta döndürebiliyordu; dış yolda
+			// clampToolResultForModel yok. Kesme cevapta SÖYLENİR.
+			total := len(series)
+			if len(series) > queryMetricMaxSeries {
+				series = series[:queryMetricMaxSeries]
+			}
+			for i := range series {
+				series[i].Points = thinEvery(series[i].Points, queryMetricMaxPoints)
+			}
+			return map[string]any{"series": series, "count": len(series), "total_series": total, "truncated": total > len(series)}, nil
 		},
 	}
 }
@@ -1332,7 +1379,7 @@ func renderChartTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "render_chart",
 		ShortDescription: "Operatöre CANLI grafik göster (istek hızı / hata oranı / gecikme yüzdeliği), servis + isteğe bağlı operasyon. 'Grafiğini göster' dendiğinde çağır; veri noktalarını sen anlatma.",
-		Description:      "Show the operator a LIVE chart of one RED metric (request rate, error rate, or a latency percentile) for a service, optionally narrowed to one operation. Call this when the operator asks to SEE a graph ('grafiğini göster', 'çiz', 'plot the error rate') or when a visual trend answers better than numbers. The server validates the service name and acknowledges; the chat UI then draws the chart from live telemetry — do NOT describe the data points or draw ASCII charts yourself. Cheap: one service-name lookup, no span scan. Outside the in-app chat (plain MCP clients) it returns the validated chart spec without rendering.",
+		Description:      "Show the operator a LIVE chart of one RED metric (request rate, error rate, or a latency percentile) for a service, optionally narrowed to one operation. Call this when the operator asks to SEE a graph ('grafiğini göster', 'çiz', 'plot the error rate') or when a visual trend answers better than numbers. The server validates the service name and acknowledges. Inside the Coremetry chat the UI draws the chart from live telemetry, so restating the data points is redundant; plain MCP clients get only the validated spec (nothing is rendered) — fetch numbers with get_service_health / get_operation_health when the user needs them. Cheap: one service-name lookup, no span scan.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -1430,13 +1477,30 @@ func renderChartTool(d Deps) mcp.Tool {
 			if a.Source != "" {
 				spec["source"] = a.Source
 			}
+			note := "grafik render edildi — operatörün sohbetine canlı veriyle gömülecek; veriyi ayrıca metinle tarif etme, ASCII grafik çizme."
+			if !chatRendersCharts(ctx, d) {
+				// Dış MCP istemcisi hiçbir şey çizmez: "çizildi, veriyi anlatma"
+				// demek kullanıcıyı ne grafikli ne sayılı bırakırdı.
+				note = "validated chart spec only — this client renders nothing; give numbers from get_service_health / get_operation_health if the user needs the data."
+			}
 			return map[string]any{
 				"ok":   true,
 				"spec": spec,
-				"note": "grafik render edildi — operatörün sohbetine canlı veriyle gömülecek; veriyi ayrıca metinle tarif etme, ASCII grafik çizme.",
+				"note": note,
 			}, nil
 		},
 	}
+}
+
+// chatRendersCharts — çağrı uygulama içi CoSRE sohbetinden mi geliyor (grafik
+// yalnız orada çizilir). Sohbet bağlamı ctx'te yoksa (dış MCP istemcisi)
+// CtxGet hata döner.
+func chatRendersCharts(ctx context.Context, d Deps) bool {
+	if d.CtxGet == nil {
+		return false
+	}
+	_, err := d.CtxGet(ctx)
+	return err == nil
 }
 
 // splitCSV: tiny helper kept private so we don't pull in

@@ -42,7 +42,7 @@ type buildLinkArgs struct {
 	Preset     string         `json:"preset,omitempty"` // "30m" gibi göreli; boş = mutlak pencere
 }
 
-var buildLinkPages = map[string]bool{"traces": true, "trace": true, "logs": true, "service": true, "pod": true, "clusters": true, "entity": true, "endpoints": true, "problems": true}
+var buildLinkPages = map[string]bool{"traces": true, "trace": true, "logs": true, "service": true, "pod": true, "clusters": true, "endpoints": true, "problems": true}
 
 // linkClusterID — cluster ref → Remote Cluster id (yoksa verilen değer).
 func linkClusterID(d Deps, ref string) (id, name string) {
@@ -60,13 +60,12 @@ func linkClusterID(d Deps, ref string) (id, name string) {
 //	service:  name (kanonik), tab, range, env
 //	pod:      cluster(id), namespace, pod, service, range
 //	clusters: cluster(id), ns=<id>|<namespace>, section, service, range
-//	entity:   id
 //	endpoints: service, search, range
 //	problems: service (pencere okunmaz)
 func buildLink(a buildLinkArgs, clusterID string, filters []chstore.FilterExpr, rangeParam string) (string, error) {
 	page := strings.ToLower(strings.TrimSpace(a.Page))
 	if !buildLinkPages[page] {
-		return "", fmt.Errorf("page %q: traces | trace | logs | service | pod | clusters | entity | endpoints | problems", a.Page)
+		return "", fmt.Errorf("page %q: traces | trace | logs | service | pod | clusters | endpoints | problems", a.Page)
 	}
 	q := url.Values{}
 	set := func(k, v string) {
@@ -145,11 +144,6 @@ func buildLink(a buildLinkArgs, clusterID string, filters []chstore.FilterExpr, 
 		}
 		set("section", a.Tab)
 		set("service", a.Service)
-	case "entity":
-		if a.Workload != "" && a.Namespace != "" && clusterID != "" {
-			return "", fmt.Errorf("entity id'si tür/kind ister — workload için clusters sayfasını kullan (page=clusters, namespace)")
-		}
-		return "", fmt.Errorf("entity sayfası entity id ister (pod:<cid>/<ns>/<pod> gibi); list_pods/list_workloads id döndürür")
 	case "endpoints":
 		set("service", a.Service)
 		set("search", a.Search)
@@ -177,30 +171,31 @@ func buildLinkTool(d Deps) mcp.Tool {
 			"Pages: traces (service, search, filters[], errors_only, min_ms/max_ms, env, cluster, sort, group_by/group_attr → aggregate view), trace (trace_id, span_id, tab), " +
 			"logs (query=KQL, service, cluster, severity or errors_only, trace_id/span_id, env), service (service, tab), pod (cluster, namespace, pod), clusters (cluster, namespace, " +
 			"tab=overview|pods|nodes), endpoints (service, search), problems (service). The window is written as range=custom:<fromMs>-<toMs> from range_s (default 1800) — " +
-			"or a preset when `preset` is given (5m…30d). Returns a root-relative href; never invent URLs yourself. End every answer with the link.",
+			"or a preset when `preset` is given (5m…30d). Returns a root-relative href (e.g. /traces?…): prefix the base URL of the Coremetry install this MCP server " +
+			"belongs to when you show it. Build Coremetry links only through this tool, because hand-written URLs miss the parameter names each page actually reads.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"page":        map[string]any{"type": "string", "enum": []string{"traces", "trace", "logs", "service", "pod", "clusters", "endpoints", "problems"}},
-				"service":     map[string]any{"type": "string"},
-				"namespace":   map[string]any{"type": "string"},
+				"page":        map[string]any{"type": "string", "enum": []string{"traces", "trace", "logs", "service", "pod", "clusters", "endpoints", "problems"}, "description": "Target page; each page reads only its own params — trace needs trace_id, service needs service, pod needs pod."},
+				"service":     map[string]any{"type": "string", "description": "Exact service name (traces, logs, service, pod, clusters, endpoints, problems)."},
+				"namespace":   map[string]any{"type": "string", "description": "pod / clusters; on traces it becomes a k8s.namespace.name filter."},
 				"cluster":     map[string]any{"type": "string", "description": "Remote Cluster id / name / span value."},
-				"pod":         map[string]any{"type": "string"},
-				"trace_id":    map[string]any{"type": "string"},
-				"span_id":     map[string]any{"type": "string"},
-				"env":         map[string]any{"type": "string"},
+				"pod":         map[string]any{"type": "string", "description": "pod page: pod name (with cluster + namespace)."},
+				"trace_id":    map[string]any{"type": "string", "description": "trace page (required) or logs: 32-hex trace id."},
+				"span_id":     map[string]any{"type": "string", "description": "trace / logs: 16-hex span id."},
+				"env":         map[string]any{"type": "string", "description": "traces / logs / service: deploy_env value."},
 				"search":      map[string]any{"type": "string", "description": "traces/endpoints free text."},
 				"query":       map[string]any{"type": "string", "description": "logs KQL."},
 				"filters":     map[string]any{"type": "array", "description": "traces: attribute filters as in search_traces.", "items": map[string]any{"type": "object"}},
-				"errors_only": map[string]any{"type": "boolean"},
-				"min_ms":      map[string]any{"type": "number"},
-				"max_ms":      map[string]any{"type": "number"},
-				"sort":        map[string]any{"type": "string", "enum": []string{"time", "duration"}},
+				"errors_only": map[string]any{"type": "boolean", "description": "traces: error traces only; logs: severity ≥ 17 when severity is empty."},
+				"min_ms":      map[string]any{"type": "number", "description": "traces: lower duration bound (ms)."},
+				"max_ms":      map[string]any{"type": "number", "description": "traces: upper duration bound (ms)."},
+				"sort":        map[string]any{"type": "string", "enum": []string{"time", "duration"}, "description": "traces: time = newest, duration = slowest (descending)."},
 				"group_by":    map[string]any{"type": "string", "description": "traces aggregate view: operation | service | status | attr."},
-				"group_attr":  map[string]any{"type": "string"},
+				"group_attr":  map[string]any{"type": "string", "description": "traces aggregate view with group_by=attr: the attribute key."},
 				"severity":    map[string]any{"type": "integer", "description": "logs: OTel severity floor (17 = error)."},
 				"tab":         map[string]any{"type": "string", "description": "service: overview|operations|logs|topology|infra|pods; trace: trace|logs; clusters: overview|pods|nodes."},
-				"range_s":     map[string]any{"type": "integer", "minimum": 60, "maximum": 2592000, "description": "Window seconds ending at the chat anchor. Default 1800."},
+				"range_s":     map[string]any{"type": "integer", "minimum": 60, "maximum": 604800, "description": "Window seconds ending at the chat anchor. Default 1800, max 604800 (7d); for a longer link use preset (e.g. 30d)."},
 				"preset":      map[string]any{"type": "string", "description": "Relative preset instead of an absolute window: 5m,15m,30m,1h,3h,6h,12h,24h,2d,7d,30d."},
 			},
 			"required": []string{"page"},

@@ -219,7 +219,7 @@ func getRunbookTool(d Deps) mcp.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"runbook_id": map[string]any{"type": "string", "description": "Runbook id (from search_knowledge or the /runbooks page)."},
-				"problem_id": map[string]any{"type": "string", "description": "Resolve via the problem's rule and service."},
+				"problem_id": map[string]any{"type": "string", "description": "Resolve via the problem's rule and service. The Problem id or its display id 'P-xxxxx'."},
 				"rule_id":    map[string]any{"type": "string", "description": "Alert rule id."},
 				"service":    map[string]any{"type": "string", "description": "Service name (service metadata runbookUrl)."},
 			},
@@ -235,6 +235,10 @@ func getRunbookTool(d Deps) mcp.Tool {
 			via := "runbook_id"
 			if id == "" {
 				if pid := strings.TrimSpace(a.ProblemID); pid != "" {
+					pid, err := resolveProblemRef(ctx, d, pid)
+					if err != nil {
+						return nil, err
+					}
 					p, err := d.Store.GetProblem(ctx, pid)
 					if err != nil {
 						return nil, err
@@ -360,7 +364,7 @@ func searchKnowledgeTool(d Deps) mcp.Tool {
 					notes = append(notes, "documents: "+err.Error())
 				}
 				for _, h := range hits {
-					href := "/settings?tab=rag"
+					href := "/settings/knowledge"
 					if h.SourceRef != "" {
 						href = h.SourceRef
 					}

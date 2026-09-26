@@ -150,6 +150,28 @@ func TestAnswerOpenHref(t *testing.T) {
 	}
 }
 
+// build_link'in href'i tıklanabilir çip olur; kök-göreli dışı, protokol-göreli
+// ve başka araçların çıktısı yok sayılır.
+func TestBuildLinkResultLink(t *testing.T) {
+	cases := []struct {
+		tool, content, want string
+		ok                  bool
+	}{
+		{"build_link", `{"href":"/traces?service=checkout&range=1h","page":"traces"}`, "/traces?service=checkout&range=1h", true},
+		{"build_link", `{"href":"//evil.example/x"}`, "", false},
+		{"build_link", `{"href":"/\\evil.example/x"}`, "", false},
+		{"build_link", `{"href":"https://evil.example/x"}`, "", false},
+		{"build_link", `bozuk`, "", false},
+		{"search_traces", `{"href":"/traces"}`, "", false},
+	}
+	for _, c := range cases {
+		l, ok := buildLinkResultLink(c.tool, c.content)
+		if ok != c.ok || l.Href != c.want {
+			t.Errorf("%s %s → (%q, %v), want (%q, %v)", c.tool, c.content, l.Href, ok, c.want, c.ok)
+		}
+	}
+}
+
 // Kaynak pini: döngü sonucu çipi arg-türevi köprüden ÖNCE dener ve her iki
 // cevap yayını open'ı chatAnswerEvent üzerinden taşır (feedback-tested-but-
 // unreachable sınıfı — saf yardımcı çağrılmıyorsa hiçbir şeyi pinlemez).
@@ -163,6 +185,11 @@ func TestToolResultDeepLinkReachable(t *testing.T) {
 	call := strings.Index(src, "toolCallLink(tc.Name, tc.Input, time.Now())")
 	if res < 0 || call < 0 || call < res {
 		t.Fatalf("sonuç linki arg köprüsünden önce denenmeli: res=%d call=%d", res, call)
+	}
+	// build_link'in href'i de döngüde kaldırılır (saf yardımcı çağrılmıyorsa
+	// tablo testi hiçbir şeyi pinlemez).
+	if bl := strings.Index(src, "buildLinkResultLink(tc.Name, tr.Content)"); bl < 0 || bl > call {
+		t.Fatalf("build_link sonucu döngüde, arg köprüsünden önce kaldırılmalı: bl=%d call=%d", bl, call)
 	}
 	if strings.Count(src, "answerOpenHref(lastUserText(req.Messages), loopOpen)") != 2 {
 		t.Fatal("iki answer yayını da (normal + tur tavanı) open'ı taşımalı")

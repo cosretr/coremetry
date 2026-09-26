@@ -40,7 +40,7 @@ import (
 var mvCostClaims = map[string]string{
 	"list_services": "service_summary_5m — readServices(), range_s>=300 ve env=='' kapısı; " +
 		"aksi hâlde ham spans ve açıklama bunu SÖYLÜYOR (v0.10.25)",
-	"get_service_health": "list_services ile AYNI okuyucu (readServices)",
+	"get_service_health": "list_services ile AYNI MV kapısı (readServicesIn — tam ad; alt-dize değil)",
 	"get_metrics_for_span": "spanmetrics MV fast-path'i YALNIZ step>=300s'de; " +
 		"açıklama koşulu ve dar pencerede ham taramaya düştüğünü söylüyor (v0.10.25)",
 	"get_topology":           "topology_edges_5m — koşulsuz MV",
@@ -196,9 +196,14 @@ func TestBothToolsShareOneReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(b)
-	if n := strings.Count(src, "readServices(ctx, d,"); n != 2 {
-		t.Errorf("paylaşılan okuyucu %d yerde çağrılıyor; list_services ve "+
-			"get_service_health'in İKİSİ de kullanmalı", n)
+	// list_services alt-dize okuyucusunu, get_service_health aynı MV
+	// kapısının TAM-ad ikizini (readServicesIn) kullanır — alt-dize tek
+	// servis sorusunda en yoğun başka servisi döndürüyordu.
+	if n := strings.Count(src, "readServices(ctx, d,"); n != 1 {
+		t.Errorf("alt-dize okuyucusu %d yerde çağrılıyor; yalnız list_services kullanmalı", n)
+	}
+	if !strings.Contains(src, "readServicesIn(ctx, d, from, to, []string{name}, a.Env, 1)") {
+		t.Error("get_service_health tam-ad okuyucusunu (readServicesIn) kullanmıyor")
 	}
 	// Eski koşulsuz ham çağrı geri gelmemeli.
 	if strings.Contains(src, `d.Store.GetServicesFilteredIn(ctx, 0, from, to, a.NameContains`) {

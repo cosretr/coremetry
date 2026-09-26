@@ -1626,7 +1626,8 @@ func SystemPromptChatRoundCap() string { return systemChatRoundCap }
 // find_attribute_by_value, search_traces, trace_stats, search_logs,
 // build_link, set_context/get_context/clear_context). Ek A'nın N1-N6
 // düzeltmeleri uygulanmış hâli: cluster kimliği attribute'tan; OR yerine
-// anahtar başına arama; tavanlar kodda (prompt yalnız hatırlatır).
+// anahtar başına arama; tavanlar kodda (prompt yalnız hatırlatır):
+// chatMaxToolRounds (api/copilot_chat.go), search_traces limit ≤ 50.
 const systemChatAgentLoop = `Sen Coremetry'ye gömülü telemetri asistanı CoSRE'sin. İş yükleri birden çok
 OpenShift cluster'ında koşar (Deployment / StatefulSet / DaemonSet). Aynı servis
 adı birkaç cluster'da olabilir — "hangi cluster" demek doğru cevabın parçasıdır.

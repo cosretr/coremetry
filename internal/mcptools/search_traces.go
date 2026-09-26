@@ -54,8 +54,8 @@ func searchTracesTool(d Deps) mcp.Tool {
 			"narrowed_from_iso (window was halved under resource pressure — the answer covers LESS than you asked). " +
 			"ATTRIBUTE FILTERS (filters[]): keys MUST come from describe_attributes / find_attribute_by_value — never invent one; a filter requires a scope " +
 			"(service, namespace or cluster). Filtered searches are the slow path, so the window is clamped: indexed keys ≤ 6h, non-indexed keys ≤ 1h, " +
-			"sort=duration with filters ≤ 1h, ≤ 50 rows — window_clamped_reason says when. `deep_link` reproduces the exact search in the Traces UI: " +
-			"put it at the end of your answer.",
+			"sort=duration with filters ≤ 1h, ≤ 50 rows; without attribute filters a namespace/cluster scope is still a raw scan and is clamped to ≤ 24h. " +
+			"window_clamped_reason says when. `deep_link` reproduces the exact search in the Traces UI (root-relative, same rule as build_link).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -89,8 +89,8 @@ func searchTracesTool(d Deps) mcp.Tool {
 				"limit": map[string]any{
 					"type":        "integer",
 					"minimum":     1,
-					"maximum":     100,
-					"description": "Max traces to return. Default 20 (≤ 50 with filters).",
+					"maximum":     50,
+					"description": "Max traces to return. Default 20, max 50 — beyond that, hand over deep_link.",
 				},
 				"filters": map[string]any{
 					"type":        "array",
@@ -157,7 +157,7 @@ func searchTracesTool(d Deps) mcp.Tool {
 				return nil, fmt.Errorf("filters: %w", err)
 			}
 			hasScope := strings.TrimSpace(a.Service) != "" || ns != "" || clusterVal != "" || strings.TrimSpace(a.Cluster) != ""
-			gate, err := applySearchGate(a.RangeS, clampLimit(a.Limit, 20, 100), filters[:userFilters], hasScope, sortBy == "duration", chstore.AttrIndexAvailable(), len(filters)-userFilters)
+			gate, err := applySearchGate(a.RangeS, clampLimit(a.Limit, 20, 50), filters[:userFilters], hasScope, sortBy == "duration", chstore.AttrIndexAvailable(), len(filters)-userFilters)
 			if err != nil {
 				return nil, err
 			}

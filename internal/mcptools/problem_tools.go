@@ -87,6 +87,27 @@ func problemView(p chstore.Problem) map[string]any {
 	return out
 }
 
+// resolveProblemRef — "P-xxxxx" görünen kimliği iç kimliğe çevirir; başka
+// her değer olduğu gibi geçer. Operatör görünen kimliği yapıştırır
+// (v0.10.706); get_problem onu kabul ediyordu, kardeşleri (kök neden,
+// kanıt, benzerler, runbook) iç kimlikle birebir aradığı için "henüz
+// sentezlenmedi, sonra dene" diye YANLIŞ cevap veriyordu. Bulunamayan
+// görünen kimlik aynen döner — çağıranın kendi bulunamadı dalı cevaplar.
+func resolveProblemRef(ctx context.Context, d Deps, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if !chstore.IsProblemDisplayID(ref) {
+		return ref, nil
+	}
+	p, err := d.Store.GetProblemByDisplayID(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	if p == nil || p.ID == "" {
+		return ref, nil
+	}
+	return p.ID, nil
+}
+
 func getProblemTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "get_problem",
@@ -217,7 +238,7 @@ func getCorrelationEvidenceTool(d Deps) mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"problem_id": map[string]any{"type": "string", "description": "The Problem id. Required."},
+				"problem_id": map[string]any{"type": "string", "description": "The Problem id or its display id 'P-xxxxx'. Required."},
 				"sections": map[string]any{
 					"type":        "array",
 					"items":       map[string]any{"type": "string", "enum": evidenceSections},
@@ -242,7 +263,11 @@ func getCorrelationEvidenceTool(d Deps) mcp.Tool {
 					return nil, fmt.Errorf("unknown section %q (known: %s)", sname, strings.Join(evidenceSections, ", "))
 				}
 			}
-			h, err := d.Store.GetHypothesis(ctx, "problem", a.ProblemID)
+			pid, err := resolveProblemRef(ctx, d, a.ProblemID)
+			if err != nil {
+				return nil, err
+			}
+			h, err := d.Store.GetHypothesis(ctx, "problem", pid)
 			if err != nil {
 				return nil, err
 			}
@@ -289,7 +314,7 @@ func similarProblemsTool(d Deps) mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"problem_id": map[string]any{"type": "string", "description": "A Problem id; its (service, rule) key is used. Optional when service + rule_id are given."},
+				"problem_id": map[string]any{"type": "string", "description": "A Problem id or its display id 'P-xxxxx'; its (service, rule) key is used. Optional when service + rule_id are given."},
 				"service":    map[string]any{"type": "string", "description": "Subject (service name or DB subject id). Used with rule_id when problem_id is omitted."},
 				"rule_id":    map[string]any{"type": "string", "description": "Rule id (the 'ruleId' field of a problem)."},
 				"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": similarProblemsMax, "description": "Rows. Default 5, max 20."},
@@ -305,7 +330,11 @@ func similarProblemsTool(d Deps) mcp.Tool {
 			service, ruleID := strings.TrimSpace(a.Service), strings.TrimSpace(a.RuleID)
 			anchor := strings.TrimSpace(a.ProblemID)
 			if anchor != "" {
-				p, err := d.Store.GetProblem(ctx, anchor)
+				pid, err := resolveProblemRef(ctx, d, anchor)
+				if err != nil {
+					return nil, err
+				}
+				p, err := d.Store.GetProblem(ctx, pid)
 				if err != nil {
 					return nil, err
 				}
@@ -395,7 +424,7 @@ func capabilitiesFrom(d Deps) map[string]Capability {
 	}
 	if d.RAGReady != nil {
 		if d.RAGReady() {
-			caps["rag"] = Capability{Enabled: true, Detail: "document RAG ready (search_knowledge planned)"}
+			caps["rag"] = Capability{Enabled: true, Detail: "document RAG ready (search_knowledge searches runbooks + documents)"}
 		} else {
 			caps["rag"] = Capability{Enabled: false, Reason: "RAG not configured or index not ready"}
 		}

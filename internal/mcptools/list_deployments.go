@@ -139,7 +139,7 @@ func ListDeploymentsWindow(ctx context.Context, d Deps, a ListDeploymentsArgs, f
 		"scope":    scope,
 		"sources":  map[string]any{"inferred": counts["inferred"], "event": counts["event"], "rollout": counts["rollout"], "rollouts_layer": rolloutState},
 		"notes":    notes,
-		"next":     "Bir satırın etkisi için get_deploy_diff(service, version); rollout ayrıntısı için /rollouts sayfası (build_link).",
+		"next":     "Bir satırın etkisi için get_deploy_diff(service, version). Rollout ayrıntısı /rollouts sayfasında; build_link bu sayfayı üretmez.",
 	}, nil
 }
 
