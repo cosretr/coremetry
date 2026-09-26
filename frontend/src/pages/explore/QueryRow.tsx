@@ -61,10 +61,12 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
   const setGroup = (next: FilterGroup) => onChange({ ...q, filterGroup: next });
 
   return (
-    <div style={{
+    // v0.10.926 — kapalı sorgu soluklaşır ama opaklık ATAYA değil çocuklara
+    // (`.qr-off`, globals.css): atadaki opaklık Tooltip kutusunu da yarı
+    // saydam çizip satırın yığın bağlamına hapsediyordu.
+    <div className={q.enabled ? undefined : 'qr-off'} style={{
       display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap',
       padding: '8px 12px', borderTop: '1px solid var(--border)',
-      opacity: q.enabled ? 1 : 0.5,
     }}>
       {/* Letter badge — click toggles the query on/off.
           v0.10.924 — buton bütünlüğü Faz 2: `all: unset` + satır-içi dolu
@@ -75,7 +77,7 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
         icon={<b>{q.letter}</b>}
         aria-label={`Sorgu ${q.letter}`}
         onClick={() => onChange({ ...q, enabled: !q.enabled })}
-        title={q.enabled ? 'Sorguyu kapat' : 'Sorguyu aç'}
+        tooltip={q.enabled ? 'Sorguyu kapat' : 'Sorguyu aç'}
         style={{ marginTop: 2 }} />
 
       <div style={{ marginTop: 1 }}>
@@ -176,12 +178,16 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
       <div className="row-actions">
         <IconButton icon="⧉" onClick={onDuplicate} disabled={!canDuplicate}
           aria-label="Sorguyu çoğalt"
-          title={canDuplicate
+          // v0.10.926 — Tooltip pilotu: devre dışı hâlde metin eylem değil
+          // SEBEP → yerel title'da kalır; etkin hâlin ipucu Tooltip'e geçer.
+          tooltip={canDuplicate
             ? 'Sorguyu çoğalt — filtreler, scope, split ve DSL aynen kopyalanır'
-            : 'En fazla 4 sorgu (A–D)'} />
+            : undefined}
+          title={canDuplicate ? undefined : 'En fazla 4 sorgu (A–D)'} />
         <IconButton icon="×" onClick={onRemove} disabled={!canRemove}
           aria-label="Sorguyu sil"
-          title={canRemove ? 'Sorguyu sil' : 'Son sorgu silinemez'} />
+          tooltip={canRemove ? 'Sorguyu sil' : undefined}
+          title={canRemove ? undefined : 'Son sorgu silinemez'} />
       </div>
     </div>
   );

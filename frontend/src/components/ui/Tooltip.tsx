@@ -44,21 +44,30 @@ import { placeTip, type TipPos, type TipSide } from '@/lib/tipPlacement';
 //   • Esc: `useEscLayer` (tek belge dinleyicisi, LIFO yığın) — dosyada
 //     keydown dinleyicisi YOK (escLayer.test.ts bunu yasaklıyor).
 //   • Kaydırma/yeniden boyut: kutu YENİDEN YERLEŞİR; çapa görünür alandan
-//     çıkınca kapanır. (İlk sürüm her kaydırmada kapatıyordu: Tab ile
+//     (pencere YA DA en yakın kırpan kaydırma kutusu, v0.10.926) çıkınca
+//     kapanır. (İlk sürüm her kaydırmada kapatıyordu: Tab ile
 //     ekran dışındaki bir butona gelince tarayıcının odak kaydırması
 //     ipucunu aynı karede kapatıyordu — inceleme turunda ölçüldü.)
 //   • İçerik açıkken değişirse ("Kopyala" → "Kopyalandı") yeniden ölçülür.
 //   • Kutuya tıklamak satıra/kaba KABARCIKLANMAZ: kutu tetiğin DOM kardeşi,
 //     yani tıklanabilir satırın torunu; üstü başka satırı örterken o
 //     tıklama yanlış satırın çekmecesini açıyordu.
-//   • `disabled` butonlar işaretçi olayı almaz → ipucu açılmaz. Devre dışı
-//     sebebini göstermek için `title` kalır ya da bir sarmalayıcı kullanın.
+//   • `disabled` butonlar: Chromium pointerenter'ı İLETİR ve React
+//     onPointerEnter'ı çağırır (yalnız tık/fare olaylarını bastırır;
+//     v0.10.926 incelemesinde ölçüldü) — ipucu açılabilir, tarayıcıya
+//     göre değişir. Devre dışı SEBEBİ farklı bir metinse onu `title`da
+//     tutun (`tooltip={dis ? undefined : …} title={dis ? neden : undefined}`).
+//   • Opaklığı < 1 olan ata (soluk satır) ipucunu da yarı saydam çizer ve
+//     yığın bağlamı kurar (v0.10.926): soluklaştırmayı ataya değil
+//     çocuklara uygulayın (`.mqe-row.off`, `.qr-off`).
 //
 // ── ARIA ────────────────────────────────────────────────────────────────
 // Kutu `role="tooltip"` + `useId`; tetiğe `aria-describedby` enjekte
 // edilir (Field.tsx deseni). İçerik tetiğin `aria-label`ine EŞİTSE
 // describedby basılmaz (ekran okuyucu aynı cümleyi iki kez okumasın).
-// Tetikteki `title` düşürülür: yerel ipucu ile bu ikisi üst üste binerdi.
+// Tetikteki `title` BOŞ dizeye çekilir (v0.10.926): yerel ipucu ile bu
+// ikisi üst üste binerdi; `undefined` olsaydı tetik ata <tr>'nin title'ını
+// devralırdı. Kutu da `title=""` taşır (satırın DOM torunu).
 //
 // ÇOCUK: tek bir eleman; DOM olay prop'larını ve `aria-describedby`ı
 // kendi `<button>`una geçirmeli (Button, IconButton, Chip, LinkButton
@@ -81,8 +90,26 @@ interface TooltipTriggerProps {
   onFocus?: (e: FocusEvent<HTMLElement>) => void;
   onBlur?: (e: FocusEvent<HTMLElement>) => void;
   'aria-describedby'?: string;
+  'aria-description'?: string;
   'aria-label'?: string;
   title?: string;
+}
+
+// v0.10.926 — çapa, en yakın kırpan (overflow ≠ visible) atasının dışına
+// kaydıysa ipucu kapanır. Yalnız pencere denetlenseydi iç kaydırma
+// kutusunda (Log Patterns tablosu) klavyeyle açılan ipucu, görünmez olmuş
+// düğmeyi kutunun dışına kadar takip ederdi. Boyutsuz ata atlanır (jsdom
+// ölçüm yapmaz; tarayıcıda boyutsuz kırpan ata zaten her şeyi gizler).
+function clippedOut(el: HTMLElement): boolean {
+  const r = el.getBoundingClientRect();
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const cs = getComputedStyle(p);
+    if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+    const pr = p.getBoundingClientRect();
+    if (pr.width === 0 && pr.height === 0) continue;
+    if (r.bottom <= pr.top || r.top >= pr.bottom || r.right <= pr.left || r.left >= pr.right) return true;
+  }
+  return false;
 }
 
 /** Fare ile açılma gecikmesi varsayılanı (ms). */
@@ -135,6 +162,7 @@ export function Tooltip({ content, children, side = 'top', delay = TOOLTIP_DELAY
     const r = a.getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight;
     if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) { hide(); return; }
+    if (clippedOut(a)) { hide(); return; }
     setPos(placeTip(
       { left: r.left, top: r.top, width: r.width, height: r.height },
       { width: t.offsetWidth, height: t.offsetHeight },
@@ -189,8 +217,19 @@ export function Tooltip({ content, children, side = 'top', delay = TOOLTIP_DELAY
     pos ? '' : 'is-measuring',
   ].filter(Boolean).join(' ');
 
+  // v0.10.926 — metin aria-label'dan FARKLIYSA kalıcı açıklama: eskiden
+  // `title` bunu her an erişilebilir açıklama olarak veriyordu; ipucu
+  // yalnız açıkken describedby basar (dokunmatik/tarama kipi hiç görmez).
+  // Açıkken describedby önceliklidir — aynı cümle iki kez okunmaz.
+  const description = describes && typeof content === 'string' ? content : undefined;
+
   const trigger = cloneElement(children, {
-    title: undefined,
+    'aria-description': description,
+    // v0.10.926 — `undefined` DEĞİL boş dize: title'sız eleman en yakın
+    // atasının title'ını devralır (HTML "advisory information"); ata <tr>
+    // kendi title'ını taşıyorsa satırın yerel ipucu bizimkinin yanında
+    // açılıyordu. Boş title devralmayı keser, kendisi ipucu göstermez.
+    title: '',
     'aria-describedby': describedBy,
     onPointerEnter: (e: PointerEvent<HTMLElement>) => {
       cp.onPointerEnter?.(e);
@@ -230,6 +269,7 @@ export function Tooltip({ content, children, side = 'top', delay = TOOLTIP_DELAY
           ref={tipRef}
           id={id}
           role="tooltip"
+          title=""
           className={classes}
           data-side={pos?.side}
           style={pos ? { left: pos.left, top: pos.top } : undefined}

@@ -47,6 +47,10 @@ export function KioskSpanPanel({ span, traceStartNs, logs, eventRows, onClose }:
         <span className="kiosk-span__name" title={span.name}>{displaySpanName(span)}</span>
         <span className={`badge ${err ? 'b-err' : 'b-ok'}`}>{err ? 'ERROR' : (span.statusCode || 'unset')}</span>
         <span className="trace-kiosk__brand-spacer" />
+        {/* v0.10.926 — title kalır: panel TraceWaterfall renderDetail ile
+            `.wf-row` içinde çizilir (tablo-dışı `content-visibility: auto`,
+            sanal kipte `transform: translateY`) — ikisi de ui/Tooltip'in
+            `position: fixed` kutusunu yakalar (Tooltip.tsx BİLİNEN SINIRLAR). */}
         <IconButton aria-label="Span detayını kapat (Esc)" title="Kapat (Esc)"
           icon={<span aria-hidden="true">×</span>} onClick={onClose} />
       </div>

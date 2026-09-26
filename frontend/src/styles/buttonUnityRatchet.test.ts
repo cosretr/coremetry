@@ -33,6 +33,11 @@ const MAX_RAW_BUTTONS = 0;
 const MAX_ROLE_BUTTON = 0;
 const MAX_REASONED_EXEMPTIONS = 17;
 const MAX_SEGMENTED_FILES = 0;
+// v0.10.926 (Tooltip pilotu) — glif-only IconButton'da yerel `title=`
+// yerine `tooltip=` (ui/Tooltip: temaya uyar, klavyede açılır). 50 → 7:
+// kalanlar gerekçeli (content-visibility+transform atası, z-index'li FAB,
+// devre dışı SEBEBİ metni). Yalnız AŞAĞI iner.
+const MAX_ICONBUTTON_TITLE = 7;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {
@@ -77,6 +82,31 @@ describe('buton bütünlüğü mandalı', () => {
   it('gerekçeli istisna sayısı tavanı aşmaz', () => {
     const n = files.reduce((a, p) => a + readFileSync(p, 'utf8').split('\n').filter(l => REASONED.test(l)).length, 0);
     expect(n, 'istisna yerine atom kullan; gerçekten gerekiyorsa tavanı gerekçeyle artır').toBeLessThanOrEqual(MAX_REASONED_EXEMPTIONS);
+  });
+  it('title= taşıyan IconButton sayısı tavanı aşmaz', () => {
+    // Açılış etiketinin YALNIZ derinlik-0 metni: süslü parantez içi (iç JSX,
+    // ifadeler) ve tırnaklı öznitelik değerleri atlanır — `"a -> b"` etiketi
+    // erken bitirmez, `icon={<span title=…/>}` sayılmaz.
+    const topLevel = (src: string) => {
+      const out: string[] = [];
+      for (const m of src.matchAll(/<IconButton\b/g)) {
+        let i = m.index! + m[0].length, depth = 0, quote = '', top = '';
+        for (; i < src.length; i++) {
+          const c = src[i];
+          if (quote) { if (c === quote) quote = ''; continue; }
+          if (depth === 0 && (c === '"' || c === "'")) { quote = c; top += c; continue; }
+          if (c === '{') { depth++; continue; }
+          if (c === '}') { depth--; continue; }
+          if (depth > 0) continue;
+          if (c === '>') break;
+          top += c;
+        }
+        out.push(top);
+      }
+      return out;
+    };
+    const n = [...code.values()].reduce((a, s) => a + topLevel(s).filter(t => /\stitle=/.test(t)).length, 0);
+    expect(n, 'IconButton ipucu için tooltip= kullan; title= yalnız gerekçeyle').toBeLessThanOrEqual(MAX_ICONBUTTON_TITLE);
   });
   it('elle .segmented kuran dosya sayısı tavanı aşmaz', () => {
     const n = files.filter(p => /className="segmented/.test(code.get(p)!)).length;

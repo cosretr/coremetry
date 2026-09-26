@@ -21,7 +21,7 @@ export function LangToggle() {
   return (
     <IconButton variant="ghost" size="md" className="theme-toggle tt-text" onClick={() => setUserLang(next)}
       aria-label={tip}
-      title={tip}
+      tooltip={tip}
       icon={next.toUpperCase()} />
   );
 }

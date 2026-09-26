@@ -247,7 +247,7 @@ export function LogContextModal({
                         variant="bare" size="xs" className="ib-accent"
                         onClick={() => onTracePeek(l.traceId)}
                         aria-label={`Peek trace ${l.traceId.slice(0, 12)}`}
-                        title={`Peek trace ${l.traceId.slice(0, 12)}…`}
+                        tooltip={`Peek trace ${l.traceId.slice(0, 12)}…`}
                         icon="👁" />
                     )}
                   </span>

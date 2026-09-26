@@ -93,21 +93,21 @@ function KvRow({ k, v, onAdd, onExclude, onToggleCol, isCol }: {
               {onAdd && (
                 <IconButton variant="bare" size="xs" className="ib-add"
                   onClick={(e) => { e.stopPropagation(); onAdd(k, v); }}
-                  title={`Filter for ${k}: ${v}`}
+                  tooltip={`Filter for ${k}: ${v}`}
                   aria-label={`Filter for ${k}: ${v}`}
                   icon="⊕" />
               )}
               {onExclude && (
                 <IconButton variant="bare" size="xs" className="ib-not"
                   onClick={(e) => { e.stopPropagation(); onExclude(k, v); }}
-                  title={`Filter out ${k}: ${v}`}
+                  tooltip={`Filter out ${k}: ${v}`}
                   aria-label={`Filter out ${k}: ${v}`}
                   icon="⊖" />
               )}
               {onToggleCol && (
                 <IconButton variant="bare" size="xs" className="ib-add"
                   onClick={(e) => { e.stopPropagation(); onToggleCol(k); }}
-                  title={isCol ? `Remove ${k} column` : `Add ${k} as column`}
+                  tooltip={isCol ? `Remove ${k} column` : `Add ${k} as column`}
                   aria-label={isCol ? `Remove ${k} column` : `Add ${k} as column`}
                   icon={isCol ? '▣' : '▤'} />
               )}
@@ -304,7 +304,7 @@ export function LogTable({
                     yalnız başlık-hover'da belirme (opacity) + boşluk için. */}
                 <IconButton variant="bare" size="xs" className="th-remove"
                   onClick={e => { e.stopPropagation(); onRemoveColumn(c.id); }}
-                  title={`Remove the ${c.label} column`}
+                  tooltip={`Remove the ${c.label} column`}
                   aria-label={`Remove the ${c.label} column`}
                   icon="×" />
               </>
@@ -406,14 +406,17 @@ function LogRow({
           {onFilterAdd && (
             <IconButton variant="bare" size="xs" className="ib-add"
               onClick={(e) => { e.stopPropagation(); onFilterAdd(key, value); }}
-              title={`Filter for ${key}: ${value}`}
+              // v0.10.926 — Tooltip. Satır hover'ı artık filter değil zemin
+              // tonu (filter `position: fixed`i yakalıyordu); hücrenin kendi
+              // title'ı sızmaz (Tooltip boş title basar).
+              tooltip={`Filter for ${key}: ${value}`}
               aria-label={`Filter for ${key}: ${value}`}
               icon="⊕" />
           )}
           {onFilterExclude && (
             <IconButton variant="bare" size="xs" className="ib-not"
               onClick={(e) => { e.stopPropagation(); onFilterExclude(key, value); }}
-              title={`Filter out ${key}: ${value}`}
+              tooltip={`Filter out ${key}: ${value}`}
               aria-label={`Filter out ${key}: ${value}`}
               icon="⊖" />
           )}
@@ -540,7 +543,8 @@ function LogRow({
                 {onTracePeek && (
                   <IconButton variant="bare" size="xs" className="ib-accent"
                     onClick={e => { e.stopPropagation(); onTracePeek(l.traceId); }}
-                    title="Peek trace inline (summary + sibling logs)"
+                    // v0.10.926 — Tooltip (pivot ⊕/⊖ ile aynı; satır hover'ı zemin tonu).
+                    tooltip="Peek trace inline (summary + sibling logs)"
                     aria-label="Peek trace inline"
                     style={{ marginLeft: 4 }}
                     icon="👁" />

@@ -250,7 +250,7 @@ export default function DashboardsPage() {
                         aria-label={starMap.has(d.id) ? `${d.name} yıldızını kaldır` : `${d.name} panosunu yıldızla`}
                         active={starMap.has(d.id)}
                         variant="bare" size="xs" className="ib-star"
-                        title={starMap.has(d.id) ? 'Yıldızı kaldır' : 'Yıldızla — listenin başına gelir'}
+                        tooltip={starMap.has(d.id) ? 'Yıldızı kaldır' : 'Yıldızla — listenin başına gelir'}
                         disabled={starBusy === d.id}
                         // Satırın kendi onClick'i panoya gidiyor;
                         // durdurulmazsa her yıldız tıklaması sayfayı

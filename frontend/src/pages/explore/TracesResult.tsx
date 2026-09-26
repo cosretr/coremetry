@@ -130,7 +130,7 @@ export function TracesResult({
                   ? <>
                       <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>{c.label}</span>
                       <IconButton variant="bare" size="xs"
-                        title="Remove column" aria-label={`Remove the ${c.label} column`}
+                        tooltip="Remove column" aria-label={`Remove the ${c.label} column`}
                         onClick={e => { e.stopPropagation(); setExtraCols(extraCols.filter(x => x !== c.label)); }}
                         style={{ marginLeft: 6 }}
                         icon="×" />

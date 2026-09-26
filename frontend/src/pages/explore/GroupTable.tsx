@@ -198,7 +198,10 @@ function PivotButtons({ pivot, onPivot }: {
   ) => (
     <IconButton
       aria-label={aria}
-      title={disabled ?? title}
+      // v0.10.926 — etkin hâl Tooltip (ata <tr> title'ı sızmaz); pasif
+      // hâlde metin devre dışı SEBEBİ → yerel title.
+      tooltip={disabled ? undefined : title}
+      title={disabled}
       disabled={!!disabled}
       variant="bare" size="xs"
       onClick={e => { e.stopPropagation(); if (!disabled) onPivot(pivot.pairs, mode); }}
@@ -229,9 +232,12 @@ function SourceButton({ target, onOpen }: { target: SourceTarget; onOpen: () => 
   return (
     <IconButton
       aria-label="Kaynağa git — bu satırı üreten spanlar"
-      title={target.ok
+      // v0.10.926 — PivotButtons ile aynı: etkin hâl Tooltip, pasif hâlin
+      // SEBEBİ yerel title.
+      tooltip={target.ok
         ? 'Kaynağa git — bu satırı üreten span listesi, aynı pencere ve aynı filtrelerle (Enter)'
-        : target.why}
+        : undefined}
+      title={target.ok ? undefined : target.why}
       disabled={!target.ok}
       variant="bare" size="xs"
       onClick={e => { e.stopPropagation(); if (target.ok) onOpen(); }}
@@ -321,13 +327,18 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
           {dt.sortedRows.map((r, i) => {
             const hidden = hiddenKeys.has(r.rowKey);
             const target = sourceTarget?.(r.letter, r.pivot?.pairs ?? []);
+            const rp = dt.rowProps(i);
             return (
               <tr key={r.rowKey}
-                {...dt.rowProps(i)}
+                {...rp}
+                // v0.10.926 — gizli satır soluklaşması hücrelerde (`.gt-off`,
+                // globals.css): satırdaki opaklık ⊕/⊖/⇥ ipucunu yarı saydam
+                // çizip satırın yığın bağlamına hapsediyordu.
+                className={[rp.className, hidden ? 'gt-off' : ''].filter(Boolean).join(' ') || undefined}
                 onMouseEnter={() => onFocus(hidden ? null : r.rowKey)}
                 onClick={(e) => (e.ctrlKey || e.metaKey) ? onToggleHidden(r.rowKey) : onIsolate(r.rowKey)}
                 title="Tıkla: yalnız bu seri · Ctrl/Cmd+tık: gizle-göster · Enter: kaynağa git · üzerine gel: panelde vurgula"
-                style={{ cursor: 'pointer', opacity: hidden ? 0.45 : 1,
+                style={{ cursor: 'pointer',
                          contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
                 {/* v0.9.848 — hücre FLEX oldu. Pivot düğmeleri etiketin
                     SOLUNDA ve flexShrink:0: sağına konsaydı uzun bir grup

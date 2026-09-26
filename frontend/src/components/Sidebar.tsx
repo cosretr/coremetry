@@ -373,9 +373,13 @@ export function Sidebar() {
               aria-label={effCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               icon={effCollapsed ? '»' : '«'}
               variant="secondary" size="md" className="sb-collapse"
+              // v0.10.926 — Tooltip pilotu: tablet bandında düğme devre dışı ve
+              // metin eylem değil SEBEP → yerel `title`da kalır; etkin hâlin
+              // ipucu Tooltip'e geçer.
+              tooltip={isTablet ? undefined : (collapsed ? 'Expand sidebar' : 'Collapse sidebar')}
               title={isTablet
                 ? 'Dar pencerede menü ikon-only kalır — genişletmek için pencereyi 1024px üstüne çıkarın'
-                : (collapsed ? 'Expand sidebar' : 'Collapse sidebar')} />
+                : undefined} />
           )}
         </div>
         <div id="nav">

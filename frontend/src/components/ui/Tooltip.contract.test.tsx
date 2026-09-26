@@ -174,10 +174,10 @@ describe('Tooltip — ARIA ve tetik prop\'ları', () => {
     expect(btn(el).getAttribute('aria-describedby')).toBe(`help ${tip(el)!.id}`);
   });
 
-  it('tetikteki title düşürülür (yerel ipucu ile üst üste binmesin)', () => {
+  it('tetikteki title boşalır (yerel ipucu ile üst üste binmesin, atadan devralmasın)', () => {
     const el = render(
       <Tooltip content="Sil"><IconButton aria-label="Sil" icon="×" title="Sil" /></Tooltip>);
-    expect(btn(el).hasAttribute('title')).toBe(false);
+    expect(btn(el).getAttribute('title')).toBe('');
   });
 
   it('çocuğun kendi odak/işaretçi işleyicileri de çağrılır', () => {
@@ -274,5 +274,85 @@ describe('Tooltip — inceleme turu regresyonları', () => {
     keyFocus(btn(el));
     act(() => { tip(el)!.click(); });
     expect(rowClicks).toBe(0);
+  });
+
+  // v0.10.926 (Tooltip pilotu) — IconButton'ın `tooltip` prop'u atomun
+  // kendisini sarar: çağrı yerinde <Tooltip> sarmalayıcısı gerekmez.
+  describe('IconButton tooltip prop', () => {
+    it('yerel title düşer; fare gecikmesinden sonra ipucu açılır ve tanımlar', () => {
+      const el = render(<IconButton aria-label="Sil" icon="×" tooltip="Satırı sil" title="eski" />);
+      expect(btn(el).getAttribute('title')).toBe('');
+      pointer(btn(el), 'pointerover');
+      advance(TOOLTIP_DELAY);
+      expect(tip(el)?.textContent).toBe('Satırı sil');
+      expect(btn(el).getAttribute('aria-describedby')).toBe(tip(el)!.id);
+    });
+    it('tooltip yoksa sarmalanmaz; title olduğu gibi kalır', () => {
+      const el = render(<IconButton aria-label="Sil" icon="×" title="Sil" />);
+      expect(btn(el).getAttribute('title')).toBe('Sil');
+      pointer(btn(el), 'pointerover');
+      advance(TOOLTIP_DELAY);
+      expect(tip(el)).toBeNull();
+    });
+    it('ref düğmeye iner; çağıranın onPointerEnter/onFocus işleyicisi de çalışır', () => {
+      let ref: HTMLButtonElement | null = null;
+      let entered = 0;
+      const el = render(
+        <IconButton aria-label="Yenile" icon="↻" tooltip="Yenile" ref={r => { ref = r; }}
+          onPointerEnter={() => { entered++; }} />);
+      expect(ref).toBe(btn(el));
+      pointer(btn(el), 'pointerover');
+      expect(entered).toBe(1);
+    });
+  });
+});
+
+// v0.10.926 — ata title'ı sızmaz: title'sız eleman en yakın atasının
+// title'ını devralır. Tetik ve kutu boş title taşır; ata <tr>'nin yerel
+// ipucu Tooltip'in yanında açılmaz.
+describe('Tooltip × ata title', () => {
+  it('tetik ve kutu boş title taşır', () => {
+    vi.useFakeTimers();
+    const el = render(
+      <table><tbody><tr title="Satırın kendi ipucu"><td>
+        <IconButton aria-label="Ekle" icon="⊕" tooltip="Filtreye ekle" />
+      </td></tr></tbody></table>);
+    expect(btn(el).getAttribute('title')).toBe('');
+    pointer(btn(el), 'pointerover');
+    advance(TOOLTIP_DELAY);
+    expect(tip(el)?.getAttribute('title')).toBe('');
+  });
+});
+
+// v0.10.926 — ikinci inceleme turu: (1) metin aria-label'dan farklıysa
+// kalıcı erişilebilir açıklama (eski `title` bunu her an veriyordu);
+// (2) çapa en yakın kırpan kaydırma kutusunun dışına kaydıysa ipucu kapanır.
+describe('Tooltip × erişilebilir açıklama ve kaydırma kutusu', () => {
+  it('farklı metin → aria-description kalıcı; aynı metin → yok', () => {
+    const el = render(<>
+      <IconButton aria-label="Sorgu A" icon="A" tooltip="Sorguyu kapat" />
+      <IconButton aria-label="Yenile" icon="↻" tooltip="Yenile" />
+    </>);
+    const [a, b] = [...el.querySelectorAll('button')];
+    expect(a.getAttribute('aria-description')).toBe('Sorguyu kapat');
+    expect(b.hasAttribute('aria-description')).toBe(false);
+  });
+  const rect = (top: number, h: number) =>
+    ({ top, bottom: top + h, left: 0, right: 100, width: 100, height: h, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  function scrollBox(anchorTop: number) {
+    const el = render(
+      <div data-box="1" style={{ overflowX: 'auto', overflowY: 'auto' }}>
+        <IconButton aria-label="Ekle" icon="⊕" tooltip="Filtreye ekle" />
+      </div>);
+    vi.spyOn(el.querySelector<HTMLElement>('[data-box]')!, 'getBoundingClientRect').mockReturnValue(rect(0, 100));
+    vi.spyOn(btn(el), 'getBoundingClientRect').mockReturnValue(rect(anchorTop, 20));
+    keyFocus(btn(el));
+    return el;
+  }
+  it('çapa kaydırma kutusunun İÇİNDE → ipucu açık', () => {
+    expect(tip(scrollBox(40))).not.toBeNull();
+  });
+  it('çapa kutunun DIŞINA kaymış → ipucu kapanır', () => {
+    expect(tip(scrollBox(300))).toBeNull();
   });
 });

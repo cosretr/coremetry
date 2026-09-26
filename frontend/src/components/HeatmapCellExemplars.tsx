@@ -111,7 +111,7 @@ export function HeatmapCellExemplars({ cell, bucketWidthNs, filters, dsl, exempl
             {cell.count.toLocaleString()} spans in cell
           </span>
           <IconButton variant="secondary" size="sm" aria-label="Close exemplars"
-            title="Close" onClick={onClose} icon="✕" />
+            tooltip="Close" onClick={onClose} icon="✕" />
         </div>
         <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 14 }}>
           {/* v0.9.869 (tutarlılık denetimi MT3 sınıfı, YENİ bulgu) — eski

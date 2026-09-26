@@ -70,10 +70,10 @@ export function AIFeedbackButtons({ exchangeId }: { exchangeId?: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
       <div style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
         <IconButton variant="ghost" size="sm" active={verdict === 1}
-          onClick={() => rate(1)} title="Faydalı"
+          onClick={() => rate(1)} tooltip="Faydalı"
           aria-label="Cevabı faydalı işaretle" icon="👍" />
         <IconButton variant="ghost" size="sm" active={verdict === -1}
-          onClick={() => rate(-1)} title="Faydasız"
+          onClick={() => rate(-1)} tooltip="Faydasız"
           aria-label="Cevabı faydasız işaretle" icon="👎" />
       </div>
       {/* Kutu yalnız 👎 SEÇİLİYKEN: 👍'ye neden sormak anket olurdu; 👎'nin

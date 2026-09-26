@@ -1129,7 +1129,7 @@ function TracesPageInner() {
               {/* v0.10.914 (buton bütünlüğü) — sayfaya özel Go/Clear sınıfları
                   yerine ortak atomlar: IconButton (temizle) + Button primary sm (git). */}
               {draft.traceId && (
-                <IconButton size="sm" variant="ghost" aria-label="Trace ID'yi temizle" title="Clear"
+                <IconButton size="sm" variant="ghost" aria-label="Trace ID'yi temizle" tooltip="Clear"
                   icon={<span aria-hidden="true">✕</span>}
                   onClick={() => { setDraft({ ...draft, traceId: '' }); setFilter({ ...filter, traceId: '' }); }} />
               )}
@@ -1190,7 +1190,7 @@ function TracesPageInner() {
               {/* v0.10.724 — katla/aç; şerit başlığının en solunda. */}
               <IconButton size="sm" aria-label={stripCollapsed ? 'Grafiği aç' : 'Grafiği katla'}
                 aria-expanded={!stripCollapsed}
-                title={stripCollapsed ? 'Grafiği göster' : 'Grafiği katla — yalnız istatistik şeridi kalır (tarayıcıda hatırlanır)'}
+                tooltip={stripCollapsed ? 'Grafiği göster' : 'Grafiği katla — yalnız istatistik şeridi kalır (tarayıcıda hatırlanır)'}
                 icon={<span aria-hidden="true">{stripCollapsed ? '▸' : '▾'}</span>}
                 onClick={toggleStrip} />
               <SegmentedControl aria-label="Grafik türü" value={viz} onChange={setViz} options={[
@@ -1559,7 +1559,7 @@ function TracesPageInner() {
                           {id === 'operation' && (
                             <IconButton className="row-kiosk"
                               aria-label="Kiosk görünümünde aç (yeni pencere)"
-                              title="Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede"
+                              tooltip="Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede"
                               icon={<span aria-hidden="true">⧉</span>}
                               onClick={e => {
                                 e.preventDefault(); e.stopPropagation();

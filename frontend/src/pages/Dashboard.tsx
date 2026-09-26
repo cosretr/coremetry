@@ -664,7 +664,7 @@ function PanelMenu({ panel, vars, range, canEdit, onDuplicate, onEdit }: {
       <IconButton className="dash-panel-menu-btn"
         variant="secondary" size="sm"
         aria-label="Panel menüsü" aria-haspopup="menu" aria-expanded={open}
-        title="Panel actions"
+        tooltip="Panel actions"
         onClick={() => setOpen(o => !o)}
         icon="⋯" />
       {open && (
@@ -854,7 +854,7 @@ function DashboardGrid({
                   <span className="row gap-1" style={{ marginLeft: 8 }} onClick={e => e.stopPropagation()}>
                     <Button variant="secondary" size="sm"
                       onClick={() => g.rowPanel && onEditPanel(g.rowPanel.id)}>Edit</Button>
-                    <IconButton variant="danger" size="sm" title="Delete row"
+                    <IconButton variant="danger" size="sm" tooltip="Delete row"
                       aria-label="Delete row"
                       onClick={() => g.rowPanel && onDeletePanel(g.rowPanel.id)} icon="×" />
                   </span>
@@ -946,7 +946,7 @@ function DashboardGrid({
                           <>
                             <Button variant="secondary" size="sm"
                               onClick={() => onEditPanel(p.id)}>Edit</Button>
-                            <IconButton variant="danger" size="sm" title="Delete panel"
+                            <IconButton variant="danger" size="sm" tooltip="Delete panel"
                               aria-label="Delete panel"
                               onClick={() => onDeletePanel(p.id)} icon="×" />
                           </>

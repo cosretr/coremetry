@@ -778,7 +778,8 @@ export default function EndpointsPage() {
                             aria-label={isExpanded
                               ? 'Hide downstream dependencies'
                               : 'Show downstream dependencies'}
-                            title={isExpanded
+                            // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
+                            tooltip={isExpanded
                               ? 'Hide downstream dependencies'
                               : 'Show services / dbs this endpoint\'s service typically calls'}
                             icon={isExpanded
@@ -937,7 +938,8 @@ export default function EndpointsPage() {
                             {/* v0.10.705 — bu route için eşik alarmı (editör/admin). */}
                             {canEditRules && entry === 'http' && (
                               <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
-                                title="Bu route için eşik alarmı: p95/p99/hata oranı/hız eşiği geçince Problem"
+                                // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
+                                tooltip="Bu route için eşik alarmı: p95/p99/hata oranı/hız eşiği geçince Problem"
                                 onClick={e => { e.stopPropagation(); setAlertRow(r); }} />
                             )}
                           </span>

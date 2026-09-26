@@ -44,7 +44,9 @@ export function ThemeToggle() {
   return (
     <IconButton variant="ghost" size="md" className="theme-toggle" onClick={toggle}
       aria-label={`Theme: ${LABEL[theme]} — switch to ${LABEL[NEXT[theme]]}`}
-      title={`Theme: ${LABEL[theme]} — click for ${LABEL[NEXT[theme]]}`}
+      // v0.10.926 — Tooltip; grup köşe kuralı `:last-of-type` (globals.css),
+      // kardeş ipucu kutusu son düğmenin köşesini bozmaz.
+      tooltip={`Theme: ${LABEL[theme]} — click for ${LABEL[NEXT[theme]]}`}
       icon={GLYPH[theme]} />
   );
 }

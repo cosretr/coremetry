@@ -295,7 +295,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
           actions={<>
             <ResetLayoutButton dt={dt} />
             <IconButton size="sm" icon={<span aria-hidden="true">↻</span>} aria-label="Pod envanterini yenile"
-              title="Tüm cluster'ları yeniden oku" disabled={podsFetching} onClick={refetchPods} />
+              tooltip="Tüm cluster'ları yeniden oku" disabled={podsFetching} onClick={refetchPods} />
           </>} />
         <div className="table-wrap is-fit" style={{ marginBottom: 14 }}>
           <table style={{ tableLayout: 'fixed', width: '100%' }}>

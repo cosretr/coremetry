@@ -55,7 +55,7 @@ export function NamespaceCombobox({ namespaces, value, onPick, onClear }: {
           yanında akıyordu; o yerleşim korunur. */}
       {value && !open && (
         <IconButton variant="bare" size="xs" icon="✕" onClick={onClear}
-          aria-label="Clear namespace" title="Clear namespace" />
+          aria-label="Clear namespace" tooltip="Clear namespace" />
       )}
       {open && (
         <div style={{

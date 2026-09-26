@@ -211,10 +211,12 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                                 onClick={e => { e.stopPropagation(); onSearch(r.query); }}>Ara</Button>
                               {/* v0.10.502 (B6) — mevcut metni ezmeden ekle / hariç tut */}
                               <IconButton variant="bare" size="xs" className="ib-add"
-                                title={`Mevcut aramaya ekle: ${r.query}`} aria-label={`Mevcut aramaya ekle: ${r.query}`}
+                                // v0.10.926 — Tooltip; ata <tr> title'ı (r.sample) sızmaz
+                                // (Tooltip tetiğe ve kutuya boş title basar).
+                                tooltip={`Mevcut aramaya ekle: ${r.query}`} aria-label={`Mevcut aramaya ekle: ${r.query}`}
                                 onClick={e => { e.stopPropagation(); onSearch(r.query, 'and'); }} icon="⊕" />
                               <IconButton variant="bare" size="xs" className="ib-not"
-                                title={`Hariç tut: NOT (${r.query})`} aria-label={`Hariç tut: NOT (${r.query})`}
+                                tooltip={`Hariç tut: NOT (${r.query})`} aria-label={`Hariç tut: NOT (${r.query})`}
                                 onClick={e => { e.stopPropagation(); onSearch(r.query, 'not'); }} icon="⊖" />
                             </span>
                           )}

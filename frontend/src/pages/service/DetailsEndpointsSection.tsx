@@ -150,7 +150,7 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
                         <Link to={tracesLink(r, range, env || undefined, (r.cluster || scopeCluster) || undefined)} className="accent" style={{ fontSize: 11, padding: '2px 8px' }}>Traces →</Link>
                         {canEditRules && (
                           <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
-                            title="Bu route için eşik alarmı (p95/p99/hata oranı/hız)" onClick={() => setAlertRow(r)} />
+                            tooltip="Bu route için eşik alarmı (p95/p99/hata oranı/hız)" onClick={() => setAlertRow(r)} />
                         )}
                       </td>
                     </tr>

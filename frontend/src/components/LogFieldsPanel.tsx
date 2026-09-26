@@ -124,12 +124,12 @@ function FieldAccordion({ field, scope, isColumn, onToggleColumn, onPillAdd, onP
                   title="lift = hata seçimindeki pay − tabandaki pay (puan); ±5 altı gürültü">{b.label}</span>); })()}
               <IconButton variant="bare" size="xs" className="ib-add"
                 onClick={() => onPillAdd(field, v.value)}
-                title={`Filter for ${field}: ${v.value}`}
+                tooltip={`Filter for ${field}: ${v.value}`}
                 aria-label={`Filter for ${field}: ${v.value}`}
                 icon="⊕" />
               <IconButton variant="bare" size="xs" className="ib-not"
                 onClick={() => onPillExclude(field, v.value)}
-                title={`Filter out ${field}: ${v.value}`}
+                tooltip={`Filter out ${field}: ${v.value}`}
                 aria-label={`Filter out ${field}: ${v.value}`}
                 icon="⊖" />
             </div>

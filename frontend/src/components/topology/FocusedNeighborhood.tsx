@@ -372,7 +372,7 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
             )}
             {pinnedNode && (
               <IconButton variant="ghost" size="sm" aria-label="Unpin node"
-              title="Unpin" onClick={() => setPinned(null)} icon="✕" />
+              tooltip="Unpin" onClick={() => setPinned(null)} icon="✕" />
             )}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'ui-monospace, monospace', marginBottom: 6 }}>

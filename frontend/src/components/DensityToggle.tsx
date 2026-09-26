@@ -68,7 +68,7 @@ export function DensityToggle() {
   return (
     <IconButton variant="ghost" size="md" className="theme-toggle" onClick={cycle}
       aria-label={tip}
-      title={tip}
+      tooltip={tip}
       icon={GLYPH[density]} />
   );
 }

@@ -2076,7 +2076,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    the row background subtly to telegraph that the row is
    actionable. */
 .kv-actions { opacity: 0; transition: opacity 80ms ease-out; }
-.kv-filterable:hover .kv-actions { opacity: 1; }
+.kv-filterable:hover .kv-actions,
+.kv-filterable:focus-within .kv-actions { opacity: 1; } /* v0.10.926 — klavye odağı da açar (odak halkası + ipucu görünür) */
 .kv-filterable:hover td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 
 /* Metrics */
@@ -2400,8 +2401,10 @@ tr.wf-evidence > td:first-child { border-left: 3px dashed var(--accent2); }
 /* Density + theme toggle pill group in the topbar */
 .topbar-prefs { display: flex; align-items: center; flex-shrink: 0; }
 .topbar-prefs .theme-toggle { border-radius: 0; border-right: none; }
-.topbar-prefs .theme-toggle:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
-.topbar-prefs .theme-toggle:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-right: 1px solid var(--border); }
+/* v0.10.926 — `:first/last-of-type`: açık Tooltip kutusu (span) düğmenin
+   kardeşi olur; `:last-child` hover süresince son düğmeden düşüyordu. */
+.topbar-prefs .theme-toggle:first-of-type { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.topbar-prefs .theme-toggle:last-of-type  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-right: 1px solid var(--border); }
 .topbar-prefs .theme-toggle:hover { position: relative; z-index: 1; }
 /* Vertical separator between the time-range picker and the pref group */
 .topbar-prefs-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; margin: 0 8px; }
@@ -2676,9 +2679,13 @@ button.accent.copied {
   font-size: var(--fs-xs); line-height: 1.35; font-weight: 400;
   font-style: normal; text-transform: none; letter-spacing: normal;
   white-space: normal; overflow-wrap: anywhere; text-align: left;
+  /* v0.10.926 — kutu tetiğin DOM kardeşi: font atadan gelirdi (log
+     satırı / kv tablosu monospace). Gövde yığınına sabitle. */
+  font-family: -apple-system, 'Segoe UI', sans-serif;
   pointer-events: auto;
   animation: fadeIn .12s ease-out;
 }
+[data-theme="redhat"] .tip { font-family: 'Red Hat Text', 'RedHatText', -apple-system, 'Segoe UI', sans-serif; }
 .tip.is-measuring { visibility: hidden; left: 0; top: 0; }
 /* Yapışkan hücre/başlık (sticky + z-index) kendi yığın bağlamını kurar;
    içindeki .tip'in z'si yalnız o bağlamda sayılır ve sonraki satırın sabit
@@ -3289,7 +3296,19 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .mqe-topn select { font-size: 12px; }
 .mqe-rows { display: flex; flex-direction: column; gap: 8px; }
 .mqe-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
-.mqe-row.off { opacity: .55; }
+/* v0.10.926 — soluklaştırma ATAYA değil çocuklara: atadaki opaklık < 1
+   Tooltip kutusunu (düğmenin kardeşi) yarı saydam çizer ve satırda yığın
+   bağlamı kurup ipucunu sonraki satırın altına gömerdi. İpucu ya da açılır
+   liste/menü BARINDIRAN çocuk o an soluklaşmaz: opaklıklı çocuk kendi yığın
+   bağlamını kurar ve içindeki açılır panel sonraki kardeşin altında kalırdı.
+   `.row-actions` kap olarak soluklaşır → içindeki devre dışı düğmenin .4'ü
+   eskisi gibi ÇARPILIR. Explore QueryRow aynı kural (.qr-off, eski 0.5). */
+.mqe-row.off > :not(.tip):not(:has(.tip, [role="listbox"], [role="menu"], .mqe-pop, .fq-pop)) { opacity: .55; }
+.qr-off > :not(.tip):not(:has(.tip, [role="listbox"], [role="menu"], .mqe-pop, .fq-pop)) { opacity: .5; }
+/* Gizli seri satırları (Explore grup tablosu, grafik lejantı) aynı dersle:
+   hücreler soluklaşır, ipucu barındıran hücre o an değil. */
+tr.gt-off > td:not(:has(.tip)) { opacity: .45; }
+tr.sl-off > td:not(:has(.tip)) { opacity: .4; }
 .mqe-id-letter { font-weight: 700; font-size: 12px; color: var(--accent2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mqe-eye { font-size: 11px; color: var(--text3); }
 .mqe-picker { position: relative; }
@@ -3383,7 +3402,11 @@ td > .cell-actions.end { justify-content: flex-end; }
 .logtbl-dense > tbody > tr > td.lt-wrap { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .logtbl-dense > tbody > tr.log-error { background: color-mix(in oklab, var(--err) 7%, transparent); }
 .logtbl-dense > tbody > tr.log-warn  { background: color-mix(in oklab, var(--warn) 6%, transparent); }
-.logtbl-dense > tbody > tr.log-error:hover, .logtbl-dense > tbody > tr.log-warn:hover { filter: brightness(1.04); }
+/* v0.10.926 — hover `filter: brightness(1.04)` idi; filter `position: fixed`
+   torunları yakalar (satırdaki Tooltip kutusu kayıp kırpılıyordu). Aynı
+   "biraz daha belirgin" hissi tonu koyulaştırarak. */
+.logtbl-dense > tbody > tr.log-error:hover { background: color-mix(in oklab, var(--err) 11%, transparent); }
+.logtbl-dense > tbody > tr.log-warn:hover  { background: color-mix(in oklab, var(--warn) 10%, transparent); }
 
 /* Service Logs tab — filter bar + level facet chips */
 .ov-logbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -4196,7 +4219,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 /* v0.10.282 — /logs satırında pod pivotu: hücre üstüne gelince ⊕/⊖ (KvRow
    .kv-actions deseninin hücre-kapsamlı ikizi). */
 .lt-pivot .kv-actions { opacity: 0; }
-.lt-pivot:hover .kv-actions { opacity: 1; }
+.lt-pivot:hover .kv-actions, .lt-pivot:focus-within .kv-actions { opacity: 1; }
 
 /* v0.10.298 — /logs Desenler paneli: sayı hücresinde pay çubuğu */
 .lp-panel .table-wrap { max-height: 380px; overflow: auto; }

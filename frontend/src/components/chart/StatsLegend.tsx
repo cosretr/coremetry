@@ -119,7 +119,10 @@ export function StatsLegend({ series, onToggle, isVisible, defaultCollapsed, sto
                   <tr key={s.label + i}
                     {...(onToggle ? rowKeyboard(() => onToggle(i, false)) : {})}
                     onClick={onToggle ? e => { e.preventDefault(); onToggle(i, e.ctrlKey || e.metaKey); } : undefined}
-                    style={{ opacity: on ? 1 : 0.4, cursor: onToggle ? 'pointer' : 'default' }}
+                    // v0.10.926 — gizli seri soluklaşması hücrelerde (`.sl-off`):
+                    // satırdaki opaklık ⊕ ipucunu yarı saydam çiziyordu.
+                    className={on ? undefined : 'sl-off'}
+                    style={{ cursor: onToggle ? 'pointer' : 'default' }}
                     title={onToggle ? 'Tıkla: yalnız bu seri · Ctrl/Cmd-tık: gizle/göster' : undefined}>
                     <td style={{ ...td, textAlign: 'left', color: 'var(--text2)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
                       <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: s.color, marginRight: 7, verticalAlign: 'middle' }} />
@@ -127,8 +130,11 @@ export function StatsLegend({ series, onToggle, isVisible, defaultCollapsed, sto
                       {onPick && (pickable ? pickable(i) : true) && (
                         <IconButton variant="bare" size="xs" className="ib-add"
                           onClick={e => { e.stopPropagation(); onPick(i); }}
-                          onKeyDown={e => { e.stopPropagation(); }}
-                          title={`Filter for ${s.label}`} aria-label={`Filter for ${s.label}`}
+                          // v0.10.926 — Esc geçsin: tek Esc dinleyicisi belgede
+                          // (lib/keyboard.ts); durdurulursa ipucu Esc'le kapanmaz.
+                          onKeyDown={e => { if (e.key !== 'Escape') e.stopPropagation(); }}
+                          // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
+                          tooltip={`Filter for ${s.label}`} aria-label={`Filter for ${s.label}`}
                           icon="⊕" />
                       )}
                     </td>

@@ -507,7 +507,7 @@ function QueryRow({ q, canRemove, onChange, onDuplicate, onRemove }: {
           durum pressed'den okunur; Explore QueryRow'daki kardeşiyle tek dil.
           İki glif (harf + göz) sığsın diye md. */}
       <IconButton variant="secondary" size="md" active={q.enabled}
-        aria-label={`Query ${q.id}`} title={q.enabled ? 'Disable query' : 'Enable query'}
+        aria-label={`Query ${q.id}`} tooltip={q.enabled ? 'Disable query' : 'Enable query'}
         style={{ width: 'auto', minWidth: 28, padding: '0 6px' }}
         onClick={() => onChange({ ...q, enabled: !q.enabled })}
         icon={<>
@@ -544,8 +544,8 @@ function QueryRow({ q, canRemove, onChange, onDuplicate, onRemove }: {
           onClick={e => { e.preventDefault(); onChange({ ...q, color: '' }); }} />}
       </label>
       <div className="row-actions">
-        <IconButton icon="⧉" title="Duplicate" aria-label="Duplicate query" onClick={onDuplicate} />
-        <IconButton icon="×" title="Remove" aria-label="Remove query" onClick={onRemove} disabled={!canRemove} />
+        <IconButton icon="⧉" tooltip="Duplicate" aria-label="Duplicate query" onClick={onDuplicate} />
+        <IconButton icon="×" tooltip="Remove" aria-label="Remove query" onClick={onRemove} disabled={!canRemove} />
       </div>
     </div>
   );

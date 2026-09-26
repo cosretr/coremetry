@@ -1,5 +1,7 @@
 import { forwardRef, useContext, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { ButtonGroupSizeContext } from './buttonGroupContext';
+import { Tooltip } from './Tooltip';
+import type { TipSide } from '@/lib/tipPlacement';
 
 // IconButton — the square, glyph-only affordance (v0.9.884 dalgası, MB4).
 //
@@ -43,6 +45,17 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   size?: Size;
   /** Yıldız / pin / negate gibi açık-kapalı durumlar — `aria-pressed` de basar. */
   active?: boolean;
+  /** v0.10.926 (Tooltip pilotu) — yerel `title` yerine ui/Tooltip: temaya
+   *  uyar, klavye odağında açılır, Esc ile kapanır. `title` ile birlikte
+   *  verilirse `title` boşalır (ata title'ını da devralmaz). Devre dışı
+   *  SEBEBİ farklı bir metinse onu `title`da tutun:
+   *  `tooltip={dis ? undefined : …} title={dis ? neden : undefined}`.
+   *  Tooltip'in `position: fixed` sınırları için ui/Tooltip.tsx başlığına
+   *  bakın (transform / filter / contain / tablo-dışı content-visibility /
+   *  opaklık < 1 atası). */
+  tooltip?: ReactNode;
+  /** İpucunun tercih edilen tarafı (varsayılan üst; sığmazsa çevrilir). */
+  tooltipSide?: TipSide;
 }
 
 const variantClass: Record<Variant, string> = {
@@ -58,7 +71,7 @@ const sizeClass: Record<Size, string> = {
 };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, variant = 'ghost', size, active, className,
+  { icon, variant = 'ghost', size, active, className, tooltip, tooltipSide,
     type = 'button', ...rest },
   ref,
 ) {
@@ -73,7 +86,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     className,
   ].filter(Boolean).join(' ');
 
-  return (
+  const button = (
     <button
       ref={ref}
       type={type}
@@ -83,4 +96,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       <span className="btn-icon-glyph" aria-hidden="true">{icon}</span>
     </button>
   );
+  return tooltip == null || tooltip === ''
+    ? button
+    : <Tooltip content={tooltip} side={tooltipSide}>{button}</Tooltip>;
 });

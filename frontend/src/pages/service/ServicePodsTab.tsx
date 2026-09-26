@@ -191,7 +191,7 @@ export function ServicePodsTab({ service, range, onZoom, onZoomReset }: {
         actions={<>
           <ResetLayoutButton dt={dt} />
           <IconButton size="sm" icon={<span aria-hidden="true">↻</span>} aria-label="Pod listesini yenile"
-            title="Entity katmanı + tüm Thanos cluster'ları yeniden oku" disabled={th.podsFetching || entityQ.isFetching} onClick={refetchAll} />
+            tooltip="Entity katmanı + tüm Thanos cluster'ları yeniden oku" disabled={th.podsFetching || entityQ.isFetching} onClick={refetchAll} />
         </>} />
       {chain.length > 0 && <div style={{ marginBottom: 8 }}><ChainStrip chain={chain} range={range} nameOf={nameOf} /></div>}
 

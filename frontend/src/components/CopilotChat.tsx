@@ -385,6 +385,10 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
           atomda bir rung değil, satır-içi kalır; `bare` zemin boyamaz. */}
       {launcher && !drawerOpen && <TraceExplainNudge />}{/* v0.10.432 (D8) — FAB'ın üstündeki baloncuk */}
       {launcher && !drawerOpen && (
+        // v0.10.926 — title kalır: ipucu kutusu FAB'ın KARDEŞİ olarak
+        // `--z-tooltip` (30) ile çizilir, FAB ise `--z-fab` (80). Sağ kenardaki
+        // çekmeceler (60/61), span paneli (40) ve üstteki nudge baloncuğu (80)
+        // açıkken ipucu onların ALTINDA kalıp görünmez; yerel title üstte.
         <IconButton variant="bare"
           className={criticalOpen > 0 ? 'cm-ai-fab is-alert' : 'cm-ai-fab'}
           onClick={() => setOpen(true)}

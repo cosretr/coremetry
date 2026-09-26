@@ -907,7 +907,8 @@ export default function ClustersPage() {
                                     variant="bare" size="xs" className="ib-accent"
                                     onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
                                     aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
-                                    title="Per-pod trend charts for this namespace"
+                                    // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
+                                    tooltip="Per-pod trend charts for this namespace"
                                     icon={<ChartSpline size={14} strokeWidth={1.75} />} />
                                 </td>
                               </tr>

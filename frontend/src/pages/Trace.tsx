@@ -1428,7 +1428,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
         icon="▾"
         variant="secondary"
         size="md"
-        title={`${identities.length} farklı kimlik — hangi işleme gidileceğini seç`}
+        tooltip={`${identities.length} farklı kimlik — hangi işleme gidileceğini seç`}
         onClick={() => setOpen(o => !o)}
         // v0.10.570 (operatör: "üst üste bindi sanki") — .btn-icon.ib-md SABİT
         // 28×28 kare; yanındaki Button md dolgudan daha uzun, yani ok kısa

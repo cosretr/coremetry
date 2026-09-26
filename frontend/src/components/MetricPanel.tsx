@@ -206,6 +206,10 @@ export function MetricPanel(props: MetricPanelProps) {
     <div ref={menuRef} style={{ position: 'relative' }}>
       <IconButton
         aria-label="Panel menu"
+        // v0.10.926 — ⋯ z-index 4'lük kaplamada: ipucu o yığın bağlamına
+        // hapsolur; üste açılırsa /service'in yapışkan sekme şeridi (z 5)
+        // örter. Aşağı, panelin kendi gövdesine açılır.
+        tooltipSide="bottom"
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen(o => !o)}
@@ -215,7 +219,7 @@ export function MetricPanel(props: MetricPanelProps) {
           opacity: hovered || menuOpen ? 1 : 0,
           transition: 'opacity .12s ease',
         }}
-        title="Panel actions"
+        tooltip="Panel actions"
         // v0.9.890 — glif ⋮ değil ⋯. Bu tetik ile Dashboard'ınki AYNI
         // işti, aynı 26×24 kutuydu ve GLİFLERİ farklıydı; denetim bunu
         // ayrıca kusur olarak işaretledi. İkisi de yatay üç nokta.

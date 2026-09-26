@@ -76,8 +76,13 @@ saklanmasıydı); (2) **barrel'a ekle**; (3) CSS adını sahiplen.
 `CopyButton` · `PageLoader` — hepsi `components/` altında.
 
 **🔴 Atom BOŞLUĞU (kanonik yok):** `Stat` (95 kullanım, **6 tanım**) ·
-~~`Tooltip`~~ → **`ui/Tooltip.tsx` (v0.10.919)**; göç: butonlardaki ~320
-`title=` (önce IconButton'lar) · **`ui/ButtonGroup.tsx` (v0.10.919)** eş
+~~`Tooltip`~~ → **`ui/Tooltip.tsx` (v0.10.919)**; **IconButton `tooltip=`
+prop'u (v0.10.926)** — glif-only düğmede `title=` yerine bu (50 → 7, mandal
+`buttonUnityRatchet`). Kalan göç: diğer butonlardaki `title=`. Kullanmadan
+önce Tooltip başlığındaki sınırlar: filter/transform/contain/tablo-dışı
+content-visibility atası, opaklığı < 1 ata (soluklaştırmayı çocuklara ver:
+`.qr-off`, `.gt-off`), `:last-child` kardeş seçicisi (`:last-of-type` kullan),
+devre dışı SEBEBİ `title`da kalır · **`ui/ButtonGroup.tsx` (v0.10.919)** eş
 eylem kümesi (tek seçim → SegmentedControl, commit → ActionRow) ·
 gezinme butonu (`Button` polimorfik değil, 36 sahipsiz site) ·
 `Section` (5 tanım).

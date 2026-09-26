@@ -834,7 +834,7 @@ export default function ServicesPage() {
                             variant="bare" size="xs" className="ib-star"
                             style={{ marginRight: 6, verticalAlign: 'middle' }}
                             onClick={e => { e.stopPropagation(); togglePin(s.name); }}
-                            title={pinned.has(s.name)
+                            tooltip={pinned.has(s.name)
                               ? 'Unpin — service falls back into the sorted list'
                               : 'Pin — float to top of the list'}
                             icon={<Star size={14} strokeWidth={1.75}

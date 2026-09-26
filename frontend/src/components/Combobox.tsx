@@ -237,7 +237,7 @@ export function Combobox({
       {value ? (
         <IconButton variant="ghost" size="xs" className="cb-clear"
           aria-label="Clear"
-          title="Clear"
+          tooltip="Clear"
           onClick={() => {
             onChange('');
             // Kilitliyken odak/açılış YOK — ama temizleme çalışır.
