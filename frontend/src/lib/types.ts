@@ -7484,7 +7484,9 @@ export interface RolloutStats {
 /** rollout.Run — sunucu MarshalJSON'u camelCase + epoch-ms yazar (reconciler.go); istemci normalize ETMEZ. */
 export interface RolloutRun { startedAt: number; finishedAt: number; host?: string; status: string; clusters: number; rolloutsWritten: number; spanMs: number; ksmMs: number; error?: string }
 export interface RolloutRunsResponse { runs: RolloutRun[] }
-export interface RolloutSettings { enabled: boolean; interval?: string; bucket?: string; threshold?: number; hysteresis?: number; exitHysteresis?: number; overlapMax?: string; lookback?: string; weakSignal?: boolean; stalledMin?: string; updatedAt?: number }
+export interface RolloutSettings { enabled: boolean; interval?: string; bucket?: string; threshold?: number; hysteresis?: number; exitHysteresis?: number; overlapMax?: string; lookback?: string; weakSignal?: boolean; stalledMin?: string; updatedAt?: number;
+  /** v0.10.957 — Rollouts v2 (P1.5) vidaları; P2.3'e dek hiçbir okuyucu yok. `source` "v2" kaydedilebilir ama etkisizdir. */
+  source?: 'v1' | 'v2'; detectorIntervalS?: number; stuckAfter?: string; ignoreScale?: boolean; kinds?: string[]; initialEvents?: boolean; observedGenWaitTicks?: number; incarnationAbsentTicks?: number; knownRevisionsMax?: number }
 /** GET/PUT /api/settings/rollouts cevabı: settings + resolved (uygulanan) + defaults. */
 export interface RolloutSettingsResponse { settings: RolloutSettings; resolved: Record<string, unknown>; defaults: RolloutSettings }
 /** GET /api/rollout/detail (v0.10.203) — çekmece. since/generatedAt NANOSANİYE (rollout.startedAt ms'tir). */

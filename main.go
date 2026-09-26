@@ -23,6 +23,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/api"
 	"github.com/cilcenk/coremetry/internal/appschema"
+	"github.com/cilcenk/coremetry/internal/argocd"
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chmigrate"
@@ -1074,6 +1075,13 @@ func main() {
 		log.Printf("[rollout] load persisted config: %v", err)
 	}
 	cfgRefresh.Add("rollout", func(ctx context.Context) error { return rolloutSettings.LoadPersisted(ctx, store) })
+	// v0.10.957 — Argo CD ayar blobu (system_settings["argocd"]; Rollouts v2
+	// P1.4), her rolde. P1: yalnız GET/PUT/keşif okur; işçi yok (P3).
+	argocdSettings := argocd.NewSettingsService()
+	if err := argocdSettings.LoadPersisted(ctx, store); err != nil {
+		log.Printf("[argocd] load persisted config: %v", err)
+	}
+	cfgRefresh.Add("argocd", func(ctx context.Context) error { return argocdSettings.LoadPersisted(ctx, store) })
 	var entitySyncer *entity.Syncer
 	if mode.worker {
 		entitySyncer = entity.NewSyncer(entity.NewThanosSource(thanosSvc), entity.StoreFromCH(store), entitySettings.Resolved)
@@ -1421,6 +1429,8 @@ func main() {
 	srv.SetThanos(thanosSvc)
 	srv.SetEntity(entitySettings, entitySyncer)
 	srv.SetRollout(rolloutSettings) // v0.10.200 — rollouts ayarı (her rol; PUT + bayrak kapısı)
+	// v0.10.957 — Argo CD ayarı (her rol; GET/PUT + keşif; paket düzeyi, api.go büyümez).
+	api.SetArgoCDSettings(argocdSettings)
 	if mode.api {
 		srv.StartRolloutTail(ctx) // v0.10.200 — pod-yerel SSE tail (audit §3 T); yalnız api
 	}

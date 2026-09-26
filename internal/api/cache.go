@@ -556,6 +556,11 @@ func (s *Server) reloadConfigOnSignal(ctx context.Context, svc string) {
 				log.Printf("[rollout] reload on signal: %v", err)
 			}
 		}
+	case "argocd":
+		// v0.10.957 — Argo CD ayar blobu (argocd_settings_routes.go PUT).
+		// Case uçla AYNI sürümde (thanos v0.9.237 dersi); P1'de blobu yalnız
+		// GET/PUT okur, P3 işçileri aynı servisi okuyacak. Nil-güvenli.
+		s.reloadArgoCDSettings(ctx)
 	case "rag":
 		if s.rag != nil {
 			if err := s.rag.LoadPersisted(ctx, s.store); err != nil {

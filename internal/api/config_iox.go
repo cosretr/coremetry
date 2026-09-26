@@ -230,6 +230,8 @@ func (s *Server) importConfig(w http.ResponseWriter, r *http.Request) {
 		"copilot", "ldap", "tempo", "pipeline", "logstore", "thanos", "custom_roles",
 		"mcpclient",      // v0.10.87 — dış MCP sunucu listesi de hydrate eder
 		"promql_console", // v0.10.952 — PromQL konsolu korkulukları (paket-global, hydrate eder)
+		"argocd",         // v0.10.957 — Argo CD ayar blobu (Rollouts v2 P1.4; hydrate eder)
+		"rollouts",       // v0.10.957 — rollouts bayrağı + v2 vidaları hydrate eder ama listede yoktu (audit §10.7)
 	} {
 		s.publishConfigReload(r.Context(), svc)
 	}

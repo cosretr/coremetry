@@ -37,7 +37,126 @@ type Settings struct {
 	WeakSignal *bool `json:"weakSignal,omitempty"`
 	// StalledMin — Faz 5 (KSM): ready < desired bu süreden uzun → stalled (10m). Bugün yalnız saklanır/kelepçelenir.
 	StalledMin string `json:"stalledMin,omitempty"`
-	UpdatedAt  int64  `json:"updatedAt,omitempty"`
+
+	// v0.10.957 — Rollouts v2 P1.5 vidaları (docs/rollouts/v2-audit.md §10.7).
+	// EKLEMELİ: v1 alanları ve Resolved aynen; v2 değerleri ResolvedV2'de.
+	// P1'de bunları OKUYAN YOK (KSM dedektörü P2.1–P2.2; kaynak anahtarı
+	// P2.3). Eski bloblar (alan yok) v2 varsayılanlarıyla yüklenir.
+	//
+	// Source — /api/rollouts* okuma kaynağı: "v1" (workload_rollouts,
+	// varsayılan) | "v2" (rollout_events; P2.3'te bağlanır).
+	Source string `json:"source,omitempty"`
+	// DetectorIntervalS — KSM dedektör tiki, saniye (karar 8: 30; 10–300).
+	DetectorIntervalS int `json:"detectorIntervalS,omitempty"`
+	// StuckAfter — progressing → stuck zamanlayıcısı (§4.5; "10m", 2m–6h).
+	StuckAfter string `json:"stuckAfter,omitempty"`
+	// IgnoreScale — yalnız ölçek / yalnız annotation nesil artışı olay
+	// değildir (§4.4 adım 4); nil = true.
+	IgnoreScale *bool `json:"ignoreScale,omitempty"`
+	// Kinds — izlenen iş yükü türleri (rollout_events.workload_kind yazımı;
+	// büyük/küçük harf duyarsız girilir): Deployment, StatefulSet, DaemonSet.
+	Kinds []string `json:"kinds,omitempty"`
+	// InitialEvents — bootstrap'tan sonra İLK kez görülen iş yükü için
+	// change_type='initial' olayı (karar 10); ilk-ever koşu yalnız baseline.
+	// nil = true.
+	InitialEvents *bool `json:"initialEvents,omitempty"`
+	// ObservedGenWaitTicks — nesil artışından sonra observed_generation ≥
+	// generation için en çok kaç tik beklenir (§4.4 adım 2; 10 = 30 s tikte
+	// 5 dk: 1 dk'lık CMO scrape'i + controller gecikmesine geniş pay; 1–120).
+	ObservedGenWaitTicks int `json:"observedGenWaitTicks,omitempty"`
+	// IncarnationAbsentTicks — K: iş yükü ≥ K ardışık TAM okumada yoksa
+	// yeniden görünüşü yeni incarnation'dır (§4.3; 3; 1–60).
+	IncarnationAbsentTicks int `json:"incarnationAbsentTicks,omitempty"`
+	// KnownRevisionsMax — incarnation başına akılda tutulan revizyon sınırı
+	// (§10.3.2; 32). revisionHistoryLimit'i (vars. 10) AŞMALI ki GC'lenmiş
+	// RS'nin geri dönüşü ROLLBACK görünsün (§4.4 durum c) → taban 11, tavan 256.
+	KnownRevisionsMax int `json:"knownRevisionsMax,omitempty"`
+
+	UpdatedAt int64 `json:"updatedAt,omitempty"`
+}
+
+// v0.10.957 — v2 kaynak değerleri.
+const (
+	SourceV1 = "v1"
+	SourceV2 = "v2"
+)
+
+// v2Kinds — v0.10.957 — kanonik tür yazımı ve SIRASI (ResolvedV2 bu sırayla döner).
+// Rollout (Argo Rollouts, karar 11) ve DeploymentConfig (karar 12) onaysız
+// — P1'de kabul edilmez.
+var v2Kinds = []string{"Deployment", "StatefulSet", "DaemonSet"}
+
+// V2Resolved — v0.10.957 — v2 vidalarının UYGULANAN değerleri. Resolved'dan
+// ayrı: Resolved karşılaştırılabilir kalsın (settings_test.go `!=`) ve v1
+// reconciler'ın girdisi değişmesin.
+type V2Resolved struct {
+	Source                 string
+	DetectorInterval       time.Duration
+	StuckAfter             time.Duration
+	IgnoreScale            bool
+	Kinds                  []string
+	InitialEvents          bool
+	ObservedGenWaitTicks   int
+	IncarnationAbsentTicks int
+	KnownRevisionsMax      int
+}
+
+// clampInt — v0.10.957 — ≤0 → def (ayarsız / geçersiz), sonra [lo, hi].
+func clampInt(v, def, lo, hi int) int {
+	if v <= 0 {
+		v = def
+	}
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// canonicalV2Kind — v0.10.957 — büyük/küçük harf duyarsız eşleşme.
+func canonicalV2Kind(k string) (string, bool) {
+	k = strings.TrimSpace(k)
+	for _, c := range v2Kinds {
+		if strings.EqualFold(k, c) {
+			return c, true
+		}
+	}
+	return "", false
+}
+
+// ResolvedV2 — v0.10.957 — v2 kelepçeleri (tik 10–300 s, stuckAfter 2m–6h,
+// observedGenWaitTicks 1–120, incarnationAbsentTicks 1–60, knownRevisionsMax
+// 11–256); bilinmeyen source → v1; kinds kanonik/tekil/kanonik sırada,
+// geçerli tür yoksa varsayılan üçlü; nil bool'lar → true.
+func (s Settings) ResolvedV2() V2Resolved {
+	d := DefaultSettings()
+	r := V2Resolved{
+		Source:                 SourceV1,
+		DetectorInterval:       time.Duration(clampInt(s.DetectorIntervalS, d.DetectorIntervalS, 10, 300)) * time.Second,
+		StuckAfter:             settingsdur.Clamp(settingsdur.Parse(s.StuckAfter, settingsdur.Parse(d.StuckAfter, 10*time.Minute)), 2*time.Minute, 6*time.Hour),
+		IgnoreScale:            s.IgnoreScale == nil || *s.IgnoreScale,
+		InitialEvents:          s.InitialEvents == nil || *s.InitialEvents,
+		ObservedGenWaitTicks:   clampInt(s.ObservedGenWaitTicks, d.ObservedGenWaitTicks, 1, 120),
+		IncarnationAbsentTicks: clampInt(s.IncarnationAbsentTicks, d.IncarnationAbsentTicks, 1, 60),
+		KnownRevisionsMax:      clampInt(s.KnownRevisionsMax, d.KnownRevisionsMax, 11, 256),
+	}
+	if strings.EqualFold(strings.TrimSpace(s.Source), SourceV2) {
+		r.Source = SourceV2
+	}
+	want := map[string]bool{}
+	for _, k := range s.Kinds {
+		if c, ok := canonicalV2Kind(k); ok {
+			want[c] = true
+		}
+	}
+	for _, c := range v2Kinds {
+		if len(want) == 0 || want[c] {
+			r.Kinds = append(r.Kinds, c)
+		}
+	}
+	return r
 }
 
 type Resolved struct {
@@ -54,7 +173,11 @@ type Resolved struct {
 }
 
 func DefaultSettings() Settings {
-	return Settings{Enabled: false, Interval: "60s", Bucket: "5m", Threshold: 10, Hysteresis: 2, ExitHysteresis: 6, OverlapMax: "30m", Lookback: "6h", StalledMin: "10m"}
+	t := true
+	return Settings{Enabled: false, Interval: "60s", Bucket: "5m", Threshold: 10, Hysteresis: 2, ExitHysteresis: 6, OverlapMax: "30m", Lookback: "6h", StalledMin: "10m",
+		// v0.10.957 — v2 varsayılanları (GET `defaults`; ResolvedV2 buradan okur).
+		Source: SourceV1, DetectorIntervalS: 30, StuckAfter: "10m", IgnoreScale: &t, Kinds: append([]string(nil), v2Kinds...),
+		InitialEvents: &t, ObservedGenWaitTicks: 10, IncarnationAbsentTicks: 3, KnownRevisionsMax: 32}
 }
 
 // bucketAllowed — saat bölenleri: Go AlignBucket ile CH toStartOfInterval aynı
@@ -158,8 +281,32 @@ func ValidateSettings(s Settings) error {
 	if s.Hysteresis < 0 || s.ExitHysteresis < 0 {
 		return fmt.Errorf("histerezis negatif olamaz")
 	}
+	// v0.10.957 — v2 vidaları: aynı duruş (anlaşılmaz/negatif 400, aralık
+	// dışı okumada kelepçelenir — GET `resolved` uygulananı gösterir).
+	if v := strings.TrimSpace(s.StuckAfter); v != "" && settingsdur.Parse(v, 0) == 0 {
+		return fmt.Errorf("stuckAfter anlaşılamadı: %q (örn. \"10m\", \"1h\")", s.StuckAfter)
+	}
+	if v := strings.TrimSpace(s.Source); v != "" && !strings.EqualFold(v, SourceV1) && !strings.EqualFold(v, SourceV2) {
+		return fmt.Errorf("source %q geçersiz: %q ya da %q", s.Source, SourceV1, SourceV2)
+	}
+	for name, v := range map[string]int{"detectorIntervalS": s.DetectorIntervalS, "observedGenWaitTicks": s.ObservedGenWaitTicks,
+		"incarnationAbsentTicks": s.IncarnationAbsentTicks, "knownRevisionsMax": s.KnownRevisionsMax} {
+		if v < 0 {
+			return fmt.Errorf("%s negatif olamaz: %d", name, v)
+		}
+	}
+	for i, k := range s.Kinds {
+		if _, ok := canonicalV2Kind(k); !ok {
+			return fmt.Errorf("kinds[%d] %q geçersiz: %s", i, k, strings.Join(v2Kinds, " | "))
+		}
+	}
 	return nil
 }
+
+// SettingsStore — v0.10.957 — system_settings["rollouts"]'ın dar yüzü
+// (*chstore.Store karşılar). Dışa açıldı — api katmanı PUT'u sahte depoyla
+// gidiş-dönüş test edebilsin (rollouts.go rolloutSettingsStoreOf).
+type SettingsStore = settingsStore
 
 type settingsStore interface {
 	GetRolloutSettingsRaw(ctx context.Context) ([]byte, error)
@@ -180,6 +327,9 @@ func (s *SettingsService) Current() Settings {
 }
 
 func (s *SettingsService) Resolved() Resolved { return s.Current().Resolved() }
+
+// ResolvedV2 — v0.10.957 — v2 vidalarının uygulanan değerleri.
+func (s *SettingsService) ResolvedV2() V2Resolved { return s.Current().ResolvedV2() }
 
 func (s *SettingsService) Configure(cfg Settings) {
 	s.mu.Lock()

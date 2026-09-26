@@ -218,12 +218,27 @@ func (s *Server) getRolloutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := s.rolloutCfg.Current()
 	res := s.rolloutCfg.Resolved()
+	v2 := s.rolloutCfg.ResolvedV2() // v0.10.957 — Rollouts v2 P1.5 vidaları (eklemeli; P1'de okuyan yok)
 	writeJSON(w, map[string]any{"settings": cfg, "resolved": map[string]any{
 		"enabled": res.Enabled, "intervalSec": int(res.Interval / time.Second), "bucketSec": int(res.Bucket / time.Second),
 		"threshold": res.Threshold, "hysteresis": res.Hysteresis, "exitHysteresis": res.ExitHysteresis,
 		"overlapMaxSec": int(res.OverlapMax / time.Second), "lookbackSec": int(res.Lookback / time.Second),
 		"weakSignal": res.WeakSignal, "stalledMinSec": int(res.StalledMin / time.Second),
+		"source": v2.Source, "detectorIntervalSec": int(v2.DetectorInterval / time.Second), "stuckAfterSec": int(v2.StuckAfter / time.Second),
+		"ignoreScale": v2.IgnoreScale, "kinds": v2.Kinds, "initialEvents": v2.InitialEvents,
+		"observedGenWaitTicks": v2.ObservedGenWaitTicks, "incarnationAbsentTicks": v2.IncarnationAbsentTicks, "knownRevisionsMax": v2.KnownRevisionsMax,
 	}, "defaults": rollout.DefaultSettings()})
+}
+
+// rolloutSettingsStoreOf — v0.10.957 — depo seçimi (test dikişi;
+// promqlHistoryStoreOf emsali). nil *chstore.Store'u arayüze sarmak
+// nil-olmayan bir arayüz üretir ve SavePersisted panikler — açıkça nil
+// döner, PUT 503.
+var rolloutSettingsStoreOf = func(s *Server) rollout.SettingsStore {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	return s.store
 }
 
 func (s *Server) putRolloutSettings(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +257,12 @@ func (s *Server) putRolloutSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.rolloutCfg.SavePersisted(r.Context(), s.store, in); err != nil {
+	st := rolloutSettingsStoreOf(s)
+	if st == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "ayar deposu bağlı değil")
+		return
+	}
+	if err := s.rolloutCfg.SavePersisted(r.Context(), st, in); err != nil {
 		writeErr(w, err)
 		return
 	}
