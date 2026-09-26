@@ -29,6 +29,13 @@ var stateTables = []string{
 	"FROM anomaly_silences", "FROM anomaly_tracked",
 	// v0.10.767 — ingest_ledger: pod sayaç defteri, RMT + FINAL; ana bağlantı.
 	"FROM ingest_ledger",
+	// v0.10.959 — ROLLOUTS: v1 olay tablosu listede EKSİKTİ (v2-audit §10.5)
+	// + v2'nin sekiz state tablosu. Hepsi RMT + FINAL, birleşik state grubu;
+	// okumaları in-order ana bağlantıda kalmalı.
+	"FROM workload_rollouts",
+	"FROM rollout_events", "FROM rollout_workload_state", "FROM argocd_app_status",
+	"FROM argocd_sync_events", "FROM argocd_app_mapping", "FROM rollout_classification",
+	"FROM ado_commit_enrichment", "FROM rollout_worker_runs",
 }
 
 // Tek kaynağa indirgeme, kapıyı SESSİZCE boşaltmanın da yoludur: liste

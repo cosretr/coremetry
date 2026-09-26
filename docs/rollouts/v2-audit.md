@@ -676,6 +676,8 @@ A collector restart risks the known wedge (`CLAUDE.md` pitfalls), so this is a m
 - **One writer per table**, full-row writes carrying every field (E2 / invariant 4), with an **explicit client `version`** on every write (the Replicated insert-dedup lesson of `ai_eval_runs`/`settings.go`, per S5).
 - **Codecs:** none on these state tables, as with the v1 state tables (`rollout_schema.go:52-78`, `migrations/0012_rollout_layer.sql:113-139`). That keeps `0015` byte-identical to `store.go` (the 0012 contract, `0012_rollout_layer.sql:11-17`). The ZSTD(3)/ZSTD(1) split (C1) concerns telemetry and rollups.
 - `DateTime64(3)` everywhere, bound with tz-less `toDateTime64(?,3,'UTC')` (CLAUDE.md pitfall).
+- **Writer contract (v0.10.959 review):** a DEFAULT-less column is NOT mandatory in ClickHouse — an omitted or zero TTL anchor stores 1970-01-01 and the row is deleted at the next TTL merge. Every P2/P3/P4 writer rejects a zero or pre-epoch TTL anchor (`started_at`, `last_seen_at`, `changed_at`, `op_started_at`, `last_verified_at`, `first_requested_at`, and `rollout_worker_runs.started_at` for every worker) with a pure validator pinned in its own tests. No CHECK constraint (operator decision if wanted).
+- **`argocd_app_status` fold (P3):** at most one row per (app, tick); a sync completion and the tuple change it causes in the same tick fold into one `change_kind='sync'` row carrying the new tuple and `sync_phase` (`change_kind` is not in ORDER BY). The P3 writer pins this with a unit test.
 
 ### 10.3 DDL (single-node form; `adaptDDL` turns each into `ReplicatedReplacingMergeTree('<prefix>/state/<name>','{shard}-{replica}',version)` in cluster mode)
 

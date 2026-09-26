@@ -2344,6 +2344,17 @@ func canonicalTables(sd, ld, md int) []string {
 		// GİRMEZ → stateTableDDL birleşik grup); prod'da 0012 ADIM 5.
 		workloadRolloutsDDL,
 		rolloutReconcileRunsDDL,
+		// v0.10.959 — ROLLOUTS v2 P1.7: sekiz state tablosu (rollout_v2_schema.go,
+		// v2-audit §10.3; sıra rolloutV2TableDDLs ile aynı). Shard EDİLMEZ →
+		// birleşik state grubu; prod'da migrations/0015 (sihirbaz, boot değil).
+		rolloutEventsDDL,
+		rolloutWorkloadStateDDL,
+		argocdAppStatusDDL,
+		argocdSyncEventsDDL,
+		argocdAppMappingDDL,
+		rolloutClassificationDDL,
+		adoCommitEnrichmentDDL,
+		rolloutWorkerRunsDDL,
 
 		// audit_log: who did what, when. Append-only event stream.
 		// Used by admin compliance flow + the /admin/audit page.

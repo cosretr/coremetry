@@ -41,6 +41,13 @@ var telemetryPurgeTables = []string{
 	// (started_at dondurulmuş tarihçe purge'la gider — audit §5(g),
 	// operatör onayı 2026-08-30; preserve istenirse gerekçe satırıyla taşınır).
 	"workload_rollouts", "rollout_reconcile_runs", "workload_revision_activity_1m",
+	// v0.10.959 — ROLLOUTS v2 (karar 24, operatör onayı 2026-09-26): yedisi
+	// KSM / Argo metrikleri / Azure DevOps'tan TÜRER, yeni ingest ve işçi
+	// tikleriyle yeniden doğar. argocd_sync_events BİLİNÇLİ OLARAK YOK —
+	// configPreserveTables'da, gerekçe orada.
+	"rollout_events", "rollout_workload_state", "argocd_app_status",
+	"argocd_app_mapping", "rollout_classification", "ado_commit_enrichment",
+	"rollout_worker_runs",
 	// raw signals (exemplars = OTLP metric exemplars, v0.8.328;
 	// span_links + span_links_reverse = OTel span links, v0.8.329 — pure
 	// telemetry, regenerates from new ingest. The reverse table is listed
@@ -111,6 +118,12 @@ var configPreserveTables = []string{
 	// satırları purge'la gider (öksüz kalan yalnız çağrı örneği, skor değil).
 	// Büyüme 180g TTL'le sınırlı.
 	"ai_eval_runs",
+	// v0.10.959 — Argo CD senkron operasyon kaydı (ROLLOUTS v2, karar 24).
+	// Telemetriden türer AMA YENİDEN DOĞMAZ: Argo her uygulama için yalnız
+	// son 10 geçmiş kaydını (status.history) tutar ve API işçisi yalnız
+	// değişimde okur — purge edilen senkron tarihçesi geri gelmez, Coremetry
+	// o sınırın ötesindeki TEK kayıt. Büyüme 180g TTL'le sınırlı.
+	"argocd_sync_events",
 	// v0.10.17 (F0.4) — bunlar zaten purge EDİLMİYORDU (allowlist'te
 	// yoklar) ama hiçbir listede de olmadıkları için güvenlik testi
 	// onları KORUMUYORDU. Yani biri yarın allowlist'e eklese, hiçbir
