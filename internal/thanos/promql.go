@@ -46,6 +46,16 @@ func nsMatcher(nsFilter string) string {
 	return fmt.Sprintf(`,namespace=~"%s"`, escapeLabelValue(nsFilter))
 }
 
+// NamespaceMatcher — v0.10.955 — nsMatcher'ın dışa açık İNCE sarmalayıcısı
+// (Rollouts v2 P1.2; docs/rollouts/v2-audit.md §3.4, §4.9): işçi sorguları
+// da cluster'ın NamespaceFilter kalkanını taşısın. Çıktı sözleşmesi
+// nsMatcher'ın AYNISI: boş filtre → ""; aksi hâlde BAŞTA VİRGÜLLÜ
+// `,namespace=~"<regex>"` bağlacı. Mevcut bir matcher'ın arkasına eklenir
+// (`kube_x{pod!=""` + NamespaceMatcher(f) + `}`); PromQL baştaki virgülü
+// kabul etmez, seçicide başka matcher yoksa çağıran bir tane koyar.
+// Regex operatöründür; yalnız dize çerçevesi kaçışlanır.
+func NamespaceMatcher(nsFilter string) string { return nsMatcher(nsFilter) }
+
 // podCPUQuery — per-pod CPU in cores: 5m rate over the cAdvisor
 // counter, container!="" drops the pause/aggregate rows,
 // pod!="" drops node-level series.

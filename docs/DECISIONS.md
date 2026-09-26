@@ -824,3 +824,37 @@ kuralına rağmen konsol okuyucusu `internal/thanos/console.go`'da (belirteç ç
 ekleme o pakette, `effectiveTokenFor` dışa kapalı; onaylı denetimin planı). Eski `doQuery`'e ve
 `promapi`'ye dokunulmadı. Rollouts v2 aynı taşıma üzerinden `WorkerQuery` girişi ekleyecek
 (docs/rollouts/v2-audit.md §3.4) — üçüncü bir okuyucu yazılmaz.
+
+## 2026-09-26 — Rollouts v2 Faz 1: KSM doğruluk kaynağı, Argo hub, ayrı durum tabloları (v0.10.955–960)
+
+**Karar (operatör: Faz 0 denetimi docs/rollouts/v2-audit.md, "3 onay" = §12.3 karar 1–10,
+"24 25 onay"):** Önerilerin tamamı onaylı.
+1. İşçi okuyucusu PromQL konsolunun taşıması üzerinde tek dışa açık giriş: `thanos.WorkerQuery`
+   + `WorkerLimits` (konsol yeniden platformlanmaz; `doQuery` ve `promapi` dokunulmaz;
+   çözülemeyen `TokenRef` → istek gönderilmez).
+2. İşçi tavanları: çağrı başına ≤ 50 000 seri, ≤ 64 MiB gövde, 30 sn (tavan 45 sn).
+3. v1 KSM bacağı taşınmaz (v2 onun yerini alır).
+4. Filtre `?trigger=`; kolon "Kaynak"/"Source" YENİ kolon kimliğiyle; API alanı `trigger`.
+5. Argo hub sıradan bir Remote Cluster. Ortamda Argo CD İKİ hub kümesinde kurulu (operatör,
+   2026-09-26): blobda `hubs[{clusterId, injectClusterLabel}]` (etiket ekleme hub başına), her
+   instance kendi `hubClusterId`'sini taşır;
+   `https://kubernetes.default.svc` o instance'ın kendi hub'ına çözülür, keşif hub başına koşar.
+6. Sekiz tablo (`rollout_events`, `rollout_workload_state`, `argocd_app_status`,
+   `argocd_sync_events`, `argocd_app_mapping`, `rollout_classification`,
+   `ado_commit_enrichment`, `rollout_worker_runs`); TTL 180 g / 400 g (durum) / 30 g
+   (eşleme, koşu kaydı). `workload_rollouts` genişletilmez (kimliği span türevi, iki yazarlı).
+7. `apiServerUrls` liste (normalize: küçük harf şema+host, sondaki `/` yok, port yoksa
+   `:6443`); `pairGroup` serbest metin; küme başına tek `argoSuffix`.
+8. Dedektör tick'i 30 sn.
+9. `rollout_events` anahtarında `incarnation_at` (CMO denylist'i `_created`'ı düşürüyor;
+   sil/yeniden yarat geçmişi ezmesin).
+10. İlk görülen iş yükü için `change_type='initial'` olayı; hiç koşmamış ilk tur yalnız taban.
+24. Purge: sekizi de telemetri sınıfı, `argocd_sync_events` HARİÇ — o config gibi korunur
+    (Argo kendi geçmişinde yalnız son 10 kaydı tutar; silinen geri gelmez).
+25. `0015`'te ZooKeeper yolu `0012` gibi sabit `/clickhouse/tables/state/<ad>`; boot'un çalışma
+    zamanında çözdüğü önekten farkı migration başlığında yazılı.
+
+**Neden:** KSM her iş yükünü görür (span'i olmayan dahil), span türevi v1 görmez; Argo ve Azure
+DevOps kanıtı geç gelir ve ayrı yazarlıdır, bu yüzden olay satırına kopyalanmaz, okurken
+birleştirilir. **Faz 1 davranış değiştirmez:** ayarlar, okuyucu, tablolar; hiçbir işçi başlamaz,
+bayraklar kapalı. Faz 2–5 her biri kendi §11 sorgu paketi yanıtlarını bekler.
