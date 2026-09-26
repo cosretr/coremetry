@@ -138,7 +138,7 @@ export function LDAPTab() {
                 hint="Paste the PEM bundle if your AD uses an internal CA. Leave empty to use system roots.">
           <textarea value={cfg.caCert || ''} onChange={e => update({ caCert: e.target.value })}
                     rows={3}
-                    style={{ width: '100%', fontFamily: 'monospace', fontSize: 11 }}
+                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11 }}
                     placeholder="-----BEGIN CERTIFICATE-----..." />
         </Field2>
 
@@ -207,7 +207,7 @@ export function LDAPTab() {
           <Field2 label="Team regex" small
             hint={'opsiyonel — ilk yakalama grubu ekip olur; ör. "…ÜNVAN-Ekip" için -([^-]+)$ (son tireden sonrası). Eşleşme yoksa ekip boş kalır.'}>
             <input value={cfg.teamRegex ?? ''} onChange={e => update({ teamRegex: e.target.value })}
-                   placeholder="-([^-]+)$" style={{ width: '100%', fontFamily: 'ui-monospace, monospace' }} />
+                   placeholder="-([^-]+)$" style={{ width: '100%', fontFamily: 'var(--font-mono)' }} />
           </Field2>
         </Row>
         {/* v0.8.430 — attribute discovery. Operator-reported: users.team
@@ -268,7 +268,9 @@ export function LDAPTab() {
           highest-privilege match. Group string can be a full DN or a CN
           fragment — match is case-insensitive substring.
         </p>
-        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', marginBottom: 8 }}>
+        {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi (T1). Hücre dolgusu
+            (4px) giriş kutularını sıkı tutar; sınıf karşılığı yok, satır içi kalır. */}
+        <table style={{ marginBottom: 8 }}>
           <thead>
             <tr style={{ background: 'var(--bg)', color: 'var(--text2)' }}>
               <th style={{ padding: 6, textAlign: 'left' }}>Group (DN or CN substring)</th>
@@ -401,11 +403,11 @@ function GroupSyncSection({ cfg, update }: {
       <Row>
         <Field2 label="Users base DN" hint="kullanıcı aramasının kökü">
           <input value={gs.usersBaseDN} onChange={e => patch({ usersBaseDN: e.target.value })}
-                 placeholder="OU=Users,DC=corp,DC=example" style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                 placeholder="OU=Users,DC=corp,DC=example" className="mono" style={{ width: '100%' }} />
         </Field2>
         <Field2 label="User filter" small>
           <input value={gs.userFilter} onChange={e => patch({ userFilter: e.target.value })}
-                 placeholder="(objectClass=user)" style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                 placeholder="(objectClass=user)" className="mono" style={{ width: '100%' }} />
         </Field2>
         <Field2 label="Username attr" hint="üye kimliği" small>
           <input value={gs.userNameAttribute} onChange={e => patch({ userNameAttribute: e.target.value })}
@@ -415,11 +417,11 @@ function GroupSyncSection({ cfg, update }: {
       <Row>
         <Field2 label="Groups base DN" hint="grup keşfinin kökü">
           <input value={gs.groupsBaseDN} onChange={e => patch({ groupsBaseDN: e.target.value })}
-                 placeholder="OU=Groups,DC=corp,DC=example" style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                 placeholder="OU=Groups,DC=corp,DC=example" className="mono" style={{ width: '100%' }} />
         </Field2>
         <Field2 label="Group filter" small>
           <input value={gs.groupFilter} onChange={e => patch({ groupFilter: e.target.value })}
-                 placeholder="(objectClass=group)" style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                 placeholder="(objectClass=group)" className="mono" style={{ width: '100%' }} />
         </Field2>
       </Row>
       <Row>
@@ -428,13 +430,13 @@ function GroupSyncSection({ cfg, update }: {
                     onChange={e => patch({ includePrefixes: linesToList(e.target.value) })}
                     rows={2} spellCheck={false}
                     placeholder="OU=DistributionGroups,OU=Groups,DC=corp,DC=example"
-                    style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 11.5 }} />
+                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11.5 }} />
         </Field2>
         <Field2 label="Exclude prefixes" hint="kapsam dışı bırakılacaklar">
           <textarea value={(gs.excludePrefixes || []).join('\n')}
                     onChange={e => patch({ excludePrefixes: linesToList(e.target.value) })}
                     rows={2} spellCheck={false}
-                    style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 11.5 }} />
+                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11.5 }} />
         </Field2>
       </Row>
       {/* Sır kaynağı referansları (dosya/env) — doluysa yukarıdaki inline
@@ -443,15 +445,15 @@ function GroupSyncSection({ cfg, update }: {
       <Row>
         <Field2 label="CA file path" hint="doluysa inline CA cert'i ezer" small>
           <input value={cfg.caFile ?? ''} onChange={e => update({ caFile: e.target.value })}
-                 placeholder="/etc/coremetry/ldap-ca.pem" style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                 placeholder="/etc/coremetry/ldap-ca.pem" className="mono" style={{ width: '100%' }} />
         </Field2>
         <Field2 label="Bind password file" hint="doluysa inline şifreyi ezer" small>
           <input value={cfg.bindPasswordFile ?? ''} onChange={e => update({ bindPasswordFile: e.target.value })}
-                 placeholder="/etc/coremetry/ldap-bind.pass" style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                 placeholder="/etc/coremetry/ldap-bind.pass" className="mono" style={{ width: '100%' }} />
         </Field2>
         <Field2 label="Bind password env" hint="ortam değişkeni adı" small>
           <input value={cfg.bindPasswordEnv ?? ''} onChange={e => update({ bindPasswordEnv: e.target.value })}
-                 placeholder="COREMETRY_LDAP_BIND_PASSWORD" style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                 placeholder="COREMETRY_LDAP_BIND_PASSWORD" className="mono" style={{ width: '100%' }} />
         </Field2>
       </Row>
     </>
@@ -541,14 +543,15 @@ function GroupSyncStatus() {
               </div>
               {prev.warning && <FlashBox kind="err">{prev.warning}</FlashBox>}
               <div className="table-wrap is-scroll" style={{ maxHeight: 260 }}>
+                {/* v0.10.942 — statik tablo: önizleme en çok 10 grup örnekler, sıralanmaz (T1). */}
                 <table>
                   <thead><tr><th>Grup (CN)</th><th>Üye</th><th>Örnek üyeler</th></tr></thead>
                   <tbody>
                     {prev.groups.map(g => (
                       <tr key={g.uid}>
-                        <td className="mono" style={{ fontSize: 11 }} title={g.dn}>{g.cn}</td>
-                        <td className="num mono">{g.memberCount}</td>
-                        <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>{g.sampleMembers.join(', ') || '—'}</td>
+                        <td className="mono" title={g.dn}>{g.cn}</td>
+                        <td className="num">{g.memberCount}</td>
+                        <td className="mono cell-muted">{g.sampleMembers.join(', ') || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -648,14 +651,15 @@ function InspectPanel({ onPick }: { onPick: (attr: string, pattern: string) => v
             </div>
           )}
           <div className="table-wrap is-scroll" style={{ maxHeight: 360 }}>
+            {/* v0.10.942 — statik tablo: seçici liste, aday düğmesi Team alanlarını doldurur (T1). */}
             <table>
               <thead><tr><th>Attribute</th><th>Değer(ler)</th><th>Ekip adayları — tıkla, seç</th></tr></thead>
               <tbody>
                 {Object.entries(res.attributes).sort(([a], [b]) => a.localeCompare(b)).map(([k, vs]) => (
                   <tr key={k}>
-                    <td className="mono" style={{ whiteSpace: 'nowrap', fontSize: 11 }}>{k}</td>
-                    <td className="mono" style={{ fontSize: 11, overflowWrap: 'anywhere' }}>{vs.join(' · ')}</td>
-                    <td style={{ fontSize: 11 }}>
+                    <td className="mono">{k}</td>
+                    <td className="mono">{vs.join(' · ')}</td>
+                    <td>
                       {/* v0.8.523 — sunucu ürettiği canlı-önizlemeli adaylar:
                           operatör ÇIKAN DEĞERİ görür, tıklar; regex arkada. */}
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>

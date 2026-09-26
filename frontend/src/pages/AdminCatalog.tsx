@@ -184,8 +184,8 @@ export default function AdminCatalogPage() {
             rungunda yapıyor. */}
         {filtered && filtered.length > 0 && (
           <div className="table-wrap is-scroll"
-               style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+               style={{ maxHeight: 'calc(100vh - 220px)' }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
@@ -214,16 +214,11 @@ function DisplayRow({ row, onEdit }: { row: Row; onEdit: () => void }) {
   const m = row.meta;
   const hasAny = m.ownerTeam || m.sreTeam || m.chatChannel || m.runbookUrl || m.oncallUrl || m.repository;
   return (
-    <tr style={{
-      opacity: row.hasTraffic ? 1 : 0.55,
-      // content-visibility: auto lets the browser skip rendering
-      // off-screen rows (v0.5.199). At 1000+ services the catalog
-      // table locked the page on initial paint without this.
-      // intrinsicSize is a single-row placeholder so the scrollbar
-      // stays accurate before measurement.
-      contentVisibility: 'auto',
-      containIntrinsicSize: 'auto 36px',
-    }}>
+    // content-visibility: auto lets the browser skip rendering
+    // off-screen rows (v0.5.199). At 1000+ services the catalog
+    // table locked the page on initial paint without this.
+    // v0.10.942 — `.cv-row` (tek satır ritmi `--row-h`, T6); opaklık veriye bağlı, satır içi kalır.
+    <tr className="cv-row" style={{ opacity: row.hasTraffic ? 1 : 0.55 }}>
       <td className="mono">
         <span style={{ fontWeight: 600 }}>{row.service}</span>
         {!row.hasTraffic && (
@@ -328,10 +323,8 @@ function EditRow({ draft, busy, onChange, onSave, onCancel }: {
       </tr>
       {(aiHint || aiError) && (
         <tr style={{ background: 'var(--bg2)' }}>
-          <td colSpan={8} style={{
-            fontSize: 11, paddingTop: 0, paddingBottom: 8,
-            color: aiError ? 'var(--err)' : 'var(--text3)',
-            fontStyle: 'italic',
+          <td colSpan={8} className={aiError ? 'cell-err' : 'cell-faint'} style={{
+            paddingTop: 0, paddingBottom: 8, fontStyle: 'italic',
           }}>
             {aiError ?? `✨ ${aiHint}`}
           </td>

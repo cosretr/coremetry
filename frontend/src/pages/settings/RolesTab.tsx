@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Button, Modal, Stack, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { Button, ButtonGroup, Modal, Stack, useConfirm } from '@/components/ui';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api, type CustomRole, type AvailablePage } from '@/lib/api';
 
 // v0.9.871 (tutarlılık denetimi BT13) — paylaşılan primitif. Kolon kümesi,
 // sıra, etiketler ve hücre içerikleri AYNEN korundu; kazanılan tek şey
 // sıralama + yeniden boyutlandırma + kalıcı genişlik.
-const ROLE_COLS: DataTableColumn<CustomRole>[] = [
+// v0.10.942 (tablo standardı dilim 3) — ikincil sütun tonu ve "sayfa yok"
+// uyarısı kolon bayrağında; eylem hücresi `kind: 'actions'` kolonu
+// (`minWidth = width`: sığdırma onu eski sabit `trailing` gibi kilitler).
+const ROLE_COLS: ColumnDef<CustomRole>[] = [
   { id: 'name',  label: 'Name',  sortValue: r => r.name,             naturalDir: 'asc', width: 220 },
   // Hücre sayfa adlarını virgülle basıyor; sıralama da GÖRÜNENE göre
   // olsun (sayıya göre sıralamak metin gösteren bir kolonda şaşırtır).
-  { id: 'pages', label: 'Pages', sortValue: r => r.pages.join(', '), naturalDir: 'asc', flex: true },
+  { id: 'pages', label: 'Pages', sortValue: r => r.pages.join(', '), naturalDir: 'asc', flex: true,
+    tone: r => (r.pages.length === 0 ? 'err' : 'muted') },
+  { id: 'actions', label: 'Actions', kind: 'actions', width: 160, minWidth: 160 },
 ];
 
 // ── Custom roles tab ────────────────────────────────────────────────────────
@@ -107,26 +111,23 @@ export function CustomRolesTab() {
         </Empty>
       ) : (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
-            <DataTableColgroup dt={dt} trailing={[160]} />
-            <DataTableHead dt={dt} trailing={<th style={{ textAlign: 'right' }}>Actions</th>} />
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(r => (
                 <tr key={r.name}>
-                  <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text2)' }}>
-                    {r.pages.length === 0
-                      ? <span style={{ color: 'var(--err)' }}>(none — user will see no nav)</span>
-                      : r.pages.join(', ')}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <Button variant="secondary" size="sm" onClick={() => setEditing(r)} style={{ marginRight: 6 }}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost-danger" size="sm" onClick={() => void remove(r.name)} disabled={busy === r.name}>
-                      Delete
-                    </Button>
-                  </td>
+                  <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
+                  <DataTableCell dt={dt} col="pages" row={r}
+                    value={r.pages.length === 0 ? '(none — user will see no nav)' : r.pages.join(', ')} />
+                  <DataTableCell dt={dt} col="actions" row={r}>
+                    <ButtonGroup aria-label={`${r.name} actions`} size="sm">
+                      <Button variant="secondary" onClick={() => setEditing(r)}>Edit</Button>
+                      <Button variant="ghost-danger" onClick={() => void remove(r.name)} disabled={busy === r.name}>
+                        Delete
+                      </Button>
+                    </ButtonGroup>
+                  </DataTableCell>
                 </tr>
               ))}
             </tbody>

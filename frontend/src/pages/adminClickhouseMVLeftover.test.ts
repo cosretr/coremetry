@@ -98,7 +98,8 @@ describe('MV artığı — kart (v0.10.830)', () => {
     expect(page).toContain('artık ölçülemedi');
     const i = page.indexOf('{leftoverRows.map(l => {');
     expect(i).toBeGreaterThan(0);
-    expect(page.slice(i, i + 700)).toContain("contentVisibility: 'auto'");
+    // v0.10.942 — tablo standardı T6: satır içi content-visibility yerine tek sınıf.
+    expect(page.slice(i, i + 700)).toContain('className="cv-row"');
   });
   it('boyut okunamadıysa dürüst metin (0 satır DEĞİL)', () => {
     expect(page).toContain("'boyut okunamadı'");

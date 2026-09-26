@@ -60,6 +60,7 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
                 atamada son 24 saati geriye dönük tara (pod/servis entity'leri)
               </label>
             </Row>
+            {/* v0.10.942 — statik tablo: satır başına kayıt seçici + Assign, düzenlenebilir eşleme listesi (T1). */}
             <table>
               <thead><tr><th>Value</th><th className="num">Spans</th><th>First seen</th><th>Last seen</th><th>Bound to</th><th></th></tr></thead>
               <tbody>

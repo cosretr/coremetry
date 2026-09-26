@@ -353,14 +353,14 @@ export function ChannelModal({ initial, onClose, onSaved }: {
                   placeholder={initial ? 'kayıtlı — boş bırakırsan korunur' : 'Authorization: Bearer sk-…'}
                   onChange={e => setWebhookHeaders(e.target.value)}
                   spellCheck={false}
-                  style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  className="mono" style={{ width: '100%' }} />
               </Field>
               <Field label={'Gövde şablonu (opsiyonel Go template — boş = varsayılan {problem, coremetryUrl} JSON)'}>
                 <textarea rows={4} value={webhookTemplate}
                   placeholder={'{"service":"{{.Problem.Service}}","severity":"{{.Problem.Severity}}","url":"{{.CoremetryURL}}"}'}
                   onChange={e => setWebhookTemplate(e.target.value)}
                   spellCheck={false}
-                  style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  className="mono" style={{ width: '100%' }} />
               </Field>
             </>
           )}

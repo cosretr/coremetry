@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Button, useConfirm } from '@/components/ui';
+import { Button, ButtonGroup, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { ChannelHealthRow, NotificationChannel } from '@/lib/types';
 import { IconBell } from '@/components/icons';
@@ -10,8 +10,7 @@ import { ChannelModal } from './ChannelModal';
 import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
 import { fmtAgoNs } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { kindsSummary } from '@/lib/notifyKinds'; // v0.10.747
 
 // v0.9.875 (tutarlılık denetimi BT16) — bildirim kanalları paylaşılan
@@ -35,14 +34,17 @@ function healthRank(h: ChannelHealthRow | undefined): number {
   return Math.max(1, h.consecFails);
 }
 
-const channelCols = (health: Map<string, ChannelHealthRow>): DataTableColumn<NotificationChannel>[] => [
+// v0.10.942 (tablo standardı dilim 3) — eylemler `kind: 'actions'` kolonu;
+// `minWidth = width` onu eski sabit `trailing` genişliğinde kilitler.
+const channelCols = (health: Map<string, ChannelHealthRow>): ColumnDef<NotificationChannel>[] => [
   { id: 'name',   label: 'Name',                 sortValue: c => c.name, naturalDir: 'asc', width: 190 },
   { id: 'type',   label: 'Type',                 sortValue: c => c.type, naturalDir: 'asc', width: 130 },
-  { id: 'target', label: 'Recipients / target',  sortValue: c => summarizeChannel(c), naturalDir: 'asc', flex: true },
+  { id: 'target', label: 'Recipients / target',  sortValue: c => summarizeChannel(c), naturalDir: 'asc', flex: true, mono: true },
   { id: 'sev',    label: 'Min severity',         sortValue: c => SEVERITY_RANK[String(c.minSeverity).toLowerCase()] ?? 0, width: 130 },
   { id: 'kinds',  label: 'Türler',               sortValue: c => kindsSummary(c.matchRules?.kinds), naturalDir: 'asc', width: 150 }, // v0.10.747
   { id: 'status', label: 'Status',               sortValue: c => (c.enabled ? 1 : 0), width: 100 },
   { id: 'health', label: 'Sağlık',               sortValue: c => healthRank(health.get(healthKey(c.type, c.name))), naturalDir: 'desc', width: 175 },
+  { id: 'actions', label: 'Eylemler',            kind: 'actions', width: 210, minWidth: 210 },
 ];
 
 // ── Channels tab ────────────────────────────────────────────────────────────
@@ -143,11 +145,10 @@ export function ChannelsTab() {
       )}
       {items && items.length > 0 && (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
-            <DataTableColgroup dt={dt} trailing={[210]} />
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
             <DataTableHead
               dt={dt}
-              trailing={<th></th>}
               // Kapak-fetch tavanına çarpıldığında sayılar bir ALT sınır;
               // dürüstlük başlıkta da duruyor, yalnız satır tooltip'inde
               // değil (operatör kolonu okurken tavanı bilmeli).
@@ -158,27 +159,30 @@ export function ChannelsTab() {
             <tbody>
               {dt.sortedRows.map(c => (
                 <tr key={c.id}>
-                  <td><b>{c.name}</b></td>
-                  <td className="mono">{c.type}</td>
-                  <td className="mono" style={{ fontSize: 12 }}>{summarizeChannel(c)}</td>
-                  <td><SeverityBadge s={c.minSeverity} /></td>
-                  <td style={{ fontSize: 12 }} title="Kanalın aldığı olay türleri (boş = hepsi)">{kindsSummary(c.matchRules?.kinds)}</td>
+                  <DataTableCell dt={dt} col="name" row={c}><b>{c.name}</b></DataTableCell>
+                  <DataTableCell dt={dt} col="type" row={c} value={c.type} className="mono" />
+                  <DataTableCell dt={dt} col="target" row={c} value={summarizeChannel(c)} />
+                  <DataTableCell dt={dt} col="sev" row={c}><SeverityBadge s={c.minSeverity} /></DataTableCell>
+                  <DataTableCell dt={dt} col="kinds" row={c} value={kindsSummary(c.matchRules?.kinds)}
+                    title="Kanalın aldığı olay türleri (boş = hepsi)" />
                   {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu: iki uç da nötr. */}
-                  <td>{c.enabled
+                  <DataTableCell dt={dt} col="status" row={c}>{c.enabled
                     ? <span className="badge b-gray">ON</span>
                     : <span className="badge b-gray">OFF</span>}
-                  </td>
-                  <td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="health" row={c}>
                     <HealthCell
                       h={healthMap.get(healthKey(c.type, c.name))}
                       state={health.isError ? 'error' : health.isPending ? 'loading' : 'ready'}
                     />
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <Button variant="secondary" size="sm" onClick={() => onTest(c)} style={{ marginRight: 6 }}>Test</Button>
-                    <Button variant="secondary" size="sm" onClick={() => setEditing(c)} style={{ marginRight: 6 }}>Edit</Button>
-                    <Button variant="danger" size="sm" onClick={() => onDelete(c)}>Delete</Button>
-                  </td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="actions" row={c}>
+                    <ButtonGroup aria-label={`${c.name} actions`} size="sm">
+                      <Button variant="secondary" onClick={() => onTest(c)}>Test</Button>
+                      <Button variant="secondary" onClick={() => setEditing(c)}>Edit</Button>
+                      <Button variant="danger" onClick={() => onDelete(c)}>Delete</Button>
+                    </ButtonGroup>
+                  </DataTableCell>
                 </tr>
               ))}
             </tbody>

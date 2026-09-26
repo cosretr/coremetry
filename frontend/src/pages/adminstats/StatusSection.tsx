@@ -47,7 +47,7 @@ export function ComponentRow({ c }: { c: StatusComponent }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         {c.latencyMs !== undefined && c.latencyMs > 0 && (
-          <span style={{ color: 'var(--text3)', fontSize: 11, fontFamily: 'monospace' }}
+          <span style={{ color: 'var(--text3)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
                 title="Probe latency">
             {c.latencyMs}ms
           </span>
@@ -61,7 +61,7 @@ export function ComponentRow({ c }: { c: StatusComponent }) {
 function InfoChip({ k, v, highlight }: { k: string; v: string; highlight?: boolean }) {
   return (
     <span style={{
-      fontSize: 11, fontFamily: 'monospace', padding: '1px 6px', borderRadius: 4,
+      fontSize: 11, fontFamily: 'var(--font-mono)', padding: '1px 6px', borderRadius: 4,
       background: highlight ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'var(--bg3)',
       color: highlight ? 'var(--accent)' : 'var(--text2)',
       border: highlight ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid var(--border)',

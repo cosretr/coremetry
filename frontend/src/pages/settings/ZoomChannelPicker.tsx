@@ -174,7 +174,8 @@ export function ZoomChannelPicker({
             )}
 
             <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 4 }}>
-              <table style={{ width: '100%' }}>
+              {/* v0.10.942 — statik tablo: seçici liste, satır tıkı JID'i forma yazar (T1). */}
+              <table>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--bg1)', zIndex: 1 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Name</th>
@@ -186,16 +187,10 @@ export function ZoomChannelPicker({
                   {filtered.map(r => (
                     <tr key={r.id || r.jid}
                       {...rowActivation(() => { onPick(r.jid); setOpen(false); })}
-                      style={filtered.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
-                      <td style={{ fontSize: 12, fontWeight: 600 }}>{r.name || '(unnamed)'}</td>
-                      <td style={{
-                        fontSize: 10, color: 'var(--text3)',
-                        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                      }}>{channelType(r.type)}</td>
-                      <td style={{
-                        fontSize: 11, color: 'var(--text2)',
-                        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                      }}>{r.jid}</td>
+                      className={filtered.length > 100 ? 'cv-row' : undefined}>
+                      <td className="cell-strong">{r.name || '(unnamed)'}</td>
+                      <td className="mono cell-faint">{channelType(r.type)}</td>
+                      <td className="mono cell-muted">{r.jid}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -22,13 +22,13 @@ const PRIMITIVE = join('components', 'ui', 'DataTable') + '/';
 
 const CEILINGS = {
   /** T1 — `<table>` sayısı eksi `<DataTableHead>` sayısı (dosya başına). */
-  rawTable: 72,
+  rawTable: 61, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 72 → 61
   /** T5 — `<td style={…}>`: hücre görünümü sınıfa/sütun tanımına taşınır. */
-  tdStyle: 439, // v0.10.933 — yürüyücüyle gerçek sayı (düz regex eksik sayıyordu)
+  tdStyle: 318, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 439 → 318
   /** T5 — satır içi hücre yazı boyu: yoğunluk ayarı ulaşamıyor. */
-  tdFontSize: 174, // v0.10.933 — yürüyücüyle gerçek sayı (düz regex eksik sayıyordu)
+  tdFontSize: 99, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 174 → 99
   /** T4 — sayı hücresinde monospace (`num mono` / `mono num`). */
-  numMono: 284,
+  numMono: 212, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 284 → 212
   /** T2 — satır içi `<tr … cursor:` (imleç yalnız tıklanabilir satırda, CSS'ten).
    *  v0.10.933 (tablo standardı T2) — sayım artık süslü parantez farkında
    *  etiket yürüyücüsüyle (styles/jsxTags.ts): eski `<tr\b[^>]*cursor:`
@@ -39,21 +39,21 @@ const CEILINGS = {
    *  açılan satırda). Yürüyücüyle ölçülen gerçek sayım: 0. */
   trCursor: 0,
   /** T6 — elle `containIntrinsicSize` (tek `--row-h` ritmi). */
-  containIntrinsicSize: 61,
+  containIntrinsicSize: 48, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 61 → 48
   /** T10 — ölü `.is-fit` (v0.9.1078'den beri masaüstü kuralı yok).
    *  v0.10.933 (dilim 1): 68 → 66 — LogPatternsPanel'in iki iç kaydırmalı kabı `is-scroll`. */
-  isFit: 66,
+  isFit: 34, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 66 → 34
   /** T10 — satır içi `tableLayout` (tek tablo sınıfı / primitif). */
-  tableLayout: 126,
+  tableLayout: 82, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 126 → 82
   /** T3 — sahte sıralanabilir sütun (`sortValue: () => 0`). */
-  fakeSortable: 11,
+  fakeSortable: 10, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 11 → 10
   /** T7 — talimat ipuçlu satır (`<tr title=…>`). */
-  trTitle: 24, // v0.10.933 — yürüyücüyle gerçek sayı (düz regex eksik sayıyordu)
+  trTitle: 23, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 24 → 23
   /** T5 — satır içi monospace yığını (`fontFamily: '…monospace…'` /
    *  `font: '…monospace…'` dizgisi). v0.10.933 (tablo standardı T5) — TEK
    *  yığın `--font-mono` (globals.css); ikinci yazım yığını çoğaltır, tema /
    *  yoğunluk ayarı ona ulaşamaz. Taban v0.10.933 ölçümü (263); göçü dilim 3. */
-  inlineMonoStack: 263,
+  inlineMonoStack: 194, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 263 → 194
 } as const;
 
 function walk(dir: string, out: string[] = []): string[] {

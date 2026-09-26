@@ -6,8 +6,7 @@ import { Button, LinkButton } from '@/components/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { useAuditLog } from '@/lib/queries';
 import { tsLong, type GoDuration } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { AuditEntry } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 
@@ -18,17 +17,20 @@ import { PageControls } from '@/components/ui/PageControls';
 // no meaningful order key, and it doubles as the expand-toggle
 // cell (click → pretty-printed JSON in place). Body cell order
 // below MUST match this column order.
-const AUDIT_COLS: DataTableColumn<AuditEntry>[] = [
-  { id: 'time',    label: 'Time',    sortValue: e => e.time,       naturalDir: 'desc', width: 170 },
+// v0.10.942 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında;
+// 10/11px hücreler tablo boyunda, ikincil olanlar renkle (S3). Filtre
+// düğmeli hücreler ton almaz: LinkButton kendi rengini taşır.
+const AUDIT_COLS: ColumnDef<AuditEntry>[] = [
+  { id: 'time',    label: 'Time',    sortValue: e => e.time,       naturalDir: 'desc', width: 170, tone: () => 'muted' },
   { id: 'actor',   label: 'Actor',   sortValue: e => e.actorEmail, naturalDir: 'asc', width: 220 },
-  { id: 'action',  label: 'Action',  sortValue: e => e.action,     naturalDir: 'asc', width: 200 },
-  { id: 'target',  label: 'Target',  sortValue: e => e.targetKind, naturalDir: 'asc', width: 200 },
+  { id: 'action',  label: 'Action',  sortValue: e => e.action,     naturalDir: 'asc', width: 200, mono: true },
+  { id: 'target',  label: 'Target',  sortValue: e => e.targetKind, naturalDir: 'asc', width: 200, mono: true },
   // v0.9.648 — ESNEK kolon: serbest metin, artan genişliği emsin.
   // Sabit genişlik toplamı 1280px'di ve tablo taşıyordu; details flex
   // olunca sabit toplam 920px'e düşüyor ve tablo her genişlikte sığıyor.
   // Kolon SİLİNMEDİ, genişliği daraltılmadı — yalnız artanı emiyor.
-  { id: 'details', label: 'Details', flex: true },
-  { id: 'ip',      label: 'IP',      sortValue: e => e.ip,         naturalDir: 'asc', width: 130 },
+  { id: 'details', label: 'Details', flex: true, mono: true, tone: () => 'muted' },
+  { id: 'ip',      label: 'IP',      sortValue: e => e.ip,         naturalDir: 'asc', width: 130, mono: true, tone: () => 'faint' },
 ];
 
 // Curated catalog of every action the API currently emits via
@@ -233,8 +235,8 @@ export default function AuditPage() {
           </Empty>
         )}
         {data && visible.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
@@ -244,26 +246,26 @@ export default function AuditPage() {
                     // v0.9.137 (scale-audit 2026-07-20) — server caps to 200
                     // rows but that's above the 100-row content-visibility
                     // threshold (CLAUDE.md); skip off-screen row layout.
-                    <tr key={e.id} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 44px' }}>
-                      <td className="mono" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                        {tsLong(e.time)}
-                      </td>
-                      <td>
+                    <tr key={e.id} className="cv-row">
+                      {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
+                      <DataTableCell dt={dt} col="time" row={e} value={tsLong(e.time)} className="mono" />
+                      <DataTableCell dt={dt} col="actor" row={e}>
                         <div style={{ fontWeight: 600, fontSize: 12 }}>
                           {e.actorEmail
                             ? <FilterClick onClick={() => setActor(e.actorEmail)}>{e.actorEmail}</FilterClick>
                             : '—'}
                         </div>
                         <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.actorRole}</div>
-                      </td>
-                      <td className="mono" style={{ fontSize: 11 }}>
+                      </DataTableCell>
+                      <DataTableCell dt={dt} col="action" row={e}>
                         <FilterClick onClick={() => setAction(e.action)}>{e.action}</FilterClick>
-                      </td>
-                      <td className="mono" style={{ fontSize: 11 }}>
+                      </DataTableCell>
+                      <DataTableCell dt={dt} col="target" row={e}>
                         <FilterClick onClick={() => setTarget(e.targetKind)}>{e.targetKind}</FilterClick>
                         {e.targetId && <span style={{ color: 'var(--text3)' }}> · {e.targetId}</span>}
-                      </td>
-                      <td onClick={() => e.details && toggleExpand(e.id)}
+                      </DataTableCell>
+                      <td {...dt.cellProps(e, 'details')}
+                          onClick={() => e.details && toggleExpand(e.id)}
                           onKeyDown={ev => {
                             // Keyboard parity with the click affordance —
                             // Enter/Space toggles the expanded JSON the
@@ -277,22 +279,22 @@ export default function AuditPage() {
                           role={e.details ? 'button' : undefined}
                           tabIndex={e.details ? 0 : undefined}
                           aria-expanded={e.details ? isExpanded : undefined}
-                          style={{ fontSize: 11, color: 'var(--text2)',
-                                   // Fixed layout governs the column width via
-                                   // the colgroup; the global td ellipsis clips
-                                   // the collapsed state. Expanded → wrap the
-                                   // pretty-printed JSON within the (resizable)
-                                   // column so the operator reads it inline.
-                                   whiteSpace: isExpanded ? 'pre-wrap' : 'nowrap',
-                                   overflowWrap: isExpanded ? 'anywhere' : undefined,
-                                   fontFamily: 'monospace',
-                                   cursor: e.details ? 'pointer' : 'default' }}
+                          style={{
+                            // Fixed layout governs the column width via
+                            // the colgroup; the global td ellipsis clips
+                            // the collapsed state. Expanded → wrap the
+                            // pretty-printed JSON within the (resizable)
+                            // column so the operator reads it inline.
+                            whiteSpace: isExpanded ? 'pre-wrap' : 'nowrap',
+                            overflowWrap: isExpanded ? 'anywhere' : undefined,
+                            cursor: e.details ? 'pointer' : 'default',
+                          }}
                           title={isExpanded ? 'Click to collapse' : (e.details || '')}>
                         {isExpanded
                           ? <span>{prettyJSON(e.details)}</span>
                           : (e.details || '—')}
                       </td>
-                      <td className="mono" style={{ fontSize: 10, color: 'var(--text3)' }}>{e.ip || '—'}</td>
+                      <DataTableCell dt={dt} col="ip" row={e} value={e.ip} />
                     </tr>
                   );
                 })}

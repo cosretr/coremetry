@@ -1732,6 +1732,9 @@ td.num.mono, th.num.mono { font-family: inherit; font-size: inherit; }
    --text3)` 116 hücre; göçü dilim 3). ColumnDef `tone(row)` → dt.cellProps. */
 .cell-muted { color: var(--text2); }
 .cell-faint { color: var(--text3); }
+/* v0.10.942 (tablo standardı dilim 3) — satırı KİMLİKLEYEN hücrenin ağırlığı
+   (satır içi `fontWeight: 600`, 17 hücre); boyut/renk değil, yalnız ağırlık. */
+.cell-strong { font-weight: 600; }
 /* v0.10.939 (tablo standardı T4) — <DataTableCell> değersiz hücresinin soluk
    "—" glifi (KeyValue `.keyval__val--empty` ile aynı ton): boş hücre boşluk
    değil, "değer yok" okunur. */

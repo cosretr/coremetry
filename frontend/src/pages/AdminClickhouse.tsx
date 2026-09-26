@@ -1,14 +1,13 @@
 import { useRef, useState, useEffect } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import { api, apiErrorDetail } from '@/lib/api';
 import { fmtNum, fmtBytes, fmtClock, fmtDateTime, tsLong } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
 import { useQuery } from '@tanstack/react-query';
 import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, rawHostLabel, sortRawHosts, staleVerdict } from './adminch/traceHealth'; // v0.10.757, ham sayım v0.10.823
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
-import { Button, Modal, SegmentedControl } from '@/components/ui';
+import { Button, KeyValue, KeyValueRow, Modal, SegmentedControl } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
@@ -19,12 +18,13 @@ import type {
   FunctionIDColumnStatusResult, FunctionIDColumnPreflightResult,
   AttrIndexStatusResult, AttrIndexPreflightResult,
   TraceBackfillDay, TraceBackfillRun,
-  CHMeasurePartsRow, // v0.10.683 — ölçüm paneli
+  CHMeasurePartsRow, CHMeasureEventsRow, CHMeasureAsyncRow, CHMeasureInsertRow, // v0.10.683 — ölçüm paneli
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
   CHDanglingMV, // v0.10.762 — sarkan MV onarımı
   CHMVHostState, CHMVState, // v0.10.825 — MV kapsaması (ok | plain | dangling | missing)
   CHMVLeftover, CHMVLeftoverKind, // v0.10.830 — artık (çıplak MV kalıntısı | sahipsiz iç tablo)
   CHReplicaConsistencyResponse, CHReplicaRepairMode, CHReplicaRepairPlan, // v0.10.791 — replika tutarlılığı (829: kip)
+  DDLQueueHealth,
 } from '@/lib/types';
 
 // AdminClickhouse — v0.5.329. Datadog-style CH self-stats:
@@ -120,7 +120,7 @@ type ShardPolicyRow = { table: string; expr: string };
 // each table must match its COLS order. Free-text columns (Query /
 // Command / Failure / shard expr) rely on the global td ellipsis under
 // table-layout:fixed — no per-cell maxWidth/nowrap needed.
-const SLOW_COLS: DataTableColumn<Slow>[] = [
+const SLOW_COLS: ColumnDef<Slow>[] = [
   { id: 'time',     label: 'Time',      sortValue: q => q.eventTimeNs, naturalDir: 'desc', width: 110 },
   { id: 'user',     label: 'User',      sortValue: q => q.user ?? '',  naturalDir: 'asc',  width: 120 },
   { id: 'elapsed',  label: 'Elapsed',   sortValue: q => q.elapsedMs, numeric: true, naturalDir: 'desc', width: 100 },
@@ -129,7 +129,7 @@ const SLOW_COLS: DataTableColumn<Slow>[] = [
   { id: 'query',    label: 'Query',     sortValue: q => q.query,     naturalDir: 'asc',  width: 540 },
 ];
 
-const MERGE_COLS: DataTableColumn<Merge>[] = [
+const MERGE_COLS: ColumnDef<Merge>[] = [
   { id: 'host',     label: 'Node',        sortValue: m => m.host,     naturalDir: 'asc',  width: 150 },
   { id: 'database', label: 'Database',    sortValue: m => m.database, naturalDir: 'asc',  width: 160 },
   { id: 'table',    label: 'Table',       sortValue: m => m.table,    naturalDir: 'asc',  width: 200 },
@@ -139,7 +139,7 @@ const MERGE_COLS: DataTableColumn<Merge>[] = [
   { id: 'merged',   label: 'Merged size', sortValue: m => m.mergedSizeBytes, numeric: true, naturalDir: 'desc', width: 130 },
 ];
 
-const PARTHOT_COLS: DataTableColumn<PartHot>[] = [
+const PARTHOT_COLS: ColumnDef<PartHot>[] = [
   { id: 'database', label: 'Database', sortValue: p => p.database, naturalDir: 'asc',  width: 160 },
   { id: 'table',    label: 'Table',    sortValue: p => p.table,    naturalDir: 'asc',  width: 240 },
   { id: 'parts',    label: 'Parts',    sortValue: p => p.parts,      numeric: true, naturalDir: 'desc', width: 120 },
@@ -147,7 +147,7 @@ const PARTHOT_COLS: DataTableColumn<PartHot>[] = [
   { id: 'bytes',    label: 'Bytes',    sortValue: p => p.bytesTotal, numeric: true, naturalDir: 'desc', width: 140 },
 ];
 
-const ASYNC_COLS: DataTableColumn<AsyncIns>[] = [
+const ASYNC_COLS: ColumnDef<AsyncIns>[] = [
   { id: 'database', label: 'Database',       sortValue: a => a.database, naturalDir: 'asc',  width: 160 },
   { id: 'table',    label: 'Table',          sortValue: a => a.table,    naturalDir: 'asc',  width: 240 },
   { id: 'bytes',    label: 'Bytes buffered', sortValue: a => a.totalBytes,      numeric: true, naturalDir: 'desc', width: 150 },
@@ -155,7 +155,7 @@ const ASYNC_COLS: DataTableColumn<AsyncIns>[] = [
   { id: 'oldest',   label: 'Oldest',         sortValue: a => a.firstUpdateMsAgo, numeric: true, naturalDir: 'desc', width: 110 },
 ];
 
-const MUTATION_COLS: DataTableColumn<Mutation>[] = [
+const MUTATION_COLS: ColumnDef<Mutation>[] = [
   { id: 'table',   label: 'Table',          sortValue: m => `${m.database}.${m.table}`, naturalDir: 'asc',  width: 240 },
   { id: 'parts',   label: 'Parts left',     sortValue: m => m.parts,     numeric: true, naturalDir: 'desc', width: 110 },
   { id: 'elapsed', label: 'Elapsed',        sortValue: m => m.elapsedMs, numeric: true, naturalDir: 'desc', width: 110 },
@@ -163,14 +163,14 @@ const MUTATION_COLS: DataTableColumn<Mutation>[] = [
   { id: 'failure', label: 'Latest failure', sortValue: m => m.latestFail ?? '', naturalDir: 'asc', width: 240 },
 ];
 
-const REPLAG_COLS: DataTableColumn<RepLag>[] = [
+const REPLAG_COLS: ColumnDef<RepLag>[] = [
   { id: 'database', label: 'Database',       sortValue: r => r.database, naturalDir: 'asc',  width: 160 },
   { id: 'table',    label: 'Table',          sortValue: r => r.table,    naturalDir: 'asc',  width: 240 },
   { id: 'queue',    label: 'Queue',          sortValue: r => r.queueSize,        numeric: true, naturalDir: 'desc', width: 120 },
   { id: 'delay',    label: 'Absolute delay', sortValue: r => r.absoluteDelaySec, numeric: true, naturalDir: 'desc', width: 140 },
 ];
 
-const NODE_COLS: DataTableColumn<ClusterNode>[] = [
+const NODE_COLS: ColumnDef<ClusterNode>[] = [
   { id: 'shard',   label: 'Shard',   sortValue: n => n.shardNum,   numeric: true, naturalDir: 'asc', width: 90 },
   { id: 'replica', label: 'Replica', sortValue: n => n.replicaNum, numeric: true, naturalDir: 'asc', width: 90 },
   { id: 'host',    label: 'Host',    sortValue: n => n.hostName,        naturalDir: 'asc', width: 220 },
@@ -179,7 +179,7 @@ const NODE_COLS: DataTableColumn<ClusterNode>[] = [
   { id: 'local',   label: 'Local',   sortValue: n => (n.isLocal ? 1 : 0), numeric: false, naturalDir: 'desc', width: 90 },
 ];
 
-const SHARD_POLICY_COLS: DataTableColumn<ShardPolicyRow>[] = [
+const SHARD_POLICY_COLS: ColumnDef<ShardPolicyRow>[] = [
   { id: 'table', label: 'Table',            sortValue: r => r.table, naturalDir: 'asc', width: 240 },
   { id: 'expr',  label: 'Shard expression', sortValue: r => r.expr,  naturalDir: 'asc', width: 400 },
 ];
@@ -194,7 +194,7 @@ type Coord = {
   uptimeS?: number;
 };
 
-const COORD_COLS: DataTableColumn<Coord>[] = [
+const COORD_COLS: ColumnDef<Coord>[] = [
   // v0.9.649 — ESNEK: host adı değişken uzunlukta, artanı emer.
   { id: 'host',    label: 'Host',      sortValue: c => c.host,     naturalDir: 'asc', flex: true },
   // Entry = bu node'un GİRİŞ NOKTASI olduğu sorgu sayısı. Panelin asıl
@@ -245,6 +245,17 @@ const COORD_WINDOWS: Array<{ s: number; label: string }> = [
 // "0 iş" göstermez, ölçülemeyen "dengeli" sayılmaz, ve dengesizlik
 // SHARD İÇİNDE hesaplanır — aynı shard'ın replikaları aynı veriyi
 // tutar, farklı shard'lar tanım gereği farklı.
+// v0.10.942 — tablo standardı T1: node başına kayıt listesi (küme boyu kadar
+// satır) → useDataTable. initialSort yok: satır sırası nodeWorkView'unki.
+const NODE_WORK_COLS: ColumnDef<NodeWorkRow>[] = [
+  { id: 'host',     label: 'Node',            sortValue: r => r.host,         naturalDir: 'asc', flex: true },
+  { id: 'shard',    label: 'Shard/Rep',       sortValue: r => r.shard,        naturalDir: 'asc', width: 150 },
+  { id: 'cpu',      label: 'CPU (cores)',     sortValue: r => r.cpuCores,     numeric: true, naturalDir: 'desc', width: 120 },
+  { id: 'merge',    label: 'Merge (threads)', sortValue: r => r.mergeThreads, numeric: true, naturalDir: 'desc', width: 140 },
+  { id: 'inserted', label: 'Inserted rows',   sortValue: r => r.insertedRows, numeric: true, naturalDir: 'desc', width: 140 },
+  { id: 'fetches',  label: 'Part fetches',    sortValue: r => r.partFetches,  numeric: true, naturalDir: 'desc', width: 120 },
+];
+
 function NodeWorkPanel() {
   const q = useQuery({
     queryKey: ['ch-nodework'],
@@ -259,6 +270,7 @@ function NodeWorkPanel() {
     baseRef.current = makeBaseline(raw.nodes, raw.generatedAt);
   }
   const view = raw ? nodeWorkView(raw.nodes, baseRef.current, raw.generatedAt) : null;
+  const dt = useDataTable<NodeWorkRow>({ storageKey: 'ch-nodework', columns: NODE_WORK_COLS, rows: view?.rows ?? [] });
 
   if (raw === undefined) return <Section title="Node work spread"><Spinner /></Section>;
   if (raw === null) {
@@ -317,32 +329,27 @@ function NodeWorkPanel() {
         <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>{raw.note}</div>
       )}
       <div className="table-wrap">
-        <table style={{ width: '100%' }}>
-          <thead><tr>
-            <th style={{ textAlign: 'left' }}>Node</th>
-            <th style={{ textAlign: 'left' }}>Shard/Rep</th>
-            <th className="num">CPU (cores)</th>
-            <th className="num">Merge (threads)</th>
-            <th className="num">Inserted rows</th>
-            <th className="num">Part fetches</th>
-          </tr></thead>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
           <tbody>
-            {view?.rows.map((r: NodeWorkRow) => (
-              <tr key={r.host} style={{ opacity: r.restarted ? 0.55 : 1 }}>
-                <td className="mono">{r.host}</td>
-                <td className="mono" style={{ color: 'var(--text3)' }}>
-                  {r.shard ? `${r.shard}${r.replica ? ' / ' + r.replica : ''}` : '—'}
-                </td>
-                <td className="num mono">{fmt(r.cpuCores, 3)}</td>
-                <td className="num mono" title="CPU DEĞİL — merge thread'inin meşgul geçirdiği süre (I/O beklemesi dahil). CPU'yu aşabilir.">
-                  {fmt(r.mergeThreads, 3)}
-                </td>
-                <td className="num mono">{fmtInt(r.insertedRows)}</td>
-                <td className="num mono">{fmtInt(r.partFetches)}</td>
-              </tr>
-            ))}
+            {dt.sortedRows.map(r => {
+              const shardRep = r.shard ? `${r.shard}${r.replica ? ' / ' + r.replica : ''}` : '—';
+              return (
+                <tr key={r.host} style={{ opacity: r.restarted ? 0.55 : 1 }}>
+                  <td className="mono">{r.host}</td>
+                  <td className="mono cell-faint" title={r.shard ? shardRep : undefined}>{shardRep}</td>
+                  <td className="num">{fmt(r.cpuCores, 3)}</td>
+                  <td className="num" title="CPU DEĞİL — merge thread'inin meşgul geçirdiği süre (I/O beklemesi dahil). CPU'yu aşabilir.">
+                    {fmt(r.mergeThreads, 3)}
+                  </td>
+                  <td className="num">{fmtInt(r.insertedRows)}</td>
+                  <td className="num">{fmtInt(r.partFetches)}</td>
+                </tr>
+              );
+            })}
             {view?.rows.some((r: NodeWorkRow) => r.restarted) && (
-              <tr><td colSpan={6} style={{ fontSize: 11, color: 'var(--text3)', paddingTop: 6 }}>
+              <tr><td colSpan={6} className="cell-faint" style={{ paddingTop: 6 }}>
                 Soluk satır = sayaç sıfırlanmış (node yeniden başladı). O tur ölçüm yok ve
                 dengesizlik hesabına GİRMİYOR — 0 saymak "iş yapmıyor" demek olurdu.
               </td></tr>
@@ -373,9 +380,28 @@ function fmtDurTR(sec: number): string {
   return `${(sec / 3600).toFixed(1)}sa`;
 }
 
+// v0.10.942 — tablo standardı T1: host ve kuyruk başı girdileri kayıt
+// listesi → useDataTable. initialSort yok: satırlar sunucunun sırasında.
+type DDLHostRow = NonNullable<DDLQueueHealth['hosts']>[number];
+type DDLEntryRow = NonNullable<DDLQueueHealth['entries']>[number];
+const DDL_HOST_COLS: ColumnDef<DDLHostRow>[] = [
+  { id: 'host',      label: 'Host',    sortValue: h => h.host,      naturalDir: 'asc', flex: true },
+  { id: 'processed', label: 'İşlenen', sortValue: h => h.processed, numeric: true, naturalDir: 'desc', width: 130 },
+  { id: 'behind',    label: 'Geride',  sortValue: h => h.behind,    numeric: true, naturalDir: 'desc', width: 110 },
+];
+const DDL_ENTRY_COLS: ColumnDef<DDLEntryRow>[] = [
+  { id: 'entry',  label: 'Girdi', sortValue: e => e.entry,      naturalDir: 'asc', width: 170 },
+  { id: 'host',   label: 'Host',  sortValue: e => e.host,       naturalDir: 'asc', width: 180 },
+  { id: 'status', label: 'Durum', sortValue: e => e.status,     naturalDir: 'asc', width: 120 },
+  { id: 'age',    label: 'Yaş',   sortValue: e => e.ageSeconds, numeric: true, naturalDir: 'desc', width: 90 },
+  { id: 'query',  label: 'Sorgu', sortValue: e => e.query,      naturalDir: 'asc', flex: true },
+];
+
 function DDLQueuePanel() {
   const q = useDDLQueueHealth();
   const d = q.isPending ? undefined : q.isError ? null : q.data ?? null;
+  const hostDt = useDataTable<DDLHostRow>({ storageKey: 'ch-ddl-hosts', columns: DDL_HOST_COLS, rows: d?.hosts ?? [] });
+  const entryDt = useDataTable<DDLEntryRow>({ storageKey: 'ch-ddl-entries', columns: DDL_ENTRY_COLS, rows: d?.entries ?? [] });
 
   const tone: Record<string, string> = {
     healthy: 'b-gray', single_node: 'b-gray', // v0.10.929 (K5) — sağlıklı nötr
@@ -409,14 +435,15 @@ function DDLQueuePanel() {
 
           {d.hosts && d.hosts.length > 0 && d.stuckCount > 0 && (
             <div className="table-wrap">
-            <table style={{ width: "100%" }}>
-              <thead><tr><th>Host</th><th>İşlenen</th><th>Geride</th></tr></thead>
+            <table {...hostDt.tableProps}>
+              <DataTableColgroup dt={hostDt} />
+              <DataTableHead dt={hostDt} />
               <tbody>
-                {d.hosts.map(h => (
+                {hostDt.sortedRows.map(h => (
                   <tr key={h.host}>
                     <td className="mono">{h.host}</td>
-                    <td style={{ textAlign: 'right' }}>{h.processed.toLocaleString()}</td>
-                    <td style={{ textAlign: 'right', color: h.behind > 0 ? 'var(--err)' : 'var(--text3)' }}>
+                    <td className="num">{h.processed.toLocaleString()}</td>
+                    <td className={`num ${h.behind > 0 ? 'cell-err' : 'cell-faint'}`}>
                       {h.behind > 0 ? h.behind.toLocaleString() : '—'}
                     </td>
                   </tr>
@@ -441,16 +468,17 @@ function DDLQueuePanel() {
                 Kuyruğun başı ({d.entries.length} girdi{d.stuckCount > d.entries.length ? `, toplam ${d.stuckCount}` : ''})
               </summary>
               <div className="table-wrap" style={{ marginTop: 6 }}>
-              <table style={{ width: "100%" }}>
-                <thead><tr><th>Girdi</th><th>Host</th><th>Durum</th><th>Yaş</th><th>Sorgu</th></tr></thead>
+              <table {...entryDt.tableProps}>
+                <DataTableColgroup dt={entryDt} />
+                <DataTableHead dt={entryDt} />
                 <tbody>
-                  {d.entries.map((e, i) => (
+                  {entryDt.sortedRows.map((e, i) => (
                     <tr key={`${e.entry}-${e.host}-${i}`}>
-                      <td className="mono">{e.entry}</td>
-                      <td className="mono">{e.host}</td>
+                      <td className="mono" title={e.entry}>{e.entry}</td>
+                      <td className="mono" title={e.host}>{e.host}</td>
                       <td>{e.status}</td>
-                      <td>{fmtDurTR(e.ageSeconds)}</td>
-                      <td className="mono" style={{ maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.query}>{e.query}</td>
+                      <td className="num">{fmtDurTR(e.ageSeconds)}</td>
+                      <td className="mono" title={e.query}>{e.query}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -618,23 +646,23 @@ function CoordinatorPanel() {
       {data === null && <EmptyNote text="Failed to load coordination spread" />}
       {data && data.note && <EmptyNote text={data.note} />}
       {data && !data.note && data.nodes.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(c => (
                 <tr key={c.host}>
-                  <td className="mono" style={{ fontSize: 11 }} title={c.host}>{c.host || '—'}</td>
-                  <td className="num mono"><strong>{fmtNum(c.initial)}</strong></td>
-                  <td className="num mono">{fmtNum(c.selects)}</td>
-                  <td className="num mono">{fmtNum(c.inserts)}</td>
-                  <td className="num mono">{fmtNum(c.other)}</td>
-                  <td className="num mono">{fmtNum(c.readRows)}</td>
-                  <td className="num mono">{c.memoryMB.toFixed(0)} MB</td>
-                  <td className="num mono">{c.p50Ms.toFixed(0)} ms</td>
-                  <td className="num mono">{c.p95Ms.toFixed(0)} ms</td>
-                  <td className="num mono">{fmtUptime(c.uptimeS)}</td>
+                  <td className="mono" title={c.host}>{c.host || '—'}</td>
+                  <td className="num"><strong>{fmtNum(c.initial)}</strong></td>
+                  <td className="num">{fmtNum(c.selects)}</td>
+                  <td className="num">{fmtNum(c.inserts)}</td>
+                  <td className="num">{fmtNum(c.other)}</td>
+                  <td className="num">{fmtNum(c.readRows)}</td>
+                  <td className="num">{c.memoryMB.toFixed(0)} MB</td>
+                  <td className="num">{c.p50Ms.toFixed(0)} ms</td>
+                  <td className="num">{c.p95Ms.toFixed(0)} ms</td>
+                  <td className="num">{fmtUptime(c.uptimeS)}</td>
                 </tr>
               ))}
             </tbody>
@@ -753,21 +781,21 @@ export default function AdminClickhousePage() {
               {(!data.slowQueries || data.slowQueries.length === 0)
                 ? <EmptyNote text="No slow queries in the last hour" />
                 : (
-                  <div className="table-wrap is-fit">
-                    <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <div className="table-wrap">
+                    <table {...slowDt.tableProps}>
                       <DataTableColgroup dt={slowDt} />
                       <DataTableHead dt={slowDt} />
                       <tbody>
                         {slowDt.sortedRows.map((q, i) => (
                           <tr key={i}>
-                            <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
+                            <td className="mono cell-faint">
                               {fmtClock(q.eventTimeNs / 1e6)}
                             </td>
-                            <td className="mono" style={{ fontSize: 11 }}>{q.user || '—'}</td>
-                            <td className="num mono">{q.elapsedMs.toFixed(0)} ms</td>
-                            <td className="num mono">{q.memoryMb.toFixed(0)} MB</td>
-                            <td className="num mono">{fmtNum(q.readRows)}</td>
-                            <td className="mono" style={{ fontSize: 11 }} title={q.query}>
+                            <td className="mono cell-muted">{q.user || '—'}</td>
+                            <td className="num">{q.elapsedMs.toFixed(0)} ms</td>
+                            <td className="num">{q.memoryMb.toFixed(0)} MB</td>
+                            <td className="num">{fmtNum(q.readRows)}</td>
+                            <td className="mono" title={q.query}>
                               {q.query.replace(/\s+/g, ' ').slice(0, 200)}
                             </td>
                           </tr>
@@ -782,8 +810,8 @@ export default function AdminClickhousePage() {
               {(!data.merges || data.merges.length === 0)
                 ? <EmptyNote text="No merges in flight — CH idle or up-to-date" />
                 : (
-                  <div className="table-wrap is-fit">
-                    <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <div className="table-wrap">
+                    <table {...mergeDt.tableProps}>
                       <DataTableColgroup dt={mergeDt} />
                       <DataTableHead dt={mergeDt} />
                       <tbody>
@@ -792,10 +820,10 @@ export default function AdminClickhousePage() {
                             <td className="mono">{m.host}</td>
                             <td className="mono">{m.database}</td>
                             <td className="mono">{m.table}</td>
-                            <td className="num mono">{m.elapsedSec.toFixed(1)}s</td>
-                            <td className="num mono">{m.progressPct.toFixed(0)}%</td>
-                            <td className="num mono">{fmtNum(m.rowsRead)}</td>
-                            <td className="num mono">{fmtBytes(m.mergedSizeBytes)}</td>
+                            <td className="num">{m.elapsedSec.toFixed(1)}s</td>
+                            <td className="num">{m.progressPct.toFixed(0)}%</td>
+                            <td className="num">{fmtNum(m.rowsRead)}</td>
+                            <td className="num">{fmtBytes(m.mergedSizeBytes)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -808,8 +836,8 @@ export default function AdminClickhousePage() {
               {(!data.partHotspots || data.partHotspots.length === 0)
                 ? <EmptyNote text="No part data available" />
                 : (
-                  <div className="table-wrap is-fit">
-                    <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <div className="table-wrap">
+                    <table {...partDt.tableProps}>
                       <DataTableColgroup dt={partDt} />
                       <DataTableHead dt={partDt} />
                       <tbody>
@@ -817,12 +845,9 @@ export default function AdminClickhousePage() {
                           <tr key={i}>
                             <td className="mono">{p.database}</td>
                             <td className="mono">{p.table}</td>
-                            <td className="num mono" style={{
-                              color: p.parts > 300 ? 'var(--err)' : p.parts > 150 ? 'var(--warn)' : 'var(--text)',
-                              fontWeight: p.parts > 150 ? 600 : 400,
-                            }}>{fmtNum(p.parts)}</td>
-                            <td className="num mono">{fmtNum(p.rowsTotal)}</td>
-                            <td className="num mono">{fmtBytes(p.bytesTotal)}</td>
+                            <td className={`num ${p.parts > 300 ? 'cell-err cell-strong' : p.parts > 150 ? 'cell-warn cell-strong' : ''}`}>{fmtNum(p.parts)}</td>
+                            <td className="num">{fmtNum(p.rowsTotal)}</td>
+                            <td className="num">{fmtBytes(p.bytesTotal)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -833,8 +858,8 @@ export default function AdminClickhousePage() {
 
             {data.asyncInserts && data.asyncInserts.length > 0 && (
               <Section title="Async insert buffer">
-                <div className="table-wrap is-fit">
-                  <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <div className="table-wrap">
+                  <table {...asyncDt.tableProps}>
                     <DataTableColgroup dt={asyncDt} />
                     <DataTableHead dt={asyncDt} />
                     <tbody>
@@ -842,9 +867,9 @@ export default function AdminClickhousePage() {
                         <tr key={i}>
                           <td className="mono">{a.database}</td>
                           <td className="mono">{a.table}</td>
-                          <td className="num mono">{fmtNum(a.totalBytes)}</td>
-                          <td className="num mono">{fmtNum(a.entriesCount)}</td>
-                          <td className="num mono">{a.firstUpdateMsAgo}ms</td>
+                          <td className="num">{fmtNum(a.totalBytes)}</td>
+                          <td className="num">{fmtNum(a.entriesCount)}</td>
+                          <td className="num">{a.firstUpdateMsAgo}ms</td>
                         </tr>
                       ))}
                     </tbody>
@@ -865,20 +890,18 @@ export default function AdminClickhousePage() {
                   a sustained non-zero row count usually means the table needs a tombstone or
                   ReplacingMergeTree pattern instead of in-place mutation.
                 </p>
-                <div className="table-wrap is-fit">
-                  <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <div className="table-wrap">
+                  <table {...mutationDt.tableProps}>
                     <DataTableColgroup dt={mutationDt} />
                     <DataTableHead dt={mutationDt} />
                     <tbody>
                       {mutationDt.sortedRows.map((m, i) => (
                         <tr key={i}>
                           <td className="mono">{m.database}.{m.table}</td>
-                          <td className="num mono">{fmtNum(m.parts)}</td>
-                          <td className="num mono">{fmtAge(m.elapsedMs)}</td>
-                          <td className="mono" style={{ fontSize: 11 }} title={m.command}>{m.command}</td>
-                          <td className="mono" style={{
-                            fontSize: 11, color: m.latestFail ? 'var(--err)' : 'var(--text3)',
-                          }} title={m.latestFail}>{m.latestFail || '—'}</td>
+                          <td className="num">{fmtNum(m.parts)}</td>
+                          <td className="num">{fmtAge(m.elapsedMs)}</td>
+                          <td className="mono" title={m.command}>{m.command}</td>
+                          <td className={`mono ${m.latestFail ? 'cell-err' : 'cell-faint'}`} title={m.latestFail}>{m.latestFail || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -889,8 +912,8 @@ export default function AdminClickhousePage() {
 
             {data.replicationLag && data.replicationLag.length > 0 && (
               <Section title="Replication lag (cluster only)">
-                <div className="table-wrap is-fit">
-                  <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <div className="table-wrap">
+                  <table {...repLagDt.tableProps}>
                     <DataTableColgroup dt={repLagDt} />
                     <DataTableHead dt={repLagDt} />
                     <tbody>
@@ -898,8 +921,8 @@ export default function AdminClickhousePage() {
                         <tr key={i}>
                           <td className="mono">{r.database}</td>
                           <td className="mono">{r.table}</td>
-                          <td className="num mono">{fmtNum(r.queueSize)}</td>
-                          <td className="num mono">{r.absoluteDelaySec}s</td>
+                          <td className="num">{fmtNum(r.queueSize)}</td>
+                          <td className="num">{r.absoluteDelaySec}s</td>
                         </tr>
                       ))}
                     </tbody>
@@ -939,7 +962,7 @@ export default function AdminClickhousePage() {
 // bozuk bir MV write_failed üretir ve ingest'i düşürür. O kararın
 // sahibi operatör.
 
-const ROLLUP_COLS: DataTableColumn<RollupTableStatus>[] = [
+const ROLLUP_COLS: ColumnDef<RollupTableStatus>[] = [
   { id: 'table',  label: 'Tablo',   sortValue: r => r.table,  naturalDir: 'asc', width: 250 },
   { id: 'family', label: 'Aile',    sortValue: r => r.family, naturalDir: 'asc', width: 100 },
   { id: 'exists', label: 'Durum',   sortValue: r => (r.exists ? 1 : 0), numeric: true, naturalDir: 'desc', width: 120 },
@@ -1046,15 +1069,15 @@ function RollupWizardPanel() {
       {status.isPending && <Spinner />}
       {status.isError && <Empty icon="⚠" title="Rollup durumu okunamadı" />}
       {status.data && (
-        <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap" style={{ marginBottom: 10 }}>
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(t => (
                 <tr key={t.table}>
                   <td className="mono">{t.table}</td>
-                  <td style={{ fontSize: 11, color: 'var(--text3)' }}>{t.family}</td>
+                  <td className="cell-faint">{t.family}</td>
                   <td>
                     {t.err
                       ? <span className="badge b-warn" title={t.err}>OKUNAMADI</span>
@@ -1062,8 +1085,8 @@ function RollupWizardPanel() {
                         ? <span className="badge b-gray">VAR</span>
                         : <span className="badge b-gray">YOK</span>}
                   </td>
-                  <td className="num mono">{t.exists && !t.err ? fmtNum(t.rows) : '—'}</td>
-                  <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
+                  <td className="num">{t.exists && !t.err ? fmtNum(t.rows) : '—'}</td>
+                  <td className="mono cell-faint">
                     {t.minTsMs > 0 ? fmtDateTime(t.minTsMs) : '—'}
                   </td>
                 </tr>
@@ -1096,27 +1119,22 @@ function RollupWizardPanel() {
             </span>
             <span style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
           </div>
-          <div className="table-wrap" style={{ marginBottom: 8 }}>
-            <table style={{ width: '100%' }}>
-              <thead><tr><th>Kontrol</th><th>Sonuç</th></tr></thead>
-              <tbody>
-                <PreRow label="spans_local" ok={pre.spansLocal} />
-                <PreRow label="metric_points_local" ok={pre.metricPointsLocal} />
-                <PreRow label="Kaynak kolonlar tam"
-                        ok={pre.missingColumns.length === 0}
-                        note={pre.missingColumns.join(', ')} />
-                <PreRow label="Tanımlı küme"
-                        ok={pre.clusters.length > 0}
-                        note={pre.clusters.join(', ')} />
-                <PreRow label="rollup_spans_narrow_10s zaten kurulu"
-                        ok={pre.narrowInstalled} neutral />
-                <PreRow label="rollup_metrics_1m zaten kurulu"
-                        ok={pre.metricsInstalled} neutral />
-                <PreRow label="rollup_metrics_route_1m zaten kurulu"
-                        ok={pre.routeInstalled} neutral />
-              </tbody>
-            </table>
-          </div>
+          <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
+            <PreRow label="spans_local" ok={pre.spansLocal} />
+            <PreRow label="metric_points_local" ok={pre.metricPointsLocal} />
+            <PreRow label="Kaynak kolonlar tam"
+                    ok={pre.missingColumns.length === 0}
+                    note={pre.missingColumns.join(', ')} />
+            <PreRow label="Tanımlı küme"
+                    ok={pre.clusters.length > 0}
+                    note={pre.clusters.join(', ')} />
+            <PreRow label="rollup_spans_narrow_10s zaten kurulu"
+                    ok={pre.narrowInstalled} neutral />
+            <PreRow label="rollup_metrics_1m zaten kurulu"
+                    ok={pre.metricsInstalled} neutral />
+            <PreRow label="rollup_metrics_route_1m zaten kurulu"
+                    ok={pre.routeInstalled} neutral />
+          </KeyValue>
           {pre.probeErrors && pre.probeErrors.length > 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>
               Probe hataları: {pre.probeErrors.join(' · ')}
@@ -1176,13 +1194,15 @@ function RollupWizardPanel() {
             </span>
           </div>
           <div className="table-wrap">
-            <table style={{ width: '100%' }}>
-              <thead><tr><th style={{ width: 60 }}>#</th><th>İfade</th><th style={{ width: 90 }}>Sonuç</th></tr></thead>
+            {/* v0.10.942 — statik tablo (T1): sıralı DDL sonuç günlüğü; sıra
+                yürütme sırasıdır (ilk ✗ gerçek neden), sıralanmaz. */}
+            <table>
+              <thead><tr><th className="num" style={{ width: 60 }}>#</th><th>İfade</th><th style={{ width: 90 }}>Sonuç</th></tr></thead>
               <tbody>
                 {action.res.statements.map((s, i) => (
                   <tr key={i}>
-                    <td className="mono" style={{ color: 'var(--text3)' }}>{i + 1}</td>
-                    <td className="mono" style={{ fontSize: 11 }} title={s.err || s.head}>
+                    <td className="num cell-faint">{i + 1}</td>
+                    <td className="mono" title={s.err || s.head}>
                       {s.head}
                       {s.err && (
                         <div style={{ color: 'var(--err)', fontSize: 11, marginTop: 2, whiteSpace: 'normal' }}>
@@ -1271,20 +1291,19 @@ function RollupWizardPanel() {
   );
 }
 
+// v0.10.942 — tablo standardı T1: ön kontrol "kontrol → sonuç" çiftleri
+// öznitelik paneli → KeyValue satırı (eski iki hücreli tablo yerine).
 function PreRow({ label, ok, note, neutral }: {
   label: string; ok: boolean; note?: string; neutral?: boolean;
 }) {
   return (
-    <tr>
-      <td className="mono" style={{ fontSize: 11.5 }}>{label}</td>
-      <td>
-        {/* v0.10.929 (K5) — ✓ bir durum kontrolü (geçiş değil): nötr --text2; renk yalnız ✗ sapmada. */}
-        <span style={{ color: ok ? 'var(--text2)' : neutral ? 'var(--text3)' : 'var(--err)' }}>
-          {ok ? '✓' : neutral ? '—' : '✗'}
-        </span>
-        {note && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text3)' }}>{note}</span>}
-      </td>
-    </tr>
+    <KeyValueRow k={label} v={<>
+      {/* v0.10.929 (K5) — ✓ bir durum kontrolü (geçiş değil): nötr --text2; renk yalnız ✗ sapmada. */}
+      <span style={{ color: ok ? 'var(--text2)' : neutral ? 'var(--text3)' : 'var(--err)' }}>
+        {ok ? '✓' : neutral ? '—' : '✗'}
+      </span>
+      {note && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text3)' }}>{note}</span>}
+    </>} />
   );
 }
 
@@ -1334,9 +1353,9 @@ function CHQueryOptimizer() {
         placeholder="SELECT service_name, count() FROM spans WHERE time >= now() - INTERVAL 1 HOUR GROUP BY service_name"
         rows={6}
         spellCheck={false}
+        className="mono"
         style={{
           width: '100%', boxSizing: 'border-box',
-          fontFamily: 'ui-monospace, monospace', fontSize: 12,
           padding: 10, background: 'var(--bg)', color: 'var(--text)',
           border: '1px solid var(--border)', borderRadius: 6,
         }}
@@ -1361,7 +1380,6 @@ function CHQueryOptimizer() {
                 Optimized SQL
               </div>
               <pre style={{
-                fontFamily: 'ui-monospace, monospace', fontSize: 12,
                 padding: 10, background: 'var(--bg)', color: 'var(--text)',
                 border: '1px solid var(--border)', borderRadius: 6,
                 whiteSpace: 'pre-wrap', wordBreak: 'break-word',
@@ -1384,7 +1402,6 @@ function CHQueryOptimizer() {
                 Raw model output
               </div>
               <pre style={{
-                fontFamily: 'ui-monospace, monospace', fontSize: 12,
                 padding: 10, background: 'var(--bg)', color: 'var(--text3)',
                 border: '1px solid var(--border)', borderRadius: 6,
                 whiteSpace: 'pre-wrap', wordBreak: 'break-word',
@@ -1517,20 +1534,20 @@ function TopologyPanel({ topology: t }: { topology: Topology }) {
       </div>
 
       {t.nodes && t.nodes.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...nodesDt.tableProps}>
             <DataTableColgroup dt={nodesDt} />
             <DataTableHead dt={nodesDt} />
             <tbody>
               {nodesDt.sortedRows.map((n, i) => (
                 <tr key={i}>
-                  <td className="num mono">{n.shardNum}</td>
-                  <td className="num mono">{n.replicaNum}</td>
+                  <td className="num">{n.shardNum}</td>
+                  <td className="num">{n.replicaNum}</td>
                   <td className="mono">{n.hostName}</td>
-                  <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>
+                  <td className="mono cell-muted">
                     {n.hostAddress || '—'}
                   </td>
-                  <td className="num mono">{n.port}</td>
+                  <td className="num">{n.port}</td>
                   <td>
                     {n.isLocal
                       ? <span style={{ color: 'var(--text2)' }}>● self</span>
@@ -1555,18 +1572,15 @@ function TopologyPanel({ topology: t }: { topology: Topology }) {
           }}>
             Shard policy (resolved)
           </div>
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...shardDt.tableProps}>
               <DataTableColgroup dt={shardDt} />
               <DataTableHead dt={shardDt} />
               <tbody>
                 {shardDt.sortedRows.map(({ table, expr }) => (
                   <tr key={table}>
                     <td className="mono">{table}</td>
-                    <td className="mono" style={{
-                      fontSize: 11,
-                      color: expr === 'rand()' ? 'var(--text3)' : 'var(--text)',
-                    }}>{expr}</td>
+                    <td className={`mono ${expr === 'rand()' ? 'cell-faint' : ''}`}>{expr}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1612,7 +1626,7 @@ function MiniStat({ label, value, hint, cls }: {
 // görmedim". Rollup panelinin aynası: durum (host başına nesne), ön
 // kontrol (küme + k8s kapsama + LC kapısı), uygula (gömülü 0011, ilk
 // hatada durur), geri al (yalnız MV'ler). Boot'ta asla koşmaz.
-const ENTITY_LAYER_COLS: DataTableColumn<EntityLayerObjectStatus>[] = [
+const ENTITY_LAYER_COLS: ColumnDef<EntityLayerObjectStatus>[] = [
   { id: 'name', label: 'Nesne', width: 220, sortValue: o => o.name },
   { id: 'kind', label: 'Tür', width: 110, sortValue: o => o.kind },
   { id: 'state', label: 'Durum', width: 130, sortValue: o => o.state },
@@ -1680,22 +1694,22 @@ function EntityLayerWizardPanel() {
             {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
             entity_seen_5m son 15 dk: <span className="mono">{fmtNum(status.seenRows)}</span> satır
           </div>
-          <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap" style={{ marginBottom: 10 }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(o => (
                   <tr key={`${o.kind}:${o.name}`}>
                     <td className="mono">{o.name}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
                       {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
                     </td>
-                    <td className="num mono">{o.haveHosts}/{o.hosts}</td>
+                    <td className="num">{o.haveHosts}/{o.hosts}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1718,17 +1732,12 @@ function EntityLayerWizardPanel() {
             <span className={`badge ${pre.supported ? 'b-ok' : 'b-warn'}`}>{pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ'}</span>
             <span style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
           </div>
-          <div className="table-wrap" style={{ marginBottom: 8 }}>
-            <table style={{ width: '100%' }}>
-              <thead><tr><th>Kontrol</th><th>Sonuç</th></tr></thead>
-              <tbody>
-                <PreRow label="spans_local" ok={pre.spansLocal} />
-                <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
-                <PreRow label="k8s.pod.name kapsama (son 15 dk)" ok={pre.podAttrCoverage > 0} note={`%${(pre.podAttrCoverage * 100).toFixed(0)}`} />
-                <PreRow label="uniq pod adı (son 1 saat) ≤ 100k" ok={pre.uniqPods1h <= 100_000} note={fmtNum(pre.uniqPods1h)} />
-              </tbody>
-            </table>
-          </div>
+          <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
+            <PreRow label="spans_local" ok={pre.spansLocal} />
+            <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
+            <PreRow label="k8s.pod.name kapsama (son 15 dk)" ok={pre.podAttrCoverage > 0} note={`%${(pre.podAttrCoverage * 100).toFixed(0)}`} />
+            <PreRow label="uniq pod adı (son 1 saat) ≤ 100k" ok={pre.uniqPods1h <= 100_000} note={fmtNum(pre.uniqPods1h)} />
+          </KeyValue>
           {pre.probeErrors && pre.probeErrors.length > 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>Probe hataları: {pre.probeErrors.join(' · ')}</div>
           )}
@@ -1786,13 +1795,36 @@ function EntityLayerWizardPanel() {
 // Dürüstlük: query_log kapalıysa slot "kullanılamıyor" der; sayaçlar
 // kümülatif, saat başına hız uptime'dan türetilir (restart eden node'da
 // uptime küçüktür, hız o pencereyi anlatır).
-const MEASURE_PARTS_COLS: DataTableColumn<CHMeasurePartsRow>[] = [
+const MEASURE_PARTS_COLS: ColumnDef<CHMeasurePartsRow>[] = [
   { id: 'host',       label: 'Host',                 sortValue: p => p.host,  naturalDir: 'asc',  width: 150 },
   { id: 'table',      label: 'Table',                sortValue: p => p.table, naturalDir: 'asc',  width: 240 },
   { id: 'partitions', label: 'Partitions',           sortValue: p => p.partitions,           numeric: true, naturalDir: 'desc', width: 110 },
   { id: 'parts',      label: 'Parts',                sortValue: p => p.parts,                numeric: true, naturalDir: 'desc', width: 100 },
   { id: 'maxpp',      label: 'Max parts / partition', sortValue: p => p.maxPartsPerPartition, numeric: true, naturalDir: 'desc', width: 170 },
   { id: 'rows',       label: 'Rows',                 sortValue: p => p.rows,                 numeric: true, naturalDir: 'desc', width: 130 },
+];
+// v0.10.942 — tablo standardı T1: host başına üç ölçüm tablosu da kayıt
+// listesi (küme boyu kadar satır) → useDataTable. initialSort yok: satırlar
+// sunucunun sırasında. Hız kolonları uptime'a bölünmüş değere göre sıralanır.
+const perSec = (v: number, uptimeS: number): number | null => (uptimeS > 0 ? v / uptimeS : null);
+const MEASURE_EVENTS_COLS: ColumnDef<CHMeasureEventsRow>[] = [
+  { id: 'host',     label: 'Host',             sortValue: e => e.host,            naturalDir: 'asc', flex: true },
+  { id: 'uptime',   label: 'Uptime',           sortValue: e => e.uptimeS,         numeric: true, naturalDir: 'desc', width: 100 },
+  { id: 'delayed',  label: 'DelayedInserts',   sortValue: e => e.delayedInserts,  numeric: true, naturalDir: 'desc', width: 140 },
+  { id: 'rejected', label: 'RejectedInserts',  sortValue: e => e.rejectedInserts, numeric: true, naturalDir: 'desc', width: 140 },
+  { id: 'inserted', label: 'InsertedRows /sa', sortValue: e => perSec(e.insertedRows, e.uptimeS), numeric: true, naturalDir: 'desc', width: 150 },
+  { id: 'merged',   label: 'MergedRows /sa',   sortValue: e => perSec(e.mergedRows, e.uptimeS),   numeric: true, naturalDir: 'desc', width: 150 },
+  { id: 'ratio',    label: 'Merge/insert',     sortValue: e => (e.insertedRows > 0 ? e.mergedRows / e.insertedRows : null), numeric: true, naturalDir: 'desc', width: 120 },
+];
+const MEASURE_ASYNC_COLS: ColumnDef<CHMeasureAsyncRow>[] = [
+  { id: 'host',    label: 'Host',   sortValue: a => a.host,    naturalDir: 'asc', flex: true },
+  { id: 'buffers', label: 'Tampon', sortValue: a => a.buffers, numeric: true, naturalDir: 'desc', width: 110 },
+  { id: 'bytes',   label: 'Bayt',   sortValue: a => a.bytes,   numeric: true, naturalDir: 'desc', width: 120 },
+];
+const MEASURE_INSERT_COLS: ColumnDef<CHMeasureInsertRow>[] = [
+  { id: 'host',    label: 'Host',                    sortValue: i => i.host,          naturalDir: 'asc', flex: true },
+  { id: 'rows',    label: 'Satır / insert (medyan)', sortValue: i => i.rowsPerInsert, numeric: true, naturalDir: 'desc', width: 190 },
+  { id: 'inserts', label: 'Insert sayısı',           sortValue: i => i.inserts,       numeric: true, naturalDir: 'desc', width: 130 },
 ];
 
 // partsTone — parts_to_delay_insert varsayılanı 24.x'te 1000 (eski
@@ -1809,7 +1841,7 @@ function perHour(v: number, uptimeS: number): string {
 // GROUP BY trace_id pencere boyu koşar, mount'ta fetch YOK, yoklama YOK;
 // operatör pencereyi seçip "Çalıştır" der. Köksüz trace = root-only
 // süzgecinde düşer ve listede "unknown" servisle görünebilir.
-const ROOT_COV_COLS: DataTableColumn<CHRootCoverageRow>[] = [
+const ROOT_COV_COLS: ColumnDef<CHRootCoverageRow>[] = [
   { id: 'entry',    label: 'Giriş servisi', sortValue: r => r.entryService, naturalDir: 'asc', flex: true },
   { id: 'traces',   label: 'Trace',         sortValue: r => r.traces, numeric: true, width: 110 },
   { id: 'without',  label: 'Köksüz',        sortValue: r => r.traces - r.withRoot, numeric: true, width: 110 },
@@ -1886,7 +1918,7 @@ function mvTargetFinding(c: CHMVHostState): MVTargetFindingKind | null {
   if (c.target === 'unmeasured' && (c.state === 'ok' || (c.state === 'dangling' && !!c.targetUUID))) return 'unknown';
   return null;
 }
-const MV_FINDING_COLS: DataTableColumn<MVTargetFinding>[] = [
+const MV_FINDING_COLS: ColumnDef<MVTargetFinding>[] = [
   { id: 'host', label: 'Node', sortValue: f => f.row.host, naturalDir: 'asc', width: 150 },
   { id: 'view', label: 'MV', sortValue: f => f.row.view, naturalDir: 'asc', flex: true },
   { id: 'inner', label: 'İç tablonun uuid’si', sortValue: f => f.row.innerUUID ?? '', naturalDir: 'asc', width: 280 },
@@ -1896,7 +1928,10 @@ const MV_FINDING_COLS: DataTableColumn<MVTargetFinding>[] = [
   // (MV topluyor) ve `unknown` (ölçülemedi) satırları v0.10.833'ün kararıyla
   // DÜĞMESİZ kalır ve gerekçeyi rozet olarak taşır. Sıralanabilir değil
   // (sortValue yok): eylem bir veri boyutu değil.
-  { id: 'action', label: '', width: 170 },
+  // v0.10.942 — tablo standardı T8: `kind: 'actions'` (başlık etiketi boş,
+  // `label` aria-label; boyutlanmaz; td/th `col-actions`). id/width aynı →
+  // kayıtlı genişlikler korunur.
+  { id: 'action', label: 'Eylemler', kind: 'actions', width: 170 },
 ];
 const mvLeftoverKey = (l: CHMVLeftover) => `${l.host}/${l.inner}`;
 /** İç tablonun boyutu; okunamadıysa dürüst "boyut okunamadı" (0 satır DEĞİL). */
@@ -2102,22 +2137,25 @@ function DanglingMVPanel() {
         {leftoverError && <span className="badge b-err" title={leftoverError}>artık ölçülemedi: {leftoverError}</span>}
       </div>
       {(repairRows.length > 0 || leftoverRows.length > 0) && (
-        <table style={{ width: '100%' }}>
-          <thead><tr><th>Node</th><th>MV</th><th>Durum</th><th></th></tr></thead>
+        // v0.10.942 — statik tablo (T1): iki satır türü (onarım + artık) tek
+        // tabloda, satır başına tek yıkıcı eylem; birleşik satır modeli
+        // gerektiren DataTable dönüşümü ayrı iş.
+        <table>
+          <thead><tr><th>Node</th><th>MV</th><th>Durum</th><th className="col-actions" aria-label="Eylemler" /></tr></thead>
           <tbody>
             {repairRows.map(r => {
               const res = result?.key === r.key ? result : null;
               const fromPeer = peerable(r);
               const blocked = !!cluster && !r.addr;
               return (
-                <tr key={r.key} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
+                <tr key={r.key} className="cv-row">
                   <td className="mono">{r.host}{blocked ? ' · adres çözülemedi' : ''}</td>
-                  <td className="mono" style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.uuid ? `${r.view} · iç tablo uuid ${r.uuid}` : r.view}>{r.view}</td>
+                  <td className="mono" style={{ maxWidth: 260 }} title={r.uuid ? `${r.view} · iç tablo uuid ${r.uuid}` : r.view}>{r.view}</td>
                   <td>
                     <span className={`badge ${MV_STATE_TONE[r.state]}`} title={mvStateTitle(r)}>{MV_STATE_LABEL[r.state]}</span>
                     {r.state === 'plain' && <div className="cell-hint" style={{ fontSize: 11 }}>iç tablo Replicated değil ({r.innerEngine || '?'})</div>}
                   </td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td className="col-actions">
                     {fromPeer || (r.canonical && MV_STATE_ACTION[r.state] === 'rebuild')
                       ? <Button variant={fromPeer ? 'accent' : 'danger'} size="sm" disabled={repairing !== null || blocked} loading={repairing === r.key}
                           title={fromPeer
@@ -2140,9 +2178,9 @@ function DanglingMVPanel() {
               // Kapı artık düğmenin kendisinde: sunucu reddi ikinci katman.
               const stopped = l.blocked || leftoverBlockedBy(l);
               return (
-                <tr key={k} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
+                <tr key={k} className="cv-row">
                   <td className="mono">{l.host}{blocked ? ' · adres çözülemedi' : ''}</td>
-                  <td className="mono" style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  <td className="mono" style={{ maxWidth: 260 }}
                     title={`${l.inner}${l.innerEngine ? ` · ${l.innerEngine}` : ''} · ${mvLeftoverSize(l)}`}>
                     {l.kind === 'artik' ? l.view : l.inner}
                   </td>
@@ -2155,7 +2193,7 @@ function DanglingMVPanel() {
                     </span>
                     <div className="cell-hint" style={{ fontSize: 11 }}>{mvLeftoverSize(l)}</div>
                   </td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td className="col-actions">
                     {/* v0.10.830 inceleme: guarded MV'nin kanonik `_local`'i bu
                         kurulumda HİÇ doğmaz — kapı asla geçmez. Düğme çizip
                         409 atmak var olmayan bir düğmeyi işaret ediyordu. */}
@@ -2186,8 +2224,8 @@ function DanglingMVPanel() {
           <summary style={{ cursor: 'pointer', fontSize: 12 }}>
             Hedef uuid bulguları — {targetBroken.length} çözülmüyor, {targetLive.length} başka nesneye yazıyor, {targetUnknown.length} ölçülemedi
           </summary>
-          <div className="table-wrap is-fit" style={{ marginTop: 8 }}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap" style={{ marginTop: 8 }}>
+            <table {...findingDt.tableProps}>
               <DataTableColgroup dt={findingDt} />
               <DataTableHead dt={findingDt} />
               <tbody>
@@ -2199,16 +2237,16 @@ function DanglingMVPanel() {
                   const tres = result?.key === `tgt:${f.key}` ? result : null;
                   const tblocked = !!cluster && !f.row.addr;
                   return (
-                    <tr key={f.key} style={{ contentVisibility: 'auto', containIntrinsicSize: '40px' }}>
+                    <tr key={f.key} className="cv-row">
                       <td className="mono" title={f.row.host}>{f.row.host}{tblocked ? ' · adres çözülemedi' : ''}</td>
-                      <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.row.view}>{f.row.view}</td>
-                      <td className="mono" style={{ fontSize: 11 }} title={f.row.innerUUID || 'okunamadı'}>{f.row.innerUUID || '—'}</td>
-                      <td className="mono" style={{ fontSize: 11 }} title={f.row.targetUUID || 'okunamadı'}>{f.row.targetUUID || '—'}</td>
-                      <td style={{ fontSize: 11 }}>
+                      <td className="mono" title={f.row.view}>{f.row.view}</td>
+                      <td className="mono cell-muted" title={f.row.innerUUID || 'okunamadı'}>{f.row.innerUUID || '—'}</td>
+                      <td className="mono cell-muted" title={f.row.targetUUID || 'okunamadı'}>{f.row.targetUUID || '—'}</td>
+                      <td>
                         <span className={`badge ${MV_FINDING_TONE[f.kind]}`}>{MV_FINDING_LABEL[f.kind]}</span>
                         {f.row.targetNote && <div className="cell-hint" style={{ fontSize: 11 }}>{f.row.targetNote}</div>}
                       </td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td className="col-actions">
                         {/* SATIR BAŞINA TEK YIKICI EYLEM (v0.10.825 duruşu):
                             kapsaması `ok` OLMAYAN hücre (örn. `plain` +
                             `mismatch`) üstteki onarım tablosunda ZATEN
@@ -2517,14 +2555,16 @@ function ReplicaConsistencyPanel() {
       {data?.warnings?.map(w => <div key={w} role="alert" className="cell-hint" style={{ color: 'var(--err)' }}>Uyarı: {w}</div>)}
       {data?.notes?.map(n => <div key={n} className="cell-hint">{n}</div>)}
       {data && data.cluster && tables.length > 0 && (
-        <table style={{ width: '100%' }}>
-          <thead><tr><th>Tablo</th><th>Shard</th><th>Replikalar</th><th>Karar</th></tr></thead>
+        // v0.10.942 — statik tablo (T1): çok satırlı hücreler onarım düğmeleri
+        // taşır, sıra karar önceliği; içerik boyutlu otomatik düzen korunur.
+        <table>
+          <thead><tr><th>Tablo</th><th className="num">Shard</th><th>Replikalar</th><th>Karar</th></tr></thead>
           <tbody>
             {tables.flatMap(t => t.shards.map(sh => {
               const rb = runbook(data.cluster, data.database, t.table, sh, t.view, t.catalog); // v0.10.872 — katalog dışı: runbook yok
               return (
                 // v0.10.872 — tablo×shard ~180 satır (90 tablo × 2), kardeş tablolar gibi cv.
-                <tr key={`${t.table}/${sh.shard}`} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}>
+                <tr key={`${t.table}/${sh.shard}`} className="cv-row">
                   <td className="mono">
                     {t.table}
                     {/* v0.10.824 — `.inner_id.<uuid>` satırı okunmaz bir uuid'dir; hangi MV'nin
@@ -2547,8 +2587,8 @@ function ReplicaConsistencyPanel() {
                       </div>
                     )}
                   </td>
-                  <td className="mono">{sh.shard < 0 ? '—' : sh.shard}</td>
-                  <td className="mono" style={{ fontSize: 11 }}>
+                  <td className="num">{sh.shard < 0 ? '—' : sh.shard}</td>
+                  <td className="mono cell-muted">
                     {(sh.replicas ?? []).map(r => (
                       <div key={r.host} title={`${r.zkPath}\nreplica ${r.replicaName} · kayıtlı ${r.totalReplicas} / aktif ${r.activeReplicas}${r.lastException ? `\n${r.lastException}` : ''}`}>
                         {r.host} · {shortZk(r.zkPath)} · {r.totalReplicas}/{r.activeReplicas}{r.engine ? ` · ${r.engine}` : ''}
@@ -2783,22 +2823,24 @@ function TraceHealthPanel() {
             {kv('kabul edilen (oran penceresi)', fmtNum(data.fleet.acceptedSettled))}
             {kv("CH'de saklanan (oran penceresi)", data.fleet.storedKnown ? fmtNum(data.fleet.storedSettled) : '—')}
             {data.fleet.pods.length > 0 && (
-              <table style={{ width: '100%', marginTop: 6, fontSize: 11 }}>
+              // v0.10.942 — statik tablo (T1): dar kart içinde ingest podu başına
+              // kompakt özet (kartın kendi 11px boyu); saat damgası mono kalır.
+              <table style={{ marginTop: 6, fontSize: 11 }}>
                 <thead>
                   <tr>
-                    <th>Pod</th><th style={{ textAlign: 'right' }}>Kabul</th><th style={{ textAlign: 'right' }}>Düşen</th>
-                    <th style={{ textAlign: 'right' }}>Hata</th><th style={{ textAlign: 'right' }}>Son örnek</th><th style={{ textAlign: 'right' }}>Boot</th>
+                    <th>Pod</th><th className="num">Kabul</th><th className="num">Düşen</th>
+                    <th className="num">Hata</th><th style={{ textAlign: 'right' }}>Son örnek</th><th className="num">Boot</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.fleet.pods.map(p => (
                     <tr key={p.pod}>
                       <td className="mono">{p.pod}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(p.accepted)}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(p.dropped)}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(p.writeFailed)}</td>
+                      <td className="num">{fmtNum(p.accepted)}</td>
+                      <td className="num">{fmtNum(p.dropped)}</td>
+                      <td className="num">{fmtNum(p.writeFailed)}</td>
                       <td className="mono" style={{ textAlign: 'right' }} title={tsLong(p.lastSampleAt)}>{hhmm(p.lastSampleAt)}</td>
-                      <td className="mono" style={{ textAlign: 'right' }} title="Pencerede görülen farklı boot_id (restart) sayısı">{p.boots}</td>
+                      <td className="num" title="Pencerede görülen farklı boot_id (restart) sayısı">{p.boots}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2922,22 +2964,22 @@ function RootCoveragePanel() {
       {data === null && armed !== null && <EmptyNote text="Kapsama okunamadı (pencereyi daralt)" />}
       {data && data.rows.length === 0 && <EmptyNote text="Pencerede trace yok" />}
       {data && data.rows.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(r => {
                 const p = r.traces ? (r.withRoot / r.traces) * 100 : 0;
                 return (
-                  <tr key={r.entryService || '(none)'} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
+                  <tr key={r.entryService || '(none)'} className="cv-row">
                     <td className="mono" title={r.entryService || 'Trace\'te hiç server/consumer span yok'}>
                       {r.entryService || <span style={{ color: 'var(--text3)' }}>(giriş servisi de yok)</span>}
                     </td>
-                    <td className="num mono">{fmtNum(r.traces)}</td>
-                    <td className="num mono">{fmtNum(r.traces - r.withRoot)}</td>
-                    <td className="num mono"><span className={`badge ${rootTone(p)}`}>{p.toFixed(1)}%</span></td>
-                    <td className="num mono"><span className={`badge ${rootTone(r.traces ? (entryRootOf(r) / r.traces) * 100 : 0)}`}>
+                    <td className="num">{fmtNum(r.traces)}</td>
+                    <td className="num">{fmtNum(r.traces - r.withRoot)}</td>
+                    <td className="num"><span className={`badge ${rootTone(p)}`}>{p.toFixed(1)}%</span></td>
+                    <td className="num"><span className={`badge ${rootTone(r.traces ? (entryRootOf(r) / r.traces) * 100 : 0)}`}>
                       {(r.traces ? (entryRootOf(r) / r.traces) * 100 : 0).toFixed(1)}%</span></td>
                   </tr>
                 );
@@ -2961,6 +3003,9 @@ function MeasurePanel() {
     storageKey: 'ch-measure-parts', columns: MEASURE_PARTS_COLS,
     rows: data?.parts ?? [], initialSort: { id: 'maxpp', dir: 'desc' },
   });
+  const eventsDt = useDataTable<CHMeasureEventsRow>({ storageKey: 'ch-measure-events', columns: MEASURE_EVENTS_COLS, rows: data?.events ?? [] });
+  const asyncDt = useDataTable<CHMeasureAsyncRow>({ storageKey: 'ch-measure-async', columns: MEASURE_ASYNC_COLS, rows: data?.async ?? [] });
+  const insertDt = useDataTable<CHMeasureInsertRow>({ storageKey: 'ch-measure-insert', columns: MEASURE_INSERT_COLS, rows: data?.insertSize ?? [] });
   const worstPP = data?.parts.reduce((m, p) => Math.max(m, p.maxPartsPerPartition), 0) ?? 0;
   const delayed = data?.events.reduce((n, e) => n + e.delayedInserts, 0) ?? 0;
   const rejected = data?.events.reduce((n, e) => n + e.rejectedInserts, 0) ?? 0;
@@ -2999,19 +3044,19 @@ function MeasurePanel() {
           <h4 style={{ margin: '10px 0 6px' }}>Parça baskısı · host × tablo</h4>
           {data.partsNote && <EmptyNote text={data.partsNote} />}
           {data.parts.length > 0 && (
-            <div className="table-wrap is-fit">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <div className="table-wrap">
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
                   {dt.sortedRows.map(p => (
                     <tr key={p.host + '/' + p.table}>
-                      <td className="mono" style={{ fontSize: 11 }} title={p.host}>{p.host || '—'}</td>
+                      <td className="mono" title={p.host}>{p.host || '—'}</td>
                       <td className="mono" title={p.table}>{p.table}</td>
-                      <td className="num mono">{fmtNum(p.partitions)}</td>
-                      <td className="num mono">{fmtNum(p.parts)}</td>
-                      <td className="num mono"><span className={`badge ${partsTone(p.maxPartsPerPartition)}`}>{fmtNum(p.maxPartsPerPartition)}</span></td>
-                      <td className="num mono">{fmtNum(p.rows)}</td>
+                      <td className="num">{fmtNum(p.partitions)}</td>
+                      <td className="num">{fmtNum(p.parts)}</td>
+                      <td className="num"><span className={`badge ${partsTone(p.maxPartsPerPartition)}`}>{fmtNum(p.maxPartsPerPartition)}</span></td>
+                      <td className="num">{fmtNum(p.rows)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3022,19 +3067,20 @@ function MeasurePanel() {
           <h4 style={{ margin: '14px 0 6px' }}>system.events · host başına (kümülatif; /sa = uptime'a bölünmüş)</h4>
           {data.eventsNote && <EmptyNote text={data.eventsNote} />}
           {data.events.length > 0 && (
-            <div className="table-wrap is-fit">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
-                <thead><tr><th>Host</th><th className="num">Uptime</th><th className="num">DelayedInserts</th><th className="num">RejectedInserts</th><th className="num">InsertedRows /sa</th><th className="num">MergedRows /sa</th><th className="num">Merge/insert</th></tr></thead>
+            <div className="table-wrap">
+              <table {...eventsDt.tableProps}>
+                <DataTableColgroup dt={eventsDt} />
+                <DataTableHead dt={eventsDt} />
                 <tbody>
-                  {data.events.map(e => (
+                  {eventsDt.sortedRows.map(e => (
                     <tr key={e.host}>
-                      <td className="mono" style={{ fontSize: 11 }}>{e.host || '—'}</td>
-                      <td className="num mono">{fmtUptime(e.uptimeS)}</td>
-                      <td className="num mono"><span className={`badge ${e.delayedInserts > 0 ? 'b-warn' : 'b-gray'}`}>{fmtNum(e.delayedInserts)}</span></td>
-                      <td className="num mono"><span className={`badge ${e.rejectedInserts > 0 ? 'b-err' : 'b-gray'}`}>{fmtNum(e.rejectedInserts)}</span></td>
-                      <td className="num mono" title={`kümülatif ${fmtNum(e.insertedRows)}`}>{perHour(e.insertedRows, e.uptimeS)}</td>
-                      <td className="num mono" title={`kümülatif ${fmtNum(e.mergedRows)}`}>{perHour(e.mergedRows, e.uptimeS)}</td>
-                      <td className="num mono" title="MergedRows / InsertedRows — yazma çarpanı; MV sayısı ve batch boyutu bunu büyütür/küçültür.">
+                      <td className="mono">{e.host || '—'}</td>
+                      <td className="num">{fmtUptime(e.uptimeS)}</td>
+                      <td className="num"><span className={`badge ${e.delayedInserts > 0 ? 'b-warn' : 'b-gray'}`}>{fmtNum(e.delayedInserts)}</span></td>
+                      <td className="num"><span className={`badge ${e.rejectedInserts > 0 ? 'b-err' : 'b-gray'}`}>{fmtNum(e.rejectedInserts)}</span></td>
+                      <td className="num" title={`kümülatif ${fmtNum(e.insertedRows)}`}>{perHour(e.insertedRows, e.uptimeS)}</td>
+                      <td className="num" title={`kümülatif ${fmtNum(e.mergedRows)}`}>{perHour(e.mergedRows, e.uptimeS)}</td>
+                      <td className="num" title="MergedRows / InsertedRows — yazma çarpanı; MV sayısı ve batch boyutu bunu büyütür/küçültür.">
                         {e.insertedRows > 0 ? (e.mergedRows / e.insertedRows).toFixed(2) + '×' : '—'}
                       </td>
                     </tr>
@@ -3048,15 +3094,16 @@ function MeasurePanel() {
           {data.asyncNote && <EmptyNote text={data.asyncNote} />}
           {!data.asyncNote && data.async.length === 0 && <p className="cell-hint">Şu an tamponda bekleyen async insert yok (host listede yoksa tamponu boştur).</p>}
           {data.async.length > 0 && (
-            <div className="table-wrap is-fit">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
-                <thead><tr><th>Host</th><th className="num">Tampon</th><th className="num">Bayt</th></tr></thead>
+            <div className="table-wrap">
+              <table {...asyncDt.tableProps}>
+                <DataTableColgroup dt={asyncDt} />
+                <DataTableHead dt={asyncDt} />
                 <tbody>
-                  {data.async.map(a => (
+                  {asyncDt.sortedRows.map(a => (
                     <tr key={a.host}>
-                      <td className="mono" style={{ fontSize: 11 }}>{a.host || '—'}</td>
-                      <td className="num mono">{fmtNum(a.buffers)}</td>
-                      <td className="num mono">{fmtBytes(a.bytes)}</td>
+                      <td className="mono">{a.host || '—'}</td>
+                      <td className="num">{fmtNum(a.buffers)}</td>
+                      <td className="num">{fmtBytes(a.bytes)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3068,15 +3115,16 @@ function MeasurePanel() {
           {!data.queryLogAvailable && <EmptyNote text={data.insertSizeNote || 'system.query_log kapalı'} />}
           {data.queryLogAvailable && data.insertSize.length === 0 && <p className="cell-hint">Son 1 saatte spans insert kaydı yok.</p>}
           {data.insertSize.length > 0 && (
-            <div className="table-wrap is-fit">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
-                <thead><tr><th>Host</th><th className="num">Satır / insert (medyan)</th><th className="num">Insert sayısı</th></tr></thead>
+            <div className="table-wrap">
+              <table {...insertDt.tableProps}>
+                <DataTableColgroup dt={insertDt} />
+                <DataTableHead dt={insertDt} />
                 <tbody>
-                  {data.insertSize.map(i => (
+                  {insertDt.sortedRows.map(i => (
                     <tr key={i.host}>
-                      <td className="mono" style={{ fontSize: 11 }}>{i.host || '—'}</td>
-                      <td className="num mono" title="Denetim: 10k–100k bandı; 10k alt sınırda.">{fmtNum(Math.round(i.rowsPerInsert))}</td>
-                      <td className="num mono">{fmtNum(i.inserts)}</td>
+                      <td className="mono">{i.host || '—'}</td>
+                      <td className="num" title="Denetim: 10k–100k bandı; 10k alt sınırda.">{fmtNum(Math.round(i.rowsPerInsert))}</td>
+                      <td className="num">{fmtNum(i.inserts)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3307,7 +3355,9 @@ function TraceBackfillWizardPanel() {
           </div>
         )}
         {days && (
-          <table style={{ fontSize: 12, borderCollapse: 'collapse' }}>
+          // v0.10.942 — statik tablo (T1): düzenlenebilir seçim listesi (gün
+          // başına onay kutusu); dar hücre dolgusu bilerek satır içi.
+          <table>
             <thead><tr>
               <th style={{ textAlign: 'left', padding: '2px 10px 2px 0' }}></th>
               <th style={{ textAlign: 'left', padding: '2px 10px 2px 0' }}>Gün</th>
@@ -3325,9 +3375,9 @@ function TraceBackfillWizardPanel() {
                       title={d.day >= todayUtc ? 'Bugün geri doldurulamaz: canlı MV aynı bucket\'lara yazıyor (çift sayım)' : undefined}
                       onChange={e => setSel(s2 => ({ ...s2, [d.day]: e.target.checked }))} />
                   </td>
-                  <td style={{ padding: '2px 10px 2px 0', fontFamily: 'ui-monospace, monospace' }}>{d.day}</td>
-                  <td style={{ padding: '2px 10px 2px 0', textAlign: 'right' }}>{d.spanRows.toLocaleString()}</td>
-                  <td style={{ padding: '2px 10px 2px 0', textAlign: 'right' }}>{d.mvRows.toLocaleString()}</td>
+                  <td className="mono" style={{ padding: '2px 10px 2px 0' }}>{d.day}</td>
+                  <td className="num" style={{ padding: '2px 10px 2px 0' }}>{d.spanRows.toLocaleString()}</td>
+                  <td className="num" style={{ padding: '2px 10px 2px 0' }}>{d.mvRows.toLocaleString()}</td>
                   <td style={{ padding: '2px 0' }}>
                     {d.gap
                       ? <span className="badge b-warn">boşluk</span>
@@ -3422,22 +3472,22 @@ function FunctionIdColumnWizardPanel() {
               : allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
             doluluk (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
           </div>
-          <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap" style={{ marginBottom: 10 }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(o => (
                   <tr key={`${o.kind}:${o.name}`}>
                     <td className="mono">{o.name}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
                       {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
                     </td>
-                    <td className="num mono">{o.haveHosts}/{o.hosts}</td>
+                    <td className="num">{o.haveHosts}/{o.hosts}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3460,21 +3510,16 @@ function FunctionIdColumnWizardPanel() {
             <span className={`badge ${pre.supported ? 'b-ok' : 'b-warn'}`}>{pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ'}</span>
             <span style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
           </div>
-          <div className="table-wrap" style={{ marginBottom: 8 }}>
-            <table style={{ width: '100%' }}>
-              <thead><tr><th>Kontrol</th><th>Sonuç</th></tr></thead>
-              <tbody>
-                <PreRow label="spans_local" ok={pre.spansLocal} />
-                <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
-                <PreRow label="Anahtar yazımı (son 10 dk, örneklem)" ok={pre.keyCounts.length > 0}
-                  note={pre.keyCounts.length ? pre.keyCounts.map(k => `${k.key}: ~${fmtNum(k.count)}`).join(' · ') : 'function_id anahtarı görülmedi'} />
-                <PreRow label="Kolon var" ok={pre.columnExists} neutral={!pre.columnExists} />
-                <PreRow label="Kolon dolu (son 10 dk)" ok={pre.columnExists && pre.filled > 0} neutral={!pre.columnExists}
-                  note={pre.columnExists ? `${fmtNum(pre.filled)} / ${fmtNum(pre.total)} (${fillPct(pre.filled, pre.total)})` : undefined} />
-                <PreRow label="Skip index var" ok={pre.indexExists} neutral={!pre.indexExists} />
-              </tbody>
-            </table>
-          </div>
+          <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
+            <PreRow label="spans_local" ok={pre.spansLocal} />
+            <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
+            <PreRow label="Anahtar yazımı (son 10 dk, örneklem)" ok={pre.keyCounts.length > 0}
+              note={pre.keyCounts.length ? pre.keyCounts.map(k => `${k.key}: ~${fmtNum(k.count)}`).join(' · ') : 'function_id anahtarı görülmedi'} />
+            <PreRow label="Kolon var" ok={pre.columnExists} neutral={!pre.columnExists} />
+            <PreRow label="Kolon dolu (son 10 dk)" ok={pre.columnExists && pre.filled > 0} neutral={!pre.columnExists}
+              note={pre.columnExists ? `${fmtNum(pre.filled)} / ${fmtNum(pre.total)} (${fillPct(pre.filled, pre.total)})` : undefined} />
+            <PreRow label="Skip index var" ok={pre.indexExists} neutral={!pre.indexExists} />
+          </KeyValue>
           {pre.probeErrors && pre.probeErrors.length > 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>Probe hataları: {pre.probeErrors.join(' · ')}</div>
           )}
@@ -3598,22 +3643,22 @@ function AttrIndexWizardPanel() {
             {' '}· bloom yüklemi <span className="mono">{fmtNum(status.used)}</span> ·
             tutarlılık (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
           </div>
-          <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap" style={{ marginBottom: 10 }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(o => (
                   <tr key={`${o.kind}:${o.name}`}>
                     <td className="mono">{o.name}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
                       {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
                     </td>
-                    <td className="num mono">{o.haveHosts}/{o.hosts}</td>
+                    <td className="num">{o.haveHosts}/{o.hosts}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3636,19 +3681,14 @@ function AttrIndexWizardPanel() {
             <span className={`badge ${pre.supported ? 'b-ok' : 'b-warn'}`}>{pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ'}</span>
             <span style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
           </div>
-          <div className="table-wrap" style={{ marginBottom: 8 }}>
-            <table style={{ width: '100%' }}>
-              <thead><tr><th>Kontrol</th><th>Sonuç</th></tr></thead>
-              <tbody>
-                <PreRow label="spans_local" ok={pre.spansLocal} />
-                <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
-                <PreRow label="Kolonlar var (attr_kvh + res_kvh)" ok={pre.columnsExist} neutral={!pre.columnsExist} />
-                <PreRow label="Tutarlı (son 10 dk: kvh uzunluğu = anahtar sayısı)" ok={pre.columnsExist && pre.total > 0 && pre.filled === pre.total} neutral={!pre.columnsExist}
-                  note={pre.columnsExist ? `${fmtNum(pre.filled)} / ${fmtNum(pre.total)} (${fillPct(pre.filled, pre.total)})` : undefined} />
-                <PreRow label="Bloom indeksleri var (4)" ok={pre.indexesExist} neutral={!pre.indexesExist} />
-              </tbody>
-            </table>
-          </div>
+          <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
+            <PreRow label="spans_local" ok={pre.spansLocal} />
+            <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
+            <PreRow label="Kolonlar var (attr_kvh + res_kvh)" ok={pre.columnsExist} neutral={!pre.columnsExist} />
+            <PreRow label="Tutarlı (son 10 dk: kvh uzunluğu = anahtar sayısı)" ok={pre.columnsExist && pre.total > 0 && pre.filled === pre.total} neutral={!pre.columnsExist}
+              note={pre.columnsExist ? `${fmtNum(pre.filled)} / ${fmtNum(pre.total)} (${fillPct(pre.filled, pre.total)})` : undefined} />
+            <PreRow label="Bloom indeksleri var (4)" ok={pre.indexesExist} neutral={!pre.indexesExist} />
+          </KeyValue>
           {pre.probeErrors && pre.probeErrors.length > 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>Probe hataları: {pre.probeErrors.join(' · ')}</div>
           )}
@@ -3763,22 +3803,22 @@ function RolloutLayerWizardPanel() {
             {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
             workload_revision_activity_1m son 15 dk: <span className="mono">{fmtNum(status.activityRows)}</span> satır
           </div>
-          <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap" style={{ marginBottom: 10 }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(o => (
                   <tr key={`${o.kind}:${o.name}`}>
                     <td className="mono">{o.name}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+                    <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
                       {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
                     </td>
-                    <td className="num mono">{o.haveHosts}/{o.hosts}</td>
+                    <td className="num">{o.haveHosts}/{o.hosts}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3803,32 +3843,29 @@ function RolloutLayerWizardPanel() {
             <span className={`badge ${pre.mvGate ? 'b-gray' : 'b-warn'}`} title="her cluster'da k8s.replicaset.name kapsaması ≥ %95">{pre.mvGate ? 'MV KAPISI AÇIK' : 'MV KAPISI KAPALI'}</span>
             <span style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
           </div>
-          <div className="table-wrap" style={{ marginBottom: 8 }}>
-            <table style={{ width: '100%' }}>
-              <thead><tr><th>Kontrol</th><th>Sonuç</th></tr></thead>
-              <tbody>
-                <PreRow label="spans_local" ok={pre.spansLocal} />
-                <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
-                <PreRow label="0011 kolonları (cluster / k8s_namespace)" ok={pre.layer0011} />
-                <PreRow label="uniq replicaset / imaj adı (son 1 saat) ≤ 100k" ok={pre.uniqRs1h <= 100_000 && pre.uniqImage1h <= 100_000} note={`${fmtNum(pre.uniqRs1h)} / ${fmtNum(pre.uniqImage1h)}`} />
-              </tbody>
-            </table>
-          </div>
+          <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
+            <PreRow label="spans_local" ok={pre.spansLocal} />
+            <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
+            <PreRow label="0011 kolonları (cluster / k8s_namespace)" ok={pre.layer0011} />
+            <PreRow label="uniq replicaset / imaj adı (son 1 saat) ≤ 100k" ok={pre.uniqRs1h <= 100_000 && pre.uniqImage1h <= 100_000} note={`${fmtNum(pre.uniqRs1h)} / ${fmtNum(pre.uniqImage1h)}`} />
+          </KeyValue>
           {/* Kapsama CLUSTER BAŞINA — bir cluster'ın collector'ı eksik basıyorsa burada görünür */}
+          {/* v0.10.942 — statik tablo (T1): ön kontrol kutusunda span cluster
+              değeri başına kapsama özeti (tanımlı küme sayısı kadar satır). */}
           <div className="table-wrap" style={{ marginBottom: 8 }}>
-            <table style={{ width: '100%' }}>
-              <thead><tr><th>Span cluster değeri</th><th style={{ textAlign: 'right' }}>Span (15 dk)</th><th style={{ textAlign: 'right' }}>Örneklem</th><th style={{ textAlign: 'right' }}>Replicaset</th><th style={{ textAlign: 'right' }}>Image</th><th style={{ textAlign: 'right' }}>Namespace</th></tr></thead>
+            <table>
+              <thead><tr><th>Span cluster değeri</th><th className="num">Span (15 dk)</th><th className="num">Örneklem</th><th className="num">Replicaset</th><th className="num">Image</th><th className="num">Namespace</th></tr></thead>
               <tbody>
-                {(pre.coverage ?? []).length === 0 && <tr><td colSpan={6} style={{ color: 'var(--text3)' }}>son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</td></tr>}
+                {(pre.coverage ?? []).length === 0 && <tr><td colSpan={6} className="cell-faint">son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</td></tr>}
                 {(pre.coverage ?? []).map(c => (
                   <tr key={c.cluster}>
                     {/* '' = cluster'sız (k8s dışı) trafik: görünür, kapıya girmez. sampled=0 = ölçülemedi → kapı kapalı. */}
                     <td className="mono">{c.cluster || '(boş — kapıya girmez)'}</td>
-                    <td className="num mono">{fmtNum(c.total)}</td>
-                    <td className="num mono" style={{ color: c.sampled === 0 ? 'var(--err)' : undefined }}>{c.sampled === 0 ? 'ölçülemedi' : fmtNum(c.sampled)}</td>
-                    <td className="num mono" style={{ color: c.replicaset >= 0.95 ? undefined : 'var(--err)' }}>{c.sampled === 0 ? '—' : pct(c.replicaset)}</td>
-                    <td className="num mono" style={{ color: c.image >= 0.95 ? undefined : 'var(--warn)' }}>{c.sampled === 0 ? '—' : pct(c.image)}</td>
-                    <td className="num mono" style={{ color: c.namespace >= 0.95 ? undefined : 'var(--err)' }}>{c.sampled === 0 ? '—' : pct(c.namespace)}</td>
+                    <td className="num">{fmtNum(c.total)}</td>
+                    <td className={`num ${c.sampled === 0 ? 'cell-err' : ''}`}>{c.sampled === 0 ? 'ölçülemedi' : fmtNum(c.sampled)}</td>
+                    <td className={`num ${c.replicaset >= 0.95 ? '' : 'cell-err'}`}>{c.sampled === 0 ? '—' : pct(c.replicaset)}</td>
+                    <td className={`num ${c.image >= 0.95 ? '' : 'cell-warn'}`}>{c.sampled === 0 ? '—' : pct(c.image)}</td>
+                    <td className={`num ${c.namespace >= 0.95 ? '' : 'cell-err'}`}>{c.sampled === 0 ? '—' : pct(c.namespace)}</td>
                   </tr>
                 ))}
               </tbody>

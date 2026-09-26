@@ -13,22 +13,23 @@ import { Stack, Row } from '@/components/ui';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, Empty } from '@/components/Spinner';
 import { CopyButton } from '@/components/CopyButton';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import type { TraceFacet, TraceFacetStatus, TraceFacetsResponse } from '@/lib/types';
 import { FlashBox, humanize, useSettingsLoad, SettingsLoadError } from './shared';
 
 type FacetRow = TraceFacet & { status?: TraceFacetStatus };
 
-const COLS: DataTableColumn<FacetRow>[] = [
-  { id: 'key', label: 'Attribute', sortValue: r => r.key, naturalDir: 'asc', width: 180 },
-  { id: 'spellings', label: 'Yazımlar', sortValue: r => (r.spellings ?? []).join(','), naturalDir: 'asc', flex: true },
+// v0.10.942 (tablo standardı dilim 3) — `act` sahte sıralanabilir değil,
+// eylem kolonu (T3/T8); 11px kod hücreleri `mono` + `tone: muted` (S3).
+const COLS: ColumnDef<FacetRow>[] = [
+  { id: 'key', label: 'Attribute', sortValue: r => r.key, naturalDir: 'asc', width: 180, mono: true },
+  { id: 'spellings', label: 'Yazımlar', sortValue: r => (r.spellings ?? []).join(','), naturalDir: 'asc', flex: true, mono: true, tone: () => 'muted' },
   { id: 'scope', label: 'Kapsam', sortValue: r => r.scope ?? 'span', naturalDir: 'asc', width: 90 },
   { id: 'type', label: 'Tip', sortValue: r => r.type ?? 'lc', naturalDir: 'asc', width: 70 },
-  { id: 'column', label: 'Kolon', sortValue: r => r.status?.column ?? '', naturalDir: 'asc', width: 170 },
+  { id: 'column', label: 'Kolon', sortValue: r => r.status?.column ?? '', naturalDir: 'asc', width: 170, mono: true, tone: () => 'muted' },
   { id: 'state', label: 'Durum (bu pod)', sortValue: r => (r.status?.routed ? 2 : r.status?.columnExists ? 1 : 0), numeric: true, width: 150 },
-  { id: 'act', label: '', sortValue: () => 0, width: 60 },
+  { id: 'act', label: 'Eylemler', kind: 'actions', width: 60 },
 ];
 
 // v0.10.929 (K5) — 'kolona yönleniyor' normal son hâl: nötr; renk yalnız eksik kolon/indekste.
@@ -114,8 +115,8 @@ export function TraceFacetsTab() {
       {rows.length === 0 ? (
         <Empty icon="≡" title="Kayıtlı facet yok" compact>Yerleşik terfi kolonları (channel_code, function_code, k8s.*) kodda; burası operatörün eklediği ek facet'ler.</Empty>
       ) : (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
@@ -123,13 +124,14 @@ export function TraceFacetsTab() {
                 const st = facetStateLabel(r.status);
                 return (
                   <tr key={r.key} className="tf-row">
-                    <td className="mono">{r.key}</td>
-                    <td className="mono" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={(r.spellings ?? [r.key]).join(', ')}>{(r.spellings ?? [r.key]).join(', ')}</td>
-                    <td>{r.scope ?? 'span'}</td>
-                    <td>{r.type ?? 'lc'}</td>
-                    <td className="mono" style={{ fontSize: 11 }}>{r.status?.column ?? ''}</td>
+                    <DataTableCell dt={dt} col="key" row={r} value={r.key} />
+                    <DataTableCell dt={dt} col="spellings" row={r} value={(r.spellings ?? [r.key]).join(', ')} />
+                    <DataTableCell dt={dt} col="scope" row={r} value={r.scope ?? 'span'} />
+                    <DataTableCell dt={dt} col="type" row={r} value={r.type ?? 'lc'} />
+                    <DataTableCell dt={dt} col="column" row={r} value={r.status?.column} />
+                    {/* v0.10.942 — `numeric` yalnız sıralama yönü için: rozet hücresi `num` almaz, solda kalır. */}
                     <td><Badge tone={st.tone}>{st.text}</Badge></td>
-                    <td><Button variant="secondary" size="xs" className="tf-remove" disabled={busy} onClick={() => remove(r.key)} title="Kaydı sil (kolon/indeks ClickHouse'ta kalır; rollback SQL'i elle)">Sil</Button></td>
+                    <DataTableCell dt={dt} col="act" row={r}><Button variant="secondary" size="xs" className="tf-remove" disabled={busy} onClick={() => remove(r.key)} title="Kaydı sil (kolon/indeks ClickHouse'ta kalır; rollback SQL'i elle)">Sil</Button></DataTableCell>
                   </tr>
                 );
               })}

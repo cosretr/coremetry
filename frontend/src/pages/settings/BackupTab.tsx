@@ -216,7 +216,7 @@ export function BackupTab() {
                   display: 'grid',
                   gridTemplateColumns: '180px repeat(4, 1fr)',
                   gap: 8, padding: '3px 0',
-                  fontFamily: 'ui-monospace, monospace', fontSize: 11,
+                  fontFamily: 'var(--font-mono)', fontSize: 11,
                   borderBottom: '1px solid var(--divider)',
                 }}>
                   <span style={{ color: 'var(--text)', fontWeight: 600 }}>{t}</span>

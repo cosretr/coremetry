@@ -170,6 +170,7 @@ export function TeamRoutingTab() {
         </Empty>
       ) : (
         <div className="table-wrap" style={{ marginBottom: 14 }}>
+          {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi, satır başına adres girişi (T1). */}
           <table>
             <thead>
               <tr><th>Takım</th><th>E-posta adres(ler)i</th></tr>
@@ -179,7 +180,7 @@ export function TeamRoutingTab() {
                 const v = contactFor(team);
                 return (
                   <tr key={team.toLowerCase()}>
-                    <td className="mono" style={{ whiteSpace: 'nowrap' }}>
+                    <td className="mono">
                       {team}
                       {v.trim() === '' && (
                         <span className="badge b-warn" style={{ marginLeft: 8, fontSize: 9 }}>eksik</span>

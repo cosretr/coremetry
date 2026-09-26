@@ -7,8 +7,7 @@ import { useSystemStats, useTraceContext, useEvaluatorHealth, keys } from '@/lib
 import { api } from '@/lib/api';
 import { fmtNum, fmtClock, tsLong } from '@/lib/utils';
 import { etaChipLabel, evaluatorQuietLabel, diskHistoryChip } from '@/lib/fmtEta';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type {
   SystemStatus,
   RedisStats, CacheStats, SystemStats,
@@ -24,20 +23,23 @@ type HistoryRow = SystemStats['history'][number];
 // ClickHouse per-table storage. Compression sorts on the raw ratio
 // (compressed/uncompressed) so the most-/least-compressible tables
 // sort sensibly even though the cell renders a "% (raw)" string.
-const STORAGE_COLS: DataTableColumn<TableStatRow>[] = [
-  { id: 'table',       label: 'Table',       sortValue: t => t.table,            naturalDir: 'asc',  width: 220 },
+// v0.10.942 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında;
+// 11px hücreler tablo boyunda, ikincil olanlar renkle (S3). Kimlik kolonu
+// (tablo adı) birincil: boyu düştü, ton almadı.
+const STORAGE_COLS: ColumnDef<TableStatRow>[] = [
+  { id: 'table',       label: 'Table',       sortValue: t => t.table,            naturalDir: 'asc',  width: 220, mono: true },
   { id: 'rows',        label: 'Rows',        sortValue: t => t.rows,             numeric: true, naturalDir: 'desc', width: 120 },
   { id: 'disk',        label: 'On disk',     sortValue: t => t.bytesOnDisk,      numeric: true, naturalDir: 'desc', width: 120 },
   { id: 'compression', label: 'Compression', sortValue: t => t.uncompressedBytes > 0 ? t.compressedBytes / t.uncompressedBytes : 0,
-                                                                                  numeric: true, naturalDir: 'desc', width: 200 },
+                                                                                  numeric: true, naturalDir: 'desc', width: 200, tone: () => 'faint' },
   { id: 'parts',       label: 'Parts',       sortValue: t => t.parts,            numeric: true, naturalDir: 'desc', width: 90 },
-  { id: 'oldest',      label: 'Oldest',      sortValue: t => t.oldestNs,         naturalDir: 'asc',  width: 180 },
-  { id: 'newest',      label: 'Newest',      sortValue: t => t.newestNs,         naturalDir: 'desc', width: 180 },
+  { id: 'oldest',      label: 'Oldest',      sortValue: t => t.oldestNs,         naturalDir: 'asc',  width: 180, tone: () => 'muted' },
+  { id: 'newest',      label: 'Newest',      sortValue: t => t.newestNs,         naturalDir: 'desc', width: 180, tone: () => 'muted' },
 ];
 
 // Daily history. Default sort = day desc (newest first), preserving
 // the prior `[...history].reverse()` ordering.
-const HISTORY_COLS: DataTableColumn<HistoryRow>[] = [
+const HISTORY_COLS: ColumnDef<HistoryRow>[] = [
   { id: 'day',      label: 'Day',      sortValue: d => d.day,                                naturalDir: 'desc', width: 140 },
   { id: 'traces',   label: 'Traces',   sortValue: d => d.traces,            numeric: true,   naturalDir: 'desc', width: 110 },
   { id: 'spans',    label: 'Spans',    sortValue: d => d.spans,             numeric: true,   naturalDir: 'desc', width: 110 },
@@ -333,7 +335,7 @@ export default function AdminStatsPage() {
                 <div style={{
                   display: 'flex', justifyContent: 'space-between',
                   fontSize: 10, color: 'var(--text3)', marginTop: 6,
-                  fontFamily: 'ui-monospace, monospace',
+                  fontFamily: 'var(--font-mono)',
                 }}>
                   <span>{data.history[0].day}</span>
                   <span>{data.history[data.history.length - 1].day}</span>
@@ -523,7 +525,7 @@ export default function AdminStatsPage() {
                           <b>{d.name}</b>
                           {d.host && <span style={{ color: 'var(--text2)' }}>@ {d.host}</span>}
                           <span style={{
-                            color: 'var(--text3)', fontFamily: 'ui-monospace, monospace', fontSize: 11,
+                            color: 'var(--text3)', fontFamily: 'var(--font-mono)', fontSize: 11,
                           }}>{d.path}</span>
                           <span style={{ flex: 1 }} />
                           <span style={{ color: tone, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -597,8 +599,8 @@ export default function AdminStatsPage() {
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
                 ClickHouse storage · {data.tables.length} table{data.tables.length === 1 ? '' : 's'}
               </div>
-              <div className="table-wrap is-fit">
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <div className="table-wrap">
+                <table {...storageDt.tableProps}>
                   <DataTableColgroup dt={storageDt} />
                   <DataTableHead dt={storageDt} />
                   <tbody>
@@ -608,21 +610,14 @@ export default function AdminStatsPage() {
                         : 0;
                       return (
                         <tr key={t.table}>
-                          <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{t.table}</td>
-                          <td className="num">{fmtNum(t.rows)}</td>
-                          <td className="num">{fmtBytes(t.bytesOnDisk)}</td>
-                          <td className="num" style={{ color: 'var(--text3)' }}>
-                            {ratio > 0
-                              ? `${(ratio * 100).toFixed(1)}% (${fmtBytes(t.uncompressedBytes)} raw)`
-                              : '—'}
-                          </td>
-                          <td className="num">{t.parts}</td>
-                          <td style={{ fontSize: 11, color: 'var(--text2)' }}>
-                            {t.oldestNs ? tsLong(t.oldestNs) : '—'}
-                          </td>
-                          <td style={{ fontSize: 11, color: 'var(--text2)' }}>
-                            {t.newestNs ? tsLong(t.newestNs) : '—'}
-                          </td>
+                          <DataTableCell dt={storageDt} col="table" row={t} value={t.table} />
+                          <DataTableCell dt={storageDt} col="rows" row={t} value={fmtNum(t.rows)} />
+                          <DataTableCell dt={storageDt} col="disk" row={t} value={fmtBytes(t.bytesOnDisk)} />
+                          <DataTableCell dt={storageDt} col="compression" row={t}
+                            value={ratio > 0 ? `${(ratio * 100).toFixed(1)}% (${fmtBytes(t.uncompressedBytes)} raw)` : null} />
+                          <DataTableCell dt={storageDt} col="parts" row={t} value={t.parts} />
+                          <DataTableCell dt={storageDt} col="oldest" row={t} value={t.oldestNs ? tsLong(t.oldestNs) : null} />
+                          <DataTableCell dt={storageDt} col="newest" row={t} value={t.newestNs ? tsLong(t.newestNs) : null} />
                         </tr>
                       );
                     })}
@@ -639,8 +634,8 @@ export default function AdminStatsPage() {
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
                 Daily history
               </div>
-              <div className="table-wrap is-scroll" style={{ maxHeight: 360, overflowY: 'auto' }}>
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <div className="table-wrap is-scroll" style={{ maxHeight: 360 }}>
+                <table {...historyDt.tableProps}>
                   <DataTableColgroup dt={historyDt} />
                   <DataTableHead dt={historyDt} />
                   <tbody>
@@ -648,14 +643,15 @@ export default function AdminStatsPage() {
                       const errPct = d.spans > 0 ? (d.errors / d.spans) * 100 : 0;
                       return (
                         <tr key={d.day}>
-                          <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{d.day}</td>
-                          <td className="num">{fmtNum(d.traces)}</td>
-                          <td className="num">{fmtNum(d.spans)}</td>
-                          <td className="num">{fmtNum(d.errors)}</td>
+                          {/* v0.10.942 — gün damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
+                          <DataTableCell dt={historyDt} col="day" row={d} value={d.day} className="mono" />
+                          <DataTableCell dt={historyDt} col="traces" row={d} value={fmtNum(d.traces)} />
+                          <DataTableCell dt={historyDt} col="spans" row={d} value={fmtNum(d.spans)} />
+                          <DataTableCell dt={historyDt} col="errors" row={d} value={fmtNum(d.errors)} />
                           <td className={`num ${errPct >= 5 ? 'cell-err' : errPct > 0 ? 'cell-warn' : ''}`}>
                             {errPct.toFixed(2)}%
                           </td>
-                          <td className="num">{d.services}</td>
+                          <DataTableCell dt={historyDt} col="services" row={d} value={d.services} />
                         </tr>
                       );
                     })}

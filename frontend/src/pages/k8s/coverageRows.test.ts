@@ -145,7 +145,8 @@ describe('kablolama', () => {
 
   it('>100 satırlı tablo content-visibility taşıyor', () => {
     // CLAUDE.md sert kısıtı: satır sayısı 100'ü aşabilen tablolar.
-    expect(page).toContain("contentVisibility: 'auto'");
+    // v0.10.942 — satır içi stil yerine tek sınıf `.cv-row` (T6).
+    expect(page).toContain('className="cv-row"');
   });
 });
 

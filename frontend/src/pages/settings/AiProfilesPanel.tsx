@@ -4,21 +4,25 @@
 // profili VARSAYILAN yapar, aşağıdaki eski form o profili düzenler.
 // Anahtar hiç geri gelmez (hasKey); boş anahtar = mevcut korunur.
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Badge, Modal, SelectField, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { Button, ButtonGroup, Badge, Modal, SelectField, useConfirm } from '@/components/ui';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import type { AIModelProfile, AIModelProfileInput, AIProfilesPayload, AIProvider, AIProfileTestResult, AIThinking } from '@/lib/types';
 import { Field2, FlashBox, Row } from './shared';
 import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable } from './aiProfiles';
 
-const COLS: DataTableColumn<AIModelProfile>[] = [
+// v0.10.942 (tablo standardı dilim 3) — 11px ikincil hücreler `tone: muted`
+// (S3); eylemler `kind: 'actions'`. 340 = eski `trailing` 330 + ButtonGroup'un
+// 6px aralığı (3×6px, eski 3×~3.4px boşluk yerine): 330'da 4 buton 308.7px'e
+// çıkıp 306px içeriği aşıyor, `.btn-group` sarıyor ve «Sil» ikinci satıra düşüyordu.
+const COLS: ColumnDef<AIModelProfile>[] = [
   { id: 'label',    label: 'Profil',    sortValue: p => p.label || p.id,                naturalDir: 'asc', width: 230 },
   { id: 'provider', label: 'Sağlayıcı', sortValue: p => p.provider,                     naturalDir: 'asc', width: 115 },
-  { id: 'model',    label: 'Model',     sortValue: p => p.model ?? '',                  naturalDir: 'asc', width: 160 },
-  { id: 'endpoint', label: 'Endpoint',  sortValue: p => endpointLabel(p.provider, p.baseUrl), naturalDir: 'asc', width: 210 },
+  { id: 'model',    label: 'Model',     sortValue: p => p.model ?? '',                  naturalDir: 'asc', width: 160, mono: true, tone: () => 'muted' },
+  { id: 'endpoint', label: 'Endpoint',  sortValue: p => endpointLabel(p.provider, p.baseUrl), naturalDir: 'asc', width: 210, mono: true, tone: () => 'muted' },
   { id: 'key',      label: 'Anahtar',   sortValue: p => (p.hasKey ? 1 : 0),             width: 90 },
-  { id: 'tuning',   label: 'Tuning',    sortValue: p => tuningSummary(p),                width: 130 },
+  { id: 'tuning',   label: 'Tuning',    sortValue: p => tuningSummary(p),                width: 130, tone: () => 'muted' },
+  { id: 'actions',  label: 'Eylemler',  kind: 'actions', width: 340, minWidth: 340 },
 ];
 
 type Draft = { id: string; label: string; provider: AIProvider; baseUrl: string; apiKey: string; model: string; skipTls: boolean; maxTokens: string; temperature: string; timeoutS: string; thinking: AIThinking };
@@ -80,41 +84,43 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
           <Button variant="secondary" size="sm" onClick={() => { setIsNew(true); setDraft(emptyDraft()); }}>Profil ekle</Button>
         </span>
       </Row>
-      <div className="table-wrap is-fit" style={{ marginTop: 8 }}>
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
-          <DataTableColgroup dt={dt} trailing={[330]} />
-          <DataTableHead dt={dt} trailing={<th></th>} />
+      <div className="table-wrap" style={{ marginTop: 8 }}>
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.map(p => {
               const t = tests[p.id];
               return (
                 <tr key={p.id}>
-                  <td style={{ fontWeight: 600, overflow: 'hidden' }} title={p.id}>
+                  <DataTableCell dt={dt} col="label" row={p} className="cell-strong" title={p.id}>
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.id}</div>
                     {/* v0.10.179 — rozet kendi satırında: ellipsis rozeti yutuyordu (178 canlı görüntüsü) */}
                     <div className="field-hint mono" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       {p.label ? p.id : null}{p.default && <Badge>varsayılan</Badge>}
                     </div>
-                  </td>
-                  <td><span className="badge b-gray">{p.provider}</span></td>
-                  <td className="mono" style={{ fontSize: 11 }} title={p.model}>{p.model || '—'}</td>
-                  <td className="mono" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endpointLabel(p.provider, p.baseUrl)}>{endpointLabel(p.provider, p.baseUrl)}</td>
-                  <td>{p.hasKey ? <span className="badge b-gray">stored</span> : profileUsable(p) ? <span className="badge b-gray">no auth</span> : <span className="badge b-warn">yok</span>}</td>
-                  <td style={{ fontSize: 11, color: 'var(--text2)' }}>{tuningSummary(p)}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <Button variant="secondary" size="sm" onClick={() => { setIsNew(false); setDraft(draftOf(p)); }}>Düzenle</Button>{' '}
-                    {!p.default && <Button variant="secondary" size="sm" disabled={busy} onClick={() => run(() => api.defaultAIProfile(p.id), `Varsayılan: ${p.id}`)}>Varsayılan yap</Button>}{' '}
-                    <Button variant="secondary" size="sm" loading={t === 'pending'} onClick={() => test(p.id)}>Bağlantıyı dene</Button>{' '}
-                    {!p.default && <Button variant="ghost-danger" size="sm" disabled={busy} onClick={async () => {
-                      if (!await confirm({ title: 'Profil silinsin mi?', body: <><b>{p.label || p.id}</b> silinecek; bu profile eşlenmiş yüzeyler varsayılana döner.</>, confirmLabel: 'Sil', danger: true })) return;
-                      await run(() => api.deleteAIProfile(p.id), `Silindi: ${p.id}`);
-                    }}>Sil</Button>}
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="provider" row={p}><span className="badge b-gray">{p.provider}</span></DataTableCell>
+                  <DataTableCell dt={dt} col="model" row={p} value={p.model} />
+                  <DataTableCell dt={dt} col="endpoint" row={p} value={endpointLabel(p.provider, p.baseUrl)} />
+                  <DataTableCell dt={dt} col="key" row={p}>{p.hasKey ? <span className="badge b-gray">stored</span> : profileUsable(p) ? <span className="badge b-gray">no auth</span> : <span className="badge b-warn">yok</span>}</DataTableCell>
+                  <DataTableCell dt={dt} col="tuning" row={p} value={tuningSummary(p)} />
+                  <DataTableCell dt={dt} col="actions" row={p}>
+                    <ButtonGroup aria-label={`${p.label || p.id} eylemleri`} size="sm">
+                      <Button variant="secondary" onClick={() => { setIsNew(false); setDraft(draftOf(p)); }}>Düzenle</Button>
+                      {!p.default && <Button variant="secondary" disabled={busy} onClick={() => run(() => api.defaultAIProfile(p.id), `Varsayılan: ${p.id}`)}>Varsayılan yap</Button>}
+                      <Button variant="secondary" loading={t === 'pending'} onClick={() => test(p.id)}>Bağlantıyı dene</Button>
+                      {!p.default && <Button variant="ghost-danger" disabled={busy} onClick={async () => {
+                        if (!await confirm({ title: 'Profil silinsin mi?', body: <><b>{p.label || p.id}</b> silinecek; bu profile eşlenmiş yüzeyler varsayılana döner.</>, confirmLabel: 'Sil', danger: true })) return;
+                        await run(() => api.deleteAIProfile(p.id), `Silindi: ${p.id}`);
+                      }}>Sil</Button>}
+                    </ButtonGroup>
                     {t && t !== 'pending' && (
                       <div className={`field-hint ${t.ok ? '' : 'is-err'}`} style={{ textAlign: 'right' }} title={t.error ?? t.sample}>
                         {t.ok ? `✓ ${t.ms} ms${t.sample ? ` · «${t.sample}»` : ''}` : `✗ ${t.error ?? 'hata'}`}
                       </div>
                     )}
-                  </td>
+                  </DataTableCell>
                 </tr>
               );
             })}

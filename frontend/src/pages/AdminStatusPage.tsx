@@ -278,7 +278,7 @@ function SubsTab() {
       {subs.map(s => (
         <div key={s.id} className="status-row">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{s.email}</span>
+            <span className="mono">{s.email}</span>
             {s.verified
               ? <span className="badge b-gray" title="Confirmed the subscription via email link">verified</span>
               : <span className="badge b-warn"

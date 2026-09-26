@@ -6,19 +6,20 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { fmtNum, fmtBytes, fmtClock } from '@/lib/utils';
 import { useElasticIndices, useElasticErrors, useTraceContext } from '@/lib/queries';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { TraceContextServiceCoverage, ESQueryError } from '@/lib/types';
 import { esErrorKey } from './admin/esErrorKey';
 
 // v0.9.876 (tutarlılık denetimi BT14) — genişlikler eski <colgroup>'tan
 // AYNEN alındı; Error kolonu esner (eski `<col />` genişliksizdi).
-const ES_ERR_COLS: DataTableColumn<ESQueryError>[] = [
-  { id: 'time',   label: 'Time',   sortValue: e => e.at,     width: 150 },
+// v0.10.942 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında;
+// 11px ikincil hücreler tablo boyunda, hiyerarşi renkle (S3).
+const ES_ERR_COLS: ColumnDef<ESQueryError>[] = [
+  { id: 'time',   label: 'Time',   sortValue: e => e.at,     width: 150, tone: () => 'muted' },
   { id: 'op',     label: 'Op',     sortValue: e => e.op,     naturalDir: 'asc', width: 170 },
   { id: 'status', label: 'Status', sortValue: e => e.status, numeric: true, width: 90 },
-  { id: 'index',  label: 'Index',  sortValue: e => e.index,  naturalDir: 'asc', width: 260 },
-  { id: 'error',  label: 'Error',  sortValue: e => e.error,  naturalDir: 'asc', flex: true },
+  { id: 'index',  label: 'Index',  sortValue: e => e.index,  naturalDir: 'asc', width: 260, mono: true, tone: () => 'muted' },
+  { id: 'error',  label: 'Error',  sortValue: e => e.error,  naturalDir: 'asc', flex: true, tone: () => 'err' },
 ];
 
 // AdminElastic (v0.5.466) — operator-facing inventory of the
@@ -62,13 +63,13 @@ const HEALTH_COLOUR: Record<string, string> = {
 // adoption). Preserves the prior default sort (Size desc) and the
 // prior natural directions: text cols asc, numeric cols desc.
 // Body-cell order below MUST match this order.
-const ELASTIC_COLS: DataTableColumn<Row>[] = [
-  { id: 'name',      label: 'Index',     sortValue: r => r.name,      naturalDir: 'asc',  width: 320 },
+const ELASTIC_COLS: ColumnDef<Row>[] = [
+  { id: 'name',      label: 'Index',     sortValue: r => r.name,      naturalDir: 'asc',  width: 320, mono: true },
   { id: 'health',    label: 'Health',    sortValue: r => r.health,    naturalDir: 'asc',  width: 100 },
   { id: 'docCount',  label: 'Docs',      sortValue: r => r.docCount,  naturalDir: 'desc', numeric: true, width: 120 },
   { id: 'sizeBytes', label: 'Size',      sortValue: r => r.sizeBytes, naturalDir: 'desc', numeric: true, width: 120 },
   { id: 'ilmPhase',  label: 'ILM phase', sortValue: r => r.ilmPhase,  naturalDir: 'asc',  width: 120 },
-  { id: 'ilmPolicy', label: 'Policy',    sortValue: r => r.ilmPolicy, naturalDir: 'asc',  width: 200 },
+  { id: 'ilmPolicy', label: 'Policy',    sortValue: r => r.ilmPolicy, naturalDir: 'asc',  width: 200, tone: () => 'muted' },
 ];
 
 // Recent failed ES queries (v0.8.230, operator-requested). Polls every
@@ -107,7 +108,7 @@ function QueryErrorsPanel() {
       {errs.length === 0 ? (
         <Empty icon="✓" title="No failed queries since boot" />
       ) : (
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...errDt.tableProps}>
           <DataTableColgroup dt={errDt} />
           <DataTableHead dt={errDt} />
           <tbody>
@@ -115,18 +116,17 @@ function QueryErrorsPanel() {
               const k = esErrorKey(e);
               return (
               <Fragment key={k}>
-                <tr {...rowActivation(() => setOpen(open === k ? null : k))}
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}
-                  title="Click to show the exact query body sent">
-                  <td className="mono" style={{ fontSize: 11 }}>{fmtClock(e.at)}</td>
-                  <td>{e.op}</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>
+                <tr {...rowActivation(() => setOpen(open === k ? null : k))} className="cv-row">
+                  {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
+                  <DataTableCell dt={errDt} col="time" row={e} value={fmtClock(e.at)} className="mono" />
+                  <DataTableCell dt={errDt} col="op" row={e} value={e.op} />
+                  <DataTableCell dt={errDt} col="status" row={e}>
                     <span className="badge" style={{ background: 'color-mix(in srgb, var(--err) 22%, transparent)' }}>
                       {e.status || 'net'}
                     </span>
-                  </td>
-                  <td className="mono" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.index}>{e.index}</td>
-                  <td style={{ fontSize: 12, color: 'var(--err)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.error}>{e.error}</td>
+                  </DataTableCell>
+                  <DataTableCell dt={errDt} col="index" row={e} value={e.index} />
+                  <DataTableCell dt={errDt} col="error" row={e} value={e.error} />
                 </tr>
                 {open === k && (
                   <tr>
@@ -157,8 +157,8 @@ function QueryErrorsPanel() {
 // trace→log pivot going to work?" answer appears here without anyone
 // hand-querying the cluster. Works on both backends (CH reports its fixed
 // trace_id column + the same coverage numbers).
-const COVERAGE_COLS: DataTableColumn<TraceContextServiceCoverage>[] = [
-  { id: 'service',   label: 'Service',    sortValue: r => r.service,   naturalDir: 'asc',  width: 280 },
+const COVERAGE_COLS: ColumnDef<TraceContextServiceCoverage>[] = [
+  { id: 'service',   label: 'Service',    sortValue: r => r.service,   naturalDir: 'asc',  width: 280, mono: true },
   { id: 'total',     label: 'Logs · 24h', sortValue: r => r.total,     naturalDir: 'desc', numeric: true, width: 130 },
   { id: 'withTrace', label: 'With trace', sortValue: r => r.withTrace, naturalDir: 'desc', numeric: true, width: 130 },
   { id: 'pct',       label: 'Coverage',   sortValue: r => (r.total > 0 ? r.withTrace / r.total : 0),
@@ -242,7 +242,7 @@ function TraceContextCard() {
           </div>
           {/* Candidate shapes the probe checked (the traceTermsAny fan-out) */}
           {report.fields.length > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, fontFamily: 'ui-monospace, monospace' }}>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, fontFamily: 'var(--font-mono)' }}>
               {report.fields.map(f =>
                 `${f.name}: ${f.types.length > 0 ? f.types.join('/') : 'absent'}${f.configured ? ' (configured)' : ''}`,
               ).join(' · ')}
@@ -265,18 +265,17 @@ function TraceContextCard() {
             </div>
           )}
           {rows.length > 0 && (
-            <div className="table-wrap is-scroll" style={{ marginTop: 10, maxHeight: 320, overflowY: 'auto' }}>
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <div className="table-wrap is-scroll" style={{ marginTop: 10, maxHeight: 320 }}>
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
                   {dt.sortedRows.map(r => (
-                    <tr key={r.service}
-                      style={dt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : undefined}>
-                      <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.service}>{r.service}</td>
-                      <td className="num">{fmtNum(r.total)}</td>
-                      <td className="num">{fmtNum(r.withTrace)}</td>
-                      <td className="num">{covPct(r.withTrace, r.total)}</td>
+                    <tr key={r.service} className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
+                      <DataTableCell dt={dt} col="service" row={r} value={r.service} />
+                      <DataTableCell dt={dt} col="total" row={r} value={fmtNum(r.total)} />
+                      <DataTableCell dt={dt} col="withTrace" row={r} value={fmtNum(r.withTrace)} />
+                      <DataTableCell dt={dt} col="pct" row={r} value={covPct(r.withTrace, r.total)} />
                     </tr>
                   ))}
                 </tbody>
@@ -394,22 +393,22 @@ export default function AdminElasticPage() {
               {fmtNum(rows.reduce((s, r) => s + r.docCount, 0))} docs ·{' '}
               {fmtBytes(rows.reduce((s, r) => s + r.sizeBytes, 0))}
             </div>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(r => (
-                  <tr key={r.name} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
-                    <td className="mono">{r.name}</td>
-                    <td>
+                  <tr key={r.name} className="cv-row">
+                    <DataTableCell dt={dt} col="name" row={r} value={r.name} />
+                    <DataTableCell dt={dt} col="health" row={r}>
                       <span className="badge" style={{
                         background: HEALTH_COLOUR[r.health] ?? 'var(--bg3)',
                         textTransform: 'lowercase',
                       }}>{r.health || '—'}</span>
-                    </td>
-                    <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(r.docCount)}</td>
-                    <td className="mono" style={{ textAlign: 'right' }}>{fmtBytes(r.sizeBytes)}</td>
-                    <td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="docCount" row={r} value={fmtNum(r.docCount)} />
+                    <DataTableCell dt={dt} col="sizeBytes" row={r} value={fmtBytes(r.sizeBytes)} />
+                    <DataTableCell dt={dt} col="ilmPhase" row={r}>
                       {r.ilmPhase ? (
                         <span className="badge" style={{
                           background: PHASE_COLOUR[r.ilmPhase] ?? 'var(--bg3)',
@@ -418,8 +417,8 @@ export default function AdminElasticPage() {
                       ) : (
                         <span style={{ color: 'var(--text3)' }}>—</span>
                       )}
-                    </td>
-                    <td style={{ color: 'var(--text2)', fontSize: 12 }}>{r.ilmPolicy || '—'}</td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="ilmPolicy" row={r} value={r.ilmPolicy} />
                   </tr>
                 ))}
               </tbody>

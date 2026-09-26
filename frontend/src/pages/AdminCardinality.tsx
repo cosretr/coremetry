@@ -6,8 +6,7 @@ import { useCardinality, useSystemStats, keys } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { fmtBytes, fmtNum } from '@/lib/utils';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 
 // Row shapes for the cardinality data tables. Kept local — these
 // mirror the cardinality report response and aren't shared.
@@ -16,20 +15,22 @@ type ColumnRow = { table: string; column: string; compressedBytes: number; uncom
 type FinOpsServiceRow = { name: string; rows: number };
 
 // Sortable + resizable column defs for the attribute-key panel.
-const ATTR_KEY_COLS: DataTableColumn<AttrKeyRow>[] = [
-  { id: 'key',         label: 'Key',                 sortValue: r => r.key,            naturalDir: 'asc',  width: 280 },
+// v0.10.942 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında
+// (mono / numeric / tone); satır içi küçük punto yerine renk (S3).
+const ATTR_KEY_COLS: ColumnDef<AttrKeyRow>[] = [
+  { id: 'key',         label: 'Key',                 sortValue: r => r.key,            naturalDir: 'asc',  width: 280, mono: true },
   { id: 'distinct',    label: 'Distinct values',     sortValue: r => r.distinctValues, numeric: true, naturalDir: 'desc', width: 150 },
-  { id: 'occurrences', label: 'Sampled occurrences', sortValue: r => r.occurrences,    numeric: true, naturalDir: 'desc', width: 170 },
-  { id: 'source',      label: 'Source',              sortValue: r => r.source,         naturalDir: 'asc',  width: 160 },
+  { id: 'occurrences', label: 'Sampled occurrences', sortValue: r => r.occurrences,    numeric: true, naturalDir: 'desc', width: 170, tone: () => 'muted' },
+  { id: 'source',      label: 'Source',              sortValue: r => r.source,         naturalDir: 'asc',  width: 160, tone: () => 'faint' },
 ];
 
 // Sortable + resizable column defs for the top-columns panel.
-const COLUMN_COLS: DataTableColumn<ColumnRow>[] = [
-  { id: 'table',        label: 'Table',               sortValue: r => r.table,            naturalDir: 'asc',  width: 180 },
-  { id: 'column',       label: 'Column',              sortValue: r => r.column,           naturalDir: 'asc',  width: 200 },
+const COLUMN_COLS: ColumnDef<ColumnRow>[] = [
+  { id: 'table',        label: 'Table',               sortValue: r => r.table,            naturalDir: 'asc',  width: 180, mono: true, tone: () => 'muted' },
+  { id: 'column',       label: 'Column',              sortValue: r => r.column,           naturalDir: 'asc',  width: 200, mono: true },
   { id: 'compressed',   label: 'On disk (compressed)', sortValue: r => r.compressedBytes,  numeric: true, naturalDir: 'desc', width: 170 },
-  { id: 'uncompressed', label: 'Uncompressed',        sortValue: r => r.uncompressedBytes, numeric: true, naturalDir: 'desc', width: 150 },
-  { id: 'ratio',        label: 'Ratio',               sortValue: r => r.compressionRatio,  numeric: true, naturalDir: 'desc', width: 90 },
+  { id: 'uncompressed', label: 'Uncompressed',        sortValue: r => r.uncompressedBytes, numeric: true, naturalDir: 'desc', width: 150, tone: () => 'faint' },
+  { id: 'ratio',        label: 'Ratio',               sortValue: r => r.compressionRatio,  numeric: true, naturalDir: 'desc', width: 90, tone: () => 'muted' },
 ];
 
 // /admin/cardinality — meta-observability dashboard answering
@@ -150,10 +151,10 @@ function TopRowList({ rows, unit }: { rows: { name: string; rows: number }[]; un
     <div className="stack gap-1">
       {rows.map((r, i) => (
         <Row key={i} gap={2} style={{ fontSize: 12 }}>
-          <span style={{ width: 22, color: 'var(--text3)', fontFamily: 'monospace', textAlign: 'right' }}>
+          <span style={{ width: 22, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
             {i + 1}.
           </span>
-          <span style={{ flex: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          <span style={{ flex: 1, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                 title={r.name}>
             {r.name}
           </span>
@@ -175,7 +176,7 @@ function TopRowList({ rows, unit }: { rows: { name: string; rows: number }[]; un
               background: 'var(--accent)',
             }} />
           </span>
-          <span style={{ width: 80, textAlign: 'right', fontFamily: 'monospace', color: 'var(--text2)' }}>
+          <span style={{ width: 80, textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text2)' }}>
             {fmtNum(r.rows)} {unit}
           </span>
         </Row>
@@ -198,8 +199,8 @@ function AttrKeyTable({ rows }: { rows: AttrKeyRow[] }) {
     return <Empty compact icon="◯" title="No attributes sampled" />;
   }
   return (
-    <div className="table-wrap is-fit">
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+    <div className="table-wrap">
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
@@ -214,18 +215,13 @@ function AttrKeyTable({ rows }: { rows: AttrKeyRow[] }) {
               // cardinality installs this table can hit a few
               // thousand attribute keys and lock the page
               // without it.
-              <tr key={i} style={{
-                contentVisibility: 'auto',
-                containIntrinsicSize: 'auto 32px',
-              }}>
-                <td className="mono">{r.key}</td>
-                <td className="num mono">
+              <tr key={i} className="cv-row">
+                <DataTableCell dt={dt} col="key" row={r} value={r.key} />
+                <DataTableCell dt={dt} col="distinct" row={r}>
                   <Badge tone={tone}>{fmtNum(r.distinctValues)}</Badge>
-                </td>
-                <td className="num mono" style={{ color: 'var(--text2)' }}>
-                  {fmtNum(r.occurrences)}
-                </td>
-                <td style={{ fontSize: 11, color: 'var(--text3)' }}>{r.source}</td>
+                </DataTableCell>
+                <DataTableCell dt={dt} col="occurrences" row={r} value={fmtNum(r.occurrences)} />
+                <DataTableCell dt={dt} col="source" row={r} value={r.source} />
               </tr>
             );
           })}
@@ -366,8 +362,8 @@ function FinOpsContributorsTable({ top, bytesPerSpan, totalSpans24h, costPerTbMo
   totalSpans24h: number;
   costPerTbMo: number;
 }) {
-  const cols = useMemo<DataTableColumn<FinOpsServiceRow>[]>(() => [
-    { id: 'service', label: 'Service',           sortValue: s => s.name,                                       naturalDir: 'asc',  width: 220 },
+  const cols = useMemo<ColumnDef<FinOpsServiceRow>[]>(() => [
+    { id: 'service', label: 'Service',           sortValue: s => s.name,                                       naturalDir: 'asc',  width: 220, mono: true },
     { id: 'spans',   label: '24h spans',         sortValue: s => s.rows,                          numeric: true, naturalDir: 'desc', width: 130 },
     { id: 'share',   label: 'Share',             sortValue: s => s.rows / totalSpans24h,          numeric: true, naturalDir: 'desc', width: 100 },
     { id: 'cost',    label: 'Est. monthly cost', sortValue: s => s.rows * bytesPerSpan * 30 * costPerTbMo, numeric: true, naturalDir: 'desc', width: 150 },
@@ -379,8 +375,8 @@ function FinOpsContributorsTable({ top, bytesPerSpan, totalSpans24h, costPerTbMo
     initialSort: { id: 'spans', dir: 'desc' },
   });
   return (
-    <div className="table-wrap is-fit">
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+    <div className="table-wrap">
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
@@ -389,10 +385,10 @@ function FinOpsContributorsTable({ top, bytesPerSpan, totalSpans24h, costPerTbMo
             const cost = (s.rows * bytesPerSpan * 30 / 1e12) * costPerTbMo;
             return (
               <tr key={s.name}>
-                <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{s.name}</td>
-                <td className="num mono">{fmtNum(s.rows)}</td>
-                <td className="num mono">{(share * 100).toFixed(1)}%</td>
-                <td className="num mono">${cost.toFixed(2)}</td>
+                <DataTableCell dt={dt} col="service" row={s} value={s.name} />
+                <DataTableCell dt={dt} col="spans" row={s} value={fmtNum(s.rows)} />
+                <DataTableCell dt={dt} col="share" row={s} value={`${(share * 100).toFixed(1)}%`} />
+                <DataTableCell dt={dt} col="cost" row={s} value={`$${cost.toFixed(2)}`} />
               </tr>
             );
           })}
@@ -419,12 +415,12 @@ function KPI({ label, value, sub, tone }: {
       }}>{label}</div>
       <div style={{
         fontSize: 18, fontWeight: 700, color,
-        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+        fontFamily: 'var(--font-mono)',
       }}>{value}</div>
       {sub && (
         <div style={{
           fontSize: 10, color: 'var(--text3)', marginTop: 2,
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          fontFamily: 'var(--font-mono)',
         }}>{sub}</div>
       )}
     </div>
@@ -445,23 +441,18 @@ function ColumnTable({ rows }: { rows: ColumnRow[] }) {
     return <Empty compact icon="◯" title="system.columns empty" />;
   }
   return (
-    <div className="table-wrap is-fit">
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+    <div className="table-wrap">
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
           {dt.sortedRows.map((r, i) => (
-            <tr key={i} style={{
-              contentVisibility: 'auto',
-              containIntrinsicSize: 'auto 32px',
-            }}>
-              <td className="mono" style={{ color: 'var(--text2)' }}>{r.table}</td>
-              <td className="mono">{r.column}</td>
-              <td className="num mono">{fmtBytes(r.compressedBytes)}</td>
-              <td className="num mono" style={{ color: 'var(--text3)' }}>{fmtBytes(r.uncompressedBytes)}</td>
-              <td className="num mono" style={{ color: 'var(--text2)' }}>
-                {r.compressionRatio.toFixed(1)}×
-              </td>
+            <tr key={i} className="cv-row">
+              <DataTableCell dt={dt} col="table" row={r} value={r.table} />
+              <DataTableCell dt={dt} col="column" row={r} value={r.column} />
+              <DataTableCell dt={dt} col="compressed" row={r} value={fmtBytes(r.compressedBytes)} />
+              <DataTableCell dt={dt} col="uncompressed" row={r} value={fmtBytes(r.uncompressedBytes)} />
+              <DataTableCell dt={dt} col="ratio" row={r} value={`${r.compressionRatio.toFixed(1)}×`} />
             </tr>
           ))}
         </tbody>

@@ -558,6 +558,7 @@ export function OracleTab() {
                   )}
                   {(pr.sample?.length ?? 0) > 0 && (
                     <div className="oracle-scroll">
+                      {/* v0.10.942 — statik tablo: sabit ≤3 örnek satır, sıralanmaz (T1). */}
                       <table>
                         <thead>
                           <tr>{(pr.columns ?? []).map(c => <th key={c}>{c}</th>)}</tr>

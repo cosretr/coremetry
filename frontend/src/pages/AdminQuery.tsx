@@ -143,7 +143,7 @@ export default function AdminQueryPage() {
           onChange={e => setQuery(e.target.value)}
           rows={4}
           style={{
-            width: '100%', fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            width: '100%', fontFamily: 'var(--font-mono)',
             fontSize: 13, padding: 10, marginBottom: 8,
             background: 'var(--bg1)', border: '1px solid var(--border)',
             borderRadius: 6, color: 'var(--text)', resize: 'vertical',
@@ -167,7 +167,7 @@ export default function AdminQueryPage() {
             padding: '8px 12px', marginBottom: 10,
             background: 'rgba(220,38,38,0.08)',
             border: '1px solid rgba(220,38,38,0.3)', borderRadius: 4,
-            fontFamily: 'ui-monospace, monospace',
+            fontFamily: 'var(--font-mono)',
           }}>
             ✗ {error}
           </div>
@@ -200,7 +200,6 @@ export default function AdminQueryPage() {
               <pre style={{
                 fontSize: 11, padding: 12, borderRadius: 6,
                 background: 'var(--bg0)', border: '1px solid var(--border)',
-                fontFamily: 'ui-monospace, monospace',
                 whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                 color: 'var(--text2)',
                 overflow: 'auto', maxHeight: 280,

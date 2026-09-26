@@ -76,13 +76,14 @@ export function ExternalLinksTab() {
       {links.length === 0
         ? <div className="field-hint">Henüz link yok.</div>
         : (
-          <table style={{ width: '100%' }}>
+          // v0.10.942 — statik tablo: düzenlenebilir liste; sıra anlamlı (grupta ilk çözülen çizilir), sıralanmaz (T1).
+          <table>
             <thead><tr><th style={{ textAlign: 'left' }}>Etiket</th><th style={{ textAlign: 'left' }}>Şablon</th><th style={{ textAlign: 'left' }}>Grup</th><th style={{ textAlign: 'left' }}>Gerekli</th><th style={{ textAlign: 'left' }}>Renk</th><th></th></tr></thead>
             <tbody>
               {links.map((l, i) => (
                 <tr key={l.label}>
                   <td>{l.label}</td>
-                  <td className="td-full mono" style={{ fontSize: 12 }}>{l.urlTemplate} <CopyButton value={l.urlTemplate} title="Şablonu kopyala" /></td>
+                  <td className="mono cell-wrap">{l.urlTemplate} <CopyButton value={l.urlTemplate} title="Şablonu kopyala" /></td>
                   <td>{l.group?.trim()
                     ? <span className="mono" style={{ fontSize: 12 }}>{l.group.trim()}</span>
                     : <span className="field-hint">tek başına</span>}</td>

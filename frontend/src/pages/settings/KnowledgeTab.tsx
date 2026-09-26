@@ -4,8 +4,7 @@ import { Button, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
 import { Field2, FlashBox, Row } from './shared';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { RagDocument } from '@/lib/types';
 
 // v0.9.871 (tutarlılık denetimi BT17) — RAG doküman kataloğu paylaşılan
@@ -13,12 +12,15 @@ import type { RagDocument } from '@/lib/types';
 // Kolon kümesi/sıra/etiket AYNEN korundu; ek olarak mT4'ün başlık hizası
 // bedavaya geliyor: sayısal kolonların BAŞLIKLARI da sağa yaslanıyor
 // (hücreler zaten sağdaydı, başlıklar solda kalmıştı).
-const DOC_COLS: DataTableColumn<RagDocument>[] = [
-  { id: 'docName',    label: 'Doküman',  sortValue: d => d.docName,          naturalDir: 'asc', flex: true },
+// v0.10.942 (tablo standardı dilim 3) — görünüm kolon bayraklarında; eylem
+// `kind: 'actions'` kolonu, `minWidth = width` eski sabit `trailing` genişliği.
+const DOC_COLS: ColumnDef<RagDocument>[] = [
+  { id: 'docName',    label: 'Doküman',  sortValue: d => d.docName,          naturalDir: 'asc', flex: true, mono: true },
   { id: 'source',     label: 'Kaynak',   sortValue: d => d.source,           naturalDir: 'asc', width: 150 },
   { id: 'chunks',     label: 'Parça',    sortValue: d => d.chunks,           numeric: true,     width: 100 },
   { id: 'bytes',      label: 'Boyut',    sortValue: d => d.bytes,            numeric: true,     width: 110 },
-  { id: 'uploadedBy', label: 'Yükleyen', sortValue: d => d.uploadedBy ?? '', naturalDir: 'asc', width: 170 },
+  { id: 'uploadedBy', label: 'Yükleyen', sortValue: d => d.uploadedBy ?? '', naturalDir: 'asc', width: 170, tone: () => 'muted' },
+  { id: 'actions',    label: 'Eylemler', kind: 'actions', width: 90, minWidth: 90 },
 ];
 
 // KnowledgeTab — doküman soru-cevap (RAG) yapılandırması (v0.8.491).
@@ -223,7 +225,7 @@ export function KnowledgeTab() {
               <input value={src.url} placeholder="https://azuredevops.banka.local/DefaultCollection/Proje/_wiki/…"
                 onChange={e => setSources(p => p.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
                 spellCheck={false}
-                style={{ flex: 3, fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                className="mono" style={{ flex: 3 }} />
               <input value={src.username} placeholder="kullanıcı (PAT'te boş)"
                 autoComplete="off"
                 onChange={e => setSources(p => p.map((x, j) => j === i ? { ...x, username: e.target.value } : x))}
@@ -239,7 +241,7 @@ export function KnowledgeTab() {
                 title="Ham auth header — doluysa Basic yerine bu gönderilir"
                 spellCheck={false}
                 onChange={e => setSources(p => p.map((x, j) => j === i ? { ...x, authHeader: e.target.value } : x))}
-                style={{ flex: 1, fontFamily: 'ui-monospace, monospace', fontSize: 11.5 }} />
+                style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11.5 }} />
               <Button variant="secondary" size="sm" type="button" aria-label="Kaynağı kaldır"
                 title="Kaynağı kaldır (kayıtlı sırrıyla birlikte)"
                 onClick={() => setSources(p => p.filter((_, j) => j !== i))}>✕</Button>
@@ -321,18 +323,18 @@ export function KnowledgeTab() {
       )}
       {docs && docs.length > 0 && (
         <div className="table-wrap" style={{ marginTop: 8 }}>
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
-            <DataTableColgroup dt={dt} trailing={[90]} />
-            <DataTableHead dt={dt} trailing={<th></th>} />
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(d => (
                 <tr key={d.docId}>
-                  <td className="mono" style={{ fontSize: 12 }}>{d.docName}</td>
-                  <td><span className="badge b-gray">{d.source}</span></td>
-                  <td className="num mono">{d.chunks}</td>
-                  <td className="num mono">{(d.bytes / 1024).toFixed(1)} KB</td>
-                  <td style={{ fontSize: 11, color: 'var(--text2)' }}>{d.uploadedBy || '—'}</td>
-                  <td style={{ textAlign: 'right' }}>
+                  <DataTableCell dt={dt} col="docName" row={d} value={d.docName} />
+                  <DataTableCell dt={dt} col="source" row={d}><span className="badge b-gray">{d.source}</span></DataTableCell>
+                  <DataTableCell dt={dt} col="chunks" row={d} value={d.chunks} />
+                  <DataTableCell dt={dt} col="bytes" row={d} value={`${(d.bytes / 1024).toFixed(1)} KB`} />
+                  <DataTableCell dt={dt} col="uploadedBy" row={d} value={d.uploadedBy} />
+                  <DataTableCell dt={dt} col="actions" row={d}>
                     <Button variant="danger" size="sm" type="button" disabled={busy}
                       onClick={async () => {
                         if (!await confirm({
@@ -348,7 +350,7 @@ export function KnowledgeTab() {
                       }}>
                       Sil
                     </Button>
-                  </td>
+                  </DataTableCell>
                 </tr>
               ))}
             </tbody>

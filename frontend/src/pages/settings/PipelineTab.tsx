@@ -1,12 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Button, Modal, Stack, useConfirm } from '@/components/ui';
+import { Button, ButtonGroup, Modal, Stack, useConfirm } from '@/components/ui';
 import { api, type PipelineRule } from '@/lib/api';
 import type { MetricExclusionRule } from '@/lib/types';
 import { Field, FlashBox, humanize } from './shared';
 import { buildPipelineRuleBody, describeCondition } from './pipelineRuleBody';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 
 // v0.9.875 (tutarlılık denetimi MT6) — kural tablosu paylaşılan primitife.
 // v0.9.797'den beri türetilmiş-metrik kuralları da buraya yazılıyor ve liste
@@ -16,13 +15,17 @@ import type { DataTableColumn } from '@/lib/dataTable';
 // rate). Sıralama görüneni takip etsin diye anahtar+op+değer üzerinden
 // yapılıyor — aynı attr'ı hedefleyen kurallar yan yana geliyor, ki bu
 // listedeki en sık soru ("bu key'e dokunan kaç kural var").
-const RULE_COLS: DataTableColumn<PipelineRule>[] = [
+// v0.10.942 (tablo standardı dilim 3) — yüklem kodu `mono` bayrağıyla (11px
+// punto düştü; iç tonlar değer/AND ayrımını taşıyor); eylemler `kind:
+// 'actions'` kolonu, `minWidth = width` eski sabit `trailing` genişliği.
+const RULE_COLS: ColumnDef<PipelineRule>[] = [
   { id: 'name',      label: 'Name',      sortValue: r => r.name,   naturalDir: 'asc', width: 200 },
   { id: 'kind',      label: 'Kind',      sortValue: r => r.kind,   naturalDir: 'asc', width: 110 },
   { id: 'signal',    label: 'Signal',    sortValue: r => r.signal, naturalDir: 'asc', width: 110 },
   { id: 'predicate', label: 'Predicate',
-    sortValue: r => `${r.when.key} ${r.when.op} ${r.when.value}`, naturalDir: 'asc', flex: true },
+    sortValue: r => `${r.when.key} ${r.when.op} ${r.when.value}`, naturalDir: 'asc', flex: true, mono: true },
   { id: 'enabled',   label: 'Enabled',   sortValue: r => (r.enabled ? 1 : 0), width: 95 },
+  { id: 'actions',   label: 'Actions',   kind: 'actions', width: 160, minWidth: 160 },
 ];
 
 // ── Pipeline tab (v0.5.263; logs + metrics v0.8.282) ────────────────────────
@@ -122,22 +125,22 @@ export function PipelineTab() {
         </Empty>
       ) : (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
-            <DataTableColgroup dt={dt} trailing={[160]} />
-            <DataTableHead dt={dt} trailing={<th style={{ textAlign: 'right' }}>Actions</th>} />
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(r => (
                 <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td>
+                  <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
+                  <DataTableCell dt={dt} col="kind" row={r}>
                     <span className={r.kind === 'drop' ? 'badge b-err' : 'badge b-info'}>
                       {r.kind.toUpperCase()}
                     </span>
-                  </td>
-                  <td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="signal" row={r}>
                     <code style={{ fontSize: 11 }}>{r.signal}</code>
-                  </td>
-                  <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="predicate" row={r}>
                     {r.when.key} <b>{r.when.op}</b>{' '}
                     <span style={{ color: 'var(--text2)' }}>"{r.when.value}"</span>
                     {/* v0.9.803 — EK koşullar listede de görünür. Yalnız
@@ -160,18 +163,20 @@ export function PipelineTab() {
                         keep <b>{(r.rate * 100).toFixed(1)}%</b>
                       </span>
                     )}
-                  </td>
-                  <td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="enabled" row={r}>
                     <input type="checkbox" checked={r.enabled} onChange={() => toggle(r)} />
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <Button variant="secondary" size="sm" onClick={() => setEditing(r)} style={{ marginRight: 6 }}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost-danger" size="sm" onClick={() => void remove(r)}>
-                      Delete
-                    </Button>
-                  </td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="actions" row={r}>
+                    <ButtonGroup aria-label={`${r.name} actions`} size="sm">
+                      <Button variant="secondary" onClick={() => setEditing(r)}>
+                        Edit
+                      </Button>
+                      <Button variant="ghost-danger" onClick={() => void remove(r)}>
+                        Delete
+                      </Button>
+                    </ButtonGroup>
+                  </DataTableCell>
                 </tr>
               ))}
             </tbody>
@@ -477,9 +482,9 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
                   signal === 'logs' ? 'service.name | severity_text | body | attr.X'
                   : signal === 'metrics' ? 'metric | unit | instrument | service.name'
                   : 'service.name | name | kind | attr.X | resource.X'}
-                style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                className="mono" />
               <select value={whenOp} onChange={e => setWhenOp(e.target.value as PipelineRule['when']['op'])}
-                style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
+                className="mono">
                 <option value="=">=</option>
                 <option value="!=">!=</option>
                 <option value="contains">contains</option>
@@ -492,7 +497,7 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
               </select>
               <input value={whenVal} onChange={e => setWhenVal(e.target.value)} required
                 placeholder={whenOp === '=~' ? 'RE2 pattern, e.g. ^/health' : 'value'}
-                style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                className="mono" />
             </div>
             {/* v0.9.802 — bozuk desen backend'de 400 döner (validateCondition).
                 O hata genel kutuda değil DESENİN ALTINDA görünsün: operatör
@@ -575,10 +580,10 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 8 }}>
                 <input value={enrichKey} onChange={e => setEnrichKey(e.target.value)}
                   placeholder="e.g. team, region, cluster"
-                  style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  className="mono" />
                 <input value={enrichVal} onChange={e => setEnrichVal(e.target.value)}
                   placeholder="value"
-                  style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  className="mono" />
               </div>
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
                 Sets a resource attribute on every matching record. Existing keys are

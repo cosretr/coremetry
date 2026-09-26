@@ -5,8 +5,7 @@ import { readState } from '@/lib/readState';
 import { Button, Modal, Stack, useConfirm } from '@/components/ui';
 import { api, type MaintenanceWindow } from '@/lib/api';
 import { Field, Row } from './shared';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { tsLong } from '@/lib/utils';
 import { formatDateTime, parseDateTime } from '@/lib/rangePicker';
 
@@ -33,15 +32,19 @@ const STATUS_RANK: Record<WindowStatus, number> = { active: 3, upcoming: 2, past
 // ona bağlamak columnLayoutSig'i her render'da tazeleyip operatörün
 // sürüklediği genişlikleri atardı. `now` yalnız sortValue'nun İÇİNDE,
 // sıralama anında okunuyor.
-const WINDOW_COLS: DataTableColumn<MaintenanceWindow>[] = [
-  { id: 'service',  label: 'Service',  sortValue: w => w.service,        naturalDir: 'asc', width: 180 },
-  { id: 'severity', label: 'Severity', sortValue: w => w.severity,       naturalDir: 'asc', width: 110 },
-  { id: 'starts',   label: 'Starts',   sortValue: w => w.startAt,        width: 175 },
-  { id: 'ends',     label: 'Ends',     sortValue: w => w.endAt,          width: 175 },
-  { id: 'reason',   label: 'Reason',   sortValue: w => w.reason ?? '',   naturalDir: 'asc', flex: true },
-  { id: 'by',       label: 'By',       sortValue: w => w.createdBy ?? '', naturalDir: 'asc', width: 150 },
+// v0.10.942 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında
+// (11px ikincil metin → ton, S3); eylem hücresi `kind: 'actions'` kolonu,
+// `minWidth = width` onu eski sabit `trailing` gibi kilitler.
+const WINDOW_COLS: ColumnDef<MaintenanceWindow>[] = [
+  { id: 'service',  label: 'Service',  sortValue: w => w.service,        naturalDir: 'asc', width: 180, mono: true },
+  { id: 'severity', label: 'Severity', sortValue: w => w.severity,       naturalDir: 'asc', width: 110, tone: () => 'muted' },
+  { id: 'starts',   label: 'Starts',   sortValue: w => w.startAt,        width: 175, tone: () => 'muted' },
+  { id: 'ends',     label: 'Ends',     sortValue: w => w.endAt,          width: 175, tone: () => 'muted' },
+  { id: 'reason',   label: 'Reason',   sortValue: w => w.reason ?? '',   naturalDir: 'asc', flex: true, tone: () => 'muted' },
+  { id: 'by',       label: 'By',       sortValue: w => w.createdBy ?? '', naturalDir: 'asc', width: 150, mono: true, tone: () => 'faint' },
   { id: 'status',   label: 'Status',
     sortValue: w => STATUS_RANK[maintenanceStatus(w, Date.now() * 1e6)], width: 110 },
+  { id: 'actions',  label: 'Actions',  kind: 'actions', width: 150, minWidth: 150 },
 ];
 
 // ── Maintenance windows tab ────────────────────────────────────────────────
@@ -135,33 +138,34 @@ export function MaintenanceTab() {
       )}
       {items && items.length > 0 && (
         <div className="table-wrap">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
-            <DataTableColgroup dt={dt} trailing={[150]} />
-            <DataTableHead dt={dt} trailing={<th style={{ textAlign: 'right' }}>Actions</th>} />
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(w => {
                 const status = maintenanceStatus(w, now);
                 return (
                   <tr key={w.id}>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{w.service}</td>
-                    <td className="mono" style={{ fontSize: 11, textTransform: 'uppercase' }}>{w.severity}</td>
-                    <td className="mono" style={{ fontSize: 11 }}>{tsLong(w.startAt)}</td>
-                    <td className="mono" style={{ fontSize: 11 }}>{tsLong(w.endAt)}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text2)' }}>{w.reason || '—'}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'monospace' }}>{w.createdBy || '—'}</td>
-                    <td>
+                    <DataTableCell dt={dt} col="service" row={w} value={w.service} className="cell-strong" />
+                    {/* v0.10.942 — büyük harf satır içi textTransform yerine değerde (ASCII enum, lang=en: aynı glifler). */}
+                    <DataTableCell dt={dt} col="severity" row={w} value={w.severity.toUpperCase()} className="mono" />
+                    <DataTableCell dt={dt} col="starts" row={w} value={tsLong(w.startAt)} className="mono" />
+                    <DataTableCell dt={dt} col="ends" row={w} value={tsLong(w.endAt)} className="mono" />
+                    <DataTableCell dt={dt} col="reason" row={w} value={w.reason} />
+                    <DataTableCell dt={dt} col="by" row={w} value={w.createdBy} />
+                    <DataTableCell dt={dt} col="status" row={w}>
                       {/* v0.10.929 (K5) — DISABLED/PAST geçmiş kayıt: nötr (eskiden kırmızı/yeşil).
                           ACTIVE amber kalır: şu an uyarıları susturan pencere bir sapma. */}
                       {status === 'disabled' ? <span className="badge b-gray" style={{ fontSize: 9 }}>DISABLED</span>
                         : status === 'active'   ? <span className="badge b-warn" style={{ fontSize: 9 }}>ACTIVE</span>
                         : status === 'upcoming' ? <span className="badge b-info" style={{ fontSize: 9 }}>UPCOMING</span>
                         :                         <span className="badge b-gray" style={{ fontSize: 9 }}>PAST</span>}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="actions" row={w}>
                       {!w.disabled && (
                         <Button variant="danger" size="sm" onClick={() => del(w.id)}>End / delete</Button>
                       )}
-                    </td>
+                    </DataTableCell>
                   </tr>
                 );
               })}
@@ -251,7 +255,7 @@ function NewMaintenanceModal({ onClose, onCreated }: {
                 placeholder="2026-08-10 14:00:00" inputMode="numeric"
                 onChange={e => setStartAt(e.target.value)}
                 style={{
-                  width: '100%', fontFamily: 'monospace',
+                  width: '100%', fontFamily: 'var(--font-mono)',
                   ...(parseDateTime(startAt) === null ? { borderColor: 'var(--err)' } : {}),
                 }} />
             </Field>
@@ -260,7 +264,7 @@ function NewMaintenanceModal({ onClose, onCreated }: {
                 placeholder="2026-08-10 15:00:00" inputMode="numeric"
                 onChange={e => setEndAt(e.target.value)}
                 style={{
-                  width: '100%', fontFamily: 'monospace',
+                  width: '100%', fontFamily: 'var(--font-mono)',
                   ...(parseDateTime(endAt) === null ? { borderColor: 'var(--err)' } : {}),
                 }} />
             </Field>

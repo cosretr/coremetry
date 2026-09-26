@@ -6,22 +6,25 @@ import { copyToClipboard } from '@/lib/clipboard';
 import type { APIToken } from '@/lib/types';
 import { Field2, FlashBox, Row } from './shared';
 import { tsLong } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 
 // v0.9.872 (tutarlılık denetimi BT5) — `is-fit` sınıfı vardı, primitif
 // yoktu. Kolon genişliği BEYAN EDİLMEDİĞİ için isFitTables.test.ts bu
 // tabloyu ÖLÇEMİYOR ve UNMEASURED istisnasında bekliyordu; genişlikler
 // beyan edildiği an ölçüme giriyor ve istisnadan çıkarılıyor.
-// Toplam: 170+120+110+150+165+110 = 825 + trailing 120 = 945px < 1150 eşiği.
-const TOKEN_COLS: DataTableColumn<APIToken>[] = [
+// Toplam: 170+120+110+150+165+110 = 825 + eylem 120 = 945px < 1150 eşiği.
+// v0.10.942 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında
+// (11px ikincil metin → `tone: muted`, S3); eylem hücresi `kind: 'actions'`
+// kolonu. `minWidth = width`: sığdırma onu eski sabit `trailing` gibi kilitler.
+const TOKEN_COLS: ColumnDef<APIToken>[] = [
   { id: 'name',      label: 'Ad',     sortValue: t => t.name,            naturalDir: 'asc', width: 170 },
-  { id: 'prefix',    label: 'Token',  sortValue: t => t.prefix,          naturalDir: 'asc', width: 120 },
+  { id: 'prefix',    label: 'Token',  sortValue: t => t.prefix,          naturalDir: 'asc', width: 120, mono: true, tone: () => 'muted' },
   { id: 'role',      label: 'Rol',    sortValue: t => t.role,            naturalDir: 'asc', width: 110 },
-  { id: 'createdBy', label: 'Üreten', sortValue: t => t.createdBy ?? '', naturalDir: 'asc', width: 150 },
-  { id: 'createdAt', label: 'Tarih',  sortValue: t => t.createdAt,       width: 165 },
+  { id: 'createdBy', label: 'Üreten', sortValue: t => t.createdBy ?? '', naturalDir: 'asc', width: 150, tone: () => 'muted' },
+  { id: 'createdAt', label: 'Tarih',  sortValue: t => t.createdAt,       width: 165, tone: () => 'muted' },
   // Aktif token'lar üstte: iptal edilmişler arşiv, canlı olanlar envanter.
   { id: 'revoked',   label: 'Durum',  sortValue: t => (t.revoked ? 0 : 1), width: 110 },
+  { id: 'actions',   label: 'Eylemler', kind: 'actions', width: 120, minWidth: 120 },
 ];
 
 // ApiTokensTab — v0.8.444. Harici agent platformlarının (GenAI Studio
@@ -132,22 +135,23 @@ export function ApiTokensTab() {
         </Empty>
       )}
       {tokens && tokens.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
-            <DataTableColgroup dt={dt} trailing={[120]} />
-            <DataTableHead dt={dt} trailing={<th></th>} />
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(t => (
                 <tr key={t.id} style={{ opacity: t.revoked ? 0.55 : 1 }}>
-                  <td style={{ fontWeight: 600 }}>{t.name}</td>
-                  <td className="mono" style={{ fontSize: 11 }}>{t.prefix}</td>
-                  <td><span className="badge b-gray">{t.role}</span></td>
-                  <td style={{ fontSize: 11, color: 'var(--text2)' }}>{t.createdBy || '—'}</td>
-                  <td className="mono" style={{ fontSize: 11 }}>{tsLong(t.createdAt)}</td>
-                  <td>{t.revoked
+                  <DataTableCell dt={dt} col="name" row={t} value={t.name} className="cell-strong" />
+                  <DataTableCell dt={dt} col="prefix" row={t} value={t.prefix} />
+                  <DataTableCell dt={dt} col="role" row={t}><span className="badge b-gray">{t.role}</span></DataTableCell>
+                  <DataTableCell dt={dt} col="createdBy" row={t} value={t.createdBy} />
+                  {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
+                  <DataTableCell dt={dt} col="createdAt" row={t} value={tsLong(t.createdAt)} className="mono" />
+                  <DataTableCell dt={dt} col="revoked" row={t}>{t.revoked
                     ? <span className="badge b-gray">REVOKED</span>
-                    : <span className="badge b-gray">ACTIVE</span>}</td>
-                  <td style={{ textAlign: 'right' }}>
+                    : <span className="badge b-gray">ACTIVE</span>}</DataTableCell>
+                  <DataTableCell dt={dt} col="actions" row={t}>
                     {!t.revoked && (
                       <Button variant="danger" size="sm"
                         onClick={async () => {
@@ -164,7 +168,7 @@ export function ApiTokensTab() {
                         İptal et
                       </Button>
                     )}
-                  </td>
+                  </DataTableCell>
                 </tr>
               ))}
             </tbody>

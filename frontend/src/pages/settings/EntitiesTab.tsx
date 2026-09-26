@@ -105,7 +105,7 @@ export function EntitiesTab() {
             <Empty icon="∅" title="No sync runs in the last 24 h">Add a Remote Cluster (Settings → Remote clusters) and run a sync, or wait for the interval.</Empty>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>

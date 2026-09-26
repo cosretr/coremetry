@@ -7,8 +7,7 @@ import {
   podSeenWindow, podStabilityWarning, coverageHeaderTitle,
 } from '@/pages/k8s/coverageRows';
 import type { K8sCoverageRow, PodRow } from '@/lib/types';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 
 // AdminK8sCoverage — K8s bağlam kapsama kartı (v0.10.36, entity Faz 0).
 //
@@ -46,18 +45,20 @@ const TONE: Record<string, { bg: string; fg: string; text: string }> = {
 // Sıralama burada da gerçekten işe yarıyor: "hangi pod en çok span
 // üretiyor", "hangi namespace'te yoğunlaşmış", "ömrü belirsiz olanlar
 // hangileri" — hepsi bir sütun tıkı.
-const POD_COLS: DataTableColumn<PodRow>[] = [
-  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 140 },
-  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', width: 260 },
-  { id: 'service',   label: 'Servis',    sortValue: r => r.service,   naturalDir: 'asc', width: 170 },
-  { id: 'node',      label: 'Node',      sortValue: r => r.node ?? '', naturalDir: 'asc', width: 150 },
-  { id: 'spans',     label: 'Span',      sortValue: r => r.spans, numeric: true, naturalDir: 'desc', width: 90 },
+// v0.10.942 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında;
+// 11px ikincil hücreler tablo boyunda, hiyerarşi renkle (S3).
+const POD_COLS: ColumnDef<PodRow>[] = [
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 140, mono: true, tone: () => 'faint' },
+  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', width: 260, mono: true },
+  { id: 'service',   label: 'Servis',    sortValue: r => r.service,   naturalDir: 'asc', width: 170, mono: true, tone: () => 'muted' },
+  { id: 'node',      label: 'Node',      sortValue: r => r.node ?? '', naturalDir: 'asc', width: 150, mono: true, tone: () => 'faint' },
+  { id: 'spans',     label: 'Span',      sortValue: r => r.spans, numeric: true, naturalDir: 'desc', width: 90, tone: () => 'faint' },
   { id: 'seen',      label: 'Görülme',   sortValue: r => r.lastSeen, numeric: true, naturalDir: 'desc', width: 170 },
 ];
 
-const COVERAGE_COLS: DataTableColumn<K8sCoverageRow>[] = [
-  { id: 'service', label: 'Servis',   sortValue: r => r.service, naturalDir: 'asc', width: 260 },
-  { id: 'sampled', label: 'Örneklem', sortValue: r => r.sampled, numeric: true, naturalDir: 'desc', width: 110 },
+const COVERAGE_COLS: ColumnDef<K8sCoverageRow>[] = [
+  { id: 'service', label: 'Servis',   sortValue: r => r.service, naturalDir: 'asc', width: 260, mono: true },
+  { id: 'sampled', label: 'Örneklem', sortValue: r => r.sampled, numeric: true, naturalDir: 'desc', width: 110, tone: () => 'faint' },
   ...COVERAGE_FIELDS.map(f => ({
     id: f.key,
     // v0.10.196 — kısa başlık (kırpılmaz); tam anahtar title'da (renderLabel).
@@ -143,23 +144,24 @@ export default function AdminK8sCoveragePage() {
       {/* Filo resmi ÖNCE: operatörün sorusu "filonun ne kadarı bu alanı
           yayıyor". Servis tablosu ikincil, 200 satırda kaybolur. */}
       <Card header="Filo kapsaması">
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        {/* v0.10.942 — statik tablo: sabit alan listesi (COVERAGE_FIELDS), sırası anlamlı, sıralanmaz (T1). */}
+        <div className="table-wrap">
+          <table className="dt">
             <thead>
               <tr>
                 <th>Alan</th>
-                <th style={{ textAlign: 'right' }}>Tam</th>
-                <th style={{ textAlign: 'right' }}>Kısmi</th>
-                <th style={{ textAlign: 'right' }}>Yok</th>
+                <th className="num">Tam</th>
+                <th className="num">Kısmi</th>
+                <th className="num">Yok</th>
               </tr>
             </thead>
             <tbody>
               {fleet.map(f => (
                 <tr key={f.field}>
                   <td className="mono" title={f.label}>{f.attr}</td>
-                  <td style={{ textAlign: 'right', color: f.full > 0 ? 'var(--text2)' : 'var(--text3)' }}>{f.full}</td>
-                  <td style={{ textAlign: 'right', color: f.partial > 0 ? 'var(--warn)' : 'var(--text3)' }}>{f.partial}</td>
-                  <td style={{ textAlign: 'right', color: f.none > 0 ? 'var(--err)' : 'var(--text3)' }}>{f.none}</td>
+                  <td className={`num ${f.full > 0 ? 'cell-muted' : 'cell-faint'}`}>{f.full}</td>
+                  <td className={`num ${f.partial > 0 ? 'cell-warn' : 'cell-faint'}`}>{f.partial}</td>
+                  <td className={`num ${f.none > 0 ? 'cell-err' : 'cell-faint'}`}>{f.none}</td>
                 </tr>
               ))}
             </tbody>
@@ -173,23 +175,21 @@ export default function AdminK8sCoveragePage() {
             Örneklemde hiç span görülmedi — pencereyi genişletin.
           </Empty>
         ) : (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} renderLabel={c => <span title={coverageHeaderTitle(c.id)}>{c.label}</span>} />
               <tbody>
                 {dt.sortedRows.map(r => (
-                  <tr key={r.service} style={{ contentVisibility: 'auto' }}>
-                    <td className="mono">{r.service}</td>
-                    <td style={{ textAlign: 'right', color: 'var(--text3)' }}>
-                      {r.sampled.toLocaleString()}
-                    </td>
+                  <tr key={r.service} className="cv-row">
+                    <DataTableCell dt={dt} col="service" row={r} value={r.service} />
+                    <DataTableCell dt={dt} col="sampled" row={r} value={r.sampled.toLocaleString()} />
                     {COVERAGE_FIELDS.map(f => {
                       const seen = fieldSeen(r, f.key);
                       const st = fieldState(seen, r.sampled);
                       const pct = fieldPct(seen, r.sampled);
                       return (
-                        <td key={f.key} style={{ color: TONE[st].fg, fontSize: 11 }}
+                        <td key={f.key} style={{ color: TONE[st].fg }}
                             title={pct === null ? 'ölçülmedi' : `${seen}/${r.sampled} (%${pct})`}>
                           {st === 'full' ? '✓' : st === 'none' ? '✗' : st === 'unknown' ? '—' : `%${pct}`}
                         </td>
@@ -224,17 +224,17 @@ export default function AdminK8sCoveragePage() {
             tablosu hangi servisin yaydığını söylüyor.
           </Empty>
         ) : (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...podDt.tableProps}>
               <DataTableColgroup dt={podDt} />
               <DataTableHead dt={podDt} />
               <tbody>
                 {podDt.sortedRows.map((r: PodRow) => {
                   const warn = podStabilityWarning(r);
                   return (
-                    <tr key={`${r.namespace}/${r.pod}`} style={{ contentVisibility: 'auto' }}>
-                      <td className="mono" style={{ color: 'var(--text3)' }}>{r.namespace || '—'}</td>
-                      <td className="mono">
+                    <tr key={`${r.namespace}/${r.pod}`} className="cv-row">
+                      <DataTableCell dt={podDt} col="namespace" row={r} value={r.namespace} />
+                      <DataTableCell dt={podDt} col="pod" row={r}>
                         {r.pod}
                         {/* Uyarı satırın İÇİNDE: dipnota atmak, birleşmiş
                             ömrün sessiz kalması demek olurdu. */}
@@ -244,15 +244,12 @@ export default function AdminK8sCoveragePage() {
                             ömür belirsiz
                           </span>
                         )}
-                      </td>
-                      <td className="mono" style={{ fontSize: 11 }}>{r.service}</td>
-                      <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
-                        {r.node || '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--text3)' }}>
-                        {r.spans.toLocaleString()}
-                      </td>
-                      <td style={{ fontSize: 11, color: 'var(--text3)' }}>{podSeenWindow(r)}</td>
+                      </DataTableCell>
+                      <DataTableCell dt={podDt} col="service" row={r} value={r.service} />
+                      <DataTableCell dt={podDt} col="node" row={r} value={r.node} />
+                      <DataTableCell dt={podDt} col="spans" row={r} value={r.spans.toLocaleString()} />
+                      {/* v0.10.942 — `seen` sayısal sıralanır ama cümle basar: sola yaslı kalır (cellProps `num` verirdi). */}
+                      <td className="cell-faint">{podSeenWindow(r)}</td>
                     </tr>
                   );
                 })}

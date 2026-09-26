@@ -363,7 +363,7 @@ function AiProviderSettings() {
             </div>
             <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
                    placeholder="http://ollama:11434/v1   (or https://api.openai.com/v1 for real OpenAI)"
-                   autoComplete="off" style={{ width: '100%', fontFamily: 'monospace' }} />
+                   autoComplete="off" style={{ width: '100%', fontFamily: 'var(--font-mono)' }} />
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
               Endpoint must serve <code>/chat/completions</code> in OpenAI's request shape.
               Common paths: Ollama → <code>http://&lt;host&gt;:11434/v1</code>,

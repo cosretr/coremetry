@@ -7,12 +7,11 @@
 import { useState } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui/Button';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { fmtNum, fmtClock } from '@/lib/utils';
 import { KPI, fmtUptime, fmtBytes } from './shared';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { RedisStats, CacheStats, SystemStats, SpoolState } from '@/lib/types';
 import { orderSpoolTables, spoolRowBadge, startResultText } from './spoolOrder'; // v0.10.761 / v0.10.773 / v0.10.775
 
@@ -20,8 +19,10 @@ type TopKeyRow = CacheStats['topKeys'][number];
 
 // Hottest API cache keys. Default = hits desc (server already returns
 // them hottest-first).
-const TOPKEY_COLS: DataTableColumn<TopKeyRow>[] = [
-  { id: 'key',  label: 'Key',  sortValue: k => k.key,  naturalDir: 'asc',  width: 420 },
+// v0.10.942 (tablo standardı dilim 3) — anahtar kimlik kolonu: `mono` bayrağı,
+// 11px'i tablo boyunda (S3); birincil olduğu için ton almaz.
+const TOPKEY_COLS: ColumnDef<TopKeyRow>[] = [
+  { id: 'key',  label: 'Key',  sortValue: k => k.key,  naturalDir: 'asc',  width: 420, mono: true },
   { id: 'hits', label: 'Hits', sortValue: k => k.hits, numeric: true, naturalDir: 'desc', width: 100 },
 ];
 
@@ -84,7 +85,7 @@ export function BehaviorPanel({ behavior }: { behavior: SystemStats['behavior'] 
           </div>
           {b.lastError && (
             <div className="err" style={{
-              fontSize: 11, marginTop: 10, fontFamily: 'ui-monospace, monospace',
+              fontSize: 11, marginTop: 10, fontFamily: 'var(--font-mono)',
               overflowWrap: 'anywhere',
             }}>{b.lastError}</div>
           )}
@@ -217,7 +218,7 @@ export function CodeFetchPanel({ code }: { code: SystemStats['codeFetch'] }) {
               zaman damgası anlatır. */}
           {c.lastError && (
             <div className="err" style={{
-              fontSize: 11, marginTop: 10, fontFamily: 'ui-monospace, monospace',
+              fontSize: 11, marginTop: 10, fontFamily: 'var(--font-mono)',
               overflowWrap: 'anywhere',
             }}>
               {c.lastError}
@@ -297,7 +298,7 @@ export function DistributionQueuePanel({ dq }: { dq: SystemStats['distributionQu
           birikme olabilir de olmayabilir de.
           {dq.probeError && (
             <div className="err" style={{
-              marginTop: 6, fontFamily: 'ui-monospace, monospace', overflowWrap: 'anywhere',
+              marginTop: 6, fontFamily: 'var(--font-mono)', overflowWrap: 'anywhere',
             }}>{dq.probeError}</div>
           )}
         </div>
@@ -334,7 +335,7 @@ export function DistributionQueuePanel({ dq }: { dq: SystemStats['distributionQu
                   )}
                   {t.lastError && (
                     <div className="err" style={{
-                      fontFamily: 'ui-monospace, monospace', marginTop: 2,
+                      fontFamily: 'var(--font-mono)', marginTop: 2,
                       overflowWrap: 'anywhere', fontSize: 10,
                     }}>{t.lastError}</div>
                   )}
@@ -656,7 +657,7 @@ export function ApiCachePanel({ data }: { data: CacheStats | null | undefined })
                       display: 'inline-block', width: 10, height: 10,
                       borderRadius: 2, background: TIER_COLOR[tier],
                     }} />
-                    <span style={{ fontFamily: 'ui-monospace, monospace' }}>{tier}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>{tier}</span>
                     <span style={{ color: 'var(--text3)' }}>
                       {fmtNum(n)} · {pct.toFixed(1)}%
                     </span>
@@ -673,16 +674,14 @@ export function ApiCachePanel({ data }: { data: CacheStats | null | undefined })
                 Hottest cache keys
               </div>
               <div className="table-wrap">
-                <table style={{ fontSize: 12, tableLayout: 'fixed', width: '100%' }}>
+                <table {...topKeysDt.tableProps}>
                   <DataTableColgroup dt={topKeysDt} />
                   <DataTableHead dt={topKeysDt} />
                   <tbody>
                     {topKeysDt.sortedRows.map(k => (
                       <tr key={k.key}>
-                        <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
-                          {k.key}
-                        </td>
-                        <td className="num">{fmtNum(k.hits)}</td>
+                        <DataTableCell dt={topKeysDt} col="key" row={k} value={k.key} />
+                        <DataTableCell dt={topKeysDt} col="hits" row={k} value={fmtNum(k.hits)} />
                       </tr>
                     ))}
                   </tbody>

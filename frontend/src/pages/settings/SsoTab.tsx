@@ -177,8 +177,7 @@ export function SSOPresetsTab() {
         <pre style={{
           margin: 0, padding: 14, background: 'var(--bg)',
           border: '1px solid var(--border)', borderRadius: 6,
-          fontSize: 12, lineHeight: 1.6, overflowX: 'auto',
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          lineHeight: 1.6, overflowX: 'auto',
         }}>
           <code>{active.yaml}</code>
         </pre>

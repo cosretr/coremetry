@@ -186,7 +186,7 @@ export function McpServersTab() {
                 <textarea value={r.envText} rows={3} spellCheck={false}
                   placeholder={'API_KEY=…\nMCP_ROOT=/data'}
                   onChange={e => upd(i, { envText: e.target.value })}
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12 }} />
+                  className="mono" style={{ width: '100%' }} />
               </SettingRow>
             )}
 

@@ -4,8 +4,7 @@ import { useClusterMembers } from '@/lib/queries';
 import { type ClusterMember } from '@/lib/api';
 import { tsLong, tsRel } from '@/lib/utils';
 import { IconLock } from '@/components/icons';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 
 // Columns for the shared sortable + resizable DataTable. Cell ORDER
@@ -15,12 +14,14 @@ import { Button } from '@/components/ui/Button';
 // true would right-align, but these render as relative-time text so
 // we keep them left-aligned and only set sortValue) — biggest-first
 // 'desc' means most-recent-first.
-const CLUSTER_COLS: DataTableColumn<ClusterMember>[] = [
+// v0.10.942 (tablo standardı dilim 3) — hücre tonu kolon bayraklarında;
+// kilit hücresinin 11px'i tablo boyunda, ikincilliği renkle (S3).
+const CLUSTER_COLS: ColumnDef<ClusterMember>[] = [
   { id: 'pod',     label: 'Pod',                 sortValue: m => m.id,                    naturalDir: 'asc',  width: 280 },
-  { id: 'version', label: 'Version',             sortValue: m => m.version || '',         naturalDir: 'asc',  width: 140 },
-  { id: 'started', label: 'Started',             sortValue: m => m.startedAt,             naturalDir: 'desc', width: 150 },
-  { id: 'seen',    label: 'Last heartbeat',      sortValue: m => m.lastSeen,              naturalDir: 'desc', width: 160 },
-  { id: 'locks',   label: 'Active leader locks', sortValue: m => m.leaderLocks?.length ?? 0, naturalDir: 'desc', width: 260 },
+  { id: 'version', label: 'Version',             sortValue: m => m.version || '',         naturalDir: 'asc',  width: 140, mono: true, tone: () => 'muted' },
+  { id: 'started', label: 'Started',             sortValue: m => m.startedAt,             naturalDir: 'desc', width: 150, tone: () => 'faint' },
+  { id: 'seen',    label: 'Last heartbeat',      sortValue: m => m.lastSeen,              naturalDir: 'desc', width: 160, tone: () => 'faint' },
+  { id: 'locks',   label: 'Active leader locks', sortValue: m => m.leaderLocks?.length ?? 0, naturalDir: 'desc', width: 260, tone: () => 'muted' },
 ];
 
 // AdminCluster — v0.5.253 multi-pod HA visibility page.
@@ -103,27 +104,27 @@ export default function AdminClusterPage() {
               borderRadius: 6, fontSize: 13, display: 'flex', gap: 24,
             }}>
               <span>
-                <b style={{ fontFamily: 'ui-monospace, monospace', fontSize: 16 }}>
+                <b style={{ fontFamily: 'var(--font-mono)', fontSize: 16 }}>
                   {data.members.length}
                 </b>{' '}
                 <span style={{ color: 'var(--text3)' }}>live pod{data.members.length === 1 ? '' : 's'}</span>
               </span>
               <span>
-                <b style={{ fontFamily: 'ui-monospace, monospace', fontSize: 16 }}>
+                <b style={{ fontFamily: 'var(--font-mono)', fontSize: 16 }}>
                   {new Set(data.members.map(m => m.version)).size}
                 </b>{' '}
                 <span style={{ color: 'var(--text3)' }}>version{new Set(data.members.map(m => m.version)).size === 1 ? '' : 's'}</span>
               </span>
               <span>
-                <b style={{ fontFamily: 'ui-monospace, monospace', fontSize: 16 }}>
+                <b style={{ fontFamily: 'var(--font-mono)', fontSize: 16 }}>
                   {data.members.filter(m => (m.leaderLocks?.length ?? 0) > 0).length}
                 </b>{' '}
                 <span style={{ color: 'var(--text3)' }}>holding leader lock</span>
               </span>
             </div>
 
-            <div className="table-wrap is-fit">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <div className="table-wrap">
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
@@ -131,11 +132,8 @@ export default function AdminClusterPage() {
                     const stale = (now * 1e6 - m.lastSeen) > 30 * 1e9;
                     return (
                       <tr key={m.id} style={stale ? { opacity: 0.55 } : undefined}>
-                        <td>
-                          <span style={{
-                            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                            fontWeight: m.isThisPod ? 700 : 500,
-                          }}>
+                        <DataTableCell dt={dt} col="pod" row={m}>
+                          <span className="mono" style={{ fontWeight: m.isThisPod ? 700 : 500 }}>
                             {m.id}
                           </span>
                           {/* v0.10.929 (K5) — kimlik işareti (self) ne sağlık ne geçiş:
@@ -159,19 +157,14 @@ export default function AdminClusterPage() {
                               textTransform: 'uppercase',
                             }}>stale</span>
                           )}
-                        </td>
-                        <td className="mono" style={{ color: 'var(--text2)' }}>
-                          {m.version || '—'}
-                        </td>
-                        <td className="mono" style={{ color: 'var(--text3)' }}
-                            title={tsLong(m.startedAt)}>
-                          {tsRel(m.startedAt)}
-                        </td>
-                        <td className="mono" style={{ color: 'var(--text3)' }}
-                            title={tsLong(m.lastSeen)}>
-                          {tsRel(m.lastSeen)}
-                        </td>
-                        <td style={{ fontSize: 11, color: 'var(--text2)' }}>
+                        </DataTableCell>
+                        <DataTableCell dt={dt} col="version" row={m} value={m.version} />
+                        {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
+                        <DataTableCell dt={dt} col="started" row={m} value={tsRel(m.startedAt)}
+                          className="mono" title={tsLong(m.startedAt)} />
+                        <DataTableCell dt={dt} col="seen" row={m} value={tsRel(m.lastSeen)}
+                          className="mono" title={tsLong(m.lastSeen)} />
+                        <DataTableCell dt={dt} col="locks" row={m}>
                           {!m.leaderLocks || m.leaderLocks.length === 0
                             ? <span style={{ color: 'var(--text3)' }}>—</span>
                             : m.leaderLocks.map(k => (
@@ -183,7 +176,7 @@ export default function AdminClusterPage() {
                                 }}>{k}</code>
                               ))
                           }
-                        </td>
+                        </DataTableCell>
                       </tr>
                     );
                   })}

@@ -328,7 +328,7 @@ export default function SQLPlaygroundPage() {
                     style={{
                       flex: 1, textAlign: 'left',
                       fontSize: 11, padding: '2px 0',
-                      fontFamily: 'monospace',
+                      fontFamily: 'var(--font-mono)',
                     }}>
                     {t.table}
                   </LinkButton>
@@ -342,7 +342,7 @@ export default function SQLPlaygroundPage() {
                           display: 'block', width: '100%',
                           textAlign: 'left', padding: '1px 0',
                           fontSize: 10,
-                          fontFamily: 'monospace',
+                          fontFamily: 'var(--font-mono)',
                         }}
                         title={c.type}>
                         {c.name} <span style={{ color: 'var(--text3)' }}>{c.type}</span>
@@ -424,7 +424,7 @@ export default function SQLPlaygroundPage() {
             spellCheck={false}
             style={{
               flexShrink: 0, height: 220,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontFamily: 'var(--font-mono)',
               fontSize: 12, lineHeight: 1.5,
               padding: 10, background: 'var(--bg1)',
               color: 'var(--text)',
@@ -443,7 +443,7 @@ export default function SQLPlaygroundPage() {
               fontSize: 12, color: 'var(--err)', padding: '8px 12px',
               background: 'color-mix(in srgb, var(--err) 8%, transparent)',
               border: '1px solid color-mix(in srgb, var(--err) 30%, transparent)', borderRadius: 4,
-              fontFamily: 'monospace', whiteSpace: 'pre-wrap',
+              fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap',
             }}>
               {result.error}
             </div>
@@ -556,7 +556,7 @@ function ResultTable({ result }: { result: SQLResult }) {
           // v0.10.928 — başlık çizgisi `thead th` gibi --border'da kalır;
           // meta şerit ve satır ayraçları --divider (başlık/satır hiyerarşisi).
           borderBottom: '1px solid var(--border)',
-          fontFamily: 'monospace', fontSize: 11, fontWeight: 600,
+          fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
           flexShrink: 0,
         }}>
           {dt.columns.map(c => {
@@ -610,7 +610,7 @@ function ResultTable({ result }: { result: SQLResult }) {
               gridTemplateColumns: gridTemplate,
               minWidth: 'max-content',
               borderBottom: '1px solid var(--divider)',
-              fontSize: 11, fontFamily: 'monospace',
+              fontSize: 11, fontFamily: 'var(--font-mono)',
               background: i % 2 === 0 ? 'transparent' : 'var(--bg0)',
             }}>
               {row.map((v, j) => (

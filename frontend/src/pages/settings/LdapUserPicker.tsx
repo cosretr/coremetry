@@ -68,7 +68,9 @@ export function LDAPUserPicker() {
         <div style={{ fontSize: 12, color: 'var(--text3)' }}>No matches.</div>
       )}
       {results && results.length > 0 && (
-        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+        // v0.10.942 — statik tablo: seçici liste (≤25 arama sonucu, Provision ile seçilir; T1).
+        // Hücre dolgusu (6px) bu sıkı listenin ritmi; sınıf karşılığı yok, satır içi kalır.
+        <table>
           <thead>
             <tr style={{ background: 'var(--bg)', color: 'var(--text2)' }}>
               <th style={{ padding: 6, textAlign: 'left' }}>Name</th>
@@ -83,7 +85,7 @@ export function LDAPUserPicker() {
                 <td style={{ padding: 6 }}>{u.displayName || '—'}</td>
                 <td style={{ padding: 6 }}><code>{u.username}</code></td>
                 <td style={{ padding: 6 }}>{u.email || '—'}</td>
-                <td style={{ padding: 6, textAlign: 'right' }}>
+                <td className="col-actions" style={{ padding: 6 }}>
                   <Button variant="secondary" size="sm" type="button"
                           onClick={() => setProvisionFor(u)}>
                     Provision
