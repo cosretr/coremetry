@@ -458,7 +458,7 @@ export function DependenciesTable({
                   <tr {...rowActivation(() => (onRowNavigate
                         ? onRowNavigate(r)
                         : setOpen(isOpen ? null : r, isOpen ? null : rowKey)))}
-                      style={{ cursor: 'pointer',
+                      style={{
                                // scale-audit v0.8.203 — skip off-screen rows
                                // (matches the instance table below); at a bank
                                // with many DB schemas this list reaches 1000s.

@@ -309,7 +309,6 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                 return (
                   <tr key={r.cluster} {...rp}
                       className={[rp.className, sel ? 'row-selected' : ''].filter(Boolean).join(' ') || undefined}
-                      style={{ cursor: 'pointer' }}
                       title={sel ? 'Kapsamı kaldırmak için tıkla' : 'Bu cluster\'a daralt'}
                       {...rowActivation(() => setICluster(sel ? '' : r.cluster))}>
                     <td className="mono" onClick={e => e.stopPropagation()}>

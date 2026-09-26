@@ -173,6 +173,14 @@
   --fs-md:  13px;  /* 20× — kontrol/buton metni */
   --fs-lg:  14px;  /*  8× */
   --fs-xl:  18px;  /*  3× — sayfa başlığı */
+  /* v0.10.933 (tablo standardı T5) — TEK monospace yığını. Eskiden beş
+     ayrı yığın (düz `monospace` / `ui-monospace, monospace` / … Consolas)
+     iki görünür yüz üretiyordu; her mono kural bunu okur. */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* v0.10.933 (tablo standardı T6) — satır ritmi. Bu RAHAT (varsayılan)
+     değer; compact/dense kendi değerini dolgu kurallarının yanında
+     bildirir. rowHeight.ts `ROW_H` ile eşit olmak ZORUNDA (rowHeight.test). */
+  --row-h: 36px;
 
   /* ── MK2 (v0.9.910) — z-index skalası ────────────────────────────────────
      Depoda 32 farklı z değeri vardı ve hiçbiri diğerine göre TANIMLI
@@ -396,7 +404,18 @@ body {
 }
 a { color: var(--accent2); text-decoration: none; }
 a:hover { text-decoration: underline; }
-code, pre, .mono { font-family: monospace; font-size: 12px; }
+code, pre, .mono { font-family: var(--font-mono); font-size: 12px; } /* v0.10.933 (T5) — tek yığın; tablo içinde boyut `:where(table) .mono`dan */
+/* v0.10.933 (tablo standardı T5) — hücrede TEK yazı boyu: tablonunki.
+   `.mono`nun sabit 12px'i 1129 hücrenin 602'sinde yoğunluk ayarını
+   (compact/dense, ≤640px) deliyordu; tablo içinde boyutu miras alır.
+   `:where(table)` özgüllüğü 0,1,0'da tutar: üstteki `.mono { 12px }`'i
+   (0,1,0) SONRA geldiği için yener, dosyada daha sonra gelen tek sınıflı
+   boyut kuralları ise yine kazanır — .ib-when 13px tarih damgası (operatör
+   kararı v0.10.736/739), .badge, .trend-spark__tt, .mtp-*, .field-hint.
+   `table .mono` (0,1,1) hepsini eziyordu. Yer BİLEREK burası: .field-hint
+   (tablo hücresinde `field-hint mono`, AiProfilesPanel) `table {}`
+   bloğundan önce tanımlı; kural orada kalsaydı onu da ezerdi. */
+:where(table) .mono { font-size: inherit; }
 
 /* Layout */
 #app { display: flex; height: 100vh; overflow: hidden; }
@@ -506,7 +525,7 @@ code, pre, .mono { font-family: monospace; font-size: 12px; }
 }
 .tb-search-kbd {
   flex: 0 0 auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 10px; color: var(--text3);
   border: 1px solid var(--border); border-radius: var(--radius-xs);
   padding: 1px 5px; background: var(--bg1);
@@ -888,7 +907,7 @@ button.sec.is-overlay, .btn-icon.ib-sec.is-overlay { background: var(--bg1); box
 }
 .btn-disclose.dsc-section .dsc-glyph {
   width: 14px; flex: none; font-size: 11px; color: var(--text2);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
 }
 /* Bound to the ARIA state, not to a second class: the divider and the
    announced state can never disagree. */
@@ -1167,7 +1186,7 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 /* The count that rides along a tab label ("Operations 412"). */
 .tab-strip .tab-count {
   margin-left: 6px; font-size: 11px; color: var(--text3);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
 }
 
 .segmented {
@@ -1223,7 +1242,7 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 }
 .facet:hover { background: var(--bg3); color: var(--text); }
 .facet.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent2); }
-.facet .n { font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--text3); font-weight: 600; }
+.facet .n { font-family: var(--font-mono); font-size: 10.5px; color: var(--text3); font-weight: 600; }
 .facet.on .n { color: var(--accent2); }
 /* Severity-tinted inactive priority chips — keep the P1=err / P2=warn cue
    even when the chip is off, so the operator's eye reads urgency at rest. */
@@ -1263,7 +1282,7 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
   font-size: 12px; color: var(--text); cursor: pointer; }
 .fsel-row:hover { background: var(--accent-soft); }
 .fsel-row input { accent-color: var(--accent); pointer-events: none; }
-.fsel-n { margin-left: auto; font-family: ui-monospace, monospace;
+.fsel-n { margin-left: auto; font-family: var(--font-mono);
   font-size: 10.5px; color: var(--text3); }
 .fsel-solo { font-size: 10px; color: var(--accent2); background: none;
   border: none; cursor: pointer; padding: 0 3px; visibility: hidden; }
@@ -1299,6 +1318,20 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
    beyaz başlık şeridi + gri satırlar oluyordu — tasarım kademesi değil,
    kaza. 104 çağrı noktası, 13 rotanın TEK yüzeyi. */
 .table-wrap { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; overflow-y: hidden; }
+/* v0.10.933 (tablo standardı T10) — TEK çerçeve: kenarlık + köşe yalnız
+   sayfada DOĞRUDAN duran tabloda. Kart / çekmece / modal / DrawerSection
+   içinde kap zaten bir yüzey; ikinci kutu çizilmez (26 dosyada kutu içinde
+   kutu vardı). Zemin (bg1) KALIR: yapışkan başlık ve sabit kolonların opak
+   zemini ona dayanıyor (surfaceTokens). `.empty` soymasıyla aynı desen;
+   yeni bir yüzey kabı eklenince iki listeye de eklenir. */
+.card .table-wrap, .card-static .table-wrap, .ov-card-b .table-wrap,
+.drawer-panel .table-wrap, .drawer-section .table-wrap,
+.modal-dialog .table-wrap { border: 0; border-radius: 0; }
+/* v0.10.933 (tablo standardı T10) — istisna: CoSRE markdown tablosu renkli
+   (accent %8) cevap kartının İÇİNDE; kart onu bir yüzey gibi çevrelemiyor,
+   çerçevesiz tablo tonlu zemine akıyordu. Aynı özgüllük (0,2,0), SONRA
+   geldiği için de-frame listesini (kart bir .card/çekmece içindeyken) yener. */
+.ai-answer-card .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-sm); }
 
 /* v0.9.644 — YAPIŞKAN TABLO BAŞLIĞI, tablo başına OPT-IN.
    (denetim bulgusu #10: "sticky tablo başlığı yok VE .table-wrap
@@ -1370,7 +1403,9 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
   background: var(--bg1);
   box-shadow: inset 0 -1px 0 var(--border);
 }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+/* v0.10.933 (tablo standardı T5) — tablo içindeki `.mono` boyutu miras alır:
+   kural `code, pre, .mono`nun hemen altında (`:where(table) .mono`). */
 thead th {
   padding: 9px 12px; text-align: left;
   /* v0.10.928 (Y3) — düz başlık: büyük harf + izleme kalktı ("p95 (ms)"
@@ -1381,6 +1416,10 @@ thead th {
   font-weight: 600; color: var(--text2); font-size: var(--fs-xs);
   text-transform: none; letter-spacing: normal; border-bottom: 1px solid var(--border);
   user-select: none;
+  /* v0.10.933 (tablo standardı T3) — başlık tek satır, taşan "…". Eskiden
+     yalnız DataTableHead bunu satır içi yazıyordu; ~61 elle yazılmış
+     <thead> sarıyordu. İpuçları (.tip) `position: fixed`, kırpılmaz. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   /* v0.9.697 — resize tutamağının (position:absolute) ÇAPASI. Eskiden
      DataTableHead bunu satır içi yazıyordu ve satır içi stil, aşağıdaki
      `.table-wrap.is-fit thead th { position: sticky }` kuralını EZİYORDU;
@@ -1392,8 +1431,17 @@ thead th {
 }
 thead th.sortable { cursor: pointer; transition: color .1s; }
 thead th.sortable:hover { color: var(--text); }
-thead th.sorted { color: var(--accent2); }
-thead th .sort-arrow { margin-left: 4px; opacity: .7; }
+/* v0.10.933 (tablo standardı T3) — sessiz başlık. Sıralı kolon etiketi
+   --text (accent değil: vurgu yalnız sapan değerde); boştaki ↕ gizli,
+   başlığın üstüne gelince / klavye odağında belirir; etkin ▲▼ hep
+   görünür. Dokunmatikte (hover yok) ipucu soluk kalır — keşfedilebilirlik. */
+thead th.sorted { color: var(--text); }
+thead th .sort-arrow { margin-left: 4px; opacity: 0; transition: opacity .1s; }
+thead th:hover .sort-arrow, thead th:focus-visible .sort-arrow { opacity: .7; }
+thead th.sorted .sort-arrow { opacity: 1; }
+@media (hover: none) {
+  thead th .sort-arrow { opacity: .35; }
+}
 /* Shared column-resize handle (DataTable primitive, v0.7.53). 6px hot zone
    on the th right edge; a faint accent line appears on hover so the operator
    sees the grab target. Matches the .sidebar-resizer / .span-panel-resizer feel. */
@@ -1409,13 +1457,22 @@ thead th .col-resize-handle {
 }
 thead th .col-resize-handle:hover { background: var(--accent); opacity: .5; }
 /* v0.10.928 (Y2) — satır ayracı --divider; Skeleton.tsx satır çizgisi bununla aynı kalmalı. */
-tbody tr { border-bottom: 1px solid var(--divider); cursor: pointer; transition: background .08s; }
+tbody tr { border-bottom: 1px solid var(--divider); transition: background .08s; }
 tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--bg2); }
+/* v0.10.933 (tablo standardı T2) — el imleci + hover YALNIZ tıklanabilir
+   satırda. Eskiden taban `tbody tr` ikisini de her satıra veriyordu:
+   ~200 satır şablonunun ~%77'si (anahtar/değer, admin, detay tabloları)
+   hiçbir şey yapmayan bir tık vaat ediyordu. Üç işaret:
+     [role="button"]      rowActivation / rowKeyboard (lib/a11y.ts)
+     [data-row-action]    rowClickHandlers, dt.rowProps (onOpen varken),
+                          VirtualTable onRowClick, elle onClick'li satır
+     :has(> td > .row-link) satır = gerçek bağlantı (Traces, Problems)
+   Tek hover tonu --bg2. Seçim/açık hâli yalnız `.row-selected`. */
+tbody tr[role="button"], tbody tr[data-row-action], tbody tr:has(> td > .row-link) { cursor: pointer; }
+tbody tr[role="button"]:hover, tbody tr[data-row-action]:hover, tbody tr:has(> td > .row-link):hover { background: var(--bg2); }
 /* Aggregate "All" row at the top of a list table — sticky-bordered + slight tint
    so the totals are visually distinct from per-row entries. */
-tbody tr.agg-row { background: var(--bg2); border-bottom: 2px solid var(--border); cursor: default; }
-tbody tr.agg-row:hover { background: var(--bg2); }
+tbody tr.agg-row { background: var(--bg2); border-bottom: 2px solid var(--border); }
 tbody td { padding: 9px 12px; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* v0.10.338 — Operator-reported: çekmecedeki tam kimlik hücreleri (revizyon,
    imaj repo:tag) yukarıdaki genel nowrap+320px kuralıyla "…" oluyordu; okunması
@@ -1442,10 +1499,30 @@ tbody td.td-full { max-width: none; white-space: normal; overflow: visible; text
    kaydırma çubuğunu çıkarıyordu. İkinci seçici (0,2,2) her yoğunlukta
    kazanır. */
 tbody td.row-cell, [data-density] tbody td.row-cell { padding: 0; }
+/* v0.10.933 (tablo standardı T6) — >100 satırlı tablonun ekran dışı
+   satırları için TEK sınıf: tahmin `--row-h` (yoğunlukla değişir).
+   Satır içi containIntrinsicSize'ın 13 farklı değeri (22–44px, üç
+   yazımla) kaydırma çubuğunu zıplatıyordu; göçü dilim 3. */
+.cv-row { content-visibility: auto; contain-intrinsic-size: auto var(--row-h); }
+/* v0.10.933 (tablo standardı T6) — genişletilmiş satırın TEK detay hücresi
+   (colSpan). Altı yer beş dolgu + üç zeminle çiziyordu. İç kutu kademesi
+   --bg2; sarar, kırpmaz. Yoğunluk kuralı dolguyu ezmesin diye ikinci
+   seçici (row-cell ile aynı gerekçe). */
+tbody td.row-detail, [data-density] tbody td.row-detail {
+  padding: 12px 16px; background: var(--bg2); border-top: 1px solid var(--divider);
+  max-width: none; white-space: normal; overflow: visible;
+}
+/* v0.10.933 (tablo standardı T2) — detay hücresine GÖMÜLÜ tablonun tıklanabilir
+   satırı bir kademe üst (bg3): iç kutu zaten bg2, bg2 hover orada görünmez.
+   Seçici üç işaretin aynısı; `> td` yapışkan kolon hover'ını (0,3,3) da yener. */
+td.row-detail tbody tr[role="button"]:hover > td,
+td.row-detail tbody tr[data-row-action]:hover > td,
+td.row-detail tbody tr:has(> td > .row-link):hover > td { background: var(--bg3); }
 .row-link { display: block; padding: 9px 12px; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Sanallaştırılmış tabloda (Traces) satır yüksekliği virtualizer sözleşmesi:
-   TAM 36 px, yoğunluk/yazı boyutundan bağımsız (Traces.tsx rowHeight={36}). */
-.vt-scroll tbody td.row-cell > .row-link { box-sizing: border-box; height: 36px; line-height: 18px; padding: 9px 12px; }
+   TAM `--row-h`, yoğunluk/yazı boyutundan bağımsız — `.vt-scroll` token'ı
+   rahat değere (ROW_H, rowHeight.ts) geri sabitler (v0.10.933, T6). */
+.vt-scroll tbody td.row-cell > .row-link { box-sizing: border-box; height: var(--row-h); line-height: 18px; padding: 9px 12px; }
 .row-link:hover { text-decoration: none; }
 .row-link--name:hover { color: var(--accent2); text-decoration: underline; text-underline-offset: 3px; }
 .row-link:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
@@ -1461,7 +1538,7 @@ tbody td.row-cell, [data-density] tbody td.row-cell { padding: 0; }
 /* `className` Field atomunda <input>'a iner; dar kolon seçimi :has() ile sarmalayıcıya taşınır. */
 .oracle-row > .field:has(> input.is-narrow) { flex: 0 1 150px; }
 .oracle-q { margin-top: var(--sp-5); padding: var(--sp-5) var(--sp-6); border: 1px dashed var(--border); border-radius: var(--radius-sm); background: var(--bg1); }
-.oracle-q textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-xs); }
+.oracle-q textarea { font-family: var(--font-mono); font-size: var(--fs-xs); }
 .oracle-probe { margin-top: var(--sp-5); font-size: var(--fs-sm); }
 .oracle-probe table { font-size: var(--fs-xs); }
 .oracle-scan { margin-top: var(--sp-4); font-size: var(--fs-xs); }
@@ -1475,7 +1552,7 @@ tbody td.row-cell, [data-density] tbody td.row-cell { padding: 0; }
 /* Onay kutusu + etiket, Field atomunun yanında taban hizasında durur. */
 .oracle-check { display: flex; align-items: center; gap: var(--sp-3); padding-bottom: var(--sp-5); font-size: var(--fs-xs); white-space: nowrap; }
 .oracle-actions { display: flex; gap: var(--sp-4); align-items: center; flex-wrap: wrap; margin-top: var(--sp-5); }
-.oracle-sql { margin: var(--sp-4) 0 0; padding: var(--sp-4) var(--sp-5); overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg1); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-xs); color: var(--text2); }
+.oracle-sql { margin: var(--sp-4) 0 0; padding: var(--sp-4) var(--sp-5); overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg1); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text2); }
 .oracle-scroll { overflow-x: auto; margin-top: var(--sp-4); }
 .oracle-note { color: var(--text2); font-size: var(--fs-sm); margin-bottom: var(--sp-6); }
 .oracle-sub { margin: var(--sp-5) 0 var(--sp-4); font-size: var(--fs-xs); font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
@@ -1500,9 +1577,9 @@ tbody td.row-cell, [data-density] tbody td.row-cell { padding: 0; }
    below ALL the rows, so a trailing drill-through column was invisible
    on laptop widths. sticky+right:0 keeps it in the viewport at every
    scroll offset. Backgrounds MUST be opaque (cells float over scrolled
-   content): base = page bg the rows sit on; hover mirrors tbody
-   tr:hover; selected flattens .row-selected's accent tint over the
-   base. Rows with an inline tint (err rows) set their own inline
+   content): base = page bg the rows sit on; hover mirrors the
+   interactive-row hover (T2); selected = --accent-bg, the row's own
+   tone (v0.10.933). Rows with an inline tint (err rows) set their own inline
    background on the pinned td — inline wins over all of these, same
    precedence the tr itself has today. */
 th.sticky-right, td.sticky-right {
@@ -1514,7 +1591,8 @@ th.sticky-right, td.sticky-right {
   background: var(--bg1);
   box-shadow: -6px 0 8px -8px rgba(0, 0, 0, .5);
 }
-tbody tr:hover td.sticky-right { background: var(--bg2); }
+/* v0.10.933 (T2) — sabit hücre hover'ı yalnız tıklanabilir satırda (satırın ikizi). */
+tbody tr[role="button"]:hover td.sticky-right, tbody tr[data-row-action]:hover td.sticky-right, tbody tr:has(> td > .row-link):hover td.sticky-right { background: var(--bg2); }
 /* v0.9.1256 — SOL sabit kimlik kolonları (operatör: /endpoints geniş
    tabloda kaydırınca service/path kayboluyordu). left ofseti INLINE
    gelir (stickyLeftOffsets — resize'lı genişliklerle kümülatif);
@@ -1524,16 +1602,19 @@ th.sticky-left, td.sticky-left {
   background: var(--bg1);
   box-shadow: 6px 0 8px -8px rgba(0, 0, 0, .5);
 }
-tbody tr:hover td.sticky-left { background: var(--bg2); }
-tr.row-selected td.sticky-left {
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg1));
-}
-tr.row-selected td.sticky-right {
-  /* Aynı gerekçe: karışımın TABANI kabın zemini olmalı. */
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg1));
-}
+tbody tr[role="button"]:hover td.sticky-left, tbody tr[data-row-action]:hover td.sticky-left, tbody tr:has(> td > .row-link):hover td.sticky-left { background: var(--bg2); }
+/* v0.10.933 (tablo standardı T2) — seçili satırın sabit hücresi satırın
+   KENDİ tonu (--accent-bg). Eskiden %10 accent karışımıydı: geniş seçili
+   satır iki ayrı renk gösteriyordu. `!important` `.row-selected`in kendi
+   `!important`inin ikizi — hover'daki seçili satır da tek tonda kalır. */
+tr.row-selected td.sticky-left,
+tr.row-selected td.sticky-right { background: var(--accent-bg) !important; }
 /* Numeric columns — right-align + tabular figures so digits line up by place value. */
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* v0.10.933 (tablo standardı T4) — sayılar arayüz fontunda: `num mono`
+   (284 hücre) satıra ikinci bir yazı yüzü getiriyordu. Hizayı monospace
+   değil `tabular-nums` (yukarıda) tutar. Mono yalnız kimlik/kod sütununda. */
+td.num.mono, th.num.mono { font-family: inherit; font-size: inherit; }
 /* v0.10.931 (tablo standardı T9) — sapan değer yalnız METİN rengiyle,
    dolgu yok. Eskiden iki tablo `num err` / `num warn` basıyordu; `.err`
    ve `.warn` yalnız bileşik seçicilerde (.pb-pill.err …) tanımlı olduğu
@@ -1607,7 +1688,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wf-resizer-row {
   width: 6px; flex-shrink: 0; pointer-events: none;
 }
-.wf-tick-label { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 10px; color: var(--text2); font-family: monospace; white-space: nowrap; pointer-events: none; }
+.wf-tick-label { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 10px; color: var(--text2); font-family: var(--font-mono); white-space: nowrap; pointer-events: none; }
 .wf-vline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--divider); pointer-events: none; }
 /* ── Waterfall row, Tempo-style ──────────────────────────────────────── */
 /* Compact rows — Tempo's new (Grafana 11+) trace view runs at
@@ -1674,7 +1755,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wf-svcbreak-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 5px; font-size: 10.5px; color: var(--text2); }
 .wf-svcbreak-legend .it { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .wf-svcbreak-legend .sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
-.wf-svcbreak-legend .ms { font-family: ui-monospace, monospace; color: var(--text3); }
+.wf-svcbreak-legend .ms { font-family: var(--font-mono); color: var(--text3); }
 
 /* Span event marker — exception moment on the bar (rotated square). */
 .wf-ev {
@@ -1764,7 +1845,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   padding: 0 6px;
   margin-left: 6px;
   border-radius: var(--radius);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   color: var(--accent2);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
@@ -1795,7 +1876,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Öz-süre payı (v0.10.276) — barın içinde soldan koyu şerit; token karışımı. */
 .wf-bar-self { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--text) 30%, transparent); pointer-events: none; }
 /* Katlı alt ağaç özeti (v0.10.276) — .wf-cluster geometrisi, muted tokens. */
-.wf-sub { font-size: 9px; font-weight: 600; letter-spacing: 0.2px; flex-shrink: 0; padding: 0 5px; border-radius: 3px; margin-right: 8px; color: var(--text2); border: 1px solid var(--border); font-family: ui-monospace, Menlo, monospace; line-height: 1.4; white-space: nowrap; }
+.wf-sub { font-size: 9px; font-weight: 600; letter-spacing: 0.2px; flex-shrink: 0; padding: 0 5px; border-radius: 3px; margin-right: 8px; color: var(--text2); border: 1px solid var(--border); font-family: var(--font-mono); line-height: 1.4; white-space: nowrap; }
 
 /* Sanal satır kabı (v0.10.278) — mutlak konumlu satırlar için referans. */
 .wf-rows { position: relative; }
@@ -1834,7 +1915,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   color: var(--text2);
   background: color-mix(in srgb, var(--text2) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--text2) 30%, transparent);
@@ -1876,8 +1957,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* v0.10.356 (operatör) — öz-süre gölgesi (.wf-bar-self, absolute) statik etiketin
    ÜSTÜNE boyanıyordu, süre yazısı sönük kalıyordu. Etiket katman olarak gölgenin
    üstünde ve tam beyaz: konum relative + z-index, renk --on-accent. */
-.wf-bar-label { position: relative; z-index: 1; font-size: 10px; color: var(--on-accent); white-space: nowrap; font-family: monospace; overflow: hidden; text-overflow: ellipsis; min-width: 0; pointer-events: none; text-shadow: 0 1px 1px rgba(0,0,0,.35); }
-.wf-bar-label-outside { position: absolute; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--text2); font-family: monospace; pointer-events: none; white-space: nowrap; }
+.wf-bar-label { position: relative; z-index: 1; font-size: 10px; color: var(--on-accent); white-space: nowrap; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; min-width: 0; pointer-events: none; text-shadow: 0 1px 1px rgba(0,0,0,.35); }
+.wf-bar-label-outside { position: absolute; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--text2); font-family: var(--font-mono); pointer-events: none; white-space: nowrap; }
 /* v0.8.536 — flips the outside label to the bar's LEFT for spans that sit
    near the end of the trace (the common "last short operation" shape),
    where the right-hand label lands outside #wf-outer's overflow:hidden and
@@ -1896,7 +1977,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    when the digit count fluctuates (12.34 → 1.23k). */
 .u-legend {
   font-size: 10px !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-feature-settings: 'tnum' 1;
   color: var(--text2);
   padding: 4px 0 0 0;
@@ -2109,8 +2190,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    long. table-layout: auto + max-width + word-break lets long keys
    wrap onto multiple lines instead of being clipped by the old
    nowrap+110px fixed column. Min-width keeps short keys aligned. */
-.ps-kv td:first-child { color: var(--text2); min-width: 140px; max-width: 320px; word-break: break-word; font-family: monospace; }
-.ps-kv td:last-child { font-family: monospace; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.ps-kv td:first-child { color: var(--text2); min-width: 140px; max-width: 320px; word-break: break-word; font-family: var(--font-mono); }
+.ps-kv td:last-child { font-family: var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 .ps-event { margin: 3px 0; padding: 5px 8px; background: var(--bg2); border-radius: var(--radius-xs); font-size: 12px; }
 
 /* Trace layout */
@@ -2160,7 +2241,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   min-width: 180px; max-width: 50%;
   overflow: hidden; text-overflow: ellipsis;
 }
-.kv-table td:last-child { font-family: monospace; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.kv-table td:last-child { font-family: var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 
 /* Kibana-style click-to-filter affordance (v0.5.229). Buttons
    hidden by default to keep the row tidy; reveal on hover so
@@ -2171,7 +2252,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .kv-actions { opacity: 0; transition: opacity 80ms ease-out; }
 .kv-filterable:hover .kv-actions,
 .kv-filterable:focus-within .kv-actions { opacity: 1; } /* v0.10.926 — klavye odağı da açar (odak halkası + ipucu görünür) */
-.kv-filterable:hover td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.kv-filterable:hover td { background: var(--bg3); } /* v0.10.933 (tablo standardı T2) — bir kademe üst: bu satırlar zemini bg2 olan açılmış log detay hücresinde; bg2 üstüne bg2 görünmezdi (accent %5 idi) */
 
 /* Metrics */
 #metric-chart-wrap { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-top: 14px; }
@@ -2186,7 +2267,7 @@ canvas { max-width: 100%; }
 .graph-node { cursor: pointer; }
 .graph-node rect { transition: stroke .15s, filter .15s; }
 .graph-node:hover rect { filter: brightness(1.25); }
-.graph-tooltip { position: fixed; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; pointer-events: none; z-index: var(--z-modal); max-width: 240px; white-space: pre-line; font-family: monospace; }
+.graph-tooltip { position: fixed; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; pointer-events: none; z-index: var(--z-modal); max-width: 240px; white-space: pre-line; font-family: var(--font-mono); }
 
 /* Empty state */
 /* v0.9.978 (arka plan denetimi D1.5 / K2) — boş ekranın YÜZEYİ yoktu.
@@ -2198,7 +2279,7 @@ canvas { max-width: 100%; }
 .empty .icon { font-size: 36px; margin-bottom: 12px; }
 .empty h3 { font-size: 14px; margin-bottom: 6px; color: var(--text); }
 .empty p { font-size: 12px; }
-.empty code { background: var(--bg2); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: monospace; }
+.empty code { background: var(--bg2); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); }
 .empty .empty-action { margin-top: 14px; display: flex; justify-content: center; gap: 8px; }
 /* `.empty-compact` (v0.9.915, mT1) — panel İÇİ ölçek. Sayfa boşluğunun
    60px'i bir kartın içinde paneli üç katına çıkarıyor; bu yüzden panel
@@ -2290,7 +2371,7 @@ canvas { max-width: 100%; }
 .ex-stack {
   margin-top: 8px; padding: 8px 10px;
   background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-xs);
-  font-family: monospace; font-size: 11px; line-height: 1.45;
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.45;
   color: var(--text2); white-space: pre; overflow: auto;
   max-height: 360px; max-width: 100%;
 }
@@ -2614,7 +2695,7 @@ button.accent.copied {
 }
 .trace-lookup input {
   background: transparent; border: 0; outline: none;
-  color: var(--text); font-family: monospace; font-size: 12px;
+  color: var(--text); font-family: var(--font-mono); font-size: 12px;
   width: 320px; padding: 5px 4px;
 }
 .trace-lookup input::placeholder { color: var(--text3); font-style: italic; }
@@ -2629,7 +2710,7 @@ button.accent.copied {
   width: 100%; resize: vertical; min-height: 110px;
   background: var(--bg1); color: var(--text);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 10px 12px; font-family: monospace; font-size: 12px;
+  padding: 10px 12px; font-family: var(--font-mono); font-size: 12px;
   line-height: 1.55; outline: none; tab-size: 2;
 }
 .adv-query textarea:focus { border-color: var(--focus); }
@@ -2650,8 +2731,8 @@ button.accent.copied {
 }
 .fb-chip:hover { border-color: var(--accent); }
 .fb-chip b { color: var(--accent2); font-weight: 600; }
-.fb-chip-op { color: var(--text2); font-family: monospace; font-size: 11px; }
-.fb-chip-val { color: var(--text); font-family: monospace; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-chip-op { color: var(--text2); font-family: var(--font-mono); font-size: 11px; }
+.fb-chip-val { color: var(--text); font-family: var(--font-mono); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── FilterQueryBox (v0.10.264, Traces "Add filter" Öneri A) — token-only;
    yoğunluk cascade'i input ölçüsünü kapsıyor. Kardeş: .fb-chip (FilterBuilder). ── */
@@ -2674,7 +2755,7 @@ button.accent.copied {
 .fq-input { flex: 1; min-width: 220px; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; padding: 4px 2px; }
 .fq-input::placeholder { color: var(--text3); }
 .fq-hint { margin-left: auto; color: var(--text3); font-size: 11px; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
-.fq-hint kbd { display: inline-block; padding: 0 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: var(--radius-xs); background: var(--bg2); font-size: 10px; line-height: 15px; color: var(--text2); font-family: ui-monospace, Menlo, monospace; }
+.fq-hint kbd { display: inline-block; padding: 0 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: var(--radius-xs); background: var(--bg2); font-size: 10px; line-height: 15px; color: var(--text2); font-family: var(--font-mono); }
 .fq-pop { position: absolute; top: calc(100% + 6px); left: 0; width: min(640px, 100%); background: var(--bg1); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop); z-index: var(--z-popover); overflow: hidden; }
 .fq-steps { display: flex; border-bottom: 1px solid var(--divider); background: var(--bg2); }
 .fq-steps > div { padding: 6px 12px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); border-right: 1px solid var(--divider); display: flex; align-items: center; gap: 6px; }
@@ -2869,7 +2950,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .team-edit .cb-wrap input {
   font-size: 11px;
   padding: 2px 22px 2px 6px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--font-mono);
 }
 .mqe-chip-edit .cb-wrap { width: 112px; }
 .mqe-chip-edit .cb-wrap input { width: 100%; padding-right: 20px; }
@@ -2913,7 +2994,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   display: flex; flex-direction: column; gap: 4px;
   font-size: 11px; color: var(--text2);
 }
-.trp-custom input { font-family: monospace; }
+.trp-custom input { font-family: var(--font-mono); }
 .trp-row { display: flex; gap: 4px; }
 .trp-row input[type="text"] { flex: 1; min-width: 0; }
 /* Time-of-day field — hour/minute/second refinement next to the text field;
@@ -2964,34 +3045,16 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    selectors narrow (only attack chrome, not content) so
    compact mode never makes anything unreadable. */
 
-/* Four density steps — spacious / comfortable (default) /
-   compact / dense. The compact + dense rules below ladder
-   the same surfaces (table cells, controls, page padding,
-   waterfall rows). Tested at each step so the difference is
-   visible without breaking the layout. Default (no
-   data-density attr set, or = "comfortable") inherits the
-   base rules above this block.
-
-   Pre-v0.4.85 only "compact" existed and the diff was
-   barely visible — this set tightens compact further AND
-   adds a denser "dense" step (used by SREs on a 4K with 50
-   service rows in view) AND a "spacious" step for tablet
-   / accessibility-first operators. */
-
-/* ── Spacious — extra breathing room ─────────────────────── */
-[data-density="spacious"] table { font-size: 14px; }
-[data-density="spacious"] thead th { padding: 10px 14px; }
-[data-density="spacious"] tbody td { padding: 10px 14px; }
-[data-density="spacious"] .row-link { padding: 10px 14px; } /* v0.10.225 — td dolgusunun ikizi */
-[data-density="spacious"] .controls { gap: 12px; }
-[data-density="spacious"] .controls input,
-[data-density="spacious"] .controls select,
-[data-density="spacious"] .controls button { padding: 7px 12px; font-size: 13px; }
-[data-density="spacious"] #content, [data-density="spacious"] .page-body { padding: 22px 28px; }
-[data-density="spacious"] .wf-row { min-height: 26px; }
-[data-density="spacious"] .wf-bar { height: 14px; }
+/* Three density steps (v0.10.933, tablo standardı — operatör cevabı S7;
+   4'ten indi, "spacious" kalktı) — comfortable (default) / compact /
+   dense. The compact + dense rules below ladder the same surfaces
+   (table cells, controls, page padding, waterfall rows) and each step
+   sets its own `--row-h` next to its padding. Default (no data-density
+   attr set, or = "comfortable") inherits the base rules above this
+   block. A stored "spacious" migrates to comfortable (lib/density.ts). */
 
 /* ── Compact — modest tightening ──────────────────────────── */
+[data-density="compact"] { --row-h: 24px; } /* v0.10.933 (T6) — 11px × 1.5 + 2×3px dolgu + ayraç */
 [data-density="compact"] table { font-size: 11px; }
 [data-density="compact"] thead th { padding: 3px 7px; }
 [data-density="compact"] tbody td { padding: 3px 7px; }
@@ -3007,6 +3070,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 [data-density="compact"] .badge { font-size: 9px; padding: 1px 5px; }
 
 /* ── Dense — maximum information density ─────────────────── */
+[data-density="dense"] { --row-h: 20px; } /* v0.10.933 (T6) — 10px × 1.5 + 2×2px dolgu + ayraç */
 [data-density="dense"] table { font-size: 10px; }
 [data-density="dense"] thead th { padding: 2px 5px; font-size: var(--fs-2xs); } /* v0.10.928 (Y3) — başlık 10px gövdeden büyük kalmasın */
 [data-density="dense"] tbody td { padding: 2px 5px; }
@@ -3032,11 +3096,6 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    Padding and the KPI tile's two size drivers (min-height + value
    size) now follow the tier. Nothing here changes layout structure:
    same grid, same order, same components. */
-[data-density="spacious"] .card       { padding: 18px; }
-[data-density="spacious"] .ov-card-h  { padding: 16px 20px; }
-[data-density="spacious"] .ov-card-b  { padding: 20px; }
-[data-density="spacious"] .ov-kpi     { padding: 18px 20px 20px; min-height: 132px; }
-
 [data-density="compact"] .card        { padding: 10px; }
 [data-density="compact"] .ov-card-h   { padding: 9px 12px; }
 [data-density="compact"] .ov-card-b   { padding: 11px; }
@@ -3192,7 +3251,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 /* v0.10.718 — başlık içindeki rozetler (kapsam, eşleşme, cluster adı) büyük
    harfe dönüşmez; mono değerler olduğu gibi okunur. */
 .sec-head .badge { text-transform: none; letter-spacing: 0; }
-.sec-head .sec-head__src { text-transform: none; letter-spacing: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; font-size: 10.5px; }
+.sec-head .sec-head__src { text-transform: none; letter-spacing: 0; font-family: var(--font-mono); font-weight: 500; font-size: 10.5px; }
 .sec-head .badge { text-transform: none; letter-spacing: 0; }
 .sec-head .sec-head__meta { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11px; color: var(--text3); }
 .sec-head .sec-head__actions { display: inline-flex; gap: 6px; text-transform: none; letter-spacing: 0; font-weight: 400; }
@@ -3247,7 +3306,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .ov-legend { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .ov-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text2); }
 .ov-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
-.ov-deploy-flag { position: absolute; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text2); transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
+.ov-deploy-flag { position: absolute; font-size: 10px; font-family: var(--font-mono); color: var(--text2); transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
 
 /* v0.10.928 (Y1) — ölü `.ov-flow*` / `.ov-node*` (servis akış haritası) ve
    `.nbr-*` (komşu kartı) aileleri silindi: 0 kullanım, ikisi de accent
@@ -3284,7 +3343,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .prob .ic { width: 30px; height: 30px; border-radius: var(--radius); display: grid; place-items: center; flex: none; }
 .prob .ti { font-weight: 600; font-size: 13px; }
 .prob .de { color: var(--text2); font-size: 12px; margin-top: 2px; }
-.prob .tm { margin-left: auto; color: var(--text3); font-size: 11px; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.prob .tm { margin-left: auto; color: var(--text3); font-size: 11px; white-space: nowrap; font-family: var(--font-mono); }
 /* v0.9.978 (D1.7) — `--bg2`, `--bg1` DEĞİL: `.ud-pill`in dört çağrı
    yerinin ikisi `Incident.tsx`te bir `.card`ın (yani `--bg1`in) İÇİNDE,
    ikisi DetailDrawer panelinde. Blanket `--bg1` onları kaybederdi.
@@ -3293,7 +3352,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 /* v0.10.928 (Y1) — hover `.card-link` diliyle: kenar --border-strong, accent
    halka yok. `text-decoration: none` (0,2,0) `a:hover` altı çizgisini yener. */
 .ud-pill:hover { border-color: var(--border-strong); text-decoration: none; }
-.ud-pill .mult { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: var(--text3); font-weight: 500; }
+.ud-pill .mult { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--text3); font-weight: 500; }
 /* .volbars — compact occurrence/volume histogram (Problem detail occurrences
    over time). Bars align to the bottom; each column's <i> height is set inline
    ∝ count, tinted by token (spike vs baseline). */
@@ -3304,7 +3363,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 /* Instances */
 .ov-inst { display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center; padding: 11px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg1); }
 .ov-inst + .ov-inst { margin-top: 9px; }
-.ov-inst .ov-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.ov-inst .ov-id { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .ov-mini { text-align: right; min-width: 92px; }
 .ov-mini .l { font-size: 10px; color: var(--text3); }
 .ov-mini .v { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -3317,7 +3376,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .ov-barcell { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; width: 100%; }
 .ov-minibar { height: 6px; border-radius: 3px; background: var(--bg2); overflow: hidden; flex: 1; max-width: 90px; }
 .ov-minibar i { display: block; height: 100%; border-radius: 3px; }
-.ov-tag { display: inline-block; padding: 1px 5px; border-radius: var(--radius-xs); font-size: 9.5px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg2); color: var(--text2); margin-right: 7px; vertical-align: middle; }
+.ov-tag { display: inline-block; padding: 1px 5px; border-radius: var(--radius-xs); font-size: 9.5px; font-weight: 700; font-family: var(--font-mono); background: var(--bg2); color: var(--text2); margin-right: 7px; vertical-align: middle; }
 .ov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .ov-dot.green { background: transparent; box-shadow: inset 0 0 0 1px var(--border-strong); } /* v0.10.929 (K5) — sağlıklı = soluk halka; 'green' tarihsel ad */
 .ov-dot.amber { background: var(--warn-solid); }
@@ -3333,7 +3392,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 /* v0.10.928 (Y4) — zoom düğmeleri grafiğin üstünde yüzüyor; dolgusuz
    ikincil kenarlar/düğümler glifin içinden görünmesin. */
 .topo-zoomctl button.sec { background: var(--bg1); }
-.topo-zoomctl .pct { font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text3); font-variant-numeric: tabular-nums; }
+.topo-zoomctl .pct { font: 600 10px var(--font-mono); color: var(--text3); font-variant-numeric: tabular-nums; }
 .topo-edges { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
 .topo-node { position: absolute; transform: translate(-50%, -50%); z-index: var(--z-sticky-cell); display: flex; align-items: center; gap: 8px; max-width: 170px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg1); box-shadow: var(--shadow-sm); cursor: default; transition: opacity .12s ease, border-color .12s ease; }
 .topo-node.focus { border: 2px solid var(--accent); background: color-mix(in oklab, var(--accent) 12%, var(--bg1)); padding: 9px 12px; }
@@ -3350,7 +3409,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    kapısında KALICI gerekçeli muafiyet. */
 .topo-node.ext { border-style: dashed; background: var(--bg0); }
 .topo-name { font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topo-sub { font-size: 9.5px; color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.topo-sub { font-size: 9.5px; color: var(--text3); font-family: var(--font-mono); white-space: nowrap; }
 /* v0.8.383 — node env chip ("int"/"uat"/"prep" next to the service
    name). Token-level only; renders solely when the MV path carries
    ServiceMapNode.env (v0.8.380 derive). */
@@ -3372,7 +3431,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 /* v0.8.281 — kenar RED chip'i (hacim/dk · p99 · err%). Pill'lerin altında
    kalsın diye z-index aynı (DOM sırası: chip'ler node'lardan önce);
    pointer-events yok — hover/hit-test kenarın kendisinde kalır. */
-.topo-chip { position: absolute; transform: translate(-50%, -50%); z-index: var(--z-sticky-cell); pointer-events: none; font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 7px; border-radius: var(--radius-sm); background: var(--bg1); border: 1px solid var(--border); color: var(--text2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.topo-chip { position: absolute; transform: translate(-50%, -50%); z-index: var(--z-sticky-cell); pointer-events: none; font: 600 10px var(--font-mono); padding: 2px 7px; border-radius: var(--radius-sm); background: var(--bg1); border: 1px solid var(--border); color: var(--text2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .topo-chip.hot { border-color: var(--accent); color: var(--text); }
 .topo-chip .chip-err { color: var(--err); }
 
@@ -3397,11 +3456,11 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    hücreler soluklaşır, ipucu barındıran hücre o an değil. */
 tr.gt-off > td:not(:has(.tip)) { opacity: .45; }
 tr.sl-off > td:not(:has(.tip)) { opacity: .4; }
-.mqe-id-letter { font-weight: 700; font-size: 12px; color: var(--accent2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mqe-id-letter { font-weight: 700; font-size: 12px; color: var(--accent2); font-family: var(--font-mono); }
 .mqe-eye { font-size: 11px; color: var(--text3); }
 .mqe-picker { position: relative; }
 .mqe-pickname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.mqe-unit { font-size: 10px; color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg3); padding: 1px 5px; border-radius: var(--radius-xs); }
+.mqe-unit { font-size: 10px; color: var(--text3); font-family: var(--font-mono); background: var(--bg3); padding: 1px 5px; border-radius: var(--radius-xs); }
 .mqe-caret { color: var(--text3); font-size: 10px; }
 .mqe-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-nav); width: 320px; max-width: 92vw; background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-pop); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
 .mqe-search { width: 100%; }
@@ -3421,9 +3480,9 @@ tr.sl-off > td:not(:has(.tip)) { opacity: .4; }
 .mqe-alias { width: 90px; font-size: 12px; }
 .mqe-filters { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .mqe-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg2); font-size: 11px; }
-.mqe-chip-k { color: var(--text2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mqe-chip-k { color: var(--text2); font-family: var(--font-mono); }
 .mqe-chip-op { color: var(--text3); }
-.mqe-chip-v { color: var(--accent2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mqe-chip-v { color: var(--accent2); font-family: var(--font-mono); }
 .mqe-chip-edit { gap: 5px; padding: 3px 6px; }
 .mqe-chip-edit select, .mqe-chip-edit input { font-size: 11px; }
 .mqe-chip-edit input { width: 96px; }
@@ -3452,13 +3511,13 @@ tr.sl-off > td:not(:has(.tip)) { opacity: .4; }
 td > .cell-actions { display: flex; gap: var(--sp-3); align-items: center; }
 td > .cell-actions.end { justify-content: flex-end; }
 .mqe-code { display: flex; flex-direction: column; gap: 4px; }
-.mqe-code textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.6; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); color: var(--text); resize: vertical; }
+.mqe-code textarea { width: 100%; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); color: var(--text); resize: vertical; }
 .mqe-code-foot { font-size: 11px; }
 .mqe-code-err { color: var(--err); font-size: 11.5px; }
 /* v0.9.782 — PromQL etiket gezgini: katlanabilir anahtar/değer sütunları.
    Chip'ler ui/Chip (group-by chip'iyle tek dil; v0.10.924). */
 .mqe-lb { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
-.mqe-lb-metric { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--accent2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.mqe-lb-metric { font-family: var(--font-mono); font-size: 11px; color: var(--accent2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
 .mqe-lb-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 10px 10px; } /* v0.10.924 — üst çizgi DisclosureButton bölüm anatomisinden gelir; ikisi 2px'e yığılıyordu */
 .mqe-lb-pick { display: flex; align-items: center; gap: 6px; padding-top: 8px; }
 .mqe-lb-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding-top: 8px; }
@@ -3470,7 +3529,7 @@ td > .cell-actions.end { justify-content: flex-end; }
 .mqe-chart { padding: 12px; }
 .mqe-dash-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 3px 0; font-size: 13px; }
 /* step 2 — formula rows, per-query colour, panel options */
-.mqe-expr { flex: 1 1 320px; min-width: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.mqe-expr { flex: 1 1 320px; min-width: 220px; font-family: var(--font-mono); font-size: 12.5px; }
 .mqe-row.formula { background: color-mix(in oklab, var(--accent) 5%, var(--bg1)); }
 .mqe-row.formula .mqe-id-letter { color: var(--accent2); }
 .mqe-unitin { width: 56px; font-size: 12px; }
@@ -3483,7 +3542,7 @@ td > .cell-actions.end { justify-content: flex-end; }
    Dense mono top-level cells + a subtle per-severity row tint (ERROR red,
    WARN amber). Scoped to direct rows so the expanded-row pre/kv-table keep
    their own styling. Tokens only. */
-.logtbl-dense > tbody > tr > td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.logtbl-dense > tbody > tr > td { font-family: var(--font-mono); font-size: 11.5px; }
 /* v0.10.417 (log arama denetimi B5) — satır sarma anahtarı: yalnız mesaj
    hücresi, yalnız açıkken. .td-full değil (word-break:break-all URL/UUID'yi
    parçalar); telefon kuralı (640px) dokunulmadı. */
@@ -3544,7 +3603,7 @@ td > .cell-actions.end { justify-content: flex-end; }
      kelepçeli; etiket kesilir, değer asla kırılmaz. */
   max-width: min(420px, calc(100vw - 24px));
 }
-.ov-tt .ov-tt-t { color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; margin-bottom: 5px; }
+.ov-tt .ov-tt-t { color: var(--text3); font-family: var(--font-mono); font-size: 10px; margin-bottom: 5px; }
 /* v0.10.182 — bant tooltip ipucu («tıkla → çekmece»), PIN_TIP_HTML ile aynı ton */
 .ov-tt .ov-tt-hint { color: var(--text3); font-size: 10px; margin-top: 4px; }
 .ov-tt .ov-tt-r { display: flex; align-items: center; gap: 7px; justify-content: space-between; }
@@ -3560,7 +3619,10 @@ td > .cell-actions.end { justify-content: flex-end; }
    scroll container owns the height, so the header sticks to its top edge. */
 /* v0.9.978 (D1.2) — `.table-wrap` ile aynı boşluk, aynı gerekçe:
    `thead th` `--bg2` ile opak, gövde şeffaftı. */
-.vt-scroll { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); }
+/* v0.10.933 (tablo standardı T6) — virtualizer satır yüksekliğini JS'te
+   (ROW_H) sabit tahmin eder ve [data-density]yi görmez; kutunun içinde
+   ritim rahat değerde kalır. rowHeight.test ROW_H ile eşitliği çiviler. */
+.vt-scroll { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); --row-h: 36px; }
 /* v0.10.726 — 721'in fill kipi ve 722'nin fill kolonu kuralları
    KALDIRILDI: operatör test ortamında gördü, Dynatrace SAYFAYI kaydırır
    (chart+filtreler yukarı kayar, liste sayfanın sonuna kadar akar), kutuyu
@@ -3569,7 +3631,7 @@ td > .cell-actions.end { justify-content: flex-end; }
    v0.9.645 + v0.9.1078 aynen. Yatay kaydırma kutuda kalır. */
 .vt-scroll > table { border-collapse: collapse; }
 .vt-scroll thead { position: sticky; top: 0; z-index: var(--z-sticky-cell); }
-.vt-scroll thead th { background: var(--bg2); }
+.vt-scroll thead th { background: var(--bg1); } /* v0.10.933 (tablo standardı T3) — tek başlık yüzeyi (bg2 idi; `.table-wrap.is-scroll` ile aynı) */
 .vt-scroll td.vt-empty { text-align: center; color: var(--text3); padding: 28px 12px; }
 
 /* System area (v0.8.9) — the consolidated admin shell: a left vertical
@@ -3705,7 +3767,8 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
       bir sınıf (docs/INCIDENTS.md, table-layout). Burada sarma açık,
       kırpma yok.
    2. `tbody tr { cursor: pointer }` yanlış sinyal: bu satırların tıklama
-      hedefi yok.
+      hedefi yok. v0.10.933 (T2) — taban kural artık imleç/hover vermiyor
+      (yalnız tıklanabilir satır), yerel opt-out'lar silindi.
    3. Başlıklarda `text-transform: uppercase` KAPALI. Sebebi süs değil
       ANLAM: model başlığa birim yazıyor ("p95 (ms)") ve büyütmek onu
       "P95 (MS)" yapıyor — birim adı büyük harfte başka bir şeydir.
@@ -3723,11 +3786,9 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
   padding: 5px 8px;
   white-space: nowrap;
 }
-.cm-md-table tbody tr { cursor: default; }
 /* v0.10.688 — sohbette trace listesi bloğu (ChatTraceList). */
 .cm-trace-list { margin-top: var(--sp-3); overflow-x: auto; }
 .cm-trace-list__more { margin-top: var(--sp-2); font-size: var(--fs-xs); }
-.cm-md-table tbody tr:hover { background: transparent; }
 .cm-md-table tbody td {
   padding: 5px 8px; max-width: none;
   white-space: normal; overflow: visible; text-overflow: clip;
@@ -3757,12 +3818,12 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
   border-bottom: 1px solid var(--divider); min-height: 20px;
 }
 .cm-md-code-lang {
-  font: 600 9.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 600 9.5px var(--font-mono);
   text-transform: uppercase; letter-spacing: .06em; color: var(--text3);
 }
 .cm-md-code pre {
   margin: 0; padding: 7px 9px; overflow-x: auto;
-  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 11.5px/1.5 var(--font-mono);
   white-space: pre; color: var(--text);
 }
 /* v0.10.514 (operatör, prod: "highlight ettiği satır uzun olunca CoSRE
@@ -4202,9 +4263,9 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .cm-steps-t tr.is-open td { background: var(--accent-bg); }
 .cm-steps-t tr.is-err td.cm-steps-tool, .cm-steps-t tr.is-err td.cm-steps-res { color: var(--err); }
 .cm-steps-t td.num { text-align: right; white-space: nowrap; }
-.cm-steps-tool { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.cm-steps-tool { font-family: var(--font-mono); white-space: nowrap; }
 .cm-steps-tool button { font: inherit; }
-.cm-steps-args { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text3); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-steps-args { font-family: var(--font-mono); color: var(--text3); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-steps-res { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
 .cm-steps-bar { display: inline-block; width: 44px; height: 5px; border-radius: 3px; background: var(--bg3); vertical-align: middle; margin-left: 6px; overflow: hidden; }
 .cm-steps-bar i { display: block; height: 100%; background: var(--accent); min-width: 2%; }
@@ -4242,7 +4303,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 /* v0.10.734 — oluşum çubuğu: dolgu pay, etiket "sayı · %" (iki sayı sütunu yerine). */
 .exc-share { position: relative; height: 16px; border-radius: var(--radius-xs); overflow: hidden; background: color-mix(in srgb, var(--text3) 16%, transparent); }
 .exc-share i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--err); opacity: .65; }
-.exc-share b { position: relative; z-index: 1; padding: 0 var(--sp-3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-2xs); line-height: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
+.exc-share b { position: relative; z-index: 1; padding: 0 var(--sp-3); font-family: var(--font-mono); font-size: var(--fs-2xs); line-height: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
 /* v0.10.734 — uzun stack trace katlama şeridi (kartın altı). */
 .ex-fold { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-5); border-top: 1px dashed var(--divider); background: var(--bg2); border-radius: 0 0 8px 8px; }
 .ex-fold__note { color: var(--text3); font-size: var(--fs-xs); }
@@ -4252,7 +4313,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 /* v0.10.187 — ekran okuyucu metni (görsel yok); hata satırı işareti */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .cm-md-code-no { display: inline-block; min-width: 5ch; margin-right: 10px; text-align: right; color: var(--text3); user-select: none; position: sticky; left: 0; background: var(--bg2); }
-.cm-md-code-file { font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.cm-md-code-file { font: 10px var(--font-mono); color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .cm-md-code-res { color: var(--text3); font-style: italic; }
 .cm-md-code-fold { padding: 2px 6px 4px; border-top: 1px solid var(--divider); background: var(--bg2); }
 /* CoSRE cevap kartı anatomisi: Karar + Kanıt satırları */
@@ -4279,7 +4340,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .lf-type {
   display: inline-block; flex: none; width: 12px; text-align: center;
   font-size: 9px; line-height: 1; color: var(--text3);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
 }
 
 /* v0.10.282 — /logs satırında pod pivotu: hücre üstüne gelince ⊕/⊖ (KvRow
@@ -4288,14 +4349,18 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .lt-pivot:hover .kv-actions, .lt-pivot:focus-within .kv-actions { opacity: 1; }
 
 /* v0.10.298 — /logs Desenler paneli: sayı hücresinde pay çubuğu */
-.lp-panel .table-wrap { max-height: 380px; overflow: auto; }
+/* v0.10.933 (T10) — iç kaydırmalı kap = `.is-scroll` (yapışkan başlık oradan). */
+.lp-panel .table-wrap.is-scroll { max-height: 380px; }
 .lp-search { white-space: nowrap; }
 .lp-row td.num { position: relative; }
 .lp-bar { position: absolute; right: 6px; top: 6px; bottom: 6px; background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 2px; pointer-events: none; }
-.lp-row:hover td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+/* v0.10.933 (T2) — `.lp-row:hover td` kalktı: sorgusu olan satır role=button
+   taşır ve ortak `tbody tr[role="button"]:hover` bg2'sini alır; sorgusuz
+   (tıklanamaz) satır hover almaz. */
 
 /* v0.10.303 — Settings → Trace facets: satır/eylem kancaları (test + hover) */
-.tf-row:hover td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+/* v0.10.933 (tablo standardı T2) — `.tf-row:hover td` silindi: TraceFacetsTab
+   satırı tıklanmaz (eylem yalnız ekle/kaldır düğmesinde); sınıf test kancası kalır. */
 .tf-add, .tf-remove { white-space: nowrap; }
 
 /* v0.10.330 — tablo hücresinde tek satır + üç nokta (K8s kolonları: pod/node

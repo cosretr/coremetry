@@ -712,7 +712,6 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                   <tr key={i} data-trace-id={s.traceId || undefined}
                     className={isEv ? 'wf-evidence' : undefined}
                     title={isEv ? 'Explain kanıtı — kök neden bu trace üzerinden soruşturuldu' : undefined}
-                    style={{ cursor: s.traceId ? 'pointer' : 'default' }}
                     {...(s.traceId ? rowActivation(() => navigate(traceHref(s.traceId!))) : {})}>
                     <td className="mono" style={{ paddingLeft: 14 }}>
                       <span style={{ color: 'var(--accent2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: 150 }}>

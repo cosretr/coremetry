@@ -560,8 +560,7 @@ export default function ProblemsPage() {
                         // açıyordu. Enter/Boşluk → detay, yalnız satır odaktayken.
                         // v0.10.924 — buton rolü rowActivation yayılımından geliyor
                         // (tıklanabilir <tr> sözleşmesi, D3); tekrar eden literal kalktı.
-                        aria-expanded={open}
-                        style={{ cursor: 'pointer' }}>
+                        aria-expanded={open}>
                         <td style={{ color: 'var(--text3)', textAlign: 'center', cursor: 'pointer' }}
                           title={open ? 'Hide occurrences' : 'Peek occurrences'}
                           onClick={e => { e.stopPropagation(); toggleExpand(g.fingerprint); }}>

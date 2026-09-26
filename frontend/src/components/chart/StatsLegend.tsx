@@ -125,7 +125,6 @@ export function StatsLegend({ series, onToggle, isVisible, defaultCollapsed, sto
                     // v0.10.926 — gizli seri soluklaşması hücrelerde (`.sl-off`):
                     // satırdaki opaklık ⊕ ipucunu yarı saydam çiziyordu.
                     className={on ? undefined : 'sl-off'}
-                    style={{ cursor: onToggle ? 'pointer' : 'default' }}
                     title={onToggle ? 'Tıkla: yalnız bu seri · Ctrl/Cmd-tık: gizle/göster' : undefined}>
                     <td style={{ ...td, textAlign: 'left', color: 'var(--text2)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
                       <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: s.color, marginRight: 7, verticalAlign: 'middle' }} />

@@ -826,7 +826,7 @@ export default function ClustersPage() {
                               className={r.deployment === depFilter ? 'row-selected' : undefined}
                               {...rowActivation(() => setSection('pods', p => p.set('deployment', r.deployment)))}
                               title="Open the pod list filtered to this workload"
-                              style={{ cursor: 'pointer', ...(depdt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : null) }}>
+                              style={depdt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : undefined}>
                               <td className="mono" style={{ fontSize: 12 }}>{r.deployment}</td>
                               {/* v0.9.39 — ready/desired rozeti + statü; KSM
                                   yoksa '—'. v0.9.42: surge'de (ready>desired,
@@ -881,7 +881,7 @@ export default function ClustersPage() {
                                 title={selected
                                   ? 'Clear the namespace selection'
                                   : 'Show workloads in this namespace'}
-                                style={{ cursor: 'pointer', ...(nsdt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : null) }}>
+                                style={nsdt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : undefined}>
                                 <td className="mono" style={{ fontSize: 12 }}>{r.namespace}</td>
                                 <td className="num mono">{r.pods ? fmtNum(r.pods) : '—'}</td>
                                 <td className="num mono">{fmtCores(r.cpuCores)}</td>
@@ -953,7 +953,6 @@ export default function ClustersPage() {
                             <tr key={`${r.cluster}|${r.namespace}|${r.pod}`}
                               {...rowActivation(() => openPod(r))}
                               style={{
-                                cursor: 'pointer',
                                 contentVisibility: 'auto',
                                 containIntrinsicSize: 'auto 36px',
                               }}>

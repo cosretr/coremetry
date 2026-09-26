@@ -238,9 +238,10 @@ export default function DashboardsPage() {
                 {dt.sortedRows.map((d, i) => (
                   <tr key={d.id}
                       {...dt.rowProps(i)}
+                      // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                      data-row-action
                       onMouseEnter={() => dt.nav.setSelected(i)}
-                      onClick={() => navigate(`/dashboard?id=${d.id}`)}
-                      style={{ cursor: 'pointer' }}>
+                      onClick={() => navigate(`/dashboard?id=${d.id}`)}>
                     {/* <td> SIRASI dashCols() ile BİREBİR olmak zorunda —
                         tableLayout:fixed + colgroup, kayma tsc'ye
                         görünmez. Sıra: star · name · tags · description

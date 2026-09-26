@@ -445,10 +445,11 @@ export function DatabaseStatementsSection({
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map((r, i) => (
+                /* v0.10.933 (tablo standardı T2) — stmtHash'siz satır açılmaz:
+                   rowActivation yalnız açılan satıra; koşullu cursor kalktı. */
                 <tr key={r.stmtHash ?? i}
-                  {...rowActivation(() => onOpen(r))}
-                  title={`${r.sampleStatement || r.statement}\n\ncalled by ${r.service}`}
-                  style={{ cursor: r.stmtHash ? 'pointer' : 'default' }}>
+                  {...(r.stmtHash ? rowActivation(() => onOpen(r)) : {})}
+                  title={`${r.sampleStatement || r.statement}\n\ncalled by ${r.service}`}>
                   <td className="mono" style={{
                     maxWidth: 0, overflow: 'hidden',
                     textOverflow: 'ellipsis', whiteSpace: 'nowrap',

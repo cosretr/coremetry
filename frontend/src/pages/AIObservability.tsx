@@ -291,7 +291,7 @@ export default function AIObservabilityPage() {
                   const cost = costForCall(rates, c.model, c.inputTokens, c.outputTokens);
                   return (
                   <tr key={c.id} {...rowActivation(() => setOpen(c))}
-                    style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
+                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
                     <td className="mono" style={{ fontSize: 11 }}>{tsLong(c.createdAt)}</td>
                     <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{c.surface}</td>
                     <td style={{ fontSize: 12 }}>
@@ -635,7 +635,7 @@ function BreakdownTable({ title, rows, cols, onPickFirst }: {
           </tr></thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} {...rowActivation(() => onPickFirst(r.a))} style={{ cursor: 'pointer' }}>
+              <tr key={i} {...rowActivation(() => onPickFirst(r.a))}>
                 <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{r.a}</td>
                 <td className="num mono">{r.b}</td>
                 <td className="num mono" style={{ fontSize: 11 }}>{r.c}</td>

@@ -116,7 +116,7 @@ function QueryErrorsPanel() {
               return (
               <Fragment key={k}>
                 <tr {...rowActivation(() => setOpen(open === k ? null : k))}
-                  style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}
                   title="Click to show the exact query body sent">
                   <td className="mono" style={{ fontSize: 11 }}>{fmtClock(e.at)}</td>
                   <td>{e.op}</td>

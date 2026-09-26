@@ -58,7 +58,7 @@ export function PanelLegend({
                 aria-pressed={vis[i] !== false}
                 aria-label={`${s.name} — Enter: izole et, Boşluk: gizle/göster`}
                 style={{
-                  opacity: vis[i] === false ? 0.35 : 1, cursor: 'pointer',
+                  opacity: vis[i] === false ? 0.35 : 1,
                   background: focusName === s.name ? 'var(--bg2)' : undefined,
                 }}
                 // v0.9.793 — hover/fokus SERİYİ VURGULAR (TSP sözleşmesi).

@@ -185,7 +185,9 @@ export default function RolloutsPage() {
                       });
                       const wlHref = entityHref({ type: 'workload', id: `wl:${r.clusterId}/${r.namespace}/${r.kind || 'Deployment'}/${r.workload}`, name: r.workload, namespace: r.namespace, clusterId: r.clusterId }, { range });
                       return (
-                        <tr key={rolloutKey(r)} style={rows.length > 100 ? { ...ROW_CV, cursor: 'pointer' } : { cursor: 'pointer' }}
+                        <tr key={rolloutKey(r)} style={rows.length > 100 ? ROW_CV : undefined}
+                          // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                          data-row-action
                           onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; setParam('rollout', encodeRolloutParam(r)); }}>
                           <td><Badge tone={statusTone(r.status)} title={[statusTitle(r.status), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></td>
                           <td title={`${cname} / ${r.namespace} / ${r.workload}`} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

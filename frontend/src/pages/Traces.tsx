@@ -37,7 +37,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ColumnManager } from '@/components/ColumnManager';
 import { stepForPoints, barPanelMaxDataPoints } from '@/lib/chartStep';
-import { VirtualTable } from '@/components/ui/DataTable';
+import { VirtualTable, ROW_H } from '@/components/ui/DataTable';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTable } from '@/components/ui/DataTable';
 import { stickyLeftOffsets, formatSortParam, type DataTableColumn } from '@/lib/dataTable';
@@ -1529,7 +1529,7 @@ function TracesPageInner() {
               dt={dt}
               height="auto"
               scrollResetKey={`${page}|${sort}|${order}`}
-              rowHeight={36}
+              rowHeight={ROW_H}
               getRowKey={(t) => t.traceId}
               renderRow={(t) => {
                 const href = traceHref(t.traceId, { pageRange: range });
@@ -1842,7 +1842,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill }: {
               const drillable = a.withRawAvailable ?? a.traceCount;
               const missingRaw = a.traceCount - drillable;
               return (
-                <tr key={`${a.groupKey}|${a.groupExtra}`} {...rowActivation(() => onDrill(a))} style={{ cursor: 'pointer' }}>
+                <tr key={`${a.groupKey}|${a.groupExtra}`} {...rowActivation(() => onDrill(a))}>
                   <td><b>{a.groupKey || '—'}</b></td>
                   {groupBy !== 'service' && <td><SvcBadge name={a.groupExtra ?? ''} /></td>}
                   <td className="mono" style={{ textAlign: 'right' }}>

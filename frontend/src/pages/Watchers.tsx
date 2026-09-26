@@ -174,7 +174,7 @@ export default function WatchersPage() {
                 {dt.sortedRows.map((r, i) => (
                   <tr key={r.id} {...dt.rowProps(i)}
                     {...rowActivation(() => openWatcher(r.id))}
-                    style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 38px' }}
+                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 38px' }}
                     title="Open fire / notification / resolve history">
                     <td><b>{r.name}</b></td>
                     <td className="mono" style={{ fontSize: 12 }} title={r.watcherJson ? 'Imported ES watch — condition projected from the stored definition' : undefined}>

@@ -345,6 +345,9 @@ export function substituteVars(s: string, vars: Record<string, string>): string 
 //                             () => router.push(`/trace?id=${t.traceId}`))}>
 export function rowClickHandlers(href: string, navigate: () => void) {
   return {
+    // v0.10.933 (tablo standardı T2) — el imleci + hover yalnız bu işareti
+    // (ya da role="button" / .row-link) taşıyan satıra verilir (globals.css).
+    'data-row-action': true as const,
     onClick: (e: ReactMouseEvent) => {
       // Left-click with a modifier → new tab. Match what an <a href> does.
       if (e.metaKey || e.ctrlKey || e.shiftKey) {

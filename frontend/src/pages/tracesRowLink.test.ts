@@ -81,17 +81,22 @@ describe('/traces satırı gerçek bir link', () => {
     const c = css();
     expect(c).toContain('tbody td.row-cell, [data-density] tbody td.row-cell { padding: 0; }');
     const tdRules = [...c.matchAll(/\[data-density="([a-z]+)"\] tbody td \{ padding: ([^;]+); \}/g)];
-    expect(tdRules.length, 'yoğunluk td kuralları kayboldu — kapı BAYAT').toBeGreaterThanOrEqual(3);
+    // v0.10.933 — yoğunluk 4 → 3 basamak: rahat taban kuralda, compact + dense burada.
+    expect(tdRules.map(r => r[1]).sort(), 'yoğunluk td kuralları kayboldu — kapı BAYAT').toEqual(['compact', 'dense']);
     for (const [, density, pad] of tdRules) {
       const twin = new RegExp(`\\[data-density="${density}"\\] \\.row-link \\{ padding: ${pad.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; \\}`);
       expect(c, `${density}: .row-link dolgusu td ile aynı değil`).toMatch(twin);
     }
   });
 
-  it('sanal tabloda row-link 36 px\'e çakılı ve Traces.tsx rowHeight={36}', () => {
+  // v0.10.933 (tablo standardı T6) — literal 36 yerine TEK ritim: CSS
+  // `--row-h` (sanal kutuda ROW_H'ye geri sabitli), JS `ROW_H`. Eşitliği
+  // ui/DataTable/rowHeight.test.ts çiviliyor.
+  it('sanal tabloda row-link --row-h\'ye çakılı ve Traces.tsx rowHeight={ROW_H}', () => {
     const c = css();
-    expect(c).toMatch(/\.vt-scroll tbody td\.row-cell > \.row-link \{[^}]*height: 36px;[^}]*line-height: 18px;/);
-    expect(traces()).toContain('rowHeight={36}');
+    expect(c).toMatch(/\.vt-scroll tbody td\.row-cell > \.row-link \{[^}]*height: var\(--row-h\);[^}]*line-height: 18px;/);
+    expect(traces()).toContain('rowHeight={ROW_H}');
+    expect(traces()).not.toContain('rowHeight={36}');
     // v0.10.722/726 — yükseklik = içerik ('auto'), formül gitti; sayfa kaydırır.
     expect(traces()).toContain('height="auto"');
     expect(traces()).not.toContain('44 + displayRows.length * 36');

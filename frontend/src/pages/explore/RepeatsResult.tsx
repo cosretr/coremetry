@@ -87,7 +87,7 @@ export function RepeatsResult({
                 {repeatsDt.sortedRows.map((r, i) => (
                   <tr key={`${r.traceId}|${i}`} {...repeatsDt.rowProps(i)}
                       {...rowActivation(() => navigate(traceHref(r.traceId)))}
-                      style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' }}>
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' }}>
                     <td>
                       <Link to={traceHref(r.traceId)}
                             onClick={e => e.stopPropagation()}

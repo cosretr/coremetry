@@ -42,6 +42,21 @@ describe('tablo kabı yüksekliği sınırlanınca kayar (v0.10.930)', () => {
     expect(offenders).toEqual([]);
   });
 
+  // v0.10.933 (tablo standardı T10) — aynı kural CSS tarafında: bir
+  // `.table-wrap` kuralı max-height veriyorsa seçici `.is-scroll` taşır
+  // (`.lp-panel .table-wrap` 380px ile yapışkan başlıksız kayıyordu).
+  it('globals.css: max-height veren her .table-wrap kuralı .is-scroll', () => {
+    const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const offenders: string[] = [];
+    for (const m of clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/max-height\s*:/.test(m[2])) continue;
+      for (const sel of m[1].split(',').map(s => s.trim())) {
+        if (/\.table-wrap(?![\w-])/.test(sel) && !/\.table-wrap[\w.-]*\.is-scroll|\.is-scroll[\w.-]*\.table-wrap/.test(sel)) offenders.push(sel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('Slos öneri önizlemesi is-scroll', () => {
     const s = readFileSync(resolve(SRC, 'pages/Slos.tsx'), 'utf8');
     expect(s).toContain(`<div className="table-wrap is-scroll" style={{ maxHeight: '50vh' }}>`);

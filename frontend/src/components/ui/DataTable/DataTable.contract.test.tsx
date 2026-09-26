@@ -163,3 +163,26 @@ describe('DataTableColgroup sığdırma sanal tabloya da ulaşır (v0.10.357)', 
   });
 });
 
+
+/* v0.10.933 (tablo standardı T3) — sayısal (sağa yaslı) kolonda sıralama oku
+   etiketten ÖNCE: boştaki görünmez ok yuvası solda, etiket sağa yaslı
+   sayılarla aynı hizada biter. Sayısal olmayan kolonda ok etiketten sonra. */
+describe('DataTableHead ok yeri', () => {
+  it('numeric → ok önce (margin sağda); metin → ok sonra', () => {
+    const el = render(<Probe />);
+    const ths = Array.from(el.querySelectorAll('th'));
+    const nTh = ths.find(t => t.textContent?.includes('N') && t.classList.contains('num'))!;
+    const nameTh = ths.find(t => t.textContent?.includes('Name'))!;
+    const kids = (th: Element) => Array.from(th.childNodes).filter(n => n.nodeType === 3 || (n as Element).classList?.contains('sort-arrow'));
+    const nKids = kids(nTh);
+    expect((nKids[0] as Element).classList?.contains('sort-arrow')).toBe(true);
+    expect(nKids[1].textContent).toBe('N');
+    const arrow = nTh.querySelector<HTMLElement>('.sort-arrow')!;
+    expect(arrow.style.marginLeft).toBe('0px');
+    expect(arrow.style.marginRight).toBe('4px');
+    const nameKids = kids(nameTh);
+    expect(nameKids[0].textContent).toBe('Name');
+    expect((nameKids[1] as Element).classList?.contains('sort-arrow')).toBe(true);
+    expect(nameTh.querySelector<HTMLElement>('.sort-arrow')!.getAttribute('style')).toBeNull();
+  });
+});

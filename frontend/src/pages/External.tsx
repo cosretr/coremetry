@@ -117,7 +117,6 @@ export default function ExternalPage() {
                   <tr key={r.host} {...dt.rowProps(i)}
                     {...rowActivation(() => openHost(r.host))}
                     style={{
-                      cursor: 'pointer',
                       contentVisibility: 'auto',
                       containIntrinsicSize: 'auto 36px',
                     }}>

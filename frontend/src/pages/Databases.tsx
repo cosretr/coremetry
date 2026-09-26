@@ -455,10 +455,12 @@ export default function DatabasesPage() {
                     <DataTableHead dt={stmtDt} />
                   <tbody>
                     {stmtDt.sortedRows.map((r, i) => (
+                      /* v0.10.933 (tablo standardı T2) — stmtHash'siz satır açılmaz:
+                         rowActivation (role=button → el imleci + hover) yalnız
+                         açılan satıra; satır içi koşullu cursor kalktı. */
                       <tr key={r.stmtHash ?? i}
-                        {...rowActivation(() => openStmt(r))}
-                        title={r.sampleStatement || r.statement}
-                        style={{ cursor: r.stmtHash ? 'pointer' : 'default' }}>
+                        {...(r.stmtHash ? rowActivation(() => openStmt(r)) : {})}
+                        title={r.sampleStatement || r.statement}>
                         <td className="mono" style={{ maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {r.statement}
                         </td>

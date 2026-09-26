@@ -434,7 +434,7 @@ function LogRow({
              off-screen log rows — the table > 100 rows hard constraint.
              ~28px row; containIntrinsicSize reserves space so the
              scrollbar doesn't jump (v0.7.79). */
-          style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 28px' }}>
+          style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 28px' }}>
         <td className="mono">{tsLong(l.timestamp)}</td>
         {colIds.map(id => {
           if (id === 'message') {

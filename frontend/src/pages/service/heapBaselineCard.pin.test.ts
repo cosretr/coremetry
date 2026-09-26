@@ -16,6 +16,9 @@ describe('HeapBaselineCard — dürüstlük pinleri', () => {
     expect(src).toContain('thresholds={thresholds}');
     expect(src).toContain('[focused, ...pods.filter(p => p !== focused)].slice(0, LINES_MAX)');
     expect(src).toContain('rowActivation(() => setFocus(p.pod))');
+    // v0.10.933 (tablo standardı T2) — odaklı satır tek seçili görünümle, satır içi bg3 yok.
+    expect(src).toContain("className={focused?.pod === p.pod ? 'row-selected' : undefined}");
+    expect(src).not.toContain("? 'var(--bg3)'");
     expect(src).toContain('sessiz · ');
     expect(src).toContain('Bu kart problem açmaz.');
     expect(src).toContain('gölge: problem AÇILIRDI'); // v0.10.891 — dedektör hükmü rozeti

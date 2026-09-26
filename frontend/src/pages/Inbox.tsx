@@ -978,7 +978,6 @@ export default function InboxPage() {
                     {...rowActivation(() => openDrawer(it))}
                     onMouseEnter={() => dt.nav.setSelected(i)}
                     style={{
-                      cursor: 'pointer',
                       contentVisibility: 'auto',
                       containIntrinsicSize: 'auto 44px',
                     }}>

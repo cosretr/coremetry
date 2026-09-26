@@ -7,6 +7,7 @@
 export { useDataTable, DataTableHead, DataTableColgroup, ColResizeHandle, ResetLayoutButton, resolveInitialSort, headKeyDown, HEAD_RESIZE_STEP_PX } from './DataTable';
 export type { DataTable, DataTableSelection, DataTableServer } from './DataTable';
 export { VirtualTable } from './VirtualTable';
+export { ROW_H } from './rowHeight';
 export type { VirtualTableProps } from './VirtualTable';
 export type { DataTableColumn, SortState, SortDir } from '@/lib/dataTable';
 export { columnLayoutSig, visibleColumns, nextSort, parseSortParam, formatSortParam } from '@/lib/dataTable';

@@ -152,7 +152,9 @@ export function DrawerSection({ title, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: 18 }}>
+    // v0.10.933 (tablo standardı T10) — `drawer-section` kancası: içindeki
+    // `.table-wrap` çerçevesini bırakır (globals.css), kutu içinde kutu yok.
+    <div className="drawer-section" style={{ marginBottom: 18 }}>
       <div style={{
         fontSize: 'var(--fs-2xs)', color: 'var(--text3)', textTransform: 'uppercase',
         letterSpacing: 0.5, marginBottom: 'var(--sp-3)', fontWeight: 600,

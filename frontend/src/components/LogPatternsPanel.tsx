@@ -135,7 +135,10 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
   const d = q.data;
   const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 0);
   const maxTotal = trows.reduce((m, r) => Math.max(m, r.totalCount), 0);
-  const rowStyle = (has: boolean) => ({ cursor: has ? 'pointer' : 'default', contentVisibility: 'auto', containIntrinsicSize: '0 26px' } as const);
+  /* v0.10.933 (tablo standardı T2) — koşullu cursor kalktı: el imleci + hover
+     globals.css'ten role=button işaretiyle gelir, işaret yalnız sorgusu olan
+     (açılan) satırda. */
+  const rowStyle = { contentVisibility: 'auto', containIntrinsicSize: '0 26px' } as const;
   return (
     <div className="card lp-panel" style={{ padding: '10px 12px', marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -175,7 +178,7 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
           {q.isError && <Empty icon="⚠" title="Desenler alınamadı" compact>{q.error instanceof Error ? q.error.message : ''}</Empty>}
           {d && rows.length === 0 && !q.isPending && <Empty icon="≡" title="Bu pencerede desen yok" compact />}
           {rows.length > 0 && (
-            <div className="table-wrap is-fit">
+            <div className="table-wrap is-scroll">
               <table style={{ tableLayout: 'fixed', width: '100%' }}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
@@ -184,8 +187,8 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                     const share = maxCount > 0 ? (r.count / maxCount) * 100 : 0;
                     return (
                       <tr key={r.hash} className="lp-row" title={r.sample}
-                        {...rowActivation(() => { if (r.query) onSearch(r.query); })}
-                        style={rowStyle(!!r.query)}>
+                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}
+                        style={rowStyle}>
                         <td className="mono" style={cellEllipsis}>{r.template}</td>
                         <td className="num">
                           <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
@@ -240,7 +243,7 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
             </Empty>
           )}
           {trows.length > 0 && (
-            <div className="table-wrap is-fit">
+            <div className="table-wrap is-scroll">
               <table style={{ tableLayout: 'fixed', width: '100%' }}>
                 <DataTableColgroup dt={tdt} />
                 <DataTableHead dt={tdt} />
@@ -249,8 +252,8 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                     const share = maxTotal > 0 ? (r.totalCount / maxTotal) * 100 : 0;
                     return (
                       <tr key={r.id} className="lp-row" title={r.sample}
-                        {...rowActivation(() => { if (r.query) onSearch(r.query); })}
-                        style={rowStyle(!!r.query)}>
+                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}
+                        style={rowStyle}>
                         <td className="mono" style={cellEllipsis}>
                           {r.exceptionType && <span className="badge b-err" style={{ marginRight: 6 }}>{r.exceptionType}</span>}
                           {r.template}

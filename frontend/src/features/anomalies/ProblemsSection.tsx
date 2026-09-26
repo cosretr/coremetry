@@ -626,7 +626,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                       // yayılımından geliyor (tıklanabilir <tr> sözleşmesi, D3);
                       // aynı değeri tekrarlayan literal öznitelik kaldırıldı.
                       style={{
-                        cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 44px',
+                        contentVisibility: 'auto', containIntrinsicSize: 'auto 44px',
                         // v0.10.922 (sade palet adım 1) — açık kritik satırın
                         // kırmızı zemini KALKTI. Aynı olgu beş kez boyanıyordu
                         // (zemin + P1 + CRITICAL + kırmızı değer + OPEN); renk

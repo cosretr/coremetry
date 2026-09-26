@@ -99,7 +99,7 @@ export function TopEndpointsCard({ service, range, endpoints }: {
             {dt.sortedRows.slice(0, 10).map((r, i) => {
               const share = maxTime > 0 ? totalTimeOf(r) / maxTime : 0;
               return (
-                <tr key={r.path} {...dt.rowProps(i)} style={{ cursor: 'pointer' }}
+                <tr key={r.path} {...dt.rowProps(i)}
                     {...rowActivation(() => gotoEp(r.path))}>
                   <td><span className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.path}>{r.path}</span></td>
                   <td className="num">{fmtCount(r.calls)}</td>

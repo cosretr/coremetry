@@ -149,9 +149,11 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
               {dt.sortedRows.map(p => {
                 const st = HEAP_STATUS[p.band.status] ?? HEAP_STATUS.no_baseline;
                 const noBand = p.band.status === 'no_baseline';
+                /* v0.10.933 (tablo standardı T2) — odaklı pod satırı satır içi
+                   bg3 zemin yerine tek seçili görünüm `.row-selected`. */
                 return (
                   <tr key={p.pod} {...rowActivation(() => setFocus(p.pod))} title="Bandı bu poda odakla"
-                      style={{ cursor: 'pointer', background: focused?.pod === p.pod ? 'var(--bg3)' : undefined }}>
+                      className={focused?.pod === p.pod ? 'row-selected' : undefined}>
                     <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pod}</td>
                     <td className="num mono">{fmtPct(p.band.current)}</td>
                     <td className="num mono">{noBand ? '—' : `${fmtPct(p.band.lower)}–${fmtPct(p.band.upper)}`}</td>

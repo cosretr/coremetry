@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { stripTsComments } from './zLayers.test';
+import { jsxOpenTags } from './jsxTags';
 
 // tableUnityRatchet — v0.10.932 (tablo standardı, dilim 0).
 //
@@ -23,23 +24,36 @@ const CEILINGS = {
   /** T1 — `<table>` sayısı eksi `<DataTableHead>` sayısı (dosya başına). */
   rawTable: 72,
   /** T5 — `<td style={…}>`: hücre görünümü sınıfa/sütun tanımına taşınır. */
-  tdStyle: 433,
+  tdStyle: 439, // v0.10.933 — yürüyücüyle gerçek sayı (düz regex eksik sayıyordu)
   /** T5 — satır içi hücre yazı boyu: yoğunluk ayarı ulaşamıyor. */
-  tdFontSize: 172,
+  tdFontSize: 174, // v0.10.933 — yürüyücüyle gerçek sayı (düz regex eksik sayıyordu)
   /** T4 — sayı hücresinde monospace (`num mono` / `mono num`). */
   numMono: 284,
-  /** T2 — satır içi `<tr … cursor:` (imleç yalnız tıklanabilir satırda, CSS'ten). */
-  trCursor: 9,
+  /** T2 — satır içi `<tr … cursor:` (imleç yalnız tıklanabilir satırda, CSS'ten).
+   *  v0.10.933 (tablo standardı T2) — sayım artık süslü parantez farkında
+   *  etiket yürüyücüsüyle (styles/jsxTags.ts): eski `<tr\b[^>]*cursor:`
+   *  regex'i `{...rowActivation(() => …)}` gibi önceki bir yayılımın ok
+   *  fonksiyonunda duruyor, SONRAKİ `style={{ cursor: … }}`'u görmüyordu —
+   *  "9 → 0" ölçümü 3 koşullu imleci (Databases, databases/detailSections,
+   *  traces/ShapesView) kaçırmıştı; onlar da silindi (rowActivation yalnız
+   *  açılan satırda). Yürüyücüyle ölçülen gerçek sayım: 0. */
+  trCursor: 0,
   /** T6 — elle `containIntrinsicSize` (tek `--row-h` ritmi). */
   containIntrinsicSize: 61,
-  /** T10 — ölü `.is-fit` (v0.9.1078'den beri masaüstü kuralı yok). */
-  isFit: 68,
+  /** T10 — ölü `.is-fit` (v0.9.1078'den beri masaüstü kuralı yok).
+   *  v0.10.933 (dilim 1): 68 → 66 — LogPatternsPanel'in iki iç kaydırmalı kabı `is-scroll`. */
+  isFit: 66,
   /** T10 — satır içi `tableLayout` (tek tablo sınıfı / primitif). */
   tableLayout: 126,
   /** T3 — sahte sıralanabilir sütun (`sortValue: () => 0`). */
   fakeSortable: 11,
   /** T7 — talimat ipuçlu satır (`<tr title=…>`). */
-  trTitle: 10,
+  trTitle: 24, // v0.10.933 — yürüyücüyle gerçek sayı (düz regex eksik sayıyordu)
+  /** T5 — satır içi monospace yığını (`fontFamily: '…monospace…'` /
+   *  `font: '…monospace…'` dizgisi). v0.10.933 (tablo standardı T5) — TEK
+   *  yığın `--font-mono` (globals.css); ikinci yazım yığını çoğaltır, tema /
+   *  yoğunluk ayarı ona ulaşamaz. Taban v0.10.933 ölçümü (263); göçü dilim 3. */
+  inlineMonoStack: 263,
 } as const;
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -58,15 +72,18 @@ function tableCounts(): Record<keyof typeof CEILINGS, number> {
   return {
     rawTable: code.reduce((a, s) =>
       a + Math.max(0, (s.match(/<table\b/g)?.length ?? 0) - (s.match(/<DataTableHead\b/g)?.length ?? 0)), 0),
-    tdStyle: count(/<td\b[^>]*\sstyle=\{/g),
-    tdFontSize: count(/<td\b[^>]*\sstyle=\{\{[^}]*fontSize/g),
+    // v0.10.933 — td/tr sayaçları da süslü-parantez farkında yürüyücüyle: düz
+    // `<td\b[^>]*` bir önceki ok fonksiyonundaki `>`'de durup eksik sayıyordu.
+    tdStyle: code.reduce((a, s) => a + jsxOpenTags(s, 'td').filter(t => /\sstyle=\{/.test(t.tag)).length, 0),
+    tdFontSize: code.reduce((a, s) => a + jsxOpenTags(s, 'td').filter(t => /\sstyle=\{\{[^}]*fontSize/.test(t.tag)).length, 0),
     numMono: count(/\b(num mono|mono num)\b/g),
-    trCursor: count(/<tr\b[^>]*cursor:/g),
+    trCursor: code.reduce((a, s) => a + jsxOpenTags(s, 'tr').filter(t => /\bcursor\s*:/.test(t.tag)).length, 0),
     containIntrinsicSize: count(/containIntrinsicSize/g),
     isFit: count(/\bis-fit\b/g),
     tableLayout: count(/tableLayout:/g),
     fakeSortable: count(/sortValue:\s*\(\)\s*=>\s*0\b/g),
-    trTitle: count(/<tr\b[^>]*\stitle=/g),
+    trTitle: code.reduce((a, s) => a + jsxOpenTags(s, 'tr').filter(t => /\stitle=/.test(t.tag)).length, 0),
+    inlineMonoStack: count(/\bfont(?:Family)?:\s*(['"`])[^'"`\n]*monospace[^'"`\n]*\1/g),
   };
 }
 

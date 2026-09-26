@@ -86,11 +86,17 @@ describe('D1 — yüzey kapları zemin taşır', () => {
     expect(backgroundOf('.table-wrap')).toBe('var(--bg1)');
   });
 
-  it('seçili satırın sabit kolonu kabın zeminiyle karışıyor', () => {
-    const body = ruleBodies('tr.row-selected td.sticky-right')[0];
-    expect(body, 'kural kayboldu').toBeTruthy();
-    expect(body).toContain('var(--bg1)');
-    expect(body, 'karışımın tabanı sayfa zemini kalmış').not.toContain('var(--bg0)');
+  // v0.10.933 (tablo standardı T2) — sabit hücre artık satırın KENDİ seçim
+  // tonunu (--accent-bg, opak) taşıyor; %10 accent karışımı geniş seçili
+  // satırda ikinci bir ton üretiyordu. Opaklık şartı değişmedi: --accent-bg
+  // üç temada da SOLID bir token.
+  it('seçili satırın sabit kolonları satırın seçim tonunu taşır (--accent-bg)', () => {
+    for (const sel of ['tr.row-selected td.sticky-right', 'tr.row-selected td.sticky-left']) {
+      const body = ruleBodies(sel)[0];
+      expect(body, `${sel} kuralı kayboldu`).toBeTruthy();
+      expect(body, sel).toMatch(/background:\s*var\(--accent-bg\)/);
+      expect(body, `${sel}: yarı saydam karışım geri geldi`).not.toContain('color-mix');
+    }
   });
 
   // D1.6 / denetim riski V1. `.empty` artık bir kutu; bir yüzeyin

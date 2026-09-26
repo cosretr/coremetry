@@ -156,7 +156,7 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                     <Fragment key={r.key}>
                       <tr id={`pod-row-${r.pod}`} {...rowActivation(onRow)}
                         title={expandable ? 'Metrikleri göster · JVM · GC · datasource' : 'Pod detayı'}
-                        style={{ cursor: 'pointer', ...(many ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' } : {}) }}>
+                        style={many ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' } : undefined}>
                         <td className="mono sticky-left" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           title={`${r.cluster} / ${r.namespace || '?'} / ${r.pod}`} onClick={e => e.stopPropagation()}>
                           {expandable && <span className="pods-caret" aria-hidden="true" onClick={() => setOpenKey(open ? null : r.key)}>{open ? '▾' : '▸'}</span>}

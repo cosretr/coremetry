@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { DataTableColgroup, DataTableHead, type DataTable } from './DataTable';
+import { ROW_H } from './rowHeight';
 
 // VirtualTable — windowed rendering for a useDataTable table (v0.8.6 Phase 0).
 //
@@ -33,7 +34,8 @@ export interface VirtualTableProps<T> {
   // görünüme getirilir — "Next"e basan operatör yeni sayfanın BAŞINI görür,
   // 50 satır yukarı kaydırmaz.
   scrollResetKey?: unknown;
-  // Fixed row height in px. Match the real row height (default 36).
+  // Fixed row height in px. Match the real row height (default ROW_H — the
+  // CSS `--row-h` twin, v0.10.933).
   rowHeight?: number;
   // Extra rows rendered above/below the viewport so fast scrolls don't blank.
   overscan?: number;
@@ -56,7 +58,7 @@ export interface VirtualTableProps<T> {
 }
 
 export function VirtualTable<T>({
-  dt, height, rowHeight = 36, overscan = 12,
+  dt, height, rowHeight = ROW_H, overscan = 12,
   leading, leadingHead, renderRow, getRowKey, rowClassName, onRowClick,
   className, emptyMessage, scrollResetKey,
 }: VirtualTableProps<T>) {
@@ -125,6 +127,9 @@ export function VirtualTable<T>({
                   <tr
                     key={vi.key}
                     {...rpRest}
+                    // v0.10.933 (tablo standardı T2) — onRowClick de satırı
+                    // tıklanabilir yapar (imleç + hover globals.css'ten).
+                    data-row-action={onRowClick ? true : undefined}
                     className={cls}
                     aria-rowindex={vi.index + 1}
                     aria-selected={dt.selection ? dt.selection.isSelected(row) : undefined}

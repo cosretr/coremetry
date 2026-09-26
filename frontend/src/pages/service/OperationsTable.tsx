@@ -7,7 +7,7 @@ import { Sparkline } from '@/components/Sparkline';
 import { TrendSpark } from '@/components/TrendSpark'; // v0.10.697
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { EventMarkers } from '@/components/EventMarkers';
-import { fmtNum, timeRangeToNs } from '@/lib/utils';
+import { fmtNum, timeRangeToNs, rowClickHandlers } from '@/lib/utils';
 import { encodeFilters, encodeRange, buildQuery } from '@/lib/urlState';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -447,12 +447,21 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
               // .row-selected accent when j/k lands here. Index tracks
               // dt.sortedRows (the agg "All" row above is NOT counted).
               const rp = dt.rowProps(i);
+              /* v0.10.933 (tablo standardı T2) — rp'nin data-row-action işareti
+                 satıra el imleci + hover veriyordu ama satırda FARE işleyicisi
+                 yoktu (yalnız j/k + Enter/o). rowClickHandlers imleci gerçek
+                 kılar: sol tık opHref'e, ⌘/Ctrl/orta tık yeni sekmeye (explore/
+                 TracesResult deseni). İçteki Link'ler (tık + orta tık) ve trend
+                 düğmesi stopPropagation — tek tık iki kez gezinmesin. */
               return (
                 <tr key={op.name} {...rp}
+                    {...rowClickHandlers(opHref(op.name), () => navigate(opHref(op.name)))}
                     style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
                   <td>
                     <Link
                       to={opHref(op.name)}
+                      onClick={e => e.stopPropagation()}
+                      onAuxClick={e => e.stopPropagation()}
                       style={{ fontWeight: 500 }}
                       title="Open this operation in Traces — service + name pre-filtered"
                     >{op.name}</Link>
@@ -464,6 +473,8 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                     {!normalized && (
                       <Link
                         to={detailsHref(op.name)}
+                        onClick={e => e.stopPropagation()}
+                        onAuxClick={e => e.stopPropagation()}
                         title="Operation-scoped charts — RPS / error rate / p50–p99 duration band + latency heatmap for just this operation"
                         aria-label={`Open scoped charts for ${op.name}`}
                         style={{
@@ -501,7 +512,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                         v0.10.924 — buton bütünlüğü Faz 2: ham `.btn-bare` sarmalayıcı →
                         Button ghost xs (zeminsiz; hover'da bg2 tıklanabilirliği söyler). */}
                     <Button variant="ghost" size="xs" style={{ padding: '1px 2px', border: 0 }}
-                      onClick={() => { setOpFocus('calls'); setOpDetail(op); }}
+                      onClick={e => { e.stopPropagation(); setOpFocus('calls'); setOpDetail(op); }}
                       title={`Calls ${fmtNum(op.spanCount)} · Err %${op.errorRate.toFixed(2)} · P99 ${op.p99DurationMs.toFixed(0)}ms · tıkla: grafik`}>
                       <TrendSpark calls={op.sparkline ?? []} errors={op.errorsSparkline ?? []} p99={op.p99Sparkline ?? []} width={TREND_W} />
                     </Button>

@@ -129,7 +129,7 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
                 <DataTableHead dt={dt} />
                 <tbody>
                   {dt.sortedRows.map((r, i) => (
-                    <tr key={`${r.cluster}|${r.path}`} {...dt.rowProps(i)} style={{ cursor: 'pointer' }}
+                    <tr key={`${r.cluster}|${r.path}`} {...dt.rowProps(i)}
                         {...rowActivation(() => { window.location.assign(gotoEp(r)); })}>
                       <td><Link to={gotoEp(r)} className="mono row-link" onClick={e => e.stopPropagation()}
                         style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.path}>{r.path}</Link></td>

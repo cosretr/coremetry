@@ -1053,7 +1053,7 @@ function TimeSeriesLegend({ rows, isVisible, onToggle }: {
               <tr key={r.label + i}
                 {...rowKeyboard(() => onToggle(i, false))}
                 onClick={e => onToggle(i, e.ctrlKey || e.metaKey)}
-                style={{ cursor: 'pointer', opacity: on ? 1 : 0.4, borderTop: '1px solid var(--divider)' }}
+                style={{ opacity: on ? 1 : 0.4, borderTop: '1px solid var(--divider)' }}
                 title="Click to isolate this series · Ctrl/Cmd-click to toggle">
                 <td style={{ padding: '3px 6px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: r.color, marginRight: 6, verticalAlign: 'middle' }} />

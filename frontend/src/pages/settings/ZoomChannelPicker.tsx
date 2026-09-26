@@ -127,11 +127,14 @@ export function ZoomChannelPicker({
           position: 'fixed', inset: 0, background: 'var(--backdrop)',
           display: 'grid', placeItems: 'center', zIndex: 'var(--z-modal-nested)',
         }}>
+          {/* v0.10.933 (tablo standardı T2) — diyalog yüzeyi bg2 değil bg1
+              (.modal-dialog ile aynı modal yüzeyi): paylaşılan satır hover'ı
+              bg2, bg2 zeminde görünmüyordu. */}
           <div onClick={e => e.stopPropagation()} style={{
             width: 720, maxWidth: '94vw', maxHeight: '82vh',
             display: 'flex', flexDirection: 'column',
             padding: 18, borderRadius: 8,
-            background: 'var(--bg2)', border: '1px solid var(--border)',
+            background: 'var(--bg1)', border: '1px solid var(--border)',
           }}>
             <div style={{
               display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10,
@@ -183,9 +186,7 @@ export function ZoomChannelPicker({
                   {filtered.map(r => (
                     <tr key={r.id || r.jid}
                       {...rowActivation(() => { onPick(r.jid); setOpen(false); })}
-                      style={{ cursor: 'pointer', ...(filtered.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : null) }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg3)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      style={filtered.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
                       <td style={{ fontSize: 12, fontWeight: 600 }}>{r.name || '(unnamed)'}</td>
                       <td style={{
                         fontSize: 10, color: 'var(--text3)',

@@ -227,7 +227,7 @@ export default function SlowQueriesPage() {
                         {...rowActivation(() => r.stmtHash
                           ? openStmt(r)
                           : setExpanded(isExpanded ? null : key))}
-                        style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' } as React.CSSProperties}>
+                        style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' } as React.CSSProperties}>
                         <td onClick={e => {
                           e.stopPropagation();
                           setExpanded(isExpanded ? null : key);

@@ -210,7 +210,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                     return (
                       <Row key={i}>
                         <tr {...rowActivation(() => setExpandedIdx(e => e === i ? null : i))}
-                            style={{ cursor: 'pointer', ...(dt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : null) }}>
+                            style={dt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
                           <td className="mono"
                               style={{ maxWidth: 540, overflow: 'hidden',
                                        textOverflow: 'ellipsis', whiteSpace: 'nowrap',

@@ -148,7 +148,9 @@ export default function IncidentsPage() {
               <tbody>
                 {dt.sortedRows.map((i, idx) => (
                   <tr key={i.id} {...dt.rowProps(idx)}
-                      style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}
+                      // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                      data-row-action
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}
                       onMouseEnter={() => dt.nav.setSelected(idx)}
                       onClick={() => navigate(`/incident?id=${i.id}`)}>
                     <td><StatusPill s={i.status} /></td>

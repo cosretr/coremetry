@@ -121,8 +121,7 @@ export function PostgresPanel({ instance, range }: { instance: string; range: Ti
                           label: `Database · ${d.name}`,
                           unit: 'B',
                           filters: [{ k: 'database', op: '=', v: [d.name] }],
-                        }))}
-                        style={{ cursor: 'pointer' }}>
+                        }))}>
                         <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 }}>{d.name}</td>
                         <td className="num mono">{fmtBytes(d.sizeBytes)}</td>
                         <td className="num mono">{fmtNum(d.backendCount)}</td>

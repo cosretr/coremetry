@@ -137,7 +137,10 @@ export function TracesResult({
                     </>
                   : c.label}
                 trailing={
-                  <th style={{ whiteSpace: 'nowrap' }}>
+                  // v0.10.933 (tablo standardı T3) — taban `thead th` artık
+                  // `overflow: hidden` (ellipsis); ColumnManager'ın açılır
+                  // paneli bu th'nin İÇİNDE absolute, kırpılmasın.
+                  <th style={{ whiteSpace: 'nowrap', overflow: 'visible' }}>
                     <ColumnManager
                       cols={extraCols}
                       onAdd={k => { if (!extraCols.includes(k) && extraCols.length < 8) setExtraCols([...extraCols, k]); }} />
@@ -148,7 +151,7 @@ export function TracesResult({
                   <tr key={t.traceId} {...dt.rowProps(i)}
                       {...rowClickHandlers(traceHref(t.traceId),
                                            () => navigate(traceHref(t.traceId)))}
-                      style={{ cursor: 'pointer', contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' }}>
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' }}>
                     <td className="mono">
                       <Link to={traceHref(t.traceId)}
                             onClick={e => e.stopPropagation()}

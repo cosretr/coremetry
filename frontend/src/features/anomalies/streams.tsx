@@ -463,6 +463,8 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
             {dt.sortedRows.map(e => (
               <tr key={e.id}
                 ref={el => { rowRefs.current[e.id] = el; }}
+                // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                data-row-action
                 onClick={ev => {
                   // Interactive children keep their own behaviour —
                   // only a plain row click opens the drawer.
@@ -480,11 +482,9 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
                   outline: '1px solid var(--accent2)',
                   contentVisibility: 'auto',
                   containIntrinsicSize: 'auto 36px',
-                  cursor: 'pointer',
                 } : {
                   contentVisibility: 'auto',
                   containIntrinsicSize: 'auto 36px',
-                  cursor: 'pointer',
                 }}>
                 <td>
                   {/* v0.10.929 (K5) — ACTIVE normal durum (STATUS_TONE active → nötr); CLEARED geçiş, yeşil kalır. */}

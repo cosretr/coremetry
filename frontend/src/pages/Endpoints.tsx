@@ -744,6 +744,8 @@ export default function EndpointsPage() {
                       // tüm tbody'yi remount ediyordu (açık şerit + odak kaybı).
                       <React.Fragment key={rowKey}>
                       <tr {...dt.rowProps(i)}
+                        // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                        data-row-action
                         onMouseEnter={() => dt.nav.setSelected(i)}
                         onClick={e => {
                           // v0.9.839 — row click NAVIGATES to the full
@@ -757,7 +759,6 @@ export default function EndpointsPage() {
                         title="Open the endpoint detail page (RED series, latency distribution, callers, failing traces)"
                         style={{
                           contentVisibility: 'auto', containIntrinsicSize: 'auto 32px',
-                          cursor: 'pointer',
                           // Subtle err tint on broken endpoints (prototype cue).
                           background: r.errorRate >= 5
                             ? 'color-mix(in srgb, var(--err) 7%, transparent)'

@@ -124,7 +124,8 @@ describe('D3 — tek #content', () => {
   it('.page-body globals.css\'te #content ile aynı kuralı paylaşıyor', () => {
     const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
     expect(css).toMatch(/#content, \.page-body \{[^}]*flex: 1[^}]*overflow: auto/);
-    for (const d of ['spacious', 'compact', 'dense']) {
+    // v0.10.933 — yoğunluk 4 → 3 basamak (spacious kalktı, lib/density.ts).
+    for (const d of ['compact', 'dense']) {
       expect(css, `[data-density="${d}"] .page-body padding kuralı eksik`)
         .toContain(`[data-density="${d}"] .page-body`);
     }

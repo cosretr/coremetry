@@ -85,7 +85,7 @@ export function OpsCard({ service, range, operations }: {
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.slice(0, 8).map((r, i) => (
-              <tr key={r.name} {...dt.rowProps(i)} style={{ cursor: 'pointer' }}
+              <tr key={r.name} {...dt.rowProps(i)}
                   {...rowActivation(() => navigate(opHref(r.name)))}>
                 <td><span className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.name}>{r.name}</span></td>
                 <td className="num">{r.spanCount >= 1000 ? `${(r.spanCount / 1000).toFixed(1)}K` : r.spanCount}</td>
@@ -174,7 +174,7 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.slice(0, 8).map((r, i) => (
-                <tr key={i} {...dt.rowProps(i)} style={{ cursor: 'pointer' }}
+                <tr key={i} {...dt.rowProps(i)}
                     {...rowActivation(() => navigate(dbHref(r)))}>
                   <td>
                     <div className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.sampleStatement || r.statement}>{r.statement}</div>

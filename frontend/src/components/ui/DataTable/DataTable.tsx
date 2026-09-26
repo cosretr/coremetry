@@ -68,7 +68,9 @@ export interface DataTable<T> {
   // bindings) unless the caller supplied onOpen. Spread `rowProps(i)` on each
   // <tr> for data-row-idx + the .row-selected accent.
   nav: TableNav<T>;
-  rowProps: (index: number) => { 'data-row-idx': number; 'data-table-id': string; className?: string };
+  // v0.10.933 (tablo standardı T2) — `data-row-action` yalnız onOpen verilmiş
+  // tabloda: satır açılabilir, imleç + hover globals.css'ten bu işaretle gelir.
+  rowProps: (index: number) => { 'data-row-idx': number; 'data-table-id': string; 'data-row-action'?: true; className?: string };
   // v0.10.249 (DataTable dilim 4) — ADDİTİF. Seçenek verilmediğinde
   // bugünkü davranış bayt-bayt aynı (109 çağrı yeri).
   /** Bildirilen kolonların tamamı (columnModel gizlemiş olsa da). */
@@ -367,13 +369,18 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   // İLK eşleşeni buluyordu: iki tablolu bir sayfada j/k bir tabloda
   // seçim yaparken kaydırma DİĞERİNDE oluyordu. Kimliği satıra basmak,
   // sarmalayıcıya basmaktan daha ucuz (sayfaların `<div>`ine dokunmuyor).
+  const openable = !!onOpen;
   const rowProps = useCallback(
-    (index: number) => ({
+    (index: number): ReturnType<DataTable<T>['rowProps']> => ({
       'data-row-idx': index,
       'data-table-id': storageKey,
+      /* v0.10.933 (tablo standardı T2) — anahtar YALNIZ onOpen'lı tabloda
+         basılır: `'data-row-action': undefined` yayılsaydı, yayılım sırası
+         satırdaki açık bir işareti (rowClickHandlers vb.) sıfırlayabilirdi. */
+      ...(openable ? { 'data-row-action': true as const } : {}),
       className: nav.selected === index ? 'row-selected' : undefined,
     }),
-    [nav, storageKey],
+    [nav, storageKey, openable],
   );
 
   // v0.9.988 (D6.1) — dar ekran süzgeci. `narrow` false olduğu sürece
@@ -650,8 +657,17 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   userSelect: 'none',
                 }}>
+              {/* v0.10.933 (tablo standardı T3) — sayısal (sağa yaslı) kolonda ok
+                  etiketin SOLUNDA (boşluk sağa alınır): boştayken görünmez ok
+                  yuvası solda kalır, görünen etiket sağa yaslı sayılarla aynı
+                  hizada biter. `align` çözümü `numeric`i zaten sağa çeviriyor;
+                  servicesTable gibi `align: 'right'` bildiren sayısal kolonlar da
+                  kapsanır. Sayısal olmayan kolon değişmedi. */}
+              {sortable && align === 'right' && (
+                <span className="sort-arrow" style={{ marginLeft: 0, marginRight: 4 }}>{active ? (dt.sort.dir === 'desc' ? '▼' : '▲') : '↕'}</span>
+              )}
               {renderLabel ? renderLabel(c) : c.label}
-              {sortable && (
+              {sortable && align !== 'right' && (
                 <span className="sort-arrow">{active ? (dt.sort.dir === 'desc' ? '▼' : '▲') : '↕'}</span>
               )}
               {/* MK3 (v0.9.919) — elle basılan kopya yerine PAYLAŞILAN

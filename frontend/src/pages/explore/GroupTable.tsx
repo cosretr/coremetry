@@ -335,11 +335,12 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                 // globals.css): satırdaki opaklık ⊕/⊖/⇥ ipucunu yarı saydam
                 // çizip satırın yığın bağlamına hapsediyordu.
                 className={[rp.className, hidden ? 'gt-off' : ''].filter(Boolean).join(' ') || undefined}
+                // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                data-row-action
                 onMouseEnter={() => onFocus(hidden ? null : r.rowKey)}
                 onClick={(e) => (e.ctrlKey || e.metaKey) ? onToggleHidden(r.rowKey) : onIsolate(r.rowKey)}
                 title="Tıkla: yalnız bu seri · Ctrl/Cmd+tık: gizle-göster · Enter: kaynağa git · üzerine gel: panelde vurgula"
-                style={{ cursor: 'pointer',
-                         contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
+                style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
                 {/* v0.9.848 — hücre FLEX oldu. Pivot düğmeleri etiketin
                     SOLUNDA ve flexShrink:0: sağına konsaydı uzun bir grup
                     etiketi (ellipsis + nowrap) onları sessizce kırpardı —
