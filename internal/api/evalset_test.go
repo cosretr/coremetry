@@ -13,12 +13,16 @@
 // yok). Gecikme METRİK (soğuk model 60 sn+ olabilir): aşım uyarı, kırmızı
 // değil. Altbilgi prompt_version + model taşır; onsuz yeşil koşum hiçbir
 // şey söylemez (prompt değişince eski skor kıyaslanamaz).
+//
+// v0.10.940 — aynı vakalar Settings › AI › Değerlendirme panelinden SUNUCUDA
+// da koşar (ai_evalset_runs.go; üretim profili, ai_calls'a "evalset-" önekli
+// satır). Bu CLI geliştirici yolu olarak kalır; vaka adımları ortak
+// (runEvalsetCase), fikstür gömülü kümeden (loadEvalsetCases).
 
 package api
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"sync"
@@ -26,7 +30,6 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
-	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
@@ -63,62 +66,44 @@ func TestEvalsetReplay(t *testing.T) {
 	cases := loadEvalset(t)
 	pass, fail, skipped := 0, 0, 0
 	var results []evalrubric.CaseResult // v0.10.666 — Faz A rubrik + artefakt
+	// v0.10.940 — vaka yolu panelle ORTAK (runEvalsetCase, ai_evalset_core.go);
+	// burada yalnız çağrının kendisi: özel Service + sıfır sıcaklık, bellek
+	// içi kayıt. Şema adı üretim etiketi (chat-intent, rootcause-verdict…) —
+	// üretim gövdesiyle aynı; NLToQuery/CHQueryOptimize artık üretim şemasıyla.
+	call := func(ctx context.Context, surface, system, user string, schema map[string]any, json bool) (string, error) {
+		ctx = copilot.WithMeta(ctx, copilot.CallMeta{Surface: evalsetSurfacePrefix + surface, UserID: "evalset", Shield: aiShield})
+		if json {
+			ctx = copilot.WithJSONMode(ctx)
+			if len(schema) > 0 {
+				ctx = copilot.WithJSONSchema(ctx, evalProductionLabel(surface), schema)
+			}
+		}
+		return svc.Explain(ctx, system, user)
+	}
 	t.Logf("id\tsurface\tok\tlatency_ms\tunknown_entities\trubric\tfails")
 	for _, c := range cases {
-		if why := evalCaseSkipReason(c); why != "" { // v0.10.431
+		o := runEvalsetCase(context.Background(), call, c)
+		if o.Skipped { // v0.10.431
 			skipped++
-			t.Logf("%s\t%s\tSKIP\t-\t-\t%s", c.ID, c.Surface, why)
+			t.Logf("%s\t%s\tSKIP\t-\t-\t%s", c.ID, c.Surface, o.SkipReason)
 			continue
 		}
-		system, ok := evalSystemPrompt(c.Surface)
-		if !ok {
-			t.Fatalf("%s: surface %q çözülemiyor", c.ID, c.Surface)
-		}
-		ctx := copilot.WithMeta(context.Background(), copilot.CallMeta{Surface: "evalset-" + c.Surface, UserID: "evalset", Shield: aiShield})
-		if evalJSONSurface(c.Surface) {
-			ctx = copilot.WithJSONMode(ctx)
-			if c.Surface == "IntentClassify" {
-				ctx = copilot.WithJSONSchema(ctx, "chat-intent", intentClassifySchema())
-			}
-		}
-		sys, user := evalCaseInput(c, system) // v0.10.423 — export vakaları ham prompt taşır
-		// v0.10.424 — RCA hakemi: hipotezden canlı yolla aynı prompt/şema.
-		var rcaH *chstore.RootCauseHypothesis
-		var rcaCat rcaEvidenceCatalog
-		if len(c.Hypothesis) > 0 {
-			rcaH = &chstore.RootCauseHypothesis{}
-			if err := json.Unmarshal(c.Hypothesis, rcaH); err != nil {
-				t.Fatalf("%s: hypothesis: %v", c.ID, err)
-			}
-			var rivals, entities []string
-			rcaCat, rivals, entities, user = evalRCAInputs(rcaH, time.Now())
-			ctx = copilot.WithJSONSchema(ctx, "rootcause-verdict", rcaVerdictSchema(entities, rivals))
-		}
-		t0 := time.Now()
-		answer, err := svc.Explain(ctx, sys, user)
-		lat := time.Since(t0).Milliseconds()
-		var fails []string
-		var unknown int
-		if rcaH != nil && err == nil {
-			fails, unknown = scoreRCACase(c, rcaH, rcaCat, answer)
-		} else {
-			fails, unknown = scoreEvalCase(c, system, answer, err)
-		}
 		okS := "ok"
-		if len(fails) > 0 {
+		if len(o.Fails) > 0 {
 			okS = "FAIL"
 			fail++
 		} else {
 			pass++
 		}
-		rub := evalrubric.Score(evalRubricInput(c, answer, err, unknown, rcaH != nil))
-		results = append(results, evalrubric.CaseResult{ID: c.ID, Surface: c.Surface, OK: len(fails) == 0, LatencyMs: lat, Fails: fails, Rubric: rub})
-		t.Logf("%s\t%s\t%s\t%d\t%d\t%.2f\t%s", c.ID, c.Surface, okS, lat, unknown, rub.Total, strings.Join(fails, " | "))
-		if len(fails) > 0 {
-			t.Errorf("%s (%s): %s\n  why: %s\n  answer: %s", c.ID, c.Surface, strings.Join(fails, "; "), c.Why, strings.TrimSpace(answer))
+		results = append(results, evalrubric.CaseResult{ID: c.ID, Surface: c.Surface, OK: len(o.Fails) == 0, LatencyMs: o.LatencyMs, Fails: o.Fails, Rubric: o.Rubric})
+		t.Logf("%s\t%s\t%s\t%d\t%d\t%.2f\t%s", c.ID, c.Surface, okS, o.LatencyMs, o.Unknown, o.Rubric.Total, strings.Join(o.Fails, " | "))
+		// v0.10.940 — fikstür hatası (bilinmeyen yüzey / bozuk hipotez) artık
+		// koşuyu t.Fatalf ile DÜŞÜRMEZ: "fixture: …" ihlaliyle kırmızı vaka.
+		if len(o.Fails) > 0 {
+			t.Errorf("%s (%s): %s\n  why: %s\n  answer: %s", c.ID, c.Surface, strings.Join(o.Fails, "; "), c.Why, strings.TrimSpace(o.Answer))
 		}
-		if c.Expect.MaxLatencyMs > 0 && lat > int64(c.Expect.MaxLatencyMs) {
-			t.Logf("  ⚠ %s gecikme %d ms > %d ms (metrik, kırmızı değil)", c.ID, lat, c.Expect.MaxLatencyMs)
+		if c.Expect.MaxLatencyMs > 0 && o.LatencyMs > int64(c.Expect.MaxLatencyMs) {
+			t.Logf("  ⚠ %s gecikme %d ms > %d ms (metrik, kırmızı değil)", c.ID, o.LatencyMs, c.Expect.MaxLatencyMs)
 		}
 	}
 	// Kayıt sayacı ile skorlayıcı aynı tanımı paylaşır (E6): ShieldHits

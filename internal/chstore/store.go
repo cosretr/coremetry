@@ -2849,6 +2849,43 @@ func canonicalTables(sd, ld, md int) []string {
 		ORDER BY exchange_id
 		TTL toDate(created_at) + INTERVAL 90 DAY`,
 
+		// v0.10.940 — ai_eval_runs: Settings › AI › Değerlendirme panelinin
+		// koşu kaydı (ai_eval_runs.go). Koşu sunucuda sürer; satır başta
+		// (running), HER vakadan sonra (sayaçlar + summary, cases BOŞ — yazım
+		// küçük kalsın) ve sonda (son durum + cases) YENİDEN yazılır → state
+		// sınıfı: ReplacingMergeTree(version), ORDER BY id MÜNHASIRAN, FINAL
+		// okuma. version istemci damgası (settings.go v0.10.129 emsali —
+		// Replicated INSERT dedup'u özdeş bloğu düşürmesin).
+		// PARTITION BY YOK (ai_feedback/rca_verdicts emsali; Kural P1).
+		// finished_at sentinel'i epoch (C4 — Nullable yok). Saklama: liste
+		// en yeni 20'yi gösterir; fiziksel silme 180g TTL — ALTER DELETE
+		// mutasyonu YOK. cases/summary serbest JSON → ZSTD(3), LC değil.
+		`CREATE TABLE IF NOT EXISTS ai_eval_runs (
+			id             String,
+			started_at     DateTime64(9),
+			updated_at     DateTime64(9),
+			finished_at    DateTime64(9) DEFAULT toDateTime64(0, 9),
+			status         LowCardinality(String),
+			started_by     String  DEFAULT '',
+			app_version    String  DEFAULT '',
+			prompt_version String  DEFAULT '',
+			model          String  DEFAULT '',
+			profile_id     String  DEFAULT '',
+			surfaces       Array(String),
+			total          UInt32  DEFAULT 0,
+			done           UInt32  DEFAULT 0,
+			pass           UInt32  DEFAULT 0,
+			fail           UInt32  DEFAULT 0,
+			skipped        UInt32  DEFAULT 0,
+			rubric_mean    Float64 DEFAULT 0,
+			error          String  DEFAULT '',
+			summary        String  DEFAULT '' CODEC(ZSTD(3)),
+			cases          String  DEFAULT '' CODEC(ZSTD(3)),
+			version        UInt64  DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		ORDER BY id
+		TTL toDateTime(started_at) + INTERVAL 180 DAY`,
+
 		// Email subscribers — get notified when a public-visible
 		// incident opens or resolves on the configured components.
 		// Double opt-in: public submissions land with verified=0

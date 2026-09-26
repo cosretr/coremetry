@@ -1,18 +1,59 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, useConfirm } from '@/components/ui';
+import { Button, TabStrip, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, Field, ConfigStatusBanner } from './shared';
 import type { AIProvider, AISettings, AIIntentClassify, AIProfilesPayload } from '@/lib/types';
 import { AiProfilesPanel } from './AiProfilesPanel';
 import { AiBudgetPanel } from './AiBudgetPanel'; // v0.10.411
 import { AiChatRetentionPanel } from './AiChatRetentionPanel'; // v0.10.561
+import { AiEvalPanel } from './AiEvalPanel'; // v0.10.940
+import { EVAL_URL_PARAMS } from './aiEval';
 import { tuningToForm, tuningToWire } from './aiTuning';
 import { IconSparkles } from '@/components/icons';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
-// AITab — editable AI Copilot configuration. Admin picks a provider,
-// pastes their key, optionally sets a model, hits Save. Server stores
+// v0.10.940 (operatör onayı K1, 2026-09-26) — Settings › CoSRE iki sekme:
+// "Sağlayıcı ve profiller" (bugünkü gövde, AYNEN) ve "Değerlendirme"
+// (evalset paneli, AiEvalPanel.tsx). Sekme URL'de (`?tab=eval`, replace;
+// yoksa ilk sekme — eski /settings/ai linkleri aynı yere düşer).
+//
+// Şerit ayar-okuma kapısının ÖNÜNDE çizilir: kapı (SettingsLoadError /
+// Spinner) ilk sekmenin gövdesine taşındı. Şerit kapının ARKASINDA
+// kalsaydı GET /api/settings/ai başarısız olduğunda Değerlendirme
+// sekmesine hiç ulaşılamazdı — oysa panel o uca değil, kendi
+// /api/ai/evalset/… uçlarına dayanıyor. Neden yeni bir /settings bölümü
+// (slug) DEĞİL: evalset CoSRE'nin bir alt konusu; ayrı bölüm hem tabIndex
+// hem TAB_COMPS'ta yer açar ve operatörü iki yerde "AI ayarı" aratırdı.
+type AiTabKey = 'provider' | 'eval';
+
+export function AITab() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: AiTabKey = searchParams.get('tab') === 'eval' ? 'eval' : 'provider';
+  const setTab = (t: AiTabKey) =>
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (t === 'eval') p.set('tab', 'eval');
+      else {
+        p.delete('tab');
+        // Değerlendirmenin koşu/vaka/kıyas parametreleri o sekmenin;
+        // dönüşte bayat bir ?case= çekmeceyi kendiliğinden açmasın.
+        for (const k of EVAL_URL_PARAMS) p.delete(k);
+      }
+      return p;
+    }, { replace: true });
+  return (
+    <>
+      <TabStrip ariaLabel="CoSRE ayar sekmeleri" value={tab} onChange={setTab}
+        tabs={[{ key: 'provider', label: 'Sağlayıcı ve profiller' }, { key: 'eval', label: 'Değerlendirme' }]} />
+      {tab === 'eval' ? <AiEvalPanel /> : <AiProviderSettings />}
+    </>
+  );
+}
+
+// AiProviderSettings — editable AI Copilot configuration (v0.10.940'a dek
+// AITab'ın kendisiydi; gövde değişmeden ilk sekmeye taşındı). Admin picks a
+// provider, pastes their key, optionally sets a model, hits Save. Server stores
 // the override in system_settings and updates the live service so the
 // next Explain call uses the new creds without restart.
 //
@@ -21,7 +62,7 @@ import { Link } from 'react-router-dom';
 //   - GitHub Copilot: GitHub OAuth token (ghu_…) with Copilot access;
 //     server exchanges it for a session token and calls
 //     api.githubcopilot.com (OpenAI-compatible).
-export function AITab() {
+function AiProviderSettings() {
   const confirm = useConfirm();
   const [provider, setProvider] = useState<AIProvider>('anthropic');
   const [model, setModel] = useState('');

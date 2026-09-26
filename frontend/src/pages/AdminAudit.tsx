@@ -58,6 +58,8 @@ const KNOWN_ACTIONS = [
   'saved_view.delete',
   'settings.ai.update',
   'ai.evalset.export', // v0.10.423
+  'ai.evalset.run',    // v0.10.940 — Settings › CoSRE › Değerlendirme: koşu başlatıldı
+  'ai.evalset.cancel', // v0.10.940 — koşu durduruldu
   'settings.ai_budget.update', // v0.10.411
   'settings.ai_rates.update',  // v0.10.411 — gemide olan ama listede olmayan eylem
   'settings.ldap.update',

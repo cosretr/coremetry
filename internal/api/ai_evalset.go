@@ -213,4 +213,5 @@ func (s *Server) exportAIEvalset(w http.ResponseWriter, r *http.Request) {
 // registerAIEvalsetRoutes — ai_routes.go'dan çağrılır; api.go büyümez.
 func (s *Server) registerAIEvalsetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/ai/evalset/export", auth.RequireRole(auth.RoleAdmin, s.exportAIEvalset))
+	s.registerAIEvalsetRunRoutes(mux) // v0.10.940 — Değerlendirme paneli, ai_evalset_runs.go
 }

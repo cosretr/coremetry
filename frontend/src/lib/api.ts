@@ -1218,13 +1218,16 @@ export const api = {
     get<import('./types').DBStmtDetail>(`/api/databases/statements/detail?${qs(params)}`),
 
   // AI observability (v0.5.163). Admin-only read endpoints.
-  aiCalls: (params: { surface?: string; provider?: string; status?: string; from?: number; to?: number; limit?: number }) =>
+  // v0.10.940 — `source` (üçü de): yok = üretim (evalset satırları HARİÇ),
+  // 'evalset' = yalnız Değerlendirme koşularının çağrıları. Sunucu önbellek
+  // anahtarı kaynağı taşır; /api/ai/budget parametre ALMAZ (hep üretim).
+  aiCalls: (params: { surface?: string; provider?: string; status?: string; from?: number; to?: number; limit?: number; source?: import('./types').AICallSource }) =>
     get<import('./types').AICall[]>(`/api/ai/calls?${qs(params)}`),
   aiCall: (id: string) =>
     get<import('./types').AICall>(`/api/ai/calls/${encodeURIComponent(id)}`),
-  aiStats: (params: { from?: number; to?: number }) =>
+  aiStats: (params: { from?: number; to?: number; source?: import('./types').AICallSource }) =>
     get<import('./types').AIStats>(`/api/ai/stats?${qs(params)}`),
-  aiSeries: (params: { from?: number; to?: number }) =>
+  aiSeries: (params: { from?: number; to?: number; source?: import('./types').AICallSource }) =>
     get<import('./types').AICallsTimePoint[]>(`/api/ai/series?${qs(params)}`),
   // v0.8.399 — thumbs up/down on an AI answer. exchangeId comes from
   // the chat SSE answer event; re-posting the same id replaces the
@@ -1268,6 +1271,31 @@ export const api = {
     document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
   },
+  // v0.10.940 — Settings › CoSRE › Değerlendirme: evalset'i SUNUCUDA koşturan
+  // panel (internal/api/ai_evalset_runs.go; hepsi admin, POST ayrıca
+  // requireCopilot → AI kapalıyken 503). Okumalar signal alır: sekme/çekmece
+  // kapanınca RQ iptal eder. Yazmalarda kısa tavan: POST yalnız işi BAŞLATIR
+  // (202, koşu arka planda sürer) ve iptal yalnız bağlamı keser — ikisinin de
+  // 60 s varsayılanı beklemesi için sebep yok; asılı bir istek düğmeyi
+  // dakikalarca "yükleniyor"da tutardı.
+  aiEvalsetCatalog: (signal?: AbortSignal) =>
+    get<import('./types').EvalsetCatalog>(`/api/ai/evalset/catalog`, signal),
+  aiEvalsetRuns: (signal?: AbortSignal) =>
+    get<{ runs: import('./types').EvalRunSummary[] }>(`/api/ai/evalset/runs`, signal),
+  aiEvalsetRun: (id: string, signal?: AbortSignal) =>
+    get<{ run: import('./types').EvalRunSummary; cases: import('./types').EvalCaseResult[] }>(
+      `/api/ai/evalset/runs/${encodeURIComponent(id)}`, signal),
+  // surfaces [] = tümü (sunucu sözleşmesi). 409 gövdesi {error, run}:
+  // çağıran humanize ile `error`u gösterir ve listeyi tazeler.
+  aiEvalsetStartRun: (surfaces: string[]) =>
+    request<{ run: import('./types').EvalRunSummary }>(`/api/ai/evalset/runs`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ surfaces }), timeoutMs: 30_000,
+    }),
+  aiEvalsetCancelRun: (id: string) =>
+    request<{ ok: boolean }>(`/api/ai/evalset/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST', timeoutMs: 15_000 }),
+  aiEvalsetCompare: (base: string, head: string, signal?: AbortSignal) =>
+    get<import('./types').EvalCompare>(`/api/ai/evalset/compare?${qs({ base, head })}`, signal),
   aiRates: () =>
     get<Record<string, import('./types').AIRate>>(`/api/ai/rates`),
   putAIRates: (rates: Record<string, import('./types').AIRate>) =>

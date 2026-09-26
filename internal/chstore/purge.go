@@ -103,6 +103,14 @@ var configPreserveTables = []string{
 	// signal; preserved even though the ai_calls rows they rate purge
 	// (the 90d TTL bounds any orphans).
 	"ai_feedback",
+	// v0.10.940 — evalset koşu geçmişi (Değerlendirme paneli). Telemetriden
+	// TÜREMEZ (girdi gömülü fikstür, çıktı o günkü model/prompt'un cevabı) ve
+	// yeniden DOĞMAZ: eski sürümün skoru bir daha üretilemez, prompt
+	// regresyon kıyasının tek tabanı bu satırlar. Operatörün başlattığı
+	// kalite kaydı → ai_feedback'in yanında korunur; ürettiği ai_calls
+	// satırları purge'la gider (öksüz kalan yalnız çağrı örneği, skor değil).
+	// Büyüme 180g TTL'le sınırlı.
+	"ai_eval_runs",
 	// v0.10.17 (F0.4) — bunlar zaten purge EDİLMİYORDU (allowlist'te
 	// yoklar) ama hiçbir listede de olmadıkları için güvenlik testi
 	// onları KORUMUYORDU. Yani biri yarın allowlist'e eklese, hiçbir

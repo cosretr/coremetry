@@ -19,7 +19,31 @@ DAVRANIŞ (must-contain / must-not-contain / uydurma ad sayısı / niyet).
   gerçek anahtarına asla ateşlenmez. Kayıt yazılmaz (recorder bellek içi;
   `ai_calls` satırı yok).
 
-- Fikstür doğrulaması etiketsiz koşar (`TestEvalsetFixturesValid`):
+- **Panel (v0.10.940):** Settings › AI › Değerlendirme aynı vakaları
+  SUNUCUDA koşar — üretimin yapılandırılmış profil(ler)iyle, onay adımı
+  yok. Her yüzey üretimde hangi profile gidiyorsa oraya gider
+  (`copilot.SurfaceProfileID(<üretim etiketi>)` + `WithProfile`; tablo
+  `internal/api/ai_evalset_core.go` `evalProductionLabels`). Çağrılar
+  `ai_calls`'a `surface = "evalset-<Yüzey>"` ile yazılır: /ai'da
+  "Kaynak: Değerlendirme" ayrı görünür, üretim sayılarına karışmaz.
+  Koşular `ai_eval_runs` tablosunda (son 20 listelenir, 180 gün TTL);
+  iki bitmiş koşu `evalrubric.Diff` ile kıyaslanır (`cmd/evalsetdiff`
+  ile aynı semantik). Uçlar: `internal/api/ai_evalset_runs.go` başlığı.
+
+- **Gömülü küme (v0.10.940):** `*.json` binary'ye gömülür
+  (`embed.go`, `evalset.FS`) — çalışma imajında bu dizin yok. Yeni vaka
+  eklemek = JSON'u buraya koymak; panel ve CLI bir sonraki derlemede
+  görür. `*.md` gömülmez (.dockerignore da dışlar).
+
+- CLI ile panel TEK vaka yolunu paylaşır (`runEvalsetCase`). Fark yalnız
+  çağrıda: CLI özel bir Service + sıcaklık 0 + bellek içi kayıt; panel
+  üretim profilinin sıcaklığı + gerçek `ai_calls` satırı. JSON yüzeyleri
+  (IntentClassify, NLToQuery, CHQueryOptimize, RCAVerdict) ikisinde de
+  üretimin şemasıyla çağrılır. Bilinmeyen yüzey / bozuk hipotez koşuyu
+  düşürmez: `fixture: …` ihlaliyle kırmızı vaka olur.
+
+- Fikstür doğrulaması etiketsiz koşar (`TestEvalsetFixturesValid`, GÖMÜLÜ
+  kümeyi okur — gemiye bineni doğrular):
   şema `coremetry.evalset/1`, benzersiz id, çözülebilir surface, `why`
   zorunlu, en az bir beklenti. Yazım hatası kırmızı test, sessiz atlama değil.
 

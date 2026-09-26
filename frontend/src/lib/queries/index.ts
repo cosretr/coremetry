@@ -76,3 +76,6 @@ export { useBlastRadiusBatch } from './problems'; // v0.10.260 — inbox toplu b
 export { useStackFrameLinks } from './devops'; // v0.10.581 — tıklanabilir stack frame
 export * from './copilot'; // v0.10.702 — CoSRE veri çipleri
 export { useTraceRootDef, useSaveTraceRootDef } from './traceRootDef'; // v0.10.733 — kök tanımı
+export {
+  aiEvalKeys, useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun,
+} from './aiEval'; // v0.10.940 — Settings › CoSRE › Değerlendirme (evalset paneli)

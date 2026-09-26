@@ -745,3 +745,22 @@ SLO kırpma, v0.10.931 çizilmeyen hata rengi).
 **Göç:** dilim 0 kapılar + hatalar, dilim 1 tek CSS sürümü, dilim 2 primitif, dilim 3 sayfa
 süpürmeleri, dilim 4 durumlar. `tableUnityRatchet` tabanları yalnız azalır.
 
+
+## 2026-09-26 — CoSRE değerlendirme paneli: donmuş vakalar Ayarlar'daki modelle sunucuda koşar (v0.10.940)
+
+**Karar (operatör: "bunu settingsteki modelden alsa direkt", "Ücretli sağlayıcı yol local llm
+modeline bağlıyız", mockup "CoSRE Değerlendirme Paneli" + "Ok"):** K1 Ayarlar › CoSRE içinde
+"Değerlendirme" alt sekmesi (`?tab=eval`, yalnız admin). Koşu, binary'ye gömülü evalset'i
+(`internal/copilot/evalset/*.json`) sunucuda, her yüzeyi üretimin o yüzey için seçtiği
+profille (eşleme > grup kardeşi > varsayılan) ve üretimin çağrı yoluyla (`aiCall`) koşar;
+onay adımı ve ücretli sağlayıcı uyarısı YOK. K2 çağrılar `ai_calls`'a `evalset-<Yüzey>`
+yüzeyiyle yazılır; /ai sayaçları, seri, çağrı listesi ve bütçe bu satırları varsayılan olarak
+HARİÇ tutar, `?source=evalset` ("Kaynak: Değerlendirme") yalnız onları gösterir — yeni kolon
+yok, ayrım tek önek sabitinde (`chstore.AICallEvalsetSurfacePrefix`). K3 listede son 20 koşu;
+fiziksel silme `ai_eval_runs` tablosunun 180 günlük TTL'i (mutasyon yok).
+
+**Neden:** Vakalar yalnız CI dışı bir CLI koşumuyla ölçülebiliyordu; prompt denetiminin yeni
+vakaları hiç koşulmamıştı. Puanlama ve vaka yolu CLI ile ORTAK (`runEvalsetCase`), böylece
+panel ile `go test -tags evalset` aynı şeyi ölçer; CLI özel Service'iyle sıcaklık 0'da ve
+`ai_calls`'a yazmadan kalır. Aynı anda tek koşu (süreç + taze `running` satırı), 15 dk
+güncellenmeyen koşu "yarım kaldı" sayılır; son yazım başarısızsa sonuç bellekte tutulur.

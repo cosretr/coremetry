@@ -1,292 +1,34 @@
 package api
 
 // evalset_fixture_test.go — v0.10.422 (CoSRE denetimi E1/E7): donmuş replay
-// vakalarının ŞEMASI, yükleyicisi, surface→sistem promptu haritası ve SAF
-// skorlayıcısı. Etiketsiz koşar: fikstür yazım hatası kırmızı test olur
-// (sessiz atlama değil). Modele giden koşum evalset_test.go'da
-// (//go:build evalset). Şema: internal/copilot/evalset/README.md.
+// vakalarının SÖZLEŞME ve skorlayıcı testleri. Etiketsiz koşar: fikstür
+// yazım hatası kırmızı test olur (sessiz atlama değil). Modele giden koşum
+// evalset_test.go'da (//go:build evalset). Şema: internal/copilot/evalset/README.md.
+//
+// v0.10.940 — şema tipleri, yükleyici, surface→sistem promptu haritası ve
+// SAF skorlayıcılar üretim koduna taşındı (ai_evalset_core.go — panel koşuyu
+// sunucuda başlatıyor); testler burada, değişmeden. loadEvalset artık GÖMÜLÜ
+// kümeyi okur: TestEvalsetFixturesValid gemiye bineni doğrular.
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
-	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
-	"github.com/cilcenk/coremetry/internal/copilot"
-	"github.com/cilcenk/coremetry/internal/rca"
 )
 
-const evalsetSchema = "coremetry.evalset/1"
-
-// evalsetDir — denetimin adlandırdığı yol (internal/copilot/evalset); .go
-// dosyası yok, `go build ./...` görmez. Test cwd = paket dizini.
-const evalsetDir = "../copilot/evalset"
-
-type evalExpect struct {
-	MustContain        []string `json:"mustContain,omitempty"`
-	MustNotContain     []string `json:"mustNotContain,omitempty"`
-	KnownEntities      []string `json:"knownEntities,omitempty"`
-	KnownTeams         []string `json:"knownTeams,omitempty"` // v0.10.429 — team slotu için canlı takım listesi
-	MaxUnknownEntities *int     `json:"maxUnknownEntities,omitempty"`
-	Intent             string   `json:"intent,omitempty"`
-	IntentService      string   `json:"intentService,omitempty"`
-	MaxLatencyMs       int      `json:"maxLatencyMs,omitempty"`
-	// v0.10.424 — RCA hakemi (surface RCAVerdict): kabul edilen verdict
-	// kümesi + kanıt-ID atıf oranı (K2'den geçen / atıf yapılan).
-	Verdicts                []string `json:"verdicts,omitempty"`
-	MinEvidenceCitationRate *float64 `json:"minEvidenceCitationRate,omitempty"`
-}
-
-type evalCase struct {
-	ID      string `json:"id"`
-	Surface string `json:"surface"`
-	Why     string `json:"why"`
-	User    string `json:"user"`
-	// Prompt — v0.10.423 (E5 export): kayıtlı örnek (sistem+kullanıcı
-	// birleşik). Doluysa koşucu sistem promptunu BOŞ gönderir, prompt'u
-	// kullanıcı olarak yollar; user ile birlikte verilmez.
-	Prompt string `json:"prompt,omitempty"`
-	// Hypothesis — v0.10.424: RCAVerdict vakası kullanıcı promptu yerine
-	// chstore.RootCauseHypothesis taşır; prompt, katalog, rakipler ve şema
-	// canlı yolla AYNI kodla üretilir (EvidenceCatalog.byID dışa kapalı —
-	// katalog JSON'la elle kurulamaz).
-	Hypothesis json.RawMessage `json:"hypothesis,omitempty"`
-	Expect     evalExpect      `json:"expect"`
-	// Provenance — v0.10.431: export vakasının kaynağı; truncated=true
-	// (prompt_sample 4 KiB'de kırpıldı) ise koşucu vakayı PUANLAMAZ —
-	// kırpık prompt'la alınan cevap ne pass ne fail kanıtıdır. ai_evalset.go
-	// başlığı bunu v0.10.423'ten beri vaat ediyordu, koşucu okumuyordu.
-	Provenance *evalProvenance `json:"provenance,omitempty"`
-	file       string
-}
-
-type evalProvenance struct {
-	ExchangeID string `json:"exchangeId,omitempty"`
-	Truncated  bool   `json:"truncated"`
-}
-
-// evalCaseSkipReason — SAF: koşucunun atlama kararı (boş = koş).
-func evalCaseSkipReason(c evalCase) string {
-	if c.Provenance != nil && c.Provenance.Truncated {
-		return "provenance.truncated — kırpık prompt puanlanmaz"
-	}
-	return ""
-}
-
-// evalRCAInputs — hipotez → (katalog, rakipler, izinli varlıklar, kullanıcı
-// promptu); rca_verdict.go buildRCAVerdictSurface ile aynı adımlar (extras
-// ve imzalar boş: fikstür IO'suz).
-func evalRCAInputs(h *chstore.RootCauseHypothesis, now time.Time) (rcaEvidenceCatalog, []string, []string, string) {
-	cat := buildRCAEvidenceCatalog(h)
-	cands := make([]string, 0, len(h.Candidates))
-	for _, c := range h.Candidates {
-		cands = append(cands, c.Service)
-	}
-	rivals := buildRCARivalOptions(cat, h.TopSuspect, cands)
-	entities := rcaAllowedEntities(cat)
-	return cat, rivals, entities, buildRCAVerdictPrompt(h, cat, rivals, nil, now)
-}
-
-// scoreRCACase — SAF: model JSON'u → canlı ayrıştırma + onarım + kalkan
-// zinciri (applyRCAShieldsPure); verdict kümesi, atıf oranı
-// (K2'den geçen / atıf yapılan; hiç atıf yoksa 1.0 yalnız
-// insufficient_evidence'ta), K3 uydurma sayısı.
-func scoreRCACase(c evalCase, h *chstore.RootCauseHypothesis, cat rcaEvidenceCatalog, answer string) (fails []string, unknown int) {
-	var mv rcaModelVerdict
-	parsed := false
-	if err := json.Unmarshal([]byte(strings.TrimSpace(answer)), &mv); err == nil && rcaVerdictEnumOK(mv.Verdict) {
-		parsed = true
-	} else if fixed, ok := salvageJSONObject(answer); ok {
-		if err := json.Unmarshal([]byte(fixed), &mv); err == nil && rcaVerdictEnumOK(mv.Verdict) {
-			parsed = true
-		}
-	}
-	if !parsed {
-		return []string{"unparsed: " + strings.TrimSpace(answer)}, 0
-	}
-	cited := len(mv.RootCause.Evidence)
-	for _, st := range mv.CausalChain {
-		cited += len(st.Evidence)
-	}
-	// v0.10.431 — çürütme atıfları da paydada: applyRCAShieldsPure
-	// filterRefutationIDs'in reddettiklerini de RejectedEvidence'a yazar;
-	// payda yalnız destek atıflarını sayınca geçerli bir verdict katalog
-	// dışı tek bir refuted_by yüzünden 1.0 eşiğinin altına düşüyordu.
-	for _, rej := range mv.RejectedHypotheses {
-		cited += len(rej.RefutedBy)
-	}
-	sh := rcaShieldReport{Parsed: true}
-	v := applyRCAShieldsPure(h, cat, mv, &sh)
-	if len(c.Expect.Verdicts) > 0 {
-		okV := false
-		for _, w := range c.Expect.Verdicts {
-			if v.Verdict == w {
-				okV = true
-			}
-		}
-		if !okV {
-			fails = append(fails, fmt.Sprintf("verdict %q ∉ %v", v.Verdict, c.Expect.Verdicts))
-		}
-	}
-	if c.Expect.MinEvidenceCitationRate != nil {
-		rate := 1.0
-		if cited > 0 {
-			rate = float64(cited-len(sh.RejectedEvidence)) / float64(cited)
-		} else if v.Verdict != "insufficient_evidence" {
-			rate = 0
-		}
-		if rate < *c.Expect.MinEvidenceCitationRate {
-			fails = append(fails, fmt.Sprintf("evidence citation rate %.2f < %.2f (cited %d, rejected %v)", rate, *c.Expect.MinEvidenceCitationRate, cited, sh.RejectedEvidence))
-		}
-	}
-	unknown = len(sh.UnknownEntities)
-	if c.Expect.MaxUnknownEntities != nil && unknown > *c.Expect.MaxUnknownEntities {
-		fails = append(fails, fmt.Sprintf("unknown entities %d > %d: %v", unknown, *c.Expect.MaxUnknownEntities, sh.UnknownEntities))
-	}
-	return fails, unknown
-}
-
-// evalCaseInput — koşucu ve skorlayıcı için (system, user) çifti.
-func evalCaseInput(c evalCase, system string) (string, string) {
-	if c.Prompt != "" {
-		return "", c.Prompt
-	}
-	return system, c.User
-}
-
-type evalFile struct {
-	Schema string     `json:"schema"`
-	Cases  []evalCase `json:"cases"`
-}
-
-// evalSystemPrompt — fikstürdeki surface adı → copilot.SystemPromptX.
-// Eksik ad kırmızı test (TestEvalsetFixturesValid), sessiz atlama değil.
-func evalSystemPrompt(surface string) (string, bool) {
-	switch surface {
-	case "Trace":
-		return copilot.SystemPromptTrace(), true
-	case "Span":
-		return copilot.SystemPromptSpan(), true
-	case "Problem":
-		return copilot.SystemPromptProblem(), true
-	case "Exception":
-		return copilot.SystemPromptException(), true
-	case "Incident":
-		return copilot.SystemPromptIncident(), true
-	case "Anomaly":
-		return copilot.SystemPromptAnomaly(), true
-	case "ServiceHealth":
-		return copilot.SystemPromptServiceHealth(), true
-	case "Runbook":
-		return copilot.SystemPromptRunbook(), true
-	case "CompareTraces":
-		return copilot.SystemPromptCompareTraces(), true
-	case "DeployImpact":
-		return copilot.SystemPromptDeployImpact(), true
-	case "SLOBurn":
-		return copilot.SystemPromptSLOBurn(), true
-	case "SlowQuery":
-		return copilot.SystemPromptSlowQuery(), true
-	case "NLToQuery":
-		return copilot.SystemPromptNLToQuery(), true
-	case "CHQueryOptimize":
-		return copilot.SystemPromptCHQueryOptimize(), true
-	case "RCAVerdict":
-		return copilot.SystemPromptRCAVerdict(), true
-	case "ServiceCharts":
-		return copilot.SystemPromptServiceCharts(), true
-	case "GeneralChat":
-		return copilot.SystemPromptGeneralChat(), true
-	case "Chat":
-		return copilot.SystemPromptChat(), true
-	case "IntentClassify":
-		return copilot.SystemPromptIntentClassify(), true
-	}
-	return "", false
-}
-
-// evalJSONSurface — JSON kipinde çağrılan yüzeyler (canlı yolla aynı).
-//
-//nolint:unused // v0.10.636: yalnız `-tags evalset` ile derlenen evalset_test.go çağırır; varsayılan build'da U1000 yanlış pozitif.
-func evalJSONSurface(surface string) bool {
-	switch surface {
-	case "IntentClassify", "RCAVerdict", "NLToQuery", "CHQueryOptimize":
-		return true
-	}
-	return false
-}
-
+// loadEvalset — loadEvalsetCases'in test sarmalayıcısı (hata = t.Fatal).
 func loadEvalset(t *testing.T) []evalCase {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(evalsetDir, "*.json"))
+	cases, err := loadEvalsetCases()
 	if err != nil {
 		t.Fatal(err)
 	}
-	sort.Strings(files)
-	var out []evalCase
-	for _, f := range files {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var ef evalFile
-		if err := json.Unmarshal(b, &ef); err != nil {
-			t.Fatalf("%s: %v", f, err)
-		}
-		if ef.Schema != evalsetSchema {
-			t.Fatalf("%s: schema %q, want %q", f, ef.Schema, evalsetSchema)
-		}
-		for i := range ef.Cases {
-			ef.Cases[i].file = filepath.Base(f)
-			out = append(out, ef.Cases[i])
-		}
-	}
-	return out
-}
-
-// scoreEvalCase — SAF: cevap + hata → ihlal listesi ve uydurma ad sayısı.
-// mustContain/mustNotContain büyük/küçük harf duyarsız; uydurma sayımı
-// rca.CountUnknownEntities (E6 sayacıyla AYNI tanım); niyet
-// parseIntentJSON (canlı ayrıştırıcı — "none" = eşleşmedi).
-func scoreEvalCase(c evalCase, system, answer string, err error) (fails []string, unknown int) {
-	if err != nil {
-		return []string{"error: " + err.Error()}, 0
-	}
-	low := strings.ToLower(answer)
-	for _, m := range c.Expect.MustContain {
-		if !strings.Contains(low, strings.ToLower(m)) {
-			fails = append(fails, "missing: "+m)
-		}
-	}
-	for _, m := range c.Expect.MustNotContain {
-		if strings.Contains(low, strings.ToLower(m)) {
-			fails = append(fails, "forbidden: "+m)
-		}
-	}
-	sys, user := evalCaseInput(c, system)
-	unknown = int(rca.CountUnknownEntities(rca.LowerKnownSet(c.Expect.KnownEntities...), sys+"\n"+user, answer))
-	if c.Expect.MaxUnknownEntities != nil && unknown > *c.Expect.MaxUnknownEntities {
-		fails = append(fails, fmt.Sprintf("unknown entities %d > %d", unknown, *c.Expect.MaxUnknownEntities))
-	}
-	if c.Expect.Intent != "" {
-		route, _, matched := parseIntentJSON(answer, c.Expect.KnownEntities, nil, c.Expect.KnownTeams, "")
-		got := "none"
-		if matched {
-			got = string(route.Intent)
-		}
-		if got != c.Expect.Intent {
-			fails = append(fails, fmt.Sprintf("intent %q, want %q (raw %s)", got, c.Expect.Intent, strings.TrimSpace(answer)))
-		} else if matched && c.Expect.IntentService != "" && route.Service != c.Expect.IntentService {
-			fails = append(fails, fmt.Sprintf("intent service %q, want %q", route.Service, c.Expect.IntentService))
-		}
-	}
-	return fails, unknown
+	return cases
 }
 
 // TestEvalsetFixturesValid — etiketsiz; fikstür sözleşmesi.
@@ -409,25 +151,6 @@ func TestScoreRCACase(t *testing.T) {
 	}
 	if fails, _ := scoreRCACase(c, h, cat, `{"verdict":"insufficient_evidence","root_cause":{"evidence":[]}}`); len(fails) != 1 || !strings.HasPrefix(fails[0], "verdict") {
 		t.Fatalf("küme dışı verdict kızarmalı: %v", fails)
-	}
-}
-
-// evalRubricInput — v0.10.666 (Faz A): vaka beklentisi + çıktı → deterministik
-// rubrik girdisi. Dil boyutu yalnız düz metin yüzeylerde (JSON/şema yüzeyleri
-// ve RCA hakemi n/a); grounded tavanı vakanın maxUnknownEntities'i (yoksa 0).
-func evalRubricInput(c evalCase, answer string, err error, unknown int, rca bool) evalrubric.Input {
-	maxUnknown := 0
-	if c.Expect.MaxUnknownEntities != nil {
-		maxUnknown = *c.Expect.MaxUnknownEntities
-	}
-	return evalrubric.Input{
-		Answer:         answer,
-		Err:            err,
-		UnknownCount:   unknown,
-		MaxUnknown:     maxUnknown,
-		MustContain:    c.Expect.MustContain,
-		MustNotContain: c.Expect.MustNotContain,
-		ExpectTurkish:  !evalJSONSurface(c.Surface) && !rca,
 	}
 }
 

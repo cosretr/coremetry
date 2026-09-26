@@ -4701,3 +4701,50 @@ a.ins-val:hover { text-decoration: underline; }
   .svc-att-row { grid-template-columns: auto auto minmax(0, 1fr) auto; height: auto; min-height: 22px; padding: var(--sp-1) var(--sp-3); }
   .svc-att-meta { grid-column: 1 / -1; white-space: normal; line-height: 16px; padding-bottom: var(--sp-1); }
 }
+
+/* ── Değerlendirme paneli — v0.10.940 (pages/settings/AiEvalPanel.tsx,
+   Settings › CoSRE › Değerlendirme). Yalnız düzen, ilerleme çubuğu, vaka
+   çekmecesinin <pre> kutusu ve karşılaştırma listeleri; tablolar tablo
+   standardının kendi sınıflarıyla (table.dt / cell-* / row-link), renkler
+   token. Önek `evs-` — `ev-` sohbet kanıt kartının (EvidenceCard, `.ev-card` ailesi).
+   <pre> için ayrı sınıf, çünkü mevcut iki kutu uymuyor: `.ex-stack`
+   `white-space: pre` (model cevabı satır kırmadan yatay kayardı),
+   `.oracle-sql` sarmıyor ve yüksekliği sınırsız (16 KiB cevap çekmeceyi
+   boylardı). Satır içi monospace yığını YOK: `pre` zaten --font-mono
+   (inlineMonoStack mandalı tavanda). ── */
+.evs-panel { max-width: 1100px; }
+.evs-intro { margin: 0 0 var(--sp-6); color: var(--text2); font-size: var(--fs-sm); line-height: 1.5; }
+.evs-note { margin-top: var(--sp-3); font-size: var(--fs-xs); }
+.evs-note--warn { color: var(--warn); }
+.evs-chips { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-6); }
+.evs-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); margin-top: var(--sp-6); }
+.evs-actions .field-hint { margin-top: 0; }
+.evs-progress-row { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-6); }
+/* İz --bg3, dolgu --accent (rol: DOLGU, v0.10.920 renk rolleri). */
+.evs-progress { height: 6px; border-radius: var(--radius-xs); background: var(--bg3); overflow: hidden; }
+.evs-progress__fill { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.evs-progress__text { font-size: var(--fs-sm); color: var(--text2); font-variant-numeric: tabular-nums; }
+/* `.status-dot` blok boyut verir ama satır içi <span>'de genişlik tutmaz:
+   hücre metniyle aynı satırda hizalı inline-block. */
+.evs-dot { display: inline-block; vertical-align: middle; margin-right: var(--sp-3); }
+.evs-why { margin: 0 0 var(--sp-6); color: var(--text2); font-size: var(--fs-sm); line-height: 1.5; }
+.evs-pre {
+  margin: var(--sp-3) 0 0; padding: var(--sp-4) var(--sp-5);
+  max-height: 320px; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: var(--fs-xs); line-height: 1.45; color: var(--text);
+}
+.evs-fails, .evs-expect, .evs-cmp__list { margin: 0; padding-left: var(--sp-7); font-size: var(--fs-sm); line-height: 1.6; }
+.evs-fails { color: var(--err); }
+.evs-cmp-pick { max-width: 520px; margin-top: var(--sp-6); }
+.evs-cmp { display: flex; flex-direction: column; gap: var(--sp-5); margin-top: var(--sp-5); }
+.evs-cmp__summary { font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
+.evs-cmp__title { margin-bottom: var(--sp-2); font-size: var(--fs-xs); font-weight: 600; color: var(--text2); }
+.evs-cmp__title--err { color: var(--err); }
+
+/* v0.10.940 — /ai süzgeç şeridinin select'leri (Kaynak / sağlayıcı / durum).
+   Satır içi `fontSize: 12` idi; sınıf (0,1,0) olunca `[data-density] .controls
+   select` kuralları (yoğunluk + ≤640px iOS 16px) yine kazanır. Bilerek ≤640px
+   katmanının DIŞINDA — yalnız masaüstü tabanı. */
+.ai-filter-select { font-size: var(--fs-sm); }

@@ -2646,6 +2646,175 @@ export interface AICallsTimePoint {
   outputTokens: number;
 }
 
+/** v0.10.940 — /api/ai/{stats,series,calls} `?source=`. Parametre YOK =
+ *  üretim (evalset koşularının `evalset-*` yüzeyli satırları HARİÇ); `evalset`
+ *  = YALNIZ o satırlar. Tek değerli birlik bilerek: "üretim" tel üstünde bir
+ *  değer değil, parametrenin yokluğu — `qs()` undefined'ı zaten atar. */
+export type AICallSource = 'evalset';
+
+/** v0.10.940 — evalset koşularının ai_calls `surface` öneki; Go aynası
+ *  chstore.AICallEvalsetSurfacePrefix (sunucu `?source=` koşulunu bununla
+ *  kurar). /ai Kaynak değişince öbür kaynağa ait yüzey süzgecini temizlemek
+ *  için tek yerde: süzgeç kaynak koşuluyla AND'lenir, uyuşmazsa hep 0 satır. */
+export const EVALSET_SURFACE_PREFIX = 'evalset-';
+
+// ── Evalset paneli (v0.10.940, Settings › CoSRE › Değerlendirme) ──────────
+// Go aynası: internal/api/ai_evalset_core.go — evalCatalog(+Surface),
+// evalRunSummary (+ evalSurfaceSummary), evalCaseResult ve evalrubric.Diff'i
+// saran evalCompare (+Side/Case/Delta); uçlar ai_evalset_runs.go'da. Sözleşme evalset-panel spec'inin HTTP bölümü; boş listeler `[]`,
+// asla null (sunucu garantisi — yine de okuma yerleri `?? []` ile korunur,
+// v0.10.811 /ai null kırılım dersi). Zamanlar RFC3339 UTC dizgesi (ns değil:
+// koşu kaydı bir iş kaydı, telemetri noktası değil).
+
+/** Koşu durumu. `abandoned` sunucuda OKUMADA türetilir: 15 dk'dır
+ *  güncellenmeyen, bu sürecin sahiplenmediği `running` satırı. */
+export type EvalRunStatus = 'running' | 'done' | 'cancelled' | 'failed' | 'abandoned';
+
+/** Katalogdaki bir yüzey + üretimin o yüzey için kullanacağı profil
+ *  (eşleme > grup kardeşi > varsayılan). Anahtar / hasKey ASLA gelmez. */
+export interface EvalsetCatalogSurface {
+  surface: string;
+  cases: number;
+  profileId: string;
+  profileLabel: string;
+  provider: string;
+  model: string;
+  baseUrl: string;
+}
+
+/** GET /api/ai/evalset/catalog — yüzeyler vaka sayısına göre azalan, sonra ad. */
+export interface EvalsetCatalog {
+  /** copilotReady(): false iken Koş kapalı (POST 503 döner). */
+  ready: boolean;
+  appVersion: string;
+  promptVersion: string;
+  total: number;
+  /** v0.10.940 — üretimin o an VARSAYILAN profili (Go evalCatalog.DefaultProfileID).
+   *  Başlığın "Profil" satırı bununla seçilir; son koşunun profileId'si
+   *  bugünkü yönlendirmeyi söylemez. */
+  defaultProfileId: string;
+  surfaces: EvalsetCatalogSurface[];
+}
+
+/** Koşunun yüzey başına özeti (koşu sürerken her vakadan sonra güncellenir). */
+export interface EvalSurfaceSummary {
+  surface: string;
+  cases: number;
+  pass: number;
+  fail: number;
+  skipped: number;
+  /** null = bu yüzeyin HİÇBİR vakası maxUnknownEntities taşımıyor (ölçülmedi);
+   *  aksi hâlde taşıyan vakaların toplamı. 0 ile null ayrı şeyler. */
+  unknownEntities: number | null;
+  avgLatencyMs: number;
+}
+
+/** Koşu özeti — liste satırı ve detayın `run` alanı. */
+export interface EvalRunSummary {
+  id: string;
+  status: EvalRunStatus;
+  startedAt: string;
+  updatedAt: string;
+  /** Koşu sürerken ''. */
+  finishedAt: string;
+  startedBy: string;
+  appVersion: string;
+  promptVersion: string;
+  /** Başlangıçtaki VARSAYILAN profilin modeli/kimliği; vaka başı profil/model vakada. */
+  model: string;
+  profileId: string;
+  /** [] = tümü. */
+  surfaces: string[];
+  total: number;
+  done: number;
+  pass: number;
+  fail: number;
+  skipped: number;
+  /** Hiç puanlanmamışken 0. */
+  rubricMean: number;
+  error: string;
+  bySurface: EvalSurfaceSummary[];
+}
+
+/** Fikstürün `expect` nesnesi AYNEN (evalExpect JSON etiketleri). */
+export interface EvalExpect {
+  mustContain?: string[];
+  mustNotContain?: string[];
+  knownEntities?: string[];
+  knownTeams?: string[];
+  maxUnknownEntities?: number;
+  intent?: string;
+  intentService?: string;
+  /** Ölçü, kapı değil: aşılması vakayı KALDIRMAZ. */
+  maxLatencyMs?: number;
+  verdicts?: string[];
+  minEvidenceCitationRate?: number;
+}
+
+/** Bir vakanın sonucu (GET /runs/{id} `cases`). Girdi 8 KiB, cevap 16 KiB'de
+ *  rune-güvenli kırpılır; kırpıldıysa *Truncated true. */
+export interface EvalCaseResult {
+  id: string;
+  surface: string;
+  why: string;
+  ok: boolean;
+  skipped: boolean;
+  skipReason: string;
+  latencyMs: number;
+  fails: string[];
+  unknownEntities: number;
+  rubricTotal: number;
+  profileId: string;
+  model: string;
+  input: string;
+  inputTruncated: boolean;
+  answer: string;
+  answerTruncated: boolean;
+  /** Taşıma / sağlayıcı hatası metni (varsa). */
+  error: string;
+  expect: EvalExpect;
+}
+
+/** Karşılaştırmanın bir tarafı (koşu künyesi). */
+export interface EvalCompareSide {
+  id: string;
+  startedAt: string;
+  model: string;
+  promptVersion: string;
+  appVersion: string;
+  pass: number;
+  fail: number;
+  total: number;
+}
+
+export interface EvalCompareCase {
+  id: string;
+  surface: string;
+}
+
+export interface EvalCompareDelta extends EvalCompareCase {
+  /** Rubrik toplamı (0..1). */
+  before: number;
+  after: number;
+}
+
+/** GET /api/ai/evalset/compare?base=&head= — evalrubric.Diff sarmalı.
+ *  `note` FormatDiff anlamını Türkçe taşır (model farkı, aynı prompt
+ *  sürümü gürültü tabanı …). */
+export interface EvalCompare {
+  comparable: boolean;
+  note: string;
+  base: EvalCompareSide;
+  head: EvalCompareSide;
+  rubricMeanDelta: number;
+  newlyFailing: EvalCompareCase[];
+  newlyPassing: EvalCompareCase[];
+  regressed: EvalCompareDelta[];
+  improved: EvalCompareDelta[];
+  onlyInBase: string[];
+  onlyInHead: string[];
+}
+
 export interface StatusSubscriber {
   id: string;
   email: string;

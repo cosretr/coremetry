@@ -193,6 +193,54 @@ func (s *Store) InsertAICall(ctx context.Context, c AICall) error {
 	return batch.Send()
 }
 
+// ── v0.10.940 (değerlendirme paneli, K2) — kaynak ayrımı ─────────────────
+//
+// Settings › AI › Değerlendirme evalset vakalarını üretimle AYNI yoldan
+// koşuyor (s.aiCall → recorder → ai_calls). Satırı ayıran tek şey yüzey
+// öneki: "evalset-"+<EvalsetSurface> — CLI koşucusunun zaten kullandığı
+// önek. Yeni kolon YOK: ai_calls INSERT'i iki boot probe'una bağlı
+// (iki-boot sözleşmesi); bir `source` kolonu üçüncü bayrak ve küme kipinde
+// bir boot boyunca etiketsiz satır demekti. Önek her satırda, geriye dönük.
+//
+// Sözleşme (ai_calls_source_test pinler): /ai ve bütçe agregatları
+// VARSAYILAN üretimdir, evalset satırları DIŞARIDA — sıfır değer
+// AICallSource("") üretim sayılır, unutulmuş bir parametre sayıları
+// şişirmez, en kötü evalset'i gizler. AICallSourceEvalset YALNIZ evalset.
+// Nokta/geri bildirim okumaları (GetAICall, AICallForEvalset, 👎 listeleri,
+// KB adayları, exchange okumaları) süzülmez: kimliğiyle istenen satır
+// kaynağından bağımsız bulunmalı.
+const AICallEvalsetSurfacePrefix = "evalset-"
+
+// AICallSource — /ai okuyucularının kaynak seçimi (HTTP ?source= aynası).
+type AICallSource string
+
+const (
+	AICallSourceProduction AICallSource = "production"
+	AICallSourceEvalset    AICallSource = "evalset"
+)
+
+// aiCallsSourceCond — SAF; kaynak süzgecinin TEK yazımı. startsWith (LIKE
+// değil): önekteki '-' ve olası '_' LIKE joker sınıfına girmez, kaçış
+// derdi yok. Önek derleme-zamanı sabiti → literal gömülür; bind'a
+// çevrilmedi çünkü her çağıranın arg sırası (from, to, …) aynen kalsın.
+// Tanınmayan her değer üretimdir (K2: evalset asla varsayılan olmaz).
+func aiCallsSourceCond(src AICallSource) string {
+	cond := "startsWith(surface, '" + AICallEvalsetSurfacePrefix + "')"
+	if src == AICallSourceEvalset {
+		return cond
+	}
+	return "NOT " + cond
+}
+
+// aiCallsWindowWhere — v0.10.940: agregat okuyucuların ortak WHERE'i
+// (pencere + kaynak). İki bind (from, to) — çağıranların arg listesi
+// değişmedi; kaynak koşulu bind taşımaz.
+func aiCallsWindowWhere(src AICallSource) string {
+	return `WHERE created_at >= toDateTime64(?, 9, 'UTC')
+		  AND created_at <  toDateTime64(?, 9, 'UTC')
+		  AND ` + aiCallsSourceCond(src)
+}
+
 // ListAICalls returns recent calls filtered by surface/provider/
 // status. Filters all optional — empty means "any". Caller-side
 // pagination via since/limit; default 100 rows. Latest-first.
@@ -203,20 +251,22 @@ type ListAICallsParams struct {
 	From     time.Time // inclusive; zero = no lower bound
 	To       time.Time // exclusive; zero = now()
 	Limit    int
+	// Source — v0.10.940 (K2): sıfır değer = üretim (evalset DIŞARIDA).
+	Source AICallSource
 }
 
-func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall, error) {
-	if p.Limit <= 0 || p.Limit > 1000 {
-		p.Limit = 100
-	}
-	if p.To.IsZero() {
-		p.To = time.Now().UTC()
-	}
+// aiCallsListSQL — v0.10.940: ListAICalls'ın SAF kurucusu (kaynak pini
+// ai_calls_source_test). Kaynak koşulu DAİMA eklenir, ?surface= süzgecine
+// rağmen: üretim görünümünde açıkça surface=evalset-X istemek boş döner.
+// Kaynak yüzeyden önce gelir — yoksa tek bir süzgeç üretim listesine
+// evalset satırı sızdırırdı.
+func aiCallsListSQL(p ListAICallsParams, cached bool) (string, []any) {
 	var wc whereClause
 	if !p.From.IsZero() {
 		wc.add("created_at >= toDateTime64(?, 9, 'UTC')", chDateTime64Arg(p.From))
 	}
 	wc.add("created_at < toDateTime64(?, 9, 'UTC')", chDateTime64Arg(p.To))
+	wc.add(aiCallsSourceCond(p.Source))
 	if p.Surface != "" {
 		wc.add("surface = ?", p.Surface)
 	}
@@ -226,12 +276,22 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	if p.Status != "" {
 		wc.add("status = ?", p.Status)
 	}
-	cached := aiCallsCachedCol.Load() // v0.10.807
 	q := aiCallsRowSelect(cached) + `
 		FROM ai_calls ` + wc.sql() + `
 		ORDER BY created_at DESC
 		LIMIT ?`
-	args := append(wc.args, p.Limit)
+	return q, append(wc.args, p.Limit)
+}
+
+func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall, error) {
+	if p.Limit <= 0 || p.Limit > 1000 {
+		p.Limit = 100
+	}
+	if p.To.IsZero() {
+		p.To = time.Now().UTC()
+	}
+	cached := aiCallsCachedCol.Load() // v0.10.807
+	q, args := aiCallsListSQL(p, cached)
 	rows, err := s.conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -343,16 +403,27 @@ func newAIStats() AIStats {
 	return AIStats{BySurface: []AISurfaceStat{}, ByProvider: []AIProviderStat{}}
 }
 
-// ComputeAIStats does the aggregate query for the overview cards.
-// Window-bounded (from..to) so we never scan beyond the TTL.
-func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStats, error) {
-	if to.IsZero() {
-		to = time.Now().UTC()
-	}
-	if from.IsZero() {
-		from = to.Add(-24 * time.Hour)
-	}
-	row := s.conn.QueryRow(ctx, `
+// aiStatsSQL — v0.10.940 (K2): ComputeAIStats'in sekiz alt sorgusu TEK
+// kurucuda. Önceden her biri kendi WHERE'ini elle yazıyordu; kaynak süzgeci
+// sekiz yere ayrı ayrı eklenseydi biri unutulur ve o KPI (ör. kalkan
+// isabeti) üretim sayısına evalset'i sessizce karıştırırdı. Test tüm
+// alanları reflect ile gezer — yeni alt sorgu eklenirse süzgeçsiz kalamaz.
+// Her sorgu tam iki bind taşır (from, to); çağıran arg listesi değişmedi.
+type aiStatsSQL struct {
+	Totals        string
+	BySurface     string
+	ByProvider    string
+	ErrorClass    string
+	TTFT          string
+	Shield        string
+	CachedSum     string
+	CachedByModel string
+}
+
+func aiStatsQueries(src AICallSource) aiStatsSQL {
+	w := aiCallsWindowWhere(src)
+	return aiStatsSQL{
+		Totals: `
 		SELECT
 			toUInt64(count()),
 			toUInt64(countIf(status = 'ok')),
@@ -364,8 +435,71 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 			toUInt64(sum(output_tokens)),
 			toUInt64(uniqExact(user_id))
 		FROM ai_calls
-		WHERE created_at >= toDateTime64(?, 9, 'UTC')
-		  AND created_at <  toDateTime64(?, 9, 'UTC')`,
+		` + w,
+		// v0.10.940 — LIMIT 20 kırılımı: evalset'in 12 "evalset-*" yüzeyi
+		// üretim görünümünde ilk 20'ye giremez (süzgeç GROUP BY'dan önce).
+		BySurface: `
+		SELECT surface,
+		       toUInt64(count()),
+		       coalesce(toFloat64(countIf(status = 'error')) / nullIf(count(), 0), 0),
+		       coalesce(toFloat64(avg(duration_ms)), 0)
+		FROM ai_calls
+		` + w + `
+		GROUP BY surface
+		ORDER BY count() DESC
+		LIMIT 20`,
+		ByProvider: `
+		SELECT provider, model,
+		       toUInt64(count()),
+		       toUInt64(sum(input_tokens)),
+		       toUInt64(sum(output_tokens)),
+		       toUInt64(countIf(status = 'error')),
+		       toFloat64(avg(duration_ms)),
+		       toFloat64(quantile(0.95)(duration_ms))
+		FROM ai_calls
+		` + w + `
+		GROUP BY provider, model
+		ORDER BY count() DESC
+		LIMIT 20`,
+		ErrorClass: `
+			SELECT error_class, toUInt64(count())
+			FROM ai_calls
+			` + w + `
+			  AND status = 'error'
+			GROUP BY error_class ORDER BY count() DESC LIMIT 12`,
+		TTFT: `
+			SELECT ifNotFinite(toFloat64(avgIf(ttft_ms, ttft_ms > 0)), 0)
+			FROM ai_calls
+			` + w,
+		Shield: `
+			SELECT toUInt64(countIf(shield_hits > 0)), toUInt64(sum(shield_hits))
+			FROM ai_calls
+			` + w,
+		CachedSum: `
+			SELECT toUInt64(sum(cached_tokens))
+			FROM ai_calls
+			` + w,
+		CachedByModel: `
+			SELECT provider, model, toUInt64(sum(cached_tokens))
+			FROM ai_calls
+			` + w + `
+			GROUP BY provider, model`,
+	}
+}
+
+// ComputeAIStats does the aggregate query for the overview cards.
+// Window-bounded (from..to) so we never scan beyond the TTL.
+// v0.10.940 — src: üretim (varsayılan, evalset DIŞARIDA) ya da yalnız
+// evalset; sekiz alt sorgunun hepsi aynı kaynağı okur (aiStatsQueries).
+func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time, src AICallSource) (*AIStats, error) {
+	if to.IsZero() {
+		to = time.Now().UTC()
+	}
+	if from.IsZero() {
+		from = to.Add(-24 * time.Hour)
+	}
+	qs := aiStatsQueries(src)
+	row := s.conn.QueryRow(ctx, qs.Totals,
 		chDateTime64Arg(from), chDateTime64Arg(to))
 	st := newAIStats() // v0.10.811 — kırılımlar boşken [] (null değil)
 	if err := row.Scan(&st.TotalCalls, &st.OkCalls, &st.ErrorCalls,
@@ -379,17 +513,7 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 
 	// Per-surface breakdown — operator wants "which Explain button
 	// gets the most clicks / has the highest error rate".
-	sRows, err := s.conn.Query(ctx, `
-		SELECT surface,
-		       toUInt64(count()),
-		       coalesce(toFloat64(countIf(status = 'error')) / nullIf(count(), 0), 0),
-		       coalesce(toFloat64(avg(duration_ms)), 0)
-		FROM ai_calls
-		WHERE created_at >= toDateTime64(?, 9, 'UTC')
-		  AND created_at <  toDateTime64(?, 9, 'UTC')
-		GROUP BY surface
-		ORDER BY count() DESC
-		LIMIT 20`,
+	sRows, err := s.conn.Query(ctx, qs.BySurface,
 		chDateTime64Arg(from), chDateTime64Arg(to))
 	if err != nil {
 		return nil, err
@@ -409,6 +533,8 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 	// so the latest verdict per exchange wins), merged into the
 	// surface rows in Go. Surfaces with feedback but no calls in the
 	// window are deliberately dropped — the /ai table is call-driven.
+	// v0.10.940 — ai_feedback kaynak süzgeci İSTEMEZ: birleşme yüzey
+	// adıyla ve "evalset-*" adları üretim satırlarıyla hiç eşleşmez.
 	fb, err := s.aiFeedbackBySurface(ctx, from, to)
 	if err != nil {
 		return nil, err
@@ -420,20 +546,7 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 		}
 	}
 
-	pRows, err := s.conn.Query(ctx, `
-		SELECT provider, model,
-		       toUInt64(count()),
-		       toUInt64(sum(input_tokens)),
-		       toUInt64(sum(output_tokens)),
-		       toUInt64(countIf(status = 'error')),
-		       toFloat64(avg(duration_ms)),
-		       toFloat64(quantile(0.95)(duration_ms))
-		FROM ai_calls
-		WHERE created_at >= toDateTime64(?, 9, 'UTC')
-		  AND created_at <  toDateTime64(?, 9, 'UTC')
-		GROUP BY provider, model
-		ORDER BY count() DESC
-		LIMIT 20`,
+	pRows, err := s.conn.Query(ctx, qs.ByProvider,
 		chDateTime64Arg(from), chDateTime64Arg(to))
 	if err != nil {
 		return nil, err
@@ -451,13 +564,7 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 	// v0.10.409 — hata sınıfı + TTFT (kolonlar varsa).
 	if aiCallsExtended.Load() {
 		st.Extended = true
-		eRows, err := s.conn.Query(ctx, `
-			SELECT error_class, toUInt64(count())
-			FROM ai_calls
-			WHERE created_at >= toDateTime64(?, 9, 'UTC')
-			  AND created_at <  toDateTime64(?, 9, 'UTC')
-			  AND status = 'error'
-			GROUP BY error_class ORDER BY count() DESC LIMIT 12`,
+		eRows, err := s.conn.Query(ctx, qs.ErrorClass,
 			chDateTime64Arg(from), chDateTime64Arg(to))
 		if err != nil {
 			log.Printf("[ai_calls] hata sınıfı kırılımı okunamadı: %v", err)
@@ -474,20 +581,12 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 			eRows.Close()
 		}
 		var ttft float64
-		if err := s.conn.QueryRow(ctx, `
-			SELECT ifNotFinite(toFloat64(avgIf(ttft_ms, ttft_ms > 0)), 0)
-			FROM ai_calls
-			WHERE created_at >= toDateTime64(?, 9, 'UTC')
-			  AND created_at <  toDateTime64(?, 9, 'UTC')`,
+		if err := s.conn.QueryRow(ctx, qs.TTFT,
 			chDateTime64Arg(from), chDateTime64Arg(to)).Scan(&ttft); err == nil {
 			st.AvgTTFTMs = ttft
 		}
 		// v0.10.421 (E6) — kalkan isabeti.
-		if err := s.conn.QueryRow(ctx, `
-			SELECT toUInt64(countIf(shield_hits > 0)), toUInt64(sum(shield_hits))
-			FROM ai_calls
-			WHERE created_at >= toDateTime64(?, 9, 'UTC')
-			  AND created_at <  toDateTime64(?, 9, 'UTC')`,
+		if err := s.conn.QueryRow(ctx, qs.Shield,
 			chDateTime64Arg(from), chDateTime64Arg(to)).Scan(&st.ShieldHitCalls, &st.ShieldHits); err != nil {
 			log.Printf("[ai_calls] kalkan isabeti okunamadı: %v", err)
 		}
@@ -495,20 +594,11 @@ func (s *Store) ComputeAIStats(ctx context.Context, from, to time.Time) (*AIStat
 	// v0.10.807 — önek önbelleği toplamı + model başına (kolon varsa).
 	if aiCallsCachedCol.Load() {
 		st.CachedCol = true
-		if err := s.conn.QueryRow(ctx, `
-			SELECT toUInt64(sum(cached_tokens))
-			FROM ai_calls
-			WHERE created_at >= toDateTime64(?, 9, 'UTC')
-			  AND created_at <  toDateTime64(?, 9, 'UTC')`,
+		if err := s.conn.QueryRow(ctx, qs.CachedSum,
 			chDateTime64Arg(from), chDateTime64Arg(to)).Scan(&st.CachedTokens); err != nil {
 			log.Printf("[ai_calls] cached_tokens toplamı okunamadı: %v", err)
 		}
-		cRows, err := s.conn.Query(ctx, `
-			SELECT provider, model, toUInt64(sum(cached_tokens))
-			FROM ai_calls
-			WHERE created_at >= toDateTime64(?, 9, 'UTC')
-			  AND created_at <  toDateTime64(?, 9, 'UTC')
-			GROUP BY provider, model`,
+		cRows, err := s.conn.Query(ctx, qs.CachedByModel,
 			chDateTime64Arg(from), chDateTime64Arg(to))
 		if err != nil {
 			log.Printf("[ai_calls] model başına cached_tokens okunamadı: %v", err)
@@ -543,7 +633,26 @@ type AICallsTimePoint struct {
 	OutputTokens uint64  `json:"outputTokens"`
 }
 
-func (s *Store) AICallsTimeseries(ctx context.Context, from, to time.Time, bucketSec int) ([]AICallsTimePoint, error) {
+// aiCallsTimeseriesSQL — v0.10.940: AICallsTimeseries'in SAF kurucusu
+// (kaynak pini). bucketSec önceki gibi Sprintf'le girer (int, çağıran
+// sınırlı); pencere bind'la, kaynak aiCallsWindowWhere'den.
+func aiCallsTimeseriesSQL(bucketSec int, src AICallSource) string {
+	return fmt.Sprintf(`
+		SELECT toStartOfInterval(created_at, INTERVAL %d second) AS bucket,
+		       toUInt64(count()) AS calls,
+		       toUInt64(countIf(status = 'error')) AS errors,
+		       coalesce(toFloat64(avg(duration_ms)), 0) AS avg_ms,
+		       toUInt64(sum(input_tokens)) AS in_tok,
+		       toUInt64(sum(output_tokens)) AS out_tok
+		FROM ai_calls
+		%s
+		GROUP BY bucket
+		ORDER BY bucket`, bucketSec, aiCallsWindowWhere(src))
+}
+
+// v0.10.940 — src: ComputeAIStats ile aynı kaynak sözleşmesi (grafik ve
+// KPI kartları aynı popülasyonu çizer).
+func (s *Store) AICallsTimeseries(ctx context.Context, from, to time.Time, bucketSec int, src AICallSource) ([]AICallsTimePoint, error) {
 	if to.IsZero() {
 		to = time.Now().UTC()
 	}
@@ -553,19 +662,7 @@ func (s *Store) AICallsTimeseries(ctx context.Context, from, to time.Time, bucke
 	if bucketSec <= 0 {
 		bucketSec = 300
 	}
-	q := fmt.Sprintf(`
-		SELECT toStartOfInterval(created_at, INTERVAL %d second) AS bucket,
-		       toUInt64(count()) AS calls,
-		       toUInt64(countIf(status = 'error')) AS errors,
-		       coalesce(toFloat64(avg(duration_ms)), 0) AS avg_ms,
-		       toUInt64(sum(input_tokens)) AS in_tok,
-		       toUInt64(sum(output_tokens)) AS out_tok
-		FROM ai_calls
-		WHERE created_at >= toDateTime64(?, 9, 'UTC')
-		  AND created_at <  toDateTime64(?, 9, 'UTC')
-		GROUP BY bucket
-		ORDER BY bucket`, bucketSec)
-	rows, err := s.conn.Query(ctx, q,
+	rows, err := s.conn.Query(ctx, aiCallsTimeseriesSQL(bucketSec, src),
 		chDateTime64Arg(from), chDateTime64Arg(to))
 	if err != nil {
 		return nil, err

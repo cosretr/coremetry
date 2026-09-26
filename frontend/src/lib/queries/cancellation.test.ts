@@ -57,6 +57,10 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // istekte; kiosk penceresi kapanınca ya da limit değişince eski istek
   // kesilmeli.
   { file: 'trace.ts', hooks: ['api.traceBundle('] },
+  // v0.10.940 — evalset paneli: koşu listesi / detayı 10 s yoklanır, kıyas
+  // iki koşunun vaka kayıtlarını çözer; sekme ya da çekmece kapanınca eski
+  // istek kesilmeli. Başlat / durdur mutasyonları kapsam dışı (iptal edilmez).
+  { file: 'aiEval.ts', hooks: ['api.aiEvalsetCatalog(', 'api.aiEvalsetRuns(', 'api.aiEvalsetRun(', 'api.aiEvalsetCompare('] },
 ];
 
 // stripComments — kaynağı YORUMSUZ okur.

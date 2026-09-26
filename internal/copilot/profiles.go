@@ -324,6 +324,52 @@ func (s *Service) SurfaceProfiles() map[string]string {
 	return out
 }
 
+// SurfaceProfileID — v0.10.940 (evalset paneli): `surface` etiketli bir
+// çağrının ÇÖZÜLECEĞİ profil kimliği — resolveProfileLocked'un WithProfile'sız
+// hâli (yüzey haritası > grup kardeşi > varsayılan). Neden gerekli: panel
+// çağrıyı "evalset-<Yüzey>" etiketiyle kaydeder (üretim satırı sanılmasın);
+// o etiket haritada olmadığı için varsayılana düşer ve chat-intent'i küçük
+// modele bağlayan kurulumda IntentClassify vakası YANLIŞ modeli ölçerdi.
+// Koşucu bunun yerine üretim etiketinin profilini sorar, WithProfile ile
+// sabitler. Grup/harita mantığı KOPYALANMAZ — tek çözücü, tek doğru.
+// Profil kümesi boşsa (eski düz alanlar) geçici aynanın kimliği döner.
+func (s *Service) SurfaceProfileID(surface string) string {
+	if s == nil {
+		return ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.resolveProfileLocked(WithMeta(context.Background(), CallMeta{Surface: surface})).cfg.ID
+}
+
+// ProfileView — v0.10.940: ANAHTARSIZ profil görünümü (evalset kataloğu).
+// Anahtar da hasKey de BİLİNÇLİ yok: katalog "hangi uç, hangi model"
+// sorusunu cevaplar; Profiles()/ProfilesSnapshot anahtar taşır ve çağıranın
+// soymasına güvenmek bir sonraki alanda sızıntıdır. Model boşsa sağlayıcının
+// varsayılanı (ModelFor ile aynı kural — ekranda "" değil gerçekten giden ad).
+// Bilinmeyen kimlik ok=false; küme boşken DefaultProfileID geçici aynayı anlatır.
+func (s *Service) ProfileView(id string) (label, provider, model, baseURL string, ok bool) {
+	if s == nil {
+		return "", "", "", "", false
+	}
+	s.mu.RLock()
+	var cfg ModelProfile
+	if rt := s.profiles[id]; rt != nil {
+		cfg, ok = rt.cfg, true
+	} else if len(s.profiles) == 0 && id == DefaultProfileID {
+		cfg, ok = ModelProfile{ID: DefaultProfileID, Provider: s.provider, Model: s.model, BaseURL: s.baseURL}, true
+	}
+	s.mu.RUnlock()
+	if !ok {
+		return "", "", "", "", false
+	}
+	model = cfg.Model
+	if model == "" {
+		model = s.DefaultModels()[cfg.Provider]
+	}
+	return cfg.Label, cfg.Provider, model, cfg.BaseURL, true
+}
+
 // ProfileTimeout — profilin etkin istemci zaman aşımı ("" = varsayılan).
 func (s *Service) ProfileTimeout(id string) time.Duration {
 	s.mu.RLock()

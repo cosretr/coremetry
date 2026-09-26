@@ -15,9 +15,11 @@ import type { DataTableColumn } from '@/lib/dataTable';
 import {
   type AIRateTable, mergeRates, costForCall, fmtCost,
 } from '@/lib/ai-rates';
-import type {
-  AICall, AIStats, AICallsTimePoint, TimeRange,
+import {
+  type AICall, type AIStats, type AICallsTimePoint, type TimeRange, type AICallSource,
+  EVALSET_SURFACE_PREFIX,
 } from '@/lib/types';
+import { useSearchParams } from 'react-router-dom';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -42,6 +44,29 @@ export default function AIObservabilityPage() {
   const [status, setStatus] = useState('');
   const [open, setOpen] = useState<AICall | null>(null);
   const [rates, setRates] = useState<AIRateTable>(() => mergeRates(null));
+  // v0.10.940 (operatör onayı K2) — Kaynak: Üretim (varsayılan, parametre
+  // YOK) / Değerlendirme (?source=evalset). Settings › CoSRE › Değerlendirme
+  // koşularının çağrıları ai_calls'a `evalset-*` yüzeyiyle düşer; sunucu
+  // üretim görünümünde onları HARİÇ tutar, yani KPI/grafik/tablo üretimi
+  // şişirmez. Kaynak URL'de (paylaşılan link aynı görünümü açar; Settings
+  // paneli buraya ?source=evalset ile bağlanır) ve üç okumaya da gider —
+  // biri unutulsa KPI bir kaynaktan, tablo ötekinden okurdu. Bütçe (24 sa)
+  // parametre almaz: bütçe üretim harcamasının tavanıdır.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const source: AICallSource | undefined = searchParams.get('source') === 'evalset' ? 'evalset' : undefined;
+  const setSource = (v: string) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (v === 'evalset') p.set('source', 'evalset');
+      else p.delete('source');
+      return p;
+    }, { replace: true });
+    // v0.10.940 — öbür kaynağın yüzey süzgeci taşınmaz: sunucu kaynak
+    // koşulunu süzgeçle AND'ler, `evalset-…` süzgeci Üretim'de (ya da
+    // tersi) hep 0 satır döndürürdü. Sağlayıcı / durum iki kaynakta da
+    // anlamlı — korunur.
+    if (surface && surface.startsWith(EVALSET_SURFACE_PREFIX) !== (v === 'evalset')) setSurface('');
+  };
 
   // v0.9.875 (tutarlılık denetimi BT1) — 200 satırlık AI çağrı listesi.
   // Duration ve Cost kolonları VARDI ama sıralanamıyordu; "en pahalı /
@@ -78,6 +103,10 @@ export default function AIObservabilityPage() {
       .catch(() => { /* fall back to bundled */ });
   }, []);
 
+  // v0.10.940 — kaynak değişince önceki kaynağın KPI'ları / grafiği yeni
+  // etiketin altında bir an bile görünmesin: yeni okuma gelene dek yükleniyor.
+  useEffect(() => { setStats(undefined); setSeries(undefined); }, [source]);
+
   // Poll every 60s so the page stays close to live for the
   // operator watching deployments. Cheap — the stats query is
   // server-side cached 30s.
@@ -86,8 +115,8 @@ export default function AIObservabilityPage() {
     let cancelled = false; // v0.8.300 — range change mid-flight must not overwrite
     const tick = () => {
       const { from, to } = timeRangeToNs(range);
-      api.aiStats({ from, to }).then(s => { if (!cancelled) setStats(s); }).catch(() => { if (!cancelled) setStats(null); });
-      api.aiSeries({ from, to }).then(s => { if (!cancelled) setSeries(s ?? []); }).catch(() => { if (!cancelled) setSeries([]); });
+      api.aiStats({ from, to, source }).then(s => { if (!cancelled) setStats(s); }).catch(() => { if (!cancelled) setStats(null); });
+      api.aiSeries({ from, to, source }).then(s => { if (!cancelled) setSeries(s ?? []); }).catch(() => { if (!cancelled) setSeries([]); });
       api.aiBudget().then(b => { if (!cancelled) setBudget(b); }).catch(() => { if (!cancelled) setBudget(null); }); // v0.10.411 — sabit 24 sa pencere
     };
     tick();
@@ -97,7 +126,7 @@ export default function AIObservabilityPage() {
     // (the next tick fires within 60s).
     timer = window.setInterval(() => { if (!document.hidden) tick(); }, 60_000);
     return () => { cancelled = true; if (timer) clearInterval(timer); };
-  }, [range]);
+  }, [range, source]);
 
   useEffect(() => {
     const { from, to } = timeRangeToNs(range);
@@ -108,11 +137,12 @@ export default function AIObservabilityPage() {
       surface: surface || undefined,
       provider: provider || undefined,
       status: status || undefined,
+      source, // v0.10.940
     })
       .then(c => { if (!cancelled) setCalls(c ?? []); })
       .catch(() => { if (!cancelled) setCalls(null); });
     return () => { cancelled = true; };
-  }, [range, surface, provider, status]);
+  }, [range, surface, provider, status, source]);
 
   return (
     <>
@@ -122,6 +152,15 @@ export default function AIObservabilityPage() {
           Every CoSRE call lands here — latency, tokens, status,
           per-surface breakdown. Prompt + response samples (≤4KB) are kept
           for inspection. Admin-only.
+          {/* v0.10.940 — kaynak seçici süzgeç şeridinde, KPI'ların ALTINDA;
+              değerlendirme görünümündeyken karoların neyi saydığı üstte de
+              yazsın (bütçe karosu hep üretim). */}
+          {source === 'evalset' && (
+            <div className="field-hint">
+              Kaynak: Değerlendirme — yalnız Settings › CoSRE › Değerlendirme koşularının
+              çağrıları (yüzey evalset-…). Bütçe (24 sa) karosu her zaman üretimi gösterir.
+            </div>
+          )}
         </div>
 
         {/* KPI cards */}
@@ -235,13 +274,25 @@ export default function AIObservabilityPage() {
               yazılmamıştı: PageControls.tsx:43'ün yorumu bir sözleşme
               anlatıyordu, kablo takılı değildi. Aynı kök nedenin
               (shortcutSearchTarget.test.ts başlığı) ikinci tekrarı. */}
+          {/* v0.10.940 — Kaynak ilk sırada: diğer süzgeçlerden farklı
+              olarak yalnız tabloyu değil KPI + grafiği de kapsar. İki değer →
+              düz select (frontend-conventions §3, ≤10 sabit değer). Boyut
+              `.ai-filter-select`te, satır içinde değil: satır içi 12px
+              yoğunluk kurallarını ve telefondaki iOS 16px kuralını ezerdi;
+              sağlayıcı / durum seçicileri de aynı sınıfa geçti. */}
+          <select value={source ?? ''} onChange={e => setSource(e.target.value)}
+            aria-label="Kaynak"
+            className="ai-filter-select">
+            <option value="">Üretim</option>
+            <option value="evalset">Değerlendirme</option>
+          </select>
           <input type="search" placeholder="Filter by surface…" aria-label="Filter by surface"
             data-shortcut-search
             value={surface} onChange={e => setSurface(e.target.value)}
             style={{ fontSize: 12, padding: '3px 8px', width: 200 }} />
           <select value={provider} onChange={e => setProvider(e.target.value)}
             aria-label="Filter by provider"
-            style={{ fontSize: 12 }}>
+            className="ai-filter-select">
             <option value="">All providers</option>
             <option value="openai">openai</option>
             <option value="anthropic">anthropic</option>
@@ -249,7 +300,7 @@ export default function AIObservabilityPage() {
           </select>
           <select value={status} onChange={e => setStatus(e.target.value)}
             aria-label="Filter by status"
-            style={{ fontSize: 12 }}>
+            className="ai-filter-select">
             <option value="">All statuses</option>
             <option value="ok">ok</option>
             <option value="error">error</option>

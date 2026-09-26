@@ -286,9 +286,25 @@ func aiSurfaceFromPath(p string) string {
 	return seg
 }
 
+// aiSourceParam — v0.10.940 (değerlendirme paneli, K2): /ai okuma
+// uçlarının ?source= normalizasyonu. YALNIZ tam "evalset" değerlendirme
+// satırlarını seçer; yokluk ve HER başka değer üretimdir (evalset
+// DIŞARIDA). Neden katı eşitlik (EqualFold/TrimSpace değil): FE tek
+// yazımla gönderiyor, anahtar iki değerle sınırlı kalıyor — el yazımı
+// "?source=Evalset" ayrı bir önbellek girdisi basamaz, üretime düşer.
+// Neden varsayılan üretim: parametreyi bilmeyen eski istemci (açık sekme,
+// deploy sırası) evalset'le şişmiş sayı görmesin.
+func aiSourceParam(raw string) chstore.AICallSource {
+	if raw == string(chstore.AICallSourceEvalset) {
+		return chstore.AICallSourceEvalset
+	}
+	return chstore.AICallSourceProduction
+}
+
 // listAICalls — paginated recent-calls table on the /ai page.
 // Filters: surface / provider / status / time range. Default
 // window 24h.
+// v0.10.940 — ?source= (aiSourceParam); önbelleksiz uç, anahtar yok.
 func (s *Server) listAICalls(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	p := chstore.ListAICallsParams{
@@ -296,6 +312,7 @@ func (s *Server) listAICalls(w http.ResponseWriter, r *http.Request) {
 		Provider: q.Get("provider"),
 		Status:   q.Get("status"),
 		Limit:    parseInt(q.Get("limit"), 100),
+		Source:   aiSourceParam(q.Get("source")),
 	}
 	from := parseTime(q.Get("from"))
 	to := parseTime(q.Get("to"))
@@ -338,14 +355,23 @@ func (s *Server) getAICall(w http.ResponseWriter, r *http.Request) {
 // the same numbers.
 func (s *Server) aiStats(w http.ResponseWriter, r *http.Request) {
 	from, to := parseFromTo(r, 24*time.Hour)
-	// v0.10.409 — yanıt şekli değişti (byErrorClass/avgTtftMs/extended) ve
-	// dolum boot-zamanı bayrağına bağlı: ikisi de anahtarda, deploy sonrası
-	// bayat şekil servis edilmez.
-	key := fmt.Sprintf("ai-stats:v421:from=%d:to=%d:ext=%t",
-		from.UnixNano()/int64(time.Minute), to.UnixNano()/int64(time.Minute), chstore.AICallsExtended())
+	src := aiSourceParam(r.URL.Query().Get("source")) // v0.10.940 (K2)
+	key := aiStatsKey(from, to, chstore.AICallsExtended(), src)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		return s.store.ComputeAIStats(ctx, from, to)
+		return s.store.ComputeAIStats(ctx, from, to, src)
 	})
+}
+
+// aiStatsKey — SAF (ai_observability_source_test pinler).
+// v0.10.409 — yanıt şekli değişti (byErrorClass/avgTtftMs/extended) ve
+// dolum boot-zamanı bayrağına bağlı: ikisi de anahtarda, deploy sonrası
+// bayat şekil servis edilmez.
+// v0.10.940 — normalize edilmiş kaynak anahtarda: eksikliği üretim
+// sekmesine evalset KPI'larını (ya da tersini) 30 sn servis ederdi.
+// Şekil sürümü (v421) değişmedi — src= soneki anahtarı zaten yeniliyor.
+func aiStatsKey(from, to time.Time, ext bool, src chstore.AICallSource) string {
+	return fmt.Sprintf("ai-stats:v421:from=%d:to=%d:ext=%t:src=%s",
+		from.UnixNano()/int64(time.Minute), to.UnixNano()/int64(time.Minute), ext, src)
 }
 
 // aiRCAQuality — kök-neden hakem motorunun kalitesi (v0.9.594).
@@ -390,11 +416,18 @@ func (s *Server) aiSeries(w http.ResponseWriter, r *http.Request) {
 	if bucketSec < 60 {
 		bucketSec = 60
 	}
-	key := fmt.Sprintf("ai-series:from=%d:to=%d:b=%d",
-		from.UnixNano()/int64(time.Minute), to.UnixNano()/int64(time.Minute), bucketSec)
+	src := aiSourceParam(r.URL.Query().Get("source")) // v0.10.940 (K2)
+	key := aiSeriesKey(from, to, bucketSec, src)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		return s.store.AICallsTimeseries(ctx, from, to, bucketSec)
+		return s.store.AICallsTimeseries(ctx, from, to, bucketSec, src)
 	})
+}
+
+// aiSeriesKey — SAF; v0.10.940: aiStatsKey ile aynı gerekçe, kaynak
+// anahtarda (grafik ve KPI kartları aynı popülasyonu çizmeli).
+func aiSeriesKey(from, to time.Time, bucketSec int, src chstore.AICallSource) string {
+	return fmt.Sprintf("ai-series:from=%d:to=%d:b=%d:src=%s",
+		from.UnixNano()/int64(time.Minute), to.UnixNano()/int64(time.Minute), bucketSec, src)
 }
 
 // GET /api/ai/router-gaps?days=7 — v0.9.549.
