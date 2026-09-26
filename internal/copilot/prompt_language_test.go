@@ -75,16 +75,17 @@ func promptRegistry() map[string]promptClass {
 		// buraya taşındı: metin artık Türkçe yazılmış. ChatRoundCap aynı
 		// döngünün tur-tavanı hâli; sicile girmesiyle copilot_chat.go'daki
 		// satır-içi İngilizce ek de dil kapısının kapsamına girdi.
-		"Chat":           classTurkishNative,
-		"IntentClassify": classTurkishNative, // v0.10.172 — JSON çıktı, Türkçe talimat (RCAVerdict emsali)
-		"GeneralChat":    classTurkishNative, // v0.10.194 — none → genel bilgi cevabı (tool'suz)
-		"ChatRoundCap":   classTurkishNative,
-		"ChatAgentLoop":  classTurkishNative, // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A, Türkçe/kısa)
-		"ShiftSummary":   classTurkishNative,
-		"AlertNoise":     classTurkishNative,
-		"LogPatterns":    classTurkishNative,
-		"Postmortem":     classTurkishNative, // Faz 5.4 — markdown taslak, Türkçe talimat
-		"RunbookUpdate":  classTurkishNative, // Faz 5.5 — güncelleme önerisi bloğu
+		"Chat":               classTurkishNative,
+		"IntentClassify":     classTurkishNative, // v0.10.172 — JSON çıktı, Türkçe talimat (RCAVerdict emsali)
+		"GeneralChat":        classTurkishNative, // v0.10.194 — none → genel bilgi cevabı (tool'suz)
+		"ChatRoundCap":       classTurkishNative,
+		"ChatAgentLoop":      classTurkishNative, // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A, Türkçe/kısa)
+		"TraceInvestigation": classTurkishNative, // v0.10.948 — "CoSRE'ye sor" trace inceleme cevabı
+		"ShiftSummary":       classTurkishNative,
+		"AlertNoise":         classTurkishNative,
+		"LogPatterns":        classTurkishNative,
+		"Postmortem":         classTurkishNative, // Faz 5.4 — markdown taslak, Türkçe talimat
+		"RunbookUpdate":      classTurkishNative, // Faz 5.5 — güncelleme önerisi bloğu
 		// ── Makine-parse edilen çıktı
 		"NLToQuery":       classStructured,
 		"CHQueryOptimize": classStructured,
@@ -109,7 +110,8 @@ func promptTexts() map[string]string {
 		"GeneralChat":    SystemPromptGeneralChat(),
 		"DrawerChat":     SystemPromptDrawerChat(), "Chat": SystemPromptChat(),
 		"ChatRoundCap": SystemPromptChatRoundCap(), "ChatAgentLoop": SystemPromptChatAgentLoop(),
-		"RCAVerdict": SystemPromptRCAVerdict(), "ServiceAnalysis": SystemPromptServiceAnalysis(),
+		"TraceInvestigation": SystemPromptTraceInvestigation(),
+		"RCAVerdict":         SystemPromptRCAVerdict(), "ServiceAnalysis": SystemPromptServiceAnalysis(),
 		"RAGChat": SystemPromptRAGChat(), "ShiftSummary": SystemPromptShiftSummary(),
 		"AlertNoise": SystemPromptAlertNoise(), "LogPatterns": SystemPromptLogPatterns(),
 		"Postmortem": SystemPromptPostmortem(), "RunbookUpdate": SystemPromptRunbookUpdate(),

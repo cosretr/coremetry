@@ -42,6 +42,7 @@ OracleLogsResponse,
   InsightKind, InsightResponse, InsightSignal, InsightLink, InsightChartSpec,
   AnomalySensitivityConfig, TailPoint , MetricCompareReport , LogPatternsResult, LogTemplate, TraceFacet, TraceFacetsResponse, DBSlowQueryConfig, StatementSearchRow,
   CopilotStartersResponse,
+  AIStreamFrame, ExplainStepEvent, ChatStepSourceState, ExplainTraceAnswer, // v0.10.948 — explain adımları + kaynak durumu
 } from './types';
 import { encodeMetricQuery, type MetricQuery } from './metricQuery';
 // withMetricSource — v0.9.1151 deneme modu. Sayfa URL'sindeki
@@ -117,6 +118,53 @@ export interface ExplainStreamOpts {
   /** v0.10.432 (D8) — açılış kaynağı (`?src=nudge`): sunucu yüzey etiketini
    *  "explain-trace:nudge" yapar; /ai baloncuk tıklarını ayrı sayar. */
   src?: string;
+  /** v0.10.948 (CoSRE Faz B) — sunucunun explain SIRASINDA gerçekten yürüttüğü
+   *  okumalar: `step` çağrıdan ÖNCE, `step-result` çağrı BİTİNCE. Yalnız akan
+   *  kipte gelir; önbellek isabetinde hiç gelmez (hiçbir şey koşmadı). */
+  onStep?: (ev: ExplainStepEvent) => void;
+}
+
+// explainStepFrame — v0.10.948: SSE çerçevesi → ExplainStepEvent. GÜVEN SINIRI
+// (insightFrame'in gerekçesi): `JSON.parse` bilinmeyen şekil döndürüyor ve
+// alanlar TEK yerde daraltılır. Eşleştirme `i` ile yapıldığından `i`siz çerçeve
+// düşer (eski sunucu / etiket adımı — ilerleme listesi yalnız gerçek araç
+// çağrısını gösterir); `args` nesne gelirse JSON metnine çevrilir (sohbet
+// çipinin şekli). `sources` içindeki bozuk satırlar atlanır, uydurulmaz.
+export function explainStepFrame(f: AIStreamFrame): ExplainStepEvent | null {
+  const i = typeof f.i === 'number' && Number.isFinite(f.i) ? f.i : null;
+  if (i === null) return null;
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  if (f.kind === 'step') {
+    const args = typeof f.args === 'string' ? f.args
+      : f.args && typeof f.args === 'object' ? JSON.stringify(f.args) : undefined;
+    return { kind: 'step', i, tool: str(f.tool), label: str(f.label), args, origin: str(f.origin) };
+  }
+  if (f.kind !== 'step-result') return null;
+  let sources: ChatStepSourceState[] | undefined;
+  if (Array.isArray(f.sources)) {
+    sources = [];
+    for (const raw of f.sources as unknown[]) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      const o = raw as Record<string, unknown>;
+      if (typeof o.source !== 'string' || typeof o.state !== 'string' || !o.state) continue;
+      const st: ChatStepSourceState = { source: o.source, state: o.state };
+      if (Array.isArray(o.flags)) st.flags = o.flags.filter((x): x is string => typeof x === 'string');
+      if (typeof o.detail === 'string' && o.detail) st.detail = o.detail;
+      sources.push(st);
+    }
+  }
+  return {
+    kind: 'step-result', i,
+    tool: typeof f.tool === 'string' ? f.tool : '',
+    ok: f.ok === true,
+    preview: typeof f.preview === 'string' ? f.preview : '',
+    truncated: f.truncated === true,
+    bytes: typeof f.bytes === 'number' ? f.bytes : 0,
+    href: str(f.href),
+    durationMs: typeof f.durationMs === 'number' && f.durationMs >= 0 ? f.durationMs : undefined,
+    skipped: f.skipped === true ? true : undefined,
+    sources,
+  };
 }
 
 /**
@@ -164,6 +212,13 @@ async function explainStream<T>(path: string, init: RequestInit, opts: ExplainSt
     if (f.kind === 'delta') {
       const t = f.text;
       if (typeof t === 'string' && t) opts.onDelta?.(t);
+      return;
+    }
+    // v0.10.948 — sunucunun yürüttüğü okuma adımları (trace incelemesi).
+    // Dinleyen yoksa sessizce geçer: öteki explain uçları adım yayınlamaz.
+    if (f.kind === 'step' || f.kind === 'step-result') {
+      const ev = opts.onStep ? explainStepFrame(f) : null;
+      if (ev) opts.onStep?.(ev);
       return;
     }
     if (f.kind === 'answer') {
@@ -2320,9 +2375,16 @@ export const api = {
   // verilince istek `?stream=1` ile gider ve cevap token token akar.
   // VERİLMEYİNCE gövde de davranış da bayt bayt eskisi — akan kip bir
   // TALEP, sözleşme değişikliği değil.
-  copilotExplainTrace:   (id: string, includeCode?: boolean, opts?: ExplainStreamOpts) =>
-    explainCall<import('./types').ExplainAnswerBase & { evidenceSpanIds?: string[]; code?: import('./types').AICodeContext; oracleRows?: number }>(
-      `/api/copilot/explain-trace/${id}`, explainInit(includeCode), opts),
+  // v0.10.948 (CoSRE Faz B) — cevap `sources` (her okumanın kaynak durumu) ve
+  // `id`siz kanıt linkleri taşır; akan kipte `opts.onStep` gerçek adımları alır.
+  // v0.10.948 — `spanId` (4. argüman, isteğe bağlı): seçili span incelemenin
+  // odak servisini belirler — bağlam şeridi ve takip sorularıyla AYNI servis.
+  // Yalnız geçerli 16-hex gider (sunucu ötekini zaten yok sayar); yoksa kök.
+  // Sıra korunur: 3 argümanlı çağıranlar ve test casusları değişmez.
+  copilotExplainTrace:   (id: string, includeCode?: boolean, opts?: ExplainStreamOpts, spanId?: string) =>
+    explainCall<ExplainTraceAnswer>(
+      `/api/copilot/explain-trace/${id}${spanId && /^[0-9a-f]{16}$/i.test(spanId) ? `?span=${spanId.toLowerCase()}` : ''}`,
+      explainInit(includeCode), opts),
   // Per-span explain (v0.5.144). Backend pulls target span +
   // parent + children + error siblings for a focused prompt.
   copilotExplainSpan:    (traceId: string, spanId: string, opts?: ExplainStreamOpts) =>

@@ -16,7 +16,8 @@ import { parseChatBlocks, type ChatBlock } from './chatMarkdown';
 import { parseStepPreview, fmtPreviewBytes } from './stepPreview';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { Chip } from '@/components/ui/Chip';
-import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, sourceStateTone, stateUnknown, stepRunning, toolErrorLabel, windowPrefix, type SourceStateView } from './toolSteps';
+import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, stateUnknown, stepRunning, toolErrorLabel } from './toolSteps';
+import { StateBadges } from './StateBadges'; // v0.10.948 — ExplainSteps ile paylaşılan rozetler
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
 // buraya taşındı: AI çekmecesi içindeki sohbet (AIDrawer) aynı balonu
@@ -231,22 +232,9 @@ export function renderMessage(text: string, streaming = false, typed?: ChatTyped
 // durum rozeti (boş · erişilemedi · yetki yok · zaman aşımı · kısmi ·
 // gecikmeli · limitli), `skipped:true` ise "yürütülmedi". Bağlam etiketleri
 // (araç adı olmayan) "çalışıyor…" demez — onlara hiç sonuç gelmez.
-// v0.10.944 — kaynak öneki yalnız BİRDEN ÇOK kaynak varken: tek kaynağın
-// ikincil bayrakları (kısmi + limitli) "logs · " tekrarı taşımaz.
-// v0.10.944 — pencere öneki (compare_periods: "sorun · " / "referans · ")
-// detail'den; aynı kaynaklı iki rozet başlığa inmeden ayırt edilir.
-function StateBadges({ states }: { states: SourceStateView[] }) {
-  if (states.length === 0) return null;
-  const multi = new Set(states.map(st => st.source)).size > 1;
-  return (<>
-    {states.map((st, k) => (
-      <span key={k} className={`badge b-${sourceStateTone(st.state)}`}
-        title={`${st.source || 'kaynak'}: ${st.label}${st.detail ? ` — ${st.detail}` : ''}`}>
-        {multi && st.source ? `${st.source} · ` : ''}{windowPrefix(st.detail)}{st.label}
-      </span>
-    ))}
-  </>);
-}
+// v0.10.948 — StateBadges (kaynak öneki yalnız birden çok kaynakta, pencere
+// öneki detail'den) ./StateBadges.tsx'e taşındı: "CoSRE'ye sor" ilerleme
+// listesi (ExplainSteps) aynı rozetleri çiziyor — tek yazım.
 
 function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
   steps: string[];

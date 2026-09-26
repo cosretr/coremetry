@@ -69,6 +69,12 @@ const (
 // chatCallCapContent — tavan dolunca çalıştırılmayan çağrının sonucu.
 const chatCallCapContent = `{"error":"tool çağrı tavanı doldu — çağrı çalıştırılmadı; eldekini raporla"}`
 
+// chatLoopHandlerSeam — v0.10.948 TEST DİKİŞİ (prod'da nil): döngünün uçtan
+// uca testinde gerçek katalog (ad, şema, rol süzgeci, Executor) aynen kalır,
+// yalnız handler sahte koşucuya bağlanır — CH/ES/VM'e hiç dokunulmaz
+// (chat_trace_followup_loop_test.go).
+var chatLoopHandlerSeam func(name string, h mcp.ToolHandler) mcp.ToolHandler
+
 // splitByCallBudget — SAF: bir turun çağrılarını kalan bütçeye göre ikiye
 // ayırır (çalışacaklar, çalışmayacaklar). Sıra korunur.
 func splitByCallBudget(calls []copilot.ToolCall, left int) (run, over []copilot.ToolCall) {
@@ -159,6 +165,14 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
+	}
+	// v0.10.948 — istemci geçmişi YALNIZ metin turu (chat_history_sanitize.go):
+	// rol user/assistant; istemcinin kurduğu araç çağrısı/sonucu sağlayıcıya
+	// hiç gitmez. Bütçe (ClampHistory) ve kademeler süzülmüş diziyi görür.
+	var droppedTurns, strippedTurns int
+	req.Messages, droppedTurns, strippedTurns = sanitizeClientHistory(req.Messages)
+	if droppedTurns+strippedTurns > 0 {
+		log.Printf("[chat] istemci geçmişi süzüldü: %d tur atıldı, %d turun araç alanı düştü", droppedTurns, strippedTurns)
 	}
 	if len(req.Messages) == 0 {
 		http.Error(w, `{"error":"messages required"}`, http.StatusBadRequest)
@@ -301,32 +315,53 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// HAM KANITINI da yeniden kurup anlatıma katar; kanıt çekilemezse
 	// v0.9.479'un metin-tabanlı anlatımı aynen sürer (soft-fail).
 	// v0.10.745 — çekmece kanıtındaki damgalar da operatörün diliminde.
-	if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
-		cspan.tier("drawer", dok)
-		emit("done", map[string]bool{"ok": dok})
-		return
+	//
+	// v0.10.948 (CoSRE Faz B) — TRACE TAKİBİ: özne trace/span ve açıklama
+	// bağlamı doluysa (chat_trace_followup.go) guided'ın almadığı takip çekmece
+	// anlatımına, RAG'a ve niyet sınıflandırıcısına HİÇ girmez — doğrudan
+	// serbest araç döngüsüne: tek-çağrılı anlatım takip sorusunun kanıtını
+	// (kıyas, metrik, pod, deploy) toplayamıyordu. Guided yukarıda aynen
+	// (yapıştırılan kimlik / somut özne); diğer özneler bayt-bayt eski sırada.
+	//
+	// v0.10.948 — sayfa bağlamı kapıdan ÖNCE temizlenir: Geçmiş'ten açılan
+	// çekmece açıklama gelmeden takip atar; page AYNI trace'i kanıtlıyorsa o
+	// takip de döngüye gider (drawerTraceFollowUp). v0.10.542 (Faz 3.4) — açık
+	// sayfa yolu: aynı sayfaya giden tool linki "bu sayfada uygula" aksiyonuna
+	// dönüşür (chat_actions.go).
+	pageCtx := agentctx.Sanitize(req.Context.Page)
+	pagePath, pageTraceID := "", ""
+	if pageCtx != nil {
+		pagePath, pageTraceID = pageCtx.Path, pageCtx.TraceID
 	}
+	traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)
+	if !isTraceFollowUp {
+		if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
+			cspan.tier("drawer", dok)
+			emit("done", map[string]bool{"ok": dok})
+			return
+		}
 
-	// v0.8.438 — doküman RAG yolu: guided telemetri router'ı
-	// eşleşmediyse ve soru yüklü dokümanlara yeterince benziyorsa
-	// (skor tabanı) tek narration çağrısıyla kaynak atıflı cevap.
-	// Sıra bilinçli: telemetri şekilleri > dokümanlar > serbest döngü.
-	if handled, rok := s.ragChatAnswer(ctx, emit, req.Messages, req.Context.Service); handled {
-		cspan.tier("rag", rok)
-		emit("done", map[string]bool{"ok": rok})
-		return
-	}
+		// v0.8.438 — doküman RAG yolu: guided telemetri router'ı
+		// eşleşmediyse ve soru yüklü dokümanlara yeterince benziyorsa
+		// (skor tabanı) tek narration çağrısıyla kaynak atıflı cevap.
+		// Sıra bilinçli: telemetri şekilleri > dokümanlar > serbest döngü.
+		if handled, rok := s.ragChatAnswer(ctx, emit, req.Messages, req.Context.Service); handled {
+			cspan.tier("rag", rok)
+			emit("done", map[string]bool{"ok": rok})
+			return
+		}
 
-	// v0.10.172 — kademe 3.5: LLM niyet sınıflandırıcısı (copilot_intent.go).
-	// Deterministik router (kademe 1) ve RAG eşleşmeyen serbest soruyu
-	// küçük model tek katı-JSON çağrısıyla kılavuz niyetine eşler; eşlerse
-	// cevap AYNI prefetch→anlatım yolundan (runGuidedRoute). Eşlemezse
-	// ayara göre öneri çipleri (on_no_loop, prod varsayılanı) ya da aşağıdaki
-	// serbest döngü (on). Sınıflandırıcı hatası sessizce düşer — döngü sürer.
-	if handled, iok := s.copilotChatIntent(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz); handled {
-		cspan.tier("intent", iok)
-		emit("done", map[string]bool{"ok": iok})
-		return
+		// v0.10.172 — kademe 3.5: LLM niyet sınıflandırıcısı (copilot_intent.go).
+		// Deterministik router (kademe 1) ve RAG eşleşmeyen serbest soruyu
+		// küçük model tek katı-JSON çağrısıyla kılavuz niyetine eşler; eşlerse
+		// cevap AYNI prefetch→anlatım yolundan (runGuidedRoute). Eşlemezse
+		// ayara göre öneri çipleri (on_no_loop, prod varsayılanı) ya da aşağıdaki
+		// serbest döngü (on). Sınıflandırıcı hatası sessizce düşer — döngü sürer.
+		if handled, iok := s.copilotChatIntent(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz); handled {
+			cspan.tier("intent", iok)
+			emit("done", map[string]bool{"ok": iok})
+			return
+		}
 	}
 
 	// Build the tool set once (closures over the live store + logs)
@@ -373,7 +408,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// 5 dk TTL'li önbelleğinden gelir; sunucu erişilemezse katalog boş
 	// düşer ve sohbet YERLİ tool'larla aynen sürer (soft-fail).
 	extNames := map[string]bool{} // v0.10.425 — ai.tool köken etiketi (native | external)
-	if s.mcpClient != nil && s.mcpClient.Configured() {
+	// v0.10.948 — trace takibi YALNIZ yerli salt-okur katalog: dış MCP tool'ları (yazma yetkisi Coremetry'de denetlenmez, chat_mcp_bridge.go) çekmeceye sızmaz — DECISIONS v0.10.86-89 "guided/drawer/RAG'a sızmaz" + Faz B gereksinim 7.
+	if !isTraceFollowUp && s.mcpClient != nil && s.mcpClient.Configured() {
 		ext := externalChatTools(
 			s.mcpClient.Registry().Tools(ctx),
 			s.mcpClient.ToolRules,
@@ -402,13 +438,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// deduped by service+operation+agg.
 	var chartBlocks []string
 	// v0.10.541 (Faz 3.3a) — tipli bloklar (event: block), eski çerçevelerle paralel.
-	// v0.10.542 (Faz 3.4) — açık sayfa yolu: aynı sayfaya giden tool linki
-	// "bu sayfada uygula" aksiyonuna dönüşür (chat_actions.go).
-	pageCtx := agentctx.Sanitize(req.Context.Page)
-	pagePath := ""
-	if pageCtx != nil {
-		pagePath = pageCtx.Path
-	}
+	// v0.10.542 (Faz 3.4) — açık sayfa yolu (pagePath) trace takibi kapısının
+	// üstünde kurulur (v0.10.948).
 	chartSeen := map[string]bool{}
 	appendCharts := func(text string) string {
 		// v0.10.47 — MODELİN KENDİ ÇİTİ ÖNCE SÖKÜLÜR.
@@ -436,6 +467,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// v0.10.29 — döngü boyunca çağrılan araçlar; cevabın altındaki
 	// deterministik "Kaynak:" künyesini besliyor (chat_source_note.go).
 	var calledTools []string
+	// v0.10.948 — trace takibinin sayı denetimi kanıtı: sunucu bağlamı + operatör
+	// mesajları + YÜRÜTÜLEN çağrıların argümanı ve tam çıktısı (chat_trace_followup.go).
+	var fuEvidence strings.Builder
 	var totalIn, totalOut, totalCached uint32 // v0.10.807 — cached: önek önbelleği toplamı
 	var lastErr error
 	var finalText string
@@ -462,10 +496,19 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// 30 dakikaya gidiyordu (chat_screen_context.go).
 	// v0.10.944 — pin bir kez temizlenir; hem servis düşümü hem sayfa önsözü kullanır.
 	pinnedCtx := agentctx.Sanitize(req.Context.PinnedPage)
+	// v0.10.948 — trace takibinde BAŞKA trace'in (ya da traceId'siz) sayfası üç
+	// önsözden de düşer; env de: çekmecede ikisi aynı bayat traceCtx'ten.
+	// AKTİF BAĞLAM, EKRAN BAĞLAMI ve AÇIK SAYFA böylece aynı şeyi söyler.
+	// pagePath istekten kalır (yalnız "bu sayfada uygula" link eşlemesi).
+	loopEnv := req.Context.Env
+	if isTraceFollowUp && pageCtx != nil && traceFollowUpPage(traceSubj, pageCtx) == nil {
+		pageCtx = nil
+		loopEnv = ""
+	}
 	screenCtx := ChatScreenContext{
 		Service:   freeLoopScreenService(req.Context.Service, pageCtx, pinnedCtx),
 		Operation: req.Context.Operation,
-		Env:       req.Context.Env,
+		Env:       loopEnv,
 		RangeS:    req.Context.RangeS,
 		AnchorTo:  anchorTo,
 		Anchored:  anchored,
@@ -495,11 +538,32 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// Bugün önbelleklenebilir önek = ajan döngüsü bloğu; tam sabit-önce
 	// sıra ancak evalset kanıtıyla (operatör kararı). Ölçüm: ai_calls
 	// cached_tokens (v0.10.807).
+	// v0.10.948 — trace takibi: AKTİF BAĞLAM (özneden + aynı trace'in page'inden),
+	// takip talimatı (copilot.TraceFollowUpAddendum) ve önceki açıklama VERİ
+	// bloğu olarak; sohbet çekirdeğinden ÖNCE — DataNotInstruction sonda kalır.
+	var traceFU *traceFollowUp
+	// v0.10.948 — Geçmiş devralmasında açıklama yok: sıfır araçlı cevap
+	// "önceki CoSRE açıklaması"na dayandığını iddia etmez, genel künye kalır.
+	fuHadExplain := isTraceFollowUp && strings.TrimSpace(req.Context.Explain) != ""
+	if isTraceFollowUp {
+		tf := buildTraceFollowUp(traceSubj, pageCtx, loopEnv, req.Context.RangeS, anchorTo, time.Now())
+		traceFU = &tf
+		emit("step", map[string]string{"label": traceFollowUpChipTR(tf)})
+	}
 	loopPrompt := copilot.SystemPromptChatAgentLoop() + // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A)
 		screenContextPreambleTR(screenCtx) +
 		agentctx.PreambleTR(pageCtx, pinnedCtx) + // v0.10.539 — sayfa bağlamı (pin önce)
 		chatContextPreambleTR(cst.ctx) + // v0.10.478 — aktif sohbet bağlamı (Ek A ACTIVE_CONTEXT)
+		traceFollowUpPromptTR(traceFU, req.Context.Explain) + // v0.10.948 — boşsa ""
 		withAddressee(addressee, copilot.SystemPromptChat())
+	if isTraceFollowUp {
+		// v0.10.948 — sayı denetiminin tohumu: açıklamasız AKTİF BAĞLAM + ekran ve
+		// sayfa önsözleri + operatör turları. Önceki açıklama YOK (ilk cevabın sayı uyarısı
+		// tam da işaretlediği sayıları temellendirirdi).
+		fuEvidence.WriteString(traceFollowUpEvidenceSeed([]string{
+			traceFollowUpPromptTR(traceFU, ""), screenContextPreambleTR(screenCtx), agentctx.PreambleTR(pageCtx, pinnedCtx),
+		}, req.Messages))
+	}
 
 	// v0.10.88 — TEKRAR MUHAFIZI (exchange kapsamı). v0.10.84 prompt'u
 	// "aynı tool'u aynı argümanlarla iki kez çağırma" diyor; bu harita
@@ -510,6 +574,11 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// bilinmeyen ad, tekrar muhafızı, kapsam (bugün kısıtsız), 20 s bütçe,
 	// JSON'lama, ToolErrorJSON, ai.tool span'ı ve audit satırı orada; döngü
 	// yalnız Outcome'u yayınlar (çip, kanıt, köprü) ve konuşmaya ekler.
+	if chatLoopHandlerSeam != nil { // v0.10.948 — yalnız testte dolu
+		for n, h := range byName {
+			byName[n] = chatLoopHandlerSeam(n, h)
+		}
+	}
 	exec := agenttools.NewExecutor(byName, extNames, agenttools.Hooks{
 		Span: cspan.tool,
 		Audit: func(name string, args json.RawMessage, dur time.Duration, err error, bytes int) {
@@ -518,6 +587,12 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	})
 
 	callsLeft := chatMaxToolCalls
+	// v0.10.948 — hak ≠ iş: bilinmeyen/tekrar/kapsam reddi hak yer ama yürümez;
+	// bütçe notu yürütülen ve alışveriş boyunca yürütülmeyen çağrıyı ayrı sayar.
+	executedN, skippedN := 0, 0
+	// v0.10.948 — bütçe sessiz değil: operatör döngünün sınırını baştan görür,
+	// dolunca da ne kadarının kullanıldığını (chat_loop_steps.go).
+	emit("step", map[string]string{"label": chatBudgetLabelTR(chatMaxToolCalls, chatMaxToolRounds)})
 	for round := 0; round < chatMaxToolRounds; round++ {
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		turn, err := s.copilot.ChatWithTools(tctx, loopPrompt, conv, specs)
@@ -568,7 +643,11 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			// EN SERBEST olduğu bu yolda yoktu. En değerli hâli araç
 			// listelemek değil: hiç araç çağrılmadıysa cevabın canlı
 			// veriye DAYANMADIĞINI söylemek.
-			finalText = appendCharts(turn.Text) + chatSourceNoteTR(calledTools)
+			// v0.10.948 — trace takibinde iki deterministik ek (chat_trace_followup.go):
+			// kanıtta olmayan sayı uyarısı ve önceki açıklamayı adlandıran künye.
+			// Takip değilse ikisi de bayt-bayt eski künye.
+			finalText = appendCharts(turn.Text) + traceFollowUpNumericWarning(isTraceFollowUp, turn.Text, fuEvidence.String()) +
+				traceFollowUpSourceNoteTR(fuHadExplain, calledTools, chatSourceNoteTR(calledTools))
 			// v0.9.709 (operatör-bildirimi) — cevaptaki request_id'ler log
 			// köprüsü çipi olur; altyapı (links + ChatBubble çipleri)
 			// v0.9.419'dan beri hazırdı, yalnız guided yayınlıyordu.
@@ -591,6 +670,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		results := make([]copilot.ToolResult, 0, len(turn.ToolCalls))
 		run, over := splitByCallBudget(turn.ToolCalls, callsLeft)
 		callsLeft -= len(run)
+		cancelled := false // v0.10.948 — tur ortasında ctx bitti mi
 		for _, tc := range run {
 			// v0.9.1181 (Faz 4.3) — çipin kimliği. `step` tool ÇALIŞMADAN
 			// önce çıkar (ilerleme geri bildirimi), sonuç ise çalıştıktan
@@ -615,22 +695,35 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			// burada çıkıyor: operatör modelin NE DENEDİĞİNİ görmeli,
 			// başarısız denemeler dâhil — o ayrı bir soru.
 			stepN = emitStepChip(emit, tc.Name, string(tc.Input))
+			// v0.10.948 — İPTAL her çağrıdan ÖNCE denetlenir: Executor.Call ilk iş
+			// ctx'e bakar (Kind cancelled, handler çağrılmaz); turun kalanları da
+			// aynı yoldan yürütülmeden geçer ve döngü aşağıda biter.
 			oc := exec.Call(ctx, tc.Name, tc.Input)
 			if !oc.Executed {
-				// bilinmeyen ad / tekrar muhafızı / kapsam reddi: yürütülmedi,
-				// süre yazılmaz (v0.10.161 — Σ süre hesaplanabilir kalsın).
-				preview, truncated := clipStepPreview(oc.Content)
-				emit("step-result", map[string]any{
-					"i": stepN, "tool": tc.Name, "ok": false,
-					"preview": preview, "truncated": truncated, "bytes": len(oc.Content),
-					"durationMs": 0,
-				})
+				// bilinmeyen ad / tekrar muhafızı / kapsam reddi / iptal:
+				// yürütülmedi, süre yazılmaz (v0.10.161 — Σ süre hesaplanabilir
+				// kalsın). v0.10.948 — `skipped:true` + neden; durationMs YOK
+				// (0 ms bir ölçüm gibi okunuyordu; chat_loop_steps.go).
+				if oc.Kind == agenttools.KindCancelled {
+					cancelled = true
+				}
+				emit("step-result", skippedStepResult(stepN, tc.Name, oc.Content, oc.Kind))
 				results = append(results, copilot.ToolResult{
 					CallID: tc.ID, Name: tc.Name, IsError: true, Content: oc.Content,
 				})
+				skippedN++
 				continue
 			}
 			toolDur := oc.Duration
+			executedN++
+			if isTraceFollowUp {
+				// v0.10.948 — sayı denetiminin kanıtı: YALNIZ yürüyen çağrı, argümanı
+				// ve TAM çıktısı (modele giden kırpık kopya değil).
+				fuEvidence.Write(tc.Input)
+				fuEvidence.WriteByte('\n')
+				fuEvidence.WriteString(oc.Content)
+				fuEvidence.WriteByte('\n')
+			}
 			// CoSRE Faz-2 — render_chart: handler'ın DOĞRULANMIŞ çıktısı
 			// (tc.Input değil) ```chart``` fence'ine dönüşür.
 			if tc.Name == "render_chart" && !oc.IsError {
@@ -720,10 +813,23 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			// N6 — tavanı aşan çağrılar ÇALIŞTIRILMAZ; her birine hata sonucu
 			// döner (sağlayıcı sahipsiz tool_call kabul etmez) ve döngü tavan
 			// turuna geçer.
-			emit("step", map[string]string{"label": fmt.Sprintf("tool-çağrı tavanı (%d) doldu — %d çağrı çalıştırılmadı", chatMaxToolCalls, len(over))})
+			// v0.10.948 — her biri çip + skipped (call_cap): modelin ne denediği
+			// görünür; sayı aşağıdaki bütçe notunda.
 			for _, tc := range over {
+				n := emitStepChip(emit, tc.Name, string(tc.Input))
+				emit("step-result", skippedStepResult(n, tc.Name, chatCallCapContent, skipReasonCallCap))
 				results = append(results, copilot.ToolResult{CallID: tc.ID, Name: tc.Name, IsError: true, Content: chatCallCapContent})
 			}
+			skippedN += len(over)
+		}
+		if cancelled || ctx.Err() != nil {
+			// v0.10.948 — İPTAL: kalan çağrılar yürütülmedi (skipped), model
+			// yeniden ÇAĞRILMAZ (tavan turu dâhil) — cevabı bekleyen yok ya da
+			// alışveriş tavanı doldu; ikinci bir LLM çağrısı boşa bütçe yakar.
+			// ctx turun SON çağrısında bittiyse de (skipped yok) aynı son.
+			lastErr = ctx.Err()
+			emit("error", map[string]string{"error": chatCancelledMessageTR(lastErr, exchangeMax)})
+			break
 		}
 		conv = append(conv, copilot.ChatMessage{Role: "user", ToolResults: results})
 
@@ -736,6 +842,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		// taşındı (SystemPromptChatRoundCap = taban + ek). Sicil
 		// accessor'lardan türediğinden bu ek artık dil kapısının kapsamında.
 		if round == chatMaxToolRounds-1 || callsLeft <= 0 {
+			// v0.10.948 — bütçe dolduğu AÇIKÇA söylenir: harcanan hak/tur, yürütülen
+			// ve alışveriş boyunca yürütülmeyen çağrı (eski "tool-çağrı tavanı" etiketinin yerine).
+			emit("step", map[string]string{"label": chatBudgetExhaustedLabelTR(chatMaxToolCalls-callsLeft, executedN, skippedN, round+1)})
 			// v0.10.806 — tavan eki döngü prompt'unun SONUNA: önek aynı kalır
 			// (önbellek isabeti) ve tavan turu bağlam önsözlerini de görür
 			// (eskiden yalnız hitap + sohbet çekirdeği + ek gidiyordu).
@@ -780,7 +889,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				// YOKTU. Oysa bu yol tanımı gereği EN ÇOK araç çağıran yol:
 				// tavana ancak tur tur araç çağırarak varılıyor. Yani atıfın
 				// en anlamlı olduğu cevap, tek atıfsız cevaptı.
-				finalText = appendCharts(turn2.Text) + chatSourceNoteTR(calledTools)
+				// v0.10.948 — iki çıkış tek sözleşme: sayı denetimi ve takip künyesi burada da.
+				finalText = appendCharts(turn2.Text) + traceFollowUpNumericWarning(isTraceFollowUp, turn2.Text, fuEvidence.String()) +
+					traceFollowUpSourceNoteTR(fuHadExplain, calledTools, chatSourceNoteTR(calledTools))
 				// v0.9.709 (operatör-bildirimi) — cevaptaki request_id'ler log
 				// köprüsü çipi olur. v0.9.1228 — tool köprüleri de burada:
 				// tur-tavanı cevabı da döngünün kanıt linklerini taşır.

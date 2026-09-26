@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -462,4 +463,87 @@ func serverFuncBodies(t *testing.T) map[string]string {
 		}
 	}
 	return out
+}
+
+// ── 7. hazırlıklı çekirdek (v0.10.948, trace incelemesi) ────────────────
+
+// Hazırlık ilk bayttan ÖNCE "trace yok" derse cevap bugünkü düz metin
+// 404'tür; akışa hiçbir çerçeve yazılmaz ve LLM çağrılmaz.
+func TestDeliverExplainPreparedNotFoundBeforeFirstByte(t *testing.T) {
+	p := newStreamingProvider(t, &streamingProvider{deltas: []string{"x"}})
+	s := explainStreamServer(t, p)
+	r := explainReq(true)
+	w := httptest.NewRecorder()
+	s.deliverExplainPrepared(w, r, "xid-5", "", func() (map[string]any, string) { return nil, "" },
+		func(func(string, any)) (explainPrepared, error) { return explainPrepared{}, errExplainTraceNotFound })
+	if w.Code != http.StatusNotFound || strings.TrimSpace(w.Body.String()) != "trace not found" {
+		t.Fatalf("hazırlık 404'ü = %d %q", w.Code, w.Body.String())
+	}
+	if p.nStream+p.nBuffered != 0 {
+		t.Fatal("hazırlık hatasında LLM çağrıldı")
+	}
+}
+
+// Hazırlık adım yayınladıktan SONRA düşerse statü artık 200'dür: akışta
+// error + done{ok:false}; adımlar withStepIDs kimliği taşır.
+func TestDeliverExplainPreparedErrorAfterSteps(t *testing.T) {
+	p := newStreamingProvider(t, &streamingProvider{deltas: []string{"x"}})
+	s := explainStreamServer(t, p)
+	r := explainReq(true)
+	w := httptest.NewRecorder()
+	s.deliverExplainPrepared(w, r, "xid-6", "", func() (map[string]any, string) { return nil, "" },
+		func(emit func(string, any)) (explainPrepared, error) {
+			emit("step", map[string]any{"tool": "get_trace", "args": "{}"})
+			return explainPrepared{}, fmt.Errorf("kaynak okunamadı")
+		})
+	frames := parseSSE(t, w.Body.String())
+	if len(frames) != 3 || frames[0].event != "step" || frames[1].event != "error" || frames[2].event != "done" {
+		t.Fatalf("çerçeveler = %v; step → error → done", frames)
+	}
+	if i, _ := frames[0].data["i"].(float64); i != 1 {
+		t.Errorf("adım kimliği = %v; withStepIDs sayacı 1 vermeli", frames[0].data["i"])
+	}
+	if ok, _ := frames[2].data["ok"].(bool); ok {
+		t.Error("done.ok = true; hata akışında false olmalı")
+	}
+}
+
+// Buffered kipte hazırlığın adım olayları DÜŞER (gövde bugünkü JSON), boş
+// cacheKey'li hazırlık cevabı SAKLANMAZ ve eklerin kendi bağlantıları korunur.
+func TestDeliverExplainPreparedBufferedNoStoreKeepsLinks(t *testing.T) {
+	p := newStreamingProvider(t, &streamingProvider{deltas: []string{"cevap"}})
+	s := explainStreamServer(t, p)
+	mc := newMemCache()
+	s.cache = mc
+	links := []guidedAnswerLink{{Label: "Trace", Href: "/trace?id=abc"}}
+	stored := false
+	prep := func(emit func(string, any)) (explainPrepared, error) {
+		emit("step", map[string]any{"tool": "get_trace", "args": "{}"})
+		return explainPrepared{extra: map[string]any{"links": links}, run: s.explainPrompt(explainReq(false), "sys", "user"),
+			onStore: func(context.Context) { stored = true }}, nil
+	}
+	w := httptest.NewRecorder()
+	s.deliverExplainPrepared(w, explainReq(false), "xid-7", "anahtar", func() (map[string]any, string) { return nil, "" }, prep)
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("buffered gövde JSON değil: %v (%s)", err, w.Body.String())
+	}
+	if body["explanation"] != "cevap" {
+		t.Fatalf("explanation = %v", body["explanation"])
+	}
+	if l, _ := body["links"].([]any); len(l) != 1 {
+		t.Errorf("eklerin bağlantıları kayboldu: %v", body["links"])
+	}
+	if len(mc.m) != 0 || stored {
+		t.Error("cacheKey'siz hazırlık cevabı saklandı")
+	}
+}
+
+// Kaynak pini: trace incelemesi hazırlıklı çekirdekten çıkar (ikinci bir
+// SSE yazıcısı yok).
+func TestTraceInvestigationUsesPreparedDelivery(t *testing.T) {
+	body, ok := serverFuncBodies(t)["explainTraceInvestigation"]
+	if !ok || !strings.Contains(body, "s.deliverExplainPrepared(") {
+		t.Fatal("explainTraceInvestigation deliverExplainPrepared'dan geçmiyor")
+	}
 }

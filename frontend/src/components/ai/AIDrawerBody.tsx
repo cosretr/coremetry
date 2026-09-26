@@ -9,7 +9,7 @@ import { aiSubjectSubtitle, aiSubjectTitle, formatAiParam, type AISubject } from
 import { emitAiEvidence, emitAiFocus, scrollToAttr } from './aiEvents';
 import { ChatBubble } from './ChatBubble';
 import { ServiceChartsExplainBody } from './ServiceChartsExplainBody';
-import { aiSubjectQuestion, buildExplainContext, drawerFollowups } from './drawerChat';
+import { aiSubjectQuestion, buildExplainContext, drawerFollowups, traceUrlSpan } from './drawerChat';
 import { useChatThread } from './useChatThread';
 import { useStickToBottom } from './stickToBottom';
 import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './chatInputKey';
@@ -55,6 +55,12 @@ export function AIDrawerBody({ subject, onClose, traceCtx, resume, onResumed }: 
   // sonra gelirse `explain` memo'su güncellenir, sohbet yerinde kalır.
   const [resumed, setResumed] = useState(false);
   if (resume && !resumed) setResumed(true);
+  // v0.10.948 — yenilemede span'ler yüklenmeden auto-koşu atar; odak o ana kadar
+  // URL'deki seçili span. Gövde özneyle key'li: tembel başlangıç mount anını
+  // yakalar. window.location (useLocation değil): Trace.tsx seçimi
+  // history.replaceState ile yansıtıyor, router onu hiç görmüyor.
+  const [urlSpan] = useState(() => (subject.kind === 'trace'
+    ? traceUrlSpan(window.location.pathname, window.location.search, subject.id) : undefined));
 
   // v0.9.1033 — `charts` öznesinin gövdesi AYRI: bu yüzey düz metin
   // değil, anlatım + YAPISAL sinyal tablosu + pivot linkleri döndürüyor
@@ -82,7 +88,14 @@ export function AIDrawerBody({ subject, onClose, traceCtx, resume, onResumed }: 
         auto
         kind={subject.kind}
         id={subject.id}
-        spanId={subject.kind === 'span' ? subject.spanId : undefined}
+        // v0.10.948 — trace öznesinde operatörün SEÇTİĞİ span (traceCtx.spanId
+        // yalnız seçim varken dolu) incelemenin odak servisini belirler: bağlam
+        // şeridi ve takip sorularıyla AYNI servis. Seçim yoksa kök incelenir.
+        // Bağlam henüz yayınlanmadıysa (yenileme / paylaşılan link) URL'deki
+        // span; yayınlanınca o devralır (açık seçimsizlik → kök).
+        spanId={subject.kind === 'span' ? subject.spanId
+          : subject.kind === 'trace' ? (traceCtx?.traceId === subject.id ? traceCtx.spanId : urlSpan)
+          : undefined}
         fromNs={subject.kind === 'service-health' ? subject.fromNs : undefined}
         toNs={subject.kind === 'service-health' ? subject.toNs : undefined}
         // v0.9.408 / v0.9.414 kanıt sözleşmesi: çekmece kanıtı hem kendi
@@ -222,7 +235,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
   // Kalıcı anlık görüntü (≤2 KB): geçmişten açılınca şerit bunu gösterir.
   const persistContext = useMemo(() => (page ? capPageContext(page) ?? undefined : undefined), [page]);
 
-  const { turns, busy, send, retry, last, showFollowups, adopt } = useChatThread({
+  const { turns, busy, send, retry, stop, last, showFollowups, adopt } = useChatThread({
     explain, seed, subject: subjectParam,
     onOpen: href => { const to = mergeOpenHref(href, window.location.pathname, window.location.search); if (to) navigate(to, { replace: true }); }, // v0.10.460
     service: subject.kind === 'service-health' ? subject.id : undefined,
@@ -318,9 +331,17 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
               border: '1px solid var(--border)', borderRadius: 6,
               resize: 'none', maxHeight: CHAT_INPUT_MAX_PX, overflowY: 'auto',
             }} />
-          <Button variant="primary" type="submit" disabled={!input.trim()} loading={busy}>
-            Gönder
-          </Button>
+          {/* v0.10.948 — DURDUR çekmecede de: trace takip soruları artık tam araç döngüsünü (≤5 tur/6 çağrı) koşuyor; akarken Gönder'in YERİNİ alır (CopilotChat v0.10.23 ile aynı). */}
+          {busy ? (
+            <Button variant="secondary" type="button" onClick={stop}
+              title="Cevabı durdur — o ana kadar akan metin korunur">
+              Durdur
+            </Button>
+          ) : (
+            <Button variant="primary" type="submit" disabled={!input.trim()}>
+              Gönder
+            </Button>
+          )}
         </form>
       </DrawerSection>
     </div>

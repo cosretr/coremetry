@@ -17,6 +17,10 @@
 // id HER ZAMAN encodeURIComponent'ten geçer: servis adı / fingerprint
 // içinde ':' geçse bile ayraç belirsizleşmez (parse ':' üzerinden böler).
 
+// v0.10.948 — trace başlığı i18n'den ("CoSRE’ye sor" / "Ask CoSRE"); modül
+// hâlâ saf: dil bir ARGÜMAN, verilmezse currentLang() (hook yok).
+import { currentLang, t, type Lang } from './i18n';
+
 export const AI_PARAM = 'ai';
 
 // AI_CODE_PARAM (v0.10.81, operatör-bildirimli): "Kodu da incele"
@@ -236,9 +240,12 @@ export function parseAiParam(
 }
 
 // Çekmece başlığı — operatör hangi soruyu sorduğunu görsün.
-export function aiSubjectTitle(s: AISubject): string {
+// v0.10.948 (CoSRE Faz B) — trace öznesi artık kanıt toplayan inceleme; başlık
+// düğmenin adıyla aynı ("CoSRE’ye sor · trace <kısa kimlik>", EN "Ask CoSRE ·
+// trace …"). Öteki türler DEĞİŞMEDİ. `lang` verilmezse etkin dil.
+export function aiSubjectTitle(s: AISubject, lang: Lang = currentLang()): string {
   switch (s.kind) {
-    case 'trace':          return 'Explain trace';
+    case 'trace':          return t('ai.askCosre', lang);
     case 'span':           return 'Explain span';
     case 'problem':        return 'Explain problem';
     case 'incident':       return 'Explain incident';
@@ -254,7 +261,8 @@ export function aiSubjectTitle(s: AISubject): string {
 }
 
 // Başlığın altındaki ikinci satır: hangi nesne (kısaltılmış id / servis).
-export function aiSubjectSubtitle(s: AISubject): string {
+export function aiSubjectSubtitle(s: AISubject, lang: Lang = currentLang()): string {
+  if (s.kind === 'trace') return `${t('ai.subject.trace', lang)} ${short(s.id)}`; // v0.10.948
   if (s.kind === 'span') return `${short(s.id)} · span ${short(s.spanId)}`;
   if (s.kind === 'charts') return `${s.id} · ${chartScopeLabel(s.scope)}`;
   return s.kind === 'service-health' ? s.id : short(s.id);

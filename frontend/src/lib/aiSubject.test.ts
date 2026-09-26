@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   formatAiParamForUrl, aiSelfParam,
   formatAiParam, parseAiParam, aiSubjectTitle, aiSubjectSubtitle,
@@ -85,6 +85,34 @@ describe('parseAiParam — reddedilenler', () => {
   }
 });
 
+// v0.10.948 (CoSRE Faz B) — trace çekmecesinin başlığı düğmenin adıyla aynı,
+// i18n'li: TR "CoSRE’ye sor · trace <kısa>", EN "Ask CoSRE · trace <kısa>".
+// Öteki türlerin başlığı DEĞİŞMEDİ. Dil verilmezse etkin dil (kullanıcı seçimi).
+describe('trace başlığı i18n (v0.10.948)', () => {
+  const tr = { kind: 'trace', id: '0af7651916cd43dd8448eb211c80319c' } as const;
+  it('açık dil', () => {
+    expect(`${aiSubjectTitle(tr, 'tr')} · ${aiSubjectSubtitle(tr, 'tr')}`).toBe('CoSRE’ye sor · trace 0af7651916cd43dd…');
+    expect(`${aiSubjectTitle(tr, 'en')} · ${aiSubjectSubtitle(tr, 'en')}`).toBe('Ask CoSRE · trace 0af7651916cd43dd…');
+  });
+  it('öteki türler aynı', () => {
+    expect(aiSubjectTitle({ kind: 'span', id: 't', spanId: 's' }, 'tr')).toBe('Explain span');
+    expect(aiSubjectTitle({ kind: 'exception', id: 'fp' }, 'tr')).toBe('Explain root cause');
+  });
+  it('varsayılan dil: kullanıcı seçimi (localStorage) → yoksa İngilizce', () => {
+    const mem = new Map<string, string>();
+    const ls = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); }, removeItem: (k: string) => { mem.delete(k); } };
+    vi.stubGlobal('localStorage', ls);
+    vi.stubGlobal('window', { localStorage: ls });
+    try {
+      expect(aiSubjectTitle(tr)).toBe('Ask CoSRE');
+      mem.set('coremetry.lang', 'tr');
+      expect(aiSubjectTitle(tr)).toBe('CoSRE’ye sor');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('başlık yardımcıları', () => {
   it('her tür için başlık üretir', () => {
     for (const c of CASES) {
@@ -92,7 +120,9 @@ describe('başlık yardımcıları', () => {
     }
   });
   it('uzun id kısaltılır, servis adı olduğu gibi kalır', () => {
-    expect(aiSubjectSubtitle({ kind: 'trace', id: 'a'.repeat(32) })).toBe(`${'a'.repeat(16)}…`);
+    // v0.10.948 — trace alt satırı "trace <kısa kimlik>" (başlık "CoSRE’ye sor · trace …").
+    expect(aiSubjectSubtitle({ kind: 'trace', id: 'a'.repeat(32) })).toBe(`trace ${'a'.repeat(16)}…`);
+    expect(aiSubjectSubtitle({ kind: 'problem', id: 'b'.repeat(32) })).toBe(`${'b'.repeat(16)}…`);
     expect(aiSubjectSubtitle({ kind: 'service-health', id: 'checkout-service-long', fromNs: 1, toNs: 2 }))
       .toBe('checkout-service-long');
     expect(aiSubjectSubtitle({ kind: 'span', id: 'trace-1', spanId: 'span-2' }))

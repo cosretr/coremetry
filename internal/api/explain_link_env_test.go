@@ -67,11 +67,17 @@ func TestTraceExplainUsesRootService(t *testing.T) {
 		t.Error("kök span parent'sızlıkla seçilmiyor")
 	}
 
-	api := readSourceFile(t, "api.go")
 	// v0.10.921 — meta haritası traceExplainExtra'ya taşındı; iddia kök
 	// servisin deliverExplain'e GEÇMESİ, haritanın biçimi değil.
-	if !strings.Contains(api, ", run, in.RootService, cacheKey)") {
-		t.Error("trace explain kök servisi deliverExplain'e GEÇİRMİYOR — " +
+	// v0.10.948 — handler api.go'dan trace_explain_handler.go'ya taşındı;
+	// "Kodu da incele" dalı + varsayılan inceleme dalı ayrı ayrı pinlenir.
+	h := flatWS(readSourceFile(t, "trace_explain_handler.go"))
+	if !strings.Contains(h, ", run, in.RootService, cacheKey)") {
+		t.Error("trace explain (Kodu da incele) kök servisi deliverExplain'e GEÇİRMİYOR — " +
+			"prod-dışı trace'in linki yanlış ortama gider")
+	}
+	if !strings.Contains(h, "service: inv.RootService") {
+		t.Error("trace incelemesi (varsayılan yol) kök servisi explainPrepared'a GEÇİRMİYOR — " +
 			"prod-dışı trace'in linki yanlış ortama gider")
 	}
 }

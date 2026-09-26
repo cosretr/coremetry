@@ -195,6 +195,8 @@ func TestMcpBridgeIsReachable(t *testing.T) {
 		"exec.Call(ctx, tc.Name, tc.Input)": "tekrar muhafızı (tools.Executor) yürütme yolunda değil", // v0.10.536
 		"s.mcpClient.Registry().Call":       "çağrılar Registry üzerinden gitmiyor",
 		`"mcp.call", "mcp_server"`:          "dış çağrı audit izi düşmüş",
+		// v0.10.948 — trace takibi yalnız yerli salt-okur katalog (Faz B gereksinim 7).
+		"!isTraceFollowUp && s.mcpClient != nil": "dış MCP tool'ları trace takibine sızıyor — yazma yetkisi denetlenmiyor",
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("%s (aranan: %q)", why, needle)

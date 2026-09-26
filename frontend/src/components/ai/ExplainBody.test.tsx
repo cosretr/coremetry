@@ -4,6 +4,7 @@
 // yerinde ve katlı; akış sürerken anatomi yok.
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import { ExplainBody } from './ExplainBody';
 
 const TEXT = [
@@ -78,5 +79,31 @@ describe('ExplainBody (v0.10.165)', () => {
     expect(h).toContain('Kanıt: 19 span · 2 Oracle satırı');
     const only = renderToStaticMarkup(<ExplainBody text={TEXT} busy={false} evidence={{ spans: 0, traces: 0, oracle: 1 }} />);
     expect(only).toContain('Kanıt: 1 Oracle satırı');
+  });
+});
+
+// v0.10.948 (CoSRE Faz B) — gövdenin altındaki iki deterministik satır:
+// `id`siz kanıt linkleri ve `sources` kaynak dipnotu. Akış SÜRERKEN ikisi de
+// yok (yarım cevabın altında "kaynak durumu" erken olurdu); `sources` varken
+// sunucunun metin bloğu gövdeden ayrılır.
+describe('ExplainBody — kanıt linkleri + kaynak dipnotu (v0.10.948)', () => {
+  const BODY = '**Bulgu**\n- checkout yavaş.\n\n**Kaynak durumu**\n- traces: başarılı';
+  const links = [{ label: 'Servis', href: '/service?name=checkout&env=prod' }];
+  const sources = [{ source: 'traces', state: 'ok' }, { source: 'logs', state: 'timeout' }];
+  const render = (busy: boolean) => renderToStaticMarkup(
+    <MemoryRouter><ExplainBody text={BODY} busy={busy} links={links} sources={sources} /></MemoryRouter>);
+  it('bitmiş cevap: link satırı + dipnot; metin bloğu tek kez', () => {
+    const h = render(false);
+    expect(h).toContain('aria-label="Kanıt linkleri"');
+    expect(h).toContain('href="/service?name=checkout&amp;env=prod"');
+    expect(h).toContain('cx-sources');
+    expect(h).toContain('logs · zaman aşımı');
+    expect(h).not.toContain('traces: başarılı');
+  });
+  it('akış sürerken ikisi de YOK, metin ham akar', () => {
+    const h = render(true);
+    expect(h).not.toContain('Kanıt linkleri');
+    expect(h).not.toContain('cx-sources');
+    expect(h).toContain('traces: başarılı');
   });
 });

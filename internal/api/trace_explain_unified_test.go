@@ -34,7 +34,8 @@ func TestIsTraceExplainAsk(t *testing.T) {
 func TestChatTraceExplainMatchesExplainButton(t *testing.T) {
 	g, _ := os.ReadFile("copilot_guided.go")
 	u, _ := os.ReadFile("trace_explain_unified.go")
-	a, _ := os.ReadFile("api.go")
+	// v0.10.948 — handler api.go'dan trace_explain_handler.go'ya taşındı.
+	a, _ := os.ReadFile("trace_explain_handler.go")
 	if !strings.Contains(string(g), "if route.Intent == guidedTraceByID {\n\t\tif handled, ok := s.guidedTraceExplain(") {
 		t.Fatal("runGuidedRoute trace_by_id'yi guidedTraceExplain'e vermeli (anlatım sarmalayıcısından ÖNCE)")
 	}
@@ -56,7 +57,7 @@ func TestChatTraceExplainMatchesExplainButton(t *testing.T) {
 		}
 	}
 	if !strings.Contains(string(a), `explainCacheKey(copilot.SystemPromptTrace(), in.User, "")`) {
-		t.Fatal("copilotExplainTrace önbellek anahtarı formülü değişti")
+		t.Fatal("klasik trace explain önbellek anahtarı formülü değişti (explainTraceClassicPrepared)")
 	}
 	if !strings.Contains(us, `"chat": true`) && !strings.Contains(mustRead(t, "ai_observability.go"), `"chat": true`) {
 		t.Fatal("aisrc=chat yüzey soneki whitelist'te olmalı (explain-trace:chat)")

@@ -161,6 +161,8 @@ const EN: Catalog = {
   // explain-trace yüzeyi ve AIExplainButton aynı kalır.
   'ai.askCosre':          'Ask CoSRE',
   'ai.askCosreTraceHint': 'Ask CoSRE about this trace.',
+  // v0.10.948 (CoSRE Faz B) — çekmece başlığının trace alt satırı: "Ask CoSRE · trace <kısa kimlik>".
+  'ai.subject.trace':     'trace',
 
   // v0.10.944 (CoSRE Faz A) — çekmecenin "Bağlam" şeridi: sohbetin hangi
   // trace/span/servis/ortam/cluster/namespace ve pencereye kapsandığı.
@@ -312,6 +314,7 @@ const TR: Catalog = {
 
   'ai.askCosre':          'CoSRE’ye sor',
   'ai.askCosreTraceHint': 'Bu trace hakkında CoSRE’ye soru sor.',
+  'ai.subject.trace':     'trace',
 
   'ai.ctx.label':     'Bağlam',
   'ai.ctx.aria':      'CoSRE sohbet bağlamı',
@@ -372,6 +375,10 @@ export function setUserLang(lang: Lang | null): void {
   window.dispatchEvent(new Event(USER_LANG_EVENT));
 }
 
+// lastResolvedLang — v0.10.948: useLang'in en son çözdüğü etkin dil (marka
+// varsayılanı dahil); hiçbir bileşen henüz çizilmediyse null.
+let lastResolvedLang: Lang | null = null;
+
 // useLang resolves the EFFECTIVE language: user-picked
 // (localStorage) → branding default → English. Exported for
 // components that need locale-aware formatting beyond catalog
@@ -379,7 +386,19 @@ export function setUserLang(lang: Lang | null): void {
 export function useLang(): Lang {
   const brand = useBranding();
   const userLang = useUserLang();
-  return userLang ?? (brand.language === 'tr' ? 'tr' : 'en');
+  const lang = userLang ?? (brand.language === 'tr' ? 'tr' : 'en');
+  // v0.10.948 — hook DIŞI metin üreticileri (aiSubjectTitle: çekmece başlığı
+  // ve Geçmiş satırı) için son çözülen dil. İdempotent önbellek: aynı girdi
+  // aynı değeri yazar, render saflığını bozmaz.
+  lastResolvedLang = lang;
+  return lang;
+}
+
+// currentLang — v0.10.948: hook kullanamayan saf yardımcıların etkin dili.
+// Öncelik useT ile aynı: kullanıcı seçimi (localStorage) → son çözülen
+// (marka varsayılanı) → İngilizce.
+export function currentLang(): Lang {
+  return readUserLang() ?? lastResolvedLang ?? 'en';
 }
 
 // useT returns a translator scoped to the effective language.

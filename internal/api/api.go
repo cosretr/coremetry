@@ -8590,53 +8590,6 @@ func (s *Server) putAISettings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// copilotExplainTrace fetches the spans for a trace, builds a compact
-// JSON description, and asks the model for an SRE-flavoured summary.
-// Heavy lifting (gathering context) happens server-side so the
-// browser doesn't ship trace data back to the API just to ship it on
-// to Anthropic.
-//
-// v0.9.482 — kanıt montajı (span seçimi + ilişkili loglar + dürüstlük
-// notu) buildTraceExplainInput'a taşındı: AI çekmecesindeki sohbet AYNI
-// paketi kurabilsin (operatör raporu: "logda ne yazıyor" takipleri kör
-// cevaplanıyordu). Prompt bayt-bayt aynıdır — explain_trace_input_test.go
-// pinler. Emsal: anomaly.BuildExceptionExplainInput (v0.9.415).
-func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
-	r, xid := withExchange(r)
-	in, err := s.buildTraceExplainInput(r.Context(), r.PathValue("id"))
-	if errors.Is(err, errExplainTraceNotFound) {
-		http.Error(w, "trace not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	// v0.9.831 — "Kodu da incele" (opsiyonel gövde). Kod bağlamı
-	// trace'in LOGLARINDAKİ stacktrace'ten çıkar ve o stack'i basan
-	// SERVİSİN deposunda aranır (bkz. traceExplainInput.StackService).
-	opts := decodeExplainOptions(r)
-	var cc devops.CodeContext
-	run := s.explainPrompt(r, copilot.SystemPromptTrace(), in.User)
-	// v0.10.83 — önbellek anahtarı GERÇEK prompt'tan: kod dalında kod
-	// bloğu da kimliğe girer (kodlu/kodsuz cevap ayrı satır; blok
-	// değişirse anahtar değişir).
-	cacheKey := explainCacheKey(copilot.SystemPromptTrace(), in.User, "")
-	if opts.IncludeCode {
-		cc = s.buildCodeContext(r.Context(), in.StackService, in.Stack)
-		// v0.10.115 — SQL hatasında şema kanıtı (hata span'ının db_statement'ı
-		// → katalog); kod bloğunun arkasına, kendi bütçesiyle.
-		se := s.buildSchemaEvidence(in.ErrorText, in.DBStatements, mapperBlocks(cc))
-		cacheKey = explainCacheKey(copilot.SystemPromptTraceWithCode(), in.User, cc.PromptBlock()+se.Block)
-		run = explainPromptBuffered(func() (string, error) {
-			return s.copilotExplainEvidence(r,
-				copilot.SystemPromptTrace(), copilot.SystemPromptTraceWithCode(), in.User, cc, se)
-		})
-	}
-	// v0.9.1127 (Faz 1.5) — cevabın çıkışı tek yerden (deliverExplain).
-	s.deliverExplain(w, r, xid, traceExplainExtra(in, cc, opts.IncludeCode), run, in.RootService, cacheKey)
-}
-
 // copilotExplainSpan focuses the LLM on ONE span instead of the
 // whole trace: target span + parent + direct children + any
 // error spans in the same trace. Tighter prompt + cheaper round-

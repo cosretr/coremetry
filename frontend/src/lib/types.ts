@@ -1549,6 +1549,19 @@ export interface VMSnapshot {
   tokenRef?: string;
   tokenResolved?: boolean;
   tokenError?: string;
+  // v0.10.948 — etiket eşlemesi tam tur (secret değil; vmetrics.Snapshot.LabelMap).
+  labelMap?: VMLabelMap;
+}
+// VMLabelMap — v0.10.948: rol → VM etiket adı (vmetrics.LabelMap aynası).
+// Boş alan = konvansiyon (service_name) / canlı keşif. Adlar MetricsQL
+// dilbilgisinde ([a-zA-Z_][a-zA-Z0-9_]*); noktalı ad sunucuda 400.
+export interface VMLabelMap {
+  service?: string;
+  env?: string;
+  cluster?: string;
+  namespace?: string;
+  pod?: string;
+  version?: string;
 }
 export interface VMSettingsInput {
   enabled: boolean;
@@ -1566,6 +1579,10 @@ export interface VMSettingsInput {
   // v0.10.292 — çift yazım alanları (boş writeUrl = baseUrl'e yaz).
   writeUrl?: string;
   writeEnabled?: boolean;
+  // v0.10.948 — İŞARETÇİ sözleşme (vmetrics_handlers.go): alan yoksa saklı
+  // eşleme korunur, `{}`/boş alan = temizle. Form artık altısını da bilir ve
+  // her kayıtta tam nesneyi yollar.
+  labelMap?: VMLabelMap;
 }
 // A failed probe answers HTTP 200 with ok:false — a connection failure is
 // a successful ANSWER to "is this URL right?", not a request error.
@@ -6265,6 +6282,44 @@ export interface ExplainAnswerBase {
   cachedAtMs?: number;
 }
 
+// v0.10.948 (CoSRE Faz B) — explain-trace artık sunucuda GERÇEK okumalar
+// çalıştırıyor (get_trace → loglar · dönem kıyası · pod/metrik · deploy).
+// ExplainSourceStatus: cevap çerçevesinin `sources` satırı — internal/
+// sourcestate.Status'un aynası; ChatStepSourceState'in (rozet alt kümesi)
+// üst kümesi, yani iki şekil de bu tiple okunur. `ok` DAHİL her kaynak gelir:
+// dipnot "hangi kaynak okundu" sorusunu da cevaplar, yalnız sapmayı değil.
+export interface ExplainSourceStatus extends ChatStepSourceState {
+  backend?: string;
+  returned?: number;
+  limit?: number;
+  fromIso?: string;
+  toIso?: string;
+  notes?: string[];
+  // v0.10.948 — inceleme bölümünün kimliği (Go invSourceEntry aynası): section
+  // (T/L/K/P/D), label ("Karşılaştırma"), tool ("compare_periods"; bölüm
+  // KOŞMADIYSA yok). Dipnot adı bunlardan — traces/clickhouse iki bölümde
+  // (trace okuması · dönem kıyası) aynı görünmesin.
+  section?: string;
+  label?: string;
+  tool?: string;
+}
+
+// ExplainTraceAnswer — v0.10.948: explain-trace yanıtı. `links` (taban tipte)
+// artık iki aile taşır: `id`li kimlik köprüleri (satır içi, v0.10.35) ve
+// `id`siz, sunucunun gerçek kayıtlardan kurduğu göreli kanıt linkleri
+// (/trace, /logs, /service, /traces) — ikincisi kartın altında satır olur.
+export interface ExplainTraceAnswer extends ExplainAnswerBase {
+  evidenceSpanIds?: string[];
+  code?: AICodeContext;
+  oracleRows?: number;
+  sources?: ExplainSourceStatus[];
+}
+
+// ExplainStepEvent — v0.10.948: explain akışında sunucunun yürüttüğü okuma
+// adımları; sohbetin step / step-result çerçeveleriyle AYNI şekil (tek
+// sözleşme, iki yüzey). Önbellek isabetinde hiç gelmez (hiçbir şey koşmadı).
+export type ExplainStepEvent = Extract<ChatStreamEvent, { kind: 'step' } | { kind: 'step-result' }>;
+
 // ChatTurn (v0.9.479) — ekranda çizilen bir sohbet turu: wire shape'i
 // (ChatMessage) + yalnız UI'ın bildiği alanlar. İKİ yüzey paylaşır —
 // global CoSRE penceresi (CopilotChat) ve AI çekmecesi içindeki sohbet
@@ -6822,6 +6877,14 @@ export interface ESLogstoreFieldMap {
   // Empty = self-discover via a cached field_caps over the candidate
   // shapes (backend es_env_field.go).
   env?: string;
+  // v0.10.948 — çapraz-kaynak eşleme (Faz A backend'i, Faz B formu): cluster /
+  // namespace / pod / sürüm rollerinin belge alanı. Boş dize = temizle →
+  // aday listeleri + field_caps keşfi; anahtarın HİÇ gitmemesi = saklı olanı
+  // koru (logstore_es_handlers.go esFieldMapInput işaretçileri).
+  cluster?: string;
+  namespace?: string;
+  pod?: string;
+  version?: string;
 }
 
 export interface ESLogstoreSnapshot {

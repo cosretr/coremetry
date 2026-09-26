@@ -4,7 +4,32 @@ import { Button, Field } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import { vmFloorToForm, vmFloorToWire } from './vmForm';
-import type { VMAuthType, VMSettingsInput, VMTestResult } from '@/lib/types';
+import type { VMAuthType, VMLabelMap, VMSettingsInput, VMTestResult } from '@/lib/types';
+
+// v0.10.948 (CoSRE Faz B) — etiket eşlemesi formu. Rol sırası ve adlar Go'nun
+// vmetrics.LabelRoles'ü; ad dilbilgisi vmetrics.ValidLabelName ile aynı (noktalı
+// `k8s.pod.name` VM'de `k8s_pod_name` olarak yaşar). Form yalnız UYARIR —
+// kararın tek yazımı sunucuda (LabelMapProblem → 400, metin aynen gösterilir).
+const LABEL_ROLES: { key: keyof VMLabelMap; label: string; ph: string }[] = [
+  { key: 'service', label: 'Servis', ph: 'boş = service_name konvansiyonu' },
+  { key: 'env', label: 'Ortam', ph: 'boş = keşif' },
+  { key: 'cluster', label: 'Cluster', ph: 'boş = keşif' },
+  { key: 'namespace', label: 'Namespace', ph: 'boş = keşif' },
+  { key: 'pod', label: 'Pod', ph: 'boş = keşif' },
+  { key: 'version', label: 'Sürüm', ph: 'boş = keşif' },
+];
+const LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+// labelForm — snapshot eşlemesi → form (her rol dolu dize; eksik anahtar = '').
+function labelForm(m: VMLabelMap | undefined): Required<VMLabelMap> {
+  const out = { service: '', env: '', cluster: '', namespace: '', pod: '', version: '' };
+  for (const r of LABEL_ROLES) out[r.key] = (m?.[r.key] ?? '').trim();
+  return out;
+}
+function labelNameError(v: string): string | undefined {
+  const t = v.trim();
+  if (!t || LABEL_NAME.test(t)) return undefined;
+  return `geçersiz etiket adı — [a-zA-Z_][a-zA-Z0-9_]* olmalı (ör. ${t.replace(/[^a-zA-Z0-9_]/g, '_')})`;
+}
 
 // MetricsBackendTab — external VictoriaMetrics READ backend (v0.9.1150,
 // Faz 1). TempoTab is the template; the Test button follows DevOpsTab.
@@ -39,6 +64,10 @@ export function MetricsBackendTab() {
   // gövdesi VM'e de yazılır; boş URL = baseUrl.
   const [writeUrl, setWriteUrl] = useState('');
   const [writeEnabled, setWriteEnabled] = useState(false);
+  // v0.10.948 — rol → VM etiket adı (boş = konvansiyon/keşif). Saklı değer
+  // okunur ve HER kayıtta tam nesne gider: sunucunun işaretçi sözleşmesinde
+  // alan yoksa saklı korunur, boş alan temizler (vmetrics_handlers.go).
+  const [labelMap, setLabelMap] = useState<Required<VMLabelMap>>(() => labelForm(undefined));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [test, setTest] = useState<VMTestResult | null>(null);
@@ -58,6 +87,7 @@ export function MetricsBackendTab() {
       setAllowUnfilteredPercentiles(!!s.allowUnfilteredPercentiles);
       setWriteUrl(s.writeUrl ?? '');
       setWriteEnabled(!!s.writeEnabled);
+      setLabelMap(labelForm(s.labelMap));
     },
   );
 
@@ -72,6 +102,7 @@ export function MetricsBackendTab() {
     allowUnfilteredPercentiles,
     writeUrl: writeUrl.trim() || undefined,
     writeEnabled,
+    labelMap: labelForm(labelMap), // kırpılmış, altı rolün tamamı
   });
 
   const save = async (e: FormEvent) => {
@@ -88,6 +119,8 @@ export function MetricsBackendTab() {
       // operatörün yazdığını hata mesajıyla birlikte tutar — doğru olan bu.
       setRateWindowFloor(vmFloorToForm(next.rateWindowFloorS));
       setAllowUnfilteredPercentiles(!!next.allowUnfilteredPercentiles);
+      // v0.10.948 — eşleme de sunucunun kırpıp sakladığıyla tohumlanır.
+      if (next.labelMap) setLabelMap(labelForm(next.labelMap));
       setMsg({
         kind: 'ok',
         text: next.enabled
@@ -311,6 +344,33 @@ export function MetricsBackendTab() {
               </div>
             </span>
           </label>
+        </div>
+
+        {/* v0.10.948 — BAĞLAM ETİKETLERİ: CoSRE'nin metrik araçları (query_metric,
+            list_metric_labels) servis/ortam/cluster/namespace/pod/sürüm süzgecini
+            hangi VM etiketine uygulayacak. Sıra: burası → konvansiyon → canlı keşif;
+            araç sonucu hangisini kullandığını ve eşlenemeyen süzgeci "kısmi"
+            diye raporlar. Trace kimliği bir metrik etiketi DEĞİLDİR. */}
+        <div style={{
+          marginTop: 4, marginBottom: 12, paddingTop: 12,
+          borderTop: '1px solid var(--border)',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Bağlam etiketleri (CoSRE)</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10, lineHeight: 1.5 }}>
+            CoSRE bir trace’i metriklerle eşlerken servis, ortam, cluster,
+            namespace, pod ve sürüm süzgecini bu etiketlere uygular. Boş alan:
+            servis için <code>service_name</code> konvansiyonu, diğerleri için
+            metriğin gerçek etiketlerinden keşif. Eşlenemeyen süzgeç sessizce
+            düşmez, sonuçta “kısmi” olarak raporlanır.
+          </div>
+          <div className="grid-2" style={{ display: 'grid', gap: 12 }}>
+            {LABEL_ROLES.map(r => (
+              <Field key={r.key} label={r.label} value={labelMap[r.key]}
+                onChange={e => { const v = e.target.value; setLabelMap(m => ({ ...m, [r.key]: v })); }}
+                placeholder={r.ph} autoComplete="off" spellCheck={false}
+                error={labelNameError(labelMap[r.key])} />
+            ))}
+          </div>
         </div>
 
         {test && (

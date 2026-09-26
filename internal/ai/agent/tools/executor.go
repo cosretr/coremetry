@@ -45,14 +45,28 @@ type Hooks struct {
 	Audit func(name string, args json.RawMessage, dur time.Duration, err error, bytes int)
 }
 
+// Outcome.Kind değerleri. v0.10.948 — adlandırıldı: sohbet döngüsü ve trace
+// incelemesi yürütülmeyen çağrının NEDENİNİ (step-result skipped) buradan okur.
+const (
+	KindOK       = "ok"
+	KindError    = "error"
+	KindUnknown  = "unknown"
+	KindRepeated = "repeated"
+	KindScope    = "scope"
+	// KindCancelled — v0.10.948: ctx çağrıdan ÖNCE bitmişti (istemci iptali ya da
+	// alışveriş tavanı); handler hiç çağrılmadı.
+	KindCancelled = "cancelled"
+)
+
 // Outcome — bir çağrının sonucu.
 type Outcome struct {
 	// Content — modele giden metin: JSON sonuç, ToolErrorJSON, RepeatedCallJSON ya da "unknown tool".
 	Content string
 	IsError bool
-	// Executed — handler gerçekten koştu (bilinmeyen ad ve tekrar: false; süre yazılmaz).
+	// Executed — handler gerçekten koştu (bilinmeyen ad, tekrar, kapsam reddi,
+	// iptal: false; süre yazılmaz).
 	Executed bool
-	// Kind — ok | error | unknown | repeated | scope
+	// Kind — ok | error | unknown | repeated | scope | cancelled
 	Kind     string
 	Duration time.Duration
 	Err      error
@@ -93,22 +107,29 @@ func (x *Executor) WithBudget(d time.Duration) *Executor {
 func (x *Executor) Known(name string) bool { _, ok := x.byName[name]; return ok }
 
 // Call — sıra sözleşmesi (chat döngüsünün eski gövdesiyle birebir):
-// bilinmeyen → tekrar muhafızı → kapsam → span aç → bütçeli yürütme →
-// JSON'la / ToolErrorJSON → span kapat(bayt, ok) → audit.
+// iptal → bilinmeyen → tekrar muhafızı → kapsam → span aç → bütçeli
+// yürütme → JSON'la / ToolErrorJSON → span kapat(bayt, ok) → audit.
 func (x *Executor) Call(ctx context.Context, name string, args json.RawMessage) Outcome {
+	// v0.10.948 — İPTAL HER ÇAĞRIDAN ÖNCE. Eskiden bitmiş ctx ile de handler
+	// koşuyordu: sürücü "cancelled" ile hızlı düşse de bir span + audit satırı +
+	// kısmi CH/ES isteği bırakıyordu ve tur kalan çağrıları sırayla yakıyordu.
+	// En başta: tekrar muhafızı yürümeyen çağrıyı "görüldü" diye kaydetmesin.
+	if cerr := ctx.Err(); cerr != nil {
+		return Outcome{Content: mcp.ToolErrorJSON(cerr), IsError: true, Kind: KindCancelled, Err: cerr}
+	}
 	h, found := x.byName[name]
 	if !found {
 		msg := fmt.Sprintf("unknown tool %q", name)
-		return Outcome{Content: msg, IsError: true, Kind: "unknown"}
+		return Outcome{Content: msg, IsError: true, Kind: KindUnknown}
 	}
 	// v0.10.88 — aynı (tool, kanonik argüman) çiftinin ikinci kopyası
 	// YÜRÜTÜLMEZ; model ToolErrorJSON alanlarıyla yönlendirilir.
 	if MarkRepeatedCall(x.seen, name, args) {
-		return Outcome{Content: RepeatedCallJSON, IsError: true, Kind: "repeated"}
+		return Outcome{Content: RepeatedCallJSON, IsError: true, Kind: KindRepeated}
 	}
 	cargs, serr := x.scope.Constrain(ctx, name, args)
 	if serr != nil {
-		return Outcome{Content: mcp.ToolErrorJSON(serr), IsError: true, Kind: "scope", Err: serr}
+		return Outcome{Content: mcp.ToolErrorJSON(serr), IsError: true, Kind: KindScope, Err: serr}
 	}
 	end := func(int, bool) {}
 	if x.hooks.Span != nil {
@@ -117,11 +138,11 @@ func (x *Executor) Call(ctx context.Context, name string, args json.RawMessage) 
 	t0 := time.Now()
 	out, herr := runTool(ctx, h, cargs, x.budget)
 	dur := time.Since(t0)
-	oc := Outcome{Executed: true, Duration: dur, Err: herr, Kind: "ok"}
+	oc := Outcome{Executed: true, Duration: dur, Err: herr, Kind: KindOK}
 	if herr != nil {
 		// v0.9.1234 — MCP telinin gördüğü sözleşmenin AYNISI (sınıf +
 		// tekrar denenebilirlik + Türkçe ipucu + kırpılmış ham metin).
-		oc.Content, oc.IsError, oc.Kind = mcp.ToolErrorJSON(herr), true, "error"
+		oc.Content, oc.IsError, oc.Kind = mcp.ToolErrorJSON(herr), true, KindError
 	} else {
 		oc.Content = out
 	}

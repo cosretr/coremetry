@@ -1,6 +1,6 @@
 // explainAnatomy.test.ts — v0.10.165 sözleşmesi (explainAnatomy.ts başlığı).
 import { describe, it, expect } from 'vitest';
-import { verdictLine, hoistCodeQuotes, dropVerdictSentence } from './explainAnatomy';
+import { verdictLine, hoistCodeQuotes, dropVerdictSentence, splitSourceFooter } from './explainAnatomy';
 
 const ANSWER = [
   '**Hata ve Anlamı**',
@@ -35,6 +35,21 @@ describe('verdictLine', () => {
     expect(verdictLine('- gecikme 3× arttı.\n- db_query yavaş.')).toBeNull();
     expect(verdictLine('hiç başlık yok')).toBeNull();
     expect(verdictLine(null)).toBeNull();
+  });
+  // v0.10.948 — beş başlıklı inceleme cevabında «Olası neden» HİPOTEZ: iki
+  // cümle olsa da Karar şeridine çıkmaz (sıra Bulgu → Kanıt → Olası neden
+  // korunur; «ilişki, neden değil» kaydı iddiasından kopmaz). Yukarıdaki
+  // inline «**Olası neden:**» ve Kök Neden örnekleri **Bulgu** taşımaz → Karar sürer.
+  it('inceleme şekli (**Bulgu** başlığı) → Karar YOK (v0.10.948)', () => {
+    const inv = [
+      '**Bulgu**', '- checkout POST /orders 1840 ms.', '',
+      '**Kanıt**', '- [T1] payments öz süre 1620 ms', '',
+      '**Olası neden**', '- payments bağlantı havuzu dolu görünüyor. Aynı pencerede deploy var (ilişki, neden değil).', '',
+    ].join('\n');
+    expect(verdictLine(inv)).toBeNull();
+    expect(verdictLine(inv.replace('**Bulgu**', '**Bulgu:**'))).toBeNull();
+    // aynı Olası neden bölümü **Bulgu**'suz → klasik Karar (kontrol)
+    expect(verdictLine(inv.split('\n').slice(6).join('\n'))).toBe('payments bağlantı havuzu dolu görünüyor.');
   });
 });
 
@@ -71,5 +86,52 @@ describe('hoistCodeQuotes', () => {
     const t = 'metin\n```java\n240| a\n246| b';
     expect(hoistCodeQuotes(t)).toEqual({ quotes: [], rest: t });
     expect(hoistCodeQuotes('düz')).toEqual({ quotes: [], rest: 'düz' });
+  });
+});
+
+// v0.10.948 (CoSRE Faz B) — sunucunun "Kaynak durumu" metin dipnotu, yapısal
+// `sources` varken gövdeden ayrılır (kart rozetle çizer); sayı denetimi
+// uyarısı ve sonraki bölümler gövdede KALIR.
+describe('splitSourceFooter (v0.10.948)', () => {
+  const FIVE = [
+    '**Bulgu**', '- checkout POST /orders 1840 ms; payments çağrısı hata.', '',
+    '**Kanıt**', '- [T1] payments self 1620 ms', '',
+    '**Olası neden**', '- payments bağlantı havuzu; aynı pencerede deploy var (ilişki).', '',
+    '**Eksik veri**', '- logs: erişilemedi', '',
+    '**Sonraki kontrol**', '- /service?name=payments&env=prod', '',
+  ].join('\n');
+  it('sondaki blok (--- ayracıyla) ayrılır; beş bölüm aynen', () => {
+    const r = splitSourceFooter(FIVE + '---\n**Kaynak durumu**\n- traces/clickhouse: başarılı\n- logs/elasticsearch: kaynağa erişilemedi (eksik veri)');
+    expect(r.footer).toContain('logs/elasticsearch');
+    expect(r.footer!.startsWith('**Kaynak durumu**')).toBe(true);
+    expect(r.body).toContain('**Sonraki kontrol**');
+    expect(r.body).not.toContain('Kaynak durumu');
+    expect(r.body).not.toMatch(/---\s*$/);
+  });
+  it('sayı denetimi uyarısı (⚠) gövdede kalır — önce ya da sonra', () => {
+    const after = splitSourceFooter(FIVE + '**Kaynak durumu**\n- traces: başarılı\n\n⚠ Kanıtta bulunamayan sayı(lar): 1900 ms');
+    expect(after.body).toContain('⚠ Kanıtta bulunamayan sayı(lar): 1900 ms');
+    expect(after.footer).not.toContain('⚠');
+    const before = splitSourceFooter(FIVE + '⚠ Kanıtta bulunamayan sayı(lar): 12%\n\nKaynak durumu: traces ok · logs erişilemedi');
+    expect(before.body).toContain('⚠ Kanıtta bulunamayan');
+    expect(before.footer).toBe('Kaynak durumu: traces ok · logs erişilemedi');
+  });
+  it('SON başlık alınır; bloktan sonraki cevap başlığı gövdede kalır', () => {
+    const r = splitSourceFooter('**Kaynak durumu** (model)\nmetin\n\n**Kaynak durumu**\n- logs: boş\n**Sonraki kontrol**\n- sonra');
+    expect(r.footer).toBe('**Kaynak durumu**\n- logs: boş');
+    expect(r.body).toContain('**Kaynak durumu** (model)');
+    expect(r.body).toContain('**Sonraki kontrol**\n- sonra');
+  });
+  it('kalın madde satırları ("**logs/elasticsearch**: …") blokta kalır', () => {
+    const r = splitSourceFooter('**Bulgu**\n- x\n\n**Kaynak durumu**\n**traces/clickhouse**: başarılı\n**logs/elasticsearch**: erişilemedi — eksik veri');
+    expect(r.body).toBe('**Bulgu**\n- x');
+    expect(r.footer).toContain('**logs/elasticsearch**: erişilemedi');
+  });
+  it('blok yoksa metin AYNEN (null footer)', () => {
+    expect(splitSourceFooter(FIVE)).toEqual({ body: FIVE, footer: null });
+  });
+  it('başlık biçimleri: ## ve düz satır', () => {
+    expect(splitSourceFooter('a\n## Kaynak durumu\n- x').footer).toBe('## Kaynak durumu\n- x');
+    expect(splitSourceFooter('a\nKAYNAK DURUMU: x').body).toBe('a');
   });
 });

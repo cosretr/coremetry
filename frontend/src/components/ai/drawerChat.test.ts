@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AISubject } from '@/lib/aiSubject';
 import {
-  EXPLAIN_CONTEXT_MAX, aiSubjectQuestion, buildExplainContext, clampExplain, drawerFollowups,
+  EXPLAIN_CONTEXT_MAX, aiSubjectQuestion, buildExplainContext, clampExplain, drawerFollowups, traceUrlSpan,
 } from './drawerChat';
 
 // v0.9.479 pinleri — AI çekmecesi sohbetinin bağlam devri.
@@ -108,5 +108,34 @@ describe('drawerFollowups', () => {
     expect(chips).toContain('Bu neden oluyor?');
     // Global chat'in filo çipleri çekmeceye sızmamalı.
     expect(chips.join(' ')).not.toContain('Takımımın');
+  });
+});
+
+// v0.10.948 — yenilemede / paylaşılan `/trace?id=X&span=Y&ai=trace` linkinde
+// CopilotExplain span'ler yüklenmeden (traceCtx yayınlanmadan) BİR KEZ koşar;
+// odak o ana kadar URL'deki seçili span. Aksi hâlde ilk cevap kök servisi,
+// takipler seçili span'in servisini inceliyordu.
+describe('traceUrlSpan', () => {
+  const T = '0af7651916cd43dd8448eb211c80319c';
+  const S = 'b7ad6b7169203331';
+  it('aynı trace + geçerli span → span (küçük harfe)', () => {
+    expect(traceUrlSpan('/trace', `?id=${T}&span=${S.toUpperCase()}&ai=trace`, T)).toBe(S);
+    expect(traceUrlSpan('/trace', `?id=${T.toUpperCase()}&span=${S}`, T)).toBe(S);
+  });
+  it('başka trace kimliği → undefined', () => {
+    expect(traceUrlSpan('/trace', `?id=${'f'.repeat(32)}&span=${S}`, T)).toBeUndefined();
+    expect(traceUrlSpan('/trace', `?span=${S}`, T)).toBeUndefined();
+  });
+  it('/trace dışı yol → undefined', () => {
+    expect(traceUrlSpan('/traces', `?id=${T}&span=${S}`, T)).toBeUndefined();
+    expect(traceUrlSpan('/logs', `?id=${T}&span=${S}`, T)).toBeUndefined();
+  });
+  it('16-hex olmayan span → undefined', () => {
+    expect(traceUrlSpan('/trace', `?id=${T}&span=xyz`, T)).toBeUndefined();
+    expect(traceUrlSpan('/trace', `?id=${T}&span=${S}00`, T)).toBeUndefined();
+    expect(traceUrlSpan('/trace', `?id=${T}`, T)).toBeUndefined();
+  });
+  it('kiosk linki de çözülür (aynı /trace?id=&span= rotası)', () => {
+    expect(traceUrlSpan('/trace', `?id=${T}&span=${S}&kiosk=1`, T)).toBe(S);
   });
 });

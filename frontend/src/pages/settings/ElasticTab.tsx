@@ -33,6 +33,14 @@ export function ElasticTab() {
   // v0.8.400 — deployment-environment field for the ?env= filter;
   // empty = the backend self-discovers via field_caps.
   const [fEnv, setFEnv] = useState('');
+  // v0.10.948 (CoSRE Faz B) — çapraz-kaynak eşleme alanları (Faz A backend'i:
+  // logstore_es_handlers.go esFieldMapInput). Boş = aday listeleri + field_caps
+  // keşfi; CoSRE'nin log araçları hangi alanı (yapılandırılmış / keşfedilmiş)
+  // kullandığını sonucunda raporlar.
+  const [fCluster, setFCluster] = useState('');
+  const [fNamespace, setFNamespace] = useState('');
+  const [fPod, setFPod] = useState('');
+  const [fVersion, setFVersion] = useState('');
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -55,6 +63,10 @@ export function ElasticTab() {
       setFSevTx(s.fields?.severityTx || '');
       setFSevNo(s.fields?.severityNo || '');
       setFEnv(s.fields?.env || '');
+      setFCluster(s.fields?.cluster || '');
+      setFNamespace(s.fields?.namespace || '');
+      setFPod(s.fields?.pod || '');
+      setFVersion(s.fields?.version || '');
     },
   );
 
@@ -68,6 +80,10 @@ export function ElasticTab() {
       timestamp: fTimestamp, traceId: fTraceId, spanId: fSpanId,
       service: fService, body: fBody, severityTx: fSevTx, severityNo: fSevNo,
       env: fEnv,
+      // v0.10.948 — dördü de HER kayıtta gider (form saklı değeri okudu): boş
+      // dize "temizle → keşif", sunucunun işaretçi sözleşmesi. Anahtarı hiç
+      // göndermemek (eski form) saklı değeri korur — bu form artık onu bilir.
+      cluster: fCluster, namespace: fNamespace, pod: fPod, version: fVersion,
     },
   });
 
@@ -223,12 +239,24 @@ export function ElasticTab() {
                 {fieldRow('Severity (text)', fSevTx, setFSevTx, 'log.level')}
                 {fieldRow('Severity (number)', fSevNo, setFSevNo, 'empty = skip')}
                 {fieldRow('Environment', fEnv, setFEnv, 'empty = self-discover')}
+                {fieldRow('Cluster', fCluster, setFCluster, 'empty = self-discover')}
+                {fieldRow('Namespace', fNamespace, setFNamespace, 'empty = self-discover')}
+                {fieldRow('Pod', fPod, setFPod, 'empty = self-discover')}
+                {fieldRow('Version', fVersion, setFVersion, 'empty = self-discover')}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
                 Environment backs the global env picker on /logs. Left empty,
                 Coremetry discovers the field from the index mapping
                 (deployment.environment[.name] and friends) and /logs shows an
                 honest chip when none resolves.
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+                Cluster / namespace / pod / version back CoSRE’s cross-source
+                matching (trace ↔ logs filters). Left empty, Coremetry tries its
+                candidate fields (k8s.cluster.name, kubernetes.namespace.name,
+                kubernetes.pod_name, service.version and friends) via field_caps;
+                a filter it cannot map is reported as partial, never silently
+                dropped. Set one only when your pipeline uses another path.
               </div>
             </details>
 

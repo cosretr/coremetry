@@ -31,6 +31,18 @@ import (
 // Hafızadaki "gate tek-yazım kör noktası" ve "muhafız dilime bağlanınca"
 // dersleriyle aynı sınıf: sözleşme koda yazılı ama hiçbir şey onu
 // zorlamıyor.
+//
+// v0.10.948 (CoSRE Faz B) — sıraya BİR KAPI eklendi, sıra değişmedi:
+//
+//	guided > [trace/span takibi → doğrudan serbest döngü] > drawer > RAG > niyet > serbest döngü
+//
+// Çekmecede trace/span öznesiyle açıklama bağlamı varken takip sorusu
+// tek-çağrılı çekmece anlatımına gidiyordu; o yol araç çağıramadığı için
+// kıyas/metrik/pod/deploy kanıtını toplayamıyordu (chat_trace_followup.go).
+// Kapı guided'dan SONRA (yapıştırılan kimlik ve somut özne guided'da kalır)
+// ve drawer/RAG/niyet üçlüsünü tek blokta sarar; serbest döngü bloğun
+// DIŞINDA kalmalı — aksi hâlde trace takibi hiçbir kademeye ulaşmaz.
+// TestTraceFollowUpGateSkipsMiddleTiers pinler.
 
 // tierMarkers — kademelerin sıradaki KİMLİKLERİ.
 //
@@ -159,4 +171,52 @@ func tierBlock(src string, start int) string {
 		}
 	}
 	return rest
+}
+
+// traceFollowUpGate — v0.10.948 kapısının kaynak kimliği ve bloğu.
+// Açıklaması henüz gelmemiş Geçmiş devralması kapıya page.traceId == özne ile girer.
+const (
+	traceFollowUpGate  = "traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)"
+	traceFollowUpBlock = "if !isTraceFollowUp {"
+)
+
+// TestTraceFollowUpGateSkipsMiddleTiers — v0.10.948: trace/span takibi
+// guided'dan SONRA karar verir ve yalnız drawer/RAG/niyet kademelerini atlar.
+// Üç iddia: (1) kapı guided'dan sonra, drawer'dan önce; (2) drawer, RAG ve
+// niyet çağrıları kapının bloğunun İÇİNDE (biri dışarı taşarsa trace takibi
+// yine tek-çağrılı anlatıma düşer); (3) serbest döngü bloğun DIŞINDA ve
+// sonrasında (içine girerse trace takibi hiçbir cevaba ulaşmaz).
+func TestTraceFollowUpGateSkipsMiddleTiers(t *testing.T) {
+	b, err := os.ReadFile("copilot_chat.go")
+	if err != nil {
+		t.Fatalf("copilot_chat.go okunamadı: %v", err)
+	}
+	src := stripGoCommentsAPI(string(b))
+	iGuided := strings.Index(src, tierMarkers[0].marker)
+	iGate := strings.Index(src, traceFollowUpGate)
+	iDrawer := strings.Index(src, tierMarkers[1].marker)
+	if iGate < 0 {
+		t.Fatalf("trace takibi kapısı bulunamadı (%q)", traceFollowUpGate)
+	}
+	if !(iGuided < iGate && iGate < iDrawer) {
+		t.Fatalf("kapı guided ile drawer ARASINDA olmalı: guided=%d kapı=%d drawer=%d", iGuided, iGate, iDrawer)
+	}
+	iBlock := strings.Index(src[iGate:], traceFollowUpBlock)
+	if iBlock < 0 {
+		t.Fatalf("kapının bloğu bulunamadı (%q)", traceFollowUpBlock)
+	}
+	iBlock += iGate
+	block := tierBlock(src, iBlock)
+	for _, m := range []string{tierMarkers[1].marker, tierMarkers[2].marker, "s.copilotChatIntent(ctx, emit,"} {
+		if !strings.Contains(block, m) {
+			t.Errorf("%q kapının bloğunda değil — trace takibi bu kademeye düşer", m)
+		}
+	}
+	loop := tierMarkers[3].marker
+	if strings.Contains(block, loop) {
+		t.Fatal("serbest döngü kapının bloğunda — trace takibi hiçbir kademeye ulaşmaz")
+	}
+	if strings.Index(src, loop) < iBlock+len(block) {
+		t.Fatal("serbest döngü kapı bloğundan SONRA gelmeli")
+	}
 }

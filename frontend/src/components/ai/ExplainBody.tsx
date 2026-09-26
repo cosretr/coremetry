@@ -11,15 +11,25 @@
 //   stack çiti yerinde kalır, katlanır) → dipnot/geri bildirim (çağıran çizer).
 // Akış SÜRERKEN ham metin aynen akar (yarım çit titremesin); anatomi yalnız
 // bitmiş metne uygulanır. Güven puanı çizilmez (böyle bir alan yok — brief §5).
+// v0.10.948 (CoSRE Faz B) — gövdenin ALTINA iki deterministik satır: sunucunun
+// `id`siz kanıt linkleri (ExplainEvidenceLinks) ve `sources` kaynak durumu
+// dipnotu (ExplainSourceFooter). Yapısal `sources` varken sunucunun metne
+// eklediği "Kaynak durumu" bloğu gövdeden ayrılır (splitSourceFooter) — aynı
+// bilgi iki kez basılmaz; `sources` yoksa metin aynen kalır.
+// v0.10.948 — beş başlıklı inceleme cevabında (**Bulgu** … **Sonraki kontrol**)
+// Karar ÇİZİLMEZ: «Olası neden» hipotezdir; verdictLine metnin şeklinden
+// null döner (`sources`suz önbellek isabetinde de), bölüm bütün kalır.
 import { useMemo } from 'react';
 import { RenderedMarkdown, CodeBlock } from '@/components/Markdown';
 import type { IdLink } from '@/components/ai/inlineIdLinks';
-import { verdictLine, hoistCodeQuotes, dropVerdictSentence } from './explainAnatomy';
+import type { ExplainSourceStatus } from '@/lib/types';
+import { verdictLine, hoistCodeQuotes, dropVerdictSentence, splitSourceFooter } from './explainAnatomy';
+import { ExplainEvidenceLinks, ExplainSourceFooter } from './ExplainEvidence';
 
 // oracle — v0.10.921 (Kademe A): Explain'e giren Oracle hata satırı sayısı.
 export interface ExplainEvidence { spans: number; traces: number; oracle?: number }
 
-export function ExplainBody({ text, busy, links, evidence, verdict: wantVerdict = true }: {
+export function ExplainBody({ text: raw, busy, links, evidence, verdict: wantVerdict = true, sources }: {
   text: string;
   busy: boolean;
   links?: IdLink[];
@@ -27,7 +37,12 @@ export function ExplainBody({ text, busy, links, evidence, verdict: wantVerdict 
   evidence?: ExplainEvidence;
   /** false → Karar satırı çizilmez (kod kartı açıkken ilk kart) */
   verdict?: boolean;
+  /** v0.10.948 — cevap çerçevesinin kaynak durumları (explain-trace); yoksa dipnot yok */
+  sources?: ExplainSourceStatus[];
 }) {
+  const hasSources = !!sources?.length;
+  // v0.10.948 — sunucunun metin dipnotu yalnız yapısal kopyası VARKEN ayrılır.
+  const text = useMemo(() => (busy || !hasSources ? raw : splitSourceFooter(raw).body), [busy, hasSources, raw]);
   const verdict = useMemo(() => (busy || !wantVerdict ? null : verdictLine(text)), [busy, text, wantVerdict]);
   const hoisted = useMemo(() => {
     if (busy) return { quotes: [], rest: text };
@@ -52,6 +67,8 @@ export function ExplainBody({ text, busy, links, evidence, verdict: wantVerdict 
       )}
       {hoisted.quotes.map((q, i) => <CodeBlock key={`q${i}`} lang={q.lang} lines={q.lines} anatomy />)}
       <RenderedMarkdown text={hoisted.rest} idLinks={links} anatomy />
+      {!busy && <ExplainEvidenceLinks links={links} />}
+      {!busy && <ExplainSourceFooter sources={sources} />}
     </>
   );
 }

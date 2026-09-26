@@ -111,3 +111,38 @@ func TestRepeatKeyCanonical(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.948 — iptal HER çağrıdan önce: bitmiş ctx ile handler çağrılmaz,
+// span/audit açılmaz, sonuç `cancelled` sınıfı ToolErrorJSON ve tekrar
+// muhafızı yürümeyen çağrıyı "görüldü" diye KAYDETMEZ (canlı ctx ile aynı
+// çağrı sonra yürür). Sohbet döngüsü bunu step-result skipped:true yapar.
+func TestExecutorCancelledBeforeCall(t *testing.T) {
+	ran, spans, audits := 0, 0, 0
+	byName := map[string]Handler{
+		"get_trace": func(_ context.Context, _ json.RawMessage) (any, error) { ran++; return map[string]any{"ok": true}, nil },
+	}
+	x := NewExecutor(byName, nil, Hooks{
+		Span: func(ctx context.Context, _ string, _ bool) (context.Context, func(int, bool)) {
+			spans++
+			return ctx, func(int, bool) {}
+		},
+		Audit: func(string, json.RawMessage, time.Duration, error, int) { audits++ },
+	})
+	args := json.RawMessage(`{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}`)
+	cctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	oc := x.Call(cctx, "get_trace", args)
+	if oc.Executed || !oc.IsError || oc.Kind != KindCancelled || !strings.Contains(oc.Content, `"error":"cancelled"`) || oc.Duration != 0 {
+		t.Fatalf("iptal edilmiş ctx: %+v", oc)
+	}
+	// Bilinmeyen ad da iptalde önce iptal olarak döner (neden tek: vazgeçildi).
+	if oc := x.Call(cctx, "nope", nil); oc.Kind != KindCancelled {
+		t.Fatalf("iptal bilinmeyen addan önce: %+v", oc)
+	}
+	if ran != 0 || spans != 0 || audits != 0 {
+		t.Fatalf("iptalde handler/span/audit çalışmamalı: ran=%d spans=%d audits=%d", ran, spans, audits)
+	}
+	if oc := x.Call(context.Background(), "get_trace", args); !oc.Executed || oc.Kind != KindOK || ran != 1 {
+		t.Fatalf("iptal edilen çağrı tekrar muhafızına yazılmamalı: %+v ran=%d", oc, ran)
+	}
+}
