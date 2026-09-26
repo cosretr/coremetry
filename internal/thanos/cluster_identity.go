@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // cluster_identity.go — REMOTE CLUSTER KAYDI = ENTITY HİYERARŞİSİNİN KÖKÜ
@@ -220,6 +222,7 @@ func ReconcileClusterSettings(in, cur Settings) (Settings, error) {
 			if c.Token == "" {
 				c.Token = prev.Token
 			}
+			carryRolloutFields(c, prev)
 			// v0.10.139 — otomatik algılama alanları sunucu sahipli: istemci
 			// göndermediyse saklı değer korunur; etiket ELLE değiştirildiyse
 			// kaynak manual'a düşer (auto rozeti yalan söylemesin).
@@ -243,6 +246,11 @@ func ReconcileClusterSettings(in, cur Settings) (Settings, error) {
 		} else {
 			c.SpanClusterValue, c.SpanClusterValues = "", nil
 		}
+		// v0.10.956 — Rollouts v2 alanları: normalise + biçim doğrulaması
+		// (tekillik aşağıda, tüm liste üstünde).
+		if err := normalizeRolloutFields(c); err != nil {
+			return Settings{}, err
+		}
 	}
 	// v0.10.139 — TEKLİK: bir span cluster değeri ve bir (etiket, değer) çifti
 	// aynı anda yalnız BİR kayda. Çakışma reddedilir, bağlı kayıt söylenir.
@@ -252,11 +260,132 @@ func ReconcileClusterSettings(in, cur Settings) (Settings, error) {
 	return out, nil
 }
 
+// v0.10.956 — Rollouts v2 P1.3 alan sınırları (docs/rollouts/v2-audit.md
+// §3.2). Blob tüm pod'lara 30 s'de bir yüklenir; sınırlar onu küçük tutar.
+const (
+	apiServerURLsMax = 16 // bir cluster'ın dest_server yazımları; gerçekte 1-3
+	argoSuffixMax    = 63 // Argo uygulama adı bir k8s adı (DNS etiketi ≤ 63)
+	pairGroupMax     = 64 // rune
+)
+
+// argoSuffixRe — v0.10.956 — suffix bir Argo uygulama adının parçası:
+// harf/rakamla başlar ve biter, arada '.', '_' ya da '-'. Büyük harfe izin
+// var (tekillik harf duyarsız); boşluk yok, '.' dışında regex meta karakteri
+// yok — P3 yine de QuoteMeta ile kaçırır (audit §6), değer bir ad parçası.
+var argoSuffixRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`)
+
+// carryRolloutFields — v0.10.956 — eski istemci / karışık sürüm koruması
+// (audit §3.2: "bir Save ya da karışık sürüm pod'u alanları siler").
+//
+// İşaret `apiServerUrls` ANAHTARININ varlığı: alanları bilen istemci
+// (ClustersTab, GET → PUT gidiş-dönüşü — Snapshot listeyi hep [] ile basar)
+// anahtarı HER ZAMAN gönderir; JSON'da `[]` Go'da nil OLMAYAN boş dilimdir.
+//   - liste nil (anahtar yok = eski istemci ya da alan bilmeyen betik):
+//     liste saklı değerden taşınır; boş metin alanları da taşınır, dolu
+//     metin uygulanır (kısmi betik gövdesi yalnız suffix'i değiştirebilir);
+//   - liste nil değil: gövde YETKİLİ — [] ve "" temizler.
+//
+// Ters yön (eski pod yeni istemcinin gövdesini işlerse) buradan
+// düzeltilemez: eski ikili alanları tanımaz, blobu onlarsız yazar. Pencere
+// bu sürüme geçişin rolling-upgrade süresi (ya da eski sürüme geri dönüş).
+func carryRolloutFields(c *ClusterConfig, prev ClusterConfig) {
+	if c.APIServerURLs != nil {
+		return
+	}
+	c.APIServerURLs = prev.APIServerURLs
+	if strings.TrimSpace(c.ArgoSuffix) == "" {
+		c.ArgoSuffix = prev.ArgoSuffix
+	}
+	if strings.TrimSpace(c.PairGroup) == "" {
+		c.PairGroup = prev.PairGroup
+	}
+}
+
+// normalizeRolloutFields — v0.10.956 — saf; Reconcile'ın parçası, böylece
+// üç blob yazıcısı (PUT, detect, assign-span-cluster) aynı kuraldan geçer.
+// Liste kanonikleşir (NormalizeAPIServerURL; boş öğe atılır, tekrar
+// tekilleşir). nil-lik KORUNUR: nil kalan liste "anahtar yok" demektir ve
+// ikinci bir Reconcile (PUT'un otomatik algılama kancası) aynı sonucu verir;
+// açıkça temizlenen liste boş-ama-nil-değil kalır, ikinci geçiş onu saklı
+// değerle DOLDURMAZ. Blob'a ikisi de yazılmaz (omitempty).
+func normalizeRolloutFields(c *ClusterConfig) error {
+	c.ArgoSuffix = strings.TrimSpace(c.ArgoSuffix)
+	c.PairGroup = strings.TrimSpace(c.PairGroup)
+	if c.ArgoSuffix != "" && (len(c.ArgoSuffix) > argoSuffixMax || !argoSuffixRe.MatchString(c.ArgoSuffix)) {
+		return fmt.Errorf("cluster %q argoSuffix %q geçersiz: harf/rakamla başlayıp biten, en çok %d karakter (arada . _ - olabilir)", c.Name, c.ArgoSuffix, argoSuffixMax)
+	}
+	if utf8.RuneCountInString(c.PairGroup) > pairGroupMax {
+		return fmt.Errorf("cluster %q pairGroup en çok %d karakter olabilir", c.Name, pairGroupMax)
+	}
+	if strings.IndexFunc(c.PairGroup, unicode.IsControl) >= 0 {
+		return fmt.Errorf("cluster %q pairGroup kontrol karakteri (satır sonu vb.) içeremez", c.Name)
+	}
+	if c.APIServerURLs == nil {
+		return nil
+	}
+	out := make([]string, 0, len(c.APIServerURLs))
+	seen := map[string]bool{}
+	for i, raw := range c.APIServerURLs {
+		if strings.TrimSpace(raw) == "" {
+			continue // form listesindeki boş satır
+		}
+		n, err := NormalizeAPIServerURL(raw)
+		if err != nil {
+			// Ham değer YANKILANMAZ (userinfo parolası olabilir) — konum yeter.
+			return fmt.Errorf("cluster %q apiServerUrls #%d: %v", c.Name, i+1, err)
+		}
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	if len(out) > apiServerURLsMax {
+		return fmt.Errorf("cluster %q apiServerUrls en çok %d adres taşıyabilir (%d verildi)", c.Name, apiServerURLsMax, len(out))
+	}
+	c.APIServerURLs = out
+	return nil
+}
+
 // checkClusterUniqueness — saf; tablo-testli. Hata metni operatöre gider.
 func checkClusterUniqueness(cfg Settings) error {
 	spanOwner := map[string]string{}
 	labelOwner := map[string]string{}
+	apiOwner := map[string]string{}    // v0.10.956 — kanonik API server URL → kayıt
+	suffixOwner := map[string]string{} // v0.10.956 — küçük harf argoSuffix → kayıt
 	for _, c := range cfg.Clusters {
+		// v0.10.956 — Rollouts v2 P1.3: bir dest_server tek cluster'a, bir
+		// suffix tek cluster'a çözülmeli (audit §3.2, §6 "suffix → cluster").
+		// Değerler Reconcile'da zaten normalise; burada yeniden normalise
+		// etmek fonksiyonu tek başına çağrıldığında da doğru tutar.
+		for _, u := range c.APIServerURLs {
+			k := strings.TrimSpace(u)
+			if n, err := NormalizeAPIServerURL(u); err == nil {
+				k = n
+			}
+			if k == "" {
+				continue
+			}
+			// v0.10.956 — küme-içi adres (https://kubernetes.default.svc, her
+			// yazımıyla: …svc:443, …svc.cluster.local) Remote Cluster'a
+			// YAZILMAZ. Argo CD iki hub'da kurulu (operatör, audit §5.6): bu
+			// adres "instance'ın KENDİ hub'ı" demek ve eşlemede instance'ın
+			// hubClusterId'sine çözülür (argocd hubs[]). Bir kayda bağlamak iki
+			// hub'dan birini yanlış seçerdi; hub'ın dış API adresi yazılır.
+			if IsInClusterAPIServerURL(k) {
+				return fmt.Errorf("apiServerUrls: %q kaydında %s yazılmaz — Argo'nun küme-içi hedefi instance'ın hub'ına çözülür (Ayarlar › Argo CD, hubs); hub'ın dış API server adresini yazın", c.Name, InClusterAPIServerURL)
+			}
+			if o, dup := apiOwner[k]; dup && o != c.Name {
+				return fmt.Errorf("apiServerUrls: %s zaten %q kaydına bağlı; bir API server adresi aynı anda tek kayda bağlanabilir", k, o)
+			}
+			apiOwner[k] = c.Name
+		}
+		if s := strings.ToLower(strings.TrimSpace(c.ArgoSuffix)); s != "" {
+			if o, dup := suffixOwner[s]; dup && o != c.Name {
+				return fmt.Errorf("argoSuffix %q zaten %q kaydında (büyük/küçük harf duyarsız); bir suffix tek cluster'a çözülmeli", c.ArgoSuffix, o)
+			}
+			suffixOwner[s] = c.Name
+		}
 		for _, v := range c.SpanClusterKeys() {
 			if o, dup := spanOwner[v]; dup && o != c.Name {
 				return fmt.Errorf("span cluster değeri %q zaten %q kaydına bağlı; bir değer aynı anda tek kayda bağlanabilir", v, o)

@@ -1996,6 +1996,13 @@ export interface ThanosClusterSnapshot {
   namespaceFilter?: string;
   insecureSkipVerify?: boolean;
   enabled: boolean;
+  /** v0.10.956 — Rollouts v2 P1.3: Kubernetes API server adresleri (Argo `dest_server`), sunucuda kanonik
+   *  (küçük harf, sondaki / yok, port yoksa :6443). Yeni sunucu hep dizi basar; eski sunucu göndermez. */
+  apiServerUrls?: string[];
+  /** v0.10.956 — Argo uygulama adının cluster son eki (tek; cluster'lar arası tekil, harf duyarsız). */
+  argoSuffix?: string;
+  /** v0.10.956 — aktif-aktif çift anahtarı (serbest metin). */
+  pairGroup?: string;
 }
 export interface ThanosSnapshot {
   clusters: ThanosClusterSnapshot[];
@@ -2016,6 +2023,12 @@ export interface ThanosClusterInput {
   namespaceFilter?: string;
   insecureSkipVerify?: boolean;
   enabled: boolean;
+  /** v0.10.956 — ANAHTAR VARSA (boş dizi dahil) gövde yetkilidir: [] ve '' temizler. Anahtarı göndermeyen
+   *  gövdede sunucu saklı listeyi ve boş metinlerin saklı değerini korur, dolu metni uygular
+   *  (thanos.ReconcileClusterSettings) — eski istemci ve eski pod'dan yüklenmiş ClustersTab satırı. */
+  apiServerUrls?: string[];
+  argoSuffix?: string;
+  pairGroup?: string;
 }
 /** Mirrors api.probeClusterSource (thanos_identity.go, v0.10.128). */
 export interface ThanosClusterProbe {
@@ -2075,6 +2088,19 @@ export interface ThanosAssignSpanClusterResponse {
 export interface ThanosLabelCheck { ok: boolean; series: number; checkedAt: string; error?: string }
 export interface ThanosSettingsInput {
   clusters: ThanosClusterInput[];
+}
+/** v0.10.956 — api.clusterSourceEntry (thanos_handlers.go): GET /api/clusters/sources viewer-güvenli kayıt.
+ *  URL / apiServerUrls / token BİLEREK yok. */
+export interface ClusterSourceEntry {
+  id: string;
+  name: string;
+  pairGroup?: string;
+  argoSuffix?: string;
+}
+/** GET /api/clusters/sources (viewer+). `clusters` = etkin adlar (eski şekil); `entries` v0.10.956 ek alanı. */
+export interface ClusterSourcesResponse {
+  clusters: string[];
+  entries?: ClusterSourceEntry[];
 }
 
 // One (cluster, namespace, pod) sample from a remote cluster's

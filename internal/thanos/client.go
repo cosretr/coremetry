@@ -86,6 +86,21 @@ type ClusterConfig struct {
 	NamespaceFilter    string `json:"namespaceFilter,omitempty"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
 	Enabled            bool   `json:"enabled"`
+	// v0.10.956 — Rollouts v2 P1.3 (docs/rollouts/v2-audit.md §3.2, karar 7).
+	// Üçü de EK ve omitempty: alan bilmeyen eski pod blobu aynı okur. P1'de
+	// okuyucu yok; P3 Argo eşleyicisi kullanacak.
+	//
+	// APIServerURLs — bu cluster'ın Kubernetes API server adresleri (Argo
+	// `dest_server` yazımları kayıttan kayda değiştiği için LİSTE;
+	// SpanClusterValue → SpanClusterValues dersinin aynısı). Kanonik biçimde
+	// saklanır (NormalizeAPIServerURL); cluster'lar arası tekil.
+	APIServerURLs []string `json:"apiServerUrls,omitempty"`
+	// ArgoSuffix — Argo uygulama adının son parçası
+	// (<prefix>-<team>-<component>-<env>-<suffix>, audit §6); cluster başına
+	// TEK, cluster'lar arası tekil (büyük/küçük harf duyarsız).
+	ArgoSuffix string `json:"argoSuffix,omitempty"`
+	// PairGroup — aktif-aktif çiftin ortak anahtarı; serbest metin, paylaşımlı.
+	PairGroup string `json:"pairGroup,omitempty"`
 }
 
 // Settings is the persisted blob: the whole cluster list, written
@@ -118,6 +133,13 @@ type ClusterSnapshot struct {
 	NamespaceFilter    string `json:"namespaceFilter,omitempty"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
 	Enabled            bool   `json:"enabled"`
+	// v0.10.956 — Rollouts v2 P1.3. apiServerUrls BİLEREK omitempty DEĞİL ve
+	// hiç nil değil: GET → PUT gidiş-dönüşünde anahtar hep bulunur, sunucu
+	// gövdeyi "alanları bilen istemci" sayar (ReconcileClusterSettings) —
+	// boş liste temizlemedir, eksik anahtar saklı değeri korur.
+	APIServerURLs []string `json:"apiServerUrls"`
+	ArgoSuffix    string   `json:"argoSuffix,omitempty"`
+	PairGroup     string   `json:"pairGroup,omitempty"`
 }
 
 // Snapshot is what GET /api/settings/thanos returns.
@@ -411,6 +433,9 @@ func (s *Service) Snapshot() Snapshot {
 			TokenRef: c.TokenRef, TokenResolved: c.TokenRef != "" && s.resolvedTokens[c.EffectiveID()] != "",
 			TokenError:         s.resolveErrs[c.EffectiveID()],
 			InsecureSkipVerify: c.InsecureSkipVerify, Enabled: c.Enabled,
+			// v0.10.956 — kopya (append(nil...) değil: boşken de [] kalsın).
+			APIServerURLs: append(make([]string, 0, len(c.APIServerURLs)), c.APIServerURLs...),
+			ArgoSuffix:    c.ArgoSuffix, PairGroup: c.PairGroup,
 		})
 	}
 	return out

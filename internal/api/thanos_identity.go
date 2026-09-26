@@ -130,18 +130,11 @@ func (s *Server) detectClusterLabel(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, out)
 		return
 	}
-	next, err := thanos.ApplyDetection(cur.Clusters[idx], d, time.Now())
+	// v0.10.956 — blob hesabı saf yardımcıda (detectionSettings; rollout
+	// alanlarının korunması thanos_identity_test.go'da pinli).
+	merged, err := detectionSettings(cur, idx, d, time.Now())
 	if err != nil {
-		out["error"] = err.Error()
-		writeJSON(w, out)
-		return
-	}
-	in := cur
-	in.Clusters = append([]thanos.ClusterConfig(nil), cur.Clusters...)
-	in.Clusters[idx] = next
-	merged, err := thanos.ReconcileClusterSettings(in, cur)
-	if err != nil {
-		out["error"] = err.Error() // teklik: aynı etiket çifti başka kayıtta
+		out["error"] = err.Error() // belirsiz algılama ya da teklik: aynı etiket çifti başka kayıtta
 		writeJSON(w, out)
 		return
 	}
@@ -281,23 +274,8 @@ func (s *Server) assignSpanClusterValue(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusNotFound, "cluster kaydı yok")
 		return
 	}
-	next := cur
-	next.Clusters = append([]thanos.ClusterConfig(nil), cur.Clusters...)
-	c := next.Clusters[idx]
-	// AÇIK değerlere ekle (SpanClusterKeys değil: Name yedeğini listeye
-	// yazmak yeniden adlandırmayı kırar — v0.10.139 dersi). Aynı değer zaten
-	// bu kayıttaysa idempotent (Reconcile tekilleştirir).
-	// Kaydın hiç açık değeri yoksa örtük Name anahtarı da AÇIKÇA korunur —
-	// aksi halde ilk atama Name eşleşmesini sessizce koparırdı (inceleme).
-	// Bilinçli operatör eylemi: yeniden adlandırmada eski ad tarihsel
-	// span'ler için açık değer olarak kalır (istenen).
-	vals := c.ExplicitSpanClusterValues()
-	if len(vals) == 0 && c.Name != "" {
-		vals = []string{c.Name}
-	}
-	c.SpanClusterValues = append(vals, in.Value)
-	next.Clusters[idx] = c
-	merged, err := thanos.ReconcileClusterSettings(next, cur)
+	c := cur.Clusters[idx]
+	merged, err := assignSpanClusterSettings(cur, idx, in.Value)
 	if err != nil {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return
@@ -335,4 +313,43 @@ func (s *Server) assignSpanClusterValue(w http.ResponseWriter, r *http.Request) 
 	s.audit(r, "settings.thanos.assign_span_cluster", "settings", in.ClusterID,
 		fmt.Sprintf("value=%q cluster=%s backfill=%s", in.Value, c.Name, backfill))
 	writeJSON(w, map[string]any{"ok": true, "clusterId": c.EffectiveID(), "clusterName": c.Name, "values": merged.Clusters[idx].SpanClusterKeys(), "backfill": backfill})
+}
+
+// detectionSettings — v0.10.956 — "Detect label" apply=1 yolunun saf blob
+// hesabı (handler'dan ayrıldı; davranış aynı). Saklı kaydın TAMAMI
+// kopyalanır, yalnız etiket alanları değişir; Reconcile teklik kapısı.
+// Rollouts v2 alanları (apiServerUrls / argoSuffix / pairGroup) kopyayla
+// aynen taşınır — thanos_identity_test.go pinler.
+func detectionSettings(cur thanos.Settings, idx int, d thanos.Detection, now time.Time) (thanos.Settings, error) {
+	next, err := thanos.ApplyDetection(cur.Clusters[idx], d, now)
+	if err != nil {
+		return thanos.Settings{}, err
+	}
+	in := cur
+	in.Clusters = append([]thanos.ClusterConfig(nil), cur.Clusters...)
+	in.Clusters[idx] = next
+	return thanos.ReconcileClusterSettings(in, cur)
+}
+
+// assignSpanClusterSettings — v0.10.956 — span değeri atamanın saf blob
+// hesabı (handler'dan ayrıldı; davranış aynı). cur yerinde değişmez;
+// Rollouts v2 alanları kopyayla aynen taşınır — thanos_identity_test.go pinler.
+func assignSpanClusterSettings(cur thanos.Settings, idx int, value string) (thanos.Settings, error) {
+	next := cur
+	next.Clusters = append([]thanos.ClusterConfig(nil), cur.Clusters...)
+	c := next.Clusters[idx]
+	// AÇIK değerlere ekle (SpanClusterKeys değil: Name yedeğini listeye
+	// yazmak yeniden adlandırmayı kırar — v0.10.139 dersi). Aynı değer zaten
+	// bu kayıttaysa idempotent (Reconcile tekilleştirir).
+	// Kaydın hiç açık değeri yoksa örtük Name anahtarı da AÇIKÇA korunur —
+	// aksi halde ilk atama Name eşleşmesini sessizce koparırdı (inceleme).
+	// Bilinçli operatör eylemi: yeniden adlandırmada eski ad tarihsel
+	// span'ler için açık değer olarak kalır (istenen).
+	vals := c.ExplicitSpanClusterValues()
+	if len(vals) == 0 && c.Name != "" {
+		vals = []string{c.Name}
+	}
+	c.SpanClusterValues = append(vals, value)
+	next.Clusters[idx] = c
+	return thanos.ReconcileClusterSettings(next, cur)
 }

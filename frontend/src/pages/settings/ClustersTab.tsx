@@ -3,7 +3,7 @@ import { fmtDateTime } from '@/lib/utils';
 import { SpanClusterValuesPanel } from './SpanClusterValuesPanel';
 import { Combobox } from '@/components/Combobox';
 import { Spinner } from '@/components/Spinner';
-import { Button, Field } from '@/components/ui';
+import { Button, Field, Row, Stack, TextareaField } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError } from './shared';
 import { useClusters } from '@/lib/queries';
@@ -45,7 +45,22 @@ interface EditRow {
   namespaceFilter: string;
   insecureSkipVerify: boolean;
   enabled: boolean;
+  // v0.10.956 — Rollouts v2 P1.3 (docs/rollouts/v2-audit.md §3.2). Liste metin
+  // olarak tutulur (satır/virgül); kaydetmede diziye çevrilir, sunucu normalise eder.
+  apiServerUrls: string;
+  argoSuffix: string;
+  pairGroup: string;
+  // v0.10.956 — inceleme (karışık sürüm): liste anahtarı PUT'a yalnız bu true
+  // iken gider. Snapshot `apiServerUrls` dizisi taşıdıysa (yeni sunucu), satır
+  // formda yeni eklendiyse ya da operatör listeyi düzenlediyse true. GET'i
+  // ESKİ pod yanıtladıysa (rolling upgrade) form saklı değeri hiç görmedi;
+  // `[]` göndermek yeni pod'da gövdeyi yetkili yapıp üç alanı silerdi.
+  apiServerUrlsKnown: boolean;
 }
+
+// v0.10.956 — apiServerUrls girdisi: virgül ya da satır sonu ayırır; kırpılır,
+// boşlar atılır. Normalise (küçük harf, :6443, sondaki /) SUNUCUDA — tek kural.
+const splitUrlList = (text: string) => text.split(/[,\n]/).map(v => v.trim()).filter(Boolean);
 
 function fromSnapshot(c: ThanosClusterSnapshot): EditRow {
   return {
@@ -61,6 +76,12 @@ function fromSnapshot(c: ThanosClusterSnapshot): EditRow {
     namespaceFilter: c.namespaceFilter || '',
     insecureSkipVerify: !!c.insecureSkipVerify,
     enabled: c.enabled,
+    // v0.10.956 — eski sunucu alanları göndermez → boş.
+    apiServerUrls: (c.apiServerUrls ?? []).join('\n'),
+    argoSuffix: c.argoSuffix || '',
+    pairGroup: c.pairGroup || '',
+    // Yeni sunucu diziyi HEP basar (boşsa []); yokluğu = eski pod yanıtladı.
+    apiServerUrlsKnown: Array.isArray(c.apiServerUrls),
   };
 }
 
@@ -69,6 +90,7 @@ const EMPTY_ROW: EditRow = {
   tokenRef: '', tokenResolved: false, tokenError: '',
   thanosLabelName: '', thanosLabelValue: '', spanClusterValue: '', spanClusterValues: '',
   namespaceFilter: '', insecureSkipVerify: false, enabled: true,
+  apiServerUrls: '', argoSuffix: '', pairGroup: '', apiServerUrlsKnown: true, // v0.10.956
 };
 
 export function ClustersTab() {
@@ -162,6 +184,15 @@ export function ClustersTab() {
           spanClusterValues: r.spanClusterValues.split(',').map(v => v.trim()).filter(Boolean),
           namespaceFilter: r.namespaceFilter.trim() || undefined,
           insecureSkipVerify: r.insecureSkipVerify, enabled: r.enabled,
+          // v0.10.956 — apiServerUrls dizi (boşsa []): sunucu anahtarın
+          // varlığını "alanları bilen istemci" sayar; boş liste/metin = temizle.
+          // Anahtarı göndermeyen eski bundle'da sunucu saklı değerleri korur.
+          // inceleme: satırı eski pod yüklediyse ve liste elle değişmediyse
+          // anahtar GİTMEZ (undefined) — sunucu saklı listeyi ve boş metinlerin
+          // saklı değerini taşır, dolu metni uygular.
+          apiServerUrls: r.apiServerUrlsKnown ? splitUrlList(r.apiServerUrls) : undefined,
+          argoSuffix: r.argoSuffix.trim(),
+          pairGroup: r.pairGroup.trim(),
         })),
       });
       setRows((next.clusters ?? []).map(fromSnapshot));
@@ -348,22 +379,47 @@ export function ClustersTab() {
                   )}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                <label style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                    Namespace filter (PromQL regex — cardinality shield)
+              <Stack gap={3}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                  <label style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
+                      Namespace filter (PromQL regex — cardinality shield)
+                    </div>
+                    <input value={r.namespaceFilter}
+                      onChange={e => patch(i, { namespaceFilter: e.target.value })}
+                      placeholder='^(app-|payments-)  ·  empty = all namespaces (top 500 pods)'
+                      style={{ width: '100%' }} />
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6, whiteSpace: 'nowrap' }}>
+                    <input type="checkbox" checked={r.insecureSkipVerify}
+                      onChange={e => patch(i, { insecureSkipVerify: e.target.checked })} />
+                    <span style={{ fontSize: 12 }}>Skip TLS verify</span>
+                  </label>
+                </div>
+                {/* v0.10.956 — Rollouts v2 P1.3 (docs/rollouts/v2-audit.md §3.2, karar 7):
+                    Argo CD eşlemesinin cluster tarafı. P1'de okuyan yok; doğrulama +
+                    normalise + tekillik sunucuda (thanos.ReconcileClusterSettings). */}
+                <TextareaField label="API server URLs (Argo CD dest_server)" rows={2}
+                  value={r.apiServerUrls}
+                  onChange={e => patch(i, { apiServerUrls: e.target.value, apiServerUrlsKnown: true })}
+                  placeholder="https://api.cluster-a.example.invalid:6443"
+                  autoComplete="off" spellCheck={false}
+                  hint="One per line or comma-separated · saved normalised (lower-case host, no trailing /, :6443 when no port) · unique across clusters · not https://kubernetes.default.svc (Argo resolves it to the instance's hub; enter the hub's external API address)" />
+                <Row gap={3} wrap>
+                  <div className="row-grow">
+                    <Field label="Argo app suffix" value={r.argoSuffix}
+                      onChange={e => patch(i, { argoSuffix: e.target.value })}
+                      placeholder="e.g. ca" autoComplete="off" spellCheck={false}
+                      hint="Last token of Argo app names (…-<env>-<suffix>) · unique" />
                   </div>
-                  <input value={r.namespaceFilter}
-                    onChange={e => patch(i, { namespaceFilter: e.target.value })}
-                    placeholder='^(app-|payments-)  ·  empty = all namespaces (top 500 pods)'
-                    style={{ width: '100%' }} />
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6, whiteSpace: 'nowrap' }}>
-                  <input type="checkbox" checked={r.insecureSkipVerify}
-                    onChange={e => patch(i, { insecureSkipVerify: e.target.checked })} />
-                  <span style={{ fontSize: 12 }}>Skip TLS verify</span>
-                </label>
-              </div>
+                  <div className="row-grow">
+                    <Field label="Pair group" value={r.pairGroup}
+                      onChange={e => patch(i, { pairGroup: e.target.value })}
+                      placeholder="e.g. prod-pair-1" autoComplete="off"
+                      hint="Free text · active-active clusters share one value" />
+                  </div>
+                </Row>
+              </Stack>
             </div>
           );
         })}

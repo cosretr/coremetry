@@ -725,15 +725,40 @@ func (s *Server) getClusterNodes(w http.ResponseWriter, r *http.Request) {
 // GET'i admin-only olduğundan bu dar, secret'sız uç ayrı; bellek-içi
 // snapshot'tan okur, cache gerekmez.
 func (s *Server) getClusterSources(w http.ResponseWriter, r *http.Request) {
-	names := []string{}
+	var snap thanos.Snapshot
 	if s.thanos != nil {
-		for _, c := range s.thanos.Snapshot().Clusters {
-			if c.Enabled {
-				names = append(names, c.Name)
-			}
-		}
+		snap = s.thanos.Snapshot()
 	}
-	writeJSON(w, map[string]any{"clusters": names})
+	writeJSON(w, clusterSourcesPayload(snap))
+}
+
+// clusterSourceEntry — v0.10.956 — Rollouts v2 P1.3 (docs/rollouts/v2-audit.md
+// §3.2): viewer yüzeylerinin pairGroup / argoSuffix'i görebileceği tek yer
+// (settings GET admin-only). `clusters` öğeleri düz ad olduğundan alan
+// oraya EKLENEMEZ; şekli bozmamak için yanına paralel `entries` dizisi.
+// Bilerek YOK: url, apiServerUrls, token/tokenRef — viewer'a altyapı adresi
+// ve secret referansı gitmez. id var: v2 okuyucuları EffectiveID ile
+// anahtarlar (audit §1.3 risk 5), ad değişse de kimlik kalır.
+type clusterSourceEntry struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	PairGroup  string `json:"pairGroup,omitempty"`
+	ArgoSuffix string `json:"argoSuffix,omitempty"`
+}
+
+// clusterSourcesPayload — v0.10.956 — saf (thanos_handlers_test.go). Yalnız
+// etkin kayıtlar; boşken iki dizi de [] (null değil — FE .map()'liyor).
+func clusterSourcesPayload(snap thanos.Snapshot) map[string]any {
+	names := []string{}
+	entries := []clusterSourceEntry{}
+	for _, c := range snap.Clusters {
+		if !c.Enabled {
+			continue
+		}
+		names = append(names, c.Name)
+		entries = append(entries, clusterSourceEntry{ID: c.ID, Name: c.Name, PairGroup: c.PairGroup, ArgoSuffix: c.ArgoSuffix})
+	}
+	return map[string]any{"clusters": names, "entries": entries}
 }
 
 // getThanosSettings returns the masked cluster list (per-cluster
@@ -800,6 +825,11 @@ func (s *Server) putThanosSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	// v0.10.128 — ID sunucu sahipli + saklı token birleştirmesi (ada VE
 	// id'ye göre: yeniden adlandırma token'ı düşürmez).
+	// v0.10.956 — Rollouts v2 alanlarının doğrulaması da burada, tek yerde:
+	// apiServerUrls normalise (NormalizeAPIServerURL), argoSuffix/pairGroup
+	// biçimi, cluster'lar arası tekillik ve eski istemci gövdesinin saklı
+	// değerleri koruması (carryRolloutFields). detect ve assign-span-cluster
+	// yazıcıları aynı Reconcile'dan geçer; hata blob'a dokunmadan 400.
 	in, err := thanos.ReconcileClusterSettings(in, cur)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -820,18 +850,41 @@ func (s *Server) putThanosSettings(w http.ResponseWriter, r *http.Request) {
 	s.thanos.ResetLabelChecks(context.WithoutCancel(r.Context()), s.store)
 	go s.thanos.LabelCheckTickPersist(context.WithoutCancel(r.Context()), s.store) // v0.10.140 — kayıt sonrası taze denetim
 	snap := s.thanos.Snapshot()
-	// Token'lar audit_log'a girmez (tempo sözleşmesi) — adlar +
-	// enabled bayrakları operatörün "kim ne zaman hangi cluster'ı
-	// ekledi/kapattı" sorusuna yeter.
+	s.audit(r, "settings.thanos.update", "settings", "thanos_clusters", thanosSettingsAuditDetails(snap))
+	writeJSON(w, snap)
+}
+
+// thanosSettingsAuditDetails — PUT'un audit ayrıntısı (saf; v0.10.956'da
+// handler'dan ayrıldı, thanos_handlers_test.go pinler).
+// Token'lar audit_log'a girmez (tempo sözleşmesi) — adlar +
+// enabled bayrakları operatörün "kim ne zaman hangi cluster'ı
+// ekledi/kapattı" sorusuna yeter.
+// v0.10.956 — Rollouts v2 P1.3: `rollouts` = alan taşıyan kayıtların
+// apiServerUrls / argoSuffix / pairGroup SON hâli ("dest_server eşlemesini
+// kim değiştirdi" sorusu). Adresler secret değil; audit admin-only.
+func thanosSettingsAuditDetails(snap thanos.Snapshot) string {
+	type rolloutFields struct {
+		Name          string   `json:"name"`
+		APIServerURLs []string `json:"apiServerUrls,omitempty"`
+		ArgoSuffix    string   `json:"argoSuffix,omitempty"`
+		PairGroup     string   `json:"pairGroup,omitempty"`
+	}
 	names := make([]string, 0, len(snap.Clusters))
+	var rollouts []rolloutFields
 	for _, c := range snap.Clusters {
 		state := "off"
 		if c.Enabled {
 			state = "on"
 		}
 		names = append(names, c.Name+"("+state+")")
+		if len(c.APIServerURLs) > 0 || c.ArgoSuffix != "" || c.PairGroup != "" {
+			rollouts = append(rollouts, rolloutFields{Name: c.Name, APIServerURLs: c.APIServerURLs, ArgoSuffix: c.ArgoSuffix, PairGroup: c.PairGroup})
+		}
 	}
-	details, _ := json.Marshal(map[string]any{"clusters": names, "count": len(names)})
-	s.audit(r, "settings.thanos.update", "settings", "thanos_clusters", string(details))
-	writeJSON(w, snap)
+	m := map[string]any{"clusters": names, "count": len(names)}
+	if len(rollouts) > 0 {
+		m["rollouts"] = rollouts
+	}
+	details, _ := json.Marshal(m)
+	return string(details)
 }
