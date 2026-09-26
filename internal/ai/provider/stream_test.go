@@ -280,6 +280,28 @@ func TestAnthropicStreamAccum(t *testing.T) {
 	}
 }
 
+// TestAnthropicStreamAccumRefusal — akış ortasında ret: akmış kısmi metin
+// cevap sayılmaz, buffered yolla aynı hata döner.
+func TestAnthropicStreamAccumRefusal(t *testing.T) {
+	a := &anthropicStreamAccum{}
+	a.feed(`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Kısmi "}}`)
+	a.feed(`data: {"type":"message_delta","delta":{"stop_reason":"refusal"},"usage":{"output_tokens":3}}`)
+	if final, _, err := a.finishAnthropic(); err == nil || final != "" || err.Error() != "anthropic: model isteği reddetti (stop_reason=refusal)" {
+		t.Fatalf("finish = (%q, %v); want refusal hatası, metin yok", final, err)
+	}
+}
+
+// TestAnthropicStreamAccumThinkingOnlyIsMarked — yalnız-düşünce akışı
+// kurtarılır ama salvage.go işaretini taşır.
+func TestAnthropicStreamAccumThinkingOnlyIsMarked(t *testing.T) {
+	a := &anthropicStreamAccum{}
+	a.feed(`data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"çalışma notu"}}`)
+	final, _, err := a.finishAnthropic()
+	if err != nil || final != SalvagedThinkingPrefix+"çalışma notu" {
+		t.Fatalf("finish = (%q, %v); want işaretli kurtarma", final, err)
+	}
+}
+
 func TestAnthropicStreamAccumErrorEvent(t *testing.T) {
 	a := &anthropicStreamAccum{}
 	a.feed(`data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`)

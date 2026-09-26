@@ -209,16 +209,30 @@ func TestParseOpenAIToolsChat_EmptyContentGuard(t *testing.T) {
 		wantCalls int
 	}{
 		{
-			name: "tool çağrısı YOK + reasoning dolu → kurtar",
+			// Düşünce kanalından gelen metin İŞARETLENİR (salvage.go v0.10.66) —
+			// explain yolunun SalvageAnswer'ıyla aynı kural.
+			name: "tool çağrısı YOK + reasoning dolu → kurtar ve işaretle",
 			body: `{"choices":[{"message":{"content":null,"reasoning":"<think>hm</think>Merhaba!"}}],` +
 				`"usage":{"prompt_tokens":1,"completion_tokens":1}}`,
-			wantText: "Merhaba!",
+			wantText: SalvagedThinkingPrefix + "Merhaba!",
 		},
 		{
-			name: "reasoning_content da aynı kurtarmayı alır",
+			name: "reasoning_content da aynı kurtarmayı ve işareti alır",
 			body: `{"choices":[{"message":{"content":"","reasoning_content":"Cevap burada."}}],` +
 				`"usage":{"prompt_tokens":1,"completion_tokens":1}}`,
-			wantText: "Cevap burada.",
+			wantText: SalvagedThinkingPrefix + "Cevap burada.",
+		},
+		{
+			name: "content'e gömülü <think> bloğu soyulur (reasoning parser'sız sunucu)",
+			body: `{"choices":[{"message":{"content":"<think>x</think>Cevap"}}],` +
+				`"usage":{"prompt_tokens":1,"completion_tokens":1}}`,
+			wantText: "Cevap",
+		},
+		{
+			name: "content yalnız düşünceyse içi kurtarılır ve işaretlenir",
+			body: `{"choices":[{"message":{"content":"<think>yalnız düşünce</think>"}}],` +
+				`"usage":{"prompt_tokens":1,"completion_tokens":1}}`,
+			wantText: SalvagedThinkingPrefix + "yalnız düşünce",
 		},
 		{
 			name: "tool çağrısı VAR + reasoning dolu → content BOŞ kalır",
@@ -237,7 +251,7 @@ func TestParseOpenAIToolsChat_EmptyContentGuard(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseOpenAIToolsChat([]byte(tc.body), labelOpenAI)
+			got, err := parseOpenAIToolsChat([]byte(tc.body), labelOpenAI, nil)
 			if err != nil {
 				t.Fatalf("parse: %v", err)
 			}
@@ -310,6 +324,9 @@ func TestChatAnthropicTools_GoldenRequestBody(t *testing.T) {
 		b["system"] != "sys" || b["model"] != "claude-x" {
 		t.Fatalf("gövde = %v", b)
 	}
+	if _, has := b["tool_choice"]; has {
+		t.Fatalf("normal turda tool_choice gönderilmez: %v", b["tool_choice"])
+	}
 	// v0.10.253 (prompt audit D1): temperature Anthropic gövdesine BİNMEZ.
 	if _, has := b["temperature"]; has {
 		t.Fatalf("anthropic tools gövdesi temperature taşıyor: %v", b)
@@ -327,6 +344,88 @@ func TestChatAnthropicTools_GoldenRequestBody(t *testing.T) {
 	}
 	if _, bad := tw["function"]; bad {
 		t.Fatalf("openai sarmalayıcısı anthropic gövdesine sızmış: %v", tw)
+	}
+}
+
+// TestChatAnthropicTools_NoToolCallsKeepsDefinitions — tur tavanı: geçmişte
+// tool_use/tool_result varken tanımlar gövdede KALIR, çağrı tool_choice
+// {type:none} ile kapanır (boş tools dizisi yerine).
+func TestChatAnthropicTools_NoToolCallsKeepsDefinitions(t *testing.T) {
+	rt := &captureRT{body: `{"content":[{"type":"text","text":"ok"}],"usage":{}}`}
+	cfg := Config{APIKey: "k", Model: "claude-x", HTTPClient: newCaptureClient(rt)}
+	if _, err := ChatAnthropicTools(context.Background(), cfg, ChatRequest{
+		System: "sys", Messages: []ChatMessage{{Role: "user", Text: "q"}},
+		Tools: demoTools(), NoToolCalls: true,
+	}); err != nil {
+		t.Fatalf("ChatAnthropicTools: %v", err)
+	}
+	b := rt.bodies[0]
+	if tools, _ := b["tools"].([]any); len(tools) != 1 {
+		t.Fatalf("tools = %v; tanımlar kalmalı", b["tools"])
+	}
+	tc, _ := b["tool_choice"].(map[string]any)
+	if tc["type"] != "none" {
+		t.Fatalf("tool_choice = %v; want {type:none}", b["tool_choice"])
+	}
+}
+
+// TestChatOpenAITools_NoToolCalls — barındırılan OpenAI boş tools dizisini
+// reddeder: tanımlar kalır + tool_choice "none". Yerel uçta bugünkü şekil.
+func TestChatOpenAITools_NoToolCalls(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		base      string
+		wantTools int
+		wantNone  bool
+	}{
+		{"barındırılan OpenAI", "", 1, true},
+		{"yerel openai-compat uç", "http://vllm.local/v1", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := &captureRT{}
+			cfg := toolsClient(rt)
+			cfg.BaseURL = tc.base
+			if _, err := ChatOpenAITools(context.Background(), cfg, ChatRequest{
+				System: "sys", Messages: []ChatMessage{{Role: "user", Text: "q"}},
+				Tools: demoTools(), NoToolCalls: true,
+			}); err != nil {
+				t.Fatalf("ChatOpenAITools: %v", err)
+			}
+			b := rt.bodies[0]
+			tools, ok := b["tools"].([]any)
+			if !ok || len(tools) != tc.wantTools {
+				t.Fatalf("tools = %v; want %d", b["tools"], tc.wantTools)
+			}
+			if got := b["tool_choice"] == "none"; got != tc.wantNone {
+				t.Fatalf("tool_choice = %v; want none=%v", b["tool_choice"], tc.wantNone)
+			}
+		})
+	}
+}
+
+// TestParseOpenAIToolsChat_AnswerJSONIsNotACall — cevaptaki JSON örneği
+// ({"name":"checkout-service",…}) sunulan bir tool adı değilse çağrı DEĞİL;
+// tool sunulmamış turda (tur tavanı) metin-çağrı ayrıştırması hiç koşmaz.
+func TestParseOpenAIToolsChat_AnswerJSONIsNotACall(t *testing.T) {
+	chatBody := func(content string) []byte {
+		b, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": content}}}, "usage": map[string]any{}})
+		return b
+	}
+	answer := "En yavaş servis:\n```json\n{\"name\": \"checkout-service\", \"p99_ms\": 1840}\n```\nÖneri: indeks."
+	for _, offered := range [][]string{{"search_traces", "resolve_entity"}, nil} {
+		got, err := parseOpenAIToolsChat(chatBody(answer), labelOpenAI, offered)
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		if len(got.ToolCalls) != 0 || !strings.Contains(got.Text, "checkout-service") {
+			t.Fatalf("offered=%v: cevap çağrıya dönüştü: calls=%+v text=%q", offered, got.ToolCalls, got.Text)
+		}
+	}
+	// Sunulan ad çitte ise çağrıdır (v0.10.545 geri düşüşü korunur).
+	call := "```json\n{\"name\":\"search_traces\",\"arguments\":{}}\n```"
+	got, err := parseOpenAIToolsChat(chatBody(call), labelOpenAI, []string{"search_traces"})
+	if err != nil || len(got.ToolCalls) != 1 || !got.ToolCallsFromText {
+		t.Fatalf("sunulan ad metinden çağrı olmalıydı: %+v err=%v", got, err)
 	}
 }
 
@@ -377,6 +476,15 @@ func TestChatAnthropicTools_BlockRoundTrip(t *testing.T) {
 	}
 	if r1["is_error"] != true || r1["content"] != "error: timeout" {
 		t.Fatalf("hata sonucu is_error taşımalı: %v", r1)
+	}
+}
+
+// TestParseAnthropicToolsChat_Refusal — stop_reason=refusal araç yolunda da
+// açık hata (buffered ParseAnthropic ile aynı cümle), boş nihai cevap değil.
+func TestParseAnthropicToolsChat_Refusal(t *testing.T) {
+	_, err := parseAnthropicToolsChat([]byte(`{"content":[],"stop_reason":"refusal","usage":{"input_tokens":5,"output_tokens":0}}`))
+	if err == nil || err.Error() != "anthropic: model isteği reddetti (stop_reason=refusal)" {
+		t.Fatalf("err = %v; want refusal hatası", err)
 	}
 }
 

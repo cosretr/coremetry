@@ -233,11 +233,12 @@ func TestStreamTextOpenAIImmediateEOFFallsBackOnce(t *testing.T) {
 // değiştiren taşıma. Anthropic ucu SABİT olduğu için httptest yerine
 // s.cli'ye enjekte ediliyor (parityRT ile aynı teknik).
 type anthropicStreamRT struct {
-	streamStatus int    // stream:true isteğine dönülecek statü (0 = 200)
-	streamCT     string // ve content-type
-	streamBody   string
-	nStream      int
-	nBuffered    int
+	streamStatus   int    // stream:true isteğine dönülecek statü (0 = 200)
+	streamCT       string // ve content-type
+	streamBody     string
+	bufferedStatus int // buffered isteğe dönülecek statü (0 = 200 + cevap)
+	nStream        int
+	nBuffered      int
 }
 
 func (a *anthropicStreamRT) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -262,6 +263,10 @@ func (a *anthropicStreamRT) RoundTrip(req *http.Request) (*http.Response, error)
 		return resp(st, a.streamCT, a.streamBody)
 	}
 	a.nBuffered++
+	if a.bufferedStatus != 0 {
+		return resp(a.bufferedStatus, "application/json",
+			`{"type":"error","error":{"type":"invalid_request_error","message":"credit balance too low"}}`)
+	}
 	return resp(200, "application/json",
 		`{"content":[{"type":"text","text":"buffered cevap"}],"usage":{"input_tokens":3,"output_tokens":2}}`)
 }
@@ -322,6 +327,27 @@ func TestStreamTextAnthropicFallbackOn400CachesVerdict(t *testing.T) {
 	}
 	if rt.nStream != 1 || rt.nBuffered != 2 {
 		t.Fatalf("önbellekli karar yoklamayı atlamalı: stream=%d buffered=%d", rt.nStream, rt.nBuffered)
+	}
+}
+
+// TestStreamTextFallbackVerdictOnlyWhenBufferedSucceeds — akış 400 alır ve
+// buffered da AYNI hatayı alırsa sorun akış desteği değil istektir (kredi,
+// bağlam, model adı): karar YAZILMAZ, sonraki çağrı akışı yeniden dener
+// (v0.9.526 JSON-merdiveni kuralının akış karşılığı).
+func TestStreamTextFallbackVerdictOnlyWhenBufferedSucceeds(t *testing.T) {
+	rt := &anthropicStreamRT{streamStatus: 400, streamCT: "application/json",
+		streamBody: `{"type":"error","error":{"message":"credit balance too low"}}`, bufferedStatus: 400}
+	s := newAnthropicService(t, rt)
+
+	if _, err := s.StreamText(context.Background(), "sys", "user", nil); err == nil {
+		t.Fatal("iki yol da 400 — hata dönmeliydi")
+	}
+	if s.streamKnownUnsupported(ProviderAnthropic, "", "claude-x") {
+		t.Fatal("buffered da başarısızken 'akış yok' kararı yazıldı")
+	}
+	_, _ = s.StreamText(context.Background(), "sys", "user", nil)
+	if rt.nStream != 2 {
+		t.Fatalf("ikinci çağrı akışı yeniden denemeliydi: stream=%d", rt.nStream)
 	}
 }
 

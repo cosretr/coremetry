@@ -262,7 +262,9 @@ func TestChatOpenAIVLLMReasoningAndAPIKeyHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("chat: %v", err)
 	}
-	if turn.Text != "Merhaba! Size nasıl yardımcı olabilirim?" {
+	// Kurtarılan düşünce kanalı işaretli döner (salvage.go v0.10.66 —
+	// explain yoluyla aynı kural; araç döngüsü de artık işaretliyor).
+	if turn.Text != provider.SalvagedThinkingPrefix+"Merhaba! Size nasıl yardımcı olabilirim?" {
 		t.Fatalf("reasoning fallback missed: %q", turn.Text)
 	}
 	if gotAuth != "Bearer sekret" || gotAPIKey != "sekret" {

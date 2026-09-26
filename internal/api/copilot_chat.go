@@ -685,9 +685,14 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			// v0.10.806 — tavan eki döngü prompt'unun SONUNA: önek aynı kalır
 			// (önbellek isabeti) ve tavan turu bağlam önsözlerini de görür
 			// (eskiden yalnız hitap + sohbet çekirdeği + ek gidiyordu).
+			// Tool TANIMLARI gider ama çağrı yasak (WithNoToolCalls): geçmiş
+			// tool_use/tool_result taşıyor — Anthropic tanımsız tool'la 400
+			// verir, barındırılan OpenAI boş tools dizisini reddeder; tanımlar
+			// kalınca önek önbelleği de korunur. Yerel uçlarda gövde bugünkü
+			// şekilde (boş dizi) kalır — provider.ChatRequest.NoToolCalls.
 			capPrompt := loopPrompt + copilot.ChatRoundCapAddendum()
 			tctx2, endTurn2 := cspan.turn(ctx, round, false) // v0.10.425 — tur tavanı da bir tur
-			turn2, err2 := s.copilot.ChatWithTools(tctx2, capPrompt, conv, nil)
+			turn2, err2 := s.copilot.ChatWithTools(copilot.WithNoToolCalls(tctx2), capPrompt, conv, specs)
 			endTurn2(turn2.InputTokens, turn2.OutputTokens, turn2.CachedTokens, err2)
 			totalIn += turn2.InputTokens
 			totalCached += turn2.CachedTokens

@@ -235,11 +235,10 @@ func containsAny(src string, spellings []string) bool {
 	return false
 }
 
-// futureLLMBodyIdioms — bugün HİÇBİR YERDE geçmeyen, ama geçtiği gün
-// provider'da geçmesi gereken deyimler. Taban denetimi bilerek
-// UYGULANMAZ: `tool_choice`'ı Coremetry bugüne kadar hiç göndermedi
-// (tool seçimi modele bırakılıyor), yani "provider'da da yok" DOĞRU
-// hâldir. Kapının işi burada ileriye dönük: biri tool zorlaması
+// futureLLMBodyIdioms — yalnız provider'da geçmesi gereken deyimler.
+// Taban denetimi bilerek UYGULANMAZ: `tool_choice` yalnız tur tavanında
+// ("none" — çağrı YASAĞI, zorlama değil) gönderiliyor; tool seçimi normal
+// turda modele bırakılıyor. Kapının işi ileriye dönük: biri tool zorlaması
 // eklerse copilot'ta değil provider'da eklesin.
 var futureLLMBodyIdioms = []string{
 	`"tool_choice"`,

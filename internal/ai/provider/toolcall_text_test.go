@@ -73,6 +73,14 @@ func TestParseTextToolCallsRejects(t *testing.T) {
 			t.Errorf("%q: ok=%v calls=%v rest=%q", in, ok, calls, rest)
 		}
 	}
+	// Açık çağrı sınırlayıcısı known dışındaki adı da kabul eder (Executor
+	// sözleşmeyle düzeltir); cevap biçimlerinde (çit, çıplak JSON) süzgeç var.
+	if calls, _, ok := ParseTextToolCalls(`<tool_call>{"name":"rm_rf","arguments":{}}</tool_call>`, known); !ok || calls[0].Name != "rm_rf" {
+		t.Fatal("açık sınırlayıcı ad süzgecine takılmamalı")
+	}
+	if _, _, ok := ParseTextToolCalls("```json\n{\"name\":\"checkout-service\",\"p99_ms\":1840}\n```", known); ok {
+		t.Fatal("çitteki cevap JSON'u sunulmayan adla çağrı sayıldı")
+	}
 	// known boş → her geçerli ad kabul (Executor "unknown tool" der)
 	if calls, _, ok := ParseTextToolCalls(`{"name":"anything","arguments":{}}`, nil); !ok || calls[0].Name != "anything" {
 		t.Fatal("known boşken ad süzgeci yok")

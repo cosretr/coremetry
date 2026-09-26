@@ -300,6 +300,7 @@ type anthropicStreamAccum struct {
 	emitted   bool
 	sawData   bool
 	errMsg    string // error olayının yükü
+	stop      string // message_delta.delta.stop_reason
 	inTokens  int
 	outTokens int
 	cached    int // v0.10.807 — cache_read_input_tokens
@@ -319,9 +320,10 @@ func (a *anthropicStreamAccum) feed(line string) string {
 			} `json:"usage"`
 		} `json:"message"`
 		Delta *struct {
-			Type     string `json:"type"`
-			Text     string `json:"text"`
-			Thinking string `json:"thinking"`
+			Type       string `json:"type"`
+			Text       string `json:"text"`
+			Thinking   string `json:"thinking"`
+			StopReason string `json:"stop_reason"`
 		} `json:"delta"`
 		Usage *struct {
 			OutputTokens int `json:"output_tokens"`
@@ -358,6 +360,9 @@ func (a *anthropicStreamAccum) feed(line string) string {
 		if ev.Usage != nil {
 			a.outTokens = ev.Usage.OutputTokens
 		}
+		if ev.Delta != nil && ev.Delta.StopReason != "" {
+			a.stop = ev.Delta.StopReason
+		}
 	case "error":
 		if ev.Error != nil {
 			a.errMsg = ev.Error.Message
@@ -370,10 +375,16 @@ func (a *anthropicStreamAccum) finishAnthropic() (final, trailing string, err er
 	if a.errMsg != "" {
 		return "", "", fmt.Errorf("anthropic stream error: %s", a.errMsg)
 	}
+	if a.stop == "refusal" {
+		// Akmış kısmi metin cevap SAYILMAZ (buffered yolla aynı cümle →
+		// ErrClassRefusal); "empty response" diye de görünmez.
+		return "", "", errAnthropicRefusal
+	}
 	final = strings.TrimSpace(a.content.String())
 	if final == "" {
-		// Yalnız-düşünce akışı — openai-compat ile aynı kurtarma duruşu.
-		final = StripThinking(strings.TrimSpace(a.reasoning.String()))
+		// Yalnız-düşünce akışı — openai-compat ile aynı kurtarma duruşu, aynı
+		// işaretle (salvage.go v0.10.66: düşünce kanalından gelen metin işaretlenir).
+		final = MarkSalvagedThinking(StripThinking(strings.TrimSpace(a.reasoning.String())))
 	}
 	if final == "" {
 		return "", "", errors.New("anthropic stream: empty response")

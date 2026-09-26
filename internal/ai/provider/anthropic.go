@@ -139,7 +139,7 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 	// çağıran salvage/yeniden deneme yerine operatöre söyler.
 	if parsed.StopReason == "refusal" {
 		return Response{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens, CachedTokens: parsed.Usage.CacheReadInputTokens},
-			errors.New("anthropic: model isteği reddetti (stop_reason=refusal)")
+			errAnthropicRefusal
 	}
 	var out strings.Builder
 	for _, c := range parsed.Content {
@@ -157,3 +157,7 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 		CachedTokens: parsed.Usage.CacheReadInputTokens, // v0.10.807
 	}, nil
 }
+
+// errAnthropicRefusal — stop_reason=refusal'ın TEK metni (buffered, akış ve
+// araç yolu aynı cümleyi döndürür; ClassifyAIErrorText "reddetti"ye bakar).
+var errAnthropicRefusal = errors.New("anthropic: model isteği reddetti (stop_reason=refusal)")

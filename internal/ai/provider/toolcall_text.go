@@ -42,7 +42,10 @@ var (
 )
 
 // ParseTextToolCalls — content içindeki çağrıları ayrıştırır. known boş
-// değilse yalnız o adlar kabul edilir (model uydurmasına karşı). ok=false:
+// değilse cevapların da kullandığı biçimlerde (``` çiti, çıplak JSON,
+// pythonic satır) yalnız o adlar kabul edilir — cevaptaki bir JSON örneği
+// çağrı sanılmasın. Açık çağrı sınırlayıcıları (<tool_call> vb.) her geçerli
+// adı kabul eder: uydurma ad Executor'da sözleşmeyle düzeltilir. ok=false:
 // hiçbir çağrı çözülemedi (çağıran metni cevap sayar).
 func ParseTextToolCalls(content string, known []string) (calls []ToolCall, rest string, ok bool) {
 	// Gemma kanal token'lı düşünce bloğu (<|channel>thought … <channel|>) —
@@ -55,11 +58,9 @@ func ParseTextToolCalls(content string, known []string) (calls []ToolCall, rest 
 	for _, k := range known {
 		allowed[k] = true
 	}
+	acceptAny := func(name string) bool { return textCallIdent.MatchString(name) }
 	accept := func(name string) bool {
-		if !textCallIdent.MatchString(name) {
-			return false
-		}
-		return len(allowed) == 0 || allowed[name]
+		return acceptAny(name) && (len(allowed) == 0 || allowed[name])
 	}
 	consumed := body
 	seq := 0
@@ -68,10 +69,14 @@ func ParseTextToolCalls(content string, known []string) (calls []ToolCall, rest 
 		calls = append(calls, ToolCall{ID: fmt.Sprintf("call_text_%d", seq), Name: name, Input: args, Raw: nil})
 	}
 	// 1-3: sınırlayıcılı segmentler
-	for _, re := range textCallDelims {
+	for i, re := range textCallDelims {
+		acc := accept // ``` çiti (son desen): cevaplardaki JSON örnekleri de bu şekli taşır
+		if i < len(textCallDelims)-1 {
+			acc = acceptAny // açık tool-call sınırlayıcısı
+		}
 		for _, m := range re.FindAllStringSubmatch(consumed, -1) {
 			inner := strings.TrimSpace(m[1])
-			if n := parseCallSegment(inner, accept, add); n > 0 {
+			if n := parseCallSegment(inner, acc, add); n > 0 {
 				consumed = strings.Replace(consumed, m[0], "", 1)
 			}
 		}

@@ -60,6 +60,19 @@ type ChatTurn struct {
 	ToolCallsFromText bool
 }
 
+type noToolCallsKey struct{}
+
+// WithNoToolCalls — tur tavanı: bu çağrıda tool tanımları gövdede kalır ama
+// model çağrı yapamaz (provider.ChatRequest.NoToolCalls).
+func WithNoToolCalls(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noToolCallsKey{}, true)
+}
+
+func noToolCallsFrom(ctx context.Context) bool {
+	v, _ := ctx.Value(noToolCallsKey{}).(bool)
+	return v
+}
+
 // ChatWithTools runs ONE model turn over the conversation with the
 // given tools available. Branches on the configured provider. No
 // ai_calls recording here — the handler records once per user
@@ -130,7 +143,7 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 // chatRequest — snapshot'ı tool'lu istek şekline çevirir. Ayarlar
 // (bütçe/temperature/model) buffered explain ile TEK kaynaktan gelir:
 // callSnapshot. 1024 paritesi tam da bunun yokluğundan doğmuştu.
-func chatRequest(req aiprov.Request, system string, msgs []ChatMessage, tools []ToolSpec) aiprov.ChatRequest {
+func chatRequest(ctx context.Context, req aiprov.Request, system string, msgs []ChatMessage, tools []ToolSpec) aiprov.ChatRequest {
 	return aiprov.ChatRequest{
 		Model:       req.Model,
 		MaxTokens:   req.MaxTokens,
@@ -139,6 +152,7 @@ func chatRequest(req aiprov.Request, system string, msgs []ChatMessage, tools []
 		System:      system,
 		Messages:    msgs,
 		Tools:       tools,
+		NoToolCalls: noToolCallsFrom(ctx),
 	}
 }
 
@@ -155,13 +169,13 @@ func chatTurnFrom(r aiprov.ChatResponse) ChatTurn {
 
 func (s *Service) chatAnthropicWithTools(ctx context.Context, system string, msgs []ChatMessage, tools []ToolSpec) (ChatTurn, error) {
 	cfg, req, _, _, _ := s.callSnapshot(ctx)
-	resp, err := aiprov.ChatAnthropicTools(ctx, cfg, chatRequest(req, system, msgs, tools))
+	resp, err := aiprov.ChatAnthropicTools(ctx, cfg, chatRequest(ctx, req, system, msgs, tools))
 	return chatTurnFrom(resp), err
 }
 
 func (s *Service) chatOpenAIWithTools(ctx context.Context, system string, msgs []ChatMessage, tools []ToolSpec) (ChatTurn, error) {
 	cfg, req, _, _, _ := s.callSnapshot(ctx)
-	resp, err := aiprov.ChatOpenAITools(ctx, cfg, chatRequest(req, system, msgs, tools))
+	resp, err := aiprov.ChatOpenAITools(ctx, cfg, chatRequest(ctx, req, system, msgs, tools))
 	return chatTurnFrom(resp), err
 }
 
@@ -177,7 +191,7 @@ func (s *Service) chatGitHubWithTools(ctx context.Context, system string, msgs [
 	}
 	cfg, req, _, _, _ := s.callSnapshot(ctx)
 	cfg.APIKey = sessTok
-	resp, err := aiprov.ChatGitHubTools(ctx, cfg, chatRequest(req, system, msgs, tools))
+	resp, err := aiprov.ChatGitHubTools(ctx, cfg, chatRequest(ctx, req, system, msgs, tools))
 	return chatTurnFrom(resp), err
 }
 

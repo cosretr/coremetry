@@ -148,9 +148,21 @@ func (s *Service) streamFallback(fe *aiprov.StreamFallbackError, provider, baseU
 			fe.Provider, fe.Status, fe.ContentType)
 		return parseOneShot(fe.Body)
 	case aiprov.VerdictFallbackCache:
+		// v0.9.526 kuralı (JSON merdiveni, provider_calls.go): karar YALNIZ alt
+		// basamak başarırsa yazılır. Aynı 400/404 buffered'da da dönüyorsa sorun
+		// akış desteği değil isteğin/hesabın/modelin kendisidir (kredi, bağlam
+		// taşması, model adı); kalıcı "akış yok" kararı sonraki her anlatımı
+		// süreç ömrü boyunca buffered'a (akışsız) mahkûm ederdi.
+		out, pt, ct, err := buffered()
+		if err != nil {
+			log.Printf("[copilot] %s %d: akış ve buffered ikisi de başarısız — akış kararı YAZILMADI (%.200s)",
+				fe.Provider, fe.Status, strings.TrimSpace(string(fe.Body)))
+			return out, pt, ct, err
+		}
 		s.markStreamUnsupported(provider, baseURL, model)
 		log.Printf("[copilot] stream unsupported, buffered fallback (%s %d: %.200s — verdict cached)",
 			fe.Provider, fe.Status, strings.TrimSpace(string(fe.Body)))
+		return out, pt, ct, nil
 	default: // VerdictFallbackOnce — geçici, karar YAZILMAZ
 		log.Printf("[copilot] stream unsupported, buffered fallback (%s %d transient: %.200s)",
 			fe.Provider, fe.Status, strings.TrimSpace(string(fe.Body)))

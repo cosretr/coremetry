@@ -89,6 +89,12 @@ type ChatRequest struct {
 	System    string
 	Messages  []ChatMessage
 	Tools     []ToolSpec
+	// NoToolCalls — tur tavanı: tool TANIMLARI gövdede kalır (geçmişteki
+	// tool_use/tool_result blokları tanımlı tool ister; önek önbelleği de
+	// korunur) ama çağrı yasaktır — Anthropic'te tool_choice {type:"none"},
+	// barındırılan OpenAI / GitHub'da tool_choice "none". Yerel openai-compat
+	// uçlarında bugünkü şekil (boş tools dizisi) korunur.
+	NoToolCalls bool
 }
 
 // ChatResponse — çözümlenmiş tur. ToolCalls doluysa çağıran onları
@@ -197,6 +203,11 @@ func buildAnthropicToolsBody(cfg Config, req ChatRequest) map[string]any {
 		"max_tokens": req.resolvedMaxTokens(), "system": req.System,
 		"messages": apiMsgs, "tools": apiTools,
 	}
+	if req.NoToolCalls && len(apiTools) > 0 {
+		// Tur tavanı: tanımlar kalır (geçmişteki tool_use/tool_result bloklarının
+		// tanımlı tool istemesi + önek önbelleği), çağrı yasak.
+		body["tool_choice"] = map[string]any{"type": "none"}
+	}
 	// temperature bilinçli olarak GÖNDERİLMEZ (anthropic.go başlığı, v0.10.253 D1).
 	return body
 }
@@ -210,7 +221,8 @@ func parseAnthropicToolsChat(respBody []byte) (ChatResponse, error) {
 			Name  string          `json:"name"`
 			Input json.RawMessage `json:"input"`
 		} `json:"content"`
-		Usage struct {
+		StopReason string `json:"stop_reason"`
+		Usage      struct {
 			InputTokens          int `json:"input_tokens"`
 			OutputTokens         int `json:"output_tokens"`
 			CacheReadInputTokens int `json:"cache_read_input_tokens"` // v0.10.807
@@ -221,6 +233,11 @@ func parseAnthropicToolsChat(respBody []byte) (ChatResponse, error) {
 	}
 	out := ChatResponse{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens,
 		CachedTokens: parsed.Usage.CacheReadInputTokens}
+	// ParseAnthropic ile aynı sözleşme (v0.10.253 D3): ret açık hatadır, boş
+	// nihai cevap değil — araç döngüsü onu "cevap" sanıp künyeyle basıyordu.
+	if parsed.StopReason == "refusal" {
+		return out, errAnthropicRefusal
+	}
 	var text strings.Builder
 	for _, c := range parsed.Content {
 		switch c.Type {
@@ -258,9 +275,11 @@ func ChatOpenAITools(ctx context.Context, cfg Config, req ChatRequest) (ChatResp
 		// Explain yoluyla aynı gerekçe (v0.8.384).
 		hdrs["api-key"] = cfg.APIKey
 	}
+	// tool_choice "none" yalnız barındırılan OpenAI'de (boş tools dizisini
+	// reddediyor); yerel uçların tool_choice desteği doğrulanmadı → bugünkü şekil.
 	return chatOpenAIShape(ctx, cfg, req,
 		strings.TrimRight(base, "/")+"/chat/completions", hdrs,
-		defaultModel, labelOpenAI)
+		defaultModel, labelOpenAI, strings.TrimRight(base, "/") == defaultBaseURL)
 }
 
 // ChatGitHubTools tek bir tool'lu Copilot turu yürütür.
@@ -278,13 +297,15 @@ func ChatGitHubTools(ctx context.Context, cfg Config, req ChatRequest) (ChatResp
 		"Editor-Version":         "vscode/1.85.0",
 		"Editor-Plugin-Version":  "copilot-chat/0.12.0",
 		"User-Agent":             "GithubCopilot/1.155.0",
-	}, defaultGitHubModel, labelGitHub)
+	}, defaultGitHubModel, labelGitHub, true)
 }
 
+// chatOpenAIShape — toolChoiceNone: uç tool_choice "none"u kabul ediyor
+// (barındırılan OpenAI / GitHub); NoToolCalls turunda tanımlar gövdede kalır.
 func chatOpenAIShape(ctx context.Context, cfg Config, req ChatRequest,
-	url string, hdrs map[string]string, fallbackModel, label string) (ChatResponse, error) {
+	url string, hdrs map[string]string, fallbackModel, label string, toolChoiceNone bool) (ChatResponse, error) {
 
-	raw, err := json.Marshal(buildOpenAIToolsBody(cfg, req, fallbackModel))
+	raw, err := json.Marshal(buildOpenAIToolsBody(cfg, req, fallbackModel, toolChoiceNone))
 	if err != nil {
 		return ChatResponse{}, err
 	}
@@ -304,12 +325,26 @@ func chatOpenAIShape(ctx context.Context, cfg Config, req ChatRequest,
 	if resp.StatusCode >= 300 {
 		return ChatResponse{}, &HTTPError{Provider: label, Status: resp.StatusCode, Body: strings.TrimSpace(string(respBody))}
 	}
-	return parseOpenAIToolsChat(respBody, label)
+	// Metin-gömülü çağrı geri düşüşü yalnız tool SUNULMUŞKEN: tur-tavanı
+	// turunda çağrı-şekilli metin cevabın parçasıdır.
+	offered := toolNames(req.Tools)
+	if req.NoToolCalls {
+		offered = nil
+	}
+	return parseOpenAIToolsChat(respBody, label, offered)
+}
+
+func toolNames(ts []ToolSpec) []string {
+	out := make([]string, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, t.Name)
+	}
+	return out
 }
 
 // buildOpenAIToolsBody — openai tools + tool_calls + role:tool mesaj
 // kodlaması. Saf.
-func buildOpenAIToolsBody(cfg Config, req ChatRequest, fallbackModel string) map[string]any {
+func buildOpenAIToolsBody(cfg Config, req ChatRequest, fallbackModel string, toolChoiceNone bool) map[string]any {
 	apiMsgs := []map[string]any{{"role": "system", "content": req.System}}
 	for _, m := range req.Messages {
 		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
@@ -346,13 +381,15 @@ func buildOpenAIToolsBody(cfg Config, req ChatRequest, fallbackModel string) map
 	}
 
 	apiTools := make([]map[string]any, 0, len(req.Tools))
-	for _, t := range req.Tools {
-		apiTools = append(apiTools, map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name": t.Name, "description": t.Description, "parameters": t.InputSchema,
-			},
-		})
+	if !req.NoToolCalls || toolChoiceNone {
+		for _, t := range req.Tools {
+			apiTools = append(apiTools, map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name": t.Name, "description": t.Description, "parameters": t.InputSchema,
+				},
+			})
+		}
 	}
 
 	body := map[string]any{
@@ -362,6 +399,11 @@ func buildOpenAIToolsBody(cfg Config, req ChatRequest, fallbackModel string) map
 		"max_tokens": req.resolvedMaxTokens(),
 		"messages":   apiMsgs, "tools": apiTools,
 	}
+	if req.NoToolCalls && len(apiTools) > 0 {
+		// Tur tavanı, barındırılan uç: boş tools dizisi burada 400 alır;
+		// tanımlar kalır, çağrı "none" ile kapanır.
+		body["tool_choice"] = "none"
+	}
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
@@ -369,7 +411,7 @@ func buildOpenAIToolsBody(cfg Config, req ChatRequest, fallbackModel string) map
 	return body
 }
 
-func parseOpenAIToolsChat(respBody []byte, label string) (ChatResponse, error) {
+func parseOpenAIToolsChat(respBody []byte, label string, offered []string) (ChatResponse, error) {
 	var parsed struct {
 		Choices []struct {
 			Message struct {
@@ -407,6 +449,21 @@ func parseOpenAIToolsChat(respBody []byte, label string) (ChatResponse, error) {
 	}
 	msg := parsed.Choices[0].Message
 	out.Text = msg.Content
+	// salvaged — metin modelin DÜŞÜNCESİNDEN geliyor; sonda işaretlenir
+	// (salvage.go v0.10.66: explain yolunun SalvageAnswer'ıyla aynı kural).
+	salvaged := false
+	// Satır-içi <think> bloğu (reasoning parser'sız sunucuda Qwen3 sınıfı)
+	// soyulur — explain yolu SalvageAnswer'ın 1. basamağıyla aynı. İçerik
+	// YALNIZ düşünceyse ve tool çağrısı yoksa 3. basamak: düşüncenin içi.
+	if strings.Contains(out.Text, "</think>") {
+		if st := StripThinking(out.Text); st != "" {
+			out.Text = st
+		} else if len(msg.ToolCalls) == 0 {
+			out.Text, salvaged = ThinkingContent(msg.Content), true
+		} else {
+			out.Text = ""
+		}
+	}
 	// Reasoning-model yedeği (v0.8.384): content boşsa cevap
 	// reasoning_content / reasoning'de yaşıyor; baştaki <think> bloğu
 	// Explain'le aynı şekilde soyulur. YALNIZ tool çağrısı YOKKEN — bir
@@ -414,9 +471,9 @@ func parseOpenAIToolsChat(respBody []byte, label string) (ChatResponse, error) {
 	// "cevap verdim" sanılıp döngü erken biter.
 	if strings.TrimSpace(out.Text) == "" && len(msg.ToolCalls) == 0 {
 		if alt := strings.TrimSpace(msg.ReasoningContent); alt != "" {
-			out.Text = StripThinking(alt)
+			out.Text, salvaged = StripThinking(alt), true
 		} else if alt := strings.TrimSpace(msg.Reasoning); alt != "" {
-			out.Text = StripThinking(alt)
+			out.Text, salvaged = StripThinking(alt), true
 		}
 	}
 	for _, rawCall := range msg.ToolCalls {
@@ -439,12 +496,18 @@ func parseOpenAIToolsChat(respBody []byte, label string) (ChatResponse, error) {
 		})
 	}
 	// v0.10.545 — metin-gömülü çağrı geri düşüşü (toolcall_text.go): yalnız
-	// yapılandırılmış tool_calls YOKKEN; ad süzgeci yok (Executor bilinmeyen adı
-	// sözleşmeyle reddeder). Kesik JSON → çağrı yok, metin cevap sayılır.
-	if len(out.ToolCalls) == 0 {
-		if calls, rest, ok := ParseTextToolCalls(out.Text, nil); ok {
+	// tool SUNULMUŞKEN ve yapılandırılmış tool_calls YOKKEN. Açık çağrı
+	// sınırlayıcısında ad süzgeci yok (Executor uydurma adı sözleşmeyle
+	// düzeltir); cevapların da kullandığı biçimlerde (``` çiti, çıplak JSON)
+	// yalnız sunulan adlar — yoksa cevaptaki {"name":"checkout-service",…}
+	// örneği çağrıya dönüşüp cevabı yiyordu. Kesik JSON → çağrı yok.
+	if len(out.ToolCalls) == 0 && len(offered) > 0 {
+		if calls, rest, ok := ParseTextToolCalls(out.Text, offered); ok {
 			out.ToolCalls, out.Text, out.ToolCallsFromText = calls, rest, true
 		}
+	}
+	if salvaged && len(out.ToolCalls) == 0 {
+		out.Text = MarkSalvagedThinking(out.Text)
 	}
 	return out, nil
 }
