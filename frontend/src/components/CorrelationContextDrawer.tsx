@@ -235,7 +235,7 @@ function Lens({
       <div
         style={{
           padding: '6px 10px',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '1px solid var(--divider)',
           fontSize: 10,
           color: 'var(--text3)',
           textTransform: 'uppercase',

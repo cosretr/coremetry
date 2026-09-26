@@ -69,12 +69,14 @@ export function DrillButton({ to, label, range, params, title, variant = 'primar
       </Link>
     );
   }
+  // v0.10.928 — satır içi bg3 + --border boyası kalktı: yüzey/kenarlık/hover
+  // artık `a.sec`ten (dolgusuz secondary). /service başlığında yanındaki
+  // "← All services" ve Pin ile aynı dil; yalnız yazı rengi varyanttan.
   return (
-    <Link to={href} title={title}
+    <Link to={href} title={title} className="sec"
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         fontSize: 12, padding: '5px 12px',
-        background: 'var(--bg3)', border: '1px solid var(--border)',
         borderRadius: 6,
         color: variant === 'subtle' ? 'var(--text)' : 'var(--accent2)',
         textDecoration: 'none', whiteSpace: 'nowrap',

@@ -106,9 +106,10 @@ function bucketWindowAt(u: uPlot, clientX: number, clientY: number) {
 const CURSOR_POINT_PX = 10;
 const CURSOR_POINT_BORDER_PX = 2;
 
+// v0.10.928 — ipucu içindeki ayraç iç çizgi: --divider.
 const PIN_TIP_HTML =
   '<div class="ov-tt-tip" style="margin-top:4px;padding-top:4px;' +
-  'border-top:1px solid var(--border);color:var(--text3);font-size:10px">' +
+  'border-top:1px solid var(--divider);color:var(--text3);font-size:10px">' +
   'Shift+tık: sabitle</div>';
 
 export type PanelData =
@@ -899,6 +900,15 @@ export function CorePanel({
         tt.style.display = 'none';
         return;
       }
+      // v0.10.928 (Y1) — el imleci eskiden KARTTAN geliyordu (silinen ikinci
+      // `.card` bloğu her karta pointer veriyordu). Kart artık sabit; yalnız
+      // ◆ tıkı olan panelde ◆ işaretinin ÜSTÜNDE pointer (tıkla isabetiyle
+      // aynı exemplarAt hesabı). Panel/kova tıkı olan panelde imleci sarmalayıcı
+      // zaten veriyor. Bant şeridi aşağıda kendi imlecini yazar.
+      if (!stacked && exemplarClickRef.current && exemplarsRef.current?.some(x => x?.length)
+        && exemplarAt(u, exemplarsRef.current, visRef.current, u.cursor.left ?? 0, u.cursor.top ?? 0)) {
+        u.over.style.cursor = 'pointer';
+      }
       // v0.10.180/182 — imleç bir bant ŞERİDİNDEYSE tooltip'in BAŞINA bölge
       // başlığı eklenir (seri satırları KALIR — tepe değeri kaybolmasın, #4).
       // Yalnız GERÇEK hover: senkron kardeşte cursor.top kaynağın y-değeridir,
@@ -1171,7 +1181,7 @@ export function CorePanel({
               ))}
               {!!menuExtra?.length && (
                 <div role="separator" style={{
-                  height: 1, background: 'var(--border)', margin: '2px 0',
+                  height: 1, background: 'var(--divider)', margin: '2px 0',
                 }} />
               )}
               <MenuItem onClick={() => { setFullscreen(f => !f); setMenuOpen(false); }}>

@@ -74,6 +74,19 @@ function failures(theme: Theme): string[] {
   need('--accent2 on --accent-bg', t('--accent2'), t('--accent-bg'), 4.5);
   need('--text-faint on --bg1 (devre dışı)', t('--text-faint'), t('--bg1'), 3);
   need('--border-strong vs --bg1 (form kenarı)', t('--border-strong'), t('--bg1'), 3);
+  // v0.10.928 (Y2) — iç ayraç BANTTA: görünür ama çerçeveden (--border)
+  // yumuşak; bg2 hover satırında/şeritlerinde kaybolmaz. Ayraç dekoratif
+  // (1.4.11 muaf) — alt sınır okunurluk, üst sınır "ikinci çerçeve olmasın".
+  const div1 = ratio(t('--divider'), t('--bg1'));
+  if (div1 < 1.15 || div1 > 1.3) out.push(`${theme}: --divider vs --bg1 = ${div1.toFixed(2)} (1.15–1.30 bandı dışında)`);
+  if (div1 >= ratio(t('--border'), t('--bg1'))) out.push(`${theme}: --divider (${div1.toFixed(2)}) --border'dan yumuşak değil`);
+  need('--divider vs --bg2 (hover satırı, bg2 şeritleri)', t('--divider'), t('--bg2'), 1.07);
+  // v0.10.928 (Y4) — dolgusuz ikincil düğmenin kenarı: düğme şekli yalnız
+  // bu çizgiden okunur; hover'daki --border-strong'dan hafif kalmalı.
+  need('--border-control vs --bg1 (ikincil kenarı)', t('--border-control'), t('--bg1'), 2);
+  need('--border-control vs --bg2 (bg2 yüzeydeki ikincil)', t('--border-control'), t('--bg2'), 1.75);
+  if (ratio(t('--border-control'), t('--bg1')) >= ratio(t('--border-strong'), t('--bg1')))
+    out.push(`${theme}: --border-control --border-strong'dan hafif değil (hover kademesi kaybolur)`);
   need('--on-accent on --accent', t('--on-accent'), t('--accent'), 4.5);
   need('--on-accent on --accent-hover', t('--on-accent'), t('--accent-hover'), 4.5);
   need('--on-accent on --err-solid', t('--on-accent'), t('--err-solid'), 4.5);
@@ -106,9 +119,36 @@ describe('token karşıtlığı (v0.10.920)', () => {
     expect(out).toEqual([]);
   });
 
+  // v0.10.928 — --divider ve --border-control koyu raya da ELLE eşlenmeli:
+  // hex tanım :root'ta bir kez çözülür, #sidebar'ın --bg1/--border
+  // remap'ini görmez. Eşlenmezse redhat rayında #e9e9e9 ayraç (~14:1) ve
+  // açık gri sb-collapse kenarı çizilir. Bant temalardan geniş: ray
+  // zemini #151515 ve --border'ı da (1.72) temalarınkinden sert.
+  it('redhat koyu kenar çubuğu: --divider / --border-control remap', () => {
+    const out: string[] = [];
+    const b1 = sidebarTok('--bg1');
+    const div = ratio(sidebarTok('--divider'), b1);
+    if (div < 1.2) out.push(`#sidebar --divider / --bg1 = ${div.toFixed(2)} (< 1.2)`);
+    if (div >= ratio(sidebarTok('--border'), b1)) out.push(`#sidebar --divider --border'dan yumuşak değil (${div.toFixed(2)})`);
+    const div2 = ratio(sidebarTok('--divider'), sidebarTok('--bg2'));
+    if (div2 < 1.05) out.push(`#sidebar --divider / --bg2 = ${div2.toFixed(2)} (< 1.05)`);
+    // sb-collapse #sidebar-header'da, yani --bg1 üstünde; bg2 (1.61) ölçülmez.
+    const ctl = ratio(sidebarTok('--border-control'), b1);
+    if (ctl < 2) out.push(`#sidebar --border-control / --bg1 = ${ctl.toFixed(2)} (< 2)`);
+    if (ctl >= ratio(sidebarTok('--border-strong'), b1)) out.push('#sidebar --border-control --border-strong\'dan hafif değil');
+    expect(out).toEqual([]);
+  });
+
   it('kapı boşa dönmüyor: tokenlar gerçekten çözüldü', () => {
     for (const theme of THEMES) expect(tok(theme, '--bg1')).toMatch(/^#[0-9a-f]{6}$/);
     expect(SIDEBAR.get('--accent2')).toBeDefined();
+    // v0.10.928 — tok() eksik temayı :root'a düşürür; yeni tokenlar her
+    // blokta KENDİ değeriyle yazılı olmalı, yoksa koyu değer ölçülür.
+    for (const name of ['--divider', '--border-control']) {
+      for (const [label, b] of [[':root', ROOT], ['light', LIGHT], ['redhat', REDHAT], ['#sidebar', SIDEBAR]] as const) {
+        expect(b.get(name), `${label} ${name} hex değil ya da yok`).toMatch(/^#[0-9a-f]{6}$/);
+      }
+    }
   });
 
   it('kanvas yedek değerleri :root ile aynı (heatmapRamp, TraceMinimap)', () => {

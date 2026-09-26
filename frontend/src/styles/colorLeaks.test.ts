@@ -218,7 +218,8 @@ describe('mK6 token tanımları', () => {
   it('v0.10.920 rol token\'ları her üç temada tanımlı', () => {
     const light = CSS.slice(CSS.indexOf('[data-theme="light"]'), CSS.indexOf('[data-theme="redhat"]'));
     const redhat = CSS.slice(CSS.indexOf('[data-theme="redhat"]'), CSS.indexOf('[data-theme="redhat"] body'));
-    for (const t of ['--accent-hover', '--focus', '--ok-bg', '--warn-bg', '--err-bg', '--info-bg', '--err-solid', '--warn-solid']) {
+    // v0.10.928 — --divider (Y2 iç ayraç) ve --border-control (Y4 ikincil kenarı) eklendi.
+    for (const t of ['--accent-hover', '--focus', '--ok-bg', '--warn-bg', '--err-bg', '--info-bg', '--err-solid', '--warn-solid', '--divider', '--border-control']) {
       expect(rootBlock.includes(`${t}:`), `${t} :root'ta yok`).toBe(true);
       expect(light.includes(`${t}:`), `${t} light'ta yok`).toBe(true);
       expect(redhat.includes(`${t}:`), `${t} redhat'te yok`).toBe(true);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useServiceRollouts7d } from '@/lib/queries/services';
@@ -131,7 +131,7 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
             <div key={r.timeUnixNs}
               style={{
                 padding: '8px 0',
-                borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                borderTop: i > 0 ? '1px solid var(--divider)' : 'none',
               }}>
               <div onClick={() => setExpanded(open ? null : i)}
                 style={{
@@ -286,6 +286,8 @@ function DeltaChip({ label, pct, suffix }: { label: string; pct: number | null; 
   );
 }
 
+const DIFF_TH: CSSProperties = { color: 'var(--text2)', fontSize: 'var(--fs-xs)', fontWeight: 600 };
+
 function ExpandedDiff({ imp }: { imp: DeployImpact }) {
   return (
     <div style={{
@@ -295,8 +297,10 @@ function ExpandedDiff({ imp }: { imp: DeployImpact }) {
     }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '4px 14px', alignItems: 'center' }}>
         <span style={{ color: 'var(--text3)' }}></span>
-        <span style={{ color: 'var(--text3)', textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.4 }}>before</span>
-        <span style={{ color: 'var(--text3)', textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.4 }}>after</span>
+        {/* v0.10.928 (Y3) — kolon başlığı, `thead th` ile aynı düz dil:
+            text2 · fs-xs · 600, büyük harf/izleme yok. */}
+        <span style={DIFF_TH}>Before</span>
+        <span style={DIFF_TH}>After</span>
 
         <span>Spans</span>
         <span className="mono">{fmtNum(imp.before.count)}</span>

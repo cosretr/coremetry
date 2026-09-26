@@ -188,9 +188,10 @@ function Inner() {
       <PageShell>
         {/* Detail bar — back · status · severity · (spacer) · actions */}
         <div className="rb-bar">
-          {/* v0.9.1320 — geri linki pencereyi + env'i taşır (navHref). */}
+          {/* v0.9.1320 — geri linki pencereyi + env'i taşır (navHref).
+              v0.10.928 — satır-içi border kalktı; çerçeve + hover a.sec'ten. */}
           <Link to={navHref('/incidents', sp.toString())} className="sec" style={{
-            padding: '5px 12px', border: '1px solid var(--border)', borderRadius: 6,
+            padding: '5px 12px', borderRadius: 6,
             fontSize: 12, color: 'var(--text)', textDecoration: 'none',
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}><ArrowLeft size={14} strokeWidth={1.75} /> Incidents</Link>
@@ -260,7 +261,7 @@ function Inner() {
               </div>
             )}
             {isAdmin && (
-              <div className="ov-card-b" style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--border)' }}>
+              <div className="ov-card-b" style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--divider)' }}>
                 <input value={note} onChange={e => setNote(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && submitNote()}
                   placeholder="Add a note (mitigation tried, hypothesis, who's on it)…"

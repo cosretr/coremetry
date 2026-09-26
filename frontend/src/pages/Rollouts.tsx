@@ -244,7 +244,7 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>En çok rollback alan workload'lar</h3>
           <table style={{ width: '100%' }}>
-            <thead><tr><th>workload</th><th style={{ textAlign: 'right' }}>rollback</th></tr></thead>
+            <thead><tr><th>Workload</th><th style={{ textAlign: 'right' }}>Rollback</th></tr></thead>
             <tbody>
               {st.topRollback.length === 0 && <tr><td colSpan={2} className="field-hint">yok</td></tr>}
               {st.topRollback.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num mono">{w.n}</td></tr>)}
@@ -254,7 +254,7 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>En çok deploy alan workload'lar</h3>
           <table style={{ width: '100%' }}>
-            <thead><tr><th>workload</th><th style={{ textAlign: 'right' }}>rollout</th></tr></thead>
+            <thead><tr><th>Workload</th><th style={{ textAlign: 'right' }}>Rollout</th></tr></thead>
             <tbody>
               {st.topDeploy.length === 0 && <tr><td colSpan={2} className="field-hint">yok</td></tr>}
               {st.topDeploy.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num mono">{w.n}</td></tr>)}
@@ -264,7 +264,7 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Gün kırılımı</h3>
           <table style={{ width: '100%' }}>
-            <thead><tr><th>gün</th><th style={{ textAlign: 'right' }}>rollout</th><th style={{ textAlign: 'right' }}>geri alınan</th></tr></thead>
+            <thead><tr><th>Gün</th><th style={{ textAlign: 'right' }}>Rollout</th><th style={{ textAlign: 'right' }}>Geri alınan</th></tr></thead>
             <tbody>
               {st.byDay.length === 0 && <tr><td colSpan={3} className="field-hint">yok</td></tr>}
               {st.byDay.map(d => <tr key={d.day}><td className="mono">{d.day}</td><td className="num mono">{d.total}</td><td className="num mono" style={d.rolledBack > 0 ? { color: 'var(--err)' } : undefined}>{d.rolledBack}</td></tr>)}

@@ -100,9 +100,11 @@ export function ServiceNeighbors({ service, since = '10m', capped = false, defau
           )}
         </DisclosureButton>
         {open && data !== undefined && (
+          // v0.10.928 — iç ayraç: `.btn-disclose.dsc-section[aria-expanded]`
+          // alt çizgisiyle aynı token (--divider); ikisi birlikte değişir.
           <span style={{
             display: 'flex', alignItems: 'center', flex: 'none',
-            paddingLeft: 4, paddingRight: 14, borderBottom: '1px solid var(--border)',
+            paddingLeft: 4, paddingRight: 14, borderBottom: '1px solid var(--divider)',
           }}>
             <Button variant="secondary" size="xs"
               title="Bypass the cached result and recompute now"

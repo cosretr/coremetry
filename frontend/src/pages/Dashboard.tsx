@@ -427,9 +427,12 @@ function Inner() {
       <Topbar title={draft.name} range={range} onRangeChange={setRange} />
       {/* Kiosk çıkışı — sidebar gizliyken tek görünür çıkış. ESC de
           çalışır (yukarıdaki dinleyici), ama görünmeyen bir kısayol tek
-          çıkış olamaz: bir TV'de kimse ESC'i bilmiyor. */}
+          çıkış olamaz: bir TV'de kimse ESC'i bilmiyor.
+          v0.10.928 — secondary dolgusuz; paneller üstünde yüzdüğü için
+          is-overlay opak zemin verir (satır-içi background hover'ı öldürürdü). */}
       {kiosk && (
         <Button variant="secondary" size="sm" onClick={() => setKiosk(false)}
+          className="is-overlay"
           title="Kiosk modundan çık (ESC)"
           style={{ position: 'fixed', top: 10, right: 12, zIndex: 'var(--z-fab)' }}>
           Kiosk'tan çık ✕

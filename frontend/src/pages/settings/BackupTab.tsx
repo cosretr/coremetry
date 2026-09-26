@@ -109,7 +109,7 @@ export function BackupTab() {
         log) — those are rebuilt from ingest.
       </div>
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginBottom: 20 }}>
+      <div style={{ borderTop: '1px solid var(--divider)', paddingTop: 16, marginBottom: 20 }}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Export</div>
         <Button variant="primary" onClick={onExport} loading={busy}>
           Download config (JSON)
@@ -125,7 +125,7 @@ export function BackupTab() {
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+      <div style={{ borderTop: '1px solid var(--divider)', paddingTop: 16 }}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Restore</div>
         <input
           type="file"
@@ -217,7 +217,7 @@ export function BackupTab() {
                   gridTemplateColumns: '180px repeat(4, 1fr)',
                   gap: 8, padding: '3px 0',
                   fontFamily: 'ui-monospace, monospace', fontSize: 11,
-                  borderBottom: '1px solid var(--bg2)',
+                  borderBottom: '1px solid var(--divider)',
                 }}>
                   <span style={{ color: 'var(--text)', fontWeight: 600 }}>{t}</span>
                   <span style={{ color: d.willAdd.length > 0 ? 'var(--ok)' : 'var(--text3)' }}

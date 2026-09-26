@@ -104,9 +104,10 @@ export function decidePinGesture(args: {
 // Pin görsel ipucu — tooltip içeriği pin süresince yeniden yazılmadığından
 // başa eklenen satır kalıcıdır; unpin sonrası ilk setCursor innerHTML'i
 // yeniden yazar ve satır kendiliğinden gider (clearPinStyle yine de siler).
+// v0.10.928 — ipucu satırının alt çizgisi iç ayraç: --divider.
 const PIN_HINT_HTML =
   '<div class="tt-pin-hint" style="display:flex;align-items:center;gap:5px;' +
-  'margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--border);' +
+  'margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--divider);' +
   'color:var(--text2);font-size:10px">\u{1F4CC} sabit — tık / Esc çözer</div>';
 
 // applyPinStyle — tooltip'i pinli moda al: fare girebilir (metin kopyalanır),

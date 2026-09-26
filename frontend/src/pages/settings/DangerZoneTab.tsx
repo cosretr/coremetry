@@ -78,7 +78,7 @@ export function DangerZoneTab() {
           Purge telemetry data…
         </Button>
       ) : (
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+        <div style={{ borderTop: '1px solid var(--divider)', paddingTop: 14 }}>
           <div style={{ fontSize: 12, marginBottom: 8 }}>
             Type <code>{CONFIRM}</code> to confirm:
           </div>

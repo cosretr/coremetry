@@ -665,7 +665,7 @@ export default function ProblemsPage() {
                         <tr>
                           <td colSpan={isAdmin ? 10 : 9} style={{
                             background: 'var(--bg1)', padding: '10px 16px',
-                            borderTop: '1px solid var(--border)',
+                            borderTop: '1px solid var(--divider)',
                           }}>
                             <SamplesPanel fingerprint={g.fingerprint} occurrences={Number(g.occurrences)} />
                           </td>

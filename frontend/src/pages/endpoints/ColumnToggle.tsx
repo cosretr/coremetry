@@ -71,7 +71,7 @@ export function ColumnToggle({ columns, visible, onChange }: {
             </label>
           ))}
           {hiddenCount > 0 && (
-            <div style={{ borderTop: '1px solid var(--border)', marginTop: 6, paddingTop: 6 }}>
+            <div style={{ borderTop: '1px solid var(--divider)', marginTop: 6, paddingTop: 6 }}>
               <Button variant="ghost" size="sm" style={{ width: '100%' }}
                 onClick={() => onChange(new Set(columns.map(c => c.id)))}>
                 Show all

@@ -525,7 +525,7 @@ function ResultTable({ result }: { result: SQLResult }) {
       {/* Meta strip — query stats, sticky cap warning. */}
       <div style={{
         background: 'var(--bg2)',
-        padding: '6px 12px', borderBottom: '1px solid var(--border)',
+        padding: '6px 12px', borderBottom: '1px solid var(--divider)',
         fontSize: 11, color: 'var(--text3)', display: 'flex', gap: 12,
         flexShrink: 0,
       }}>
@@ -553,6 +553,8 @@ function ResultTable({ result }: { result: SQLResult }) {
           gridTemplateColumns: gridTemplate,
           minWidth: 'max-content',
           background: 'var(--bg2)',
+          // v0.10.928 — başlık çizgisi `thead th` gibi --border'da kalır;
+          // meta şerit ve satır ayraçları --divider (başlık/satır hiyerarşisi).
           borderBottom: '1px solid var(--border)',
           fontFamily: 'monospace', fontSize: 11, fontWeight: 600,
           flexShrink: 0,
@@ -607,7 +609,7 @@ function ResultTable({ result }: { result: SQLResult }) {
               display: 'grid',
               gridTemplateColumns: gridTemplate,
               minWidth: 'max-content',
-              borderBottom: '1px solid var(--border)',
+              borderBottom: '1px solid var(--divider)',
               fontSize: 11, fontFamily: 'monospace',
               background: i % 2 === 0 ? 'transparent' : 'var(--bg0)',
             }}>

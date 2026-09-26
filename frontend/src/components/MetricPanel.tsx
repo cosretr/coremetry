@@ -214,6 +214,9 @@ export function MetricPanel(props: MetricPanelProps) {
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen(o => !o)}
         variant="secondary" size="sm"
+        // v0.10.928 (Y4) — ikincil artık dolgusuz; kompakt kaplamada ⋯
+        // grafiğin ÜSTÜNDE yüzüyor → opak kaçış kapısı `is-overlay`.
+        className={compact ? 'is-overlay' : undefined}
         style={{
           // Reveal on hover / focus-within / when open — Grafana-style.
           opacity: hovered || menuOpen ? 1 : 0,

@@ -334,14 +334,14 @@ function REDStrip({ row, pending, compare, onToggleCompare }: {
   compare: boolean; onToggleCompare: () => void;
 }) {
   if (pending && !row) {
-    return <Card density="tight" style={{ marginBottom: 12 }}><Spinner /></Card>;
+    return <Card style={{ marginBottom: 12 }}><Spinner /></Card>;
   }
   if (!row) {
     // Honest, and specific about WHY — the deep-link case the modal
     // learned to state in v0.9.818: the numbers come from the list read,
     // so an endpoint outside the window has none to show.
     return (
-      <Card density="tight" style={{ marginBottom: 12 }}>
+      <Card style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}>
           This endpoint has <b>no row in the selected window</b>, so its RED
           numbers and series cannot be drawn — they come from the endpoint

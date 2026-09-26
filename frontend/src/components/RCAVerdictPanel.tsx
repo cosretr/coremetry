@@ -230,7 +230,7 @@ export function RCAVerdictPanel({ v, exchangeId }: { v: RCAVerdict; exchangeId?:
       {/* ── 4. Üç güven, üç ayrı etiket ───────────────────────────── */}
       <div style={{
         display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 14, paddingTop: 10,
-        borderTop: '1px solid var(--border)', fontSize: 11.5, color: 'var(--text3)',
+        borderTop: '1px solid var(--divider)', fontSize: 11.5, color: 'var(--text3)',
       }}>
         <span title="Kalkanlardan geçmiş nihai güven — ekranda esas alınacak sayı budur">
           Güven <b style={{ color: 'var(--text2)' }}>{(v.confidence * 100).toFixed(0)}%</b>
@@ -276,7 +276,7 @@ export function RCAVerdictPanel({ v, exchangeId }: { v: RCAVerdict; exchangeId?:
           HİÇ sorulmaz (canRateVerdict). */}
       {canRateVerdict(exchangeId) && (
         <div style={{
-          marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)',
+          marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--divider)',
           display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 11.5,
           color: 'var(--text3)',
         }}>

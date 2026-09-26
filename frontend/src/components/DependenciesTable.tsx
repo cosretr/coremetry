@@ -664,7 +664,7 @@ export function DependenciesTable({
                           source the header and colgroup already use. */}
                       <td colSpan={depCols.length} style={{
                         background: 'var(--bg1)', padding: '12px 16px',
-                        borderTop: '1px solid var(--border)',
+                        borderTop: '1px solid var(--divider)',
                       }}>
                         {/* v0.8.364 — explicit ✕ affordance (pairs with
                             the page-level Esc handler on /messaging;

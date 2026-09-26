@@ -245,7 +245,7 @@ function Result({ res, showCtx, setShowCtx, kibanaHref, service }: {
           Kimlik yoksa soru HİÇ SORULMAZ (canRateVerdict). Cevabı
           kaydedemeyeceğimiz bir soruyu sormak, bu düzeltmenin ortadan
           kaldırdığı hatanın ta kendisiydi. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderTop: '1px solid var(--divider)', paddingTop: 10 }}>
         {/* v0.10.537 — paylaşılan atom (👎'de yorum kutusu); elle yazılmış kopya silindi. */}
         {canRateVerdict(res.exchangeId) && (<>
           <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>Bu analiz yararlı mıydı?</span>

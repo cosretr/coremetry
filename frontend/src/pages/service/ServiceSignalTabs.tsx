@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Pager } from '@/components/Pager';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -16,6 +16,7 @@ import { TopologyPillGraph, type PillNode, type PillEdge, type PillLevel } from 
 import { FocusedNeighborhood } from '@/components/topology/FocusedNeighborhood';
 import { parseTopologyHops, topologyHopsUrlValue } from './topologyHops';
 import { serviceHref } from '@/lib/serviceHref';
+import { Chip } from '@/components/ui'; // v0.10.928 — seviye fasetleri
 
 // Service-scoped Logs / Topology tabs — the design's tab strip beyond
 // Overview/Operations/Details. All read-only, all reuse the app-wide
@@ -46,6 +47,8 @@ function levelOf(r: LogRow): Lvl {
 }
 
 const LVL_BADGE: Record<Lvl, string> = { error: 'b-err', warn: 'b-warn', info: 'b-ok', debug: 'b-mut' };
+// Faset sayacı — eski `.ov-facet .n` tonu (Metrics.tsx ile aynı).
+const FACET_N: CSSProperties = { fontVariantNumeric: 'tabular-nums', color: 'var(--text3)', fontWeight: 600 };
 
 // v0.9.358 — histogram serisi adını levelOf ile AYNI kurallarla banda indirger;
 // iki ayrı sınıflandırıcı sürüklenirse çip ile çubuk yine ayrışırdı.
@@ -198,14 +201,17 @@ export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }
       <div className="ov-logbar">
         <input className="field" placeholder="Filter logs (message, service)…" value={searchInput}
           onChange={e => setSearchInput(e.target.value)} style={{ flex: '1 1 280px', maxWidth: 360 }} />
-        <span className={'ov-facet' + (lvl === 'all' ? ' on' : '')} onClick={() => setLvl('all')}>
-          All <span className="n">{counts.all}</span>
-        </span>
+        {/* v0.10.928 — Metrics.tsx'in v0.10.924 dönüşümünün kaçan ikizi:
+            `span.ov-facet onClick` (rol yok, tabIndex yok, klavye yok) →
+            Chip `active` (gerçek düğme, seçili hâl aria-pressed). */}
+        <Chip active={lvl === 'all'} onClick={() => setLvl('all')}>
+          All <span style={FACET_N}>{counts.all}</span>
+        </Chip>
         {LVL_ORDER.map(l => (
-          <span key={l} className={'ov-facet' + (lvl === l ? ' on' : '')} onClick={() => setLvl(l)}>
+          <Chip key={l} active={lvl === l} onClick={() => setLvl(l)}>
             <span className={`badge ${LVL_BADGE[l]}`}>{l.toUpperCase()}</span>
-            <span className="n">{counts[l]}</span>
-          </span>
+            <span style={FACET_N}>{counts[l]}</span>
+          </Chip>
         ))}
         <Link className="ov-sub" style={{ marginLeft: 'auto' }}
           to={logsHref({ window: rangeParam, service })}>Open in Logs →</Link>

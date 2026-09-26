@@ -706,3 +706,21 @@ dolgu (açık temalarda metin kahvesi renk körlüğünde kırmızıya yaklaşı
 tüm WCAG çift tablosunu artık doğrudan globals.css'ten denetliyor.
 Bileşenlerden renk çekme (adım 1), yapı sadeleştirme (adım 2), hex/ton ratchet'i (adım 3) ve
 yazı ölçeği (adım 4) ayrı onayla. Mockup: claude.ai artifact "Coremetry Sade Palet".
+
+## 2026-09-26 — Sade palet adım 2: yapı sadeleştirme (v0.10.928)
+
+**Karar (operatör: "Önerini yapalım"):** Y1 kartlar sabit — hover'da mavi kenar ve el imleci yok;
+yalnız gerçekten bir yere giden kart `CardLink` (gerçek `<a>`, hover/odakta `--border-strong`).
+Y2 iç ayırıcılar yeni `--divider` tonunda (bg1'e karşı 1,21–1,27:1; dış çerçeve `--border`
+kalır). Y3 tablo başlıkları sade: `--fs-xs` (11px; 11,5 merdivende yok), 600, `--text2`,
+büyük harf ve harf aralığı yok; küçük harfli doğal dil etiketleri cümle düzenine çekildi
+(tanımlayıcı/birim olduğu gibi). Y4 ikincil buton dolgusuz: şeffaf + `--border-control`
+(bg1'e ≥2:1), hover bg2 + `--border-strong`, basılı bg3; içeriğin ÜSTÜNDE yüzen ikinciller
+`is-overlay` ile opak.
+
+**Neden:** Rengin ve çizginin çoğu yapıyı değil gürültüyü taşıyordu: 76 statik kart
+tıklanabilir gibi davranıyordu, başlıklar büyük harfle bağırıyordu, 325 ikincil buton
+birincil kadar dolguluydu. Kapılar: `contrastTokens` iki yeni tokenı her temada ölçer,
+`paletteStep2.pin` yapıyı çiviler; `.card-tight` (hiç uygulanmamıştı) kural, prop ve çağrı
+yerleriyle birlikte kalktı.
+

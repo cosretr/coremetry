@@ -23,7 +23,7 @@ export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
       </div>
       {rows.length > 0 && (
         <table className="ev-table" aria-label="RED şimdi / taban">
-          <thead><tr><th>RED</th><th className="num">şimdi</th><th className="num">taban</th><th>Δ</th></tr></thead>
+          <thead><tr><th>RED</th><th className="num">Şimdi</th><th className="num">Taban</th><th>Δ</th></tr></thead>
           <tbody>
             {rows.map(r => (
               <tr key={r.key}>

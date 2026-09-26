@@ -361,7 +361,7 @@ function ExplainBlock({ anchor, id }: { anchor: 'problem' | 'anomaly'; id: strin
   const showPersisted = !!persisted && !verdict && !loading;
 
   return (
-    <div style={{ marginTop: 4, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+    <div style={{ marginTop: 4, paddingTop: 10, borderTop: '1px solid var(--divider)' }}>
       {prose === undefined && !loading && (
         <Button variant="secondary" size="sm" onClick={onExplain}>
           ✨ Explain

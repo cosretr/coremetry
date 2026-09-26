@@ -520,7 +520,7 @@ export function WhereTheTimeGoesSection({ refObj, from, to, env, cluster }: {
       {/* Backends: DB time at ANY depth. Separate on purpose — see the
           function comment. */}
       {d && d.backends.length > 0 && (
-        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
+        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--divider)' }}>
           <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 4 }}
             title="Database and broker time found ANYWHERE beneath this route, including inside the services above. Shown separately because that time is already counted in its parent's share — adding the two lists together would count the same milliseconds twice.">
             of which, in backends (any depth)

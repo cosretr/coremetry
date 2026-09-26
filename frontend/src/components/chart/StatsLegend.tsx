@@ -89,8 +89,11 @@ export function StatsLegend({ series, onToggle, isVisible, defaultCollapsed, sto
   const totalSum = addIdx.reduce((a, i) => a + stats[i].sum, 0);
   const totalUnit = addIdx.length ? series[addIdx[0]].unit : '';
 
-  const th: React.CSSProperties = { color: 'var(--text3)', fontWeight: 500, textAlign: 'right', padding: '2px 8px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.3px' };
-  const td: React.CSSProperties = { padding: '3px 8px', textAlign: 'right', borderTop: '1px solid var(--border)', fontVariantNumeric: 'tabular-nums', fontFamily: 'ui-monospace, monospace' };
+  // v0.10.928 — başlık tipografisi `thead th` taban kuralından (düz yazım,
+  // 600, text2, --fs-xs); burada yalnız hizalama + dolgu. Satır çizgisi iç
+  // ayraç (--divider); Toplam satırının --text3 çizgisi bilinçli, kalıyor.
+  const th: React.CSSProperties = { textAlign: 'right', padding: '2px 8px' };
+  const td: React.CSSProperties = { padding: '3px 8px', textAlign: 'right', borderTop: '1px solid var(--divider)', fontVariantNumeric: 'tabular-nums', fontFamily: 'ui-monospace, monospace' };
 
   return (
     <div style={{ marginTop: 8 }}>

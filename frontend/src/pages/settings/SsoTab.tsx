@@ -168,7 +168,9 @@ export function SSOPresetsTab() {
         {active.description}
       </div>
       <div style={{ position: 'relative' }}>
-        <Button variant="secondary" size="sm" onClick={copy}
+        {/* v0.10.928 — <pre> üstünde yüzer: dolgusuz secondary'de kod satırı
+            etiketin altından akmasın diye opak (is-overlay). */}
+        <Button variant="secondary" size="sm" onClick={copy} className="is-overlay"
           style={{ position: 'absolute', top: 8, right: 8 }}>
           {copied ? '✓ copied' : 'Copy'}
         </Button>

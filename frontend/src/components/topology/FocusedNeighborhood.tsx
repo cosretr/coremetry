@@ -449,7 +449,7 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
               cevaplıyor. Yalnız PIN'de: extHost gate'i pinnedNode'dan
               türüyor, hover hiçbir istek atmıyor. */}
           {extHost && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--divider)' }}>
               <div style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.3px', marginBottom: 4 }}>
                 EN ÇOK ÇAĞRILAN YOLLAR
               </div>

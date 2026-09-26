@@ -119,7 +119,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
       {svc && svc.services.length === 0 && <Empty icon="—" title="Bu pencerede bu entity altından span geçmedi." compact />}
       {svc && svc.services.length > 0 && (
         <table>
-          <thead><tr><th>service</th><th>pods</th><th>spans</th><th>errors</th><th>avg ms</th></tr></thead>
+          <thead><tr><th>Service</th><th>Pods</th><th>Spans</th><th>Errors</th><th>Avg ms</th></tr></thead>
           <tbody>
             {/* v0.10.857 (scale-audit) — cluster entity'sinde penceredeki her servis gelir: >100 satırda content-visibility. */}
             {svc.services.map(s => (
@@ -140,7 +140,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
           {/* v0.10.190 — namespace'siz span satırları pod adıyla eşlendi; ilan */}
           {(svc?.nsMissingRows ?? 0) > 0 && <div className="field-hint">{svc!.nsMissingRows} satır namespace'siz span'lerden (bu cluster'ın collector'ı k8s.namespace.name basmıyor) — pod adı cluster içinde tek varsayıldı.</div>}
           <table>
-            <thead><tr><th>pod</th><th>namespace</th><th>service</th><th>spans</th><th>errors</th><th>avg ms</th><th>last seen</th></tr></thead>
+            <thead><tr><th>Pod</th><th>Namespace</th><th>Service</th><th>Spans</th><th>Errors</th><th>Avg ms</th><th>Last seen</th></tr></thead>
             <tbody>
               {rows.slice(0, 200).map(r => (
                 <tr key={`${r.namespace}/${r.pod}/${r.service}`} style={rows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
@@ -167,7 +167,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
         <>
           <h3>Lifetimes ({lifetimes.length})</h3>
           <table>
-            <thead><tr><th>valid from</th><th>valid to</th><th>source</th><th>uid</th></tr></thead>
+            <thead><tr><th>Valid from</th><th>Valid to</th><th>Source</th><th>uid</th></tr></thead>
             <tbody>
               {lifetimes.map(l => (
                 <tr key={`${l.validFrom}|${l.uid ?? ''}`}>

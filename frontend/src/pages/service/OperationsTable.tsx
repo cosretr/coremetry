@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Sparkline } from '@/components/Sparkline';
 import { TrendSpark } from '@/components/TrendSpark'; // v0.10.697
@@ -256,19 +257,22 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // group_id rel C — the Raw ⇄ Normalized toggle + helper caption.
   // Rendered above EVERY state (loading / empty / populated) so the
   // operator can always flip back to raw — never trap them in a
-  // normalized-empty view with no escape. Reuses the shared <Button>
-  // atom (the v0.7.54 one-design-language rule); no hand-rolled button
+  // normalized-empty view with no escape. Reuses a shared ui/ atom
+  // (the v0.7.54 one-design-language rule); no hand-rolled button
   // styles. Viewer SEES the toggle — read-only data, no gating.
+  // v0.10.928 — seçim secondary/ghost farkıyla kodlanıyordu; dolgusuz
+  // secondary'de bu yalnız "kenarlık var" farkına iniyordu. Tek seçim →
+  // SegmentedControl (radiogroup, accent seçili).
   const modeToggle = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-      <span style={{ display: 'inline-flex', gap: 4 }}>
-        <Button variant={normalized ? 'ghost' : 'secondary'} size="sm"
-          onClick={() => onToggleNormalized(false)}
-          title="Show operations by raw span name">Raw</Button>
-        <Button variant={normalized ? 'secondary' : 'ghost'} size="sm"
-          onClick={() => onToggleNormalized(true)}
-          title="Collapse id-bearing operations into shapes (GET /users/:id)">Normalized</Button>
-      </span>
+      <SegmentedControl size="sm" aria-label="Operation names"
+        value={normalized ? 'normalized' : 'raw'}
+        onChange={v => onToggleNormalized(v === 'normalized')}
+        options={[
+          { value: 'raw', label: 'Raw', title: 'Show operations by raw span name' },
+          { value: 'normalized', label: 'Normalized',
+            title: 'Collapse id-bearing operations into shapes (GET /users/:id)' },
+        ]} />
       <span style={{ fontSize: 11, color: 'var(--text3)', maxWidth: 320, lineHeight: 1.3 }}>
         collapse id-bearing operations into shapes — <code>GET /users/:id</code>
       </span>

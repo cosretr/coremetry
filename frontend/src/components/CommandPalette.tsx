@@ -597,7 +597,7 @@ export function CommandPalette() {
           <>
             <div style={{
               padding: '14px 16px',
-              borderBottom: '1px solid var(--border)',
+              borderBottom: '1px solid var(--divider)',
               display: 'flex', alignItems: 'center', gap: 10,
               background: 'var(--bg2)',
             }}>
@@ -652,7 +652,7 @@ export function CommandPalette() {
                       }} />
                     <div style={{
                       maxHeight: 240, overflowY: 'auto',
-                      borderTop: '1px solid var(--border)',
+                      borderTop: '1px solid var(--divider)',
                     }}>
                       {suggestLoading && suggestResults.length === 0 && (
                         <div style={{ padding: 12, fontSize: 11, color: 'var(--text3)' }}>
@@ -704,7 +704,7 @@ export function CommandPalette() {
             <div style={{
               padding: '10px 16px',
               fontSize: 11, color: 'var(--text3)',
-              borderTop: '1px solid var(--border)',
+              borderTop: '1px solid var(--divider)',
               display: 'flex', justifyContent: 'space-between',
             }}>
               <span>
@@ -742,7 +742,7 @@ export function CommandPalette() {
             border: 'none', outline: 'none',
             background: 'transparent', color: 'var(--text)',
             padding: '14px 16px', fontSize: 14,
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--divider)',
           }} />
         <div id="cp-listbox" role="listbox" aria-label="Sonuçlar" style={{ overflowY: 'auto', flex: 1 }}>
           {results.length === 0 && (
@@ -797,7 +797,7 @@ export function CommandPalette() {
           ))}
         </div>
         <div style={{
-          padding: '6px 12px', borderTop: '1px solid var(--border)',
+          padding: '6px 12px', borderTop: '1px solid var(--divider)',
           fontSize: 11, color: 'var(--text3)',
           display: 'flex', gap: 16,
         }}>

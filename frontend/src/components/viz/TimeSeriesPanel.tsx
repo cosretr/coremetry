@@ -645,6 +645,8 @@ export function TimeSeriesPanel({
             })));
             if (rows.length === 0) { tip.style.opacity = '0'; return; }
 
+            // v0.10.928 — deploy/event/exemplar satırlarının alt çizgisi iç
+            // ayraç (--divider), tooltip çerçevesi --border'da kalır.
             let deployRow = '';
             if (deploys && deploys.length > 0) {
               const cursorX = u.cursor.left ?? -1;
@@ -657,7 +659,7 @@ export function TimeSeriesPanel({
               }
               if (nearestNs != null) {
                 deployRow =
-                  `<div style="display:flex;gap:8px;align-items:center;line-height:1.5;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--border)">` +
+                  `<div style="display:flex;gap:8px;align-items:center;line-height:1.5;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--divider)">` +
                     `<span style="display:inline-block;width:8px;height:8px;background:var(--purple,#a371f7);border-radius:2px;flex-shrink:0"></span>` +
                     `<span style="flex:1">deploy</span>` +
                   `</div>`;
@@ -679,7 +681,7 @@ export function TimeSeriesPanel({
                 const col = ANNOTATION_KIND_TOKEN[near.kind] ?? ANNOTATION_DEFAULT_TOKEN;
                 const txt = near.label ? `${near.kind} · ${near.label}` : near.kind;
                 eventRow =
-                  `<div style="display:flex;gap:8px;align-items:center;line-height:1.5;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--border)">` +
+                  `<div style="display:flex;gap:8px;align-items:center;line-height:1.5;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--divider)">` +
                     `<span style="display:inline-block;width:8px;height:8px;background:${col};transform:rotate(45deg);flex-shrink:0"></span>` +
                     `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px" title="${escapeHTML(txt)}">${escapeHTML(txt)}</span>` +
                   `</div>`;
@@ -711,7 +713,7 @@ export function TimeSeriesPanel({
                   : near.kind === 'otlp' ? 'var(--purple)'
                   : 'var(--accent2)';
                 exemplarRow =
-                  `<div style="display:flex;gap:8px;align-items:center;line-height:1.5;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--border)">` +
+                  `<div style="display:flex;gap:8px;align-items:center;line-height:1.5;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--divider)">` +
                     `<span style="color:${c}">◆</span>` +
                     `<span style="flex:1">${escapeHTML(near.kind)} trace ${escapeHTML(near.traceId.slice(0, 8))}… · tıkla→aç</span>` +
                   `</div>`;
@@ -1032,13 +1034,16 @@ function TimeSeriesLegend({ rows, isVisible, onToggle }: {
       {!collapsed && legendMode(rows.length) === 'table' && (
       <div style={{ overflowX: 'auto', marginTop: 4 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        {/* v0.10.928 — başlık tipografisi `thead th` taban kuralından (600,
+            text2, düz yazım). Etkisiz `<tr>` rengi/hizası silindi; sayı
+            başlıkları `th.num` ile değerlerin üstünde sağa hizalı. */}
         <thead>
-          <tr style={{ color: 'var(--text3)', textAlign: 'right' }}>
-            <th style={{ textAlign: 'left', fontWeight: 500, padding: '2px 6px' }}>Series</th>
-            <th style={{ fontWeight: 500, padding: '2px 6px' }}>Last</th>
-            <th style={{ fontWeight: 500, padding: '2px 6px' }}>Min</th>
-            <th style={{ fontWeight: 500, padding: '2px 6px' }}>Max</th>
-            <th style={{ fontWeight: 500, padding: '2px 6px' }}>Avg</th>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>Series</th>
+            <th className="num" style={{ padding: '2px 6px' }}>Last</th>
+            <th className="num" style={{ padding: '2px 6px' }}>Min</th>
+            <th className="num" style={{ padding: '2px 6px' }}>Max</th>
+            <th className="num" style={{ padding: '2px 6px' }}>Avg</th>
           </tr>
         </thead>
         <tbody>
@@ -1048,7 +1053,7 @@ function TimeSeriesLegend({ rows, isVisible, onToggle }: {
               <tr key={r.label + i}
                 {...rowKeyboard(() => onToggle(i, false))}
                 onClick={e => onToggle(i, e.ctrlKey || e.metaKey)}
-                style={{ cursor: 'pointer', opacity: on ? 1 : 0.4, borderTop: '1px solid var(--border)' }}
+                style={{ cursor: 'pointer', opacity: on ? 1 : 0.4, borderTop: '1px solid var(--divider)' }}
                 title="Click to isolate this series · Ctrl/Cmd-click to toggle">
                 <td style={{ padding: '3px 6px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: r.color, marginRight: 6, verticalAlign: 'middle' }} />

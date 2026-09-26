@@ -46,12 +46,12 @@ const TONE: Record<string, { bg: string; fg: string; text: string }> = {
 // üretiyor", "hangi namespace'te yoğunlaşmış", "ömrü belirsiz olanlar
 // hangileri" — hepsi bir sütun tıkı.
 const POD_COLS: DataTableColumn<PodRow>[] = [
-  { id: 'namespace', label: 'namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 140 },
-  { id: 'pod',       label: 'pod',       sortValue: r => r.pod,       naturalDir: 'asc', width: 260 },
-  { id: 'service',   label: 'servis',    sortValue: r => r.service,   naturalDir: 'asc', width: 170 },
-  { id: 'node',      label: 'node',      sortValue: r => r.node ?? '', naturalDir: 'asc', width: 150 },
-  { id: 'spans',     label: 'span',      sortValue: r => r.spans, numeric: true, naturalDir: 'desc', width: 90 },
-  { id: 'seen',      label: 'görülme',   sortValue: r => r.lastSeen, numeric: true, naturalDir: 'desc', width: 170 },
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 140 },
+  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', width: 260 },
+  { id: 'service',   label: 'Servis',    sortValue: r => r.service,   naturalDir: 'asc', width: 170 },
+  { id: 'node',      label: 'Node',      sortValue: r => r.node ?? '', naturalDir: 'asc', width: 150 },
+  { id: 'spans',     label: 'Span',      sortValue: r => r.spans, numeric: true, naturalDir: 'desc', width: 90 },
+  { id: 'seen',      label: 'Görülme',   sortValue: r => r.lastSeen, numeric: true, naturalDir: 'desc', width: 170 },
 ];
 
 const COVERAGE_COLS: DataTableColumn<K8sCoverageRow>[] = [
@@ -146,10 +146,10 @@ export default function AdminK8sCoveragePage() {
           <table style={{ tableLayout: 'fixed', width: '100%' }}>
             <thead>
               <tr>
-                <th>alan</th>
-                <th style={{ textAlign: 'right' }}>tam</th>
-                <th style={{ textAlign: 'right' }}>kısmi</th>
-                <th style={{ textAlign: 'right' }}>yok</th>
+                <th>Alan</th>
+                <th style={{ textAlign: 'right' }}>Tam</th>
+                <th style={{ textAlign: 'right' }}>Kısmi</th>
+                <th style={{ textAlign: 'right' }}>Yok</th>
               </tr>
             </thead>
             <tbody>

@@ -506,7 +506,7 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
               hata / boş üç hâlin hepsi çizilir (ev kuralı: boş panel yok). */}
           {showHistory && (
             <div style={{
-              borderBottom: '1px solid var(--border)', background: 'var(--bg1)',
+              borderBottom: '1px solid var(--divider)', background: 'var(--bg1)',
               maxHeight: 240, overflowY: 'auto',
             }}>
               <div style={{
@@ -652,7 +652,7 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
           {/* Composer */}
           <form
             onSubmit={e => { e.preventDefault(); submit(input); }}
-            style={{ display: 'flex', gap: 8, padding: 'var(--sp-5) var(--sp-7)', borderTop: '1px solid var(--border)' }}>
+            style={{ display: 'flex', gap: 8, padding: 'var(--sp-5) var(--sp-7)', borderTop: '1px solid var(--divider)' }}>
             {/* v0.10.664 — <textarea>: Enter gönderir, Shift+Enter yeni satır (stack
                 trace / SQL yapıştırılabilir); akarken KİLİTLİ DEĞİL — gönderim
                 mevcut akışı durdurup yeni soruyu gönderir (useChatThread). */}

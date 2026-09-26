@@ -377,7 +377,7 @@ export default function AdminStatsPage() {
                     ];
                     return (
                       <div key={`${n.host}/${i}`} style={{
-                        borderTop: i > 0 ? '1px solid var(--border)' : undefined,
+                        borderTop: i > 0 ? '1px solid var(--divider)' : undefined,
                         paddingTop: i > 0 ? 12 : 0,
                       }}>
                         <div style={{

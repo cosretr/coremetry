@@ -66,7 +66,7 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
     // saydam çizip satırın yığın bağlamına hapsediyordu.
     <div className={q.enabled ? undefined : 'qr-off'} style={{
       display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap',
-      padding: '8px 12px', borderTop: '1px solid var(--border)',
+      padding: '8px 12px', borderTop: '1px solid var(--divider)',
     }}>
       {/* Letter badge — click toggles the query on/off.
           v0.10.924 — buton bütünlüğü Faz 2: `all: unset` + satır-içi dolu

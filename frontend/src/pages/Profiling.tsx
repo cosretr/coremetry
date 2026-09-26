@@ -135,10 +135,11 @@ export default function ProfilingPage() {
           </span>
           {/* Pyroscope is the de-facto continuous-profiling tool.
               When the bundled Compose stack runs it's at port 4040;
-              the link is harmless if the operator hasn't deployed it. */}
+              the link is harmless if the operator hasn't deployed it.
+              v0.10.928 — satır-içi border kalktı; çerçeve + hover a.sec'ten. */}
           <a href={pyroscopeURL()} target="_blank" rel="noopener" className="sec"
              style={{ padding: '5px 12px', fontSize: 12, textDecoration: 'none',
-                      borderRadius: 6, border: '1px solid var(--border)',
+                      borderRadius: 6,
                       color: 'var(--accent2)',
                       display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <IconFlame size={14} /> Open Pyroscope ↗
@@ -379,8 +380,10 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   return (
     <div style={{ position: 'relative' }}>
       {/* v0.10.924 — buton bütünlüğü Faz 2: Button xs; satır-içi stil
-          yalnız konum (kod bloğunun sağ üst köşesi). */}
-      <Button variant="secondary" size="xs" onClick={onCopy}
+          yalnız konum (kod bloğunun sağ üst köşesi).
+          v0.10.928 — secondary artık dolgusuz; <pre>'nin üstünde yüzdüğü
+          için is-overlay opak zemin verir (uzun satır etiketin altından akmaz). */}
+      <Button variant="secondary" size="xs" onClick={onCopy} className="is-overlay"
         style={{ position: 'absolute', top: 6, right: 6 }}>
         {copied ? '✓ copied' : 'Copy'}
       </Button>

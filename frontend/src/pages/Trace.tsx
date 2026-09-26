@@ -1135,7 +1135,7 @@ function SharePopover({ traceId }: { traceId: string }) {
           {canShare && (
             <>
           {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--border)', margin: '14px -12px' }} />
+          <div style={{ borderTop: '1px solid var(--divider)', margin: '14px -12px' }} />
 
           {/* Public link section */}
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)',
@@ -1191,7 +1191,7 @@ function SharePopover({ traceId }: { traceId: string }) {
               hides the whole block so the popover stays
               tidy when there's nothing to manage. */}
           {shares.length > 0 && (
-            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)',
                             textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>
                 Active shares ({shares.length})
@@ -1418,7 +1418,9 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
   const sections = [...logSections, ...spanSections];
 
   return (
-    <span ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
+    // v0.10.928 — .btn-split: hover/odak eden yarı öne gelir (dolgusuz
+    // ikincil butonun koyulaşan kenarı -1px bindirmede örtülmesin).
+    <span ref={wrapRef} className="btn-split" style={{ position: 'relative', display: 'inline-flex' }}>
       {mainBtn(true)}
       <IconButton
         ref={triggerRef}
@@ -1454,7 +1456,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
           }}>
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
-            padding: '4px 10px 6px', borderBottom: '1px solid var(--border)', marginBottom: 4,
+            padding: '4px 10px 6px', borderBottom: '1px solid var(--divider)', marginBottom: 4,
           }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Hangi işlem?</span>
             {/* v0.10.568 — sunucu aday listesini 10'da kesebilir; sayıyı "tamam"
@@ -1466,7 +1468,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
           </div>
           {sections.map((sec, si) => (
             <div key={sec.title}>
-              {si > 0 && <div style={{ height: 1, background: 'var(--border)', margin: '4px 6px' }} />}
+              {si > 0 && <div style={{ height: 1, background: 'var(--divider)', margin: '4px 6px' }} />}
               <div style={{ fontSize: 10.5, color: 'var(--text3)', padding: '4px 10px 2px', letterSpacing: .3 }}>{sec.title}</div>
               {sec.items.map(({ cand, url: cu, missing: cm }) => (
                 <MenuItem

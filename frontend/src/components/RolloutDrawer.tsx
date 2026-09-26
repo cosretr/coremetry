@@ -79,7 +79,7 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
           <DrawerSection title={`Servis sağlığı — deploy öncesi/sonrası (${d.services.length})`}>
             <div className="table-wrap">
               <table style={{ width: '100%' }}>
-                <thead><tr><th>servis</th><th>sağlık</th><th style={{ textAlign: 'right' }}>hata% ö/s</th><th style={{ textAlign: 'right' }}>p99 ö/s</th><th style={{ textAlign: 'right' }}>istek ö/s</th></tr></thead>
+                <thead><tr><th>Servis</th><th>Sağlık</th><th style={{ textAlign: 'right' }}>Hata% ö/s</th><th style={{ textAlign: 'right' }}>p99 ö/s</th><th style={{ textAlign: 'right' }}>İstek ö/s</th></tr></thead>
                 <tbody>
                   {d.services.map(s => (
                     <tr key={s.service}>

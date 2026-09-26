@@ -431,7 +431,7 @@ export function DropsPanel({ drops }: { drops: SystemStats['drops'] }) {
       {pipelineTotal > 0 && (
         <div style={{
           marginTop: total > 0 ? 12 : 8, paddingTop: 8,
-          borderTop: total > 0 ? '1px solid var(--border)' : 'none',
+          borderTop: total > 0 ? '1px solid var(--divider)' : 'none',
           fontSize: 11, color: 'var(--text3)',
         }}>
           Dropped by pipeline rules (intentional): spans {fmtNum(d.spansPipeline)}
@@ -758,7 +758,7 @@ function SpoolRunbook() {
     );
   }
   return (
-    <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+    <div style={{ marginTop: 12, borderTop: '1px solid var(--divider)', paddingTop: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600 }}>Runbook</span>
         <span style={{ flex: 1 }} />

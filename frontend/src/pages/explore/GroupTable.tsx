@@ -87,7 +87,7 @@ export function deltaPct(
 // olsun en dibe indirir, yani "—" basan satırlar sıralamayı kirletmez.
 const BASE_COLS: DataTableColumn<GroupRow>[] = [
   { id: 'series',  label: 'Seri',     sortValue: r => `${r.letter} ${r.label}`, naturalDir: 'asc', width: 320 },
-  { id: 'cursor',  label: '@imleç',   numeric: true, width: 110 },
+  { id: 'cursor',  label: '@İmleç',   numeric: true, width: 110 },
   { id: 'last',    label: 'Son',      sortValue: r => r.last,    numeric: true, width: 110 },
   { id: 'min',     label: 'Min',      sortValue: r => r.min,     numeric: true, width: 110 },
   { id: 'max',     label: 'Maks',     sortValue: r => r.max,     numeric: true, width: 110 },

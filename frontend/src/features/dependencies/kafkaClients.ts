@@ -152,11 +152,11 @@ export function kafkaScopeNoteTR(scope: string | null | undefined): string | nul
 }
 
 export const KAFKA_PRODUCER_COLS = [
-  { id: 'producer_send_rate', label: 'gönd/s' },
-  { id: 'producer_error_rate', label: 'hata/s' },
-  { id: 'producer_retry_rate', label: 'yeniden/s' },
+  { id: 'producer_send_rate', label: 'Gönd/s' },
+  { id: 'producer_error_rate', label: 'Hata/s' },
+  { id: 'producer_retry_rate', label: 'Yeniden/s' },
 ] as const;
 export const KAFKA_CONSUMER_COLS = [
-  { id: 'consumer_consumed_rate', label: 'tük/s (servis)' },
-  { id: 'consumer_lag_max', label: 'lag (maks.)' },
+  { id: 'consumer_consumed_rate', label: 'Tük/s (servis)' },
+  { id: 'consumer_lag_max', label: 'Lag (maks.)' },
 ] as const;

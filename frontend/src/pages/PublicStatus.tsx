@@ -275,7 +275,7 @@ function ComponentLine({ c, first }: { c: ComponentRow; first: boolean }) {
   return (
     <div style={{
       padding: '14px 18px',
-      borderTop: first ? 'none' : '1px solid var(--border)',
+      borderTop: first ? 'none' : '1px solid var(--divider)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{
@@ -410,7 +410,7 @@ function IncidentItem({ i, first }: { i: IncidentRow; first: boolean }) {
   return (
     <div style={{
       padding: '14px 18px',
-      borderTop: first ? 'none' : '1px solid var(--border)',
+      borderTop: first ? 'none' : '1px solid var(--divider)',
     }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
         <span style={{

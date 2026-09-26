@@ -74,7 +74,10 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
     <>
       <table style={{ width: '100%', fontSize: dense ? 10.5 : 12 }}>
         <thead>
-          <tr style={{ color: 'var(--text3)', fontSize: dense ? 9.5 : 11, textAlign: 'left' }}>
+          {/* v0.10.928 (Y3) — `tr`deki renk/boyut/hiza satır-içi stili
+              silindi: `thead th` kuralı üçünü de kendisi bildirdiği için
+              hiç uygulanmıyordu (dense 9.5px başlık hiç görünmedi). */}
+          <tr>
             <th>Yol</th>
             <th className="num">Çağrı</th>
             {!dense && <th className="num">Hata %</th>}

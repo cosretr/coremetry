@@ -128,7 +128,7 @@ export function TracesResult({
               <DataTableHead dt={dt}
                 renderLabel={c => c.id.startsWith(ATTR_PREFIX)
                   ? <>
-                      <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>{c.label}</span>
+                      <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 'inherit' }}>{c.label}</span>
                       <IconButton variant="bare" size="xs"
                         tooltip="Remove column" aria-label={`Remove the ${c.label} column`}
                         onClick={e => { e.stopPropagation(); setExtraCols(extraCols.filter(x => x !== c.label)); }}

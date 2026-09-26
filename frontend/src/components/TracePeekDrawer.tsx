@@ -176,7 +176,7 @@ export function TracePeekDrawer({
             background: 'var(--bg1)', marginBottom: 12,
           }}>
             <div style={{
-              padding: '6px 10px', borderBottom: '1px solid var(--border)',
+              padding: '6px 10px', borderBottom: '1px solid var(--divider)',
               fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.4,
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>

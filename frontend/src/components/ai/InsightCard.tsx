@@ -346,8 +346,10 @@ function PivotLink({ label, href }: { label: string; href: string }) {
   return <a href={href} style={pivotStyle} target="_blank" rel="noopener noreferrer">{label}</a>;
 }
 
+// v0.10.928 — içgörüler arası ve ayak çizgileri iç ayraç: --divider
+// (dış çerçeveler --border'da kalır).
 const cardStyle: React.CSSProperties = {
-  borderTop: '1px dashed var(--border)',
+  borderTop: '1px dashed var(--divider)',
   padding: '12px 14px',
   display: 'grid',
   gap: 12,
@@ -382,7 +384,7 @@ const mutedStyle: React.CSSProperties = {
 const footStyle: React.CSSProperties = {
   display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
   fontSize: 11, color: 'var(--text3)',
-  borderTop: '1px solid var(--border)', paddingTop: 8,
+  borderTop: '1px solid var(--divider)', paddingTop: 8,
 };
 
 // Link görsel dili: ev konvansiyonu satır-içi accent rengi

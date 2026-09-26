@@ -119,7 +119,7 @@ export function KafkaClientsSection({ system, cluster, destination, range, xRang
                 })}
               </div>
               <div className="kc-grid">
-                <KafkaLastTable storageKey="msg-topic-clients-last" title="Son değer" keyLabel="servis · istemci"
+                <KafkaLastTable storageKey="msg-topic-clients-last" title="Son değer" keyLabel="Servis · istemci"
                   rows={kafkaLastRows(data.blocks, blockKeys)}
                   cols={blockKeys.map(k => ({ id: k, label: data.blocks[k].label || k }))} />
               </div>
@@ -151,9 +151,9 @@ export function KafkaClientsSection({ system, cluster, destination, range, xRang
         </LazyMount>
       </div>
       <div className="kc-grid">
-        <KafkaLastTable storageKey="deps-kafka-producers" title="Üreticiler (son değer)" keyLabel="servis"
+        <KafkaLastTable storageKey="deps-kafka-producers" title="Üreticiler (son değer)" keyLabel="Servis"
           rows={producers} cols={KAFKA_PRODUCER_COLS} />
-        <KafkaLastTable storageKey="deps-kafka-consumers" title="Tüketiciler (son değer)" keyLabel="servis · istemci"
+        <KafkaLastTable storageKey="deps-kafka-consumers" title="Tüketiciler (son değer)" keyLabel="Servis · istemci"
           rows={consumers} cols={KAFKA_CONSUMER_COLS} />
       </div>
       </>

@@ -716,9 +716,11 @@ function ExploreInner({ onSelfWrite }: {
   };
 
   // ── Query-console zone styling (unchanged visual language) ───────────────
+  // v0.10.928 — bölge ayraçları (ZONE üst çizgisi, VDIV) iç ayraç: --divider;
+  // konsolun dış çerçevesi --border'da kalır.
   const ZONE: CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-    padding: '9px 12px', borderTop: '1px solid var(--border)',
+    padding: '9px 12px', borderTop: '1px solid var(--divider)',
   };
   const ZONE_FIRST: CSSProperties = { ...ZONE, borderTop: 'none' };
   const ZONE_LABEL: CSSProperties = {
@@ -726,7 +728,7 @@ function ExploreInner({ onSelfWrite }: {
     letterSpacing: '.5px', color: 'var(--text3)', textTransform: 'uppercase',
   };
   const VDIV: CSSProperties = {
-    width: 1, alignSelf: 'stretch', background: 'var(--border)', margin: '0 2px',
+    width: 1, alignSelf: 'stretch', background: 'var(--divider)', margin: '0 2px',
   };
 
   // v0.9.562 — GİRİŞ EKRANI KALDIRILDI (operatör: "Explore'da 'hangi

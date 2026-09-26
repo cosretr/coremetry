@@ -2782,8 +2782,8 @@ function TraceHealthPanel() {
               <table style={{ width: '100%', marginTop: 6, fontSize: 11 }}>
                 <thead>
                   <tr>
-                    <th>pod</th><th style={{ textAlign: 'right' }}>kabul</th><th style={{ textAlign: 'right' }}>düşen</th>
-                    <th style={{ textAlign: 'right' }}>hata</th><th style={{ textAlign: 'right' }}>son örnek</th><th style={{ textAlign: 'right' }}>boot</th>
+                    <th>Pod</th><th style={{ textAlign: 'right' }}>Kabul</th><th style={{ textAlign: 'right' }}>Düşen</th>
+                    <th style={{ textAlign: 'right' }}>Hata</th><th style={{ textAlign: 'right' }}>Son örnek</th><th style={{ textAlign: 'right' }}>Boot</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3020,7 +3020,7 @@ function MeasurePanel() {
           {data.events.length > 0 && (
             <div className="table-wrap is-fit">
               <table style={{ tableLayout: 'fixed', width: '100%' }}>
-                <thead><tr><th>Host</th><th className="num">Uptime</th><th className="num">DelayedInserts</th><th className="num">RejectedInserts</th><th className="num">InsertedRows /sa</th><th className="num">MergedRows /sa</th><th className="num">merge/insert</th></tr></thead>
+                <thead><tr><th>Host</th><th className="num">Uptime</th><th className="num">DelayedInserts</th><th className="num">RejectedInserts</th><th className="num">InsertedRows /sa</th><th className="num">MergedRows /sa</th><th className="num">Merge/insert</th></tr></thead>
                 <tbody>
                   {data.events.map(e => (
                     <tr key={e.host}>
@@ -3812,7 +3812,7 @@ function RolloutLayerWizardPanel() {
           {/* Kapsama CLUSTER BAŞINA — bir cluster'ın collector'ı eksik basıyorsa burada görünür */}
           <div className="table-wrap" style={{ marginBottom: 8 }}>
             <table style={{ width: '100%' }}>
-              <thead><tr><th>span cluster değeri</th><th style={{ textAlign: 'right' }}>span (15 dk)</th><th style={{ textAlign: 'right' }}>örneklem</th><th style={{ textAlign: 'right' }}>replicaset</th><th style={{ textAlign: 'right' }}>image</th><th style={{ textAlign: 'right' }}>namespace</th></tr></thead>
+              <thead><tr><th>Span cluster değeri</th><th style={{ textAlign: 'right' }}>Span (15 dk)</th><th style={{ textAlign: 'right' }}>Örneklem</th><th style={{ textAlign: 'right' }}>Replicaset</th><th style={{ textAlign: 'right' }}>Image</th><th style={{ textAlign: 'right' }}>Namespace</th></tr></thead>
               <tbody>
                 {(pre.coverage ?? []).length === 0 && <tr><td colSpan={6} style={{ color: 'var(--text3)' }}>son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</td></tr>}
                 {(pre.coverage ?? []).map(c => (

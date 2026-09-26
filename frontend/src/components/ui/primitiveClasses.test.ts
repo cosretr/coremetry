@@ -196,6 +196,11 @@ describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığ
         !new RegExp(`\\.${base}\\.`).test(r.sel));
       if (baseHover.some(r => r.body.includes('background'))) continue;
       for (const r of mine) {
+        // v0.10.928 — hiçbir şey BOYAMAYAN hover kuralı (yalnız z-index /
+        // position: bitişik grupta hover edeni öne alma) kaçak değildir:
+        // arka planın kazananı yine varyantın kendi hover kuralı.
+        const paints = /(^|;|\s)(background|color|border[\w-]*|box-shadow|outline[\w-]*|opacity|filter)\s*:/.test(r.body);
+        if (!paints) continue;
         if (!r.body.includes('background')) {
           offenders.push(`${r.sel} → 'background' bildirmiyor; ${LEAK} kazanır ve dolu accent olur`);
         }

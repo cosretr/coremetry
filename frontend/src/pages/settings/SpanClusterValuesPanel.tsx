@@ -61,7 +61,7 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
               </label>
             </Row>
             <table>
-              <thead><tr><th>value</th><th className="num">spans</th><th>first seen</th><th>last seen</th><th>bound to</th><th></th></tr></thead>
+              <thead><tr><th>Value</th><th className="num">Spans</th><th>First seen</th><th>Last seen</th><th>Bound to</th><th></th></tr></thead>
               <tbody>
                 {rows.map(r => (
                   <tr key={r.value}>

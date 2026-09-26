@@ -413,9 +413,11 @@ function ServiceDetailInner() {
         )}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
           {/* v0.9.1320 — geri linki pencereyi + env'i taşır (navHref);
-              çıplak `/services` operatörü sticky pencereye düşürüyordu. */}
+              çıplak `/services` operatörü sticky pencereye düşürüyordu.
+              v0.10.928 — satır içi --border kalktı; kenarlık `a.sec`ten
+              (--border-control, hover --border-strong). */}
           <Link to={navHref('/services', searchParams.toString())} className="sec" style={{
-            padding: '5px 12px', border: '1px solid var(--border)',
+            padding: '5px 12px',
             borderRadius: 6, fontSize: 12, color: 'var(--text)', textDecoration: 'none',
           }}>← All services</Link>
           {/* Drill chips (v0.5.463) — DrillButton standardises the

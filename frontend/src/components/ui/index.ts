@@ -36,8 +36,8 @@ export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl'
 export type { TabItem } from './TabStrip';
 export type { DisclosureButtonProps } from './DisclosureButton';
 
-export { Card } from './Card';
-export type { CardProps } from './Card';
+export { Card, CardLink } from './Card'; // CardLink: v0.10.928 (Y1)
+export type { CardProps, CardLinkProps } from './Card';
 
 export { StatTile } from './StatTile';
 export type { StatTileProps } from './StatTile';

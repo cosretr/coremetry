@@ -160,7 +160,7 @@ export function ColumnManager({ cols, onAdd }: {
               <span style={{ flex: 1, textAlign: 'center' }}>Add custom column &quot;{query.trim()}&quot;</span>
             </Button>
           )}
-          <div style={{ fontSize: 10, color: 'var(--text3)', padding: '6px 8px 0', borderTop: '1px solid var(--border)', marginTop: 6 }}>
+          <div style={{ fontSize: 10, color: 'var(--text3)', padding: '6px 8px 0', borderTop: '1px solid var(--divider)', marginTop: 6 }}>
             keys from spans seen in the last 1h
           </div>
         </div>

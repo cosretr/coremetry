@@ -497,9 +497,11 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
           title={probTruncated ? 'Sayımlar görünen sayfa üzerinden — liste kırpıldı, tam envanter için aşağıdaki şeride bak' : undefined}>
           {open} open · {resolved} resolved{probTruncated ? ' (sayfada)' : ''}
         </span>
+        {/* v0.10.928 — satır-içi border kalktı: çerçeve (--border-control)
+            ve hover kenarı a.sec'ten gelsin, satır-içi değer onları ezmesin. */}
         <Link to="/alerts" className="sec" style={{
           textDecoration: 'none', padding: '5px 12px',
-          border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text)',
+          borderRadius: 6, fontSize: 12, color: 'var(--text)',
           display: 'inline-flex', alignItems: 'center', gap: 6,
         }}><IconBell /> <span>Manage alert rules</span></Link>
       </div>

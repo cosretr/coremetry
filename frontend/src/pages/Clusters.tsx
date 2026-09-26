@@ -18,11 +18,12 @@ import { MiniBar } from '@/pages/clusters/MiniBar';
 import { NamespaceCombobox } from '@/pages/clusters/NamespaceCombobox';
 import { MetricArea } from '@/pages/clusters/MetricArea';
 import { promQuote } from '@/pages/clusters/promQuote';
+import { clusterSearch } from '@/pages/clusters/clusterSearch'; // v0.10.928 (Y1)
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { TableSkeleton } from '@/components/Skeleton';
-import { Button, Card, Drawer, DrawerSection, IconButton, LinkButton } from '@/components/ui';
+import { Button, Card, CardLink, Drawer, DrawerSection, IconButton, LinkButton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum } from '@/lib/utils';
@@ -143,15 +144,8 @@ export default function ClustersPage() {
   // süzgeci). Eski ?tab= parametresi yok sayılır (v0.8.584 geçiciydi).
   const clusterParam = params.get('cluster') ?? '';
   const isDetail = clusterParam !== '';
-  const openCluster = (name: string) => setParams(prev => {
-    const next = new URLSearchParams(prev);
-    next.set('cluster', name);
-    // v0.9.17 — önceki cluster'ın sekmesi/drawer kimlikleri yeni
-    // cluster'a taşınmaz (filtre çipleri görünür+temizlenebilir
-    // olduklarından deep-link niyetine dokunulmaz).
-    for (const k of ['tab', 'section', 'pod', 'ns']) next.delete(k);
-    return next;
-  }, { replace: true });
+  // v0.10.928 (Y1) — kartı açmak artık bir link: hedef `clusterSearch`
+  // (pages/clusters/clusterSearch.ts; v0.9.17 temizliği orada).
   // v0.9.17 — v0.9.12'nin ?service='i ve ?q/?section/?ns eklendikçe
   // temizlik güncellenmemişti: geri dönüşte sızan filtre bir SONRAKİ
   // cluster'a uygulanıyor, ?ns kalıntısı drawer'ı genel görünümün
@@ -609,9 +603,11 @@ export default function ClustersPage() {
                       ? <span className="badge b-warn">degraded</span>
                       : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>;
                   return (
-                    <Card key={name}
-                      onClick={() => openCluster(name)}
-                      style={{ cursor: 'pointer' }}
+                    // v0.10.928 (Y1) — tek tıklanabilir kart gerçek link: Tab+Enter,
+                    // ⌘/orta tık yeni sekme; `replace` eski geçmiş davranışı.
+                    <CardLink key={name}
+                      to={{ search: clusterSearch(params, name) }}
+                      replace
                       header={
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                           <span style={{ fontFamily: 'ui-monospace, monospace' }}>{name}</span>
@@ -661,7 +657,7 @@ export default function ClustersPage() {
                           )}
                         </div>
                       )}
-                    </Card>
+                    </CardLink>
                   );
                 })}
               </div>
@@ -1045,7 +1041,7 @@ export default function ClustersPage() {
                     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                     gap: 14,
                   }}>
-                    <Card density="tight" header="CPU used (cores)">
+                    <Card header="CPU used (cores)">
                       <div className="mono" style={kpiVal}>
                         {d?.cpuUsedCores ? fmtCores(d.cpuUsedCores) : '—'}
                       </div>
@@ -1057,7 +1053,7 @@ export default function ClustersPage() {
                       </div>
                       <CapacityEtaLine f={d?.cpuForecast} />
                     </Card>
-                    <Card density="tight" header="Memory used">
+                    <Card header="Memory used">
                       <div className="mono" style={kpiVal}>
                         {d?.memUsedBytes ? fmtBytes(d.memUsedBytes) : '—'}
                       </div>
@@ -1068,7 +1064,7 @@ export default function ClustersPage() {
                       <CapacityEtaLine f={d?.memForecast} />
                     </Card>
                     {phaseTotal > 0 && (
-                      <Card density="tight" header="Running pods">
+                      <Card header="Running pods">
                         {/* v0.10.922 (sade palet adım 1) — K5: çalışan pod
                             sayısı normal durum; hep-yeşil KPI NÖTR. */}
                         <div className="mono" style={kpiVal}>
@@ -1086,7 +1082,7 @@ export default function ClustersPage() {
                         v0.10.922 (sade palet adım 1) — K5: 0 alarm
                         NÖTR (yeşil değil); yalnız crit/warn renkli. */}
                     {showAlerts && (
-                      <Card density="tight" header="Active alerts"
+                      <Card header="Active alerts"
                         title="Counts firing/pending ALERTS series from Prometheus. 0 also appears when the cluster has no alerting rules configured — the ALERTS metric cannot distinguish the two.">
                         <div className="mono" style={{
                           ...kpiVal,
@@ -1102,14 +1098,14 @@ export default function ClustersPage() {
                     {/* v0.9.10 — net kartları yalnız veri VARSA (alan
                         yokluğu yanlış sıfır okutmaz — probe duruşu). */}
                     {(d?.netInBps ?? 0) > 0 && (
-                      <Card density="tight" header="Net in">
+                      <Card header="Net in">
                         <div className="mono" style={kpiVal}>
                           {fmtBps(d!.netInBps!)}
                         </div>
                       </Card>
                     )}
                     {(d?.netOutBps ?? 0) > 0 && (
-                      <Card density="tight" header="Net out">
+                      <Card header="Net out">
                         <div className="mono" style={kpiVal}>
                           {fmtBps(d!.netOutBps!)}
                         </div>

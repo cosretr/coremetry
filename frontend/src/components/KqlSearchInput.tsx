@@ -378,7 +378,7 @@ export function KqlSearchInput({
         }}>
           <div style={{
             padding: '4px 10px', fontSize: 10, color: 'var(--text3)',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--divider)',
             fontFamily: 'ui-monospace, monospace',
           }}>
             {/* v0.9.955 (F4/Ö16) — başlık HANGİ soruya cevap verdiğimizi

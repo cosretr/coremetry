@@ -142,7 +142,7 @@ function TraceOpsSection({ items, onMute, canEdit }: {
       count={items.length}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 10 }}>
         {items.map((a, i) => (
-          <Card key={i} density="tight"
+          <Card key={i}
                 style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
             <Row gap={2} style={{ minWidth: 0 }}>
               {a.kind === 'new_error'
@@ -189,7 +189,7 @@ function MetricSection({ items }: { items: Problem[] | undefined }) {
       count={items.length}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 10 }}>
         {items.map(p => (
-          <Card key={p.id} density="tight">
+          <Card key={p.id}>
             <Row gap={2} style={{ marginBottom: 4 }}>
               <Badge tone={p.severity === 'critical' ? 'danger' : 'warning'} style={{ fontSize: 10 }}>
                 {p.severity.toUpperCase()}
@@ -575,7 +575,7 @@ function LogPatternsSection({ items, onMute, canEdit }: {
           // altında kalırdı (MT4 sınıfı, v0.9.869). Ad küratörlü listede
           // tekil, yani kararlı bir kimlik.
           <Fragment key={a.pattern}>
-          <Card density="tight"
+          <Card
                 style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
             <Row gap={2} style={{ minWidth: 0 }}>
               {a.kind === 'new'

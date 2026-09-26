@@ -279,7 +279,7 @@ function WatcherHistoryDrawer({ watcher, onClose }: {
       <div style={{
         display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12,
         color: 'var(--text2)', padding: '8px 0 12px',
-        borderBottom: '1px solid var(--border)', marginBottom: 14,
+        borderBottom: '1px solid var(--divider)', marginBottom: 14,
       }}>
         <span>Last 24h: <b style={{ color: 'var(--text)' }}>{watcher.fires24h} fires</b></span>
         <span>Recent: <b style={{ color: 'var(--text)' }}>{sum ? sum.notifs24h : '…'} notifications</b>

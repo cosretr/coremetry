@@ -217,7 +217,7 @@ export function LogContextModal({
                 <div key={l.id} className="lcm-row" style={{
                   gap: 6, padding: '3px 8px',
                   fontSize: 11, fontFamily: 'ui-monospace, monospace',
-                  borderBottom: '1px solid var(--bg2)',
+                  borderBottom: '1px solid var(--divider)', // v0.10.928 (Y2) — bg2 geçici yumuşak çizgisinin yerine
                   alignItems: 'baseline',
                   background: isPivot ? 'rgba(250,204,21,0.10)' : 'transparent',
                   borderLeft: isPivot ? '3px solid var(--warn, #facc15)' : '3px solid transparent',

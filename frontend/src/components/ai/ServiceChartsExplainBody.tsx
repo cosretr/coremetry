@@ -199,7 +199,7 @@ function ChartsAnswer({ data, service, fromNs, toNs, busy, onRegenerate }: {
       {/* Altbilgi — dürüstlük satırı her yanıtta. /ai bu üretimin
           kaydını (surface=explain-charts) gösterir. */}
       <div style={{
-        borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4,
+        borderTop: '1px solid var(--divider)', paddingTop: 8, marginTop: 4,
         display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
         fontSize: 10.5, color: 'var(--text3)',
       }}>
@@ -227,11 +227,11 @@ function SigRow({ label, children }: { label: string; children: React.ReactNode 
   return (
     <tr>
       <td style={{
-        padding: '4px 6px', borderBottom: '1px solid var(--border)',
+        padding: '4px 6px', borderBottom: '1px solid var(--divider)',
         verticalAlign: 'top', color: 'var(--text2)', whiteSpace: 'nowrap', width: 86,
       }}>{label}</td>
       <td style={{
-        padding: '4px 6px', borderBottom: '1px solid var(--border)',
+        padding: '4px 6px', borderBottom: '1px solid var(--divider)',
         verticalAlign: 'top', minWidth: 0,
       }}>{children}</td>
     </tr>

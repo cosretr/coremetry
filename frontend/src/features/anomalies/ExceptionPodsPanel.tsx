@@ -81,7 +81,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
                 <col className="exc-pods-c-pod" /><col className="exc-pods-c-node" /><col className="exc-pods-c-n" /><col className="exc-pods-c-t" /><col className="exc-pods-c-a" />
               </colgroup>
               <thead>
-                <tr><th>pod · cluster › namespace</th><th>node</th><th>occurrences · share</th><th>son</th><th></th></tr>
+                <tr><th>Pod · cluster › namespace</th><th>Node</th><th>Occurrences · share</th><th>Son</th><th></th></tr>
               </thead>
               <tbody>
                 {shown.map(r => {

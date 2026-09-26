@@ -37,6 +37,10 @@
          (redhat) tek piksel oynamadı; dark/light ona hizalandı. */
   --bg:  #24272b;
   --border: #41454a;
+  /* v0.10.928 (Y2) — İÇ ayraç: satır, başlık/alt şerit, menü çizgisi.
+     Dış çerçeve --border'da kalır; ayraç onun ~yarı ağırlığı
+     (bg1'e 1.15–1.30, bg2 hover satırında ≥1.07 — contrastTokens). */
+  --divider: #34383c;
   --text: #e6ebf1;
   --text2: #c2c9d1;
   --text3: #9fa5ad;  /* v0.10.920 — ≥4.56 her zeminde (bg3 dahil); v0.10.450'de yalnız bg0/bg1'de geçiyordu */
@@ -86,6 +90,10 @@
      odak halkaları) ton olarak yığılır. Sabit seçim zemini --accent-bg. */
   --accent-soft:   color-mix(in srgb, var(--accent) 16%, transparent);
   --border-strong: #6d7379;  /* v0.10.920 — form alanı kenarı ≥3:1 (WCAG 1.4.11) */
+  /* v0.10.928 (Y4) — dolgusuz ikincil düğmenin kenarı: --border (1.3–1.55)
+     dolgu kalkınca kayboluyor, --border-strong 325 düğme için fazla yüksek.
+     bg1'e ≥2.0, bg2'ye ≥1.75; hover --border-strong'a çıkar. */
+  --border-control: #51565b;
   --shadow-pop:    0 8px 24px rgba(0, 0, 0, .45);
   --shadow-sm:     0 1px 2px rgba(0, 0, 0, .25);
 
@@ -159,7 +167,7 @@
   --sp-8: 24px;  /*  1× — bölüm arası */
 
   --fs-3xs: 9px;   /*  9× */
-  --fs-2xs: 10px;  /* 28× — mikro etiket, uppercase başlık */
+  --fs-2xs: 10px;  /* 28× — mikro etiket (KPI/bölüm); tablo başlığı v0.10.928'den beri --fs-xs */
   --fs-xs:  11px;  /* 46× */
   --fs-sm:  12px;  /* 50× — gövde varsayılanı */
   --fs-md:  13px;  /* 20× — kontrol/buton metni */
@@ -225,6 +233,7 @@
   /* v0.9.990 (D7) — alias `--bg1`e sabitlendi; gerekçe :root'taki blokta. */
   --bg:  #ffffff;
   --border: #dde2e9;
+  --divider: #e6e9ef;  /* v0.10.928 (Y2) — gerekçe :root'ta */
   --text:  #212429;
   --text2: #474c54;
   --text3: #62676f;  /* v0.10.920 — ≥4.63 her zeminde (bg3 ve durum tonları dahil) */
@@ -255,6 +264,7 @@
   --teal:   #137775;
   --accent-soft:   rgba(37, 114, 222, .10);
   --border-strong: #8d939a;
+  --border-control: #b2b7be;  /* v0.10.928 (Y4) — gerekçe :root'ta */
   --shadow-pop:    0 8px 24px rgba(20, 30, 45, .14);
   --shadow-sm:     0 1px 2px rgba(20, 30, 45, .05);
 
@@ -292,6 +302,8 @@
      bu, yani operatörün ekranı bu dalgada bit-bit aynı kaldı. */
   --bg:  #ffffff;
   --border: #d2d2d2;
+  /* v0.10.928 (Y2) — PF satır çizgisi #d2d2d2'nin yarısı; bilinçli sadeleştirme. */
+  --divider: #e9e9e9;
   --text:  #151515;
   --text2: #4f5255;
   --text3: #676b70;  /* v0.10.920 — PF #6a6e73'ün fark edilmez koyusu: --bg3 ve durum tonları üzerinde 4.5 */
@@ -323,6 +335,7 @@
   --teal:   #009596;
   --accent-soft:   rgba(0, 102, 204, .08);
   --border-strong: #8a8d90;  /* PF form kenarı; #b8bbbe beyazda 1.93 idi (1.4.11 ≥3) */
+  --border-control: #b6b7b8;  /* v0.10.928 (Y4) */
   --shadow-pop:    0 8px 24px rgba(21, 21, 21, .16);
   --shadow-sm:     0 1px 2px rgba(21, 21, 21, .08);
 
@@ -355,6 +368,10 @@
   --bg3: #333333;
   --bg:  #151515;
   --border: #3c3f42;
+  /* v0.10.928 — ikisi de ELLE eşlenir: yoksa redhat'in açık değerleri koyu
+     raya miras kalır (#e9e9e9 ayraç ~14:1, açık gri sb-collapse kenarı). */
+  --divider: #2c2e30;
+  --border-control: #46494c;
   --text:  #ffffff;
   --text2: #d2d2d2;
   --text3: #989b9e;   /* v0.10.920 — koyu basamaklarda ≥4.5 */
@@ -599,8 +616,15 @@ summary:focus-visible,
     scroll-behavior: auto !important;
   }
 }
-button.sec { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
-button.sec:hover:not(:disabled) { background: var(--bg2); }
+/* v0.10.928 (Y4) — DOLGUSUZ ikincil: şeffaf zemin + --border-control
+   kenarı. Eskiden dinlenme dolgusu --bg3 ("basılı" kademesi) idi ve dark'ta
+   hover (bg2) dinlenmeden KOYU çıkıyordu. Merdiven artık doğru: dinlenme
+   şeffaf < hover bg2 + --border-strong < basılı bg3. Her :hover/:active
+   `background` YAZAR — yoksa `button:hover` (0,2,1) accent'e boyar.
+   İçeriğin ÜSTÜNDE yüzen ikinciller opak kalsın diye `.is-overlay` aşağıda. */
+button.sec { background: transparent; color: var(--text); border: 1px solid var(--border-control); transition: background .15s, border-color .15s; }
+button.sec:hover:not(:disabled) { background: var(--bg2); border-color: var(--border-strong); }
+button.sec:active:not(:disabled) { background: var(--bg3); }
 /* v0.9.1210 (operatör bildirimi) — bağlantı-düğme: `<Link className="sec">`
    DÖRT çağrı yerinde yaşıyordu ama yukarıdaki kural button-scoped —
    anchor'a sınıf SESSİZCE hiç uygulanmıyordu; "Traces → / Explore →"
@@ -609,11 +633,12 @@ button.sec:hover:not(:disabled) { background: var(--bg2); }
    yüzeyini birlikte giyer; underline yok (düğme, metin-link değil). */
 a.sec {
   display: inline-flex; align-items: center; gap: 4px;
-  background: var(--bg3); color: var(--text); border: 1px solid var(--border);
+  background: transparent; color: var(--text); border: 1px solid var(--border-control);
   border-radius: var(--radius-sm); padding: 5px 14px; font-size: 13px;
-  text-decoration: none; transition: background .15s;
+  text-decoration: none; transition: background .15s, border-color .15s;
 }
-a.sec:hover { background: var(--bg2); }
+a.sec:hover { background: var(--bg2); border-color: var(--border-strong); }
+a.sec:active { background: var(--bg3); }
 /* a.accent — `.sec` ikizinin accent kardeşi (v0.9.1372).
    v0.9.1210'un dersi bir varyant sonra aynen tekrarlanacaktı: `.accent`
    yalnız `button.accent` olarak tanımlıydı, dolayısıyla bir <Link>'e
@@ -755,8 +780,11 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
 .btn-icon.ib-sm { width: 24px; height: 24px; font-size: 12px; }
 .btn-icon.ib-md { width: 28px; height: 28px; font-size: 13px; }
 .btn-icon.ib-ghost:hover:not(:disabled) { background: var(--bg2); color: var(--text); }
-.btn-icon.ib-sec { background: var(--bg3); color: var(--text); border-color: var(--border); }
-.btn-icon.ib-sec:hover:not(:disabled) { background: var(--bg2); }
+/* v0.10.928 (Y4) — `button.sec` ile aynı dolgusuz dil. `.btn-icon.active`in
+   ÜSTÜNDE kalmalı: ikisi de (0,2,0), açık anahtarın tint'ini sıra kazandırır. */
+.btn-icon.ib-sec { background: transparent; color: var(--text); border-color: var(--border-control); }
+.btn-icon.ib-sec:hover:not(:disabled) { background: var(--bg2); border-color: var(--border-strong); }
+.btn-icon.ib-sec:active:not(:disabled) { background: var(--bg3); }
 /* `bare` is the honest replacement for `all: unset`: no chrome at all,
    but the focus ring and a colour hover survive. */
 /* `background` here is NOT decoration — it is the fix for v0.9.895.
@@ -811,6 +839,15 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
 .btn-icon.active { color: var(--accent2); background: var(--accent-bg); border-color: var(--accent-border); }
 /* v0.10.924 — açık anahtar hover'da tint'ini kaybetmesin (`.ib-sec:hover` 0,4,0). */
 .btn-icon.active:hover:not(:disabled) { background: var(--accent-bg); }
+/* v0.10.928 (Y4) — `.ib-sec:hover` artık kenarı da --border-strong'a çekiyor;
+   açık ikincil anahtar (MetricQueryEditor, QueryRow) accent kenarını korusun.
+   Genel `.btn-icon.active:hover`a EKLENMEDİ: `.ib-star.active` kenarsız kalmalı. */
+.btn-icon.ib-sec.active:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); }
+/* v0.10.928 (Y4) — içeriğin ÜSTÜNDE yüzen ikinciller (kiosk çıkışı, kompakt
+   panel ⋯, kod bloğu Kopyala) şeffaf kalırsa arkadaki çizgi/kod glifin
+   içinden görünür. Dinlenmede opak; hover/basılı kuralları (bg2/bg3,
+   daha özgül) zaten opak. */
+button.sec.is-overlay, .btn-icon.ib-sec.is-overlay { background: var(--bg1); box-shadow: var(--shadow-sm); }
 /* `ib-star` — the favourite/pin modifier. The generic `.active` accent
    tint is right for filter-ish toggles (negate, pin-a-column) but WRONG
    here: a starred row is amber in every tool an operator has used, and
@@ -855,7 +892,7 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
 }
 /* Bound to the ARIA state, not to a second class: the divider and the
    announced state can never disagree. */
-.btn-disclose.dsc-section[aria-expanded="true"] { border-bottom-color: var(--border); }
+.btn-disclose.dsc-section[aria-expanded="true"] { border-bottom-color: var(--divider); } /* v0.10.928 (Y2) — ServiceNeighbors ikiziyle birlikte */
 /* `dsc-caps` — the uppercase section label used above in-page charts
    ("LATENCY DISTRIBUTION"). A caller modifier rather than a third
    anatomy: it changes typography only, not layout. */
@@ -878,8 +915,10 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
 .opt-row:focus-visible { outline-offset: -2px; }
 
 /* v0.10.927 — TileButton: tıklanabilir karo (ui/TileButton.tsx). Çerçeve
-   bağımlılık panellerinin statik karo ikiziyle aynı; hover kenarlık
-   --accent2 + bg3 (eskiden JS onMouseEnter ile satır-içi). */
+   bağımlılık panellerinin statik karo ikiziyle aynı.
+   v0.10.928 (Y1) — hover `.card-link` diliyle aynı: yalnız kenar
+   --border-strong'a çıkar. `background` bilinçli olarak YAZILI kalır:
+   silinirse `button:hover:not(:disabled)` karoyu accent'e boyar. */
 .tile-btn {
   display: block; width: 100%; box-sizing: border-box; text-align: left;
   padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
@@ -887,7 +926,7 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
   font: inherit; cursor: pointer;
   transition: border-color .12s, background .12s;
 }
-.tile-btn:hover:not(:disabled) { border-color: var(--accent2); background: var(--bg3); }
+.tile-btn:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg2); }
 
 /* v0.10.927 — StatTile onClick: çerçeve satır-içi (bg1) kalır; burada
    düğme sıfırlaması + eski `.stat-click` hover/odak dili. Satır-içi zemin
@@ -900,7 +939,9 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
   width: 100%; box-sizing: border-box; text-align: left;
   color: var(--text); font: inherit; cursor: pointer;
 }
-.stat-tile-btn:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--accent) inset; }
+/* v0.10.928 (Y1) — halka --border-strong: çerçeve satır-içi olduğu için
+   kenar rengi CSS'ten değişemiyor, iç gölge onun yerini tutar. */
+.stat-tile-btn:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--border-strong) inset; }
 .stat-tile-btn:focus-visible { outline-offset: 2px; }
 
 /* ── Chip (v0.9.894) — bordered, labelled affordance ────────────────
@@ -961,8 +1002,13 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 
 /* ── Card / panel primitive ─────────────────────────────────────
    The repeated bg1 + border + 8px radius pattern that 30+ inline
-   <div style={{...}}> use across the app. .card-tight is the
-   denser variant for sidebar callouts and inline meta panels. */
+   <div style={{...}}> use across the app.
+   v0.10.928 (Y1) — TEK `.card` kuralı ve STATİK: imleç, hover, geçiş
+   yok. Eskiden dosyanın aşağısındaki ikinci `.card` bloğu 77 kartın
+   hepsine `cursor: pointer` + mavi hover veriyordu; yalnız biri
+   tıklanabilirdi. `.card-tight` de o bloğun gölgesinde hiç
+   uygulanmamıştı — kural ve Card'ın yaydığı sınıf birlikte silindi
+   (sıfır görsel kayma). Tıklanabilir kart = `.card.card-link`. */
 .card {
   background: var(--bg1);
   border: 1px solid var(--border);
@@ -970,27 +1016,21 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
   padding: 14px;
   box-shadow: var(--shadow-sm);
 }
-.card-tight { padding: 10px; border-radius: var(--radius-sm); background: var(--bg2); }
-/* `.card-static` (v0.9.921, mK11) — `.card`ın etkileşimsiz ikizi.
-   `.card` bu dosyada İKİ KEZ tanımlı; ikinci tanım (`:1005`)
-   `cursor: pointer` + accent hover taşıyor çünkü gezinilebilir kart
-   ızgaraları için yazıldı. Yükleme iskeleti gibi TIKLANMAYAN kutular
-   onu devralmamalı: tıklanabilir görünen ama hiçbir şey yapmayan bir
-   yüzey, yavaş bir sayfadan daha kötü bir izlenim bırakır. */
+/* v0.10.928 (Y1) — yalnız gerçekten bir yere giden kart (ui/Card.tsx
+   CardLink → <a class="card card-link">). `color: inherit` `a {}`
+   mavisini, (0,2,0) :hover da `a:hover` (0,1,1) altı çizgisini yener;
+   klavye halkası global :focus-visible kuralından gelir. */
+.card-link { display: block; color: inherit; text-decoration: none; cursor: pointer; transition: border-color .12s; }
+.card-link:hover, .card-link:focus-visible { border-color: var(--border-strong); text-decoration: none; }
+/* `.card-static` (v0.9.921, mK11) — `.card`ın gölgesiz ikizi. Doğuş
+   sebebi (ikinci `.card` tanımının imleci + accent hover'ı) v0.10.928'de
+   kalktı; `.card` artık kendisi statik. Üç kullanıcısı (Skeleton,
+   RetentionTab, SmtpTab) `.card`a taşınınca bu kural silinebilir. */
 .card-static {
   background: var(--bg1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
-}
-
-/* Dashboard listing card hover — used by /dashboards. Subtle
-   border-tint so the link target is obvious without flipping
-   the whole tile colour. */
-.dashboard-card:hover {
-  border-color: var(--accent);
-  background: var(--bg3);
-  text-decoration: none !important;
 }
 
 /* Row-selected — applied by table pages whose row navigation
@@ -1028,14 +1068,14 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 .modal-header {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--divider);
   font-weight: 600;
 }
 .modal-body { padding: 16px 18px; }
 .modal-footer {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 12px 18px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--divider);
   background: var(--bg2);
   border-radius: 0 0 10px 10px;
 }
@@ -1244,24 +1284,12 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 .sb-user-trigger { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; border-radius: 0; }
 .sb-user-trigger:hover:not(:disabled) { background: var(--bg2); }
 .sb-user-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.fsel-sep { border-top: 1px solid var(--border); margin: 5px 0; }
+.fsel-sep { border-top: 1px solid var(--divider); margin: 5px 0; }
 .fsel-all { display: block; width: 100%; text-align: left; font-size: 11.5px;
   color: var(--accent2); background: none; border: none; cursor: pointer;
   padding: 4px 12px; }
 .fsel-all:hover { background: var(--accent-soft); }
 .facet.f-warn:not(.on) { color: var(--warn); }
-
-/* Cards */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-.card {
-  background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 14px; cursor: pointer; transition: border-color .15s;
-}
-.card:hover { border-color: var(--accent); }
-.card-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-stat { display: flex; justify-content: space-between; margin: 3px 0; font-size: 12px; color: var(--text2); }
-.card-stat .v { font-weight: 600; color: var(--text); }
-.card-stat .v.ok { color: var(--ok); } .card-stat .v.err { color: var(--err); } .card-stat .v.warn { color: var(--warn); }
 
 /* Table */
 /* v0.9.978 (arka plan denetimi D1.1 / KN-1) — `background` BU KURALIN
@@ -1338,8 +1366,13 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 thead th {
   padding: 9px 12px; text-align: left;
-  font-weight: 700; color: var(--text3); font-size: 10px;
-  text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border);
+  /* v0.10.928 (Y3) — düz başlık: büyük harf + izleme kalktı ("p95 (ms)"
+     artık "P95 (MS)" değil). Ayrım ağırlık (600) + --text2 + alt çizgi.
+     `none`/`normal` bilerek YAZILI: ikisi de miras alınır, büyük harfli
+     bir ata başlığı geri çevirmesin. Alt çizgi --border'da kalır
+     (başlık/gövde sınırı); satır ayraçları --divider. */
+  font-weight: 600; color: var(--text2); font-size: var(--fs-xs);
+  text-transform: none; letter-spacing: normal; border-bottom: 1px solid var(--border);
   user-select: none;
   /* v0.9.697 — resize tutamağının (position:absolute) ÇAPASI. Eskiden
      DataTableHead bunu satır içi yazıyordu ve satır içi stil, aşağıdaki
@@ -1368,7 +1401,8 @@ thead th .col-resize-handle {
   cursor: col-resize; user-select: none; touch-action: none;
 }
 thead th .col-resize-handle:hover { background: var(--accent); opacity: .5; }
-tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background .08s; }
+/* v0.10.928 (Y2) — satır ayracı --divider; Skeleton.tsx satır çizgisi bununla aynı kalmalı. */
+tbody tr { border-bottom: 1px solid var(--divider); cursor: pointer; transition: background .08s; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: var(--bg2); }
 /* Aggregate "All" row at the top of a list table — sticky-bordered + slight tint
@@ -1547,7 +1581,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Waterfall */
 #wf-outer { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; font-size: 12px; }
 .wf-header { display: flex; position: sticky; top: 0; z-index: var(--z-handle); background: var(--bg2); border-bottom: 2px solid var(--border); height: 42px; user-select: none; }
-.wf-col-name { flex-shrink: 0; padding: 0 10px; display: flex; align-items: center; border-right: 1px solid var(--border); font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; }
+.wf-col-name { flex-shrink: 0; padding: 0 10px; display: flex; align-items: center; border-right: 1px solid var(--divider); font-size: var(--fs-xs); font-weight: 600; color: var(--text2); } /* v0.10.928 — Y3 düz başlık (`thead th` ile aynı), Y2 kolon ayracı */
 .wf-col-bar { flex: 1; position: relative; overflow: hidden; }
 .wf-resizer {
   width: 6px; flex-shrink: 0; cursor: col-resize;
@@ -1560,14 +1594,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   width: 6px; flex-shrink: 0; pointer-events: none;
 }
 .wf-tick-label { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 10px; color: var(--text2); font-family: monospace; white-space: nowrap; pointer-events: none; }
-.wf-vline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); pointer-events: none; }
+.wf-vline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--divider); pointer-events: none; }
 /* ── Waterfall row, Tempo-style ──────────────────────────────────────── */
 /* Compact rows — Tempo's new (Grafana 11+) trace view runs at
    ~22px so a 200-span trace fits in a screen without scrolling.
    The previous 26px felt heavier than the rest of the app. */
 .wf-row {
   display: flex; align-items: stretch; min-height: 22px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--divider);
   cursor: pointer; transition: background .07s; position: relative;
   /* content-visibility: auto lets the browser skip rendering
      waterfall rows that are off-screen (v0.5.183). Traces with
@@ -1586,7 +1620,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* v0.10.682 — satır-içi span detayı (TraceWaterfall renderDetail): seçili
    satır sarar, detay tam genişlikte satırın altında (Tempo düzeni). */
 .wf-row.wf-has-detail { flex-wrap: wrap; }
-.wf-row-detail { flex: 0 0 100%; cursor: default; border-top: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--bg2); padding: var(--sp-4) var(--sp-5) var(--sp-5) var(--sp-6); }
+.wf-row-detail { flex: 0 0 100%; cursor: default; border-top: 1px solid var(--divider); border-left: 3px solid var(--accent); background: var(--bg2); padding: var(--sp-4) var(--sp-5) var(--sp-5) var(--sp-6); }
 .wf-row-detail .kiosk-span { border: 0; border-radius: 0; background: transparent; padding: 0; }
 .wf-row.wf-err .wf-name { color: var(--err); }
 /* Error span — whole-row low-opacity red tint (Tempo latest).
@@ -1646,7 +1680,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    clear focused-row signal. */
 .wf-stripe { flex-shrink: 0; width: 2px; opacity: 0.55; transition: width .07s, opacity .07s, filter .07s; }
 
-.wf-row-name { flex-shrink: 0; position: relative; display: flex; align-items: center; border-right: 1px solid var(--border); overflow: hidden; }
+.wf-row-name { flex-shrink: 0; position: relative; display: flex; align-items: center; border-right: 1px solid var(--divider); overflow: hidden; }
 .wf-row-name-inner { display: flex; align-items: center; gap: 2px; flex: 1; padding-right: 8px; min-width: 0; }
 .wf-toggle { width: 16px; height: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text2); cursor: pointer; border-radius: 2px; background: transparent; border: 0; padding: 0; }
 /* v0.10.924 — düğme DisclosureButton; `.btn-disclose:hover` (0,3,0) zemini
@@ -1695,13 +1729,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* v0.9.1277 — şelale başlığındaki "×N grupla" anahtarı. Gövdesi `.facet`
    (tek tasarım dili: kritik-yol odak çipiyle aynı chip); burada YALNIZ
-   başlık hücresine uyum için ölçü/metin dönüşümü yerelleşiyor —
-   `.wf-col-name` UPPERCASE + letter-spacing dayatıyor ve 42px yüksek. */
+   42px başlık hücresine uyum için ölçü yerelleşiyor. (v0.10.928 —
+   `.wf-col-name` artık büyük harf dayatmıyor; eski sıfırlama kalktı.) */
 .wf-grp-toggle {
   margin-left: auto;
   flex-shrink: 0;
-  text-transform: none;
-  letter-spacing: normal;
   padding: 2px 8px;
   font-size: 10.5px;
 }
@@ -1997,7 +2029,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .status-grid { margin-top: 18px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .status-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  padding: 14px 16px; border-bottom: 1px solid var(--divider);
   background: var(--bg1); transition: background .12s;
 }
 .status-row:last-child { border-bottom: none; }
@@ -2030,7 +2062,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .span-panel-resizer { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: var(--z-handle); background: transparent; transition: background .12s; touch-action: none; }
 .span-panel-resizer:hover { background: var(--accent); opacity: .6; }
 .span-panel-resizer:active { background: var(--accent); }
-#span-panel-head { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; position: sticky; top: 0; background: var(--bg1); z-index: var(--z-sticky-bar); }
+#span-panel-head { padding: 10px 14px; border-bottom: 1px solid var(--divider); display: flex; align-items: flex-start; justify-content: space-between; position: sticky; top: 0; background: var(--bg1); z-index: var(--z-sticky-bar); }
 .ps-title { font-size: 13px; font-weight: 600; word-break: break-word; flex: 1; padding-right: 8px; }
 #span-panel-body { padding: 12px 14px; }
 /* v0.10.691 (operatör: "inline gösterim trace'te iyiymiş, Coremetry içindeki
@@ -2053,7 +2085,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .ps-sec { margin-bottom: 14px; }
 .ps-sec-title { font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
 .ps-kv { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
-.ps-kv td { padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ps-kv td { padding: 3px 6px; border-bottom: 1px solid var(--divider); vertical-align: top; }
 /* Attribute keys (e.g. messaging.kafka.consumer.group.id) can be very
    long. table-layout: auto + max-width + word-break lets long keys
    wrap onto multiple lines instead of being clipped by the old
@@ -2103,7 +2135,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    max-width caps pathological cases (entire URI as an attribute
    key) at half the row so the value column doesn't disappear. */
 .kv-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
-.kv-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.kv-table td { padding: 3px 8px; border-bottom: 1px solid var(--divider); vertical-align: top; }
 .kv-table td:first-child {
   color: var(--text2); white-space: nowrap;
   min-width: 180px; max-width: 50%;
@@ -2235,7 +2267,7 @@ canvas { max-width: 100%; }
    panelin içinde GÖRÜNMEZ yapardı. `--bg0` da doğru değildi (sayfa
    zemini, üstelik light temada `#ffffff` ile panelden AÇIK çıkıyor —
    merdiven yönü temaya göre dönüyor). Doğru kademe iç-kutu: `--bg2`.
-   Aynı kademeyi `.empty code` ve `.card-tight` de kullanıyor. */
+   Aynı kademeyi `.empty code` de kullanıyor. */
 .ex-stack {
   margin-top: 8px; padding: 8px 10px;
   background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-xs);
@@ -2414,8 +2446,10 @@ tr.wf-evidence > td:first-child { border-left: 3px dashed var(--accent2); }
 .btn-disclose.nav-group-header .dsc-glyph {
   width: 16px; text-align: center; font-size: 10px; flex: none;
 }
-/* Both sidebar icon buttons keep a transparent field: `ib-sec`'s --bg3
-   fill would make them read as raised controls inside a flat rail. */
+/* v0.10.928 — `ib-sec` artık kendisi şeffaf; sb-collapse bunu yine de
+   yazılı tutar (düz ray). sb-hamburger içeriğin üstünde sabit durduğu için
+   opak --bg2 alır. Kenar --border-control: redhat koyu rayında #sidebar
+   remap'i (#46494c) okunur. */
 .btn-icon.sb-hamburger {
   position: fixed; top: 10px; left: 10px; z-index: var(--z-drawer);
   width: 36px; height: 36px; font-size: 18px;
@@ -2619,8 +2653,8 @@ button.accent.copied {
 .fq-hint { margin-left: auto; color: var(--text3); font-size: 11px; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
 .fq-hint kbd { display: inline-block; padding: 0 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: var(--radius-xs); background: var(--bg2); font-size: 10px; line-height: 15px; color: var(--text2); font-family: ui-monospace, Menlo, monospace; }
 .fq-pop { position: absolute; top: calc(100% + 6px); left: 0; width: min(640px, 100%); background: var(--bg1); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop); z-index: var(--z-popover); overflow: hidden; }
-.fq-steps { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); }
-.fq-steps > div { padding: 6px 12px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); border-right: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+.fq-steps { display: flex; border-bottom: 1px solid var(--divider); background: var(--bg2); }
+.fq-steps > div { padding: 6px 12px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); border-right: 1px solid var(--divider); display: flex; align-items: center; gap: 6px; }
 .fq-steps > div.on { color: var(--accent2); font-weight: 700; background: var(--accent-soft); }
 .fq-steps > div.done { color: var(--text2); }
 .fq-steps .mono { text-transform: none; letter-spacing: 0; color: var(--text); }
@@ -2641,7 +2675,7 @@ button.accent.copied {
 .fq-ops .fq-op { font-size: 12px; line-height: normal; padding: 4px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border); background: var(--bg2); color: var(--text); cursor: pointer; transition: background .15s; }
 .fq-ops .fq-op.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent2); font-weight: 600; }
 .fq-ops .fq-oplong { color: var(--text3); font-size: 10.5px; }
-.fq-foot { border-top: 1px solid var(--border); padding: 6px 12px; display: flex; gap: 14px; font-size: 11px; color: var(--text3); background: var(--bg2); flex-wrap: wrap; }
+.fq-foot { border-top: 1px solid var(--divider); padding: 6px 12px; display: flex; gap: 14px; font-size: 11px; color: var(--text3); background: var(--bg2); flex-wrap: wrap; }
 .fq-foot b { color: var(--text2); font-weight: 600; }
 .fq-quick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; font-size: 11.5px; color: var(--text3); }
 .fq-quick-label { color: var(--text3); }
@@ -2708,6 +2742,11 @@ button.accent.copied {
 /* Odaklanan buton komşusunun üstüne çıkar: -1px bindirmede sağdaki kardeş
    aksi hâlde odak halkasının kenarını örterdi. */
 .btn-group.is-attached > button:focus-visible { z-index: 1; }
+/* v0.10.928 — dolgusuz ikincil buton hover'da kenarını koyulaştırır; bitişik
+   kardeş (-1px) o pikseli kendi kenarıyla örterdi → 1px dikiş. Hover eden
+   öne gelir. Trace'in el yapımı bölünmüş düğmesi (.btn-split) aynı kural. */
+.btn-group.is-attached > button:hover:not(:disabled) { z-index: 1; }
+.btn-split > button:hover:not(:disabled), .btn-split > button:focus-visible { position: relative; z-index: 1; }
 
 /* Tooltip (v0.10.919, Seçenek B) — gerekçe ui/Tooltip.tsx. Ağaçta,
    `position: fixed`: tetiğin yığın bağlamını devralır (çekmece/modal
@@ -2787,7 +2826,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    `.cb-foot`: "… +N more — refine search" kesinti notu; tıklanamaz,
    listeden AYRI okunsun diye üstten çizgili. */
 .cb-meta { margin-left: 10px; color: var(--text3); font-size: 11px; }
-.cb-foot { border-top: 1px solid var(--border); }
+.cb-foot { border-top: 1px solid var(--divider); }
 /* Kilitli alan (EnvPicker'ın "env uygulanmıyor" hâli). Eskiden satır
    içi style'daydı; `@media` satır içini yenemediği için token
    katmanına indi (v0.9.980 dersinin aynısı). */
@@ -2843,7 +2882,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .trp-presets {
   display: flex; flex-direction: column; gap: 2px; min-width: 150px;
   max-height: 440px; overflow-y: auto;
-  border-left: 1px solid var(--border); padding-left: 16px;
+  border-left: 1px solid var(--divider); padding-left: 16px;
 }
 /* Left column — absolute range. */
 .trp-custom { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 300px; }
@@ -2889,7 +2928,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   font-size: 11px;
 }
 .trp-foot {
-  border-top: 1px solid var(--border); padding-top: 8px;
+  border-top: 1px solid var(--divider); padding-top: 8px;
   font-size: 10px; color: var(--text3);
 }
 
@@ -2946,7 +2985,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 
 /* ── Dense — maximum information density ─────────────────── */
 [data-density="dense"] table { font-size: 10px; }
-[data-density="dense"] thead th { padding: 2px 5px; }
+[data-density="dense"] thead th { padding: 2px 5px; font-size: var(--fs-2xs); } /* v0.10.928 (Y3) — başlık 10px gövdeden büyük kalmasın */
 [data-density="dense"] tbody td { padding: 2px 5px; }
 [data-density="dense"] .row-link { padding: 2px 5px; } /* v0.10.225 */
 [data-density="dense"] .controls { gap: 4px; }
@@ -3161,13 +3200,13 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .ov-delta.down.bad { color: var(--err); }
 .ov-kpi .ov-spark { position: absolute; right: 0; bottom: 0; left: 0; height: 34px; opacity: .9; z-index: 0; pointer-events: none; }
 
-/* Overview card header/body (lighter than the generic .card-title) */
+/* Overview card header/body */
 /* flex-wrap (v0.9.484): başlığın yanına kontrol gelebiliyor (Response time
    görünüm segmenti) ve fallback başlığı uzun ("· tüm span'ler"). Dar bir 3
    kolonlu grid'de ikisi birden sığmazsa SARSIN — nowrap + sabit genişlik
    metni sessizce kırpıyor (docs/INCIDENTS.md, table-layout sınıfı). Tek
    çocuklu kartlarda hiçbir etkisi yok. */
-.ov-card-h { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--border); }
+.ov-card-h { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--divider); }
 .ov-card-h h3 { margin: 0; font-size: 13.5px; font-weight: 700; letter-spacing: -.1px; }
 .ov-card-h .ov-sub { color: var(--text3); font-size: 11.5px; font-weight: 500; }
 .ov-card-h .ov-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
@@ -3185,36 +3224,10 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .ov-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
 .ov-deploy-flag { position: absolute; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text2); transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
 
-/* Service flow */
-.ov-flow { position: relative; }
-.ov-flow-cols { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 0; align-items: stretch; }
-.ov-flow-col { display: flex; flex-direction: column; gap: 10px; justify-content: center; padding: 4px 6px; }
-.ov-flow-col .ov-col-lab { font-size: 10.5px; letter-spacing: .7px; color: var(--text3); font-weight: 700; text-transform: uppercase; text-align: center; margin-bottom: 2px; }
-.ov-node { border: 1px solid var(--border); border-radius: 10px; background: var(--bg1); padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: border-color .12s, box-shadow .12s; position: relative; z-index: var(--z-sticky-cell); }
-.ov-node:hover, .ov-node.hot { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.ov-node.dim { opacity: .4; }
-.ov-node .ov-nm { font-weight: 600; font-size: 12.5px; }
-.ov-node .ov-st { font-size: 10.5px; color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.ov-node.center { border-width: 2px; border-color: var(--accent); background: var(--accent-soft); padding: 14px; }
-.ov-node.center .ov-nm { font-size: 14px; }
-.ov-node .ov-edge-stat { margin-left: auto; text-align: right; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text3); line-height: 1.3; }
-.ov-flow svg.ov-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-
-/* Upstream / downstream neighbors card (prototype design-parity) — the flat
-   two-column list that replaced the in-page service-flow map on the Overview.
-   No wires, no center node; pure-CSS hover ring. Values mapped 1:1 from the
-   prototype's coremetry.css .nbr-* rules onto the real tokens. */
-.nbr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.nbr-col { display: flex; flex-direction: column; gap: 9px; }
-.nbr-col-lab { font-size: 11px; letter-spacing: .6px; color: var(--text2); font-weight: 700; text-transform: uppercase; }
-.nbr-col-sub { font-size: 11px; color: var(--text3); margin: -5px 0 4px; }
-.nbr-node { border: 1px solid var(--border); border-radius: 10px; background: var(--bg1); padding: 10px 12px; display: flex; align-items: center; gap: 10px; transition: border-color .12s, box-shadow .12s; }
-.nbr-node:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.nbr-node .nbr-id { min-width: 0; }
-.nbr-node .nbr-nm { font-weight: 600; font-size: 12.5px; }
-.nbr-node .nbr-st { font-size: 10.5px; color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.nbr-node .nbr-edge { margin-left: auto; text-align: right; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text3); line-height: 1.3; flex: none; }
-.nbr-empty { font-size: 11.5px; color: var(--text3); padding: 6px 2px; }
+/* v0.10.928 (Y1) — ölü `.ov-flow*` / `.ov-node*` (servis akış haritası) ve
+   `.nbr-*` (komşu kartı) aileleri silindi: 0 kullanım, ikisi de accent
+   halkalı hover deseni taşıyordu. (`.ov-node .ov-st` OverviewTables'taki
+   `ov-st`e hiç eşleşmiyordu; sınıf da oradan kaldırıldı.) */
 
 /* Detail-view primitives (prototype design-parity) — shared by the Incident and
    Problem drill-in pages: the action/back bar, meta-chip row, timeline event
@@ -3241,7 +3254,7 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 20px; font-size: 11.5px; color: var(--text2); background: var(--bg1); }
 .chip .k { color: var(--text3); }
 .chip b { color: var(--text); font-weight: 600; }
-.prob { display: flex; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.prob { display: flex; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--divider); }
 .prob:last-child { border-bottom: none; }
 .prob .ic { width: 30px; height: 30px; border-radius: var(--radius); display: grid; place-items: center; flex: none; }
 .prob .ti { font-weight: 600; font-size: 13px; }
@@ -3252,7 +3265,9 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    ikisi DetailDrawer panelinde. Blanket `--bg1` onları kaybederdi.
    İç-kutu kademesi `--bg2` her üç temada da kaptan ayrışıyor. */
 .ud-pill { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); font-size: 12.5px; font-weight: 600; text-decoration: none; color: inherit; }
-.ud-pill:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* v0.10.928 (Y1) — hover `.card-link` diliyle: kenar --border-strong, accent
+   halka yok. `text-decoration: none` (0,2,0) `a:hover` altı çizgisini yener. */
+.ud-pill:hover { border-color: var(--border-strong); text-decoration: none; }
 .ud-pill .mult { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: var(--text3); font-weight: 500; }
 /* .volbars — compact occurrence/volume histogram (Problem detail occurrences
    over time). Bars align to the bottom; each column's <i> height is set inline
@@ -3290,6 +3305,9 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
 .topo.pannable { cursor: grab; }
 .topo.panning { cursor: grabbing; user-select: none; }
 .topo-zoomctl { position: absolute; top: 10px; right: 10px; z-index: var(--z-sticky-foot); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+/* v0.10.928 (Y4) — zoom düğmeleri grafiğin üstünde yüzüyor; dolgusuz
+   ikincil kenarlar/düğümler glifin içinden görünmesin. */
+.topo-zoomctl button.sec { background: var(--bg1); }
 .topo-zoomctl .pct { font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text3); font-variant-numeric: tabular-nums; }
 .topo-edges { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
 .topo-node { position: absolute; transform: translate(-50%, -50%); z-index: var(--z-sticky-cell); display: flex; align-items: center; gap: 8px; max-width: 170px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg1); box-shadow: var(--shadow-sm); cursor: default; transition: opacity .12s ease, border-color .12s ease; }
@@ -3455,34 +3473,17 @@ td > .cell-actions.end { justify-content: flex-end; }
 
 /* Service Logs tab — filter bar + level facet chips */
 .ov-logbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.ov-facet {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-  padding: 4px 9px; border-radius: var(--radius-sm); font-size: 12px; color: var(--text2);
-  border: 1px solid var(--border); background: var(--bg1); user-select: none;
-}
-.ov-facet:hover { border-color: var(--border-strong); color: var(--text); }
-.ov-facet.on { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
-.ov-facet .n { font-variant-numeric: tabular-nums; color: var(--text3); font-weight: 600; }
-.ov-facet.on .n { color: var(--text2); }
 
 /* Metrics explorer (v0.7.115) — left catalog + focused chart + sparkline grid */
 .metrics-explorer { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
 .metric-catalog { padding: 0; overflow: hidden; position: sticky; top: 8px; }
-.metric-list { max-height: calc(100vh - 250px); overflow-y: auto; border-top: 1px solid var(--border); }
-.metric-row { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none; border-bottom: 1px solid var(--border); background: transparent; cursor: pointer; }
+.metric-list { max-height: calc(100vh - 250px); overflow-y: auto; border-top: 1px solid var(--divider); }
+.metric-row { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none; border-bottom: 1px solid var(--divider); background: transparent; cursor: pointer; }
 .metric-row:hover:not(:disabled) { background: var(--bg2); }
 .metric-row.active { background: var(--accent-soft); }
 .metric-row-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .metric-row.active .metric-row-name { color: var(--accent2); }
 .metric-row-meta { font-size: 10px; color: var(--text3); margin-top: 2px; }
-.metric-spark-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.metric-spark { display: block; text-align: left; padding: 12px; cursor: pointer; }
-.metric-spark:hover:not(:disabled) { background: var(--bg1); border-color: var(--accent); }
-.metric-spark-name { font-size: 11.5px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.metric-spark-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
-.metric-spark-val { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
-.metric-spark-unit { font-size: 10px; color: var(--text3); margin-left: 3px; font-weight: 500; }
-.metric-spark-chart { flex: none; }
 
 /* Service identity header (design handoff app.jsx .svc-head) */
 .svc-head { display: flex; align-items: flex-start; gap: 16px; padding: 2px 0 12px; }
@@ -3617,16 +3618,6 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 .pb-tile.accent { border-left-color: var(--accent); }
 .pb-tile .n { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .pb-tile .k { font-size: 10.5px; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
-/* Problem card: 4px severity rail on the left edge. */
-.pb-card { display: flex; gap: 12px; background: var(--bg1); border: 1px solid var(--border); border-left: 4px solid var(--text3); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 8px; cursor: pointer; min-width: 0; }
-.pb-card:hover { background: var(--bg2); }
-.pb-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.pb-card.err { border-left-color: var(--err); }
-.pb-card.warn { border-left-color: var(--warn-solid); }
-.pb-card.ok { border-left-color: var(--ok); }
-.pb-card.gray { border-left-color: var(--text3); }
-.pb-card .pb-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.pb-card .pb-side { flex: 0 0 220px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; text-align: right; font-size: 11px; color: var(--text3); }
 .pb-title { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pb-id { font-size: 10.5px; color: var(--text3); }
 .pb-rc { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3638,7 +3629,7 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 .pb-pill.err .dot { background: var(--err); }
 /* Detail page cards. */
 .pb-sect { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 12px; min-width: 0; }
-.pb-sect > .h { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg2); border-radius: var(--radius-sm) var(--radius-sm) 0 0; font-size: 12px; font-weight: 700; }
+.pb-sect > .h { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--divider); background: var(--bg2); border-radius: var(--radius-sm) var(--radius-sm) 0 0; font-size: 12px; font-weight: 700; }
 .pb-sect > .h.accent { background: var(--accent-bg); border-bottom-color: var(--accent-border); color: var(--accent2); }
 .pb-sect > .b { padding: 10px 12px; min-width: 0; }
 /* Vertical dot-line timeline. */
@@ -3692,6 +3683,8 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
    3. Başlıklarda `text-transform: uppercase` KAPALI. Sebebi süs değil
       ANLAM: model başlığa birim yazıyor ("p95 (ms)") ve büyütmek onu
       "P95 (MS)" yapıyor — birim adı büyük harfte başka bir şeydir.
+      v0.10.928 (Y3) — bu artık evin varsayılanı (`thead th`); burada
+      yalnız dolgu + nowrap yerel, tipografi taban kuraldan gelir.
    Kaydırma kabı paylaşılan `.table-wrap` (yatay taşma tablonun KENDİ
    kabında; sayfa gövdesi asla yana kaymaz). */
 .cm-md-tw { margin: 6px 0; max-width: 100%; }
@@ -3701,7 +3694,7 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
    yatay kaydırıcısına gidiyor. */
 .cm-md-table { font-size: 12px; width: auto; min-width: 100%; }
 .cm-md-table thead th {
-  padding: 5px 8px; font-size: 10.5px; text-transform: none; letter-spacing: 0;
+  padding: 5px 8px;
   white-space: nowrap;
 }
 .cm-md-table tbody tr { cursor: default; }
@@ -3735,7 +3728,7 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 .cm-md-code-h {
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px; padding: 1px 4px 1px 8px; background: var(--bg2);
-  border-bottom: 1px solid var(--border); min-height: 20px;
+  border-bottom: 1px solid var(--divider); min-height: 20px;
 }
 .cm-md-code-lang {
   font: 600 9.5px ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -3911,7 +3904,6 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
   /* D8 (v0.9.989) — paylaşılan eşit-kesir ızgaraları, `.ov-kpis`
      ailesiyle AYNI basamakta: 3+ kolon tablet bandında 2'ye düşüyor. */
   .grid-3, .grid-4, .grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .nbr-cols { grid-template-columns: 1fr; }
   .mqe-lb-cols { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -3981,9 +3973,11 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
   .btn-disclose.dsc-row.pc-more {
     flex: none; white-space: nowrap;
     min-height: 36px; padding: 6px 12px; font-size: 14px;
-    color: var(--text); background: var(--bg2);
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); background: transparent;
+    border: 1px solid var(--border-control); border-radius: var(--radius-sm);
   }
+  /* v0.10.928 (Y4) — aynı bardaki dolgusuz ikincillerle tek dil. */
+  .btn-disclose.dsc-row.pc-more:hover:not(:disabled) { background: var(--bg2); border-color: var(--border-strong); }
   /* Panel HER ZAMAN DOM'da (çocuklar mount kalsın, sayaç kapalıyken de
      doğru olsun) — görünürlüğü bu sınıf taşıyor. Açıkken bir POPOVER:
      barın altına konumlanıyor, sayfayı aşağı itmiyor. `--z-dropdown`
@@ -4091,7 +4085,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
   .trp-presets {
     flex-direction: row; flex-wrap: wrap; max-height: none;
     border-left: 0; padding-left: 0;
-    border-top: 1px solid var(--border); padding-top: 10px;
+    border-top: 1px solid var(--divider); padding-top: 10px;
   }
   .trp-presets .trp-section-title { width: 100%; }
 
@@ -4176,8 +4170,9 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .cm-steps-sum .badge { font-size: 10px; padding: 1px 6px; }
 .cm-steps-tw { margin-top: 6px; overflow-x: auto; max-width: 100%; }
 .cm-steps-t { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
-.cm-steps-t th { text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.cm-steps-t td { padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+/* v0.10.928 — Y3 düz başlık (11px gövdenin bir kademe altı; ağırlık 600 taban kuraldan), Y2 satır ayracı. */
+.cm-steps-t th { text-align: left; font-size: var(--fs-2xs); color: var(--text2); padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.cm-steps-t td { padding: 3px 6px; border-bottom: 1px solid var(--divider); vertical-align: top; }
 .cm-steps-t tr.is-open td { background: var(--accent-bg); }
 .cm-steps-t tr.is-err td.cm-steps-tool, .cm-steps-t tr.is-err td.cm-steps-res { color: var(--err); }
 .cm-steps-t td.num { text-align: right; white-space: nowrap; }
@@ -4216,14 +4211,14 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
    Traces düğmesi pil kalır ama kompakt (2px 8px, 11 px) → 12 % sütuna sığar. */
 .exc-pods-t a.sec { display: inline; padding: 0; border: 0; background: none; font-size: inherit; color: var(--accent2); }
 .exc-pods-t a.sec:hover { background: none; text-decoration: underline; text-underline-offset: 2px; }
-.exc-pods-t td.exc-pods-act a.sec { display: inline-flex; padding: 2px 8px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: var(--fs-xs); }
-.exc-pods-t td.exc-pods-act a.sec:hover { background: var(--bg2); text-decoration: none; }
+.exc-pods-t td.exc-pods-act a.sec { display: inline-flex; padding: 2px 8px; border: 1px solid var(--border-control); background: transparent; color: var(--text); font-size: var(--fs-xs); } /* v0.10.928 (Y4) — a.sec klonu, dolgusuz */
+.exc-pods-t td.exc-pods-act a.sec:hover { background: var(--bg2); border-color: var(--border-strong); text-decoration: none; }
 /* v0.10.734 — oluşum çubuğu: dolgu pay, etiket "sayı · %" (iki sayı sütunu yerine). */
 .exc-share { position: relative; height: 16px; border-radius: var(--radius-xs); overflow: hidden; background: color-mix(in srgb, var(--text3) 16%, transparent); }
 .exc-share i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--err); opacity: .65; }
 .exc-share b { position: relative; z-index: 1; padding: 0 var(--sp-3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-2xs); line-height: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
 /* v0.10.734 — uzun stack trace katlama şeridi (kartın altı). */
-.ex-fold { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-5); border-top: 1px dashed var(--border); background: var(--bg2); border-radius: 0 0 8px 8px; }
+.ex-fold { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-5); border-top: 1px dashed var(--divider); background: var(--bg2); border-radius: 0 0 8px 8px; }
 .ex-fold__note { color: var(--text3); font-size: var(--fs-xs); }
 
 /* v0.10.165 — kod alıntısı: satır numarası oluğu, dosya başlığı, stack katlama
@@ -4233,7 +4228,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .cm-md-code-no { display: inline-block; min-width: 5ch; margin-right: 10px; text-align: right; color: var(--text3); user-select: none; position: sticky; left: 0; background: var(--bg2); }
 .cm-md-code-file { font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .cm-md-code-res { color: var(--text3); font-style: italic; }
-.cm-md-code-fold { padding: 2px 6px 4px; border-top: 1px solid var(--border); background: var(--bg2); }
+.cm-md-code-fold { padding: 2px 6px 4px; border-top: 1px solid var(--divider); background: var(--bg2); }
 /* CoSRE cevap kartı anatomisi: Karar + Kanıt satırları */
 /* v0.10.461 — AI cevap kartı: Explain paneli (CopilotExplain) ve asistan
    sohbet turu (ChatBubble) AYNI kart. answerCard.ts açıklar. */
@@ -4285,7 +4280,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
    satır OptionRow atomu (.opt-row düzen/hover/odak halkası); burada yalnız
    ayırıcı çizgi + köşesiz satır (çerçeveli kaydırma kabının içinde). */
 .stmt-pick { display: block; width: 100%; }
-.stmt-pick-row { border-bottom: 1px solid var(--border); border-radius: 0; }
+.stmt-pick-row { border-bottom: 1px solid var(--divider); border-radius: 0; }
 .stmt-pick-row:last-child { border-bottom: 0; }
 
 /* v0.10.551 — /messaging çekmecesi «Kafka istemcileri · METRİK» bölümü (KafkaClientsSection) */
@@ -4308,7 +4303,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .ev-verdict--none { color: var(--text3); }
 .ev-table { border-collapse: collapse; width: auto; }
 .ev-table th, .ev-table td { padding: 2px var(--sp-4) 2px 0; text-align: left; font-weight: 400; color: var(--text2); }
-.ev-table th { font-size: var(--fs-2xs); color: var(--text3); text-transform: uppercase; letter-spacing: 0.02em; }
+.ev-table th { font-size: var(--fs-2xs); font-weight: 600; color: var(--text2); } /* v0.10.928 (Y3) — düz başlık */
 .ev-table td.num, .ev-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .ev-delta--up { color: var(--err); }
 .ev-delta--down { color: var(--ok); }
@@ -4401,7 +4396,7 @@ a.ins-val:hover { text-decoration: underline; }
 .svc-att-sp { flex: 1; }
 .svc-att-head a { font-size: var(--fs-xs); }
 .svc-att-rows { display: flex; flex-direction: column; }
-.svc-att-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; align-items: center; gap: 0 var(--sp-4); height: 22px; padding: 0 var(--sp-3); margin: 0 calc(-1 * var(--sp-3)); border-radius: var(--radius-xs); border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); color: inherit; text-decoration: none; }
+.svc-att-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; align-items: center; gap: 0 var(--sp-4); height: 22px; padding: 0 var(--sp-3); margin: 0 calc(-1 * var(--sp-3)); border-radius: var(--radius-xs); border-top: 1px solid var(--divider); color: inherit; text-decoration: none; }
 .svc-att-row:first-child { border-top: 0; }
 .svc-att-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); text-decoration: none; }
 .svc-att-row .badge { padding: 0 var(--sp-3); font-size: var(--fs-2xs); line-height: 16px; }
@@ -4412,7 +4407,7 @@ a.ins-val:hover { text-decoration: underline; }
 .svc-att-meta b { color: var(--err); }
 .svc-att-go { color: var(--text3); font-size: var(--fs-sm); }
 .svc-att-row:hover .svc-att-go { color: var(--accent2); }
-.svc-att-more { font-size: var(--fs-xs); color: var(--text2); line-height: 20px; border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.svc-att-more { font-size: var(--fs-xs); color: var(--text2); line-height: 20px; border-top: 1px solid var(--divider); }
 .svc-att-thin { border: 1px solid var(--border); background: var(--bg1); border-radius: var(--radius-sm); padding: 0 var(--sp-5); height: 24px; display: flex; align-items: center; margin-bottom: 14px; }
 @media (max-width: 640px) {
   .svc-att-row { grid-template-columns: auto auto minmax(0, 1fr) auto; height: auto; min-height: 22px; padding: var(--sp-1) var(--sp-3); }

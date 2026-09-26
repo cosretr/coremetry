@@ -212,9 +212,9 @@ export default function LoginPage() {
               display: 'flex', alignItems: 'center', gap: 8,
               color: 'var(--text3)', fontSize: 11, margin: '6px 0 14px',
             }}>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              <div style={{ flex: 1, height: 1, background: 'var(--divider)' }} />
               <span>{t('login.orLocal')}</span>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              <div style={{ flex: 1, height: 1, background: 'var(--divider)' }} />
             </div>
           </>
         )}

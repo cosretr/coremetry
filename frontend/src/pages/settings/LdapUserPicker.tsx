@@ -79,7 +79,7 @@ export function LDAPUserPicker() {
           </thead>
           <tbody>
             {results.map(u => (
-              <tr key={u.dn} style={{ borderTop: '1px solid var(--border)' }}>
+              <tr key={u.dn} style={{ borderTop: '1px solid var(--divider)' }}>
                 <td style={{ padding: 6 }}>{u.displayName || '—'}</td>
                 <td style={{ padding: 6 }}><code>{u.username}</code></td>
                 <td style={{ padding: 6 }}>{u.email || '—'}</td>

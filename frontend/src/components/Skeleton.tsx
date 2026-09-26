@@ -76,12 +76,10 @@ export function TableSkeleton({
 // stacked rectangles approximate the shape closely enough.
 export function CardSkeleton({ height = 96 }: { height?: number }) {
   return (
-    // mK11 (v0.9.921) — `.card-static`, `.card` DEĞİL. `.card`
-    // globals.css'te İKİ KEZ tanımlı ve ikinci tanım `cursor: pointer` +
-    // `:hover { border-color: accent }` taşıyor (gezinilebilir kart
-    // ızgaraları için). Bir YÜKLEME iskeletine onu vermek iskeleti
-    // tıklanabilir gösterirdi — operatör henüz var olmayan bir şeye
-    // tıklamaya çalışır. Ayrı sınıf, aynı görsel kutu.
+    // mK11 (v0.9.921) — `.card-static`: o gün `.card` hover'da tıklanabilir
+    // görünüyordu. v0.10.928 — `.card` artık tek tanım ve statik (tıklanabilir
+    // kart yalnız `.card-link`); `.card-static` gölgesiz aynı kutu olarak
+    // kalıyor, `.card`'a taşınması ayrı iş.
     <div className="card-static" style={{
       height,
       display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)',
@@ -106,7 +104,9 @@ export function ListSkeleton({ rows = 8, height = 32 }: {
           display: 'flex', alignItems: 'center', gap: 10,
           height,
           padding: '0 12px',
-          borderBottom: '1px solid var(--border)',
+          // v0.10.928 — satır çizgisi `tbody tr` ile aynı token (--divider):
+          // iskeletten gerçek listeye geçişte çizgi ağırlığı değişmesin.
+          borderBottom: '1px solid var(--divider)',
         }}>
           <Skeleton width={70}  height={10} inline />
           <Skeleton width={40}  height={10} inline />

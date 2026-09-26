@@ -181,7 +181,7 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
                         the bridge into the database catalogue; the row
                         itself keeps going to /traces (v0.9.960), so the
                         click has to stop here. */}
-                    <div className="ov-st">
+                    <div>
                       {r.dbSystem ? (
                         <Link to={databasesFilterHref(r, { range: encodeRange(range) })}
                           onClick={e => e.stopPropagation()}
