@@ -362,7 +362,7 @@ function Inner() {
                 {editingPM ? (
                   <div>
                     <textarea value={postmortemDraft} onChange={e => setPostmortemDraft(e.target.value)}
-                      rows={12} style={{ width: '100%', resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
+                      rows={12} className="mono" style={{ width: '100%', resize: 'vertical' }}
                       placeholder={POSTMORTEM_TEMPLATE} />
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
                       <Button variant="secondary" size="sm" onClick={draftPM} loading={aiPM.busy} disabled={busy !== null}

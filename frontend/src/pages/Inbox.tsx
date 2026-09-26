@@ -928,10 +928,10 @@ export default function InboxPage() {
           // multi-line exception message + team chips), which breaks the
           // VirtualTable uniform-row assumption. content-visibility keeps the
           // >100-row paint cheap while letting each row size to its content.
-          <div className="table-wrap is-fit"
+          <div className="table-wrap"
             style={{ opacity: showingStale ? 0.45 : 1, transition: 'opacity 120ms' }}
             aria-busy={showingStale}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dt.tableProps}>
               {/* leading={[34]} — the primitive owns the <colgroup>; a
                   second one alongside it is invalid markup and the
                   browser silently keeps only the first. */}
@@ -955,15 +955,14 @@ export default function InboxPage() {
                 </th>
               } />
               <tbody>
-                {dt.sortedRows.map((it, i) => (
+                {dt.sortedRows.map((it, i) => {
+                  const rp = dt.rowProps(i);
+                  return (
                   <tr key={it.id}
-                    {...dt.rowProps(i)}
+                    {...rp}
                     {...rowActivation(() => openDrawer(it))}
                     onMouseEnter={() => dt.nav.setSelected(i)}
-                    style={{
-                      contentVisibility: 'auto',
-                      containIntrinsicSize: 'auto 44px',
-                    }}>
+                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                     <td style={{ textAlign: 'center' }}
                       onClick={e => { e.stopPropagation(); }}>
                       {/* stopPropagation: the row itself opens the triage
@@ -975,7 +974,7 @@ export default function InboxPage() {
                     <td>
                       <PriorityBadge p={it.priority} reason={it.priorityReason} />
                     </td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)' }} title={it.displayId}>
+                    <td className="cell-faint" title={it.displayId}>
                       {it.source}
                       {/* v0.10.706 — kategori rozeti kaynağın altında (sütun eklenmedi). */}
                       {it.category && <div className="mono" style={{ fontSize: 9, letterSpacing: 0.3 }}>{it.category}</div>}
@@ -1044,8 +1043,7 @@ export default function InboxPage() {
                       <DetailLine it={it} />
                       <AISummaryLine it={it} />
                     </td>
-                    <td className="mono"
-                      style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    <td className="num">
                       {it.exception
                         ? it.exception.occurrences.toLocaleString()
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
@@ -1079,7 +1077,8 @@ export default function InboxPage() {
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1186,8 +1185,8 @@ function AISummaryLine({ it }: { it: InboxItem }) {
         background: 'var(--accent-soft)',
         borderLeft: '2px solid var(--accent)',
         // Tek satıra çivili: satır yüksekliği sınırlı kalsın, yoksa
-        // containIntrinsicSize yer-tutucu tahmini (auto 44px) daha da
-        // yanlışlaşır ve kaydırma çubuğu zıplar.
+        // .cv-row yer-tutucu tahmini (--row-h) daha da yanlışlaşır ve
+        // kaydırma çubuğu zıplar.
         display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
         overflow: 'hidden',
       }}

@@ -147,8 +147,9 @@ function ProblemOffenders({ problem }: { problem: Problem }) {
       {opsQ.data && rows.length === 0 && (
         <Empty compact icon="◯" title="No operations in the problem window" />
       )}
+      {/* v0.10.945 — statik tablo (T1): en ağır 5 operasyon (topOffenders), sabit sıra; sıralanmaz. */}
       {rows.length > 0 && (
-        <table style={{ width: '100%', tableLayout: 'fixed' }}>
+        <table className="dt">
           <colgroup><col /><col style={{ width: 72 }} /><col style={{ width: 80 }} /><col style={{ width: 76 }} /></colgroup>
           <thead>
             <tr>
@@ -161,7 +162,7 @@ function ProblemOffenders({ problem }: { problem: Problem }) {
           <tbody>
             {rows.map(o => (
               <tr key={o.name}>
-                <td style={{ overflow: 'hidden' }}>
+                <td>
                   <Link
                     to={operationTracesHref({
                       window: { fromNs: win.fromNs, toNs: win.toNs },
@@ -177,7 +178,7 @@ function ProblemOffenders({ problem }: { problem: Problem }) {
                   </Link>
                 </td>
                 <td className="num">{fmtNum(o.spanCount)}</td>
-                <td className="num mono">{o.p99DurationMs.toFixed(0)} ms</td>
+                <td className="num">{o.p99DurationMs.toFixed(0)} ms</td>
                 <td className="num">
                   {/* v0.10.922 (sade palet adım 1, K5) — ≤%1 SAĞLIKLI, yeşil
                       değil nötr: yeşil yalnız bir geçişi (düzeldi) anlatır. */}
@@ -696,11 +697,13 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h"><h3>Sample traces</h3>{samples.length > 0 && <span className="ov-sub">{Math.min(samples.length, 14)}{samples.length > 14 ? ` / ${samples.length}` : ''}</span>}</div>
           <div className="table-wrap">
+            {/* v0.10.945 — statik tablo (T1): başlıksız kompakt örnek listesi, en çok 14 satır,
+                sıra sunucunun; DataTable'a göç başlık satırı ekler (görsel), bu dilimde değil. */}
             <table>
               <tbody>
                 {samplesQ.isLoading && <tr><td style={{ padding: 12 }}><Spinner /></td></tr>}
                 {!samplesQ.isLoading && samples.length === 0 && (
-                  <tr><td style={{ padding: 12, color: emptyNote.warn ? 'var(--warn)' : 'var(--text3)', fontSize: 12 }}>
+                  <tr><td className={emptyNote.warn ? 'cell-warn' : 'cell-faint'} style={{ padding: 12 }}>
                     {emptyNote.text}
                   </td></tr>
                 )}
@@ -711,7 +714,6 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                   // tıklanınca buraya kaydırılır.
                   <tr key={i} data-trace-id={s.traceId || undefined}
                     className={isEv ? 'wf-evidence' : undefined}
-                    title={isEv ? 'Explain kanıtı — kök neden bu trace üzerinden soruşturuldu' : undefined}
                     {...(s.traceId ? rowActivation(() => navigate(traceHref(s.traceId!))) : {})}>
                     <td className="mono" style={{ paddingLeft: 14 }}>
                       <span style={{ color: 'var(--accent2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: 150 }}>
@@ -723,8 +725,10 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                         listeliyor, sabit rozet bilgi taşımıyordu. "kanıt"
                         kelimesi kalır ama nötr — satırın rengini zaten
                         .wf-evidence veriyor (bir olgu = bir sinyal). */}
-                    <td>{isEv && <span className="badge b-gray">kanıt</span>}</td>
-                    <td className="mono" style={{ textAlign: 'right', paddingRight: 14, fontSize: 11, color: 'var(--text3)' }}>{tsLong(s.time)}</td>
+                    <td title={isEv ? 'Explain kanıtı — kök neden bu trace üzerinden soruşturuldu' : undefined}>
+                      {isEv && <span className="badge b-gray">kanıt</span>}
+                    </td>
+                    <td className="mono cell-faint" style={{ textAlign: 'right', paddingRight: 14 }}>{tsLong(s.time)}</td>
                   </tr>
                   );
                 })}

@@ -127,7 +127,7 @@ function Inner() {
               borderRadius: 8, padding: 12, marginBottom: 10, background: 'var(--bg1)',
             }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ color: 'var(--text3)', fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>#{i + 1}</span>
+                <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>#{i + 1}</span>
                 <span className="badge b-info" style={{ whiteSpace: 'nowrap' }}>{KIND_ICON[s.kind] ?? ''} {s.kind}</span>
                 <b style={{ flex: 1 }}>{s.title || '(untitled step)'}</b>
                 <span className={`badge ${STEP_BADGE[s.status] ?? 'b-gray'}`}>{s.status.replace(/_/g, ' ')}</span>
@@ -142,13 +142,13 @@ function Inner() {
               {s.output && (
                 <pre style={{
                   marginTop: 8, padding: 8, background: 'var(--bg)', borderRadius: 4,
-                  fontSize: 12, overflowX: 'auto', fontFamily: 'ui-monospace, monospace',
+                  fontSize: 12, overflowX: 'auto',
                 }}>{s.output}</pre>
               )}
               {s.error && (
                 <pre style={{
                   marginTop: 8, padding: 8, background: 'var(--bg)', borderRadius: 4,
-                  fontSize: 12, overflowX: 'auto', color: 'var(--err)', fontFamily: 'ui-monospace, monospace',
+                  fontSize: 12, overflowX: 'auto', color: 'var(--err)',
                 }}>{s.error}</pre>
               )}
 

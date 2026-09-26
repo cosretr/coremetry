@@ -484,7 +484,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
                   <span className={sevClass(l.severity)} style={{ fontSize: 10, fontWeight: 700, minWidth: 42 }}>
                     {l.severityText || sevName(l.severity)}
                   </span>
-                  <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'monospace' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
                     {tsShort(l.timestamp)}
                   </span>
                 </div>
@@ -504,18 +504,21 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
         {spanHotspots && spanHotspots.profilesUsed > 0 && spanHotspots.hotspots.length > 0 && (
           <Section wide title={`Top methods in span window (${spanHotspots.profilesUsed} profiles merged)`}>
             <BreakdownBar b={spanHotspots.breakdown} />
-            <table className="ps-kv" style={{ width: '100%', fontSize: 11 }}>
+            {/* v0.10.945 (tablo standardı T1) — statik tablo: sunucu top=10 döner,
+                sıra örnek sayısı (sıralanmaz). Yüzde hücresinin nowrap'i
+                `.ps-kv td:last-child`in pre-wrap'ini ezer: satır içi kalır. */}
+            <table className="ps-kv" style={{ fontSize: 11 }}>
               <tbody>
                 {spanHotspots.hotspots.map((h, i) => {
                   const total = spanHotspots.totalSamples || 1;
                   const pct = (h.self / total) * 100;
                   return (
                     <tr key={i}>
-                      <td style={{ fontFamily: 'monospace', wordBreak: 'break-all', paddingRight: 6 }} title={h.name}>
+                      <td className="mono" style={{ paddingRight: 6 }} title={h.name}>
                         {clipMethod(h.name)}
                         <KindBadge kind={h.kind} />
                       </td>
-                      <td className="num mono" style={{ whiteSpace: 'nowrap', color: 'var(--text2)', width: 80 }}>
+                      <td className="num cell-muted" style={{ whiteSpace: 'nowrap', width: 80 }}>
                         {pct.toFixed(1)}%
                       </td>
                     </tr>
@@ -533,7 +536,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
                 className="ps-event"
                 style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--text)' }}>
                 <span className="badge b-info">{p.profileType.toUpperCase()}</span>
-                <span style={{ flex: 1, fontFamily: 'monospace', fontSize: 11 }}>
+                <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                   {tsLong(p.startTime)} {p.durationMs > 0 && `· ${(p.durationMs/1000).toFixed(1)}s`}
                 </span>
                 <span style={{ color: 'var(--accent2)', display: 'inline-flex' }}>
@@ -559,6 +562,11 @@ function Section({ title, children, wide }: { title: React.ReactNode; children: 
   );
 }
 
+// v0.10.945 (tablo standardı T1) — `.ps-kv` tabloları KeyValue'ya BİLEREK
+// göçmedi: satır içi panelin Tempo yoğunluğu (anahtar sütunu içeriğe sığar,
+// 11.5px, 2px satır — v0.10.686/692, `.span-panel-inline .ps-kv`) ve
+// KioskSpanPanel ile ortak görünüm KeyValue'nun sabit 150px etiketinde yok.
+// İkisi birlikte, KeyValue sıkı bir kip kazanınca göçer.
 function KV({ children }: { children: React.ReactNode }) {
   return <table className="ps-kv"><tbody>{children}</tbody></table>;
 }
@@ -706,12 +714,11 @@ const ServiceLinkCtx = createContext<SpanLinkCtx & {
 // tıklanabilsin"). null = bayrak kapalı / uygulama-içi link yok.
 const SpanK8sCtx = createContext<SpanK8sContext | null>(null);
 
-function Row({ k, v, mono, pre, copyable }: {
-  k: string; v: string; mono?: boolean; pre?: boolean; copyable?: boolean;
+// v0.10.945 — ölü `mono`/`pre` bayrakları (hiçbir çağıran vermiyordu) ve
+// onların satır içi hücre stili silindi; değer hücresi `.ps-kv td:last-child`.
+function Row({ k, v, copyable }: {
+  k: string; v: string; copyable?: boolean;
 }) {
-  const style: React.CSSProperties = {};
-  if (mono) style.wordBreak = 'break-all';
-  if (pre) style.whiteSpace = 'pre-wrap';
   const links = useContext(ServiceLinkCtx);
   const k8s = useContext(SpanK8sCtx);
   // v0.10.34 — servis + endpoint tek çözücüde (spanEntityLinks.ts).
@@ -722,7 +729,7 @@ function Row({ k, v, mono, pre, copyable }: {
   return (
     <tr>
       <td>{k}</td>
-      <td style={style}>
+      <td>
         {href
           ? <Link to={href} title={k8sHref ? `${k} → entity detayı (span anı)` : `Open ${v} service page`}
               >{v}</Link>

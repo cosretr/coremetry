@@ -272,7 +272,7 @@ export function AnomalyDetailDrawer({ event, onClose }: {
 
           {event.sample && !behaviorDetails && (
             <pre style={{
-              fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+              fontSize: 11,
               whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
               background: 'var(--bg1)', border: '1px solid var(--border)',
               borderRadius: 6, padding: '8px 10px', marginBottom: 12,

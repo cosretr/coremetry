@@ -14,8 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Check, ArrowDownToLine } from 'lucide-react';
 import { Badge, Button, Card, DisclosureButton, Row, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import { ClusterChips } from '@/components/ClusterChips';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 // v0.9.1137 (AI Faz 2.4) — log deseni kartının yuvası (ızgara varyantı).
@@ -405,7 +404,7 @@ function anomalyKindLabel(kind: AnomalyEvent['kind']): string {
 // içerikleri AYNEN korundu; kazanılan tek şey sıralama + yeniden
 // boyutlandırma + kalıcı genişlik. Pattern kolonu '24%' yerine flex:true —
 // yüzde bir px genişliğe çevrilseydi geniş desenler kırpılırdı.
-const ANOMALY_HISTORY_COLS: DataTableColumn<AnomalyEvent>[] = [
+const ANOMALY_HISTORY_COLS: ColumnDef<AnomalyEvent>[] = [
   { id: 'status',   label: 'Status',      sortValue: e => e.status,                 naturalDir: 'asc', width: 76 },
   { id: 'pattern',  label: 'Pattern',     sortValue: e => e.pattern,                naturalDir: 'asc', flex: true },
   { id: 'service',  label: 'Service',     sortValue: e => e.service,                naturalDir: 'asc', width: 260 },
@@ -455,8 +454,10 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
       <div className="table-wrap">
         {/* table-layout:fixed + colgroup keeps the 8-column history table
             inside the card (no horizontal scroll) while letting Pattern /
-            Service flex; numerics + timestamps get fixed mono columns. */}
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            Service flex; numerics + timestamps get fixed-width columns. */}
+        {/* v0.10.945 — AI sütunu `trailing` kalır (kind:'actions' değil): Explain
+            düğmesinin yeri ve "AI" başlığı bu dilimde değişmez. */}
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} trailing={[44]} />
           <DataTableHead dt={dt} trailing={<th>AI</th>} />
           <tbody>
@@ -471,28 +472,23 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
                   if ((ev.target as HTMLElement).closest('a,button')) return;
                   onOpen(e.id);
                 }}
-                title="Click for spike details"
-                // content-visibility skips off-screen rows on paint — the
-                // 24h history can run long. Not virtualized: the ?event=<id>
+                // content-visibility skips off-screen rows on paint (.cv-row) —
+                // the 24h history can run long. Not virtualized: the ?event=<id>
                 // deep-link scrolls a specific row into view, which needs the
                 // target row's DOM node mounted (a windowed table wouldn't
-                // have it). containIntrinsicSize keeps the scrollbar honest.
+                // have it).
+                className="cv-row"
                 style={highlight === e.id ? {
                   background: 'var(--accent-soft)',
                   outline: '1px solid var(--accent2)',
-                  contentVisibility: 'auto',
-                  containIntrinsicSize: 'auto 36px',
-                } : {
-                  contentVisibility: 'auto',
-                  containIntrinsicSize: 'auto 36px',
-                }}>
+                } : undefined}>
                 <td>
                   {/* v0.10.929 (K5) — ACTIVE normal durum (STATUS_TONE active → nötr); CLEARED geçiş, yeşil kalır. */}
                   <span className={`badge ${e.status === 'active' ? 'b-gray' : 'b-ok'}`}>
                     {e.status === 'active' ? 'ACTIVE' : 'CLEARED'}
                   </span>
                 </td>
-                <td style={{ fontWeight: 600 }} title={e.pattern}>{e.pattern}</td>
+                <td className="cell-strong" title={e.pattern}>{e.pattern}</td>
                 <td>
                   {/* v0.9.966 — anomalinin gözlem aralığı. CLEARED bir
                       satırda pencere GEÇMİŞTE kalıyor; onsuz link "şimdi"yi
@@ -517,10 +513,10 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
                     {anomalyKindLabel(e.kind)}
                   </span>
                 </td>
-                <td className="num mono" style={{ fontWeight: 700 }}>{e.peakRatio.toFixed(1)}</td>
+                <td className="num" style={{ fontWeight: 700 }}>{e.peakRatio.toFixed(1)}</td>
                 {/* v0.10.739 — tarih damgası 13 px (.ib-when). */}
-                <td className="mono ib-when" style={{ color: 'var(--text3)' }}>{tsLong(e.startedAt)}</td>
-                <td className="mono ib-when" style={{ color: 'var(--text3)' }}>{tsLong(e.lastSeen)}</td>
+                <td className="mono ib-when cell-faint">{tsLong(e.startedAt)}</td>
+                <td className="mono ib-when cell-faint">{tsLong(e.lastSeen)}</td>
                 <td>
                   {/* v0.9.477 — satır-içi panel bir tablo hücresinde
                       satırı şişiriyordu; cevap artık sağ AI çekmecesinde. */}
@@ -621,7 +617,7 @@ function LogPatternsSection({ items, onMute, canEdit }: {
             {a.sample && (
               <div style={{
                 fontSize: 11, color: 'var(--text3)',
-                fontFamily: 'monospace',
+                fontFamily: 'var(--font-mono)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }} title={a.sample}>
                 {a.sample}
@@ -742,7 +738,7 @@ function DeployChip({ d, service }: {
         padding: '1px 7px', borderRadius: 10, fontSize: 10,
         background: palette.bg, border: `1px solid ${palette.border}`,
         color: palette.color, textDecoration: 'none',
-        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+        fontFamily: 'var(--font-mono)',
         verticalAlign: 'middle',
       }}>
       <ArrowDownToLine size={10} strokeWidth={2} />

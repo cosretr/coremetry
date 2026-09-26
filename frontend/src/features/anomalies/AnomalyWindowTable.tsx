@@ -8,8 +8,7 @@
 // (onMute → çağıran hem kararı hem susturmayı yazar). → mevcut
 // AnomalyDetailDrawer (?anomaly=). Yalnız pencerede anomali varsa çizilir.
 import { Badge, LinkButton } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtDateTime } from '@/lib/utils';
 import { ANOMALY_KIND_COLOR, ANOMALY_KIND_TR, silenceKey } from '@/lib/anomalyRegions';
 import { SnoozeButton } from './SnoozeButton';
@@ -17,7 +16,7 @@ import type { AnomalyEvent, AnomalySilence } from '@/lib/types';
 
 interface Row { e: AnomalyEvent; silence?: AnomalySilence }
 
-const COLS: DataTableColumn<Row>[] = [
+const COLS: ColumnDef<Row>[] = [
   { id: 'kind', label: 'Tür', width: 130, sortValue: r => r.e.kind, naturalDir: 'asc' },
   { id: 'pattern', label: 'Desen', width: 300, sortValue: r => r.e.pattern, naturalDir: 'asc' },
   { id: 'started', label: 'Başlangıç', width: 150, sortValue: r => r.e.startedAt },
@@ -25,7 +24,7 @@ const COLS: DataTableColumn<Row>[] = [
   { id: 'peak', label: 'Tepe ×', width: 80, numeric: true, sortValue: r => r.e.peakRatio },
   { id: 'status', label: 'Durum', width: 90, sortValue: r => r.e.status },
   { id: 'fb', label: 'Geri bildirim', width: 210, sortValue: r => (r.e.verdict === 'anomaly' ? 2 : r.e.verdict === 'not_anomaly' || r.silence ? 1 : 0) },
-  { id: 'act', label: '', width: 260 },
+  { id: 'act', label: 'Eylemler', kind: 'actions', width: 260 },
 ];
 
 export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, onVerdict, truncated }: {
@@ -47,7 +46,7 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
   return (
     <>
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -57,20 +56,20 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
                   <span aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: silence ? 'var(--text3)' : (ANOMALY_KIND_COLOR[e.kind] ?? 'var(--warn)'), marginRight: 6, verticalAlign: 'middle' }} />
                   {ANOMALY_KIND_TR[e.kind] ?? e.kind}
                 </td>
-                <td className="mono" title={e.pattern} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.pattern}</td>
+                <td className="mono" title={e.pattern}>{e.pattern}</td>
                 <td className="mono">{fmtDateTime(new Date(e.startedAt / 1e6))}</td>
                 <td className="mono">{fmtDateTime(new Date(e.lastSeen / 1e6))}</td>
-                <td className="num mono">×{e.peakRatio.toFixed(1)}</td>
+                <td className="num">×{e.peakRatio.toFixed(1)}</td>
                 {/* v0.10.929 (K5) — active normal durum → nötr; cleared geçiş → yeşil (streams/çekmece ile tek kural). */}
                 <td>{e.status === 'active' ? <Badge tone="neutral">active</Badge> : <Badge tone="success">cleared</Badge>}</td>
-                <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <td>
                   {/* v0.10.929 (K5) — anomaliyi teyit etmek iyi haber değil: karar rozeti nötr. */}
                   {e.verdict === 'anomaly' && <Badge tone="neutral" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtDateTime(new Date(e.verdictAt / 1e6))}` : ''}`}>anomali ✓</Badge>}
                   {e.verdict === 'not_anomaly' && <Badge tone="neutral" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtDateTime(new Date(e.verdictAt / 1e6))}` : ''}`}>değil ✗</Badge>}
                   {silence && <Badge tone="neutral" style={e.verdict ? { marginLeft: 6 } : undefined} title={`${silence.createdBy} · ${fmtDateTime(new Date(silence.createdAt / 1e6))}${silence.reason ? ` · ${silence.reason}` : ''}`}>sessiz{silence.untilAt > 0 ? ` · ${fmtDateTime(new Date(silence.untilAt / 1e6))}'e dek` : ''}</Badge>}
                   {!e.verdict && !silence && <span className="field-hint">—</span>}
                 </td>
-                <td style={{ whiteSpace: 'nowrap' }}>
+                <td className="col-actions">
                   <LinkButton onClick={() => onOpen(e.id)} title="Anomali çekmecesini aç">→ detay</LinkButton>
                   {canEdit && e.verdict !== 'anomaly' && (
                     <span style={{ marginLeft: 8 }}>

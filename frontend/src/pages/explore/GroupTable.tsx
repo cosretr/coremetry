@@ -310,7 +310,7 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
   };
 
   return (
-    <div className="table-wrap is-fit" style={{ marginTop: 12 }}
+    <div className="table-wrap" style={{ marginTop: 12 }}
       onMouseLeave={() => onFocus(null)}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
         <Button variant="secondary" size="sm" onClick={exportCSV}
@@ -320,7 +320,7 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
           ⤓ CSV
         </Button>
       </div>
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
@@ -334,19 +334,21 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                 // v0.10.926 — gizli satır soluklaşması hücrelerde (`.gt-off`,
                 // globals.css): satırdaki opaklık ⊕/⊖/⇥ ipucunu yarı saydam
                 // çizip satırın yığın bağlamına hapsediyordu.
-                className={[rp.className, hidden ? 'gt-off' : ''].filter(Boolean).join(' ') || undefined}
+                // v0.10.945 (tablo standardı T6) — ekran dışı satır `cv-row`.
+                className={[rp.className, 'cv-row', hidden ? 'gt-off' : ''].filter(Boolean).join(' ')}
                 // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
                 data-row-action
                 onMouseEnter={() => onFocus(hidden ? null : r.rowKey)}
-                onClick={(e) => (e.ctrlKey || e.metaKey) ? onToggleHidden(r.rowKey) : onIsolate(r.rowKey)}
-                title="Tıkla: yalnız bu seri · Ctrl/Cmd+tık: gizle-göster · Enter: kaynağa git · üzerine gel: panelde vurgula"
-                style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
+                onClick={(e) => (e.ctrlKey || e.metaKey) ? onToggleHidden(r.rowKey) : onIsolate(r.rowKey)}>
                 {/* v0.9.848 — hücre FLEX oldu. Pivot düğmeleri etiketin
                     SOLUNDA ve flexShrink:0: sağına konsaydı uzun bir grup
                     etiketi (ellipsis + nowrap) onları sessizce kırpardı —
                     bu depoda tekrar eden bir kesilme sınıfı. Taşan tek şey
                     etiket, ve o zaten title'da tam hâliyle duruyor. */}
-                <td style={{ overflow: 'hidden' }}>
+                {/* v0.10.945 (tablo standardı T7) — jest açıklaması satırdan seri
+                    (kimlik + görünürlük işareti) hücresine indi: Ctrl/Cmd+tık'ın
+                    tek keşif yolu bu ipucu. */}
+                <td title="Tıkla: yalnız bu seri · Ctrl/Cmd+tık: gizle-göster · Enter: kaynağa git · üzerine gel: panelde vurgula">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
                     {/* v0.9.806 — glif SERİNİN RENGİNDE. Tablo tek lejant ama
                         renksizdi: 10 serilik bir panelde satırı çizgiyle
@@ -377,17 +379,17 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                     }}>{r.label}</b>
                   </div>
                 </td>
-                <td className="mono" style={{ textAlign: 'right', color: cursorSec == null ? 'var(--text3)' : 'var(--accent2)' }}>
+                <td className="num" style={{ color: cursorSec == null ? 'var(--text3)' : 'var(--accent2)' }}>
                   {cursorSec == null ? '·' : fmtSmart(valueAtCursor(r.points, cursorSec), r.unit)}
                 </td>
-                <td className="mono" style={{ textAlign: 'right' }}>{fmtSmart(r.last, r.unit)}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>{fmtSmart(r.min, r.unit)}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>{fmtSmart(r.max, r.unit)}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>{fmtSmart(r.avg, r.unit)}</td>
+                <td className="num">{fmtSmart(r.last, r.unit)}</td>
+                <td className="num">{fmtSmart(r.min, r.unit)}</td>
+                <td className="num">{fmtSmart(r.max, r.unit)}</td>
+                <td className="num">{fmtSmart(r.avg, r.unit)}</td>
                 {/* Toplam yalnız TOPLANABİLİR birimde. ms/%/latency'de
                     pod'lar arası toplam anlamsız bir sayı olurdu — "—"
                     basıp neden olduğunu title'da söylüyoruz. */}
-                <td className="mono" style={{ textAlign: 'right' }}
+                <td className="num"
                   title={r.additive ? undefined
                     : `Toplam bu birimde anlamlı değil (${r.unit || 'birimsiz'})`}>
                   {r.additive ? fmtSmart(r.sum, r.unit) : '—'}
@@ -398,7 +400,7 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                     değil operatörün niyeti. Yön OKLA söylenir (↑/↓), değer
                     yargısı RENKLE söylenmez. */}
                 {hasCompare && (
-                  <td className="mono" style={{ textAlign: 'right' }}
+                  <td className="num"
                     title={r.deltaPct == null
                       ? 'Önceki dönemde bu serinin karşılığı yok ya da önceki değer sıfır — yüzde değişim tanımsız'
                       : `${r.additive ? 'Toplam' : 'Ortalama'} bazında önceki döneme göre`}>
@@ -406,7 +408,7 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                       : `${r.deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(r.deltaPct).toFixed(1)}%`}
                   </td>
                 )}
-                <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(r.buckets)}</td>
+                <td className="num">{fmtNum(r.buckets)}</td>
               </tr>
             );
           })}

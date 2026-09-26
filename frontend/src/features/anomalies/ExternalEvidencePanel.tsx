@@ -14,8 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner, Empty } from '@/components/Spinner';
 import { externalSummaryKind, externalSummaryNote } from '@/lib/problemSubject'; // v0.10.598
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import { TimeChart } from '@/components/charts/TimeChart';
 import { fmtDateTime } from '@/lib/utils';
 import { fmtDur } from '@/components/traces/shared';
@@ -25,7 +24,7 @@ import { traceRows, evidenceCounts, pickSeries, labelKeys, labelValues, toChart,
 
 const BASELINE_LOOKBACK_NS = 3 * 3600e9;
 
-const TRACE_COLS: DataTableColumn<ExternalTraceRow>[] = [
+const TRACE_COLS: ColumnDef<ExternalTraceRow>[] = [
   { id: 'time', label: 'Zaman', width: 176, sortValue: r => r.startNs, numeric: true },
   { id: 'trace', label: 'Trace', width: 150 },
   { id: 'root', label: 'Kök servis · op', width: 260, sortValue: r => `${r.rootService ?? ''} ${r.rootOp ?? ''}` },
@@ -35,13 +34,13 @@ const TRACE_COLS: DataTableColumn<ExternalTraceRow>[] = [
   { id: 'status', label: 'Durum', width: 100, sortValue: r => (r.missing ? 2 : r.errorSpans > 0 ? 0 : 1), numeric: true },
 ];
 
-const POD_COLS: DataTableColumn<PodHit>[] = [
+const POD_COLS: ColumnDef<PodHit>[] = [
   { id: 'pod', label: 'Pod', width: 320, sortValue: r => r.pod },
   { id: 'count', label: 'Satır', width: 90, numeric: true, sortValue: r => r.count },
   { id: 'last', label: 'Son görülme', width: 176, numeric: true, sortValue: r => r.lastSeenNs },
 ];
 
-const SIG_COLS: DataTableColumn<LogSignature>[] = [
+const SIG_COLS: ColumnDef<LogSignature>[] = [
   { id: 'sev', label: 'Şiddet', width: 90, sortValue: r => r.severity },
   { id: 'tpl', label: 'İmza (örnek mesaj başlıkta)', width: 520, sortValue: r => r.template },
   { id: 'count', label: 'Kayıt', width: 80, numeric: true, sortValue: r => r.count },
@@ -178,7 +177,7 @@ export function ExternalEvidencePanel({ problem, window: win }: {
       <EvidenceBlock title="İlgili trace'ler" count={tRows.length}>
         {tRows.length === 0 ? <Muted>Trace kanıtı yok.</Muted> : (
           <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dtT.tableProps}>
               <DataTableColgroup dt={dtT} />
               <DataTableHead dt={dtT} />
               <tbody>
@@ -186,9 +185,9 @@ export function ExternalEvidencePanel({ problem, window: win }: {
                   <tr key={r.traceId}>
                     <td className="mono">{r.startNs > 0 ? fmtDateTime(new Date(r.startNs / 1e6)) : '—'}</td>
                     <td className="mono"><Link to={traceHref(r.traceId, { tab: 'logs' })} className="sec" title={`${r.traceId} — Logs sekmesi (Oracle satırları)`}>{r.traceId.slice(0, 12)}…</Link></td>
-                    <td title={`${r.rootService ?? ''} ${r.rootOp ?? ''}`} style={ellipsis}>{r.rootService ? <>{r.rootService} <span style={{ color: 'var(--text3)' }}>· {r.rootOp}</span></> : '—'}</td>
-                    <td title={`${r.errorService ?? ''} ${r.errorOp ?? ''}`} style={ellipsis}>{r.errorService ? <>{r.errorService} <span style={{ color: 'var(--text3)' }}>· {r.errorOp}</span></> : '—'}</td>
-                    <td className="num mono">{r.durationNs > 0 ? fmtDur(r.durationNs / 1e6) : '—'}</td>
+                    <td title={`${r.rootService ?? ''} ${r.rootOp ?? ''}`}>{r.rootService ? <>{r.rootService} <span style={{ color: 'var(--text3)' }}>· {r.rootOp}</span></> : '—'}</td>
+                    <td title={`${r.errorService ?? ''} ${r.errorOp ?? ''}`}>{r.errorService ? <>{r.errorService} <span style={{ color: 'var(--text3)' }}>· {r.errorOp}</span></> : '—'}</td>
+                    <td className="num">{r.durationNs > 0 ? fmtDur(r.durationNs / 1e6) : '—'}</td>
                     <td className="num">{r.spans || '—'}</td>
                     <td>{r.missing
                       ? <span className="badge b-gray" title="Trace id dış kaynaktan geldi ama bu pencerede CH'de span'i yok (retention ya da henüz gelmedi)">CH'de yok</span>
@@ -207,13 +206,13 @@ export function ExternalEvidencePanel({ problem, window: win }: {
       <EvidenceBlock title="Etkilenen pod'lar" count={pods.length}>
         {pods.length === 0 ? <Muted>Pod kanıtı yok (kaynak pod kimliği döndürmedi).</Muted> : (
           <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dtP.tableProps}>
               <DataTableColgroup dt={dtP} />
               <DataTableHead dt={dtP} />
               <tbody>
                 {dtP.sortedRows.map(r => (
                   <tr key={r.pod}>
-                    <td className="mono" title={r.pod} style={ellipsis}>{r.pod}</td>
+                    <td className="mono" title={r.pod}>{r.pod}</td>
                     <td className="num">{r.count}</td>
                     <td className="mono">{r.lastSeenNs > 0 ? fmtDateTime(new Date(r.lastSeenNs / 1e6)) : '—'}</td>
                   </tr>
@@ -228,14 +227,14 @@ export function ExternalEvidencePanel({ problem, window: win }: {
       <EvidenceBlock title="Log imzaları (WARN+)" count={sigs.length}>
         {sigs.length === 0 ? <Muted>Log imzası yok.</Muted> : (
           <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dtS.tableProps}>
               <DataTableColgroup dt={dtS} />
               <DataTableHead dt={dtS} />
               <tbody>
                 {dtS.sortedRows.map(r => (
                   <tr key={r.hash}>
                     <td><span className={`badge ${sevTone(r.severity)}`}>{r.severity || '—'}</span></td>
-                    <td className="mono" title={r.sample} style={ellipsis}>{r.template}</td>
+                    <td className="mono" title={r.sample}>{r.template}</td>
                     <td className="num">{r.count}</td>
                     <td className="num">{r.traceCount}</td>
                   </tr>
@@ -248,8 +247,6 @@ export function ExternalEvidencePanel({ problem, window: win }: {
     </div>
   );
 }
-
-const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
 
 function Muted({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 12, color: 'var(--text3)' }}>{children}</div>;

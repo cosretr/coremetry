@@ -228,7 +228,7 @@ function HeaderStat({ label, value, tone, title }: { label: string; value: strin
     <div title={title} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 44 }}>
       <span style={{
         fontSize: 14, fontWeight: 700, color, lineHeight: 1.1,
-        fontVariantNumeric: 'tabular-nums', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)',
       }}>{value}</span>
       <span style={{ fontSize: 9, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
     </div>
@@ -856,21 +856,24 @@ function TracesPageInner() {
   // bir link parametresi, groupBy'a göre adı değişirse link taşınamaz.
   // Genişlikler zaten columnLayoutSig ile korunuyor — Service kolonu gelip
   // gidince imza değişir ve bayat genişlikler DÜŞER (istenen davranış).
+  // v0.10.945 (tablo standardı) — sortValue'lar dürüst erişimci: serverSort
+  // kipinde primitif onları hiç çağırmaz (satırlar sunucu sırasında), yani
+  // davranış aynı; `() => 0` yalnız "sıralanabilir" işaretiydi.
   const aggCols = useMemo<DataTableColumn<AggregateRow>[]>(() => [
-    { id: 'name', label: groupLabel(groupBy, groupAttr), sortValue: () => '', naturalDir: 'asc', flex: true },
+    { id: 'name', label: groupLabel(groupBy, groupAttr), sortValue: r => r.groupKey, naturalDir: 'asc', flex: true },
     // Service sıralanabilir DEĞİL (sunucu bu eksende sıralamıyor) — sortValue
     // yok, dolayısıyla başlık tıklanmaz. Eski elle <th>Service</th> ile aynı.
     ...(groupBy !== 'service'
       ? [{ id: 'service', label: 'Service', width: 170 } as DataTableColumn<AggregateRow>]
       : []),
-    { id: 'count',     label: 'Traces',  sortValue: () => 0, numeric: true, width: 130 },
-    { id: 'perMin',    label: 'Per min', sortValue: () => 0, numeric: true, width: 100 },
-    { id: 'errorRate', label: 'Error %', sortValue: () => 0, numeric: true, width: 100 },
-    { id: 'avg',       label: 'Avg',     sortValue: () => 0, numeric: true, width: 95 },
-    { id: 'p50',       label: 'P50',     sortValue: () => 0, numeric: true, width: 95 },
-    { id: 'p95',       label: 'P95',     sortValue: () => 0, numeric: true, width: 95 },
-    { id: 'p99',       label: 'P99',     sortValue: () => 0, numeric: true, width: 95 },
-    { id: 'max',       label: 'Max',     sortValue: () => 0, numeric: true, width: 95 },
+    { id: 'count',     label: 'Traces',  sortValue: r => r.traceCount, numeric: true, width: 130 },
+    { id: 'perMin',    label: 'Per min', sortValue: r => r.perMin,     numeric: true, width: 100 },
+    { id: 'errorRate', label: 'Error %', sortValue: r => r.errorRate,  numeric: true, width: 100 },
+    { id: 'avg',       label: 'Avg',     sortValue: r => r.avgMs,      numeric: true, width: 95 },
+    { id: 'p50',       label: 'P50',     sortValue: r => r.p50Ms,      numeric: true, width: 95 },
+    { id: 'p95',       label: 'P95',     sortValue: r => r.p95Ms,      numeric: true, width: 95 },
+    { id: 'p99',       label: 'P99',     sortValue: r => r.p99Ms,      numeric: true, width: 95 },
+    { id: 'max',       label: 'Max',     sortValue: r => r.maxMs,      numeric: true, width: 95 },
   ], [groupBy, groupAttr]);
 
   // Eski link köprüsü: `?aggSort=p99&aggOrder=asc`. Önceliği `s_traces-agg`in
@@ -1831,7 +1834,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill }: {
   return (
     <>
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -1845,7 +1848,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill }: {
                 <tr key={`${a.groupKey}|${a.groupExtra}`} {...rowActivation(() => onDrill(a))}>
                   <td><b>{a.groupKey || '—'}</b></td>
                   {groupBy !== 'service' && <td><SvcBadge name={a.groupExtra ?? ''} /></td>}
-                  <td className="mono" style={{ textAlign: 'right' }}>
+                  <td className="num">
                     {fmtNum(a.traceCount)}
                     {missingRaw > 0 && (
                       <span className="badge b-warn" style={{ marginLeft: 6, fontSize: 10 }}
@@ -1854,13 +1857,13 @@ function AggregateTable({ agg, groupBy, dt, onDrill }: {
                       </span>
                     )}
                   </td>
-                  <td className="mono" style={{ textAlign: 'right' }} title="Traces per minute">{fmtPerMin(a.perMin)}</td>
-                  <td className="mono" style={{ textAlign: 'right' }}><span className={`badge ${errCls}`}>{fmtFixed(a.errorRate, 2)}%</span></td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{fmtFixed(a.avgMs, 1)}ms</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{fmtFixed(a.p50Ms, 1)}ms</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{fmtFixed(a.p95Ms, 1)}ms</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{fmtFixed(a.p99Ms, 1)}ms</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>{fmtFixed(a.maxMs, 1)}ms</td>
+                  <td className="num" title="Traces per minute">{fmtPerMin(a.perMin)}</td>
+                  <td className="num"><span className={`badge ${errCls}`}>{fmtFixed(a.errorRate, 2)}%</span></td>
+                  <td className="num">{fmtFixed(a.avgMs, 1)}ms</td>
+                  <td className="num">{fmtFixed(a.p50Ms, 1)}ms</td>
+                  <td className="num">{fmtFixed(a.p95Ms, 1)}ms</td>
+                  <td className="num">{fmtFixed(a.p99Ms, 1)}ms</td>
+                  <td className="num">{fmtFixed(a.maxMs, 1)}ms</td>
                 </tr>
               );
             })}

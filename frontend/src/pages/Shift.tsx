@@ -6,8 +6,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
 import { IconSparkles } from '@/components/icons';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { tsLong, fmtFixed } from '@/lib/utils';
 import { serviceHref, eventLifespanWindow, exceptionGroupWindow } from '@/lib/serviceHref';
@@ -29,7 +28,7 @@ import { SubjectLink } from '../components/SubjectLink';
 // paylaşılabilir link yeter). AI anlatımı inline panelde (SlowQueries
 // emsali) — tek-atış sonuç, çekmece sohbeti değil.
 
-const PROBLEM_COLS: DataTableColumn<Problem>[] = [
+const PROBLEM_COLS: ColumnDef<Problem>[] = [
   { id: 'prio', label: 'Öncelik', sortValue: p => p.priority ?? 'P9', width: 80 },
   { id: 'service', label: 'Servis', sortValue: p => p.service, width: 180 },
   { id: 'rule', label: 'Kural', sortValue: p => p.ruleName, width: 240 },
@@ -38,7 +37,7 @@ const PROBLEM_COLS: DataTableColumn<Problem>[] = [
   { id: 'rc', label: 'Kök neden', sortValue: p => p.rootCause?.topSuspect ?? '', width: 220 },
 ];
 
-const WORSE_COLS: DataTableColumn<ChangedService>[] = [
+const WORSE_COLS: ColumnDef<ChangedService>[] = [
   { id: 'service', label: 'Servis', sortValue: c => c.service, width: 200 },
   { id: 'err', label: 'Hata oranı', sortValue: c => c.errDeltaPct, numeric: true, width: 190 },
   { id: 'p99', label: 'P99', sortValue: c => c.p99DeltaPct, numeric: true, width: 220 },
@@ -46,7 +45,7 @@ const WORSE_COLS: DataTableColumn<ChangedService>[] = [
   { id: 'score', label: 'Skor', sortValue: c => c.score, numeric: true, width: 80 },
 ];
 
-const EXC_COLS: DataTableColumn<ExceptionGroup>[] = [
+const EXC_COLS: ColumnDef<ExceptionGroup>[] = [
   { id: 'type', label: 'Tip', sortValue: g => g.type, width: 320 },
   { id: 'service', label: 'Servis', sortValue: g => g.service, width: 180 },
   { id: 'first', label: 'İlk görülme', sortValue: g => g.firstSeen, numeric: true, width: 150 },
@@ -148,7 +147,7 @@ export default function ShiftPage() {
             {problems.length === 0
               ? <Empty icon="✓" title="Pencerede problem açılmadı">Sakin bir vardiya.</Empty>
               : (
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <table {...probT.tableProps}>
                   <DataTableColgroup dt={probT} />
                   <DataTableHead dt={probT} />
                   <tbody>
@@ -159,8 +158,7 @@ export default function ShiftPage() {
                         <td><Link to={`/problems?problem=${encodeURIComponent(p.id)}`}>{p.ruleName}</Link></td>
                         <td className="mono">{tsLong(p.startedAt)}</td>
                         <td>{p.resolvedAt ? `kapandı ${tsLong(p.resolvedAt)}` : p.status}</td>
-                        <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          title={p.rootCause?.topSuspect ?? ''}>
+                        <td title={p.rootCause?.topSuspect ?? ''}>
                           {p.rootCause?.topSuspect
                             ? `${p.rootCause.topSuspect} (%${Math.round((p.rootCause.confidence ?? 0) * 100)})`
                             : p.recentDeploy ? `deploy ${p.recentDeploy.version}` : '—'}
@@ -177,17 +175,17 @@ export default function ShiftPage() {
             {worsened.length === 0
               ? <Empty icon="✓" title="Kayda değer kötüleşme yok">Önceki pencereye göre sapan servis bulunmadı.</Empty>
               : (
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <table {...worseT.tableProps}>
                   <DataTableColgroup dt={worseT} />
                   <DataTableHead dt={worseT} />
                   <tbody>
                     {worseT.sortedRows.map((c: ChangedService) => (
                       <tr key={c.service}>
                         <td><Link to={serviceHref(c.service, { range: pageWindow })}>{c.service}</Link></td>
-                        <td>{deltaCell(c.baselineErrorRate * 100, c.currentErrorRate * 100, '%', c.errDeltaPct)}</td>
-                        <td>{deltaCell(c.baselineP99Ms, c.currentP99Ms, 'ms', c.p99DeltaPct)}</td>
-                        <td>{deltaCell(c.baselineRate, c.currentRate, '/s', c.rateDeltaPct)}</td>
-                        <td className="mono">{fmtFixed(c.score, 1)}</td>
+                        <td className="num">{deltaCell(c.baselineErrorRate * 100, c.currentErrorRate * 100, '%', c.errDeltaPct)}</td>
+                        <td className="num">{deltaCell(c.baselineP99Ms, c.currentP99Ms, 'ms', c.p99DeltaPct)}</td>
+                        <td className="num">{deltaCell(c.baselineRate, c.currentRate, '/s', c.rateDeltaPct)}</td>
+                        <td className="num">{fmtFixed(c.score, 1)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -202,18 +200,18 @@ export default function ShiftPage() {
             {excs.length === 0
               ? <Empty icon="✓" title="Yeni imza yok">Bu pencerede ilk kez görülen exception grubu bulunmadı.</Empty>
               : (
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <table {...excT.tableProps}>
                   <DataTableColgroup dt={excT} />
                   <DataTableHead dt={excT} />
                   <tbody>
                     {excT.sortedRows.map((g: ExceptionGroup) => (
                       <tr key={g.fingerprint}>
-                        <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={g.type}>
+                        <td className="mono" title={g.type}>
                           <Link to={`/problems?exc=${encodeURIComponent(g.fingerprint)}`}>{g.type}</Link>
                         </td>
                         <td><Link to={serviceHref(g.service, { range: exceptionGroupWindow(g) })}>{g.service}</Link></td>
                         <td className="mono">{tsLong(g.firstSeen)}</td>
-                        <td className="mono">{g.occurrences}</td>
+                        <td className="num">{g.occurrences}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -245,7 +243,7 @@ function deltaCell(base: number, cur: number, unit: string, deltaPct: number) {
   const worse = cur > base;
   const arrow = cur > base ? ' ↑' : cur < base ? ' ↓' : '';
   return (
-    <span style={{ color: worse ? 'var(--err)' : 'var(--text2)' }} className="mono">
+    <span style={{ color: worse ? 'var(--err)' : 'var(--text2)' }}>
       {fmtFixed(base, 1)}{unit} → {fmtFixed(cur, 1)}{unit} ({deltaPct > 0 ? '+' : ''}{fmtFixed(deltaPct, 0)}%){arrow}
     </span>
   );

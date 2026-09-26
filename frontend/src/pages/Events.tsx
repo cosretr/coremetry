@@ -10,8 +10,7 @@ import { useOperatorEvents, useDeleteOperatorEvent, useNotificationLog } from '@
 import { timeRangeToNs, tsMinute } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { useUrlRange } from '@/lib/useUrlRange';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { serviceHref, pointEventWindow } from '@/lib/serviceHref';
 import type { NotificationLogEntry } from '@/lib/types';
 import { UNMATCHED_KIND } from '@/lib/notifyRouting';
@@ -56,6 +55,10 @@ type Event = {
   owner: string;
   createdAt: number;  // unix ns
 };
+
+// v0.10.945 (tablo standardı T8) — eylem kolonu `kind: 'actions'`: başlıksız,
+// sıralanmaz, sağa yaslı. id/genişlik aynı → kayıtlı kolon genişlikleri korunur.
+const EVENT_ACTIONS_COL: ColumnDef<Event> = { id: 'actions', label: 'Actions', kind: 'actions', width: 60 };
 
 // Kind→colour palette matches EventMarkers.tsx so the same event
 // reads consistently on the chart overlay and on this page.
@@ -134,10 +137,10 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
     () => (data && related) ? data.filter(n => n.relatedKind === related) : data,
     [data, related]);
 
-  const cols = useMemo<DataTableColumn<NotificationLogEntry>[]>(() => [
-    { id: 'time',    label: 'Sent',    sortValue: n => n.sentAt,      naturalDir: 'desc', width: 130 },
+  const cols = useMemo<ColumnDef<NotificationLogEntry>[]>(() => [
+    { id: 'time',    label: 'Sent',    sortValue: n => n.sentAt,      naturalDir: 'desc', width: 130, tone: () => 'faint' },
     { id: 'channel', label: 'Channel', sortValue: n => n.channelKind, naturalDir: 'asc',  width: 160 },
-    { id: 'target',  label: 'To',      sortValue: n => n.target,      naturalDir: 'asc',  width: 200 },
+    { id: 'target',  label: 'To',      sortValue: n => n.target,      naturalDir: 'asc',  width: 200, mono: true, tone: () => 'muted' },
     { id: 'subject', label: 'Subject', sortValue: n => n.subject,     naturalDir: 'asc',  width: 340 },
     { id: 'related', label: 'Related', sortValue: n => n.relatedKind, naturalDir: 'asc',  width: 150 },
     { id: 'status',  label: 'Status',  sortValue: n => (n.ok ? 1 : 0), naturalDir: 'asc', width: 90 },
@@ -185,26 +188,23 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
         </Empty>
       )}
       {rows && rows.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(n => (
-                <tr key={n.id} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
-                  <td className="mono" style={{ fontSize: 11, color: 'var(--text3)', whiteSpace: 'nowrap' }}
-                      title={new Date(n.sentAt / 1_000_000).toISOString()}>
-                    {fmtRel(n.sentAt)}
-                  </td>
-                  <td>
+                <tr key={n.id} className="cv-row">
+                  {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar). */}
+                  <DataTableCell dt={dt} col="time" row={n} value={fmtRel(n.sentAt)} className="mono"
+                    title={new Date(n.sentAt / 1_000_000).toISOString()} />
+                  <DataTableCell dt={dt} col="channel" row={n}>
                     <span className="badge b-info" style={{ marginRight: 6 }}>{n.channelKind}</span>
                     <span style={{ fontSize: 11, color: 'var(--text2)' }}>{n.channelName}</span>
-                  </td>
-                  <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }} title={n.target}>
-                    {n.target || '—'}
-                  </td>
-                  <td title={n.bodyPreview || n.subject}>{n.subject || '—'}</td>
-                  <td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="target" row={n} value={n.target} />
+                  <DataTableCell dt={dt} col="subject" row={n} value={n.subject} title={n.bodyPreview || n.subject} />
+                  <DataTableCell dt={dt} col="related" row={n}>
                     {n.relatedKind === 'problem' && n.relatedId ? (
                       <Link to={`/problems?problem=${encodeURIComponent(n.relatedId)}`}
                         style={{ color: 'var(--accent2)', fontSize: 11 }}
@@ -224,8 +224,8 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
                     ) : (
                       <span style={{ fontSize: 11, color: 'var(--text3)' }}>{n.relatedKind || '—'}</span>
                     )}
-                  </td>
-                  <td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="status" row={n}>
                     {/* v0.9.1344 — ÜÇÜNCÜ HÂL. channelKind='none' satırı bir
                         gönderim değil, "bu problem hiçbir kanalla eşleşmedi"
                         işareti. `ok ? sent : failed` ikilisi onu "failed"
@@ -237,7 +237,7 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
                       : n.ok
                         ? <span className="badge b-gray">sent</span>
                         : <span className="badge b-err" title={n.error}>failed</span>}
-                  </td>
+                  </DataTableCell>
                 </tr>
               ))}
             </tbody>
@@ -293,14 +293,14 @@ function AnnotationsTab({ from, to }: { from: number; to: number }) {
   };
 
   // Shared sortable + resizable table. Actions column only for deleters.
-  const eventCols = useMemo<DataTableColumn<Event>[]>(() => [
-    { id: 'time',    label: 'Time',    sortValue: e => e.time,    naturalDir: 'desc', width: 150 },
+  const eventCols = useMemo<ColumnDef<Event>[]>(() => [
+    { id: 'time',    label: 'Time',    sortValue: e => e.time,    naturalDir: 'desc', width: 150, tone: () => 'faint' },
     { id: 'kind',    label: 'Kind',    sortValue: e => e.kind,    naturalDir: 'asc',  width: 120 },
     { id: 'label',   label: 'Label',   sortValue: e => e.label,   naturalDir: 'asc',  width: 300 },
     { id: 'service', label: 'Service', sortValue: e => e.service, naturalDir: 'asc',  width: 170 },
-    { id: 'owner',   label: 'Owner',   sortValue: e => e.owner,   naturalDir: 'asc',  width: 130 },
+    { id: 'owner',   label: 'Owner',   sortValue: e => e.owner,   naturalDir: 'asc',  width: 130, mono: true, tone: () => 'muted' },
     { id: 'link',    label: 'Link',    width: 80 },
-    ...(canDelete ? [{ id: 'actions', label: '', width: 60 } as DataTableColumn<Event>] : []),
+    ...(canDelete ? [EVENT_ACTIONS_COL] : []),
   ], [canDelete]);
   const dt = useDataTable<Event>({
     storageKey: 'events', columns: eventCols,
@@ -337,27 +337,25 @@ function AnnotationsTab({ from, to }: { from: number; to: number }) {
           </Empty>
         )}
         {data && data.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(ev => (
-                  <tr key={ev.id} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
-                    <td className="mono" style={{ fontSize: 11, color: 'var(--text3)', whiteSpace: 'nowrap' }}
-                        title={new Date(ev.time / 1_000_000).toISOString()}>
-                      {fmtRel(ev.time)}
-                    </td>
-                    <td>
+                  <tr key={ev.id} className="cv-row">
+                    <DataTableCell dt={dt} col="time" row={ev} value={fmtRel(ev.time)} className="mono"
+                      title={new Date(ev.time / 1_000_000).toISOString()} />
+                    <DataTableCell dt={dt} col="kind" row={ev}>
                       <span style={{
                         display: 'inline-block', padding: '2px 8px',
                         fontSize: 10, fontWeight: 600, borderRadius: 4,
                         color: KIND_COLOURS[ev.kind] ?? KIND_COLOURS.custom,
                         border: `1px solid ${KIND_COLOURS[ev.kind] ?? KIND_COLOURS.custom}`,
                       }}>{ev.kind || 'custom'}</span>
-                    </td>
-                    <td>{ev.label}</td>
-                    <td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="label" row={ev} value={ev.label} />
+                    <DataTableCell dt={dt} col="service" row={ev}>
                       {/* v0.9.966 — anotasyon TEK bir an; servis sayfası o
                           anın etrafında açılmalı. Şerit zaten "her grafikte
                           dikey işaret" diye vaat ediyor, link ise "şimdi"yi
@@ -366,19 +364,17 @@ function AnnotationsTab({ from, to }: { from: number; to: number }) {
                         ? <Link to={serviceHref(ev.service, { range: pointEventWindow(ev.time) })}
                              style={{ color: 'var(--accent2)' }}>{ev.service}</Link>
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </td>
-                    <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>
-                      {ev.owner || '—'}
-                    </td>
-                    <td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="owner" row={ev} value={ev.owner} />
+                    <DataTableCell dt={dt} col="link" row={ev}>
                       {ev.link
                         ? <a href={ev.link} target="_blank" rel="noopener noreferrer"
                              style={{ color: 'var(--accent2)', fontSize: 11 }}
                              title={ev.link}>open ↗</a>
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </td>
+                    </DataTableCell>
                     {canDelete && (
-                      <td>
+                      <DataTableCell dt={dt} col="actions" row={ev}>
                         <Button
                           variant="ghost-danger"
                           size="sm"
@@ -393,7 +389,7 @@ function AnnotationsTab({ from, to }: { from: number; to: number }) {
                               tek sözleşmeye indiriyor. */}
                           {busyDelete === ev.id ? '…' : '✕'}
                         </Button>
-                      </td>
+                      </DataTableCell>
                     )}
                   </tr>
                 ))}

@@ -77,11 +77,13 @@ export function ProblemLogEvidence({ service, startedAt, resolvedAt, linkWindow 
                   <DataTableHead dt={dt} />
                   <tbody>
                     {dt.sortedRows.map(r => (
-                      <tr key={r.hash} title={r.sample}>
+                      <tr key={r.hash}>
                         <td><span className={`badge ${sevClass(r.severity)}`}>{sevName(r.severity)}</span></td>
-                        <td className="mono" style={{ fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <td className="mono" title={r.sample}>
+                          {/* v0.10.945 — örnek satır Link başlığında: hücre title'ı iç bağlantının kendi title'ıyla gölgeleniyordu (T7 göçü). */}
                           {r.query
-                            ? <Link to={logsHref({ window: linkWindow, service, severity: PROBLEM_LOG_SEVERITY, q: r.query, panel: 'patterns' })} title="Bu desenin satırları (/logs, aynı pencere, Desenler paneli açık)">{r.template}</Link>
+                            ? <Link to={logsHref({ window: linkWindow, service, severity: PROBLEM_LOG_SEVERITY, q: r.query, panel: 'patterns' })}
+                                title={`${r.sample}\n— Bu desenin satırları (/logs, aynı pencere, Desenler paneli açık)`}>{r.template}</Link>
                             : r.template}
                         </td>
                         <td className="num">{r.count.toLocaleString()}</td>

@@ -154,7 +154,7 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
                            letterSpacing: '.4px', fontWeight: 700 }}>DSL</span>
             <input value={q.dsl} spellCheck={false}
               onChange={e => onChange({ ...q, dsl: e.target.value })}
-              style={{ flex: 1, fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11.5 }}
+              style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11.5 }}
               title="Gelişmiş DSL — chip filtreleriyle AND'lenir (eski derin linklerden gelir)" />
             <IconButton size="xs" icon="✕" aria-label="DSL'i kaldır"
               onClick={() => onChange({ ...q, dsl: '' })} />

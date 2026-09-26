@@ -13,8 +13,7 @@ import { tsLong, fmtNum } from '@/lib/utils';
 import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.796
 import { priorityRank } from '@/lib/priorityRank'; // v0.10.796
 import { incidentRootCauseLabel, incidentRootCauseSort } from '@/lib/incidentRootCause';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { Incident, IncidentStatus } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
@@ -22,13 +21,13 @@ import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.92
 
 // Columns for the shared sortable + resizable DataTable. Ongoing
 // incidents (no resolvedAt) sort as longest-duration.
-const INCIDENT_COLS: DataTableColumn<Incident>[] = [
+const INCIDENT_COLS: ColumnDef<Incident>[] = [
   { id: 'status',   label: 'Status',   sortValue: i => i.status,   naturalDir: 'asc', width: 120 },
   // v0.10.796 — P rozeti (server, Inbox ile aynı merdiven); P1 önce sıralanır.
   { id: 'priority', label: 'Priority', sortValue: i => priorityRank(i.priority), numeric: true, naturalDir: 'desc', width: 90 },
   { id: 'severity', label: 'Severity', sortValue: i => i.severity, naturalDir: 'asc', width: 120 },
   { id: 'title',    label: 'Title',    sortValue: i => i.title,    naturalDir: 'asc', width: 320 },
-  { id: 'service',  label: 'Service',  sortValue: i => i.service,  naturalDir: 'asc', width: 180 },
+  { id: 'service',  label: 'Service',  sortValue: i => i.service,  naturalDir: 'asc', width: 180, mono: true },
   // v0.10.797 — bağlı problemler "3 (2 açık)"; açık olan önce, sonra toplam.
   { id: 'problems', label: 'Problems', sortValue: i => (i.unresolvedProblems ?? -1) * 1000 + (i.problemCount ?? 0), numeric: true, naturalDir: 'desc', width: 110 },
   // v0.10.698 — bağlı problemlerin en güvenli hipotezi (server); yoksa "—".
@@ -141,48 +140,50 @@ export default function IncidentsPage() {
           // ClusterChips can wrap, so rows are variable-height — incompatible
           // with VirtualTable's uniform-row assumption. content-visibility
           // keeps the paint cheap on the (limit 200) list.
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
-                {dt.sortedRows.map((i, idx) => (
-                  <tr key={i.id} {...dt.rowProps(idx)}
-                      // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
-                      data-row-action
-                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}
-                      onMouseEnter={() => dt.nav.setSelected(idx)}
-                      onClick={() => navigate(`/incident?id=${i.id}`)}>
-                    <td><StatusPill s={i.status} /></td>
-                    <td>{i.priority ? <PriorityBadge p={i.priority} reason={i.priorityReason} /> : '—'}</td>
-                    <td><SeverityPill s={i.severity} /></td>
-                    <td>
-                      <Link to={`/incident?id=${i.id}`} style={{ fontWeight: 600, color: 'var(--text)' }}
-                            onClick={e => e.stopPropagation()}>
-                        {i.title}
-                      </Link>
-                      {i.assignee && (
-                        <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 8 }}>
-                          assigned to {i.assignee}
-                        </span>
-                      )}
-                    </td>
-                    <td className="mono" style={{ fontSize: 12 }}>
-                      {i.service || '—'}
-                      <ClusterChipsRef clusters={i.clusters} />
-                    </td>
-                    <td className="mono" style={{ fontSize: 12 }} title={i.problemCount === undefined ? undefined : `${i.problemCount} bağlı problem, ${i.unresolvedProblems ?? 0} açık`}>
-                      {i.problemCount === undefined ? '—' : `${i.problemCount}${i.unresolvedProblems ? ` (${i.unresolvedProblems} açık)` : ''}`}
-                    </td>
-                    <td className="mono" style={{ fontSize: 12 }}>
-                      <IncidentCause rc={i.rootCause} />
-                    </td>
-                    <td className="mono ib-when">{tsLong(i.startedAt)}</td>{/* v0.10.739 — 13 px damga */}
-                    <td className="mono" style={{ textAlign: 'right' }}>
-                      {fmtDuration(i.startedAt, i.resolvedAt)}
-                    </td>
-                  </tr>
-                ))}
+                {dt.sortedRows.map((i, idx) => {
+                  const rp = dt.rowProps(idx);
+                  return (
+                    <tr key={i.id} {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
+                        // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                        data-row-action
+                        onMouseEnter={() => dt.nav.setSelected(idx)}
+                        onClick={() => navigate(`/incident?id=${i.id}`)}>
+                      <DataTableCell dt={dt} col="status" row={i}><StatusPill s={i.status} /></DataTableCell>
+                      {/* v0.10.945 — priority ve kök neden kolonlarında `numeric` yalnız
+                          sıralama için: hücreleri DataTableCell'in `num`unu almaz (hiza aynı). */}
+                      <td>{i.priority ? <PriorityBadge p={i.priority} reason={i.priorityReason} /> : '—'}</td>
+                      <DataTableCell dt={dt} col="severity" row={i}><SeverityPill s={i.severity} /></DataTableCell>
+                      <DataTableCell dt={dt} col="title" row={i}>
+                        <Link to={`/incident?id=${i.id}`} style={{ fontWeight: 600, color: 'var(--text)' }}
+                              onClick={e => e.stopPropagation()}>
+                          {i.title}
+                        </Link>
+                        {i.assignee && (
+                          <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 8 }}>
+                            assigned to {i.assignee}
+                          </span>
+                        )}
+                      </DataTableCell>
+                      <DataTableCell dt={dt} col="service" row={i}>
+                        {i.service || '—'}
+                        <ClusterChipsRef clusters={i.clusters} />
+                      </DataTableCell>
+                      <DataTableCell dt={dt} col="problems" row={i} title={i.problemCount === undefined ? undefined : `${i.problemCount} bağlı problem, ${i.unresolvedProblems ?? 0} açık`}>
+                        {i.problemCount === undefined ? '—' : `${i.problemCount}${i.unresolvedProblems ? ` (${i.unresolvedProblems} açık)` : ''}`}
+                      </DataTableCell>
+                      <td className="mono">
+                        <IncidentCause rc={i.rootCause} />
+                      </td>
+                      <DataTableCell dt={dt} col="started" row={i} value={tsLong(i.startedAt)} className="mono ib-when" />{/* v0.10.739 — 13 px damga */}
+                      <DataTableCell dt={dt} col="duration" row={i} value={fmtDuration(i.startedAt, i.resolvedAt)} />
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

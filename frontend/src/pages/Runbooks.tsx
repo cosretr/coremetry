@@ -4,21 +4,23 @@ import { Button } from '@/components/ui/Button';
 import { Spinner, Empty } from '@/components/Spinner';
 import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { Runbook } from '@/lib/types';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 // v0.9.872 (tutarlılık denetimi BT11) — `is-fit` sınıfı vardı, primitif
 // yoktu. Genişlikler beyan edilmediği için isFitTables.test.ts bu tabloyu
 // ÖLÇEMİYOR ve UNMEASURED istisnasında bekliyordu.
-// Toplam: flex + 90 + 100 + 260 + 165 = 615 + trailing 260 = 875px < 1150.
-const RUNBOOK_COLS: DataTableColumn<Runbook>[] = [
+// Toplam: flex + 90 + 100 + 260 + 165 = 615 + eylemler 260 = 875px < 1150.
+// v0.10.945 (tablo standardı dilim 3) — eylemler `kind: 'actions'` kolonu;
+// `minWidth = width` onu eski sabit `trailing` genişliğinde kilitler.
+const RUNBOOK_COLS: ColumnDef<Runbook>[] = [
   { id: 'title',   label: 'Title',   sortValue: r => r.title || '(untitled)', naturalDir: 'asc', flex: true },
   { id: 'steps',   label: 'Steps',   sortValue: r => r.steps?.length ?? 0,    numeric: true, width: 90 },
   { id: 'enabled', label: 'Enabled', sortValue: r => (r.enabled ? 1 : 0),     width: 100 },
   { id: 'labels',  label: 'Labels',  sortValue: r => (r.labels ?? []).join(', '), naturalDir: 'asc', width: 260 },
   { id: 'updated', label: 'Updated', sortValue: r => r.updatedAt,             width: 165 },
+  { id: 'actions', label: 'Actions', kind: 'actions', width: 260, minWidth: 260 },
 ];
 import { useAuth } from '@/components/AuthProvider';
 import {
@@ -124,10 +126,10 @@ export default function RunbooksPage() {
         )}
 
         {runbooks && runbooks.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
-              <DataTableColgroup dt={dt} trailing={[260]} />
-              <DataTableHead dt={dt} trailing={<th></th>} />
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
+              <DataTableColgroup dt={dt} />
+              <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(rb => (
                   <tr key={rb.id}>
@@ -138,7 +140,7 @@ export default function RunbooksPage() {
                         {rb.title || '(untitled)'}
                       </a>
                     </td>
-                    <td className="num mono">{rb.steps?.length ?? 0}</td>
+                    <td className="num">{rb.steps?.length ?? 0}</td>
                     {/* v0.10.929 (K5) — açık/kapalı ayar durumu nötr. */}
                     <td>{rb.enabled
                       ? <span className="badge b-gray">ON</span>
@@ -154,10 +156,10 @@ export default function RunbooksPage() {
                           </span>
                         )}
                     </td>
-                    <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
+                    <td className="mono cell-faint">
                       {tsLong(rb.updatedAt)}
                     </td>
-                    <td><div className="cell-actions end">
+                    <DataTableCell dt={dt} col="actions" row={rb}><div className="cell-actions end">
                       <Button variant="secondary" size="sm"
                         onClick={() => navigate(`/runbook?id=${encodeURIComponent(rb.id)}`)}>
                         Open
@@ -178,7 +180,7 @@ export default function RunbooksPage() {
                         </Button>
                       )}
                     </div>
-                    </td>
+                    </DataTableCell>
                   </tr>
                 ))}
               </tbody>

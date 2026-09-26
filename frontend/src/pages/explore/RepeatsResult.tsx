@@ -80,44 +80,45 @@ export function RepeatsResult({
               : `${repeats.length} trace${repeats.length === 1 ? '' : 's'} with ≥ ${repeatMin} repeats of the same span shape — heaviest at the top.`}
           </div>
           <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...repeatsDt.tableProps}>
               <DataTableColgroup dt={repeatsDt} />
               <DataTableHead dt={repeatsDt} />
               <tbody>
-                {repeatsDt.sortedRows.map((r, i) => (
-                  <tr key={`${r.traceId}|${i}`} {...repeatsDt.rowProps(i)}
-                      {...rowActivation(() => navigate(traceHref(r.traceId)))}
-                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' }}>
-                    <td>
-                      <Link to={traceHref(r.traceId)}
-                            onClick={e => e.stopPropagation()}
-                            style={{ fontFamily: 'monospace', fontSize: 11 }}>
-                        {r.traceId.slice(0, 12)}…
-                      </Link>
-                    </td>
-                    <td style={{ fontSize: 12 }}>
-                      <span style={{ fontWeight: 600 }}>{r.service || '—'}</span>
-                      {r.rootName && (
-                        <span style={{ color: 'var(--text3)' }}> · {r.rootName}</span>
-                      )}
-                    </td>
-                    <td style={{
-                      fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                      fontSize: 11, color: 'var(--text2)',
-                    }} title={(r.groupValues ?? []).join(' · ')}>
-                      {(r.groupValues ?? []).filter(Boolean).join(' · ') ||
-                        <span style={{ color: 'var(--text3)' }}>(empty)</span>}
-                    </td>
-                    <td className="num mono" style={{ fontWeight: 700,
-                      color: r.count >= 50 ? 'var(--err)' : r.count >= 20 ? 'var(--warn)' : 'var(--text)' }}>
-                      {fmtNum(r.count)}
-                    </td>
-                    <td className="num mono">{r.totalDurationMs.toFixed(1)}ms</td>
-                    <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
-                      {tsLong(r.startedAt)}
-                    </td>
-                  </tr>
-                ))}
+                {repeatsDt.sortedRows.map((r, i) => {
+                  const rp = repeatsDt.rowProps(i);
+                  return (
+                    <tr key={`${r.traceId}|${i}`} {...rp}
+                        {...rowActivation(() => navigate(traceHref(r.traceId)))}
+                        className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                      <td className="mono">
+                        <Link to={traceHref(r.traceId)}
+                              onClick={e => e.stopPropagation()}
+                              style={{ fontSize: 11 }}>
+                          {r.traceId.slice(0, 12)}…
+                        </Link>
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: 600 }}>{r.service || '—'}</span>
+                        {r.rootName && (
+                          <span style={{ color: 'var(--text3)' }}> · {r.rootName}</span>
+                        )}
+                      </td>
+                      <td className="mono cell-muted" title={(r.groupValues ?? []).join(' · ')}>
+                        {(r.groupValues ?? []).filter(Boolean).join(' · ') ||
+                          <span style={{ color: 'var(--text3)' }}>(empty)</span>}
+                      </td>
+                      {/* v0.10.945 — 700 ağırlığın sınıfı yok (.cell-strong 600): satır içi kalır. */}
+                      <td className={`num ${r.count >= 50 ? 'cell-err' : r.count >= 20 ? 'cell-warn' : ''}`}
+                        style={{ fontWeight: 700 }}>
+                        {fmtNum(r.count)}
+                      </td>
+                      <td className="num">{r.totalDurationMs.toFixed(1)}ms</td>
+                      <td className="mono cell-faint" title={tsLong(r.startedAt)}>
+                        {tsLong(r.startedAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

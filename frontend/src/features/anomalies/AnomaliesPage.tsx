@@ -18,8 +18,7 @@ import { api, type UserRow } from '@/lib/api';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { fmtNum, tsLong } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, type ColumnDef } from '@/components/ui/DataTable';
 import type {
   ExceptionGroup, ExceptionGroupState, ExceptionSample,
 } from '@/lib/types';
@@ -62,7 +61,7 @@ const DEFAULT_EXC_SORT = { id: 'priority' as SortKey, dir: 'desc' as const };
 // sortable marker + naturalDir carrier). State's severity-style
 // ordering (worst at top) stays server-side — see
 // exceptionGroupsOrderBy's multiIf.
-const EXC_COLS: DataTableColumn<ExceptionGroup>[] = [
+const EXC_COLS: ColumnDef<ExceptionGroup>[] = [
   // v0.10.703 — öncelik kendi sütununda (Problems inbox PRIO ile aynı anatomi);
   // sıralama sunucuda (exception_priority_sort.go), sortValue yalnız işaret.
   { id: 'priority',    label: 'Prio',        sortValue: g => g.priority ?? '', naturalDir: 'desc', width: 60 },
@@ -74,6 +73,12 @@ const EXC_COLS: DataTableColumn<ExceptionGroup>[] = [
   { id: 'firstSeen',   label: 'First seen',  sortValue: g => g.firstSeen,   width: 168 },
   { id: 'lastSeen',    label: 'Last seen',   sortValue: g => g.lastSeen,    width: 168 },
   { id: 'assignee',    label: 'Assignee',    sortValue: g => g.assignee,    naturalDir: 'asc',  width: 120 },
+];
+// v0.10.945 (tablo standardı T8) — eylem kolonu yalnız admin/editor'de;
+// `minWidth = width` onu eski sabit `trailing` genişliğinde kilitler.
+const EXC_COLS_ADMIN: ColumnDef<ExceptionGroup>[] = [
+  ...EXC_COLS,
+  { id: 'actions',     label: 'Actions',     kind: 'actions', width: 208, minWidth: 208 },
 ];
 
 // v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
@@ -238,7 +243,7 @@ export default function ProblemsPage() {
     // v0.10.703 — anahtar v2: eski kalıcı sıra (lastSeen) yeni öncelik
     // varsayılanını gölgelemesin; genişlikler sıfırlanır (bilinçli).
     storageKey: 'exception-inbox-v2',
-    columns: EXC_COLS,
+    columns: isAdmin ? EXC_COLS_ADMIN : EXC_COLS,
     rows: data ?? [],
     serverSort: true,
     initialSort: DEFAULT_EXC_SORT,
@@ -540,11 +545,10 @@ export default function ProblemsPage() {
           <div className="table-wrap"
             style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
             aria-busy={refreshing}>
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
-              <DataTableColgroup dt={dt} leading={[24]} trailing={isAdmin ? [208] : undefined} />
+            <table {...dt.tableProps}>
+              <DataTableColgroup dt={dt} leading={[24]} />
               <DataTableHead dt={dt}
-                leading={<th style={{ width: 24 }}></th>}
-                trailing={isAdmin ? <th style={{ width: 208 }}>Actions</th> : undefined} />
+                leading={<th style={{ width: 24 }}></th>} />
               <tbody>
                 {filtered.map(g => {
                   const open = expanded.has(g.fingerprint);
@@ -561,7 +565,7 @@ export default function ProblemsPage() {
                         // v0.10.924 — buton rolü rowActivation yayılımından geliyor
                         // (tıklanabilir <tr> sözleşmesi, D3); tekrar eden literal kalktı.
                         aria-expanded={open}>
-                        <td style={{ color: 'var(--text3)', textAlign: 'center', cursor: 'pointer' }}
+                        <td className="cell-faint" style={{ textAlign: 'center' }}
                           title={open ? 'Hide occurrences' : 'Peek occurrences'}
                           onClick={e => { e.stopPropagation(); toggleExpand(g.fingerprint); }}>
                           {open
@@ -629,16 +633,16 @@ export default function ProblemsPage() {
                               bakmalı. */}
                           <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
                             onClick={e => e.stopPropagation()}
-                            style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                            className="mono">
                             {g.service}
                           </Link>
                         </td>
-                        <td className="mono row-cell" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--err)' }}>
+                        <td className="num row-cell cell-strong cell-err">
                           <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>
                         </td>
                         {/* v0.10.739 — tarih damgası 13 px (.ib-when, Inbox 736 ile aynı). */}
-                        <td className="mono row-cell ib-when" style={{ color: 'var(--text3)' }}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.firstSeen)}</Link></td>
-                        <td className="mono row-cell ib-when" style={{ color: 'var(--text3)' }}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.lastSeen)}</Link></td>
+                        <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.firstSeen)}</Link></td>
+                        <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.lastSeen)}</Link></td>
                         <td onClick={e => e.stopPropagation()}>
                           {isAdmin ? (
                             <select value={g.assignee} onChange={e => setAssignee(g, e.target.value)}
@@ -655,13 +659,14 @@ export default function ProblemsPage() {
                           )}
                         </td>
                         {isAdmin && (
-                          <td onClick={e => e.stopPropagation()}>
+                          <td className="col-actions" onClick={e => e.stopPropagation()}>
                             <ActionButtons g={g} onSet={setState} />
                           </td>
                         )}
                       </tr>
                       {open && (
                         <tr>
+                          {/* v0.10.945 — `row-detail` değil: örnek kartları bg2, o zeminde kaybolurlar; bg1 bilerek. */}
                           <td colSpan={isAdmin ? 10 : 9} style={{
                             background: 'var(--bg1)', padding: '10px 16px',
                             borderTop: '1px solid var(--divider)',
@@ -789,11 +794,11 @@ function SampleCard({ sample, index }: { sample: ExceptionSample; index: number 
       borderRadius: 6, padding: 10,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
-        <span style={{ color: 'var(--text3)', fontFamily: 'monospace' }}>#{index}</span>
-        <Link to={traceHref(sample.traceId)} style={{ fontFamily: 'monospace' }}>
+        <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>#{index}</span>
+        <Link to={traceHref(sample.traceId)} style={{ fontFamily: 'var(--font-mono)' }}>
           {sample.traceId.slice(0, 12)}…
         </Link>
-        <span style={{ color: 'var(--text2)', fontFamily: 'monospace', fontSize: 11 }}>
+        <span style={{ color: 'var(--text2)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
           span <code>{sample.spanId.slice(0, 8)}</code>
           {sample.spanName && <> · <b>{sample.spanName}</b></>}
         </span>
@@ -802,12 +807,12 @@ function SampleCard({ sample, index }: { sample: ExceptionSample; index: number 
       </div>
       {sample.message && (
         <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 6,
-                      fontFamily: 'monospace', wordBreak: 'break-word' }}>
+                      fontFamily: 'var(--font-mono)', wordBreak: 'break-word' }}>
           {sample.message}
         </div>
       )}
       {sample.statusMsg && sample.statusMsg !== sample.message && (
-        <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4, fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
           status: {sample.statusMsg}
         </div>
       )}
@@ -824,7 +829,7 @@ function SampleCard({ sample, index }: { sample: ExceptionSample; index: number 
               marginTop: 6, padding: 10, background: 'var(--bg)',
               border: '1px solid var(--border)', borderRadius: 4,
               fontSize: 11, lineHeight: 1.45, overflow: 'auto', maxHeight: 280,
-              whiteSpace: 'pre', fontFamily: 'monospace',
+              whiteSpace: 'pre',
             }}>{sample.stacktrace}</pre>
           )}
         </>

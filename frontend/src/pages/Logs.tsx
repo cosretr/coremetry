@@ -1095,7 +1095,7 @@ function LogsInner() {
                     onClick={() => setEditPill(editPill === i ? null : i)}
                     title="Düzenle — alan/operatör/değer"
                     style={{
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontFamily: 'var(--font-mono)',
                       color: tone,
                       textDecoration: f.disabled ? 'line-through' : undefined,
                     }}>
@@ -1185,7 +1185,7 @@ function LogsInner() {
                 onClick={() => setSeverity(keyName === 'all' ? 0 : LVL_FACETS.find(f => f.key === keyName)!.min)}>
                 {children}
                 <span style={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontFamily: 'var(--font-mono)',
                   fontSize: 10.5, color: on ? 'var(--accent2)' : 'var(--text3)',
                 }}>
                   {facetLoading ? '·' : count.toLocaleString()}

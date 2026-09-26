@@ -13,7 +13,7 @@ import { readState } from '@/lib/readState';
 import { useAuth } from '@/components/AuthProvider';
 import { RenderedMarkdown } from '@/components/Markdown';
 import { Button } from '@/components/ui/Button';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useRunbook, useUpdateRunbook, useDeleteRunbook, useRunbookExecutions, useExecuteRunbook } from '@/lib/queries';
@@ -21,7 +21,6 @@ import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 import { IconSparkles } from '@/components/icons';
 import { aiErrorHint } from '@/lib/aiErrors';
 import { tsLong } from '@/lib/utils';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { AuditEntry, Runbook, RunbookStep, RunbookStepKind, RunbookExecution } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -211,14 +210,17 @@ function Inner() {
   );
 }
 
-const EXEC_COLS: DataTableColumn<RunbookExecution>[] = [
+// v0.10.945 (tablo standardı dilim 3) — ikincil hücreler renkle (S3),
+// sayılar arayüz fontunda (S2); eylemler `kind: 'actions'` kolonu.
+const EXEC_COLS: ColumnDef<RunbookExecution>[] = [
   { id: 'id',        label: 'Run',        sortValue: e => e.id,                  naturalDir: 'asc', width: 150 },
   { id: 'status',    label: 'Status',     sortValue: e => e.status,              naturalDir: 'asc', width: 130 },
   { id: 'startedAt', label: 'Started',    sortValue: e => e.startedAt,           numeric: true, width: 180 },
   { id: 'steps',     label: 'Steps',      sortValue: e => e.stepStates.length,   numeric: true, width: 90 },
-  { id: 'duration',  label: 'Duration',   sortValue: e => (e.completedAt ? e.completedAt - e.startedAt : 0), numeric: true, width: 110 },
-  { id: 'startedBy', label: 'Triggered by', sortValue: e => e.startedBy ?? '',   naturalDir: 'asc', width: 200 },
-  { id: 'open',      label: '',                                                  width: 130 },
+  { id: 'duration',  label: 'Duration',   sortValue: e => (e.completedAt ? e.completedAt - e.startedAt : 0), numeric: true, width: 110, tone: () => 'muted' },
+  { id: 'startedBy', label: 'Triggered by', sortValue: e => e.startedBy ?? '',   naturalDir: 'asc', width: 200, mono: true, tone: () => 'muted' },
+  // v0.10.945 — boyutlanmaz eylem kolonu: Öneri + Open ≈117px içerik + 24px dolgu.
+  { id: 'open',      label: 'Actions',    kind: 'actions',                       width: 140, minWidth: 140 },
 ];
 
 function ExecutionsTab({ runbookId }: { runbookId: string }) {
@@ -262,8 +264,8 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
     return <Empty icon="▷" title="No runs yet">Click Run to execute this runbook. Every run is recorded here — who ran it, when, and which steps executed.</Empty>;
   }
   return (
-    <div className="table-wrap is-fit">
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+    <div className="table-wrap">
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
@@ -271,13 +273,17 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
             const done = e.stepStates.filter(s => STEP_TERMINAL.includes(s.status)).length;
             return (
               <tr key={e.id}>
-                <td className="mono" style={{ color: 'var(--accent2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.id}</td>
+                {/* v0.10.945 — accent2 kimlik rengi için hücre sınıfı yok: satır içi kalır. */}
+                <td className="mono" style={{ color: 'var(--accent2)' }}>{e.id}</td>
                 <td><span className={`badge ${EXEC_BADGE[e.status] ?? 'b-gray'}`}>{e.status.replace(/_/g, ' ')}</span></td>
-                <td className="mono" style={{ fontSize: 11 }}>{tsLong(e.startedAt)}</td>
-                <td className="num mono">{done}/{e.stepStates.length}</td>
-                <td className="num mono" style={{ fontSize: 11 }}>{e.completedAt ? fmtDur(e.completedAt - e.startedAt) : '—'}</td>
-                <td className="mono" style={{ color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.startedBy || '—'}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {/* Zaman damgası mono ve sola yaslı kalır (S2 yalnız sayı hücresi). */}
+                <td className="mono cell-muted">{tsLong(e.startedAt)}</td>
+                <DataTableCell dt={dt} col="steps" row={e} value={`${done}/${e.stepStates.length}`} />
+                <DataTableCell dt={dt} col="duration" row={e} value={e.completedAt ? fmtDur(e.completedAt - e.startedAt) : '—'} />
+                <DataTableCell dt={dt} col="startedBy" row={e} value={e.startedBy || '—'} />
+                {/* v0.10.945 — ButtonGroup DEĞİL: grup sarar (flex-wrap), 140px
+                    kolonda iki düğme alt satıra düşerdi; td tabanı nowrap tutar. */}
+                <DataTableCell dt={dt} col="open" row={e}>
                   {!!e.problemId && !!e.completedAt && (
                     <Button variant="secondary" size="sm" onClick={() => suggest(e)}
                       loading={sugg?.busy === true && sugg.execId === e.id} style={{ marginRight: 6 }}
@@ -286,7 +292,7 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
                     </Button>
                   )}
                   <Button variant="secondary" size="sm" onClick={() => navigate(`/runbook-exec?id=${encodeURIComponent(e.id)}`)}>Open</Button>
-                </td>
+                </DataTableCell>
               </tr>
             );
           })}
@@ -317,13 +323,13 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
 // primitife taşındı (kardeş ExecutionsTab zaten öyleydi; bu sekme tek
 // istisnaydı). Kolon kümesi, sıra, etiketler ve hücre içerikleri AYNEN
 // korundu; kazanılan sıralama + yeniden boyutlandırma + kalıcı genişlik.
-const AUDIT_COLS: DataTableColumn<AuditEntry>[] = [
+const AUDIT_COLS: ColumnDef<AuditEntry>[] = [
   // Zaman mono ve SOLA hizalı kalıyor (numeric:true başlığı sağa iterdi) —
   // yalnız sıralanabilirlik ekleniyor.
   { id: 'time',    label: 'Time',    sortValue: a => a.time,                width: 170 },
   { id: 'actor',   label: 'Actor',   sortValue: a => a.actorEmail ?? '',    naturalDir: 'asc', width: 220 },
   { id: 'action',  label: 'Action',  sortValue: a => a.action,              naturalDir: 'asc', width: 180 },
-  { id: 'details', label: 'Details', sortValue: a => a.details ?? '',       naturalDir: 'asc', flex: true },
+  { id: 'details', label: 'Details', sortValue: a => a.details ?? '',       naturalDir: 'asc', flex: true, mono: true, tone: () => 'faint' },
 ];
 
 function AuditTab({ runbookId, isAdmin }: { runbookId: string; isAdmin: boolean }) {
@@ -360,19 +366,17 @@ function AuditTab({ runbookId, isAdmin }: { runbookId: string; isAdmin: boolean 
   }
   return (
     <div className="table-wrap">
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
           {dt.sortedRows.map(a => (
             <tr key={a.id}>
-              <td className="mono" style={{ fontSize: 11 }}>{tsLong(a.time)}</td>
+              <td className="mono cell-muted">{tsLong(a.time)}</td>
               <td className="mono">{a.actorEmail || '—'}</td>
               <td><span className="badge b-gray">{a.action}</span></td>
-              <td className="mono" title={a.details}
-                style={{ fontSize: 11, color: 'var(--text3)', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {a.details || '—'}
-              </td>
+              {/* v0.10.945 — maxWidth sabit düzende etkisizdi (genişlik colgroup'ta). */}
+              <DataTableCell dt={dt} col="details" row={a} value={a.details || '—'} title={a.details} />
             </tr>
           ))}
         </tbody>
@@ -428,7 +432,7 @@ function Overview({ draft, canEdit, patch }: {
             onChange={e => patch({ description: e.target.value })}
             placeholder="# When to run&#10;…what this procedure is for, prerequisites, escalation."
             spellCheck={false}
-            style={{ minHeight: 180, fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 13, resize: 'vertical' }} />
+            style={{ minHeight: 180, fontFamily: 'var(--font-mono)', fontSize: 13, resize: 'vertical' }} />
         </Field>
         <Field label="Labels (comma-separated)">
           <input value={labelsText} disabled={!canEdit}
@@ -613,7 +617,7 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
         <input value={step.title} disabled={!canEdit}
           onChange={e => onChange({ title: e.target.value })}
           placeholder="Step title" style={{ flex: 1 }} />
-        <span style={{ color: 'var(--text3)', fontSize: 11, fontFamily: 'ui-monospace, monospace' }}>#{index + 1}</span>
+        <span style={{ color: 'var(--text3)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>#{index + 1}</span>
         {canEdit && (
           <Button variant="ghost-danger" size="sm" onClick={onRemove} title="Remove step"
             aria-label="Remove step">
@@ -640,7 +644,7 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
             onChange={e => onChange({ query: e.target.value })}
             placeholder="error_rate by service where service = 'api-gateway'"
             spellCheck={false}
-            style={{ minHeight: 56, fontFamily: 'ui-monospace, monospace', fontSize: 12, resize: 'vertical' }} />
+            className="mono" style={{ minHeight: 56, resize: 'vertical' }} />
         </Field>
       )}
       {step.kind === 'http' && (
@@ -660,12 +664,12 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
               onChange={e => onChange({ headers: textToHeaders(e.target.value) })}
               placeholder={'Authorization: Token abc\nContent-Type: application/json'}
               spellCheck={false}
-              style={{ minHeight: 48, fontFamily: 'ui-monospace, monospace', fontSize: 12, resize: 'vertical' }} />
+              className="mono" style={{ minHeight: 48, resize: 'vertical' }} />
           </Field>
           <Field label="Body">
             <textarea value={step.body ?? ''} disabled={!canEdit}
               onChange={e => onChange({ body: e.target.value })} spellCheck={false}
-              style={{ minHeight: 48, fontFamily: 'ui-monospace, monospace', fontSize: 12, resize: 'vertical' }} />
+              className="mono" style={{ minHeight: 48, resize: 'vertical' }} />
           </Field>
           <Field label="Timeout (ms)">
             <input type="number" value={step.timeoutMs ?? ''} disabled={!canEdit}
@@ -679,7 +683,7 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
             onChange={e => onChange({ script: e.target.value })}
             placeholder="// return a value or call out via fetch-like API\nreturn 1 + 1;"
             spellCheck={false}
-            style={{ minHeight: 72, fontFamily: 'ui-monospace, monospace', fontSize: 12, resize: 'vertical' }} />
+            className="mono" style={{ minHeight: 72, resize: 'vertical' }} />
         </Field>
       )}
       {step.kind === 'bash' && (
@@ -687,7 +691,7 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
           <Field label="Command (runs on the agent)">
             <input value={step.command ?? ''} disabled={!canEdit}
               onChange={e => onChange({ command: e.target.value })}
-              placeholder="kubectl rollout restart deploy/api -n prod" style={{ fontFamily: 'ui-monospace, monospace' }} />
+              placeholder="kubectl rollout restart deploy/api -n prod" style={{ fontFamily: 'var(--font-mono)' }} />
           </Field>
           <Field label="Timeout (ms)">
             <input type="number" value={step.timeoutMs ?? ''} disabled={!canEdit}

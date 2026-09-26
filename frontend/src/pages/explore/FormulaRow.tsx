@@ -36,7 +36,7 @@ export function FormulaRow({ value, onChange, letters }: {
         onChange={e => onChange(e.target.value)}
         placeholder={`sorgu harfleri üzerinde formül — örn. ${letters[0] ?? 'A'} / ${letters[1] ?? 'B'} * 100`}
         spellCheck={false}
-        style={{ flex: 1, minWidth: 220, fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12 }} />
+        style={{ flex: 1, minWidth: 220, fontFamily: 'var(--font-mono)', fontSize: 12 }} />
       {problem && value.trim() !== '' && (
         <span style={{ fontSize: 11, color: 'var(--warn)' }}>⚠ {problem}</span>
       )}

@@ -66,7 +66,7 @@ export function VolumeChart({
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: collapsed ? 0 : 4, fontSize: 10.5, color: 'var(--text-faint)' }}>
         {header}
         {!collapsed && (
-          <span style={{ fontFamily: 'var(--font-mono, ui-monospace)' }}
+          <span style={{ fontFamily: 'var(--font-mono)' }}
             title={volumeHint(unit ?? 'traces')}>
             {unit} / {bucketMin}m bucket · sürükle = zaman seç</span>
         )}

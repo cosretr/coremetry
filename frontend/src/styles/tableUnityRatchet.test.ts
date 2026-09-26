@@ -22,13 +22,13 @@ const PRIMITIVE = join('components', 'ui', 'DataTable') + '/';
 
 const CEILINGS = {
   /** T1 — `<table>` sayısı eksi `<DataTableHead>` sayısı (dosya başına). */
-  rawTable: 57, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 61 → 57
+  rawTable: 53, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 57 → 53
   /** T5 — `<td style={…}>`: hücre görünümü sınıfa/sütun tanımına taşınır. */
-  tdStyle: 208, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 318 → 208
+  tdStyle: 116, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 208 → 116
   /** T5 — satır içi hücre yazı boyu: yoğunluk ayarı ulaşamıyor. */
-  tdFontSize: 62, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 99 → 62
+  tdFontSize: 22, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 62 → 22
   /** T4 — sayı hücresinde monospace (`num mono` / `mono num`). */
-  numMono: 51, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 212 → 51
+  numMono: 26, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 51 → 26
   /** T2 — satır içi `<tr … cursor:` (imleç yalnız tıklanabilir satırda, CSS'ten).
    *  v0.10.933 (tablo standardı T2) — sayım artık süslü parantez farkında
    *  etiket yürüyücüsüyle (styles/jsxTags.ts): eski `<tr\b[^>]*cursor:`
@@ -39,21 +39,21 @@ const CEILINGS = {
    *  açılan satırda). Yürüyücüyle ölçülen gerçek sayım: 0. */
   trCursor: 0,
   /** T6 — elle `containIntrinsicSize` (tek `--row-h` ritmi). */
-  containIntrinsicSize: 27, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 48 → 27
+  containIntrinsicSize: 11, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 27 → 11
   /** T10 — ölü `.is-fit` (v0.9.1078'den beri masaüstü kuralı yok).
    *  v0.10.933 (dilim 1): 68 → 66 — LogPatternsPanel'in iki iç kaydırmalı kabı `is-scroll`. */
-  isFit: 14, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 34 → 14
+  isFit: 3, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 14 → 3
   /** T10 — satır içi `tableLayout` (tek tablo sınıfı / primitif). */
-  tableLayout: 37, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 82 → 37
+  tableLayout: 8, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 37 → 8
   /** T3 — sahte sıralanabilir sütun (`sortValue: () => 0`). */
-  fakeSortable: 10, // v0.10.942 — dilim 3 dalga 1 (admin + ayarlar): 11 → 10
+  fakeSortable: 0, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 10 → 0
   /** T7 — talimat ipuçlu satır (`<tr title=…>`). */
-  trTitle: 15, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 23 → 15
+  trTitle: 5, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 15 → 5
   /** T5 — satır içi monospace yığını (`fontFamily: '…monospace…'` /
    *  `font: '…monospace…'` dizgisi). v0.10.933 (tablo standardı T5) — TEK
    *  yığın `--font-mono` (globals.css); ikinci yazım yığını çoğaltır, tema /
    *  yoğunluk ayarı ona ulaşamaz. Taban v0.10.933 ölçümü (263); göçü dilim 3. */
-  inlineMonoStack: 129, // v0.10.943 — dilim 3 dalga 2 (servis/bağımlılık/altyapı): 194 → 129
+  inlineMonoStack: 92, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 129 → 92
 } as const;
 
 function walk(dir: string, out: string[] = []): string[] {

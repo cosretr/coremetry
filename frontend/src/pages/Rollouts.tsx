@@ -22,8 +22,7 @@ import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/ui/PageShell';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Badge, Button, StatTile } from '@/components/ui';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { timeRangeToNs } from '@/lib/utils';
 import { fmtNum, fmtDateTime, fmtDurShort } from '@/lib/utils';
@@ -34,7 +33,7 @@ import { RolloutDrawer } from '@/components/RolloutDrawer';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { entityHref } from '@/lib/entityHref';
 import { rolloutKey, statusTone, statusLabel, statusTitle, rolloutDurationSec, shortRevision, imageDiff, encodeRolloutParam, decodeRolloutParam, rolloutTracesFilters, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone } from '@/lib/rolloutRow';
-import type { WorkloadRollout } from '@/lib/types';
+import type { RolloutStats, WorkloadRollout } from '@/lib/types';
 
 const STATUSES = ['', 'in_progress', 'completed', 'rolled_back', 'superseded', 'stalled'] as const;
 
@@ -46,7 +45,7 @@ const STATUSES = ['', 'in_progress', 'completed', 'rolled_back', 'superseded', '
 // genişlik; toplam kabı aşarsa .table-wrap zaten overflow-x:auto kaydırır
 // (v0.9.1078). Başlık kırpılması da biter: taban her başlığın tam adını
 // taşıyacak kadar geniş.
-const COLS: DataTableColumn<WorkloadRollout>[] = [
+const COLS: ColumnDef<WorkloadRollout>[] = [
   { id: 'status', label: 'Durum', width: 120, minWidth: 96 },
   { id: 'workload', label: 'Workload', width: 260, minWidth: 180 },
   // v0.10.565 (operatör-raporlu): cluster adı Workload hücresinin SONUNDA
@@ -56,8 +55,8 @@ const COLS: DataTableColumn<WorkloadRollout>[] = [
   { id: 'cluster', label: 'Cluster', width: 150, minWidth: 110 },
   { id: 'kind', label: 'Tür', width: 100, minWidth: 64 },
   { id: 'change', label: 'Değişiklik', width: 130, minWidth: 100 }, // v0.10.234 — imaj değişti mi (Deployment) / aynı mı (config)
-  { id: 'revision', label: 'Revizyon', width: 150, minWidth: 120 },
-  { id: 'image', label: 'İmaj (eski → yeni)', width: 300, minWidth: 170 },
+  { id: 'revision', label: 'Revizyon', width: 150, minWidth: 120, mono: true },
+  { id: 'image', label: 'İmaj (eski → yeni)', width: 300, minWidth: 170, mono: true },
   { id: 'started', label: 'Başladı', width: 170, minWidth: 140, numeric: true },
   { id: 'dur', label: 'Süre', width: 90, minWidth: 64, numeric: true },
   { id: 'spans', label: 'Span', width: 90, minWidth: 64, numeric: true },
@@ -66,8 +65,6 @@ const COLS: DataTableColumn<WorkloadRollout>[] = [
   { id: 'note', label: 'Not', width: 260, minWidth: 120 },
   { id: 'links', label: '', width: 120, minWidth: 96 },
 ];
-
-const ROW_CV = { contentVisibility: 'auto', containIntrinsicSize: '0 32px' } as const;
 
 export default function RolloutsPage() {
   const [range, setRange] = useUrlRange('24h');
@@ -173,7 +170,7 @@ export default function RolloutsPage() {
             <>
               {listQ.data?.capped && <div className="pod-cap">Liste sunucuda kesildi (limit 200) — pencereyi daralt.</div>}
               <div className="table-wrap">
-                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                <table {...dt.tableProps}>
                   <DataTableColgroup dt={dt} />
                   <DataTableHead dt={dt} />
                   <tbody>
@@ -185,33 +182,35 @@ export default function RolloutsPage() {
                       });
                       const wlHref = entityHref({ type: 'workload', id: `wl:${r.clusterId}/${r.namespace}/${r.kind || 'Deployment'}/${r.workload}`, name: r.workload, namespace: r.namespace, clusterId: r.clusterId }, { range });
                       return (
-                        <tr key={rolloutKey(r)} style={rows.length > 100 ? ROW_CV : undefined}
+                        <tr key={rolloutKey(r)} className={rows.length > 100 ? 'cv-row' : undefined}
                           // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
                           data-row-action
                           onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; setParam('rollout', encodeRolloutParam(r)); }}>
-                          <td><Badge tone={statusTone(r.status)} title={[statusTitle(r.status), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></td>
-                          <td title={`${cname} / ${r.namespace} / ${r.workload}`} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <DataTableCell dt={dt} col="status" row={r}><Badge tone={statusTone(r.status)} title={[statusTitle(r.status), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></DataTableCell>
+                          <DataTableCell dt={dt} col="workload" row={r} title={`${cname} / ${r.namespace} / ${r.workload}`}>
                             <Link to={wlHref} className="sec">{r.workload}</Link>
                             <span className="field-hint"> · {r.namespace}</span>
-                          </td>
+                          </DataTableCell>
                           {/* v0.10.565 — cluster kendi kolonunda; ad çözülemezse ham id (clusterName). */}
-                          <td title={cname} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cname}</td>
-                          <td className="field-hint">{r.kind || '—'}</td>
-                          <td>{(() => { const k = rolloutChangeKind(r); return <Badge tone={changeKindTone(k)} title={changeKindTitle(k)}>{changeKindLabel(k)}</Badge>; })()}</td>
-                          <td className="mono" title={r.revision} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortRevision(r.revision, r.workload)}{r.prevRevision ? <span className="field-hint"> ← {shortRevision(r.prevRevision, r.workload)}</span> : null}</td>
-                          <td className="mono" title={r.image || undefined} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{imageDiff(r)}</td>
+                          <DataTableCell dt={dt} col="cluster" row={r} value={cname} />
+                          <DataTableCell dt={dt} col="kind" row={r} className="field-hint">{r.kind || '—'}</DataTableCell>
+                          <DataTableCell dt={dt} col="change" row={r}>{(() => { const k = rolloutChangeKind(r); return <Badge tone={changeKindTone(k)} title={changeKindTitle(k)}>{changeKindLabel(k)}</Badge>; })()}</DataTableCell>
+                          <DataTableCell dt={dt} col="revision" row={r} title={r.revision}>{shortRevision(r.revision, r.workload)}{r.prevRevision ? <span className="field-hint"> ← {shortRevision(r.prevRevision, r.workload)}</span> : null}</DataTableCell>
+                          <DataTableCell dt={dt} col="image" row={r} title={r.image || undefined}>{imageDiff(r)}</DataTableCell>
+                          {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar); kolon
+                              `numeric` olduğundan DataTableCell `num` basar ve mono'yu nötrlerdi. */}
                           <td className="mono">{fmtDateTime(new Date(r.startedAt))}</td>
-                          <td className="num mono">{fmtDurShort(rolloutDurationSec(r, Date.now()))}</td>
-                          <td className="num mono">{fmtNum(r.spanCount)}</td>
-                          <td className="num">{r.problemsCaused
+                          <DataTableCell dt={dt} col="dur" row={r} value={fmtDurShort(rolloutDurationSec(r, Date.now()))} />
+                          <DataTableCell dt={dt} col="spans" row={r} value={fmtNum(r.spanCount)} />
+                          <DataTableCell dt={dt} col="problems" row={r}>{r.problemsCaused
                             ? <Link to={`?${(() => { const p = new URLSearchParams(sp); p.set('rollout', encodeRolloutParam(r)); return p.toString(); })()}`}
                                     title="rollout başladığından beri açık problemler (servisleri) — çekmeceyi açar" style={{ textDecoration: 'none' }}>
                                 <Badge tone="danger">{fmtNum(r.problemsCaused)}</Badge>
                               </Link>
-                            : <span className="field-hint">—</span>}</td>
-                          <td className="field-hint">{r.detectedBy}</td>
-                          <td className="field-hint" title={r.note || undefined} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.note || ''}</td>
-                          <td><Link to={tracesHref} className="sec">Traces →</Link></td>
+                            : <span className="field-hint">—</span>}</DataTableCell>
+                          <DataTableCell dt={dt} col="by" row={r} className="field-hint">{r.detectedBy}</DataTableCell>
+                          <DataTableCell dt={dt} col="note" row={r} className="field-hint" title={r.note || undefined}>{r.note || ''}</DataTableCell>
+                          <DataTableCell dt={dt} col="links" row={r}><Link to={tracesHref} className="sec">Traces →</Link></DataTableCell>
                         </tr>
                       );
                     })}
@@ -233,7 +232,19 @@ export default function RolloutsPage() {
   );
 }
 
+// v0.10.945 (tablo standardı T1) — gün kırılımı pencere başına sınırsız
+// (sunucu LIMIT 400 gün): kayıt listesi, useDataTable. initialSort yok —
+// satırlar sunucunun gün sırasında kalır.
+type DayRow = RolloutStats['byDay'][number];
+const DAY_COLS: ColumnDef<DayRow>[] = [
+  { id: 'day', label: 'Gün', sortValue: d => d.day, naturalDir: 'asc', flex: true },
+  { id: 'total', label: 'Rollout', sortValue: d => d.total, naturalDir: 'desc', numeric: true, width: 90 },
+  { id: 'rolledBack', label: 'Geri alınan', sortValue: d => d.rolledBack, naturalDir: 'desc', numeric: true, width: 110,
+    tone: d => (d.rolledBack > 0 ? 'err' : undefined) },
+];
+
 function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof useRolloutStats>['data']>; clusterName: (id: string) => string }) {
+  const dayDt = useDataTable<DayRow>({ storageKey: 'rollouts-by-day', columns: DAY_COLS, rows: st.byDay });
   return (
     <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -248,31 +259,41 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>En çok rollback alan workload'lar</h3>
-          <table style={{ width: '100%' }}>
-            <thead><tr><th>Workload</th><th style={{ textAlign: 'right' }}>Rollback</th></tr></thead>
+          {/* v0.10.945 — statik tablo (T1): sunucunun sıraladığı topN=10 özeti, sıralanmaz. */}
+          <table>
+            <thead><tr><th>Workload</th><th className="num">Rollback</th></tr></thead>
             <tbody>
               {st.topRollback.length === 0 && <tr><td colSpan={2} className="field-hint">yok</td></tr>}
-              {st.topRollback.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num mono">{w.n}</td></tr>)}
+              {st.topRollback.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
         </div>
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>En çok deploy alan workload'lar</h3>
-          <table style={{ width: '100%' }}>
-            <thead><tr><th>Workload</th><th style={{ textAlign: 'right' }}>Rollout</th></tr></thead>
+          {/* v0.10.945 — statik tablo (T1): sunucunun sıraladığı topN=10 özeti, sıralanmaz. */}
+          <table>
+            <thead><tr><th>Workload</th><th className="num">Rollout</th></tr></thead>
             <tbody>
               {st.topDeploy.length === 0 && <tr><td colSpan={2} className="field-hint">yok</td></tr>}
-              {st.topDeploy.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num mono">{w.n}</td></tr>)}
+              {st.topDeploy.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
         </div>
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Gün kırılımı</h3>
-          <table style={{ width: '100%' }}>
-            <thead><tr><th>Gün</th><th style={{ textAlign: 'right' }}>Rollout</th><th style={{ textAlign: 'right' }}>Geri alınan</th></tr></thead>
+          <table {...dayDt.tableProps}>
+            <DataTableColgroup dt={dayDt} />
+            <DataTableHead dt={dayDt} />
             <tbody>
               {st.byDay.length === 0 && <tr><td colSpan={3} className="field-hint">yok</td></tr>}
-              {st.byDay.map(d => <tr key={d.day}><td className="mono">{d.day}</td><td className="num mono">{d.total}</td><td className="num mono" style={d.rolledBack > 0 ? { color: 'var(--err)' } : undefined}>{d.rolledBack}</td></tr>)}
+              {dayDt.sortedRows.map(d => (
+                <tr key={d.day}>
+                  {/* v0.10.945 — tarih damgası mono kalır (S2 yalnız sayıyı kapsar). */}
+                  <DataTableCell dt={dayDt} col="day" row={d} value={d.day} className="mono" />
+                  <DataTableCell dt={dayDt} col="total" row={d} value={d.total} />
+                  <DataTableCell dt={dayDt} col="rolledBack" row={d} value={d.rolledBack} />
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

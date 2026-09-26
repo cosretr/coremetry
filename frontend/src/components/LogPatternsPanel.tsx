@@ -16,8 +16,7 @@ import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim
 import { useLogsPatterns, useLogsTemplates } from '@/lib/queries';
 import type { LogsParams } from '@/lib/api';
 import type { LogPatternGroup, LogTemplate } from '@/lib/types';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { trendCell, trendLabel } from '@/lib/logPatternsTrend'; // v0.10.508 (C6)
 import { getItem, setItem } from '@/lib/storage';
@@ -70,27 +69,28 @@ const TEMPLATES_LIMIT = 200;
 // YENİ). Taban istenmediyse hücre "—"; sıralama değeri satır başına
 // trendSortValue ile (taban satır verisinde değil sonuç zarfında olduğu
 // için sortValue'ya kapanışla giriyor — aşağıda colsFor).
-const COLS: DataTableColumn<LogPatternGroup>[] = [
-  { id: 'template', label: 'Desen', sortValue: r => r.template, naturalDir: 'asc', flex: true },
+// v0.10.945 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında:
+// 11/11.5px hücreler tablo boyunda, ikincil olanlar renkle (S3); eylem
+// kolonu `kind: 'actions'` (sahte sortValue yok, T3/T8).
+const COLS: ColumnDef<LogPatternGroup>[] = [
+  { id: 'template', label: 'Desen', sortValue: r => r.template, naturalDir: 'asc', flex: true, mono: true },
   { id: 'count', label: 'Sayı', sortValue: r => r.count, numeric: true, width: 110 },
   { id: 'trend', label: 'Δ', sortValue: r => r.new ? Number.MAX_SAFE_INTEGER : (r.ratio ?? 0), numeric: true, width: 72 },
   { id: 'severity', label: 'Seviye', sortValue: r => r.severity, numeric: true, width: 84 },
-  { id: 'services', label: 'Servisler', sortValue: r => r.services.join(','), naturalDir: 'asc', width: 170 },
-  { id: 'lastSeen', label: 'Son', sortValue: r => r.lastSeen, numeric: true, width: 96 },
-  { id: 'act', label: '', sortValue: () => 0, width: 64 },
+  { id: 'services', label: 'Servisler', sortValue: r => r.services.join(','), naturalDir: 'asc', width: 170, mono: true, tone: () => 'muted' },
+  { id: 'lastSeen', label: 'Son', sortValue: r => r.lastSeen, numeric: true, width: 96, tone: () => 'muted' },
+  // v0.10.945 — eylem kolonu boyutlanmaz (T8): genişlik Ara + ⊕ + ⊖ içeriğine göre; 64px'te ⊖ kırpılıyordu.
+  { id: 'act', label: 'Eylemler', kind: 'actions', width: 108, minWidth: 108 },
 ];
 
-const TCOLS: DataTableColumn<LogTemplate>[] = [
-  { id: 'template', label: 'Şablon', sortValue: r => r.template, naturalDir: 'asc', flex: true },
+const TCOLS: ColumnDef<LogTemplate>[] = [
+  { id: 'template', label: 'Şablon', sortValue: r => r.template, naturalDir: 'asc', flex: true, mono: true },
   { id: 'totalCount', label: 'Toplam', sortValue: r => r.totalCount, numeric: true, width: 110 },
-  { id: 'services', label: 'Servisler', sortValue: r => r.services.join(','), naturalDir: 'asc', width: 170 },
-  { id: 'firstSeen', label: 'İlk', sortValue: r => r.firstSeen, numeric: true, width: 96 },
-  { id: 'lastSeen', label: 'Son', sortValue: r => r.lastSeen, numeric: true, width: 96 },
-  { id: 'act', label: '', sortValue: () => 0, width: 64 },
+  { id: 'services', label: 'Servisler', sortValue: r => r.services.join(','), naturalDir: 'asc', width: 170, mono: true, tone: () => 'muted' },
+  { id: 'firstSeen', label: 'İlk', sortValue: r => r.firstSeen, numeric: true, width: 96, tone: () => 'muted' },
+  { id: 'lastSeen', label: 'Son', sortValue: r => r.lastSeen, numeric: true, width: 96, tone: () => 'muted' },
+  { id: 'act', label: 'Eylemler', kind: 'actions', width: 64 },
 ];
-
-const cellEllipsis = { fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
-const cellServices = { fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
 
 export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }: {
   params: LogsParams;
@@ -138,7 +138,6 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
   /* v0.10.933 (tablo standardı T2) — koşullu cursor kalktı: el imleci + hover
      globals.css'ten role=button işaretiyle gelir, işaret yalnız sorgusu olan
      (açılan) satırda. */
-  const rowStyle = { contentVisibility: 'auto', containIntrinsicSize: '0 26px' } as const;
   return (
     <div className="card lp-panel" style={{ padding: '10px 12px', marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -179,17 +178,17 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
           {d && rows.length === 0 && !q.isPending && <Empty icon="≡" title="Bu pencerede desen yok" compact />}
           {rows.length > 0 && (
             <div className="table-wrap is-scroll">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
                 <DataTableHead dt={dt} />
                 <tbody>
                   {dt.sortedRows.map(r => {
                     const share = maxCount > 0 ? (r.count / maxCount) * 100 : 0;
                     return (
-                      <tr key={r.hash} className="lp-row" title={r.sample}
-                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}
-                        style={rowStyle}>
-                        <td className="mono" style={cellEllipsis}>{r.template}</td>
+                      // v0.10.945 — örnek satır ipucu satırdan şablon hücresine (T7).
+                      <tr key={r.hash} className="lp-row cv-row"
+                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}>
+                        <DataTableCell dt={dt} col="template" row={r} value={r.template} title={r.sample} />
                         <td className="num">
                           <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
                           <span style={{ position: 'relative' }}>{r.count.toLocaleString()}</span>
@@ -202,11 +201,10 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                             : <span style={{ color: c.kind === 'ratio' ? (c.up ? 'var(--err)' : 'var(--text2)' /* v0.10.929 (K5) — düşüş nötr */) : 'var(--text3)' }}>{trendLabel(c)}</span>; })()}
                         </td>
                         <td><span className={sevClass(r.severity)}>{r.severityText || sevName(r.severity)}</span></td>
-                        <td className="mono" style={cellServices} title={r.services.join(', ')}>
-                          {r.services.join(', ')}{r.serviceCount > r.services.length ? ` +${r.serviceCount - r.services.length}` : ''}
-                        </td>
-                        <td className="num" style={{ fontSize: 11, color: 'var(--text2)' }} title={tsLong(r.lastSeen)}>{agoLabel(r.lastSeen)}</td>
-                        <td>
+                        <DataTableCell dt={dt} col="services" row={r} title={r.services.join(', ')}
+                          value={`${r.services.join(', ')}${r.serviceCount > r.services.length ? ` +${r.serviceCount - r.services.length}` : ''}`} />
+                        <DataTableCell dt={dt} col="lastSeen" row={r} value={agoLabel(r.lastSeen)} title={tsLong(r.lastSeen)} />
+                        <DataTableCell dt={dt} col="act" row={r}>
                           {r.query && (
                             <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                               <Button variant="secondary" size="xs" className="lp-search"
@@ -214,8 +212,8 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                                 onClick={e => { e.stopPropagation(); onSearch(r.query); }}>Ara</Button>
                               {/* v0.10.502 (B6) — mevcut metni ezmeden ekle / hariç tut */}
                               <IconButton variant="bare" size="xs" className="ib-add"
-                                // v0.10.926 — Tooltip; ata <tr> title'ı (r.sample) sızmaz
-                                // (Tooltip tetiğe ve kutuya boş title basar).
+                                // v0.10.926 — Tooltip (tetiğe ve kutuya boş title basar;
+                                // ata hücre/satır ipucu sızmaz).
                                 tooltip={`Mevcut aramaya ekle: ${r.query}`} aria-label={`Mevcut aramaya ekle: ${r.query}`}
                                 onClick={e => { e.stopPropagation(); onSearch(r.query, 'and'); }} icon="⊕" />
                               <IconButton variant="bare" size="xs" className="ib-not"
@@ -223,7 +221,7 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                                 onClick={e => { e.stopPropagation(); onSearch(r.query, 'not'); }} icon="⊖" />
                             </span>
                           )}
-                        </td>
+                        </DataTableCell>
                       </tr>
                     );
                   })}
@@ -244,34 +242,33 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
           )}
           {trows.length > 0 && (
             <div className="table-wrap is-scroll">
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table {...tdt.tableProps}>
                 <DataTableColgroup dt={tdt} />
                 <DataTableHead dt={tdt} />
                 <tbody>
                   {tdt.sortedRows.map(r => {
                     const share = maxTotal > 0 ? (r.totalCount / maxTotal) * 100 : 0;
                     return (
-                      <tr key={r.id} className="lp-row" title={r.sample}
-                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}
-                        style={rowStyle}>
-                        <td className="mono" style={cellEllipsis}>
+                      <tr key={r.id} className="lp-row cv-row"
+                        {...(r.query ? rowActivation(() => onSearch(r.query)) : {})}>
+                        <DataTableCell dt={tdt} col="template" row={r} title={r.sample}>
                           {r.exceptionType && <span className="badge b-err" style={{ marginRight: 6 }}>{r.exceptionType}</span>}
                           {r.template}
-                        </td>
+                        </DataTableCell>
                         <td className="num">
                           <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
                           <span style={{ position: 'relative' }}>{r.totalCount.toLocaleString()}</span>
                         </td>
-                        <td className="mono" style={cellServices} title={r.services.join(', ')}>{r.services.join(', ')}</td>
-                        <td className="num" style={{ fontSize: 11, color: 'var(--text2)' }} title={tsLong(r.firstSeen)}>{agoLabel(r.firstSeen)}</td>
-                        <td className="num" style={{ fontSize: 11, color: 'var(--text2)' }} title={tsLong(r.lastSeen)}>{agoLabel(r.lastSeen)}</td>
-                        <td>
+                        <DataTableCell dt={tdt} col="services" row={r} value={r.services.join(', ')} />
+                        <DataTableCell dt={tdt} col="firstSeen" row={r} value={agoLabel(r.firstSeen)} title={tsLong(r.firstSeen)} />
+                        <DataTableCell dt={tdt} col="lastSeen" row={r} value={agoLabel(r.lastSeen)} title={tsLong(r.lastSeen)} />
+                        <DataTableCell dt={tdt} col="act" row={r}>
                           {r.query && (
                             <Button variant="secondary" size="xs" className="lp-search"
                               title={`Ara: ${r.query}`}
                               onClick={e => { e.stopPropagation(); onSearch(r.query); }}>Ara</Button>
                           )}
-                        </td>
+                        </DataTableCell>
                       </tr>
                     );
                   })}

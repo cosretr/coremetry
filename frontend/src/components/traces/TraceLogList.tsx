@@ -57,7 +57,7 @@ export function TraceLogList({
                 gap: 6,
                 padding: '2px 6px',
                 fontSize: 11,
-                fontFamily: 'ui-monospace, monospace',
+                fontFamily: 'var(--font-mono)',
                 // v0.10.928 — `--bg2` ile taklit edilen yumuşak çizgi yerine
                 // iç ayraç token'ı (bg2 zeminlerde de görünür kalır).
                 borderBottom: '1px solid var(--divider)',

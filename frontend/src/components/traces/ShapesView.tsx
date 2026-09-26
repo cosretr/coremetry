@@ -126,17 +126,18 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
 
   return (
     <>
-      <div className="table-wrap is-fit">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.map((r, i) => {
               // v0.10.922 (sade palet adım 1, K5) — %0 hata nötr; agg görünümüyle aynı.
               const errCls = r.errorRate > 5 ? 'b-err' : r.errorRate > 0 ? 'b-warn' : 'b-gray';
+              const rp = dt.rowProps(i);
               return (
                 <tr key={r.signature}
-                  {...dt.rowProps(i)}
+                  {...rp}
                   // v0.10.933 (tablo standardı T2) — exemplar'sız satır açılmaz:
                   // rowActivation (role=button → el imleci + hover) yalnız açılan
                   // satıra; satır içi koşullu cursor kalktı. dt onOpen'lı olduğu
@@ -149,20 +150,22 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
                   // operations that barely collapses, so an unfiltered
                   // /traces?view=shapes painted ~1000 unguarded rows. Same
                   // treatment TracesResult already applies to this row shape.
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' }}
-                  title={r.exemplar ? 'Open an exemplar trace for this shape' : undefined}>
-                  <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  // v0.10.945 (tablo standardı T6/T7) — ekran dışı satır `cv-row`
+                  // (rowProps'un row-selected'ıyla birleşik); talimat ipucu kalktı.
+                  className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                  <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <SvcBadge name={r.service} />
                       <span title={r.operation} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.operation || '—'}</span>
                     </div>
                   </td>
-                  <td className="num mono">{r.count.toLocaleString()}</td>
+                  <td className="num">{r.count.toLocaleString()}</td>
                   <td className="num"><span className={`badge ${errCls}`}>{r.errorRate.toFixed(1)}%</span></td>
-                  <td className="num mono">{fmtDur(r.p50)}</td>
-                  <td className="num mono">{fmtDur(r.p95)}</td>
-                  <td className="num mono">{fmtDur(r.p99)}</td>
-                  <td className="mono" style={{ fontSize: 10.5, color: 'var(--accent2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td className="num">{fmtDur(r.p50)}</td>
+                  <td className="num">{fmtDur(r.p95)}</td>
+                  <td className="num">{fmtDur(r.p99)}</td>
+                  {/* v0.10.945 — --accent2 bir hücre sınıfı değil (sapma tonu değil, bağlantı rengi): satır içi kalır. */}
+                  <td className="mono" style={{ color: 'var(--accent2)' }}>
                     {r.exemplar ? `${r.exemplar.slice(0, 12)}…` : '—'}
                   </td>
                 </tr>

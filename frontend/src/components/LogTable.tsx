@@ -11,7 +11,7 @@ import { tsLong, sevName, sevClass } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { LogRow } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
-import { Button, IconButton } from '@/components/ui';
+import { Button, IconButton, KeyValue, KeyValueRow } from '@/components/ui';
 
 // Column model (Discover revamp step 3): Time is fixed left, Message
 // is fixed right (flexes), the Trace deep-link column trails when
@@ -65,6 +65,8 @@ const COL_WIDTHS: Record<string, number> = {
 // to the parent's filter, ⊖ adds `NOT key:value`. The callbacks
 // are optional so surfaces without a filter state (trace detail
 // Logs tab) silently omit the buttons.
+// v0.10.945 (tablo standardı T1) — `.kv-table` satırı yerine KeyValue
+// satırı: ⊕/⊖/▤ eylem yuvasında (hover + klavye odağıyla belirir).
 function KvRow({ k, v, onAdd, onExclude, onToggleCol, isCol }: {
   k: string; v: string;
   onAdd?: (key: string, value: string) => void;
@@ -77,45 +79,37 @@ function KvRow({ k, v, onAdd, onExclude, onToggleCol, isCol }: {
   isCol?: boolean;
 }) {
   // The buttons only render at all when a callback was provided.
-  // CSS hover state (kv-actions visible only on tr:hover) keeps
-  // the table tidy when the operator is just reading.
+  // The KeyValue action slot (hover / focus-within reveal) keeps
+  // the list tidy when the operator is just reading.
   const canFilter = !!(onAdd || onExclude || onToggleCol);
+  // Değerler öznitelikler olduğu gibi (tam doğruluk) — eski `.kv-table`
+  // değer hücresi gibi monospace.
   return (
-    <tr className={canFilter ? 'kv-filterable' : ''}>
-      <td title={k}>{k}</td>
-      <td>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span>{v}</span>
-          {canFilter && (
-            <span className="kv-actions" style={{
-              display: 'inline-flex', gap: 2,
-            }}>
-              {onAdd && (
-                <IconButton variant="bare" size="xs" className="ib-add"
-                  onClick={(e) => { e.stopPropagation(); onAdd(k, v); }}
-                  tooltip={`Filter for ${k}: ${v}`}
-                  aria-label={`Filter for ${k}: ${v}`}
-                  icon="⊕" />
-              )}
-              {onExclude && (
-                <IconButton variant="bare" size="xs" className="ib-not"
-                  onClick={(e) => { e.stopPropagation(); onExclude(k, v); }}
-                  tooltip={`Filter out ${k}: ${v}`}
-                  aria-label={`Filter out ${k}: ${v}`}
-                  icon="⊖" />
-              )}
-              {onToggleCol && (
-                <IconButton variant="bare" size="xs" className="ib-add"
-                  onClick={(e) => { e.stopPropagation(); onToggleCol(k); }}
-                  tooltip={isCol ? `Remove ${k} column` : `Add ${k} as column`}
-                  aria-label={isCol ? `Remove ${k} column` : `Add ${k} as column`}
-                  icon={isCol ? '▣' : '▤'} />
-              )}
-            </span>
-          )}
-        </span>
-      </td>
-    </tr>
+    <KeyValueRow k={k} v={v} mono actions={canFilter ? (
+      <>
+        {onAdd && (
+          <IconButton variant="bare" size="xs" className="ib-add"
+            onClick={(e) => { e.stopPropagation(); onAdd(k, v); }}
+            tooltip={`Filter for ${k}: ${v}`}
+            aria-label={`Filter for ${k}: ${v}`}
+            icon="⊕" />
+        )}
+        {onExclude && (
+          <IconButton variant="bare" size="xs" className="ib-not"
+            onClick={(e) => { e.stopPropagation(); onExclude(k, v); }}
+            tooltip={`Filter out ${k}: ${v}`}
+            aria-label={`Filter out ${k}: ${v}`}
+            icon="⊖" />
+        )}
+        {onToggleCol && (
+          <IconButton variant="bare" size="xs" className="ib-add"
+            onClick={(e) => { e.stopPropagation(); onToggleCol(k); }}
+            tooltip={isCol ? `Remove ${k} column` : `Add ${k} as column`}
+            aria-label={isCol ? `Remove ${k} column` : `Add ${k} as column`}
+            icon={isCol ? '▣' : '▤'} />
+        )}
+      </>
+    ) : undefined} />
   );
 }
 
@@ -292,7 +286,7 @@ export function LogTable({
   const cols = 1 + colIds.length + (hideTraceColumn ? 0 : 1);
   return (
     <div className="table-wrap">
-      <table className="logtbl-dense" style={{ tableLayout: 'fixed', width: '100%' }}>
+      <table className={[dt.tableProps.className, 'logtbl-dense'].join(' ')}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} renderLabel={onRemoveColumn ? (c) => (
           NON_REMOVABLE_COL_IDS.has(c.id)
@@ -429,17 +423,16 @@ function LogRow({
       <tr {...rowActivation(onClick)}
           data-row-idx={idx}
           data-table-id={tableId}
-          className={`${selected ? 'row-selected ' : ''}${l.severity >= 17 ? 'log-error' : l.severity >= 13 ? 'log-warn' : ''}`.trim() || undefined}
           /* content-visibility lets the browser skip layout/paint of
-             off-screen log rows — the table > 100 rows hard constraint.
-             ~28px row; containIntrinsicSize reserves space so the
-             scrollbar doesn't jump (v0.7.79). */
-          style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 28px' }}>
+             off-screen log rows — the table > 100 rows hard constraint
+             (v0.7.79). v0.10.945 (T6) — tahmin tek sınıftan: `cv-row`. */
+          className={`cv-row${selected ? ' row-selected' : ''}${l.severity >= 17 ? ' log-error' : l.severity >= 13 ? ' log-warn' : ''}`}>
         <td className="mono">{tsLong(l.timestamp)}</td>
         {colIds.map(id => {
           if (id === 'message') {
             return (
-              <td key={id} className={wrap ? 'lt-wrap' : undefined} style={wrap ? undefined : { maxWidth: 480 }} title={wrap ? undefined : l.body}>
+              // v0.10.945 — satır içi maxWidth sabit düzende etkisizdi (genişlik colgroup'ta).
+              <td key={id} className={wrap ? 'lt-wrap' : undefined} title={wrap ? undefined : l.body}>
                 {/* v0.8.407 — span-event pseudo rows (exceptions / log-bridge
                     records riding the trace's spans) are visibly distinct from
                     backend log rows so the merged trace Logs tab stays honest. */}
@@ -483,7 +476,7 @@ function LogRow({
                   <span style={{
                     fontSize: 11, padding: '1px 6px',
                     background: 'var(--bg3)', borderRadius: 3,
-                    fontFamily: 'monospace',
+                    fontFamily: 'var(--font-mono)',
                   }}>
                     {l.serviceName || '—'}
                   </span>
@@ -493,7 +486,7 @@ function LogRow({
           }
           if (id === 'cluster') {
             return (
-              <td key={id} className={'mono' + (canPivot && ce ? ' lt-pivot' : '')} style={{ fontSize: 11, color: 'var(--text2)' }}
+              <td key={id} className={'mono cell-muted' + (canPivot && ce ? ' lt-pivot' : '')}
                   title={cluster || 'no openshift.labels.cluster / openshift.cluster.name / k8s.cluster.name resource attr'}>
                 {ce ? pivotCell(ce.key, ce.value, cluster) : '—'}
               </td>
@@ -505,7 +498,7 @@ function LogRow({
             // (trace Logs sekmesi) yalnız değer.
             const pe = pod ? podEntryOfLog(l) : null;
             return (
-              <td key={id} className={'mono' + (canPivot && pe ? ' lt-pivot' : '')} style={{ fontSize: 11, color: 'var(--text2)' }}
+              <td key={id} className={'mono cell-muted' + (canPivot && pe ? ' lt-pivot' : '')}
                   title={pod || 'no k8s.pod.name / kubernetes.pod_name resource attr'}>
                 {pe ? pivotCell(pe.key, pe.value, truncMid(pod, 22)) : '—'}
               </td>
@@ -516,7 +509,7 @@ function LogRow({
           // the expanded row's kv-tables imply (attrs listed first).
           const v = (l.attributes ?? {})[id] ?? (l.resourceAttributes ?? {})[id] ?? '';
           return (
-            <td key={id} className={'mono' + (canPivot && v ? ' lt-pivot' : '')} style={{ fontSize: 11, color: 'var(--text2)' }}
+            <td key={id} className={'mono cell-muted' + (canPivot && v ? ' lt-pivot' : '')}
                 title={v || `no ${id} attribute on this log`}>
               {v ? pivotCell(id, v, v) : '—'}
             </td>
@@ -561,7 +554,8 @@ function LogRow({
               sayfa-zemini tokeni burada üç temada üç ayrı anlam taşıyordu
               (dark'ta tablodan koyu, light'ta tablodan AÇIK, redhat'te
               tablodan koyu). `--bg2` uygulamanın "iç kutu / hover"
-              kademesi — `.vt-scroll thead th` ve `.empty code` ile aynı. */}
+              kademesi — `.vt-scroll thead th` ve `.empty code` ile aynı.
+              v0.10.945 — `row-detail` DEĞİL: dolgu 10px 20px, üst çizgi yok. */}
           <td colSpan={cols} style={{ background: 'var(--bg2)', padding: '10px 20px' }}>
             {/* Doc viewer tabs (Discover revamp 7/7): Table keeps
                 the classic anatomy (pretty body + kv-tables with
@@ -608,27 +602,30 @@ function LogRow({
                         seg.hl ? <mark key={i}>{seg.text}</mark> : <span key={i}>{seg.text}</span>)
                     : prettyMaybe(l.body)}
                 </pre>
+                {/* v0.10.945 (tablo standardı T1) — öznitelikler KeyValue. Detay
+                    hücresi `tbody td` tabanından nowrap miras bırakır; etiket
+                    sarabilsin (240px sütun) diye liste `normal`e döner. */}
                 {attrs.length > 0 && (
-                  <table className="kv-table"><tbody>
+                  <KeyValue labelWidth="wide" style={{ whiteSpace: 'normal' }}>
                     {attrs.map(([k, v]) => (
                       <KvRow key={k} k={k} v={String(v)}
                         onAdd={onFilterAdd} onExclude={onFilterExclude}
                         onToggleCol={onToggleColumn} isCol={colIds.includes(k)} />
                     ))}
-                  </tbody></table>
+                  </KeyValue>
                 )}
                 {res.length > 0 && (
                   <details style={{ marginTop: 6 }}>
                     <summary style={{ cursor: 'pointer', fontSize: 11, color: 'var(--text2)' }}>
                       Resource ({res.length})
                     </summary>
-                    <table className="kv-table"><tbody>
+                    <KeyValue labelWidth="wide" style={{ whiteSpace: 'normal' }}>
                       {res.map(([k, v]) => (
                         <KvRow key={k} k={k} v={String(v)}
                           onAdd={onFilterAdd} onExclude={onFilterExclude}
                           onToggleCol={onToggleColumn} isCol={colIds.includes(k)} />
                       ))}
-                    </tbody></table>
+                    </KeyValue>
                   </details>
                 )}
               </>

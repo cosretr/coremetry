@@ -76,6 +76,8 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
           </div>
         ) : (
           <>
+            {/* v0.10.945 — statik tablo (T1): operatör onaylı mockup'ın (a42a0b31) yüzde
+                kolonlu kart tablosu; ilk 8 pod + "tümü", sıra sunucunun (oluşum), sıralanmaz. */}
             <table className="exc-pods-t">
               <colgroup>
                 <col className="exc-pods-c-pod" /><col className="exc-pods-c-node" /><col className="exc-pods-c-n" /><col className="exc-pods-c-t" /><col className="exc-pods-c-a" />

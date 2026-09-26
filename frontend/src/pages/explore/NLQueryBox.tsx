@@ -95,7 +95,7 @@ export function NLQueryBox({
           <span style={{ color: 'var(--ok)' }}>✓</span>
           <span>
             Applied <b>{state.filterCount}</b> filter{state.filterCount === 1 ? '' : 's'} · range
-            {' '}<code style={{ fontFamily: 'ui-monospace, monospace' }}>{state.preset}</code>
+            {' '}<code>{state.preset}</code>
             {state.explain && <> · <span style={{ color: 'var(--text3)' }}>{state.explain}</span></>}
           </span>
         </div>

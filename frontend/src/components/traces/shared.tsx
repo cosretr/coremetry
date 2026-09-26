@@ -43,7 +43,7 @@ export function SvcBadge({ name }: { name: string }) {
         fontSize: 11,
         padding: '1px 7px',
         borderRadius: 4,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontFamily: 'var(--font-mono)',
         background: svcBadgeBg(name),
         color: svcColor(name),
         whiteSpace: 'nowrap',

@@ -37,7 +37,8 @@ describe('tarih damgası sınıfı diğer listelerde (v0.10.739)', () => {
   for (const [f, n] of files) {
     it(`${f}: ${n} hücre .ib-when, satır-içi 11 px tsLong hücresi yok`, () => {
       const src = readFileSync(resolve(__dirname, f), 'utf8');
-      expect((src.match(/className="mono(?: row-cell)? ib-when"/g) ?? []).length).toBe(n);
+      // v0.10.945 (tablo standardı S3) — soluk damga rengi satır içi değil sınıfta (cell-faint).
+      expect((src.match(/className="mono(?: row-cell)? ib-when(?: cell-(?:faint|muted))?"/g) ?? []).length).toBe(n);
       expect(src).not.toMatch(/<td className="mono(?: row-cell)?" style=\{\{ fontSize: 11[^}]*\}\}>(?:<Link[^>]*>)?\{tsLong\(/);
     });
   }

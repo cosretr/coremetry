@@ -155,7 +155,7 @@ export default function WatchersPage() {
           </Empty>
         )}
         {rows && rows.length > 0 && (
-          <div className="table-wrap is-fit">
+          <div className="table-wrap">
             {/* v0.9.196 review-fix: summary rollup hatası sessiz sıfır-dolgu
                 olarak sunulmaz — sütunların güvenilmez olduğu söylenir. */}
             {summaryQ.isError && (
@@ -167,59 +167,61 @@ export default function WatchersPage() {
                 ⚠ Summary rollup unavailable — "Last fire" / "Fires (24h)" columns may be stale or empty.
               </div>
             )}
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
-                {dt.sortedRows.map((r, i) => (
-                  <tr key={r.id} {...dt.rowProps(i)}
-                    {...rowActivation(() => openWatcher(r.id))}
-                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 38px' }}
-                    title="Open fire / notification / resolve history">
-                    <td><b>{r.name}</b></td>
-                    <td className="mono" style={{ fontSize: 12 }} title={r.watcherJson ? 'Imported ES watch — condition projected from the stored definition' : undefined}>
-                      hits.total {r.comparator} {r.threshold}
-                    </td>
-                    <td style={{ fontSize: 12 }}>{fmtDurShort(r.windowSec)}</td>
-                    <td>
-                      {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu, sağlık değil: ON nötr. */}
-                      {r.enabled
-                        ? <span className="badge b-gray">ON</span>
-                        : <span className="badge b-gray"
-                            title={r.disabledReason || 'Disabled by operator'}>OFF</span>}
-                      {canEdit && (
-                        <Button variant="secondary" size="sm"
-                          style={{ marginLeft: 6 }}
-                          onClick={e => {
-                            e.stopPropagation(); // satır tıklaması drawer açmasın
-                            (r.enabled ? disableRule : enableRule).mutate(r.id);
-                          }}>
-                          {r.enabled ? 'Disable' : 'Enable'}
-                        </Button>
-                      )}
-                    </td>
-                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}
-                        title={r.lastFire ? tsLong(r.lastFire) : undefined}>
-                      {r.lastFire ? fmtAgoNs(r.lastFire) : <span style={{ color: 'var(--text3)' }}>—</span>}
-                      {/* v0.10.929 (K5) — ton tek durum sözlüğünden: open → nötr (kırmızı değil). */}
-                      {r.openNow && <TriageStatusBadge s="open" label="OPEN" style={{ marginLeft: 6 }} />}
-                    </td>
-                    <td className="num mono" style={{ fontSize: 12 }}>
-                      {/* M4 — sayı yerine saat-bazlı dağılım: 24 slotluk
-                          mini-bar (mode='count') + toplam. Rollup'ı
-                          olmayan / hiç fire etmemiş satır sayıya düşer. */}
-                      <span style={{ display: 'inline-flex', alignItems: 'center',
-                                     gap: 8, justifyContent: 'flex-end' }}>
-                        {r.firesHourly?.some(v => v > 0) && (
-                          <Sparkline mode="count" values={r.firesHourly}
-                            width={64} height={16} color="var(--purple)"
-                            title={`Fires per hour — last 24h (oldest → newest), total ${r.fires24h}`} />
+                {dt.sortedRows.map((r, i) => {
+                  // v0.10.945 — cv-row rowProps sınıfıyla BİRLEŞİR (row-selected ezilmesin);
+                  // talimat ipucu (satır title) kalktı: el imleci + hover satırın işareti (T7).
+                  const rp = dt.rowProps(i);
+                  return (
+                    <tr key={r.id} {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
+                      {...rowActivation(() => openWatcher(r.id))}>
+                      <td><b>{r.name}</b></td>
+                      <td className="mono" title={r.watcherJson ? 'Imported ES watch — condition projected from the stored definition' : undefined}>
+                        hits.total {r.comparator} {r.threshold}
+                      </td>
+                      <td>{fmtDurShort(r.windowSec)}</td>
+                      <td>
+                        {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu, sağlık değil: ON nötr. */}
+                        {r.enabled
+                          ? <span className="badge b-gray">ON</span>
+                          : <span className="badge b-gray"
+                              title={r.disabledReason || 'Disabled by operator'}>OFF</span>}
+                        {canEdit && (
+                          <Button variant="secondary" size="sm"
+                            style={{ marginLeft: 6 }}
+                            onClick={e => {
+                              e.stopPropagation(); // satır tıklaması drawer açmasın
+                              (r.enabled ? disableRule : enableRule).mutate(r.id);
+                            }}>
+                            {r.enabled ? 'Disable' : 'Enable'}
+                          </Button>
                         )}
-                        {r.fires24h > 0 ? r.fires24h : <span style={{ color: 'var(--text3)' }}>0</span>}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td title={r.lastFire ? tsLong(r.lastFire) : undefined}>
+                        {r.lastFire ? fmtAgoNs(r.lastFire) : <span style={{ color: 'var(--text3)' }}>—</span>}
+                        {/* v0.10.929 (K5) — ton tek durum sözlüğünden: open → nötr (kırmızı değil). */}
+                        {r.openNow && <TriageStatusBadge s="open" label="OPEN" style={{ marginLeft: 6 }} />}
+                      </td>
+                      <td className="num">
+                        {/* M4 — sayı yerine saat-bazlı dağılım: 24 slotluk
+                            mini-bar (mode='count') + toplam. Rollup'ı
+                            olmayan / hiç fire etmemiş satır sayıya düşer. */}
+                        <span style={{ display: 'inline-flex', alignItems: 'center',
+                                       gap: 8, justifyContent: 'flex-end' }}>
+                          {r.firesHourly?.some(v => v > 0) && (
+                            <Sparkline mode="count" values={r.firesHourly}
+                              width={64} height={16} color="var(--purple)"
+                              title={`Fires per hour — last 24h (oldest → newest), total ${r.fires24h}`} />
+                          )}
+                          {r.fires24h > 0 ? r.fires24h : <span style={{ color: 'var(--text3)' }}>0</span>}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

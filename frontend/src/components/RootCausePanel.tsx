@@ -126,6 +126,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
             </div>
           ) : (
             <div className="table-wrap">
+              {/* v0.10.945 — statik tablo (T1): en çok 6 çağıran, sabit öncelik sırası (hata → RPS); sıralanmaz. */}
               <table>
                 <thead><tr>
                   <th>Caller</th>
@@ -144,8 +145,8 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                             {c.service}
                           </Link>
                         </td>
-                        <td className="num mono">{c.rps.toFixed(1)}</td>
-                        <td className="num mono" style={{ color: c.errorRate > 0 ? 'var(--err)' : 'var(--text2)' }}>
+                        <td className="num">{c.rps.toFixed(1)}</td>
+                        <td className={`num ${c.errorRate > 0 ? 'cell-err' : 'cell-muted'}`}>
                           {/* v0.8.317 — BlastRadiusCaller.errorRate is a PERCENT
                               (chstore/blast_radius.go: errors*100/calls); pct()
                               multiplies a 0..1 fraction by 100, so a 3%-error
@@ -173,9 +174,10 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
         <Section title="What else changed"
                  subtitle="services that moved around the fire (current vs prior window, by composite score)">
           <div className="table-wrap">
+            {/* v0.10.945 — statik tablo (T1): en çok 8 servis, sıra sunucunun bileşik puanı; sıralanmaz. */}
             <table>
               <thead><tr>
-                <th style={{ width: 36 }}>#</th>
+                <th className="num" style={{ width: 36 }}>#</th>
                 <th>Service</th>
                 <th>What changed</th>
                 <th className="num" style={{ width: 64 }}>Score</th>
@@ -183,19 +185,16 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
               <tbody>
                 {corr.slice(0, 8).map((c, i) => (
                   <tr key={c.service}>
-                    <td className="mono" style={{ color: 'var(--text3)' }}>{i + 1}</td>
+                    <td className="num cell-faint">{i + 1}</td>
                     <td>
                       <Link to={serviceHref(c.service, { range: win })} style={{ fontWeight: 600 }}>
                         {c.service}
                       </Link>
                     </td>
-                    <td style={{ fontSize: 12, lineHeight: 1.5 }}>
+                    <td style={{ lineHeight: 1.5 }}>
                       {c.reasons.map((r, k) => <div key={k}>{r}</div>)}
                     </td>
-                    <td className="num mono" style={{
-                      fontWeight: 600,
-                      color: c.score > 50 ? 'var(--err)' : c.score > 20 ? 'var(--warn)' : 'var(--text2)',
-                    }}>{c.score.toFixed(0)}</td>
+                    <td className={`num cell-strong ${c.score > 50 ? 'cell-err' : c.score > 20 ? 'cell-warn' : 'cell-muted'}`}>{c.score.toFixed(0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -236,6 +235,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
         <Section title="İlgili dağıtımlar"
                  subtitle="problem başlangıcından önceki 120 dk içinde bu servisin iş yüklerinde başlayan rollout'lar">
           <div className="table-wrap">
+            {/* v0.10.945 — statik tablo (T1): worker en çok 3 rollout puanlar; sıralanmaz. */}
             <table>
               <thead><tr>
                 <th>İş yükü</th>
@@ -246,8 +246,8 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
               </tr></thead>
               <tbody>
                 {rollouts.map(ev => (
-                  <tr key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`} title={ev.reason}>
-                    <td>
+                  <tr key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`}>
+                    <td title={ev.reason}>
                       <Link to={rolloutEvidenceHref(ev)} style={{ fontWeight: 600 }}>
                         {ev.namespace}/{ev.workload}
                       </Link>
@@ -255,12 +255,12 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                         <span className="badge b-warn" style={{ marginLeft: 6 }} title="problemin pod'u bu revizyonda">POD</span>
                       )}
                     </td>
-                    <td className="mono" style={{ fontSize: 12 }}>
+                    <td className="mono">
                       {ev.prevImageTag && ev.imageTag && ev.prevImageTag !== ev.imageTag
                         ? <>{ev.prevImageTag} → {ev.imageTag}</>
                         : (ev.imageTag || shortRevision(ev.revision, ev.workload))}
                     </td>
-                    <td className="mono" style={{ fontSize: 12, color: 'var(--text2)' }} title={tsLong(ev.startedAtNs)}>
+                    <td className="mono cell-muted" title={tsLong(ev.startedAtNs)}>
                       {ev.ageMin <= 0 ? 'aynı dakika' : `${ev.ageMin} dk önce`}
                     </td>
                     <td>
@@ -272,7 +272,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                         {ev.status}
                       </Badge>
                     </td>
-                    <td className="num mono" style={{ fontWeight: 600, color: ev.band === 'high' ? 'var(--err)' : 'var(--warn)' }}>
+                    <td className={`num cell-strong ${ev.band === 'high' ? 'cell-err' : 'cell-warn'}`}>
                       {ev.score.toFixed(2)}
                     </td>
                   </tr>
@@ -294,14 +294,15 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
         <Section title="Log şablonları (bu servis)"
                  subtitle="kalıcı Drain şablonları, son 60 dk görülen; sayım ömür boyu gözlem, problem penceresinin sayımı değil">
           <div className="table-wrap">
+            {/* v0.10.945 — statik tablo (T1): sunucu en çok 5 şablon döner (deepEvidenceLimit), sayıma göre sıralı. */}
             <table>
               <thead><tr><th>Şablon</th><th className="num" style={{ width: 90 }}>Toplam</th><th style={{ width: 110 }}>Son görülme</th></tr></thead>
               <tbody>
                 {rc.hypothesis!.deep!.templates!.map(t => (
-                  <tr key={t.id} title={t.sample}>
-                    <td className="mono" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.template}</td>
+                  <tr key={t.id}>
+                    <td className="mono" title={t.sample}>{t.template}</td>
                     <td className="num">{t.totalCount.toLocaleString()}</td>
-                    <td className="mono" style={{ fontSize: 12, color: 'var(--text2)' }} title={tsLong(t.lastSeen)}>{tsLong(t.lastSeen)}</td>
+                    <td className="mono cell-muted" title={tsLong(t.lastSeen)}>{tsLong(t.lastSeen)}</td>
                   </tr>
                 ))}
               </tbody>

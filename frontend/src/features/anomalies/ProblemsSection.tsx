@@ -565,8 +565,11 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
           artık başlık satırının ⋯ menüsünde ("Kolonları sıfırla",
           DataTableHead) — sayfa başına düğme ve koşullu sarmalayıcısı kalktı. */}
       {sorted && sorted.length > 0 && (
-        <div className="table-wrap is-fit">
-          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            {/* v0.10.945 — Assignee + Triage `trailing` kalır: Assignee düzenlenebilir
+                sayfa hücresi, Triage ondan sonra gelir; kind:'actions' ikisini de
+                yönetilen kolona çevirmeyi gerektirirdi (bu dilimde değil). */}
             <DataTableColgroup dt={dt} leading={[28]} trailing={[170, 90]} />
             <DataTableHead dt={dt}
               leading={
@@ -592,6 +595,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                 // yeni sekme); satırın onClick'i etkileşimli hücreler için
                 // kalıyor, Link kendi tıkını yutuyor (çift gezinme yok).
                 const href = problemDetailHref(location.pathname, searchParams, p.id);
+                const rp = dt.rowProps(i);
                 return (
                   // v0.9.1133 — key FRAGMENT'te: satır artık iki `<tr>`
                   // döndürebiliyor (satır + açık insight kartı). Keyless bir
@@ -599,7 +603,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                   // değiştiğinde açık kart BAŞKA bir satırın altında kalır
                   // (MT4, brokenAffordances kapısı).
                   <Fragment key={p.id}>
-                  <tr {...dt.rowProps(i)}
+                  <tr {...rp}
                       {...rowActivation(() => openDetail(p.id))}
                       // v0.10.925 — satırın kendi onKeyDown'ı rowActivation'ınkini
                       // EZİYORDU ve hedef denetimi yoktu: satır içindeki bir
@@ -609,13 +613,11 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                       // v0.10.924 — buton rolü + tabIndex yukarıdaki rowActivation
                       // yayılımından geliyor (tıklanabilir <tr> sözleşmesi, D3);
                       // aynı değeri tekrarlayan literal öznitelik kaldırıldı.
-                      style={{
-                        contentVisibility: 'auto', containIntrinsicSize: 'auto 44px',
-                        // v0.10.922 (sade palet adım 1) — açık kritik satırın
-                        // kırmızı zemini KALKTI. Aynı olgu beş kez boyanıyordu
-                        // (zemin + P1 + CRITICAL + kırmızı değer + OPEN); renk
-                        // artık yalnız öncelik rozetinde.
-                      }}>
+                      // v0.10.922 (sade palet adım 1) — açık kritik satırın
+                      // kırmızı zemini KALKTI. Aynı olgu beş kez boyanıyordu
+                      // (zemin + P1 + CRITICAL + kırmızı değer + OPEN); renk
+                      // artık yalnız öncelik rozetinde.
+                      className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                       <td onClick={e => e.stopPropagation()}>
                         <input type="checkbox"
                           checked={selectedIds.has(p.id)}
@@ -645,7 +647,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                         <ClusterChips clusters={p.clusters} />
                       </td>
                       <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{p.metric}</Link></td>
-                      <td className="mono row-cell" style={{ textAlign: 'right' }}>
+                      <td className="num row-cell">
                         <Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>
                           {/* v0.10.922 (sade palet adım 1) — değer düz metin
                               (--text, 600); eşiği aştığını satırın varlığı ve
@@ -654,7 +656,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                           <span style={{ color: 'var(--text3)' }}> / {fmtFixed(p.threshold, 2)}</span>
                         </Link>
                       </td>
-                      <td style={{ fontSize: 12 }}>
+                      <td>
                         {/* v0.10.922 (sade palet adım 1) — ANOMALY / Runbook /
                             AI insight / blast-radius çipleri ÜST VERİ: mavi
                             (b-info) değil nötr (b-gray). Renk yalnız sapmada
@@ -764,7 +766,7 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
                           <ProblemStatusBadge status={p.status} />
                         </Link>
                       </td>
-                      <td onClick={e => e.stopPropagation()} style={{ fontSize: 12 }}>
+                      <td onClick={e => e.stopPropagation()}>
                         <AssigneeCell problem={p}
                           currentUserEmail={currentUserEmail}
                           onChanged={() => problemsQ.refetch()} />

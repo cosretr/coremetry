@@ -17,8 +17,13 @@ describe('Rollouts cluster kolonu', () => {
     expect(c).toBeGreaterThan(w);
     expect(k).toBeGreaterThan(c);
   });
+  // v0.10.945 (tablo standardı) — hücre sözleşmesi: dizge `value` tam adı
+  // `title`a koyar (cellProps), "…" tabandan (`tbody td`); satır içi stil yok.
   it('hücre: çözülmüş ad + title, ellipsis', () => {
-    expect(src).toContain('<td title={cname} style={{ overflow: \'hidden\', textOverflow: \'ellipsis\', whiteSpace: \'nowrap\' }}>{cname}</td>');
+    expect(src).toContain('<DataTableCell dt={dt} col="cluster" row={r} value={cname} />');
+    const col = src.slice(src.indexOf("{ id: 'cluster', label: 'Cluster'"), src.indexOf("{ id: 'kind', label: 'Tür'"));
+    // title yalnız sayısal olmayan, sarmayan kolonda basılır; kolon kırpar.
+    expect(col).not.toMatch(/numeric|truncate/);
   });
   it('workload eki artık cluster TEKRARLAMAZ (kırpılma kaynağı)', () => {
     expect(src).toContain('<span className="field-hint"> · {r.namespace}</span>');

@@ -25,6 +25,7 @@ describe('/slos satır fan-out', () => {
   });
   it('iki çip LazyMount içinde, satırlar >100\'de content-visibility taşır', () => {
     expect(src.split('<LazyMount compact').length - 1).toBe(2);
-    expect(src).toContain("dt.sortedRows.length > 100 ? { contentVisibility: 'auto'");
+    // v0.10.945 (tablo standardı T6) — content-visibility tek sınıftan (`.cv-row`).
+    expect(src).toContain("dt.sortedRows.length > 100 ? 'cv-row' : undefined");
   });
 });

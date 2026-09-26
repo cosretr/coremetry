@@ -11,8 +11,7 @@ import { useSLOs, useCreateSLO, useDeleteSLO } from '@/lib/queries';
 import { api } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { LazyMount } from '@/components/LazyMount'; // v0.10.854
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { SLIType, SLORow } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 import { QueryError } from '@/components/QueryError';
@@ -24,6 +23,11 @@ import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 // non-sortable because their values are loaded asynchronously per
 // row (separate /api/slos/{id}/forecast + /burn-series fetches) so
 // the SLORow object doesn't carry the numbers needed to compare.
+
+// v0.10.945 (tablo standardı T8) — eylem kolonu `kind: 'actions'`; id/genişlik
+// aynı → kayıtlı genişlikler korunur. İçteki `.cell-actions` (flex) düğmeleri
+// yerinde tutar.
+const SLO_ACTIONS_COL: ColumnDef<SLORow> = { id: 'actions', label: 'Actions', kind: 'actions', width: 130 };
 
 export default function SLOsPage() {
   const confirm = useConfirm();
@@ -43,9 +47,9 @@ export default function SLOsPage() {
   // only for editors/admins. Numeric accessors preserve the prior
   // sort semantics; null status (no telemetry yet) sinks to the bottom.
   const windowDays = items && items.length > 0 ? items[0].windowDays : 0;
-  const sloCols = useMemo<DataTableColumn<SLORow>[]>(() => [
+  const sloCols = useMemo<ColumnDef<SLORow>[]>(() => [
     { id: 'name',     label: 'Name',        sortValue: o => o.name?.toLowerCase() ?? '',    naturalDir: 'asc', width: 220 },
-    { id: 'service',  label: 'Service',     sortValue: o => o.service?.toLowerCase() ?? '', naturalDir: 'asc', width: 150 },
+    { id: 'service',  label: 'Service',     sortValue: o => o.service?.toLowerCase() ?? '', naturalDir: 'asc', width: 150, mono: true },
     { id: 'target',   label: 'Target',      sortValue: o => o.target,                       naturalDir: 'desc', numeric: true, width: 96 },
     { id: 'sli',      label: `SLI (${windowDays}d)`, sortValue: o => o.status?.sli ?? null,  naturalDir: 'desc', numeric: true, width: 110 },
     { id: 'budget',   label: 'Budget left', sortValue: o => o.status?.budgetRemaining ?? null, naturalDir: 'desc', width: 130 },
@@ -54,7 +58,7 @@ export default function SLOsPage() {
     { id: 'trend',    label: '7d trend',    width: 100 },
     // v0.10.801 — sıra: ihlal (0) → olay yok (0.5) → sağlıklı (1); durum yoksa null.
     { id: 'status',   label: 'Status',      sortValue: o => (o.status ? (o.status.noData ? 0.5 : o.status.healthy ? 1 : 0) : null), naturalDir: 'desc', width: 110 },
-    ...(isAdmin ? [{ id: 'actions', label: '', width: 130 } as DataTableColumn<SLORow>] : []),
+    ...(isAdmin ? [SLO_ACTIONS_COL] : []),
   ], [windowDays, isAdmin]);
 
   const dt = useDataTable<SLORow>({
@@ -110,14 +114,14 @@ export default function SLOsPage() {
         )}
         {items && items.length > 0 && (
           <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(o => (
                   // v0.10.854 (scale-audit 🔴) — >100 satırda content-visibility (ev kuralı).
-                  <tr key={o.id} style={dt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 44px' } : undefined}>
-                    <td>
+                  <tr key={o.id} className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
+                    <DataTableCell dt={dt} col="name" row={o}>
                       <div style={{ fontWeight: 600 }}>{o.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
                         {o.sliType === 'latency'
@@ -125,29 +129,29 @@ export default function SLOsPage() {
                           : 'availability'}
                         {o.operation && <> · op=<code>{o.operation}</code></>}
                       </div>
-                    </td>
-                    <td className="mono">{o.service}</td>
-                    <td className="mono">{(o.target * 100).toFixed(2)}%</td>
-                    <td className="mono" title={o.status?.hint || undefined}>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="service" row={o} value={o.service} />
+                    <DataTableCell dt={dt} col="target" row={o} value={`${(o.target * 100).toFixed(2)}%`} />
+                    <DataTableCell dt={dt} col="sli" row={o} title={o.status?.hint || undefined}>
                       {/* v0.10.801 — olaysız pencere %100 değil "—"; ipucu varsa ⚠ (title). */}
                       {o.status && !o.status.noData ? (o.status.sli * 100).toFixed(3) + '%' : '—'}
                       {o.status?.hint && !o.status.noData && <span className="badge b-warn" style={{ marginLeft: 6, fontSize: 10 }}>⚠ tanım</span>}
-                    </td>
-                    <td className="mono">
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="budget" row={o} className="mono">
                       {o.status && !o.status.noData ? <BudgetBar value={o.status.budgetRemaining} /> : '—'}
-                    </td>
-                    <td className="mono">
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="burn" row={o} className="mono">
                       {o.status && !o.status.noData ? <BurnBadge rate={o.status.burnRate} /> : '—'}
-                    </td>
+                    </DataTableCell>
                     {/* v0.10.854 (scale-audit 🔴) — satır başına iki istek yalnız GÖRÜNÜR
                         satırda (LazyMount); autocreate ≤200 SLO × 2 = 400 istek/yükleme idi. */}
-                    <td>
+                    <DataTableCell dt={dt} col="forecast" row={o}>
                       <LazyMount compact minHeight={18}><ForecastChip sloId={o.id} /></LazyMount>
-                    </td>
-                    <td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="trend" row={o}>
                       <LazyMount compact minHeight={18}><BurnSparkline sloId={o.id} /></LazyMount>
-                    </td>
-                    <td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="status" row={o}>
                       {/* v0.10.801 — Honeycomb "No Events": olaysız SLO ne sağlıklı ne ihlal. */}
                       {o.status?.noData
                         ? <span className="badge b-gray" title={o.status.hint}>Olay yok</span>
@@ -155,14 +159,14 @@ export default function SLOsPage() {
                           // v0.10.929 (K5) — sağlıklı SLO nötr; renk yalnız Breached'te.
                           ? <span className="badge b-gray">Healthy</span>
                           : <span className="badge b-err">Breached</span>}
-                    </td>
+                    </DataTableCell>
                     {isAdmin && (
-                      <td><div className="cell-actions">
+                      <DataTableCell dt={dt} col="actions" row={o}><div className="cell-actions">
                         <BurnExplainButton sloId={o.id} />
                         <Button variant="ghost-danger" size="sm" loading={deleteSLO.isPending}
                           onClick={() => void onDelete(o.id, o.name)}>Delete</Button>
                       </div>
-                      </td>
+                      </DataTableCell>
                     )}
                   </tr>
                 ))}
@@ -186,6 +190,25 @@ export default function SLOsPage() {
     </>
   );
 }
+
+// v0.10.945 (tablo standardı T1) — öneri önizlemesi kayıt listesi (servis
+// başına iki satır, sunucu varsayılanı 30 servis): useDataTable, initialSort
+// yok (sunucunun trafik sırası). Hedef ve taban birimi satıra göre değişir
+// (ms / %), sıralanmaz; sayılar arayüz fontunda (S2), gerekçe renkle (S3).
+type AutoSuggestion = Awaited<ReturnType<typeof api.autocreateSLOs>>['suggestions'][number];
+// v0.10.945 — kolonlar sabit + minWidth tabanlı (Rollouts v0.10.205 emsali):
+// flex kolonun minWidth'i fit'te yalnız pay ayırır, taban DEĞİL; dar ekranda
+// tabanlar kabı aşınca .table-wrap yatay kaydırır, değerler okunur kalır.
+// Genişlik toplamı 720 ≤ masaüstü kabı (~724) → fit null, masaüstü aynı.
+// Gerekçe serbest metin: dokunmatikte ipucu yok, kırpılmaz sarar (T11);
+// hedef/taban kırpılırsa `truncate: 'end'` tam değeri title'a koyar.
+const AUTO_COLS: ColumnDef<AutoSuggestion>[] = [
+  { id: 'service',  label: 'Service',            sortValue: p => p.service, naturalDir: 'asc', width: 160, minWidth: 120, mono: true },
+  { id: 'sli',      label: 'SLI',                sortValue: p => p.sliType, naturalDir: 'asc', width: 100, minWidth: 96 },
+  { id: 'target',   label: 'Target / Threshold', numeric: true, width: 150, minWidth: 150, truncate: 'end' },
+  { id: 'baseline', label: 'Baseline',           numeric: true, width: 100, minWidth: 96, truncate: 'end', tone: () => 'faint' },
+  { id: 'reason',   label: 'Reason',             width: 210, minWidth: 180, truncate: 'wrap', tone: () => 'muted' },
+];
 
 // AutoSLOModal (v0.5.147) walks the operator through dry-run →
 // review → commit. Two phases: dry-run lists every (service,
@@ -214,8 +237,9 @@ function AutoSLOModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       setRunning(false);
     }
   };
-  const proposed = preview ? preview.filter(p => !p.skipped) : [];
+  const proposed = useMemo(() => (preview ? preview.filter(p => !p.skipped) : []), [preview]);
   const skipped = preview ? preview.filter(p => p.skipped) : [];
+  const autoDt = useDataTable<AutoSuggestion>({ storageKey: 'slo-autocreate-preview', columns: AUTO_COLS, rows: proposed });
   return (
     <div role="dialog" style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
@@ -255,26 +279,21 @@ function AutoSLOModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <div className="table-wrap is-scroll" style={{ maxHeight: '50vh' }}>
             {/* v0.10.930 — is-scroll: kap kayar ve başlık yapışkan kalır; eskiden
                 satırlar 50vh'de kaydırma çubuğu olmadan kesiliyordu. */}
-            <table>
-              <thead><tr>
-                <th>Service</th><th>SLI</th><th>Target / Threshold</th><th>Baseline</th><th>Reason</th>
-              </tr></thead>
+            <table {...autoDt.tableProps}>
+              <DataTableColgroup dt={autoDt} />
+              <DataTableHead dt={autoDt} />
               <tbody>
-                {proposed.map((p, i) => (
-                  <tr key={i}>
-                    <td className="mono">{p.service}</td>
-                    <td>{p.sliType}</td>
-                    <td className="mono">
-                      {p.sliType === 'latency'
-                        ? `≤ ${p.thresholdMs?.toFixed(0)} ms @ ${(p.target * 100).toFixed(1)}%`
-                        : `${(p.target * 100).toFixed(2)}%`}
-                    </td>
-                    <td className="mono" style={{ color: 'var(--text3)' }}>
-                      {p.sliType === 'latency'
-                        ? `${p.baselineMs?.toFixed(1)} ms`
-                        : `${((p.baselineSli ?? 0) * 100).toFixed(3)}%`}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text2)' }}>{p.reason}</td>
+                {autoDt.sortedRows.map(p => (
+                  <tr key={`${p.service}|${p.sliType}`}>
+                    <DataTableCell dt={autoDt} col="service" row={p} value={p.service} />
+                    <DataTableCell dt={autoDt} col="sli" row={p} value={p.sliType} />
+                    <DataTableCell dt={autoDt} col="target" row={p} value={p.sliType === 'latency'
+                      ? `≤ ${p.thresholdMs?.toFixed(0)} ms @ ${(p.target * 100).toFixed(1)}%`
+                      : `${(p.target * 100).toFixed(2)}%`} />
+                    <DataTableCell dt={autoDt} col="baseline" row={p} value={p.sliType === 'latency'
+                      ? `${p.baselineMs?.toFixed(1)} ms`
+                      : `${((p.baselineSli ?? 0) * 100).toFixed(3)}%`} />
+                    <DataTableCell dt={autoDt} col="reason" row={p} value={p.reason} />
                   </tr>
                 ))}
               </tbody>

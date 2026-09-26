@@ -119,8 +119,8 @@ export function TracesResult({
                 </a></>
             )}
           </div>
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} trailing={[120]} />
               {/* Same column-manager UX as /traces — attribute columns
                   carry a hover-× remove affordance via renderLabel, and
@@ -128,7 +128,7 @@ export function TracesResult({
               <DataTableHead dt={dt}
                 renderLabel={c => c.id.startsWith(ATTR_PREFIX)
                   ? <>
-                      <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 'inherit' }}>{c.label}</span>
+                      <span className="mono">{c.label}</span>
                       <IconButton variant="bare" size="xs"
                         tooltip="Remove column" aria-label={`Remove the ${c.label} column`}
                         onClick={e => { e.stopPropagation(); setExtraCols(extraCols.filter(x => x !== c.label)); }}
@@ -147,42 +147,45 @@ export function TracesResult({
                   </th>
                 } />
               <tbody>
-                {dt.sortedRows.map((t, i) => (
-                  <tr key={t.traceId} {...dt.rowProps(i)}
-                      {...rowClickHandlers(traceHref(t.traceId),
-                                           () => navigate(traceHref(t.traceId)))}
-                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' }}>
-                    <td className="mono">
-                      <Link to={traceHref(t.traceId)}
-                            onClick={e => e.stopPropagation()}
-                            style={{ fontSize: 11 }}>
-                        {t.traceId.slice(0, 12)}…
-                      </Link>
-                    </td>
-                    <td><b>{t.rootName}</b></td>
-                    <td className="mono" style={{ fontSize: 12 }}>{t.serviceName}</td>
-                    <td className="mono" style={{ textAlign: 'right' }}>
-                      {t.durationMs.toFixed(1)}ms
-                    </td>
-                    <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(t.spanCount)}</td>
-                    <td className="mono ib-when">{tsLong(t.startTime)}</td>{/* v0.10.739 — 13 px damga */}
-                    <td>
-                      {/* v0.10.922 (sade palet adım 1, K5) — /traces ile aynı: sağlıklı → sr-only. */}
-                      {t.hasError
-                        ? <span className="badge b-err">ERROR</span>
-                        : <span className="sr-only">OK</span>}
-                    </td>
-                    {extraCols.map(k => {
-                      const v = t.extras?.[k] ?? '';
-                      return (
-                        <td key={k} className="mono" style={{ fontSize: 11, color: v ? 'var(--text2)' : 'var(--text3)', whiteSpace: 'nowrap', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }} title={v || ''}>
-                          {v || '—'}
-                        </td>
-                      );
-                    })}
-                    <td />
-                  </tr>
-                ))}
+                {dt.sortedRows.map((t, i) => {
+                  const rp = dt.rowProps(i);
+                  return (
+                    <tr key={t.traceId} {...rp}
+                        {...rowClickHandlers(traceHref(t.traceId),
+                                             () => navigate(traceHref(t.traceId)))}
+                        className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                      <td className="mono">
+                        <Link to={traceHref(t.traceId)}
+                              onClick={e => e.stopPropagation()}
+                              style={{ fontSize: 11 }}>
+                          {t.traceId.slice(0, 12)}…
+                        </Link>
+                      </td>
+                      <td><b>{t.rootName}</b></td>
+                      <td className="mono">{t.serviceName}</td>
+                      <td className="num">
+                        {t.durationMs.toFixed(1)}ms
+                      </td>
+                      <td className="num">{fmtNum(t.spanCount)}</td>
+                      <td className="mono ib-when">{tsLong(t.startTime)}</td>{/* v0.10.739 — 13 px damga */}
+                      <td>
+                        {/* v0.10.922 (sade palet adım 1, K5) — /traces ile aynı: sağlıklı → sr-only. */}
+                        {t.hasError
+                          ? <span className="badge b-err">ERROR</span>
+                          : <span className="sr-only">OK</span>}
+                      </td>
+                      {extraCols.map(k => {
+                        const v = t.extras?.[k] ?? '';
+                        return (
+                          <td key={k} className={v ? 'mono cell-muted' : 'mono cell-faint'} style={{ maxWidth: 280 }} title={v || ''}>
+                            {v || '—'}
+                          </td>
+                        );
+                      })}
+                      <td />
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
