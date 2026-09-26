@@ -805,3 +805,22 @@ tutulanları sayar; muaf satırda "N servis" işareti.
 **Neden:** Tek servisteki birkaç oluşum gürültüydü; aynı hatanın birden çok serviste aynı anda
 görülmesi ve geri dönen hata ise sayı küçük olsa da sinyal. Mesajsız / yalnız kimlikten oluşan
 exception'lar muafiyet anahtarı almaz (genel tür filoda her an bir yerde tekrarlanır).
+
+## 2026-09-26 — PromQL konsolu (Thanos): editor+, audit_log, pod başına sınırlar (v0.10.950–953)
+
+**Karar (operatör: Faz 0 denetimi docs/promql-console/audit.md, "4 onay"):** Uzak küme başına
+Thanos üzerinde salt okunur PromQL konsolu; `/api/promql/*` kendi rota dosyasında (api.go büyümez).
+Önerilerin tamamı onaylı: editor ve üstü (özel roller sunucuda kısıtlayamadığı için viewer değil);
+her sorgu `audit_log`'a `promql.query` (başarılı, hata, reddedilen; otomatik tamamlama değil);
+kullanıcı başına eşzamanlılık ve dakikalık sınırlar v1'de POD BAŞINA; `partial_response=false`;
+7 günü aşan aralık REDDEDİLİR (kırpılmaz); otomatik adım grafik genişliğine göre, elle adım taban
+ve 11k nokta tavanına yükseltilir; seri tavanı 500 + toplam sayı, gövde tavanı ayar (32 MiB) açık
+hatayla; sorgu geçmişi sunucuda, kullanıcı başına son 50 (saved_views blob'u, localStorage değil);
+paylaşılan querier kipinde küme etiketi yorum/dizgi güvenli eklenir, match[]'e de eklenir.
+shadcn/Tailwind yok (2026-09-25 buton kararı): mevcut atomlar ve CorePanelMulti.
+
+**İkinci Thanos okuyucusu:** `internal/promapi` başlığındaki "yeni çağıranlar promapi kullanır"
+kuralına rağmen konsol okuyucusu `internal/thanos/console.go`'da (belirteç çözümü ve eşleştirici
+ekleme o pakette, `effectiveTokenFor` dışa kapalı; onaylı denetimin planı). Eski `doQuery`'e ve
+`promapi`'ye dokunulmadı. Rollouts v2 aynı taşıma üzerinden `WorkerQuery` girişi ekleyecek
+(docs/rollouts/v2-audit.md §3.4) — üçüncü bir okuyucu yazılmaz.
