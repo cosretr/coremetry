@@ -63,6 +63,12 @@ type ExceptionGroup struct {
 	// damgası olmadan operatör 6 saatlik bir çıkarımı canlı sayının
 	// altında taze sanar. 0 = özet yok.
 	AISummaryAt int64 `json:"aiSummaryAt,omitempty"`
+	// Spread / SpreadServices — v0.10.949 — YALNIZ JSON (CH kolonu değil,
+	// Scan/INSERT'e girmez): aynı exception aynı anda kaç serviste (kendisi
+	// dahil) ve ortak servislerin ilk 5'i. api.annotateExceptionSpread
+	// doldurur; 0 = yayılım yok/bilinmiyor.
+	Spread         int      `json:"spread,omitempty"`
+	SpreadServices []string `json:"spreadServices,omitempty"`
 }
 
 // FingerprintException computes a stable identifier for "the same
@@ -242,13 +248,24 @@ var (
 	intRe      = regexp.MustCompile(`\d+`)
 )
 
-func normalizeMessage(s string) string {
+func normalizeMessage(s string) string { return normalizeMessageMask(s, true) }
+
+// normalizeMessageMask — v0.10.949 — normalizeMessage zincirinin TEK kaynağı.
+// maskQuoted=true saklanan parmak izlerinin davranışıdır (değişirse her
+// yığınsız grup yeniden parmak izlenir — dokunulmaz). Yayılım anahtarı
+// (ExceptionSpreadKey) tırnak içini KORUR: JDK yardımcı-NPE mesajlarında
+// tırnak içi kod kimliğidir (metot/alan adı) — hataya özgü ve occurrence'lar
+// arasında sabit; maskelenirse ilgisiz NPE'ler tek anahtara çöker.
+// Rakam/uuid/hex/ts/email/tok maskeleri tırnak içinde de işler.
+func normalizeMessageMask(s string, maskQuoted bool) string {
 	s = uuidRe.ReplaceAllString(s, "#uuid")
 	s = isoTsRe.ReplaceAllString(s, "#ts")
 	s = hexRe.ReplaceAllString(s, "#hex")
 	s = bareHexRe.ReplaceAllString(s, "#hex")
 	s = emailRe.ReplaceAllString(s, "#email")
-	s = quotedRe.ReplaceAllString(s, "#q")
+	if maskQuoted {
+		s = quotedRe.ReplaceAllString(s, "#q")
+	}
 	s = mixedTokRe.ReplaceAllString(s, "#tok")
 	s = intRe.ReplaceAllString(s, "#")
 	return s
@@ -560,6 +577,20 @@ type ExceptionGroupFilter struct {
 	// "only" = yalnız HTTP-hata grupları. Deseni HTTPErrorTypeRe taşır —
 	// Go tarafı sınıflandırmayla (api.isHTTPErrorType) AYNI kaynak.
 	HTTPErrors string
+	// FloorExempt — v0.10.949 — MinOccurrences tabanından MUAF parmak izleri
+	// (aynı anda ≥2 serviste görülen, tabanın altındaki gruplar;
+	// ExceptionSpread.ExemptBelow). Yalnız MinOccurrences > 0 iken anlamlı:
+	// `(occurrences >= ? OR fingerprint IN (?))`. Boş = istisna yok, eski
+	// cümle bayt-bayt aynı.
+	FloorExempt []string
+	// FloorExemptRegressed — v0.10.949 (operatör kararı 2026-09-26: regressed
+	// grup 5'in altında ve tek serviste de olsa varsayılan görünümde KALIR)
+	// — state = 'regressed' satırlar da tabandan MUAF. "Regressed"
+	// olgusu state kolonudur (ExStateRegressed; shouldRegress yazar) —
+	// öncelik merdiveninin (api.exceptionPriorityAt → P2 "regressed") baktığı
+	// alanın aynısı. Yalnız MinOccurrences > 0 iken anlamlı; yayılım
+	// okunamasa (FloorExempt boş) da geçerli.
+	FloorExemptRegressed bool
 }
 
 // HTTPErrorTypeRe — "HTTP-hata grubu" tanımının TEK kaynağı: çıplak
@@ -592,7 +623,19 @@ func buildExceptionGroupWhere(f ExceptionGroupFilter) whereClause {
 		// Default view excludes ignored — they're explicitly silenced.
 		wc.add("state != ?", ExStateIgnored)
 	}
-	if f.MinOccurrences > 0 {
+	if f.MinOccurrences > 0 && (len(f.FloorExempt) > 0 || f.FloorExemptRegressed) {
+		// v0.10.949 — taban + istisnaları (regressed durumu, çoklu-servis
+		// kümesi) TEK koşulda: LIMIT bütçesi yalnız görünecek satırlara
+		// harcanır (v0.9.336 dersi).
+		cond, args := "occurrences >= ?", []any{f.MinOccurrences}
+		if f.FloorExemptRegressed {
+			cond, args = cond+" OR state = ?", append(args, ExStateRegressed)
+		}
+		if len(f.FloorExempt) > 0 {
+			cond, args = cond+" OR fingerprint IN (?)", append(args, f.FloorExempt)
+		}
+		wc.add("("+cond+")", args...)
+	} else if f.MinOccurrences > 0 {
 		wc.add("occurrences >= ?", f.MinOccurrences)
 	}
 	if f.MaxOccurrences > 0 {

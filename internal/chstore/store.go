@@ -298,6 +298,11 @@ type Store struct {
 	// (memo.go): arka plan işleri tick içinde tek FINAL taraması paylaşır;
 	// UpsertProblem/UpsertProblemAISummary düşürür.
 	openSnap *ttlMemo[*OpenProblems]
+	// spreadMemo — v0.10.949 — ExceptionSpread'in 60 sn'lik memo'su (exception_spread.go).
+	spreadMemo *ttlMemo[*ExceptionSpread]
+	// v0.10.949 — yayılım okuması hata verdiyse bu ana kadar CH'a gidilmez (unix ns).
+	// Sıfır değer = backoff yok; kurucu değişmez.
+	spreadFailUntil atomic.Int64
 
 	// hasTopoClusterCol — `topology_edges_5m` üstünde queue düğümünün
 	// messaging cluster'ını taşıyan `cluster` kolonu var mı (v0.9.1025).
@@ -877,8 +882,9 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 		chOpts: chOpts,
 		// v0.9.975 — the SQL sites (topology/backtrace writers, the heavy
 		// raw-spans scans, the SQL playground) clamp against this.
-		memPlan:  memPlan,
-		openSnap: newTTLMemo[*OpenProblems](openSnapshotTTL),
+		memPlan:    memPlan,
+		openSnap:   newTTLMemo[*OpenProblems](openSnapshotTTL),
+		spreadMemo: newTTLMemo[*ExceptionSpread](spreadMemoTTL), // v0.10.949
 	}
 	// v0.5.437 — self-heal pass. Detects HighVolumeTables `_local`
 	// MVs/aggregates that exist in system.tables (engine

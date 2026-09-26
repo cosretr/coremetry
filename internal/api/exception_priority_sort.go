@@ -18,6 +18,7 @@ package api
 
 import (
 	"context"
+	"net/url"
 	"sort"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -80,9 +81,20 @@ func pageExceptionGroups(items []chstore.ExceptionGroup, offset, limit int) []ch
 // exceptionPage — handler'ın döndüreceği sayfa sözleşmesi: Limit/Offset
 // İSTENEN sayfa (tavanlı çekimde bile), Capped = öncelik sıralaması
 // tavanı aştı (en yeni 3000 sıralandı). prio=false → apply no-op.
+//
+// v0.10.949 — taban alanları: MinOcc uygulanan taban, Hidden tabanın
+// GİZLEDİĞİ grup sayısı (tabansız sayım − toplam; varsayılan kipte istisnalı
+// satırlar — çoklu-servis ve regressed — toplamda olduğu için "5'in altında,
+// tek serviste, regressed değil" demek), FloorDefault varsayılan kip
+// (istisnalı taban) mı. SpreadOK yayılım okundu mu: false = okuma soft-fail etti (CH hatası/backoff), taban
+// istisnasız uygulandı — Hidden o an çoklu-servis grupları da içerir.
 type exceptionPage struct {
 	Limit, Offset int
 	Capped        bool
+	MinOcc        uint64
+	Hidden        int64
+	FloorDefault  bool
+	SpreadOK      bool
 	prio          bool
 	dir           string
 }
@@ -91,8 +103,24 @@ type exceptionPage struct {
 // last_seen DESC — tavan aşımında en yeni 3000), değilse istenen sayfa;
 // toplam sayım her iki yolda aynı süzgeçten. Öncelik hesabı ÇAĞIRANDA
 // (satır başına exceptionPriority), apply ondan sonra.
-func (s *Server) listExceptionGroupsPage(ctx context.Context, f chstore.ExceptionGroupFilter) ([]chstore.ExceptionGroup, int64, exceptionPage, error) {
+//
+// v0.10.949 — ?floor=default: taban SUNUCUDA seçilir (effectiveDefaultFloor)
+// ve çoklu-servis + regressed istisnası uygulanır (Inbox varsayılanıyla aynı
+// kural; regressed: operatör kararı 2026-09-26).
+// Param yoksa ?minOccurrences= bugünkü gibi (yoksa taban yok — API uyumu).
+// Taban varken tabansız bir COUNT daha: gizlenen sayı yanıtta (yeni alan).
+// Yayılım işaretleri her kipte.
+func (s *Server) listExceptionGroupsPage(ctx context.Context, f chstore.ExceptionGroupFilter, q url.Values) ([]chstore.ExceptionGroup, int64, exceptionPage, error) {
 	pg := exceptionPage{Limit: f.Limit, Offset: f.Offset, prio: f.Sort == exceptionPrioritySortKey, dir: f.Dir}
+	sp := s.exceptionSpread(ctx)
+	pg.SpreadOK = sp != nil
+	if q.Get("floor") == "default" {
+		pg.FloorDefault = true
+		f.MinOccurrences = effectiveDefaultFloor(currentExceptionTriage())
+		f.FloorExempt = sp.ExemptBelow(f.MinOccurrences)
+		f.FloorExemptRegressed = true // v0.10.949 — regressed tabandan muaf
+	}
+	pg.MinOcc = f.MinOccurrences
 	if pg.prio {
 		f.Limit, f.Offset = exceptionPrioritySortCap, 0
 		f.Sort, f.Dir = "lastSeen", "desc"
@@ -105,7 +133,44 @@ func (s *Server) listExceptionGroupsPage(ctx context.Context, f chstore.Exceptio
 	if err != nil {
 		return nil, 0, pg, err
 	}
+	if f.MinOccurrences > 0 {
+		nf := f
+		nf.MinOccurrences, nf.FloorExempt, nf.FloorExemptRegressed = 0, nil, false
+		noFloor, err := s.store.CountExceptionGroups(ctx, nf)
+		if err != nil {
+			return nil, 0, pg, err
+		}
+		pg.Hidden = floorHidden(noFloor, total)
+	}
+	annotateExceptionSpread(items, sp)
 	return items, total, pg, nil
+}
+
+// floorHidden — tabansız sayım − tabanlı toplam; iki okuma arasında yazım
+// olursa negatife düşmez.
+func floorHidden(noFloor, total int64) int64 {
+	if noFloor <= total {
+		return 0
+	}
+	return noFloor - total
+}
+
+// body — v0.10.949 — /api/exception-groups yanıt gövdesi (api.go büyümesin
+// diye burada). Eski beş alan aynen; taban alanları EK (istemci opsiyonel
+// okur). apply'dan SONRA çağrılır (Capped orada belirlenir).
+func (pg *exceptionPage) body(items []chstore.ExceptionGroup, total int64) map[string]any {
+	return map[string]any{
+		"items":           items,
+		"total":           total,
+		"limit":           pg.Limit,
+		"offset":          pg.Offset,
+		"capped":          pg.Capped,
+		"minOcc":          pg.MinOcc,
+		"hiddenByMinOcc":  pg.Hidden,
+		"floorDefault":    pg.FloorDefault,
+		"spreadWindowMin": spreadWindowMin(),
+		"spreadAvailable": pg.SpreadOK,
+	}
 }
 
 // apply — öncelik sıralaması + sayfa dilimi; sort=priority değilse aynen.

@@ -790,3 +790,18 @@ gösterdi. **Sınırlar (mevcut kararlar):** üründe veri maskeleme yok (maskel
 yalnız DataNotInstruction çerçevesi ve FenceSafe); tenant modeli yok (rol tabanlı yetki, yeni
 araçlar viewer, REST eşleriyle aynı). Faz B: seçili trace için kanıta dayalı inceleme akışı ve
 takip sorularının araç döngüsüne bağlanması.
+
+## 2026-09-26 — Exception varsayılan tabanı 5; çok servisli ve regressed gruplar muaf (v0.10.949)
+
+**Karar (operatör: "aynı anda farklı servislerden gelmiyorsa 5'ten düşük exception'ı göstermeye
+gerek yok; tek servisten gelen 5'ten küçükleri göstermeyebiliriz"; regressed sorusuna "görünür
+kalsın"):** Inbox ve /problems varsayılan tabanı 2 → 5 (v0.10.740 kararının yerine). İstisnalar:
+(1) aynı exception (tür + normalize mesaj; fingerprint servisi içerdiği için değil) aynı anda
+(etkinlik aralıkları storm penceresi payıyla — varsayılan 10 dk — çakışan) ≥2 serviste görülüyorsa;
+(2) regressed gruplar (öncelik koduyla aynı `state` kaynağı); (3) P1 eşiği 5'in altına çekilirse
+taban ona iner. Açık `?minOcc=N` ve `minOcc=0` (hepsi) aynen. Şerit gizlenenleri ve muafiyetle
+tutulanları sayar; muaf satırda "N servis" işareti.
+
+**Neden:** Tek servisteki birkaç oluşum gürültüydü; aynı hatanın birden çok serviste aynı anda
+görülmesi ve geri dönen hata ise sayı küçük olsa da sinyal. Mesajsız / yalnız kimlikten oluşan
+exception'lar muafiyet anahtarı almaz (genel tür filoda her an bir yerde tekrarlanır).

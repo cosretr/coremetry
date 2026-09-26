@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -130,6 +131,12 @@ type InboxExceptionRef struct {
 	Type        string `json:"type"`
 	Message     string `json:"message"`
 	Occurrences uint64 `json:"occurrences"`
+	// Spread / SpreadServices — v0.10.949 — aynı exception aynı anda kaç
+	// serviste (kendisi dahil) + ortakların ilk 5'i (annotateInboxSpread).
+	// Yalnız UI işareti: tabanın istisnası bu alana DEĞİL, SQL ile aynı
+	// ExemptBelow kümesine bakar (applyInboxMinOcc, v0.10.949).
+	Spread         int      `json:"spread,omitempty"`
+	SpreadServices []string `json:"spreadServices,omitempty"`
 }
 
 type InboxAnomalyRef struct {
@@ -222,7 +229,13 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 	// and the merged triage queue was showing exactly the same one-off rows.
 	// Negative/absent → the default floor; an explicit 0 means "show all"
 	// and is honoured, which is why this can't use parseInt's default alone.
-	minOcc := normalizeInboxMinOcc(q.Get("minOcc"))
+	minOcc, floorDefault := normalizeInboxMinOcc(q.Get("minOcc"))
+	if floorDefault {
+		// v0.10.949 — varsayılan kip: taban min(5, P1MinOccurrences) ve
+		// çoklu-servis istisnası (exception_spread.go). Açık ?minOcc=N
+		// (0 dahil) bugünkü gibi istisnasız.
+		minOcc = effectiveDefaultFloor(currentExceptionTriage())
+	}
 	// v0.9.330 (operator-reported, prod) — kind/priority moved SERVER-side.
 	//
 	// They were client-side facets over a server-CAPPED page: the handler
@@ -273,7 +286,9 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 	// with the total). Without the bump a pre-upgrade array could still be
 	// sitting under this key and would deserialize into the new shape as an
 	// empty page.
-	cacheKey := inboxListKey(statusFilter, service, search, ownerTeam, sreTeam, team, env, limit, sortID, sortDir, minOcc, kinds, prios, subject) + ":since=" + since + ":cat=" + strings.Join(cats, ",")
+	// v0.10.949 — floorDefault anahtarda: varsayılan 5 (istisnalı) ile açık
+	// ?minOcc=5 (istisnasız) AYNI minOcc'u taşır ama farklı satırlar döner.
+	cacheKey := inboxListKey(statusFilter, service, search, ownerTeam, sreTeam, team, env, limit, sortID, sortDir, minOcc, kinds, prios, subject) + ":since=" + since + ":cat=" + strings.Join(cats, ",") + ":floorDefault=" + strconv.FormatBool(floorDefault)
 	// v0.9.228 — 10s → 15s. v0.9.220 gave the inbox list a 30s poll; at a 10s
 	// TTL the SWR window is ttl×staleFactor = 30s and the Redis entry expires
 	// at 30s too, so each poll arrived at age = 30s + previous latency —
@@ -517,6 +532,21 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 		// hangi sınıfın çekileceğini söyler. Seçilmeyen sınıf kesin COUNT
 		// chip'i alır (v0.9.330 sözleşmesi).
 		excOn, httpOn := kindOn["exception"], kindOn["httperror"]
+		// v0.10.949 — filo yayılımı (60 sn memo, soft-fail nil). İstisna
+		// listesi YALNIZ varsayılan kipte; işaretler her kipte (aşağıda).
+		sp := s.exceptionSpread(ctx)
+		var floorExempt []string
+		// v0.10.949 — Go ayrımı (applyInboxMinOcc) SQL ile AYNI kırpılmış
+		// kümeyi kullanır: ExemptBelow SpreadExemptCap'le kırpılır, taban-altı
+		// çekimi ise kırpılan parmak izlerini de getirir — Spread ≥ 2'ye
+		// bakmak rozet/chip/problems sayımından ayrışırdı. Sıfır değer =
+		// istisnasız (açık ?minOcc=N). Varsayılan kipte regressed satırlar da
+		// muaf (operatör kararı 2026-09-26) — SQL'de FloorExemptRegressed.
+		var floorEx floorExemption
+		if floorDefault {
+			floorExempt = sp.ExemptBelow(minOcc)
+			floorEx = newFloorExemption(floorExempt)
+		}
 		if !teamIsEmpty && !excOn {
 			// Deselected → COUNT (state + floor + allowlist + Search, fetch'le
 			// aynı). Kalan sapma payı problem-chip'iyle AYNI belgeli kenar:
@@ -526,6 +556,7 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			if n, err := s.store.CountExceptionGroups(ctx, chstore.ExceptionGroupFilter{
 				State: pickExceptionState(statusFilter), MinOccurrences: minOcc,
 				Services: teamServices, HTTPErrors: "exclude", Search: search,
+				FloorExempt: floorExempt, FloorExemptRegressed: floorDefault, // v0.10.949
 			}); err == nil {
 				skippedCounts["exception"] = int(n)
 			}
@@ -534,6 +565,7 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			if n, err := s.store.CountExceptionGroups(ctx, chstore.ExceptionGroupFilter{
 				State: pickExceptionState(statusFilter), MinOccurrences: minOcc,
 				Services: teamServices, HTTPErrors: "only", Search: search,
+				FloorExempt: floorExempt, FloorExemptRegressed: floorDefault, // v0.10.949
 			}); err == nil {
 				skippedCounts["httperror"] = int(n)
 			}
@@ -550,7 +582,12 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 				State: pickExceptionState(statusFilter), Limit: excLimit,
 				MinOccurrences: minOcc,
 				Services:       teamServices,
-				HTTPErrors:     httpFilter,
+				// v0.10.949 — regressed + çoklu-servis istisnası tabanla AYNI
+				// cümlede (occurrences >= ? OR state = ? OR fingerprint IN (?)):
+				// LIMIT görünecek satırlara harcanır (v0.9.336).
+				FloorExempt:          floorExempt,
+				FloorExemptRegressed: floorDefault,
+				HTTPErrors:           httpFilter,
 				// v0.9.441 — arama STORE'a iner (ex_type/message/service
 				// ILIKE): eskiden Go'da yalnız ≤500 aday içinde aranıyordu,
 				// aday setine girmemiş kayıt aramayla da bulunamıyordu.
@@ -565,7 +602,12 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			if len(exGroups) >= excLimit {
 				scanCapped = true
 			}
+			// v0.10.949 — istisnalı satırlar (çoklu-servis + regressed)
+			// yukarıda ZATEN geldi; taban-altı çekimi onları bir daha eklemez
+			// (iki kez sayılmasınlar).
+			fetched := make(map[string]bool, len(exGroups))
 			for _, g := range exGroups {
+				fetched[g.Fingerprint] = true
 				items = append(items, exceptionToInbox(g))
 			}
 			if minOcc > 0 {
@@ -580,6 +622,9 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 					return nil, err
 				}
 				for _, g := range belowFloor {
+					if fetched[g.Fingerprint] {
+						continue
+					}
 					items = append(items, exceptionToInbox(g))
 				}
 			}
@@ -790,9 +835,12 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			items = kept
 		}
 
+		// v0.10.949 — yayılım işaretleri tabandan ÖNCE, her kipte (UI satır
+		// rozeti). Tabanın istisnası işarete değil floorEx'e bakar.
+		annotateInboxSpread(items, sp)
 		// Occurrence floor — last of the row-level narrows, so `hidden` is
 		// honest (see applyInboxMinOcc).
-		items, hiddenByMinOcc := applyInboxMinOcc(items, minOcc)
+		items, hiddenByMinOcc := applyInboxMinOcc(items, minOcc, floorEx)
 
 		// v0.9.487 (operatör kararı, prod) — exception türü dışındaki
 		// türler inbox'ta HEP P3: "bakmadığın türde yazmasına gerek yok,
@@ -827,6 +875,13 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		items = applyInboxCategoryFacet(items, cats)
+		// v0.10.949 — keptBySpread, satır facet'lerinden (kind/prio/kategori)
+		// SONRA sayılır: istisnayla tutulan <5 satır varsayılan ayarda P3'tür
+		// ve P1+P2 görünümünde düşer; şerit tabloda olmayan satırı
+		// "gösterildi" diye saymasın. Sıralama/tavandan ÖNCE: `total` ile
+		// aynı küme. keptRegressed — regressed istisnasıyla tutulanlar (P2,
+		// varsayılan görünümde kalır); bir satır yalnız birinde sayılır.
+		keptBySpread, keptRegressed := countFloorKept(items, minOcc, floorEx)
 
 		// Rank the WHOLE candidate set before the cap (v0.9.318 scan fix +
 		// v0.9.319 server sort). Sorting after the cap would rank a page,
@@ -858,6 +913,16 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			// still be the important one.
 			"minOcc":         minOcc,
 			"hiddenByMinOcc": hiddenByMinOcc,
+			// v0.10.949 — varsayılan kip mi (istisnalı taban), tabanın
+			// altında olup çoklu-servis istisnasıyla GÖSTERİLEN satır sayısı
+			// ve "aynı anda" penceresi (dk). UI metni bunları okur.
+			"minOccDefault":   floorDefault,
+			"keptBySpread":    keptBySpread,
+			"keptRegressed":   keptRegressed, // v0.10.949 — tabanın altında, regressed olduğu için gösterilen
+			"spreadWindowMin": spreadWindowMin(),
+			// v0.10.949 — false: yayılım okuması soft-fail (CH hatası/backoff),
+			// taban istisnasız uygulandı; UI "çoklu-servis" dilini düşürür.
+			"spreadAvailable": sp != nil,
 			// Facet totals over the pre-facet, pre-cap set. The chips render
 			// from these, so they stay truthful about what is being excluded.
 			"counts": counts,
@@ -1243,22 +1308,37 @@ func applyInboxCategoryFacet(items []InboxItem, cats []string) []InboxItem {
 // 2-3'lükler görünür kalır (417'nin ruhu), yalnız tek-seferlik düşer. Açık
 // ?minOcc=0 ("show all") aynen çalışır; istemci "show all" için 0'ı URL'e
 // YAZAR (silerse varsayılan geri gelirdi).
-const inboxDefaultMinOcc = 2
+//
+// v0.10.949 (operatör 2026-09-26: "aynı anda farklı servislerden gelmiyorsa
+// 5'ten düşük exception'ı göstermeye gerek yok; tek servisten gelen 5'ten
+// küçükleri göstermeyebiliriz") — varsayılan taban 5, İSTİSNALI: aynı
+// exception (tür + normalize mesaj) aynı anda (±StormWindow) ≥2 serviste
+// görülüyorsa 5'in altında da görünür (exception_spread.go). Etkin taban
+// min(5, P1MinOccurrences) — P1 gizlenemez (effectiveDefaultFloor). İstisna
+// YALNIZ varsayılan kipte; açık ?minOcc=N ve 0 ("show all") bugünkü gibi.
+// v0.10.949 (operatör kararı 2026-09-26) — regressed gruplar (P2
+// "regressed") da istisna: 5'in altında ve tek serviste de olsa görünür.
+// Inbox ve /problems aynı varsayılanı paylaşır (istemci DEFAULT_MIN_OCC = 5,
+// minOccDefault.test.ts ikisini birden çiviler).
+const inboxDefaultMinOcc = 5
 
 // normalizeInboxMinOcc parses ?minOcc=. Absent → the default floor; an
 // explicit "0" → no floor ("show all"), which is the affordance that keeps
 // the filtering non-silent. Garbage → the default, never an error: a
 // hand-edited URL should still open a usable queue.
-func normalizeInboxMinOcc(raw string) uint64 {
+//
+// v0.10.949 — ikinci dönüş "varsayılan kip mi": param yok ya da çöp → true
+// (taban + çoklu-servis istisnası); açık bir sayı (0 dahil) → false, istisnasız.
+func normalizeInboxMinOcc(raw string) (uint64, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return inboxDefaultMinOcc
+		return inboxDefaultMinOcc, true
 	}
 	n := parseInt(raw, -1)
 	if n < 0 {
-		return inboxDefaultMinOcc
+		return inboxDefaultMinOcc, true
 	}
-	return uint64(n)
+	return uint64(n), false
 }
 
 // applyInboxMinOcc drops exception rows below the floor and reports how many
@@ -1272,20 +1352,63 @@ func normalizeInboxMinOcc(raw string) uint64 {
 // passed everything else and failed only the floor". Counting at map time
 // would overstate it by including rows the service/env filter would have
 // removed anyway — and an inflated "42 hidden" is its own kind of lie.
-func applyInboxMinOcc(items []InboxItem, minOcc uint64) ([]InboxItem, int) {
+//
+// v0.10.949 — ex: varsayılan kipin istisnası (floorExemption); sıfır değer =
+// açık ?minOcc=N, istisnasız (bugünkü davranış). İstisnaya giren taban-altı
+// exception/httperror satırı KALIR: regressed durumdaki (operatör kararı
+// 2026-09-26) ya da ExemptBelow'un (SpreadExemptCap'le kırpılmış)
+// kümesindeki. hidden yalnız "tabanın altında, tek serviste, regressed
+// değil" olanlar. Spread yalnız UI işareti — üyelik ölçütü DEĞİL
+// (rozet/chip/problems ile ayrışmasın). İstisnayla tutulanların sayısı
+// facet'lerden sonra countFloorKept'te.
+func applyInboxMinOcc(items []InboxItem, minOcc uint64, ex floorExemption) (kept []InboxItem, hidden int) {
 	if minOcc == 0 {
 		return items, 0
 	}
-	kept := items[:0]
-	hidden := 0
+	kept = items[:0]
 	for _, it := range items {
-		if (it.Kind == "exception" || it.Kind == "httperror") && it.Exception != nil && it.Exception.Occurrences < minOcc {
+		if inboxBelowFloor(it, minOcc) {
+			if ex.reason(it) != "" {
+				kept = append(kept, it)
+				continue
+			}
 			hidden++
 			continue
 		}
 		kept = append(kept, it)
 	}
 	return kept, hidden
+}
+
+// inboxBelowFloor — taban yalnız exception/httperror satırlarını ısırır
+// (feedback-inbox-httperror-is-exception: tür kapısı yok); ref'siz satır
+// dokunulmaz.
+func inboxBelowFloor(it InboxItem, minOcc uint64) bool {
+	return (it.Kind == "exception" || it.Kind == "httperror") && it.Exception != nil && it.Exception.Occurrences < minOcc
+}
+
+// countFloorKept — v0.10.949 — varsayılan kipte tabanın altında kalıp
+// listede duran exception/httperror satırları ancak istisnayla kalmış
+// olabilir; nedenine göre sayılır (regressed ÖNCE — floorExemption.reason).
+// Facet'lerden (kind/prio/kategori) SONRA çağrılır ki şerit yalnız tabloda
+// gerçekten duran satırları saysın. Üyelik applyInboxMinOcc ile aynı
+// kuraldan. SAF.
+func countFloorKept(items []InboxItem, minOcc uint64, ex floorExemption) (bySpread, byRegressed int) {
+	if minOcc == 0 {
+		return 0, 0
+	}
+	for _, it := range items {
+		if !inboxBelowFloor(it, minOcc) {
+			continue
+		}
+		switch ex.reason(it) {
+		case floorKeptSpread:
+			bySpread++
+		case floorKeptRegressed:
+			byRegressed++
+		}
+	}
+	return bySpread, byRegressed
 }
 
 // inboxSortDefault is the historical rank: priority desc, most-recent first
@@ -1453,6 +1576,11 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 		probN, anN, incN uint64
 		exN, httpN       int64
 	)
+	// v0.10.949 — varsayılan listenin tabanı + istisnası (çoklu-servis +
+	// regressed); iki exception sayımı da bunu kullanır (errgroup'tan önce,
+	// tek memo okuması).
+	badgeFloor := effectiveDefaultFloor(currentExceptionTriage())
+	badgeExempt := s.exceptionSpread(ctx).ExemptBelow(badgeFloor)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
@@ -1470,6 +1598,9 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 			return nil
 		}
 		var err error
+		// v0.10.949 — rozet varsayılan LİSTEYLE aynı kümeyi sayar: etkin
+		// taban (min(5, P1MinOccurrences)) + çoklu-servis ve regressed
+		// istisnası (v0.9.322 sözleşmesi — rozet sayfadan büyük olamaz).
 		// v0.9.322 — the badge must apply the SAME occurrence floor the list
 		// applies by default (v0.9.320), or the sidebar promises rows the page
 		// then hides: locally badge 4 vs list 3, and on prod — where one-off
@@ -1485,8 +1616,11 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 		exN, err = s.store.CountExceptionGroups(gctx, chstore.ExceptionGroupFilter{
 			State:          pickExceptionState("open"),
 			Services:       envServices,
-			MinOccurrences: inboxDefaultMinOcc,
+			MinOccurrences: badgeFloor,
 			HTTPErrors:     "exclude",
+			FloorExempt:    badgeExempt,
+			// v0.10.949 — regressed tabandan muaf (varsayılan listeyle aynı).
+			FloorExemptRegressed: true,
 		})
 		return err
 	})
@@ -1499,8 +1633,11 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 		httpN, err = s.store.CountExceptionGroups(gctx, chstore.ExceptionGroupFilter{
 			State:          pickExceptionState("open"),
 			Services:       envServices,
-			MinOccurrences: inboxDefaultMinOcc,
+			MinOccurrences: badgeFloor,
 			HTTPErrors:     "only",
+			FloorExempt:    badgeExempt,
+			// v0.10.949 — regressed tabandan muaf (varsayılan listeyle aynı).
+			FloorExemptRegressed: true,
 		})
 		return err
 	})
@@ -1932,7 +2069,9 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 		return "P1", burstDesc + " · " + shortDur(time.Duration(age)) + " önce bitti"
 	}
 
-	if g.State == "regressed" {
+	// v0.10.949 — "regressed" olgusu tek yerden (exceptionIsRegressed):
+	// varsayılan tabanın regressed istisnası aynı yüklemi kullanır.
+	if exceptionIsRegressed(g.State) {
 		return "P2", "regressed"
 	}
 	// v0.9.524 — operatör-bildirimli: "28 Haziran'daki problemde bile

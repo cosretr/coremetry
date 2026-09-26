@@ -143,8 +143,16 @@ patlama (BurstMinTotal + BurstMinRate) → **P1 yapışkan** (v0.9.1205); `regre
 damlama istisnası kalktı); taze && ≥100 → P2; oran ≥ BurstMinRate/2 → P3
 gerekçeli; değilse P3. **Operatör direktifleri (yeniden önerme):** P1 zamanla
 P2/P3'e İNMEZ; "kuyruk şişer" cevabı `p1MinOccurrences` vidasıdır, zaman
-değil. Occurrence tabanı 2 (v0.10.740): tekil oluşum gizli, 2-3 görünür, show
-all = minOcc=0; 0/5'e çekme. Exceptions varsayılan sırası ÖNCELİK (v0.10.703).
+değil. Occurrence tabanı 5 (v0.10.949, operatör 2026-09-26; önce 2 v0.10.740):
+5'in altı TEK serviste gizli; aynı exception (tür + normalize mesaj) aynı anda
+(±`stormWindowMinutes`) ≥2 serviste görülüyorsa görünür (`exception_spread.go`,
+satırda "N servis" işareti). Regressed (P2 "regressed", `state='regressed'`)
+gruplar da muaf — 5'in altında ve tek serviste de olsa görünür (operatör
+2026-09-26; `exceptionIsRegressed` tek kaynak, SQL `FloorExemptRegressed`).
+Etkin taban min(5, `p1MinOccurrences`) — P1
+gizlenmez. İstisna yalnız varsayılan kipte (param yok; /problems `floor=default`);
+açık ?minOcc=N ve show all = minOcc=0 istisnasız. Rozet aynı kümeyi sayar.
+Exceptions varsayılan sırası ÖNCELİK (v0.10.703).
 Inbox = ignored hariç TÜM durumlar, durum rozetiyle (v0.10.751); yalnız Ignored
 ayrı sekme; `open` kovası /inbox rozet sayacı için aynen.
 

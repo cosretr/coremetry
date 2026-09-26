@@ -22,6 +22,22 @@ export type InboxPage = {
   // failed only the floor" — an inflated hidden count is its own lie.
   minOcc?: number;
   hiddenByMinOcc?: number;
+  // v0.10.949 — varsayılan kip (param yok): taban 5 (etkin: min(5, P1 eşiği))
+  // + çoklu-servis istisnası. keptBySpread = tabanın altında olup aynı anda
+  // ≥2 serviste görüldüğü için GÖSTERİLEN satırlar; spreadWindowMin = "aynı
+  // anda" penceresi (dk, exception_triage.stormWindowMinutes). hiddenByMinOcc
+  // bu kipte "tabanın altında, tek serviste" demek.
+  minOccDefault?: boolean;
+  keptBySpread?: number;
+  // v0.10.949 (operatör kararı 2026-09-26) — tabanın altında olup regressed
+  // olduğu için GÖSTERİLEN satırlar (yayılımdan bağımsız; regressed +
+  // çoklu-servis satır yalnız burada sayılır).
+  keptRegressed?: number;
+  spreadWindowMin?: number;
+  // v0.10.949 — false: yayılım okuması soft-fail (CH hatası/backoff), taban
+  // istisnasız uygulandı; şerit "çoklu-servis" dilini düşürür. undefined
+  // (eski gövde) = var.
+  spreadAvailable?: boolean;
   // v0.9.330 — facet totals computed server-side over the pre-facet, pre-cap
   // set. The chips MUST render from these: counting the returned page is what
   // made prod show "Exceptions 0" on a queue holding thousands of them.
@@ -51,7 +67,7 @@ export function useInbox(filter: {
   env?: string; // v0.8.387 — global picker, service-scoped (matches /problems)
   limit?: number;
   sort?: string; dir?: 'asc' | 'desc'; // v0.9.319 — server-side ranking
-  minOcc?: number; // v0.9.320 — occurrence floor (0 = show all)
+  minOcc?: number; // v0.9.320 — occurrence floor (0 = show all); v0.10.949 — undefined = sunucu varsayılanı (istisnalı)
   // v0.9.330 — kind/priority are SERVER filters now: they decide which rows
   // come back, so they must bite before the cap.
   kind?: string; prio?: string;

@@ -200,21 +200,26 @@ func TestSortInboxItemsTiebreakStaysTriageOrder(t *testing.T) {
 // the surface meant to REPLACE it. Operator: "1 defa Java timeout aldığı için
 // problems'ta exception gözüküyor" — the merged queue had the same one-offs.
 
+// v0.10.949 — ikinci dönüş "varsayılan kip": yalnız param yok/çöp iken true
+// (taban + çoklu-servis istisnası); açık sayı (0 ve 5 dahil) istisnasız.
 func TestNormalizeInboxMinOcc(t *testing.T) {
 	cases := []struct {
-		raw  string
-		want uint64
+		raw     string
+		want    uint64
+		defMode bool
 	}{
-		{"", inboxDefaultMinOcc},   // absent → the floor (v0.10.740: 2 — tek oluşum varsayılanda yok)
-		{"0", 0},                   // explicit "show all" is honoured
-		{"10", 10},                 // the strip's second rung
-		{"  7 ", 7},                // whitespace from a pasted URL
-		{"-3", inboxDefaultMinOcc}, // nonsense → default, never an error
-		{"abc", inboxDefaultMinOcc},
+		{"", 5, true},      // absent → the floor (v0.10.949: 5, istisnalı)
+		{"5", 5, false},    // açık 5 = eski "5+ only" linki: istisnasız
+		{"0", 0, false},    // explicit "show all" is honoured
+		{"10", 10, false},  // the strip's second rung
+		{"  7 ", 7, false}, // whitespace from a pasted URL
+		{"-3", 5, true},    // nonsense → default, never an error
+		{"abc", 5, true},
 	}
 	for _, tc := range cases {
-		if got := normalizeInboxMinOcc(tc.raw); got != tc.want {
-			t.Errorf("normalizeInboxMinOcc(%q) = %d, want %d", tc.raw, got, tc.want)
+		got, def := normalizeInboxMinOcc(tc.raw)
+		if got != tc.want || def != tc.defMode {
+			t.Errorf("normalizeInboxMinOcc(%q) = (%d, %v), want (%d, %v)", tc.raw, got, def, tc.want, tc.defMode)
 		}
 	}
 }
@@ -233,7 +238,7 @@ func TestApplyInboxMinOcc(t *testing.T) {
 		// nil dereference guard that silently means "below the floor".
 		{ID: "exc-nil", Kind: "exception"},
 	}
-	kept, hidden := applyInboxMinOcc(append([]InboxItem(nil), items...), 5)
+	kept, hidden := applyInboxMinOcc(append([]InboxItem(nil), items...), 5, floorExemption{})
 	if hidden != 1 {
 		t.Errorf("hidden = %d, want 1 (only exc-1 is below 5)", hidden)
 	}
@@ -242,10 +247,91 @@ func TestApplyInboxMinOcc(t *testing.T) {
 		t.Errorf("kept = %q, want the 1-occurrence exception dropped and nothing else", got)
 	}
 
-	// Floor 0 = show all: no filtering, no hidden count, same slice.
-	all, none := applyInboxMinOcc(append([]InboxItem(nil), items...), 0)
+	// Floor 0 = show all: no filtering, no hidden count, same slice — even
+	// with an exempt set present (minOcc=0 short-circuits).
+	all, none := applyInboxMinOcc(append([]InboxItem(nil), items...), 0, newFloorExemption([]string{"x"}))
 	if none != 0 || len(all) != len(items) {
 		t.Errorf("minOcc=0 filtered: kept %d/%d, hidden %d", len(all), len(items), none)
+	}
+}
+
+// v0.10.949 — istisna kipi: tabanın altındaki exception VE httperror satırı
+// ExemptBelow'un (SQL'le AYNI, SpreadExemptCap'le kırpılmış) kümesindeyse
+// kalır; istisnasız kipte (açık ?minOcc=, sıfır floorExemption) aynı
+// satırlar gizlenir.
+// Spread yalnız UI işareti: Spread ≥ 2 olup kırpılmış kümede OLMAYAN satır
+// (tavan dışı kalan) gizlenir — rozet/chip/problems sayımıyla ayrışmasın.
+// Problem/anomaly/ref'siz satırlar hiç dokunulmaz.
+func TestApplyInboxMinOccSpreadExempt(t *testing.T) {
+	items := []InboxItem{
+		{ID: "exc-solo", Kind: "exception", Exception: &InboxExceptionRef{Fingerprint: "exc-solo", Occurrences: 2}},
+		{ID: "exc-multi", Kind: "exception", Exception: &InboxExceptionRef{Fingerprint: "exc-multi", Occurrences: 2, Spread: 3}},
+		{ID: "http-multi", Kind: "httperror", Exception: &InboxExceptionRef{Fingerprint: "http-multi", Occurrences: 1, Spread: 2}},
+		// Yayılımlı ama SpreadExemptCap dışında kalmış: SQL yolları onu
+		// istisna saymıyor, Go ayrımı da saymamalı (regresyon).
+		{ID: "exc-capped", Kind: "exception", Exception: &InboxExceptionRef{Fingerprint: "exc-capped", Occurrences: 3, Spread: 2}},
+		{ID: "exc-big-multi", Kind: "exception", Exception: &InboxExceptionRef{Fingerprint: "exc-big-multi", Occurrences: 50, Spread: 2}},
+		{ID: "prob", Kind: "problem"},
+		{ID: "anom", Kind: "anomaly"},
+		{ID: "exc-nil", Kind: "exception"},
+	}
+	set := newFloorExemption([]string{"exc-multi", "http-multi"})
+	kept, hidden := applyInboxMinOcc(append([]InboxItem(nil), items...), 5, set)
+	bySpread, byRegressed := countFloorKept(kept, 5, set)
+	if hidden != 2 || bySpread != 2 || byRegressed != 0 {
+		t.Errorf("exempt: hidden=%d keptBySpread=%d keptRegressed=%d, want 2/2/0 (exc-solo + exc-capped gizli)", hidden, bySpread, byRegressed)
+	}
+	if got := inboxIDs(kept); got != "exc-multihttp-multiexc-big-multiprobanomexc-nil" {
+		t.Errorf("exempt kept = %q", got)
+	}
+	kept, hidden = applyInboxMinOcc(append([]InboxItem(nil), items...), 5, floorExemption{})
+	if bySpread, _ := countFloorKept(kept, 5, floorExemption{}); hidden != 4 || bySpread != 0 {
+		t.Errorf("explicit: hidden=%d keptBySpread=%d, want 4/0", hidden, bySpread)
+	}
+	if got := inboxIDs(kept); got != "exc-big-multiprobanomexc-nil" {
+		t.Errorf("explicit kept = %q", got)
+	}
+}
+
+// v0.10.949 — keptBySpread / keptRegressed facet'lerden SONRA sayılır.
+// İstisnayla tutulan <5 satır varsayılan triage ayarında P3'tür (P1 ≥500 /
+// patlama ≥1000, P2 ≥100 ya da regressed); Inbox'ın varsayılan P1+P2
+// görünümünde yalnız regressed olan kalır. Regressed satır yayılımlı olsa da
+// keptRegressed'e sayılır (yayılımdan bağımsız görünürdü) — bir satır tek
+// sayaçta.
+func TestCountFloorKeptAfterFacets(t *testing.T) {
+	mk := func() []InboxItem {
+		return []InboxItem{
+			{ID: "a-p3", Kind: "exception", Priority: "P3", Status: "new", Exception: &InboxExceptionRef{Fingerprint: "fa", Occurrences: 3, Spread: 2}},
+			{ID: "b-p2", Kind: "exception", Priority: "P2", Status: "regressed", Exception: &InboxExceptionRef{Fingerprint: "fb", Occurrences: 2, Spread: 2}},
+			{ID: "big-p1", Kind: "exception", Priority: "P1", Status: "new", Exception: &InboxExceptionRef{Fingerprint: "fbig", Occurrences: 7}},
+		}
+	}
+	set := newFloorExemption([]string{"fa", "fb"})
+	cases := []struct {
+		name          string
+		minOcc        uint64
+		ex            floorExemption
+		wantSpread    int
+		wantRegressed int
+	}{
+		{"varsayılan kip, P1+P2 → yalnız regressed", 5, set, 0, 1},
+		{"açık ?minOcc (istisnasız) → 0", 5, floorExemption{}, 0, 0},
+		{"show all (minOcc=0) → 0", 0, set, 0, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			items, _ := applyInboxMinOcc(mk(), tc.minOcc, tc.ex)
+			items = applyInboxFacets(items, []string{"exception"}, []string{"P1", "P2"})
+			if bs, br := countFloorKept(items, tc.minOcc, tc.ex); bs != tc.wantSpread || br != tc.wantRegressed {
+				t.Errorf("countFloorKept=(%d, %d), want (%d, %d)", bs, br, tc.wantSpread, tc.wantRegressed)
+			}
+		})
+	}
+	// Facet öncesi sayım (eski davranış) 1+1 derdi — farkın kendisi hata.
+	pre, _ := applyInboxMinOcc(mk(), 5, set)
+	if bs, br := countFloorKept(pre, 5, set); bs != 1 || br != 1 {
+		t.Fatalf("facet öncesi sayım=(%d, %d), want (1, 1) (testin ayırt ediciliği)", bs, br)
 	}
 }
 
@@ -599,11 +685,37 @@ func TestInboxFloorFetchesBothSides(t *testing.T) {
 	if !strings.Contains(src, "MaxOccurrences: minOcc") {
 		t.Error("the below-floor rows must be fetched too, or hiddenByMinOcc stops being countable after the Go narrows")
 	}
+	// v0.10.949 — çoklu-servis istisnası tabanla AYNI (üst) çekimde: LIMIT
+	// görünecek satırlara harcansın (v0.9.336).
+	iAbove := strings.Index(src, "MinOccurrences: minOcc,\n\t\t\t\tServices:       teamServices,")
+	iExempt := strings.Index(src, "FloorExempt:          floorExempt,\n\t\t\t\tFloorExemptRegressed: floorDefault,\n\t\t\t\tHTTPErrors:           httpFilter,")
+	iBelow := strings.Index(src, "MaxOccurrences: minOcc")
+	if iAbove < 0 || iExempt < iAbove || iExempt > iBelow {
+		t.Error("FloorExempt + FloorExemptRegressed üst (taban) çekiminde olmalı, alt çekimde değil")
+	}
 	// The split must still happen at the END, after every narrow.
-	iFetch := strings.Index(src, "MaxOccurrences: minOcc")
-	iSplit := strings.Index(src, "applyInboxMinOcc(items, minOcc)")
-	if iFetch < 0 || iSplit < 0 || iSplit < iFetch {
+	iSplit := strings.Index(src, "applyInboxMinOcc(items, minOcc, floorEx)")
+	if iBelow < 0 || iSplit < 0 || iSplit < iBelow {
 		t.Error("applyInboxMinOcc must run after both fetches and after the narrows")
+	}
+	// İşaretler tabandan ÖNCE: istisna kipi Exception.Spread'i okur.
+	if iAnn := strings.Index(src, "annotateInboxSpread(items, sp)"); iAnn < 0 || iAnn > iSplit {
+		t.Error("annotateInboxSpread applyInboxMinOcc'tan önce çağrılmalı")
+	}
+	// v0.10.949 — keptBySpread satır facet'lerinden SONRA, sıralama/tavandan
+	// ÖNCE (total ile aynı küme): şerit tabloda olmayan satırı saymasın.
+	iKept := strings.Index(src, "keptBySpread, keptRegressed := countFloorKept(items, minOcc, floorEx)")
+	iCat := strings.Index(src, "items = applyInboxCategoryFacet(items, cats)")
+	iSort := strings.Index(src, "sortInboxItems(items, sortID, sortDir)")
+	if iKept < 0 || iCat < 0 || iSort < 0 || iKept < iCat || iKept > iSort {
+		t.Errorf("countFloorKept facet'lerden sonra, sortInboxItems'tan önce olmalı (kept=%d cat=%d sort=%d)", iKept, iCat, iSort)
+	}
+	// Go ayrımı SQL'le aynı (kırpılmış) istisna kümesini kullanır.
+	if !strings.Contains(src, "floorExempt = sp.ExemptBelow(minOcc)\n\t\t\tfloorEx = newFloorExemption(floorExempt)") {
+		t.Error("floorEx ExemptBelow listesinden kurulmalı (SpreadExemptCap tavanı Go'da da geçerli)")
+	}
+	if !strings.Contains(src, `"spreadAvailable": sp != nil,`) {
+		t.Error("inbox yanıtı yayılımın okunup okunmadığını söylemeli (soft-fail dürüstlüğü)")
 	}
 }
 
@@ -672,16 +784,18 @@ func TestInboxExceptionBudgetIsUnconditional(t *testing.T) {
 	// koruyor — kullanan kod derlenmez.
 }
 
-// v0.10.740 (operatör: "1 tane geldiyse dahil etme") — varsayılan taban 2:
-// tek oluşumlu grup varsayılan listede yok, 2+ görünür; açık "0" hepsi.
-func TestInboxDefaultMinOccDropsSingletons(t *testing.T) {
-	if inboxDefaultMinOcc != 2 {
-		t.Fatalf("inboxDefaultMinOcc = %d, want 2", inboxDefaultMinOcc)
+// v0.10.740 (operatör: "1 tane geldiyse dahil etme") — varsayılan taban 2.
+// v0.10.949 (operatör 2026-09-26: "tek servisten gelen 5'ten küçük
+// exception'ları göstermeyebiliriz") — varsayılan taban 5, çoklu-servis
+// istisnalı; açık "0" hepsi, istisnasız.
+func TestInboxDefaultMinOccHidesSingleServiceBelowFive(t *testing.T) {
+	if inboxDefaultMinOcc != 5 {
+		t.Fatalf("inboxDefaultMinOcc = %d, want 5", inboxDefaultMinOcc)
 	}
-	if got := normalizeInboxMinOcc(""); got != 2 {
-		t.Fatalf("param yokken taban 2 olmalı, %d", got)
+	if got, def := normalizeInboxMinOcc(""); got != 5 || !def {
+		t.Fatalf("param yokken taban 5 ve varsayılan kip olmalı, (%d, %v)", got, def)
 	}
-	if got := normalizeInboxMinOcc("0"); got != 0 {
-		t.Fatalf("açık 0 = hepsi, %d", got)
+	if got, def := normalizeInboxMinOcc("0"); got != 0 || def {
+		t.Fatalf("açık 0 = hepsi, istisnasız: (%d, %v)", got, def)
 	}
 }

@@ -2406,6 +2406,8 @@ export interface InboxItem {
   exception?: {
     fingerprint: string; type: string; message: string;
     occurrences: number;
+    /** v0.10.949 — ExceptionGroup.spread / spreadServices ile aynı anlam. */
+    spread?: number; spreadServices?: string[];
   };
   anomaly?: {
     id: string; kind: string; pattern: string;
@@ -4557,6 +4559,11 @@ export interface ExceptionGroup {
   // v0.9.415 — ExceptionExplainer'ın proaktif kök-sebep özeti (P1
   // gruplara arka planda dolar); boş/yok = henüz üretilmedi.
   aiSummary?: string;
+  /** v0.10.949 — aynı exception (tür + normalize mesaj) aynı anda kaç
+   *  serviste görüldü (kendisi dahil); ≥2 ise varsayılan 5 tabanından muaf.
+   *  spreadServices: diğer servisler (≤5, sıralı). Yoksa/1 = tek servis. */
+  spread?: number;
+  spreadServices?: string[];
 }
 
 export interface ExceptionSample {

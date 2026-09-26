@@ -37,6 +37,7 @@ import type { InboxItem, InboxKind } from '@/lib/types';
 import { stripMarkdown } from '@/components/Markdown';
 import { serviceHref, inboxItemWindow } from '@/lib/serviceHref';
 import { SubjectLink } from '../components/SubjectLink';
+import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle } from '@/features/anomalies/spread'; // v0.10.949
 import type { SubjectLane } from '@/lib/types';
 
 // Facet vocab + defaults (v0.8.291) — both defaults are what the URL codec
@@ -156,7 +157,10 @@ const INBOX_COLS: DataTableColumn<InboxItem>[] = [
 ];
 
 // v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
-const DEFAULT_MIN_OCC = 2;
+// v0.10.949 — 2 → 5, çoklu-servis istisnalı (aynı anda ≥2 serviste görülen
+// grup 5'in altında da görünür); istisna sunucuda, istemci varsayılan kipte
+// tabanı GÖNDERMEZ.
+const DEFAULT_MIN_OCC = 5;
 
 export default function InboxPage() {
   const navigate = useNavigate();
@@ -228,6 +232,13 @@ export default function InboxPage() {
   // (sunucu inboxDefaultMinOcc ile aynı): tek oluşumlu grup varsayılanda
   // yok, 2-3'lükler görünür. "show all" 0'ı URL'e YAZAR (silinirse
   // varsayılan geri gelir); paylaşılan link gördüğünü taşır.
+  // v0.10.949 (operatör 2026-09-26: "tek servisten gelen 5'ten küçük
+  // exception'ları göstermeyebiliriz") — varsayılan taban 5; aynı exception
+  // aynı anda ≥2 serviste görülüyorsa 5'in altında da görünür. VARSAYILAN
+  // KİP = URL'de param YOK: o hâlde istek tabanı göndermez, sunucu etkin
+  // tabanı (min(5, P1 eşiği)) ve istisnayı kendisi uygular. Açık ?minOcc=N
+  // (eski ?minOcc=5 linki ve 0 = hepsi dahil) istisnasız, bugünkü gibi.
+  const floorDefault = searchParams.get('minOcc') === null;
   const minOcc = (() => {
     const raw = searchParams.get('minOcc');
     if (raw === null) return DEFAULT_MIN_OCC;
@@ -388,7 +399,9 @@ export default function InboxPage() {
     limit: 300,
     sort: srvSort.id ?? 'priority',
     dir: srvSort.dir,
-    minOcc,
+    // v0.10.949 — param yoksa GÖNDERME (sunucu varsayılan kipi: taban +
+    // çoklu-servis istisnası); açık değer (0 dahil) aynen gider.
+    minOcc: searchParams.get('minOcc') === null ? undefined : minOcc,
     since: sinceFilter || undefined,
     // v0.9.330 — facets go to the SERVER now. As client-side filters they ran
     // over a page the server had already capped at 300 by priority; on prod
@@ -426,6 +439,21 @@ export default function InboxPage() {
   const scanCapped = !inboxQ.isPending && !inboxQ.isError
     && !!inboxQ.data?.scanCapped && anyFilter;
   const hiddenByMinOcc = inboxQ.data?.hiddenByMinOcc ?? 0;
+  // v0.10.949 — varsayılan kipin sunucu değerleri: etkin taban (P1 eşiği 5'in
+  // altına çekildiyse o), istisnayla tutulan satırlar ve "aynı anda" penceresi.
+  // keepPreviousData: kip değişiminin hemen ardından data ÖNCEKİ (açık kip)
+  // yanıtıdır — sunucu taban alanlarına yalnız yanıtın kendisi varsayılan
+  // kipteyse güven; minOcc opsiyonel, yine sabite düş.
+  const floorLive = inboxQ.data?.minOccDefault === true;
+  const effFloor = floorLive ? (inboxQ.data?.minOcc ?? DEFAULT_MIN_OCC) : DEFAULT_MIN_OCC;
+  const keptBySpread = floorLive ? (inboxQ.data?.keptBySpread ?? 0) : 0;
+  // v0.10.949 (operatör kararı 2026-09-26) — regressed gruplar tabanın altında
+  // ve tek serviste de olsa varsayılan kipte gösterilir; yayılımdan bağımsız.
+  const keptRegressed = floorLive ? (inboxQ.data?.keptRegressed ?? 0) : 0;
+  const spreadWin = inboxQ.data?.spreadWindowMin;
+  // v0.10.949 — yayılım okunamadı (soft-fail): istisna uygulanmadı, gizli
+  // sayı çoklu-servis gruplarını da içerir. undefined (eski gövde) = var.
+  const spreadOff = inboxQ.data?.spreadAvailable === false;
   // v0.9.353 (operator-reported) — the rows on screen belong to the PREVIOUS
   // filter while the new one fetches. useInbox keeps previous data
   // (placeholderData: keepPreviousData) so a filter change doesn't blank the
@@ -881,7 +909,23 @@ export default function InboxPage() {
             display: 'flex', alignItems: 'center', gap: 8,
             fontSize: 11.5, color: 'var(--text3)', marginBottom: 8,
           }}>
-            {minOcc > 0 ? (
+            {minOcc > 0 && floorDefault ? (
+              // v0.10.949 — varsayılan kip: taban + çoklu-servis istisnası.
+              // Gizlenen = "tabanın altında, tek serviste"; istisnayla
+              // tutulanlar ayrıca sayılır (rastlantısal eşleşme görünür kalsın).
+              // Yayılım kapalıysa (spreadOff) düz taban dili: "Showing N+ groups · X hidden".
+              // v0.10.949 — regressed istisnası her iki dilde de (yayılımdan bağımsız).
+              <>
+                <span title={spreadOff ? spreadOffFloorTitle(effFloor) : defaultFloorTitle(effFloor, spreadWin)}>
+                  Showing <b style={{ color: 'var(--text2)' }}>{effFloor}+</b> groups{spreadOff ? ' and regressed groups' : <>, regressed groups and groups seen in ≥2 services at the same time{spreadWin ? ` (±${spreadWin} min)` : ''}</>}
+                  {floorLive && hiddenByMinOcc > 0 && <> · <b style={{ color: 'var(--text2)' }}>{hiddenByMinOcc}</b> {spreadOff ? 'hidden' : <>groups below {effFloor}, single service, hidden</>}</>}
+                  {!spreadOff && keptBySpread > 0 && <> · <b style={{ color: 'var(--text2)' }}>{keptBySpread}</b> multi-service groups shown although below {effFloor}</>}
+                  {keptRegressed > 0 && <> · <b style={{ color: 'var(--text2)' }}>{keptRegressed}</b> regressed groups shown although below {effFloor}</>}
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setMinOcc(0)}>show all</Button>
+                <Button variant="ghost" size="sm" onClick={() => setMinOcc(10)}>10+</Button>
+              </>
+            ) : minOcc > 0 ? (
               <>
                 <span title="Bir kez düşen bir exception bu pencere hakkında bir olgudur, triage edilecek bir problem değil. Eşiğin altındakiler gizli — hepsini görmek için tıkla.">
                   Showing groups with <b style={{ color: 'var(--text2)' }}>{minOcc}+</b> occurrences
@@ -896,7 +940,6 @@ export default function InboxPage() {
               <>
                 <span>Showing <b style={{ color: 'var(--text2)' }}>every</b> row, including one-off exceptions</span>
                 <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>
-                <Button variant="ghost" size="sm" onClick={() => setMinOcc(5)}>5+ only</Button>
               </>
             )}
             {/* v0.9.1332 — sürüklenmiş kolon genişliklerinin çıkmazı (operatör:
@@ -957,6 +1000,7 @@ export default function InboxPage() {
               <tbody>
                 {dt.sortedRows.map((it, i) => {
                   const rp = dt.rowProps(i);
+                  const spread = spreadOf(it.exception); // v0.10.949
                   return (
                   <tr key={it.id}
                     {...rp}
@@ -988,6 +1032,17 @@ export default function InboxPage() {
                         onClick={e => e.stopPropagation()}
                         style={{ fontWeight: 600 }}
                         emptyFallback={<span style={{ color: 'var(--text3)' }}>(none)</span>} />
+                      {/* v0.10.949 — aynı exception aynı anda N serviste: tek
+                          satır nokta+metin, soluk (T9: renk yalnız sapan
+                          değerde; T11: ortakların tam listesi ipucunda). */}
+                      {spread && (
+                        <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, spreadWin)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                          <span className="dot" aria-hidden="true"
+                            style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
+                          {spread.n} servis
+                        </div>
+                      )}
                       {(it.ownerTeam || it.sreTeam) && (
                         <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {it.ownerTeam && (

@@ -41,6 +41,7 @@ import { IconSparkles } from '@/components/icons';
 // v0.10.751 — sekmeler tek kaynaktan (tabs.ts): Inbox = ignored hariç her
 // durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
 import { EXCEPTION_TABS as TABS, resolveExceptionTab } from './tabs';
+import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle, readFloorMeta, type FloorMeta } from './spread'; // v0.10.949
 
 // Exception-inbox sort keys the SERVER understands (v0.8.318 — the
 // ORDER BY runs in ClickHouse across the whole paginated set). The
@@ -82,7 +83,11 @@ const EXC_COLS_ADMIN: ColumnDef<ExceptionGroup>[] = [
 ];
 
 // v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
-const DEFAULT_MIN_OCC = 2;
+// v0.10.949 — 2 → 5, çoklu-servis istisnalı; varsayılan kipte istek tabanı
+// göndermez, `floor: 'default'` ile sunucuya bırakır.
+const DEFAULT_MIN_OCC = 5;
+
+type ExceptionGroupsParams = Parameters<typeof api.exceptionGroups>[0]; // v0.10.949 — floor dahil
 
 export default function ProblemsPage() {
   const { user } = useAuth();
@@ -119,6 +124,11 @@ export default function ProblemsPage() {
   // (sunucu inboxDefaultMinOcc ile aynı): tek oluşumlu grup varsayılanda
   // yok, 2-3'lükler görünür. "show all" 0'ı URL'e YAZAR (silinirse
   // varsayılan geri gelir); paylaşılan link gördüğünü taşır.
+  // v0.10.949 (operatör 2026-09-26) — varsayılan taban 5 (Inbox ile aynı
+  // kural): aynı exception aynı anda ≥2 serviste görülüyorsa 5'in altında da
+  // görünür. Param YOKSA varsayılan kip: istek `floor: 'default'` gönderir,
+  // taban + istisna sunucuda. Açık ?minOcc=N istisnasız, bugünkü gibi.
+  const floorDefault = searchParams.get('minOcc') === null;
   const minOcc = (() => {
     const raw = searchParams.get('minOcc');
     if (raw === null) return DEFAULT_MIN_OCC;
@@ -185,6 +195,14 @@ export default function ProblemsPage() {
   const dataRef = useRef<ExceptionGroup[] | null | undefined>(undefined);
   dataRef.current = data;
   const [total, setTotal] = useState(0);
+  // v0.10.949 — yanıttaki taban alanları (etkin taban, gizlenen sayı, pencere).
+  const [floorMeta, setFloorMeta] = useState<FloorMeta>({});
+  // v0.10.949 — floorMeta kip değişiminde yeni yanıt gelene dek ÖNCEKİ (açık
+  // kip) yanıttır: sunucu tabanına yalnız yanıt varsayılan kipteyse güven.
+  // spreadOff = yayılım okunamadı (soft-fail), istisna uygulanmadı; undefined
+  // (eski gövde) = var.
+  const defFloor = floorMeta.floorDefault === true ? (floorMeta.minOcc ?? DEFAULT_MIN_OCC) : DEFAULT_MIN_OCC;
+  const spreadOff = floorMeta.spreadAvailable === false;
   const PAGE_SIZE = 50;
   // Expanded fingerprint(s) — multiple groups can be open at once for compare-and-contrast.
   // Seed with any ?exception=<fingerprint> the URL carries so a
@@ -270,7 +288,7 @@ export default function ProblemsPage() {
     } else {
       setData(undefined);
     }
-    api.exceptionGroups({
+    const params: ExceptionGroupsParams = {
       state: tab, service: service || undefined,
       ownerTeam: ownerTeam || undefined, sreTeam: sreTeam || undefined,
       env: env || undefined,
@@ -280,9 +298,16 @@ export default function ProblemsPage() {
       sort: sortBy, dir: sortDir,
       q: committedSearch || undefined,
       limit: PAGE_SIZE, offset: page * PAGE_SIZE,
-      minOccurrences: minOcc > 0 ? minOcc : undefined, // v0.9.315
-    })
-      .then(d => { setData(d.items ?? []); setTotal(d.total ?? 0); setLoadErr(null); setRefreshing(false); })
+      // v0.9.315 — açık taban; v0.10.949 — varsayılan kipte taban YOK,
+      // floor: 'default' ile sunucu seçer (taban + çoklu-servis istisnası).
+      minOccurrences: !floorDefault && minOcc > 0 ? minOcc : undefined,
+      floor: floorDefault ? 'default' : undefined,
+    };
+    api.exceptionGroups(params)
+      .then(d => {
+        setData(d.items ?? []); setTotal(d.total ?? 0); setFloorMeta(readFloorMeta(d));
+        setLoadErr(null); setRefreshing(false);
+      })
       // v0.9.858 (UX denetimi K6) — null hiçbir render dalına girmiyordu:
       // exception listesinin sorgu hatası BOŞ EKRAN demekti ve "exception
       // yok, temiziz" diye okunuyordu. Sinyal kaybının en pahalı yeri.
@@ -313,7 +338,7 @@ export default function ProblemsPage() {
     // env (v0.9.941) dep listesinde: Topbar'dan ortam değiştirildiğinde
     // liste yeniden okunmalı, yoksa süzgeç bir sonraki başka değişikliğe
     // kadar uygulanmamış görünür.
-  }, [tab, service, ownerTeam, sreTeam, env, page, sortSig, committedSearch, minOcc]);
+  }, [tab, service, ownerTeam, sreTeam, env, page, sortSig, committedSearch, minOcc, floorDefault]); // v0.10.949 — ?minOcc=5 ↔ param yok aynı minOcc, farklı kip
 
 
   useEffect(() => {
@@ -522,10 +547,25 @@ export default function ProblemsPage() {
             display: 'flex', alignItems: 'center', gap: 8,
             fontSize: 11.5, color: 'var(--text3)', marginBottom: 8,
           }}>
-            {minOcc > 0 ? (
+            {minOcc > 0 && floorDefault ? (
+              // v0.10.949 — varsayılan kip (Inbox ile aynı şerit). Gizlenen
+              // sayı sunucudan (tabansız sayım − toplam), yani "tabanın
+              // altında, tek serviste" olanlar (v0.10.949 — regressed değil).
+              <>
+                <span title={spreadOff ? spreadOffFloorTitle(defFloor) : defaultFloorTitle(defFloor, floorMeta.spreadWindowMin)}>
+                  {/* v0.10.949 — regressed istisnası her iki dilde (yayılımdan bağımsız, operatör kararı 2026-09-26). */}
+                  Showing <b style={{ color: 'var(--text2)' }}>{defFloor}+</b> groups{spreadOff ? ' and regressed groups' : <>, regressed groups and groups seen in ≥2 services at the same time{floorMeta.spreadWindowMin ? ` (±${floorMeta.spreadWindowMin} min)` : ''}</>}
+                  {floorMeta.floorDefault === true && (floorMeta.hiddenByMinOcc ?? 0) > 0 && <> · <b style={{ color: 'var(--text2)' }}>{floorMeta.hiddenByMinOcc}</b> {spreadOff ? 'hidden' : <>groups below {defFloor}, single service, hidden</>}</>}
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setMinOcc(0)}>show all</Button>
+                <Button variant="ghost" size="sm" onClick={() => setMinOcc(10)}>10+</Button>
+              </>
+            ) : minOcc > 0 ? (
               <>
                 <span title="Bir kez düşen bir exception bu pencere hakkında bir olgudur, triage edilecek bir problem değil. Eşiğin altındakiler gizli — hepsini görmek için tıkla.">
                   Showing groups with <b style={{ color: 'var(--text2)' }}>{minOcc}+</b> occurrences
+                  {/* v0.10.949 — /problems da gizlenen sayıyı alıyor (yeni, ek alan). */}
+                  {(floorMeta.hiddenByMinOcc ?? 0) > 0 && <> — <b style={{ color: 'var(--text2)' }}>{floorMeta.hiddenByMinOcc}</b> hidden</>}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => setMinOcc(0)}>show all</Button>
                 {minOcc !== 10 && (
@@ -536,7 +576,6 @@ export default function ProblemsPage() {
               <>
                 <span>Showing <b style={{ color: 'var(--text2)' }}>every</b> group, including one-off exceptions</span>
                 <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>
-                <Button variant="ghost" size="sm" onClick={() => setMinOcc(5)}>5+ only</Button>
               </>
             )}
           </div>
@@ -552,6 +591,7 @@ export default function ProblemsPage() {
               <tbody>
                 {filtered.map(g => {
                   const open = expanded.has(g.fingerprint);
+                  const spread = spreadOf(g); // v0.10.949
                   // v0.10.221 — düz hücreler gerçek <Link> (orta tık yeni
                   // sekme); caret/servis/eylem hücreleri kendi tıklarını
                   // taşır, satır onClick'i kalan boşluk için kalıyor.
@@ -636,6 +676,15 @@ export default function ProblemsPage() {
                             className="mono">
                             {g.service}
                           </Link>
+                          {/* v0.10.949 — aynı exception aynı anda N serviste (Inbox ile aynı işaret). */}
+                          {spread && (
+                            <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, floorMeta.spreadWindowMin)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                              <span className="dot" aria-hidden="true"
+                                style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
+                              {spread.n} servis
+                            </div>
+                          )}
                         </td>
                         <td className="num row-cell cell-strong cell-err">
                           <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>

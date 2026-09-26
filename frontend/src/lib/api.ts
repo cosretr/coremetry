@@ -3043,8 +3043,17 @@ export const api = {
     // v0.9.315 (operatör) — occurrence floor. One-off exceptions (a
     // single Java socket timeout) rendered rows indistinguishable from
     // sustained outages. Omitted = no floor.
-    minOccurrences?: number }) =>
-    get<{ items: ExceptionGroup[]; total: number; limit: number; offset: number }>(`/api/exception-groups?${qs(params)}`),
+    minOccurrences?: number;
+    // v0.10.949 — 'default' = sunucu varsayılan tabanı (5, P1 eşiği küçükse o)
+    // + çok servisli / regressed muafiyeti; minOccurrences ile birlikte gönderilmez.
+    floor?: 'default' }) =>
+    get<{
+      items: ExceptionGroup[]; total: number; limit: number; offset: number;
+      capped?: boolean;
+      // v0.10.949 — taban meta verisi (features/anomalies/spread.ts readFloorMeta).
+      minOcc?: number; hiddenByMinOcc?: number; floorDefault?: boolean;
+      spreadWindowMin?: number; spreadAvailable?: boolean;
+    }>(`/api/exception-groups?${qs(params)}`),
   // getExceptionGroup — point lookup by fingerprint, used to resolve a
   // shared /problems?exc=<fp> link when the group isn't on the
   // requester's currently-loaded page/filter. Throws on 404 (see

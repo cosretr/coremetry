@@ -69,10 +69,12 @@ func TestListExceptionGroupsPrioritySortWiring(t *testing.T) {
 	if j := strings.Index(body, "\nfunc "); j > 0 {
 		body = body[:j]
 	}
+	// v0.10.949 — q (floor=default) yardımcıya iner; gövde pg.body'de
+	// (api.go büyümesin), Capped'i belirleyen apply'dan SONRA.
 	for _, want := range []string{
-		"s.listExceptionGroupsPage(ctx, f)",
+		"s.listExceptionGroupsPage(ctx, f, q)",
 		"pg.apply(items, total)",
-		`"capped": pg.Capped`,
+		"return pg.body(items, total), nil",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("listExceptionGroups %q içermeli", want)
@@ -83,8 +85,11 @@ func TestListExceptionGroupsPrioritySortWiring(t *testing.T) {
 	if prio < 0 || sortAt < 0 || prio > sortAt {
 		t.Error("öncelik satır başına hesaplandıktan SONRA sıralanmalı")
 	}
+	if bodyAt := strings.Index(body, "pg.body(items, total)"); bodyAt < sortAt {
+		t.Error("gövde apply'dan SONRA kurulmalı (Capped orada belirlenir)")
+	}
 	helper := readRepoFile(t, "exception_priority_sort.go")
-	for _, want := range []string{"f.Sort == exceptionPrioritySortKey", "f.Limit, f.Offset = exceptionPrioritySortCap, 0", "sortExceptionGroupsByPriority(items, pg.dir)", "pageExceptionGroups(items, pg.Offset, pg.Limit)"} {
+	for _, want := range []string{"f.Sort == exceptionPrioritySortKey", "f.Limit, f.Offset = exceptionPrioritySortCap, 0", "sortExceptionGroupsByPriority(items, pg.dir)", "pageExceptionGroups(items, pg.Offset, pg.Limit)", `"capped":          pg.Capped`} {
 		if !strings.Contains(helper, want) {
 			t.Errorf("exception_priority_sort.go %q içermeli", want)
 		}
