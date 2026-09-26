@@ -1,6 +1,6 @@
 ---
 name: helm-chart-coremetry
-description: Coremetry Helm chart guardrails — OpenShift restricted-v2 SCC compatibility, global.imageRegistry air-gapped rewrite, external ClickHouse/Redis wiring, monolithic vs distributed deployment.mode, MCP/SSE session affinity, the reset-schema hook, Route vs Ingress, and the Chart.yaml version/appVersion bump rules. Use BEFORE any change under charts/coremetry/ or examples/openshift/; when the chart changes, the app tag and the chart appVersion ship together via /release. Do NOT use for local minikube deploys of an unchanged chart (helm upgrade is poisonous there — use kubectl set image) or for generic Kubernetes/Helm questions unrelated to this chart.
+description: Coremetry Helm chart guardrails — OpenShift restricted-v2 SCC compatibility, global.imageRegistry air-gapped rewrite, external ClickHouse/Redis wiring, monolithic vs distributed deployment.mode, MCP/SSE session affinity, the reset-schema hook, Route vs Ingress, and how CI stamps Chart.yaml version/appVersion from the tag. Use BEFORE any change under charts/coremetry/ or examples/openshift/; chart changes ship with the app tag via /release (CI publishes the chart at the tag version). Do NOT use for local minikube deploys of an unchanged chart (helm upgrade is poisonous there — use kubectl set image) or for generic Kubernetes/Helm questions unrelated to this chart.
 ---
 
 # /helm-chart-coremetry — Coremetry chart guardrails
@@ -213,28 +213,18 @@ chart-render-time assertion if a future contributor mixes them.
 
 ### 8. Chart.yaml version vs appVersion
 
-`Chart.yaml` has `version` (chart) and `appVersion` (binary).
-Coremetry keeps them IN SYNC via the release process — both
-bumped together when chart-visible changes ship.
+CI owns the published chart version: on every tag push,
+`.github/workflows/release.yml` (job `helm`, step "Sync Chart
+appVersion to git tag") rewrites both `version` and `appVersion` to
+the tag, then `helm package` + `helm push` to
+`oci://ghcr.io/<owner>/charts`. Every release therefore publishes a
+chart whose version equals the app tag — don't hand-bump per chart
+change, and don't decouple the two (docs/RELEASE-1.0.md).
 
-```yaml
-version: 0.6.21
-appVersion: "0.6.21"
-```
-
-**Bump rules:**
-- ANY chart template change (new field, new resource, default
-  flip) → bump both `version` and `appVersion`.
-- ANY binary-side change that the chart REFERENCES (new env var,
-  new endpoint) → bump both.
-- Binary-only change with no chart reference → chart version
-  stays. NOTES.txt or value comments referencing the version are
-  STILL ok to update without a bump (text only).
-
-Per the release skill, `helm package` + OCI push to
-`oci://ghcr.io/cosretr/charts/coremetry` runs on tag push. If the
-chart version doesn't change, the push is a no-op for the chart
-artifact (GHCR rejects duplicate version tags).
+The values committed in `Chart.yaml` only matter to a local
+`helm install`/`helm template` from a checkout; keep the two fields
+equal to each other and, when you touch them, equal to the latest
+tag, so a checkout install doesn't pull a stale image.
 
 ### 9. Migration / upgrade safety
 
@@ -295,10 +285,6 @@ All four should pass. Spot-check that:
   collide. Use `Role` + `RoleBinding` per namespace; gate any
   truly-cluster-scoped resource on a value `cluster.enabled:
   false` default.
-- **Chart version-bump without binary-version-bump.** Drift
-  between chart and binary versions historically caused
-  "operator deployed chart 0.6.10 with v0.5.487 binary" surprises.
-  See `Chart.yaml` v0.5.0 → v0.6.2 → v0.6.21 catch-up history.
 
 ## Hard-constraint reminders
 

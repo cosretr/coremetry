@@ -14,9 +14,9 @@ barrel'da yok** ve kopyaların çoğu bu yüzden doğdu.
 
 ## 1. ARAMA ZORUNLULUĞU
 
-> **Adım 0: barrel YETMEZ.** `components/ui/index.ts` `PageShell`,
-> `Spinner`, `Empty`, `Pager`, `Skeleton*`, `CopyButton`, `PageLoader`
-> **export etmiyor** (doğrulandı). Barrel'a bakıp "yok" demek, bu
+> **Adım 0: barrel YETMEZ.** `components/ui/index.ts` `Spinner`, `Empty`,
+> `Pager`, `Skeleton*`, `CopyButton`, `PageLoader` **export etmiyor**
+> (hepsi `components/` altında). Barrel'a bakıp "yok" demek, bu
 > dökümdeki kopyaların yarısının doğum sebebi.
 
 ```bash
@@ -68,14 +68,19 @@ saklanmasıydı); (2) **barrel'a ekle**; (3) CSS adını sahiplen.
 `Modal` · `Drawer` · `Badge` · `MenuItem` · `PageControls` ·
 `DisclosureButton` · `LinkButton` · `SearchField` · `ActionRow` ·
 `ConfirmProvider`/`useConfirm` · `FacetMultiSelect` · `VirtualList` ·
-`VirtualTable` · `RouteSkeleton`
+`VirtualTable` · `RouteSkeleton` · `PageShell`
 
 **Kanonik ama barrel DIŞINDA** (aramayı ıskalatan grup):
-`PageShell` (`ui/PageShell.tsx`, 59 kullanım — **barrel'a eklenmeli**) ·
 `Spinner` (202) · `Empty` (204) · `Pager` (7) · `Skeleton*` ·
 `CopyButton` · `PageLoader` — hepsi `components/` altında.
 
-**🔴 Atom BOŞLUĞU (kanonik yok):** `Stat` (95 kullanım, **6 tanım**) ·
+**🟡 `Stat`:** `ui/StatTile.tsx` (barrel'da; `statTileGate` 3 detay yüzeyini
+pinliyor) kanonik karo — 3 yerel `Stat` tanımı kaldı
+(`features/dependencies/panels/shared.tsx`, `components/DBQueriesPanel.tsx`,
+`components/topology/FocusedNeighborhood.tsx`); yeni karo yazmadan önce
+StatTile'a bak, farklıysa StatTile'ı genişlet.
+
+**🔴 Atom BOŞLUĞU (kanonik yok):**
 ~~`Tooltip`~~ → **`ui/Tooltip.tsx` (v0.10.919)**; **IconButton `tooltip=`
 prop'u (v0.10.926)** — glif-only düğmede `title=` yerine bu (50 → 7, mandal
 `buttonUnityRatchet`). Kalan göç: diğer butonlardaki `title=`. Kullanmadan
@@ -96,7 +101,7 @@ kolon alanı (mekanizma kurulu, 0 tüketici).
 
 | # | Aile | Kopya | Kullanım | Kanonik |
 |---|---|---:|---:|---|
-| K1 | **`Stat`** | **6 tanım** | 95 | `features/dependencies/panels/shared.tsx` → **`ui/Stat.tsx`'e taşı** |
+| K1 | **`Stat`** | 3 yerel tanım | — | `ui/StatTile.tsx` — genişlet, yeni atom açma |
 | K2 | **`Field`** | **7 tanım** | 203 | **`ui/Field.tsx`** — tek a11y taşıyan sürüm |
 | K3 | **İkincil buton** | **4 yazım** | 274 | `<Button variant="secondary">` (gezinme hariç) |
 | K4 | **`Badge`** | atom vs elle sınıf | 14 vs **297** | `ui/Badge.tsx` (union eksik — AS-2) |
@@ -351,7 +356,7 @@ Bonus ret: native `confirm()` · `chartsV2` kelimesi (yorumda bile) ·
   mu? 36 sahipsiz site bekliyor.
 - **AS-2:** `Badge` union'ında `b-watcher` karşılığı yok; atom bugün 2
   siteyi karşılayamıyor → geçiş tamamlanamaz.
-- **AS-3:** `PageShell` barrel'a eklensin mi (tek satır, 59 kullanım).
+- ~~**AS-3:** `PageShell` barrel'a eklensin mi~~ — **KAPANDI** v0.9.1300 (`ui/index.ts`).
 - **AS-4:** İki yarım birim haritası — `metricUnit.ts` (tam) vs
   `routeSeries.ts` (yalnız `s|ms`). Birleştirilsin mi?
 - **AS-5:** Kapı genişletmeleri: `colorLeaks` donmuş listesi → tüm ağaç?

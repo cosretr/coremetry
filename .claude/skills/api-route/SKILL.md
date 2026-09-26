@@ -1,22 +1,21 @@
 ---
 name: api-route
-description: Add a new HTTP endpoint to Coremetry — ALWAYS in its own internal/api/<domain>.go file with a `registerXxxRoutes(mux)` method, so api.go grows by exactly one line (or by zero — register via route_registry.go init()). Covers route/auth/audit/serveCached/writeErr conventions, the four frontend touchpoints, and the silent-failure list (an unregistered route answers HTTP 200 with a blank page, never 404). Use BEFORE adding, moving or deleting any /api/* route, and whenever someone proposes editing api.go to add an endpoint. Do NOT use for MCP tools (use /mcp-tools), AI explain surfaces (/copilot-surface), or ClickHouse query design (/clickhouse-schema).
+description: Add a new HTTP endpoint to Coremetry — ALWAYS in its own internal/api/<domain>.go file that registers itself from init() via registerRoutesExtra (route_registry.go); api.go does not grow at all (TestApiGoDoesNotGrow fails on a single added line). Covers route/auth/audit/serveCached/writeErr conventions, the four frontend touchpoints, and the silent-failure list (an unregistered route answers HTTP 200 with a blank page, never 404). Use BEFORE adding, moving or deleting any /api/* route, and whenever someone proposes editing api.go to add an endpoint. Do NOT use for MCP tools (use /mcp-tools), AI explain surfaces (/copilot-surface), or ClickHouse query design (/clickhouse-schema).
 ---
 
 # /api-route — yeni endpoint, kendi dosyasında
 
 `internal/api/api.go` on binin üstünde satır ve yüzlerce route taşıyor. Yeni yüzey oraya
-yazılmaz: kendi dosyasını açar, `api.go` **tek satır** büyür. Bu bir
-temenni değil, kodda yazılı direktif — `vmetrics_routes.go:5-8`,
-`ai_routes.go:11-13`, `api.go:1083-1085` ("Yeni AI ucu ORAYA eklenir,
-api.go'ya değil").
+yazılmaz: kendi dosyasını açar ve kendini `init()`'te deftere kaydeder;
+`api.go` HİÇ büyümez (`TestApiGoDoesNotGrow`, taban
+`.claude/baselines/api_go_lines`, yalnız aşağı iner). Emsal direktifler:
+`vmetrics_routes.go`, `ai_routes.go` ve api.go'daki "Yeni AI ucu ORAYA
+eklenir, api.go'ya değil" yorumu.
 
-Ölçüldü: yeni dosya eklemenin maliyeti **1 kayıt satırı**. `buildMux`,
-import listesi, OpenAPI, middleware zinciri — hiçbiri değişmiyor.
+Yeni dosyanın maliyeti: `buildMux`, import listesi, OpenAPI, middleware
+zinciri — hiçbiri değişmiyor.
 
-Bu skill v0.9.1293'te 438 route + 131 dosyanın taranmasıyla yazıldı;
-her dosya:satır atıfı o gün doğrulandı. Satır numaraları kayabilir —
-sembol adları kaymaz, önce onları grep'le.
+Atıflar sembol adıyladır — satır numarası kayar; önce grep'le.
 
 ## Adım adım
 
@@ -51,8 +50,8 @@ yüzeyin tamamını görür.
   muafiyetleri (`GET /api/branding` public, `PUT` değil), `make audit`
   CHECK 7 regex'i (`"[A-Z]+ /` arıyor), ve Go 1.22 mux'ta kazara tüm
   metotları açar. Pakette `switch r.Method` deseni **0**.
-- **`/api/` altında kal.** Dışına çıkan her yol `auth.go:290-293`
-  catch-all'ı yüzünden **otomatik public** olur: `RequireRole` yazsan
+- **`/api/` altında kal.** Dışına çıkan her yol `auth.go`'daki
+  `!strings.HasPrefix(path, "/api/")` catch-all'ı yüzünden **otomatik public** olur: `RequireRole` yazsan
   bile middleware kimlik çözmez, `FromContext` nil döner, `s.audit`
   sessizce hiçbir şey yazmaz. `/api/` dışındaki her route bir dış
   protokol sözleşmesidir (`/tempo/*` Grafana, `/v1/*` OTLP).
@@ -69,38 +68,25 @@ mux.Handle("PUT /api/widgets/{id}",
 mux.Handle("DELETE /api/widgets/{id}",
     auth.RequireRole(auth.RoleAdmin, http.HandlerFunc(s.deleteWidget)))
 ```
-`editorRoles` = `api.go:519` (`{RoleAdmin, RoleEditor}`). Kapıyı route
+`editorRoles` (`var editorRoles`, api.go) = `{RoleAdmin, RoleEditor}`. Kapıyı route
 tablosunda görmek güvenlik incelemesini tek dosyaya indirir; handler-içi
 kapı yalnız **sahiplik** kararı içindir (rol değil).
 
 Okuma kardeşini kapısız bırak — viewer state'i GÖRMELİ, boş sayfa değil
-(CLAUDE.md). Kanonik blok: `api.go:1210-1214` (GET çıplak,
-POST/PUT/DELETE `RequireAnyRole`).
+(CLAUDE.md). Kanonik çift: aynı kaynağın GET'i çıplak, yazması
+`RequireAnyRole(editorRoles, …)` — örn. `GET`/`PUT /api/topology/hidden`,
+`GET`/`PUT /api/services/{name}/metadata`.
 
-### 6. `api.go`'ya tek satır
-
-> v0.10.247 — alternatif: `internal/api/route_registry.go` defteri. Domain dosyası
-> `func init() { registerRoutesExtra("<ad>", (*Server).registerXxxRoutes) }` yazar,
-> api.go'ya satır GİRMEZ; `buildMux` defteri ad sırasıyla boşaltır ve
-> `TestMuxRoutePatterns` çakışmayı görür (`preferences_routes.go`,
-> `admin_function_id.go` emsalleri). Operatörün "api.go'ya satır ekleme" kısıtı
-> geldiğinde bu yol.
+### 6. Kayıt — api.go'ya satır GİRMEZ
 ```go
-s.registerWidgetRoutes(mux) // v0.10.X — widget drill-down, widgets.go
+func init() { registerRoutesExtra("widgets", (*Server).registerWidgetRoutes) }
 ```
-
-| Yüzey | Nereye |
-|---|---|
-| Okuma / drill-down (en yaygın) | `api.go:832-839` bloğunun **en altına** |
-| `/api/settings/*` | `api.go:1156` civarı, `registerVMetricsRoutes` komşusu |
-| `/api/admin/clickhouse/*` | `api.go:632` / `:636` |
-| AI / copilot ucu | **api.go'ya HİÇ dokunma** → `ai_routes.go:68` içine |
-
-> ⚠️ Satırı bloğun ARASINA sokma. `api.go:834`'teki yorum bugün yanlış
-> satırı anlatıyor (`registerAPITokenRoutes` üstünde `pivot.go`
-> anlatımı): iki commit boyunca yeni çağrılar yorumlu satırın ÜSTÜNE
-> eklendi, yorum aşağı kaydı. En alta ekle ya da satır-ÜSTÜ yorum
-> kullan (`api.go:552-556` tarzı).
+`route_registry.go` defteri: `buildMux` kayıtları ad sırasıyla boşaltır,
+`TestMuxRoutePatterns` defter rotalarını da çakışma testine sokar, aynı ad
+iki kez kaydolursa init anında panic. api.go'ya tek satır eklemek bile
+`TestApiGoDoesNotGrow`'u kırar. Emsal: `preferences_routes.go`,
+`admin_function_id.go`. AI / copilot ucu: `ai_routes.go` `registerAIRoutes`
+içine.
 
 ### 7. Frontend — dört dokunuş (CLAUDE.md "2" der, gerçek 4)
 1. `lib/types.ts` — Go payload'ının aynası; başlıkta hangi Go tipini
@@ -121,13 +107,13 @@ package api
 
 // widgets.go — v0.10.XXXX (<hangi brief / hangi sayfa>).
 //
-// api.go BÜYÜMEYECEK kuralı (registerVMetricsRoutes emsali): yüzeyin
-// rotaları kendi dosyasında, api.go tek satır register çağrısıyla büyür.
+// api.go BÜYÜMEYECEK kuralı (TestApiGoDoesNotGrow): yüzeyin rotaları
+// kendi dosyasında, kayıt init()'te registerRoutesExtra ile.
 //
 //   GET /api/widgets?service=&from=&to=&env=&cluster=&limit=
 //
 // Rol kapısı YOK — salt-okunur drill-down (endpoints_detail.go duruşu);
-// küresel middleware (api.go:1358) kimliksiz isteği zaten 401 yapıyor ve
+// küresel auth middleware (s.auth.Middleware) kimliksiz isteği zaten 401 yapıyor ve
 // viewer bu veriyi GÖRMELİ. serveCached 30s; anahtar TÜM girdileri taşır
 // (v0.5.187) ve pencere cacheBucket ile 30s grid'e oturur.
 
@@ -140,6 +126,8 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
+
+func init() { registerRoutesExtra("widgets", (*Server).registerWidgetRoutes) }
 
 func (s *Server) registerWidgetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/widgets", s.getWidgets)
@@ -252,9 +240,9 @@ sözleşme → tipli struct (`endpointDetailPayload` emsali).
 
 | Durum | Çağrı | Not |
 |---|---|---|
-| Doğrulama / kötü girdi | `writeJSONError(w, 400, msg)` | `api.go:11609` |
-| Store / upstream hatası | `writeErr(w, err)` | `api.go:11622` |
-| Başarı | `writeJSON(w, v)` | `api.go:11588`, yalnız 200 |
+| Doğrulama / kötü girdi | `writeJSONError(w, 400, msg)` | `writeJSONError` (api.go) |
+| Store / upstream hatası | `writeErr(w, err)` | `writeErr` (api.go) |
+| Başarı | `writeJSON(w, v)` | `writeJSON` (api.go), yalnız 200 |
 
 `writeErr` dalları: `context.Canceled` → **499 gövdesiz** (5xx sayılırsa
 Coremetry'nin KENDİ `error_rate` anomalisini tetikler, v0.7.13) ·
@@ -283,13 +271,14 @@ dön, 4xx değil (`vmetrics_handlers.go:161-164`).
 paylaşıyor) · `GET /api/events` (`if s.bus != nil` koşullu) ·
 `/api/mcp/*` (`if s.mcp != nil`; handler'lar `*mcp.Server` metodu) ·
 `GET /livez` (pakette tek inline closure) · `mux.Handle("/",
-spaHandler(sub))` (`api.go:1338`, kayıt sırası SON olmalı).
+spaHandler(sub))` (kayıt sırası SON olmalı).
 
 **Taşıma yordamı** (mevcut aileyi api.go'dan çıkarmak için):
 1. Yeni `<domain>.go` / `<domain>_routes.go` aç
 2. Kayıt satırlarını **birebir** kopyala (metot öneki + hizalama + auth
    wrapper dahil)
-3. api.go'dan sil, yerine tek satır çağrı
+3. api.go'dan sil; yeni dosya `init()`'te `registerRoutesExtra` ile kaydolur;
+   `.claude/baselines/api_go_lines`'ı yeni `wc -l` değerine aynı commit'te indir (ratchet)
 4. Gate'leri koş; **bölünmüş kayıt bırakma** (bugün 5 aile iki yerden
    kayıtlı: `/api/endpoints`, `/api/databases`, `/api/traces`,
    `/api/spans`, `/api/admin/clickhouse`)
@@ -302,12 +291,11 @@ saf pas-geçme kaydı, taşımanın davranışsal riski sıfır.
 ## Sessizce bozulanlar
 
 - 🔴 **Kayıt satırı unutulursa 404 DEĞİL, HTTP 200 + boş ekran.**
-  SPA catch-all (`api.go:1338`) yolu `index.html`'e düşürür → FE
-  `request()` JSON olmayan content-type'ta `undefined` döner
-  (`frontend/src/lib/api.ts:331`). Hata fırlatılmaz, log basılmaz,
-  network panelinde 200 görünür; `go build`/`go test`/`make audit`
-  üçü de yeşil. **Kontrol:**
-  `grep -n "registerWidgetRoutes" internal/api/api.go`
+  SPA catch-all (`mux.Handle("/", spaHandler(sub))`) yolu `index.html`'e
+  düşürür → FE `request()` (`lib/api.ts`) JSON olmayan content-type'ta
+  `undefined` döner. Hata fırlatılmaz, log basılmaz, network panelinde
+  200 görünür; `go build`/`go test`/`make audit` üçü de yeşil. **Kontrol:**
+  `grep -n 'registerRoutesExtra("widgets"' internal/api/widgets.go`
 - 🔴 **Eksik `s.audit` — hiçbir kapı yakalamaz.** `make audit`'in 9
   CHECK'inin hiçbiri audit çağrısı aramıyor; `go vet`/`go test` de
   göremez. Tamamen insan-inceleme kalemi. (`s.audit` ayrıca
@@ -332,11 +320,11 @@ saf pas-geçme kaydı, taşımanın davranışsal riski sıfır.
 
 ```bash
 go build ./...
-go test ./internal/api/ -run 'TestMuxRoutePatterns' -v   # bu değişikliğin EN kritik komutu
+go test ./internal/api/ -run 'TestApiGoDoesNotGrow|TestMuxRoutePatterns' -v   # bu değişikliğin EN kritik komutu
 go test ./...
 make audit                                                # CHECK 7 kopya route
 cd frontend && npx tsc --noEmit                           # FE'ye dokunduysan
-grep -n "registerWidgetRoutes" internal/api/api.go        # S1 — otomatik kapısı YOK
+grep -n 'registerRoutesExtra("widgets"' internal/api/widgets.go   # S1 — otomatik kapısı YOK
 ```
 
 AI ucu eklediysen ek olarak:

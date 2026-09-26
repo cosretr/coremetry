@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a Coremetry release — compute the next v0.10.X tag from git tags, run every gate, stage explicit paths, commit in the CLAUDE.md format, annotate the tag, push, then rebuild the image in the background with `make image` (never `make docker-up` — v0.9.210). Use when the operator explicitly asks to release / ship / tag the current change. All four gates block the tag — `cd frontend && npx tsc --noEmit`, `go build ./...`, `go test ./...`, and `make audit` (🔴 critical stops the tag, 🟡 goes to the operator). On a non-trivial diff run /review-changes first. Do NOT use for a bare "commit this" with no tag, and never fold unrelated changes into one release.
+description: Cut a Coremetry release — compute the next v0.10.X tag from git tags, run every gate, stage explicit paths, commit in the CLAUDE.md format, annotate the tag, push, then rebuild the image in the background with `make image` (never `make docker-up` — v0.9.210). Use when the operator explicitly asks to release / ship / tag the current change. All gates CI runs block the tag — frontend `npx tsc --noEmit && npx eslint src && TZ=UTC npx vitest run`, `go build ./... && go vet ./...`, `go test ./...`, and `make audit` (🔴 critical stops the tag, 🟡 goes to the operator). On a non-trivial diff run /review-changes first. Do NOT use for a bare "commit this" with no tag, and never fold unrelated changes into one release.
 ---
 
 # /release — ship a Coremetry change
@@ -39,19 +39,20 @@ operator may want them.
 git tag --sort=-v:refname | grep -E '^v0\.10\.[0-9]+$' | head -1
 ```
 
-Increment the patch component by 1. Example: previous tag `v0.9.1291`
-→ next is `v0.9.1292`. The series is monotonic; never re-use a tag —
+Increment the patch component by 1. Example: previous tag `v0.10.932`
+→ next is `v0.10.933`. The series is monotonic; never re-use a tag —
 and a gap (a skipped number) is fine, re-using one is not.
 
-### 3. Type-check + build — the gate
+### 3. Type-check, lint, unit tests, build — the gate
 
-Per CLAUDE.md "When you ship a new feature" steps 9 + 10:
-TypeScript is law, `go build` is law. Gate the commit on a clean
-type-check / build. Run in parallel based on which file types
-changed:
-- If any `frontend/**/*.tsx` or `frontend/**/*.ts` changed:
-  `cd frontend && npx tsc --noEmit`
-- If any `*.go` changed: `go build ./...`
+The same chain CI runs (`.github/workflows/ci.yml`, CONTRIBUTING.md §3;
+CLAUDE.md "Ship checklist" steps 9 + 10). Run in parallel based on which
+file types changed:
+- Any `frontend/**` change:
+  `cd frontend && npx tsc --noEmit && npx eslint src && TZ=UTC npx vitest run`
+  (vitest carries the ratchets — `buttonUnityRatchet`, `tableUnityRatchet` —
+  a red one otherwise surfaces only in CI after the tag is pushed)
+- Any `*.go` change: `go build ./... && go vet ./...`
 
 If either fails, surface the error and stop — don't try to fix it
 silently. The operator decides whether to fix-forward or abort.
@@ -59,7 +60,7 @@ silently. The operator decides whether to fix-forward or abort.
 ### 3a. `go test ./...` — regression suite gate (v0.5.447)
 
 Run after the build gate. The regression-test discipline
-(CLAUDE.md "When you ship" item 11) ships a test per
+(CLAUDE.md "Ship checklist" item 11) ships a test per
 `v0.10.X — bug-fix` release, so the suite grows over time and
 catches recurrence of historical bug classes.
 
@@ -73,7 +74,7 @@ catches recurrence of historical bug classes.
 
 Run `make audit` after the type-check/build gate but before
 staging. It greps for the regression patterns from CLAUDE.md's
-"Hard constraints" and "Performance pitfalls" sections (cache-key
+"Hard constraints" and "Pitfall rules" sections (cache-key
 length anti-pattern, eager Combobox, setInterval without
 document.hidden, direct s.copilot.Explain, non-GLOBAL IN over
 Distributed, FROM spans without nearby LIMIT).
@@ -148,7 +149,7 @@ Use `run_in_background: true` on the Bash call. The runtime will
 notify when it completes (~30-60s). Do NOT wait inline — that
 blocks the conversation.
 
-If a previous `make docker-up` is still running (the user can see
+If a previous `make image` is still running (the user can see
 this in `docker ps` if needed), tell them rather than starting a
 second one — the rebuild lock will fight itself and produce a
 broken image. CLAUDE.md is explicit: one rebuild at a time.
@@ -160,7 +161,7 @@ that rebuild is running. No multi-paragraph summary — the diff is
 visible in the commit, the operator knows what they shipped.
 
 Example confirmation:
-> v0.9.1292 commit/push tamam, rebuild arkada. <release title>
+> v0.10.933 commit/push tamam, rebuild arkada. <release title>
 
 ## Common pitfalls
 
@@ -178,6 +179,6 @@ Example confirmation:
 - **Bug fix commits go IMMEDIATELY.** Don't batch a bug fix into a
   feature commit — ship the bug fix as its own v0.10.X+1 right after
   the prior release.
-- **Don't `make docker-up` while another rebuild is in flight.**
+- **Don't `make image` while another rebuild is in flight.**
   BuildKit serialises layer cache; concurrent rebuilds fight and
   one of the resulting images will be broken.

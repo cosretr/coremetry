@@ -149,7 +149,7 @@ spinner) for the historical incident.
 
 For each new admin action / settings surface added since the
 last audit:
-- `api.go` route uses `auth.RequireRole(auth.RoleAdmin, …)` OR
+- The route registration (`register*Routes` in the domain file; api.go only for legacy routes) uses `auth.RequireRole(auth.RoleAdmin, …)` OR
   `auth.RequireAnyRole(editorRoles, …)`
 - Every mutation handler calls `s.audit(r, "kind.action", ...)`
 - Frontend button hides / disables based on `user.role`
@@ -216,9 +216,9 @@ Present findings as a single ranked report:
 - ai_calls attribution wraps every Copilot route
 ```
 
-Limit each section to top 10 findings; if you have more, surface a
-count and offer to dump the rest on request. The operator triages
-from the top.
+Rank within each section so the operator can triage from the top.
+List every finding; collapse repeats of one pattern into a single
+line with the count and the file list.
 
 ## Don't
 

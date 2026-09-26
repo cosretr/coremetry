@@ -5,10 +5,9 @@ description: Checklist for every change to Coremetry's OTLP→ClickHouse convers
 
 # /otlp-converter — dönüşüme dokunuyorsan bu liste
 
-Tek giriş noktaları: `ConvertTraces` (`convert.go:30`) + `convertSpan`
-(`:89`) + `appendSpanLinks` (`:68`) · `ConvertLogs` (`:174`) ·
-`ConvertMetrics` (`:225`) + `convertMetric` (`:281`) + `appendExemplars`
-(`:392`).
+Tek giriş noktaları (hepsi `convert.go`): `ConvertTraces` + `convertSpan`
++ `appendSpanLinks` · `ConvertLogs` · `ConvertMetrics` + `convertMetric` +
+`appendExemplars`.
 
 > **`make audit`'in OTLP ile ilgili TEK CHECK'i yok** (doğrulandı: 0
 > eşleşme). Bu alanda otomatik koruma sıfır — bu liste onun yerine geçiyor.
@@ -153,8 +152,9 @@ düşmüyor. Ama `switch d := m.Data.(type)` **`default` dalsız**
 - [ ] Yeni alan §3 politikasına göre ya taşınır ya **sayaçla** düşürülür.
 
 ### 2.6 Golden test
-- [ ] **Bugün golden test YOK** — `internal/otlp/testdata/` dizini hiç yok
-      (doğrulandı). Yeni dönüşüm kodu golden testle birlikte gelir.
+- [ ] Değişen dönüşüm bir golden fixture'la geliyor mu? Emsal:
+      `convert_messaging_golden_test.go` + `testdata/span_messaging_kafka.json`
+      (v0.10.553). Yeni sinyal ailesi = yeni fixture + aynı kalıpta test.
 - [ ] Golden test **tam-struct** karşılaştırması mı (`want chstore.Span`
       literali)? Alan-alan iddia yetmez — **yeni alan eklendiğinde test
       kırılmak ZORUNDA.**
@@ -228,27 +228,15 @@ boş kolon, 10 dk penceresinde küçük harfli 2.67M span / büyük harfli
 sıfır). Yeni bir anahtar eklerken **prod'da hangi yazımın geldiğini ÖLÇ** —
 varsayma. Teşhis anlatısı `/perf-triage` örnek vakasında.
 
-## 5. Golden test — bugün yok, nasıl kurulur
+## 5. Golden test — emsal ve genişletme
 
-Mevcut testler elle kurulmuş proto struct'ları üzerinden çalışıyor;
-`testdata/` altında kayıtlı payload yok.
-
-```go
-// convert_golden_test.go — v0.10.X
-// Girdi: testdata/<vaka>.json (OTLP JSON, gerçek collector çıktısı)
-// Beklenen: TAM chstore.Span literali — alan-alan iddia DEĞİL.
-// Neden tam struct: yeni bir alan eklendiğinde bu test KIRILMAK ZORUNDA;
-// kırılmıyorsa alanın taşındığını kimse doğrulamamış demektir.
-func TestConvertSpanGolden(t *testing.T) {
-    raw := mustReadTestdata(t, "span_http_server.json")
-    spans, links := ConvertTraces(mustUnmarshalTraces(t, raw))
-    want := []chstore.Span{{ /* … TÜM alanlar … */ }}
-    if diff := cmp.Diff(want, spans); diff != "" {
-        t.Fatalf("span mismatch (-want +got):\n%s", diff)
-    }
-    _ = links
-}
-```
+Emsal: `internal/otlp/convert_messaging_golden_test.go`
+(`TestConvertSpanMessagingGolden`) — `testdata/span_messaging_kafka.json`
+(protojson) → `ConvertTraces` → TAM `chstore.Span` karşılaştırması,
+yalnız stdlib (`reflect`, `protojson`; go-cmp bağımlılık değil). Yeni
+fixture'ı bu dosyanın kalıbıyla ekle. Neden tam struct: yeni bir alan
+eklendiğinde test KIRILMAK ZORUNDA; kırılmıyorsa alanın taşındığını kimse
+doğrulamamış demektir.
 
 Fixture'ın kapsaması gereken, **bugün test edilmeyen** dallar: span links ·
 exemplar (dört DP tipi) · exponential histogram degrade dalları ·

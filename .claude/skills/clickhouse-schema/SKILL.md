@@ -5,8 +5,10 @@ description: Coremetry ClickHouse guardrails — decision tree for new tables/MV
 
 # /clickhouse-schema — Coremetry CH sözleşmesi
 
-Ölçek: **48 tablo · 33 MV** (20 `store.go` + 13 `migrations/`) · **13 rollup
-kademesi**. Prod dış Distributed CH (2 shard × 2 replica), lokal chc-0/chc-1.
+Ölçek sayımları kayar — kullanmadan önce yeniden say: span MV'leri
+`canonicalMVs()` (`internal/chstore/store.go`; taban 2026-09-26: 22),
+operatör katmanı `grep -ci 'CREATE MATERIALIZED VIEW' migrations/*.sql`
+(taban: 16). Prod dış Distributed CH (2 shard × 2 replica), lokal chc-0/chc-1.
 
 **Sayım tabanını daima yaz** — "ifade" mi, "farklı tablo" mu, "token" mu.
 Aynı dosyayı üç kez sayıp üç farklı sonuç üretmek bu repoda gerçekleşti.
@@ -367,7 +369,7 @@ koymak aynı yalan olurdu."*
 |---|---|---|
 | `store.go migrate()` | Uygulamanın SAHİP OLDUĞU şema; boot'ta bildirimsel + idempotent | Uygulamanın yönettiği her tablo/kolon/MV |
 | `internal/chmigrate/` | **Migration DEĞİL** — tek-node → cluster **veri kopyalayıcı**, sıfır DDL (doğrulandı) | Yalnız `--migrate-from` bayrağı |
-| `migrations/*.sql` | **Operatör sahipliğinde** rollup/promotion katmanı | Sihirbaz (0001/0003/0008) veya elle (0002/0004/0005/0006/0007) |
+| `migrations/*.sql` | **Operatör sahipliğinde** rollup / promotion / katman DDL'i | Admin → ClickHouse sihirbazının okuduğu alt küme: `migrations/embed.go` `FS` listesi (taban 2026-09-26: 0001/0003/0008/0011/0012/0013/0014); listede olmayanlar elle ya da kendi admin kartıyla |
 
 **Adlandırma** `NNNN_<konu>.sql`, 4 haneli. Numara **sıra garantisi değil,
 kimlik**: `0003` ile `0003_..._rollback` aynı numarayı paylaşır; `0008`,
@@ -440,6 +442,6 @@ bir kayıt düşürülmüş nesnenin CREATE'ini elerdi.
    gerekçelendirilmemiş.
 2. **`spanmetrics_calls/hist/duration_5m`** (Hat B) okuyucusuz — kalıcı 0
    satır, "bozuk değil" belgeli. Silinsin mi?
-3. **`root_cause_hypotheses`** Kural P1 ihlali (değişken partition kolonu) —
-   bugfix dilimi mi?
+3. ~~**`root_cause_hypotheses`** Kural P1 ihlali~~ — **KAPANDI** v0.9.1304
+   (PARTITION BY söküldü; DDL `ORDER BY (anchor_kind, anchor_id)`, partition yok).
 4. ~~`alters` içindeki 5 CREATE TABLE~~ — **KAPANDI** v0.9.1301 (taşıma) + v0.9.1302 (eleme dilimden bağımsızlaştı).

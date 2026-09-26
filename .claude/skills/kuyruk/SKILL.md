@@ -1,12 +1,12 @@
 ---
 name: kuyruk
-description: Render the operator's prioritised DEVELOPMENT queue — in-progress and pending items grouped bugs > scale > features > polish, at most 7 rows with effort estimates, ending in the literal prompt "Hangisi?" so the operator picks rather than reading analysis. Use when the operator types "kuyruk" or asks what to work on next. Do NOT use for the P1/P2/P3 triage of live Problem rows on Inbox/Topology (incident priority is a different surface), and never invent queue items the operator did not raise.
+description: Render the operator's prioritised DEVELOPMENT queue — in-progress and pending items grouped bugs > scale > features > polish, a short pick-list with effort estimates, ending in the literal prompt "Hangisi?" so the operator picks rather than reading analysis. Use when the operator types "kuyruk" or asks what to work on next. Do NOT use for the P1/P2/P3 triage of live Problem rows on Inbox/Topology (incident priority is a different surface), and never invent queue items the operator did not raise.
 ---
 
 # /kuyruk — prioritised work queue
 
-`kuyruk` is Cenk's standing pattern for "what's next" — see
-`CLAUDE.md` under "Workflow / Daily". Goal of this skill: present
+`kuyruk` is the operator's standing pattern for "what's next" — see
+`CLAUDE.md` "Workflow". Goal of this skill: present
 the current state of work in a form that takes <5 seconds to
 scan, followed by "Hangisi?" so the operator picks rather than
 reading more analysis.
@@ -64,7 +64,9 @@ if they care.
 
 ### 4. Render
 
-Numbered list, max 7 items. Format:
+Numbered list, short enough to scan in a few seconds: every bug and
+in-progress item, then the top of each remaining bucket; if items are
+left out, end with one line giving the count per bucket. Format:
 
 ```
 | # | İş | Tahmin | Kategori |

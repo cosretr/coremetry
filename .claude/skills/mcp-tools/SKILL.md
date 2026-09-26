@@ -85,10 +85,10 @@ methods take from/to time.Time — the TOOL converts `range_s` into
 that pair via:
 
 ```go
-from, to := rangeWindow(a.RangeS) // helper in tools.go
+from, to := rangeWindow(ctx, a.RangeS) // helper in tools.go
 ```
 
-`rangeWindow(0)` returns a sane default (30min). The tool's JSON
+`rangeWindow(ctx, 0)` returns a sane default (30min). The tool's JSON
 Schema declares `range_s` with both `minimum: 0` and `maximum`
 (typically 604800 = 7 days) so the LLM can't fan a request that'll
 scan three months of partitions.
@@ -120,8 +120,10 @@ Typical caps:
 ```go
 func myTool(d Deps) mcp.Tool {
     return mcp.Tool{
-        Name:        "snake_case_tool_name",
-        Description: "<one-paragraph contract — see step 6>",
+        Name:             "snake_case_tool_name",
+        ShortDescription: "<2-3 cümlelik TÜRKÇE sözleşme — in-app sohbet her tur bunu okur>",
+        MinRole:          "", // "" = viewer; REST eşi editor/admin ise aynısı
+        Description:      "<one-paragraph contract — see step 6>",
         InputSchema: map[string]any{
             "type": "object",
             "properties": map[string]any{
@@ -145,7 +147,7 @@ func myTool(d Deps) mcp.Tool {
                     return nil, fmt.Errorf("decode args: %w", err)
                 }
             }
-            from, to := rangeWindow(a.RangeS)
+            from, to := rangeWindow(ctx, a.RangeS)
             limit := clampLimit(a.Limit, 50, 500)
             rows, err := d.Store.GetXFiltered(ctx, ..., from, to, ..., limit, 0)
             if err != nil {
@@ -170,6 +172,11 @@ include, in order:
 3. **Cost/scope warning if any.** "Reads the 5-minute pre-
    aggregate so cheap to call repeatedly." Or "scans raw spans;
    keep range_s small."
+4. **When NOT to use it** — name the sibling tool that answers the
+   neighbouring question ("for one endpoint's RED use
+   get_operation_health").
+5. **What it does not return / its limits** — caps, windows, fields
+   left out, so the model doesn't infer absence from omission.
 
 Bad: `"Lists services."`
 Good: `"List Coremetry services with their current RPS, error rate, and p99 latency. Reads the 5-minute pre-aggregate so it's cheap to call repeatedly. Use this as the entry point when investigating an incident: 'which services are unhealthy right now?'"`
@@ -187,10 +194,14 @@ JSON Schema types map: `string`, `integer`, `number`, `boolean`,
 `enum` for string allowlists, `description` for free-form
 guidance the LLM reads.
 
-### 8. Register in `Register()`
+### 8. Add it to `ToolList(d)`
 
-End of `internal/mcptools/tools.go`'s `Register(srv, d)`. Order
-doesn't matter — the LLM gets the full catalogue on `tools/list`.
+`Register()` delegates to `ToolList(d)` (`tools.go`), which also feeds
+the in-app chat's function-calling spec — one registry, two consumers.
+Place the tool next to the tools it chains with; the list order is
+deliberate (see the adjacency comments) and is what the chat model sees.
+Tools that need in-app conversation state go in `chatOnlyTools` too:
+`Register` hides them from external MCP clients.
 
 ### 9. Auth gating
 
@@ -206,29 +217,36 @@ method should NOT carry role logic — the route layer does. For a
 mutation tool, also call `s.audit(...)` from inside the handler
 (through Deps if needed) so the action lands in the audit log.
 
-A read-only tool that surfaces data the viewer role can already
-see in the UI needs no extra gating beyond JWT presence.
+Role gating is per tool: set `mcp.Tool.MinRole` to the REST sibling's
+gate (`""` = any authenticated viewer; `"editor"`/`"admin"` when the
+REST route is wrapped in `RequireAnyRole`/`RequireRole`). `mcpCallGate`
+(`internal/api/mcp_gate.go`) enforces it on MCP calls and the chat
+hides tools above the caller's role — a mismatch with REST is a bug.
+A write tool (none exist today) needs MinRole ≥ "editor" plus an audit
+row.
 
 ### 10. Boot wiring sanity
 
-`main.go` constructs `mcp.NewServer(...)`, then calls
-`mcptools.Register(srv, mcptools.Deps{Store: store, LogStore:
-logstore})`, then `api.NewServer(...).SetMCP(srv)`. The order
-matters: tools must be registered BEFORE the SSE endpoint starts
-accepting traffic, or early `tools/list` requests will return
+`main.go` builds the MCP server after every `srv.Set*` the Deps
+read, calls `mcptools.Register(mcpSvc, srv.MCPDeps())` — the same
+constructor (`internal/api/mcp_deps.go`) the in-app chat uses — then
+`srv.SetMCP(mcpSvc)`. Tools must be registered BEFORE the endpoint
+starts accepting traffic, or early `tools/list` requests return
 empty.
 
-This is already wired — don't move it. If you add a new Deps
-field (e.g. `Tempo *tempo.Service`), thread it through
-`mcptools.Deps` and the `Register` call in `main.go`.
+This is already wired — don't move it. A new Deps field is set in
+`mcpDeps()` only: it is the single constructor
+(`TestOnlyOneMCPDepsConstructionSite` also scans `main.go`).
 
-### 11. Test by hand (no integration test suite yet)
+### 11. Test
 
-There's no test layer for mcptools. Smoke-test by hitting the
-MCP HTTP endpoint with a JSON-RPC envelope:
+Add a table test next to the tool (`internal/mcptools/<tool>_test.go`;
+`tools_test.go`, `short_desc_test.go` and `has_more_test.go` are the
+catalogue-wide gates). Then smoke-test the live endpoint
+(Streamable-HTTP, stateless):
 
 ```bash
-curl -sS -b /tmp/cm.cookies -X POST http://localhost:8088/mcp \
+curl -sS -b "$JAR" -X POST http://localhost:8090/api/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
        "params":{"name":"my_tool",
@@ -236,12 +254,12 @@ curl -sS -b /tmp/cm.cookies -X POST http://localhost:8088/mcp \
   | python3 -m json.tool
 ```
 
-Check: tool found, args parsed (no `decode args` error in the
-body), expected shape returned, count reasonable.
+(`$JAR` = the login cookie jar from /perf-triage ADIM 1.) Check: tool
+found, no `decode args` error, expected shape, count reasonable.
 
 ### 12. Ship via `/release`
 
-Single `v0.6.X — feature: MCP tool <name>` commit. Brief body
+Single `v0.10.X — MCP tool <name>` release. Brief body
 describing what it surfaces + when an LLM would reach for it.
 Update the `## Tool catalogue` comment block at top of `tools.go`.
 

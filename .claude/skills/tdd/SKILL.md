@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: Test-first loop for NEW Coremetry backend work — write the failing table-driven test against a pure seam (SQL builder, decision function, key/format helper) BEFORE the implementation, iterate to green, then ship via /release. Use when building a new backend feature, endpoint or pure helper, or when the operator says "tdd ile" / "test-first"; it extends the bug-fix regression-test gate (v0.5.447) to features. Prefer this repo's stdlib table-driven style over any external testing skill — no testify, goleak or testcontainers. Do NOT use for frontend work (vitest rules live in /frontend-conventions), for a production bug (use /bugfix), or when the change is pure I/O wiring with no testable seam.
+description: Test-first loop for NEW Coremetry backend work — write the failing table-driven test against a pure seam (SQL builder, decision function, key/format helper) BEFORE the implementation, iterate to green, then ship via /release. Use when building a new backend feature, endpoint or pure helper, or when the operator says "tdd ile" / "test-first"; it extends the bug-fix regression-test gate (v0.5.447) to features. Prefer this repo's stdlib table-driven style over any external testing skill — no testify, goleak or testcontainers. Do NOT use for frontend UI/JSX work (no unit seam; pure lib/*.ts logic is in scope, vitest gates live in /frontend-conventions), for a production bug (use /bugfix), or when the change is pure I/O wiring with no testable seam.
 ---
 
 # /tdd — test-first feature loop
@@ -58,11 +58,11 @@ so out loud when that happens.
 
 ### 4. Wire + full gates
 
-Only after green: wire the seam into the handler/page (route
-registration in api.go per the backend rules, serveCached +
-hash-all-inputs key, auth/audit if it writes). Then the standard
-release gates: `npx tsc --noEmit` / `go build ./...` /
-`go test ./...` / `make audit`.
+Only after green: wire the seam into the handler/page (route in
+its own `internal/api/<domain>.go`, registered from `init()` via
+`registerRoutesExtra` — /api-route; serveCached + hash-all-inputs
+key, auth/audit if it writes). Then the standard
+release gates (the `/release` chain CI runs, `make audit` included).
 
 ### 5. Release
 

@@ -31,17 +31,14 @@ bugfix.** This step is non-skippable.
 Before any investigation: the memory index (MEMORY.md) is already in
 context every session — scan its feedback entries and OPEN, in full,
 the 1-3 `feedback-*.md` files that plausibly apply to this report.
-(Reading every feedback file each time was the v0.6.37 mechanic; the
-index now loads automatically and the point of the step is picking
-the right lessons, not re-reading every lesson.)
 
 1. `MEMORY.md` — the index of feedback memories (already in context).
 2. The relevant `feedback-*.md` files from that index. The
    feedback memories encode patterns of past failure I am known to
    repeat: bug-repro discipline, unit-mixing in templates,
    audit/verify context, terse-response preference, etc.
-3. The "Performance pitfalls — historical incidents" section of
-   the repo `CLAUDE.md` — these are the codebase-specific
+3. The "Pitfall rules" section of the repo `CLAUDE.md` (full
+   stories in docs/INCIDENTS.md) — these are the codebase-specific
    re-occurrence patterns (cache key digests, render-time
    recomputation, document.hidden, ES query_string flags,
    significant_text background, TTL unit-mixing, etc.).
@@ -151,7 +148,7 @@ Investigate more.
 
 ### 4a. Regression test — bug-fix releases ship with one (v0.5.447)
 
-CLAUDE.md "When you ship a new feature" item 11: every
+CLAUDE.md "Ship checklist" item 11: every
 `v0.10.X — bug-fix` release ships with a Go test that fails on
 re-regression. This catches future copy-paste-induced
 re-occurrences of the SAME class of bug.
@@ -166,7 +163,7 @@ re-occurrences of the SAME class of bug.
   pure SQL-building helper into a testable function rather than
   skipping the test entirely.
 - `go test ./...` must pass before tagging. The /release skill
-  runs this as step 3b.
+  runs this as step 3a.
 
 ### 4b. Runtime verification gate — MANDATORY (v0.6.37)
 
@@ -177,20 +174,21 @@ because of a type mismatch the string-match couldn't see. Same-day
 v0.6.37 had to fix it again.
 
 Before tagging a bug-fix release, **run the artifact the user
-will actually run**:
+will actually run** — the local minikube stack (docs/local-dev.md
+§8: app on `http://localhost:8090` via port-forward, ClickHouse
+pods `chc-0`/`chc-1` in namespace `coremetry`, as /perf-triage uses):
 
-- SQL / DDL changes → execute the produced statement against the
-  live CH (`docker exec coremetry-clickhouse clickhouse-client -q
-  "<your statement>"`) and confirm exit code 0 + the table now
-  shows the expected shape.
-- API changes → curl the endpoint with the cookie jar
-  (`/tmp/cm.cookies`, login via
-  `admin@coremetry.local`/`admin`) and assert the response shape.
+- SQL / DDL changes → `kubectl exec -n coremetry chc-0 --
+  clickhouse-client -d coremetry -q "<your statement>"`; confirm
+  exit 0 and the expected table shape.
+- API changes → curl `http://localhost:8090/...` with a login
+  cookie jar (/perf-triage ADIM 1) and assert the response shape.
 - Frontend changes → not optional; load the page in the running
   app. (For pure-CSS edits, take a screenshot.)
-- Config / boot-order changes → `make docker-up` + tail
-  `docker logs coremetry 2>&1` for the first 10s after boot,
-  watching for error lines that mention the changed code path.
+- Config / boot-order changes → roll a uniquely tagged image with
+  `kubectl set image` (docs/local-dev.md §8; not `helm upgrade`,
+  not `make docker-up`) and read the new pod's log for the first
+  seconds after boot, watching for errors on the changed path.
 
 If running the artifact is impossible (no live env, no test
 fixture), say so explicitly in the release message — don't sneak
@@ -230,12 +228,10 @@ the bug; the release confirmation already covered that.
   you're hiding the bug, not fixing it.
 - **Don't bundle the fix into a feature commit.** The release log
   needs the bug fix as its own row for forensics.
-- **Don't ship the fix without a regression test.** This is the
-  inverse of an older note that lived here and was wrong: the repo
-  DOES have a suite (`go test ./...` is a release gate since
-  v0.5.447). Step 4a is binding — extract the pure seam and pin the
-  bug class. What IS scope creep: back-filling tests for untouched
-  code you happened to read on the way.
+- **Don't ship the fix without a regression test.** Step 4a is
+  binding (`go test ./...` is a release gate since v0.5.447) —
+  extract the pure seam and pin the bug class. Back-filling tests
+  for untouched code you read on the way is scope creep.
 - **Don't blame past code.** "v0.10.X introduced this" in the body
   is fine; "the previous developer should have…" isn't.
 - **Don't over-explain the conversation.** The commit message is

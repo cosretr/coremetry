@@ -1,6 +1,6 @@
 ---
 name: otel-conventions
-description: Coremetry's OTel guardrails — single W3C tracecontext propagator policy, the "critical 5" resource attributes, semconv → ClickHouse column mapping (http.*/db.*/messaging.*/gen_ai.*), OTLP gRPC vs HTTP receivers, duration/percentile naming locks, sampling decision points, EDOT acceptance — plus the triage runbook for "service doesn't show up" / "spans don't chain" / "metric is misnamed". Use BEFORE changing internal/otlp/, a receiver or converter, or any field name in this repo that maps to an OTel attribute or resource. This skill outranks the generic opentelemetry / golang-observability / dt-obs-* skills for Coremetry code — on conflict the repo invariant wins (no in-binary sampling, v0.8.73). Do NOT use for instrumenting an application with an OTel SDK, for collector config outside this repo, for generic "how does trace context work" questions, or for CH table/query design (use /clickhouse-schema).
+description: Coremetry's OTel guardrails — single W3C tracecontext propagator policy, the "critical 5" resource attributes, semconv → ClickHouse column mapping (http.*/db.*/messaging.*/gen_ai.*), OTLP gRPC vs HTTP receivers, duration/percentile naming locks, no in-binary sampling (Collector-side only), EDOT acceptance — plus the triage runbook for "service doesn't show up" / "spans don't chain" / "metric is misnamed". Use BEFORE changing internal/otlp/, a receiver or converter, or any field name in this repo that maps to an OTel attribute or resource. This skill outranks the generic opentelemetry / golang-observability / dt-obs-* skills for Coremetry code — on conflict the repo invariant wins (no in-binary sampling, v0.8.73). Do NOT use for instrumenting an application with an OTel SDK, for collector config outside this repo, for generic "how does trace context work" questions, or for CH table/query design (use /clickhouse-schema).
 ---
 
 # /otel-conventions — Coremetry OTel conventions
@@ -127,8 +127,9 @@ ask for filtering on it:
    attr_keys + use the FilterBuilder's "any attribute" search.
 
 **Don't promote every new semconv attribute to a column.**
-Schema churn at billion-row scale is expensive (per the
-clickhouse-schema skill's "ORDER BY is immutable" rule).
+Schema churn at billion-row scale is expensive (column adds on
+high-volume tables need the two-boot distributed contract —
+/clickhouse-schema §3, §9).
 
 ### 4. OTLP gRPC vs HTTP — both, no preference
 
@@ -180,34 +181,19 @@ divide manually.
 | `avg_ms` | "Average" | mean — affected by outliers; rarely useful at scale |
 
 **Don't add `p999_ms` or `p9999_ms` as new MV columns.** Beyond
-p99, the quantilesState() merge inflates state size sharply and
+p99, the MV quantile state (`quantilesTDigestState`) inflates state size sharply and
 the precision drops. If a SLO needs p999, compute it on raw spans
 with a bounded window.
 
-### 6. Head + tail sampling decision points
+### 6. Sampling — none in the binary
 
-Coremetry samples at TWO points:
-
-1. **Head sampling** — `internal/sampling/Sampler.Decide(span)`
-   — fires when an OTLP span arrives. Default `keepErrors=true,
-   keepRoots=true`. Probabilistic sampling for the rest.
-2. **Tail sampling** — `internal/sampling/Tail.Add(span)` —
-   buffers complete traces, decides after the trace closes
-   (root finishes). Tail sampler's `AttachFlush` returns kept
-   spans through the SAME consumer the head path uses.
-
-**When adding a new "keep these spans" rule:**
-
-- If the rule depends on a single span's attribute (status_code,
-  http.method): add to head sampler.
-- If the rule depends on the WHOLE TRACE (any span erred, total
-  duration > threshold, contains a specific operation): add to
-  tail sampler.
-
-**Don't reach for tail sampling for everything.** Tail buffers
-the entire trace in memory until close + N seconds — at high QPS
-the buffer dominates memory. Head sampling is cheaper per span
-and covers 90% of "keep spans we care about" rules.
+Coremetry stores 100% of the spans it receives; in-binary head/tail
+sampling was removed in v0.8.73 (docs/DECISIONS.md, "Ingest / OTLP").
+When an operator wants sampling, it is configured in the OTel
+Collector in front of Coremetry (e.g. the `tailsampling` processor).
+Don't add a sampler, keep-rule engine or sampling setting to the
+ingest path. Drop / enrich rules belong to the ingest pipeline
+(`internal/pipeline`, `/api/admin/pipeline-rules`).
 
 ### 7. EDOT vs raw OTel SDK — both acceptable
 
@@ -309,10 +295,11 @@ Run this checklist in order:
    content-type) not 404 / 500.
 4. **Are spans landing in CH?** `SELECT count() FROM spans
    WHERE service_name=? AND time>=now()-INTERVAL 5 MINUTE`.
-5. **Is the head sampler dropping them?** Check
-   `/api/health` for `spans_dropped` rate. If non-zero +
-   `keepErrors=true`, the operator's spans aren't erroring +
-   aren't roots + got probabilistically sampled out.
+5. **Is ingest dropping them?** `/api/health` → `spans_dropped`
+   counts spans refused because the ingest queue was full (item
+   count or byte budget — back-pressure), not a sampling
+   decision. Coremetry does not sample; if spans are missing by
+   policy, check the Collector's sampling config.
 6. **Is the pipeline (v0.5.263) filtering them?** Check
    /admin/pipeline rules — a "drop spans where service=X" rule
    could silently kill ingest.
@@ -358,24 +345,17 @@ Run this checklist in order:
   resolving inconsistently across SDKs. Coalesce chain pattern
   was set here; copy it for any new multi-name attr.
 - **v0.5.263** — ingest-time pipeline engine added (drop /
-  enrich rules evaluated BEFORE the sampler). Reduced span
-  volume 30%+ on installs with chatty `gae_app` etc. spans.
-  When debugging "spans missing", check pipeline rules first
-  before suspecting the sampler.
+  enrich rules). When debugging "spans missing", check pipeline
+  rules first.
 - **v0.5.208** — Tempo external trace backend as a fallback.
-  OTel spans land in CH at low sampling, Tempo gets 100%
-  retention. `/trace/{id}` resolves CH first, Tempo second.
-  Lesson: Coremetry's sampling rate is independently tunable
-  from the long-tail-trace story.
+  `/trace/{id}` resolves CH first, Tempo second. Any
+  sample-to-Coremetry / 100%-to-Tempo split is done in the
+  Collector, not in the binary.
 - **v0.5.244** — Drain templater is sample-based on purpose;
   full-scan templating at billion-log scale is unworkable.
   Don't re-derive without reading the v0.5.244 commit msg.
 - **v0.5.346** — async_insert tuning to current values for
   ingest. Don't churn.
-- **v0.5.394** — `COREMETRY_VERSION` env override removed —
-  stale env value silently masked the actual build tag.
-  Lesson: don't add overrides for things the binary should
-  self-report.
 
 ## Don't
 

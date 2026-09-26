@@ -16,7 +16,7 @@ catches them BEFORE the commit lands.
 
 The yardstick is the architect-grade `CLAUDE.md` — its "Hard
 constraints", "Architectural invariants", "Performance budgets",
-and "When you ship a new feature" sections are the rubric.
+and "Ship checklist" sections are the rubric.
 
 ## When to use
 
@@ -195,10 +195,10 @@ loses the audit trail of "what was flagged".
 - **Don't lecture.** "You should always X" comments are noise.
   Cite the file:line and suggest the fix; the WHY lives in
   CLAUDE.md.
-- **Don't flag style choices that match the file's existing
-  style.** If the file uses inline styles throughout, don't
-  flag one more inline style — that's a refactor, not a
-  diff issue.
+- **Don't flag pre-existing style the diff merely touches.**
+  Only what this diff adds counts — and a NEW fully static
+  inline style block, raw hex, or raw `<button>` is a finding
+  even in a file full of them (/frontend-design-system §9).
 - **Don't fabricate issues.** If the diff is genuinely clean,
   say so. False positives erode trust in future runs.
 - **Don't expand to architecture review.** "You should

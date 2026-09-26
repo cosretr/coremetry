@@ -1,13 +1,13 @@
 ---
 name: where-is
-description: Locate where a concept lives in the Coremetry codebase — delegates the search to an Explore subagent and returns at most 7 file:line pointers with a one-line summary each, so the main session's context is never spent on grep+read cycles. Use when the operator asks "X kodu nerede" / "where is X handled" and the target is a fuzzy concept (the SLO burn-rate evaluator, the trace sampling decision, system_settings hydration) rather than a name you could grep in one shot. Do NOT use when the user already gave you the symbol or file name (just grep it), and do NOT use for "how does X work" explanations — this skill returns pointers only, never prose, never edits.
+description: Locate where a concept lives in the Coremetry codebase — delegates the search to an Explore subagent and returns a short ranked list of file:line pointers with a one-line summary each, so the main session's context is never spent on grep+read cycles. Use when the operator asks "X kodu nerede" / "where is X handled" and the target is a fuzzy concept (the SLO burn-rate evaluator, the ingest pipeline drop rules, system_settings hydration) rather than a name you could grep in one shot. Do NOT use when the user already gave you the symbol or file name (just grep it), and do NOT use for "how does X work" explanations — this skill returns pointers only, never prose, never edits.
 ---
 
 # /where-is — codebase concept lookup
 
 Most of Coremetry's surfaces follow naming conventions
 (chstore.GetX, copilotExplainX, FooPanel, /api/foo/{id}) but
-"the SLO burn-rate evaluator" or "the trace sampling decision"
+"the SLO burn-rate evaluator" or "the ingest pipeline drop rules"
 isn't a function name — it's a *concept* that takes 3-5 grep
 iterations to track down. Each iteration reads files into the
 main session's context window. By call 5 the agent is bloated
@@ -37,7 +37,7 @@ Main session's context stays clean.
 
 Examples:
 - `/where-is the SLO burn rate evaluator`
-- `/where-is trace sampling decision logic`
+- `/where-is ingest pipeline drop rules`
 - `/where-is the alert noisy-rule evaluator`
 - `/where-is the topology aggregator goroutine`
 - `/where-is the Drain templater`
@@ -68,9 +68,10 @@ covers the canonical paths; common search surfaces:
     - internal/notify/       notification fan-out
     - internal/auth/, internal/ldap/   auth
     - internal/copilot/      AI + system prompts
-    - internal/sampling/     sampling
+    - internal/pipeline/     ingest drop/enrich rules
     - internal/topology/     topology batch correlator
-    - internal/chmigrate/    schema migrations
+    - internal/chmigrate/    single-node → cluster data copy (no DDL)
+    - migrations/ + internal/chstore/store.go migrate()   CH schema
 
   Frontend:
     - frontend/src/pages/        page roots
@@ -87,17 +88,15 @@ For each hit:
   - file:line (markdown link form: [filename](path#L42))
   - one short sentence on what's there
 
-Cap output at 7 hits. If there are clearly more, mention
-"+N more" at the end. Stay terse — no preamble, no
-explanation of methodology. The caller wants pointers, not
-narrative.
+Return the entry points a reader would open first, most
+central first — usually a handful. If more files are
+involved, list them compactly as bare file:line under a
+"+N more" line. No preamble, no explanation of methodology.
+The caller wants pointers, not narrative.
 
 Search breadth: very thorough. The caller will burn time
 on missing matches.
 ```
-
-Specifically pass `"very thorough"` as the breadth hint in
-the Agent's `description` parameter.
 
 ### 2. Format the response
 

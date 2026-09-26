@@ -12,8 +12,8 @@ wrong API shape, the wrong UX surface, and burning 30 min
 before pivoting. This skill removes that cost by surfacing a
 1-minute spec for explicit approval BEFORE the edit phase.
 
-The spec's "Files" section follows the 10-step "When you ship a
-new feature" checklist in CLAUDE.md — backend → cache → auth →
+The spec's "Files" section follows the 11-step "Ship checklist"
+in CLAUDE.md — backend → cache → auth →
 audit → settings → frontend type → frontend client → frontend
 component → ts gate → go gate. That ordering is the path that's
 proven not to need rework.
@@ -49,9 +49,9 @@ Produce a markdown spec with these sections, in this order:
 Catches misunderstanding early.
 
 ## Files (in shipping order)
-Backend, top-down (per CLAUDE.md's 10-step checklist):
+Backend, top-down (per CLAUDE.md's Ship checklist):
 - internal/chstore/foo.go (+N lines) — new MV query method
-- internal/api/api.go (+N lines) — route + handler + serveCached + audit + auth gate
+- internal/api/<domain>.go (new file) — register*Routes + init() registerRoutesExtra, handler, serveCached, audit, auth gate (/api-route)
 Then frontend, top-down:
 - frontend/src/lib/types.ts (+N lines) — new shared type
 - frontend/src/lib/api.ts (+N lines) — client method
@@ -106,7 +106,7 @@ Empty if everything's obvious.
    feature to anchor the spec on real conventions. The
    "Files" section should reference patterns that already
    work in this repo.
-   - "Like the Sampling tab in Settings.tsx"
+   - "Like the AI tab in pages/settings/AiTab.tsx"
    - "Like the OperationPicker pattern"
    - "Like the saved_views table with page='X'"
    - "Like the Tempo `LoadPersisted` template"
@@ -137,7 +137,7 @@ Empty if everything's obvious.
 ## Anti-patterns
 
 - **Don't over-spec.** A spec should fit in a chat message.
-  Two pages of design doc is wrong format — that's a /sketch
+  Two pages of design doc is wrong format — that's a design doc,
   not a /spec.
 - **Don't include the IMPLEMENTATION of the code in the
   spec.** The spec is the WHAT and WHERE; code samples

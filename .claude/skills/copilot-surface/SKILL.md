@@ -1,6 +1,6 @@
 ---
 name: copilot-surface
-description: Add ONE new AI "✨ Explain" affordance to Coremetry — system prompt in internal/copilot/prompts.go, route + handler, the s.copilotExplain(r, …) wrapper that keeps /ai attribution honest, the lib/api.ts client method, and the button. Use when the operator wants a new explain affordance on a page or panel that has none. Do NOT use for the chat/agent runtime, providers, streaming, RAG, tool-calling or RCA verdicts (those live in internal/ai and the rest of internal/copilot), for tuning Copilot settings or models, or for explaining something to the operator yourself.
+description: Add ONE new AI "✨ Explain" affordance to Coremetry — system prompt in internal/copilot/prompts.go, route in ai_routes.go (requireCopilot) + handler in its own file, the s.copilotExplain(r, …) wrapper that keeps /ai attribution honest, the lib/api.ts client method, and the button. Use when the operator wants a new explain affordance on a page or panel that has none. Do NOT use for the chat/agent runtime, providers, streaming, RAG, tool-calling or RCA verdicts (those live in internal/ai and the rest of internal/copilot), for tuning Copilot settings or models, or for explaining something to the operator yourself.
 ---
 
 # /copilot-surface — add a new AI explain surface
@@ -11,7 +11,7 @@ SystemPromptTrace, SystemPromptSpan, SystemPromptSLOBurn,
 SystemPromptSlowQuery, etc.). This skill walks the agent through
 the 5 files to touch + the conventions to follow.
 
-The 10-step "When you ship a new feature" checklist in CLAUDE.md
+The 11-step "Ship checklist" in CLAUDE.md
 collapses to 5 here because Copilot surfaces are read-only and
 share the existing infrastructure — no schema change, no settings
 persistence (Copilot config already lives in `system_settings`),
@@ -56,54 +56,57 @@ const systemX = `You are a senior <role> assistant inside an APM
 tool. The operator clicked "Explain" on <thing>. You receive:
 <list of fields>.
 
-Respond in 3-5 short bullets:
+Answer in short bullets — as many as the evidence supports, no
+more:
   (1) one-line verdict: <list of canonical verdicts>.
   (2) <specific hazard you see, anchored to the data>.
   (3) <highest-impact remediation, one best fix not five>.
   (4) optional: <second-tier improvement>.
 
 Anchor on the data you have. Don't speculate beyond what you
-were shown. Don't hedge.`
+were shown. Don't hedge.` + AnswerInTurkish
 
 func SystemPromptX() string { return systemX }
 ```
 
 Then register it in `promptRegistry()` + `promptTexts()`
 (`internal/copilot/prompt_language_test.go`) with its class —
-`classDirective` for prose (must end with `AnswerInTurkish`),
+`classDirective` for prose (the const ends with `+ AnswerInTurkish`),
 `classTurkishNative` for Turkish-written instructions,
-`classStructured` for machine-parsed output (no language directive).
+`classStructured` for machine-parsed output — and in
+`promptVersionRegistry` (`observe_meta.go`). If the surface's main
+consumer is the small local model and the output must follow a fixed
+shape, use the Turkish-native pattern with ONE few-shot and fixed
+section labels (`systemProblem`, `systemServiceAnalysis`).
 
 Patterns to copy:
 - Lead with "You are a senior X assistant inside an APM tool."
 - Enumerate the input shape so the model knows what it has.
-- Constrain output to 3-5 bullets.
+- Fix the section schema ((1)…(4)); let the evidence set the count — no numeric bullet cap (v0.10.253 D7).
 - Demand a one-line verdict + specific quote / clause / number.
 - Demand ONE best fix, not a menu.
 - Explicit "don't hedge" / "don't speculate" at the end.
 
-### 2. `internal/api/api.go` (route)
+### 2. `internal/api/ai_routes.go` (route)
 
-Register the route:
+Register inside `registerAIRoutes`, wrapped by the single 503 gate:
 
 ```go
-mux.HandleFunc("POST /api/copilot/explain-X", s.copilotExplainX)
+mux.HandleFunc("POST   /api/copilot/explain-X", s.requireCopilot(s.copilotExplainX))
 ```
 
-Same auth gate as other Copilot endpoints (no role wrapper —
-the Copilot itself is configured-or-not). If the surface needs
-data the operator wouldn't otherwise see, gate it.
+No role wrapper unless the surface exposes data the viewer couldn't
+otherwise see. `TestRequireCopilotRouteCoverage` fails on an unwrapped
+`/api/copilot/` route; api.go does not grow (`TestApiGoDoesNotGrow`).
 
-### 3. `internal/api/api.go` (handler)
+### 3. `internal/api/copilot_explain_x.go` (handler)
 
-Add the handler near the other copilotExplainX functions:
+Own file (emsal `copilot_explain_slo.go`). No configured/active check in
+the handler — `requireCopilot` already answered 503
+(`TestNoInlineCopilotGates`).
 
 ```go
 func (s *Server) copilotExplainX(w http.ResponseWriter, r *http.Request) {
-    if !s.copilot.Configured() {
-        http.Error(w, "AI copilot not configured", http.StatusServiceUnavailable)
-        return
-    }
     // Read inputs — either from the request body (when the
     // frontend already has the data on hand) or from the
     // chstore (when the operator only knows a key like an id).
@@ -111,16 +114,11 @@ func (s *Server) copilotExplainX(w http.ResponseWriter, r *http.Request) {
         // … fields
     }
     if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-        http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+        writeJSONError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
         return
     }
-
-    // Compose the user-prompt string from the inputs. Keep it
-    // tight; cap any free-text fields (e.g. SQL, log bodies)
-    // at ~4KB so the prompt + recording stay cheap.
     var sb strings.Builder
-    fmt.Fprintf(&sb, "...", body.X, body.Y)
-
+    fmt.Fprintf(&sb, "...", body.X, body.Y) // cap free-text fields (SQL, log bodies) ~4KB
     out, err := s.copilotExplain(r, copilot.SystemPromptX(), sb.String())
     if err != nil {
         writeErr(w, err)
@@ -135,67 +133,32 @@ func (s *Server) copilotExplainX(w http.ResponseWriter, r *http.Request) {
 call to the surface for `/ai` analytics + records the `ai_calls`
 row. Direct calls silently break the dashboard.
 
-### 4. `frontend/src/lib/api.ts`
+### 4. `frontend/src/lib/api.ts` + `lib/aiSubject.ts`
 
-Add the client method:
+Add the client method (`request<{ explanation: string }>` POST to
+`/api/copilot/explain-X`) and a new entry in `AI_KINDS`
+(`lib/aiSubject.ts`) plus its branch in `CopilotExplain`'s kind
+dispatch. Shared response types go in `lib/types.ts` (CLAUDE.md
+"What goes WHERE": `lib/types.ts` is the single source of truth for
+shared shapes).
 
-```ts
-copilotExplainX: (body: { /* matching the handler body */ }) =>
-  request<{ explanation: string }>(`/api/copilot/explain-X`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }),
-```
+### 5. Frontend trigger
 
-If you need a shared type for the response, add it to
-`lib/types.ts` rather than re-declaring in the component
-(CLAUDE.md "Frontend type discipline").
-
-### 5. Frontend button
-
-Wire the button on the relevant page. Standard pattern:
-
-```tsx
-// state for explain — keyed if the page has multiple invocable rows
-type ExplainState = 'idle' | 'busy' | { text: string } | { error: string };
-const [explainState, setExplainState] = useState<ExplainState>('idle');
-
-const askCopilot = async () => {
-  setExplainState('busy');
-  try {
-    const r = await api.copilotExplainX({ /* fields */ });
-    setExplainState({ text: r.explanation });
-  } catch (e) {
-    setExplainState({ error: e instanceof Error ? e.message : String(e) });
-  }
-};
-```
-
-Button shape (mirror SlowQueries.tsx for inline / explains;
-mirror Slos.tsx BurnExplainButton for modal-based):
-
-```tsx
-{explainState === 'busy' ? (
-  <span style={{ color: 'var(--text3)' }}>✨ Thinking…</span>
-) : (
-  <button className="sec" onClick={askCopilot}
-    style={{ fontSize: 11, padding: '4px 10px', color: 'var(--accent2)' }}
-    title="Ask Copilot for …">
-    ✨ Explain
-  </button>
-)}
-```
-
-Render the answer inline OR in a panel, depending on the page
-density. Slow-query rows render inline; SLO row → opens a Modal.
-Match neighbouring patterns rather than inventing.
+Don't build a local explain state machine or button. The surface
+renders the shared trigger `<AIExplainButton subject={…}>`
+(`components/ai/AIExplainButton.tsx`); the answer lives in the AI
+drawer, where `CopilotExplain` (`components/CopilotExplain.tsx`)
+fetches by kind and renders `ExplainBody` + feedback. Mirror an
+existing kind (e.g. `anomaly`, `service-health`). Raw `<button>` is
+blocked outside `ui/` (`buttonUnityRatchet`, ESLint
+`ui/no-raw-button`).
 
 ## Verification
 
 After the 5 files are touched:
 
 1. `go build ./...` — handler + system prompt compile.
-2. `cd frontend && npx tsc --noEmit` — api.ts + button type-check.
+2. `cd frontend && npx tsc --noEmit && TZ=UTC npx vitest run` — api.ts + AI kind type-check; button ratchet.
 3. Trigger the button manually in the running app (or simulate
    via `curl -X POST /api/copilot/explain-X -d '{…}'`).
 4. **Verify `/ai` attribution.** A row should land with
@@ -214,13 +177,14 @@ operator click.
 
 - **Don't bypass `copilotExplain`.** Direct `s.copilot.Explain`
   calls skip the recorder, making /ai blind to the new surface.
-- **Don't write a 2-paragraph system prompt.** The model
-  performs better on tight, opinionated prompts than verbose
-  ones. 5-15 lines is the right length.
+- **Don't pad the system prompt.** Keep it to what the model
+  needs: input shape, section schema, grounding rule — plus one
+  example when the small local model must reproduce a fixed shape
+  (`systemProblem`).
 - **Don't pass entire CH responses through.** Cap free-text
-  fields. The ai_calls row caps samples at 4KB anyway — beyond
-  that the data is truncated server-side, so you're paying
-  prompt tokens for nothing.
+  fields (~4KB): the model is billed for every token you send;
+  `ai_calls` only truncates its recorded sample
+  (`chstore.SamplePromptCap`), not the prompt.
 - **Don't ship without the /ai surface attribution working.**
   The whole point of the wrapper is operator visibility into
   AI usage. Verify the surface name appears in /ai before

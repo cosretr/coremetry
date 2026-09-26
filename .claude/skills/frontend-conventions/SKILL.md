@@ -12,25 +12,31 @@ one exists because its violation shipped a bug or an incident.
 
 ## 1. One design language
 
-- Buttons: the shared `<Button variant size>` atom
-  (`components/ui/Button.tsx`). Never hand-roll
-  `<button style={{fontSize, padding, border}}>` — the 2px6px vs
-  3px7px drift class is what forced the atom (v0.7.54).
+- Buttons: `ui/` atoms only — `<Button variant size>`
+  (`components/ui/Button.tsx`), `IconButton`, `SegmentedControl`,
+  `ButtonGroup`, `DisclosureButton`, `OptionRow`, `TileButton`. Raw
+  `<button>` / `role="button"` outside `ui/` is blocked
+  (`buttonUnityRatchet.test.ts` holds both at 0; ESLint
+  `ui/no-raw-button`) — the 2px6px vs 3px7px drift class is what
+  forced the atom (v0.7.54). Decision table: /frontend-design-system §4.
 - Labelled inputs: `components/ui/Field.tsx`; badges `.badge
   .b-ok/.b-err/.b-warn/.b-info/.b-gray` or the typed `<Badge tone>`
   wrapper; cards/rows from `components/ui`.
-- Tab strips: the shared `.tab-strip` + active-class buttons
-  (Trace, PublicTrace, Events, doc viewer all use it — the
-  operator's eye expects one tab anatomy).
+- Tab strips: the `<TabStrip>` atom (`components/ui/TabStrip.tsx`); it
+  owns the `.tab-strip` anatomy and `role="tablist"` — don't hand-write
+  the class (the operator's eye expects one tab anatomy).
 - Icons: lucide-react (already a dep) or inline SVG; no new icon
   packages.
 
 ## 2. Tables
 
-- EVERY data table adopts `useDataTable`
+- Record lists adopt `useDataTable`
   (`components/ui/DataTable/DataTable.tsx`, pure core `lib/dataTable.ts`):
   sortable + column-resizable, widths/sort persisted by
-  `storageKey`. Template: `SlowQueries.tsx`.
+  `storageKey`. Template: `SlowQueries.tsx`. Other table kinds (static
+  ≤10-row / picker lists with a reason, attributes = `KeyValue`,
+  legends exempt) follow the four-kinds row in CLAUDE.md Hard
+  constraints.
 - Server-paged tables (Services, Traces, Logs) use serverSort /
   resize-only mode — client sort on one page of a server-ordered
   set is misleading (LOG_COLS comment, v0.7.54).
