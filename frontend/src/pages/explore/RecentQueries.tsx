@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
-import { Button } from '@/components/ui/Button';
+import { Button, MenuItem } from '@/components/ui';
 import { historyItemView, type QueryHistoryEntry } from './useQueryHistory';
 
 // RecentQueries (v0.9.849) — "Son sorgular ▾".
@@ -57,13 +57,17 @@ export function RecentQueries({ history, onApply }: {
   return (
     <div ref={rootRef} style={{ position: 'relative' }}>
       <Button variant="secondary" size="sm"
-        aria-expanded={open}
+        aria-haspopup="menu" aria-expanded={open}
         onClick={() => setOpen(o => !o)}
         title="Bu tarayıcıda en son çalıştırdığın sorgular — tıkla, aynen geri yükle">
         ⟲ Son sorgular ▾
       </Button>
+      {/* v0.10.927 — satırlar SEÇİM değil EYLEM (tık = sorguyu geri yükle):
+          listbox/option değil menu/MenuItem. Hover + klavye odağı `.menuitem`
+          CSS'inden (JS-hover kalktı), geri yüklenemeyen kayıt `:disabled`
+          (soluk + not-allowed). İki sütun `.menuitem-label` içinde. */}
       {open && (
-        <div role="listbox" aria-label="Son sorgular"
+        <div role="menu" aria-label="Son sorgular"
           style={{
             position: 'absolute', top: '100%', right: 0, zIndex: 'var(--z-dropdown)', marginTop: 4,
             minWidth: 320, maxWidth: 560,
@@ -72,32 +76,22 @@ export function RecentQueries({ history, onApply }: {
             boxShadow: '0 8px 24px rgba(0,0,0,.28)',
           }}>
           {items.map((it, i) => (
-            // eslint-disable-next-line ui/no-raw-button -- role="option" listbox satırı: atomlar button rolü/iç sarmalayıcı basar, seçenek ham kalır
-            <button key={`${it.text}:${i}`} type="button" role="option"
-              aria-selected={false}
+            <MenuItem key={`${it.text}:${i}`}
               disabled={!it.search}
               title={it.search
                 ? it.title
                 : `${it.title}\n(bu kayıt geri yüklenemiyor — eski/bozuk biçim)`}
-              onClick={() => { if (it.search) { setOpen(false); onApply(it.search); } }}
-              style={{
-                all: 'unset', boxSizing: 'border-box',
-                display: 'flex', alignItems: 'baseline', gap: 8,
-                width: '100%', padding: '6px 8px', borderRadius: 5,
-                cursor: it.search ? 'pointer' : 'not-allowed',
-                opacity: it.search ? 1 : 0.5,
-                fontSize: 12, color: 'var(--text)',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-              <span style={{
-                flex: 1, minWidth: 0,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{it.text}</span>
-              <span style={{ flexShrink: 0, fontSize: 10.5, color: 'var(--text3)' }}>
-                {it.when}
+              onClick={() => { if (it.search) { setOpen(false); onApply(it.search); } }}>
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+                <span style={{
+                  flex: 1, minWidth: 0,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{it.text}</span>
+                <span style={{ flexShrink: 0, fontSize: 10.5, color: 'var(--text3)' }}>
+                  {it.when}
+                </span>
               </span>
-            </button>
+            </MenuItem>
           ))}
         </div>
       )}

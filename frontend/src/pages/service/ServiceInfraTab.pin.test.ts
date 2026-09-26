@@ -43,6 +43,23 @@ describe('Infra dilim 1 — KPI, grafik hatası, HAProxy', () => {
     expect(infra).toContain("kpi.restarts == null ? '—'");
     expect(css).toContain('.stat-grid {');
     expect(css).toContain('.stat-sub {');
+    // v0.10.927 — alt satır artık span (düğme içinde blok yok): blok olmalı,
+    // yoksa "3 / 5" ile "all pods healthy" aynı satıra yapışır.
+    expect(css).toMatch(/\.stat-sub \{ display: block;/);
+  });
+  it('v0.10.927 — KPI karosu gerçek düğme: StatTile onClick + title, div.stat-click sarmalayıcısı yok', () => {
+    const strip = infra.slice(infra.indexOf('<div className="stat-grid">'));
+    const grid = strip.slice(0, strip.indexOf('</div>'));
+    expect((grid.match(/<StatTile /g) ?? []).length).toBe(4);
+    expect((grid.match(/ onClick=/g) ?? []).length).toBe(4);
+    expect(infra).toContain('onClick={goToPods} title="Pods sekmesine git"');
+    expect(infra).toContain(`onClick={() => scrollToChart('cpu')} title="CPU grafiğine git"`);
+    expect(infra).toContain(`onClick={() => scrollToChart('mem')} title="Memory grafiğine git"`);
+    expect(infra).not.toContain('className="stat-click"');
+    expect(infra).not.toContain('rowActivation<HTMLDivElement>');
+    // düğme içine blok konamaz — alt satır span (blokluğu `.stat-sub` CSS'inde)
+    expect(infra).not.toContain('<div className="stat-sub">');
+    expect((infra.match(/<span className="stat-sub">/g) ?? []).length).toBe(4);
   });
   it('grafik hatası yerinde: ChartSlot beş grafiği sarar', () => {
     expect((infra.match(/<ChartSlot q=/g) ?? []).length).toBe(5);

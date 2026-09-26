@@ -12,6 +12,7 @@ import { statementTracesHref } from '@/lib/pivotHref';
 import { metricCatalogueHref } from '@/pages/explore/urlCodec';
 import { Button } from '@/components/ui/Button';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { TileButton } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
@@ -65,9 +66,11 @@ export function Stat({ label, value, tone, onClick, sub }: {
   // operator gets keyboard + screen-reader treatment for free,
   // a subtle hover state, and an arrow affordance in the
   // corner to telegraph the drill-down.
+  // v0.10.927 — parçalar `span` + `display: block`: düğme içine blok
+  // (`div`) konamaz; aynı `inner` statik div ikizinde de piksel-özdeş.
   const inner = (
     <>
-      <div style={{
+      <span style={{
         fontSize: 9, color: 'var(--text3)',
         textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600,
         display: 'flex', alignItems: 'center', gap: 4,
@@ -76,47 +79,35 @@ export function Stat({ label, value, tone, onClick, sub }: {
         {onClick && (
           <span aria-hidden style={{ marginLeft: 'auto', opacity: 0.5 }}>↗</span>
         )}
-      </div>
-      <div style={{ fontSize: 16, fontWeight: 700, color,
+      </span>
+      <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color,
                      fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
         {value}
-      </div>
+      </span>
       {sub && (
-        <div style={{
+        <span style={{
+          display: 'block',
           fontSize: 10, color: 'var(--text3)', marginTop: 2,
           fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-        }}>{sub}</div>
+        }}>{sub}</span>
       )}
     </>
   );
   if (onClick) {
-    // v0.10.924 — buton bütünlüğü Faz 2: gerekçeli istisna (karo atomu yok).
-    // `all: 'unset'` → `.btn-bare`: aynı görünüm, odak halkası geri geliyor.
+    // v0.10.927 — TileButton atomu: çerçeve statik ikizle aynı (bg2,
+    // kenarlık, --radius-xs, 8/10); hover (--accent2 + bg3) `.tile-btn`
+    // CSS'inde — eski JS onMouseEnter/Leave boyaması kalktı.
     return (
-      // eslint-disable-next-line ui/no-raw-button -- tıklanabilir stat karosu: çerçevesi aynı ızgaradaki statik div ikiziyle aynı kalmalı, Button çocukları yatay .row span içine sarar
-      <button type="button" onClick={onClick} className="btn-bare"
-        title="Open metric chart"
-        style={{
-          display: 'block', cursor: 'pointer',
-          padding: '8px 10px', borderRadius: 4,
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          transition: 'border-color 0.12s, background 0.12s',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.borderColor = 'var(--accent2)';
-          e.currentTarget.style.background = 'var(--bg3)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.borderColor = 'var(--border)';
-          e.currentTarget.style.background = 'var(--bg2)';
-        }}>
+      <TileButton onClick={onClick} title="Open metric chart">
         {inner}
-      </button>
+      </TileButton>
     );
   }
+  // v0.10.927 — köşe --radius-xs (eski literal 4): TileButton ikiziyle her
+  // temada aynı (dark/light 4px, redhat 2px).
   return (
     <div style={{
-      padding: '8px 10px', borderRadius: 4,
+      padding: '8px 10px', borderRadius: 'var(--radius-xs)',
       background: 'var(--bg2)', border: '1px solid var(--border)',
     }}>
       {inner}
@@ -135,9 +126,11 @@ export function GaugeStat({ label, usage, limit, sub, onClick, forecast }: {
   const tone: 'ok' | 'warn' | 'err' =
     pct >= 90 ? 'err' : pct >= 75 ? 'warn' : 'ok';
   const fill = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : 'var(--ok)';
+  // v0.10.927 — parçalar `span` + `display: block` (Stat ile aynı gerekçe;
+  // doluluk çubuğu da — `width: %` blok kutu ister).
   const inner = (
     <>
-      <div style={{
+      <span style={{
         fontSize: 9, color: 'var(--text3)',
         textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600,
         display: 'flex', alignItems: 'center',
@@ -146,65 +139,53 @@ export function GaugeStat({ label, usage, limit, sub, onClick, forecast }: {
         {onClick && (
           <span aria-hidden style={{ marginLeft: 'auto', opacity: 0.5 }}>↗</span>
         )}
-      </div>
-      <div style={{
+      </span>
+      <span style={{
+        display: 'block',
         fontSize: 14, fontWeight: 700,
         fontFamily: 'ui-monospace, SFMono-Regular, monospace',
         marginBottom: 4,
       }}>
         {fmtNum(usage)} <span style={{ color: 'var(--text3)', fontWeight: 400 }}>/ {fmtNum(limit)}</span>
-      </div>
-      <div style={{
+      </span>
+      <span style={{
+        display: 'block',
         height: 4, background: 'var(--bg3)', borderRadius: 2, overflow: 'hidden',
       }}>
-        <div style={{
+        <span style={{
+          display: 'block',
           width: `${Math.min(100, pct)}%`, height: '100%', background: fill,
           transition: 'width 0.2s',
         }} />
-      </div>
+      </span>
       {sub && (
-        <div style={{
+        <span style={{
+          display: 'block',
           fontSize: 10, color: 'var(--text3)', marginTop: 4,
           fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-        }}>{sub}</div>
+        }}>{sub}</span>
       )}
       {eta && (
-        <div style={{ marginTop: 4 }} title={eta.title}>
+        <span style={{ display: 'block', marginTop: 4 }} title={eta.title}>
           {eta.badge
             ? <span className={`badge ${eta.tone}`}>{eta.text}</span>
             : <span style={{ fontSize: 10, color: 'var(--text3)' }}>{eta.text}</span>}
-        </div>
+        </span>
       )}
     </>
   );
   if (onClick) {
-    // v0.10.924 — buton bütünlüğü Faz 2: gerekçeli istisna (karo atomu yok).
-    // `all: 'unset'` → `.btn-bare`: aynı görünüm, odak halkası geri geliyor.
+    // v0.10.927 — TileButton atomu (Stat ile aynı); JS hover kalktı.
     return (
-      // eslint-disable-next-line ui/no-raw-button -- tıklanabilir stat karosu: çerçevesi aynı ızgaradaki statik div ikiziyle aynı kalmalı, Button çocukları yatay .row span içine sarar
-      <button type="button" onClick={onClick} className="btn-bare"
-        title="Open metric chart"
-        style={{
-          display: 'block', cursor: 'pointer',
-          padding: '8px 10px', borderRadius: 4,
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          transition: 'border-color 0.12s, background 0.12s',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.borderColor = 'var(--accent2)';
-          e.currentTarget.style.background = 'var(--bg3)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.borderColor = 'var(--border)';
-          e.currentTarget.style.background = 'var(--bg2)';
-        }}>
+      <TileButton onClick={onClick} title="Open metric chart">
         {inner}
-      </button>
+      </TileButton>
     );
   }
+  // v0.10.927 — köşe --radius-xs: TileButton ikiziyle her temada aynı.
   return (
     <div style={{
-      padding: '8px 10px', borderRadius: 4,
+      padding: '8px 10px', borderRadius: 'var(--radius-xs)',
       background: 'var(--bg2)', border: '1px solid var(--border)',
     }}>
       {inner}

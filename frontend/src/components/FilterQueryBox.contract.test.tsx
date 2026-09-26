@@ -103,6 +103,37 @@ describe('FilterQueryBox', () => {
     expect(onChange).toHaveBeenCalledWith([{ k: 'http.route', op: 'EXISTS', v: [] }]);
   });
 
+  // v0.10.927 — op seçenekleri anahtar/değer kardeşleriyle aynı desen:
+  // role=option <div> (ham <button> değil), id = girdinin activedescendant'ı,
+  // vurgulu olan `.fq-op.sel`; fareyle seçim onMouseDown'da, odak girdide.
+  it('op seçenekleri role=option div (button değil); mousedown seçer', () => {
+    const onChange = vi.fn();
+    const el = render(<FilterQueryBox value={[]} onChange={onChange} />);
+    const input = el.querySelector('input.fq-input') as HTMLInputElement;
+    act(() => { setInput(input, 'http'); });
+    act(() => { key(input, 'Tab'); });
+    const ops = Array.from(el.querySelectorAll<HTMLElement>('.fq-ops .fq-op'));
+    expect(ops.length).toBeGreaterThan(1);
+    expect(el.querySelector('.fq-list button')).toBeNull();
+    for (const o of ops) {
+      expect(o.tagName).toBe('DIV');
+      expect(o.getAttribute('role')).toBe('option');
+    }
+    expect(ops[0].classList.contains('sel')).toBe(true);
+    expect(ops[0].getAttribute('aria-selected')).toBe('true');
+    expect(input.getAttribute('aria-activedescendant')).toBe(ops[0].id);
+    act(() => { key(input, 'ArrowDown'); });
+    const ops2 = Array.from(el.querySelectorAll<HTMLElement>('.fq-ops .fq-op'));
+    expect(ops2[1].classList.contains('sel')).toBe(true);
+    expect(ops2[0].classList.contains('sel')).toBe(false);
+    expect(input.getAttribute('aria-activedescendant')).toBe(ops2[1].id);
+    const exists = ops2.find(o => o.getAttribute('title') === 'EXISTS')!;
+    const md = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    act(() => { exists.dispatchEvent(md); });
+    expect(md.defaultPrevented).toBe(true);
+    expect(onChange).toHaveBeenCalledWith([{ k: 'http.route', op: 'EXISTS', v: [] }]);
+  });
+
   it('metrik modu (v0.10.270): anahtarlar metricAttrKeys, değerler metricLabels, sayım çubuğu yok', async () => {
     const onChange = vi.fn();
     const el = render(<FilterQueryBox value={[]} onChange={onChange} metricName="http_requests_total" metricService="api" />);

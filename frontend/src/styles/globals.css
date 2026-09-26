@@ -861,6 +861,48 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
    anatomy: it changes typography only, not layout. */
 .btn-disclose.dsc-caps { font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
 
+/* v0.10.927 — OptionRow: seçim listesi satırı (ui/OptionRow.tsx). Tam
+   genişlik, sola yaslı, çocuklar doğrudan düğmede (sütun düzeni çağıranın
+   yerleşim sınıfı). Hover kuralı (0,3,0) `button:hover:not(:disabled)`ı
+   (0,2,1) YENER — eski `.mqe-opt:hover` (0,2,0) kaybediyordu ve fareyle
+   gelinen satır dolu accent maviye boyanıyordu. */
+.opt-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border: 0; border-radius: var(--radius-xs);
+  background: transparent; color: var(--text);
+  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+}
+.opt-row:hover:not(:disabled) { background: var(--bg2); }
+.opt-row.is-sel { background: var(--accent-soft); }
+.opt-row.is-sel:hover:not(:disabled) { background: var(--accent-soft); }
+.opt-row:focus-visible { outline-offset: -2px; }
+
+/* v0.10.927 — TileButton: tıklanabilir karo (ui/TileButton.tsx). Çerçeve
+   bağımlılık panellerinin statik karo ikiziyle aynı; hover kenarlık
+   --accent2 + bg3 (eskiden JS onMouseEnter ile satır-içi). */
+.tile-btn {
+  display: block; width: 100%; box-sizing: border-box; text-align: left;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg2); color: var(--text);
+  font: inherit; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.tile-btn:hover:not(:disabled) { border-color: var(--accent2); background: var(--bg3); }
+
+/* v0.10.927 — StatTile onClick: çerçeve satır-içi (bg1) kalır; burada
+   düğme sıfırlaması + eski `.stat-click` hover/odak dili. Satır-içi zemin
+   `button:hover` mavisini zaten yener. */
+.stat-tile-btn {
+  /* Izgara öğesi satır boyuna gerilir; blok düğme içeriğini DİKEYDE
+     ortalar → bir karo uzayınca diğerlerinin etiketi ortaya kayardı.
+     Sütun flex içeriği üste yaslar. */
+  display: flex; flex-direction: column; align-items: stretch;
+  width: 100%; box-sizing: border-box; text-align: left;
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.stat-tile-btn:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--accent) inset; }
+.stat-tile-btn:focus-visible { outline-offset: 2px; }
+
 /* ── Chip (v0.9.894) — bordered, labelled affordance ────────────────
    mB2's 10+ hand-rolled sites, three of which re-derived this exact
    accent tint with an inline color-mix while --accent-bg / --accent-border
@@ -2593,8 +2635,11 @@ button.accent.copied {
 .fq-opt .cnt.bar { display: inline-flex; align-items: center; gap: 6px; }
 .fq-opt .cnt i { display: inline-block; height: 6px; background: var(--accent); opacity: .55; border-radius: 2px; }
 .fq-ops { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
-.fq-ops button { font-size: 12px; padding: 4px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border); background: var(--bg2); color: var(--text); cursor: pointer; }
-.fq-ops button.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent2); font-weight: 600; }
+/* v0.10.927 — op seçeneği artık ham düğme değil, anahtar/değer kardeşleri
+   gibi role=option div (.fq-op). `line-height: normal` + `transition`
+   eskiden UA/taban `button` kuralından geliyordu — görünüm aynı kalsın. */
+.fq-ops .fq-op { font-size: 12px; line-height: normal; padding: 4px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border); background: var(--bg2); color: var(--text); cursor: pointer; transition: background .15s; }
+.fq-ops .fq-op.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent2); font-weight: 600; }
 .fq-ops .fq-oplong { color: var(--text3); font-size: 10.5px; }
 .fq-foot { border-top: 1px solid var(--border); padding: 6px 12px; display: flex; gap: 14px; font-size: 11px; color: var(--text3); background: var(--bg2); flex-wrap: wrap; }
 .fq-foot b { color: var(--text2); font-weight: 600; }
@@ -3320,9 +3365,9 @@ tr.sl-off > td:not(:has(.tip)) { opacity: .4; }
 .mqe-facets { display: flex; gap: 4px; flex-wrap: wrap; }
 .mqe-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .mqe-hint { padding: 12px; font-size: 11.5px; color: var(--text3); text-align: center; }
-.mqe-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: none; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; text-align: left; }
-.mqe-opt:hover { background: var(--bg2); }
-.mqe-opt.on { background: var(--accent-soft); }
+/* v0.10.927 — satır OptionRow (.opt-row); eski ham düğmenin UA
+   `line-height: normal` yoğunluğu korunur (ad + açıklama + birim). */
+.mqe-list .opt-row { line-height: normal; }
 .mqe-optname { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* v0.8.417 (DE2) — two-line picker options: name + catalogue description. */
 .mqe-optcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -4236,12 +4281,12 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
    adı 40+ karakter; çip kalkınca satır tek yükseklikte kalsın). */
 .cell-ellipsis { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
-/* v0.10.331 — /alerts DB statement seçici (StatementPicker). Satır ham
-   <button>: liste öğesi primitifi; Button atomu değil (tüm satır tıklanır). */
+/* v0.10.331 — /alerts DB statement seçici (StatementPicker). v0.10.927 —
+   satır OptionRow atomu (.opt-row düzen/hover/odak halkası); burada yalnız
+   ayırıcı çizgi + köşesiz satır (çerçeveli kaydırma kabının içinde). */
 .stmt-pick { display: block; width: 100%; }
-.stmt-pick-row { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 6px 8px; background: transparent; border: 0; border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer; font: inherit; }
+.stmt-pick-row { border-bottom: 1px solid var(--border); border-radius: 0; }
 .stmt-pick-row:last-child { border-bottom: 0; }
-.stmt-pick-row:hover, .stmt-pick-row:focus-visible { background: var(--bg2); outline: none; }
 
 /* v0.10.551 — /messaging çekmecesi «Kafka istemcileri · METRİK» bölümü (KafkaClientsSection) */
 .kc-sec { margin-bottom: var(--sp-6); }
@@ -4317,13 +4362,11 @@ a.ins-val:hover { text-decoration: underline; }
 .kc-scope { font-size: var(--fs-2xs); color: var(--warn); margin-bottom: var(--sp-2); }
 
 /* v0.10.718 — Infrastructure dilim 1: KPI StatTile ızgarası (Kafka şeridiyle
-   aynı atom), tıklanabilir tile (grafiğe kaydır / Pods'a git) ve tile alt
-   satırı (limit oranı, "en çok restart"). Token merdiveni, ham sayı yok. */
+   aynı atom) ve tile alt satırı (limit oranı, "en çok restart"). Tıklanabilir
+   tile v0.10.927'den beri `StatTile onClick` (`.stat-tile-btn`); alt satır
+   span → `display: block` aşağıda. Token merdiveni, ham sayı yok. */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
-.stat-click { cursor: pointer; border-radius: var(--radius-sm); }
-.stat-click:hover { box-shadow: 0 0 0 1px var(--accent) inset; }
-.stat-click:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.stat-sub { font-size: var(--fs-2xs); font-weight: 400; color: var(--text3); margin-top: var(--sp-1); font-family: inherit; }
+.stat-sub { display: block; font-size: var(--fs-2xs); font-weight: 400; color: var(--text3); margin-top: var(--sp-1); font-family: inherit; }
 .stat-sub .mono { font-size: inherit; }
 
 /* v0.10.720 — Pods tek tablo: cluster grup başlık satırı (ara toplam +

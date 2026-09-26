@@ -340,41 +340,38 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
         </div>
 
         {/* ── KPI şeridi: StatTile (Kafka şeridiyle aynı atom, v0.10.718) ── */}
+        {/* v0.10.927 — karo kendisi düğme (StatTile onClick); eski
+            div.stat-click + rowActivation sarmalayıcısı kalktı. Alt satır
+            `span.stat-sub` (blok CSS'te): düğme içine `div` konamaz. */}
         <div className="stat-grid">
-          <div className="stat-click" {...rowActivation<HTMLDivElement>(goToPods)} title="Pods sekmesine git">
-            <StatTile label={kpi.phaseKnown ? 'Running pods' : 'Pods'}>
-              {kpi.phaseKnown ? `${fmtNum(kpi.running)} / ${fmtNum(kpi.pods)}` : fmtNum(kpi.pods)}
-              <div className="stat-sub">{kpi.phaseKnown
-                ? (kpi.pods - kpi.running > 0 ? `${fmtNum(kpi.pods - kpi.running)} not running` : 'all pods healthy')
-                : 'status unknown — kube-state-metrics not visible'}</div>
-            </StatTile>
-          </div>
-          <div className="stat-click" {...rowActivation<HTMLDivElement>(() => scrollToChart('cpu'))} title="CPU grafiğine git">
-            <StatTile label="CPU used (cores)" tone={cpuPct != null && cpuPct >= 90 ? 'err' : cpuPct != null && cpuPct >= 75 ? 'warn' : undefined}>
-              {visRows.length ? fmtCores(kpi.cpuCores) : '—'}
-              <div className="stat-sub">{kpi.cpuLimitCores != null
-                ? `limit ${fmtCores(kpi.cpuLimitCores)} · %${cpuPct}`
-                : 'limit bilinmiyor'}</div>
-            </StatTile>
-          </div>
-          <div className="stat-click" {...rowActivation<HTMLDivElement>(() => scrollToChart('mem'))} title="Memory grafiğine git">
-            <StatTile label="Memory used" tone={memPct != null && memPct >= 90 ? 'err' : memPct != null && memPct >= 75 ? 'warn' : undefined}>
-              {visRows.length ? fmtBytes(kpi.memBytes) : '—'}
-              <div className="stat-sub">{kpi.memLimitBytes != null
-                ? `limit ${fmtBytes(kpi.memLimitBytes)} · %${memPct}`
-                : 'limit bilinmiyor'}</div>
-            </StatTile>
-          </div>
-          <div className="stat-click" {...rowActivation<HTMLDivElement>(goToPods)} title="Pods sekmesine git">
-            <StatTile label="Restarts (toplam)" tone={restartTone}>
-              {kpi.restarts == null ? '—' : fmtNum(kpi.restarts)}
-              <div className="stat-sub">{kpi.restarts == null
-                ? 'kube-state-metrics görünmüyor'
-                : kpi.topRestart && kpi.topRestart.restarts > 0
-                  ? <>en çok: <span className="mono">{kpi.topRestart.pod}</span> · {fmtNum(kpi.topRestart.restarts)}</>
-                  : 'restart yok'}</div>
-            </StatTile>
-          </div>
+          <StatTile label={kpi.phaseKnown ? 'Running pods' : 'Pods'} onClick={goToPods} title="Pods sekmesine git">
+            {kpi.phaseKnown ? `${fmtNum(kpi.running)} / ${fmtNum(kpi.pods)}` : fmtNum(kpi.pods)}
+            <span className="stat-sub">{kpi.phaseKnown
+              ? (kpi.pods - kpi.running > 0 ? `${fmtNum(kpi.pods - kpi.running)} not running` : 'all pods healthy')
+              : 'status unknown — kube-state-metrics not visible'}</span>
+          </StatTile>
+          <StatTile label="CPU used (cores)" tone={cpuPct != null && cpuPct >= 90 ? 'err' : cpuPct != null && cpuPct >= 75 ? 'warn' : undefined}
+            onClick={() => scrollToChart('cpu')} title="CPU grafiğine git">
+            {visRows.length ? fmtCores(kpi.cpuCores) : '—'}
+            <span className="stat-sub">{kpi.cpuLimitCores != null
+              ? `limit ${fmtCores(kpi.cpuLimitCores)} · %${cpuPct}`
+              : 'limit bilinmiyor'}</span>
+          </StatTile>
+          <StatTile label="Memory used" tone={memPct != null && memPct >= 90 ? 'err' : memPct != null && memPct >= 75 ? 'warn' : undefined}
+            onClick={() => scrollToChart('mem')} title="Memory grafiğine git">
+            {visRows.length ? fmtBytes(kpi.memBytes) : '—'}
+            <span className="stat-sub">{kpi.memLimitBytes != null
+              ? `limit ${fmtBytes(kpi.memLimitBytes)} · %${memPct}`
+              : 'limit bilinmiyor'}</span>
+          </StatTile>
+          <StatTile label="Restarts (toplam)" tone={restartTone} onClick={goToPods} title="Pods sekmesine git">
+            {kpi.restarts == null ? '—' : fmtNum(kpi.restarts)}
+            <span className="stat-sub">{kpi.restarts == null
+              ? 'kube-state-metrics görünmüyor'
+              : kpi.topRestart && kpi.topRestart.restarts > 0
+                ? <>en çok: <span className="mono">{kpi.topRestart.pod}</span> · {fmtNum(kpi.topRestart.restarts)}</>
+                : 'restart yok'}</span>
+          </StatTile>
         </div>
 
         {/* ── Kaynak kullanımı (v0.10.719): yalnız TOPLAM; kapsam tümü → cluster

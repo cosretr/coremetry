@@ -310,14 +310,16 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
             )}
             {draft.step === 'op' && (
               <div className="fq-ops" role="presentation">
+                {/* v0.10.927 — op seçeneği anahtar/değer kardeşleriyle AYNI desen:
+                    role=option <div> (odak girdide, aria-activedescendant yönetir;
+                    onMouseDown preventDefault odağı çalmaz). Ham düğme değil. */}
                 {opMatches.map((op, i) => (
-                  // eslint-disable-next-line ui/no-raw-button -- listbox seçeneği (role=option + aria-selected, girdinin aria-activedescendant'ı yönetir; onMouseDown odağı girdide tutar) — komut düğmesi değil; `.fq-ops button` kuralları boyuyor
-                  <button key={op} type="button" id={`${listId}-${i}`} role="option" aria-selected={i === hi}
-                    className={i === hi ? 'sel mono' : 'mono'} title={op}
+                  <div key={op} id={`${listId}-${i}`} role="option" aria-selected={i === hi}
+                    className={i === hi ? 'fq-op sel mono' : 'fq-op mono'} title={op}
                     onMouseEnter={() => setHi(i)}
                     onMouseDown={e => { e.preventDefault(); setHi(i); if (!OP_NEEDS_VALUE[op]) commit({ k: draft.k, op, v: [] }, draft.editing); else setDraft({ ...draft, step: 'value', op, text: '' }); }}>
                     {OP_SHORT[op]}{OP_SHORT[op] !== op ? <span className="fq-oplong"> {op}</span> : null}
-                  </button>
+                  </div>
                 ))}
               </div>
             )}

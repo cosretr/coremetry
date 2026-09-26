@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { RuleTarget, StatementSearchRow } from '@/lib/types';
-import { Button } from '@/components/ui/Button';
+import { Button, OptionRow } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
 
 export function statementTargetOf(row: StatementSearchRow): RuleTarget {
@@ -49,14 +49,14 @@ export function StatementPicker({ value, onChange, service = '' }: { value?: Rul
       {rows && rows.length === 0 && !busy && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Son 24 saatte eşleşen ifade yok{service ? ` (${service} kapsamında)` : ''}.</div>}
       {rows && rows.length > 0 && (
         <div style={{ marginTop: 6, maxHeight: 220, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+          {/* v0.10.927 — sonuç satırı OptionRow; .stmt-pick-row yalnız ayırıcı çizgi. */}
           {rows.map(r => (
-            // eslint-disable-next-line ui/no-raw-button -- arama sonucu satırı: tam genişlik üç sütunlu seçenek; ui/'da liste-seçeneği atomu yok
-            <button key={`${r.dbSystem}|${r.dbName}|${r.stmtHash}`} type="button" className="stmt-pick-row" onClick={() => onChange(statementTargetOf(r))}
+            <OptionRow key={`${r.dbSystem}|${r.dbName}|${r.stmtHash}`} className="stmt-pick-row" onClick={() => onChange(statementTargetOf(r))}
               title={`${r.sample}\n${r.execs.toLocaleString()} yürütme/24s · p95 ${Math.round(r.p95Ms)} ms · ${r.services.join(', ')}`}>
               <span className="badge b-gray mono" style={{ fontSize: 10 }}>{r.dbSystem}{r.dbName && r.dbName !== 'default' ? ` · ${r.dbName}` : ''}</span>
               <code className="mono cell-ellipsis" style={{ flex: 1, minWidth: 0, fontSize: 11 }}>{r.sample}</code>
               <span className="mono" style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{r.execs.toLocaleString()}× · p95 {Math.round(r.p95Ms)} ms</span>
-            </button>
+            </OptionRow>
           ))}
         </div>
       )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { seriesColor } from '@/lib/chartFmt';
 import { Link } from 'react-router-dom';
 import { Spinner } from './Spinner';
-import { DisclosureButton } from '@/components/ui';
+import { Button, DisclosureButton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { fmtNum, type GoDuration } from '@/lib/utils';
 import type { NeighborStat, TimeRange } from '@/lib/types';
@@ -69,41 +69,49 @@ export function ServiceNeighbors({ service, since = '10m', capped = false, defau
       background: 'var(--bg1)', border: '1px solid var(--border)',
       borderRadius: 8, marginBottom: 14,
     }}>
-      <DisclosureButton anatomy="section" expanded={open} onClick={() => setOpen(o => !o)}>
-        <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600 }}>
-          Upstream / downstream for <span style={{ color: 'var(--text)' }}>{service}</span>
-        </span>
-        {open && data && (
-          <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-            {upstream.length} upstream · {downstream.length} downstream
-            {' · '}last {since}{capped && ' (capped)'}
-            {' · '}sampled from {data.sampledFrom} trace{data.sampledFrom === 1 ? '' : 's'}
-            {' · '}{fmtNum(data.totalSpans)} spans inspected
+      {/* v0.10.927 — "↻ Refresh" başlık düğmesinin İÇİNDEN çıktı (button
+          içinde button olmaz): kardeş gerçek Button — Tab ile ulaşılır,
+          Enter/Space yalnız yeniler, bölümü açıp kapamaz. DisclosureButton
+          flex:1 ile kalan genişliği alır ve ARIA'ya bağlı ayracını kendisi
+          çizer; Refresh hücresi yalnız AÇIKKEN var, o yüzden aynı ayracı sabit
+          taşır — çizgi tam genişlikte kesintisiz. */}
+      <div style={{ display: 'flex' }}>
+        <DisclosureButton anatomy="section" expanded={open} onClick={() => setOpen(o => !o)}
+          // Refresh hücresi varken sağ dolgu 8 + hücrenin sol 4'ü = eski 12px
+          // aralık; o 4px başlığın odak halkasının (2px + 2px ofset) Refresh
+          // düğmesinin altında kalmasını da önler.
+          style={{ flex: 1, minWidth: 0, ...(open && data !== undefined ? { paddingRight: 8 } : null) }}>
+          <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600 }}>
+            Upstream / downstream for <span style={{ color: 'var(--text)' }}>{service}</span>
           </span>
-        )}
-        <span style={{ flex: 1 }} />
+          {open && data && (
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+              {upstream.length} upstream · {downstream.length} downstream
+              {' · '}last {since}{capped && ' (capped)'}
+              {' · '}sampled from {data.sampledFrom} trace{data.sampledFrom === 1 ? '' : 's'}
+              {' · '}{fmtNum(data.totalSpans)} spans inspected
+            </span>
+          )}
+          <span style={{ flex: 1 }} />
+          {!open && (
+            <span style={{ fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
+              click to expand
+            </span>
+          )}
+        </DisclosureButton>
         {open && data !== undefined && (
-          <span
-            // eslint-disable-next-line ui/no-raw-button -- DisclosureButton başlığının İÇİNDE: button içine button konamaz; dışarı almak başlık yerleşimini yeniden kurmak demek
-            role="button"
-            tabIndex={0}
-            onClick={e => { e.stopPropagation(); setRefreshTick(t => t + 1); }}
-            onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setRefreshTick(t => t + 1); } }}
-            title="Bypass the cached result and recompute now"
-            style={{
-              fontSize: 11, color: 'var(--accent2)',
-              background: 'var(--bg3)', border: '1px solid var(--border)',
-              borderRadius: 4, padding: '3px 10px', cursor: 'pointer',
-            }}>
-            ↻ Refresh
+          <span style={{
+            display: 'flex', alignItems: 'center', flex: 'none',
+            paddingLeft: 4, paddingRight: 14, borderBottom: '1px solid var(--border)',
+          }}>
+            <Button variant="secondary" size="xs"
+              title="Bypass the cached result and recompute now"
+              onClick={() => setRefreshTick(t => t + 1)}>
+              ↻ Refresh
+            </Button>
           </span>
         )}
-        {!open && (
-          <span style={{ fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
-            click to expand
-          </span>
-        )}
-      </DisclosureButton>
+      </div>
 
       {open && (
         <div style={{ padding: 14, paddingTop: 10 }}>

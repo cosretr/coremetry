@@ -8,6 +8,9 @@ Status: **decided — Option B approved 2026-09-25; Phase 1 shipped in v0.10.919
 > search-field-shaped palette trigger, the calendar day cell). The exemption count has its own
 > ceiling in `buttonUnityRatchet.test.ts`, so it can only go down. Out of this pass: `title=` →
 > `Tooltip`, a list-option atom (would retire 5 of the 17), a clickable StatTile atom (2 of 17).
+>
+> **Follow-ups:** v0.10.926 — IconButton `tooltip=` (glyph-only `title=` 50 → 7, ratcheted).
+> v0.10.927 — `OptionRow` + `TileButton` atoms and `StatTile onClick`; exemptions 17 → 9.
 
 > **Correction (v0.10.919):** §2.3's heuristic flagged 7 comment matches; a comment-aware
 > count (`stripTsComments`, cross-checked with a TypeScript AST count and the new ESLint rule)

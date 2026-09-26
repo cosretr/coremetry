@@ -141,8 +141,11 @@ vakası) · pickerlar.
 `variant` **zorunlu prop** (451/451 sitede yazılı) — bu aileyi bozma.
 **Ham `<button>` / `role="button"` `ui/` dışında YASAK** (v0.10.919, ESLint
 `ui/no-raw-button`). v0.10.924'ten beri tavan **0 ham + 0 role**, bastırma
-yok; atoma sığmayan 17 yer gerekçeli satır istisnası taşır ve istisna
-sayısının da tavanı var (`buttonUnityRatchet`, yalnız azalır).
+yok; atoma sığmayan 9 yer (v0.10.927'de 17'den indi) gerekçeli satır
+istisnası taşır ve istisna sayısının da tavanı var (`buttonUnityRatchet`,
+yalnız azalır). Seçim listesi satırı → `OptionRow`; tıklanabilir karo →
+`TileButton` ya da `StatTile onClick`; girdi-güdümlü liste seçeneği →
+`div role=option` (Combobox/FilterQueryBox deseni).
 Primitif gövdesi `ui/` altına taşınır; tek seçim → `SegmentedControl`,
 eş eylemler → `ButtonGroup`, aç/kapa → `DisclosureButton`, sekme →
 `TabStrip`. Gerçekten gerekiyorsa satır istisnası gerekçeyle:

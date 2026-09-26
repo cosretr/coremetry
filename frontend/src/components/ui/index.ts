@@ -20,6 +20,12 @@ export type { LinkButtonProps } from './LinkButton';
 export { MenuItem } from './Menu';
 export type { MenuItemProps } from './Menu';
 
+export { OptionRow } from './OptionRow'; // v0.10.927
+export type { OptionRowProps } from './OptionRow';
+
+export { TileButton } from './TileButton'; // v0.10.927
+export type { TileButtonProps } from './TileButton';
+
 export { Chip } from './Chip';
 export type { ChipProps } from './Chip';
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner } from '@/components/Spinner';
-import { Button, Chip } from '@/components/ui';
+import { Button, Chip, OptionRow } from '@/components/ui';
 import { getRecentMetrics, recordMetricPick } from '@/lib/recentMetrics';
 import type { MetricInfo } from '@/lib/types';
 
@@ -108,10 +108,10 @@ export function GroupedMetricPicker({ value, unit, onPick }: {
             {showRecents && (
               <>
                 <div className="mqe-sect">Recent</div>
+                {/* v0.10.927 — satırlar OptionRow: .opt-row düzen + hover + seçili
+                    hâli verir (eski .mqe-opt/.on emekli); sütunlar mqe-optcol. */}
                 {recents.map(m => (
-                  // eslint-disable-next-line ui/no-raw-button -- seçim listesi satırı: tam genişlik iki sütun + seçili hâl; ui/'da liste-seçeneği atomu yok
-                  <button key={'r:' + m.name} type="button"
-                    className={'mqe-opt' + (m.name === value ? ' on' : '')}
+                  <OptionRow key={'r:' + m.name} selected={m.name === value}
                     title={m.description || m.name}
                     onClick={() => pick(m)}>
                     <span className="mqe-optcol">
@@ -119,7 +119,7 @@ export function GroupedMetricPicker({ value, unit, onPick }: {
                       {m.description && <span className="mqe-optdesc">{m.description}</span>}
                     </span>
                     {m.unit && <span className="mqe-unit">{m.unit}</span>}
-                  </button>
+                  </OptionRow>
                 ))}
                 <div className="mqe-sect">All metrics</div>
               </>
@@ -128,8 +128,7 @@ export function GroupedMetricPicker({ value, unit, onPick }: {
               : filtered.length === 0 ? <div className="mqe-hint">No metrics match.</div>
               : <>
                 {filtered.map(m => (
-                  // eslint-disable-next-line ui/no-raw-button -- seçim listesi satırı: tam genişlik iki sütun + seçili hâl; ui/'da liste-seçeneği atomu yok
-                  <button key={m.name} type="button" className={'mqe-opt' + (m.name === value ? ' on' : '')}
+                  <OptionRow key={m.name} selected={m.name === value}
                     title={m.description || m.name}
                     onClick={() => pick(m)}>
                     <span className="mqe-optcol">
@@ -137,7 +136,7 @@ export function GroupedMetricPicker({ value, unit, onPick }: {
                       {m.description && <span className="mqe-optdesc">{m.description}</span>}
                     </span>
                     {m.unit && <span className="mqe-unit">{m.unit}</span>}
-                  </button>
+                  </OptionRow>
                 ))}
                 {hasMore && <div className="mqe-hint">More results — refine your search…</div>}
               </>}

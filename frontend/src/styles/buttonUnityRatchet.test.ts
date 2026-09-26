@@ -28,10 +28,12 @@ import { stripTsComments } from './zLayers.test';
 // dönüşemeyen 17 yer (liste seçeneği, graf düğümü, <td>/<tr>, düğme içeren
 // başlık) gerekçeli satır istisnası taşıyor; o sayı da yalnız AŞAĞI iner —
 // istisna, tavanı sıfırlanmış kapının arka kapısı olmasın.
+// v0.10.927: 17 → 9 (OptionRow, TileButton, StatTile onClick, op seçeneği
+// div role=option, Son sorgular menüsü, ServiceNeighbors başlığı).
 const SRC = resolve(__dirname, '..');
 const MAX_RAW_BUTTONS = 0;
 const MAX_ROLE_BUTTON = 0;
-const MAX_REASONED_EXEMPTIONS = 17;
+const MAX_REASONED_EXEMPTIONS = 9;
 const MAX_SEGMENTED_FILES = 0;
 // v0.10.926 (Tooltip pilotu) — glif-only IconButton'da yerel `title=`
 // yerine `tooltip=` (ui/Tooltip: temaya uyar, klavyede açılır). 50 → 7:

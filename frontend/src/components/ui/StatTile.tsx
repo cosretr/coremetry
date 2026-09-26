@@ -4,6 +4,12 @@ export type StatTileProps = {
   /** `err` / `warn` recolour the VALUE only; the frame stays neutral. */
   tone?: 'err' | 'warn';
   children: React.ReactNode;
+  /** v0.10.927 — verilirse karo gerçek bir DÜĞME olur (ilgili grafiğe /
+   *  sekmeye git). Eskiden çağıran `div.stat-click` + rowActivation ile
+   *  sarıyordu: düğme rolü taklidi, içinde blok `div`ler. */
+  onClick?: () => void;
+  /** Tıklanabilir karonun ipucu (nereye gider). */
+  title?: string;
 };
 
 /**
@@ -38,9 +44,16 @@ export type StatTileProps = {
  * NOT the same component wearing different names, so folding them in
  * here would mean redesigning those surfaces under cover of a refactor.
  */
-export function StatTile({ label, tone, children }: StatTileProps) {
+export function StatTile({ label, tone, children, onClick, title }: StatTileProps) {
+  // v0.10.927 — tıklanabilir hâl: aynı çerçeve, kök `<button>`, parçalar
+  // `span` + `display: block` (`<button>` içine blok eleman konamaz).
+  // Hover/odak `.stat-tile-btn` (globals.css; eski `.stat-click`in yerine).
+  const Frame = onClick ? 'button' : 'div';
+  const Part = onClick ? 'span' : 'div';
   return (
-    <div style={{
+    <Frame
+      {...(onClick ? { type: 'button' as const, className: 'stat-tile-btn', onClick, title } : {})}
+      style={{
       padding: '8px 10px', border: '1px solid var(--border)',
       borderRadius: 6, background: 'var(--bg1)', minWidth: 0,
     }}>
@@ -49,14 +62,16 @@ export function StatTile({ label, tone, children }: StatTileProps) {
           sırasında ısırdı). Değerler AYNI piksel: --fs-2xs = 10px
           ("mikro etiket, uppercase başlık" — tam bu kullanım),
           --sp-1 = 2px. Görsel değişiklik yok. */}
-      <div style={{
+      <Part style={{
+        display: 'block',
         fontSize: 'var(--fs-2xs)', color: 'var(--text3)', marginBottom: 'var(--sp-1)',
         textTransform: 'uppercase', letterSpacing: 0.4,
-      }}>{label}</div>
-      <div className="mono" style={{
+      }}>{label}</Part>
+      <Part className="mono" style={{
+        display: 'block',
         fontSize: 15, fontWeight: 600,
         color: tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : 'var(--text)',
-      }}>{children}</div>
-    </div>
+      }}>{children}</Part>
+    </Frame>
   );
 }
