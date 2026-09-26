@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,12 +29,48 @@ import (
 //   Geri al   YALNIZ MV + sarmalayıcı — yazımı keser, kolon/tablo/veri KALIR.
 //
 // Boot'ta ASLA koşmaz; tek tetikleyici admin düğmesi (ev kuralı v0.9.613).
+//
+// v0.10.960 — 0015 ROLLOUTS v2 STATE TABLOLARI (P1.8; docs/rollouts/v2-audit.md
+// §10.5, kararlar 6 / 9 / 24 / 25). YENİ SİHİRBAZ DEĞİL, bu kartın uzantısı:
+//
+//   Durum     nesne listesinin sonuna sekiz tablo (kind table, §10.3 sırası,
+//             rollout_v2_schema.go'dan türer) → aynı clusterAllReplicas
+//             (system.tables) probe'u host başına VAR / KISMİ / YOK der.
+//   Ön kontrol (0015) system.clusters + istenen küme orada mı, spans_local,
+//             sekiz tablonun host başına motoru (system.tables) ve ZK yolu
+//             (system.replicas). REDDEDER: (a) bir host'ta Replicated OLMAYAN
+//             kopya — dış Distributed + ALLOW_UNSET_CLUSTER boot'unun ilk
+//             host'a kurduğu düz tablo; 0015'in IF NOT EXISTS'i orada no-op
+//             kalırdı; (b) sabit yoldan FARKLI ZK yolu — eksik host'lar 0015
+//             ile AYRI replikasyon grubuna katılırdı (split-brain); (c) küme
+//             kipinde özel önek (cfg.ReplicaPath) — 0015'in sabit yolu boot'un
+//             kuşak probe'unu (useUnifiedStatePath) "eski yol" saydırır ve
+//             SONRAKİ yeni state tablolarını shard'lı yola düşürürdü.
+//   Uygula    gömülü 0015, `uptrace_all` → gerçek küme adı, ifade ifade, İLK
+//             HATADA DUR (IF NOT EXISTS → yeniden basmak güvenli). 0012'nin
+//             apply'ından AYRI yol ve kapı: 0011 / kapsama / LC kapıları state
+//             tablolarıyla ilgisiz, onlara takılmamalı.
+//   Geri al   gömülü 0015 rollback — sekiz tablo ters sırada DROP … SYNC,
+//             ilk hatada DURMAZ (IF EXISTS). VERİ GİDER; argocd_sync_events
+//             tarihçesi geri gelmez (Argo yalnız son 10 kaydı tutar). 0012'nin
+//             MV-yalnız geri alması DEĞİŞMEDİ.
+//
+// ZK yolu (karar 25): 0015 '/clickhouse/tables/state/<ad>' SABİT yazar (0012
+// gibi); boot öneki ve kuşağı çalışma zamanında çözer (state_replication.go
+// zkPrefix + useUnifiedStatePath). Varsayılan önek + taze / 0009 sonrası
+// kümede ikisi AYNI ifadeyi üretir (rollout_layer_admin_test.go pinler);
+// ayrıştığı durumları yukarıdaki (b)/(c) reddi yakalar.
 
 type RolloutLayerObject = EntityLayerObject
 type RolloutLayerObjectStatus = EntityLayerObjectStatus
 
-// RolloutLayerObjects — 0012'nin yarattığı her nesne (test pinler).
+// RolloutLayerObjects — 0012'nin yarattığı her nesne + (v0.10.960) 0015'in
+// sekiz state tablosu (test pinler; 0012 bölümü önde ve değişmedi).
 func RolloutLayerObjects() []RolloutLayerObject {
+	return append(rolloutLayer0012Objects(), rolloutV2LayerObjects()...)
+}
+
+func rolloutLayer0012Objects() []RolloutLayerObject {
 	return []RolloutLayerObject{
 		{Name: "k8s_deployment", Kind: "column", Table: "spans_local"},
 		{Name: "k8s_statefulset", Kind: "column", Table: "spans_local"},
@@ -387,6 +425,282 @@ func (s *Store) RolloutLayerRollback(ctx context.Context, cluster string) []Roll
 		return []RollupStmtResult{{Head: "ön koşul", Err: "cluster adı geçersiz — yalnız harf/rakam/_ . - (≤64)"}}
 	}
 	stmts := rolloutLayerRollbackStatements(c)
+	out := make([]RollupStmtResult, 0, len(stmts))
+	for _, stmt := range stmts {
+		r := RollupStmtResult{Head: stmtHead(stmt)}
+		if err := s.conn.Exec(ctx, stmt); err != nil {
+			r.Err = err.Error()
+		} else {
+			r.OK = true
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// ───────────────── v0.10.960 — 0015 Rollouts v2 state tabloları ─────────────────
+
+const (
+	rolloutV2LayerFile         = "0015_rollouts_v2.sql"
+	rolloutV2LayerRollbackFile = "0015_rollouts_v2_rollback.sql"
+	// rolloutV2ZKPrefix — 0015'in SABİT ZK öneki (karar 25); boot'un
+	// varsayılanıyla (state_replication.go zkPrefix) aynı.
+	rolloutV2ZKPrefix = "/clickhouse/tables"
+)
+
+// rolloutV2TableNames — sekiz tablo adı, §10.3 sırasıyla. TEK KAYNAK
+// rollout_v2_schema.go: elle ikinci bir liste tutulmaz.
+func rolloutV2TableNames() []string {
+	ddls := rolloutV2TableDDLs()
+	out := make([]string, 0, len(ddls))
+	for _, ddl := range ddls {
+		if n, ok := ddlCreatesObject(ddl); ok {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func rolloutV2LayerObjects() []RolloutLayerObject {
+	names := rolloutV2TableNames()
+	out := make([]RolloutLayerObject, 0, len(names))
+	for _, n := range names {
+		out = append(out, RolloutLayerObject{Name: n, Kind: "table"})
+	}
+	return out
+}
+
+// rolloutV2LayerStatements — gömülü 0015, küme adıyla, ifadelere bölünmüş. SAF.
+func rolloutV2LayerStatements(cluster string) ([]string, error) {
+	raw, err := migrations.FS.ReadFile(rolloutV2LayerFile)
+	if err != nil {
+		return nil, fmt.Errorf("gömülü %s okunamadı: %w", rolloutV2LayerFile, err)
+	}
+	return SplitSQLStatements(AdaptRollupDDL(string(raw), cluster)), nil
+}
+
+// rolloutV2LayerRollbackStatements — gömülü 0015 rollback (sekiz DROP … SYNC). SAF.
+func rolloutV2LayerRollbackStatements(cluster string) ([]string, error) {
+	raw, err := migrations.FS.ReadFile(rolloutV2LayerRollbackFile)
+	if err != nil {
+		return nil, fmt.Errorf("gömülü %s okunamadı: %w", rolloutV2LayerRollbackFile, err)
+	}
+	return SplitSQLStatements(AdaptRollupDDL(string(raw), cluster)), nil
+}
+
+// rolloutV2HostTable — sekiz tablodan birinin bir host'taki hâli (probe satırı).
+type rolloutV2HostTable struct {
+	Host, Table, Engine, ZKPath string
+}
+
+func rolloutV2NameList() string {
+	names := rolloutV2TableNames()
+	q := make([]string, len(names))
+	for i, n := range names {
+		q[i] = "'" + n + "'" // adlar kendi sabit DDL'imizden, kullanıcı girdisi değil
+	}
+	return strings.Join(q, ", ")
+}
+
+// rolloutV2TablesProbeSQL / rolloutV2ReplicasProbeSQL — SAF. Küme adı
+// validRolloutLayerCluster'dan geçmiş olmalı (DDL'e değil, sorguya ham girer).
+// skip_unavailable_shards YOK: ulaşılamayan host probe'u düşürür → ön kontrol
+// reddeder (o host'a ON CLUSTER DDL zaten kuyrukta takılırdı).
+func rolloutV2TablesProbeSQL(cluster string) string {
+	return fmt.Sprintf("SELECT hostName() AS host, name, engine FROM clusterAllReplicas('%s', system.tables) "+
+		"WHERE database = currentDatabase() AND name IN (%s) LIMIT 1000 SETTINGS max_execution_time = 10",
+		cluster, rolloutV2NameList())
+}
+
+func rolloutV2ReplicasProbeSQL(cluster string) string {
+	return fmt.Sprintf("SELECT hostName() AS host, table, zookeeper_path FROM clusterAllReplicas('%s', system.replicas) "+
+		"WHERE database = currentDatabase() AND table IN (%s) LIMIT 1000 SETTINGS max_execution_time = 10",
+		cluster, rolloutV2NameList())
+}
+
+// rolloutV2LayerConflicts — SAF: 0015'i basmayı güvensiz kılan host
+// durumları, (host, tablo) sırasında. Tablo hiç yoksa ya da her yerde
+// Replicated + sabit yoldaysa boş.
+func rolloutV2LayerConflicts(engines, replicas []rolloutV2HostTable) []string {
+	type row struct{ host, table, msg string }
+	var rows []row
+	for _, e := range engines {
+		if !strings.HasPrefix(e.Engine, "Replicated") {
+			rows = append(rows, row{e.Host, e.Table, fmt.Sprintf("%s: %s — motor %s (Replicated değil; 0015'in IF NOT EXISTS'i bu host'ta no-op kalır — boot'un kurduğu kopyayı önce o host'ta düşür)", e.Host, e.Table, e.Engine)})
+		}
+	}
+	for _, r := range replicas {
+		want := unifiedStatePath(rolloutV2ZKPrefix, r.Table)
+		if r.ZKPath != want {
+			rows = append(rows, row{r.Host, r.Table, fmt.Sprintf("%s: %s — ZK yolu %s (0015: %s; eksik host'lar AYRI replikasyon grubuna katılırdı)", r.Host, r.Table, r.ZKPath, want)})
+		}
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].host != rows[j].host {
+			return rows[i].host < rows[j].host
+		}
+		return rows[i].table < rows[j].table
+	})
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.msg
+	}
+	return out
+}
+
+// rolloutV2LayerGate — ön kontrol kararının girdileri (SAF karar için).
+type rolloutV2LayerGate struct {
+	ProbeErrors  int
+	SpansLocal   bool
+	Clusters     []string
+	Cluster      string
+	CustomPrefix string // küme kipinde varsayılandan farklı ZK öneki; "" = yok
+	Conflicts    []string
+}
+
+// rolloutV2LayerDecision — SAF karar; sıra: emin değilsek hiç basma.
+func rolloutV2LayerDecision(g rolloutV2LayerGate) (bool, string) {
+	switch {
+	case g.ProbeErrors > 0:
+		return false, "probe hatası — emin olamadığımız kümeye DDL basmıyoruz"
+	case !g.SpansLocal:
+		return false, "spans_local yok — bu kurulum tek düğüm; 0015 dağıtık şema içindir (uygulama sekiz tabloyu boot'ta kendi kurar, rollout_v2_schema.go)"
+	case g.Cluster == "":
+		return false, "küme seçilmedi — DDL `ON CLUSTER` yazıyor"
+	case !validRolloutLayerCluster(g.Cluster):
+		return false, "küme adı geçersiz — yalnız harf/rakam/_ . - (≤64)"
+	case !slices.Contains(g.Clusters, g.Cluster):
+		return false, fmt.Sprintf("%q system.clusters'ta yok — ON CLUSTER DDL kuyrukta süresiz bekler (v0.9.613)", g.Cluster)
+	case g.CustomPrefix != "":
+		return false, fmt.Sprintf("küme kipinde özel ZK öneki (%s) — 0015 %s/state/<ad> SABİT yazar ve boot'un kuşak probe'unu bozar; dosyayı öneke uyarlayıp elle uygula (karar 25)", g.CustomPrefix, rolloutV2ZKPrefix)
+	case len(g.Conflicts) > 0:
+		return false, fmt.Sprintf("%d çakışma — %s", len(g.Conflicts), strings.Join(g.Conflicts, " · "))
+	}
+	return true, "uygulanabilir: sekiz Rollouts v2 state tablosu (ON CLUSTER, ReplicatedReplacingMergeTree, IF NOT EXISTS; ilk hatada durur)"
+}
+
+// RolloutV2LayerPreflightResult — "0015 bu kümeye güvenle basılır mı".
+type RolloutV2LayerPreflightResult struct {
+	Clusters         []string `json:"clusters"`
+	SuggestedCluster string   `json:"suggestedCluster,omitempty"`
+	// Cluster — çakışma probe'unun koştuğu küme (istenen; boşsa önerilen).
+	Cluster    string `json:"cluster"`
+	SpansLocal bool   `json:"spansLocal"`
+	// BootManaged — cluster_name dolu: boot sekiz tabloyu kendisi kurar
+	// (spans varsa arka plana ertelenmiş); 0015 yalnız eksik host'ları tamamlar.
+	BootManaged bool     `json:"bootManaged"`
+	Conflicts   []string `json:"conflicts"`
+	ProbeErrors []string `json:"probeErrors,omitempty"`
+	Supported   bool     `json:"supported"`
+	Detail      string   `json:"detail"`
+	Generated   int64    `json:"generated"`
+}
+
+// RolloutV2LayerPreflight — hiçbir şey yazmaz. cluster boşsa önerilen küme
+// (cfg.ClusterName ya da spans Distributed'ının kümesi) probe edilir.
+func (s *Store) RolloutV2LayerPreflight(ctx context.Context, cluster string) (RolloutV2LayerPreflightResult, error) {
+	out := RolloutV2LayerPreflightResult{
+		SuggestedCluster: strings.TrimSpace(s.cfg.ClusterName),
+		BootManaged:      s.clusterMode(),
+		Generated:        time.Now().Unix(),
+		Clusters:         []string{}, // null değil
+		Conflicts:        []string{},
+	}
+	if out.SuggestedCluster == "" {
+		out.SuggestedCluster = s.discoverSpansCluster(ctx)
+	}
+	out.Cluster = strings.TrimSpace(cluster)
+	if out.Cluster == "" {
+		out.Cluster = out.SuggestedCluster
+	}
+	rows, err := s.conn.Query(ctx, `SELECT DISTINCT cluster FROM system.clusters ORDER BY cluster LIMIT 100`)
+	if err != nil {
+		out.ProbeErrors = append(out.ProbeErrors, "system.clusters: "+err.Error())
+	} else {
+		for rows.Next() {
+			var c string
+			if err := rows.Scan(&c); err == nil && c != "" {
+				out.Clusters = append(out.Clusters, c)
+			}
+		}
+		rows.Close()
+	}
+	if ok, err := s.tableExists(ctx, "spans_local"); err != nil {
+		out.ProbeErrors = append(out.ProbeErrors, "spans_local: "+err.Error())
+	} else {
+		out.SpansLocal = ok
+	}
+	// Çakışma probe'u yalnız geçerli + tanımlı kümede (aksi hâlde karar
+	// zaten reddeder; tanımsız adla clusterAllReplicas hata verirdi).
+	if validRolloutLayerCluster(out.Cluster) && slices.Contains(out.Clusters, out.Cluster) {
+		engines, err := s.rolloutV2HostTables(ctx, rolloutV2TablesProbeSQL(out.Cluster), false)
+		if err != nil {
+			out.ProbeErrors = append(out.ProbeErrors, "tablo motorları: "+err.Error())
+		}
+		replicas, err := s.rolloutV2HostTables(ctx, rolloutV2ReplicasProbeSQL(out.Cluster), true)
+		if err != nil {
+			out.ProbeErrors = append(out.ProbeErrors, "ZK yolları: "+err.Error())
+		}
+		out.Conflicts = append(out.Conflicts, rolloutV2LayerConflicts(engines, replicas)...)
+	}
+	custom := ""
+	if s.clusterMode() && s.zkPrefix() != rolloutV2ZKPrefix {
+		custom = s.zkPrefix()
+	}
+	out.Supported, out.Detail = rolloutV2LayerDecision(rolloutV2LayerGate{
+		ProbeErrors: len(out.ProbeErrors), SpansLocal: out.SpansLocal,
+		Clusters: out.Clusters, Cluster: out.Cluster, CustomPrefix: custom, Conflicts: out.Conflicts,
+	})
+	return out, nil
+}
+
+// rolloutV2HostTables — (host, tablo, motor | zk yolu) satırları.
+func (s *Store) rolloutV2HostTables(ctx context.Context, q string, zk bool) ([]rolloutV2HostTable, error) {
+	rows, err := s.conn.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []rolloutV2HostTable
+	for rows.Next() {
+		var r rolloutV2HostTable
+		third := &r.Engine
+		if zk {
+			third = &r.ZKPath
+		}
+		if err := rows.Scan(&r.Host, &r.Table, third); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// RolloutV2LayerApply — gömülü 0015, ifade ifade; ilk hatada durur. Kapı
+// (RolloutV2LayerPreflight) çağıranda: HTTP ucu her istekte koşar.
+func (s *Store) RolloutV2LayerApply(ctx context.Context, cluster string) []RollupStmtResult {
+	c := strings.TrimSpace(cluster)
+	if c == "" || !validRolloutLayerCluster(c) {
+		return []RollupStmtResult{{Head: "ön koşul", Err: "cluster adı zorunlu/geçersiz — yalnız harf/rakam/_ . - (≤64)"}}
+	}
+	stmts, err := rolloutV2LayerStatements(c)
+	if err != nil {
+		return []RollupStmtResult{{Head: "ön koşul", Err: err.Error()}}
+	}
+	return s.execStmtsStopOnError(ctx, stmts)
+}
+
+// RolloutV2LayerRollback — sekiz tabloyu VERİSİYLE düşürür; ilk hatada
+// DURMAZ (IF EXISTS — bir tablonun hatası ötekileri bırakmasın).
+func (s *Store) RolloutV2LayerRollback(ctx context.Context, cluster string) []RollupStmtResult {
+	c := strings.TrimSpace(cluster)
+	if c == "" || !validRolloutLayerCluster(c) {
+		return []RollupStmtResult{{Head: "ön koşul", Err: "cluster adı zorunlu/geçersiz — yalnız harf/rakam/_ . - (≤64)"}}
+	}
+	stmts, err := rolloutV2LayerRollbackStatements(c)
+	if err != nil {
+		return []RollupStmtResult{{Head: "ön koşul", Err: err.Error()}}
+	}
 	out := make([]RollupStmtResult, 0, len(stmts))
 	for _, stmt := range stmts {
 		r := RollupStmtResult{Head: stmtHead(stmt)}

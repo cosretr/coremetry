@@ -3667,6 +3667,24 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cluster }), timeoutMs: 200_000,
     }),
+  // v0.10.960 — 0015 Rollouts v2 state tabloları (aynı kart, ayrı uçlar;
+  // admin_rollout_layer.go). Ön kontrol İSTENEN küme için (boşsa sunucu
+  // önerileni probe eder); apply sunucuda ön kontrolü yeniden koşar (409).
+  rolloutV2LayerPreflight: (cluster?: string) => {
+    const q = qs({ cluster: cluster?.trim() });
+    return get<import('./types').RolloutV2LayerPreflightResult>(`/api/admin/rollout-layer/preflight-0015${q ? `?${q}` : ''}`);
+  },
+  rolloutV2LayerApply: (cluster: string) =>
+    request<import('./types').RolloutV2LayerApplyResult>('/api/admin/rollout-layer/apply-0015', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cluster }), timeoutMs: 360_000, // sunucu: 45 s ön kontrol + 5 dk DDL (8 ON CLUSTER ifadesi)
+    }),
+  // Sekiz tabloyu VERİSİYLE düşürür; sunucu confirm:true'suz 400 döner.
+  rolloutV2LayerRollback: (cluster: string) =>
+    request<import('./types').RollupActionResult>('/api/admin/rollout-layer/rollback-0015', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cluster, confirm: true }), timeoutMs: 200_000, // sunucu 3 dk
+    }),
   rollupStatus: () =>
     get<import('./types').RollupStatusResult>('/api/admin/rollup/status'),
   /** Ön kontrol — hiçbir şey yazmaz. Supported hükmü + gerekçe. */

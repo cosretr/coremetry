@@ -14,6 +14,24 @@ package api
 // almak audit R1'in tam kendisi (boş değil ama işe yaramaz MV).
 // Süre: ON CLUSTER DDL dağıtık kuyruğa girer; 5 dk üst sınır, istek kopsa da
 // DDL yarıda kalmasın (context.WithoutCancel — rollup emsali).
+//
+// v0.10.960 — 0015 (Rollouts v2: sekiz state tablosu; docs/rollouts/v2-audit.md
+// §10.5). YENİ SİHİRBAZ DEĞİL — aynı kart, aynı dosya, api.go büyümez; durum
+// ucu (status) sekiz tabloyu nesne listesinde zaten döndürür:
+//
+//	GET  /api/admin/rollout-layer/preflight-0015  admin — ?cluster=; küme tanımlı mı, spans_local, host başına motor + ZK yolu çakışması
+//	POST /api/admin/rollout-layer/apply-0015      admin — {cluster}; ön kontrol HER istekte; audit rollout_layer.apply_0015
+//	POST /api/admin/rollout-layer/rollback-0015   admin — {cluster, confirm:true}; sekiz tablo VERİSİYLE düşer; audit rollout_layer.rollback_0015
+//
+// Neden 0012'nin apply'ına katılmadı: 0012'nin kapıları (0011 kolonları,
+// kapsama, LC) state tablolarıyla ilgisiz — 0015'i onlara takmak ya da
+// "Uygula (0012)" düğmesinin sessizce sekiz tablo daha kurması ikisi de
+// yanlış olurdu. 0012'nin apply/rollback'i ve audit türleri DEĞİŞMEDİ;
+// 0015'in audit türleri ayrı (rollout_layer.apply_0015 /
+// rollout_layer.rollback_0015, hedef 0015_rollouts_v2) — audit'te iki
+// migration ayırt edilebilsin. Rollback confirm:true ister (replica-repair
+// emsali): argocd_sync_events tarihçesi geri gelmez (Argo yalnız son 10
+// kaydı tutar). Boot bu uçları ASLA çağırmaz (v0.9.613).
 
 import (
 	"context"
@@ -35,6 +53,13 @@ func (s *Server) registerRolloutLayerAdminRoutes(mux *http.ServeMux) {
 		auth.RequireRole(auth.RoleAdmin, s.postRolloutLayerApply))
 	mux.HandleFunc("POST /api/admin/rollout-layer/rollback",
 		auth.RequireRole(auth.RoleAdmin, s.postRolloutLayerRollback))
+	// v0.10.960 — 0015 (Rollouts v2 state tabloları)
+	mux.HandleFunc("GET /api/admin/rollout-layer/preflight-0015",
+		auth.RequireRole(auth.RoleAdmin, s.getRolloutV2LayerPreflight))
+	mux.HandleFunc("POST /api/admin/rollout-layer/apply-0015",
+		auth.RequireRole(auth.RoleAdmin, s.postRolloutV2LayerApply))
+	mux.HandleFunc("POST /api/admin/rollout-layer/rollback-0015",
+		auth.RequireRole(auth.RoleAdmin, s.postRolloutV2LayerRollback))
 }
 
 func (s *Server) getRolloutLayerStatus(w http.ResponseWriter, r *http.Request) {
@@ -111,5 +136,74 @@ func (s *Server) postRolloutLayerRollback(w http.ResponseWriter, r *http.Request
 	defer cancel()
 	res := s.store.RolloutLayerRollback(ctx, cluster)
 	s.audit(r, "rollout_layer.rollback", "clickhouse", "0012_rollout_layer", auditRollupDetail(cluster, res))
+	writeJSON(w, map[string]any{"statements": res, "ok": rollupResultsOK(res)})
+}
+
+// ───────────── v0.10.960 — 0015 Rollouts v2 state tabloları ─────────────
+
+func (s *Server) getRolloutV2LayerPreflight(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+	res, err := s.store.RolloutV2LayerPreflight(ctx, strings.TrimSpace(r.URL.Query().Get("cluster")))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, res)
+}
+
+func (s *Server) postRolloutV2LayerApply(w http.ResponseWriter, r *http.Request) {
+	cluster, ok := decodeEntityLayerAction(w, r)
+	if !ok {
+		return
+	}
+	// 0012 S3/S4 emsali: ön kontrol HER apply'da, İSTENEN küme için sunucuda
+	// koşar — doğrudan POST kapıyı atlayamaz. Reddedilen istek de audit'e düşer.
+	pctx, pcancel := context.WithTimeout(context.WithoutCancel(r.Context()), 45*time.Second)
+	pre, err := s.store.RolloutV2LayerPreflight(pctx, cluster)
+	pcancel()
+	if err != nil || len(pre.ProbeErrors) > 0 || !pre.Supported {
+		detail := pre.Detail
+		if err != nil {
+			detail = err.Error()
+		} else if len(pre.ProbeErrors) > 0 {
+			detail += " (" + strings.Join(pre.ProbeErrors, "; ") + ")"
+		}
+		s.audit(r, "rollout_layer.apply_0015", "clickhouse", "0015_rollouts_v2", "REDDEDİLDİ cluster="+cluster+": "+detail)
+		writeJSONError(w, http.StatusConflict, "ön kontrol geçmedi — "+detail)
+		return
+	}
+	// Sekiz ON CLUSTER CREATE (distributed_ddl_task_timeout 180 s/ifade);
+	// istek kopsa da DDL yarıda kalmasın. IF NOT EXISTS → yeniden basmak güvenli.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Minute)
+	defer cancel()
+	res := s.store.RolloutV2LayerApply(ctx, cluster)
+	s.audit(r, "rollout_layer.apply_0015", "clickhouse", "0015_rollouts_v2", auditRollupDetail(cluster, res))
+	writeJSON(w, map[string]any{"statements": res, "ok": rollupResultsOK(res),
+		"note": "tablolar boş doğar — yazıcı işçiler P2/P3/P4; doğrulama: SELECT hostName(), table, zookeeper_path FROM clusterAllReplicas('<küme>', system.replicas) WHERE table IN (…) → hepsi /clickhouse/tables/state/<table>"})
+}
+
+func (s *Server) postRolloutV2LayerRollback(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Cluster string `json:"cluster"`
+		Confirm bool   `json:"confirm"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
+		return
+	}
+	cluster := strings.TrimSpace(in.Cluster)
+	if cluster == "" {
+		writeJSONError(w, http.StatusBadRequest, "cluster required")
+		return
+	}
+	if !in.Confirm {
+		writeJSONError(w, http.StatusBadRequest, "confirm:true zorunlu — sekiz Rollouts v2 tablosu VERİSİYLE düşer; argocd_sync_events tarihçesi geri gelmez")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 3*time.Minute)
+	defer cancel()
+	res := s.store.RolloutV2LayerRollback(ctx, cluster)
+	s.audit(r, "rollout_layer.rollback_0015", "clickhouse", "0015_rollouts_v2", auditRollupDetail(cluster, res))
 	writeJSON(w, map[string]any{"statements": res, "ok": rollupResultsOK(res)})
 }

@@ -4092,6 +4092,35 @@ export interface RolloutLayerPreflightResult {
   detail: string;
   generated: number;
 }
+/** v0.10.960 — 0015 Rollouts v2'nin sekiz state tablosu, §10.3 sırasıyla (Go:
+ *  rollout_v2_schema.go → rolloutV2TableNames). Durum ucu bunları 0012'nin
+ *  nesnelerinin ARDINA ekler; kart listeyi bu adlarla 0012 / 0015 diye böler
+ *  (tek rozet 0012'yi EKSİK gösteriyordu — inceleme F2). Kayma kapısı:
+ *  rolloutV2Layer.contract.test.ts (migrations/0015_rollouts_v2.sql). */
+export const ROLLOUT_V2_TABLES = [
+  'rollout_events', 'rollout_workload_state', 'argocd_app_status', 'argocd_sync_events',
+  'argocd_app_mapping', 'rollout_classification', 'ado_commit_enrichment', 'rollout_worker_runs',
+] as const;
+/** v0.10.960 — GET /api/admin/rollout-layer/preflight-0015 (chstore.RolloutV2LayerPreflightResult). */
+export interface RolloutV2LayerPreflightResult {
+  clusters: string[];
+  suggestedCluster?: string;
+  /** Çakışma probe'unun koştuğu küme: istenen, boşsa önerilen. */
+  cluster: string;
+  spansLocal: boolean;
+  /** cluster_name dolu: boot sekiz tabloyu kendisi kurar; 0015 yalnız eksik host'ları tamamlar. */
+  bootManaged: boolean;
+  /** Host başına motor (Replicated değil) / ZK yolu çakışmaları; probe koşmadıysa boş. */
+  conflicts: string[];
+  probeErrors?: string[];
+  supported: boolean;
+  detail: string;
+  generated: number;
+}
+/** v0.10.960 — POST apply-0015 cevabı; note her zaman dolu (doğrulama sorgusu). Rollback-0015 = RollupActionResult. */
+export interface RolloutV2LayerApplyResult extends RollupActionResult {
+  note: string;
+}
 /** v0.10.252 — 0013 attr_function_id terfi kolonu sihirbazı (chstore.FunctionIDColumn*). */
 export interface FunctionIDColumnStatusResult {
   cluster: string;

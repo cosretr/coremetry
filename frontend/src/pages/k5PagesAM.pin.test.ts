@@ -166,6 +166,9 @@ describe('v0.10.929 — AdminClickhouse: yeşil yalnız ön kontrol ve eylem son
       expect(allowed.some(r => r.test(l)), l.trim()).toBe(true);
     }
     // Geçiş tarafı gerçekten yeşil kaldı (yanlışlıkla nötrlenmedi).
+    // v0.10.960 — Rollouts katmanı kartının 0012 ve 0015 blokları ön kontrol
+    // kutusunu ORTAK WizPreflightFrame'den basar (tek kopya, aynı çerçeve +
+    // hüküm rozeti, aynı kural) → sayı 5'te kalır: dört sihirbaz + ortak çerçeve.
     expect(src.match(/pre\.supported \? 'b-ok' : 'b-warn'/g)).toHaveLength(5);
     expect(src.match(/border: `1px solid \$\{pre\.supported \? 'var\(--ok\)' : 'var\(--warn\)'\}`/g)).toHaveLength(5);
   });

@@ -11,6 +11,9 @@
 // (docs/audit/trace-attribute-search.md); testi attr_index_migration_test.go.
 // v0.10.197: 0012 (rollouts katmanı: 6 terfi kolonu + workload_rollouts +
 // workload_revision_activity_1m MV) — Admin → ClickHouse "Rollouts katmanı".
+// v0.10.960 — 0015 (Rollouts v2: sekiz state tablosu) + rollback'i — aynı
+// "Rollouts katmanı" sihirbazının 0015 yolu (apply-0015 / rollback-0015);
+// DDL'i rollout_v2_schema.go ile bayt eşliğinde (rollout_layer_admin_test.go).
 // Yalnız 0001 + 0003 + 0008 (+0011) gömülü — sihirbazın kapsamı:
 //
 //	0001 → dar span rollup zinciri (10s→1m→5m→1h)
@@ -26,7 +29,7 @@ import "embed"
 
 // FS — gömülü DDL dosyaları. chstore.RollupApply okur.
 //
-//go:embed 0001_rollup_narrow.sql 0003_rollup_metrics.sql 0008_rollup_metrics_route.sql 0011_entity_layer.sql 0012_rollout_layer.sql 0013_function_id.sql 0013_function_id_rollback.sql 0014_attr_kvh.sql 0014_attr_kvh_rollback.sql
+//go:embed 0001_rollup_narrow.sql 0003_rollup_metrics.sql 0008_rollup_metrics_route.sql 0011_entity_layer.sql 0012_rollout_layer.sql 0013_function_id.sql 0013_function_id_rollback.sql 0014_attr_kvh.sql 0014_attr_kvh_rollback.sql 0015_rollouts_v2.sql 0015_rollouts_v2_rollback.sql
 var FS embed.FS
 
 // AllSQL — TÜM migration dosyaları, YALNIZ AD ÇIKARMAK için (v0.10.846).

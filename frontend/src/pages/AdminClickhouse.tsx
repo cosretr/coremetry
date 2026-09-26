@@ -1,13 +1,13 @@
-import { useRef, useState, useEffect } from 'react';
+import { useId, useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef, type DataTableStateProps, type DataTable } from '@/components/ui/DataTable';
 import { api, apiErrorDetail } from '@/lib/api';
 import { fmtNum, fmtBytes, fmtClock, fmtDateTime, tsLong } from '@/lib/utils';
 import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupStatus } from '@/lib/queries';
 import { useQuery } from '@tanstack/react-query';
 import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, rawHostLabel, sortRawHosts, staleVerdict } from './adminch/traceHealth'; // v0.10.757, ham sayım v0.10.823
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
-import { Button, KeyValue, KeyValueRow, Modal, SegmentedControl } from '@/components/ui';
+import { Button, KeyValue, KeyValueRow, Modal, Row, SectionHead, SegmentedControl, SelectField } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
@@ -15,6 +15,7 @@ import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
   RolloutLayerStatusResult, RolloutLayerPreflightResult,
+  RolloutV2LayerPreflightResult, RollupStmtResult, // v0.10.960 — 0015 bloğu
   FunctionIDColumnStatusResult, FunctionIDColumnPreflightResult,
   AttrIndexStatusResult, AttrIndexPreflightResult,
   TraceBackfillDay, TraceBackfillRun,
@@ -26,6 +27,7 @@ import type {
   CHReplicaConsistencyResponse, CHReplicaRepairMode, CHReplicaRepairPlan, // v0.10.791 — replika tutarlılığı (829: kip)
   DDLQueueHealth,
 } from '@/lib/types';
+import { ROLLOUT_V2_TABLES } from '@/lib/types'; // v0.10.960 — rollout kartı durum listesini 0012 / 0015 diye böler
 
 // AdminClickhouse — v0.5.329. Datadog-style CH self-stats:
 // slow queries, in-flight merges, part hotspots, replication lag.
@@ -3765,7 +3767,202 @@ function AttrIndexWizardPanel() {
   );
 }
 
-function RolloutLayerWizardPanel() {
+// ── Rollouts katmanı kartı: 0012 + 0015 ─────────────────────────────
+// v0.10.960 — Rollouts v2 P1.8 (docs/rollouts/v2-audit.md §10.5; inceleme
+// F2). Durum ucu 0012'nin 17 nesnesinin ARDINA 0015'in sekiz state
+// tablosunu da döndürüyor (rollout_layer_admin.go RolloutLayerObjects).
+// Kart listeyi TEK rozetle sayınca 0012'si tam bir küme deploy'dan sonra
+// EKSİK'e dönüyor, kartın tek "Uygula"sı 0012'yi bastığından UI'da bunu
+// düzeltecek hiçbir şey yoktu (0015 yalnız API). Liste ROLLOUT_V2_TABLES
+// ile ikiye bölünür: 0012 rozeti YALNIZ 0012 nesnelerinden (hüküm
+// öncekiyle aynı); 0015 kendi bloğunda kendi rozeti + ön kontrol / uygula /
+// geri al (ayrı uçlar, ayrı kapı — 0012'nin 0011 / kapsama / LC kapıları
+// state tablolarıyla ilgisiz).
+function splitRolloutLayerObjects(objects: EntityLayerObjectStatus[]): {
+  layer0012: EntityLayerObjectStatus[]; layer0015: EntityLayerObjectStatus[];
+} {
+  const v2 = new Set<string>(ROLLOUT_V2_TABLES);
+  const layer0012: EntityLayerObjectStatus[] = [];
+  const layer0015: EntityLayerObjectStatus[] = [];
+  for (const o of objects) {
+    if (o.kind === 'table' && v2.has(o.name)) layer0015.push(o);
+    else layer0012.push(o);
+  }
+  return { layer0012, layer0015 };
+}
+
+/** v0.10.960 — grubun tamlık rozeti: satır var VE her nesne her host'ta VAR. */
+function LayerCompleteBadge({ rows }: { rows: EntityLayerObjectStatus[] }) {
+  return rows.length > 0 && rows.every(o => o.state === 'ok')
+    ? <span className="badge b-gray">TAM</span>
+    : <span className="badge b-warn">EKSİK</span>;
+}
+
+/** v0.10.960 — host başına nesne durumu; 0012 ve 0015 grupları aynı satır dilini taşır. */
+function RolloutLayerObjectsTable({ dt, loaded, err }: {
+  dt: DataTable<EntityLayerObjectStatus>; loaded: boolean; err: string | null;
+}) {
+  return (
+    <div className="table-wrap" style={{ marginBottom: 10 }}>
+      <table {...dt.tableProps}>
+        <DataTableColgroup dt={dt} />
+        <DataTableHead dt={dt} />
+        <tbody>
+          {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...schemaStatusState(loaded, err)} /> : dt.sortedRows.map(o => (
+            <tr key={`${o.kind}:${o.name}`}>
+              <td className="mono">{o.name}</td>
+              <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
+              <td>
+                {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
+                  : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
+                  : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
+                  : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
+              </td>
+              <td className="num">{o.haveHosts}/{o.hosts}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** v0.10.960 — uygula / geri al ifade sonuçları (iki blok ortak). */
+function StmtResultList({ statements }: { statements: RollupStmtResult[] }) {
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--fs-xs)' }}>
+      {statements.map((st, i) => (
+        <li key={i} className="mono" style={{ color: st.ok ? 'var(--text2)' : 'var(--err)' }}>{st.head}{st.err ? ` — ${st.err}` : ''}</li>
+      ))}
+    </ul>
+  );
+}
+
+// ── 0012 + 0015 bloklarının ORTAK iskeleti ──────────────────────────
+// v0.10.960 — inceleme: 0015 bloğu 0012'nin satır içi stil bloklarını
+// kopyalıyordu (merdiven dışı 12.5 / 11.5 punto ve elle color-mix zemin
+// dahil). İskelet tek kopya: değerler merdiven token'ı (--fs-*, --sp-*,
+// --radius-sm), hüküm zemini --ok-bg / --warn-bg (rozet/banner zemini —
+// elle color-mix yazılmaz). Statik blokların globals.css'e ch-wiz-* sınıf
+// ailesi olarak taşınması ayrı iş: bu dilim yalnız bu dosyaya dokunabiliyor.
+function WizIntro({ children }: { children: ReactNode }) {
+  return <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', margin: '0 0 var(--sp-5)', lineHeight: 1.55 }}>{children}</p>;
+}
+
+function WizStatusLine({ children }: { children: ReactNode }) {
+  return <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--text3)', marginBottom: 'var(--sp-3)' }}>{children}</div>;
+}
+
+function WizError({ children }: { children: ReactNode }) {
+  return <span style={{ color: 'var(--err)', fontSize: 'var(--fs-sm)' }}>{children}</span>;
+}
+
+/** Ön kontrol + durum yenile satırı; `children` = boş durum ipucu vb. */
+function WizPreflightActions({ label, onPreflight, preBusy, preDisabled, onRefresh, statusBusy, preErr, children }: {
+  label: string; onPreflight: () => void; preBusy: boolean; preDisabled?: boolean;
+  onRefresh: () => void; statusBusy: boolean; preErr: string | null; children?: ReactNode;
+}) {
+  return (
+    <Row gap={2} wrap style={{ marginBottom: 'var(--sp-5)' }}>
+      <Button variant="secondary" size="sm" onClick={onPreflight} loading={preBusy} disabled={preDisabled}>{label}</Button>
+      <Button variant="ghost" size="sm" onClick={onRefresh} disabled={statusBusy}>Durumu yenile</Button>
+      {preErr && <WizError>{preErr}</WizError>}
+      {children}
+    </Row>
+  );
+}
+
+/** Ön kontrol kutusu: hüküm çerçevesi + UYGULANABİLİR / UYGULANAMAZ + ek rozetler + detay. */
+function WizPreflightFrame({ pre, badges, children }: {
+  pre: { supported: boolean; detail: string }; badges?: ReactNode; children: ReactNode;
+}) {
+  return (
+    <div style={{
+      padding: 'var(--sp-6) var(--sp-7)', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--sp-6)',
+      border: `1px solid ${pre.supported ? 'var(--ok)' : 'var(--warn)'}`,
+      background: pre.supported ? 'var(--ok-bg)' : 'var(--warn-bg)',
+    }}>
+      <Row gap={2} wrap style={{ marginBottom: 'var(--sp-4)' }}>
+        <span className={`badge ${pre.supported ? 'b-ok' : 'b-warn'}`}>{pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ'}</span>
+        {badges}
+        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
+      </Row>
+      {children}
+    </div>
+  );
+}
+
+function WizProbeErrors({ errors }: { errors?: string[] }) {
+  if (!errors || errors.length === 0) return null;
+  return <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--warn)' }}>Probe hataları: {errors.join(' · ')}</div>;
+}
+
+/** Küme seçici + eylem düğmeleri satırı (alta hizalı: etiketli seçici ile düğmeler aynı çizgide). */
+function WizControls({ children }: { children: ReactNode }) {
+  return <div style={{ display: 'flex', gap: 'var(--sp-5)', alignItems: 'flex-end', flexWrap: 'wrap' }}>{children}</div>;
+}
+
+/** Küme seçici — SelectField (label↔select bağı useId ile). Gerekçe metni
+ *  düğme satırında durur (alan ipucu olarak seçiciyi genişletirdi);
+ *  `describedBy` onu seçiciye bağlar. */
+function WizClusterSelect({ value, onChange, clusters, disabled, describedBy }: {
+  value: string; onChange: (v: string) => void; clusters: string[]; disabled: boolean; describedBy?: string;
+}) {
+  return (
+    <SelectField label="Küme" value={value} onChange={e => onChange(e.target.value)} disabled={disabled} aria-describedby={describedBy}>
+      <option value="">—</option>
+      {clusters.map(c => <option key={c} value={c}>{c}</option>)}
+    </SelectField>
+  );
+}
+
+/** v0.10.960 — satır içi onayın durumu. Açan düğme onay açılınca söküldüğü
+ *  için odak kaybolurdu: Vazgeç odağı açan düğmeye geri verir (Modal'ın odak
+ *  iadesi gibi) — `refocus` yalnız o düğmenin yeniden bağlanışında
+ *  autoFocus olur; yeni onay ve eylem sıfırlar. */
+function useInlineConfirm<K extends string>() {
+  const [kind, setKind] = useState<K | null>(null);
+  const [refocus, setRefocus] = useState<K | null>(null);
+  return {
+    kind, refocus,
+    open: (k: K) => { setRefocus(null); setKind(k); },
+    cancel: () => { setRefocus(kind); setKind(null); },
+    close: () => { setRefocus(null); setKind(null); },
+  };
+}
+
+/** Satır içi onay. Metin role=alert (ekran okuyucu duyurur — geri alınamaz
+ *  kayıp uyarısı yalnız görsel kalmasın); odak Vazgeç'te (ConfirmDialog
+ *  sözleşmesi 4: Enter'a hazır parmak onayı seçmesin). */
+function WizConfirm({ children, danger, confirmDisabled, busy, onConfirm, onCancel }: {
+  children: ReactNode; danger: boolean; confirmDisabled?: boolean; busy: boolean;
+  onConfirm: () => void; onCancel: () => void;
+}) {
+  return (
+    <>
+      <span role="alert" style={{ fontSize: 'var(--fs-sm)' }}>{children}</span>
+      <Button variant={danger ? 'danger' : 'primary'} size="sm" loading={busy} disabled={confirmDisabled} onClick={onConfirm}>Evet</Button>
+      <Button variant="ghost" size="sm" disabled={busy} autoFocus onClick={onCancel}>Vazgeç</Button>
+    </>
+  );
+}
+
+/** Az önceki uygula / geri al sonucu (TAMAM / HATA + ifadeler). */
+function WizActionResult({ action, title, extra }: {
+  action: { res: RollupActionResult }; title: string; extra?: ReactNode;
+}) {
+  return (
+    <div style={{ marginTop: 'var(--sp-5)' }}>
+      <div style={{ fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
+        {title}: {action.res.ok ? <span className="badge b-ok">TAMAM</span> : <span className="badge b-err">HATA</span>}
+        {extra}
+      </div>
+      <StmtResultList statements={action.res.statements} />
+    </div>
+  );
+}
+
+export function RolloutLayerWizardPanel() {
   const [status, setStatus] = useState<RolloutLayerStatusResult | null>(null);
   const [statusErr, setStatusErr] = useState<string | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
@@ -3774,13 +3971,15 @@ function RolloutLayerWizardPanel() {
   const [preErr, setPreErr] = useState<string | null>(null);
   const [cluster, setCluster] = useState('');
   const [withMV, setWithMV] = useState(false);
-  const [confirmKind, setConfirmKind] = useState<'apply' | 'rollback' | null>(null);
+  const confirm = useInlineConfirm<'apply' | 'rollback'>();
   const [busyKind, setBusyKind] = useState<'apply' | 'rollback' | null>(null);
   const [action, setAction] = useState<{ kind: 'apply' | 'rollback'; res: RollupActionResult & { withMV?: boolean } } | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const busy = busyKind !== null;
   const rows = status?.objects ?? [];
-  const dt = useDataTable<EntityLayerObjectStatus>({ storageKey: 'ch-rollout-layer-status', columns: ENTITY_LAYER_COLS, rows });
+  // v0.10.960 — status değişmedikçe aynı diziler (useDataTable girdisi).
+  const groups = useMemo(() => splitRolloutLayerObjects(status?.objects ?? []), [status]);
+  const dt = useDataTable<EntityLayerObjectStatus>({ storageKey: 'ch-rollout-layer-status', columns: ENTITY_LAYER_COLS, rows: groups.layer0012 });
   const loadStatus = async () => {
     setStatusBusy(true); setStatusErr(null);
     try { setStatus(await api.rolloutLayerStatus()); }
@@ -3801,7 +4000,7 @@ function RolloutLayerWizardPanel() {
     finally { setPreBusy(false); }
   };
   const runAction = async (kind: 'apply' | 'rollback') => {
-    setConfirmKind(null); setBusyKind(kind); setActionErr(null); setAction(null);
+    confirm.close(); setBusyKind(kind); setActionErr(null); setAction(null);
     try {
       const res = kind === 'apply' ? await api.rolloutLayerApply(cluster, withMV) : await api.rolloutLayerRollback(cluster);
       setAction({ kind, res });
@@ -3809,148 +4008,252 @@ function RolloutLayerWizardPanel() {
     finally { setBusyKind(null); void loadStatus(); void runPreflight(); }
   };
   const canApply = !!pre?.supported && !!cluster && !busy;
-  const allOk = rows.length > 0 && rows.every(o => o.state === 'ok');
   const pct = (v: number) => `%${(v * 100).toFixed(0)}`;
+  const confirmKind = confirm.kind;
   return (
-    <Section title="Rollouts katmanı şeması (0012)">
-      <p style={{ fontSize: 12, color: 'var(--text2)', margin: '0 0 10px', lineHeight: 1.55 }}>
-        spans'a <code className="mono">k8s_deployment / k8s_statefulset / k8s_daemonset / k8s_replicaset / container_image / container_image_tag</code> terfi
-        kolonları + set index, <code className="mono">workload_rollouts / rollout_reconcile_runs</code> state tabloları ve
-        <code className="mono"> workload_revision_activity_1m</code> MV'si. Ön koşul: 0011 uygulanmış olmalı. MV yalnız kapsama kapısı
-        (her cluster'da <code className="mono">k8s.replicaset.name</code> ≥ %95) açıkken kurulur — kapalıysa önce o cluster'ın collector'ı.
-      </p>
-      {/* v0.10.954 — tablo standardı T12: durum tablosunun yükleniyor / hata / boş
-          hâli tablonun İÇİNDE (schemaStatusState); yenileme eski satırlar
-          dururken düşerse hata eskisi gibi tablonun üstünde (satırlar kazanır). */}
-      {statusErr && rows.length > 0 && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
-      {status && (
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
-          küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
-          {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
-          workload_revision_activity_1m son 15 dk: <span className="mono">{fmtNum(status.activityRows)}</span> satır
-        </div>
-      )}
-      <div className="table-wrap" style={{ marginBottom: 10 }}>
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...schemaStatusState(!!status, statusErr)} /> : dt.sortedRows.map(o => (
-              <tr key={`${o.kind}:${o.name}`}>
-                <td className="mono">{o.name}</td>
-                <td className="cell-faint">{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
-                <td>
-                  {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
-                    : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
-                    : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
-                    : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
-                </td>
-                <td className="num">{o.haveHosts}/{o.hosts}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
-        <Button variant="secondary" size="sm" onClick={runPreflight} loading={preBusy}>Ön kontrol</Button>
-        <Button variant="ghost" size="sm" onClick={() => void loadStatus()} disabled={statusBusy}>Durumu yenile</Button>
-        {preErr && <span style={{ color: 'var(--err)', fontSize: 12 }}>{preErr}</span>}
-      </div>
-      {pre && (
-        <div style={{
-          padding: '12px 14px', borderRadius: 6, marginBottom: 12,
-          border: `1px solid ${pre.supported ? 'var(--ok)' : 'var(--warn)'}`,
-          background: pre.supported ? 'color-mix(in srgb, var(--ok) 8%, transparent)' : 'color-mix(in srgb, var(--warn) 10%, transparent)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-            <span className={`badge ${pre.supported ? 'b-ok' : 'b-warn'}`}>{pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ'}</span>
-            {/* v0.10.929 (K5) — MV kapısı bir durum: açık = nötr, kapalı = sapma (amber). */}
+    <Section title="Rollouts katmanı şeması (0012 + 0015)">
+      <div role="group" aria-label="0012 — terfi kolonları, v1 state tabloları, MV">
+        <SectionHead title="0012 — terfi kolonları · v1 state tabloları · MV" />
+        <WizIntro>
+          spans'a <code className="mono">k8s_deployment / k8s_statefulset / k8s_daemonset / k8s_replicaset / container_image / container_image_tag</code> terfi
+          kolonları + set index, <code className="mono">workload_rollouts / rollout_reconcile_runs</code> state tabloları ve
+          <code className="mono"> workload_revision_activity_1m</code> MV'si. Ön koşul: 0011 uygulanmış olmalı. MV yalnız kapsama kapısı
+          (her cluster'da <code className="mono">k8s.replicaset.name</code> ≥ %95) açıkken kurulur — kapalıysa önce o cluster'ın collector'ı.
+        </WizIntro>
+        {/* v0.10.954 — tablo standardı T12: durum tablosunun yükleniyor / hata / boş
+            hâli tablonun İÇİNDE (schemaStatusState); yenileme eski satırlar
+            dururken düşerse hata eskisi gibi tablonun üstünde (satırlar kazanır). */}
+        {statusErr && rows.length > 0 && <Empty icon="⚠" title="Durum okunamadı">{statusErr}</Empty>}
+        {status && (
+          <WizStatusLine>
+            küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
+            <LayerCompleteBadge rows={groups.layer0012} /> ·
+            workload_revision_activity_1m son 15 dk: <span className="mono">{fmtNum(status.activityRows)}</span> satır
+          </WizStatusLine>
+        )}
+        <RolloutLayerObjectsTable dt={dt} loaded={!!status} err={statusErr} />
+        <WizPreflightActions label="Ön kontrol" onPreflight={() => void runPreflight()} preBusy={preBusy}
+          onRefresh={() => void loadStatus()} statusBusy={statusBusy} preErr={preErr} />
+        {pre && (
+          <WizPreflightFrame pre={pre} badges={
+            /* v0.10.929 (K5) — MV kapısı bir durum: açık = nötr, kapalı = sapma (amber). */
             <span className={`badge ${pre.mvGate ? 'b-gray' : 'b-warn'}`} title="her cluster'da k8s.replicaset.name kapsaması ≥ %95">{pre.mvGate ? 'MV KAPISI AÇIK' : 'MV KAPISI KAPALI'}</span>
-            <span style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
-          </div>
-          <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
-            <PreRow label="spans_local" ok={pre.spansLocal} />
-            <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
-            <PreRow label="0011 kolonları (cluster / k8s_namespace)" ok={pre.layer0011} />
-            <PreRow label="uniq replicaset / imaj adı (son 1 saat) ≤ 100k" ok={pre.uniqRs1h <= 100_000 && pre.uniqImage1h <= 100_000} note={`${fmtNum(pre.uniqRs1h)} / ${fmtNum(pre.uniqImage1h)}`} />
-          </KeyValue>
-          {/* Kapsama CLUSTER BAŞINA — bir cluster'ın collector'ı eksik basıyorsa burada görünür */}
-          {/* v0.10.942 — statik tablo (T1): ön kontrol kutusunda span cluster
-              değeri başına kapsama özeti (tanımlı küme sayısı kadar satır). */}
-          <div className="table-wrap" style={{ marginBottom: 8 }}>
-            <table>
-              <thead><tr><th>Span cluster değeri</th><th className="num">Span (15 dk)</th><th className="num">Örneklem</th><th className="num">Replicaset</th><th className="num">Image</th><th className="num">Namespace</th></tr></thead>
-              <tbody>
-                {(pre.coverage ?? []).length === 0 ? (
-                  // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
-                  <tr data-dt-state="empty">
-                    <td colSpan={6} className="dt-state">
-                      <div className="dt-state-body">
-                        <span>Son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (pre.coverage ?? []).map(c => (
-                  <tr key={c.cluster}>
-                    {/* '' = cluster'sız (k8s dışı) trafik: görünür, kapıya girmez. sampled=0 = ölçülemedi → kapı kapalı. */}
-                    <td className="mono">{c.cluster || '(boş — kapıya girmez)'}</td>
-                    <td className="num">{fmtNum(c.total)}</td>
-                    <td className={`num ${c.sampled === 0 ? 'cell-err' : ''}`}>{c.sampled === 0 ? 'ölçülemedi' : fmtNum(c.sampled)}</td>
-                    <td className={`num ${c.replicaset >= 0.95 ? '' : 'cell-err'}`}>{c.sampled === 0 ? '—' : pct(c.replicaset)}</td>
-                    <td className={`num ${c.image >= 0.95 ? '' : 'cell-warn'}`}>{c.sampled === 0 ? '—' : pct(c.image)}</td>
-                    <td className={`num ${c.namespace >= 0.95 ? '' : 'cell-err'}`}>{c.sampled === 0 ? '—' : pct(c.namespace)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {pre.probeErrors && pre.probeErrors.length > 0 && (
-            <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>Probe hataları: {pre.probeErrors.join(' · ')}</div>
-          )}
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <label style={{ display: 'grid', gap: 4, fontSize: 11, color: 'var(--text3)' }}>
-          Küme
-          <select value={cluster} onChange={e => setCluster(e.target.value)} disabled={!pre || busy}>
-            <option value="">—</option>
-            {(pre?.clusters ?? []).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </label>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }} title="MV (ADIM 6) — yalnız kapsama kapısı açıkken; sunucu da doğrular">
-          <input type="checkbox" checked={withMV} disabled={!pre?.mvGate || busy} onChange={e => setWithMV(e.target.checked)} /> MV dahil
-        </label>
-        {confirmKind === null ? (
-          <>
-            <Button variant="primary" size="sm" disabled={!canApply} onClick={() => setConfirmKind('apply')}>Uygula (0012)</Button>
-            <Button variant="ghost-danger" size="sm" disabled={!cluster || busy} onClick={() => setConfirmKind('rollback')}>MV'yi geri al</Button>
-          </>
-        ) : (
-          <>
-            <span style={{ fontSize: 12 }}>
+          }>
+            <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
+              <PreRow label="spans_local" ok={pre.spansLocal} />
+              <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
+              <PreRow label="0011 kolonları (cluster / k8s_namespace)" ok={pre.layer0011} />
+              <PreRow label="uniq replicaset / imaj adı (son 1 saat) ≤ 100k" ok={pre.uniqRs1h <= 100_000 && pre.uniqImage1h <= 100_000} note={`${fmtNum(pre.uniqRs1h)} / ${fmtNum(pre.uniqImage1h)}`} />
+            </KeyValue>
+            {/* Kapsama CLUSTER BAŞINA — bir cluster'ın collector'ı eksik basıyorsa burada görünür */}
+            {/* v0.10.942 — statik tablo (T1): ön kontrol kutusunda span cluster
+                değeri başına kapsama özeti (tanımlı küme sayısı kadar satır). */}
+            <div className="table-wrap" style={{ marginBottom: 8 }}>
+              <table>
+                <thead><tr><th>Span cluster değeri</th><th className="num">Span (15 dk)</th><th className="num">Örneklem</th><th className="num">Replicaset</th><th className="num">Image</th><th className="num">Namespace</th></tr></thead>
+                <tbody>
+                  {(pre.coverage ?? []).length === 0 ? (
+                    // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
+                    <tr data-dt-state="empty">
+                      <td colSpan={6} className="dt-state">
+                        <div className="dt-state-body">
+                          <span>Son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (pre.coverage ?? []).map(c => (
+                    <tr key={c.cluster}>
+                      {/* '' = cluster'sız (k8s dışı) trafik: görünür, kapıya girmez. sampled=0 = ölçülemedi → kapı kapalı. */}
+                      <td className="mono">{c.cluster || '(boş — kapıya girmez)'}</td>
+                      <td className="num">{fmtNum(c.total)}</td>
+                      <td className={`num ${c.sampled === 0 ? 'cell-err' : ''}`}>{c.sampled === 0 ? 'ölçülemedi' : fmtNum(c.sampled)}</td>
+                      <td className={`num ${c.replicaset >= 0.95 ? '' : 'cell-err'}`}>{c.sampled === 0 ? '—' : pct(c.replicaset)}</td>
+                      <td className={`num ${c.image >= 0.95 ? '' : 'cell-warn'}`}>{c.sampled === 0 ? '—' : pct(c.image)}</td>
+                      <td className={`num ${c.namespace >= 0.95 ? '' : 'cell-err'}`}>{c.sampled === 0 ? '—' : pct(c.namespace)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <WizProbeErrors errors={pre.probeErrors} />
+          </WizPreflightFrame>
+        )}
+        <WizControls>
+          <WizClusterSelect value={cluster} onChange={setCluster} clusters={pre?.clusters ?? []} disabled={!pre || busy} />
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }} title="MV (ADIM 6) — yalnız kapsama kapısı açıkken; sunucu da doğrular">
+            <input type="checkbox" checked={withMV} disabled={!pre?.mvGate || busy} onChange={e => setWithMV(e.target.checked)} /> MV dahil
+          </label>
+          {confirmKind === null ? (
+            <>
+              <Button variant="primary" size="sm" disabled={!canApply} autoFocus={confirm.refocus === 'apply'} onClick={() => confirm.open('apply')}>Uygula (0012)</Button>
+              <Button variant="ghost-danger" size="sm" disabled={!cluster || busy} autoFocus={confirm.refocus === 'rollback'} onClick={() => confirm.open('rollback')}>MV'yi geri al</Button>
+            </>
+          ) : (
+            <WizConfirm danger={confirmKind === 'rollback'} busy={busy} onConfirm={() => void runAction(confirmKind)} onCancel={confirm.cancel}>
               {confirmKind === 'apply'
                 ? <>0012 <span className="mono">{cluster}</span> kümesine uygulanacak ({withMV ? 'MV dahil' : 'MV HARİÇ — kolon+index+tablo'}; IF NOT EXISTS; ilk hatada durur). Emin misin?</>
                 : <>workload_revision_activity_1m MV'si düşürülecek — yazım kesilir, kolon/tablo/veri kalır. Emin misin?</>}
-            </span>
-            <Button variant={confirmKind === 'apply' ? 'primary' : 'danger'} size="sm" loading={busy} onClick={() => void runAction(confirmKind)}>Evet</Button>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmKind(null)}>Vazgeç</Button>
-          </>
+            </WizConfirm>
+          )}
+          {actionErr && <WizError>{actionErr}</WizError>}
+        </WizControls>
+        {action && (
+          <WizActionResult action={action} title={action.kind === 'apply' ? 'Uygula' : 'Geri al'}
+            extra={action.kind === 'apply' && action.res.withMV === false && withMV && <span className="field-hint"> · MV atlandı (sunucu kapıyı kapalı buldu)</span>} />
         )}
-        {actionErr && <span style={{ color: 'var(--err)', fontSize: 12 }}>{actionErr}</span>}
       </div>
-      {action && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 12, marginBottom: 6 }}>
-            {action.kind === 'apply' ? 'Uygula' : 'Geri al'}: {action.res.ok ? <span className="badge b-ok">TAMAM</span> : <span className="badge b-err">HATA</span>}
-            {action.kind === 'apply' && action.res.withMV === false && withMV && <span className="field-hint"> · MV atlandı (sunucu kapıyı kapalı buldu)</span>}
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11.5 }}>
-            {action.res.statements.map((st, i) => (
-              <li key={i} className="mono" style={{ color: st.ok ? 'var(--text2)' : 'var(--err)' }}>{st.head}{st.err ? ` — ${st.err}` : ''}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <RolloutV2LayerBlock rows={groups.layer0015} loaded={!!status} statusErr={statusErr}
+        statusBusy={statusBusy} onRefresh={() => void loadStatus()} />
     </Section>
+  );
+}
+
+// v0.10.960 — Go rolloutV2LayerConflicts'in "motor … (Replicated değil; …)"
+// satırı: dış Distributed + COREMETRY_CH_ALLOW_UNSET_CLUSTER boot'unun
+// bağlandığı ilk host'a kurduğu DÜZ kopya (0015'in IF NOT EXISTS'i orada
+// no-op kalır). Ne yapılacağı (0015 rollback başlığı) YALNIZ bu çakışma
+// raporlanınca gösterilir. Test fikstürü mesajı Go biçiminden türetir.
+const ROLLOUT_V2_PLAIN_COPY = 'Replicated değil';
+
+// v0.10.960 — 0015 bloğu: 0012 bloğunun aynası, kendi uçları
+// (preflight-0015 / apply-0015 / rollback-0015). Ön kontrol İSTENEN küme
+// için koşar (çakışma probe'u kümeye özgü) → Uygula yalnız ön kontrolün
+// koştuğu küme seçiliyken, ön kontrol UYGULANABİLİR ve tazelenmiyorken
+// açık; sunucu her apply'da yeniden koşar (409). Onay açıkken küme seçici
+// ve Ön kontrol kilitli, Evet aynı kapıya bağlı (inceleme: onay sırasında
+// başka küme seçilince ön kontrolsüz kümeye Evet gidiyordu). Geri al sekiz
+// tabloyu VERİSİYLE düşürür: onay metni argocd_sync_events kaybını ve
+// kapatılacak yazıcıları söyler, istemci confirm:true gönderir.
+function RolloutV2LayerBlock({ rows, loaded, statusErr, statusBusy, onRefresh }: {
+  rows: EntityLayerObjectStatus[]; loaded: boolean; statusErr: string | null;
+  statusBusy: boolean; onRefresh: () => void;
+}) {
+  const [pre, setPre] = useState<RolloutV2LayerPreflightResult | null>(null);
+  const [preBusy, setPreBusy] = useState(false);
+  const [preErr, setPreErr] = useState<string | null>(null);
+  const [cluster, setCluster] = useState('');
+  const confirm = useInlineConfirm<'apply' | 'rollback'>();
+  const [busyKind, setBusyKind] = useState<'apply' | 'rollback' | null>(null);
+  const [action, setAction] = useState<{ kind: 'apply' | 'rollback'; res: RollupActionResult & { note?: string } } | null>(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
+  const staleId = useId();
+  const busy = busyKind !== null;
+  const confirmKind = confirm.kind;
+  const confirming = confirmKind !== null;
+  const dt = useDataTable<EntityLayerObjectStatus>({ storageKey: 'ch-rollout-v2-layer-status', columns: ENTITY_LAYER_COLS, rows });
+  // want boş → sunucu önerilen kümeyi probe eder. Seçim: istenen (hâlâ
+  // tanımlıysa) → önerilen (tanımlıysa) → tek küme → boş.
+  const runPreflight = async (want: string) => {
+    setPreBusy(true); setPreErr(null);
+    try {
+      const r = await api.rolloutV2LayerPreflight(want || undefined);
+      setPre(r);
+      setCluster(want && r.clusters.includes(want) ? want
+        : r.suggestedCluster && r.clusters.includes(r.suggestedCluster) ? r.suggestedCluster
+        : r.clusters.length === 1 ? r.clusters[0] : '');
+    } catch (e: unknown) { setPreErr(apiErrorDetail(e).message); setPre(null); }
+    finally { setPreBusy(false); }
+  };
+  const runAction = async (kind: 'apply' | 'rollback') => {
+    const target = cluster;
+    confirm.close(); setBusyKind(kind); setActionErr(null); setAction(null);
+    try {
+      const res = kind === 'apply' ? await api.rolloutV2LayerApply(target) : await api.rolloutV2LayerRollback(target);
+      setAction({ kind, res });
+    } catch (e: unknown) { setActionErr(apiErrorDetail(e).message); } // 409 gövdesi: "ön kontrol geçmedi — …"
+    finally { setBusyKind(null); onRefresh(); void runPreflight(target); }
+  };
+  const probed = !!pre && !!pre.cluster && pre.clusters.includes(pre.cluster);
+  // Go: motor / ZK probe'u hata verince o dilim nil kalır → Conflicts boş
+  // ama DOĞRULANMADI; "Çakışma yok ✓" yazılmaz (erişilemeyen host tam bu hâl).
+  const probeFailed = (pre?.probeErrors?.length ?? 0) > 0;
+  const conflictCount = pre?.conflicts.length ?? 0;
+  const stale = !!pre && !!cluster && cluster !== pre.cluster;
+  // Uygula'nın kapısı; onay açıkken Evet'i de aynı kapı tutar.
+  const applyReady = !!pre?.supported && !!cluster && !stale && !preBusy;
+  const canApply = applyReady && !busy;
+  const plainCopy = !!pre && pre.conflicts.some(c => c.includes(ROLLOUT_V2_PLAIN_COPY));
+  const present = rows.filter(o => o.state === 'ok').length;
+  return (
+    <div role="group" aria-label="0015 — Rollouts v2 state tabloları">
+      <SectionHead title="0015 — Rollouts v2 state tabloları" />
+      <WizIntro>
+        Tek düğüm ve uygulama yönetimli kümede (cluster_name dolu) boot bu sekiz tabloyu kendisi kurar — orada Uygula (0015) genelde gerekmez.
+        Dış Distributed kurulumda bir host'taki düz (Replicated olmayan) boot kopyası ön kontrolü reddettirir.
+      </WizIntro>
+      {loaded && (
+        <WizStatusLine>
+          <LayerCompleteBadge rows={rows} /> · {present}/{rows.length} tablo tüm host'larda
+        </WizStatusLine>
+      )}
+      <RolloutLayerObjectsTable dt={dt} loaded={loaded} err={statusErr} />
+      <WizPreflightActions label="Ön kontrol (0015)" onPreflight={() => void runPreflight(cluster)} preBusy={preBusy}
+        preDisabled={confirming || busy} onRefresh={onRefresh} statusBusy={statusBusy} preErr={preErr}>
+        {!pre && !preBusy && !preErr && <span className="field-hint">Ön kontrol henüz koşmadı — küme listesi + host başına motor / ZK yolu çakışması; hiçbir şey yazmaz.</span>}
+      </WizPreflightActions>
+      {pre && (
+        <WizPreflightFrame pre={pre} badges={pre.bootManaged && (
+          <span className="badge b-gray" title="cluster_name dolu: boot sekiz tabloyu kendisi kurar (spans varsa arka planda); 0015 yalnız eksik host'ları tamamlar">BOOT YÖNETİYOR</span>
+        )}>
+          <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
+            <PreRow label="spans_local" ok={pre.spansLocal} />
+            <PreRow label="Tanımlı küme" ok={pre.clusters.length > 0} note={pre.clusters.join(', ')} />
+            <PreRow label="Probe edilen küme system.clusters'ta" ok={probed} note={pre.cluster || '(önerilen küme yok)'} />
+            <PreRow label="Çakışma yok (host başına motor + ZK yolu)"
+              ok={probed && !probeFailed && conflictCount === 0}
+              neutral={conflictCount === 0 && (!probed || probeFailed)}
+              note={conflictCount > 0 ? `${conflictCount} çakışma${probeFailed ? ' (probe hatası — liste eksik olabilir)' : ''}`
+                : probed && probeFailed ? 'probe hatası — doğrulanamadı' : undefined} />
+          </KeyValue>
+          {conflictCount > 0 && (
+            <ul style={{ margin: '0 0 var(--sp-4)', paddingLeft: 18, fontSize: 'var(--fs-xs)', color: 'var(--warn)' }}>
+              {pre.conflicts.map((c, i) => <li key={i} className="mono">{c}</li>)}
+            </ul>
+          )}
+          {plainCopy && (
+            <div className="field-hint" style={{ marginBottom: 'var(--sp-4)' }}>
+              Replicated olmayan kopya = boot'un (COREMETRY_CH_ALLOW_UNSET_CLUSTER) o host'a kurduğu düz tablo. Boşsa YALNIZ o host'ta,
+              ON CLUSTER olmadan <code className="mono">DROP TABLE &lt;ad&gt; SYNC</code>; hemen ardından Ön kontrol (0015) → Uygula (0015)
+              (Uygula yeni ön kontrolü bekler) — arada pod yeniden başlarsa boot kopyayı yine kurar. Ayrıntı:{' '}
+              <code className="mono">migrations/0015_rollouts_v2_rollback.sql</code> başlığı.
+            </div>
+          )}
+          <WizProbeErrors errors={pre.probeErrors} />
+        </WizPreflightFrame>
+      )}
+      <WizControls>
+        <WizClusterSelect value={cluster} onChange={setCluster} clusters={pre?.clusters ?? []}
+          disabled={!pre || busy || confirming} describedBy={stale && !confirming ? staleId : undefined} />
+        {confirmKind === null ? (
+          <>
+            <Button variant="primary" size="sm" disabled={!canApply} autoFocus={confirm.refocus === 'apply'}
+              aria-describedby={stale ? staleId : undefined} onClick={() => confirm.open('apply')}>Uygula (0015)</Button>
+            <Button variant="ghost-danger" size="sm" disabled={!cluster || busy} autoFocus={confirm.refocus === 'rollback'}
+              onClick={() => confirm.open('rollback')}>Tabloları geri al (0015)</Button>
+            {stale && (
+              <span id={staleId} className="field-hint">
+                {pre?.cluster ? <>ön kontrol <span className="mono">{pre.cluster}</span> için koştu</> : 'ön kontrol küme seçilmeden koştu'}
+                {" — seçili küme için Ön kontrol (0015)'ü yeniden koş"}
+              </span>
+            )}
+          </>
+        ) : (
+          <WizConfirm danger={confirmKind === 'rollback'} busy={busy}
+            confirmDisabled={confirmKind === 'apply' ? !applyReady : !cluster}
+            onConfirm={() => void runAction(confirmKind)} onCancel={confirm.cancel}>
+            {confirmKind === 'apply'
+              ? <>0015 <span className="mono">{cluster}</span> kümesine uygulanacak (sekiz state tablosu; ON CLUSTER + ReplicatedReplacingMergeTree, IF NOT EXISTS; ilk hatada durur). Emin misin?</>
+              : <>Sekiz Rollouts v2 tablosu <span className="mono">{cluster}</span> kümesinde VERİSİYLE düşürülecek. <b>argocd_sync_events tarihçesi geri gelmez</b> (Argo CD yalnız son 10 kaydı tutar).
+                Önce Rollouts v2 yazıcılarını kapat (<span className="mono">rollouts</span> ayarı <span className="mono">source=v1</span>, Argo CD / zenginleştirme kapalı) — açık
+                işçi düşen tabloya yazarken UNKNOWN_TABLE alır; boot tabloları sonraki açılışta yeniden kurar. Emin misin?</>}
+          </WizConfirm>
+        )}
+        {actionErr && <WizError>{actionErr}</WizError>}
+      </WizControls>
+      {action && (
+        <WizActionResult action={action} title={action.kind === 'apply' ? 'Uygula (0015)' : 'Geri al (0015)'}
+          extra={action.res.note && <span className="field-hint"> · {action.res.note}</span>} />
+      )}
+    </div>
   );
 }
