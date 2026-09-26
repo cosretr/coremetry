@@ -382,6 +382,69 @@ secrets:
 > All are `optional: true` env refs except `oidc-client-secret`, so an
 > existing Secret that omits the unused ones still boots.
 
+### Integration tokens (`tokenRef`) via extraEnv / envFrom / extraVolumes
+
+Added in v0.10.958. An integration that uses `tokenRef` stores a reference
+in its settings instead of the token. Remote Clusters (Thanos), Tempo,
+VictoriaMetrics and Oracle (`passwordRef`) accept one today, and Argo CD
+instances will with Rollouts v2. Argo CD instances accept only a reference.
+The other four also have a stored-token field. When both are set, the
+reference wins. If the reference does not resolve, the stored token is not
+used as a fallback: Thanos, Tempo and VictoriaMetrics send the request with
+no credentials, and Oracle fails the connection.
+`internal/secretref` resolves the reference inside the pod:
+
+| Reference | Resolves to | Deliver it with |
+|---|---|---|
+| `env:NAME` (`NAME` must match `^[A-Za-z_][A-Za-z0-9_]*$`) | the value of env var `NAME` | `extraEnv` (one key) or `envFrom` (every key of a Secret, optional `prefix`) |
+| `file:/abs/path` (no whitespace) | the file's content | `extraVolumes` + `extraVolumeMounts` (a mounted Secret) |
+
+Surrounding whitespace and newlines are trimmed, and an empty value is an
+error. To rotate an `env:` reference, restart the pod. A `file:` reference
+picks up an updated Secret without a restart (the settings are re-resolved
+every 30 s), unless it is mounted with `subPath`.
+
+The four lists render on the monolithic Deployment and on the distributed
+**api**, **worker** and **ingest** Deployments. Ingest needs them because
+the VictoriaMetrics metric write runs only on ingest pods. Without the
+reference there, those writes go out with no `Authorization` header, while
+the Settings test, which runs on an api pod, still passes. The agent is left
+out on purpose: it runs runbook bash steps, and those inherit the pod
+environment. The defaults are empty and render nothing.
+
+```bash
+oc create secret generic coremetry-integrations -n coremetry \
+  --from-literal=ARGOCD_TEAM_A_PROD_TOKEN='<argocd-token>' \
+  --from-literal=DEVOPS_PAT='<ado-pat>'
+```
+
+```yaml
+# Every key as an env var: tokenRef env:COREMETRY_SECRET_ARGOCD_TEAM_A_PROD_TOKEN
+envFrom:
+  - prefix: COREMETRY_SECRET_
+    secretRef:
+      name: coremetry-integrations
+
+# Or as files: tokenRef file:/var/run/secrets/coremetry/integrations/ARGOCD_TEAM_A_PROD_TOKEN
+extraVolumes:
+  - name: integration-tokens
+    secret:
+      secretName: coremetry-integrations
+extraVolumeMounts:
+  - name: integration-tokens
+    mountPath: /var/run/secrets/coremetry/integrations
+    readOnly: true
+```
+
+> `helm template` fails early in three cases:
+> - one of the four values is not a list, or one of its items is not a mapping;
+> - `extraEnv` sets a name the chart manages (`COREMETRY_MODE`, `COREMETRY_JWT_SECRET`, `COREMETRY_CH_PASSWORD`, `COREMETRY_INITIAL_PASSWORD`);
+> - a volume name or mount path matches one the chart owns (`config`, `tmp`, `/tmp`, `/app/config.yaml`).
+>
+> Leave `defaultMode` unset on Secret volumes. The chart does not pin `fsGroup`, so on vanilla Kubernetes `0400` or `0440` can leave the file unreadable for the non-root UID.
+>
+> The Azure DevOps PAT moves to `tokenRef` in Rollouts v2 P4.1. Until then, enter it in Settings.
+
 ---
 
 ## 6. MCP / SSE session affinity
@@ -536,6 +599,13 @@ helm template coremetry charts/coremetry \
   --set deployment.mode=distributed --set autoscaling.enabled=true \
   | grep -A4 'kind: HorizontalPodAutoscaler'
 #   → name: coremetry-api ; scaleTargetRef → Deployment/coremetry-api
+
+# Integration secrets render on the api + worker + ingest roles (v0.10.958)
+helm template coremetry charts/coremetry --set deployment.mode=distributed \
+  --set secrets.jwtSecret=x --set deployment.roles.agent.enabled=true \
+  --set 'envFrom[0].secretRef.name=coremetry-integrations' \
+  | grep -c 'envFrom:'
+#   → 3 (api + worker + ingest; never agent). Default render: 0.
 ```
 
 ---

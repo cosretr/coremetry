@@ -146,3 +146,46 @@ that will fail loudly so the misconfiguration is obvious.
 clickhouse:9000
 {{- end -}}
 {{- end -}}
+
+{{/*
+v0.10.958 — coremetry.validateExtras: extraEnv / envFrom / extraVolumes /
+extraVolumeMounts için render-anı koruması (Rollouts v2 P1.6). Kubernetes bu
+hataların bir kısmını ancak apply'da, bir kısmını HİÇ yakalamaz:
+  - liste olmayan değer ya da eşleme olmayan öğe → geçersiz manifest;
+  - chart'ın her zaman yönettiği env adının tekrarı → Kubernetes SONUNCUYU
+    alır (extraEnv COREMETRY_MODE=api, distributed'da worker'ı sessizce api
+    yapar) ve upgrade'in strategic-merge patch'i bozulur;
+  - chart'ın hacim adı (config, tmp) ya da mount yolu (/tmp,
+    /app/config.yaml) çakışması → apply reddi, rolling update yarıda kalır.
+İki deployment şablonu mod bloğunun başında çağırır; çıktısı boştur, varsayılan
+değerlerle manifest değişmez.
+*/}}
+{{- define "coremetry.validateExtras" -}}
+{{- range $key := list "extraEnv" "envFrom" "extraVolumes" "extraVolumeMounts" -}}
+{{- $v := index $.Values $key -}}
+{{- if and $v (not (kindIs "slice" $v)) -}}
+{{- fail (printf "coremetry: %s must be a YAML list (got %s) — see the extraEnv block in values.yaml" $key (kindOf $v)) -}}
+{{- end -}}
+{{- range $item := ($v | default list) -}}
+{{- if not (kindIs "map" $item) -}}
+{{- fail (printf "coremetry: every %s item must be a mapping (got %s)" $key (kindOf $item)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $reservedEnv := list "COREMETRY_MODE" "COREMETRY_JWT_SECRET" "COREMETRY_CH_PASSWORD" "COREMETRY_INITIAL_PASSWORD" -}}
+{{- range $e := (.Values.extraEnv | default list) -}}
+{{- if has (toString $e.name) $reservedEnv -}}
+{{- fail (printf "coremetry: extraEnv must not set %s — the chart manages it (use deployment.mode / secrets.*)" (toString $e.name)) -}}
+{{- end -}}
+{{- end -}}
+{{- range $vol := (.Values.extraVolumes | default list) -}}
+{{- if has (toString $vol.name) (list "config" "tmp") -}}
+{{- fail (printf "coremetry: extraVolumes name %q collides with a chart-owned volume (config, tmp)" (toString $vol.name)) -}}
+{{- end -}}
+{{- end -}}
+{{- range $m := (.Values.extraVolumeMounts | default list) -}}
+{{- if has (toString $m.mountPath) (list "/tmp" "/app/config.yaml") -}}
+{{- fail (printf "coremetry: extraVolumeMounts mountPath %q collides with a chart-owned mount (/tmp, /app/config.yaml)" (toString $m.mountPath)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

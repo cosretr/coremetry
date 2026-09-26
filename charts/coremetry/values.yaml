@@ -114,6 +114,99 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# ── Ek env / envFrom / hacimler (Coremetry pod'ları) ─────────────────────────
+#
+# v0.10.958 — Rollouts v2 P1.6: operatörün KENDİ Secret/ConfigMap'lerini
+# Coremetry pod'larına bağlama yolu. tokenRef kullanan entegrasyon
+# system_settings'e düz token değil bir REFERANS yazar; internal/secretref
+# onu pod içinde çözer. Referansın tam biçimi:
+#
+#   env:NAME   → NAME ortam değişkeninin değeri. NAME POSIX olmalı:
+#                ^[A-Za-z_][A-Za-z0-9_]*$ (tire / nokta YOK).
+#   file:/yol  → mutlak yoldaki dosyanın içeriği (boşluksuz yol).
+#   İkisinde de baştaki/sondaki boşluk + newline kırpılır; boş değer = hata.
+#   tokenRef alanı düz token kabul etmez. Thanos / Tempo / VictoriaMetrics /
+#   Oracle'da ayrı bir saklı token/şifre alanı da var: ref doluysa ref
+#   TERCİH edilir ve çözülemezse saklı değere DÜŞÜLMEZ (Thanos/Tempo/VM
+#   isteği kimliksiz gider, Oracle bağlantısı hata verir).
+#   Rotasyon: env: → pod restart (kubectl rollout restart); file: →
+#   Secret'ı güncelle, kubelet mount'u yeniler, ayar ≤30 s'de yeniden çözülür
+#   (subPath'li mount YENİLENMEZ — rotasyon için subPath kullanma).
+#
+# Bugün tokenRef okuyanlar: Remote Clusters (Thanos), Tempo, VictoriaMetrics,
+# Oracle (passwordRef). Argo CD instance `tokenRef`'i (ayar anahtarı
+# `argocd`, yalnız ref — düz token alanı yok) Rollouts v2 ile gelir; Azure
+# DevOps PAT'in tokenRef'e taşınması P4.1'dedir (karar 20) — o zamana dek
+# PAT Ayarlar'dan girilir, aşağıdaki DevOps satırı ileriye dönük örnektir.
+#
+# NEREYE render edilir: monolitik Deployment + distributed modda ref çözen
+# üç rol: api (ayar/sorgu yolu, Test probe'ları), worker (arka plan işleri)
+# ve ingest — VictoriaMetrics'e OTLP metrik YAZIMI yalnız ingest pod'unda
+# koşar; VM tokenRef'i ingest'te çözülmezse yazım Authorization'sız gider
+# (api'deki Test yine yeşil görünür). agent rolüne BİLİNÇLİ verilmez: runbook
+# bash/javascript adımı koşar ve bash adımı pod ortamını devralır
+# (internal/agent/executor.go) — sır orada okunabilirdi. Monolitik pod
+# agent'ı süreç içinde koşar; bu ayrım gerekiyorsa distributed mod +
+# deployment.roles.agent kullan.
+#
+# Varsayılan boş → hiçbir şey render edilmez (mevcut kurulumun manifesti
+# bayt-bayt aynı). extraEnv chart'ın kendi env'lerinin SONUNA eklenir.
+# Render anında reddedilenler (templates/_helpers.tpl coremetry.validateExtras):
+# liste olmayan değer ya da eşleme olmayan öğe; chart'ın yönettiği env adları
+# COREMETRY_MODE, COREMETRY_JWT_SECRET, COREMETRY_CH_PASSWORD,
+# COREMETRY_INITIAL_PASSWORD (onlar için deployment.mode / secrets.*);
+# chart'ın hacim adları config, tmp ve mount yolları /tmp, /app/config.yaml.
+# Kubernetes kuralı: aynı ad hem env'de hem envFrom'da varsa env kazanır.
+#
+# Örnek (sentetik adlar) — iki Argo CD instance token'ı + bir DevOps PAT
+# taşıyan AYRI bir Secret. Key'ler POSIX olsun: secretref yalnız POSIX adı
+# çözer, eski Kubernetes envFrom'da geçersiz adlı key'i sessizce atlar.
+#
+#   oc create secret generic coremetry-integrations -n coremetry \
+#     --from-literal=ARGOCD_TEAM_A_PROD_TOKEN='<argocd-token>' \
+#     --from-literal=ARGOCD_TEAM_B_PROD_TOKEN='<argocd-token>' \
+#     --from-literal=DEVOPS_PAT='<ado-pat>'
+#
+# (a) envFrom — Secret'ın bütün key'leri, önekle (önek binary'nin okuduğu
+#     COREMETRY_* adlarıyla çakışmasın; docs/ENV.md):
+#   envFrom:
+#     - prefix: COREMETRY_SECRET_
+#       secretRef:
+#         name: coremetry-integrations
+#   → Argo instance team-a-prod: tokenRef = env:COREMETRY_SECRET_ARGOCD_TEAM_A_PROD_TOKEN
+#
+# (b) extraEnv — tek key, açık adla. secrets.existingSecret'a EK key koyup
+#     oradan da okunabilir (o Secret'ı envFrom'a verme: chart key'leri
+#     jwt-secret gibi tireli, secretref çözemez; sırlar boşuna çoğalır):
+#   extraEnv:
+#     - name: COREMETRY_SECRET_DEVOPS_PAT
+#       valueFrom:
+#         secretKeyRef:
+#           name: coremetry-integrations
+#           key: DEVOPS_PAT
+#   → tokenRef = env:COREMETRY_SECRET_DEVOPS_PAT
+#
+# (c) dosya — mount edilmiş Secret (pod restart'sız rotasyon):
+#   extraVolumes:
+#     - name: integration-tokens
+#       secret:
+#         secretName: coremetry-integrations
+#   extraVolumeMounts:
+#     - name: integration-tokens
+#       mountPath: /var/run/secrets/coremetry/integrations
+#       readOnly: true
+#   → tokenRef = file:/var/run/secrets/coremetry/integrations/ARGOCD_TEAM_B_PROD_TOKEN
+#
+# restricted-v2 SCC: secret / configMap / emptyDir / projected hacimler
+# uygundur; hostPath EKLEME (SCC reddeder). Secret hacminde defaultMode'u boş
+# bırak: chart fsGroup sabitlemez, vanilla k8s'te 0400/0440 dosyayı non-root
+# UID'ye okunmaz yapar. readOnlyRootFilesystem açık kalır — yazılabilir yol
+# gerekiyorsa emptyDir ekle.
+extraEnv: []
+envFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+
 # Coremetry pod resources. Defaults target production banking-
 # adjacent workloads where alert latency matters more than tight
 # bin-packing. Burstable QoS — requests << limits so the pod

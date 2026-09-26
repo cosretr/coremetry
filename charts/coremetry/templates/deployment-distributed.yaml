@@ -16,17 +16,26 @@
   price. Diffs between roles read as obvious local additions.
 */}}
 {{- if eq (default "monolithic" .Values.deployment.mode) "distributed" -}}
+{{- include "coremetry.validateExtras" . -}}
 {{- $fullname := include "coremetry.fullname" . -}}
+{{- /* v0.10.958 — "extras": extraEnv / envFrom / extraVolumes /
+       extraVolumeMounts bu role render edilsin mi. tokenRef çözen üç rol:
+       api (okuma yolu + Test probe'ları), worker (arka plan işleri) ve
+       ingest — VictoriaMetrics OTLP metrik YAZIMI yalnız ingest pod'unda
+       koşar (main.go vmForward), VM tokenRef'i orada çözülmezse yazım
+       Authorization'sız gider (api'deki Test yine yeşil görünür). agent
+       HARİÇ: bash adımı pod ortamını devralır — sır oraya bilinçli
+       taşınmaz (values.yaml). */}}
 {{- $roles := list
-  (dict "name" "ingest" "mode" "ingest" "replicas" .Values.deployment.roles.ingest.replicas "resources" .Values.deployment.roles.ingest.resources)
-  (dict "name" "api"    "mode" "api"    "replicas" .Values.deployment.roles.api.replicas    "resources" .Values.deployment.roles.api.resources)
-  (dict "name" "worker" "mode" "worker" "replicas" .Values.deployment.roles.worker.replicas "resources" .Values.deployment.roles.worker.resources)
+  (dict "name" "ingest" "mode" "ingest" "replicas" .Values.deployment.roles.ingest.replicas "resources" .Values.deployment.roles.ingest.resources "extras" true)
+  (dict "name" "api"    "mode" "api"    "replicas" .Values.deployment.roles.api.replicas    "resources" .Values.deployment.roles.api.resources    "extras" true)
+  (dict "name" "worker" "mode" "worker" "replicas" .Values.deployment.roles.worker.replicas "resources" .Values.deployment.roles.worker.resources "extras" true)
 -}}
 {{- if .Values.deployment.roles.agent.enabled }}
 {{- /* v0.7.4 — runbook agent role: executes http/javascript/bash steps in an
        isolated, non-data-plane pod. Multiple replicas are HA-safe (each
        automated step is claimed via a per-execution Redis lock). */}}
-{{- $roles = append $roles (dict "name" "agent" "mode" "agent" "replicas" .Values.deployment.roles.agent.replicas "resources" .Values.deployment.roles.agent.resources) }}
+{{- $roles = append $roles (dict "name" "agent" "mode" "agent" "replicas" .Values.deployment.roles.agent.replicas "resources" .Values.deployment.roles.agent.resources "extras" false) }}
 {{- end }}
 {{- range $role := $roles }}
 ---
@@ -199,6 +208,19 @@ spec:
                   key: es-api-key
                   optional: true
             {{- end }}
+            {{- /* v0.10.958 — Rollouts v2 P1.6: ek env'ler chart env'lerinden
+                   SONRA, yalnız extras'lı rollerde (monolitik şablonla aynı). */}}
+            {{- if $role.extras }}
+            {{- with $.Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+          {{- if $role.extras }}
+          {{- with $.Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- end }}
           volumeMounts:
             - name: config
               mountPath: /app/config.yaml
@@ -206,6 +228,11 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            {{- if $role.extras }}
+            {{- with $.Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
           readinessProbe:
             httpGet: { path: /api/health, port: http }
             periodSeconds: 5
@@ -236,6 +263,11 @@ spec:
             name: {{ $fullname }}-config
         - name: tmp
           emptyDir: {}
+        {{- if $role.extras }}
+        {{- with $.Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- end }}
       {{- with $.Values.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
       {{- end }}

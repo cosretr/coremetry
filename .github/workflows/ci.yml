@@ -353,3 +353,13 @@ jobs:
             --set config.auth.oidc.issuerUrl=https://example.com \
             --set secrets.jwtSecret=ci-test \
             > /dev/null
+      # v0.10.958 — extraEnv/envFrom/extraVolumes yalnız ingest+api+worker'a
+      # gider, agent'a ASLA (runbook bash adımları pod ortamını devralır);
+      # varsayılan render'da hiç envFrom yok.
+      - name: helm template (distributed + extras)
+        run: |
+          out=$(helm template ci charts/coremetry --set deployment.mode=distributed \
+            --set secrets.jwtSecret=ci-test --set deployment.roles.agent.enabled=true \
+            --set 'envFrom[0].secretRef.name=ci-integrations')
+          test "$(printf '%s\n' "$out" | grep -c 'envFrom:')" -eq 3
+          test "$(helm template ci charts/coremetry --set deployment.mode=distributed --set secrets.jwtSecret=ci-test | grep -c 'envFrom:')" -eq 0

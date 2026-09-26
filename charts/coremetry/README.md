@@ -57,6 +57,7 @@ All knobs and their defaults are documented inline in
 | External ClickHouse | `clickhouse.enabled`, `clickhouse.external.addr`, `clickhouse.secure` |
 | External Redis | `redis.enabled`, `redis.external.url` |
 | Secrets | `secrets.existingSecret` (preferred) or inline `secrets.*` |
+| Integration secrets (`tokenRef`) | `extraEnv`, `envFrom`, `extraVolumes`, `extraVolumeMounts`: the monolithic pod plus the api, worker and ingest roles, never agent (v0.10.958). Ingest needs them because VictoriaMetrics metric writes run there. The reference forms are `env:NAME` and `file:/path`. See [docs/openshift-distributed.md §5](docs/openshift-distributed.md#integration-tokens-tokenref-via-extraenv--envfrom--extravolumes) |
 | Exposure | `route.enabled` (OpenShift) or `ingress.enabled` (vanilla k8s) |
 | MCP / SSE stickiness | `service.sessionAffinity`, `service.sessionAffinityTimeoutSeconds` |
 | Autoscaling | `autoscaling.*` (targets the api role in distributed mode) |

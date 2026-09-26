@@ -5,6 +5,7 @@
   and this file is skipped.
 */}}
 {{- if eq (default "monolithic" .Values.deployment.mode) "monolithic" -}}
+{{- include "coremetry.validateExtras" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -190,6 +191,16 @@ spec:
                   key: es-api-key
                   optional: true
             {{- end }}
+            {{- /* v0.10.958 — Rollouts v2 P1.6: operatörün ek env'leri chart'ın
+                   env'lerinden SONRA (tokenRef `env:NAME` teslimi; ayrıntı ve
+                   yasak adlar values.yaml extraEnv bloğunda). Boşsa render yok. */}}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           volumeMounts:
             - name: config
               mountPath: /app/config.yaml
@@ -198,6 +209,10 @@ spec:
             # Static binary needs a writable /tmp; the rest of root is read-only.
             - name: tmp
               mountPath: /tmp
+            {{- /* v0.10.958 — ek mount'lar (tokenRef `file:/yol` teslimi). */}}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           readinessProbe:
             httpGet: { path: /api/health, port: http }
             periodSeconds: 5
@@ -224,6 +239,10 @@ spec:
             name: {{ include "coremetry.fullname" . }}-config
         - name: tmp
           emptyDir: {}
+        {{- /* v0.10.958 — ek hacimler (Secret / ConfigMap / emptyDir). */}}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
       {{- end }}
