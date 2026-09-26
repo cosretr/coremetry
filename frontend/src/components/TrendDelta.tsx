@@ -57,7 +57,7 @@ export function TrendDelta({ cur, prior, kind }: {
   return (
     <span style={{
       marginLeft: 4, fontSize: 9, color,
-      fontFamily: 'ui-monospace, monospace',
+      fontFamily: 'var(--font-mono)',
       display: 'inline-flex', alignItems: 'center', gap: 1,
     }}
       title={`Prior window: ${prior.toLocaleString(undefined, { maximumFractionDigits: 1 })}`}>

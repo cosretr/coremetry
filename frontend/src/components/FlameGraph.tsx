@@ -52,7 +52,7 @@ export function FlameGraph({ root, totalWidth = 1100 }: { root: FlameNode; total
 
       <div style={{ overflow: 'auto', position: 'relative' }}
            onMouseLeave={() => setHover(null)}>
-        <svg width={totalWidth} height={height} style={{ display: 'block', fontFamily: 'monospace' }}>
+        <svg width={totalWidth} height={height} style={{ display: 'block', fontFamily: 'var(--font-mono)' }}>
           {boxes.map((b, i) => {
             // v0.10.922 (sade palet adım 1) — K6: marka kırmızısı yalnız
             // logoda. Odak çerçevesi kendi seri rengini korur; odak 2px

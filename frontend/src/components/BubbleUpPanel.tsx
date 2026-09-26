@@ -146,7 +146,7 @@ function AttributeBlock({ attr, onApply }: {
   return (
     <div>
       <div style={{
-        fontSize: 11, fontFamily: 'ui-monospace, monospace',
+        fontSize: 11, fontFamily: 'var(--font-mono)',
         color: 'var(--text2)', marginBottom: 4,
       }}>
         {attr.key}

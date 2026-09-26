@@ -113,6 +113,8 @@ function AttrGroup({ label, entries }: { label: string; entries: [string, string
   return (
     <details open className="kiosk-span__group">
       <summary className="ps-sec-title">{label} <span className="kiosk-span__cnt">{entries.length}</span></summary>
+      {/* v0.10.947 — statik tablo (T1): Tempo yoğunluğunda öznitelik listesi (`.kiosk-span .ps-kv`,
+          etiket içeriğe sığar); KeyValue sıkı kip kazanınca SpanDetail'in `.ps-kv`siyle birlikte göçer. */}
       <table className="ps-kv"><tbody>
         {entries.map(([k, v]) => {
           const f = formatAttrValue(v); // v0.10.686 — Tempo: dizge tırnaklı, sayı mavi

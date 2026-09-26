@@ -50,7 +50,7 @@ export function ServiceRuntimeBadge({
         padding: compact ? '1px 6px' : '2px 8px',
         background: 'var(--bg3)', border: '1px solid var(--border)',
         borderRadius: 12, color: 'var(--text2)',
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'var(--font-mono)',
         whiteSpace: 'nowrap',
         ...style,
       }}>

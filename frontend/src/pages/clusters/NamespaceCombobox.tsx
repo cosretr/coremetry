@@ -78,10 +78,9 @@ export function NamespaceCombobox({ namespaces, value, onPick, onClear }: {
               All namespaces
             </div>
             {shown.map(n => (
-              <div key={n} onClick={() => pick(n)}
+              <div key={n} onClick={() => pick(n)} className="mono"
                 style={{
-                  padding: '5px 8px', fontSize: 12, cursor: 'pointer', borderRadius: 3,
-                  fontFamily: 'ui-monospace, monospace',
+                  padding: '5px 8px', cursor: 'pointer', borderRadius: 3,
                   background: n === value ? 'var(--bg3)' : undefined,
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg3)')}

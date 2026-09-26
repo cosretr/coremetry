@@ -36,7 +36,7 @@ export function Gauge({ pct, label, sub, color, size = 110, stroke = 9 }: {
         <div style={{
           position: 'absolute', inset: 0, display: 'flex',
           alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'ui-monospace, monospace', fontSize: 24, fontWeight: 700,
+          fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 700,
         }}>
           {pct == null ? '—' : `${Math.round(pct)}%`}
         </div>

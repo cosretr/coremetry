@@ -435,7 +435,7 @@ function IncidentItem({ i, first }: { i: IncidentRow; first: boolean }) {
       )}
       <div style={{
         color: 'var(--text3)', fontSize: 11, marginTop: 8,
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'var(--font-mono)',
       }}>
         {fmtDateTime(started)}
         {i.resolvedAt && ` → ${tsLong(i.resolvedAt)}`}

@@ -375,7 +375,7 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
               tooltip="Unpin" onClick={() => setPinned(null)} icon="✕" />
             )}
           </div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'ui-monospace, monospace', marginBottom: 6 }}>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
             {kindLabel(hoverNode)} · {hoverNode.kind === 'service' ? 'service.name' : hoverNode.system ? (hoverNode.kind === 'database' ? 'db.system' : 'messaging.system') : hoverNode.kind}
             {hoverNode.kind === 'database' && hoverNode.dbName ? ` · db.name=${hoverNode.dbName}` : ''}
           </div>
@@ -503,7 +503,7 @@ function Kind({ c, l }: { c: string; l: string }) {
 function Stat({ l, v, tone }: { l: string; v: string; tone?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <span style={{ fontSize: 12, fontWeight: 700, color: tone ?? 'var(--text)', fontFamily: 'ui-monospace, monospace' }}>{v}</span>
+      <span className="mono" style={{ fontWeight: 700, color: tone ?? 'var(--text)' }}>{v}</span>
       <span style={{ fontSize: 8.5, color: 'var(--text3)', letterSpacing: '0.4px' }}>{l}</span>
     </div>
   );

@@ -38,7 +38,7 @@ export function KindBadge({ kind }: { kind: ProfileFrameKind }) {
       // v0.10.922 (sade palet adım 1) — her tür aynı nötr stil; v0.10.920
       // sleep mürekkep istisnası artık gereksiz (--text2 her zeminde okunur).
       background: 'var(--bg3)', color: 'var(--text2)',
-      borderRadius: 3, fontFamily: 'monospace',
+      borderRadius: 3, fontFamily: 'var(--font-mono)',
       verticalAlign: 'middle',
     }}>
       {LABELS[kind]}

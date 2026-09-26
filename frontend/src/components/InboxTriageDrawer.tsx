@@ -152,7 +152,7 @@ function DrawerBody({ item, onClose, onOpenSource }: {
           </div>
           {item.exception.message && (
             <pre style={{
-              fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+              fontSize: 11,
               whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: 0,
               color: 'var(--text2)', maxHeight: 160, overflowY: 'auto',
             }} title={item.exception.message}>{item.exception.message}</pre>

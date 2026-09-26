@@ -902,7 +902,7 @@ export function TraceWaterfall({
                         fontSize: 10, lineHeight: 1, padding: '1px 4px',
                         borderRadius: 3, border: '1px solid var(--border)',
                         color: lc.err ? 'var(--err)' : 'var(--text3)',
-                        fontFamily: 'ui-monospace, monospace',
+                        fontFamily: 'var(--font-mono)',
                       }}>
                       ≡{lc.n}
                     </span>

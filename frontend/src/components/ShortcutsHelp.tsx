@@ -85,7 +85,7 @@ function KeysPill({ keys }: { keys: string }) {
     : keys.split('+').map(formatKey).join(' ');
   return (
     <kbd style={{
-      display: 'inline-block', fontFamily: 'monospace',
+      display: 'inline-block', fontFamily: 'var(--font-mono)',
       fontSize: 11, padding: '2px 6px',
       background: 'var(--bg3)',
       border: '1px solid var(--border)',

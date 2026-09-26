@@ -206,6 +206,7 @@ export default function MetricsPage() {
     // hiçbir tuş bağlanmıyordu. Yazılmış-ama-bağlanmamış kod.
     onOpen: m => navigate(metricHref(m)),
   });
+  const cvRows = dt.sortedRows.length > 100;
 
   if (redirectTo) return <Navigate replace to={redirectTo} />;
 
@@ -377,13 +378,18 @@ export default function MetricsPage() {
                 </Empty>
               ) : (
                 <>
-                  <div className="table-wrap is-fit">
-                    <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <div className="table-wrap">
+                    <table {...dt.tableProps}>
                       <DataTableColgroup dt={dt} />
                       <DataTableHead dt={dt} />
                       <tbody>
-                        {dt.sortedRows.map((m, i) => (
-                          <tr key={m.name} {...dt.rowProps(i)}
+                        {dt.sortedRows.map((m, i) => {
+                          // v0.10.947 (tablo standardı T6/§2c) — cv-row, rowProps'un
+                          // row-selected sınıfıyla birleşir (sonraki className onu ezerdi).
+                          const rp = dt.rowProps(i);
+                          return (
+                          <tr key={m.name} {...rp}
+                            className={[rp.className, cvRows ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
                             {...rowKeyboard(() => navigate(metricHref(m)))}
                             // Değiştirici tuşlu tık satırda YOK SAYILIR: ⌘-tık
                             // "yeni sekme" demektir ve satır bir link değil, o
@@ -392,10 +398,8 @@ export default function MetricsPage() {
                             onClick={e => {
                               if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
                               navigate(metricHref(m));
-                            }}
-                            style={dt.sortedRows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' } : undefined}
-                            title={`Open ${m.name} in Explore`}>
-                            <td className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            }}>
+                            <td className="mono" title={m.name}>
                               {/* Gerçek <a>: ⌘-tık yeni sekme, sağ-tık menüsü,
                                   Tab+Enter. draggable=false olmasa metin
                                   seçmeye çalışan operatör linki SÜRÜKLER —
@@ -414,8 +418,7 @@ export default function MetricsPage() {
                                 "0s ago" değil — v0.9.833 öncesi bir
                                 sunucu alanı hiç göndermez ve uydurma bir
                                 tazelik en kötü yalandır. */}
-                            <td style={{
-                              color: metricIsStale(m.lastSeenNs, nowMs) ? 'var(--text3)' : 'var(--text2)',
+                            <td className={metricIsStale(m.lastSeenNs, nowMs) ? 'cell-faint' : 'cell-muted'} style={{
                               opacity: metricIsStale(m.lastSeenNs, nowMs) ? 0.65 : 1,
                               fontVariantNumeric: 'tabular-nums',
                             }}
@@ -433,12 +436,12 @@ export default function MetricsPage() {
                                 {m.serviceCount ? m.serviceCount.toLocaleString() : '—'}
                               </td>
                             )}
-                            <td style={{ color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                              title={m.description}>
+                            <td className="cell-muted" title={m.description}>
                               {m.description || '—'}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

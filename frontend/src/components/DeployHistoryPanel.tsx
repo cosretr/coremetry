@@ -144,12 +144,12 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
                 <span style={{ fontSize: 12, fontWeight: 600 }}>
                   ↻ {r.podsRemoved} pod{r.podsRemoved === 1 ? '' : 's'} replaced
                 </span>
-                <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'ui-monospace, monospace' }}
+                <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}
                   title={`${r.podsAdded} new · ${r.podsRemoved} retired · ${r.activePods} now active`}>
                   +{r.podsAdded}/−{r.podsRemoved}
                 </span>
                 {r.versionAfter && (
-                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'ui-monospace, monospace' }}
+                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}
                     title="service.version changed at this rollout">
                     {(r.versionBefore || '?')}→{r.versionAfter}
                   </span>
@@ -250,7 +250,7 @@ function DeltaChips({ imp }: { imp: DeployImpact | null }) {
   const errStable = imp.before.errorRate === 0 && imp.after.errorRate === 0;
   return (
     <span style={{ display: 'inline-flex', gap: 6, fontSize: 11,
-      fontFamily: 'ui-monospace, monospace' }}>
+      fontFamily: 'var(--font-mono)' }}>
       <DeltaChip label="p99" pct={p99Stable ? null : imp.p99DeltaPct} suffix="%" />
       <DeltaChip label="err" pct={errStable ? null : imp.errorRateDeltaPct} suffix="pp" />
       <DeltaChip label="avg" pct={imp.before.avgMs === 0 ? null : imp.avgDeltaPct} suffix="%" />

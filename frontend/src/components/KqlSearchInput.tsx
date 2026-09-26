@@ -379,7 +379,7 @@ export function KqlSearchInput({
           <div style={{
             padding: '4px 10px', fontSize: 10, color: 'var(--text3)',
             borderBottom: '1px solid var(--divider)',
-            fontFamily: 'ui-monospace, monospace',
+            fontFamily: 'var(--font-mono)',
           }}>
             {/* v0.9.955 (F4/Ö16) — başlık HANGİ soruya cevap verdiğimizi
                 söyler. Alan adı listesi ile değer listesi ekranda aynı
@@ -398,12 +398,11 @@ export function KqlSearchInput({
               : `${token?.field}: ${loading ? '· searching…' : ''}`}
           </div>
           {items.map((v, i) => (
-            <div key={v}
+            <div key={v} className="mono"
               onMouseEnter={() => setHighlight(i)}
               onMouseDown={e => { e.preventDefault(); pick(i); }}
               style={{
-                padding: '6px 10px', cursor: 'pointer', fontSize: 12,
-                fontFamily: 'ui-monospace, monospace',
+                padding: '6px 10px', cursor: 'pointer',
                 background: i === highlight ? 'var(--bg2)' : 'transparent',
                 borderLeft: i === highlight ? '2px solid var(--accent2)' : '2px solid transparent',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',

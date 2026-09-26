@@ -967,7 +967,7 @@ export function TimeSeriesPanel({
           position: 'absolute', pointerEvents: 'none', left: 4, transform: 'translateY(-50%)',
           background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 3,
           padding: '1px 5px', fontSize: 10, color: 'var(--text)',
-          fontFamily: 'ui-monospace, monospace', opacity: 0, transition: 'opacity .08s',
+          fontFamily: 'var(--font-mono)', opacity: 0, transition: 'opacity .08s',
           zIndex: 6, whiteSpace: 'nowrap',
         }} />
       </div>

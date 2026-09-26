@@ -628,7 +628,7 @@ export default function AlertsPage() {
                 {t.label}
                 <span style={{
                   marginLeft: 6, fontSize: 10, color: 'var(--text3)',
-                  fontFamily: 'ui-monospace, monospace',
+                  fontFamily: 'var(--font-mono)',
                 }}>{t.count}</span>
               </Button>
             ))}
@@ -654,7 +654,7 @@ export default function AlertsPage() {
         )}
         {rules && rules.length > 0 && (
           <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} trailing={[250]} />
               <DataTableHead dt={dt} trailing={<th />} />
               <tbody>
@@ -675,7 +675,7 @@ export default function AlertsPage() {
                   const isTarget = !!r.target;
                   const isRoute = r.target?.kind === 'http_route'; // v0.10.705
                   return (
-                  <tr key={r.id} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}>
+                  <tr key={r.id} className="cv-row">
                     <td>
                       <b>{r.name}</b>
                       {/* v0.10.519 — kuralın ekip hedefi (boş = sahip + SRE). */}

@@ -171,8 +171,8 @@ export default function UsersPage() {
           </Empty>
         )}
         {users && users.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
@@ -180,8 +180,7 @@ export default function UsersPage() {
                   const isMe = me?.id === u.id;
                   const isOIDC = u.authProvider === 'oidc';
                   return (
-                    <tr key={u.id}
-                      style={users.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 44px' } : undefined}>
+                    <tr key={u.id} className={users.length > 100 ? 'cv-row' : undefined}>
                       <td>
                         {/* v0.8.238 — LDAP photo avatar; initials chip
                             fallback keeps rows aligned. */}
@@ -278,15 +277,14 @@ export default function UsersPage() {
                             title="Bu sürümden beri hiç giriş yapmadı">—</span>
                         )}
                       </td>
-                      <td className="mono" style={{ color: 'var(--text3)' }}
-                        title={tsLong(u.createdAt)}>
+                      <td className="mono cell-faint" title={tsLong(u.createdAt)}>
                         {/* Saniyesiz — bir hesabın oluşturulma saniyesi
                             25px kolon genişliğine değmiyor ve o 25px
                             doğrudan taşmaya gidiyordu (v0.9.660). Tam
                             damga title'da. */}
                         {tsMinute(u.createdAt)}
                       </td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td className="col-actions">
                         <Button variant="secondary" onClick={() => setResetFor(u)}
                           disabled={isOIDC}
                           title={isOIDC ? 'OIDC users authenticate via SSO — no local password' : 'Set a new password'}
@@ -523,7 +521,7 @@ function RoleEditor({ user, isMe, onChanged }: {
       <select value={user.role} disabled={busy}
         onChange={e => apply(e.target.value as Role)}
         style={{ fontSize: 11, padding: '2px 6px', minWidth: 90,
-                 fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                 fontFamily: 'var(--font-mono)',
                  fontWeight: 600 }}>
         <option value="admin">admin</option>
         <option value="editor">editor</option>
@@ -583,7 +581,7 @@ function CustomRoleEditor({ user, catalog, onChanged }: {
     <select value={user.customRole ?? ''} disabled={busy}
       onChange={e => apply(e.target.value)}
       style={{ fontSize: 11, padding: '2px 6px', minWidth: 130,
-               fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}
+               fontFamily: 'var(--font-mono)' }}
       title="Pick a custom role to restrict this viewer to a subset of pages">
       <option value="">— unrestricted —</option>
       {catalog.map(r => (

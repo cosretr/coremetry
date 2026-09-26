@@ -216,7 +216,7 @@ export function LogContextModal({
                 // taşındı; masaüstü aynı, <640px'te tek kolon.
                 <div key={l.id} className="lcm-row" style={{
                   gap: 6, padding: '3px 8px',
-                  fontSize: 11, fontFamily: 'ui-monospace, monospace',
+                  fontSize: 11, fontFamily: 'var(--font-mono)',
                   borderBottom: '1px solid var(--divider)', // v0.10.928 (Y2) — bg2 geçici yumuşak çizgisinin yerine
                   alignItems: 'baseline',
                   background: isPivot ? 'rgba(250,204,21,0.10)' : 'transparent',

@@ -19,7 +19,7 @@ export function CompareToggle({ value, onChange }: { value: CompareMode; onChang
           title={m === 'off' ? 'No comparison'
             : m === 'prev' ? 'Previous window of the same length'
             : `${m} ago at the same time`}
-          style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+          style={{ fontFamily: 'var(--font-mono)' }}>
           {m === 'off' ? 'off' : m === 'prev' ? 'prev window' : m}
         </Button>
       ))}

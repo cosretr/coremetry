@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { QueryErrorInline } from '@/components/QueryError';
 import { timeRangeToNs, fmtNum } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import type { ServiceAttrRow, TimeRange } from '@/lib/types';
 
 // ServiceAttrsPanel — v0.5.381. Surfaces "what attrs is my
@@ -107,10 +106,12 @@ export function ServiceAttrsPanel({ service, range }: {
 
 // Sortable + resizable columns (shared useDataTable primitive). Sample
 // values omits sortValue → not sortable, but still column-resizable.
-const ATTR_COLS: DataTableColumn<ServiceAttrRow>[] = [
-  { id: 'key',          label: 'Key',          sortValue: r => r.key,         naturalDir: 'asc', width: 280 },
-  { id: 'occurrences',  label: 'Occurrences',  sortValue: r => r.occurrences, numeric: true,     width: 120 },
-  { id: 'sampleValues', label: 'Sample values' },
+// v0.10.947 — hücre görünümü kolon bayraklarında (tablo standardı T5):
+// anahtar mono, sayı arayüz fontunda (S2), ikincil hücreler 11px yerine renk (S3).
+const ATTR_COLS: ColumnDef<ServiceAttrRow>[] = [
+  { id: 'key',          label: 'Key',          sortValue: r => r.key,         naturalDir: 'asc', width: 280, mono: true },
+  { id: 'occurrences',  label: 'Occurrences',  sortValue: r => r.occurrences, numeric: true,     width: 120, tone: () => 'muted' },
+  { id: 'sampleValues', label: 'Sample values', tone: () => 'muted' },
 ];
 
 function AttrSection({ title, rows, storageKey }: { title: string; rows: ServiceAttrRow[]; storageKey: string }) {
@@ -126,16 +127,15 @@ function AttrSection({ title, rows, storageKey }: { title: string; rows: Service
         {title}
       </div>
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.map(r => (
-              <tr key={`${r.scope}:${r.key}`}
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 28px' }}>
-                <td className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }}>{r.key}</td>
-                <td className="num mono" style={{ color: 'var(--text2)' }}>{fmtNum(r.occurrences)}</td>
-                <td style={{ fontSize: 11, color: 'var(--text2)' }}>
+              <tr key={`${r.scope}:${r.key}`} className="cv-row">
+                <DataTableCell dt={dt} col="key" row={r} value={r.key} />
+                <DataTableCell dt={dt} col="occurrences" row={r} value={fmtNum(r.occurrences)} />
+                <DataTableCell dt={dt} col="sampleValues" row={r}>
                   {r.sampleValues.length === 0 ? '—' : (
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {r.sampleValues.map((v, i) => (
@@ -149,7 +149,7 @@ function AttrSection({ title, rows, storageKey }: { title: string; rows: Service
                       ))}
                     </div>
                   )}
-                </td>
+                </DataTableCell>
               </tr>
             ))}
           </tbody>

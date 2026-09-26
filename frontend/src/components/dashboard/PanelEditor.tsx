@@ -223,7 +223,7 @@ export function PanelEditor({ panel, onChange, onClose, onDelete }: {
             <textarea
               value={(panel.config as MarkdownPanelConfig).text ?? ''}
               onChange={e => updateConfig({ text: e.target.value })}
-              style={{ width: '100%', minHeight: 140, fontFamily: 'monospace', fontSize: 12 }} />
+              className="mono" style={{ width: '100%', minHeight: 140 }} />
           </Field>
         )}
 
@@ -264,7 +264,7 @@ function MetricFields({ cfg, onChange }: {
           <textarea value={cfg.promql ?? ''} spellCheck={false}
             onChange={e => update('promql', e.target.value)}
             rows={3}
-            style={{ width: '100%', fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12 }}
+            className="mono" style={{ width: '100%' }}
             placeholder={'sum by (service.name) (rate(http.server.duration[5m]))'} />
         </Field>
       ) : (
@@ -368,7 +368,7 @@ function PromqlFields({ cfg, onChange }: {
         <textarea value={cfg.query ?? ''} spellCheck={false}
           onChange={e => update('query', e.target.value)}
           rows={3}
-          style={{ width: '100%', fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12 }}
+          className="mono" style={{ width: '100%' }}
           placeholder={'sum by (service.name) (rate(http.server.duration[5m]))'} />
       </Field>
       <div className="grid-3" style={{ display: 'grid', gap: 12 }}>
@@ -450,7 +450,7 @@ function SpanMetricFields({ cfg, onChange }: {
         <textarea value={cfg.dsl ?? ''}
           placeholder='service_name = "checkout"\nduration > 100ms'
           onChange={e => update('dsl', e.target.value)}
-          style={{ width: '100%', minHeight: 70, fontFamily: 'monospace', fontSize: 12 }} />
+          className="mono" style={{ width: '100%', minHeight: 70 }} />
       </Field>
     </>
   );
@@ -512,7 +512,7 @@ function TopNFields({ cfg, onChange }: {
         <textarea value={cfg.dsl ?? ''}
           placeholder='service.name = "checkout"\nduration > 100ms'
           onChange={e => update('dsl', e.target.value)}
-          style={{ width: '100%', minHeight: 70, fontFamily: 'monospace', fontSize: 12 }} />
+          className="mono" style={{ width: '100%', minHeight: 70 }} />
       </Field>
     </>
   );

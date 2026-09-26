@@ -365,7 +365,7 @@ function TeamPill({ label, team, title }: {
                     background: 'var(--bg2)',
                   }}
                   title={`Email ${m.email}`}>
-                  <span style={{ fontFamily: 'ui-monospace, monospace' }}>{m.email}</span>
+                  <span className="mono">{m.email}</span>
                   <span style={{
                     fontSize: 9, color: 'var(--text3)',
                     textTransform: 'uppercase', letterSpacing: 0.4,

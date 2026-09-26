@@ -242,6 +242,8 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
           <div><AIFeedbackButtons exchangeId={ai.xid} /></div>
         </div>
       )}
+      {/* v0.10.947 — statik tablo: en çok 10 satırlık seçimli öneri listesi
+          (rapor top-10 çeker, sıralanmaz), kayıt listesi değil (T1). */}
       <div className="table-wrap">
         <table>
           <thead><tr>
@@ -276,16 +278,16 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
                       : 'Threshold-only hint — Apply has nothing to set, but Disable still works'} />
                 </td>
                 <td><b>{n.ruleName}</b></td>
-                <td className="num mono">{n.openCount}</td>
-                <td className="num mono">
+                <td className="num">{n.openCount}</td>
+                <td className="num">
                   {n.medianDurSec >= 60
                     ? `${(n.medianDurSec / 60).toFixed(1)} min`
                     : `${n.medianDurSec.toFixed(0)} s`}
                 </td>
-                <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
+                <td className="mono cell-faint">
                   {tsLong(n.lastFiredNs)}
                 </td>
-                <td style={{ fontSize: 12, color: 'var(--text2)' }}>{n.suggestion}</td>
+                <td className="cell-muted">{n.suggestion}</td>
                 <td>
                   <Button variant="secondary" size="sm"
                     onClick={() => applySuggestion(n)}

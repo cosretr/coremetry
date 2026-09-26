@@ -116,7 +116,7 @@ function FieldAccordion({ field, scope, isColumn, onToggleColumn, onPillAdd, onP
               <span title={v.value} style={{
                 flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontFamily: 'var(--font-mono)',
               }}>{v.value}</span>
               <span style={{ color: 'var(--text3)' }} title={lift && d.errorLift ? `hata seçiminde %${(v.selPct ?? pct).toFixed(1)} · tabanda %${(v.basePct ?? 0).toFixed(1)}` : undefined}>{pct.toFixed(pct >= 10 ? 0 : 1)}%</span>
               {(() => { const b = liftBadge(v, !!lift && !!d.errorLift && !d.errorLift.degraded); return b.kind === 'none' ? null : (
@@ -296,7 +296,7 @@ export function LogFieldsPanel({
           // off-screen ones at zero structural cost.
           contentVisibility: 'auto',
           containIntrinsicSize: '0 22px',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontFamily: 'var(--font-mono)',
           background: expandedField === f ? 'var(--accent-soft)' : undefined,
           color: removable ? 'var(--accent2)' : 'var(--text2)',
         }}>

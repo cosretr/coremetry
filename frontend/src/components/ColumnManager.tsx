@@ -139,11 +139,10 @@ export function ColumnManager({ cols, onAdd }: {
               </div>
             )}
             {filtered.map(k => (
-              <div key={k}
+              <div key={k} className="mono"
                 onClick={() => { onAdd(k); setOpen(false); setQuery(''); }}
                 style={{
-                  padding: '5px 8px', fontSize: 12, cursor: 'pointer',
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  padding: '5px 8px', cursor: 'pointer',
                   borderRadius: 3,
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg3)')}

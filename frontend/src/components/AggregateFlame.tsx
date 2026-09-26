@@ -127,7 +127,7 @@ export function AggregateFlame({ roots, totalWidth = 1100 }: {
 
       <div style={{ overflow: 'auto', position: 'relative' }}
            onMouseLeave={() => setHover(null)}>
-        <svg width={totalWidth} height={height} style={{ display: 'block', fontFamily: 'monospace' }}>
+        <svg width={totalWidth} height={height} style={{ display: 'block', fontFamily: 'var(--font-mono)' }}>
           {boxes.map((b, i) => {
             const isErr = b.node.errorCount > 0;
             // v0.8.302 — error bars use the theme token (SVG resolves var()),

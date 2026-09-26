@@ -29,7 +29,7 @@ export function NodeHeatmap({ nodes }: { nodes: ClusterNodeRow[] }) {
               <span style={{ width: 6, height: 6, borderRadius: 2, background: roleColor, flexShrink: 0 }}
                 title={n.role || 'node'} />
               <span style={{
-                fontFamily: 'ui-monospace, monospace', fontSize: 11,
+                fontFamily: 'var(--font-mono)', fontSize: 11,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }} title={n.node}>{n.node}</span>
             </div>

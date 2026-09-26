@@ -216,7 +216,7 @@ export function SavedViewsBar({ page, right }: {
                 fontSize: 9, color: 'var(--text3)',
                 marginLeft: 2, padding: '0 4px',
                 border: '1px solid var(--border)', borderRadius: 2,
-                fontFamily: 'ui-monospace, monospace',
+                fontFamily: 'var(--font-mono)',
               }}>{i + 1}</span>
             )}
           </LinkButton>

@@ -29,7 +29,7 @@ export function ClusterChips({ clusters }: { clusters?: string[] }) {
           title={`Show /services scoped to ${c}`}
           style={{
             fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 600,
-            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            fontFamily: 'var(--font-mono)',
             background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
             color: 'var(--accent2)',
             border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',

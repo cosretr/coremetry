@@ -7,11 +7,10 @@ import { api } from '@/lib/api';
 import { cachedPctLabel } from './ai/cachedTokens';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
-import type { RCAVerdictQuality, AIBudgetStatus } from '@/lib/types';
+import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall } from '@/lib/types';
 import { budgetVerdict, budgetCls } from './ai/aiBudgetView';
 import { timeRangeToNs, tsLong, fmtNum } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import {
   type AIRateTable, mergeRates, costForCall, fmtCost,
 } from '@/lib/ai-rates';
@@ -75,19 +74,23 @@ export default function AIObservabilityPage() {
   // Kolonlar `rates`e memoise: maliyet oranlardan türetiliyor. `rates`
   // mount başına BİR KEZ ayarlanıyor, yani kimlik kararlı — columnLayoutSig
   // her render'da tazelenmiyor (operatörün sürüklediği genişlikler durur).
-  const callCols = useMemo<DataTableColumn<AICall>[]>(() => [
-    { id: 'time',     label: 'Time',              sortValue: c => c.createdAt, width: 165 },
-    { id: 'surface',  label: 'Surface',           sortValue: c => c.surface,   naturalDir: 'asc', flex: true },
+  //
+  // v0.10.947 (tablo standardı) — hücre görünümü kolon bayraklarında; 11px
+  // ikincil hücreler tablo boyunda, hiyerarşi renkle (S3).
+  const callCols = useMemo<ColumnDef<AICall>[]>(() => [
+    { id: 'time',     label: 'Time',              sortValue: c => c.createdAt, width: 165, tone: () => 'muted' },
+    { id: 'surface',  label: 'Surface',           sortValue: c => c.surface,   naturalDir: 'asc', flex: true, mono: true },
     { id: 'model',    label: 'Provider · Model',  sortValue: c => `${c.provider} ${c.model ?? ''}`, naturalDir: 'asc', width: 210 },
     { id: 'status',   label: 'Status',            sortValue: c => c.status,    naturalDir: 'asc', width: 95 },
     { id: 'duration', label: 'Duration',          sortValue: c => c.durationMs, numeric: true, width: 105 },
-    { id: 'tokens',   label: 'In / Out tokens',   sortValue: c => c.inputTokens + c.outputTokens, numeric: true, width: 140 },
+    { id: 'tokens',   label: 'In / Out tokens',   sortValue: c => c.inputTokens + c.outputTokens, numeric: true, width: 140, tone: () => 'faint' },
     // Oran tablosunda olmayan bir model için costForCall null döner;
     // sıralamada -1 ile en dibe iner (bilinmeyen maliyet "ucuz" sayılmasın).
     { id: 'cost',     label: 'Cost',
       sortValue: c => costForCall(rates, c.model, c.inputTokens, c.outputTokens) ?? -1,
-      numeric: true, width: 100 },
-    { id: 'user',     label: 'User',              sortValue: c => c.userEmail || c.userId || '', naturalDir: 'asc', width: 175 },
+      numeric: true, width: 100,
+      tone: c => (costForCall(rates, c.model, c.inputTokens, c.outputTokens) === null ? 'faint' : 'muted') },
+    { id: 'user',     label: 'User',              sortValue: c => c.userEmail || c.userId || '', naturalDir: 'asc', width: 175, tone: () => 'faint' },
   ], [rates]);
   const dt = useDataTable<AICall>({
     storageKey: 'ai-calls', columns: callCols, rows: calls ?? [],
@@ -334,38 +337,33 @@ export default function AIObservabilityPage() {
         {calls && calls.length > 0 && (
           <>
           <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
                 {dt.sortedRows.map(c => {
                   const cost = costForCall(rates, c.model, c.inputTokens, c.outputTokens);
                   return (
-                  <tr key={c.id} {...rowActivation(() => setOpen(c))}
-                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
-                    <td className="mono" style={{ fontSize: 11 }}>{tsLong(c.createdAt)}</td>
-                    <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{c.surface}</td>
-                    <td style={{ fontSize: 12 }}>
+                  <tr key={c.id} className="cv-row" {...rowActivation(() => setOpen(c))}>
+                    {/* v0.10.947 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar). */}
+                    <DataTableCell dt={dt} col="time" row={c} value={tsLong(c.createdAt)} className="mono" />
+                    <DataTableCell dt={dt} col="surface" row={c} value={c.surface} />
+                    <DataTableCell dt={dt} col="model" row={c}>
                       <span style={{ color: 'var(--text2)' }}>{c.provider}</span>
                       {c.model && <span style={{ color: 'var(--text3)' }}> · {c.model}</span>}
-                    </td>
-                    <td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="status" row={c}>
                       {c.status === 'ok'
                         ? <span className="badge b-gray">ok</span>
                         : <span className="badge b-err">error</span>}
-                    </td>
-                    <td className="num mono">{c.durationMs} ms</td>
-                    <td className="num mono" style={{ fontSize: 11, color: 'var(--text3)' }}
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="duration" row={c} value={`${c.durationMs} ms`} />
+                    <DataTableCell dt={dt} col="tokens" row={c}
                       title={c.cachedTokens ? `${c.cachedTokens} giriş token'ı önek önbelleğinden` : undefined}>
                       {c.inputTokens}{c.cachedTokens ? <span> ({cachedPctLabel(c.cachedTokens, c.inputTokens)})</span> : null} / {c.outputTokens}
-                    </td>
-                    <td className="num mono" style={{
-                      fontSize: 11,
-                      color: cost === null ? 'var(--text3)' : 'var(--text2)',
-                    }}>{fmtCost(cost)}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)' }}>
-                      {c.userEmail || c.userId || '—'}
-                    </td>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="cost" row={c} value={fmtCost(cost)} />
+                    <DataTableCell dt={dt} col="user" row={c} value={c.userEmail || c.userId || null} />
                   </tr>
                   );
                 })}
@@ -519,6 +517,18 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
 // "Kullanıcı" kolonu bilinçli: tek kişinin ısrarla denediği bir soru
 // ile ekibin tamamının sorduğu soru aynı öncelikte değil, ve sayı tek
 // başına bunu ayırt edemiyor.
+// v0.10.947 (tablo standardı T1) — sunucu LIMIT 50: kayıt listesi,
+// useDataTable. initialSort yok — satırlar sunucunun sıklık sırasında kalır.
+// Soru kimlik kolonu: 11.5px düştü, ton almadı; tam soru satırın değil
+// hücrenin title'ında (T7). Damga mono kalır (S2).
+type RouterGap = Awaited<ReturnType<typeof api.aiRouterGaps>>['gaps'][number];
+const GAP_COLS: ColumnDef<RouterGap>[] = [
+  { id: 'question', label: 'Soru',      sortValue: g => g.question, naturalDir: 'asc', flex: true, mono: true },
+  { id: 'count',    label: 'Kez',       sortValue: g => g.count, numeric: true, width: 80 },
+  { id: 'users',    label: 'Kullanıcı', sortValue: g => g.users, numeric: true, width: 100, tone: () => 'faint' },
+  { id: 'last',     label: 'Son',       sortValue: g => g.lastAt, width: 165, tone: () => 'faint' },
+];
+
 function RouterGapsPanel() {
   const [days, setDays] = useState<1 | 7 | 30>(7);
   const [data, setData] = useState<Awaited<ReturnType<typeof api.aiRouterGaps>> | null | undefined>(undefined);
@@ -530,6 +540,7 @@ function RouterGapsPanel() {
       .catch(() => { if (!cancelled) setData(null); });
     return () => { cancelled = true; };
   }, [days]);
+  const gapDt = useDataTable<RouterGap>({ storageKey: 'ai-router-gaps', columns: GAP_COLS, rows: data?.gaps ?? [] });
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
@@ -560,22 +571,16 @@ function RouterGapsPanel() {
               tutarlı olur.
             </div>
             <div className="table-wrap">
-              <table>
-                <thead><tr>
-                  <th>Soru</th>
-                  <th style={{ textAlign: 'right' }}>Kez</th>
-                  <th style={{ textAlign: 'right' }}>Kullanıcı</th>
-                  <th>Son</th>
-                </tr></thead>
+              <table {...gapDt.tableProps}>
+                <DataTableColgroup dt={gapDt} />
+                <DataTableHead dt={gapDt} />
                 <tbody>
-                  {data.gaps.map((g, i) => (
-                    <tr key={i} title={g.question}>
-                      <td className="mono" style={{ fontSize: 11.5, maxWidth: 560, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {g.question}
-                      </td>
-                      <td className="num mono">{g.count.toLocaleString()}</td>
-                      <td className="num mono" style={{ color: 'var(--text3)' }}>{g.users}</td>
-                      <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>{tsLong(g.lastAt)}</td>
+                  {gapDt.sortedRows.map(g => (
+                    <tr key={g.question}>
+                      <DataTableCell dt={gapDt} col="question" row={g} value={g.question} />
+                      <DataTableCell dt={gapDt} col="count" row={g} value={g.count.toLocaleString()} />
+                      <DataTableCell dt={gapDt} col="users" row={g} value={g.users} />
+                      <DataTableCell dt={gapDt} col="last" row={g} value={tsLong(g.lastAt)} className="mono" />
                     </tr>
                   ))}
                 </tbody>
@@ -588,8 +593,19 @@ function RouterGapsPanel() {
   );
 }
 
+// v0.10.947 (tablo standardı T1) — sunucu LIMIT 100: kayıt listesi,
+// useDataTable; initialSort yok (sunucu sırası). Satırın "Cevap" ipucu
+// Soru hücresine taşındı (T7: veri ipucu değeri gösteren hücrede).
+const NEG_COLS: ColumnDef<NegativeFeedbackCall>[] = [
+  { id: 'surface', label: 'Yüzey',    sortValue: r => r.surface, naturalDir: 'asc', width: 190 },
+  { id: 'prompt',  label: 'Soru',     sortValue: r => r.prompt, naturalDir: 'asc', flex: true, mono: true },
+  { id: 'comment', label: 'Yorum',    sortValue: r => r.comment ?? '', naturalDir: 'asc', width: 280 },
+  { id: 'when',    label: 'Ne zaman', sortValue: r => r.createdAt, width: 165, tone: () => 'faint' },
+  { id: 'who',     label: 'Kim',      sortValue: r => r.userEmail ?? '', naturalDir: 'asc', width: 175, tone: () => 'faint' },
+];
+
 function NegativeFeedbackPanel() {
-  const [rows, setRows] = useState<import('@/lib/types').NegativeFeedbackCall[] | null | undefined>(undefined);
+  const [rows, setRows] = useState<NegativeFeedbackCall[] | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     api.aiNegativeFeedback()
@@ -597,6 +613,7 @@ function NegativeFeedbackPanel() {
       .catch(() => { if (!cancelled) setRows(null); });
     return () => { cancelled = true; };
   }, []);
+  const negDt = useDataTable<NegativeFeedbackCall>({ storageKey: 'ai-negative-feedback', columns: NEG_COLS, rows: rows ?? [] });
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
@@ -620,20 +637,21 @@ function NegativeFeedbackPanel() {
         )}
         {rows && rows.length > 0 && (
           <div className="table-wrap">
-            <table>
-              <thead><tr><th>Yüzey</th><th>Soru</th><th>Yorum</th><th>Ne zaman</th><th>Kim</th></tr></thead>
+            <table {...negDt.tableProps}>
+              <DataTableColgroup dt={negDt} />
+              <DataTableHead dt={negDt} />
               <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i} title={r.response ? `Cevap: ${r.response.slice(0, 400)}` : undefined}>
-                    <td><span className="badge b-gray">{r.surface || '—'}</span></td>
-                    <td className="mono" style={{ fontSize: 11.5, maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.prompt || '—'}</td>
+                {negDt.sortedRows.map((r, i) => (
+                  <tr key={i}>
+                    <DataTableCell dt={negDt} col="surface" row={r}><span className="badge b-gray">{r.surface || '—'}</span></DataTableCell>
+                    <DataTableCell dt={negDt} col="prompt" row={r} value={r.prompt || null}
+                      title={r.response ? `Cevap: ${r.response.slice(0, 400)}` : undefined} />
                     {/* v0.9.1193 — 👎'nin NEDENİ. Kırpma title'da tamamlanır;
                         yorum çoğu satırda boş kalacak (opsiyonel), '—' ile
                         "yorum yazılmadı" dürüstçe görünür. */}
-                    <td style={{ fontSize: 11.5, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        title={r.comment || undefined}>{r.comment || '—'}</td>
-                    <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>{tsLong(r.createdAt)}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text3)' }}>{r.userEmail || '—'}</td>
+                    <DataTableCell dt={negDt} col="comment" row={r} value={r.comment || null} />
+                    <DataTableCell dt={negDt} col="when" row={r} value={tsLong(r.createdAt)} className="mono" />
+                    <DataTableCell dt={negDt} col="who" row={r} value={r.userEmail || null} />
                   </tr>
                 ))}
               </tbody>
@@ -658,7 +676,7 @@ function KPI({ label, value, cls }: { label: string; value: string; cls?: 'ok' |
       <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 18, fontWeight: 600, color, marginTop: 4, fontFamily: 'ui-monospace, monospace' }}>
+      <div style={{ fontSize: 18, fontWeight: 600, color, marginTop: 4, fontFamily: 'var(--font-mono)' }}>
         {value}
       </div>
     </div>
@@ -680,6 +698,10 @@ function BreakdownTable({ title, rows, cols, onPickFirst }: {
     }}>
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{title}</div>
       <div className="table-wrap is-scroll" style={{ maxHeight: 220 }}>
+        {/* v0.10.947 — statik tablo (T1): satırlar biçimli dizge (sıralama
+            anahtarı yok) ve ≥360px ızgara kartında otomatik düzen; sabit
+            kolon genişlikleri bugünkü dağılıma yaklaşamaz. 11px ikincil
+            sayılar tablo boyunda, renkle (S3). */}
         <table>
           <thead><tr>
             {cols.map(c => <th key={c}>{c}</th>)}
@@ -687,12 +709,12 @@ function BreakdownTable({ title, rows, cols, onPickFirst }: {
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} {...rowActivation(() => onPickFirst(r.a))}>
-                <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{r.a}</td>
-                <td className="num mono">{r.b}</td>
-                <td className="num mono" style={{ fontSize: 11 }}>{r.c}</td>
-                <td className="num mono" style={{ fontSize: 11 }}>{r.d}</td>
+                <td className="mono">{r.a}</td>
+                <td className="num">{r.b}</td>
+                <td className="num cell-muted">{r.c}</td>
+                <td className="num cell-muted">{r.d}</td>
                 {cols.length === 5 && (
-                  <td className="num mono" style={{ fontSize: 11 }}>{r.e ?? '—'}</td>
+                  <td className="num cell-muted">{r.e ?? '—'}</td>
                 )}
               </tr>
             ))}
@@ -818,7 +840,7 @@ function Kv({ k, v }: { k: string; v: string }) {
   return (
     <div>
       <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{k}</div>
-      <div style={{ fontSize: 12, fontFamily: 'ui-monospace, monospace', marginTop: 2 }}>{v}</div>
+      <div className="mono" style={{ marginTop: 2 }}>{v}</div>
     </div>
   );
 }

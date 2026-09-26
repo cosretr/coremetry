@@ -3,12 +3,11 @@ import { seriesColor } from '@/lib/chartFmt';
 import { fmtClock } from '@/lib/utils';
 import { MultiLineChart } from './MultiLineChart';
 import type { ExploreSeries, SpanMetricSeries } from '@/lib/types';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 
 type TopNRow = { name: string; latest: number; total: number };
 
-const TOPN_COLS: DataTableColumn<TopNRow>[] = [
+const TOPN_COLS: ColumnDef<TopNRow>[] = [
   { id: 'name',   label: 'Name',         sortValue: r => r.name,   naturalDir: 'asc', flex: true },
   { id: 'latest', label: 'Latest',       sortValue: r => r.latest, numeric: true, width: 130 },
   { id: 'total',  label: 'Window total', sortValue: r => r.total,  numeric: true, width: 150 },
@@ -188,7 +187,7 @@ function TopNViz({ series, unit }: { series: ExploreSeries[]; unit?: string }) {
 
   return (
     <div className="table-wrap">
-      <table style={{ tableLayout: 'fixed', width: '100%' }}>
+      <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} trailing={[240]} />
         <DataTableHead dt={dt} trailing={<th></th>} />
         <tbody>
@@ -201,9 +200,11 @@ function TopNViz({ series, unit }: { series: ExploreSeries[]; unit?: string }) {
                   {r.name}
                 </span>
               </td>
-              <td className="num mono">{fmt(r.latest, unit)}</td>
-              <td className="num mono">{fmt(r.total, unit)}</td>
-              <td style={{ width: '40%' }}>
+              <DataTableCell dt={dt} col="latest" row={r} value={fmt(r.latest, unit)} />
+              <DataTableCell dt={dt} col="total" row={r} value={fmt(r.total, unit)} />
+              {/* v0.10.947 — çubuk kolonunun genişliği colgroup'taki trailing 240px'te;
+                  sabit düzende <col> genişliği hücreninkini (eski `width: 40%`) ezer. */}
+              <td>
                 <div style={{ height: 10, background: 'var(--bg3)', borderRadius: 3 }}>
                   <div style={{
                     width: `${(r.latest / max) * 100}%`,

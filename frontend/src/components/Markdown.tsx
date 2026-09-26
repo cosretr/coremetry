@@ -237,7 +237,7 @@ function renderInline(s: string, idPat?: IdLinkPattern | null): React.ReactNode[
         return (
           <a key={key++} href={l.href} target="_blank" rel="noopener noreferrer"
              title={l.label}
-             style={{ color: 'var(--accent2)', fontFamily: 'ui-monospace, monospace' }}>
+             style={{ color: 'var(--accent2)', fontFamily: 'var(--font-mono)' }}>
             {m[1]}
           </a>
         );
@@ -263,7 +263,6 @@ function renderInline(s: string, idPat?: IdLinkPattern | null): React.ReactNode[
     { re: /^`([^`]+)`/,
       render: m => <code key={key++} style={{
         background: 'var(--bg)', padding: '0 4px', borderRadius: 3,
-        fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12,
       }}>{m[1]}</code> },
   ];
   while (rest.length > 0) {

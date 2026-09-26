@@ -7,10 +7,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('büyük tablolar — content-visibility + katalog limiti', () => {
+  // v0.10.947 (tablo standardı T6) — content-visibility tek sınıfta (`.cv-row`,
+  // satır ritmi --row-h); >100 koşulu aynen korunur.
   it('EntityDetail iki satır tipi de >100 koşuluyla cv taşır', () => {
     const src = readFileSync(resolve(__dirname, 'EntityDetail.tsx'), 'utf8');
-    expect(src).toContain("svc.services.length > 100 ? { contentVisibility: 'auto'");
-    expect(src).toContain("rows.length > 100 ? { contentVisibility: 'auto'");
+    expect(src).toContain("svc.services.length > 100 ? 'cv-row' : undefined");
+    expect(src).toContain("rows.length > 100 ? 'cv-row' : undefined");
+    expect(src).not.toContain('containIntrinsicSize');
   });
   it('AdminCatalog serviceNames limitini sunucu tavanına (1000) çıkarır', () => {
     const src = readFileSync(resolve(__dirname, 'AdminCatalog.tsx'), 'utf8');

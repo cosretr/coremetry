@@ -72,7 +72,9 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
   const maxChars = dense ? 26 : 46;
   return (
     <>
-      <table style={{ width: '100%', fontSize: dense ? 10.5 : 12 }}>
+      {/* v0.10.947 — statik tablo: en çok 10 sabit satır, sıralanmaz (T1).
+          Kartta (dense) bilerek sıkışık tek punto; 12px tablonun tabanı. */}
+      <table style={dense ? { fontSize: 10.5 } : undefined}>
         <thead>
           {/* v0.10.928 (Y3) — `tr`deki renk/boyut/hiza satır-içi stili
               silindi: `thead th` kuralı üçünü de kendisi bildirdiği için
@@ -88,22 +90,18 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
           {rows.map(r => (
             <tr key={r.path}>
               <td>
-                <span
-                  title={`${r.path}\n${fmtNum(r.calls)} çağrı · ${r.errorRate.toFixed(2)}% hata · p99 ${r.p99Ms.toFixed(0)}ms`}
-                  style={{ fontFamily: 'ui-monospace, monospace' }}>
+                <span className="mono"
+                  title={`${r.path}\n${fmtNum(r.calls)} çağrı · ${r.errorRate.toFixed(2)}% hata · p99 ${r.p99Ms.toFixed(0)}ms`}>
                   {ellipsizePathMiddle(r.path, maxChars)}
                 </span>
               </td>
-              <td className="num mono">{fmtNum(r.calls)}</td>
+              <td className="num">{fmtNum(r.calls)}</td>
               {!dense && (
-                <td className="num mono" style={{
-                  color: r.errorRate > 5 ? 'var(--err)'
-                    : r.errorRate > 1 ? 'var(--warn)' : 'var(--text3)',
-                }}>{r.errorRate.toFixed(2)}</td>
+                <td className={`num ${r.errorRate > 5 ? 'cell-err' : r.errorRate > 1 ? 'cell-warn' : 'cell-faint'}`}>
+                  {r.errorRate.toFixed(2)}
+                </td>
               )}
-              <td className="num mono" style={{
-                color: dense && r.errorRate > 5 ? 'var(--err)' : undefined,
-              }}>{r.p99Ms.toFixed(0)}</td>
+              <td className={`num ${dense && r.errorRate > 5 ? 'cell-err' : ''}`}>{r.p99Ms.toFixed(0)}</td>
             </tr>
           ))}
         </tbody>

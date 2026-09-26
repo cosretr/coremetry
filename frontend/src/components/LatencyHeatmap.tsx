@@ -479,7 +479,7 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
           border: '1px solid color-mix(in srgb, var(--warn) 40%, transparent)',
           color: 'var(--warn)',
           pointerEvents: 'none',
-          fontFamily: 'ui-monospace, monospace',
+          fontFamily: 'var(--font-mono)',
         }} title="Wide windows are hash-sampled by trace_id to keep the query under the execution cap; cell counts are estimated by multiplying back up.">
           {sampledTag}
         </div>
@@ -547,7 +547,7 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
           borderRadius: 4, padding: '6px 9px',
           fontSize: 11, color: 'var(--text)',
           whiteSpace: 'nowrap', zIndex: 5,
-          fontFamily: 'ui-monospace, monospace',
+          fontFamily: 'var(--font-mono)',
           boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
         }}>
           <div style={{ fontWeight: 600 }}>
@@ -574,7 +574,7 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
         position: 'absolute', bottom: 6, left: 60, zIndex: 4,
         display: 'inline-flex', alignItems: 'center', gap: 3,
         fontSize: 10, color: 'var(--text3)', pointerEvents: 'none',
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'var(--font-mono)',
       }} title="Hücre yoğunluğu (log ölçek): az → çok">
         <span>az</span>
         {densityRamp(resolveRampTokens()).slice(1).map((c, i) => (
@@ -593,7 +593,7 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
           border: '1px solid color-mix(in srgb, var(--warn) 40%, transparent)',
           color: 'var(--warn)',
           pointerEvents: 'none',
-          fontFamily: 'ui-monospace, monospace',
+          fontFamily: 'var(--font-mono)',
         }} title={`Cells with z-score ≥ ${OUTLIER_Z} (count > mean + ${OUTLIER_Z}σ over non-empty cells)`}>
           {statsRef.current.outliers.size} outlier{statsRef.current.outliers.size === 1 ? '' : 's'}
         </div>

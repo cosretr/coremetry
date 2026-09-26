@@ -52,7 +52,7 @@ export function PhaseDonut({ running, pending, failed, size = 130, stroke = 13 }
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
         }}>
-          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 22, fontWeight: 700 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700 }}>
             {total > 0 ? total : '—'}
           </span>
           <span style={{ fontSize: 10, color: 'var(--text3)' }}>pods</span>

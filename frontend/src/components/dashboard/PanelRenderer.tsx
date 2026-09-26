@@ -951,12 +951,10 @@ function StatPanel({ cfg, range, refreshTick, height }: {
           Aggs where lower-is-better (latency / errors) flip
           red on increase; rate / count etc. stay neutral. */}
       {delta !== null && (
-        <div style={{
-          fontSize: 12,
+        <div className="mono" style={{
           // v0.10.929 (K5) — iyileşme ('good') nötr --text2; kötüleşme kırmızı kalır.
           color: tone === 'bad'  ? 'var(--err)'
                : 'var(--text2)',
-          fontFamily: 'ui-monospace, monospace',
           display: 'inline-flex', alignItems: 'center', gap: 4,
         }}
              title="Δ vs same-length prior window">

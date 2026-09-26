@@ -93,7 +93,7 @@ export function StatsLegend({ series, onToggle, isVisible, defaultCollapsed, sto
   // 600, text2, --fs-xs); burada yalnız hizalama + dolgu. Satır çizgisi iç
   // ayraç (--divider); Toplam satırının --text3 çizgisi bilinçli, kalıyor.
   const th: React.CSSProperties = { textAlign: 'right', padding: '2px 8px' };
-  const td: React.CSSProperties = { padding: '3px 8px', textAlign: 'right', borderTop: '1px solid var(--divider)', fontVariantNumeric: 'tabular-nums', fontFamily: 'ui-monospace, monospace' };
+  const td: React.CSSProperties = { padding: '3px 8px', textAlign: 'right', borderTop: '1px solid var(--divider)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' };
 
   return (
     <div style={{ marginTop: 8 }}>

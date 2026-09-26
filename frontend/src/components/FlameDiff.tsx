@@ -64,7 +64,7 @@ export function FlameDiff({ root, totalWidth = 1100 }: {
 
       <div style={{ overflow: 'auto', position: 'relative' }}
            onMouseLeave={() => setHover(null)}>
-        <svg width={totalWidth} height={height} style={{ display: 'block', fontFamily: 'monospace' }}>
+        <svg width={totalWidth} height={height} style={{ display: 'block', fontFamily: 'var(--font-mono)' }}>
           {boxes.map((b, i) => {
             const w = Math.max(0.5, b.width);
             const x = b.x;

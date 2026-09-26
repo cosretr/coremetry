@@ -508,7 +508,7 @@ function Chip({ label, value }: { label: string; value: string }) {
       display: 'inline-flex', gap: 6, alignItems: 'baseline',
     }}>
       <span style={{ color: 'var(--text3)' }}>{label}</span>
-      <span style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{value}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{value}</span>
     </span>
   );
 }
@@ -552,7 +552,7 @@ function TopologyDeltaStrip({ data, baselineLabel }: { data: ServiceMap; baselin
       {newSvcs.length > 0 && (
         <span title={newSvcs.map(s => s.service).join('\n')}>
           <span className="badge b-info" style={{ marginRight: 6 }}>+{newSvcs.length} svc</span>
-          <span style={{ color: 'var(--text3)', fontFamily: 'monospace', fontSize: 11 }}>
+          <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
             {sample(newSvcs.map(s => s.service))}
           </span>
         </span>
@@ -560,7 +560,7 @@ function TopologyDeltaStrip({ data, baselineLabel }: { data: ServiceMap; baselin
       {newDeps.length > 0 && (
         <span title={newDeps.map(e => `${e.caller} → ${e.callee}`).join('\n')}>
           <span className="badge b-info" style={{ marginRight: 6 }}>+{newDeps.length} edge</span>
-          <span style={{ color: 'var(--text3)', fontFamily: 'monospace', fontSize: 11 }}>
+          <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
             {sample(newDeps.map(e => `${e.caller}→${e.callee}`))}
           </span>
         </span>
@@ -568,7 +568,7 @@ function TopologyDeltaStrip({ data, baselineLabel }: { data: ServiceMap; baselin
       {gone.length > 0 && (
         <span title={gone.map(s => s.service).join('\n')}>
           <span className="badge b-warn" style={{ marginRight: 6 }}>−{gone.length} svc</span>
-          <span style={{ color: 'var(--text3)', fontFamily: 'monospace', fontSize: 11 }}>
+          <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
             {sample(gone.map(s => s.service))}
           </span>
         </span>
@@ -576,7 +576,7 @@ function TopologyDeltaStrip({ data, baselineLabel }: { data: ServiceMap; baselin
       {goneEdges.length > 0 && (
         <span title={goneEdges.map(e => `${e.caller} → ${e.callee}`).join('\n')}>
           <span className="badge b-err" style={{ marginRight: 6 }}>−{goneEdges.length} edge</span>
-          <span style={{ color: 'var(--text3)', fontFamily: 'monospace', fontSize: 11 }}>
+          <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
             {sample(goneEdges.map(e => `${e.caller}→${e.callee}`))}
           </span>
         </span>

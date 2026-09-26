@@ -25,7 +25,8 @@ import { timeRangeToNs, fmtDateTime } from '@/lib/utils';
 import { useEntityEnabled, useEntity, useEntityServices, useEntityLatency } from '@/lib/queries';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { serviceHref } from '@/lib/serviceHref';
-import type { EntityDetailResponse, EntityRecord, EntityServicesResponse, TimeRange } from '@/lib/types';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import type { EntityDetailResponse, EntityRecord, EntityServiceRow, EntitySeenAgg, EntityServicesResponse, TimeRange } from '@/lib/types';
 
 export default function EntityDetail() {
   const [sp] = useSearchParams();
@@ -56,6 +57,26 @@ export default function EntityDetail() {
   );
 }
 
+// v0.10.947 (tablo standardı T1) — iki kayıt listesi (cluster entity'sinde
+// penceredeki her servis / pod gelir) useDataTable'da: sıra `initialSort`
+// verilmediği için sunucununki; sayılar arayüz fontunda, sağa yaslı (S2).
+const SVC_COLS: ColumnDef<EntityServiceRow>[] = [
+  { id: 'service', label: 'Service', sortValue: s => s.service, naturalDir: 'asc', flex: true, minWidth: 160 },
+  { id: 'pods',    label: 'Pods',    sortValue: s => s.pods,    numeric: true, width: 80 },
+  { id: 'spans',   label: 'Spans',   sortValue: s => s.spans,   numeric: true, width: 100 },
+  { id: 'errors',  label: 'Errors',  sortValue: s => s.errors,  numeric: true, width: 90 },
+  { id: 'avgMs',   label: 'Avg ms',  sortValue: s => s.avgMs,   numeric: true, width: 90 },
+];
+const POD_SVC_COLS: ColumnDef<EntitySeenAgg>[] = [
+  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true, minWidth: 160 },
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 160 },
+  { id: 'service',   label: 'Service',   sortValue: r => r.service,   naturalDir: 'asc', width: 200 },
+  { id: 'spans',     label: 'Spans',     sortValue: r => r.spans,     numeric: true, width: 90 },
+  { id: 'errors',    label: 'Errors',    sortValue: r => r.errors,    numeric: true, width: 80 },
+  { id: 'avgMs',     label: 'Avg ms',    sortValue: r => r.avgMs,     numeric: true, width: 90 },
+  { id: 'lastSeen',  label: 'Last seen', sortValue: r => Date.parse(r.lastSeen), width: 170 },
+];
+
 function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDetailResponse; svc?: EntityServicesResponse; svcError?: string; at: number; pageRange: TimeRange; from: number; to: number }) {
   const { entity, parents, children, lifetimes, cluster, atMatch } = data;
   const [showLabels, setShowLabels] = useState(false);
@@ -65,6 +86,8 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
   const labels = Object.entries(entity.labels ?? {}).sort(([a], [b]) => a.localeCompare(b));
   const kids = Object.entries(children ?? {}).sort(([a], [b]) => a.localeCompare(b));
   const rows = svc?.rows ?? [];
+  const svcDt = useDataTable<EntityServiceRow>({ storageKey: 'entity-detail-services', columns: SVC_COLS, rows: svc?.services ?? [] });
+  const podDt = useDataTable<EntitySeenAgg>({ storageKey: 'entity-detail-pod-services', columns: POD_SVC_COLS, rows });
   return (
     <Stack gap={4}>
       <Row gap={2} wrap>
@@ -119,54 +142,68 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
       {svcError && <Empty icon="!" title="Servisler yüklenemedi." compact>{svcError}</Empty>}
       {svc && svc.services.length === 0 && <Empty icon="—" title="Bu pencerede bu entity altından span geçmedi." compact />}
       {svc && svc.services.length > 0 && (
-        <table>
-          <thead><tr><th>Service</th><th>Pods</th><th>Spans</th><th>Errors</th><th>Avg ms</th></tr></thead>
-          <tbody>
-            {/* v0.10.857 (scale-audit) — cluster entity'sinde penceredeki her servis gelir: >100 satırda content-visibility. */}
-            {svc.services.map(s => (
-              <tr key={s.service} style={svc.services.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
-                <td><Link to={serviceHref(s.service, { range: pageRange })} className="sec">{s.service}</Link></td>
-                <td className="mono">{s.pods}</td>
-                <td className="mono">{s.spans}</td>
-                <td className="mono">{s.errors}</td>
-                <td className="mono">{s.avgMs.toFixed(1)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        // v0.10.947 — .table-wrap: DataTableColgroup kabı bulamazsa fitColumnWidths
+        // çalışmaz; fixed düzende flex Service kolonu sıfıra inebilir.
+        <div className="table-wrap">
+          <table {...svcDt.tableProps}>
+            <DataTableColgroup dt={svcDt} />
+            <DataTableHead dt={svcDt} />
+            <tbody>
+              {/* v0.10.857 (scale-audit) — cluster entity'sinde penceredeki her servis gelir: >100 satırda content-visibility. */}
+              {svcDt.sortedRows.map(s => (
+                <tr key={s.service} className={svc.services.length > 100 ? 'cv-row' : undefined}>
+                  <DataTableCell dt={svcDt} col="service" row={s} title={s.service}>
+                    <Link to={serviceHref(s.service, { range: pageRange })} className="sec">{s.service}</Link>
+                  </DataTableCell>
+                  <DataTableCell dt={svcDt} col="pods" row={s} value={s.pods} />
+                  <DataTableCell dt={svcDt} col="spans" row={s} value={s.spans} />
+                  <DataTableCell dt={svcDt} col="errors" row={s} value={s.errors} />
+                  <DataTableCell dt={svcDt} col="avgMs" row={s} value={s.avgMs.toFixed(1)} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {rows.length > 0 && (
         <>
           <h3>Pods × services ({rows.length})</h3>
           {/* v0.10.190 — namespace'siz span satırları pod adıyla eşlendi; ilan */}
           {(svc?.nsMissingRows ?? 0) > 0 && <div className="field-hint">{svc!.nsMissingRows} satır namespace'siz span'lerden (bu cluster'ın collector'ı k8s.namespace.name basmıyor) — pod adı cluster içinde tek varsayıldı.</div>}
-          <table>
-            <thead><tr><th>Pod</th><th>Namespace</th><th>Service</th><th>Spans</th><th>Errors</th><th>Avg ms</th><th>Last seen</th></tr></thead>
-            <tbody>
-              {rows.slice(0, 200).map(r => (
-                <tr key={`${r.namespace}/${r.pod}/${r.service}`} style={rows.length > 100 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 34px' } : undefined}>
-                  <td>
-                    {r.namespace ? (
-                      <Link to={entityHref({ type: 'pod', id: `pod:${entity.clusterId}/${r.namespace}/${r.pod}`, name: r.pod, namespace: r.namespace, clusterId: entity.clusterId }, hrefOpts)} className="sec"
-                        title={`${cluster?.name ?? entity.clusterId} / ${r.namespace} / ${r.pod}`}>{r.pod}</Link>
-                    ) : <span className="mono" title="namespace span'de yok — entity linki yok">{r.pod}</span>}
-                  </td>
-                  <td>{r.namespace || '—'}</td>
-                  <td><Link to={serviceHref(r.service, { range: pageRange })} className="sec">{r.service}</Link></td>
-                  <td className="mono">{r.spans}</td>
-                  <td className="mono">{r.errors}</td>
-                  <td className="mono">{r.avgMs.toFixed(1)}</td>
-                  <td className="mono">{fmtDateTime(new Date(r.lastSeen))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table {...podDt.tableProps}>
+              <DataTableColgroup dt={podDt} />
+              <DataTableHead dt={podDt} />
+              <tbody>
+                {/* v0.10.947 — ilk 200 satır SIRALANMIŞ listeden: sıralama tüm satırlara uygulanır, kırpma sonra. */}
+                {podDt.sortedRows.slice(0, 200).map(r => (
+                  <tr key={`${r.namespace}/${r.pod}/${r.service}`} className={rows.length > 100 ? 'cv-row' : undefined}>
+                    <DataTableCell dt={podDt} col="pod" row={r}>
+                      {r.namespace ? (
+                        <Link to={entityHref({ type: 'pod', id: `pod:${entity.clusterId}/${r.namespace}/${r.pod}`, name: r.pod, namespace: r.namespace, clusterId: entity.clusterId }, hrefOpts)} className="sec"
+                          title={`${cluster?.name ?? entity.clusterId} / ${r.namespace} / ${r.pod}`}>{r.pod}</Link>
+                      ) : <span className="mono" title="namespace span'de yok — entity linki yok">{r.pod}</span>}
+                    </DataTableCell>
+                    <DataTableCell dt={podDt} col="namespace" row={r} value={r.namespace} />
+                    <DataTableCell dt={podDt} col="service" row={r} title={r.service}>
+                      <Link to={serviceHref(r.service, { range: pageRange })} className="sec">{r.service}</Link>
+                    </DataTableCell>
+                    <DataTableCell dt={podDt} col="spans" row={r} value={r.spans} />
+                    <DataTableCell dt={podDt} col="errors" row={r} value={r.errors} />
+                    <DataTableCell dt={podDt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
+                    <DataTableCell dt={podDt} col="lastSeen" row={r} value={fmtDateTime(new Date(r.lastSeen))} className="mono" />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {rows.length > 200 && <span className="field-hint">ilk 200 satır gösteriliyor</span>}
         </>
       )}
       {lifetimes.length > 1 && (
         <>
           <h3>Lifetimes ({lifetimes.length})</h3>
+          {/* v0.10.947 — statik tablo (T1): aynı entity'nin ömürleri, sunucu ≤ 50 (pratikte 1–3), sunucu sırası anlamlı; PodLifetimesTable ile aynı. */}
           <table>
             <thead><tr><th>Valid from</th><th>Valid to</th><th>Source</th><th>uid</th></tr></thead>
             <tbody>

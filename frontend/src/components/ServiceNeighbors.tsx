@@ -208,7 +208,7 @@ function Chip({ stat, range }: { stat: NeighborStat; range?: TimeRange }) {
         background: color, flexShrink: 0,
       }} />
       <span>{stat.service}</span>
-      <span style={{ color: 'var(--text3)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>
+      <span style={{ color: 'var(--text3)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
         ×{stat.traceCount} · {stat.spanCount}
       </span>
     </Link>
@@ -236,7 +236,7 @@ function SelfChip({ name }: { name: string }) {
 
 function Arrow() {
   return (
-    <span style={{ color: 'var(--text3)', fontSize: 18, fontFamily: 'ui-monospace, monospace' }}>
+    <span style={{ color: 'var(--text3)', fontSize: 18, fontFamily: 'var(--font-mono)' }}>
       →
     </span>
   );

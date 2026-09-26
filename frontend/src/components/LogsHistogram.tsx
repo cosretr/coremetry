@@ -214,7 +214,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         display: 'flex', justifyContent: onBreakdown ? 'space-between' : 'flex-end',
         alignItems: 'center', marginBottom: 4,
         fontSize: 10, color: 'var(--text-faint)',
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'var(--font-mono)',
       }}>
         {/* v0.9.1220 — kırılım seçicisi (Kibana "Break down by"). Sabit
             küçük küme → düz select (frontend-conventions §3); v0.9.1250'de

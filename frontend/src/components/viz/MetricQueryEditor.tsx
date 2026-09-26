@@ -1032,10 +1032,10 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
                     onMouseDown={e => { e.preventDefault(); applySug(name); }}
                     onMouseEnter={() => setSugIdx(i)}
                     title={name}
+                    className="mono"
                     style={{
                       padding: '3px 7px', borderRadius: 5, cursor: 'pointer',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                      fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       background: i === sugIdx ? 'var(--bg2)' : 'transparent',
                       color: i === sugIdx ? 'var(--text)' : 'var(--text2)',
                     }}>

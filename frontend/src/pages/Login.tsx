@@ -296,7 +296,7 @@ export default function LoginPage() {
           <div style={{
             marginTop: 18, textAlign: 'center',
             fontSize: 10, color: 'var(--text3)',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontFamily: 'var(--font-mono)',
             letterSpacing: '0.3px',
           }}>
             {brand.appName} {version}

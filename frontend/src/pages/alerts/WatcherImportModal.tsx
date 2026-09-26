@@ -149,7 +149,7 @@ export function WatcherImportModal({ onClose, onImported }: {
           value={raw} disabled={imported}
           onChange={e => { setRaw(e.target.value); setReport(null); }}
           spellCheck={false}
-          style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, width: '100%' }}
+          style={{ fontFamily: 'var(--font-mono)', fontSize: 12, width: '100%' }}
           placeholder={'{\n  "trigger": { "schedule": { "interval": "10m" } },\n  "input": { "search": { "request": { "indices": ["app-*"], "body": { … } } } },\n  "condition": { "compare": { "ctx.payload.hits.total": { "gte": 100 } } }\n}'} />
       </div>
 

@@ -828,7 +828,7 @@ function DeployImpactButton({ service, deploys }: {
           <div style={{
             display: 'flex', gap: 12, fontSize: 11,
             color: 'var(--text3)', marginBottom: 8,
-            fontFamily: 'ui-monospace, monospace',
+            fontFamily: 'var(--font-mono)',
           }}>
             <span>before: {resp.before.rps.toFixed(2)} rps · {resp.before.errorRate.toFixed(2)}% err · p99 {resp.before.p99Ms.toFixed(0)}ms</span>
             <span>→</span>

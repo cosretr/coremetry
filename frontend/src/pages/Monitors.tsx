@@ -125,13 +125,13 @@ function MonitorCard({ m, isAdmin, deleting, onEdit, onDelete, onTimeline, showT
         {!m.enabled && <span style={{ fontSize: 11, color: 'var(--text3)' }}>(disabled)</span>}
         {(m.type === 'http' || m.type === 'keyword') && m.url && (
           <span style={{
-            fontSize: 11, fontFamily: 'monospace', color: 'var(--text3)',
+            fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)',
             maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }} title={m.url}>{m.url}</span>
         )}
         {(m.type === 'tcp' || m.type === 'ssl-cert') && m.target && (
           <span style={{
-            fontSize: 11, fontFamily: 'monospace', color: 'var(--text3)',
+            fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)',
             maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }} title={m.target}>{m.target}</span>
         )}
@@ -173,7 +173,7 @@ function MonitorCard({ m, isAdmin, deleting, onEdit, onDelete, onTimeline, showT
           <CertDaysChip days={m.lastResult.detail} warnDays={m.certWarnDays ?? 14} />
         )}
         {m.lastResult?.latencyMs !== undefined && m.lastResult.latencyMs > 0 && (
-          <span style={{ color: 'var(--text3)', fontSize: 11, fontFamily: 'monospace' }} title="Last probe latency">
+          <span style={{ color: 'var(--text3)', fontSize: 11, fontFamily: 'var(--font-mono)' }} title="Last probe latency">
             {m.lastResult.latencyMs}ms
           </span>
         )}
@@ -218,7 +218,7 @@ function UptimeChip({ stats }: { stats: MonitorStats }) {
             display: 'inline-flex', alignItems: 'baseline', gap: 8,
             padding: '2px 8px', borderRadius: 4,
             background: 'var(--bg3)', border: '1px solid var(--border)',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontFamily: 'var(--font-mono)',
             fontVariantNumeric: 'tabular-nums', fontSize: 11,
           }}>
       <span style={{ color: 'var(--text3)', fontSize: 9, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>1h</span>
@@ -241,7 +241,7 @@ function CertDaysChip({ days, warnDays }: { days: number; warnDays: number }) {
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: '2px 8px', borderRadius: 4,
         background: 'var(--bg3)', border: '1px solid var(--border)',
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontFamily: 'var(--font-mono)',
         fontVariantNumeric: 'tabular-nums', fontSize: 11, color: tone, fontWeight: 600,
       }}>
       🔒 {label}

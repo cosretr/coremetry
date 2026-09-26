@@ -6,8 +6,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
 import { Button, Field, IconButton, Modal, SearchField, Stack } from '@/components/ui';
 import { Sparkline } from '@/components/Sparkline';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { parseDashboardImport } from '@/lib/dashboardIO';
 import { toast } from '@/lib/toast';
@@ -35,13 +34,15 @@ const STAR_PAGE = 'dashboard-star';
 // updated_at DESC döndürüyor ve sortRows STABLE olduğundan sonuç
 // "yıldızlılar üstte, her grup içinde en son güncellenen önce" —
 // yani eski varsayılan grupların İÇİNDE aynen korunuyor.
-function dashCols(starMap: Map<string, string>): DataTableColumn<DashboardSummary>[] {
+//
+// v0.10.947 (tablo standardı) — ikincil kolonların rengi `tone`da (S3).
+function dashCols(starMap: Map<string, string>): ColumnDef<DashboardSummary>[] {
   return [
     { id: 'star',        label: '',           sortValue: r => (starMap.has(r.id) ? 1 : 0), numeric: true, width: 36, minWidth: 36 },
     { id: 'name',        label: 'Dashboard',  sortValue: r => r.name,        naturalDir: 'asc', width: 240 },
     { id: 'tags',        label: 'Tags',       sortValue: r => (r.tags ?? []).join(','), naturalDir: 'asc', width: 180 },
-    { id: 'description', label: 'Description', sortValue: r => r.description, naturalDir: 'asc', width: 300 },
-    { id: 'updatedAt',   label: 'Updated',    sortValue: r => r.updatedAt,   numeric: true,     width: 150 },
+    { id: 'description', label: 'Description', sortValue: r => r.description, naturalDir: 'asc', width: 300, tone: () => 'muted' },
+    { id: 'updatedAt',   label: 'Updated',    sortValue: r => r.updatedAt,   numeric: true,     width: 150, tone: () => 'muted' },
   ];
 }
 
@@ -230,8 +231,8 @@ export default function DashboardsPage() {
           </Empty>
         )}
         {filtered && filtered.length > 0 && (
-          <div className="table-wrap is-fit">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <div className="table-wrap">
+            <table {...dt.tableProps}>
               <DataTableColgroup dt={dt} />
               <DataTableHead dt={dt} />
               <tbody>
@@ -259,19 +260,13 @@ export default function DashboardsPage() {
                         onClick={e => { e.stopPropagation(); void toggleStar(d); }}
                         icon={starMap.has(d.id) ? '★' : '☆'} />
                     </td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--text)' }}>{d.name}</span>
-                    </td>
+                    <DataTableCell dt={dt} col="name" row={d} value={d.name} className="cell-strong" />
                     <td title={(d.tags ?? []).join(', ') || undefined}>
                       <TagBadges tags={d.tags} />
                     </td>
-                    <td style={{ color: 'var(--text2)' }} title={d.description || undefined}>
-                      {d.description || <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </td>
-                    <td className="num mono" style={{ color: 'var(--text2)' }}
-                        title={`Updated ${tsLong(d.updatedAt)}`}>
-                      {tsLong(d.updatedAt)}
-                    </td>
+                    <DataTableCell dt={dt} col="description" row={d} value={d.description || null} />
+                    <DataTableCell dt={dt} col="updatedAt" row={d} value={tsLong(d.updatedAt)}
+                      title={`Updated ${tsLong(d.updatedAt)}`} />
                   </tr>
                 ))}
               </tbody>

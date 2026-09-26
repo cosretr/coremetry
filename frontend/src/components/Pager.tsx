@@ -278,7 +278,7 @@ function OffsetPager({
             aria-label="Go to page"
             title="Enter ile git"
             style={{
-              width: 56, textAlign: 'center', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              width: 56, textAlign: 'center', fontFamily: 'var(--font-mono)',
               fontVariantNumeric: 'tabular-nums', padding: '3px 6px',
             }} />
           {lastPage !== null && (

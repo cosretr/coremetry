@@ -356,7 +356,7 @@ export function Sparkline({
       {wrapped}
       <span style={{
         fontSize: 10, color: deltaColour,
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'var(--font-mono)',
       }} title={`first → last in window`}>
         {arrow} {Math.abs(deltaPct).toFixed(0)}%
       </span>
