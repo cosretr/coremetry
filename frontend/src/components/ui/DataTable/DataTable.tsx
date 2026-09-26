@@ -1,8 +1,8 @@
 import {
   useCallback, useEffect, useMemo, useRef, useState,
-  type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject,
+  type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject,
 } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { orderColumnsByModel, type ColumnModel } from '@/lib/columnModel';
 import { EMPTY_SELECTION, toggleRow, rangeSelect, selectAll, pruneSelection, type SelectionState } from '@/lib/rowSelection';
 import { useTableNav, type TableNav } from '@/lib/useTableNav';
@@ -15,6 +15,10 @@ import {
   stickyLeftOffsets,
 } from '@/lib/dataTable';
 import { getItem, setItem, dtSortKey, dtWidthKey } from '@/lib/storage';
+import { rowClickHandlers } from '@/lib/utils';
+import type { CellTone, ColumnDef } from './types';
+import { DataTableHeadMenu } from './HeadMenu';
+import { DEFAULT_W } from './rowHeight';
 
 // DataTable — Coremetry's shared sortable + column-resizable table
 // primitive (v0.7.53). Project principle: EVERY data table is
@@ -22,11 +26,62 @@ import { getItem, setItem, dtSortKey, dtWidthKey } from '@/lib/storage';
 //
 //   const dt = useDataTable({ storageKey: 'slowqueries', columns, rows,
 //                             initialSort: { id: 'totalMs', dir: 'desc' } });
-//   <table style={{ tableLayout: 'fixed', width: '100%' }}>
+//   <table {...dt.tableProps}>
 //     <DataTableColgroup dt={dt} leading={[36]} />
 //     <DataTableHead dt={dt} leading={<th style={{ width: 36 }} />} />
 //     <tbody>{dt.sortedRows.map(renderRow)}</tbody>
 //   </table>
+//
+// v0.10.939 (tablo standardı dilim 2) — hücre ve satır sözleşmesi:
+//   • `dt.tableProps` = `{ className: 'dt' }` — satır içi `{ tableLayout:
+//     'fixed', width: '100%' }` yazımının (125 site) sınıf karşılığı (T10).
+//   • Kolon bayrakları (types.ts ColumnDef): `numeric` (td.num), `mono`
+//     (kimlik/kod), `tone(row)` (.cell-err/-warn/-muted/-faint),
+//     `truncate: 'end'|'middle'|'wrap'`, `kind: 'actions'`. Sayfa sınıf
+//     YAZMAZ: `<td {...dt.cellProps(r, 'p95', text)}>` ya da
+//     `<DataTableCell dt={dt} col="p95" row={r} value={text} />`
+//     (kırpılan dizge değer `title`a gider — T11 "tam değer ipucunda";
+//     `numeric` kolonda ipucu YOK, `truncate` açıkça verilmedikçe).
+//     v0.10.939 (tablo standardı T7) — argüman sırası TEK: önce satır, sonra
+//     kolon — `cellProps(row, colId, value?)` ve `rowLink(row, colId)`.
+//     Sabit kolon (`stickyLeft/Right`) sınıfı ve `left` ofseti SAYFADA
+//     kalır: leading hücre genişliğini primitif bilmez.
+//   • Başlık satırının sağ ucunda ⋯ → "Kolonları sıfırla" (S8,
+//     HeadMenu.tsx): başlık satırının üstüne gelince / odakta belirir,
+//     etiketin üstüne biner (yer ayırmaz). Sayfa başına sıfırlama düğmesi YOK.
+//
+// SATIR = BAĞLANTI (T7, `getRowHref`) — gezinen satırın deseni:
+//
+//   const dt = useDataTable({ …, getRowHref: r => serviceHref(r.name) });
+//   <tr {...dt.rowProps(i, r)}>                    // data-row-action + yedek tık
+//     <DataTableCell dt={dt} col="name" row={r} value={r.name} />  // <Link>
+//     <DataTableCell dt={dt} col="p95" row={r} value={fmtMs(r.p95)} />
+//     <td {...dt.cellProps(r, 'links')}><SubjectLink …/></td>       // ownLink
+//   </tr>
+//
+//   • Her düz hücre AYNI href'i taşıyan gerçek `<Link className="row-link">`
+//     (`dt.rowLink(row, colId)`): orta tık / ⌘-tık / sağ tık "yeni sekmede
+//     aç" tarayıcıdan gelir. Yalnız İLK link hücresi Tab durağı; diğerleri
+//     `tabIndex=-1` (satır başına tek durak — Traces'te 8'di). Linkli
+//     hücrenin `row-cell` sınıfını (dolgu linke) `<DataTableCell>` basar —
+//     `cellProps` basmaz; linki elle çizen sayfa (önerilmez) onu da yazar.
+//   • Kendi linkini/düğmesini taşıyan kolon `ownLink: true` (ya da `kind:
+//     'actions'`): SARILMAZ — `<a>` içinde `<a>`/`<button>` geçersiz
+//     (problemsRowLink.test kuralı).
+//   • `rowProps(i, row)` satıra `data-row-action` + YEDEK fare işleyicisi
+//     basar (lib/utils `rowClickHandlers` — Services'in yardımcısı, ikinci
+//     kopya yok): ownLink/eylem hücresinin BOŞLUĞUNA tık da açar (el imleci
+//     yalan söylemez, rowAction.contract ters yön). Etkileşimli bir öğeden
+//     (a, button, input, role=button…) gelen tık yedeği tetiklemez; link
+//     hücreleri `stopPropagation` taşır — aynı tık iki kez gezinmez.
+//   • getRowHref'li tabloda `row` ZORUNLU: verilmezse `dt.sortedRows[i]`
+//     varsayılır ve gruplu/süzülmüş/sayfalanmış bir listede bu BAŞKA bir
+//     satırın href'idir (sessizce yanlış yere gider). Geliştirmede
+//     (import.meta.env.DEV) tablo başına bir kez console.error basılır.
+//   • URL-parametreli çekmece (?problem=…) için `rowLinkReplace: true`:
+//     linkler ve yedek `replace` ile gezinir (geçmiş sözleşmesi).
+//   • Seçim (T2): `selection` verilmiş tabloda seçili satır `rowProps`tan
+//     `row-selected` alır (klavye imleciyle AYNI tek seçili görünüm).
 //
 // Sort is CLIENT-SIDE by default (for the common "fetched array of
 // ≤ a few k rows" table). Server-paged tables have two options:
@@ -37,8 +92,57 @@ import { getItem, setItem, dtSortKey, dtWidthKey } from '@/lib/storage';
 // localStorage under the storageKey, so the operator's layout
 // survives reloads — same contract as the Traces v0.7.47 cols.
 
-const DEFAULT_W = 120;
+// v0.10.939 (tablo standardı T12) — DEFAULT_W rowHeight.ts'te (DataTableState
+// iskeleti aynı değeri okur); burada yalnız alt sınır.
 const DEFAULT_MIN = 48;
+
+/** v0.10.939 (tablo standardı T9/T5) — ton → sınıf. Sınıflar globals.css'te
+ *  (.cell-err/.cell-warn v0.10.931, .cell-muted/.cell-faint v0.10.939). */
+const TONE_CLASS: Record<CellTone, string> = {
+  err: 'cell-err',
+  warn: 'cell-warn',
+  muted: 'cell-muted',
+  faint: 'cell-faint',
+};
+
+/** v0.10.939 (tablo standardı T10) — `dt.tableProps`; sabit düzen `table.dt`. */
+const TABLE_PROPS = { className: 'dt' } as const;
+
+/** v0.10.939 (tablo standardı T4/T5/T9/T11) — `dt.cellProps` dönüşü (`<td {...}>`). */
+export interface CellProps {
+  className?: string;
+  /** Kırpılan (`truncate` end/middle) hücrenin TAM dizge değeri (T11). */
+  title?: string;
+}
+
+/** v0.10.939 (tablo standardı T7) — `dt.rowLink` dönüşü: `<Link {...link}>`. */
+export interface RowLinkProps {
+  to: string;
+  className: string;
+  /** Satırın İLK link hücresi Tab durağıdır; diğerleri -1 (satır başına tek durak). */
+  tabIndex?: -1;
+  replace?: boolean;
+  /** Satırın yedek tık işleyicisi (rowProps) aynı tıkla ikinci kez gezinmesin. */
+  onClick: (e: ReactMouseEvent<HTMLElement>) => void;
+}
+
+/** `dt.rowProps(i)` dönüşü — `<tr {...}>`. İşleyiciler yalnız getRowHref'li satırda. */
+export interface RowProps {
+  'data-row-idx': number;
+  'data-table-id': string;
+  'data-row-action'?: true;
+  className?: string;
+  onClick?: (e: ReactMouseEvent<HTMLElement>) => void;
+  onAuxClick?: (e: ReactMouseEvent<HTMLElement>) => void;
+  onMouseDown?: (e: ReactMouseEvent<HTMLElement>) => void;
+}
+
+// v0.10.939 (tablo standardı T7) — satırın yedek işleyicisi `rowClickHandlers`
+// (lib/utils) — etkileşimli öğeden (a, button, input, role=button…) gelen
+// olayı YOK SAYAN koruma orada, Services/TracesResult/OperationsTable ile
+// ORTAK (ikinci kopya yok). Link hücresi tıkını yine kendisi durdurur:
+// VirtualTable'ın korumasız `onRowClick`i de aynı tıkla ikinci kez gezinmesin.
+const stopRowClick = (e: ReactMouseEvent<HTMLElement>) => e.stopPropagation();
 
 export interface DataTable<T> {
   // v0.9.928 — tablonun kimliği. `rowProps` zaten satıra basıyordu ama
@@ -46,12 +150,14 @@ export interface DataTable<T> {
   // "operatör bu tabloyla etkileşti" sinyalini kaçırıyordu. DataTableHead
   // aynı damgayı `<thead>`e basmak için buradan okuyor.
   storageKey: string;
-  columns: DataTableColumn<T>[];
+  // v0.10.939 — ColumnDef (DataTableColumn'un ADDİTİF genişlemesi): hücre
+  // bayrakları (mono/tone/truncate/kind) buradan okunur.
+  columns: ColumnDef<T>[];
   // v0.9.988 (D6) — `<colgroup>`/`<thead>`de gerçekten çizilen kolonlar:
   // `headerHidden` düşmüş, dar ekranda `mobileHide` de düşmüş. Bir
   // kolonu `mobileHide` işaretleyen sayfa GÖVDE hücresini de buradan
   // (ya da `narrow`dan) sürmek zorunda — yoksa hücreler kayar.
-  visibleColumns: DataTableColumn<T>[];
+  visibleColumns: ColumnDef<T>[];
   // Telefon genişliği (<640px, D2'nin eşiğiyle aynı). Gövde hücresini
   // kolon dizisinden sürmeyen tablolar için ham kanca.
   narrow: boolean;
@@ -70,17 +176,33 @@ export interface DataTable<T> {
   nav: TableNav<T>;
   // v0.10.933 (tablo standardı T2) — `data-row-action` yalnız onOpen verilmiş
   // tabloda: satır açılabilir, imleç + hover globals.css'ten bu işaretle gelir.
-  rowProps: (index: number) => { 'data-row-idx': number; 'data-table-id': string; 'data-row-action'?: true; className?: string };
+  // v0.10.939 (T7) — getRowHref'li tabloda href'i olan satır da işaret alır
+  // ve YEDEK fare işleyicisi taşır (ownLink/eylem hücresinin boşluğu).
+  // `row`: `index` dt.sortedRows'taki sıradır; gruplu/süzülmüş bir listede
+  // satırı AÇIKÇA verin (ServicePodsTable gibi). v0.10.939 (T7) —
+  // getRowHref'li tabloda `row` verilmezse geliştirmede console.error.
+  // v0.10.939 (T2) — seçim API'si satırı seçili sayıyorsa `row-selected`.
+  rowProps: (index: number, row?: T) => RowProps;
   // v0.10.249 (DataTable dilim 4) — ADDİTİF. Seçenek verilmediğinde
   // bugünkü davranış bayt-bayt aynı (109 çağrı yeri).
   /** Bildirilen kolonların tamamı (columnModel gizlemiş olsa da). */
-  allColumns: DataTableColumn<T>[];
+  allColumns: ColumnDef<T>[];
   /** Satır seçimi (selection verilmişse); yoksa null. */
   selection: DataTableSelection<T> | null;
   /** Sunucu sayfalama demeti (server verilmişse); j son satırda onPage(page+1). */
   server: DataTableServer | null;
   /** Satır = link (v0.10.216); VirtualTable ownLink olmayan hücreyi sarar. */
   getRowHref: ((row: T) => string | null) | null;
+  /** v0.10.939 (T10) — `<table {...dt.tableProps}>`: sabit düzen + tam genişlik (`table.dt`). */
+  tableProps: { className: string };
+  /** v0.10.939 (T4/T5/T8/T9/T11) — hücre sınıfı + kırpılan değerin `title`ı.
+   *  `value` yalnız DİZGE ise ipucu olur (`numeric` kolonda yalnız `truncate`
+   *  açıkça verilmişse); bilinmeyen kolon → `{}`. Argüman sırası `rowLink` ile
+   *  aynı: önce satır. `row-cell` BASMAZ — linki çizen `<DataTableCell>` basar. */
+  cellProps: (row: T, colId: string, value?: unknown) => CellProps;
+  /** v0.10.939 (T7) — hücrenin satır linki; getRowHref yok / href null /
+   *  ownLink / actions kolonu → null. */
+  rowLink: (row: T, colId: string) => RowLinkProps | null;
 }
 
 export interface DataTableSelection<T> {
@@ -102,9 +224,9 @@ export interface DataTableServer {
   onSort?: (s: SortState) => void;
 }
 
-export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, initialSort, persistSort = true, sortIds, serverSort, onSortChange, urlSortFallback, onOpen, searchRef, columnModel, selection: selectionOpt, server, getRowHref }: {
+export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, initialSort, persistSort = true, sortIds, serverSort, onSortChange, urlSortFallback, onOpen, searchRef, columnModel, selection: selectionOpt, server, getRowHref, rowLinkReplace = false }: {
   storageKey: string;
-  columns: DataTableColumn<T>[];
+  columns: ColumnDef<T>[];
   rows: T[];
   initialSort?: SortState;
   // persistSort (v0.10.669) — false: sıralama localStorage'dan OKUNMAZ ve
@@ -136,7 +258,13 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   selection?: { mode: 'single' | 'multi'; getRowId: (row: T) => string; value?: ReadonlySet<string>; onChange?: (ids: ReadonlySet<string>) => void };
   /** v0.10.249 — sunucu sayfalama/sıralama demeti. */
   server?: DataTableServer;
+  // v0.10.939 (tablo standardı T7) — satır = gerçek bağlantı. Verilince
+  // `dt.rowLink` / `<DataTableCell>` düz hücreleri `<Link class="row-link">`
+  // ile sarar, `rowProps` işaret + yedek tık basar (dosya başı deseni).
   getRowHref?: (row: T) => string | null;
+  // v0.10.939 (T7) — URL-parametreli çekmece hedefi (?problem=…): linkler ve
+  // yedek tık `replace` ile gezinir, geri tuşu çekmece geçmişiyle dolmaz.
+  rowLinkReplace?: boolean;
   // serverSort (v0.8.251) — for server-paged tables (Services first): the
   // ORDER BY runs on the backend, so the hook keeps EVERY piece of the sort
   // UX — URL `s_<storageKey>` param, localStorage persistence, header click /
@@ -260,6 +388,9 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   }, [urlSort, knownSortSig]);
 
   const toggleSort = useCallback((id: string) => {
+    // v0.10.939 (tablo standardı T8) — eylem kolonu sıralanmaz; bir
+    // `sortValue` unutulmuş olsa bile (sahte sıralanabilir, T3).
+    if (columns.find(c => c.id === id)?.kind === 'actions') return;
     // resolveToggle is the pure half (lib/dataTable.ts): null = column
     // unknown / not sortable → no-op, no state write, no callback.
     const next = resolveToggle(columns, sort, id);
@@ -370,28 +501,118 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   // seçim yaparken kaydırma DİĞERİNDE oluyordu. Kimliği satıra basmak,
   // sarmalayıcıya basmaktan daha ucuz (sayfaların `<div>`ine dokunmuyor).
   const openable = !!onOpen;
+  const navigate = useNavigate();
+  // v0.10.939 (tablo standardı T7) — `rowProps(i)` satırsız çağrı uyarısı
+  // tablo başına BİR kez (her satır × her render konsolu boğardı).
+  const warnedRowArg = useRef(false);
   const rowProps = useCallback(
-    (index: number): ReturnType<DataTable<T>['rowProps']> => ({
-      'data-row-idx': index,
-      'data-table-id': storageKey,
-      /* v0.10.933 (tablo standardı T2) — anahtar YALNIZ onOpen'lı tabloda
-         basılır: `'data-row-action': undefined` yayılsaydı, yayılım sırası
-         satırdaki açık bir işareti (rowClickHandlers vb.) sıfırlayabilirdi. */
-      ...(openable ? { 'data-row-action': true as const } : {}),
-      className: nav.selected === index ? 'row-selected' : undefined,
-    }),
-    [nav, storageKey, openable],
+    (index: number, rowArg?: T): RowProps => {
+      /* v0.10.939 (tablo standardı T7) — getRowHref'li tabloda satır AÇIKÇA
+         verilmeli: `sortedRows[index]` gruplu/süzülmüş/sayfalanmış listede
+         başka bir satırdır ve yedek tık sessizce YANLIŞ href'e gider.
+         Geliştirmede sesli (üretim paketinde bu dal yok). */
+      if (import.meta.env.DEV && getRowHref && rowArg === undefined && !warnedRowArg.current) {
+        warnedRowArg.current = true;
+        console.error(`useDataTable(${storageKey}): getRowHref'li tabloda rowProps(i, row) — satırı açıkça verin; `
+          + 'rowProps(i) dt.sortedRows[i]\'yi varsayar (gruplu/süzülmüş listede yanlış satır).');
+      }
+      const row = rowArg !== undefined ? rowArg : sortedRows[index];
+      /* v0.10.939 (tablo standardı T2) — TEK seçili görünüm: klavye imleci
+         (nav.selected) YA DA seçim API'sinin seçili saydığı satır. */
+      const selected = nav.selected === index
+        || (selectionApi !== null && row !== undefined && selectionApi.isSelected(row));
+      const base: RowProps = {
+        'data-row-idx': index,
+        'data-table-id': storageKey,
+        /* v0.10.933 (tablo standardı T2) — anahtar YALNIZ onOpen'lı tabloda
+           basılır: `'data-row-action': undefined` yayılsaydı, yayılım sırası
+           satırdaki açık bir işareti (rowClickHandlers vb.) sıfırlayabilirdi. */
+        ...(openable ? { 'data-row-action': true as const } : {}),
+        className: selected ? 'row-selected' : undefined,
+      };
+      /* v0.10.939 (tablo standardı T7) — getRowHref'li satır: işaret + YEDEK
+         fare işleyicisi, lib/utils `rowClickHandlers`tan (Services'in
+         yardımcısı): etkileşimli öğeden gelen olay yok sayılır, ⌘/Ctrl/Shift
+         ve orta tık yeni sekme. Link hücreleri kendi tıkını durdurur (rowLink
+         onClick); buraya yalnız ownLink/eylem hücresinin boşluğu düşer. */
+      const href = getRowHref && row !== undefined ? getRowHref(row) : null;
+      if (!href) return base;
+      return {
+        ...base,
+        ...rowClickHandlers(href, () => navigate(href, { replace: rowLinkReplace })),
+      };
+    },
+    [nav, storageKey, openable, sortedRows, getRowHref, navigate, rowLinkReplace, selectionApi],
   );
 
   // v0.9.988 (D6.1) — dar ekran süzgeci. `narrow` false olduğu sürece
   // liste bugünkü `!headerHidden` süzgeciyle BİREBİR aynı; hiçbir kolon
   // `mobileHide` taşımadığı için bu sürümde telefonda da aynı.
+  // v0.10.939 — karar saf çekirdekte (visibleColumns); süzgeç ColumnDef
+  // ÖĞELERİNİ korur ki hücre bayrakları tipte kaybolmasın.
   const narrow = useIsNarrow();
-  const visible = useMemo(() => visibleColumns(columns, narrow), [columns, narrow]);
+  const visible = useMemo(() => {
+    const keep = new Set<DataTableColumn<T>>(visibleColumns(columns, narrow));
+    return columns.filter(c => keep.has(c));
+  }, [columns, narrow]);
+
+  // ── v0.10.939 (tablo standardı dilim 2) — hücre sözleşmesi ─────────────
+  // Bayraklar BİLDİRİLEN kolondan okunur (columnModel gizlese de tanım aynı).
+  const colById = useMemo(() => new Map(declaredColumns.map(c => [c.id, c])), [declaredColumns]);
+  // T7 — satırın TEK Tab durağı: görünür sırada ilk sarılabilir kolon.
+  const firstLinkColId = useMemo(
+    () => visible.find(c => !c.ownLink && c.kind !== 'actions')?.id ?? null,
+    [visible],
+  );
+  const linkHref = useCallback((row: T, colId: string): string | null => {
+    if (!getRowHref) return null;
+    const c = colById.get(colId);
+    if (!c || c.ownLink || c.kind === 'actions') return null;
+    return getRowHref(row) || null;
+  }, [getRowHref, colById]);
+  const rowLink = useCallback((row: T, colId: string): RowLinkProps | null => {
+    const href = linkHref(row, colId);
+    if (!href) return null;
+    return {
+      to: href,
+      className: 'row-link',
+      ...(colId === firstLinkColId ? {} : { tabIndex: -1 as const }),
+      ...(rowLinkReplace ? { replace: true } : {}),
+      onClick: stopRowClick,
+    };
+  }, [linkHref, firstLinkColId, rowLinkReplace]);
+  const cellProps = useCallback((row: T, colId: string, value?: unknown): CellProps => {
+    const c = colById.get(colId);
+    if (!c) return {};
+    const actions = c.kind === 'actions';
+    const trunc = c.truncate ?? 'end';
+    const tone = !actions && c.tone ? c.tone(row) : undefined;
+    // v0.10.939 (tablo standardı T7) — `row-cell` BURADA YOK: sınıf "dolgu
+    // linke" demek ve linki çizen <DataTableCell> basar. cellProps'u elle
+    // yayan (linksiz) bir hücre dolgusunu kaybetmesin.
+    const className = [
+      c.numeric && !actions ? 'num' : '',
+      c.mono && !actions ? 'mono' : '',
+      tone ? TONE_CLASS[tone] : '',
+      trunc === 'wrap' && !actions ? 'cell-wrap' : '',
+      // v0.10.939 (tablo standardı T8) — `col-actions` (kolon türü); içteki
+      // `.cell-actions` sarmalayıcısı (td > .cell-actions) ayrı bir şey.
+      actions ? 'col-actions' : '',
+    ].filter(Boolean).join(' ');
+    const out: CellProps = {};
+    if (className) out.className = className;
+    // v0.10.939 (tablo standardı T11) — sayı kırpılmaz (sağa yaslı kısa
+    // değer): `numeric` kolonda ipucu yalnız `truncate` AÇIKÇA verilmişse.
+    // Kimlik / mono / middle kolonları ipucunu tutar.
+    const titled = !c.numeric || c.truncate !== undefined || !!c.mono;
+    if (!actions && titled && trunc !== 'wrap' && typeof value === 'string' && value !== '') out.title = value;
+    return out;
+  }, [colById]);
 
   return {
     storageKey, columns, visibleColumns: visible, narrow, sortedRows, sort, toggleSort, setSort, colWidths, startResize, resizeBy, resetLayout, nav, rowProps,
     allColumns: declaredColumns, selection: selectionApi, server: server ?? null, getRowHref: getRowHref ?? null,
+    tableProps: TABLE_PROPS, cellProps, rowLink,
   };
 }
 
@@ -556,26 +777,10 @@ export function DataTableColgroup<T>({ dt, leading, trailing }: { dt: DataTable<
   );
 }
 
-// ResetLayoutButton — kalıcı kolon genişliklerini temizler (v0.9.660).
-//
-// `resetLayout` useDataTable'dan beri DÖNDÜRÜLÜYORDU ve HİÇBİR sayfa
-// bağlamamıştı. Operatör bir kolonu bir kez sürüklediğinde genişlik
-// localStorage'a yazılıyor ve kalıcı oluyor; o genişlik tabloyu ekrandan
-// taşırıyorsa geri dönüş yolu YOK — çıkmaz sokak. Users tablosunun
-// kaymasında (v0.9.660) bu ikinci katmandı.
-//
-// KENDİ KENDİNİ GİZLİYOR: kalıcı genişlik yoksa buton da yok. Hiçbir şey
-// yapmayan bir düğme araç çubuğunda gürültüdür ve operatör onu bir daha
-// okumaz.
-export function ResetLayoutButton<T>({ dt }: { dt: DataTable<T> }) {
-  if (Object.keys(dt.colWidths).length === 0) return null;
-  return (
-    <button className="sec" onClick={dt.resetLayout}
-      title="Restore default column widths — clears widths you dragged, so the table fits the window again">
-      Reset columns
-    </button>
-  );
-}
+// (ResetLayoutButton — v0.9.660 → v0.10.939 SİLİNDİ. Sayfa başına "Reset
+// columns" düğmesi 123 tablonun 18'inde, her birinde başka bir yerdeydi;
+// sıfırlama artık DataTableHead'in ⋯ menüsünde, HER tabloda aynı yerde —
+// HeadMenu.tsx. Uyum katmanı bırakılmadı.)
 
 // DataTableHead — the full <thead><tr> built from the column defs: each
 // sortable column is clickable (▲▼↕ glyph + aria-sort, matching the
@@ -596,6 +801,13 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
   // sola sabit zincir onların ardından başlar.
   stickyLeftBase?: number;
 }) {
+  // v0.10.939 (tablo standardı S8) — ⋯ menüsü SON görünür yönetilen başlıkta
+  // (yeni hücre yok: kolon genişlikleri + yapışkan başlık aynen). `trailing`
+  // verilmiş tabloda o hücre sayfanındır; menü ondan önceki son kolonda
+  // durur (dilim 3'te eylem sütunları `kind: 'actions'`e göçünce menü
+  // boş başlıklı eylem sütununa, yani satırın sağ ucuna oturur).
+  const cols = dt.visibleColumns;
+  const menuHostId = cols.some(c => c.kind !== 'actions') ? cols[cols.length - 1]?.id : undefined;
   return (
     // v0.9.928 — başlık da tablonun kimliğini taşıyor: bir kolona tıklayıp
     // sıralamak "bu tabloyla çalışıyorum" demektir ve j/k sahipliği o tıkla
@@ -604,12 +816,27 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
     <thead data-table-id={dt.storageKey}>
       <tr>
         {leading}
-        {dt.visibleColumns.map(c => {
-          const sortable = !!c.sortValue;
-          const active = dt.sort.id === c.id;
-          const align = c.align ?? (c.numeric ? 'right' : 'left');
-          const cls = [c.numeric ? 'num' : '', sortable ? 'sortable' : '', active ? 'sorted' : '', c.stickyRight ? 'sticky-right' : '', c.stickyLeft ? 'sticky-left' : '']
+        {cols.map(c => {
+          // v0.10.939 (tablo standardı T8) — eylem kolonu: etiket boş (ad
+          // aria-label'da), sıralanmaz, boyutlanmaz, sağa yaslı.
+          const actions = c.kind === 'actions';
+          const sortable = !!c.sortValue && !actions;
+          const active = dt.sort.id === c.id && !actions;
+          const align = actions ? 'right' : c.align ?? (c.numeric ? 'right' : 'left');
+          const menuHost = c.id === menuHostId;
+          // v0.10.939 (tablo standardı T8) — eylem kolonu `col-actions` (td ile aynı).
+          const cls = [c.numeric && !actions ? 'num' : '', sortable ? 'sortable' : '', active ? 'sorted' : '', c.stickyRight ? 'sticky-right' : '', c.stickyLeft ? 'sticky-left' : '', actions ? 'col-actions' : '', menuHost ? 'dt-menu-host' : '',
+            // Kayıtlı genişlik varken ⋯ hep görünür: sıfırlanacak bir şey var ve
+            // taşan tabloda son başlık kaydırılmış olabilir (eski görünür düğmenin işi).
+            menuHost && Object.keys(dt.colWidths).length > 0 ? 'dt-menu-host--dirty' : '']
             .filter(Boolean).join(' ');
+          // v0.10.939 (tablo standardı S8) — ⋯ taşıyan başlığın adı etiketi:
+          // yoksa columnheader adı içerikten hesaplanır ve tetiğin
+          // aria-label'ı eklenir ("N Tablo seçenekleri"). Tetik kendi adıyla
+          // ayrı bir düğme olarak kalır.
+          const thLabel = actions
+            ? (c.label || 'Eylemler')
+            : menuHost && typeof c.label === 'string' ? (c.label || 'Eylemler') : undefined;
           // v0.9.1256 — sola sabit başlıkların kümülatif left'i (saf
           // çekirdek; resize edilmiş genişlik anında yansır).
           const leftOff = c.stickyLeft
@@ -618,6 +845,7 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
           return (
             <th key={c.id}
                 className={cls || undefined}
+                aria-label={thLabel}
                 onClick={sortable ? () => dt.toggleSort(c.id) : undefined}
                 // v0.10.249 — klavye: sıralanabilir başlık odaklanır; Enter/Space
                 // sıralar, Shift+←/→ 8 px daraltır/genişletir (audit §9).
@@ -666,7 +894,7 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
               {sortable && align === 'right' && (
                 <span className="sort-arrow" style={{ marginLeft: 0, marginRight: 4 }}>{active ? (dt.sort.dir === 'desc' ? '▼' : '▲') : '↕'}</span>
               )}
-              {renderLabel ? renderLabel(c) : c.label}
+              {actions ? null : renderLabel ? renderLabel(c) : c.label}
               {sortable && align !== 'right' && (
                 <span className="sort-arrow">{active ? (dt.sort.dir === 'desc' ? '▼' : '▲') : '↕'}</span>
               )}
@@ -679,7 +907,8 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
                   117 tablonun HİÇBİRİNE ulaşmıyordu — yazılmış,
                   test edilmiş, bağlanmamış (v0.9.660 sınıfı). Tek satır
                   delegasyon hepsini kapsıyor. */}
-              <ColResizeHandle dt={dt} colId={c.id} />
+              {!actions && <ColResizeHandle dt={dt} colId={c.id} />}
+              {menuHost && <DataTableHeadMenu dt={dt} />}
             </th>
           );
         })}

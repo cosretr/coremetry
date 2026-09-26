@@ -6,7 +6,7 @@
 // bu pod'a süzülmüş Traces.
 import { Link } from 'react-router-dom';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { fmtNum, fmtDateTime } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
@@ -83,7 +83,7 @@ export function PodServicesTable({ data, pending, error, pod, spanCluster, pageR
         </table>
       </div>
       <div className="pod-cap">
-        <code className="mono">GET /api/entity/services</code> · entity_seen_5m · seçili pencere · Hata % ve Ort. ms bu pod'daki span'lerin; yüzdelik yok (pod-başı p95 ancak servis sayfasının Pods sekmesinde). <ResetLayoutButton dt={dt} />
+        <code className="mono">GET /api/entity/services</code> · entity_seen_5m · seçili pencere · Hata % ve Ort. ms bu pod'daki span'lerin; yüzdelik yok (pod-başı p95 ancak servis sayfasının Pods sekmesinde).
       </div>
     </>
   );

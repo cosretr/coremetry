@@ -112,18 +112,21 @@ describe('paylaşılan gövde — CallerSection', () => {
     expect(drawer).toContain("import { CallerSection } from './CallerSection';");
   });
   it('sayfa kendi düzen anahtarlarını veriyor (çekmecenin genişlikleri taşmasın)', () => {
-    expect(page).toContain('storageKey="msg-topic-producers" showReset');
-    expect(page).toContain('storageKey="msg-topic-consumers" showReset');
-    // Çekmece iki propu da GEÇMEZ — varsayılanlar bugünkü davranış.
+    expect(page).toContain('storageKey="msg-topic-producers"');
+    expect(page).toContain('storageKey="msg-topic-consumers"');
+    // Çekmece propu GEÇMEZ — varsayılan bugünkü davranış.
     expect(drawer).not.toContain('storageKey="msg-topic');
-    expect(drawer).not.toContain('showReset');
+    // v0.10.939 (tablo standardı S8) — sayfaya özel sıfırlama propu kalktı;
+    // "Kolonları sıfırla" her tablonun başlık ⋯ menüsünde.
+    expect(page).not.toContain('showReset');
   });
   it('sekme tabloları paylaşılan primitifi kullanıyor', () => {
     for (const key of ['msg-topic-ops', 'msg-topic-spannames']) {
       expect(page).toContain(`storageKey: '${key}'`);
     }
     expect(page.match(/<DataTableColgroup dt=\{dt\} \/>/g)?.length ?? 0).toBe(2);
-    expect(page.match(/<ResetLayoutButton dt=\{dt\} \/>/g)?.length ?? 0).toBe(2);
+    // v0.10.939 (S8) — sıfırlama DataTableHead ⋯ menüsünde, sayfada düğme yok.
+    expect(page).not.toContain('<ResetLayout' + 'Button');
     // >100 satır ihtimali olan her tablo content-visibility taşır.
     expect(page.match(/contentVisibility: 'auto'/g)?.length ?? 0).toBe(2);
   });

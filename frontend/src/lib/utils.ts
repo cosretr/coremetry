@@ -343,15 +343,36 @@ export function substituteVars(s: string, vars: Record<string, string>): string 
 //
 //   <tr {...rowClickHandlers(`/trace?id=${t.traceId}`,
 //                             () => router.push(`/trace?id=${t.traceId}`))}>
+//
+// v0.10.939 (tablo standardı T7) — satırın İÇİNDEKİ etkileşimli bir öğeden
+// (a, button, input, role=button …) gelen olay YOK SAYILIR: o öğe kendi işini
+// yapar (link gezinir, düğme eylemini çalıştırır). Eskiden satır da gezinirdi:
+// hücredeki bir <a>'ya orta tık tarayıcının kendi yeni sekmesi + satırın
+// window.open'ı = İKİ sekme; satırdaki düğmeye tık eylem + gezinme. Aynı
+// koruma useDataTable'ın getRowHref yedeğinde (dt.rowProps) — o da bu
+// yardımcıdan kurulur, ikinci bir kopya yok.
+const ROW_INTERACTIVE = 'a[href], button, input, select, textarea, label, summary, '
+  + '[role="button"], [role="link"], [role="menuitem"], [role="checkbox"], [role="switch"], [role="option"]';
+/** v0.10.939 (tablo standardı T7) — olay satırın içindeki etkileşimli bir öğeden mi geldi?
+ *  Satırın KENDİSİ (ör. role="button" satır) sayılmaz. */
+export function fromInteractive(e: ReactMouseEvent): boolean {
+  const t = e.target;
+  if (!(t instanceof Element)) return false;
+  const hit = t.closest(ROW_INTERACTIVE);
+  return !!hit && hit !== e.currentTarget && e.currentTarget.contains(hit);
+}
+const openNewTab = (href: string) => { window.open(href, '_blank', 'noopener,noreferrer'); };
+
 export function rowClickHandlers(href: string, navigate: () => void) {
   return {
     // v0.10.933 (tablo standardı T2) — el imleci + hover yalnız bu işareti
     // (ya da role="button" / .row-link) taşıyan satıra verilir (globals.css).
     'data-row-action': true as const,
     onClick: (e: ReactMouseEvent) => {
+      if (fromInteractive(e)) return;
       // Left-click with a modifier → new tab. Match what an <a href> does.
       if (e.metaKey || e.ctrlKey || e.shiftKey) {
-        window.open(href, '_blank', 'noopener,noreferrer');
+        openNewTab(href);
         return;
       }
       navigate();
@@ -359,13 +380,12 @@ export function rowClickHandlers(href: string, navigate: () => void) {
     // Middle button. preventDefault on mousedown stops Chrome's
     // auto-scroll widget; auxclick fires after and is what we react to.
     onAuxClick: (e: ReactMouseEvent) => {
-      if (e.button === 1) {
-        e.preventDefault();
-        window.open(href, '_blank', 'noopener,noreferrer');
-      }
+      if (e.button !== 1 || fromInteractive(e)) return;
+      e.preventDefault();
+      openNewTab(href);
     },
     onMouseDown: (e: ReactMouseEvent) => {
-      if (e.button === 1) e.preventDefault();
+      if (e.button === 1 && !fromInteractive(e)) e.preventDefault();
     },
   };
 }

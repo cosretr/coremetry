@@ -9,11 +9,12 @@
 // doğmadan tek eve çekildi.
 //
 // ÇEKMECE DAVRANIŞI DEĞİŞMEDİ, ve bu bir iddia değil ölçü: `storageKey`
-// verilmezse eskisi gibi `deps-callers-${tone}`, `showReset` verilmezse
-// "Reset columns" düğmesi YOK. Çekmece iki propu da geçmiyor.
+// verilmezse eskisi gibi `deps-callers-${tone}`. Çekmece propu geçmiyor.
+// v0.10.939 (tablo standardı S8) — sayfaya özel sıfırlama düğmesi propu
+// kalktı: "Kolonları sıfırla" her tablonun başlık ⋯ menüsünde (DataTableHead).
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { DBCallerBreakdown, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
@@ -42,7 +43,7 @@ import { fmtNum } from '@/lib/utils';
 // contract the page-level table above uses). The client-side
 // search filter is preserved and feeds filtered rows into the
 // primitive; sort + column-resize layout persist per-tone.
-export function CallerSection({ title, rows, emptyMessage, tone, range, storageKey, showReset }: {
+export function CallerSection({ title, rows, emptyMessage, tone, range, storageKey }: {
   title: string;
   rows: DBCallerBreakdown[];
   emptyMessage: string;
@@ -59,8 +60,6 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
    * diğerinin sürüklediği genişlikleri miras alırdı.
    */
   storageKey?: string;
-  /** v0.10.575 — sayfada "Reset columns" görünür; çekmecede (varsayılan) YOK. */
-  showReset?: boolean;
 }) {
   type Caller = DBCallerBreakdown;
   // v0.10.929 (K5) — rol bir kategori, sağlık değil: consumer yeşil değil, nötr.
@@ -137,14 +136,6 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
         {search && (
           <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 400 }}>
             {dt.sortedRows.length} of {rows.length}
-          </span>
-        )}
-        {/* Arama kutusu zaten `margin-left:auto` alıyor; İKİ auto marj boş
-            alanı BÖLÜŞÜR ve kutuyu ortaya iterdi. Bu yüzden itme yalnız
-            kutunun olmadığı hâlde (≤10 satır). */}
-        {showReset && (
-          <span style={{ marginLeft: rows.length > 10 ? undefined : 'auto' }}>
-            <ResetLayoutButton dt={dt} />
           </span>
         )}
       </div>

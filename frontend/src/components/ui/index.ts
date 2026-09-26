@@ -114,3 +114,7 @@ export { PriorityBadge } from './PriorityBadge';
 
 export { SectionHead } from './SectionHead'; // v0.10.715 — bölüm başlığı atomu
 export type { SectionHeadProps } from './SectionHead';
+
+// v0.10.939 (tablo standardı T1) — öznitelik paneli atomu (dl/dt/dd); 21 yer dilim 3'te göçer.
+export { KeyValue, KeyValueRow } from './KeyValue';
+export type { KeyValueProps, KeyValueRowProps, KeyValueItem, KeyValueLabelWidth } from './KeyValue';

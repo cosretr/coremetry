@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { fmtDateTime, fmtBytes } from '@/lib/utils';
 import { fmtCores, podPhaseBadge } from '@/pages/clusters/thresholds';
@@ -112,7 +112,7 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
         </table>
       </div>
       <div className="pod-cap">
-        Kardeşler <code className="mono">/api/entity</code> (sunucu ≤ 50) · faz/restart/CPU/Mem <code className="mono">/api/clusters/pods</code> (topk 500) ile ad üzerinden{truncated ? ' — liste kesik: «—» yok demek değil' : ''}. <ResetLayoutButton dt={dt} />
+        Kardeşler <code className="mono">/api/entity</code> (sunucu ≤ 50) · faz/restart/CPU/Mem <code className="mono">/api/clusters/pods</code> (topk 500) ile ad üzerinden{truncated ? ' — liste kesik: «—» yok demek değil' : ''}.
       </div>
     </>
   );

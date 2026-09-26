@@ -16,7 +16,7 @@ import { teamOptionsCI } from '@/lib/teamOptions';
 import { derivedTeamTitle } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL } from '@/lib/inboxUrl';
 import { useUrlEnv } from '@/lib/useUrlEnv';
-import { useDataTable, DataTableHead, DataTableColgroup, resolveInitialSort, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, resolveInitialSort } from '@/components/ui/DataTable';
 import { FacetMultiSelect } from '@/components/ui/FacetMultiSelect';
 import { InboxTriageDrawer } from '@/components/InboxTriageDrawer';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
@@ -899,27 +899,10 @@ export default function InboxPage() {
                 <Button variant="ghost" size="sm" onClick={() => setMinOcc(5)}>5+ only</Button>
               </>
             )}
-            {/* v0.9.1332 — operatör raporu: "neden sayfa yatayda kayıyor".
-                Kayan şey sayfa DEĞİL, tablo kendi .table-wrap kabında
-                (overflow-x:auto) — ama sebebi iki katmanlı olabiliyor ve
-                ikincisinin çıkış yolu yoktu. Sürüklenmiş kolon genişlikleri
-                localStorage'da kalıcı (dt.<key>.widths) ve columnLayoutSig
-                onları yalnız BEYAN EDİLEN bir genişlik değişince atıyor;
-                saf sürükleme sonsuza kadar yaşıyor. Tabloyu ekrandan
-                taşıran bir genişlik, geri dönüşü olmayan bir çıkmaz
-                oluyordu — v0.9.660'ta Users tablosunda ölçülen ikinci
-                katmanın aynısı.
-
-                ResetLayoutButton v0.9.660'ta tam bu iş için yazıldı ve
-                Users DIŞINDA hiçbir sayfa bağlamadı. Kendi kendini
-                gizliyor (kalıcı genişlik yoksa render etmiyor), yani bu
-                satıra sürekli bir gürültü eklemiyor.
-
-                Tutamağa çift tık da aynı şeyi yapıyor (DataTable.tsx:289)
-                ama keşfedilebilir değil: hiçbir yerde yazmıyor. */}
-            <span style={{ marginLeft: 'auto' }}>
-              <ResetLayoutButton dt={dt} />
-            </span>
+            {/* v0.9.1332 — sürüklenmiş kolon genişliklerinin çıkmazı (operatör:
+                "neden sayfa yatayda kayıyor"). v0.10.939 (tablo standardı S8):
+                "Kolonları sıfırla" artık başlık satırının ⋯ menüsünde
+                (DataTableHead), sayfa başına düğme yok. */}
           </div>
         )}
         {scanCapped && (

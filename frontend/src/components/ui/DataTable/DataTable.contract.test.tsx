@@ -8,13 +8,16 @@
 //   • columnModel görünür sırayı/gizliyi uygular, allColumns tam kalır,
 //     genişlik imzası bildirilen kolonlardan (gizleme genişliği sıfırlamaz)
 //   • VirtualTable aria-rowcount basar; boş satır colSpan görünür kolon sayısı
-//   • selection: toggle/range/all/clear id ile
+//     (v0.10.939 — boş hâl DataTableState satırı; `state` prop'u türü seçer,
+//     İngilizce 'No rows.' vt-empty hücresi yok)
+//   • selection: toggle/range/all/clear id ile; v0.10.939 (T2) seçili satır
+//     rowProps'tan `row-selected` alır
 import { describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { useDataTable, DataTableHead, DataTableColgroup, VirtualTable, type DataTable, type ColumnDef, type ColumnModel } from './index';
+import { useDataTable, DataTableHead, DataTableColgroup, VirtualTable, DATA_TABLE_STATE_TEXT, type DataTable, type ColumnDef, type ColumnModel, type VirtualTableProps } from './index';
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -52,7 +55,7 @@ function Probe({ model, selection }: { model?: ColumnModel | null; selection?: b
       <table>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
-        <tbody>{dt.sortedRows.map((r, i) => <tr key={r.id} {...dt.rowProps(i)}><td>{r.name}</td></tr>)}</tbody>
+        <tbody>{dt.sortedRows.map((r, i) => <tr key={r.id} {...dt.rowProps(i, r)}><td>{r.name}</td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -105,11 +108,28 @@ describe('selection bağlaması', () => {
     expect(sel().ids.size).toBe(3);
     expect(sel().isSelected(ROWS[1])).toBe(true);
   });
+
+  // v0.10.939 (tablo standardı T2) — TEK seçili görünüm: seçim API'sinin
+  // seçili saydığı satır da klavye imleciyle aynı `row-selected`ı alır
+  // (BulkBar'ın --accent-bg'siyle tek aile).
+  it('seçili satır rowProps\'tan row-selected alır; seçimsiz satır almaz', () => {
+    const el = render(<Probe selection />);
+    const sel = () => last!.selection!;
+    const trOf = (name: string) => [...el.querySelectorAll('tbody tr')].find(tr => tr.textContent === name)!;
+    expect(trOf('beta').classList.contains('row-selected')).toBe(false);
+    act(() => { sel().toggle(ROWS[1]); });
+    expect(trOf('beta').classList.contains('row-selected')).toBe(true);
+    expect(trOf('alpha').classList.contains('row-selected')).toBe(false);
+    const i = last!.sortedRows.indexOf(ROWS[1]);
+    expect(last!.rowProps(i, ROWS[1]).className).toBe('row-selected');
+    act(() => { sel().clear(); });
+    expect(trOf('beta').classList.contains('row-selected')).toBe(false);
+  });
 });
 
-function VProbe({ rows }: { rows: Row[] }) {
+function VProbe({ rows, state, leading }: { rows: Row[]; state?: VirtualTableProps<Row>['state']; leading?: number[] }) {
   const dt = useDataTable<Row>({ storageKey: 'contract-vt', columns: COLS, rows });
-  return <VirtualTable<Row> dt={dt} height={200} renderRow={r => <td>{r.name}</td>} />;
+  return <VirtualTable<Row> dt={dt} height={200} state={state} leading={leading} renderRow={r => <td>{r.name}</td>} />;
 }
 
 function VAuto({ rows, resetKey }: { rows: Row[]; resetKey?: unknown }) {
@@ -144,8 +164,40 @@ describe('VirtualTable', () => {
     const el = render(<VProbe rows={ROWS} />);
     expect(el.querySelector('table')!.getAttribute('aria-rowcount')).toBe('3');
     const empty = render(<VProbe rows={[]} />);
-    const td = empty.querySelector('td.vt-empty')!;
+    const td = empty.querySelector('td.dt-state')!;
     expect(td.getAttribute('colspan')).toBe(String(COLS.length));
+  });
+
+  // v0.10.939 (tablo standardı T12) — boş hâl DataTableState satırı: `state`
+  // verilmezse 'empty' (Traces'in davranışı — "Bu aralıkta veri yok"),
+  // İngilizce 'No rows.' / vt-empty yok; leading colSpan'a sayılır.
+  it('state yok + satır yok → DataTableState empty; vt-empty / "No rows." yok', () => {
+    const el = render(<VProbe rows={[]} leading={[24]} />);
+    const tr = el.querySelector('tbody tr[data-dt-state]')!;
+    expect(tr.getAttribute('data-dt-state')).toBe('empty');
+    expect(tr.textContent).toBe(DATA_TABLE_STATE_TEXT.empty);
+    expect(tr.querySelector('td')!.getAttribute('colspan')).toBe(String(COLS.length + 1));
+    expect(el.querySelector('.vt-empty')).toBeNull();
+    expect(el.textContent).not.toContain('No rows.');
+  });
+
+  it('state türü + mesajı geçer (loading iskelet, error mesajı); satır varken state çizilmez', () => {
+    const loading = render(<VProbe rows={[]} state={{ kind: 'loading', skeletonRows: 3 }} />);
+    expect(loading.querySelector('tr[data-dt-state="loading"] td.dt-state--loading')).not.toBeNull();
+    expect(loading.querySelectorAll('.dt-state-skel').length).toBe(3);
+    const error = render(<VProbe rows={[]} state={{ kind: 'error', message: 'okunamadı' }} />);
+    expect(error.querySelector('tr[data-dt-state="error"]')!.textContent).toContain('okunamadı');
+    const withRows = render(<VProbe rows={ROWS} state={{ kind: 'loading' }} />);
+    expect(withRows.querySelector('[data-dt-state]')).toBeNull();
+  });
+
+  it('VirtualTable kaynağında vt-empty / emptyMessage kalmadı', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(__dirname, 'VirtualTable.tsx'), 'utf8')
+      .split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+    expect(src).not.toMatch(/vt-empty|emptyMessage|No rows/);
+    expect(src).toContain('<DataTableState dt={dt} leading={leading}');
   });
 });
 

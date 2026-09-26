@@ -744,7 +744,7 @@ button.xs { padding: 1px 6px; font-size: 10.5px; border-radius: var(--radius-xs)
 }
 .menuitem:hover:not(:disabled),
 .menuitem:focus-visible { background: var(--bg3); color: var(--text); }
-.menuitem:disabled { opacity: .4; cursor: not-allowed; }
+.menuitem:disabled, .menuitem[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 .menuitem.mi-danger { color: var(--err); }
 .menuitem.mi-danger:hover:not(:disabled),
 .menuitem.mi-danger:focus-visible { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
@@ -1404,6 +1404,10 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
   box-shadow: inset 0 -1px 0 var(--border);
 }
 table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+/* v0.10.939 (tablo standardı T10) — `dt.tableProps` (`<table className="dt">`):
+   125 sitede satır içi yazılan `{ tableLayout: 'fixed', width: '100%' }`
+   yazımının sınıf karşılığı; dilim 3 mekanik olarak buna göçer. */
+table.dt { table-layout: fixed; width: 100%; }
 /* v0.10.933 (tablo standardı T5) — tablo içindeki `.mono` boyutu miras alır:
    kural `code, pre, .mono`nun hemen altında (`:where(table) .mono`). */
 thead th {
@@ -1456,6 +1460,62 @@ thead th .col-resize-handle {
   cursor: col-resize; user-select: none; touch-action: none;
 }
 thead th .col-resize-handle:hover { background: var(--accent); opacity: .5; }
+/* v0.10.939 (tablo standardı S8) — başlık satırının ⋯ menüsü ("Kolonları
+   sıfırla", ui/DataTable/HeadMenu.tsx). YENİ hücre yok ve YER AYRILMAZ:
+   tetik son görünür başlığın (`th.dt-menu-host`) sağ ucuna mutlak konumla
+   BİNER — kalıcı sağ dolgu son kolonun etiketini/okunu her tabloda sola
+   itiyordu (inceleme). `right: 6px`: 6 px'lik boyut tutamağı
+   (`.col-resize-handle`, right 0) açıkta kalır. Dururken görünmez (opacity
+   0 — `.sort-arrow` fikri; son kolonun etiketi ve etkin ▲▼ oku dururken
+   TAM görünür); başlık satırının üstüne gelince / host odakta / menü açıkken
+   belirir ve zemini başlık yüzeyi (--bg1) altındaki etiket ucunu örter.
+   `visibility: hidden` DEĞİL: düğmeyi Tab sırasından düşürür, `:focus-within`
+   onu hiç açığa çıkaramazdı. Düğme belirince soluk (--text3); kendi hover'ı
+   (ib-ghost) / odak / açık hâli tam renk. Odak halkası içeri (-2px): `th`nin
+   `overflow: hidden`ı kırpmasın. Menü `position: fixed` (koordinat JS'ten):
+   `th`nin ve `.table-wrap`ın overflow'u kırpamaz. */
+.dt-menu { position: absolute; top: 0; bottom: 0; right: 6px; display: flex; align-items: center; }
+.dt-menu .btn-icon {
+  max-height: 100%; color: var(--text3);
+  background: var(--bg1); box-shadow: -4px 0 0 var(--bg1);
+  opacity: 0; transition: opacity .1s, background .15s, color .15s;
+}
+th.dt-menu-host:hover .dt-menu .btn-icon,
+.dt-menu-host--dirty .dt-menu .btn-icon,
+.dt-menu-host:focus-within .dt-menu .btn-icon,
+.dt-menu .btn-icon[aria-expanded="true"] { opacity: 1; }
+.dt-menu .btn-icon:focus-visible, .dt-menu .btn-icon[aria-expanded="true"] { color: var(--text); }
+.dt-menu .btn-icon:focus-visible { outline-offset: -2px; }
+/* Dokunmatik (hover yok): tetik HEP görünür ve YALNIZ burada host dolgusu
+   ayrılır (6 tutamak + 20 düğme + 4) — etiket tetiğin altına girmesin.
+   İkinci seçici yoğunluk kuralını (`[data-density] thead th` 0,1,2, dosyada
+   SONRA) yener — row-cell ile aynı gerekçe. */
+@media (hover: none) {
+  thead th.dt-menu-host, [data-density] thead th.dt-menu-host { padding-right: 30px; }
+  .dt-menu .btn-icon { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-menu .btn-icon { transition: none; }
+}
+.dt-menu-pop {
+  position: fixed; z-index: var(--z-dropdown); min-width: 188px;
+  display: flex; flex-direction: column; gap: 2px; padding: 4px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+  /* Başlık hücresinin yazı kalıbı menüye sızmasın. */
+  text-align: left; font-weight: 400; white-space: normal; user-select: none;
+}
+/* Açık menü yığında satırların (yapışkan hücre z 2) ÜSTÜNDE: `.vt-scroll
+   thead` (sticky, z 2), `.is-scroll` başlık hücresi (sticky, z 3) ve sabit
+   kolon başlığı kendi yığın bağlamını kurar — menü açıkken ata dropdown
+   basamağına çıkar (`:has(.tip)` ipucu deseninin ikizi, globals.css
+   `.table-wrap.is-scroll thead th:has(.tip)`). Seçiciler taban kuralı
+   özgüllükte YENER: çıplak `thead:has(…)` (0,1,1) dosyada sonraki
+   `.vt-scroll thead`e, `thead th:has(…)` (0,1,2) `.is-scroll thead th`e
+   (0,2,2) yeniliyordu — v0.10.939 inceleme. */
+.vt-scroll thead:has(.dt-menu-pop),
+.table-wrap.is-scroll thead th:has(.dt-menu-pop),
+th.sticky-right:has(.dt-menu-pop), th.sticky-left:has(.dt-menu-pop) { z-index: var(--z-dropdown); }
 /* v0.10.928 (Y2) — satır ayracı --divider; Skeleton.tsx satır çizgisi bununla aynı kalmalı. */
 tbody tr { border-bottom: 1px solid var(--divider); transition: background .08s; }
 tbody tr:last-child { border-bottom: none; }
@@ -1526,6 +1586,52 @@ td.row-detail tbody tr:has(> td > .row-link):hover > td { background: var(--bg3)
 .row-link:hover { text-decoration: none; }
 .row-link--name:hover { color: var(--accent2); text-decoration: underline; text-underline-offset: 3px; }
 .row-link:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+/* v0.10.939 (tablo standardı T12) — tablonun İÇİNDEKİ durum satırı
+   (DataTableState): tek <tr>, tek colSpan hücre; başlık yerinde kalır.
+   Satır işaretsiz (role/data-row-action yok) → imleç + hover YOK (T2).
+   Yükseklik iki satır ritmi (mockup 72px = 2 × 36) ve yoğunlukla küçülür.
+   `tbody td`nin nowrap + 320px + "…" kuralı colSpan hücreyi kırpmasın diye
+   geri alınıyor (`td.row-detail` ile aynı). İkinci seçici (0,2,2):
+   `[data-density] tbody td` dolgusu dosyada SONRA ve (0,1,2) — row-cell /
+   row-detail ile aynı gerekçe. */
+tbody td.dt-state, [data-density] tbody td.dt-state {
+  height: calc(var(--row-h) * 2);
+  padding: var(--sp-4) var(--sp-6);
+  max-width: none; white-space: normal; overflow: visible;
+  text-align: center; color: var(--text3);
+}
+/* Metin + "Filtreleri temizle" ya da QueryErrorInline ortada; hata
+   bileşeninin kendi flex kutusu burada içeriği kadar daralır ve ortalanır
+   (iç yapısına dokunmadan). */
+.dt-state-body { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--sp-2); }
+/* Yükleniyor: dolgu yok — iskelet çizgileri hücreyi kenardan kenara doldurur,
+   her çizgi TAM bir satır (`--row-h`; `.vt-scroll` onu rahat değere sabitler).
+   Çizgi ayracı gerçek satırınkiyle aynı token (--divider, v0.10.928 Y2). */
+tbody td.dt-state.dt-state--loading, [data-density] tbody td.dt-state.dt-state--loading { height: auto; padding: 0; }
+.dt-state-skel { display: flex; align-items: center; height: var(--row-h); border-bottom: 1px solid var(--divider); }
+.dt-state-skel:last-child { border-bottom: 0; }
+/* İskelet hücresi = bir kolon; yatay dolgu `tbody td` ile eş (rahat 12px,
+   yoğunlukta aşağıda). Genişlik satır içi `flex` (colgroup orantısı,
+   hesaplanmış değer). Sayısal kolonun çubuğu sağa yaslı (T4 hizası). */
+.dt-state-skel-cell { display: flex; justify-content: flex-start; box-sizing: border-box; min-width: 0; padding: 0 var(--sp-6); }
+.dt-state-skel-cell--num { justify-content: flex-end; }
+[data-density="compact"] .dt-state-skel-cell { padding: 0 7px; } /* `[data-density="compact"] tbody td` ile eş */
+[data-density="dense"] .dt-state-skel-cell { padding: 0 5px; }   /* `[data-density="dense"] tbody td` ile eş */
+
+/* v0.10.939 (tablo standardı T8) — toplu işlem çubuğu (BulkBar). Yalnız
+   seçim varken basılır. Zemin seçili satırın tonu (--accent-bg,
+   `.row-selected` ile aynı, üç temada) — çubuk ve seçili satırlar tek aile
+   okunur. Eylemler sağda; sıra ActionRow'un yapısında ([Temizle][birincil]). */
+.bulk-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-6); margin-bottom: var(--sp-4);
+  background: var(--accent-bg); border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+.bulk-bar-count { font-weight: 600; color: var(--text); }
+.bulk-bar-meta { color: var(--text2); font-size: var(--fs-xs); }
+.bulk-bar-actions { margin-left: auto; }
 /* Settings → dış kaynak sekmeleri (Influx v0.10.222, Oracle v0.10.580):
    kaynak kartı + alt blok. İkinci sekme kendi nüshasını yazmıyor —
    iki ad AYNI kurala bağlı; üçüncü bir kaynak sekmesi de buraya eklenir. */
@@ -1621,6 +1727,42 @@ td.num.mono, th.num.mono { font-family: inherit; font-size: inherit; }
    için hücreye hiç boya gelmiyordu. */
 .cell-err  { color: var(--err); }
 .cell-warn { color: var(--warn); }
+/* v0.10.939 (tablo standardı T5) — hiyerarşi RENKLE, küçük puntoyla değil:
+   ikincil metin --text2, soluk metin --text3 (satır içi `color: var(--text2|
+   --text3)` 116 hücre; göçü dilim 3). ColumnDef `tone(row)` → dt.cellProps. */
+.cell-muted { color: var(--text2); }
+.cell-faint { color: var(--text3); }
+/* v0.10.939 (tablo standardı T4) — <DataTableCell> değersiz hücresinin soluk
+   "—" glifi (KeyValue `.keyval__val--empty` ile aynı ton): boş hücre boşluk
+   değil, "değer yok" okunur. */
+.cell-empty { color: var(--text3); }
+/* v0.10.939 (tablo standardı T11) — `truncate: 'wrap'`: hücre sarar, kırpmaz;
+   `overflow-wrap: anywhere` uzun kimliği/URL'yi kelime içinde de böler ama
+   `break-all` gibi HER harfte değil (td-full'ün kusuru). Özgüllük
+   `tbody td` (0,0,2) nowrap/320px kuralını yener. */
+tbody td.cell-wrap { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* v0.10.939 (tablo standardı T11) — linkli satırda sarılan hücrenin içeriği
+   `.row-link`in İÇİNDE: link kendi nowrap + "…" kuralını taşır (blok) ve
+   td.cell-wrap'in sarmasını geri alırdı. Link de sarar (aynı dört bildirim). */
+tbody td.cell-wrap > .row-link { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* v0.10.939 (tablo standardı T8) — `kind: 'actions'` kolonu (`col-actions`,
+   td + th): başlıksız, sağa yaslı (satır içi eylem + ⋯). Hücre table-cell
+   KALIR; esneme gerekirse içteki `.cell-actions` sarmalayıcısında (aşağıdaki
+   `td > .cell-actions`) — iki ad ayrı: kolon türü ≠ iç sarmalayıcı. */
+td.col-actions, th.col-actions { text-align: right; }
+/* v0.10.939 (tablo standardı T11) — <MiddleEllipsis>: kimliği ORTADAN kırpar.
+   Baş "…" alır, kuyruk (son N karakter) hiç kırpılmaz; ölçüm yok. SATIR İÇİ
+   kutular (flex DEĞİL): flex iki span'i bloklaştırıp kopyala-yapıştırı ve
+   ekran okuyucuyu iki parçaya bölüyordu. Dış kap blok + nowrap; baş
+   inline-block, kuyruğa `--mid-tail-w` (MiddleEllipsis satır içi, `Nch`)
+   kadar yer bırakır; `vertical-align: bottom` inline-block'un taban çizgisi
+   boşluğunu siler. `pre`: bölme noktasındaki boşluk kaybolmasın. */
+.mid-ellipsis { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; }
+.mid-ellipsis__head {
+  display: inline-block; max-width: calc(100% - var(--mid-tail-w, 8ch)); vertical-align: bottom;
+  overflow: hidden; text-overflow: ellipsis; white-space: pre;
+}
+.mid-ellipsis__tail { white-space: pre; }
 
 /* Badges — sized to the design handoff's .pill (2px8px / radius6 / 11px / 700).
    inline-flex + gap so an icon/dot sits flush with the label; tabular-nums for
@@ -2253,6 +2395,53 @@ td.num.mono, th.num.mono { font-family: inherit; font-size: inherit; }
 .kv-filterable:hover .kv-actions,
 .kv-filterable:focus-within .kv-actions { opacity: 1; } /* v0.10.926 — klavye odağı da açar (odak halkası + ipucu görünür) */
 .kv-filterable:hover td { background: var(--bg3); } /* v0.10.933 (tablo standardı T2) — bir kademe üst: bu satırlar zemini bg2 olan açılmış log detay hücresinde; bg2 üstüne bg2 görünmezdi (accent %5 idi) */
+
+/* v0.10.939 (tablo standardı T1) — KeyValue atomu (ui/KeyValue.tsx): öznitelik
+   panelinin tek yazımı; `.ps-kv` / `.kv-table` / div ızgaraları dilim 3'te buna
+   göçer. Mockup "Anahtar/değer" bölümü: dl ızgarası, 150px etiket, etiket
+   --text2 (büyük harf yok), değer --text, mono yalnız kimlikte, uzun değer
+   kelime sınırında / gerekirse her yerde sarar — ASLA break-all. Satırlar
+   --divider; zebra yok; dış çerçeve YOK (T10: çağıranın kabı çizer). Satır
+   tıklanmaz → hover zemini ve el imleci YOK (T2); yalnız eylem yuvası belirir.
+   Etiket sütunu dar kapta (telefon, dar çekmece) %40'ı aşmaz: medya sorgusu
+   gerekmiyor. Dolgu tablo ritmiyle aynı yatay 12px; yoğunlukta tablo
+   hücresinin dolgusunu izler (`[data-density] tbody td`). */
+.keyval {
+  --kv-label-w: 150px;
+  --kv-pad-y: var(--sp-3);
+  --kv-pad-x: var(--sp-6);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.keyval--wide { --kv-label-w: 240px; } /* uzun OTel anahtarları (messaging.kafka.consumer.group.id) */
+.keyval__row {
+  display: grid;
+  grid-template-columns: min(var(--kv-label-w), 40%) minmax(0, 1fr);
+  border-bottom: 1px solid var(--divider);
+}
+/* :last-child DEĞİL — ui/Tooltip kutusu tetiğin kardeşi olur (ui/Tooltip.tsx sınırları). */
+.keyval__row:last-of-type { border-bottom: 0; }
+.keyval__k, .keyval__v { margin: 0; min-width: 0; padding: var(--kv-pad-y) var(--kv-pad-x); }
+.keyval__k { color: var(--text2); overflow-wrap: anywhere; }
+.keyval__v { display: flex; align-items: flex-start; gap: var(--sp-3); color: var(--text); }
+/* pre-wrap: çok satırlı öznitelik (SQL, komut satırı) yapısını korur — tam doğruluk. */
+.keyval__val { flex: 1 1 auto; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.keyval__val--mono { font-family: var(--font-mono); }
+.keyval__val--empty { color: var(--text3); }
+/* Eylem yuvası — `.kv-actions` deseninin ikizi: hover VE klavye odağı açar
+   (gizli düğmeye inen odak halkası + ipucu görünür kalsın); dokunmatikte
+   hover yok → hep görünür. */
+.keyval__acts { display: inline-flex; flex: none; gap: var(--sp-1); opacity: 0; transition: opacity 80ms ease-out; }
+.keyval__row:hover .keyval__acts,
+.keyval__row:focus-within .keyval__acts { opacity: 1; }
+@media (hover: none) {
+  .keyval__acts { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .keyval__acts { transition: none; }
+}
+[data-density="compact"] .keyval { --kv-pad-y: 3px; --kv-pad-x: 7px; font-size: var(--fs-xs); }
+[data-density="dense"] .keyval { --kv-pad-y: 2px; --kv-pad-x: 5px; font-size: var(--fs-2xs); }
 
 /* Metrics */
 #metric-chart-wrap { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-top: 14px; }
@@ -3632,7 +3821,8 @@ td > .cell-actions.end { justify-content: flex-end; }
 .vt-scroll > table { border-collapse: collapse; }
 .vt-scroll thead { position: sticky; top: 0; z-index: var(--z-sticky-cell); }
 .vt-scroll thead th { background: var(--bg1); } /* v0.10.933 (tablo standardı T3) — tek başlık yüzeyi (bg2 idi; `.table-wrap.is-scroll` ile aynı) */
-.vt-scroll td.vt-empty { text-align: center; color: var(--text3); padding: 28px 12px; }
+/* (v0.10.939 — `.vt-scroll td.vt-empty` SİLİNDİ: VirtualTable'ın boş hâli
+   DataTableState satırı, `td.dt-state`.) */
 
 /* System area (v0.8.9) — the consolidated admin shell: a left vertical
    sub-nav + the active sub-page. Tokens only; light+dark via the vars. */
@@ -4124,7 +4314,15 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
      13px'ini örtüyordu), çipin 24px'lik kutusunda kırpılıyor, ID
      satırlarını 36px'e şişiriyordu. Önceden ham düğme olarak zaten muaftılar. */
   .btn-icon.cb-clear, .btn-icon.cb-caret, .fq-chip .btn-icon.fq-x, .btn-icon.th-remove,
+  .dt-menu .btn-icon,
   button.xs.copy-btn { min-width: 0; min-height: 0; }
+  /* v0.10.939 (tablo standardı S8) — başlık ⋯ tetiği de (yukarıda) 36px
+     tabanından MUAF, `.th-remove` gibi: 36px başlık satırından taşar ve
+     `max-height: 100%` ile çelişirdi. Dokunma hedefi `th`nin YÜKSEKLİĞİ:
+     tetik `.dt-menu` kutusunu (th'nin tepesinden dibine, `top/bottom: 0`)
+     boydan boya doldurur; yatayda host dolgusunun ayırdığı 20 px sütun
+     (`@media (hover: none)` kuralı). */
+  .dt-menu .btn-icon { height: 100%; }
 
   /* D6.3 (v0.9.988) — çekmece dar ekranda TAM EKRAN. Genişliği zaten
      `min(width, 100vw)` (Drawer.tsx) hallediyordu; eksik olan iç
@@ -4435,7 +4633,6 @@ a.ins-val:hover { text-decoration: underline; }
 .mtp-e2e-link { font-size: var(--fs-xs); font-weight: 500; white-space: nowrap; }
 .mtp-sec { margin-bottom: var(--sp-6); }
 .mtp-sec-head { display: flex; align-items: center; gap: var(--sp-4); font-size: var(--fs-sm); font-weight: 700; color: var(--text2); margin-bottom: var(--sp-3); }
-.mtp-sec-act { margin-left: auto; }
 .mtp-dot { width: 8px; height: 8px; border-radius: var(--radius-xs); }
 .mtp-dot--op { background: var(--purple); }
 .mtp-dot--span { background: var(--accent2); }

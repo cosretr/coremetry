@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { LinkButton, IconButton, SectionHead, Button } from '@/components/ui';
 import { StatTile } from '@/components/ui/StatTile';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import { MetricArea } from '@/pages/clusters/MetricArea';
 import { servicePodRegex } from '@/pages/clusters/podWorkload';
 import { fmtCores } from '@/pages/clusters/thresholds';
@@ -293,7 +293,6 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
           </>}
           meta={<>{podsSettled} / {podsTotal} cluster tarandı{ago ? ` · ${ago}` : ''}</>}
           actions={<>
-            <ResetLayoutButton dt={dt} />
             <IconButton size="sm" icon={<span aria-hidden="true">↻</span>} aria-label="Pod envanterini yenile"
               tooltip="Tüm cluster'ları yeniden oku" disabled={podsFetching} onClick={refetchPods} />
           </>} />

@@ -122,8 +122,11 @@ describe('T2 — satır yardımcıları işaret basar', () => {
   it('VirtualTable yalnız fareyle açılan (onRowClick) satırı işaretler', () => {
     // v0.10.933 — rowProps'un onOpen işareti burada KULLANILMAZ: onOpen yalnız
     // klavye (j/k, Enter) demek; fare işleyicisi yoksa el imleci yalan söyler.
+    // v0.10.939 (tablo standardı T7) — getRowHref'li satır da işaret alır: fare
+    // işleyicisi rowProps'tan (rpRest.onClick) gelir, onRowClick kazanır.
     const src = readFileSync(resolve(__dirname, 'VirtualTable.tsx'), 'utf8');
-    expect(src).toContain('data-row-action={onRowClick ? true : undefined}');
+    expect(src).toContain('data-row-action={onRowClick || linked ? true : undefined}');
+    expect(src).toContain('onClick={onRowClick ? () => onRowClick(row, vi.index) : rpRest.onClick}');
   });
 });
 
@@ -171,7 +174,10 @@ describe('T2 — elle tık işleyicili satır işaretli', () => {
    `<ad>.rowProps(` ya da `const rp = <ad>.rowProps(` / `const { …, ...rp } =
    <ad>.rowProps(` ile yayılan değişken); çağrı argümanında `onOpen` varsa
    tablo açılabilir. Prop olarak gelen dt (VirtualTable) çözülmez — o satır
-   işaretini ve onClick'ini açıkça yazıyor. */
+   işaretini ve onClick'ini açıkça yazıyor.
+   v0.10.939 (tablo standardı T7) — çağrıda `getRowHref` varsa rowProps
+   işareti İŞLEYİCİSİYLE birlikte basar (yedek onClick/onAuxClick —
+   rowLink.contract.test çiviliyor): satır işlenmiş sayılır. */
 function callArgs(src: string, open: number): string {
   let d = 0;
   for (let i = open; i < src.length; i++) {
@@ -180,11 +186,11 @@ function callArgs(src: string, open: number): string {
   }
   return src.slice(open);
 }
-function tableHasOnOpen(src: string, dt: string): boolean {
+function tableHasOpt(src: string, dt: string, opt: RegExp): boolean {
   const m = new RegExp(`(?:const|let)\\s+${dt}\\s*=\\s*useDataTable\\s*(?:<[^(]*>)?\\s*\\(`).exec(src);
-  return !!m && /\bonOpen\b/.test(callArgs(src, m.index + m[0].length - 1));
+  return !!m && opt.test(callArgs(src, m.index + m[0].length - 1));
 }
-function openRowProps(src: string, tag: string): boolean {
+function rowPropsTables(src: string, tag: string): Set<string> {
   const tables = new Set<string>();
   for (const m of tag.matchAll(/(\w+)\.rowProps\(/g)) tables.add(m[1]);
   for (const m of tag.matchAll(/\{\.\.\.(\w+)\}/g)) {
@@ -194,7 +200,13 @@ function openRowProps(src: string, tag: string): boolean {
     if (direct) tables.add(direct[1]);
     if (rest) tables.add(rest[1]);
   }
-  return [...tables].some(t => tableHasOnOpen(src, t));
+  return tables;
+}
+function openRowProps(src: string, tag: string): boolean {
+  return [...rowPropsTables(src, tag)].some(t => tableHasOpt(src, t, /\bonOpen\b/));
+}
+function linkedRowProps(src: string, tag: string): boolean {
+  return [...rowPropsTables(src, tag)].some(t => tableHasOpt(src, t, /\bgetRowHref\b/));
 }
 const ROLE_MARK = /role="button"|rowActivation\(|rowKeyboard\(/;
 const ACTION_MARK = /data-row-action|rowClickHandlers\(/;
@@ -207,7 +219,7 @@ function unhandledMarkedRows(src: string): { line: number; open: boolean }[] {
     const open = openRowProps(src, tag);
     const action = open || ACTION_MARK.test(tag);
     if (!action && !ROLE_MARK.test(tag)) continue;
-    const handled = action ? MOUSE.test(tag) : MOUSE.test(tag) || KEYS.test(tag);
+    const handled = linkedRowProps(src, tag) || (action ? MOUSE.test(tag) : MOUSE.test(tag) || KEYS.test(tag));
     if (!handled) out.push({ line, open });
   }
   return out;
@@ -225,6 +237,8 @@ describe('T2 — işaretli satır işleyicili (ters yön)', () => {
     // Elle role="button" + yalnız onKeyDown geçer; elle data-row-action + yalnız onKeyDown geçmez.
     expect(unhandledMarkedRows('<tr role="button" onKeyDown={k}>')).toEqual([]);
     expect(unhandledMarkedRows('<tr data-row-action onKeyDown={k}>')).toEqual([{ line: 1, open: false }]);
+    // v0.10.939 (T7) — getRowHref'li tablonun rowProps'u işleyicisini kendi taşır.
+    expect(unhandledMarkedRows(before.replace('onOpen: (op) => go(op)', 'onOpen: (op) => go(op), getRowHref: href'))).toEqual([]);
   });
 
   it('role=button / data-row-action / onOpen\'lı rowProps taşıyan her <tr> bir işleyici taşır', () => {

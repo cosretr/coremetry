@@ -66,6 +66,18 @@ function emittedClasses(src: string): string[] {
   return out;
 }
 
+/**
+ * v0.10.939 (tablo standardı T1) — `classes` listesini `className`e taşıyan
+ * JSX öğelerinin etiketleri (`<button … className={classes}`, Chip'in
+ * `<span className={`${classes} ch-static`}`i). Eşleşme en yakın `<`dan
+ * başlar (`[^<]` onu geçemez); açılış etiketinde className'den önce `<`
+ * geçerse etiket kaçar — o zaman aşağıdaki "kök bulunamadı" iddiası
+ * kırmızıya döner, kapı sessizce daralmaz.
+ */
+function classesHosts(body: string): string[] {
+  return [...body.matchAll(/<([A-Za-z][\w.]*)\b[^<]*?\bclassName=\{[^}]*\bclasses\b/g)].map(m => m[1]);
+}
+
 describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığı var', () => {
   it('en az bir primitif taranıyor (kapı boşa dönmüyor)', () => {
     // Dosya adı deseni kayarsa (ör. ui/ klasörü bölünürse) bu kapı sessizce
@@ -133,6 +145,10 @@ describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığ
       if (m) bases.push([f, m[1]]);
     }
     expect(bases.length, 'taban sınıflı primitif bulunamadı — desen kaymış').toBeGreaterThan(2);
+    // v0.10.939 (tablo standardı T1) — KeyValue kapıdan kaçmasın: `.keyval`
+    // tabanı yalnız atomun (dilim 3'te 21 elle yazım ona göçüyor). Atom
+    // `const classes = [...]` desenini bırakırsa bu satır kırmızıya döner.
+    expect(bases.map(([, b]) => b), 'KeyValue tabanı taranmıyor — `const classes = [\'keyval\', …]` deseni kaymış').toContain('keyval');
 
     const offenders: string[] = [];
     for (const [f, base] of bases) {
@@ -169,6 +185,20 @@ describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığ
   // o primitifin HER değiştirici :hover kuralı bildirmek ZORUNDA.
   // `.btn-link` bunu taban kuralında yapıyor → değiştiricileri muaf
   // (yanlış pozitif üretmiyor).
+  //
+  // v0.10.939 (tablo standardı T1) — KAPSAM: yalnız hover öznesi bir
+  // <button> olabilen kurallar. Kaçağın kaynağı ELEMENT-seviyesi
+  // `button:hover`; <button> olmayan bir öğeye (KeyValue'nun <dl> satırı,
+  // Tooltip'in <span>'ı) o kural hiç uygulanmaz. Kapsamdakiler:
+  //   • kökü <button> olan atomun (classes listesini bir `<button`a basan —
+  //     Chip'in <span> dalı da olsa) BÜTÜN :hover kuralları, eskisi gibi;
+  //   • kökü <button> olmayan atomda (ButtonGroup <div>) yalnız :hover'ı
+  //     bir `button` bileşiğine düşen kurallar (`.btn-group > button:hover`).
+  // Öncesi: `.keyval__row:hover .keyval__acts { opacity: 1 }` (arka plan
+  // bildirmeyen, opaklık boyayan açığa çıkarma kuralı; satırın hover zemini
+  // OLMAMALI, T2) kaçak diye işaretleniyordu ve KeyValue bu yüzden ev
+  // desenini (`const classes = [...]`) bırakıp sahiplik kapısından da
+  // kaçmıştı.
   it('primitif :hover kuralları arka planı geri bildiriyor (button:hover kaçağı)', () => {
     const css = stripComments(readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8'));
 
@@ -177,19 +207,34 @@ describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığ
     const LEAK = 'button:' + 'hover:not(:disabled)';
     expect(css, `${LEAK} kuralı yok — bu kapının dayanağı kalmamış`).toContain(LEAK);
 
-    const bases: string[] = [];
+    const bases: Array<{ base: string; button: boolean }> = [];
+    const rootless: string[] = [];
     for (const f of primitives) {
       const body = stripComments(readFileSync(join(UI, f), 'utf8'));
       const m = body.match(/const classes\s*=\s*\[\s*'([^']+)'/);
-      if (m) bases.push(m[1]);
+      if (!m) continue;
+      const hosts = classesHosts(body);
+      if (!hosts.length) rootless.push(`ui/${f} (.${m[1]})`);
+      bases.push({ base: m[1], button: hosts.includes('button') });
     }
+    // Kapsam daraltması SESSİZ kalmasın (v0.10.939): kök etiketi okunamayan
+    // atom <button> değil sayılıp kapıdan düşerdi.
+    expect(rootless, `classes listesini taşıyan JSX öğesi bulunamadı:\n${rootless.join('\n')}`).toEqual([]);
+    const buttonBases = bases.filter(b => b.button).map(b => b.base);
+    expect(buttonBases, 'v0.9.895 kaçağının atomu (IconButton) kapsam dışı kaldı').toContain('btn-icon');
+    expect(buttonBases.length, 'buton kökü tespiti kaymış — kapı boşa dönüyor').toBeGreaterThan(4);
+    expect(buttonBases, 'KeyValue <dl> — buton sayılmamalı').not.toContain('keyval');
 
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .map(m => ({ sel: m[1].trim().replace(/\s+/g, ' '), body: m[2] }));
+    // :hover'ı bir `button` bileşiğine düşen seçici (`> button:hover`,
+    // `button.sec:hover:not(:disabled)`).
+    const HOVER_ON_BUTTON = /(^|[\s>+~,(])button(?![\w-])[^\s>+~,]*:hover/;
 
     const offenders: string[] = [];
-    for (const base of bases) {
-      const mine = rules.filter(r => r.sel.includes(`.${base}`) && r.sel.includes(':hover'));
+    for (const { base, button } of bases) {
+      const mine = rules.filter(r => r.sel.includes(`.${base}`) && r.sel.includes(':hover')
+        && (button || HOVER_ON_BUTTON.test(r.sel)));
       // Taban :hover kuralı = seçicide `.base` var, başka bir `.mod` yok.
       const baseHover = mine.filter(r =>
         new RegExp(`\\.${base}(?![\\w-])(:|,|\\s|$)`).test(r.sel) &&

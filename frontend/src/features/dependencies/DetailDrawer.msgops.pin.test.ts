@@ -28,8 +28,10 @@ describe('Operasyonlar · MV bölümü (v0.10.563)', () => {
     expect(drawer).toContain('<DataTableHead dt={msgOpsDt} />');
     // Varsayılan sıralama: en çok çağrılan operasyon üstte.
     expect(drawer).toContain("initialSort: { id: 'count', dir: 'desc' }");
-    // v0.9.1332 çıkmaz sokağı: sürüklenen genişliğin geri dönüşü olsun.
-    expect(drawer).toContain('<ResetLayoutButton dt={msgOpsDt} />');
+    // v0.9.1332 çıkmaz sokağı: sürüklenen genişliğin geri dönüşü —
+    // v0.10.939 (tablo standardı S8) DataTableHead'in ⋯ menüsünde; sayfa
+    // başına düğme yok (resetLayoutAdoption.test).
+    expect(drawer).not.toContain('<ResetLayout' + 'Button');
   });
 
   it('hook erken dönüşlerden ÖNCE — rules-of-hooks (v0.9.873 tuzağı)', () => {

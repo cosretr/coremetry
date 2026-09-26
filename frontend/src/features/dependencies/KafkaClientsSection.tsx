@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal'; // v0.10.554
 import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange } from '@/lib/types';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
@@ -176,7 +176,7 @@ function KafkaLastTable({ storageKey, title, keyLabel, rows, cols }: {
   const dt = useDataTable<KafkaLastRow>({ storageKey, columns, rows, initialSort: { id: cols[0]?.id ?? 'key', dir: 'desc' } });
   return (
     <div className="kc-table">
-      <div className="kc-subhead">{title} · {rows.length} <ResetLayoutButton dt={dt} /></div>
+      <div className="kc-subhead">{title} · {rows.length}</div>
       {rows.length === 0 ? (
         <div className="kc-empty">seri yok</div>
       ) : (

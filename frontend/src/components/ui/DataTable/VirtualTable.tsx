@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { DataTableColgroup, DataTableHead, type DataTable } from './DataTable';
+import { DataTableState, type DataTableStateProps } from './DataTableState';
 import { ROW_H } from './rowHeight';
 
 // VirtualTable — windowed rendering for a useDataTable table (v0.8.6 Phase 0).
@@ -54,13 +55,22 @@ export interface VirtualTableProps<T> {
   rowClassName?: (row: T, index: number) => string | undefined;
   onRowClick?: (row: T, index: number) => void;
   className?: string;
-  emptyMessage?: ReactNode;
+  // v0.10.939 (tablo standardı T12) — satır YOKKEN tbody'nin tek satırı:
+  // DataTableState (empty / no-match / loading / error + message /
+  // onClearFilters / onRetry / skeletonRows). `leading` VirtualTable'ın
+  // kendi dizisinden geçer (colSpan + iskelet hizası), trailing yok.
+  // Verilmezse `{ kind: 'empty' }` — Traces gibi hiçbir şey vermeyen
+  // tüketicinin boş hâli standart "Bu aralıkta veri yok" satırı. Satır
+  // VARKEN çizilmez (bayat satırlar tazelenirken yerinde kalır). Eski
+  // İngilizce 'No rows.' `vt-empty` hücresi + `emptyMessage` SİLİNDİ
+  // (uyum katmanı yok; mesaj `state.message`).
+  state?: Omit<DataTableStateProps<T>, 'dt' | 'leading' | 'trailing'>;
 }
 
 export function VirtualTable<T>({
   dt, height, rowHeight = ROW_H, overscan = 12,
   leading, leadingHead, renderRow, getRowKey, rowClassName, onRowClick,
-  className, emptyMessage, scrollResetKey,
+  className, state, scrollResetKey,
 }: VirtualTableProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
   const rows = dt.sortedRows;
@@ -77,9 +87,8 @@ export function VirtualTable<T>({
   const totalSize = virtualizer.getTotalSize();
   const padTop = items.length ? items[0].start : 0;
   const padBottom = items.length ? totalSize - items[items.length - 1].end : 0;
-  // v0.10.249 (audit §9, dört gizli kusur): colSpan GÖRÜNÜR kolonları
-  // sayar (dar ekranda mobileHide düşer, boş satır taşmasın).
-  const colCount = (leading?.length ?? 0) + dt.visibleColumns.filter(c => !c.headerHidden).length;
+  // (v0.10.249'un GÖRÜNÜR kolon colSpan sayımı v0.10.939'ten beri
+  // DataTableState'te: leading + dt.visibleColumns — aynı sayım.)
   // Klavye seçimi (j/k) sanal satıra kaydırır — useTableNav'ın
   // querySelector'ı mount edilmemiş satırı bulamaz.
   const selected = dt.nav.selected;
@@ -110,31 +119,38 @@ export function VirtualTable<T>({
       ref={parentRef}
       className={['vt-scroll', className].filter(Boolean).join(' ')}
       style={{ height, overflow: 'auto', position: 'relative', contain }}>
-      <table style={{ tableLayout: 'fixed', width: '100%' }} aria-rowcount={rows.length}>
+      {/* v0.10.939 (tablo standardı T10) — sabit düzen sınıftan (`table.dt`). */}
+      <table {...dt.tableProps} aria-rowcount={rows.length}>
         <DataTableColgroup dt={dt} leading={leading} />
         <DataTableHead dt={dt} leading={leadingHead} />
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={colCount} className="vt-empty">{emptyMessage ?? 'No rows.'}</td></tr>
+            // v0.10.939 (tablo standardı T12) — boş/yükleniyor/hata TABLONUN içinde.
+            <DataTableState dt={dt} leading={leading} {...(state ?? { kind: 'empty' })} />
           ) : (
             <>
               {padTop > 0 && <tr aria-hidden style={{ height: padTop }} />}
               {items.map(vi => {
                 const row = rows[vi.index];
-                const { className: rpClass, ...rpRest } = dt.rowProps(vi.index);
+                const { className: rpClass, ...rpRest } = dt.rowProps(vi.index, row);
                 const cls = [rpClass, rowClassName?.(row, vi.index)].filter(Boolean).join(' ') || undefined;
+                // v0.10.939 (tablo standardı T7) — getRowHref'li satırın
+                // yedek fare işleyicisi rowProps'tan gelir (rpRest.onClick);
+                // onRowClick verilmişse o kazanır.
+                const linked = !!dt.getRowHref?.(row);
                 return (
                   <tr
                     key={vi.key}
                     {...rpRest}
                     // v0.10.933 (tablo standardı T2) — onRowClick de satırı
                     // tıklanabilir yapar (imleç + hover globals.css'ten).
-                    data-row-action={onRowClick ? true : undefined}
+                    // v0.10.939 (T7) — href'li satır da (fare işleyicisi rowProps'ta).
+                    data-row-action={onRowClick || linked ? true : undefined}
                     className={cls}
                     aria-rowindex={vi.index + 1}
                     aria-selected={dt.selection ? dt.selection.isSelected(row) : undefined}
                     style={{ height: rowHeight }}
-                    onClick={onRowClick ? () => onRowClick(row, vi.index) : undefined}>
+                    onClick={onRowClick ? () => onRowClick(row, vi.index) : rpRest.onClick}>
                     {renderRow(row, vi.index)}
                   </tr>
                 );

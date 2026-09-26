@@ -13,7 +13,7 @@ import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Chip, Button, Badge } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { fmtDateTime } from '@/lib/utils';
 import { fmtDur } from '@/components/traces/shared';
@@ -123,7 +123,6 @@ export function PodTracesTable({ ctx, p95Ms }: {
           <code className="mono">GET /api/traces</code> · sunucu sayfalı, {POD_TRACE_PAGE}/sayfa · {rows.length > 0 ? `${rows.length}${hasMore ? ' · daha fazla var' : ' · hepsi bu'}` : ''} · toplam sayım kapalı (count=skip)
         </span>
         {(hasMore || loading) && rows.length > 0 && <Button variant="secondary" size="xs" onClick={() => setPages(p => p + 1)} disabled={loading}>{loading ? 'yükleniyor…' : 'Daha fazla yükle'}</Button>}
-        <ResetLayoutButton dt={dt} />
       </div>
     </>
   );

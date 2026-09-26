@@ -6,7 +6,7 @@ import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
 import { useDepDetail } from '@/lib/queries/dependencies';
 import { fmtNum, fmtNs, timeRangeToNs } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange, DBDetail, MessagingDetail, DBOpStat, MsgOperationStat } from '@/lib/types';
 import { Stat } from './panels/shared';
@@ -470,9 +470,6 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                 width: 8, height: 8, borderRadius: 2, background: 'var(--purple)',
               }} />
               Operasyonlar · MV · {msgOps.length} satır
-              <span style={{ marginLeft: 'auto' }}>
-                <ResetLayoutButton dt={msgOpsDt} />
-              </span>
             </div>
             {msgOps.length === 0 ? (
               // Bölüm GİZLENMİYOR: yokluğu söylemek, bakılmamış gibi

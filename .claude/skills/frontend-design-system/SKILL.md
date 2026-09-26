@@ -185,6 +185,15 @@ tam değer ipucunda); boş/yükleniyor/hata tablonun İÇİNDE, başlık kalır.
 Yoğunluk 3 basamak. Göç dilim dilim; `tableUnityRatchet` sayılar yalnız
 azalır.
 
+**Tablo primitifleri (v0.10.939, dilim 2 — sayfalar dilim 3'te benimser):**
+ColumnDef `mono` / `tone(row)` / `truncate: 'end'|'middle'|'wrap'` / `kind: 'actions'`;
+`dt.cellProps(row, colId, value?)` ya da `<DataTableCell>` (boş değer soluk "—");
+`<MiddleEllipsis>` (kimlik; LogTable `truncMid` buna taşınacak); `dt.tableProps`
+(satır içi `tableLayout` yerine `.dt`); `getRowHref` + `dt.rowLink(row, colId)`
+(gerçek bağlantı, yeni sekme); `<DataTableState kind>` (boş/eşleşme yok/yükleniyor/
+hata, tablonun İÇİNDE); `<BulkBar>` (`selection` ile); `ui/KeyValue` (öznitelik
+panelleri). "Kolonları sıfırla" başlığın ⋯ menüsünde, ayrı düğme yok.
+
 `storageKey` **zorunlu ve benzersiz** — 89 tablo, 0 çakışma. Kolon tanımı
 `COLS` dizisi: `id`/`label`/`width`/`sortValue`/`numeric`. Başlık
 özelleştirmesi `DataTableHead`'in `renderLabel` hook'u ile; pure core'un

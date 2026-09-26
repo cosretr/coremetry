@@ -30,7 +30,7 @@ import { PageShell } from '@/components/ui/PageShell';
 import { StatTile, TabStrip } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { CallerSection } from '@/features/dependencies/CallerSection';
 import { KafkaClientsSection } from '@/features/dependencies/KafkaClientsSection';
@@ -232,7 +232,7 @@ export default function MessagingTopicPage() {
                 rows={producers}
                 emptyMessage="Bu pencerede bu destination'a üretici span'i yok."
                 tone="producer" range={range}
-                storageKey="msg-topic-producers" showReset />
+                storageKey="msg-topic-producers" />
             )}
             {tab === 'producers' && <MetricOnlyCallers names={metricOnlyProducers} what="üretici" />}
             {tab === 'consumers' && (
@@ -241,7 +241,7 @@ export default function MessagingTopicPage() {
                 rows={consumers}
                 emptyMessage="Bu pencerede bu destination'a tüketici span'i yok."
                 tone="consumer" range={range}
-                storageKey="msg-topic-consumers" showReset />
+                storageKey="msg-topic-consumers" />
             )}
             {tab === 'consumers' && <MetricOnlyCallers names={metricOnlyConsumers} what="tüketici" />}
             {tab === 'operations' && <OperationsTable rows={msgOps} />}
@@ -379,7 +379,6 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
       <div className="mtp-sec-head">
         <span aria-hidden className="mtp-dot mtp-dot--op" />
         Operasyonlar · MV · {rows.length} satır
-        <span className="mtp-sec-act"><ResetLayoutButton dt={dt} /></span>
       </div>
       {/* TRACE PİVOTU YOK — bilerek (çekmecedeki gerekçenin aynısı):
           messagingTracesHref'in `operation` parametresi span ADINA çevriliyor,
@@ -455,7 +454,6 @@ function SpanNamesTable({ rows, range, system, destination }: {
       <div className="mtp-sec-head">
         <span aria-hidden className="mtp-dot mtp-dot--span" />
         Span adları · {rows.length} satır
-        <span className="mtp-sec-act"><ResetLayoutButton dt={dt} /></span>
       </div>
       {rows.length === 0 ? (
         <div className="mtp-empty">Bu pencerede span adı satırı yok.</div>

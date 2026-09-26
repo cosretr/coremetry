@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useDataTable, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable } from '@/components/ui/DataTable';
 import { IconButton, SectionHead, Row, SegmentedControl } from '@/components/ui';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -189,7 +189,6 @@ export function ServicePodsTab({ service, range, onZoom, onZoomReset }: {
           {th.podsPending ? ` · ${th.podsSettled} / ${th.podsTotal} cluster tarandı` : ago ? ` · ${ago}` : ''}
         </>}
         actions={<>
-          <ResetLayoutButton dt={dt} />
           <IconButton size="sm" icon={<span aria-hidden="true">↻</span>} aria-label="Pod listesini yenile"
             tooltip="Entity katmanı + tüm Thanos cluster'ları yeniden oku" disabled={th.podsFetching || entityQ.isFetching} onClick={refetchAll} />
         </>} />

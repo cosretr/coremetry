@@ -8,7 +8,7 @@
 // (onMute → çağıran hem kararı hem susturmayı yazar). → mevcut
 // AnomalyDetailDrawer (?anomaly=). Yalnız pencerede anomali varsa çizilir.
 import { Badge, LinkButton } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { fmtDateTime } from '@/lib/utils';
 import { ANOMALY_KIND_COLOR, ANOMALY_KIND_TR, silenceKey } from '@/lib/anomalyRegions';
@@ -95,7 +95,7 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
         </table>
       </div>
       <div className="pod-cap">
-        <code className="mono">GET /api/anomalies/events</code> (son 24 saat, en yeni 200{truncated ? ' — KESİLDİ, liste tam değil' : ''}) · servis süzgeci istemcide · bant = [başlangıç, son görülme] (endedAt yok) · güven puanı yok (tepe = peakRatio) · «Anomali»/«Değil» = karar (anomaly_verdicts, olay başına son karar), «Değil» ayrıca susturur (kanonik parmak izi; akış + terfi kapısı okur). <ResetLayoutButton dt={dt} />
+        <code className="mono">GET /api/anomalies/events</code> (son 24 saat, en yeni 200{truncated ? ' — KESİLDİ, liste tam değil' : ''}) · servis süzgeci istemcide · bant = [başlangıç, son görülme] (endedAt yok) · güven puanı yok (tepe = peakRatio) · «Anomali»/«Değil» = karar (anomaly_verdicts, olay başına son karar), «Değil» ayrıca susturur (kanonik parmak izi; akış + terfi kapısı okur).
       </div>
     </>
   );

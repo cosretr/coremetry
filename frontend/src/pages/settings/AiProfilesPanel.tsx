@@ -5,7 +5,7 @@
 // Anahtar hiç geri gelmez (hasKey); boş anahtar = mevcut korunur.
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button, Badge, Modal, SelectField, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { api } from '@/lib/api';
 import type { AIModelProfile, AIModelProfileInput, AIProfilesPayload, AIProvider, AIProfileTestResult, AIThinking } from '@/lib/types';
@@ -77,7 +77,6 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
         <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Model profilleri</h3>
         <span className="field-hint">{payload.profiles.length} profil · varsayılan: <b>{payload.defaultProfile}</b> · aşağıdaki form varsayılan profili düzenler</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <ResetLayoutButton dt={dt} />
           <Button variant="secondary" size="sm" onClick={() => { setIsNew(true); setDraft(emptyDraft()); }}>Profil ekle</Button>
         </span>
       </Row>

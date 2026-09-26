@@ -10,7 +10,7 @@ import { keys, useUsers, useCustomRoles } from '@/lib/queries';
 import { api, type UserRow, type CustomRole } from '@/lib/api';
 import type { Role } from '@/lib/types';
 import { tsLong, tsMinute, tsRel } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import { USER_COLS } from './usersColumns';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
@@ -124,7 +124,6 @@ export default function UsersPage() {
               {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           )}
-          <ResetLayoutButton dt={dt} />
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {/* v0.8.403 — presence: count over ALL loaded users (not the
                 team-filtered slice) so the header reads as a page-level

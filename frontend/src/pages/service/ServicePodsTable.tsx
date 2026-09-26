@@ -29,8 +29,9 @@ import type { TimeRange } from '@/lib/types';
 // otomatik açar + kaydırır; TEK SEFERLİK ve TÜKETİLİR (replace:true, yabancı
 // paramlar korunur). Pod envanterde yoksa param yine temizlenir.
 //
-// Sıralama/genişlik TEK dt (üstte, ResetLayout başlıkta); gruplu kipte her
-// grup aynı sıralamayı izler. Satır > 100: content-visibility.
+// Sıralama/genişlik TEK dt (üstte; "Kolonları sıfırla" tablo başlığının ⋯
+// menüsünde, v0.10.939); gruplu kipte her grup aynı sıralamayı izler.
+// Satır > 100: content-visibility.
 
 function ms(v?: number): string {
   if (v === undefined || v <= 0) return '—';

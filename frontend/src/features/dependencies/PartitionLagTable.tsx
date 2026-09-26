@@ -6,7 +6,7 @@
 import { useMemo } from 'react';
 import type { TimeRange } from '@/lib/types';
 import { useMessagingClients } from '@/lib/queries/messaging';
-import { useDataTable, DataTableHead, DataTableColgroup, ResetLayoutButton } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { Spinner, Empty } from '@/components/Spinner';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
@@ -44,7 +44,6 @@ export function PartitionLagTable({ system, cluster, destination, range }: {
         <span>Partition'lar · en kötü {rows.length} / {total}</span>
         <span style={{ color: 'var(--text3)', marginLeft: 8 }}>son 10 dk · son değer</span>
         {hidden > 0 && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>({hidden} partition daha)</span>}
-        <span style={{ marginLeft: 'auto' }}><ResetLayoutButton dt={dt} /></span>
       </div>
       <div className="table-wrap">
         <table>
