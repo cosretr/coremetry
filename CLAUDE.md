@@ -13,6 +13,7 @@ Datadog / Dynatrace / Honeycomb engineer this?"**
 | **Picker = server-side search** — never eager `<Combobox options={…}>` | `ServicePicker` / `OperationPicker` / `MetricNamePicker` |
 | **Table > 100 rows** — virtualize, server-paginate, or `content-visibility:auto` | every list page |
 | **Every data table sortable + resizable** — shared primitive, never hand-rolled | `useDataTable` + `DataTable.tsx`; template `SlowQueries.tsx` |
+| **Four table kinds only** (table standard, 2026-09-26): record list = `DataTable`; ≤10 fixed unsorted rows or an editable/picker list = static `<table>` with a reason; attributes = `KeyValue`; legends / chat markdown exempt. Rows look clickable only when they are; colour only on the deviating value | `docs/DECISIONS.md` "Tablo standardı"; `tableUnityRatchet` |
 | **Cache key hashes ALL inputs** — sorted + FNV; length-only digests cross-poison (v0.5.187) | `internal/api/cache.go` |
 | **`timeRangeToNs(range)` only inside `useEffect`/`useMemo`** — bare in JSX = infinite refetch (v0.5.184) | every page using `range` |
 | **CH query on `spans`/`metric_points`** — `LIMIT` + `SETTINGS max_execution_time` + time-bounded WHERE | `internal/chstore/*.go` |

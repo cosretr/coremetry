@@ -160,7 +160,25 @@ eş eylemler → `ButtonGroup`, aç/kapa → `DisclosureButton`, sekme →
 | Server-paged (Services/Traces/Logs) | resize-only; **client sort YASAK** — bir sayfalık server-ordered küme üzerinde sıralama yanıltır |
 | >100 satır | + `contentVisibility:'auto'` |
 | Çok büyük liste | `VirtualTable` (`Traces.tsx` emsali) |
-| Sabit ≤10 satır, sıralanmayacak | ham `<table>` meşru |
+| Sabit ≤10 satır, sıralanmayacak | ham `<table>` meşru (gerekçe listesiyle) |
+| Düzenlenebilir liste / seçici | ham `<table>` meşru (gerekçe listesiyle) |
+| Öznitelik (anahtar/değer) | `KeyValue` atomu — tablo değil |
+| Grafik lejantı, sohbet markdown/kanıt tablosu | muaf, kendi kapsamlı sınıfı |
+
+**Tablo standardı (operatör onayı 2026-09-26, mockup "Coremetry Tablo
+Standardı"; T1–T12):** satırın 4 hâli (durağan --divider, hover + el imleci
+YALNIZ tıklanabilir satırda, tek seçili görünüm, tek soluk opaklık); sessiz
+başlık (ok yalnız sıralı sütunda, sıralı etiket --text); sayılar arayüz
+fontunda sağa yaslı + tabular-nums, birim başlıkta, eksik değer soluk "—";
+tek yazı boyu (hiyerarşi renkle), monospace yalnız kimlik/kodda; tek satır
+ritmi `--row-h`; bir satır = bir eylem (gezinen satır gerçek bağlantı,
+yeni sekme çalışır); eylemler tek sağ sütunda (en çok bir ikon + ⋯, silme
+menüde onaylı); renk yalnız sapan değerde (`.cell-err` / `.cell-warn`,
+dolgu yok); tek çerçeve (kart/çekmece içinde çerçevesiz, iç kaydırma
+`is-scroll` = yapışkan başlık); hücre tek satır (kimlikte ortadan kırp,
+tam değer ipucunda); boş/yükleniyor/hata tablonun İÇİNDE, başlık kalır.
+Yoğunluk 3 basamak. Göç dilim dilim; `tableUnityRatchet` sayılar yalnız
+azalır.
 
 `storageKey` **zorunlu ve benzersiz** — 89 tablo, 0 çakışma. Kolon tanımı
 `COLS` dizisi: `id`/`label`/`width`/`sortValue`/`numeric`. Başlık

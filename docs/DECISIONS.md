@@ -724,3 +724,24 @@ birincil kadar dolguluydu. Kapılar: `contrastTokens` iki yeni tokenı her temad
 `paletteStep2.pin` yapıyı çiviler; `.card-tight` (hiç uygulanmamıştı) kural, prop ve çağrı
 yerleriyle birlikte kalktı.
 
+## 2026-09-26 — Tablo standardı: dört tür, sessiz satır, renk yalnız sapmada (v0.10.930→)
+
+**Karar (operatör: "önerini yapalım mockup gördüm uygundur", mockup "Coremetry Tablo
+Standardı"):** T1–T12 ve sekiz açık soruda önerilenler. T1 dört tür tablo (DataTable,
+gerekçeli statik tablo, KeyValue atomu, muaf lejant/sohbet); T2 satırın dört hâli, hover ve el
+imleci yalnız tıklanabilir satırda; T3 sessiz başlık; T4 sayılar arayüz fontunda (günlük dört
+tablo dahil); T5 tek yazı boyu, hiyerarşi renkle, monospace yalnız kimlik/kodda; T6 `--row-h`;
+T7 bir satır bir eylem, gezinen satır gerçek bağlantı; T8 tek eylem sütunu (⋯ hep görünür,
+soluk); T9 renk yalnız sapan değerde, durum sütunu nokta + metin; T10 tek çerçeve; T11 hücre
+tek satır; T12 durumlar tablonun içinde. Yoğunluk 4 → 3 basamak; "Kolonları sıfırla" başlık
+satırının ⋯ menüsünde; varlık başına tek açılış hedefi.
+
+**Neden:** ~195 tablonun iskeleti ortaktı, gürültü detaydaydı: satırların %74'ü tıklanamadığı
+hâlde el imleci alıyordu, 705 sütunda boşta ok, 284 monospace sayı hücresi, 405 satır içi hücre
+stili (yoğunluk hücrelerin yarısına ulaşmıyordu), 13 farklı satır yüksekliği tahmini, 5 ayrı
+satır-tıklama yolu, 26 dosyada kutu içinde kutu. Envanter iki gerçek hata da buldu (v0.10.930
+SLO kırpma, v0.10.931 çizilmeyen hata rengi).
+
+**Göç:** dilim 0 kapılar + hatalar, dilim 1 tek CSS sürümü, dilim 2 primitif, dilim 3 sayfa
+süpürmeleri, dilim 4 durumlar. `tableUnityRatchet` tabanları yalnız azalır.
+
