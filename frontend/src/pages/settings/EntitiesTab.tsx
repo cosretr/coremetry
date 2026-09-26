@@ -28,8 +28,8 @@ const RUN_COLS: DataTableColumn<EntitySyncRun>[] = [
   { id: 'info', label: 'Error / unmapped', width: 360, sortValue: r => r.Error },
 ];
 
+// v0.10.929 (K5) — arka plan senkronunun 'ok' koşusu normal sonuç: nötr.
 function statusTone(s: EntitySyncRun['Status']): Tone {
-  if (s === 'ok') return 'success';
   if (s === 'failed') return 'danger';
   if (s === 'partial') return 'warning';
   return 'neutral';

@@ -164,7 +164,8 @@ function Inner() {
         )}
         <div className="row" style={{ alignItems: 'center', gap: 12, marginBottom: 10 }}>
           <Button variant="secondary" size="sm" onClick={() => navigate('/runbooks')}>← Runbooks</Button>
-          <span className={`badge ${draft.enabled ? 'b-ok' : 'b-gray'}`}>
+          {/* v0.10.929 (K5) — açık/kapalı ayar durumu; kelime taşır, renk yok. */}
+          <span className="badge b-gray">
             {draft.enabled ? 'ENABLED' : 'DISABLED'}
           </span>
           {draft.createdBy && (

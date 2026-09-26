@@ -112,7 +112,9 @@ function MonitorCard({ m, isAdmin, deleting, onEdit, onDelete, onTimeline, showT
   showTimeline: boolean;
 }) {
   const status = m.lastResult?.status ?? 'unknown';
-  const cls = status === 'up' ? 'operational' : status === 'down' ? 'outage' : 'degraded';
+  // v0.10.929 (K5) — henüz sonuç yok (PENDING) sapma değil: 'up' ile aynı nötr
+  // sınıf (.status-*-operational artık nötr). Gerçek 'degraded' amber kalır.
+  const cls = status === 'down' ? 'outage' : status === 'degraded' ? 'degraded' : 'operational';
   const lastChecked = m.lastResult?.time ? tsLong(m.lastResult.time) : '—';
   return (
     <div className={`status-row status-row-${cls}`}>
@@ -161,7 +163,7 @@ function MonitorCard({ m, isAdmin, deleting, onEdit, onDelete, onTimeline, showT
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         {/* Uptime % rollup — 1h / 24h side-by-side. Coloured by
-            health: ≥99.9% green, ≥99% amber, below = red. Standard
+            health: ≥99.9% neutral (K5), ≥99% amber, below = red. Standard
             SLO three-band visual signal. Hidden when no probe data
             yet (fresh monitor). */}
         {m.stats && m.stats.probes24h > 0 && (
@@ -195,7 +197,7 @@ function MonitorCard({ m, isAdmin, deleting, onEdit, onDelete, onTimeline, showT
 
 // UptimeChip — 1h / 24h uptime percentages displayed side-by-side
 // next to the status pill. Uses a three-band SLO visual: ≥99.9%
-// green (operational), ≥99% amber (degraded), below = red. The
+// neutral (v0.10.929 K5 — sağlıklı bant renk almaz), ≥99% amber, below = red. The
 // breakpoints match the de-facto industry convention (Pingdom /
 // BetterStack / UptimeRobot all use the same 99 / 99.9 split).
 function UptimeChip({ stats }: { stats: MonitorStats }) {
@@ -205,7 +207,7 @@ function UptimeChip({ stats }: { stats: MonitorStats }) {
     return `${v.toFixed(1)}%`;
   };
   const tone = (v: number) =>
-    v >= 99.9 ? 'var(--ok)' :
+    v >= 99.9 ? 'var(--text2)' :
     v >= 99   ? 'var(--warn)' :
                 'var(--err)';
   return (
@@ -231,7 +233,7 @@ function UptimeChip({ stats }: { stats: MonitorStats }) {
 // CertDaysChip — days remaining until the leaf cert expires, colour-banded
 // against the monitor's warn threshold. Negative = already expired.
 function CertDaysChip({ days, warnDays }: { days: number; warnDays: number }) {
-  const tone = days < 0 ? 'var(--err)' : days < warnDays ? 'var(--warn)' : 'var(--ok)';
+  const tone = days < 0 ? 'var(--err)' : days < warnDays ? 'var(--warn)' : 'var(--text2)'; // v0.10.929 (K5) — pencere dışı nötr
   const label = days < 0 ? `expired ${-days}d ago` : `${days}d left`;
   return (
     <span title={`Certificate ${days < 0 ? 'expired' : 'expires in ' + days + ' day(s)'} · warn < ${warnDays}d`}
@@ -255,7 +257,8 @@ function Timeline({ monitorId }: { monitorId: string }) {
   return (
     <span style={{ display: 'inline-flex', gap: 1, alignItems: 'center', marginLeft: 8 }}>
       {ordered.map(r => {
-        const c = r.status === 'up' ? 'var(--ok)' : r.status === 'down' ? 'var(--err)' : 'var(--warn)';
+        // v0.10.929 (K5) — 'up' tiki nötr; renk yalnız down/degraded sapmasında.
+        const c = r.status === 'up' ? 'var(--text3)' : r.status === 'down' ? 'var(--err)' : 'var(--warn)';
         const t = `${r.status.toUpperCase()} · ${tsLong(r.time)}${r.latencyMs ? ` · ${r.latencyMs}ms` : ''}${r.message ? ` · ${r.message}` : ''}`;
         return (
           <span key={r.time} title={t}

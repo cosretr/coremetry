@@ -44,13 +44,14 @@ describe('MV onarımı — kablolama', () => {
   });
   it('üç durum rozetli; ok satırları tabloya girmez, boş durum sayıyı söyler', () => {
     expect(page).toContain("{ ok: 'sağlıklı', plain: 'düz', dangling: 'sarkan', missing: 'yok' }");
-    expect(page).toContain("{ ok: 'b-ok', plain: 'b-warn', dangling: 'b-err', missing: 'b-err' }");
+    // v0.10.929 (K5) — sağlıklı MV nötr (b-gray); sapma tonları aynı.
+    expect(page).toContain("{ ok: 'b-gray', plain: 'b-warn', dangling: 'b-err', missing: 'b-err' }");
     expect(page).toContain('iç tablo Replicated değil');
     // Sağlıklı hücreler tabloya GİRMEZ (kapsama ok satırlarını da döner).
     expect(page).toContain("if (c.state === 'ok') continue;");
     // Aynı MV iki kez çizilmez: sarkan liste yalnız kapsamada OLMAYAN satırı ekler.
     expect(page).toContain('if (seen.has(`${d.host}/${d.view}`)) continue;');
-    // Yeşil rozet ÖLÇÜLMÜŞ kapsama ister: kapsama yoksa/hatalıysa "0 MV × 0 host"
+    // Sağlıklı rozeti ÖLÇÜLMÜŞ kapsama ister: kapsama yoksa/hatalıysa "0 MV × 0 host"
     // diye sağlıklı denmez; hata b-err rozetiyle mesajıyla birlikte görünür.
     // v0.10.830 — kapı büyüdü: artık (kalıntı/öksüz) ÖLÇÜLMÜŞ ve BOŞ olmalı.
     // v0.10.833 — hedef uuid de ÖLÇÜLMÜŞ ve bulgusuz olmalı: kapsaması `ok`

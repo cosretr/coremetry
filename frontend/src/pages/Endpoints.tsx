@@ -729,7 +729,8 @@ export default function EndpointsPage() {
                 <DataTableHead dt={dt} leading={<th style={{ width: 22 }} />} />
                 <tbody>
                   {dt.sortedRows.map((r, i) => {
-                    const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-ok';
+                    // v0.10.929 (K5) — eşikler aynı; eşik altı sağlıklı dal nötr.
+                    const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
                     // v0.9.818 — genişletme anahtarı artık KARARLI ve
                     // URL-güvenli: eskiden satır INDEKSİNİ taşıyordu, yani
                     // sıralama/filtre değişince açık şerit başka bir satıra
@@ -858,7 +859,8 @@ export default function EndpointsPage() {
                               return <span style={{ color: 'var(--text3)' }}
                                 title={LIST_NEW_TITLE}>{LIST_NEW_LABEL}</span>;
                             }
-                            const cls = d.pct > 5 ? 'var(--err)' : d.pct < -5 ? 'var(--ok)' : 'var(--text3)';
+                            // v0.10.929 (K5) — iyileşme nötr --text2 (Sparkline emsali), kötüleşme kırmızı kalır.
+                            const cls = d.pct > 5 ? 'var(--err)' : d.pct < -5 ? 'var(--text2)' : 'var(--text3)';
                             return <b style={{ color: cls }}>{d.pct > 0 ? '▲' : d.pct < 0 ? '▼' : ''}{Math.abs(d.pct).toFixed(0)}%</b>;
                           })()}
                         </td>}
@@ -1032,7 +1034,8 @@ function StatusBreakdown({ r }: { r: EndpointRow }) {
   return (
     <span style={{ display: 'inline-flex', gap: 4 }}>
       {s2 > 0 && (
-        <span className="badge b-ok" title={`${s2.toLocaleString()} 2xx responses`}>2xx {compactNum(s2)}</span>
+        // v0.10.929 (K5) — 2xx normal trafik: 3xx gibi nötr; renk yalnız 4xx/5xx sapmada.
+        <span className="badge b-gray" title={`${s2.toLocaleString()} 2xx responses`}>2xx {compactNum(s2)}</span>
       )}
       {s3 > 0 && (
         <span className="badge b-gray" title={`${s3.toLocaleString()} 3xx redirects`}>3xx {compactNum(s3)}</span>

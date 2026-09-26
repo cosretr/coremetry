@@ -26,26 +26,12 @@ import { PageShell } from '@/components/ui/PageShell';
 // on client spans; the server.address semconv fallback ships as the
 // v2 aggregator slice.
 
-// Category → badge tone. Semantic families, not per-vendor colours —
-// the operator's eye should land on "payments red-ish, cloud blue-ish"
-// groupings, and unknown categories fall through to gray.
-const CATEGORY_TONE: Record<string, string> = {
-  payments: 'b-err',
-  auth: 'b-warn',
-  messaging: 'b-info',
-  email: 'b-info',
-  push: 'b-info',
-  sms: 'b-info',
-  cloud: 'b-ok',
-  cdn: 'b-ok',
-  observability: 'b-gray',
-  search: 'b-gray',
-  ai: 'b-warn',
-};
-
+// v0.10.929 (K5) — kategori renk almaz (adım 1 KindBadge emsali): eski
+// CATEGORY_TONE payments'ı kırmızı, cloud/cdn'i yeşil basıyordu — ikisi de
+// sapma ya da geçiş değil. Ayrımı kategorinin kelimesi taşır.
 function CategoryBadge({ category }: { category?: string }) {
   if (!category) return <span style={{ color: 'var(--text3)' }}>—</span>;
-  return <span className={`badge ${CATEGORY_TONE[category] ?? 'b-gray'}`}>{category}</span>;
+  return <span className="badge b-gray">{category}</span>;
 }
 
 const EXT_COLS: DataTableColumn<ExternalHost>[] = [

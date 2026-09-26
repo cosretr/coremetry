@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button, Field } from '@/components/ui';
 import { api } from '@/lib/api';
-import { useSettingsLoad, SettingsLoadError } from './shared';
+import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import { vmFloorToForm, vmFloorToWire } from './vmForm';
 import type { VMAuthType, VMSettingsInput, VMTestResult } from '@/lib/types';
 
@@ -129,16 +129,12 @@ export function MetricsBackendTab() {
         doğrudan VM’den okuyun (Prometheus uyumlu HTTP API).
       </p>
 
-      <div className={`status-banner status-banner-${ready ? 'operational' : 'degraded'}`}>
-        <span className={`status-pill status-pill-${ready ? 'operational' : 'degraded'}`}>
-          {ready ? 'VICTORIAMETRICS' : 'CLICKHOUSE'}
-        </span>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>
-          {ready
-            ? `Metrik okumaları ${baseUrl} adresinden.`
-            : 'Kapalı — metrik okumaları Coremetry’nin ClickHouse’undan.'}
-        </span>
-      </div>
+      {/* v0.10.929 (K5) — kurulu/kurulmamış bir ayar durumu: nötr bant (eskiden yeşil/amber). */}
+      <ConfigStatusBanner label={ready ? 'VICTORIAMETRICS' : 'CLICKHOUSE'}>
+        {ready
+          ? `Metrik okumaları ${baseUrl} adresinden.`
+          : 'Kapalı — metrik okumaları Coremetry’nin ClickHouse’undan.'}
+      </ConfigStatusBanner>
 
       {/* KAPSAM. Bu satır olmadan "metrik backend'i" ifadesi "TÜM
           metrikler" diye okunur ve ilk JVM paneli uyuşmadığında bug
@@ -204,7 +200,7 @@ export function MetricsBackendTab() {
           <label style={{ display: 'block', marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
               Bearer token
-              {hasToken && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>· saklı</span>}
+              {hasToken && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· saklı</span>}
             </div>
             <input type="password" value={token}
               onChange={e => setToken(e.target.value)}

@@ -58,9 +58,9 @@ export function Stat({ label, value, tone, onClick, sub }: {
   onClick?: () => void;
   sub?: string;
 }) {
+  // v0.10.929 (K5) — 'ok' (aralıkta) sağlıklı durum: değer nötr --text, yeşil yok.
   const color = tone === 'err' ? 'var(--err)'
               : tone === 'warn' ? 'var(--warn)'
-              : tone === 'ok'  ? 'var(--ok)'
               : 'var(--text)';
   // When clickable we render the tile as a button so the
   // operator gets keyboard + screen-reader treatment for free,
@@ -125,7 +125,8 @@ export function GaugeStat({ label, usage, limit, sub, onClick, forecast }: {
   const pct = limit > 0 ? (usage / limit) * 100 : 0;
   const tone: 'ok' | 'warn' | 'err' =
     pct >= 90 ? 'err' : pct >= 75 ? 'warn' : 'ok';
-  const fill = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : 'var(--ok)';
+  // v0.10.929 (K5) — %75 altı doluluk normal: çubuk nötr (clusters pctColor emsali).
+  const fill = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : 'var(--text3)';
   // v0.10.927 — parçalar `span` + `display: block` (Stat ile aynı gerekçe;
   // doluluk çubuğu da — `width: %` blok kutu ister).
   const inner = (
@@ -443,10 +444,11 @@ export function PanelHeader({ engineLabel, instance, status, color, extraBadge, 
           : 'No receiver metric_points seen — receiver may be down or not yet wired'}
           style={{
             fontSize: 9, padding: '1px 6px', borderRadius: 3,
+            // v0.10.929 (K5) — UP sağlıklı durum: nötr hap; DOWN kırmızı kalır.
             background: status === 'up'
-              ? 'color-mix(in srgb, var(--ok) 15%, transparent)'
+              ? 'var(--bg3)'
               : 'color-mix(in srgb, var(--err) 15%, transparent)',
-            color: status === 'up' ? 'var(--ok)' : 'var(--err)',
+            color: status === 'up' ? 'var(--text2)' : 'var(--err)',
             fontFamily: 'ui-monospace, SFMono-Regular, monospace',
             textTransform: 'uppercase', letterSpacing: '.5px',
           }}>{status}</span>

@@ -79,9 +79,10 @@ export function pctOfLimit(used: number, limit: number | null): number | null {
 }
 
 /** Durum rozeti metni + tonu (tablo "Durum" hücresi). */
-export function clusterStatus(t: PodTotals): { text: string; tone: 'ok' | 'warn' | 'err' | 'gray' } {
+// v0.10.929 (K5) — 'all running' sağlıklı hâl: nötr (gray); ton yalnız failing'de.
+export function clusterStatus(t: PodTotals): { text: string; tone: 'warn' | 'err' | 'gray' } {
   if (!t.phaseKnown) return { text: 'durum bilinmiyor', tone: 'gray' };
-  if (t.failing === 0) return { text: t.running === t.pods ? 'all running' : `${t.running} / ${t.pods} running`, tone: 'ok' };
+  if (t.failing === 0) return { text: t.running === t.pods ? 'all running' : `${t.running} / ${t.pods} running`, tone: 'gray' };
   return { text: `${t.failing} failing`, tone: t.failing >= Math.max(1, Math.ceil(t.pods / 2)) ? 'err' : 'warn' };
 }
 

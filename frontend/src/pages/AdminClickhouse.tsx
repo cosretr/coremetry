@@ -222,7 +222,7 @@ function fmtUptime(s?: number): string {
 // node her şeyi alıyorsa N'e yaklaşır. Eşikler kaba ama operatörün
 // "bakmam lazım mı?" sorusunu tek renkte cevaplıyor.
 function imbalanceTone(v: number): string {
-  if (v <= 1.25) return 'b-ok';
+  if (v <= 1.25) return 'b-gray'; // v0.10.929 (K5) — dengeli = sağlıklı, nötr
   if (v <= 2) return 'b-warn';
   return 'b-err';
 }
@@ -378,7 +378,7 @@ function DDLQueuePanel() {
   const d = q.isPending ? undefined : q.isError ? null : q.data ?? null;
 
   const tone: Record<string, string> = {
-    healthy: 'b-ok', single_node: 'b-gray',
+    healthy: 'b-gray', single_node: 'b-gray', // v0.10.929 (K5) — sağlıklı nötr
     worker_stuck: 'b-err', worker_skipping: 'b-err',
     unreachable: 'b-err', probe_failed: 'b-warn',
   };
@@ -1059,7 +1059,7 @@ function RollupWizardPanel() {
                     {t.err
                       ? <span className="badge b-warn" title={t.err}>OKUNAMADI</span>
                       : t.exists
-                        ? <span className="badge b-ok">VAR</span>
+                        ? <span className="badge b-gray">VAR</span>
                         : <span className="badge b-gray">YOK</span>}
                   </td>
                   <td className="num mono">{t.exists && !t.err ? fmtNum(t.rows) : '—'}</td>
@@ -1278,7 +1278,8 @@ function PreRow({ label, ok, note, neutral }: {
     <tr>
       <td className="mono" style={{ fontSize: 11.5 }}>{label}</td>
       <td>
-        <span style={{ color: ok ? 'var(--ok)' : neutral ? 'var(--text3)' : 'var(--err)' }}>
+        {/* v0.10.929 (K5) — ✓ bir durum kontrolü (geçiş değil): nötr --text2; renk yalnız ✗ sapmada. */}
+        <span style={{ color: ok ? 'var(--text2)' : neutral ? 'var(--text3)' : 'var(--err)' }}>
           {ok ? '✓' : neutral ? '—' : '✗'}
         </span>
         {note && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text3)' }}>{note}</span>}
@@ -1400,7 +1401,7 @@ function CHQueryOptimizer() {
 // answers "are we talking to a cluster?" in under a second. The
 // banner colour reflects the live agreement between the
 // configured cluster name and what system.clusters reports:
-//   • green  — configuredCluster set, nodes detected
+//   • nötr   — configuredCluster set, nodes detected (v0.10.929 K5: sağlıklı hâl renk almaz)
 //   • blue   — standalone install (no cluster configured)
 //   • amber  — configuredCluster set but system.clusters is
 //              empty → misconfig (env var on the app side,
@@ -1433,11 +1434,12 @@ function TopologyPanel({ topology: t }: { topology: Topology }) {
     rows: shardRows, initialSort: { id: 'table', dir: 'asc' },
   });
   const bannerCls = misconfigured || probeFailed ? 'warn' : (t.mode === 'cluster' ? 'ok' : 'info');
+  // v0.10.929 (K5) — "cluster bağlı" sağlıklı durum: nötr çerçeve; renk yalnız warn'da.
   const bannerColor =
-    bannerCls === 'ok' ? 'var(--ok)' :
+    bannerCls === 'ok' ? 'var(--border)' :
     bannerCls === 'warn' ? 'var(--warn)' : 'var(--accent2)';
   const bannerBg =
-    bannerCls === 'ok' ? 'color-mix(in srgb, var(--ok) 8%, transparent)' :
+    bannerCls === 'ok' ? 'var(--bg2)' :
     bannerCls === 'warn' ? 'color-mix(in srgb, var(--warn) 10%, transparent)' : 'color-mix(in srgb, var(--info) 8%, transparent)';
 
   return (
@@ -1467,7 +1469,7 @@ function TopologyPanel({ topology: t }: { topology: Topology }) {
           )}
           {!misconfigured && !probeFailed && t.mode === 'cluster' && (
             <>
-              <strong style={{ color: 'var(--ok)' }}>● Cluster mode</strong> —
+              <strong style={{ color: 'var(--text)' }}>● Cluster mode</strong> —
               connected to cluster <code className="mono">{t.configuredCluster}</code>
               {' '}with <strong>{t.nodes?.length ?? 0}</strong> registered node{(t.nodes?.length ?? 0) === 1 ? '' : 's'}.
               {cacheStale && (
@@ -1531,7 +1533,7 @@ function TopologyPanel({ topology: t }: { topology: Topology }) {
                   <td className="num mono">{n.port}</td>
                   <td>
                     {n.isLocal
-                      ? <span style={{ color: 'var(--ok)' }}>● self</span>
+                      ? <span style={{ color: 'var(--text2)' }}>● self</span>
                       : <span style={{ color: 'var(--text3)' }}>—</span>}
                   </td>
                 </tr>
@@ -1675,7 +1677,7 @@ function EntityLayerWizardPanel() {
         <>
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
             küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
-            {allOk ? <span className="badge b-ok">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+            {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
             entity_seen_5m son 15 dk: <span className="mono">{fmtNum(status.seenRows)}</span> satır
           </div>
           <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
@@ -1688,7 +1690,7 @@ function EntityLayerWizardPanel() {
                     <td className="mono">{o.name}</td>
                     <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
-                      {o.state === 'ok' ? <span className="badge b-ok">VAR</span>
+                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
@@ -1796,7 +1798,7 @@ const MEASURE_PARTS_COLS: DataTableColumn<CHMeasurePartsRow>[] = [
 // partsTone — parts_to_delay_insert varsayılanı 24.x'te 1000 (eski
 // sürümlerde 150/300): 300'de uyar, 1000'de kırmızı.
 function partsTone(maxPP: number): string {
-  return maxPP >= 1000 ? 'b-err' : maxPP >= 300 ? 'b-warn' : 'b-ok';
+  return maxPP >= 1000 ? 'b-err' : maxPP >= 300 ? 'b-warn' : 'b-gray'; // v0.10.929 (K5) — eşik altı nötr
 }
 function perHour(v: number, uptimeS: number): string {
   return uptimeS > 0 ? fmtNum(Math.round(v / (uptimeS / 3600))) : '—';
@@ -1814,7 +1816,7 @@ const ROOT_COV_COLS: DataTableColumn<CHRootCoverageRow>[] = [
   { id: 'pct',      label: 'Tam kök %',     sortValue: r => (r.traces ? r.withRoot / r.traces : 0), numeric: true, width: 100 },
   { id: 'entrypct', label: 'Giriş kökü %',  sortValue: r => (r.traces ? entryRootOf(r) / r.traces : 0), numeric: true, width: 110 },
 ];
-function rootTone(pct: number): string { return pct >= 90 ? 'b-ok' : pct >= 50 ? 'b-warn' : 'b-err'; }
+function rootTone(pct: number): string { return pct >= 90 ? 'b-gray' : pct >= 50 ? 'b-warn' : 'b-err'; } // v0.10.929 (K5) — sağlıklı kapsama nötr
 // v0.10.757 — "Trace hattı sağlığı" (trace bütünlüğü denetimi 2026-09-17,
 // operatör onaylı spec: sihirbaz değil panel, önce pod-içi). Üç kart:
 // kayıp (bu podun ingest sayaçları + reject/degrade + spool + CH'de
@@ -1841,7 +1843,8 @@ type MVRepairRow = {
   addr?: string; uuid?: string; innerEngine?: string; peerHost?: string; canonical: boolean;
 };
 const MV_STATE_LABEL: Record<CHMVState, string> = { ok: 'sağlıklı', plain: 'düz', dangling: 'sarkan', missing: 'yok' };
-const MV_STATE_TONE: Record<CHMVState, string> = { ok: 'b-ok', plain: 'b-warn', dangling: 'b-err', missing: 'b-err' };
+// v0.10.929 (K5) — sağlıklı MV nötr; renk yalnız plain/dangling/missing sapmasında.
+const MV_STATE_TONE: Record<CHMVState, string> = { ok: 'b-gray', plain: 'b-warn', dangling: 'b-err', missing: 'b-err' };
 // v0.10.833 — satırın EYLEMİ artık exhaustive bir Record'dan gelir. Eskiden
 // karar `r.canonical` ise DANGER "Yeniden kur" basmaktı; CHMVState'e yeni bir
 // değer eklemek yıkıcı düğmeyi SESSİZCE açardı. Bu haritayla yeni bir değer
@@ -2057,18 +2060,18 @@ function DanglingMVPanel() {
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <Button variant="accent" size="sm" onClick={() => void scan()} loading={busy}>Ölç</Button>
-        {/* v0.10.825 incelemesi: yeşil rozet ÖLÇÜLMÜŞ kapsama ister. Eskiden
+        {/* v0.10.825 incelemesi: sağlıklı rozeti ÖLÇÜLMÜŞ kapsama ister. Eskiden
             kapsama hiç gelmediğinde ya da hata verdiğinde kart "MV'ler sağlıklı ·
             0 MV × 0 host" diyordu — ölçülmemiş bir şey sağlıklı sayılamaz. */}
-        {/* v0.10.830 — yeşil rozet ARTIK YOKLUĞUNU da ister: kalıntı/öksüz
+        {/* v0.10.830 — sağlıklı rozeti ARTIK YOKLUĞUNU da ister: kalıntı/öksüz
             ölçülmediyse ya da varsa "sağlıklı" demek, replika kartının kalıcı
             kırmızı satırını yalanlar. */}
-        {/* v0.10.833 — yeşil rozet artık "ÖLÇÜLDÜ VE bulgu yok" ister: hedef
+        {/* v0.10.833 — sağlıklı rozeti artık "ÖLÇÜLDÜ VE bulgu yok" ister: hedef
             uuid'si hiç ölçülememiş bir kurulumu sağlıklı ilan etmek, kartın
             tam da bu sürümde kapattığı yalanı sürdürürdü. */}
         {coverage && !coverageError && !targetError && leftovers && !leftoverError && repairRows.length === 0 && leftoverRows.length === 0 &&
           findings.length === 0 && (
-          <span className="badge b-ok">MV&apos;ler sağlıklı · {mvCount} MV × {hostCount} host{cluster ? ` · ${cluster}` : ''}</span>
+          <span className="badge b-gray">MV&apos;ler sağlıklı · {mvCount} MV × {hostCount} host{cluster ? ` · ${cluster}` : ''}</span>
         )}
         {/* v0.10.833 — rozet İKİYE ayrıldı: uyuşmazlığın sonucu ÖLÇÜLÜR.
             Şekil-1'de ingest düşer (kod 60), şekil-2'de MV başka adlı bir
@@ -2269,7 +2272,8 @@ function DanglingMVPanel() {
                   <code className="mono"> UUID &apos;{'<TO INNER UUID>'}&apos;</code> EKLE. Bu parça atlanırsa tablo rastgele bir nesne uuid&apos;si alır ve MV onu yine bulamaz.
                   <br /><b>Kod 57 (TABLE_ALREADY_EXISTS) alırsan DUR:</b> o hedef uuid BAŞKA bir tabloda yaşıyor demektir ve o tablo MV&apos;nin çalışan hedefidir — düşürme, kartı yeniden Ölç.</li>
                 <li>Tarihçeyi taşı: <code className="mono">INSERT INTO `.inner_id.{'<view uuid>'}` SELECT * FROM mv_hedef_yanlis_{'<view>'}</code>.</li>
-                <li>Kartı yeniden <b>Ölç</b>; yeşile döndükten sonra yeniden adlandırılan kopyayı düşür.</li>
+                {/* v0.10.929 (K5) — adım renge değil rozete bağlı: sağlıklı hâl artık nötr (yeşil değil). */}
+                <li>Kartı yeniden <b>Ölç</b>; &quot;MV&apos;ler sağlıklı&quot; rozeti görünüp satır listeden düşünce yeniden adlandırılan kopyayı düşür.</li>
               </ol>
               Tarihçe bu host&apos;ta feda edilebilirse kısa yol: view&apos;ı düşür + kanonik DDL&apos;i ON CLUSTER&apos;sız kur — <i>Hedefi onar</i> aynı
               shard&apos;da sağlam bir eş bulamadığında zaten bunu yapar ve onay penceresi tarihçenin sıfırlanacağını AÇIKÇA söyler.
@@ -2377,7 +2381,7 @@ function DanglingMVPanel() {
           {/* v0.10.832 — iki uuid AYRI: ADI view'ın uuid'sidir, NESNE uuid'si
               MV'nin TO INNER UUID'sidir. Eski metin ikisini tek şey sanıyordu
               ve dal gerçekten de adın uuid'sini nesne uuid'si olarak gömüyordu
-              → kart yeşile dönerdi, ingest "Target table … doesn't exist"
+              → kart sağlıklı rozetini gösterirdi, ingest "Target table … doesn't exist"
               demeye devam ederdi. */}
           {peerable(confirm) ? (
             <p style={{ fontSize: 12 }}>
@@ -2811,7 +2815,7 @@ function TraceHealthPanel() {
             {kv('trace (son 5 dk)', `${fmtNum(data.coverage.traces)}${data.coverage.source ? ` · ${data.coverage.source}` : ''}`)}
             {kv('köksüz trace', fmtNum(Math.max(0, data.coverage.traces - data.coverage.withEntryRoot)))}
             {kv('MV gap günü', data.coverage.gapDays.length === 0
-              ? <span className="badge b-ok">yok</span>
+              ? <span className="badge b-gray">yok</span>
               : <span className="badge b-warn" title={data.coverage.gapDays.join(', ')}>{data.coverage.gapDays.length} gün</span>)}
           </div>
           <div style={card}>
@@ -2979,10 +2983,10 @@ function MeasurePanel() {
             <span className={`badge ${partsTone(worstPP)}`} title="Partition başına en çok aktif parça (tüm host × tablo). parts_to_delay_insert'e yaklaşma = önce batch boyutu, sonra MV sayısı.">
               max parts/partition {fmtNum(worstPP)}
             </span>
-            <span className={`badge ${delayed > 0 ? 'b-warn' : 'b-ok'}`} title="system.events DelayedInserts (kümülatif, tüm host'lar): parça baskısı yüzünden yavaşlatılan insert sayısı.">
+            <span className={`badge ${delayed > 0 ? 'b-warn' : 'b-gray'}`} title="system.events DelayedInserts (kümülatif, tüm host'lar): parça baskısı yüzünden yavaşlatılan insert sayısı.">
               DelayedInserts {fmtNum(delayed)}
             </span>
-            <span className={`badge ${rejected > 0 ? 'b-err' : 'b-ok'}`} title="system.events RejectedInserts (kümülatif): parts_to_throw_insert aşıldı, insert REDDEDİLDİ.">
+            <span className={`badge ${rejected > 0 ? 'b-err' : 'b-gray'}`} title="system.events RejectedInserts (kümülatif): parts_to_throw_insert aşıldı, insert REDDEDİLDİ.">
               RejectedInserts {fmtNum(rejected)}
             </span>
             {!data.queryLogAvailable && (
@@ -3026,8 +3030,8 @@ function MeasurePanel() {
                     <tr key={e.host}>
                       <td className="mono" style={{ fontSize: 11 }}>{e.host || '—'}</td>
                       <td className="num mono">{fmtUptime(e.uptimeS)}</td>
-                      <td className="num mono"><span className={`badge ${e.delayedInserts > 0 ? 'b-warn' : 'b-ok'}`}>{fmtNum(e.delayedInserts)}</span></td>
-                      <td className="num mono"><span className={`badge ${e.rejectedInserts > 0 ? 'b-err' : 'b-ok'}`}>{fmtNum(e.rejectedInserts)}</span></td>
+                      <td className="num mono"><span className={`badge ${e.delayedInserts > 0 ? 'b-warn' : 'b-gray'}`}>{fmtNum(e.delayedInserts)}</span></td>
+                      <td className="num mono"><span className={`badge ${e.rejectedInserts > 0 ? 'b-err' : 'b-gray'}`}>{fmtNum(e.rejectedInserts)}</span></td>
                       <td className="num mono" title={`kümülatif ${fmtNum(e.insertedRows)}`}>{perHour(e.insertedRows, e.uptimeS)}</td>
                       <td className="num mono" title={`kümülatif ${fmtNum(e.mergedRows)}`}>{perHour(e.mergedRows, e.uptimeS)}</td>
                       <td className="num mono" title="MergedRows / InsertedRows — yazma çarpanı; MV sayısı ve batch boyutu bunu büyütür/küçültür.">
@@ -3327,7 +3331,7 @@ function TraceBackfillWizardPanel() {
                   <td style={{ padding: '2px 0' }}>
                     {d.gap
                       ? <span className="badge b-warn">boşluk</span>
-                      : <span className="badge b-ok">tam</span>}
+                      : <span className="badge b-gray">tam</span>}
                   </td>
                 </tr>
               ))}
@@ -3415,7 +3419,7 @@ function FunctionIdColumnWizardPanel() {
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
             küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
             {status.bootManaged ? <span className="badge b-gray" title="spans uygulama yönetimli: boot kolonu kendisi ekler">BOOT YÖNETİYOR</span>
-              : allOk ? <span className="badge b-ok">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+              : allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
             doluluk (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
           </div>
           <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
@@ -3428,7 +3432,7 @@ function FunctionIdColumnWizardPanel() {
                     <td className="mono">{o.name}</td>
                     <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
-                      {o.state === 'ok' ? <span className="badge b-ok">VAR</span>
+                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
@@ -3589,8 +3593,8 @@ function AttrIndexWizardPanel() {
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
             küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
             {status.bootManaged ? <span className="badge b-gray" title="spans uygulama yönetimli: boot kolonu kendisi ekler">BOOT YÖNETİYOR</span>
-              : allOk ? <span className="badge b-ok">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
-            bu pod: {status.ready ? <span className="badge b-ok" title="probe kolonu gördü — =/IN/EXISTS bloom yolunda">BLOOM YOLU</span> : <span className="badge b-gray" title="kolon görülmedi — dizi yolu (eski davranış, doğru ama yavaş)">DİZİ YOLU</span>}
+              : allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+            bu pod: {status.ready ? <span className="badge b-gray" title="probe kolonu gördü — =/IN/EXISTS bloom yolunda">BLOOM YOLU</span> : <span className="badge b-gray" title="kolon görülmedi — dizi yolu (eski davranış, doğru ama yavaş)">DİZİ YOLU</span>}
             {' '}· bloom yüklemi <span className="mono">{fmtNum(status.used)}</span> ·
             tutarlılık (son 10 dk): <span className="mono">{fmtNum(status.filled)} / {fmtNum(status.total)}</span> ({fillPct(status.filled, status.total)})
           </div>
@@ -3604,7 +3608,7 @@ function AttrIndexWizardPanel() {
                     <td className="mono">{o.name}</td>
                     <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
-                      {o.state === 'ok' ? <span className="badge b-ok">VAR</span>
+                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
@@ -3756,7 +3760,7 @@ function RolloutLayerWizardPanel() {
         <>
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
             küme <span className="mono">{status.cluster || '(tek düğüm)'}</span> ·{' '}
-            {allOk ? <span className="badge b-ok">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
+            {allOk ? <span className="badge b-gray">TAM</span> : <span className="badge b-warn">EKSİK</span>} ·
             workload_revision_activity_1m son 15 dk: <span className="mono">{fmtNum(status.activityRows)}</span> satır
           </div>
           <div className="table-wrap is-fit" style={{ marginBottom: 10 }}>
@@ -3769,7 +3773,7 @@ function RolloutLayerWizardPanel() {
                     <td className="mono">{o.name}</td>
                     <td style={{ fontSize: 11, color: 'var(--text3)' }}>{o.kind}{o.table ? ` · ${o.table}` : ''}</td>
                     <td>
-                      {o.state === 'ok' ? <span className="badge b-ok">VAR</span>
+                      {o.state === 'ok' ? <span className="badge b-gray">VAR</span>
                         : o.state === 'partial' ? <span className="badge b-warn" title="bazı host'larda yok — dağıtık DDL yarım kalmış">KISMİ</span>
                         : o.state === 'missing' ? <span className="badge b-gray">YOK</span>
                         : <span className="badge b-warn" title={o.err}>OKUNAMADI</span>}
@@ -3795,7 +3799,8 @@ function RolloutLayerWizardPanel() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             <span className={`badge ${pre.supported ? 'b-ok' : 'b-warn'}`}>{pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ'}</span>
-            <span className={`badge ${pre.mvGate ? 'b-ok' : 'b-warn'}`} title="her cluster'da k8s.replicaset.name kapsaması ≥ %95">{pre.mvGate ? 'MV KAPISI AÇIK' : 'MV KAPISI KAPALI'}</span>
+            {/* v0.10.929 (K5) — MV kapısı bir durum: açık = nötr, kapalı = sapma (amber). */}
+            <span className={`badge ${pre.mvGate ? 'b-gray' : 'b-warn'}`} title="her cluster'da k8s.replicaset.name kapsaması ≥ %95">{pre.mvGate ? 'MV KAPISI AÇIK' : 'MV KAPISI KAPALI'}</span>
             <span style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
           </div>
           <div className="table-wrap" style={{ marginBottom: 8 }}>
@@ -3821,9 +3826,9 @@ function RolloutLayerWizardPanel() {
                     <td className="mono">{c.cluster || '(boş — kapıya girmez)'}</td>
                     <td className="num mono">{fmtNum(c.total)}</td>
                     <td className="num mono" style={{ color: c.sampled === 0 ? 'var(--err)' : undefined }}>{c.sampled === 0 ? 'ölçülemedi' : fmtNum(c.sampled)}</td>
-                    <td className="num mono" style={{ color: c.replicaset >= 0.95 ? 'var(--ok)' : 'var(--err)' }}>{c.sampled === 0 ? '—' : pct(c.replicaset)}</td>
-                    <td className="num mono" style={{ color: c.image >= 0.95 ? 'var(--ok)' : 'var(--warn)' }}>{c.sampled === 0 ? '—' : pct(c.image)}</td>
-                    <td className="num mono" style={{ color: c.namespace >= 0.95 ? 'var(--ok)' : 'var(--err)' }}>{c.sampled === 0 ? '—' : pct(c.namespace)}</td>
+                    <td className="num mono" style={{ color: c.replicaset >= 0.95 ? undefined : 'var(--err)' }}>{c.sampled === 0 ? '—' : pct(c.replicaset)}</td>
+                    <td className="num mono" style={{ color: c.image >= 0.95 ? undefined : 'var(--warn)' }}>{c.sampled === 0 ? '—' : pct(c.image)}</td>
+                    <td className="num mono" style={{ color: c.namespace >= 0.95 ? undefined : 'var(--err)' }}>{c.sampled === 0 ? '—' : pct(c.namespace)}</td>
                   </tr>
                 ))}
               </tbody>

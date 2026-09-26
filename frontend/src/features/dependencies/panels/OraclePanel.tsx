@@ -51,10 +51,11 @@ export function OraclePanel({ instance, range }: { instance: string; range: Time
             : 'No oracledb.* metric_points seen — receiver may be down or not yet wired'}
                 style={{
                   fontSize: 9, padding: '1px 6px', borderRadius: 3,
+                  // v0.10.929 (K5) — UP sağlıklı durum: nötr hap (shared.tsx ile aynı).
                   background: data.status === 'up'
-                    ? 'color-mix(in srgb, var(--ok) 15%, transparent)'
+                    ? 'var(--bg3)'
                     : 'color-mix(in srgb, var(--err) 15%, transparent)',
-                  color: data.status === 'up' ? 'var(--ok)' : 'var(--err)',
+                  color: data.status === 'up' ? 'var(--text2)' : 'var(--err)',
                   fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                   textTransform: 'uppercase', letterSpacing: '.5px',
                 }}>{data.status}</span>
@@ -180,7 +181,8 @@ function TablespaceBar({ ts, onClick }: {
 }) {
   const tone: 'ok' | 'warn' | 'err' =
     ts.usedPct >= 90 ? 'err' : ts.usedPct >= 75 ? 'warn' : 'ok';
-  const fill = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : 'var(--ok)';
+  // v0.10.929 (K5) — %75 altı normal: çubuk nötr (GaugeStat ile aynı).
+  const fill = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : 'var(--text3)';
   const inner = (
     <div style={{
       display: 'grid', gridTemplateColumns: '120px 1fr 90px 60px 18px', gap: 10,

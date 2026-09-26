@@ -58,7 +58,7 @@ const MAX_POINTS = 2000;
 // so canvas strokes re-resolve on a theme flip (resolveColor reads the live
 // CSS var). Mirrors the semantics of the legacy EventMarkers DOM overlay.
 const ANNOTATION_KIND_TOKEN: Record<string, string> = {
-  deploy: 'var(--ok)',
+  deploy: 'var(--text2)', // v0.10.929 (K5) — kategori, sağlık değil (AnnotationLane ile aynı)
   config: 'var(--accent)',
   incident: 'var(--err)',
   maintenance: 'var(--warn)',

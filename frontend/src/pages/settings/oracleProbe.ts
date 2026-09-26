@@ -8,10 +8,13 @@ import type { OracleLongCheck, OracleMappingCheck, OracleScanCheck, OracleWindow
 export const ORACLE_TEST_WINDOWS = [5, 15, 60] as const;
 export type OracleTestWindow = (typeof ORACLE_TEST_WINDOWS)[number];
 
-export type ScanTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
+// v0.10.929 (K5) — 'b-ok' tondan çıktı: iyi yapılandırma hükmü (indeksli,
+// partition, LONG select dışında) sağlıklı bir HÂL, geçiş değil → nötr b-gray.
+// Test başarısının yeşili FlashBox'ta (düğmenin doğrudan geri bildirimi) kalır.
+export type ScanTone = 'b-warn' | 'b-err' | 'b-gray';
 
-/** Tam-tarama hükmü: indeks ya da partition varsa yeşil; ikisi de yoksa
- *  kırmızı; sözlük okunamadıysa / tablo bulunamadıysa gri (hüküm yok). */
+/** Tam-tarama hükmü: indeks ya da partition varsa nötr (sorun yok); ikisi de
+ *  yoksa kırmızı; sözlük okunamadıysa / tablo bulunamadıysa gri (hüküm yok). */
 export function scanVerdict(s: OracleScanCheck | undefined): { tone: ScanTone; text: string; detail: string } {
   if (!s || !s.checked) {
     return { tone: 'b-gray', text: 'tam tarama kontrolü yapılamadı', detail: s?.error ?? 'sözlük okunmadı' };
@@ -22,10 +25,10 @@ export function scanVerdict(s: OracleScanCheck | undefined): { tone: ScanTone; t
   const rows = s.numRows > 0 ? `${s.numRows.toLocaleString('tr-TR')} satır` : 'satır sayısı bilinmiyor';
   const analyzed = s.lastAnalyzed ? ` (istatistik ${s.lastAnalyzed})` : '';
   if (s.indexed) {
-    return { tone: 'b-ok', text: `${s.tsColumn} indeksli`, detail: `${s.indexName ?? 'indeks'} · ${rows}${analyzed}` };
+    return { tone: 'b-gray', text: `${s.tsColumn} indeksli`, detail: `${s.indexName ?? 'indeks'} · ${rows}${analyzed}` };
   }
   if (s.partitioned) {
-    return { tone: 'b-ok', text: `${s.tsColumn} partition anahtarı`, detail: `partition budaması · ${rows}${analyzed}` };
+    return { tone: 'b-gray', text: `${s.tsColumn} partition anahtarı`, detail: `partition budaması · ${rows}${analyzed}` };
   }
   return {
     tone: 'b-err',
@@ -69,7 +72,7 @@ export function longVerdict(l: OracleLongCheck | undefined): { tone: ScanTone; t
       detail: 'LONG kolon FETCH FIRST ile okunamaz (ORA-00997). Alanı kapat (-) ya da başka kolona eşle.',
     };
   }
-  return { tone: 'b-ok', text: 'LONG kolonlar select dışında', detail: l.columns.join(', ') };
+  return { tone: 'b-gray', text: 'LONG kolonlar select dışında', detail: l.columns.join(', ') };
 }
 
 /** v0.10.886 — eşleme hükmü. null = gösterilecek bir şey yok (sözlük okundu, her

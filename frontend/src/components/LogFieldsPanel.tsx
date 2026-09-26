@@ -120,7 +120,8 @@ function FieldAccordion({ field, scope, isColumn, onToggleColumn, onPillAdd, onP
               }}>{v.value}</span>
               <span style={{ color: 'var(--text3)' }} title={lift && d.errorLift ? `hata seçiminde %${(v.selPct ?? pct).toFixed(1)} · tabanda %${(v.basePct ?? 0).toFixed(1)}` : undefined}>{pct.toFixed(pct >= 10 ? 0 : 1)}%</span>
               {(() => { const b = liftBadge(v, !!lift && !!d.errorLift && !d.errorLift.degraded); return b.kind === 'none' ? null : (
-                <span className={'badge ' + (b.kind === 'up' ? 'b-err' : b.kind === 'down' ? 'b-ok' : '')}
+                // v0.10.929 (K5) — hatada DAHA AZ görülen değer iyileşme sinyali: nötr.
+                <span className={'badge ' + (b.kind === 'up' ? 'b-err' : b.kind === 'down' ? 'b-gray' : '')}
                   title="lift = hata seçimindeki pay − tabandaki pay (puan); ±5 altı gürültü">{b.label}</span>); })()}
               <IconButton variant="bare" size="xs" className="ib-add"
                 onClick={() => onPillAdd(field, v.value)}

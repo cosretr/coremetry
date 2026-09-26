@@ -18,8 +18,9 @@ import type { EndpointRow, TimeRange } from '@/lib/types';
 // sözleşmesinin dosya hali. Satır tıkı /traces'a (OpsCard davranışı);
 // D3 dilimi peek drawer'ı bunun ÜSTÜNE ekleyecek.
 
+// v0.10.929 (K5) — sağlıklı dal nötr (b-gray); eşikler değişmedi, renk yalnız sapmaya.
 function errBadge(rate: number): string {
-  return `badge ${rate > 5 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-ok'}`;
+  return `badge ${rate > 5 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-gray'}`;
 }
 
 const totalTimeOf = (r: EndpointRow) => r.calls * r.avgMs;

@@ -220,7 +220,8 @@ export function BackupTab() {
                   borderBottom: '1px solid var(--divider)',
                 }}>
                   <span style={{ color: 'var(--text)', fontWeight: 600 }}>{t}</span>
-                  <span style={{ color: d.willAdd.length > 0 ? 'var(--ok)' : 'var(--text3)' }}
+                  {/* v0.10.929 (K5) — "yeni" bir değişiklik, iyileşme değil: vurgu (--accent2), yeşil değil. */}
+                  <span style={{ color: d.willAdd.length > 0 ? 'var(--accent2)' : 'var(--text3)' }}
                     title={d.willAdd.length > 0 ? d.willAdd.slice(0, 20).join('\n') : 'no new rows'}>
                     +{d.willAdd.length} new
                   </span>

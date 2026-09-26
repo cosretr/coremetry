@@ -418,7 +418,7 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {!settled ? <span className="badge b-gray">{noEv ? 'kanıt yok' : '…'}</span>
                           : d.ok === false ? <span className="badge b-err" title={err?.retryable ? 'tekrar denenebilir' : undefined}>⚠ hata{err?.retryable ? ' · tekrar' : ''}</span>
-                          : <span className="badge b-ok">ok</span>}
+                          : <span className="badge b-gray">ok</span> /* v0.10.929 (K5) — sohbet geçmişinde kalıcı: nötr */}
                         {d.truncated && <span className="badge b-warn" style={{ marginLeft: 4 }} title={`önizleme 4 KB'a kırpıldı; gerçek boy ${fmtPreviewBytes(d.bytes ?? 0)}`}>kırpık</span>}
                       </td>
                     </tr>

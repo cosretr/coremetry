@@ -12,6 +12,7 @@ export function healthLevel(errPct: number): HealthLevel {
 }
 
 // healthColor maps a level to its token var() for inline text/fills.
+// v0.10.929 (K5) — 'green' sağlıklı durum: nötr --text3 (lib/health.ts ile aynı).
 export function healthColor(level: HealthLevel): string {
-  return level === 'red' ? 'var(--err)' : level === 'amber' ? 'var(--warn)' : 'var(--ok)';
+  return level === 'red' ? 'var(--err)' : level === 'amber' ? 'var(--warn)' : 'var(--text3)';
 }

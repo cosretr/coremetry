@@ -201,16 +201,17 @@ export function OracleTab() {
             <div key={i} className={`oracle-src${src.enabled ? '' : ' is-off'}`}>
               {st && (
                 <div className="oracle-status">
+                  {/* v0.10.929 (K5) — başarılı/çözüldü/sağlıklı arka plan durumu: nötr (is-quiet); renk yalnız is-err'de. */}
                   {st.lastCheckAt
                     ? <>Son bağlantı denemesi <b>{fmtDateTime(st.lastCheckAt)}</b>{' · '}
                       {st.lastCheckOK
-                        ? <span className="is-ok">başarılı</span>
+                        ? <span className="is-quiet">başarılı</span>
                         : <span className="is-err">{st.lastError || 'başarısız'}</span>}</>
                     : <span className="is-quiet">Bu sunucuda henüz bağlantı denenmedi.</span>}
                   {src.passwordRef && (
                     <> · şifre referansı{' '}
                       {st.passwordResolved
-                        ? <span className="is-ok">çözüldü</span>
+                        ? <span className="is-quiet">çözüldü</span>
                         : <span className="is-err">{st.passwordError || 'çözülemedi'}</span>}</>
                   )}
                 </div>
@@ -236,7 +237,7 @@ export function OracleTab() {
                         {ps.capped && <> · <span className="badge b-warn">tavana çarptı — devam ediyor</span></>}
                         {ps.lastError
                           ? <> · <span className="is-err">{ps.lastError}</span></>
-                          : <> · <span className="is-ok">okuma sağlıklı</span></>}
+                          : <> · <span className="is-quiet">okuma sağlıklı</span></>}
                         {status?.poll?.pod && <> · pod <code>{status.poll.pod}</code></>}
                       </>
                     ) : (
@@ -305,7 +306,7 @@ export function OracleTab() {
                   placeholder="coremetry_ro" autoComplete="off"
                   hint={err.user ? undefined : 'Salt-okunur bir hesap yeterli.'} />
                 <Field type="password" autoComplete="new-password" error={err.password}
-                  label={<>Şifre{r.snapshot?.hasPassword && <span className="is-ok"> · kayıtlı</span>}</>}
+                  label={<>Şifre{r.snapshot?.hasPassword && <span style={{ color: 'var(--text3)' }}> · kayıtlı</span>}</>}
                   value={src.password ?? ''}
                   onChange={e => patch(i, { password: e.target.value })}
                   placeholder={r.snapshot?.hasPassword ? '(saklı değeri korumak için boş bırakın)' : 'Oracle şifresi…'}
@@ -320,7 +321,7 @@ export function OracleTab() {
                 {src.passwordRef && r.snapshot?.passwordRef === src.passwordRef && (
                   <span className="oracle-check">
                     {r.snapshot.passwordResolved
-                      ? <Badge tone="success">referans çözüldü</Badge>
+                      ? <Badge>referans çözüldü</Badge>
                       : <Badge tone="danger">referans çözülemedi</Badge>}
                   </span>
                 )}

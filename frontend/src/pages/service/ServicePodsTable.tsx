@@ -123,7 +123,8 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                           onClick={() => setCollapsed(s => ({ ...s, [g.cluster]: !s[g.cluster] }))} />
                         <Link to={entityHref({ type: 'cluster', id: g.cluster, name: g.cluster, clusterId: g.cluster }, { range })}
                           className="mono pods-group__name" title="Cluster detayı">{g.cluster}</Link>
-                        <span className={`badge ${t.phaseKnown ? (t.failing > 0 ? 'b-err' : 'b-ok') : 'b-gray'}`}>
+                        {/* v0.10.929 (K5) — 'N / N running' normal faz: nötr; yalnız failing kırmızı. */}
+                        <span className={`badge ${t.phaseKnown && t.failing > 0 ? 'b-err' : 'b-gray'}`}>
                           {t.phaseKnown ? `${t.running} / ${t.pods} running` : `${t.pods} pod`}
                         </span>
                         <span className="pods-group__stats">

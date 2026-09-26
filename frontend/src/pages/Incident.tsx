@@ -25,6 +25,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 import { IconSparkles } from '@/components/icons';
 import { aiErrorHint } from '@/lib/aiErrors';
+import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.929 (K5) — tek durum sözlüğü (hafif yaprak)
 
 export default function IncidentPage() {
   return <Suspense fallback={<Spinner />}><Inner /></Suspense>;
@@ -421,10 +422,12 @@ What we did to mitigate and fix.
 - [ ] Owner — concrete change to prevent recurrence
 `;
 
+// v0.10.929 (K5) — ton tek durum sözlüğünden (features/anomalies/statusTone):
+// OPEN/ACK nötr, yalnız RESOLVED (geçiş) yeşil. Sözlük ProblemDetail'den
+// değil hafif yaprak modülden gelir — bu parçaya ağır zincir girmez.
 function StatusPill({ s }: { s: Incident['status'] }) {
-  const cls = s === 'open' ? 'b-err' : s === 'acknowledged' ? 'b-warn' : 'b-ok';
   const label = s === 'open' ? 'OPEN' : s === 'acknowledged' ? 'ACK' : 'RESOLVED';
-  return <span className={`badge ${cls}`}>{label}</span>;
+  return <TriageStatusBadge s={s} label={label} />;
 }
 function SeverityPill({ s }: { s: string }) {
   const cls = s === 'critical' ? 'b-err' : s === 'warning' ? 'b-warn' : 'b-info';
@@ -454,7 +457,7 @@ function kindLabel(k: string): string {
 function eventStyle(kind: string, severity: string): { icon: ReactNode; token: string } {
   switch (kind) {
     case 'created':          return { icon: <AlertTriangle size={16} />, token: severity === 'critical' ? '--err' : '--warn' };
-    case 'ack':              return { icon: <Bell size={16} />, token: '--warn' };
+    case 'ack':              return { icon: <Bell size={16} />, token: '--text3' }; // v0.10.929 (K5) — ack normal durum, STATUS_TONE gibi nötr
     case 'resolved':         return { icon: <Check size={16} />, token: '--ok' };
     case 'note':             return { icon: <MessageSquare size={16} />, token: '--accent' };
     case 'problem_attached': return { icon: <AlertTriangle size={16} />, token: '--err' };

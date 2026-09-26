@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Badge, Button, Field, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
-import { useSettingsLoad, SettingsLoadError } from './shared';
+import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import { fmtDateTime } from '@/lib/utils';
 import type { DevOpsFlavor, DevOpsResolveDryRun, DevOpsTestResult, SchemaCatalogSummary } from '@/lib/types';
 
@@ -218,16 +218,12 @@ export function DevOpsTab() {
         kaydına kod gövdesi değil, yalnız <code>dosya:aralık</code> özeti yazılır.
       </p>
 
-      <div className={`status-banner status-banner-${configured ? 'operational' : 'degraded'}`}>
-        <span className={`status-pill status-pill-${configured ? 'operational' : 'degraded'}`}>
-          {configured ? 'YAPILANDIRILDI' : 'YAPILANDIRILMADI'}
-        </span>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>
-          {configured
-            ? `${baseUrl}${collection ? ` / ${collection}` : ''}`
-            : 'Sunucu adresi girilmedi.'}
-        </span>
-      </div>
+      {/* v0.10.929 (K5) — kurulu/kurulmamış bir ayar durumu: nötr bant (eskiden yeşil/amber). */}
+      <ConfigStatusBanner label={configured ? 'YAPILANDIRILDI' : 'YAPILANDIRILMADI'}>
+        {configured
+          ? `${baseUrl}${collection ? ` / ${collection}` : ''}`
+          : 'Sunucu adresi girilmedi.'}
+      </ConfigStatusBanner>
 
       <form onSubmit={save} style={{
         marginTop: 18, padding: 16, borderRadius: 8,
@@ -294,7 +290,7 @@ export function DevOpsTab() {
         <label style={{ display: 'block', marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
             Personal Access Token (PAT)
-            {hasPat && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>· kayıtlı</span>}
+            {hasPat && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· kayıtlı</span>}
           </div>
           <input type="password" value={pat}
             onChange={e => setPat(e.target.value)}
@@ -605,7 +601,7 @@ export function DevOpsTab() {
         </p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
           {schema && schema.importedAt > 0 ? (
-            <Badge tone="success">{schema.tables} tablo · {schema.columns} kolon · {fmtDateTime(new Date(schema.importedAt))}{schema.flavor ? ` · ${schema.flavor}` : ''}</Badge>
+            <Badge>{schema.tables} tablo · {schema.columns} kolon · {fmtDateTime(new Date(schema.importedAt))}{schema.flavor ? ` · ${schema.flavor}` : ''}</Badge>
           ) : (
             <Badge>katalog yüklü değil</Badge>
           )}

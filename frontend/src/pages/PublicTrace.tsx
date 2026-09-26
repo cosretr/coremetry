@@ -131,7 +131,10 @@ function PublicTraceInner() {
         </code>
         {data.spans.length > 0 && (
           <>
-            <span className={`badge ${hasErr ? 'b-err' : 'b-ok'}`}>{hasErr ? 'ERROR' : 'OK'}</span>
+            {/* v0.10.929 (K5) — /trace başlığıyla aynı: sağlıklı trace rozetsiz, kelime sr-only. */}
+            {hasErr
+              ? <span className="badge b-err">ERROR</span>
+              : <span className="sr-only">OK</span>}
             <span style={{ color: 'var(--text2)', fontSize: 12 }}>{data.spans.length} spans · {fmtNs(totalNs)}</span>
             {root && <span style={{ color: 'var(--text3)', fontSize: 12 }}>{tsLong(root.startTime)}</span>}
           </>

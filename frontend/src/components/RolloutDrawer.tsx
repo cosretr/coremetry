@@ -84,7 +84,8 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
                   {d.services.map(s => (
                     <tr key={s.service}>
                       <td className="mono" style={{ fontSize: 12 }}><Link to={serviceHref(s.service, { params: { range: `custom:${Math.round(d.since / 1e6)}-${Math.round(d.generatedAt / 1e6)}` } })} className="sec">{s.service}</Link></td>
-                      <td><Badge tone={s.health === 'red' ? 'danger' : s.health === 'yellow' ? 'warning' : s.health === 'green' ? 'success' : 'neutral'}>{s.health || 'n/a'}</Badge></td>
+                      {/* v0.10.929 (K5) — green = sağlıklı durum, nötr; renk yalnız sapmada. */}
+                      <td><Badge tone={s.health === 'red' ? 'danger' : s.health === 'yellow' ? 'warning' : 'neutral'}>{s.health || 'n/a'}</Badge></td>
                       {s.after.throughput === 0 ? (
                         <>
                           {/* deploy'dan sonra hiç span yok: sahte %0.0/0ms basma */}

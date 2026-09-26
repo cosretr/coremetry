@@ -14,7 +14,9 @@ import type { Tone } from '@/components/ui/Badge';
 export function verdictTone(v: RCAVerdict['verdict']): Tone {
   switch (v) {
     case 'root_cause_identified':
-      return 'success';
+      // v0.10.929 (K5) — bir analiz SONUCU; sağlık ya da kullanıcı eylemi
+      // değil: nötr. Renk yalnız belirsizlikte (olası neden sarı).
+      return 'neutral';
     case 'probable_cause':
       return 'warning';
     default:

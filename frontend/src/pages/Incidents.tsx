@@ -18,6 +18,7 @@ import type { DataTableColumn } from '@/lib/dataTable';
 import type { Incident, IncidentStatus } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
+import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.929 (K5) — tek durum sözlüğü (hafif yaprak)
 
 // Columns for the shared sortable + resizable DataTable. Ongoing
 // incidents (no resolvedAt) sort as longest-duration.
@@ -100,9 +101,10 @@ export default function IncidentsPage() {
             <Button variant="primary" onClick={() => setShowNew(true)}>+ Declare incident</Button>
           )}
           <span style={{ color: 'var(--text3)', fontSize: 12, marginLeft: 'auto' }}>
-            <b style={{ color: 'var(--err)' }}>{counts.open}</b> open ·
-            {' '}<b style={{ color: 'var(--warn)' }}>{counts.acknowledged}</b> ack ·
-            {' '}<b style={{ color: 'var(--ok)' }}>{counts.resolved}</b> resolved
+            {/* v0.10.929 (K5) — sayaç nötr: üç sayı da --text, durum rengi rozette. */}
+            <b style={{ color: 'var(--text)' }}>{counts.open}</b> open ·
+            {' '}<b style={{ color: 'var(--text)' }}>{counts.acknowledged}</b> ack ·
+            {' '}<b style={{ color: 'var(--text)' }}>{counts.resolved}</b> resolved
           </span>
         </PageControls>
         {/* v0.9.456 (dürüstlük A4) — en-yeni-200 penceresi dolduysa
@@ -203,10 +205,14 @@ function IncidentCause({ rc }: { rc: Incident['rootCause'] }) {
   );
 }
 
+// v0.10.929 (K5) — ton tek durum sözlüğünden (features/anomalies/statusTone):
+// OPEN/ACK nötr, yalnız RESOLVED (geçiş) yeşil. .status-pill-* bırakıldı
+// (operational sınıfı nötre dönerken RESOLVED'ın yeşili gitmesin); detay
+// sayfası (Incident.tsx) ile aynı rozet. Sözlük hafif yaprak modülden gelir,
+// ProblemDetail'den değil — liste parçasına ağır zincir girmez.
 function StatusPill({ s }: { s: IncidentStatus }) {
-  const cls = s === 'open' ? 'outage' : s === 'acknowledged' ? 'degraded' : 'operational';
   const label = s === 'open' ? 'OPEN' : s === 'acknowledged' ? 'ACK' : 'RESOLVED';
-  return <span className={`status-pill status-pill-${cls}`}>{label}</span>;
+  return <TriageStatusBadge s={s} label={label} />;
 }
 function SeverityPill({ s }: { s: string }) {
   const cls = s === 'critical' ? 'b-err' : s === 'warning' ? 'b-warn' : 'b-info';

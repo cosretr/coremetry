@@ -54,6 +54,15 @@ import { PageShell } from '@/components/ui/PageShell';
 // the default tab.
 type ServiceTab = 'overview' | 'operations' | 'details' | 'logs' | 'topology' | 'infra' | 'pods';
 
+// v0.10.929 (K5) — /service başlık noktası. Sağlıklı hâl nötr halka
+// (`.ov-dot.green` globals'ta artık soluk --border-strong halkası; ad tarihsel),
+// sapma amber/kırmızı. Etiket ekran okuyucu + tooltip için aynı eşikte.
+function serviceHeadDot(errorRate: number): { cls: 'red' | 'amber' | 'green'; label: 'critical' | 'warning' | 'healthy' } {
+  if (errorRate > 5) return { cls: 'red', label: 'critical' };
+  if (errorRate > 1) return { cls: 'amber', label: 'warning' };
+  return { cls: 'green', label: 'healthy' };
+}
+
 function ServiceDetailInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   // v0.10.717 (multi-cluster ilkesi) — Topbar Cluster kapsamı ve Details
@@ -375,6 +384,10 @@ function ServiceDetailInner() {
   const displayedOps = normalized ? (normOpsQ.data ?? []) : operations;
   const opsLoading = normalized && normOpsQ.isLoading;
 
+  // v0.10.929 (K5) — başlık sağlık noktası: sınıf + metin alternatifi tek
+  // eşikten (>5 kritik, >1 uyarı); ikisi ayrı ayrı hesaplanıp ayrışmasın.
+  const headDot = serviceHeadDot(info?.errorRate ?? 0);
+
   if (!svc) {
     return (
       <>
@@ -404,7 +417,14 @@ function ServiceDetailInner() {
         {info && (
           <div className="svc-head">
             <div className="svc-title">
-              <span className={`ov-dot ${info.errorRate > 5 ? 'red' : info.errorRate > 1 ? 'amber' : 'green'}`} style={{ width: 12, height: 12 }} />
+              {/* v0.10.929 (K5) — eşikler aynı; sağlıklı nokta yeşil değil, soluk
+                  --border-strong halkası (Services HealthDot emsali). Halka artık
+                  globals'taki `.ov-dot.green`ten gelir (tarihsel ad, nötr halka);
+                  satır içi boxShadow kopyası kalktı. Renk tek başına durum
+                  taşımasın: aynı >5 / >1 eşiğinde metin alternatifi (title +
+                  aria-label). */}
+              <span className={`ov-dot ${headDot.cls}`} style={{ width: 12, height: 12 }}
+                role="img" title={headDot.label} aria-label={headDot.label} />
               <h1>{svc}</h1>
               {runtimeQ.data && <ServiceRuntimeBadge rt={runtimeQ.data} compact />}
               <ServiceCatalogPill service={svc} />
@@ -684,26 +704,28 @@ function ServiceSLOChip({ slo }: { slo: SLORow }) {
   const noData = !!st?.noData;
   const healthy = noData ? false : (st?.healthy ?? true);
   const budget = st ? Math.max(0, Math.min(1, st.budgetRemaining)) : 1;
-  // Budget bar tint: green > 25% left, amber 0–25%, red exhausted.
-  const budgetCls = budget > 0.25 ? 'var(--ok)' : budget > 0 ? 'var(--warn)' : 'var(--err)';
+  // Budget bar tint: neutral > 25% left, amber 0–25%, red exhausted.
+  // v0.10.929 (K5) — sağlıklı bütçe nötr (--text3); renk yalnız sapmada.
+  const budgetCls = budget > 0.25 ? 'var(--text3)' : budget > 0 ? 'var(--warn)' : 'var(--err)';
   const burn = st?.burnRate ?? 0;
   return (
     <div style={{
       padding: 10, borderRadius: 6,
       background: 'var(--bg2)', border: '1px solid var(--border)',
-      borderLeft: `3px solid ${noData ? 'var(--border)' : healthy ? 'var(--ok)' : 'var(--err)'}`,
+      // v0.10.929 (K5) — sağlıklı SLO rayı nötr; kırmızı yalnız ihlalde.
+      borderLeft: `3px solid ${noData || healthy ? 'var(--border)' : 'var(--err)'}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 12, fontWeight: 600 }}>{slo.name}</span>
         <span style={{ flex: 1 }} />
-        <span className={`badge ${noData ? 'b-gray' : healthy ? 'b-ok' : 'b-err'}`} style={{ fontSize: 10 }} title={st?.hint || undefined}>
+        <span className={`badge ${noData || healthy ? 'b-gray' : 'b-err'}`} style={{ fontSize: 10 }} title={st?.hint || undefined}>
           {noData ? 'Olay yok' : healthy ? 'Healthy' : 'Breached'}
         </span>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6 }}>
         {slo.sliType === 'latency' ? `latency ≤ ${slo.thresholdMs}ms` : 'availability'}
         {' · target '}<b>{(slo.target * 100).toFixed(2)}%</b>
-        {st && !noData && <> · SLI <b style={{ color: healthy ? 'var(--ok)' : 'var(--err)' }}>{(st.sli * 100).toFixed(2)}%</b></>}
+        {st && !noData && <> · SLI <b style={{ color: healthy ? 'var(--text)' : 'var(--err)' }}>{(st.sli * 100).toFixed(2)}%</b></>}
       </div>
       {st && !noData && (
         <>

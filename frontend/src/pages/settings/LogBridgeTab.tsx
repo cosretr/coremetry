@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
-import { SettingRow, SettingsLoadError, useSettingsLoad } from './shared';
+import { SettingRow, SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
 
 // LogBridgeTab — dış log sistemine köprü şablonları (v0.9.657).
 //
@@ -83,16 +83,12 @@ export function LogBridgeTab() {
         Coremetry log sisteminize proxy yapmaz; yalnız linki kurar.
       </p>
 
-      <div className={`status-banner status-banner-${configured > 0 ? 'operational' : 'degraded'}`}>
-        <span className={`status-pill status-pill-${configured > 0 ? 'operational' : 'degraded'}`}>
-          {configured > 0 ? 'AÇIK' : 'YAPILANDIRILMADI'}
-        </span>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>
-          {configured > 0
-            ? `${configured} ortam için link üretilecek.`
-            : 'Kapalı — cevaplarda log linki çizilmiyor.'}
-        </span>
-      </div>
+      {/* v0.10.929 (K5) — kurulu/kurulmamış bir ayar durumu: nötr bant (eskiden yeşil/amber). */}
+      <ConfigStatusBanner label={configured > 0 ? 'AÇIK' : 'YAPILANDIRILMADI'}>
+        {configured > 0
+          ? `${configured} ortam için link üretilecek.`
+          : 'Kapalı — cevaplarda log linki çizilmiyor.'}
+      </ConfigStatusBanner>
 
       <form onSubmit={save} style={{
         marginTop: 18, padding: 16, borderRadius: 8,

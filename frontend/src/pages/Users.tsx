@@ -128,9 +128,10 @@ export default function UsersPage() {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {/* v0.8.403 — presence: count over ALL loaded users (not the
                 team-filtered slice) so the header reads as a page-level
-                "who's on Coremetry right now". */}
+                "who's on Coremetry right now".
+                v0.10.929 (K5) — varlık/etkinlik göstergesi, sağlık değil: nötr. */}
             {onlineCount > 0 && (
-              <span className="badge b-ok"
+              <span className="badge b-gray"
                 title="Users with authenticated API activity in the last 5 minutes">
                 ● {onlineCount} online
               </span>
@@ -241,7 +242,7 @@ export default function UsersPage() {
                             sighting only while it's still fresh, else "—". */}
                         {u.online ? (
                           <span>
-                            <span className="badge b-ok"
+                            <span className="badge b-gray"
                               title="Authenticated API activity in the last 5 minutes">
                               ● online
                             </span>

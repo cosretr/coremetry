@@ -23,7 +23,10 @@ export function fmtDelta(now: number, base: number): EvidenceDelta {
   return { dir: 'flat', text: '~' };
 }
 
-export interface EvidenceRedRow { key: string; label: string; now: string; base: string; delta: EvidenceDelta }
+// v0.10.929 (K5) — satır başına YÖN bayrağı: `upIsBad` yükselişin sapma
+// olup olmadığını söyler. Hata oranı / gecikme artışı kötü (kırmızı kalır);
+// throughput (istek/sn) artışı sağlık sinyali değil — nötr basılır.
+export interface EvidenceRedRow { key: string; label: string; now: string; base: string; delta: EvidenceDelta; upIsBad: boolean }
 
 const fmtPct = (v: number) => `%${v >= 10 ? v.toFixed(0) : v.toFixed(1)}`;
 const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${Math.round(v)} ms`);
@@ -33,10 +36,21 @@ export function redRows(red: ChatEvidence['red']): EvidenceRedRow[] {
   if (!red) return [];
   const c: ChatEvidenceRED = red.current, b: ChatEvidenceRED = red.baseline;
   return [
-    { key: 'errorRate', label: 'hata oranı', now: fmtPct(c.errorRate), base: fmtPct(b.errorRate), delta: fmtDelta(c.errorRate, b.errorRate) },
-    { key: 'p95', label: 'p95', now: fmtMs(c.p95Ms), base: fmtMs(b.p95Ms), delta: fmtDelta(c.p95Ms, b.p95Ms) },
-    { key: 'rate', label: 'istek/sn', now: fmtRate(c.rate), base: fmtRate(b.rate), delta: fmtDelta(c.rate, b.rate) },
+    { key: 'errorRate', label: 'hata oranı', now: fmtPct(c.errorRate), base: fmtPct(b.errorRate), delta: fmtDelta(c.errorRate, b.errorRate), upIsBad: true },
+    { key: 'p95', label: 'p95', now: fmtMs(c.p95Ms), base: fmtMs(b.p95Ms), delta: fmtDelta(c.p95Ms, b.p95Ms), upIsBad: true },
+    { key: 'rate', label: 'istek/sn', now: fmtRate(c.rate), base: fmtRate(b.rate), delta: fmtDelta(c.rate, b.rate), upIsBad: false },
   ];
+}
+
+// v0.10.929 (K5) — Δ hücresinin sınıfı. Yükseliş (▲ ×N ya da ▲ yeni) YALNIZ
+// `upIsBad` satırında sapma tonunu (.ev-delta--up kırmızı / --new amber)
+// alır; yükselişin iyi olduğu satırda (istek/sn) değiştirici YOK → hücre
+// .ev-table td'nin nötr rengini (--text2, .ev-delta--down ile aynı) taşır.
+// Düşüş ve ~ her satırda kendi (nötr) sınıflarını korur.
+export function evidenceDeltaClass(r: Pick<EvidenceRedRow, 'delta' | 'upIsBad'>): string {
+  const rise = r.delta.dir === 'up' || r.delta.dir === 'new';
+  if (rise && !r.upIsBad) return 'ev-delta';
+  return `ev-delta ev-delta--${r.delta.dir}`;
 }
 
 export function fmtEvidenceTime(ns: number): string {

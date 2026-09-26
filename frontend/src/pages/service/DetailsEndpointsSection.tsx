@@ -36,8 +36,9 @@ import { topByTimeShare, mergePerCluster, shareBar, parseEndpointsMode, type Clu
 const TOP_N = 8;
 const PER_CLUSTER_LIMIT = 20;
 
+// v0.10.929 (K5) — sağlıklı dal nötr (b-gray); eşikler değişmedi, renk yalnız sapmaya.
 function errBadge(rate: number): string {
-  return `badge ${rate > 5 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-ok'}`;
+  return `badge ${rate > 5 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-gray'}`;
 }
 function fmtCount(n: number): string {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);

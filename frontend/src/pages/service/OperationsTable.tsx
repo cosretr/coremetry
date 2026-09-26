@@ -424,7 +424,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                 </td>
                 <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(agg.spans)}</td>
                 <td className="mono" style={{ textAlign: 'right' }}>
-                  <span className={`badge b-${agg.errorRate > 5 ? 'err' : agg.errorRate > 0 ? 'warn' : 'ok'}`}>
+                  <span className={`badge b-${agg.errorRate > 5 ? 'err' : agg.errorRate > 0 ? 'warn' : 'gray'}`}>
                     {agg.errorRate.toFixed(2)}%
                   </span>
                 </td>
@@ -435,7 +435,8 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
               </tr>
             )}
             {dt.sortedRows.map((op, i) => {
-              const errCls = op.errorRate > 5 ? 'err' : op.errorRate > 0 ? 'warn' : 'ok';
+              // v0.10.929 (K5) — %0 hata nötr (gray), yeşil değil.
+              const errCls = op.errorRate > 5 ? 'err' : op.errorRate > 0 ? 'warn' : 'gray';
               // v0.9.498 — calls sparkline'ı ARTIK şiddet rengiyle
               // boyanmıyor (eski sparkColor kaldırıldı). Üç seri yan yana
               // duruyorsa renk METRİĞİ göstermeli: aynı seri her satırda
@@ -511,7 +512,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                   </td>
                   <td className="mono" style={{ textAlign: 'right' }}>{fmtNum(op.spanCount)}</td>
                   <td className="mono" style={{ textAlign: 'right' }}>
-                    <span className={`badge b-${errCls === 'err' ? 'err' : errCls === 'warn' ? 'warn' : 'ok'}`}>
+                    <span className={`badge b-${errCls}`}>
                       {op.errorRate.toFixed(2)}%
                     </span>
                   </td>

@@ -150,10 +150,12 @@ export function MaintenanceTab() {
                     <td style={{ fontSize: 12, color: 'var(--text2)' }}>{w.reason || '—'}</td>
                     <td style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'monospace' }}>{w.createdBy || '—'}</td>
                     <td>
-                      {status === 'disabled' ? <span className="badge b-err" style={{ fontSize: 9 }}>DISABLED</span>
+                      {/* v0.10.929 (K5) — DISABLED/PAST geçmiş kayıt: nötr (eskiden kırmızı/yeşil).
+                          ACTIVE amber kalır: şu an uyarıları susturan pencere bir sapma. */}
+                      {status === 'disabled' ? <span className="badge b-gray" style={{ fontSize: 9 }}>DISABLED</span>
                         : status === 'active'   ? <span className="badge b-warn" style={{ fontSize: 9 }}>ACTIVE</span>
                         : status === 'upcoming' ? <span className="badge b-info" style={{ fontSize: 9 }}>UPCOMING</span>
-                        :                         <span className="badge b-ok" style={{ fontSize: 9 }}>PAST</span>}
+                        :                         <span className="badge b-gray" style={{ fontSize: 9 }}>PAST</span>}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       {!w.disabled && (

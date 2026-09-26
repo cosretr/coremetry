@@ -152,7 +152,8 @@ export default function SLOsPage() {
                       {o.status?.noData
                         ? <span className="badge b-gray" title={o.status.hint}>Olay yok</span>
                         : o.status?.healthy
-                          ? <span className="badge b-ok">Healthy</span>
+                          // v0.10.929 (K5) — sağlıklı SLO nötr; renk yalnız Breached'te.
+                          ? <span className="badge b-gray">Healthy</span>
                           : <span className="badge b-err">Breached</span>}
                     </td>
                     {isAdmin && (
@@ -300,7 +301,8 @@ function AutoSLOModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
 function BudgetBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(1, value)) * 100;
-  const color = pct > 50 ? 'var(--ok)' : pct > 20 ? 'var(--warn)' : 'var(--err)';
+  // v0.10.929 (K5) — rahat bütçe nötr (--text3); eşikler aynı.
+  const color = pct > 50 ? 'var(--text3)' : pct > 20 ? 'var(--warn)' : 'var(--err)';
   return (
     <div title={`${pct.toFixed(1)}% of error budget remaining`} style={{
       display: 'inline-block', width: 100, height: 10, position: 'relative',
@@ -317,7 +319,8 @@ function BudgetBar({ value }: { value: number }) {
 
 function BurnBadge({ rate }: { rate: number }) {
   if (!isFinite(rate)) return <span style={{ color: 'var(--text3)' }}>—</span>;
-  const cls = rate > 2 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-ok';
+  // v0.10.929 (K5) — normal yanma (≤1×) nötr.
+  const cls = rate > 2 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-gray';
   return <span className={`badge ${cls}`}>{rate.toFixed(2)}×</span>;
 }
 
@@ -343,8 +346,9 @@ function ForecastChip({ sloId }: { sloId: string }) {
   });
   if (!data) return <span style={{ color: 'var(--text3)' }}>…</span>;
   if (data.safeBurn) {
+    // v0.10.929 (K5) — güvenli yanma normal hâl: "OK" nötr rozet.
     return (
-      <span className="badge b-ok"
+      <span className="badge b-gray"
         title={`Current burn rate ${data.burnRate.toFixed(2)}× — at or below replenishment, budget is stable`}>
         OK
       </span>
@@ -576,7 +580,8 @@ function BurnSparkline({ sloId }: { sloId: string }) {
     const x = PAD + i * stepX;
     return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${yOf(p.burnRate).toFixed(1)}`;
   }).join(' ');
-  const color = maxRate > 1 ? 'var(--err)' : maxRate > 0.5 ? 'var(--warn)' : 'var(--ok)';
+  // v0.10.929 (K5) — sakin çizgi nötr (Services errSparkColor emsali).
+  const color = maxRate > 1 ? 'var(--err)' : maxRate > 0.5 ? 'var(--warn)' : 'var(--text3)';
   const tooltip = `7d burn rate — max ${maxRate.toFixed(2)}×`;
   return (
     <svg width={W} height={H} style={{ display: 'block' }}

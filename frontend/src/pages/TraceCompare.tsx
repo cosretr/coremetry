@@ -27,7 +27,8 @@ type CompareTab = 'split' | 'diff';
 // other.
 //
 // Header summary: per-side total duration + the delta (B − A)
-// in ms with a colour cue (red = slower, green = faster). For
+// in ms with a colour cue (red = slower; faster is neutral --text2
+// since v0.10.929 K5 — iyileşme renk almaz). For
 // the operator that's the headline number — "is the new build
 // faster or slower, by how much".
 //
@@ -201,7 +202,7 @@ function TraceSide({ label, id, q, otherQ }: {
 
   // Delta vs the other side — only meaningful once both
   // queries have data. Positive (B − A) > 0 → B is slower (red);
-  // < 0 → B faster (green); 0 → identical.
+  // < 0 → B faster (nötr --text2, v0.10.929 K5); 0 → identical.
   const otherSpans: SpanRow[] = otherQ.data?.spans ?? [];
   const otherTotalNs = useMemo(() => {
     if (otherSpans.length === 0) return 0;
@@ -210,7 +211,7 @@ function TraceSide({ label, id, q, otherQ }: {
     return maxT - minT;
   }, [otherSpans]);
   const deltaNs = label === 'B' && otherTotalNs > 0 ? totalNs - otherTotalNs : 0;
-  const deltaColor = deltaNs > 0 ? 'var(--err)' : deltaNs < 0 ? 'var(--ok)' : 'var(--text3)';
+  const deltaColor = deltaNs > 0 ? 'var(--err)' : deltaNs < 0 ? 'var(--text2)' : 'var(--text3)';
 
   return (
     <div className="tc-side">
@@ -269,7 +270,7 @@ function TraceSide({ label, id, q, otherQ }: {
 // delta so the biggest regressions are at the top.
 //
 // Each row has a colour-coded delta cell (red = slower in B,
-// green = faster), the matched path label, and the absolute
+// faster = neutral --text2 since v0.10.929 K5), the matched path label, and the absolute
 // duration on each side. "Only in A" / "Only in B" rows fall
 // to the bottom of the list because they're informational —
 // most useful when refactoring (operations renamed) rather
@@ -380,7 +381,7 @@ function AlignedDiff({ aQ, bQ }: {
                 : delta > 0
                   ? 'var(--err)'
                   : delta < 0
-                    ? 'var(--ok)'
+                    ? 'var(--text2)' // v0.10.929 (K5) — iyileşme nötr
                     : 'var(--text3)';
               // v0.9.236 — one row per aligned span pair across two FULL
               // traces, uncapped on either side; a 2000-span pair blocked

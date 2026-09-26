@@ -7,6 +7,8 @@
 //
 // Returns a `var(--…)` string — never a raw hex — so light/dark theming and
 // the project "tokens only" rule both hold.
+// v0.10.929 (K5) — sağlıklı dal yeşil değil, nötr --text3 (eşikler aynı);
+// renk yalnız sapmada (amber/kırmızı).
 export function healthToken(errorRate: number): string {
-  return errorRate > 5 ? 'var(--err)' : errorRate > 1 ? 'var(--warn)' : 'var(--ok)';
+  return errorRate > 5 ? 'var(--err)' : errorRate > 1 ? 'var(--warn)' : 'var(--text3)';
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { evidenceBlocks, evidenceHasHypothesis, fmtDelta, fmtRangeTR, isChatEvidence, redRows } from './chatEvidence';
+import { evidenceBlocks, evidenceDeltaClass, evidenceHasHypothesis, fmtDelta, fmtRangeTR, isChatEvidence, redRows } from './chatEvidence';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { ChatEvidence, ChatTypedBlock } from './types';
 
 // v0.10.558 — kanıt kartı saf çekirdeği.
@@ -34,6 +36,33 @@ describe('chatEvidence', () => {
     expect(rows[1]).toMatchObject({ now: '900 ms', base: '120 ms' });
     expect(redRows(undefined)).toEqual([]);
   });
+  // v0.10.929 (K5) — yükselişin iyi olduğu satır (throughput) kırmızı basılmaz.
+  it('yön bayrağı: hata oranı / p95 yükselişi kötü, istek/sn yükselişi nötr', () => {
+    const rows = redRows(ev.red);
+    expect(rows.map(r => [r.key, r.upIsBad])).toEqual([['errorRate', true], ['p95', true], ['rate', false]]);
+    const up = fmtDelta(80, 40), fresh = fmtDelta(5, 0), down = fmtDelta(20, 40), flat = fmtDelta(41, 39);
+    // Yükseliş kötüyse sapma tonu.
+    expect(evidenceDeltaClass({ delta: up, upIsBad: true })).toBe('ev-delta ev-delta--up');
+    expect(evidenceDeltaClass({ delta: fresh, upIsBad: true })).toBe('ev-delta ev-delta--new');
+    // Yükseliş iyiyse (istek/sn) nötr: kırmızı/amber değiştirici yok.
+    expect(evidenceDeltaClass({ delta: up, upIsBad: false })).toBe('ev-delta');
+    expect(evidenceDeltaClass({ delta: fresh, upIsBad: false })).toBe('ev-delta');
+    // Düşüş / ~ her iki yönde kendi nötr sınıfı.
+    expect(evidenceDeltaClass({ delta: down, upIsBad: false })).toBe('ev-delta ev-delta--down');
+    expect(evidenceDeltaClass({ delta: flat, upIsBad: true })).toBe('ev-delta ev-delta--flat');
+    // Uçtan uca: istek/sn ×2 artışı .ev-delta--up almaz.
+    const rate = redRows({ current: { ...ev.red!.current, rate: 80 }, baseline: { ...ev.red!.baseline, rate: 40 } })
+      .find(r => r.key === 'rate')!;
+    expect(rate.delta.dir).toBe('up');
+    expect(evidenceDeltaClass(rate)).not.toContain('ev-delta--up');
+  });
+
+  it('EvidenceCard Δ hücresi sınıfı yön bayrağından alır (dir\'den doğrudan değil)', () => {
+    const src = readFileSync(resolve(__dirname, '../components/ai/EvidenceCard.tsx'), 'utf8');
+    expect(src).toContain('<td className={evidenceDeltaClass(r)}>{r.delta.text}</td>');
+    expect(src).not.toContain('ev-delta--${r.delta.dir}');
+  });
+
   it('aralık + hipotez', () => {
     expect(fmtRangeTR(3600)).toBe('son 1 sa');
     expect(fmtRangeTR(1800)).toBe('son 30 dk');

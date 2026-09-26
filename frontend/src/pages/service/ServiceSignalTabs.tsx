@@ -46,7 +46,8 @@ function levelOf(r: LogRow): Lvl {
   return 'debug';
 }
 
-const LVL_BADGE: Record<Lvl, string> = { error: 'b-err', warn: 'b-warn', info: 'b-ok', debug: 'b-mut' };
+// v0.10.929 (K5) — INFO normal seviye: nötr (b-gray); renk yalnız warn/error'da.
+const LVL_BADGE: Record<Lvl, string> = { error: 'b-err', warn: 'b-warn', info: 'b-gray', debug: 'b-mut' };
 // Faset sayacı — eski `.ov-facet .n` tonu (Metrics.tsx ile aynı).
 const FACET_N: CSSProperties = { fontVariantNumeric: 'tabular-nums', color: 'var(--text3)', fontWeight: 600 };
 

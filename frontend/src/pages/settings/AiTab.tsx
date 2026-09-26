@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
-import { useSettingsLoad, SettingsLoadError, Field } from './shared';
+import { useSettingsLoad, SettingsLoadError, Field, ConfigStatusBanner } from './shared';
 import type { AIProvider, AISettings, AIIntentClassify, AIProfilesPayload } from '@/lib/types';
 import { AiProfilesPanel } from './AiProfilesPanel';
 import { AiBudgetPanel } from './AiBudgetPanel'; // v0.10.411
@@ -207,23 +207,20 @@ export function AITab() {
         // configured. wf: the disabled tier is the whole point of the
         // toggle — show it distinctly so the operator sees AI is off
         // without thinking the key was lost.
+        // v0.10.929 (K5) — üç kademe de bir ayar durumu: nötr bant; ayrım etikette.
         const configured = hasKey || (provider === 'openai' && !!baseUrl);
         const active = configured && enabled;
-        const tier = active ? 'operational' : 'degraded';
         const label = active ? 'ACTIVE' : configured ? 'DISABLED' : 'NOT CONFIGURED';
         return (
-          <div className={`status-banner status-banner-${tier}`}>
-            <span className={`status-pill status-pill-${tier}`}>{label}</span>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>
-              {active
-                ? (hasKey
-                    ? `Provider: ${providerLabel} — ready.`
-                    : `Provider: ${providerLabel} (no auth) — ready at ${baseUrl}.`)
-                : configured
-                  ? `Provider: ${providerLabel} — credentials kept, CoSRE turned off.`
-                  : 'Not configured. Paste a key (or set a local endpoint URL) below.'}
-            </span>
-          </div>
+          <ConfigStatusBanner label={label}>
+            {active
+              ? (hasKey
+                  ? `Provider: ${providerLabel} — ready.`
+                  : `Provider: ${providerLabel} (no auth) — ready at ${baseUrl}.`)
+              : configured
+                ? `Provider: ${providerLabel} — credentials kept, CoSRE turned off.`
+                : 'Not configured. Paste a key (or set a local endpoint URL) below.'}
+          </ConfigStatusBanner>
         );
       })()}
 

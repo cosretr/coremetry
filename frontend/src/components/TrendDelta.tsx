@@ -3,7 +3,8 @@ import { LIST_NEW_LABEL, LIST_NEW_TITLE } from '@/lib/endpointHonesty';
 
 // TrendDelta — small arrow + % change next to a metric value.
 // kind='lowerBetter' → red when current > prior (regression),
-//                       green when current < prior (improvement).
+//                       neutral --text2 when current < prior (improvement;
+//                       v0.10.929 K5 — iyileşme renksiz, Sparkline emsali).
 // kind='neutral' → just direction tint, no value judgement
 //                  (used for calls — more traffic isn't inherently
 //                   bad, less isn't inherently good).
@@ -49,7 +50,7 @@ export function TrendDelta({ cur, prior, kind }: {
   const up = pct > 0;
   let color = 'var(--text3)';
   if (kind === 'lowerBetter') {
-    color = up ? 'var(--err)' : 'var(--ok)';
+    color = up ? 'var(--err)' : 'var(--text2)';
   } else if (kind === 'neutral') {
     color = up ? 'var(--accent2)' : 'var(--text3)';
   }

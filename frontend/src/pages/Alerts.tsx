@@ -734,7 +734,7 @@ export default function AlertsPage() {
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
                     </td>
                     <td>{r.enabled
-                      ? <span className="badge b-ok">ON</span>
+                      ? <span className="badge b-gray">ON</span>
                       : <span className="badge b-gray">OFF</span>}</td>
                     <td>
                       {isEsWatcher

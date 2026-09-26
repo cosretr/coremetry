@@ -196,7 +196,7 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
                           : 'Trend kapalı ya da taban okunamadı'}>
                           {(() => { const c = trendCell(r, d?.baseline); return c.kind === 'new'
                             ? <span className="badge b-warn">YENİ</span>
-                            : <span style={{ color: c.kind === 'ratio' ? (c.up ? 'var(--err)' : c.flat ? 'var(--text2)' : 'var(--ok)') : 'var(--text3)' }}>{trendLabel(c)}</span>; })()}
+                            : <span style={{ color: c.kind === 'ratio' ? (c.up ? 'var(--err)' : 'var(--text2)' /* v0.10.929 (K5) — düşüş nötr */) : 'var(--text3)' }}>{trendLabel(c)}</span>; })()}
                         </td>
                         <td><span className={sevClass(r.severity)}>{r.severityText || sevName(r.severity)}</span></td>
                         <td className="mono" style={cellServices} title={r.services.join(', ')}>

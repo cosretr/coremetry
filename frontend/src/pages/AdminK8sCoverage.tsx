@@ -28,7 +28,8 @@ import type { DataTableColumn } from '@/lib/dataTable';
 // ayrı sayılıyor; ikisini karıştırmak, kartın kendi amacını bozar.
 
 const TONE: Record<string, { bg: string; fg: string; text: string }> = {
-  full: { bg: 'var(--ok-bg, #0f3)', fg: 'var(--ok)', text: 'var' },
+  // v0.10.929 (K5) — tam kapsama sağlıklı durum: nötr (renk yalnız kısmi/yok sapmasında).
+  full: { bg: 'transparent', fg: 'var(--text2)', text: 'var' },
   partial: { bg: 'transparent', fg: 'var(--warn)', text: 'kısmi' },
   none: { bg: 'transparent', fg: 'var(--err)', text: 'yok' },
   unknown: { bg: 'transparent', fg: 'var(--text3)', text: '—' },
@@ -156,7 +157,7 @@ export default function AdminK8sCoveragePage() {
               {fleet.map(f => (
                 <tr key={f.field}>
                   <td className="mono" title={f.label}>{f.attr}</td>
-                  <td style={{ textAlign: 'right', color: f.full > 0 ? 'var(--ok)' : 'var(--text3)' }}>{f.full}</td>
+                  <td style={{ textAlign: 'right', color: f.full > 0 ? 'var(--text2)' : 'var(--text3)' }}>{f.full}</td>
                   <td style={{ textAlign: 'right', color: f.partial > 0 ? 'var(--warn)' : 'var(--text3)' }}>{f.partial}</td>
                   <td style={{ textAlign: 'right', color: f.none > 0 ? 'var(--err)' : 'var(--text3)' }}>{f.none}</td>
                 </tr>

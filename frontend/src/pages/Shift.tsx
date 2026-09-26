@@ -240,10 +240,13 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 
 function deltaCell(base: number, cur: number, unit: string, deltaPct: number) {
   if (base === 0 && cur === 0) return <span style={{ color: 'var(--text3)' }}>—</span>;
+  // v0.10.929 (K5) — iyileşme nötr (--text2), kötüleşme kırmızı kalır;
+  // eşit değer (cur === base) nötr ve ok işaretsiz (eskiden yeşil '↓').
   const worse = cur > base;
+  const arrow = cur > base ? ' ↑' : cur < base ? ' ↓' : '';
   return (
-    <span style={{ color: worse ? 'var(--err)' : 'var(--ok)' }} className="mono">
-      {fmtFixed(base, 1)}{unit} → {fmtFixed(cur, 1)}{unit} ({deltaPct > 0 ? '+' : ''}{fmtFixed(deltaPct, 0)}%) {worse ? '↑' : '↓'}
+    <span style={{ color: worse ? 'var(--err)' : 'var(--text2)' }} className="mono">
+      {fmtFixed(base, 1)}{unit} → {fmtFixed(cur, 1)}{unit} ({deltaPct > 0 ? '+' : ''}{fmtFixed(deltaPct, 0)}%){arrow}
     </span>
   );
 }

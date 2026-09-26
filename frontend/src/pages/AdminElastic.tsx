@@ -53,7 +53,7 @@ const PHASE_COLOUR: Record<string, string> = {
 };
 
 const HEALTH_COLOUR: Record<string, string> = {
-  green:  'color-mix(in srgb, var(--ok) 20%, transparent)',
+  green:  'var(--bg3)', // v0.10.929 (K5) — sağlıklı indeks nötr; yalnız yellow/red renkli
   yellow: 'color-mix(in srgb, var(--warn) 18%, transparent)',
   red:    'color-mix(in srgb, var(--err) 22%, transparent)',
 };
@@ -183,7 +183,7 @@ function TraceContextCard() {
   if (!tcQ.data || !report) return null; // loading / fetch error — card is best-effort
 
   const verdict = report.pivotReady
-    ? { cls: 'b-ok',   text: `${report.effectiveType} ✓` }
+    ? { cls: 'b-gray', text: `${report.effectiveType} ✓` } // v0.10.929 (K5) — pivot hazır = sağlıklı, nötr
     : report.effectiveType === 'absent'
       ? { cls: 'b-warn', text: 'absent ⚠' }
       : { cls: 'b-err',  text: `${report.effectiveType} ⚠` };

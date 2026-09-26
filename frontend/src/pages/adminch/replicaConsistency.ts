@@ -6,11 +6,12 @@
  */
 import type { CHReplicaCatalog, CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaTable, CHReplicaVerdict } from '@/lib/types';
 
-export type ReplicaTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
+// v0.10.929 (K5) — tutarlı replika sağlıklı hâl, geçiş değil: 'b-ok' tipten çıktı.
+export type ReplicaTone = 'b-warn' | 'b-err' | 'b-gray';
 
 export function verdictTone(v: CHReplicaVerdict): ReplicaTone {
   switch (v) {
-    case 'ok': return 'b-ok';
+    case 'ok': return 'b-gray';
     // v0.10.846 — katalog kararları GRİ: ölçülmüş bir sağlık değil, ölçünün
     // uygulanmadığı bir hâl. Kırmızı olsalardı operatör var olmayan bir işe
     // bakardı (prod 2026-09-20: `feedbacks` "eksik replika" diyordu).
@@ -51,7 +52,8 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
     // yalnız replikasız hâlde ezer, replikalı `unmanaged` satır `divergent`/
     // `readonly` taşıyabilir ve 846 öncesi gibi başlığı kırmızıya boyardı —
     // "eylem önerilmez" diyen satır "sorunlu" sayılamaz. `removed` kalır:
-    // sunucu her zaman ezer (rank < lagging), boyar ama sayılmaz.
+    // sunucu her zaman ezer (rank < lagging); worst'e girer ama sayılmaz
+    // (v0.10.929 K5: tonu ok ile aynı b-gray, ayrım metinde).
     if (t.catalog === 'unmanaged') continue;
     if (RANK[t.verdict] > RANK[worst]) worst = t.verdict;
     if (RANK[t.verdict] >= RANK.lagging) bad++;
@@ -76,9 +78,13 @@ export function summarize(r: Pick<CHReplicaConsistencyResponse, 'tables'>): Repl
   const removed = r.tables.filter(t => t.catalog === 'removed').length;
   const unmanaged = r.tables.filter(t => t.catalog === 'unmanaged').length;
   const measured = r.tables.length - removed - unmanaged;
-  // `unmanaged` rozeti BOYAMAZ: kalıcı bir olgu için kartı sonsuza dek
-  // griye kilitlemek, ürün sağlıklıyken yanlış bir tedirginlik üretirdi.
-  // `removed` boyar — o bir kalıntı ve gidecek.
+  // `unmanaged` karara (worst/bad/ton) GİRMEZ; metinde yalnız "katalog dışı"
+  // sayısı olarak görünür — kalıcı bir olgu tonu sonsuza dek değiştirmemeli.
+  // `removed` girer (worst='removed') ve metinde "kalıntı" olarak görünür —
+  // o geçici, bir sonraki boot siler.
+  // v0.10.929 (K5) — sağlıklı hâl (ok) artık b-gray; `removed` da b-gray.
+  // Yani ton ikisini AYIRMAZ (eskiden ok yeşildi, removed griye "boyardı");
+  // ayrım görünür metinde ve `worst` alanında.
   const tone: ReplicaTone = (unmapped > 0 || single > 0) && bad === 0
     ? 'b-warn'
     : verdictTone(worst); // v0.10.872 — `unmanaged` döngüde atlandığı için worst'e giremez

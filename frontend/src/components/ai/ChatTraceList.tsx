@@ -24,7 +24,8 @@ export function ChatTraceList({ tl }: { tl: ChatTraceListPayload }) {
               <td><Link to={traceHref(t.traceId)} title={t.traceId}>{t.rootName || t.traceId}</Link></td>
               <td className="num mono">{t.durationMs >= 1000 ? (t.durationMs / 1000).toFixed(2) + ' s' : t.durationMs.toFixed(0) + ' ms'}</td>
               <td className="num mono">{t.spanCount}</td>
-              <td><span className={`badge ${t.hasError ? 'b-err' : 'b-ok'}`}>{t.hasError ? 'ERROR' : 'OK'}</span></td>
+              {/* v0.10.929 (K5) — sağlıklı trace nötr: yalnız ERROR rozeti; OK ekran okuyucuya (Traces emsali). */}
+              <td>{t.hasError ? <span className="badge b-err">ERROR</span> : <span className="sr-only">OK</span>}</td>
             </tr>
           ))}
         </tbody>

@@ -163,7 +163,8 @@ function Inner() {
               {isCurrent && canEdit && (
                 isAgent ? (
                   <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text2)' }}>
-                    <span className="badge b-warn">agent</span>{' '}
+                    {/* v0.10.929 (K5) — adımın agent'ta olması normal akış, uyarı değil: nötr. */}
+                    <span className="badge b-gray">agent</span>{' '}
                     This {s.kind} step runs on the coremetry-agent — it will pick it up shortly (status updates on the next poll). You can also skip it.
                     <div style={{ marginTop: 6 }}>
                       <Button variant="secondary" size="sm" onClick={() => act(s.stepId, 'skip')} disabled={stepAction.isPending}>Skip</Button>

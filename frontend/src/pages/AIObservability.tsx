@@ -300,13 +300,13 @@ export default function AIObservabilityPage() {
                     </td>
                     <td>
                       {c.status === 'ok'
-                        ? <span className="badge b-ok">ok</span>
+                        ? <span className="badge b-gray">ok</span>
                         : <span className="badge b-err">error</span>}
                     </td>
                     <td className="num mono">{c.durationMs} ms</td>
                     <td className="num mono" style={{ fontSize: 11, color: 'var(--text3)' }}
                       title={c.cachedTokens ? `${c.cachedTokens} giriş token'ı önek önbelleğinden` : undefined}>
-                      {c.inputTokens}{c.cachedTokens ? <span style={{ color: 'var(--ok)' }}> ({cachedPctLabel(c.cachedTokens, c.inputTokens)})</span> : null} / {c.outputTokens}
+                      {c.inputTokens}{c.cachedTokens ? <span> ({cachedPctLabel(c.cachedTokens, c.inputTokens)})</span> : null} / {c.outputTokens}
                     </td>
                     <td className="num mono" style={{
                       fontSize: 11,
@@ -595,9 +595,10 @@ function NegativeFeedbackPanel() {
 }
 
 function KPI({ label, value, cls }: { label: string; value: string; cls?: 'ok' | 'warn' | 'err' }) {
+  // v0.10.929 (K5) — 'ok' tonu (sağlıklı KPI) nötr metin; renk yalnız warn/err
+  // sapmasında. Ton ADI görünüm modellerinde (aiBudgetView, rcaQualityView) kalır.
   const color = cls === 'err' ? 'var(--err)'
-    : cls === 'warn' ? 'var(--warn)'
-    : cls === 'ok' ? 'var(--ok)' : 'var(--text)';
+    : cls === 'warn' ? 'var(--warn)' : 'var(--text)';
   return (
     <div style={{
       padding: '10px 12px', borderRadius: 6,
@@ -706,7 +707,7 @@ function CallDrawer({ call, rates, onClose }: { call: AICall; rates: AIRateTable
   return (
     <Drawer onClose={onClose} width={680} header={
       <>
-        <span className={`badge ${call.status === 'ok' ? 'b-ok' : 'b-err'}`}>
+        <span className={`badge ${call.status === 'ok' ? 'b-gray' : 'b-err'}`}>
           {call.status}
         </span>
         <span style={{ fontWeight: 700, fontSize: 13 }}>{call.surface}</span>

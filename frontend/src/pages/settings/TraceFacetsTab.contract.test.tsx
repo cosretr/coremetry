@@ -77,7 +77,7 @@ describe('TraceFacetsTab', () => {
   });
   it('facetStateLabel basamakları', () => {
     expect(facetStateLabel(undefined).tone).toBe('neutral');
-    expect(facetStateLabel({ key: 'a', column: 'c', columnExists: true, indexExists: true, routed: true }).tone).toBe('success');
+    expect(facetStateLabel({ key: 'a', column: 'c', columnExists: true, indexExists: true, routed: true }).tone).toBe('neutral'); // v0.10.929 (K5)
     expect(facetStateLabel({ key: 'a', column: 'c', columnExists: true, indexExists: false, routed: false }).text).toContain('indeks yok');
     expect(facetStateLabel({ key: 'a', column: 'c', columnExists: false, indexExists: false, routed: false }).text).toBe('kolon yok');
   });

@@ -27,8 +27,10 @@ describe('verdictTone', () => {
     expect(verdictTone('insufficient_evidence')).toBe('neutral');
     expect(verdictTone('insufficient_evidence')).not.toBe('danger');
   });
-  it('belirlenen kök neden yeşil, olası neden sarı', () => {
-    expect(verdictTone('root_cause_identified')).toBe('success');
+  // v0.10.929 (K5) — kök neden bulundu bir analiz sonucu, geçiş değil: nötr.
+  it('belirlenen kök neden nötr (yeşil değil), olası neden sarı', () => {
+    expect(verdictTone('root_cause_identified')).toBe('neutral');
+    expect(verdictTone('root_cause_identified')).not.toBe('success');
     expect(verdictTone('probable_cause')).toBe('warning');
   });
 });

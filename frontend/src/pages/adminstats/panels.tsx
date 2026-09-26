@@ -791,10 +791,11 @@ function SpoolRunbook() {
                 basılacağı üstteki panele bakmadan görünsün. */}
             {/* v0.10.888 (operatör "açılış logu hatası") — batch modu gerçek durumu: boot
                 logu "motor ALTER desteklemiyor" der ve kaybolur; asıl bilgi (spool tek-dosya
-                modunda mı) burada kalıcı. Çare metni sunucudan (batchingVerdict). */}
+                modunda mı) burada kalıcı. Çare metni sunucudan (batchingVerdict).
+                v0.10.929 (K5) — "etkin" sağlıklı ayar durumu: nötr; renk yalnız KAPALI'da. */}
             {state.batching && state.batching.tablesTotal > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                <span className={`badge ${state.batching.effective ? 'b-ok' : 'b-err'}`}
+                <span className={`badge ${state.batching.effective ? 'b-gray' : 'b-err'}`}
                   title={`profil distributed_background_insert_batch=${state.batching.profileValue < 0 ? 'okunamadı' : state.batching.profileValue} · tablo ayarı ${state.batching.tablesWithSetting}/${state.batching.tablesTotal}`}>
                   batch gönderim {state.batching.effective ? 'etkin' : 'KAPALI'}
                 </span>

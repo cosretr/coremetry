@@ -17,11 +17,13 @@ import { fmtCores, podPhaseBadge } from '@/pages/clusters/thresholds';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import type { EntityContainersResponse, EntityRecord, TimeRange } from '@/lib/types';
 import type { SiblingRow } from './podPage';
+import { waitingReasonTone } from './waitingReason';
 
-function containerTone(c: { readyKnown: boolean; ready: boolean; restarts: number; lastTermReason?: string }): 'neutral' | 'success' | 'danger' | 'warning' {
+// v0.10.929 (K5) — hazır + yeniden başlamamış konteyner normal hâl: nötr.
+function containerTone(c: { readyKnown: boolean; ready: boolean; restarts: number; lastTermReason?: string }): 'neutral' | 'danger' | 'warning' {
   if (!c.readyKnown) return 'neutral';
   if (!c.ready) return 'danger';
-  return c.restarts > 0 || c.lastTermReason ? 'warning' : 'success';
+  return c.restarts > 0 || c.lastTermReason ? 'warning' : 'neutral';
 }
 
 export function PodContainersTable({ ctr, pending, containerRecs }: {
@@ -47,7 +49,9 @@ export function PodContainersTable({ ctr, pending, containerRecs }: {
                   <td className="mono">{c.name}</td>
                   <td>{c.readyKnown ? <Badge tone={containerTone(c)}>{c.ready ? 'ready' : 'not ready'}</Badge> : <span className="field-hint" title="kube_pod_container_status_ready serisi yok">?</span>}</td>
                   <td className="num" style={c.restarts > 0 ? { color: 'var(--warn)' } : undefined}>{c.restarts}</td>
-                  <td>{c.waitingReason ? <Badge tone="danger">{c.waitingReason}</Badge> : '—'}</td>
+                  {/* v0.10.929 (K5) — olağan başlangıç geçişi (ContainerCreating /
+                      PodInitializing) nötr; kubelet arıza nedenleri kırmızı. */}
+                  <td>{c.waitingReason ? <Badge tone={waitingReasonTone(c.waitingReason)}>{c.waitingReason}</Badge> : '—'}</td>
                   <td>{c.lastTermReason ? <Badge tone="warning">{c.lastTermReason}</Badge> : '—'}</td>
                 </tr>
               ))}
@@ -96,7 +100,7 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
                     {/* service TAŞINMAZ (inceleme #16): kardeş o servisi çalıştırmıyor olabilir; yanlış RED kapsamı + yanlış geri linki olurdu. */}
                     <Link to={entityHref(r.rec, { range: pageRange, at: at || undefined, clusterName })} className="sec">{r.name}</Link>
                   </td>
-                  <td>{live === 'live' ? <Badge tone="success">live</Badge> : live === 'stale' ? <Badge tone="warning">stale</Badge> : <Badge tone="danger">gone</Badge>}</td>
+                  <td>{live === 'live' ? <Badge>live</Badge> : live === 'stale' ? <Badge tone="warning">stale</Badge> : <Badge tone="danger">gone</Badge>}</td>
                   <td>{r.known && r.phase ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span> : <span className="field-hint" title="topk 500 listesinde yok — faz bilinmiyor">—</span>}</td>
                   <td className="num" style={(r.restarts ?? 0) > 0 ? { color: 'var(--warn)' } : undefined} title={r.lastTermReason ? `son: ${r.lastTermReason}` : undefined}>{r.restarts === null ? '—' : r.restarts}</td>
                   <td className="num mono">{r.cpuCores === null ? '—' : fmtCores(r.cpuCores)}</td>

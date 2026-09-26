@@ -5,8 +5,9 @@ import { resolve } from 'node:path';
 import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, podRSHash, rawHostLabel, sortRawHosts, stalePods, staleVerdict } from './traceHealth';
 
 describe('traceHealth — saf', () => {
-  it('lossVerdict: kalıcı kayıp err, kalite işareti warn, temiz ok', () => {
-    expect(lossVerdict({ accepted: 10, dropped: 0, writeFailed: 0 })).toEqual({ tone: 'b-ok', text: 'kayıp yok' });
+  // v0.10.929 (K5) — temiz hâl sağlıklı, geçiş değil: b-ok → b-gray.
+  it('lossVerdict: kalıcı kayıp err, kalite işareti warn, temiz nötr', () => {
+    expect(lossVerdict({ accepted: 10, dropped: 0, writeFailed: 0 })).toEqual({ tone: 'b-gray', text: 'kayıp yok' });
     expect(lossVerdict({ accepted: 10, dropped: 0, writeFailed: 0, rejects: { span_empty_id: 3 } }).tone).toBe('b-warn');
     expect(lossVerdict({ accepted: 10, dropped: 2, writeFailed: 0 }).tone).toBe('b-err');
     expect(lossVerdict({ accepted: 10, dropped: 0, writeFailed: 0, rejects: { http_decode_failed: 1, span_empty_id: 9 } }).text).toBe('1 kayıp');
@@ -18,8 +19,8 @@ describe('traceHealth — saf', () => {
   it('pctOf / nameTone / bucketBars', () => {
     expect(pctOf(1, 0)).toBeNull();
     expect(pctOf(25, 100)).toBe(25);
-    expect(nameTone(null)).toBe('b-ok');
-    expect(nameTone(4.9)).toBe('b-ok');
+    expect(nameTone(null)).toBe('b-gray'); // v0.10.929 (K5)
+    expect(nameTone(4.9)).toBe('b-gray');
     expect(nameTone(5)).toBe('b-warn');
     expect(nameTone(20)).toBe('b-err');
     expect(bucketBars([])).toEqual([]);
@@ -44,14 +45,15 @@ describe('traceHealth — kablolama', () => {
 describe('traceHealth — filo', () => {
   const base = { accepted: 1000, storedSettled: 998, storedKnown: true, empty: false, settledFrom: 0, settledTo: 1 };
   it('fleetVerdict: eşikler, %100 üstü olduğu gibi, gri durumlar', () => {
-    expect(fleetVerdict(base)).toEqual({ tone: 'b-ok', text: '%99.8 saklandı', pct: 99.8 });
+    // v0.10.929 (K5) — ≥%99.5 saklandı sağlıklı hâl: nötr.
+    expect(fleetVerdict(base)).toEqual({ tone: 'b-gray', text: '%99.8 saklandı', pct: 99.8 });
     expect(fleetVerdict({ ...base, storedSettled: 980 }).tone).toBe('b-warn');
     expect(fleetVerdict({ ...base, storedSettled: 900 }).tone).toBe('b-err');
-    expect(fleetVerdict({ ...base, storedSettled: 1012 })).toEqual({ tone: 'b-ok', text: '%101 saklandı', pct: 101.2 });
+    expect(fleetVerdict({ ...base, storedSettled: 1012 })).toEqual({ tone: 'b-gray', text: '%101 saklandı', pct: 101.2 });
     // v0.10.770 — prod: defter 15 dk'lık, pencere 6 saat → %7495 yeşil çizilmişti.
     expect(fleetVerdict({ ...base, storedSettled: 74950 })).toEqual({ tone: 'b-warn', text: '%7495 saklandı (kapsam?)', pct: 7495 });
     expect(fleetVerdict({ ...base, coveredFrom: 1, settledTo: 1 }).text).toBe('defter henüz yerleşmedi');
-    expect(fleetVerdict({ ...base, settledTo: 10, coveredFrom: 5, accepted: 1, acceptedSettled: 1000 }).tone).toBe('b-ok');
+    expect(fleetVerdict({ ...base, settledTo: 10, coveredFrom: 5, accepted: 1, acceptedSettled: 1000 }).tone).toBe('b-gray');
     expect(fleetVerdict({ ...base, empty: true })).toEqual({ tone: 'b-gray', text: 'defter boş', pct: null });
     expect(fleetVerdict({ ...base, settledTo: 0 }).text).toBe('pencere kısa');
     expect(fleetVerdict({ ...base, storedKnown: false }).text).toBe('saklanan okunamadı');

@@ -280,7 +280,7 @@ function SubsTab() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{s.email}</span>
             {s.verified
-              ? <span className="badge b-ok" title="Confirmed the subscription via email link">verified</span>
+              ? <span className="badge b-gray" title="Confirmed the subscription via email link">verified</span>
               : <span className="badge b-warn"
                   title={s.confirmSentAt
                     ? `Confirmation email sent ${tsLong(s.confirmSentAt)} — subscriber hasn't clicked yet`

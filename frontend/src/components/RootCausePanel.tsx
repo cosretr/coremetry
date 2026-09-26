@@ -5,7 +5,10 @@ import { IconFlame } from './icons';
 import { api } from '@/lib/api';
 import { fmtFixed, fmtDurShort } from '@/lib/utils';
 import type { RootCause, BubbleUpValue, RolloutEvidence } from '@/lib/types';
-import { rolloutEvidenceHref, shortRevision } from '@/lib/rolloutRow';
+import { rolloutEvidenceHref, shortRevision, statusTone as rolloutStatusTone } from '@/lib/rolloutRow';
+import { Badge } from '@/components/ui/Badge';
+// v0.10.929 (K5) — durum tonu tek sözlükten; hafif yaprak (ProblemDetail değil — döngü/ağır zincir yok).
+import { TriageStatusBadge } from '@/features/anomalies/statusTone';
 import { tsLong } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
@@ -150,8 +153,10 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                           {fmtFixed(c.errorRate, 1)}%
                         </td>
                         <td>
+                          {/* v0.10.929 (K5) — açık problem normal durum: STATUS_TONE open → nötr.
+                              Sözlük hafif yaprak modülden (features/anomalies/statusTone) — elle kopya kural yok. */}
                           {c.hasOpenProblem
-                            ? <span className="badge b-err">OPEN</span>
+                            ? <TriageStatusBadge s="open" label="OPEN" />
                             : <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
                         </td>
                       </tr>
@@ -210,7 +215,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                 }}>
             {rc.exemplar.statusCode === 'error'
               ? <span className="badge b-err">ERROR</span>
-              : <span className="badge b-ok">OK</span>}
+              : <span className="sr-only">OK</span>}
             <span style={{ fontWeight: 600, color: 'var(--text)' }}>{rc.exemplar.name}</span>
             <span className="mono" style={{ fontSize: 12, color: 'var(--text2)' }}>
               {(rc.exemplar.durationNs / 1e6).toFixed(1)} ms
@@ -259,9 +264,13 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                       {ev.ageMin <= 0 ? 'aynı dakika' : `${ev.ageMin} dk önce`}
                     </td>
                     <td>
-                      <span className={`badge ${ev.status === 'stalled' || ev.status === 'rolled_back' ? 'b-err' : ev.status === 'in_progress' ? 'b-warn' : 'b-gray'}`}>
+                      {/* v0.10.929 (K5) — ton rolloutRow statusTone()'dan TÜRER (Rollouts sayfası /
+                          RolloutDrawer ile aynı; kayamaz): in_progress → info (sürüyor, sapma
+                          değil), completed → success (GEÇİŞ), stalled → warning ve rolled_back →
+                          danger (sapma kalır), superseded/bilinmeyen → nötr. */}
+                      <Badge tone={rolloutStatusTone(ev.status)}>
                         {ev.status}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="num mono" style={{ fontWeight: 600, color: ev.band === 'high' ? 'var(--err)' : 'var(--warn)' }}>
                       {ev.score.toFixed(2)}
@@ -309,7 +318,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                 display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12,
                 color: c.found ? 'var(--text)' : 'var(--text3)',
               }}>
-                <span style={{ flex: '0 0 14px', color: c.found ? 'var(--ok)' : 'var(--text3)' }}>
+                <span style={{ flex: '0 0 14px', color: c.found ? 'var(--text2)' : 'var(--text3)' }}>
                   {c.found ? '✓' : '—'}
                 </span>
                 <span style={{ flex: '0 0 120px', fontWeight: 600 }}>{c.family}</span>

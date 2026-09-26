@@ -39,8 +39,9 @@ export function ServiceMapNodeDrawer({ service, range, fromNs, toNs, onClose }: 
   return (
     <Drawer onClose={onClose} width={420} header={
       <>
+        {/* v0.10.929 (K5) — GREEN sağlıklı durum: nötr rozet (Services HealthDot emsali). */}
         {s?.health && (
-          <span className={`badge b-${s.health === 'red' ? 'err' : s.health === 'yellow' ? 'warn' : 'ok'}`}
+          <span className={`badge b-${s.health === 'red' ? 'err' : s.health === 'yellow' ? 'warn' : 'gray'}`}
             style={{ fontSize: 10 }} title={s.healthReason}>
             {s.health.toUpperCase()}
           </span>
@@ -67,10 +68,11 @@ export function ServiceMapNodeDrawer({ service, range, fromNs, toNs, onClose }: 
               <span style={{ color: 'var(--text3)' }}>Spans</span>
               <span className="mono">{fmtNum(s.spanCount)}</span>
               <span style={{ color: 'var(--text3)' }}>Error rate</span>
+              {/* v0.10.929 (K5) — %0 hata sağlıklı: düz --text3 metin (Services ErrRateValue emsali). */}
               <span className="mono">
-                <span className={`badge b-${s.errorRate > 5 ? 'err' : s.errorRate > 0 ? 'warn' : 'ok'}`}>
-                  {fmtFixed(s.errorRate, 2)}%
-                </span>
+                {s.errorRate > 0
+                  ? <span className={`badge b-${s.errorRate > 5 ? 'err' : 'warn'}`}>{fmtFixed(s.errorRate, 2)}%</span>
+                  : <span style={{ color: 'var(--text3)' }}>{fmtFixed(s.errorRate, 2)}%</span>}
               </span>
               <span style={{ color: 'var(--text3)' }}>Avg</span>
               <span className="mono">{fmtFixed(s.avgDurationMs, 1)}ms</span>

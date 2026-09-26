@@ -345,15 +345,16 @@ function HistorySection({ items, meta }: {
           onOpen={openDetail}
           title={`Active (${active.length})`} />
       )}
+      {/* v0.10.929 (K5) — "aktif anomali yok" sağlıklı durum: nötr kutu, yeşil yok. */}
       {active.length === 0 && (
         <div style={{
           padding: '12px 14px', fontSize: 12, color: 'var(--text2)',
-          background: 'color-mix(in srgb, var(--ok) 6%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--ok) 24%, transparent)',
+          background: 'var(--bg2)',
+          border: '1px solid var(--border)',
           borderRadius: 4, marginBottom: 12,
           display: 'flex', alignItems: 'center', gap: 6,
         }}>
-          <Check size={13} strokeWidth={2} style={{ color: 'var(--ok)', flexShrink: 0 }} />
+          <Check size={13} strokeWidth={2} style={{ color: 'var(--text3)', flexShrink: 0 }} />
           No active anomalies in the last 24h.
           {cleared.length > 0 && ` ${cleared.length} cleared event${cleared.length === 1 ? '' : 's'} below.`}
         </div>
@@ -486,7 +487,8 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
                   cursor: 'pointer',
                 }}>
                 <td>
-                  <span className={`badge ${e.status === 'active' ? 'b-err' : 'b-ok'}`}>
+                  {/* v0.10.929 (K5) — ACTIVE normal durum (STATUS_TONE active → nötr); CLEARED geçiş, yeşil kalır. */}
+                  <span className={`badge ${e.status === 'active' ? 'b-gray' : 'b-ok'}`}>
                     {e.status === 'active' ? 'ACTIVE' : 'CLEARED'}
                   </span>
                 </td>

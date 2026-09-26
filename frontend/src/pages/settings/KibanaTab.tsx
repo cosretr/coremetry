@@ -3,7 +3,7 @@ import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { KibanaSettings } from '@/lib/types';
-import { SettingRow, SettingsLoadError, useSettingsLoad } from './shared';
+import { SettingRow, SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
 
 // KibanaTab — external Kibana deep-link config (v0.5.236).
 // Operator pastes the base URL of their Kibana install; the
@@ -61,16 +61,12 @@ export function KibanaTab() {
         Coremetry never proxies Kibana; only mints the deep-link.
       </p>
 
-      <div className={`status-banner status-banner-${ready ? 'operational' : 'degraded'}`}>
-        <span className={`status-pill status-pill-${ready ? 'operational' : 'degraded'}`}>
-          {ready ? 'ENABLED' : 'NOT CONFIGURED'}
-        </span>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>
-          {ready
-            ? `Logs page will render a Kibana link pointing at ${baseUrl}.`
-            : 'Disabled — no Kibana link rendered on the Logs page.'}
-        </span>
-      </div>
+      {/* v0.10.929 (K5) — kurulu/kurulmamış bir ayar durumu: nötr bant (eskiden yeşil/amber). */}
+      <ConfigStatusBanner label={ready ? 'ENABLED' : 'NOT CONFIGURED'}>
+        {ready
+          ? `Logs page will render a Kibana link pointing at ${baseUrl}.`
+          : 'Disabled — no Kibana link rendered on the Logs page.'}
+      </ConfigStatusBanner>
 
       <form onSubmit={save} style={{
         marginTop: 18, padding: 16, borderRadius: 8,

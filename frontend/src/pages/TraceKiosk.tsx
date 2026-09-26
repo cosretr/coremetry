@@ -144,7 +144,10 @@ export function TraceKiosk() {
         <span className="trace-kiosk__title" title={root ? displaySpanName(root) : id}>
           {root ? displaySpanName(root) : 'Trace'}
         </span>
-        <span className={`badge ${hasErr ? 'b-err' : 'b-ok'}`}>{hasErr ? 'ERROR' : 'OK'}</span>
+        {/* v0.10.929 (K5) — /trace başlığıyla aynı: sağlıklı trace rozetsiz, kelime sr-only. */}
+        {hasErr
+          ? <span className="badge b-err">ERROR</span>
+          : <span className="sr-only">OK</span>}
         {errSpans > 0 && <span className="cell-hint">{errSpans} error span{errSpans === 1 ? '' : 's'}</span>}
         <span className="trace-summary__dur" title="Trace toplam süresi: ilk span başlangıcından son span bitişine">⏱ {fmtNs(totalNs)}</span>
         <span>{spans.length} spans · {svcCount} service{svcCount === 1 ? '' : 's'}</span>

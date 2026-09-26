@@ -151,8 +151,12 @@ export default function RolloutsPage() {
           </label>
           {isAdmin && (
             <span className="field-hint" style={{ marginLeft: 'auto' }}>
+              {/* v0.10.929 (K5) — arka plan işinin 'ok' bitişi normal sonuç: nötr.
+                  'skipped' de nötr: kapanışta (ctx iptali) yarıda kesilen tik,
+                  arıza değil (internal/rollout/reconciler.go RunSkipped).
+                  Sapma yalnız partial (uyarı) ve failed/bilinmeyen (hata). */}
               {lastRun
-                ? <>reconciler son koşu {fmtDateTime(new Date(lastRun.startedAt))} · <span className={`badge ${lastRun.status === 'ok' ? 'b-ok' : lastRun.status === 'partial' || lastRun.status === 'skipped' ? 'b-warn' : 'b-err'}`}>{lastRun.status}</span></>
+                ? <>reconciler son koşu {fmtDateTime(new Date(lastRun.startedAt))} · <span className={`badge ${lastRun.status === 'ok' || lastRun.status === 'skipped' ? 'b-gray' : lastRun.status === 'partial' ? 'b-warn' : 'b-err'}`}>{lastRun.status}</span></>
                 : runsQ.isPending ? null : 'reconciler henüz koşmadı'}
             </span>
           )}

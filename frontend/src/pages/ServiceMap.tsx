@@ -546,9 +546,12 @@ function TopologyDeltaStrip({ data, baselineLabel }: { data: ServiceMap; baselin
       display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', fontSize: 12,
     }}>
       <span style={{ fontWeight: 600 }}>Δ topology {baselineLabel}:</span>
+      {/* v0.10.929 (K5) — "yeni" bir değişim, iyileşme değil: iki "+N" çipi de
+          vurgu taşır — `badge b-info` (--info = --accent2 ailesi, her temada),
+          satır içi renk yok; yeşil değil. Kaybolan −N sapma renginde kalır. */}
       {newSvcs.length > 0 && (
         <span title={newSvcs.map(s => s.service).join('\n')}>
-          <span className="badge b-ok" style={{ marginRight: 6 }}>+{newSvcs.length} svc</span>
+          <span className="badge b-info" style={{ marginRight: 6 }}>+{newSvcs.length} svc</span>
           <span style={{ color: 'var(--text3)', fontFamily: 'monospace', fontSize: 11 }}>
             {sample(newSvcs.map(s => s.service))}
           </span>

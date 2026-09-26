@@ -12,7 +12,8 @@ import type { InsightResponse } from './types';
 
 describe('insightTone', () => {
   const CASES: Array<[string | undefined, string | null]> = [
-    ['ok',      'b-ok'],
+    // v0.10.929 (K5) — sağlıklı 'ok' nötr: rozet yok (yeşil yalnız geçiş).
+    ['ok',      null],
     ['warn',    'b-warn'],
     ['err',     'b-err'],
     // '' contract.go'da GEÇERLİ bir değer: "nötr bilgi" (servis adı,

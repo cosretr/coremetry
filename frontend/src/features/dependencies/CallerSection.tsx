@@ -63,9 +63,10 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
   showReset?: boolean;
 }) {
   type Caller = DBCallerBreakdown;
+  // v0.10.929 (K5) — rol bir kategori, sağlık değil: consumer yeşil değil, nötr.
   const dotColor =
     tone === 'producer' ? 'var(--accent2)' :
-    tone === 'consumer' ? 'var(--ok)' :
+    tone === 'consumer' ? 'var(--text3)' :
     tone === 'other'    ? 'var(--text3)' :
                           'var(--accent2)';
   const hasRole = rows.some(r => r.role);
@@ -162,7 +163,8 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map((c, i) => {
-                const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'ok';
+                // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
+                const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray';
                 return (
                   <tr key={`${c.service}|${c.pod}|${c.role ?? ''}|${i}`}
                       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
@@ -220,7 +222,8 @@ function RoleBadge({ role }: { role: string }) {
   const r = role.toLowerCase();
   const tone =
     r === 'producer' ? { bg: 'color-mix(in srgb, var(--accent) 15%, transparent)', fg: 'var(--accent2)' } :
-    r === 'consumer' ? { bg: 'color-mix(in srgb, var(--ok) 15%, transparent)', fg: 'var(--ok)' } :
+    // v0.10.929 (K5) — consumer rolü kategori: b-gray eşdeğeri (client ile aynı nötr).
+    r === 'consumer' ? { bg: 'var(--bg3)',            fg: 'var(--text2)' } :
     r === 'client'   ? { bg: 'var(--bg3)',            fg: 'var(--text2)' } :
                        { bg: 'var(--bg3)',            fg: 'var(--text3)' };
   return (

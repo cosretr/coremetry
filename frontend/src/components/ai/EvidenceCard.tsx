@@ -6,7 +6,7 @@
 import { Link } from 'react-router-dom';
 import { serviceHref } from '@/lib/serviceHref';
 import { fmtNum } from '@/lib/utils';
-import { evidenceHasHypothesis, fmtEvidenceTime, fmtRangeTR, redRows } from '@/lib/chatEvidence';
+import { evidenceDeltaClass, evidenceHasHypothesis, fmtEvidenceTime, fmtRangeTR, redRows } from '@/lib/chatEvidence';
 import type { ChatEvidence } from '@/lib/types';
 
 export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
@@ -30,7 +30,8 @@ export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
                 <td>{r.label}</td>
                 <td className="num mono">{r.now}</td>
                 <td className="num mono">{r.base}</td>
-                <td className={`ev-delta ev-delta--${r.delta.dir}`}>{r.delta.text}</td>
+                {/* v0.10.929 (K5) — ton satırın yön bayrağından: istek/sn artışı kırmızı değil. */}
+                <td className={evidenceDeltaClass(r)}>{r.delta.text}</td>
               </tr>
             ))}
           </tbody>

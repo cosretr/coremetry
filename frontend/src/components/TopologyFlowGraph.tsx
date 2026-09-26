@@ -10,6 +10,8 @@ import { fitViewport, readableFit, zoomAt, zoomRange, type Viewport } from '@/li
 import { depPillLinesMap } from '@/lib/topoLabels';
 import { Button } from '@/components/ui/Button';
 import { useServicesMetadata } from '@/lib/queries';
+import { seriesPalette } from '@/lib/chartFmt';
+import { useThemeTick } from '@/lib/useThemeTick';
 import {
   foldTopology, defaultCollapsed, parseNsFold, encodeNsFold,
   isNsNode, nsOfNodeId,
@@ -38,6 +40,13 @@ import {
 // .topo-node (+ .focus/.dim), .topo-name, .topo-sub, .topo-dot,
 // @keyframes topo-edge-flow. Tek ekleme (aşağıya bakın):
 //   .topo-node.ext { border-style: dashed; background: var(--bg0); }
+
+// v0.10.929 (K5) — "yeni" (baseline'dan beri) kenarın kesik deseni: uzun
+// çizgi + kısa boşluk, normal akışın kısa kesiklerinden (4 6) okunur biçimde
+// ayrı. Periyot 16 = @keyframes topo-edge-flow'un dashoffset'i (-16) → akış
+// döngüsü dikişsiz. Inline style gerekli: sınıfın stroke-dasharray'ini SVG
+// öznitelik değil yalnız inline stil ezer.
+const NEW_EDGE_DASH = '12 4';
 
 export function TopologyFlowGraph({
   data: rawData, focus, hoverNode, onHoverNode, onSelectNode, height = 560,
@@ -147,6 +156,9 @@ export function TopologyFlowGraph({
   // Deterministik namespace rengi — TÜM (katlı + açık) ≥2 üyeli
   // namespace'lerin sıralı listesi üzerinden indekslenir ki bir grubun
   // katlanması diğerlerinin rengini kaydırmasın.
+  // v0.10.929 (K5) — ad alanı bir KATEGORİ: durum tokenları (--warn/--ok)
+  // yerine seri paleti (tema-farkında hex; tema değişince yeniden çözülür).
+  const themeTick = useThemeTick();
   const nsColor = useMemo(() => {
     const meta = metaQ.data ?? {};
     const counts = new Map<string, number>();
@@ -155,12 +167,13 @@ export function TopologyFlowGraph({
       const ns = meta[n.service]?.namespace;
       if (ns) counts.set(ns, (counts.get(ns) ?? 0) + 1);
     }
-    const palette = ['--accent', '--warn', '--ok', '--purple', '--teal', '--orange'];
+    const palette = seriesPalette();
     const m = new Map<string, string>();
     [...counts.entries()].filter(([, c]) => c >= 2).map(([ns]) => ns).sort()
       .forEach((ns, i) => m.set(ns, palette[i % palette.length]));
     return m;
-  }, [preFold.nodes, metaQ.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeTick: palet tema değişiminde yeniden çözülsün
+  }, [preFold.nodes, metaQ.data, themeTick]);
 
   // Çift yönlü kenarları tek çizgiye indir (A→B + B→A) — ServiceMapGraph deseni.
   type RenderedEdge = { forward: ServiceMapEdge; reverse?: ServiceMapEdge };
@@ -314,7 +327,7 @@ export function TopologyFlowGraph({
         y: g.y0 - NODE_H - PAD,
         w: (g.x1 - g.x0) + 2 * (NODE_W + PAD),
         h: (g.y1 - g.y0) + 2 * (NODE_H + PAD),
-        colorVar: nsColor.get(ns) ?? '--accent',
+        color: nsColor.get(ns) ?? 'var(--accent)',
       }));
   }, [data.nodes, positioned, metaQ.data, nsColor]);
 
@@ -343,8 +356,8 @@ export function TopologyFlowGraph({
       <svg className="topo-edges" width={layoutW} height={layoutH}>
         {hulls.map(h => (
           <rect key={`hull-${h.ns}`} x={h.x} y={h.y} width={h.w} height={h.h} rx={24}
-            fill={`color-mix(in srgb, var(${h.colorVar}) 7%, transparent)`}
-            stroke={`color-mix(in srgb, var(${h.colorVar}) 30%, transparent)`}
+            fill={`color-mix(in srgb, ${h.color} 7%, transparent)`}
+            stroke={`color-mix(in srgb, ${h.color} 30%, transparent)`}
             strokeWidth={1} />
         ))}
         {renderedEdges.map((re, i) => {
@@ -364,7 +377,14 @@ export function TopologyFlowGraph({
           // çift yönlü çizgide ters yönün demeti de raporlanır.
           const fwdBundle = bundled.get(`${e.caller}|${e.callee}`) ?? 0;
           const revBundle = re.reverse ? (bundled.get(`${re.reverse.caller}|${re.reverse.callee}`) ?? 0) : 0;
-          const stroke = e.isNew ? 'var(--ok)' : errorish ? 'var(--err)' : hot ? 'var(--accent)' : 'var(--border-strong)';
+          // v0.10.929 (K5) — "yeni" kenar bir değişim, iyileşme değil: vurgu --accent2.
+          // Hiyerarşi: hata kırmızısı > yeni (accent2) > hover mavisi > nötr —
+          // YENİ ama hatalı kenar kırmızı kalır (sapma, değişimden önce gelir).
+          // accent2 light/redhat temalarında hover'ın --accent'ine çok yakın;
+          // bu yüzden yeni kenar RENKTEN bağımsız, kendi kesik deseniyle de
+          // ayrışır (hatalı olsa bile "yeni" bilgisi kaybolmasın).
+          const stroke = errorish ? 'var(--err)' : e.isNew ? 'var(--accent2)' : hot ? 'var(--accent)' : 'var(--border-strong)';
+          const newDash = e.isNew ? NEW_EDGE_DASH : undefined;
           const opacity = dimmed ? 0.12 : hot ? 0.95 : errorish ? 0.85 : 0.55;
           // v0.9.1031 — yön oku (operatör isteği). Uca (t=1) konan ok HTML
           // pilinin ALTINDA kalır (düğümler SVG'nin üstünde); hedefe yakın
@@ -383,7 +403,7 @@ export function TopologyFlowGraph({
               strokeWidth={hot ? w + 0.8 : w}
               opacity={opacity}
               className="topo-edge-flow"
-              style={{ animationDuration: `${(2.8 - 1.8 * t).toFixed(2)}s`, transition: 'opacity 120ms, stroke 120ms, stroke-width 120ms' }}>
+              style={{ animationDuration: `${(2.8 - 1.8 * t).toFixed(2)}s`, transition: 'opacity 120ms, stroke 120ms, stroke-width 120ms', strokeDasharray: newDash }}>
               <title>
                 {`${e.caller} → ${e.callee}\n${e.traceCount} traces · ${e.spanCount} spans` +
                   (e.errorCount > 0 ? ` · ${e.errorCount} errors` : '') +
@@ -421,13 +441,13 @@ export function TopologyFlowGraph({
           açardı) — o başlık buton semantiği olmadan salt etiket kalır. */}
       {hulls.map(h => h.ns === focusNs ? (
         <div key={`nshdr-${h.ns}`} className="topo-nshdr"
-          style={{ left: h.x + 10, top: h.y + 6, color: `var(${h.colorVar})`, cursor: 'default' }}
+          style={{ left: h.x + 10, top: h.y + 6, color: h.color, cursor: 'default' }}
           title={`ns: ${h.ns} — odaklı servisin namespace'i katlanamaz`}>
           ns: {h.ns} · {h.n} svc
         </div>
       ) : (
         <div key={`nshdr-${h.ns}`} className="topo-nshdr"
-          style={{ left: h.x + 10, top: h.y + 6, color: `var(${h.colorVar})` }}
+          style={{ left: h.x + 10, top: h.y + 6, color: h.color }}
           // eslint-disable-next-line ui/no-raw-button -- tuval üstü hull etiketi: .topo-nshdr boyar ve pan istisnası closest('.topo-nshdr') ile; DisclosureButton dolgu/hover'ı etiket çerçevesiyle çakışır
           role="button" tabIndex={0}
           title={`ns: ${h.ns} — tıkla: ${h.n} servisi tek karta katla`}
@@ -462,7 +482,7 @@ export function TopologyFlowGraph({
             {fmtNum(Math.round(e.rate ?? 0))}/dk · p99 {fmtMs(e.p99Ms)}
             {errPct >= 1 && <span className="chip-err"> · {errPct.toFixed(1)}% err</span>}
             {dPct != null && Math.abs(dPct) >= 5 && (
-              <span style={{ color: dPct > 0 ? 'var(--err)' : 'var(--ok)' }}
+              <span style={{ color: dPct > 0 ? 'var(--err)' : 'var(--text2)' /* v0.10.929 (K5) — iyileşme nötr */ }}
                 title={`p99 önceki pencereye göre ${dPct > 0 ? 'kötüleşti' : 'iyileşti'}`}>
                 {' '}· Δ{dPct > 0 ? '+' : ''}{dPct.toFixed(0)}%
               </span>
@@ -482,13 +502,13 @@ export function TopologyFlowGraph({
         if (isNsNode(n.service)) {
           const ns = nsOfNodeId(n.service);
           const g = groups.find(x => x.ns === ns);
-          const colorVar = nsColor.get(ns) ?? '--accent';
+          const nsHue = nsColor.get(ns) ?? 'var(--accent)';
           return (
             <div key={n.service}
               className={'topo-node topo-nsnode' + (dim ? ' dim' : '')}
               style={{
                 left: p.x, top: p.y, cursor: 'pointer',
-                borderColor: `color-mix(in srgb, var(${colorVar}) 55%, var(--border))`,
+                borderColor: `color-mix(in srgb, ${nsHue} 55%, var(--border))`,
               }}
               // eslint-disable-next-line ui/no-raw-button -- graf düğüm kartı (katlı ns): konumlu .topo-node pill'i, blok içerik; pan istisnası closest('.topo-node') — düğme atomu değil
               role="button" tabIndex={0}
@@ -507,7 +527,7 @@ export function TopologyFlowGraph({
               }>
               <span className={`topo-dot ${level}`} />
               <div style={{ minWidth: 0 }}>
-                <div className="topo-name" style={{ color: `var(${colorVar})` }}>{ns} ▸</div>
+                <div className="topo-name" style={{ color: nsHue }}>{ns} ▸</div>
                 <div className="topo-sub">
                   {g?.members.length ?? 0} svc · {n.spanCount.toLocaleString()} span
                   {n.errorRate > 0.01 ? ` · ${(n.errorRate * 100).toFixed(1)}% err` : ''}

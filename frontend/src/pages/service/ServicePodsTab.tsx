@@ -223,7 +223,7 @@ export function ServicePodsTab({ service, range, onZoom, onZoomReset }: {
       <SectionHead id="runtime-sec" title="Runtime" source="OTel · metric_points"
         badges={<>
           {runtimeFamily && <span className="badge b-info">{FAMILY_LABEL[runtimeFamily] ?? runtimeFamily}</span>}
-          <span className="badge b-ok" title="Bu bölümün kaynağı: OTel runtime metrikleri (ClickHouse) — Thanos düşse de burası çalışır.">Thanos&#39;tan bağımsız</span>
+          <span className="badge b-gray" title="Bu bölümün kaynağı: OTel runtime metrikleri (ClickHouse) — Thanos düşse de burası çalışır.">Thanos&#39;tan bağımsız</span>
         </>}
         meta={runtimeQ.data?.language ? <span className="mono">{runtimeQ.data.language}</span> : undefined} />
       <RuntimeCharts service={service} from={th.from} to={th.to} onZoom={onZoom} onZoomReset={onZoomReset} hideHeader />

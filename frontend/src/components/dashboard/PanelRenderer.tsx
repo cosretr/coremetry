@@ -953,8 +953,8 @@ function StatPanel({ cfg, range, refreshTick, height }: {
       {delta !== null && (
         <div style={{
           fontSize: 12,
-          color: tone === 'good' ? 'var(--ok)'
-               : tone === 'bad'  ? 'var(--err)'
+          // v0.10.929 (K5) — iyileşme ('good') nötr --text2; kötüleşme kırmızı kalır.
+          color: tone === 'bad'  ? 'var(--err)'
                : 'var(--text2)',
           fontFamily: 'ui-monospace, monospace',
           display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -1209,10 +1209,9 @@ function mean(arr: number[]): number {
   return s / arr.length;
 }
 
-// Sparkline tints to match the delta tone — a bad-trending
-// stat gets a red sparkline, a good-trending one gets green.
-// Neutral keeps the standard accent so traffic charts read
-// like the rest of the page.
+// Sparkline tints to match the delta tone: bad → red; good/neutral →
+// standard accent (v0.10.929 K5 — an improving trend is not a health
+// signal, so it reads like the rest of the page's traffic charts).
 function Sparkline({ points, tone = 'neutral' }: {
   points: { time: number; value: number }[];
   tone?: Tone;
@@ -1232,9 +1231,9 @@ function Sparkline({ points, tone = 'neutral' }: {
   // so the sparkline reads as an area chart, not a thin line —
   // visually closer to Datadog's stat tiles.
   const areaPath = path + ` L ${w} ${h} L 0 ${h} Z`;
-  const stroke = tone === 'good' ? 'var(--ok)' : tone === 'bad' ? 'var(--err)' : 'var(--accent)';
-  const fill   = tone === 'good' ? 'rgba(63,185,80,0.15)'
-              : tone === 'bad'  ? 'rgba(248,81,73,0.15)'
+  // v0.10.929 (K5) — 'good' (iyileşme) yeşil değil: nötr seri rengiyle aynı.
+  const stroke = tone === 'bad' ? 'var(--err)' : 'var(--accent)';
+  const fill   = tone === 'bad'  ? 'rgba(248,81,73,0.15)'
               : 'color-mix(in srgb, var(--accent) 12%, transparent)';
   return (
     <svg width={w} height={h} style={{ display: 'block' }}>

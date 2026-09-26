@@ -20,6 +20,15 @@ const FAILING_TRACE_COLS: DataTableColumn<EndpointFailingTrace>[] = [
 import { trimHistogram, type EndpointRef } from './endpointParam';
 import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
+import { seriesPalette } from '@/lib/chartFmt';
+import { useThemeTick } from '@/lib/useThemeTick';
+
+// v0.10.929 (K5) — "Where the time goes" içinde `db` bir KATEGORİ, sapma
+// değil: --warn (uyarı) yerine seri paletinden sabit yuva (mor — mavi
+// vurgulu service/messaging kardeşlerinden ve durum renklerinden ayrık;
+// KindBadge emsali: kategori = sabit seri yuvası). Satır ve "backends"
+// listesi aynı rengi taşır.
+const DB_SERIES_SLOT = 6;
 
 // detailSections — the /endpoint page's body (v0.9.839).
 //
@@ -135,7 +144,9 @@ export function StatusSection({ detail }: { detail: EndpointDetail }) {
   // CLASSED spans, not of all calls — spans with no http.status_code
   // are outside this section by definition (see the empty state).
   const bars: Array<{ label: string; n: number; cls: string; color: string }> = st ? [
-    { label: '2xx', n: st.http2xx, cls: 'b-ok', color: 'var(--ok)' },
+    // v0.10.929 (K5) — 2xx ROZETİ sağlıklı hâl: nötr (b-gray). Çubuk bir
+    // VERİ serisi olarak yeşil kalır (var(--ok)).
+    { label: '2xx', n: st.http2xx, cls: 'b-gray', color: 'var(--ok)' },
     { label: '3xx', n: st.http3xx, cls: 'b-gray', color: 'var(--text3)' },
     { label: '4xx', n: st.http4xx, cls: 'b-warn', color: 'var(--warn)' },
     { label: '5xx', n: st.http5xx, cls: 'b-err', color: 'var(--err)' },
@@ -401,7 +412,8 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map((r, i) => {
-                const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-ok';
+                // v0.10.929 (K5) — eşikler aynı; yalnız sağlıklı dal nötr (b-gray).
+                const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
                 return (
                   <tr key={`${r.value}|${i}`}>
                     <td className="mono" style={{ fontSize: 11 }} title={r.value}>{r.value}</td>
@@ -458,6 +470,10 @@ export function WhereTheTimeGoesSection({ refObj, from, to, env, cluster }: {
   const d = q.data;
   const rows = d?.downstream ?? [];
   const total = d?.totalMs ?? 0;
+  // v0.10.929 (K5) — seri rengi hex olarak çözülür; tema değişince yeniden
+  // çizilsin diye tik'e abone (DOM özniteliği, React store değil).
+  useThemeTick();
+  const dbTone = seriesPalette()[DB_SERIES_SLOT];
 
   return (
     <Card header={
@@ -487,7 +503,7 @@ export function WhereTheTimeGoesSection({ refObj, from, to, env, cluster }: {
       {rows.map(e => {
         const pct = total > 0 ? (e.shareMs / total) * 100 : 0;
         const tone = e.kind === 'self' ? 'var(--text3)'
-          : e.kind === 'db' ? 'var(--warn)' : 'var(--accent2)';
+          : e.kind === 'db' ? dbTone : 'var(--accent2)';
         return (
           <div key={`${e.kind}/${e.name}`} style={{ marginBottom: 5 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11.5 }}>
@@ -530,7 +546,7 @@ export function WhereTheTimeGoesSection({ refObj, from, to, env, cluster }: {
               display: 'flex', alignItems: 'baseline', gap: 6,
               fontSize: 11, marginBottom: 2,
             }}>
-              <span className="mono" style={{ color: 'var(--warn)' }}>{b.name}</span>
+              <span className="mono" style={{ color: dbTone }}>{b.name}</span>
               <span style={{ flex: 1 }} />
               <span style={{ color: 'var(--text2)', fontVariantNumeric: 'tabular-nums' }}>
                 {b.calls} calls · p99 {b.p99Ms.toFixed(0)}ms
@@ -617,7 +633,8 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map(r => {
-                const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-ok';
+                // v0.10.929 (K5) — eşikler aynı; yalnız sağlıklı dal nötr (b-gray).
+                const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
                 return (
                   <tr key={r.service}>
                     <td style={{

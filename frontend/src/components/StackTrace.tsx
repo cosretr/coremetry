@@ -37,7 +37,7 @@ export function StackTrace({ stack, frames, warning, verified, headClass }: {
   frames?: StackFrameLink[];
   /** Sürüm uyarısı; YALNIZ gerçekten link üretildiyse ve bir kez. */
   warning?: string;
-  /** v0.10.590 — sürüm VCS'te doğrulandıysa uyarı yerine onay tonu. */
+  /** v0.10.590 — sürüm VCS'te doğrulandıysa uyarı yerine nötr ton (v0.10.929 K5: yeşil değil). */
   verified?: boolean;
   /**
    * v0.10.735 — İLK satırın (exception mesajı; frame değildir) sınıfı.
@@ -76,7 +76,8 @@ export function StackTrace({ stack, frames, warning, verified, headClass }: {
     <>
       {hasLink && !!warning && (
         <div className="ex-stack-note">
-          <span className={verified ? "badge b-ok" : "badge b-warn"}>{warning}</span>
+          {/* v0.10.929 (K5) — doğrulanmış sürüm normal durum: nötr; doğrulanmamış sapma, amber kalır. */}
+          <span className={verified ? "badge b-gray" : "badge b-warn"}>{warning}</span>
         </div>
       )}
       <pre className="ex-stack">

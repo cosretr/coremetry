@@ -146,7 +146,7 @@ export function ApiTokensTab() {
                   <td className="mono" style={{ fontSize: 11 }}>{tsLong(t.createdAt)}</td>
                   <td>{t.revoked
                     ? <span className="badge b-gray">REVOKED</span>
-                    : <span className="badge b-ok">ACTIVE</span>}</td>
+                    : <span className="badge b-gray">ACTIVE</span>}</td>
                   <td style={{ textAlign: 'right' }}>
                     {!t.revoked && (
                       <Button variant="danger" size="sm"

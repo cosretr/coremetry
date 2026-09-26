@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button, Field, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
-import { useSettingsLoad, SettingsLoadError } from './shared';
+import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import type { TempoAuthType } from '@/lib/types';
 
 // TempoTab — external Grafana Tempo backend (v0.5.208). When
@@ -117,16 +117,12 @@ export function TempoTab() {
         Trace-by-id only — search / aggregations / topology still hit Coremetry.
       </p>
 
-      <div className={`status-banner status-banner-${ready ? 'operational' : 'degraded'}`}>
-        <span className={`status-pill status-pill-${ready ? 'operational' : 'degraded'}`}>
-          {ready ? 'ENABLED' : 'NOT CONFIGURED'}
-        </span>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>
-          {ready
-            ? `Pointing at ${baseUrl}${orgId ? ` (orgId=${orgId})` : ''}.`
-            : 'Disabled — CH misses return empty without trying Tempo.'}
-        </span>
-      </div>
+      {/* v0.10.929 (K5) — kurulu/kurulmamış bir ayar durumu: nötr bant (eskiden yeşil/amber). */}
+      <ConfigStatusBanner label={ready ? 'ENABLED' : 'NOT CONFIGURED'}>
+        {ready
+          ? `Pointing at ${baseUrl}${orgId ? ` (orgId=${orgId})` : ''}.`
+          : 'Disabled — CH misses return empty without trying Tempo.'}
+      </ConfigStatusBanner>
 
       <form onSubmit={save} style={{
         marginTop: 18, padding: 16, borderRadius: 8,
@@ -174,7 +170,7 @@ export function TempoTab() {
           <label style={{ display: 'block', marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
               {authType === 'bearer' ? 'Bearer token' : 'Password'}
-              {hasToken && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>· stored</span>}
+              {hasToken && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
             </div>
             <input type="password" value={token}
               onChange={e => setToken(e.target.value)}

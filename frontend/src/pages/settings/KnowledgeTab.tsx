@@ -152,7 +152,7 @@ export function KnowledgeTab() {
         {!cfg.enabled
           ? <span className="badge b-gray" style={{ marginLeft: 8 }}>kapalı</span>
           : cfg.endpoint
-            ? <span className="badge b-ok" style={{ marginLeft: 8 }}>aktif · semantik</span>
+            ? <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif · semantik</span>
             : <span className="badge b-warn" style={{ marginLeft: 8 }}>aktif · keyword modu</span>}
       </h2>
       <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 12 }}>

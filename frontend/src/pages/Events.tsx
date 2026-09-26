@@ -60,7 +60,7 @@ type Event = {
 // Kind→colour palette matches EventMarkers.tsx so the same event
 // reads consistently on the chart overlay and on this page.
 const KIND_COLOURS: Record<string, string> = {
-  deploy:      'var(--ok)',
+  deploy:      'var(--text2)', // v0.10.929 (K5) — kategori rengi yeşil değil; AnnotationLane ile aynı
   config:      'var(--accent)',
   incident:    'var(--err)',
   maintenance: 'var(--warn)',
@@ -235,7 +235,7 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
                     {n.channelKind === UNMATCHED_KIND
                       ? <span className="badge b-err" title={n.error}>kimseye gitmedi</span>
                       : n.ok
-                        ? <span className="badge b-ok">sent</span>
+                        ? <span className="badge b-gray">sent</span>
                         : <span className="badge b-err" title={n.error}>failed</span>}
                   </td>
                 </tr>

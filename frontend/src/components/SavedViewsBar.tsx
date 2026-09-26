@@ -184,13 +184,14 @@ export function SavedViewsBar({ page, right }: {
         <span key={v.id} style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           padding: '2px 8px', borderRadius: 3,
+          // v0.10.929 (K5) — uygulanan görünüm bir SEÇİM: yeşil literal yerine vurgu dili.
           background: isActive
-            ? 'rgba(46,160,67,.16)'  // green-ish when this view is the live one
+            ? 'var(--accent-bg)'
             : isModified
               ? 'rgba(187,128,9,.14)'  // amber when drifted
               : v.ownerId === '' ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg3)',
           border: isActive
-            ? '1px solid rgba(46,160,67,.55)'
+            ? '1px solid var(--accent)'
             : isModified
               ? '1px solid rgba(187,128,9,.55)'
               : v.ownerId === '' ? '1px solid color-mix(in srgb, var(--accent) 35%, transparent)' : '1px solid var(--border)',
@@ -206,7 +207,7 @@ export function SavedViewsBar({ page, right }: {
               if (isModified) return `${base} · drifted; click to restore${shortcut}`;
               return base + shortcut;
             })()}>
-            {isActive && <span style={{ fontSize: 9, color: 'rgb(46,160,67)' }}>✓</span>}
+            {isActive && <span style={{ fontSize: 9, color: 'var(--accent2)' }}>✓</span>}
             {isModified && <span style={{ fontSize: 9, color: 'rgb(187,128,9)' }}>●</span>}
             {!isActive && !isModified && v.ownerId === '' && <span style={{ fontSize: 9 }}>★</span>}
             {v.name}

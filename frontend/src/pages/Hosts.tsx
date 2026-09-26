@@ -135,7 +135,8 @@ export default function HostsPage() {
                       color: r.memPct > 85 ? 'var(--err)' : r.memPct > 60 ? 'var(--warn)' : 'var(--text3)',
                     }}>{r.memPct > 0 ? r.memPct.toFixed(0) : '—'}</td>
                     <td>
-                      <span className={`badge ${r.up ? 'b-ok' : 'b-gray'}`}>{r.up ? 'up' : 'stale'}</span>
+                      {/* v0.10.929 (K5) — 'up' sağlıklı durum: nötr; 'stale' bir sapma → amber. */}
+                      <span className={`badge ${r.up ? 'b-gray' : 'b-warn'}`}>{r.up ? 'up' : 'stale'}</span>
                     </td>
                     <td className="num mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
                       {fmtAgoNs(r.lastSeen)}

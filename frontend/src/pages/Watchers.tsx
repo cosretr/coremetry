@@ -15,6 +15,7 @@ import { buildWatcherTimeline, summarizeWatcherHistory, type WatcherTimelineEntr
 import { WatcherImportModal } from './alerts/WatcherImportModal';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
+import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.929 (K5) — tek durum sözlüğü (hafif yaprak)
 
 // /watchers (v0.9.196) — dedicated surface for the imported ES
 // Watcher fleet (~300 rules in prod; operator decision 2026-07-23).
@@ -181,8 +182,9 @@ export default function WatchersPage() {
                     </td>
                     <td style={{ fontSize: 12 }}>{fmtDurShort(r.windowSec)}</td>
                     <td>
+                      {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu, sağlık değil: ON nötr. */}
                       {r.enabled
-                        ? <span className="badge b-ok">ON</span>
+                        ? <span className="badge b-gray">ON</span>
                         : <span className="badge b-gray"
                             title={r.disabledReason || 'Disabled by operator'}>OFF</span>}
                       {canEdit && (
@@ -199,7 +201,8 @@ export default function WatchersPage() {
                     <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}
                         title={r.lastFire ? tsLong(r.lastFire) : undefined}>
                       {r.lastFire ? fmtAgoNs(r.lastFire) : <span style={{ color: 'var(--text3)' }}>—</span>}
-                      {r.openNow && <span className="badge b-err" style={{ marginLeft: 6 }}>OPEN</span>}
+                      {/* v0.10.929 (K5) — ton tek durum sözlüğünden: open → nötr (kırmızı değil). */}
+                      {r.openNow && <TriageStatusBadge s="open" label="OPEN" style={{ marginLeft: 6 }} />}
                     </td>
                     <td className="num mono" style={{ fontSize: 12 }}>
                       {/* M4 — sayı yerine saat-bazlı dağılım: 24 slotluk
@@ -264,10 +267,11 @@ function WatcherHistoryDrawer({ watcher, onClose }: {
             {watcher.name}
           </b>
           <span className="badge b-watcher">ES WATCHER</span>
+          {/* v0.10.929 (K5) — satırla aynı: ON nötr (ayar durumu), OPEN tek durum sözlüğünden. */}
           {watcher.enabled
-            ? <span className="badge b-ok">ON</span>
+            ? <span className="badge b-gray">ON</span>
             : <span className="badge b-gray" title={watcher.disabledReason || 'Disabled by operator'}>OFF</span>}
-          {watcher.openNow && <span className="badge b-err">OPEN</span>}
+          {watcher.openNow && <TriageStatusBadge s="open" label="OPEN" />}
         </div>
       }>
       {/* Summary strip — mockup's .sum row. v0.9.196 review-fix: 24h
@@ -330,7 +334,7 @@ function WatcherHistoryDrawer({ watcher, onClose }: {
           <span style={{ color: 'var(--text3)' }}>Status</span>
           <span>
             {watcher.enabled
-              ? <span style={{ color: 'var(--ok)' }}>● enabled</span>
+              ? <span style={{ color: 'var(--text)' }}>● enabled</span>
               : <span style={{ color: 'var(--text2)' }}>○ disabled{watcher.disabledReason ? ` — ${watcher.disabledReason}` : ''}</span>}
           </span>
           <span style={{ color: 'var(--text3)' }}>Notifies</span>
@@ -449,7 +453,7 @@ function TimelineBody({ e }: { e: WatcherTimelineEntry }) {
         <span className="mono" title={n.target}>{n.target || n.channelName || '—'}</span>
         {' — '}
         {n.ok
-          ? <span style={{ color: 'var(--ok)' }}>✓ sent</span>
+          ? <span style={{ color: 'var(--text3)' }}>✓ sent</span>
           : <span style={{ color: 'var(--err)' }} title={n.error}>✗ failed</span>}
       </div>
     </div>

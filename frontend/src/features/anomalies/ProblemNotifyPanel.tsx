@@ -93,7 +93,8 @@ export function ProblemNotifyPanel({ problemId }: { problemId: string }) {
           </div>
           {s.sends.map(n => (
             <div key={n.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-              <span className={n.ok ? 'badge b-ok' : 'badge b-err'} title={n.error || undefined}>
+              {/* v0.10.929 (K5) — sistemin gönderimi normal sonuç (kullanıcı eylemi değil): nötr. */}
+              <span className={n.ok ? 'badge b-gray' : 'badge b-err'} title={n.error || undefined}>
                 {n.ok ? 'gitti' : 'hata'}
               </span>
               <span style={{ color: 'var(--text2)' }}>{n.channelName}</span>

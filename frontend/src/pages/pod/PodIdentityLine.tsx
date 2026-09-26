@@ -63,7 +63,8 @@ export function PodIdentityLine({ detail, clusterName, namespace, pod, row, at, 
           )}
           <span className="field-hint">›</span>
           <Badge tone="info" title={detail?.entity.id ?? pod}>{pod}</Badge>
-          {live === 'live' && <Badge tone="success">live</Badge>}
+          {/* v0.10.929 (K5) — canlı pod normal hâl: nötr (EntityDetail emsali). */}
+          {live === 'live' && <Badge>live</Badge>}
           {live === 'stale' && <Badge tone="warning" title="Son senkronda görülmedi; ömür henüz kapanmadı">stale</Badge>}
           {live === 'gone' && <Badge tone="danger">artık mevcut değil</Badge>}
           {row?.phase && <span className={`badge ${podPhaseBadge(row.phase)}`} title="Faz — Thanos KSM anlık">{row.phase}</span>}

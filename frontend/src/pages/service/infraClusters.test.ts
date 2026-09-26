@@ -51,7 +51,7 @@ describe('pctOfLimit / clusterStatus', () => {
   });
   it('durum: bilinmiyor / all running / n failing (yarı ve üstü err)', () => {
     expect(clusterStatus(podTotals([pod({ pod: 'a', cluster: 'c' })]))).toEqual({ text: 'durum bilinmiyor', tone: 'gray' });
-    expect(clusterStatus(podTotals([pod({ pod: 'a', cluster: 'c', phase: 'Running' })]))).toEqual({ text: 'all running', tone: 'ok' });
+    expect(clusterStatus(podTotals([pod({ pod: 'a', cluster: 'c', phase: 'Running' })]))).toEqual({ text: 'all running', tone: 'gray' }); // v0.10.929 (K5)
     const two = podTotals([pod({ pod: 'a', cluster: 'c', phase: 'Running' }), pod({ pod: 'b', cluster: 'c', phase: 'Pending' }), pod({ pod: 'c', cluster: 'c', phase: 'Running' })]);
     expect(clusterStatus(two)).toEqual({ text: '1 failing', tone: 'warn' });
     const half = podTotals([pod({ pod: 'a', cluster: 'c', phase: 'Failed' }), pod({ pod: 'b', cluster: 'c', phase: 'Running' })]);

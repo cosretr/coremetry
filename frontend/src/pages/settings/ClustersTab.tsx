@@ -259,7 +259,7 @@ export function ClustersTab() {
                   <label style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
                       Token
-                      {r.hasToken && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>· stored</span>}
+                      {r.hasToken && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
                     </div>
                     <input type="password" value={r.token}
                       onChange={e => patch(i, { token: e.target.value })}

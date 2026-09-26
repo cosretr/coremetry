@@ -16,10 +16,13 @@ import type { InsightKind, InsightResponse } from './types';
  * dördüncü bir değer eklerse kart onu yanlış renkle basmaz — hiç renk
  * basmaz. Yanlış renk, renksizlikten kötü: `err` tonuyla çizilmiş bir
  * "ok" satırı operatörü olmayan bir olaya koşturur.
+ *
+ * v0.10.929 (K5) — `ok` sağlıklı durum: rozet yok, değer düz basılır
+ * (yeşil yalnız geçiş için). Renk yalnız sapmada (warn/err).
  */
-export function insightTone(severity?: string): 'b-ok' | 'b-warn' | 'b-err' | null {
+export function insightTone(severity?: string): 'b-warn' | 'b-err' | null {
   switch ((severity ?? '').trim().toLowerCase()) {
-    case 'ok':   return 'b-ok';
+    case 'ok':   return null;
     case 'warn': return 'b-warn';
     case 'err':  return 'b-err';
     default:     return null;

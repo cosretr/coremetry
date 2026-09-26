@@ -3,7 +3,8 @@
 import type { ProblemInsight } from '@/lib/types';
 import { fmtEvidenceTime } from '@/lib/chatEvidence';
 
-export interface InsightCell { key: string; label: string; text: string; href?: string; tone?: 'ok' | 'warn' | 'muted' }
+// v0.10.929 (K5) — 'ok' tonu kalktı: "ilk kez" ne geçiş ne veri; yeşil yok.
+export interface InsightCell { key: string; label: string; text: string; href?: string; tone?: 'warn' | 'muted' }
 
 export function fmtDurationShort(s: number): string {
   if (!(s > 0)) return '—';
@@ -32,6 +33,6 @@ export function insightCells(ins: ProblemInsight | null | undefined, serviceHref
     : { key: 'rollout', label: 'rollout', text: '—', tone: 'muted' };
   const similar: InsightCell = ins.similar
     ? { key: 'similar', label: 'daha önce', text: `${ins.similar.count}× · son ${fmtDurationShort(ins.similar.lastDurationS)}${ins.similar.lastAssignee ? ' · ' + ins.similar.lastAssignee : ''}`, href: `/problems?problem=${encodeURIComponent(ins.similar.lastId)}` }
-    : { key: 'similar', label: 'daha önce', text: 'ilk kez', tone: 'ok' };
+    : { key: 'similar', label: 'daha önce', text: 'ilk kez', tone: 'muted' };
   return [suspect, anomaly, rollout, similar];
 }

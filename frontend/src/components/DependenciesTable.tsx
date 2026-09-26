@@ -440,7 +440,8 @@ export function DependenciesTable({
           <DataTableHead dt={dt} stickyLeftBase={24} leading={<th className="sticky-left" style={{ width: 24, left: 0 }} aria-label="Expand"></th>} />
           <tbody>
             {dt.sortedRows.map((r, i) => {
-              const errCls = r.errorRate > 5 ? 'err' : r.errorRate > 0 ? 'warn' : 'ok';
+              // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
+              const errCls = r.errorRate > 5 ? 'err' : r.errorRate > 0 ? 'warn' : 'gray';
               // Key includes cluster so two rows with the same
               // (system, destination) but different physical
               // Kafka clusters don't collide in expansion state.
@@ -783,7 +784,8 @@ function P99DeltaCell({ cur, prior, compare }: {
     );
   }
   const pct = d * 100;
-  const tone = pct >= 20 ? 'var(--err)' : pct >= 5 ? 'var(--warn)' : pct <= -5 ? 'var(--ok)' : 'var(--text2)';
+  // v0.10.929 (K5) — iyileşme nötr --text2 (Sparkline emsali); kötüleşme renkli kalır.
+  const tone = pct >= 20 ? 'var(--err)' : pct >= 5 ? 'var(--warn)' : 'var(--text2)';
   return (
     <td className="mono" style={{ textAlign: 'right', color: tone }}
       title={`p99 ${cur.toFixed(1)}ms · önceki ${(prior ?? 0).toFixed(1)}ms`}>
@@ -844,11 +846,14 @@ function TrendCell({ trend, loading }: {
   }
   const rps = trend.points.map(p => p.rps);
   // Health tone from the latest-bucket gauge — drives both the
-  // sparkline colour and the err chip. Mirrors the row's errCls
-  // thresholds (>5 err, >0 warn) so the eye doesn't recalibrate.
-  const errTone: 'err' | 'warn' | 'ok' =
+  // sparkline colour and the err chip.
+  // v0.10.929 (K5) — satırın Err% hücresiyle (errCls) BİREBİR aynı eşik:
+  // >5 err, >0 warn, aksi nötr (gray). Eski yorum ">0 warn" diyordu ama kod
+  // >1 kullanıyordu: %0.5 hata satırda amber, trend çipinde yeşil basılırdı.
+  // Sağlıklı (%0) dal nötr — yeşil değil.
+  const errTone: 'err' | 'warn' | 'gray' =
     trend.curErrorRate > 5 ? 'err'
-    : trend.curErrorRate > 1 ? 'warn' : 'ok';
+    : trend.curErrorRate > 0 ? 'warn' : 'gray';
   const sparkColor =
     errTone === 'err' ? 'var(--err)'
     : errTone === 'warn' ? 'var(--warn)'
@@ -856,9 +861,10 @@ function TrendCell({ trend, loading }: {
   // p99 chip tone — same ms thresholds the drawer's Stat tiles
   // use elsewhere wouldn't fit (those are domain-specific); a
   // generic latency band reads fine here: >500ms err, >200ms warn.
-  const p99Tone: 'err' | 'warn' | 'ok' =
+  // v0.10.929 (K5) — ≤200ms normal gecikme: nötr çip.
+  const p99Tone: 'err' | 'warn' | 'gray' =
     trend.curP99Ms > 500 ? 'err'
-    : trend.curP99Ms > 200 ? 'warn' : 'ok';
+    : trend.curP99Ms > 200 ? 'warn' : 'gray';
   // v0.9.820 — rozetler artık son TAM kovadan (backend
   // applyDBTrendCurrent). Tooltip'ler bunu SÖYLÜYOR, çünkü "şu an" ile
   // "son kapanmış 5 dakika" arasındaki fark bir olay sırasında kritik:

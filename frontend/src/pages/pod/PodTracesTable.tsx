@@ -107,7 +107,10 @@ export function PodTracesTable({ ctx, p95Ms }: {
                   <td title={r.rootName} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.rootName || '—'}</td>
                   <td className="num mono" style={r.hasError ? { color: 'var(--err)' } : undefined}>{fmtDur(r.durationMs)}</td>
                   <td className="num">{r.spanCount}</td>
-                  <td><span className={`badge ${r.hasError ? 'b-err' : 'b-ok'}`}>{r.hasError ? 'error' : 'ok'}</span></td>
+                  {/* v0.10.929 (K5) — sağlıklı satır görsel boş, kelime sr-only (Traces listesi emsali). */}
+                  <td>{r.hasError
+                    ? <span className="badge b-err">error</span>
+                    : <span className="sr-only">ok</span>}</td>
                   <td><Link to={traceHref(r.traceId)} className="sec" title="Trace'i aç">→</Link></td>
                 </tr>
               ))}

@@ -87,7 +87,7 @@ describe('MV artığı — kart (v0.10.830)', () => {
     const btn = block.indexOf('Kalıntıyı düşür');
     expect(block.slice(0, btn)).toContain('? <span className="badge b-warn"');
   });
-  it('yeşil rozet artık yokluğunu DA ister', () => {
+  it('sağlıklı rozeti artık yokluğunu DA ister', () => {
     const i = page.indexOf("MV&apos;ler sağlıklı");
     expect(i).toBeGreaterThan(0);
     const guard = page.slice(Math.max(0, i - 300), i);

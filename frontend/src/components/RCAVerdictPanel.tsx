@@ -207,7 +207,8 @@ export function RCAVerdictPanel({ v, exchangeId }: { v: RCAVerdict; exchangeId?:
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.6, color: 'var(--text2)' }}>
             {v.remediation.map((r, i) => (
               <li key={i}>
-                <Badge tone={r.kind === 'fix' ? 'success' : 'info'}>
+                {/* v0.10.929 (K5) — kalıcı/geçici bir kategori (sağlık/geçiş değil): nötr, kelime taşır. */}
+                <Badge tone="neutral">
                   {r.kind === 'fix' ? 'kalıcı' : 'geçici'}
                 </Badge>{' '}
                 {r.action}

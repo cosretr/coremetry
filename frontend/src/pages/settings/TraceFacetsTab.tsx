@@ -31,9 +31,10 @@ const COLS: DataTableColumn<FacetRow>[] = [
   { id: 'act', label: '', sortValue: () => 0, width: 60 },
 ];
 
-export function facetStateLabel(st?: TraceFacetStatus): { text: string; tone: 'success' | 'warning' | 'neutral' } {
+// v0.10.929 (K5) — 'kolona yönleniyor' normal son hâl: nötr; renk yalnız eksik kolon/indekste.
+export function facetStateLabel(st?: TraceFacetStatus): { text: string; tone: 'warning' | 'neutral' } {
   if (!st) return { text: 'kaydedilmedi', tone: 'neutral' };
-  if (st.routed) return { text: 'kolona yönleniyor', tone: 'success' };
+  if (st.routed) return { text: 'kolona yönleniyor', tone: 'neutral' };
   if (st.columnExists) return { text: st.indexExists ? 'kolon var · doğrulanmadı' : 'kolon var · indeks yok', tone: 'warning' };
   return { text: 'kolon yok', tone: 'warning' };
 }

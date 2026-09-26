@@ -112,9 +112,12 @@ export function ServiceClusterBreakdown({ service, range }: {
         Per-cluster breakdown <span style={{
           fontWeight: 400, color: 'var(--text3)', textTransform: 'none',
         }}>· {clusters.length} cluster{clusters.length === 1 ? '' : 's'} with traces</span>
-        {/* v0.10.883 — kaynak dürüstlüğü: MV pencereyi kapsamıyorsa ham spans (p50/p95/seri yok). */}
+        {/* v0.10.883 — kaynak dürüstlüğü: MV pencereyi kapsamıyorsa ham spans (p50/p95/seri yok).
+            v0.10.929 (K5) — 'MV' normal yol → nötr; 'spans' geri düşüşü GERÇEK
+            sapma (p50/p95/seri yok) → amber — Overview'ın "kapsam: tüm span'ler"
+            geri düşüşüyle aynı dil. */}
         {q.data?.source && (
-          <span className={`badge ${q.data.source === 'mv' ? 'b-ok' : 'b-gray'}`} style={{ marginLeft: 8, fontWeight: 400, textTransform: 'none' }}
+          <span className={`badge ${q.data.source === 'mv' ? 'b-gray' : 'b-warn'}`} style={{ marginLeft: 8, fontWeight: 400, textTransform: 'none' }}
             title={q.data.source === 'mv' ? 'service_env_summary_5m' : 'MV bu pencereyi kapsamıyor — ham spans; p50/p95 ve seri yok'}>
             {q.data.source === 'mv' ? 'MV' : 'spans'}
           </span>
@@ -126,7 +129,7 @@ export function ServiceClusterBreakdown({ service, range }: {
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.map(c => {
-              const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'ok';
+              const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray'; // v0.10.929 (K5)
               return (
                 <tr key={c.cluster}>
                   <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

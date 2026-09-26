@@ -4,7 +4,7 @@ import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { McpServerInput, McpServerStatus, McpServerTestResult } from '@/lib/types';
-import { SettingRow, SettingsLoadError, useSettingsLoad } from './shared';
+import { SettingRow, SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
 
 // McpServersTab — dış MCP sunucu listesi (v0.10.87, MCP istemci dilim ②).
 //
@@ -113,16 +113,12 @@ export function McpServersTab() {
         bir alt süreç başlatır; kısıtlı ortamlarda http kullanın.
       </p>
 
-      <div className={`status-banner status-banner-${enabledCount ? 'operational' : 'degraded'}`}>
-        <span className={`status-pill status-pill-${enabledCount ? 'operational' : 'degraded'}`}>
-          {enabledCount ? `${enabledCount} ETKİN` : 'KAPALI'}
-        </span>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>
-          {enabledCount
-            ? 'Etkin sunucuların tool katalogları sohbet döngüsüne eklenecek.'
-            : "Dış sunucu yok — sohbet yalnız yerli tool'larla çalışır."}
-        </span>
-      </div>
+      {/* v0.10.929 (K5) — kurulu/kurulmamış bir ayar durumu: nötr bant (eskiden yeşil/amber). */}
+      <ConfigStatusBanner label={enabledCount ? `${enabledCount} ETKİN` : 'KAPALI'}>
+        {enabledCount
+          ? 'Etkin sunucuların tool katalogları sohbet döngüsüne eklenecek.'
+          : "Dış sunucu yok — sohbet yalnız yerli tool'larla çalışır."}
+      </ConfigStatusBanner>
 
       {rows.map((r, i) => {
         const st = status.find(s => s.server === r.name.toLowerCase().replace(/[^a-z0-9-]+/g, '-'));

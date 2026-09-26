@@ -157,10 +157,11 @@ function KpiTile({ lab, val, unit, accent, spark, delta, goodWhenUp, note, sub }
   // alınabilir olmalı — kaldırıldığında karo bugünkü hâline döner.
   sub?: string;
 }) {
-  // Color by whether the move is GOOD for this metric (README §Status
-  // semantics): throughput/apdex up = good (green); failure/latency up =
-  // bad (red). The .ov-delta classes encode up=err/down=ok by default, with
-  // .up.good / .down.bad overrides for the goodWhenUp case.
+  // Direction is judged per metric (goodWhenUp): throughput up = better;
+  // failure/latency up = worse. The .ov-delta classes encode up=worse /
+  // down=better by default, with .up.good / .down.bad overrides for the
+  // goodWhenUp case. v0.10.929 (K5) — iyileşme (.down, .up.good) CSS'te nötr
+  // --text2; renk yalnız kötüleşmede (.up, .down.bad → --err).
   const deltaCls = delta
     ? `ov-delta ${delta.dir}${goodWhenUp && delta.dir === 'up' ? ' good' : ''}${goodWhenUp && delta.dir === 'down' ? ' bad' : ''}`
     : '';
@@ -896,7 +897,12 @@ export function ServiceOverview({ service, range, windowNs, info, operations, en
             p99 ile yer değişsin") — Failure rate karosu SON sırada; altındaki
             RED grafik şeridinin ÜÇÜNCÜ grafiğiyle (Failure rate) aynı kolona
             düşüyor. v0.9.798'de kaynağı DEĞİŞMEDİ: hata oranı span türevli
-            (giriş-span ilkesi) ve metrik tarafında karşılığı yok. */}
+            (giriş-span ilkesi) ve metrik tarafında karşılığı yok.
+            v0.10.929 (K5) — accent="var(--err)" BİLİNÇLİ KALIYOR: şerit +
+            sparkline SERİ KİMLİĞİ (veri), durum rengi değil — Throughput
+            karosunun --accent'i, Response time'ın --orange'ı gibi; altındaki
+            Failure rate grafiğinin Errors çizgisiyle aynı renk. Oran 0 da
+            olsa şerit aynıdır; sağlık/sapma dili delta sınıfında (.ov-delta). */}
         <MetricPanel compact menuOnly title="Failure rate" metricQuery={mkFailureRate('stat')}>
           <KpiTile lab="Failure rate" val={metricErrorsUnknown ? '—' : `${errorRatePct.toFixed(2)}%`} accent="var(--err)" spark={vals(lat?.error_rate)} delta={computeDelta(vals(lat?.error_rate))} goodWhenUp={false} note={latScopeNote} />
         </MetricPanel>

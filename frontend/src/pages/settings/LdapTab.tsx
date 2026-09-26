@@ -496,7 +496,7 @@ function GroupSyncStatus() {
       <h3 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px' }}>
         Group sync durumu
         {sum && (sum.enabled
-          ? <span className="badge b-ok" style={{ marginLeft: 8 }}>aktif</span>
+          ? <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif</span>
           : <span className="badge b-gray" style={{ marginLeft: 8 }}>kapalı</span>)}
       </h3>
       {!sum || !sum.configured ? (

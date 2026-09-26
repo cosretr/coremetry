@@ -61,9 +61,11 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
                 <td className="mono">{fmtDateTime(new Date(e.startedAt / 1e6))}</td>
                 <td className="mono">{fmtDateTime(new Date(e.lastSeen / 1e6))}</td>
                 <td className="num mono">×{e.peakRatio.toFixed(1)}</td>
-                <td>{e.status === 'active' ? <Badge tone="danger">active</Badge> : <Badge tone="neutral">cleared</Badge>}</td>
+                {/* v0.10.929 (K5) — active normal durum → nötr; cleared geçiş → yeşil (streams/çekmece ile tek kural). */}
+                <td>{e.status === 'active' ? <Badge tone="neutral">active</Badge> : <Badge tone="success">cleared</Badge>}</td>
                 <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {e.verdict === 'anomaly' && <Badge tone="success" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtDateTime(new Date(e.verdictAt / 1e6))}` : ''}`}>anomali ✓</Badge>}
+                  {/* v0.10.929 (K5) — anomaliyi teyit etmek iyi haber değil: karar rozeti nötr. */}
+                  {e.verdict === 'anomaly' && <Badge tone="neutral" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtDateTime(new Date(e.verdictAt / 1e6))}` : ''}`}>anomali ✓</Badge>}
                   {e.verdict === 'not_anomaly' && <Badge tone="neutral" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtDateTime(new Date(e.verdictAt / 1e6))}` : ''}`}>değil ✗</Badge>}
                   {silence && <Badge tone="neutral" style={e.verdict ? { marginLeft: 6 } : undefined} title={`${silence.createdBy} · ${fmtDateTime(new Date(silence.createdAt / 1e6))}${silence.reason ? ` · ${silence.reason}` : ''}`}>sessiz{silence.untilAt > 0 ? ` · ${fmtDateTime(new Date(silence.untilAt / 1e6))}'e dek` : ''}</Badge>}
                   {!e.verdict && !silence && <span className="field-hint">—</span>}

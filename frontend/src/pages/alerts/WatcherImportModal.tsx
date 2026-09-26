@@ -23,8 +23,10 @@ import type { WatcherImportReport, WatcherSupport } from '@/lib/types';
 // Modal state is deliberately ephemeral (no URL params): this is a
 // transient paste-and-go flow, not a shareable drawer view.
 
+// v0.10.929 (K5) — "tam destekli" önizlemede normal sonuç: nötr; renk yalnız
+// kısmi/desteksizde. (İçe aktarma SONRASI --ok kutusu eylem geri bildirimi, kalır.)
 const badgeClass: Record<WatcherSupport, string> = {
-  supported:   'b-ok',
+  supported:   'b-gray',
   partial:     'b-warn',
   unsupported: 'b-err',
 };

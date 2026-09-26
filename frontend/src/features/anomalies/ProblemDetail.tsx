@@ -31,6 +31,7 @@ import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import type { ExceptionGroup, ExceptionGroupState, Problem, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.922 (sade palet adım 1)
+import { TriageStatusBadge, ProblemStatusBadge } from './statusTone'; // v0.10.929 (K5) — hafif yaprak
 import { PageShell } from '@/components/ui/PageShell';
 import { ShareButton } from '@/components/ShareButton';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -70,37 +71,13 @@ const STATE_LABEL: Record<ExceptionGroupState, string> = {
 // v0.10.922 (sade palet adım 1) — TEK durum → ton sözlüğü (operatör K5:
 // normal/sağlıklı durum NÖTR, yeşil yalnız bir GEÇİŞ için). Dört yüzey
 // (Inbox, Problems satırı, Exceptions listesi, bu detay) aynı durumu dört
-// ayrı tonda basıyordu: "open" Inbox'ta amber, Problems'ta kırmızı;
-// "acknowledged" Inbox/Exceptions'ta mavi, burada amber; "regressed"
-// kırmızı/amber; "new" kırmızı/amber/mavi. Eşleme BURADA yaşıyor çünkü
-// ProblemsSection ve AnomaliesPage bu dosyayı zaten içe aktarıyor, Inbox
-// da ProblemsSection üzerinden aynı parçada (yeni chunk bağımlılığı yok).
-//   open / active / acknowledged / ignored / muted → nötr (b-gray)
-//   resolved              → b-ok  (geçiş: düzeldi)
-//   regressed / new       → b-warn (dikkat, alarm değil)
-// Aciliyetin rengi ÖNCELİK rozetinde (P1 kırmızı); durum onu tekrar etmez.
-// Renk hiçbir yerde tek taşıyıcı değil — rozetin kelimesi aynen kalıyor.
-// Bilinmeyen durum GİZLENMEZ, nötr tonda ham kelimesiyle basılır.
-const STATUS_TONE: Record<string, string> = {
-  open: 'b-gray', active: 'b-gray', acknowledged: 'b-gray', ignored: 'b-gray', muted: 'b-gray',
-  resolved: 'b-ok',
-  regressed: 'b-warn', new: 'b-warn',
-};
-
-export function TriageStatusBadge({ s, label, title }: { s: string; label: string; title?: string }) {
-  return <span className={`badge ${STATUS_TONE[s.toLowerCase()] ?? 'b-gray'}`} title={title}>{label}</span>;
-}
-
-// Alarm problemlerinin (problems tablosu) üç durumu — liste satırı ve detay
-// şeridi aynı kelimeyi basar; tanımadığı durumda eskisi gibi hiçbir şey.
-const PROBLEM_STATUS_LABEL: Record<string, string> = {
-  open: 'OPEN', acknowledged: 'ACK', resolved: 'RESOLVED',
-};
-
-export function ProblemStatusBadge({ status }: { status: string }) {
-  const label = PROBLEM_STATUS_LABEL[status];
-  return label ? <TriageStatusBadge s={status} label={label} /> : null;
-}
+// ayrı tonda basıyordu.
+// v0.10.929 (K5) — sözlük + TriageStatusBadge + ProblemStatusBadge hafif
+// yaprak modüle (./statusTone) taşındı: RootCausePanel, Incident, Incidents
+// ve Watchers elle kopya kural yerine onu içe aktarır (ProblemDetail'in ağır
+// zinciri o parçalara girmez). Buradaki yeniden dışa aktarım mevcut içe
+// aktaranlar (Inbox, AnomaliesPage, ProblemsSection) kırılmasın diye.
+export { TriageStatusBadge, ProblemStatusBadge } from './statusTone';
 
 // ShareButton (shared, v0.8.540 — was a local copy here) copies the
 // current address-bar URL. The URL is already the canonical shareable

@@ -8,7 +8,9 @@ export interface TraceHealthPodLike {
   rejects?: Record<string, number>;
 }
 
-export type LossTone = 'b-ok' | 'b-warn' | 'b-err' | 'b-gray';
+// v0.10.929 (K5) — 'b-ok' tipten çıktı: "kayıp yok", temiz adlar, ≥%99.5
+// saklandı SAĞLIKLI hâl, geçiş değil → nötr. Renk yalnız sapmada.
+export type LossTone = 'b-warn' | 'b-err' | 'b-gray';
 
 /**
  * Kayıp kartı rozeti: kalıcı kayıp (drop + write_failed + reddedilen istek) → err;
@@ -24,7 +26,7 @@ export function lossVerdict(p: TraceHealthPodLike, spoolDegraded = false, ingest
   const quality = (r.span_empty_id ?? 0) + (r.span_invalid_time ?? 0);
   if (lost > 0) return { tone: 'b-err', text: `${lost.toLocaleString()} kayıp` };
   if (quality > 0) return { tone: 'b-warn', text: `${quality.toLocaleString()} kalite işareti` };
-  return { tone: 'b-ok', text: 'kayıp yok' };
+  return { tone: 'b-gray', text: 'kayıp yok' };
 }
 
 /** Yüzde (0-100) ya da null (payda 0). */
@@ -40,8 +42,8 @@ export function bucketBars(buckets: { t: number; spans: number }[]): { t: number
 
 /** Ad kalitesi rozeti: çıplak fiil payı ≥ %20 err, ≥ %5 warn. */
 export function nameTone(barePct: number | null): LossTone {
-  if (barePct === null) return 'b-ok';
-  return barePct >= 20 ? 'b-err' : barePct >= 5 ? 'b-warn' : 'b-ok';
+  if (barePct === null) return 'b-gray';
+  return barePct >= 20 ? 'b-err' : barePct >= 5 ? 'b-warn' : 'b-gray';
 }
 
 // v0.10.767 (Faz B) — filo mutabakatı rozeti. Oran = yerleşmiş pencerede
@@ -66,7 +68,7 @@ export function fleetVerdict(f: FleetLike): { tone: LossTone; text: string; pct:
   const pct = (f.storedSettled / accepted) * 100;
   const num = pct >= 100 ? String(Math.round(pct)) : pct.toFixed(1);
   if (pct > 110) return { tone: 'b-warn', text: `%${num} saklandı (kapsam?)`, pct };
-  return { tone: pct >= 99.5 ? 'b-ok' : pct >= 97 ? 'b-warn' : 'b-err', text: `%${num} saklandı`, pct };
+  return { tone: pct >= 99.5 ? 'b-gray' : pct >= 97 ? 'b-warn' : 'b-err', text: `%${num} saklandı`, pct };
 }
 
 // v0.10.823 — ham sayım satırları. Şard ETİKETLENİR: aynı shard'ın host'ları

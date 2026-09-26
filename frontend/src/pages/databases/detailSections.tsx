@@ -313,7 +313,8 @@ export function DatabaseCallersSection({ callers, range, env }: {
             <DataTableHead dt={dt} />
             <tbody>
               {dt.sortedRows.map((c, i) => {
-                const errCls = c.errorRate > 5 ? 'b-err' : c.errorRate > 0 ? 'b-warn' : 'b-ok';
+                // v0.10.929 (K5) — %0 hata nötr (b-gray); eşikler aynı.
+                const errCls = c.errorRate > 5 ? 'b-err' : c.errorRate > 0 ? 'b-warn' : 'b-gray';
                 const impact = c.spanCount * c.avgDurationMs;
                 return (
                   <tr key={`${c.service}|${c.pod}|${i}`}

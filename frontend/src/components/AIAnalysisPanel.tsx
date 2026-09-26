@@ -21,8 +21,9 @@ import { isAbortError } from '@/components/ai/chatAbort';
 // configured model returns a strict Turkish verdict rendered as structured
 // cards. All fixed UI copy is Turkish-in-code; the model produces only the
 // analysis content. Colour is used ONLY for the güven (confidence) badge.
+// v0.10.929 (K5) — yüksek güven nötr; renk yalnız sapmada (orta/düşük güven).
 
-const GUVEN_BADGE: Record<string, string> = { yuksek: 'b-ok', orta: 'b-warn', dusuk: 'b-err' };
+const GUVEN_BADGE: Record<string, string> = { yuksek: 'b-gray', orta: 'b-warn', dusuk: 'b-err' };
 
 const GUVEN_LABEL: Record<string, string> = { yuksek: 'YÜKSEK GÜVEN', orta: 'ORTA GÜVEN', dusuk: 'DÜŞÜK GÜVEN' };
 

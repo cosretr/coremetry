@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
-import { useSettingsLoad, SettingsLoadError } from './shared';
+import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import type { ESLogstoreInput, ESLogstoreSnapshot } from '@/lib/types';
 
 // ElasticTab — UI-managed logs read backend (v0.8.232,
@@ -129,19 +129,17 @@ export function ElasticTab() {
       </p>
 
       {snap && (
-        <div className={`status-banner status-banner-${snap.backend === 'elasticsearch' ? 'operational' : 'degraded'}`}>
-          <span className={`status-pill status-pill-${snap.backend === 'elasticsearch' ? 'operational' : 'degraded'}`}>
-            {snap.backend.toUpperCase()}
-          </span>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>
-            {snap.backend === 'elasticsearch'
-              ? `Reading ${snap.index || 'app-*'} on ${snap.addresses.join(', ') || '—'}`
-              : 'Reading the built-in ClickHouse logs table.'}
-          </span>
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
-            source: {snap.source === 'ui' ? 'UI override' : 'env / YAML'}
-          </span>
-        </div>
+        // v0.10.929 (K5) — seçili log backend'i bir ayar durumu: nötr bant (ES yeşil / CH amber değil).
+        <ConfigStatusBanner label={snap.backend.toUpperCase()}
+          aside={
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
+              source: {snap.source === 'ui' ? 'UI override' : 'env / YAML'}
+            </span>
+          }>
+          {snap.backend === 'elasticsearch'
+            ? `Reading ${snap.index || 'app-*'} on ${snap.addresses.join(', ') || '—'}`
+            : 'Reading the built-in ClickHouse logs table.'}
+        </ConfigStatusBanner>
       )}
 
       <form onSubmit={save} style={{
@@ -171,7 +169,7 @@ export function ElasticTab() {
             <label style={{ display: 'block' }}>
               <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
                 API key
-                {snap?.hasApiKey && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>· stored</span>}
+                {snap?.hasApiKey && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
               </div>
               <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
                 placeholder={snap?.hasApiKey ? '(leave empty to keep stored value)' : 'base64 id:api_key — takes precedence over basic auth'}
@@ -187,7 +185,7 @@ export function ElasticTab() {
               <label style={{ display: 'block' }}>
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
                   Password
-                  {snap?.hasPassword && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>· stored</span>}
+                  {snap?.hasPassword && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
                 </div>
                 <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                   placeholder={snap?.hasPassword ? '(keep stored)' : ''} style={{ width: '100%' }} />

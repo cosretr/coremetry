@@ -247,7 +247,7 @@ function AnnouncementSection() {
       <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
         Duyuru şeridi
         {a.enabled && a.text
-          ? <span className="badge b-ok" style={{ marginLeft: 8 }}>aktif</span>
+          ? <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif</span>
           : <span className="badge b-gray" style={{ marginLeft: 8 }}>kapalı</span>}
       </h2>
       <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 12 }}>

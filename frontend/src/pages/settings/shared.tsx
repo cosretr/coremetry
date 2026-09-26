@@ -53,6 +53,31 @@ export function FlashBox({ kind, children }: { kind: 'ok' | 'err'; children: Rea
   );
 }
 
+// ── Ayar durum bandı (v0.10.929, K5) ────────────────────────────────────────
+// Sekmelerin üst bandı (ENABLED / NOT CONFIGURED / KAPALI / CLICKHOUSE …) bir
+// KONFİGÜRASYON durumu — ne sağlık ne sapma. Eskiden kurulu = yeşil
+// (.status-banner-operational), kurulmamış = amber (-degraded) boyanıyordu;
+// K5: iki uç da nötr, ayrım etiket + cümlede. Sağlık modifier'ları
+// (-operational / -degraded / -outage) gerçek sağlık gösteren Monitors /
+// Admin durum yüzeylerine kalır. v0.10.929 (K5, lider kararı) — burada inline
+// renk yok: semantik takma ad sınıfları .status-banner-neutral /
+// .status-pill-neutral globals.css'te -operational ile TEK kuralı paylaşır
+// (bg2 / border / text2, hap bg3 / text2) — ayar bandı "sağlık" adı taşımaz,
+// değerler de ayrışamaz.
+export function ConfigStatusBanner({ label, children, aside }: {
+  label: ReactNode;
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
+  return (
+    <div className="status-banner status-banner-neutral">
+      <span className="status-pill status-pill-neutral">{label}</span>
+      <span style={{ fontWeight: 600, fontSize: 14 }}>{children}</span>
+      {aside}
+    </div>
+  );
+}
+
 // ── shared form atoms (LDAP tab — kept alongside the rest of the
 //    Settings shared primitives during the split).
 export function SectionTitle({ children }: { children: ReactNode }) {

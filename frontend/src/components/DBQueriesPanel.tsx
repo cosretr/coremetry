@@ -199,7 +199,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                   {dt.sortedRows.map((r, i) => {
                     const expanded = expandedIdx === i;
                     const errPct = r.count > 0 ? (r.errorCount / r.count) * 100 : 0;
-                    const errCls = errPct > 5 ? 'b-err' : errPct > 0 ? 'b-warn' : 'b-ok';
+                    const errCls = errPct > 5 ? 'b-err' : errPct > 0 ? 'b-warn' : 'b-gray'; // v0.10.929 (K5) — ulaşılmaz dal da yeşil değil
                     // v0.9.963 (G1-b) — null when the row carries no
                     // stmtHash (pre-D1 cache entry); the cell then renders a
                     // dash rather than a link that opens an empty drawer.

@@ -94,13 +94,13 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.id}</div>
                     {/* v0.10.179 — rozet kendi satırında: ellipsis rozeti yutuyordu (178 canlı görüntüsü) */}
                     <div className="field-hint mono" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {p.label ? p.id : null}{p.default && <Badge tone="success">varsayılan</Badge>}
+                      {p.label ? p.id : null}{p.default && <Badge>varsayılan</Badge>}
                     </div>
                   </td>
                   <td><span className="badge b-gray">{p.provider}</span></td>
                   <td className="mono" style={{ fontSize: 11 }} title={p.model}>{p.model || '—'}</td>
                   <td className="mono" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endpointLabel(p.provider, p.baseUrl)}>{endpointLabel(p.provider, p.baseUrl)}</td>
-                  <td>{p.hasKey ? <span className="badge b-ok">stored</span> : profileUsable(p) ? <span className="badge b-gray">no auth</span> : <span className="badge b-warn">yok</span>}</td>
+                  <td>{p.hasKey ? <span className="badge b-gray">stored</span> : profileUsable(p) ? <span className="badge b-gray">no auth</span> : <span className="badge b-warn">yok</span>}</td>
                   <td style={{ fontSize: 11, color: 'var(--text2)' }}>{tuningSummary(p)}</td>
                   <td style={{ textAlign: 'right' }}>
                     <Button variant="secondary" size="sm" onClick={() => { setIsNew(false); setDraft(draftOf(p)); }}>Düzenle</Button>{' '}

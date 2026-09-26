@@ -139,8 +139,9 @@ export default function RunbooksPage() {
                       </a>
                     </td>
                     <td className="num mono">{rb.steps?.length ?? 0}</td>
+                    {/* v0.10.929 (K5) — açık/kapalı ayar durumu nötr. */}
                     <td>{rb.enabled
-                      ? <span className="badge b-ok">ON</span>
+                      ? <span className="badge b-gray">ON</span>
                       : <span className="badge b-gray">OFF</span>}</td>
                     <td>
                       {(rb.labels ?? []).length === 0

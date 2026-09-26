@@ -192,7 +192,9 @@ export function ExternalEvidencePanel({ problem, window: win }: {
                     <td className="num">{r.spans || '—'}</td>
                     <td>{r.missing
                       ? <span className="badge b-gray" title="Trace id dış kaynaktan geldi ama bu pencerede CH'de span'i yok (retention ya da henüz gelmedi)">CH'de yok</span>
-                      : <span className={`badge ${r.errorSpans > 0 ? 'b-err' : 'b-ok'}`}>{r.errorSpans > 0 ? `${r.errorSpans} hata` : 'ok'}</span>}</td>
+                      : r.errorSpans > 0
+                        ? <span className="badge b-err">{`${r.errorSpans} hata`}</span>
+                        : <span style={{ color: 'var(--text3)' }}>ok</span>}</td>
                   </tr>
                 ))}
               </tbody>

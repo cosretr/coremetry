@@ -45,7 +45,12 @@ export function KioskSpanPanel({ span, traceStartNs, logs, eventRows, onClose }:
       <div className="kiosk-span__head">
         <SvcBadge name={span.serviceName} />
         <span className="kiosk-span__name" title={span.name}>{displaySpanName(span)}</span>
-        <span className={`badge ${err ? 'b-err' : 'b-ok'}`}>{err ? 'ERROR' : (span.statusCode || 'unset')}</span>
+        {/* v0.10.929 (K5) — SpanDetail / TraceKiosk ile aynı kural: renk ve rozet
+            yalnız sapmada (ERROR); sağlıklı span'de kelime (ok/unset) sr-only —
+            görsel boş, ekran okuyucu durumu duyar. Durum metni facts satırında da var. */}
+        {err
+          ? <span className="badge b-err">ERROR</span>
+          : <span className="sr-only">{span.statusCode || 'unset'}</span>}
         <span className="trace-kiosk__brand-spacer" />
         {/* v0.10.926 — title kalır: panel TraceWaterfall renderDetail ile
             `.wf-row` içinde çizilir (tablo-dışı `content-visibility: auto`,

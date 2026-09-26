@@ -269,10 +269,11 @@ function DeltaChip({ label, pct, suffix }: { label: string; pct: number | null; 
   }
   // Colour bands. Latency / avg in percent; error rate in
   // percentage points (already pre-multiplied). > 5% worse =
-  // red, > 1% worse = amber, < -5% better = green.
+  // red, > 1% worse = amber, < -5% better = neutral --text2
+  // (v0.10.929 K5 — iyileşme renksiz, Sparkline emsali).
   const color = pct > 5 ? 'var(--err)'
     : pct > 1 ? 'var(--warn)'
-    : pct < -5 ? 'var(--ok)'
+    : pct < -5 ? 'var(--text2)'
     : 'var(--text3)';
   const sign = pct > 0 ? '+' : '';
   return (

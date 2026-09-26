@@ -12,8 +12,15 @@ import type { ChartTimeRegion } from '@/lib/chart/overlays';
 // Renkler EventMarkers.tsx'in v0.5.478 paletiyle AYNI KALIR — /events
 // sayfasındaki kind çipleri de bu paleti kopyalar; kaynak artık burası.
 export const EVENT_KIND_COLOUR: Record<string, string> = {
-  deploy:      'rgba(46,160,67,0.65)',
-  config:      'color-mix(in srgb, var(--accent) 65%, transparent)',
+  // v0.10.929 (K5) — deploy bir kategori, sağlık değil: yeşil literal yerine
+  // --text2 (AnnotationLane KIND_COLOR ile aynı).
+  // v0.10.929 (K5) — canvas-güvenli: bu değerler uPlot bölge yolunda
+  // resolveVar'dan geçer ve resolveVar YALNIZ tam `var(--x)` biçimini çözer;
+  // `color-mix(… var(--x) …)` çözülmeden canvas'a gider ve geçersiz renk
+  // olarak düşer (config'in eski hatası da buydu). Değerler ya literal renk
+  // ya da çıplak `var(--token)`; opaklık gerekirse literal kullanılır.
+  deploy:      'var(--text2)',
+  config:      'var(--accent)',
   incident:    'rgba(220,38,38,0.70)',
   maintenance: 'rgba(217,119,6,0.65)',
 };

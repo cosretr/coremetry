@@ -196,13 +196,15 @@ function AnchorHeader({ ctx }: { ctx: CorrelationContext }) {
 }
 
 // joinKeyStyle resolves the colour + tooltip for the anchor join-key chip. The
-// three values mirror correlate.go's join* consts: trace_id (exact, green),
+// three values mirror correlate.go's join* consts: trace_id (exact, neutral),
 // exemplar (a real representative trace, accent), service+window (fuzzy, amber).
+// v0.10.929 (K5) — kesin eşleşme normal/sağlıklı durum: yeşil değil, nötr --text2;
+// renk yalnız sapmada (bulanık eşleşme amber).
 function joinKeyStyle(joinKey: string): { color: string; title: string } {
   switch (joinKey) {
     case 'trace_id':
       return {
-        color: 'var(--ok)',
+        color: 'var(--text2)',
         title: 'Exact cross-signal join on trace_id — no time fuzz.',
       };
     case 'exemplar':

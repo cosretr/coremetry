@@ -18,9 +18,10 @@ describe('replicaConsistency — saf', () => {
   it('her karar için ton ve etiket var; yapısal sorunlar kırmızı, gecikme sarı', () => {
     for (const v of VERDICTS) {
       expect(verdictLabel(v)).toBeTruthy();
-      expect(['b-ok', 'b-warn', 'b-err', 'b-gray']).toContain(verdictTone(v));
+      // v0.10.929 (K5) — hiçbir karar yeşil değil (tutarlı = sağlıklı hâl, nötr).
+      expect(['b-warn', 'b-err', 'b-gray']).toContain(verdictTone(v));
     }
-    expect(verdictTone('ok')).toBe('b-ok');
+    expect(verdictTone('ok')).toBe('b-gray');
     expect(verdictTone('lagging')).toBe('b-warn');
     for (const v of ['divergent', 'readonly', 'session_expired', 'missing_replica', 'not_replicated', 'no_replication'] as const) expect(verdictTone(v)).toBe('b-err');
     // Sıra sunucuyla aynı: no_replication en kötü; v0.10.818 yapısal üçlü oturumun üstünde.
@@ -376,20 +377,27 @@ describe('katalog kararları — v0.10.846', () => {
     expect(s.text).toBe('1 tablo tutarlı · 1 katalog dışı');
   });
 
-  // İKİSİ FARKLI ŞEY: `removed` geçici (bir sonraki boot siler) ve rozeti
-  // boyar; `unmanaged` kalıcı (operatörün kendi tablosu) ve kartı sonsuza
-  // dek griye kilitlememeli.
-  it('kalıcı katalog-dışı rozeti kilitlemez, geçici kalıntı boyar', () => {
+  // İKİSİ FARKLI ŞEY: `removed` geçici (bir sonraki boot siler) ve karara
+  // (worst) girer; `unmanaged` kalıcı (operatörün kendi tablosu) ve karara
+  // (worst/bad/ton) girmez — metinde yalnız "katalog dışı" sayısı olarak görünür.
+  // v0.10.929 (K5) — ok ve removed ikisi de b-gray: ton artık ayırmaz.
+  // Ayrım operatörün GÖRDÜĞÜ metinde ("kalıntı") ve `worst` kararında.
+  it('kalıcı katalog-dışı karara girmez, geçici kalıntı metinde görünür', () => {
+    // Katalog-dışı satır bilerek 'divergent': karara girseydi worst 'ok' kalamazdı.
     const only = summarize({ tables: [
       { table: 'a', shards: [], verdict: 'ok' },
-      { table: 'musteri_deneme', shards: [], verdict: 'ok', catalog: 'unmanaged' },
+      { table: 'musteri_deneme', shards: [], verdict: 'divergent', catalog: 'unmanaged' },
     ] });
-    expect(only.tone).toBe('b-ok');
+    expect(only.tone).toBe('b-gray');
+    expect(only.worst).toBe('ok');
+    expect(only.text).not.toContain('kalıntı');
     const withRemoved = summarize({ tables: [
       { table: 'a', shards: [], verdict: 'ok' },
       { table: 'feedbacks', shards: [], verdict: 'removed', catalog: 'removed', removedSince: 'v0.8.240' },
     ] });
     expect(withRemoved.tone).toBe('b-gray');
+    expect(withRemoved.worst).toBe('removed');
+    expect(withRemoved.text).toContain('kalıntı');
     const both = summarize({ tables: [
       { table: 'a', shards: [], verdict: 'ok' },
       { table: 'feedbacks', shards: [], verdict: 'removed', catalog: 'removed', removedSince: 'v0.8.240' },
@@ -447,7 +455,7 @@ describe('katalog dışı satır — replikalı unmanaged (v0.10.872)', () => {
     const s = summarize({ tables: [managedOk, unmanagedDiv] });
     expect(s.bad).toBe(0);
     expect(s.worst).toBe('ok');
-    expect(s.tone).toBe('b-ok');
+    expect(s.tone).toBe('b-gray'); // v0.10.929 (K5) — sağlıklı özet nötr
     expect(s.unmanaged).toBe(1);
   });
   it('runbook: divergent shard bile olsa katalog dışı satır SQL basmaz', () => {

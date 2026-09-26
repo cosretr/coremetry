@@ -365,7 +365,8 @@ export default function AdminStatsPage() {
                     const memUsed = n.osMemoryTotal > 0
                       ? Math.max(0, n.osMemoryTotal - n.osMemoryAvailable) : 0;
                     const memPct = n.osMemoryTotal > 0 ? (memUsed / n.osMemoryTotal) * 100 : 0;
-                    const memTone = memPct >= 90 ? 'var(--err)' : memPct >= 75 ? 'var(--warn)' : 'var(--ok)';
+                    // v0.10.929 (K5) — eşik altı doluluk nötr (clusters pctColor emsali); eşikler aynı.
+                    const memTone = memPct >= 90 ? 'var(--err)' : memPct >= 75 ? 'var(--warn)' : 'var(--text3)';
                     // The three CPU counters are sampled independently and
                     // DO sum past 100% in practice (observed 131% while
                     // load average was 2.15). Each is drawn on its own so
@@ -511,7 +512,8 @@ export default function AdminStatsPage() {
                     // Thresholds are about HEADROOM, not neatness: past
                     // 90% a merge can fail to find room for its output
                     // part, which stalls ingest rather than degrading it.
-                    const tone = pct >= 90 ? 'var(--err)' : pct >= 75 ? 'var(--warn)' : 'var(--ok)';
+                    // v0.10.929 (K5) — eşik altı doluluk nötr (clusters pctColor emsali).
+                    const tone = pct >= 90 ? 'var(--err)' : pct >= 75 ? 'var(--warn)' : 'var(--text3)';
                     return (
                       <div key={`${d.host}/${d.name}/${i}`}>
                         <div style={{

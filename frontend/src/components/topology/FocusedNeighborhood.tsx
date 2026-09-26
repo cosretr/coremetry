@@ -473,7 +473,8 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
 
       {/* ── health legend (bottom-left) ─────────────────────────────────── */}
       <div style={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3, display: 'inline-flex', gap: 12, fontSize: 10, color: 'var(--text3)', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
-        <Kind c="var(--ok)" l="healthy" /><Kind c="var(--warn)" l=">1% err" /><Kind c="var(--err)" l=">5% err" />
+        {/* v0.10.929 (K5) — lejant healthToken ile aynı: sağlıklı nötr. */}
+        <Kind c="var(--text3)" l="healthy" /><Kind c="var(--warn)" l=">1% err" /><Kind c="var(--err)" l=">5% err" />
       </div>
 
       {/* ── footer caption ──────────────────────────────────────────────── */}

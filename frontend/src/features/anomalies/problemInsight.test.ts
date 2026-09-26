@@ -24,7 +24,8 @@ describe('problemInsight', () => {
     const cells = insightCells({ ...base, hypothesisComputed: false, topSuspect: undefined, firstAnomaly: null, rollout: null, similar: null }, s => s);
     expect(cells[0].text).toBe('hipotez yok');
     expect(cells[1].text).toBe('—');
-    expect(cells[3]).toMatchObject({ text: 'ilk kez', tone: 'ok' });
+    // v0.10.929 (K5) — "ilk kez" sağlıklı/normal bilgi: nötr (muted), yeşil değil.
+    expect(cells[3]).toMatchObject({ text: 'ilk kez', tone: 'muted' });
     expect(insightCells(null, s => s)).toEqual([]);
   });
   it('süre / delta biçimi', () => {

@@ -192,11 +192,12 @@ export default function LoginPage() {
         {demoEnabled && (
           <div style={{
             marginBottom: 14, padding: '8px 12px', borderRadius: 6,
-            background: 'rgba(63,185,80,0.10)',
-            border: '1px solid rgba(63,185,80,0.35)',
+            // v0.10.929 (K5) — bilgi notu ne geçiş ne veri: yeşil literal yerine nötr token.
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
             color: 'var(--text2)', fontSize: 12, lineHeight: 1.4,
           }}>
-            <b style={{ color: 'var(--ok)' }}>Demo mode</b> — credentials are pre-filled,
+            <b style={{ color: 'var(--text)' }}>Demo mode</b> — credentials are pre-filled,
             just hit <i>Sign in</i>. Anyone with this URL has the same access.
           </div>
         )}

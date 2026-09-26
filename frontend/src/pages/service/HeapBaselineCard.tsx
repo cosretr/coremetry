@@ -25,7 +25,7 @@ import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 export const HEAP_STATUS: Record<string, { icon: string; label: string; tone: string }> = {
   critical:    { icon: '●', label: 'kritik sapma', tone: 'b-err' },
   deviating:   { icon: '▲', label: 'sapıyor',      tone: 'b-warn' },
-  ok:          { icon: '○', label: 'bant içinde',  tone: 'b-ok' },
+  ok:          { icon: '○', label: 'bant içinde',  tone: 'b-gray' }, // v0.10.929 (K5) — sağlıklı = nötr
   no_baseline: { icon: '◌', label: 'baseline yok', tone: 'b-gray' },
 };
 

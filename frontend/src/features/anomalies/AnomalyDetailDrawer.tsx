@@ -208,7 +208,8 @@ export function AnomalyDetailDrawer({ event, onClose }: {
   return (
     <Drawer onClose={onClose} width={560} header={
       <>
-        <Badge tone={event.status === 'active' ? 'danger' : 'success'} style={{ fontSize: 10 }}>
+        {/* v0.10.929 (K5) — ACTIVE normal durum → nötr; CLEARED geçiş, yeşil kalır. */}
+        <Badge tone={event.status === 'active' ? 'neutral' : 'success'} style={{ fontSize: 10 }}>
           {event.status === 'active' ? 'ACTIVE' : 'CLEARED'}
         </Badge>
         <span className="badge b-gray" style={{ fontSize: 10 }}>{KIND_LABEL[event.kind]}</span>

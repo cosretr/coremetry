@@ -8,9 +8,10 @@ import type { OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@
 const base: OracleScanCheck = { checked: true, tsColumn: 'ERR_TIMESTAMP', found: true, indexed: false, partitioned: false, numRows: 12000000 };
 
 describe('oracleProbe — tam tarama hükmü', () => {
-  it('indeks yeşil, partition yeşil, ikisi yok kırmızı, kontrol yok gri', () => {
-    expect(scanVerdict({ ...base, indexed: true, indexName: 'IX_TS' }).tone).toBe('b-ok');
-    expect(scanVerdict({ ...base, partitioned: true }).tone).toBe('b-ok');
+  it('indeks nötr, partition nötr, ikisi yok kırmızı, kontrol yok gri', () => {
+    // v0.10.929 (K5) — iyi yapılandırma hükmü nötr (b-gray), yeşil değil.
+    expect(scanVerdict({ ...base, indexed: true, indexName: 'IX_TS' }).tone).toBe('b-gray');
+    expect(scanVerdict({ ...base, partitioned: true }).tone).toBe('b-gray');
     const risk = scanVerdict({ ...base, partitionKey: 'ERR_TYPE' });
     expect(risk.tone).toBe('b-err');
     expect(risk.text).toBe('TAM TARAMA RİSKİ');
@@ -53,10 +54,10 @@ describe('oracleProbe — LONG kolon hükmü', () => {
     expect(v?.text).toContain('MCA_ERR_DETAIL');
     expect(v?.detail).toContain('yalnız eşlenen kolonlar');
   });
-  it('eşlenen kipte: eşlenen LONG kırmızı, eşlenmemiş LONG yeşil', () => {
+  it('eşlenen kipte: eşlenen LONG kırmızı, eşlenmemiş LONG nötr', () => {
     expect(longVerdict(l({ mappedOnly: true, columns: ['D'], selected: ['D'] }))?.tone).toBe('b-err');
     const ok = longVerdict(l({ mappedOnly: true, columns: ['D'], selected: [] }));
-    expect(ok?.tone).toBe('b-ok');
+    expect(ok?.tone).toBe('b-gray'); // v0.10.929 (K5)
     expect(ok?.detail).toBe('D');
   });
   it('LONG yoksa null; kontrol yoksa gri; sonuç yoksa null', () => {

@@ -71,7 +71,7 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
                     <td className="mono">{fmtDateTime(new Date(r.lastSeen))}</td>
                     <td>
                       {r.ownerName
-                        ? <Badge tone="success" title={r.ownerId}>{r.ownerName}</Badge>
+                        ? <Badge title={r.ownerId}>{r.ownerName}</Badge>
                         : <Badge tone="warning" title="Hiçbir Remote Cluster kaydı bu değeri taşımıyor">unmapped</Badge>}
                     </td>
                     <td>

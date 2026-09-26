@@ -163,8 +163,9 @@ export function ChannelsTab() {
                   <td className="mono" style={{ fontSize: 12 }}>{summarizeChannel(c)}</td>
                   <td><SeverityBadge s={c.minSeverity} /></td>
                   <td style={{ fontSize: 12 }} title="Kanalın aldığı olay türleri (boş = hepsi)">{kindsSummary(c.matchRules?.kinds)}</td>
+                  {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu: iki uç da nötr. */}
                   <td>{c.enabled
-                    ? <span className="badge b-ok">ON</span>
+                    ? <span className="badge b-gray">ON</span>
                     : <span className="badge b-gray">OFF</span>}
                   </td>
                   <td>
@@ -235,9 +236,10 @@ function HealthCell({ h, state }: { h?: ChannelHealthRow; state: 'loading' | 'er
   const when = fmtAgoNs(h.lastAt);
   const cappedNote = h.capped ? '\nNot: son 5000 kayıtla sınırlı — sayı bir ALT sınırdır.' : '';
   if (h.lastOk) {
+    // v0.10.929 (K5) — sağlıklı kanal nötr; renk yalnız HATA ×N'de.
     return (
       <span title={`Son başarılı gönderim: ${when}${cappedNote}`}>
-        <span className="badge b-ok">OK</span>
+        <span className="badge b-gray">OK</span>
         {' '}
         <span style={{ color: 'var(--text2)', fontSize: 12 }}>{when}</span>
       </span>

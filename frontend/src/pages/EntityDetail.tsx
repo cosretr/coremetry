@@ -79,7 +79,8 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
         ))}
         <span className="field-hint">›</span>
         <Badge tone="info" title={entity.id}>{entity.type === 'workload' ? `${entity.labels?.kind ?? 'workload'}/${entity.name}` : entity.name}</Badge>
-        {live === 'live' && <Badge tone="success">live</Badge>}
+        {/* v0.10.929 (K5) — 'live' olağan yaşam döngüsü: nötr; stale/gone renkli kalır. */}
+        {live === 'live' && <Badge>live</Badge>}
         {live === 'stale' && <Badge tone="warning" title="Son senkronda görülmedi; ömür henüz kapanmadı">stale</Badge>}
         {live === 'gone' && <Badge tone="danger">artık mevcut değil</Badge>}
       </Row>

@@ -18,11 +18,11 @@ import { useEvaluatorHealth } from '@/lib/queries';
 import type { EvaluatorHealth } from '@/lib/types';
 
 // tone — durumdan rozet sınıfına. Paylaşılan .badge tokenları
-// kullanılır (b-ok/b-warn/b-err/b-gray); elle renk yazılmaz, tema
+// kullanılır (b-warn/b-err/b-gray); elle renk yazılmaz, tema
 // değişince kendiliğinden doğru kalsın.
 function tone(status: EvaluatorHealth['status']): string {
   switch (status) {
-    case 'ok':      return 'b-ok';
+    case 'ok':      return 'b-gray';  // v0.10.929 (K5) — çalışıyor = sağlıklı durum, nötr; kelime taşır
     case 'stale':   return 'b-err';   // takılma = kırmızı: alarm üretimi durmuş olabilir
     case 'failing': return 'b-warn';
     default:        return 'b-gray';  // unknown — asla yeşil

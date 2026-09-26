@@ -19,8 +19,9 @@ import { serviceHref } from '@/lib/serviceHref';
 // useDataTable primitive (sortable + resizable). Operations comes from the
 // already-fetched service bundle; DB statements fetch once here.
 
+// v0.10.929 (K5) — sağlıklı dal nötr (b-gray); eşikler değişmedi, renk yalnız sapmaya.
 function errBadge(rate: number): string {
-  return `badge ${rate > 5 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-ok'}`;
+  return `badge ${rate > 5 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-gray'}`;
 }
 
 // ── Operations (compact) ────────────────────────────────────────────────

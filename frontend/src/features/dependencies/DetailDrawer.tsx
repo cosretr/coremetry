@@ -487,7 +487,8 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                   <DataTableHead dt={msgOpsDt} />
                   <tbody>
                     {msgOpsDt.sortedRows.map((o, i) => {
-                      const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'ok';
+                      // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
+                      const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
                       const missing = isOpMissing(o.operation);
                       return (
                         <tr key={`${o.operation}|${i}`}>

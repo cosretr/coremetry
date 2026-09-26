@@ -138,14 +138,16 @@ export default function AdminClusterPage() {
                           }}>
                             {m.id}
                           </span>
+                          {/* v0.10.929 (K5) — kimlik işareti (self) ne sağlık ne geçiş:
+                              b-gray tonunda nötr; biçim yandaki stale ile aynı kalır. */}
                           {m.isThisPod && (
                             <span style={{
                               marginLeft: 8, fontSize: 10,
                               padding: '1px 6px', borderRadius: 3,
-                              background: 'color-mix(in srgb, var(--ok) 15%, transparent)',
-                              color: 'var(--ok)',
+                              background: 'var(--bg3)',
+                              color: 'var(--text2)',
                               textTransform: 'uppercase',
-                              border: '1px solid color-mix(in srgb, var(--ok) 30%, transparent)',
+                              border: '1px solid var(--border)',
                             }}>this pod</span>
                           )}
                           {stale && (
