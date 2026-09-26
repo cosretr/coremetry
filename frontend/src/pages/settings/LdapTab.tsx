@@ -540,7 +540,7 @@ function GroupSyncStatus() {
                 kimlik eşleşmesi <b>%{(prev.matchRatio * 100).toFixed(0)}</b> ({prev.matched}/{prev.totalAliases})
               </div>
               {prev.warning && <FlashBox kind="err">{prev.warning}</FlashBox>}
-              <div className="table-wrap" style={{ maxHeight: 260, overflowY: 'auto' }}>
+              <div className="table-wrap is-scroll" style={{ maxHeight: 260 }}>
                 <table>
                   <thead><tr><th>Grup (CN)</th><th>Üye</th><th>Örnek üyeler</th></tr></thead>
                   <tbody>
@@ -647,7 +647,7 @@ function InspectPanel({ onPick }: { onPick: (attr: string, pattern: string) => v
               alanları dolduruldu; <b>Kaydet</b>'e basıp çıkış/giriş yapınca uygulanır.
             </div>
           )}
-          <div className="table-wrap" style={{ maxHeight: 360, overflowY: 'auto' }}>
+          <div className="table-wrap is-scroll" style={{ maxHeight: 360 }}>
             <table>
               <thead><tr><th>Attribute</th><th>Değer(ler)</th><th>Ekip adayları — tıkla, seç</th></tr></thead>
               <tbody>

@@ -628,7 +628,7 @@ function BreakdownTable({ title, rows, cols, onPickFirst }: {
       borderRadius: 6, padding: 12,
     }}>
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{title}</div>
-      <div className="table-wrap" style={{ maxHeight: 220, overflowY: 'auto' }}>
+      <div className="table-wrap is-scroll" style={{ maxHeight: 220 }}>
         <table>
           <thead><tr>
             {cols.map(c => <th key={c}>{c}</th>)}

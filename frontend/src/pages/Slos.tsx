@@ -252,7 +252,9 @@ function AutoSLOModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </Empty>
         )}
         {preview && proposed.length > 0 && (
-          <div className="table-wrap" style={{ maxHeight: '50vh' }}>
+          <div className="table-wrap is-scroll" style={{ maxHeight: '50vh' }}>
+            {/* v0.10.930 — is-scroll: kap kayar ve başlık yapışkan kalır; eskiden
+                satırlar 50vh'de kaydırma çubuğu olmadan kesiliyordu. */}
             <table>
               <thead><tr>
                 <th>Service</th><th>SLI</th><th>Target / Threshold</th><th>Baseline</th><th>Reason</th>

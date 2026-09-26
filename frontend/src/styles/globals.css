@@ -1355,6 +1355,13 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
    v0.9.697'den beri `position`ı satır içi YAZMIYOR (bilerek), yani
    primitife geçiş yapışkanlığı SESSİZCE düşürürdü — MT5'in ta kendisi,
    itirafı DetailDrawer.tsx'in kendi yorumunda duruyor. */
+.table-wrap.is-scroll {
+  /* v0.10.930 — iç kaydırmalı kap KENDİSİ kayar. Taban `.table-wrap`
+     `overflow-y: hidden`; `maxHeight` verilip bu unutulunca satırlar
+     kaydırma çubuğu olmadan KESİLİYORDU (Slos öneri önizlemesi). Altı
+     kullanıcı bunu satır içinde yazıyordu; kural artık sınıfta. */
+  overflow-y: auto;
+}
 .table-wrap.is-scroll thead th {
   position: sticky;
   top: 0;
