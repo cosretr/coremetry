@@ -62,10 +62,6 @@ func promptRegistry() map[string]promptClass {
 		"SlowQuery":         classDirective,
 		// ── Chat kademeleri (Faz 1.6'da internal/api'den taşındı)
 		"GuidedChat": classDirective, // kademe 1 — guided router narration
-		// v0.10.13 — talimatın kendisi Türkçe; cevabı BAĞLAMDAN harfi
-		// harfine kopyalatıyor (küçük model kendi adı yerine tanınmış bir
-		// marka söylemeye meyilli).
-		"SelfMeta":   classTurkishNative,
 		"DrawerChat": classDirective, // kademe 2 — explain-grounded çekmece
 		// ── Türkçe-native talimatlar. İkisi (RCAVerdict, ServiceAnalysis)
 		// JSON üretir ama talimatı Türkçedir: 2B dersi (copilot_aianalyze.go)
@@ -109,7 +105,6 @@ func promptTexts() map[string]string {
 		"Runbook": SystemPromptRunbook(), "CompareTraces": SystemPromptCompareTraces(),
 		"DeployImpact": SystemPromptDeployImpact(), "SLOBurn": SystemPromptSLOBurn(),
 		"SlowQuery": SystemPromptSlowQuery(), "GuidedChat": SystemPromptGuidedChat(),
-		"SelfMeta":       SystemPromptSelfMeta(),
 		"IntentClassify": SystemPromptIntentClassify(),
 		"GeneralChat":    SystemPromptGeneralChat(),
 		"DrawerChat":     SystemPromptDrawerChat(), "Chat": SystemPromptChat(),

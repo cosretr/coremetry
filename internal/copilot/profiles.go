@@ -349,6 +349,22 @@ func (s *Service) ProfilesSnapshot() (profiles []ModelProfile, defaultID string,
 	return s.profilesLocked(), s.defaultID, surface
 }
 
+// ModelFor — çağrının ÇÖZÜLEN profilindeki model (WithProfile > yüzey
+// haritası > grup kardeşi > varsayılan); alan boşsa sağlayıcının varsayılanı.
+// Profil kimlik taşımıyorsa ya da AI kapalıysa "". ActiveModel'in
+// profil-farkında hâli: "sen hangi modelsin" cevabı sohbetin GERÇEKTEN
+// kullandığı modeli söylesin (ActiveModel varsayılan profili okur).
+func (s *Service) ModelFor(ctx context.Context) string {
+	if !s.activeFor(ctx, true) {
+		return ""
+	}
+	p, m, _ := s.profileIdentity(ctx)
+	if m == "" {
+		m = s.DefaultModels()[p]
+	}
+	return m
+}
+
 // activeFor — çağrının ÇÖZÜLEN profili kimlik taşıyor mu (anahtar ya da
 // openai + base URL); ana anahtar ayrı. Active()'in profil-farkında hâli:
 // varsayılan anahtarsızken bile anahtarlı profil çalışır (#1).

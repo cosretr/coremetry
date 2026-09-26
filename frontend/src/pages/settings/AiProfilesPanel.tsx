@@ -151,7 +151,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
             {draft.provider === 'openai' && <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 12 }}><input type="checkbox" checked={draft.skipTls} onChange={e => setDraft({ ...draft, skipTls: e.target.checked })} /> TLS doğrulamasını atla (öz-imzalı yerel uç)</label>}
             <Row>
               <Field2 label="Max tokens" small hint="boş = küresel"><input value={draft.maxTokens} onChange={e => setDraft({ ...draft, maxTokens: e.target.value })} inputMode="numeric" /></Field2>
-              <Field2 label="Temperature" small hint="boş = küresel; 0 bir değerdir"><input value={draft.temperature} onChange={e => setDraft({ ...draft, temperature: e.target.value })} inputMode="decimal" /></Field2>
+              <Field2 label="Temperature" small hint="boş = küresel; 0 bir değerdir; Anthropic profillerinde uygulanmaz"><input value={draft.temperature} onChange={e => setDraft({ ...draft, temperature: e.target.value })} inputMode="decimal" /></Field2>
               <Field2 label="Timeout (s)" small hint="boş = küresel"><input value={draft.timeoutS} onChange={e => setDraft({ ...draft, timeoutS: e.target.value })} inputMode="numeric" /></Field2>
             </Row>
             {/* v0.10.534 (modelcaps) — düşünme anahtarı modelin ailesine göre gövdeye iner

@@ -85,7 +85,11 @@ func For(model string) Caps {
 	case strings.Contains(m, "gpt"):
 		return Caps{Family: FamilyGPT}
 	case strings.Contains(m, "claude"):
-		return Caps{Family: FamilyClaude}
+		// Claude 5 ailesi `thinking` alanı gönderilmediğinde de düşünür
+		// (Sonnet 5 / Opus 5 adaptive varsayılan, Fable 5.x hep açık): araç
+		// döngüsü thinking bloklarını geri oynatmalı, bütçe uyarısı da geçerli.
+		return Caps{Family: FamilyClaude, Reasoning: strings.Contains(m, "opus-5") ||
+			strings.Contains(m, "sonnet-5") || strings.Contains(m, "fable") || strings.Contains(m, "mythos")}
 	}
 	return Caps{Family: FamilyUnknown}
 }

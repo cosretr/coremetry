@@ -274,6 +274,11 @@ type guidedRoute struct {
 	EndpointOptions []endpointCandidate
 	// v0.10.479 (F4-2) — namespace_services: yalnız pod listesi ("bunun pod'ları").
 	FindPods bool
+	// DirectAnswer — netleştirme sorusu (hangi servis / hangi takım): aday
+	// listesi, soru ve çipler anlatımdan ÖNCE tamamen belli; metni sunucu
+	// kurar, anlatım çağrısı yapılmaz (modelin ekleyebileceği tek şey
+	// uydurma bir ad olurdu).
+	DirectAnswer string
 }
 
 // normalizeGuidedMsg lowercases for matching. Go's ToLower maps the
@@ -1718,6 +1723,13 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	if route.Intent == guidedHowTo { // v0.10.809 — LLM'siz yol tarifi
 		return s.guidedHowToAnswer(emit, route, question, ctxService)
 	}
+	if route.Intent == guidedSelfMeta { // LLM'siz: cevap yapılandırmada yazılı
+		n := emitGuidedStep(emit, "self_meta", "")
+		text := s.selfMetaAnswerTR(ctx)
+		emitGuidedStepResult(emit, n, "self_meta", text, nil)
+		emit("answer", map[string]any{"text": text, "suggestions": guidedSuggestions(route)})
+		return true, true
+	}
 	if route.Intent == guidedOpenPage {
 		links := dedupLinksByHref(guidedAnswerLinks(route, linkWindowBetween(from, to)))
 		ans := map[string]any{"text": openPageAnswerTR(route), "suggestions": guidedSuggestions(route), "links": links}
@@ -1791,8 +1803,6 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		evidence, sources, err = s.guidedMessagingBundle(ctx, emit, route.Service, from, to, rangeS)
 	case guidedTraceByID:
 		evidence, sources, err = s.guidedTraceBundle(ctx, emit, route.TraceID)
-	case guidedSelfMeta:
-		evidence, sources, err = s.guidedSelfMetaBundle(emit)
 	case guidedSpanByID:
 		evidence, sources, err = s.guidedSpanBundle(ctx, emit, route.SpanID, from, to)
 	case guidedRequestID:
@@ -1810,6 +1820,10 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		// route differently. The steps already emitted just render as
 		// extra progress chips.
 		return false, false
+	}
+	if route.DirectAnswer != "" { // netleştirme: girdi çıktıyı tam belirliyor
+		emit("answer", map[string]any{"text": route.DirectAnswer, "suggestions": guidedSuggestions(route)})
+		return true, true
 	}
 
 	// The ONE self-recording model call, via the surface-explicit
@@ -2408,7 +2422,8 @@ func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any),
 		// Artık takımı SORUYORUZ ve canlı takım listesini çip olarak
 		// sunuyoruz; operatör tıklayınca guidedTeamServices devralıyor.
 		return s.guidedAskTeamEvidence(ctx, route,
-			"Oturum kimliği yok (auth kapalı ya da token kullanıcıya bağlı değil), bu yüzden kullanıcının takımını KENDİM okuyamıyorum.\n")
+			"Oturum kimliği yok (auth kapalı ya da token kullanıcıya bağlı değil), bu yüzden kullanıcının takımını KENDİM okuyamıyorum.\n",
+			"Oturum kimliğini okuyamadığım için takımını bilemiyorum. ")
 	}
 	nTeam := emitGuidedStep(emit, "resolve_user_team", "")
 	u, uerr := s.store.GetUserByID(ctx, meta.UserID)
@@ -2419,7 +2434,8 @@ func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any),
 	}
 	if u.Team == "" {
 		ev, src, aerr := s.guidedAskTeamEvidence(ctx, route,
-			fmt.Sprintf("Kullanıcının (%s) hesabına takım atanmamış (admin Settings → Users → Team alanı bunu kalıcı çözer).\n", u.Email))
+			fmt.Sprintf("Kullanıcının (%s) hesabına takım atanmamış (admin Settings → Users → Team alanı bunu kalıcı çözer).\n", u.Email),
+			fmt.Sprintf("Hesabına (%s) takım atanmamış — admin Settings → Users → Team alanından atayabilir. ", u.Email))
 		emitGuidedStepResult(emit, nTeam, "resolve_user_team", ev, aerr)
 		return ev, src, aerr
 	}
@@ -2560,10 +2576,15 @@ const guidedTeamAskMax = 8
 // metni yeni bir kullanıcı mesajı olarak gönderir ve router çıplak takım
 // adını guidedTeamServices'e yönlendirir. Sunucuda konuşma durumu YOK —
 // tek dayanak "çıplak takım adı kendi başına yönlenebilir" olması.
-func (s *Server) guidedAskTeamEvidence(ctx context.Context, route *guidedRoute, why string) (string, string, error) {
+//
+// whyUser — aynı gerekçenin operatöre giden hâli: cevap metnini sunucu
+// kurar (route.DirectAnswer), anlatım çağrısı yapılmaz; kanıt metni ⚙
+// çipinin dayanağı olarak kalır.
+func (s *Server) guidedAskTeamEvidence(ctx context.Context, route *guidedRoute, why, whyUser string) (string, string, error) {
 	entries := s.guidedTeamCatalogue(ctx)
 	opts, _, _, _ := teamAskOptions(entries, guidedTeamAskMax) // v0.10.559 — tür dönüşümlü
 	route.TeamOptions = opts
+	route.DirectAnswer = askTeamAnswerTR(whyUser, entries, guidedTeamAskMax)
 	var b strings.Builder
 	b.WriteString(why)
 	if len(opts) == 0 {
@@ -2577,6 +2598,28 @@ func (s *Server) guidedAskTeamEvidence(ctx context.Context, route *guidedRoute, 
 	b.WriteString("Bu adlar cevabın altında ÇİP olarak da duruyor — tıklaması yeter; listede yoksa adı yazabileceğini de söyle. İki grubu da say (uygulama VE SRE).\n")
 	b.WriteString("KURAL: takım adı UYDURMA, yalnız yukarıdaki listeyi say.\n")
 	return b.String(), "servis kataloğu takım listesi (takım sorusu)", nil
+}
+
+// askTeamAnswerTR — SAF: takım sorusunun operatöre giden metni. İki grup
+// (uygulama VE SRE) ve "+N takım" satırı renderTeamAskEvidenceTR'den —
+// v0.10.559'un "yalnız SRE takımları sayıldı" düzeltmesi korunur.
+func askTeamAnswerTR(whyUser string, entries []mcptools.TeamCatalogueEntry, max int) string {
+	opts, _, _, _ := teamAskOptions(entries, max)
+	if len(opts) == 0 {
+		return whyUser + "Servis kataloğunda takım ataması yok; şimdilik belirli bir servis adıyla sorabilirsin. " +
+			"Kalıcı çözüm: Service Catalog'da takım atamak."
+	}
+	return whyUser + "Hangi takımdasın? Alttaki çiplerden birine tıkla ya da takım adını yaz; " +
+		"o takımın servislerini en çok hata alandan başlayarak getiririm.\n" + renderTeamAskEvidenceTR(entries, max)
+}
+
+// askServiceAnswerTR — SAF: servis netleştirme sorusunun operatöre giden metni.
+func askServiceAnswerTR(opts []string) string {
+	if len(opts) == 0 {
+		return "Servis adını çözemedim ve katalogda aday bulamadım. Servis adını yazar mısın? (Servisler sayfasından kopyalayabilirsin.)"
+	}
+	return fmt.Sprintf("Hangi servisi kastettin? Adaylar: %s. Alttaki çiplerden birine tıkla ya da listede yoksa adı yaz.",
+		strings.Join(opts, ", "))
 }
 
 // teamServicesMaxRows — kanıtta listelenen servis satırı tavanı. Üstü
@@ -3640,8 +3683,6 @@ func guidedNarrationPrompt(intent guidedIntent) string {
 	// farklı derinlikte anlatılırdı (v0.9.1131'in tam olarak bu kazası).
 	case guidedTraceByID, guidedSpanByID, guidedRequestID:
 		return copilot.SystemPromptTrace()
-	case guidedSelfMeta:
-		return copilot.SystemPromptSelfMeta()
 	}
 	return copilot.SystemPromptGuidedChat()
 }
@@ -3678,29 +3719,29 @@ func isSelfMetaQuestion(toks []string) bool {
 	return subject && identity
 }
 
-// guidedSelfMetaBundle — deterministik cevap; ClickHouse'a hiç gitmiyor.
+// selfMetaAnswerTR — asistanın kendisi hakkındaki soru; LLM'siz.
 //
-// Kanıt YAPILANDIRMADAN geliyor (ActiveModel), tahminden değil. Bu
-// önemli: küçük modeller "hangi modelsin" sorusuna kendi adı yerine
-// tanınmış bir markanın adını söylemeye meyilli. Kanıtı birebir vermek +
-// anlatıcıya "harfi harfine aktar" demek, o uydurmanın önündeki tek
-// gerçek engel.
+// Cevap YAPILANDIRMADA yazılı: bir anlatıcıya "model adını harfi harfine
+// kopyala" demek yerine metni sunucu kurar — küçük modelin adı tanınmış bir
+// markayla değiştirme riski kalmaz. Model adı sohbet yüzeyinin ÇÖZÜLEN
+// profilinden gelir (WithProfile > yüzey haritası > grup kardeşi >
+// varsayılan), anlatım çağrısının kullanacağı zincirin aynısı.
 //
-// Model adı sır DEĞİL (operatör Helm values'ına kendi yazıyor);
-// ActiveModel zaten yalnız modeli döndürüyor, baseURL/apiKey'i değil.
-func (s *Server) guidedSelfMetaBundle(emit func(string, any)) (string, string, error) {
-	emit("Yapılandırma okunuyor", nil)
+// Model adı sır DEĞİL (operatör Helm values'ına kendi yazıyor); ModelFor
+// yalnız modeli döndürür, baseURL/apiKey'i değil.
+func (s *Server) selfMetaAnswerTR(ctx context.Context) string {
 	model := ""
 	if s.copilot != nil {
-		model = s.copilot.ActiveModel()
+		m := copilot.MetaFromContext(ctx)
+		m.Surface = "chat-guided"
+		model = s.copilot.ModelFor(copilot.WithMeta(ctx, m))
 	}
 	if model == "" {
 		return "AI asistanı bu kurulumda YAPILANDIRILMAMIŞ (model seçilmemiş " +
-			"ya da sağlayıcı kapalı). Ayarlar → AI bölümünden yapılandırılır.", "", nil
+			"ya da sağlayıcı kapalı). Ayarlar → AI bölümünden yapılandırılır."
 	}
-	return "Bu kurulumda çalışan LLM modelinin adı TAM OLARAK şudur: " + model +
-		"\n\nAsistanın adı CoSRE'dir ve Coremetry'nin içine gömülüdür; " +
-		"telemetriyi (trace, log, metrik, problem) okuyup anlatır.", "", nil
+	return "Ben CoSRE: Coremetry'nin içine gömülü SRE asistanıyım; telemetriyi " +
+		"(trace, log, metrik, problem) okuyup anlatırım. Bu kurulumda çalışan model: `" + model + "`."
 }
 
 // evidenceAsOf — "kaç saat önce" hesabının DAYANAĞI (v0.10.65).
@@ -3785,6 +3826,7 @@ func (s *Server) guidedAskServiceEvidence(ctx context.Context, route *guidedRout
 	var b strings.Builder
 	b.WriteString("Operatörün sorusu bir SERVİS gerektiriyor ama adı çözülemedi ya da birden çok servise oturuyor.\n")
 	fmt.Fprintf(&b, "Soru: %q\n", strings.TrimSpace(question))
+	route.DirectAnswer = askServiceAnswerTR(route.ServiceOptions) // anlatım çağrısı yok
 	if len(route.ServiceOptions) == 0 {
 		b.WriteString("Katalogda aday yok. KULLANICIYA SÖYLE: servis adını yazsın (Servisler sayfasından kopyalayabilir).\n")
 		return b.String(), src, nil

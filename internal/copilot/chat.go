@@ -2,6 +2,7 @@ package copilot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -58,6 +59,9 @@ type ChatTurn struct {
 	CachedTokens uint32 // v0.10.807 — önek önbelleği; tur başına, döngü toplar
 	// ToolCallsFromText — v0.10.545: bkz. provider.ChatResponse.ToolCallsFromText.
 	ToolCallsFromText bool
+	// RawContent — Anthropic asistan turunun ham content'i; döngü onu
+	// ChatMessage.RawContent olarak geri besler (thinking blokları imzalı kalır).
+	RawContent json.RawMessage
 }
 
 type noToolCallsKey struct{}
@@ -164,6 +168,7 @@ func chatTurnFrom(r aiprov.ChatResponse) ChatTurn {
 		OutputTokens:      clampTokens(r.OutputTokens),
 		CachedTokens:      clampTokens(r.CachedTokens), // v0.10.807
 		ToolCallsFromText: r.ToolCallsFromText,
+		RawContent:        r.RawContent,
 	}
 }
 

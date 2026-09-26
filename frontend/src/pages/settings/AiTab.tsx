@@ -405,10 +405,11 @@ export function AITab() {
                  value={temperature} onChange={e => setTemperature(e.target.value)}
                  placeholder="0.2 (default)" style={{ width: '100%' }} />
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
-            Range <b>0–2</b>. Low keeps explanations reproducible, which is
-            what an APM wants — two operators reading the same incident
-            should get the same answer. Anthropic caps at 1 and rejects
-            higher; the provider, not Coremetry, enforces that.
+            Range <b>0–2</b>. Applies to OpenAI-compatible and GitHub
+            endpoints; strict-JSON surfaces on OpenAI-compatible endpoints
+            always run at 0. Anthropic requests never carry temperature
+            (current Claude models reject sampling parameters), so this
+            field has no effect on Anthropic profiles.
           </div>
         </Field>
 

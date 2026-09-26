@@ -320,9 +320,21 @@ func TestChatAnthropicTools_GoldenRequestBody(t *testing.T) {
 		t.Fatalf("headers: version=%q key=%q", h.Get("Anthropic-Version"), h.Get("X-Api-Key"))
 	}
 	b := rt.bodies[0]
-	if b["max_tokens"] != float64(8192) ||
-		b["system"] != "sys" || b["model"] != "claude-x" {
+	if b["max_tokens"] != float64(8192) || b["model"] != "claude-x" {
 		t.Fatalf("gövde = %v", b)
+	}
+	// Sistem tek blok + önbellek kesme noktası (araç kataloğu + sistem birlikte
+	// önbelleklenir); üst düzey cache_control büyüyen konuşmayı izler.
+	sys, _ := b["system"].([]any)
+	if len(sys) != 1 {
+		t.Fatalf("system = %v; want tek text bloğu", b["system"])
+	}
+	s0 := sys[0].(map[string]any)
+	if s0["text"] != "sys" || s0["cache_control"] == nil {
+		t.Fatalf("system bloğu = %v; want text=sys + cache_control", s0)
+	}
+	if b["cache_control"] == nil {
+		t.Fatalf("üst düzey cache_control yok: %v", b)
 	}
 	if _, has := b["tool_choice"]; has {
 		t.Fatalf("normal turda tool_choice gönderilmez: %v", b["tool_choice"])
@@ -344,6 +356,9 @@ func TestChatAnthropicTools_GoldenRequestBody(t *testing.T) {
 	}
 	if _, bad := tw["function"]; bad {
 		t.Fatalf("openai sarmalayıcısı anthropic gövdesine sızmış: %v", tw)
+	}
+	if tw["cache_control"] == nil {
+		t.Fatalf("son tool önbellek kesme noktası taşımalı: %v", tw)
 	}
 }
 
@@ -485,6 +500,31 @@ func TestParseAnthropicToolsChat_Refusal(t *testing.T) {
 	_, err := parseAnthropicToolsChat([]byte(`{"content":[],"stop_reason":"refusal","usage":{"input_tokens":5,"output_tokens":0}}`))
 	if err == nil || err.Error() != "anthropic: model isteği reddetti (stop_reason=refusal)" {
 		t.Fatalf("err = %v; want refusal hatası", err)
+	}
+}
+
+// TestChatAnthropicTools_RawContentReplay — ham asistan turu (thinking bloğu
+// imzasıyla) BİREBİR geri gider; RawContent'siz mesaj bugünkü kodlamayı korur.
+func TestChatAnthropicTools_RawContentReplay(t *testing.T) {
+	raw := json.RawMessage(`[{"type":"thinking","thinking":"x","signature":"SIG"},{"type":"tool_use","id":"tu_1","name":"list_problems","input":{}}]`)
+	resp, err := parseAnthropicToolsChat([]byte(`{"content":` + string(raw) + `,"usage":{}}`))
+	if err != nil || string(resp.RawContent) != string(raw) {
+		t.Fatalf("RawContent yakalanmadı: %q err=%v", resp.RawContent, err)
+	}
+	rt := &captureRT{body: `{"content":[],"usage":{}}`}
+	cfg := Config{APIKey: "k", Model: "claude-x", HTTPClient: newCaptureClient(rt)}
+	if _, err := ChatAnthropicTools(context.Background(), cfg, ChatRequest{System: "sys", Messages: []ChatMessage{
+		{Role: "user", Text: "q"},
+		{Role: "assistant", ToolCalls: resp.ToolCalls, RawContent: resp.RawContent},
+		{Role: "user", ToolResults: []ToolResult{{CallID: "tu_1", Name: "list_problems", Content: "{}"}}},
+	}}); err != nil {
+		t.Fatalf("ChatAnthropicTools: %v", err)
+	}
+	msgs, _ := rt.bodies[0]["messages"].([]any)
+	asst, _ := msgs[1].(map[string]any)
+	blocks, _ := asst["content"].([]any)
+	if len(blocks) != 2 || blocks[0].(map[string]any)["signature"] != "SIG" {
+		t.Fatalf("thinking bloğu imzasıyla tekrar oynatılmadı: %v", asst["content"])
 	}
 }
 

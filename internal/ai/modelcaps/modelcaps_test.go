@@ -21,7 +21,10 @@ func TestForAndExtraBody(t *testing.T) {
 		{"o3-mini", FamilyOSeries, true, ""},
 		{"gpt-5-mini", FamilyGPT, true, ""},
 		{"gpt-4o-mini", FamilyGPT, false, ""},
-		{"claude-sonnet-5", FamilyClaude, false, ""},
+		{"claude-sonnet-5", FamilyClaude, true, ""},
+		{"claude-opus-5", FamilyClaude, true, ""},
+		{"claude-fable-5-1", FamilyClaude, true, ""},
+		{"claude-sonnet-4-6", FamilyClaude, false, ""},
 		{"", FamilyUnknown, false, ""},
 		{"my-finetune", FamilyUnknown, false, ""},
 	}

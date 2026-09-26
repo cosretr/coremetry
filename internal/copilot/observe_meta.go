@@ -34,7 +34,6 @@ var promptVersionRegistry = map[string]string{
 	"systemAnomaly":              systemAnomaly,
 	"systemServiceHealth":        systemServiceHealth,
 	"systemRunbook":              systemRunbook,
-	"systemSelfMeta":             systemSelfMeta,
 	"systemCompareTraces":        systemCompareTraces,
 	"systemDeployImpact":         systemDeployImpact,
 	"systemSLOBurn":              systemSLOBurn,

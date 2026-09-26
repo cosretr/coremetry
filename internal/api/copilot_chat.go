@@ -582,6 +582,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		// call and feed results back as a user turn.
 		conv = append(conv, copilot.ChatMessage{
 			Role: "assistant", Text: turn.Text, ToolCalls: turn.ToolCalls,
+			RawContent: turn.RawContent, // Anthropic thinking blokları imzalı geri gider
 		})
 		results := make([]copilot.ToolResult, 0, len(turn.ToolCalls))
 		run, over := splitByCallBudget(turn.ToolCalls, callsLeft)

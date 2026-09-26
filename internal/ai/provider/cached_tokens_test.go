@@ -30,7 +30,9 @@ func TestParseAnthropicCachedTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.InputTokens != 900 || r.CachedTokens != 800 {
+	// InputTokens = TOPLAM giriş (openai prompt_tokens ile aynı anlam):
+	// kuyruk 900 + önbellekten okunan 800.
+	if r.InputTokens != 1700 || r.CachedTokens != 800 {
 		t.Errorf("usage: %+v", r)
 	}
 }
@@ -47,7 +49,7 @@ func TestOpenAIStreamAccumCachedTokens(t *testing.T) {
 func TestAnthropicStreamAccumCachedTokens(t *testing.T) {
 	var a anthropicStreamAccum
 	a.feed(`data: {"type":"message_start","message":{"usage":{"input_tokens":50,"cache_read_input_tokens":40}}}`)
-	if a.inTokens != 50 || a.cached != 40 {
+	if a.inTokens != 90 || a.cached != 40 {
 		t.Errorf("acc: in=%d cached=%d", a.inTokens, a.cached)
 	}
 }

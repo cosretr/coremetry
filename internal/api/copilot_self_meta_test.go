@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -84,21 +85,15 @@ func TestSelfMetaRoutes(t *testing.T) {
 	}
 }
 
-// TestSelfMetaBundleIsDeterministic — kanıt YAPILANDIRMADAN gelir.
+// TestSelfMetaAnswerIsDeterministic — cevap YAPILANDIRMADAN, LLM'siz kurulur.
 //
 // AI yapılandırılmamışken bile ölü bir cevap dönmemeli: "bilgi yok"
 // yerine "yapılandırılmamış" demek, operatöre ne yapacağını söyler.
-func TestSelfMetaBundleIsDeterministic(t *testing.T) {
+func TestSelfMetaAnswerIsDeterministic(t *testing.T) {
 	var s Server // copilot nil — yapılandırılmamış kurulum
-	ev, src, err := s.guidedSelfMetaBundle(func(string, any) {})
-	if err != nil {
-		t.Fatalf("hata: %v", err)
-	}
-	if src != "" {
-		t.Errorf("kaynak = %q; bu rota ClickHouse'a gitmiyor, kaynak olmamalı", src)
-	}
+	ev := s.selfMetaAnswerTR(context.Background())
 	if ev == "" {
-		t.Fatal("kanıt boş — RAG'daki ölü cevabın aynısı")
+		t.Fatal("cevap boş — RAG'daki ölü cevabın aynısı")
 	}
 	// "Yüklü dokümanlarda bu bilgi yok" cevabının TERSİ: ne olduğunu ve
 	// ne yapılacağını söylüyor.

@@ -314,10 +314,7 @@ func (a *anthropicStreamAccum) feed(line string) string {
 	var ev struct {
 		Type    string `json:"type"`
 		Message *struct {
-			Usage struct {
-				InputTokens          int `json:"input_tokens"`
-				CacheReadInputTokens int `json:"cache_read_input_tokens"` // v0.10.807
-			} `json:"usage"`
+			Usage anthropicUsage `json:"usage"`
 		} `json:"message"`
 		Delta *struct {
 			Type       string `json:"type"`
@@ -339,7 +336,7 @@ func (a *anthropicStreamAccum) feed(line string) string {
 	switch ev.Type {
 	case "message_start":
 		if ev.Message != nil {
-			a.inTokens = ev.Message.Usage.InputTokens
+			a.inTokens = ev.Message.Usage.totalInput() // buffered yolla aynı anlam: TOPLAM giriş
 			a.cached = ev.Message.Usage.CacheReadInputTokens
 		}
 	case "content_block_delta":

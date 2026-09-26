@@ -74,6 +74,15 @@ type ChatMessage struct {
 	Text        string       `json:",omitempty"`
 	ToolCalls   []ToolCall   `json:",omitempty"`
 	ToolResults []ToolResult `json:",omitempty"`
+	// RawContent — Anthropic asistan turunun HAM content dizisi (thinking +
+	// text + tool_use, imzalarıyla). Doluysa BİREBİR tekrar oynatılır:
+	// düşünen modeller (Sonnet 5 / Opus 5 thinking alanı yokken de düşünür,
+	// Fable 5.1 hep düşünür) düşürülmüş ya da değiştirilmiş thinking bloğunu
+	// sonraki turda reddeder. ToolCall.Raw'ın (Gemini thought_signature,
+	// v0.8.373) Anthropic ikizi; openai-compat yolunda ve eski mesajlarda nil.
+	// json:"-": yalnız sunucu döngüsünün içinde yaşar — istemcinin gönderdiği
+	// sohbet gövdesinden ham blok enjekte edilemez.
+	RawContent json.RawMessage `json:"-"`
 }
 
 // ChatRequest — çok turlu, tool'lu tek bir model çağrısının girdileri.
@@ -108,6 +117,9 @@ type ChatResponse struct {
 	InputTokens       int
 	OutputTokens      int
 	CachedTokens      int // v0.10.807 — bkz. Response.CachedTokens
+	// RawContent — Anthropic yanıtının ham content dizisi; bir sonraki turda
+	// ChatMessage.RawContent olarak aynen geri gider (thinking blokları dâhil).
+	RawContent json.RawMessage
 }
 
 func (r ChatRequest) resolvedModel(cfg Config, fallback string) string {
@@ -166,6 +178,12 @@ func ChatAnthropicTools(ctx context.Context, cfg Config, req ChatRequest) (ChatR
 func buildAnthropicToolsBody(cfg Config, req ChatRequest) map[string]any {
 	apiMsgs := make([]map[string]any, 0, len(req.Messages))
 	for _, m := range req.Messages {
+		if m.Role == "assistant" && len(m.RawContent) > 0 {
+			// Ham asistan turu BİREBİR: thinking blokları imzalarıyla birlikte
+			// döner; yeniden kurmak onları düşürür ve düşünen model 400 verir.
+			apiMsgs = append(apiMsgs, map[string]any{"role": "assistant", "content": m.RawContent})
+			continue
+		}
 		var blocks []map[string]any
 		if m.Text != "" {
 			blocks = append(blocks, map[string]any{"type": "text", "text": m.Text})
@@ -187,10 +205,18 @@ func buildAnthropicToolsBody(cfg Config, req ChatRequest) map[string]any {
 	}
 
 	apiTools := make([]map[string]any, 0, len(req.Tools))
-	for _, t := range req.Tools {
-		apiTools = append(apiTools, map[string]any{
+	for i, t := range req.Tools {
+		def := map[string]any{
 			"name": t.Name, "description": t.Description, "input_schema": t.InputSchema,
-		})
+		}
+		if i == len(req.Tools)-1 {
+			// Araçlar sistemden ÖNCE işlenir; deterministik sıralı katalog
+			// tek kesme noktasıyla alışverişler ARASINDA da önbelleklenir
+			// (sistem, istek-başı önsözler taşıdığından alışverişten alışverişe
+			// değişir).
+			def["cache_control"] = map[string]any{"type": "ephemeral"}
+		}
+		apiTools = append(apiTools, def)
 	}
 
 	body := map[string]any{
@@ -200,8 +226,14 @@ func buildAnthropicToolsBody(cfg Config, req ChatRequest) map[string]any {
 		// v0.9.1120 — sabit operatör-ayarlı bir getter'a dönüştü ve
 		// temperature eklendi (anthropic gövdeleri hiç taşımıyordu, yani
 		// bu yol sağlayıcı varsayılanı ≈1.0'da koşuyordu).
-		"max_tokens": req.resolvedMaxTokens(), "system": req.System,
-		"messages": apiMsgs, "tools": apiTools,
+		"max_tokens": req.resolvedMaxTokens(),
+		// Sistem + araç kataloğu bir alışverişin turları boyunca bayt-bayt
+		// aynı; bu kesme noktası ikisini birlikte önbellekler. Üst düzey
+		// cache_control büyüyen konuşmayı izler (otomatik önbellek). Eşiğin
+		// altındaki önek sessizce önbelleklenmez.
+		"system":        []map[string]any{{"type": "text", "text": req.System, "cache_control": map[string]any{"type": "ephemeral"}}},
+		"cache_control": map[string]any{"type": "ephemeral"},
+		"messages":      apiMsgs, "tools": apiTools,
 	}
 	if req.NoToolCalls && len(apiTools) > 0 {
 		// Tur tavanı: tanımlar kalır (geçmişteki tool_use/tool_result bloklarının
@@ -214,32 +246,37 @@ func buildAnthropicToolsBody(cfg Config, req ChatRequest) map[string]any {
 
 func parseAnthropicToolsChat(respBody []byte) (ChatResponse, error) {
 	var parsed struct {
-		Content []struct {
-			Type  string          `json:"type"`
-			Text  string          `json:"text"`
-			ID    string          `json:"id"`
-			Name  string          `json:"name"`
-			Input json.RawMessage `json:"input"`
-		} `json:"content"`
-		StopReason string `json:"stop_reason"`
-		Usage      struct {
-			InputTokens          int `json:"input_tokens"`
-			OutputTokens         int `json:"output_tokens"`
-			CacheReadInputTokens int `json:"cache_read_input_tokens"` // v0.10.807
-		} `json:"usage"`
+		Content    json.RawMessage `json:"content"`
+		StopReason string          `json:"stop_reason"`
+		Usage      anthropicUsage  `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return ChatResponse{}, fmt.Errorf("decode anthropic chat: %w", err)
 	}
-	out := ChatResponse{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens,
+	out := ChatResponse{InputTokens: parsed.Usage.totalInput(), OutputTokens: parsed.Usage.OutputTokens,
 		CachedTokens: parsed.Usage.CacheReadInputTokens}
 	// ParseAnthropic ile aynı sözleşme (v0.10.253 D3): ret açık hatadır, boş
 	// nihai cevap değil — araç döngüsü onu "cevap" sanıp künyeyle basıyordu.
 	if parsed.StopReason == "refusal" {
 		return out, errAnthropicRefusal
 	}
+	var blocks []struct {
+		Type  string          `json:"type"`
+		Text  string          `json:"text"`
+		ID    string          `json:"id"`
+		Name  string          `json:"name"`
+		Input json.RawMessage `json:"input"`
+	}
+	if len(parsed.Content) > 0 {
+		if err := json.Unmarshal(parsed.Content, &blocks); err != nil {
+			return ChatResponse{}, fmt.Errorf("decode anthropic chat content: %w", err)
+		}
+	}
+	if len(blocks) > 0 {
+		out.RawContent = parsed.Content
+	}
 	var text strings.Builder
-	for _, c := range parsed.Content {
+	for _, c := range blocks {
 		switch c.Type {
 		case "text":
 			text.WriteString(c.Text)

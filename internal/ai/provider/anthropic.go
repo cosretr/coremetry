@@ -124,12 +124,8 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
-		StopReason string `json:"stop_reason"`
-		Usage      struct {
-			InputTokens          int `json:"input_tokens"`
-			OutputTokens         int `json:"output_tokens"`
-			CacheReadInputTokens int `json:"cache_read_input_tokens"` // v0.10.807
-		} `json:"usage"`
+		StopReason string         `json:"stop_reason"`
+		Usage      anthropicUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return Response{}, fmt.Errorf("decode anthropic response: %w", err)
@@ -138,7 +134,7 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 	// metin + stop_reason=refusal döner. Boş panel değil, açık hata —
 	// çağıran salvage/yeniden deneme yerine operatöre söyler.
 	if parsed.StopReason == "refusal" {
-		return Response{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens, CachedTokens: parsed.Usage.CacheReadInputTokens},
+		return Response{InputTokens: parsed.Usage.totalInput(), OutputTokens: parsed.Usage.OutputTokens, CachedTokens: parsed.Usage.CacheReadInputTokens},
 			errAnthropicRefusal
 	}
 	var out strings.Builder
@@ -152,7 +148,7 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 	// Bu, taşınan davranış; değiştirmek ayrı bir ürün kararı olurdu.
 	return Response{
 		Text:         out.String(),
-		InputTokens:  parsed.Usage.InputTokens,
+		InputTokens:  parsed.Usage.totalInput(),
 		OutputTokens: parsed.Usage.OutputTokens,
 		CachedTokens: parsed.Usage.CacheReadInputTokens, // v0.10.807
 	}, nil
@@ -161,3 +157,19 @@ func ParseAnthropic(respBody []byte) (Response, error) {
 // errAnthropicRefusal — stop_reason=refusal'ın TEK metni (buffered, akış ve
 // araç yolu aynı cümleyi döndürür; ClassifyAIErrorText "reddetti"ye bakar).
 var errAnthropicRefusal = errors.New("anthropic: model isteği reddetti (stop_reason=refusal)")
+
+// anthropicUsage — Messages usage bloğu. input_tokens YALNIZ son kesme
+// noktasından sonraki kuyruktur; önbellekten okunan ve önbelleğe yazılan
+// kısım ayrı alanlarda gelir. openai prompt_tokens (önbellekli dâhil TOPLAM
+// giriş) ile aynı anlam için üçü toplanır — yoksa önbellek açıldığında /ai
+// prompt boyunu eksik, önbellek yüzdesini şişik gösterir.
+type anthropicUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"` // v0.10.807
+}
+
+func (u anthropicUsage) totalInput() int {
+	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+}

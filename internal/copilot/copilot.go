@@ -104,7 +104,9 @@ type Service struct {
 	// explain, github explain and anthropic stream (the v0.8.138 /
 	// v0.8.393 budget lift never reached them), and temperature was
 	// 0.2 on openai/github but ABSENT from every anthropic body
-	// (provider default ~1.0). Both gaps close here.
+	// (provider default ~1.0). max_tokens now shares one default;
+	// temperature reaches only the openai-compat and github bodies
+	// (v0.10.253 D1: the Anthropic bodies never carry it).
 	maxTokens int
 	// temperature is a POINTER for the same reason `enabled` is:
 	// 0 is a VALID temperature (fully deterministic), so a plain
@@ -408,10 +410,10 @@ const (
 	// rationale; the point of the alias is that anthropic and github
 	// now share it instead of their own 1024.
 	defaultMaxTokens = openAICompletionTokens
-	// defaultTemperature — 0.2 was already the openai/github literal.
-	// Applying it to anthropic too is a deliberate BEHAVIOUR CHANGE
-	// (provider default ≈1.0 → 0.2): an APM explanation should be
-	// reproducible, not creative.
+	// defaultTemperature — openai-compat / github default: an APM
+	// explanation should be reproducible, not creative. The Anthropic
+	// body never carries temperature (sampling params 400 on current
+	// Claude models; v0.10.253 D1).
 	defaultTemperature = 0.2
 	// defaultTimeout — local LLMs (Ollama loading a 70B model,
 	// llama.cpp on CPU) can take 60+ seconds for a first generation.
@@ -427,10 +429,8 @@ const (
 	// accepts the value and a stray zero would be expensive.
 	minMaxTokens = 256
 	maxMaxTokens = 32768
-	// 0..2 is the openai-compat range. Anthropic caps at 1 and 400s
-	// above it — we let the PROVIDER reject that rather than guessing
-	// here which provider the operator is pointed at, because the knob
-	// is stored once and the provider can change under it.
+	// 0..2 is the openai-compat range. The Anthropic path ignores this
+	// knob entirely (no temperature is sent), so no Anthropic cap applies.
 	minTemperature = 0.0
 	maxTemperature = 2.0
 	// Under 10s a local-LLM cold load (Ollama pulling a 70B into RAM)
