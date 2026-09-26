@@ -574,7 +574,7 @@ export default function EndpointsPage() {
             style={{ fontSize: 12 }}
             aria-label="Veri kaynağı"
             title={src === 'metric'
-              ? 'Kaynak: metrik — OTel HTTP server histogramı (VM ya da ClickHouse), örneklemeden bağımsız tam sayım; ⚡/✖ exemplar yok, p90 yok'
+              ? 'Kaynak: metrik — OTel HTTP server histogramı (VM ya da ClickHouse), örneklemeden bağımsız tam sayım; p90 yok'
               : 'Kaynak: span — spanmetrics_1m (izlerden türetilmiş); collector örnekliyorsa eksik sayar'}>
             <option value="span">Kaynak: span</option>
             <option value="metric">Kaynak: metrik</option>
@@ -902,41 +902,16 @@ export default function EndpointsPage() {
                                 v0.10.6 (operatör: "mavi olabilir Traces
                                 butonu") — `.sec` → `.accent`, v0.9.1372'de
                                 detay sayfalarının pivotlarına yapılanın
-                                aynısı. Komşu ⚡/✖ ANLAMSAL renkte kalıyor
-                                (yavaş/hatalı örnek); onları maviye çevirmek
-                                taşıdıkları bilgiyi silerdi. */}
+                                aynısı. */}
                             <Link to={tracesLink(r, range, env, cluster)} className="accent"
                                   style={{ fontSize: 11, padding: '2px 8px' }}>
                               Traces →
                             </Link>
-                            {/* v0.9.310 (brief N3) — jump STRAIGHT to the
-                                slowest / worst-error trace for this route.
-                                "view →" lands on a filtered list the
-                                operator must then re-scan by eye; these two
-                                ids are already in the MV's argMax exemplar
-                                states, so the row read costs nothing extra
-                                to carry them.
-
-                                Rendered only when present. Empty means "no
-                                exemplar in this window" — forward-only
-                                states, a healthy window, or the raw
-                                cluster/env path which has no states at all
-                                — and a disabled placeholder would imply a
-                                trace exists that we won't show. */}
-                            {r.slowTraceId && (
-                              <Link to={traceHref(r.slowTraceId, { pageRange: range })}
-                                    title="Open the SLOWEST trace of this endpoint in the selected window. Falls outside the window? The trace may have aged past span retention — the MV keeps exemplars longer than the raw spans."
-                                    style={{ fontSize: 11, color: 'var(--warn)', textDecoration: 'none' }}>
-                                ⚡
-                              </Link>
-                            )}
-                            {r.errorTraceId && (
-                              <Link to={traceHref(r.errorTraceId, { pageRange: range })}
-                                    title="Open the slowest ERRORED trace of this endpoint in the selected window."
-                                    style={{ fontSize: 11, color: 'var(--err)', textDecoration: 'none' }}>
-                                ✖
-                              </Link>
-                            )}
+                            {/* v0.10.946 (operatör: "en sağdaki çarpı ve şimşek ikonlarına gerek
+                                yok, direkt Traces diyebilir") — satırın en yavaş (⚡) ve en
+                                yavaş hatalı (✖) trace kısayolları KALDIRILDI; satırın tek
+                                açılış hedefi Traces (tablo standardı S5). Exemplar kimlikleri
+                                API'de duruyor; endpoint detay sayfası onları göstermeye devam eder. */}
                             {/* v0.10.705 — bu route için eşik alarmı (editör/admin). */}
                             {canEditRules && entry === 'http' && (
                               <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
@@ -972,8 +947,7 @@ export default function EndpointsPage() {
                 rotasız client span'leri listeye katılıyor, exemplar
                 kısayolları ise hiç gelmiyor. Bugüne dek sayfa bunu
                 söylemiyordu; aynı filtreyi açıp kapatan operatör satır
-                sayısının neden oynadığını ve ⚡/✖ ikonlarının neden
-                kaybolduğunu tahmin etmek zorundaydı. Not YALNIZ gerçekten
+                sayısının neden oynadığını tahmin etmek zorundaydı. Not YALNIZ gerçekten
                 ham yoldayken çıkar — her sayfada duran bir uyarı, hiçbir
                 sayfada okunmayan bir uyarıdır. */}
             {(metricNote ?? sourceNote) && (

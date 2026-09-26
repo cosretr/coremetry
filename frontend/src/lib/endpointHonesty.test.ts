@@ -178,9 +178,12 @@ describe('endpointsSourceNote', () => {
     const n = endpointsSourceNote('prod-eu', 'uat')!;
     expect(n).toContain('env + cluster');
   });
-  it('her hâlinde iki popülasyon farkını da söyler', () => {
+  // v0.10.946 — liste sayfasındaki ⚡/✖ exemplar kısayolları kaldırıldı; not
+  // artık yalnız operatörün gördüğü farkı (rotasız client span'leri) söyler.
+  it('her hâlinde popülasyon farkını söyler, kaldırılan kısayollardan söz etmez', () => {
     const n = endpointsSourceNote('c', '')!;
-    expect(n).toContain('exemplar');
     expect(n.toLowerCase()).toContain('client');
+    expect(n).not.toContain('⚡');
+    expect(n).not.toContain('kısayol');
   });
 });

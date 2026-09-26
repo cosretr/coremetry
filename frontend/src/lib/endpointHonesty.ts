@@ -184,9 +184,8 @@ export function toggleExpanded(cur: Set<string>, key: string): Set<string> {
  *   · pathExpr'in url.path / http.target katmanları devreye giriyor ve
  *     rotasız client span'leri (endpointKindPred'in v0.8.560 carve-out'u)
  *     listeye KATILIYOR — MV yolunda bu satırlar yok;
- *   · MV'nin argMax exemplar state'leri ham yolda YOK, yani ⚡/✖ trace
- *     kısayolları hiç gelmiyor ("bu pencerede yavaş trace yok" diye
- *     okunuyordu, oysa cevap "bu yolda exemplar tutulmuyor").
+ *   (v0.10.946 — liste sayfasındaki ⚡/✖ exemplar kısayolları kaldırıldı;
+ *   notun onlarla ilgili cümlesi de gitti.)
  */
 export function endpointsSourceNote(cluster?: string, env?: string): string | null {
   const dims: string[] = [];
@@ -198,7 +197,6 @@ export function endpointsSourceNote(cluster?: string, env?: string): string | nu
     `Kaynak: HAM spans — ${which} filtresi spanmetrics rollup'ında olmayan ` +
     'bir boyut, okuma ham span\'lere düşüyor. Bu liste MV yolunun birebir ' +
     'aynısı DEĞİL: rotasız client span\'leri (url.path / http.target) buraya ' +
-    'dahil olur ve exemplar kısayolları (⚡ / ✖) hiç gelmez — argMax ' +
-    'exemplar state\'leri yalnız MV\'de yaşıyor.'
+    'dahil olur.'
   );
 }
