@@ -188,3 +188,50 @@ describe('Rollouts Canlı — durumlar tablonun içinde', () => {
     expect(t.querySelector('tbody tr[data-dt-state="empty"]')).toBeNull();
   });
 });
+
+// v0.10.984 — Rollouts v2 P2.3: sunucu `v2: true` döndürünce v2 kolon seti
+// (karar 4: Kaynak/detectedBy ve Span yok, Nesil var) ayrı storageKey'le;
+// v1 cevabında kolonlar bugünkü gibi. Satır kimliği / çekmece bağlantısı 6
+// parça. Kapalı durum sayfa adını söyler.
+describe('Rollouts Canlı — v2 kaynağı (P2.3)', () => {
+  const liveTable = (el: HTMLElement) => el.querySelector('.table-wrap table')!;
+  const heads = (el: HTMLElement) => Array.from(liveTable(el).querySelectorAll('thead th')).map(th => th.textContent ?? '');
+  const V2ROW: WorkloadRollout = {
+    ...ROLLOUT, revision: 'checkout-8b2d', detectedBy: 'ksm', spanCount: 0, generation: 7, incarnationAt: 1_757_990_000_000,
+    changeType: 'rollout', v2Status: 'succeeded', specReplicas: 3, updatedReplicas: 3, availableReplicas: 3,
+  };
+
+  it('v1 cevabı: Span + Kaynak kolonları, Nesil yok', () => {
+    h.list = { data: LIST, isPending: false, error: null };
+    const hs = heads(mount('/rollouts'));
+    expect(hs.some(x => x.includes('Span'))).toBe(true);
+    expect(hs.some(x => x.includes('Kaynak'))).toBe(true);
+    expect(hs.some(x => x.includes('Nesil'))).toBe(false);
+  });
+
+  it('v2 cevabı: Kaynak ve Span düşer, Nesil + replika; hücre sayısı başlıkla eşit', () => {
+    h.list = { data: { ...LIST, rollouts: [V2ROW], v2: true }, isPending: false, error: null };
+    const el = mount('/rollouts');
+    const hs = heads(el);
+    expect(hs.some(x => x.includes('Span'))).toBe(false);
+    expect(hs.some(x => x.includes('Kaynak'))).toBe(false);
+    expect(hs.some(x => x.includes('Nesil'))).toBe(true);
+    const row = dataRows(liveTable(el))[0];
+    expect(row.querySelectorAll('td')).toHaveLength(hs.length);
+    expect(row.textContent).toContain('3/3/3');
+    expect(row.textContent).toContain('Deployment'); // değişiklik türü change_type'tan
+  });
+
+  it('v2 boş liste: dedektör metni (sunucu notu yoksa)', () => {
+    h.list = { data: { ...LIST, rollouts: [], v2: true }, isPending: false, error: null };
+    const el = mount('/rollouts');
+    expect(liveTable(el).querySelector('tbody tr[data-dt-state="empty"]')!.textContent).toContain('KSM dedektörü');
+  });
+
+  it('kapalı: sayfa adı «Deployment/Rollouts kapalı», Ayarlar sekmesine yönlendirmez', () => {
+    h.list = { data: { disabled: true } as RolloutListResponse, isPending: false, error: null };
+    const el = mount('/rollouts');
+    expect(el.textContent).toContain('Deployment/Rollouts kapalı');
+    expect(el.textContent).not.toContain('Settings → Rollouts');
+  });
+});

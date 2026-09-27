@@ -15,6 +15,12 @@ package api
 // sayfa değil). Rol kapısı yok (rapor da açıktı; viewer okur).
 // serveCached 30 s; pencereler now'a çapalı → anahtar 30 s zaman kovası
 // taşır (yoksa aynı anahtar sonsuza dek ilk cevabı servis ederdi).
+//
+// v0.10.984 (Rollouts v2 P2.3): source="v2" iken 6 parçalı anahtar
+// (&kind=&incarnationAt=<ms>&generation=) rollout_events satırını açar;
+// servisler iş yükü düzeyinde çözülür (v2 revizyonu STS/DS'de MV
+// revizyonuyla eşleşmez — rollout_services.go). 5 parçalı eski bağlantı
+// her iki kaynakta da workload_rollouts'tan açılır (karar 14).
 
 import (
 	"context"
@@ -24,6 +30,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/rollout"
 )
 
 // RolloutDetail — çekmece yükü. Since/Generated NANOSANİYE (rollout.startedAt
@@ -43,6 +50,15 @@ func (s *Server) getRolloutDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+	src := s.rolloutSource()
+	if v2id, present, perr := parseRolloutV2ID(q); present && src == rollout.SourceV2 {
+		if perr != nil {
+			writeJSONError(w, http.StatusBadRequest, perr.Error())
+			return
+		}
+		s.getRolloutDetailV2(w, r, v2id)
+		return
+	}
 	id := chstore.RolloutID{
 		ClusterID: strings.TrimSpace(q.Get("cluster")),
 		Namespace: strings.TrimSpace(q.Get("namespace")),
@@ -60,9 +76,9 @@ func (s *Server) getRolloutDetail(w http.ResponseWriter, r *http.Request) {
 	if haveCluster {
 		id.ClusterID = c.EffectiveID()
 	}
-	key := rolloutDetailKey(id, time.Now())
+	key := rolloutDetailKey(src, id, time.Now())
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		row, err := s.store.RolloutByID(ctx, id)
+		row, err := rolloutReaderOf(s).RolloutByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -72,12 +88,50 @@ func (s *Server) getRolloutDetail(w http.ResponseWriter, r *http.Request) {
 		if !haveCluster {
 			// Satır registry kimliği taşır, MV span DEĞERİ taşır: kayıt yoksa
 			// (silinmiş/kapalı cluster) çeviri imkânsız — MV'yi suçlamadan söyle.
-			return &RolloutDetail{Rollout: *row, Services: []ServiceReportSection{},
-				Since: row.StartedAt.UnixNano(), Generated: time.Now().UnixNano(),
-				Note: "cluster kaydı registry'de yok ya da kapalı — servisler çözülemez (Settings → Remote Clusters)"}, nil
+			return rolloutDetailNoCluster(*row), nil
 		}
 		// -1 sa: önceki revizyonla örtüşen kovalar da servis boyutunu taşır.
 		svcs, capped, err := s.store.RolloutServices(ctx, c.SpanClusterKeys(), id.Namespace, id.Workload, id.Revision, id.StartedAt.Add(-time.Hour))
+		if err != nil {
+			return nil, err
+		}
+		det, err := s.buildRolloutDetail(ctx, *row, svcs)
+		if err != nil {
+			return nil, err
+		}
+		if capped {
+			det.Note = appendDetailNote(det.Note, "servis listesi kesildi (ilk 200)")
+		}
+		return det, nil
+	})
+}
+
+// rolloutDetailNoCluster — satır registry kimliği taşır, MV span DEĞERİ:
+// kayıt yoksa (silinmiş/kapalı cluster) çeviri imkânsız.
+func rolloutDetailNoCluster(row chstore.RolloutRow) *RolloutDetail {
+	return &RolloutDetail{Rollout: row, Services: []ServiceReportSection{},
+		Since: row.StartedAt.UnixNano(), Generated: time.Now().UnixNano(),
+		Note: "cluster kaydı registry'de yok ya da kapalı — servisler çözülemez (Settings → Remote Clusters)"}
+}
+
+// getRolloutDetailV2 — v0.10.984 — rollout_events satırının çekmecesi.
+func (s *Server) getRolloutDetailV2(w http.ResponseWriter, r *http.Request, id chstore.RolloutV2ID) {
+	c, haveCluster := s.resolveCluster(id.ClusterID)
+	if haveCluster {
+		id.ClusterID = c.EffectiveID()
+	}
+	s.serveCached(w, r, rolloutV2DetailKey(id, time.Now()), 30*time.Second, func(ctx context.Context) (any, error) {
+		row, err := rolloutReaderOf(s).RolloutV2ByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if row == nil {
+			return nil, errNotFound
+		}
+		if !haveCluster {
+			return rolloutDetailNoCluster(*row), nil
+		}
+		svcs, capped, err := s.rolloutV2Services(ctx, c.SpanClusterKeys(), *row)
 		if err != nil {
 			return nil, err
 		}

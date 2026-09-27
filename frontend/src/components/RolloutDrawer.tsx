@@ -7,6 +7,9 @@
 // ilgili sayfaya köprü verir.
 // v0.10.943 — tablo standardı T1: Geçiş öznitelik paneli KeyValue, servis
 // listesi (sunucu en çok 200) useDataTable; sinyal önizlemesi statik tablo.
+// v0.10.984 (Rollouts v2 P2.3) — 6 parçalı kimlik (rollout_events) de açılır;
+// v2 satırında Geçiş paneli nesil, replika, tam imaj listesi ve takılma
+// nedenini ekler; durum ipucu KSM anlamıyla (statusTitle v2).
 import { Link } from 'react-router-dom';
 import { Drawer, DrawerSection, Badge, KeyValue, KeyValueRow } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -15,7 +18,7 @@ import { fmtDateTime, fmtNum } from '@/lib/utils';
 import { useRolloutDetail, useEntityClusters } from '@/lib/queries';
 import { CopyButton } from '@/components/CopyButton';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
-import { statusTone, statusLabel, statusTitle, shortRevision, imageDiff, imageRef, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone, rolloutPlaceLabel } from '@/lib/rolloutRow';
+import { statusTone, statusLabel, statusTitle, shortRevision, imageDiff, imageRef, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone, rolloutPlaceLabel, isV2Rollout, replicaSummary } from '@/lib/rolloutRow';
 import type { RolloutIdParam } from '@/lib/rolloutRow';
 import type { ServiceReportSection } from '@/lib/types';
 
@@ -71,14 +74,19 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
         // (genel `tbody td` nowrap + 320px kuralı); tam kimlik yanında kopyalama
         // düğmesi. v0.10.943 — öznitelik paneli KeyValue: değer kırpılmaz, sarar.
         const curImage = imageRef(r.image, r.imageTag);
+        const v2 = isV2Rollout(r);
+        const replicas = replicaSummary(r);
         return (
           <DrawerSection title="Geçiş">
             <KeyValue>
               <KeyValueRow k="tür" v={<><Badge tone={changeKindTone(k)}>{changeKindLabel(k)}</Badge> <span className="field-hint">{changeKindTitle(k)}</span></>} />
-              <KeyValueRow k="durum" v={<><Badge tone={statusTone(r.status)}>{statusLabel(r.status)}</Badge> <span className="field-hint">{statusTitle(r.status)}</span></>} />
+              <KeyValueRow k="durum" v={<><Badge tone={statusTone(r.status)}>{statusLabel(r.status)}</Badge> <span className="field-hint">{statusTitle(r.status, v2)}{r.stuckReason ? ` · neden ${r.stuckReason}` : ''}</span></>} />
               <KeyValueRow k="küme" mono title={`cluster id ${r.clusterId}`} v={rolloutPlaceLabel(r, clusterName)} />
-              <KeyValueRow k="revizyon" mono v={<>{r.prevRevision || '—'} → <b>{r.revision}</b> <CopyButton value={r.revision} title="Revizyonu kopyala" /></>} />
+              <KeyValueRow k="revizyon" mono v={<>{r.prevRevision || '—'} → <b>{r.revision || '—'}</b> {r.revision && <CopyButton value={r.revision} title="Revizyonu kopyala" />}</>} />
+              {v2 && <KeyValueRow k="nesil" mono v={<>{r.generation}{r.observedGeneration ? <span className="field-hint"> · gözlenen {r.observedGeneration}</span> : null}</>} />}
+              {replicas && <KeyValueRow k="replika" mono title="güncel şablonda / hazır / istenen (KSM)" v={replicas} />}
               <KeyValueRow k="imaj" mono v={<>{imageRef(r.prevImage, r.prevImageTag)} → <b>{curImage}</b> {curImage !== '—' && <CopyButton value={curImage} title="İmajı (repo:tag) kopyala" />}</>} />
+              {(r.images?.length ?? 0) > 1 && <KeyValueRow k="tüm imajlar" mono v={(r.images ?? []).join(', ')} />}
               <KeyValueRow k="zaman" v={<span className="field-hint">başladı {fmtDateTime(new Date(r.startedAt))}{r.completedAt > 0 ? ` · tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''}{r.detectedBy ? ` · kaynak ${r.detectedBy}` : ''}</span>} />
             </KeyValue>
           </DrawerSection>

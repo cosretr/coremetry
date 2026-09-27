@@ -2913,9 +2913,9 @@ func (s *Server) getServiceRollouts(w http.ResponseWriter, r *http.Request) {
 	// açılışı 5-dk bucket'lı groupUniqArray taramasını + 8 rollout için
 	// ComputeDeployImpact'i sıfırdan ödüyordu — üstelik sekme aynı ucu üç
 	// ayrı pencereden üç kez çağırıyordu.
-	key := fmt.Sprintf("service-rollouts:svc=%s:w=%s", name, cacheBucket(from, to))
+	key := fmt.Sprintf("service-rollouts:svc=%s:src=%s:w=%s", name, s.serviceRolloutsSrc(), cacheBucket(from, to))
 	s.serveCached(w, r, key, time.Minute, func(ctx context.Context) (any, error) {
-		res, err := s.store.GetServiceRollouts(ctx, name, from, to)
+		res, err := s.serviceRolloutsFor(ctx, name, from, to) // v0.10.984 — source=v2: rollout_events
 		if err != nil {
 			return nil, err
 		}

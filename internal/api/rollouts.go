@@ -16,11 +16,14 @@ package api
 // ÖNCE kelepçelenir. Tail (SSE) bu dosyada: StartRolloutTail yalnız api
 // rolünde, kursör updated_at, watermark now64(3) − 3 s, FINAL + LIMIT,
 // PublishLocal (köprüsüz — her pod kendi tail'iyle üretir; audit §3 T).
+//
+// v0.10.984 (Rollouts v2 P2.3): rollouts.source="v2" iken aynı uçlar
+// rollout_events okur (rollouts_v2_read.go — kaynak seçimi, depo dikişi,
+// 6 parçalı anahtar); cevap şekli aynı, anahtarlar kaynağı taşır.
 
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -94,9 +97,15 @@ func (s *Server) listRollouts(w http.ResponseWriter, r *http.Request) {
 	if limit > rolloutListLimitMax {
 		limit = rolloutListLimitMax // kelepçe: sessiz varsayılana düşürme değil (store emsali)
 	}
-	key := rolloutsListKey(f, limit, from, to)
+	src := s.rolloutSource()
+	key := rolloutsListKey(src, f, limit, from, to)
 	s.serveCached(w, r, key, rolloutListTTL, func(ctx context.Context) (any, error) {
-		rows, err := s.store.RolloutList(ctx, f, from, to, limit)
+		rd := rolloutReaderOf(s)
+		list := rd.RolloutList
+		if src == rollout.SourceV2 {
+			list = rd.RolloutV2List
+		}
+		rows, err := list(ctx, f, from, to, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -105,13 +114,20 @@ func (s *Server) listRollouts(w http.ResponseWriter, r *http.Request) {
 		}
 		s.attachProblemsCaused(ctx, rows) // v0.10.244 — D4 feed rozeti (hata = rozet yok)
 		resp := map[string]any{"rollouts": rows, "from": from.UnixMilli(), "to": to.UnixMilli(), "limit": limit}
+		if src == rollout.SourceV2 {
+			resp["v2"] = true // v0.10.984 — FE v2 kolon setini seçer (eklemeli; v1'de anahtar yok)
+		}
 		if len(rows) >= limit {
 			resp["capped"] = true
 		}
 		// MV/kolon yoksa (dış Distributed'da 0012 uygulanmadan) liste boş — ilan.
 		// Yalnız boş listede: sağlıklı yolda ekstra CH sorgusu atılmaz.
 		if len(rows) == 0 {
-			if st := s.rolloutLayerNote(ctx); st != "" {
+			note := s.rolloutLayerNote
+			if src == rollout.SourceV2 {
+				note = s.rolloutV2LayerNote
+			}
+			if st := note(ctx); st != "" {
 				resp["note"] = st
 			}
 		}
@@ -123,7 +139,7 @@ func (s *Server) listRollouts(w http.ResponseWriter, r *http.Request) {
 // söyle. run.Error viewer'a AKMAZ (ham CH/driver dizesi host/tablo taşıyabilir);
 // ayrıntı /api/rollouts/runs (admin).
 func (s *Server) rolloutLayerNote(ctx context.Context) string {
-	run, err := s.store.RolloutLastRun(ctx)
+	run, err := rolloutReaderOf(s).RolloutLastRun(ctx)
 	if err != nil {
 		return "koşu kaydı okunamadı (geçici CH hatası olabilir; ayrıntı: sunucu logları)"
 	}
@@ -144,6 +160,29 @@ func (s *Server) getRollout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+	src := s.rolloutSource()
+	// v0.10.984 — 6 parçalı anahtar yalnız v2 kaynağında (karar 14); v1'de
+	// aşağıdaki v1 doğrulaması bugünkü 400'ü verir.
+	if v2id, present, perr := parseRolloutV2ID(q); present && src == rollout.SourceV2 {
+		if perr != nil {
+			writeJSONError(w, http.StatusBadRequest, perr.Error())
+			return
+		}
+		if c, ok := s.resolveCluster(v2id.ClusterID); ok {
+			v2id.ClusterID = c.EffectiveID()
+		}
+		s.serveCached(w, r, rolloutV2Key(v2id), rolloutListTTL, func(ctx context.Context) (any, error) {
+			row, err := rolloutReaderOf(s).RolloutV2ByID(ctx, v2id)
+			if err != nil {
+				return nil, err
+			}
+			if row == nil {
+				return nil, errNotFound
+			}
+			return map[string]any{"rollout": row}, nil
+		})
+		return
+	}
 	id := chstore.RolloutID{ClusterID: strings.TrimSpace(q.Get("cluster")), Namespace: strings.TrimSpace(q.Get("namespace")),
 		Workload: strings.TrimSpace(q.Get("workload")), Revision: strings.TrimSpace(q.Get("revision"))}
 	ms, _ := strconv.ParseInt(q.Get("startedAt"), 10, 64)
@@ -155,9 +194,9 @@ func (s *Server) getRollout(w http.ResponseWriter, r *http.Request) {
 	if c, ok := s.resolveCluster(id.ClusterID); ok {
 		id.ClusterID = c.EffectiveID()
 	}
-	key := rolloutKey(id)
+	key := rolloutKey(src, id)
 	s.serveCached(w, r, key, rolloutListTTL, func(ctx context.Context) (any, error) {
-		row, err := s.store.RolloutByID(ctx, id)
+		row, err := rolloutReaderOf(s).RolloutByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -188,9 +227,20 @@ func (s *Server) getRolloutStats(w http.ResponseWriter, r *http.Request) {
 	if topN > rolloutStatsTopNMax {
 		topN = rolloutStatsTopNMax
 	}
-	key := rolloutStatsKey(cluster, ns, topN, from, to)
+	src := s.rolloutSource()
+	key := rolloutStatsKey(src, cluster, ns, topN, from, to)
 	s.serveCached(w, r, key, rolloutStatsTTL, func(ctx context.Context) (any, error) {
-		st, err := s.store.RolloutStats(ctx, cluster, ns, from, to, topN)
+		rd := rolloutReaderOf(s)
+		if src == rollout.SourceV2 {
+			st, err := rd.RolloutV2Stats(ctx, cluster, ns, from, to, topN)
+			if err != nil {
+				return nil, err
+			}
+			// v0.10.984 — eklemeli işaret (RolloutStats'a alan eklemek v1
+			// cevabını değiştirirdi): v2'de gövde {…stats, "v2": true}.
+			return rolloutStatsV2{RolloutStats: st, V2: true}, nil
+		}
+		st, err := rd.RolloutStats(ctx, cluster, ns, from, to, topN)
 		if err != nil {
 			return nil, err
 		}
@@ -202,8 +252,17 @@ func (s *Server) getRolloutRuns(w http.ResponseWriter, r *http.Request) {
 	if !s.rolloutEnabled(w) {
 		return
 	}
-	s.serveCached(w, r, "rollouts:runs", 10*time.Second, func(ctx context.Context) (any, error) {
-		runs, err := s.store.RolloutRuns(ctx, 20)
+	src := s.rolloutSource()
+	s.serveCached(w, r, rolloutRunsKey(src), 10*time.Second, func(ctx context.Context) (any, error) {
+		if src == rollout.SourceV2 {
+			// v0.10.984 — v2 dedektörünün rollout_worker_runs satırları.
+			wr, err := rolloutReaderOf(s).RolloutWorkerRuns(ctx, rollout.WorkerRolloutDetector, 20)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"runs": rolloutRunsFromWorker(wr)}, nil
+		}
+		runs, err := rolloutReaderOf(s).RolloutRuns(ctx, 20)
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +280,7 @@ func (s *Server) getRolloutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := s.rolloutCfg.Current()
 	res := s.rolloutCfg.Resolved()
-	v2 := s.rolloutCfg.ResolvedV2() // v0.10.957 — Rollouts v2 P1.5 vidaları (eklemeli; P1'de okuyan yok)
+	v2 := s.rolloutCfg.ResolvedV2() // v0.10.957 — Rollouts v2 P1.5 vidaları (eklemeli; source P2.3'ten beri okuma yolunu seçer)
 	writeJSON(w, map[string]any{"settings": cfg, "resolved": map[string]any{
 		"enabled": res.Enabled, "intervalSec": int(res.Interval / time.Second), "bucketSec": int(res.Bucket / time.Second),
 		"threshold": res.Threshold, "hysteresis": res.Hysteresis, "exitHysteresis": res.ExitHysteresis,
@@ -278,8 +337,9 @@ func (s *Server) putRolloutSettings(w http.ResponseWriter, r *http.Request) {
 
 // ── SSE tail (audit §3 Seçenek T) ─────────────────────────────────────────
 //
-// Her api pod'u workload_rollouts'u tail'ler: keyset kursör + watermark
-// (replika gecikmesi payı), FINAL + LIMIT. Yayın PublishLocal ve tik başına
+// Her api pod'u workload_rollouts'u (v0.10.984: source=v2'de
+// rollout_events'i) tail'ler: keyset kursör + watermark (replika gecikmesi
+// payı), FINAL + LIMIT. Yayın PublishLocal ve tik başına
 // TEK olay ({"n": satır} — Plan A: FE invalidation olarak kullanır; satır
 // gövdesi yayınlanmaz, ilk toplu reconcile 10k olay basardı). Köprüye
 // basılmaz (N pod × N tail = N× teslim olurdu). Bayrak kapalıyken VE kimse
@@ -307,35 +367,27 @@ func (s *Server) StartRolloutTail(ctx context.Context) {
 		defer t.Stop()
 		// Keyset kursör (chstore.RolloutCursor): bir tikin upsert'i tüm satırlara
 		// aynı updated_at'i basar; salt zaman kursörü bir batch'i geçemezdi.
-		cursor := chstore.RolloutCursor{UpdatedAt: time.Now().Add(-rolloutTailWatermark)}
+		// v0.10.984 — kaynak başına ayrı kursör (v2: RolloutV2Cursor); kaynak
+		// değişince ikisi de watermark'a sıfırlanır (eski tablonun kursörü
+		// yenisinde anlamsız).
+		fresh := func() time.Time { return time.Now().Add(-rolloutTailWatermark) }
+		cursor := chstore.RolloutCursor{UpdatedAt: fresh()}
+		cursorV2 := chstore.RolloutV2Cursor{UpdatedAt: fresh()}
+		lastSrc := s.rolloutSource()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
 			}
-			if s.rolloutCfg == nil || !s.rolloutCfg.Resolved().Enabled || s.bus.Subscribers() == 0 {
-				cursor = chstore.RolloutCursor{UpdatedAt: time.Now().Add(-rolloutTailWatermark)}
+			src := s.rolloutSource()
+			if s.rolloutCfg == nil || !s.rolloutCfg.Resolved().Enabled || s.bus.Subscribers() == 0 || src != lastSrc {
+				cursor = chstore.RolloutCursor{UpdatedAt: fresh()}
+				cursorV2 = chstore.RolloutV2Cursor{UpdatedAt: fresh()}
+				lastSrc = src
 				continue
 			}
-			// Dolu batch → aynı tikte bir sonraki sayfa (kuyruk birikmesin).
-			changed := 0
-			for page := 0; page < rolloutTailMaxPages; page++ {
-				tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-				rows, next, err := s.store.RolloutTail(tctx, cursor, rolloutTailWatermark, rolloutTailLimit)
-				cancel()
-				if err != nil {
-					if ctx.Err() == nil { // kapanış iptali arıza değil
-						log.Printf("[rollout] tail: %v", err)
-					}
-					break
-				}
-				changed += len(rows)
-				cursor = next
-				if len(rows) < rolloutTailLimit {
-					break
-				}
-			}
+			changed := rolloutTailPages(ctx, rolloutReaderOf(s), src, &cursor, &cursorV2)
 			if changed > 0 {
 				// Tik başına TEK olay + TEK önbellek süpürmesi (deploy anları
 				// dışında hiç; Plan A: FE olayı görünce yeniden çeker).
@@ -344,6 +396,44 @@ func (s *Server) StartRolloutTail(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// rolloutTailPages — v0.10.984 — tail tikinin sayfa döngüsü (StartRolloutTail'den
+// ayrıldı ki kursör anlamı test edilebilsin). Dolu batch → aynı tikte bir
+// sonraki sayfa (kuyruk birikmesin). Kursör YALNIZ başarıda ilerler
+// (v0.10.984 öncesi anlam; İnceleme): chstore.RolloutTail rows.Err()'de
+// ilerlemiş kursörü hatayla döndürür — onu saklamak sayılmayan satırları
+// kalıcı atlardı (SSE olayı + önbellek süpürmesi kaybolurdu).
+func rolloutTailPages(ctx context.Context, rd rolloutReader, src string, cursor *chstore.RolloutCursor, cursorV2 *chstore.RolloutV2Cursor) int {
+	changed := 0
+	for page := 0; page < rolloutTailMaxPages; page++ {
+		tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		var rows []chstore.RolloutRow
+		var err error
+		if src == rollout.SourceV2 {
+			var next chstore.RolloutV2Cursor
+			if rows, next, err = rd.RolloutV2Tail(tctx, *cursorV2, rolloutTailWatermark, rolloutTailLimit); err == nil {
+				*cursorV2 = next
+			}
+		} else {
+			var next chstore.RolloutCursor
+			if rows, next, err = rd.RolloutTail(tctx, *cursor, rolloutTailWatermark, rolloutTailLimit); err == nil {
+				*cursor = next
+			}
+		}
+		cancel()
+		if err != nil {
+			if ctx.Err() == nil { // kapanış iptali arıza değil
+				logRolloutTailErr(src, err)
+			}
+			break
+		}
+		changed += len(rows)
+		if len(rows) < rolloutTailLimit {
+			break
+		}
+	}
+	return changed
 }
 
 // sseDropped — /api/health görünürlüğü (bus nil-güvenli).

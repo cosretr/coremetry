@@ -6829,6 +6829,14 @@ export interface Rollout {
   // v0.10.717 — rollout'un cluster'ı (span türevi); kademeli çıkışta cluster
   // başına satır. Boş = türetilemedi.
   cluster?: string;
+  // v0.10.984 (Rollouts v2 P2.3) — source "ksm": satır pod değişiminden değil
+  // rollout_events'ten (rollouts.source=v2). podsAdded = güncel şablondaki
+  // replika, podsRemoved = 0 (KSM emekli pod saymaz); etiketler serviceRolloutLabel.ts.
+  source?: 'ksm' | string;
+  workloadKind?: string; namespace?: string; workload?: string;
+  /** v1 sözlüğü (in_progress | completed | rolled_back | superseded | stalled). */
+  status?: string;
+  specReplicas?: number; updatedReplicas?: number;
 }
 // v0.9.435 — filo Deploys/Rollouts geçmişi (/deploys sayfası).
 export interface RecentDeployEntry {
@@ -6853,6 +6861,10 @@ export interface RolloutsResult {
   // (k8s.pod.name / service.instance.id / host.name), so churn
   // can't be computed.
   instancesTracked: boolean;
+  // v0.10.984 — "ksm" = satırlar rollout_events'ten (v2 okuma yolu); yoksa pod-churn.
+  source?: 'ksm' | string;
+  // v0.10.984 — v2 okumasının sınırı (iş yükü listesi kesildi, eşlenmeyen span cluster değeri…).
+  note?: string;
 }
 
 // SlowQueryRow — same as DBQueryStat plus the originating
@@ -7553,8 +7565,22 @@ export interface WorkloadRollout {
   detectedBy: string; spanCount: number; note: string; updatedAt: number;
   /** v0.10.244 — başlangıçtan beri açık ∩ rollout'un servisleri (liste yükleyicisi; çekmece sayımıyla aynı). */
   problemsCaused?: number;
+  /** v0.10.984 — Rollouts v2 P2.3: satır rollout_events'ten geldiyse (chstore.RolloutV2Fields; v1 satırında YOK).
+   *  generation + incarnationAt (ms) + kind = 6 parçalı ?rollout= anahtarı. `status` yine v1 sözlüğünde; ham v2 durumu v2Status. */
+  incarnationAt?: number; generation?: number;
+  v2Status?: 'progressing' | 'succeeded' | 'stuck' | 'rolled_back' | 'superseded' | string;
+  /** rollout | config | rollback | initial (KSM dedektörü, §10.3.1). */
+  changeType?: 'rollout' | 'config' | 'rollback' | 'initial' | string;
+  observedGeneration?: number; specReplicas?: number; updatedReplicas?: number; availableReplicas?: number;
+  /** Tam imaj referansları (sıralı); image/imageTag bunların ilkinden. */
+  images?: string[]; prevImages?: string[];
+  versionTag?: string;
+  /** progress_deadline | timeout | '' */
+  stuckReason?: string;
+  succeededAt?: number; stuckAt?: number; finishedAt?: number;
 }
-export interface RolloutListResponse { rollouts: WorkloadRollout[]; from: number; to: number; limit: number; capped?: boolean; note?: string; disabled?: boolean }
+/** v2: true — v0.10.984, sunucu rollout_events okudu (rollouts.source="v2"); v1 cevabında anahtar yok. */
+export interface RolloutListResponse { rollouts: WorkloadRollout[]; from: number; to: number; limit: number; capped?: boolean; note?: string; disabled?: boolean; v2?: boolean }
 export interface RolloutWorkloadN { clusterId: string; namespace: string; workload: string; n: number }
 export interface RolloutStats {
   total: number; completed: number; rolledBack: number; inProgress: number; stalled: number; superseded: number;
@@ -7563,12 +7589,18 @@ export interface RolloutStats {
   topRollback: RolloutWorkloadN[]; topDeploy: RolloutWorkloadN[]; byDay: { day: string; total: number; rolledBack: number }[];
   /** 404 {disabled:true} sentineli (queries/rollouts.ts) — hata değil, kapalı bayrak. */
   disabled?: boolean;
+  /** v0.10.984 — rollout_events'ten sayıldı (completed = succeeded, inProgress = progressing, stalled = stuck). */
+  v2?: boolean;
 }
-/** rollout.Run — sunucu MarshalJSON'u camelCase + epoch-ms yazar (reconciler.go); istemci normalize ETMEZ. */
-export interface RolloutRun { startedAt: number; finishedAt: number; host?: string; status: string; clusters: number; rolloutsWritten: number; spanMs: number; ksmMs: number; error?: string }
+/** rollout.Run — sunucu MarshalJSON'u camelCase + epoch-ms yazar (reconciler.go); istemci normalize ETMEZ.
+ *  v0.10.984 — source=v2'de satırlar rollout_worker_runs'tan (worker="rollout-detector"): clusters = kapsam,
+ *  rolloutsWritten = yazılan satır, spanMs/ksmMs 0; ek alanlar yalnız v2'de. */
+export interface RolloutRun { startedAt: number; finishedAt: number; host?: string; status: string; clusters: number; rolloutsWritten: number; spanMs: number; ksmMs: number; error?: string;
+  worker?: string; scopesOk?: number; seriesRead?: number; truncated?: boolean; partialResponse?: boolean; unmapped?: number; apiCalls?: number; durationMs?: number }
 export interface RolloutRunsResponse { runs: RolloutRun[] }
 export interface RolloutSettings { enabled: boolean; interval?: string; bucket?: string; threshold?: number; hysteresis?: number; exitHysteresis?: number; overlapMax?: string; lookback?: string; weakSignal?: boolean; stalledMin?: string; updatedAt?: number;
-  /** v0.10.957 — Rollouts v2 (P1.5) vidaları; P2.3'e dek hiçbir okuyucu yok. `source` "v2" kaydedilebilir ama etkisizdir. */
+  /** v0.10.957 — Rollouts v2 (P1.5) vidaları. v0.10.984 (P2.3): `source` "v2" (+ enabled) iken /api/rollouts*, SSE tail,
+   *  GitOps sekmesi ve servis rollout okuması rollout_events'ten; varsayılan v1. */
   source?: 'v1' | 'v2'; detectorIntervalS?: number; stuckAfter?: string; ignoreScale?: boolean; kinds?: string[]; initialEvents?: boolean; observedGenWaitTicks?: number; incarnationAbsentTicks?: number; knownRevisionsMax?: number }
 /** GET/PUT /api/settings/rollouts cevabı: settings + resolved (uygulanan) + defaults. */
 export interface RolloutSettingsResponse { settings: RolloutSettings; resolved: Record<string, unknown>; defaults: RolloutSettings }
@@ -8118,7 +8150,7 @@ export interface TraceFacetsResponse {
 export type PageId =
   | 'home' | 'trace' | 'trace-compare' | 'traces' | 'service' | 'service-backtrace' | 'services'
   | 'problems' | 'anomalies' | 'inbox' | 'exceptions' | 'errors' | 'logs' | 'explore' | 'metrics'
-  | 'clusters' | 'pod' | 'entity' | 'hosts' | 'rollouts' | 'events' | 'deployment-report'
+  | 'clusters' | 'pod' | 'entity' | 'hosts' | 'rollouts' | 'events'
   | 'endpoints' | 'endpoint' | 'databases' | 'database' | 'slow-queries' | 'statement'
   | 'dashboards' | 'dashboard' | 'service-map' | 'topology' | 'messaging' | 'external' | 'profiling'
   | 'slos' | 'alerts' | 'monitors' | 'watchers' | 'incidents' | 'incident' | 'runbooks' | 'runbook'

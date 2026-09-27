@@ -83,7 +83,7 @@ type V2Event struct {
 	StuckAt            time.Time `ch:"stuck_at"`
 	FinishedAt         time.Time `ch:"finished_at"`
 	Note               string    `ch:"note"`
-	UpdatedAt          time.Time `ch:"updated_at"` // SSE tail kursörü = tik zamanı
+	UpdatedAt          time.Time `ch:"updated_at"` // SSE tail kursörü = yazım anı (v2StampWrite)
 	Version            uint64    `ch:"version"`
 }
 

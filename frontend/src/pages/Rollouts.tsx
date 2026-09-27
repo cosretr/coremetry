@@ -14,6 +14,13 @@
 // → Empty + admin için tek tık Enable (mevcut ayarları EZMEDEN: read-modify-write).
 // Koşu durumu (runs) admin ucu: viewer'da hiç sorulmaz (403 döngüsü olmasın).
 // Satır çekmecesi + health verdict + tekil `/api/rollout` istemcisi Faz 4b.
+// v0.10.984 (Rollouts v2 P2.3; docs/rollouts/v2-audit.md §12.1): sayfa adı
+// «Deployment/Rollouts» (nav, ⌘K, Topbar, kapalı durumu). Sunucu
+// rollouts.source="v2" iken rollout_events okur ve `v2: true` döner → v2
+// kolon seti (karar 4: "Kaynak" = detectedBy kolonu düşer — v2'de hep KSM;
+// span sayısı yok; Nesil + replika gelir) AYRI storageKey'le (kayıtlı
+// genişlikler öteki sete yanlış uygulanmasın). Durum süzgeci v1 sözlüğünde
+// kalır (sunucu çevirir); satır kimliği / ?rollout= 6 parçalı (rolloutRow.ts).
 import { useEffect, useMemo, useState } from 'react';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { Link, useSearchParams } from 'react-router-dom';
@@ -35,7 +42,7 @@ import { keys, useRollouts, useRolloutStats, useRolloutRuns, useEntityClusters }
 import { RolloutDrawer } from '@/components/RolloutDrawer';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { entityHref } from '@/lib/entityHref';
-import { rolloutKey, statusTone, statusLabel, statusTitle, rolloutDurationSec, shortRevision, imageDiff, encodeRolloutParam, decodeRolloutParam, rolloutTracesFilters, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone } from '@/lib/rolloutRow';
+import { rolloutKey, statusTone, statusLabel, statusTitle, rolloutDurationSec, shortRevision, imageDiff, encodeRolloutParam, decodeRolloutParam, rolloutTracesFilters, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone, replicaSummary } from '@/lib/rolloutRow';
 import type { RolloutStats, WorkloadRollout } from '@/lib/types';
 
 const STATUSES = ['', 'in_progress', 'completed', 'rolled_back', 'superseded', 'stalled'] as const;
@@ -68,6 +75,16 @@ const COLS: ColumnDef<WorkloadRollout>[] = [
   { id: 'note', label: 'Not', width: 260, minWidth: 120 },
   { id: 'links', label: '', width: 120, minWidth: 96 },
 ];
+
+// v0.10.984 — v2 kolon seti (rollout_events): span / Kaynak yok (karar 4 —
+// P3.4'ün tetikleyici kolonu "Kaynak" adını YENİ kimlikle alacak), revizyondan
+// sonra Nesil (+ güncel/hazır/istenen replika).
+const COLS_V2: ColumnDef<WorkloadRollout>[] = COLS.flatMap(c =>
+  c.id === 'spans' || c.id === 'by' ? []
+  : c.id === 'revision' ? [c, { id: 'gen', label: 'Nesil', width: 130, minWidth: 96, numeric: true }]
+  : [c]);
+
+const ROLLOUTS_PAGE_TITLE = 'Deployment/Rollouts';
 
 export default function RolloutsPage() {
   const [range, setRange] = useUrlRange('24h');
@@ -104,7 +121,12 @@ export default function RolloutsPage() {
   const statsQ = useRolloutStats({ from, to, cluster: cluster || undefined, namespace: ns || undefined, topN: 10 }, tab === 'stats');
   const runsQ = useRolloutRuns(isAdmin); // admin ucu: viewer'da 403 döngüsü açma
   const rows = useMemo(() => listQ.data?.rollouts ?? [], [listQ.data]);
-  const dt = useDataTable<WorkloadRollout>({ storageKey: 'rollouts-live', columns: COLS, rows, serverSort: true });
+  // v0.10.984 — iki kanca da her render'da çağrılır (kanca sırası sabit);
+  // görünen tablo sunucunun kaynağına göre seçilir, öteki boş satırla durur.
+  const v2 = listQ.data?.v2 === true;
+  const dtV1 = useDataTable<WorkloadRollout>({ storageKey: 'rollouts-live', columns: COLS, rows: v2 ? [] : rows, serverSort: true });
+  const dtV2 = useDataTable<WorkloadRollout>({ storageKey: 'rollouts-live-v2', columns: COLS_V2, rows: v2 ? rows : [], serverSort: true });
+  const dt = v2 ? dtV2 : dtV1;
   const [enabling, setEnabling] = useState(false);
   const [enableErr, setEnableErr] = useState('');
   const err = (tab === 'live' ? listQ.error : statsQ.error) as Error | null;
@@ -122,7 +144,9 @@ export default function RolloutsPage() {
     listQ.isPending ? { kind: 'loading' }
     : err ? { kind: 'error', message: `Rollout listesi yüklenemedi: ${err.message}` }
     : liveFiltered ? { kind: 'no-match', ...(listQ.data?.note ? { message: `Eşleşme yok — ${listQ.data.note}` } : {}) }
-    : { kind: 'empty', message: `Bu pencerede rollout yok — ${listQ.data?.note ?? 'Reconciler aktif kümeye giren yeni revizyon görmedi (giriş: ≥2 karar kovası + gözlenmiş yokluk).'}` };
+    : { kind: 'empty', message: `Bu pencerede rollout yok — ${listQ.data?.note ?? (v2
+      ? 'KSM dedektörü bu pencerede nesil artışı görmedi (ölçek ve yalnız-annotation değişiklikleri rollout sayılmaz).'
+      : 'Reconciler aktif kümeye giren yeni revizyon görmedi (giriş: ≥2 karar kovası + gözlenmiş yokluk).')}` };
   const enable = async () => {
     setEnabling(true);
     setEnableErr('');
@@ -139,7 +163,7 @@ export default function RolloutsPage() {
   };
   return (
     <>
-      <Topbar title="Rollouts" range={range} onRangeChange={setRange} />
+      <Topbar title={ROLLOUTS_PAGE_TITLE} range={range} onRangeChange={setRange} />
       <PageShell>
         <TabStrip ariaLabel="Rollout görünümü" value={tab} onChange={k => setParam('tab', k === 'live' ? '' : k)} style={{ marginBottom: 10 }}
           tabs={[{ key: 'live', label: 'Canlı' }, { key: 'stats', label: 'Toplu' }]} />
@@ -167,16 +191,18 @@ export default function RolloutsPage() {
                   'skipped' de nötr: kapanışta (ctx iptali) yarıda kesilen tik,
                   arıza değil (internal/rollout/reconciler.go RunSkipped).
                   Sapma yalnız partial (uyarı) ve failed/bilinmeyen (hata). */}
+              {/* v0.10.984 — v2'de koşular KSM dedektörünün (rollout_worker_runs, worker alanı dolu). */}
               {lastRun
-                ? <>reconciler son koşu {fmtDateTime(new Date(lastRun.startedAt))} · <span className={`badge ${lastRun.status === 'ok' || lastRun.status === 'skipped' ? 'b-gray' : lastRun.status === 'partial' ? 'b-warn' : 'b-err'}`}>{lastRun.status}</span></>
-                : runsQ.isPending ? null : 'reconciler henüz koşmadı'}
+                ? <>{lastRun.worker ? 'dedektör' : 'reconciler'} son koşu {fmtDateTime(new Date(lastRun.startedAt))} · <span className={`badge ${lastRun.status === 'ok' || lastRun.status === 'skipped' ? 'b-gray' : lastRun.status === 'partial' ? 'b-warn' : 'b-err'}`}>{lastRun.status}</span></>
+                : runsQ.isPending ? null : `${v2 ? 'dedektör' : 'reconciler'} henüz koşmadı`}
             </span>
           )}
         </div>
         {disabled ? (
-          <Empty icon="—" title="Rollouts kapalı"
+          <Empty icon="—" title={`${ROLLOUTS_PAGE_TITLE} kapalı`}
             action={isAdmin ? <Button variant="primary" size="sm" loading={enabling} onClick={() => void enable()}>Etkinleştir</Button> : undefined}>
-            Olay tablosu yazılmıyor. {isAdmin ? (enableErr ? `Açılamadı: ${enableErr}` : 'Mevcut ayarlar korunarak açılır.') : 'Bir admin Settings → Rollouts → Enable ile açar.'}
+            {/* v0.10.984 — Ayarlar'da Rollouts sekmesi yok (v2-audit §2.6 madde 5): gerçek yol bu sayfadaki düğme. */}
+            Olay tablosu yazılmıyor. {isAdmin ? (enableErr ? `Açılamadı: ${enableErr}` : 'Mevcut ayarlar korunarak açılır.') : 'Bir admin bu sayfadaki «Etkinleştir» ile açar.'}
           </Empty>
         ) : tab === 'live' ? (
           <>
@@ -198,7 +224,7 @@ export default function RolloutsPage() {
                         // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
                         data-row-action
                         onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; setParam('rollout', encodeRolloutParam(r)); }}>
-                        <DataTableCell dt={dt} col="status" row={r}><Badge tone={statusTone(r.status)} title={[statusTitle(r.status), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></DataTableCell>
+                        <DataTableCell dt={dt} col="status" row={r}><Badge tone={statusTone(r.status)} title={[statusTitle(r.status, v2), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></DataTableCell>
                         <DataTableCell dt={dt} col="workload" row={r} title={`${cname} / ${r.namespace} / ${r.workload}`}>
                           <Link to={wlHref} className="sec">{r.workload}</Link>
                           <span className="field-hint"> · {r.namespace}</span>
@@ -207,20 +233,21 @@ export default function RolloutsPage() {
                         <DataTableCell dt={dt} col="cluster" row={r} value={cname} />
                         <DataTableCell dt={dt} col="kind" row={r} className="field-hint">{r.kind || '—'}</DataTableCell>
                         <DataTableCell dt={dt} col="change" row={r}>{(() => { const k = rolloutChangeKind(r); return <Badge tone={changeKindTone(k)} title={changeKindTitle(k)}>{changeKindLabel(k)}</Badge>; })()}</DataTableCell>
-                        <DataTableCell dt={dt} col="revision" row={r} title={r.revision}>{shortRevision(r.revision, r.workload)}{r.prevRevision ? <span className="field-hint"> ← {shortRevision(r.prevRevision, r.workload)}</span> : null}</DataTableCell>
+                        <DataTableCell dt={dt} col="revision" row={r} title={r.revision || undefined}>{r.revision ? shortRevision(r.revision, r.workload) : '—'}{r.prevRevision ? <span className="field-hint"> ← {shortRevision(r.prevRevision, r.workload)}</span> : null}</DataTableCell>
+                        {v2 && <DataTableCell dt={dt} col="gen" row={r} title="nesil · güncel/hazır/istenen replika (KSM)">{fmtNum(r.generation ?? 0)}<span className="field-hint"> · {replicaSummary(r)}</span></DataTableCell>}
                         <DataTableCell dt={dt} col="image" row={r} title={r.image || undefined}>{imageDiff(r)}</DataTableCell>
                         {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar); kolon
                             `numeric` olduğundan DataTableCell `num` basar ve mono'yu nötrlerdi. */}
                         <td className="mono">{fmtDateTime(new Date(r.startedAt))}</td>
                         <DataTableCell dt={dt} col="dur" row={r} value={fmtDurShort(rolloutDurationSec(r, Date.now()))} />
-                        <DataTableCell dt={dt} col="spans" row={r} value={fmtNum(r.spanCount)} />
+                        {!v2 && <DataTableCell dt={dt} col="spans" row={r} value={fmtNum(r.spanCount)} />}
                         <DataTableCell dt={dt} col="problems" row={r}>{r.problemsCaused
                           ? <Link to={`?${(() => { const p = new URLSearchParams(sp); p.set('rollout', encodeRolloutParam(r)); return p.toString(); })()}`}
                                   title="rollout başladığından beri açık problemler (servisleri) — çekmeceyi açar" style={{ textDecoration: 'none' }}>
                               <Badge tone="danger">{fmtNum(r.problemsCaused)}</Badge>
                             </Link>
                           : <span className="field-hint">—</span>}</DataTableCell>
-                        <DataTableCell dt={dt} col="by" row={r} className="field-hint">{r.detectedBy}</DataTableCell>
+                        {!v2 && <DataTableCell dt={dt} col="by" row={r} className="field-hint">{r.detectedBy}</DataTableCell>}
                         <DataTableCell dt={dt} col="note" row={r} className="field-hint" title={r.note || undefined}>{r.note || ''}</DataTableCell>
                         <DataTableCell dt={dt} col="links" row={r}><Link to={tracesHref} className="sec">Traces →</Link></DataTableCell>
                       </tr>

@@ -172,7 +172,8 @@ export const keys = {
              ['rollouts', 'list', p] as const,
     stats: (p: { from: number; to: number; cluster?: string; namespace?: string; topN?: number }) => ['rollouts', 'stats', p] as const,
     runs:  () => ['rollouts', 'runs'] as const,
-    detail: (p: { clusterId: string; namespace: string; workload: string; revision: string; startedAt: number }) => ['rollouts', 'detail', p] as const,
+    // v0.10.984 — p 5 (workload_rollouts) ya da 6 parçalı (rollout_events) kimlik; tüm alanlar anahtarda.
+    detail: (p: import('../rolloutRow').RolloutIdParam) => ['rollouts', 'detail', p] as const,
     gitops: (svc: string) => ['rollouts', 'gitops', svc] as const, // v0.10.981 — servis GitOps sekmesi
   },
   // v0.10.131 — K8s entity katmanı (entities.ts). Her anahtar TÜM girdileri

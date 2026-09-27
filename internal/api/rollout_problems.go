@@ -11,6 +11,11 @@ package api
 // (RolloutServicesBatch) + tek açık-problem anlık görüntüsü. Şema yok
 // (audit K5). Küme kaydı registry'de yoksa o satır 0 kalır (çekmece de
 // "servisler çözülemez" der).
+//
+// v0.10.984 (Rollouts v2 P2.3): v2 satırı (RolloutRow.V2 dolu) iş yükü
+// düzeyinde eşlenir (Revision boş anahtar, RolloutWorkloadServicesBatch) —
+// v2 revizyonu STS/DS'de MV revizyonuyla eşleşmez. Tek listede iki tür
+// satır olmaz (kaynak uç başına tek) ama sayım satır başına karar verir.
 
 import (
 	"context"
@@ -28,8 +33,12 @@ func countProblemsCaused(rows []chstore.RolloutRow, clustersByRow [][]string, sv
 	out := make([]int, len(rows))
 	for i, row := range rows {
 		inSet := map[string]bool{}
+		rev := row.Revision
+		if row.V2 != nil {
+			rev = "" // iş yükü düzeyi anahtar (v2)
+		}
 		for _, c := range clustersByRow[i] {
-			for _, svc := range svcByKey[chstore.RolloutServiceKey{Cluster: c, Namespace: row.Namespace, Workload: row.Workload, Revision: row.Revision}] {
+			for _, svc := range svcByKey[chstore.RolloutServiceKey{Cluster: c, Namespace: row.Namespace, Workload: row.Workload, Revision: rev}] {
 				inSet[svc] = true
 			}
 		}
@@ -55,14 +64,20 @@ func (s *Server) attachProblemsCaused(ctx context.Context, rows []chstore.Rollou
 		return
 	}
 	clustersByRow := make([][]string, len(rows))
-	var keys []chstore.RolloutServiceKey
+	var keys, v2keys []chstore.RolloutServiceKey
 	seen := map[chstore.RolloutServiceKey]bool{}
 	since := rows[0].StartedAt
 	for i, row := range rows {
 		if c, ok := s.resolveCluster(row.ClusterID); ok {
 			clustersByRow[i] = c.SpanClusterKeys()
 		}
+		if row.V2 != nil {
+			v2keys = append(v2keys, v2RowServiceKeys(clustersByRow[i], row)...)
+		}
 		for _, cv := range clustersByRow[i] {
+			if row.V2 != nil {
+				break
+			}
 			k := chstore.RolloutServiceKey{Cluster: cv, Namespace: row.Namespace, Workload: row.Workload, Revision: row.Revision}
 			if !seen[k] {
 				seen[k] = true
@@ -73,13 +88,27 @@ func (s *Server) attachProblemsCaused(ctx context.Context, rows []chstore.Rollou
 			since = row.StartedAt
 		}
 	}
-	if len(keys) == 0 {
+	if len(keys) == 0 && len(v2keys) == 0 {
 		return
 	}
-	svcByKey, err := s.store.RolloutServicesBatch(ctx, keys, since.Add(-time.Hour))
-	if err != nil {
-		log.Printf("[rollouts] problemsCaused services: %v", err)
-		return
+	svcByKey := map[chstore.RolloutServiceKey][]string{}
+	if len(keys) > 0 {
+		m, err := s.store.RolloutServicesBatch(ctx, keys, since.Add(-time.Hour))
+		if err != nil {
+			log.Printf("[rollouts] problemsCaused services: %v", err)
+			return
+		}
+		svcByKey = m
+	}
+	if len(v2keys) > 0 {
+		m, err := s.store.RolloutWorkloadServicesBatch(ctx, v2keys, since.Add(-time.Hour))
+		if err != nil {
+			log.Printf("[rollouts] problemsCaused v2 services: %v", err)
+			return
+		}
+		for k, v := range m { // anahtarlar ayrık: v2'de Revision boş
+			svcByKey[k] = v
+		}
 	}
 	snapshot, err := s.store.OpenProblemsSnapshot(ctx)
 	if err != nil {

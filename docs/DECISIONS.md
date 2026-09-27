@@ -1178,3 +1178,58 @@ yazmak yerine atla + koşu teşhisinde say.
   sınıflandırma (P3.4, §7.5) bu işçide değil. `/api/services/{name}/gitops` (bayraksız) bu
   sürümde v0.10.981 küme-içi kuralını korur (yalnız TAM `https://kubernetes.default.svc`);
   işçinin geniş kuralı (`:443`, sondaki `/`, `.cluster.local`) eşleyiciyle (P3.2) gelir.
+
+## 2026-09-27 — Rollouts v2 P2.3 okuma yolu §11'den önce kodlandı, bayrak kapalı (v0.10.984)
+
+**Karar (operatör: "devam et … bitir işleri" — §11 probe'u henüz koşulmadan Faz 2.3'ün kodlanması):**
+P2.3 (`internal/api/rollouts_v2_read.go`, `internal/chstore/rollout_v2_read.go`,
+`internal/rollout/v2read.go`; FE `lib/rolloutRow.ts`, `lib/serviceRolloutLabel.ts`, `pages/Rollouts.tsx`)
+§11 K/D cevapları GELMEDEN yazıldı. Okuma yolu yalnız `system_settings["rollouts"]` **enabled=true VE
+source="v2"** iken rollout_events'e döner — P2.2 dedektörünün koşma koşuluyla aynı bayrak; varsayılan v1'de
+cevaplar bayt bayt bugünkü (handler testleri v1 gövdesini ve "v2 okuması çağrılmadı"yı pinler; değişen
+yalnız önbellek anahtarlarının içi). Açma yolu arayüzsüz: `GET /api/settings/rollouts` → dönen
+`settings` içinde `source:"v2"` → tam blobu `PUT` (audit `rollouts.settings.update`); geri dönüş `"v1"`.
+P2.3 yazmaz; doğrulanmamış varsayımın bedeli yanlış GÖSTERİMDİR, yanlış satır değil.
+- **Açmadan önce doğrulanacaklar:** P2.2 kaydındaki V1–V14 listesinin tamamı (gösterilen satırları o
+  dedektör yazar) + `0015` sihirbazla uygulanmış olmalı (§2.5; tablo yoksa liste boş + dedektör notu,
+  tail her tik hata loglar) + §10.6 "measure first": tail her 15 s (dinleyici varken) rollout_events
+  FINAL taraması yapar — bölümsüz tabloda v1 workload_rollouts tail'iyle aynı sınıf; prod'da ilk hafta
+  `system.query_log`'dan süre/okunan satır ölçülür + V14 (`kube_pod_container_info` `image` değeri
+  `repo:tag`, `repo@digest` ya da `repo:tag@digest` — sonuncuda tag okunur; `SplitImageRef` bunu varsayar,
+  başka biçimde imaj sütunu ham kalır) + sidecar'lı iş yükünde birincil imaj seçiminin (`PrimaryImagePair`:
+  değişen repo > iş yükü adı > ilk) prod imaj adlarıyla tuttuğu +
+  STS/DS `new_revision` doluluğu (boşsa Revizyon "—", kimlik yine 6 parça).
+- **Tasarım kararları:** yeni rota YOK — FE kaynağı göremez (ayar ucu admin), cevap şekli aynı; liste ve
+  istatistik gövdesine eklemeli `v2: true`, satıra eklemeli v2 alanları (`generation`, `incarnationAt`,
+  `changeType`, `v2Status`, replikalar, tam imaj listeleri, `stuckReason`, …; `RolloutRow.V2` nil → anahtar
+  yok). Durum v1 sözlüğünde (`progressing→in_progress`, `succeeded→completed`, `stuck→stalled`,
+  `rolled_back`/`superseded` aynen; `?status=` sunucuda ters çevrilir, tablo testi `v2read_test.go`).
+  Bağlantılar (karar 14): kodek parça sayısıyla ayırır — 6 parça (`cluster|namespace|kind|workload|
+  incarnationAtMs|generation`) rollout_events, 5 parça eski bağlantı v2 açıkken de workload_rollouts'tan
+  (TTL'e dek); v1'de 6 parçalı istek bugünkü 400. v2 kolon seti ayrı `storageKey` (`rollouts-live-v2`):
+  "Kaynak" (detectedBy — v2'de hep ksm) ve Span düşer (karar 4; P3.4'ün tetikleyici kolonu "Kaynak"
+  adını yeni kimlikle alır), Nesil + güncel/hazır/istenen replika gelir. Problem rozeti ve çekmecenin
+  servisleri v2'de İŞ YÜKÜ düzeyinde (`RolloutWorkloadServicesBatch`, revizyonsuz, başlangıç − 1 sa):
+  MV'nin STS/DS revizyonu imaj tag'i, v2'ninki controller revision — revizyonla eşleşmez. İstatistik
+  süresi yalnız succeeded (`succeeded_at − started_at`); `initial` olaylar toplamda sayılır.
+  `/api/rollouts/runs` ve boş liste notu v2'de `rollout_worker_runs` (worker="rollout-detector")
+  okur (P2.2 yalnız yazıcıyı getirmişti). SSE tail kaynak başına ayrı kursör, kaynak değişince sıfırlanır.
+  GitOps sekmesi (v0.10.981) aynı anahtarla rollout_events'ten. Her önbellek anahtarı kaynağı taşır.
+- **§2.2 sapması (servis kapsamlı okuma):** audit "yeni rota, kendi dosyasında" diyordu; bunun yerine
+  `/api/services/{name}/rollouts` sunucuda kaynağı seçer (`serviceRolloutsFor`): DeployHistoryPanel,
+  sürüm çipi, ServiceCharts işaretleri, annotation şeridi ve CoSRE grafik anlatımı tek yardımcıdan
+  beslenir, FE'de "hangi uç" dalı yok; pod-churn yolu P6'da emekli olur. KSM satırı pod-churn şeklinde
+  `source:"ksm"` + iş yükü + durum taşır; `config` değişikliği `restart` sayılır (sürüm çipi ve deploy
+  işaretleri saymaz), `podsRemoved`=0 (KSM emekli pod saymaz) — FE etiketleri `serviceRolloutLabel.ts`
+  ("0 pods replaced" basılmaz). İş yükleri servisin son 7 günde span ürettikleri (MV): span'i olmayan
+  iş yükünün rollout'u /rollouts'ta görünür, servis sayfasında görünmez (bilinen sınır, §10.6).
+- **Ad:** «Deployment/Rollouts» — nav EN/TR, ⌘K etiketi + "deployments" takma adı, Topbar, kapalı
+  durumu (metin artık olmayan "Settings → Rollouts" yerine sayfadaki «Etkinleştir»i söyler, §2.6 madde 5
+  FE yarısı); `pageContext` `/deployment-report` → `rollouts` (ölü `deployment-report` PageId çıktı).
+- **İnceleme düzeltmeleri:** v1 imaj/sürüm alanı sıralı listenin ilki değil `PrimaryImagePair` (istio
+  sidecar'ı önde sıralanıp "1.20.1 → 1.20.1" + `VersionConstant` gösteriyordu); dedektör `updated_at`'i
+  tik başı değil küme YAZIM anı basar (`v2StampWrite`; tik başı 15 s tail watermark'ını geçince keyset
+  kursör satırı hiç görmezdi — v1 de yazım anını basar); tail kursörü yalnız başarıda ilerler
+  (`rolloutTailPages`; v1'de de önceki anlam); v2 STS/DS "Traces →" süzgeci controller revizyonu değil
+  `imageTag`, revizyonsuz Deployment deployment adıyla; DeployHistoryPanel KSM satırını zaman + iş yüküyle
+  anahtarlar (aynı scrape zamanı).

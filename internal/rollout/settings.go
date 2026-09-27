@@ -44,7 +44,8 @@ type Settings struct {
 	// P2.3). Eski bloblar (alan yok) v2 varsayılanlarıyla yüklenir.
 	//
 	// Source — /api/rollouts* okuma kaynağı: "v1" (workload_rollouts,
-	// varsayılan) | "v2" (rollout_events; P2.3'te bağlanır).
+	// varsayılan) | "v2" (rollout_events; v0.10.984 P2.3 bağladı — enabled
+	// ile birlikte: api/rollouts_v2_read.go).
 	Source string `json:"source,omitempty"`
 	// DetectorIntervalS — KSM dedektör tiki, saniye (karar 8: 30; 10–300).
 	DetectorIntervalS int `json:"detectorIntervalS,omitempty"`

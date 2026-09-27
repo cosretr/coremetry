@@ -3164,8 +3164,11 @@ export const api = {
   // admin ucu (koşu hatası ham CH dizesi taşıyabilir); sunucu camelCase/ms yazar
   rolloutRuns: (signal?: AbortSignal) =>
     get<import('./types').RolloutRunsResponse>('/api/rollouts/runs', signal),
-  rolloutDetail: (p: { clusterId: string; namespace: string; workload: string; revision: string; startedAt: number }, signal?: AbortSignal) =>
-    get<import('./types').RolloutDetail>(`/api/rollout/detail?cluster=${encodeURIComponent(p.clusterId)}&namespace=${encodeURIComponent(p.namespace)}&workload=${encodeURIComponent(p.workload)}&revision=${encodeURIComponent(p.revision)}&startedAt=${p.startedAt}`, signal),
+  // v0.10.984 — 6 parçalı (rollout_events) kimlik kind + incarnationAt + generation taşır; 5 parçalı eski kimlik aynen.
+  rolloutDetail: (p: import('./rolloutRow').RolloutIdParam, signal?: AbortSignal) =>
+    get<import('./types').RolloutDetail>('generation' in p
+      ? `/api/rollout/detail?cluster=${encodeURIComponent(p.clusterId)}&namespace=${encodeURIComponent(p.namespace)}&kind=${encodeURIComponent(p.kind)}&workload=${encodeURIComponent(p.workload)}&incarnationAt=${p.incarnationAt}&generation=${p.generation}`
+      : `/api/rollout/detail?cluster=${encodeURIComponent(p.clusterId)}&namespace=${encodeURIComponent(p.namespace)}&workload=${encodeURIComponent(p.workload)}&revision=${encodeURIComponent(p.revision)}&startedAt=${p.startedAt}`, signal),
   // v0.10.981 — servis GitOps sekmesi (service_gitops.go): iş yükleri + Argo uygulamaları + rollout'lar.
   serviceGitOps: (svc: string, signal?: AbortSignal) =>
     get<import('./types').ServiceGitOpsResponse>(`/api/services/${encodeURIComponent(svc)}/gitops`, signal),

@@ -11,6 +11,7 @@ import { IconSparkles } from './icons';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
 import { useFailureSLO, useServiceDeploys, useServiceRollouts, useSLOs } from '@/lib/queries';
+import { rolloutMarkerLabel, rolloutMarkerDescription } from '@/lib/serviceRolloutLabel';
 import { failureThresholds } from '@/lib/failureSlo';
 import { timeRangeToNs } from '@/lib/utils';
 import { envDSL, clusterDSL } from '@/lib/entrySpans';
@@ -339,11 +340,11 @@ export function ServiceCharts({ service, range, onZoom, onZoomReset, opScope = '
   const deployMarkers: DeployMarker[] | undefined = useMemo(() => {
     const rollouts = rolloutsQ.data?.rollouts;
     if (!rollouts) return undefined;
+    // v0.10.984 — source "ksm" (rollouts.source=v2) satırı iş yükü + durumla etiketlenir.
     return rollouts.map(r => ({
       timeUnixNs: r.timeUnixNs,
-      label: `↻ ${r.podsRemoved}p`,
-      description: `rollout · ${r.podsRemoved} pod${r.podsRemoved === 1 ? '' : 's'} replaced (+${r.podsAdded})`
-        + (r.versionAfter ? ` · ${r.versionBefore || '?'}→${r.versionAfter}` : ''),
+      label: rolloutMarkerLabel(r),
+      description: rolloutMarkerDescription(r),
     }));
   }, [rolloutsQ.data]);
 

@@ -30,7 +30,9 @@ export const ROUTE_PAGES: Record<string, PageId> = {
   '/exceptions': 'exceptions', '/errors': 'errors',
   '/logs': 'logs', '/explore': 'explore', '/metrics': 'metrics',
   '/clusters': 'clusters', '/pod': 'pod', '/entity': 'entity', '/hosts': 'hosts',
-  '/rollouts': 'rollouts', '/events': 'events', '/deployment-report': 'deployment-report', '/deploys': 'rollouts',
+  // v0.10.984 (Rollouts v2 P2.3) — /deployment-report emekli rota /rollouts'a (Deployment/Rollouts)
+  // yönlendirir: bağlam da o sayfanınki ('/deploys' gibi); ayrı 'deployment-report' kimliği (PageId'den de çıktı) ölü sayfaydı.
+  '/rollouts': 'rollouts', '/events': 'events', '/deployment-report': 'rollouts', '/deploys': 'rollouts',
   '/endpoints': 'endpoints', '/endpoint': 'endpoint',
   '/databases': 'databases', '/database': 'database', '/databases/slow-queries': 'slow-queries', '/databases/statement': 'statement',
   '/dashboards': 'dashboards', '/dashboard': 'dashboard',

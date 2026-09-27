@@ -7,6 +7,7 @@ import type { Rollout, DeployImpact, TimeRange } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { entityHref } from '@/lib/entityHref';
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
+import { rolloutHeadline, rolloutCounts, rolloutExplainVersion, rolloutRowKey } from '@/lib/serviceRolloutLabel';
 
 // Per-row Copilot explain state (v0.5.192). Keyed by rollout
 // timestamp so each row remembers its own answer + loading flag
@@ -27,6 +28,9 @@ type ExplainState =
 // rollout: pods replaced + age + the before/after RED diff so the
 // operator reads "the rollout regressed p99 by 12%" at a glance. A
 // version is shown ONLY when it actually changed across the rollout.
+// v0.10.984 (Rollouts v2 P2.3) — rollouts.source="v2" iken sunucu satırları
+// rollout_events'ten (KSM) verir (source "ksm"): başlık / sayaç / boş metin
+// serviceRolloutLabel.ts'ten, pod-churn metni KSM satırına basılmaz.
 export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range }: {
   service: string;
   // v0.10.717 (multi-cluster) — Topbar Cluster kapsamı: satırlar süzülür
@@ -41,9 +45,11 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
 }) {
   const [rows, setRows] = useState<Rollout[] | null | undefined>(undefined);
   const [tracked, setTracked] = useState(true);
+  const [ksm, setKsm] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
   // Per-rollout explain state, keyed by timestamp so the map stays
-  // correct even if the rollout list re-fetches.
+  // correct even if the rollout list re-fetches. v0.10.984 — KSM satırında
+  // zaman + iş yükü (rolloutRowKey; aynı scrape zamanı paylaşılabilir).
   const [explains, setExplains] = useState<Record<string, ExplainState>>({});
   const [copilotEnabled, setCopilotEnabled] = useState<boolean | null>(null);
 
@@ -60,6 +66,7 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
     // v0.10.717 — kapsam seçiliyse yalnız o cluster'ın rollout'ları.
     setRows((rolloutsQ.data.rollouts ?? []).filter(r => !cluster || !r.cluster || r.cluster === cluster).slice().reverse());
     setTracked(rolloutsQ.data.instancesTracked ?? false);
+    setKsm(rolloutsQ.data.source === 'ksm');
   }, [rolloutsQ.data, rolloutsQ.isError, cluster]);
   useEffect(() => {
     // Probe the copilot once — if it's not configured, hide the
@@ -68,12 +75,12 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
   }, [service]);
 
   const askCopilot = async (row: Rollout) => {
-    const key = `${row.timeUnixNs}`;
+    const key = rolloutRowKey(row); // v0.10.984 — KSM satırları zaman paylaşabilir
     setExplains(s => ({ ...s, [key]: { kind: 'busy' } }));
     try {
       const r = await api.copilotDeployImpact({
         service,
-        version: row.versionAfter || (row.kind === 'restart' ? `restart (${row.podsRemoved} pods)` : `rollout (${row.podsRemoved} pods)`), // v0.8.405
+        version: rolloutExplainVersion(row), // v0.8.405; v0.10.984 KSM satırı
         deployTimeNs: row.timeUnixNs,
         windowSec: 600,
       });
@@ -101,7 +108,9 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
         <div style={{ fontWeight: 700, color: 'var(--text2)', marginBottom: 4 }}>
           ↻ Recent rollouts
         </div>
-        {tracked
+        {ksm
+          ? 'No rollouts in the last 7 days — KSM saw no generation change on this service’s workloads.'
+          : tracked
           ? 'No rollouts (pod-set turnover) in the last 7 days — the service’s instances have been stable.'
           : 'This service emits no pod identity (k8s.pod.name / service.instance.id / host.name), so rollouts can’t be detected.'}
       </div>
@@ -121,14 +130,14 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
       }}>
         <span>↻ Recent rollouts</span>
         <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-          pod-set turnover · ±10 min impact
+          {ksm ? 'KSM rollouts' : 'pod-set turnover'} · ±10 min impact
         </span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {rows.map((r, i) => {
           const open = expanded === i;
           return (
-            <div key={r.timeUnixNs}
+            <div key={rolloutRowKey(r)}
               style={{
                 padding: '8px 0',
                 borderTop: i > 0 ? '1px solid var(--divider)' : 'none',
@@ -142,11 +151,11 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
                   {r.impact ? (open ? '▼' : '▶') : ''}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 600 }}>
-                  ↻ {r.podsRemoved} pod{r.podsRemoved === 1 ? '' : 's'} replaced
+                  {rolloutHeadline(r)}
                 </span>
                 <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}
-                  title={`${r.podsAdded} new · ${r.podsRemoved} retired · ${r.activePods} now active`}>
-                  +{r.podsAdded}/−{r.podsRemoved}
+                  title={rolloutCounts(r).title}>
+                  {rolloutCounts(r).text}
                 </span>
                 {r.versionAfter && (
                   <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}
@@ -188,7 +197,7 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
                       propagation so the row's expand toggle doesn't
                       also fire. */}
                   {copilotEnabled && (() => {
-                    const key = `${r.timeUnixNs}`;
+                    const key = rolloutRowKey(r);
                     const st = explains[key] ?? { kind: 'idle' as const };
                     return (
                       <div style={{ marginTop: 10 }}

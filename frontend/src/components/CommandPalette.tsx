@@ -72,7 +72,8 @@ const PAGES: Result[] = [
   { kind: 'page', label: 'Anomalies',   navKey: 'nav.anomalies', hint: 'Log + trace anomaly streams', to: '/anomalies' },
   // v0.10.201 — Inbox/Incidents/Problems/Anomalies'in navKey'siz KOPYA bloğu silindi
   // (⌘K aynı dört sayfayı iki kez listeliyordu, dedup yok); Deployment Report → Rollouts.
-  { kind: 'page', label: 'Rollouts',    navKey: 'nav.rollouts', aliases: ['deploy', 'deployment report', 'rollout'], hint: 'Live workload rollouts + deploy stats', to: '/rollouts' },
+  // v0.10.984 (Rollouts v2 P2.3) — sayfa adı «Deployment/Rollouts»; "deployments" araması da bulur.
+  { kind: 'page', label: 'Deployment/Rollouts', navKey: 'nav.rollouts', aliases: ['deploy', 'deployments', 'deployment report', 'rollout', 'rollouts'], hint: 'Live workload rollouts + deploy stats', to: '/rollouts' },
   // Services
   { kind: 'page', label: 'Services',    navKey: 'nav.services', hint: 'Per-service RED + latency', to: '/services' },
   { kind: 'page', label: 'Endpoints',   navKey: 'nav.endpoints', hint: 'Per-route RED', to: '/endpoints' },

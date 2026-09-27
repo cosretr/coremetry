@@ -55,7 +55,7 @@ func TestRolloutKeysCarryEveryInput(t *testing.T) {
 	from := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
 	to := from.Add(time.Hour)
 	base := chstore.RolloutFilter{ClusterID: "c-1", Namespace: "pay", Workload: "api", Status: "completed", Kind: "Deployment"}
-	k0 := rolloutsListKey(base, 100, from, to)
+	k0 := rolloutsListKey("v1", base, 100, from, to)
 	variants := []chstore.RolloutFilter{
 		{ClusterID: "c-2", Namespace: "pay", Workload: "api", Status: "completed", Kind: "Deployment"},
 		{ClusterID: "c-1", Namespace: "core", Workload: "api", Status: "completed", Kind: "Deployment"},
@@ -64,35 +64,62 @@ func TestRolloutKeysCarryEveryInput(t *testing.T) {
 		{ClusterID: "c-1", Namespace: "pay", Workload: "api", Status: "completed", Kind: "StatefulSet"},
 	}
 	for _, v := range variants {
-		if rolloutsListKey(v, 100, from, to) == k0 {
+		if rolloutsListKey("v1", v, 100, from, to) == k0 {
 			t.Fatalf("girdi anahtarı ayırmadı: %+v", v)
 		}
 	}
-	if rolloutsListKey(base, 50, from, to) == k0 {
+	if rolloutsListKey("v1", base, 50, from, to) == k0 {
 		t.Fatal("limit anahtarda olmalı")
 	}
-	if rolloutsListKey(base, 100, from.Add(time.Hour), to.Add(time.Hour)) == k0 {
+	if rolloutsListKey("v1", base, 100, from.Add(time.Hour), to.Add(time.Hour)) == k0 {
 		t.Fatal("pencere anahtarda olmalı")
 	}
 	// aynı 30 s kova → tek girdi (FE her tick'te yeniden hesaplar)
-	if rolloutsListKey(base, 100, from.Add(7*time.Second), to.Add(7*time.Second)) != k0 {
+	if rolloutsListKey("v1", base, 100, from.Add(7*time.Second), to.Add(7*time.Second)) != k0 {
 		t.Fatal("aynı 30 s kovası tek girdi olmalı")
 	}
 	// ayraç saldırısı: parçalar ayrı ayrı özetlenir
 	a := chstore.RolloutFilter{ClusterID: "c\x00pay", Namespace: ""}
 	bf := chstore.RolloutFilter{ClusterID: "c", Namespace: "\x00pay"}
-	if rolloutsListKey(a, 100, from, to) == rolloutsListKey(bf, 100, from, to) {
+	if rolloutsListKey("v1", a, 100, from, to) == rolloutsListKey("v1", bf, 100, from, to) {
 		t.Fatal("NUL kaydırması anahtar çakıştırmamalı")
 	}
 	// kararlılık
-	if rolloutsListKey(base, 100, from, to) != k0 {
+	if rolloutsListKey("v1", base, 100, from, to) != k0 {
 		t.Fatal("anahtar kararlı olmalı")
 	}
 	id := chstore.RolloutID{ClusterID: "c-1", Namespace: "pay", Workload: "api", Revision: "api-abc", StartedAt: from}
-	if rolloutKey(id) == rolloutKey(chstore.RolloutID{ClusterID: "c-1", Namespace: "pay", Workload: "api", Revision: "api-abc", StartedAt: from.Add(time.Minute)}) {
+	if rolloutKey("v1", id) == rolloutKey("v1", chstore.RolloutID{ClusterID: "c-1", Namespace: "pay", Workload: "api", Revision: "api-abc", StartedAt: from.Add(time.Minute)}) {
 		t.Fatal("startedAt anahtarda olmalı")
 	}
-	if rolloutStatsKey("c-1", "pay", 10, from, to) == rolloutStatsKey("c-1", "pay", 20, from, to) {
+	if rolloutStatsKey("v1", "c-1", "pay", 10, from, to) == rolloutStatsKey("v1", "c-1", "pay", 20, from, to) {
 		t.Fatal("topN anahtarda olmalı")
+	}
+	// v0.10.984 — okuma kaynağı her anahtarda (iki tablo aynı girdiye farklı cevap verir).
+	if rolloutsListKey("v2", base, 100, from, to) == k0 {
+		t.Fatal("kaynak liste anahtarında olmalı")
+	}
+	if rolloutKey("v2", id) == rolloutKey("v1", id) {
+		t.Fatal("kaynak tekil anahtarda olmalı")
+	}
+	if rolloutStatsKey("v2", "c-1", "pay", 10, from, to) == rolloutStatsKey("v1", "c-1", "pay", 10, from, to) {
+		t.Fatal("kaynak istatistik anahtarında olmalı")
+	}
+	if rolloutDetailKey("v2", id, from) == rolloutDetailKey("v1", id, from) || rolloutRunsKey("v2") == rolloutRunsKey("v1") {
+		t.Fatal("kaynak çekmece / koşu anahtarında olmalı")
+	}
+	v2id := chstore.RolloutV2ID{ClusterID: "c-1", Namespace: "pay", Kind: "Deployment", Workload: "api", IncarnationAt: from, Generation: 7}
+	for _, v := range []chstore.RolloutV2ID{
+		{ClusterID: "c-2", Namespace: "pay", Kind: "Deployment", Workload: "api", IncarnationAt: from, Generation: 7},
+		{ClusterID: "c-1", Namespace: "pay", Kind: "StatefulSet", Workload: "api", IncarnationAt: from, Generation: 7},
+		{ClusterID: "c-1", Namespace: "pay", Kind: "Deployment", Workload: "api", IncarnationAt: from.Add(time.Minute), Generation: 7},
+		{ClusterID: "c-1", Namespace: "pay", Kind: "Deployment", Workload: "api", IncarnationAt: from, Generation: 8},
+	} {
+		if rolloutV2Key(v) == rolloutV2Key(v2id) || rolloutV2DetailKey(v, from) == rolloutV2DetailKey(v2id, from) {
+			t.Fatalf("v2 anahtar parçası ayırmadı: %+v", v)
+		}
+	}
+	if rolloutV2Key(v2id) == rolloutKey("v2", id) {
+		t.Fatal("6 parçalı anahtar 5 parçalıyla çakışmamalı")
 	}
 }

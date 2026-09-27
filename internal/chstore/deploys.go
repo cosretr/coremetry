@@ -465,6 +465,19 @@ type Rollout struct {
 	// (span cluster türevi). Kademeli çıkış her cluster'da ayrı satır;
 	// boş = cluster türetilemedi.
 	Cluster string `json:"cluster,omitempty"`
+	// v0.10.984 (Rollouts v2 P2.3) — rollouts.source="v2" iken satır pod
+	// değişiminden DEĞİL rollout_events'ten (KSM) gelir: Source="ksm" +
+	// iş yükü kimliği + v1 sözlüğünde durum + replika sayıları. Pod-churn
+	// satırında hepsi boş (omitempty → v1 cevabı aynı). KSM satırında
+	// PodsAdded = güncel şablondaki replika, PodsRemoved = 0 (KSM emekli pod
+	// saymaz), ActivePods = hazır replika; tüketiciler Source'a bakar.
+	Source          string `json:"source,omitempty"`
+	WorkloadKind    string `json:"workloadKind,omitempty"`
+	Namespace       string `json:"namespace,omitempty"`
+	Workload        string `json:"workload,omitempty"`
+	Status          string `json:"status,omitempty"`
+	SpecReplicas    int    `json:"specReplicas,omitempty"`
+	UpdatedReplicas int    `json:"updatedReplicas,omitempty"`
 }
 
 // RolloutsResult is the GetServiceRollouts payload.
@@ -479,6 +492,12 @@ type RolloutsResult struct {
 	// service.instance.id / host_name) is present, so churn can't be
 	// computed — the UI shows nothing rather than a misleading empty.
 	InstancesTracked bool `json:"instancesTracked"`
+	// Source — v0.10.984: "ksm" = satırlar rollout_events'ten (v2 okuma
+	// yolu); boş = pod-churn (v1, JSON'da yok).
+	Source string `json:"source,omitempty"`
+	// Note — v0.10.984: v2 okumasının sınırı (iş yükü listesi kesildi, span
+	// cluster değeri eşlenemedi…); boş = yok.
+	Note string `json:"note,omitempty"`
 }
 
 // GetServiceRollouts detects pod-churn rollouts for a service by

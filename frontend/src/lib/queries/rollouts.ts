@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { keys } from './keys';
 import type { RolloutListResponse, RolloutStats, RolloutRunsResponse, RolloutDetail, ServiceGitOpsResponse } from '../types';
+import type { RolloutIdParam } from '../rolloutRow';
 
 export interface RolloutListParams {
   from: number; to: number; // ns
@@ -49,7 +50,7 @@ export function useRolloutRuns(enabled = true) {
   });
 }
 
-export function useRolloutDetail(p: { clusterId: string; namespace: string; workload: string; revision: string; startedAt: number }) {
+export function useRolloutDetail(p: RolloutIdParam) {
   return useQuery<RolloutDetail>({
     queryKey: keys.rollouts.detail(p),
     queryFn: ({ signal }) => api.rolloutDetail(p, signal),

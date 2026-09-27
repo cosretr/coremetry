@@ -110,3 +110,72 @@ func (s *Store) RolloutServicesBatch(ctx context.Context, keys []RolloutServiceK
 	}
 	return out, rows.Err()
 }
+
+// ── v0.10.984 — Rollouts v2 P2.3: iş yükü düzeyi servis çözümü ────────────
+//
+// v2 satırının revizyonu MV'nin revizyonuyla her türde eşleşmez: MV'de
+// Deployment revizyonu RS adı (v2 new_revision ile aynı) ama STS/DS'de imaj
+// TAG'i (v0.10.211 vekili), v2'de ise controller revision adı / hash. Bu
+// yüzden v2 satırının servisleri (cluster, ns, workload) üzerinden, rollout
+// başlangıcı − 1 sa'ten beri — revizyon süzgeci YOK. Bir iş yükünün
+// servisleri revizyonlar arasında aynıdır; fark yalnız başlangıçtan önce
+// emekli olmuş bir servisin de sayılabilmesi (1 sa payı v1 ile aynı).
+
+// rolloutWorkloadServicesBatchSQL — SAF: n (cluster, ns, workload) demeti
+// için tek MV sorgusu; demet IN = MV ORDER BY öneği.
+func rolloutWorkloadServicesBatchSQL(n int) string {
+	tuples := make([]string, n)
+	for i := range tuples {
+		tuples[i] = "(?, ?, ?)"
+	}
+	return `
+		SELECT cluster, k8s_namespace, workload, service_name
+		FROM workload_revision_activity_1m
+		WHERE (cluster, k8s_namespace, workload) IN (` + strings.Join(tuples, ", ") + `)
+		  AND bucket >= toDateTime(?, 'UTC') AND bucket <= now()
+		GROUP BY cluster, k8s_namespace, workload, service_name
+		ORDER BY cluster, k8s_namespace, workload, service_name
+		LIMIT ` + fmt.Sprint(200*n) + `
+		SETTINGS max_execution_time = 10`
+}
+
+// RolloutWorkloadServicesBatch — v0.10.984 — v2 akış rozeti ve çekmecesi
+// için iş yükü başına servisler; dönen haritanın anahtarında Revision BOŞ.
+// keys'in Revision alanı yok sayılır (tekilleştirilir); 1000'de kesilir.
+func (s *Store) RolloutWorkloadServicesBatch(ctx context.Context, keys []RolloutServiceKey, since time.Time) (map[RolloutServiceKey][]string, error) {
+	out := map[RolloutServiceKey][]string{}
+	seen := map[RolloutServiceKey]bool{}
+	uniq := make([]RolloutServiceKey, 0, len(keys))
+	for _, k := range keys {
+		k.Revision = ""
+		if !seen[k] {
+			seen[k] = true
+			uniq = append(uniq, k)
+		}
+	}
+	if len(uniq) == 0 {
+		return out, nil
+	}
+	if len(uniq) > 1000 {
+		uniq = uniq[:1000]
+	}
+	args := make([]any, 0, len(uniq)*3+1)
+	for _, k := range uniq {
+		args = append(args, k.Cluster, k.Namespace, k.Workload)
+	}
+	args = append(args, chDateTimeArg(since))
+	rows, err := s.conn.Query(ctx, rolloutWorkloadServicesBatchSQL(len(uniq)), args...)
+	if err != nil {
+		return nil, fmt.Errorf("rollout workload services batch: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k RolloutServiceKey
+		var svc string
+		if err := rows.Scan(&k.Cluster, &k.Namespace, &k.Workload, &svc); err != nil {
+			return nil, err
+		}
+		out[k] = append(out[k], svc)
+	}
+	return out, rows.Err()
+}

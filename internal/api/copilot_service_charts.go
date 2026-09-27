@@ -96,7 +96,8 @@ func (s *Server) buildServiceChartsInput(
 	// gerçek sürüm değişimi ("deploy") yeniden başlatmaya ("restart")
 	// TERCİH EDİLİR: operatörün sorduğu soru neredeyse her zaman sürüm
 	// değişimiyle ilgili (v0.8.405 kind ayrımı).
-	if rr, err := s.store.GetServiceRollouts(ctx, service, from, to); err == nil && rr != nil {
+	// v0.10.984 — source=v2 iken rollout_events (serviceRolloutsFor; işaretlerle aynı yol).
+	if rr, err := s.serviceRolloutsFor(ctx, service, from, to); err == nil && rr != nil {
 		var pick *chstore.Rollout
 		for i := range rr.Rollouts {
 			ro := &rr.Rollouts[i]
@@ -113,6 +114,9 @@ func (s *Server) buildServiceChartsInput(
 				VersionBefore: pick.VersionBefore,
 				VersionAfter:  pick.VersionAfter,
 				PodsReplaced:  pick.PodsRemoved,
+			}
+			if pick.Source == "ksm" { // KSM: güncel şablondaki replika (emekli pod sayılmaz)
+				in.Signals.Deploy.PodsReplaced = pick.UpdatedReplicas
 			}
 		}
 	}

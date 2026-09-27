@@ -862,6 +862,7 @@ func (d *V2Detector) processCluster(ctx context.Context, set V2Resolved, ref V2C
 			return res
 		}
 		if len(out.Events) > 0 {
+			v2StampWrite(out.Events, d.now())
 			if err := d.store.RolloutV2WriteEvents(ctx, out.Events); err != nil {
 				mem.loaded = false
 				res.hard, res.note = true, "rollout_events yazılamadı: "+err.Error()
@@ -886,6 +887,19 @@ func (d *V2Detector) processCluster(ctx context.Context, set V2Resolved, ref V2C
 	// Dondurma kısmi sonuçtur (yokluk işlenmedi): koşu partial, satırlar yazıldı.
 	res.ok = len(frozenKinds) == 0
 	return res
+}
+
+// v2StampWrite — v0.10.984 — SAF: olayların updated_at'i YAZIM anına
+// (ms). DetectV2 tik başlangıcını basar; küme Thanos okumalarını (parallel=4
+// kuyruğu, imaj sorguları) bitirip yazdığında bu 15 s tail watermark'ını
+// geçmiş olabilir ve SSE tail'in keyset kursörü (api/rollouts.go) o
+// satırları hiç görmez (İnceleme). v1 de yazım anını basar (RolloutUpsert).
+// version dokunulmaz (ReplacingMergeTree sırası tikten kalır).
+func v2StampWrite(events []V2Event, at time.Time) {
+	at = v2ms(at)
+	for i := range events {
+		events[i].UpdatedAt = at
+	}
 }
 
 // v2LatestPerIncarnation — SAF: (iş yükü, incarnation) başına generation'ı

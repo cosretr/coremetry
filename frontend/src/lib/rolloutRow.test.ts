@@ -62,6 +62,36 @@ describe('rolloutTracesFilters', () => {
   it("bilinmeyen/boş tür Deployment gibi davranır (eski satırlar)", () => {
     expect(rolloutTracesFilters({ kind: '', namespace: 'n', workload: 'w', revision: 'w-abc' })[0].k).toBe('resource.k8s.replicaset.name');
   });
+  // İnceleme (v0.10.984): v2 STS/DS revizyonu controller revizyonu — tag imageTag'den.
+  const v2 = { generation: 4, incarnationAt: 1_700_000_000_000 };
+  it('v2 StatefulSet/DaemonSet → imaj tag imageTag\'den, revizyondan değil', () => {
+    const f = rolloutTracesFilters({ kind: 'StatefulSet', namespace: 'db', workload: 'web', revision: 'web-7d9f8c6b5', imageTag: '1.4.2', ...v2 });
+    expect(f).toEqual([
+      { k: 'resource.k8s.statefulset.name', op: '=', v: ['web'] },
+      { k: 'resource.container.image.tag', op: '=', v: ['1.4.2'] },
+      { k: 'resource.k8s.namespace.name', op: '=', v: ['db'] },
+    ]);
+    const d = rolloutTracesFilters({ kind: 'DaemonSet', namespace: 'sys', workload: 'agent', revision: '5c7f9d8b4', imageTag: 't3', ...v2 });
+    expect(d[1]).toEqual({ k: 'resource.container.image.tag', op: '=', v: ['t3'] });
+    expect(JSON.stringify(d)).not.toContain('5c7f9d8b4');
+  });
+  it('v2 STS tag yoksa → yalnız iş yükü + namespace (boş tag süzgeci yok)', () => {
+    const f = rolloutTracesFilters({ kind: 'StatefulSet', namespace: 'db', workload: 'web', revision: 'web-7d9f8c6b5', imageTag: '', ...v2 });
+    expect(f).toEqual([
+      { k: 'resource.k8s.statefulset.name', op: '=', v: ['web'] },
+      { k: 'resource.k8s.namespace.name', op: '=', v: ['db'] },
+    ]);
+  });
+  it('revizyonu boş Deployment → deployment adı + namespace (replicaset.name=\'\' değil)', () => {
+    expect(rolloutTracesFilters({ kind: 'Deployment', namespace: 'pay', workload: 'api', revision: '', ...v2 })).toEqual([
+      { k: 'resource.k8s.deployment.name', op: '=', v: ['api'] },
+      { k: 'resource.k8s.namespace.name', op: '=', v: ['pay'] },
+    ]);
+  });
+  it('v2 Deployment revizyonu RS adı → v1 gibi replicaset', () => {
+    expect(rolloutTracesFilters({ kind: 'Deployment', namespace: 'pay', workload: 'api', revision: 'api-8a', imageTag: '2.0', ...v2 })[0])
+      .toEqual({ k: 'resource.k8s.replicaset.name', op: '=', v: ['api-8a'] });
+  });
 });
 
 // v0.10.234 — Operator-reported: çekmecede "hangi sürümden hangisine" görünmüyordu,
@@ -95,6 +125,43 @@ describe('rolloutChangeKind', () => {
     expect(imageRef('reg/app', '1.0')).toBe('reg/app:1.0');
     expect(imageRef('reg/app', '')).toBe('reg/app');
     expect(imageRef('', '')).toBe('—');
+  });
+});
+
+// v0.10.984 — Rollouts v2 P2.3: v2 satırı kimliği 6 parça, tür change_type'tan,
+// durum ipucu KSM anlamıyla; kanıt v2 anahtarı taşırsa 6 parçalı bağlantı.
+import { isV2Rollout, replicaSummary, changeKindTone } from './rolloutRow';
+describe('v2 satırı (v0.10.984)', () => {
+  const v2row: WorkloadRollout = { ...base, revision: '', detectedBy: 'ksm', generation: 7, incarnationAt: 1_699_999_940_000, changeType: 'rollback',
+    specReplicas: 3, updatedReplicas: 2, availableReplicas: 1 };
+  it('kimlik 6 parça; v1 satırı eski 5 parça', () => {
+    expect(isV2Rollout(v2row)).toBe(true);
+    expect(isV2Rollout(base)).toBe(false);
+    expect(rolloutKey(v2row)).toBe('c-1|pay|Deployment|api|1699999940000|7');
+    expect(rolloutKey(base)).toBe('c-1|pay|api|api-7fb7dffckb|1700000000000');
+    // aynı iş yükünün iki nesli ayrı satır; upsert v2 kimliğiyle çalışır
+    const next = { ...v2row, generation: 8, updatedAt: 5 };
+    expect(upsertRollouts([v2row], [next])).toHaveLength(2);
+  });
+  it("tür change_type'tan (imaj kıyası yapılmaz)", () => {
+    expect(rolloutChangeKind(v2row)).toBe('rollback');
+    expect(changeKindLabel('rollback')).toBe('Rollback');
+    expect(changeKindTone('rollback')).toBe('warning');
+    expect(rolloutChangeKind({ ...v2row, changeType: 'rollout' })).toBe('deployment');
+    expect(rolloutChangeKind({ ...v2row, changeType: 'config' })).toBe('config');
+    expect(rolloutChangeKind({ ...v2row, changeType: 'initial' })).toBe('initial');
+  });
+  it('durum ipucu v2 anlamıyla; replika özeti yalnız v2', () => {
+    for (const st of ['in_progress', 'completed', 'rolled_back', 'superseded', 'stalled']) {
+      expect(statusTitle(st, true)).not.toBe('');
+      expect(statusTitle(st, true)).not.toBe(statusTitle(st));
+    }
+    expect(replicaSummary(v2row)).toBe('2/1/3');
+    expect(replicaSummary(base)).toBeNull();
+  });
+  it('kanıt v2 anahtarı taşırsa 6 parçalı bağlantı (ns → ms)', () => {
+    const href = rolloutEvidenceHref({ clusterId: 'c-1', namespace: 'pay', workload: 'api', revision: '', startedAtNs: 1, workloadKind: 'Deployment', generation: 7, incarnationAtNs: 1699999940000_000000 });
+    expect(decodeRolloutParam(href.slice('/rollouts?rollout='.length))).toEqual({ clusterId: 'c-1', namespace: 'pay', kind: 'Deployment', workload: 'api', incarnationAt: 1699999940000, generation: 7 });
   });
 });
 

@@ -131,11 +131,8 @@ func (s *Store) RolloutV2LatestEvents(ctx context.Context, clusterID string) ([]
 		}
 		n := 0
 		for rows.Next() {
-			var e rollout.V2Event
-			if err := rows.Scan(&e.ClusterID, &e.Namespace, &e.WorkloadKind, &e.Workload, &e.IncarnationAt, &e.Generation,
-				&e.StartedAt, &e.Status, &e.ChangeType, &e.ObservedGeneration, &e.SpecReplicas, &e.UpdatedReplicas,
-				&e.AvailableReplicas, &e.NewRevision, &e.OldRevision, &e.Images, &e.PrevImages, &e.VersionTag, &e.StuckReason,
-				&e.SucceededAt, &e.StuckAt, &e.FinishedAt, &e.Note, &e.UpdatedAt, &e.Version); err != nil {
+			e, err := scanRolloutV2Event(rows) // v0.10.984 — okuma yoluyla ortak tarayıcı
+			if err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("rollout_events scan: %w", err)
 			}

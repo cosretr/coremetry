@@ -23,7 +23,7 @@ import {
 import { useServiceGitOps } from '@/lib/queries';
 import { fmtDateTime, fmtDurShort } from '@/lib/utils';
 import {
-  rolloutKey, statusTone, statusLabel, statusTitle, rolloutDurationSec, imageDiff,
+  rolloutKey, statusTone, statusLabel, statusTitle, rolloutDurationSec, imageDiff, isV2Rollout,
   encodeRolloutParam, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone,
 } from '@/lib/rolloutRow';
 import {
@@ -194,7 +194,7 @@ function RolloutsSection({ d, pending, err, onRetry, clusterName }: {
               return (
                 <tr key={rolloutKey(r)} className={rows.length > 100 ? 'cv-row' : undefined}>
                   <DataTableCell dt={dt} col="status" row={r}>
-                    <Badge tone={statusTone(r.status)} title={statusTitle(r.status) || undefined}>{statusLabel(r.status)}</Badge>
+                    <Badge tone={statusTone(r.status)} title={statusTitle(r.status, isV2Rollout(r)) || undefined /* v0.10.984 — v2 satırı KSM anlamıyla */}>{statusLabel(r.status)}</Badge>
                   </DataTableCell>
                   <DataTableCell dt={dt} col="workload" row={r} title={`${cname} / ${r.namespace} / ${r.workload}`}>
                     {r.workload}<span className="field-hint"> · {r.namespace}</span>

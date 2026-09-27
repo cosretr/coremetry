@@ -293,6 +293,10 @@ type RolloutRow struct {
 	// beri açık ∩ rollout'un servisleri (api/rollout_problems.go); liste
 	// yükleyicisi doldurur, store yazmaz.
 	ProblemsCaused int `json:"problemsCaused,omitempty"`
+	// V2 — v0.10.984 (Rollouts v2 P2.3): satır rollout_events'ten geldiyse
+	// v2'ye özgü alanlar (rollout_v2_read.go RolloutRowFromV2). nil = v1
+	// satırı → JSON'a HİÇBİR ek anahtar girmez (v1 cevabı bayt bayt aynı).
+	V2 *RolloutV2Fields `json:"-"`
 }
 
 // MarshalJSON — camelCase alanlar (lib/types.ts aynası); sıfır zamanlar 0.
@@ -303,7 +307,7 @@ func (r RolloutRow) MarshalJSON() ([]byte, error) {
 		}
 		return t.UnixMilli()
 	}
-	return json.Marshal(map[string]any{
+	m := map[string]any{
 		"clusterId": r.ClusterID, "namespace": r.Namespace, "workload": r.Workload, "kind": r.Kind, "revision": r.Revision,
 		"startedAt": ms(r.StartedAt), "status": r.Status, "prevRevision": r.PrevRevision,
 		"image": r.Image, "imageTag": r.ImageTag, "prevImage": r.PrevImage, "prevImageTag": r.PrevImageTag,
@@ -311,7 +315,13 @@ func (r RolloutRow) MarshalJSON() ([]byte, error) {
 		"podsReadyAt": ms(r.PodsReadyAt), "ksmNotReadySince": ms(r.KSMNotReadySince), "completedAt": ms(r.CompletedAt),
 		"detectedBy": r.DetectedBy, "spanCount": r.SpanCount, "note": r.Note, "updatedAt": ms(r.UpdatedAt),
 		"problemsCaused": r.ProblemsCaused,
-	})
+	}
+	if r.V2 != nil {
+		for k, v := range r.V2.jsonFields(ms) {
+			m[k] = v
+		}
+	}
+	return json.Marshal(m)
 }
 
 func rolloutWhere(f RolloutFilter, from, to time.Time) (string, []any) {
@@ -482,19 +492,7 @@ func (s *Store) RolloutStats(ctx context.Context, clusterID, ns string, from, to
 		Scan(&total, &completed, &rolled, &inprog, &stalled, &superseded, &meanSec, &p95Sec); err != nil {
 		return nil, fmt.Errorf("rollout stats: %w", err)
 	}
-	st.Total, st.Completed, st.RolledBack, st.InProgress, st.Stalled, st.Superseded = int(total), int(completed), int(rolled), int(inprog), int(stalled), int(superseded)
-	if days := to.Sub(from).Hours() / 24; days > 0 {
-		st.PerDay = float64(total) / days
-	}
-	if completed+rolled > 0 {
-		st.RollbackRate = float64(rolled) / float64(completed+rolled)
-	}
-	if meanSec == meanSec { // NaN korunması
-		st.MeanDurationSec = meanSec
-	}
-	if p95Sec == p95Sec {
-		st.P95DurationSec = p95Sec
-	}
+	fillRolloutStatsTotals(st, total, completed, rolled, inprog, stalled, superseded, meanSec, p95Sec, from, to)
 	// 2) en çok rollback / en çok deploy alan workload'lar
 	top := func(extra string, dst *[]RolloutWorkloadN) error {
 		rows, err := s.conn.Query(ctx, `SELECT cluster_id, namespace, workload, count() AS n FROM workload_rollouts FINAL

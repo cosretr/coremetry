@@ -1185,3 +1185,42 @@ func TestV2DetectorWaitActive(t *testing.T) {
 		t.Fatal("bayrak açılınca true dönmeli")
 	}
 }
+
+// TestV2DetectorStampsUpdatedAtAtWrite — İnceleme (v0.10.984): updated_at
+// tik başlangıcı değil YAZIM anı; küme okumaları uzarsa (parallel=4 kuyruğu,
+// yavaş Thanos) tik zamanı SSE tail'in 15 s watermark'ını geçer ve keyset
+// kursör satırı hiç görmezdi. version tikten kalır.
+func TestV2DetectorStampsUpdatedAtAtWrite(t *testing.T) {
+	h := newV2Harness(t)
+	h.dep("api", 1, 1, 3, 3, 3, 3, map[string]uint32{"api-a": 3}, map[string][]string{"api-a": {"reg/api:1"}})
+	h.tick() // bootstrap
+	h.dep("api", 2, 2, 3, 4, 2, 3, map[string]uint32{"api-a": 2, "api-b": 2},
+		map[string][]string{"api-a": {"reg/api:1"}, "api-b": {"reg/api:2"}})
+	h.clock = h.clock.Add(30 * time.Second)
+	h.ksm.sampleAt = h.clock.Add(-5 * time.Second)
+	// Her saat okuması 1 s ilerler: yazım, tik başlangıcından sonra.
+	var seen []time.Time
+	h.det.now = func() time.Time {
+		at := h.clock.Add(time.Duration(len(seen)) * time.Second)
+		seen = append(seen, at)
+		return at
+	}
+	h.det.Tick(context.Background())
+	evs := h.store.eventList()
+	if len(evs) != 1 || len(seen) < 3 {
+		t.Fatalf("START olayı + en az 3 saat okuması bekleniyordu: %d olay, %d okuma", len(evs), len(seen))
+	}
+	tickAt := seen[1] // tick(): run.StartedAt, ardından tik zamanı
+	if !evs[0].UpdatedAt.After(tickAt) {
+		t.Fatalf("updated_at yazım anı olmalı (> tik %v): %v", tickAt, evs[0].UpdatedAt)
+	}
+	if evs[0].Version != uint64(tickAt.UnixNano()) {
+		t.Fatalf("version tik zamanından kalmalı: %d != %d", evs[0].Version, tickAt.UnixNano())
+	}
+	// Saf yardımcı: ms kesim, hepsine aynı an.
+	es := []V2Event{{}, {}}
+	v2StampWrite(es, detT0.Add(1500*time.Microsecond))
+	if !es[0].UpdatedAt.Equal(detT0.Add(time.Millisecond)) || !es[1].UpdatedAt.Equal(es[0].UpdatedAt) {
+		t.Fatalf("v2StampWrite: %v %v", es[0].UpdatedAt, es[1].UpdatedAt)
+	}
+}

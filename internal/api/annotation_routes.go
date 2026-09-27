@@ -58,7 +58,8 @@ func (s *Server) getAnnotations(w http.ResponseWriter, r *http.Request) {
 		from = to.Add(-1 * time.Hour)
 	}
 
-	key := fmt.Sprintf("annotations:v1:svc=%s:w=%s", service, cacheBucket(from, to))
+	// v0.10.984 — rollout kaynağı anahtarda (source=v2: rollout_events satırları).
+	key := fmt.Sprintf("annotations:v1:svc=%s:src=%s:w=%s", service, s.serviceRolloutsSrc(), cacheBucket(from, to))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		type src struct {
 			items []AnnotationItem
@@ -75,9 +76,12 @@ func (s *Server) getAnnotations(w http.ResponseWriter, r *http.Request) {
 					Title: "deploy " + d.Version, TargetType: "rollout",
 				})
 			}
-			if res, err := s.store.GetServiceRollouts(ctx, service, from, to); err == nil && res != nil {
+			if res, err := s.serviceRolloutsFor(ctx, service, from, to); err == nil && res != nil {
 				for _, ro := range res.Rollouts {
 					title := fmt.Sprintf("rollout ↻ %d pod", ro.PodsRemoved)
+					if ro.Source == "ksm" { // v0.10.984 — KSM satırı emekli pod saymaz: iş yükü + durum
+						title = "rollout ↻ " + ro.Workload + " · " + ro.Status
+					}
 					if ro.VersionAfter != "" {
 						title += " · " + ro.VersionAfter
 					}

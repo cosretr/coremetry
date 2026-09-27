@@ -30,6 +30,9 @@ package api
 // tabanlı eski yüzey (P6'da emekli); bu sekme KSM/reconciler satırını
 // (workload_rollouts) okur — Rollouts sayfasıyla aynı kayıt.
 //
+// v0.10.984 (Rollouts v2 P2.3): rollouts.source="v2" iken (2) rollout_events
+// okur (RolloutV2ForWorkloads); satır şekli aynı (RolloutRow + V2 alanları).
+//
 // Hata duruşu: bir hub'ın hatası yalnız o hub'ın satırına yazılır (URL/
 // token yankılanmaz — argocdProbeErrText), rollout okuma hatası yalnız
 // rollout bölümüne not düşer; iş yükü sorgusu düşerse uç hata döner
@@ -128,14 +131,16 @@ func (s *Server) getServiceGitOps(w http.ResponseWriter, r *http.Request) {
 	}
 	cm := s.serviceGitOpsClusterMaps()
 	rolloutsOn := s.rolloutCfg != nil && s.rolloutCfg.Resolved().Enabled
+	src := s.rolloutSource()
 	// Girdiler (hepsi cevabı değiştirir): servis, dakika ızgarası (pencere
-	// ondan türer), Argo blob sürümü (pin/hub), Rollouts bayrağı ve Remote
-	// Cluster eşlemeleri (span değeri, API server URL, ad, token durumu).
-	key := fmt.Sprintf("service-gitops:svc=%s:t=%d:argo=%d:ro=%t:cl=%s", name, now.Unix(), argoVer, rolloutsOn, cm.digest())
+	// ondan türer), Argo blob sürümü (pin/hub), Rollouts bayrağı + okuma
+	// kaynağı (v0.10.984) ve Remote Cluster eşlemeleri (span değeri, API
+	// server URL, ad, token durumu).
+	key := fmt.Sprintf("service-gitops:svc=%s:t=%d:argo=%d:ro=%t:src=%s:cl=%s", name, now.Unix(), argoVer, rolloutsOn, src, cm.digest())
 	s.serveCached(w, r, key, serviceGitOpsTTL, func(ctx context.Context) (any, error) {
 		ctx, cancel := context.WithTimeout(ctx, serviceGitOpsBudget)
 		defer cancel()
-		return s.buildServiceGitOps(ctx, name, now, svc, cm, rolloutsOn)
+		return s.buildServiceGitOps(ctx, name, now, svc, cm, rolloutsOn, src)
 	})
 }
 
@@ -234,7 +239,7 @@ func serviceGitOpsWorkloads(refs []chstore.WorkloadRevisionRef, bySpan map[strin
 	return out, um
 }
 
-func (s *Server) buildServiceGitOps(ctx context.Context, name string, now time.Time, svc *argocd.SettingsService, cm serviceGitOpsClusters, rolloutsOn bool) (*serviceGitOpsResponse, error) {
+func (s *Server) buildServiceGitOps(ctx context.Context, name string, now time.Time, svc *argocd.SettingsService, cm serviceGitOpsClusters, rolloutsOn bool, src string) (*serviceGitOpsResponse, error) {
 	wFrom, rFrom := now.Add(-serviceGitOpsWorkloadWindow), now.Add(-serviceGitOpsRolloutWindow)
 	resp := &serviceGitOpsResponse{
 		Service: name, From: rFrom.UnixMilli(), WorkloadsFrom: wFrom.UnixMilli(), To: now.UnixMilli(),
@@ -255,12 +260,12 @@ func (s *Server) buildServiceGitOps(ctx context.Context, name string, now time.T
 		resp.Workloads = append(resp.Workloads, serviceGitOpsWorkload{ServiceWorkload: wl, ClusterName: cm.names[wl.ClusterID]})
 	}
 
-	s.serviceGitOpsRollouts(ctx, resp, workloads, rFrom, now, rolloutsOn)
+	s.serviceGitOpsRollouts(ctx, resp, workloads, rFrom, now, rolloutsOn, src)
 	s.serviceGitOpsArgo(ctx, resp, workloads, svc, cm)
 	return resp, nil
 }
 
-func (s *Server) serviceGitOpsRollouts(ctx context.Context, resp *serviceGitOpsResponse, workloads []argocd.ServiceWorkload, from, to time.Time, enabled bool) {
+func (s *Server) serviceGitOpsRollouts(ctx context.Context, resp *serviceGitOpsResponse, workloads []argocd.ServiceWorkload, from, to time.Time, enabled bool, src string) {
 	if !enabled {
 		resp.Rollouts.Note = `Rollouts kapalı — bir admin /rollouts sayfasındaki "Etkinleştir" ile açar`
 		return
@@ -273,7 +278,12 @@ func (s *Server) serviceGitOpsRollouts(ctx context.Context, resp *serviceGitOpsR
 	for _, w := range workloads {
 		keys = append(keys, rollout.Key{ClusterID: w.ClusterID, Namespace: w.Namespace, Workload: w.Workload})
 	}
-	rows, err := s.store.RolloutsForWorkloads(ctx, keys, from, to)
+	rd := rolloutReaderOf(s)
+	read := rd.RolloutsForWorkloads
+	if src == rollout.SourceV2 {
+		read = rd.RolloutV2ForWorkloads
+	}
+	rows, err := read(ctx, keys, from, to)
 	if err != nil {
 		log.Printf("[service-gitops] rollouts %s: %v", resp.Service, err)
 		resp.Rollouts.Note = "rollout listesi okunamadı (geçici CH hatası olabilir; ayrıntı: sunucu logları)"
