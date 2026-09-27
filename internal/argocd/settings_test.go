@@ -81,7 +81,7 @@ func TestSettingsJSONFieldNames(t *testing.T) {
 	}
 	// v0.10.957 — inceleme: iki hub (§5.6) — üst düzey hubClusterId /
 	// injectClusterLabel YOK; hubs[] + instance başına hubClusterId.
-	if got, want := keys(m), "apiWorker,classification,enabled,envList,hubs,instances,intervals,mapping,pins,reader,updatedAt"; got != want {
+	if got, want := keys(m), "apiWorker,classification,enabled,envList,hubs,instances,intervals,mapping,metricsWorker,pins,reader,updatedAt"; got != want {
 		t.Fatalf("üst alanlar:\n got %s\nwant %s", got, want)
 	}
 	var hubs []map[string]json.RawMessage

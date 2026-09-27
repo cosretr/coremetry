@@ -338,6 +338,29 @@ func TestWorkerQuerySharedQuerierInjection(t *testing.T) {
 	}
 }
 
+// v0.10.983 — WorkerLimits.NoClusterLabel: Argo hub'ının injectClusterLabel=
+// false kararı (§5.6; H0.3 ≠ H0.5) işçi yolunda da uygulanır — küme etiketi
+// ifadeye EKLENMEZ, geri kalan (dedup, partial_response, token) aynen.
+func TestWorkerQueryNoClusterLabel(t *testing.T) {
+	f := newFakeConsoleThanos(t, false, respondWith(200, seriesBody("vector", 1)))
+	cl := consoleTestCluster(f.URL, "cluster")
+	expr := `max by (name) (argocd_app_info{namespace="team-a-prod"})`
+	res, err := workerTestService(nil, cl).WorkerQuery(context.Background(), cl.ID, expr, WorkerLimits{NoClusterLabel: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := f.last(t).Form.Get("query")
+	if sent != expr || res.EffectiveQuery != expr {
+		t.Fatalf("enjeksiyonsuz sorgu aynen gitmeli: gönderilen %q / effectiveQuery %q", sent, res.EffectiveQuery)
+	}
+	if strings.Contains(sent, `cluster="`) {
+		t.Fatalf("küme etiketi enjekte edilmemeli: %q", sent)
+	}
+	if got := f.last(t).Form.Get("dedup"); got != "true" {
+		t.Fatalf("dedup varsayılanı korunmalı: %q", got)
+	}
+}
+
 // ── fail-closed TokenRef ────────────────────────────────────────────────
 
 func TestWorkerQueryTokenRef(t *testing.T) {

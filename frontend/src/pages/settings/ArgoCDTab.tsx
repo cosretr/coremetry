@@ -23,8 +23,14 @@ import { ArgoCDEmptyPanel } from './ArgoCDEmptyPanel';
 // operatör onayı 2026-09-27 "Onay rollout için önerin", mockup argocd-canvas
 // Main / States; sunucu v0.10.957 + v0.10.974 PUT kuralları).
 //
-// Bu sürüm ayarları SAKLAR ve DOĞRULAR; Argo işçileri Faz 3'te başlar —
-// başlık bandı bunu dürüstçe söyler. Sayfanın durumu:
+// Bu sürüm ayarları SAKLAR ve DOĞRULAR. v0.10.983 (P3.1): argocd-metrics
+// işçisinin AYRI onay kutusu var (`metricsWorker.enabled`, varsayılan kapalı;
+// yalnız entegrasyon açıkken seçilebilir). İnceleme: üst düzey `enabled` P1'den
+// beri "yalnız bayrağı kaydeder" diye sunuldu — işçi anahtarı yapılsaydı onu
+// açmış kurulumlarda işçi deploy'la başlardı. Kayıt yalnız admin PUT'u (audit
+// settings.argocd.update + 409 bayat koruması aynen). Argo CD API bağlantısı
+// askıda (karar 2026-09-27); başlık bandı işçinin kayıtlı durumunu dürüstçe
+// söyler. Sayfanın durumu:
 //   • Taslak GET `settings`ten (saklanan) kurulur; Kaydet TÜM blobu taslak
 //     sırasıyla PUT eder, yanıt (settings + tokens) yeni taban olur.
 //   • Remote Cluster kaynağı Thanos ayar anlık görüntüsü (devre dışılar
@@ -267,7 +273,7 @@ export function ArgoCDTab() {
       applyResponse(r);
       setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]); setSavedNow(true); setInstMsg(''); setHubMsg(''); setStale(null);
       const s = r.settings;
-      setOkText(`Kaydedildi — ${s.hubs?.length ?? 0} hub, ${s.instances?.length ?? 0} instance; ${s.pins?.length ?? 0} pin olduğu gibi geri gönderildi. Denetim kaydı yazıldı (settings.argocd.update); Argo işçileri Faz 3'e kadar çalışmaz.`);
+      setOkText(`Kaydedildi — ${s.hubs?.length ?? 0} hub, ${s.instances?.length ?? 0} instance; ${s.pins?.length ?? 0} pin olduğu gibi geri gönderildi. Denetim kaydı yazıldı (settings.argocd.update); ${s.enabled && s.metricsWorker?.enabled ? 'metrik işçisi açık — worker lideri en geç 30 sn içinde okumaya başlar.' : 'metrik işçisi kapalı — hub sorgusu atılmaz.'}`);
       announce('Kaydedildi.');
     } catch (e) {
       const p = parseArgoHttpError(e);
@@ -341,22 +347,39 @@ export function ArgoCDTab() {
   if (!loaded) return <Spinner />;
 
   const savedEnabled = !!snap.settings.enabled;
+  const savedWorker = savedEnabled && !!snap.settings.metricsWorker?.enabled;
   const at = savedNow ? 'son kayıt şimdi' : savedAtText(snap.settings.updatedAt);
   const emptyMode = base.hubs.length === 0 && base.instances.length === 0 && draft.hubs.length === 0 && draft.instances.length === 0;
   const liveRegion = <div role="status" aria-live="polite" className="sr-only">{live}</div>;
   const banner = (text: string) => (
     <ConfigStatusBanner label={savedEnabled ? 'Açık' : 'Kapalı'} aside={at ? <span style={ASIDE}>{at}</span> : undefined}>{text}</ConfigStatusBanner>
   );
+  const workerOn = !emptyMode && draft.enabled && draft.metricsWorker;
   const enabledBox = (
-    <div style={CHECK}>
-      <input id="acd-enabled" type="checkbox" checked={emptyMode ? false : draft.enabled} disabled={emptyMode}
-        aria-describedby="acd-enabled-h" onChange={e => { const v = e.target.checked; change(d => ({ ...d, enabled: v })); }} />
-      <div>
-        <label htmlFor="acd-enabled">Argo CD entegrasyonu açık</label>
-        <div id="acd-enabled-h" className="field-hint">
-          {emptyMode
-            ? 'Açmak için önce bir hub ekleyin: açıkken en az bir etkin hub zorunlu.'
-            : "Açıkken en az bir etkin hub zorunlu. Bu sürümde açmak yalnız bayrağı kaydeder; metrik ve API işçileri Faz 3'te başlar."}
+    <div className="stack gap-3">
+      <div style={CHECK}>
+        <input id="acd-enabled" type="checkbox" checked={emptyMode ? false : draft.enabled} disabled={emptyMode}
+          aria-describedby="acd-enabled-h"
+          onChange={e => { const v = e.target.checked; change(d => ({ ...d, enabled: v, metricsWorker: v ? d.metricsWorker : false })); }} />
+        <div>
+          <label htmlFor="acd-enabled">Argo CD entegrasyonu açık</label>
+          <div id="acd-enabled-h" className="field-hint">
+            {emptyMode
+              ? 'Açmak için önce bir hub ekleyin: açıkken en az bir etkin hub zorunlu.'
+              : 'Açıkken en az bir etkin hub zorunlu. Tek başına hiçbir işçi başlatmaz: metrik işçisi aşağıdaki ayrı anahtarla açılır, Argo CD API bağlantısı askıda.'}
+          </div>
+        </div>
+      </div>
+      <div style={CHECK}>
+        <input id="acd-metrics" type="checkbox" checked={workerOn} disabled={emptyMode || !draft.enabled}
+          aria-describedby="acd-metrics-h" onChange={e => { const v = e.target.checked; change(d => ({ ...d, metricsWorker: v })); }} />
+        <div>
+          <label htmlFor="acd-metrics">Metrik işçisini çalıştır (argocd-metrics)</label>
+          <div id="acd-metrics-h" className="field-hint">
+            {!emptyMode && !draft.enabled
+              ? 'Önce Argo CD entegrasyonunu açın.'
+              : <>Açıkken worker lideri her tik aralığında (Gelişmiş › <code>intervals.metricsS</code>, varsayılan 60 sn) hub Thanos'undaki <code>argocd_*</code> metriklerini okur ve Application durum değişimleriyle tamamlanan senkronları kaydeder. Argo CD API'sine bağlanılmaz; kapalıyken hiçbir hub sorgusu atılmaz.</>}
+          </div>
         </div>
       </div>
     </div>
@@ -368,7 +391,7 @@ export function ArgoCDTab() {
         {liveRegion}
         <div className="stack gap-2">
           <h2 style={H2}>Argo CD</h2>
-          <p style={DESC}>Hub kümelerindeki Argo CD instance'larını tanımlar. Bu sürüm ayarları yalnız saklar ve doğrular; Argo işçileri Faz 3'te başlar.</p>
+          <p style={DESC}>Hub kümelerindeki Argo CD instance'larını tanımlar. Metrik işçisi açıkken Application durumu hub Thanos'undaki <code>argocd_*</code> metriklerinden izlenir; Argo CD API'sine bağlanılmaz.</p>
         </div>
         {banner(clusters.length ? 'Ayarlanmadı — hub ve instance yok' : 'Ayarlanmadı — Remote Cluster kaydı yok')}
         {enabledBox}
@@ -398,12 +421,13 @@ export function ArgoCDTab() {
       <div className="stack gap-2">
         <h2 style={H2}>Argo CD</h2>
         <p style={DESC}>
-          Hub kümelerindeki Argo CD instance'larını tanımlar. Faz 3'te Application durumu ve senkron işlemleri rollout'larla eşlenecek;
-          bu sürüm ayarları yalnız saklar ve doğrular. Hub, o kümenin <code>argocd_*</code> serilerini tutan Thanos'u gösteren sıradan bir
-          Remote Cluster kaydıdır. Salt okuma: Coremetry Argo CD'ye yazmaz, refresh tetiklemez.
+          Hub kümelerindeki Argo CD instance'larını tanımlar. Metrik işçisi açıkken Application durum değişimleri ve tamamlanan senkronlar
+          hub'ın <code>argocd_*</code> metriklerinden kaydedilir; rollout'larla eşleme sonraki adımda. Hub, o kümenin <code>argocd_*</code>
+          serilerini tutan Thanos'u gösteren sıradan bir Remote Cluster kaydıdır. Salt okuma: Coremetry Argo CD'ye yazmaz, refresh tetiklemez;
+          Argo CD API bağlantısı şimdilik askıda.
         </p>
       </div>
-      {banner(`${savedEnabled ? 'Ayarlar saklanıyor ve doğrulanıyor' : 'Kapalı — ayarlar saklanıyor'} · Argo işçileri bu sürümde çalışmıyor (Faz 3)`)}
+      {banner(`${savedWorker ? 'Metrik işçisi açık — hub metrikleri okunuyor' : savedEnabled ? 'Ayarlar saklanıyor ve doğrulanıyor — metrik işçisi kapalı' : 'Kapalı — ayarlar saklanıyor, metrik işçisi çalışmıyor'} · Argo CD API bağlantısı askıda`)}
       <fieldset disabled={busy} aria-busy={busy || undefined} className="stack gap-6" style={LOCK}>
         {enabledBox}
 
@@ -415,7 +439,7 @@ export function ArgoCDTab() {
           announce={announce} focus={focus} />
 
         <ArgoCDSectionPanel id="acd-inst-h" title="Instance'lar" meta={instMeta}
-          desc={<>Her instance, bir hub üzerindeki bir Argo CD namespace'idir. Kimlik (id) hub'lar arasında da tekil olmalı (Faz 3'te ClickHouse <code>instance_id</code>). Argo CD API erişimi yalnız token referansıyla (<code>tokenRef</code>) verilir; referansı olmayan instance yalnız metriklerle izlenir.</>}>
+          desc={<>Her instance, bir hub üzerindeki bir Argo CD namespace'idir. Kimlik (id) hub'lar arasında da tekil olmalı (ClickHouse <code>argocd_app_status.instance_id</code>). Argo CD API erişimi yalnız token referansıyla (<code>tokenRef</code>) verilir; referansı olmayan instance yalnız metriklerle izlenir.</>}>
           <ArgoCDInstancesPanel instances={draft.instances} base={base} hubs={draft.hubs} clusters={clusters} tokens={snap.tokens}
             pins={snap.pins} buffer={buffer} bufErr={bufErr} pending={pending} issues={issues} msg={instMsg}
             onOpen={openEdit} onEdit={editInstance} onToggle={toggleInstance} onRemove={removeInstance} onBufferChange={changeBuffer}

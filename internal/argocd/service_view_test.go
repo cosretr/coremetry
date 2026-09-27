@@ -178,6 +178,34 @@ func TestMatchServiceApps(t *testing.T) {
 	}
 }
 
+// v0.10.983 inceleme — /api/services/{name}/gitops argocd bayrağına bağlı
+// değil: bayrak kapalıyken davranış değişmesin diye yalnız TAM
+// InClusterServer yazımı hub'a çözülür; :443 / sondaki "/" / .cluster.local
+// yazımları (işçinin DestClusterID'si onları da çözer) burada ÇÖZÜLMEZ
+// (v0.10.981 davranışı; geniş kural P3.2 ile).
+func TestMatchServiceAppsInClusterExactOnly(t *testing.T) {
+	wl := []ServiceWorkload{{ClusterID: "hub", Namespace: "pay", Workload: "checkout"}, {ClusterID: "c-a", Namespace: "pay", Workload: "checkout"}}
+	for ds, want := range map[string]string{
+		InClusterServer:                                "hub",
+		"https://kubernetes.default.svc:443":           "",
+		"https://kubernetes.default.svc/":              "",
+		"https://kubernetes.default.svc.cluster.local": "",
+		"HTTPS://KUBERNETES.DEFAULT.SVC":               "",
+	} {
+		res := MatchServiceApps(ServiceMatchInput{
+			Apps:      []AppStatus{{HubClusterID: "hub", InstanceNamespace: "t-prod", AppNamespace: "apps", Name: "p-pay-checkout-prod", DestServer: ds, DestNamespace: "pay"}},
+			Workloads: wl, Settings: Settings{Instances: []Instance{{ID: "i1", HubClusterID: "hub", HubNamespace: "t-prod"}}, Mapping: Mapping{NameConfidence: 70}},
+			ClusterByServer: map[string]string{"https://api.a:6443": "c-a"},
+		})
+		if len(res.Apps) != 1 || res.Apps[0].DestCluster != want {
+			t.Errorf("%q → küme %q beklenir: %+v", ds, want, res.Apps)
+		}
+		if DestClusterID(ds, "hub", nil, nil) != "hub" {
+			t.Errorf("%q işçinin çözücüsünde (DestClusterID) hub'a çözülür", ds)
+		}
+	}
+}
+
 func TestPinnedAppNames(t *testing.T) {
 	pins := []Pin{
 		{ClusterID: "c", Namespace: "n", Workload: "w", AppName: "a"},

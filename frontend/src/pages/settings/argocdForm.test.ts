@@ -97,7 +97,7 @@ describe('toPutBody — sıra, bölümler, pins', () => {
     const d = draftFromSettings(s);
     d.adv['reader.timeoutS'] = '40';
     const body = toPutBody(d, s.pins ?? [], 1_790_000_000_000_000_000);
-    expect(Object.keys(body).sort()).toEqual(['apiWorker', 'classification', 'enabled', 'envList', 'expectedUpdatedAt', 'hubs', 'instances', 'intervals', 'mapping', 'pins', 'reader']);
+    expect(Object.keys(body).sort()).toEqual(['apiWorker', 'classification', 'enabled', 'envList', 'expectedUpdatedAt', 'hubs', 'instances', 'intervals', 'mapping', 'metricsWorker', 'pins', 'reader']);
     expect(body.pins).toEqual(s.pins);
     expect(body.hubs).toEqual([{ clusterId: H1, injectClusterLabel: true }, { clusterId: H2, injectClusterLabel: true }]);
     expect(body.apiWorker).toEqual({ rps: 1.5, burst: 0, maxConcurrent: 0 });
@@ -587,5 +587,30 @@ describe('trLocative / fmtTr / savedAtText', () => {
     expect(savedAtText(undefined)).toBe('');
     expect(savedAtText(Date.UTC(2026, 8, 26, 20, 41) * 1e6)).toMatch(/^son kayıt 26 Eyl \d\d:41$/);
     expect(fmtHourMinute(new Date(2026, 8, 26, 7, 5))).toBe('07:05');
+  });
+});
+
+// v0.10.983 inceleme — metrik işçisinin AYRI bayrağı (`metricsWorker.enabled`):
+// eski blobda yok → kapalı; PUT'ta entegrasyon kapalıysa işçi de kapalı gider;
+// değişiklik cümlesi ETKİN değeri karşılaştırır; 409 birleştirmesi alanı taşır.
+describe('metricsWorker bayrağı', () => {
+  it('eski blob (alan yok) → kapalı; PUT entegrasyona bağlı', () => {
+    const d = draftFromSettings(settings());
+    expect(d.enabled).toBe(true);
+    expect(d.metricsWorker).toBe(false);
+    expect(toPutBody(d, [], 0).metricsWorker).toEqual({ enabled: false });
+    d.metricsWorker = true;
+    expect(toPutBody(d, [], 0).metricsWorker).toEqual({ enabled: true });
+    d.enabled = false;
+    expect(toPutBody(d, [], 0).metricsWorker).toEqual({ enabled: false });
+    expect(draftFromSettings(settings({ metricsWorker: { enabled: true } })).metricsWorker).toBe(true);
+  });
+  it('değişiklik cümlesi etkin değerle; birleştirme alanı taşır', () => {
+    const base = draftFromSettings(settings());
+    const d = { ...base, metricsWorker: true };
+    expect(diffPhrases(d, base, CLUSTERS)).toEqual(['metrik işçisi açıldı']);
+    const on = draftFromSettings(settings({ metricsWorker: { enabled: true } }));
+    expect(diffPhrases({ ...on, enabled: false }, on, CLUSTERS)).toEqual(['Argo CD kapatıldı', 'metrik işçisi kapatıldı']);
+    expect(mergeDraft(base, d, base).draft.metricsWorker).toBe(true);
   });
 });

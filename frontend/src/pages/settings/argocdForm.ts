@@ -102,6 +102,8 @@ export const effMode = (m: MetricsOnlyMode): 'estimate' | 'unknown' => (m === 'u
 
 export interface Draft {
   enabled: boolean;
+  /** v0.10.983 — argocd-metrics işçisi (`metricsWorker.enabled`); yalnız `enabled` açıkken anlamlı. */
+  metricsWorker: boolean;
   hubs: HubDraft[];
   instances: InstanceDraft[];
   envList: string[];
@@ -154,6 +156,7 @@ export function draftFromSettings(s: ArgoCDSettings): Draft {
   const mode = s.classification?.metricsOnlyMode ?? '';
   return {
     enabled: !!s.enabled,
+    metricsWorker: !!s.metricsWorker?.enabled,
     hubs: (s.hubs ?? []).map(h => ({ key: `h:${h.clusterId}`, clusterId: h.clusterId, inject: h.injectClusterLabel ?? true })),
     instances: (s.instances ?? []).map(i => ({
       key: `s:${i.id}`, origin: 'saved' as const, savedId: i.id,
@@ -195,6 +198,8 @@ export function toPutBody(d: Draft, pins: ArgoCDPin[], expectedUpdatedAt: number
   return {
     expectedUpdatedAt,
     enabled: d.enabled,
+    // v0.10.983 — sunucu da kapalı entegrasyonda işçi bayrağını kapatır (Validate).
+    metricsWorker: { enabled: d.enabled && d.metricsWorker },
     hubs: d.hubs.map(h => ({ clusterId: h.clusterId, injectClusterLabel: h.inject })),
     envList: [...d.envList],
     instances: d.instances.map(instanceInput),
@@ -401,6 +406,9 @@ export function diffPhrases(d: Draft, base: Draft, clusters: RemoteCluster[]): s
   const out: string[] = [];
   const hn = (id: string) => hubName(id, clusters);
   if (d.enabled !== base.enabled) out.push(d.enabled ? 'Argo CD açıldı' : 'Argo CD kapatıldı');
+  // v0.10.983 — metrik işçisinin AYRI bayrağı (etkin değer: entegrasyon açık VE işçi açık).
+  const mw = d.enabled && d.metricsWorker, bmw = base.enabled && base.metricsWorker;
+  if (mw !== bmw) out.push(mw ? 'metrik işçisi açıldı' : 'metrik işçisi kapatıldı');
   for (const h of d.hubs) {
     const b = base.hubs.find(x => x.clusterId === h.clusterId);
     if (!b) out.push(`${hn(h.clusterId)} hub olarak eklendi`);
@@ -875,6 +883,7 @@ export function mergeDraft(base: Draft, draft: Draft, fresh: Draft): MergeResult
   return {
     draft: {
       enabled: pick(base.enabled, draft.enabled, fresh.enabled, t),
+      metricsWorker: pick(base.metricsWorker, draft.metricsWorker, fresh.metricsWorker, t),
       hubs: mergeRows(base.hubs, draft.hubs, fresh.hubs, h => h.clusterId, t),
       instances: mergeRows(base.instances, draft.instances, fresh.instances, i => i.id, t),
       envList: pick(base.envList, draft.envList, fresh.envList, t),

@@ -558,8 +558,9 @@ func (s *Server) reloadConfigOnSignal(ctx context.Context, svc string) {
 		}
 	case "argocd":
 		// v0.10.957 — Argo CD ayar blobu (argocd_settings_routes.go PUT).
-		// Case uçla AYNI sürümde (thanos v0.9.237 dersi); P1'de blobu yalnız
-		// GET/PUT okur, P3 işçileri aynı servisi okuyacak. Nil-güvenli.
+		// Case uçla AYNI sürümde (thanos v0.9.237 dersi). v0.10.983: worker
+		// pod'undaki argocd-metrics işçisi aynı servisi okur — enabled bayrağı
+		// ve aralıklar peer'da 30 s poll'ü beklemeden uygulanır. Nil-güvenli.
 		s.reloadArgoCDSettings(ctx)
 	case "rag":
 		if s.rag != nil {

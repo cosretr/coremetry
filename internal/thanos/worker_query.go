@@ -98,6 +98,12 @@ type WorkerLimits struct {
 	// değerlendirilir ve ardışık sorgular farklı scrape'leri okuyabilir.
 	// Sıfır → parametre gönderilmez (önceki davranış).
 	Time time.Time
+	// NoClusterLabel — v0.10.983 — true ise kaydın küme etiketi ifadeye
+	// ENJEKTE EDİLMEZ (EffectiveQuery atlanır). Argo hub'ının
+	// injectClusterLabel=false kararı (§5.6: Argo serileri kube_node_info'dan
+	// farklı dış etiket taşıyorsa enjekte edilen matcher 0 seri döndürür);
+	// argocd-metrics işçisi hub başına geçirir. Sıfır değer = bugünkü davranış.
+	NoClusterLabel bool
 }
 
 func (l WorkerLimits) normalized() WorkerLimits {
@@ -173,6 +179,10 @@ func (s *Service) WorkerQuery(ctx context.Context, clusterID, expr string, lim W
 	// çözülmez yaparsa istek BAŞLIKSIZ giderdi (fail-closed delinir; yük
 	// testiyle yakalandı: TestWorkerQueryTokenCheckedIsTokenSent).
 	c.Token, c.TokenRef = tok, ""
+	if lim.NoClusterLabel {
+		// v0.10.983 — yerel kopyada: kayıt değişmez, konsol yolu etkilenmez.
+		c.ThanosLabelName, c.ThanosLabelValue = "", ""
+	}
 	eff := c.EffectiveQuery(expr)
 	form := url.Values{
 		"query": {eff},

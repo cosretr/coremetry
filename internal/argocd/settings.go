@@ -12,6 +12,14 @@
 //
 // P1 = davranış değişikliği YOK: bu blobu kendi GET/PUT/doğrulamasından
 // başka hiçbir şey okumaz; işçi yok (P3.1/P3.3), bayrak varsayılan kapalı.
+// v0.10.983 — P3.1: argocd-metrics işçisi (metrics_worker.go; hub Thanos
+// metrikleri, API yok) AYRI bir bayrakla açılır: `metricsWorker.enabled`
+// (varsayılan false) VE `enabled` VE ≥1 hub. İnceleme: üst düzey `enabled`
+// P1'den beri "yalnız bayrağı kaydeder" diye sunuldu; onu işçi anahtarı
+// yapmak, onu önceden açmış kurulumlarda işçiyi DEPLOY ile (admin eylemi
+// olmadan) başlatırdı. Kapalıyken işçi G/Ç yapmaz. Paketin G/Ç'li tek
+// dosyaları metrics_worker.go (enjekte arayüzler) ve metrics_thanos.go
+// (thanos.WorkerQuery adaptörü); gerisi SAF.
 //
 // ── NEDEN tokenRef VAR, token YOK ────────────────────────────────────────
 //
@@ -89,7 +97,13 @@ const InClusterServer = "https://kubernetes.default.svc"
 // karar) ve her instance kendi `hubClusterId`'sini taşır. Karar 5 aynen:
 // her hub sıradan etkin bir Remote Cluster + bu blobdaki işaret.
 type Settings struct {
+	// Enabled — entegrasyon anahtarı (P1). Tek başına hiçbir işçi başlatmaz;
+	// açıkken en az bir etkin hub zorunlu.
 	Enabled bool `json:"enabled"`
+	// MetricsWorker — v0.10.983 inceleme: argocd-metrics işçisinin KENDİ
+	// bayrağı (MetricsActive: enabled VE metricsWorker.enabled VE ≥1 hub).
+	// Eski bloblarda yok → false → işçi başlamaz.
+	MetricsWorker MetricsWorkerSettings `json:"metricsWorker"`
 	// Hubs — Argo metriklerini taşıyan hub Remote Cluster'ları (en çok
 	// maxHubs; clusterId tekil). Keşif hub başına koşar.
 	Hubs []Hub `json:"hubs,omitempty"`
@@ -134,6 +148,12 @@ type Instance struct {
 	Enabled            bool   `json:"enabled"`
 	Discovered         bool   `json:"discovered,omitempty"`       // keşif önerisinden geldi
 	AppsAnyNamespace   bool   `json:"appsAnyNamespace,omitempty"` // exported_namespace ≠ namespace (§5.2 durum C)
+}
+
+// MetricsWorkerSettings — v0.10.983 — argocd-metrics işçisinin bayrağı.
+// Validate entegrasyon kapalıyken bunu da kapatır (kaydedilen blob tutarlı).
+type MetricsWorkerSettings struct {
+	Enabled bool `json:"enabled"`
 }
 
 // APIWorker — Argo API işçisinin istemci-taraflı kısıtı (§7.3: sunucuda
@@ -455,6 +475,10 @@ func hasControl(s string) bool {
 func Validate(in Settings, clusters []ClusterRef) (Settings, error) {
 	out := in
 	out.UpdatedAt = 0
+	// v0.10.983 — metrik işçisi entegrasyon anahtarına bağlı: kapalı
+	// entegrasyonda açık işçi bayrağı saklanmaz (yeniden açılış işçiyi
+	// sessizce başlatmasın).
+	out.MetricsWorker.Enabled = in.MetricsWorker.Enabled && in.Enabled
 
 	byID := make(map[string]ClusterRef, len(clusters))
 	for _, c := range clusters {

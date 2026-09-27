@@ -1104,3 +1104,77 @@ açılır. Doğrulanmamış varsayıma dayanan her yer fail-safe: yazmak yerine 
 - **P2.1 çekirdek düzeltmesi:** artışsız görülen yeni revizyon (`evidence_without_bump`) artık
   `known_revisions`'a katılmaz — katılırsa artış geldiği tik sahte ROLLBACK yazılır ve önceki
   başarılı rollout `rolled_back` olurdu (sorgu kayması ya da KSM informer kayması).
+
+## 2026-09-27 — Rollouts v2 P3.1 argocd-metrics işçisi §11'den önce kodlandı, bayrak kapalı (v0.10.983)
+
+**Karar (operatör: "devam et … bitir işleri" — §11 probe'u henüz koşulmadan Faz 3.1'in kodlanması;
+"Argo CD: şimdilik yalnız metrik" kararıyla):** P3.1 (`internal/argocd/app_status.go`,
+`metrics_worker.go`, `metrics_thanos.go`; `internal/chstore/argocd_status_store.go`) §11 H/N
+cevapları GELMEDEN yazıldı. İşçi yalnız `system_settings["argocd"]` **enabled=true VE
+metricsWorker.enabled=true VE ≥1 hub** iken koşar; "argocd-metrics" kilidi ve döngüsü bayrak İLK
+kez açılınca başlar (`WaitActive`): varsayılan kurulumda hub sorgusu, CH okuması, koşu satırı ya da
+Redis anahtarı yok. **Ayrı bayrak (inceleme):** üst düzey `enabled` P1'den beri "yalnız bayrağı
+kaydeder" diye sunuldu; onu işçi anahtarı yapmak, P1/P2'de açmış kurulumlarda işçiyi deploy'la
+(admin eylemi olmadan) başlatırdı — `metricsWorker.enabled` eski bloblarda yok = kapalı; Validate
+entegrasyon kapalıyken onu da kapatır. Argo CD API'sine bağlanılmaz (P3.3 askıda). Ayarlar › Argo
+CD'de entegrasyon kutusunun altında ayrı "Metrik işçisini çalıştır (argocd-metrics)" kutusu (kayıt
+aynı admin PUT'u: audit + 409 bayat koruması). Doğrulanmamış varsayıma dayanan her yer fail-safe:
+yazmak yerine atla + koşu teşhisinde say.
+- **Açmadan önce doğrulanacaklar (§11 H):** H0.3 vs H0.5 her hub'da (küme etiketi Argo
+  serilerinde var mı → `injectClusterLabel`; yanlışsa envanter 0 seri döner — boş envanter VERİ
+  YOK sayılır: taban alınmaz, yokluk sayılmaz, `inventory_empty`; etiket düzeltilince okuma kapsamı
+  değişir ve ilk dolu envanter bütün uygulamaları `baseline` yazar); `up` serisi aynı seçiciyle
+  (namespace [+ job], aynı küme etiketi kararı) okunabilmeli ve `argocd_app_info` ile aynı `job`
+  etiketini taşımalı — hedef sağlığı yalnız uygulama serisi üreten job'ların hedeflerinde sayılır
+  (`up{sel} and on (job) group by (job) (argocd_app_info{sel})`; ikinci inceleme: job'suz seçicide
+  ilgisiz kalıcı `up==0` hedefi — dex, redis-exporter — silmeyi sonsuza dek bekletiyordu); yokluk
+  (`deleted`) yalnız bu hedefler sağlamken işlenir (hedef yok / `up==0` / sağlam hedef sayısı
+  azaldı → o envanterde sayılmaz); `up` bulunamazsa silme HİÇ yazılmaz; bekletme 3 ardışık
+  envanteri bulursa parça partial + not (`absence_held_streak`); H0.2/H0.4 (HA/shard kopyaları `max by`
+  + dedup=true sonrası tek seri — aynı anahtarda iki farklı durum görülürse uygulama o tik
+  `app_ambiguous`, satır yok); H1.2 (§5.2 durumu: A/C'de parça seçicisi `namespace=<instance ns>`
+  doğru; B + apps-in-any-namespace KAPSANMAZ — eksik kapsama, yanlış satır değil); H1.1/H1.3
+  (`metricsJob` tanımlıysa seçiciye eklenir; aynı job birden çok instance'ta sorun değil,
+  namespace ayırır); H1.6 (parça başına uygulama ≤ `reader.maxSeries`; aşarsa parça her tik
+  `shard_truncated` ile atlanır — dest_server alt parçalaması yok); H4 (`operation` etiketi ve
+  değerleri; sabit olmayan küme = Synced+Healthy+işlem yok DIŞI; `autosync_enabled` yoksa '');
+  H5 (`argocd_app_sync_total` da `exported_namespace` taşımalı — join anahtarı §5.3); H6
+  (senkron hacmi ve `resets()`; controller yeniden başlayınca eski değere EŞİT yeni değer
+  sıfırlanma olarak görülmez → o senkron kaçar, bilinen sınır); §5.1 `dry_run` (v3.1+) senkron
+  seçicilerinde `dry_run!="true"` ile dışarıda (etiketsiz eski sürüm serileri de eşleşir). Ek:
+  querier `changes()`, `offset`, `unless on (…)` ve `count_values` içeren anlık sorguyu `time=` ile
+  kabul etmeli; okuma kapsamı ÖRTÜŞEN parçaların HEPSİ atlanır (birini okumak diğer hub'ın
+  uygulamalarını yanlış instance/cluster_id altında yazardı): aynı Thanos + aynı namespace iki parça,
+  ikisinde de dolu ve farklı `metricsJob` ya da ikisinde de aynı adlı farklı değerli enjekte küme
+  etiketi yoksa çakışır (ikinci inceleme: job'suz seçici job'lunun, etiketsiz okuma etiketlinin üst
+  kümesidir — yalnız birine job/etiket vermek ayırmaz).
+- **Tasarım kararları:** parça = hub üzerindeki etkin instance (§5.4); ilk tik ve her
+  `intervals.inventoryMin` tam envanter + tam sayaç tabanı, aradaki tikler (`intervals.metricsS`)
+  yalnız sabit olmayan küme + senkron penceresi (değişen ya da yeni doğan sayaç, pencere
+  `2×aralık…5 dk`) + sabite dönen / senkronu görülen ama gözlenmeyen uygulamalar için ada göre
+  hedefli okuma (≤10×50 ad). Parçanın bütün sorguları tek değerlendirme zamanında (tik − 15 s);
+  herhangi bir hata / kesik / uyarılı okuma parçanın farkını atlatır, bellek aynen. Satır yalnız
+  tuple değişince ya da senkron bitince; uygulama başına tik başına TEK satır (senkron + değişim →
+  tek `sync`); aynı aralıkta ikinci satır önceki satırın 1 ms sonrasına kayar (RMT anahtarı ezmesin).
+  İlk koşu ve yeniden kurulumdan sonraki ilk tam envanterde bilinmeyen uygulama `baseline` (yeni mi,
+  TTL'i dolmuş mu ayırt edilemez), sonrası `appeared`; taban envanterinde belirsiz kalan uygulama
+  ilk gözlemde yine `baseline`; iki ardışık tam envanterde (hedefler sağlamken) yoksa `deleted`;
+  bilinen uygulamaların yarıdan fazlası (≥20) birden yoksa silme en çok 30 dk dondurulur, HEPSİ
+  birden yoksa (sayıdan bağımsız) hiç kabul edilmez (bilinen sınır: gerçekten tüm uygulamaları
+  silinen instance'a `deleted` yazılmaz). Okuma kapsamı (hub, Thanos URL'si, etkin küme etiketi,
+  seçici) değişirse envanter/sayaç/hedef tabanı yeniden alınır ve farklı tuple da `baseline`
+  yazılır. Son satırı 150 günden eski değişmemiş uygulama tam envanterde `baseline` ile tazelenir
+  (180 günlük TTL tek satırı düşürmesin). Başarısız/kesik envanter 2ⁿ × aralık (tavan
+  inventoryMin) geri çekilir, arada ucuz okuma. Yeniden kurulum son satırı `deleted` olanları
+  almaz (churn'lü instance 200k tavanına silinmişlerle dayanmasın); canlı lider de silinen
+  uygulamayı bir tik sonra belleğinden düşürür (geri dönen yine `appeared`). Sayaç
+  tabanı yokken yeni seri SAYILMAZ; pencerenin kaçırdığı artış envanterde `sync_missed` sayılır ama
+  YAZILMAZ (zamanı bilinmeyen senkron satırı §7.5 penceresini yanıltırdı); tuple'ı bilinmeyen
+  uygulamanın senkronu ertelenir. Lider edinimi / yazım hatası / bayrak kapanışı belleği düşürür,
+  durum `argocd_app_status`'tan (FINAL, uygulama başına LIMIT 1 BY, keyset) kurulur; lockDegraded'da
+  her tik yeniden okunur. Tik başına TEK `rollout_worker_runs` satırı (worker=argocd-metrics;
+  `unmapped` = cluster_id'si boş yazılan satır). `thanos.WorkerLimits.NoClusterLabel` hub'ın
+  injectClusterLabel=false kararını işçi yoluna taşır. Eşleyici (P3.2) ve metrics-only
+  sınıflandırma (P3.4, §7.5) bu işçide değil. `/api/services/{name}/gitops` (bayraksız) bu
+  sürümde v0.10.981 küme-içi kuralını korur (yalnız TAM `https://kubernetes.default.svc`);
+  işçinin geniş kuralı (`:443`, sondaki `/`, `.cluster.local`) eşleyiciyle (P3.2) gelir.

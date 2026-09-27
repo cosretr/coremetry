@@ -1105,7 +1105,8 @@ func main() {
 	}
 	cfgRefresh.Add("rollout", func(ctx context.Context) error { return rolloutSettings.LoadPersisted(ctx, store) })
 	// v0.10.957 — Argo CD ayar blobu (system_settings["argocd"]; Rollouts v2
-	// P1.4), her rolde. P1: yalnız GET/PUT/keşif okur; işçi yok (P3).
+	// P1.4), her rolde. GET/PUT/keşif okur; v0.10.983'ten beri worker rolünde
+	// argocd-metrics işçisi de (aşağıda; bayrak kapalıyken G/Ç yok).
 	argocdSettings := argocd.NewSettingsService()
 	if err := argocdSettings.LoadPersisted(ctx, store); err != nil {
 		log.Printf("[argocd] load persisted config: %v", err)
@@ -1240,6 +1241,27 @@ func main() {
 			rolloutDetLeader.SetOnAcquire(func() { rolloutDet.OnAcquire(); rolloutDet.Tick(ctx) })
 			rolloutDetLeader.Start(chstore.WithQueryTag(ctx, "worker:rollout-detector"))
 			rolloutDet.Run(ctx)
+		}()
+		// v0.10.983 — ROLLOUTS v2 P3.1: "argocd-metrics" işçisi (argocd_app_status
+		// tek yazıcısı), YALNIZ METRİK (Argo CD API'sine bağlanılmaz — karar
+		// 2026-09-27). Bayrak: argocd.enabled VE argocd.metricsWorker.enabled
+		// (ayrı, varsayılan false — P1'de açılmış `enabled` deploy'da işçiyi
+		// başlatmaz) VE en az bir hub. Kilit ve döngü
+		// bayrak İLK kez açılınca başlar (WaitActive): varsayılan kurulumda sorgu,
+		// CH okuması, koşu satırı, Redis anahtarı yok. Edinimde bellek düşer, ilk
+		// tik durumu CH'den kurar; lockDegraded'da her tik CH'den tazelenir.
+		argoMetrics := argocd.NewMetricsWorker(store, argocd.ThanosMetricsQuerier{Svc: thanosSvc},
+			argocd.ThanosRegistry{Svc: thanosSvc}, argocdSettings.Current)
+		argoMetrics.SetDegradedCheck(lockDegradedNow.Load)
+		go func() {
+			if !argoMetrics.WaitActive(ctx, 30*time.Second) {
+				return
+			}
+			argoLeader := cache.NewLeaderHolder(lockImpl, rollout.WorkerArgoCDMetrics, cache.LeaderTTL(time.Minute))
+			argoMetrics.SetLeaderCheck(argoLeader.IsLeader)
+			argoLeader.SetOnAcquire(func() { argoMetrics.OnAcquire(); argoMetrics.Tick(ctx) })
+			argoLeader.Start(chstore.WithQueryTag(ctx, "worker:argocd-metrics"))
+			argoMetrics.Run(ctx)
 		}()
 	}
 	// v0.9.1150 — dış VictoriaMetrics OKUMA backend'i (tempo/thanos

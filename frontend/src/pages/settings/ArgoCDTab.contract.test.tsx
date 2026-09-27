@@ -878,3 +878,89 @@ describe('ArgoCDTab — v0.10.978 bayat yazma koruması (409)', () => {
     expect(el.querySelector('button[aria-label="uat ortamını kaldır"]')).not.toBeNull();
   });
 });
+
+// v0.10.983 — Rollouts v2 P3.1: argocd-metrics işçisinin AYRI onay kutusu
+// (`metricsWorker.enabled`). İnceleme: üst düzey `enabled` P1'den beri "yalnız
+// bayrağı kaydeder" diye sunuldu; onu işçi anahtarı yapmak, önceden açmış
+// kurulumlarda işçiyi deploy'la başlatırdı. Kayıt yalnız mevcut admin PUT'undan
+// (tam blob, expectedUpdatedAt ile — 409 bayat koruması aynen); başlık bandı
+// KAYITLI durumu söyler (taslağı değil).
+describe('ArgoCDTab — v0.10.983 metrik işçisi anahtarı', () => {
+  const STALE = 'HTTP 409: {"error":"ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin","errorType":"stale","updatedAt":1790000000000001000}';
+  const integ = (el: HTMLElement) => byId<HTMLInputElement>(el, 'acd-enabled');
+  const box = (el: HTMLElement) => byId<HTMLInputElement>(el, 'acd-metrics');
+  const label = (el: HTMLElement, id: string) => el.querySelector(`label[for="${id}"]`)?.textContent;
+  const withWorker = (): ArgoCDSettings => ({ ...baseSettings(), metricsWorker: { enabled: true } });
+
+  it('eski blob (enabled, metricsWorker yok): entegrasyon açık ama işçi KAPALI; iki ayrı etiket', async () => {
+    setup();
+    const el = render();
+    await tick();
+    expect(label(el, 'acd-enabled')).toBe('Argo CD entegrasyonu açık');
+    expect(byId(el, 'acd-enabled-h').textContent).toContain('Tek başına hiçbir işçi başlatmaz');
+    expect(integ(el).checked).toBe(true);
+    expect(label(el, 'acd-metrics')).toBe('Metrik işçisini çalıştır (argocd-metrics)');
+    expect(box(el).checked).toBe(false);
+    expect(box(el).disabled).toBe(false);
+    expect(box(el).getAttribute('aria-describedby')).toBe('acd-metrics-h');
+    expect(byId(el, 'acd-metrics-h').textContent).toContain("Argo CD API'sine bağlanılmaz");
+    expect(el.textContent).toContain('Ayarlar saklanıyor ve doğrulanıyor — metrik işçisi kapalı · Argo CD API bağlantısı askıda');
+    expect(el.textContent).not.toContain('Faz 3)');
+  });
+
+  it('işçi açık kayıt: bant "açık"; kapat → PUT metricsWorker:false + expectedUpdatedAt', async () => {
+    setup(withWorker());
+    const el = render();
+    await tick();
+    expect(box(el).checked).toBe(true);
+    expect(el.textContent).toContain('Metrik işçisi açık — hub metrikleri okunuyor');
+    click(box(el));
+    expect(el.textContent).toContain('metrik işçisi kapatıldı');
+    // Bant taslağı değil KAYITLI durumu söyler.
+    expect(el.textContent).toContain('Metrik işçisi açık — hub metrikleri okunuyor');
+    const body = await save(el);
+    expect(body.enabled).toBe(true);
+    expect(body.metricsWorker).toEqual({ enabled: false });
+    expect(body.expectedUpdatedAt).toBe(1_790_000_000_000_000_000);
+    expect(el.textContent).toContain('metrik işçisi kapalı — hub sorgusu atılmaz.');
+    expect(el.textContent).toContain('Ayarlar saklanıyor ve doğrulanıyor — metrik işçisi kapalı');
+  });
+
+  it('entegrasyonu kapatmak işçiyi de kapatır; işçi kutusu devre dışı kalır', async () => {
+    setup(withWorker());
+    const el = render();
+    await tick();
+    click(integ(el));
+    expect(box(el).checked).toBe(false);
+    expect(box(el).disabled).toBe(true);
+    expect(byId(el, 'acd-metrics-h').textContent).toContain('Önce Argo CD entegrasyonunu açın');
+    click(integ(el));
+    expect(box(el).checked).toBe(false); // yeniden açılış işçiyi sessizce başlatmaz
+    click(integ(el));
+    const body = await save(el);
+    expect(body.enabled).toBe(false);
+    expect(body.metricsWorker).toEqual({ enabled: false });
+    expect(el.textContent).toContain('Kapalı — ayarlar saklanıyor, metrik işçisi çalışmıyor');
+  });
+
+  it('işçiyi aç: PUT metricsWorker:true, sonuç kutusu işçinin başlayacağını söyler', async () => {
+    setup();
+    const el = render();
+    await tick();
+    click(box(el));
+    const body = await save(el);
+    expect(body.metricsWorker).toEqual({ enabled: true });
+    expect(el.textContent).toContain('metrik işçisi açık — worker lideri en geç 30 sn içinde okumaya başlar.');
+  });
+
+  it('anahtar değişikliği de 409 bayat korumasından geçer', async () => {
+    setup(withWorker());
+    putArgoCDSettings.mockRejectedValueOnce(new Error(STALE));
+    const el = render();
+    await tick();
+    click(box(el));
+    await save(el);
+    expect([...el.querySelectorAll('[role="alert"]')].some(a => a.textContent?.includes('başka biri tarafından değiştirildi'))).toBe(true);
+    expect(el.textContent).toContain('Metrik işçisi açık — hub metrikleri okunuyor');
+  });
+});

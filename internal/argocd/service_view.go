@@ -179,11 +179,7 @@ func ParseAppInfoVector(hubID string, raw json.RawMessage) ([]AppStatus, error) 
 			DestServer: m["dest_server"], DestNamespace: m["dest_namespace"],
 			SyncStatus: m["sync_status"], HealthStatus: m["health_status"], Operation: m["operation"],
 		}
-		if ex := m["exported_namespace"]; ex != "" {
-			a.AppNamespace, a.InstanceNamespace = ex, m["namespace"]
-		} else {
-			a.AppNamespace = m["namespace"]
-		}
+		a.AppNamespace, a.InstanceNamespace = appNamespaceOf(m) // §5.2 (v0.10.983: işçiyle tek kural)
 		if v, ok := m["autosync_enabled"]; ok && v != "" {
 			b := v == "true"
 			a.AutoSync = &b
@@ -292,6 +288,13 @@ func MatchServiceApps(in ServiceMatchInput) ServiceMatchResult {
 		}
 		return Instance{}, false
 	}
+	// v0.10.983 inceleme: bu uç (/api/services/{name}/gitops) argocd bayrağına
+	// bağlı DEĞİL — işçinin geniş küme-içi kuralı (DestClusterID:
+	// IsInClusterServer, :443 / sondaki "/" / .cluster.local) buraya taşınsaydı
+	// bayrak kapalıyken GitOps sekmesinin eşleşmesi değişirdi. Bu sürümde
+	// yalnız TAM InClusterServer yazımı hub'a çözülür (v0.10.981 davranışı);
+	// geniş kural eşleyiciyle (P3.2) birlikte gelir. Test:
+	// TestMatchServiceAppsInClusterExactOnly.
 	destCluster := func(a AppStatus) string {
 		if a.DestServer == "" {
 			return ""
