@@ -1034,6 +1034,8 @@ The Service card, environment matrix and pair warning follow annex §9.1–§9.2
 
 ### 11.0 How to run, safely
 
+> **v0.10.979:** this pack is runnable as an admin probe — `POST/GET /api/admin/rollouts-v2/probe` executes K/D/R/H/N/T through the Remote Cluster readers, tokenises every value and renders the §11.9 table; see `docs/rollouts/v2-probe-runbook.md`. The manual procedure below remains the reference; the probe's §11.9 table splits the `hub` column into `hub-1` / `hub-2`. A (§11.6) and V (§11.7) are not run (metrics-only decision, 2026-09-27).
+
 - **Where:**
   - §11.1–§11.3 run against **each target Thanos** (`cluster-a`, then `cluster-b`);
   - §11.3–§11.5 run against `<hub-thanos>`;

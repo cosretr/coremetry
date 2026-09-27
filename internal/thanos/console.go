@@ -144,6 +144,11 @@ func (l ConsoleLimits) normalized() ConsoleLimits {
 type ConsoleInstantQuery struct {
 	Query string
 	Time  time.Time // sıfır → gönderilmez (Thanos "şimdi"yi kullanır)
+	// Dedup — v0.10.979 — nil → gönderilmez (konsol davranışı, karar 5:
+	// querier varsayılanı). Yalnız Rollouts v2 sorgu paketinin hub
+	// "matcher'sız" geçişi dolu verir: çift, WorkerQuery'nin dedup=true'su ile
+	// YALNIZ matcher'da ayrışsın. Konsol handler'ları bu alanı doldurmaz.
+	Dedup *bool
 }
 
 // ConsoleRangeQuery — /api/v1/query_range girdisi. Step ETKİN adımdır:
@@ -261,6 +266,9 @@ func (s *Service) ConsoleQuery(ctx context.Context, c ClusterConfig, q ConsoleIn
 	form := url.Values{"query": {eff}}
 	if !q.Time.IsZero() {
 		form.Set("time", formatPromTime(q.Time))
+	}
+	if q.Dedup != nil { // v0.10.979 — yalnız açıkça istenince (bkz. alan yorumu)
+		form.Set("dedup", strconv.FormatBool(*q.Dedup))
 	}
 	return s.consoleEval(ctx, c, "/api/v1/query", form, lim.normalized(), q.Query, eff)
 }

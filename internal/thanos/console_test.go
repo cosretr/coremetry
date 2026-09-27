@@ -915,3 +915,32 @@ func TestConsoleFormatting(t *testing.T) {
 		t.Errorf("pay tavanı 1s → %v", g)
 	}
 }
+
+// v0.10.979 — Rollouts v2 sorgu paketi: ConsoleInstantQuery.Dedup nil →
+// dedup= GÖNDERİLMEZ (konsol davranışı değişmez); &true / &false → form'da.
+// Hub'ın matcher'sız geçişi bu alanla WorkerQuery'nin dedup=true'sunu
+// aynalar; çift yalnız küme matcher'ında ayrışır.
+func TestConsoleQueryDedupParam(t *testing.T) {
+	f := newFakeConsoleThanos(t, false, respondWith(200, seriesBody("vector", 0)))
+	s := New()
+	c := consoleTestCluster(f.URL, "")
+	ctx := context.Background()
+	if _, err := s.ConsoleQuery(ctx, c, ConsoleInstantQuery{Query: "up"}, ConsoleLimits{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.last(t).Form["dedup"]; ok {
+		t.Error("nil Dedup: dedup gönderilmemeli")
+	}
+	for _, v := range []bool{true, false} {
+		d := v
+		if _, err := s.ConsoleQuery(ctx, c, ConsoleInstantQuery{Query: "up", Dedup: &d}, ConsoleLimits{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.last(t).Form.Get("dedup"); got != strconv.FormatBool(v) {
+			t.Errorf("Dedup=%v → dedup=%q", v, got)
+		}
+	}
+	if f.count() != 3 {
+		t.Errorf("3 istek bekleniyordu, %d", f.count())
+	}
+}

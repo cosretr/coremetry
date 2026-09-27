@@ -261,6 +261,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		"alert_target_route.go": true,
 		// v0.10.712 — SAF telemetri: trace_summary_5m kök kapsaması (admin teşhisi).
 		"trace_root_coverage.go": true,
+		// v0.10.979 — SAF telemetri: Rollouts v2 §11.8 T paketi, tek FROM'u spans
+		// (15 dk örneklem, res_keys has() varlık sayaçları; k8s_coverage.go ile
+		// aynı sınıf). State okumaz.
+		"rollout_probe_spans.go": true,
 		// TAŞINMAZ ÜÇÜNCÜ SINIF: sysstats.go + cluster.go system.* okuyor.
 		// Bunlar NODE-LOKAL tablolar; RoundRobin'e verilirse disk/utilizasyon
 		// panelleri her çağrıda BAŞKA node'u raporlar (SQL konsolunun in-order

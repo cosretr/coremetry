@@ -1030,3 +1030,19 @@ suçlu dosyada düzeltilir, tavan yükseltilmez.
    yeniden yükle" kutusu; yeniden yükleme sunucuda değişmemiş alanlardaki düzenlemeleri korur.
 4. **CorePanel:** `title=""` ile boş `<h3>` basılmaz; `ariaLabel` prop'u (role=group) — Trace pod
    grafikleri çift duyurmaz.
+
+## 2026-09-27 — §11 sorgu paketi shell script değil admin probe (v0.10.979)
+
+**Karar (operatör: "Önerin" → "1: §11 sorgu paketini çalıştırılabilir hâle getir"):** Rollouts v2
+Faz 2/3'ü açan §11 canlı sorgu paketi (K/D/R/H/N/T) `POST/GET /api/admin/rollouts-v2/probe` olarak
+Coremetry'nin içinde koşar; shell script ya da Grafana tarifi değil. Gerekçe: token operatörün
+eline geçmez (Remote Cluster `tokenRef`, `WorkerQuery` fail-closed; konsol ailesi fail-closed
+olmadığı için çözülmemiş ref koşudan önce reddedilir); okuyucular mevcut olanlar (`WorkerQuery`,
+`ConsoleQuery` etiketi silinmiş kopyaya — matcher'sız geçiş çifti yalnız matcher'da ayrışsın diye
+`ConsoleInstantQuery.Dedup` eklendi —, `ConsoleLabels/LabelValues`, chstore T örneklemi); her
+DEĞER koşu başına bir jetonlayıcıdan geçer (küme, host, namespace, job, ad, proje, repo, suffix,
+pod, deploy_env; bilinmeyen etiket varsayılan-red), eşleme yalnız bellekte, rapor 1 saat pod
+belleğinde, hiçbir yere yazılmaz. Asenkron (202 + yoklama): ~330 çağrı ve `[24h]` sorguları
+Route'un 30 s'sini aşar. Rapor V1–V14'ü (v2detect.go başlığı) confirmed/refuted/unknown ile
+yargılar; A (§11.6) ve V (§11.7) "skipped (metrics-only)". Bilinen sınırlar: rapor pod-yerel
+(çok replikada 404 `none` + `pod`), H6 `[24h]` bölünmesi yok, arayüz yok (API + runbook).

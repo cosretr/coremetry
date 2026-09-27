@@ -277,6 +277,18 @@ func (s *Server) audit(r *http.Request, action, kind, targetID, details string) 
 	if claims == nil {
 		return
 	}
+	s.auditAs(claims, clientIP(r), action, kind, targetID, details)
+}
+
+// auditAs — v0.10.979 — audit'in *http.Request'siz gövdesi: aktör ve IP
+// istekten ÖNCEDEN alınmış (Rollouts v2 sorgu paketi 202 döndükten sonra
+// arka plan goroutine'inde biten koşunun satırını yazar; r.Context() o
+// sırada ölmüştür). Davranış aynı: kanal → drainer; kanal yoksa senkron
+// yedek; doluysa log+drop sayacı.
+func (s *Server) auditAs(claims *auth.Claims, ip, action, kind, targetID, details string) {
+	if claims == nil {
+		return
+	}
 	entry := chstore.AuditEntry{
 		Time:       time.Now().UnixNano(),
 		ActorID:    claims.UserID,
@@ -285,7 +297,7 @@ func (s *Server) audit(r *http.Request, action, kind, targetID, details string) 
 		Action:     action,
 		TargetKind: kind,
 		TargetID:   targetID,
-		IP:         clientIP(r),
+		IP:         ip,
 		Details:    details,
 	}
 	if s.auditQ == nil {
