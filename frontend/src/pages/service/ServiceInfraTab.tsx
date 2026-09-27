@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { LinkButton, IconButton, SectionHead, Button } from '@/components/ui';
 import { StatTile } from '@/components/ui/StatTile';
 import { Spinner, Empty } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { MetricArea } from '@/pages/clusters/MetricArea';
 import { servicePodRegex } from '@/pages/clusters/podWorkload';
 import { fmtCores } from '@/pages/clusters/thresholds';
@@ -105,7 +105,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   const {
     metaQ, ns, deploy, matched, rows, clustersWithPods,
     effNs, effDeploy, from, to, cFrom, cTo, clamped,
-    sourcesPending, noClusters, podsBlocking,
+    sourcesPending, noClusters, podsBlocking, sourcesError,
     podsSettled, podsTotal, podErrors, truncatedClusters,
     podsUpdatedAt, podsFetching, refetchPods,
   } = useServicePods(service, range);
@@ -234,25 +234,72 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   // v0.10.552 — Thanos gövdesi (erken dönüşler dahil) ayrı bir kapanışta; Kafka
   // client paneli ondan BAĞIMSIZ altta çizilir (Thanos yokken de).
   const thanosBody = (() => {
+    // Kapı girdileri (servis metadata'sı + Thanos kaynak listesi) okunmadan
+    // "Thanos tanımlı değil" kapısı bilinmez: bu bekleme kapının, tablonun
+    // değil — dışarıda kalır (tarif §2).
     if (metaQ.isPending || sourcesPending) return <Spinner />;
+    // v0.10.967 — Thanos kaynak listesi OKUNAMADIYSA liste boştur ama bu
+    // "yapılandırılmamış" değildir: kapı eskiden okuma hatasını "Add a remote
+    // cluster" diye gösteriyordu. `noClusters &&` şart: arka plan yenilemesi
+    // düşüp önbellekte cluster'lar varken satırlar silinmez (hata başlık
+    // rozetinde). Yeniden dene yok (tarif §6: bu dilimde yeni retry eklenmez).
+    if (noClusters && sourcesError) {
+      return <Empty icon="⚠" title="Thanos kaynakları okunamadı">
+        Bu bir yapılandırma eksikliği değil, okuma hatası: {sourcesError}{entityHint}
+      </Empty>;
+    }
     if (noClusters) {
       return <Empty icon="▦" title="No Thanos clusters configured">
         Add a remote cluster under Settings → Remote clusters to see pod-level infrastructure here.{entityHint}
       </Empty>;
     }
-    if (rows.length === 0) {
-      // v0.9.538 — spinner YALNIZ hiç eşleşme yokken; gelen cluster'lar
+
+    // v0.10.967 — tablo standardı T12 (dilim 5, P-1): pod envanterinin
+    // yükleniyor / boş durumu Clusters tablosunun İÇİNDE, başlık ve bölüm
+    // başlığı (eşleşme rozeti, "N / M cluster tarandı", ↻) durur. Eskiden
+    // sekme bütünüyle bir Spinner'a ya da "No pods matched" kutusuna
+    // dönüşüyordu. Tanı cümlesi + Pods sekmesi bağlantısı `detail`de.
+    // Satırdan türeyen KPI şeridi ve grafikler eski koşullarıyla (satır varken).
+    const showRows = rows.length > 0;
+    // v0.10.967 — eskiden cluster'lar yanıt vermeyince de "No pods matched …
+    // nothing matched" deniyordu (v0.9.363'ün Pods sekmesinde kapattığı yalan):
+    // hata satırı artık ayrı, ServicePodsTab'ın cümlesiyle. Satırlar varken
+    // hata başlıktaki "N cluster yanıt vermedi" rozetinde (satırlar kazanır).
+    //
+    // v0.10.967 — tanı + çare cümlesi (v0.9.536 gerçek aday kalıbı) iki dalda
+    // ortak. Kısmi hatada (bir cluster yanıt verip eşleşme bulamadı, diğeri
+    // düştü) eski kutunun "N cluster'da denendi · adlandırmayı kontrol et ya da
+    // katalogda tanımla" önerisi kaybolmasın; sayı YALNIZ yanıt verenler (düşen
+    // cluster'da arama yapılmadı). Hepsi düştüyse arama hiç koşmadı → cümle yok.
+    const diag = (where: string) => <>
+      Denenen: {ns && deploy ? `k8s.namespace=${ns} · ${deploy}` : 'k8s metadata eşlemesi'}
+      {' '}ve pod adı kalıbı (<span className="mono">{servicePodRegex(service, deploy)}</span>),{' '}
+      {where}. Pod&#39;ların{' '}
+      <span className="mono">&lt;service&gt;-&lt;hash&gt;-&lt;rand&gt;</span> adlandırmasına uyduğunu
+      kontrol et ya da servis kataloğunda namespace/deployment tanımla.
+    </>;
+    // Durum satırında podsBlocking yanlış ⇒ tüm cluster'lar oturdu; yanıt veren
+    // = oturan − düşen.
+    const answered = podsSettled - podErrors.length;
+    const tableState: Omit<DataTableStateProps<InfraClusterRow>, 'dt'> =
+      // v0.9.538 — bekleme YALNIZ hiç eşleşme yokken; gelen cluster'lar
       // hemen çizilir (tek yavaş cluster tüm sayfayı bekletmesin).
-      if (podsBlocking) return <Spinner />;
-      return <Empty icon="▦" title="No pods matched">
-        {/* v0.9.536 — gerçek aday kalıbı (ServicePodsTab ile aynı düzeltme). */}
-        Tried {ns && deploy ? `k8s.namespace=${ns} · ${deploy}` : 'the k8s metadata mapping'}
-        {' '}and pod-name matching (<span className="mono">{servicePodRegex(service, deploy)}</span>) across{' '}
-        {matched.length} Thanos cluster{matched.length > 1 ? 's' : ''} — nothing matched.
-        Check that the pods follow the <span className="mono">&lt;service&gt;-&lt;hash&gt;-&lt;rand&gt;</span> naming
-        or curate namespace/deployment in the service catalog.{entityHint}
-      </Empty>;
-    }
+      podsBlocking ? { kind: 'loading' }
+      : podErrors.length > 0 ? {
+        kind: 'error',
+        message: `Pod envanteri okunamadı: ${podErrors.join(', ')} cluster${podErrors.length > 1 ? "'ları" : "'ı"} sorguya yanıt vermedi — liste bu yüzden boş olabilir, workload yok demek değil.`,
+        // Parça boşken null: boş bir fragment de "içerik" sayılır ve boş yuva basar.
+        detail: answered > 0 || entityHint
+          ? <>{answered > 0 && diag(`yanıt veren ${answered} Thanos cluster'ında`)}{entityHint}</>
+          : null,
+        detailKey: entityEnabled ? 'pods-link' : 'text',
+      }
+      : {
+        kind: 'empty',
+        message: 'Eşleşen pod yok',
+        detail: <>{diag(`${matched.length} Thanos cluster'ında`)}{entityHint}</>,
+        detailKey: entityEnabled ? 'pods-link' : 'text',
+      };
 
     const kpi = podTotals(visRows);
     const cpuPct = pctOfLimit(kpi.cpuCores, kpi.cpuLimitCores);
@@ -291,6 +338,9 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                 {podErrors.length} cluster yanıt vermedi
               </span>
             )}
+            {/* v0.10.967 — kaynak listesi yenilemesi düştü ama önbellekteki liste
+                duruyor: satırlar kalır, hata sessiz değil (ServicePodsTab ile aynı rozet). */}
+            {sourcesError && <span className="badge b-err" title={sourcesError}>Thanos kaynaklarına erişilemedi</span>}
           </>}
           meta={<>{podsSettled} / {podsTotal} cluster tarandı{ago ? ` · ${ago}` : ''}</>}
           actions={<>
@@ -302,7 +352,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
-              {dt.sortedRows.map((r, i) => {
+              {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
                 const rp = dt.rowProps(i);
                 const sel = effCluster === r.cluster;
                 const st = clusterStatus(r);
@@ -345,6 +395,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
         {/* v0.10.927 — karo kendisi düğme (StatTile onClick); eski
             div.stat-click + rowActivation sarmalayıcısı kalktı. Alt satır
             `span.stat-sub` (blok CSS'te): düğme içine `div` konamaz. */}
+        {showRows && (
         <div className="stat-grid">
           <StatTile label={kpi.phaseKnown ? 'Running pods' : 'Pods'} onClick={goToPods} title="Pods sekmesine git">
             {kpi.phaseKnown ? `${fmtNum(kpi.running)} / ${fmtNum(kpi.pods)}` : fmtNum(kpi.pods)}
@@ -375,12 +426,13 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                 : 'restart yok'}</span>
           </StatTile>
         </div>
+        )}
 
         {/* ── Kaynak kullanımı (v0.10.719): yalnız TOPLAM; kapsam tümü → cluster
             başına seri; tek cluster → toplam + pod limit toplamı çizgisi
             (envanterin kube-state limitlerinden; bilinmiyorsa çizgi yok).
             Hata yerinde (ChartSlot); kısmi hata başlıkta rozet. ── */}
-        {chartsVisible && (
+        {showRows && chartsVisible && (
           <>
             <SectionHead id="infra-resources" title="Kaynak kullanımı" source="Thanos · deploy-trend"
               badges={<>
@@ -420,7 +472,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
             sinyal (operatör onaylı üçlü: 2xx + 5xx + gecikme).
             v0.10.718 — üç grafik üç sütun; başlık atomu; hata yerinde.
             v0.10.719 — kapsam tümü → cluster başına ("cluster · route"). */}
-        {(haproxyAny || haproxyErr) && (
+        {showRows && (haproxyAny || haproxyErr) && (
           <>
             <SectionHead id="infra-haproxy" title="Router / HAProxy" source="Thanos · router haproxy_backend_*"
               badges={<span className="badge b-gray mono"

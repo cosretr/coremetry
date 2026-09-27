@@ -528,6 +528,9 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
       {/* Top operations — for DBs the first 80 chars of
           db_statement (collapses unparameterised SQL); for
           messaging the span name (publish / consume / process). */}
+      {/* v0.10.967 — dtNoState: durum satırı yok — bölüm yalnız operasyon varken
+          çizilir (kendini gizleme, tarif §2); yükleniyor / hata çekmecenin tek
+          okumasına ait (erken dönüşler, yukarıda). */}
       {allTopOps.length > 0 && (
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6,

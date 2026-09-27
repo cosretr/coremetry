@@ -7,7 +7,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { TraceWaterfall } from '@/components/TraceWaterfall';
 import { computeCriticalPath } from '@/lib/criticalPath';
 import { alignTraces, type AlignedPair } from '@/lib/spanAlign';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { PageShell } from '@/components/ui/PageShell';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { api } from '@/lib/api';
@@ -336,46 +336,54 @@ function AlignedDiff({ aQ, bQ }: {
     rows: aligned?.pairs ?? NO_PAIRS,
   });
 
-  if (aQ.isLoading || bQ.isLoading) return <Spinner />;
-  if (!aligned || aligned.pairs.length === 0) {
-    return (
-      <Empty icon="↔" title="No spans to align">
-        Both traces returned without spans, or one of them failed to load.
-      </Empty>
-    );
-  }
+  // v0.10.967 — tablo standardı T12 (dilim 5): yükleniyor / hata / boş
+  // tablonun İÇİNDE, başlık kalır. Eski tek Empty ("No spans to align —
+  // both traces returned without spans, or one of them failed to load")
+  // hatayı boşla aynı kutuda söylüyordu; artık iki ayrı tür. Bir yan
+  // patladıysa diğer yanın satırları ÇİZİLMEZ: hizalama iki trace ister,
+  // tek yanlı liste her satırı "only in B" diye yanlış etiketlerdi.
+  // Yeniden deneme eskiden yoktu, eklenmedi (recipe §6).
+  const failedSides = [aQ.isError && 'A', bQ.isError && 'B'].filter(Boolean).join(' ve ');
+  const loading = aQ.isLoading || bQ.isLoading;
+  const showRows = !loading && !failedSides && !!aligned && aligned.pairs.length > 0;
+  const state: Omit<DataTableStateProps<AlignedPair>, 'dt'> =
+    loading ? { kind: 'loading' }
+    : failedSides ? { kind: 'error', message: `Trace ${failedSides} okunamadı — hizalama iki trace'in de spanlarını ister.` }
+    : { kind: 'empty', message: 'Hizalanacak span yok — iki trace de spansız döndü.' };
 
   return (
     <div>
-      <div style={{
-        display: 'flex', gap: 16, fontSize: 12, color: 'var(--text2)',
-        marginBottom: 10, flexWrap: 'wrap',
-      }}>
-        <span>{aligned.matched} matched</span>
-        <span style={{ color: 'var(--warn)' }}>{aligned.onlyInA} only in A</span>
-        <span style={{ color: 'var(--warn)' }}>{aligned.onlyInB} only in B</span>
-        {/* v0.9.869 (tutarlılık denetimi MT3) — "click a row to focus the
-            path in either waterfall" cümlesi SİLİNDİ. Satırlarda onClick
-            yoktu, cursor:pointer bile yoktu: var olmayan bir etkileşim vaat
-            ediliyordu. Operatör tıklar, hiçbir şey olmaz, UI'ın bozuk
-            olduğunu sanar. Tıkı BAĞLAMIYORUZ (kapsam kararı) — yanlış olan
-            vaatti, eksik olan özellik değil. */}
-        {/* v0.9.877 (tutarlılık denetimi BT7) — bu ipucu artık yalnız
-            VARSAYILAN düzende basılıyor. Tablo sıralanabilir olduğu an,
-            operatör bir başlığa tıkladıktan sonra sabit duran "Sorted by
-            absolute Δ desc" cümlesi yalan söylerdi. */}
-        {dt.sort.id === null && (
-          <span style={{ marginLeft: 'auto', color: 'var(--text3)' }}>
-            Sorted by absolute Δ desc
-          </span>
-        )}
-      </div>
+      {showRows && aligned && (
+        <div style={{
+          display: 'flex', gap: 16, fontSize: 12, color: 'var(--text2)',
+          marginBottom: 10, flexWrap: 'wrap',
+        }}>
+          <span>{aligned.matched} matched</span>
+          <span style={{ color: 'var(--warn)' }}>{aligned.onlyInA} only in A</span>
+          <span style={{ color: 'var(--warn)' }}>{aligned.onlyInB} only in B</span>
+          {/* v0.9.869 (tutarlılık denetimi MT3) — "click a row to focus the
+              path in either waterfall" cümlesi SİLİNDİ. Satırlarda onClick
+              yoktu, cursor:pointer bile yoktu: var olmayan bir etkileşim vaat
+              ediliyordu. Operatör tıklar, hiçbir şey olmaz, UI'ın bozuk
+              olduğunu sanar. Tıkı BAĞLAMIYORUZ (kapsam kararı) — yanlış olan
+              vaatti, eksik olan özellik değil. */}
+          {/* v0.9.877 (tutarlılık denetimi BT7) — bu ipucu artık yalnız
+              VARSAYILAN düzende basılıyor. Tablo sıralanabilir olduğu an,
+              operatör bir başlığa tıkladıktan sonra sabit duran "Sorted by
+              absolute Δ desc" cümlesi yalan söylerdi. */}
+          {dt.sort.id === null && (
+            <span style={{ marginLeft: 'auto', color: 'var(--text3)' }}>
+              Sorted by absolute Δ desc
+            </span>
+          )}
+        </div>
+      )}
       <div className="table-wrap">
         <table style={{ tableLayout: 'fixed', width: '100%' }}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map(p => {
+            {!showRows ? <DataTableState dt={dt} {...state} /> : dt.sortedRows.map(p => {
               const isOnlyA = p.a && !p.b;
               const isOnlyB = !p.a && p.b;
               const delta = p.deltaNs;

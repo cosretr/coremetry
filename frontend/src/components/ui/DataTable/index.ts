@@ -29,6 +29,7 @@ export type { SelectionState } from '@/lib/rowSelection';
 // v0.10.939 (tablo standardı T12 + T8) — tablo içi durum satırı + toplu işlem çubuğu.
 export { DataTableState } from './DataTableState';
 export { DATA_TABLE_STATE_TEXT } from './dataTableStateText';
-export type { DataTableStateKind, DataTableStateProps } from './DataTableState';
+// v0.10.967 (dilim 5, P-2) — statik tablonun (dt yok, colSpan) durum satırı tipi.
+export type { DataTableStateKind, DataTableStateProps, DataTableStateStaticProps } from './DataTableState';
 export { BulkBar } from './BulkBar';
 export type { BulkBarAction, BulkBarProps } from './BulkBar';

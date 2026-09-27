@@ -12,9 +12,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Check, ArrowDownToLine } from 'lucide-react';
+import { ArrowDownToLine } from 'lucide-react';
 import { Badge, Button, Card, DisclosureButton, Row, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { ClusterChips } from '@/components/ClusterChips';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 // v0.9.1137 (AI Faz 2.4) — log deseni kartının yuvası (ızgara varyantı).
@@ -105,7 +105,7 @@ export function AnomalyStreams() {
       <LogPatternsSection items={logPatterns} onMute={onMute} canEdit={canEdit} />
       <TraceOpsSection    items={traceOps}    onMute={onMute} canEdit={canEdit} />
       <MetricSection      items={metrics} />
-      <HistorySection items={history} meta={historyMeta} />
+      <HistorySection items={history} meta={historyMeta} error={historyQ.isError} />
     </>
   );
 }
@@ -113,10 +113,12 @@ export function AnomalyStreams() {
 // AnomalyShell standardises the look across the live sections.
 // Renders nothing when count==0 OR items===undefined (still loading)
 // — keeps the page from reflowing as feeds load asynchronously.
-function AnomalyShell({ title, hint, count, children }: {
-  title: string; hint: string; count: number; children: React.ReactNode;
+// v0.10.967 — `error`: okuma hatası boş bölüm DEĞİL; bölüm sayıdan
+// bağımsız çizilir ve hatayı tablosunun içinde söyler (HistorySection).
+function AnomalyShell({ title, hint, count, error, children }: {
+  title: string; hint: string; count: number; error?: boolean; children: React.ReactNode;
 }) {
-  if (count === 0) return null;
+  if (count === 0 && !error) return null;
   return (
     <Card style={{ marginBottom: 16 }}>
       <Row gap={3} style={{ alignItems: 'baseline', marginBottom: 10 }}>
@@ -268,11 +270,13 @@ function SilencesSection({ items, onUnmute, onUnmuteAll, canEdit }: {
   );
 }
 
-function HistorySection({ items, meta }: {
+function HistorySection({ items, meta, error = false }: {
   items: AnomalyEvent[] | undefined;
   // v0.9.465 (dürüstlük A9) — SQL sayımları + kırpma bayrağı; yoksa
   // sayfa-türevi sayımlara düşülür.
   meta?: { activeTotal: number; clearedTotal: number; truncated: boolean };
+  /** v0.10.967 — geçmiş sorgusu hatada (önbellekte bayat satır olsa da). */
+  error?: boolean;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   // ?event=<id> deep-link target. We scroll + flash the matching
@@ -322,44 +326,40 @@ function HistorySection({ items, meta }: {
   // Eskiden seçim ile varsayılan VEYA'lanıyordu: ≤10 satırda grup zorla
   // açıktı ve başlık tıkı hiçbir şey yapmıyordu.
   const [showCleared, setShowCleared] = useState<boolean | null>(null);
-  if (items === undefined || items.length === 0) return null;
-  const active  = items.filter(e => e.status === 'active');
-  const cleared = items.filter(e => e.status === 'cleared');
+  // v0.10.967 — tablo standardı T12 (dilim 5). Yükleniyor ve sağlıklı-boş
+  // bölümü hâlâ gizler (AnomalyShell kararı). HATA gizlemez: eskiden
+  // ilk okuma hatası bölümü sessizce yok ediyor, yenileme hatası ise bayat
+  // satırları güncel gibi bırakıyordu. Hata artık Active tablosunun içinde;
+  // bayat satırlar, bayat sayılar ve Cleared grubu hatayla birlikte çizilmez.
+  if (!error && (items === undefined || items.length === 0)) return null;
+  const live = error ? [] : (items ?? []);
+  const active  = live.filter(e => e.status === 'active');
+  const cleared = live.filter(e => e.status === 'cleared');
   // Default expanded when the cleared set is small enough to
   // glance at; collapsed when it's noisy.
   const defaultExpanded = cleared.length <= 10;
   const expanded = showCleared ?? defaultExpanded;
+  // v0.10.929 (K5) — "aktif anomali yok" sağlıklı durum: nötr, yeşil yok.
+  // v0.10.967 — eski nötr kutu artık Active tablosunun boş satırı.
+  const activeState: Omit<DataTableStateProps<AnomalyEvent>, 'dt' | 'leading' | 'trailing'> = error
+    ? { kind: 'error' }
+    : { kind: 'empty', message: `Son 24 saatte aktif anomali yok${cleared.length > 0 ? ` — aşağıda ${cleared.length} cleared olay var` : ''}` };
   return (
     <AnomalyShell
       title="Anomaly history (last 24h)"
-      hint={`${meta?.activeTotal ?? active.length} active · ${meta?.clearedTotal ?? cleared.length} cleared${meta?.truncated ? ` · ilk ${(items ?? []).length} satır yüklendi` : ''}`}
-      count={items.length}>
+      hint={error ? '' : `${meta?.activeTotal ?? active.length} active · ${meta?.clearedTotal ?? cleared.length} cleared${meta?.truncated ? ` · ilk ${live.length} satır yüklendi` : ''}`}
+      count={live.length} error={error}>
       {detailEvent && (
         <AnomalyDetailDrawer event={detailEvent} onClose={() => openDetail(null)} />
       )}
-      {active.length > 0 && (
-        <AnomalyTable rows={active}
-          storageKey="anomaly-history-active"
-          rowRefs={rowRefs} highlight={highlight}
-          onOpen={openDetail}
-          title={`Active (${active.length})`} />
-      )}
-      {/* v0.10.929 (K5) — "aktif anomali yok" sağlıklı durum: nötr kutu, yeşil yok. */}
-      {active.length === 0 && (
-        <div style={{
-          padding: '12px 14px', fontSize: 12, color: 'var(--text2)',
-          background: 'var(--bg2)',
-          border: '1px solid var(--border)',
-          borderRadius: 4, marginBottom: 12,
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          <Check size={13} strokeWidth={2} style={{ color: 'var(--text3)', flexShrink: 0 }} />
-          No active anomalies in the last 24h.
-          {cleared.length > 0 && ` ${cleared.length} cleared event${cleared.length === 1 ? '' : 's'} below.`}
-        </div>
-      )}
+      <AnomalyTable rows={active}
+        storageKey="anomaly-history-active"
+        rowRefs={rowRefs} highlight={highlight}
+        onOpen={openDetail}
+        title={error ? 'Active' : `Active (${active.length})`}
+        state={activeState} />
       {cleared.length > 0 && (
-        <div style={{ marginTop: active.length > 0 ? 14 : 0 }}>
+        <div style={{ marginTop: 14 }}>
           {/* v0.10.924 — buton bütünlüğü Faz 2: `all: unset` başlık →
               DisclosureButton (aria-expanded + ev ▸/▾ glifi). */}
           <DisclosureButton expanded={expanded}
@@ -422,7 +422,7 @@ const ANOMALY_HISTORY_COLS: ColumnDef<AnomalyEvent>[] = [
 // cleared groups share one render path (v0.5.279). Same
 // columns / styling as before; only the title row above the
 // table is optional now.
-function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
+function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, state }: {
   rows: AnomalyEvent[];
   // İKİ örnek render ediliyor (Active + Cleared). Ayrı anahtarlar şart:
   // tek anahtar iki tablonun sırasını ve sürüklenen genişliklerini
@@ -435,6 +435,8 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
   // the existing affordances keep working unchanged.
   onOpen: (id: string) => void;
   title?: string;
+  /** v0.10.967 (T12) — satır yokken tablonun içindeki durum; verilmezse düz boş. */
+  state?: Omit<DataTableStateProps<AnomalyEvent>, 'dt' | 'leading' | 'trailing'>;
 }) {
   // Varsayılan sıra sunucununkiyle birebir: handler `status = 'active' DESC,
   // last_seen DESC` döndürüyor ve sayfa zaten active/cleared olarak ayırıyor.
@@ -445,8 +447,10 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
   return (
     <div>
       {title && (
+        // v0.10.967 — kırmızı yalnız satır varken (aktif anomali = sapma);
+        // "Active (0)" ya da hata anında başlık nötr (T9).
         <div style={{
-          fontSize: 11, fontWeight: 700, color: 'var(--err)',
+          fontSize: 11, fontWeight: 700, color: rows.length > 0 ? 'var(--err)' : 'var(--text3)',
           textTransform: 'uppercase', letterSpacing: '.06em',
           marginBottom: 6,
         }}>{title}</div>
@@ -461,7 +465,7 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title }: {
           <DataTableColgroup dt={dt} trailing={[44]} />
           <DataTableHead dt={dt} trailing={<th>AI</th>} />
           <tbody>
-            {dt.sortedRows.map(e => (
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} trailing={[44]} {...(state ?? { kind: 'empty' })} /> : dt.sortedRows.map(e => (
               <tr key={e.id}
                 ref={el => { rowRefs.current[e.id] = el; }}
                 // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)

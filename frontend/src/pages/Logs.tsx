@@ -7,13 +7,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { KqlSearchInput } from '@/components/KqlSearchInput';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
-import { Spinner, Empty } from '@/components/Spinner';
+import { Spinner } from '@/components/Spinner';
 import { IconSparkles } from '@/components/icons';
-import { TableSkeleton } from '@/components/Skeleton';
 import { Combobox } from '@/components/Combobox';
 import { ServicePicker } from '@/components/ServicePicker';
 import { CopyButton } from '@/components/CopyButton';
 import { LogTable, DEFAULT_LOG_COLUMNS } from '@/components/LogTable';
+import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { CorrelationContextDrawer } from '@/components/CorrelationContextDrawer';
 import { LogContextModal } from '@/components/LogContextModal';
 import { LogPillEditor } from '@/components/LogPillEditor';
@@ -84,6 +84,9 @@ const LOG_SHARE_TITLE =
 // transform both scale linearly. 2000 is generous — past that the
 // answer is a narrower filter, not more scrolling.
 const ACC_CAP = 2000;
+// v0.10.967 — tablo standardı T12: veri yokken / okunamadığında tabloya
+// verilen SABİT boş dizi (her render'da yeni [] j/k gezinmesini tazelerdi).
+const NO_LOGS: LogRow[] = [];
 
 const LVL_FACETS: Array<{ key: string; label: string; min: number }> = [
   { key: 'error', label: 'ERROR', min: 17 },
@@ -789,10 +792,121 @@ function LogsInner() {
   // (matches the existing click behaviour), Esc clears the
   // selection. The hook scrolls the active row into view via
   // [data-row-idx], which we set on the LogRowR below.
-  const tableNav = useTableNav<LogRow>(logs, {
+  // v0.10.967 — tablo standardı T12 (dilim 5): tabloda GÖRÜNEN satırlar.
+  // Yükleniyor / hata anında boş: başarısız bir yenilemede birikmiş eski
+  // satırlar (accRows) hatanın üstünde sessizce kalmaz — eskiden de tablo
+  // o anda hiç çizilmiyordu. j/k aynı diziyi gezer (görünmeyen satır seçilmez).
+  const shownLogs = data ? logs : NO_LOGS;
+  const tableNav = useTableNav<LogRow>(shownLogs, {
     onOpen: (l) => toggle(l.id),
     pageId: 'logs',
   });
+  // "Filtreleri temizle" (yerel daraltma) kendini kaldırınca odak kutuya döner.
+  const narrowRef = useRef<HTMLInputElement>(null);
+
+  // v0.10.967 — tablo standardı T12 (dilim 5, P-1): yükleniyor / hata /
+  // yavaş backend / boş / yerel daraltma "eşleşme yok" tablonun İÇİNDE,
+  // başlık kalır. Kapılar ve sıra eskisiyle aynı (v0.10.415/416/420
+  // yorumları aşağıda yerinde). Eski kutuların eylemleri kaybolmadı:
+  // "↻ Retry" → onRetry (aynı staticQ.refetch), "Clear filters" / sunucu
+  // metni / KQL örneği / span filtresini kaldır bağlantısı / system stats
+  // linki `detail` yuvasında. Yavaş backend bandı (rozet) tablonun üstünde
+  // kalır; boş satırı artık hata türü (⚠ + Retry, "boş sonuç değil").
+  const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
+    data === undefined ? { kind: 'loading', skeletonRows: 12 }
+    // v0.9.215 — the error leg of the tri-state used to render NOTHING:
+    // data===null fell through every branch, so a rejected query (malformed
+    // KQL, ES timeout, backend down) left a blank page under the toolbar.
+    // The operator reads that as "no logs", not "your query didn't run".
+    : data === null ? {
+      kind: 'error',
+      message: 'Log sorgusu çalışmadı — log backend sorguyu reddetti ya da zamanında cevap vermedi.',
+      onRetry: () => void staticQ.refetch(),
+      detail: (
+        <div style={{ color: 'var(--text2)' }}>
+          {staticQ.error instanceof Error && staticQ.error.message && (
+            <div className="mono" style={{
+              marginTop: 8, padding: '6px 9px', fontSize: 11.5,
+              background: 'var(--bg2)', border: '1px solid var(--border)',
+              borderRadius: 6, color: 'var(--err)', whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+            }}>
+              {staticQ.error.message}
+            </div>
+          )}
+          <div style={{ marginTop: 8 }}>
+            Most often the search text isn’t valid KQL — check quotes and
+            field names (<code>level:error AND service.name:"checkout"</code>),
+            or clear the search box to confirm the backend answers at all.
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <Button variant="ghost" size="sm" onClick={reset}>Clear filters</Button>
+          </div>
+        </div>
+      ),
+    }
+    // v0.10.415 (B1) — degraded boş durum: "No logs found" YALAN olurdu.
+    // v0.10.420 — kapı YÜKLENEN satırlar: narrow her şeyi süzdüyse kendi
+    // durumu var (aşağıdaki no-match); burada boş durum çizilmez.
+    : data && loadedRows.length === 0 && !live && !!staticQ.data?.degraded ? {
+      kind: 'error',
+      message: `Log backend yavaş — bu liste eksik: ${staticQ.data?.reason ?? 'log backend slow/unreachable'}. Sonuç 15 sn önbellekte — pencereyi daralt, servis filtresi ekle ya da yeniden dene.`,
+      onRetry: () => void staticQ.refetch(),
+    }
+    : data && loadedRows.length === 0 && (live || !staticQ.data?.degraded) ? (
+      // v0.10.416 (B2) — canlı kuyruk ileri-yönlü: tamamlanmış bir trace
+      // yeni satır üretmez; "backend'de kaydı yok" teşhisi burada yalan olurdu.
+      filter.traceId && live ? {
+        kind: 'empty',
+        message: "Canlı kuyruk bu trace'e kilitli — yalnız YENİ satırlar akar. Trace'in geçmiş logları için canlı kuyruğu kapat; tamamlanmış bir trace yeni satır üretmez.",
+      }
+      // v0.10.420 — canlı kuyruk ileri-yönlü; "pencereyi genişlet" öğüdü
+      // burada anlamsız (akış from/to taşımaz).
+      : live ? {
+        kind: 'empty',
+        message: 'Canlı kuyruk açık — yeni satır bekleniyor. Yalnız akış açıldıktan sonra yazılan satırlar gelir; geçmişi görmek için canlı kuyruğu kapat.',
+      }
+      : filter.traceId ? {
+        kind: 'empty',
+        message: 'Bu trace için log kaydı yok',
+        // "removing the span filter" kendini kaldıran bir eylem: tık spanId'yi
+        // boşaltır, detail (açıklama) yerinde kalır ama bağlantı gider —
+        // yuva yeniden bağlansın ki odak <body>'ye düşmesin.
+        detailKey: filter.spanId ? 'span' : 'trace',
+        detail: (
+          <div style={{ color: 'var(--text2)' }}>
+            The trace exists in Coremetry, but the logs backend has no
+            record of it. Two common reasons:
+            <ul style={{ marginTop: 8, paddingLeft: 18, lineHeight: 1.6, textAlign: 'left', display: 'inline-block' }}>
+              <li>The application emitted no log lines while this trace was active.</li>
+              <li>The log shipper (Filebeat / OTel Collector ES exporter / etc.) hadn't started yet when the trace ran, so the log was never indexed.</li>
+            </ul>
+            {filter.spanId && <div>You also filtered by span — try <a href="#" onClick={e => { e.preventDefault(); const next = { ...filter, spanId: '' }; setFilter(next); setDraft(d => ({ ...d, spanId: '' })); }}>removing the span filter</a> to see all logs for the trace.</div>}
+          </div>
+        ),
+      }
+      : {
+        kind: 'empty',
+        message: 'Log bulunamadı',
+        detail: (
+          <div style={{ color: 'var(--text2)' }}>
+            Widen the time range, drop the service/cluster filter, or
+            relax the severity floor. If unfiltered queries are also
+            empty, the logs backend (<code>COREMETRY_LOGS_BACKEND</code>)
+            may be misconfigured — check <Link to="/system/stats" style={{ color: 'var(--accent2)' }}>system stats</Link>.
+          </div>
+        ),
+      }
+    )
+    // A local filter that hides everything must not read as "no logs
+    // exist" — that state belongs to the query, not to this reading aid.
+    // no-match yalnız YÜKLENEN satırlar varken (kaynak dolu, süzgeç eledi).
+    : {
+      kind: 'no-match',
+      message: `Yüklenen ${loadedRows.length.toLocaleString()} satırın hiçbiri "${narrow.trim()}" içermiyor — bu süzgeç yalnız sayfadakilere bakar; tüm pencerede aramak için terimi yukarıdaki sorguya yaz.`,
+      onClearFilters: () => setNarrow(''),
+      returnFocusRef: narrowRef,
+    };
 
   return (
     <>
@@ -1266,93 +1380,6 @@ function LogsInner() {
           onSeries={setHistTotals}
           onSeriesPick={addFromRow} /* v0.10.503 (B8) — lejant ⊕ → pill */ />
 
-        {data === undefined && <TableSkeleton rows={12} cols={5} />}
-        {/* v0.9.215 — the error leg of the tri-state used to render NOTHING:
-            data===null fell through every branch below, so a rejected query
-            (malformed KQL, ES timeout, backend down) left a blank page under
-            the toolbar. The operator reads that as "no logs", not "your
-            query didn't run" — and keeps widening the range against a query
-            that can never succeed. */}
-        {data === null && (
-          <Empty icon="⚠" title="Query failed">
-            <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-              The logs backend rejected this query or didn’t answer in time.
-              {staticQ.error instanceof Error && staticQ.error.message && (
-                <div className="mono" style={{
-                  marginTop: 8, padding: '6px 9px', fontSize: 11.5,
-                  background: 'var(--bg2)', border: '1px solid var(--border)',
-                  borderRadius: 6, color: 'var(--err)', whiteSpace: 'pre-wrap',
-                  overflowWrap: 'anywhere',
-                }}>
-                  {staticQ.error.message}
-                </div>
-              )}
-              <div style={{ marginTop: 8 }}>
-                Most often the search text isn’t valid KQL — check quotes and
-                field names (<code>level:error AND service.name:"checkout"</code>),
-                or clear the search box to confirm the backend answers at all.
-              </div>
-              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                <Button variant="secondary" size="sm" onClick={() => staticQ.refetch()}>
-                  ↻ Retry
-                </Button>
-                <Button variant="ghost" size="sm" onClick={reset}>Clear filters</Button>
-              </div>
-            </div>
-          </Empty>
-        )}
-        {/* v0.10.415 (B1) — degraded boş durum: "No logs found" YALAN olurdu. */}
-        {/* v0.10.420 — kapı YÜKLENEN satırlar: narrow her şeyi süzdüyse kendi
-            mesajı var ("None of the N loaded rows…"); burada boş durum çizilmez. */}
-        {data && loadedRows.length === 0 && !live && !!staticQ.data?.degraded && (
-          <Empty icon="⚠" title="Log backend yavaş — bu liste eksik">
-            <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-              {staticQ.data.reason ?? 'log backend slow/unreachable'}. Sonuç 15 sn önbellekte —
-              pencereyi daralt, servis filtresi ekle ya da yeniden dene.
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <Button variant="secondary" size="sm" onClick={() => staticQ.refetch()}>↻ Retry</Button>
-            </div>
-          </Empty>
-        )}
-        {data && loadedRows.length === 0 && (live || !staticQ.data?.degraded) && (
-          filter.traceId && live ? (
-            /* v0.10.416 (B2) — canlı kuyruk ileri-yönlü: tamamlanmış bir trace
-               yeni satır üretmez; "backend'de kaydı yok" teşhisi burada yalan olurdu. */
-            <Empty icon="≡" title="Canlı kuyruk bu trace'e kilitli — yalnız YENİ satırlar akar">
-              <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-                Trace'in geçmiş logları için canlı kuyruğu kapat; tamamlanmış bir trace yeni satır üretmez.
-              </div>
-            </Empty>
-          ) : live ? (
-            /* v0.10.420 — canlı kuyruk ileri-yönlü; "pencereyi genişlet" öğüdü
-               burada anlamsız (akış from/to taşımaz). */
-            <Empty icon="≡" title="Canlı kuyruk açık — yeni satır bekleniyor">
-              <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-                Yalnız akış açıldıktan sonra yazılan satırlar gelir. Geçmişi görmek için canlı kuyruğu kapat.
-              </div>
-            </Empty>
-          ) : filter.traceId ? (
-            <Empty icon="≡" title="No logs match this trace">
-              The trace exists in Coremetry, but the logs backend has no
-              record of it. Two common reasons:
-              <ul style={{ marginTop: 8, paddingLeft: 18, lineHeight: 1.6 }}>
-                <li>The application emitted no log lines while this trace was active.</li>
-                <li>The log shipper (Filebeat / OTel Collector ES exporter / etc.) hadn't started yet when the trace ran, so the log was never indexed.</li>
-              </ul>
-              {filter.spanId && <>You also filtered by span — try <a href="#" onClick={e => { e.preventDefault(); const next = { ...filter, spanId: '' }; setFilter(next); setDraft(d => ({ ...d, spanId: '' })); }}>removing the span filter</a> to see all logs for the trace.</>}
-            </Empty>
-          ) : (
-            <Empty icon="≡" title="No logs found">
-              <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-                Widen the time range, drop the service/cluster filter, or
-                relax the severity floor. If unfiltered queries are also
-                empty, the logs backend (<code>COREMETRY_LOGS_BACKEND</code>)
-                may be misconfigured — check <Link to="/system/stats" style={{ color: 'var(--accent2)' }}>system stats</Link>.
-              </div>
-            </Empty>
-          )
-        )}
         {/* v0.9.294 — narrow within results. Sits directly above the
             table because it acts on the table, and it says LOADED in
             the placeholder: this filters the rows already in the page,
@@ -1365,6 +1392,7 @@ function LogsInner() {
             marginBottom: 8, fontSize: 11.5,
           }}>
             <input
+              ref={narrowRef}
               value={narrow}
               onChange={e => setNarrow(e.target.value)}
               placeholder={`Filter the ${loadedRows.length.toLocaleString()} loaded rows… (no new query)`}
@@ -1431,77 +1459,63 @@ function LogsInner() {
             )}
           </div>
         )}
-        {/* A local filter that hides everything must not read as "no
-            logs exist" — that state belongs to the query, not to this
-            reading aid. */}
-        {data && loadedRows.length > 0 && logs.length === 0 && narrow.trim() !== '' && (
-          <div style={{
-            fontSize: 12, color: 'var(--text2)', padding: '10px 4px', marginBottom: 8,
-          }}>
-            None of the {loadedRows.length.toLocaleString()} loaded rows contain
-            {' '}<b>{narrow.trim()}</b>. This only searches what is already on the page —
-            put the term in the query above to search the whole window.
-          </div>
-        )}
-        {data && logs.length > 0 && (
-          <>
-            <LogTable logs={logs} nav={tableNav}
-              wrap={wrapLines}
-              columns={logCols}
-              onRemoveColumn={removeColumn}
-              highlightTerms={highlightTerms}
-              expandedIds={expanded}
-              onToggleExpand={toggle}
-              onFilterAdd={addFromRow}
-              onFilterExclude={excludeFromRow}
-              onToggleColumn={toggleColumn}
-              onTracePeek={tid => setPeekTraceId(tid)}
-              onContextOpen={l => setContextPivot(l)}
-              permalink={l => buildDocPermalink(l, env)} />
-            {/* Load more (v0.8.260 — replaced the Back/Next pager;
-                keyset cursor mechanics unchanged underneath). Rows
-                accumulate in accRows; the button advances the cursor
-                to the response's nextCursor and the new page appends.
-                Hidden during live tail (the live buffer owns its own
-                moving window). Button-first per spec — an
-                IntersectionObserver auto-load can layer on once the
-                behaviour settles (and it would multiply backend
-                queries, which the ES-usage constraint caps). */}
-                {/* v0.9.1016 — paylaşılan sözleşme (v0.9.1014), cursor
-                    kipi. Kip bir görünüm tercihi DEĞİL veri modeli beyanı:
-                    bu sayfa keyset imleçle yürüyor, "sayfa 7'ye git"
-                    ifade edilemez (7'nin imleci ancak 6 çekilerek bilinir)
-                    ve satırlar BİRİKİYOR. v0.8.260'ın Back/Next'i
-                    "Load more" ile değiştirme kararı korunuyor —
-                    sözleşme onu geri almıyor, tarif ediyor.
-                    v0.9.288 — "of 10,000" ES tarafında YALANDI:
-                    track_total_hits 10.000'de duruyor (milyar-belge
-                    ölçeğinde her eşleşmeyi saymak tam da kaçındığın şey),
-                    ES relation "gte" dönüyor. Aynı etiket ClickHouse'ta
-                    gerçek bir count(). Backend hangisi olduğunu söylüyor;
-                    artık "+"yı `count` beyanı basıyor. */}
-            {!live && (
-                <Pager mode="cursor"
-                  count={staticQ.data?.totalIsLowerBound ? 'capped' : 'exact'}
-                  total={total}
-                  loaded={logs.length}
-                  hasMore={!!data.nextCursor}
-                  onMore={() => { if (data.nextCursor) setCursor(data.nextCursor); }}
-                  loading={staticQ.isFetching}
-                  extras={
-                    /* v0.9.292 — the accumulation window slid forward. Rows
-                       leaving the top without a word is the silent-loss
-                       class this page keeps producing; say it and say the
-                       remedy. */
-                    accDropped > 0 ? (
-                      <span style={{ color: 'var(--warn)' }}
-                        title={`"Load more" keeps at most ${ACC_CAP.toLocaleString()} rows in the page so it stays responsive. ${accDropped.toLocaleString()} earlier (newer) rows have scrolled out of the buffer — narrow the time range or the filter to see a slice that fits.`}>
-                        {accDropped.toLocaleString()} earlier rows dropped from the buffer
-                      </span>
-                    ) : undefined
-                  } />
-            )}
-          </>
+        {/* v0.10.967 — tablo HER durumda (başlık kalır); durum satırı
+            logsState'ten. Pager eskisi gibi yalnız satır varken. */}
+        <LogTable logs={shownLogs} nav={tableNav} state={logsState}
+          wrap={wrapLines}
+          columns={logCols}
+          onRemoveColumn={removeColumn}
+          highlightTerms={highlightTerms}
+          expandedIds={expanded}
+          onToggleExpand={toggle}
+          onFilterAdd={addFromRow}
+          onFilterExclude={excludeFromRow}
+          onToggleColumn={toggleColumn}
+          onTracePeek={tid => setPeekTraceId(tid)}
+          onContextOpen={l => setContextPivot(l)}
+          permalink={l => buildDocPermalink(l, env)} />
+        {/* Load more (v0.8.260 — replaced the Back/Next pager;
+            keyset cursor mechanics unchanged underneath). Rows
+            accumulate in accRows; the button advances the cursor
+            to the response's nextCursor and the new page appends.
+            Hidden during live tail (the live buffer owns its own
+            moving window). Button-first per spec — an
+            IntersectionObserver auto-load can layer on once the
+            behaviour settles (and it would multiply backend
+            queries, which the ES-usage constraint caps). */}
+        {/* v0.9.1016 — paylaşılan sözleşme (v0.9.1014), cursor
+            kipi. Kip bir görünüm tercihi DEĞİL veri modeli beyanı:
+            bu sayfa keyset imleçle yürüyor, "sayfa 7'ye git"
+            ifade edilemez (7'nin imleci ancak 6 çekilerek bilinir)
+            ve satırlar BİRİKİYOR. v0.8.260'ın Back/Next'i
+            "Load more" ile değiştirme kararı korunuyor —
+            sözleşme onu geri almıyor, tarif ediyor.
+            v0.9.288 — "of 10,000" ES tarafında YALANDI:
+            track_total_hits 10.000'de duruyor (milyar-belge
+            ölçeğinde her eşleşmeyi saymak tam da kaçındığın şey),
+            ES relation "gte" dönüyor. Aynı etiket ClickHouse'ta
+            gerçek bir count(). Backend hangisi olduğunu söylüyor;
+            artık "+"yı `count` beyanı basıyor. */}
+        {data && logs.length > 0 && !live && (
+          <Pager mode="cursor"
+            count={staticQ.data?.totalIsLowerBound ? 'capped' : 'exact'}
+            total={total}
+            loaded={logs.length}
+            hasMore={!!data.nextCursor}
+            onMore={() => { if (data.nextCursor) setCursor(data.nextCursor); }}
+            loading={staticQ.isFetching}
+            extras={
+              /* v0.9.292 — the accumulation window slid forward. Rows
+                 leaving the top without a word is the silent-loss
+                 class this page keeps producing; say it and say the
+                 remedy. */
+              accDropped > 0 ? (
+                <span style={{ color: 'var(--warn)' }}
+                  title={`"Load more" keeps at most ${ACC_CAP.toLocaleString()} rows in the page so it stays responsive. ${accDropped.toLocaleString()} earlier (newer) rows have scrolled out of the buffer — narrow the time range or the filter to see a slice that fits.`}>
+                  {accDropped.toLocaleString()} earlier rows dropped from the buffer
+                </span>
+              ) : undefined
+            } />
         )}
           </div>
         </div>

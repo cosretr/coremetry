@@ -668,6 +668,9 @@ export function ApiCachePanel({ data }: { data: CacheStats | null | undefined })
           </div>
 
           {/* Top hot keys */}
+          {/* v0.10.967 — dtNoState: durum satırı yok — tablo yalnız anahtar varken
+              çizilir (kendini gizleme, tarif §2); yükleniyor / hata kartın kendi
+              erken dönüşleri, hiç istek yoksa kart "No cached endpoints" der. */}
           {data.topKeys && data.topKeys.length > 0 && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>

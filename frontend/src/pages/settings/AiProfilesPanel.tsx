@@ -84,6 +84,9 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
           <Button variant="secondary" size="sm" onClick={() => { setIsNew(true); setDraft(emptyDraft()); }}>Profil ekle</Button>
         </span>
       </Row>
+      {/* v0.10.967 — dtNoState: durum satırı yok — tablo boş olamaz: AiTab paneli
+          yalnız `profiles.length > 0` iken bağlar ve varsayılan profil silinemez
+          (copilot.DeleteProfile); yükleniyor / hata sekmenin ayar yükleme kapısında. */}
       <div className="table-wrap" style={{ marginTop: 8 }}>
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />

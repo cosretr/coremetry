@@ -18,7 +18,7 @@ import { api, type UserRow } from '@/lib/api';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { fmtNum, tsLong } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
-import { useDataTable, DataTableColgroup, DataTableHead, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type {
   ExceptionGroup, ExceptionGroupState, ExceptionSample,
 } from '@/lib/types';
@@ -33,7 +33,7 @@ import { PageControls } from '@/components/ui/PageControls';
 import { AlertProblemHost } from './ProblemsSection';
 import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
-import { QueryError, QueryErrorInline } from '@/components/QueryError';
+import { QueryErrorInline } from '@/components/QueryError';
 import { PageShell } from '@/components/ui/PageShell';
 import { stripMarkdown } from '@/components/Markdown';
 import { IconSparkles } from '@/components/icons';
@@ -88,6 +88,22 @@ const EXC_COLS_ADMIN: ColumnDef<ExceptionGroup>[] = [
 const DEFAULT_MIN_OCC = 5;
 
 type ExceptionGroupsParams = Parameters<typeof api.exceptionGroups>[0]; // v0.10.949 — floor dahil
+
+// v0.10.967 — tablo standardı T12 (dilim 5): sekme başına boş-durum metni.
+// Eski Empty'nin başlığı + gövdesi tek cümle (Türkçe, anlam aynı): her
+// sekmenin NEDEN boş olabileceğini söyler ki operatör "sayfa bozuk" sanmasın
+// (v0.6.24).
+function excEmptyMessage(tab: string): string {
+  const head = tab === 'inbox' ? 'Inbox boş, ignored dışında hiç grup yok' : `"${tab}" sekmesinde grup yok`;
+  const why = tab === 'resolved'
+    ? "Inbox'ta bir satırda Resolve'a basınca ya da 14 gün yeni oluşum gelmeyince gruplar buraya düşer"
+    : tab === 'ignored'
+      ? "bir satırda Ignore'a basınca gruplar buraya düşer; ignored grup yeniden tetiklense de sessiz kalır"
+      : tab === 'acknowledged'
+        ? "bir satırı Ack'leyince (gördün ama henüz düzeltmedin) gruplar buraya düşer; ack'ten çıkarmak için Resolve'a bas"
+        : 'son oluşumları görmek için bir satıra tıkla; durumu Ack / Resolve / Ignore ile yönet';
+  return `${head} — ${why}`;
+}
 
 export default function ProblemsPage() {
   const { user } = useAuth();
@@ -364,6 +380,22 @@ export default function ProblemsPage() {
   // old client-side sort of one 50-row server page mis-prioritized, and
   // the client search read as "no results" for matches on other pages.
   const filtered = data ?? [];
+  // v0.10.967 — tablo standardı T12 (dilim 5): yükleniyor / hata / eşleşme
+  // yok / boş tablonun İÇİNDE; başlık, eşik şeridi ve Pager yerinde. Hata
+  // aynı sunucu metnini ve aynı ↻ Retry'ı (refreshExceptionGroups) taşır;
+  // hata `data`yı null'a çektiği için bayat sayfa hatayla yan yana kalmaz.
+  // Eşleşme yok = isteğin kendisi kullanıcı süzgeci taşıdı (servis, takım,
+  // arama — hepsi sunucuda); sekme ve occurrence tabanı süzgeç değil (taban
+  // şeridi gizlenen sayıyı kendisi söyler).
+  const excFiltered = !!(service || ownerTeam || sreTeam || committedSearch);
+  const excTableState: Omit<DataTableStateProps<ExceptionGroup>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? {
+      kind: 'error', onRetry: refreshExceptionGroups,
+      ...(loadErr ? { message: `Exception listesi okunamadı: ${loadErr}` } : {}),
+    }
+    : excFiltered ? { kind: 'no-match', message: `"${tab}" sekmesinde süzgeçle eşleşen grup yok` }
+    : { kind: 'empty', message: excEmptyMessage(tab) };
 
   const userById = useMemo(() => {
     const m = new Map<string, UserRow>();
@@ -507,36 +539,6 @@ export default function ProblemsPage() {
           </span>
         </PageControls>
 
-        {data === undefined && <Spinner />}
-        {data === null && (
-          <QueryError message={loadErr} onRetry={refreshExceptionGroups}>
-            The exception list could not be loaded. This is a failed read — an
-            empty page here would have read as "no exceptions".
-          </QueryError>
-        )}
-        {data && filtered.length === 0 && (
-          <Empty icon="✓" title={tab === 'inbox'
-            ? 'Inbox boş — ignored dışında hiç grup yok'
-            : `No groups in "${tab}"`}>
-            {/* v0.6.24 — explain why each tab might legitimately
-                be empty so operators don't think the page broke. */}
-            {tab === 'resolved' && (
-              <>Groups land here when you click <b>Resolve</b> on a row in the Inbox,
-              or automatically after 14 days without a new occurrence.</>
-            )}
-            {tab === 'ignored' && (
-              <>Groups land here when you click <b>Ignore</b> on a row. Ignored groups
-              stay silent even if they fire again.</>
-            )}
-            {tab === 'acknowledged' && (
-              <>Groups land here when you <b>Ack</b> a row — you've seen it but haven't
-              fixed it yet. Click <b>Resolve</b> to move out of ack.</>
-            )}
-            {tab !== 'resolved' && tab !== 'ignored' && tab !== 'acknowledged' && (
-              <>Click a row to inspect recent occurrences. Use Ack / Resolve / Ignore to manage state.</>
-            )}
-          </Empty>
-        )}
         {/* v0.9.315 (operatör) — occurrence eşiği ŞERİDİ. Süzgecin
             kendisi kadar önemli: bir kez düşen nadir bir exception
             gerçekten önemli olan olabilir, ve onu söylemeden saklamak
@@ -580,157 +582,155 @@ export default function ProblemsPage() {
             )}
           </div>
         )}
-        {data && filtered.length > 0 && (
-          <div className="table-wrap"
-            style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
-            aria-busy={refreshing}>
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} leading={[24]} />
-              <DataTableHead dt={dt}
-                leading={<th style={{ width: 24 }}></th>} />
-              <tbody>
-                {filtered.map(g => {
-                  const open = expanded.has(g.fingerprint);
-                  const spread = spreadOf(g); // v0.10.949
-                  // v0.10.221 — düz hücreler gerçek <Link> (orta tık yeni
-                  // sekme); caret/servis/eylem hücreleri kendi tıklarını
-                  // taşır, satır onClick'i kalan boşluk için kalıyor.
-                  const excHref = excDetailHref(location.pathname, searchParams, g.fingerprint);
-                  return (
-                    <Fragment key={g.fingerprint}>
-                      <tr {...rowActivation(() => openExcDetail(g))}
-                        // v0.10.925 — ayrı onKeyDown rowActivation'ınkini eziyordu
-                        // (hedef denetimsiz): caret/eylem düğmesindeki Enter detayı
-                        // açıyordu. Enter/Boşluk → detay, yalnız satır odaktayken.
-                        // v0.10.924 — buton rolü rowActivation yayılımından geliyor
-                        // (tıklanabilir <tr> sözleşmesi, D3); tekrar eden literal kalktı.
-                        aria-expanded={open}>
-                        <td className="cell-faint" style={{ textAlign: 'center' }}
-                          title={open ? 'Hide occurrences' : 'Peek occurrences'}
-                          onClick={e => { e.stopPropagation(); toggleExpand(g.fingerprint); }}>
-                          {open
-                            ? <ChevronDown size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle' }} />
-                            : <ChevronRight size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle' }} />}
-                        </td>
-                        <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{g.priority ? <PriorityBadge p={g.priority} reason={g.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>
-                        <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}><StateBadge s={g.state} /></Link></td>
-                        <td className="row-cell">
-                          <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>
-                          <div className="mono" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 11.5, color: 'var(--err)' }}>
-                            {g.type}
-                            {/* First observed within the last hour —
-                                the highest-signal marker for an SRE
-                                scanning the list in the morning: these
-                                did not exist yesterday.
+        <div className="table-wrap"
+          style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
+          aria-busy={refreshing}>
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} leading={[24]} />
+            <DataTableHead dt={dt}
+              leading={<th style={{ width: 24 }}></th>} />
+            <tbody>
+              {filtered.length === 0 ? <DataTableState dt={dt} leading={[24]} {...excTableState} /> : filtered.map(g => {
+                const open = expanded.has(g.fingerprint);
+                const spread = spreadOf(g); // v0.10.949
+                // v0.10.221 — düz hücreler gerçek <Link> (orta tık yeni
+                // sekme); caret/servis/eylem hücreleri kendi tıklarını
+                // taşır, satır onClick'i kalan boşluk için kalıyor.
+                const excHref = excDetailHref(location.pathname, searchParams, g.fingerprint);
+                return (
+                  <Fragment key={g.fingerprint}>
+                    <tr {...rowActivation(() => openExcDetail(g))}
+                      // v0.10.925 — ayrı onKeyDown rowActivation'ınkini eziyordu
+                      // (hedef denetimsiz): caret/eylem düğmesindeki Enter detayı
+                      // açıyordu. Enter/Boşluk → detay, yalnız satır odaktayken.
+                      // v0.10.924 — buton rolü rowActivation yayılımından geliyor
+                      // (tıklanabilir <tr> sözleşmesi, D3); tekrar eden literal kalktı.
+                      aria-expanded={open}>
+                      <td className="cell-faint" style={{ textAlign: 'center' }}
+                        title={open ? 'Hide occurrences' : 'Peek occurrences'}
+                        onClick={e => { e.stopPropagation(); toggleExpand(g.fingerprint); }}>
+                        {open
+                          ? <ChevronDown size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle' }} />
+                          : <ChevronRight size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle' }} />}
+                      </td>
+                      <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{g.priority ? <PriorityBadge p={g.priority} reason={g.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>
+                      <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}><StateBadge s={g.state} /></Link></td>
+                      <td className="row-cell">
+                        <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>
+                        <div className="mono" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 11.5, color: 'var(--err)' }}>
+                          {g.type}
+                          {/* First observed within the last hour —
+                              the highest-signal marker for an SRE
+                              scanning the list in the morning: these
+                              did not exist yesterday.
 
-                                v0.9.314 — was labelled "NEW", which now
-                                belongs to the STATE column. "<1h" says
-                                literally what it means and cannot be
-                                read as a triage state. */}
-                            {Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
-                              <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
-                                title="First seen within the last hour — this exception did not exist before that.">
-                                &lt;1h
-                              </span>
-                            )}
-                          </div>
-                          <div className="mono" style={{ fontSize: 10.5, color: 'var(--text3)',
-                                        maxWidth: 480, overflow: 'hidden',
-                                        textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                               title={g.message}>
-                            {g.message || '—'}
-                          </div>
-                          {/* v0.9.1133 (AI Faz 2.3) — PASİF özet satırı.
-                              ExceptionExplainer'ın arka planda yazdığı
-                              `aiSummary` (v0.9.415) bu listenin payload'ında
-                              ZATEN geliyordu (ListExceptionGroups ai_summary'yi
-                              seçiyor) ama hiçbir yerde çizilmiyordu — yalnız
-                              detay sayfası gösteriyordu. Sıfır fetch, sıfır
-                              LLM: satır ne yazılmışsa onu okur. Özet YOKSA
-                              hiçbir şey çizilmez (uydurma bir cümle yerine
-                              sessizlik); yalnız çip durur.
-                              stripMarkdown ŞART: model `**kalın**` üretiyor ve
-                              tek satırlık kırpılmış bir yüzeyde yıldızlar
-                              ekrana dökülür (v0.9.641/696 sınıfı). */}
-                          {g.aiSummary && (
-                            <div style={{
-                              display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 3,
-                              fontSize: 10.5, color: 'var(--text2)', maxWidth: 480, minWidth: 0,
-                            }} title={stripMarkdown(g.aiSummary)}>
-                              <IconSparkles size={10} />
-                              <span style={{
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                              }}>{stripMarkdown(g.aiSummary)}</span>
-                            </div>
-                          )}
-                          </Link>
-                        </td>
-                        <td>
-                          {/* v0.9.966 — grubun KENDİ ömrü (firstSeen→
-                              lastSeen). ProblemDetail aynı satır tipi için
-                              zaten bu pencereyi kullanıyor; listeden ve
-                              detaydan açılan servis sayfası aynı zamana
-                              bakmalı. */}
-                          <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
-                            onClick={e => e.stopPropagation()}
-                            className="mono">
-                            {g.service}
-                          </Link>
-                          {/* v0.10.949 — aynı exception aynı anda N serviste (Inbox ile aynı işaret). */}
-                          {spread && (
-                            <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, floorMeta.spreadWindowMin)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
-                              <span className="dot" aria-hidden="true"
-                                style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
-                              {spread.n} servis
-                            </div>
-                          )}
-                        </td>
-                        <td className="num row-cell cell-strong cell-err">
-                          <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>
-                        </td>
-                        {/* v0.10.739 — tarih damgası 13 px (.ib-when, Inbox 736 ile aynı). */}
-                        <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.firstSeen)}</Link></td>
-                        <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.lastSeen)}</Link></td>
-                        <td onClick={e => e.stopPropagation()}>
-                          {isAdmin ? (
-                            <select value={g.assignee} onChange={e => setAssignee(g, e.target.value)}
-                              style={{ fontSize: 11, maxWidth: 160 }}>
-                              <option value="">— unassigned —</option>
-                              {users.map(u => (
-                                <option key={u.id} value={u.id}>{u.email}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span style={{ fontSize: 11, color: 'var(--text2)' }}>
-                              {g.assignee ? (userById.get(g.assignee)?.email ?? g.assignee) : '—'}
+                              v0.9.314 — was labelled "NEW", which now
+                              belongs to the STATE column. "<1h" says
+                              literally what it means and cannot be
+                              read as a triage state. */}
+                          {Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
+                            <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
+                              title="First seen within the last hour — this exception did not exist before that.">
+                              &lt;1h
                             </span>
                           )}
-                        </td>
-                        {isAdmin && (
-                          <td className="col-actions" onClick={e => e.stopPropagation()}>
-                            <ActionButtons g={g} onSet={setState} />
-                          </td>
+                        </div>
+                        <div className="mono" style={{ fontSize: 10.5, color: 'var(--text3)',
+                                      maxWidth: 480, overflow: 'hidden',
+                                      textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                             title={g.message}>
+                          {g.message || '—'}
+                        </div>
+                        {/* v0.9.1133 (AI Faz 2.3) — PASİF özet satırı.
+                            ExceptionExplainer'ın arka planda yazdığı
+                            `aiSummary` (v0.9.415) bu listenin payload'ında
+                            ZATEN geliyordu (ListExceptionGroups ai_summary'yi
+                            seçiyor) ama hiçbir yerde çizilmiyordu — yalnız
+                            detay sayfası gösteriyordu. Sıfır fetch, sıfır
+                            LLM: satır ne yazılmışsa onu okur. Özet YOKSA
+                            hiçbir şey çizilmez (uydurma bir cümle yerine
+                            sessizlik); yalnız çip durur.
+                            stripMarkdown ŞART: model `**kalın**` üretiyor ve
+                            tek satırlık kırpılmış bir yüzeyde yıldızlar
+                            ekrana dökülür (v0.9.641/696 sınıfı). */}
+                        {g.aiSummary && (
+                          <div style={{
+                            display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 3,
+                            fontSize: 10.5, color: 'var(--text2)', maxWidth: 480, minWidth: 0,
+                          }} title={stripMarkdown(g.aiSummary)}>
+                            <IconSparkles size={10} />
+                            <span style={{
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}>{stripMarkdown(g.aiSummary)}</span>
+                          </div>
                         )}
-                      </tr>
-                      {open && (
-                        <tr>
-                          {/* v0.10.945 — `row-detail` değil: örnek kartları bg2, o zeminde kaybolurlar; bg1 bilerek. */}
-                          <td colSpan={isAdmin ? 10 : 9} style={{
-                            background: 'var(--bg1)', padding: '10px 16px',
-                            borderTop: '1px solid var(--divider)',
-                          }}>
-                            <SamplesPanel fingerprint={g.fingerprint} occurrences={Number(g.occurrences)} />
-                          </td>
-                        </tr>
+                        </Link>
+                      </td>
+                      <td>
+                        {/* v0.9.966 — grubun KENDİ ömrü (firstSeen→
+                            lastSeen). ProblemDetail aynı satır tipi için
+                            zaten bu pencereyi kullanıyor; listeden ve
+                            detaydan açılan servis sayfası aynı zamana
+                            bakmalı. */}
+                        <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
+                          onClick={e => e.stopPropagation()}
+                          className="mono">
+                          {g.service}
+                        </Link>
+                        {/* v0.10.949 — aynı exception aynı anda N serviste (Inbox ile aynı işaret). */}
+                        {spread && (
+                          <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, floorMeta.spreadWindowMin)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                            <span className="dot" aria-hidden="true"
+                              style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
+                            {spread.n} servis
+                          </div>
+                        )}
+                      </td>
+                      <td className="num row-cell cell-strong cell-err">
+                        <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>
+                      </td>
+                      {/* v0.10.739 — tarih damgası 13 px (.ib-when, Inbox 736 ile aynı). */}
+                      <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.firstSeen)}</Link></td>
+                      <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.lastSeen)}</Link></td>
+                      <td onClick={e => e.stopPropagation()}>
+                        {isAdmin ? (
+                          <select value={g.assignee} onChange={e => setAssignee(g, e.target.value)}
+                            style={{ fontSize: 11, maxWidth: 160 }}>
+                            <option value="">— unassigned —</option>
+                            {users.map(u => (
+                              <option key={u.id} value={u.id}>{u.email}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span style={{ fontSize: 11, color: 'var(--text2)' }}>
+                            {g.assignee ? (userById.get(g.assignee)?.email ?? g.assignee) : '—'}
+                          </span>
+                        )}
+                      </td>
+                      {isAdmin && (
+                        <td className="col-actions" onClick={e => e.stopPropagation()}>
+                          <ActionButtons g={g} onSet={setState} />
+                        </td>
                       )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                    </tr>
+                    {open && (
+                      <tr>
+                        {/* v0.10.945 — `row-detail` değil: örnek kartları bg2, o zeminde kaybolurlar; bg1 bilerek. */}
+                        <td colSpan={isAdmin ? 10 : 9} style={{
+                          background: 'var(--bg1)', padding: '10px 16px',
+                          borderTop: '1px solid var(--divider)',
+                        }}>
+                          <SamplesPanel fingerprint={g.fingerprint} occurrences={Number(g.occurrences)} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {/* v0.9.1015 — paylaşılan sözleşme (v0.9.1014). Elle çizilmiş
             şerit üç yerde ayrışıyordu: sağa yaslıydı (Gutenberg'e göre
             "ileri" sağda olmalı ama şeridin KENDİSİ ortada/solda

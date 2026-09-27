@@ -172,6 +172,45 @@ export function buildGroupRows(panels: PanelData[]): GroupRow[] {
   return rows;
 }
 
+export type GroupTableState = Omit<DataTableStateProps<GroupRow>, 'dt'>;
+
+// groupTableState — v0.10.967 (tablo standardı T12, dilim 5): seri YOKKEN
+// tablonun içindeki durum, panellerin KENDİ durumundan. SAF.
+//
+// Sıra (recipe §3): yükleniyor → hata → boş. Satır varsa tablo satırları
+// çizer ve bu değer kullanılmaz (bir harf hâlâ yükleniyor ya da patlamış
+// olsa bile dolu harflerin satırları kalır; patlayan harf sayfanın
+// "Sorgu X hata verdi" bandında söylenir — bayat satır değil, başka
+// harfin taze satırları).
+//
+// undefined = hiç sorgu istenmedi (her panel 'idle': parametresiz /explore
+// giriş ekranı). Kapı, tablonun durumu değil (recipe §2): tablo eskisi gibi
+// hiç çizilmez, "Sorgunu kur" ipucu panellerde.
+//
+// Hata metni harfin KENDİ mesajı (bant ile aynı cümle); formül paneli
+// yalnız bir girdi harfi patladığında hata olur, o yüzden harf varken
+// formülün "Girdi sorgusu A hata verdi"si tekrar basılmaz. Boş metni
+// panelin emptyReason'ı (sunucunun "neden boş" notu dahil): harfler aynı
+// sebebi söylüyorsa bir kez, farklıysa harf harf.
+export function groupTableState(panels: PanelData[]): GroupTableState | undefined {
+  if (panels.every(p => p.state === 'idle')) return undefined;
+  if (panels.some(p => p.state === 'loading')) return { kind: 'loading' };
+  const failed = panels.filter(p => p.state === 'error');
+  if (failed.length > 0) {
+    const letters = failed.filter(p => !p.isFormula);
+    const msgs = (letters.length > 0 ? letters : failed).map(p => (p.isFormula
+      ? p.errorMessage ?? `Formül ${p.desc} hesaplanamadı`
+      : `Sorgu ${p.letter} hata verdi${p.errorMessage ? `: ${p.errorMessage}` : ''}`));
+    return { kind: 'error', message: msgs.join(' · ') };
+  }
+  const reasons = panels.filter(p => p.state === 'ready' && p.emptyReason)
+    .map(p => ({ letter: p.letter, reason: p.emptyReason! }));
+  const distinct = new Set(reasons.map(r => r.reason));
+  if (distinct.size === 0) return { kind: 'empty' };
+  if (distinct.size === 1) return { kind: 'empty', message: reasons[0].reason };
+  return { kind: 'empty', message: reasons.map(r => `${r.letter}: ${r.reason}`).join(' · ') };
+}
+
 // PivotButtons (v0.9.848) — satırdan tek tıkla daraltma / hariç tutma.
 //
 // Sağ-tık ya da ⋯ menüsü DEĞİL: iki eylem var, ikisi de tek tık, ve bir
@@ -249,11 +288,11 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
   panels: PanelData[];
   // v0.10.954 — tablo standardı T12 (P6, VirtualTable / LogTable `state`
   // emsali): seri yokken tablonun İÇİNDE çizilecek durum. Çağıran verirse
-  // tablo başlığıyla kalır; vermezse eskisi gibi hiç çizilmez — Explore
-  // bugün yükleniyor'u tablonun dışında gösteriyor, varsayılan "boş" satırı
-  // yüklenirken yalan olurdu. Explore bugün `state` VERMİYOR: dtNoState
-  // mandalındaki -1 henüz gerçek değil (tableUnityRatchet notu).
-  state?: Omit<DataTableStateProps<GroupRow>, 'dt'>;
+  // tablo başlığıyla kalır; vermezse eskisi gibi hiç çizilmez (varsayılan
+  // "boş" satırı yüklenirken yalan olurdu).
+  // v0.10.967 — Explore artık `groupTableState(panels)` veriyor; undefined
+  // yalnız hiç sorgu istenmemişken (giriş ekranı kapısı).
+  state?: GroupTableState;
   hiddenKeys: Set<string>;
   onToggleHidden: (rowKey: string) => void;
   // v0.9.930 — satırdan KAYNAĞA iniş. Tablo hangi harften hangi çiftlerle

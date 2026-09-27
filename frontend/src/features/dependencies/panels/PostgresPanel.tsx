@@ -107,6 +107,9 @@ export function PostgresPanel({ instance, range }: { instance: string; range: Ti
               onClick={() => setDrill({ metric: 'postgresql.wal.age', label: 'WAL age', unit: 's' })} />
           </div>
 
+          {/* v0.10.967 — dtNoState: durum satırı yok — bölüm yalnız veritabanı varken
+              çizilir (kendini gizleme, tarif §2); yükleniyor / hata panelin tek
+              yanıtına ait (Spinner / PanelErr, yukarıda). */}
           {data.databases.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <SubHeader label={`Databases (${data.databases.length})`} />

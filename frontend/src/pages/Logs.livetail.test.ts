@@ -24,6 +24,7 @@ describe('live tail carries the trace lock (B2)', () => {
   });
 
   it('kilitli canlı kuyrukta boş durum "backend kaydı yok" demez', () => {
-    expect(src).toContain('filter.traceId && live ? (');
+    // v0.10.967 — tablo standardı T12: dal artık logsState'te (nesne).
+    expect(src).toContain('filter.traceId && live ? {');
   });
 });

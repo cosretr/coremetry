@@ -55,20 +55,33 @@ const CEILINGS = {
    *  yoğunluk ayarı ona ulaşamaz. Taban v0.10.933 ölçümü (263); göçü dilim 3. */
   inlineMonoStack: 19, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 92 → 19
   /** T12 / S6 — durumu tablonun İÇİNDE olmayan DataTable tablosu. Dosya
-   *  başına `max(0, <DataTableHead> − <DataTableState>)` + `state=` almayan
-   *  `<VirtualTable>`. Her DataTable tablosu tam bir DataTableHead basar
-   *  (dt'yi alt bileşene geçiren sayfada da başlık ve durum AYNI dosyada);
-   *  VirtualTable başlığını ve durum satırını kendi basar, benimseme `state=`.
+   *  başına `max(0, <DataTableHead> − dt'li <DataTableState>)` + `state=`
+   *  almayan `<VirtualTable>` (`dtNoStateOf`). Her DataTable tablosu tam bir
+   *  DataTableHead basar (dt'yi alt bileşene geçiren sayfada da başlık ve
+   *  durum AYNI dosyada); VirtualTable başlığını ve durum satırını kendi
+   *  basar, benimseme `state=`.
    *  v0.10.954 — dilim 4 tabanı 139; iki pilot (ServiceBacktrace,
-   *  PartitionLagTable) ile 137.
-   *  v0.10.954 — DİKKAT: explore/GroupTable "benimsedi" sayılır ama göç
-   *  GERÇEK DEĞİL — Explore `state=` vermiyor, `rows.length === 0 && !state`
-   *  hâlâ null döner (kullanıcıya görünen değişiklik yok). Bu -1'e dayanarak
-   *  tavan DÜŞÜRÜLMEZ; Explore `state=` geçtiğinde gerçekleşir ve bu not
-   *  silinir (explore/GroupTable.state.test.tsx notun doğruluğunu çiviler).
-   *  v0.10.954 — dilim 4 göçü: ölçüm 40; tavan 41 = 40 + GroupTable'ın
-   *  gerçek olmayan -1'i (yukarıdaki not). Explore `state=` geçince 40. */
-  dtNoState: 41, // v0.10.954 — dilim 4 (tablo içi durumlar): 137 → 41
+   *  PartitionLagTable) ile 137; dilim 4 göçü 40.
+   *  v0.10.967 — dilim 5 (P-1 `detail`, P-2 `colSpan`): ölçüm 17.
+   *  explore/GroupTable göçü artık gerçek (Explore `state={groupState}`
+   *  veriyor); v0.10.954'ün "gerçek değil" notu ve +1'i silindi.
+   *  v0.10.967 — P-2'nin statik `<DataTableState colSpan>`'ı dt'li durum
+   *  SAYILMAZ: aynı dosyadaki durumsuz bir DataTableHead'i örtmesin
+   *  (Rollouts, PodContextTables statik + dt'li tabloyu bir arada tutuyor).
+   *  Ölçüm iki sayımla da 17 — bugün örtülen tablo yok.
+   *  v0.10.967 — DİKKAT: service/ServicePodsTable "benimsedi" sayılır ama
+   *  göç GERÇEK DEĞİL — ServicePodsTab `state=` vermiyor, tabloyu yalnız
+   *  satır varken bağlıyor, Spinner / Empty hâlâ dışarıda. Durumu dışarıda
+   *  kalan gerçek tablo sayısı 18. Tavan yine ölçümde (17): +1 pay, yeni bir
+   *  durumsuz tabloyu kapıdan geçirirdi. ServicePodsTab `state=` geçince
+   *  sayım değişmez; bu not ve aşağıdaki çivi silinir (çivi bunu zorlar).
+   *  Kalan 17: AdminClickhouse 8 (başka iş akışının dosyası); kendini
+   *  gizleyen / boş olamayan 8 (AnomalyWindowTable, DetailDrawer top ops,
+   *  PostgresPanel, AdminCardinality FinOps, adminstats top keys,
+   *  EntityDetail pods × services, TopEndpointsCard, AiProfilesPanel);
+   *  OverviewTables OpsCard 1 (boşu bundle hatasından ayıramıyor —
+   *  Service → Overview → OpsCard `state` zinciri bekliyor). */
+  dtNoState: 17, // v0.10.967 — dilim 5: 41 → 17
 } as const;
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -117,14 +130,22 @@ function tableCounts(): Record<keyof typeof CEILINGS, number> {
     fakeSortable: count(/sortValue:\s*\(\)\s*=>\s*0\b/g),
     trTitle: code.reduce((a, s) => a + jsxOpenTags(s, 'tr').filter(t => /\stitle=/.test(t.tag)).length, 0),
     inlineMonoStack: count(/\bfont(?:Family)?:\s*(['"`])[^'"`\n]*monospace[^'"`\n]*\1/g),
-    dtNoState: code.reduce((a, s) => {
-      const heads = s.match(/<DataTableHead\b/g)?.length ?? 0;
-      const states = s.match(/<DataTableState\b/g)?.length ?? 0;
-      const vtBare = jsxOpenTags(s.replace(VT_GENERIC, '<VirtualTable '), 'VirtualTable')
-        .filter(t => !hasTopLevelAttr(t.tag, 'state')).length;
-      return a + Math.max(0, heads - states) + vtBare;
-    }, 0),
+    dtNoState: code.reduce((a, s) => a + dtNoStateOf(s), 0),
   };
+}
+
+/** Dosya başına dtNoState (yorumları ayıklanmış kaynak).
+ *  v0.10.967 (dilim 5, P-2) — `<DataTableState colSpan={N}>` statik tablonun
+ *  (dt yok) durum satırıdır; dt'li durum sayılmaz. Düz `<DataTableState\b`
+ *  sayımı onu da sayıyor, aynı dosyadaki durumsuz bir DataTableHead'i
+ *  örtüyordu. `colSpan` yalnız etiketin KENDİ özniteliğiyse: `detail`
+ *  içindeki `<td colSpan>` derinlik > 0'da kalır. */
+function dtNoStateOf(s: string): number {
+  const heads = s.match(/<DataTableHead\b/g)?.length ?? 0;
+  const dtStates = jsxOpenTags(s, 'DataTableState').filter(t => !hasTopLevelAttr(t.tag, 'colSpan')).length;
+  const vtBare = jsxOpenTags(s.replace(VT_GENERIC, '<VirtualTable '), 'VirtualTable')
+    .filter(t => !hasTopLevelAttr(t.tag, 'state')).length;
+  return Math.max(0, heads - dtStates) + vtBare;
 }
 
 describe('tablo standardı mandalı (v0.10.932)', () => {
@@ -147,5 +168,37 @@ describe('dtNoState — VirtualTable `state=` yalnız kendi özniteliğiyse say�
     expect(bare(`<VirtualTable<Row> dt={dt} renderRow={t => <Link to={h} state={{ from: x }}>{t.id}</Link>} />`)).toBe(1);
     expect(bare(`<VirtualTable<Map<string, number>> dt={dt}\n  state={{ kind: 'loading' }} renderRow={r => <td>{r.a}</td>} />`)).toBe(0);
     expect(bare(`<VirtualTable dt={dt} title="a state=b" />`)).toBe(1);
+  });
+});
+
+// v0.10.967 (tablo standardı, dilim 5) — P-2 statik durumu dt'li durum
+// sayılmaz (dtNoStateOf); aksi hâlde aynı dosyadaki durumsuz DataTable
+// tablosu görünmez olurdu.
+describe('dtNoState — statik `<DataTableState colSpan>` dt\'li tabloyu örtmez', () => {
+  const HEAD = '<table {...dt.tableProps}><DataTableColgroup dt={dt} /><DataTableHead dt={dt} /><tbody>{rows}</tbody></table>';
+  it('statik durum + durumsuz DataTable başlığı = 1', () => {
+    expect(dtNoStateOf(`<table><tbody>{n ? r : <DataTableState colSpan={3} kind="empty" />}</tbody></table>${HEAD}`)).toBe(1);
+    // colSpan'dan önce ok fonksiyonu / JSX olsa da etiketin kendi özniteliği
+    expect(dtNoStateOf(`<DataTableState kind="no-match" onClearFilters={() => setQ('')} colSpan={3} />${HEAD}`)).toBe(1);
+    expect(dtNoStateOf(`<DataTableState kind="empty" detail={<Link to="/x">x</Link>} colSpan={3} />${HEAD}`)).toBe(1);
+  });
+  it('dt\'li durum başlığı karşılar; detail içindeki colSpan etiketin değil', () => {
+    expect(dtNoStateOf(`${HEAD}<DataTableState dt={dt} {...tableState} />`)).toBe(0);
+    expect(dtNoStateOf(`${HEAD}<DataTableState dt={dt} kind="empty" detail={<td colSpan={2} />} />`)).toBe(0);
+  });
+});
+
+// v0.10.967 (dilim 5) — CEILINGS.dtNoState notunun doğruluğu: ServicePodsTable
+// durum satırını basıyor ama sekme `state=` vermiyor, sayaçtaki -1 gerçek
+// değil. Sekme `state=` geçtiğinde bu çivi kırmızı olur: göç gerçekleşmiştir,
+// not ve bu blok silinir (sayım zaten 0; tavan değişmez).
+describe('dtNoState — ServicePodsTable kredisi dürüst (v0.10.967)', () => {
+  it('ServicePodsTab <ServicePodsTable>e state= vermiyor — veriyorsa not silinmeli', () => {
+    const tab = stripTsComments(readFileSync(join(SRC, 'pages', 'service', 'ServicePodsTab.tsx'), 'utf8'));
+    const tags = jsxOpenTags(tab, 'ServicePodsTable');
+    expect(tags.length).toBeGreaterThan(0);
+    expect(tags.some(t => hasTopLevelAttr(t.tag, 'state')),
+      'ServicePodsTab artık state= veriyor: göç gerçek — CEILINGS.dtNoState notunu ve bu çiviyi sil')
+      .toBe(false);
   });
 });

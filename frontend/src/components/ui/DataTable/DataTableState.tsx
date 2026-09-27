@@ -63,21 +63,64 @@ import { DEFAULT_W } from './rowHeight';
 //     kutusu gibi); değilse tablonun kabı (`.table-wrap` / `.vt-scroll`,
 //     DataTableColgroup'un ölçtüğü aynı kaplar; yoksa `<table>`). Kap odak
 //     alamıyorsa GEÇİCİ tabIndex=-1 alır ve odak çıkınca geri alınır.
+//
+// v0.10.967 — tablo standardı dilim 5 (recipe §5):
+//   • P-1 `detail`: sayfanın CTA'sı / bağlantısı / kısa önerisi (Link,
+//     Button, kopyalanan komut) empty / no-match / error satırında, türün
+//     kendi içeriğinin (mesaj + "Filtreleri temizle" / "↻ Retry")
+//     ARKASINDA, aynı `.dt-state-body` içinde. Dilim 4'te bu CTA'lar ne
+//     silinebildi ne tablonun dışına park edilebildi; tablo "blocked" kaldı.
+//     loading'de yok sayılır (iskelet eylem taşımaz). Detail KENDİ odak
+//     bekçisi olan ayrı yuvada (`DetailSlot`, StateBody'nin aynısı); gövde
+//     anahtarı yine yalnız `tür:eylem-var-mı`. Detail'in varlığı gövde
+//     anahtarına girseydi detail'in gelip gitmesi (başka bir sorguya ya da
+//     yetkiye bağlı CTA) gövdeyi bütünüyle yeniden bağlar, hâlâ çizilen
+//     "↻ Retry" / "Filtreleri temizle"den odağı kaba ya da filtre kutusuna
+//     kaçırırdı. Yuva giderken odak içindeyse odak aynı kuralla geri döner.
+//     SINIR: yuva bağlı kalırken İÇİNDEKİ odaklı düğme kalkarsa bekçi bunu
+//     göremez — sayfa detail'in eylem kümesini `detailKey`de söyler (değişince
+//     yuva yeniden bağlanır), ya da düğmeyle birlikte detail'i düşürür.
+//   • P-2 `colSpan`: statik tablo (`useDataTable` yok) `dt` YERİNE thead'deki
+//     <th> sayısını verir. empty / no-match / error hücresi dt'li sürümle
+//     birebir aynı (odak dönüşü dahil); loading kolon orantısı olmadığı için
+//     N tam genişlik çizgi. `dt` ile `colSpan`dan TAM OLARAK biri — ikisi de
+//     yoksa ya da ikisi birden verilirse derleme hatası (tip kapısı,
+//     DataTableState.contract.test.tsx).
 
 export type DataTableStateKind = 'empty' | 'no-match' | 'loading' | 'error';
 
-export interface DataTableStateProps<T> {
-  dt: DataTable<T>;
+/** Türü ve içeriği seçen ortak alanlar — dt'li ve statik sürümde aynı. */
+interface DataTableStateBase {
   kind: DataTableStateKind;
-  /** Yönetilmeyen baş kolonların px genişlikleri (DataTableColgroup `leading` ile aynı dizi). */
-  leading?: number[];
-  /** Yönetilmeyen son kolonların px genişlikleri (DataTableColgroup `trailing` ile aynı dizi). */
-  trailing?: number[];
   /**
    * Türün varsayılan satırını ezer (ör. admin tablosunda "Henüz kullanıcı
    * yok"; hata türünde sunucunun metni). loading'de durum etiketi olur.
    */
   message?: string;
+  /**
+   * v0.10.967 (P-1) — empty / no-match / error: türün kendi içeriğinin
+   * arkasına, aynı hücrede basılan sayfa içeriği: CTA düğmesi, `<Link>`,
+   * kısa öneri ya da kopyalanan komut. loading'de yok sayılır. `false` /
+   * `null` / `''` → hiç basılmaz (`detail={cond && <Link/>}` güvenli).
+   *
+   * Odak: detail GİDERKEN (yanlış değere döner ya da tür değişir) odak
+   * içindeyse `returnFocusRef`e / tablonun kabına döner; detail gelip
+   * giderken türün kendi düğmesi ("↻ Retry", "Filtreleri temizle") odağını
+   * korur. SINIR: detail yerinde kalırken içindeki odaklı düğme kalkarsa
+   * (ör. "Pencereyi genişlet" gider, ipucu metni kalır) bu GÖRÜLMEZ ve odak
+   * <body>'ye düşer — o zaman `detailKey` verin ya da düğmeyle birlikte
+   * detail'i de düşürün.
+   */
+  detail?: ReactNode;
+  /**
+   * v0.10.967 (P-1) — detail'in EYLEM KÜMESİNİN kimliği (ör.
+   * `canWiden ? 'widen' : 'hint'`). Değişince detail yuvası yeniden bağlanır;
+   * odak yuvanın içindeyse `returnFocusRef`e / tablonun kabına döner.
+   * Yalnız detail'in odak alabilen öğeleri değişince değiştirin: metin
+   * değişimi için değil (yuva yeniden bağlanır, odaklı düğme odağını kaybeder).
+   * Türün kendi düğmelerine dokunmaz.
+   */
+  detailKey?: string;
   /**
    * no-match: verilirse "Filtreleri temizle" LinkButton'u basılır. Düğme
    * kendini kaldırınca (satırlar geldi) odağı bileşen geri verir —
@@ -99,6 +142,33 @@ export interface DataTableStateProps<T> {
   returnFocusRef?: RefObject<HTMLElement | null>;
   /** loading: iskelet çizgisi sayısı (TableSkeleton varsayılanıyla aynı: 8). */
   skeletonRows?: number;
+}
+
+/**
+ * `useDataTable` tablosu: colSpan ve iskelet orantısı `dt`den (+ leading /
+ * trailing). Sayfaların hesapladığı durum tipi `Omit<DataTableStateProps<Row>, 'dt'>`
+ * bu yüzden değişmedi.
+ */
+export interface DataTableStateProps<T> extends DataTableStateBase {
+  dt: DataTable<T>;
+  /** v0.10.967 (P-2) — dt varken colSpan verilemez (sayım dt'nin). */
+  colSpan?: never;
+  /** Yönetilmeyen baş kolonların px genişlikleri (DataTableColgroup `leading` ile aynı dizi). */
+  leading?: number[];
+  /** Yönetilmeyen son kolonların px genişlikleri (DataTableColgroup `trailing` ile aynı dizi). */
+  trailing?: number[];
+}
+
+/**
+ * v0.10.967 (P-2) — statik tablo (`dt` yok): `colSpan` = thead'deki <th>
+ * sayısı, tek başına toplam (leading / trailing yok). Hesaplanan durum için
+ * `Omit<DataTableStateStaticProps, 'colSpan'>`.
+ */
+export interface DataTableStateStaticProps extends DataTableStateBase {
+  colSpan: number;
+  dt?: never;
+  leading?: never;
+  trailing?: never;
 }
 
 /**
@@ -142,7 +212,33 @@ function StateBody({ children, onFocusOrphaned }: {
   return <div ref={ref} className="dt-state-body">{children}</div>;
 }
 
-interface SkelCell { key: string; flex: string; num: boolean; bar: boolean }
+/**
+ * v0.10.967 (P-1) — detail yuvası, StateBody ile aynı bekçi: yuva giderken
+ * (detail yanlış değere döndü, `detailKey` değişti ya da gövde yeniden
+ * bağlandı) odak içindeyse `onFocusOrphaned`. Ayrı bileşen olması gövdenin
+ * anahtarını detail'den bağımsız tutar: detail gelip giderken türün kendi
+ * düğmesi aynı DOM düğümü kalır, odağı kaçmaz.
+ */
+function DetailSlot({ children, onFocusOrphaned }: {
+  children: ReactNode;
+  onFocusOrphaned: (from: HTMLElement) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const slot = ref.current;
+    return () => {
+      if (slot && slot.contains(document.activeElement)) onFocusOrphaned(slot);
+    };
+  }, [onFocusOrphaned]);
+  return <div ref={ref} data-dt-state-detail="">{children}</div>;
+}
+
+interface SkelCell { key: string; flex: string; num: boolean; bar: boolean; full?: boolean }
+
+// v0.10.967 (P-2) — statik tablonun iskelet çizgisi: colgroup orantısı yok
+// (kolon genişliği bilinmiyor), çizgi başına TEK tam genişlik hücre ve çubuk.
+// Uydurma kolon bölmesi gerçek satır gelince kayardı; dürüst olan tam çizgi.
+const STATIC_SKEL_LINE: SkelCell[] = [{ key: 'line', flex: '1 1 0px', num: false, bar: true, full: true }];
 
 /**
  * İskelet çizgisinin hücreleri — `<colgroup>` genişliklerinin flex karşılığı.
@@ -172,10 +268,25 @@ function skeletonCells<T>(dt: DataTable<T>, leading: number[], trailing: number[
   ];
 }
 
-export function DataTableState<T>({
-  dt, kind, leading = [], trailing = [], message, onClearFilters, onRetry, skeletonRows = 8, returnFocusRef,
-}: DataTableStateProps<T>) {
-  const span = leading.length + dt.visibleColumns.length + trailing.length;
+/**
+ * v0.10.967 (P-1) — detail basılacak mı: `cond && <Link/>` gibi yanlış
+ * değerler (false / null / undefined / '') yuva basmaz (DOM detail'siz
+ * sürümle birebir aynı kalır).
+ */
+function hasContent(node: ReactNode): boolean {
+  return node !== undefined && node !== null && typeof node !== 'boolean' && node !== '';
+}
+
+export function DataTableState<T>(props: DataTableStateProps<T> | DataTableStateStaticProps) {
+  const { kind, message, detail, detailKey, onClearFilters, onRetry, skeletonRows = 8, returnFocusRef } = props;
+  const leading = props.leading ?? [];
+  const trailing = props.trailing ?? [];
+  // v0.10.967 (P-2) — dt varsa sayım dt'nin (görünür kolonlar); yoksa statik
+  // tablonun verdiği colSpan. Tip ikisini birden yasaklar; JS'den ikisi
+  // birden gelirse dt kazanır (colgroup'la aynı sayım).
+  const span = props.dt
+    ? leading.length + props.dt.visibleColumns.length + trailing.length
+    : props.colSpan;
 
   // v0.10.939 (tablo standardı T12) — `returnFocusRef` bir ref'te: iniş
   // işleyicisi kararlı kalır (çağıran her render'da yeni ref nesnesi verse de).
@@ -184,7 +295,7 @@ export function DataTableState<T>({
   const onFocusOrphaned = useCallback((from: HTMLElement) => landFocus(from, returnRef.current?.current), []);
 
   if (kind === 'loading') {
-    const cells = skeletonCells(dt, leading, trailing);
+    const cells = props.dt ? skeletonCells(props.dt, leading, trailing) : STATIC_SKEL_LINE;
     return (
       <tr data-dt-state={kind}>
         <td colSpan={span} className="dt-state dt-state--loading">
@@ -200,7 +311,8 @@ export function DataTableState<T>({
                           gibi geniş, diğerleri satırdan satıra değişen kısa çubuk. */}
                       {c.bar && (
                         <Skeleton height="0.8em"
-                          width={ci === leading.length ? `${50 + (ri % 3) * 10}%` : `${30 + (ri % 4) * 8}%`} />
+                          width={c.full ? '100%'
+                            : ci === leading.length ? `${50 + (ri % 3) * 10}%` : `${30 + (ri % 4) * 8}%`} />
                       )}
                     </span>
                   );
@@ -216,10 +328,15 @@ export function DataTableState<T>({
   // v0.10.939 (tablo standardı T12) — eylemin varlığı anahtarda: düğme
   // giderse gövde yeniden bağlanır ve temizliği odağı yakalar.
   const hasAction = (kind === 'no-match' && !!onClearFilters) || (kind === 'error' && !!onRetry);
+  // v0.10.967 (P-1) — detail anahtarda DEĞİL: kendi bekçisi DetailSlot'ta
+  // (başlıktaki gerekçe). Anahtara girerse detail'in gelip gitmesi hâlâ
+  // çizilen Retry / "Filtreleri temizle"yi yeniden bağlar ve odağı kaçırır.
+  const withDetail = hasContent(detail);
   return (
     <tr data-dt-state={kind}>
       <td colSpan={span} className="dt-state">
-        <StateBody key={`${kind}:${hasAction ? 'action' : 'none'}`} onFocusOrphaned={onFocusOrphaned}>
+        <StateBody key={`${kind}:${hasAction ? 'action' : 'none'}`}
+          onFocusOrphaned={onFocusOrphaned}>
           {kind === 'error' && (
             <QueryErrorInline text={message ?? DATA_TABLE_STATE_TEXT.error} onRetry={onRetry} />
           )}
@@ -234,6 +351,14 @@ export function DataTableState<T>({
                 </>
               )}
             </>
+          )}
+          {/* v0.10.967 (P-1) — sayfanın CTA'sı / bağlantısı türün kendi
+              içeriğinin arkasında; tek sarmalayıcı: sayfanın satır içi cümlesi
+              (metin + Link) tek flex öğesi kalır, gap'le parçalanmaz. <div>:
+              kopyalanan komut gibi blok içerik de geçerli iç içelik.
+              `detailKey` değişince yalnız bu yuva yeniden bağlanır. */}
+          {withDetail && (
+            <DetailSlot key={detailKey} onFocusOrphaned={onFocusOrphaned}>{detail}</DetailSlot>
           )}
         </StateBody>
       </td>

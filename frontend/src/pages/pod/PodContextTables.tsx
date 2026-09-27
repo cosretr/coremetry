@@ -11,8 +11,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, KeyValue } from '@/components/ui';
-import { Spinner } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { fmtDateTime, fmtBytes } from '@/lib/utils';
 import { fmtCores, podPhaseBadge } from '@/pages/clusters/thresholds';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
@@ -27,33 +26,50 @@ function containerTone(c: { readyKnown: boolean; ready: boolean; restarts: numbe
   return c.restarts > 0 || c.lastTermReason ? 'warning' : 'neutral';
 }
 
-export function PodContainersTable({ ctr, pending, containerRecs }: {
+export function PodContainersTable({ ctr, pending, containerRecs, error }: {
   ctr?: EntityContainersResponse;
   pending: boolean;
   /** entity çocukları — KSM serisi yokken en azından adlar */
   containerRecs?: EntityRecord[];
+  /**
+   * v0.10.967 — HTTP okumasının hatası (react-query `error`, yalnız isError iken).
+   * Verilmezse ilk yüklemede düşen istek `ctr` undefined + pending false olarak
+   * gelir ve "KSM serisi yok" diye okunurdu; tazeleme düşerse önbellekteki eski
+   * satırlar hatasız "güncel" görünürdü.
+   */
+  error?: unknown;
 }) {
-  if (pending) return <Spinner />;
   const rows = ctr?.containers ?? [];
+  // v0.10.967 — tablo standardı dilim 5 (P-2): `pending` Spinner erken dönüşü
+  // kalktı; yükleniyor da tablonun İÇİNDE, başlık durur. Kaynak notu eskisi
+  // gibi yalnız yanıt gelince (pending'de hiç yoktu).
+  // Thanos hatası (sunucu 200 + `error`, konteyner listesi HER ZAMAN boş —
+  // internal/api/entities.go) ve düşen HTTP okuması bu tablonun HATA hâli:
+  // gövde "KSM serisi yok" (boş sonuç) DEMEZ. Şerit yalnız okuma düştüğü hâlde
+  // satır ekrandayken (tazeleme hatası, önbellekteki son liste) — hata iki kez
+  // basılmaz, eski satırlar sessizce "güncel" okunmaz.
+  const failed = !!ctr?.error || !!error;
+  const failText = ctr?.error ?? (error instanceof Error ? error.message : error ? String(error) : '');
+  const showRows = !pending && rows.length > 0;
+  const state: Omit<DataTableStateStaticProps, 'colSpan'> = pending
+    ? { kind: 'loading' }
+    : failed
+      ? (ctr?.error ? { kind: 'error', message: `Konteyner durumu okunamadı (Thanos): ${ctr.error}` } : { kind: 'error' })
+      : { kind: 'empty', message: `KSM serisi yok${containerRecs && containerRecs.length > 0 ? ` · konteynerler: ${containerRecs.map(c => c.name).join(', ')}` : ''}` };
   return (
     <>
-      {ctr?.error && <div className="pod-cap"><Badge tone="warning" title={ctr.error}>Thanos: durum alınamadı</Badge></div>}
+      {showRows && failed && (
+        <div className="pod-cap">
+          <Badge tone="warning" title={failText}>{ctr?.error ? 'Thanos: durum alınamadı' : 'Konteyner durumu tazelenemedi — son okunan liste'}</Badge>
+        </div>
+      )}
       <div className="table-wrap">
         {/* v0.10.943 — statik tablo (T1): pod başına ≤ ~10 konteyner, sıralanmaz. */}
         <table>
           <thead><tr><th>Ad</th><th>Ready</th><th className="num">Restarts</th><th>Waiting</th><th>Son sonlanma</th></tr></thead>
           <tbody>
-            {rows.length === 0 ? (
-              // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
-              // Başlık durur; yükleniyor hâlâ yukarıdaki erken dönüş (P-2 bekler).
-              <tr data-dt-state="empty">
-                <td colSpan={5} className="dt-state">
-                  <div className="dt-state-body">
-                    <span>KSM serisi yok{containerRecs && containerRecs.length > 0 ? ` · konteynerler: ${containerRecs.map(c => c.name).join(', ')}` : ''}</span>
-                  </div>
-                </td>
-              </tr>
-            ) : rows.map(c => (
+            {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 5 <th>. */}
+            {!showRows ? <DataTableState colSpan={5} {...state} /> : rows.map(c => (
               <tr key={c.name}>
                 <td className="mono">{c.name}</td>
                 <td>{c.readyKnown ? <Badge tone={containerTone(c)}>{c.ready ? 'ready' : 'not ready'}</Badge> : <span className="field-hint" title="kube_pod_container_status_ready serisi yok">?</span>}</td>
@@ -67,9 +83,11 @@ export function PodContainersTable({ ctr, pending, containerRecs }: {
           </tbody>
         </table>
       </div>
-      <div className="pod-cap">
-        <code className="mono">GET /api/entity/containers</code> · kube_pod_container_status_{'{'}ready,restarts_total,waiting_reason,last_terminated_reason{'}'} · anlık — konteyner başına zaman serisi yok (CPU/Mem pod toplamıdır).
-      </div>
+      {!pending && (
+        <div className="pod-cap">
+          <code className="mono">GET /api/entity/containers</code> · kube_pod_container_status_{'{'}ready,restarts_total,waiting_reason,last_terminated_reason{'}'} · anlık — konteyner başına zaman serisi yok (CPU/Mem pod toplamıdır).
+        </div>
+      )}
     </>
   );
 }

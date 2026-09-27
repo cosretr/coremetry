@@ -49,7 +49,7 @@ import { metricsNeedingUnit, useMetricUnits, withMetricUnits } from './explore/m
 import { PanelStack, buildPanels } from './explore/PanelStack';
 import { queryToPanel, isPinnable } from './explore/pinToDashboard';
 import { PinToDashboardModal } from './explore/PinToDashboardModal';
-import { GroupTable } from './explore/GroupTable';
+import { GroupTable, groupTableState } from './explore/GroupTable';
 import { pivotQuery, type PivotMode } from './explore/pivotQuery';
 import { exploreSourceHref, type SourceTarget } from './explore/sourceHref';
 import { SummaryViz } from './explore/SummaryViz';
@@ -472,6 +472,10 @@ function ExploreInner({ onSelfWrite }: {
     () => Object.entries(errorByLetter).sort(([a], [b]) => a.localeCompare(b)),
     [errorByLetter]);
   const anyProduces = debounced.queries.some(produces);
+  // v0.10.967 — tablo standardı T12: GroupTable seri yokken durumunu
+  // (yükleniyor / hata / boş) panellerin durumundan tablonun İÇİNDE çizer;
+  // başlık kalır. undefined = hiç sorgu istenmedi (giriş ekranı kapısı).
+  const groupState = useMemo(() => groupTableState(panels), [panels]);
 
   // Heatmap viz — the LatencyHeatmap path, driven by query A (panel header
   // states it). Gated exactly like the pre-v2 heatmap fetch.
@@ -1126,7 +1130,8 @@ name ~ checkout`}
                   onFocus={setFocusKey}
                   onPivot={pivotFromRow}
                   sourceTarget={sourceTargetFor}
-                  onOpenSource={openSourceFromRow} />
+                  onOpenSource={openSourceFromRow}
+                  state={groupState} />
               </>
             )}
           </>

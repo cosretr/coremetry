@@ -7,9 +7,10 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Row, Badge } from '@/components/ui';
-import { Spinner, Empty } from '@/components/Spinner';
+import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
+import { humanize } from './shared';
 
 export function SpanClusterValuesPanel({ clusters, onAssigned }: {
   clusters: { id?: string; name: string }[];
@@ -39,6 +40,16 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
     }
   };
   const rows = q.data?.rows ?? [];
+  // v0.10.967 — tablo standardı dilim 5 (P-2): Spinner / Empty zinciri
+  // tablonun İÇİNE indi, başlık durur. Sıra aynı: yükleniyor, hata, boş.
+  // Hata önbellekteki eski satırları da gizler (eskiden hata dalı tabloyu
+  // hiç çizmiyordu): düşen tazelemenin altında bayat eşleme "güncel" gibi
+  // okunmasın. Geriye dönük tarama anahtarı da aynı kapıya bağlı.
+  const showRows = !q.isPending && !q.error && rows.length > 0;
+  const state: Omit<DataTableStateStaticProps, 'colSpan'> =
+    q.isPending ? { kind: 'loading' }
+    : q.error ? { kind: 'error', message: `Span cluster değerleri yüklenemedi: ${humanize(q.error)}` }
+    : { kind: 'empty', message: "Span verisinde cluster değeri yok — span'ler k8s.cluster.name / openshift.cluster.name / cluster taşımıyor." };
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
@@ -48,62 +59,47 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
         </span>
       </div>
       <div className="ov-card-b">
-        {q.isPending ? <Spinner /> : q.error ? (
-          <Empty icon="!" title="Span cluster değerleri yüklenemedi" compact>{String(q.error)}</Empty>
-        ) : (
-          <>
-            {/* v0.10.954 — geriye dönük tarama anahtarı yalnız atanacak satır varken anlamlı (eskisi gibi). */}
-            {rows.length > 0 && (
-              <Row gap={2} wrap>
-                <label className="field-hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <input type="checkbox" checked={backfill} onChange={e => setBackfill(e.target.checked)} />
-                  atamada son 24 saati geriye dönük tara (pod/servis entity'leri)
-                </label>
-              </Row>
-            )}
-            {/* v0.10.942 — statik tablo: satır başına kayıt seçici + Assign, düzenlenebilir eşleme listesi (T1). */}
-            <table>
-              <thead><tr><th>Value</th><th className="num">Spans</th><th>First seen</th><th>Last seen</th><th>Bound to</th><th></th></tr></thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
-                  // Yükleniyor / hata yukarıda kalır (P-2 bekler).
-                  <tr data-dt-state="empty">
-                    <td colSpan={6} className="dt-state">
-                      <div className="dt-state-body">
-                        <span>Span verisinde cluster değeri yok — span'ler k8s.cluster.name / openshift.cluster.name / cluster taşımıyor.</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : rows.map(r => (
-                  <tr key={r.value}>
-                    <td className="mono">{r.value}</td>
-                    <td className="num">{r.spans.toLocaleString()}</td>
-                    <td className="mono">{fmtDateTime(new Date(r.firstSeen))}</td>
-                    <td className="mono">{fmtDateTime(new Date(r.lastSeen))}</td>
-                    <td>
-                      {r.ownerName
-                        ? <Badge title={r.ownerId}>{r.ownerName}</Badge>
-                        : <Badge tone="warning" title="Hiçbir Remote Cluster kaydı bu değeri taşımıyor">unmapped</Badge>}
-                    </td>
-                    <td>
-                      {!r.ownerName && (
-                        <Row gap={2}>
-                          <select value={pick[r.value] ?? ''} onChange={e => setPick(p => ({ ...p, [r.value]: e.target.value }))}>
-                            <option value="">— cluster —</option>
-                            {clusters.filter(c => c.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                          <Button type="button" variant="primary" size="xs" disabled={!pick[r.value]} onClick={() => assign(r.value)}>Assign</Button>
-                          {msg[r.value] && <span className="field-hint">{msg[r.value]}</span>}
-                        </Row>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
+        {/* v0.10.954 — geriye dönük tarama anahtarı yalnız atanacak satır varken anlamlı (eskisi gibi). */}
+        {showRows && (
+          <Row gap={2} wrap>
+            <label className="field-hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={backfill} onChange={e => setBackfill(e.target.checked)} />
+              atamada son 24 saati geriye dönük tara (pod/servis entity'leri)
+            </label>
+          </Row>
         )}
+        {/* v0.10.942 — statik tablo: satır başına kayıt seçici + Assign, düzenlenebilir eşleme listesi (T1). */}
+        <table>
+          <thead><tr><th>Value</th><th className="num">Spans</th><th>First seen</th><th>Last seen</th><th>Bound to</th><th></th></tr></thead>
+          <tbody>
+            {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 6 <th>. */}
+            {!showRows ? <DataTableState colSpan={6} {...state} /> : rows.map(r => (
+              <tr key={r.value}>
+                <td className="mono">{r.value}</td>
+                <td className="num">{r.spans.toLocaleString()}</td>
+                <td className="mono">{fmtDateTime(new Date(r.firstSeen))}</td>
+                <td className="mono">{fmtDateTime(new Date(r.lastSeen))}</td>
+                <td>
+                  {r.ownerName
+                    ? <Badge title={r.ownerId}>{r.ownerName}</Badge>
+                    : <Badge tone="warning" title="Hiçbir Remote Cluster kaydı bu değeri taşımıyor">unmapped</Badge>}
+                </td>
+                <td>
+                  {!r.ownerName && (
+                    <Row gap={2}>
+                      <select value={pick[r.value] ?? ''} onChange={e => setPick(p => ({ ...p, [r.value]: e.target.value }))}>
+                        <option value="">— cluster —</option>
+                        {clusters.filter(c => c.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <Button type="button" variant="primary" size="xs" disabled={!pick[r.value]} onClick={() => assign(r.value)}>Assign</Button>
+                      {msg[r.value] && <span className="field-hint">{msg[r.value]}</span>}
+                    </Row>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

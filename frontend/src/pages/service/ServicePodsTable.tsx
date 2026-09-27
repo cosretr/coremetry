@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { DataTableHead, DataTableColgroup, type DataTable } from '@/components/ui/DataTable';
+import { DataTableHead, DataTableColgroup, DataTableState, type DataTable, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { DisclosureButton } from '@/components/ui';
 import { PodJmxInline } from './PodJmxInline';
@@ -44,7 +44,7 @@ const SRC_LABEL: Record<MergedPodRow['source'], { text: string; title: string }>
   thanos: { text: 'T', title: 'Yalnız Thanos envanteri; bu pencerede span görülmedi' },
 };
 
-export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, cFrom, cTo, rangeParam }: {
+export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, cFrom, cTo, rangeParam, state }: {
   dt: DataTable<MergedPodRow>;
   view: PodView;
   service: string;
@@ -54,6 +54,15 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
   cFrom: number;
   cTo: number;
   rangeParam: string | null;
+  /**
+   * v0.10.967 — tablo standardı T12 (tarif P6, VirtualTable emsali): satır
+   * yokken tablonun İÇİNDE çizilen durum; başlık bu dosyada olduğu için durum
+   * satırı da burada. Verilmezse `{ kind: 'empty' }`. DİKKAT: ServicePodsTab
+   * bugün `state` VERMİYOR ve tabloyu yalnız satır varken bağlıyor
+   * (Spinner / Empty hâlâ dışarıda) — sekme `state` geçirip tabloyu her
+   * durumda bağlayınca göç gerçekleşir.
+   */
+  state?: Omit<DataTableStateProps<MergedPodRow>, 'dt' | 'leading' | 'trailing'>;
 }) {
   const [params, setParams] = useSearchParams();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -108,6 +117,7 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
         <tbody>
+          {dt.sortedRows.length === 0 && <DataTableState dt={dt} {...(state ?? { kind: 'empty' })} />}
           {groups.map(g => {
             const isCol = !!g.cluster && !!collapsed[g.cluster];
             const t = g.totals;

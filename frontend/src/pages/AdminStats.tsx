@@ -7,7 +7,7 @@ import { useSystemStats, useTraceContext, useEvaluatorHealth, keys } from '@/lib
 import { api } from '@/lib/api';
 import { fmtNum, fmtClock, tsLong } from '@/lib/utils';
 import { etaChipLabel, evaluatorQuietLabel, diskHistoryChip } from '@/lib/fmtEta';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import type {
   SystemStatus,
   RedisStats, CacheStats, SystemStats,
@@ -115,20 +115,27 @@ export default function AdminStatsPage() {
     qc.invalidateQueries({ queryKey: keys.admin.systemStats });
   };
 
+  // v0.10.967 — sunucu depolama ve 30 günlük geçmiş sorgularını YUMUŞAK
+  // düşürür (chstore/sysstats.go): hata ya da sıfır satırda Go nil dilimi
+  // JSON'da `null` olur. `data.history.length` o anda sayfayı çökertiyordu;
+  // iki liste tek yerde `[]`e iner, boş durum satırları bundan beslenir.
+  const tables = useMemo(() => data?.tables ?? [], [data]);
+  const history = useMemo(() => data?.history ?? [], [data]);
+
   const histMax = useMemo(() => {
-    if (!data?.history?.length) return 0;
-    return Math.max(...data.history.map(d => d.spans));
-  }, [data]);
+    if (!history.length) return 0;
+    return Math.max(...history.map(d => d.spans));
+  }, [history]);
 
   // Shared sortable + resizable tables. Hooks are unconditional —
   // they sit above the `data` conditional render below.
   const storageDt = useDataTable<TableStatRow>({
     storageKey: 'adminstats-storage', columns: STORAGE_COLS,
-    rows: data?.tables ?? [], initialSort: { id: 'disk', dir: 'desc' },
+    rows: tables, initialSort: { id: 'disk', dir: 'desc' },
   });
   const historyDt = useDataTable<HistoryRow>({
     storageKey: 'adminstats-history', columns: HISTORY_COLS,
-    rows: data?.history ?? [], initialSort: { id: 'day', dir: 'desc' },
+    rows: history, initialSort: { id: 'day', dir: 'desc' },
   });
 
   return (
@@ -289,7 +296,7 @@ export default function AdminStatsPage() {
                   bars scaled to peak day · errors overlay in red
                 </span>
               </div>
-              {data.history.length === 0 ? (
+              {history.length === 0 ? (
                 <div style={{ color: 'var(--text3)', fontSize: 12, fontStyle: 'italic' }}>
                   No history yet. The 5-minute aggregate MV needs at least one bucket to populate.
                 </div>
@@ -298,7 +305,7 @@ export default function AdminStatsPage() {
                   display: 'flex', alignItems: 'flex-end', gap: 2,
                   height: 140, paddingTop: 8,
                 }}>
-                  {data.history.map(d => {
+                  {history.map(d => {
                     const h = histMax > 0 ? Math.max(2, (d.spans / histMax) * 130) : 2;
                     const errH = d.spans > 0
                       ? Math.max(0, (d.errors / d.spans) * h)
@@ -331,14 +338,14 @@ export default function AdminStatsPage() {
                 </div>
               )}
               {/* X-axis label endpoints */}
-              {data.history.length >= 2 && (
+              {history.length >= 2 && (
                 <div style={{
                   display: 'flex', justifyContent: 'space-between',
                   fontSize: 10, color: 'var(--text3)', marginTop: 6,
                   fontFamily: 'var(--font-mono)',
                 }}>
-                  <span>{data.history[0].day}</span>
-                  <span>{data.history[data.history.length - 1].day}</span>
+                  <span>{history[0].day}</span>
+                  <span>{history[history.length - 1].day}</span>
                 </div>
               )}
             </div>
@@ -597,14 +604,21 @@ export default function AdminStatsPage() {
               borderRadius: 8, padding: 14, marginBottom: 18,
             }}>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-                ClickHouse storage · {data.tables.length} table{data.tables.length === 1 ? '' : 's'}
+                ClickHouse storage · {tables.length} table{tables.length === 1 ? '' : 's'}
               </div>
+              {/* v0.10.967 — tablo standardı T12: boş liste tablonun İÇİNDE, başlık
+                  durur (sayfa düzeyi yükleniyor / hata yukarıda kalır). Sunucu
+                  system.parts okumasını yumuşak düşürür: boş liste okuma hatası
+                  da olabilir, metin bunu söyler. */}
               <div className="table-wrap">
                 <table {...storageDt.tableProps}>
                   <DataTableColgroup dt={storageDt} />
                   <DataTableHead dt={storageDt} />
                   <tbody>
-                    {storageDt.sortedRows.map(t => {
+                    {storageDt.sortedRows.length === 0 ? (
+                      <DataTableState dt={storageDt} kind="empty"
+                        message="Depolama satırı yok — system.parts okuması düşerse sunucu bu listeyi boş döndürür" />
+                    ) : storageDt.sortedRows.map(t => {
                       const ratio = t.uncompressedBytes > 0
                         ? t.compressedBytes / t.uncompressedBytes
                         : 0;
@@ -634,12 +648,17 @@ export default function AdminStatsPage() {
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
                 Daily history
               </div>
+              {/* v0.10.967 — tablo standardı T12: boş geçmiş tablonun İÇİNDE; metin
+                  yukarıdaki çubuk grafiğin boş cümlesiyle aynı anlam. */}
               <div className="table-wrap is-scroll" style={{ maxHeight: 360 }}>
                 <table {...historyDt.tableProps}>
                   <DataTableColgroup dt={historyDt} />
                   <DataTableHead dt={historyDt} />
                   <tbody>
-                    {historyDt.sortedRows.map(d => {
+                    {historyDt.sortedRows.length === 0 ? (
+                      <DataTableState dt={historyDt} kind="empty"
+                        message="Henüz geçmiş yok — 5 dakikalık özet MV'nin en az bir kovası dolmalı; geçmiş sorgusu düşerse de liste boş gelir" />
+                    ) : historyDt.sortedRows.map(d => {
                       const errPct = d.spans > 0 ? (d.errors / d.spans) * 100 : 0;
                       return (
                         <tr key={d.day}>

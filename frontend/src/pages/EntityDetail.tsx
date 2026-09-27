@@ -170,6 +170,9 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
           </tbody>
         </table>
       </div>
+      {/* v0.10.967 — dtNoState: durum satırı yok — pod × servis bölümü yalnız satır
+          varken çizilir (kendini gizleme, tarif §2); aynı okumanın yükleniyor /
+          hata durumu yukarıdaki servis tablosunun içinde. */}
       {rows.length > 0 && (
         <>
           <h3>Pods × services ({rows.length})</h3>

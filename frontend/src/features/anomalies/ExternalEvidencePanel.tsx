@@ -7,6 +7,10 @@
 // Hepsi mevcut atomlarla (useDataTable, badge, Spinner/Empty); yeni
 // primitive yok. Hipotez /rootcause zarfından okunur (aynı FINAL satır).
 // Fetch yalnız bu sayfa açıkken; polling yok (kanıt 5 dk'da bir güncellenir).
+// v0.10.967 — tablo standardı T12 (dilim 5): üç kanıt tablosunun "yok"
+// paragrafları tablonun İÇİNDE boş satır (başlık kalır). Yükleniyor / hata /
+// "henüz toplanmadı" panel düzeyinde kalır: hipotez zarfı panelin tamamını
+// (metrik kararı, sayım şeridi, üç tablo) tanımlıyor.
 
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -14,7 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner, Empty } from '@/components/Spinner';
 import { externalSummaryKind, externalSummaryNote } from '@/lib/problemSubject'; // v0.10.598
-import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { TimeChart } from '@/components/charts/TimeChart';
 import { fmtDateTime } from '@/lib/utils';
 import { fmtDur } from '@/components/traces/shared';
@@ -175,81 +179,71 @@ export function ExternalEvidencePanel({ problem, window: win }: {
 
       {/* 3. Trace'ler */}
       <EvidenceBlock title="İlgili trace'ler" count={tRows.length}>
-        {tRows.length === 0 ? <Muted>Trace kanıtı yok.</Muted> : (
-          <div className="table-wrap">
-            <table {...dtT.tableProps}>
-              <DataTableColgroup dt={dtT} />
-              <DataTableHead dt={dtT} />
-              <tbody>
-                {dtT.sortedRows.map(r => (
-                  <tr key={r.traceId}>
-                    <td className="mono">{r.startNs > 0 ? fmtDateTime(new Date(r.startNs / 1e6)) : '—'}</td>
-                    <td className="mono"><Link to={traceHref(r.traceId, { tab: 'logs' })} className="sec" title={`${r.traceId} — Logs sekmesi (Oracle satırları)`}>{r.traceId.slice(0, 12)}…</Link></td>
-                    <td title={`${r.rootService ?? ''} ${r.rootOp ?? ''}`}>{r.rootService ? <>{r.rootService} <span style={{ color: 'var(--text3)' }}>· {r.rootOp}</span></> : '—'}</td>
-                    <td title={`${r.errorService ?? ''} ${r.errorOp ?? ''}`}>{r.errorService ? <>{r.errorService} <span style={{ color: 'var(--text3)' }}>· {r.errorOp}</span></> : '—'}</td>
-                    <td className="num">{r.durationNs > 0 ? fmtDur(r.durationNs / 1e6) : '—'}</td>
-                    <td className="num">{r.spans || '—'}</td>
-                    <td>{r.missing
-                      ? <span className="badge b-gray" title="Trace id dış kaynaktan geldi ama bu pencerede CH'de span'i yok (retention ya da henüz gelmedi)">CH'de yok</span>
-                      : r.errorSpans > 0
-                        ? <span className="badge b-err">{`${r.errorSpans} hata`}</span>
-                        : <span style={{ color: 'var(--text3)' }}>ok</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dtT.tableProps}>
+            <DataTableColgroup dt={dtT} />
+            <DataTableHead dt={dtT} />
+            <tbody>
+              {dtT.sortedRows.length === 0 ? <DataTableState dt={dtT} kind="empty" message="Trace kanıtı yok" /> : dtT.sortedRows.map(r => (
+                <tr key={r.traceId}>
+                  <td className="mono">{r.startNs > 0 ? fmtDateTime(new Date(r.startNs / 1e6)) : '—'}</td>
+                  <td className="mono"><Link to={traceHref(r.traceId, { tab: 'logs' })} className="sec" title={`${r.traceId} — Logs sekmesi (Oracle satırları)`}>{r.traceId.slice(0, 12)}…</Link></td>
+                  <td title={`${r.rootService ?? ''} ${r.rootOp ?? ''}`}>{r.rootService ? <>{r.rootService} <span style={{ color: 'var(--text3)' }}>· {r.rootOp}</span></> : '—'}</td>
+                  <td title={`${r.errorService ?? ''} ${r.errorOp ?? ''}`}>{r.errorService ? <>{r.errorService} <span style={{ color: 'var(--text3)' }}>· {r.errorOp}</span></> : '—'}</td>
+                  <td className="num">{r.durationNs > 0 ? fmtDur(r.durationNs / 1e6) : '—'}</td>
+                  <td className="num">{r.spans || '—'}</td>
+                  <td>{r.missing
+                    ? <span className="badge b-gray" title="Trace id dış kaynaktan geldi ama bu pencerede CH'de span'i yok (retention ya da henüz gelmedi)">CH'de yok</span>
+                    : r.errorSpans > 0
+                      ? <span className="badge b-err">{`${r.errorSpans} hata`}</span>
+                      : <span style={{ color: 'var(--text3)' }}>ok</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </EvidenceBlock>
 
       {/* 4. Pod'lar */}
       <EvidenceBlock title="Etkilenen pod'lar" count={pods.length}>
-        {pods.length === 0 ? <Muted>Pod kanıtı yok (kaynak pod kimliği döndürmedi).</Muted> : (
-          <div className="table-wrap">
-            <table {...dtP.tableProps}>
-              <DataTableColgroup dt={dtP} />
-              <DataTableHead dt={dtP} />
-              <tbody>
-                {dtP.sortedRows.map(r => (
-                  <tr key={r.pod}>
-                    <td className="mono" title={r.pod}>{r.pod}</td>
-                    <td className="num">{r.count}</td>
-                    <td className="mono">{r.lastSeenNs > 0 ? fmtDateTime(new Date(r.lastSeenNs / 1e6)) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dtP.tableProps}>
+            <DataTableColgroup dt={dtP} />
+            <DataTableHead dt={dtP} />
+            <tbody>
+              {dtP.sortedRows.length === 0 ? <DataTableState dt={dtP} kind="empty" message="Pod kanıtı yok — kaynak pod kimliği döndürmedi" /> : dtP.sortedRows.map(r => (
+                <tr key={r.pod}>
+                  <td className="mono" title={r.pod}>{r.pod}</td>
+                  <td className="num">{r.count}</td>
+                  <td className="mono">{r.lastSeenNs > 0 ? fmtDateTime(new Date(r.lastSeenNs / 1e6)) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </EvidenceBlock>
 
       {/* 5. Log imzaları */}
       <EvidenceBlock title="Log imzaları (WARN+)" count={sigs.length}>
-        {sigs.length === 0 ? <Muted>Log imzası yok.</Muted> : (
-          <div className="table-wrap">
-            <table {...dtS.tableProps}>
-              <DataTableColgroup dt={dtS} />
-              <DataTableHead dt={dtS} />
-              <tbody>
-                {dtS.sortedRows.map(r => (
-                  <tr key={r.hash}>
-                    <td><span className={`badge ${sevTone(r.severity)}`}>{r.severity || '—'}</span></td>
-                    <td className="mono" title={r.sample}>{r.template}</td>
-                    <td className="num">{r.count}</td>
-                    <td className="num">{r.traceCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dtS.tableProps}>
+            <DataTableColgroup dt={dtS} />
+            <DataTableHead dt={dtS} />
+            <tbody>
+              {dtS.sortedRows.length === 0 ? <DataTableState dt={dtS} kind="empty" message="Log imzası yok" /> : dtS.sortedRows.map(r => (
+                <tr key={r.hash}>
+                  <td><span className={`badge ${sevTone(r.severity)}`}>{r.severity || '—'}</span></td>
+                  <td className="mono" title={r.sample}>{r.template}</td>
+                  <td className="num">{r.count}</td>
+                  <td className="num">{r.traceCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </EvidenceBlock>
     </div>
   );
-}
-
-function Muted({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, color: 'var(--text3)' }}>{children}</div>;
 }
 
 function EvidenceBlock({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {

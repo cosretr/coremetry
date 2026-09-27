@@ -4,13 +4,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TrendDelta } from '@/components/TrendDelta';
 import { Star } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
 import { passesLocalDisplayFilters } from '@/lib/serviceFilters';
-import { TableSkeleton } from '@/components/Skeleton';
 import { ServicePicker } from '@/components/ServicePicker';
 import { Sparkline } from '@/components/Sparkline';
 import { ServiceRuntimeBadge } from '@/components/ServiceRuntimeBadge';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import {
@@ -31,7 +29,6 @@ import { getItem, setItem } from '@/lib/storage';
 import { getPinnedServices, isServicePinned, toggleServicePin } from '@/lib/recentServices';
 import type { Service, SparklineBucket, TimeRange, SpanAgg } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
-import { QueryError } from '@/components/QueryError';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/ui/PageShell';
 import { Pager } from '@/components/Pager';
@@ -518,6 +515,46 @@ export default function ServicesPage() {
   const goToService = (svc: string) =>
     navigate(serviceHref(svc, { range }));
 
+  // v0.10.967 — tablo standardı dilim 5 (T12 + P-1): yükleniyor / hata /
+  // eşleşme yok / boş tablonun İÇİNDE, başlık durur; yenilemede satırlar
+  // solgunlukla yerinde kalır (refreshing). Hata dalı v0.9.858'in dersini
+  // taşır: sunucunun metni + "servislerin etkilenmedi, collector'a bakma"
+  // + aynı ↻ (retryNonce). OTLP kurulum talimatı (kopyalanan uç nokta)
+  // boş satırın detail yuvasında (P-1) — yalnız HİÇBİR süzgeç yokken.
+  // Sunucuya giden bir süzgeç (arama, takım, cluster, namespace, env,
+  // errors-only, min spans / p99) boş döndürdüyse "eşleşme yok": eskiden
+  // burada da "No services yet — exporter'ı bağla" basılıyordu, yani süzgeç
+  // enstrümantasyon eksikliği gibi okunuyordu. "Filtreleri temizle" =
+  // sayfanın Reset'i; Reset cluster / namespace / env'i silmediği için
+  // yalnız onlar seçiliyken düğme basılmaz (işe yaramayan eylem olmasın).
+  const shown = sorted ?? [];
+  const serverFiltered = !!(committedFilter || ownerTeam || sreTeam || cluster || namespace || env
+    || errorsOnly || minSpans || minP99);
+  const resettable = !!(committedFilter || ownerTeam || sreTeam || errorsOnly || minSpans || minP99);
+  const tableState: Omit<DataTableStateProps<Service>, 'dt'> =
+    data === undefined ? { kind: 'loading', skeletonRows: 10 }
+    : data === null ? {
+        kind: 'error',
+        onRetry: () => setRetryNonce(n => n + 1),
+        message: `Servis listesi okunamadı${loadErr ? `: ${loadErr}` : ''} — bu bir okuma hatası; servislerin ve `
+          + 'telemetrileri etkilenmedi, bu başarılı olana dek collector tarafında arama.',
+      }
+    : data.length > 0 || serverFiltered ? {
+        kind: 'no-match',
+        message: 'Geçerli süzgeçlerle eşleşen servis yok',
+        ...(resettable ? { onClearFilters: reset } : {}),
+      }
+    : {
+        kind: 'empty',
+        message: 'Henüz servis yok',
+        detail: (
+          <span>
+            OTLP exporter&apos;ını collector&apos;a yönelt — <code>OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318</code> (HTTP)
+            ya da <code>:14317</code> (gRPC).
+          </span>
+        ),
+      };
+
   // Per-session hover-prefetch dedupe. Once a service has
   // been hover-prefetched for the current (range) the L1 +
   // Redis tiers stay warm well past the cache TTL so we
@@ -690,259 +727,241 @@ export default function ServicesPage() {
           </PageControls>
         )}
 
-        {/* cols, SERVICE_COLS uzunluğunu izler (v0.9.1317'de 7 → 8). */}
-        {data === undefined && <TableSkeleton rows={10} cols={SERVICE_COLS.length} />}
         {/* v0.9.858 (UX denetimi K6) — BU sayfanın hata dalı denetimin en
             pahalı örneğiydi: /api/services hatası "No services yet — point
             your OTLP exporter…" basıyordu. Backend arızası INSTRUMENTATION
             eksikliği gibi sunuluyor, operatör saatlerce collector tarafında
-            arıyordu. Hata artık hata olarak duruyor. */}
-        {data === null && (
-          <QueryError message={loadErr} onRetry={() => setRetryNonce(n => n + 1)}>
-            The service list could not be loaded. This is a failed read — your
-            services and their telemetry are unaffected; do not go looking at
-            the collector until this succeeds.
-          </QueryError>
-        )}
-        {data && data.length === 0 && (
-          <Empty icon="⬡" title="No services yet">
-            Point your OTLP exporter at the collector — <code>OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318</code> (HTTP) or <code>:14317</code> (gRPC).
-          </Empty>
-        )}
-        {data && data.length > 0 && sorted && sorted.length === 0 && (
-          <Empty icon="⬡" title="No services match the current filters" />
-        )}
-        {sorted && sorted.length > 0 && (
-          <>
-            <div className="table-wrap"
-              style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
-              aria-busy={refreshing}>
-              <table {...dt.tableProps}>
-                <DataTableColgroup dt={dt} />
-                {/* v0.8.251 — shared primitive header (serverSort mode): same
-                    click-to-re-fetch semantics as the old SortTh row, plus the
-                    URL/localStorage-persisted sort state and resize grips. */}
-                <DataTableHead dt={dt} />
-                <tbody>
-                  {agg && (
-                    <tr className="agg-row">
-                      {/* v0.9.281 (operatör) — etiket "All (50)" idi ve YANILTICIYDI:
-                          1125 servisli bir kurulumda bunu okuyan kişi toplamın 50
-                          olduğunu ya da satırın hepsini kapsadığını sanıyor. Satır
-                          zaten SAYFA kapsamlı — altındaki her hücrenin tooltip'i
-                          "across visible services" diyor — sadece başlığı öyle
-                          demiyordu. Toplam biliniyorsa ikisi yan yana gösteriliyor,
-                          böylece sayı hem doğru hem bağlamlı okunuyor. */}
-                      <td>
-                        <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                          This page ({sorted.length})
-                        </span>
-                        {total != null && total > sorted.length && (
-                          <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 6 }}
-                                title={`${total} services match the current filters; this row sums only the ${sorted.length} on screen.`}>
-                            of {fmtNum(total)}
+            arıyordu. Hata artık hata olarak duruyor — v0.10.967'den beri
+            tablonun İÇİNDE (tableState). */}
+        <div className="table-wrap"
+          style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
+          aria-busy={refreshing}>
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            {/* v0.8.251 — shared primitive header (serverSort mode): same
+                click-to-re-fetch semantics as the old SortTh row, plus the
+                URL/localStorage-persisted sort state and resize grips. */}
+            <DataTableHead dt={dt} />
+            <tbody>
+              {shown.length === 0 && <DataTableState dt={dt} {...tableState} />}
+              {agg && (
+                <tr className="agg-row">
+                  {/* v0.9.281 (operatör) — etiket "All (50)" idi ve YANILTICIYDI:
+                      1125 servisli bir kurulumda bunu okuyan kişi toplamın 50
+                      olduğunu ya da satırın hepsini kapsadığını sanıyor. Satır
+                      zaten SAYFA kapsamlı — altındaki her hücrenin tooltip'i
+                      "across visible services" diyor — sadece başlığı öyle
+                      demiyordu. Toplam biliniyorsa ikisi yan yana gösteriliyor,
+                      böylece sayı hem doğru hem bağlamlı okunuyor. */}
+                  <td>
+                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                      This page ({shown.length})
+                    </span>
+                    {total != null && total > shown.length && (
+                      <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 6 }}
+                            title={`${total} services match the current filters; this row sums only the ${shown.length} on screen.`}>
+                        of {fmtNum(total)}
+                      </span>
+                    )}
+                  </td>
+                  {/* v0.10.922 (sade palet adım 1) — toplam satırının
+                      mini-grafikleri de satırlarla aynı kuralda: nötr
+                      SPARK_NEUTRAL, hata serisi yalnız >0 kovada kırmızı. */}
+                  <td className="num">
+                    <SparkCell value={fmtNum(agg.spans)}
+                               spark={aggBuckets.map(b => b.spans)}
+                               color={SPARK_NEUTRAL}
+                               title="Total spans/5m across visible services"
+                               onClick={() => goToExplore('', 'rate')} />
+                  </td>
+                  <td className="num">
+                    <SparkCell value={<ErrRateValue pct={agg.errorRate} />}
+                    spark={aggErrSeries}
+                    color={errSparkColor(aggErrSeries)}
+                    title="Aggregate error rate (weighted by spans)"
+                    // v0.9.499 — çizgi moduna geri (operatör: "eskiden
+                    // spans ile aynı şekilde chart'tı, bar görünümüne
+                    // ihtiyaç yok"). M4'ün eşikli mini-bar'ı satırdaki
+                    // diğer dört hücreyle farklı bir dil konuşuyordu;
+                    // eşik sinyali zaten Err% rozetinde okunuyor.
+                    onClick={() => goToExplore('', 'error_rate')} />
+                  </td>
+                  <td className="num">
+                    <SparkCell value={`${fmtFixed(agg.avgMs, 1)}ms`}
+                               spark={aggBuckets.map(b => b.avgMs)}
+                               color={SPARK_NEUTRAL}
+                               title="Aggregate avg latency (weighted by spans)"
+                               onClick={() => goToExplore('', 'avg')} />
+                  </td>
+                  <td className="num">
+                    <SparkCell value={`${fmtFixed(agg.p99Ms, 1)}ms`}
+                               spark={aggBuckets.map(b => b.p99Ms)}
+                               color={SPARK_NEUTRAL}
+                               title="Worst-service P99 in each bucket"
+                               onClick={() => goToExplore('', 'p99')} />
+                  </td>
+                  {/* P99 Δ — sayfa-toplamı satırında anlamsız, boş. */}
+                  <td />
+                  <td className="num">
+                    <ApdexBadge value={agg.apdex} />
+                  </td>
+                  {/* Last seen — sayfa toplamının yaşam döngüsü yok. */}
+                  <td />
+                </tr>
+              )}
+              {shown.map((s, i) => {
+                const buckets = sparklines[s.name] ?? [];
+                // v0.10.922 (sade palet adım 1) — hata serisi bir kez
+                // hesaplanır: hem çizilir hem rengini (errSparkColor) belirler.
+                const errSeries = buckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null);
+                const isSelected = tableNav.selected === i;
+                return (
+                  <tr key={s.name}
+                      data-row-idx={i}
+                      // v0.9.928 — kimlik damgası. Bu tablo kendi <tr>'sini
+                      // basıyor (useDataTable rowProps'undan geçmiyor), o
+                      // yüzden v0.9.926'nın KAPSAMLI oto-kaydırma sorgusu
+                      // burada hiçbir şey bulamıyordu: seçim yürüyor ama
+                      // satır görünüre kaydırılmıyordu. Aynı damga j/k
+                      // arbitrajının da etkileşim sinyali.
+                      data-table-id={tableNav.pageId}
+                      className={isSelected ? 'row-selected' : undefined}
+                      onMouseEnter={() => {
+                        tableNav.setSelected(i);
+                        // Hover prefetch — fire the bundle
+                        // query for this service so by the
+                        // time the operator clicks the row
+                        // the L1 + Redis tiers are warm and
+                        // the detail page mount lands on a
+                        // HIT-L1. Dedupe via a Set so a
+                        // mouse drag across 10 rows fires 10
+                        // requests, not 100.
+                        prefetchService(s.name);
+                      }}
+                      {...rowClickHandlers(serviceHref(s.name, { range }),
+                                           () => goToService(s.name))}>
+                    <td>
+                      {/* v0.5.276 — pin star. Click toggles
+                          localStorage; pinned services float to
+                          the top of the list regardless of
+                          sort. Operator's 3-5 daily-touched
+                          services stay sticky. */}
+                      <IconButton
+                        aria-label={pinned.has(s.name)
+                          ? `${s.name} sabitlemesini kaldır`
+                          : `${s.name} servisini listenin başına sabitle`}
+                        active={pinned.has(s.name)}
+                        variant="bare" size="xs" className="ib-star"
+                        style={{ marginRight: 6, verticalAlign: 'middle' }}
+                        onClick={e => { e.stopPropagation(); togglePin(s.name); }}
+                        tooltip={pinned.has(s.name)
+                          ? 'Unpin — service falls back into the sorted list'
+                          : 'Pin — float to top of the list'}
+                        icon={<Star size={14} strokeWidth={1.75}
+                          fill={pinned.has(s.name) ? 'currentColor' : 'none'} />} />
+                      {/* v0.5.274 — auto-scored health dot.
+                          Red/yellow/green from errorRate +
+                          open problem counts (computed
+                          server-side at read time). Title
+                          surfaces the firing rule so the
+                          badge is auditable. */}
+                      <HealthDot health={s.health} reason={s.healthReason}
+                        openProblems={s.openProblems} />
+                      <span style={{ fontWeight: 600 }}>{s.name}</span>
+                      {/* Runtime fingerprint pill — pulled from
+                          the per-list batch fetch (one query
+                          for every service vs N queries per
+                          row). Compact mode = small font, no
+                          glyph, just the language-coloured
+                          text. Hidden when the SDK didn't
+                          emit usable resource attributes. */}
+                      {runtimes && runtimes[s.name] && (
+                        <ServiceRuntimeBadge rt={runtimes[s.name]} compact
+                                             style={{ marginLeft: 8 }} />
+                      )}
+                    </td>
+                    <td className="num">
+                      <SparkCell value={fmtNum(s.spanCount)}
+                                 spark={buckets.map(b => b.spans)}
+                                 color={SPARK_NEUTRAL}
+                                 title={`Spans/5m for ${s.name}`}
+                                 onClick={() => goToExplore(s.name, 'rate')} />
+                    </td>
+                    <td className="num">
+                      <SparkCell value={<ErrRateValue pct={s.errorRate} />}
+                      spark={errSeries}
+                      color={errSparkColor(errSeries)}
+                      title={`Error rate (%) for ${s.name}`}
+                      // v0.9.499 — çizgi moduna geri (bkz. agg satırı).
+                      onClick={() => goToExplore(s.name, 'error_rate')} />
+                    </td>
+                    <td className="num">
+                      <SparkCell value={`${fmtFixed(s.avgDurationMs, 1)}ms`}
+                                 spark={buckets.map(b => b.avgMs)}
+                                 color={SPARK_NEUTRAL}
+                                 title={`Avg latency (ms) for ${s.name}`}
+                                 onClick={() => goToExplore(s.name, 'avg')} />
+                    </td>
+                    <td className="num">
+                      <SparkCell value={`${fmtFixed(s.p99DurationMs, 1)}ms`}
+                                 spark={buckets.map(b => b.p99Ms)}
+                                 color={SPARK_NEUTRAL}
+                                 title={`P99 latency (ms) for ${s.name}`}
+                                 onClick={() => goToExplore(s.name, 'p99')} />
+                    </td>
+                    <td className="num">
+                      {compare
+                        ? <TrendDelta cur={s.p99DurationMs} prior={s.priorP99Ms} kind="lowerBetter" />
+                        : <span style={{ color: 'var(--text3)' }}
+                            title="Önceki pencereyle kıyas için Δ prior'u aç ya da bu kolonu sırala">—</span>}
+                    </td>
+                    <td className="num">
+                      <ApdexBadge value={s.apdex} />
+                    </td>
+                    {/* v0.9.1317 — service_seen MV'sinden "Last seen".
+                        firstSeen YOKSA "unknown" yazar: MV yalnız
+                        ileri doldurduğu için henüz doğumunu görmediği
+                        servisler var, ve backend o durumda alanı hiç
+                        göndermiyor — burada uydurulacak bir tarih yok.
+                        v0.9.1329 — başlık+gövde İngilizceye alındı
+                        (sayfanın diğer yedi başlığıyla tutarlılık). */}
+                    {/* v0.10.943 — hizası `num`dan; zaman damgası mono kalır (S2 yalnız sayı hücresi). */}
+                    <td className="num">
+                      {s.lastSeen
+                        ? <span className="mono" title={`Last seen: ${tsLong(s.lastSeen)}\nFirst seen: ${
+                            s.firstSeen ? tsLong(s.firstSeen) : 'unknown (this service was already running before we started recording)'}`}>
+                            {fmtAgoNs(s.lastSeen)}
                           </span>
-                        )}
-                      </td>
-                      {/* v0.10.922 (sade palet adım 1) — toplam satırının
-                          mini-grafikleri de satırlarla aynı kuralda: nötr
-                          SPARK_NEUTRAL, hata serisi yalnız >0 kovada kırmızı. */}
-                      <td className="num">
-                        <SparkCell value={fmtNum(agg.spans)}
-                                   spark={aggBuckets.map(b => b.spans)}
-                                   color={SPARK_NEUTRAL}
-                                   title="Total spans/5m across visible services"
-                                   onClick={() => goToExplore('', 'rate')} />
-                      </td>
-                      <td className="num">
-                        <SparkCell value={<ErrRateValue pct={agg.errorRate} />}
-                        spark={aggErrSeries}
-                        color={errSparkColor(aggErrSeries)}
-                        title="Aggregate error rate (weighted by spans)"
-                        // v0.9.499 — çizgi moduna geri (operatör: "eskiden
-                        // spans ile aynı şekilde chart'tı, bar görünümüne
-                        // ihtiyaç yok"). M4'ün eşikli mini-bar'ı satırdaki
-                        // diğer dört hücreyle farklı bir dil konuşuyordu;
-                        // eşik sinyali zaten Err% rozetinde okunuyor.
-                        onClick={() => goToExplore('', 'error_rate')} />
-                      </td>
-                      <td className="num">
-                        <SparkCell value={`${fmtFixed(agg.avgMs, 1)}ms`}
-                                   spark={aggBuckets.map(b => b.avgMs)}
-                                   color={SPARK_NEUTRAL}
-                                   title="Aggregate avg latency (weighted by spans)"
-                                   onClick={() => goToExplore('', 'avg')} />
-                      </td>
-                      <td className="num">
-                        <SparkCell value={`${fmtFixed(agg.p99Ms, 1)}ms`}
-                                   spark={aggBuckets.map(b => b.p99Ms)}
-                                   color={SPARK_NEUTRAL}
-                                   title="Worst-service P99 in each bucket"
-                                   onClick={() => goToExplore('', 'p99')} />
-                      </td>
-                      {/* P99 Δ — sayfa-toplamı satırında anlamsız, boş. */}
-                      <td />
-                      <td className="num">
-                        <ApdexBadge value={agg.apdex} />
-                      </td>
-                      {/* Last seen — sayfa toplamının yaşam döngüsü yok. */}
-                      <td />
-                    </tr>
-                  )}
-                  {sorted.map((s, i) => {
-                    const buckets = sparklines[s.name] ?? [];
-                    // v0.10.922 (sade palet adım 1) — hata serisi bir kez
-                    // hesaplanır: hem çizilir hem rengini (errSparkColor) belirler.
-                    const errSeries = buckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null);
-                    const isSelected = tableNav.selected === i;
-                    return (
-                      <tr key={s.name}
-                          data-row-idx={i}
-                          // v0.9.928 — kimlik damgası. Bu tablo kendi <tr>'sini
-                          // basıyor (useDataTable rowProps'undan geçmiyor), o
-                          // yüzden v0.9.926'nın KAPSAMLI oto-kaydırma sorgusu
-                          // burada hiçbir şey bulamıyordu: seçim yürüyor ama
-                          // satır görünüre kaydırılmıyordu. Aynı damga j/k
-                          // arbitrajının da etkileşim sinyali.
-                          data-table-id={tableNav.pageId}
-                          className={isSelected ? 'row-selected' : undefined}
-                          onMouseEnter={() => {
-                            tableNav.setSelected(i);
-                            // Hover prefetch — fire the bundle
-                            // query for this service so by the
-                            // time the operator clicks the row
-                            // the L1 + Redis tiers are warm and
-                            // the detail page mount lands on a
-                            // HIT-L1. Dedupe via a Set so a
-                            // mouse drag across 10 rows fires 10
-                            // requests, not 100.
-                            prefetchService(s.name);
-                          }}
-                          {...rowClickHandlers(serviceHref(s.name, { range }),
-                                               () => goToService(s.name))}>
-                        <td>
-                          {/* v0.5.276 — pin star. Click toggles
-                              localStorage; pinned services float to
-                              the top of the list regardless of
-                              sort. Operator's 3-5 daily-touched
-                              services stay sticky. */}
-                          <IconButton
-                            aria-label={pinned.has(s.name)
-                              ? `${s.name} sabitlemesini kaldır`
-                              : `${s.name} servisini listenin başına sabitle`}
-                            active={pinned.has(s.name)}
-                            variant="bare" size="xs" className="ib-star"
-                            style={{ marginRight: 6, verticalAlign: 'middle' }}
-                            onClick={e => { e.stopPropagation(); togglePin(s.name); }}
-                            tooltip={pinned.has(s.name)
-                              ? 'Unpin — service falls back into the sorted list'
-                              : 'Pin — float to top of the list'}
-                            icon={<Star size={14} strokeWidth={1.75}
-                              fill={pinned.has(s.name) ? 'currentColor' : 'none'} />} />
-                          {/* v0.5.274 — auto-scored health dot.
-                              Red/yellow/green from errorRate +
-                              open problem counts (computed
-                              server-side at read time). Title
-                              surfaces the firing rule so the
-                              badge is auditable. */}
-                          <HealthDot health={s.health} reason={s.healthReason}
-                            openProblems={s.openProblems} />
-                          <span style={{ fontWeight: 600 }}>{s.name}</span>
-                          {/* Runtime fingerprint pill — pulled from
-                              the per-list batch fetch (one query
-                              for every service vs N queries per
-                              row). Compact mode = small font, no
-                              glyph, just the language-coloured
-                              text. Hidden when the SDK didn't
-                              emit usable resource attributes. */}
-                          {runtimes && runtimes[s.name] && (
-                            <ServiceRuntimeBadge rt={runtimes[s.name]} compact
-                                                 style={{ marginLeft: 8 }} />
-                          )}
-                        </td>
-                        <td className="num">
-                          <SparkCell value={fmtNum(s.spanCount)}
-                                     spark={buckets.map(b => b.spans)}
-                                     color={SPARK_NEUTRAL}
-                                     title={`Spans/5m for ${s.name}`}
-                                     onClick={() => goToExplore(s.name, 'rate')} />
-                        </td>
-                        <td className="num">
-                          <SparkCell value={<ErrRateValue pct={s.errorRate} />}
-                          spark={errSeries}
-                          color={errSparkColor(errSeries)}
-                          title={`Error rate (%) for ${s.name}`}
-                          // v0.9.499 — çizgi moduna geri (bkz. agg satırı).
-                          onClick={() => goToExplore(s.name, 'error_rate')} />
-                        </td>
-                        <td className="num">
-                          <SparkCell value={`${fmtFixed(s.avgDurationMs, 1)}ms`}
-                                     spark={buckets.map(b => b.avgMs)}
-                                     color={SPARK_NEUTRAL}
-                                     title={`Avg latency (ms) for ${s.name}`}
-                                     onClick={() => goToExplore(s.name, 'avg')} />
-                        </td>
-                        <td className="num">
-                          <SparkCell value={`${fmtFixed(s.p99DurationMs, 1)}ms`}
-                                     spark={buckets.map(b => b.p99Ms)}
-                                     color={SPARK_NEUTRAL}
-                                     title={`P99 latency (ms) for ${s.name}`}
-                                     onClick={() => goToExplore(s.name, 'p99')} />
-                        </td>
-                        <td className="num">
-                          {compare
-                            ? <TrendDelta cur={s.p99DurationMs} prior={s.priorP99Ms} kind="lowerBetter" />
-                            : <span style={{ color: 'var(--text3)' }}
-                                title="Önceki pencereyle kıyas için Δ prior'u aç ya da bu kolonu sırala">—</span>}
-                        </td>
-                        <td className="num">
-                          <ApdexBadge value={s.apdex} />
-                        </td>
-                        {/* v0.9.1317 — service_seen MV'sinden "Last seen".
-                            firstSeen YOKSA "unknown" yazar: MV yalnız
-                            ileri doldurduğu için henüz doğumunu görmediği
-                            servisler var, ve backend o durumda alanı hiç
-                            göndermiyor — burada uydurulacak bir tarih yok.
-                            v0.9.1329 — başlık+gövde İngilizceye alındı
-                            (sayfanın diğer yedi başlığıyla tutarlılık). */}
-                        {/* v0.10.943 — hizası `num`dan; zaman damgası mono kalır (S2 yalnız sayı hücresi). */}
-                        <td className="num">
-                          {s.lastSeen
-                            ? <span className="mono" title={`Last seen: ${tsLong(s.lastSeen)}\nFirst seen: ${
-                                s.firstSeen ? tsLong(s.firstSeen) : 'unknown (this service was already running before we started recording)'}`}>
-                                {fmtAgoNs(s.lastSeen)}
-                              </span>
-                            : <span className="mono" style={{ color: 'var(--text3)' }}
-                                title="No lifecycle record yet — the service_seen MV fills in from a service's first span onward">—</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {/* v0.9.1015 — paylaşılan sözleşme (v0.9.1014). `count`
-                bu sayfada KOŞULLU ve bu bilinçli: `total` opt-in
-                `?withTotal=1`den geliyor ve bir cluster/env filtresi
-                altında ham yol onu DÖNDÜRMÜYOR (v0.7.44). Sayı varsa
-                KESİN — offset sayfalama gerçek, yani son sayfa hem
-                türetilebilir hem ULAŞILABİLİR. Yoksa 'skip': uydurulmuş
-                bir denominatör basmaktansa gezinmeyi hasMore'a bırakıyoruz.
-                Eski şeritteki "⏮ First" düştü — sayfa girdisine "1" yazıp
-                Enter aynı işi yapıyor ve sözleşme tek bir ileri/geri
-                anatomisi tanımlıyor. */}
-            {total != null ? (
-              <Pager mode="offset" count="exact" total={total}
-                page={page} pageSize={PAGE_SIZE} onPage={setPage}
-                lastReachablePage={Math.max(0, Math.ceil(total / PAGE_SIZE) - 1)}
-                extras={<ServicesPagerExtras shown={sorted.length} sortBy={sortBy} sortDir={sortDir} env={env} />} />
-            ) : (
-              <Pager mode="offset" count="skip"
-                page={page} pageSize={PAGE_SIZE} hasMore={hasMore} onPage={setPage}
-                extras={<ServicesPagerExtras shown={sorted.length} sortBy={sortBy} sortDir={sortDir} env={env} />} />
-            )}
-          </>
-        )}
+                        : <span className="mono" style={{ color: 'var(--text3)' }}
+                            title="No lifecycle record yet — the service_seen MV fills in from a service's first span onward">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {/* v0.9.1015 — paylaşılan sözleşme (v0.9.1014). `count`
+            bu sayfada KOŞULLU ve bu bilinçli: `total` opt-in
+            `?withTotal=1`den geliyor ve bir cluster/env filtresi
+            altında ham yol onu DÖNDÜRMÜYOR (v0.7.44). Sayı varsa
+            KESİN — offset sayfalama gerçek, yani son sayfa hem
+            türetilebilir hem ULAŞILABİLİR. Yoksa 'skip': uydurulmuş
+            bir denominatör basmaktansa gezinmeyi hasMore'a bırakıyoruz.
+            Eski şeritteki "⏮ First" düştü — sayfa girdisine "1" yazıp
+            Enter aynı işi yapıyor ve sözleşme tek bir ileri/geri
+            anatomisi tanımlıyor.
+            v0.10.967 — şerit eskisi gibi yalnız satırlar varken. */}
+        {shown.length > 0 && (total != null ? (
+          <Pager mode="offset" count="exact" total={total}
+            page={page} pageSize={PAGE_SIZE} onPage={setPage}
+            lastReachablePage={Math.max(0, Math.ceil(total / PAGE_SIZE) - 1)}
+            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} />} />
+        ) : (
+          <Pager mode="offset" count="skip"
+            page={page} pageSize={PAGE_SIZE} hasMore={hasMore} onPage={setPage}
+            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} />} />
+        ))}
       </PageShell>
     </>
   );

@@ -16,7 +16,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
 import { useDataTable, DataTableHead, DataTableColgroup, VirtualTable, DATA_TABLE_STATE_TEXT, type DataTable, type ColumnDef, type ColumnModel, type VirtualTableProps } from './index';
 
 let host: HTMLDivElement | null = null;
@@ -189,6 +189,27 @@ describe('VirtualTable', () => {
     expect(error.querySelector('tr[data-dt-state="error"]')!.textContent).toContain('okunamadı');
     const withRows = render(<VProbe rows={ROWS} state={{ kind: 'loading' }} />);
     expect(withRows.querySelector('[data-dt-state]')).toBeNull();
+  });
+
+  // v0.10.967 — P-1: VirtualTable'ın `state`'i DataTableState'in `detail`'ini
+  // miras alır (Traces'in TracesEmpty teşhisleri / CTA'ları satırın içine
+  // girebilsin). colSpan (P-2) ise VirtualTable'da geçilemez: dt'yi kendisi verir.
+  it('state.detail (P-1): CTA satırın tek hücresinde, leading colSpan\'a sayılır', () => {
+    const el = render(<VProbe rows={[]} leading={[24]}
+      state={{ kind: 'empty', message: 'İzleyici yok', detail: <Link to="/watchers/new">İzleyici ekle</Link> }} />);
+    const trs = el.querySelectorAll('tbody tr');
+    expect(trs.length).toBe(1);
+    const td = trs[0].querySelector('td.dt-state')!;
+    expect(td.getAttribute('colspan')).toBe(String(COLS.length + 1));
+    expect(td.querySelector('[data-dt-state-detail] a')!.getAttribute('href')).toBe('/watchers/new');
+    expect(td.textContent).toBe('İzleyici yokİzleyici ekle');
+    expect(el.querySelector('thead a')).toBeNull();
+    const vtState: VirtualTableProps<Row>['state'] = {
+      kind: 'empty',
+      // @ts-expect-error — VirtualTable dt'yi kendisi verir; statik colSpan geçilemez
+      colSpan: 3,
+    };
+    expect(vtState).toBeTruthy();
   });
 
   it('VirtualTable kaynağında vt-empty / emptyMessage kalmadı', async () => {

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
 import { ServicePicker } from '@/components/ServicePicker';
 import { Button, Chip, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { useAuth } from '@/components/AuthProvider';
 import {
@@ -24,7 +23,6 @@ import { notifySummary } from './alerts/notifyTeams';
 import { ConditionPreview } from './alerts/ConditionPreview';
 import { NoisyRulesPanel } from './alerts/NoisyRulesPanel';
 import { WatcherImportModal } from './alerts/WatcherImportModal';
-import { QueryError } from '@/components/QueryError';
 import { Link } from 'react-router-dom';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -273,6 +271,40 @@ export default function AlertsPage() {
   const confirm = useConfirm();
   const enableRule  = useEnableAlertRule();
   const disableRule = useDisableAlertRule();
+
+  // v0.10.967 — tablo standardı dilim 5 (T12 + P-1): yükleniyor / hata /
+  // eşleşme yok / boş tablonun İÇİNDE, başlık durur. Sıra eskisiyle aynı;
+  // hata eskisi gibi bayat satırları da gizler (rulesAll null → satır yok).
+  // v0.9.858'in uyarısı ("boş kural kümesi değil, yerine yeni kural açma")
+  // sunucu metniyle hata satırında, ↻ aynı refetch. "+ New rule" CTA'sı
+  // silinmedi, dışarı park edilmedi: satırın detail yuvasında (P-1).
+  // Tür çipi (Metric / Watcher) hepsini elediyse artık "eşleşme yok" +
+  // Filtreleri temizle (= All çipi): eskiden kural VARKEN "No alert rules"
+  // yazıyordu. Kaynak gerçekten boşsa çip seçili kalsa da boş durum.
+  const newRuleCta = canEdit && (
+    <Button variant="primary" onClick={() => setShowForm(true)}>+ New rule</Button>
+  );
+  const rulesErr = rulesQ.error instanceof Error ? rulesQ.error.message : '';
+  const tableState: Omit<DataTableStateProps<AlertRuleRow>, 'dt'> =
+    rules === undefined ? { kind: 'loading' }
+    : rules === null ? {
+        kind: 'error',
+        onRetry: () => void rulesQ.refetch(),
+        message: `Alarm kuralları okunamadı${rulesErr ? `: ${rulesErr}` : ''} — bu bir okuma hatası, boş kural kümesi değil; `
+          + 'başarılı olana dek yerine yeni kural oluşturma.',
+      }
+    : ruleKind !== 'all' && (rulesAll?.length ?? 0) > 0 ? {
+        kind: 'no-match',
+        message: ruleKind === 'watcher' ? 'Watcher türünde alarm kuralı yok' : 'Metrik türünde alarm kuralı yok',
+        onClearFilters: () => setRuleKind('all'),
+        detail: newRuleCta,
+      }
+    : {
+        kind: 'empty',
+        message: 'Alarm kuralı yok — alarm kuralları anomali dedektörlerini ve eşik kontrollerini adlandırılmış, '
+          + 'yönlendirilebilir problemlere çevirir; ya da mevcut yapılandırmanı SQL playground üzerinden içe aktar.',
+        detail: newRuleCta,
+      };
 
   // Open the edit form pre-filled from a noisy-rules suggestion.
   // NoisyRulesPanel owns the report + bulk-apply state; this single
@@ -606,7 +638,6 @@ export default function AlertsPage() {
           </div>
         )}
 
-        {rules === undefined && <Spinner />}
         {/* v0.5.305 — kind filter chips so operators can scope
             the table to just their watchers (saved log alerts)
             without scrolling past 50+ metric rules. */}
@@ -634,151 +665,131 @@ export default function AlertsPage() {
             ))}
           </div>
         )}
-        {rules === null && (
-          <QueryError message={rulesQ.error instanceof Error ? rulesQ.error.message : undefined} onRetry={() => rulesQ.refetch()}>
-            Alert rules could not be loaded. This is a failed read, not an empty
-            rule set — do not create replacements until it succeeds.
-          </QueryError>
-        )}
-        {rules && rules.length === 0 && (
-          <Empty icon="🔔" title="No alert rules"
-            action={canEdit
-              ? <Button variant="primary" onClick={() => setShowForm(true)}>+ New rule</Button>
-              : undefined}>
-            <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-              Alert rules turn anomaly detectors and threshold checks into
-              named, routable problems — or import from your existing config
-              via the SQL playground.
-            </div>
-          </Empty>
-        )}
-        {rules && rules.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} trailing={[250]} />
-              <DataTableHead dt={dt} trailing={<th />} />
-              <tbody>
-                {dt.sortedRows.map(r => {
-                  // v0.5.305 — Watchers (Logs → Create watcher;
-                  // saved-search alerts) live in the same
-                  // alert_rules table with metric='log_query'.
-                  // Surface them with their own badge + render
-                  // the saved query in the Condition column so
-                  // the operator can tell at a glance which row
-                  // is a watcher vs a metric alert.
-                  // Faz-1 — imported ES Watcher definitions use
-                  // metric='watcher': same badge family, condition
-                  // rendered as the projected hits.total compare.
-                  const isWatcher = r.metric === 'log_query';
-                  const isEsWatcher = r.metric === 'watcher';
-                  // v0.10.331 — hedefli kural (DB ifadesi): örnek SQL + ölçü.
-                  const isTarget = !!r.target;
-                  const isRoute = r.target?.kind === 'http_route'; // v0.10.705
-                  return (
-                  <tr key={r.id} className="cv-row">
-                    <td>
-                      <b>{r.name}</b>
-                      {/* v0.10.519 — kuralın ekip hedefi (boş = sahip + SRE). */}
-                      {r.notify?.teams?.length ? (
-                        <div className="mono" style={{ fontSize: 10, color: 'var(--text3)' }} title="Bu kural açılınca mail alacak ekipler (Settings → Team routing adresleri)">{notifySummary(r.notify)}</div>
-                      ) : null}
-                    </td>
-                    <td className="mono">{isRoute ? r.target!.service : isTarget ? '— all callers —' : (r.service || (isWatcher || isEsWatcher ? '— logs —' : '— all —'))}</td>
-                    <td className="mono" style={{ maxWidth: 380 }}>
-                      {isRoute ? (
-                        <>
-                          <span className="badge b-gray mono" style={{ fontSize: 10, marginRight: 6 }}>route</span>
-                          <code className="mono cell-ellipsis" title={isRoute ? `${r.target!.service} ${r.target!.route}` : ''} style={{ maxWidth: 220, fontSize: 11, verticalAlign: 'middle' }}>{r.target!.route}</code>
-                          <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{r.metric.replace('http_route_', '').replace('_ms', '')} {r.comparator} {r.threshold} {httpRouteUnit(r.metric)}</span>
-                        </>
-                      ) : isTarget ? (
-                        <>
-                          <span className="badge b-gray mono" style={{ fontSize: 10, marginRight: 6 }}>{r.target!.dbSystem || 'db'}{r.target!.dbName && r.target!.dbName !== 'default' ? ` · ${r.target!.dbName}` : ''}</span>
-                          <code className="mono cell-ellipsis" title={r.target!.sample || r.target!.stmtHash} style={{ maxWidth: 220, fontSize: 11, verticalAlign: 'middle' }}>{r.target!.sample || `#${r.target!.stmtHash}`}</code>
-                          <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{r.metric.replace('db_stmt_', '').replace('_ms', '')} {r.comparator} {r.threshold} ms</span>
-                        </>
-                      ) : isEsWatcher ? (
-                        <span title={r.watcherJson}>
-                          hits.total {r.comparator} {r.threshold}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} trailing={[250]} />
+            <DataTableHead dt={dt} trailing={<th />} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} trailing={[250]} {...tableState} /> : dt.sortedRows.map(r => {
+                // v0.5.305 — Watchers (Logs → Create watcher;
+                // saved-search alerts) live in the same
+                // alert_rules table with metric='log_query'.
+                // Surface them with their own badge + render
+                // the saved query in the Condition column so
+                // the operator can tell at a glance which row
+                // is a watcher vs a metric alert.
+                // Faz-1 — imported ES Watcher definitions use
+                // metric='watcher': same badge family, condition
+                // rendered as the projected hits.total compare.
+                const isWatcher = r.metric === 'log_query';
+                const isEsWatcher = r.metric === 'watcher';
+                // v0.10.331 — hedefli kural (DB ifadesi): örnek SQL + ölçü.
+                const isTarget = !!r.target;
+                const isRoute = r.target?.kind === 'http_route'; // v0.10.705
+                return (
+                <tr key={r.id} className="cv-row">
+                  <td>
+                    <b>{r.name}</b>
+                    {/* v0.10.519 — kuralın ekip hedefi (boş = sahip + SRE). */}
+                    {r.notify?.teams?.length ? (
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--text3)' }} title="Bu kural açılınca mail alacak ekipler (Settings → Team routing adresleri)">{notifySummary(r.notify)}</div>
+                    ) : null}
+                  </td>
+                  <td className="mono">{isRoute ? r.target!.service : isTarget ? '— all callers —' : (r.service || (isWatcher || isEsWatcher ? '— logs —' : '— all —'))}</td>
+                  <td className="mono" style={{ maxWidth: 380 }}>
+                    {isRoute ? (
+                      <>
+                        <span className="badge b-gray mono" style={{ fontSize: 10, marginRight: 6 }}>route</span>
+                        <code className="mono cell-ellipsis" title={isRoute ? `${r.target!.service} ${r.target!.route}` : ''} style={{ maxWidth: 220, fontSize: 11, verticalAlign: 'middle' }}>{r.target!.route}</code>
+                        <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{r.metric.replace('http_route_', '').replace('_ms', '')} {r.comparator} {r.threshold} {httpRouteUnit(r.metric)}</span>
+                      </>
+                    ) : isTarget ? (
+                      <>
+                        <span className="badge b-gray mono" style={{ fontSize: 10, marginRight: 6 }}>{r.target!.dbSystem || 'db'}{r.target!.dbName && r.target!.dbName !== 'default' ? ` · ${r.target!.dbName}` : ''}</span>
+                        <code className="mono cell-ellipsis" title={r.target!.sample || r.target!.stmtHash} style={{ maxWidth: 220, fontSize: 11, verticalAlign: 'middle' }}>{r.target!.sample || `#${r.target!.stmtHash}`}</code>
+                        <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{r.metric.replace('db_stmt_', '').replace('_ms', '')} {r.comparator} {r.threshold} ms</span>
+                      </>
+                    ) : isEsWatcher ? (
+                      <span title={r.watcherJson}>
+                        hits.total {r.comparator} {r.threshold}
+                      </span>
+                    ) : isWatcher ? (
+                      <>
+                        <code title={r.logQuery}
+                          style={{
+                            display: 'inline-block', maxWidth: '100%',
+                            overflow: 'hidden', textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap', verticalAlign: 'middle',
+                            padding: '1px 4px', borderRadius: 3,
+                            background: 'var(--bg3)', fontSize: 11,
+                          }}>
+                          {r.logQuery || '(empty)'}
+                        </code>
+                        <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
+                          count {r.comparator} {r.threshold}
                         </span>
-                      ) : isWatcher ? (
-                        <>
-                          <code title={r.logQuery}
-                            style={{
-                              display: 'inline-block', maxWidth: '100%',
-                              overflow: 'hidden', textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap', verticalAlign: 'middle',
-                              padding: '1px 4px', borderRadius: 3,
-                              background: 'var(--bg3)', fontSize: 11,
-                            }}>
-                            {r.logQuery || '(empty)'}
-                          </code>
-                          <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
-                            count {r.comparator} {r.threshold}
-                          </span>
-                        </>
-                      ) : (
-                        <>{r.metric} {r.comparator} {r.threshold}</>
-                      )}
-                    </td>
-                    <td>{r.windowSec / 60} min</td>
-                    <td><SeverityBadge s={r.severity} /></td>
-                    <td>
-                      {r.openProblems > 0
-                        ? <Link className="badge b-err"
-                            to={`/inbox?q=${encodeURIComponent(r.name)}`}
-                            title={`${r.openProblems} açık problem bu kuraldan — Inbox'ta aç`}
-                            style={{ textDecoration: 'none' }}>
-                            {r.openProblems} open
-                          </Link>
-                        : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </td>
-                    <td>{r.enabled
-                      ? <span className="badge b-gray">ON</span>
-                      : <span className="badge b-gray">OFF</span>}</td>
-                    <td>
-                      {isEsWatcher
-                        ? <span className="badge b-info" title="Imported ES Watcher definition — evaluated against the log backend; the raw watch JSON is stored verbatim">ES WATCHER</span>
-                        : isWatcher
-                        ? <span className="badge b-info" title="Saved log-search alert created via /logs Create watcher">WATCHER</span>
-                        : r.builtIn
-                          ? <span className="badge b-info">BUILT-IN</span>
-                          : <span className="badge b-gray">metric</span>}
-                    </td>
-                    <td><div className="cell-actions end">
-                      {isWatcher && (
-                        <Link className="sec"
-                          to={logsHref({ window: null, q: r.logQuery || '' })}
-                          title="Open the saved log search in /logs"
+                      </>
+                    ) : (
+                      <>{r.metric} {r.comparator} {r.threshold}</>
+                    )}
+                  </td>
+                  <td>{r.windowSec / 60} min</td>
+                  <td><SeverityBadge s={r.severity} /></td>
+                  <td>
+                    {r.openProblems > 0
+                      ? <Link className="badge b-err"
+                          to={`/inbox?q=${encodeURIComponent(r.name)}`}
+                          title={`${r.openProblems} açık problem bu kuraldan — Inbox'ta aç`}
                           style={{ textDecoration: 'none' }}>
-                          ↗ logs
+                          {r.openProblems} open
                         </Link>
-                      )}
-                      {canEdit && (
-                        <>
-                          <Button variant="secondary" size="sm" onClick={() => startEdit(r)}>Edit</Button>
-                          {r.enabled
-                            ? <Button variant="secondary" size="sm" onClick={() => disable(r.id)}
-                                title="Silence the rule without removing its definition">
-                                Disable
-                              </Button>
-                            : <Button variant="secondary" size="sm" onClick={() => enable(r.id)}>Enable</Button>}
-                          <Button variant="ghost-danger" size="sm" loading={deleteRule.isPending}
-                            onClick={() => void remove(r.id, r.name)}
-                            title="Remove the rule entirely from ClickHouse">
-                            Delete
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                  </td>
+                  <td>{r.enabled
+                    ? <span className="badge b-gray">ON</span>
+                    : <span className="badge b-gray">OFF</span>}</td>
+                  <td>
+                    {isEsWatcher
+                      ? <span className="badge b-info" title="Imported ES Watcher definition — evaluated against the log backend; the raw watch JSON is stored verbatim">ES WATCHER</span>
+                      : isWatcher
+                      ? <span className="badge b-info" title="Saved log-search alert created via /logs Create watcher">WATCHER</span>
+                      : r.builtIn
+                        ? <span className="badge b-info">BUILT-IN</span>
+                        : <span className="badge b-gray">metric</span>}
+                  </td>
+                  <td><div className="cell-actions end">
+                    {isWatcher && (
+                      <Link className="sec"
+                        to={logsHref({ window: null, q: r.logQuery || '' })}
+                        title="Open the saved log search in /logs"
+                        style={{ textDecoration: 'none' }}>
+                        ↗ logs
+                      </Link>
+                    )}
+                    {canEdit && (
+                      <>
+                        <Button variant="secondary" size="sm" onClick={() => startEdit(r)}>Edit</Button>
+                        {r.enabled
+                          ? <Button variant="secondary" size="sm" onClick={() => disable(r.id)}
+                              title="Silence the rule without removing its definition">
+                              Disable
+                            </Button>
+                          : <Button variant="secondary" size="sm" onClick={() => enable(r.id)}>Enable</Button>}
+                        <Button variant="ghost-danger" size="sm" loading={deleteRule.isPending}
+                          onClick={() => void remove(r.id, r.name)}
+                          title="Remove the rule entirely from ClickHouse">
+                          Delete
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  </td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </PageShell>
     </>
   );

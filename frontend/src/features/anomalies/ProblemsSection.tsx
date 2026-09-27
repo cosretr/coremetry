@@ -38,7 +38,7 @@ import { teamOptionsCI } from '@/lib/teamOptions';
 import { getItem, setItem, STORAGE_KEYS } from '@/lib/storage';
 import { decodeCsvSet, encodeCsvSet } from '@/lib/inboxUrl';
 import { useUrlEnv } from '@/lib/useUrlEnv';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { Problem } from '@/lib/types';
 import { AlertProblemDetail, ProblemStatusBadge } from './ProblemDetail';
@@ -347,6 +347,30 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
   // Preserve the tri-state contract (undefined loading / null error /
   // rows) the render below branches on.
   const sorted = data == null ? data : dt.sortedRows;
+  // v0.10.967 — tablo standardı T12 (dilim 5): yükleniyor / hata / boş /
+  // eşleşme yok tablonun İÇİNDE, başlık + süzgeç çubuğu yerinde. Hata dalı
+  // eskiden HİÇ yoktu (null hiçbir dala girmiyor, bölüm başlığın altında boş
+  // kalıyordu) — artık hata satırı; eski kodda yeniden deneme yoktu, yok.
+  // Eşleşme yok = sunucu satır döndürdü, istemci tarafı şiddet çipleri
+  // hepsini eledi; YA DA isteğin kendisi kullanıcı süzgeci taşıdı (öncelik
+  // çipleri — varsayılan P1+P2 de dar —, servis, takım, cluster) ve sunucu
+  // sıfır döndü. Env küresel kapsam, durum sekme gibi eksen: süzgeç sayılmaz.
+  // "open" + sıfır satır aşağıdaki çökme dalında kalır.
+  const rowsOnScreen = sorted ?? [];
+  const probFiltered = prioSet.size < PROBLEMS_PRIO_ALL.length
+    || !!(serviceFilter || ownerTeam || sreTeam || cluster);
+  const tableState: Omit<DataTableStateProps<Problem>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error' }
+    : data.length > 0 ? {
+      kind: 'no-match',
+      message: `Seçili şiddetlerde "${statusFilter}" problem yok — diğerlerini görmek için yukarıdaki süzgeci değiştir`,
+    }
+    : probFiltered ? {
+      kind: 'no-match',
+      message: `Seçili süzgeçlerle "${statusFilter}" problem yok — diğerlerini görmek için yukarıdaki süzgeci değiştir`,
+    }
+    : { kind: 'empty', message: `"${statusFilter}" durumunda problem yok — diğer durumları görmek için yukarıdaki süzgeci değiştir` };
   // v0.10.260 (perf §7 madde 4, F3 ⭐) — açık satırların servisleri TEK
   // toplu blast-radius isteğiyle (satır başına istek yerine; 200 satır =
   // 200 istek + 200 cache anahtarıydı). Küme sıralı → anahtar kararlı.
@@ -521,12 +545,6 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
           Daraltmayı sıkılaştır (servis, durum, öncelik) ya da sayıları /inbox rozetinden izle.
         </div>
       )}
-      {data === undefined && <Spinner />}
-      {data && sorted && sorted.length === 0 && (
-        <Empty icon="✓" title={`No problems in "${statusFilter}"`}>
-          Switch the filter above to see other states.
-        </Empty>
-      )}
       {sorted && sorted.length > 0 && selectedIds.size > 0 && (
         <div style={{
           padding: '8px 12px', marginBottom: 8,
@@ -564,240 +582,239 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
           888px + esnek `rule`). v0.10.939 (tablo standardı S8): sıfırlama
           artık başlık satırının ⋯ menüsünde ("Kolonları sıfırla",
           DataTableHead) — sayfa başına düğme ve koşullu sarmalayıcısı kalktı. */}
-      {sorted && sorted.length > 0 && (
-        <div className="table-wrap">
-          <table {...dt.tableProps}>
-            {/* v0.10.945 — Assignee + Triage `trailing` kalır: Assignee düzenlenebilir
-                sayfa hücresi, Triage ondan sonra gelir; kind:'actions' ikisini de
-                yönetilen kolona çevirmeyi gerektirirdi (bu dilimde değil). */}
-            <DataTableColgroup dt={dt} leading={[28]} trailing={[170, 90]} />
-            <DataTableHead dt={dt}
-              leading={
-                <th style={{ width: 28 }}>
-                  <input type="checkbox"
-                    checked={sorted.length > 0 && sorted.every(p => selectedIds.has(p.id))}
-                    onChange={e => {
-                      if (e.target.checked) {
-                        setSelectedIds(new Set(sorted.map(p => p.id)));
-                      } else {
-                        setSelectedIds(new Set());
-                      }
-                    }}
-                    onClick={e => e.stopPropagation()}
-                    title="Select all visible" />
-                </th>
-              }
-              trailing={<><th>Assignee</th><th>Triage</th></>} />
-            <tbody>
-              {sorted.map((p, i) => {
-                const isAnomaly = p.ruleId?.startsWith('anomaly:');
-                // v0.10.221 — düz hücreler gerçek <Link> (orta tık / ⌘-tık
-                // yeni sekme); satırın onClick'i etkileşimli hücreler için
-                // kalıyor, Link kendi tıkını yutuyor (çift gezinme yok).
-                const href = problemDetailHref(location.pathname, searchParams, p.id);
-                const rp = dt.rowProps(i);
-                return (
-                  // v0.9.1133 — key FRAGMENT'te: satır artık iki `<tr>`
-                  // döndürebiliyor (satır + açık insight kartı). Keyless bir
-                  // `<>` reconcile'ı yanlış eşleştirir ve sıralama
-                  // değiştiğinde açık kart BAŞKA bir satırın altında kalır
-                  // (MT4, brokenAffordances kapısı).
-                  <Fragment key={p.id}>
-                  <tr {...rp}
-                      {...rowActivation(() => openDetail(p.id))}
-                      // v0.10.925 — satırın kendi onKeyDown'ı rowActivation'ınkini
-                      // EZİYORDU ve hedef denetimi yoktu: satır içindeki bir
-                      // düğmeye (onay kutusu, eylem) basılan Enter/Boşluk da
-                      // detayı açıyordu. rowActivation aynı eylemi yalnız satırın
-                      // KENDİSİ odaktayken yapar.
-                      // v0.10.924 — buton rolü + tabIndex yukarıdaki rowActivation
-                      // yayılımından geliyor (tıklanabilir <tr> sözleşmesi, D3);
-                      // aynı değeri tekrarlayan literal öznitelik kaldırıldı.
-                      // v0.10.922 (sade palet adım 1) — açık kritik satırın
-                      // kırmızı zemini KALKTI. Aynı olgu beş kez boyanıyordu
-                      // (zemin + P1 + CRITICAL + kırmızı değer + OPEN); renk
-                      // artık yalnız öncelik rozetinde.
-                      className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
-                      <td onClick={e => e.stopPropagation()}>
-                        <input type="checkbox"
-                          checked={selectedIds.has(p.id)}
-                          onChange={e => {
-                            setSelectedIds(prev => {
-                              const next = new Set(prev);
-                              if (e.target.checked) next.add(p.id);
-                              else next.delete(p.id);
-                              return next;
-                            });
-                          }} />
-                      </td>
-                      <td className="row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{p.priority ? <PriorityBadge p={p.priority} reason={p.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>
-                      <td className="row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}><SeverityBadge s={p.severity} /></Link></td>
-                      <td>
-                        {/* v0.9.966 — problemin ömrü: onset−1h → (çözüm |
-                            şimdi)+10m. Aynı sınırlar ProblemDetail'in
-                            logs/traces/servis pivotlarında; liste ile detay
-                            farklı pencere göstermemeli. AÇIK problemde
-                            pencere ŞİMDİye kadar uzuyor — onset±40dk, hâlâ
-                            yanan bir olayda hiçbir şeyin bozuk olmadığı bir
-                            ana bakmak demekti. */}
-                        <SubjectLink service={p.service} subjectKind={p.kind}
-                          href={serviceHref(p.service, { range: eventLifespanWindow(p) })}
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          {/* v0.10.945 — Assignee + Triage `trailing` kalır: Assignee düzenlenebilir
+              sayfa hücresi, Triage ondan sonra gelir; kind:'actions' ikisini de
+              yönetilen kolona çevirmeyi gerektirirdi (bu dilimde değil). */}
+          <DataTableColgroup dt={dt} leading={[28]} trailing={[170, 90]} />
+          <DataTableHead dt={dt}
+            leading={
+              <th style={{ width: 28 }}>
+                <input type="checkbox"
+                  checked={rowsOnScreen.length > 0 && rowsOnScreen.every(p => selectedIds.has(p.id))}
+                  disabled={rowsOnScreen.length === 0}
+                  onChange={e => {
+                    if (e.target.checked) {
+                      setSelectedIds(new Set(rowsOnScreen.map(p => p.id)));
+                    } else {
+                      setSelectedIds(new Set());
+                    }
+                  }}
+                  onClick={e => e.stopPropagation()}
+                  title="Select all visible" />
+              </th>
+            }
+            trailing={<><th>Assignee</th><th>Triage</th></>} />
+          <tbody>
+            {rowsOnScreen.length === 0 ? <DataTableState dt={dt} leading={[28]} trailing={[170, 90]} {...tableState} /> : rowsOnScreen.map((p, i) => {
+              const isAnomaly = p.ruleId?.startsWith('anomaly:');
+              // v0.10.221 — düz hücreler gerçek <Link> (orta tık / ⌘-tık
+              // yeni sekme); satırın onClick'i etkileşimli hücreler için
+              // kalıyor, Link kendi tıkını yutuyor (çift gezinme yok).
+              const href = problemDetailHref(location.pathname, searchParams, p.id);
+              const rp = dt.rowProps(i);
+              return (
+                // v0.9.1133 — key FRAGMENT'te: satır artık iki `<tr>`
+                // döndürebiliyor (satır + açık insight kartı). Keyless bir
+                // `<>` reconcile'ı yanlış eşleştirir ve sıralama
+                // değiştiğinde açık kart BAŞKA bir satırın altında kalır
+                // (MT4, brokenAffordances kapısı).
+                <Fragment key={p.id}>
+                <tr {...rp}
+                    {...rowActivation(() => openDetail(p.id))}
+                    // v0.10.925 — satırın kendi onKeyDown'ı rowActivation'ınkini
+                    // EZİYORDU ve hedef denetimi yoktu: satır içindeki bir
+                    // düğmeye (onay kutusu, eylem) basılan Enter/Boşluk da
+                    // detayı açıyordu. rowActivation aynı eylemi yalnız satırın
+                    // KENDİSİ odaktayken yapar.
+                    // v0.10.924 — buton rolü + tabIndex yukarıdaki rowActivation
+                    // yayılımından geliyor (tıklanabilir <tr> sözleşmesi, D3);
+                    // aynı değeri tekrarlayan literal öznitelik kaldırıldı.
+                    // v0.10.922 (sade palet adım 1) — açık kritik satırın
+                    // kırmızı zemini KALKTI. Aynı olgu beş kez boyanıyordu
+                    // (zemin + P1 + CRITICAL + kırmızı değer + OPEN); renk
+                    // artık yalnız öncelik rozetinde.
+                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                    <td onClick={e => e.stopPropagation()}>
+                      <input type="checkbox"
+                        checked={selectedIds.has(p.id)}
+                        onChange={e => {
+                          setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(p.id);
+                            else next.delete(p.id);
+                            return next;
+                          });
+                        }} />
+                    </td>
+                    <td className="row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{p.priority ? <PriorityBadge p={p.priority} reason={p.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>
+                    <td className="row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}><SeverityBadge s={p.severity} /></Link></td>
+                    <td>
+                      {/* v0.9.966 — problemin ömrü: onset−1h → (çözüm |
+                          şimdi)+10m. Aynı sınırlar ProblemDetail'in
+                          logs/traces/servis pivotlarında; liste ile detay
+                          farklı pencere göstermemeli. AÇIK problemde
+                          pencere ŞİMDİye kadar uzuyor — onset±40dk, hâlâ
+                          yanan bir olayda hiçbir şeyin bozuk olmadığı bir
+                          ana bakmak demekti. */}
+                      <SubjectLink service={p.service} subjectKind={p.kind}
+                        href={serviceHref(p.service, { range: eventLifespanWindow(p) })}
+                        onClick={e => e.stopPropagation()}
+                        style={{ fontWeight: 600 }} />
+                      <ClusterChips clusters={p.clusters} />
+                    </td>
+                    <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{p.metric}</Link></td>
+                    <td className="num row-cell">
+                      <Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>
+                        {/* v0.10.922 (sade palet adım 1) — değer düz metin
+                            (--text, 600); eşiği aştığını satırın varlığı ve
+                            P rozeti zaten söylüyor. */}
+                        <b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(p.value, 2)}</b>
+                        <span style={{ color: 'var(--text3)' }}> / {fmtFixed(p.threshold, 2)}</span>
+                      </Link>
+                    </td>
+                    <td>
+                      {/* v0.10.922 (sade palet adım 1) — ANOMALY / Runbook /
+                          AI insight / blast-radius çipleri ÜST VERİ: mavi
+                          (b-info) değil nötr (b-gray). Renk yalnız sapmada
+                          (cascading amber kalır). */}
+                      {isAnomaly && (
+                        <span className="badge b-gray" style={{ marginRight: 6 }}>ANOMALY</span>
+                      )}
+                      <Link to={href} replace className="row-link row-link--inline" onClick={e => e.stopPropagation()}>{p.ruleName}</Link>
+                      {p.runbookUrl && (
+                        <a href={p.runbookUrl} target="_blank" rel="noopener"
                           onClick={e => e.stopPropagation()}
-                          style={{ fontWeight: 600 }} />
-                        <ClusterChips clusters={p.clusters} />
-                      </td>
-                      <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{p.metric}</Link></td>
-                      <td className="num row-cell">
-                        <Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>
-                          {/* v0.10.922 (sade palet adım 1) — değer düz metin
-                              (--text, 600); eşiği aştığını satırın varlığı ve
-                              P rozeti zaten söylüyor. */}
-                          <b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(p.value, 2)}</b>
-                          <span style={{ color: 'var(--text3)' }}> / {fmtFixed(p.threshold, 2)}</span>
-                        </Link>
-                      </td>
-                      <td>
-                        {/* v0.10.922 (sade palet adım 1) — ANOMALY / Runbook /
-                            AI insight / blast-radius çipleri ÜST VERİ: mavi
-                            (b-info) değil nötr (b-gray). Renk yalnız sapmada
-                            (cascading amber kalır). */}
-                        {isAnomaly && (
-                          <span className="badge b-gray" style={{ marginRight: 6 }}>ANOMALY</span>
-                        )}
-                        <Link to={href} replace className="row-link row-link--inline" onClick={e => e.stopPropagation()}>{p.ruleName}</Link>
-                        {p.runbookUrl && (
-                          <a href={p.runbookUrl} target="_blank" rel="noopener"
-                            onClick={e => e.stopPropagation()}
-                            title="Open team runbook"
-                            className="badge b-gray"
-                            style={{ marginLeft: 8, textDecoration: 'none' }}>
-                            Runbook ↗
-                          </a>
-                        )}
-                        {p.recentDeploy && (
-                          // Deploy correlation tag — shows the
-                          // service.version that landed in the 30 min
-                          // before the problem fired. The classic
-                          // "regression coincided with deploy" signal
-                          // in a single chip. Amber so it visually
-                          // codes as "warning, look here".
-                          <span className="badge b-warn"
-                            onClick={e => e.stopPropagation()}
-                            title={`service.version=${p.recentDeploy.version} first seen ${fmtAge(p.recentDeploy.ageSeconds)} before this problem opened`}
-                            style={{ marginLeft: 8 }}>
-                            <ArrowDownToLine size={11} strokeWidth={1.75} /> {p.recentDeploy.version} · {fmtAge(p.recentDeploy.ageSeconds)} before
-                          </span>
-                        )}
-                        {p.aiSummary && (
-                          // AI auto-explain chip (v0.5.254). The
-                          // background problemExplainer fills this
-                          // within ~30s of a critical fire; tooltip
-                          // shows the full blurb so the operator
-                          // gets first-look context without
-                          // clicking through. The IconSparkles glyph is
-                          // the "Copilot output" visual anchor, matching
-                          // the existing operator-clicked Explain affordances.
-                          <span className="badge b-gray"
-                            onClick={e => e.stopPropagation()}
-                            title={stripMarkdown(p.aiSummary)}
-                            style={{ marginLeft: 8, cursor: 'help' }}>
-                            <IconSparkles size={11} /> AI insight
-                          </span>
-                        )}
-                        {/* v0.6.29 — blast radius chip for open
-                            problems. Lazy-fetches when the row
-                            renders; only shows when callers > 0
-                            so the chip is silent on a service
-                            with no upstream callers. Cascade
-                            count surfaces in amber. */}
-                        {p.status === 'open' && p.service && (
-                          <BlastRadiusChip data={blast.data?.items?.[p.service] ?? null} />
-                        )}
-                        {isAnomaly && (
-                          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                            {p.description}
-                          </div>
-                        )}
-                        {p.aiSummary && (
-                          <div style={{
-                            fontSize: 11, color: 'var(--text2)', marginTop: 4,
-                            padding: 6, borderRadius: 4,
-                            background: 'var(--accent-soft)',
-                            borderLeft: '2px solid var(--accent)',
-                          }}>
-                            {/* v0.9.696 — kırpılmamış tam metin: markdown basılıyor. */}
-                            <RenderedMarkdown text={p.aiSummary} />
-                          </div>
-                        )}
-                        {/* rc #3 — in-page root-cause ribbon. Collapsed chip
-                            renders from the row's persisted summary
-                            (p.rootCause, joined by the /problems handler — no
-                            fetch); expand reads the full /rootcause fan-out.
-                            The chip's own stopPropagation keeps the row's
-                            navigate-on-click intact. */}
-                        {/* v0.9.1133 (AI Faz 2.3) — TEK ŞERİT: kök-neden çipi
-                            ve "▸ Ne oldu?" yan yana, ŞERİDİN KENDİ satırında
-                            (`trailing`) — kardeş öğe olarak koyulsa şerit
-                            genişlediğinde çip panelin altına kayardı.
-                            Collapsed kök-neden çipi AYNEN duruyor (sıfır
-                            fetch, satırın kalıcı özeti); kart açıkken
-                            şeridin GÖVDESİ bastırılıyor (`suppressed`) —
-                            ikisi de aynı olayın kanıtını gösteriyor ve üst
-                            üste açık iki sıralama operatörü "hangisi doğru"
-                            tahminine zorlar (v0.9.306 sınıfı). Şeride basmak
-                            ölü tık DEĞİL: `onExpandRequest` kartı kapatır,
-                            aynı tıkta gövde açılır. */}
-                        <div style={{ marginTop: p.aiSummary ? 6 : 2 }}>
-                          <RootCauseRibbon anchor="problem" id={p.id} summary={p.rootCause}
-                            suppressed={insight.openId === p.id}
-                            onExpandRequest={insight.close}
-                            trailing={
-                              <InsightRowChip open={insight.openId === p.id}
-                                onToggle={() => insight.toggle(p.id)} />
-                            } />
+                          title="Open team runbook"
+                          className="badge b-gray"
+                          style={{ marginLeft: 8, textDecoration: 'none' }}>
+                          Runbook ↗
+                        </a>
+                      )}
+                      {p.recentDeploy && (
+                        // Deploy correlation tag — shows the
+                        // service.version that landed in the 30 min
+                        // before the problem fired. The classic
+                        // "regression coincided with deploy" signal
+                        // in a single chip. Amber so it visually
+                        // codes as "warning, look here".
+                        <span className="badge b-warn"
+                          onClick={e => e.stopPropagation()}
+                          title={`service.version=${p.recentDeploy.version} first seen ${fmtAge(p.recentDeploy.ageSeconds)} before this problem opened`}
+                          style={{ marginLeft: 8 }}>
+                          <ArrowDownToLine size={11} strokeWidth={1.75} /> {p.recentDeploy.version} · {fmtAge(p.recentDeploy.ageSeconds)} before
+                        </span>
+                      )}
+                      {p.aiSummary && (
+                        // AI auto-explain chip (v0.5.254). The
+                        // background problemExplainer fills this
+                        // within ~30s of a critical fire; tooltip
+                        // shows the full blurb so the operator
+                        // gets first-look context without
+                        // clicking through. The IconSparkles glyph is
+                        // the "Copilot output" visual anchor, matching
+                        // the existing operator-clicked Explain affordances.
+                        <span className="badge b-gray"
+                          onClick={e => e.stopPropagation()}
+                          title={stripMarkdown(p.aiSummary)}
+                          style={{ marginLeft: 8, cursor: 'help' }}>
+                          <IconSparkles size={11} /> AI insight
+                        </span>
+                      )}
+                      {/* v0.6.29 — blast radius chip for open
+                          problems. Lazy-fetches when the row
+                          renders; only shows when callers > 0
+                          so the chip is silent on a service
+                          with no upstream callers. Cascade
+                          count surfaces in amber. */}
+                      {p.status === 'open' && p.service && (
+                        <BlastRadiusChip data={blast.data?.items?.[p.service] ?? null} />
+                      )}
+                      {isAnomaly && (
+                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                          {p.description}
                         </div>
-                      </td>
-                      <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(p.startedAt)}</Link></td>
-                      <td className="row-cell">
-                        {/* v0.10.922 (sade palet adım 1) — durum tonu tek
-                            sözlükten (ProblemDetail STATUS_TONE): OPEN/ACK
-                            nötr, RESOLVED yeşil (geçiş). */}
-                        <Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>
-                          <ProblemStatusBadge status={p.status} />
-                        </Link>
-                      </td>
-                      <td onClick={e => e.stopPropagation()}>
-                        <AssigneeCell problem={p}
-                          currentUserEmail={currentUserEmail}
-                          onChanged={() => problemsQ.refetch()} />
-                      </td>
-                      <td onClick={e => e.stopPropagation()}>
-                        {/* Triage — opens the right-side drawer
-                            consolidating rule details + causal
-                            correlation + AI explain + runbook
-                            AI in one panel. Replaces the v0.5.x
-                            inline "Why?" expansion and the
-                            scattered per-cell AI buttons. */}
-                        <Button variant="secondary" size="sm"
-                          onClick={() => openDetail(p.id)}>
-                          Triage ▶
-                        </Button>
-                      </td>
-                    </tr>
-                  {/* Kart YALNIZ açık satırda mount olur; kapanınca unmount
-                      edilir ve uçuştaki SSE akışı kesilir. Kolon sayısı:
-                      1 (seçim) + 8 (PROBLEM_COLS) + 2 (Assignee/Triage). */}
-                  {insight.openId === p.id && (
-                    <InsightRowSlot kind="problem" id={p.id}
-                      colSpan={11} onClose={insight.close} />
-                  )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                      )}
+                      {p.aiSummary && (
+                        <div style={{
+                          fontSize: 11, color: 'var(--text2)', marginTop: 4,
+                          padding: 6, borderRadius: 4,
+                          background: 'var(--accent-soft)',
+                          borderLeft: '2px solid var(--accent)',
+                        }}>
+                          {/* v0.9.696 — kırpılmamış tam metin: markdown basılıyor. */}
+                          <RenderedMarkdown text={p.aiSummary} />
+                        </div>
+                      )}
+                      {/* rc #3 — in-page root-cause ribbon. Collapsed chip
+                          renders from the row's persisted summary
+                          (p.rootCause, joined by the /problems handler — no
+                          fetch); expand reads the full /rootcause fan-out.
+                          The chip's own stopPropagation keeps the row's
+                          navigate-on-click intact. */}
+                      {/* v0.9.1133 (AI Faz 2.3) — TEK ŞERİT: kök-neden çipi
+                          ve "▸ Ne oldu?" yan yana, ŞERİDİN KENDİ satırında
+                          (`trailing`) — kardeş öğe olarak koyulsa şerit
+                          genişlediğinde çip panelin altına kayardı.
+                          Collapsed kök-neden çipi AYNEN duruyor (sıfır
+                          fetch, satırın kalıcı özeti); kart açıkken
+                          şeridin GÖVDESİ bastırılıyor (`suppressed`) —
+                          ikisi de aynı olayın kanıtını gösteriyor ve üst
+                          üste açık iki sıralama operatörü "hangisi doğru"
+                          tahminine zorlar (v0.9.306 sınıfı). Şeride basmak
+                          ölü tık DEĞİL: `onExpandRequest` kartı kapatır,
+                          aynı tıkta gövde açılır. */}
+                      <div style={{ marginTop: p.aiSummary ? 6 : 2 }}>
+                        <RootCauseRibbon anchor="problem" id={p.id} summary={p.rootCause}
+                          suppressed={insight.openId === p.id}
+                          onExpandRequest={insight.close}
+                          trailing={
+                            <InsightRowChip open={insight.openId === p.id}
+                              onToggle={() => insight.toggle(p.id)} />
+                          } />
+                      </div>
+                    </td>
+                    <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(p.startedAt)}</Link></td>
+                    <td className="row-cell">
+                      {/* v0.10.922 (sade palet adım 1) — durum tonu tek
+                          sözlükten (ProblemDetail STATUS_TONE): OPEN/ACK
+                          nötr, RESOLVED yeşil (geçiş). */}
+                      <Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>
+                        <ProblemStatusBadge status={p.status} />
+                      </Link>
+                    </td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <AssigneeCell problem={p}
+                        currentUserEmail={currentUserEmail}
+                        onChanged={() => problemsQ.refetch()} />
+                    </td>
+                    <td onClick={e => e.stopPropagation()}>
+                      {/* Triage — opens the right-side drawer
+                          consolidating rule details + causal
+                          correlation + AI explain + runbook
+                          AI in one panel. Replaces the v0.5.x
+                          inline "Why?" expansion and the
+                          scattered per-cell AI buttons. */}
+                      <Button variant="secondary" size="sm"
+                        onClick={() => openDetail(p.id)}>
+                        Triage ▶
+                      </Button>
+                    </td>
+                  </tr>
+                {/* Kart YALNIZ açık satırda mount olur; kapanınca unmount
+                    edilir ve uçuştaki SSE akışı kesilir. Kolon sayısı:
+                    1 (seçim) + 8 (PROBLEM_COLS) + 2 (Assignee/Triage). */}
+                {insight.openId === p.id && (
+                  <InsightRowSlot kind="problem" id={p.id}
+                    colSpan={11} onClose={insight.close} />
+                )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

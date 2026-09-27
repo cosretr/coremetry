@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button, useConfirm } from '@/components/ui';
+import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { useServicesMetadata } from '@/lib/queries';
 import { teamOptionsCI } from '@/lib/teamOptions';
@@ -61,6 +62,16 @@ export function TeamRoutingTab() {
 
   if (tc === undefined) return <Spinner />;
   if (tc === null) return <Empty icon="⚠" title="Failed to load team routing settings" />;
+
+  // v0.10.967 — sekmenin kapısı yalnız KAYITLI adres okumasını (tc) bekler;
+  // satırların çoğunu veren katalog okuması (useServicesMetadata) ayrı. Katalog
+  // yüklenirken ya da düştüğünde tablo "Katalogda takım yok" DEMEZ: durum
+  // satırı yükleniyor / hata (ExternalLinksTab emsali). Eskiden de yeniden
+  // deneme yoktu → yok (recipe §6).
+  const routingState: Omit<DataTableStateStaticProps, 'colSpan'> =
+    catalogQ.isPending ? { kind: 'loading' }
+    : catalogQ.isError ? { kind: 'error', message: `Servis kataloğu okunamadı: ${humanize(catalogQ.error)}` }
+    : { kind: 'empty', message: "Katalogda takım yok — Service catalog'a owner/SRE team girildiğinde takımlar burada listelenir." };
 
   const contactFor = (team: string): string => {
     for (const [k, v] of Object.entries(tc.contacts)) {
@@ -164,6 +175,16 @@ export function TeamRoutingTab() {
         </Field>
       </div>
 
+      {/* v0.10.967 — katalog düştü ama kayıtlı takımlar var: liste EKSİK, tam
+          gibi sunulmasın (tablo içi hâl yalnız satır yokken; bu satırlarla yan
+          yana yaşayan not, recipe §2). */}
+      {rows.length > 0 && catalogQ.isError && (
+        <div className="field-hint" role="status">
+          {catalogQ.data === undefined
+            ? `Servis kataloğu okunamadı (${humanize(catalogQ.error)}) — liste yalnız kayıtlı takımları gösteriyor.`
+            : `Servis kataloğu tazelenemedi (${humanize(catalogQ.error)}) — katalog takımları son okumadan.`}
+        </div>
+      )}
       <div className="table-wrap" style={{ marginBottom: 14 }}>
         {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi, satır başına adres girişi (T1). */}
         <table>
@@ -171,15 +192,11 @@ export function TeamRoutingTab() {
             <tr><th>Takım</th><th>E-posta adres(ler)i</th></tr>
           </thead>
           <tbody>
-            {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. colSpan = thead'deki 2 <th>. */}
+            {/* v0.10.967 (tablo standardı dilim 5, P-2) — statik tablonun durum satırı; colSpan = thead'deki 2 <th>.
+                Kayıtlı adres okumasının yükleniyor / hatası sekmenin kapısı (form ona bağlı) — dışarıda;
+                katalog okumasının yükleniyor / hatası bu satırda (routingState). */}
             {rows.length === 0 ? (
-              <tr data-dt-state="empty">
-                <td colSpan={2} className="dt-state">
-                  <div className="dt-state-body">
-                    <span>Katalogda takım yok — Service catalog'a owner/SRE team girildiğinde takımlar burada listelenir.</span>
-                  </div>
-                </td>
-              </tr>
+              <DataTableState colSpan={2} {...routingState} />
             ) : rows.map(team => {
               const v = contactFor(team);
               return (

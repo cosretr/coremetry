@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui';
 import type { FlameNode, ProfileFrameKind } from '@/lib/types';
 import { flameToHotspots, flameCategoryBreakdown, type MethodHotspot } from '@/lib/flameHotspots';
 import { KindBadge, BreakdownBar, kindLabel } from './KindBadge';
-import { useDataTable, DataTableColgroup, DataTableHead } from '@/components/ui/DataTable';
+import { useDataTable, DataTableColgroup, DataTableHead, DataTableState } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 
 // Method Hotspots — Dynatrace-style "which functions are
@@ -35,6 +35,8 @@ export function MethodHotspots({ root }: { root: FlameNode }) {
   // default; clicking a kind chip toggles it on; clicking the
   // active kind clears the filter.
   const [kindFilter, setKindFilter] = useState<ProfileFrameKind | 'all'>('all');
+  // v0.10.967 — "Filtreleri temizle" kendini kaldırınca odak filtre kutusuna döner.
+  const filterRef = useRef<HTMLInputElement>(null);
 
   const allHotspots = useMemo(() => flameToHotspots(root), [root]);
   const breakdown = useMemo(() => flameCategoryBreakdown(root), [root]);
@@ -59,7 +61,13 @@ export function MethodHotspots({ root }: { root: FlameNode }) {
   });
   const visible = useMemo(() => dt.sortedRows.slice(0, ROW_CAP), [dt.sortedRows]);
 
+  // Bölüm profil hiç hotspot taşımıyorsa kendini gizler (ürün kararı, kalır).
   if (allHotspots.length === 0) return null;
+  // v0.10.967 — tablo standardı T12 (ServiceAttrsPanel emsali): buraya
+  // gelindiyse süzgeçsiz küme dolu; tablo boşsa onu boşaltan isim ya da tür
+  // süzgecidir → "Eşleşme yok" tablonun İÇİNDE, başlık durur. Eskiden gövde
+  // sessizce boş kalıyordu. Temizle = iki süzgecin başlangıç değeri.
+  const clearFilters = () => { setFilter(''); setKindFilter('all'); };
 
   return (
     <div style={{
@@ -77,6 +85,7 @@ export function MethodHotspots({ root }: { root: FlameNode }) {
         </span>
         <KindFilterChips cur={kindFilter} onChange={setKindFilter} />
         <input
+          ref={filterRef}
           type="text"
           value={filter}
           onChange={e => setFilter(e.target.value)}
@@ -95,7 +104,9 @@ export function MethodHotspots({ root }: { root: FlameNode }) {
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {visible.map(h => (
+            {visible.length === 0 ? (
+              <DataTableState dt={dt} kind="no-match" onClearFilters={clearFilters} returnFocusRef={filterRef} />
+            ) : visible.map(h => (
               <HotspotRow key={h.name} h={h} totalValue={totalValue} />
             ))}
           </tbody>

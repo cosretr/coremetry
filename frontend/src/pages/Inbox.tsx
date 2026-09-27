@@ -7,8 +7,6 @@ import { Button, Chip, SearchField } from '@/components/ui';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Shield } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
 import { useInbox, useServicesMetadata } from '@/lib/queries';
 import { tsLong, fmtFixed, fmtAgoNs } from '@/lib/utils';
 import { IconSparkles } from '@/components/icons';
@@ -16,7 +14,7 @@ import { teamOptionsCI } from '@/lib/teamOptions';
 import { derivedTeamTitle } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL } from '@/lib/inboxUrl';
 import { useUrlEnv } from '@/lib/useUrlEnv';
-import { useDataTable, DataTableHead, DataTableColgroup, resolveInitialSort } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, resolveInitialSort, type DataTableStateProps } from '@/components/ui/DataTable';
 import { FacetMultiSelect } from '@/components/ui/FacetMultiSelect';
 import { InboxTriageDrawer } from '@/components/InboxTriageDrawer';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
@@ -565,6 +563,28 @@ export default function InboxPage() {
   const allPickedOnScreen = (filtered?.length ?? 0) > 0
     && (filtered ?? []).every((r: InboxItem) => picked.has(r.id));
 
+  // v0.10.967 — tablo standardı T12 (dilim 5): yükleniyor / hata / eşleşme
+  // yok / boş tablonun İÇİNDE; başlık, taban şeridi, kırpma rozetleri yerinde.
+  // `data` hata anında null (önbellekte bayat sayfa olsa da) → bayat satır
+  // hatayla yan yana kalmaz. Eski "Queue clear" metni öncelik/tür süzgecine
+  // göre dallanıyordu: o dal eşleşme-yok yüklemidir (varsayılan görünüm
+  // P1+P2 Exception, yani dar). İsteğin taşıdığı diğer süzgeçler (arama,
+  // servis, takım, ilk görülme) sunucuda daraltır → eşleşme yok. Kategori
+  // yalnız istemcide süzülür (istekte yok): sunucu satır döndürüp kategori
+  // hepsini elediyse `data.length > 0` zaten eşleşme-yok der; kaynak boşsa
+  // kuyruk gerçekten boştur ("Kuyruk boş"), kategori onu daraltmadı.
+  // Ortam seçicisi pencere gibi genel kapsamdır, süzgeç sayılmaz. Tek bir
+  // "hepsini temizle" eylemi yok → onClearFilters yok. Karşılaştırma sözlük
+  // BOYUTUNA karşı (v0.9.323: tür listesi büyürken `< 3` literali kalmıştı).
+  const facetNarrowed = prioSet.size < PRIO_ALL.length || kindSet.size < KIND_ALL.length;
+  const otherNarrowed = !!(serviceFilter || searchFilter || ownerFilter || sreFilter || teamFilter || sinceFilter);
+  const inboxState: Omit<DataTableStateProps<InboxItem>, 'dt'> =
+    data === undefined ? { kind: 'loading' }
+    : data === null ? { kind: 'error' }
+    : facetNarrowed ? { kind: 'no-match', message: 'Kuyruk boş — daha fazlasını görmek için öncelik / tür süzgecini genişlet' }
+    : otherNarrowed || data.length > 0 ? { kind: 'no-match' }
+    : { kind: 'empty', message: 'Kuyruk boş — şu an ilgini bekleyen bir şey yok' };
+
   const toggleRow = (id: string) => setPicked(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -881,19 +901,6 @@ export default function InboxPage() {
           </div>
         )}
 
-        {data === undefined && <TableSkeleton cols={6} wideFirst />}
-        {data === null && <Empty icon="!" title="Failed to load the queue" />}
-        {filtered && filtered.length === 0 && (
-          <Empty icon="✓" title="Queue clear">
-            {/* v0.9.323 — compare against the vocabulary SIZE, not a literal.
-                The kind list grew to four in v0.9.321 while this still read
-                `< 3`, so hiding exactly one kind produced "nothing needs your
-                attention" while a filter was actively narrowing the queue. */}
-            {prioSet.size < PRIO_ALL.length || kindSet.size < KIND_ALL.length
-              ? 'Widen the priority / kind filter to see more.'
-              : 'Nothing needs your attention right now.'}
-          </Empty>
-        )}
         {showingStale && (
           <div style={{ marginBottom: 8 }}>
             <span className="badge b-warn">
@@ -966,178 +973,177 @@ export default function InboxPage() {
             </span>
           </div>
         )}
-        {filtered && filtered.length > 0 && (
-          // NOT VirtualTable: rows are variable-height (DetailLine renders a
-          // multi-line exception message + team chips), which breaks the
-          // VirtualTable uniform-row assumption. content-visibility keeps the
-          // >100-row paint cheap while letting each row size to its content.
-          <div className="table-wrap"
-            style={{ opacity: showingStale ? 0.45 : 1, transition: 'opacity 120ms' }}
-            aria-busy={showingStale}>
-            <table {...dt.tableProps}>
-              {/* leading={[34]} — the primitive owns the <colgroup>; a
-                  second one alongside it is invalid markup and the
-                  browser silently keeps only the first. */}
-              <DataTableColgroup dt={dt} leading={[34]} />
-              <DataTableHead dt={dt} leading={
-                <th style={{ width: 34, textAlign: 'center' }}>
-                  {/* Select-all covers the rows CURRENTLY on screen, not the
-                      whole server-side queue — the list is a capped top
-                      slice, so "all" can only honestly mean what is
-                      visible. */}
-                  <input type="checkbox" aria-label="Görünen satırların hepsini seç"
-                    title="Görünen satırların hepsini seç"
-                    checked={allPickedOnScreen}
-                    ref={el => { if (el) el.indeterminate = selCount > 0 && !allPickedOnScreen; }}
-                    onChange={() => setPicked(prev => {
-                      if (allPickedOnScreen) return new Set();
-                      const next = new Set(prev);
-                      for (const r of (filtered ?? [])) next.add(r.id);
-                      return next;
-                    })} />
-                </th>
-              } />
-              <tbody>
-                {dt.sortedRows.map((it, i) => {
-                  const rp = dt.rowProps(i);
-                  const spread = spreadOf(it.exception); // v0.10.949
-                  return (
-                  <tr key={it.id}
-                    {...rp}
-                    {...rowActivation(() => openDrawer(it))}
-                    onMouseEnter={() => dt.nav.setSelected(i)}
-                    className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
-                    <td style={{ textAlign: 'center' }}
-                      onClick={e => { e.stopPropagation(); }}>
-                      {/* stopPropagation: the row itself opens the triage
-                          drawer, and ticking a box must not also navigate. */}
-                      <input type="checkbox" checked={picked.has(it.id)}
-                        aria-label={`Seç: ${it.title}`}
-                        onChange={() => toggleRow(it.id)} />
-                    </td>
-                    <td>
-                      <PriorityBadge p={it.priority} reason={it.priorityReason} />
-                    </td>
-                    <td className="cell-faint" title={it.displayId}>
-                      {it.source}
-                      {/* v0.10.706 — kategori rozeti kaynağın altında (sütun eklenmedi). */}
-                      {it.category && <div className="mono" style={{ fontSize: 9, letterSpacing: 0.3 }}>{it.category}</div>}
-                    </td>
-                    <td>
-                      {/* v0.9.860 (UX denetimi K1) — satırın kendi olay
-                          penceresi taşınır; aksi hâlde servis sayfası
-                          "şimdi" açılır ve olay görünmez. */}
-                      <SubjectLink service={it.service} subjectKind={it.subjectKind}
-                        href={serviceHref(it.service, { range: inboxItemWindow(it) })}
-                        onClick={e => e.stopPropagation()}
-                        style={{ fontWeight: 600 }}
-                        emptyFallback={<span style={{ color: 'var(--text3)' }}>(none)</span>} />
-                      {/* v0.10.949 — aynı exception aynı anda N serviste: tek
-                          satır nokta+metin, soluk (T9: renk yalnız sapan
-                          değerde; T11: ortakların tam listesi ipucunda). */}
-                      {spread && (
-                        <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, spreadWin)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
-                          <span className="dot" aria-hidden="true"
-                            style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
-                          {spread.n} servis
-                        </div>
-                      )}
-                      {(it.ownerTeam || it.sreTeam) && (
-                        <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {it.ownerTeam && (
-                            <Chip size="xs" active={ownerFilter === it.ownerTeam}
-                              onClick={e => {
-                                e.stopPropagation();
-                                setOwnerFilter(ownerFilter === it.ownerTeam ? '' : (it.ownerTeam ?? ''));
-                              }}
-                              title={teamChipTitle(it, ownerFilter === it.ownerTeam
-                                ? `Clear owner filter`
-                                : `Filter inbox to owner ${it.ownerTeam}`)}>
-                              <Users size={11} strokeWidth={1.75} /> {it.teamsVia ? '≈ ' : ''}{it.ownerTeam}
-                            </Chip>
-                          )}
-                          {it.sreTeam && (
-                            <Chip size="xs" active={sreFilter === it.sreTeam}
-                              onClick={e => {
-                                e.stopPropagation();
-                                setSreFilter(sreFilter === it.sreTeam ? '' : (it.sreTeam ?? ''));
-                              }}
-                              title={teamChipTitle(it, sreFilter === it.sreTeam
-                                ? `Clear SRE filter`
-                                : `Filter inbox to SRE ${it.sreTeam}`)}>
-                              <Shield size={11} strokeWidth={1.75} /> {it.teamsVia ? '≈ ' : ''}{it.sreTeam}
-                            </Chip>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                        <span style={{ fontWeight: 600 }}>{it.title}</span>
-                        {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama
-                            hiç çizilmiyordu: "all" pivotunda çözülmüş bir satır
-                            yenisiyle birebir aynı görünüyordu. */}
-                        <StatusBadge s={it.status} />
-                        {/* Bunlar backend'in ZATEN hesaplayıp attığı iki bilgi
-                            (v0.9.255). Operatörün bir satırda ilk aradığı şeyler:
-                            "runbook var mı" ve "az önce deploy oldu mu". */}
-                        {it.runbookUrl && (
-                          // v0.10.922 (sade palet adım 1) — üst veri: nötr.
-                          <a href={it.runbookUrl} target="_blank" rel="noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="badge b-gray" title="Runbook aç">📕 runbook</a>
+        {/* NOT VirtualTable: rows are variable-height (DetailLine renders a
+            multi-line exception message + team chips), which breaks the
+            VirtualTable uniform-row assumption. content-visibility keeps the
+            >100-row paint cheap while letting each row size to its content. */}
+        <div className="table-wrap"
+          style={{ opacity: showingStale ? 0.45 : 1, transition: 'opacity 120ms' }}
+          aria-busy={showingStale}>
+          <table {...dt.tableProps}>
+            {/* leading={[34]} — the primitive owns the <colgroup>; a
+                second one alongside it is invalid markup and the
+                browser silently keeps only the first. */}
+            <DataTableColgroup dt={dt} leading={[34]} />
+            <DataTableHead dt={dt} leading={
+              <th style={{ width: 34, textAlign: 'center' }}>
+                {/* Select-all covers the rows CURRENTLY on screen, not the
+                    whole server-side queue — the list is a capped top
+                    slice, so "all" can only honestly mean what is
+                    visible. */}
+                <input type="checkbox" aria-label="Görünen satırların hepsini seç"
+                  title="Görünen satırların hepsini seç"
+                  checked={allPickedOnScreen}
+                  disabled={(filtered?.length ?? 0) === 0}
+                  ref={el => { if (el) el.indeterminate = selCount > 0 && !allPickedOnScreen; }}
+                  onChange={() => setPicked(prev => {
+                    if (allPickedOnScreen) return new Set();
+                    const next = new Set(prev);
+                    for (const r of (filtered ?? [])) next.add(r.id);
+                    return next;
+                  })} />
+              </th>
+            } />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} leading={[34]} {...inboxState} /> : dt.sortedRows.map((it, i) => {
+                const rp = dt.rowProps(i);
+                const spread = spreadOf(it.exception); // v0.10.949
+                return (
+                <tr key={it.id}
+                  {...rp}
+                  {...rowActivation(() => openDrawer(it))}
+                  onMouseEnter={() => dt.nav.setSelected(i)}
+                  className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
+                  <td style={{ textAlign: 'center' }}
+                    onClick={e => { e.stopPropagation(); }}>
+                    {/* stopPropagation: the row itself opens the triage
+                        drawer, and ticking a box must not also navigate. */}
+                    <input type="checkbox" checked={picked.has(it.id)}
+                      aria-label={`Seç: ${it.title}`}
+                      onChange={() => toggleRow(it.id)} />
+                  </td>
+                  <td>
+                    <PriorityBadge p={it.priority} reason={it.priorityReason} />
+                  </td>
+                  <td className="cell-faint" title={it.displayId}>
+                    {it.source}
+                    {/* v0.10.706 — kategori rozeti kaynağın altında (sütun eklenmedi). */}
+                    {it.category && <div className="mono" style={{ fontSize: 9, letterSpacing: 0.3 }}>{it.category}</div>}
+                  </td>
+                  <td>
+                    {/* v0.9.860 (UX denetimi K1) — satırın kendi olay
+                        penceresi taşınır; aksi hâlde servis sayfası
+                        "şimdi" açılır ve olay görünmez. */}
+                    <SubjectLink service={it.service} subjectKind={it.subjectKind}
+                      href={serviceHref(it.service, { range: inboxItemWindow(it) })}
+                      onClick={e => e.stopPropagation()}
+                      style={{ fontWeight: 600 }}
+                      emptyFallback={<span style={{ color: 'var(--text3)' }}>(none)</span>} />
+                    {/* v0.10.949 — aynı exception aynı anda N serviste: tek
+                        satır nokta+metin, soluk (T9: renk yalnız sapan
+                        değerde; T11: ortakların tam listesi ipucunda). */}
+                    {spread && (
+                      <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, spreadWin)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                        <span className="dot" aria-hidden="true"
+                          style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
+                        {spread.n} servis
+                      </div>
+                    )}
+                    {(it.ownerTeam || it.sreTeam) && (
+                      <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {it.ownerTeam && (
+                          <Chip size="xs" active={ownerFilter === it.ownerTeam}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setOwnerFilter(ownerFilter === it.ownerTeam ? '' : (it.ownerTeam ?? ''));
+                            }}
+                            title={teamChipTitle(it, ownerFilter === it.ownerTeam
+                              ? `Clear owner filter`
+                              : `Filter inbox to owner ${it.ownerTeam}`)}>
+                            <Users size={11} strokeWidth={1.75} /> {it.teamsVia ? '≈ ' : ''}{it.ownerTeam}
+                          </Chip>
                         )}
-                        {it.recentDeploy && (
-                          <span className="badge b-warn"
-                            title={`${it.recentDeploy.service} ${it.recentDeploy.version} — ${tsLong(it.recentDeploy.timeUnixNs)}`}>
-                            ⟳ deploy {it.recentDeploy.version}
-                          </span>
+                        {it.sreTeam && (
+                          <Chip size="xs" active={sreFilter === it.sreTeam}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSreFilter(sreFilter === it.sreTeam ? '' : (it.sreTeam ?? ''));
+                            }}
+                            title={teamChipTitle(it, sreFilter === it.sreTeam
+                              ? `Clear SRE filter`
+                              : `Filter inbox to SRE ${it.sreTeam}`)}>
+                            <Shield size={11} strokeWidth={1.75} /> {it.teamsVia ? '≈ ' : ''}{it.sreTeam}
+                          </Chip>
                         )}
                       </div>
-                      <DetailLine it={it} />
-                      <AISummaryLine it={it} />
-                    </td>
-                    <td className="num">
-                      {it.exception
-                        ? it.exception.occurrences.toLocaleString()
-                        : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </td>
-                    {/* v0.10.736 (operatör: "tarih fontu biraz daha büyük olabilir")
-                        — 11 → 13 px (--fs-md), sınıfta; yaş satırı 11 px kalır. */}
-                    <td className="mono ib-when">
-                      {it.startedAt
-                        ? <>
-                            {tsLong(it.startedAt)}
-                            {/* Age belongs to first-seen: "how long has this
-                                been going on" is read off the start, not the
-                                last hit. */}
-                            <div className="ib-when__ago">
-                              {fmtAgoNs(it.startedAt)}
-                            </div>
-                          </>
-                        : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </td>
-                    <td className="mono ib-when">
-                      {/* v0.9.333 — yaş ve ilk-görülme artık kendi kolonunda.
-                          v0.9.255'te ikisi bu hücreye sıkıştırılmıştı ve ilk
-                          görülme yalnız iki damga FARKLIYSA çiziliyordu: yani
-                          exception satırlarında çoğu zaman hiç görünmüyordu ve
-                          hiçbir zaman sıralanamıyordu. */}
-                      {tsLong(it.lastSeen)}
-                    </td>
-                    <td>
-                      {it.assignee
-                        ? <AssigneePill v={it.assignee} />
-                        : <span style={{ color: 'var(--text3)' }}>—</span>}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600 }}>{it.title}</span>
+                      {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama
+                          hiç çizilmiyordu: "all" pivotunda çözülmüş bir satır
+                          yenisiyle birebir aynı görünüyordu. */}
+                      <StatusBadge s={it.status} />
+                      {/* Bunlar backend'in ZATEN hesaplayıp attığı iki bilgi
+                          (v0.9.255). Operatörün bir satırda ilk aradığı şeyler:
+                          "runbook var mı" ve "az önce deploy oldu mu". */}
+                      {it.runbookUrl && (
+                        // v0.10.922 (sade palet adım 1) — üst veri: nötr.
+                        <a href={it.runbookUrl} target="_blank" rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="badge b-gray" title="Runbook aç">📕 runbook</a>
+                      )}
+                      {it.recentDeploy && (
+                        <span className="badge b-warn"
+                          title={`${it.recentDeploy.service} ${it.recentDeploy.version} — ${tsLong(it.recentDeploy.timeUnixNs)}`}>
+                          ⟳ deploy {it.recentDeploy.version}
+                        </span>
+                      )}
+                    </div>
+                    <DetailLine it={it} />
+                    <AISummaryLine it={it} />
+                  </td>
+                  <td className="num">
+                    {it.exception
+                      ? it.exception.occurrences.toLocaleString()
+                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                  </td>
+                  {/* v0.10.736 (operatör: "tarih fontu biraz daha büyük olabilir")
+                      — 11 → 13 px (--fs-md), sınıfta; yaş satırı 11 px kalır. */}
+                  <td className="mono ib-when">
+                    {it.startedAt
+                      ? <>
+                          {tsLong(it.startedAt)}
+                          {/* Age belongs to first-seen: "how long has this
+                              been going on" is read off the start, not the
+                              last hit. */}
+                          <div className="ib-when__ago">
+                            {fmtAgoNs(it.startedAt)}
+                          </div>
+                        </>
+                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                  </td>
+                  <td className="mono ib-when">
+                    {/* v0.9.333 — yaş ve ilk-görülme artık kendi kolonunda.
+                        v0.9.255'te ikisi bu hücreye sıkıştırılmıştı ve ilk
+                        görülme yalnız iki damga FARKLIYSA çiziliyordu: yani
+                        exception satırlarında çoğu zaman hiç görünmüyordu ve
+                        hiçbir zaman sıralanamıyordu. */}
+                    {tsLong(it.lastSeen)}
+                  </td>
+                  <td>
+                    {it.assignee
+                      ? <AssigneePill v={it.assignee} />
+                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                  </td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {/* ── Alert rules (firing thresholds + SLO burn) ───────────
             v0.9.837 (operatör): bölüm Exceptions sayfasından buraya

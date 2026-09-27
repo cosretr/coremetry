@@ -78,6 +78,11 @@ export function OpsCard({ service, range, operations }: {
           </Link>
         </span>
       </div>
+      {/* v0.10.967 — dtNoState: durum satırı yok — operasyonlar sayfanın bundle
+          okumasından prop olarak gelir; bundle hatası da [] verir (Service.tsx),
+          kart okumanın başarılı olup olmadığını bilmez → "boş" satırı hata anında
+          yalan olurdu. Yükleniyor / hata sayfa düzeyinde; state ancak Service →
+          ServiceOverview → OpsCard zinciri geçirince (P6) tabloya girer. */}
       <div style={{ overflowX: 'auto' }}>
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />

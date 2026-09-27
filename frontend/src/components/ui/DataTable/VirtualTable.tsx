@@ -64,6 +64,9 @@ export interface VirtualTableProps<T> {
   // VARKEN çizilmez (bayat satırlar tazelenirken yerinde kalır). Eski
   // İngilizce 'No rows.' `vt-empty` hücresi + `emptyMessage` SİLİNDİ
   // (uyum katmanı yok; mesaj `state.message`).
+  // v0.10.967 (dilim 5, P-1) — `state.detail` (+ `state.detailKey`) da
+  // buradan geçer (CTA / Link satırın içinde); `colSpan` (P-2) geçilemez,
+  // dt'yi VirtualTable verir.
   state?: Omit<DataTableStateProps<T>, 'dt' | 'leading' | 'trailing'>;
 }
 

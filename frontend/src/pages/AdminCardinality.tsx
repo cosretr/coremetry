@@ -330,6 +330,9 @@ function FinOpsPanel({ services }: {
         </span>
       </Row>
 
+      {/* v0.10.967 — dtNoState: durum satırı yok — katkı tablosu yalnız satır ve
+          span başına bayt varken çizilir (kendini gizleme, tarif §2); raporun
+          yükleniyor / hatası sayfada, systemStats beklemesi kartın erken dönüşünde. */}
       {top.length > 0 && bytesPerSpan > 0 && (
         <div>
           <div style={{

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { Button } from '@/components/ui';
+import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 
 // ZoomChannel mirrors the backend ZoomChannel struct.
 interface ZoomChannelRow {
@@ -36,6 +37,8 @@ export function ZoomChannelPicker({
   const [err, setErr] = useState<string | null>(null);
   const [rows, setRows] = useState<ZoomChannelRow[] | null>(null);
   const [search, setSearch] = useState('');
+  // v0.10.967 — "Filtreleri temizle" kendini kaldırınca odak arama kutusuna döner.
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const canFetch = (
     // For an unsaved channel we need all three credential fields
@@ -103,6 +106,24 @@ export function ZoomChannelPicker({
     );
   });
 
+  // v0.10.967 — tablo standardı dilim 5 (P-2, recipe P7): tablonun ÜSTÜNDEKİ
+  // "Loading channels…" satırı, kırmızı hata kutusu ve boş cümle tablonun
+  // İÇİNE indi; arama kutusu yerinde. Satırlar kazanır: Refresh sürerken
+  // eldeki satırlar kalır (üstteki "Loading channels…" satırı yalnız o
+  // zaman), satır varken gelen hata ÜSTTE şerit olarak kalır — sunucu
+  // kesilmiş listede kısmi kanalları hatayla BİRLİKTE döner, ya da düşen
+  // Refresh eski listeyi bırakır; iki hâlde de hata görünür, sessiz bayat
+  // satır yok. Eskiden aramanın hepsini elediği liste boş bir gövdeydi:
+  // artık "Eşleşme yok" + "Filtreleri temizle" (arama kutusunu boşaltır).
+  const hasRows = (rows?.length ?? 0) > 0;
+  const showRows = filtered.length > 0;
+  const listState: Omit<DataTableStateStaticProps, 'colSpan'> =
+    busy ? { kind: 'loading', message: 'Kanallar yükleniyor' }
+    : err && !hasRows ? { kind: 'error', message: `Zoom kanalları okunamadı: ${err}` }
+    : rows === null ? { kind: 'loading', message: 'Kanallar yükleniyor' }
+    : rows.length === 0 ? { kind: 'empty', message: 'Bu S2S uygulamasına görünen kanal yok — kanalın burada görünmesi için bot kullanıcısının o kanala üye olması gerekir.' }
+    : { kind: 'no-match', onClearFilters: () => setSearch(''), returnFocusRef: searchRef };
+
   const channelType = (t?: number) =>
     t === 1 ? 'DM'
     : t === 2 ? 'Group'
@@ -153,13 +174,13 @@ export function ZoomChannelPicker({
               </span>
             </div>
 
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Filter by name, ID, or JID…"
               autoFocus
               style={{ marginBottom: 10, fontSize: 13 }} />
 
-            {busy && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading channels…</div>}
-            {err && (
+            {busy && showRows && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading channels…</div>}
+            {err && hasRows && (
               <div style={{
                 fontSize: 11, color: 'var(--err)', padding: '6px 8px',
                 borderRadius: 4, marginBottom: 8,
@@ -178,18 +199,8 @@ export function ZoomChannelPicker({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows && rows.length === 0 && !busy && !err ? (
-                    // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
-                    // Yalnız boş hâl tabloya indi (koşul aynen); yükleniyor
-                    // satırı ve hata kutusu P-2'yi bekliyor.
-                    <tr data-dt-state="empty">
-                      <td colSpan={3} className="dt-state">
-                        <div className="dt-state-body">
-                          <span>Bu S2S uygulamasına görünen kanal yok — kanalın burada görünmesi için bot kullanıcısının o kanala üye olması gerekir.</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : filtered.map(r => (
+                  {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 3 <th>. */}
+                  {!showRows ? <DataTableState colSpan={3} {...listState} /> : filtered.map(r => (
                     <tr key={r.id || r.jid}
                       {...rowActivation(() => { onPick(r.jid); setOpen(false); })}
                       className={filtered.length > 100 ? 'cv-row' : undefined}>

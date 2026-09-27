@@ -7,7 +7,7 @@ import { Sparkline } from '@/components/Sparkline';
 import { Button, Drawer, DrawerSection } from '@/components/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { useAlertRules, useWatchersSummary, useWatcherHistory, useEnableAlertRule, useDisableAlertRule, useUpdateAlertRule } from '@/lib/queries';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { AlertRule, WatcherSummaryEntry } from '@/lib/types';
 import { fmtAgoNs, fmtDurShort, tsLong } from '@/lib/utils';
@@ -116,6 +116,23 @@ export default function WatchersPage() {
   const selected = selectedId ? rows?.find(r => r.id === selectedId) : undefined;
   const failed = rulesQ.isError;
 
+  // v0.10.967 — tablo standardı dilim 5 (T12 + P-1): yükleniyor / hata /
+  // boş tablonun İÇİNDE, başlık durur. Sıra eskisiyle aynı (hata boş
+  // filodan önce: v0.9.196 review-fix "hata boş-filo gibi sunulmaz").
+  // Yenileme düşüp önbellek eski satırları tutuyorsa hata yine görünür:
+  // showRows hatada bayat satırları gizler (Alerts aynı sorguda aynısını
+  // yapar). "⤓ Import ES watcher" CTA'sı boş satırın detail yuvasında (P-1).
+  const showRows = !failed && !!rows && rows.length > 0;
+  const tableState: Omit<DataTableStateProps<WatcherRow>, 'dt'> =
+    failed ? { kind: 'error' }
+    : rows === undefined ? { kind: 'loading' }
+    : {
+        kind: 'empty',
+        message: 'Henüz watcher yok — Elasticsearch Watcher tanımlarını (PUT _watcher/watch gövdesinin aynısı) içe aktar; '
+          + 'Coremetry onları kendi zamanlamalarıyla değerlendirir, fire\'lar Problem açar ve bildirim kanallarından yönlenir.',
+        detail: canEdit && <Button variant="primary" onClick={() => setShowImport(true)}>⤓ Import ES watcher</Button>,
+      };
+
   return (
     <>
       <Topbar title="Watchers" />
@@ -140,92 +157,77 @@ export default function WatchersPage() {
             onImported={() => rulesQ.refetch()} />
         )}
 
-        {rows === undefined && !failed && <Spinner />}
-        {failed && <Empty icon="⚠" title="Failed to load watchers" />}
-        {/* v0.9.196 review-fix: yükleme HATASINDA "No watchers yet" +
-            Import CTA'sı basılmaz — hata boş-filo gibi sunulmaz. */}
-        {rows && rows.length === 0 && !failed && (
-          <Empty icon="👁" title="No watchers yet"
-            action={canEdit
-              ? <Button variant="primary" onClick={() => setShowImport(true)}>⤓ Import ES watcher</Button>
-              : undefined}>
-            Import your Elasticsearch Watcher definitions (the exact PUT _watcher/watch
-            body) and Coremetry evaluates them on their own schedule — fires open
-            Problems and route through the notification channels.
-          </Empty>
-        )}
-        {rows && rows.length > 0 && (
-          <div className="table-wrap">
-            {/* v0.9.196 review-fix: summary rollup hatası sessiz sıfır-dolgu
-                olarak sunulmaz — sütunların güvenilmez olduğu söylenir. */}
-            {summaryQ.isError && (
-              <div style={{
-                padding: '6px 10px', marginBottom: 8, fontSize: 12,
-                color: 'var(--warn)', border: '1px solid var(--warn)',
-                borderRadius: 6, background: 'color-mix(in srgb, var(--warn) 8%, transparent)',
-              }}>
-                ⚠ Summary rollup unavailable — "Last fire" / "Fires (24h)" columns may be stale or empty.
-              </div>
-            )}
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map((r, i) => {
-                  // v0.10.945 — cv-row rowProps sınıfıyla BİRLEŞİR (row-selected ezilmesin);
-                  // talimat ipucu (satır title) kalktı: el imleci + hover satırın işareti (T7).
-                  const rp = dt.rowProps(i);
-                  return (
-                    <tr key={r.id} {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
-                      {...rowActivation(() => openWatcher(r.id))}>
-                      <td><b>{r.name}</b></td>
-                      <td className="mono" title={r.watcherJson ? 'Imported ES watch — condition projected from the stored definition' : undefined}>
-                        hits.total {r.comparator} {r.threshold}
-                      </td>
-                      <td>{fmtDurShort(r.windowSec)}</td>
-                      <td>
-                        {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu, sağlık değil: ON nötr. */}
-                        {r.enabled
-                          ? <span className="badge b-gray">ON</span>
-                          : <span className="badge b-gray"
-                              title={r.disabledReason || 'Disabled by operator'}>OFF</span>}
-                        {canEdit && (
-                          <Button variant="secondary" size="sm"
-                            style={{ marginLeft: 6 }}
-                            onClick={e => {
-                              e.stopPropagation(); // satır tıklaması drawer açmasın
-                              (r.enabled ? disableRule : enableRule).mutate(r.id);
-                            }}>
-                            {r.enabled ? 'Disable' : 'Enable'}
-                          </Button>
+        <div className="table-wrap">
+          {/* v0.9.196 review-fix: summary rollup hatası sessiz sıfır-dolgu
+              olarak sunulmaz — sütunların güvenilmez olduğu söylenir.
+              v0.10.967 — yalnız satırlar çizilirken (eski koşul: tablo dalı). */}
+          {showRows && summaryQ.isError && (
+            <div style={{
+              padding: '6px 10px', marginBottom: 8, fontSize: 12,
+              color: 'var(--warn)', border: '1px solid var(--warn)',
+              borderRadius: 6, background: 'color-mix(in srgb, var(--warn) 8%, transparent)',
+            }}>
+              ⚠ Summary rollup unavailable — "Last fire" / "Fires (24h)" columns may be stale or empty.
+            </div>
+          )}
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {!showRows ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
+                // v0.10.945 — cv-row rowProps sınıfıyla BİRLEŞİR (row-selected ezilmesin);
+                // talimat ipucu (satır title) kalktı: el imleci + hover satırın işareti (T7).
+                const rp = dt.rowProps(i);
+                return (
+                  <tr key={r.id} {...rp} className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}
+                    {...rowActivation(() => openWatcher(r.id))}>
+                    <td><b>{r.name}</b></td>
+                    <td className="mono" title={r.watcherJson ? 'Imported ES watch — condition projected from the stored definition' : undefined}>
+                      hits.total {r.comparator} {r.threshold}
+                    </td>
+                    <td>{fmtDurShort(r.windowSec)}</td>
+                    <td>
+                      {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu, sağlık değil: ON nötr. */}
+                      {r.enabled
+                        ? <span className="badge b-gray">ON</span>
+                        : <span className="badge b-gray"
+                            title={r.disabledReason || 'Disabled by operator'}>OFF</span>}
+                      {canEdit && (
+                        <Button variant="secondary" size="sm"
+                          style={{ marginLeft: 6 }}
+                          onClick={e => {
+                            e.stopPropagation(); // satır tıklaması drawer açmasın
+                            (r.enabled ? disableRule : enableRule).mutate(r.id);
+                          }}>
+                          {r.enabled ? 'Disable' : 'Enable'}
+                        </Button>
+                      )}
+                    </td>
+                    <td title={r.lastFire ? tsLong(r.lastFire) : undefined}>
+                      {r.lastFire ? fmtAgoNs(r.lastFire) : <span style={{ color: 'var(--text3)' }}>—</span>}
+                      {/* v0.10.929 (K5) — ton tek durum sözlüğünden: open → nötr (kırmızı değil). */}
+                      {r.openNow && <TriageStatusBadge s="open" label="OPEN" style={{ marginLeft: 6 }} />}
+                    </td>
+                    <td className="num">
+                      {/* M4 — sayı yerine saat-bazlı dağılım: 24 slotluk
+                          mini-bar (mode='count') + toplam. Rollup'ı
+                          olmayan / hiç fire etmemiş satır sayıya düşer. */}
+                      <span style={{ display: 'inline-flex', alignItems: 'center',
+                                     gap: 8, justifyContent: 'flex-end' }}>
+                        {r.firesHourly?.some(v => v > 0) && (
+                          <Sparkline mode="count" values={r.firesHourly}
+                            width={64} height={16} color="var(--purple)"
+                            title={`Fires per hour — last 24h (oldest → newest), total ${r.fires24h}`} />
                         )}
-                      </td>
-                      <td title={r.lastFire ? tsLong(r.lastFire) : undefined}>
-                        {r.lastFire ? fmtAgoNs(r.lastFire) : <span style={{ color: 'var(--text3)' }}>—</span>}
-                        {/* v0.10.929 (K5) — ton tek durum sözlüğünden: open → nötr (kırmızı değil). */}
-                        {r.openNow && <TriageStatusBadge s="open" label="OPEN" style={{ marginLeft: 6 }} />}
-                      </td>
-                      <td className="num">
-                        {/* M4 — sayı yerine saat-bazlı dağılım: 24 slotluk
-                            mini-bar (mode='count') + toplam. Rollup'ı
-                            olmayan / hiç fire etmemiş satır sayıya düşer. */}
-                        <span style={{ display: 'inline-flex', alignItems: 'center',
-                                       gap: 8, justifyContent: 'flex-end' }}>
-                          {r.firesHourly?.some(v => v > 0) && (
-                            <Sparkline mode="count" values={r.firesHourly}
-                              width={64} height={16} color="var(--purple)"
-                              title={`Fires per hour — last 24h (oldest → newest), total ${r.fires24h}`} />
-                          )}
-                          {r.fires24h > 0 ? r.fires24h : <span style={{ color: 'var(--text3)' }}>0</span>}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        {r.fires24h > 0 ? r.fires24h : <span style={{ color: 'var(--text3)' }}>0</span>}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {selected && (
           <WatcherHistoryDrawer watcher={selected} onClose={() => openWatcher(null)} />

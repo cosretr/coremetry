@@ -16,7 +16,8 @@ describe('log-search slice 1 review fixes (v0.10.420)', () => {
     expect(src).toContain('data && loadedRows.length === 0 && (live || !staticQ.data?.degraded)');
   });
   it('canlı kuyruk bekleme boş durumu', () => {
-    expect(src).toContain('title="Canlı kuyruk açık — yeni satır bekleniyor"');
+    // v0.10.967 — tablo standardı T12: boş durum tablonun içinde (logsState).
+    expect(src).toContain("message: 'Canlı kuyruk açık — yeni satır bekleniyor.");
   });
   it('statik sorgu canlıyken kapalı', () => {
     expect(src).toContain('{ enabled: !live }');

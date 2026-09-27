@@ -25,8 +25,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { Topbar } from '@/components/Topbar';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { IconSearch } from '@/components/icons';
-import { Spinner, Empty } from '@/components/Spinner';
-import { TableSkeleton } from '@/components/Skeleton';
+import { Spinner } from '@/components/Spinner';
 import { OperationPicker } from '@/components/OperationPicker';
 import { ServicePicker } from '@/components/ServicePicker';
 import { FilterQueryBox } from '@/components/FilterQueryBox';
@@ -38,8 +37,8 @@ import { Pager } from '@/components/Pager';
 import { ColumnManager } from '@/components/ColumnManager';
 import { stepForPoints, barPanelMaxDataPoints } from '@/lib/chartStep';
 import { VirtualTable, ROW_H } from '@/components/ui/DataTable';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
-import type { DataTable } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
+import type { DataTable, DataTableStateProps, VirtualTableProps } from '@/components/ui/DataTable';
 import { stickyLeftOffsets, formatSortParam, type DataTableColumn } from '@/lib/dataTable';
 import { type AggSort, toAggSort, decodeLegacyAggSort } from './traces/aggSort';
 import { parseRootOnlyParam, rootOnlyUrlValue, shouldDropRootOnly } from './traces/rootOnlyFallback';
@@ -84,7 +83,6 @@ import { LatencyScatter } from '@/components/traces/LatencyScatter';
 import { ShapesView } from '@/components/traces/ShapesView';
 import { SvcBadge, DurationBar, fmtDur } from '@/components/traces/shared';
 import { PageControls } from '@/components/ui/PageControls';
-import { QueryError } from '@/components/QueryError';
 import { PageShell } from '@/components/ui/PageShell';
 import { useEntityEnabled, useTraceRootDef } from '@/lib/queries';
 import { isTraceK8sCol, withK8sColumns, canAddK8sColumns } from '@/lib/traceK8sLinks';
@@ -1111,6 +1109,76 @@ function TracesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dt.sort.id, dt.sort.dir]);
 
+  // v0.10.967 — tablo standardı T12 (dilim 5, P-1): liste ve toplu görünüm
+  // tablolarının yükleniyor / hata / boş hâlleri tablonun İÇİNDE, başlık
+  // kalır. Koşullar ve sıra eskisiyle aynı: `data`/`agg` undefined yalnız
+  // İLK yüklemede (yenilemede satırlar solgun kalır), hata anında ikisi de
+  // null'a iner (bayat satır hatanın üstünde kalmaz). Eski kutuların
+  // CTA'ları `detail` yuvasında: sunucu metni, "↻ Retry" (aynı nonce),
+  // TracesEmptyDetail teşhisleri (Aggregate düğmesi, system stats ve teşhis
+  // linkleri), anahtar önerisi düğmesi. Boş liste "eşleşme yok" DEĞİL:
+  // süzgeçsiz evrenin dolu olduğunu bilmiyoruz; ayrımı teşhis satırı yapar.
+  const retry = () => setRetryNonce(n => n + 1);
+  const listState: NonNullable<VirtualTableProps<TraceRow>['state']> =
+    data === undefined ? { kind: 'loading', skeletonRows: 10 }
+    : data === null || listErr ? {
+      kind: 'error',
+      message: 'Trace sorgusu hata verdi ya da zaman aşımına uğradı — daha dar bir zaman aralığı deneyip yeniden dene.',
+      onRetry: retry,
+      detail: serverErrorText(listErr),
+    }
+    : {
+      kind: 'empty',
+      message: data.narrowedFromNs ? 'Kısaltılmış pencerede trace yok' : 'Trace bulunamadı',
+      detail: (
+        <TracesEmptyDetail service={filter.service} search={filter.search} traceId={filter.traceId} range={range} onSwitchView={() => setView('aggregate')}
+          explainHref={explainHref ?? undefined}
+          matchingSpans={data?.emptyDiag?.matchingSpans}
+          matchingCapped={data?.emptyDiag?.matchingCapped}
+          serviceSpans={data?.emptyDiag?.serviceSpans}
+          promotedDiag={data?.emptyDiag}
+          identity={data?.identity}
+          narrowedFromNs={data?.narrowedFromNs} />
+      ),
+    };
+  const aggState: Omit<DataTableStateProps<AggregateRow>, 'dt'> =
+    agg === undefined ? {
+      kind: 'loading',
+      message: "Trace'ler trace_id'ye göre toplanıyor — pencere ≥5 dk ise trace_summary MV'den, değilse ham span'lerden okunur",
+    }
+    : agg === null ? {
+      kind: 'error',
+      message: 'Toplu sorgu hata verdi ya da zaman aşımına uğradı — daha dar bir zaman aralığı ya da daha az grup deneyip yeniden dene.',
+      onRetry: retry,
+      detail: serverErrorText(aggErr),
+    }
+    : attrSuggestion ? {
+      kind: 'empty',
+      message: 'Bu pencerede grup yok',
+      detail: (
+        <>
+          {/* v0.9.637 — yanlış yazılmış anahtar SESSİZCE boş tablo
+              veriyordu: "bu attribute yok" ile "yazımı yanlış" ayırt
+              edilemiyordu. Sorgu harf DUYARLI kalıyor (bilinçli, bkz.
+              lib/attrKeySuggest.ts); açıklanan yalnız boşluk. */}
+          <b>{groupAttr}</b> bu pencerede hiçbir span'de yok.{' '}
+          {attrSuggestion.reason === 'case'
+            ? 'Yalnız harf düzeni farklı olan bir anahtar var:'
+            : 'Şuna benzer bir anahtar var:'}{' '}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setGroupAttr(attrSuggestion.key)}
+          >{attrSuggestion.key}</Button>
+          {' '}— attribute anahtarları harf duyarlıdır.
+        </>
+      ),
+    }
+    : {
+      kind: 'empty',
+      message: 'Bu pencerede grup yok — toplu görünüm gruplayacak en az bir trace ister; eşleşen satır olduğunu Traces sekmesinde doğrula ya da zaman aralığını genişlet.',
+    };
+
   return (
     <>
       {/* v0.9.430 — Topbar seçimi out-of-band: hook yığını kendisi
@@ -1432,31 +1500,17 @@ function TracesPageInner() {
               suggestedValues={FILTER_SUGGESTED_VALUES} />
           )}
 
-        {view === 'list' && data === undefined && <TableSkeleton rows={10} cols={7} />}
-        {view === 'list' && listErr && (
-          <Empty icon="⚠" title="Query failed">
-            <p>The trace query errored or timed out. Try a narrower time range, then retry.</p>
-            <p className="mono" style={{ fontSize: 12, color: 'var(--text2)', wordBreak: 'break-word', margin: '8px 0' }}>{listErr}</p>
-            <Button variant="secondary" size="sm" onClick={() => setRetryNonce(n => n + 1)}>↻ Retry</Button>
-          </Empty>
-        )}
-        {view === 'list' && !listErr && data && traces.length === 0 && (
-          <TracesEmpty service={filter.service} search={filter.search} traceId={filter.traceId} range={range} onSwitchView={() => setView('aggregate')}
-            explainHref={explainHref ?? undefined}
-            matchingSpans={data?.emptyDiag?.matchingSpans}
-            matchingCapped={data?.emptyDiag?.matchingCapped}
-            serviceSpans={data?.emptyDiag?.serviceSpans}
-            promotedDiag={data?.emptyDiag}
-            identity={data?.identity}
-            narrowedFromNs={data?.narrowedFromNs} />
-        )}
-        {view === 'list' && data && traces.length > 0 && (
+        {/* v0.10.967 — tablo standardı T12 (dilim 5): liste görünümünde tablo
+            (başlık + sütun araç çubuğu) HER durumda; iskelet / hata / boş
+            teşhis satırı tablonun içinde (listState). Terfi bandı, Pager ve
+            sayı etiketleri eskisi gibi yalnız satır varken. */}
+        {view === 'list' && (
           <div style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
             aria-busy={refreshing}>
             {/* v0.10.339 — Operator-reported: terfi kolonu uyuşmazlığı. Bu
                 satırlar dizi yolundan geldi (sunucu kolonun yalan söylediğini
                 ölçtü ve haritayı askıya aldı); host = onarım hedefi. */}
-            {data.emptyDiag?.promotedFallback && (
+            {data && traces.length > 0 && data.emptyDiag?.promotedFallback && (
               <div style={{ marginBottom: 6, padding: '6px 10px', fontSize: 11.5, border: '1px solid var(--border)', borderLeft: '3px solid var(--warn)', borderRadius: 6, background: 'var(--bg2)', color: 'var(--text2)' }}>
                 <b>Terfi kolonu uyuşmazlığı:</b> {(data.emptyDiag.promotedKeys ?? []).join(', ')} filtresi kolon yolunda 0 span buldu, dizi yolunda{' '}
                 {(data.emptyDiag.promotedHosts ?? []).map(h => `${h.host}: ${h.arr.toLocaleString()}`).join(' · ')}. Liste dizi yoluyla cevaplandı (doğru, yavaş); sunucu haritayı askıya aldı — ilgili replikada kolon şemasını / takılı mutasyonu kontrol et.
@@ -1530,6 +1584,7 @@ function TracesPageInner() {
                 değişince liste başa gelir (scrollResetKey). */}
             <VirtualTable<TraceRow>
               dt={dt}
+              state={listState}
               height="auto"
               scrollResetKey={`${page}|${sort}|${order}`}
               rowHeight={ROW_H}
@@ -1590,165 +1645,133 @@ function TracesPageInner() {
                 yaşıyor ve tavanlı olduğunda "+" ile öyle olduğunu söylüyor;
                 gezinme hasMore + lastReachablePage üzerinde. Artık bu bir
                 yorum değil, tipin kendisi: 'skip' `total`ı YASAKLIYOR. */}
-            <Pager mode="offset" count="skip"
-              page={page} pageSize={50} hasMore={hasMore} onPage={setPage}
-              lastReachablePage={lastReachablePage(countRes?.value, countRes?.atLeast ?? false, 50)}
-              onEnd={() => {
-                // v0.10.711 — kesin son sayfa sunulamıyorsa (sayım 10.000+
-                // tavanlı ya da 6.000 id bütçesi ötesinde) listenin sonu =
-                // ters sıranın ilk sayfası. Sıra DataTable üzerinden de
-                // çevriliyor ki başlık okları ve `s_traces-list` senkron kalsın.
+            {data && traces.length > 0 && (
+              <Pager mode="offset" count="skip"
+                page={page} pageSize={50} hasMore={hasMore} onPage={setPage}
+                lastReachablePage={lastReachablePage(countRes?.value, countRes?.atLeast ?? false, 50)}
+                onEnd={() => {
+                  // v0.10.711 — kesin son sayfa sunulamıyorsa (sayım 10.000+
+                  // tavanlı ya da 6.000 id bütçesi ötesinde) listenin sonu =
+                  // ters sıranın ilk sayfası. Sıra DataTable üzerinden de
+                  // çevriliyor ki başlık okları ve `s_traces-list` senkron kalsın.
+                  //
+                  // v0.10.827 (operatör-bildirimli: "Last'a basınca gösterge
+                  // hâlâ 1 diyor") — hedef sıra artık SAF ve tip düzeyinde
+                  // SortColumn (lib/traceReach.ts reverseEndSort). Öncesinde
+                  // `dt.sort.id ?? 'startTime'` yazılıyordu ve 'startTime' bir
+                  // kolon kimliği DEĞİL: aşağıdaki sunucu-sırası efekti onu
+                  // SERVER_SORTABLE'da bulamayıp sessizce dönüyor, `order` hiç
+                  // değişmiyor, etiket "Page" kalıyordu. Ayrıca `order`/`sort`
+                  // burada DOĞRUDAN yazılıyor — göstergenin okuduğu kaynak
+                  // tıkla aynı turda değişsin, bir efektin erken-dönüşüne
+                  // asılı kalmasın.
+                  const next = reverseEndSort(sort, order);
+                  dt.setSort(next);
+                  setSort(next.id);
+                  setOrder(next.dir);
+                  setPage(0);
+                }}
+                endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}
+                // v0.10.727 (operator-reported) — ters sırada girdideki sayı
+                // SONDAN sayılır; "Page 1" listenin başı sanılıyordu.
+                // v0.10.831 (operator-reported, İKİNCİ kez) — etiket yetmedi:
+                // kutu yine "1" yazıyordu. Ters kipte Pager artık kutuyu hiç
+                // çizmiyor, konumu yazıyor ("Son sayfa" / "Sondan 2.").
                 //
-                // v0.10.827 (operatör-bildirimli: "Last'a basınca gösterge
-                // hâlâ 1 diyor") — hedef sıra artık SAF ve tip düzeyinde
-                // SortColumn (lib/traceReach.ts reverseEndSort). Öncesinde
-                // `dt.sort.id ?? 'startTime'` yazılıyordu ve 'startTime' bir
-                // kolon kimliği DEĞİL: aşağıdaki sunucu-sırası efekti onu
-                // SERVER_SORTABLE'da bulamayıp sessizce dönüyor, `order` hiç
-                // değişmiyor, etiket "Page" kalıyordu. Ayrıca `order`/`sort`
-                // burada DOĞRUDAN yazılıyor — göstergenin okuduğu kaynak
-                // tıkla aynı turda değişsin, bir efektin erken-dönüşüne
-                // asılı kalmasın.
-                const next = reverseEndSort(sort, order);
-                dt.setSort(next);
-                setSort(next.id);
-                setOrder(next.dir);
-                setPage(0);
-              }}
-              endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}
-              // v0.10.727 (operator-reported) — ters sırada girdideki sayı
-              // SONDAN sayılır; "Page 1" listenin başı sanılıyordu.
-              // v0.10.831 (operator-reported, İKİNCİ kez) — etiket yetmedi:
-              // kutu yine "1" yazıyordu. Ters kipte Pager artık kutuyu hiç
-              // çizmiyor, konumu yazıyor ("Son sayfa" / "Sondan 2.").
-              //
-              // Koşul v0.10.727'den DAR: yalnız DOĞAL EKSEN dönünce. Bu
-              // sayfanın doğal sırası zaman/desc; süreye ya da ada göre ARTAN
-              // sıralamanın "sondan N." diye bir anlamı yok. Sadece `order`a
-              // bakmak, operatör Service'e A→Z tıkladığında 1. sayfaya "Son
-              // sayfa" dedirtir ve numara kutusunu kaldırırdı — etiket eklemek
-              // zararsızdı (727), kutuyu KALDIRMAK olurdu (inceleme bulgusu).
-              reverse={order === 'asc' && sort === 'time'}
-              // Metin SIRA-NÖTR: ters kip artan sıralamanın her türünde
-              // (zaman, süre, ad…) geçerli — "en eski önce" yalnız zamana
-              // göre sıralarken doğru olurdu.
-              reverseTitle="Liste ters sıralı (artan sıra): konum SONDAN sayılıyor — 1 = son sayfa, 2 = sondan ikinci. Kesin sayfa NUMARASI gösterilemez çünkü sayım tavanlı (10.000+) ve aşama-1 kimlik bütçesi sınırlı — ⇤ First listenin başına döner."
-              endTitle={order === 'desc'
-                ? 'Listenin sonuna git: sıralama tersine döner (en eski önce), sayfa 1'
-                : 'Listenin başına dön: sıralama yeniden en yeni önce, sayfa 1'}
-              extras={
-                <>
-                  {countRes?.reason && !hasMore ? (
-                    /* v0.10.520 — liste bitti: kesin toplam listenin kendisinden
-                       (sayfa × 50 + bu sayfa); sunucu sayımı gerekmez. */
-                    <span title="Liste son sayfada; toplam listeden kesin.">
-                      {(page * 50 + traces.length).toLocaleString()} total
-                    </span>
-                  ) : countRes?.reason ? (
-                    <span title={traceCountReasonHint(countRes.reason)}>
-                      showing {traces.length}{hasMore ? '+' : ''} · toplam sayılamıyor
-                    </span>
-                  ) : countRes ? (
-                    <span title={countRes.atLeast
-                      ? `Sayım ${countRes.value.toLocaleString()} trace'te durduruldu — gerçek sayı daha büyük.`
-                      : 'Bu pencerede eşleşen trace sayısı.'}>
-                      {countRes.value.toLocaleString()}{countRes.atLeast ? '+' : ''} total
-                    </span>
-                  ) : (
-                    /* v0.10.654 — sayım yolda (otomatik); link yok. */
-                    <span title="Toplam sayılıyor…">showing {traces.length}{hasMore ? '+' : ''}</span>
-                  )}
-                  {/* v0.10.522 (operatör: "steps rows göremedim") — teşhis linki
-                      yalnız boş sonuçta vardı; dolu listede de admin'e (aynı
-                      lastListParams, yeni sekme). */}
-                  {explainHref && (
-                    <>{' · '}<a href={explainHref} target="_blank" rel="noreferrer"
-                      title="Aynı sorgunun teşhisi: seçilen yol, her ClickHouse adımı, süre, satır (yalnız admin)">teşhis</a></>
-                  )}
-                  {' · '}sorted by <b>{sort}</b> {order}
-                  {/* v0.10.124 — MV boşluğu: ham yoldan okundu, dürüstçe söyle. */}
-                  {data?.mvGap && (
-                    <span style={{ marginLeft: 8, color: 'var(--warn, #b8860b)' }}
-                      title="Bu pencerede özet tablo (trace_summary_5m) boş bir güne değiyor — liste ham span'lerden okundu (daha yavaş). Sistem → ClickHouse → tarihçe geri doldurma o günü doldurunca hızlı yola dönülür.">
-                      · MV boşluğu: ham yol
-                    </span>
-                  )}
-                  {/* v0.8.369 — Dynatrace-style honesty hint: non-time
-                      sorts rank within the newest-N slice, not the
-                      whole window. */}
-                  {/* v0.9.297 — the backend could not afford the window
-                      the operator picked and halved it. Loud, not a
-                      footnote: these rows answer a DIFFERENT question. */}
-                  {data?.narrowedFromNs ? (
-                    <span className="badge b-err" style={{ marginLeft: 6 }}
-                      title={'This query ran out of memory or time over the range you selected, so the backend answered over a shorter, more recent window instead of failing.\nThe list below is NOT your full range — narrow the range or add a filter for an answer that covers it.'}>
-                      ⚠ shortened to {tsLong(data.narrowedFromNs)} →
-                    </span>
-                  ) : null}
-                  {/* v0.10.342 — kimlik-önce arama tuttu: liste o trace'ler. */}
-                  {data?.identity?.hits ? (
-                    <span className="badge b-info" style={{ marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}
-                      title={`Arama terimi kimlik olarak eşleşti: ${data.identity.matchedKey ?? '?'} = ${filter.search} · ${data.identity.hits.toLocaleString()} trace${data.identity.bounded ? ' (tavan)' : ''}. Denenen anahtarlar: ${data.identity.keys.join(', ')}`}>
-                      kimlik: {data.identity.matchedKey ?? '?'}{data.identity.traceId ? '' : ` (${data.identity.hits.toLocaleString()})`}
-                      {data.identity.anchorMs ? ` · kimlikteki zaman ${tsLong(data.identity.anchorMs * 1e6)} ±12 s` : ''}
-                      {/* v0.10.753 — ?traceId=: pencere trace zamanına çıpalandı (1 saat varsayılanı değil). */}
-                      {data.identity.traceId && data.identity.windowFromNs ? ` · pencere trace zamanına çıpalandı (${tsLong(data.identity.windowFromNs)} → ${tsLong(data.identity.windowToNs ?? data.identity.windowFromNs)})` : ''}
-                    </span>
-                  ) : null}
-                  {data?.rankedWithinRecent ? (
-                    <span title={sort === 'time'
-                      /* v0.10.265 — servisli + filtreli liste en yeni N trace içinde süzülür.
-                         v0.10.812 — Errors'ta N artık EŞLEŞEN hatalı trace'ler üzerinde (aday = hatalı + çip). */
-                      ? `For speed, the list is ranked within the newest ${data.rankedWithinRecent.toLocaleString()} matching traces${filter.service ? ' of the service' : ' in the window'} — narrow the range to reach older ones.`
-                      : `For speed, ${sort} ranks the newest ${data.rankedWithinRecent.toLocaleString()} traces in the window — an older trace beyond that slice won't appear. Sort by time for the full window.`}
-                      style={{ marginLeft: 6, color: 'var(--text3)' }}>
-                      · ranked within newest {data.rankedWithinRecent.toLocaleString()}
-                    </span>
-                  ) : null}
-                </>
-              } />
+                // Koşul v0.10.727'den DAR: yalnız DOĞAL EKSEN dönünce. Bu
+                // sayfanın doğal sırası zaman/desc; süreye ya da ada göre ARTAN
+                // sıralamanın "sondan N." diye bir anlamı yok. Sadece `order`a
+                // bakmak, operatör Service'e A→Z tıkladığında 1. sayfaya "Son
+                // sayfa" dedirtir ve numara kutusunu kaldırırdı — etiket eklemek
+                // zararsızdı (727), kutuyu KALDIRMAK olurdu (inceleme bulgusu).
+                reverse={order === 'asc' && sort === 'time'}
+                // Metin SIRA-NÖTR: ters kip artan sıralamanın her türünde
+                // (zaman, süre, ad…) geçerli — "en eski önce" yalnız zamana
+                // göre sıralarken doğru olurdu.
+                reverseTitle="Liste ters sıralı (artan sıra): konum SONDAN sayılıyor — 1 = son sayfa, 2 = sondan ikinci. Kesin sayfa NUMARASI gösterilemez çünkü sayım tavanlı (10.000+) ve aşama-1 kimlik bütçesi sınırlı — ⇤ First listenin başına döner."
+                endTitle={order === 'desc'
+                  ? 'Listenin sonuna git: sıralama tersine döner (en eski önce), sayfa 1'
+                  : 'Listenin başına dön: sıralama yeniden en yeni önce, sayfa 1'}
+                extras={
+                  <>
+                    {countRes?.reason && !hasMore ? (
+                      /* v0.10.520 — liste bitti: kesin toplam listenin kendisinden
+                         (sayfa × 50 + bu sayfa); sunucu sayımı gerekmez. */
+                      <span title="Liste son sayfada; toplam listeden kesin.">
+                        {(page * 50 + traces.length).toLocaleString()} total
+                      </span>
+                    ) : countRes?.reason ? (
+                      <span title={traceCountReasonHint(countRes.reason)}>
+                        showing {traces.length}{hasMore ? '+' : ''} · toplam sayılamıyor
+                      </span>
+                    ) : countRes ? (
+                      <span title={countRes.atLeast
+                        ? `Sayım ${countRes.value.toLocaleString()} trace'te durduruldu — gerçek sayı daha büyük.`
+                        : 'Bu pencerede eşleşen trace sayısı.'}>
+                        {countRes.value.toLocaleString()}{countRes.atLeast ? '+' : ''} total
+                      </span>
+                    ) : (
+                      /* v0.10.654 — sayım yolda (otomatik); link yok. */
+                      <span title="Toplam sayılıyor…">showing {traces.length}{hasMore ? '+' : ''}</span>
+                    )}
+                    {/* v0.10.522 (operatör: "steps rows göremedim") — teşhis linki
+                        yalnız boş sonuçta vardı; dolu listede de admin'e (aynı
+                        lastListParams, yeni sekme). */}
+                    {explainHref && (
+                      <>{' · '}<a href={explainHref} target="_blank" rel="noreferrer"
+                        title="Aynı sorgunun teşhisi: seçilen yol, her ClickHouse adımı, süre, satır (yalnız admin)">teşhis</a></>
+                    )}
+                    {' · '}sorted by <b>{sort}</b> {order}
+                    {/* v0.10.124 — MV boşluğu: ham yoldan okundu, dürüstçe söyle. */}
+                    {data?.mvGap && (
+                      <span style={{ marginLeft: 8, color: 'var(--warn, #b8860b)' }}
+                        title="Bu pencerede özet tablo (trace_summary_5m) boş bir güne değiyor — liste ham span'lerden okundu (daha yavaş). Sistem → ClickHouse → tarihçe geri doldurma o günü doldurunca hızlı yola dönülür.">
+                        · MV boşluğu: ham yol
+                      </span>
+                    )}
+                    {/* v0.8.369 — Dynatrace-style honesty hint: non-time
+                        sorts rank within the newest-N slice, not the
+                        whole window. */}
+                    {/* v0.9.297 — the backend could not afford the window
+                        the operator picked and halved it. Loud, not a
+                        footnote: these rows answer a DIFFERENT question. */}
+                    {data?.narrowedFromNs ? (
+                      <span className="badge b-err" style={{ marginLeft: 6 }}
+                        title={'This query ran out of memory or time over the range you selected, so the backend answered over a shorter, more recent window instead of failing.\nThe list below is NOT your full range — narrow the range or add a filter for an answer that covers it.'}>
+                        ⚠ shortened to {tsLong(data.narrowedFromNs)} →
+                      </span>
+                    ) : null}
+                    {/* v0.10.342 — kimlik-önce arama tuttu: liste o trace'ler. */}
+                    {data?.identity?.hits ? (
+                      <span className="badge b-info" style={{ marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}
+                        title={`Arama terimi kimlik olarak eşleşti: ${data.identity.matchedKey ?? '?'} = ${filter.search} · ${data.identity.hits.toLocaleString()} trace${data.identity.bounded ? ' (tavan)' : ''}. Denenen anahtarlar: ${data.identity.keys.join(', ')}`}>
+                        kimlik: {data.identity.matchedKey ?? '?'}{data.identity.traceId ? '' : ` (${data.identity.hits.toLocaleString()})`}
+                        {data.identity.anchorMs ? ` · kimlikteki zaman ${tsLong(data.identity.anchorMs * 1e6)} ±12 s` : ''}
+                        {/* v0.10.753 — ?traceId=: pencere trace zamanına çıpalandı (1 saat varsayılanı değil). */}
+                        {data.identity.traceId && data.identity.windowFromNs ? ` · pencere trace zamanına çıpalandı (${tsLong(data.identity.windowFromNs)} → ${tsLong(data.identity.windowToNs ?? data.identity.windowFromNs)})` : ''}
+                      </span>
+                    ) : null}
+                    {data?.rankedWithinRecent ? (
+                      <span title={sort === 'time'
+                        /* v0.10.265 — servisli + filtreli liste en yeni N trace içinde süzülür.
+                           v0.10.812 — Errors'ta N artık EŞLEŞEN hatalı trace'ler üzerinde (aday = hatalı + çip). */
+                        ? `For speed, the list is ranked within the newest ${data.rankedWithinRecent.toLocaleString()} matching traces${filter.service ? ' of the service' : ' in the window'} — narrow the range to reach older ones.`
+                        : `For speed, ${sort} ranks the newest ${data.rankedWithinRecent.toLocaleString()} traces in the window — an older trace beyond that slice won't appear. Sort by time for the full window.`}
+                        style={{ marginLeft: 6, color: 'var(--text3)' }}>
+                        · ranked within newest {data.rankedWithinRecent.toLocaleString()}
+                      </span>
+                    ) : null}
+                  </>
+                } />
+            )}
           </div>
         )}
 
-        {/* Aggregate view. */}
-        {view === 'aggregate' && agg === undefined && (
-          <Spinner label="Aggregating traces by trace_id…" hint="Reads the trace_summary MV when the window is ≥5min, raw spans otherwise." />
-        )}
-        {view === 'aggregate' && agg && agg.length === 0 && (
-          <Empty icon="∑" title="No groups in this window">
-            <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-              {/* v0.9.637 — yanlış yazılmış anahtar SESSİZCE boş tablo
-                  veriyordu: "bu attribute yok" ile "yazımı yanlış" ayırt
-                  edilemiyordu. Sorgu harf DUYARLI kalıyor (bilinçli, bkz.
-                  lib/attrKeySuggest.ts); açıklanan yalnız boşluk. */}
-              {attrSuggestion ? (
-                <>
-                  <b>{groupAttr}</b> bu pencerede hiçbir span'de yok.{' '}
-                  {attrSuggestion.reason === 'case'
-                    ? 'Yalnız harf düzeni farklı olan bir anahtar var:'
-                    : 'Şuna benzer bir anahtar var:'}{' '}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setGroupAttr(attrSuggestion.key)}
-                  >{attrSuggestion.key}</Button>
-                  {' '}— attribute anahtarları harf duyarlıdır.
-                </>
-              ) : (
-                'The aggregate view needs at least one trace to group. Switch to the Traces tab to confirm there are matching rows, or widen the time range.'
-              )}
-            </div>
-          </Empty>
-        )}
-        {view === 'aggregate' && agg === null && (
-          <QueryError message={aggErr} onRetry={() => setRetryNonce(n => n + 1)}>
-            The aggregate query errored or timed out. Try a narrower time range
-            or fewer groups, then retry.
-          </QueryError>
-        )}
-        {view === 'aggregate' && agg && agg.length > 0 && (
+        {/* Aggregate view. v0.10.967 — tablo HER durumda; yükleniyor / hata /
+            boş (anahtar önerisi düğmesiyle) tablonun içinde (aggState). */}
+        {view === 'aggregate' && (
           <div style={{ opacity: aggRefreshing ? 0.55 : 1, transition: 'opacity 120ms' }} aria-busy={aggRefreshing}>
-          <AggregateTable agg={agg} groupBy={groupBy} dt={aggDt}
+          <AggregateTable agg={agg ?? []} groupBy={groupBy} dt={aggDt} state={aggState}
             onDrill={(a) => {
               if (groupBy === 'service') { setFilter({ ...filter, service: a.groupKey }); setDraft({ ...draft, service: a.groupKey }); }
               else if (groupBy === 'operation') { setFilter({ ...filter, search: a.groupKey, service: a.groupExtra ?? filter.service }); setDraft({ ...draft, search: a.groupKey, service: a.groupExtra ?? draft.service }); }
@@ -1823,13 +1846,16 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { cl
 // DataTableHead'in işi; bırakılsaydı iki başlık anatomisi ve iki ok glifi
 // yan yana yaşardı (bu dalganın kapatmaya çalıştığı şeyin ta kendisi).
 
-function AggregateTable({ agg, groupBy, dt, onDrill }: {
+function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
   agg: AggregateRow[]; groupBy: GroupBy;
   // v0.9.878 — sıralama durumu artık primitifte; sayfa `dt`yi kuruyor
   // (serverSort kipi) ve buraya veriyor. aggSort/aggOrder/onSort propları
   // düştü: üçü de dt.sort ve dt.toggleSort'un kopyasıydı.
   dt: DataTable<AggregateRow>;
   onDrill: (a: AggregateRow) => void;
+  // v0.10.967 — tablo standardı T12 (P6, VirtualTable `state` emsali): grup
+  // yokken tablonun İÇİNDE çizilecek durum (sayfanın aggState'i).
+  state: Omit<DataTableStateProps<AggregateRow>, 'dt'>;
 }) {
   return (
     <>
@@ -1838,7 +1864,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill }: {
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.map(a => {
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...state} /> : dt.sortedRows.map(a => {
               // v0.10.922 (sade palet adım 1) — K5: %0 hata sağlıklı hâl → nötr
               // b-gray (eskiden yeşil b-ok); renk yalnız sapmada (warn/err).
               const errCls = a.errorRate > 5 ? 'b-err' : a.errorRate > 0 ? 'b-warn' : 'b-gray';
@@ -1870,9 +1896,12 @@ function AggregateTable({ agg, groupBy, dt, onDrill }: {
           </tbody>
         </table>
       </div>
-      <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
-        {agg.length} groups · grouped by <b style={{ color: 'var(--accent2)' }}>{groupBy}</b> · sorted by <b>{dt.sort.id ?? 'count'}</b> {dt.sort.dir} · click a row to drill down
-      </div>
+      {/* v0.10.967 — sayı satırı satırlardan türer: yalnız grup varken. */}
+      {agg.length > 0 && (
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
+          {agg.length} groups · grouped by <b style={{ color: 'var(--accent2)' }}>{groupBy}</b> · sorted by <b>{dt.sort.id ?? 'count'}</b> {dt.sort.dir} · click a row to drill down
+        </div>
+      )}
     </>
   );
 }
@@ -1897,9 +1926,28 @@ export default function TracesPage() {
   );
 }
 
-// TracesEmpty — distinguishes "aged out of raw spans (MV still has it)" from
-// "search matched nothing" so the operator gets the right next step.
-function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narrowedFromNs, explainHref, matchingSpans, matchingCapped, serviceSpans, promotedDiag, identity }: {
+// v0.10.967 — liste hatasının sunucu metni (eski "Query failed" kutusunun
+// mono satırı, aynı biçim); durum satırının `detail` yuvasına iner. Metin
+// yoksa hiçbir şey (detail basılmaz). Toplu görünümün QueryError metni de
+// aynı satırla basılır — iki hata tek dil.
+function serverErrorText(msg: string | null) {
+  return msg
+    ? <p className="mono" style={{ fontSize: 12, color: 'var(--text2)', wordBreak: 'break-word', margin: '8px 0' }}>{msg}</p>
+    : null;
+}
+
+// TracesEmptyDetail — distinguishes "aged out of raw spans (MV still has it)"
+// from "search matched nothing" so the operator gets the right next step.
+// v0.10.967 — tablo standardı T12 (dilim 5, P-1): eskiden tablonun YERİNE
+// çizilen bir <Empty> kutusuydu; artık liste tablosunun boş satırının
+// `detail` yuvası. Başlık ("No traces found" / "…shortened window") sayfada
+// Türkçe `message`; teşhis metni, "Switch to Aggregate view" düğmesi,
+// system stats ve teşhis (explain) linkleri AYNEN burada. Yuva yalnız boş
+// satır çizilirken bağlanır, yani MV sayım isteği eskisi gibi yalnız boş
+// sonuçta koşar. Düğmeyi değiştiren her girdi (servis / pencere) listeyi
+// yeniden çekip satırı 'loading'e döndürür — yuva bağlıyken düğme kalkmaz,
+// `detailKey` gerekmez.
+function TracesEmptyDetail({ service, search, traceId = '', range, onSwitchView, narrowedFromNs, explainHref, matchingSpans, matchingCapped, serviceSpans, promotedDiag, identity }: {
   service: string; search: string; range: TimeRange; onSwitchView: () => void;
   // v0.10.753 — ?traceId= ile gelen boş liste: metin kimlik çıpasına göre (emptyReason.ts).
   traceId?: string;
@@ -1937,7 +1985,7 @@ function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narro
   // saf (pages/traces/emptyReason.ts): ham sayım ayırır, yoksa iddia yok.
   const reason = tracesEmptyReason({ narrowed: !!narrowedFromNs, service, search, mvSpans, serviceSpans });
   return (
-    <Empty icon="⋮" title={narrowedFromNs ? 'No traces in the shortened window' : 'No traces found'}>
+    <>
       <div style={{ marginTop: 6, color: 'var(--text2)' }}>
         {reason === 'narrowed' ? (
           <>
@@ -2007,6 +2055,6 @@ function TracesEmpty({ service, search, traceId = '', range, onSwitchView, narro
           </a>
         </div>
       )}
-    </Empty>
+    </>
   );
 }

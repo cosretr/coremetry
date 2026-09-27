@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui';
+import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import type { LDAPDirectoryUser, Role } from '@/lib/types';
 
@@ -15,9 +16,13 @@ export function LDAPUserPicker() {
   const [provisionFor, setProvisionFor] = useState<LDAPDirectoryUser | null>(null);
   const [role, setRole] = useState<Role>('viewer');
   const [provisionMsg, setProvisionMsg] = useState<string | null>(null);
+  // v0.10.967 — sonucun ait olduğu arama metni (kutu sonradan değişebilir):
+  // sıfır sonuç, bir terimle arandıysa "eşleşme yok", boş terimle "dizin boş".
+  const [searched, setSearched] = useState('');
 
   const search = async (e?: FormEvent) => {
     if (e) e.preventDefault();
+    setSearched(q);
     setBusy(true); setError(null); setResults(null);
     try {
       const r = await api.searchLDAPUsers(q, 25);
@@ -45,6 +50,15 @@ export function LDAPUserPicker() {
     }
   };
 
+  const showRows = error === null && !!results && results.length > 0;
+  // Sıra eski paragraflarla aynı: hata önce, sonra sıfır sonuç. Aranan
+  // terim kullanıcının süzgeci (sunucu tarafı) → "Eşleşme yok" (eski
+  // "No matches."); tek temizle eylemi yok (kutuyu boşaltmak aramaz).
+  const searchState: Omit<DataTableStateStaticProps, 'colSpan'> =
+    error !== null ? { kind: 'error', message: `Dizin araması başarısız: ${error}` }
+    : searched.trim() ? { kind: 'no-match' }
+    : { kind: 'empty', message: 'Dizinde kullanıcı bulunamadı' };
+
   return (
     <div style={{
       marginTop: 18, padding: 16, borderRadius: 8,
@@ -61,13 +75,13 @@ export function LDAPUserPicker() {
                placeholder="Name, email or username" style={{ flex: 1 }} />
         <Button type="submit" variant="primary" loading={busy}>Search</Button>
       </form>
-      {error && (
-        <div style={{ color: 'var(--err)', fontSize: 12, marginBottom: 8 }}>{error}</div>
-      )}
-      {results && results.length === 0 && (
-        <div style={{ fontSize: 12, color: 'var(--text3)' }}>No matches.</div>
-      )}
-      {results && results.length > 0 && (
+      {/* v0.10.967 — tablo standardı dilim 5 (P-2): arama hatası (kırmızı
+          satır) ve "No matches." paragrafı tablonun İÇİNE indi, başlık durur.
+          Kapı aynı: tablo ilk arama sonuçlanınca çizilir (öncesi girdi
+          bekleyen bir seçici; aranırken sonuçlar sıfırlanıyor, gösterge
+          Search düğmesinin kendisi). Hata ve sonuç birlikte olamaz: arama
+          ikisini de sıfırlayarak başlar. */}
+      {(error !== null || results !== null) && (
         // v0.10.942 — statik tablo: seçici liste (≤25 arama sonucu, Provision ile seçilir; T1).
         // Hücre dolgusu (6px) bu sıkı listenin ritmi; sınıf karşılığı yok, satır içi kalır.
         <table>
@@ -80,7 +94,8 @@ export function LDAPUserPicker() {
             </tr>
           </thead>
           <tbody>
-            {results.map(u => (
+            {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 4 <th>. */}
+            {!showRows ? <DataTableState colSpan={4} {...searchState} /> : (results ?? []).map(u => (
               <tr key={u.dn} style={{ borderTop: '1px solid var(--divider)' }}>
                 <td style={{ padding: 6 }}>{u.displayName || '—'}</td>
                 <td style={{ padding: 6 }}><code>{u.username}</code></td>

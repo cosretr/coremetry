@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
 import { Link } from 'react-router-dom';
-import { Spinner } from './Spinner';
 import { api } from '@/lib/api';
 import { fmtSmart } from '@/lib/chartFmt';
 import { fmtClock, tsLong } from '@/lib/utils';
 import type { TraceRow, FilterExpr } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
 import { IconButton } from '@/components/ui/IconButton';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 
 // HeatmapCellExemplars — v0.5.260. Honeycomb-classic "click the
 // slow band → see what traces ran there" workflow. Modal opens
@@ -75,6 +77,33 @@ export function HeatmapCellExemplars({ cell, bucketWidthNs, filters, dsl, exempl
   // (arka plan) düşer; kapanma yalnız basış da arka planda başladıysa. Capture
   // şart: startResize pointerdown'ı stopPropagation'la kesiyor.
   const pressOnBackdrop = useRef(false);
+
+  // v0.10.967 — tablo standardı dilim 5 (T12 + P-1): yükleniyor / hata /
+  // boş tablonun İÇİNDE, başlık durur. Hata metni eski çareyi taşır (süzgeci
+  // genişlet / aralığı kontrol et; ↻ yoktu, eklenmedi). "Eşleşme yok" değil
+  // boş: modalın kendi süzgeci yok, heatmap'in süzgeci kohortun TANIMI.
+  // Boş açıklaması (örneklenmiş heatmap) mesajda; hücrenin sunucu-tarafı
+  // temsilci trace bağlantısı (v0.9.393 ölü uç) detail yuvasında (P-1).
+  const tableState: Omit<DataTableStateProps<TraceRow>, 'dt'> =
+    traces === undefined ? { kind: 'loading' }
+    : traces === null ? {
+        kind: 'error',
+        message: 'Trace\'ler okunamadı — süzgeçleri genişletmeyi dene ya da zaman aralığını kontrol et.',
+      }
+    : {
+        kind: 'empty',
+        message: 'Eşleşen trace yok — heatmap sayısı ham span\'ları yansıtır, bu arama trace kimliğiyle birleştirir. '
+          + 'Heatmap örneklenmişse exemplar\'lar eksik olabilir (hücre yine gerçek span\'ları temsil eder, '
+          + 'yalnız hepsine burada trace satırı olarak ulaşılamaz).',
+        detail: exemplarTraceId && (
+          <span>
+            Yine de hücrenin temsilci trace&#39;i elimizde:{' '}
+            <Link className="mono" to={traceHref(exemplarTraceId)}>
+              ◆ {exemplarTraceId.slice(0, 16)}… (hücredeki en yavaş)
+            </Link>
+          </span>
+        ),
+      };
 
   // Esc closes the modal — standard chrome on every modal in this app.
   // v0.9.950 (E2/Ö28) — KATMAN: modalın ALTINDAKİ çekmece/panel aynı
@@ -147,83 +176,54 @@ export function HeatmapCellExemplars({ cell, bucketWidthNs, filters, dsl, exempl
           current filter set. Click a trace id to open its waterfall.
         </div>
 
-        {traces === undefined && <Spinner />}
-        {traces === null && (
-          <div style={{ color: 'var(--err)', fontSize: 12 }}>
-            Failed to load traces — try widening filters or check the time range.
+        {traces && traces.length > 0 && exemplarTraceId && (
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>
+            ◆ temsilci (en yavaş):{' '}
+            <Link className="mono" to={traceHref(exemplarTraceId)}>
+              {exemplarTraceId.slice(0, 16)}…
+            </Link>
           </div>
         )}
-        {traces && traces.length === 0 && (
-          <div style={{ color: 'var(--text3)', fontSize: 12, padding: '12px 0' }}>
-            No traces matched. The heatmap's count reflects raw spans; this lookup
-            joins by trace id. If the heatmap is sampled, exemplars may be missing
-            (the cell still represents real spans, just not all reachable as
-            trace rows here).
-            {exemplarTraceId && (
-              <div style={{ marginTop: 8 }}>
-                {/* v0.9.393 — ölü uç kapandı: hücrenin sunucu-tarafı temsilci
-                    trace'i aramadan bağımsız her zaman elimizde. */}
-                Yine de hücrenin temsilci trace&#39;i elimizde:{' '}
-                <Link className="mono" to={traceHref(exemplarTraceId)}
-                  >
-                  ◆ {exemplarTraceId.slice(0, 16)}… (hücredeki en yavaş)
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
-        {traces && traces.length > 0 && (
-          <>
-          {exemplarTraceId && (
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>
-              ◆ temsilci (en yavaş):{' '}
-              <Link className="mono" to={traceHref(exemplarTraceId)}>
-                {exemplarTraceId.slice(0, 16)}…
-              </Link>
-            </div>
-          )}
-          {/* v0.10.947 — table.dt (fixed) düzeninde flex Service kolonu yalnız
-              kalan alanı alır; dar diyalogda sabitlerin toplamı kabı aşınca 0'a
-              çöküyordu. Taban genişlikle tablo taşar, diyaloğun overflow:auto'su
-              yatay kaydırır; masaüstünde (~665px içerik) görünüm aynı. Trailing
-              32: 12+12 hücre dolgusu 24'lük kolonda "!"i sıfıra kırpıyordu. */}
-          <table {...dt.tableProps} style={{ minWidth: 640 }}>
-            <DataTableColgroup dt={dt} trailing={[32]} />
-            <DataTableHead dt={dt} trailing={<th />} />
-            <tbody>
-              {dt.sortedRows.map(t => (
-                <tr key={t.traceId}>
-                  <DataTableCell dt={dt} col="trace" row={t}>
-                    <Link to={traceHref(t.traceId)}
-                      onClick={onClose}
-                      style={{ color: 'var(--accent2)', textDecoration: 'none' }}>
-                      {t.traceId.slice(0, 16)}…
-                    </Link>
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="service" row={t}
-                    title={[t.serviceName, t.rootName].filter(Boolean).join(' / ') || undefined}>
-                    {t.serviceName || <span className="cell-empty">—</span>}
-                    {t.rootName && (
-                      <span className="cell-faint" style={{ marginLeft: 6 }}>
-                        / {t.rootName}
-                      </span>
-                    )}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="duration" row={t} value={fmtSmart(t.durationMs ?? 0, 'ms')} />
-                  <DataTableCell dt={dt} col="spans" row={t} value={(t.spanCount ?? 0).toLocaleString()} />
-                  <DataTableCell dt={dt} col="started" row={t} value={tsLong(t.startTime)} className="mono" />
-                  <td>
-                    {t.hasError && (
-                      <span title="root span errored"
-                        style={{ color: 'var(--err)', fontWeight: 700 }}>!</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </>
-        )}
+        {/* v0.10.947 — table.dt (fixed) düzeninde flex Service kolonu yalnız
+            kalan alanı alır; dar diyalogda sabitlerin toplamı kabı aşınca 0'a
+            çöküyordu. Taban genişlikle tablo taşar, diyaloğun overflow:auto'su
+            yatay kaydırır; masaüstünde (~665px içerik) görünüm aynı. Trailing
+            32: 12+12 hücre dolgusu 24'lük kolonda "!"i sıfıra kırpıyordu. */}
+        <table {...dt.tableProps} style={{ minWidth: 640 }}>
+          <DataTableColgroup dt={dt} trailing={[32]} />
+          <DataTableHead dt={dt} trailing={<th />} />
+          <tbody>
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} trailing={[32]} {...tableState} /> : dt.sortedRows.map(t => (
+              <tr key={t.traceId}>
+                <DataTableCell dt={dt} col="trace" row={t}>
+                  <Link to={traceHref(t.traceId)}
+                    onClick={onClose}
+                    style={{ color: 'var(--accent2)', textDecoration: 'none' }}>
+                    {t.traceId.slice(0, 16)}…
+                  </Link>
+                </DataTableCell>
+                <DataTableCell dt={dt} col="service" row={t}
+                  title={[t.serviceName, t.rootName].filter(Boolean).join(' / ') || undefined}>
+                  {t.serviceName || <span className="cell-empty">—</span>}
+                  {t.rootName && (
+                    <span className="cell-faint" style={{ marginLeft: 6 }}>
+                      / {t.rootName}
+                    </span>
+                  )}
+                </DataTableCell>
+                <DataTableCell dt={dt} col="duration" row={t} value={fmtSmart(t.durationMs ?? 0, 'ms')} />
+                <DataTableCell dt={dt} col="spans" row={t} value={(t.spanCount ?? 0).toLocaleString()} />
+                <DataTableCell dt={dt} col="started" row={t} value={tsLong(t.startTime)} className="mono" />
+                <td>
+                  {t.hasError && (
+                    <span title="root span errored"
+                      style={{ color: 'var(--err)', fontWeight: 700 }}>!</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

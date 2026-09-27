@@ -7,6 +7,7 @@ import { fmtFixed, fmtDurShort } from '@/lib/utils';
 import type { RootCause, BubbleUpValue, RolloutEvidence } from '@/lib/types';
 import { rolloutEvidenceHref, shortRevision, statusTone as rolloutStatusTone } from '@/lib/rolloutRow';
 import { Badge } from '@/components/ui/Badge';
+import { DataTableState } from '@/components/ui/DataTable';
 // v0.10.929 (K5) — durum tonu tek sözlükten; hafif yaprak (ProblemDetail değil — döngü/ağır zincir yok).
 import { TriageStatusBadge } from '@/features/anomalies/statusTone';
 import { tsLong } from '@/lib/utils';
@@ -130,13 +131,10 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                 <th style={{ width: 90 }}>State</th>
               </tr></thead>
               <tbody>
-                {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. colSpan = thead'deki 4 <th>. */}
+                {/* v0.10.967 (tablo standardı dilim 5, P-2) — statik tablonun durum satırı; colSpan = thead'deki 4 <th>.
+                    Panelin yükleniyor / hata dönüşleri yukarıda kalır (yanıt bölümleri belirliyor). */}
                 {(blast.callers ?? []).length === 0 ? (
-                  <tr data-dt-state="empty">
-                    <td colSpan={4} className="dt-state">
-                      <div className="dt-state-body"><span>Bu pencerede çağıran yok — {service} bir giriş noktası</span></div>
-                    </td>
-                  </tr>
+                  <DataTableState colSpan={4} kind="empty" message={`Bu pencerede çağıran yok — ${service} bir giriş noktası`} />
                 ) : [...(blast.callers ?? [])]
                   .sort((a, b) => b.errorRate - a.errorRate || b.rps - a.rps)
                   .slice(0, 6)

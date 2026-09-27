@@ -87,7 +87,9 @@ describe('v0.10.929 — sağlıklı durum nötr (yeşil yok)', () => {
   it('streams "aktif anomali yok" kutusu nötr', () => {
     const s = code('features/anomalies/streams.tsx');
     expect(s).not.toContain('var(--ok)');
-    expect(s).toContain("<Check size={13} strokeWidth={2} style={{ color: 'var(--text3)', flexShrink: 0 }} />");
+    // v0.10.967 — tablo standardı T12 (dilim 5): eski nötr kutu artık Active
+    // tablosunun BOŞ satırı (DataTableState kind 'empty' — ton yok, yeşil yok).
+    expect(s).toMatch(/kind: 'empty', message: `Son 24 saatte aktif anomali yok/);
   });
 
   it('ChatBubble araç adımı ok → gri; AI güven "yüksek" → gri', () => {

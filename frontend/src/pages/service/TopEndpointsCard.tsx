@@ -91,6 +91,9 @@ export function TopEndpointsCard({ service, range, endpoints }: {
           </Link>
         </span>
       </div>
+      {/* v0.10.967 — dtNoState: durum satırı yok — kart boş olamaz: Overview onu
+          yalnız `endpoints.length > 0` iken çizer (boşsa OpsCard'a düşer);
+          yükleniyor / hata sayfanın bundle okumasına ait (Service.tsx). */}
       <div style={{ overflowX: 'auto' }}>
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />

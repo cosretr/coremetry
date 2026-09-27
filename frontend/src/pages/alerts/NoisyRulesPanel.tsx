@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, useConfirm } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
 import { IconSparkles } from '@/components/icons';
-import { QueryErrorInline } from '@/components/QueryError';
+import { DataTableState } from '@/components/ui/DataTable';
 import { useUpdateAlertRule, useDisableAlertRule } from '@/lib/queries';
 import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
@@ -62,12 +62,20 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
   // Tek okuma yolu — hem ilk yükleme hem Retry buradan geçer, böylece hata
   // dalı iki yerde ayrı ayrı yazılmak zorunda kalmıyor (MT1'i mümkün kılan
   // şey guard'ın elle çoğaltılmasıydı).
-  const load = useCallback(() => {
-    setNoisy(undefined);
+  // v0.10.967 — toplu Apply / Disable sonrası tazeleme de BURADAN geçer.
+  // Eskiden orada `.catch(() => {})` vardı: tazeleme düşünce eski öneri
+  // listesi (az önce sıkılan kurallar dahil) sessizce ekranda kalıyordu —
+  // tam da bu yolun kapattığı MT1 sınıfı. Artık düşen tazeleme tablonun
+  // içinde hata satırı olur (satırlar tazeleme sürerken yerinde kalır).
+  const fetchNoisy = useCallback(() => {
     api.alertTuningNoisyRules('24h', 10)
       .then(r => setNoisy((r?.rules ?? []).filter(n => n.suggestion !== '')))
       .catch(() => setNoisy(null));
   }, []);
+  const load = useCallback(() => {
+    setNoisy(undefined);
+    fetchNoisy();
+  }, [fetchNoisy]);
   useEffect(load, [load]);
   const applySuggestion = (n: NoisyRule) => {
     const base = (rules ?? []).find(r => r.id === n.ruleId);
@@ -134,9 +142,7 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
       // the server cache window, but a refetch makes the UI feel
       // responsive in the meantime).
       setSelected(new Set());
-      api.alertTuningNoisyRules('24h', 10)
-        .then(r => setNoisy((r?.rules ?? []).filter(n => n.suggestion !== '')))
-        .catch(() => {});
+      fetchNoisy();
     } finally {
       setBulkBusy(false);
     }
@@ -164,9 +170,7 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
     try {
       await Promise.allSettled(ids.map(id => disableRule.mutateAsync(id)));
       setSelected(new Set());
-      api.alertTuningNoisyRules('24h', 10)
-        .then(r => setNoisy((r?.rules ?? []).filter(n => n.suggestion !== '')))
-        .catch(() => {});
+      fetchNoisy();
     } finally {
       setBulkBusy(false);
     }
@@ -176,17 +180,15 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
   // (bu bir öneri paneli, sayfanın gövdesi değil). Hata dalı QueryErrorInline
   // — <Empty> değil, çünkü boş-durum anlatısı tam da kaçınmaya çalıştığımız
   // yanlış mesaj. Gerçekten öneri yoksa panel eskisi gibi kendini gizler.
+  // v0.10.967 — tablo standardı dilim 5 (P-2): hata erken dönüşü kalktı;
+  // QueryErrorInline (aynı metin anlamı + aynı Retry = load) artık panelin
+  // tablosunun İÇİNDE, başlık durur. Yükleniyor ve boş self-hide AYNEN.
+  // Satırdan türeyen başlık parçaları (sayı, "Gürültüyü anlat") hata hâlinde
+  // yok — eskiden de hata hâlinde panel yoktu; "0 rules" demesin.
   if (noisy === undefined) return null;
-  if (noisy === null) {
-    return (
-      <div style={{ marginBottom: 14 }}>
-        <QueryErrorInline
-          text="Noisy-rules report could not be loaded — tuning suggestions are unavailable, not absent."
-          onRetry={load} />
-      </div>
-    );
-  }
-  if (noisy.length === 0) return null;
+  if (noisy !== null && noisy.length === 0) return null;
+  const failed = noisy === null;
+  const list = noisy ?? [];
 
   return (
     <div style={{
@@ -195,13 +197,17 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
     }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 700 }}>⚡ Noisy rules (last 24h)</span>
-        <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-          {noisy.length} rule{noisy.length === 1 ? '' : 's'} could be tightened
-        </span>
-        <Button variant="secondary" size="sm" onClick={explainNoise} disabled={ai.busy}
-          title="Son 24 saatin gürültü paketini AI anlatır: baskın desen + önce sıkılacak vida">
-          <IconSparkles /> Gürültüyü anlat
-        </Button>
+        {!failed && (
+          <>
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+              {list.length} rule{list.length === 1 ? '' : 's'} could be tightened
+            </span>
+            <Button variant="secondary" size="sm" onClick={explainNoise} disabled={ai.busy}
+              title="Son 24 saatin gürültü paketini AI anlatır: baskın desen + önce sıkılacak vida">
+              <IconSparkles /> Gürültüyü anlat
+            </Button>
+          </>
+        )}
         {selected.size > 0 && (
           <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
             <Button variant="primary" size="sm" onClick={applySelected}
@@ -263,7 +269,12 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
             <th></th>
           </tr></thead>
           <tbody>
-            {noisy.map(n => {
+            {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 7 <th>. */}
+            {failed ? (
+              <DataTableState colSpan={7} kind="error"
+                message="Gürültülü kural raporu okunamadı — ayar önerileri yok değil, alınamadı."
+                onRetry={load} />
+            ) : list.map(n => {
               const hasKnob = (n.suggestedForSec ?? 0) > 0
                 || (n.suggestedMinSamples ?? 0) > 0
                 || (n.suggestedCooldownSec ?? 0) > 0;

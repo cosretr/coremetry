@@ -2,11 +2,13 @@ import { useMemo, useRef, useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
-import { Spinner, Empty } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
 import { Button, Field, IconButton, Modal, SearchField, Stack } from '@/components/ui';
 import { Sparkline } from '@/components/Sparkline';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { parseDashboardImport } from '@/lib/dashboardIO';
 import { toast } from '@/lib/toast';
@@ -186,6 +188,29 @@ export default function DashboardsPage() {
     searchRef,
   });
 
+  // v0.10.967 — tablo standardı dilim 5 (T12 + P-1): yükleniyor / hata /
+  // eşleşme yok / boş tablonun İÇİNDE, başlık durur. Sıra eskisiyle aynı
+  // (hata filtered'ı da null yapar → bayat satır kalmaz). Eşleşme yok yalnız
+  // kaynakta pano VARKEN; "Filtreleri temizle" aramanın kendi ✕'iyle aynı
+  // setter, odak arama kutusuna döner. "+ New dashboard" CTA'sı boş satırın
+  // detail yuvasında (P-1) — silinmedi, tablonun dışına da taşınmadı.
+  const tableState: Omit<DataTableStateProps<DashboardSummary>, 'dt'> =
+    items === undefined ? { kind: 'loading' }
+    : items === null ? { kind: 'error' }
+    : items.length > 0 ? {
+        kind: 'no-match',
+        message: `“${q}” ile eşleşen kayıtlı pano yok`,
+        onClearFilters: () => setQ(''),
+        returnFocusRef: searchRef,
+      }
+    : {
+        kind: 'empty',
+        message: isAdmin
+          ? 'Henüz pano yok — metrik, trace ve logları tek bir görünümde birleştirmek için bir tane oluştur.'
+          : 'Henüz pano yok — pano oluşturması için bir admin\'e başvur.',
+        detail: isAdmin && <Button variant="primary" onClick={() => setShowNew(true)}>+ New dashboard</Button>,
+      };
+
   return (
     <>
       <Topbar title="Dashboards" />
@@ -216,63 +241,47 @@ export default function DashboardsPage() {
           </span>
         </PageControls>
 
-        {items === undefined && <Spinner />}
-        {items === null && <Empty icon="⚠" title="Failed to load dashboards" />}
-        {items && items.length === 0 && (
-          <Empty icon="◫" title="No dashboards yet"
-            action={isAdmin ? <Button variant="primary" onClick={() => setShowNew(true)}>+ New dashboard</Button> : undefined}>
-            {isAdmin ? 'Create one to combine metrics, traces and logs into a single view.'
-                     : 'Ask an admin to create dashboards.'}
-          </Empty>
-        )}
-        {items && items.length > 0 && filtered && filtered.length === 0 && (
-          <Empty icon="◇" title="No matching dashboards">
-            No saved dashboard matches “{q}”.
-          </Empty>
-        )}
-        {filtered && filtered.length > 0 && (
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.map((d, i) => (
-                  <tr key={d.id}
-                      {...dt.rowProps(i)}
-                      // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
-                      data-row-action
-                      onMouseEnter={() => dt.nav.setSelected(i)}
-                      onClick={() => navigate(`/dashboard?id=${d.id}`)}>
-                    {/* <td> SIRASI dashCols() ile BİREBİR olmak zorunda —
-                        tableLayout:fixed + colgroup, kayma tsc'ye
-                        görünmez. Sıra: star · name · tags · description
-                        · updatedAt. */}
-                    <td>
-                      <IconButton
-                        aria-label={starMap.has(d.id) ? `${d.name} yıldızını kaldır` : `${d.name} panosunu yıldızla`}
-                        active={starMap.has(d.id)}
-                        variant="bare" size="xs" className="ib-star"
-                        tooltip={starMap.has(d.id) ? 'Yıldızı kaldır' : 'Yıldızla — listenin başına gelir'}
-                        disabled={starBusy === d.id}
-                        // Satırın kendi onClick'i panoya gidiyor;
-                        // durdurulmazsa her yıldız tıklaması sayfayı
-                        // değiştirirdi.
-                        onClick={e => { e.stopPropagation(); void toggleStar(d); }}
-                        icon={starMap.has(d.id) ? '★' : '☆'} />
-                    </td>
-                    <DataTableCell dt={dt} col="name" row={d} value={d.name} className="cell-strong" />
-                    <td title={(d.tags ?? []).join(', ') || undefined}>
-                      <TagBadges tags={d.tags} />
-                    </td>
-                    <DataTableCell dt={dt} col="description" row={d} value={d.description || null} />
-                    <DataTableCell dt={dt} col="updatedAt" row={d} value={tsLong(d.updatedAt)}
-                      title={`Updated ${tsLong(d.updatedAt)}`} />
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((d, i) => (
+                <tr key={d.id}
+                    {...dt.rowProps(i)}
+                    // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
+                    data-row-action
+                    onMouseEnter={() => dt.nav.setSelected(i)}
+                    onClick={() => navigate(`/dashboard?id=${d.id}`)}>
+                  {/* <td> SIRASI dashCols() ile BİREBİR olmak zorunda —
+                      tableLayout:fixed + colgroup, kayma tsc'ye
+                      görünmez. Sıra: star · name · tags · description
+                      · updatedAt. */}
+                  <td>
+                    <IconButton
+                      aria-label={starMap.has(d.id) ? `${d.name} yıldızını kaldır` : `${d.name} panosunu yıldızla`}
+                      active={starMap.has(d.id)}
+                      variant="bare" size="xs" className="ib-star"
+                      tooltip={starMap.has(d.id) ? 'Yıldızı kaldır' : 'Yıldızla — listenin başına gelir'}
+                      disabled={starBusy === d.id}
+                      // Satırın kendi onClick'i panoya gidiyor;
+                      // durdurulmazsa her yıldız tıklaması sayfayı
+                      // değiştirirdi.
+                      onClick={e => { e.stopPropagation(); void toggleStar(d); }}
+                      icon={starMap.has(d.id) ? '★' : '☆'} />
+                  </td>
+                  <DataTableCell dt={dt} col="name" row={d} value={d.name} className="cell-strong" />
+                  <td title={(d.tags ?? []).join(', ') || undefined}>
+                    <TagBadges tags={d.tags} />
+                  </td>
+                  <DataTableCell dt={dt} col="description" row={d} value={d.description || null} />
+                  <DataTableCell dt={dt} col="updatedAt" row={d} value={tsLong(d.updatedAt)}
+                    title={`Updated ${tsLong(d.updatedAt)}`} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {/* Shared system-wide activity strip — same data as the
             former per-card thumbnails, lifted out so the table rows

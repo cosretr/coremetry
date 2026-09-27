@@ -13,10 +13,11 @@ import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Stack, Row } from '@/components/ui';
 import { CopyButton } from '@/components/CopyButton';
+import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import type { ExternalLink } from '@/lib/types';
 import { renderExternalLink } from '@/lib/externalLinks';
-import { FlashBox } from './shared';
+import { FlashBox, humanize } from './shared';
 
 // v0.10.372 — operatör: "şablona ihtiyacım yok, date'i trace'in olduğu dakika
 // ilet" → örnek trace başlangıç dakikasını ({{time}}) taşır; kimlik içindeki
@@ -40,23 +41,41 @@ const PREVIEW_CTX = {
 
 export function ExternalLinksTab() {
   const [links, setLinks] = useState<ExternalLink[]>([]);
+  // v0.10.967 — tablo standardı dilim 5 (P-2): listenin OKUMA hâli tablonun.
+  // undefined = yükleniyor, string = okunamadı (sunucu metni; '' = metinsiz),
+  // null = okundu. Eskiden `links` [] ile başlıyordu: yüklenirken ve okuma
+  // düşünce tablo "Henüz link yok" diyordu (hata ayrıca FlashBox'ta) — boş
+  // ile okunamadı aynı satırdaydı. Okuma hatası artık FlashBox'a değil
+  // tablonun hata satırına; FlashBox kaydet/sil geri bildirimi olarak kalır.
+  const [readErr, setReadErr] = useState<string | null | undefined>(undefined);
   const [draft, setDraft] = useState<{ label: string; urlTemplate: string; color: string; group: string }>({ label: '', urlTemplate: '', color: '', group: '' });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   useEffect(() => {
-    api.getExternalLinks().then(d => setLinks(d.links ?? [])).catch(e => setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Yüklenemedi' }));
+    api.getExternalLinks()
+      .then(d => { setLinks(d.links ?? []); setReadErr(null); })
+      .catch(e => setReadErr(e instanceof Error ? humanize(e) : ''));
   }, []);
   const save = async (next: ExternalLink[]) => {
     setBusy(true); setMsg(null);
     try {
       const d = await api.putExternalLinks(next);
       setLinks(d.links ?? []);
+      // Kayıt yanıtı sunucudaki listenin kendisi: tablo artık doğru.
+      setReadErr(null);
       setMsg({ kind: 'ok', text: 'Kaydedildi.' });
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Kaydedilemedi' });
     } finally { setBusy(false); }
   };
   const preview = draft.urlTemplate ? renderExternalLink(draft.urlTemplate, PREVIEW_CTX) : null;
+  // Okuma düşmüşse (ilk okuma; kayıt başarısı readErr'i temizler) eski satır
+  // gösterilmez — hata satırı.
+  const showRows = readErr === null && links.length > 0;
+  const linksState: Omit<DataTableStateStaticProps, 'colSpan'> =
+    readErr === undefined ? { kind: 'loading' }
+    : readErr !== null ? { kind: 'error', ...(readErr ? { message: `Linkler okunamadı: ${readErr}` } : {}) }
+    : { kind: 'empty', message: 'Henüz link yok' };
   return (
     <Stack gap={4}>
       <div className="field-hint">
@@ -74,17 +93,11 @@ export function ExternalLinksTab() {
       </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
       {/* v0.10.942 — statik tablo: düzenlenebilir liste; sıra anlamlı (grupta ilk çözülen çizilir), sıralanmaz (T1).
-          v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. Boşken başlık kalır (S6). */}
+          v0.10.967 (P-2) — durum satırı DataTableState colSpan = thead'deki 6 <th>; boşken başlık kalır (S6). */}
       <table>
         <thead><tr><th style={{ textAlign: 'left' }}>Etiket</th><th style={{ textAlign: 'left' }}>Şablon</th><th style={{ textAlign: 'left' }}>Grup</th><th style={{ textAlign: 'left' }}>Gerekli</th><th style={{ textAlign: 'left' }}>Renk</th><th></th></tr></thead>
         <tbody>
-          {links.length === 0 ? (
-            <tr data-dt-state="empty">
-              <td colSpan={6} className="dt-state">
-                <div className="dt-state-body"><span>Henüz link yok</span></div>
-              </td>
-            </tr>
-          ) : links.map((l, i) => (
+          {!showRows ? <DataTableState colSpan={6} {...linksState} /> : links.map((l, i) => (
             <tr key={l.label}>
               <td>{l.label}</td>
               <td className="mono cell-wrap">{l.urlTemplate} <CopyButton value={l.urlTemplate} title="Şablonu kopyala" /></td>

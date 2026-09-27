@@ -274,13 +274,11 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
           <table>
             <thead><tr><th>Workload</th><th className="num">Rollback</th></tr></thead>
             <tbody>
-              {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. */}
-              {st.topRollback.length === 0 && (
-                <tr data-dt-state="empty">
-                  <td colSpan={2} className="dt-state"><div className="dt-state-body"><span>Bu pencerede rollback alan workload yok</span></div></td>
-                </tr>
-              )}
-              {st.topRollback.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
+              {/* v0.10.967 (tablo standardı dilim 5, P-2) — statik tablonun durum satırı; colSpan = thead'deki 2 <th>.
+                  Yükleniyor / hata bölümün (istatistik yanıtı KPI'ları da belirliyor) — dışarıda kalır. */}
+              {st.topRollback.length === 0
+                ? <DataTableState colSpan={2} kind="empty" message="Bu pencerede rollback alan workload yok" />
+                : st.topRollback.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -290,13 +288,10 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
           <table>
             <thead><tr><th>Workload</th><th className="num">Rollout</th></tr></thead>
             <tbody>
-              {/* v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState. */}
-              {st.topDeploy.length === 0 && (
-                <tr data-dt-state="empty">
-                  <td colSpan={2} className="dt-state"><div className="dt-state-body"><span>Bu pencerede deploy alan workload yok</span></div></td>
-                </tr>
-              )}
-              {st.topDeploy.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
+              {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 2 <th>. */}
+              {st.topDeploy.length === 0
+                ? <DataTableState colSpan={2} kind="empty" message="Bu pencerede deploy alan workload yok" />
+                : st.topDeploy.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td>{w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
         </div>

@@ -11,12 +11,15 @@ import { api } from '@/lib/api';
 import type { LogRow } from '@/lib/types';
 import { Card, DisclosureButton, SegmentedControl } from '@/components/ui';
 import { PanelTitle } from '@/components/ui/PanelTitle';
-import { Spinner, Empty } from '@/components/Spinner';
 import { LogTable } from '@/components/LogTable';
+import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { LogContextModal } from '@/components/LogContextModal';
 import { podLogSearch, levelCounts, POD_LOG_MIN_SEV, type PodLogLevel } from './podLogs';
 
 const POD_LOG_LIMIT = 100;
+// v0.10.967 — kararlı boş dizi: satır gösterilmeyen durumlarda LogTable'a
+// (ServiceSignalTabs emsali).
+const NO_LOGS: LogRow[] = [];
 
 export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
   pod: string; from: number; to: number; service?: string; cluster?: string;
@@ -55,6 +58,34 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
   const rows = q.data?.logs ?? [];
   const counts = useMemo(() => levelCounts(rows), [rows]);
 
+  // v0.10.967 — tablo standardı dilim 5 (T12 + P-1, P6 LogTable `state`):
+  // yükleniyor / backend yanıtsız / yavaş / boş artık LogTable'ın İÇİNDE,
+  // sütun başlıkları durur. Sıra eskisiyle aynı. degraded "log yok" değil →
+  // hata türü, nedeni satırda. Yenileme düşüp önbellek eski satırları
+  // tutuyorsa hata yine görünür: showRows bayat satırları, sayaç çiplerini
+  // ve alt notu birlikte gizler (bayat sayı hata satırının altında kalmasın).
+  // Arama ya da seviye seçiliyken boş sonuç "eşleşme yok" (ortak temizleme
+  // eylemi yok). CH gövde-araması ipucu + Loglar sayfası bağlantısı iki
+  // boş türün de detail yuvasında (P-1) — silinmedi, dışarı taşınmadı.
+  const degraded = !!q.data?.degraded;
+  const showRows = !q.isPending && !q.isError && !degraded && rows.length > 0;
+  const bodyHint = (
+    <span>
+      Log backend&apos;i ClickHouse ise pod adı log gövdesinde aranır; gövdede geçmiyorsa sonuç çıkmaz — <Link to={logsLink}>Loglar sayfasında</Link> pili kaldırıp servis kapsamıyla bakın.
+    </span>
+  );
+  const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
+    q.isPending ? { kind: 'loading' }
+    : q.isError ? { kind: 'error', message: "Log backend'i yanıt vermedi." }
+    : degraded ? {
+        kind: 'error',
+        message: `Log backend'i yavaş/erişilemez — liste boş gösterilmedi${q.data?.reason ? `: ${q.data.reason}` : '.'}`,
+      }
+    : (text.trim() || lvl !== 'all') ? {
+        kind: 'no-match', message: 'Bu pod için bu pencerede süzgeçle eşleşen log yok.', detail: bodyHint,
+      }
+    : { kind: 'empty', message: 'Bu pod için bu pencerede log yok.', detail: bodyHint };
+
   // v0.10.914 (buton bütünlüğü) — tek seçimli seviye: ortak SegmentedControl.
   const lvlLabel = (label: string, n?: number) => (n !== undefined ? `${label} · ${n}` : label);
 
@@ -71,20 +102,14 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
               <SegmentedControl size="sm" aria-label="Log seviyesi" value={lvl}
                 onChange={v => setParam('plvl', v === 'all' ? null : v)} options={[
                   { value: 'all', label: 'Tümü' },
-                  { value: 'error', label: lvlLabel('ERROR', lvl === 'all' && rows.length ? counts.error : undefined) },
-                  { value: 'warn', label: lvlLabel('WARN+', lvl === 'all' && rows.length ? counts.warn : undefined) },
+                  { value: 'error', label: lvlLabel('ERROR', lvl === 'all' && showRows ? counts.error : undefined) },
+                  { value: 'warn', label: lvlLabel('WARN+', lvl === 'all' && showRows ? counts.warn : undefined) },
                 ]} />
               <input className="field" style={{ flex: '1 1 240px', maxWidth: 360 }} placeholder="Ara (mesaj içinde)…"
                 value={input} onChange={e => setInput(e.target.value)} aria-label="Pod logları içinde ara" />
             </div>
-            {q.isPending ? <Spinner />
-              : q.isError ? <Empty icon="—" title="Log backend'i yanıt vermedi." />
-              : q.data?.degraded ? <Empty icon="—" title="Log backend'i yavaş/erişilemez — liste boş gösterilmedi.">{q.data.reason}</Empty>
-              : rows.length === 0 ? <Empty icon="—" title="Bu pod için bu pencerede log yok.">
-                  Log backend'i ClickHouse ise pod adı log gövdesinde aranır; gövdede geçmiyorsa sonuç çıkmaz — <Link to={logsLink}>Loglar sayfasında</Link> pili kaldırıp servis kapsamıyla bakın.
-                </Empty>
-              : <LogTable logs={rows} onContextOpen={setPivot} />}
-            {rows.length > 0 && (
+            <LogTable logs={showRows ? rows : NO_LOGS} state={logsState} onContextOpen={setPivot} />
+            {showRows && (
               <div className="pod-cap">
                 {rows.length} satır (en yeni önce){rows.length >= POD_LOG_LIMIT ? ' · daha fazlası için Loglar sayfası' : ''}
                 {lvl === 'all' ? ' · çip sayıları bu sayfadaki satırlardan' : ''}

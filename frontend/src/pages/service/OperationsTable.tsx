@@ -2,14 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui';
-import { Spinner, Empty } from '@/components/Spinner';
 import { Sparkline } from '@/components/Sparkline';
 import { TrendSpark } from '@/components/TrendSpark'; // v0.10.697
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { EventMarkers } from '@/components/EventMarkers';
 import { fmtNum, timeRangeToNs, rowClickHandlers } from '@/lib/utils';
 import { encodeFilters, encodeRange, buildQuery } from '@/lib/urlState';
-import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
+import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { serviceHref } from '@/lib/serviceHref';
 import type { TimeRange, OperationSummary, SpanMetricSeries, SpanAgg } from '@/lib/types';
@@ -279,74 +278,42 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
     </div>
   );
 
-  // Loading covers the normalized refetch (raw arrives in the bundle).
-  if (loading) {
-    return (
-      <div style={{ marginTop: 18 }}>
-        <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 700 }}>⊙ Operations</h3>
-          {modeToggle}
-        </div>
-        <Spinner />
-      </div>
-    );
-  }
-
-  if (rows.length === 0) {
-    // group_id rel C — normalized-empty is a DIFFERENT story than
-    // raw-empty: it's not "no traffic", it's "no op_group shapes in
-    // this window yet" (forward-only — grouping starts with newly-
-    // ingested spans, so old windows legitimately have none). Honest
-    // <Empty> message + the toggle stays visible so the operator flips
-    // back to raw without losing the page.
-    if (normalized) {
-      return (
-        <div style={{ marginTop: 18 }}>
-          <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700 }}>⊙ Operations</h3>
-            {modeToggle}
-          </div>
-          <Empty icon="∅" title="No normalized shapes in this window">
-            Normalized grouping starts with newly-ingested spans — no shapes in this window yet.
-          </Empty>
-        </div>
-      );
-    }
-    // v0.5.292 — short-window (≤30 min) default hits "no
-    // traffic" often enough that operators reported the page
-    // as broken. Surface a one-click widen-to-1h instead of
-    // the bare-empty message. Wider windows keep the plain
-    // empty state since "no ops in 24h" is genuinely "no
-    // ops".
-    const isShortWindow = preset
-      && ['5m', '10m', '15m', '30m'].includes(preset);
-    return (
-      <div style={{ marginTop: 18 }}>
-        <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 700 }}>⊙ Operations</h3>
-          {modeToggle}
-        </div>
-        <div className="empty" style={{ padding: 30 }}>
-          {isShortWindow ? (
-            <>
-              <div style={{ marginBottom: 12 }}>
-                No traffic for <b>{service}</b> in the last <b>{preset}</b>.
-                Idle or low-traffic services often don't produce
-                spans in a short window.
-              </div>
-              {onWiden && (
-                <Button variant="primary" onClick={onWiden}>
-                  Widen to last 1h
-                </Button>
-              )}
-            </>
-          ) : (
-            <>No operations seen in this window</>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // v0.10.967 — tablo standardı dilim 5 (T12 + P-1, recipe P3): üç erken
+  // dönüş (Spinner / normalize-boş / kısa-pencere önerisi) tablonun İÇİNE
+  // taşındı; başlık + Raw⇄Normalized anahtarı eskisi gibi HER durumda
+  // üstte, sütun başlıkları artık onlarla birlikte durur. Sıra aynı:
+  // `loading` (normalize yeniden çekimi) satırlardan önce gelir — önceki
+  // kipin satırları yanıp sönmesin (group_id rel C). Kısa-pencere önerisi
+  // mesajda, "Widen to last 1h" CTA'sı detail yuvasında (P-1); düğme
+  // gidince (pencere genişledi) odak tablonun kabına döner. Süzgeç
+  // hepsini elediyse "eşleşme yok" + Filtreleri temizle (eskiden yalnız
+  // "All" satırı kalıyordu, hiçbir şey söylenmiyordu).
+  const isShortWindow = !!preset && ['5m', '10m', '15m', '30m'].includes(preset);
+  const showRows = !loading && filtered.length > 0;
+  const tableState: Omit<DataTableStateProps<OperationSummary>, 'dt'> =
+    loading ? { kind: 'loading' }
+    : rows.length === 0 ? (
+      // group_id rel C — normalized-empty is a DIFFERENT story than
+      // raw-empty: it's not "no traffic", it's "no op_group shapes in
+      // this window yet" (forward-only — grouping starts with newly-
+      // ingested spans, so old windows legitimately have none). The
+      // toggle stays visible above so the operator flips back to raw.
+      normalized ? {
+        kind: 'empty',
+        message: 'Bu pencerede normalize şekil yok — normalize gruplama yeni alınan span\'larla başlar; bu pencerede henüz şekil yok.',
+      }
+      // v0.5.292 — short-window (≤30 min) default hits "no traffic"
+      // often enough that operators reported the page as broken: a
+      // one-click widen-to-1h instead of the bare-empty message. Wider
+      // windows keep the plain empty state ("no ops in 24h" is "no ops").
+      : isShortWindow ? {
+        kind: 'empty',
+        message: `Son ${preset} içinde ${service} için trafik yok — boşta ya da az trafikli servisler kısa bir pencerede çoğu zaman span üretmez.`,
+        detail: onWiden && <Button variant="primary" onClick={onWiden}>Widen to last 1h</Button>,
+      }
+      : { kind: 'empty', message: 'Bu pencerede operasyon görülmedi' }
+    )
+    : { kind: 'no-match', onClearFilters: () => setFilter(''), returnFocusRef: searchRef };
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -354,17 +321,21 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
         <h3 style={{ fontSize: 13, fontWeight: 700 }}>⊙ Operations</h3>
         {modeToggle}
       </div>
-      <div style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-          {normalized && <b style={{ color: 'var(--text2)' }}>normalized · </b>}
-          {filter.trim()
-            ? `${dt.sortedRows.length} / ${rows.length} matching`
-            : `${rows.length} ${normalized ? 'operation shape' : 'distinct span name'}${rows.length === 1 ? '' : 's'} in ${service}`}
-        </span>
-        <input ref={searchRef} className="field" value={filter} onChange={e => setFilter(e.target.value)}
-          placeholder="Filter by name…  ( / to focus, j/k to move, Enter to open )"
-          style={{ marginLeft: 'auto', width: 320 }} />
-      </div>
+      {/* v0.10.967 — sayaç + süzgeç kutusu eskisi gibi yalnız veri varken
+          (yüklenirken / boşken "0 distinct span names" okunmasın). */}
+      {!loading && rows.length > 0 && (
+        <div style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+            {normalized && <b style={{ color: 'var(--text2)' }}>normalized · </b>}
+            {filter.trim()
+              ? `${dt.sortedRows.length} / ${rows.length} matching`
+              : `${rows.length} ${normalized ? 'operation shape' : 'distinct span name'}${rows.length === 1 ? '' : 's'} in ${service}`}
+          </span>
+          <input ref={searchRef} className="field" value={filter} onChange={e => setFilter(e.target.value)}
+            placeholder="Filter by name…  ( / to focus, j/k to move, Enter to open )"
+            style={{ marginLeft: 'auto', width: 320 }} />
+        </div>
+      )}
       {/* v0.5.462 — operator-reported: the previous maxHeight:540
           inner-scroll wrapper made even a 50-op service feel
           claustrophobic. Virtualization via content-visibility:auto
@@ -400,7 +371,8 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
             </span>
           ) : c.label} />
           <tbody>
-            {agg && (
+            {!showRows && <DataTableState dt={dt} {...tableState} />}
+            {showRows && agg && (
               <tr className="agg-row">
                 <td><span style={{ fontWeight: 700 }}>All ({rows.length})</span></td>
                 <td>
@@ -434,7 +406,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                 <td className="num">{agg.p99Ms.toFixed(1)}ms</td>
               </tr>
             )}
-            {dt.sortedRows.map((op, i) => {
+            {showRows && dt.sortedRows.map((op, i) => {
               // v0.10.929 (K5) — %0 hata nötr (gray), yeşil değil.
               const errCls = op.errorRate > 5 ? 'err' : op.errorRate > 0 ? 'warn' : 'gray';
               // v0.9.498 — calls sparkline'ı ARTIK şiddet rengiyle

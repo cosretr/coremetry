@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { fmtNum, fmtDurShort } from '@/lib/utils';
 import type { ExternalPathRow } from '@/lib/types';
 
@@ -48,16 +49,18 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
   dense?: boolean;
 }) {
   const muted: CSSProperties = { fontSize: dense ? 10 : 12, color: 'var(--text3)' };
-
-  if (error) {
-    return (
-      <div style={{ ...muted, color: 'var(--warn)' }}>
-        Yol kırılımı okunamadı — çağıran listesi ve trend geçerli.
-        {!dense && <span className="mono" style={{ display: 'block', marginTop: 3 }}>{error}</span>}
-      </div>
-    );
-  }
   const rows = (paths ?? []).slice(0, limit ?? 10);
+  // v0.10.967 — tablo standardı dilim 5 (P-2): hata erken dönüşü kalktı;
+  // "okunamadı" da boş cümle gibi tablonun İÇİNDE, başlık durur. Sıra aynı:
+  // hata, gelen yolları da gizler (eskiden erken dönüş satırlardan önceydi) —
+  // bayat/kısmi satır hatanın yanında "geçerli" gibi okunmasın. Ham hata
+  // metni eskisi gibi yalnız geniş yüzeyde (kart 240px).
+  const showRows = !error && rows.length > 0;
+  const state: Omit<DataTableStateStaticProps, 'colSpan'> = error
+    ? { kind: 'error', message: dense
+      ? 'Yol kırılımı okunamadı — çağıran listesi ve trend geçerli.'
+      : `Yol kırılımı okunamadı: ${error} — çağıran listesi ve trend geçerli.` }
+    : { kind: 'empty', message: "Bu pencerede URL taşıyan istemci span'i yok — yol kırılımı url.full / http.url / url.path attr'ından türer." };
 
   const total = rows.reduce((a, r) => a + r.calls, 0);
   const maxChars = dense ? 26 : 46;
@@ -78,18 +81,8 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
-            // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
-            // Boş cümle tablonun İÇİNDE, başlık durur. Hata dalı (üstteki
-            // erken dönüş) P-2'yi bekliyor.
-            <tr data-dt-state="empty">
-              <td colSpan={dense ? 3 : 4} className="dt-state">
-                <div className="dt-state-body">
-                  <span>Bu pencerede URL taşıyan istemci span'i yok — yol kırılımı url.full / http.url / url.path attr'ından türer.</span>
-                </div>
-              </td>
-            </tr>
-          ) : rows.map(r => (
+          {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki <th> sayısı (dense'te Hata % yok). */}
+          {!showRows ? <DataTableState colSpan={dense ? 3 : 4} {...state} /> : rows.map(r => (
             <tr key={r.path}>
               <td>
                 <span className="mono"
@@ -111,8 +104,9 @@ export function ExternalPaths({ paths, error, windowS, limit, dense }: {
       {/* Pencere kırpması BEYAN edilir: sunucu ham spans okumasını
           kısıtlıyor, yani bu sayılar çekmecenin üst yarısıyla AYNI
           aralığı kapsamayabilir. Gizlenirse operatör seçtiği aralığın
-          tamamına ait bir toplam sanar. (Satır yokken "0 çağrı" demez.) */}
-      {rows.length > 0 && (
+          tamamına ait bir toplam sanar. (Satır yokken "0 çağrı" demez;
+          v0.10.967 — hata satırının altında bayat toplam da kalmaz.) */}
+      {showRows && (
         <div style={{ ...muted, marginTop: 5 }}>
           {fmtNum(total)} çağrı{windowS ? ` · son ${fmtDurShort(windowS)}` : ''}
           {' · '}id'ler <span className="mono">{'{id}'}</span> olarak gruplandı
