@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LatencyHeatmap as Heatmap } from '@/lib/types';
 import { fmtSmart } from '@/lib/chartFmt';
+import { chartMonoFont } from '@/lib/chart/resolveVar';
 import { fmtClock } from '@/lib/utils';
 import { useThemeTick } from '@/lib/useThemeTick'; // v0.10.505 (D8)
 import { DEFAULT_RAMP_TOKENS, densityRamp, heatmapTimeLabel, type RampTokens } from '@/lib/chart/heatmapRamp';
@@ -255,7 +256,7 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
       // axis isn't a smear of overlapping numbers.
       const css = getComputedStyle(document.documentElement);
       ctx.fillStyle = css.getPropertyValue('--text2').trim() || '#7d8693';
-      ctx.font = '10px ui-monospace, SFMono-Regular, monospace';
+      ctx.font = chartMonoFont(10); // v0.10.980 — tek yığın (--font-mono)
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
       const yLabels = 4;

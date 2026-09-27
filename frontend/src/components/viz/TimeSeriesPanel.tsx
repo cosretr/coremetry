@@ -9,7 +9,7 @@ import { placeTooltip } from '@/lib/chartTooltip';
 import { DisclosureButton } from '@/components/ui';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { timeSeriesPanelBuildSignature } from '@/lib/chartBuildSig';
-import { resolveVar as resolveColor } from '@/lib/chart/resolveVar';
+import { resolveVar as resolveColor, chartMonoFont } from '@/lib/chart/resolveVar';
 import { legendMode } from '@/lib/chart/legendMode';
 import { xRangePinned, type XPin } from '@/lib/chart/xRange';
 import { stepGapsRefiner, nearestFilledIdx } from '@/lib/chart/gapPolicy';
@@ -496,7 +496,7 @@ export function TimeSeriesPanel({
               ctx.strokeStyle = purple;
               ctx.fillStyle = purple;
               ctx.lineWidth = 1.2;
-              ctx.font = '10px ui-monospace, monospace';
+              ctx.font = chartMonoFont(10); // v0.10.980 — tek yığın (--font-mono)
               for (const dNs of deploys) {
                 const t = dNs / 1e9;
                 if (t < xMin || t > xMax) continue;
@@ -730,7 +730,7 @@ export function TimeSeriesPanel({
                 return `<div style="display:flex;gap:8px;align-items:center;line-height:1.5">` +
                   `<span style="display:inline-block;width:8px;height:8px;background:${escapeHTML(r.color)};border-radius:2px;flex-shrink:0"></span>` +
                   `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px" title="${lbl}">${lbl}</span>` +
-                  `<span style="font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums">${escapeHTML(r.text)}</span>` +
+                  `<span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums">${escapeHTML(r.text)}</span>` +
                 `</div>`;
               }).join('');
             tip.style.opacity = '1';

@@ -4,7 +4,7 @@ import uPlot from 'uplot';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { fmtXTicks, fmtAxisTick, fmtTooltipTime } from '@/lib/chartFmt';
 import { overviewChartBuildSignature } from '@/lib/chartBuildSig';
-import { resolveVar } from '@/lib/chart/resolveVar';
+import { resolveVar, chartMonoFont } from '@/lib/chart/resolveVar';
 import { yRangeHeadroom } from '@/lib/chart/yRange';
 import { yRefitScale } from '@/lib/chart/zoomState';
 import { xRangePinned, type XPin } from '@/lib/chart/xRange';
@@ -198,6 +198,7 @@ export function OverviewChart({
     const gridc = resolveVar('var(--border)');
     const text3 = resolveVar('var(--text3)');
     const purple = resolveVar('var(--purple)');
+    const axisFont = chartMonoFont(10); // v0.10.980 — tek yığın (--font-mono)
     const stacked = mode === 'stacked';
 
     // Overlay plugin — regions (background-most) + threshold lines (Grafana-
@@ -259,12 +260,12 @@ export function OverviewChart({
       axes: [
         {
           stroke: text3, grid: { show: false }, ticks: { show: false }, size: 22,
-          font: '10px ui-monospace, monospace',
+          font: axisFont,
           // v0.9.88 — çıplak ":30" yerine ev formatlayıcı fmtXTicks.
           values: (_u, sp) => fmtXTicks(sp as number[]),
         },
         {
-          stroke: text3, size: 34, font: '10px ui-monospace, monospace',
+          stroke: text3, size: 34, font: axisFont,
           grid: { stroke: gridc, width: 1, dash: [3, 4] },
           ticks: { show: false },
           // splits derive from the LIVE scale max so a setData re-fit updates

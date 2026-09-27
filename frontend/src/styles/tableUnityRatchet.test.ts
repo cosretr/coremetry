@@ -119,8 +119,10 @@ const CEILINGS = {
    *  çivi pages/Trace.monoStack.pin.test.ts). Kalan 4 DOM değil canvas:
    *  charts/TimeChart 2 + service/charts/OverviewChart 2 — uPlot eksen
    *  `font`u bir canvas dizgisi, `var(--font-mono)`yu çözmez; göçü
-   *  çözümlenmiş bir belirteç (resolveVar benzeri, useThemeTick ile) ister. */
-  inlineMonoStack: 4, // v0.10.977 — dilim 7: 9 → 4
+   *  çözümlenmiş bir belirteç (resolveVar benzeri, useThemeTick ile) ister.
+   *  v0.10.980 — 4 → 0: eksenler `chartMonoFont(px)` (lib/chart/resolveVar;
+   *  build anında `--font-mono`yu çözer, tema flip'te motor yeniden kurar). */
+  inlineMonoStack: 0, // v0.10.980 — canvas artığı: 4 → 0
   /** T12 / S6 — durumu tablonun İÇİNDE olmayan DataTable tablosu. Dosya
    *  başına `max(0, <DataTableHead> − dt'li <DataTableState>)` + `state=`
    *  almayan `<VirtualTable>` (`dtNoStateOf`). Her DataTable tablosu tam bir

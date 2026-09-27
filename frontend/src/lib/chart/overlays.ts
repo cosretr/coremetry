@@ -1,5 +1,5 @@
 import type uPlot from 'uplot';
-import { resolveVar } from './resolveVar';
+import { resolveVar, chartMonoFont } from './resolveVar';
 
 // overlays.ts (Grafana-parite M3) — paylaşımlı ÇİZİM çekirdeği: y-threshold
 // çizgileri + x-ekseni zaman-bölgesi (problem/anomali penceresi) gölgeleme.
@@ -113,7 +113,7 @@ export function fitLabel(
 // ── Çizim çekirdekleri (draw hook içinden; canvas gerektirir) ──────────────
 
 // drawThresholds — yatay kesikli eşik çizgisi + üstünde ihlal bandı + sağ
-// kenarda etiket. TSP/MLC kopyalarının birebiri: font 10px ui-monospace,
+// kenarda etiket. TSP/MLC kopyalarının birebiri: font 10px --font-mono (v0.10.980),
 // lineWidth 1.2, dash [6,4], etiket sağdan 4px içeride ve çizginin 4px
 // üstünde. bandAlpha: MLC 0.07 (globalAlpha yolu); TSP 0x14/255 (eski
 // hex+'14' dolgusunun alfa eşdeğeri — hex olmayan degenerate renkte eski
@@ -131,7 +131,7 @@ export function drawThresholds(
   const yMax = u.scales[scaleKey]?.max ?? 0;
   const ctx = u.ctx;
   ctx.save();
-  ctx.font = '10px ui-monospace, monospace';
+  ctx.font = chartMonoFont(10);
   for (const th of thresholds) {
     if (!thresholdVisible(th.value, yMin, yMax)) continue;
     const y = u.valToPos(th.value, scaleKey, true);
@@ -288,7 +288,7 @@ export function drawTimeRegions(u: uPlot, regions: ChartTimeRegion[], xUnit = 1)
   const dpr = (typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1) || 1;
   const ctx = u.ctx;
   ctx.save();
-  ctx.font = `${10 * dpr}px ui-monospace, monospace`;
+  ctx.font = chartMonoFont(10 * dpr);
   // v0.10.168 — hiza AÇIKÇA sol/üst: uPlot'un y-ekseni tik etiketleri
   // textAlign='right' bırakıyor ve save() o sızıntıyı yakalıyor; etiket
   // x1'den SOLA uzayıp eksen etiketlerini eziyordu (166 canlı görüntüsü:

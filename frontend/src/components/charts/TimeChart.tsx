@@ -4,7 +4,7 @@ import uPlot from 'uplot';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { fmtXTicks, fmtAxisTick, fmtTooltipTime } from '@/lib/chartFmt';
 import { timeChartBuildSignature } from '@/lib/chartBuildSig';
-import { resolveVar } from '@/lib/chart/resolveVar';
+import { resolveVar, chartMonoFont } from '@/lib/chart/resolveVar';
 import { yRangeHeadroom } from '@/lib/chart/yRange';
 import { yRefitScale } from '@/lib/chart/zoomState';
 import { xRangePinned, type XPin } from '@/lib/chart/xRange';
@@ -189,6 +189,7 @@ export function TimeChart({
     const colors = series.map(s => resolveVar(s.color));
     const gridc = resolveVar('var(--border)');
     const text3 = resolveVar('var(--text3)');
+    const axisFont = chartMonoFont(10); // v0.10.980 — tek yığın (--font-mono)
     const hasRight = series.some(s => s.axis === 'right');
 
     // v0.9.245 — bar genişliğine TAVAN. `Infinity` (maks yok) demek, bucket
@@ -238,7 +239,7 @@ export function TimeChart({
     // re-fit updates the gridlines (the old build-time `max` closure would go
     // stale on the fast-path). fmt read through its ref for live formatting.
     const yAxis = (scale: string, side: 0 | 1, fmtRef: React.MutableRefObject<((v: number) => string) | undefined>, showGrid: boolean, unit: string): uPlot.Axis => ({
-      scale, side, stroke: text3, size: 38, font: '10px ui-monospace, monospace',
+      scale, side, stroke: text3, size: 38, font: axisFont,
       grid: showGrid ? { stroke: gridc, width: 1, dash: [3, 4] } : { show: false },
       // v0.9.245 — kısa tick çentikleri. Etiketler eksene "yapışık" durduğu
       // için hangi sayının hangi çizgiye ait olduğu okunmuyordu (operatör:
@@ -261,7 +262,7 @@ export function TimeChart({
         grid: { stroke: gridc, width: 1, dash: [3, 4] },
         ticks: { show: true, stroke: gridc, width: 1, size: 3 },
         size: 20,
-        font: '10px ui-monospace, monospace',
+        font: axisFont,
         // v0.8.402 — house day-boundary formatter (fmtXTicks stamps MM-DD on
         // the first tick of each new day); space thins ticks so wider
         // date+time labels never overlap.
