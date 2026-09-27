@@ -9,13 +9,22 @@ package argocd
 // başına namespace / exported_namespace değerlerini JobProbe'a doldurur.
 // Burada o gözlemden ADAY instance'lar türetilir; hiçbir şey kaydedilmez.
 //
-// ── NEDEN label-values, NEDEN count() değil ──────────────────────────────
+// ── NEDEN adaylar label-values, NEDEN sayım iş başına TEK count ─────────
 //
-// argocd_app_info ~40k seri (§5.4): /api/v1/series etiket setlerini
-// döndürür (~20–30 MB). label-values yalnız TEKİL değerleri döndürür
-// (onlarca), sunucu-uygulamalı limit + zaman penceresi taşır ve bir PromQL
-// değerlendirmesi başlatmaz. Karşılığı iş başına 2 çağrı (+ paylaşılan iş
-// adında namespace başına 1) — üst sınır api katmanında.
+// v0.10.974 — argocd_app_info ~40k seri (§5.4): /api/v1/series etiket
+// setlerini döndürür (~20–30 MB). ADAY bulma label-values'ta kalır: yalnız
+// TEKİL değerler (onlarca), sunucu-uygulamalı limit + zaman penceresi, PromQL
+// değerlendirmesi yok; iş başına 2 çağrı (+ paylaşılan iş adında namespace
+// başına 1). Adaylar kurulduktan SONRA ikinci tur sayar (onaylı mockup
+// dipnotu): uygulama sayısı iş başına TEK anlık `count [by (namespace)]
+// (group by (namespace, exported_namespace, name) (argocd_app_info{job="J"}))`
+// — §5.4 kural 1–3 (anlık; listelemeden önce say; kopyaları grupla, shard/HA
+// pod'ları çarpmasın). `name` üzerinde label browser ASLA (kural 4) ve `name`
+// tek başına durum C'yi eksik sayar (§5.2: anahtar (instance, app_ns, name)).
+// Shard sayısı sınırlı `pod` label-values (≤100, 1 sa pencere). Sayım
+// çağrıları aynı ≤150 çağrı / 60 s bütçesinin ARTANINI kullanır (api katmanı):
+// hiçbir adayı düşürmez, error/incomplete üretmez, 200'ü bozmaz; bütçe biterse
+// kalan adaylar "sayım atlandı" notu, sonuç countsIncomplete alır.
 //
 // ── §5.2 durumları (H1.2) ────────────────────────────────────────────────
 //
@@ -34,6 +43,9 @@ package argocd
 // önerisi TÜM hub'lardaki kimliklerle çakışmaz (id tüm hub'larda tekil).
 
 import (
+	"encoding/json"
+	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -86,6 +98,16 @@ type Candidate struct {
 	ConfiguredID     string   `json:"configuredId,omitempty"`  // bu (ns, iş) zaten kayıtlıysa o instance
 	Note             string   `json:"note,omitempty"`
 	Error            string   `json:"error,omitempty"`
+	// v0.10.974 — keşif anının sayımı (BE2; ikinci tur, bütçenin artanı).
+	// nil = bilinmiyor (CountNote nedenini söyler). Hatalı aday sayım taşımaz.
+	AppCount            *int   `json:"appCount,omitempty"`            // tekil (namespace, exported_namespace, name)
+	ShardCount          *int   `json:"shardCount,omitempty"`          // tekil `pod` (controller shard/replika)
+	ShardCountTruncated bool   `json:"shardCountTruncated,omitempty"` // pod listesi 100'de kesildi: ShardCount alt sınır
+	CountNote           string `json:"countNote,omitempty"`           // sayım eksik/kısmi ise kısa Türkçe neden
+	// JobWide — v0.10.974 — iş genelinde exported_namespace YOK (durum B, iş
+	// düzeyi aday): sayım iş genelinde count() ile, shard kapsamı (iş, "").
+	// Yalnız sunucu içi.
+	JobWide bool `json:"-"`
 }
 
 func uniqSorted(in []string) []string {
@@ -128,7 +150,7 @@ func BuildCandidates(hubClusterID string, probes []JobProbe, existing []Instance
 			}
 		}
 		if !exported {
-			c := Candidate{MetricsJob: p.Job, Discovered: true, NamespaceCase: "B", AppNamespaces: nss,
+			c := Candidate{MetricsJob: p.Job, Discovered: true, NamespaceCase: "B", AppNamespaces: nss, JobWide: true,
 				Note: "exported_namespace yok (honorLabels: true): namespace Application ns'idir; hubNamespace tahmini — doğrulayın"}
 			if len(nss) == 1 {
 				c.HubNamespace = nss[0]
@@ -257,5 +279,175 @@ func uniqueID(base string, taken map[string]bool) string {
 		if id := b + suffix; !taken[id] {
 			return id
 		}
+	}
+}
+
+// ── v0.10.974 — uygulama / shard sayısı (BE2) ────────────────────────────
+
+// Sayım notları (Candidate.CountNote) — FE bunları title olarak gösterir.
+const (
+	CountNoteNoSeries = "anlık sorguda seri yok"
+	CountNoteNoPod    = "pod etiketi yok"
+	CountNoteBudget   = "sayım atlandı: keşif bütçesi doldu"
+)
+
+// AppCountFailNote — uygulama sayımı okunamadı; reason kısa ve URL'siz
+// (ConsoleError.Type: timeout, unavailable …).
+func AppCountFailNote(reason string) string { return "uygulama sayısı okunamadı: " + reason }
+
+// ShardCountFailNote — pod değerleri okunamadı.
+func ShardCountFailNote(reason string) string { return "shard sayısı okunamadı: " + reason }
+
+// AppCountQuery — v0.10.974 — iş başına TEK anlık sayım (§5.4 kural 1–3).
+// jobWide (durum B iş düzeyi aday): iş genelinde `count(...)`; aksi hâlde
+// `count by (namespace) (...)` ve her aday kendi namespace satırını alır.
+// job AppInfoSelector ile AYNI kaçışlanır; küme matcher'ı thanos
+// EffectiveQuery'nin işi (burada YOK).
+func AppCountQuery(job string, jobWide bool) string {
+	inner := "(group by (namespace, exported_namespace, name) (" + AppInfoSelector(job, "") + "))"
+	if jobWide {
+		return "count" + inner
+	}
+	return "count by (namespace) " + inner
+}
+
+// ShardScope — bir `pod` label-values çağrısı: argocd_app_info{job, [namespace]}
+// ve sonucun yazılacağı aday dizinleri.
+type ShardScope struct {
+	Job       string
+	Namespace string // "" = iş geneli
+	Idx       []int
+}
+
+// CountJob — ikinci turun iş başına işi: bir anlık sayım + shard kapsamları.
+type CountJob struct {
+	Job     string
+	JobWide bool
+	Idx     []int // bu işin adayları (aday sırası)
+	Shards  []ShardScope
+}
+
+// PlanCounts — v0.10.974 — SAF: hatasız adaylar iş başına, ADAY SIRASIYLA.
+// Shard kapsamı: iş tek adaylıysa ya da aday JobWide ise (iş, ""); paylaşılan
+// iş adında (iş, hubNamespace) — her instance kendi controller pod'larını
+// sayar. Hatalı aday hiç sayım çağrısı almaz.
+func PlanCounts(cands []Candidate) []CountJob {
+	var out []CountJob
+	pos := map[string]int{}
+	for i, c := range cands {
+		if c.Error != "" || c.MetricsJob == "" {
+			continue
+		}
+		k, ok := pos[c.MetricsJob]
+		if !ok {
+			k = len(out)
+			pos[c.MetricsJob] = k
+			out = append(out, CountJob{Job: c.MetricsJob})
+		}
+		out[k].Idx = append(out[k].Idx, i)
+		out[k].JobWide = out[k].JobWide || c.JobWide
+	}
+	for k := range out {
+		j := &out[k]
+		if len(j.Idx) == 1 || j.JobWide {
+			j.Shards = []ShardScope{{Job: j.Job, Idx: append([]int(nil), j.Idx...)}}
+			continue
+		}
+		for _, i := range j.Idx {
+			j.Shards = append(j.Shards, ShardScope{Job: j.Job, Namespace: cands[i].HubNamespace, Idx: []int{i}})
+		}
+	}
+	return out
+}
+
+// ParseCountVector — v0.10.974 — Prometheus data.result (vector; thanos
+// ConsoleResult.Result verbatim) → namespace → ham değer dizesi. count()
+// (by'sız) satırının anahtarı "". Değer dize değilse "" (tamsayı değil notu).
+func ParseCountVector(raw json.RawMessage) (map[string]string, error) {
+	var rows []struct {
+		Metric map[string]string `json:"metric"`
+		Value  []json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, fmt.Errorf("vector çözülemedi: %w", err)
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		v := ""
+		if len(r.Value) == 2 {
+			_ = json.Unmarshal(r.Value[1], &v)
+		}
+		out[r.Metric["namespace"]] = v
+	}
+	return out, nil
+}
+
+// maxNoteValue — nota giren upstream değerinin tavanı.
+const maxNoteValue = 32
+
+// AppCountFor — v0.10.974 — SAF: bir adayın uygulama sayısı (nil + not ya da
+// değer). jobWide → "" anahtarı (count()); aksi hâlde adayın hubNamespace'i.
+// Sonuçta yok → CountNoteNoSeries (sonuç MaxSeries'te kesildiyse "kesildi");
+// negatif / kesirli / NaN / sonsuz → "tamsayı değil".
+func AppCountFor(c Candidate, jobWide bool, byNS map[string]string, truncated bool) (*int, string) {
+	key := c.HubNamespace
+	if jobWide {
+		key = ""
+	}
+	raw, ok := byNS[key]
+	if !ok {
+		if truncated {
+			return nil, AppCountFailNote("sonuç seri tavanında kesildi")
+		}
+		return nil, CountNoteNoSeries
+	}
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 || f != math.Trunc(f) || f > math.MaxInt32 {
+		if len(raw) > maxNoteValue {
+			raw = raw[:maxNoteValue]
+		}
+		return nil, AppCountFailNote(fmt.Sprintf("tamsayı değil (%q)", raw))
+	}
+	n := int(f)
+	return &n, ""
+}
+
+// NoteCounts — idx'teki adaylara sayım notu (tekil; "; " ile birleşir).
+func NoteCounts(cands []Candidate, idx []int, note string) {
+	if note == "" {
+		return
+	}
+	for _, i := range idx {
+		c := &cands[i]
+		switch {
+		case c.CountNote == "":
+			c.CountNote = note
+		case !strings.Contains("; "+c.CountNote+"; ", "; "+note+"; "):
+			c.CountNote += "; " + note
+		}
+	}
+}
+
+// ApplyAppCounts — j'nin adaylarına ayrıştırılmış anlık sayımı yazar.
+func ApplyAppCounts(cands []Candidate, j CountJob, byNS map[string]string, truncated bool) {
+	for _, i := range j.Idx {
+		n, note := AppCountFor(cands[i], j.JobWide, byNS, truncated)
+		cands[i].AppCount = n
+		NoteCounts(cands, []int{i}, note)
+	}
+}
+
+// ApplyShardCount — kapsamın adaylarına `pod` değer sayısı: 0 → nil +
+// CountNoteNoPod; kesik liste → ShardCount = n (alt sınır) + işaret.
+func ApplyShardCount(cands []Candidate, sc ShardScope, n int, truncated bool) {
+	for _, i := range sc.Idx {
+		if n <= 0 {
+			cands[i].ShardCount = nil
+			NoteCounts(cands, []int{i}, CountNoteNoPod)
+			continue
+		}
+		v := n
+		cands[i].ShardCount = &v
+		cands[i].ShardCountTruncated = truncated
 	}
 }

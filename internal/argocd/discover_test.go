@@ -7,6 +7,8 @@ package argocd
 // paylaşılan iş adı, kayıtlı instance eşlemesi, kimlik önerisi.
 
 import (
+	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -172,5 +174,210 @@ func TestBuildCandidatesPerHub(t *testing.T) {
 	}
 	if onB[0].ID == "openshift-gitops" || !instanceIDRe.MatchString(onB[0].ID) {
 		t.Fatalf("kimlik tüm hub'larda tekil olmalı: %q", onB[0].ID)
+	}
+}
+
+// ── v0.10.974 — keşifte uygulama / shard sayısı (BE2) ──────────────────────
+//
+// Onaylı mockup dipnotu + audit §5.4 kural 1–3: uygulama sayısı iş başına
+// TEK anlık `count [by (namespace)] (group by (namespace, exported_namespace,
+// name) (argocd_app_info{job="J"}))` (name label browser'ı YASAK, kural 4);
+// shard sayısı sınırlı `pod` label-values (≤100). Saf parçalar: sorgu metni,
+// JobWide işareti, iş başına plan (shard kapsamı), sonuç atama ve notlar.
+
+func TestAppCountQuery(t *testing.T) {
+	const grp = `group by (namespace, exported_namespace, name) `
+	cases := []struct {
+		job  string
+		wide bool
+		want string
+	}{
+		{"team-a-prod-metrics", false, `count by (namespace) (` + grp + `(argocd_app_info{job="team-a-prod-metrics"}))`},
+		{"team-a-prod-metrics", true, `count(` + grp + `(argocd_app_info{job="team-a-prod-metrics"}))`},
+		// AppInfoSelector ile AYNI kaçış (PromQL dize sabiti).
+		{`we"ird\job`, true, `count(` + grp + `(argocd_app_info{job="we\"ird\\job"}))`},
+		{"a\nb", false, `count by (namespace) (` + grp + `(argocd_app_info{job="a\nb"}))`},
+	}
+	for _, c := range cases {
+		if got := AppCountQuery(c.job, c.wide); got != c.want {
+			t.Errorf("AppCountQuery(%q, %v)\n got %s\nwant %s", c.job, c.wide, got, c.want)
+		}
+	}
+}
+
+// JobWide — iş genelinde exported_namespace YOK (durum B, iş düzeyi aday):
+// namespace etiketi Application ns'idir, sayım iş genelinde count() ile.
+func TestBuildCandidatesJobWide(t *testing.T) {
+	probes := []JobProbe{
+		{Job: "a-metrics", Namespaces: []string{"a"}, Exported: map[string][]string{"a": {"a"}}},        // A
+		{Job: "b-metrics", Namespaces: []string{"b"}},                                                   // B tek ns
+		{Job: "c-metrics", Namespaces: []string{"c-1", "c-2"}},                                          // B çok ns
+		{Job: "d-metrics", Namespaces: []string{"d", "d-x"}, Exported: map[string][]string{"d": {"d"}}}, // d-x: ns düzeyi B
+		{Job: "e-metrics", Err: "unavailable: down"},                                                    // hata
+	}
+	got := byJobNS(BuildCandidates("c-hub-a", probes, nil))
+	want := map[string]bool{"a-metrics|a": false, "b-metrics|b": true, "c-metrics|": true, "d-metrics|d": false, "d-metrics|d-x": false, "e-metrics|": false}
+	if len(got) != len(want) {
+		t.Fatalf("adaylar: %+v", got)
+	}
+	for k, w := range want {
+		if c, ok := got[k]; !ok || c.JobWide != w {
+			t.Errorf("%s JobWide=%v, beklenen %v (%+v)", k, c.JobWide, w, c)
+		}
+	}
+	raw, _ := json.Marshal(got["b-metrics|b"])
+	if strings.Contains(strings.ToLower(string(raw)), "jobwide") {
+		t.Fatalf("JobWide yalnız sunucu içi (json:\"-\"): %s", raw)
+	}
+}
+
+// PlanCounts — hatasız adaylar iş başına ADAY SIRASIYLA gruplanır; shard
+// kapsamı tek adaylı ya da JobWide işte (iş, ""), paylaşılan işte (iş, ns).
+// Hatalı aday hiç sayım çağrısı almaz.
+func TestPlanCounts(t *testing.T) {
+	cands := BuildCandidates("c-hub-a", []JobProbe{
+		{Job: "argocd-metrics", Namespaces: []string{"team-b", "team-a"}, Exported: map[string][]string{"team-a": {"team-a"}, "team-b": {"team-b"}}},
+		{Job: "team-c-metrics", Namespaces: []string{"team-c"}, Exported: map[string][]string{"team-c": {"team-c-apps"}}},
+		{Job: "team-d-metrics", Namespaces: []string{"d-1", "d-2"}},
+		{Job: "team-x-metrics", Err: "internal: boom"},
+	}, nil)
+	// sıra: argocd-metrics|team-a, argocd-metrics|team-b, team-c, team-d, team-x(hata)
+	plan := PlanCounts(cands)
+	type sc struct{ job, ns, idx string }
+	type row struct {
+		job  string
+		wide bool
+		idx  string
+		sh   []sc
+	}
+	want := []row{
+		{"argocd-metrics", false, "0,1", []sc{{"argocd-metrics", "team-a", "0"}, {"argocd-metrics", "team-b", "1"}}},
+		{"team-c-metrics", false, "2", []sc{{"team-c-metrics", "", "2"}}},
+		{"team-d-metrics", true, "3", []sc{{"team-d-metrics", "", "3"}}},
+	}
+	ints := func(xs []int) string {
+		var s []string
+		for _, x := range xs {
+			s = append(s, strconv.Itoa(x))
+		}
+		return strings.Join(s, ",")
+	}
+	if len(plan) != len(want) {
+		t.Fatalf("plan %+v", plan)
+	}
+	for i, w := range want {
+		p := plan[i]
+		if p.Job != w.job || p.JobWide != w.wide || ints(p.Idx) != w.idx || len(p.Shards) != len(w.sh) {
+			t.Fatalf("plan[%d] = %+v, beklenen %+v", i, p, w)
+		}
+		for k, s := range w.sh {
+			if g := p.Shards[k]; g.Job != s.job || g.Namespace != s.ns || ints(g.Idx) != s.idx {
+				t.Errorf("plan[%d].Shards[%d] = %+v, beklenen %+v", i, k, g, s)
+			}
+		}
+	}
+	if len(PlanCounts(nil)) != 0 {
+		t.Fatal("boş aday → boş plan")
+	}
+}
+
+func TestParseCountVector(t *testing.T) {
+	m, err := ParseCountVector(json.RawMessage(`[{"metric":{"namespace":"team-a"},"value":[1700000000.5,"1184"]},` +
+		`{"metric":{},"value":[1700000000.5,"57"]},{"metric":{"namespace":"team-b"},"value":[1700000000.5,3]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m["team-a"] != "1184" || m[""] != "57" {
+		t.Fatalf("namespace → değer: %v", m)
+	}
+	if v, ok := m["team-b"]; !ok || v != "" {
+		t.Fatalf("dize olmayan değer boş dizeye iner (tamsayı değil notu): %v", m)
+	}
+	if m, err := ParseCountVector(json.RawMessage(`[]`)); err != nil || len(m) != 0 {
+		t.Fatalf("boş vektör: %v %v", m, err)
+	}
+	for _, bad := range []string{`{`, `{"a":1}`, `[1,2]`} {
+		if _, err := ParseCountVector(json.RawMessage(bad)); err == nil {
+			t.Errorf("%s hata vermeli", bad)
+		}
+	}
+}
+
+func TestAppCountFor(t *testing.T) {
+	byNS := map[string]string{"team-a": "1184", "team-z": "0", "team-f": "1.5", "team-n": "NaN", "team-m": "-1",
+		"team-i": "+Inf", "team-e": "1e3", "team-s": "", "": "57"}
+	cases := []struct {
+		name  string
+		ns    string
+		wide  bool
+		trunc bool
+		want  int // -1 = nil
+		note  string
+	}{
+		{"tamsayı", "team-a", false, false, 1184, ""},
+		{"sıfır geçerli", "team-z", false, false, 0, ""},
+		{"üslü tamsayı", "team-e", false, false, 1000, ""},
+		{"iş geneli count() → boş anahtar", "", true, false, 57, ""},
+		{"iş geneli: aday ns'i yok sayılır", "b-ns", true, false, 57, ""},
+		{"sonuçta yok", "team-q", false, false, -1, "anlık sorguda seri yok"},
+		{"kesik sonuçta yok", "team-q", false, true, -1, "uygulama sayısı okunamadı: sonuç seri tavanında kesildi"},
+		{"kesirli", "team-f", false, false, -1, `uygulama sayısı okunamadı: tamsayı değil ("1.5")`},
+		{"NaN", "team-n", false, false, -1, `uygulama sayısı okunamadı: tamsayı değil ("NaN")`},
+		{"negatif", "team-m", false, false, -1, `uygulama sayısı okunamadı: tamsayı değil ("-1")`},
+		{"sonsuz", "team-i", false, false, -1, `uygulama sayısı okunamadı: tamsayı değil ("+Inf")`},
+		{"dize değil", "team-s", false, false, -1, `uygulama sayısı okunamadı: tamsayı değil ("")`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			n, note := AppCountFor(Candidate{HubNamespace: c.ns}, c.wide, byNS, c.trunc)
+			switch {
+			case c.want < 0 && n != nil:
+				t.Fatalf("nil beklenirdi, %d", *n)
+			case c.want >= 0 && (n == nil || *n != c.want):
+				t.Fatalf("%v, beklenen %d", n, c.want)
+			}
+			if note != c.note {
+				t.Fatalf("not %q, beklenen %q", note, c.note)
+			}
+		})
+	}
+}
+
+func TestApplyCounts(t *testing.T) {
+	cands := []Candidate{{MetricsJob: "j", HubNamespace: "team-a"}, {MetricsJob: "j", HubNamespace: "team-b"}}
+	j := CountJob{Job: "j", Idx: []int{0, 1}, Shards: []ShardScope{{Job: "j", Namespace: "team-a", Idx: []int{0}}, {Job: "j", Namespace: "team-b", Idx: []int{1}}}}
+	ApplyAppCounts(cands, j, map[string]string{"team-a": "12"}, false)
+	ApplyShardCount(cands, j.Shards[0], 3, false)
+	ApplyShardCount(cands, j.Shards[1], 0, false)
+	a, b := cands[0], cands[1]
+	if a.AppCount == nil || *a.AppCount != 12 || a.ShardCount == nil || *a.ShardCount != 3 || a.ShardCountTruncated || a.CountNote != "" {
+		t.Errorf("a: %+v", a)
+	}
+	if b.AppCount != nil || b.ShardCount != nil || b.CountNote != "anlık sorguda seri yok; pod etiketi yok" {
+		t.Errorf("b (iki not birleşir): %+v", b)
+	}
+	// ≥100 pod: ShardCount=100 alt sınır + işaret, not yok.
+	c := []Candidate{{MetricsJob: "j"}}
+	ApplyShardCount(c, ShardScope{Job: "j", Idx: []int{0}}, 100, true)
+	if c[0].ShardCount == nil || *c[0].ShardCount != 100 || !c[0].ShardCountTruncated || c[0].CountNote != "" {
+		t.Errorf("kesik pod listesi: %+v", c[0])
+	}
+	// Not tekilleşir (bütçe notu iki kez yazılsa da bir kez görünür).
+	NoteCounts(c, []int{0}, CountNoteBudget)
+	NoteCounts(c, []int{0}, CountNoteBudget)
+	if c[0].CountNote != CountNoteBudget || CountNoteBudget != "sayım atlandı: keşif bütçesi doldu" {
+		t.Errorf("tekil not: %q", c[0].CountNote)
+	}
+	raw, _ := json.Marshal(Candidate{ID: "x"})
+	for _, k := range []string{"appCount", "shardCount", "shardCountTruncated", "countNote"} {
+		if strings.Contains(string(raw), k) {
+			t.Errorf("sayısız aday %q taşımamalı (omitempty): %s", k, raw)
+		}
+	}
+	if got := AppCountFailNote("timeout"); got != "uygulama sayısı okunamadı: timeout" {
+		t.Errorf("AppCountFailNote: %q", got)
+	}
+	if got := ShardCountFailNote("unavailable"); got != "shard sayısı okunamadı: unavailable" {
+		t.Errorf("ShardCountFailNote: %q", got)
 	}
 }

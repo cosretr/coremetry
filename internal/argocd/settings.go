@@ -22,6 +22,20 @@
 // sızardı. Çözülemeyen ref FAIL-CLOSED (Token hata döner, işçi instance'ı
 // atlar); thanos başlıksız istek atar, burada atılmaz (§7.2).
 //
+// ── v0.10.974 — PUT kuralları (put.go; operatör onayı 2026-09-27) ────────
+//
+// Admin PUT artık Validate'i doğrudan değil ApplyPut'u çağırır: boş tokenRef
+// kayıtlı referansı KORUR (kaldırmak istek-yalnız `clearTokenRef: true`;
+// Instance alanı değil, blob'a girmez); kayıtlı bir instance'ın id'si SALT
+// OKUNUR — kayıtlı bir (hubClusterId, hubNamespace) yuvasını, o yuvanın
+// kayıtlı id'si gövdede yokken yeni bir id alırsa 400 instances[i].id (sessiz
+// sil+ekle YOK; önce eski satırı kaldırıp kaydet, sonra yeni kimlikle ekle —
+// id Faz 3'te ClickHouse instance_id). Kayıtlı id'yi başka hub'a taşımak,
+// silmek ve boş yuvaya yeni id izinli; namespace'i de değişen yeniden
+// adlandırma sil+ekle'den ayırt edilemez, izinli. Instance'ları bağlı bir
+// kayıtlı hub hubs'tan çıkarılamaz (400 instances[i].hubClusterId). Config
+// import (config_iox) bunların DIŞINDA: tam değiştirir, koruma anlamı yok.
+//
 // ── NEDEN sayısal sıfır = varsayılan ─────────────────────────────────────
 //
 // Blob, rollouts emsali gibi operatörün GİRDİĞİNİ saklar; uygulanan
@@ -621,7 +635,9 @@ func canonicalInstances(in []Instance, hubs []Hub) ([]Instance, map[string]bool,
 		case inst.HubClusterID == "":
 			return nil, nil, fieldErr(p("hubClusterId"), "%d hub var; instance'ın hub'ı zorunlu", len(hubs))
 		case !hubSet[inst.HubClusterID]:
-			return nil, nil, fieldErr(p("hubClusterId"), "%q hubs listesinde değil", inst.HubClusterID)
+			// v0.10.974 — mesaj çareyi de söyler (yol aynı; kayıtlı hub'ın
+			// kaldırılması BE4'te, ApplyPut ön denetiminde daha özgül).
+			return nil, nil, fieldErr(p("hubClusterId"), "%q hubs listesinde değil — hub'ı hubs listesine ekleyin ya da instance'ı listedeki bir hub'a taşıyın", inst.HubClusterID)
 		}
 		if len(inst.Name) > maxNameLen || hasControl(inst.Name) {
 			return nil, nil, fieldErr(p("name"), "≤%d karakter, kontrol karakteri yok", maxNameLen)

@@ -1946,6 +1946,21 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(s),
     }),
+  // v0.10.974 — Argo CD ayarları (admin; argocd_settings_routes.go). PUT boş
+  // tokenRef'te kayıtlı referansı korur; kaldırmak istek-yalnız
+  // `clearTokenRef: true`. Keşif hub başına tek POST ve sunucu bütçesi 60 sn
+  // (≤150 çağrı): istemci tavanı 75 sn, çağıranın signal'i (sekme sökülünce) keser.
+  getArgoCDSettings: () => get<import('./types').ArgoCDSettingsResponse>(`/api/settings/argocd`),
+  putArgoCDSettings: (s: import('./types').ArgoCDSettingsInput) =>
+    request<import('./types').ArgoCDSettingsResponse>(`/api/settings/argocd`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(s),
+    }),
+  discoverArgoCD: (b: import('./types').ArgoCDDiscoverRequest, signal?: AbortSignal) =>
+    request<import('./types').ArgoCDDiscoverResult>(`/api/settings/argocd/discover`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(b), signal, timeoutMs: 75_000,
+    }),
   // Remote-cluster pod metrics (/clusters yüzeyi). Fan-out is the
   // CALLER's: one request per cluster so each rides its own cache
   // slot and fails independently (audit §6).

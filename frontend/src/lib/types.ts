@@ -8187,3 +8187,25 @@ export interface TracePodMetricsQuery {
   mdp: number;
   pods: { ns: string; pod: string }[];
 }
+
+// ── v0.10.974 — Argo CD ayarları ──────────────────────────────────────────
+// GET/PUT /api/settings/argocd + POST /api/settings/argocd/discover
+// (internal/api/argocd_settings_routes.go, internal/argocd/{settings,discover,put}.go).
+// Tek sahip bu bölge (lane F); ClustersTab yalnız import eder. `settings.hubs`,
+// `instances`, `envList`, `pins` gelmeyebilir (= []), `hubs[].injectClusterLabel`
+// gelmeyebilir (= true), `updatedAt` nanosaniye.
+export interface ArgoCDHub { clusterId: string; injectClusterLabel?: boolean }
+export interface ArgoCDInstance { id: string; hubClusterId: string; name?: string; hubNamespace: string; metricsJob?: string; apiUrl?: string; tokenRef?: string; insecureSkipVerify?: boolean; enabled: boolean; discovered?: boolean; appsAnyNamespace?: boolean }
+/** v0.10.974 — PUT'a özgü: `clearTokenRef` İSTEK-YALNIZ (saklanmaz, geri dönmez). Boş tokenRef + bayraksız = kayıtlı ref korunur. */
+export interface ArgoCDInstanceInput extends ArgoCDInstance { clearTokenRef?: boolean }
+export interface ArgoCDPin { clusterId: string; namespace: string; workloadKind: string; workload: string; instanceId: string; appNamespace: string; appName: string }
+export interface ArgoCDSettings { enabled: boolean; hubs?: ArgoCDHub[]; envList?: string[]; instances?: ArgoCDInstance[]; apiWorker: { rps?: number; burst?: number; maxConcurrent?: number }; classification: { windowMin?: number; outOfBandLookbackMin?: number; metricsOnlyMode?: '' | 'estimate' | 'unknown' }; pins?: ArgoCDPin[]; reader: { maxSeries?: number; maxBodyMiB?: number; timeoutS?: number }; intervals: { metricsS?: number; inventoryMin?: number; mapperMin?: number; classifierReevalH?: number }; mapping: { nameConfidence?: number; namespaceConfidence?: number }; updatedAt?: number }
+export interface ArgoCDSettingsInput extends Omit<ArgoCDSettings, 'instances' | 'updatedAt'> { instances: ArgoCDInstanceInput[] }
+export interface ArgoCDBound { min: number; max: number; default: number }
+export interface ArgoCDTokenStatus { tokenRef: string; resolved: boolean; error?: string }
+export interface ArgoCDHubStatus { id: string; name?: string; enabled: boolean; found: boolean; injectClusterLabel: boolean }
+export interface ArgoCDSettingsResponse { settings: ArgoCDSettings; resolved: ArgoCDSettings; defaults: ArgoCDSettings; bounds: Record<string, ArgoCDBound>; tokens: Record<string, ArgoCDTokenStatus>; hubs: ArgoCDHubStatus[] }
+export interface ArgoCDCandidate { id: string; hubClusterId: string; name: string; hubNamespace: string; metricsJob: string; appsAnyNamespace: boolean; discovered: boolean; namespaceCase?: 'A' | 'B' | 'C'; appNamespaces?: string[]; configuredId?: string; note?: string; error?: string; appCount?: number; shardCount?: number; shardCountTruncated?: boolean; countNote?: string }
+export interface ArgoCDDiscoverRequest { hubClusterId: string; injectClusterLabel?: boolean }
+export interface ArgoCDDiscoverResult { hubClusterId: string; hubName: string; injectClusterLabel: boolean; window: { start: number; end: number }; candidates: ArgoCDCandidate[]; jobsTruncated: boolean; incomplete?: boolean; countsIncomplete?: boolean; warnings?: string[]; calls: number; saved: false }
+export interface ArgoCDDiscoverError { error: string; errorType?: string } // guardrail | timeout | unavailable | internal | bad_data | execution | response_too_large; 429 has only {error}

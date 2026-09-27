@@ -32,8 +32,17 @@ package api
 // start/end AÇIKÇA, sunucu-uygulamalı limit, partial_response=false).
 // Adaylar argocd.BuildCandidates'ta saf türetilir ve HİÇBİR ŞEY
 // KAYDEDİLMEZ — operatör seçip PUT'la kaydeder (annex §7.2 "öner, asla
-// otomatik yazma"). Sınırlar: ≤50 iş, iş başına ≤100 değer, ≤150 çağrı,
-// çağrı başına 15 s, toplam 60 s; pod başına tek eşzamanlı keşif (429).
+// otomatik yazma").
+// v0.10.974 — aday bulma label-values'ta KALIR; adaylar kurulduktan SONRA
+// ikinci tur sayar (onaylı mockup dipnotu): uygulama sayısı iş başına TEK
+// anlık ConsoleQuery `count [by (namespace)] (group by (namespace,
+// exported_namespace, name) (argocd_app_info{job="J"}))` (§5.4 kural 1–3:
+// anlık, listelemeden önce say, shard/HA kopyalarını grupla; `name` label
+// browser'ı ASLA, kural 4), shard sayısı sınırlı `pod` label-values (≤100).
+// Sınırlar: ≤50 iş, iş başına ≤100 değer, ≤150 çağrı (sayımlar DAHİL), çağrı
+// başına 15 s, toplam 60 s; pod başına tek eşzamanlı keşif (429). Sayım
+// yalnız ARTAN bütçeyi kullanır: aday düşürmez, error/incomplete üretmez,
+// 200'ü bozmaz; bütçe biterse kalan adaylara not + countsIncomplete.
 // Hub yok / bilinmiyor / devre dışı / tokenRef'i çözülemiyor → 400
 // guardrail ve upstream'e İSTEK YOK (§7.2 fail-closed ruhu). Upstream
 // hatası ConsoleError.StatusCode ile eşlenir; gövde yapılandırılmış URL'yi
@@ -204,6 +213,14 @@ func writeArgoCDFieldError(w http.ResponseWriter, err error) {
 // hub mevcut Remote Cluster'a karşı) → kalıcı yaz → bu pod'da canlı →
 // peer'lara yayınla → audit. Yazım istek iptaline bağlı DEĞİL
 // (context.WithoutCancel, promql_console_settings.go emsali).
+//
+// v0.10.974 — Validate yerine argocd.ApplyPut (put.go: boş tokenRef kayıtlıyı
+// korur, istek-yalnız clearTokenRef kaldırır, kayıtlı kimlik değiştirilemez,
+// bağlı instance'ı olan hub kaldırılamaz). Birleştirmeden ÖNCE kalıcı blob
+// best-effort yeniden yüklenir: B pod'undaki PUT, A pod'unun az önce kaydettiği
+// bloba karşı birleşir (≤30 s bayat bellek kopyasına değil); okuma hatası
+// loglanır, bellekteki blobla sürülür. Audit details birleşmiş blobdur
+// (clearTokenRef taşımaz).
 func (s *Server) putArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 	svc := argocdSettingsSvc.Load()
 	if svc == nil {
@@ -215,12 +232,7 @@ func (s *Server) putArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 		writeArgoCDFieldError(w, &argocd.FieldError{Msg: "gövde okunamadı ya da 1 MiB'ı aşıyor"})
 		return
 	}
-	in, err := argocd.ParseInput(raw)
-	if err != nil {
-		writeArgoCDFieldError(w, err)
-		return
-	}
-	cfg, err := argocd.Validate(in, s.argocdClusterRefs())
+	in, opts, err := argocd.ParsePut(raw)
 	if err != nil {
 		writeArgoCDFieldError(w, err)
 		return
@@ -228,6 +240,14 @@ func (s *Server) putArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 	st := argocdSettingsStoreOf(s)
 	if st == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "ayar deposu bağlı değil")
+		return
+	}
+	if err := svc.LoadPersisted(r.Context(), st); err != nil {
+		log.Printf("[argocd] PUT öncesi kalıcı blob yüklenemedi, bellekteki blobla sürülüyor: %v", err)
+	}
+	cfg, err := argocd.ApplyPut(in, opts, svc.Current(), s.argocdClusterRefs())
+	if err != nil {
+		writeArgoCDFieldError(w, err)
 		return
 	}
 	if err := svc.SavePersisted(context.WithoutCancel(r.Context()), st, cfg); err != nil {
@@ -251,6 +271,9 @@ const (
 	argocdDiscoverMaxBodyB    = int64(4 << 20) // label-values gövdesi: onlarca değer
 	argocdDiscoverWindow      = time.Hour      // §5.4 kural 4: metadata HER ZAMAN pencereli
 	argocdDiscoverReqMaxBody  = 4 << 10
+	// argocdCountMaxSeries — v0.10.974 — anlık count'un seri tavanı: iş başına
+	// en çok argocdDiscoverMaxValues namespace satırı (+1 kesilmeyi görür).
+	argocdCountMaxSeries = argocdDiscoverMaxValues + 1
 )
 
 // argocdDiscoverBusy — pod başına tek eşzamanlı keşif (≤150 hub çağrısı).
@@ -277,9 +300,12 @@ type argocdDiscoverResult struct {
 	Candidates         []argocd.Candidate     `json:"candidates"`
 	JobsTruncated      bool                   `json:"jobsTruncated"`
 	Incomplete         bool                   `json:"incomplete,omitempty"` // çağrı/zaman bütçesi doldu
-	Warnings           []string               `json:"warnings,omitempty"`   // upstream warnings (URL maskeli)
-	Calls              int                    `json:"calls"`
-	Saved              bool                   `json:"saved"` // her zaman false: probe salt-okunur
+	// CountsIncomplete — v0.10.974 — sayım turu (uygulama/shard) bütçeyi
+	// bitirdi; aday listesi TAM, Incomplete bunun için set edilmez.
+	CountsIncomplete bool     `json:"countsIncomplete,omitempty"`
+	Warnings         []string `json:"warnings,omitempty"` // upstream warnings (URL maskeli)
+	Calls            int      `json:"calls"`
+	Saved            bool     `json:"saved"` // her zaman false: probe salt-okunur
 }
 
 func writeArgoCDGuardrail(w http.ResponseWriter, msg string) {
@@ -376,7 +402,8 @@ func (s *Server) discoverArgoCDInstances(w http.ResponseWriter, r *http.Request)
 	}
 	// Probe gerçekten koştu (korkuluklar geçildi): başarılı ya da değil audit.
 	details, _ := json.Marshal(map[string]any{"hubClusterId": hubID, "injectClusterLabel": inject,
-		"candidates": len(res.Candidates), "calls": res.Calls, "status": status, "errorType": errType})
+		"candidates": len(res.Candidates), "calls": res.Calls, "status": status, "errorType": errType,
+		"countsIncomplete": res.CountsIncomplete}) // v0.10.974
 	s.audit(r, "settings.argocd.discover", "settings", argocd.SettingsKey, string(details))
 	switch {
 	case err == nil:
@@ -395,7 +422,8 @@ func (s *Server) discoverArgoCDInstances(w http.ResponseWriter, r *http.Request)
 // görür); tek bir işin sorgusu düşerse o aday Error taşır ve tur sürer.
 // Bütçe (çağrı sayısı / bağlam) biterse kalan işler "atlandı" hatasıyla
 // döner ve sonuç Incomplete işaretlenir. hub'ın küme etiketi, inject=false
-// ise çağıran tarafından zaten temizlenmiştir.
+// ise çağıran tarafından zaten temizlenmiştir. v0.10.974 — adaylar kurulunca
+// aynı bütçeyle sayım turu (argocdCountPass).
 func (s *Server) runArgoCDDiscovery(ctx context.Context, hub thanos.ClusterConfig, inject bool, existing []argocd.Instance) (*argocdDiscoverResult, error) {
 	end := argocdDiscoverNow()
 	start := end.Add(-argocdDiscoverWindow)
@@ -472,11 +500,84 @@ func (s *Server) runArgoCDDiscovery(ctx context.Context, hub thanos.ClusterConfi
 	if res.Candidates == nil {
 		res.Candidates = []argocd.Candidate{}
 	}
+	s.argocdCountPass(ctx, hub, end, res, values, budgetLeft, warns)
 	for w := range warns {
 		res.Warnings = append(res.Warnings, w)
 	}
 	sort.Strings(res.Warnings)
 	return res, nil
+}
+
+// argocdCountPass — v0.10.974 — BE2 ikinci tur (dosya başlığı): hatasız
+// adaylar iş başına (argocd.PlanCounts) bir anlık count + kapsam başına bir
+// `pod` label-values. Her çağrı res.Calls'a sayılır ve AYNI budgetLeft'e
+// (≤150 çağrı, 60 s bağlam) tabidir; adaylar zaten kurulu olduğundan sayım
+// hiçbir adaya mal olamaz. Başarısız sayım yalnız CountNote yazar (error,
+// incomplete, 200 dokunulmaz); bütçe/bağlam biterse kalan adaylar
+// CountNoteBudget ve sonuç CountsIncomplete alır. Hub küme etiketi inject=false
+// ise çağıran tarafından zaten temizlenmiştir (count da etiketsiz koşar).
+func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, end time.Time, res *argocdDiscoverResult,
+	values func(label, sel string, limit int) (*thanos.ConsoleLabelsResult, error), budgetLeft func(int) bool, warns map[string]bool) {
+	cands := res.Candidates
+	qlim := thanos.ConsoleLimits{Timeout: argocdDiscoverCallTimeout, MaxSeries: argocdCountMaxSeries,
+		MaxBodyBytes: argocdDiscoverMaxBodyB, PartialResponse: false}
+	skip := func(idx []int) {
+		argocd.NoteCounts(cands, idx, argocd.CountNoteBudget)
+		res.CountsIncomplete = true
+	}
+	// fail — sayım hatası: bağlam bittiyse bütçe (atlandı), değilse kısa ve
+	// URL'siz neden (ConsoleError.Type; tanınmayan hata yalnız logda).
+	fail := func(idx []int, err error, note func(string) string) {
+		if ctx.Err() != nil {
+			skip(idx)
+			return
+		}
+		why := thanos.ConsoleErrInternal
+		var ce *thanos.ConsoleError
+		if errors.As(err, &ce) {
+			why = ce.Type
+		} else {
+			log.Printf("[argocd] keşif sayımı: beklenmeyen hata: %v", err)
+		}
+		argocd.NoteCounts(cands, idx, note(why))
+	}
+	for _, j := range argocd.PlanCounts(cands) {
+		if !budgetLeft(1) {
+			skip(j.Idx)
+			continue
+		}
+		res.Calls++
+		qr, err := s.thanos.ConsoleQuery(ctx, hub, thanos.ConsoleInstantQuery{Query: argocd.AppCountQuery(j.Job, j.JobWide), Time: end}, qlim)
+		switch {
+		case err != nil:
+			fail(j.Idx, err, argocd.AppCountFailNote)
+		case qr.ResultType != "vector":
+			argocd.NoteCounts(cands, j.Idx, argocd.AppCountFailNote("beklenmeyen sonuç türü "+qr.ResultType))
+		default:
+			for _, w := range qr.Warnings {
+				warns[w] = true
+			}
+			byNS, perr := argocd.ParseCountVector(qr.Result)
+			if perr != nil {
+				log.Printf("[argocd] keşif sayımı %s: %v", j.Job, perr)
+				argocd.NoteCounts(cands, j.Idx, argocd.AppCountFailNote("bozuk yanıt"))
+				break
+			}
+			argocd.ApplyAppCounts(cands, j, byNS, qr.Truncated)
+		}
+		for _, sc := range j.Shards {
+			if !budgetLeft(1) {
+				skip(sc.Idx)
+				continue
+			}
+			pods, err := values("pod", argocd.AppInfoSelector(sc.Job, sc.Namespace), argocdDiscoverMaxValues)
+			if err != nil {
+				fail(sc.Idx, err, argocd.ShardCountFailNote)
+				continue
+			}
+			argocd.ApplyShardCount(cands, sc, len(pods.Values), pods.Truncated)
+		}
+	}
 }
 
 // argocdProbeErrText — aday başına hata metni (URL'siz; ConsoleError

@@ -8,6 +8,14 @@ package api
 // parametreleri, küme etiketi enjeksiyon anahtarı, upstream hatası URL
 // sızdırmadan eşlenir, meşgul kapısı) ve kablo pinleri (reload case,
 // config-import listesi, main.go boot + 30 s yenileme).
+//
+// v0.10.974 — Argo CD ayar sekmesi onayının (2026-09-27) dört arka uç kuralı:
+// boş tokenRef kayıtlıyı korur / clearTokenRef kaldırır (blob'a, cevaba,
+// audit'e hiç girmez), kayıtlı kimlik değiştirme 400, bağlı instance'ı olan
+// hub kaldırma 400, PUT başka pod'un az önce yazdığı bloba karşı birleşir;
+// keşifte ikinci tur uygulama (anlık count, sahte /api/v1/query) ve shard
+// (`pod` label-values) sayımı aynı bütçeden, sayım hatası 200'ü bozmaz; hub
+// Thanos 403 metni FE'nin eşlediği biçimde pinli.
 
 import (
 	"context"
@@ -29,7 +37,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
-// ── Sahte Thanos (yalnız label values) ─────────────────────────────────────
+// ── Sahte Thanos (label values + v0.10.974 anlık sorgu) ────────────────────
 
 type argoFakeReq struct {
 	Method, Path string
@@ -43,7 +51,15 @@ type argoFakeThanos struct {
 	// values — etiket adı → match[] içinde aranan alt dize → değerler.
 	// İlk eşleşen alt dize kazanır (daha özgül olan önce yazılır).
 	values map[string][]argoFakeRule
-	fail   func(req argoFakeReq) (int, string) // 0 = başarı
+	// queries — v0.10.974 — /api/v1/query: `query` içinde aranan alt dize →
+	// vector data.result JSON'u (ilk eşleşen; yoksa []).
+	queries []argoFakeQueryRule
+	fail    func(req argoFakeReq) (int, string) // 0 = başarı
+}
+
+type argoFakeQueryRule struct {
+	contains string
+	result   string
 }
 
 type argoFakeRule struct {
@@ -68,6 +84,18 @@ func newArgoFakeThanos(t *testing.T) *argoFakeThanos {
 				fmt.Fprint(w, body)
 				return
 			}
+		}
+		if req.Path == "/api/v1/query" {
+			result := "[]"
+			for _, rule := range f.queries {
+				if strings.Contains(req.Form.Get("query"), rule.contains) {
+					result = rule.result
+					break
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":%s}}`, result)
+			return
 		}
 		const pre, suf = "/api/v1/label/", "/values"
 		if !strings.HasPrefix(req.Path, pre) || !strings.HasSuffix(req.Path, suf) {
@@ -99,14 +127,18 @@ func (f *argoFakeThanos) requests() []argoFakeReq {
 
 // argoFakeStore — system_settings'in bellek içi ikizi.
 type argoFakeStore struct {
-	mu   sync.Mutex
-	rows map[string][]byte
-	puts int
+	mu     sync.Mutex
+	rows   map[string][]byte
+	puts   int
+	getErr error // v0.10.974 — PUT öncesi LoadPersisted hatası (logla, sür)
 }
 
 func (f *argoFakeStore) GetSetting(_ context.Context, key string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
 	return f.rows[key], nil
 }
 
@@ -363,6 +395,9 @@ func TestArgoCDSettingsPutValidation(t *testing.T) {
 		{"apiUrl userinfo", `{"hubs":[{"clusterId":"` + hub + `"}],"instances":[{"id":"a","hubNamespace":"a","apiUrl":"https://u:p@argocd.example.invalid"}]}`, "instances[0].apiUrl"},
 		{"tokenRef şemasız", `{"hubs":[{"clusterId":"` + hub + `"}],"instances":[{"id":"a","hubNamespace":"a","tokenRef":"plaintext"}]}`, "instances[0].tokenRef"},
 		{"reader karar 2 tavanı", `{"reader":{"maxSeries":60000}}`, "reader.maxSeries"},
+		// v0.10.974 — istek-yalnız clearTokenRef
+		{"clearTokenRef bool değil", `{"hubs":[{"clusterId":"` + hub + `"}],"instances":[{"id":"a","hubNamespace":"a","clearTokenRef":"yes"}]}`, "instances[0].clearTokenRef"},
+		{"clearTokenRef + dolu tokenRef", `{"hubs":[{"clusterId":"` + hub + `"}],"instances":[{"id":"a","hubNamespace":"a","tokenRef":"env:A","clearTokenRef":true}]}`, "instances[0].clearTokenRef"},
 		{"bozuk JSON", `{"enabled":`, ""},
 	}
 	for _, c := range cases {
@@ -435,6 +470,15 @@ func seedArgoFake(f *argoFakeThanos) {
 		{`job="team-a-prod-metrics"`, []string{"team-a-prod", "team-a-apps"}}, // durum C
 		// team-b: exported_namespace YOK (honorLabels: true) → durum B
 	}
+	// v0.10.974 — sayım turu: controller pod'ları (shard) ve anlık count.
+	f.values["pod"] = []argoFakeRule{
+		{`job="team-a-prod-metrics"`, []string{"argocd-application-controller-0", "argocd-application-controller-1", "argocd-application-controller-2"}},
+		// team-b: pod etiketi yok → shardCount nil + not
+	}
+	f.queries = []argoFakeQueryRule{
+		{`job="team-a-prod-metrics"`, `[{"metric":{"namespace":"team-a-prod"},"value":[1700000000,"1184"]}]`},
+		{`job="team-b-uat-metrics"`, `[{"metric":{},"value":[1700000000,"57"]}]`},
+	}
 }
 
 func TestArgoCDDiscoverCandidatesReadOnly(t *testing.T) {
@@ -460,7 +504,8 @@ func TestArgoCDDiscoverCandidatesReadOnly(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	if res.HubClusterID != hub || res.HubName != argoHubName || !res.InjectClusterLabel || res.Saved || res.Calls != 5 {
+	// v0.10.974 — çağrı: 1 iş + 2×2 aday turu + 2×(1 count + 1 pod) sayım turu.
+	if res.HubClusterID != hub || res.HubName != argoHubName || !res.InjectClusterLabel || res.Saved || res.Calls != 9 {
 		t.Fatalf("zarf: %+v", res)
 	}
 	if res.Window.End-res.Window.Start != 3600_000 {
@@ -479,15 +524,46 @@ func TestArgoCDDiscoverCandidatesReadOnly(t *testing.T) {
 	if a.HubClusterID != hub || b.HubClusterID != hub {
 		t.Errorf("adaylar probe edilen hub'ı taşımalı (§5.6): %q %q", a.HubClusterID, b.HubClusterID)
 	}
+	// v0.10.974 — sayımlar: A count by (namespace) satırı + 3 pod; B iş geneli
+	// count() + pod yok (not).
+	if a.AppCount == nil || *a.AppCount != 1184 || a.ShardCount == nil || *a.ShardCount != 3 || a.ShardCountTruncated || a.CountNote != "" {
+		t.Errorf("A sayımları: %+v", a)
+	}
+	if b.AppCount == nil || *b.AppCount != 57 || b.ShardCount != nil || b.CountNote != "pod etiketi yok" {
+		t.Errorf("B sayımları (iş geneli count, pod yok): %+v", b)
+	}
+	if strings.Contains(w.Body.String(), "countsIncomplete") || strings.Contains(w.Body.String(), `"incomplete"`) {
+		t.Errorf("bütçe yeterliyken countsIncomplete/incomplete yok: %s", w.Body)
+	}
 	// Salt-okunur: depo dokunulmadı, canlı ayar aynı.
 	if e.store.puts != 0 || len(e.svc.Current().Instances) != 1 {
 		t.Fatal("keşif KAYDETMEMELİ")
 	}
-	// Upstream: yalnız label values GET, sınırlı, pencereli, partial_response=false,
-	// her seçici argocd_app_info + hub'ın küme matcher'ı.
-	for _, r := range e.fake.requests() {
+	// Upstream: label values GET (sınırlı, pencereli, partial_response=false,
+	// her seçici argocd_app_info + hub'ın küme matcher'ı) ve v0.10.974 — iş
+	// başına tek anlık count POST'u (time = pencere sonu, partial_response=false,
+	// küme matcher'ı enjekte).
+	reqs := e.fake.requests()
+	end := reqs[0].Form.Get("end")
+	var queries []string
+	for _, r := range reqs {
+		if r.Path == "/api/v1/query" {
+			q := r.Form.Get("query")
+			queries = append(queries, q)
+			// v0.10.974 — timeout=15s: çağrı başına keşif tavanı (argocdDiscoverCallTimeout);
+			// ConsoleLimits'ten düşerse varsayılan 30s giderdi.
+			if r.Method != http.MethodPost || r.Form.Get("partial_response") != "false" || r.Form.Get("time") != end || end == "" ||
+				r.Form.Get("timeout") != "15s" {
+				t.Errorf("anlık count: POST, partial_response=false, time=pencere sonu (%s), timeout=15s: %s %v", end, r.Method, r.Form)
+			}
+			if !strings.Contains(q, `argocd_app_info{cluster="`+argoHubName+`",job="`) || !strings.HasPrefix(q, "count") ||
+				!strings.Contains(q, "group by (namespace, exported_namespace, name)") {
+				t.Errorf("count sorgusu: %s", q)
+			}
+			continue
+		}
 		if r.Method != http.MethodGet || !strings.HasPrefix(r.Path, "/api/v1/label/") {
-			t.Errorf("yalnız label-values GET beklenir: %s %s", r.Method, r.Path)
+			t.Errorf("label-values GET ya da /api/v1/query POST beklenir: %s %s", r.Method, r.Path)
 		}
 		if r.Form.Get("start") == "" || r.Form.Get("end") == "" || r.Form.Get("limit") == "" || r.Form.Get("partial_response") != "false" {
 			t.Errorf("start/end/limit/partial_response=false: %v", r.Form)
@@ -498,8 +574,14 @@ func TestArgoCDDiscoverCandidatesReadOnly(t *testing.T) {
 			}
 		}
 	}
+	if len(queries) != 2 ||
+		queries[0] != `count by (namespace) (group by (namespace, exported_namespace, name) (argocd_app_info{cluster="cluster-a",job="team-a-prod-metrics"}))` ||
+		queries[1] != `count(group by (namespace, exported_namespace, name) (argocd_app_info{cluster="cluster-a",job="team-b-uat-metrics"}))` {
+		t.Errorf("iş başına tek count (A: by namespace, B: iş geneli): %q", queries)
+	}
 	rows := e.audits()
-	if len(rows) != 1 || rows[0].Action != "settings.argocd.discover" || !strings.Contains(rows[0].Details, `"candidates":2`) {
+	if len(rows) != 1 || rows[0].Action != "settings.argocd.discover" || !strings.Contains(rows[0].Details, `"candidates":2`) ||
+		!strings.Contains(rows[0].Details, `"countsIncomplete":false`) || !strings.Contains(rows[0].Details, `"calls":9`) {
 		t.Fatalf("keşif audit: %+v", rows)
 	}
 }
@@ -516,12 +598,19 @@ func TestArgoCDDiscoverInjectSwitch(t *testing.T) {
 	if len(reqs) == 0 {
 		t.Fatal("istek yok")
 	}
+	nq := 0
 	for _, r := range reqs {
-		for _, m := range r.Form["match[]"] {
+		for _, m := range append(append([]string(nil), r.Form["match[]"]...), r.Form["query"]...) {
 			if strings.Contains(m, "cluster=") {
 				t.Fatalf("injectClusterLabel=false iken matcher enjekte edildi: %s", m)
 			}
 		}
+		if r.Path == "/api/v1/query" {
+			nq++
+		}
+	}
+	if nq != 2 {
+		t.Fatalf("v0.10.974 — sayım sorguları da etiketsiz koşmalı (2 iş → 2 count): %d", nq)
 	}
 	// v0.10.957 — enjeksiyon HUB BAŞINA (§5.6): kayıtlı hub false, gövde
 	// enjeksiyon söylemiyor → hub'ın kendi ayarı (matcher YOK).
@@ -762,5 +851,383 @@ func TestArgoCDSettingsResolvedTokenNeverEchoed(t *testing.T) {
 	}
 	if v, err := e.svc.Token("team-a-prod"); err != nil || v != secret {
 		t.Fatalf("değer bellekte çözülmeli: %q %v", v, err)
+	}
+}
+
+// ── v0.10.974 — dört arka uç kuralı (HTTP) ────────────────────────────────
+
+func argoTokenRefs(t *testing.T, raw []byte) map[string]string {
+	t.Helper()
+	var s argocd.Settings
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatalf("blob: %v — %s", err, raw)
+	}
+	out := map[string]string{}
+	for _, inst := range s.Instances {
+		out[inst.ID] = inst.TokenRef
+	}
+	return out
+}
+
+// BE1: ref yaz → aynı id boş ref ile PUT (kayıtlı korunur: depo blobu,
+// tokens haritası, audit) → clearTokenRef ile PUT (ref gider). Bayrak
+// hiçbir kalıcı ya da dönen yüzeyde görünmez.
+func TestArgoCDSettingsPutTokenRefKeepThenClear(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hub := argoClusterID(argoHubName)
+	const ref = "env:COREMETRY_TEST_ARGOCD_KEEP_968"
+	body := func(inst string) string {
+		return `{"hubs":[{"clusterId":"` + hub + `"}],"instances":[` + inst + `,{"id":"team-b-uat","hubNamespace":"team-b-uat"}]}`
+	}
+	noFlag := func(step string, w *httptest.ResponseRecorder) {
+		t.Helper()
+		surfaces := []string{w.Body.String(), string(e.store.rows[argocd.SettingsKey])}
+		for _, a := range e.audits() {
+			surfaces = append(surfaces, a.Details)
+		}
+		for i, b := range surfaces {
+			if strings.Contains(strings.ToLower(b), "cleartokenref") {
+				t.Fatalf("%s: clearTokenRef istek-yalnız, #%d yüzeyde görünmemeli: %s", step, i, b)
+			}
+		}
+	}
+
+	w := e.do(t, "PUT", "/api/settings/argocd", body(`{"id":"team-a-prod","hubNamespace":"team-a-prod","tokenRef":"`+ref+`"}`), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ref yaz: %d %s", w.Code, w.Body)
+	}
+	noFlag("ref yaz", w)
+
+	w = e.do(t, "PUT", "/api/settings/argocd", body(`{"id":"team-a-prod","hubNamespace":"team-a-prod","tokenRef":""}`), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("boş ref: %d %s", w.Code, w.Body)
+	}
+	if got := argoTokenRefs(t, e.store.rows[argocd.SettingsKey]); got["team-a-prod"] != ref || got["team-b-uat"] != "" {
+		t.Fatalf("boş ref kayıtlıyı korumalı (depo blobu): %v", got)
+	}
+	if tok, ok := argoJSON(t, w)["tokens"].(map[string]any)["team-a-prod"].(map[string]any); !ok || tok["tokenRef"] != ref {
+		t.Fatalf("PUT cevabı tokens haritası kayıtlı ref'i taşımalı: %s", w.Body)
+	}
+	rows := e.audits()
+	if len(rows) != 1 || rows[0].Action != "settings.argocd.update" || !strings.Contains(rows[0].Details, `"tokenRef":"`+ref+`"`) {
+		t.Fatalf("audit details BİRLEŞMİŞ blobu taşımalı: %+v", rows)
+	}
+
+	w = e.do(t, "PUT", "/api/settings/argocd", body(`{"id":"team-a-prod","hubNamespace":"team-a-prod","tokenRef":"","clearTokenRef":true}`), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("clearTokenRef: %d %s", w.Code, w.Body)
+	}
+	if got := argoTokenRefs(t, e.store.rows[argocd.SettingsKey]); got["team-a-prod"] != "" {
+		t.Fatalf("clearTokenRef ref'i kaldırmalı: %v", got)
+	}
+	if toks := argoJSON(t, w)["tokens"].(map[string]any); len(toks) != 0 {
+		t.Fatalf("tokens haritasında id kalmamalı: %v", toks)
+	}
+	if strings.Contains(w.Body.String(), ref) || strings.Contains(string(e.store.rows[argocd.SettingsKey]), ref) {
+		t.Fatalf("kaldırılan ref görünmemeli: %s", w.Body)
+	}
+	noFlag("clearTokenRef", w)
+}
+
+// PUT, 30 s yenilemeyi beklemeden başka pod'un az önce yazdığı bloba karşı
+// birleşir (LoadPersisted önce); depo okuma hatası PUT'u düşürmez.
+func TestArgoCDSettingsPutMergesAgainstPeerBlob(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hub := argoClusterID(argoHubName)
+	const ref = "env:COREMETRY_TEST_ARGOCD_PEER_968"
+	if w := e.do(t, "PUT", "/api/settings/argocd", `{"hubs":[{"clusterId":"`+hub+`"}],"instances":[{"id":"team-a-prod","hubNamespace":"team-a-prod","tokenRef":"`+ref+`"}]}`, auth.RoleAdmin); w.Code != http.StatusOK {
+		t.Fatalf("pod A: %d %s", w.Code, w.Body)
+	}
+	// Pod B: bellek bayat (hiç yüklenmemiş varsayılan).
+	SetArgoCDSettings(argocd.NewSettingsService())
+	if w := e.do(t, "PUT", "/api/settings/argocd", `{"hubs":[{"clusterId":"`+hub+`"}],"instances":[{"id":"team-a-prod","hubNamespace":"team-a-prod"}]}`, auth.RoleAdmin); w.Code != http.StatusOK {
+		t.Fatalf("pod B: %d %s", w.Code, w.Body)
+	}
+	if got := argoTokenRefs(t, e.store.rows[argocd.SettingsKey]); got["team-a-prod"] != ref {
+		t.Fatalf("pod B pod A'nın blobuna karşı birleşmeli (ref korunur): %v", got)
+	}
+	e.store.getErr = fmt.Errorf("ch down")
+	if w := e.do(t, "PUT", "/api/settings/argocd", `{"hubs":[{"clusterId":"`+hub+`"}],"instances":[{"id":"team-a-prod","hubNamespace":"team-a-prod"}]}`, auth.RoleAdmin); w.Code != http.StatusOK {
+		t.Fatalf("depo okuma hatası logla-sür: %d %s", w.Code, w.Body)
+	}
+	if got := argoTokenRefs(t, e.store.rows[argocd.SettingsKey]); got["team-a-prod"] != ref {
+		t.Fatalf("bellekteki blobla birleşmeli: %v", got)
+	}
+}
+
+// BE3: kayıtlı yuvayı yeni kimlikle almak 400 instances[0].id; yazım ve
+// settings.argocd.update audit'i YOK.
+func TestArgoCDSettingsPutRenameRejected(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hub := argoClusterID(argoHubName)
+	if w := e.do(t, "PUT", "/api/settings/argocd", `{"hubs":[{"clusterId":"`+hub+`"}],"instances":[{"id":"team-a-prod","hubNamespace":"team-a-prod"}]}`, auth.RoleAdmin); w.Code != http.StatusOK {
+		t.Fatalf("ilk kayıt: %d %s", w.Code, w.Body)
+	}
+	e.audits()
+	puts := e.store.puts
+	w := e.do(t, "PUT", "/api/settings/argocd", `{"hubs":[{"clusterId":"`+hub+`"}],"instances":[{"id":"team-a-gitops","hubNamespace":"team-a-prod"}]}`, auth.RoleAdmin)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("yeniden adlandırma → 400: %d %s", w.Code, w.Body)
+	}
+	m := argoJSON(t, w)
+	msg, _ := m["error"].(string)
+	if m["field"] != "instances[0].id" || !strings.HasPrefix(msg, "instances[0].id: ") ||
+		!strings.Contains(msg, `"team-a-gitops" kayıtlı "team-a-prod" instance'ının yerini alıyor (`+argoHubName+`/team-a-prod)`) {
+		t.Fatalf("gövde: %v", m)
+	}
+	if e.store.puts != puts || len(e.audits()) != 0 || e.svc.Current().Instances[0].ID != "team-a-prod" {
+		t.Fatal("reddedilen yeniden adlandırma yazmamalı / audit etmemeli")
+	}
+}
+
+// BE4: bağlı instance'ı olan hub kaldırılamaz (400, yazım yok, audit yok);
+// aynı PUT'ta instance'ları taşımak kaldırmayı serbest bırakır.
+func TestArgoCDSettingsPutHubRemoval(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hubA, hubB := argoClusterID(argoHubName), argoClusterID(argoTargetName)
+	two := `{"hubs":[{"clusterId":"` + hubA + `"},{"clusterId":"` + hubB + `"}],"instances":[
+	  {"id":"team-a-prod","hubClusterId":"` + hubA + `","hubNamespace":"team-a-prod"},
+	  {"id":"team-c-prod","hubClusterId":"` + hubB + `","hubNamespace":"team-c-prod"}]}`
+	if w := e.do(t, "PUT", "/api/settings/argocd", two, auth.RoleAdmin); w.Code != http.StatusOK {
+		t.Fatalf("iki hub: %d %s", w.Code, w.Body)
+	}
+	e.audits()
+	puts := e.store.puts
+	w := e.do(t, "PUT", "/api/settings/argocd", `{"hubs":[{"clusterId":"`+hubA+`"}],"instances":[
+	  {"id":"team-a-prod","hubClusterId":"`+hubA+`","hubNamespace":"team-a-prod"},
+	  {"id":"team-c-prod","hubClusterId":"`+hubB+`","hubNamespace":"team-c-prod"}]}`, auth.RoleAdmin)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("bağlı hub kaldırma → 400: %d %s", w.Code, w.Body)
+	}
+	m := argoJSON(t, w)
+	want := `instances[1].hubClusterId: hub "` + argoTargetName + `" (` + hubB + `) listeden çıkarılıyor ama 1 instance ona bağlı — ` +
+		`instance'ları başka hub'a taşıyın ya da hub'ı listede bırakın`
+	if m["field"] != "instances[1].hubClusterId" || m["error"] != want {
+		t.Fatalf("gövde:\n got %v\nwant %s", m, want)
+	}
+	if e.store.puts != puts || len(e.audits()) != 0 || len(e.svc.Current().Hubs) != 2 {
+		t.Fatal("reddedilen hub kaldırma yazmamalı / audit etmemeli")
+	}
+	w = e.do(t, "PUT", "/api/settings/argocd", `{"hubs":[{"clusterId":"`+hubA+`"}],"instances":[
+	  {"id":"team-a-prod","hubClusterId":"`+hubA+`","hubNamespace":"team-a-prod"},
+	  {"id":"team-c-prod","hubClusterId":"`+hubA+`","hubNamespace":"team-c-prod"}]}`, auth.RoleAdmin)
+	if w.Code != http.StatusOK || len(e.svc.Current().Hubs) != 1 {
+		t.Fatalf("taşı + kaldır aynı PUT'ta → 200: %d %s", w.Code, w.Body)
+	}
+}
+
+// Sayım hatası 200'ü bozmaz: aday kalır, error/incomplete yok, sayı nil + not.
+func TestArgoCDDiscoverCountFailureKeeps200(t *testing.T) {
+	e := newArgoTestEnv(t)
+	seedArgoFake(e.fake)
+	hub := argoClusterID(argoHubName)
+	e.fake.fail = func(r argoFakeReq) (int, string) {
+		switch {
+		case r.Path == "/api/v1/query":
+			return http.StatusServiceUnavailable, `{"status":"error","errorType":"timeout","error":"query timed out at ` + e.fake.URL + `"}`
+		case r.Path == "/api/v1/label/pod/values" && strings.Contains(strings.Join(r.Form["match[]"], " "), "team-a-prod-metrics"):
+			return http.StatusInternalServerError, `{"status":"error","errorType":"internal","error":"boom"}`
+		}
+		return 0, ""
+	}
+	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+hub+`"}`, auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("yalnız sayım düştü → 200: %d %s", w.Code, w.Body)
+	}
+	assertArgoNoLeak(t, w.Body.String(), e.fake.URL)
+	var res argocdDiscoverResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Candidates) != 2 || res.Incomplete || res.CountsIncomplete || res.Calls != 9 {
+		t.Fatalf("zarf: %+v", res)
+	}
+	a, b := res.Candidates[0], res.Candidates[1]
+	if a.Error != "" || a.AppCount != nil || a.ShardCount != nil || a.CountNote != "uygulama sayısı okunamadı: timeout; shard sayısı okunamadı: internal" {
+		t.Errorf("A: %+v", a)
+	}
+	if b.Error != "" || b.AppCount != nil || b.CountNote != "uygulama sayısı okunamadı: timeout; pod etiketi yok" {
+		t.Errorf("B: %+v", b)
+	}
+}
+
+// Bütçe ikinci turda biter: aday listesi TAM (50 iş, hatasız, incomplete
+// yok), kalan adaylar "sayım atlandı" notu, sonuç countsIncomplete; toplam
+// çağrı ≤150 (1 + 50×2 aday turu = 101; sayıma 49 kalır).
+func TestArgoCDDiscoverCountBudgetExhausted(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hub := argoClusterID(argoHubName)
+	var jobs []string
+	for i := 0; i < argocdDiscoverMaxJobs; i++ {
+		job, ns := fmt.Sprintf("job-%02d", i), fmt.Sprintf("ns-%02d", i)
+		jobs = append(jobs, job)
+		sel := `job="` + job + `"`
+		e.fake.values["namespace"] = append(e.fake.values["namespace"], argoFakeRule{sel, []string{ns}})
+		e.fake.values["exported_namespace"] = append(e.fake.values["exported_namespace"], argoFakeRule{sel, []string{ns}})
+		e.fake.queries = append(e.fake.queries, argoFakeQueryRule{sel, `[{"metric":{"namespace":"` + ns + `"},"value":[1700000000,"7"]}]`})
+	}
+	e.fake.values["job"] = []argoFakeRule{{"argocd_app_info", jobs}}
+	e.fake.values["pod"] = []argoFakeRule{{"argocd_app_info", []string{"argocd-application-controller-0"}}}
+	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+hub+`"}`, auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var res argocdDiscoverResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Calls != argocdDiscoverMaxCalls || len(e.fake.requests()) != argocdDiscoverMaxCalls || res.Incomplete || !res.CountsIncomplete {
+		t.Fatalf("zarf: calls=%d istek=%d incomplete=%v countsIncomplete=%v", res.Calls, len(e.fake.requests()), res.Incomplete, res.CountsIncomplete)
+	}
+	if len(res.Candidates) != argocdDiscoverMaxJobs {
+		t.Fatalf("aday listesi tam olmalı: %d", len(res.Candidates))
+	}
+	for i, c := range res.Candidates {
+		if c.Error != "" {
+			t.Fatalf("sayım bütçesi adayı düşürmemeli / hata yazmamalı: %+v", c)
+		}
+		switch {
+		case i < 24: // 24 iş × 2 çağrı = 48
+			if c.AppCount == nil || *c.AppCount != 7 || c.ShardCount == nil || *c.ShardCount != 1 || c.CountNote != "" {
+				t.Fatalf("aday %d tam sayılmalı: %+v", i, c)
+			}
+		case i == 24: // 150. çağrı count; pod'a bütçe kalmadı
+			if c.AppCount == nil || c.ShardCount != nil || c.CountNote != argocd.CountNoteBudget {
+				t.Fatalf("aday 24 yalnız uygulama sayısı: %+v", c)
+			}
+		default:
+			if c.AppCount != nil || c.ShardCount != nil || c.CountNote != argocd.CountNoteBudget {
+				t.Fatalf("aday %d atlanmalı: %+v", i, c)
+			}
+		}
+	}
+	if rows := e.audits(); len(rows) != 1 || !strings.Contains(rows[0].Details, `"countsIncomplete":true`) {
+		t.Fatalf("audit countsIncomplete taşımalı: %+v", rows)
+	}
+}
+
+// Hatalı aday (iş sorgusu düştü) hiç sayım çağrısı almaz.
+func TestArgoCDDiscoverErrorCandidatesNoCountCalls(t *testing.T) {
+	e := newArgoTestEnv(t)
+	seedArgoFake(e.fake)
+	hub := argoClusterID(argoHubName)
+	e.fake.fail = func(r argoFakeReq) (int, string) {
+		if strings.Contains(strings.Join(r.Form["match[]"], " "), `job="team-b-uat-metrics"`) {
+			return http.StatusInternalServerError, `{"status":"error","errorType":"internal","error":"boom"}`
+		}
+		return 0, ""
+	}
+	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+hub+`"}`, auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var res argocdDiscoverResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	// 1 iş + team-a 2 + team-b 1 (düştü) + team-a sayım 2.
+	if res.Calls != 6 || len(res.Candidates) != 2 {
+		t.Fatalf("zarf: %+v", res)
+	}
+	if b := res.Candidates[1]; b.Error == "" || b.AppCount != nil || b.ShardCount != nil || b.CountNote != "" {
+		t.Fatalf("hatalı aday sayım taşımaz: %+v", b)
+	}
+	if a := res.Candidates[0]; a.AppCount == nil || a.ShardCount == nil {
+		t.Fatalf("sağlam aday sayılır: %+v", a)
+	}
+	for _, r := range e.fake.requests() {
+		if strings.Contains(r.Form.Get("query"), "team-b-uat-metrics") ||
+			(r.Path == "/api/v1/label/pod/values" && strings.Contains(strings.Join(r.Form["match[]"], " "), "team-b-uat-metrics")) {
+			t.Fatalf("hatalı aday için sayım çağrısı yapıldı: %s %v", r.Path, r.Form)
+		}
+	}
+}
+
+// FE'nin "Thanos kimlik bilgisini reddetti" eşlemesi bu metne dayanır: hub
+// Thanos 401/403 (JSON'suz gövde, ör. oauth-proxy) → 502 unavailable + sabit
+// metin. Davranış değişmedi; metin pinlendi.
+func TestArgoCDDiscoverHub403TextPinned(t *testing.T) {
+	e := newArgoTestEnv(t)
+	e.fake.fail = func(argoFakeReq) (int, string) { return http.StatusForbidden, "<html>Forbidden</html>" }
+	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+argoClusterID(argoHubName)+`"}`, auth.RoleAdmin)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("hub 403 → 502: %d %s", w.Code, w.Body)
+	}
+	const want = `{"error":"thanos rejected the cluster credentials (HTTP 403)","errorType":"unavailable"}`
+	if got := strings.TrimSpace(w.Body.String()); got != want {
+		t.Fatalf("gövde:\n got %s\nwant %s", got, want)
+	}
+}
+
+// v0.10.974 — sayım sonucu MaxSeries (argocdCountMaxSeries = 101) tavanında
+// kesilirse kesilen namespace'in adayı sayı almaz, "kesildi" notu alır; bu bir
+// bütçe durumu değildir (countsIncomplete / incomplete yok). MaxSeries
+// ConsoleLimits'ten düşerse varsayılan 500 satırın hepsi okunur ve aday yanlış
+// bir sayı taşırdı — bu test o gerilemeyi yakalar.
+func TestArgoCDDiscoverCountTruncated(t *testing.T) {
+	e := newArgoTestEnv(t)
+	seedArgoFake(e.fake)
+	rows := make([]string, 0, argocdCountMaxSeries+1)
+	for i := 0; i < argocdCountMaxSeries; i++ {
+		rows = append(rows, fmt.Sprintf(`{"metric":{"namespace":"ns-%03d"},"value":[1700000000,"1"]}`, i))
+	}
+	rows = append(rows, `{"metric":{"namespace":"team-a-prod"},"value":[1700000000,"1184"]}`) // 102. satır: kesilir
+	e.fake.queries = append([]argoFakeQueryRule{{`job="team-a-prod-metrics"`, "[" + strings.Join(rows, ",") + "]"}}, e.fake.queries...)
+	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+argoClusterID(argoHubName)+`"}`, auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var res argocdDiscoverResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Candidates) != 2 || res.Incomplete || res.CountsIncomplete {
+		t.Fatalf("zarf (kesik sayım bütçe değildir): %+v", res)
+	}
+	a := res.Candidates[0]
+	if a.Error != "" || a.AppCount != nil || a.CountNote != argocd.AppCountFailNote("sonuç seri tavanında kesildi") {
+		t.Fatalf("A: kesilen namespace sayı almaz, not alır: %+v", a)
+	}
+	if a.ShardCount == nil || *a.ShardCount != 3 {
+		t.Fatalf("A: shard sayımı etkilenmez: %+v", a)
+	}
+}
+
+// v0.10.974 — bağlam sayım turunda biterse (istemci koptu / 60 sn doldu) kalan
+// adaylar "okunamadı: canceled" DEĞİL, tam olarak bütçe notu alır ve sonuç
+// countsIncomplete taşır (spec: "budget or context is exhausted"); aday
+// listesi tam, 200 bozulmaz. countsIncomplete tek başına yetmez — bağlam
+// dalı silinse de sonraki çağrının bütçe denetimi bayrağı yine kurardı; bu
+// yüzden NOT birebir karşılaştırılır.
+func TestArgoCDDiscoverCountCtxExhausted(t *testing.T) {
+	e := newArgoTestEnv(t)
+	seedArgoFake(e.fake)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e.fake.fail = func(r argoFakeReq) (int, string) {
+		if r.Path != "/api/v1/query" {
+			return 0, ""
+		}
+		cancel() // yanıttan ÖNCE: bağlam iptali deterministik
+		return http.StatusServiceUnavailable, `{"status":"error","errorType":"unavailable","error":"down"}`
+	}
+	req := httptest.NewRequest("POST", "/api/settings/argocd/discover", strings.NewReader(`{"hubClusterId":"`+argoClusterID(argoHubName)+`"}`))
+	req = req.WithContext(auth.ContextWithClaims(ctx, &auth.Claims{UserID: "u-admin", Email: "admin@example.test", Role: auth.RoleAdmin}))
+	w := httptest.NewRecorder()
+	e.mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sayım turunda bağlam bitti → yine 200: %d %s", w.Code, w.Body)
+	}
+	var res argocdDiscoverResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if !res.CountsIncomplete || res.Incomplete || len(res.Candidates) != 2 {
+		t.Fatalf("zarf: countsIncomplete=%v incomplete=%v aday=%d", res.CountsIncomplete, res.Incomplete, len(res.Candidates))
+	}
+	for i, c := range res.Candidates {
+		if c.Error != "" || c.AppCount != nil || c.ShardCount != nil || c.CountNote != argocd.CountNoteBudget {
+			t.Fatalf("aday %d: tam olarak bütçe notu beklenir (okunamadı değil): %+v", i, c)
+		}
 	}
 }

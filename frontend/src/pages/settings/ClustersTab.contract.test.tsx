@@ -12,12 +12,23 @@
 //     saklı değeri görmedi, `[]` yeni pod'da onu silerdi;
 //   - liste girdisi virgül ve satır sonuyla bölünür, kırpılır, boşlar atılır.
 // Ağ mock; SpanClusterValuesPanel (react-query) ve telemetri adları stub.
+//
+// v0.10.974 — "Argo CD eşlemesi" (onaylı mockup ClusterFields.dc.html):
+//   - Argo CD ayarı kendi efektinde, en-iyi-çaba okunur: hub kaydında nötr
+//     "Argo hub" rozeti + instance sayılı not + Ayarlar › Argo CD bağlantısı;
+//     not ad girdisi, Etkin kutusu ve Remove düğmesinden aria-describedby ile
+//     bağlı; okuma reddedilirse rozet de hata metni de YOK, form çizilir;
+//   - küme-içi API server adresi ve büyük/küçük harf duyarsız yinelenen ek
+//     istemcide yakalanır: PUT GİTMEZ, özet role=alert, madde alana götürür;
+//   - önizleme kaydedilecek biçimi ve notlarını gösterir; pairGroup ipucu
+//     "Bu grupta: …" diğer kayıtları sayar; sunucu hatası yedek metin kalır.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { ThanosClusterInput, ThanosSettingsInput, ThanosSnapshot } from '@/lib/types';
+import { MemoryRouter } from 'react-router-dom';
+import type { ArgoCDSettingsResponse, ThanosClusterInput, ThanosSettingsInput, ThanosSnapshot } from '@/lib/types';
 
-const { getThanosSettings, putThanosSettings } = vi.hoisted(() => {
+const { getThanosSettings, putThanosSettings, getArgoCDSettings } = vi.hoisted(() => {
   const snap: ThanosSnapshot = {
     clusters: [
       {
@@ -30,14 +41,32 @@ const { getThanosSettings, putThanosSettings } = vi.hoisted(() => {
       { id: 'c-bbbbbbbb', name: 'cluster-b', url: 'http://thanos-b.example.invalid', hasToken: false, enabled: true, authType: 'none' },
     ],
   };
+  // v0.10.974 — Argo CD ayarı: cluster-a (c-aaaaaaaa) hub, iki instance bağlı;
+  // üçüncü instance listede olmayan bir hub'a işaret ediyor (sayılmaz).
+  const argo: ArgoCDSettingsResponse = {
+    settings: {
+      enabled: true,
+      hubs: [{ clusterId: 'c-aaaaaaaa', injectClusterLabel: true }],
+      instances: [
+        { id: 'team-a-prod', hubClusterId: 'c-aaaaaaaa', hubNamespace: 'team-a-prod', enabled: true },
+        { id: 'team-a-int', hubClusterId: 'c-aaaaaaaa', hubNamespace: 'team-a-int', enabled: false },
+        { id: 'team-b-prod', hubClusterId: 'c-zzzzzzzz', hubNamespace: 'team-b-prod', enabled: true },
+      ],
+      apiWorker: {}, classification: {}, reader: {}, intervals: {}, mapping: {},
+    },
+    resolved: { enabled: true, apiWorker: {}, classification: {}, reader: {}, intervals: {}, mapping: {} },
+    defaults: { enabled: false, apiWorker: {}, classification: {}, reader: {}, intervals: {}, mapping: {} },
+    bounds: {}, tokens: {}, hubs: [{ id: 'c-aaaaaaaa', name: 'cluster-a', enabled: true, found: true, injectClusterLabel: true }],
+  };
   return {
     getThanosSettings: vi.fn(async () => snap),
     putThanosSettings: vi.fn(async (s: ThanosSettingsInput) => ({
       clusters: s.clusters.map(c => ({ ...c, id: c.id ?? 'c-new', hasToken: false })),
     }) as ThanosSnapshot),
+    getArgoCDSettings: vi.fn(async () => argo),
   };
 });
-vi.mock('@/lib/api', () => ({ api: { getThanosSettings, putThanosSettings } }));
+vi.mock('@/lib/api', () => ({ api: { getThanosSettings, putThanosSettings, getArgoCDSettings } }));
 vi.mock('@/lib/queries', () => ({ useClusters: () => ({ data: ['cluster-a', 'cluster-b'] }) }));
 vi.mock('./SpanClusterValuesPanel', () => ({ SpanClusterValuesPanel: () => null }));
 
@@ -46,12 +75,14 @@ import { ClustersTab } from './ClustersTab';
 let host: HTMLDivElement | null = null; let root: Root | null = null;
 function render(): HTMLElement {
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
-  act(() => { root!.render(<ClustersTab />); });
+  // v0.10.974 — Argo CD sekmesine gerçek <Link> → yönlendirici bağlamı.
+  act(() => { root!.render(<MemoryRouter><ClustersTab /></MemoryRouter>); });
   return host;
 }
 afterEach(() => {
   act(() => { root?.unmount(); }); host?.remove(); root = null; host = null;
   putThanosSettings.mockClear();
+  getArgoCDSettings.mockClear();
 });
 const tick = async () => { await act(async () => { await new Promise(r => setTimeout(r, 20)); }); };
 
@@ -161,5 +192,142 @@ describe('ClustersTab — Rollouts v2 alanları (v0.10.956)', () => {
     act(() => { setValue(fieldByLabel(el, URLS, 1), 'https://api.cluster-b.example.invalid:6443'); });
     const sent = await saveAll(el);
     expect(sent[1].apiServerUrls).toEqual(['https://api.cluster-b.example.invalid:6443']);
+  });
+});
+
+// ── v0.10.974 — Argo CD eşlemesi (ClusterFields.dc.html) ─────────────────────
+const card = (el: HTMLElement, name: string): HTMLElement => {
+  const g = el.querySelector<HTMLElement>(`[role="group"][aria-label="${name} kaydı"]`);
+  if (!g) throw new Error(`${name} kartı yok`);
+  return g;
+};
+const alertBox = (el: HTMLElement) => el.querySelector<HTMLElement>('[role="alert"]');
+async function clickSave(el: HTMLElement) {
+  const btn = [...el.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Save all');
+  if (!btn) throw new Error('Save all yok');
+  act(() => { (btn as HTMLButtonElement).click(); });
+  await tick();
+}
+
+describe('ClustersTab — Argo CD eşlemesi (v0.10.974)', () => {
+  it('hub kaydı: nötr "Argo hub" rozeti + instance sayılı not + Argo CD bağlantısı; not üç kontrole bağlı', async () => {
+    const el = render();
+    await tick();
+    expect(getArgoCDSettings).toHaveBeenCalledTimes(1);
+    const a = card(el, 'cluster-a');
+    const badge = [...a.querySelectorAll('.badge')].find(b => b.textContent?.trim() === 'Argo hub');
+    expect(badge, 'Argo hub rozeti').toBeTruthy();
+    // Nötr: öznitelik, sapma değil (b-gray; yeşil/kırmızı yok).
+    expect(badge!.className).toContain('b-gray');
+    expect(badge!.querySelector('svg')).toBeTruthy();
+    const link = a.querySelector<HTMLAnchorElement>('a[href="/settings/argocd"]');
+    expect(link?.textContent).toBe('Ayarlar › Argo CD');
+    const note = link!.parentElement!;
+    expect(note.textContent).toBe("Argo CD hub'ı (2 instance): kaldırır ya da kapatırsanız Argo CD ayarı bir sonraki kayıtta reddedilir. Hub seçimi ve küme etiketi kararı Ayarlar › Argo CD sekmesinde; burada değiştirilemez.");
+    expect(note.id).not.toBe('');
+    const name = a.querySelector<HTMLInputElement>('input[placeholder="prod-ist"]')!;
+    const enabled = a.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    const remove = [...a.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Remove')!;
+    for (const ctl of [name, enabled, remove]) expect(ctl.getAttribute('aria-describedby')).toBe(note.id);
+    // Uyarır, engellemez: Remove etkin, kayıt kaldırılabilir.
+    expect(remove.disabled).toBe(false);
+
+    const b = card(el, 'cluster-b');
+    expect(b.textContent).not.toContain('Argo hub');
+    expect(b.querySelector('a[href="/settings/argocd"]')).toBeNull();
+    expect(b.querySelector('input[placeholder="prod-ist"]')!.hasAttribute('aria-describedby')).toBe(false);
+    // Alt başlık iki kartta da, üç v0.10.956 alanının üstünde.
+    // v0.10.974 — inceleme: mockup'taki gibi GERÇEK h3 (başlık gezinmesi),
+    // büyük harfli SectionHead ayırıcısı değil.
+    for (const c of [a, b]) {
+      const h3 = [...c.querySelectorAll('h3')].find(h => h.textContent === 'Argo CD eşlemesi');
+      expect(h3, 'Argo CD eşlemesi h3').toBeTruthy();
+      expect(h3!.closest('.dtl-sech')).toBeNull();
+      expect(h3!.nextElementSibling?.textContent).toBe("Argo'nun dest_server ve uygulama adı eki bu kümeye nasıl çözülür");
+    }
+  });
+
+  it('Argo CD ayarı okunamazsa: rozet yok, not yok, hata metni yok — form yine çizilir', async () => {
+    getArgoCDSettings.mockRejectedValueOnce(new Error('HTTP 503: {"error":"argocd settings store unavailable"}'));
+    const el = render();
+    await tick();
+    expect(el.textContent).not.toContain('Argo hub');
+    expect(el.querySelector('a[href="/settings/argocd"]')).toBeNull();
+    expect(el.textContent).not.toMatch(/503|unavailable|okunamadı/);
+    expect(alertBox(el)).toBeNull();
+    expect(fieldByLabel(el, SUFFIX, 0).value).toBe('ca');
+  });
+
+  it('önizleme kaydedilecek biçimi gösterir; pairGroup "Bu grupta: …"; geçerli gövde PUT edilir', async () => {
+    const el = render();
+    await tick();
+    const a = card(el, 'cluster-a');
+    expect(a.textContent).toContain('Kaydedilecek biçim · tüm kayıtlarda tekil');
+    expect(a.textContent).toContain('https://api.cluster-a.example.invalid:6443değişmedi');
+    act(() => { setValue(fieldByLabel(el, URLS, 1), 'HTTPS://API.Cluster-B.example.invalid/'); });
+    act(() => { setValue(fieldByLabel(el, PAIR, 1), 'pair-1'); });
+    const b = card(el, 'cluster-b');
+    expect(b.textContent).toContain('https://api.cluster-b.example.invalid:6443küçük harf · sondaki / atıldı · :6443 eklendi');
+    expect(b.textContent).toContain('https://kubernetes.default.svc yazılmaz — Argo\'nun küme-içi hedefi instance\'ın hub\'ına çözülür; hub için dış API adresini girin.');
+    const pairB = fieldByLabel(el, PAIR, 1);
+    expect(el.ownerDocument.getElementById(pairB.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('Serbest metin · aynı değeri taşıyan kümeler aktif-aktif çifttir. Bu grupta: cluster-a.');
+    const pairA = fieldByLabel(el, PAIR, 0);
+    expect(el.ownerDocument.getElementById(pairA.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('Serbest metin · aynı değeri taşıyan kümeler aktif-aktif çifttir. Bu grupta: cluster-b.');
+    const sent = await saveAll(el);
+    expect(sent[1].apiServerUrls).toEqual(['HTTPS://API.Cluster-B.example.invalid/']);
+  });
+
+  it('küme-içi adres istemcide engellenir: PUT yok, satır içi hata, bağlantılı özet alana götürür', async () => {
+    const el = render();
+    await tick();
+    const ta = fieldByLabel(el, URLS, 1);
+    act(() => { setValue(ta, 'https://api.cluster-b.example.invalid:6443\nhttps://kubernetes.default.svc'); });
+    expect(ta.getAttribute('aria-invalid')).toBe('true');
+    expect(card(el, 'cluster-b').textContent).toContain('https://kubernetes.default.svcyazılamaz: küme-içi hedef');
+    // Geçerli satırın alanı temiz.
+    expect(fieldByLabel(el, URLS, 0).getAttribute('aria-invalid')).toBeNull();
+
+    await clickSave(el);
+    expect(putThanosSettings).not.toHaveBeenCalled();
+    const box = alertBox(el)!;
+    expect(box.textContent).toContain('Kaydedilmedi — istemci denetimi 1 sorun buldu; istek gönderilmedi, hiçbir kayıt değişmedi.');
+    expect(box.textContent).toContain("· cluster-b · API server URL'leri: https://kubernetes.default.svc yazılamaz — Argo'nun küme-içi hedefi instance'ın hub'ına çözülür. Satırı silin; hub'ın dış API adresi zaten listede.");
+    const go = [...box.querySelectorAll('button')].find(b => b.textContent === "cluster-b · API server URL'leri")!;
+    act(() => { go.click(); });
+    expect(el.ownerDocument.activeElement).toBe(ta);
+  });
+
+  it('yinelenen ek (büyük/küçük harf duyarsız) engellenir; hata DÜZENLENEN satırda', async () => {
+    const el = render();
+    await tick();
+    act(() => { setValue(fieldByLabel(el, SUFFIX, 1), 'CA'); });
+    const sfxB = fieldByLabel(el, SUFFIX, 1);
+    const sfxA = fieldByLabel(el, SUFFIX, 0);
+    expect(sfxB.getAttribute('aria-invalid')).toBe('true');
+    expect(el.ownerDocument.getElementById(sfxB.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('“CA” eki cluster-a kaydında da var (büyük/küçük harf duyarsız). Ek, uygulama adının son jetonundan kümeyi seçer; her kümede tekil olmalı. cluster-b uygulamalarındaki son jetonu girin, ör. cb.');
+    expect(sfxA.getAttribute('aria-invalid')).toBeNull();
+    expect(el.ownerDocument.getElementById(sfxA.getAttribute('aria-describedby')!)?.textContent)
+      .toBe('Argo uygulama adının son jetonu (…-env-ek). Tekil, büyük/küçük harf duyarsız.');
+
+    await clickSave(el);
+    expect(putThanosSettings).not.toHaveBeenCalled();
+    const box = alertBox(el)!;
+    expect(box.textContent).toContain('Kaydedilmedi — istemci denetimi 1 sorun buldu; istek gönderilmedi, hiçbir kayıt değişmedi.');
+    expect(box.textContent).toContain("· cluster-b · Argo app eki: “CA” cluster-a kaydında da var (büyük/küçük harf duyarsız). cluster-b'ye kendi ekini verin, ör. cb.");
+    const go = [...box.querySelectorAll('button')].find(b => b.textContent === 'cluster-b · Argo app eki')!;
+    act(() => { go.click(); });
+    expect(el.ownerDocument.activeElement).toBe(sfxB);
+  });
+
+  it('istemci denetimi geçerse sunucunun ilk hatası yedek metin olarak gösterilir', async () => {
+    putThanosSettings.mockRejectedValueOnce(new Error('HTTP 400: {"error":"apiServerUrls: https://api.cluster-x.example.invalid:6443 zaten \\"cluster-x\\" kaydına bağlı"}'));
+    const el = render();
+    await tick();
+    await clickSave(el);
+    expect(putThanosSettings).toHaveBeenCalledTimes(1);
+    expect(alertBox(el)?.textContent).toBe('apiServerUrls: https://api.cluster-x.example.invalid:6443 zaten "cluster-x" kaydına bağlı');
   });
 });
