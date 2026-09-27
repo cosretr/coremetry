@@ -137,7 +137,8 @@ type ReplicaConsistencyReport struct {
 	// erişilemeyen host). Notes bilgi, Warnings eylem ister.
 	Warnings []string `json:"warnings,omitempty"`
 	// StatePaths — v0.10.965: state tablolarının ZK yolu hükmü (eski / karışık /
-	// eksik) ve boot kilidi (state_path_check.go). Yeni okuma YOK; tek düğümde nil.
+	// eksik; state_path_check.go). v0.10.971 — boot kilidi kalktı (kural 3
+	// yok). Yeni okuma YOK; tek düğümde nil.
 	StatePaths *StatePathCheck `json:"statePaths,omitempty"`
 }
 

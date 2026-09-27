@@ -495,6 +495,21 @@ func TestRolloutV2LayerDecision(t *testing.T) {
 			t.Errorf("[%s] = (%v, %q), beklenen (%v, …%q…)", c.label, ok, detail, c.ok, c.detail)
 		}
 	}
+	// v0.10.971 — özel önek reddi AYNEN durur, gerekçesi değişti: kural 3
+	// kalktı, "kuşak probe'u" bozulamaz. Asıl zarar: 0015'in sabit yolu bu
+	// önekte birleşik sayılmaz (eksik host kural 2 ile ayrı gruba düşer);
+	// boot sekizi bu önekte zaten birleşik kurar.
+	g := base
+	g.CustomPrefix = "/ch/tbl"
+	_, detail := rolloutV2LayerDecision(g)
+	for _, want := range []string{"/ch/tbl/state/<ad>", "zaten birleşik"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("özel önek gerekçesi %q içermeli: %s", want, detail)
+		}
+	}
+	if strings.Contains(detail, "kuşak") {
+		t.Errorf("özel önek gerekçesi kaldırılan kuşak kuralını anıyor: %s", detail)
+	}
 }
 
 func TestRolloutV2LayerProbeSQL(t *testing.T) {
@@ -534,10 +549,12 @@ func TestRolloutV2LayerActionsRejectBadCluster(t *testing.T) {
 // YEŞİL geçiyordu ve her biri apply-0015'i şu durumlardan birinde
 // yürütürdü: boot'un düz (Replicated olmayan) kopyası üstüne (IF NOT EXISTS
 // o host'ta no-op), eski {shard} ZK yolu üstüne (replikasyon grubu
-// bölünür), özel ReplicaPath'le (boot'un useUnifiedStatePath kuşağı
-// sonraki state tablolarında döner). Bu test gerçek fonksiyonu kalıba göre
-// cevaplayan sahte bağlantıyla koşar (emsal: service_metadata_test.go
-// fakeConn, mv_inner_conn_test.go scriptRow) — canlı ClickHouse YOK.
+// bölünür), özel ReplicaPath'le (0015'in sabit yolu o önekte birleşik
+// sayılmaz: boot kural 2 ile eksik host'a ayrı bir yol kurar; v0.10.971
+// öncesi kural 3 ile sonraki state tabloları da eski yola dönerdi). Bu
+// test gerçek fonksiyonu kalıba göre cevaplayan sahte bağlantıyla koşar
+// (emsal: service_metadata_test.go fakeConn, mv_inner_conn_test.go
+// scriptRow) — canlı ClickHouse YOK.
 
 // rv2PreRows — dize satırları döndüren sahte driver.Rows.
 type rv2PreRows struct {

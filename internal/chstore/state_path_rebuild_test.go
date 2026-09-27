@@ -3,7 +3,10 @@ package chstore
 // state_path_rebuild_test.go — v0.10.965 — State tablolarını birleşik ZK
 // yolunda yeniden kurma sihirbazı. Operatör kararları 2026-09-27: on tablo
 // (ingest_ledger, ai_eval_runs + sekiz Rollouts v2) DROP + CREATE, veri kaybı
-// kabul, taşıma yok; boot kuralı (kural 3) DEĞİŞMEZ.
+// kabul, taşıma yok. v0.10.971 — boot'un kural 3'ü KALDIRILDI (operatör
+// kararı 2026-09-27, öneri 2): "kilit" yok, kısmi seçim onay (partialOK)
+// istemez; "eski yolda kalanlar" (stillLegacyAfter / stillLegacy) yalnız
+// bilgidir. Veri güvenliği kapılarının hepsi aynen durur.
 //
 // Canlı ClickHouse YOK: saf tablolar + sprConn (driver.Conn gömülü sahte;
 // mv_inner_conn_test.go scriptRow tip anahtarı ve rv2PreConn alt dize
@@ -13,6 +16,7 @@ package chstore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -390,7 +394,10 @@ func TestStatePathReplicaCollisions(t *testing.T) {
 	}
 }
 
-func TestStatePathLockAfter(t *testing.T) {
+// TestStatePathStillLegacyAfter — v0.10.971 (eski kilit testinin yerine):
+// çalıştırmadan sonra eski yolda kalacak state tabloları. YALNIZ bilgi —
+// kural 3 kalktı, kalan eski tablo yeni tabloları eski yola çekmez.
+func TestStatePathStillLegacyAfter(t *testing.T) {
 	const pre = "/clickhouse/tables"
 	cur := map[string]string{"users": pre + "/state/users"}
 	var ten []string
@@ -398,22 +405,37 @@ func TestStatePathLockAfter(t *testing.T) {
 		cur[e.Name] = pre + "/01/" + e.Name
 		ten = append(ten, e.Name)
 	}
-	open, reason, still := statePathLockAfter(cur, ten, pre)
-	if !open || len(still) != 0 || still == nil || reason != "taze veya göç SONRASI kurulum" {
-		t.Errorf("onu seçili: (%v, %q, %v)", open, reason, still)
+	if still := statePathStillLegacyAfter(cur, ten, pre); still == nil || len(still) != 0 {
+		t.Errorf("onu seçili: %v", still)
 	}
-	open, reason, still = statePathLockAfter(cur, ten[2:], pre)
-	if open || !slices.Equal(still, []string{"ai_eval_runs", "ingest_ledger"}) || !strings.Contains(reason, "2 state tablosu eski yolda") {
-		t.Errorf("8/10: (%v, %q, %v)", open, reason, still)
+	if still := statePathStillLegacyAfter(cur, ten[2:], pre); !slices.Equal(still, []string{"ai_eval_runs", "ingest_ledger"}) {
+		t.Errorf("8/10: %v", still)
 	}
 	cur["alert_rules"] = pre + "/02/alert_rules"
-	open, _, still = statePathLockAfter(cur, ten, pre)
-	if open || !slices.Equal(still, []string{"alert_rules"}) {
-		t.Errorf("izin dışı eski tablo: (%v, %v)", open, still)
+	if still := statePathStillLegacyAfter(cur, ten, pre); !slices.Equal(still, []string{"alert_rules"}) {
+		t.Errorf("izin dışı eski tablo: %v", still)
 	}
 	// Girdi haritası DEĞİŞMEZ (plan ve apply aynı gözlemi okur).
 	if cur["ingest_ledger"] != pre+"/01/ingest_ledger" {
-		t.Error("statePathLockAfter girdiyi değiştirdi")
+		t.Error("statePathStillLegacyAfter girdiyi değiştirdi")
+	}
+}
+
+// TestStatePathNoLockConcept — v0.10.971 kaynak pini: sihirbaz ve denetim boot
+// kuralını "kilit" için ÇAĞIRMAZ, kısmi seçim onay alanı (partialOK) yok.
+// Kural 3 geri gelirse ya da kilit kopyası yeniden yazılırsa kızarır.
+func TestStatePathNoLockConcept(t *testing.T) {
+	for _, f := range []string{"state_path_check.go", "state_path_rebuild.go"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(b)
+		for _, bad := range []string{"useUnifiedStatePath(", "LockOpen", "LockReason", "PartialOK", `json:"partialOK"`, "statePathLockAfter"} {
+			if strings.Contains(src, bad) {
+				t.Errorf("%s %q içeriyor — kural 3 kalktı, kilit kavramı yok", f, bad)
+			}
+		}
 	}
 }
 
@@ -804,8 +826,11 @@ type sprConn struct {
 	deferred   []string
 	deferReads int
 	beforeExec func(c *sprConn, q string)
-	queries    []string
-	execs      []string
+	// v0.10.971 — dolu ise system.replicas okuması bu hatayı döner (son
+	// ölçümün okunamadığı dal).
+	replicasErr error
+	queries     []string
+	execs       []string
 }
 
 func newSprConn() *sprConn {
@@ -937,6 +962,9 @@ func (c *sprConn) Query(ctx context.Context, q string, args ...any) (driver.Rows
 			vals = append(vals, []any{h})
 		}
 	case strings.Contains(q, "system.replicas)"):
+		if c.replicasErr != nil {
+			return nil, c.replicasErr
+		}
 		if len(c.deferred) > 0 {
 			if c.deferReads++; c.deferReads >= c.deferAfter {
 				for _, d := range c.deferred {
@@ -1192,7 +1220,7 @@ func TestStatePathRebuildHappy(t *testing.T) {
 	c.legacy("ai_eval_runs", 5)
 	c.unified("users", spHosts...)
 	// v0.10.965 — boot süzgeci: state dışı replikalı tablolar (shard'lı yolda,
-	// prod'un gerçek şekli) kilidi etkilemez ve hiç ifade almaz.
+	// prod'un gerçek şekli) "eski yolda kalanlar"a girmez ve hiç ifade almaz.
 	for _, n := range []string{"spans_local", ".inner_id.45f12d2e-36ac-4cb4-8bef-5025847af024", "problems_old"} {
 		c.legacy(n, 0)
 	}
@@ -1201,12 +1229,16 @@ func TestStatePathRebuildHappy(t *testing.T) {
 	if len(p.Blocked) != 0 {
 		t.Fatalf("plan engelli: %v", p.Blocked)
 	}
-	// v0.10.965 — rollout ve kilit uyarıları arayüzün kendi satırlarında: plan uyarısı olarak YİNELENMEZ.
+	// v0.10.965 — rollout uyarısı arayüzün kendi satırında: plan uyarısı olarak YİNELENMEZ.
 	if len(p.Warnings) != 0 {
 		t.Errorf("plan uyarıları boş olmalı (is_local temiz): %v", p.Warnings)
 	}
-	if len(p.Drops) != 10 || len(p.Creates) != 10 || !p.LockOpensAfter || len(p.StillLegacyAfter) != 0 {
-		t.Fatalf("plan: drops %d creates %d kilit %v kalan %v", len(p.Drops), len(p.Creates), p.LockOpensAfter, p.StillLegacyAfter)
+	if len(p.Drops) != 10 || len(p.Creates) != 10 || p.StillLegacyAfter == nil || len(p.StillLegacyAfter) != 0 {
+		t.Fatalf("plan: drops %d creates %d kalan %v", len(p.Drops), len(p.Creates), p.StillLegacyAfter)
+	}
+	// v0.10.971 — plan JSON'unda kilit alanı yok.
+	if pj, _ := json.Marshal(p); strings.Contains(string(pj), `"lockOpensAfter"`) {
+		t.Errorf("plan JSON lockOpensAfter taşıyor: %s", pj)
 	}
 	if p.Hosts != 4 || p.Database != "coremetry" || p.Cluster != "uptrace_all" {
 		t.Errorf("plan başlığı: %+v", p)
@@ -1246,11 +1278,16 @@ func TestStatePathRebuildHappy(t *testing.T) {
 			t.Errorf("%s: CREATE 0015 ifadesiyle bayt bayt aynı değil", n)
 		}
 	}
-	if !res.OK || res.Phase != "done" || !res.LockOpen || res.StillLegacy == nil || len(res.StillLegacy) != 0 || res.Resume != "" {
-		t.Errorf("sonuç: ok=%v phase=%s kilit=%v kalan=%v resume=%q", res.OK, res.Phase, res.LockOpen, res.StillLegacy, res.Resume)
+	if !res.OK || res.Phase != "done" || res.StillLegacy == nil || len(res.StillLegacy) != 0 || res.Resume != "" {
+		t.Errorf("sonuç: ok=%v phase=%s kalan=%v resume=%q", res.OK, res.Phase, res.StillLegacy, res.Resume)
 	}
-	if !strings.Contains(res.Note, "sonraki deploy ya da rolling restart") || res.LockReason != "taze veya göç SONRASI kurulum" {
-		t.Errorf("not / kilit: %q / %q", res.Note, res.LockReason)
+	// v0.10.971 — not kilit anlatmaz; boot log doğrulaması "(N birleşik, 0 eski)" biçimiyle.
+	if !strings.Contains(res.Note, "(N birleşik, 0 eski)") || strings.Contains(strings.ToLower(res.Note), "kilit") ||
+		strings.Contains(res.Note, "yola kurulacak") {
+		t.Errorf("not: %q", res.Note)
+	}
+	if rj, _ := json.Marshal(res); strings.Contains(string(rj), `"lockOpen"`) || strings.Contains(string(rj), `"lockReason"`) {
+		t.Errorf("sonuç JSON kilit alanı taşıyor: %s", rj)
 	}
 	for _, tb := range res.Tables {
 		if !tb.Verified || tb.After != "unified" {
@@ -1272,13 +1309,11 @@ func TestStatePathRebuildHappy(t *testing.T) {
 
 func TestStatePathRebuildRefusals(t *testing.T) {
 	type cell struct {
-		label   string
-		setup   func(c *sprConn)
-		tables  []string
-		mutate  func(c *sprConn, ack *StatePathRebuildAck) // plan ile apply arasında
-		queue   DDLQueueHealth
-		partial bool
-		want    string
+		label  string
+		setup  func(c *sprConn)
+		mutate func(c *sprConn, ack *StatePathRebuildAck) // plan ile apply arasında
+		queue  DDLQueueHealth
+		want   string
 	}
 	cells := []cell{
 		{label: "erişilemeyen host", mutate: func(c *sprConn, _ *StatePathRebuildAck) { c.unreachable = true },
@@ -1341,8 +1376,6 @@ func TestStatePathRebuildRefusals(t *testing.T) {
 			want: `replika adı çakışması: {shard}-{replica} host-1, host-2 host'larında "01-r1"`},
 		{label: "veritabanı Atomic değil", setup: func(c *sprConn) { c.dbEngine["host-4"] = "Ordinary" },
 			want: "host-4: veritabanı motoru Ordinary (Atomic değil)"},
-		{label: "8/10 partialOK yok", tables: sprTen()[2:],
-			want: "seçim kilidi açmıyor (ai_eval_runs, ingest_ledger eski yolda kalır) — partialOK olmadan koşmaz"},
 		{label: "düz motor", setup: func(c *sprConn) { c.state["host-3"]["rollout_events"] = &sprTable{engine: "ReplacingMergeTree"} },
 			want: "rollout_events: host-3'te motor ReplacingMergeTree (Replicated değil)"},
 	}
@@ -1359,15 +1392,12 @@ func TestStatePathRebuildRefusals(t *testing.T) {
 				cl.setup(c)
 			}
 			s := sprStore(c)
-			tables := cl.tables
-			if tables == nil {
-				tables = sprTen()
-			}
+			tables := sprTen()
 			_, ack := sprPlanAck(t, s, c, tables)
 			if cl.mutate != nil {
 				cl.mutate(c, ack)
 			}
-			res, err := s.ApplyStatePathRebuild(context.Background(), StatePathRebuildRequest{Cluster: "uptrace_all", Tables: tables, Ack: ack, PartialOK: cl.partial})
+			res, err := s.ApplyStatePathRebuild(context.Background(), StatePathRebuildRequest{Cluster: "uptrace_all", Tables: tables, Ack: ack})
 			sprRefused(t, cl.label, res, err, c, cl.want)
 		})
 	}
@@ -1416,11 +1446,11 @@ func TestStatePathRebuildOnlyTwoSkipsSettings(t *testing.T) {
 	s := sprStore(c)
 	two := []string{"ingest_ledger", "ai_eval_runs"}
 	for _, e := range statePathAllowlist[2:] {
-		c.unified(e.Name, spHosts...) // sekiz zaten birleşik: kilit açılabilsin
+		c.unified(e.Name, spHosts...) // sekiz zaten birleşik: eski yolda tablo kalmasın
 	}
 	_, ack := sprPlanAck(t, s, c, two)
 	res, err := s.ApplyStatePathRebuild(context.Background(), StatePathRebuildRequest{Cluster: "uptrace_all", Tables: two, Ack: ack})
-	if err != nil || !res.OK || !res.LockOpen {
+	if err != nil || !res.OK || len(res.StillLegacy) != 0 {
 		t.Fatalf("iki tablo: %v / %+v", err, res)
 	}
 	if c.queried("system_settings") {
@@ -1448,9 +1478,9 @@ func TestStatePathRebuildDropErrorStops(t *testing.T) {
 	if !strings.HasPrefix(res.Resume, "DROP yarıda kaldı.") || res.Statements[2].OK || !strings.Contains(res.Statements[2].Err, "Coordination error") {
 		t.Errorf("devam / ifade: %q / %+v", res.Resume, res.Statements)
 	}
-	// Son ölçüm: ilk iki tablo gitti, gerisi eski.
-	if res.Tables[0].After != "absent" || res.Tables[2].After != "legacy" || res.LockOpen {
-		t.Errorf("after: %s / %s kilit %v", res.Tables[0].After, res.Tables[2].After, res.LockOpen)
+	// Son ölçüm: ilk iki tablo gitti, gerisi eski (eski yolda kalan sekiz).
+	if res.Tables[0].After != "absent" || res.Tables[2].After != "legacy" || len(res.StillLegacy) != 8 || slices.Contains(res.StillLegacy, "ingest_ledger") {
+		t.Errorf("after: %s / %s kalan %v", res.Tables[0].After, res.Tables[2].After, res.StillLegacy)
 	}
 }
 
@@ -1587,8 +1617,8 @@ func TestStatePathRebuildBudgetExpiresInCreate(t *testing.T) {
 			t.Errorf("gönderilmemiş ifade kuyrukta sayıldı: %+v", st)
 		}
 	}
-	if strings.HasPrefix(res.LockReason, "son ölçüm okunamadı") || res.Tables[2].After != "absent" {
-		t.Errorf("son ölçüm taze bağlamda yapılmadı: kilit %q, after %q", res.LockReason, res.Tables[2].After)
+	if strings.Contains(res.Resume, "son ölçüm okunamadı") || res.Tables[2].After != "absent" {
+		t.Errorf("son ölçüm taze bağlamda yapılmadı: devam %q, after %q", res.Resume, res.Tables[2].After)
 	}
 	if !strings.Contains(res.Resume, "12 dk süre bütçesi doldu — Kurma yarıda kaldı: 0 tablo kuruldu.") {
 		t.Errorf("devam = %q", res.Resume)
@@ -1628,8 +1658,12 @@ func TestStatePathRebuildBootLegacyRecreateCaughtByVerify(t *testing.T) {
 	c.allTen()
 	s := sprStore(c)
 	_, ack := sprPlanAck(t, s, c, sprTen())
-	// DROP yoklaması bittikten sonra açılan bir pod (kural 3) ingest_ledger'ı
-	// ESKİ yola kurar; sihirbazın CREATE IF NOT EXISTS'i no-op kalır.
+	// DROP yoklaması bittikten sonra ingest_ledger ESKİ yola kurulur;
+	// sihirbazın CREATE IF NOT EXISTS'i no-op kalır. v0.10.971 — kural 3
+	// kalktı; bu yarış artık yalnız (a) ON CLUSTER DROP bir host'ta henüz
+	// işlenmemişken açılan pod'un kural 2 ile komşusuna katılması ya da (b)
+	// v0.10.970 veya eski imajlı bir pod'un açılmasıyla doğar. Doğrulama yine
+	// yakalar.
 	c.beforeExec = func(c *sprConn, q string) {
 		if strings.HasPrefix(q, "CREATE TABLE IF NOT EXISTS ingest_ledger ") {
 			c.legacy("ingest_ledger", 0)
@@ -1642,8 +1676,8 @@ func TestStatePathRebuildBootLegacyRecreateCaughtByVerify(t *testing.T) {
 	if res.Phase != "verify" || res.OK || res.Tables[0].After != "legacy" || res.Tables[0].Verified {
 		t.Errorf("verify yakalamadı: phase=%s ok=%v after=%s", res.Phase, res.OK, res.Tables[0].After)
 	}
-	if !res.Tables[1].Verified || res.LockOpen || !slices.Equal(res.StillLegacy, []string{"ingest_ledger"}) {
-		t.Errorf("kalanlar: %v kilit %v", res.StillLegacy, res.LockOpen)
+	if !res.Tables[1].Verified || !slices.Equal(res.StillLegacy, []string{"ingest_ledger"}) {
+		t.Errorf("kalanlar: %v", res.StillLegacy)
 	}
 	if !strings.Contains(res.Resume, "ingest_ledger doğrulanamadı (şimdi: eski yol)") || res.Note != "" {
 		t.Errorf("devam / not: %q / %q", res.Resume, res.Note)
@@ -1681,33 +1715,67 @@ func TestStatePathRebuildResumeMix(t *testing.T) {
 			}
 		}
 	}
-	if !res.OK || !res.LockOpen {
+	if !res.OK || len(res.StillLegacy) != 0 {
 		t.Errorf("sonuç: %+v", res)
 	}
 }
 
-func TestStatePathRebuildPartialWithAck(t *testing.T) {
+// TestStatePathRebuildPartialRunsWithoutPartialOK — v0.10.971: kural 3 kalktı,
+// kısmi seçim partialOK istemez. Seçim dışı eski tablolar planda ve sonuçta
+// BİLGİ olarak görünür (bölünmüş kalırlar); veri onayı (ack) aynen şart.
+func TestStatePathRebuildPartialRunsWithoutPartialOK(t *testing.T) {
 	sprSeams(t, sprHealthy)
 	c := newSprConn()
 	c.allTen()
 	s := sprStore(c)
 	eight := sprTen()[2:]
 	p, ack := sprPlanAck(t, s, c, eight)
-	if p.LockOpensAfter || !slices.Equal(p.StillLegacyAfter, []string{"ai_eval_runs", "ingest_ledger"}) || len(p.Blocked) != 0 {
-		t.Errorf("plan kısmi seçimi engellememeli, uyarmalı: %+v", p)
+	if !slices.Equal(p.StillLegacyAfter, []string{"ai_eval_runs", "ingest_ledger"}) || len(p.Blocked) != 0 {
+		t.Errorf("plan kısmi seçimi engellememeli, kalanları listelemeli: %+v", p)
 	}
-	// v0.10.965 — kilit bilgisi lockOpensAfter/stillLegacyAfter'da; "partialOK" (istek alanı) operatör metnine sızmaz.
 	for _, w := range p.Warnings {
-		if strings.Contains(w, "partialOK") || strings.Contains(w, "kilidi açmıyor") {
-			t.Errorf("plan uyarısı kilit metnini yineliyor: %q", w)
+		if strings.Contains(w, "partialOK") || strings.Contains(w, "kilid") {
+			t.Errorf("plan uyarısı kaldırılan kilit metnini taşıyor: %q", w)
 		}
 	}
-	res, err := s.ApplyStatePathRebuild(context.Background(), StatePathRebuildRequest{Cluster: "uptrace_all", Tables: eight, Ack: ack, PartialOK: true})
+	res, err := s.ApplyStatePathRebuild(context.Background(), StatePathRebuildRequest{Cluster: "uptrace_all", Tables: eight, Ack: ack})
+	if err != nil {
+		t.Fatalf("kısmi seçim (geçerli veri onayıyla) reddedildi: %v", err)
+	}
+	if !res.OK || !slices.Equal(res.StillLegacy, []string{"ai_eval_runs", "ingest_ledger"}) || c.count("DROP") != 8 {
+		t.Errorf("kısmi: ok=%v kalan=%v DROP=%d", res.OK, res.StillLegacy, c.count("DROP"))
+	}
+	// Onay kapısı aynen: kısmi seçimde de bayat onay reddedilir.
+	c2 := newSprConn()
+	c2.allTen()
+	s2 := sprStore(c2)
+	_, ack2 := sprPlanAck(t, s2, c2, eight)
+	ack2.MeasuredAt -= int64(31 * time.Minute / time.Millisecond)
+	res2, err2 := s2.ApplyStatePathRebuild(context.Background(), StatePathRebuildRequest{Cluster: "uptrace_all", Tables: eight, Ack: ack2})
+	sprRefused(t, "kısmi, bayat onay", res2, err2, c2, "onay bayat")
+}
+
+// TestStatePathRebuildFinalReadErrorInResume — v0.10.971: son ölçüm okunamazsa
+// hata eskiden LockReason'da taşınırdı; artık devam metninin önünde.
+func TestStatePathRebuildFinalReadErrorInResume(t *testing.T) {
+	sprSeams(t, sprHealthy)
+	c := newSprConn()
+	c.allTen()
+	s := sprStore(c)
+	_, ack := sprPlanAck(t, s, c, sprTen())
+	c.execErrAt, c.execErr = 3, errors.New("code: 999, message: Coordination error")
+	c.beforeExec = func(c *sprConn, _ string) {
+		if len(c.execs) == 3 {
+			c.replicasErr = errors.New("code: 159, message: Timeout exceeded")
+		}
+	}
+	res, err := s.ApplyStatePathRebuild(context.Background(), StatePathRebuildRequest{Cluster: "uptrace_all", Tables: sprTen(), Ack: ack})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.OK || res.LockOpen || !slices.Equal(res.StillLegacy, []string{"ai_eval_runs", "ingest_ledger"}) || c.count("DROP") != 8 {
-		t.Errorf("kısmi: ok=%v kilit=%v kalan=%v", res.OK, res.LockOpen, res.StillLegacy)
+	if res.OK || res.Phase != "drop" || !strings.HasPrefix(res.Resume, "son ölçüm okunamadı: system.replicas: code: 159") ||
+		!strings.Contains(res.Resume, "DROP yarıda kaldı.") {
+		t.Errorf("devam = %q (phase %s ok %v)", res.Resume, res.Phase, res.OK)
 	}
 }
 

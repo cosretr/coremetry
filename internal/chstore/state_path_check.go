@@ -8,19 +8,23 @@ package chstore
 // ZK yolunda — '/clickhouse/tables/01/<ad>' shard-1 host'larında,
 // '/clickhouse/tables/02/<ad>' shard-2 host'larında. Her biri İKİ ayrı
 // replikasyon grubu: uygulama bağlandığı host'un yarısını görür. Kök neden
-// state_replication.go useUnifiedStatePath KURAL 3: kümede HERHANGİ bir state
-// tablosu eski yoldayken boot, hiç var olmayan YENİ state tablolarını da eski
-// yola kurar. ingest_ledger (v0.10.767) eski yolda doğdu ve sonraki her
-// tabloyu kilitledi. Onu tutan tablolar birleşik yola geçince kural 4 devreye
-// girer ve kilit kendiliğinden açılır.
+// boot'un (state_replication.go) eski KURAL 3'ü: kümede HERHANGİ bir state
+// tablosu eski yoldayken hiç var olmayan YENİ state tablolarını da eski yola
+// kuruyordu. ingest_ledger (v0.10.767) eski yolda doğdu ve sonraki her tabloyu
+// kilitledi.
+//
+// v0.10.971 — kural 3 KALDIRILDI (operatör kararı 2026-09-27, "Önerini
+// yapalım", öneri 2): hiç var olmayan tablo artık her zaman birleşik yola
+// kurulur. "Kilit" kavramı bu denetimden de çıktı (lockOpen/lockReason yok).
+// Eski yoldaki tablolar YİNE listelenir: hâlâ shard başına bölünmüşlerdir ve
+// kendiliğinden düzelmezler — sihirbaz onları yeniden kurar.
 //
 // Bu dosya YENİ OKUMA YAPMAZ: raporun zaten okuduğu system.replicas +
 // system.parts + system.tables satırlarından SAF bir tablo düzeyi hüküm
 // çıkarır. Shard başına kararlar DEĞİŞMEZ — her yarı kendi shard'ında
 // gerçekten tutarlıdır; kusur shard'lar ARASINDADIR, o yüzden tablo düzeyi
-// bayrak. Kilit hesabı boot'un kendi kuralıdır (useUnifiedStatePath) ve
-// gözlem boot'un kendi birleştirmesiyle kurulur (mergeObservedStatePath):
-// kart ile boot ayrışamaz.
+// bayrak. Süzgeç boot'un kendi süzgecidir (stateProbeTable): kart ile boot'un
+// log sayımı ayrışamaz.
 
 import (
 	"sort"
@@ -48,10 +52,10 @@ type StatePathTable struct {
 }
 
 // StatePathCheck — v0.10.965 — kartın "State tablolarının ZK yolu" bloğu.
+// v0.10.971 — lockOpen/lockReason kalktı (boot'un kural 3'ü yok; FE ile
+// birlikte, uyum katmanı yok).
 type StatePathCheck struct {
 	ZKPrefix    string           `json:"zkPrefix"`
-	LockOpen    bool             `json:"lockOpen"`
-	LockReason  string           `json:"lockReason"`  // useUnifiedStatePath'in metni
 	Complete    bool             `json:"complete"`    // küme tanımındaki her host cevap verdi
 	Unreachable int              `json:"unreachable"` // tanımdaki host − cevap veren host
 	Unified     int              `json:"unified"`     // her yerde birleşik yoldaki state tabloları
@@ -137,9 +141,8 @@ func statePathGroups(rs []ReplicaState, zkPrefix, table string) ([]StatePathGrou
 //   - reachable: cevap veren host'lar; rosterSize: küme tanımındaki host sayısı
 //
 // Yalnız stateProbeTable(t) tablolar sayılır — boot'un süzgeci: `.inner*`,
-// `_local`, `_old`, `_fix` … elenir. Kilit boot'un kuralıyla hesaplanır:
-// gözlem mergeObservedStatePath ile katlanır, sonra useUnifiedStatePath(obs,
-// önek, ""). "" asla anahtar olamaz (stateProbeTable("") false) → kural 3/4.
+// `_local`, `_old`, `_fix` … elenir. v0.10.971 — kilit hesabı (boot'un
+// kuralını boş adla sormak) kalktı: kural 3 yok.
 func statePathCheckFor(byTable map[string][]ReplicaState, engineOf map[string]map[string]string,
 	reachable []string, rosterSize int, zkPrefix string) *StatePathCheck {
 	out := &StatePathCheck{
@@ -148,7 +151,6 @@ func statePathCheckFor(byTable map[string][]ReplicaState, engineOf map[string]ma
 		Unreachable: max(0, rosterSize-len(reachable)),
 		Legacy:      []StatePathTable{},
 	}
-	paths := map[string]string{}
 	names := make([]string, 0, len(byTable))
 	for t := range byTable {
 		names = append(names, t)
@@ -160,9 +162,6 @@ func statePathCheckFor(byTable map[string][]ReplicaState, engineOf map[string]ma
 			continue
 		}
 		rs := byTable[t]
-		for _, r := range rs {
-			mergeObservedStatePath(paths, t, r.ZKPath, zkPrefix)
-		}
 		kind := statePathKind(rs, zkPrefix, t)
 		if kind == "" {
 			if len(rs) > 0 && !statePathMissingSomewhere(t, engineOf, reachable) {
@@ -175,8 +174,8 @@ func statePathCheckFor(byTable map[string][]ReplicaState, engineOf map[string]ma
 	}
 	// v0.10.965 — izin listesindeki bir ad erişilebilir bir host'ta YOKSA ve
 	// eski grubu da yoksa "absent": yarım kalmış bir çalıştırmanın düşürdüğü
-	// tablolar system.replicas'ta artık görünmez, kilit hesabına da girmez —
-	// ama sihirbaz onları kurmalıdır.
+	// tablolar system.replicas'ta artık görünmez — ama sihirbaz onları
+	// kurmalıdır.
 	for _, e := range statePathAllowlist {
 		if listed[e.Name] || !statePathMissingSomewhere(e.Name, engineOf, reachable) {
 			continue
@@ -191,7 +190,6 @@ func statePathCheckFor(byTable map[string][]ReplicaState, engineOf map[string]ma
 		}
 		return out.Legacy[i].Table < out.Legacy[j].Table
 	})
-	out.LockOpen, out.LockReason = useUnifiedStatePath(stateObservation{ok: true, paths: paths}, zkPrefix, "")
 	return out
 }
 

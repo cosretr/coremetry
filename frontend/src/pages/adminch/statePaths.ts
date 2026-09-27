@@ -2,8 +2,9 @@
  * statePaths — v0.10.965 — "State tablolarının ZK yolu" bloğunun saf yarısı
  * (Replika tutarlılığı kartı; operatör kararı 2026-09-27). Kararlar
  * sunucuda (chstore.statePathCheckFor / PlanStatePathRebuild): burada
- * varsayılan seçim, kilit uyarısı (yalnız UYARI — kararı sunucu verir),
- * grup özeti, etiketler ve onay gövdesi.
+ * varsayılan seçim, seçim dışı kalan eski tablolar (yalnız BİLGİ), grup
+ * özeti, etiketler ve onay gövdesi. v0.10.971 — kilit uyarısı kalktı (boot'un
+ * kural 3'ü yok).
  */
 import type {
   CHStatePathAckTable, CHStatePathAction, CHStatePathCheck, CHStatePathClass, CHStatePathPhase,
@@ -17,19 +18,18 @@ export function defaultSelection(check: Pick<CHStatePathCheck, 'legacy'>): strin
 }
 
 /**
- * v0.10.965 — seçim kilidi açar mı? Sunucu kuralının (statePathLockAfter)
- * aynası, YALNIZ uyarı için: seçilen her tablo birleşik yola geçer; geriye
- * gözlenen (eski ya da karışık) bir state tablosu kalırsa boot kural 3 ile
- * yeni tabloları yine eski yola kurar. "absent" satırı gözlemde değildir,
- * kilidi tutmaz. İzin listesi dışı eski tablo seçilemez → kilidi tutar.
+ * v0.10.971 — seçimden sonra eski yolda (bölünmüş) kalacak state tabloları,
+ * sıralı. Sunucunun statePathStillLegacyAfter aynası, YALNIZ bilgi: boot'un
+ * kural 3'ü kalktı, kalan eski tablo yeni tabloları eski yola çekmez (eski
+ * "kilit" onayı yok). "absent" satırı eski yolda değildir; izin listesi dışı
+ * eski tablo seçilemez → kalır.
  */
-export function lockAfterSelection(check: Pick<CHStatePathCheck, 'legacy'>, selected: readonly string[]): { opens: boolean; stillLegacy: string[] } {
+export function stillLegacyAfterSelection(check: Pick<CHStatePathCheck, 'legacy'>, selected: readonly string[]): string[] {
   const sel = new Set(selected);
-  const stillLegacy = check.legacy
+  return check.legacy
     .filter(t => t.kind !== 'absent' && !(t.rebuildable && sel.has(t.table)))
     .map(t => t.table)
     .sort();
-  return { opens: stillLegacy.length === 0, stillLegacy };
 }
 
 /** Satır sayısı: binlik ayraç nokta (tr), yuvarlama YOK — operatör tam sayıyı onaylar. */

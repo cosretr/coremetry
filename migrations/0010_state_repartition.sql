@@ -119,13 +119,21 @@
 -- yolundadır. Uygulama açısından sonucu TEK ve DAR:
 --   • Var olan tablolara HİÇBİR etkisi yok (CREATE IF NOT EXISTS zaten
 --     elenir, okuma/yazma yolu ZK yolunu hiç anmaz).
---   • AMA useUnifiedStatePath (state_replication.go) kurulumu "göç
---     ÖNCESİ" sayar. Sonuç: o pencerede bir node'da EKSİK olan ya da
---     YENİ bir sürümle EKLENEN bir state tablosu ESKİ (`{shard}`) yola
---     kurulur — yani 0009'un onardığı bölünme o TEK tablo için geri gelir.
+--   • AMA useUnifiedStatePath (state_replication.go) `problems`'ı (ve
+--     `anomaly_events`'i) kümede birleşik olmayan bir yolda GÖZLER
+--     (kural 2). Sonuç: o pencerede tabloyu tutmayan bir node (yeni
+--     eklenen ya da tablosu silinmiş) onu `<önek>/{shard}/<ad>` yoluna
+--     kurar — komşularının `_repart` grubuna DEĞİL: 0009'un onardığı
+--     bölünme o tablo için geri gelir.
+--   • v0.10.971 — YENİ state tablosu getiren bir sürüm artık GÜVENLİ:
+--     hiç var olmayan tablo her zaman birleşik yola kurulur (eski "kuşak"
+--     kuralı — kurulumu "göç ÖNCESİ" sayıp yeni tabloyu eski yola kurmak
+--     — kaldırıldı).
 -- Dolayısıyla ara durumda GEÇERLİ TEK KISIT:
---   → CH kümesine node EKLEME ve YENİ state tablosu getiren bir sürümü
---     DEPLOY ETME. Etmen gerekiyorsa önce AŞAMA B'yi koştur.
+--   → CH kümesine node EKLEME (ve bu iki tabloyu bir node'da düşürme).
+--     Gerekiyorsa önce AŞAMA B'yi koştur. (v0.10.970 ve öncesi imajla
+--     YENİ state tablosu getiren sürümü de deploy etme — o imajlarda
+--     kuşak kuralı hâlâ var.)
 -- Durumu boot logundan doğrula:
 --     [chstore] state ZK yolu probe'u: N tablo gözlendi (X birleşik, Y eski)
 --   AŞAMA A sonrası Y=2 beklenir; AŞAMA B sonrası Y=0.

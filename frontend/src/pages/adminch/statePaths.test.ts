@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ackFromPlan, actionLabel, classLabel, defaultSelection, fmtRows, groupHostsTitle, groupSummary,
-  kindLabel, lockAfterSelection, phaseLabel, rowsToDelete, stateLabel,
+  kindLabel, phaseLabel, rowsToDelete, stateLabel, stillLegacyAfterSelection,
 } from './statePaths';
 import type {
   CHStatePathAction, CHStatePathCheck, CHStatePathClass, CHStatePathPhase, CHStatePathRebuildPlan,
@@ -48,20 +48,23 @@ describe('statePaths — saf', () => {
     expect(defaultSelection(c)).toEqual(['ingest_ledger', 'rollout_events']);
   });
 
-  it('lockAfterSelection: hepsi seçili açar; kısmi seçim ve izin dışı eski tablo KAPALI tutar', () => {
+  // v0.10.971 — kilit kalktı (boot'un kural 3'ü yok): seçim dışı eski tablolar
+  // yalnız BİLGİ olarak listelenir — bölünmüş kalırlar, yeni tabloları eski
+  // yola çekmezler. Sunucunun statePathStillLegacyAfter aynası.
+  it('stillLegacyAfterSelection: hepsi seçili boş; kısmi seçim ve izin dışı eski tablo listelenir', () => {
     const ten = ['ingest_ledger', 'ai_eval_runs', 'rollout_events', 'rollout_workload_state', 'argocd_app_status',
       'argocd_sync_events', 'argocd_app_mapping', 'rollout_classification', 'ado_commit_enrichment', 'rollout_worker_runs'];
     const c = check(ten.map(t => legacy(t)));
-    expect(lockAfterSelection(c, ten)).toEqual({ opens: true, stillLegacy: [] });
-    expect(lockAfterSelection(c, ten.slice(2))).toEqual({ opens: false, stillLegacy: ['ai_eval_runs', 'ingest_ledger'] });
-    // Gözlemde olmayan (absent) satır kilidi tutmaz, seçilmese bile.
+    expect(stillLegacyAfterSelection(c, ten)).toEqual([]);
+    expect(stillLegacyAfterSelection(c, ten.slice(2))).toEqual(['ai_eval_runs', 'ingest_ledger']);
+    // Gözlemde olmayan (absent) satır eski yolda değildir, seçilmese bile.
     const withAbsent = check([legacy('ingest_ledger'), legacy('rollout_events', { kind: 'absent', groups: [] })]);
-    expect(lockAfterSelection(withAbsent, ['ingest_ledger'])).toEqual({ opens: true, stillLegacy: [] });
-    // İzin dışı eski tablo seçilemez: adı seçimde olsa da kilidi tutar.
+    expect(stillLegacyAfterSelection(withAbsent, ['ingest_ledger'])).toEqual([]);
+    // İzin dışı eski tablo seçilemez: adı seçimde olsa da eski yolda kalır.
     const foreign = check([legacy('ingest_ledger'), legacy('alert_rules', { rebuildable: false })]);
-    expect(lockAfterSelection(foreign, ['ingest_ledger', 'alert_rules'])).toEqual({ opens: false, stillLegacy: ['alert_rules'] });
-    // Karışık satır da gözlemde → seçilmezse tutar.
-    expect(lockAfterSelection(check([legacy('ai_eval_runs', { kind: 'mixed' })]), [])).toEqual({ opens: false, stillLegacy: ['ai_eval_runs'] });
+    expect(stillLegacyAfterSelection(foreign, ['ingest_ledger', 'alert_rules'])).toEqual(['alert_rules']);
+    // Karışık satır da bölünmüş → seçilmezse kalır.
+    expect(stillLegacyAfterSelection(check([legacy('ai_eval_runs', { kind: 'mixed' })]), [])).toEqual(['ai_eval_runs']);
   });
 
   it('groupSummary: yol sayısı, kısa yol, host SAYISI, tam satır; host adları yalnız title', () => {

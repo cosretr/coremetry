@@ -56,7 +56,10 @@
 -- KÜMEDEN okur (internal/chstore/state_replication.go):
 --   • tablo kümede eski yolda görülüyorsa → eski yolu kullanır,
 --   • birleşik yolda görülüyorsa → birleşik yolu kullanır,
---   • hiç yoksa → kurulumun kuşağına bakar.
+--   • hiç yoksa → birleşik yol (v0.10.971). Öncesinde "kurulumun
+--     kuşağına" bakardı: kümede TEK bir eski yollu state tablosu varken
+--     hiç var olmayan yeni tablo da eski yola kurulurdu (kendini besleyen
+--     kilit; prod'da on tablo bölünmüş doğdu). Kaldırıldı — bkz. T7.
 -- Yani bu göç KENDİLİĞİNDEN tamamlanır: RENAME bittiği an dört host da
 -- birleşik yolu raporlar, uygulama bir sonraki boot'ta ONU görür.
 -- Çevrilecek bir bayrak, ikinci bir deploy YOKTUR.
@@ -89,6 +92,19 @@
 -- T6. ADIM 1'in ürettiği DDL, o kümenin O ANKİ şemasıdır. Sürüm
 --     atlanmış bir kurulumda kolon eksikse ADIM 2'nin `SELECT *`'ı
 --     gürültülü hata verir — sessiz veri kaybı değil.
+-- T7. v0.10.971 — BİRLEŞİK DOĞMUŞ TABLOLAR. v0.10.971+ uygulaması hiçbir
+--     node'da OLMAYAN state tablosunu, kümede eski yolda başka tablolar
+--     olsa bile DOĞRUDAN birleşik yola kurar. O tablolar göç istemez.
+--     ADIM 1'in üreticisi onlar için de satır üretir: replaceOne tutmaz
+--     ve satır zaten `/state/<ad>` taşır — ADIM 1 DOĞRULAMASI bunu
+--     YAKALAMAZ. O satırı ÇALIŞTIRMA: `<ad>_unified` canlı tablonun kendi
+--     ZK yoluna kurulmak ister ve REPLICA_ALREADY_EXISTS alır (gürültülü,
+--     veri zararı yok — T4'ün belirtisi). Tanıma: canlı tablonun
+--     system.replicas zookeeper_path'i zaten `<prefix>/state/<ad>`. 37'lik
+--     listeden biri böyle doğduysa (ör. düşürülüp yeniden kurulmuş) onun
+--     ADIM 2/3 bloğunu da ATLA; ADIM 4a'nın satır sayısı 37 + N olur.
+--     scripts/migrate-0009-state-unify.sh bunları "zaten birleşik" sayıp
+--     atlar; "KISMİ göç" uyarısında --resume güvenlidir.
 --
 -- ============================================================
 -- GERİ ALMA
@@ -195,10 +211,11 @@ WHERE database = currentDatabase()
 ORDER BY total_rows ASC, name ASC
 FORMAT TSVRaw;
 
--- DOĞRULAMA: 37 satır çıkmalı ve her satırda `/state/` geçmeli,
--- `/{shard}/` GEÇMEMELİ. Geçiyorsa üreticinin replaceOne'ı tutmamıştır
--- (ör. operatör ReplicaPath'i değiştirmiş ve yol `/{shard}/` içermiyor)
--- — DUR, elle incele.
+-- DOĞRULAMA: 37 satır (+ T7'nin birleşik doğmuş tabloları — onları ATLA)
+-- çıkmalı ve her satırda `/state/` geçmeli, `/{shard}/` GEÇMEMELİ.
+-- Geçiyorsa üreticinin replaceOne'ı tutmamıştır (ör. operatör
+-- ReplicaPath'i değiştirmiş ve yol `/{shard}/` içermiyor) — DUR, elle
+-- incele.
 
 
 -- ============================================================
@@ -475,7 +492,8 @@ WHERE database = currentDatabase()
 GROUP BY table, zookeeper_path
 HAVING zookeeper_path NOT LIKE '%/{shard}/%'
 ORDER BY table;
--- BEKLENEN: 37 satır, `replicas` = küme host sayısı (prod 4, lokal 2).
+-- BEKLENEN: 37 + N satır (N = T7'nin birleşik doğmuş state tabloları),
+-- `replicas` = küme host sayısı (prod 4, lokal 2).
 
 -- 4b. Dört host da AYNI sayıyı veriyor mu? `uniq_counts = 1` şart.
 SELECT 'problems' AS t, uniqExact(c) AS uniq_counts, min(c) AS n FROM (

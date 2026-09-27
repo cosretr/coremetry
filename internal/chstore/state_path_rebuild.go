@@ -9,14 +9,27 @@ package chstore
 //     ingest_ledger veri kaybı kabul ("2 için önerin a"), ai_eval_runs veri
 //     kaybı kabul ("3 için de data kaybı önemsiz"), sekiz Rollouts v2
 //     tablosu boş. VERİ TAŞIMA YOK.
-//   - Boot kuralı değişikliği (kural 3: hiç var olmayan yeni state tablosu
-//     her zaman birleşik yola) ONAYLANMADI — useUnifiedStatePath'e dokunulmaz.
+//   - v0.10.971 — boot kuralı değişikliği ONAYLANDI ("Önerini yapalım", öneri
+//     2): kural 3 kalktı, hiç var olmayan state tablosu her zaman birleşik
+//     yola kurulur. Sihirbazın "kilit" kavramı (lockOpensAfter, partialOK,
+//     sonuçtaki lockOpen) onunla birlikte kalktı; eski yolda kalanlar
+//     (stillLegacyAfter / stillLegacy) yalnız BİLGİ: bölünmüş kalırlar ama
+//     yeni tabloları eski yola çekmezler.
 //
-// SIRA ÖNEMLİ. Önce seçilen tabloların HEPSİ düşer, her host'ta gittiği
-// yoklanır, SONRA hepsi kurulur, sonra doğrulanır. Neden: kural 3. Bazı
-// tablolar düşmüş, bazıları hâlâ eski yoldayken açılan bir pod eksik olanları
-// ESKİ yola kurar. Onu hepsi gittikten sonra açılan pod kural 4'e ulaşır ve
-// sihirbazın ifadesinin AYNISIYLA birleşik yola kurar — o yarış zararsız.
+// SIRA — v0.10.971'da ZORUNLU DEĞİL, bilinçli KORUNUR. Önce seçilen
+// tabloların HEPSİ düşer, her host'ta gittiği yoklanır, SONRA hepsi kurulur,
+// sonra doğrulanır. Kural 3 varken zorunluydu (yarı düşmüş kümede açılan pod
+// eksikleri eski yola kurardı). Bugün hâlâ değerli: (1) tek drop_wait
+// bariyeri ve faza dayalı basit devam; (2) v0.10.970 veya eski imajlı bir pod
+// (kural 3 hâlâ onda) CREATE fazında açılırsa — seçim dışı eski tablo
+// kalmadıysa — eski kurala göre de birleşik yola kurar. Yine de sihirbaz
+// v0.10.971 her pod'da çalışırken koşulmalı. Sıradan
+// bağımsız kalan yarış: ON CLUSTER DROP bir host'ta henüz işlenmemişken
+// açılan pod kural 2 ile o host'un eski yolunu görür ve tabloyu düşmüş
+// host'lara ESKİ yolla kurar — "rollout/restart yapma" uyarısı bu yüzden
+// durur, doğrulama (verify) da yakalar. Hepsi gittikten sonra açılan pod
+// kural 4 ile sihirbazın ifadesinin AYNISIYLA birleşik yola kurar — o yarış
+// zararsız.
 //
 // ÖLÇÜM KATI: her okuma ana bağlantıda (s.conn), veritabanı `database = ?`
 // ile bağlı, skip_unavailable_shards YOK (erişilemeyen host okumayı düşürür →
@@ -26,8 +39,9 @@ package chstore
 // DDL TEK KAYNAKTAN. Sekiz Rollouts v2 tablosu 0015'in ifadesiyle
 // (rolloutV2LayerStatements); ingest_ledger ve ai_eval_runs kanonik katalogdan,
 // TAZE bir gölge Store'un tüm-birleşik gözlemiyle render edilir. Pod'un boot
-// anındaki gözlemi (stateObs) ASLA kullanılmaz: o gözlem kural 2/3 ile eski
-// yolu verir. statePathRenderCheck birleşik yolu ve replika adını doğrular.
+// anındaki gözlemi (stateObs) ASLA kullanılmaz: o gözlem kural 2 ile tablonun
+// eski yolunu verir. statePathRenderCheck birleşik yolu ve replika adını
+// doğrular.
 
 import (
 	"context"
@@ -141,7 +155,7 @@ func statePathIsEight(name string) bool {
 // tablosu birleşik yolda DEĞİLKEN (eski / karışık satır ya da denetimin
 // "birleşik yolda eksik" satırı) replika onarımı ve ilk replika ESKİ yolu
 // çoğaltır — Onar eşin literal yolunu klonlar, ilk replika boot gözlemiyle
-// adaptDDL'e gider (kural 2/3 → {shard}) — ve yeniden kurulumu geri alır.
+// adaptDDL'e gider (kural 2 → {shard}) — ve yeniden kurulumu geri alır.
 // O tablonun tek eylemi "State tablolarının ZK yolu" bloğudur. kind: satırın
 // StatePath'i, yoksa denetim listesindeki türü. İzin listesi dışı eski
 // tablolarda onarım olduğu gibi kalır (sihirbaz onları kurmaz). "" = geçer.
@@ -194,6 +208,8 @@ type StatePathRebuildTable struct {
 }
 
 // StatePathRebuildPlan — v0.10.965 — salt okuma plan.
+// v0.10.971 — lockOpensAfter kalktı; StillLegacyAfter yalnız bilgi (seçim
+// dışı kalıp bölünmüş kalacak eski tablolar), kapı değil.
 type StatePathRebuildPlan struct {
 	Cluster          string                  `json:"cluster"`
 	Database         string                  `json:"database"`
@@ -203,7 +219,6 @@ type StatePathRebuildPlan struct {
 	Tables           []StatePathRebuildTable `json:"tables"`
 	Drops            []string                `json:"drops"`
 	Creates          []string                `json:"creates"`
-	LockOpensAfter   bool                    `json:"lockOpensAfter"`
 	StillLegacyAfter []string                `json:"stillLegacyAfter"`
 	Blocked          []string                `json:"blocked"`
 	Checks           []string                `json:"checks"`
@@ -223,24 +238,24 @@ type StatePathRebuildAck struct {
 	Tables     []StatePathAckTable `json:"tables"`
 }
 
-// StatePathRebuildRequest — v0.10.965 — apply isteği.
+// StatePathRebuildRequest — v0.10.965 — apply isteği. v0.10.971 — kısmi
+// seçim onayı kalktı (kural 3 yok); bayat bir istemcinin fazladan alanı
+// JSON çözücüde yok sayılır.
 type StatePathRebuildRequest struct {
-	Cluster   string               `json:"cluster"`
-	Tables    []string             `json:"tables"`
-	Ack       *StatePathRebuildAck `json:"ack"`
-	PartialOK bool                 `json:"partialOK"`
+	Cluster string               `json:"cluster"`
+	Tables  []string             `json:"tables"`
+	Ack     *StatePathRebuildAck `json:"ack"`
 }
 
 // StatePathRebuildResult — v0.10.965 — apply sonucu. OK=false iken de DDL
-// koşmuş olabilir: Statements ve Resume bunu taşır.
+// koşmuş olabilir: Statements ve Resume bunu taşır. v0.10.971 — lockOpen /
+// lockReason kalktı; son ölçüm okunamazsa hata Resume'un önünde.
 type StatePathRebuildResult struct {
 	OK          bool                    `json:"ok"`
 	Phase       string                  `json:"phase"` // "drop" | "drop_wait" | "create" | "verify" | "done"
 	Tables      []StatePathRebuildTable `json:"tables"`
 	Statements  []RollupStmtResult      `json:"statements"`
-	LockOpen    bool                    `json:"lockOpen"`
-	LockReason  string                  `json:"lockReason"`
-	StillLegacy []string                `json:"stillLegacy"`
+	StillLegacy []string                `json:"stillLegacy"` // bilgi: son ölçümde eski yolda kalan state tabloları
 	Resume      string                  `json:"resume"`
 	Note        string                  `json:"note"`
 }
@@ -603,11 +618,12 @@ func statePathReplicaNames(hosts []string, macros map[string]map[string]string) 
 	return names, blocked
 }
 
-// statePathLockAfter — v0.10.965 — SAF: çalıştırmadan SONRA kilit. Seçilen
-// her tablo birleşik yoluyla değiştirilir, sonra boot'un kuralı
-// (useUnifiedStatePath(obs, önek, "")). still: eski yolda kalan state
-// tabloları (izin listesi dışındakiler dahil), sıralı.
-func statePathLockAfter(currentPaths map[string]string, selected []string, zkPrefix string) (open bool, reason string, still []string) {
+// statePathStillLegacyAfter — v0.10.971 — SAF: çalıştırmadan SONRA eski
+// yolda kalacak state tabloları (izin listesi dışındakiler dahil), sıralı,
+// [] (null değil). Seçilen her tablo birleşik yoluyla değiştirilir; girdi
+// haritası değişmez. YALNIZ bilgi: eskiden (v0.10.965) boot'un kural 3'üyle
+// "kilit" hesaplanırdı, kural kalktı.
+func statePathStillLegacyAfter(currentPaths map[string]string, selected []string, zkPrefix string) []string {
 	paths := make(map[string]string, len(currentPaths)+len(selected))
 	for t, p := range currentPaths {
 		paths[t] = p
@@ -615,8 +631,7 @@ func statePathLockAfter(currentPaths map[string]string, selected []string, zkPre
 	for _, t := range selected {
 		paths[t] = unifiedStatePath(zkPrefix, t)
 	}
-	open, reason = useUnifiedStatePath(stateObservation{ok: true, paths: paths}, zkPrefix, "")
-	return open, reason, statePathStillLegacy(paths, zkPrefix)
+	return statePathStillLegacy(paths, zkPrefix)
 }
 
 // statePathStillLegacy — SAF: birleşik yolda olmayan state tabloları, sıralı, [] (null değil).
@@ -632,7 +647,8 @@ func statePathStillLegacy(paths map[string]string, zkPrefix string) []string {
 }
 
 // statePathObserved — SAF: R3 satırlarından boot'un gözlemi (stateProbeTable
-// süzgeci + mergeObservedStatePath). Sıra deterministik.
+// süzgeci + mergeObservedStatePath). Sıra deterministik. Plan ve son ölçüm
+// "eski yolda kalanlar"ı buradan sayar.
 func statePathObserved(reps map[string]map[string]statePathReplica, zkPrefix string) map[string]string {
 	paths := map[string]string{}
 	tables := make([]string, 0, len(reps))
@@ -710,8 +726,8 @@ type statePathGateInput struct {
 
 // statePathGate — v0.10.965 — SAF: engel nedenleri, bu SIRAYLA. İlk üç
 // (küme kipi, küme, erişim) ölçümü anlamsız kılar: sonrası sınanmaz.
-// Onay ve kilit-sonrası kapıları apply'a özgüdür (statePathAckAll,
-// statePathLockAfter) ve bu listenin ARDINA eklenir.
+// Onay kapıları apply'a özgüdür (statePathAckAll, statePathEvalAckGate) ve
+// bu listenin ARDINA eklenir. (v0.10.971 — kilit-sonrası kapısı kalktı.)
 func statePathGate(in statePathGateInput) []string {
 	if !in.ClusterMode {
 		return []string{"küme kipi değil"}
@@ -1353,13 +1369,10 @@ func (s *Store) planStatePathRebuild(ctx context.Context, cluster string, tables
 	}
 	p.Blocked = append(p.Blocked, statePathGate(in)...)
 
-	// Kilit — çalıştırmadan sonra. v0.10.965 — kilit uyarısı plan uyarısına
-	// YAZILMAZ: arayüz lockOpensAfter/stillLegacyAfter'dan kendi satırını ve
-	// onay kutusunu çizer ("partialOK" bir istek alanıdır, operatör metni değil);
-	// apply'daki ret (partialOK olmadan koşmaz) aynen durur.
-	var still []string
-	p.LockOpensAfter, _, still = statePathLockAfter(statePathObserved(m.reps, prefix), out.selected, prefix)
-	p.StillLegacyAfter = still
+	// Çalıştırmadan sonra eski yolda kalacaklar — v0.10.971: YALNIZ bilgi
+	// (kural 3 kalktı; kilit, partialOK ve onun apply reddi yok). Plan
+	// uyarısına YAZILMAZ: arayüz kendi satırını stillLegacyAfter'dan çizer.
+	p.StillLegacyAfter = statePathStillLegacyAfter(statePathObserved(m.reps, prefix), out.selected, prefix)
 	// Uyarılar (engel değil).
 	if m.isLocalErr != nil {
 		p.Warnings = append(p.Warnings, "is_local denetimi okunamadı: "+m.isLocalErr.Error())
@@ -1379,15 +1392,17 @@ func (s *Store) planStatePathRebuild(ctx context.Context, cluster string, tables
 
 // ───────────────────────── 2.7 apply ─────────────────────────
 
-// statePathSuccessNote — başarı notu (çalışan pod'lar boot gözlemini tutar).
-const statePathSuccessNote = "Çalışan pod'lar boot anındaki yol gözlemini tutar: kilit her pod'un bir sonraki açılışında açılır (sonraki deploy ya da rolling restart). Doğrulama: boot log satırı '(N birleşik, 0 eski) — yeni state tabloları BİRLEŞİK yola kurulacak'. Rollouts kartındaki 0015 ön kontrolü artık çakışma göstermez."
+// statePathSuccessNote — başarı notu. v0.10.971 — kilit cümlesi kalktı (kural
+// 3 yok): yeni tablolar zaten birleşik yola kurulur; boot log doğrulaması ve
+// 0015 satırı kalır.
+const statePathSuccessNote = "Doğrulama: her pod'un bir sonraki açılışında (sonraki deploy ya da rolling restart) boot log satırı '(N birleşik, 0 eski)' der — eski yolda başka tablo kalmadıysa. Rollouts kartındaki 0015 ön kontrolü artık çakışma göstermez."
 
 // statePathPendingErr — kuyruğa alınmış (zaman aşımı) ifadenin kaydı.
 const statePathPendingErr = "kuyrukta — durum yoklamasıyla doğrulanıyor"
 
 // ApplyStatePathRebuild — v0.10.965 — DROP hepsi → her host'ta gitti mi
 // (katı yoklama, birleşik znode'da replika kalmadı mı) → CREATE hepsi →
-// katı yoklamayla doğrula → son kilit. İstemciye GÜVENİLMEZ: taze plan +
+// katı yoklamayla doğrula → son ölçüm. İstemciye GÜVENİLMEZ: taze plan +
 // onay kapısı; herhangi bir engel *StatePathGateError döner ve hiçbir ifade
 // koşmaz. İlk hatada durur; tablo başına After/Verified ve devam metni.
 func (s *Store) ApplyStatePathRebuild(ctx context.Context, req StatePathRebuildRequest) (*StatePathRebuildResult, error) {
@@ -1408,9 +1423,6 @@ func (s *Store) ApplyStatePathRebuild(ctx context.Context, req StatePathRebuildR
 		blocked = append(blocked, statePathAckAll(plan.Tables, req.Ack, time.Now())...)
 		if msg := statePathEvalAckGate(pl.evalRead, pl.evalLastWriteMs, req.Ack); msg != "" {
 			blocked = append(blocked, msg)
-		}
-		if !plan.LockOpensAfter && !req.PartialOK {
-			blocked = append(blocked, fmt.Sprintf("seçim kilidi açmıyor (%s eski yolda kalır) — partialOK olmadan koşmaz", strings.Join(plan.StillLegacyAfter, ", ")))
 		}
 	}
 	if len(blocked) > 0 {
@@ -1592,8 +1604,9 @@ func statePathDropPending(ctx context.Context, conn driver.Conn, live statePathL
 	return out
 }
 
-// statePathFinish — son katı ölçüm: tablo başına After/Verified, son kilit,
-// eski yolda kalanlar, OK, devam metni ve not.
+// statePathFinish — son katı ölçüm: tablo başına After/Verified, eski yolda
+// kalanlar, OK, devam metni ve not. v0.10.971 — son kilit kalktı; okuma
+// hatası (eskiden kilit gerekçesinde) devam metninin önüne yazılır.
 func (s *Store) statePathFinish(ctx context.Context, m *statePathMeasure, prefix string, res *StatePathRebuildResult) {
 	// v0.10.965 — son ölçüm TAZE bağlamda: bütçe dolduysa ölü ctx ile okuma
 	// "son ölçüm okunamadı" der, After boş kalır ve devam metni yanlış nedeni
@@ -1601,8 +1614,9 @@ func (s *Store) statePathFinish(ctx context.Context, m *statePathMeasure, prefix
 	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
 	live, err := s.statePathReadLive(fctx, m.cluster, m.db)
+	readErr := ""
 	if err != nil {
-		res.LockReason = "son ölçüm okunamadı: " + err.Error()
+		readErr = "son ölçüm okunamadı: " + err.Error()
 	} else {
 		for i := range res.Tables {
 			t := &res.Tables[i]
@@ -1611,9 +1625,7 @@ func (s *Store) statePathFinish(ctx context.Context, m *statePathMeasure, prefix
 				t.Verified = statePathVerified(t.Table, m.hosts, live.engines[t.Table], live.reps[t.Table], prefix)
 			}
 		}
-		paths := statePathObserved(live.reps, prefix)
-		res.LockOpen, res.LockReason = useUnifiedStatePath(stateObservation{ok: true, paths: paths}, prefix, "")
-		res.StillLegacy = statePathStillLegacy(paths, prefix)
+		res.StillLegacy = statePathStillLegacy(statePathObserved(live.reps, prefix), prefix)
 	}
 	res.OK = res.Phase == "done"
 	for _, t := range res.Tables {
@@ -1629,6 +1641,9 @@ func (s *Store) statePathFinish(ctx context.Context, m *statePathMeasure, prefix
 		res.Phase = "verify" // son ölçüm doğrulamayı bozduysa dürüst ol
 	}
 	res.Resume = statePathResumeHint(res.Phase, res.Tables)
+	if readErr != "" { // v0.10.971 — After/Verified neden boş: ölçüm okunamadı
+		res.Resume = readErr + " — " + res.Resume
+	}
 	if ctx.Err() != nil { // v0.10.965 — kesilme nedeni açıkça
 		res.Resume = "12 dk süre bütçesi doldu — " + res.Resume
 	}

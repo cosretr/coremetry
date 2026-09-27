@@ -31,16 +31,20 @@
 -- Go DDL'iyle BİRLİKTE güncelle.
 --
 -- ZK YOLU — karar 25. Bu dosya '/clickhouse/tables/state/<ad>' SABİT yazar
--- (0012 gibi). Boot ise öneki ve kuşağı ÇALIŞMA ZAMANINDA çözer
+-- (0012 gibi). Boot ise öneki ve yolu ÇALIŞMA ZAMANINDA çözer
 -- (internal/chstore/state_replication.go: zkPrefix = cfg.ReplicaPath, boşsa
--- /clickhouse/tables; useUnifiedStatePath = kümede gözlenen yol). Varsayılan
--- önek + taze ya da 0009 sonrası kümede ikisi AYNI ifadeyi üretir (test
--- pinli). Ayrıştığı iki durum, sihirbazın ön kontrolünde REDDEDİLİR:
---   - küme kipinde özel önek (cfg.ReplicaPath): bu dosyadaki yol boot'un
---     kuşak probe'una "eski yol" görünür ve SONRAKİ yeni state tablolarını
---     shard'lı yola düşürürdü → dosyayı öneke uyarlayıp elle uygula;
---   - sekizden biri bir host'ta FARKLI ZK yolunda (0009 öncesi kümede boot
---     onu eski '<önek>/{shard}/<ad>','{replica}' yoluyla kurmuş olabilir):
+-- /clickhouse/tables; useUnifiedStatePath = kümede gözlenen yol, tablo
+-- hiçbir node'da yoksa birleşik yol). Varsayılan önekte, tablo hiçbir
+-- node'da yokken ikisi AYNI ifadeyi üretir (test pinli; v0.10.971'dan beri
+-- kümede başka eski state tabloları olsa da). Ayrıştığı iki durum,
+-- sihirbazın ön kontrolünde REDDEDİLİR:
+--   - küme kipinde özel önek (cfg.ReplicaPath): bu dosyadaki yol o önekte
+--     BİRLEŞİK sayılmaz — tabloyu tutmayan host'a boot ayrı bir yol kurar
+--     ve kart onları "eski" gösterir. Boot sekizi o önekte zaten birleşik
+--     kurar (v0.10.971); gerekiyorsa dosyayı öneke uyarlayıp elle uygula;
+--   - sekizden biri bir host'ta FARKLI ZK yolunda (v0.10.971 öncesi boot,
+--     kümede eski yolda başka state tablosu varken, onu eski
+--     '<önek>/{shard}/<ad>','{replica}' yoluyla kurmuş olabilir):
 --     IF NOT EXISTS eksik host'lara 0015 yolunu verir → iki replikasyon
 --     grubu (split-brain). Önce o tabloyu ON CLUSTER düşür ya da boot'un
 --     yoluyla hizala.

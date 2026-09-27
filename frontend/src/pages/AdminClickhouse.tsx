@@ -2541,7 +2541,7 @@ export function ReplicaConsistencyPanel() {
     } finally { setApplying(false); setCleanupConfirm(false); void scan(); }
   };
   const sum = data ? summarize(data) : null;
-  const spHead = data?.cluster ? statePathHeadline(data.statePaths) : null; // v0.10.965 — kilit kapalıyken başlık özeti tek başına yetmez
+  const spHead = data?.cluster ? statePathHeadline(data.statePaths) : null; // v0.10.971 — bölünmüş state tabloları varken başlık özeti tek başına yetmez
   const tables = data
     ? [...data.tables].sort((a, b) => verdictRank(b.verdict) - verdictRank(a.verdict) || a.table.localeCompare(b.table))
     : [];

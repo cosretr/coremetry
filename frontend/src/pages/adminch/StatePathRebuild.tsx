@@ -4,7 +4,10 @@
  * "sihirbaza ekle … düzeltmesi ve kontrolü").
  *
  * Denetim sunucuda (chstore.statePathCheckFor, raporun kendi okumaları);
- * burada liste, kilit rozeti ve kural 3 açıklaması. Düzeltme: seçilenler
+ * burada liste, bölünme rozeti ve açıklaması. v0.10.971 — boot'un kural 3'ü
+ * kalktı (hiç var olmayan state tablosu her zaman birleşik yola kurulur):
+ * "kilit" rozeti, kısmi seçim onayları ve partialOK yok; seçim dışı eski
+ * tablolar yalnız BİLGİ satırında (bölünmüş kalırlar). Düzeltme: seçilenler
  * ON CLUSTER … SYNC ile düşer, her host'ta gittiği yoklanır, sonra hepsi
  * birleşik yolda kurulur ve doğrulanır. Veri TAŞINMAZ (ingest_ledger ve
  * ai_eval_runs için kayıp operatör kararıyla kabul). Plan salt okuma; apply
@@ -19,7 +22,7 @@ import { api, apiErrorDetail, UnauthorizedError } from '@/lib/api';
 import type { CHStatePathCheck, CHStatePathRebuildPlan, CHStatePathRebuildResult } from '@/lib/types';
 import {
   ackFromPlan, actionLabel, classLabel, defaultSelection, fmtRows, groupHostsTitle, groupSummary,
-  kindLabel, lockAfterSelection, phaseLabel, rowsToDelete, stateLabel,
+  kindLabel, phaseLabel, rowsToDelete, stateLabel, stillLegacyAfterSelection,
 } from './statePaths';
 
 export interface StatePathBlockProps {
@@ -43,16 +46,9 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
   // Seçim DIŞLANANLAR olarak tutulur: kart yeniden ölçülünce yeni listede
   // varsayılan (izinli her tablo) kendiliğinden gelir.
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => new Set());
-  const [partialAck, setPartialAck] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
   const [plan, setPlan] = useState<CHStatePathRebuildPlan | null>(null);
   const [ack, setAck] = useState(false);
-  // v0.10.965 — kısmi onay TAZE plandan: kartın ölçümü bayat olabilir (bu
-  // arada açılan bir pod kural 3 ile yeni bir tabloyu eski yola kurmuş, ya da
-  // o an erişilemeyen host'taki eski tablo görünmemiş olabilir). Plan kilidin
-  // kapalı kalacağını söylüyorsa onay diyalogda istenir; kartta verilen onay
-  // yalnız tohumdur (normal kısmi akış iki kez sormaz).
-  const [planPartialAck, setPlanPartialAck] = useState(false);
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<{ res: CHStatePathRebuildResult; hosts: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,9 +56,11 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
 
   const rebuildable = defaultSelection(check);
   const selected = rebuildable.filter(t => !excluded.has(t));
-  const lock = lockAfterSelection(check, selected);
-  const needsPartialAck = !lock.opens;
+  const stillLegacy = stillLegacyAfterSelection(check, selected); // v0.10.971 — yalnız bilgi
   const legacyCount = check.legacy.filter(t => t.kind !== 'absent').length;
+  // v0.10.971 — "yeniden kur" yalnız sihirbaz en az birini kurabiliyorsa; izin
+  // listesi dışı kalıntılar (ör. alert_rules) runbook ister, düğmesi yok.
+  const legacyRebuildable = check.legacy.some(t => t.kind !== 'absent' && t.rebuildable);
   const absentCount = check.legacy.filter(t => t.kind === 'absent').length;
   const busy = planBusy || applying;
 
@@ -73,14 +71,10 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
       return next;
     });
   };
-  const closePlan = () => { setPlan(null); setAck(false); setPlanPartialAck(false); };
+  const closePlan = () => { setPlan(null); setAck(false); };
   const openPlan = async () => {
     setPlanBusy(true); setError(null); setResult(null); setAck(false);
-    try {
-      const p = await api.chStatePathRebuildPlan(selected);
-      setPlanPartialAck(needsPartialAck && partialAck);
-      setPlan(p);
-    }
+    try { setPlan(await api.chStatePathRebuildPlan(selected)); }
     catch (e: unknown) { setError(apiErrorDetail(e).message); }
     finally { setPlanBusy(false); }
   };
@@ -92,7 +86,6 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
         cluster,
         tables: plan.tables.map(t => t.table),
         ack: ackFromPlan(plan),
-        partialOK: !plan.lockOpensAfter && planPartialAck,
       });
       setResult({ res, hosts: plan.hosts });
       closePlan();
@@ -122,20 +115,20 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
   const createOnly = !!plan && plan.drops.length === 0;
   const workCount = plan ? plan.tables.filter(t => t.action !== 'skip').length : 0;
   const dropsTable = (name: string) => !!plan?.tables.some(t => t.table === name && t.action === 'rebuild');
-  const needsPlanPartial = !!plan && !plan.lockOpensAfter;
+  const planStill = plan?.stillLegacyAfter ?? [];
+  const resultStill = result?.res.stillLegacy ?? [];
   return (
     <div role="group" aria-label="State tablolarının ZK yolu" style={{ margin: '8px 0 12px' }}>
       <SectionHead title="State tablolarının ZK yolu" badges={<>
-        {check.lockOpen
-          ? <span className="badge b-ok" title={check.lockReason}>kilit açık · yeni state tabloları birleşik yola kurulur</span>
-          : <span className="badge b-err" title={check.lockReason}>kilit KAPALI · {legacyCount} state tablosu eski yolda</span>}
+        {legacyCount > 0 && <span className="badge b-err">{legacyCount} state tablosu eski yolda — bölünmüş{legacyRebuildable ? ', yeniden kur' : ' (runbook)'}</span>}
         {absentCount > 0 && <span className="badge b-warn">{absentCount} tablo birleşik yolda eksik</span>}
+        {check.legacy.length === 0 && check.complete && <span className="badge b-ok">tüm state tabloları birleşik yolda</span>}
       </>} meta={<span className="cell-hint">{check.unified} birleşik</span>} />
-      {!check.lockOpen && (
+      {legacyCount > 0 && (
         <p className="cell-hint">
           Bu tablolar eski (shard&apos;lı) ZK yolunda: her shard ayrı bir replikasyon grubu, uygulama bağlandığı host&apos;un yarısını görür.
-          Biri bile eski yolda durdukça boot, HİÇ var olmayan yeni state tablolarını da eski yola kurar (kural 3) — sonradan eklenen her
-          tablo bölünmüş doğar. Hepsi birleşik yola geçince kilit bir sonraki açılışta kendiliğinden açılır.
+          Yeni state tabloları bundan etkilenmez: boot hiç var olmayan tabloyu her zaman birleşik yola kurar (v0.10.971). Eski yoldakiler
+          kendiliğinden düzelmez.
         </p>
       )}
       {!check.complete && (
@@ -161,25 +154,20 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
               </div>
               {t.rebuildable
                 ? t.classNote && <div className="cell-hint">{t.classNote}</div>
-                : <div className="cell-hint" style={{ color: 'var(--warn)' }}>bu sihirbazın izin listesinde değil — kilidi kapalı tutar (0009/0010 runbook&apos;u ya da kalıntı temizliği)</div>}
+                : <div className="cell-hint" style={{ color: 'var(--warn)' }}>bu sihirbazın izin listesinde değil — bölünmüş kalır (0009/0010 runbook&apos;u ya da kalıntı temizliği)</div>}
             </li>
           ))}
         </ul>
       )}
-      {rebuildable.length > 0 && needsPartialAck && (
+      {rebuildable.length > 0 && stillLegacy.length > 0 && (
         <div role="status" className="cell-hint" style={{ color: 'var(--warn)' }}>
-          Seçim dışı kalan eski tablolar: {lock.stillLegacy.join(', ')} — kilit KAPALI kalır; boot yeni state tablolarını yine eski yola kurar.
-          Düşürülüp kurulurken açılan bir pod bu tabloları da eski yola kurabilir.
-          <label style={{ ...checkStyle, marginLeft: 8, color: 'var(--text3)' }}>
-            <input type="checkbox" checked={partialAck} disabled={busy} onChange={e => setPartialAck(e.target.checked)} />
-            Kilidin kapalı kalacağını anlıyorum
-          </label>
+          Seçim dışı kalan eski tablolar bölünmüş kalır: {stillLegacy.join(', ')}
         </div>
       )}
       {rebuildable.length > 0 && (
         <div style={{ ...lineStyle, marginTop: 6 }}>
           <Button variant="accent" size="sm" loading={planBusy}
-            disabled={selected.length === 0 || (needsPartialAck && !partialAck) || busy}
+            disabled={selected.length === 0 || busy}
             title="Plan salt okuma: katı ölçüm (skip_unavailable_shards yok), kapılar ve koşacak ifadeler; çalıştırma ayrı onay ister"
             onClick={() => void openPlan()}>Yeniden kurulumu planla ({selected.length} tablo)</Button>
         </div>
@@ -188,7 +176,7 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
       {result && (result.res.ok ? (
         <div role="status" className="cell-hint">
           Tamam: {result.res.tables.filter(t => t.verified).length} tablo birleşik yolda doğrulandı ({result.hosts}/{result.hosts} host).
-          Kilit: {result.res.lockOpen ? 'açık' : `KAPALI — ${result.res.stillLegacy.join(', ')}`}. {result.res.note}
+          {resultStill.length > 0 && ` Eski yolda (bölünmüş) kalan: ${resultStill.join(', ')}.`} {result.res.note}
         </div>
       ) : (
         <>
@@ -215,7 +203,7 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
         <Modal open size="lg" title={`State tablolarını birleşik yola yeniden kur — ${workCount} tablo`} onClose={applying ? noop : closePlan} footer={
           <>
             <Button variant="secondary" size="sm" disabled={applying} onClick={closePlan}>Vazgeç</Button>
-            <Button variant="danger" size="sm" disabled={!ack || planBlocked.length > 0 || applying || (needsPlanPartial && !planPartialAck)} loading={applying}
+            <Button variant="danger" size="sm" disabled={!ack || planBlocked.length > 0 || applying} loading={applying}
               onClick={() => void apply()}>{createOnly ? 'Birleşik yolda kur' : 'Düşür ve yeniden kur'}</Button>
           </>
         }>
@@ -254,14 +242,10 @@ export function StatePathBlock({ check, cluster, onDone }: StatePathBlockProps) 
             <summary style={{ cursor: 'pointer', fontSize: 11 }}>Koşacak ifadeler ({plan.drops.length + plan.creates.length})</summary>
             <pre className="mono" style={{ fontSize: 11, whiteSpace: 'pre-wrap', margin: '4px 0 0' }}>{[...plan.drops, ...plan.creates].join(';\n\n')}</pre>
           </details>
-          {needsPlanPartial && (
+          {planStill.length > 0 && (
+            // v0.10.971 — yalnız bilgi (plan taze ve katı; kartın listesi bayat olabilir): onay istenmez.
             <div className="cell-hint" style={{ color: 'var(--warn)' }}>
-              Kilit bu çalıştırmadan sonra da KAPALI: {plan.stillLegacyAfter.join(', ')}
-              {/* v0.10.965 — plan taze ve katı; kartın tahmini bayat olabilir, partialOK planın lockOpensAfter'ından sürülür. */}
-              <label style={{ ...checkStyle, marginLeft: 8, color: 'var(--text3)' }}>
-                <input type="checkbox" checked={planPartialAck} disabled={applying} onChange={e => setPlanPartialAck(e.target.checked)} />
-                Kilidin kapalı kalacağını anlıyorum
-              </label>
+              Bu çalıştırmadan sonra eski yolda (bölünmüş) kalacaklar: {planStill.join(', ')}
             </div>
           )}
           <label style={{ ...checkStyle, fontSize: 12, marginTop: 8 }}>

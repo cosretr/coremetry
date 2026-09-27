@@ -36,6 +36,16 @@ func TestStatePathRebuildAdminRoutes(t *testing.T) {
 			t.Errorf("%q yok", want)
 		}
 	}
+	// v0.10.971 — kural 3 kalktı: kısmi seçim onayı (partialOK) ve kilit yok;
+	// audit eski yolda kalanları (bilgi) taşır.
+	if !strings.Contains(src, `"stillLegacy": res.StillLegacy`) {
+		t.Error("apply audit'i stillLegacy taşımalı")
+	}
+	for _, gone := range []string{"PartialOK", "partialOK", "lockOpen", "LockOpen"} {
+		if strings.Contains(src, gone) {
+			t.Errorf("%q hâlâ var — kural 3 ile kilit/kısmi onay kalktı", gone)
+		}
+	}
 	if n := strings.Count(src, "auth.RequireRole(auth.RoleAdmin"); n != 2 {
 		t.Errorf("iki uç da admin kapılı olmalı (%d)", n)
 	}

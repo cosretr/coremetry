@@ -70,10 +70,11 @@ import "fmt"
 //     olanı eler, yoksa CREATE senkron koşar (erteleme yok).
 //   Küme kipi (cluster_name dolu): hiçbiri shard kayıtlarında değil →
 //     stateTableDDL → ON CLUSTER + ReplicatedReplacingMergeTree; ZK yolu
-//     state_replication.go'nun kümeden okuduğu kuşağa göre
-//     '<önek>/state/<ad>','{shard}-{replica}' (taze / 0009 sonrası) ya da
-//     eski '<önek>/{shard}/<ad>','{replica}'. spans varsa DDL arka plana
-//     ertelenir (ddl_defer.go) — boot beklemez.
+//     state_replication.go'nun kümeden okuduğu yola göre: tablo hiçbir
+//     node'da yoksa '<önek>/state/<ad>','{shard}-{replica}' (v0.10.971 —
+//     kümede başka eski state tabloları olsa da), bir node'da eski yolda
+//     gözlendiyse o yola katılır ('<önek>/{shard}/<ad>','{replica}'). spans
+//     varsa DDL arka plana ertelenir (ddl_defer.go) — boot beklemez.
 //   Dış Distributed (spans Distributed, cluster_name BOŞ): boot ya hiç
 //     başlamaz (externalDistributedFatal) ya da COREMETRY_CH_ALLOW_UNSET_CLUSTER
 //     ile tek-düğüm DDL'i koşar — state tabloları için ATLAMA YOK: sekiz

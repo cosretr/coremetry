@@ -140,7 +140,8 @@ func TestSeedPathDecision(t *testing.T) {
 			wantPath: "/p/state/events", wantEvidenceHas: "hiçbir shard'da Replicated değil",
 		},
 		{
-			// TAM OLAY: kuşak kuralı "eski yol" dedi, ama tablo kardeş
+			// TAM OLAY: boot'un yol kuralı "eski yol" dedi (probe koşmamış;
+			// v0.10.971 öncesi kural 3 de böyle derdi), ama tablo kardeş
 			// shard'da birleşik yolda yaşıyor. Uydurulmuş yola gidilseydi
 			// ikinci grup doğardı; gözlenen kazanır.
 			name:    "birleşik biçim + gözlenen yol → gözlenen benimsenir (a)",
@@ -167,8 +168,8 @@ func TestSeedPathDecision(t *testing.T) {
 			wantPath: "/p/01/spans", wantEvidenceHas: "gözlenen yolları ÜRETİYOR",
 		},
 		{
-			// Kuşak yanlış seçilmiş: tablo aslında birleşik yolda, hesap
-			// shard'lı yol üretiyor → uydurma. ENGEL.
+			// Yol kuralı yanlış seçmiş (probe koşmamış): tablo aslında
+			// birleşik yolda, hesap shard'lı yol üretiyor → uydurma. ENGEL.
 			name:    "makrolu biçim + hesap kümeyle çelişiyor → ENGEL (b)",
 			pathArg: "/p/{shard}/events", computed: "/p/01/events",
 			observed:        []seedObservedPath{{Host: "h2", Path: "/p/state/events"}},
@@ -230,11 +231,13 @@ func TestTableObservedPaths(t *testing.T) {
 	}
 }
 
-// TestSeedGenerationEvidence — operatör Uygula'dan ÖNCE hangi kuşağın hangi
-// KANITLA seçildiğini görür.
+// TestSeedGenerationEvidence — operatör Uygula'dan ÖNCE hangi yolun hangi
+// KANITLA seçildiğini görür. v0.10.971 — "kuşak" dili kalktı (kural 3 yok):
+// satır "ZK yolu kuralı" der ve kural 4'ün gerekçesini taşır.
 func TestSeedGenerationEvidence(t *testing.T) {
-	st := seedGenerationEvidence("events", true, true, "taze veya göç SONRASI kurulum")
-	if !strings.Contains(st, "BİRLEŞİK") || !strings.Contains(st, "taze veya göç") {
+	st := seedGenerationEvidence("events", true, true, statePathFreshReason)
+	if !strings.Contains(st, "BİRLEŞİK") || !strings.Contains(st, "hiç var olmayan state tablosu") ||
+		!strings.HasPrefix(st, "ZK yolu kuralı:") || strings.Contains(st, "kuşa") {
 		t.Errorf("state + birleşik: %q", st)
 	}
 	if old := seedGenerationEvidence("events", true, false, "tablo kümede eski yolda (/p/01/events)"); !strings.Contains(old, "ESKİ") || !strings.Contains(old, "/p/01/events") {
@@ -298,7 +301,7 @@ func TestSeedCanonicalArgsHappyPath(t *testing.T) {
 		wantFamily, wantPath, wantRep string
 	}{
 		{
-			// Sondaj koşmadı → kuşak kuralı ESKİ yol (mevcut kuruluma dokunma).
+			// Sondaj koşmadı → kural 1: ESKİ yol (mevcut kuruluma dokunma).
 			name: "state tablosu · sondaj yok → eski yol", obs: stateObservation{},
 			table:      "events",
 			wantFamily: "ReplicatedReplacingMergeTree", wantPath: "/ch/tbl/{shard}/events", wantRep: "{replica}",
@@ -316,6 +319,18 @@ func TestSeedCanonicalArgsHappyPath(t *testing.T) {
 			obs:        stateObservation{ok: true, paths: map[string]string{"events": "/ch/tbl/01/events"}},
 			table:      "events",
 			wantFamily: "ReplicatedReplacingMergeTree", wantPath: "/ch/tbl/{shard}/events", wantRep: "{replica}",
+		},
+		{
+			// v0.10.971 — kural 3 kalktı: kümede BAŞKA state tabloları eski
+			// yolda, bu tablo hiçbir yerde Replicated değil (düz) → kural 4:
+			// BİRLEŞİK yol. Eskiden eski makrolu yola giderdi.
+			name: "state tablosu · komşular eski yolda, tablo gözlenmedi → birleşik yol",
+			obs: stateObservation{ok: true, paths: map[string]string{
+				"problems":      "/ch/tbl/01/problems",
+				"ingest_ledger": "/ch/tbl/{shard}/ingest_ledger",
+			}},
+			table:      "events",
+			wantFamily: "ReplicatedReplacingMergeTree", wantPath: "/ch/tbl/state/events", wantRep: "{shard}-{replica}",
 		},
 		{
 			// `_local` türetimi: arama ÇIPLAK adla, eşleşme ÜRETİLEN adla —
@@ -619,18 +634,22 @@ func TestSeedZKOwnershipGate(t *testing.T) {
 		name      string
 		names     []string
 		err       error
+		unified   bool   // v0.10.971: yol birleşik state yolu (makrosuz kanonik)
 		wantBlock string // "" = geç
 		wantHasEv string
 	}{
 		{name: "ZNONODE → sahipsiz DOĞRULANDI, geç", err: errors.New("code: 999, Coordination::Exception: No node (ZNONODE)"), wantHasEv: "ZNONODE doğrulandı"},
 		{name: "yol var, replika yok → geç", wantHasEv: "kayıtlı replika yok"},
 		{name: "sahip VAR → engel, sahiplerin ADI ve çıkış yolu", names: []string{"01-r1", "02-r2"}, wantBlock: "01-r1, 02-r2"},
+		// v0.10.971 — birleşik state yolu: sahipler başka shard'da olabilir ve
+		// bu TASARIM gereği (tek grup). Engel aynen; metin "makro düzelt" demez.
+		{name: "birleşik state yolu, sahip VAR → engel, tek grup açıklaması", names: []string{"01-r1", "01-r2"}, unified: true, wantBlock: "küme genelinde TEK grup"},
 		{name: "Keeper okunamadı → ENGEL (fail-closed)", err: errors.New("read: connection reset by peer"), wantBlock: "DOĞRULANMIŞ yola kurulur"},
 		{name: "zaman aşımı → ENGEL (fail-closed)", err: errors.New("code: 159, Timeout exceeded"), wantBlock: "DOĞRULANMIŞ yola kurulur"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ev, blocked := seedZKOwnershipGate(p, c.names, c.err)
+			ev, blocked := seedZKOwnershipGate(p, c.names, c.err, c.unified)
 			if c.wantBlock != "" {
 				if blocked == "" {
 					t.Fatalf("ENGEL bekleniyordu, kanıt: %q", ev)
@@ -649,11 +668,77 @@ func TestSeedZKOwnershipGate(t *testing.T) {
 		})
 	}
 	// Sahip engeli gerçek çıkış yolunu söyler (kartın çizemediği düğmeyi DEĞİL).
-	_, blocked := seedZKOwnershipGate(p, []string{"01-r1"}, nil)
+	_, blocked := seedZKOwnershipGate(p, []string{"01-r1"}, nil, false)
 	for _, want := range []string{"yeniden Ölç", "PAYLAŞILIYOR", "runbook"} {
 		if !strings.Contains(blocked, want) {
 			t.Errorf("sahip engeli %q içermeli: %s", want, blocked)
 		}
+	}
+	if strings.Contains(blocked, "kuşa") {
+		t.Errorf("sahip engeli kaldırılan kuşak dilini taşıyor: %s", blocked)
+	}
+	// v0.10.971 — birleşik state yolu: paylaşım TASARIM; "makro düzelt" yanlış
+	// yönlendirir. Çıkış yolu: bayatsa yeniden Ölç, değilse gruba katılma runbook'u.
+	_, ub := seedZKOwnershipGate(p, []string{"01-r1"}, nil, true)
+	for _, want := range []string{"yeniden Ölç", "TEK grup", "{shard}-{replica}", "runbook"} {
+		if !strings.Contains(ub, want) {
+			t.Errorf("birleşik sahip engeli %q içermeli: %s", want, ub)
+		}
+	}
+	if strings.Contains(ub, "makro") || strings.Contains(ub, "PAYLAŞILIYOR") {
+		t.Errorf("birleşik sahip engeli makro/paylaşım düzeltmesi öneriyor: %s", ub)
+	}
+}
+
+// TestSeedOwnershipUnified — v0.10.971: sahiplik kapısının "tek grup" metni
+// SEÇİLEN yoldan belirlenir. Kural 3 kalkınca boot sondajının görmediği tablo
+// için kanonik yol birleşiktir (kural 4); seedPathDecision (a) ise gözlenen
+// literal yolu benimser — bu, başka shard'ın ESKİ grubu olabilir.
+func TestSeedOwnershipUnified(t *testing.T) {
+	const pfx = "/clickhouse/tables"
+	cases := []struct {
+		name, chosen, table string
+		want                bool
+	}{
+		{name: "birleşik state yolu", chosen: pfx + "/state/alert_rules", table: "alert_rules", want: true},
+		{name: "benimsenen eski shard yolu", chosen: pfx + "/01/alert_rules", table: "alert_rules"},
+		{name: "{shard} genişletilmiş yol", chosen: pfx + "/02/alert_rules", table: "alert_rules"},
+		{name: "başka tablonun birleşik yolu", chosen: pfx + "/state/users", table: "alert_rules"},
+		{name: "_local telemetri", chosen: pfx + "/01/spans_local", table: "spans_local"},
+	}
+	for _, c := range cases {
+		if got := seedOwnershipUnified(c.chosen, pfx, c.table); got != c.want {
+			t.Errorf("%s: seedOwnershipUnified(%q) = %v, beklenen %v", c.name, c.chosen, got, c.want)
+		}
+	}
+}
+
+// TestSeedOwnershipGateFollowsChosenPath — v0.10.971 uçtan uca (saf): kanonik
+// yol birleşik, kümede tablo yalnız host-3'te shard 02'nin ESKİ yolunda. (a)
+// o yolu benimser; kapı sahipleri bulur ve engeller (fail-closed) — ama metin
+// "'{shard}-{replica}' ile TEK gruba katıl" DEMEZ: o grup shard başınadır.
+func TestSeedOwnershipGateFollowsChosenPath(t *testing.T) {
+	const pfx = "/p"
+	canonical := unifiedStatePath(pfx, "events")
+	chosen, ev, blk := seedPathDecision("events", canonical, canonical, []seedObservedPath{{Host: "host-3", Path: pfx + "/02/events"}}, nil)
+	if blk != "" || chosen != pfx+"/02/events" {
+		t.Fatalf("(a) gözlenen yolu benimsemeliydi: yol %q, engel %q", chosen, blk)
+	}
+	if strings.Contains(ev, "TEK grup") || !strings.Contains(ev, "birleşik state yolu ("+canonical+") DEĞİL") || !strings.Contains(ev, "GÖZLENEN yol benimsendi") {
+		t.Errorf("eski yol benimsenirken kanıt 'TEK grup' iddia etmemeli: %s", ev)
+	}
+	_, b := seedZKOwnershipGate(chosen, []string{"02-r1"}, nil, seedOwnershipUnified(chosen, pfx, "events"))
+	if b == "" || !strings.Contains(b, "PAYLAŞILIYOR") || strings.Contains(b, "TEK grup") {
+		t.Errorf("eski shard yolunun sahip engeli PAYLAŞILIYOR demeli, TEK grup DEMEMELİ: %s", b)
+	}
+	// Kontrol: gözlenen yol birleşik ise metin tek grup açıklamasıdır.
+	chosen, ev, blk = seedPathDecision("events", canonical, canonical, []seedObservedPath{{Host: "host-3", Path: canonical}}, nil)
+	if blk != "" || chosen != canonical || !strings.Contains(ev, "TEK gruptur") {
+		t.Fatalf("birleşik gözlem: yol %q, kanıt %q, engel %q", chosen, ev, blk)
+	}
+	_, ub := seedZKOwnershipGate(chosen, []string{"02-r1"}, nil, seedOwnershipUnified(chosen, pfx, "events"))
+	if !strings.Contains(ub, "TEK grup") || strings.Contains(ub, "PAYLAŞILIYOR") {
+		t.Errorf("birleşik yolun sahip engeli tek grup açıklaması olmalı: %s", ub)
 	}
 }
 
@@ -782,6 +867,8 @@ func TestSeedSourcePins(t *testing.T) {
 		// kapılar atlanır.
 		"seedPathDecision(", "tableObservedPaths(tbl)", "seedGenerationEvidence(",
 		"seedZKOwnershipGate(", "repairHeadroomNeed(plan.Mode", "if isSeedMode(plan.Mode) {",
+		// v0.10.971 — "tek grup" bayrağı DENETLENEN yoldan (sabit/kanonik biçim değil).
+		"seedZKOwnershipGate(plan.ZKPath, names, zerr, seedOwnershipUnified(plan.ZKPath, s.zkPrefix(), req.Table))",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("eksik: %s", want)

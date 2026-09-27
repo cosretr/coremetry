@@ -589,8 +589,10 @@ if [ "$N_PARTIAL" -gt 0 ] && [ "$RESUME" -eq 0 ]; then
     "(göç dosyası T4 — sessiz devam etmektense gürültülü durmak)."
 fi
 if [ "$N_DONE" -gt 0 ] && [ "$N_TODO" -gt 0 ] && [ "$RESUME" -eq 0 ]; then
-  abort "$N_DONE tablo zaten birleşik, $N_TODO tablo değil — bu KISMİ bir göç." \
-    "Bitenleri atlayıp devam etmek için --resume ekle."
+  abort "$N_DONE tablo zaten birleşik, $N_TODO tablo değil — bu KISMİ bir göç" \
+    "ya da (v0.10.971+) uygulamanın doğrudan birleşik yola kurduğu yeni state" \
+    "tabloları var (göç dosyası T7: hiçbir node'da olmayan tablo artık birleşik doğar)." \
+    "İki durumda da bitenleri atlayıp devam etmek için --resume ekle (güvenli)."
 fi
 
 say ""

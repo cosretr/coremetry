@@ -43,9 +43,15 @@ import (
 //             host'a kurduğu düz tablo; 0015'in IF NOT EXISTS'i orada no-op
 //             kalırdı; (b) sabit yoldan FARKLI ZK yolu — eksik host'lar 0015
 //             ile AYRI replikasyon grubuna katılırdı (split-brain); (c) küme
-//             kipinde özel önek (cfg.ReplicaPath) — 0015'in sabit yolu boot'un
-//             kuşak probe'unu (useUnifiedStatePath) "eski yol" saydırır ve
-//             SONRAKİ yeni state tablolarını shard'lı yola düşürürdü.
+//             kipinde özel önek (cfg.ReplicaPath) — 0015'in sabit yolu o
+//             önekte BİRLEŞİK sayılmaz: tabloyu tutmayan bir host'a boot
+//             (kural 2) `<önek>/{shard}/<ad>` kurar (ayrı grup), kart onları
+//             "eski" listeler, sihirbaz bu önekte sekizi yeniden kuramaz.
+//             v0.10.971 — boot'un kural 3'ü kalktı: hiç var olmayan sekiz
+//             tabloyu boot bu önekte zaten '<önek>/state/<ad>' yoluna kurar,
+//             0015 orada gereksizdir. (Eski gerekçe — "kuşak probe'unu bozar,
+//             sonraki state tablolarını shard'lı yola düşürür" — kural 3 ile
+//             birlikte geçersiz.)
 //   Uygula    gömülü 0015, `uptrace_all` → gerçek küme adı, ifade ifade, İLK
 //             HATADA DUR (IF NOT EXISTS → yeniden basmak güvenli). 0012'nin
 //             apply'ından AYRI yol ve kapı: 0011 / kapsama / LC kapıları state
@@ -56,10 +62,11 @@ import (
 //             MV-yalnız geri alması DEĞİŞMEDİ.
 //
 // ZK yolu (karar 25): 0015 '/clickhouse/tables/state/<ad>' SABİT yazar (0012
-// gibi); boot öneki ve kuşağı çalışma zamanında çözer (state_replication.go
-// zkPrefix + useUnifiedStatePath). Varsayılan önek + taze / 0009 sonrası
-// kümede ikisi AYNI ifadeyi üretir (rollout_layer_admin_test.go pinler);
-// ayrıştığı durumları yukarıdaki (b)/(c) reddi yakalar.
+// gibi); boot öneki ve yolu çalışma zamanında çözer (state_replication.go
+// zkPrefix + useUnifiedStatePath). Varsayılan önekte, tablo hiçbir node'da
+// yokken ikisi AYNI ifadeyi üretir (rollout_layer_admin_test.go pinler;
+// v0.10.971'dan beri kümede başka eski state tabloları olsa da); ayrıştığı
+// durumları yukarıdaki (b)/(c) reddi yakalar.
 
 type RolloutLayerObject = EntityLayerObject
 type RolloutLayerObjectStatus = EntityLayerObjectStatus
@@ -572,7 +579,8 @@ func rolloutV2LayerDecision(g rolloutV2LayerGate) (bool, string) {
 	case !slices.Contains(g.Clusters, g.Cluster):
 		return false, fmt.Sprintf("%q system.clusters'ta yok — ON CLUSTER DDL kuyrukta süresiz bekler (v0.9.613)", g.Cluster)
 	case g.CustomPrefix != "":
-		return false, fmt.Sprintf("küme kipinde özel ZK öneki (%s) — 0015 %s/state/<ad> SABİT yazar ve boot'un kuşak probe'unu bozar; dosyayı öneke uyarlayıp elle uygula (karar 25)", g.CustomPrefix, rolloutV2ZKPrefix)
+		// v0.10.971 — ret aynen, gerekçe yeni: kural 3 kalktı (kuşak probe'u yok).
+		return false, fmt.Sprintf("küme kipinde özel ZK öneki (%s) — 0015 %s/state/<ad> SABİT yazar; bu önekte o yol birleşik sayılmaz (eksik host boot'la ayrı gruba düşer, kart 'eski' gösterir). Boot hiçbir host'ta olmayan sekiz tabloyu %s/state/<ad> yoluna zaten birleşik kurar (v0.10.971) — 0015 gerekmez; yine de gerekiyorsa dosyayı öneke uyarlayıp elle uygula (karar 25)", g.CustomPrefix, rolloutV2ZKPrefix, g.CustomPrefix)
 	case len(g.Conflicts) > 0:
 		return false, fmt.Sprintf("%d çakışma — %s", len(g.Conflicts), strings.Join(g.Conflicts, " · "))
 	}

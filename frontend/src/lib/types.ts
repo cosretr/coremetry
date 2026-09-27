@@ -3993,8 +3993,10 @@ export interface CHReplicaRepairResult { ok: boolean; table: string; shard: numb
  * v0.10.965 — State tablolarının ZK yolu (Go chstore.StatePathCheck /
  * StatePathRebuildPlan / StatePathRebuildResult). Operatör kararı 2026-09-27:
  * on state tablosu (ingest_ledger, ai_eval_runs + sekiz Rollouts v2) birleşik
- * yolda DROP + CREATE, veri taşınmaz. Kilit = boot'un kural 3'ü: tek bir state
- * tablosu eski yolda durdukça yeni state tabloları da eski yola kurulur.
+ * yolda DROP + CREATE, veri taşınmaz. v0.10.971 — boot'un kural 3'ü kalktı
+ * (hiç var olmayan state tablosu her zaman birleşik yola kurulur): kilit
+ * alanları (lockOpen / lockReason / lockOpensAfter / partialOK) yok;
+ * stillLegacyAfter / stillLegacy yalnız bilgi (bölünmüş kalan eski tablolar).
  */
 export interface CHStatePathGroup { path: string; hosts: string[]; rows: number; unified: boolean }
 export type CHStatePathClass = 'derived' | 'operator_exception' | 'empty_only';
@@ -4003,7 +4005,7 @@ export interface CHStatePathTable {
   rebuildable: boolean; class?: CHStatePathClass; classNote?: string;
 }
 export interface CHStatePathCheck {
-  zkPrefix: string; lockOpen: boolean; lockReason: string;
+  zkPrefix: string;
   /** Küme tanımındaki her host cevap verdi mi; unreachable = tanımdaki − cevap veren. */
   complete: boolean; unreachable: number; unified: number; legacy: CHStatePathTable[];
 }
@@ -4020,19 +4022,20 @@ export interface CHStatePathRebuildPlan {
   /** unix ms — onayın parmak izi (sunucu 30 dk'dan eski onayı reddeder). */
   measuredAt: number;
   tables: CHStatePathRebuildTable[]; drops: string[]; creates: string[];
-  lockOpensAfter: boolean; stillLegacyAfter: string[];
+  /** Bilgi: çalıştırmadan sonra eski yolda (bölünmüş) kalacak state tabloları. */
+  stillLegacyAfter: string[];
   blocked: string[]; checks: string[]; warnings: string[];
 }
 export interface CHStatePathAckTable { table: string; state: CHStatePathState; rows: number }
 export interface CHStatePathRebuildRequest {
   cluster: string; tables: string[];
   ack: { measuredAt: number; tables: CHStatePathAckTable[] };
-  partialOK: boolean;
 }
 export type CHStatePathPhase = 'drop' | 'drop_wait' | 'create' | 'verify' | 'done';
 export interface CHStatePathRebuildResult {
   ok: boolean; phase: CHStatePathPhase; tables: CHStatePathRebuildTable[]; statements: RollupStmtResult[];
-  lockOpen: boolean; lockReason: string; stillLegacy: string[]; resume: string; note: string;
+  /** Bilgi: son ölçümde eski yolda kalan state tabloları. */
+  stillLegacy: string[]; resume: string; note: string;
 }
 /** v0.10.757 — Admin "Trace hattı sağlığı" (Go traceHealthResponse). Sayaçlar POD-İÇİ (pod.host). */
 export interface CHTraceHealthResponse {

@@ -499,17 +499,20 @@ describe('statePathOwnsRepair — v0.10.965', () => {
   });
 });
 
-// v0.10.965 — başlık rozeti: kilit kapalıyken "N tablo tutarlı" tek başına yanlış güven.
-describe('statePathHeadline — v0.10.965', () => {
+// v0.10.965 — başlık rozeti: bölünmüş state tabloları varken "N tablo tutarlı"
+// tek başına yanlış güven. v0.10.971 — "kilit" kalktı (boot'un kural 3'ü yok):
+// rozet yalnız eski/karışık (bölünmüş) tablo sayısına bakar.
+describe('statePathHeadline — v0.10.971', () => {
   const e = (kind: 'legacy' | 'mixed' | 'absent') => ({ table: 't', kind, rebuildable: true, rows: 0, groups: [] });
-  it('denetim yok / kilit açık / yalnız eksik: rozet yok', () => {
+  it('denetim yok / liste boş / yalnız eksik: rozet yok', () => {
     expect(statePathHeadline(undefined)).toBeNull();
-    expect(statePathHeadline({ lockOpen: true, legacy: [e('legacy')] })).toBeNull();
-    expect(statePathHeadline({ lockOpen: false, legacy: [e('absent')] })).toBeNull();
+    expect(statePathHeadline({ legacy: [] })).toBeNull();
+    expect(statePathHeadline({ legacy: [e('absent')] })).toBeNull();
   });
-  it('kilit kapalı: eski + karışık sayılır, eksik sayılmaz', () => {
+  it('eski + karışık sayılır, eksik sayılmaz; metin kilit demez', () => {
     const legacy = [...Array.from({ length: 9 }, () => e('legacy')), e('mixed'), e('absent')];
-    expect(statePathHeadline({ lockOpen: false, legacy })).toBe('kilit KAPALI · 10 state tablosu eski ZK yolunda');
+    expect(statePathHeadline({ legacy })).toBe('10 state tablosu eski ZK yolunda — bölünmüş');
+    expect(statePathHeadline({ legacy: [e('legacy')] })).toBe('1 state tablosu eski ZK yolunda — bölünmüş');
   });
   it('AdminClickhouse: rozet başlık satırında, özet rozetinden hemen sonra', () => {
     const page = readFileSync(resolve(__dirname, '../AdminClickhouse.tsx'), 'utf8');

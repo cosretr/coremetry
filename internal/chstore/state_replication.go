@@ -28,6 +28,11 @@
 // makro düzeninde de benzersiz kalır.
 //
 // SPLIT-BRAIN KARARI — bkz. useUnifiedStatePath.
+//
+// v0.10.971 — boot kuralı sadeleşti (operatör kararı 2026-09-27, "Önerini
+// yapalım", öneri 2): hiç var olmayan state tablosu, kümede başka tablolar
+// eski yolda olsa bile HER ZAMAN birleşik yola kurulur. Gerekçe ve prod
+// olayı useUnifiedStatePath'in belgesinde.
 package chstore
 
 import (
@@ -102,8 +107,10 @@ func stateTableDDL(name, kind string) bool {
 //   - `…_local`      → shard-yerel telemetri
 //   - `…_old` / `…_unified` → 0009 göçünün geçici tabloları. Bilinçli
 //     dışarıda: `_old` göç sonrası doğrulama bitene dek YAŞAR ve
-//     eski (shard'lı) yolda durur — sayılsaydı kuşak kararını
-//     "göç öncesi"ne kilitlerdi.
+//     eski (shard'lı) yolda durur — sayılsaydı boot log'u ve Replika
+//     tutarlılığı kartı onu "eski yolda bölünmüş state tablosu" diye
+//     sayardı. (v0.10.971 öncesi kural 3 varken kuşak kararını da "göç
+//     öncesi"ne kilitlerdi; o kural kalktı, süzgeç sayım ve kart için durur.)
 //
 // v0.10.846 — liste BURADA BİTMİYORDU: 0010'un `…_repart` / `…_pathfix` /
 // `…_pathfix_old` aileleri ile onarım sihirbazının `…_fix` tablosu
@@ -111,7 +118,8 @@ func stateTableDDL(name, kind string) bool {
 // (table_catalog.go catalogSuffixes) vardı ve ikisi ayrışmıştı — hiçbir kapı
 // onları birbirine bağlamıyordu. Artık TEK GÖVDE: catalogDerivedName.
 // Yeni elenenler aynı gerekçenin kapsamındadır: hepsi eski (shard'lı) yolda
-// duran göç/onarım yedekleridir ve kuşak kararını geriye kilitlerlerdi.
+// duran göç/onarım yedekleridir ve sayılsalardı kart ile boot log'unda
+// sahte "bölünmüş state tablosu" satırı üretirlerdi.
 func stateProbeTable(name string) bool {
 	if catalogInnerName(name) || catalogDerivedName(name) {
 		return false
@@ -146,6 +154,11 @@ type stateObservation struct {
 	ok bool
 	// paths: state tablosu adı → kümede GÖZLENEN zookeeper_path.
 	paths map[string]string
+	// complete — v0.10.971 — küme tanımındaki (system.clusters) HER replika
+	// cevap verdi mi (stateProbeCoverage). YALNIZ BİLGİ: useUnifiedStatePath
+	// buna bakmaz. false iken kural 4'ün "hiçbir node'da yok" hükmü yalnız
+	// cevap verenler için doğrudur; boot bunu ⚠ satırıyla söyler.
+	complete bool
 }
 
 // useUnifiedStatePath — SPLIT-BRAIN MUHAFIZI. SAF.
@@ -173,19 +186,50 @@ type stateObservation struct {
 //     host da birleşik yolu raporlar, uygulama bir sonraki boot'ta
 //     ONU görür. Çevrilecek bir düğme, ikinci bir deploy yoktur.
 //
-// KARAR SIRASI:
+// KARAR SIRASI (v0.10.971):
 //  1. Probe koşmadı → ESKİ yol. "Hiçbir şeyi değiştirme" mevcut bir
-//     kümeyi bölemez. (Taze kurulumda bugünkü davranışı tekrarlar —
-//     ve o durumda probe'un başarısız olması için bağlantının ölmüş
-//     olması gerekir, ki o hâlde boot zaten çöker.)
+//     kümeyi bölemez: tablonun başka bir node'da var olup olmadığını
+//     BİLEMEYİZ. (Taze kurulumda bugünkü davranışı tekrarlar — ve o
+//     durumda probe'un başarısız olması için bağlantının ölmüş olması
+//     gerekir, ki o hâlde boot zaten çöker.)
 //  2. Tablo kümede GÖZLENDİ → gözlenen yolun kendisi. Komşularına
-//     katıl, ne olursa olsun.
-//  3. Tablo hiçbir node'da yok → kurulumun KUŞAĞI: herhangi bir state
-//     tablosu hâlâ eski yoldaysa kurulum göç ÖNCESİdir → eski yol.
-//     Bu, "yeni node eklendi" senaryosunun tam karşılığıdır: yeni node
-//     30+ eski yollu komşu görür ve eksik tablosunu da eski yolla kurar.
-//  4. Hiçbir state tablosu yok (taze kurulum) ya da hepsi birleşik
-//     (göç sonrası) → BİRLEŞİK yol.
+//     katıl, ne olursa olsun. "Kümeye YENİ node eklendi" senaryosunun
+//     tam karşılığı budur: eksik tablo yeni node'da yok ama
+//     clusterAllReplicas onu komşularda görür ve yeni node komşularının
+//     yoluna (eski ya da birleşik) kurar.
+//  3. (KALDIRILDI, v0.10.971 — aşağıda.) Numaralar operatör kararındaki
+//     gibi korunur: "kural 2" / "kural 4" başka yerlerde bu anlamla geçer.
+//  4. Tablo hiçbir node'da yok → BİRLEŞİK yol, HER ZAMAN — kümede başka
+//     state tabloları hâlâ eski yolda olsa bile. Katılınacak bir grup
+//     yoktur; eski yol ona yalnız shard başına bölünme verir.
+//
+// v0.10.971 — KALDIRILAN KURAL 3 (operatör kararı 2026-09-27, "Önerini
+// yapalım", öneri 2). Kurulumun "KUŞAĞI"na bakıyordu: kümede
+// herhangi bir state tablosu eski yoldaysa kurulum "göç ÖNCESİ" sayılır ve
+// hiç var olmayan yeni tablo da ESKİ yola kurulurdu. Kendini besleyen bir
+// KİLİTTİ: prod'da ingest_ledger eski yolda doğdu (v0.10.767) ve ondan
+// sonraki her state tablosu — ai_eval_runs, sekiz Rollouts v2 tablosu —
+// shard başına BÖLÜNMÜŞ doğdu (v0.10.960 ölçümü: on tablo, her biri iki ayrı
+// replikasyon grubu; uygulama bağlandığı host'un yarısını görüyordu).
+// Korumak istediği "yeni node" senaryosu zaten kural 2'dir. Eski yoldaki
+// tablolar hâlâ bölünmüştür ve kendiliğinden düzelmez (Admin › ClickHouse ›
+// Replika tutarlılığı › "State tablolarının ZK yolu", 0009/0010 runbook'u);
+// ama artık YENİ tabloları eski yola çekmezler.
+//
+// DAR KALAN RİSK (kural 1'in gerekçesinin yarım probe'daki hâli): gözlem
+// EKSİKSE, gözlenmeyen ama cevap vermeyen bir komşuda eski yolda duran tablo
+// "hiçbir yerde yok" sanılır ve birleşik yola kurulur (yeni bölünme). İki
+// sebebi var (v0.10.971 — ikincisi önceden belgelenmemişti):
+//   - clusterAllReplicas okuması HATA döndü → gözlem YALNIZ yereldir;
+//   - okuma BAŞARILI ama `skip_unavailable_shards=1` bağlantıyı reddeden bir
+//     replikayı HATASIZ ve SESSİZCE düşürdü (clusterAllReplicas her replikayı
+//     ayrı shard sayar) → gözlem yalnız cevap verenlerindir.
+//
+// Eski kural 3 bu dar durumu yalnız TESADÜFEN örtüyordu (eski yoldaki tablo
+// için doğru, birleşik yoldaki için yanlış). resolveStateReplicaPaths İKİ
+// durumu da GÜRÜLTÜLÜ loglar (ikincisini roster ile cevap verenleri sayarak
+// ayırır: stateProbeCoverage) ve obs.complete'e yazar; davranış kararı
+// operatörde (Keeper'dan yokluk kanıtı onaylanmadı).
 func useUnifiedStatePath(obs stateObservation, zkPrefix, name string) (bool, string) {
 	if !obs.ok {
 		return false, "probe koşmadı — mevcut kuruluma dokunulmuyor (eski yol)"
@@ -196,17 +240,12 @@ func useUnifiedStatePath(obs stateObservation, zkPrefix, name string) (bool, str
 		}
 		return false, "tablo kümede eski yolda (" + p + ") — komşularına katılıyor"
 	}
-	legacy := 0
-	for t, p := range obs.paths {
-		if p != unifiedStatePath(zkPrefix, t) {
-			legacy++
-		}
-	}
-	if legacy > 0 {
-		return false, fmt.Sprintf("kurulum göç ÖNCESİ (%d state tablosu eski yolda)", legacy)
-	}
-	return true, "taze veya göç SONRASI kurulum"
+	return true, statePathFreshReason
 }
+
+// statePathFreshReason — v0.10.971 — kural 4'ün gerekçe metni (seed planının
+// kanıt satırı ve testler aynı sabiti görür).
+const statePathFreshReason = "tablo kümede yok — hiç var olmayan state tablosu birleşik yola kurulur (v0.10.971)"
 
 // resolveStateReplicaPaths — boot probe'u. migrate()'in ilk DDL'inden
 // ÖNCE, tek goroutine'den çağrılır.
@@ -218,7 +257,12 @@ func useUnifiedStatePath(obs stateObservation, zkPrefix, name string) (bool, str
 //  2. clusterAllReplicas(…) — best effort, `skip_unavailable_shards=1`
 //     ile: rolling CH restart sırasında bir replika kapalıyken probe'un
 //     tamamen düşmesini engeller. Ulaşılabilen node'ların cevabı
-//     "bu tablo hangi grupta" sorusu için yeterlidir.
+//     "bu tablo hangi grupta" sorusu (kural 2) için yeterlidir.
+//     v0.10.971 — "bu tablo HİÇBİR yerde yok" sorusu (kural 4) için
+//     YETERLİ DEĞİLDİR: o, HER replikanın cevap vermesini ister. Bu yüzden
+//     okuma başarılıysa cevap veren replika sayısı küme tanımıyla
+//     (system.clusters) karşılaştırılır; eksikse ⚠ loglanır (davranış
+//     değişmez — obs.complete yalnız bilgi).
 //
 // ÇAKIŞMA (aynı tablo, iki farklı yol) = kurulum ZATEN bölünmüş.
 // Muhafazakâr davranılır: ESKİ yol kazanır. Yeni bir yola geçmek
@@ -240,13 +284,24 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 
 	if cl, cerr := s.queryReplicaPaths(ctx, fmt.Sprintf("clusterAllReplicas(%s, system.replicas)",
 		quoteCHIdent(s.cfg.ClusterName)), true); cerr != nil {
-		log.Printf("[chstore] küme geneli state yolu okunamadı (%v) — yalnız YEREL gözleme göre karar veriliyor", cerr)
+		// v0.10.971 — GÜRÜLTÜLÜ: kural 4 "hiçbir yerde yok → birleşik" der;
+		// yalnız yerel gözlemde komşuların eski yollu tablosu görünmez.
+		log.Printf("[chstore] ⚠ küme geneli state yolu okunamadı (%v) — yalnız YEREL gözleme göre karar veriliyor: "+
+			stateProbeBlindTail, cerr)
 	} else {
+		// v0.10.971 — okuma BAŞARILI olsa da eksik olabilir: skip_unavailable_shards=1
+		// cevap vermeyen replikayı hatasız atlar. Cevap verenler roster'la sayılır.
+		answered, roster, verr := s.stateProbeReplicaCoverage(ctx)
+		complete, warn := stateProbeCoverage(answered, roster, verr)
+		obs.complete = complete
+		if warn != "" {
+			log.Printf("[chstore] ⚠ %s — küme geneli gözlem EKSİK olabilir: %s", warn, stateProbeBlindTail)
+		}
 		for t, p := range cl {
 			old := obs.paths[t]
-			// v0.10.965 — birleştirme kuralı mergeObservedStatePath'te: Replika
-			// tutarlılığı kartının ZK yolu denetimi AYNI gövdeyi çağırır, boot
-			// ile kart ayrışamaz.
+			// v0.10.965 — birleştirme kuralı mergeObservedStatePath'te: yeniden
+			// kurulum sihirbazının ölçümü (statePathObserved) AYNI gövdeyi
+			// çağırır, boot ile sihirbaz ayrışamaz.
 			if mergeObservedStatePath(obs.paths, t, p, zkPrefix) {
 				log.Printf("[chstore] ⚠ %s İKİ farklı ZK yolunda görüldü (%q vs %q) — kurulum ZATEN bölünmüş; "+
 					"eski yol tercih ediliyor, 0009 göçü bunu onarır", t, old, p)
@@ -263,8 +318,67 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 			legacy++
 		}
 	}
-	log.Printf("[chstore] state ZK yolu probe'u: %d tablo gözlendi (%d birleşik, %d eski) — yeni state tabloları %s yola kurulacak",
-		len(obs.paths), unified, legacy, map[bool]string{true: "BİRLEŞİK", false: "ESKİ"}[legacy == 0])
+	log.Print(stateProbeLogLine(len(obs.paths), unified, legacy))
+}
+
+// stateProbeBlindTail — v0.10.971 — eksik gözlemin (hata ya da atlanan
+// replika) ⚠ satırlarının ORTAK kuyruğu: kural 4'ün kör noktası tek metinle.
+const stateProbeBlindTail = "GÖZLENMEYEN bir state tablosu birleşik yola kurulur; cevap vermeyen bir komşuda eski yolda duruyorsa " +
+	"o shard BÖLÜNÜR (Admin › ClickHouse › Replika tutarlılığı)"
+
+// stateProbeCoverage — v0.10.971 — SAF: küme geneli state yolu okumasının
+// KAPSAM hükmü. answered = clusterAllReplicas(system.one)'a cevap veren
+// replika sayısı, roster = system.clusters'taki replika sayısı, err = bu iki
+// okumadan birinin hatası. complete=false ise warn boş değildir.
+//
+// Neden ayrı sayım: system.replicas okuması `skip_unavailable_shards=1` ile
+// koşar ve bağlantıyı reddeden replikayı HATASIZ düşürür; dönen satırlarda
+// host yoktur, yani kısmi cevap tam cevaptan ayırt edilemez. Replikasız
+// (taze) bir node da satır döndürmez — bu yüzden sayım system.one'dan.
+func stateProbeCoverage(answered, roster int, err error) (complete bool, warn string) {
+	switch {
+	case err != nil:
+		return false, fmt.Sprintf("küme geneli okumanın kapsamı doğrulanamadı (%v)", err)
+	case roster <= 0:
+		return false, "küme geneli okumanın kapsamı doğrulanamadı (system.clusters'ta bu küme için replika yok)"
+	case answered < roster:
+		return false, fmt.Sprintf("yalnız %d/%d replika cevap verdi (skip_unavailable_shards=1 cevap vermeyeni HATASIZ atlar)", answered, roster)
+	}
+	return true, ""
+}
+
+// stateProbeAnsweredSQL — v0.10.971 — SAF: cevap veren replika sayısı. Her
+// replika system.one'dan tek satır döndürür; ulaşılamayan atlanır (probe'un
+// kendi okumasıyla AYNI ayar), tavanlı.
+func stateProbeAnsweredSQL(cluster string) string {
+	return "SELECT count() FROM clusterAllReplicas(" + quoteCHIdent(cluster) + ", system.one) " +
+		"SETTINGS skip_unavailable_shards = 1, max_execution_time = 10"
+}
+
+// stateProbeReplicaCoverage — v0.10.971 — roster (system.clusters, bellek
+// içi) ve cevap veren replika sayısı. Hata → kapsam doğrulanamadı.
+func (s *Store) stateProbeReplicaCoverage(ctx context.Context) (answered, roster int, err error) {
+	var r, a uint64
+	if err = s.conn.QueryRow(ctx, `SELECT count() FROM system.clusters WHERE cluster = ?`, s.cfg.ClusterName).Scan(&r); err != nil {
+		return 0, 0, err
+	}
+	if err = s.conn.QueryRow(ctx, stateProbeAnsweredSQL(s.cfg.ClusterName)).Scan(&a); err != nil {
+		return 0, int(r), err
+	}
+	return int(a), int(r), nil
+}
+
+// stateProbeLogLine — v0.10.971 — SAF: boot probe'unun özet satırı.
+// "(N birleşik, M eski)" parçası runbook'larda alıntılanır (0010 AŞAMA B,
+// sihirbazın başarı notu) — biçimi değişmez. Eski kuşak eki ("yeni state
+// tabloları ESKİ yola kurulacak") kalktı: hiç var olmayan tablo her zaman
+// birleşik yola kurulur. Eski yolda tablo varsa bölünmüş oldukları söylenir.
+func stateProbeLogLine(observed, unified, legacy int) string {
+	line := fmt.Sprintf("[chstore] state ZK yolu probe'u: %d tablo gözlendi (%d birleşik, %d eski)", observed, unified, legacy)
+	if legacy > 0 {
+		line += " — eski yoldakiler shard başına BÖLÜNMÜŞ (Admin › ClickHouse › Replika tutarlılığı); hiç var olmayan state tabloları birleşik yola kurulur"
+	}
+	return line
 }
 
 // mergeObservedStatePath — v0.10.965 — SAF. Boot probe'unun birleştirme
@@ -275,11 +389,12 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 //     ESKİ yol kazanır (birleşik olan eskisiyle değiştirilir), iki eski yol
 //     çakışırsa İLK görülen kalır.
 //
-// split=true → çakışma vardı (boot bunu log satırıyla bildirir). Replika
-// tutarlılığı kartının ZK yolu denetimi (state_path_check.go) ve yeniden
-// kurulum sihirbazının kilit hesabı (state_path_rebuild.go) AYNI gövdeyi
-// çağırır: kartın "kilit kapalı" dediği ile boot'un yeni tabloyu kurduğu yol
-// ayrışamaz.
+// split=true → çakışma vardı (boot bunu log satırıyla bildirir). Yeniden
+// kurulum sihirbazının "eski yolda kalanlar" hesabı (state_path_rebuild.go
+// statePathObserved) AYNI gövdeyi çağırır: sihirbazın saydığı yol ile boot'un
+// kural 2'de katıldığı yol ayrışamaz. v0.10.971 — kilit kavramı kalktı;
+// Replika tutarlılığı kartının denetimi (state_path_check.go) artık gözlem
+// katlamaz, türü host satırlarından doğrudan çıkarır.
 func mergeObservedStatePath(paths map[string]string, table, path, zkPrefix string) (split bool) {
 	old, dup := paths[table]
 	if dup && old != path {

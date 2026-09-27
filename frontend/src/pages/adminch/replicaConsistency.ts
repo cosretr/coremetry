@@ -211,15 +211,16 @@ export function statePathOwnsRepair(t: Pick<CHReplicaTable, 'table'>, check?: Pi
 }
 
 /**
- * v0.10.965 — kart başlığının ikinci rozeti: kilit KAPALIyken "N tablo
- * tutarlı" özeti tek başına yanlış güven verir (shard içi kararlar değişmez;
- * kusur shard'lar arası). Sayım StatePathBlock'un kilit rozetiyle aynı
- * (yalnız eksik satırlar kilidi tutmaz). null = rozet yok.
+ * v0.10.965 — kart başlığının ikinci rozeti: bölünmüş state tabloları varken
+ * "N tablo tutarlı" özeti tek başına yanlış güven verir (shard içi kararlar
+ * değişmez; kusur shard'lar arası). v0.10.971 — "kilit" kalktı (boot'un kural
+ * 3'ü yok): sayım yalnız eski + karışık (bölünmüş) satırlar, StatePathBlock'un
+ * kırmızı rozetiyle aynı; eksik satır sayılmaz. null = rozet yok.
  */
-export function statePathHeadline(sp?: Pick<CHStatePathCheck, 'lockOpen' | 'legacy'>): string | null {
-  if (!sp || sp.lockOpen) return null;
+export function statePathHeadline(sp?: Pick<CHStatePathCheck, 'legacy'>): string | null {
+  if (!sp) return null;
   const n = sp.legacy.filter(t => t.kind !== 'absent').length;
-  return n > 0 ? `kilit KAPALI · ${n} state tablosu eski ZK yolunda` : null;
+  return n > 0 ? `${n} state tablosu eski ZK yolunda — bölünmüş` : null;
 }
 
 /** ZK yolunun son üç parçası — tabloda okunur; tamamı title'da. */

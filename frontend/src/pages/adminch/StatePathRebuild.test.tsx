@@ -4,6 +4,9 @@
 // birleşik yolda DROP + CREATE, veri taşınmaz. fetch taklit edilir, api.ts
 // GERÇEK — düğmeden çıkan istek (yol, yöntem, gövde) doğrulanır
 // (AdminClickhouse.rolloutLayer.test.tsx deseni). Host adları sentetik.
+// v0.10.971 — boot'un kural 3'ü kalktı (operatör kararı 2026-09-27, öneri 2):
+// "kilit" rozeti, kısmi seçim onay kutuları ve partialOK gövde alanı yok;
+// seçim dışı eski tablolar yalnız BİLGİ satırında.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -32,7 +35,7 @@ const legacyRow = (table: string, rows = 0): CHStatePathTable => ({
   ],
 });
 const closedCheck = (over: Partial<CHStatePathCheck> = {}): CHStatePathCheck => ({
-  zkPrefix: '/clickhouse/tables', lockOpen: false, lockReason: 'kurulum göç ÖNCESİ (10 state tablosu eski yolda)',
+  zkPrefix: '/clickhouse/tables',
   complete: true, unreachable: 0, unified: 41,
   legacy: TEN.map(t => legacyRow(t, t === 'ingest_ledger' ? 1234 : t === 'ai_eval_runs' ? 5 : 0)),
   ...over,
@@ -45,15 +48,15 @@ const plan = (tables: string[], over: Partial<CHStatePathRebuildPlan> = {}): CHS
   tables: tables.map(t => planRow(t, t === 'ingest_ledger' ? 2468 : t === 'ai_eval_runs' ? 10 : 0)),
   drops: tables.map(t => `DROP TABLE IF EXISTS ${t} ON CLUSTER \`uptrace_all\` SYNC`),
   creates: tables.map(t => `CREATE TABLE IF NOT EXISTS ${t} ON CLUSTER uptrace_all (…)`),
-  lockOpensAfter: tables.length === TEN.length, stillLegacyAfter: tables.length === TEN.length ? [] : TEN.filter(t => !tables.includes(t)).sort(),
-  blocked: [], checks: ['4/4 host erişilebilir', 'DDL kuyruğu sağlıklı'], warnings: [], // v0.10.965 — sunucu rollout/kilit uyarısını plana yazmaz (arayüz satırları)
+  stillLegacyAfter: tables.length === TEN.length ? [] : TEN.filter(t => !tables.includes(t)).sort(),
+  blocked: [], checks: ['4/4 host erişilebilir', 'DDL kuyruğu sağlıklı'], warnings: [], // v0.10.965 — sunucu rollout uyarısını plana yazmaz (arayüz satırı)
   ...over,
 });
 const okResult = (over: Partial<CHStatePathRebuildResult> = {}): CHStatePathRebuildResult => ({
   ok: true, phase: 'done', tables: TEN.map(t => ({ ...planRow(t, 0), after: 'unified', verified: true })),
   statements: [{ head: 'DROP TABLE IF EXISTS ingest_ledger ON CLUSTER `uptrace_all` SYNC', ok: true }],
-  lockOpen: true, lockReason: 'taze veya göç SONRASI kurulum', stillLegacy: [], resume: '',
-  note: "Çalışan pod'lar boot anındaki yol gözlemini tutar: kilit her pod'un bir sonraki açılışında açılır (sonraki deploy ya da rolling restart).",
+  stillLegacy: [], resume: '',
+  note: "Doğrulama: her pod'un bir sonraki açılışında (sonraki deploy ya da rolling restart) boot log satırı '(N birleşik, 0 eski)' der.",
   ...over,
 });
 
@@ -118,13 +121,14 @@ afterEach(() => {
 });
 
 describe('StatePathBlock — denetim listesi', () => {
-  it('kapalı kilit: başlık, kırmızı rozet, kural 3 açıklaması, 10 etiketli kutu, host adsız özet', async () => {
+  it('bölünmüş tablolar: başlık, kırmızı rozet, v0.10.971 açıklaması, 10 etiketli kutu, host adsız özet', async () => {
     const el = await mount(closedCheck());
     expect(el.textContent).toContain('State tablolarının ZK yolu');
-    const badge = [...el.querySelectorAll('.badge.b-err')].find(b => b.textContent?.startsWith('kilit KAPALI'));
-    expect(badge?.textContent).toBe('kilit KAPALI · 10 state tablosu eski yolda');
-    expect(el.textContent).toContain('(kural 3)');
-    expect(el.textContent).toContain('kilit bir sonraki açılışta kendiliğinden açılır');
+    const badge = [...el.querySelectorAll('.badge.b-err')].find(b => b.textContent?.includes('eski yolda'));
+    expect(badge?.textContent).toBe('10 state tablosu eski yolda — bölünmüş, yeniden kur');
+    expect(el.textContent).toContain('boot hiç var olmayan tabloyu her zaman birleşik yola kurar (v0.10.971)');
+    expect(el.textContent).toContain('Eski yoldakiler kendiliğinden düzelmez.');
+    expect(el.textContent).not.toMatch(/kilit|kural 3/i);
     for (const t of TEN) expect(checkboxNamed(el, t).checked).toBe(true);
     expect(el.querySelectorAll('li input[type="checkbox"]')).toHaveLength(10);
     expect(el.textContent).toContain('…/tables/01/ingest_ledger: 2 host, 1.234 satır');
@@ -135,12 +139,23 @@ describe('StatePathBlock — denetim listesi', () => {
     expect(calls(PLAN)).toHaveLength(0); // plan yalnız düğmeyle
   });
 
-  it('açık kilit: yeşil rozet, açıklama yok; eksik satır sarı rozet', async () => {
+  it('yalnız eksik satır: kırmızı rozet ve açıklama yok, sarı rozet', async () => {
     const absent: CHStatePathTable = { ...legacyRow('rollout_events'), kind: 'absent', groups: [] };
-    const el = await mount(closedCheck({ lockOpen: true, lockReason: 'taze veya göç SONRASI kurulum', legacy: [absent] }));
-    expect(el.querySelector('.badge.b-ok')?.textContent).toBe('kilit açık · yeni state tabloları birleşik yola kurulur');
+    const el = await mount(closedCheck({ legacy: [absent] }));
+    expect(el.querySelector('.badge.b-err')).toBeNull();
+    expect(el.querySelector('.badge.b-ok')).toBeNull();
     expect([...el.querySelectorAll('.badge.b-warn')].map(b => b.textContent)).toContain('1 tablo birleşik yolda eksik');
-    expect(el.textContent).not.toContain('(kural 3)');
+    expect(el.textContent).not.toContain('kendiliğinden düzelmez');
+  });
+
+  it('liste boş: yeşil rozet, düğme yok; eksik roster\'da yeşil rozet de yok', async () => {
+    const el = await mount(closedCheck({ legacy: [] }));
+    expect(el.querySelector('.badge.b-ok')?.textContent).toBe('tüm state tabloları birleşik yolda');
+    expect(el.querySelector('.badge.b-err')).toBeNull();
+    expect([...el.querySelectorAll('button')].some(b => b.textContent?.startsWith('Yeniden kurulumu planla'))).toBe(false);
+    act(() => root!.unmount()); host?.remove();
+    const partial = await mount(closedCheck({ legacy: [], complete: false, unreachable: 1 }));
+    expect(partial.querySelector('.badge.b-ok')).toBeNull(); // liste eksik olabilir: "hepsi birleşik" denmez
   });
 
   it('eksik roster: role=alert uyarısı', async () => {
@@ -153,33 +168,54 @@ describe('StatePathBlock — denetim listesi', () => {
     const foreign: CHStatePathTable = { ...legacyRow('alert_rules'), rebuildable: false, class: undefined, classNote: undefined };
     const el = await mount(closedCheck({ legacy: [legacyRow('ingest_ledger', 1), foreign] }));
     expect(el.querySelectorAll('li input[type="checkbox"]')).toHaveLength(1);
-    expect(el.textContent).toContain('bu sihirbazın izin listesinde değil — kilidi kapalı tutar');
-    // Seçilemeyen eski tablo kilidi tutar: kısmi onay istenir.
-    expect(el.querySelector('[role="status"]')?.textContent).toContain('Seçim dışı kalan eski tablolar: alert_rules');
+    expect(el.textContent).toContain('bu sihirbazın izin listesinde değil — bölünmüş kalır (0009/0010 runbook');
+    // Seçilemeyen eski tablo yalnız BİLGİ satırında; onay istenmez, plan açık.
+    expect(el.querySelector('[role="status"]')?.textContent).toBe('Seçim dışı kalan eski tablolar bölünmüş kalır: alert_rules');
+    expect(el.querySelectorAll('label input[type="checkbox"]')).toHaveLength(1);
+    expect(buttonNamed(el, 'Yeniden kurulumu planla (1 tablo)').disabled).toBe(false);
+  });
+});
+
+describe('StatePathBlock — yalnız izin listesi dışı eski tablo', () => {
+  // v0.10.971 — rozet "yeniden kur" demez: sihirbaz bunu kuramaz (düğme yok,
+  // satır "izin listesinde değil" der); rozet ile satır çelişmez.
+  it('rozet runbook der, plan düğmesi / kutu / bilgi satırı yok', async () => {
+    const foreign: CHStatePathTable = { ...legacyRow('alert_rules'), rebuildable: false, class: undefined, classNote: undefined };
+    const el = await mount(closedCheck({ legacy: [foreign] }));
+    const badge = [...el.querySelectorAll('.badge.b-err')].find(b => b.textContent?.includes('eski yolda'));
+    expect(badge?.textContent).toBe('1 state tablosu eski yolda — bölünmüş (runbook)');
+    expect(el.textContent).not.toContain('yeniden kur');
+    expect([...el.querySelectorAll('button')].some(b => b.textContent?.startsWith('Yeniden kurulumu planla'))).toBe(false);
+    expect(el.querySelectorAll('li input[type="checkbox"]')).toHaveLength(0);
+    expect(el.querySelector('[role="status"]')).toBeNull();
+    expect(el.textContent).toContain('bu sihirbazın izin listesinde değil — bölünmüş kalır');
   });
 });
 
 describe('StatePathBlock — kısmi seçim', () => {
-  it('ingest_ledger seçimden çıkınca kilit uyarısı; onaysız plan kapalı; istek partialOK:true taşır', async () => {
+  it('ingest_ledger seçimden çıkınca yalnız bilgi satırı; plan onaysız açık; gövdede partialOK yok', async () => {
     const el = await mount(closedCheck());
     await click(checkboxNamed(el, 'ingest_ledger'));
     const status = el.querySelector('[role="status"]');
-    expect(status?.textContent).toContain('Seçim dışı kalan eski tablolar: ingest_ledger — kilit KAPALI kalır');
+    expect(status?.textContent).toBe('Seçim dışı kalan eski tablolar bölünmüş kalır: ingest_ledger');
     const planBtn = buttonNamed(el, 'Yeniden kurulumu planla (9 tablo)');
-    expect(planBtn.disabled).toBe(true);
-    await click(checkboxNamed(el, 'Kilidin kapalı kalacağını anlıyorum'));
     expect(planBtn.disabled).toBe(false);
     const nine = TEN.filter(t => t !== 'ingest_ledger');
     routes[`POST ${PLAN}`] = { body: plan(nine) };
-    routes[`POST ${APPLY}`] = { body: okResult({ lockOpen: false, stillLegacy: ['ingest_ledger'] }) };
+    routes[`POST ${APPLY}`] = { body: okResult({ stillLegacy: ['ingest_ledger'] }) };
     await click(planBtn);
     expect(calls(PLAN)[0].body).toEqual({ tables: nine });
     const dlg = dialog()!;
-    expect(dlg.textContent).toContain('Kilit bu çalıştırmadan sonra da KAPALI: ingest_ledger');
+    expect(dlg.textContent).toContain('Bu çalıştırmadan sonra eski yolda (bölünmüş) kalacaklar: ingest_ledger');
+    const go = buttonNamed(dlg, 'Düşür ve yeniden kur');
     await click(checkboxNamed(dlg, '9 tabloyu ve 10 satırı SİLMEYİ onaylıyorum; veri geri gelmez.'));
-    await click(buttonNamed(dlg, 'Düşür ve yeniden kur'));
-    expect(calls(APPLY)[0].body).toMatchObject({ partialOK: true, confirm: true, tables: nine });
-    expect(el.textContent).toContain('Kilit: KAPALI — ingest_ledger');
+    expect(go.disabled).toBe(false); // veri onayı yeter; ikinci (kilit) onayı yok
+    await click(go);
+    const body = calls(APPLY)[0].body as Record<string, unknown>;
+    expect(body).toMatchObject({ confirm: true, tables: nine });
+    expect(body).not.toHaveProperty('partialOK');
+    expect(el.textContent).toContain('Eski yolda (bölünmüş) kalan: ingest_ledger.');
+    expect(el.textContent).not.toMatch(/kilit/i);
   });
 });
 
@@ -210,15 +246,16 @@ describe('StatePathBlock — plan ve çalıştırma', () => {
     await click(go);
     const body = calls(APPLY)[0].body as Record<string, unknown>;
     expect(body).toEqual({
-      cluster: 'uptrace_all', tables: TEN, partialOK: false, confirm: true,
+      cluster: 'uptrace_all', tables: TEN, confirm: true,
       ack: {
         measuredAt: 1_800_000_000_000,
         tables: TEN.map(t => ({ table: t, state: 'legacy', rows: t === 'ingest_ledger' ? 2468 : t === 'ai_eval_runs' ? 10 : 0 })),
       },
     });
     expect(dialog()).toBeNull();
-    expect(el.textContent).toContain('Tamam: 10 tablo birleşik yolda doğrulandı (4/4 host). Kilit: açık.');
+    expect(el.textContent).toContain("Tamam: 10 tablo birleşik yolda doğrulandı (4/4 host). Doğrulama: her pod'un");
     expect(el.textContent).toContain('sonraki deploy ya da rolling restart');
+    expect(el.textContent).not.toMatch(/kilit|Eski yolda \(bölünmüş\) kalan/i);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
@@ -254,7 +291,7 @@ describe('StatePathBlock — plan ve çalıştırma', () => {
     routes[`POST ${PLAN}`] = { body: plan(TEN) };
     routes[`POST ${APPLY}`] = {
       body: okResult({
-        ok: false, phase: 'verify', lockOpen: false, stillLegacy: ['ingest_ledger'], note: '',
+        ok: false, phase: 'verify', stillLegacy: ['ingest_ledger'], note: '',
         resume: 'ingest_ledger doğrulanamadı (şimdi: eski yol). Eski yola yeniden kurulduysa bu arada bir pod açılmıştır — rollout/restart olmadığından emin ol, yeniden ölç ve çalıştır.',
       }),
     };
@@ -271,7 +308,8 @@ describe('StatePathBlock — plan ve çalıştırma', () => {
 });
 
 // v0.10.965 — inceleme bulguları (UI-1…UI-7, C-F5): çalışan apply, cevapsız istek,
-// görünür ifade listesi, taze plandan kısmi onay, kopya düzeltmeleri, yeniden ölçüm.
+// görünür ifade listesi, kopya düzeltmeleri, yeniden ölçüm. (v0.10.971 — taze
+// plandan kısmi onay kalktı: kilit yok.)
 describe('StatePathBlock — çalıştırma sırasında ve sonrasında', () => {
   const openAndAck = async (el: HTMLElement, planLabel: string, ackLabel: string) => {
     await click(buttonNamed(el, planLabel));
@@ -314,7 +352,7 @@ describe('StatePathBlock — çalıştırma sırasında ve sonrasında', () => {
     routes[`POST ${PLAN}`] = { body: plan(TEN) };
     routes[`POST ${APPLY}`] = {
       body: okResult({
-        ok: false, phase: 'drop', lockOpen: false, stillLegacy: ['ai_eval_runs'], note: '',
+        ok: false, phase: 'drop', stillLegacy: ['ai_eval_runs'], note: '',
         resume: 'DROP yarıda kaldı. Yeniden ölç → planla → çalıştır: düşürülmüş tablolar kurulur, kalan eski tablolar düşürülür.',
         statements: [
           { head: 'DROP TABLE IF EXISTS ingest_ledger ON CLUSTER `uptrace_all` SYNC', ok: true },
@@ -333,19 +371,19 @@ describe('StatePathBlock — çalıştırma sırasında ve sonrasında', () => {
     expect(el.textContent).toContain('Yarıda kaldı (düşürme): DROP yarıda kaldı.');
   });
 
-  it('kart kilidin açılacağını sanıyor, TAZE plan kapalı diyor: diyalogdaki onay olmadan düğme kapalı; istek partialOK:true', async () => {
-    routes[`POST ${PLAN}`] = { body: plan(TEN, { lockOpensAfter: false, stillLegacyAfter: ['alert_rules'] }) };
-    routes[`POST ${APPLY}`] = { body: okResult({ lockOpen: false, stillLegacy: ['alert_rules'] }) };
+  it('TAZE plan kartın görmediği eski tabloyu listeler: yalnız bilgi, veri onayıyla düğme açık; gövdede partialOK yok', async () => {
+    routes[`POST ${PLAN}`] = { body: plan(TEN, { stillLegacyAfter: ['alert_rules'] }) };
+    routes[`POST ${APPLY}`] = { body: okResult({ stillLegacy: ['alert_rules'] }) };
     const el = await mount(closedCheck());
-    expect(el.querySelector('[role="status"]')).toBeNull(); // kart kısmi onay istemiyor
+    expect(el.querySelector('[role="status"]')).toBeNull(); // kartta seçim dışı eski tablo yok
     const dlg = await openAndAck(el, 'Yeniden kurulumu planla (10 tablo)', ACK10);
-    expect(dlg.textContent).toContain('Kilit bu çalıştırmadan sonra da KAPALI: alert_rules');
+    expect(dlg.textContent).toContain('Bu çalıştırmadan sonra eski yolda (bölünmüş) kalacaklar: alert_rules');
+    expect(dlg.querySelectorAll('label input[type="checkbox"]')).toHaveLength(1); // yalnız veri onayı
     const go = buttonNamed(dlg, 'Düşür ve yeniden kur');
-    expect(go.disabled).toBe(true);
-    await click(checkboxNamed(dlg, 'Kilidin kapalı kalacağını anlıyorum'));
     expect(go.disabled).toBe(false);
     await click(go);
-    expect(calls(APPLY)[0].body).toMatchObject({ partialOK: true, confirm: true });
+    expect(calls(APPLY)[0].body).toMatchObject({ confirm: true });
+    expect(calls(APPLY)[0].body).not.toHaveProperty('partialOK');
   });
 
   it('tabloya özgü veri uyarıları yalnız o tablo düşecekse; plan uyarıları yinelenmez', async () => {
@@ -366,9 +404,9 @@ describe('StatePathBlock — çalıştırma sırasında ve sonrasında', () => {
       ...two.map(t => ({ ...planRow(t, 0), state: 'absent' as const, action: 'create' as const })),
       { ...planRow('argocd_app_status', 0), state: 'unified' as const, action: 'skip' as const },
     ];
-    routes[`POST ${PLAN}`] = { body: plan(two, { tables: rows, drops: [], lockOpensAfter: true, stillLegacyAfter: [] }) };
+    routes[`POST ${PLAN}`] = { body: plan(two, { tables: rows, drops: [], stillLegacyAfter: [] }) };
     routes[`POST ${APPLY}`] = { body: okResult() };
-    const el = await mount(closedCheck({ lockOpen: true, legacy: two.map(t => ({ ...legacyRow(t), kind: 'absent', groups: [] })) }));
+    const el = await mount(closedCheck({ legacy: two.map(t => ({ ...legacyRow(t), kind: 'absent', groups: [] })) }));
     await click(buttonNamed(el, 'Yeniden kurulumu planla (2 tablo)'));
     const dlg = dialog()!;
     expect(dlg.textContent).toContain('State tablolarını birleşik yola yeniden kur — 2 tablo');
@@ -403,7 +441,7 @@ describe('ReplicaConsistencyPanel — yeniden ölçüm hatası sonucu silmez', (
     await wait();
     const el = host!;
     await click(buttonNamed(el, 'Ölç'));
-    expect([...el.querySelectorAll('.badge.b-err')].map(b => b.textContent)).toContain('kilit KAPALI · 10 state tablosu eski ZK yolunda');
+    expect([...el.querySelectorAll('.badge.b-err')].map(b => b.textContent)).toContain('10 state tablosu eski ZK yolunda — bölünmüş');
     await click(buttonNamed(el, 'Yeniden kurulumu planla (10 tablo)'));
     await click(checkboxNamed(dialog()!, '10 tabloyu ve 2.478 satırı SİLMEYİ onaylıyorum; veri geri gelmez.'));
     await click(buttonNamed(dialog()!, 'Düşür ve yeniden kur'));

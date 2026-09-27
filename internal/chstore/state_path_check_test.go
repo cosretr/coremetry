@@ -4,7 +4,9 @@ package chstore
 // (Replika tutarlılığı kartı). Prod bulgusu (operatör, 2026-09-27, v0.10.960,
 // 4 host / 2 shard): on state tablosu eski '/clickhouse/tables/<shard>/<ad>'
 // yolunda, her biri iki replikasyon grubuna bölünmüş; kural 3 yüzünden boot
-// sonraki her yeni state tablosunu da eski yola kuruyor. Fikstür sentetik:
+// sonraki her yeni state tablosunu da eski yola kuruyordu. v0.10.971 — kural 3
+// kalktı: "kilit" kavramı denetimden de çıktı (lockOpen/lockReason yok); eski
+// yoldakiler yine listelenir, çünkü hâlâ bölünmüşlerdir. Fikstür sentetik:
 // host-1..host-4, shard 01/02.
 
 import (
@@ -203,36 +205,19 @@ func TestStatePathCheckFor(t *testing.T) {
 	if order[0] != "ingest_ledger" || order[1] != "ai_eval_runs" || order[len(order)-1] != "alert_rules" {
 		t.Errorf("sıra = %v", order)
 	}
-	// Kilit metni boot'un kendi kuralından.
-	obs := stateObservation{ok: true, paths: map[string]string{}}
-	for _, n := range []string{"ingest_ledger", "users", "ai_eval_runs", "rollout_events", "alert_rules"} {
-		for _, r := range byTable[n] {
-			mergeObservedStatePath(obs.paths, n, r.ZKPath, pre)
-		}
-	}
-	wantOpen, wantReason := useUnifiedStatePath(obs, pre, "")
-	if chk.LockOpen != wantOpen || chk.LockReason != wantReason || chk.LockOpen {
-		t.Errorf("kilit = (%v, %q), beklenen (%v, %q)", chk.LockOpen, chk.LockReason, wantOpen, wantReason)
-	}
-	if !strings.Contains(chk.LockReason, "3 state tablosu eski yolda") {
-		t.Errorf("LockReason = %q (ingest_ledger + ai_eval_runs + alert_rules)", chk.LockReason)
-	}
 	if !chk.Complete || chk.Unreachable != 0 || chk.ZKPrefix != pre {
 		t.Errorf("tam roster: %+v", chk)
 	}
 
-	// Hepsi birleşik → kilit açık, liste boş (null değil).
+	// Hepsi birleşik → liste boş (null değil).
 	all := map[string][]ReplicaState{}
 	for _, e := range statePathAllowlist {
 		all[e.Name] = spUnifiedRows(e.Name, spHosts...)
 	}
 	all["users"] = spUnifiedRows("users", spHosts...)
 	open := statePathCheckFor(all, spEngines(all), spHosts, 4, pre)
-	if !open.LockOpen || len(open.Legacy) != 0 || open.Unified != 11 {
+	if open.Legacy == nil || len(open.Legacy) != 0 || open.Unified != 11 {
 		t.Errorf("hepsi birleşik: %+v", open)
-	}
-	if open.LockReason != "taze veya göç SONRASI kurulum" {
-		t.Errorf("LockReason = %q", open.LockReason)
 	}
 
 	// Eksik roster: 3 cevap / 4 tanım.
@@ -252,6 +237,12 @@ func TestStatePathCheckFor(t *testing.T) {
 	b, _ = json.Marshal(chk)
 	if strings.Contains(string(b), "null") {
 		t.Errorf("JSON null taşıyor: %s", b)
+	}
+	// v0.10.971 — kilit alanları kalktı (FE ile birlikte; uyum katmanı yok).
+	for _, gone := range []string{`"lockOpen"`, `"lockReason"`} {
+		if strings.Contains(string(b), gone) {
+			t.Errorf("JSON %s taşıyor — kural 3 kalktı, kilit yok: %s", gone, b)
+		}
 	}
 }
 
@@ -286,16 +277,17 @@ func TestStatePathCheckForLegacyPartialListedOnce(t *testing.T) {
 	}
 }
 
-// TestStatePathLockNeverKeyedByEmptyName — kilit useUnifiedStatePath(obs,
-// önek, "") ile sorulur: "" bir tablo adı olamaz, yani kural 2 hiç
-// tetiklenmez ve cevap kural 3/4'tür.
-func TestStatePathLockNeverKeyedByEmptyName(t *testing.T) {
+// TestStatePathCheckIgnoresEmptyName — v0.10.971 (eski kilit testinin
+// yerine): boş ad boot'un süzgecinden (stateProbeTable) geçmez — ne
+// listelenir ne "birleşik" sayılır.
+func TestStatePathCheckIgnoresEmptyName(t *testing.T) {
 	if stateProbeTable("") {
-		t.Fatal("stateProbeTable(\"\") true — kilit sorgusu kural 2'ye düşebilir")
+		t.Fatal("stateProbeTable(\"\") true — boş ad state tablosu sayılıyor")
 	}
-	chk := statePathCheckFor(map[string][]ReplicaState{"": spLegacyRows("", nil)}, nil, nil, 4, "/clickhouse/tables")
-	if !chk.LockOpen || len(chk.Legacy) != 0 || chk.LockReason != "taze veya göç SONRASI kurulum" {
-		t.Errorf("boş ad gözleme girdi: %+v", chk)
+	byTable := map[string][]ReplicaState{"": spLegacyRows("", nil)}
+	chk := statePathCheckFor(byTable, spEngines(byTable), nil, 4, "/clickhouse/tables")
+	if len(chk.Legacy) != 0 || chk.Unified != 0 {
+		t.Errorf("boş ad denetime girdi: %+v", chk)
 	}
 }
 

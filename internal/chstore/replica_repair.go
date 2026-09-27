@@ -333,9 +333,12 @@ func tableObservedPaths(tbl *ReplicaTable) []seedObservedPath {
 // SORUN. Kanonik yol `adaptDDL` → `useUnifiedStatePath` üzerinden geliyor ve o
 // karar POD'un BOOT anındaki `stateObs` sondajına dayanıyor. Sondaj tabloyu
 // görmediyse (shard erişilemezken boot, clusterAllReplicas hatası, zaten
-// bölünmüş kurulum) kuşak kuralı "eski yol" diyebilir; birleşik biçimde
-// KÜME GENELİNDE TEK grup olan bir state tablosu için bu, `<prefix>/<shard>/
-// <ad>` diye UYDURULMUŞ bir yol demektir. ZK kontrolü o yolu sorar, ZNONODE
+// bölünmüş kurulum) yol kuralı yanlış yolu seçebilir: probe hiç koşmadıysa
+// kural 1 "eski yol" der (v0.10.971 öncesi kural 3 de, kümede başka eski
+// tablo varken, aynısını derdi); gözlenmemiş tablo için kural 4 artık her
+// zaman "birleşik" der. Birleşik biçimde KÜME GENELİNDE TEK grup olan bir
+// state tablosu için "eski yol", `<prefix>/<shard>/<ad>` diye UYDURULMUŞ bir
+// yol demektir. ZK kontrolü o yolu sorar, ZNONODE
 // alır, "ilk replika onu yaratır" der — ve ikinci bağımsız grup doğar. Kart
 // sonrasında iki shard'ı da `ok` gösterir, çünkü replicaVerdict yolları
 // yalnız AYNI shard içinde karşılaştırır: bölünme görünmez olur.
@@ -372,6 +375,11 @@ func seedPathDecision(table, pathArg, computed string, observed []seedObservedPa
 		}
 		got := observed[0].Path
 		ev := fmt.Sprintf("ZK yolu: kümede GÖZLENEN yol benimsendi (%s) — birleşik state yolu küme genelinde TEK gruptur", strings.Join(hosts, ", "))
+		if got != pathArg {
+			// v0.10.971 — gözlenen yol kanonik birleşik yol DEĞİL (eski, shard
+			// başına grup): "TEK grup" iddiası yalnız birleşik yolda yazılır.
+			ev = fmt.Sprintf("ZK yolu: kümede GÖZLENEN yol benimsendi (%s) — bu yol birleşik state yolu (%s) DEĞİL: eski (shard başına) grup", strings.Join(hosts, ", "), pathArg)
+		}
 		if got != computed {
 			ev += fmt.Sprintf("; kanonik hesap %s diyordu, gözlenen kazandı (uydurulmuş yola ikinci grup açılmaz)", computed)
 		}
@@ -386,7 +394,7 @@ func seedPathDecision(table, pathArg, computed string, observed []seedObservedPa
 			continue
 		}
 		if want != o.Path {
-			return "", "", fmt.Sprintf("%s zaten %s host'unda %s yolunda Replicated; kanonik hesap o host için %s üretiyor — hesap kümeyle ÇELİŞİYOR, uydurulmuş yola ilk replika kurulmaz (makroları/kuşağı düzelt, runbook)", table, o.Host, o.Path, want)
+			return "", "", fmt.Sprintf("%s zaten %s host'unda %s yolunda Replicated; kanonik hesap o host için %s üretiyor — hesap kümeyle ÇELİŞİYOR, uydurulmuş yola ilk replika kurulmaz (makroları / ZK yolu kuralını düzelt, runbook)", table, o.Host, o.Path, want)
 		}
 	}
 	ev := fmt.Sprintf("ZK yolu: kanonik hesap kümede gözlenen yolları ÜRETİYOR (%s) — shard başına ayrı grup, hedef için %s", strings.Join(hosts, ", "), computed)
@@ -396,13 +404,15 @@ func seedPathDecision(table, pathArg, computed string, observed []seedObservedPa
 	return computed, ev, ""
 }
 
-// seedGenerationEvidence — SAF: kanonik yolun KUŞAĞI hangi kanıtla seçildi?
-// Operatör Uygula'dan önce görsün diye plan.Checks'e yazılır.
+// seedGenerationEvidence — SAF: kanonik yol hangi kuralla, hangi kanıtla
+// seçildi? Operatör Uygula'dan önce görsün diye plan.Checks'e yazılır.
+// v0.10.971 — "kuşak" dili kalktı (boot'un kural 3'ü yok): gerekçe
+// useUnifiedStatePath'in metnidir (kural 1 / 2 / 4).
 func seedGenerationEvidence(table string, isState, unified bool, reason string) string {
 	if !isState {
-		return fmt.Sprintf("ZK kuşağı: %s shard kayıtlarında geçiyor → shard'lı telemetri yolu", table)
+		return fmt.Sprintf("ZK yolu kuralı: %s shard kayıtlarında geçiyor → shard'lı telemetri yolu", table)
 	}
-	return fmt.Sprintf("ZK kuşağı: %s state tablosu → %s yol (gerekçe: %s)", table,
+	return fmt.Sprintf("ZK yolu kuralı: %s state tablosu → %s yol (gerekçe: %s)", table,
 		map[bool]string{true: "BİRLEŞİK", false: "ESKİ (shard'lı)"}[unified], reason)
 }
 
@@ -582,22 +592,46 @@ func seedReplicaCountNote(total int) (string, error) {
 // okunamayan bir yola ilk replika kurmak tam da ikinci grup yaratma
 // senaryosudur. İlk replika YALNIZCA sahipsiz olduğu DOĞRULANMIŞ yola kurulur.
 //
+// unifiedState — v0.10.971: DENETLENEN yol (path) birleşik state yoludur
+// (seedOwnershipUnified). Kural 3 kalkınca kümede eski tablolar varken de düz
+// (Replicated olmayan) bir state tablosu birleşik yola seed edilir; İKİNCİ
+// shard'ın seed'i o yolu sahipli bulur. Engel AYNEN durur (fail-closed, tek
+// grup), ama metin "makro/yol düzelt" demez: birleşik yolun başka shard'larca
+// tutulması TASARIMdır. Kanonik yolun biçimi (makrosuz) YETMEZ: seedPathDecision
+// (a) gözlenen eski (shard'lı) yolu benimseyebilir ve o grup shard başınadır.
+//
 // Dönüş: plana yazılacak kanıt satırı, engel ("" = geç).
-func seedZKOwnershipGate(path string, names []string, err error) (evidence, blocked string) {
+func seedZKOwnershipGate(path string, names []string, err error, unifiedState bool) (evidence, blocked string) {
 	switch {
 	case err != nil && zkNoNode(err):
 		return fmt.Sprintf("ZK yolu %s henüz yok (ZNONODE doğrulandı) — ilk replika onu yaratır", path), ""
 	case err != nil:
 		return "", fmt.Sprintf("ZK yolu %s okunamadı (%v) — ilk replika yalnız SAHİPSİZ olduğu DOĞRULANMIŞ yola kurulur; Keeper erişimini düzeltip yeniden planla", path, err)
+	case len(names) > 0 && unifiedState:
+		// v0.10.971 — birleşik state yolu küme genelinde TEK grup: sahipler
+		// başka shard'ın host'ları olabilir ve bu doğrudur. Çıkış yolu gruba
+		// KATILMAK (aynı yol + '{shard}-{replica}'), ilk replika değil.
+		return "", fmt.Sprintf("ZK'da %s/replicas altında zaten %d replika kayıtlı (%s) — bu yolun sahibi var, ilk replika kurulmaz. Birleşik state yolu küme genelinde TEK gruptur: sahipler başka shard'ın host'larıysa tablo o grupta zaten yaşıyor; bu host'u gruba katmak için tabloyu aynı yol ve '{shard}-{replica}' replika adıyla kur (runbook) — ilk replika ikinci grup açmaz. Sahipler bu shard'ın host'larıysa rapor bayat demektir: yeniden Ölç, satır \"Onar\"a döner", path, len(names), strings.Join(names, ", "))
 	case len(names) > 0:
 		// v0.10.829 incelemesi (7): sahiplerin ADI yazılır ve gerçek çıkış
 		// yolu söylenir. Kart bu satıra "Onar" çizemez — o düğme AYNI shard'da
 		// KAYITLI bir eş ister; buradaki sahip başka bir shard'ın (ya da başka
 		// bir kurulumun) replikası olabilir.
-		return "", fmt.Sprintf("ZK'da %s/replicas altında zaten %d replika kayıtlı (%s) — bu yolun sahibi var, ilk replika kurulmaz. Sahipler bu shard'ın host'larıysa rapor bayat demektir: yeniden Ölç, satır \"Onar\"a döner. Değilse yol PAYLAŞILIYOR: makro/kuşak yapılandırmasını düzelt (runbook)", path, len(names), strings.Join(names, ", "))
+		return "", fmt.Sprintf("ZK'da %s/replicas altında zaten %d replika kayıtlı (%s) — bu yolun sahibi var, ilk replika kurulmaz. Sahipler bu shard'ın host'larıysa rapor bayat demektir: yeniden Ölç, satır \"Onar\"a döner. Değilse yol PAYLAŞILIYOR: makro / ZK yolu yapılandırmasını düzelt (runbook)", path, len(names), strings.Join(names, ", "))
 	default:
 		return fmt.Sprintf("ZK yolu %s var ama altında kayıtlı replika yok — ilk replika onu sahiplenir", path), ""
 	}
+}
+
+// seedOwnershipUnified — v0.10.971 — SAF: sahiplik kapısının "tek grup"
+// metni SEÇİLEN (denetlenen) yoldan belirlenir, kanonik yolun biçiminden
+// değil. seedPathDecision (a) kanonik yol makrosuzken gözlenen literal yolu
+// benimser; bu, başka bir shard'ın ESKİ `<prefix>/<shard>/<ad>` grubu olabilir
+// ve ona "'{shard}-{replica}' ile katıl" demek yanlış yönlendirir. State
+// tabloları yeniden adlandırılmaz (seedBase == table); `_local` telemetri
+// tablosu birleşik yolla asla eşleşmez.
+func seedOwnershipUnified(chosen, zkPrefix, table string) bool {
+	return chosen == unifiedStatePath(zkPrefix, table)
 }
 
 // zkNoNode — SAF: system.zookeeper okuması "böyle bir znode yok" dedi mi?
@@ -882,7 +916,8 @@ func isCHTimeout(err error) bool {
 // üretir: repo iki ayrı sözleşme taşıyor (birleşik `<prefix>/state/<ad>` +
 // `{shard}-{replica}`, migrations/0009 — ve eski `<prefix>/{shard}/<ad>` +
 // `{replica}`), hangisinin geçerli olduğuna useUnifiedStatePath kümenin
-// GÖZLENEN hâline bakarak karar verir. adaptDDL o kararın tek sahibi; burada
+// GÖZLENEN hâline bakarak karar verir (v0.10.971: gözlenmemiş tablo her
+// zaman birleşik). adaptDDL o kararın tek sahibi; burada
 // yeniden yazmak iki gerçek üretirdi.
 //
 // `<ad>_local` (yüksek hacimli telemetri) kanonik katalogda ÇIPLAK adla
@@ -1197,7 +1232,7 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 			block("kanonik ZK yolu hedefin makrolarıyla genişletilemedi: %v", perr)
 			return plan, nil
 		}
-		// Kuşak KANITI plana yazılır: operatör hangi sözleşmenin hangi
+		// Yol kuralının KANITI plana yazılır: operatör hangi sözleşmenin hangi
 		// gerekçeyle seçildiğini Uygula'dan ÖNCE görsün (inceleme 2026-09-20).
 		seedBase := strings.TrimSuffix(req.Table, "_local")
 		if !highVolumeTables[seedBase] {
@@ -1255,7 +1290,10 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 	names, zerr := zkChildren(ctx, peerConn, plan.ZKPath+"/replicas")
 	if seed {
 		// Seed: sahiplik kapısı SAF gövdede ve FAIL-CLOSED (inceleme 2).
-		evidence, zkBlocked := seedZKOwnershipGate(plan.ZKPath, names, zerr)
+		// v0.10.971 — "tek grup" metni DENETLENEN yoldan seçilir (seedOwnershipUnified):
+		// kanonik yol makrosuz olsa da seedPathDecision (a) gözlenen ESKİ (shard'lı)
+		// bir yolu benimsemiş olabilir; o yol birleşik değildir.
+		evidence, zkBlocked := seedZKOwnershipGate(plan.ZKPath, names, zerr, seedOwnershipUnified(plan.ZKPath, s.zkPrefix(), req.Table))
 		if zkBlocked != "" {
 			block("%s", zkBlocked)
 		} else {

@@ -5,7 +5,10 @@ package api
 // operatör kararı 2026-09-27). Mekanizma internal/chstore/state_path_rebuild.go.
 //
 //	POST /api/admin/clickhouse/replica-consistency/state-paths/plan   (admin) {tables} — salt okuma, audit yok
-//	POST /api/admin/clickhouse/replica-consistency/state-paths/apply  (admin) {cluster, tables, ack, partialOK, confirm:true} — audit'li, DDL koşar
+//	POST /api/admin/clickhouse/replica-consistency/state-paths/apply  (admin) {cluster, tables, ack, confirm:true} — audit'li, DDL koşar
+//
+// v0.10.971 — kısmi seçim onayı kalktı (boot'un kural 3'ü yok, "kilit" yok);
+// bayat bir arayüzün gönderdiği fazladan alan JSON çözücüde yok sayılır.
 //
 // Kendi dosyası: admin_replica_consistency.go salt okuma pinli (POST yok),
 // api.go BÜYÜMEZ (route defteri). Apply sonrası kartın 30 sn önbelleği düşer.
@@ -69,11 +72,10 @@ func (s *Server) postStatePathPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 type statePathApplyInput struct {
-	Cluster   string                       `json:"cluster"`
-	Tables    []string                     `json:"tables"`
-	Ack       *chstore.StatePathRebuildAck `json:"ack"`
-	PartialOK bool                         `json:"partialOK"`
-	Confirm   bool                         `json:"confirm"`
+	Cluster string                       `json:"cluster"`
+	Tables  []string                     `json:"tables"`
+	Ack     *chstore.StatePathRebuildAck `json:"ack"`
+	Confirm bool                         `json:"confirm"`
 }
 
 // statePathAuditTarget — audit kaynağı: sıralı tablo listesi ("*" = varsayılan seçim).
@@ -121,7 +123,7 @@ func (s *Server) postStatePathApply(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "ack zorunlu — önce planla")
 		return
 	}
-	req := chstore.StatePathRebuildRequest{Cluster: strings.TrimSpace(in.Cluster), Tables: tables, Ack: in.Ack, PartialOK: in.PartialOK}
+	req := chstore.StatePathRebuildRequest{Cluster: strings.TrimSpace(in.Cluster), Tables: tables, Ack: in.Ack}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 12*time.Minute)
 	defer cancel()
 	res, err := s.store.ApplyStatePathRebuild(ctx, req)
@@ -152,7 +154,7 @@ func (s *Server) postStatePathApply(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "clickhouse.state_path_rebuild", "clickhouse", target, statePathAuditJSON(map[string]any{
 		"stage": "apply", "ok": res.OK, "phase": res.Phase, "tables": rows,
-		"statements": len(res.Statements), "lockOpen": res.LockOpen,
+		"statements": len(res.Statements), "stillLegacy": res.StillLegacy,
 	}))
 	// res.OK false olabilir (DDL koştuktan sonra yarıda kaldı): 200 + ifadeler
 	// ve devam metni — 0015 apply'ı gibi; operatör neyin koştuğunu görmeli.

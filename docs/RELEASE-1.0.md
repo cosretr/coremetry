@@ -228,8 +228,11 @@ git diff <prod-tag>..HEAD | grep -E '^\+.*(ALTER|CREATE|DROP|MATERIALIZED)'
      Uygulanmazsa state tabloları (problems, alert_rules, users,
      system_settings, dashboards, incidents…) shard başına ayrı
      replikasyon grubundadır ve uygulama hangi host'a bağlanırsa onun
-     dilimini görür (prod ölçümü: problems 633.236 ↔ 4.169). Boot yalnız
-     nötr bir INFO basar, "verin bölünmüş" DEMEZ.
+     dilimini görür (prod ölçümü: problems 633.236 ↔ 4.169). Boot'un INFO
+     satırı eski yolda tablo varsa v0.10.971'dan beri "eski yoldakiler
+     shard başına BÖLÜNMÜŞ" der (öncesinde nötrdü); yine de kendiliğinden
+     düzelmez. v0.10.971'dan beri 0009'u koşmamış kurulumda da YENİ state
+     tabloları birleşik yola kurulur (göç istemez; 0009 dosyası T7).
      Sihirbazı v0.10.765'te KALDIRILDI (prod 2026-09-17: göç + `_old`
      temizliği tamam); elle: `migrations/0009_state_unify.sql` ya da
      `scripts/migrate-0009-state-unify.sh`.

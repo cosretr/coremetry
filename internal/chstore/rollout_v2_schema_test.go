@@ -533,8 +533,20 @@ func TestRolloutV2ClusterAdaptation(t *testing.T) {
 			},
 		},
 		{
-			// Göç öncesi kurulum → yeni tablo komşularına katılır (split-brain muhafızı).
-			label: "0009 öncesi küme", obs: legacyObs,
+			// v0.10.971 — kural 3 kalktı: 0009 öncesi kümede (problems eski
+			// yolda) sekiz tablo HİÇBİR node'da yoksa birleşik yola kurulur —
+			// 0015'in sabit yoluyla AYNI ifade. Eskiden eski yola kurulur ve
+			// shard başına bölünmüş doğardı (prod, v0.10.960).
+			label: "0009 öncesi küme, tablolar yok", obs: legacyObs,
+			engine: func(n string) string {
+				return "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/state/" + n + "', '{shard}-{replica}', version)"
+			},
+		},
+		{
+			// Tablonun KENDİSİ komşularda eski yolda (v0.10.971 öncesi boot'un
+			// kurduğu) → yeni node komşularına katılır (kural 2, split-brain
+			// muhafızı; bayt bayt eski biçim).
+			label: "tablo komşularda eski yolda", obs: rolloutV2LegacyObs(),
 			engine: func(n string) string {
 				return "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/" + n + "', '{replica}', version)"
 			},
@@ -567,6 +579,19 @@ func TestRolloutV2ClusterAdaptation(t *testing.T) {
 			t.Errorf("tek düğümde %s değiştirilmemeli", w.name)
 		}
 	}
+}
+
+// rolloutV2LegacyObs — v0.10.971 — sekiz tablonun HER BİRİ kümede eski
+// (shard'lı) yolda gözlenmiş: v0.10.971 öncesi boot'un kural 3 ile kurduğu
+// prod şekli (ingest_ledger kilidi).
+func rolloutV2LegacyObs() stateObservation {
+	obs := stateObservation{ok: true, paths: map[string]string{
+		"ingest_ledger": "/clickhouse/tables/01/ingest_ledger",
+	}}
+	for _, w := range rolloutV2Spec {
+		obs.paths[w.name] = "/clickhouse/tables/02/" + w.name
+	}
+	return obs
 }
 
 // Karar 24: yedisi telemetri sınıfı (türev, yeniden doğar); argocd_sync_events

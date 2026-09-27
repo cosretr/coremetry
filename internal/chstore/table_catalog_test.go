@@ -448,7 +448,9 @@ func TestMigration0010DerivedNamesStayMeasured(t *testing.T) {
 			continue
 		}
 		// Aynı türev, state ZK yolu probe'undan da ELENMELİ: eski (shard'lı)
-		// yolda duran bir yedek kuşak kararını geriye kilitler.
+		// yolda duran bir yedek boot log'u ve Replika tutarlılığı kartında
+		// sahte "bölünmüş state tablosu" olur (v0.10.971 öncesi kuşak
+		// kararını da geriye kilitlerdi).
 		if stateProbeTable(n) {
 			lost = append(lost, n+" (stateProbeTable onu kanonik state tablosu sanıyor)")
 		}
