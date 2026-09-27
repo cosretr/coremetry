@@ -24,8 +24,9 @@
        ingest — VictoriaMetrics OTLP metrik YAZIMI yalnız ingest pod'unda
        koşar (main.go vmForward), VM tokenRef'i orada çözülmezse yazım
        Authorization'sız gider (api'deki Test yine yeşil görünür). agent
-       HARİÇ: bash adımı pod ortamını devralır — sır oraya bilinçli
-       taşınmaz (values.yaml). */}}
+       HARİÇ: v0.10.966'den beri bash adımı minimal bir env allowlist'i
+       görür, ama bağlı dosyalar ve ağ adımdan hâlâ erişilebilir — sır
+       oraya bilinçli taşınmaz (values.yaml). */}}
 {{- $roles := list
   (dict "name" "ingest" "mode" "ingest" "replicas" .Values.deployment.roles.ingest.replicas "resources" .Values.deployment.roles.ingest.resources "extras" true)
   (dict "name" "api"    "mode" "api"    "replicas" .Values.deployment.roles.api.replicas    "resources" .Values.deployment.roles.api.resources    "extras" true)

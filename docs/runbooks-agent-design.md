@@ -38,7 +38,7 @@ removes the need for a runbook version table.
 | **Query** | server (Coremetry-native) — runs a CH/Explore query inline | dsl/agg/query |
 | **HTTP** | agent | url, method, headers, body, timeoutMs |
 | **JavaScript** | agent — goja sandbox (no FS/net) | script |
-| **Bash** | agent — os/exec, non-root, timeout | command |
+| **Bash** | agent — os/exec, non-root, timeout; minimal env allowlist, own process group, killed at timeout/step end (v0.10.966) | command |
 
 Query is Coremetry's differentiator over OneUptime — a diagnostic step that
 pulls the actual telemetry inline ("check error-rate for service X").
@@ -55,7 +55,10 @@ Why an agent and not the worker: operator-authored Bash/JS must run with an
 isolated blast radius, not in the api/ingest/worker that hold data + leader
 jobs. Mirrors OneUptime's self-hosted Runbook Agent. JS via `goja`
 (pure-Go, FS/net denied); Bash via `os/exec` as the non-root agent user with a
-hard timeout; HTTP with timeout + retry.
+hard timeout, a minimal env allowlist, its own process group, killed at
+timeout/step end (v0.10.966; files and the network stay reachable, and the
+default `all` pod runs the agent in-process — see docs/ENV.md "Runbook bash
+adımının ortamı"); HTTP with timeout + retry.
 
 ## Queue + agent protocol
 

@@ -901,3 +901,69 @@ yazmıyorsa; 21 ikinci atlama P4'te §11 V sonrası isteğe bağlı; 22 out_of_b
 bulamazsa env parçacığına da baksın"):** ortamın asıl kaynağı servis adı eki (`-prod/-int/-uat/-prep`);
 ek yoksa ya da tanınmazsa Argo uygulama adındaki `<env>` parçası. `envList` bu ek sözlüğüyle hizalı.
 26–30 karar değil, ortam bilgisi (§11). Hiçbiri P2.2'den önce koda girmez.
+
+## 2026-09-27 — Argo CD ayar sekmesi: dört arka uç kuralı (v0.10.968)
+
+**Karar (operatör: "Onay rollout için önerin" — mockup onayı bu dört arka uç değişikliğini de
+kapsar; kod `internal/argocd/put.go`, `discover.go`, `internal/api/argocd_settings_routes.go`):**
+1. **Boş `tokenRef` kayıtlıyı korur.** PUT'ta instance başına (id kırpılmış): dolu ref değiştirir
+   (`secretref.Valid`); boş ref + id kayıtlı → kayıtlı ref kopyalanır; boş ref + istek-yalnız
+   `clearTokenRef: true` → kaldırılır; dolu ref + `clearTokenRef: true` → 400
+   `instances[i].clearTokenRef`; bool olmayan bayrak (null dahil) → 400 aynı yolda; kayıtlı
+   olmayan id → ref yok, bayrak etkisiz. `clearTokenRef` `Instance` alanı DEĞİL: kalıcı blobda,
+   GET/PUT cevabında ve audit'te görünmez. FE yeni satırın boş ref'i için `clearTokenRef: true`
+   gönderir (aynı kimlikli silinmiş satırın ref'ini miras almasın). Config import'la bozuk gelmiş
+   kayıtlı ref PUT'ta yeniden yazılmaz (400 `instances[i].tokenRef`, değer yankılanmaz). PUT
+   birleştirmeden önce kalıcı blobu best-effort yeniden yükler: B pod'undaki kayıt A pod'unun az
+   önceki kaydına karşı birleşir (hata loglanır, bellekteki blobla sürülür).
+2. **Kayıtlı instance kimliği salt okunur — RED, örtük sil+ekle değil.** Kayıtlı bir
+   `(hubClusterId, hubNamespace)` yuvasını, o yuvanın kayıtlı id'si gövdede yokken yeni bir id
+   alırsa 400 `instances[i].id`; mesaj eski ve yeni id'yi, hub/ns'yi ve çareyi söyler (önce eski
+   satırı kaldırıp kaydet, sonra yeni kimlikle ekle). Açık bir "sil+ekle" bayrağı yok: iki ayrı
+   kayıt yeterince açık. İzinli: kayıtlı id'yi başka hub'a taşımak, silmek, boş yuvaya yeni id,
+   taşınan (gövdede duran) id'nin boşalttığı yuvaya yeni id. Namespace'i de değişen yeniden
+   adlandırma sil+ekle'den ayırt edilemez ve izinli; pinleri `pins[i].instanceId` korur. Gerekçe:
+   id Faz 3'ten itibaren ClickHouse `instance_id`; sessiz değişim geçmişi yetim bırakırdı.
+3. **Instance'ları bağlı hub kaldırılamaz.** `Validate`'ten ÖNCE ön denetim: kayıtlı bir hub
+   `hubs`'tan çıkarılırken ona bağlı instance gövdede duruyorsa 400 — yol bugünkü
+   `instances[i].hubClusterId` (mockup'ın kayıt hatası listesi ve mevcut test pini), mesaj hub adı
+   + id, bağlı instance sayısı ve çare (taşı ya da hub'ı bırak). Aynı PUT'ta instance'ları taşımak
+   kaldırmayı serbest bırakır. Genel "hubs listesinde değil" mesajı da artık çareyi söyler.
+4. **Keşifte uygulama ve shard sayısı.** Aday bulma label-values'ta kalır. Adaylar kurulduktan
+   SONRA ikinci tur: uygulama sayısı iş başına TEK anlık `count by (namespace) (group by
+   (namespace, exported_namespace, name) (argocd_app_info{job="J"}))` (iş genelinde
+   `exported_namespace` yoksa by'sız `count(...)`); shard sayısı sınırlı `pod` label-values (≤100,
+   1 sa pencere; kesikse alt sınır, FE "≥100"). Onay metni "label-values çağrıları" diyordu; onaylı
+   mockup dipnotu ve audit §5.4 izlendi: kural 1–3 anlık sorgu, listelemeden önce sayım ve
+   kopyaları gruplama ister (shard/HA pod'ları çarpmaz); kural 4 `name` üzerinde label browser'ı
+   yasaklar; §5.2'ye göre `name` tek başına durum C'yi eksik sayar. Sonuç ≤100 seri (iş başına
+   namespace tavanı), ~40k serilik metrikte güvenli. **Bütçe:** sayım çağrıları aynı ≤150 çağrı /
+   60 sn bütçesinden sayılır ve yalnız ARTANI kullanır (adaylar önce kurulur; sayım hiçbir adaya
+   mal olmaz). Sayım hatası `error`/`incomplete` yazmaz, adayı düşürmez, 200'ü bozmaz; kısa neden
+   `countNote`'ta. Bütçe biterse kalan adaylar "sayım atlandı: keşif bütçesi doldu" notu, sonuç
+   `countsIncomplete` alır (audit details'te de). Çağrı sayısı iş başına 2'den ~4'e çıkar.
+
+**Açık kalan (ertelendi):** iki admin arasında bütün-blob kayıp güncellemesi (son yazan kazanır);
+hub Thanos 401/403 ayrı bir "yetki yok" durumu yerine "erişilemedi" + sabit metin (test pinli).
+
+## 2026-09-27 — Runbook bash adımları Coremetry'nin sırlarını devralmaz (v0.10.966)
+
+**Karar (operatör: "Önerini yapalım" — öneri 1, alt önerilerle):** bash adımı yalnız bir taban env
+izin listesini görür (PATH, HOME, LANG/LC_ALL, TZ, TMPDIR, USER, HOSTNAME, sertifika yolları,
+KUBECONFIG/KUBERNETES_SERVICE_*, NO_PROXY); proxy değişkenleri yalnız parola taşımıyorsa geçer;
+`COREMETRY_AGENT_ENV_PASSTHROUGH` ile açıkça listelenen adlar geçer (tam ad; token benzeri ad
+boot log'unda işaretlenir), `COREMETRY_*` ASLA. Linux'ta süreç her rolde dump edilemez
+(PR_SET_DUMPABLE=0): aynı uid'deki çocuk `/proc/<pid>/environ`'u okuyamaz. Zaman aşımında ve adım
+sonunda tüm süreç grubu öldürülür; boru tutan arka plan süreci 2 sn sonra kesilir, adım başarılı
+sayılır ve çıktıya not düşülür. **Neden:** varsayılan all-mode'da editor rolündeki biri JWT secret'ı
+(→ admin oturumu) ve CH parolasını adım çıktısına basabiliyordu (Helm incelemesi, v0.10.958).
+**Kalan risk (belgeli):** aynı uid'in okuyabildiği dosyalar (config, bağlı secret'lar, SA token),
+iç ağdaki CH/Redis; gerçek sınır ayrı agent rolü, ileride ayrı uid/sidecar.
+
+## 2026-09-27 — Boot: hiç var olmayan yeni state tablosu her zaman birleşik ZK yoluna (öneri 2)
+
+**Karar (operatör: "Önerini yapalım" — öneri 2):** `useUnifiedStatePath` kural 3 kaldırılır: kümede
+HİÇBİR düğümde olmayan bir state tablosu, eski yolda başka state tabloları olsa bile birleşik yola
+kurulur (kural 2 — tablo bir yerde varsa komşusuna katıl — "yeni düğüm" senaryosunu zaten korur).
+**Neden:** kural 3 kendini besleyen bir kilitti: ingest_ledger eski yolda doğunca (v0.10.767) sonraki
+her state tablosu shard'a bölünmüş doğdu (prod, 10 tablo; v0.10.965 sihirbazı onarır).

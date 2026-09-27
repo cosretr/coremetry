@@ -1,8 +1,9 @@
 # Ortam değişkenleri — `COREMETRY_*` referansı
 
 Coremetry'nin Go kodunun okuduğu **her** `COREMETRY_*` değişkeni. Kaynak:
-`git grep -nP '\bCOREMETRY_[A-Z0-9_]+' -- '*.go' ':!*_test.go'` (2026-09-10,
-89 benzersiz ad). Her satır koddan okunarak yazıldı; doğrulanamayan yer
+`git grep -nP '\bCOREMETRY_[A-Z0-9_]+' -- '*.go' ':!*_test.go'` (2026-09-10
+taramasında 89 benzersiz ad; 2026-09-27 v0.10.966 ile +1 → 90). Her satır
+koddan okunarak yazıldı; doğrulanamayan yer
 "(koddan doğrulanamadı)" ile işaretli. Satır numaraları o günkü `main`'e
 aittir — kayarsa dosya + fonksiyon adı yeter.
 
@@ -56,12 +57,54 @@ Sütunlar: **Okunduğu yer** · **Yokken / varsayılan** · **Etki** · **Rol** 
 | Değişken | Okunduğu yer | Yokken / varsayılan | Etki | Rol | Gizli |
 |---|---|---|---|---|---|
 | `COREMETRY_MODE` | `main.go:117` `parseRunMode` | boş → `all` | `all\|ingest\|api\|worker\|agent`; başka değer → `log.Fatalf` (`main.go:130`). Chart `deployment.mode=distributed` her rolü ayrı Deployment yapar. | hepsi | hayır |
+| `COREMETRY_AGENT_ENV_PASSTHROUGH` | `main.go:730` agent bloğu → `agent.ConfigureBashEnv` (`internal/agent/bashenv.go`) | boş → runbook bash adımı yalnız taban listeyi görür (aşağıda) | CSV (`splitCSVEnv`); girdi `AD` (tam, harfe duyarlı) ya da `ÖNEK*` (yalnız sonda `*`, önek ≥3 karakter), ör. `PD_TOKEN,K8S_*,https_proxy`. Büyük harfe çevrilince `COREMETRY_` ile başlayan ad **hiçbir** yoldan geçmez (tam ad, önek, taban, proxy). Önek eşleşmesi `PASS\|SECRET\|TOKEN\|KEY\|CRED\|AUTH\|PRIVATE\|SESSION\|COOKIE` içeren adı ya da `@` taşıyan değeri süpürmez — kimlik yalnız tam adıyla geçer (boot logunda "credential-like" notuyla). Boot'ta reddedilir + `[agent] WARNING … entry rejected` loglanır: çıplak `*`, kısa önek, geçersiz ad (yalnız sırası gösterilir, içerik yankılanmaz), `COREMETRY_*`. Monolitikte chart `extraEnv` ile verilir; distributed agent rolüne bugün verilemez (extras render edilmez). v0.10.966. | agent, all | hayır (yalnız adlar) |
 | `COREMETRY_HTTP_ADDR` | `config.go:632` | `:8088` | api rolünde Web UI + REST + SSE + OTLP/HTTP yedeği; api olmayan rollerde yalnız `/livez` + 503 sağlık dinleyicisi (`main.go:325` boot listener, `main.go:1414` "Health-only HTTP"). Port doluysa boot anında `Fatalf`. | hepsi | hayır |
 | `COREMETRY_GRPC_ADDR` | `config.go:641` | `:4317` | OTLP/gRPC alıcı (`main.go:526`, yalnız ingest). `all` modda self-obs varsayılan hedefini de türetir (`main.go:301` `selfObsDefaultEndpoint`). | ingest | hayır |
 | `COREMETRY_OTLP_HTTP_ADDR` | `config.go:647` → `resolveOTLPHTTPAddr` (`config.go:530`) | `:4318`; `off`/`none`/`-` → dinleyici kapalı; boşluk kırpılır | Ayrı, auth'suz OTLP/HTTP dinleyici (`POST /v1/{traces,logs,metrics}`, `main.go:542`). Kapalıyken OTLP/HTTP `:8088` üzerinden yine cevap verir. | ingest | hayır |
 | `COREMETRY_PUBLIC_URL` | `config.go:638` | `""` → bildirimlerde derin link yok | `notifier.SetPublicURL` (`main.go:598`): Slack/Teams/e-posta/webhook gövdesine "Open in Coremetry" linki. Ör. `https://apm.example.com`. | worker (bildirim üretir), all | hayır |
 | `COREMETRY_ALLOWED_ORIGINS` | `config.go` | `""` → yalnız aynı-origin + `COREMETRY_PUBLIC_URL` origin'i | Virgülle origin listesi (`https://apm.example.com,http://10.0.0.5:8080`). CORS başlığı YALNIZ izinli Origin'e yazılır; izinsiz Origin'de `/api/mcp*` 403, diğer uçlar başlıksız (tarayıcı okuyamaz). Aynı-origin = Origin host[:port] == Host; ters proxy Host'u yeniden yazıyorsa PublicURL ya da bu liste gerekir. v0.10.804 (M4) öncesi her Origin yansıtılıyordu. | api/all | evet |
 | `COREMETRY_VERSION` | `main.go:189` (`init`); `selfobs.go:83,207` (yedek) | boş → ldflag `-X main.Version` > `/app/VERSION` > `"dev"` (`main.go:167-183`) | **Yalnız GÖSTERİLEN sürümü** değiştirir; `BuildVersion` (imaj kimliği) dokunulmaz. `/api/version` `version` + `build` + `overridden` (`api.go:11287`) döner — bayat env imajmış gibi davranamaz (olay v0.5.394, `docs/INCIDENTS.md`). | hepsi | hayır |
+
+
+### Runbook bash adımının ortamı (v0.10.966)
+
+Runbook `bash` adımı (`internal/agent/executor.go` `executeBash`) pod
+ortamını artık **devralmaz**. Adım yalnız şunları görür:
+
+- **Taban liste:** `HOME`, `HOSTNAME`, `KUBECONFIG`,
+  `KUBERNETES_SERVICE_HOST`, `KUBERNETES_SERVICE_PORT`, `LANG`, `LC_ALL`,
+  `NO_PROXY`, `PATH`, `SSL_CERT_DIR`, `SSL_CERT_FILE`, `TMPDIR`, `TZ`,
+  `USER`, `no_proxy`. `PATH` yok ya da boşsa
+  `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`.
+- **Proxy:** `ALL_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY` ve küçük harfli
+  eşleri yalnız değer `@` **içermiyorsa** geçer (`user:pass@` taşıyan proxy
+  düşer; gerekiyorsa knob'a tam adıyla yaz).
+- **`COREMETRY_AGENT_ENV_PASSTHROUGH`** ile açıkça verilen adlar (§1).
+
+Kurallar: `COREMETRY_` ile başlayan ad (harf fark etmez) **sert red** —
+JWT secret, CH parolası ve knob'un kendisi dahil, hiçbir girdi açamaz. Önek
+girdisi (`PD_*`) kimlik-benzeri adı (`PASS`, `SECRET`, `TOKEN`, `KEY`,
+`CRED`, `AUTH`, `PRIVATE`, `SESSION`, `COOKIE`) ya da `@` taşıyan değeri
+asla süpürmez; kimlik yalnız tam adıyla listelenerek geçer. tokenRef
+`env:` hedeflerini `COREMETRY_SECRET_` altında tut — o zaman bir bash
+adımına hiçbir yoldan geçemezler.
+
+Süreç: adım kendi süreç grubunda koşar; zaman aşımında ve adım sonunda
+grubun **tamamı** öldürülür (`sleep 999 &` gibi arka plan işleri adımla
+ölür; `setsid` ile kaçan süreç kalıntı risktir). Boruyu tutan arka plan
+işi adımı en fazla 2 sn bekletir, çıktıya bir not satırı eklenir.
+
+dumpable=0: Coremetry süreci Linux'ta **her rolde** boot'ta
+`PR_SET_DUMPABLE=0` yapar (`internal/prochard`); aynı uid'li alt süreç
+(bash adımı, MCP stdio sunucusu) `/proc/<pid>/environ`, `mem`, `fd`
+okuyamaz — yoksa `cat /proc/$PPID/environ` allowlist'i atlatırdı. Ops
+etkisi: `kubectl exec -- env` çalışır (yeni süreç kendi ortamını basar);
+`kubectl exec -- cat /proc/1/environ` artık `Permission denied` verir.
+
+Tam sandbox **değildir**: aynı uid'li dosyalar (`/app/config.yaml`,
+monolitikte extraVolumes sır dosyaları, SA token) ve ağ (küme içi
+ClickHouse / Redis) adımdan hâlâ erişilebilir. Gerçek sınır distributed
+agent rolüdür.
 
 ## 2. ClickHouse
 
@@ -226,6 +269,7 @@ Binary kendi trace + metriklerini `service.name = coremetry-<rol>`
 - Çok replika: `COREMETRY_REDIS_URL` ayarlı ve `/admin/stats` `lockDegraded=false`.
 - `COREMETRY_CH_MAX_MEMORY_USAGE` düz bayt (boot logunda "per-query memory limits" satırını doğrula).
 - `/api/version` `overridden=false` (bayat `COREMETRY_VERSION` yok).
+- Agent/all pod boot logunda `[agent] bash step env allowlist: …` ve `[prochard] dumpable=0: …` satırları var; tokenRef `env:` hedefleri `COREMETRY_SECRET_` altında.
 
 İlgili: [docs/local-dev.md](local-dev.md) · [README §Configuration](../README.md#configuration) ·
 [docs/clickhouse-cluster.md](clickhouse-cluster.md) · [docs/INCIDENTS.md](INCIDENTS.md) ·

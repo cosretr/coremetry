@@ -409,8 +409,10 @@ The four lists render on the monolithic Deployment and on the distributed
 the VictoriaMetrics metric write runs only on ingest pods. Without the
 reference there, those writes go out with no `Authorization` header, while
 the Settings test, which runs on an api pod, still passes. The agent is left
-out on purpose: it runs runbook bash steps, and those inherit the pod
-environment. The defaults are empty and render nothing.
+out on purpose: it runs runbook bash steps. Since v0.10.966 those steps get
+a minimal env allowlist instead of the pod environment, but mounted files
+and the network are still reachable from a step, so the agent role still
+gets no extras. The defaults are empty and render nothing.
 
 ```bash
 oc create secret generic coremetry-integrations -n coremetry \

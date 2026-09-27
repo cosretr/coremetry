@@ -47,6 +47,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/oracle"
 	"github.com/cilcenk/coremetry/internal/otlp"
 	"github.com/cilcenk/coremetry/internal/pipeline"
+	"github.com/cilcenk/coremetry/internal/prochard"
 	"github.com/cilcenk/coremetry/internal/rag"
 	"github.com/cilcenk/coremetry/internal/rollout"
 	"github.com/cilcenk/coremetry/internal/selfobs"
@@ -275,6 +276,15 @@ func main() {
 	mode := parseRunMode()
 	log.Printf("[mode] running as role=%s (ingest=%v api=%v worker=%v)",
 		mode.name, mode.ingest, mode.api, mode.worker)
+	// v0.10.966 — PR_SET_DUMPABLE=0 HER rolde: runbook bash adımı (agent/all)
+	// ve MCP stdio sunucuları (her rol) aynı uid ile koşar; dumpable süreçte
+	// `cat /proc/$PPID/environ` env allowlist'ini atlatıp JWT secret'ı ve CH
+	// parolasını okurdu. `kubectl exec -- env` etkilenmez.
+	if err := prochard.DisableDumpable(); err != nil {
+		log.Printf("[prochard] WARNING PR_SET_DUMPABLE=0 failed: %v — same-uid child processes can read /proc/1/environ", err)
+	} else if prochard.Supported {
+		log.Printf("[prochard] dumpable=0: /proc/<pid>/environ, mem and fd closed to same-uid child processes")
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -714,6 +724,17 @@ func main() {
 		agentID := os.Getenv("HOSTNAME")
 		if agentID == "" {
 			agentID = "agent"
+		}
+		// v0.10.966 — bash adımı yalnız taban adları + operatörün açıkça
+		// verdiği passthrough'u görür; COREMETRY_* asla. Loglar YALNIZ ad taşır.
+		accepted, rejected := agentpkg.ConfigureBashEnv(splitCSVEnv("COREMETRY_AGENT_ENV_PASSTHROUGH"))
+		passthrough := strings.Join(accepted, ",")
+		if passthrough == "" {
+			passthrough = "-"
+		}
+		log.Printf("[agent] bash step env allowlist: base=%s passthrough=%s", strings.Join(agentpkg.BashBaseEnvNames(), ","), passthrough)
+		for _, r := range rejected {
+			log.Printf("[agent] WARNING COREMETRY_AGENT_ENV_PASSTHROUGH entry rejected: %s", r)
 		}
 		go agentpkg.NewRunner(store, lockImpl, notifier, agentID, 5*time.Second).Start(ctx)
 		log.Printf("[agent] runbook automated-step agent enabled (id=%s)", agentID)

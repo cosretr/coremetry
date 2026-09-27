@@ -1,17 +1,28 @@
-// Package agent runs the COREMETRY_MODE=agent role: it claims automated
-// runbook steps (http / javascript / bash) from the API, executes them in an
-// isolated pod, and posts the result back. Arbitrary operator-authored code
-// runs HERE — never in the api/ingest/worker roles — so the blast radius is a
-// dedicated, non-root, restricted pod the operator controls. (v0.7.4)
+// Package agent runs the runbook agent loop: it claims automated runbook
+// steps (http / javascript / bash) from the API, executes them in-process, and
+// posts the result back. The loop runs in COREMETRY_MODE=agent pods AND in the
+// default monolithic `all` pod (main.go `if mode.agent`), never in the
+// api/ingest/worker-only roles. Only the distributed agent role gives the
+// operator a dedicated, non-root, restricted pod as the blast radius. (v0.7.4)
+//
+// v0.10.966 — bash adımı artık ebeveynin ortamını devralmaz: minimal env
+// allowlist'i (bashenv.go), kendi süreç grubu (zaman aşımında ve adım
+// sonunda TÜM grup öldürülür) ve dumpable=0 ebeveyn (internal/prochard;
+// /proc/$PPID/environ kapalı). Dosyalar (/app/config.yaml, bağlı sır
+// dosyaları, SA token) ve ağ adımdan HÂLÂ erişilebilir; gerçek yalıtım
+// distributed agent rolüdür.
 package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dop251/goja"
@@ -129,17 +140,91 @@ func executeJavaScript(script string, to time.Duration) StepResult {
 	return StepResult{Output: truncate(out)}
 }
 
+// v0.10.966 — boru tutan torun için üst sınır: /bin/sh çıktıktan (ya da
+// zaman aşımından) sonra borular en geç bu kadar açık kalır.
+const bashWaitDelay = 2 * time.Second
+
+// executeBash — /bin/sh -c command. v0.10.966: ortam bashEnv allowlist'i;
+// kendi süreç grubu (Setpgid) — zaman aşımında Cancel TÜM grubu öldürür
+// (eskiden yalnız /bin/sh ölürdü, `sleep 999 &` torunu boruyu tutup
+// CombinedOutput'u kilitlerdi); Wait'ten sonra grup koşulsuz süpürülür
+// (adımın arka plan işleri adım sonunda ölür); WaitDelay boru asılmasını
+// sınırlar; cappedOutput okuma sırasında belleği sınırlar (görünen çıktı
+// truncate() ile aynı).
 func executeBash(ctx context.Context, command string, to time.Duration) StepResult {
 	cctx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, "/bin/sh", "-c", command)
-	out, err := cmd.CombinedOutput()
-	res := StepResult{Output: truncate(string(out))}
+	cmd.Env = bashEnv(os.Environ(), currentBashPolicy())            // allowlist
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}           // kendi süreç grubu
+	cmd.Cancel = func() error { return killGroup(cmd.Process.Pid) } // zaman aşımı: TÜM grup
+	cmd.WaitDelay = bashWaitDelay
+	out := &cappedOutput{}
+	cmd.Stdout, cmd.Stderr = out, out // tek pipe, CombinedOutput sırası
+	err := cmd.Start()
+	if err == nil {
+		pgid := cmd.Process.Pid
+		err = cmd.Wait()
+		_ = killGroup(pgid) // süpürme: adımın arka plan işleri
+	}
+	res := StepResult{Output: out.String()}
 	switch {
+	// v0.10.966 — ErrWaitDelay ÖNCE: yalnız /bin/sh kendi başına 0 ile
+	// çıktıysa döner (gerçek zaman aşımında Cancel grubu öldürür →
+	// ExitError/ctx.Err()). Boruyu tutan iş WaitDelay'i adım süresinin
+	// ötesine taşısa da adım başarılı + not; yoksa timeoutMs < ~bitiş+2sn
+	// olan adım yanlışlıkla "timed out" sayılırdı.
+	case errors.Is(err, exec.ErrWaitDelay):
+		res.Output += "\n[agent] background processes left running by the command were terminated"
 	case cctx.Err() == context.DeadlineExceeded:
 		res.Error = "command timed out after " + to.String()
 	case err != nil:
 		res.Error = err.Error()
 	}
 	return res
+}
+
+// killGroup — v0.10.966: süreç grubunun TAMAMINA SIGKILL. ESRCH (grup zaten
+// yok) os.ErrProcessDone'a çevrilir; böylece Cancel temiz bir çıkışı hataya
+// dönüştürmez. Setpgid + Kill darwin ve linux'ta var (build tag gerekmez;
+// release yalnız linux/amd64).
+func killGroup(pgid int) error {
+	if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
+	return nil
+}
+
+// cappedOutput — v0.10.966: ilk maxOutput baytı tutar, taşmada truncated'ı
+// işaretler. Write HER ZAMAN len(p), nil döner: alt süreç EPIPE almaz ve
+// boşaltılmaya devam eder. Stdout ve Stderr'e AYNI işaretçi verilir, os/exec
+// tek boru + tek kopyalayıcı goroutine kullanır (eşzamanlı yazım yok).
+type cappedOutput struct {
+	buf       []byte
+	truncated bool
+}
+
+func (c *cappedOutput) Write(p []byte) (int, error) {
+	room := maxOutput - len(c.buf)
+	switch {
+	case len(p) <= room:
+		c.buf = append(c.buf, p...)
+	default:
+		if room > 0 {
+			c.buf = append(c.buf, p[:room]...)
+		}
+		c.truncated = true
+	}
+	return len(p), nil
+}
+
+// String — truncate() ile bayt-bayt aynı biçim.
+func (c *cappedOutput) String() string {
+	if c.truncated {
+		return string(c.buf) + "\n…[truncated]"
+	}
+	return string(c.buf)
 }

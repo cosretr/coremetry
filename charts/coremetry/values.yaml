@@ -144,10 +144,11 @@ affinity: {}
 # ve ingest — VictoriaMetrics'e OTLP metrik YAZIMI yalnız ingest pod'unda
 # koşar; VM tokenRef'i ingest'te çözülmezse yazım Authorization'sız gider
 # (api'deki Test yine yeşil görünür). agent rolüne BİLİNÇLİ verilmez: runbook
-# bash/javascript adımı koşar ve bash adımı pod ortamını devralır
-# (internal/agent/executor.go) — sır orada okunabilirdi. Monolitik pod
-# agent'ı süreç içinde koşar; bu ayrım gerekiyorsa distributed mod +
-# deployment.roles.agent kullan.
+# bash/javascript adımı koşar. v0.10.966'den beri bash adımı minimal bir env
+# allowlist'i görür (COREMETRY_* asla; docs/ENV.md "Runbook bash adımının
+# ortamı"), ama bağlı dosyalar ve ağ adımdan hâlâ erişilebilir — bu yüzden
+# agent rolü yine extras almaz. Monolitik pod agent'ı süreç içinde koşar; bu
+# ayrım gerekiyorsa distributed mod + deployment.roles.agent kullan.
 #
 # Varsayılan boş → hiçbir şey render edilmez (mevcut kurulumun manifesti
 # bayt-bayt aynı). extraEnv chart'ın kendi env'lerinin SONUNA eklenir.
