@@ -3,6 +3,8 @@
 // pod'ları üst üste, en çok 4). Trace sayfası "Metrics" sekmesinin SAF
 // yardımcıları (tablo testli).
 import type { EntityClusterInfo, SpanMetricSeries, SpanRow } from '@/lib/types';
+import { windowRangeParam } from '@/lib/urlState';
+import { podDetailPath } from '@/pages/service/podDetailPath';
 
 export const TRACE_METRICS_MAX_PODS = 4;
 export const TRACE_METRICS_WINDOWS = [5, 15, 60] as const;
@@ -48,20 +50,31 @@ export function tracePods(spans: SpanRow[]): TracePod[] {
   return [...by.values()];
 }
 
-/** Servise göre gruplu; grup içinde hatalı önce, sonra span sayısı, sonra ad. */
-export function podsByService(pods: TracePod[]): { service: string; pods: TracePod[] }[] {
+/** Servise göre gruplu; grup içinde hatalı önce, sonra span sayısı, sonra ad.
+ *  v0.10.962 — gruplar da ALFABETİK DEĞİL, trace ilgisine göre (onaylı
+ *  yeniden tasarım mockup'ının "Sıra: trace ilgisi" kuralının trace'ten
+ *  bugün okunabilen kısmı): `lead` (hata kaynağı servis, errorSourceService)
+ *  önce → toplam hata ↓ → toplam span ↓ → ad. Kritik yol payı ve öz süre
+ *  SpanRow'da yok (sunucu analizi) — yeniden tasarımın işi. */
+export function podsByService(pods: TracePod[], lead = ''): { service: string; pods: TracePod[] }[] {
   const groups = new Map<string, TracePod[]>();
   for (const p of pods) {
     const g = groups.get(p.service) ?? [];
     g.push(p);
     groups.set(p.service, g);
   }
+  const sum = (ps: TracePod[], k: 'errors' | 'spans') => ps.reduce((a, p) => a + p[k], 0);
   return [...groups.entries()]
     .map(([service, ps]) => ({
       service,
       pods: ps.sort((a, b) => (b.errors - a.errors) || (b.spans - a.spans) || a.pod.localeCompare(b.pod)),
+      errors: sum(ps, 'errors'),
+      spans: sum(ps, 'spans'),
     }))
-    .sort((a, b) => a.service.localeCompare(b.service));
+    .sort((a, b) =>
+      (Number(!!lead && b.service === lead) - Number(!!lead && a.service === lead))
+      || (b.errors - a.errors) || (b.spans - a.spans) || a.service.localeCompare(b.service))
+    .map(({ service, pods }) => ({ service, pods }));
 }
 
 /** Span derinliği (kök = 0). */
@@ -77,11 +90,9 @@ function depthOf(sp: SpanRow, byId: Map<string, SpanRow>): number {
   return d;
 }
 
-/** Varsayılan seçim: hata veren EN DERİN span'ın servisinin hatalı pod'ları
- *  (≤4; v0.10.892 "hata veren span" kuralı); hata yoksa kök span'ın pod'u. */
-export function defaultPodSelection(spans: SpanRow[], pods: TracePod[]): string[] {
+/** Pod'u bilinen, hata veren EN DERİN span (v0.10.892 "hata veren span" kuralı). */
+function deepestErrorSpan(spans: SpanRow[], pods: TracePod[], byId: Map<string, SpanRow>): SpanRow | undefined {
   const known = new Set(pods.map(p => p.pod));
-  const byId = new Map(spans.map(s => [s.spanId, s]));
   let deepest: SpanRow | undefined;
   let deepestD = -1;
   for (const sp of spans) {
@@ -89,6 +100,21 @@ export function defaultPodSelection(spans: SpanRow[], pods: TracePod[]): string[
     const d = depthOf(sp, byId);
     if (d > deepestD) { deepest = sp; deepestD = d; }
   }
+  return deepest;
+}
+
+/** v0.10.962 — hata kaynağı servis (varsayılan seçimle AYNI kural: en derin
+ *  hatalı span'ın servisi); hata yoksa ''. podsByService'in `lead`i. */
+export function errorSourceService(spans: SpanRow[], pods: TracePod[]): string {
+  return deepestErrorSpan(spans, pods, new Map(spans.map(s => [s.spanId, s])))?.serviceName ?? '';
+}
+
+/** Varsayılan seçim: hata veren EN DERİN span'ın servisinin hatalı pod'ları
+ *  (≤4; v0.10.892 "hata veren span" kuralı); hata yoksa kök span'ın pod'u. */
+export function defaultPodSelection(spans: SpanRow[], pods: TracePod[]): string[] {
+  const known = new Set(pods.map(p => p.pod));
+  const byId = new Map(spans.map(s => [s.spanId, s]));
+  const deepest = deepestErrorSpan(spans, pods, byId);
   if (deepest) {
     const svc = deepest.serviceName;
     const errPods = pods.filter(p => p.service === svc && p.errors > 0).map(p => p.pod);
@@ -101,9 +127,18 @@ export function defaultPodSelection(spans: SpanRow[], pods: TracePod[]): string[
   return pods.length ? [pods[0].pod] : [];
 }
 
+/** v0.10.962 — tavan: seçim 4'te ve pod AYNI servisten, seçili değil →
+ *  tıklama bir şey yapamaz. Panel bu çipi devre dışı + gerekçeli gösterir
+ *  (eskiden tıklama sessizce yutuluyordu); togglePod aynı kuralı kullanır. */
+export function podAtCap(selected: string[], pod: string, pods: TracePod[]): boolean {
+  if (selected.includes(pod) || selected.length < TRACE_METRICS_MAX_PODS) return false;
+  const svcOf = (p: string) => pods.find(x => x.pod === p)?.service;
+  return svcOf(selected[0]) === svcOf(pod);
+}
+
 /** Seçim kuralı: yalnız AYNI servisin pod'ları üst üste (≤4). Başka servisten
  *  pod seçmek seçimi o pod'la değiştirir; seçili pod'a tıklamak çıkarır (son
- *  pod çıkarılamaz); tavandayken yeni pod eklenmez. */
+ *  pod çıkarılamaz); tavandayken yeni pod eklenmez (podAtCap). */
 export function togglePod(selected: string[], pod: string, pods: TracePod[]): string[] {
   const svcOf = (p: string) => pods.find(x => x.pod === p)?.service;
   if (selected.includes(pod)) {
@@ -111,7 +146,7 @@ export function togglePod(selected: string[], pod: string, pods: TracePod[]): st
   }
   const svc = svcOf(pod);
   if (selected.length === 0 || svcOf(selected[0]) !== svc) return [pod];
-  if (selected.length >= TRACE_METRICS_MAX_PODS) return selected;
+  if (podAtCap(selected, pod, pods)) return selected;
   return [...selected, pod];
 }
 
@@ -125,6 +160,23 @@ export function traceMetricsWindow(spans: SpanRow[], padMin: number): { from: nu
   if (!Number.isFinite(start)) start = end = Date.now() * 1e6;
   const pad = padMin * 60 * 1e9;
   return { from: start - pad, to: end + pad, startNs: start, endNs: end };
+}
+
+/** v0.10.962 — "Pod sayfasında aç" linki panelin GÖSTERDİĞİ pencereyi taşır
+ *  (eskiden range'siz → /pod son 1 saate düşüyordu; eski bir trace'te
+ *  bambaşka bir zaman). range = windowRangeParam (custom:<fromMs>-<toMs>;
+ *  from aşağı, to yukarı yuvarlanır — pencere daralmaz), at = trace
+ *  başlangıcı (ms): /pod o an geçerli entity kaydını çözer (onaylı mockup'ın
+ *  podHref'i). Saf. */
+export function traceMetricsPodHref(
+  t: { pod: string; cluster: string; namespace: string; service: string },
+  w: { from: number; to: number; startNs: number },
+): string {
+  return podDetailPath({
+    pod: t.pod, cluster: t.cluster, namespace: t.namespace || undefined, service: t.service || undefined,
+    range: windowRangeParam({ fromNs: w.from, toNs: w.to }) || null,
+    at: Math.floor(w.startNs / 1e6) || undefined,
+  });
 }
 
 /** Span cluster değeri → Thanos/entity cluster adı (traceK8sLinks ile aynı eşleme). */
