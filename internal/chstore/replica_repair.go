@@ -1011,6 +1011,13 @@ func (s *Store) PlanReplicaRepair(ctx context.Context, req ReplicaRepairRequest)
 	if shard == nil {
 		return nil, fmt.Errorf("%s / shard %d raporda yok — yeniden Ölç", req.Table, req.Shard)
 	}
+	// v0.10.965 — ZK yolu yeniden kurulumunun izin listesindeki tablo birleşik
+	// yolda değilken onarım/ilk replika eski yolu çoğaltır (eşin literal yolu
+	// ya da boot gözlemiyle adaptDDL) ve yeniden kurulumu geri alır. Seed ve
+	// missing/plain kipleri buradan geçer, apply yeniden planlar: tek kapı.
+	if msg := statePathRepairReject(req.Table, firstNonEmpty(tbl.StatePath, statePathListedKind(rep.StatePaths, req.Table))); msg != "" {
+		return nil, errors.New(msg)
+	}
 	if shard.Verdict != ReplicaMissing && shard.Verdict != ReplicaNotReplicated {
 		return nil, fmt.Errorf("%s / shard %d kararı %q — bu sihirbaz yalnız eksik/replike-olmayan tabloyu onarır; yeniden Ölç", req.Table, req.Shard, shard.Verdict)
 	}

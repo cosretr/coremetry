@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, canSeedFirstReplica, catalogLabel, leavesFixTable, repairModeLabel, repairRequestMode, isInnerTable } from './replicaConsistency';
+import { runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone, canRepair, canSeedFirstReplica, catalogLabel, leavesFixTable, repairModeLabel, repairRequestMode, isInnerTable, statePathLabel, statePathOwnsRepair, statePathHeadline } from './replicaConsistency';
 import type { CHReplicaShard, CHReplicaState, CHReplicaVerdict } from '@/lib/types';
 
 const VERDICTS: CHReplicaVerdict[] = ['ok', 'removed', 'unmanaged', 'single', 'unmapped', 'lagging', 'divergent', 'readonly', 'session_expired', 'missing_replica', 'not_replicated', 'no_replication'];
@@ -463,5 +463,59 @@ describe('katalog dışı satır — replikalı unmanaged (v0.10.872)', () => {
     expect(runbook('shop_cluster', 'shop', 'feedbacks', unmanagedDiv.shards[0], undefined, 'removed')).toBe('');
     // katalogsuz aynı shard runbook ALIR (kapı yalnız kataloğa bakar)
     expect(runbook('shop_cluster', 'shop', 'problems', unmanagedDiv.shards[0])).not.toBe('');
+  });
+});
+
+// v0.10.965 — tablo satırının altındaki ZK yolu notu (Go ReplicaTable.statePath).
+// Shard kararı "tutarlı" kalabilir: her yarı kendi shard'ında tutarlı; kusur
+// shard'lar ARASINDA. Not tablo düzeyinde ve kilidi söyler.
+describe('statePathLabel — v0.10.965 state tablolarının ZK yolu', () => {
+  it('eski ve karışık yol metinleri', () => {
+    expect(statePathLabel('legacy')).toBe("eski ZK yolu (shard'lı) — kilidi tutuyor");
+    expect(statePathLabel('mixed')).toBe('karışık ZK yolu (birleşik + eski)');
+  });
+});
+
+// v0.10.965 — izin listesindeki state tablosu birleşik yolda değilken Onar /
+// İlk replika eski yolu çoğaltır ve yeniden kurulumu geri alır: düğme gizli.
+describe('statePathOwnsRepair — v0.10.965', () => {
+  const entry = (table: string, kind: 'legacy' | 'mixed' | 'absent', rebuildable: boolean) =>
+    ({ table, kind, rebuildable, rows: 0, groups: [] });
+  const check = { legacy: [entry('ingest_ledger', 'legacy', true), entry('rollout_events', 'absent', true), entry('alert_rules', 'legacy', false)] };
+  it('izinli eski / eksik tablo: onarım yok', () => {
+    expect(statePathOwnsRepair({ table: 'ingest_ledger' }, check)).toBe(true);
+    expect(statePathOwnsRepair({ table: 'rollout_events' }, check)).toBe(true);
+  });
+  it('izin listesi dışı eski tablo, listede olmayan tablo, denetimsiz rapor: onarım yerinde', () => {
+    expect(statePathOwnsRepair({ table: 'alert_rules' }, check)).toBe(false);
+    expect(statePathOwnsRepair({ table: 'problems' }, check)).toBe(false);
+    expect(statePathOwnsRepair({ table: 'ingest_ledger' }, undefined)).toBe(false);
+  });
+  it('AdminClickhouse: iki düğme koşulu da yardımcıyı sorar; yerine neden yazılır', () => {
+    const page = readFileSync(resolve(__dirname, '../AdminClickhouse.tsx'), 'utf8');
+    expect(page).toContain('!statePathOwnsRepair(t, data.statePaths) && canRepair(t, sh, m)');
+    expect(page).toContain('!statePathOwnsRepair(t, data.statePaths) && canSeedFirstReplica(t, sh, m)');
+    expect(page).toContain("Onarım yok: bu tablo 'State tablolarının ZK yolu' bloğundan birleşik yola yeniden kurulur");
+  });
+});
+
+// v0.10.965 — başlık rozeti: kilit kapalıyken "N tablo tutarlı" tek başına yanlış güven.
+describe('statePathHeadline — v0.10.965', () => {
+  const e = (kind: 'legacy' | 'mixed' | 'absent') => ({ table: 't', kind, rebuildable: true, rows: 0, groups: [] });
+  it('denetim yok / kilit açık / yalnız eksik: rozet yok', () => {
+    expect(statePathHeadline(undefined)).toBeNull();
+    expect(statePathHeadline({ lockOpen: true, legacy: [e('legacy')] })).toBeNull();
+    expect(statePathHeadline({ lockOpen: false, legacy: [e('absent')] })).toBeNull();
+  });
+  it('kilit kapalı: eski + karışık sayılır, eksik sayılmaz', () => {
+    const legacy = [...Array.from({ length: 9 }, () => e('legacy')), e('mixed'), e('absent')];
+    expect(statePathHeadline({ lockOpen: false, legacy })).toBe('kilit KAPALI · 10 state tablosu eski ZK yolunda');
+  });
+  it('AdminClickhouse: rozet başlık satırında, özet rozetinden hemen sonra', () => {
+    const page = readFileSync(resolve(__dirname, '../AdminClickhouse.tsx'), 'utf8');
+    const sumAt = page.indexOf('{sum && data?.cluster && <span className={`badge ${sum.tone}`}>{sum.text} · {data.cluster}</span>}');
+    const headAt = page.indexOf('{spHead && <span className="badge b-err">{spHead}</span>}');
+    expect(sumAt).toBeGreaterThan(0);
+    expect(headAt).toBeGreaterThan(sumAt);
   });
 });

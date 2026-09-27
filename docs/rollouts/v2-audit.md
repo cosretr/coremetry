@@ -1465,7 +1465,7 @@ Every route goes in its own file via `registerRoutesExtra`, so `api.go` gains 0 
 
 **Classification and mapping**
 15. **Metrics-only mode.** Before API credentials exist, show "estimated" `argo_manual` for autosync-off apps and ambiguous (≤ 0.5) for autosync-on apps, or only `unknown`? *Recommend: show estimates, clearly labelled.*
-16. **Env source of truth.** Service-name suffix (hard-coded `-prod/-int/-uat/-prep`), `deploy_env` (`prod-<cluster>`), or the Argo name `<env>` segment? Align `envList` with the service suffixes?
+16. **Env source of truth.** Service-name suffix (hard-coded `-prod/-int/-uat/-prep`), `deploy_env` (`prod-<cluster>`), or the Argo name `<env>` segment? Align `envList` with the service suffixes? **Decided 2026-09-27 (operator):** the service-name suffix first; when the service has no recognised suffix, fall back to the Argo application name's `<env>` segment. `envList` follows the suffix vocabulary.
 17. **Trigger in Problem scoring.** Add a multiplier (for example `out_of_band` ×1.10)? *Recommend: not in v2; show the trigger in evidence only.*
 18. **Emitting Problems/events** (stuck rollouts, pair drift, Argo syncs without a rollout). *Recommend: none in v2. If wanted later, use a `PollerOwnedSubject` exemption so the stale sweep does not flap on a 3 min lease failover.*
 19. **RecentDeploy source.** Switch the DeployBox and chat deploy hint to `rollout_events`, keeping span inference as the labelled non-K8s fallback (decision 13). Priority is unaffected: the "critical + fresh deploy" P1 trigger was removed in v0.9.612 (`problem.go:486-501`) and must not return (CLAUDE.md Triage). *Recommend: yes, in P2.5.*

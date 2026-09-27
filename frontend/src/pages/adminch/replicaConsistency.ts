@@ -4,7 +4,7 @@
  * özet ve kararın runbook metni. Runbook operatörün kopyalayıp DBA ile
  * koşacağı SQL: ürün ZK yolu uyuşmazlığını kendi düzeltmez (veri taşıma).
  */
-import type { CHReplicaCatalog, CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaTable, CHReplicaVerdict } from '@/lib/types';
+import type { CHReplicaCatalog, CHReplicaConsistencyResponse, CHReplicaMissingHost, CHReplicaRepairMode, CHReplicaShard, CHReplicaTable, CHReplicaVerdict, CHStatePathCheck } from '@/lib/types';
 
 // v0.10.929 (K5) — tutarlı replika sağlıklı hâl, geçiş değil: 'b-ok' tipten çıktı.
 export type ReplicaTone = 'b-warn' | 'b-err' | 'b-gray';
@@ -186,6 +186,41 @@ export const repairModeLabel = (mode: string): string =>
   : mode === 'seed' ? 'shard\'da Replicated replika YOK → bu host İLK replika olur (1/1, yedeklilik yok): `_fix` kanonik ZK yolunda kurulur, partition\'lar ATTACH edilir, EXCHANGE ile değiştirilir; shard\'ın öteki host\'ları KENDİ satırlarını tutmaya devam eder ve sonra "Onar" ile katılmalı'
   : mode === 'plain' ? 'düz tablo → Replicated: `_fix` kur, partition\'ları ATTACH et, EXCHANGE ile değiştir'
   : 'tablo yok → eşten klon: aynı ZK yolunda CREATE, parçalar eşten çekilir';
+
+/**
+ * v0.10.965 — statePathLabel: tablo satırının altındaki ZK yolu notu. Shard
+ * başına karar "tutarlı" olabilir (her yarı kendi shard'ında tutarlı); kusur
+ * shard'lar ARASINDA, tablo düzeyinde.
+ */
+export function statePathLabel(kind: 'legacy' | 'mixed'): string {
+  return kind === 'legacy' ? 'eski ZK yolu (shard\'lı) — kilidi tutuyor' : 'karışık ZK yolu (birleşik + eski)';
+}
+
+/**
+ * v0.10.965 — Onar / İlk replika bu satırda GİZLİ mi? ZK yolu yeniden
+ * kurulumunun izin listesindeki tablo birleşik yolda değilken (eski, karışık
+ * ya da "birleşik yolda eksik") onarım ESKİ yolu çoğaltır — Onar eşin literal
+ * yolunu klonlar, ilk replika boot gözlemiyle eski yolu seçer — ve yeniden
+ * kurulumu geri alır; sahibi "State tablolarının ZK yolu" bloğudur. Sunucu da
+ * reddeder (PlanReplicaRepair · statePathRepairReject): düğme ile sunucu aynı
+ * kararı verir (v0.10.846 kuralı). İzin listesi `rebuildable`'dan okunur,
+ * burada kopyalanmaz; izin listesi dışı eski tabloda onarım yerinde kalır.
+ */
+export function statePathOwnsRepair(t: Pick<CHReplicaTable, 'table'>, check?: Pick<CHStatePathCheck, 'legacy'>): boolean {
+  return !!check?.legacy.some(l => l.table === t.table && l.rebuildable);
+}
+
+/**
+ * v0.10.965 — kart başlığının ikinci rozeti: kilit KAPALIyken "N tablo
+ * tutarlı" özeti tek başına yanlış güven verir (shard içi kararlar değişmez;
+ * kusur shard'lar arası). Sayım StatePathBlock'un kilit rozetiyle aynı
+ * (yalnız eksik satırlar kilidi tutmaz). null = rozet yok.
+ */
+export function statePathHeadline(sp?: Pick<CHStatePathCheck, 'lockOpen' | 'legacy'>): string | null {
+  if (!sp || sp.lockOpen) return null;
+  const n = sp.legacy.filter(t => t.kind !== 'absent').length;
+  return n > 0 ? `kilit KAPALI · ${n} state tablosu eski ZK yolunda` : null;
+}
 
 /** ZK yolunun son üç parçası — tabloda okunur; tamamı title'da. */
 export function shortZk(path: string): string {

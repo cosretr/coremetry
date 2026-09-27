@@ -3566,6 +3566,17 @@ export const api = {
     request<import('./types').CHReplicaRepairResult>('/api/admin/clickhouse/replica-consistency/repair/cleanup', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, shard, host, confirm: true }), timeoutMs: 300_000,
     }),
+  // v0.10.965 — State tablolarının ZK yolu: plan (salt okuma; katı ölçüm + kapılar + ifadeler) /
+  // apply (audit'li; seçilenler VERİSİYLE düşer, birleşik yolda kurulur). Sunucu apply'ı 12 dk
+  // bütçeyle, istek iptalinden bağımsız koşar; istemci 13 dk bekler.
+  chStatePathRebuildPlan: (tables: string[]) =>
+    request<import('./types').CHStatePathRebuildPlan>('/api/admin/clickhouse/replica-consistency/state-paths/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tables }), timeoutMs: 120_000,
+    }),
+  chStatePathRebuildApply: (req: import('./types').CHStatePathRebuildRequest) =>
+    request<import('./types').CHStatePathRebuildResult>('/api/admin/clickhouse/replica-consistency/state-paths/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...req, confirm: true }), timeoutMs: 780_000,
+    }),
   // v0.10.757 — Trace hattı sağlığı (Admin ClickHouse): pod-içi ingest sayaçları + MV ölçüleri, bölüm başına hata.
   // raw=1 (v0.10.823) isteğe bağlı ham sayım; bayrak yalnız true ise yazılır
   // (false'ta URL — ve sunucu önbellek anahtarı — aynen eski hâlinde kalır).

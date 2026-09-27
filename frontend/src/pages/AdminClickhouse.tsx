@@ -10,7 +10,8 @@ import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/l
 import { Button, KeyValue, KeyValueRow, Modal, Row, SectionHead, SegmentedControl, SelectField } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
-import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
+import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, statePathHeadline, statePathLabel, statePathOwnsRepair, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
+import { StatePathBlock } from './adminch/StatePathRebuild'; // v0.10.965 — state tablolarının ZK yolu
 import type {
   RollupActionResult, RollupPreflightResult, RollupTableStatus, RollupTarget,
   EntityLayerObjectStatus, EntityLayerStatusResult, EntityLayerPreflightResult,
@@ -2467,14 +2468,15 @@ function DanglingMVPanel() {
 // sonraki dilim; bu kart yalnız gösterir ve runbook'u kopyalatır.
 // Operatör vakası (test ortamı): aynı sorgu her yenilemede farklı sayı,
 // dünkü trace MV'de var ham'da yok — rastgele replika seçimi + ıraksama.
-function ReplicaConsistencyPanel() {
+export function ReplicaConsistencyPanel() {
   const [data, setData] = useState<CHReplicaConsistencyResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const scan = async () => {
+  // v0.10.965 — keepOnError: yıkıcı yeniden kurulum sonrası otomatik yeniden ölçüm başarısız olursa önceki rapor (ve StatePathBlock'un yarıda kaldı/devam satırı) ekranda kalır.
+  const scan = async (keepOnError = false) => {
     setBusy(true); setErr(null);
     try { setData(await api.chReplicaConsistency(true)); }
-    catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); setData(null); }
+    catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); if (!keepOnError) setData(null); }
     finally { setBusy(false); }
   };
   // v0.10.820 — Replika onarımı: Onar → plan (salt okuma, Modal) → Uygula (audit'li DDL,
@@ -2539,6 +2541,7 @@ function ReplicaConsistencyPanel() {
     } finally { setApplying(false); setCleanupConfirm(false); void scan(); }
   };
   const sum = data ? summarize(data) : null;
+  const spHead = data?.cluster ? statePathHeadline(data.statePaths) : null; // v0.10.965 — kilit kapalıyken başlık özeti tek başına yetmez
   const tables = data
     ? [...data.tables].sort((a, b) => verdictRank(b.verdict) - verdictRank(a.verdict) || a.table.localeCompare(b.table))
     : [];
@@ -2557,6 +2560,7 @@ function ReplicaConsistencyPanel() {
         <Button variant="accent" size="sm" onClick={() => void scan()} loading={busy}>Ölç</Button>
         {data && !data.cluster && <span className="badge b-gray">küme kipi değil</span>}
         {sum && data?.cluster && <span className={`badge ${sum.tone}`}>{sum.text} · {data.cluster}</span>}
+        {spHead && <span className="badge b-err">{spHead}</span>}
         {data?.loadBalancing && <span className="badge b-gray" title="Okuma bağlantısının load_balancing ayarı">load_balancing={data.loadBalancing}</span>}
         {err && <span className="badge b-err" title={err}>ölçülemedi</span>}
       </div>
@@ -2574,6 +2578,8 @@ function ReplicaConsistencyPanel() {
       {/* v0.10.818 — küme düzeyi uyarılar (DDL'i işlemeyen host, erişilemeyen host): kırmızı + metin öneki (renge bağımlı değil). */}
       {data?.warnings?.map(w => <div key={w} role="alert" className="cell-hint" style={{ color: 'var(--err)' }}>Uyarı: {w}</div>)}
       {data?.notes?.map(n => <div key={n} className="cell-hint">{n}</div>)}
+      {/* v0.10.965 — state tablolarının ZK yolu: denetim + birleşik yolda yeniden kurulum (operatör kararı 2026-09-27). */}
+      {data?.cluster && data.statePaths && <StatePathBlock check={data.statePaths} cluster={data.cluster} onDone={() => void scan(true)} />}
       {data && data.cluster && tables.length > 0 && (
         // v0.10.942 — statik tablo (T1): çok satırlı hücreler onarım düğmeleri
         // taşır, sıra karar önceliği; içerik boyutlu otomatik düzen korunur.
@@ -2606,6 +2612,7 @@ function ReplicaConsistencyPanel() {
                         {catalogLabel(t)}
                       </div>
                     )}
+                    {t.statePath && <div className="cell-hint">{statePathLabel(t.statePath)}</div>}
                   </td>
                   <td className="num">{sh.shard < 0 ? '—' : sh.shard}</td>
                   <td className="mono cell-muted">
@@ -2624,14 +2631,16 @@ function ReplicaConsistencyPanel() {
                         <div key={m.host} style={{ color: 'var(--err)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span>{m.host} · {m.engine && !m.engine.startsWith('Replicated') ? `Replicated değil (${m.engine})` : m.engine ? `kayıtsız (${m.engine})` : 'tablo yok'}</span>
                           {/* v0.10.820 — Onar: plan salt okuma; Uygula ayrı onay kutusuyla. */}
-                          {canRepair(t, sh, m) && (
+                          {/* v0.10.965 — izinli state tablosu birleşik yolda değilken onarım eski yolu çoğaltır: sahibi ZK yolu bloğu. */}
+                          {statePathOwnsRepair(t, data.statePaths) && <span className="cell-hint">Onarım yok: bu tablo 'State tablolarının ZK yolu' bloğundan birleşik yola yeniden kurulur</span>}
+                          {!statePathOwnsRepair(t, data.statePaths) && canRepair(t, sh, m) && (
                             <Button variant="accent" size="xs" disabled={planBusy !== null || applying} loading={planBusy === k}
                               title="Plan (salt okuma): eşten DDL, eşin ZK yolu, makro/znode çakışması, DB motoru, kolon ve partition kontrolü; Uygula ayrı onay ister"
                               onClick={() => void openPlan(t.table, sh.shard, m.host)}>Onar</Button>
                           )}
                           {/* v0.10.829 — shard'da HİÇ Replicated replika yoksa katılacak eş yoktur:
                               bu host düz tablosuyla shard'ın İLK replikası olur. Ötekiler sonra "Onar". */}
-                          {canSeedFirstReplica(t, sh, m) && (
+                          {!statePathOwnsRepair(t, data.statePaths) && canSeedFirstReplica(t, sh, m) && (
                             <Button variant="danger" size="xs" disabled={planBusy !== null || applying} loading={planBusy === k}
                               title={m.engine
                                 ? "Shard'da Replicated replika YOK: bu host'un düz tablosu kanonik ZK yolunda Replicated tabloya çevrilir (1/1, yedeklilik yok). Plan salt okuma; Uygula ayrı onay ister. Shard'ın öteki host'ları sonra Onar ile katılır."

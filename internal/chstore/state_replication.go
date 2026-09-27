@@ -243,16 +243,14 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 		log.Printf("[chstore] küme geneli state yolu okunamadı (%v) — yalnız YEREL gözleme göre karar veriliyor", cerr)
 	} else {
 		for t, p := range cl {
-			old, dup := obs.paths[t]
-			if dup && old != p {
+			old := obs.paths[t]
+			// v0.10.965 — birleştirme kuralı mergeObservedStatePath'te: Replika
+			// tutarlılığı kartının ZK yolu denetimi AYNI gövdeyi çağırır, boot
+			// ile kart ayrışamaz.
+			if mergeObservedStatePath(obs.paths, t, p, zkPrefix) {
 				log.Printf("[chstore] ⚠ %s İKİ farklı ZK yolunda görüldü (%q vs %q) — kurulum ZATEN bölünmüş; "+
 					"eski yol tercih ediliyor, 0009 göçü bunu onarır", t, old, p)
-				if old == unifiedStatePath(zkPrefix, t) {
-					obs.paths[t] = p // eski olan kazanır
-				}
-				continue
 			}
-			obs.paths[t] = p
 		}
 	}
 	s.stateObs = obs
@@ -267,6 +265,31 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 	}
 	log.Printf("[chstore] state ZK yolu probe'u: %d tablo gözlendi (%d birleşik, %d eski) — yeni state tabloları %s yola kurulacak",
 		len(obs.paths), unified, legacy, map[bool]string{true: "BİRLEŞİK", false: "ESKİ"}[legacy == 0])
+}
+
+// mergeObservedStatePath — v0.10.965 — SAF. Boot probe'unun birleştirme
+// döngüsünden (resolveStateReplicaPaths) ÇIKARILDI, anlamı birebir aynı:
+//
+//   - tablo ilk kez görülüyorsa yolu yazılır;
+//   - aynı tablo İKİ farklı yolda görülürse kurulum zaten bölünmüştür:
+//     ESKİ yol kazanır (birleşik olan eskisiyle değiştirilir), iki eski yol
+//     çakışırsa İLK görülen kalır.
+//
+// split=true → çakışma vardı (boot bunu log satırıyla bildirir). Replika
+// tutarlılığı kartının ZK yolu denetimi (state_path_check.go) ve yeniden
+// kurulum sihirbazının kilit hesabı (state_path_rebuild.go) AYNI gövdeyi
+// çağırır: kartın "kilit kapalı" dediği ile boot'un yeni tabloyu kurduğu yol
+// ayrışamaz.
+func mergeObservedStatePath(paths map[string]string, table, path, zkPrefix string) (split bool) {
+	old, dup := paths[table]
+	if dup && old != path {
+		if old == unifiedStatePath(zkPrefix, table) {
+			paths[table] = path // eski olan kazanır
+		}
+		return true
+	}
+	paths[table] = path
+	return false
 }
 
 // queryReplicaPaths — <src>'ten (tablo → zookeeper_path) okur, yalnız

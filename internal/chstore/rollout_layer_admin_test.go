@@ -696,3 +696,40 @@ func TestRolloutV2LayerPreflightWiring(t *testing.T) {
 		}
 	}
 }
+
+// TestRolloutV2LayerPreflightAfterStatePathRebuild — v0.10.965 (gereksinim 3):
+// state yolu sihirbazı sekiz Rollouts v2 tablosunu varsayılan önekte birleşik
+// yola (0015'in AYNI ifadesiyle) kurduktan sonra Rollouts kartının 0015 ön
+// kontrolü çakışma GÖSTERMEZ. Üretim değişikliği gerekmez: rolloutV2LayerConflicts
+// yalnız Replicated olmayan motoru ve '/clickhouse/tables/state/<ad>' dışı yolu
+// işaretler; sihirbaz sonrası ikisi de sağlanır. Host adları sentetik.
+func TestRolloutV2LayerPreflightAfterStatePathRebuild(t *testing.T) {
+	var engines, zk [][]string
+	for _, h := range []string{"host-1", "host-2", "host-3", "host-4"} {
+		for _, n := range rolloutV2TableNames() {
+			engines = append(engines, []string{h, n, "ReplicatedReplacingMergeTree"})
+			zk = append(zk, []string{h, n, "/clickhouse/tables/state/" + n})
+		}
+	}
+	if len(engines) != 32 {
+		t.Fatalf("fikstür %d satır (4 host × 8 tablo)", len(engines))
+	}
+	conn := rv2PreConn{spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all", engines: engines, zk: zk}
+	s := &Store{cfg: config.CHConfig{ClusterName: "uptrace_all"}, conn: &conn}
+	got, err := s.RolloutV2LayerPreflight(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Conflicts) != 0 || got.Conflicts == nil {
+		t.Errorf("çakışma = %v, beklenen []", got.Conflicts)
+	}
+	if !got.Supported || !strings.HasPrefix(got.Detail, "uygulanabilir") {
+		t.Errorf("= (%v, %q), beklenen (true, uygulanabilir…)", got.Supported, got.Detail)
+	}
+	// Sihirbazın kurduğu yol = 0015'in denetlediği yol (tek gerçek).
+	for _, n := range rolloutV2TableNames() {
+		if unifiedStatePath((&Store{}).zkPrefix(), n) != unifiedStatePath(rolloutV2ZKPrefix, n) {
+			t.Errorf("%s: varsayılan önekte sihirbaz yolu 0015 yolundan farklı", n)
+		}
+	}
+}

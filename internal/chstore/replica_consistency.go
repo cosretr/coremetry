@@ -118,6 +118,10 @@ type ReplicaTable struct {
 	// dönünce "kanonik tanım yok" diye REDDEDİYORDU. Düğme ile sunucu aynı
 	// kararı vermeli; tek gerçek kaynağı sunucudur.
 	Seedable bool `json:"seedable"`
+	// StatePath — v0.10.965: state tablosunun tablo düzeyi ZK yolu türü
+	// ("legacy" | "mixed"; birleşikse boş). Shard başına karar DEĞİŞMEZ: her
+	// yarı kendi shard'ında tutarlıdır, kusur shard'lar arasındadır.
+	StatePath string `json:"statePath,omitempty"`
 }
 
 // ReplicaConsistencyReport — kartın tamamı.
@@ -132,6 +136,9 @@ type ReplicaConsistencyReport struct {
 	// Warnings — v0.10.818: küme düzeyi kırmızı uyarılar (DDL'i işlemeyen host,
 	// erişilemeyen host). Notes bilgi, Warnings eylem ister.
 	Warnings []string `json:"warnings,omitempty"`
+	// StatePaths — v0.10.965: state tablolarının ZK yolu hükmü (eski / karışık /
+	// eksik) ve boot kilidi (state_path_check.go). Yeni okuma YOK; tek düğümde nil.
+	StatePaths *StatePathCheck `json:"statePaths,omitempty"`
 }
 
 // Kararlar — FE rozet/metin bunlara göre (adminch/replicaConsistency.ts).
@@ -824,6 +831,9 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		return nil, fmt.Errorf("system.parts: %w", err) // yarım sayım = sahte ıraksama
 	}
 
+	// v0.10.965 — state tablolarının ZK yolu hükmü: aynı okumalardan, SAF.
+	out.StatePaths = statePathCheckFor(byTable, engineOf, hostNames, len(hostRows), s.zkPrefix())
+
 	// Grupla + karar. v0.10.818: hiçbir host'ta Replicated olmayan MergeTree
 	// tabloları da listeye girer (engineOf'tan) — eskiden kart onları hiç
 	// görmüyordu (spans_local tamamen düz MergeTree olsa sessizdi).
@@ -872,6 +882,9 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		}
 		sort.Ints(shards)
 		tbl := ReplicaTable{Table: t}
+		if stateProbeTable(t) {
+			tbl.StatePath = statePathKind(byTable[t], s.zkPrefix(), t) // v0.10.965
+		}
 		// v0.10.846 — ürün bu tabloyu yönetiyor mu? Karar shard'lardan ÖNCE
 		// verilir, çünkü kapsama ölçüsünün koşup koşmayacağını o belirler.
 		tbl.Catalog, tbl.RemovedSince = catalogVerdictFor(t, managedTables)

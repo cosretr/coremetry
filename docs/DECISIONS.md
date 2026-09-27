@@ -858,3 +858,46 @@ ekleme o pakette, `effectiveTokenFor` dışa kapalı; onaylı denetimin planı).
 DevOps kanıtı geç gelir ve ayrı yazarlıdır, bu yüzden olay satırına kopyalanmaz, okurken
 birleştirilir. **Faz 1 davranış değiştirmez:** ayarlar, okuyucu, tablolar; hiçbir işçi başlamaz,
 bayraklar kapalı. Faz 2–5 her biri kendi §11 sorgu paketi yanıtlarını bekler.
+
+## 2026-09-27 — On state tablosu birleşik ZK yolunda yeniden kurulur: sihirbaz, veri kaybı kabul, taşıma yok (v0.10.965)
+
+**Karar (operatör: "sihirbaza ekle … düzeltmesi ve kontrolü"; "2 için önerin a"; "3 için de data
+kaybı önemsiz"):** Prod'da (v0.10.960, 4 host / 2 shard) on state tablosu eski shard'lı ZK yolunda
+(`/clickhouse/tables/<shard>/<ad>`) ve her biri iki replikasyon grubuna bölünmüş: `ingest_ledger`,
+`ai_eval_runs` ve sekiz Rollouts v2 tablosu (`rollout_events`, `rollout_workload_state`,
+`argocd_app_status`, `argocd_sync_events`, `argocd_app_mapping`, `rollout_classification`,
+`ado_commit_enrichment`, `rollout_worker_runs`). Denetim ve düzeltme Admin → ClickHouse → Replika
+tutarlılığı kartına eklendi (Rollouts kartına değil; oradaki 0015 ön kontrolü bağımsız son kontrol
+olarak kalır). Düzeltme on tablonun HEPSİ için DROP (`ON CLUSTER … SYNC`) ve birleşik yolda
+(`<önek>/state/<ad>`, replika `{shard}-{replica}`) CREATE; önce hepsi düşer ve her host'ta gittiği
+yoklanır, sonra hepsi kurulur ve doğrulanır.
+- `ingest_ledger` (türev sayaç defteri): en fazla 30 günlük filo defteri geçmişi gider (öneri a).
+- `ai_eval_runs` (normalde korunan sınıf): evalset koşu geçmişinin kaybı kabul; çalışan koşu varsa ret.
+- Sekiz Rollouts v2 tablosu yalnız BOŞKEN ve yazıcılar kapalıyken (source v1, argocd kapalı).
+- Veri TAŞINMAZ (0009 usulü birleştirme yok). Onay planın ölçüm anını ve tablo başına satırı taşır.
+
+**Onaylanmayan:** boot kuralı değişikliği (hiç var olmayan yeni state tablosunu eski yolda başka
+tablo olsa bile her zaman birleşik yola kurmak — `useUnifiedStatePath` kural 3). Açık öneri olarak
+duruyor; kural değişmedi. Bu yüzden izin listesi dışında eski yolda kalan bir state tablosu kilidi
+kapalı tutar ve sihirbaz kısmi seçimi ancak açık onayla (`partialOK`) koşar.
+
+**Neden:** Kural 3 yüzünden tek bir eski yollu state tablosu (ilk `ingest_ledger`, v0.10.767)
+sonradan eklenen her state tablosunu bölünmüş doğurdu. Hepsi birleşik yola geçince kural 4 devreye
+girer ve kilit her pod'un bir sonraki açılışında kendiliğinden açılır.
+
+## 2026-09-27 — Rollouts v2: açık kararlar 11–23 önerilerle (16 hariç); Argo CD ayar sekmesi onaylı
+
+**Karar (operatör: "Onay rollout için önerin"):** Argo CD ayar sekmesi mockup'ı onaylı (yapımı sürüyor;
+boş tokenRef kayıtlıyı korur, keşifte uygulama/shard sayısı, kayıtlı instance kimliği salt okunur,
+instance bağlı hub kaldırılamaz). docs/rollouts/v2-audit.md §12.3'ün 11–23 kararları audit'in
+önerisiyle: 11 Argo Rollouts dilimi yalnız §11 R bulursa; 12 DeploymentConfig "kapsanmıyor" (pay
+anlamlı değilse); 13 JBoss/k8s-dışı için span'den çıkarılan sürüm "çıkarım" etiketli yedek, KSM
+olaylarına karışmaz; 14 eski `?rollout=` bağlantıları TTL'e dek eski tablodan, yenisi 6 parçalı
+anahtar; 15 metrics-only modda tahmin gösterilir, açıkça etiketli; 17 tetikleyici Problem puanına
+girmez, yalnız kanıtta; 18 v2'de Problem/olay üretilmez; 19 RecentDeploy kaynağı P2.5'te
+rollout_events; 20 DevOps PAT önce tokenRef, Build (Read) yalnız pipeline commit status
+yazmıyorsa; 21 ikinci atlama P4'te §11 V sonrası isteğe bağlı; 22 out_of_band aktör göstermez;
+23 etki okumada hesaplanır (P5). **16 (operatör, 2026-09-27: "servis adı eki olsun ama env
+bulamazsa env parçacığına da baksın"):** ortamın asıl kaynağı servis adı eki (`-prod/-int/-uat/-prep`);
+ek yoksa ya da tanınmazsa Argo uygulama adındaki `<env>` parçası. `envList` bu ek sözlüğüyle hizalı.
+26–30 karar değil, ortam bilgisi (§11). Hiçbiri P2.2'den önce koda girmez.
