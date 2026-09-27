@@ -604,6 +604,10 @@ func main() {
 	// alerts / notifications / topology aggregation / retention run DUPLICATED.
 	// Loud boot warning + a /admin/stats flag (SetLockDegraded below).
 	lockDegraded := isLockDegraded(cfg.Redis.URL != "", redisConnected)
+	// v0.10.982 — canlı degraded bayrağı: Redis yeniden bağlanınca (reprobe)
+	// LeaderTTL(1 dk) pay sonra düşer (holder'lar takası bir kalp atışı sonra
+	// fark eder); rollout dedektörü bu sürede her tik durumu CH'den tazeler.
+	lockDegradedNow := cache.NewDegradedFlag(lockDegraded)
 	if lockDegraded {
 		log.Printf("[leader] WARNING: COREMETRY_REDIS_URL is set but Redis is unreachable — " +
 			"this pod runs the ALWAYS-LEADER fallback lock. If you run more than one replica, " +
@@ -1216,6 +1220,27 @@ func main() {
 		rolloutLeader.SetOnAcquire(func() { rolloutRec.Tick(ctx) })
 		rolloutLeader.Start(chstore.WithQueryTag(ctx, "worker:rollout-reconciler"))
 		go rolloutRec.Run(ctx)
+		// v0.10.982 — ROLLOUTS v2 P2.2: canlı KSM dedektörü (rollout_events +
+		// rollout_workload_state tek yazıcısı), kendi kilidi "rollout-detector".
+		// Bayrak: rollouts.enabled VE rollouts.source="v2". Hedefler: etkin
+		// Remote Cluster'lar, Argo hub'ları DAHİL (karar 5). Kilit ve döngü
+		// bayrak İLK kez açılınca başlar (WaitActive): varsayılan kurulumda
+		// Redis anahtarı, kalp atışı ve günlük satırı da yok. Edinimde bellek
+		// düşer, ilk tik durumu CH'den kurar (OnAcquire → Tick). lockDegraded
+		// sürerken her tik durumu CH'den tazeler (§10.3.1 mint öncesi okuma).
+		rolloutDet := rollout.NewV2Detector(store, rollout.V2ThanosQuerier{Svc: thanosSvc},
+			rollout.V2ThanosClusters{Svc: thanosSvc}, rolloutSettings.Current)
+		rolloutDet.SetDegradedCheck(lockDegradedNow.Load)
+		go func() {
+			if !rolloutDet.WaitActive(ctx, 30*time.Second) {
+				return
+			}
+			rolloutDetLeader := cache.NewLeaderHolder(lockImpl, rollout.WorkerRolloutDetector, cache.LeaderTTL(time.Minute))
+			rolloutDet.SetLeaderCheck(rolloutDetLeader.IsLeader)
+			rolloutDetLeader.SetOnAcquire(func() { rolloutDet.OnAcquire(); rolloutDet.Tick(ctx) })
+			rolloutDetLeader.Start(chstore.WithQueryTag(ctx, "worker:rollout-detector"))
+			rolloutDet.Run(ctx)
+		}()
 	}
 	// v0.9.1150 — dış VictoriaMetrics OKUMA backend'i (tempo/thanos
 	// simetriği): blob'u boot'ta yükle + 30s multi-pod senkron poll'u.
@@ -1438,6 +1463,8 @@ func main() {
 			return cache.New(cfg.Redis.URL)
 		}, cacheSw, lockSw, func() {
 			srv.SetLockDegraded(false)
+			// Hemen false değil: her pod bir kalp atışı daha lider kalır.
+			lockDegradedNow.ClearAfter(cache.LeaderTTL(time.Minute))
 			bus.StartBridge(ctx)
 			srv.StartCacheInvalidation(ctx)
 		})

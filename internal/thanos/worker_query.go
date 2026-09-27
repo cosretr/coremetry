@@ -92,6 +92,12 @@ type WorkerLimits struct {
 	// Dedup — nil → true. Açık false yalnız bilinçli HA-ham okuma için.
 	Dedup           *bool
 	PartialResponse bool // partial_response= (varsayılan false)
+	// Time — v0.10.982 — sıfır değilse anlık sorgunun değerlendirme zamanı
+	// (time=<unix.ms>). Aynı tikin sorgularını TEK zamana sabitlemek için
+	// (rollout dedektörü): sabitlenmezse her sorgu sunucunun kendi "şimdi"sinde
+	// değerlendirilir ve ardışık sorgular farklı scrape'leri okuyabilir.
+	// Sıfır → parametre gönderilmez (önceki davranış).
+	Time time.Time
 }
 
 func (l WorkerLimits) normalized() WorkerLimits {
@@ -171,6 +177,9 @@ func (s *Service) WorkerQuery(ctx context.Context, clusterID, expr string, lim W
 	form := url.Values{
 		"query": {eff},
 		"dedup": {strconv.FormatBool(*lim.Dedup)},
+	}
+	if !lim.Time.IsZero() {
+		form.Set("time", strconv.FormatFloat(float64(lim.Time.UnixMilli())/1000, 'f', 3, 64))
 	}
 	// consoleEval partial_response + timeout'u cl'den yazar, akışlı çözer,
 	// konumu geri çevirir; dedup form'da kalır.

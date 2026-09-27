@@ -625,6 +625,9 @@ type v2Work struct {
 	lastUp  *V2Event        // last'ın güncel kopyası
 	fresh   *V2Event        // bu tikte açılan olay
 	started bool
+	// holdUnknown — v0.10.982 — artışsız yeni revizyon (evidence_without_bump):
+	// bilinmeyen mevcut revizyonlar known_revisions'a KATILMAZ.
+	holdUnknown bool
 }
 
 // open — iş yükünün açık olayı (bu tikte açılan ya da süren), yoksa nil.
@@ -670,8 +673,14 @@ func (d *v2Detector) advance(k V2Key, o V2Observation, st V2WorkloadState, last 
 		d.count("late_evidence")
 		d.start(w, w.ns.Generation, o.SampleAt, ev.target, V2ChangeRollout, "geç kanıt: revizyon nesil artışından sonra göründü")
 	case ev.kind == v2EvNew:
+		// v0.10.982 — P2.2 incelemesi: revizyon, nesil artışından ÖNCE
+		// görünebilir (tikin sorguları farklı scrape'leri okur ya da KSM
+		// informer kayması). Burada known'a katılsaydı artış geldiği tik yeni
+		// revizyon "bilinen" sayılır → sahte ROLLBACK + önceki başarılı
+		// rollout rolled_back. Bilinmeyen kalır; artış gelince rollout/config.
 		d.count("evidence_without_bump")
 		d.entry(k, "evidence_without_bump", ev.target)
+		w.holdUnknown = true
 	default:
 		d.count("reactivation_without_bump")
 		d.entry(k, "reactivation_without_bump", ev.target)
@@ -694,6 +703,9 @@ func (d *v2Detector) advance(k V2Key, o V2Observation, st V2WorkloadState, last 
 	}
 
 	present := v2Present(o)
+	if w.holdUnknown {
+		present = v2OnlyKnown(present, st.KnownRevisions)
+	}
 	w.ns.KnownRevisions = d.boundKnown(k, v2Union(st.KnownRevisions, present, w.ns.CurrentRevision), present, w.ns.CurrentRevision)
 	if im := v2ImagesOf(o, w.ns.CurrentRevision); len(im) > 0 || w.ns.CurrentRevision != st.CurrentRevision {
 		w.ns.Images = im
@@ -1244,6 +1256,17 @@ func v2Present(o V2Observation) []string {
 		return v2CloneStrings(o.RevisionHashes)
 	}
 	return nil
+}
+
+// v2OnlyKnown — v0.10.982 — present'in known'da olan öğeleri (sıra korunur).
+func v2OnlyKnown(present, known []string) []string {
+	var out []string
+	for _, p := range present {
+		if v2Has(known, p) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // v2Union — known (sırası korunur) + yeni mevcutlar (sıralı) + hedef.

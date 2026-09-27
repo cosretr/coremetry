@@ -767,9 +767,13 @@ func TestRolloutsV2ProbeEarlyStop(t *testing.T) {
 
 // ── Bütçe ────────────────────────────────────────────────────────────────
 
+// v0.10.982 — tam paket yükü altında 1 ms bütçe zamana bağlıydı (zamanlayıcı
+// gecikince 60'tan fazla çağrı koşabiliyordu; bir kez düştü). Bütçe 0:
+// context.WithTimeout(0) bağlamı OLUŞURKEN iptal eder → ilk bütçe kapısından
+// itibaren her sorgu deterministik olarak "run budget exhausted".
 func TestRolloutsV2ProbeBudgetExhausted(t *testing.T) {
 	e := newProbeEnv(t)
-	rolloutsV2ProbeBudget = time.Millisecond
+	rolloutsV2ProbeBudget = 0
 	e.start(t, `{}`)
 	_, m := e.get(t, "")
 	if m["status"] != "budget_exhausted" {
@@ -782,10 +786,15 @@ func TestRolloutsV2ProbeBudgetExhausted(t *testing.T) {
 			skipped++
 		}
 	}
-	// 1 ms bütçe: T (store yok) + yerel sahteye giden ilk birkaç çağrı
-	// koşabilir, kalan her şey "run budget exhausted".
-	if skipped < 200 || len(rs)-skipped > 60 {
+	// Bütçe koşu başlamadan tükenmiş: T dahil hiçbir çağrı koşmaz.
+	if skipped < 200 || skipped != len(rs) {
 		t.Errorf("%d/%d atlanan sonuç", skipped, len(rs))
+	}
+	e.fake.mu.Lock()
+	n := len(e.fake.reqs)
+	e.fake.mu.Unlock()
+	if n != 0 {
+		t.Errorf("tükenmiş bütçede sahte Thanos'a %d çağrı gitti", n)
 	}
 	as := e.audits()
 	if len(as) != 1 || !strings.Contains(as[0].Details, `"status":"budget_exhausted"`) || !strings.Contains(as[0].Details, `"errorType":"budget_exhausted"`) {

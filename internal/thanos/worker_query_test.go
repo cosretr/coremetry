@@ -302,6 +302,21 @@ func TestWorkerQueryRequestParams(t *testing.T) {
 	}
 }
 
+// v0.10.982 — WorkerLimits.Time: sabitlenen değerlendirme zamanı telde
+// time=<unix.ms> olarak gider (rollout dedektörü bir tikin sorgularını tek
+// scrape'e sabitler); sıfır değerde parametre yok (yukarıdaki test).
+func TestWorkerQueryPinnedTime(t *testing.T) {
+	f := newFakeConsoleThanos(t, false, respondWith(200, seriesBody("vector", 0)))
+	cl := consoleTestCluster(f.URL, "")
+	at := time.Date(2026, 9, 27, 10, 0, 15, 250_000_000, time.UTC)
+	if _, err := workerTestService(nil, cl).WorkerQuery(context.Background(), cl.ID, "up", WorkerLimits{Time: at}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.last(t).Form["time"]; len(got) != 1 || got[0] != "1790503215.250" {
+		t.Fatalf("time = %q, beklenen tek değer 1790503215.250", got)
+	}
+}
+
 // Paylaşımlı querier: cluster matcher EffectiveQuery ile enjekte edilir;
 // NamespaceMatcher çağıranın ifadesinde durur (P1.2 birlikte kullanım).
 func TestWorkerQuerySharedQuerierInjection(t *testing.T) {

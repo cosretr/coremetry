@@ -1540,3 +1540,42 @@ func TestDetectV2_InvalidNowSkipsTick(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.982 — P2.2 incelemesi (P2.1 çekirdek hatası): yeni revizyon nesil
+// artışından ÖNCE görünürse (tikin sorguları farklı scrape okur ya da KSM
+// informer kayması) evidence_without_bump yolu onu known_revisions'a
+// katıyordu; artış geldiği tik "bilinen revizyon" → sahte ROLLBACK ve
+// önceki başarılı rollout rolled_back. Bilinmeyen kalmalı → rollout.
+func TestDetectV2_EvidenceBeforeBumpIsNotRollback(t *testing.T) {
+	t.Run("Deployment", func(t *testing.T) {
+		s := newDetSim(t)
+		s.tick(0, detSteady("api", 0, 1, "api-a"))
+		s.tick(30, detRolling("api", 30, 2, 2, "api-a", "api-b"))
+		s.tick(60, detSteady("api", 60, 2, "api-b", "api-a"))
+		// Kayma: nesil ölçüleri eski scrape'ten (g2), RS listesi yeniden (api-c var).
+		s.tick(90, detDep("api", 90, 2).rs("api-a", 0).rs("api-b", 3).rs("api-c", 1).V())
+		if k := s.st(V2KindDeployment, "api").KnownRevisions; v2Has(k, "api-c") {
+			t.Fatalf("artışsız görülen revizyon known'a katılmamalı: %v", k)
+		}
+		s.tick(120, detDep("api", 120, 3).og(3).reps(3, 4, 2, 3).rs("api-a", 0).rs("api-b", 2).rs("api-c", 2).V())
+		want := []string{"g2 rollout succeeded api-a>api-b", "g3 rollout progressing api-b>api-c"}
+		if got := s.evs(V2KindDeployment, "api"); !reflect.DeepEqual(got, want) {
+			t.Fatalf("olaylar %v, istenen %v", got, want)
+		}
+		if s.counts["evidence_without_bump"] != 1 {
+			t.Fatalf("teşhis: %v", s.counts)
+		}
+	})
+	t.Run("StatefulSet", func(t *testing.T) {
+		s := newDetSim(t)
+		s.tick(0, detSts("db", 0, 1, "db-1", "db-1").V())
+		s.tick(30, detSts("db", 30, 2, "db-1", "db-2").ready(2).V())
+		s.tick(60, detSts("db", 60, 2, "db-2", "db-2").V())
+		s.tick(90, detSts("db", 90, 2, "db-2", "db-3").V()) // kayma: update_revision nesilden önce
+		s.tick(120, detSts("db", 120, 3, "db-2", "db-3").ready(2).V())
+		want := []string{"g2 rollout succeeded db-1>db-2", "g3 rollout progressing db-2>db-3"}
+		if got := s.evs(V2KindStatefulSet, "db"); !reflect.DeepEqual(got, want) {
+			t.Fatalf("olaylar %v, istenen %v", got, want)
+		}
+	})
+}

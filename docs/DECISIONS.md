@@ -1046,3 +1046,61 @@ belleğinde, hiçbir yere yazılmaz. Asenkron (202 + yoklama): ~330 çağrı ve 
 Route'un 30 s'sini aşar. Rapor V1–V14'ü (v2detect.go başlığı) confirmed/refuted/unknown ile
 yargılar; A (§11.6) ve V (§11.7) "skipped (metrics-only)". Bilinen sınırlar: rapor pod-yerel
 (çok replikada 404 `none` + `pod`), H6 `[24h]` bölünmesi yok, arayüz yok (API + runbook).
+
+## 2026-09-27 — Rollouts v2 P2.2 canlı KSM dedektörü §11'den önce kodlandı, bayrak kapalı (v0.10.982)
+
+**Karar (operatör: "devam et … bitir işleri" — §11 probe'u henüz koşulmadan Faz 2'nin kodlanması):**
+P2.2 (`internal/rollout/v2worker.go`, `v2fetch.go`, `v2thanos.go`, `worker_run.go`;
+`internal/chstore/rollout_v2_store.go`) §11 K/D cevapları GELMEDEN yazıldı; V1–V14 doğrulanmadı.
+Bu yüzden dedektör yalnız `system_settings["rollouts"]` **enabled=true VE source="v2"** iken koşar.
+"rollout-detector" kilidi ve döngüsü bayrak İLK kez açılınca başlar (`WaitActive`, 30 s yoklama):
+varsayılan kurulumda sorgu, CH okuması, koşu satırı, Redis anahtarı, kalp atışı ya da günlük satırı
+yok. source=v2 P2.3'te okuma yolunu da çevireceği için bayrak §11 sonuçları + P2.3 ile birlikte
+açılır. Doğrulanmamış varsayıma dayanan her yer fail-safe: yazmak yerine atla + koşu teşhisinde say.
+- **Açmadan önce doğrulanacaklar:** K1.D/K1.S/K1.DS (V1: generation + observed_generation üç türde),
+  K2.1/K2.3 (V2: `namespace`+tür etiketi, `owner_is_controller` değerleri — sorgu yalnız açık
+  `"false"`'u dışlar), K1 (V2b STS revizyon serileri), K1.R/K3 (V3: RS owner/spec, 50k tavanı),
+  K1/K6.4 (V4: `_created` yokluğu; varsa incarnation ondan), K0.5/K0.6 (V5: `timestamp()` iç
+  toplamada scrape zamanı; V9 tazelik — dedektör `up`/ikinci KSM denetlemez, yerine toplu yokluk
+  koruması), K0.4 (V6: `max by` + dedup=true sonrası tek seri), K2.3c (V7), K2.4b (V8 DS hash),
+  K1.H/K5 (V10 yazım hacmi), D (V12: DC kapsam dışı), K2.2 (V14 imaj birleşimi; STS pod
+  `controller-revision-hash` = `update_revision` adı). Ek: querier `max by (__name__, …)` ile
+  metrik adını korumalı (§11 K1 biçimi; korumazsa bütün ölçüler `fetch_bad_sample`, satır yok) ve
+  anlık sorguda `time=` parametresini kabul etmeli (dedektör tik sorgularını sabitler).
+- **Tasarım kararları:** tik başına TEK `rollout_worker_runs` satırı (anahtar (worker, started_at,
+  host) küme başına satırı çökertirdi; teşhis sayaçları `error` kolonunda, 0015 bayt-eşliği
+  değişmez); hedefler etkin, URL'li **bütün** Remote Cluster'lar — Argo hub'ları DAHİL (karar 5 /
+  §5.6: hub sıradan kayıttır, entity ve rollout işlemesi de alır; v1 reconciler da ayırmaz); bir
+  kümenin bütün tik sorguları tek değerlendirme zamanında (tik − 15 s, `WorkerLimits.Time`) — aksi
+  hâlde ardışık sorgular farklı scrape okuyup yeni RS'yi nesil artışından önce görebilir; lider
+  belleği tikler arasında taşınır, edinim / liderlik kaybı / tik sırasında yeniden edinim /
+  bayrak kapanışı / yazım hatası onu düşürür ve durum CH'den (FINAL keyset) kurulur —
+  `V2Memory.Absent` DDL'de olmadığından boş başlar (çekirdek sözleşmesi). İmajlar açık olaylı,
+  bekleyen, nesli değişmiş ya da ilk kez görülen iş yükleri için (≤100 iş yükü, ≤20 sorgu) +
+  artan bütçeyle imajı boş durumlar (bootstrap baseline'ı; ≤20/tik; okuması boş dönen aday —
+  ör. STS'de V8 etiketi yok — 2ⁿ tik, en çok 64, geri çekilir ki sonraki adaylar aç kalmasın);
+  imaj okunamazsa fark atlanmaz, change_type çekirdeğin kuralıyla `rollout` kalır ve açık olayda
+  sonradan düzelir.
+- **`lockDegraded` (§10.3.1 mint öncesi okuma):** dedektör atlamaz (v1 gibi, §10.4) ama bu sürede
+  durumu HER tik CH'den tazeler (yokluk sayaçları yereldir, korunur). Tek yazıcıda bellek CH'nin
+  kendi yazdığımız görüntüsüdür; iki pod aynı yeni iş yüküne aynı tikte farklı incarnation basarsa
+  sonraki tik ikisi de en yeni incarnation'a yakınsar (lost-state kuralı), eskisinin açık olayı
+  kapanır — kalan risk yeni iş yükü başına en çok bir yinelenen `initial` satırı (`host`
+  kolonuyla görünür). Maliyet yalnız degraded'da: pod × küme × tik başına iki keyset okuması.
+  Redis reprobe'u gerçek kilidi takınca bayrak LeaderTTL(1 dk) = 3 dk daha doğru kalır
+  (`cache.DegradedFlag`): holder'lar takası bir kalp atışı (≤60 s) sonra fark eder, diğer
+  pod'lar kendi reprobe'larına dek Noop'ta liderdir — çok yazıcılı pencere bu kadar sürer.
+- **Toplu yokluk koruması (V9 fail-safe, SÜRE SINIRLI):** taban = son kabul edilen tam okumada
+  görünen iş yükleri; ailesi büsbütün yok okunan türde (çekirdek family_absent) taban düşmez —
+  sonraki kısmi geri dönüş de korumayı tetikler. Yeniden kurulumdan sonraki ilk okumada taban
+  last_seen_at'i son 25 sa (v2TouchEvery + 1 sa) içindeki durumlar, güncel incarnation'ının son
+  olayı "gone" ile superseded kapanmış olanlar hariç; son 25 sa içinde açık olaysız silinenler yine
+  sayılır (hata güvenli yönde: kapanış ≤30 dk gecikir, `mass_absence_rebuilt_base` teşhisi —
+  tabanı ilk okumadan tohumlamak kısmi okumayla açılan yeniden kurulumda korumayı kapatırdı). Bir türde
+  tabanın ≥20 iş yükünün yarıdan azı görünürse o türün YOKLUK işlemesi en çok 30 dk dondurulur
+  (gone kapanışı ve yokluk sayacı geri alınır, koşu partial); görünen iş yükleri normal işlenir
+  (START/SUCCEEDED gecikmez). 30 dk'yı aşan V9 ihlali yine sahte gone + dönüşte yeni incarnation
+  üretir (bilinen sınır); süre dolunca taban sıfırlanır, sonraki düşüş korumayı yeniden tetikler.
+- **P2.1 çekirdek düzeltmesi:** artışsız görülen yeni revizyon (`evidence_without_bump`) artık
+  `known_revisions`'a katılmaz — katılırsa artış geldiği tik sahte ROLLBACK yazılır ve önceki
+  başarılı rollout `rolled_back` olurdu (sorgu kayması ya da KSM informer kayması).
