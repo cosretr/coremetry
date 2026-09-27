@@ -83,24 +83,28 @@ export function LDAPUserPicker() {
           ikisini de sıfırlayarak başlar. */}
       {(error !== null || results !== null) && (
         // v0.10.942 — statik tablo: seçici liste (≤25 arama sonucu, Provision ile seçilir; T1).
-        // Hücre dolgusu (6px) bu sıkı listenin ritmi; sınıf karşılığı yok, satır içi kalır.
+        // v0.10.977 — dilim 3'ün "sınıf karşılığı yok" diye bıraktığı 6px hücre
+        // dolgusu ve satırın kendi üst çizgisi düştü: hücreler taban `tbody td`
+        // ritminde (T5/T6, yoğunluk ayarı artık ulaşır), ayraç yalnız `tbody tr`
+        // alt çizgisi (T2 — çift ayraç yok). Başlık dolgusu da tabana indi ki
+        // sütun metni hücreyle hizalı kalsın; eylem sütunu tek sağ sütun (T8).
         <table>
           <thead>
             <tr style={{ background: 'var(--bg)', color: 'var(--text2)' }}>
-              <th style={{ padding: 6, textAlign: 'left' }}>Name</th>
-              <th style={{ padding: 6, textAlign: 'left' }}>Username</th>
-              <th style={{ padding: 6, textAlign: 'left' }}>Email</th>
-              <th style={{ padding: 6, textAlign: 'right', width: 100 }}></th>
+              <th>Name</th>
+              <th>Username</th>
+              <th>Email</th>
+              <th className="col-actions" aria-label="Eylemler" style={{ width: 100 }} />
             </tr>
           </thead>
           <tbody>
             {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 4 <th>. */}
             {!showRows ? <DataTableState colSpan={4} {...searchState} /> : (results ?? []).map(u => (
-              <tr key={u.dn} style={{ borderTop: '1px solid var(--divider)' }}>
-                <td style={{ padding: 6 }}>{u.displayName || '—'}</td>
-                <td style={{ padding: 6 }}><code>{u.username}</code></td>
-                <td style={{ padding: 6 }}>{u.email || '—'}</td>
-                <td className="col-actions" style={{ padding: 6 }}>
+              <tr key={u.dn}>
+                <td>{u.displayName || '—'}</td>
+                <td><code>{u.username}</code></td>
+                <td>{u.email || '—'}</td>
+                <td className="col-actions">
                   <Button variant="secondary" size="sm" type="button"
                           onClick={() => setProvisionFor(u)}>
                     Provision

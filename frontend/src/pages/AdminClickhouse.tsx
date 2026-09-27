@@ -441,6 +441,9 @@ function DDLQueuePanel() {
               yapılacağını söylemez. */}
           <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--text2)' }}>{d.detail}</div>
 
+          {/* v0.10.977 — dtNoState: durum satırı yok — host tablosu yalnız bekleyen
+              girdi ve host varken çizilir (kendini gizleme, tarif §2: sağlıklı kuyruk
+              boş); yükleniyor / hata panelin tek okumasına ait (Spinner / Empty, yukarıda). */}
           {d.hosts && d.hosts.length > 0 && d.stuckCount > 0 && (
             <div className="table-wrap">
             <table {...hostDt.tableProps}>
@@ -470,6 +473,9 @@ function DDLQueuePanel() {
             </div>
           )}
 
+          {/* v0.10.977 — dtNoState: durum satırı yok — kuyruğun başı yalnız girdi
+              varken çizilir (kendini gizleme, tarif §2; katlanır liste, sayı özetde);
+              yükleniyor / hata panelin tek okumasına ait (Spinner / Empty, yukarıda). */}
           {d.entries && d.entries.length > 0 && (
             <details>
               <summary style={{ fontSize: 12, cursor: 'pointer', color: 'var(--text3)' }}>
@@ -864,6 +870,9 @@ export default function AdminClickhousePage() {
               </div>
             </Section>
 
+            {/* v0.10.977 — dtNoState: durum satırı yok — bölüm yalnız tamponda bekleyen
+                varken çizilir (kendini gizleme, tarif §2: sağlıklı = boş tampon);
+                yükleniyor / hata sayfanın tek okumasına ait (Spinner / Empty, yukarıda). */}
             {data.asyncInserts && data.asyncInserts.length > 0 && (
               <Section title="Async insert buffer">
                 <div className="table-wrap">
@@ -891,6 +900,9 @@ export default function AdminClickhousePage() {
                 UPDATE is being rewritten by CH. Slow / sustained
                 non-zero is the early-warning shape for the
                 operator: time to swap the mutation pattern. */}
+            {/* v0.10.977 — dtNoState: durum satırı yok — bölüm yalnız bekleyen mutasyon
+                varken çizilir (kendini gizleme, tarif §2: sağlıklı kuyruk boştur);
+                yükleniyor / hata sayfanın tek okumasına ait (Spinner / Empty, yukarıda). */}
             {data.mutations && data.mutations.length > 0 && (
               <Section title={`Pending mutations (${data.mutations.length})`}>
                 <p style={{ fontSize: 11, color: 'var(--text2)', margin: '0 0 8px' }}>
@@ -918,6 +930,9 @@ export default function AdminClickhousePage() {
               </Section>
             )}
 
+            {/* v0.10.977 — dtNoState: durum satırı yok — bölüm yalnız gecikme satırı
+                varken çizilir (kendini gizleme, tarif §2; tek düğümde hiç yok);
+                yükleniyor / hata sayfanın tek okumasına ait (Spinner / Empty, yukarıda). */}
             {data.replicationLag && data.replicationLag.length > 0 && (
               <Section title="Replication lag (cluster only)">
                 <div className="table-wrap">
@@ -1545,6 +1560,10 @@ function TopologyPanel({ topology: t }: { topology: Topology }) {
                     : t.mode === 'standalone' ? 'not required' : ''} />
       </div>
 
+      {/* v0.10.977 — dtNoState: durum satırı yok — düğüm tablosu yalnız kayıtlı düğüm
+          varken çizilir (kendini gizleme, tarif §2; tek düğümde liste yok, probe hatası /
+          bayat anlık görüntü yukarıdaki bant); topoloji sayfanın tek okumasıyla gelir
+          (Spinner / Empty, AdminClickhousePage). */}
       {t.nodes && t.nodes.length > 0 && (
         <div className="table-wrap">
           <table {...nodesDt.tableProps}>
@@ -1575,6 +1594,9 @@ function TopologyPanel({ topology: t }: { topology: Topology }) {
       {/* v0.5.419 — resolved per-table shard policy. Operator
           confirms which expression each Distributed wrapper got
           without `SHOW CREATE TABLE` round-trips. */}
+      {/* v0.10.977 — dtNoState: durum satırı yok — shard politikası yalnız Distributed
+          sarmalayıcı varken çizilir (kendini gizleme, tarif §2; tek düğümde politika
+          yok); topoloji sayfanın tek okumasıyla gelir (Spinner / Empty, AdminClickhousePage). */}
       {t.shardPolicy && Object.keys(t.shardPolicy).length > 0 && (
         <div style={{ marginTop: 12 }}>
           <div style={{
@@ -2240,6 +2262,10 @@ function DanglingMVPanel() {
           Runbook ÇIPLAK `CREATE TABLE .inner_id.<uuid>` ÖNERMEZ: bu arızayı
           üreten reçete tam olarak oydu — nesne uuid'si verilmeden kurulan
           tablo rastgele bir uuid alır ve MV onu yine bulamaz. */}
+      {/* v0.10.977 — dtNoState: durum satırı yok — bulgu listesi yalnız bulgu varken
+          çizilir (kendini gizleme, tarif §2; katlanır liste, sayılar özetde); ölçüm
+          "Ölç" düğmesinde (busy), hata rozetlerde (ölçülemedi / hedef uuid okunamadı),
+          ikisi de yukarıda. */}
       {findings.length > 0 && (
         <details style={{ marginTop: 10 }}>
           <summary style={{ cursor: 'pointer', fontSize: 12 }}>
@@ -4067,14 +4093,10 @@ export function RolloutLayerWizardPanel() {
                 <thead><tr><th>Span cluster değeri</th><th className="num">Span (15 dk)</th><th className="num">Örneklem</th><th className="num">Replicaset</th><th className="num">Image</th><th className="num">Namespace</th></tr></thead>
                 <tbody>
                   {(pre.coverage ?? []).length === 0 ? (
-                    // v0.10.954 — statik tablo durumu (T12); P-2 gelince DataTableState.
-                    <tr data-dt-state="empty">
-                      <td colSpan={6} className="dt-state">
-                        <div className="dt-state-body">
-                          <span>Son 15 dk'da span yok{pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}</span>
-                        </div>
-                      </td>
-                    </tr>
+                    // v0.10.977 — statik tablo durumu (T12): P-2 `colSpan` ile DataTableState
+                    // (v0.10.954'ün elle yazılmış ara satırı gitti; colSpan = thead'deki 6 <th>,
+                    // satırlar kazanır). Çivi: AdminClickhouse.coverageState.test.tsx.
+                    <DataTableState colSpan={6} kind="empty" message={`Son 15 dk'da span yok${pre.layer0011 ? '' : ' (cluster kolonu yok — 0011 önce)'}`} />
                   ) : (pre.coverage ?? []).map(c => (
                     <tr key={c.cluster}>
                       {/* '' = cluster'sız (k8s dışı) trafik: görünür, kapıya girmez. sampled=0 = ölçülemedi → kapı kapalı. */}

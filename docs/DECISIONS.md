@@ -996,3 +996,17 @@ kaldırılmaz, çünkü karar kalıcı değil. Plan etkisi: Faz 3.3 (argocd-api 
 geçmişi, kesin uygulama↔iş yükü eşlemesi) ve ona dayanan Faz 4 (Azure DevOps zinciri) askıda;
 Faz 3.1/3.2/3.4/3.5 metrikle sürer, sınıflandırma "tahmin" etiketiyle (karar 15). API açılınca
 sekmeye alan girmek ve 3.3'ü başlatmak yeter; ayar şeması hazır.
+
+## 2026-09-27 — Tablo standardı tamamlandı (dilim 5–7, v0.10.967 / 973 / 977)
+
+**Karar (operatör: "Önerilerine evet", "Sırayla devam"):** 2026-09-26'da açılan tablo standardı
+(dört tür, sessiz satır, renk yalnız sapmada, durumlar tablonun içinde) yedi dilimde bitti.
+Dilim 5 primitife `detail` (durum satırında link/CTA) ve `colSpan` (statik tablo durumları)
+ekledi; 6–7 kalan sayaçları süpürdü. `tableUnityRatchet` tavanları ölçülen değerde ve SON:
+rawTable 47 (9 T1-muaf sohbet/lejant/iskelet + 38 gerekçeli statik), tdStyle 60 (lejant
+tabloları, dinamik opaklık/maxWidth gerekçeli), containIntrinsicSize 3, trTitle 2,
+inlineMonoStack 4 (uPlot canvas font dizgisi — var() çözülemez; çözümlü font token'ı
+gelirse düşer), dtNoState 16 (kendini gizleyen "sağlıklı = boş" bölümleri, yorumla
+gerekçeli); diğer altı sayaç 0. Kalan her sayı ratchet'in kendi yorumunda dosya+gerekçeyle
+listeli; düşüş yeni bir olanak (KeyValue sıkı kip, canvas font token'ı) gerektirir, artış
+suçlu dosyada düzeltilir, tavan yükseltilmez.

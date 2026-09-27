@@ -188,14 +188,19 @@ export function ZoomChannelPicker({
               }}>{err}</div>
             )}
 
-            <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 4 }}>
+            {/* v0.10.977 — tablo standardı T10: iç kaydırmalı kap paylaşılan
+                `table-wrap is-scroll` (tek çerçeve; yapışkan başlık, opak zemini ve
+                alt çizgisi `thead th` kuralından). Elle çizilen kenarlık ve satır
+                içi yapışkan başlık düştü. Yükseklik yine diyaloğun flex sütunundan
+                (maxHeight 82vh): `flex: 1` kalır, maxHeight yok. */}
+            <div className="table-wrap is-scroll" style={{ flex: 1 }}>
               {/* v0.10.942 — statik tablo: seçici liste, satır tıkı JID'i forma yazar (T1). */}
               <table>
-                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg1)', zIndex: 1 }}>
+                <thead>
                   <tr>
-                    <th style={{ textAlign: 'left' }}>Name</th>
-                    <th style={{ textAlign: 'left' }}>Type</th>
-                    <th style={{ textAlign: 'left' }}>JID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>JID</th>
                   </tr>
                 </thead>
                 <tbody>

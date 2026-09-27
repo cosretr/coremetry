@@ -947,8 +947,10 @@ function LinkedTracesSection({ id, pageRange }: { id: string; pageRange: TimeRan
             title={r.dir === 'out' ? 'This trace links to' : 'Linked from another trace'}>
             {r.dir === 'out' ? '→ links to' : '← linked from'}
           </span>
+          {/* v0.10.977 — T5 tek monospace yığını: `var(--font-mono)` (tablo dışı
+              öğelerde yazı boyu olduğu gibi kalır, yalnız yüz birleşti). */}
           <Link to={traceHref(r.other, { pageRange })}
-            style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
             {r.other.slice(0, 8)}…
           </Link>
           <CopyButton value={r.other} title="Copy linked trace ID" />
@@ -1202,7 +1204,7 @@ function SharePopover({ traceId }: { traceId: string }) {
               <div style={{ display: 'flex', gap: 6 }}>
                 <input value={publicURL} readOnly
                   onClick={e => (e.target as HTMLInputElement).select()}
-                  style={{ flex: 1, fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
+                  style={{ flex: 1, fontSize: 11, fontFamily: 'var(--font-mono)' }} />
                 <Button variant="secondary" size="sm" onClick={copyPublic}
                   leftIcon={publicCopied ? <IconCheck /> : <IconLink />}
                   className={publicCopied ? 'is-ok' : undefined}>
@@ -1238,7 +1240,7 @@ function SharePopover({ traceId }: { traceId: string }) {
                     fontSize: 11, color: 'var(--text2)',
                   }}>
                     <span style={{
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontFamily: 'var(--font-mono)',
                       flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }} title={`${s.createdBy || 'unknown'} · expires ${tsLong(s.expiresAt)}`}>
                       …{s.token.slice(-8)} · {s.createdBy || 'unknown'}
@@ -1305,7 +1307,7 @@ function KPI({ label, value, tone }: {
       <div style={{
         fontSize: 13, fontWeight: 600,
         color: tone === 'err' ? 'var(--err)' : 'var(--text)',
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'var(--font-mono)',
       }}>{value}</div>
     </div>
   );
@@ -1521,7 +1523,8 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
                   }}>
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
                     <span style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0 }}>
-                      <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: 'var(--text)' }}>{shortIdentity(cand.value)}</span>
+                      {/* v0.10.977 — T5: 12px + monospace = `.mono` sınıfı (tablo dışında 12px). */}
+                      <span className="mono" style={{ color: 'var(--text)' }}>{shortIdentity(cand.value)}</span>
                       {/* v0.10.569 — gevşek eşleşme İLAN EDİLİR: "buldum" ile
                           "doğruladım" ayrı şeyler; operatör tıklamadan önce bilsin. */}
                       <span style={{ fontSize: 11, color: cand.loose ? 'var(--warn)' : 'var(--text3)' }}>

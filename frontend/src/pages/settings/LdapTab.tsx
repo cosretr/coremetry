@@ -268,26 +268,30 @@ export function LDAPTab() {
           highest-privilege match. Group string can be a full DN or a CN
           fragment — match is case-insensitive substring.
         </p>
-        {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi (T1). Hücre dolgusu
-            (4px) giriş kutularını sıkı tutar; sınıf karşılığı yok, satır içi kalır. */}
+        {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi (T1).
+            v0.10.977 — dilim 3'ün "sınıf karşılığı yok" diye bıraktığı 4px hücre
+            dolgusu düştü: giriş kutuları taban `tbody td` ritminde (T5/T6,
+            yoğunluk ayarı artık ulaşır); silme hücresi tek sağ eylem sütunu
+            (`col-actions`, T8). Başlık dolgusu da tabana indi ki sütun metni
+            hücreyle hizalı kalsın. */}
         <table style={{ marginBottom: 8 }}>
           <thead>
             <tr style={{ background: 'var(--bg)', color: 'var(--text2)' }}>
-              <th style={{ padding: 6, textAlign: 'left' }}>Group (DN or CN substring)</th>
-              <th style={{ padding: 6, textAlign: 'left', width: 160 }}>Role</th>
-              <th style={{ padding: 6, width: 32 }}></th>
+              <th>Group (DN or CN substring)</th>
+              <th style={{ width: 160 }}>Role</th>
+              <th className="col-actions" aria-label="Eylemler" style={{ width: 32 }} />
             </tr>
           </thead>
           <tbody>
             {(cfg.groupRoleMap || []).map((m, i) => (
               <tr key={i}>
-                <td style={{ padding: 4 }}>
+                <td>
                   <input value={m.group}
                          onChange={e => updateMapping(cfg, setCfg, i, { group: e.target.value })}
                          placeholder="CN=Coremetry-Admins,OU=Groups,DC=corp,DC=example"
                          style={{ width: '100%' }} />
                 </td>
-                <td style={{ padding: 4 }}>
+                <td>
                   <select value={m.role}
                           onChange={e => updateMapping(cfg, setCfg, i, { role: e.target.value as Role })}>
                     <option value="admin">admin</option>
@@ -295,7 +299,7 @@ export function LDAPTab() {
                     <option value="viewer">viewer</option>
                   </select>
                 </td>
-                <td style={{ padding: 4, textAlign: 'center' }}>
+                <td className="col-actions">
                   <Button variant="ghost-danger" size="sm"
                           onClick={() => removeMapping(cfg, setCfg, i)}
                           title="Remove this group mapping"

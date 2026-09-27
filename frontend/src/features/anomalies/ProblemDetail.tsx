@@ -30,6 +30,7 @@ import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import type { ExceptionGroup, ExceptionGroupState, Problem, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
+import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable'; // v0.10.977 (T12, P-2)
 import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.922 (sade palet adım 1)
 import { TriageStatusBadge, ProblemStatusBadge } from './statusTone'; // v0.10.929 (K5) — hafif yaprak
 import { PageShell } from '@/components/ui/PageShell';
@@ -358,6 +359,17 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   // "örnek yok" demek değildir. v0.9.795: tarama partili, üç ayrı son var
   // (tavan / pencere bitti / gerçekten yok) ve üçü ayrı cümle.
   const emptyNote = emptySamplesNote(samplesQ.data, 'No sample traces.');
+  // v0.10.977 — statik tablo durumu (T12, P-2): örnek tablosunun elle yazılmış
+  // yükleniyor / boş satırları tek `<DataTableState colSpan>`; yüklem eskisiyle
+  // aynı (isLoading → iskelet, boşken emptyNote). Tarama tavanı (warn)
+  // hata türüyle sunulur ki uyarı tonu ve ⚠ kalsın — glifi QueryErrorInline
+  // kendisi bastığı için metnin öndeki '⚠ ' eki düşer. Yeniden deneme
+  // eskiden de yoktu. Başlık kutusundaki (stack kartı) kopya olduğu gibi.
+  const samplesState: Omit<DataTableStateStaticProps, 'colSpan'> = samplesQ.isLoading
+    ? { kind: 'loading' }
+    : emptyNote.warn
+      ? { kind: 'error', message: emptyNote.text.replace(/^⚠\s*/, '') }
+      : { kind: 'empty', message: emptyNote.text };
 
   // Occurrences-over-time is a real server-side, gap-filled COUNT over the
   // group's whole window (v0.8.309) — NOT bucketed from the sampled
@@ -698,15 +710,12 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           <div className="ov-card-h"><h3>Sample traces</h3>{samples.length > 0 && <span className="ov-sub">{Math.min(samples.length, 14)}{samples.length > 14 ? ` / ${samples.length}` : ''}</span>}</div>
           <div className="table-wrap">
             {/* v0.10.945 — statik tablo (T1): başlıksız kompakt örnek listesi, en çok 14 satır,
-                sıra sunucunun; DataTable'a göç başlık satırı ekler (görsel), bu dilimde değil. */}
+                sıra sunucunun; DataTable'a göç başlık satırı ekler (görsel), bu dilimde değil.
+                v0.10.977 — statik tablo durumu (T12, P-2): yükleniyor / boş / tavan
+                uyarısı tek DataTableState; colSpan = satırdaki 3 hücre (başlık yok). */}
             <table>
               <tbody>
-                {samplesQ.isLoading && <tr><td style={{ padding: 12 }}><Spinner /></td></tr>}
-                {!samplesQ.isLoading && samples.length === 0 && (
-                  <tr><td className={emptyNote.warn ? 'cell-warn' : 'cell-faint'} style={{ padding: 12 }}>
-                    {emptyNote.text}
-                  </td></tr>
-                )}
+                {(samplesQ.isLoading || samples.length === 0) && <DataTableState colSpan={3} {...samplesState} />}
                 {samples.slice(0, 14).map((s, i) => {
                   const isEv = !!s.traceId && evTraces.includes(s.traceId);
                   return (
@@ -715,6 +724,8 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                   <tr key={i} data-trace-id={s.traceId || undefined}
                     className={isEv ? 'wf-evidence' : undefined}
                     {...(s.traceId ? rowActivation(() => navigate(traceHref(s.traceId!))) : {})}>
+                    {/* v0.10.977 — uç hücrelerin 14px kenar dolgusu kart kenarıyla hizalanır
+                        (başlıksız liste; §2b özel dolgu, sınıf karşılığı yok). */}
                     <td className="mono" style={{ paddingLeft: 14 }}>
                       <span style={{ color: 'var(--accent2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: 150 }}>
                         {s.traceId ? s.traceId.slice(0, 16) + '…' : '—'}
