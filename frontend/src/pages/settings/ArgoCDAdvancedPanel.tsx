@@ -12,8 +12,10 @@ import {
 // Aralıklar ve varsayılanlar GET `bounds`tan (sunucunun intField tablosu —
 // kod ve arayüz ayrışamaz); boş kutu = varsayılan (PUT'ta 0). Çapraz alanlar
 // (out_of_band ≥ pencere, namespace güveni < ad güveni) ETKİN değerlerle,
-// sunucunun hata yoluyla. Pin düzenleyicisi Faz 3'te: burada yalnız sayı ve
-// bağlı instance'lar; Kaydet pins[]'i olduğu gibi geri gönderir.
+// sunucunun hata yoluyla. Pin düzenleyicisi yok: burada yalnız sayı ve bağlı
+// instance'lar; Kaydet pins[]'i olduğu gibi geri gönderir. v0.10.985 (P3.2):
+// notun metni pinlerin NE ZAMAN kullanıldığını söyler (metrik işçisi açıkken
+// eşleyici her mapperMin turunda; GitOps sekmesi işçi kapalıyken de uygular).
 // v0.10.974 — pins notunun açıklığı sekmede (`pinsOpen`): sunucunun
 // `pins[i]…` 400'ünün bağlantısı notu açıp başlığına odaklanır; kip seçimi
 // `classification.metricsOnlyMode` 400'ünü alanın altında gösterir.
@@ -91,12 +93,14 @@ export function ArgoCDAdvancedPanel({ draft, bounds, pins, issues, open, onOpen,
               Elle eşlemeler <span className="mono cell-faint">pins</span>
             </DisclosureButton>
           </h3>
-          <span style={SUMMARY}>{pins.length} kayıt (API ile yazıldı) · Faz 3'ten itibaren kullanılır</span>
+          <span style={SUMMARY}>{pins.length} kayıt (API ile yazıldı) · GitOps sekmesi ve eşleyici kullanır</span>
         </div>
         {pinsOpen && (
           <p id="acd-pins-body" style={TEXT}>
-            Bir iş yükünü bir Application'a elle bağlar. Faz 3'teki eşleyici pin'leri <code>match_method='manual'</code> olarak alır; elle
-            bağlantı otomatik eşlemenin önüne geçer. Düzenleyici o fazla gelir — şimdilik yalnız API: <code>PUT /api/settings/argocd</code>{' '}
+            Bir iş yükünü bir Application'a elle bağlar; elle bağlantı o iş yükü için ad tahminini devre dışı bırakır. Metrik işçisi
+            (<code>argocd-metrics</code>) açıkken eşleyici pin'leri her turda (<code>intervals.mapperMin</code>){' '}
+            <code>argocd_app_mapping</code>'e <code>match_method='manual'</code> olarak kopyalar; GitOps sekmesi işçi kapalıyken de pin'leri
+            istek anında uygular. Düzenleyici yok — şimdilik yalnız API: <code>PUT /api/settings/argocd</code>{' '}
             gövdesinde <code>pins[]</code>. Kaydet <code>pins[]</code>'i olduğu gibi geri gönderir. Pin'i olan instance tablodan kaldırılamaz;
             önce API'den pin'leri kaldırın. Bağlı instance'lar: <span className="mono">{pinsList}</span>.
           </p>

@@ -1253,6 +1253,9 @@ func main() {
 		argoMetrics := argocd.NewMetricsWorker(store, argocd.ThanosMetricsQuerier{Svc: thanosSvc},
 			argocd.ThanosRegistry{Svc: thanosSvc}, argocdSettings.Current)
 		argoMetrics.SetDegradedCheck(lockDegradedNow.Load)
+		// v0.10.985 — P3.2 eşleyici aynı işçinin içinde (aynı bayrak, aynı
+		// lider): her mapperMin argocd_app_mapping'i uzlaştırır.
+		argoMetrics.SetMapperStore(store)
 		go func() {
 			if !argoMetrics.WaitActive(ctx, 30*time.Second) {
 				return

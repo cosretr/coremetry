@@ -9,7 +9,9 @@ package argocd
 // argocd_app_info vektörünü getirir; bu dosya sorgu ifadesini kurar,
 // vektörü çözer ve uygulamaları iş yüklerine eşler.
 //
-// Eşleme (audit §6, §10.3.5; mapper P3.2 gelene kadar istek anında):
+// Eşleme (audit §6, §10.3.5; istek anında — v0.10.985'ten beri argocd-metrics
+// işçisi açıkken sekme eşleyicinin tablosundan okur, bu yol bayrak kapalıyken
+// ya da tabloda kenar yokken; kural fonksiyonları mapping.go'da ORTAK):
 //   - manual (güven 100): Settings.Pins'te iş yükü (cluster, ns, workload)
 //     ↔ (instance, appNamespace, appName) kenarı. İnsan pini otomatiği
 //     yener: pinli iş yükü için ad tahmini yapılmaz.
@@ -22,7 +24,9 @@ package argocd
 //
 // Kind yok: MV iş yükü türü taşımaz; pin (cluster, ns, workload) üzerinden
 // eşlenir. Aynı namespace'te aynı adlı Deployment + StatefulSet nadir;
-// olursa pin ikisine birden uyar (P3.2 türü taşıyacak).
+// olursa pin ikisine birden uyar. v0.10.985: eşleyicinin kenarı türü taşır
+// (manual → pinin türü, name → MV workload_kind) ama pinli iş yükü kümesi
+// de orada türsüzdür — iki yol aynı sonucu verir.
 
 import (
 	"encoding/json"
@@ -266,7 +270,10 @@ func MatchServiceApps(in ServiceMatchInput) ServiceMatchResult {
 	for _, i := range in.Settings.Instances {
 		instByID[i.ID] = i
 	}
-	// pinli iş yükü → pin listesi; pinli iş yüklerinde ad tahmini yok.
+	// pinli iş yükü → pin listesi; pinli iş yüklerinde ad tahmini yok
+	// (pinnedWorkloads / pinMatchesApp / nameEdgeMatches — mapping.go, eşleyiciyle
+	// ORTAK kural; TestMapperMatchesLiveMatcher iki yolu karşılaştırır).
+	allPinned := pinnedWorkloads(in.Settings.Pins)
 	pinned := map[wk][]Pin{}
 	for _, p := range in.Settings.Pins {
 		w := wk{ClusterID: p.ClusterID, Namespace: p.Namespace, Workload: p.Workload}
@@ -288,13 +295,13 @@ func MatchServiceApps(in ServiceMatchInput) ServiceMatchResult {
 		}
 		return Instance{}, false
 	}
-	// v0.10.983 inceleme: bu uç (/api/services/{name}/gitops) argocd bayrağına
-	// bağlı DEĞİL — işçinin geniş küme-içi kuralı (DestClusterID:
-	// IsInClusterServer, :443 / sondaki "/" / .cluster.local) buraya taşınsaydı
-	// bayrak kapalıyken GitOps sekmesinin eşleşmesi değişirdi. Bu sürümde
-	// yalnız TAM InClusterServer yazımı hub'a çözülür (v0.10.981 davranışı);
-	// geniş kural eşleyiciyle (P3.2) birlikte gelir. Test:
-	// TestMatchServiceAppsInClusterExactOnly.
+	// v0.10.983 inceleme: bu yol (/api/services/{name}/gitops'un canlı dalı)
+	// argocd bayrağına bağlı DEĞİL — işçinin geniş küme-içi kuralı
+	// (DestClusterID: IsInClusterServer, :443 / sondaki "/" / .cluster.local)
+	// buraya taşınsaydı bayrak kapalıyken GitOps sekmesinin eşleşmesi
+	// değişirdi. Yalnız TAM InClusterServer yazımı hub'a çözülür (v0.10.981
+	// davranışı). v0.10.985: geniş kural eşleyicide (BuildMapping) — o yol
+	// metricsWorker bayrağının arkasında. Test: TestMatchServiceAppsInClusterExactOnly.
 	destCluster := func(a AppStatus) string {
 		if a.DestServer == "" {
 			return ""
@@ -313,17 +320,16 @@ func MatchServiceApps(in ServiceMatchInput) ServiceMatchResult {
 		inst, instOK := instanceOf(a)
 		dc := destCluster(a)
 		app := ServiceApp{AppStatus: a, DestCluster: dc, Workloads: []ServiceWorkload{}}
+		appInst := ""
 		if instOK {
 			app.InstanceID, app.InstanceName = inst.ID, inst.Name
+			appInst = inst.ID
 		}
 		// manual
 		for w, ps := range pinned {
 			for _, p := range ps {
 				pi, ok := instByID[p.InstanceID]
-				if !ok || pi.HubClusterID != a.HubClusterID || p.AppName != a.Name || p.AppNamespace != a.AppNamespace {
-					continue
-				}
-				if instOK && inst.ID != p.InstanceID {
+				if !pinMatchesApp(p, pi, ok, a, appInst) {
 					continue
 				}
 				app.Workloads = append(app.Workloads, w)
@@ -337,10 +343,7 @@ func MatchServiceApps(in ServiceMatchInput) ServiceMatchResult {
 		// yükü de ad ile eklenmez — güven karışmasın)
 		if app.Match == "" {
 			for _, w := range in.Workloads {
-				if len(pinned[w]) > 0 || a.DestNamespace != w.Namespace || !nameHasPart(a.Name, w.Workload) {
-					continue
-				}
-				if dc != "" && dc != w.ClusterID {
+				if allPinned[w] || !nameEdgeMatches(a.Name, a.DestNamespace, dc, w) {
 					continue
 				}
 				app.Workloads = append(app.Workloads, w)
@@ -356,19 +359,7 @@ func MatchServiceApps(in ServiceMatchInput) ServiceMatchResult {
 		sortWorkloads(app.Workloads)
 		res.Apps = append(res.Apps, app)
 	}
-	sort.SliceStable(res.Apps, func(i, j int) bool {
-		x, y := res.Apps[i], res.Apps[j]
-		if (x.Match == MatchManual) != (y.Match == MatchManual) {
-			return x.Match == MatchManual
-		}
-		if x.HubClusterID != y.HubClusterID {
-			return x.HubClusterID < y.HubClusterID
-		}
-		if x.AppNamespace != y.AppNamespace {
-			return x.AppNamespace < y.AppNamespace
-		}
-		return x.Name < y.Name
-	})
+	sortServiceApps(res.Apps)
 	return res
 }
 

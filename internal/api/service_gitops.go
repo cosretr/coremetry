@@ -33,6 +33,14 @@ package api
 // v0.10.984 (Rollouts v2 P2.3): rollouts.source="v2" iken (2) rollout_events
 // okur (RolloutV2ForWorkloads); satır şekli aynı (RolloutRow + V2 alanları).
 //
+// v0.10.985 (Rollouts v2 P3.2): argocd-metrics işçisi açıkken (MetricsActive:
+// enabled + metricsWorker.enabled + ≥1 hub) ve servisin (cluster, ns)
+// çiftlerinde taze eşleme kenarı varken (3) hub Thanos'una GİTMEZ:
+// argocd_app_mapping + argocd_app_status son satırı + 24 sa 'sync' satırları
+// (service_gitops_mapper.go). Aksi hâlde — bayrak kapalı (varsayılan), kenar
+// yok ya da CH okuması düştü — v0.10.981 canlı yolu AYNEN. Cevap şekli aynı +
+// argo.source "mapper" | "live".
+//
 // Hata duruşu: bir hub'ın hatası yalnız o hub'ın satırına yazılır (URL/
 // token yankılanmaz — argocdProbeErrText), rollout okuma hatası yalnız
 // rollout bölümüne not düşer; iş yükü sorgusu düşerse uç hata döner
@@ -91,8 +99,11 @@ type serviceGitOpsHub struct {
 }
 
 type serviceGitOpsArgo struct {
-	Configured       bool                `json:"configured"`
-	Note             string              `json:"note,omitempty"`
+	Configured bool   `json:"configured"`
+	Note       string `json:"note,omitempty"`
+	// Source — v0.10.985: uygulamaların kaynağı; "mapper" (argocd_app_mapping)
+	// | "live" (istek anında hub Thanos'u). Argo aranmadıysa boş.
+	Source           string              `json:"source,omitempty"`
 	Hubs             []serviceGitOpsHub  `json:"hubs"`
 	Apps             []argocd.ServiceApp `json:"apps"`
 	OtherInNamespace int                 `json:"otherInNamespace"`
@@ -126,17 +137,21 @@ func (s *Server) getServiceGitOps(w http.ResponseWriter, r *http.Request) {
 	now := serviceGitOpsNow().UTC().Truncate(time.Minute)
 	svc := argocdSettingsSvc.Load()
 	var argoVer int64
+	var mapperOn bool
 	if svc != nil {
-		argoVer = svc.Current().UpdatedAt
+		cur := svc.Current()
+		argoVer, mapperOn = cur.UpdatedAt, argocd.MetricsActive(cur)
 	}
 	cm := s.serviceGitOpsClusterMaps()
 	rolloutsOn := s.rolloutCfg != nil && s.rolloutCfg.Resolved().Enabled
 	src := s.rolloutSource()
 	// Girdiler (hepsi cevabı değiştirir): servis, dakika ızgarası (pencere
 	// ondan türer), Argo blob sürümü (pin/hub), Rollouts bayrağı + okuma
-	// kaynağı (v0.10.984) ve Remote Cluster eşlemeleri (span değeri, API
-	// server URL, ad, token durumu).
-	key := fmt.Sprintf("service-gitops:svc=%s:t=%d:argo=%d:ro=%t:src=%s:cl=%s", name, now.Unix(), argoVer, rolloutsOn, src, cm.digest())
+	// kaynağı (v0.10.984), Argo kaynak kararının bayrağı (v0.10.985:
+	// metricsWorker — blob sürümünde de var ama karar girdisi açıkça
+	// anahtarda) ve Remote Cluster eşlemeleri (span değeri, API server URL,
+	// ad, token durumu). Tablodaki kenar varlığı veri: 60 s TTL taşır.
+	key := fmt.Sprintf("service-gitops:svc=%s:t=%d:argo=%d:mw=%t:ro=%t:src=%s:cl=%s", name, now.Unix(), argoVer, mapperOn, rolloutsOn, src, cm.digest())
 	s.serveCached(w, r, key, serviceGitOpsTTL, func(ctx context.Context) (any, error) {
 		ctx, cancel := context.WithTimeout(ctx, serviceGitOpsBudget)
 		defer cancel()
@@ -249,7 +264,7 @@ func (s *Server) buildServiceGitOps(ctx context.Context, name string, now time.T
 	}
 	// İş yükü düzeyi (revizyonsuz) liste: çok revizyonlu bir iş yükü tavanı
 	// yiyip ötekileri düşürmesin (v0.10.981 inceleme).
-	refs, capped, err := s.store.ServiceWorkloads(ctx, name, wFrom, now)
+	refs, capped, err := serviceGitOpsStoreOf(s).ServiceWorkloads(ctx, name, wFrom, now)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +276,7 @@ func (s *Server) buildServiceGitOps(ctx context.Context, name string, now time.T
 	}
 
 	s.serviceGitOpsRollouts(ctx, resp, workloads, rFrom, now, rolloutsOn, src)
-	s.serviceGitOpsArgo(ctx, resp, workloads, svc, cm)
+	s.serviceGitOpsArgo(ctx, resp, workloads, svc, cm, now)
 	return resp, nil
 }
 
@@ -293,7 +308,7 @@ func (s *Server) serviceGitOpsRollouts(ctx context.Context, resp *serviceGitOpsR
 	resp.Rollouts.Capped = len(rows) >= serviceGitOpsRolloutsCap
 }
 
-func (s *Server) serviceGitOpsArgo(ctx context.Context, resp *serviceGitOpsResponse, workloads []argocd.ServiceWorkload, svc *argocd.SettingsService, cm serviceGitOpsClusters) {
+func (s *Server) serviceGitOpsArgo(ctx context.Context, resp *serviceGitOpsResponse, workloads []argocd.ServiceWorkload, svc *argocd.SettingsService, cm serviceGitOpsClusters, now time.Time) {
 	if svc == nil || s.thanos == nil {
 		resp.Argo.Note = "Argo CD ayarları bu sunucuda bağlı değil"
 		return
@@ -307,6 +322,12 @@ func (s *Server) serviceGitOpsArgo(ctx context.Context, resp *serviceGitOpsRespo
 	if len(workloads) == 0 {
 		return
 	}
+	// v0.10.985 — işçi açıkken eşleyicinin tablosu; kenar yoksa / okuma
+	// düştüyse aşağıdaki canlı yol (v0.10.981) aynen.
+	if argocd.MetricsActive(cfg) && s.serviceGitOpsArgoMapper(ctx, resp, workloads, cfg, cm, now) {
+		return
+	}
+	resp.Argo.Source = serviceGitOpsSourceLive
 	nsSet := map[string]bool{}
 	var namespaces []string
 	for _, w := range workloads {

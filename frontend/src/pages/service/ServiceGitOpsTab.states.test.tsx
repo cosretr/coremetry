@@ -9,6 +9,9 @@
 //     24 sa senkron özeti) ve rollout satırı — satırın yanında o iş yüküne
 //     eşlenen Argo uygulaması + Rollouts çekmecesine bağlantı.
 //   • Hub hatası sayfayı düşürmez: o hub için tek satırlık not.
+//   • v0.10.985 — Argo kaynağı başlık rozetinde ve meta'da: "mapper" eşleyici
+//     tablosunu, "live" canlı Thanos'u söyler; source yoksa (eski cevap) rozet
+//     bugünkü gibi Thanos, meta'da kaynak notu yok. Eşleyici notu kutuda.
 //
 // NEDEN GERÇEK MOUNT: yalnız veri kancası sahte, tablo/primitifler gerçek.
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -132,5 +135,41 @@ describe('ServiceGitOpsTab', () => {
     expect(roT.querySelector('a[href^="/rollouts?rollout="]')).not.toBeNull();
     expect(el.textContent).toContain('Hub hub-west: sorgu başarısız — unauthorized: 403');
     expect(el.textContent).not.toContain('Hub hub-east');
+    // source yok (v0.10.981 cevabı): rozet Thanos, meta'da kaynak notu yok.
+    expect(argoHead(el).textContent).toContain('Thanos · argocd_app_info');
+    expect(argoHead(el).textContent).not.toContain('canlı sorgu');
+    expect(argoHead(el).textContent).not.toContain('eşleyici');
+  });
+
+  const APP = {
+    hubClusterId: 'h1', appNamespace: 'apps', name: 'p-shop-checkout-prod-e', syncStatus: 'Synced', healthStatus: 'Healthy',
+    destClusterId: 'c1', destNamespace: 'shop', match: 'name', confidence: 70, workloads: [W], syncs24h: { Succeeded: 1 },
+  };
+  const argoHead = (el: HTMLElement) => el.querySelector('#gitops-argo') as HTMLElement;
+
+  it('kaynak: eşleyici tablosu — rozet + meta + eşleyici notu', () => {
+    h.q = { ...h.q, isPending: false, data: base({
+      argo: { configured: true, source: 'mapper', otherInNamespace: 2, note: '1 eşlenmiş uygulamanın güncel durumu yok',
+        hubs: [{ hubClusterId: 'h1', status: 'ok', apps: 1 }], apps: [APP] },
+    }) };
+    const el = mount();
+    const head = argoHead(el);
+    expect(head.querySelector('.sec-head__src')?.textContent).toBe('eşleyici · argocd_app_mapping');
+    expect(head.querySelector('.sec-head__meta')?.textContent).toBe("1 uygulama · aynı namespace'te eşleşmeyen 2 · eşleyici tablosundan (işçi aralıkları kadar gecikmeli)");
+    expect(el.textContent).toContain('1 eşlenmiş uygulamanın güncel durumu yok');
+    expect(el.querySelector('table')?.textContent).toContain('p-shop-checkout-prod-e');
+  });
+
+  it('kaynak: canlı — rozet Thanos, meta "canlı sorgu"; eşleşme yokken de kaynak meta\'da', () => {
+    h.q = { ...h.q, isPending: false, data: base({ argo: { configured: true, source: 'live', hubs: [], apps: [APP], otherInNamespace: 0 } }) };
+    let el = mount();
+    expect(argoHead(el).querySelector('.sec-head__src')?.textContent).toBe('Thanos · argocd_app_info');
+    expect(argoHead(el).querySelector('.sec-head__meta')?.textContent).toBe('1 uygulama · canlı sorgu');
+    act(() => root?.unmount());
+    host?.remove();
+    h.q = { ...h.q, isPending: false, data: base({ argo: { configured: true, source: 'mapper', hubs: [], apps: [], otherInNamespace: 0 } }) };
+    el = mount();
+    expect(argoHead(el).querySelector('.sec-head__meta')?.textContent).toBe('eşleyici tablosundan (işçi aralıkları kadar gecikmeli)');
+    expect(el.textContent).toContain('Bu servisin iş yüklerine eşlenen Argo uygulaması yok');
   });
 });

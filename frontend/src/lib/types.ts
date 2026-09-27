@@ -7629,7 +7629,12 @@ export interface ServiceGitOpsHub { hubClusterId: string; hubName?: string; stat
 export interface ServiceGitOpsResponse {
   service: string; rolloutsFrom: number; workloadsFrom: number; to: number;
   workloads: ServiceGitOpsWorkload[]; workloadsCapped?: boolean; unmappedClusters?: string[];
-  argo: { configured: boolean; note?: string; hubs: ServiceGitOpsHub[]; apps: ArgoServiceApp[]; otherInNamespace: number };
+  argo: {
+    configured: boolean; note?: string; hubs: ServiceGitOpsHub[]; apps: ArgoServiceApp[]; otherInNamespace: number;
+    /** v0.10.985 (Rollouts v2 P3.2) — uygulamaların kaynağı: "mapper" = argocd-metrics işçisinin eşleme tablosu
+     *  (argocd_app_mapping + argocd_app_status), "live" = istek anında hub Thanos'u (v0.10.981). Argo aranmadıysa yok. */
+    source?: 'mapper' | 'live';
+  };
   rollouts: { enabled: boolean; note?: string; rows: WorkloadRollout[]; capped?: boolean };
 }
 

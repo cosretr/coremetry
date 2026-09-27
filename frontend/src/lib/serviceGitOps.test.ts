@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appsForWorkload, syncTone, healthTone, matchLabel, syncsSummary, syncsTotal, syncsFailed, repoShort, autoSyncLabel } from './serviceGitOps';
+import { appsForWorkload, syncTone, healthTone, matchLabel, syncsSummary, syncsTotal, syncsFailed, repoShort, autoSyncLabel, argoSourceBadge, argoSourceMeta } from './serviceGitOps';
 import type { ArgoServiceApp } from './types';
 
 // v0.10.981 — servis GitOps sekmesi yardımcıları.
@@ -70,5 +70,20 @@ describe('repoShort / autoSyncLabel', () => {
     expect(autoSyncLabel(true)).toBe('açık');
     expect(autoSyncLabel(false)).toBe('kapalı');
     expect(autoSyncLabel(undefined)).toBe('—');
+  });
+});
+
+// v0.10.985 — Argo bölümünün kaynak etiketleri (eşleyici tablosu | canlı Thanos).
+describe('argo kaynağı', () => {
+  it('rozet: eşleyici yalnız "mapper"da; diğer her durumda bugünkü Thanos rozeti', () => {
+    expect(argoSourceBadge('mapper')).toBe('eşleyici · argocd_app_mapping');
+    expect(argoSourceBadge('live')).toBe('Thanos · argocd_app_info');
+    expect(argoSourceBadge(undefined)).toBe('Thanos · argocd_app_info');
+  });
+  it('meta: kaynak yoksa boş', () => {
+    expect(argoSourceMeta('mapper')).toContain('eşleyici');
+    expect(argoSourceMeta('live')).toBe('canlı sorgu');
+    expect(argoSourceMeta(undefined)).toBe('');
+    expect(argoSourceMeta('x')).toBe('');
   });
 });

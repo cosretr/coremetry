@@ -18,7 +18,8 @@
 //   • Token: yazılan ref → tokenRef; kayıtlı satır dokunulmamış → "" (sunucu
 //     korur); "Referansı kaldır" → "" + clearTokenRef; YENİ satırın boş ref'i
 //     → clearTokenRef (aynı kimlikli silinmiş satırın ref'ini miras almasın).
-//   • pins[] yüklendiği gibi geri gider (düzenleyici Faz 3'te).
+//   • pins[] yüklendiği gibi geri gider (düzenleyici yok; v0.10.985'ten beri
+//     metrik işçisinin eşleyicisi pinleri match_method='manual' kopyalar).
 //   • apiUrl önizlemesi Go NormalizeAPIURL'ün ELLE ayrıştırılmış aynası:
 //     `new URL()` :443'ü düşürür ve yolu yeniden kodlar — sunucunun
 //     kaydedeceği biçim o olmazdı.
@@ -549,7 +550,7 @@ export type IssueTarget =
   | { kind: 'env' }
   | { kind: 'adv'; key: string }
   // v0.10.974 — `classification.metricsOnlyMode` (seçim kutusu acd-adv-mode) ve
-  // `pins[…]` (salt okunur not; düzenleyici Faz 3'te) — ikisinin de gidilecek yeri var.
+  // `pins[…]` (salt okunur not; düzenleyici yok, pinler API'den) — ikisinin de gidilecek yeri var.
   | { kind: 'advMode' }
   | { kind: 'pins' }
   | { kind: 'form' }
@@ -735,7 +736,7 @@ export function validateDraft(d: Draft, ctx: ValidateCtx): Issue[] {
       const first = d.instances[ids.get(id)!];
       const fn = hn(first.hubClusterId);
       out.push({ path: p('id'), short: "hub'lar arasında tekrar ediyor", target: t('id'),
-        message: `“${id}” ${fn}${trLocative(fn)}ki instance'ta da var. Kimlik hub'lar arasında tekil olmalı (Faz 3'te ClickHouse instance_id). Bu satıra ayrı bir kimlik verin, ör. ${id}-${hn(i.hubClusterId)}. Aynı namespace iki hub'da serbesttir.` });
+        message: `“${id}” ${fn}${trLocative(fn)}ki instance'ta da var. Kimlik hub'lar arasında tekil olmalı (ClickHouse instance_id: durum ve eşleme satırları bu kimliğe bağlı). Bu satıra ayrı bir kimlik verin, ör. ${id}-${hn(i.hubClusterId)}. Aynı namespace iki hub'da serbesttir.` });
     } else {
       ids.set(id, ix);
     }
@@ -763,7 +764,7 @@ export function validateDraft(d: Draft, ctx: ValidateCtx): Issue[] {
       const owner = savedSlot.get(slot);
       if (id && owner && !savedIds.has(id) && !draftIds.has(owner)) {
         out.push({ path: p('id'), short: 'kayıtlı kimlik değiştirilemez', target: t('id'),
-          message: `“${id}” kayıtlı “${owner}” instance'ının yerini alıyor (${hn(i.hubClusterId)}/${ns}): kayıtlı kimlik değiştirilemez (Faz 3'te ClickHouse instance_id). Önce “${owner}” satırını kaldırıp kaydedin, sonra “${id}” ile ekleyin.` });
+          message: `“${id}” kayıtlı “${owner}” instance'ının yerini alıyor (${hn(i.hubClusterId)}/${ns}): kayıtlı kimlik değiştirilemez (ClickHouse instance_id: durum ve eşleme satırları bu kimliğe bağlı). Önce “${owner}” satırını kaldırıp kaydedin, sonra “${id}” ile ekleyin.` });
       }
     }
     const job = i.metricsJob.trim();

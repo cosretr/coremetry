@@ -265,7 +265,7 @@ describe('validateDraft — tüm kurallar, sunucu tarzı yollar', () => {
     d.instances.push(inst({ key: 'n:3', id: 'dup-ns', hubClusterId: H2, hubNamespace: 'team-b-int' }));
     const is = validateDraft(d, ctx(d));
     expect(is.map(i => i.path)).toEqual(['instances[2].id', 'instances[3].id', 'instances[4].hubNamespace']);
-    expect(is[1].message).toBe("“team-a-prod” hub-1'deki instance'ta da var. Kimlik hub'lar arasında tekil olmalı (Faz 3'te ClickHouse instance_id). Bu satıra ayrı bir kimlik verin, ör. team-a-prod-hub-2. Aynı namespace iki hub'da serbesttir.");
+    expect(is[1].message).toBe("“team-a-prod” hub-1'deki instance'ta da var. Kimlik hub'lar arasında tekil olmalı (ClickHouse instance_id: durum ve eşleme satırları bu kimliğe bağlı). Bu satıra ayrı bir kimlik verin, ör. team-a-prod-hub-2. Aynı namespace iki hub'da serbesttir.");
     expect(is[2].message).toBe("“team-b-int” bu hub'da zaten “team-b-int” instance'ına ait (bir hub'da namespace başına tek Argo CD).");
     // aynı namespace İKİ hub'da serbest
     const ok = draftFromSettings(settings());
@@ -292,7 +292,7 @@ describe('validateDraft — tüm kurallar, sunucu tarzı yollar', () => {
     d.instances.push(inst({ key: 'n:9', id: 'team-a-gitops', hubClusterId: H1, hubNamespace: 'team-a-prod' }));
     const is = validateDraft(d, ctx(d));
     expect(is.map(i => i.path)).toEqual(['instances[1].id']);
-    expect(is[0].message).toBe("“team-a-gitops” kayıtlı “team-a-prod” instance'ının yerini alıyor (hub-1/team-a-prod): kayıtlı kimlik değiştirilemez (Faz 3'te ClickHouse instance_id). Önce “team-a-prod” satırını kaldırıp kaydedin, sonra “team-a-gitops” ile ekleyin.");
+    expect(is[0].message).toBe("“team-a-gitops” kayıtlı “team-a-prod” instance'ının yerini alıyor (hub-1/team-a-prod): kayıtlı kimlik değiştirilemez (ClickHouse instance_id: durum ve eşleme satırları bu kimliğe bağlı). Önce “team-a-prod” satırını kaldırıp kaydedin, sonra “team-a-gitops” ile ekleyin.");
   });
   it('BE3 aynası: izinli durumlar', () => {
     // Aynı kimliği sil+ekle (kimlik kayıtlı) → serbest.

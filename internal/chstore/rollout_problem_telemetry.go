@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/argocd"
 )
 
 // WorkloadRevisionRef — MV'den/spans'ten gelen ham (span cluster değeri)
@@ -155,4 +157,52 @@ func (s *Store) RolloutRefForPod(ctx context.Context, service, pod string, from,
 		return WorkloadRevisionRef{}, false, nil
 	}
 	return r, true, nil
+}
+
+// ArgoCDMapperWorkloadsMax — v0.10.985 — Rollouts v2 P3.2 eşleyicisinin tur
+// başına okuduğu en çok iş yükü (tüm filo). Aşılırsa çağıran turu ATLAR:
+// kısmi listeyle ad kenarları yanlışlıkla kaldırılırdı (argocd/mapper.go).
+const ArgoCDMapperWorkloadsMax = 200_000
+
+// argocdMapperWorkloadsSQL — SAF. serviceWorkloadsSQL'in filo kardeşi: servis
+// süzgeci yok, tür MV'nin anyLast(workload_kind) SimpleAggregate kolonundan
+// (RolloutsForWorkloads emsali). ORDER BY öneki (cluster, k8s_namespace,
+// workload) üzerinde GROUP BY; zaman sınırı bucket (günlük bölüm budaması),
+// LIMIT tavan+1 (kesiklik bilinsin), max_execution_time 25 s (işçi yolu;
+// istemci ReadTimeout 30 s — query_budget_test).
+func argocdMapperWorkloadsSQL() string {
+	return `SELECT cluster, k8s_namespace, anyLast(workload_kind) AS kind, workload
+		FROM workload_revision_activity_1m
+		WHERE bucket >= toDateTime64(?, 3, 'UTC') AND bucket <= toDateTime64(?, 3, 'UTC')
+		  AND workload != ''
+		GROUP BY cluster, k8s_namespace, workload
+		ORDER BY cluster, k8s_namespace, workload
+		LIMIT ` + fmt.Sprint(ArgoCDMapperWorkloadsMax+1) + ` SETTINGS max_execution_time = 25`
+}
+
+// ArgoCDMapperWorkloads — v0.10.985 — [from, to] içinde span üreten tekil
+// (span cluster değeri, ns, workload) + tür; capped: tavandan fazlası vardı.
+// Telemetri okuma havuzu (MV; state tablosu yok).
+func (s *Store) ArgoCDMapperWorkloads(ctx context.Context, from, to time.Time) ([]argocd.WorkloadObs, bool, error) {
+	rows, err := s.telemetryReadConn().Query(ctx, argocdMapperWorkloadsSQL(), chDateTime64Arg(from), chDateTime64Arg(to))
+	if err != nil {
+		return nil, false, fmt.Errorf("argocd mapper workloads: %w", err)
+	}
+	defer rows.Close()
+	out := []argocd.WorkloadObs{}
+	for rows.Next() {
+		var w argocd.WorkloadObs
+		if err := rows.Scan(&w.SpanCluster, &w.Namespace, &w.Kind, &w.Workload); err != nil {
+			return nil, false, err
+		}
+		out = append(out, w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	capped := len(out) > ArgoCDMapperWorkloadsMax
+	if capped {
+		out = out[:ArgoCDMapperWorkloadsMax]
+	}
+	return out, capped, nil
 }

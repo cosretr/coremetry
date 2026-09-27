@@ -76,3 +76,19 @@ export function repoShort(repo?: string): string {
 export function autoSyncLabel(v?: boolean): string {
   return v === undefined ? '—' : v ? 'açık' : 'kapalı';
 }
+
+/** v0.10.985 — Argo bölümü başlığındaki kaynak rozeti: eşleyici tablosu ya da canlı Thanos. */
+export function argoSourceBadge(source?: string): string {
+  return source === 'mapper' ? 'eşleyici · argocd_app_mapping' : 'Thanos · argocd_app_info';
+}
+
+/** v0.10.985 — bölüm meta'sındaki sessiz kaynak notu; kaynak yoksa (Argo aranmadı) boş.
+ *  İnceleme: sabit "≤10 dk" ayarlanmış aralıklarda yanlıştı; sunucu tabloyu yalnız son
+ *  argocd-metrics koşusu taze ve 'ok' iken kullanır (gecikme = metricsS / mapperMin). */
+export function argoSourceMeta(source?: string): string {
+  switch (source) {
+    case 'mapper': return 'eşleyici tablosundan (işçi aralıkları kadar gecikmeli)';
+    case 'live': return 'canlı sorgu';
+    default: return '';
+  }
+}

@@ -9,7 +9,9 @@
 //     (kesin) ya da ad tahmini. Senkron fazları argocd_app_sync_total (24 sa).
 //   - Rollout'lar — Rollouts sayfasının satırı (workload_rollouts, 7 gün);
 //     her satırın yanında o iş yüküne eşlenen Argo uygulaması.
-// Mapper (P3.2) gelince eşleme onun tablosundan okunur; sekme değişmez.
+// v0.10.985 (P3.2): argocd-metrics işçisi açıkken ve eşleme kenarı varken
+// Argo bölümü eşleyicinin tablosundan gelir (argo.source "mapper"); sekme
+// aynı, yalnız başlık rozeti ve meta kaynağı söyler.
 //
 // Tablo standardı: iki kayıt listesi DataTable, durumları tablonun İÇİNDE
 // (T12); satırlar tıklanmaz (bağlantılar hücrede) — satır tıklanır görünmez.
@@ -28,7 +30,7 @@ import {
 } from '@/lib/rolloutRow';
 import {
   appsForWorkload, syncTone, healthTone, matchLabel, matchTitle, syncsSummary, syncsTotal,
-  syncsFailed, repoShort, autoSyncLabel,
+  syncsFailed, repoShort, autoSyncLabel, argoSourceBadge, argoSourceMeta,
 } from '@/lib/serviceGitOps';
 import type { ArgoServiceApp, ServiceGitOpsResponse, WorkloadRollout } from '@/lib/types';
 
@@ -113,6 +115,10 @@ function ArgoSection({ d, pending, err, onRetry, clusterName }: {
   const truncHubs = (argo?.hubs ?? []).filter(h => h.truncated);
   const other = argo?.otherInNamespace ?? 0;
   const show = !pending && !err && rows.length > 0;
+  const srcMeta = pending || err ? '' : argoSourceMeta(argo?.source);
+  const meta = show
+    ? `${rows.length} uygulama${other > 0 ? ` · aynı namespace'te eşleşmeyen ${other}` : ''}${srcMeta ? ` · ${srcMeta}` : ''}`
+    : srcMeta || undefined;
   const state: Omit<DataTableStateProps<ArgoServiceApp>, 'dt'> =
     pending ? { kind: 'loading', skeletonRows: 3 }
     : err ? { kind: 'error', message: `GitOps bilgisi yüklenemedi: ${err.message}`, onRetry }
@@ -122,8 +128,8 @@ function ArgoSection({ d, pending, err, onRetry, clusterName }: {
         detail: <Link to="/settings/argocd">Pin ekleyerek elle bağlayın (Ayarlar › Argo CD)</Link> };
   return (
     <section>
-      <SectionHead id="gitops-argo" title="Argo CD uygulamaları" source="Thanos · argocd_app_info"
-        meta={show ? `${rows.length} uygulama${other > 0 ? ` · aynı namespace'te eşleşmeyen ${other}` : ''}` : undefined} />
+      <SectionHead id="gitops-argo" title="Argo CD uygulamaları" source={argoSourceBadge(argo?.source)} meta={meta} />
+      {!pending && !err && argo?.configured && argo.note && <div className="pod-cap" role="status">{argo.note}</div>}
       {badHubs.map(h => (
         <div key={h.hubClusterId} className="pod-cap" role="status">
           Hub {h.hubName || h.hubClusterId}: {h.status === 'skipped' ? 'atlandı' : 'sorgu başarısız'} — {h.error}

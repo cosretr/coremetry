@@ -10,8 +10,9 @@ import {
 // formu (mockup Main "inst-edit"). Açık satırın hemen altında, tek açık form;
 // "Tabloya uygula" taslağa yazar, Kaydet'e kadar hiçbir şey sunucuya gitmez.
 //
-//   • Kayıtlı satırın kimliği SALT OKUNUR (Faz 3'te ClickHouse instance_id;
-//     sunucu da reddeder, BE3). Kaydedilmemiş satırın kimliği düzenlenebilir.
+//   • Kayıtlı satırın kimliği SALT OKUNUR (ClickHouse instance_id: v0.10.983'ten
+//     beri argocd_app_status, v0.10.985'ten beri argocd_app_mapping satırları
+//     buna bağlı; sunucu da reddeder, BE3). Kaydedilmemiş satırın kimliği düzenlenebilir.
 //   • Hub seçimi yalnız GÜNCEL hub'lar (listeden çıkarılan hub seçilemez).
 //   • API URL canlı önizleme: sunucunun kaydedeceği biçim (NormalizeAPIURL
 //     aynası; port eklenmez, yol korunur).
@@ -73,7 +74,7 @@ export function ArgoCDInstanceForm({ buffer: b, errors, pending, hubs, clusters,
           autoComplete="off" spellCheck={false} error={errors.id}
           hint={b.isNew ? "Küçük harf, rakam, tire (≤63). Hub'lar arasında da tekil."
             : b.unsaved ? `Kaydedilmemiş satır: kimlik şimdi değiştirilebilir (ör. ${b.origId}-${hn}); Kaydet'ten sonra değişmez.`
-              : "Kayıttan sonra değişmez: Faz 3'te ClickHouse instance_id."}
+              : "Kayıttan sonra değişmez: ClickHouse instance_id (durum ve eşleme satırları bu kimliğe bağlı)."}
           onChange={e => set({ id: e.target.value })} />
         <Field id="acd-ed-name" label="Görünen ad" value={b.name} autoComplete="off" placeholder="boşsa id gösterilir"
           error={errors.name} hint="Yalnız ekranda; eşlemeye katılmaz." onChange={e => set({ name: e.target.value })} />

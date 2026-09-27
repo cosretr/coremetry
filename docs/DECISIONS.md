@@ -1233,3 +1233,84 @@ P2.3 yazmaz; doğrulanmamış varsayımın bedeli yanlış GÖSTERİMDİR, yanl�
   (`rolloutTailPages`; v1'de de önceki anlam); v2 STS/DS "Traces →" süzgeci controller revizyonu değil
   `imageTag`, revizyonsuz Deployment deployment adıyla; DeployHistoryPanel KSM satırını zaman + iş yüküyle
   anahtarlar (aynı scrape zamanı).
+
+## 2026-09-27 — Rollouts v2 P3.2 Argo uygulaması ↔ iş yükü eşleyicisi §11'den önce kodlandı, bayrak kapalı (v0.10.985)
+
+**Karar (operatör: "devam et … bitir işleri" — §11 probe'u henüz koşulmadan Faz 3.2'nin kodlanması;
+"Argo CD: şimdilik yalnız metrik" kararıyla):** P3.2 (`internal/argocd/mapping.go` saf çekirdek,
+`mapper.go` işçi adımı; `internal/chstore/argocd_mapping_store.go`; `internal/api/service_gitops_mapper.go`)
+§11 H/N/T cevapları GELMEDEN yazıldı. Eşleyici ayrı bayrak AÇMAZ: argocd-metrics işçisinin içinde koşar
+(§10.4, lider "argocd-metrics"), yani yalnız **enabled=true VE metricsWorker.enabled=true VE ≥1 hub**
+iken; varsayılan kurulumda sorgu, CH okuması ya da yazımı yok. GitOps sekmesi (`/api/services/{name}/gitops`)
+yalnız aynı bayrak açıkken, kapsam kapısı açıkken (aşağıda, inceleme) VE servisin (cluster, ns)
+çiftlerinde taze kenar varken tablodan okur; aksi hâlde v0.10.981 canlı yolu aynen (+ eklemeli `argo.source: "live"`). Resource (kesin) kenarı yalnız Argo
+CD API'sinden gelir (P3.3, askıda) — yazılmaz; pod_label (§11 K2.4) yazılmaz.
+- **Açmadan önce doğrulanacaklar:** P3.1 kaydındaki §11 H listesi (eşleyici o işçinin belleğini okur) +
+  §5.3 dest_server biçimleri: Remote Cluster `apiServerUrls` Argo cluster Secret'ındaki yazımla
+  normalleşince eşleşmeli (v2.x ham `spec.destination.server`, v3 çözülmüş; `""` = `destination.name`) —
+  çözülmeyen uygulama ad kenarını HER kümeye alır (canlı yolla aynı kural), zayıf kenar almaz
+  (`mapper_dest_unresolved`); §11 N5/N6 (suffix → küme tekilliği, `mapper_suffix_mismatch` ölçer —
+  eşlemeyi değiştirmez) ve N1–N4 (ad ayrışma oranı `mapper_name_parsed/unparsed`, bileşen tam eşleşmesi
+  `mapper_name_component_exact` vs `mapper_name_part_only`); §11 T / §9: iş yükü kimliği span'lerin k8s
+  deployment/statefulset/daemonset adından (MV) ve span cluster değeri Remote Cluster'a eşlenmeli
+  (`mapper_workload_cluster_unmapped`); `0015` sihirbazla uygulanmış olmalı (argocd_app_mapping); §10.6
+  "measure first": filo iş yükü okuması (workload_revision_activity_1m, son 24 sa, GROUP BY, ≤200k satır,
+  25 s) her mapperMin'de bir — prod'da ilk hafta `system.query_log`'dan süre/okunan satır ölçülür.
+- **Tasarım kararları:** kural fonksiyonları canlı matcher'la ORTAK (`pinnedWorkloads`, `pinMatchesApp`,
+  `nameEdgeMatches`; `TestMapperMatchesLiveMatcher` iki yolun aynı listeyi verdiğini pinler): manual (100)
+  pinden, pinli (cluster, ns, workload) ad tahmini almaz, servis kartında manual kenarlı uygulamanın o
+  servisteki ad kenarları düşer; name (mapping.nameConfidence) tire sınırlı ad parçası + dest_namespace +
+  çözülmüşse küme; namespace (zayıf, mapping.namespaceConfidence) dest_server'ı çözülen her uygulama,
+  candidates = o (cluster, ns)'e deploy eden uygulama sayısı — kartta yalnız "aynı namespace'te
+  eşleşmeyen" sayısı. Kenar türü taşır (manual → pinin türü, name → MV `anyLast(workload_kind)`); türü boş
+  iş yükü atlanır. Ad ayrıştırma (§6: envList + argoSuffix birleşimi, QuoteMeta, sona çapalı) kenarı
+  DEĞİŞTİRMEZ, yalnız teşhis; base key / pairGroup çift uyarısı P3.5. Tur yalnız HAZIR instance'ları
+  uzlaştırır (parça atlanmadı, bellek kurulu, son 3 × inventoryMin içinde dolu tam envanter); hazır
+  olmayanın kenarı ne eklenir ne kaldırılır. Uzlaştırma tam satır: yeni kenar first_matched_at=şimdi,
+  değişen ya da 20 saatten eski kenar first_matched_at taşınarak yeniden yazılır, istenmeyen canlı kenar
+  removed_at=şimdi (bütün alanlar taşınır); okuyucu last_verified_at'i 26 saatten eski kenarı canlı
+  saymaz (kopmuş hub / kaldırılmış instance kenarı 30 gün TTL'de kalsa da sekmeye gelmez). Fail-safe:
+  iş yükü listesi tavanda kesikse, kenar sayısı 400k'yı aşarsa ya da okuma düşerse tur atlanır (yazım
+  yok, koşu partial + "eşleyici: …"); hatalı tur da sonrakini mapperMin sonraya atar. Tur her mapperMin
+  (10 dk), ayar kaydı ya da Remote Cluster kaydı değişince hemen. Koşu satırı: mapping satırları
+  `rows_written`'a, iş yükü kenarı almayan uygulamalar `unmapped`'a eklenir (o tikte durum satırlarının
+  cluster_id'siz sayısıyla toplanır; ayrım `mapper_*` teşhisinde). Sekmenin eşleyici yolu: son durum
+  argocd_app_status'tan (son satırı 'deleted' ya da hiç satırı olmayan uygulama gösterilmez, not düşülür),
+  "Senkron (24 sa)" metrikle görülen 'sync' satırlarının sayısı — işçi tik başına tek satır yazar ve sayaç
+  tabanı yokken görülen artışı yazmaz, yani ALT SINIR (canlı yolun `increase()`'inden düşük olabilir);
+  hub satırları sorgu sonucu değil kayıt durumu (kayıt yok/devre dışı ya da tokenRef çözülmüyorsa
+  "skipped"). Önbellek anahtarı kaynak kararının girdisini (`mw`) açıkça taşır.
+- **İnceleme (v0.10.985) — kapsam kapısı:** kenar tazeliği işçinin canlı olduğunu SÖYLEMEZ (değişmeyen
+  kenar 20 sa'de bir dokunulur; hub Thanos'u düşen, parçası atlanan ya da envanteri eskiyen instance'ın
+  kenarı 26 sa taze kalır, argocd_app_status yalnız değişimde yazıldığından donmuş durum "güncel"
+  okunurdu, hub satırı "ok" derdi). Sekme tabloyu yalnız şu hâlde kullanır, aksi hâlde canlı yol +
+  `argo.note`'ta sebep: hub'lardaki HER instance etkin ve her hub'ın ≥1 instance'ı var; son
+  argocd-metrics koşusu (rollout_worker_runs, FINAL, 1 gün, LIMIT 1) var, `ok`, `started_at` ≤
+  `argocd.MetricsRunFreshness` (2 × metricsS + tik bütçesi; varsayılan 7 dk) yaşında, son ayar kaydından
+  sonra başlamış ve `scopes_total` ayardaki etkin instance sayısına eşit. İşçi, parçası tamam olduğu
+  hâlde eşleyiciye hazır olmayan instance için her tik koşuyu partial yapar (`mapper_unready_instances`),
+  yani `ok` = her instance okundu VE hazır. Başarısız eşleyici turu (okuma hatası/zaman aşımı, 200k iş
+  yükü ya da 400k kenar tavanı, yazım hatası) da başarılı tura dek tur arası HER tiki partial yapar
+  (`mapper_last_round_failed`; yalnız hatalı tik partial olsaydı 60 s tik / 10 dk turda koşuların ~%90'ı
+  `ok` yazar, kapı son koşuya bakıp ≤26 sa bayat kenarla açılırdı). Kapı geçici bir Thanos uyarısında da kapanır (bir tik canlı
+  yol) — bilerek: yanlış "güncel" yerine eski davranış. Devre dışı instance'ın kenarı kartta da atlanır.
+  Servis kartı kenarları iki okuma, ayrı bütçe: iş yükü kenarları yalnız servisin (cluster, ns,
+  workload) üçlüleri için, zayıf kenarlar ayrıca (ORDER BY'da önce geldikleri için ortak LIMIT'i doldurup
+  sonraki kümelerin eşleşen kenarlarını kesiyorlardı); zayıf kesikte yalnız sayı alt sınır. "Senkron
+  (24 sa)": lockDegraded'da iki pod'un bir tik arayla yazdığı aynı senkron, önceki 'sync' satırıyla aynı
+  fazda ve ≤ metricsS sonraki satır sayılmayarak katlanır (lagInFrame; bitişik tikteki gerçek ikinci
+  senkron da katlanır — sütun alt sınır kalır). Açmadan önce ayrıca doğrulanacak: prod'da argocd-metrics
+  koşularının çoğunun `ok` olduğu (yoksa sekme hep canlı yolda kalır; sebep notta).
+- **Bilinçli farklar (sekme, eşleyici yolu):** Ayarlar'da TANIMLI OLMAYAN bir Argo CD'nin (hub'da koşan,
+  instance olarak eklenmemiş) uygulamaları tabloda yoktur — canlı sorgu hub'daki her argocd_app_info
+  serisini görür (instance'ı çözülmeyen uygulamayı da gösterir); kapı bunu hub'ı sorgulamadan bilemez
+  (inceleme). Küme-içi adres geniş kuralla (`:443`, sondaki `/`,
+  `.cluster.local`) instance'ın kendi hub'ına çözülür (canlı yol bayraksız olduğu için TAM yazımda kalır —
+  v0.10.983 inceleme); "aynı namespace'te eşleşmeyen" küme kapsamlı ve dest_server'ı çözülmeyen eşleşmemiş
+  uygulamayı saymaz; canlı yolun topk(50) kesiği yok (tam envanter). İki hub aynı iş yükünü yönetirse iki
+  kenar, iki satır (anahtar instance_id taşır; §5.6).
+- **Kapsam dışı / sonraya:** iş yükü kaynağı yalnız span MV'si — KSM'de görülüp span üretmeyen iş yükü
+  (rollout_workload_state) kenar almaz; P3.4 sınıflandırması rollout_events anahtarıyla birleşeceği için
+  o birleşim P3.4'te eklenir. Pin düzenleyicisi yok (pinler API'den); Ayarlar › Argo CD metinleri artık
+  "Faz 3" demiyor, pinlerin ne zaman kullanıldığını ve instance_id'nin durum + eşleme satırlarına bağlı
+  olduğunu söylüyor.

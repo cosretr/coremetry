@@ -61,8 +61,18 @@ package argocd
 //   unmapped (cluster_id'si boş yazılan satır), api_calls = sorgu,
 //   error = notlar + teşhis sayaçları.
 //
-// Eşleyici (P3.2), API işçisi (P3.3) ve sınıflandırıcı (P3.4, metrics-only
-// tahmin §7.5) bu işçide DEĞİL.
+//   7. v0.10.985 — EŞLEYİCİ (P3.2; mapper.go mapperStep): her
+//      intervals.mapperMin (varsayılan 10 dk), ayar ya da Remote Cluster
+//      kaydı değişince hemen; yalnız HAZIR instance'lar (parça atlanmadı,
+//      bellek kurulu, son 3 × inventoryMin içinde dolu tam envanter)
+//      uzlaştırılır — hazır olmayanın tablodaki kenarlarına dokunulmaz.
+//      argocd_app_mapping'e değişen kenarlar yazılır; iş yükü kenarı almayan
+//      uygulamalar koşu satırının `unmapped`ına eklenir. Başarısız tur
+//      (okuma hatası, tavan, yazım hatası) başarılı tura dek her tik koşuyu
+//      partial yapar (mapper_last_round_failed) — sekme kapısı kapalı kalır.
+//
+// API işçisi (P3.3) ve sınıflandırıcı (P3.4, metrics-only tahmin §7.5) bu
+// işçide DEĞİL.
 
 import (
 	"context"
@@ -117,6 +127,11 @@ type Registry struct {
 	Hubs      map[string]HubInfo // yalnız etkin + URL'li kayıtlar
 	ByServer  map[string]string  // normalleşmiş apiServerUrl → EffectiveID
 	Normalize func(string) string
+	// v0.10.985 (P3.2 eşleyici): span cluster değeri → EffectiveID (MV iş
+	// yüklerinin kimliği; service_gitops.go bySpan ile aynı kural) ve
+	// EffectiveID → argoSuffix (§6 ad ayrıştırma + tutarlılık denetimi).
+	BySpan map[string]string
+	Suffix map[string]string
 }
 
 // RegistrySource — her tik taze Remote Cluster görünümü.
@@ -319,6 +334,16 @@ type MetricsWorker struct {
 
 	verMu   sync.Mutex
 	lastVer uint64
+
+	// v0.10.985 — eşleyici (mapper.go). mapper nil → adım yok. mapperLast /
+	// mapperFP / mapperErr yalnız inFlight altında; edinim ve bayrak
+	// kapanışı sıfırlar. mapperErr: son turun hata notu — başarılı tur
+	// temizler, o zamana dek her tik koşuyu partial yapar.
+	mapper      MapperStore
+	mapperLast  time.Time
+	mapperFP    string
+	mapperErr   string
+	mapperErrAt time.Time
 }
 
 // NewMetricsWorker — v0.10.983. settings: canlı argocd blobu (SettingsService.Current).
@@ -418,25 +443,41 @@ func (w *MetricsWorker) Tick(ctx context.Context) bool {
 	s := w.settings()
 	if !MetricsActive(s) || !w.leader() {
 		w.mem = nil
+		w.mapperLast, w.mapperFP, w.mapperErr = time.Time{}, "", ""
 		w.resetPending.Store(false)
 		return false
 	}
 	if w.resetPending.Swap(false) {
 		w.mem = nil
+		w.mapperLast, w.mapperFP, w.mapperErr = time.Time{}, "", ""
 	}
 	if w.mem == nil {
 		w.mem = map[string]*shardMem{}
 	}
 	set := s.Normalized()
 	iv := time.Duration(set.Intervals.MetricsS) * time.Second
-	dl := 5 * iv
-	if dl < 2*time.Minute {
-		dl = 2 * time.Minute
-	}
-	tctx, cancel := context.WithTimeout(ctx, dl)
+	tctx, cancel := context.WithTimeout(ctx, metricsTickDeadline(iv))
 	defer cancel()
 	w.tick(ctx, tctx, set)
 	return true
+}
+
+// metricsTickDeadline — SAF: bir tikin zaman bütçesi (5 aralık, en az 2 dk).
+func metricsTickDeadline(iv time.Duration) time.Duration {
+	if dl := 5 * iv; dl >= 2*time.Minute {
+		return dl
+	}
+	return 2 * time.Minute
+}
+
+// MetricsRunFreshness — v0.10.985 inceleme — SAF: son argocd-metrics koşusunun
+// (started_at) "işçi canlı" sayıldığı en büyük yaş: iki aralık + bir tik
+// bütçesi (koşu satırı tik bitince yazılır, started_at taşır). GitOps sekmesi
+// eşleyici tablosunu yalnız bundan yeni ve 'ok' bir koşu varken kullanır
+// (service_gitops_mapper.go); varsayılan 60 s aralıkta 7 dk.
+func MetricsRunFreshness(set Settings) time.Duration {
+	iv := time.Duration(set.Normalized().Intervals.MetricsS) * time.Second
+	return 2*iv + metricsTickDeadline(iv)
 }
 
 type shardResult struct {
@@ -527,6 +568,12 @@ func (w *MetricsWorker) tick(parent, ctx context.Context, set Settings) {
 	}
 	run.ScopesOK = okN
 	run.Status = metricsRunStatus(len(plans), okN, hardN, softN)
+	if note := w.mapperStep(ctx, set, reg, plans, results, now, &run, diag); note != "" {
+		notes = append(notes, "eşleyici: "+note)
+		if run.Status == rollout.RunOK {
+			run.Status = rollout.RunPartial
+		}
+	}
 	canceled = errors.Is(ctx.Err(), context.Canceled) && parent.Err() != nil
 }
 

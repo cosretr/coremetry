@@ -21,7 +21,7 @@ import { ArgoCDInstanceForm } from './ArgoCDInstanceForm';
 //     (tek açık form, seçili satırın vurgu rayı, aria-expanded/-controls);
 //     Kaydet'in sorunları satırın altında tam genişlik hata satırı.
 //   • Tek eylem sütunu: ⋯ = Popover (menu) + MenuItem. Pin'i olan instance
-//     kaldırılamaz (düzenleyici Faz 3'te; pins[] API'den).
+//     kaldırılamaz (pin düzenleyicisi yok; pins[] API'den).
 //   • v0.10.974 — menünün "Düzenle"si AÇ komutudur, aç/kapa değil (mockup
 //     onEdit): form zaten o satırda açıksa yalnız menü kapanır (`onEdit`); satır
 //     tıklaması ve ad düğmesi aç/kapa kalır (`onOpen`).

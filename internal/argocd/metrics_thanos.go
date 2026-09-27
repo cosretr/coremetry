@@ -55,7 +55,8 @@ func (r ThanosRegistry) ArgoRegistry() Registry {
 // + ETKİN kayıt çözücüsü (URL, etkin küme etiketi). Devre dışı kayıt hub
 // sayılmaz ve dest_server'ı eşlenmez (service_gitops.go emsali).
 func registryFrom(snap []thanos.ClusterSnapshot, byID func(string) (thanos.ClusterConfig, bool)) Registry {
-	reg := Registry{Hubs: map[string]HubInfo{}, ByServer: map[string]string{}, Normalize: normalizeDestServer}
+	reg := Registry{Hubs: map[string]HubInfo{}, ByServer: map[string]string{}, Normalize: normalizeDestServer,
+		BySpan: map[string]string{}, Suffix: map[string]string{}}
 	for _, c := range snap {
 		cc, ok := byID(c.ID)
 		if !ok || strings.TrimSpace(cc.URL) == "" {
@@ -68,6 +69,14 @@ func registryFrom(snap []thanos.ClusterSnapshot, byID func(string) (thanos.Clust
 			if n := normalizeDestServer(u); n != "" {
 				reg.ByServer[n] = c.ID
 			}
+		}
+		// v0.10.985 — eşleyici: MV'nin span cluster değeri → EffectiveID ve
+		// argoSuffix (küçük harf; thanos PUT'u büyük/küçük harf duyarsız tekil tutar).
+		for _, v := range cc.SpanClusterKeys() {
+			reg.BySpan[v] = c.ID
+		}
+		if sfx := strings.ToLower(strings.TrimSpace(c.ArgoSuffix)); sfx != "" {
+			reg.Suffix[c.ID] = sfx
 		}
 	}
 	return reg
