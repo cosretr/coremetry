@@ -1,6 +1,12 @@
 // TracePodCharts — v0.10.968 — seçili pod'un Bellek + CPU grafikleri (Trace ›
 // Metrics yeniden tasarımı, mockup PodDetail.dc.html / Main.dc.html sağ panel).
 //
+// v0.10.976 — `layout="row"`: satır altı kompakt ayrıntıda iki grafik YAN
+// YANA (`.tpp-chart-row`, içsel auto-fit: kap 2×240 px'ten darsa alt alta);
+// odak görünümü `stack` (varsayılan, bellek üstte CPU altta). Sıra, zeroBase,
+// band, limit ve kardeşler aynı. Her grafik kabı `role=group` + görünen
+// başlıkla aynı `aria-label` (CorePanel'e title="" gider).
+//
 // v0.10.968 — Çizim TEK motordan: CorePanelMulti, MultiLineChart'ın yüklediği
 // gibi lazy (`@/components/chart/corePanelEntry`; sayfa @grafana/data'ya
 // statik bağlanmaz). Öğeler SAF çekirdekten (tracePodPanelModel.buildChartItems):
@@ -42,6 +48,8 @@ export interface TracePodChartsProps {
   height?: number;
   /** Odak görünümü: açıklama "Limitler bugünkü değerdir…" ile biter. */
   focus?: boolean;
+  /** v0.10.976 — `row`: Bellek ve CPU yan yana (kompakt satır altı ayrıntı). */
+  layout?: 'stack' | 'row';
 }
 
 const TITLE: Record<ChartBuild['kind'], string> = { mem: 'Bellek (working set)', cpu: 'CPU (çekirdek)' };
@@ -56,7 +64,10 @@ function PodChart({ build, height, syncKey, xRange }: {
   useThemeTick();
   const k = build.kind;
   return (
-    <div className="tpp-chart" data-chart={k}>
+    // v0.10.976 — grafik kabı adlandırılmış grup: CorePanel'e title="" gidiyor
+    // (görsel başlık .tpp-sec-title'da), bu yüzden erişilebilir ad BURADAN;
+    // TITLE[k] tek kaynak, görünen metinle ayrışamaz.
+    <div className="tpp-chart" data-chart={k} role="group" aria-label={TITLE[k]}>
       <div className="tpp-sec-title"><span>{TITLE[k]}</span></div>
       <div className="tpp-legend">
         {build.legend.map(l => (
@@ -87,7 +98,7 @@ function PodChart({ build, height, syncKey, xRange }: {
   );
 }
 
-export function TracePodCharts({ model, selected, compare, metrics, window: w, siblingLines, height = 140, focus }: TracePodChartsProps) {
+export function TracePodCharts({ model, selected, compare, metrics, window: w, siblingLines, height = 140, focus, layout = 'stack' }: TracePodChartsProps) {
   const themeTick = useThemeTick();
   const pods = useMemo(() => chartPods(model, selected, compare, metrics), [model, selected, compare, metrics]);
   const labels = useMemo(() => suffixLabels(servicePods(model, selected.service)), [model, selected.service]);
@@ -101,11 +112,16 @@ export function TracePodCharts({ model, selected, compare, metrics, window: w, s
   }, [pods, siblingLines, w.startNs, w.endNs, stepSec, colors]);
   const xRange = useMemo(() => ({ from: w.fromNs / 1e9, to: w.toNs / 1e9 }), [w.fromNs, w.toNs]);
   const syncKey = `trace-metrics-${selected.service}`;
-  return (
-    <div className="tpp-chart">
-      {/* v0.10.916 (operator-reported) — bellek üstte, CPU altta; ikisi de zeroBase. */}
+  // v0.10.916 (operator-reported) — bellek üstte (satır kipinde solda), CPU altta (sağda); ikisi de zeroBase.
+  const charts = (
+    <>
       <PodChart build={mem} height={height} syncKey={syncKey} xRange={xRange} />
       <PodChart build={cpu} height={height} syncKey={syncKey} xRange={xRange} />
+    </>
+  );
+  return (
+    <div className="tpp-chart">
+      {layout === 'row' ? <div className="tpp-chart-row">{charts}</div> : charts}
       <p className="tpp-caption">
         {chartCaption({
           durNs: w.endNs - w.startNs, stepSec: stepSec || null, service: selected.service,

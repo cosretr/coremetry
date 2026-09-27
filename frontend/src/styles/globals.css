@@ -4815,6 +4815,23 @@ a.ins-val:hover { text-decoration: underline; }
 .tpp-tl { display: block; min-width: 0; }
 .tpp-tl svg { width: 100%; display: block; }
 .tpp-tl-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
+/* v0.10.976 — satır altı KOMPAKT ayrıntı (TracePodPanel; operatör "inline daha
+   iyi olur"). Başlık satırı sarar (ad + kopyala + Odak görünümü + Pod sayfası +
+   Span'lar + ×). Gövde iki sütun: solda üç özet bloğu YAN YANA (auto-fit: dar
+   sütunda 2 → 1'e iner, etiket sütunu dar), sağda Karşılaştır + yan yana
+   Bellek/CPU. ≤1024 (tablet eşiği; mobileBreakpoints tek kaynak) tek sütun. */
+.tpp-detail { gap: var(--sp-4); }
+.tpp-detail > .tpp-head { flex-wrap: wrap; }
+.tpp-detail > .tpp-sub { align-items: center; }
+.tpp-detail-body { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--sp-6); min-width: 0; align-items: start; }
+.tpp-kv3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-5); min-width: 0; }
+.tpp-kv3 .keyval { --kv-label-w: 96px; }
+.tpp-detail-charts { display: grid; gap: var(--sp-4); min-width: 0; align-content: start; }
+/* v0.10.976 — grafik sütunu içsel (auto-fit, .tpp-kv3 ile aynı kalıp): kap
+   2×240 px'ten darsa Bellek/CPU ALT ALTA iner. Viewport eşiği yan çubuğun
+   genişliğini (220 / 56 px) göremiyordu — 1025 px'te iki sütunlu gövdede her
+   grafik ~158 px'e düşüyordu. 1100 → ~361 px alt alta; ≥~1470 yan yana. */
+.tpp-chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: var(--sp-5); min-width: 0; }
 
 /* ── v0.10.968 — Trace › Metrics kabuğu + gruplu pod tablosu (tpm-*) ─────
    Operatör onayı 2026-09-27 (mockup Main.dc.html). Renk YALNIZ sapmada
@@ -4830,13 +4847,21 @@ a.ins-val:hover { text-decoration: underline; }
 .tpm-toolbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
 .tpm-order { color: var(--text2); font-size: var(--fs-xs); cursor: help; }
 .tpm-order:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-xs); }
-.tpm-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); align-items: start; min-width: 0; }
-.tpm-body.has-side { grid-template-columns: minmax(0, 1fr) 400px; }
 .tpm-main { min-width: 0; }
-.tpm-side {
-  position: sticky; top: 0; max-height: calc(100vh - 120px); overflow: auto; min-width: 0;
-  padding-left: var(--sp-6); border-left: 1px solid var(--divider);
-}
+/* v0.10.976 — SATIR ALTI AYRINTI (operatör: "inline daha iyi olur", 2026-09-27).
+   400 px yan panel (.tpm-body.has-side / .tpm-side, yapışkan, ≤1024 alt alta)
+   tabloyu sıkıştırıp CPU/Bellek hücrelerini "%…"ya kırpıyordu; söküldü.
+   Ayrıntı, seçili satırın altında tam genişlik tek <tr>: treegrid satırı DEĞİL
+   (role=presentation, data-ri yok — ok tuşları atlar, tıklanır görünmez: hover
+   ve el imleci yok). Hücre ev kuralı `td.row-detail` (T6: bg2 kademesi, sarar);
+   seçili satırın 3 px vurgu rayı ayrıntıya da iner. Bölge odaklanabilir grup
+   (tabIndex -1): halka yalnız klavye odağında. Ayrıntı tablonun kendi kaydırma
+   kabında kayar (kap değişmedi). */
+.tpm-scroll tbody tr.tpm-detail-row > td.tpm-detail-cell { box-shadow: inset 3px 0 0 var(--accent); }
+.tpm-detail { display: block; min-width: 0; outline: none; }
+.tpm-detail:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-xs); }
+/* row-detail zemini bg2: durum kutusu (bg2) görünsün diye bir kademe üst. */
+.tpm-detail .tpp-msg { background: var(--bg3); }
 .tpm-foot { font-size: var(--fs-2xs); color: var(--text3); }
 .table-wrap.is-scroll.tpm-scroll { max-height: calc(100vh - 220px); }
 /* Kapsam tetiği + diyaloğu (TraceMetricsCoverage). */
@@ -4885,10 +4910,9 @@ tbody td.tpm-nopod-label { color: var(--text2); }
 tbody td.tpm-more-cell { color: var(--text2); }
 .tpm-note { font-size: var(--fs-xs); flex: none; }
 
-/* v0.10.968 — tablet eşiği (mevcut 1024): yan panel ve odak görünümü tek kolona iner. */
+/* v0.10.968 — tablet eşiği (mevcut 1024): odak görünümü tek kolona iner.
+   v0.10.976 — satır altı ayrıntının gövdesi ve yan yana grafikleri de alt alta. */
 @media (max-width: 1024px) {
-  .tpm-body.has-side { grid-template-columns: minmax(0, 1fr); }
-  .tpm-side { position: static; max-height: none; padding-left: 0; border-left: 0; border-top: 1px solid var(--divider); padding-top: var(--sp-6); }
-  .tpp-focus, .tpp-cols { grid-template-columns: minmax(0, 1fr); }
+  .tpp-focus, .tpp-cols, .tpp-detail-body, .tpp-chart-row { grid-template-columns: minmax(0, 1fr); }
   .tpp-rail { border-right: 0; border-bottom: 1px solid var(--divider); max-height: 240px; }
 }

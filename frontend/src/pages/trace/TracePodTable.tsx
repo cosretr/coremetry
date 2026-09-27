@@ -39,11 +39,44 @@
 // yoksa ilk satıra konur — yeniden bağlanan tabloda satır görünüre kayar.
 // "N pod daha" fareyle tıklandığında da odak ilk açılan pod'a geçer
 // (tıklanan satır DOM'dan kalkar). CPU/Bellek sayısal: sağa yaslı.
+//
+// v0.10.976 — SATIR ALTI AYRINTI (operatör: "inline daha iyi olur",
+// 2026-09-27; prod v0.10.968'de 400 px yan panel tabloyu sıkıştırıp
+// CPU/Bellek hücrelerini "%…"ya kırpıyordu). Seçili pod'un satırının HEMEN
+// altında tam genişlik tek `<tr>` (tek `<td colSpan>`, ev kuralı
+// `td.row-detail`); içeriği kabuk `detail` ile verir (TracePodPanel).
+//   • Treegrid satırı DEĞİL: `role="presentation"` (td de), `data-ri` yok →
+//     treeNav (rows üzerinden) ve tbody'nin devredilmiş tık/tuş işleyicisi
+//     onu görmez; ok tuşları atlar. aria-hidden DEĞİL: ekran okuyucu içeriği
+//     "<pod> ayrıntısı" bölgesi olarak okur.
+//   • Odak: satırdan tık / Enter / Boşluk ile AÇILINCA bölgeye (tabIndex -1,
+//     grup) geçer; soğuk derin link (mount'ta seçili) odak çalmaz. Esc / ×
+//     kabuğun focusRow isteğiyle satıra döner (ayrıntı sökülünce odak
+//     <body>'ye düşer, mevcut kural yakalar). Tab: satır → ayrıntı denetimleri
+//     → tablodan çıkar (treegrid tek Tab durağı; sonraki satır ↓ ile).
+//   • Satır ve ayrıntı tbody'nin AYNI dizisinde (flatMap; Fragment DEĞİL):
+//     aynı anahtarla tr ⇄ Fragment geçişi React'ta satırı söküp yeniden
+//     kuruyordu, seçili satırdan Enter / Boşluk / tık ile kapanışta odak
+//     <body>'ye düşüyordu. Ayrıntı satırının anahtarı SABİT ("detail"): seçim
+//     başka pod'a taşınınca React düğümü TAŞIR, yeniden bağlamaz — Karşılaştır
+//     "+N" menüsü / odak devri ve JVM açık-kapalı durumu yaşar. Taşınan düğüm
+//     odağı yitirir (tarayıcı ve jsdom); kabuk çip yolunda `d:<pod>` focusRow
+//     isteği yollar, bölge yeniden odaklanır (çocuk etkisi "+N"ye almışsa
+//     çalınmaz).
+//   • Kaydırma YALNIZ tablonun kendi kabında (.tpm-scroll) ve yalnız satırdan
+//     AÇILAN pod ya da ilk bağlanmada AÇIK derin link (mpod dolu) için; alt
+//     kenar taşması kadar, seçili satır yapışkan başlığın altında görünür
+//     kalır; prefers-reduced-motion → anlık. Varsayılan seçim, grup yeniden
+//     açılışı, süzgeç geri-gösterimi ve kapanış KAYDIRMAZ. Element.scrollIntoView
+//     KULLANILMAZ: her kaydırılabilir atayı (#content = sayfa) da kaydırırdı.
+//   • CPU/Bellek kolonlarının küçültme tabanı = beyan genişliği (116 px):
+//     sığdırma onları DEFAULT_MIN'e çekemez (tracePodTable.cols.test.ts).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import {
   useDataTable, DataTableColgroup, DataTableHead, DataTableState, MiddleEllipsis,
-  type CellTone, type ColumnDef, type ColumnModel,
+  type CellTone, type ColumnModel,
 } from '@/components/ui/DataTable';
+import { rowErrors, TRACE_POD_COLS } from './tracePodCols';
 import { Badge, IconButton, MenuItem, Popover, PopoverLinkItem, Tooltip } from '@/components/ui';
 import { copyToClipboard } from '@/lib/clipboard';
 import { serviceHref } from '@/lib/serviceHref';
@@ -56,27 +89,9 @@ import {
 import { treeNav } from './treeNav';
 import type { PodMetricSeries, PodMetricState, TraceMetricsModel, TraceMetricsWindowInfo, TracePodInfo } from './traceMetricsModel';
 
-const rowErrors = (r: TraceMetricsRow): number | null => {
-  switch (r.kind) {
-    case 'pod': return r.pod.errors;
-    case 'group': return r.pods.reduce((a, p) => a + p.errors, 0);
-    case 'nopod': return r.summary.errors;
-    case 'nopod-svc': return r.svc.errors;
-    default: return null;
-  }
-};
-
-const COLS: ColumnDef<TraceMetricsRow>[] = [
-  { id: 'chev', label: '', width: 24, minWidth: 24 },
-  { id: 'pod', label: 'Pod', flex: true, minWidth: 200, mono: true, truncate: 'middle' },
-  { id: 'spans', label: 'Span', width: 56, numeric: true },
-  { id: 'errors', label: 'Hata', width: 52, numeric: true, tone: r => { const e = rowErrors(r); return e == null ? undefined : e > 0 ? 'err' : 'faint'; } },
-  { id: 'self', label: 'Öz süre', width: 72, numeric: true },
-  { id: 'crit', label: 'Kritik yol', width: 92, numeric: true },
-  { id: 'cpu', label: 'CPU', width: 116, align: 'right' },
-  { id: 'mem', label: 'Bellek', width: 116, align: 'right' },
-  { id: 'actions', label: 'Eylemler', width: 36, kind: 'actions' },
-];
+// v0.10.976 — kolon tanımları saf modülde (tracePodCols.ts): cpu/mem tabanı
+// 116 px orada çivili (tracePodTable.cols.test.ts).
+const COLS = TRACE_POD_COLS;
 const METRIC_HIDDEN: ColumnModel = { v: 1, order: COLS.map(c => c.id), hidden: ['cpu', 'mem'], sig: 'trace-metrics-off' };
 
 const TONE_CLASS: Record<CellTone, string> = { err: 'cell-err', warn: 'cell-warn', muted: 'cell-muted', faint: 'cell-faint' };
@@ -135,13 +150,19 @@ export interface TracePodTableProps {
   announce: (msg: string) => void;
   /** v0.10.968 — kabuğun odak dönüşü isteği (`p:<pod>`; n her istekte artar). */
   focusRow?: { key: string; n: number } | null;
+  /** v0.10.976 — seçili pod'un satır altı ayrıntısı (TracePodPanel); null = kapalı.
+   *  Satır görünür değilse (grubu kapalı, süzgeç dışı) ayrıntı da satırıyla gizlenir. */
+  detail?: ReactNode;
+  /** v0.10.976 — seçim URL'den AÇIKÇA geldi (mpod dolu); varsayılan seçim false.
+   *  Yalnız ilk bağlanmadaki kaydırma kararında okunur (derin link görünsün). */
+  detailFromUrl?: boolean;
 }
 
 export function TracePodTable(props: TracePodTableProps) {
   const {
     model, rows, selected, metrics, hideMetrics, window: w, grouping,
     onSelectPod, onToggleGroup, onExpandMore, onToggleNoPod, onShowPodSpans, onRetryService, onClearFilters, announce,
-    focusRow,
+    focusRow, detail = null, detailFromUrl = false,
   } = props;
   const columnModel = useMemo(() => ({ value: hideMetrics ? METRIC_HIDDEN : null }), [hideMetrics]);
   const dt = useDataTable<TraceMetricsRow>({
@@ -169,6 +190,16 @@ export function TracePodTable(props: TracePodTableProps) {
     rowEl(i)?.focus();
   }, [rows]);
 
+  // v0.10.976 — satır altı ayrıntı: bölge (odaklanabilir grup) ve açılış
+  // isteği. `pendingDetail` yalnız satırdan AÇILAN pod için dolar; soğuk derin
+  // linkte boş kalır (odak çalınmaz). `firstDetail`: ilk çizilen ayrıntı —
+  // derin link kaydırması yalnız o anda. Bildirimler focusRow etkisinden ÖNCE:
+  // o etki `detailPod`a bağlı (d:<pod> isteği).
+  const detailRef = useRef<HTMLElement>(null);
+  const pendingDetail = useRef<string | null>(null);
+  const firstDetail = useRef(true);
+  const detailPod = detail !== null && rows.some(r => r.kind === 'pod' && r.pod.pod === selected) ? selected : '';
+
   // v0.10.968 — kabuğun odak dönüşü (panel kapandı / odak görünümünden çıkıldı).
   const lastFocusN = useRef(0);
   const focusN = focusRow?.n ?? 0;
@@ -177,22 +208,67 @@ export function TracePodTable(props: TracePodTableProps) {
     if (!focusN || lastFocusN.current === focusN) return;
     const a = document.activeElement;
     if (a && a !== document.body) { lastFocusN.current = focusN; return; } // odak başka yerde: çalma
-    const pod = focusKey.startsWith('p:') ? focusKey.slice(2) : '';
+    lastFocusN.current = focusN;
+    const pod = /^[pd]:/.test(focusKey) ? focusKey.slice(2) : '';
+    // v0.10.976 — `d:<pod>`: ayrıntı bölgesi (çip yolu seçimi taşıdı; taşınan
+    // düğümde odak düşmüştü). Bölge çizilmemişse satır kuralına düşer.
+    if (focusKey.startsWith('d:') && pod === detailPod && detailRef.current) {
+      detailRef.current.focus({ preventScroll: true });
+      return;
+    }
     const svc = pod ? model.byPod.get(pod)?.service : undefined;
-    let i = rows.findIndex(r => r.key === focusKey);
+    let i = rows.findIndex(r => r.key === `p:${pod}`);
     if (i < 0 && svc !== undefined) i = rows.findIndex(r => r.key === `g:${svc}`);
     if (i < 0) i = rows.length ? 0 : -1;
-    lastFocusN.current = focusN;
     if (i < 0) return;
     setCursor(rows[i].key);
     tbodyRef.current?.querySelector<HTMLElement>(`tr[data-ri="${i}"]`)?.focus();
-  }, [focusN, focusKey, rows, model]);
+  }, [focusN, focusKey, rows, model, detailPod]);
+
+  // v0.10.976 — açılış kaydırması + odak. Kaydırma YALNIZ tablonun kendi
+  // kabında (.tpm-scroll) ve yalnız (a) satırdan AÇILAN pod (pendingDetail) ya
+  // da (b) ilk bağlanmada AÇIK derin link (mpod dolu) için. Varsayılan seçim,
+  // grup yeniden açılışı ve süzgeç geri-gösterimi kaydırmaz.
+  // Element.scrollIntoView KULLANILMAZ: her kaydırılabilir atayı (#content =
+  // sayfa kaydırıcısı) da kaydırır; sekmeye girişte özet şeridi / araç çubuğu
+  // görünümden çıkıyordu. Miktar: alt kenar taşması kadar; üst sınır seçili
+  // satırın yapışkan başlığın altında görünür kalması (ayrıntı kaptan uzunsa).
+  useEffect(() => {
+    const el = detailRef.current;
+    if (!detailPod || !el) return;
+    const opened = pendingDetail.current === detailPod;
+    const deepLink = firstDetail.current && detailFromUrl;
+    firstDetail.current = false;
+    if (!opened && !deepLink) return;
+    const wrap = el.closest<HTMLElement>('.tpm-scroll');
+    if (wrap) {
+      const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const w = wrap.getBoundingClientRect();
+      const headH = wrap.querySelector('thead')?.getBoundingClientRect().height ?? 0;
+      const rowTop = (el.closest('tr')?.previousElementSibling ?? el).getBoundingClientRect().top;
+      const d = Math.max(0, Math.min(el.getBoundingClientRect().bottom - w.bottom, rowTop - (w.top + headH)));
+      if (d > 0) {
+        if (typeof wrap.scrollBy === 'function') wrap.scrollBy({ top: d, behavior: reduce ? 'auto' : 'smooth' });
+        else wrap.scrollTop += d; // jsdom
+      }
+    }
+    if (opened) {
+      pendingDetail.current = null;
+      el.focus({ preventScroll: true });
+    }
+  }, [detailPod, detailFromUrl]);
 
   const activate = useCallback((i: number, fromKeyboard: boolean) => {
     const r = rows[i];
     if (!r) return;
     switch (r.kind) {
-      case 'pod': setCursor(r.key); onSelectPod(r.pod.pod); break;
+      case 'pod':
+        setCursor(r.key);
+        // v0.10.976 — açılış / başka pod'a geçiş: odak yeni ayrıntıya; seçili
+        // pod'a yeniden basmak kabukta KAPATIR (odak satırda kalır).
+        pendingDetail.current = r.pod.pod === selected ? null : r.pod.pod;
+        onSelectPod(r.pod.pod);
+        break;
       case 'group': setCursor(r.key); onToggleGroup(r.group.service, !r.open); break;
       case 'nopod': setCursor(r.key); onToggleNoPod(!r.open); break;
       case 'more': {
@@ -209,7 +285,7 @@ export function TracePodTable(props: TracePodTableProps) {
       }
       default: break;
     }
-  }, [rows, onSelectPod, onToggleGroup, onToggleNoPod, onExpandMore]);
+  }, [rows, selected, onSelectPod, onToggleGroup, onToggleNoPod, onExpandMore]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTableSectionElement>) => {
     const tr = e.target instanceof HTMLElement ? e.target.closest<HTMLElement>('tr[data-ri]') : null;
@@ -365,7 +441,7 @@ export function TracePodTable(props: TracePodTableProps) {
     }
   });
 
-  const renderRow = (r: TraceMetricsRow, i: number) => {
+  const renderRow = (r: TraceMetricsRow, i: number): ReactNode[] => {
     const stop = i === stopIdx;
     const sel = r.kind === 'pod' && r.pod.pod === selected;
     const common = {
@@ -379,7 +455,7 @@ export function TracePodTable(props: TracePodTableProps) {
     } as const;
     if (r.kind === 'more') {
       const notes = moreRowNotes(r.hidden, metrics);
-      return (
+      return [
         <tr key={r.key} {...common} className={cls('tpm-more', 'tpm-click', many && 'cv-row')}>
           {visible[0]?.id === 'chev' && <td className="tpm-chev" />}
           <td colSpan={Math.max(1, visible.length - (visible[0]?.id === 'chev' ? 1 : 0))} className="tpm-more-cell">
@@ -392,11 +468,11 @@ export function TracePodTable(props: TracePodTableProps) {
               ))}
             </span>
           </td>
-        </tr>
-      );
+        </tr>,
+      ];
     }
     const expandable = r.kind === 'group' || r.kind === 'nopod';
-    return (
+    const tr = (
       <tr key={r.key} {...common}
         aria-expanded={expandable ? r.open : undefined}
         aria-selected={r.kind === 'pod' ? sel : undefined}
@@ -411,6 +487,24 @@ export function TracePodTable(props: TracePodTableProps) {
         {cellsFor(r, stop)}
       </tr>
     );
+    if (!sel || detail === null || r.kind !== 'pod') return [tr];
+    // v0.10.976 — satır ve ayrıntı AYNI dizide (Fragment DEĞİL): aynı anahtarla
+    // tr ⇄ Fragment geçişi React'ta satırı yeniden bağlar ve odak <body>'ye
+    // düşerdi. Ayrıntı satırı: treegrid satırı değil (presentation, data-ri
+    // yok), cv-row DEĞİL (grafik ölçümü kırpılmasın); hücre ev kuralı
+    // td.row-detail; bölge "<pod> ayrıntısı" odaklanabilir grup. Anahtar SABİT
+    // ("detail", satır anahtarlarıyla çakışmaz: p:/g:/m:/n:): seçim taşınınca
+    // düğüm taşınır, alt ağaç (TracePodPanel durumu) yaşar.
+    return [
+      tr,
+      <tr key="detail" role="presentation" className="tpm-detail-row" data-detail-for={r.pod.pod}>
+        <td role="presentation" colSpan={visible.length} className="row-detail tpm-detail-cell">
+          <section ref={detailRef} tabIndex={-1} className="tpm-detail" aria-label={`${r.pod.pod} ayrıntısı`}>
+            {detail}
+          </section>
+        </td>
+      </tr>,
+    ];
   };
 
   // Menü içeriği (açık satıra göre).
@@ -466,7 +560,7 @@ export function TracePodTable(props: TracePodTableProps) {
         <tbody ref={tbodyRef} onKeyDown={onKeyDown} onClick={onClick}>
           {rows.length === 0
             ? <DataTableState dt={dt} kind="no-match" onClearFilters={onClearFilters} />
-            : rows.map(renderRow)}
+            : rows.flatMap(renderRow)}
         </tbody>
       </table>
       {/* Satır değişince yüzey yeniden bağlanır: yerleşim ve odak dönüşü yeni çapaya. */}

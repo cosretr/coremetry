@@ -1,5 +1,24 @@
-// TracePodPanel — v0.10.968 — Trace › Metrics seçili pod paneli (400px, onaylı
-// mockup Main.dc.html sağ panel; operatör "3 onay", 2026-09-27).
+// TracePodPanel — v0.10.968 — Trace › Metrics seçili pod paneli (v0.10.968'de
+// 400px yan panel, onaylı mockup Main.dc.html sağ panel; operatör "3 onay",
+// 2026-09-27).
+//
+// v0.10.976 — SATIR ALTI KOMPAKT AYRINTI (operatör: "inline daha iyi olur").
+// Yan panel tabloyu sıkıştırıp CPU/Bellek hücrelerini "%…"ya kırpıyordu; panel
+// artık TracePodTable'ın seçili satırının altında tam genişlikte (kabuk
+// `detail` prop'uyla verir; bölge ve odak tabloda). Yerleşim YATAY:
+//   • başlık satırı — ad (ortadan kırpma), kopyala, "Odak görünümü",
+//     "Pod sayfasında aç", "Span'ları Trace'te göster", ×;
+//   • alt satır + rozetler;
+//   • gövde iki sütun (`.tpp-detail-body`, ≤1024 alt alta): SOLDA üç özet
+//     bloğu yan yana (`.tpp-kv3`: Bu trace'te / Trace anında / Şu an; dar
+//     etiket sütunu), SAĞDA Karşılaştır (çipler, +N menüsü, Kardeş çizgileri)
+//     + yan yana Bellek/CPU (168 px; limit çizgisi, etkin aralık bandı, kardeş
+//     çizgileri). Metrik ok değilse sağ sütunda durum kutusu (StateBlock);
+//   • JVM yalnız JVM servisinde, KAPALI açılır bölüm (DisclosureButton) —
+//     açılmadan ClickHouse isteği yok (§6 "fetch on expand");
+//   • "Kaynak / adım" dipnotu sekme altında kalır (kabuk).
+// v0.10.968'in hiçbir parçası düşmedi; TracePodFocus paylaşılan bölümleri
+// aynen (dikey) kullanır.
 //
 // v0.10.968 — Panel bir pod'un BU TRACE'teki rolünü (span, hata, kritik yol,
 // öz süre, etkin aralık), trace anındaki CPU/belleğini (limite ve kardeşlere
@@ -29,7 +48,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Copy, Maximize2, X } from 'lucide-react';
-import { Badge, Button, Chip, IconButton, KeyValue, LinkButton, MenuItem, Popover, type KeyValueItem } from '@/components/ui';
+import { Badge, Button, Chip, DisclosureButton, IconButton, KeyValue, LinkButton, MenuItem, Popover, type KeyValueItem } from '@/components/ui';
 import { MiddleEllipsis } from '@/components/ui/DataTable/MiddleEllipsis';
 import { Skeleton } from '@/components/Skeleton';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -304,9 +323,16 @@ export function StateBlock({ state, pod, onRetry, height = 140 }: { state: PodMe
 /** v0.10.968 — JVM heap + GC: yalnız familyOf(runtime) === 'jvm' (Thanos
  *  durumundan BAĞIMSIZ); JVM değilse tek satır not; runtime bilinmiyorsa hiç.
  *  Seri etiketi ve rengi çip / Bellek / CPU ile AYNI (suffixLabels +
- *  compareColors): bir pod dört grafikte de tek ad, tek renk. */
-export function JvmSection({ model, p, compare, window: w }: { model: TraceMetricsModel; p: TracePodInfo; compare: string[]; window: TraceMetricsWindowInfo }) {
+ *  compareColors): bir pod dört grafikte de tek ad, tek renk.
+ *
+ *  v0.10.976 — `collapsible`: satır altı ayrıntıda KAPALI açılır bölüm;
+ *  TraceJvmPanel yalnız açıkken bağlanır (sorgu o zaman gider). Odak
+ *  görünümü açık (dikey) kullanır. */
+export function JvmSection({ model, p, compare, window: w, collapsible = false }: {
+  model: TraceMetricsModel; p: TracePodInfo; compare: string[]; window: TraceMetricsWindowInfo; collapsible?: boolean;
+}) {
   const themeTick = useThemeTick();
+  const [open, setOpen] = useState(false);
   const svcPods = useMemo(() => servicePods(model, p.service), [model, p.service]);
   const queryPods = useMemo(() => svcPods.map(x => x.pod), [svcPods]);
   const labels = useMemo(() => suffixLabels(svcPods), [svcPods]);
@@ -317,12 +343,26 @@ export function JvmSection({ model, p, compare, window: w }: { model: TraceMetri
   const xRange = useMemo(() => ({ from: w.fromNs / 1e9, to: w.toNs / 1e9 }), [w.fromNs, w.toNs]);
   if (!p.runtime) return null;
   if (familyOf(p.runtime) !== 'jvm') return <div className="tpp-note">JVM paneli yok · runtime: {p.runtime}</div>;
+  const panel = (
+    <TraceJvmPanel service={p.service} pods={compare} queryPods={queryPods} runtime={p.runtime}
+      from={w.fromNs} to={w.toNs} syncKey={`trace-metrics-${p.service}`} deploys={deploys} xRange={xRange}
+      labelOf={labelOf} seriesColors={colors} />
+  );
+  if (collapsible) {
+    return (
+      <section className="tpp-sec" aria-label="JVM · heap ve GC">
+        <div className="tpp-sec-title">
+          <DisclosureButton anatomy="row" expanded={open} onClick={() => setOpen(o => !o)}>JVM · heap ve GC</DisclosureButton>
+          <span>OTel jvm.* · ClickHouse</span>
+        </div>
+        {open && panel}
+      </section>
+    );
+  }
   return (
     <section className="tpp-sec" aria-label="JVM · heap ve GC">
       <div className="tpp-sec-title"><span>JVM · heap ve GC</span><span>OTel jvm.* · ClickHouse</span></div>
-      <TraceJvmPanel service={p.service} pods={compare} queryPods={queryPods} runtime={p.runtime}
-        from={w.fromNs} to={w.toNs} syncKey={`trace-metrics-${p.service}`} deploys={deploys} xRange={xRange}
-        labelOf={labelOf} seriesColors={colors} />
+      {panel}
     </section>
   );
 }
@@ -370,45 +410,53 @@ export function NowSection({ state, traceStartNs, columns = false }: { state: Po
 
 // ── Panel ─────────────────────────────────────────────────────────────────
 
+/** v0.10.976 — satır altı kompakt ayrıntı (yerleşim dosya başlığında). Bölge
+ *  (aria-label "<pod> ayrıntısı") ve odak TracePodTable'da; burası içerik. */
 export function TracePodPanel(props: TracePodPanelProps) {
   const {
-    model, selected: p, compare, metrics, window: w, siblingLines, focus,
+    model, selected: p, compare, metrics, window: w, siblingLines,
     onCompareChange, onClose, onToggleFocus, onToggleSiblingLines, onShowSpans, onOpenSpan, onRetry, announce,
   } = props;
   const state = metrics(p.pod);
   const sub = subLine(p, state);
   const { note, setNote, say } = usePanelNote(p.pod, announce);
+  const ok = state.kind === 'ok';
   return (
-    <div className="tpp" data-pod={p.pod}>
+    <div className="tpp tpp-detail" data-pod={p.pod}>
       <div className="tpp-head">
         <span className="tpp-name"><MiddleEllipsis text={p.pod} /></span>
         <CopyPodButton pod={p.pod} announce={say} />
-        <IconButton aria-label="Genişlet" tooltip="Pod odak görünümünde aç" active={focus} icon={<Maximize2 size={14} />}
-          onClick={onToggleFocus} />
-        <IconButton aria-label="Paneli kapat" tooltip="Paneli kapat (Esc)" icon={<X size={14} />} onClick={onClose} />
+        <Button variant="ghost" size="xs" leftIcon={<Maximize2 size={12} aria-hidden="true" />} title="Pod odak görünümünde aç"
+          onClick={onToggleFocus}>Odak görünümü</Button>
+        <PodPageLink p={p} state={state} window={w} />
+        <Button variant="ghost" size="xs" onClick={() => onShowSpans(p.pod)}>Span'ları Trace'te göster ({p.spans})</Button>
+        <IconButton aria-label="Ayrıntıyı kapat" tooltip="Kapat (Esc)" icon={<X size={14} />} onClick={onClose} />
       </div>
       <div className="tpp-sub">
         {sub.map((s, i) => <span key={i}>{i > 0 ? '· ' : ''}{s}</span>)}
+        <PodBadges p={p} />
       </div>
-      <div className="tpp-actions">
-        <PodPageLink p={p} state={state} window={w} />
-        <Button variant="ghost" size="sm" onClick={() => onShowSpans(p.pod)}>Span'ları Trace'te göster ({p.spans})</Button>
+      <div className="tpp-detail-body">
+        <div className="tpp-kv3">
+          <TraceFacts model={model} p={p} onOpenSpan={onOpenSpan} />
+          {state.kind === 'ok' && <MomentSection model={model} p={p} data={state.data} metrics={metrics} />}
+          <NowSection state={state} traceStartNs={model.traceStartNs} />
+        </div>
+        <div className="tpp-detail-charts">
+          {ok ? (
+            <>
+              <CompareSection model={model} p={p} compare={compare} metrics={metrics} siblingLines={siblingLines}
+                onCompareChange={onCompareChange} onToggleSiblingLines={onToggleSiblingLines} announce={say}
+                note={note} setNote={setNote} />
+              <TracePodCharts model={model} selected={p} compare={compare} metrics={metrics} window={w}
+                siblingLines={siblingLines} height={168} layout="row" />
+            </>
+          ) : (
+            <StateBlock state={state} pod={p.pod} onRetry={onRetry} height={80} />
+          )}
+        </div>
       </div>
-      <PodBadges p={p} />
-      <TraceFacts model={model} p={p} onOpenSpan={onOpenSpan} />
-      {state.kind === 'ok' ? (
-        <>
-          <MomentSection model={model} p={p} data={state.data} metrics={metrics} />
-          <CompareSection model={model} p={p} compare={compare} metrics={metrics} siblingLines={siblingLines}
-            onCompareChange={onCompareChange} onToggleSiblingLines={onToggleSiblingLines} announce={say}
-            note={note} setNote={setNote} />
-          <TracePodCharts model={model} selected={p} compare={compare} metrics={metrics} window={w} siblingLines={siblingLines} />
-        </>
-      ) : (
-        <StateBlock state={state} pod={p.pod} onRetry={onRetry} />
-      )}
-      <JvmSection model={model} p={p} compare={compare} window={w} />
-      <NowSection state={state} traceStartNs={model.traceStartNs} />
+      <JvmSection model={model} p={p} compare={compare} window={w} collapsible />
     </div>
   );
 }

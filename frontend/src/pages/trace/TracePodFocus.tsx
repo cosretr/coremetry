@@ -1,7 +1,11 @@
 // TracePodFocus — v0.10.968 — Trace › Metrics pod odak görünümü (`mview=pod`;
 // onaylı mockup PodDetail.dc.html, operatör "3 onay" 2026-09-27).
 //
-// v0.10.968 — Tablo + panel yerine tek pod: araç çubuğu ("← Tüm pod'lar",
+// v0.10.976 — Panel artık 400 px yan panel değil, tablonun satır altı
+// ayrıntısı (TracePodPanel); bu görünüm değişmedi ve ayrıntının "Odak
+// görünümü" düğmesinden ulaşılır; "Daralt" / "← Tüm pod'lar" tabloya döner.
+//
+// v0.10.968 — Tablo + ayrıntı yerine tek pod: araç çubuğu ("← Tüm pod'lar",
 // konum, önceki/sonraki İŞARETLİ pod — `[` / `]` kısayolları yalnız bu görünüm
 // bağlıyken), solda 280px işaretli pod rayı (trace ilgisi sırası), sağda
 // panelin bölümleri iki sütunda + pod'un span zaman çizelgesi + dört grafik
@@ -103,7 +107,8 @@ export function TracePodFocus(props: TracePodPanelProps) {
           <div className="tpp-head">
             <span className="tpp-name"><MiddleEllipsis text={p.pod} /></span>
             <CopyPodButton pod={p.pod} announce={say} />
-            <IconButton aria-label="Daralt" tooltip="Tablo + panel görünümüne dön" icon={<Minimize2 size={14} />} onClick={onToggleFocus} />
+            {/* v0.10.976 — dönüş hedefi tablo (satır altı ayrıntı), yan panel değil. */}
+            <IconButton aria-label="Daralt" tooltip="Tabloya dön (satır altı ayrıntı)" icon={<Minimize2 size={14} />} onClick={onToggleFocus} />
             <IconButton aria-label="Kapat" tooltip="Kapat (Esc)" icon={<X size={14} />} onClick={onClose} />
           </div>
           <div className="tpp-sub">

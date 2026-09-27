@@ -5,8 +5,25 @@
 // Main.dc.html 64 pod / 25 servis + PodDetail.dc.html). Çip duvarı yerine
 // servise göre gruplu TEK tablo (TracePodTable), sıra trace ilgisine göre ve
 // trace'ten HEMEN bilinir (hata → kritik yol payı → öz süre); metrikler
-// Thanos'tan geç gelir ve sırayı DEĞİŞTİRMEZ. Seçili pod 400 px yan panelde
-// (TracePodPanel), `mview=pod` ile odak görünümünde (TracePodFocus).
+// Thanos'tan geç gelir ve sırayı DEĞİŞTİRMEZ. Seçili pod satırının altında
+// (TracePodPanel, v0.10.976), `mview=pod` ile odak görünümünde (TracePodFocus).
+//
+// v0.10.976 — SATIR ALTI AYRINTI (operatör: "inline daha iyi olur",
+// 2026-09-27). Prod v0.10.968'de 400 px yan panel tabloyu sıkıştırıp CPU/Bellek
+// hücrelerini "%…"ya kırpıyordu; yan yerleşim (.tpm-body.has-side / .tpm-side)
+// söküldü. Seçili pod'un ayrıntısı TracePodTable'a `detail` ile verilir ve
+// seçili satırın hemen altında tam genişlikte çizilir; tabloya tıklanan /
+// Enter'lanan pod zaten seçiliyse KAPANIR (mpod=-). URL durumu (mpod, replace)
+// ve odak görünümü aynen; odak dönüşü (focusRow) ayrıntı için de geçerli.
+//   • Satırdan kapanış da restoreTo ister (Esc / × ile simetrik): satır
+//     yeniden bağlanmaz ama odak bir yerde yitmişse aynı kural yakalar.
+//   • Çip yolu seçimi taşıyınca (compare[0] çıkarıldı, ≥2 pod) ayrıntı başka
+//     satırın altına gider ve düğüm taşınır (odak düşer): kabuk `d:<pod>`
+//     focusRow isteğiyle odağı yeni bölgeye alır. Odak görünümünde tablo yok:
+//     istek üretilmez.
+//   • Tablo kaydırmayı yalnız kendi kabında yapar; `detailFromUrl` (mpod
+//     açıkça dolu) ilk bağlanmadaki derin link kaydırmasını ayırır (varsayılan
+//     seçim sekmeye girişte sayfayı kaydırmasın).
 //
 // Veri: pod başına /api/clusters/pods/detail fan-out'u yerine TOPLU uç
 // (/api/trace-pods/metrics; cluster değeri + ≤64 pod dilimi başına tek
@@ -215,6 +232,12 @@ export function TraceMetricsPanel({ traceId, spans, analysis, criticalPath, span
   const restoreTo = useCallback((pod: string) => {
     if (pod) setFocusReq({ key: `p:${pod}`, n: ++focusReqN.current });
   }, []);
+  // v0.10.976 — çip yolu seçimi taşıyınca (compare[0] çıkarıldı, ≥2 pod)
+  // ayrıntı başka satırın altına gider ve düğüm taşınır; odak <body>'ye
+  // düşmesin, yeni ayrıntının bölgesine geçsin (satırdan açılışla aynı yer).
+  const focusDetailOf = useCallback((pod: string) => {
+    if (pod) setFocusReq({ key: `d:${pod}`, n: ++focusReqN.current });
+  }, []);
   const [seenFocus, setSeenFocus] = useState(url.focus);
   if (seenFocus !== url.focus) {
     setSeenFocus(url.focus);
@@ -226,6 +249,14 @@ export function TraceMetricsPanel({ traceId, spans, analysis, criticalPath, span
     write({ compare: next });
     if (serviceChanged) announce(`Karşılaştırma servisi değişti: ${model.byPod.get(pod)?.service ?? ''}.`);
   }, [compare, model, metrics, write, announce]);
+  // v0.10.976 — tablo satırından seçim: açık olan pod'a yeniden tık / Enter
+  // ayrıntıyı KAPATIR (yalnız satır yolu; odak görünümünün rayı / önceki-sonraki
+  // onSelect'i kullanır ve seçimi düşürmez). Kapanış Esc / × ile simetrik:
+  // restoreTo — satır yerinde kalır, yitmiş odağı mevcut kural satıra döndürür.
+  const onSelectRow = useCallback((pod: string) => {
+    if (pod === selectedPod) { restoreTo(pod); write({ compare: 'closed' }); return; }
+    onSelect(pod);
+  }, [selectedPod, onSelect, write, restoreTo]);
   const onRetry = useCallback((pod: string) => {
     const i = podChunk.get(pod);
     if (i === undefined) return;
@@ -310,7 +341,12 @@ export function TraceMetricsPanel({ traceId, spans, analysis, criticalPath, span
   const panelProps: TracePodPanelProps | null = selectedInfo ? {
     model, selected: selectedInfo, compare, metrics, window: windowInfo,
     siblingLines: url.siblingLines, focus: url.focus,
-    onCompareChange: next => write({ compare: next.length ? next : 'closed' }),
+    onCompareChange: next => {
+      // v0.10.976 — seçim (compare[0]) taşındıysa odak yeni ayrıntının bölgesine;
+      // odak görünümünde (TracePodFocus de bu yolu kullanır) tablo yok: istek yok.
+      if (!url.focus && next.length > 0 && next[0] !== selectedPod) focusDetailOf(next[0]);
+      write({ compare: next.length ? next : 'closed' });
+    },
     onSelect,
     onClose: () => { restoreTo(selectedPod); write({ compare: 'closed' }); },
     onToggleFocus: () => { if (url.focus) restoreTo(selectedPod); write({ focus: !url.focus }); },
@@ -399,20 +435,16 @@ export function TraceMetricsPanel({ traceId, spans, analysis, criticalPath, span
       {showFocus && panelProps ? (
         <TracePodFocus {...panelProps} />
       ) : (
-        <div className={panelProps ? 'tpm-body has-side' : 'tpm-body'}>
-          <section aria-label="Pod tablosu" className="tpm-main">
-            <TracePodTable model={model} rows={rows} selected={selectedPod} metrics={metrics}
-              hideMetrics={thanosOff} window={windowInfo} grouping={url.grouping}
-              onSelectPod={onSelect} onToggleGroup={onToggleGroup} onExpandMore={onExpandMore}
-              onToggleNoPod={setNoPodOpen} onShowPodSpans={onShowPodSpans} onRetryService={onRetryService}
-              onClearFilters={clearFilters} announce={announce} focusRow={focusReq} />
-          </section>
-          {panelProps && (
-            <section aria-label="Pod paneli" className="tpm-side">
-              <TracePodPanel {...panelProps} />
-            </section>
-          )}
-        </div>
+        /* v0.10.976 — tek sütun: ayrıntı tablonun içinde, seçili satırın altında. */
+        <section aria-label="Pod tablosu" className="tpm-main">
+          <TracePodTable model={model} rows={rows} selected={selectedPod} metrics={metrics}
+            hideMetrics={thanosOff} window={windowInfo} grouping={url.grouping}
+            onSelectPod={onSelectRow} onToggleGroup={onToggleGroup} onExpandMore={onExpandMore}
+            onToggleNoPod={setNoPodOpen} onShowPodSpans={onShowPodSpans} onRetryService={onRetryService}
+            onClearFilters={clearFilters} announce={announce} focusRow={focusReq}
+            detail={panelProps ? <TracePodPanel {...panelProps} /> : null}
+            detailFromUrl={!url.isDefault} />
+        </section>
       )}
 
       <div className="tpm-foot">
