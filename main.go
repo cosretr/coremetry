@@ -285,6 +285,10 @@ func main() {
 	} else if prochard.Supported {
 		log.Printf("[prochard] dumpable=0: /proc/<pid>/environ, mem and fd closed to same-uid child processes")
 	}
+	// v0.10.970 — runbook yalıtımı v2, YALNIZ ÖLÇÜM: Landlock ABI'si ya da tipli
+	// neden + çekirdek + seccomp modu. Kural seti kurulmaz, süreç kısıtlanmaz;
+	// satır docs/plans/runbook-isolation-v2.md kararının prod girdisidir.
+	log.Printf("[prochard] landlock: %s", prochard.ProbeLandlock())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
