@@ -129,6 +129,11 @@ export interface CorePanelProps {
   // başarı yeşil — ROL ÇAĞIRANDAN gelir, etiketten tahmin edilmez
   // (seriesRole.ts gerekçesi).
   roles?: SeriesRole[];
+  // v0.10.968 — seri başına AÇIK renk (indeksle hizalı, eksik/undefined →
+  // rolün adı-hash rengi). Trace › Metrics karşılaştırması aynı panelde iki
+  // pod'un hash'i aynı yuvaya düşünce ikisini aynı renkte çiziyordu; çağıran
+  // çakışmasız atamayı (seriesColorsFor, karşılaştırma sırası) buradan verir.
+  colors?: (string | undefined)[];
   // uPlot saniye cinsinden brush aralığı — usePageZoomRange.handleZoom'a.
   onZoom?: (fromSec: number, toSec: number) => void;
   // Çift tık: bir adım geri (usePageZoomRange.handleZoomReset).
@@ -272,7 +277,7 @@ function fullNameOf(frame: { meta?: { custom?: Record<string, unknown> } } | und
 }
 
 export function CorePanel({
-  title, data, height = 200, roles, onZoom, onZoomReset, syncKey, logScale, zeroBase, storageKey,
+  title, data, height = 200, roles, colors, onZoom, onZoomReset, syncKey, logScale, zeroBase, storageKey,
   thresholds, regions, queryText,
   defaultHidden, xRange, note, onExpandClick, exemplars, onExemplarClick, onRegionClick, regionClickHint,
   onBucketClick, hiddenNames, hideLegend, onCursorTime, dashed, viz = 'line',
@@ -724,7 +729,7 @@ export function CorePanel({
       const name = aligned.names[i];
       b.addSeries({
         scaleKey: 'y', theme,
-        lineColor: resolveVar(seriesRoleColor(name, roles?.[i] ?? 'data')),
+        lineColor: resolveVar(colors?.[i] ?? seriesRoleColor(name, roles?.[i] ?? 'data')),
         // Çubuk kenarı ince (1) — 1.5px stroke dar çubuğu şişman gösterir.
         lineWidth: bars ? 1 : 1.5,
         // v0.9.93 (uPlot Aşama 3) dersinin bu motordaki karşılığı: yığın
@@ -949,7 +954,7 @@ export function CorePanel({
         const full = fullNameOf(framesRef.current[i]);
         return {
           label: full || label,
-          color: resolveVar(seriesRoleColor(label, roles?.[i] ?? 'data')),
+          color: resolveVar(colors?.[i] ?? seriesRoleColor(label, roles?.[i] ?? 'data')),
           value: v,
           // display processor varsa text'i o üretir; TooltipRow.text'i
           // model kurar ama biz biçimli metni unit alanına gömmüyoruz —
@@ -1011,7 +1016,7 @@ export function CorePanel({
     //                değil ÖLÇÜ; mandal yüzünden yalnız büyür, yani
     //                rebuild seyrek ve gerçekten gerekli olduğunda olur.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aligned.names.join(' '), roles?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), yGutter.px]);
+  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), yGutter.px]);
 
   // ── v0.9.793 — focusedLabel (lejant hover vurgusu) ───────────────────────
   //
@@ -1342,7 +1347,7 @@ export function CorePanel({
           stats={stats} vis={vis} onVisChange={setVis}
           focusName={focusName}
           onHover={(name, leaving) => setHoverName(n => (name !== null ? name : (n === leaving ? null : n)))}
-          roles={roles} fullNames={frames.map(f => fullNameOf(f))}
+          roles={roles} colors={colors} fullNames={frames.map(f => fullNameOf(f))}
           fmtCell={fmtCell} sumAdditive={sumAdditive} />
       )}
     </div>

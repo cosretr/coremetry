@@ -873,6 +873,14 @@ export const api = {
     const q = qs(opts);
     return get<TraceBundleResponse>(`/api/traces/${id}/bundle${q ? '?' + q : ''}`, signal);
   },
+  // v0.10.968 — Trace › Metrics toplu ucu (internal/api/trace_pod_metrics.go):
+  // bir span-cluster değeri + ≤64 pod'luk dilim için TEK istek (Thanos'ta 2
+  // range + 6 instant sorgu; maliyet pod sayısından bağımsız). signal geçer
+  // (cancellation.test.ts HEAVY): sekme/pencere değişince istek kesilir.
+  tracePodMetrics: (q: import('./types').TracePodMetricsQuery, signal?: AbortSignal) =>
+    get<import('./types').TracePodMetricsResponse>(`/api/trace-pods/metrics?cv=${encodeURIComponent(q.clusterValue)}` +
+      `&from=${q.from}&to=${q.to}&mdp=${q.mdp}` +
+      `&pods=${encodeURIComponent(q.pods.map(p => `${p.ns}/${p.pod}`).join(','))}`, signal),
 
   // v0.8.332 (pivot Phase 3) — real OTLP exemplars for a metric window
   // (GET /api/exemplars, pivot Phase 2). Either a comma-separated

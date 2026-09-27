@@ -125,6 +125,10 @@ export const keys = {
   traces: {
     bundle:      (id: string, logLimit: number, oracleLimit: number) =>
                    ['traces', 'bundle', id, logLimit, oracleLimit] as const,
+    // v0.10.968 — Trace › Metrics toplu uç: cluster değeri + pencere + mdp
+    // basamağı + dilimin ns/pod listesi (sunucu anahtarıyla aynı girdiler).
+    podMetrics:  (cv: string, from: number, to: number, mdp: number, podsParam: string) =>
+                   ['traces', 'pod-metrics', cv, from, to, mdp, podsParam] as const,
   },
 
   deploys: {

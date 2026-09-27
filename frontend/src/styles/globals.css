@@ -4768,3 +4768,127 @@ a.ins-val:hover { text-decoration: underline; }
    select` kuralları (yoğunluk + ≤640px iOS 16px) yine kazanır. Bilerek ≤640px
    katmanının DIŞINDA — yalnız masaüstü tabanı. */
 .ai-filter-select { font-size: var(--fs-sm); }
+
+/* ── v0.10.968 — ui/Popover (components/ui/Popover.tsx) ─────────────────
+   Çapaya bağlı menü/diyalog: satır ⋯ menüleri, "+N" çip menüsü, kapsam
+   diyaloğu. `position: fixed` — koordinat placeMenu'dan (JS yazar); tablo
+   kabının overflow'u kırpmaz. Görünüm başlık ⋯ menüsüyle (.dt-menu-pop) aynı
+   aile; genişlik çağıranın `width`i (satır içi, hesaplanmış). */
+.ui-popover {
+  position: fixed; z-index: var(--z-popover); left: 0; top: 0;
+  display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2);
+  max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; box-sizing: border-box;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+  text-align: left; font-weight: 400; white-space: normal; color: var(--text); font-size: var(--fs-sm);
+}
+.ui-popover[role="dialog"] { gap: var(--sp-3); padding: var(--sp-4) var(--sp-5); }
+.ui-popover:focus { outline: none; }
+.ui-popover a.menuitem { text-decoration: none; }
+
+/* ── v0.10.968 — Trace › Metrics seçili pod paneli + odak görünümü (tpp-*) ──
+   L-pod (TracePodPanel / TracePodFocus / TracePodCharts / TracePodSpanTimeline)
+   YALNIZ bu sınıfları, mevcut sınıfları ve atomları kullanır; satır içi stil
+   yalnız hesaplanmış değer taşır (örnek renk, çubuk genişliği). */
+.tpp { display: grid; gap: var(--sp-5); min-width: 0; align-content: start; }
+.tpp-head { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.tpp-name { font-family: var(--font-mono); font-weight: 600; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpp-sub { color: var(--text2); font-size: var(--fs-xs); display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.tpp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.tpp-badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.tpp-sec { border-top: 1px solid var(--divider); padding-top: var(--sp-4); display: grid; gap: var(--sp-3); min-width: 0; }
+.tpp-sec-title { font-size: var(--fs-xs); font-weight: 600; color: var(--text2); display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); }
+.tpp-note { font-size: var(--fs-xs); color: var(--text3); }
+.tpp-msg { background: var(--bg2); border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-sm); }
+.tpp-msg.is-err { color: var(--err); }
+.tpp-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.tpp-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex: none; vertical-align: middle; }
+.tpp-chart { display: grid; gap: var(--sp-2); min-width: 0; }
+.tpp-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
+.tpp-caption { font-size: var(--fs-2xs); color: var(--text3); line-height: 1.5; }
+.tpp-focus { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--sp-6); min-width: 0; }
+.tpp-focus-bar { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+.tpp-rail { overflow: auto; border-right: 1px solid var(--divider); min-width: 0; }
+.tpp-rail-item { display: flex; align-items: center; gap: var(--sp-3); width: 100%; padding: var(--sp-3) var(--sp-4); box-sizing: border-box; font-size: var(--fs-sm); text-align: left; }
+.tpp-rail-item.is-current { background: var(--accent-bg); }
+.tpp-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-6); min-width: 0; }
+.tpp-tl { display: block; min-width: 0; }
+.tpp-tl svg { width: 100%; display: block; }
+.tpp-tl-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
+
+/* ── v0.10.968 — Trace › Metrics kabuğu + gruplu pod tablosu (tpm-*) ─────
+   Operatör onayı 2026-09-27 (mockup Main.dc.html). Renk YALNIZ sapmada
+   (.cell-err/.cell-warn, tablo standardı T9); servis renk noktası yok (8 renk
+   25 servise çarpışır). Seçili satır `.row-selected` (3 px iç vurgu rayı). */
+.tpm { display: grid; gap: var(--sp-4); min-width: 0; }
+.tpm-strip { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; font-size: var(--fs-sm); }
+.tpm-strip-left, .tpm-strip-right { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; min-width: 0; }
+.tpm-muted { color: var(--text2); }
+.tpm-strong { font-weight: 600; }
+.tpm-notes { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); font-size: var(--fs-xs); }
+.tpm-toolbar { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.tpm-toolbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.tpm-order { color: var(--text2); font-size: var(--fs-xs); cursor: help; }
+.tpm-order:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-xs); }
+.tpm-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); align-items: start; min-width: 0; }
+.tpm-body.has-side { grid-template-columns: minmax(0, 1fr) 400px; }
+.tpm-main { min-width: 0; }
+.tpm-side {
+  position: sticky; top: 0; max-height: calc(100vh - 120px); overflow: auto; min-width: 0;
+  padding-left: var(--sp-6); border-left: 1px solid var(--divider);
+}
+.tpm-foot { font-size: var(--fs-2xs); color: var(--text3); }
+.table-wrap.is-scroll.tpm-scroll { max-height: calc(100vh - 220px); }
+/* Kapsam tetiği + diyaloğu (TraceMetricsCoverage). */
+.btn-link.tpm-cov { font-size: var(--fs-sm); color: var(--text2); }
+.btn-link.tpm-cov.is-warn { color: var(--warn); font-weight: 600; }
+.tpm-cov-title { font-weight: 600; font-size: var(--fs-sm); }
+.tpm-cov-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--sp-2); font-size: var(--fs-xs); }
+.tpm-cov-off { color: var(--text2); }
+.tpm-cov-result { border-top: 1px solid var(--divider); padding-top: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
+.tpm-cov-link { font-size: var(--fs-xs); }
+/* Tablo hücreleri (TracePodTable / TraceMetricCell). */
+/* Tıklanabilir satır: işleyici tbody'ye DEVREDİLMİŞ (treegrid satırı role=row
+   kalır; rowActivation role=button basardı) — el imleci + hover yalnız bu
+   işaretli satırda, taban T2 kuralıyla aynı ton. */
+.tpm-scroll tbody tr.tpm-click { cursor: pointer; }
+.tpm-scroll tbody tr.tpm-click:hover { background: var(--bg2); }
+.tpm-scroll tbody tr[role="row"]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tpm-th { cursor: help; }
+.tpm-th-note { color: var(--text3); font-weight: 400; }
+/* v0.10.968 — CPU/Bellek sayısal değer: onaylı mockup + ev kuralı (td.num) sağa yaslı. */
+tbody td.tpm-mtd { white-space: nowrap; text-align: right; }
+tbody td.tpm-chev { padding-left: var(--sp-3); padding-right: 0; color: var(--text3); }
+.tpm-caret { display: inline-block; width: 1em; text-align: center; }
+.tpm-podcell { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.tpm-podcell.is-l2 { padding-left: var(--sp-7); }
+.tpm-podcell > .tpm-pod, .tpm-podcell > .tpm-pod-name { min-width: 0; flex: 0 1 auto; }
+/* Pod adı: baş kısım (MiddleEllipsis) kırpılır, hash-ek hiç kırpılmaz;
+   `--tpm-pod-tail-w` hash-ekin `ch` genişliği (satır içi, hesaplanmış). */
+.tpm-pod { display: block; white-space: nowrap; overflow: hidden; }
+.tpm-pod > .mid-ellipsis.tpm-pod-head { display: inline-block; vertical-align: bottom; max-width: calc(100% - var(--tpm-pod-tail-w, 0ch)); }
+.tpm-pod-rs { color: var(--text3); }
+.tpm-badge { flex: none; }
+.tpm-gname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tpm-gcount { color: var(--text3); flex: none; }
+tbody td.tpm-nopod-label { color: var(--text2); }
+.tpm-crit { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--sp-3); }
+.tpm-bar { display: inline-block; width: 36px; height: 6px; border-radius: var(--radius-xs); background: var(--bg3); overflow: hidden; flex: none; }
+.tpm-bar-fill { display: block; height: 100%; background: var(--text3); }
+.tpm-mcell { display: inline-flex; align-items: center; gap: var(--sp-3); max-width: 100%; vertical-align: middle; }
+/* v0.10.968 — sparkline süs: fareyi almaz (İngilizce kova başlığı ve "1.5B"
+   biçimi hiç görünmez); ipucu tüm hücrede, Türkçe. */
+.tpm-spark { flex: none; pointer-events: none; }
+/* v0.10.968 — taşan değer ortadan değil sondan "…" (tam değer ipucunda). */
+.tpm-mval { font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* v0.10.968 — "N pod daha" etiketi sapma değil: hücrenin text2'sini devralır (T9). */
+tbody td.tpm-more-cell { color: var(--text2); }
+.tpm-note { font-size: var(--fs-xs); flex: none; }
+
+/* v0.10.968 — tablet eşiği (mevcut 1024): yan panel ve odak görünümü tek kolona iner. */
+@media (max-width: 1024px) {
+  .tpm-body.has-side { grid-template-columns: minmax(0, 1fr); }
+  .tpm-side { position: static; max-height: none; padding-left: 0; border-left: 0; border-top: 1px solid var(--divider); padding-top: var(--sp-6); }
+  .tpp-focus, .tpp-cols { grid-template-columns: minmax(0, 1fr); }
+  .tpp-rail { border-right: 0; border-bottom: 1px solid var(--divider); max-height: 240px; }
+}

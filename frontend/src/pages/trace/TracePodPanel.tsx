@@ -1,0 +1,414 @@
+// TracePodPanel — v0.10.968 — Trace › Metrics seçili pod paneli (400px, onaylı
+// mockup Main.dc.html sağ panel; operatör "3 onay", 2026-09-27).
+//
+// v0.10.968 — Panel bir pod'un BU TRACE'teki rolünü (span, hata, kritik yol,
+// öz süre, etkin aralık), trace anındaki CPU/belleğini (limite ve kardeşlere
+// göre), aynı servisin en çok 4 pod'unu üst üste grafiği, JVM heap/GC'yi
+// (yalnız JVM servislerinde) ve "Şu an" durumunu (restart, OOMKilled,
+// limitler — trace anı DEĞİL) gösterir. Veri: tablo kabuğunun toplu Thanos
+// cevabı (metrics(pod)); panel EK Thanos isteği atmaz, yalnız JVM
+// (ClickHouse metric_points) seçimde okunur.
+//
+// v0.10.962 davranışları korunur: seçili çip görünür (Chip `active`),
+// "Pod sayfasında aç" range+at taşır (traceMetricsPodHref), pod başına hata
+// asla boş gösterilmez (stateMessage), tavanda çip devre dışı + gerekçe +
+// canlı bölge duyurusu (announce), bellek CPU'dan önce ve zeroBase.
+//
+// Bölümler (Header, TraceFacts, MomentSection, CompareSection, StateBlock,
+// JvmSection, NowSection) TracePodFocus ile PAYLAŞILIR; saf kararlar
+// tracePodPanelModel.ts'te (tablo testli).
+//
+// v0.10.968 — inceleme turu: (1) karşılaştırma renkleri çakışmasız
+// (compareColors; çip swatch'ı, Bellek/CPU ve JVM çizgileri tek haritadan);
+// (2) panel duyuruları sr-only canlı bölgenin YANINDA çiplerin altında
+// görünür not olarak da yazılır (mockup `pn.hasLive`; reddedilen son-çip
+// tıkı gören kullanıcıya da sessiz kalmasın); (3) kopyalama lib/clipboard
+// yedeğiyle ve yalnız başarıda "kopyalandı" der; (4) "+N" menüsü açıkken
+// üyeliği donar (işaretlenen satır odağı <body>'ye düşürmez); (5) "Yeniden
+// dene"/"Yükle" bastıktan sonra odak mesaj kutusunda kalır.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { Check, Copy, Maximize2, X } from 'lucide-react';
+import { Badge, Button, Chip, IconButton, KeyValue, LinkButton, MenuItem, Popover, type KeyValueItem } from '@/components/ui';
+import { MiddleEllipsis } from '@/components/ui/DataTable/MiddleEllipsis';
+import { Skeleton } from '@/components/Skeleton';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useThemeTick } from '@/lib/useThemeTick';
+import { familyOf } from '@/pages/service/RuntimeCharts';
+import {
+  CRIT_FLAG_SHARE, TRACE_METRICS_MAX_COMPARE,
+  type PodMetricSeries, type PodMetricState, type TraceMetricsModel, type TraceMetricsWindowInfo,
+  type TracePodInfo, type TracePodPanelProps,
+} from './traceMetricsModel';
+import { fmtClockNs, fmtDurNs, fmtPct } from './traceMetricsFmt';
+import { shortPod, togglePod, traceMetricsPodHref } from './traceMetrics';
+import { TraceJvmPanel } from './TraceJvmPanel';
+import { TracePodCharts } from './TracePodCharts';
+import { usePanelNote } from './usePanelNote';
+import {
+  agoText, CAP_REASON, clusterNameOf, compareChipLayout, compareColors, hhmm, momentRow, nowNote, nowSection, podBadges,
+  servicePods, siblingCopy, siblingStats, stateMessage, subLine, suffixLabels,
+  type CompareChip, type MomentRow, type NowRow,
+} from './tracePodPanelModel';
+
+// ── Paylaşılan parçalar ──────────────────────────────────────────────────
+
+/** v0.10.968 — "Pod adını kopyala": lib/clipboard (düz HTTP'de execCommand
+ *  yedeği); "kopyalandı" YALNIZ kopya gerçekten yapıldıysa, değilse
+ *  "kopyalanamadı" duyurulur (tablonun ⋯ menüsüyle aynı). */
+export function CopyPodButton({ pod, announce }: { pod: string; announce: (m: string) => void }) {
+  const copy = () => {
+    void copyToClipboard(pod).then(ok => announce(ok ? `Pod adı kopyalandı: ${pod}` : `Pod adı kopyalanamadı: ${pod}`));
+  };
+  return <IconButton aria-label="Pod adını kopyala" tooltip="Pod adını kopyala" icon={<Copy size={14} />} onClick={copy} />;
+}
+
+/** v0.10.968 — "Pod sayfasında aç ↗" (range + at, v0.10.962 hata 2); cluster
+ *  bilinmiyorsa çizilmez. */
+export function PodPageLink({ p, state, window: w }: { p: TracePodInfo; state: PodMetricState; window: TraceMetricsWindowInfo }) {
+  const cluster = clusterNameOf(state);
+  if (!cluster) return null;
+  const namespace = (state.kind === 'ok' ? state.data.namespace : '') || p.namespace;
+  const href = traceMetricsPodHref(
+    { pod: p.pod, cluster, namespace, service: p.service },
+    { from: w.fromNs, to: w.toNs, startNs: w.startNs },
+  );
+  return <Link className="sec" to={href}>Pod sayfasında aç ↗</Link>;
+}
+
+export function PodBadges({ p }: { p: TracePodInfo }) {
+  const badges = podBadges(p, CRIT_FLAG_SHARE);
+  if (badges.length === 0) return null;
+  return (
+    <div className="tpp-badges">
+      {badges.map(b => <Badge key={b.t} tone={b.tone}>{b.t}</Badge>)}
+    </div>
+  );
+}
+
+/** v0.10.968 — "Bu trace'te" (KeyValue): hata zamanı ve en büyük öz süreli
+ *  span, Trace sekmesinde o span'i açan LinkButton'lar. */
+export function TraceFacts({ model, p, onOpenSpan }: { model: TraceMetricsModel; p: TracePodInfo; onOpenSpan: (id: string) => void }) {
+  const selfName = useMemo(
+    () => model.podSpans.get(p.pod)?.find(s => s.spanId === p.maxSelfSpanId)?.name ?? '',
+    [model, p.pod, p.maxSelfSpanId]);
+  const fe = p.firstError;
+  const items: KeyValueItem[] = [
+    { id: 'spans', k: 'Span', v: String(p.spans) },
+    {
+      id: 'errors', k: 'Hata',
+      v: fe
+        ? <>{`${p.errors} · ilk: ${fe.name} · ${fe.status} · `}<LinkButton onClick={() => onOpenSpan(fe.spanId)}>{fmtClockNs(fe.timeNs)}</LinkButton></>
+        : p.errors > 0 ? String(p.errors) : <span className="cell-faint">0</span>,
+    },
+    {
+      id: 'self', k: 'En büyük öz süre',
+      v: model.selfKnown && p.maxSelfSpanId
+        ? <LinkButton onClick={() => onOpenSpan(p.maxSelfSpanId)}>{`${selfName || p.maxSelfSpanId} · ${fmtDurNs(p.maxSelfNs)} ↗`}</LinkButton>
+        : null,
+    },
+    {
+      id: 'crit', k: 'Kritik yol payı',
+      v: p.critNs > 0 ? `${fmtPct(p.critShare)} · ${fmtDurNs(p.critNs)}` : <span className="cell-faint">— · kritik yolda değil</span>,
+    },
+    { id: 'active', k: 'Etkin aralık', v: `${fmtClockNs(p.activeFromNs)} → ${fmtClockNs(p.activeToNs)} · ${fmtDurNs(p.activeToNs - p.activeFromNs)}` },
+  ];
+  return (
+    <section className="tpp-sec" aria-label="Bu trace'te">
+      <div className="tpp-sec-title"><span>Bu trace'te</span></div>
+      <KeyValue items={items} />
+    </section>
+  );
+}
+
+const LEVEL_CLASS: Record<MomentRow['level'], string> = { none: 'cell-strong', warn: 'cell-warn cell-strong', err: 'cell-err cell-strong' };
+
+function MomentValue({ row }: { row: MomentRow }) {
+  return (
+    <>
+      <span className={LEVEL_CLASS[row.level]}>{row.main}</span>
+      <span className="cell-faint">{row.rest}</span>
+      {row.cap && <><br /><span className="tpp-note">{row.cap}</span></>}
+    </>
+  );
+}
+
+/** v0.10.968 — "Trace anında · Thanos, ±1 adım ({step} sn)": seviye rengi
+ *  (cell-warn / cell-err) YALNIZ limite göre sapmada; kardeş oranı ≥1,5 uyarı. */
+export function MomentSection({ model, p, data, metrics }: { model: TraceMetricsModel; p: TracePodInfo; data: PodMetricSeries; metrics: (pod: string) => PodMetricState }) {
+  const stats = useMemo(() => siblingStats(model, p, metrics), [model, p, metrics]);
+  const cpu = momentRow('cpu', data);
+  const mem = momentRow('mem', data);
+  const sib = stats ? siblingCopy(stats) : [];
+  const items: KeyValueItem[] = [
+    { id: 'cpu', k: 'CPU', v: <MomentValue row={cpu} />, title: cpu.title },
+    { id: 'mem', k: 'Bellek', v: <MomentValue row={mem} />, title: mem.title },
+    {
+      id: 'sib', k: 'Kardeşlere göre', title: 'Eşik: 1,5 kat ve üstü uyarı rengi alır',
+      v: <>{sib.map((s, i) => (
+        <span key={i} className={s.tone === 'warn' ? 'cell-warn cell-strong' : s.tone === 'err' ? 'cell-err cell-strong' : s.tone === 'faint' ? 'cell-faint' : undefined}>{s.t}</span>
+      ))}</>,
+    },
+  ];
+  return (
+    <section className="tpp-sec" aria-label="Trace anında">
+      <div className="tpp-sec-title"><span>Trace anında · Thanos, ±1 adım ({data.stepSec} sn)</span></div>
+      <KeyValue items={items} />
+    </section>
+  );
+}
+
+function ChipBody({ c, color }: { c: CompareChip; color: string | undefined }) {
+  return (
+    <>
+      {c.on && <><Check size={12} aria-hidden="true" /><span className="tpp-swatch" aria-hidden="true" style={{ background: color }} /></>}
+      <span className="mono">{c.label}</span>
+      <span> · {c.spans}</span>
+      {c.errors > 0 && <span className="cell-err"> · ⚠{c.errors}</span>}
+    </>
+  );
+}
+
+const CAP_ANNOUNCE = 'Karşılaştırmada en çok 4 pod.';
+
+/** v0.10.968 — "Karşılaştır · aynı servisten (N/4)": çipler togglePod ile
+ *  (v0.10.962 anlamı), seçili çip çıkınca sıradaki öne geçer, son çip
+ *  çıkarılamaz (duyuru), tavan devre dışı + gerekçe + duyuru; ilk 6 + işaretli
+ *  + karşılaştırılan görünür, gerisi "+N" menüsünde (menuitemcheckbox).
+ *
+ *  v0.10.968 — `note`: son duyuru çiplerin altında GÖRÜNÜR (mockup
+ *  `pn.hasLive`); başarılı tık notu siler. Menü açıkken üyeliği donar
+ *  (`menuPods` → compareChipLayout `pinned`); taşma boşalınca menü kapanır
+ *  (çapasız açık kalıp sonra kendiliğinden açılıp odak çalmasın); yalnız
+ *  karşılaştırmada olduğu için görünen çip çıkarılınca odak "+N"ye geçer. */
+export function CompareSection({
+  model, p, compare, metrics, siblingLines, onCompareChange, onToggleSiblingLines, announce, note = '', setNote,
+}: {
+  model: TraceMetricsModel;
+  p: TracePodInfo;
+  compare: string[];
+  metrics: (pod: string) => PodMetricState;
+  siblingLines: boolean;
+  onCompareChange: (next: string[]) => void;
+  onToggleSiblingLines: () => void;
+  announce: (m: string) => void;
+  note?: string;
+  setNote?: (m: string) => void;
+}) {
+  const themeTick = useThemeTick();
+  const pods = useMemo(() => servicePods(model, p.service), [model, p.service]);
+  const labels = useMemo(() => suffixLabels(pods), [pods]);
+  // Tema değişince palet yeniden çözülür (seriesColorsFor chartTheme okur).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- v0.10.968: themeTick yalnız yeniden çözme tetikleyicisi
+  const colors = useMemo(() => compareColors(compare, labels), [compare, labels, themeTick]);
+  const [menuPods, setMenuPods] = useState<ReadonlySet<string> | null>(null);
+  const [seenSvc, setSeenSvc] = useState(p.service);
+  if (seenSvc !== p.service) { setSeenSvc(p.service); setMenuPods(null); }
+  const { visible, overflow } = compareChipLayout(pods, compare, metrics, labels, menuPods ?? undefined);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (overflow.length === 0) setMenuPods(null); }, [overflow.length]);
+  // Çıkarılan çip "+N"ye kaydıysa odak oraya (karşılaştırma yazımı commit olunca).
+  const pendingMore = useRef<{ pod: string; sig: string } | null>(null);
+  const compareSig = compare.join(',');
+  useEffect(() => {
+    const pm = pendingMore.current;
+    if (!pm || pm.sig === compareSig) return;
+    pendingMore.current = null;
+    if (!visible.some(c => c.pod === pm.pod)) moreRef.current?.focus({ preventScroll: true });
+  });
+  const toggle = (c: CompareChip) => {
+    if (c.disabled) { announce(c.title === CAP_REASON ? CAP_ANNOUNCE : c.title); return; }
+    if (c.on && compare.length === 1) { announce('Son pod karşılaştırmadan çıkarılamaz.'); return; }
+    const next = togglePod(compare, c.pod, pods);
+    if (next === compare) { announce(CAP_ANNOUNCE); return; }
+    pendingMore.current = menuPods === null && c.visibleOnlyByOn ? { pod: c.pod, sig: compareSig } : null;
+    onCompareChange(next);
+    setNote?.('');
+    if (!c.on && next.length >= TRACE_METRICS_MAX_COMPARE) announce(CAP_ANNOUNCE);
+  };
+  const capBlocked = [...visible, ...overflow].some(c => c.disabled && c.title === CAP_REASON);
+  const showNote = note !== '' && !(capBlocked && note === CAP_ANNOUNCE);
+  return (
+    <section className="tpp-sec" aria-label="Karşılaştır">
+      <div className="tpp-sec-title">
+        <span>Karşılaştır · aynı servisten ({compare.length}/{TRACE_METRICS_MAX_COMPARE})</span>
+        <Chip size="xs" active={siblingLines} onClick={onToggleSiblingLines}>Kardeş çizgileri</Chip>
+      </div>
+      <div className="tpp-chips">
+        {visible.map(c => (
+          <Chip key={c.pod} active={c.on} disabled={c.disabled} title={c.title} onClick={() => toggle(c)}>
+            <ChipBody c={c} color={colors.get(c.label)} />
+          </Chip>
+        ))}
+        {overflow.length > 0 && (
+          <>
+            <Chip ref={moreRef} aria-haspopup="menu" aria-expanded={menuPods !== null} title={`Diğer ${overflow.length} pod`}
+              onClick={() => setMenuPods(m => (m ? null : new Set(overflow.map(c => c.pod))))}>
+              +{overflow.length}
+            </Chip>
+            <Popover anchorRef={moreRef} open={menuPods !== null} onClose={() => setMenuPods(null)} kind="menu" ariaLabel={`${p.service} için diğer pod'lar`} width={280}>
+              {overflow.map(c => (
+                <MenuItem key={c.pod} role="menuitemcheckbox" aria-checked={c.on} aria-disabled={c.disabled || undefined}
+                  title={c.title} onClick={() => toggle(c)}>
+                  <span className="mono">{c.label}</span> · {c.spans}{c.errors > 0 && <span className="cell-err"> · ⚠{c.errors}</span>}
+                  {c.note && <span className="cell-faint"> · {c.note}</span>}
+                </MenuItem>
+              ))}
+            </Popover>
+          </>
+        )}
+      </div>
+      {capBlocked && <div className="tpp-note">{CAP_REASON}</div>}
+      {showNote && <div className="tpp-note" data-panel-note="">{note}</div>}
+    </section>
+  );
+}
+
+/** v0.10.968 — metriği ok olmayan pod: durum mesajı (hata ASLA boş değil).
+ *  "Yeniden dene"/"Yükle" basılınca durum loading'e döner ve düğme DOM'dan
+ *  kalkar; odak <body>'ye düşmesin diye iki dalın kökü AYNI düğüm (React
+ *  yeniden kullanır, tabIndex -1) ve düğme kendini tutan odağı ona devreder. */
+export function StateBlock({ state, pod, onRetry, height = 140 }: { state: PodMetricState; pod: string; onRetry: (pod: string) => void; height?: number }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const msg = stateMessage(state);
+  if (!msg) return null;
+  if (msg.loading) {
+    return (
+      <div ref={boxRef} tabIndex={-1} className="tpp-chart" role="img" aria-label="Yükleniyor" aria-busy="true">
+        <Skeleton height={height} />
+        <Skeleton height={height} />
+      </div>
+    );
+  }
+  return (
+    <div ref={boxRef} tabIndex={-1} className={msg.tone === 'err' ? 'tpp-msg is-err' : 'tpp-msg'} data-state={state.kind}>
+      <div className="cell-strong">{msg.title}</div>
+      {msg.sub && <div>{msg.sub}</div>}
+      {(msg.settings || msg.action) && (
+        <div className="tpp-actions">
+          {msg.settings && <Link to="/settings/clusters">Ayarlar › Remote Cluster ↗</Link>}
+          {msg.action && (
+            <Button variant="secondary" size="sm" onClick={e => {
+              if (document.activeElement === e.currentTarget) boxRef.current?.focus();
+              onRetry(pod);
+            }}>
+              {msg.action === 'retry' ? 'Yeniden dene' : 'Yükle'}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** v0.10.968 — JVM heap + GC: yalnız familyOf(runtime) === 'jvm' (Thanos
+ *  durumundan BAĞIMSIZ); JVM değilse tek satır not; runtime bilinmiyorsa hiç.
+ *  Seri etiketi ve rengi çip / Bellek / CPU ile AYNI (suffixLabels +
+ *  compareColors): bir pod dört grafikte de tek ad, tek renk. */
+export function JvmSection({ model, p, compare, window: w }: { model: TraceMetricsModel; p: TracePodInfo; compare: string[]; window: TraceMetricsWindowInfo }) {
+  const themeTick = useThemeTick();
+  const svcPods = useMemo(() => servicePods(model, p.service), [model, p.service]);
+  const queryPods = useMemo(() => svcPods.map(x => x.pod), [svcPods]);
+  const labels = useMemo(() => suffixLabels(svcPods), [svcPods]);
+  const labelOf = useCallback((pod: string) => labels.get(pod) ?? shortPod(pod), [labels]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- v0.10.968: themeTick yalnız yeniden çözme tetikleyicisi
+  const colors = useMemo(() => compareColors(compare, labels), [compare, labels, themeTick]);
+  const deploys = useMemo(() => [{ timeUnixNs: w.startNs, label: 'trace' }], [w.startNs]);
+  const xRange = useMemo(() => ({ from: w.fromNs / 1e9, to: w.toNs / 1e9 }), [w.fromNs, w.toNs]);
+  if (!p.runtime) return null;
+  if (familyOf(p.runtime) !== 'jvm') return <div className="tpp-note">JVM paneli yok · runtime: {p.runtime}</div>;
+  return (
+    <section className="tpp-sec" aria-label="JVM · heap ve GC">
+      <div className="tpp-sec-title"><span>JVM · heap ve GC</span><span>OTel jvm.* · ClickHouse</span></div>
+      <TraceJvmPanel service={p.service} pods={compare} queryPods={queryPods} runtime={p.runtime}
+        from={w.fromNs} to={w.toNs} syncKey={`trace-metrics-${p.service}`} deploys={deploys} xRange={xRange}
+        labelOf={labelOf} seriesColors={colors} />
+    </section>
+  );
+}
+
+function NowValue({ r }: { r: NowRow }) {
+  return (
+    <>
+      {r.badge && <Badge tone={r.badge.tone}>{r.badge.t}</Badge>}
+      <span className={r.tone === 'warn' ? 'cell-warn cell-strong' : r.tone === 'faint' ? 'cell-faint' : undefined}>{r.v}</span>
+    </>
+  );
+}
+
+/** v0.10.968 — "Şu an (trace anı değil) · HH:MM itibarıyla · trace N dk önce".
+ *  "N dk önce" Date.now() ile useMemo İÇİNDE (render'da saat okunmaz). */
+export function NowSection({ state, traceStartNs, columns = false }: { state: PodMetricState; traceStartNs: number; columns?: boolean }) {
+  const data = state.kind === 'ok' ? state.data : null;
+  const fetchedAtMs = data?.fetchedAtMs ?? 0;
+  const head = useMemo(() => {
+    const ago = agoText(Date.now(), traceStartNs / 1e6);
+    return fetchedAtMs ? ` · ${hhmm(fetchedAtMs)} itibarıyla · trace ${ago}` : ` · trace ${ago}`;
+  }, [fetchedAtMs, traceStartNs]);
+  let body: ReactNode;
+  if (state.kind === 'loading') body = <Skeleton height={60} />;
+  else if (!data) {
+    const n = nowNote(state);
+    body = n ? <div className={n.err ? 'tpp-note is-err' : 'tpp-note'}>{n.t}</div> : null;
+  } else {
+    const { rows, note } = nowSection(data, traceStartNs);
+    const kv = (rs: NowRow[]) => <KeyValue items={rs.map(r => ({ id: r.k, k: r.k, v: <NowValue r={r} /> }))} />;
+    body = (
+      <>
+        {note && <div className="tpp-note">{note}</div>}
+        {columns ? <div className="tpp-cols">{kv(rows.slice(0, 3))}{kv(rows.slice(3))}</div> : kv(rows)}
+      </>
+    );
+  }
+  return (
+    <section className="tpp-sec" aria-label="Şu an">
+      <div className="tpp-sec-title"><span>Şu an (trace anı değil){head}</span></div>
+      {body}
+    </section>
+  );
+}
+
+// ── Panel ─────────────────────────────────────────────────────────────────
+
+export function TracePodPanel(props: TracePodPanelProps) {
+  const {
+    model, selected: p, compare, metrics, window: w, siblingLines, focus,
+    onCompareChange, onClose, onToggleFocus, onToggleSiblingLines, onShowSpans, onOpenSpan, onRetry, announce,
+  } = props;
+  const state = metrics(p.pod);
+  const sub = subLine(p, state);
+  const { note, setNote, say } = usePanelNote(p.pod, announce);
+  return (
+    <div className="tpp" data-pod={p.pod}>
+      <div className="tpp-head">
+        <span className="tpp-name"><MiddleEllipsis text={p.pod} /></span>
+        <CopyPodButton pod={p.pod} announce={say} />
+        <IconButton aria-label="Genişlet" tooltip="Pod odak görünümünde aç" active={focus} icon={<Maximize2 size={14} />}
+          onClick={onToggleFocus} />
+        <IconButton aria-label="Paneli kapat" tooltip="Paneli kapat (Esc)" icon={<X size={14} />} onClick={onClose} />
+      </div>
+      <div className="tpp-sub">
+        {sub.map((s, i) => <span key={i}>{i > 0 ? '· ' : ''}{s}</span>)}
+      </div>
+      <div className="tpp-actions">
+        <PodPageLink p={p} state={state} window={w} />
+        <Button variant="ghost" size="sm" onClick={() => onShowSpans(p.pod)}>Span'ları Trace'te göster ({p.spans})</Button>
+      </div>
+      <PodBadges p={p} />
+      <TraceFacts model={model} p={p} onOpenSpan={onOpenSpan} />
+      {state.kind === 'ok' ? (
+        <>
+          <MomentSection model={model} p={p} data={state.data} metrics={metrics} />
+          <CompareSection model={model} p={p} compare={compare} metrics={metrics} siblingLines={siblingLines}
+            onCompareChange={onCompareChange} onToggleSiblingLines={onToggleSiblingLines} announce={say}
+            note={note} setNote={setNote} />
+          <TracePodCharts model={model} selected={p} compare={compare} metrics={metrics} window={w} siblingLines={siblingLines} />
+        </>
+      ) : (
+        <StateBlock state={state} pod={p.pod} onRetry={onRetry} />
+      )}
+      <JvmSection model={model} p={p} compare={compare} window={w} />
+      <NowSection state={state} traceStartNs={model.traceStartNs} />
+    </div>
+  );
+}

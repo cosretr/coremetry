@@ -8146,3 +8146,41 @@ export interface ProblemAffectedResponse {
   entities: AffectedEntity[];
   total: number;
 }
+
+// v0.10.968 — GET /api/trace-pods/metrics (internal/api/trace_pod_metrics.go
+// tracePodMetricsResponse + internal/thanos/trace_pods.go TracePodSeries birebir).
+export type TracePodSampleState = 'ok' | 'no_samples' | 'ambiguous';
+export type TracePodInventory = 'present' | 'absent' | 'unknown';
+export interface TracePodSeriesRow {
+  ns: string;
+  nsFilled?: boolean;
+  pod: string;
+  state: TracePodSampleState;
+  cpu?: (number | null)[];   // cores; length === points
+  mem?: (number | null)[];   // bytes
+  cpuLimit?: number; memLimit?: number; cpuRequest?: number; memRequest?: number;
+  inventory: TracePodInventory;
+  phase?: string;
+  restarts?: number;
+  lastTermReason?: string;
+  lastTermAt?: number;       // unix s
+}
+export interface TracePodMetricsResponse {
+  thanos: boolean;
+  clusterValue: string;
+  mapped: boolean;
+  unmappedReason?: 'no_cluster_value' | 'no_remote_cluster';
+  cluster?: { id: string; name: string };
+  start?: number;            // unix s
+  step?: number;             // s
+  points?: number;
+  instant?: 'ok' | 'partial' | 'failed';
+  pods: TracePodSeriesRow[];
+}
+export interface TracePodMetricsQuery {
+  clusterValue: string;
+  from: number;              // unix ns
+  to: number;                // unix ns
+  mdp: number;
+  pods: { ns: string; pod: string }[];
+}

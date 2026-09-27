@@ -103,6 +103,10 @@ export interface MultiLineChartProps {
   // Kayıtlı kullanıcı seçimi YOKKEN gizli başlayacak etiketler (operatör
   // default'u: latency panellerinde p99).
   defaultHidden?: readonly string[];
+  // v0.10.968 — seri adı (groupKey.join(' · ')) → AÇIK renk. Verilmezse renk
+  // addan (seriesRoleColor). Trace › Metrics seçili pod paneli JVM çizgilerini
+  // Bellek / CPU / çip ile aynı çakışmasız atamayla boyar (tek pod = tek renk).
+  seriesColors?: ReadonlyMap<string, string>;
 }
 
 // v0.9.760 (operatör: "Endpoint/Database sayfalarındaki chartlar da yeni
@@ -116,7 +120,7 @@ export function MultiLineChart(props: MultiLineChartProps) {
   const {
     series, unit, height = 320, deploys, thresholds, regions, syncKey,
     onZoom, onZoomReset, onCursorTime, xRange, legendStorageKey, defaultHidden,
-    compareSeries, onBucketClick, logScale, zeroBase, maxSeries,
+    compareSeries, onBucketClick, logScale, zeroBase, maxSeries, seriesColors,
   } = props;
   // v0.9.807 — "others" katlaması. v0.9.789'da v2 kapısı açılırken bu adım
   // atlanmıştı: v1 gövdesi >N seriyi katlarken v2 yolu HEPSİNİ çiziyordu
@@ -144,6 +148,7 @@ export function MultiLineChart(props: MultiLineChartProps) {
         unit={unit}
         items={eff.map((s0, i) => ({
           name: s0.groupKey?.length ? s0.groupKey.join(' · ') : `seri ${i + 1}`,
+          color: seriesColors?.get(s0.groupKey?.join(' · ') ?? ''),
           // Katlanan kuyruk SESSİZ gri: v1 gövdesinin mutedGray'inin rol
           // karşılığı (seriesRoleColor('muted') → var(--text3)). Renk yine
           // tek kanaldan gelir, burada ikinci bir palet doğmaz.

@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { Sparkline } from '@/components/Sparkline';
 import {
   classifyThreshold, barGeometry, barIndexAt,
-  downsampleBuckets, maxBarsForWidth, maxLinePointsForWidth, sparkRenderMode, type BucketReducer,
+  downsampleBuckets, maxBarsForWidth, maxLinePointsForWidth, sparkMarkerX, sparkRenderMode, type BucketReducer,
 } from './sparkline';
 
 // Granular-sparklines sweep (M4, 2026-07-24) — the Sparkline component
@@ -238,5 +241,51 @@ describe('maxLinePointsForWidth', () => {
   it('7g ham besleme 80px kutuda ~12× seyreltilir', () => {
     // 2016 = 7 gün × 288 adet 5-dakikalık bucket.
     expect(2016 / maxLinePointsForWidth(80)).toBeGreaterThan(12);
+  });
+});
+
+// v0.10.968 — Trace › Metrics tablo hücresi: trace anı işareti (markerAt).
+describe('sparkMarkerX', () => {
+  it('çizgi kipinde kova i → i · width / (count − 1); kesirli indeks ara değer', () => {
+    expect(sparkMarkerX(0, 5, 52)).toBe(0);
+    expect(sparkMarkerX(4, 5, 52)).toBe(52);
+    expect(sparkMarkerX(2, 5, 52)).toBe(26);
+    expect(sparkMarkerX(1.5, 5, 52)).toBe(19.5);
+  });
+  it('bar kipinde yuva ortası; tek kovada orta', () => {
+    expect(sparkMarkerX(0, 4, 40, true)).toBe(5);
+    expect(sparkMarkerX(3, 4, 40, true)).toBe(35);
+    expect(sparkMarkerX(0, 1, 52)).toBe(26);
+  });
+  it('aralık dışı / dejenere → null (kıstırılmış işaret yanlış anı gösterirdi)', () => {
+    expect(sparkMarkerX(-0.1, 5, 52)).toBeNull();
+    expect(sparkMarkerX(4.1, 5, 52)).toBeNull();
+    expect(sparkMarkerX(NaN, 5, 52)).toBeNull();
+    expect(sparkMarkerX(1, 0, 52)).toBeNull();
+    expect(sparkMarkerX(1, 5, 0)).toBeNull();
+  });
+});
+
+// v0.10.968 — markerAt verilmezse Sparkline çıktısı AYNEN eskisi; verilince
+// tek fark 1 px'lik işaret çizgisi (var(--text2)).
+describe('Sparkline markerAt', () => {
+  const MARK = /<line[^>]*data-spark-marker=""[^>]*>(?:<\/line>)?/g;
+  const html = (props: Parameters<typeof Sparkline>[0]) => renderToStaticMarkup(createElement(Sparkline, props));
+  it.each([
+    ['alan', { values: [1, 3, null, 2, 5], width: 52, height: 16 }],
+    ['sıfır', { values: [0, 0, 0], width: 52, height: 16 }],
+    ['bar', { values: [1, 2, 3, 4], width: 40, height: 16, mode: 'bars' as const, threshold: 3 }],
+  ])('%s kipi: işaret yokken bayt bayt aynı, varken yalnız işaret eklenir', (_n, props) => {
+    const without = html(props);
+    expect(without).not.toMatch(MARK);
+    const withMark = html({ ...props, markerAt: 1.5 });
+    const marks = withMark.match(MARK) ?? [];
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toContain('stroke="var(--text2)"');
+    expect(withMark.replace(MARK, '')).toBe(without);
+  });
+  it('aralık dışı işaret çizilmez; veri yokken ("—") işaret yok', () => {
+    expect(html({ values: [1, 2], markerAt: 5 })).not.toMatch(MARK);
+    expect(html({ values: [null, null], markerAt: 0 })).not.toMatch(MARK);
   });
 });

@@ -44,13 +44,18 @@ export interface CorePanelMultiItem {
   // İlk tüketici Explore'un formül paneli — "bu seri ölçülmedi, HESAPLANDI"
   // ayrımı QueryPanel rozetinde (kesikli kenarlık) zaten kurulu bir dil.
   dashed?: boolean;
+  // v0.10.968 — bu item'ın AÇIK çizgi rengi (verilmezse rolün adı-hash
+  // rengi). Trace › Metrics karşılaştırması çakışmasız atamayı
+  // (seriesColorsFor) buradan geçirir: iki pod aynı hash yuvasına düşünce
+  // aynı renkte çizilmesin. Ghost item'lar rengi almaz (soluk rolde kalır).
+  color?: string;
   // v0.9.799 — emphasis KALDIRILDI (v0.9.798'de eklenmişti). Tek
   // tüketicisi Overview'ın "Toplam" item'ıydı; operatör o çizgiyi büyük
   // grafiklerden geri aldırınca kanal tüketicisiz kaldı ve CorePanel
   // tarafıyla birlikte silindi — yarım kablo bırakmıyoruz.
 }
 
-export interface CorePanelMultiProps extends Omit<CorePanelProps, 'data' | 'roles' | 'dashed'> {
+export interface CorePanelMultiProps extends Omit<CorePanelProps, 'data' | 'roles' | 'dashed' | 'colors'> {
   items: CorePanelMultiItem[];
   unit?: string;
   // v0.9.764 — önceki-dönem hayaleti: zamanları ÇAĞIRAN kaydırmış
@@ -113,8 +118,11 @@ export function CorePanelMulti({
   // ikinci geçiş ghost/normal item sayılarını yeniden türetmek zorunda
   // kalırdı; iki sayaç = bir gün kayan hizalama).
   const dashed: boolean[] = [];
+  // v0.10.968 — açık renkler frame'lerle AYNI geçişte (hizalama tek sayaçta).
+  const colors: (string | undefined)[] = [];
   let anyEx = false;
   let anyDash = false;
+  let anyColor = false;
   for (const it of ordered) {
     const fs = spanSeriesToFrames(it.series, { unit, name: it.name });
     frames.push(...fs);
@@ -125,6 +133,8 @@ export function CorePanelMulti({
       if (i === 0 && it.exemplars?.length) anyEx = true;
       dashed.push(!!it.dashed);
       if (it.dashed) anyDash = true;
+      colors.push(it.color);
+      if (it.color) anyColor = true;
     }
   }
   for (const g of ghostItems ?? []) {
@@ -135,9 +145,11 @@ export function CorePanelMulti({
       exemplars.push(undefined);
       dashed.push(true);
       anyDash = true;
+      colors.push(undefined);
     }
   }
   return <CorePanel {...rest} viz={viz} roles={roles} exemplars={anyEx ? exemplars : undefined}
     dashed={anyDash ? dashed : undefined}
+    colors={anyColor ? colors : undefined}
     data={{ state: 'ready', frames }} />;
 }

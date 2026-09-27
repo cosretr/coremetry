@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { panelMaxDataPoints } from '@/lib/chartStep';
-import type { FilterExpr } from '@/lib/types';
+import type { FilterExpr, SpanMetricSeries } from '@/lib/types';
 import { MultiLineChart, type DeployMarker } from '@/components/MultiLineChart';
+import { Skeleton } from '@/components/Skeleton';
 import { familyOf } from '@/pages/service/RuntimeCharts';
 import { jvmPodSeries } from './traceMetrics';
 
@@ -19,11 +21,31 @@ import { jvmPodSeries } from './traceMetrics';
 //
 // Servis JVM değilse hiç çizilmez (familyOf); JVM ama metrik yoksa tek
 // satır not: "JVM runtime metrikleri gelmiyor".
+//
+// v0.10.968 — Trace › Metrics yeniden tasarımı (seçili pod paneli + odak
+// görünümü) bu bileşeni YENİDEN kullanır; üç opsiyonel prop:
+//   • `runtime` — span'lerin telemetry.sdk.language'ı biliniyorsa
+//     /api/services/{svc}/runtime İSTENMEZ, karar familyOf(runtime) ile;
+//   • `queryPods` — sorgu anahtarı ve IN süzgeci bu küme (varsayılan `pods`):
+//     panel servisin bu trace'teki TÜM pod'larını bir kez sorar, sonuç
+//     istemcide `pods`a (karşılaştırma kümesi) süzülür — çip açıp kapamak
+//     yeniden istek atmaz;
+//   • `maxDataPoints` — varsayılan panelMaxDataPoints(2) (panel yarım genişlik).
+// Sıra ve adlar aynen: GC sonrası heap önce, jvm.gc.duration duruyor, dürüst
+// başlıklar ("GC sonrası" / "anlık kullanım"). Heap limit çizgisi YOK (ertelendi).
+//
+// v0.10.968 — iki opsiyonel prop daha (seçili pod paneli için): `labelOf`
+// seri etiketini çip / Bellek / CPU ile AYNI yapar (varsayılan shortPod —
+// "…6b7d9f8c5-m3t9w" yerine "m3t9w"), `seriesColors` o etiketlerin
+// çakışmasız rengini MultiLineChart'a geçirir: bir pod dört grafikte de tek
+// renk. Süzgeç (only) HAM pod adıyla eşleşir; yeniden adlandırma sonra.
 
 const HEAP: FilterExpr = { k: 'jvm.memory.type', op: '=', v: ['heap'] };
 const POD_KEY = 'resource.k8s.pod.name';
 
-export function TraceJvmPanel({ service, pods, from, to, syncKey, deploys, xRange }: {
+export function TraceJvmPanel({
+  service, pods, from, to, syncKey, deploys, xRange, runtime, queryPods, maxDataPoints, labelOf, seriesColors,
+}: {
   service: string;
   pods: string[];
   from: number; // unix ns
@@ -31,22 +53,29 @@ export function TraceJvmPanel({ service, pods, from, to, syncKey, deploys, xRang
   syncKey: string;
   deploys?: DeployMarker[];
   xRange?: { from: number; to: number } | null;
+  runtime?: string;
+  queryPods?: string[];
+  maxDataPoints?: number;
+  labelOf?: (pod: string) => string;
+  seriesColors?: ReadonlyMap<string, string>;
 }) {
   const runtimeQ = useQuery({
     queryKey: ['svc-runtime', service],
     queryFn: () => api.serviceRuntime(service),
-    enabled: !!service,
+    enabled: !!service && !runtime,
     staleTime: 5 * 60_000,
   });
-  const isJvm = familyOf(runtimeQ.data?.language) === 'jvm';
-  const podFilter: FilterExpr = { k: POD_KEY, op: 'IN', v: pods };
+  const isJvm = runtime ? familyOf(runtime) === 'jvm' : familyOf(runtimeQ.data?.language) === 'jvm';
+  const asked = queryPods ?? pods;
+  const mdp = maxDataPoints ?? panelMaxDataPoints(2);
+  const podFilter: FilterExpr = { k: POD_KEY, op: 'IN', v: asked };
   const spec = (name: string, filters: FilterExpr[]) => ({
-    queryKey: ['trace-jvm', service, name, pods.join(','), from, to],
+    queryKey: ['trace-jvm', service, name, asked.join(','), from, to, mdp],
     queryFn: () => api.metricQuery({
       name, service, agg: 'avg', filters: JSON.stringify(filters), groupBy: POD_KEY,
-      from, to, step: 0, maxDataPoints: panelMaxDataPoints(1),
+      from, to, step: 0, maxDataPoints: mdp,
     }),
-    enabled: isJvm && pods.length > 0,
+    enabled: isJvm && asked.length > 0,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -57,16 +86,19 @@ export function TraceJvmPanel({ service, pods, from, to, syncKey, deploys, xRang
       spec('jvm.gc.duration', [podFilter]),
     ],
   });
+  // v0.10.968 — istemci süzgeci: sorgu `queryPods` kapsar, çizim yalnız `pods`.
+  const shown = useMemo(() => new Set(pods), [pods]);
+  const only = (s: SpanMetricSeries[] | null | undefined) => (s ?? []).filter(x => shown.has(x.groupKey[0] ?? ''));
   if (!isJvm) return null;
 
-  const postGc = jvmPodSeries(postGcQ.data);
-  const heap = postGc.length > 0 ? postGc : jvmPodSeries(usedQ.data);
+  const postGc = jvmPodSeries(only(postGcQ.data), 1, labelOf);
+  const heap = postGc.length > 0 ? postGc : jvmPodSeries(only(usedQ.data), 1, labelOf);
   const heapTitle = postGc.length > 0 ? 'JVM heap, GC sonrası (bytes)' : 'JVM heap, anlık kullanım (bytes)';
-  const gc = jvmPodSeries(gcQ.data, 1000);
+  const gc = jvmPodSeries(only(gcQ.data), 1000, labelOf);
   const pending = postGcQ.isLoading || usedQ.isLoading || gcQ.isLoading;
-  if (pending) return null;
+  if (pending) return <Skeleton height={120} />;
   if (heap.length === 0 && gc.length === 0 && (postGcQ.isError || usedQ.isError || gcQ.isError)) {
-    return <div className="pod-cap">JVM runtime metrikleri okunamadı — sorgu hata verdi.</div>;
+    return <div className="pod-cap is-err">JVM runtime metrikleri okunamadı — sorgu hata verdi.</div>;
   }
   if (heap.length === 0 && gc.length === 0) {
     return <div className="pod-cap">JVM runtime metrikleri bu pod'lar için gelmiyor (OTel jvm.* yok).</div>;
@@ -74,15 +106,17 @@ export function TraceJvmPanel({ service, pods, from, to, syncKey, deploys, xRang
   return (
     <>
       {heap.length > 0 && (
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>{heapTitle}</div>
-          <MultiLineChart series={heap} height={180} syncKey={syncKey} unit="bytes" deploys={deploys} xRange={xRange} zeroBase />
+        <div className="tpp-chart">
+          <div className="tpp-sec-title"><span>{heapTitle}</span></div>
+          <MultiLineChart series={heap} height={180} syncKey={syncKey} unit="bytes" deploys={deploys} xRange={xRange} zeroBase
+            seriesColors={seriesColors} />
         </div>
       )}
       {gc.length > 0 && (
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>GC duraklaması, ortalama (ms)</div>
-          <MultiLineChart series={gc} height={160} syncKey={syncKey} unit="ms" deploys={deploys} xRange={xRange} zeroBase />
+        <div className="tpp-chart">
+          <div className="tpp-sec-title"><span>GC duraklaması, ortalama (ms)</span></div>
+          <MultiLineChart series={gc} height={160} syncKey={syncKey} unit="ms" deploys={deploys} xRange={xRange} zeroBase
+            seriesColors={seriesColors} />
         </div>
       )}
     </>

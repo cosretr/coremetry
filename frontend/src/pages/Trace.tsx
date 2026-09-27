@@ -14,6 +14,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { TraceLogsPanel } from './trace/TraceLogsPanel'; // v0.10.675 — kiosk ile paylaşılan panel
 import { TraceMetricsPanel } from './trace/TraceMetricsPanel'; // v0.10.913 — pod metrikleri sekmesi
 import { tracePods } from './trace/traceMetrics';
+import { TRACE_METRICS_URL_PARAMS } from './trace/traceMetricsModel'; // v0.10.968 — sekmeden çıkınca silinecek parametreler
 import { toggleSpanSelection } from './trace/kioskModel'; // v0.10.693
 import { TraceKiosk } from './TraceKiosk'; // v0.10.675 — ?kiosk=1 dalı
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
@@ -225,7 +226,9 @@ function TraceDetailInner() {
     else url.searchParams.delete('span');
     if (tab === 'logs' || tab === 'metrics') url.searchParams.set('tab', tab);
     else url.searchParams.delete('tab');
-    if (tab !== 'metrics') { url.searchParams.delete('mpod'); url.searchParams.delete('mwin'); }
+    // v0.10.968 — Metrics sekmesinin BÜTÜN parametreleri (mpod, mwin, mf, mq,
+    // mgrp, msib, mview) sekmeden çıkınca düşer; liste traceMetricsModel'de.
+    if (tab !== 'metrics') { for (const k of TRACE_METRICS_URL_PARAMS) url.searchParams.delete(k); }
     if (groupSimilar) url.searchParams.set('xn', '1');
     else url.searchParams.delete('xn');
     window.history.replaceState({}, '', url.toString());
@@ -401,6 +404,11 @@ function TraceDetailInner() {
   // panel, and nulling it is a no-op).
   const spanAreaRef = useRef<HTMLDivElement>(null);
   const closeSpanPanel = useCallback(() => setSelectedId(null), []);
+  // v0.10.968 — Metrics sekmesinden Trace'e dönüş: "Span'ları Trace'te göster"
+  // pod adını span süzgecine yazar (spanMatchesQuery k8s.pod.name'i de
+  // eşler); span bağlantısı span'i seçer. İkisi de sekmeyi Trace'e çevirir.
+  const showPodSpans = useCallback((pod: string) => { setSpanFilter(pod); setTab('trace'); }, []);
+  const openSpanFromMetrics = useCallback((spanId: string) => { setSelectedId(spanId); setTab('trace'); }, []);
   useOutsideClose(spanAreaRef, !!selectedId, closeSpanPanel);
 
   // Early return AFTER every hook so the hook call order is
@@ -713,7 +721,13 @@ function TraceDetailInner() {
               </>
             )}
 
-            {tab === 'metrics' && <TraceMetricsPanel spans={spans ?? []} />}
+            {/* v0.10.968 — gruplu pod tablosu + seçili pod paneli; analiz, kritik yol ve
+                kırpılma bayrağı sayfadan (yeniden hesaplanmaz). */}
+            {tab === 'metrics' && (
+              <TraceMetricsPanel traceId={id} spans={spans} analysis={analysis} criticalPath={criticalPath}
+                spanCapped={spanCap.capped || !!analysis?.truncated}
+                onShowPodSpans={showPodSpans} onOpenSpan={openSpanFromMetrics} />
+            )}
 
             {tab === 'logs' && (
               <TraceLogsPanel logs={logs} degraded={logsDegraded}
@@ -754,6 +768,10 @@ function spanCategoryTag(s: SpanRow): string {
 }
 
 function spanMatchesQuery(s: SpanRow, q: string): boolean {
+  // v0.10.968 — pod adı (resource önce, sonra span özniteliği): Metrics
+  // sekmesinin "Span'ları Trace'te göster"i süzgece pod adını yazar.
+  const pod = s.resourceAttributes?.['k8s.pod.name'] || s.attributes?.['k8s.pod.name'];
+  if (pod && pod.toLowerCase().includes(q)) return true;
   if (s.name.toLowerCase().includes(q)
     || s.serviceName.toLowerCase().includes(q)
     || displaySpanName(s).toLowerCase().includes(q)

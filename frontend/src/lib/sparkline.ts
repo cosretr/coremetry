@@ -215,3 +215,16 @@ export function sparkMaxSlotsForWidth(width: number): number {
   for (const r of SPARK_SLOT_RUNGS) if (want <= r) return r;
   return SPARK_SLOT_RUNGS[SPARK_SLOT_RUNGS.length - 1];
 }
+
+// sparkMarkerX — v0.10.968 (Trace › Metrics tablo hücresi): kesirli kova
+// indeksindeki işaretin (trace anı) x'i. Çizgi/alan kipinde kova i'nin x'i
+// `i · width / (count − 1)` (Sparkline'ın `step`i); bar kipinde yuva ORTASI
+// `(i + 0.5) · width / count`. Seri aralığının dışındaki işaret çizilmez
+// (null) — kıstırılmış bir işaret yanlış anı gösterirdi. Tek kovada orta.
+export function sparkMarkerX(markerAt: number, count: number, width: number, bars = false): number | null {
+  if (!Number.isFinite(markerAt) || !(count >= 1) || !(width > 0)) return null;
+  if (markerAt < 0 || markerAt > count - 1) return null;
+  if (bars) return ((markerAt + 0.5) * width) / count;
+  if (count === 1) return width / 2;
+  return (markerAt * width) / (count - 1);
+}

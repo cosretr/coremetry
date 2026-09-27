@@ -57,6 +57,9 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // istekte; kiosk penceresi kapanınca ya da limit değişince eski istek
   // kesilmeli.
   { file: 'trace.ts', hooks: ['api.traceBundle('] },
+  // v0.10.968 — Trace › Metrics toplu uç: dilim başına 2 Thanos range + 6 instant
+  // sorgu; sekme/pencere değişince uçuştaki istek kesilmeli.
+  { file: 'tracePodMetrics.ts', hooks: ['api.tracePodMetrics('] },
   // v0.10.940 — evalset paneli: koşu listesi / detayı 10 s yoklanır, kıyas
   // iki koşunun vaka kayıtlarını çözer; sekme ya da çekmece kapanınca eski
   // istek kesilmeli. Başlat / durdur mutasyonları kapsam dışı (iptal edilmez).

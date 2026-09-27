@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react';
-import { SPARK_DEFAULT_WIDTH, barGeometry, barIndexAt, classifyThreshold, downsampleBuckets, maxBarsForWidth, maxLinePointsForWidth, sparkRenderMode } from '@/lib/sparkline';
+import { SPARK_DEFAULT_WIDTH, barGeometry, barIndexAt, classifyThreshold, downsampleBuckets, maxBarsForWidth, maxLinePointsForWidth, sparkMarkerX, sparkRenderMode } from '@/lib/sparkline';
 import { downsampleXY } from '@/lib/perf/lttb';
 
 // Tiny inline SVG sparkline — no chart library. Auto-scales to its own
@@ -81,12 +81,16 @@ interface Props {
   showDelta?: boolean;
   // M4 sweep — render mode; see header comment. Default 'area'.
   mode?: 'area' | 'bars' | 'count';
+  // v0.10.968 (Trace › Metrics) — kesirli kova indeksinde 1 px'lik dikey
+  // işaret (var(--text2)): "trace anı". Geometri saf yardımcıda
+  // (lib/sparkline.ts sparkMarkerX); verilmezse çizim bayt bayt aynı.
+  markerAt?: number;
 }
 
 export function Sparkline({
   values, width = SPARK_DEFAULT_WIDTH, height = 22, color, title, className,
   unit, threshold, thresholdComparator = '>', onClick, showDelta, domainMax,
-  mode = 'area',
+  mode = 'area', markerAt,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -124,6 +128,7 @@ export function Sparkline({
         <title>{title || 'sıfır — ölçüm var, değer yok'}</title>
         <line x1={1} y1={y} x2={width - 1} y2={y}
               stroke={ZERO_STROKE} strokeWidth={1.5} strokeLinecap="round" opacity={0.55} />
+        {markerAt !== undefined && <SparkMarker x={sparkMarkerX(markerAt, values.length, width)} height={height} />}
       </svg>
     );
   }
@@ -336,6 +341,12 @@ export function Sparkline({
           )}
         </>
       )}
+      {/* v0.10.968 — trace anı işareti (markerAt verilmişse). */}
+      {markerAt !== undefined && (
+        <SparkMarker height={height} x={barMode
+          ? sparkMarkerX(values.length > 0 ? (markerAt * drawn.length) / values.length : markerAt, drawn.length, width, true)
+          : sparkMarkerX(markerAt, values.length, width)} />
+      )}
       {!barMode && hoverIdx != null && step > 0 && values[hoverIdx] != null && (
         <circle cx={hoverIdx * step} cy={yOf(values[hoverIdx] as number)} r={2}
           fill={stroke} stroke="var(--bg)" strokeWidth={0.75} />
@@ -362,6 +373,13 @@ export function Sparkline({
       </span>
     </span>
   );
+}
+
+// v0.10.968 — trace anı işareti: 1 px dikey çizgi, var(--text2). x null →
+// seri aralığı dışında, çizilmez.
+function SparkMarker({ x, height }: { x: number | null; height: number }) {
+  if (x === null) return null;
+  return <line x1={x} x2={x} y1={0} y2={height} stroke="var(--text2)" strokeWidth={1} data-spark-marker="" />;
 }
 
 function fmtVal(v: number, unit?: string): string {

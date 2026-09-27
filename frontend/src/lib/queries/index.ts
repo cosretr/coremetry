@@ -57,6 +57,7 @@ export {
 export { useEventStream } from './eventStream';
 export { useExemplar, useExemplarFetcher } from './spans';
 export { useTraceBundle } from './trace'; // v0.10.672 — kiosk bundle
+export { useTracePodMetricsChunks } from './tracePodMetrics'; // v0.10.968 — Trace › Metrics toplu uç
 export { useUsers, useCustomRoles } from './users';
 export { useOperatorEvents, useDeleteOperatorEvent, useNotificationLog } from './events';
 export { useInbox, useInboxCount } from './inbox';

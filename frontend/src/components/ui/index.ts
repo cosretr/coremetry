@@ -118,3 +118,5 @@ export type { SectionHeadProps } from './SectionHead';
 // v0.10.939 (tablo standardı T1) — öznitelik paneli atomu (dl/dt/dd); 21 yer dilim 3'te göçer.
 export { KeyValue, KeyValueRow } from './KeyValue';
 export type { KeyValueProps, KeyValueRowProps, KeyValueItem, KeyValueLabelWidth } from './KeyValue';
+
+export { Popover, PopoverLinkItem, type PopoverProps } from './Popover'; // v0.10.968 — çapaya bağlı menü/diyalog (satır ⋯, "+N" çip menüsü, kapsam)

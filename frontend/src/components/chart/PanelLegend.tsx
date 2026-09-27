@@ -18,7 +18,7 @@ import type { SeriesStat } from '@/lib/chart/legendStats';
 export interface PanelLegendRow { name: string; stat: SeriesStat }
 
 export function PanelLegend({
-  count, open, onToggle, stats, vis, onVisChange, focusName, onHover, roles, fullNames, fmtCell, sumAdditive,
+  count, open, onToggle, stats, vis, onVisChange, focusName, onHover, roles, colors, fullNames, fmtCell, sumAdditive,
 }: {
   count: number;
   open: boolean;
@@ -30,6 +30,8 @@ export function PanelLegend({
   // onHover(name) vurgular; onHover(null, leaving) yalnız o satır vurguluysa bırakır.
   onHover: (name: string | null, leaving?: string) => void;
   roles?: SeriesRole[];
+  // v0.10.968 — CorePanel.colors ile aynı: açık renk varsa swatch da onu çizer.
+  colors?: (string | undefined)[];
   fullNames: (string | undefined)[];
   fmtCell: (i: number, v: number | null) => string;
   sumAdditive: boolean;
@@ -82,7 +84,7 @@ export function PanelLegend({
                 <td>
                   <span style={{
                     display: 'inline-block', width: 8, height: 8, borderRadius: 2,
-                    background: resolveVar(seriesRoleColor(s.name, roles?.[i] ?? 'data')),
+                    background: resolveVar(colors?.[i] ?? seriesRoleColor(s.name, roles?.[i] ?? 'data')),
                     marginRight: 6,
                   }} />
                   {/* v0.9.1369 — tam ad title'da: lejant Grafana

@@ -1,186 +1,426 @@
 // TraceMetricsPanel — v0.10.913: Trace sayfası "Metrics" sekmesi (revize
-// mockup Onay 2026-09-25). Trace'in geçtiği pod'lar servise göre gruplu;
-// AYNI servisin en çok 4 pod'u CPU / bellek grafiğinde üst üste (hangi
-// replika farklı?). Farklı servisler üst üste çizilmez (birim/limit farkı
-// yanıltır). Veri Pod sayfasıyla aynı uç (clusterPodDetail, Thanos), yalnız
-// sekme açıkken ve yalnız seçili pod'lar için. Trace anı grafikte işaret.
-// Seçim + pencere URL'de (?mpod=a,b&mwin=15, replace).
+// mockup Onay 2026-09-25).
 //
-// v0.10.962 — yeniden tasarım (mockup onayı 2026-09-27) ÖNCESİ beş hata:
-// seçili çip görünmüyordu (tüm çipler `tone="accent"` = `.active` ile aynı
-// tint), "Pod sayfasında aç" pencereyi düşürüyordu, tek pod sorgusunun
-// hatası tüm grafikleri gizliyordu, tavandaki tıklama sessizce yutuluyordu,
-// servis grupları alfabetikti. Ayrıntı: TraceMetricsPanel.render.test.tsx.
-import { useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { useQueries } from '@tanstack/react-query';
-import { api, apiErrorDetail } from '@/lib/api';
-import type { SpanMetricSeries, SpanRow } from '@/lib/types';
-import { useEntityEnabled } from '@/lib/queries';
-import { MultiLineChart, type DeployMarker } from '@/components/MultiLineChart';
-import { Spinner, Empty } from '@/components/Spinner';
-import { Chip, SegmentedControl } from '@/components/ui';
-import { TraceJvmPanel } from './TraceJvmPanel';
+// v0.10.968 — YENİDEN TASARIM (operatör onayı 2026-09-27, "3 onay"; mockup
+// Main.dc.html 64 pod / 25 servis + PodDetail.dc.html). Çip duvarı yerine
+// servise göre gruplu TEK tablo (TracePodTable), sıra trace ilgisine göre ve
+// trace'ten HEMEN bilinir (hata → kritik yol payı → öz süre); metrikler
+// Thanos'tan geç gelir ve sırayı DEĞİŞTİRMEZ. Seçili pod 400 px yan panelde
+// (TracePodPanel), `mview=pod` ile odak görünümünde (TracePodFocus).
+//
+// Veri: pod başına /api/clusters/pods/detail fan-out'u yerine TOPLU uç
+// (/api/trace-pods/metrics; cluster değeri + ≤64 pod dilimi başına tek
+// istek). Cluster eşlemesi sunucuda — sekme entity katmanına bağlı DEĞİL.
+//
+// Kabuk bu dosyada: özet şeridi, R1 notları, araç çubuğu, gövde, dipnot,
+// canlı bölge, Esc katmanı, URL durumu ve veri kancası. v0.10.962'nin beş
+// düzeltmesi yeni tasarımda sürer: seçim görünür (row-selected +
+// aria-selected), pod linki range+at taşır, pod başına hata boş sonuç gibi
+// yazılmaz ("okunamadı" + "N servis okunamadı"), tavan geri bildirimi (her
+// zaman bağlı canlı bölge), sıra trace ilgisi.
+//
+// v0.10.968 — inceleme turu:
+//   • URL okuması da ÜST KÜMEDEN (window.location): Trace.tsx sekmeden
+//     çıkarken m* parametrelerini ham replaceState ile siler, router'ın
+//     `sp`i bayat kalır; geri dönünce panel URL'de OLMAYAN süzgeç/seçimi
+//     gösterip ilk yazımda sessizce düşürüyordu (v0.8.256 sınıfı).
+//   • Odak görünümünde tablo araç çubuğu yok (PodDetail mockup'ı): süzgeç,
+//     arama, gruplama odak rayını etkilemez.
+//   • Odak dönüşü: panel kapanınca / odak görünümünden çıkınca odak
+//     <body>'ye düşmez, kapanan pod'un satırına döner (TracePodTable
+//     focusRow).
+//   • "Yeniden dene" bitince sonuç duyurulur (düğme DOM'dan kalkıyordu).
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import type { SpanRow, TraceAnalysis } from '@/lib/types';
+import type { CriticalPath } from '@/lib/criticalPath';
+import { useEscLayer } from '@/lib/escLayer';
+import { useTracePodMetricsChunks } from '@/lib/queries/tracePodMetrics';
+import { Empty } from '@/components/Spinner';
+import { Button, SearchField, SegmentedControl, Tooltip } from '@/components/ui';
+import { TracePodTable } from './TracePodTable';
+import { TracePodPanel } from './TracePodPanel';
+import { TracePodFocus } from './TracePodFocus';
+import { TraceMetricsCoverage } from './TraceMetricsCoverage';
 import {
-  tracePods, podsByService, defaultPodSelection, togglePod, traceMetricsWindow, resolveCluster, shortPod,
-  errorSourceService, podAtCap, traceMetricsPodHref,
-  TRACE_METRICS_WINDOWS, TRACE_METRICS_DEFAULT_WINDOW, TRACE_METRICS_MAX_PODS, type TraceMetricsWindow,
+  buildRows, buildTraceMetricsModel, coverageSummary, defaultOpenGroups, defaultTracePod, podMetricState,
+  selectPod, traceWindowNs, tracePodChunks,
 } from './traceMetrics';
+import { applyTraceMetricsPatch, parseTraceMetricsUrl, type TraceMetricsUrlPatch } from './traceMetricsUrl';
+import { trPossessive } from './trSuffix';
+import {
+  CRIT_FLAG_SHARE, TRACE_METRICS_MDP, TRACE_METRICS_WINDOWS,
+  type PodMetricState, type TraceMetricsFilter, type TraceMetricsWindow, type TraceMetricsWindowInfo, type TracePodPanelProps,
+} from './traceMetricsModel';
 
-export function TraceMetricsPanel({ spans }: { spans: SpanRow[] }) {
+export interface TraceMetricsPanelProps {
+  traceId: string;
+  spans: SpanRow[];
+  analysis?: TraceAnalysis;
+  criticalPath: CriticalPath | null;   // from lib/criticalPath
+  spanCapped: boolean;
+  onShowPodSpans: (pod: string) => void;
+  onOpenSpan: (spanId: string) => void;
+}
+
+const LOADING: PodMetricState = { kind: 'loading' };
+const EMPTY_SET: ReadonlySet<string> = new Set();
+
+export function TraceMetricsPanel({ traceId, spans, analysis, criticalPath, spanCapped, onShowPodSpans, onOpenSpan }: TraceMetricsPanelProps) {
   const [sp, setSp] = useSearchParams();
-  const pods = useMemo(() => tracePods(spans), [spans]);
-  const groups = useMemo(() => podsByService(pods, errorSourceService(spans, pods)), [spans, pods]);
-  const fallback = useMemo(() => defaultPodSelection(spans, pods), [spans, pods]);
-  const urlSel = (sp.get('mpod') ?? '').split(',').filter(p => pods.some(x => x.pod === p));
-  const selected = urlSel.length ? urlSel : fallback;
-  const winRaw = Number(sp.get('mwin'));
-  const win: TraceMetricsWindow = (TRACE_METRICS_WINDOWS as readonly number[]).includes(winRaw) ? winRaw as TraceMetricsWindow : TRACE_METRICS_DEFAULT_WINDOW;
-  const { from, to, startNs } = useMemo(() => traceMetricsWindow(spans, win), [spans, win]);
-  const { clusters, enabled: entitiesOn, loading } = useEntityEnabled(pods.length > 0);
+  const model = useMemo(
+    () => buildTraceMetricsModel(spans, analysis, criticalPath, spanCapped),
+    [spans, analysis, criticalPath, spanCapped]);
+  const defPod = useMemo(() => defaultTracePod(model), [model]);
+  // v0.10.968 — okuma da yazıcıyla AYNI üst kümeden: `sp` yalnız router
+  // yazımlarında yeniden hesap tetikleyicisi (Trace.tsx'in ham replaceState'i
+  // router'a haber vermez).
+  const url = useMemo(() => {
+    const live = typeof window === 'undefined' ? sp : new URLSearchParams(window.location.search);
+    return parseTraceMetricsUrl(live, model.byPod, defPod);
+  }, [sp, model, defPod]);
 
-  const set = (k: string, v: string | null) => setSp(prev => {
-    const next = new URLSearchParams(prev);
-    if (v) next.set(k, v); else next.delete(k);
-    return next;
-  }, { replace: true });
+  // v0.10.968 — yazıcı ÜST KÜMEDEN kurar (traceMetricsUrl.ts başlığı):
+  // router'ın `prev`i bu sayfada bayat bir alt küme.
+  const write = useCallback((patch: TraceMetricsUrlPatch) => {
+    const next = applyTraceMetricsPatch(window.location.search, patch);
+    setSp(() => next, { replace: true });
+  }, [setSp]);
 
-  const targets = selected.map(p => {
-    const tp = pods.find(x => x.pod === p)!;
-    return { ...tp, cluster: resolveCluster(tp.clusterValue, clusters) };
-  });
-  const queries = useQueries({
-    queries: targets.map(t => ({
-      queryKey: ['trace-pod-metrics', t.cluster, t.namespace, t.pod, from, to],
-      queryFn: () => api.clusterPodDetail(t.cluster, t.namespace, t.pod, from, to),
-      enabled: !!t.cluster && !!t.namespace,
-      staleTime: 60_000,
-      refetchOnWindowFocus: false,
-    })),
-  });
+  // ── canlı bölge (v0.10.962'den: HER ZAMAN bağlı) ─────────────────────
+  // Önce boşaltılır sonra yazılır: aynı cümle art arda da duyurulur.
+  const liveRef = useRef<HTMLSpanElement>(null);
+  const liveTimer = useRef(0);
+  const announce = useCallback((msg: string) => {
+    const el = liveRef.current;
+    if (!el) return;
+    el.textContent = '';
+    window.clearTimeout(liveTimer.current);
+    liveTimer.current = window.setTimeout(() => { if (liveRef.current) liveRef.current.textContent = msg; }, 50);
+  }, []);
+  useEffect(() => () => window.clearTimeout(liveTimer.current), []);
 
-  if (pods.length === 0) {
-    return <Empty icon="—" title="Bu trace'in span'larında k8s.pod.name yok — pod metrikleri gösterilemiyor." />;
+  // ── yerel görünüm durumu (trace değişince sıfırlanır) ────────────────
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string> | null>(null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(EMPTY_SET);
+  const [noPodOpen, setNoPodOpen] = useState(false);
+  const [loadRest, setLoadRest] = useState(false);
+  const [forced, setForced] = useState<ReadonlySet<string>>(EMPTY_SET);
+  const [draft, setDraft] = useState(url.query);
+  const [seenTrace, setSeenTrace] = useState(traceId);
+  if (seenTrace !== traceId) {
+    setSeenTrace(traceId);
+    setOpenGroups(null); setExpanded(EMPTY_SET); setNoPodOpen(false); setLoadRest(false); setForced(EMPTY_SET);
   }
 
-  const cpu: SpanMetricSeries[] = [];
-  const mem: SpanMetricSeries[] = [];
-  const notes: string[] = [];
-  const errs: string[] = [];
-  let asked = 0;
-  targets.forEach((t, i) => {
-    if (!t.cluster) { notes.push(`${shortPod(t.pod)}: cluster "${t.clusterValue || '—'}" bir Remote Cluster kaydına eşlenmemiş`); return; }
-    if (!t.namespace) { notes.push(`${shortPod(t.pod)}: span'larda k8s.namespace.name yok`); return; }
-    asked++;
-    const q = queries[i];
-    // v0.10.962 — hata POD BAŞINA: tek sorgunun hatası diğer pod'ları
-    // gizlemez ve "örnek yok" (boş sonuç) gibi de yazılmaz. Gövde
-    // `HTTP 500: {"error":…}` (writeErr) → apiErrorDetail iç mesajı açar;
-    // 120'de kesilen ham JSON gürültüsü yazılmaz.
-    if (q?.isError) {
-      const msg = apiErrorDetail(q.error).message.trim();
-      errs.push(`${shortPod(t.pod)}: metrikler okunamadı (${msg.slice(0, 120)})`);
-      return;
-    }
-    const trend = q?.data?.trend ?? [];
-    if (q?.isSuccess && trend.length === 0) { notes.push(`${shortPod(t.pod)}: bu pencerede Thanos örneği yok`); return; }
-    const label = shortPod(t.pod);
-    if (trend.length) {
-      cpu.push({ groupKey: [label], points: trend.map(p => ({ time: p.bucket * 1e9, value: p.cpuCores })) });
-      mem.push({ groupKey: [label], points: trend.map(p => ({ time: p.bucket * 1e9, value: p.memBytes })) });
-    }
+  // Arama: yerel taslak anında süzer, URL'e 200 ms gecikmeyle yazılır. URL →
+  // taslak içe aktarımı İMZA KORUMALI (yalnız mq bizim yazmadığımız bir
+  // değere döndüyse — geri/ileri), v0.8.253 kalıbı.
+  const lastQ = useRef(url.query);
+  useEffect(() => {
+    if (url.query !== lastQ.current) { lastQ.current = url.query; setDraft(url.query); }
+  }, [url.query]);
+  useEffect(() => {
+    if (draft === lastQ.current) return;
+    const t = window.setTimeout(() => { lastQ.current = draft; write({ query: draft }); }, 200);
+    return () => window.clearTimeout(t);
+  }, [draft, write]);
+  const clearQuery = useCallback(() => {
+    setDraft('');
+    if (lastQ.current !== '') { lastQ.current = ''; write({ query: '' }); }
+  }, [write]);
+
+  // ── pencere ─────────────────────────────────────────────────────────
+  const baseWin = useMemo(() => {
+    const w = traceWindowNs(model.traceStartNs, model.traceEndNs, url.win);
+    const nowMs = Date.now();
+    return {
+      fromNs: w.from, toNs: w.to, startNs: w.startNs, endNs: w.endNs, win: url.win,
+      openWindow: w.to > (nowMs - 10 * 60_000) * 1e6,
+      agoMin: Math.max(0, Math.round((nowMs - model.traceEndNs / 1e6) / 60_000)),
+    };
+  }, [model, url.win]);
+
+  // ── veri ────────────────────────────────────────────────────────────
+  const chunks = useMemo(() => tracePodChunks(model), [model]);
+  const q = useTracePodMetricsChunks(chunks, {
+    fromNs: baseWin.fromNs, toNs: baseWin.toNs, mdp: TRACE_METRICS_MDP,
+    openWindow: baseWin.openWindow, loadRest, forced, active: model.pods.length > 0,
   });
-  const pending = queries.some(q => q.isPending && q.fetchStatus !== 'idle');
-  const allFailed = asked > 0 && errs.length === asked;
-  // v0.10.962 — pod başına nedenler: hata metni HATA renginde (`.is-err`),
-  // "örnek yok" notları nötr; ikisi de yoksa gövde yok (boş <p> çizilmez).
-  const reasons = errs.length || notes.length ? <>
-    {errs.length > 0 && <span className="is-err">{errs.join(' · ')}</span>}
-    {errs.length > 0 && notes.length > 0 && ' · '}
-    {notes.join(' · ')}
-  </> : undefined;
-  // v0.10.962 — tavan: aynı servisten eklenemeyen pod varsa GÖRÜNÜR söylenir.
-  const capMsg = `en çok ${TRACE_METRICS_MAX_PODS} pod üst üste çizilir — eklemek için önce birini çıkarın`;
-  const atCap = pods.some(p => podAtCap(selected, p.pod, pods));
-  const marker: DeployMarker[] = [{ timeUnixNs: startNs, label: 'trace', description: 'trace başlangıcı' }];
-  const xRange = { from: from / 1e9, to: to / 1e9 };
-  const selSvc = targets[0]?.service ?? '';
+  const podChunk = useMemo(() => {
+    const m = new Map<string, number>();
+    chunks.forEach((c, i) => c.pods.forEach(p => m.set(p.pod, i)));
+    return m;
+  }, [chunks]);
+  const metricsMap = useMemo(() => {
+    const m = new Map<string, PodMetricState>();
+    const trace = { startNs: model.traceStartNs, endNs: model.traceEndNs };
+    for (const p of model.pods) m.set(p.pod, podMetricState(p, q.snapshots[podChunk.get(p.pod) ?? -1], trace));
+    return m;
+  }, [model, podChunk, q.snapshots]);
+  const metrics = useCallback((pod: string) => metricsMap.get(pod) ?? LOADING, [metricsMap]);
+  const stepSec = useMemo(() => {
+    for (const s of q.snapshots) if (s.data?.mapped && s.data.step) return s.data.step;
+    return null;
+  }, [q.snapshots]);
+  const thanosOff = q.snapshots.some(s => s.data !== undefined && !s.data.thanos);
+  const windowInfo = useMemo<TraceMetricsWindowInfo>(() => ({
+    fromNs: baseWin.fromNs, toNs: baseWin.toNs, startNs: baseWin.startNs, endNs: baseWin.endNs,
+    win: baseWin.win, stepSec, openWindow: baseWin.openWindow,
+  }), [baseWin, stepSec]);
+
+  // Okunamayan dilimler + servisler (özet şeridi). Yeniden deneme sürerken
+  // dilim "pending"e döner (React Query v5: verisiz sorgunun hatası yeni
+  // istekte sıfırlanır) — şerit düğmesi "Yükleniyor…" + aria-busy ile kalsın
+  // diye denenen dilimler (pencereye bağlı kimlikle) ayrıca izlenir.
+  const failedChunks = q.snapshots.map((s, i) => (s.status === 'error' ? i : -1)).filter(i => i >= 0);
+  const chunkId = (i: number) => `${chunks[i]?.key}|${baseWin.fromNs}|${baseWin.toNs}`;
+  const [retryIds, setRetryIds] = useState<ReadonlySet<string>>(EMPTY_SET);
+  const retryIdx = chunks.map((_, i) => (retryIds.has(chunkId(i)) ? i : -1)).filter(i => i >= 0);
+  const retrying = retryIdx.some(i => { const s = q.snapshots[i]; return !!s && (s.fetching || s.status === 'pending'); });
+  const retryDone = retryIds.size > 0 && retryIdx.every(i => q.snapshots[i]?.status === 'success' && !q.snapshots[i].fetching);
+  useEffect(() => { if (retryDone) setRetryIds(EMPTY_SET); }, [retryDone]);
+  const failedServices = useMemo(() => {
+    const out = new Set<string>();
+    for (const p of model.pods) {
+      const s = q.snapshots[podChunk.get(p.pod) ?? -1];
+      if (s?.status === 'error') out.add(p.service);
+    }
+    return out;
+  }, [model, podChunk, q.snapshots]);
+  const idleChunks = q.snapshots
+    .map((s, i) => (!s.eligible && s.status === 'pending' && !s.fetching ? i : -1)).filter(i => i >= 0);
+  const idlePods = idleChunks.reduce((a, i) => a + chunks[i].pods.length, 0);
+  const retryFailed = () => {
+    setRetryIds(new Set(failedChunks.map(chunkId)));
+    for (const i of failedChunks) q.refetch(i);
+  };
+  // v0.10.968 — yeniden deneme bitince SONUÇ duyurulur: başarıda şerit düğmesi
+  // DOM'dan kalkar, klavye / ekran okuyucu kullanıcısı sessizce odağı yitirirdi.
+  const wasRetrying = useRef(false);
+  useEffect(() => {
+    if (wasRetrying.current && !retrying) {
+      announce(failedServices.size > 0 ? `${failedServices.size} servis hâlâ okunamadı.` : 'Metrikler yeniden yüklendi.');
+    }
+    wasRetrying.current = retrying;
+  }, [retrying, failedServices.size, announce]);
+
+  // ── seçim ───────────────────────────────────────────────────────────
+  const compare = url.compare;
+  const selectedPod = compare[0] ?? '';
+  // v0.10.968 — odak dönüşü isteği: panel / odak görünümü kalkınca tablo o
+  // pod'un satırını odaklar. Sayaç tekdüze artar (aynı pod ikinci kez de).
+  const [focusReq, setFocusReq] = useState<{ key: string; n: number } | null>(null);
+  const focusReqN = useRef(0);
+  const restoreTo = useCallback((pod: string) => {
+    if (pod) setFocusReq({ key: `p:${pod}`, n: ++focusReqN.current });
+  }, []);
+  const [seenFocus, setSeenFocus] = useState(url.focus);
+  if (seenFocus !== url.focus) {
+    setSeenFocus(url.focus);
+    if (url.focus) setFocusReq(null); // odak görünümüne girişte bayat istek kalmasın
+  }
+  const selectedInfo = selectedPod ? model.byPod.get(selectedPod) : undefined;
+  const onSelect = useCallback((pod: string) => {
+    const { next, serviceChanged } = selectPod(compare, pod, model, p => metrics(p).kind === 'ok');
+    write({ compare: next });
+    if (serviceChanged) announce(`Karşılaştırma servisi değişti: ${model.byPod.get(pod)?.service ?? ''}.`);
+  }, [compare, model, metrics, write, announce]);
+  const onRetry = useCallback((pod: string) => {
+    const i = podChunk.get(pod);
+    if (i === undefined) return;
+    const s = q.snapshots[i];
+    if (s?.status === 'error' || s?.status === 'success') { q.refetch(i); return; }
+    const key = chunks[i].key;
+    setForced(prev => (prev.has(key) ? prev : new Set([...prev, key])));
+  }, [podChunk, q, chunks]);
+  const onRetryService = useCallback((svc: string) => {
+    const idx = new Set<number>();
+    for (const p of model.pods) {
+      if (p.service !== svc || metricsMap.get(p.pod)?.kind !== 'error') continue;
+      const i = podChunk.get(p.pod);
+      if (i !== undefined) idx.add(i);
+    }
+    idx.forEach(i => q.refetch(i));
+  }, [model, metricsMap, podChunk, q]);
+
+  // ── satırlar ────────────────────────────────────────────────────────
+  const effOpen = useMemo(() => openGroups ?? defaultOpenGroups(model, selectedPod), [openGroups, model, selectedPod]);
+  const rows = useMemo(() => buildRows(model, {
+    grouping: url.grouping, filter: url.filter, query: draft,
+    openGroups: effOpen, expanded, noPodOpen, selected: selectedPod,
+  }), [model, url.grouping, url.filter, draft, effOpen, expanded, noPodOpen, selectedPod]);
+  const onToggleGroup = useCallback((svc: string, open: boolean) => {
+    setOpenGroups(prev => {
+      const s = new Set(prev ?? defaultOpenGroups(model, selectedPod));
+      if (open) s.add(svc); else s.delete(svc);
+      return s;
+    });
+  }, [model, selectedPod]);
+  const onExpandMore = useCallback((svc: string) => setExpanded(prev => new Set([...prev, svc])), []);
+  const collapsible = model.groups.filter(g => g.pods.length > 3).map(g => g.service);
+  const allOpen = model.groups.every(g => effOpen.has(g.service)) && collapsible.every(s => expanded.has(s));
+  const toggleAll = () => {
+    if (allOpen) { setOpenGroups(new Set()); setExpanded(EMPTY_SET); }
+    else { setOpenGroups(new Set(model.groups.map(g => g.service))); setExpanded(new Set(collapsible)); }
+    if (url.grouping !== 'service') write({ grouping: 'service' });
+  };
+  const setFilter = (f: TraceMetricsFilter) => {
+    write({ filter: f });
+    if (f === 'all') { setOpenGroups(null); setExpanded(EMPTY_SET); }
+  };
+  const clearFilters = useCallback(() => {
+    setDraft('');
+    lastQ.current = '';
+    write({ query: '', filter: 'all' });
+    setOpenGroups(null);
+    setExpanded(EMPTY_SET);
+  }, [write]);
+
+  // ── Esc: odak görünümü → arama → seçim (tek katman, kabuğun) ─────────
+  useEscLayer(model.pods.length > 0 && (url.focus || draft !== '' || compare.length > 0), () => {
+    if (url.focus) { restoreTo(selectedPod); write({ focus: false }); return; }
+    if (draft !== '') { clearQuery(); return; }
+    if (compare.length > 0) { restoreTo(selectedPod); write({ compare: 'closed' }); }
+  });
+
+  const coverage = useMemo(() => coverageSummary(model, metrics), [model, metrics]);
+
+  if (model.pods.length === 0) {
+    return (
+      <div className="tpm">
+        <Empty icon="—" title="Bu trace'in span'larında k8s.pod.name yok — pod metrikleri gösterilemiyor." />
+        <span ref={liveRef} className="sr-only" role="status" aria-live="polite" aria-atomic="true" />
+      </div>
+    );
+  }
+
+  const critPods = model.pods.filter(p => p.critShare >= CRIT_FLAG_SHARE);
+  const critSum = Math.round(critPods.reduce((a, p) => a + p.critShare, 0) * 100);
+  const clusterCount = model.clusterValues.filter(Boolean).length;
+  const filterOpts: { value: TraceMetricsFilter; label: string; title?: string; disabled?: boolean }[] = [
+    { value: 'all', label: `Hepsi ${model.counts.all}` },
+    { value: 'err', label: `Hatalı ${model.counts.err}`, title: "En az bir hatalı span taşıyan pod'lar" },
+    { value: 'crit', label: `Kritik yol ${model.counts.crit}`, title: "Trace süresinin en az %3'ü kritik yol üzerinde bu pod'da geçti" },
+    model.selfKnown
+      ? { value: 'slow', label: `Yavaş ${model.counts.slow}`, title: "Trace'in öz süresi en büyük 5 span'ından birini taşıyan pod'lar" }
+      : { value: 'slow', label: 'Yavaş', title: 'Sunucu analizi yok: öz süre gösterilemiyor', disabled: true },
+  ];
+
+  const panelProps: TracePodPanelProps | null = selectedInfo ? {
+    model, selected: selectedInfo, compare, metrics, window: windowInfo,
+    siblingLines: url.siblingLines, focus: url.focus,
+    onCompareChange: next => write({ compare: next.length ? next : 'closed' }),
+    onSelect,
+    onClose: () => { restoreTo(selectedPod); write({ compare: 'closed' }); },
+    onToggleFocus: () => { if (url.focus) restoreTo(selectedPod); write({ focus: !url.focus }); },
+    onToggleSiblingLines: () => write({ siblingLines: !url.siblingLines }),
+    onShowSpans: onShowPodSpans,
+    onOpenSpan,
+    onRetry,
+    announce,
+  } : null;
+  // v0.10.968 — odak görünümü tablo + araç çubuğunun YERİNE geçer (PodDetail mockup'ı).
+  const showFocus = url.focus && panelProps !== null;
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'grid', gap: 6 }}>
-        {groups.map(g => (
-          <div key={g.service} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
-            <span style={{ minWidth: 160, color: 'var(--text2)' }} className="mono">{g.service || '(servissiz)'}</span>
-            {g.pods.map(p => {
-              const on = selected.includes(p.pod);
-              const capped = podAtCap(selected, p.pod, pods);
-              const info = `${p.pod} · ${p.spans} span${p.errors ? ` · ${p.errors} hata` : ''}`;
-              // v0.10.962 — `tone="accent"` YOK: `.ch-accent` ile `.active`
-              // aynı tint, seçili/seçisiz ayırt edilmiyordu. Seçim = active.
-              return (
-                <Chip key={p.pod} active={on} disabled={capped}
-                  title={capped ? `${info} · ${capMsg}` : info}
-                  onClick={() => set('mpod', togglePod(selected, p.pod, pods).join(','))}>
-                  {shortPod(p.pod)} · {p.spans}{p.errors > 0 && <span style={{ color: 'var(--err)' }}> ⚠{p.errors}</span>}
-                </Chip>
-              );
-            })}
-          </div>
-        ))}
+    <div className="tpm">
+      <div className="tpm-strip">
+        <div className="tpm-strip-left">
+          <span>{model.pods.length} pod · {model.groups.length} servis · {clusterCount} cluster</span>
+          {critPods.length > 0 && (
+            <><span aria-hidden="true">·</span><span>Kritik yolun %{critSum}{trPossessive(critSum)} {critPods.length} pod'da</span></>
+          )}
+          <span aria-hidden="true">·</span>
+          <TraceMetricsCoverage summary={coverage} />
+          {(failedServices.size > 0 || retrying) && (
+            <>
+              <span aria-hidden="true">·</span>
+              {failedServices.size > 0 && <span className="cell-err tpm-strong">{failedServices.size} servis okunamadı</span>}
+              <Button variant="ghost" size="xs" aria-busy={retrying || undefined} disabled={retrying} onClick={retryFailed}>
+                {retrying ? 'Yükleniyor…' : 'Yeniden dene'}
+              </Button>
+            </>
+          )}
+        </div>
+        <div className="tpm-strip-right">
+          <span className="tpm-muted">Pencere: trace ±</span>
+          <SegmentedControl<string> size="sm" aria-label="Metrik penceresi" value={String(url.win)}
+            onChange={v => write({ win: Number(v) as TraceMetricsWindow })}
+            options={TRACE_METRICS_WINDOWS.map(w => ({ value: String(w), label: w === 60 ? '1 sa' : `${w} dk` }))} />
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, flexWrap: 'wrap' }}>
-        <span style={{ color: 'var(--text3)' }}>pencere: trace ±</span>
-        <SegmentedControl size="sm" aria-label="Metrik penceresi" value={String(win)}
-          onChange={v => set('mwin', Number(v) === TRACE_METRICS_DEFAULT_WINDOW ? null : v)}
-          options={TRACE_METRICS_WINDOWS.map(w => ({ value: String(w), label: w === 60 ? '1 sa' : `${w} dk` }))} />
-        <span style={{ flex: 1 }} />
-        <span style={{ color: 'var(--text3)' }}>{selSvc} · {selected.length}/{TRACE_METRICS_MAX_PODS} pod · {atCap ? capMsg : "aynı servisin pod'ları üst üste"}</span>
-        {/* v0.10.962 — tavan duyurusu: HER ZAMAN bağlı tek canlı bölge (BulkBar
-            v0.10.939 kalıbı; içerik değişmeden önce ağaçta olmalı). Devre dışı
-            çip Tab sırasından düşer, title'ı klavyeyle okunmaz — neden burada
-            duyurulur. Görünür sayaç canlı DEĞİL (çift duyuru olmasın). */}
-        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{atCap ? capMsg : ''}</span>
-        {targets[0]?.cluster && (
-          <Link className="sec" to={traceMetricsPodHref(targets[0], { from, to, startNs })}>Pod sayfasında aç ↗</Link>
-        )}
+
+      {(!model.selfKnown || model.truncated || baseWin.openWindow || thanosOff) && (
+        <div className="tpm-notes">
+          {!model.selfKnown && <span className="cell-warn">Sunucu analizi yok: öz süre gösterilemiyor</span>}
+          {model.truncated && <span className="cell-warn">Trace kırpılmış: sıra kısmi veriye dayanır</span>}
+          {baseWin.openWindow && <span className="tpm-muted">Trace {baseWin.agoMin} dk önce — metrikler henüz tamamlanmamış olabilir</span>}
+          {thanosOff && (
+            <span className="tpm-muted">
+              Thanos Remote Cluster tanımlı değil — CPU ve Bellek kolonları gizlendi; tablo yalnız trace verisiyle sıralandı.
+            </span>
+          )}
+        </div>
+      )}
+
+      {!showFocus && (
+        <div className="tpm-toolbar">
+          <SegmentedControl<TraceMetricsFilter> size="sm" aria-label="Pod süzgeci" value={url.filter}
+            onChange={setFilter} options={filterOpts} />
+          <SearchField value={draft} onChange={setDraft} hint="/" width={240}
+            aria-label="Servis veya pod ara" placeholder="Servis veya pod ara" data-shortcut-search=""
+            onKeyDown={e => {
+              if (e.key !== 'Escape') return;
+              e.preventDefault();
+              if (draft !== '') clearQuery();
+              else e.currentTarget.blur();
+            }} />
+          <span className="tpm-toolbar-right">
+            <Tooltip content="Önce hatanın kaynağı olan servis, sonra hatalı pod'u olan servisler; ardından kritik yol payı, en büyük öz süre, span sayısı. Metrikler sırayı değiştirmez.">
+              <span className="tpm-order" tabIndex={0}>Sıra: trace ilgisi ⓘ</span>
+            </Tooltip>
+            <SegmentedControl<string> size="sm" aria-label="Gruplama" value={url.grouping}
+              onChange={v => write({ grouping: v === 'flat' ? 'flat' : 'service' })}
+              options={[{ value: 'service', label: 'Servis' }, { value: 'flat', label: 'Düz' }]} />
+            <Button variant="ghost" size="sm" onClick={toggleAll}>{allOpen && url.grouping === 'service' ? 'Tümünü kapat' : 'Tümünü aç'}</Button>
+            {idleChunks.length > 0 && !loadRest && (
+              <Button variant="secondary" size="sm" onClick={() => {
+                setLoadRest(true);
+                announce(`${idlePods} pod'un metrikleri yükleniyor.`);
+              }}>
+                Kalan {idlePods} pod'un metriklerini yükle ({idleChunks.length} istek)
+              </Button>
+            )}
+          </span>
+        </div>
+      )}
+
+      {showFocus && panelProps ? (
+        <TracePodFocus {...panelProps} />
+      ) : (
+        <div className={panelProps ? 'tpm-body has-side' : 'tpm-body'}>
+          <section aria-label="Pod tablosu" className="tpm-main">
+            <TracePodTable model={model} rows={rows} selected={selectedPod} metrics={metrics}
+              hideMetrics={thanosOff} window={windowInfo} grouping={url.grouping}
+              onSelectPod={onSelect} onToggleGroup={onToggleGroup} onExpandMore={onExpandMore}
+              onToggleNoPod={setNoPodOpen} onShowPodSpans={onShowPodSpans} onRetryService={onRetryService}
+              onClearFilters={clearFilters} announce={announce} focusRow={focusReq} />
+          </section>
+          {panelProps && (
+            <section aria-label="Pod paneli" className="tpm-side">
+              <TracePodPanel {...panelProps} />
+            </section>
+          )}
+        </div>
+      )}
+
+      <div className="tpm-foot">
+        Kaynak: trace span'ları (sıra, hata, kritik yol) · Thanos (CPU, bellek{stepSec ? `; ${stepSec} sn adım` : ''}) · limitler şu anki değerdir.
       </div>
-      {loading || pending ? <Spinner />
-        : !entitiesOn ? <Empty icon="—" title="Cluster kayıtları (entity katmanı) kapalı — pod metrikleri Thanos'tan okunamıyor." />
-        : allFailed ? <Empty icon="✗" title="Thanos pod metrikleri okunamadı.">{reasons}</Empty>
-        // v0.10.962 — çizilecek seri yokken bir pod'un sorgusu düştüyse başlık
-        // "metrik yok" DEMEZ (hata boş sonuç gibi yazılmaz). Bu dalda düşmeyen
-        // her sorulan pod boş trend döndü (bekleyen = spinner, seri = grafik).
-        : cpu.length === 0 ? (
-          <Empty icon={errs.length > 0 ? '✗' : '—'}
-            title={errs.length > 0
-              ? `${errs.length}/${asked} pod'un Thanos metrikleri okunamadı; diğerlerinde bu pencerede örnek yok.`
-              : "Seçili pod'lar için metrik yok."}>
-            {reasons}
-          </Empty>
-        )
-        : (
-          <>
-            {/* v0.10.916 (operator-reported) — bellek üstte; iki panel de y
-                tabanı 0 (zeroBase): %0.1'lik oynama zirve gibi çizilmesin. */}
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>Memory (bytes)</div>
-              <MultiLineChart series={mem} height={180} syncKey={`trace-metrics-${selSvc}`} unit="bytes" deploys={marker} xRange={xRange} zeroBase />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>CPU (cores)</div>
-              <MultiLineChart series={cpu} height={180} syncKey={`trace-metrics-${selSvc}`} unit="cores" deploys={marker} xRange={xRange} zeroBase />
-            </div>
-            {/* v0.10.923 — JVM heap (GC sonrası) + GC duraklaması; servis JVM değilse çizilmez. */}
-            <TraceJvmPanel service={selSvc} pods={selected} from={from} to={to}
-              syncKey={`trace-metrics-${selSvc}`} deploys={marker} xRange={xRange} />
-            <div className="pod-cap">
-              kaynak Thanos (Pod sayfasıyla aynı uç) · "trace" işareti trace başlangıcı
-              {errs.length > 0 && <> · <span className="is-err">{errs.join(' · ')}</span></>}
-              {notes.length > 0 && <> · {notes.join(' · ')}</>}
-            </div>
-          </>
-        )}
+      {/* v0.10.962 — HER ZAMAN bağlı tek canlı bölge (içerik değişmeden önce ağaçta olmalı). */}
+      <span ref={liveRef} className="sr-only" role="status" aria-live="polite" aria-atomic="true" />
     </div>
   );
 }
+
