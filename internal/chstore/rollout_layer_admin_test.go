@@ -2,6 +2,7 @@ package chstore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -469,31 +470,62 @@ func TestRolloutV2LayerConflicts(t *testing.T) {
 	}
 }
 
+// v0.10.975 — karar ÜÇ çıktılı (supported, installed, detail): "kurulu"
+// ayrı bir hüküm. Kurulu kümede Supported TRUE kalır (sunucu apply kapısı
+// değişmedi — zorla basılan 0015 IF NOT EXISTS no-op'tur), kartın Uygula'sı
+// Installed'ı okuyup kapanır. Sıra: probe hatası / çakışma "kurulu"yu YENER
+// (emin olmadığımız ya da bölünmüş kümeye "kurulu" denmez); kısmi kurulum
+// uygulanabilir kalır ve eksikleri sayar.
 func TestRolloutV2LayerDecision(t *testing.T) {
 	base := rolloutV2LayerGate{SpansLocal: true, Clusters: []string{"uptrace_all", "other"}, Cluster: "uptrace_all"}
 	cases := []struct {
-		label  string
-		mut    func(g *rolloutV2LayerGate)
-		ok     bool
-		detail string
+		label     string
+		mut       func(g *rolloutV2LayerGate)
+		ok        bool
+		installed bool
+		detail    string
 	}{
-		{"uygulanabilir", func(g *rolloutV2LayerGate) {}, true, "uygulanabilir"},
-		{"probe hatası kazanır", func(g *rolloutV2LayerGate) { g.ProbeErrors = 1; g.SpansLocal = false }, false, "probe hatası"},
-		{"tek düğüm", func(g *rolloutV2LayerGate) { g.SpansLocal = false }, false, "spans_local yok"},
-		{"küme boş", func(g *rolloutV2LayerGate) { g.Cluster = "" }, false, "küme seçilmedi"},
-		{"küme adı geçersiz", func(g *rolloutV2LayerGate) { g.Cluster = "x;DROP" }, false, "geçersiz"},
-		{"küme tanımsız", func(g *rolloutV2LayerGate) { g.Cluster = "typo" }, false, "system.clusters"},
-		{"özel önek", func(g *rolloutV2LayerGate) { g.CustomPrefix = "/ch/tbl" }, false, "/ch/tbl"},
-		{"çakışma", func(g *rolloutV2LayerGate) { g.Conflicts = []string{"h1: rollout_events — …"} }, false, "1 çakışma"},
+		{"uygulanabilir (taze)", func(g *rolloutV2LayerGate) {}, true, false, "uygulanabilir: sekiz"},
+		{"probe hatası kazanır", func(g *rolloutV2LayerGate) { g.ProbeErrors = 1; g.SpansLocal = false }, false, false, "probe hatası"},
+		{"tek düğüm", func(g *rolloutV2LayerGate) { g.SpansLocal = false }, false, false, "spans_local yok"},
+		{"küme boş", func(g *rolloutV2LayerGate) { g.Cluster = "" }, false, false, "küme seçilmedi"},
+		{"küme adı geçersiz", func(g *rolloutV2LayerGate) { g.Cluster = "x;DROP" }, false, false, "geçersiz"},
+		{"küme tanımsız", func(g *rolloutV2LayerGate) { g.Cluster = "typo" }, false, false, "system.clusters"},
+		{"özel önek", func(g *rolloutV2LayerGate) { g.CustomPrefix = "/ch/tbl" }, false, false, "/ch/tbl"},
+		{"çakışma", func(g *rolloutV2LayerGate) { g.Conflicts = []string{"h1: rollout_events — …"} }, false, false, "1 çakışma"},
+		// v0.10.975 — dört yeni satır (kurulu / kısmi / çakışma / probe hatası).
+		{"kurulu", func(g *rolloutV2LayerGate) { g.Installed = true }, true, true,
+			"Kurulu: sekiz tablo her host'ta birleşik yolda — uygulama gerekmiyor"},
+		{"kısmi kurulum uygulanabilir kalır", func(g *rolloutV2LayerGate) {
+			g.Missing = []string{"host-3: rollout_events, argocd_app_status", "host-4: sekizi de yok"}
+		}, true, false, "kısmi kurulum: 2 host'ta eksik"},
+		{"çakışma kurulu'yu yener", func(g *rolloutV2LayerGate) {
+			g.Installed = true
+			g.Conflicts = []string{"host-2: rollout_events — ZK yolu …"}
+		}, false, false, "1 çakışma"},
+		{"probe hatası kurulu'yu yener", func(g *rolloutV2LayerGate) { g.Installed = true; g.ProbeErrors = 1 }, false, false, "probe hatası"},
+		{"özel önek kurulu'yu yener", func(g *rolloutV2LayerGate) { g.Installed = true; g.CustomPrefix = "/ch/tbl" }, false, false, "/ch/tbl"},
 	}
 	for _, c := range cases {
 		g := base
 		g.Clusters = append([]string(nil), base.Clusters...)
 		c.mut(&g)
-		ok, detail := rolloutV2LayerDecision(g)
-		if ok != c.ok || !strings.Contains(detail, c.detail) {
-			t.Errorf("[%s] = (%v, %q), beklenen (%v, …%q…)", c.label, ok, detail, c.ok, c.detail)
+		ok, installed, detail := rolloutV2LayerDecision(g)
+		if ok != c.ok || installed != c.installed || !strings.Contains(detail, c.detail) {
+			t.Errorf("[%s] = (%v, %v, %q), beklenen (%v, %v, …%q…)", c.label, ok, installed, detail, c.ok, c.installed, c.detail)
 		}
+	}
+	// Kurulu hükmü "uygulanabilir" DEMEZ (kart onu yeşil UYGULANABİLİR diye
+	// okumasın); kısmi hüküm "uygulanabilir" ile başlar (eski sözleşme).
+	g0 := base
+	g0.Installed = true
+	if _, _, d := rolloutV2LayerDecision(g0); strings.Contains(d, "uygulanabilir") {
+		t.Errorf("kurulu hükmü 'uygulanabilir' içermemeli: %s", d)
+	}
+	g0 = base
+	g0.Missing = []string{"host-4: sekizi de yok"}
+	if _, _, d := rolloutV2LayerDecision(g0); !strings.HasPrefix(d, "uygulanabilir") {
+		t.Errorf("kısmi hüküm 'uygulanabilir' ile başlamalı: %s", d)
 	}
 	// v0.10.971 — özel önek reddi AYNEN durur, gerekçesi değişti: kural 3
 	// kalktı, "kuşak probe'u" bozulamaz. Asıl zarar: 0015'in sabit yolu bu
@@ -501,7 +533,7 @@ func TestRolloutV2LayerDecision(t *testing.T) {
 	// boot sekizi bu önekte zaten birleşik kurar.
 	g := base
 	g.CustomPrefix = "/ch/tbl"
-	_, detail := rolloutV2LayerDecision(g)
+	_, _, detail := rolloutV2LayerDecision(g)
 	for _, want := range []string{"/ch/tbl/state/<ad>", "zaten birleşik"} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("özel önek gerekçesi %q içermeli: %s", want, detail)
@@ -527,6 +559,139 @@ func TestRolloutV2LayerProbeSQL(t *testing.T) {
 		if strings.Contains(q, "skip_unavailable_shards") {
 			t.Errorf("%s probe'u ulaşılamayan host'u atlamamalı", label)
 		}
+	}
+	// v0.10.975 — host evreni: sekizinden hiçbirini tutmayan host motor/ZK
+	// satırlarında GÖRÜNMEZ; "her host'ta kurulu" hükmü evreni bu probe'dan
+	// alır. Aynı kurallar: kümeye özgü, sınırlı, ulaşılamayan host atlanmaz.
+	q := rolloutV2HostsProbeSQL("prod_ch")
+	for _, want := range []string{"clusterAllReplicas('prod_ch', system.one)", "hostName()", "max_execution_time", "LIMIT "} {
+		if !strings.Contains(q, want) {
+			t.Errorf("host probe'u %q taşımıyor: %s", want, q)
+		}
+	}
+	if strings.Contains(q, "skip_unavailable_shards") {
+		t.Errorf("host probe'u ulaşılamayan host'u atlamamalı: %s", q)
+	}
+}
+
+// v0.10.975 — KURULUM RESMİ (saf): aynı probe satırlarından (host evreni +
+// motor + ZK yolu) "kurulu" ve kısmi kurulumda "ne eksik". Bir (host, tablo)
+// KURULU = motor Replicated* VE ZK yolu 0015'in birleşik yolu. Kurulu =
+// en az bir host ve HER (host, tablo) kurulu. Eksik listesi host başına tek
+// satır, host adı sırasında, tablo §10.3 sırasında; taze kümede (hiçbir
+// host'ta hiç tablo yok) BOŞ — o hâl "eksik" değil "kurulmamış". Çakışan
+// satır (düz motor / yanlış yol) ne kurulu ne eksik sayılır (çakışma
+// listesinin işi). Host adları sentetik.
+func TestRolloutV2LayerInstall(t *testing.T) {
+	hosts := []string{"host-1", "host-2", "host-3", "host-4"}
+	good := func(h, n string) rolloutV2HostTable {
+		return rolloutV2HostTable{Host: h, Table: n, Engine: "ReplicatedReplacingMergeTree", ZKPath: "/clickhouse/tables/state/" + n}
+	}
+	// full — verilen host'larda sekiz tablo, skip'teki (host/tablo) çiftleri hariç.
+	full := func(hs []string, skip map[string]bool) (eng, zk []rolloutV2HostTable) {
+		for _, h := range hs {
+			for _, n := range rolloutV2WantTables {
+				if skip[h+"/"+n] || skip[h+"/*"] {
+					continue
+				}
+				eng = append(eng, good(h, n))
+				zk = append(zk, good(h, n))
+			}
+		}
+		return eng, zk
+	}
+	cases := []struct {
+		label     string
+		hosts     []string
+		skip      map[string]bool
+		mut       func(eng, zk []rolloutV2HostTable) ([]rolloutV2HostTable, []rolloutV2HostTable)
+		installed bool
+		missing   []string
+	}{
+		{label: "kurulu: 4 host × 8 tablo, birleşik yol", hosts: hosts, installed: true, missing: []string{}},
+		{label: "taze: hiçbir host'ta tablo yok → eksik değil, kurulmamış", hosts: hosts,
+			skip: map[string]bool{"host-1/*": true, "host-2/*": true, "host-3/*": true, "host-4/*": true}, missing: []string{}},
+		{label: "host evreni boş + satır yok", hosts: nil,
+			skip: map[string]bool{"host-1/*": true, "host-2/*": true, "host-3/*": true, "host-4/*": true}, missing: []string{}},
+		{
+			// Sonradan katılan host-4 hiç tablo tutmuyor: motor satırlarında
+			// görünmez, YALNIZ host evreninden bilinir. host-3'te iki tablo eksik.
+			label: "kısmi", hosts: hosts,
+			skip:    map[string]bool{"host-3/rollout_events": true, "host-3/argocd_sync_events": true, "host-4/*": true},
+			missing: []string{"host-3: rollout_events, argocd_sync_events", "host-4: sekizi de yok"},
+		},
+		{
+			// Motor Replicated ama system.replicas satırı görünmüyor (oluşturma
+			// anı yarışı): yolu doğrulanamadı → kurulu DEĞİL, notla listelenir.
+			label: "ZK satırı görünmüyor", hosts: hosts,
+			mut: func(eng, zk []rolloutV2HostTable) ([]rolloutV2HostTable, []rolloutV2HostTable) {
+				out := zk[:0:0]
+				for _, r := range zk {
+					if !(r.Host == "host-2" && r.Table == "rollout_worker_runs") {
+						out = append(out, r)
+					}
+				}
+				return eng, out
+			},
+			missing: []string{"host-2: rollout_worker_runs (ZK yolu görünmüyor)"},
+		},
+		{
+			// Çakışan satır (düz kopya) kurulu değildir ama "eksik" de değildir.
+			label: "çakışan satır eksik sayılmaz", hosts: hosts,
+			mut: func(eng, zk []rolloutV2HostTable) ([]rolloutV2HostTable, []rolloutV2HostTable) {
+				for i := range eng {
+					if eng[i].Host == "host-1" && eng[i].Table == "argocd_app_status" {
+						eng[i].Engine = "ReplacingMergeTree"
+					}
+				}
+				out := zk[:0:0]
+				for _, r := range zk {
+					if !(r.Host == "host-1" && r.Table == "argocd_app_status") {
+						out = append(out, r)
+					}
+				}
+				return eng, out
+			},
+			missing: []string{},
+		},
+		{
+			// Yanlış ZK yolu da çakışmadır: kurulu değil, eksik değil.
+			label: "yanlış yol eksik sayılmaz", hosts: hosts,
+			mut: func(eng, zk []rolloutV2HostTable) ([]rolloutV2HostTable, []rolloutV2HostTable) {
+				for i := range zk {
+					if zk[i].Host == "host-2" && zk[i].Table == "rollout_events" {
+						zk[i].ZKPath = "/clickhouse/tables/01/rollout_events"
+					}
+				}
+				return eng, zk
+			},
+			missing: []string{},
+		},
+		{
+			// Host evreni motor satırlarındaki host'larla BİRLEŞİR: evren probe'u
+			// bir host'u kaçırsa da (ad biçimi farkı) o host'un tabloları sayılır.
+			label: "evren motor host'larıyla birleşir", hosts: []string{"host-1"},
+			skip: map[string]bool{"host-3/*": true, "host-4/*": true}, installed: true, missing: []string{},
+		},
+	}
+	for _, c := range cases {
+		eng, zk := full(hosts, c.skip)
+		if c.mut != nil {
+			eng, zk = c.mut(eng, zk)
+		}
+		installed, missing := rolloutV2LayerInstall(c.hosts, eng, zk)
+		if installed != c.installed || fmt.Sprint(missing) != fmt.Sprint(c.missing) || missing == nil {
+			t.Errorf("[%s] = (%v, %q), beklenen (%v, %q) (nil değil)", c.label, installed, missing, c.installed, c.missing)
+		}
+	}
+	// Deterministik: girdi sırası karışık da olsa aynı çıktı.
+	eng, zk := full(hosts, map[string]bool{"host-4/*": true, "host-2/ado_commit_enrichment": true})
+	for i, j := 0, len(eng)-1; i < j; i, j = i+1, j-1 {
+		eng[i], eng[j] = eng[j], eng[i]
+	}
+	_, a := rolloutV2LayerInstall([]string{"host-4", "host-2", "host-1", "host-3", "host-2"}, eng, zk)
+	if want := []string{"host-2: ado_commit_enrichment", "host-4: sekizi de yok"}; fmt.Sprint(a) != fmt.Sprint(want) {
+		t.Errorf("eksik listesi host sırasında ve tekil olmalı: %q", a)
 	}
 }
 
@@ -590,6 +755,8 @@ type rv2PreConn struct {
 	spansLocal uint8
 	clusters   []string
 	probeFor   string
+	hosts      []string   // v0.10.975 — system.one host evreni
+	hostsErr   error      // v0.10.975
 	engines    [][]string // host, table, engine
 	zk         [][]string // host, table, zookeeper_path
 	zkErr      error
@@ -627,6 +794,18 @@ func (c *rv2PreConn) Query(_ context.Context, q string, _ ...any) (driver.Rows, 
 			return &rv2PreRows{}, nil
 		}
 		return &rv2PreRows{vals: c.zk}, nil
+	case strings.Contains(q, "system.one)"):
+		if c.hostsErr != nil {
+			return nil, c.hostsErr
+		}
+		if !mine {
+			return &rv2PreRows{}, nil
+		}
+		v := make([][]string, len(c.hosts))
+		for i, h := range c.hosts {
+			v[i] = []string{h}
+		}
+		return &rv2PreRows{vals: v}, nil
 	}
 	return nil, errors.New("beklenmeyen Query: " + q)
 }
@@ -678,6 +857,13 @@ func TestRolloutV2LayerPreflightWiring(t *testing.T) {
 			conn:   rv2PreConn{spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all", zkErr: errors.New("timeout")},
 			detail: "probe hatası", probeErrs: true,
 		},
+		{
+			// v0.10.975 — host evreni probe'unun hatası da probe hatasıdır
+			// (ulaşılamayan host: "her host'ta kurulu" denemez, DDL de basılmaz).
+			label:  "host probe hatası",
+			conn:   rv2PreConn{spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all", hostsErr: errors.New("code: 279")},
+			detail: "probe hatası", probeErrs: true,
+		},
 	}
 	for _, c := range cases {
 		conn := c.conn
@@ -692,12 +878,13 @@ func TestRolloutV2LayerPreflightWiring(t *testing.T) {
 		if (len(got.ProbeErrors) > 0) != c.probeErrs {
 			t.Errorf("[%s] ProbeErrors = %v", c.label, got.ProbeErrors)
 		}
-		// İki çakışma probe'u da istenen kümeye (boşsa önerilene) gitmeli.
+		// İki çakışma probe'u da (v0.10.975: + host evreni) istenen kümeye
+		// (boşsa önerilene) gitmeli.
 		want := c.req
 		if want == "" {
 			want = "uptrace_all"
 		}
-		for _, src := range []string{"system.tables)", "system.replicas)"} {
+		for _, src := range []string{"system.tables)", "system.replicas)", "system.one)"} {
 			found := false
 			for _, q := range conn.queries {
 				if strings.Contains(q, src) {
@@ -731,7 +918,8 @@ func TestRolloutV2LayerPreflightAfterStatePathRebuild(t *testing.T) {
 	if len(engines) != 32 {
 		t.Fatalf("fikstür %d satır (4 host × 8 tablo)", len(engines))
 	}
-	conn := rv2PreConn{spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all", engines: engines, zk: zk}
+	conn := rv2PreConn{spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all",
+		hosts: []string{"host-1", "host-2", "host-3", "host-4"}, engines: engines, zk: zk}
 	s := &Store{cfg: config.CHConfig{ClusterName: "uptrace_all"}, conn: &conn}
 	got, err := s.RolloutV2LayerPreflight(context.Background(), "")
 	if err != nil {
@@ -740,13 +928,97 @@ func TestRolloutV2LayerPreflightAfterStatePathRebuild(t *testing.T) {
 	if len(got.Conflicts) != 0 || got.Conflicts == nil {
 		t.Errorf("çakışma = %v, beklenen []", got.Conflicts)
 	}
-	if !got.Supported || !strings.HasPrefix(got.Detail, "uygulanabilir") {
-		t.Errorf("= (%v, %q), beklenen (true, uygulanabilir…)", got.Supported, got.Detail)
+	// v0.10.975 — bu, v0.10.965 + v0.10.971'den beri NORMAL durum: artık
+	// "uygulanabilir" değil "Kurulu" (Supported yine true — sunucu apply
+	// kapısı değişmedi, zorla basılan 0015 IF NOT EXISTS no-op).
+	if !got.Supported || !got.Installed || got.Detail != "Kurulu: sekiz tablo her host'ta birleşik yolda — uygulama gerekmiyor" {
+		t.Errorf("= (supported %v, installed %v, %q), beklenen (true, true, Kurulu…)", got.Supported, got.Installed, got.Detail)
+	}
+	if got.Missing == nil || len(got.Missing) != 0 {
+		t.Errorf("kurulu kümede eksik listesi [] olmalı: %v", got.Missing)
 	}
 	// Sihirbazın kurduğu yol = 0015'in denetlediği yol (tek gerçek).
 	for _, n := range rolloutV2TableNames() {
 		if unifiedStatePath((&Store{}).zkPrefix(), n) != unifiedStatePath(rolloutV2ZKPrefix, n) {
 			t.Errorf("%s: varsayılan önekte sihirbaz yolu 0015 yolundan farklı", n)
+		}
+	}
+}
+
+// TestRolloutV2LayerPreflightPartialInstall — v0.10.975: kısmi kurulum
+// (çakışma yok) UYGULANABİLİR kalır ve neyin eksik olduğunu söyler. host-4
+// sonradan katılmış, sekizinden hiçbirini tutmuyor → motor/ZK satırlarında
+// GÖRÜNMEZ; yalnız host evreni probe'u onu bilir. Mutant (evren probe'unu
+// kablolamamak / sonucu karara taşımamak) bu kümeyi "Kurulu" ilan eder ve
+// Uygula kapanırdı — host-4 hiç kurulmadan. Host adları sentetik.
+func TestRolloutV2LayerPreflightPartialInstall(t *testing.T) {
+	var engines, zk [][]string
+	for _, h := range []string{"host-1", "host-2", "host-3"} {
+		for _, n := range rolloutV2TableNames() {
+			if h == "host-3" && n == "argocd_app_mapping" {
+				continue
+			}
+			engines = append(engines, []string{h, n, "ReplicatedReplacingMergeTree"})
+			zk = append(zk, []string{h, n, "/clickhouse/tables/state/" + n})
+		}
+	}
+	conn := rv2PreConn{spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all",
+		hosts: []string{"host-1", "host-2", "host-3", "host-4"}, engines: engines, zk: zk}
+	s := &Store{cfg: config.CHConfig{ClusterName: "uptrace_all"}, conn: &conn}
+	got, err := s.RolloutV2LayerPreflight(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Supported || got.Installed || !strings.HasPrefix(got.Detail, "uygulanabilir") || !strings.Contains(got.Detail, "kısmi kurulum: 2 host'ta eksik") {
+		t.Errorf("= (supported %v, installed %v, %q), beklenen (true, false, uygulanabilir — kısmi…)", got.Supported, got.Installed, got.Detail)
+	}
+	if want := []string{"host-3: argocd_app_mapping", "host-4: sekizi de yok"}; fmt.Sprint(got.Missing) != fmt.Sprint(want) {
+		t.Errorf("eksik = %q, beklenen %q", got.Missing, want)
+	}
+	// Çakışma varken eksik listesi DÖNMEZ (UYGULANAMAZ kartında "Uygula
+	// eksikleri kurar" yanıltırdı).
+	conn2 := conn
+	conn2.queries = nil
+	conn2.engines = append([][]string{{"host-1", "rollout_events", "ReplacingMergeTree"}}, engines[1:]...)
+	s2 := &Store{cfg: config.CHConfig{ClusterName: "uptrace_all"}, conn: &conn2}
+	got2, err := s2.RolloutV2LayerPreflight(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2.Supported || got2.Installed || got2.Missing == nil || len(got2.Missing) != 0 {
+		t.Errorf("çakışmada = (supported %v, installed %v, missing %q), beklenen (false, false, [])", got2.Supported, got2.Installed, got2.Missing)
+	}
+}
+
+// TestRolloutV2LayerPreflightJSONShape — v0.10.975: yeni iki alan telde her
+// zaman var (installed bool; missing [] — null DEĞİL: FE .map()/.length).
+// FE aynası: frontend/src/lib/rolloutV2Layer.contract.test.ts (struct
+// etiketlerini okur) + types.ts RolloutV2LayerPreflightResult.
+func TestRolloutV2LayerPreflightJSONShape(t *testing.T) {
+	for label, conn := range map[string]rv2PreConn{
+		"taze":          {spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all", hosts: []string{"host-1", "host-2"}},
+		"probe hatası":  {spansLocal: 1, clusters: []string{"uptrace_all"}, probeFor: "uptrace_all", zkErr: errors.New("timeout")},
+		"küme tanımsız": {spansLocal: 1, clusters: []string{"other"}, probeFor: "other"},
+	} {
+		c := conn
+		s := &Store{cfg: config.CHConfig{ClusterName: "uptrace_all"}, conn: &c}
+		got, err := s.RolloutV2LayerPreflight(context.Background(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		if string(m["installed"]) != "false" {
+			t.Errorf("[%s] installed = %s, beklenen false", label, m["installed"])
+		}
+		if string(m["missing"]) != "[]" {
+			t.Errorf("[%s] missing = %s, beklenen [] (null değil)", label, m["missing"])
 		}
 	}
 }

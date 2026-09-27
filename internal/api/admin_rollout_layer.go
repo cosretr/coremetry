@@ -32,6 +32,12 @@ package api
 // migration ayırt edilebilsin. Rollback confirm:true ister (replica-repair
 // emsali): argocd_sync_events tarihçesi geri gelmez (Argo yalnız son 10
 // kaydı tutar). Boot bu uçları ASLA çağırmaz (v0.9.613).
+//
+// v0.10.975 — preflight-0015 cevabı `installed` (her host'ta sekiz tablo,
+// Replicated, birleşik yolda) + `missing` (uygulanabilir kısmi kurulumda
+// host başına eksikler) taşır; kart kurulu kümede Uygula'yı kapatır.
+// apply-0015'in kapısı DEĞİŞMEDİ: kurulu kümede Supported true kalır, zorla
+// basılan 0015 IF NOT EXISTS ile no-op.
 
 import (
 	"context"

@@ -986,3 +986,13 @@ kesik stack'i tek başına "Güven: kesin" dayanağı saymaz. Problem özetinin 
 etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta stack anahtarlarına
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
+
+## 2026-09-27 — Argo CD: şimdilik yalnız metrik (API bağlantısı askıda)
+
+**Karar (operatör: "argocd şimdilik metrikle"):** Argo CD entegrasyonu şimdilik yalnız hub'ların
+Thanos'undaki `argocd_*` metrikleriyle çalışır; Argo CD API'sine bağlanılmaz. Ayarlar › Argo CD
+sekmesindeki `apiUrl`/`tokenRef` alanları isteğe bağlı olarak KALIR (boş = bağlantı yok);
+kaldırılmaz, çünkü karar kalıcı değil. Plan etkisi: Faz 3.3 (argocd-api işçisi: senkron
+geçmişi, kesin uygulama↔iş yükü eşlemesi) ve ona dayanan Faz 4 (Azure DevOps zinciri) askıda;
+Faz 3.1/3.2/3.4/3.5 metrikle sürer, sınıflandırma "tahmin" etiketiyle (karar 15). API açılınca
+sekmeye alan girmek ve 3.3'ü başlatmak yeter; ayar şeması hazır.

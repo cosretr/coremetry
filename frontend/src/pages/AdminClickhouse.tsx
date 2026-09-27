@@ -3881,20 +3881,25 @@ function WizPreflightActions({ label, onPreflight, preBusy, preDisabled, onRefre
   );
 }
 
-/** Ön kontrol kutusu: hüküm çerçevesi + UYGULANABİLİR / UYGULANAMAZ + ek rozetler + detay. */
-function WizPreflightFrame({ pre, badges, children }: {
-  pre: { supported: boolean; detail: string }; badges?: ReactNode; children: ReactNode;
+/** Ön kontrol kutusu: hüküm çerçevesi + UYGULANABİLİR / UYGULANAMAZ + ek rozetler + detay.
+ *  v0.10.975 — `settled` (ör. 0015 KURULU): yapılacak iş yok → hüküm NÖTR
+ *  (b-gray rozet, --border / --bg2) — normal durum yeşil taşımaz (K5).
+ *  `detailId` detay metnini kapalı bir düğmenin aria-describedby'ına bağlar. */
+function WizPreflightFrame({ pre, badges, settled, detailId, children }: {
+  pre: { supported: boolean; detail: string }; badges?: ReactNode; settled?: string; detailId?: string; children: ReactNode;
 }) {
+  const tone = settled ? { border: '1px solid var(--border)', background: 'var(--bg2)' } : {
+    border: `1px solid ${pre.supported ? 'var(--ok)' : 'var(--warn)'}`,
+    background: pre.supported ? 'var(--ok-bg)' : 'var(--warn-bg)',
+  };
   return (
     <div style={{
-      padding: 'var(--sp-6) var(--sp-7)', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--sp-6)',
-      border: `1px solid ${pre.supported ? 'var(--ok)' : 'var(--warn)'}`,
-      background: pre.supported ? 'var(--ok-bg)' : 'var(--warn-bg)',
+      padding: 'var(--sp-6) var(--sp-7)', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--sp-6)', ...tone,
     }}>
       <Row gap={2} wrap style={{ marginBottom: 'var(--sp-4)' }}>
-        <span className={`badge ${pre.supported ? 'b-ok' : 'b-warn'}`}>{pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ'}</span>
+        <span className={`badge ${settled ? 'b-gray' : pre.supported ? 'b-ok' : 'b-warn'}`}>{settled ?? (pre.supported ? 'UYGULANABİLİR' : 'UYGULANAMAZ')}</span>
         {badges}
-        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
+        <span id={detailId} style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', lineHeight: 1.5 }}>{pre.detail}</span>
       </Row>
       {children}
     </div>
@@ -4146,6 +4151,7 @@ function RolloutV2LayerBlock({ rows, loaded, statusErr, statusBusy, onRefresh }:
   const [action, setAction] = useState<{ kind: 'apply' | 'rollback'; res: RollupActionResult & { note?: string } } | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const staleId = useId();
+  const installedId = useId();
   const busy = busyKind !== null;
   const confirmKind = confirm.kind;
   const confirming = confirmKind !== null;
@@ -4178,8 +4184,16 @@ function RolloutV2LayerBlock({ rows, loaded, statusErr, statusBusy, onRefresh }:
   const probeFailed = (pre?.probeErrors?.length ?? 0) > 0;
   const conflictCount = pre?.conflicts.length ?? 0;
   const stale = !!pre && !!cluster && cluster !== pre.cluster;
+  // v0.10.975 — KURULU (Go rolloutV2LayerInstall): her host'ta sekiz tablo
+  // Replicated + birleşik yolda. supported true kalır (sunucu kapısı
+  // değişmedi, zorla apply IF NOT EXISTS no-op) ama yapılacak iş yok →
+  // Uygula kapalı, gerekçe = hüküm metni (aria-describedby). Bayat seçim
+  // gerekçede kazanır: hüküm başka kümenin.
+  const installed = !!pre?.installed;
+  // v0.10.975 — eski (v0.10.960–976) sunucu `missing` göndermez (rolling deploy); undefined → [] ki kart çökmesin.
+  const missing = pre?.missing ?? [];
   // Uygula'nın kapısı; onay açıkken Evet'i de aynı kapı tutar.
-  const applyReady = !!pre?.supported && !!cluster && !stale && !preBusy;
+  const applyReady = !!pre?.supported && !installed && !!cluster && !stale && !preBusy;
   const canApply = applyReady && !busy;
   const plainCopy = !!pre && pre.conflicts.some(c => c.includes(ROLLOUT_V2_PLAIN_COPY));
   const present = rows.filter(o => o.state === 'ok').length;
@@ -4201,7 +4215,7 @@ function RolloutV2LayerBlock({ rows, loaded, statusErr, statusBusy, onRefresh }:
         {!pre && !preBusy && !preErr && <span className="field-hint">Ön kontrol henüz koşmadı — küme listesi + host başına motor / ZK yolu çakışması; hiçbir şey yazmaz.</span>}
       </WizPreflightActions>
       {pre && (
-        <WizPreflightFrame pre={pre} badges={pre.bootManaged && (
+        <WizPreflightFrame pre={pre} settled={installed ? 'KURULU' : undefined} detailId={installed ? installedId : undefined} badges={pre.bootManaged && (
           <span className="badge b-gray" title="cluster_name dolu: boot sekiz tabloyu kendisi kurar (spans varsa arka planda); 0015 yalnız eksik host'ları tamamlar">BOOT YÖNETİYOR</span>
         )}>
           <KeyValue labelWidth="wide" style={{ marginBottom: 8 }}>
@@ -4218,6 +4232,15 @@ function RolloutV2LayerBlock({ rows, loaded, statusErr, statusBusy, onRefresh }:
             <ul style={{ margin: '0 0 var(--sp-4)', paddingLeft: 18, fontSize: 'var(--fs-xs)', color: 'var(--warn)' }}>
               {pre.conflicts.map((c, i) => <li key={i} className="mono">{c}</li>)}
             </ul>
+          )}
+          {/* v0.10.975 — kısmi kurulum (çakışmasız): Uygula'nın kuracağı eksikler, host başına. */}
+          {missing.length > 0 && (
+            <div style={{ marginBottom: 'var(--sp-4)' }}>
+              <div className="field-hint">Eksik — Uygula (0015) yalnız bunları kurar (var olanlar IF NOT EXISTS ile no-op):</div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
+                {missing.map(m => <li key={m} className="mono">{m}</li>)}
+              </ul>
+            </div>
           )}
           {plainCopy && (
             <div className="field-hint" style={{ marginBottom: 'var(--sp-4)' }}>
@@ -4236,7 +4259,7 @@ function RolloutV2LayerBlock({ rows, loaded, statusErr, statusBusy, onRefresh }:
         {confirmKind === null ? (
           <>
             <Button variant="primary" size="sm" disabled={!canApply} autoFocus={confirm.refocus === 'apply'}
-              aria-describedby={stale ? staleId : undefined} onClick={() => confirm.open('apply')}>Uygula (0015)</Button>
+              aria-describedby={stale ? staleId : installed ? installedId : undefined} onClick={() => confirm.open('apply')}>Uygula (0015)</Button>
             <Button variant="ghost-danger" size="sm" disabled={!cluster || busy} autoFocus={confirm.refocus === 'rollback'}
               onClick={() => confirm.open('rollback')}>Tabloları geri al (0015)</Button>
             {stale && (

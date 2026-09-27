@@ -11,6 +11,7 @@
 //      (0015 ↔ rollout_v2_schema.go bayt eşitliğini Go testi pinler.)
 //   2. RolloutV2LayerPreflightResult alanları = Go struct json etiketleri;
 //      omitempty ↔ TS'te `?:` (derleme + çalışma zamanı), tip ↔ tip.
+//      v0.10.975 — installed + missing ("kurulu" hükmü) eklendi.
 //   3. apply-0015 / rollback-0015 cevap anahtarları ve rollback'in okuduğu
 //      gövde alanları (cluster + confirm) + üç rota.
 import { describe, it, expect } from 'vitest';
@@ -70,12 +71,15 @@ describe('RolloutV2LayerPreflightResult ↔ chstore struct (v0.10.960)', () => {
   const full: Required<RolloutV2LayerPreflightResult> = {
     clusters: ['uptrace_all'], suggestedCluster: 'uptrace_all', cluster: 'uptrace_all',
     spansLocal: true, bootManaged: false, conflicts: [], probeErrors: [],
-    supported: true, detail: 'ok', generated: 1,
+    supported: true, installed: false, missing: [], detail: 'ok', generated: 1,
   };
   const optional: Record<OptionalKeys<RolloutV2LayerPreflightResult>, true> = { suggestedCluster: true, probeErrors: true };
 
+  // v0.10.975 — +installed (bool) +missing ([]string, omitempty DEĞİL: FE .length).
   it('struct okunabildi', () => {
-    expect(goFields.length).toBe(10);
+    expect(goFields.length).toBe(12);
+    expect(goFields.filter(f => f.tag === 'installed' || f.tag === 'missing'))
+      .toEqual([{ type: 'bool', tag: 'installed', omitempty: false }, { type: '[]string', tag: 'missing', omitempty: false }]);
   });
 
   it('alan adları birebir', () => {

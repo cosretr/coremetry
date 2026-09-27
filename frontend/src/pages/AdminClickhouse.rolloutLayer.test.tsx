@@ -25,6 +25,7 @@ import {
   type EntityLayerObjectStatus, type RolloutLayerStatusResult, type RolloutV2LayerPreflightResult,
   type RolloutV2LayerApplyResult, type RollupActionResult,
 } from '@/lib/types';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RolloutLayerWizardPanel } from './AdminClickhouse';
 
 const GO = readFileSync(resolve(__dirname, '../../../internal/chstore/rollout_layer_admin.go'), 'utf8');
@@ -59,9 +60,14 @@ const status = (s0012: State, s0015: State | ((t: string) => State)): RolloutLay
 });
 const pre15 = (over: Partial<RolloutV2LayerPreflightResult> = {}): RolloutV2LayerPreflightResult => ({
   clusters: ['dev_all', 'uptrace_all'], suggestedCluster: 'uptrace_all', cluster: 'uptrace_all',
-  spansLocal: true, bootManaged: false, conflicts: [], supported: true,
+  spansLocal: true, bootManaged: false, conflicts: [], supported: true, installed: false, missing: [],
   detail: 'uygulanabilir: sekiz Rollouts v2 state tablosu', generated: 1, ...over,
 });
+
+// v0.10.975 — "kurulu" hükmünün metni Go sabitinden (rolloutV2LayerInstalledDetail).
+const INSTALLED_DETAIL = GO.match(/const rolloutV2LayerInstalledDetail = "([^"]+)"/)?.[1] ?? '';
+const preInstalled = (over: Partial<RolloutV2LayerPreflightResult> = {}) =>
+  pre15({ installed: true, detail: INSTALLED_DETAIL, ...over });
 
 // ── fetch yönlendirici: `YÖNTEM /yol` → cevap; api.ts gerçek ────────────
 type Reply = { status?: number; body: unknown } | 'hang';
@@ -84,13 +90,16 @@ const calls = (method: string, path: string) => seen.filter(s => s.method === me
 const wait = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 let host: HTMLElement | null = null;
 let root: Root | null = null;
-async function mount(): Promise<HTMLElement> {
+// v0.10.975 — boundary: AppShell'in rota başı ErrorBoundary'si gibi sarar;
+// render hatası kartı söküp "Something went wrong" yedeğine düşürür.
+async function mount({ boundary = false }: { boundary?: boolean } = {}): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const panel = <RolloutLayerWizardPanel />;
   act(() => {
     root = createRoot(host!);
-    root.render(<QueryClientProvider client={qc}><MemoryRouter><RolloutLayerWizardPanel /></MemoryRouter></QueryClientProvider>);
+    root.render(<QueryClientProvider client={qc}><MemoryRouter>{boundary ? <ErrorBoundary>{panel}</ErrorBoundary> : panel}</MemoryRouter></QueryClientProvider>);
   });
   await wait();
   return host!;
@@ -415,6 +424,112 @@ describe('0015 bloğu — ön kontrol / uygula / geri al (v0.10.960)', () => {
     expect(btn(g, 'Uygula (0015)').getAttribute('aria-describedby')).toBe(hintId);
   });
 
+  // v0.10.975 — onaylı kalan iş: sekiz tablo her host'ta Replicated + birleşik
+  // yoldayken (v0.10.965 / v0.10.971'den beri NORMAL durum) kart yeşil
+  // UYGULANABİLİR diyor, Uygula açık kalıyordu (basmak IF NOT EXISTS no-op).
+  // Artık: nötr KURULU hükmü, Uygula kapalı + gerekçe aria-describedby ile
+  // bağlı; geri alma değişmedi. Sunucu kapısı değişmedi (Go testi pinler).
+  describe('kurulu / kısmi kurulum (v0.10.975)', () => {
+    it('hüküm metni Go sabitinden okundu', () => {
+      expect(INSTALLED_DETAIL).toBe("Kurulu: sekiz tablo her host'ta birleşik yolda — uygulama gerekmiyor");
+    });
+
+    it('kurulu → nötr KURULU (yeşil yok), Uygula kapalı + gerekçe bağlı, geri al açık', async () => {
+      routes['GET /api/admin/rollout-layer/preflight-0015'] = { body: preInstalled() };
+      const g = group(await mount(), '0015');
+      await click(btn(g, 'Ön kontrol (0015)'));
+      expect(g.textContent).toContain(INSTALLED_DETAIL);
+      const verdict = [...g.querySelectorAll('.badge')].find(b => b.textContent === 'KURULU');
+      expect(verdict, 'KURULU rozeti yok').toBeDefined();
+      expect(verdict!.className).toContain('b-gray');
+      expect(g.textContent).not.toContain('UYGULANABİLİR');
+      // Palet kuralı: normal durum renk taşımaz — çerçevede --ok / --ok-bg, rozette b-ok yok.
+      expect(g.querySelector('.badge.b-ok')).toBeNull();
+      expect(g.querySelector('[style*="var(--ok"]')).toBeNull();
+
+      const apply = btn(g, 'Uygula (0015)');
+      expect(apply.disabled).toBe(true);
+      const reasonId = apply.getAttribute('aria-describedby');
+      expect(reasonId).toBeTruthy();
+      expect(document.getElementById(reasonId!)?.textContent).toBe(INSTALLED_DETAIL);
+      // Geri alma kurulu kümede de açık (davranış değişmedi).
+      expect(btn(g, 'Tabloları geri al (0015)').disabled).toBe(false);
+      await click(apply);
+      expect(g.querySelector('[role="alert"]')).toBeNull(); // kapalı düğme onay açmaz
+      expect(calls('POST', '/api/admin/rollout-layer/apply-0015')).toHaveLength(0);
+    });
+
+    it('kısmi kurulum → UYGULANABİLİR, Uygula açık (gerekçe yok), eksik listesi görünür', async () => {
+      const missing = ['host-3: argocd_app_mapping', 'host-4: sekizi de yok'];
+      routes['GET /api/admin/rollout-layer/preflight-0015'] = { body: pre15({
+        detail: "uygulanabilir — kısmi kurulum: 2 host'ta eksik tablo; Uygula (0015) eksikleri birleşik yola kurar", missing,
+      }) };
+      routes['POST /api/admin/rollout-layer/apply-0015'] = { body: { ok: true, note: '', statements: [] } };
+      const g = group(await mount(), '0015');
+      await click(btn(g, 'Ön kontrol (0015)'));
+      expect(g.textContent).toContain('UYGULANABİLİR');
+      expect(g.textContent).not.toContain('KURULU');
+      const items = [...g.querySelectorAll('li')].map(li => li.textContent);
+      for (const m of missing) expect(items).toContain(m);
+      const apply = btn(g, 'Uygula (0015)');
+      expect(apply.disabled).toBe(false);
+      expect(apply.getAttribute('aria-describedby')).toBeNull();
+      await click(apply);
+      await click(btn(g, 'Evet'));
+      expect(calls('POST', '/api/admin/rollout-layer/apply-0015').map(c => c.body)).toEqual([{ cluster: 'uptrace_all' }]);
+    });
+
+    it('taze küme (eksik listesi boş) → liste yok, Uygula açık', async () => {
+      routes['GET /api/admin/rollout-layer/preflight-0015'] = { body: pre15() };
+      const g = group(await mount(), '0015');
+      await click(btn(g, 'Ön kontrol (0015)'));
+      expect(g.textContent).not.toContain('Eksik');
+      expect(btn(g, 'Uygula (0015)').disabled).toBe(false);
+    });
+
+    it('kurulu ama başka küme seçildi → gerekçe bayat ipucu (hüküm o kümenin değil)', async () => {
+      routes['GET /api/admin/rollout-layer/preflight-0015'] = { body: preInstalled() };
+      const g = group(await mount(), '0015');
+      await click(btn(g, 'Ön kontrol (0015)'));
+      await choose(select(g), 'dev_all');
+      const apply = btn(g, 'Uygula (0015)');
+      expect(apply.disabled).toBe(true);
+      expect(document.getElementById(apply.getAttribute('aria-describedby')!)?.textContent).toContain('uptrace_all için koştu');
+    });
+
+    // v0.10.975 (inceleme F1) — rolling deploy: yeni paketin isteği henüz eski
+    // (v0.10.960–976) pod'a düşer; gövdede `missing` / `installed` anahtarı yok.
+    // Kart `pre.missing.length`'te TypeError atıp sayfayı ErrorBoundary
+    // yedeğine düşürüyordu. Eski gövde = eski hüküm: UYGULANABİLİR, Uygula açık.
+    it('eski sunucu gövdesi (missing / installed yok) → çökmez, UYGULANABİLİR, Uygula açık', async () => {
+      const { missing: _m, installed: _i, ...old } = pre15();
+      expect(Object.keys(old)).not.toContain('missing');
+      routes['GET /api/admin/rollout-layer/preflight-0015'] = { body: old };
+      const el = await mount({ boundary: true });
+      await click(btn(group(el, '0015'), 'Ön kontrol (0015)'));
+      expect(el.textContent).not.toContain('Something went wrong');
+      const g = group(el, '0015');
+      expect(g.textContent).toContain('UYGULANABİLİR');
+      expect(g.textContent).not.toContain('KURULU');
+      expect(g.textContent).not.toContain('Eksik —');
+      expect(select(g).value).toBe('uptrace_all');
+      const apply = btn(g, 'Uygula (0015)');
+      expect(apply.disabled).toBe(false);
+      expect(apply.getAttribute('aria-describedby')).toBeNull();
+    });
+
+    it('kurulu → yeniden ön kontrol kısmi dönerse Uygula açılır', async () => {
+      routes['GET /api/admin/rollout-layer/preflight-0015'] = { body: preInstalled() };
+      const g = group(await mount(), '0015');
+      await click(btn(g, 'Ön kontrol (0015)'));
+      expect(btn(g, 'Uygula (0015)').disabled).toBe(true);
+      routes['GET /api/admin/rollout-layer/preflight-0015'] = { body: pre15({ missing: ['host-4: sekizi de yok'] }) };
+      await click(btn(g, 'Ön kontrol (0015)'));
+      expect(btn(g, 'Uygula (0015)').disabled).toBe(false);
+      expect(g.textContent).not.toContain(INSTALLED_DETAIL);
+    });
+  });
+
   it('ön kontrol yükleniyor → düğme meşgul; hata → mesaj, kutu yok', async () => {
     routes['GET /api/admin/rollout-layer/preflight-0015'] = 'hang';
     const g = group(await mount(), '0015');
@@ -444,12 +559,17 @@ describe('Rollouts kartı iskeleti — 0012 / 0015 ortak, token merdiveninde', (
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');
 
-  it('ön kontrol çerçevesi tek kopya; zemin --ok-bg / --warn-bg', () => {
+  // v0.10.975 — çerçevenin üçüncü tonu: `settled` (0015 KURULU) nötr —
+  // b-gray rozet, --border / --bg2 zemin; yeşil yalnız "yapılacak iş var" hükmünde.
+  it('ön kontrol çerçevesi tek kopya; zemin --ok-bg / --warn-bg, yerleşik hüküm nötr', () => {
     expect(at).toBeGreaterThan(0);
     expect(card.match(/pre\.supported \? 'b-ok' : 'b-warn'/g)).toHaveLength(1);
     expect(card.match(/border: `1px solid \$\{pre\.supported/g)).toHaveLength(1);
     expect(card).toContain("background: pre.supported ? 'var(--ok-bg)' : 'var(--warn-bg)'");
     expect(card).not.toContain('color-mix');
+    // Yerleşik (settled) dal yeşile hiç girmez: nötr çerçeve + gri rozet.
+    expect(card).toContain("const tone = settled ? { border: '1px solid var(--border)', background: 'var(--bg2)' } : {");
+    expect(card.match(/settled \? 'b-gray' : pre\.supported \? 'b-ok' : 'b-warn'/g)).toHaveLength(1);
   });
 
   it('merdiven dışı punto yok', () => {

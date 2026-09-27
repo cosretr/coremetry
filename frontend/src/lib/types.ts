@@ -4164,6 +4164,10 @@ export interface RolloutV2LayerPreflightResult {
   conflicts: string[];
   probeErrors?: string[];
   supported: boolean;
+  /** v0.10.975 — her host'ta sekiz tablo, Replicated, birleşik ZK yolunda: uygulama gerekmez. supported yine true (zorla apply no-op); kart Uygula'yı kapatır. */
+  installed: boolean;
+  /** v0.10.975 — yalnız uygulanabilir kısmi kurulumda host başına eksikler ("host-3: rollout_events, …"); aksi hâlde []. */
+  missing: string[];
   detail: string;
   generated: number;
 }

@@ -1,11 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // v0.10.197 kaynak-pini (inceleme S3/S4): apply ucu ön kontrolü HER istekte
@@ -144,5 +147,56 @@ func TestRolloutV2LayerHandlersRejectBadInputBeforeStore(t *testing.T) {
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), c.want) {
 			t.Errorf("[%s] = %d %q, beklenen 400 …%q…", c.label, rec.Code, rec.Body.String(), c.want)
 		}
+	}
+}
+
+// v0.10.975 — preflight-0015 cevabı "kurulu" hükmünü taşır: installed
+// (bool, her zaman) + missing ([] — null değil). Uç struct'ı OLDUĞU GİBİ
+// yazar (writeJSON(w, res)), telin şekli chstore etiketleridir — burada
+// uçla aynı yazıcıdan geçirilip doğrulanır. Apply-0015'in sunucu kapısı
+// DEĞİŞMEDİ: Installed'a bakmaz (kurulu kümeye zorla basılan 0015 IF NOT
+// EXISTS ile no-op; kapı hâlâ !pre.Supported / probe hatası). Kurulu
+// kümede Supported true kaldığı için zorla apply 409 almaz.
+func TestRolloutV2LayerPreflightInstalledShape(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeJSON(rec, chstore.RolloutV2LayerPreflightResult{
+		Clusters: []string{"uptrace_all"}, Cluster: "uptrace_all", SpansLocal: true,
+		Conflicts: []string{}, Missing: []string{}, Supported: true, Installed: true,
+		Detail: "Kurulu: sekiz tablo her host'ta birleşik yolda — uygulama gerekmiyor",
+	})
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]string{"installed": "true", "supported": "true", "missing": "[]", "conflicts": "[]"} {
+		if string(m[k]) != want {
+			t.Errorf("%s = %s, beklenen %s", k, m[k], want)
+		}
+	}
+	// Kısmi kurulum: eksik listesi telde dizi olarak.
+	rec = httptest.NewRecorder()
+	writeJSON(rec, chstore.RolloutV2LayerPreflightResult{Supported: true, Missing: []string{"host-4: sekizi de yok"}})
+	m = nil
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if string(m["installed"]) != "false" || string(m["missing"]) != `["host-4: sekizi de yok"]` {
+		t.Errorf("kısmi: installed=%s missing=%s", m["installed"], m["missing"])
+	}
+
+	b, err := os.ReadFile("admin_rollout_layer.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	if !strings.Contains(rolloutLayerHandlerBody(t, src, "getRolloutV2LayerPreflight"), "writeJSON(w, res)") {
+		t.Error("preflight-0015 struct'ı olduğu gibi yazmalı (yeni alanlar tele ulaşsın)")
+	}
+	apply := rolloutLayerHandlerBody(t, src, "postRolloutV2LayerApply")
+	if strings.Contains(apply, "Installed") || strings.Contains(apply, "Missing") {
+		t.Error("apply-0015 kapısı Installed/Missing'e bakmamalı — kurulu kümeye zorla apply güvenli no-op, kapı değişmedi")
+	}
+	if !strings.Contains(apply, "if err != nil || len(pre.ProbeErrors) > 0 || !pre.Supported {") {
+		t.Error("apply-0015 kapısı değişmemeli (!pre.Supported / probe hatası → 409)")
 	}
 }

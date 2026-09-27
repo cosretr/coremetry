@@ -441,7 +441,8 @@ curl -s -H "Authorization: Bearer $COREMETRY_SYNTHETIC_TOKEN" https://coremetry.
 - **S3: SA token.** **K**: agent pod'unda kapalı; k8s isteyen runbook için
   opt-in değer (önerim; K6 boş dönerse kesin). **A**: açık kalsın.
 - **S4: paketli Redis parolası (R8).** **E**: ayrı bir öneri olarak kuyruğa
-  girsin. **H**: şimdilik kalsın.
+  girsin. **H**: şimdilik kalsın. **Karar (operatör, 2026-09-27): H —
+  "redis parolaya ihtiyaç yok şimdilik"; yeniden önerilmez.**
 
 ---
 

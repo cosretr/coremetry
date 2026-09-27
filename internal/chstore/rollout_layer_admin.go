@@ -52,6 +52,13 @@ import (
 //             0015 orada gereksizdir. (Eski gerekçe — "kuşak probe'unu bozar,
 //             sonraki state tablolarını shard'lı yola düşürür" — kural 3 ile
 //             birlikte geçersiz.)
+//             v0.10.975 — ÜÇÜNCÜ HÜKÜM "KURULU": aynı probe'lar + host evreni
+//             (clusterAllReplicas system.one) her host'ta sekiz tabloyu
+//             Replicated + birleşik yolda görürse Installed=true, detay
+//             "Kurulu: … uygulama gerekmiyor"; Supported true KALIR (apply
+//             kapısı değişmedi, zorla basmak no-op), kart Uygula'yı kapatır.
+//             Çakışmasız kısmi kurulum uygulanabilir kalır, Missing host
+//             başına neyin eksik olduğunu söyler.
 //   Uygula    gömülü 0015, `uptrace_all` → gerçek küme adı, ifade ifade, İLK
 //             HATADA DUR (IF NOT EXISTS → yeniden basmak güvenli). 0012'nin
 //             apply'ından AYRI yol ve kapı: 0011 / kapsama / LC kapıları state
@@ -525,6 +532,105 @@ func rolloutV2ReplicasProbeSQL(cluster string) string {
 		cluster, rolloutV2NameList())
 }
 
+// rolloutV2HostsProbeSQL — v0.10.975 — SAF: kümenin her replikasının
+// hostName()'i (host evreni). Motor / ZK probe'ları yalnız tabloyu TUTAN
+// host'ları döndürür: sekizinden hiçbirini tutmayan (sonradan katılmış) host
+// o satırlarda görünmez ve "her host'ta kurulu" hükmü onu atlardı. Aynı
+// kurallar: skip_unavailable_shards YOK (ulaşılamayan host → probe hatası).
+func rolloutV2HostsProbeSQL(cluster string) string {
+	return fmt.Sprintf("SELECT hostName() AS host FROM clusterAllReplicas('%s', system.one) "+
+		"LIMIT 1000 SETTINGS max_execution_time = 10", cluster)
+}
+
+// rolloutV2LayerInstall — v0.10.975 — SAF: aynı probe satırlarından kurulum
+// resmi. Bir (host, tablo) KURULU = motor Replicated* VE ZK yolu 0015'in
+// birleşik yolu (unifiedStatePath(rolloutV2ZKPrefix, ad)). Host evreni =
+// hosts ∪ motor/ZK satırlarındaki host'lar (evren probe'u bir host'u ad
+// biçimi yüzünden kaçırsa da o host'un tabloları sayılır).
+//
+//	installed  en az bir host var ve HER (host, tablo) kurulu.
+//	missing    kısmi kurulumda host başına tek satır, host adı sırasında,
+//	           tablolar §10.3 sırasında: "host-3: rollout_events, …" ya da
+//	           "host-4: sekizi de yok". Replicated olup system.replicas
+//	           satırı görünmeyen tablo (oluşturma anı yarışı) "(ZK yolu
+//	           görünmüyor)" notuyla listelenir — yolu doğrulanmadan kurulu
+//	           sayılmaz. Taze kümede (hiçbir host'ta hiç tablo yok) ve
+//	           kurulu kümede BOŞ (nil değil).
+//
+// Çakışan satır (düz motor / yanlış yol) ne kurulu ne eksik sayılır — o
+// rolloutV2LayerConflicts'in işi; karar çakışmayı zaten önce reddeder.
+func rolloutV2LayerInstall(hosts []string, engines, replicas []rolloutV2HostTable) (bool, []string) {
+	tables := rolloutV2TableNames()
+	known := make(map[string]bool, len(tables))
+	for _, n := range tables {
+		known[n] = true
+	}
+	key := func(h, t string) string { return h + "\x00" + t }
+	universe := map[string]bool{}
+	for _, h := range hosts {
+		if h = strings.TrimSpace(h); h != "" {
+			universe[h] = true
+		}
+	}
+	eng := map[string]string{}
+	anyPresent := false
+	for _, e := range engines {
+		if !known[e.Table] || e.Host == "" {
+			continue
+		}
+		universe[e.Host] = true
+		eng[key(e.Host, e.Table)] = e.Engine
+		anyPresent = true
+	}
+	zk := map[string]string{}
+	for _, r := range replicas {
+		if !known[r.Table] || r.Host == "" {
+			continue
+		}
+		universe[r.Host] = true
+		zk[key(r.Host, r.Table)] = r.ZKPath
+	}
+	names := make([]string, 0, len(universe))
+	for h := range universe {
+		names = append(names, h)
+	}
+	sort.Strings(names)
+	installed := len(names) > 0
+	missing := []string{}
+	for _, h := range names {
+		var gaps []string
+		absent := 0
+		for _, t := range tables {
+			e, hasEng := eng[key(h, t)]
+			p, hasZK := zk[key(h, t)]
+			switch {
+			case !hasEng:
+				absent++
+				gaps = append(gaps, t)
+				installed = false
+			case !strings.HasPrefix(e, "Replicated"):
+				installed = false // çakışma (düz kopya) — eksik değil
+			case !hasZK:
+				gaps = append(gaps, t+" (ZK yolu görünmüyor)")
+				installed = false
+			case p != unifiedStatePath(rolloutV2ZKPrefix, t):
+				installed = false // çakışma (yanlış yol) — eksik değil
+			}
+		}
+		switch {
+		case len(gaps) == 0:
+		case absent == len(tables):
+			missing = append(missing, h+": sekizi de yok")
+		default:
+			missing = append(missing, h+": "+strings.Join(gaps, ", "))
+		}
+	}
+	if installed || !anyPresent {
+		return installed, []string{}
+	}
+	return false, missing
+}
+
 // rolloutV2LayerConflicts — SAF: 0015'i basmayı güvensiz kılan host
 // durumları, (host, tablo) sırasında. Tablo hiç yoksa ya da her yerde
 // Replicated + sabit yoldaysa boş.
@@ -563,28 +669,50 @@ type rolloutV2LayerGate struct {
 	Cluster      string
 	CustomPrefix string // küme kipinde varsayılandan farklı ZK öneki; "" = yok
 	Conflicts    []string
+	// v0.10.975 — rolloutV2LayerInstall'ın çıktısı (aynı probe'lar).
+	Installed bool
+	Missing   []string
 }
 
-// rolloutV2LayerDecision — SAF karar; sıra: emin değilsek hiç basma.
-func rolloutV2LayerDecision(g rolloutV2LayerGate) (bool, string) {
+// rolloutV2LayerInstalledDetail — v0.10.975: kurulu hükmünün metni (kart
+// bunu nötr gösterir ve Uygula'yı bu gerekçeyle kapatır; FE testi fikstürü
+// buradan okur).
+const rolloutV2LayerInstalledDetail = "Kurulu: sekiz tablo her host'ta birleşik yolda — uygulama gerekmiyor"
+
+// rolloutV2LayerDecision — SAF karar: (supported, installed, detail); sıra:
+// emin değilsek hiç basma.
+//
+// v0.10.975 — "kurulu" ayrı bir hüküm: her host'ta sekiz tablo, Replicated,
+// 0015'in birleşik yolunda (v0.10.965 yeniden kurulumu + v0.10.971 boot
+// kuralından beri NORMAL durum). Supported TRUE kalır: sunucunun apply
+// kapısı (admin_rollout_layer.go, !pre.Supported → 409) DEĞİŞMEDİ, zorla
+// basılan 0015 IF NOT EXISTS ile no-op'tur; Uygula'yı kart installed'a
+// bakıp kapatır. Probe hatası / özel önek / çakışma "kurulu"yu YENER —
+// emin olmadığımız ya da bölünmüş kümeye "kurulu" denmez. Kısmi kurulum
+// (çakışmasız) uygulanabilir kalır; eksik listesi sonuçta (Missing).
+func rolloutV2LayerDecision(g rolloutV2LayerGate) (bool, bool, string) {
 	switch {
 	case g.ProbeErrors > 0:
-		return false, "probe hatası — emin olamadığımız kümeye DDL basmıyoruz"
+		return false, false, "probe hatası — emin olamadığımız kümeye DDL basmıyoruz"
 	case !g.SpansLocal:
-		return false, "spans_local yok — bu kurulum tek düğüm; 0015 dağıtık şema içindir (uygulama sekiz tabloyu boot'ta kendi kurar, rollout_v2_schema.go)"
+		return false, false, "spans_local yok — bu kurulum tek düğüm; 0015 dağıtık şema içindir (uygulama sekiz tabloyu boot'ta kendi kurar, rollout_v2_schema.go)"
 	case g.Cluster == "":
-		return false, "küme seçilmedi — DDL `ON CLUSTER` yazıyor"
+		return false, false, "küme seçilmedi — DDL `ON CLUSTER` yazıyor"
 	case !validRolloutLayerCluster(g.Cluster):
-		return false, "küme adı geçersiz — yalnız harf/rakam/_ . - (≤64)"
+		return false, false, "küme adı geçersiz — yalnız harf/rakam/_ . - (≤64)"
 	case !slices.Contains(g.Clusters, g.Cluster):
-		return false, fmt.Sprintf("%q system.clusters'ta yok — ON CLUSTER DDL kuyrukta süresiz bekler (v0.9.613)", g.Cluster)
+		return false, false, fmt.Sprintf("%q system.clusters'ta yok — ON CLUSTER DDL kuyrukta süresiz bekler (v0.9.613)", g.Cluster)
 	case g.CustomPrefix != "":
 		// v0.10.971 — ret aynen, gerekçe yeni: kural 3 kalktı (kuşak probe'u yok).
-		return false, fmt.Sprintf("küme kipinde özel ZK öneki (%s) — 0015 %s/state/<ad> SABİT yazar; bu önekte o yol birleşik sayılmaz (eksik host boot'la ayrı gruba düşer, kart 'eski' gösterir). Boot hiçbir host'ta olmayan sekiz tabloyu %s/state/<ad> yoluna zaten birleşik kurar (v0.10.971) — 0015 gerekmez; yine de gerekiyorsa dosyayı öneke uyarlayıp elle uygula (karar 25)", g.CustomPrefix, rolloutV2ZKPrefix, g.CustomPrefix)
+		return false, false, fmt.Sprintf("küme kipinde özel ZK öneki (%s) — 0015 %s/state/<ad> SABİT yazar; bu önekte o yol birleşik sayılmaz (eksik host boot'la ayrı gruba düşer, kart 'eski' gösterir). Boot hiçbir host'ta olmayan sekiz tabloyu %s/state/<ad> yoluna zaten birleşik kurar (v0.10.971) — 0015 gerekmez; yine de gerekiyorsa dosyayı öneke uyarlayıp elle uygula (karar 25)", g.CustomPrefix, rolloutV2ZKPrefix, g.CustomPrefix)
 	case len(g.Conflicts) > 0:
-		return false, fmt.Sprintf("%d çakışma — %s", len(g.Conflicts), strings.Join(g.Conflicts, " · "))
+		return false, false, fmt.Sprintf("%d çakışma — %s", len(g.Conflicts), strings.Join(g.Conflicts, " · "))
+	case g.Installed:
+		return true, true, rolloutV2LayerInstalledDetail
+	case len(g.Missing) > 0:
+		return true, false, fmt.Sprintf("uygulanabilir — kısmi kurulum: %d host'ta eksik tablo; Uygula (0015) eksikleri birleşik yola kurar (var olanlar IF NOT EXISTS ile no-op; ilk hatada durur)", len(g.Missing))
 	}
-	return true, "uygulanabilir: sekiz Rollouts v2 state tablosu (ON CLUSTER, ReplicatedReplacingMergeTree, IF NOT EXISTS; ilk hatada durur)"
+	return true, false, "uygulanabilir: sekiz Rollouts v2 state tablosu (ON CLUSTER, ReplicatedReplacingMergeTree, IF NOT EXISTS; ilk hatada durur)"
 }
 
 // RolloutV2LayerPreflightResult — "0015 bu kümeye güvenle basılır mı".
@@ -600,8 +728,14 @@ type RolloutV2LayerPreflightResult struct {
 	Conflicts   []string `json:"conflicts"`
 	ProbeErrors []string `json:"probeErrors,omitempty"`
 	Supported   bool     `json:"supported"`
-	Detail      string   `json:"detail"`
-	Generated   int64    `json:"generated"`
+	// Installed — v0.10.975: her host'ta sekiz tablo, Replicated, birleşik
+	// yolda → uygulama gerekmez (Supported yine true; kart Uygula'yı kapatır).
+	Installed bool `json:"installed"`
+	// Missing — v0.10.975: YALNIZ uygulanabilir kısmi kurulumda host başına
+	// eksik tablolar ("host-3: rollout_events, …"); aksi hâlde [] (null değil).
+	Missing   []string `json:"missing"`
+	Detail    string   `json:"detail"`
+	Generated int64    `json:"generated"`
 }
 
 // RolloutV2LayerPreflight — hiçbir şey yazmaz. cluster boşsa önerilen küme
@@ -613,6 +747,7 @@ func (s *Store) RolloutV2LayerPreflight(ctx context.Context, cluster string) (Ro
 		Generated:        time.Now().Unix(),
 		Clusters:         []string{}, // null değil
 		Conflicts:        []string{},
+		Missing:          []string{},
 	}
 	if out.SuggestedCluster == "" {
 		out.SuggestedCluster = s.discoverSpansCluster(ctx)
@@ -640,7 +775,13 @@ func (s *Store) RolloutV2LayerPreflight(ctx context.Context, cluster string) (Ro
 	}
 	// Çakışma probe'u yalnız geçerli + tanımlı kümede (aksi hâlde karar
 	// zaten reddeder; tanımsız adla clusterAllReplicas hata verirdi).
+	// v0.10.975 — aynı koşulda host evreni + kurulum resmi (aynı satırlar).
+	installed, missing := false, []string{}
 	if validRolloutLayerCluster(out.Cluster) && slices.Contains(out.Clusters, out.Cluster) {
+		hosts, err := s.rolloutV2Hosts(ctx, rolloutV2HostsProbeSQL(out.Cluster))
+		if err != nil {
+			out.ProbeErrors = append(out.ProbeErrors, "host listesi: "+err.Error())
+		}
 		engines, err := s.rolloutV2HostTables(ctx, rolloutV2TablesProbeSQL(out.Cluster), false)
 		if err != nil {
 			out.ProbeErrors = append(out.ProbeErrors, "tablo motorları: "+err.Error())
@@ -650,16 +791,42 @@ func (s *Store) RolloutV2LayerPreflight(ctx context.Context, cluster string) (Ro
 			out.ProbeErrors = append(out.ProbeErrors, "ZK yolları: "+err.Error())
 		}
 		out.Conflicts = append(out.Conflicts, rolloutV2LayerConflicts(engines, replicas)...)
+		installed, missing = rolloutV2LayerInstall(hosts, engines, replicas)
 	}
 	custom := ""
 	if s.clusterMode() && s.zkPrefix() != rolloutV2ZKPrefix {
 		custom = s.zkPrefix()
 	}
-	out.Supported, out.Detail = rolloutV2LayerDecision(rolloutV2LayerGate{
+	out.Supported, out.Installed, out.Detail = rolloutV2LayerDecision(rolloutV2LayerGate{
 		ProbeErrors: len(out.ProbeErrors), SpansLocal: out.SpansLocal,
 		Clusters: out.Clusters, Cluster: out.Cluster, CustomPrefix: custom, Conflicts: out.Conflicts,
+		Installed: installed, Missing: missing,
 	})
+	// Eksik listesi yalnız uygulanabilir kısmi kurulumda: UYGULANAMAZ kartta
+	// "Uygula eksikleri kurar" yanıltırdı.
+	if out.Supported && !out.Installed {
+		out.Missing = missing
+	}
 	return out, nil
+}
+
+// rolloutV2Hosts — v0.10.975: host evreni satırları (tekilleştirme saf
+// rolloutV2LayerInstall'da).
+func (s *Store) rolloutV2Hosts(ctx context.Context, q string) ([]string, error) {
+	rows, err := s.conn.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }
 
 // rolloutV2HostTables — (host, tablo, motor | zk yolu) satırları.
