@@ -5,10 +5,13 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go/v2"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -77,15 +80,46 @@ func TestSumStoredIn(t *testing.T) {
 	}
 }
 
+// v0.10.969 — ledgerMissing yalnız 'Code: 60' (HTTP arayüzü yazımı) ve
+// "doesn't exist" arıyordu; clickhouse-go v2 (go.mod v2.46.0,
+// lib/proto/exception.go) hatayı *clickhouse.Exception olarak ve
+// "code: %d, message: %s" (küçük harf) biçiminde verir, CH 23+ da "does not
+// exist" yazar. Eski kodda o hata "defter yok" yerine errors["fleet"] olarak
+// panele kırmızı düşüyordu. Önce tipli kod (60 = UNKNOWN_TABLE), yoksa
+// büyük/küçük harf duyarsız metin.
 func TestLedgerMissing(t *testing.T) {
-	if ledgerMissing(nil) {
-		t.Error("nil → false")
+	unknownTable := &clickhouse.Exception{Code: 60, Name: "DB::Exception", Message: "Table coremetry.ingest_ledger does not exist"}
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		// tipli sürücü hatası (prod yolu: tracedConn hatayı sarmadan geçirir)
+		{"tipli 60, does not exist", unknownTable, true},
+		{"tipli 60, %w ile sarılı", fmt.Errorf("ingest fleet: %w", unknownTable), true},
+		{"tipli 60, doesn't exist", &clickhouse.Exception{Code: 60, Message: "Table coremetry.ingest_ledger doesn't exist"}, true},
+		{"tipli 241", &clickhouse.Exception{Code: 241, Message: "Memory limit (total) exceeded"}, false},
+		// tipli kod metinden üstün: veritabanı yok ≠ defter tablosu yok
+		{"tipli 81 (UNKNOWN_DATABASE)", &clickhouse.Exception{Code: 81, Message: "Database coremetry does not exist. (UNKNOWN_DATABASE)"}, false},
+		// metin yedeği — iki yazım
+		{"sürücü yazımı (küçük harf)", errors.New("code: 60, message: Table coremetry.ingest_ledger does not exist"), true},
+		{"HTTP yazımı (büyük harf)", errors.New("Code: 60. DB::Exception: Table coremetry.ingest_ledger doesn't exist. (UNKNOWN_TABLE)"), true},
+		{"%v ile düzleşmiş tipli hata", fmt.Errorf("ingest fleet: %v", unknownTable), true},
+		{"eski test girdisi", errors.New("code: 60, message: Table coremetry.ingest_ledger doesn't exist"), true},
+		{"küçük harf ad", errors.New("… (unknown_table)"), true},
+		{"backtick'li ad", errors.New("Table `coremetry`.`ingest_ledger` does not exist"), true},
+		// yanlış pozitif yok
+		{"kod 600 öneki", errors.New("code: 600, message: synthetic"), false},
+		{"errcode: 60", errors.New("errcode: 60 synthetic"), false},
+		{"bellek sınırı", errors.New("code: 241, message: Memory limit exceeded"), false},
+		{"zaman aşımı", errors.New("context deadline exceeded"), false},
+		{"veritabanı yok (metin)", errors.New("code: 81, message: Database coremetry does not exist"), false},
 	}
-	if !ledgerMissing(errors.New("code: 60, message: Table coremetry.ingest_ledger doesn't exist")) {
-		t.Error("UNKNOWN_TABLE (60) → true")
-	}
-	if ledgerMissing(errors.New("code: 241, message: Memory limit exceeded")) {
-		t.Error("başka hata → false")
+	for _, c := range cases {
+		if got := ledgerMissing(c.err); got != c.want {
+			t.Errorf("%s: ledgerMissing(%v) = %v, istenen %v", c.name, c.err, got, c.want)
+		}
 	}
 }
 

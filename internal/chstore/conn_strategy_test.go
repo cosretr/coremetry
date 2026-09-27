@@ -36,6 +36,13 @@ var stateTables = []string{
 	"FROM rollout_events", "FROM rollout_workload_state", "FROM argocd_app_status",
 	"FROM argocd_sync_events", "FROM argocd_app_mapping", "FROM rollout_classification",
 	"FROM ado_commit_enrichment", "FROM rollout_worker_runs",
+	// v0.10.969 — v1 reconciler koşu kaydı da EKSİKTİ: rollout_schema.go
+	// ReplacingMergeTree(version) + TTL, shard listelerinde yok (cluster.go
+	// highVolumeTables / tablesWithoutTraceID / defaultShardPolicy) → birleşik
+	// state grubu; iki okuması da (rollouts.go RolloutLastRun, RolloutRuns)
+	// FINAL ile s.conn'dan, yani in-order ana bağlantıdan. v2 kardeşi
+	// rollout_worker_runs zaten listede.
+	"FROM rollout_reconcile_runs",
 }
 
 // Tek kaynağa indirgeme, kapıyı SESSİZCE boşaltmanın da yoludur: liste
@@ -45,6 +52,7 @@ func TestStateTableGuardListIsIntact(t *testing.T) {
 	for _, must := range []string{
 		"FROM problems", "FROM anomaly_events", "FROM anomaly_silences",
 		"FROM users", "FROM system_settings",
+		"FROM rollout_reconcile_runs", // v0.10.969 — v1 koşu kaydı listede eksikti
 	} {
 		found := false
 		for _, s := range stateTables {

@@ -33,11 +33,14 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go/v2"
 
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -201,13 +204,30 @@ func sumAcceptedIn(b []chstore.IngestFleetBucket, from, to time.Time) uint64 {
 
 // ledgerMissing — SAF: tablo yok hatası (küme kipinde CREATE ON CLUSTER
 // kuyruktayken ya da eski sürüm). Hata değil, "defter yok" durumu.
+//
+// v0.10.969 — eskiden yalnız 'Code: 60' (HTTP arayüzünün yazımı) ve
+// "doesn't exist" aranıyordu; clickhouse-go v2 hatayı *clickhouse.Exception
+// olarak "code: 60, message: …" (küçük harf) biçiminde verir ve CH 23+
+// "does not exist" yazar — defter yokken panel "defter yok" yerine
+// errors["fleet"] kırmızısı gösteriyordu. Önce tipli kod (tracedConn hatayı
+// sarmadan geçirir; %w sarması da errors.As'e görünür), tip yoksa büyük/küçük
+// harf duyarsız metin. Tipli kod metinden üstündür: 81 UNKNOWN_DATABASE da
+// "does not exist" der ama defterin yokluğu değildir.
 func ledgerMissing(err error) bool {
 	if err == nil {
 		return false
 	}
-	m := err.Error()
-	return strings.Contains(m, "UNKNOWN_TABLE") || strings.Contains(m, "Code: 60") || strings.Contains(m, "doesn't exist")
+	var ex *clickhouse.Exception
+	if errors.As(err, &ex) {
+		return ex.Code == 60 // UNKNOWN_TABLE
+	}
+	return ledgerMissingText.MatchString(err.Error())
 }
+
+// ledgerMissingText — v0.10.969 — tipsiz (düzleşmiş) hata metni için: iki
+// yazımda da kod 60 ("code: 60," / "Code: 60."; \b 600'ü dışarıda tutar),
+// hata adı, ya da "Table <ad> doesn't / does not exist".
+var ledgerMissingText = regexp.MustCompile(`(?i)\bcode:\s*60\b|\bunknown_table\b|\btable\s+\S+\s+(?:doesn't|does\s+not)\s+exist`)
 
 func (s *Server) getTraceHealth(w http.ResponseWriter, r *http.Request) {
 	rangeS := traceHealthRange(r.URL.Query().Get("range_s"))

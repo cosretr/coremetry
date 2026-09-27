@@ -11,7 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/argocd"
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/entity"
+	"github.com/cilcenk/coremetry/internal/rollout"
 )
 
 // configTables is the ordered catalogue of operator-set state we
@@ -54,6 +57,21 @@ var configTables = []string{
 	"status_page_config",
 	"status_page_components",
 	"status_page_subscribers",
+}
+
+// configImportReloadTopics — import sonrası yayınlanan config:<svc>
+// sinyalleri (importConfig). Her konunun reloadConfigOnSignal'da bir case'i
+// olmalı (config_reload_test.go).
+var configImportReloadTopics = []string{
+	"copilot", "ldap", "tempo", "pipeline", "logstore", "thanos", "custom_roles",
+	"mcpclient",      // v0.10.87 — dış MCP sunucu listesi de hydrate eder
+	"promql_console", // v0.10.952 — PromQL konsolu korkulukları (paket-global, hydrate eder)
+	"argocd",         // v0.10.957 — Argo CD ayar blobu (Rollouts v2 P1.4; hydrate eder)
+	"rollouts",       // v0.10.957 — rollouts bayrağı + v2 vidaları hydrate eder ama listede yoktu (audit §10.7)
+	// v0.10.969 — entity_layer bayrağı/vidaları da hydrate eder ve replace
+	// kipinde damgalanan üç blobdan biri; sinyal yoktu, yedek ancak 30 s
+	// tazelemesinde canlıya geçiyordu.
+	"entities",
 }
 
 type configExportPayload struct {
@@ -132,6 +150,9 @@ func (s *Server) exportConfig(w http.ResponseWriter, r *http.Request) {
 //   - ?mode=replace bumps every imported row's version to now() so
 //     the imported state always wins regardless of local edits.
 //     Opt-in confirms the operator wants to overwrite drift.
+//     v0.10.969 — replace ayrıca updatedAt korumalı system_settings
+//     bloblarına (settingsImportStampKeys) aynı anı damgalar; yoksa canlı
+//     servis eski yedeği bayat sayıp restart'a dek uygulamıyordu.
 //   - Unknown tables in the payload are skipped (forward-compat).
 //   - Empty tables are skipped silently (no-op).
 //
@@ -226,13 +247,7 @@ func (s *Server) importConfig(w http.ResponseWriter, r *http.Request) {
 	// the three services that DO hydrate but were missing are added:
 	// logstore, thanos, custom_roles. An import that rewrites roles must not
 	// leave peers enforcing the old set for 30s (v0.9.233).
-	for _, svc := range []string{
-		"copilot", "ldap", "tempo", "pipeline", "logstore", "thanos", "custom_roles",
-		"mcpclient",      // v0.10.87 — dış MCP sunucu listesi de hydrate eder
-		"promql_console", // v0.10.952 — PromQL konsolu korkulukları (paket-global, hydrate eder)
-		"argocd",         // v0.10.957 — Argo CD ayar blobu (Rollouts v2 P1.4; hydrate eder)
-		"rollouts",       // v0.10.957 — rollouts bayrağı + v2 vidaları hydrate eder ama listede yoktu (audit §10.7)
-	} {
+	for _, svc := range configImportReloadTopics {
 		s.publishConfigReload(r.Context(), svc)
 	}
 
@@ -556,13 +571,9 @@ func (s *Server) loadConfigTable(ctx context.Context, table string, te tableExpo
 	if err != nil {
 		return 0, fmt.Errorf("describe %s: %w", table, err)
 	}
-	type colInfo struct {
-		name string
-		typ  string
-	}
-	colInfos := []colInfo{}
+	colInfos := []configColumn{}
 	for crows.Next() {
-		var ci colInfo
+		var ci configColumn
 		if err := crows.Scan(&ci.name, &ci.typ); err != nil {
 			crows.Close()
 			return 0, err
@@ -586,25 +597,9 @@ func (s *Server) loadConfigTable(ctx context.Context, table string, te tableExpo
 
 	now := uint64(time.Now().UnixNano())
 	for ri, row := range te.Rows {
-		vals := make([]any, len(colInfos))
-		for i, ci := range colInfos {
-			raw, present := row[ci.name]
-			if !present {
-				// New column the export file pre-dates — fill with
-				// the column's typed zero so the batch row stays
-				// positionally aligned.
-				vals[i] = zeroForCHType(ci.typ)
-				continue
-			}
-			if bumpVersion && ci.name == "version" {
-				vals[i] = now
-				continue
-			}
-			cv, err := coerceForCHType(raw, ci.typ)
-			if err != nil {
-				return 0, fmt.Errorf("row %d col %s: %w", ri, ci.name, err)
-			}
-			vals[i] = cv
+		vals, err := importRowValues(table, colInfos, row, bumpVersion, now)
+		if err != nil {
+			return 0, fmt.Errorf("row %d %w", ri, err)
 		}
 		if err := batch.Append(vals...); err != nil {
 			return 0, fmt.Errorf("append row %d: %w", ri, err)
@@ -614,6 +609,216 @@ func (s *Server) loadConfigTable(ctx context.Context, table string, te tableExpo
 		return 0, fmt.Errorf("send %s: %w", table, err)
 	}
 	return len(te.Rows), nil
+}
+
+// configColumn — system.columns satırı (ad + CH tipi), batch kolon sırası.
+type configColumn struct {
+	name string
+	typ  string
+}
+
+// importRowValues — v0.10.969 — SAF: bir export satırını loadConfigTable'ın
+// batch kolon sırasına (cols) göre sürücü tiplerine çevirir. loadConfigTable
+// döngüsünden çıkarıldı ki replace kipinin satır dönüşümü CH'siz test
+// edilebilsin (config_iox_stamp_test.go).
+//
+// replace=true (mode=replace): version kolonu `now` olur — içe aktarılan
+// satır ReplacingMergeTree tekilleştirmesini her zaman kazanır.
+func importRowValues(table string, cols []configColumn, row map[string]any, replace bool, now uint64) ([]any, error) {
+	vals := make([]any, len(cols))
+	for i, ci := range cols {
+		raw, present := row[ci.name]
+		if !present {
+			// New column the export file pre-dates — fill with
+			// the column's typed zero so the batch row stays
+			// positionally aligned.
+			vals[i] = zeroForCHType(ci.typ)
+			continue
+		}
+		if replace && ci.name == "version" {
+			vals[i] = now
+			continue
+		}
+		cv, err := coerceForCHType(raw, ci.typ)
+		if err != nil {
+			return nil, fmt.Errorf("col %s: %w", ci.name, err)
+		}
+		vals[i] = cv
+	}
+	if replace && table == "system_settings" {
+		stampImportedSettingsRow(cols, vals, int64(now))
+	}
+	return vals, nil
+}
+
+// settingsImportStampKeys — v0.10.969 — LoadPersisted'ı blobun GÖMÜLÜ
+// updatedAt'i canlı ayarınkinden küçükse yüklemeyi ATLAYAN system_settings
+// anahtarları (eski pod'un bayat blobu yeni admin PUT'unu ezmesin diye):
+//
+//	rollouts      internal/rollout/settings.go  applyLoaded (loaded >= cur alınır)
+//	argocd        internal/argocd/settings.go   isStale (loaded < cur atlanır)
+//	entity_layer  internal/entity/settings.go   applyLoaded (loaded < cur atlanır)
+//
+// Üçü de alanı `updatedAt` adıyla, int64 UnixNano olarak taşır. Başka hiçbir
+// LoadPersisted böyle bir koruma taşımıyor (tarandı: pipeline, appschema,
+// devops, ldap, copilot, logstore, custom_roles, vmetrics, rag, oracle,
+// mcpclient, tempo, thanos koşulsuz yükler). Yeni bir koruma eklenirse
+// config_iox_stamp_test.go'daki tarama kızarır ve anahtar buraya girer.
+var settingsImportStampKeys = map[string]bool{
+	rollout.SettingsKey: true,
+	argocd.SettingsKey:  true,
+	entity.SettingsKey:  true,
+}
+
+// stampImportedSettingsRow — v0.10.969 — replace kipinde korumalı bir
+// system_settings satırının value blobuna içe aktarma anını (version ile
+// AYNI an) updatedAt olarak damgalar. Kök neden: eski bir yedeğin updatedAt'i
+// tanım gereği canlınınkinden küçüktür; satır CH'de kazanır (version = now)
+// ama reload sinyaliyle okuyan servis blobu bayat sayıp atlıyor, yedek ancak
+// restart'ta (bellek varsayılana dönünce) uygulanıyordu.
+//
+// Merge kipi BİLEREK damgalanmaz: satır dosyadaki version'ıyla yazılır ve
+// FINAL en büyük version'ı seçer. SavePersisted updatedAt'i, PutSetting
+// version'ı aynı çağrıda aynı saatten damgaladığı için iki sıralama örtüşür:
+// dosyadaki satır tekilleştirmeyi kazanıyorsa gömülü updatedAt'i de canlıdan
+// yenidir ve koruma onu zaten alır; kaybediyorsa canlı blob kalır — merge'ün
+// "yerel daha yeniyse yerel kazanır" sözleşmesi tam da bu. Damgalamak orada
+// version'la çelişen bir updatedAt yazmak olurdu.
+//
+// Blob JSON nesnesi değilse (bozuk / el yapımı) aynen yazılır.
+func stampImportedSettingsRow(cols []configColumn, vals []any, stamp int64) {
+	keyIdx, valueIdx := -1, -1
+	for i, c := range cols {
+		switch c.name {
+		case "key":
+			keyIdx = i
+		case "value":
+			valueIdx = i
+		}
+	}
+	if keyIdx < 0 || valueIdx < 0 {
+		return
+	}
+	key, _ := vals[keyIdx].(string)
+	value, ok := vals[valueIdx].(string)
+	if !ok || !settingsImportStampKeys[key] {
+		return
+	}
+	if out, ok := stampJSONInt(value, "updatedAt", stamp); ok {
+		vals[valueIdx] = out
+	}
+}
+
+// stampJSONInt — v0.10.969 — SAF: üst düzey JSON nesnesindeki `field`
+// üyesinin değerini v ile değiştirir; üye yoksa (omitempty: sıfır damga)
+// nesnenin sonuna ekler. Öteki her bayt — anahtar sırası, girinti, iç içe
+// değerler (iç içe bir "updatedAt" dahil) — AYNEN kalır; yalnız değer
+// belirteci değişir. Anahtar eşleşmesi encoding/json'un alan eşleşmesiyle
+// aynı: kaçışlar çözülür ve büyük/küçük harf duyarsızdır; yinelenen
+// anahtarların HEPSİ değişir (Unmarshal sonuncuyu alır). Girdi geçerli bir
+// JSON nesnesi değilse ok=false.
+func stampJSONInt(raw, field string, v int64) (string, bool) {
+	if !json.Valid([]byte(raw)) {
+		return raw, false
+	}
+	i := skipJSONSpace(raw, 0)
+	if i >= len(raw) || raw[i] != '{' {
+		return raw, false
+	}
+	type span struct{ start, end int }
+	var hits []span
+	lastEnd := -1 // son üyenin değerinin bittiği yer
+	i++
+	for {
+		i = skipJSONSpace(raw, i)
+		if raw[i] == '}' {
+			break
+		}
+		if raw[i] == ',' {
+			i = skipJSONSpace(raw, i+1)
+		}
+		kEnd := endOfJSONString(raw, i)
+		var key string
+		if err := json.Unmarshal([]byte(raw[i:kEnd]), &key); err != nil {
+			return raw, false
+		}
+		i = skipJSONSpace(raw, kEnd) + 1 // ':'
+		i = skipJSONSpace(raw, i)
+		vEnd := endOfJSONValue(raw, i)
+		if strings.EqualFold(key, field) {
+			hits = append(hits, span{i, vEnd})
+		}
+		lastEnd, i = vEnd, vEnd
+	}
+	num := strconv.FormatInt(v, 10)
+	if len(hits) == 0 {
+		qf, _ := json.Marshal(field)
+		member := string(qf) + ":" + num
+		if lastEnd < 0 { // boş nesne
+			return raw[:i] + member + raw[i:], true
+		}
+		return raw[:lastEnd] + "," + member + raw[lastEnd:], true
+	}
+	var b strings.Builder
+	prev := 0
+	for _, h := range hits {
+		b.WriteString(raw[prev:h.start])
+		b.WriteString(num)
+		prev = h.end
+	}
+	b.WriteString(raw[prev:])
+	return b.String(), true
+}
+
+func skipJSONSpace(s string, i int) int {
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
+		i++
+	}
+	return i
+}
+
+// endOfJSONString — s[i] == '"'; kapanış tırnağından SONRAKİ indeks.
+func endOfJSONString(s string, i int) int {
+	for i++; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '"':
+			return i + 1
+		}
+	}
+	return len(s)
+}
+
+// endOfJSONValue — s[i]'de başlayan değerin bittiği yer (json.Valid'den
+// geçmiş girdi için).
+func endOfJSONValue(s string, i int) int {
+	switch s[i] {
+	case '"':
+		return endOfJSONString(s, i)
+	case '{', '[':
+		depth := 0
+		for i < len(s) {
+			switch s[i] {
+			case '"':
+				i = endOfJSONString(s, i)
+				continue
+			case '{', '[':
+				depth++
+			case '}', ']':
+				depth--
+				if depth == 0 {
+					return i + 1
+				}
+			}
+			i++
+		}
+		return len(s)
+	}
+	for i < len(s) && !strings.ContainsRune(",}] \t\n\r", rune(s[i])) {
+		i++
+	}
+	return i
 }
 
 // coerceForCHType converts a JSON-decoded value into the Go type

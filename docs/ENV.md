@@ -44,8 +44,11 @@ her rolde koşar, ama örneğin ingest knob'ları api pod'unda etkisizdir.
 Chart eşlemesi: `charts/coremetry/templates/deployment.yaml:89-190` ve
 `deployment-distributed.yaml:104-195` (Secret'tan: `jwt-secret`,
 `clickhouse-password`, `initial-admin-password`, `oidc-client-secret`,
-`es-password`, `es-api-key`). Compose eşlemesi: `docker-compose.yml`
-`coremetry.environment`. Yerel `.env` şablonu: `.env.example`.
+`es-password`, `es-api-key`). v0.10.969 — Operatörün kendi Secret'ları
+(tokenRef hedefleri) chart `extraEnv` / `envFrom` / `extraVolumes` ile
+gelir; bkz. "Runbook bash adımının ortamı" (§1). Compose eşlemesi:
+`docker-compose.yml` `coremetry.environment`. Yerel `.env` şablonu:
+`.env.example`.
 
 Sütunlar: **Okunduğu yer** · **Yokken / varsayılan** · **Etki** · **Rol** ·
 **Gizli**.
@@ -88,6 +91,19 @@ girdisi (`PD_*`) kimlik-benzeri adı (`PASS`, `SECRET`, `TOKEN`, `KEY`,
 asla süpürmez; kimlik yalnız tam adıyla listelenerek geçer. tokenRef
 `env:` hedeflerini `COREMETRY_SECRET_` altında tut — o zaman bir bash
 adımına hiçbir yoldan geçemezler.
+
+v0.10.969 — tokenRef hedefini pod'a chart verir: `env:NAME` için `envFrom`
+(bir Secret'ın bütün key'leri, `prefix: COREMETRY_SECRET_` ile) ya da
+`extraEnv` (tek key), `file:` için `extraVolumes` + `extraVolumeMounts`.
+Referans biçimi, rotasyon, render edildiği roller ve render anı redleri tek
+yerde: `charts/coremetry/values.yaml` "Ek env / envFrom / hacimler" yorum
+bloğu (v0.10.958); İngilizce özeti
+`charts/coremetry/docs/openshift-distributed.md` §5 "Integration tokens".
+`COREMETRY_SECRET_` önerilen önektir: binary hiçbir knob'u bu önekle okumaz
+ve `COREMETRY_AGENT_ENV_PASSTHROUGH` (§1, v0.10.966) onu da açamaz. Bash
+adımına gerçekten geçmesi gereken bir değer `COREMETRY_` dışı bir adla
+verilir ve knob'a tam adıyla yazılır (chart bunu bugün yalnız monolitikte
+verebilir; §1 satırı).
 
 Süreç: adım kendi süreç grubunda koşar; zaman aşımında ve adım sonunda
 grubun **tamamı** öldürülür (`sleep 999 &` gibi arka plan işleri adımla

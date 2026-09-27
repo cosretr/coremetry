@@ -113,11 +113,26 @@ describe('LogPatternsPanel', () => {
     const el = render(<LogPatternsPanel params={{ service: 'svc', from: (now - 5 * 3600 * 1000) * 1e6, to: now * 1e6 }} tab="templates" open onSearch={() => {}} />);
     await act(async () => { await new Promise(r => setTimeout(r, 30)); });
     expect(el.querySelectorAll('tr.lp-row').length).toBe(1);
+    expect(el.textContent).toContain('1 kalıcı şablon');
     logsTemplates.mockRejectedValueOnce(new Error('boom'));
     await act(async () => { await qc.refetchQueries({ queryKey: ['logs', 'templates'] }); await new Promise(r => setTimeout(r, 30)); });
     const err = el.querySelector('tr[data-dt-state="error"]');
     expect(err?.textContent).toContain('Şablonlar alınamadı: boom');
     expect(el.querySelectorAll('tr.lp-row').length).toBe(0);
+    // v0.10.969 — desenlerle aynı kural: bayat şablon sayısı güncel gibi
+    // sunulmaz; sayımın ne olduğunu anlatan not kalır.
+    expect(el.textContent).not.toMatch(/kalıcı şablon/);
+    expect(el.textContent).toContain('pencere sayımı değil');
+  });
+  // v0.10.969 — ilk yükleme hatasında da başlık "0 kalıcı şablon" demez
+  // (boş liste değil, okunamayan liste).
+  it('şablonlar: ilk yükleme hatasında başlık sayı göstermez', async () => {
+    logsTemplates.mockRejectedValueOnce(new Error('boom'));
+    const now = Date.now();
+    const el = render(<LogPatternsPanel params={{ service: 'svc', from: (now - 5 * 3600 * 1000) * 1e6, to: now * 1e6 }} tab="templates" open onSearch={() => {}} />);
+    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    expect(el.querySelector('tr[data-dt-state="error"]')?.textContent).toContain('Şablonlar alınamadı: boom');
+    expect(el.textContent).not.toMatch(/kalıcı şablon/);
   });
   it('mesajsız hata öznesini kaybetmez', async () => {
     logsPatterns.mockRejectedValueOnce(new Error(''));

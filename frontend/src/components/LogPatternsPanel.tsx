@@ -186,9 +186,17 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab }
             </>
           ) : 'sayımlar en yeni örnek satırlara göredir') : (
             <>
-              {trows.length} kalıcı şablon{trows.length >= TEMPLATES_LIMIT ? ` (tavan ${TEMPLATES_LIMIT})` : ''}
-              {' · '}son {since} içinde görülen{params.service ? ` · ${params.service}` : ''}
-              {' · '}toplam = 5 dk'da ≤1000 satırlık örneklemeden biriken gözlem, pencere sayımı değil
+              {/* v0.10.969 — desenlerle aynı kural: şablon sorgusu hatadayken
+                  bayat (ya da hiç okunmamış "0") şablon sayısı gösterilmez;
+                  sayımın ne olduğunu anlatan not kalır. */}
+              {!tq.isError && (
+                <>
+                  {trows.length} kalıcı şablon{trows.length >= TEMPLATES_LIMIT ? ` (tavan ${TEMPLATES_LIMIT})` : ''}
+                  {' · '}son {since} içinde görülen{params.service ? ` · ${params.service}` : ''}
+                  {' · '}
+                </>
+              )}
+              toplam = 5 dk'da ≤1000 satırlık örneklemeden biriken gözlem, pencere sayımı değil
             </>
           )}
         </span>

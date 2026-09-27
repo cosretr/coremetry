@@ -56,7 +56,10 @@ func (s *Server) rolloutEnabled(w http.ResponseWriter) bool {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotFound)
-	_ = json.NewEncoder(w).Encode(map[string]any{"disabled": true, "error": "rollouts kapalı — Settings → Rollouts → Enable"})
+	// v0.10.969 — Ayarlar'da Rollouts sekmesi yok (v2-audit §2.6 madde 5);
+	// gerçek yol /rollouts sayfasındaki admin "Etkinleştir" düğmesi. PUT tam
+	// blobu değiştirir → API ipucu read-modify-write (kısmi gövde ayarları sıfırlar).
+	_ = json.NewEncoder(w).Encode(map[string]any{"disabled": true, "error": `rollouts kapalı — bir admin /rollouts sayfasındaki "Etkinleştir" ile açar (API: önce GET /api/settings/rollouts, dönen "settings" içinde enabled=true yapıp tam blobu PUT et; yalnız {"enabled":true} göndermek öteki ayarları sıfırlar)`})
 	return false
 }
 
@@ -125,7 +128,7 @@ func (s *Server) rolloutLayerNote(ctx context.Context) string {
 		return "koşu kaydı okunamadı (geçici CH hatası olabilir; ayrıntı: sunucu logları)"
 	}
 	if run == nil {
-		return "reconciler henüz koşmadı (lider worker + Settings → Rollouts → Enable; dış Distributed'da Admin → ClickHouse → 0012)"
+		return `reconciler henüz koşmadı (lider worker + bayrak açık: /rollouts sayfasında "Etkinleştir"; dış Distributed'da Admin → ClickHouse → 0012)`
 	}
 	if run.Status == rollout.RunFailed {
 		return "son reconciler koşusu hata verdi — ayrıntı: /api/rollouts/runs (admin)"

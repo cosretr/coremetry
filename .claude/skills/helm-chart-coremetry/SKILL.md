@@ -244,13 +244,24 @@ reinstall` path; PVC stays so CH data survives.
 ```
 helm lint charts/coremetry
 helm template charts/coremetry > /tmp/mono.yaml
-helm template charts/coremetry --set deployment.mode=distributed > /tmp/dist.yaml
+helm template charts/coremetry --set deployment.mode=distributed --set secrets.jwtSecret=render-smoke-only > /tmp/dist.yaml
 helm template charts/coremetry --set clickhouse.resetSchema=true | grep -A 5 "kind: Job"
 helm template charts/coremetry --set global.imageRegistry=my.registry.internal | grep "image:"
 ```
 
-All four should pass. Spot-check that:
-- Distributed mode produces 3 Deployments + 4 Services.
+All five should exit 0. The distributed render needs
+`secrets.jwtSecret` (or `secrets.existingSecret`): distributed mode,
+`replicaCount>1` and `autoscaling.enabled` all trip the chart's
+shared-JWT-key guard (`templates/secret.yaml`, v0.8.343), so
+`helm template` fails without it. `render-smoke-only` is a throwaway
+value for the render — never a real key.
+Spot-check that:
+- Distributed mode produces the 3 role Deployments
+  (`<fullname>-ingest` / `-api` / `-worker`) + 5 coremetry Services
+  (the stable alias→api, one per role, and the always-rendered
+  `-ingest-headless` from v0.8.171). The raw totals are higher
+  because the bundled OTel Collector, Redis and ClickHouse render too
+  (charts/coremetry/docs/openshift-distributed.md §9).
 - Reset-schema hook only renders when explicitly set.
 - Air-gapped registry override rewrites EVERY image reference.
 

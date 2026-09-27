@@ -51,7 +51,7 @@ deployment:
 | `<release>-worker` | `worker` | `1` | **no — locked at 1, leader-elected** |
 | `<release>-agent` | `agent` | `1` | optional (HA-safe, per-step Redis lock) |
 
-`templates/service.yaml` renders **four Services** (when distributed):
+`templates/service.yaml` renders **five Services** (when distributed):
 
 | Service | Selects | Ports | Purpose |
 |---|---|---|---|
@@ -59,6 +59,7 @@ deployment:
 | `<release>-ingest` | ingest pods | `otlp-grpc` (4317) + `http` (8088) | OTLP/gRPC ingest + health |
 | `<release>-api` | api pods | `http` (8088) | UI / REST / SSE / MCP direct |
 | `<release>-worker` | worker pods | `http` (8088) | Health/observability only — **no caller routes traffic here**; stays `ClusterIP` even if `service.type` is `LoadBalancer` |
+| `<release>-ingest-headless` | ingest pods | `otlp-grpc` (4317) | `clusterIP: None` (v0.8.171): DNS returns every ingest pod IP, so the bundled collector round-robins OTLP/gRPC across replicas. Rendered in both modes (monolithic: selects the `mode=all` pods). |
 
 The **stable `<release>` Service aliasing the api role** is the load-
 bearing detail: Route/Ingress templates reference the Service by the
@@ -91,7 +92,7 @@ risk duplicate Problems.
 | | `monolithic` (default) | `distributed` |
 |---|---|---|
 | Deployments | 1 (`mode=all`) | 3 (ingest/api/worker) + optional agent |
-| Services | 1 (`<release>`, http + otlp-grpc) | 4 (stable api alias + per-role) |
+| Services | 2 (`<release>`, http + otlp-grpc; `<release>-ingest-headless`) | 5 (stable api alias + per-role + ingest-headless) |
 | Replica knob | `replicaCount` (top-level) | `deployment.roles.<role>.replicas` |
 | HPA target | `<release>` Deployment | `<release>-api` Deployment |
 | Scale-out story | all roles together | scale receivers independently of read fleet |
@@ -563,6 +564,13 @@ together when shipping a chart change tied to an app release.
 Validate the manifests with `helm lint` + `helm template` before
 touching the cluster. Expected output is called out per command.
 
+A distributed or autoscaled render needs a shared JWT signing key: without
+`secrets.jwtSecret` or `secrets.existingSecret` the chart stops the render
+(`templates/secret.yaml`, "requires a shared JWT signing key"). The commands
+below pass `secrets.jwtSecret=render-smoke-only`, a throwaway value for a
+local render; a real install takes the key from `secrets.existingSecret`
+(§5, §10) or `openssl rand -hex 32`.
+
 ```bash
 # Lint the chart
 helm lint charts/coremetry -f values-openshift.yaml
@@ -571,16 +579,18 @@ helm lint charts/coremetry -f values-openshift.yaml
 # (Don't assert a raw `kind: Deployment` count: a full render also includes the
 #  bundled OTel Collector Deployment, plus — unless you disable them for external
 #  stores — a Redis Deployment + a ClickHouse StatefulSet. So the raw totals are
-#  ~5 Deployments / 7 Services by default, or 4 Deployments / 5 Services with
+#  5 Deployments / 8 Services by default, or 4 Deployments / 6 Services with
 #  external CH+Redis. The meaningful distributed-mode assertion is the 3 roles:)
 helm template coremetry charts/coremetry \
-  --set deployment.mode=distributed \
+  --set deployment.mode=distributed --set secrets.jwtSecret=render-smoke-only \
   | grep -E 'name: coremetry-(ingest|api|worker)$' | sort -u
 #   →  coremetry-ingest / coremetry-api / coremetry-worker   (3 role Deployments)
-#      + 4 Services: the stable <release> alias→api, plus -ingest / -api / -worker.
+#      + 5 coremetry Services: the stable <release> alias→api, -ingest / -api /
+#        -worker, and -ingest-headless (§1).
 
 # Confirm COREMETRY_MODE is set per role
 helm template coremetry charts/coremetry --set deployment.mode=distributed \
+  --set secrets.jwtSecret=render-smoke-only \
   | grep -A1 'name: COREMETRY_MODE'
 #   → value: "ingest" / "api" / "worker"
 
@@ -599,12 +609,13 @@ helm template coremetry charts/coremetry \
 # HPA targets the api role in distributed mode
 helm template coremetry charts/coremetry \
   --set deployment.mode=distributed --set autoscaling.enabled=true \
+  --set secrets.jwtSecret=render-smoke-only \
   | grep -A4 'kind: HorizontalPodAutoscaler'
 #   → name: coremetry-api ; scaleTargetRef → Deployment/coremetry-api
 
 # Integration secrets render on the api + worker + ingest roles (v0.10.958)
 helm template coremetry charts/coremetry --set deployment.mode=distributed \
-  --set secrets.jwtSecret=x --set deployment.roles.agent.enabled=true \
+  --set secrets.jwtSecret=render-smoke-only --set deployment.roles.agent.enabled=true \
   --set 'envFrom[0].secretRef.name=coremetry-integrations' \
   | grep -c 'envFrom:'
 #   → 3 (api + worker + ingest; never agent). Default render: 0.
@@ -721,9 +732,10 @@ Post-install:
 # Roll out the api fleet (the others come up in parallel)
 oc rollout status deploy/coremetry-api -n coremetry
 
-# Confirm the topology — the 3 role Deployments (ingest/api/worker) + their 4
-# Services (stable alias→api, -ingest, -api, -worker). The OTel Collector (and,
-# if not external, ClickHouse/Redis) also appear under this label.
+# Confirm the topology — the 3 role Deployments (ingest/api/worker) + their 5
+# Services (stable alias→api, -ingest, -api, -worker, -ingest-headless). The
+# OTel Collector (and, if not external, ClickHouse/Redis) also appear under
+# this label.
 oc get deploy,svc -n coremetry -l app.kubernetes.io/name=coremetry
 
 # Get the Route URL
