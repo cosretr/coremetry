@@ -7543,6 +7543,15 @@ export interface K8sCoverageRow {
   image?: number;
   clusterK8s?: number;
   clusterOpenshift?: number;
+  /** v0.10.964 — Rollouts v2 P5.3 (docs/rollouts/v2-audit.md §9): sürüm/ortam
+   *  sayaçları. Yükte yoksa (eski sunucu / eski önbellek) "ölçülmedi", 0 DEĞİL.
+   *  Üçü de res_keys'te anahtar VAR mı (§11.8 T1). serviceVersion:
+   *  service.version. imageTag: container.image.tag | k8s.container.image.tag
+   *  (terfi kolonu okunmaz). envName: res_keys'te deployment.environment.name
+   *  (eski deployment.environment sayılmaz). */
+  serviceVersion?: number;
+  imageTag?: number;
+  envName?: number;
 }
 
 export interface K8sCoverage {

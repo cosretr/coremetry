@@ -5,11 +5,12 @@ import { Card } from '@/components/ui/Card';
 import {
   COVERAGE_FIELDS, fieldSeen, fieldState, fieldPct, fleetSummary,
   podSeenWindow, podStabilityWarning, coverageHeaderTitle,
+  type FieldState,
 } from '@/pages/k8s/coverageRows';
 import type { K8sCoverageRow, PodRow } from '@/lib/types';
 import {
   useDataTable, DataTableColgroup, DataTableHead, DataTableCell, DataTableState,
-  type ColumnDef, type DataTableStateProps,
+  type CellTone, type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 
 // AdminK8sCoverage — K8s bağlam kapsama kartı (v0.10.36, entity Faz 0).
@@ -29,12 +30,15 @@ import {
 // Sayılar ÖRNEKLEM üzerinden. "Ölçülmedi" ile "alan yok" ayrı renkte ve
 // ayrı sayılıyor; ikisini karıştırmak, kartın kendi amacını bozar.
 
-const TONE: Record<string, { bg: string; fg: string; text: string }> = {
-  // v0.10.929 (K5) — tam kapsama sağlıklı durum: nötr (renk yalnız kısmi/yok sapmasında).
-  full: { bg: 'transparent', fg: 'var(--text2)', text: 'var' },
-  partial: { bg: 'transparent', fg: 'var(--warn)', text: 'kısmi' },
-  none: { bg: 'transparent', fg: 'var(--err)', text: 'yok' },
-  unknown: { bg: 'transparent', fg: 'var(--text3)', text: '—' },
+// v0.10.929 (K5) — tam kapsama sağlıklı durum: nötr (renk yalnız kısmi/yok sapmasında).
+// v0.10.964 — ton sütun bayrağında (tablo standardı T9, `dt.cellProps`):
+// satır içi `style={{ color }}` yerine .cell-* sınıfı; değerler aynı
+// (tam --text2, kısmi --warn, yok --err, ölçülmedi --text3).
+const FIELD_TONE: Record<FieldState, CellTone> = {
+  full: 'muted',
+  partial: 'warn',
+  none: 'err',
+  unknown: 'faint',
 };
 
 // v0.10.36 — CLAUDE.md sert kısıtı: her veri tablosu useDataTable
@@ -72,6 +76,7 @@ const COVERAGE_COLS: ColumnDef<K8sCoverageRow>[] = [
     numeric: true,
     naturalDir: 'asc' as const,
     width: 64,
+    tone: (r: K8sCoverageRow) => FIELD_TONE[fieldState(fieldSeen(r, f.key), r.sampled)],
   })),
 ];
 
@@ -194,15 +199,17 @@ export default function AdminK8sCoveragePage() {
                 <tr key={r.service} className="cv-row">
                   <DataTableCell dt={dt} col="service" row={r} value={r.service} />
                   <DataTableCell dt={dt} col="sampled" row={r} value={r.sampled.toLocaleString()} />
+                  {/* v0.10.964 — alan hücreleri <DataTableCell>: sağa yaslı (`num`) +
+                      ton sütun bayrağından. Yükte olmayan alan (eski yük) "—". */}
                   {COVERAGE_FIELDS.map(f => {
                     const seen = fieldSeen(r, f.key);
                     const st = fieldState(seen, r.sampled);
                     const pct = fieldPct(seen, r.sampled);
                     return (
-                      <td key={f.key} style={{ color: TONE[st].fg }}
+                      <DataTableCell key={f.key} dt={dt} col={f.key} row={r}
                           title={pct === null ? 'ölçülmedi' : `${seen}/${r.sampled} (%${pct})`}>
                         {st === 'full' ? '✓' : st === 'none' ? '✗' : st === 'unknown' ? '—' : `%${pct}`}
-                      </td>
+                      </DataTableCell>
                     );
                   })}
                 </tr>

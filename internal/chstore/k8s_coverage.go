@@ -83,6 +83,24 @@ type K8sCoverageRow struct {
 	Image            uint64 `json:"image"`
 	ClusterK8s       uint64 `json:"clusterK8s"`
 	ClusterOpenshift uint64 `json:"clusterOpenshift"`
+	// v0.10.964 — Rollouts v2 P5.3 (docs/rollouts/v2-audit.md §9.1, §9.4):
+	// sürüm/ortam girdileri. Üçü de diğer sayaçlar ve §11.8 T1 gibi
+	// res_keys'te anahtar VAR mı sorusunu sayar:
+	//   ServiceVersion — service.version (kolonu yok).
+	//   ImageTag       — container.image.tag | k8s.container.image.tag;
+	//                    res_keys has(), terfi kolonu okunmaz (T1 ile aynı
+	//                    anlam; bkz. k8sCoverageImageTagExpr).
+	//   EnvName        — YALNIZ deployment.environment.name. Eski
+	//                    deployment.environment bilerek SAYILMAZ: env'den
+	//                    türetilen cluster onu görmez (§9.3.2 "missing or
+	//                    legacy env ⇒ empty cluster"). Ingest'in deploy_env
+	//                    kolonu ikisini de kabul eder (otlp/convert.go);
+	//                    onu saymak iki yazımı birleştirir ve kart hangi
+	//                    yazımın geldiğini ayıramazdı (v0.10.192 clus →
+	//                    clus_k8s/clus_ocp ayrımıyla aynı gerekçe).
+	ServiceVersion uint64 `json:"serviceVersion"`
+	ImageTag       uint64 `json:"imageTag"`
+	EnvName        uint64 `json:"envName"`
 }
 
 // K8sCoverage — servis × k8s alanı kapsama tablosu.
@@ -112,22 +130,39 @@ type K8sCoverage struct {
 	Capped bool `json:"capped,omitempty"`
 }
 
-// GetK8sCoverage — hangi servis hangi k8s resource alanını yayıyor.
+// k8sCoverageImageTagExpr — v0.10.964 (Rollouts v2 P5.3). İmaj etiketi
+// sayacının koşulu: iki yazımdan biri res_keys'te VAR mı (§11.8 T1 ile aynı
+// anlam).
 //
-// Kimlik alanları `res_keys` üzerinden okunuyor: bu depoda k8s bağlamı
-// span ATTRIBUTE'unda değil, RESOURCE ekseninde yaşıyor (ölçüldü —
-// attr_keys tarafında tek bir k8s.* anahtarı yok).
-func (s *Store) GetK8sCoverage(ctx context.Context, from, to time.Time, limit int) (*K8sCoverage, error) {
-	if limit <= 0 || limit > 500 {
-		limit = 200
-	}
-	// has() ile sayım: anahtar dizide var mı. indexOf+değer okumaya gerek
-	// yok — soru "alan GELİYOR MU", değeri ne değil.
-	// v0.10.195 — kota ZAMAN DİLİMİNE bölünür (sample_slices.go): salt
-	// `LIMIT n BY service_name` birincil anahtar önekini, yani pencerenin
-	// ilk saniyelerini örnekliyordu.
-	bucketSec, perBucket := sampleSlices(int64(to.Sub(from).Seconds()), k8sCoveragePerService)
-	q := fmt.Sprintf(`
+// Terfi kolonu (container_image_tag, 0012) bilerek OKUNMAZ:
+//   - res_keys diğer sayaçlar için zaten taranıyor; has() ek bayt getirmez.
+//     Kolon ise ek bir kolon okuması, ve 0012'den ÖNCE yazılmış part'larda
+//     MATERIALIZED değer okuma anında res_values'tan hesaplanır
+//     (promoted_attr.go) — küçük filoda pencerenin tamamı taranır.
+//   - v0.10.339 sınıfı: probe kolonu bir replikada kanıtlar, sorgulanan
+//     replika değeri taşımaz → servis etiketi yaydığı hâlde kart ✗/%N basar
+//     ("ölçülmedi ≠ yok" sözleşmesini bozar). has() ham kaynağı okur.
+//   - Hangi dalın koştuğu süreç durumuna bağlı olurdu (boot probe,
+//     SuspendPromotedKeys) ama yük paylaşılan L2'ye aynı anahtarla yazılıyor.
+//
+// Yazım listesi promotedAttrs'taki container_image_tag kaydıyla aynı
+// (TestK8sCoverageImageTagFallbackMirrorsColumn).
+const k8sCoverageImageTagExpr = "has(res_keys, 'container.image.tag') OR has(res_keys, 'k8s.container.image.tag')"
+
+// k8sCoverageSQL — kapsama sorgusu. SAF (k8s_coverage_test.go): pencere
+// (s) → SQL. Bind argümanları sabit: from, to, limit.
+//
+// has() ile sayım: anahtar dizide var mı. indexOf+değer okumaya gerek
+// yok — soru "alan GELİYOR MU", değeri ne değil.
+// v0.10.195 — kota ZAMAN DİLİMİNE bölünür (sample_slices.go): salt
+// `LIMIT n BY service_name` birincil anahtar önekini, yani pencerenin
+// ilk saniyelerini örnekliyordu.
+// v0.10.964 — üç sayaç (svc_version, img_tag, env_name). Üçü de res_keys
+// üzerinde has(): iç örneklem yine yalnız service_name + res_keys taşır, ek
+// kolon okunmaz; tarama ve tavanlar aynı.
+func k8sCoverageSQL(windowSec int64) string {
+	bucketSec, perBucket := sampleSlices(windowSec, k8sCoveragePerService)
+	return fmt.Sprintf(`
 		SELECT service_name,
 		       count()                                  AS sampled,
 		       countIf(has(res_keys, 'k8s.namespace.name'))  AS ns,
@@ -141,7 +176,10 @@ func (s *Store) GetK8sCoverage(ctx context.Context, from, to time.Time, limit in
 		       countIf(has(res_keys, 'k8s.replicaset.name'))    AS rs,
 		       countIf(has(res_keys, 'container.image.name'))    AS img,
 		       countIf(has(res_keys, 'k8s.cluster.name'))        AS clus_k8s,
-		       countIf(has(res_keys, 'openshift.cluster.name'))  AS clus_ocp
+		       countIf(has(res_keys, 'openshift.cluster.name'))  AS clus_ocp,
+		       countIf(has(res_keys, 'service.version'))         AS svc_version,
+		       countIf(%s) AS img_tag,
+		       countIf(has(res_keys, 'deployment.environment.name')) AS env_name
 		FROM (
 			SELECT service_name, res_keys FROM spans
 			WHERE time >= ? AND time <= ?
@@ -151,7 +189,29 @@ func (s *Store) GetK8sCoverage(ctx context.Context, from, to time.Time, limit in
 		GROUP BY service_name
 		ORDER BY sampled DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 25`, perBucket, bucketSec, k8sCoverageSampleRows)
+		SETTINGS max_execution_time = 25`,
+		k8sCoverageImageTagExpr, perBucket, bucketSec, k8sCoverageSampleRows)
+}
+
+// k8sCoverageScanTargets — Scan hedefleri, SELECT sırasıyla (service_name +
+// takma adlar). SAF: sıra testle SELECT'e ve JSON alanlarına çivili.
+func k8sCoverageScanTargets(r *K8sCoverageRow) []any {
+	return []any{&r.Service, &r.Sampled, &r.Namespace, &r.Deployment,
+		&r.Pod, &r.PodUID, &r.Node, &r.Container, &r.Cluster,
+		&r.ReplicaSet, &r.Image, &r.ClusterK8s, &r.ClusterOpenshift,
+		&r.ServiceVersion, &r.ImageTag, &r.EnvName}
+}
+
+// GetK8sCoverage — hangi servis hangi k8s resource alanını yayıyor.
+//
+// Kimlik alanları `res_keys` üzerinden okunuyor: bu depoda k8s bağlamı
+// span ATTRIBUTE'unda değil, RESOURCE ekseninde yaşıyor (ölçüldü —
+// attr_keys tarafında tek bir k8s.* anahtarı yok).
+func (s *Store) GetK8sCoverage(ctx context.Context, from, to time.Time, limit int) (*K8sCoverage, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	q := k8sCoverageSQL(int64(to.Sub(from).Seconds()))
 
 	rows, err := s.telemetryReadConn().Query(ctx, q, from, to, limit)
 	if err != nil {
@@ -167,9 +227,7 @@ func (s *Store) GetK8sCoverage(ctx context.Context, from, to time.Time, limit in
 	total := 0
 	for rows.Next() {
 		var r K8sCoverageRow
-		if err := rows.Scan(&r.Service, &r.Sampled, &r.Namespace, &r.Deployment,
-			&r.Pod, &r.PodUID, &r.Node, &r.Container, &r.Cluster,
-			&r.ReplicaSet, &r.Image, &r.ClusterK8s, &r.ClusterOpenshift); err != nil {
+		if err := rows.Scan(k8sCoverageScanTargets(&r)...); err != nil {
 			continue
 		}
 		out.Rows = append(out.Rows, r)

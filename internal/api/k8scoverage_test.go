@@ -64,8 +64,10 @@ func TestCoverageKeyCarriesEveryInput(t *testing.T) {
 	if !strings.Contains(src, "sec = snapK8sCoverageRange(sec)") {
 		t.Error("pencere basamağa oturtulmuyor — her tık yeni cache anahtarı, cache ölü kalır")
 	}
-	if !strings.Contains(src, `"k8s-coverage:v3:r=%d:l=%d"`) {
-		t.Error("cache anahtarı TÜM girdileri taşımıyor (pencere + limit)")
+	// v0.10.964 — v4: yük üç sayaç kazandı (serviceVersion/imageTag/envName).
+	// Biçim aynı (pencere + limit); sürüm eki eski yükü yeni koda sunmasın.
+	if !strings.Contains(src, `"k8s-coverage:v4:r=%d:l=%d"`) {
+		t.Error("cache anahtarı TÜM girdileri taşımıyor (pencere + limit) ya da yük değişip sürüm eki artmadı")
 	}
 	// Uç yalnız admin: filo genelinde servis adı listeliyor.
 	if !strings.Contains(src, "auth.RequireRole(auth.RoleAdmin, s.getK8sCoverage)") {

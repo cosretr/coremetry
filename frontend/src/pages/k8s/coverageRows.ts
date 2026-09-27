@@ -36,16 +36,19 @@ export type FieldState = 'full' | 'partial' | 'none' | 'unknown';
  * başka bir kaynak (ör. servis listesiyle diff) eklenirse burası hazır —
  * ve o güne kadar burada yazılı olan şey, iddianın nerede karşılandığı.
  */
-export function fieldState(seen: number, sampled: number): FieldState {
+// v0.10.964 — `seen` undefined = alan YÜKTE YOK (eski sunucu / eski önbellek
+// yükü; opsiyonel alanlar). Bu da "ölçülmedi": 0 saymak ✗ ("yok") basardı.
+export function fieldState(seen: number | undefined, sampled: number): FieldState {
   if (!sampled || sampled <= 0) return 'unknown';
+  if (seen === undefined) return 'unknown';
   if (seen <= 0) return 'none';
   if (seen >= sampled) return 'full';
   return 'partial';
 }
 
-/** Kapsama yüzdesi (0-100). sampled=0 → null (bölme değil, BİLGİ yok). */
-export function fieldPct(seen: number, sampled: number): number | null {
-  if (!sampled || sampled <= 0) return null;
+/** Kapsama yüzdesi (0-100). sampled=0 ya da alan yükte yok → null (bölme değil, BİLGİ yok). */
+export function fieldPct(seen: number | undefined, sampled: number): number | null {
+  if (!sampled || sampled <= 0 || seen === undefined) return null;
   return Math.round((seen / sampled) * 1000) / 10;
 }
 
@@ -71,6 +74,15 @@ export const COVERAGE_FIELDS = [
   { key: 'node', label: 'node', short: 'node', attr: 'k8s.node.name' },
   { key: 'container', label: 'container', short: 'ctr', attr: 'k8s.container.name' },
   { key: 'image', label: 'image', short: 'img', attr: 'container.image.name' },
+  // v0.10.964 — Rollouts v2 P5.3 (docs/rollouts/v2-audit.md §9.1, §9.4):
+  // sürüm/ortam girdileri. attr = SAYILAN anahtar(lar), diğer alanlar ve
+  // §11.8 T1 gibi res_keys'te "var mı". env YALNIZ deployment.environment.name:
+  // eski deployment.environment sayılmaz — env'den türetilen cluster onu
+  // görmez (§9.3.2), kart iki yazımı ayırabilmeli.
+  // v2'de sürüm KSM'den gelir; bu sayaçlar yalnız span etiketini ölçer.
+  { key: 'imageTag', label: 'image tag', short: 'tag', attr: 'container.image.tag | k8s.container.image.tag' },
+  { key: 'serviceVersion', label: 'service.version', short: 'ver', attr: 'service.version' },
+  { key: 'envName', label: 'env', short: 'env', attr: 'deployment.environment.name' },
 ] as const;
 
 /** Başlık ipucu: tam anahtar + okunur ad (servis tablosu başlığı `short`). */
@@ -81,14 +93,18 @@ export function coverageHeaderTitle(key: string): string | undefined {
 
 export type CoverageFieldKey = (typeof COVERAGE_FIELDS)[number]['key'];
 
-/** Satırdan bir alanın ham sayımı. */
-export function fieldSeen(r: K8sCoverageRow, k: CoverageFieldKey): number {
+/** Satırdan bir alanın ham sayımı. undefined = alan yükte yok (ölçülmedi).
+ *  v0.10.964 — opsiyonel alanlar artık `?? 0` DEĞİL: eski yükte ✗ basıyordu. */
+export function fieldSeen(r: K8sCoverageRow, k: CoverageFieldKey): number | undefined {
   switch (k) {
     case 'cluster': return r.cluster;
-    case 'clusterK8s': return r.clusterK8s ?? 0;
-    case 'clusterOpenshift': return r.clusterOpenshift ?? 0;
-    case 'replicaset': return r.replicaset ?? 0;
-    case 'image': return r.image ?? 0;
+    case 'clusterK8s': return r.clusterK8s;
+    case 'clusterOpenshift': return r.clusterOpenshift;
+    case 'replicaset': return r.replicaset;
+    case 'image': return r.image;
+    case 'imageTag': return r.imageTag;
+    case 'serviceVersion': return r.serviceVersion;
+    case 'envName': return r.envName;
     case 'namespace': return r.namespace;
     case 'deployment': return r.deployment;
     case 'pod': return r.pod;

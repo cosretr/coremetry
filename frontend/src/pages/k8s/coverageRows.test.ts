@@ -21,6 +21,7 @@ const row = (o: Partial<K8sCoverageRow> = {}): K8sCoverageRow => ({
   service: 'svc-a', sampled: 100,
   namespace: 0, deployment: 0, pod: 0, podUid: 0, node: 0, container: 0, cluster: 0,
   replicaset: 0, image: 0, clusterK8s: 0, clusterOpenshift: 0,
+  serviceVersion: 0, imageTag: 0, envName: 0,
   ...o,
 });
 
@@ -34,6 +35,12 @@ describe('fieldState', () => {
   // "alan yok" demek YANLIŞ olur — ölçüm yapılmadı. İkisini karıştırmak
   // kabul testini çürütür: collector düzgün kurulmuşken bile kart
   // "yaymıyor" der.
+  // v0.10.964 — alan yükte hiç yoksa (eski yük) sayım undefined: ölçülmedi.
+  it('sayım yoksa (undefined) unknown', () => {
+    expect(fieldState(undefined, 100)).toBe('unknown');
+    expect(fieldPct(undefined, 100)).toBeNull();
+  });
+
   describe('ölçüm yoksa UNKNOWN, none DEĞİL', () => {
     for (const s of [0, -1]) {
       it(`sampled=${s}`, () => {
@@ -66,10 +73,64 @@ describe('fieldSeen — her alan doğru sayıya bağlı', () => {
     ['pod', 4], ['podUid', 5], ['node', 6], ['container', 7],
   ] as const)('%s → %i', (k, want) => expect(fieldSeen(r, k)).toBe(want));
 
-  it('kartta on bir alan var (v0.10.192) ve sıra hiyerarşiyi izliyor', () => {
+  it('kartta on dört alan var (v0.10.964) ve sıra hiyerarşiyi izliyor; sürüm/ortam sayaçları sonda', () => {
     expect(COVERAGE_FIELDS.map(f => f.key)).toEqual([
       'cluster', 'clusterK8s', 'clusterOpenshift', 'namespace', 'deployment', 'replicaset', 'pod', 'podUid', 'node', 'container', 'image',
+      'imageTag', 'serviceVersion', 'envName',
     ]);
+  });
+});
+
+// v0.10.964 — Rollouts v2 P5.3 (docs/rollouts/v2-audit.md §9): sürüm ve
+// ortam sayaçları. Alanlar OPSİYONEL: eski sunucu / önbellekteki eski yük
+// onları taşımaz. Taşımayan yük "alan yok" (✗) DEĞİL "ölçülmedi" (—) —
+// kartın en önemli sözleşmesi, bu kez alanın yokluğu için.
+describe('sürüm/ortam sayaçları (v0.10.964)', () => {
+  it.each([
+    ['imageTag', 11], ['serviceVersion', 12], ['envName', 13],
+  ] as const)('%s → %i', (k, want) => {
+    const r = row({ imageTag: 11, serviceVersion: 12, envName: 13 });
+    expect(fieldSeen(r, k)).toBe(want);
+  });
+
+  // Eski yük: alanlar HİÇ yok.
+  const legacy = (): K8sCoverageRow => {
+    const r: K8sCoverageRow = row({ sampled: 100 });
+    delete r.serviceVersion; delete r.imageTag; delete r.envName;
+    delete r.replicaset; delete r.image; delete r.clusterK8s; delete r.clusterOpenshift;
+    return r;
+  };
+
+  it.each(['imageTag', 'serviceVersion', 'envName', 'replicaset', 'image', 'clusterK8s', 'clusterOpenshift'] as const)(
+    'yükte olmayan %s → ölçülmedi (unknown), yok DEĞİL', k => {
+      const r = legacy();
+      expect(fieldSeen(r, k)).toBeUndefined();
+      expect(fieldState(fieldSeen(r, k), r.sampled)).toBe('unknown');
+      expect(fieldPct(fieldSeen(r, k), r.sampled)).toBeNull();
+    });
+
+  it('yükte olmayan alan filo özetinde HİÇBİR kovaya girmez; zorunlu alanlar sayılır', () => {
+    const s = fleetSummary([legacy(), legacy()]);
+    for (const k of ['imageTag', 'serviceVersion', 'envName'] as const) {
+      expect(s.find(x => x.field === k)).toMatchObject({ full: 0, partial: 0, none: 0 });
+    }
+    // Aynı satırların zorunlu alanı (namespace = 0) ölçülmüş: "yok".
+    expect(s.find(x => x.field === 'namespace')).toMatchObject({ none: 2 });
+  });
+
+  it('sıfır sayım ölçülmüş "yok"tur (alan yükte var)', () => {
+    expect(fieldState(fieldSeen(row({ sampled: 100, envName: 0 }), 'envName'), 100)).toBe('none');
+  });
+
+  it('başlık ipucu SAYILAN anahtarı söyler', () => {
+    expect(coverageHeaderTitle('serviceVersion')).toContain('service.version');
+    expect(coverageHeaderTitle('imageTag')).toContain('container.image.tag | k8s.container.image.tag');
+    // env yalnız yeni anahtar (§11.8 T1, §9.3.2): eski yazım ya da iki
+    // yazımı birleştiren deploy_env kolonu başlıkta görünmemeli.
+    const env = coverageHeaderTitle('envName') ?? '';
+    expect(env).toBe('deployment.environment.name — env');
+    expect(env).not.toContain('deployment.environment |');
+    expect(env).not.toContain('deploy_env');
   });
 });
 
