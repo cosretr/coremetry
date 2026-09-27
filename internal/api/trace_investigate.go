@@ -54,6 +54,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/mcptools"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
 	"github.com/cilcenk/coremetry/internal/sourcestate"
+	"github.com/cilcenk/coremetry/internal/stackparse"
 )
 
 // İncelemenin çağırabildiği araçlar — sabit ve salt-okunur (hepsi MinRole "").
@@ -94,6 +95,8 @@ const (
 
 // Bölüm bütçeleri (rune) — toplam ≈ 8.4K: yerel küçük modelde bile kanıt +
 // istem + cevap aynı pencereye sığsın. Kırpma satır sınırında ve SÖYLENEREK.
+// v0.10.972 — stack'li L satırı bütçeyi basılan stack kadar büyütür (en çok
+// invStackLogs × invStackRunes ≈ 1.2K; stack yoksa toplam aynen ≈ 8.4K).
 const (
 	invRunesT       = 2400
 	invRunesL       = 2600
@@ -103,6 +106,25 @@ const (
 	invRunesO       = 1200 // v0.10.948 — Oracle bloğu (≤10 satır, JSON çitte)
 	invLogLines     = 12
 	invLogBodyRunes = 280
+)
+
+// v0.10.972 — stacktrace kanıtı (operatör: "Stacktrace detayı bölümü de geri
+// gelsin"). Önce L satırı exception.stacktrace'i HİÇ taşımıyordu (yalnız
+// exception.type/error.type + ≤280 rune gövde); gövdeye basılmış stack tek
+// satıra ezilip 280 runede kesiliyordu. Şimdi stack'li satır üst kareleri
+// "stacktrace:" alanıyla taşır: en dıştaki exception'ın ilk invStackFrames
+// karesi + her "Caused by"ın ilk karesi, ≤invStackRunes, FenceSafe. En çok
+// invStackLogs FARKLI stack basılır (aynısı "[Lk] ile aynı"); L bütçesi
+// basılan stack kadar büyür (≤ invStackLogs × invStackRunes) ki kareler öteki
+// log satırlarını düşürmesin. Tavan: get_logs_for_trace öznitelik değerini
+// 200, gövdeyi 500 runede keser (mcptools/logs_tools.go) — özet onu aşamaz:
+// "ilk 3 kare + Caused by" biçimi YALNIZ kaynak değer kesik değilse oluşur;
+// OTel/ECS exception.stacktrace özniteliğinde çoğunlukla başlık + ~1 kare
+// gelir ve satır "(kaynak kesik: …)" notunu taşır (invStackExcerpt).
+const (
+	invStackFrames = 3
+	invStackRunes  = 600
+	invStackLogs   = 2
 )
 
 // errTraceInvestigationFallback — ClickHouse'ta span yok ama Tempo yapılandırılmış:
@@ -1295,6 +1317,7 @@ func invRenderLogs(sec *invSection, o invLogsOut) {
 	}
 	logs := o.Logs
 	sort.SliceStable(logs, func(i, j int) bool { return logs[i].SeverityNumber > logs[j].SeverityNumber })
+	stackSeen := map[string]string{} // özet → ilk basıldığı satırın kimliği (v0.10.972)
 	for i, l := range logs {
 		if i >= invLogLines {
 			sec.Post = append(sec.Post, fmt.Sprintf("%d satırdan %d'i gösterildi (önce yüksek severity).", len(logs), invLogLines))
@@ -1312,10 +1335,95 @@ func invRenderLogs(sec *invSection, o invLogsOut) {
 				line += " " + k + "=" + invInline(v, 120)
 			}
 		}
-		line += " | " + invInline(l.Body, invLogBodyRunes)
+		body, stack := invLogStack(l.Attrs, l.Body)
+		line += " | " + invInline(body, invLogBodyRunes)
+		if ex := invStackExcerpt(stack); ex != "" {
+			switch id, dup := stackSeen[ex]; {
+			case dup:
+				line += " | stacktrace: [" + id + "] ile aynı"
+			case len(stackSeen) >= invStackLogs:
+				line += fmt.Sprintf(" | stacktrace: var, gösterilmedi (en çok %d farklı stacktrace)", invStackLogs)
+			default:
+				field := " | stacktrace: " + ex
+				stackSeen[ex] = fmt.Sprintf("%s%d", sec.Key, len(sec.Lines)+1) // render'ın kimliği: [L<sıra>]
+				sec.Runes += runeLen(field)                                    // bütçe stack kadar büyür (sınırlı)
+				line += field
+			}
+		}
 		sec.Lines = append(sec.Lines, line)
 	}
 	sec.Fenced = true
+}
+
+// invLogStack — v0.10.972, SAF: satırın gövdesi ve stack'i. Stack'in tanımı
+// kod çekicininkiyle AYNI (stackparse.FromLog: OTel/ECS öznitelikleri, JSON
+// gövde, ≥2 kareli düz gövde). Stack gövdeden geldiyse gövdede yalnız mesaj
+// başı kalır, kareler stacktrace alanına gider — aynı baytlar iki kez girmez.
+func invLogStack(attrs map[string]string, body string) (string, string) {
+	stack, fromBody := stackparse.FromLog(attrs, body)
+	if stack != "" && fromBody {
+		if head := stackparse.MessageHead(body); head != body && strings.HasPrefix(body, head) {
+			return head, body[len(head):]
+		}
+	}
+	return body, stack
+}
+
+// invStackExcerpt — v0.10.972, SAF: stacktrace'in üst kareleri, tek satır.
+// Başlık satırları (exception tipi: mesaj, "Caused by: …") korunur; en dıştaki
+// exception'ın ilk invStackFrames karesi ve sonraki her bölümün ("Caused by")
+// ilk karesi kalır, atılan kareler sayılıp SÖYLENİR; "... N more" atlanır.
+// Kare = "at " (Java/Kotlin/.NET/Node) ya da `File "` (Python) ile başlayan
+// satır. Parçalar "; " ile birleşir, invInline'dan geçer (FenceSafe, tek
+// satır) ve invStackRunes'ta kesilir; not kesimden sonra eklenir. Hiç kare
+// yoksa (araç değeri 200 runede kesti ya da alan yalnız mesaj) bu SÖYLENİR.
+// v0.10.972 — kaynak değer araçta kesildiyse (truncateRunes'un "…" işareti:
+// get_logs_for_trace öznitelik değerini 200, gövdeyi 500 runede keser) not
+// "(kaynak kesik: …)" eklenir: OTel/ECS exception.stacktrace çoğunlukla
+// yalnız başlık + ~1 kare taşır, alt kareler ve Caused by görünmez — model
+// tam stack sanıp dış exception'a "Güven: kesin" basmasın.
+func invStackExcerpt(stack string) string {
+	cut := strings.HasSuffix(strings.TrimSpace(stack), "…") // v0.10.972 — araç değeri kesti
+	var kept []string
+	omitted, seg, inSeg := 0, 0, 0
+	for _, raw := range strings.Split(stack, "\n") {
+		ln := strings.TrimSpace(raw)
+		switch {
+		case ln == "":
+			continue
+		case strings.HasPrefix(ln, "...") && (strings.HasSuffix(ln, "more") || strings.HasSuffix(ln, "omitted")):
+			continue // Java "... 12 more", logback "... 12 common frames omitted"
+		case strings.HasPrefix(ln, "at ") || strings.HasPrefix(ln, `File "`):
+			limit := 1
+			if seg == 0 {
+				limit = invStackFrames
+			}
+			if inSeg >= limit {
+				omitted++
+				continue
+			}
+			inSeg++
+		default: // başlık: karelerden SONRA gelirse yeni bölüm (Caused by, Python'un son satırı)
+			if inSeg > 0 {
+				seg, inSeg = seg+1, 0
+			}
+		}
+		kept = append(kept, ln)
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+	out := invInline(strings.Join(kept, "; "), invStackRunes)
+	switch {
+	case omitted > 0:
+		out += fmt.Sprintf(" (+%d kare gösterilmedi)", omitted)
+	case seg == 0 && inSeg == 0: // kaynak kesik ya da yalnız mesaj: sınıf/metot uydurulmasın
+		out += " (kare görünmüyor)"
+	}
+	if cut { // v0.10.972 — kesik kaynak SÖYLENİR (tek kare kalsa da tam stack gibi okunmasın)
+		out += " (kaynak kesik: alt kareler ve Caused by görünmüyor)"
+	}
+	return out
 }
 
 func invRenderCompare(sec *invSection, o invCompareOut, inv *traceInvestigation) {
@@ -1848,7 +1956,8 @@ func invBuildLinks(inv *traceInvestigation) []guidedAnswerLink {
 // traceInvestigationCacheRev — render/istem şekli değişince artır (eski
 // önbellek satırları bir saat içinde kendiliğinden düşer ama anında geçersizlik iyi).
 // v0.10.948b — Oracle (O) bölümü + render temizliği + çözülemeyen span satırı.
-const traceInvestigationCacheRev = "inv-v0.10.948b"
+// v0.10.972 — L satırında stacktrace alanı (üst kareler) + Kök neden / Stacktrace detayı istemi.
+const traceInvestigationCacheRev = "inv-v0.10.972"
 
 // traceInvestigationCacheKey — incelemeden ÖNCE hesaplanır: isabet hiçbir
 // okumayı çalıştırmaz (adım olayı yok). Kimlik = istem metni + trace + span.

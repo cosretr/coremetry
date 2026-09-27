@@ -967,3 +967,22 @@ HİÇBİR düğümde olmayan bir state tablosu, eski yolda başka state tablolar
 kurulur (kural 2 — tablo bir yerde varsa komşusuna katıl — "yeni düğüm" senaryosunu zaten korur).
 **Neden:** kural 3 kendini besleyen bir kilitti: ingest_ledger eski yolda doğunca (v0.10.767) sonraki
 her state tablosu shard'a bölünmüş doğdu (prod, 10 tablo; v0.10.965 sihirbazı onarır).
+
+## 2026-09-27 — CoSRE trace incelemesi: «Kök neden» güvenle, koşullu «Stacktrace detayı» (v0.10.972)
+
+**Karar (operatör: "CoSRE de neden kök neden çıkmıyor artık" → "Kök neden olsun yine de"; "Stacktrace
+detayı bölümü de geri gelsin"):** "CoSRE'ye sor" ilk cevabında (v0.10.948) «Olası neden» → «Kök
+neden»; ilk satırı güven: "Güven: kesin" (hata veren span/log'dan nedene kanıt zinciri kesintisiz)
+ya da "Güven: olası — <eksik halka>". Kanıt kuralları aynen (kimlik, uydurmama, ilişki ≠ neden;
+yalnız zamansal ilişki kesin olamaz). Kart Karar şeridini YALNIZ "kesin"de çizer; "olası" hipotez
+olarak kalır (şerit yok). «Stacktrace detayı» Kanıt'la Kök neden arasında TEK koşullu bölüm: yalnız
+L satırında stacktrace varken; Oracle satırı / çıplak exception.type sayılmaz, yoksa bölüm hiç
+yazılmaz. Sunucu L satırına üst kareleri "stacktrace:" alanıyla koyar (önce exception.stacktrace
+prompt'a hiç girmiyordu): kaynak değer kesik değilse ilk 3 kare + her Caused by'ın ilk karesi,
+≤600 rune, FenceSafe, en çok 2 farklı stack; L bütçesi basılan stack kadar büyür.
+get_logs_for_trace öznitelik değerini 200 runede kestiği için OTel/ECS exception.stacktrace'te
+çoğunlukla başlık + ~1 kare gelir; kesik olduğu satırda "(kaynak kesik: …)" diye söylenir ve istem
+kesik stack'i tek başına "Güven: kesin" dayanağı saymaz. Problem özetinin düz "Olası neden:"i ve RCA
+etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta stack anahtarlarına
+(exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
+çıktısını dış istemciler ve sohbet için de değiştirir.

@@ -27,8 +27,8 @@ import (
 // saf bileşimler parçalarıyla kapsanır).
 var promptVersionRegistry = map[string]string{
 	"systemTraceBody":            systemTraceBody,
-	"systemTraceInvestigation":   systemTraceInvestigation, // v0.10.948
-	"traceFollowUpAddendum":      traceFollowUpAddendum,    // v0.10.948
+	"systemTraceInvestigation":   systemTraceInvestigation, // v0.10.948; v0.10.972 — Kök neden + güven, koşullu Stacktrace detayı + kesik stack notu
+	"traceFollowUpAddendum":      traceFollowUpAddendum,    // v0.10.948; v0.10.972 — aynı başlıklar
 	"systemSpan":                 systemSpan,
 	"systemProblem":              systemProblem,
 	"systemExceptionBody":        systemExceptionBody,

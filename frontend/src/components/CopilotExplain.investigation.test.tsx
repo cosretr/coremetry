@@ -67,7 +67,8 @@ function fakeTrace() {
 const ANSWER = [
   '**Bulgu**', '- checkout POST /orders 1840 ms; payments hata döndü.', '',
   '**Kanıt**', '- [T1] payments öz süre 1620 ms', '',
-  '**Olası neden**', '- payments bağlantı havuzu dolu görünüyor. Aynı pencerede deploy var (ilişki, neden değil).', '',
+  // v0.10.972 — «Olası neden» → «Kök neden», ilk satırı güven; "olası" → Karar yok
+  '**Kök neden**', 'Güven: olası — pod metriği okunamadı', '- payments bağlantı havuzu dolu görünüyor. Aynı pencerede deploy var (ilişki, neden değil).', '',
   '**Eksik veri**', '- logs: erişilemedi — log kanıtı yok.', '',
   '**Sonraki kontrol**', '- payments havuz metriği.', '',
   '---', '**Kaynak durumu**', '- traces/clickhouse: başarılı', '- logs/elasticsearch: kaynağa erişilemedi (eksik veri)',
@@ -208,8 +209,9 @@ describe('CoSRE’ye sor — cevap kartı', () => {
         { source: 'metrics', backend: 'victoriametrics', state: 'not_configured' },
       ],
     });
-    for (const h of ['Bulgu', 'Kanıt', 'Eksik veri', 'Sonraki kontrol']) expect(text()).toContain(h);
+    for (const h of ['Bulgu', 'Kanıt', 'Kök neden', 'Güven: olası', 'Eksik veri', 'Sonraki kontrol']) expect(text()).toContain(h);
     // v0.10.948 — «Olası neden» hipotez: Karar şeridine çıkmaz, bölüm bütün ve yerinde kalır
+    // (v0.10.972 — «Kök neden» + "Güven: olası" aynı davranış)
     expect(host.querySelector('.cx-verdict')).toBeNull();
     expect(text()).toContain('payments bağlantı havuzu dolu görünüyor. Aynı pencerede deploy var (ilişki, neden değil).');
     expect(text().indexOf('Bulgu')).toBeLessThan(text().indexOf('payments bağlantı havuzu'));

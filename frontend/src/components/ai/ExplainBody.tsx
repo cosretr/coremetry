@@ -19,6 +19,11 @@
 // v0.10.948 — beş başlıklı inceleme cevabında (**Bulgu** … **Sonraki kontrol**)
 // Karar ÇİZİLMEZ: «Olası neden» hipotezdir; verdictLine metnin şeklinden
 // null döner (`sources`suz önbellek isabetinde de), bölüm bütün kalır.
+// v0.10.972 — o bölüm «Kök neden» oldu (ilk satırı güven): "Güven: kesin" →
+// Karar = kök neden cümlesi (gövdeden düşer, güven satırı kalır); "olası" ya
+// da güvensiz → bugünkü gibi Karar yok. Koşullu «Stacktrace detayı» bölümü
+// gövdede yerinde (stack çiti varsa katlanır). Kod değişmedi: karar metnin
+// şeklinde, explainAnatomy.ts'te.
 import { useMemo } from 'react';
 import { RenderedMarkdown, CodeBlock } from '@/components/Markdown';
 import type { IdLink } from '@/components/ai/inlineIdLinks';

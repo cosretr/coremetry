@@ -6,7 +6,9 @@
 //     ibaretse Karar ÇİZİLMEZ (yargıç must-fix: kopya). span/incident/
 //     anomaly/service-health cevapları başlıksız ("no headers") → Karar yok,
 //     bilinçli. v0.10.948 — beş başlıklı inceleme cevabında (**Bulgu** …)
-//     Karar YOK: «Olası neden» hipotezdir, hüküm değil.
+//     Karar YOK: «Olası neden» hipotezdir, hüküm değil. v0.10.972 — o bölüm
+//     «**Kök neden**» oldu, ilk satırı güven: YALNIZ "Güven: kesin"de Karar =
+//     güven satırından sonraki ilk cümle; "olası" / güvensiz → Karar YOK.
 //   - dropVerdictSentence: Karar çizilince AYNI cümle gövdeden düşer (madde
 //     kalanını korur) — çift basım yok (inceleme #3).
 //   - hoistCodeQuotes: gövdedeki OLUKLU kod alıntıları (N| önekli ya da
@@ -25,6 +27,22 @@ const VERDICT_HDR = /(?:\*\*\s*(?:kök\s*neden[^*]*|olası\s*neden[^*]*|root\s*c
 // **Bulgu** başlığı (SystemPromptTraceInvestigation'ın beş başlığından ilki);
 // model «**Bulgu:**» yazarsa da (SECTION_START gibi) iki nokta kabul.
 const INVESTIGATION_SHAPE = /^[ \t]*\*\*[ \t]*bulgu[ \t]*:?[ \t]*\*\*/im;
+// v0.10.972 — inceleme cevabının «Kök neden» başlığı (satır başı, kalın;
+// «**Kök neden:**» de) ve ilk dolu satırındaki güven ("Güven: kesin" /
+// "Güven: olası — <eksik halka>"; SystemPromptTraceInvestigation). Madde imi,
+// kalın/italik işaret ve büyük harf toleranslı; güven başlıkla aynı satırda da olabilir.
+// v0.10.972 — istemin kendi başlık biçimi «**X** — …» da kabul: «**Kök neden** — Güven: kesin»
+// ve sarkan «**Kök neden** —» satırı (tire başlıkla birlikte tüketilir).
+const INV_ROOT_HDR = /^[ \t]*\*\*[ \t]*kök[ \t]*neden[ \t]*:?[ \t]*\*\*[ \t]*(?:[:—–-][ \t]*)?/imu;
+// v0.10.972 — «Güven: kesin değil / kesin olmayan» bir çekincedir, kesin DEĞİL:
+// olumsuzlanan "kesin" güven sayılmaz (satır eşleşmez → Karar çizilmez).
+const CONFIDENCE_LINE = /^[-–—*_>\s]*güven[*_\s]*:[*_\s]*(kesin(?![\s*_]*(?:değil|olma))|olası)(?!\p{L})/iu;
+// Değeri tanınmasa da güven satırı («Güven: kesin değil», «Güven: orta»): Karar olmaz.
+const CONFIDENCE_LABEL = /^[-–—*_>\s]*güven[*_\s]*:/iu;
+// Güven taramasında boş sayılan satır: yalnız tire/boşluk (sarkan «—»).
+const DASH_ONLY = /^[\s—–-]*$/;
+// Bölüm sonu: satırın TAMAMI kalın başlık («**Eksik veri**»).
+const HEADER_LINE = /^[ \t]*\*\*[^*\n]+\*\*[ \t]*:?[ \t]*$/m;
 
 function stripInline(s: string): string {
   return s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^\s*[-*]\s+/, '').trim();
@@ -38,19 +56,69 @@ function firstSentence(p: string): string {
   return (m ? m[1] : p).trim();
 }
 
+/**
+ * v0.10.972 — başlıktan (`p`) sonraki ilk dolu satırın güveni: 'kesin' →
+ * güven satırından SONRAKİ konum (Karar cümlesi oradan başlar), 'olası' →
+ * null (Karar yok; değeri tanınmayan «Güven: …» satırı da), güven satırı
+ * yok → undefined (çağıran eski davranışını sürdürür). Güven kuralı cevabın
+ * ŞEKLİNE değil «Kök neden» bölümünün İÇERİĞİNE bağlıdır: **Bulgu** başlığı
+ * farklı yazılsa da (## Bulgu, **Bulgular**, - **Bulgu**:) güven satırı
+ * Karar olmaz. Yalnız tire olan satır (sarkan «—») boş sayılır.
+ */
+function applyConfidence(text: string, p: number): number | null | undefined {
+  while (p < text.length) {
+    let e = text.indexOf('\n', p); if (e < 0) e = text.length;
+    const line = text.slice(p, e);
+    if (!DASH_ONLY.test(line)) {
+      const c = line.match(CONFIDENCE_LINE);
+      if (c) return c[1].toLowerCase() === 'kesin' ? Math.min(e + 1, text.length) : null;
+      return CONFIDENCE_LABEL.test(line) ? null : undefined;
+    }
+    p = e + 1;
+  }
+  return undefined;
+}
+
+/**
+ * Karar cümlesinin başladığı konum (başlık/güven satırından sonrası); Karar
+ * çizilmeyecekse null. v0.10.948 — beş başlıklı inceleme cevabında «Olası
+ * neden» bir HİPOTEZDİR, hüküm değil: ilk cümlesini «Karar» şeridine çıkarmak
+ * onu kesinleştirir, Bulgu → Kanıt → Olası neden sırasını bozar ve «ilişki,
+ * neden değil» kaydını iddiasından koparırdı. v0.10.972 — o bölüm «Kök neden»
+ * oldu: YALNIZ "Güven: kesin" Karar çizer; "olası" ya da güvensiz bölüm
+ * bugünkü hipotez gibi (Karar yok → dropVerdictSentence de koşmaz, bölüm
+ * bütün). `sources`suz önbellek isabeti de aynı metni taşıdığından denetim
+ * prop'ta değil burada, metnin şeklinde.
+ */
+function verdictStart(text: string): number | null {
+  if (INVESTIGATION_SHAPE.test(text)) {
+    const m = text.match(INV_ROOT_HDR);
+    if (!m || m.index === undefined) return null;
+    const c = applyConfidence(text, m.index + m[0].length);
+    return typeof c === 'number' ? c : null; // yalnız "kesin"; olası / güvensiz → Karar yok
+  }
+  const m = text.match(VERDICT_HDR);
+  if (!m || m.index === undefined) return null;
+  // v0.10.972 — şekil dışı cevapta da güven satırı Karar olmaz: olası → yok,
+  // kesin → güven satırından sonrası; güven satırı yoksa eski davranış.
+  const s = m.index + m[0].length;
+  const c = applyConfidence(text, s);
+  return c === undefined ? s : c;
+}
+
 /** Karar satırı; yoksa ya da bölüm tek cümleyse null. ≤ 220 karakter. */
 export function verdictLine(text: string | null | undefined): string | null {
   if (!text) return null;
-  // v0.10.948 — beş başlıklı inceleme cevabında «Olası neden» bir HİPOTEZDİR,
-  // hüküm değil: ilk cümlesini «Karar» şeridine çıkarmak onu kesinleştirir,
-  // Bulgu → Kanıt → Olası neden sırasını bozar ve «ilişki, neden değil»
-  // kaydını iddiasından koparırdı. Karar çizilmez → dropVerdictSentence de
-  // koşmaz, bölüm bütün kalır. `sources`suz önbellek isabeti de aynı metni
-  // taşıdığından denetim prop'ta değil burada, metnin şeklinde.
-  if (INVESTIGATION_SHAPE.test(text)) return null;
-  const m = text.match(VERDICT_HDR);
-  if (!m || m.index === undefined) return null;
-  const after = text.slice(m.index + m[0].length);
+  const start = verdictStart(text);
+  if (start === null) return null;
+  let after = text.slice(start);
+  if (INVESTIGATION_SHAPE.test(text)) {
+    // v0.10.972 — güven satırından sonra boş satır olabilir; bölüm bir
+    // sonraki tam-kalın başlık satırında biter (yalnız güven satırı → Karar yok).
+    after = after.replace(/^(?:[ \t]*\n)+/, '');
+    const end = after.search(HEADER_LINE);
+    if (end >= 0) after = after.slice(0, end);
+  }
   // bölümün ilk paragrafı: boş satıra ya da bir sonraki **başlığa** kadar
   const para = after.split(/\n\s*\n|\n(?=\s*\*\*)/)[0] ?? '';
   const lines = para.split('\n').map(stripInline).filter(Boolean);
@@ -74,9 +142,8 @@ export function verdictLine(text: string | null | undefined): string | null {
  * madde imi kalanın başına taşınır. Bulunamazsa metin aynen.
  */
 export function dropVerdictSentence(text: string, sentence: string): string {
-  const m = text.match(VERDICT_HDR);
-  if (!m || m.index === undefined) return text;
-  const start = m.index + m[0].length;
+  const start = verdictStart(text); // v0.10.972 — inceleme cevabında güven satırından sonra
+  if (start === null) return text;
   // başlığın bittiği satır (inline «Olası neden: …» aynı satırda sürer)
   let lineStart = text.lastIndexOf('\n', start - 1) + 1;
   let lineEnd = text.indexOf('\n', start); if (lineEnd < 0) lineEnd = text.length;
@@ -165,7 +232,8 @@ export { stripMarker };
 // "**logs/elasticsearch**: erişilemedi" biçiminde de gelebilir. Hemen
 // üstteki `---` ayracı blokla birlikte gider.
 const SOURCE_FOOTER_HDR = /^[ \t>]*(?:#{1,6}[ \t]*)?(?:[*_]{1,2}[ \t]*)?kaynak durumu\b/i;
-const SECTION_START = /^[ \t]*(?:#{1,6}[ \t]+\S|\*\*[ \t]*(?:bulgu|kanıt|olası neden|eksik veri|sonraki kontrol)[ \t]*[*:])/i;
+// v0.10.972 — «Stacktrace detayı» ve «Kök neden» de cevap başlığı («Olası neden» eski önbellek metni için kalır).
+const SECTION_START = /^[ \t]*(?:#{1,6}[ \t]+\S|\*\*[ \t]*(?:bulgu|kanıt|stacktrace detayı|kök neden|olası neden|eksik veri|sonraki kontrol)[ \t]*[*:])/i;
 const WARN_LINE = /^[ \t>*_]*⚠/;
 const RULE_LINE = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 
