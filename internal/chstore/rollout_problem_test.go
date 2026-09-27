@@ -64,3 +64,23 @@ func TestRolloutRefForPodSQLShape(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.981 — GitOps sekmesi: iş yükü düzeyi (revizyonsuz) liste.
+func TestServiceWorkloadsSQLShape(t *testing.T) {
+	q := serviceWorkloadsSQL()
+	for _, want := range []string{
+		"FROM workload_revision_activity_1m",
+		"service_name = ?",
+		"bucket >= toDateTime64(?, 3, 'UTC') AND bucket <= toDateTime64(?, 3, 'UTC')",
+		"GROUP BY cluster, k8s_namespace, workload\n",
+		"LIMIT 51",
+		"max_execution_time = 10",
+	} {
+		if !strings.Contains(q, want) {
+			t.Errorf("sorguda %q yok:\n%s", want, q)
+		}
+	}
+	if strings.Contains(q, ", revision") || strings.Contains(q, "revision != ''") {
+		t.Error("revizyona göre gruplamamalı (çok revizyonlu iş yükü LIMIT'i yer)")
+	}
+}

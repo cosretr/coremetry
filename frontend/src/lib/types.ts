@@ -7575,6 +7575,32 @@ export interface RolloutSettingsResponse { settings: RolloutSettings; resolved: 
 /** GET /api/rollout/detail (v0.10.203) — çekmece. since/generatedAt NANOSANİYE (rollout.startedAt ms'tir). */
 export interface RolloutDetail { rollout: WorkloadRollout; services: ServiceReportSection[]; since: number; generatedAt: number; note?: string }
 
+// ── SERVİS GITOPS SEKMESİ (v0.10.981) — api/service_gitops.go serviceGitOpsResponse
+// + argocd.ServiceApp / AppStatus / ServiceWorkload aynası. Zamanlar ms.
+export interface ServiceGitOpsWorkload { clusterId: string; namespace: string; workload: string; clusterName?: string }
+/** argocd.ServiceApp — argocd_app_info satırı + eşleme. match: manual (pin, 100) | name (tahmini). */
+export interface ArgoServiceApp {
+  hubClusterId: string; instanceNamespace?: string; job?: string; appNamespace: string; name: string;
+  project?: string; repo?: string; destServer?: string; destNamespace?: string;
+  syncStatus?: string; healthStatus?: string; operation?: string;
+  /** Yoksa etiket yok (Argo < 2.9). */
+  autoSync?: boolean;
+  instanceId?: string; instanceName?: string;
+  /** dest_server → Remote Cluster id; yoksa çözülemedi. */
+  destClusterId?: string;
+  match: 'manual' | 'name' | string; confidence: number;
+  workloads: { clusterId: string; namespace: string; workload: string }[];
+  /** Son 24 saatte tamamlanan senkronlar, faz → adet. null = okunmadı (hata / kesik sonuç); {} = senkron yok. */
+  syncs24h: Record<string, number> | null;
+}
+export interface ServiceGitOpsHub { hubClusterId: string; hubName?: string; status: 'ok' | 'error' | 'skipped' | string; error?: string; apps: number; truncated?: boolean }
+export interface ServiceGitOpsResponse {
+  service: string; rolloutsFrom: number; workloadsFrom: number; to: number;
+  workloads: ServiceGitOpsWorkload[]; workloadsCapped?: boolean; unmappedClusters?: string[];
+  argo: { configured: boolean; note?: string; hubs: ServiceGitOpsHub[]; apps: ArgoServiceApp[]; otherInNamespace: number };
+  rollouts: { enabled: boolean; note?: string; rows: WorkloadRollout[]; capped?: boolean };
+}
+
 // K8sCoverageRow / K8sCoverage (v0.10.36) — K8s bağlam kapsama kartı,
 // entity katmanı Faz 0. Bir servisin hangi k8s resource alanını YAYDIĞI.
 //

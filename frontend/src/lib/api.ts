@@ -3166,6 +3166,9 @@ export const api = {
     get<import('./types').RolloutRunsResponse>('/api/rollouts/runs', signal),
   rolloutDetail: (p: { clusterId: string; namespace: string; workload: string; revision: string; startedAt: number }, signal?: AbortSignal) =>
     get<import('./types').RolloutDetail>(`/api/rollout/detail?cluster=${encodeURIComponent(p.clusterId)}&namespace=${encodeURIComponent(p.namespace)}&workload=${encodeURIComponent(p.workload)}&revision=${encodeURIComponent(p.revision)}&startedAt=${p.startedAt}`, signal),
+  // v0.10.981 — servis GitOps sekmesi (service_gitops.go): iş yükleri + Argo uygulamaları + rollout'lar.
+  serviceGitOps: (svc: string, signal?: AbortSignal) =>
+    get<import('./types').ServiceGitOpsResponse>(`/api/services/${encodeURIComponent(svc)}/gitops`, signal),
   rolloutSettings: () => get<import('./types').RolloutSettingsResponse>('/api/settings/rollouts'),
   putRolloutSettings: (cfg: import('./types').RolloutSettings) =>
     request<import('./types').RolloutSettingsResponse>('/api/settings/rollouts', {

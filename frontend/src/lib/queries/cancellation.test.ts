@@ -25,7 +25,7 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   { file: 'logs.ts', hooks: ['api.logs(', 'api.logsPatterns('] }, // v0.10.297 — desen örneklemesi ≤2000 satır
   // v0.10.131 — entity pivotları: entity_seen_5m taramaları + Thanos delegasyonu.
   { file: 'entities.ts', hooks: ['api.entityServices(', 'api.servicePods(', 'api.entityMetrics(', 'api.entityContainers(', 'api.entityLatency('] },
-  { file: 'rollouts.ts', hooks: ['api.rollouts(', 'api.rolloutStats(', 'api.rolloutRuns(', 'api.rolloutDetail('] }, // v0.10.201
+  { file: 'rollouts.ts', hooks: ['api.rollouts(', 'api.rolloutStats(', 'api.rolloutRuns(', 'api.rolloutDetail(', 'api.serviceGitOps('] }, // v0.10.201, v0.10.981
   { file: 'prefs.ts', hooks: ['api.getPreference('] }, // v0.10.248 — kişisel tercih okuma; sekme kapanınca iptal
   { file: 'problems.ts', hooks: ['api.blastRadiusBatch(', 'api.problemInsight(', 'api.problemAffected('] }, // v0.10.260 — inbox toplu blast-radius (MV, ≤200 servis); v0.10.562 insight
   // v0.10.581 — stack-frame künyesi. Pahalılığı ClickHouse değil DIŞ

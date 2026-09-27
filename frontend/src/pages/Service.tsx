@@ -15,6 +15,7 @@ import { ServiceOverview } from './service/Overview';
 import { ServiceLogsTab, ServiceTopologyTab } from './service/ServiceSignalTabs';
 import { ServiceInfraTab } from './service/ServiceInfraTab';
 import { ServicePodsTab } from './service/ServicePodsTab';
+import { ServiceGitOpsTab } from './service/ServiceGitOpsTab'; // v0.10.981
 import { OperationsTable } from './service/OperationsTable';
 import { ServiceClusterBreakdown } from './service/ServiceClusterBreakdown';
 import { ServiceLatencyHeatmap } from './service/ServiceLatencyHeatmap';
@@ -53,7 +54,7 @@ import { PageShell } from '@/components/ui/PageShell';
 // already lands on the same service-scoped /traces page (where the column is
 // sortable). A stale ?tab=traces link redirects there rather than 404ing to
 // the default tab.
-type ServiceTab = 'overview' | 'operations' | 'details' | 'logs' | 'topology' | 'infra' | 'pods';
+type ServiceTab = 'overview' | 'operations' | 'details' | 'logs' | 'topology' | 'infra' | 'pods' | 'gitops';
 
 // v0.10.929 (K5) — /service başlık noktası. Sağlıklı hâl nötr halka
 // (`.ov-dot.green` globals'ta artık soluk --border-strong halkası; ad tarihsel),
@@ -157,6 +158,7 @@ function ServiceDetailInner() {
     : tabParam === 'topology' ? 'topology'
     : tabParam === 'infra' ? 'infra'
     : (tabParam === 'pods' || tabParam === 'metrics') ? 'pods'
+    : tabParam === 'gitops' ? 'gitops'
     : 'overview';
   // v0.9.212 — a bookmarked ?tab=traces would otherwise land silently on
   // Overview, which reads as "my link broke". Send it where the tab used to
@@ -528,6 +530,10 @@ function ServiceDetailInner() {
                 grupları + JVM/JBoss JMX panelleri + OTel runtime çizelgeleri. */}
             {tab === 'pods' && <ServicePodsTab service={svc} range={range}
               onZoom={handleZoom} onZoomReset={handleZoomReset} />}
+            {/* v0.10.981 — GitOps: Argo uygulamaları (argocd_app_info) + servisin
+                rollout'ları (workload_rollouts). Kendi sabit pencereleri var
+                (iş yükü 24 sa, rollout 7 gün); sayfa aralığını okumaz. */}
+            {tab === 'gitops' && <ServiceGitOpsTab service={svc} />}
             {/* v0.9.63 — v0.9.62'nin sekme-tepesi RED üçlüsü OPERATÖR
                 KARARIYLA geri alındı ("gereksiz olmuş"): grafikler
                 Details'te (Performance) yaşar, Operations sekmesi
@@ -770,6 +776,7 @@ function TabStrip({ tab, onChange, opCount }: {
     { key: 'details',    label: 'Details' },
     { key: 'infra',      label: 'Infrastructure' },
     { key: 'pods',       label: 'Pods' },
+    { key: 'gitops',     label: 'GitOps' }, // v0.10.981
     { key: 'topology',   label: 'Topology' },
     { key: 'logs',       label: 'Logs' },
   ];

@@ -6,7 +6,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { keys } from './keys';
-import type { RolloutListResponse, RolloutStats, RolloutRunsResponse, RolloutDetail } from '../types';
+import type { RolloutListResponse, RolloutStats, RolloutRunsResponse, RolloutDetail, ServiceGitOpsResponse } from '../types';
 
 export interface RolloutListParams {
   from: number; to: number; // ns
@@ -57,3 +57,16 @@ export function useRolloutDetail(p: { clusterId: string; namespace: string; work
   });
 }
 
+
+/** v0.10.981 — servis GitOps sekmesi. Sekme açıkken (enabled) çeker; sunucu
+ * TTL'i 60 s (dakika ızgarası), staleTime/aralık onunla hizalı. Hidden
+ * sekmede RQ varsayılanı duraklatır. */
+export function useServiceGitOps(svc: string, enabled = true) {
+  return useQuery<ServiceGitOpsResponse>({
+    queryKey: keys.rollouts.gitops(svc),
+    queryFn: ({ signal }) => api.serviceGitOps(svc, signal),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    enabled: enabled && !!svc,
+  });
+}

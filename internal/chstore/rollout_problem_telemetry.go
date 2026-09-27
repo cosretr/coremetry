@@ -75,6 +75,55 @@ func (s *Store) RolloutRefsForService(ctx context.Context, service string, clust
 	return out, rows.Err()
 }
 
+// ServiceWorkloadsMax — v0.10.981 — ServiceWorkloads'un döndürdüğü en çok
+// iş yükü (GitOps sekmesi; RolloutsForWorkloads da 50'de keser).
+const ServiceWorkloadsMax = 50
+
+// serviceWorkloadsSQL — SAF. RolloutRefsForService'in iş yükü düzeyi
+// kardeşi: revizyona göre GRUPLAMAZ — çok revizyonlu tek iş yükü LIMIT'i
+// yiyip alfabede sonraki iş yüklerini düşürmesin (v0.10.981 inceleme).
+// LIMIT tavan+1: çağıran kesikliği bilsin.
+func serviceWorkloadsSQL() string {
+	return `SELECT cluster, k8s_namespace, workload
+		FROM workload_revision_activity_1m
+		WHERE service_name = ?
+		  AND bucket >= toDateTime64(?, 3, 'UTC') AND bucket <= toDateTime64(?, 3, 'UTC')
+		  AND workload != ''
+		GROUP BY cluster, k8s_namespace, workload
+		ORDER BY cluster, k8s_namespace, workload
+		LIMIT ` + fmt.Sprint(ServiceWorkloadsMax+1) + ` SETTINGS max_execution_time = 10`
+}
+
+// ServiceWorkloads — v0.10.981 — servisin [from, to] penceresinde span
+// ürettiği tekil (cluster span değeri, ns, workload); Revision boş.
+// capped: tavandan fazlası vardı (liste ServiceWorkloadsMax'ta kesildi).
+func (s *Store) ServiceWorkloads(ctx context.Context, service string, from, to time.Time) ([]WorkloadRevisionRef, bool, error) {
+	if service == "" {
+		return nil, false, nil
+	}
+	rows, err := s.telemetryReadConn().Query(ctx, serviceWorkloadsSQL(), service, chDateTime64Arg(from), chDateTime64Arg(to))
+	if err != nil {
+		return nil, false, fmt.Errorf("service workloads: %w", err)
+	}
+	defer rows.Close()
+	var out []WorkloadRevisionRef
+	for rows.Next() {
+		var r WorkloadRevisionRef
+		if err := rows.Scan(&r.Cluster, &r.Namespace, &r.Workload); err != nil {
+			return nil, false, err
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	capped := len(out) > ServiceWorkloadsMax
+	if capped {
+		out = out[:ServiceWorkloadsMax]
+	}
+	return out, capped, nil
+}
+
 // rolloutRefForPodSQL — SAF. service_name PK öneği + zaman sınırı; pod
 // filtresi terfi kolonu k8s_pod (promoted_attr.go). Revizyon MV ile AYNI
 // ifade (RS yoksa imaj tag'i — v0.10.211 STS/DS vekili).

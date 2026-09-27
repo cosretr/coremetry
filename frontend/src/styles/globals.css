@@ -4916,3 +4916,8 @@ tbody td.tpm-more-cell { color: var(--text2); }
   .tpp-focus, .tpp-cols, .tpp-detail-body, .tpp-chart-row { grid-template-columns: minmax(0, 1fr); }
   .tpp-rail { border-right: 0; border-bottom: 1px solid var(--divider); max-height: 240px; }
 }
+
+/* ── Servis GitOps sekmesi — v0.10.981 (pages/service/ServiceGitOpsTab.tsx).
+   Yalnız düzen: iş yükü rozetleri sarar; bölüm başlıkları SectionHead'in
+   (.dtl-sech) kendi boşluğunu kullanır, tablolar tablo standardının. ── */
+.svc-gitops__chips { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
