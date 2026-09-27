@@ -7,9 +7,11 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { TraceWaterfall } from '@/components/TraceWaterfall';
 import { computeCriticalPath } from '@/lib/criticalPath';
 import { alignTraces, type AlignedPair } from '@/lib/spanAlign';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
+import {
+  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
+  type ColumnDef, type CellTone, type DataTableStateProps,
+} from '@/components/ui/DataTable';
 import { PageShell } from '@/components/ui/PageShell';
-import type { DataTableColumn } from '@/lib/dataTable';
 import { api } from '@/lib/api';
 import { fmtNs } from '@/lib/utils';
 import type { SpanRow, TraceDetailResponse } from '@/lib/types';
@@ -112,8 +114,9 @@ function Inner() {
         <div className="controls" style={{ marginBottom: 12, alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: 'var(--text2)' }}>
             Trace A:{' '}
-            <Link to={traceHref(a)}
-                  style={{ fontFamily: 'monospace' }}>
+            {/* v0.10.973 — tablo standardı T5: tek monospace yığını `.mono`
+                (--font-mono); üst span zaten 12px, boyut aynı. */}
+            <Link to={traceHref(a)} className="mono">
               {a.slice(0, 12)}…
             </Link>
           </span>
@@ -123,7 +126,7 @@ function Inner() {
           <input value={bDraft}
                  onChange={e => setBDraft(e.target.value.trim())}
                  placeholder="paste trace ID…"
-                 style={{ width: 260, fontFamily: 'monospace', fontSize: 12 }} />
+                 style={{ width: 260, fontFamily: 'var(--font-mono)', fontSize: 12 }} />
           <Link to={`/trace/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(bDraft)}`}
                 aria-disabled={!bDraft}
                 className="sec"
@@ -222,7 +225,7 @@ function TraceSide({ label, id, q, otherQ }: {
       }}>
         <span style={{ fontSize: 14, fontWeight: 700 }}>Trace {label}</span>
         <Link to={traceHref(id)}
-              style={{ fontFamily: 'monospace', fontSize: 11 }}>
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
           {id.slice(0, 12)}…
         </Link>
         {q.isLoading && <span style={{ color: 'var(--text3)', fontSize: 12 }}>loading…</span>}
@@ -288,14 +291,23 @@ function TraceSide({ label, id, q, otherQ }: {
 // korundu; kazanılan sıralama + yeniden boyutlandırma + kalıcı genişlik.
 // Δ / % / A / B artık numeric: başlıklar da hücreler gibi sağa hizalı
 // (eskiden Δ ve % başlıkları solda, sayıları sağdaydı).
-const DIFF_COLS: DataTableColumn<AlignedPair>[] = [
-  { id: 'delta', label: 'Δ duration', sortValue: p => p.deltaNs,   numeric: true, width: 130 },
-  { id: 'pct',   label: '%',          sortValue: p => p.pctChange, numeric: true, width: 85 },
-  { id: 'path',  label: 'Path',       sortValue: p => p.pathLabel, naturalDir: 'asc', flex: true },
+//
+// v0.10.973 — tablo standardı dilim 6 (T4/T5/T9): hücre görünümü kolon
+// bayraklarında, satır içi stil yok. Δ ve % aynı tonu taşır: B yavaşsa hata
+// rengi, iyileşme nötr --text2 (v0.10.929 K5), eşit / eşleşmemiş soluk.
+// Path kimlik kolonu `mono` (11px → tablo boyu, S3); A / B süreleri ikincil
+// `muted`. Kolon kimliği ve genişlikleri AYNI: kayıtlı düzen sıfırlanmaz.
+const deltaTone = (p: AlignedPair): CellTone =>
+  p.deltaNs == null ? 'faint' : p.deltaNs > 0 ? 'err' : p.deltaNs < 0 ? 'muted' : 'faint';
+
+const DIFF_COLS: ColumnDef<AlignedPair>[] = [
+  { id: 'delta', label: 'Δ duration', sortValue: p => p.deltaNs,   numeric: true, width: 130, tone: deltaTone },
+  { id: 'pct',   label: '%',          sortValue: p => p.pctChange, numeric: true, width: 85, tone: deltaTone },
+  { id: 'path',  label: 'Path',       sortValue: p => p.pathLabel, naturalDir: 'asc', flex: true, mono: true },
   // Tek yanı olan satırlarda süre null → sortRows onları direction'dan
   // bağımsız DİBE atıyor; hücrede basılan "—" ile aynı anlam.
-  { id: 'a',     label: 'A',          sortValue: p => p.a?.duration ?? null, numeric: true, width: 110 },
-  { id: 'b',     label: 'B',          sortValue: p => p.b?.duration ?? null, numeric: true, width: 110 },
+  { id: 'a',     label: 'A',          sortValue: p => p.a?.duration ?? null, numeric: true, width: 110, tone: () => 'muted' },
+  { id: 'b',     label: 'B',          sortValue: p => p.b?.duration ?? null, numeric: true, width: 110, tone: () => 'muted' },
 ];
 
 // Sabit boş dizi — `?? []` her render'da yeni referans üretip sortedRows
@@ -379,7 +391,7 @@ function AlignedDiff({ aQ, bQ }: {
         </div>
       )}
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+        <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
@@ -387,32 +399,21 @@ function AlignedDiff({ aQ, bQ }: {
               const isOnlyA = p.a && !p.b;
               const isOnlyB = !p.a && p.b;
               const delta = p.deltaNs;
-              const tone = delta == null
-                ? 'var(--text3)'
-                : delta > 0
-                  ? 'var(--err)'
-                  : delta < 0
-                    ? 'var(--text2)' // v0.10.929 (K5) — iyileşme nötr
-                    : 'var(--text3)';
               // v0.9.236 — one row per aligned span pair across two FULL
               // traces, uncapped on either side; a 2000-span pair blocked
               // first paint. The file's own note proposed VirtualList, but
               // these rows are variable-height so content-visibility is the
               // right tool — same as TraceWaterfall on this data.
+              // v0.10.973 — `cv-row` (T6): tahmin tek ritim `--row-h`.
+              // Eksik değer (tek yanlı satır, A süresi 0 iken %) boş geçer →
+              // DataTableCell soluk "—" (T4).
               return (
-                <tr key={p.pathKey}
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 28px' }}>
-                  <td className="mono num" style={{ color: tone, whiteSpace: 'nowrap' }}>
-                    {delta == null
-                      ? '—'
-                      : `${delta >= 0 ? '+' : '−'}${fmtNs(Math.abs(delta))}`}
-                  </td>
-                  <td className="mono num" style={{ color: tone }}>
-                    {p.pctChange == null
-                      ? '—'
-                      : `${p.pctChange >= 0 ? '+' : ''}${(p.pctChange * 100).toFixed(0)}%`}
-                  </td>
-                  <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
+                <tr key={p.pathKey} className="cv-row">
+                  <DataTableCell dt={dt} col="delta" row={p}
+                    value={delta == null ? null : `${delta >= 0 ? '+' : '−'}${fmtNs(Math.abs(delta))}`} />
+                  <DataTableCell dt={dt} col="pct" row={p}
+                    value={p.pctChange == null ? null : `${p.pctChange >= 0 ? '+' : ''}${(p.pctChange * 100).toFixed(0)}%`} />
+                  <DataTableCell dt={dt} col="path" row={p} value={p.pathLabel}>
                     {p.pathLabel}
                     {isOnlyA && (
                       <span className="badge b-warn" style={{ marginLeft: 6, fontSize: 9 }}>
@@ -424,13 +425,9 @@ function AlignedDiff({ aQ, bQ }: {
                         only in B
                       </span>
                     )}
-                  </td>
-                  <td className="num mono" style={{ color: 'var(--text2)' }}>
-                    {p.a ? fmtNs(p.a.duration) : '—'}
-                  </td>
-                  <td className="num mono" style={{ color: 'var(--text2)' }}>
-                    {p.b ? fmtNs(p.b.duration) : '—'}
-                  </td>
+                  </DataTableCell>
+                  <DataTableCell dt={dt} col="a" row={p} value={p.a ? fmtNs(p.a.duration) : null} />
+                  <DataTableCell dt={dt} col="b" row={p} value={p.b ? fmtNs(p.b.duration) : null} />
                 </tr>
               );
             })}

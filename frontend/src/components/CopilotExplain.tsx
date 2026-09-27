@@ -557,8 +557,10 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
               {code.reason && (
                 <div style={{ color: 'var(--warn, var(--text3))' }}>{code.reason}</div>
               )}
+              {/* v0.10.973 — tablo standardı T5: tek monospace yığını. Eski `var(--mono, monospace)`
+                  tanımsız değişkene düşüp genel `monospace`i basıyordu (aşağıdaki kod incelemesi aynı). */}
               {code.files.map(f => (
-                <div key={`${f.path}:${f.fromLine}`} style={{ fontFamily: 'var(--mono, monospace)' }}>
+                <div key={`${f.path}:${f.fromLine}`} style={{ fontFamily: 'var(--font-mono)' }}>
                   {/* v0.10.353 (operatör) — dosya+satır DevOps'ta açılır (url sunucudan, FileURL). */}
                   {f.url
                     ? <a href={f.url} target="_blank" rel="noreferrer" title={`DevOps'ta aç: ${f.path}${f.line ? ` satır ${f.line}` : ''}`}>{f.path}:{f.fromLine}-{f.toLine} ↗</a>
@@ -626,7 +628,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
               <div>📄 Kaynak: <strong>{code.repo}</strong>{code.branch ? ` · ${code.branch}` : ''}{code.source === 'pin' ? ' · katalog pini' : code.source === 'convention' ? ' · ad konvansiyonu' : ''}</div>
               {code.reason && <div style={{ color: 'var(--warn, var(--text3))' }}>{code.reason}</div>}
               {code.files.map(f => (
-                <div key={`${f.path}:${f.fromLine}`} style={{ fontFamily: 'var(--mono, monospace)' }}>
+                <div key={`${f.path}:${f.fromLine}`} style={{ fontFamily: 'var(--font-mono)' }}>
                   {f.url
                     ? <a href={f.url} target="_blank" rel="noreferrer" title={`DevOps'ta aç: ${f.path}${f.line ? ` satır ${f.line}` : ''}`}>{f.path}:{f.fromLine}-{f.toLine} ↗</a>
                     : <>{f.path}:{f.fromLine}-{f.toLine}</>}{!!f.line && <span style={{ color: 'var(--text3)' }}> · hata satırı {f.line}</span>}

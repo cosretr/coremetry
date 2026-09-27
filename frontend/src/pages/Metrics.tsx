@@ -434,8 +434,11 @@ export default function MetricsPage() {
                           : 'The server did not report a last-seen timestamp for this metric.'}>
                         {m.lastSeenNs ? fmtAgoNs(m.lastSeenNs) : '—'}
                       </td>
+                      {/* v0.10.973 — tablo standardı T4: sayı hücresi `num` (sağa
+                          yaslı + tabular-nums); `svcs` kolonu numeric, başlığı
+                          zaten sağdaydı — hücreler başlığa hizalanır. */}
                       {showServices && (
-                        <td style={{ fontVariantNumeric: 'tabular-nums' }}
+                        <td className="num"
                           title={m.serviceCount
                             ? `${m.serviceCount.toLocaleString()} service${m.serviceCount === 1 ? '' : 's'} reported ${m.name} in the last 7 days`
                             : undefined}>

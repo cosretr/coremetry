@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Spinner, Empty } from '@/components/Spinner';
 import { DrawerSection } from '@/components/ui/Drawer';
+import { KeyValue, KeyValueRow } from '@/components/ui/KeyValue';
 import { RenderedMarkdown } from '@/components/Markdown';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
@@ -121,48 +122,50 @@ function ChartsAnswer({ data, service, fromNs, toNs, busy, onRegenerate }: {
 
       {hasSignals && (
         <DrawerSection title="İlişkili sinyaller">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <tbody>
-              {sg.deploy && (
-                <SigRow label={sg.deploy.kind === 'deploy' ? 'deploy' : 'rollout'}>
-                  {fmtClock(sg.deploy.timeUnixNs / 1e6)}
-                  {sg.deploy.versionAfter
-                    ? ` · ${sg.deploy.versionBefore || '?'} → ${sg.deploy.versionAfter}`
-                    : ''}
-                  {` · ${sg.deploy.podsReplaced} pod`}
-                </SigRow>
-              )}
-              {sg.problems?.map(p => (
-                <SigRow key={p.id} label="problem">
-                  <Link style={linkStyle} to={`/inbox?problem=${encodeURIComponent(p.id)}`}>
-                    {p.priority || p.severity.toUpperCase()} · {p.title}
-                  </Link>
-                  <span style={{ color: 'var(--text3)' }}>
-                    {' '}— {p.metric} {p.value.toFixed(2)} / eşik {p.threshold.toFixed(2)}
-                  </span>
-                </SigRow>
-              ))}
-              {sg.anomalies?.map(a => (
-                <SigRow key={a.id} label="anomali">
-                  {a.pattern}{' '}
-                  <span className="mono" style={{ color: 'var(--err)' }}>
-                    {a.peakRatio.toFixed(1)}×
-                  </span>
-                  <span style={{ color: 'var(--text3)' }}> · {a.kind} · {a.status}</span>
-                </SigRow>
-              ))}
-              {(sg.opDeltas?.length || sg.otherOps > 0) && (
-                <SigRow label="operasyon">
-                  {sg.opDeltas?.map(d => <OpDeltaRow key={d.name} d={d} />)}
-                  {sg.otherOps > 0 && (
-                    <div style={{ color: 'var(--text3)' }}>
-                      diğer {sg.otherOps} operasyon: kayda değer değişim yok
-                    </div>
-                  )}
-                </SigRow>
-              )}
-            </tbody>
-          </table>
+          {/* v0.10.973 — tablo standardı T1: etiket → değer satırları bir
+              öznitelik paneli, tablo değil → KeyValue (<dl>). Etiket sütunu
+              tek genişlik (--kv-label-w), dolgu yoğunluğu izler, değer
+              kırpılmaz sarar. Linkler ve satır koşulları aynen. */}
+          <KeyValue>
+            {sg.deploy && (
+              <KeyValueRow k={sg.deploy.kind === 'deploy' ? 'deploy' : 'rollout'} v={<>
+                {fmtClock(sg.deploy.timeUnixNs / 1e6)}
+                {sg.deploy.versionAfter
+                  ? ` · ${sg.deploy.versionBefore || '?'} → ${sg.deploy.versionAfter}`
+                  : ''}
+                {` · ${sg.deploy.podsReplaced} pod`}
+              </>} />
+            )}
+            {sg.problems?.map(p => (
+              <KeyValueRow key={p.id} k="problem" v={<>
+                <Link style={linkStyle} to={`/inbox?problem=${encodeURIComponent(p.id)}`}>
+                  {p.priority || p.severity.toUpperCase()} · {p.title}
+                </Link>
+                <span style={{ color: 'var(--text3)' }}>
+                  {' '}— {p.metric} {p.value.toFixed(2)} / eşik {p.threshold.toFixed(2)}
+                </span>
+              </>} />
+            ))}
+            {sg.anomalies?.map(a => (
+              <KeyValueRow key={a.id} k="anomali" v={<>
+                {a.pattern}{' '}
+                <span className="mono" style={{ color: 'var(--err)' }}>
+                  {a.peakRatio.toFixed(1)}×
+                </span>
+                <span style={{ color: 'var(--text3)' }}> · {a.kind} · {a.status}</span>
+              </>} />
+            ))}
+            {(sg.opDeltas?.length || sg.otherOps > 0) && (
+              <KeyValueRow k="operasyon" v={<>
+                {sg.opDeltas?.map(d => <OpDeltaRow key={d.name} d={d} />)}
+                {sg.otherOps > 0 && (
+                  <div style={{ color: 'var(--text3)' }}>
+                    diğer {sg.otherOps} operasyon: kayda değer değişim yok
+                  </div>
+                )}
+              </>} />
+            )}
+          </KeyValue>
         </DrawerSection>
       )}
 
@@ -223,21 +226,6 @@ const linkStyle: React.CSSProperties = {
   color: 'var(--accent2)', textDecoration: 'none',
 };
 
-function SigRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <tr>
-      <td style={{
-        padding: '4px 6px', borderBottom: '1px solid var(--divider)',
-        verticalAlign: 'top', color: 'var(--text2)', whiteSpace: 'nowrap', width: 86,
-      }}>{label}</td>
-      <td style={{
-        padding: '4px 6px', borderBottom: '1px solid var(--divider)',
-        verticalAlign: 'top', minWidth: 0,
-      }}>{children}</td>
-    </tr>
-  );
-}
-
 // OpDeltaRow — p95Ratio === 0 "ölçülemedi" demektir, "0×" DEĞİL
 // (backend ratioText'i ile aynı kural; sessiz sıfır "gecikme sıfıra
 // düştü" diye okunur).
@@ -251,9 +239,11 @@ function OpDeltaRow({ d }: { d: OpDelta }) {
       {d.isNew ? (
         <span className="badge b-info">yeni</span>
       ) : (
+        // v0.10.973 — tek boşluk: KeyValue değeri `pre-wrap` (boşluk
+        // korunur); eski tablo hücresi (nowrap) çift boşluğu teke indiriyordu.
         <span className="mono" style={{ fontSize: 11, color: 'var(--err)' }}>
           {d.p95Ratio > 0 ? `p95 ${d.p95Ratio.toFixed(2)}×` : 'p95 ölçülemedi'}
-          {d.errDeltaPp > 0 ? `  err +${d.errDeltaPp.toFixed(2)}pp` : ''}
+          {d.errDeltaPp > 0 ? ` err +${d.errDeltaPp.toFixed(2)}pp` : ''}
         </span>
       )}
       <span style={{ fontSize: 11, color: 'var(--text3)' }}>{d.calls} çağrı</span>

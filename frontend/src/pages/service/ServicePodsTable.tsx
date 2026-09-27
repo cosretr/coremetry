@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { DisclosureButton } from '@/components/ui';
 import { PodJmxInline } from './PodJmxInline';
 import { rowActivation } from '@/lib/a11y';
-import { fmtCores, fmtBps, podPhaseBadge, restartColor } from '@/pages/clusters/thresholds';
+import { fmtCores, fmtBps, podPhaseBadge, restartColor, restartToneClass } from '@/pages/clusters/thresholds';
 import { fmtBytes, fmtNum, fmtDateTime } from '@/lib/utils';
 import { termReasonTone } from '@/lib/podTerm';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
@@ -57,10 +57,10 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
   /**
    * v0.10.967 — tablo standardı T12 (tarif P6, VirtualTable emsali): satır
    * yokken tablonun İÇİNDE çizilen durum; başlık bu dosyada olduğu için durum
-   * satırı da burada. Verilmezse `{ kind: 'empty' }`. DİKKAT: ServicePodsTab
-   * bugün `state` VERMİYOR ve tabloyu yalnız satır varken bağlıyor
-   * (Spinner / Empty hâlâ dışarıda) — sekme `state` geçirip tabloyu her
-   * durumda bağlayınca göç gerçekleşir.
+   * satırı da burada. Verilmezse `{ kind: 'empty' }`.
+   * v0.10.973 — göç gerçek: ServicePodsTab tabloyu her durumda bağlıyor ve
+   * yükleniyor / hata / boş zincirini (eski Spinner / Empty sırası) `state`le
+   * veriyor. Satırlar kazanır: durum yalnız birleşik küme boşken.
    */
   state?: Omit<DataTableStateProps<MergedPodRow>, 'dt' | 'leading' | 'trailing'>;
 }) {
@@ -181,9 +181,10 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                         <td>{r.statusKnown && r.phase
                           ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
                           : <span className="field-hint" title="Thanos'ta bu pod için seri yok (ölü ya da KSM dışı) — durum bilinmiyor">—</span>}</td>
-                        <td className="num"
-                          title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}
-                          style={{ color: r.restartsUnknown ? 'var(--text3)' : restartColor(r.restarts ?? 0) }}>
+                        {/* v0.10.973 — tablo standardı T5/T9: ton satır içi renk yerine sınıf
+                            (restartColor ile aynı eşik ve token; bilinmeyen = soluk). */}
+                        <td className={`num ${r.restartsUnknown ? 'cell-faint' : restartToneClass(r.restarts ?? 0)}`}
+                          title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}>
                           {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
                           {r.lastTermReason && (
                             <span className={`badge b-${termReasonTone(r.lastTermReason)} pods-term`}
@@ -220,6 +221,8 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
                       </tr>
                       {open && r.thanos && (
                         <tr>
+                          {/* v0.10.973 — satır içi stil bilinçli: kenardan kenara (dolgusuz, --bg)
+                              JMX paneli için sınıf yok; row-detail dolgulu ve --bg2. */}
                           <td colSpan={colCount} style={{ padding: 0, background: 'var(--bg)' }}>
                             {/* ns = pod'un KENDİ namespace'i; çok-namespace serviste effNs yanlış olurdu. */}
                             <PodJmxInline cluster={r.cluster} ns={r.namespace || effNs} deploy={effDeploy}

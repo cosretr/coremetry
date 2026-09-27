@@ -17,6 +17,17 @@ export function restartColor(n: number): string {
   return 'var(--text3)';
 }
 
+// restartToneClass — v0.10.973 (tablo standardı T5/T9): restartColor'ın
+// tablo hücresi karşılığı. Eşikler ve tonlar aynı (>8 err, >2 warn, else
+// soluk); hücre satır içi `color` yerine sınıf alır (.cell-err / .cell-warn /
+// .cell-faint, globals.css). Sınıf adları tam literal: tableCellTone kapısı
+// `cell-${tone}` biçimini okuyamaz. restartColor kalır (Clusters, grup başlığı).
+export function restartToneClass(n: number): 'cell-err' | 'cell-warn' | 'cell-faint' {
+  if (n > 8) return 'cell-err';
+  if (n > 2) return 'cell-warn';
+  return 'cell-faint';
+}
+
 // safePct — payda 0/absent olduğunda güvenli yüzde (0..100), veya
 // null (bilinmiyor → çağıran gauge/bar'ı gizler).
 export function safePct(used?: number, capacity?: number): number | null {

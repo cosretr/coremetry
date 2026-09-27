@@ -40,6 +40,7 @@ import { ServiceRuntimeBadge } from '@/components/ServiceRuntimeBadge';
 import { keys } from '@/lib/queries/keys';
 import type { Service, Problem, OperationSummary, SLORow, TimeRange } from '@/lib/types';
 import { QueryError } from '@/components/QueryError';
+import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { PageShell } from '@/components/ui/PageShell';
 
 // v0.9.257 — SINCE_MAP deleted: it had no remaining reader here, and the
@@ -383,6 +384,12 @@ function ServiceDetailInner() {
   // renderer, useDataTable sort, sparkline) is unchanged — only `rows`.
   const displayedOps = normalized ? (normOpsQ.data ?? []) : operations;
   const opsLoading = normalized && normOpsQ.isLoading;
+  // v0.10.973 — tablo standardı T12 (tarif P6): Overview'un Operations
+  // kartının durumu. Bundle hatası da operations=[] bırakır; boşu hatadan
+  // yalnız burası ayırır. Yükleniyor yok (gövde ilk yüklemede bağlanmaz),
+  // yeniden deneme yok (üstteki QueryError'ın ↻'si sayfanın tek denemesi).
+  const opsState: Omit<DataTableStateProps<OperationSummary>, 'dt'> =
+    bundleErr ? { kind: 'error' } : { kind: 'empty', message: 'Bu pencerede operasyon yok' };
 
   // v0.10.929 (K5) — başlık sağlık noktası: sınıf + metin alternatifi tek
   // eşikten (>5 kritik, >1 uyarı); ikisi ayrı ayrı hesaplanıp ayrışmasın.
@@ -510,7 +517,7 @@ function ServiceDetailInner() {
 
             {tab === 'overview' && (
               <ServiceOverview service={svc} range={range} windowNs={rangeNs} info={info} operations={operations}
-                endpoints={endpoints} onZoom={handleZoom} onZoomReset={handleZoomReset} env={env} />
+                opsState={opsState} endpoints={endpoints} onZoom={handleZoom} onZoomReset={handleZoomReset} env={env} />
             )}
             {tab === 'logs' && <ServiceLogsTab service={svc} range={range} windowNs={rangeNs}
               onZoom={handleZoom} onZoomReset={handleZoomReset} />}

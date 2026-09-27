@@ -2,10 +2,9 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useDataTable } from '@/components/ui/DataTable';
+import { useDataTable, type DataTableStateProps } from '@/components/ui/DataTable';
 import { IconButton, SectionHead, Row, SegmentedControl } from '@/components/ui';
 import { Badge } from '@/components/ui/Badge';
-import { Spinner, Empty } from '@/components/Spinner';
 import { RuntimeCharts, familyOf } from './RuntimeCharts';
 import { HeapBaselineCard } from './HeapBaselineCard'; // v0.10.887 — paritesi #4 dilim 1
 import { PodResourceCharts } from './PodResourceCharts';
@@ -142,6 +141,41 @@ export function ServicePodsTab({ service, range, onZoom, onZoomReset }: {
   const refetchAll = () => { th.refetchPods(); if (entityEnabled) void entityQ.refetch(); };
   const chain = entityQ.data?.chain ?? [];
 
+  // v0.10.973 — tablo standardı T12 (tarif P6): Spinner / "Pod metrikleri
+  // okunamadı" / "No pods matched" kutuları tablonun İÇİNE; tablo ve başlığı
+  // her durumda durur. Zincir eskisinin aynısı (aynı sıra, aynı koşullar);
+  // durum satırı yalnız birleşik küme (rows) boşken çizilir, yani Thanos
+  // eşleşmemesi entity satırlarını yine gizleyemez. Tanı cümlesi P-1 `detail`.
+  // v0.10.973 — tablo standardı T12 (tarif §3 sıra 3): kaynak süzgeci (?psrc)
+  // kümeyi boşalttıysa "eşleşme yok" (filtrelemeyle AYNI yüklem: source !==
+  // 'all'), süzgeç değeri mesajda; eski "hepsi"ni dene ipucu artık sayfanın
+  // kendi temizleme eylemi — "Filtreleri temizle" = SegmentedControl'ün
+  // "hepsi"si (setMode, replace:true). Tanı cümlesi iki türde de aynen.
+  // returnFocusRef yok: SegmentedControl giriş ref'i vermiyor → odak tablonun
+  // kabına döner.
+  const podsDiag = <>
+    {entityEnabled
+      ? <>Entity katmanı bu pencerede pod görmedi (entity_seen_5m boş — span&#39;lerde k8s.pod.name yok ya da pencere boş).{' '}</>
+      : <>Entity katmanı kapalı.{' '}</>}
+    {th.noClusters
+      ? <>Thanos cluster&#39;ı tanımlı değil (Settings → Remote clusters).</>
+      : <>Thanos: {th.ns && th.deploy ? `k8s.namespace=${th.ns} · ${th.deploy}` : 'k8s metadata eşlemesi'}
+        {' '}ve pod adı kalıbı (<span className="mono">{servicePodRegex(service, th.deploy)}</span>) {th.matched.length} cluster&#39;da denendi — eşleşme yok.</>}
+  </>;
+  const podsState: Omit<DataTableStateProps<MergedPodRow>, 'dt' | 'leading' | 'trailing'> =
+    pending ? { kind: 'loading' }
+    : th.podErrors.length > 0 && !entityEnabled ? {
+      kind: 'error',
+      message: `Pod metrikleri okunamadı: ${th.podErrors.join(', ')} cluster${th.podErrors.length > 1 ? "'ları" : "'ı"} sorguya yanıt vermedi — liste bu yüzden boş olabilir, workload yok demek değil.`,
+    }
+    : source !== 'all' ? {
+      kind: 'no-match',
+      message: `Kaynak süzgeci "${source}" ile eşleşen pod yok`,
+      detail: podsDiag,
+      onClearFilters: () => setMode('psrc', 'all', 'all'),
+    }
+    : { kind: 'empty', message: 'Eşleşen pod yok', detail: podsDiag };
+
   return (
     <>
       <SectionHead id="pods-sec" title="Pods"
@@ -194,28 +228,9 @@ export function ServicePodsTab({ service, range, onZoom, onZoomReset }: {
         </>} />
       {chain.length > 0 && <div style={{ marginBottom: 8 }}><ChainStrip chain={chain} range={range} nameOf={nameOf} /></div>}
 
-      {pending ? <Spinner /> : rows.length === 0 ? (
-        th.podErrors.length > 0 && !entityEnabled ? (
-          <Empty icon="⚠" title="Pod metrikleri okunamadı">
-            {th.podErrors.join(', ')} cluster{th.podErrors.length > 1 ? "'ları" : "'ı"} sorguya
-            yanıt vermedi — liste bu yüzden boş olabilir, workload yok demek değil.
-          </Empty>
-        ) : (
-          <Empty icon="▦" title="No pods matched">
-            {entityEnabled
-              ? <>Entity katmanı bu pencerede pod görmedi (entity_seen_5m boş — span&#39;lerde k8s.pod.name yok ya da pencere boş).{' '}</>
-              : <>Entity katmanı kapalı.{' '}</>}
-            {th.noClusters
-              ? <>Thanos cluster&#39;ı tanımlı değil (Settings → Remote clusters).</>
-              : <>Thanos: {th.ns && th.deploy ? `k8s.namespace=${th.ns} · ${th.deploy}` : 'k8s metadata eşlemesi'}
-                {' '}ve pod adı kalıbı (<span className="mono">{servicePodRegex(service, th.deploy)}</span>) {th.matched.length} cluster&#39;da denendi — eşleşme yok.</>}
-            {source !== 'all' && <div style={{ marginTop: 6 }}>Kaynak süzgeci &quot;{source}&quot; — &quot;hepsi&quot;ni dene.</div>}
-          </Empty>
-        )
-      ) : (
-        <ServicePodsTable dt={dt} view={view} service={service} range={range}
-          effNs={th.effNs} effDeploy={th.effDeploy} cFrom={th.cFrom} cTo={th.cTo} rangeParam={rangeParam} />
-      )}
+      <ServicePodsTable dt={dt} view={view} service={service} range={range}
+        effNs={th.effNs} effDeploy={th.effDeploy} cFrom={th.cFrom} cTo={th.cTo} rangeParam={rangeParam}
+        state={podsState} />
 
       {/* OTel dil-runtime (heap/GC/threads by pod) — servis-scoped, her zaman;
           Thanos'tan tamamen bağımsız. */}

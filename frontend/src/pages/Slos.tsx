@@ -540,7 +540,7 @@ function BurnExplainButton({ sloId }: { sloId: string }) {
               <div style={{
                 display: 'flex', gap: 12, fontSize: 11,
                 color: 'var(--text3)', marginBottom: 10,
-                fontFamily: 'ui-monospace, monospace',
+                fontFamily: 'var(--font-mono)', // v0.10.973 — tablo standardı T5: tek monospace yığını; boy aynı (11px)
               }}>
                 {/* v0.10.794 — pencere etiketi sunucudan (evaluator alarmıyla aynı çift);
                     öncesi 5 dk / 1 sa ölçülüp etiketsiz basılıyordu, problemde 1 sa / 6 sa. */}

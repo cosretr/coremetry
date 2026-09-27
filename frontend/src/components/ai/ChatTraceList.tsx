@@ -22,8 +22,9 @@ export function ChatTraceList({ tl }: { tl: ChatTraceListPayload }) {
               <td className="mono">{tsShort(t.startTime)}</td>
               <td>{t.serviceName}</td>
               <td><Link to={traceHref(t.traceId)} title={t.traceId}>{t.rootName || t.traceId}</Link></td>
-              <td className="num mono">{t.durationMs >= 1000 ? (t.durationMs / 1000).toFixed(2) + ' s' : t.durationMs.toFixed(0) + ' ms'}</td>
-              <td className="num mono">{t.spanCount}</td>
+              {/* v0.10.973 — tablo standardı T4: sayı arayüz fontunda (`td.num.mono` zaten inherit basıyordu; görünüm aynı). */}
+              <td className="num">{t.durationMs >= 1000 ? (t.durationMs / 1000).toFixed(2) + ' s' : t.durationMs.toFixed(0) + ' ms'}</td>
+              <td className="num">{t.spanCount}</td>
               {/* v0.10.929 (K5) — sağlıklı trace nötr: yalnız ERROR rozeti; OK ekran okuyucuya (Traces emsali). */}
               <td>{t.hasError ? <span className="badge b-err">ERROR</span> : <span className="sr-only">OK</span>}</td>
             </tr>

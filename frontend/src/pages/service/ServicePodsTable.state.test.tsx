@@ -6,8 +6,8 @@
 // kolonlardan, başlık yerinde; verilmezse varsayılan "empty"; satır varken
 // durum satırı yok. Hata türü `detail` (CTA / bağlantı) ile aynı hücrede.
 //
-// NOT: ServicePodsTab bugün `state` VERMİYOR ve tabloyu yalnız satır varken
-// bağlıyor — sekme göçü ayrı iş (tableUnityRatchet notu).
+// v0.10.973 — ServicePodsTab artık `state` veriyor ve tabloyu her durumda
+// bağlıyor; sekme tarafı ServicePodsTab.tableStates.test.tsx'te çivili.
 import { describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';

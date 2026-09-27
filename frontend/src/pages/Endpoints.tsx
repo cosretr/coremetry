@@ -767,13 +767,12 @@ export default function EndpointsPage() {
                       // their own affordances.
                       if ((e.target as HTMLElement).closest('a, button')) return;
                       openEndpointPage(r);
-                    }}
-                    style={{
-                      // Subtle err tint on broken endpoints (prototype cue).
-                      background: r.errorRate >= 5
-                        ? 'color-mix(in srgb, var(--err) 7%, transparent)'
-                        : undefined,
                     }}>
+                    {/* v0.10.973 — tablo standardı T9 ("renk yalnız sapan değerde,
+                        dolgu yok"): hata oranı ≥%5 satırın kırmızı zemini (ve
+                        sabit Traces hücresindeki opak ikizi) kalktı. Sapmayı
+                        Error % rozeti (`errCls`, aynı eşik) işaretliyor; zemin
+                        sabit sol kolonlara zaten hiç ulaşmıyordu (opak bg1). */}
                     <td style={{ width: 22, textAlign: 'center' }}>
                       {/* v0.5.417 — dependency strip expander.
                           Click ▶ → fetches the service's
@@ -885,17 +884,7 @@ export default function EndpointsPage() {
                         return <span style={{ color: tone }}>{sp < 10 ? sp.toFixed(1) : Math.round(sp)}×</span>;
                       })()}
                     </td>}
-                    {visibleCols.has('traces') && <td className="sticky-right"
-                        style={{
-                          // Sticky cells float over scrolled content —
-                          // the err-row tint must be flattened over the
-                          // opaque base here (the tr's inline tint is
-                          // color-mix over TRANSPARENT and would let
-                          // scrolled columns bleed through).
-                          background: r.errorRate >= 5
-                            ? 'color-mix(in srgb, var(--err) 7%, var(--bg0))'
-                            : undefined,
-                        }}>
+                    {visibleCols.has('traces') && <td className="sticky-right">
                       {/* /traces, bu endpoint'e kapsamlı.
                           ⚠ Bu şerh v0.9.1372'ye kadar "search=path …
                           rootOnly=false" diyordu ve o sürümde YANLIŞ

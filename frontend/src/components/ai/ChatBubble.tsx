@@ -262,7 +262,7 @@ function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
           const ready = !!d && d.preview !== undefined;
           const isOpen = openIdx === i;
           const chipStyle: React.CSSProperties = {
-            fontSize: 10, fontFamily: 'ui-monospace, monospace',
+            fontSize: 10, fontFamily: 'var(--font-mono)', // v0.10.973 — tablo standardı T5: tek monospace yığını
             padding: '1px 6px', borderRadius: 8,
             background: isOpen ? 'var(--accent-bg)' : 'var(--bg3)',
             color: isOpen ? 'var(--accent2)' : 'var(--text3)',
@@ -440,7 +440,8 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
                       <td className="cm-steps-res" title={err?.detail ?? d.preview}>
                         {settled ? first : noEv ? 'kanıt yok (boş sonuç)' : 'sürüyor…'}
                       </td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
+                      {/* v0.10.973 — tablo standardı T5: satır içi `whiteSpace: nowrap` silindi; `tbody td` zaten tek satır (T11). */}
+                      <td>
                         {!settled ? <span className="badge b-gray">{noEv ? 'kanıt yok' : '…'}</span>
                           : d.skipped ? <span className="badge b-gray" title="Sunucu bu çağrıyı yürütmedi (süre ölçüm değildir)">yürütülmedi</span>
                           : d.ok === false ? <span className="badge b-err" title={`${err ? toolErrorLabel(err.cls) : 'hata'}${err?.retryable ? ' · tekrar denenebilir' : ''}`}>⚠ {err?.cls === 'unauthorized' ? 'yetki yok' : 'hata'}{err?.retryable ? ' · tekrar' : ''}</span>

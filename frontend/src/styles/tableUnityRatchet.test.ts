@@ -21,14 +21,24 @@ const SRC = resolve(__dirname, '..');
 const PRIMITIVE = join('components', 'ui', 'DataTable') + '/';
 
 const CEILINGS = {
-  /** T1 — `<table>` sayısı eksi `<DataTableHead>` sayısı (dosya başına). */
-  rawTable: 48, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 53 → 48
-  /** T5 — `<td style={…}>`: hücre görünümü sınıfa/sütun tanımına taşınır. */
-  tdStyle: 82, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 116 → 82
+  /** T1 — `<table>` sayısı eksi `<DataTableHead>` sayısı (dosya başına).
+   *  Tür ayırmaz: T1'in gerekçeli statik tablosu da sayılır.
+   *  v0.10.973 — kalan 47: 16'sı başka iş akışlarının dosyalarında
+   *  (AdminClickhouse 6, settings/ 9, trace/KioskSpanPanel 1); muaf sohbet
+   *  (ChatBubble 3, ChatTraceList, EvidenceCard) ve lejant (PanelLegend,
+   *  StatsLegend, TimeSeriesPanel) tabloları 8. */
+  rawTable: 47, // v0.10.973 — dilim 6: 48 → 47
+  /** T5 — `<td style={…}>`: hücre görünümü sınıfa/sütun tanımına taşınır.
+   *  v0.10.973 — kalan 69: 16'sı başka iş akışlarının dosyalarında
+   *  (AdminClickhouse 9, settings/LdapUserPicker 4, settings/LdapTab 3);
+   *  lejant tabloları 17 (StatsLegend 12, TimeSeriesPanel 5); dilim 6'da
+   *  gerekçeyle kalan 7 (Endpoints 4, Metrics 1 dinamik opaklık,
+   *  SlowQueries 1 maxWidth, ServicePodsTable 1 JMX düz hücresi). */
+  tdStyle: 69, // v0.10.973 — dilim 6: 82 → 69
   /** T5 — satır içi hücre yazı boyu: yoğunluk ayarı ulaşamıyor. */
-  tdFontSize: 1, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 22 → 1
+  tdFontSize: 0, // v0.10.973 — dilim 6: 1 → 0
   /** T4 — sayı hücresinde monospace (`num mono` / `mono num`). */
-  numMono: 8, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 26 → 8
+  numMono: 0, // v0.10.973 — dilim 6: 8 → 0
   /** T2 — satır içi `<tr … cursor:` (imleç yalnız tıklanabilir satırda, CSS'ten).
    *  v0.10.933 (tablo standardı T2) — sayım artık süslü parantez farkında
    *  etiket yürüyücüsüyle (styles/jsxTags.ts): eski `<tr\b[^>]*cursor:`
@@ -38,22 +48,30 @@ const CEILINGS = {
    *  traces/ShapesView) kaçırmıştı; onlar da silindi (rowActivation yalnız
    *  açılan satırda). Yürüyücüyle ölçülen gerçek sayım: 0. */
   trCursor: 0,
-  /** T6 — elle `containIntrinsicSize` (tek `--row-h` ritmi). */
-  containIntrinsicSize: 4, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 11 → 4
+  /** T6 — elle `containIntrinsicSize` (tek `--row-h` ritmi).
+   *  v0.10.973 — kalan 3: ai/ChatBubble (muaf sohbet tablosu),
+   *  LogFieldsPanel, TraceWaterfall. */
+  containIntrinsicSize: 3, // v0.10.973 — dilim 6: 4 → 3
   /** T10 — ölü `.is-fit` (v0.9.1078'den beri masaüstü kuralı yok).
    *  v0.10.933 (dilim 1): 68 → 66 — LogPatternsPanel'in iki iç kaydırmalı kabı `is-scroll`. */
   isFit: 0, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 3 → 0
   /** T10 — satır içi `tableLayout` (tek tablo sınıfı / primitif). */
-  tableLayout: 1, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 8 → 1
+  tableLayout: 0, // v0.10.973 — dilim 6: 1 → 0
   /** T3 — sahte sıralanabilir sütun (`sortValue: () => 0`). */
   fakeSortable: 0, // v0.10.945 — dilim 3 dalga 3 (trace/log/problem/ops sayfaları): 10 → 0
-  /** T7 — talimat ipuçlu satır (`<tr title=…>`). */
+  /** T7 — talimat ipuçlu satır (`<tr title=…>`).
+   *  v0.10.973 — kalan 2: lejant satırları (chart/StatsLegend,
+   *  viz/TimeSeriesPanel); dilim 6'da değişmedi. */
   trTitle: 2, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 5 → 2
   /** T5 — satır içi monospace yığını (`fontFamily: '…monospace…'` /
    *  `font: '…monospace…'` dizgisi). v0.10.933 (tablo standardı T5) — TEK
    *  yığın `--font-mono` (globals.css); ikinci yazım yığını çoğaltır, tema /
-   *  yoğunluk ayarı ona ulaşamaz. Taban v0.10.933 ölçümü (263); göçü dilim 3. */
-  inlineMonoStack: 19, // v0.10.947 — dilim 3 dalga 4 (AI gözlem, metrik/dashboard, grafik, servis/topoloji, uyarılar): 92 → 19
+   *  yoğunluk ayarı ona ulaşamaz. Taban v0.10.933 ölçümü (263); göçü dilim 3.
+   *  v0.10.973 — kalan 9: Trace.tsx 5 (başka iş akışının dosyası);
+   *  charts/TimeChart 2 + service/charts/OverviewChart 2 — uPlot eksen
+   *  `font`u bir canvas dizgisi, `var(--font-mono)`yu çözmez; göçü
+   *  çözümlenmiş bir belirteç ister. */
+  inlineMonoStack: 9, // v0.10.973 — dilim 6: 19 → 9
   /** T12 / S6 — durumu tablonun İÇİNDE olmayan DataTable tablosu. Dosya
    *  başına `max(0, <DataTableHead> − dt'li <DataTableState>)` + `state=`
    *  almayan `<VirtualTable>` (`dtNoStateOf`). Her DataTable tablosu tam bir
@@ -69,19 +87,18 @@ const CEILINGS = {
    *  SAYILMAZ: aynı dosyadaki durumsuz bir DataTableHead'i örtmesin
    *  (Rollouts, PodContextTables statik + dt'li tabloyu bir arada tutuyor).
    *  Ölçüm iki sayımla da 17 — bugün örtülen tablo yok.
-   *  v0.10.967 — DİKKAT: service/ServicePodsTable "benimsedi" sayılır ama
-   *  göç GERÇEK DEĞİL — ServicePodsTab `state=` vermiyor, tabloyu yalnız
-   *  satır varken bağlıyor, Spinner / Empty hâlâ dışarıda. Durumu dışarıda
-   *  kalan gerçek tablo sayısı 18. Tavan yine ölçümde (17): +1 pay, yeni bir
-   *  durumsuz tabloyu kapıdan geçirirdi. ServicePodsTab `state=` geçince
-   *  sayım değişmez; bu not ve aşağıdaki çivi silinir (çivi bunu zorlar).
-   *  Kalan 17: AdminClickhouse 8 (başka iş akışının dosyası); kendini
+   *  v0.10.973 — dilim 6: service/ServicePodsTable göçü artık gerçek —
+   *  ServicePodsTab `state={podsState}` veriyor, tablo her durumda bağlı
+   *  (çivi: service/ServicePodsTab.tableStates.test.tsx). v0.10.967'nin
+   *  "gerçek değil" notu ve onu zorlayan dürüstlük çivisi silindi; sayım
+   *  bundan değişmedi. OverviewTables OpsCard Service → Overview → OpsCard
+   *  `state` zinciriyle göçtü: 17 → 16. Ölçüm iki sayımla da 16.
+   *  Kalan 16: AdminClickhouse 8 (başka iş akışının dosyası); kendini
    *  gizleyen / boş olamayan 8 (AnomalyWindowTable, DetailDrawer top ops,
    *  PostgresPanel, AdminCardinality FinOps, adminstats top keys,
-   *  EntityDetail pods × services, TopEndpointsCard, AiProfilesPanel);
-   *  OverviewTables OpsCard 1 (boşu bundle hatasından ayıramıyor —
-   *  Service → Overview → OpsCard `state` zinciri bekliyor). */
-  dtNoState: 17, // v0.10.967 — dilim 5: 41 → 17
+   *  EntityDetail pods × services, TopEndpointsCard, settings/
+   *  AiProfilesPanel — sonuncusu da başka iş akışının dosyası). */
+  dtNoState: 16, // v0.10.973 — dilim 6: 17 → 16
 } as const;
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -185,20 +202,5 @@ describe('dtNoState — statik `<DataTableState colSpan>` dt\'li tabloyu örtmez
   it('dt\'li durum başlığı karşılar; detail içindeki colSpan etiketin değil', () => {
     expect(dtNoStateOf(`${HEAD}<DataTableState dt={dt} {...tableState} />`)).toBe(0);
     expect(dtNoStateOf(`${HEAD}<DataTableState dt={dt} kind="empty" detail={<td colSpan={2} />} />`)).toBe(0);
-  });
-});
-
-// v0.10.967 (dilim 5) — CEILINGS.dtNoState notunun doğruluğu: ServicePodsTable
-// durum satırını basıyor ama sekme `state=` vermiyor, sayaçtaki -1 gerçek
-// değil. Sekme `state=` geçtiğinde bu çivi kırmızı olur: göç gerçekleşmiştir,
-// not ve bu blok silinir (sayım zaten 0; tavan değişmez).
-describe('dtNoState — ServicePodsTable kredisi dürüst (v0.10.967)', () => {
-  it('ServicePodsTab <ServicePodsTable>e state= vermiyor — veriyorsa not silinmeli', () => {
-    const tab = stripTsComments(readFileSync(join(SRC, 'pages', 'service', 'ServicePodsTab.tsx'), 'utf8'));
-    const tags = jsxOpenTags(tab, 'ServicePodsTable');
-    expect(tags.length).toBeGreaterThan(0);
-    expect(tags.some(t => hasTopLevelAttr(t.tag, 'state')),
-      'ServicePodsTab artık state= veriyor: göç gerçek — CEILINGS.dtNoState notunu ve bu çiviyi sil')
-      .toBe(false);
   });
 });

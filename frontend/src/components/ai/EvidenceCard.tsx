@@ -28,8 +28,9 @@ export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
             {rows.map(r => (
               <tr key={r.key}>
                 <td>{r.label}</td>
-                <td className="num mono">{r.now}</td>
-                <td className="num mono">{r.base}</td>
+                {/* v0.10.973 — tablo standardı T4: sayı arayüz fontunda (`td.num.mono` zaten inherit basıyordu; görünüm aynı). */}
+                <td className="num">{r.now}</td>
+                <td className="num">{r.base}</td>
                 {/* v0.10.929 (K5) — ton satırın yön bayrağından: istek/sn artışı kırmızı değil. */}
                 <td className={evidenceDeltaClass(r)}>{r.delta.text}</td>
               </tr>

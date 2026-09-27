@@ -604,7 +604,8 @@ export function CommandPalette() {
               <span style={{
                 fontSize: 10, padding: '2px 6px', borderRadius: 3,
                 background: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent2)',
-                fontFamily: 'ui-monospace, monospace', fontWeight: 600,
+                // v0.10.973 — tablo standardı T5: tek monospace yığını (--font-mono); boy aynı (10px).
+                fontFamily: 'var(--font-mono)', fontWeight: 600,
               }}>action</span>
               <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>
                 {activeAction.label}
@@ -777,7 +778,7 @@ export function CommandPalette() {
                 fontSize: 10, padding: '2px 6px', borderRadius: 3,
                 background: r.kind === 'action' ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'var(--bg3)',
                 color: r.kind === 'action' ? 'var(--accent2)' : 'var(--text2)',
-                fontFamily: 'ui-monospace, monospace',
+                fontFamily: 'var(--font-mono)', // v0.10.973 — T5: tek yığın
                 minWidth: 56, textAlign: 'center',
                 fontWeight: r.kind === 'action' ? 600 : 400,
               }}>

@@ -41,6 +41,7 @@ import {
   topRoutesByArea, metricUnitToGrafana, ROUTE_TOP_N, metricAvgToMs, ROUTE_UNLABELLED,
 } from './charts/routeSeries';
 import { OpsCard, DbCard } from './OverviewTables';
+import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { TopEndpointsCard } from './TopEndpointsCard';
 import { MetricPanel } from '@/components/MetricPanel';
 import { AIAnalysisPanel } from '@/components/AIAnalysisPanel';
@@ -81,6 +82,10 @@ interface Props {
   range: TimeRange;
   info: Service | null;
   operations: OperationSummary[];
+  // v0.10.973 — tablo standardı T12 (tarif P6): Operations kartının durum
+  // satırı. Service.tsx hesaplar (bundle hatası → hata, yoksa boş); kart
+  // operasyonları prop olarak aldığı için ikisini kendisi ayıramaz.
+  opsState?: Omit<DataTableStateProps<OperationSummary>, 'dt'>;
   // v0.9.377 (redesign D1) — bundle'ın giriş-span endpoint slotu.
   endpoints?: import('@/lib/types').EndpointRow[];
   // v0.8.534 — drag-zoom on any Overview chart → parent maps to the global
@@ -188,7 +193,7 @@ function KpiTile({ lab, val, unit, accent, spark, delta, goodWhenUp, note, sub }
 
 // ChartCard v0.9.87'de charts/ChartCard.tsx'e taşındı (Runtime paneli de kullanır).
 
-export function ServiceOverview({ service, range, windowNs, info, operations, endpoints = [], onZoom, onZoomReset, env = '' }: Props) {
+export function ServiceOverview({ service, range, windowNs, info, operations, opsState, endpoints = [], onZoom, onZoomReset, env = '' }: Props) {
   // v0.8.480 — üst sayfa pencereyi çözdüyse AYNISI kullanılır: RED
   // prefetch'in RQ anahtarı ancak böyle tutar (timeRangeToNs göreli
   // aralıkta Date.now()'a bağlı, iki ayrı hesap anahtar kaçırır).
@@ -1179,7 +1184,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, en
       <div className="ov-grid ov-cols-2 ov-mb">
         {endpoints.length > 0
           ? <TopEndpointsCard service={service} range={range} endpoints={endpoints} />
-          : <OpsCard service={service} range={range} operations={operations} />}
+          : <OpsCard service={service} range={range} operations={operations} state={opsState} />}
         <DbCard service={service} range={range} from={from} to={to} />
       </div>
 

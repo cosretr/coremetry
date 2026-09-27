@@ -296,10 +296,11 @@ export default function SlowQueriesPage() {
                     </tr>
                     {isExpanded && (
                       <tr key={key + ':sample'}>
-                        {/* 12 = 1 (chevron) + 11 kolon (v0.10.652 Traces). */}
-                        <td colSpan={12} style={{
-                          background: 'var(--bg2)', padding: 12,
-                        }}>
+                        {/* 12 = 1 (chevron) + 11 kolon (v0.10.652 Traces).
+                            v0.10.973 — tablo standardı T6: genişletilmiş detay
+                            hücresi `row-detail` (bg2 aynı; 12px 16px dolgu, üst
+                            ayraç, satır sarar) — satır içi bg2 + 12px yerine. */}
+                        <td colSpan={12} className="row-detail">
                           <div style={{
                             fontSize: 10, color: 'var(--text3)',
                             textTransform: 'uppercase', letterSpacing: 0.5,

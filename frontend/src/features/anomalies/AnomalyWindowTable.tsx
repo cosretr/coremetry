@@ -42,6 +42,8 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
   for (const s of silences ?? []) if (s.active) byFp.set(s.fingerprint, s);
   const rows: Row[] = events.map(e => ({ e, silence: byFp.get(e.id) ?? byFp.get(silenceKey(e)) }));
   const dt = useDataTable<Row>({ storageKey: 'svc-anomaly-window', columns: COLS, rows, initialSort: { id: 'started', dir: 'desc' } });
+  // v0.10.973 — tablo standardı T12 muafı (tarif §2 bilinçli kendini gizleme): durum satırı
+  // yok, çünkü tablo boş olamaz — Overview onu yalnız pencerede anomali varken çizer (operatör kararı).
   if (rows.length === 0) return null;
   return (
     <>

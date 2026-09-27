@@ -49,8 +49,13 @@ export function overviewOpHref(service: string, range: TimeRange, op: string): s
   return operationTracesHref({ window: range, operation: op, service });
 }
 
-export function OpsCard({ service, range, operations }: {
+export function OpsCard({ service, range, operations, state }: {
   service: string; range: TimeRange; operations: OperationSummary[];
+  /** v0.10.973 — tablo standardı T12 (tarif P6): satır yokken tablonun
+   *  İÇİNDEKİ durum. Operasyonlar sayfanın bundle okumasından gelir ve bundle
+   *  hatası da [] verir; boşu hatadan yalnız Service.tsx ayırabilir, durumu o
+   *  hesaplar (Service → ServiceOverview → OpsCard). Verilmezse "empty". */
+  state?: Omit<DataTableStateProps<OperationSummary>, 'dt'>;
 }) {
   const navigate = useNavigate();
   // Drill an operation into /traces (service + name pre-filtered), the same
@@ -78,17 +83,17 @@ export function OpsCard({ service, range, operations }: {
           </Link>
         </span>
       </div>
-      {/* v0.10.967 — dtNoState: durum satırı yok — operasyonlar sayfanın bundle
-          okumasından prop olarak gelir; bundle hatası da [] verir (Service.tsx),
-          kart okumanın başarılı olup olmadığını bilmez → "boş" satırı hata anında
-          yalan olurdu. Yükleniyor / hata sayfa düzeyinde; state ancak Service →
-          ServiceOverview → OpsCard zinciri geçirince (P6) tabloya girer. */}
+      {/* v0.10.973 — tablo standardı T12: boş ya da bundle hatası tablonun İÇİNDE,
+          başlık durur (eskiden hata anında yalnız başlıklı boş tablo). Durumu
+          Service.tsx hesaplar (bundleErr → hata, yoksa "operasyon yok"); yükleniyor
+          buraya ulaşmaz: sayfa gövdeyi ilk yüklemede bağlamaz, yenilemede satırlar
+          kalır. Yeniden deneme sayfa düzeyindeki QueryError'da. */}
       <div style={{ overflowX: 'auto' }}>
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {dt.sortedRows.slice(0, 8).map((r, i) => (
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...(state ?? { kind: 'empty' })} /> : dt.sortedRows.slice(0, 8).map((r, i) => (
               <tr key={r.name} {...dt.rowProps(i)}
                   {...rowActivation(() => navigate(opHref(r.name)))}>
                 <td><span className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }} title={r.name}>{r.name}</span></td>
