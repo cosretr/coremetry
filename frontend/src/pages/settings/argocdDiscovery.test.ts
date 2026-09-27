@@ -2,13 +2,13 @@
 // karşı yeniden işaretleme (Go matchConfigured/suggestID/uniqueID aynası),
 // namespaceCase notları, Türkçe hata önekleri, sayı biçimi, hub durumu
 // önceliği (hata > kısmi > limitli > boş > ok), hata yanıtı eşlemesi (401/403
-// kimlik iletisi, 429, 504, 400 guardrail) ve özet/ayrıntı satırları.
+// "yetki yok" — v0.10.978, 429, 504, 400 guardrail) ve özet/ayrıntı satırları.
 import { describe, it, expect } from 'vitest';
 import type { ArgoCDCandidate, ArgoCDDiscoverResult } from '@/lib/types';
 import type { InstanceDraft, RemoteCluster } from './argocdForm';
 import {
   candidateErrorNote, completionText, failureState, fmtCount, fmtSec, hubBadge, hubState, hubView, markCandidates,
-  matchInstance, panelMeta, preflight, progressText, shownResult, suggestId, uniqueId, type HubRun,
+  matchInstance, panelMeta, parseDiscoverError, preflight, progressText, shownResult, suggestId, uniqueId, type HubRun,
 } from './argocdDiscovery';
 
 const H1 = 'c-4f7a21d9';
@@ -109,6 +109,7 @@ describe('Türkçe hata önekleri ve sayı biçimi', () => {
     ['timeout: x', 'okunamadı: zaman aşımı (15 sn)'], ['unavailable: x', 'okunamadı: erişilemedi'], ['internal: x', 'okunamadı: iç hata'],
     ['bad_data: x', 'okunamadı: geçersiz sorgu'], ['execution: x', 'okunamadı: değerlendirme hatası'],
     ['response_too_large: x', 'okunamadı: yanıt çok büyük'], ['skipped: discovery budget exhausted', 'atlandı: keşif bütçesi doldu'],
+    ['unauthorized: thanos rejected the cluster credentials (HTTP 403)', 'okunamadı: yetki yok'], // v0.10.978
     ['hub query failed', 'okunamadı'],
   ])('%s → %s', (e, want) => { expect(candidateErrorNote(e)).toBe(want); });
   it('fmtCount / fmtSec', () => {
@@ -138,23 +139,45 @@ describe('hub durumu ve hata eşlemesi', () => {
   it.each([
     [{ status: 400, error: 'hub Remote Cluster bilinmiyor ya da devre dışı', errorType: 'guardrail' }, 'not_configured', 'yapılandırılmamış'],
     [{ status: 504, error: 'x', errorType: 'timeout' }, 'timeout', 'zaman aşımı'],
-    [{ status: 502, error: 'thanos rejected the cluster credentials (HTTP 403)', errorType: 'unavailable' }, 'unreachable', 'erişilemedi'],
+    [{ status: 502, error: 'thanos rejected the cluster credentials (HTTP 403)', errorType: 'unauthorized', upstreamStatus: 403 }, 'unauthorized', 'yetki yok'], // v0.10.978
+    [{ status: 502, error: 'thanos is unavailable (HTTP 503)', errorType: 'unavailable', upstreamStatus: 503 }, 'unreachable', 'erişilemedi'],
     [{ status: 502, error: 'hub query failed', errorType: 'internal' }, 'unreachable', 'erişilemedi'],
     [{ status: 429, error: 'bir Argo CD keşfi zaten koşuyor' }, 'busy', null],
+    // v0.10.978 — bizim oturum/rol kapımız (auth.writeForbidden `{"error":"…"}`, errorType yok)
+    // "yetki yok" kutusunu TETİKLEMEZ: durum yalnız errorType'tan okunur. 403 gerçek yol
+    // (rol yetersiz → api.request "HTTP 403: …" → parseArgoHttpError status 403); 401 saf
+    // fonksiyon pini — pratikte api.request onu UnauthorizedError'a çevirir (status 0 + çıkış).
+    [{ status: 403, error: 'forbidden' }, 'unreachable', 'erişilemedi'],
+    [{ status: 401, error: 'unauthorized' }, 'unreachable', 'erişilemedi'],
     [{ status: 0, error: 'Request timed out after 75s — try a narrower time range or fewer filters' }, 'timeout', 'zaman aşımı'],
   ] as const)('%o → %s', (err, st, badge) => {
     expect(failureState(err)).toBe(st);
     expect(hubBadge(failureState(err))?.text ?? null).toBe(badge);
   });
-  it('"yetki yok" yok: 401/403 erişilemedi + kimlik iletisi', () => {
-    const v = hubView({ kind: 'failed', err: { status: 502, error: 'thanos rejected the cluster credentials (HTTP 403)', errorType: 'unavailable' }, ms: 300, oneShot: false },
-      [], { name: 'hub-1', label: 'cluster="hub-1"', clusterId: H1 });
-    expect(v.badge).toEqual({ text: 'erişilemedi', tone: 'danger' });
-    expect(v.detail).toEqual(['Thanos kimlik bilgisini reddetti (HTTP 403).']);
-    expect(v.notice).toEqual({ kind: 'cred' });
-    // hata özetinde "N çağrı" yok
-    expect(v.summary).toBe('0 aday · 0,3 sn · HTTP 502');
-    expect(JSON.stringify(v)).not.toContain('yetki yok');
+  // v0.10.978 — sunucu 401/403'ü errorType unauthorized + upstreamStatus ile
+  // döner (HTTP 502 kalır): States (b) hub-1 — "yetki yok" rozeti, özet
+  // upstream kodunu söyler, ayrıntı satırı yok, alert kutusu adımları taşır.
+  it('"yetki yok": errorType unauthorized → rozet + HTTP <upstream> özeti + unauthorized kutusu', () => {
+    const at = (upstreamStatus?: number): HubRun => ({ kind: 'failed', oneShot: false, ms: 300,
+      err: { status: 502, error: `thanos rejected the cluster credentials (HTTP ${upstreamStatus ?? 403})`, errorType: 'unauthorized', ...(upstreamStatus ? { upstreamStatus } : {}) } });
+    const H = { name: 'hub-1', label: 'cluster="hub-1"', clusterId: H1 };
+    const v = hubView(at(403), [], H);
+    expect(v.state).toBe('unauthorized');
+    expect(v.badge).toEqual({ text: 'yetki yok', tone: 'danger' });
+    expect(v.summary).toBe('0 aday · 0,3 sn · HTTP 403'); // hata özetinde "N çağrı" yok; kod upstream'in
+    expect(v.detail).toEqual([]);
+    expect(v.notice).toEqual({ kind: 'unauthorized' });
+    expect(JSON.stringify(v)).not.toContain('erişilemedi');
+    expect(hubView(at(401), [], H).summary).toBe('0 aday · 0,3 sn · HTTP 401');
+    expect(hubView(at(undefined), [], H).summary).toBe('0 aday · 0,3 sn · HTTP 502'); // upstream kodu yoksa bizimki
+  });
+  it('parseDiscoverError: upstreamStatus gövdeden; JSON olmayan / alanı olmayan gövdede yok', () => {
+    expect(parseDiscoverError(new Error(`HTTP 502: {"error":"thanos rejected the cluster credentials (HTTP 403)","errorType":"unauthorized","upstreamStatus":403,"hubClusterId":"${H1}"}`)))
+      .toEqual({ status: 502, error: 'thanos rejected the cluster credentials (HTTP 403)', errorType: 'unauthorized', upstreamStatus: 403 });
+    expect(parseDiscoverError(new Error('HTTP 429: {"error":"bir Argo CD keşfi zaten koşuyor"}'))).toEqual({ status: 429, error: 'bir Argo CD keşfi zaten koşuyor' });
+    expect(parseDiscoverError(new Error('HTTP 502: <html>Bad Gateway</html>'))).toEqual({ status: 502, error: '<html>Bad Gateway</html>' });
+    expect(parseDiscoverError(new Error('HTTP 502: {"error":"x","errorType":"unavailable","upstreamStatus":"503"}'))).toEqual({ status: 502, error: 'x', errorType: 'unavailable' });
+    expect(parseDiscoverError(new Error('Request timed out after 75s'))).toEqual({ status: 0, error: 'Request timed out after 75s' });
   });
   it('429 metni', () => {
     const v = hubView({ kind: 'failed', err: { status: 429, error: 'bir Argo CD keşfi zaten koşuyor' }, ms: 10, oneShot: false }, [], { name: 'hub-1', label: '', clusterId: H1 });

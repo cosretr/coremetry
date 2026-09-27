@@ -4,9 +4,9 @@ import { Badge, Button, IconButton } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { api, isCanceled } from '@/lib/api';
 import type { ArgoCDCandidate } from '@/lib/types';
-import { domKey, fmtHourMinute, hubName, parseArgoHttpError, trLocative, type HubDraft, type InstanceDraft, type RemoteCluster } from './argocdForm';
+import { domKey, fmtHourMinute, hubName, trLocative, type HubDraft, type InstanceDraft, type RemoteCluster } from './argocdForm';
 import {
-  completionText, hubView, markCandidates, panelMeta, preflight, progressText, shownResult,
+  completionText, hubView, markCandidates, panelMeta, parseDiscoverError, preflight, progressText, shownResult,
   type CandRow, type HubRun, type HubView,
 } from './argocdDiscovery';
 import { ArgoCDNote } from './ArgoCDSectionPanel';
@@ -33,6 +33,11 @@ import { ArgoCDNote } from './ArgoCDSectionPanel';
 //     sonuç taslağa karşı yeniden işaretlenir). Yeniden-ara düğmeleri koşu
 //     sırasında aria-disabled + mockup'ın soluklaştırması (rerunOp 0,45) —
 //     native disabled değil: tıklanan düğme etiketini değiştirirken odağı tutar.
+//   • v0.10.978 — "yetki yok" (States (b) hub-1): sunucu 401/403'ü errorType
+//     unauthorized + upstreamStatus ile döner; blok rozet + "HTTP 403" özeti +
+//     alert kutusu (token / cluster-monitoring-view adımları, Remote clusters
+//     bağlantısı, alert içi "<hub>'de yeniden ara") çizer. Öteki hub'ın sonucu
+//     yerinde kalır (koşular hub başına).
 
 // `.card` kabı: içindeki aday tabloları çerçevesiz (tablo standardı T10, tek
 // çerçeve); dolgu blokların kendisinde.
@@ -172,7 +177,7 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
         local[t.clusterId] = { kind: 'done', result, ms: performance.now() - t0, oneShot: t.oneShot };
       } catch (e) {
         if (ctl.signal.aborted || isCanceled(e)) return;
-        local[t.clusterId] = { kind: 'failed', err: parseArgoHttpError(e), ms: performance.now() - t0, oneShot: t.oneShot };
+        local[t.clusterId] = { kind: 'failed', err: parseDiscoverError(e), ms: performance.now() - t0, oneShot: t.oneShot };
       }
       setRuns(r => ({ ...r, [t.clusterId]: local[t.clusterId] }));
       finished.push(name);
@@ -258,10 +263,16 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
                   </Button>
                 </div>
                 {v.detail.map((line, i) => <p key={i} style={DETAIL}>{line}</p>)}
-                {v.notice?.kind === 'cred' && (
+                {v.notice?.kind === 'unauthorized' && (
                   <div role="alert" style={NOTICE}>
                     <div style={STRONG}>{name} Thanos'u isteği reddetti: kayıttaki token (ya da tokenRef) bu Thanos'ta okuma yetkisi taşımıyor. Aday listesi boş, ama bu “Argo CD yok” demek değil.</div>
                     <div>Yapılacak: <Link to="/settings/clusters">Ayarlar › Remote clusters › {name}</Link> kaydında token'ı ya da tokenRef'i <code>cluster-monitoring-view</code> yetkili bir ServiceAccount token'ıyla yenileyin, kaydedin, sonra yeniden arayın.</div>
+                    <div className="row gap-4 row-wrap">
+                      <Button variant="secondary" size="xs" id={`acd-disc-retry-${domKey(h.clusterId)}`} aria-disabled={busy || undefined} style={busy ? DIM : undefined}
+                        onClick={() => { if (!busy) void run(one(h)); }}>
+                        {name}{trLocative(name)} yeniden ara
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {v.notice?.kind === 'emptyLabel' && (

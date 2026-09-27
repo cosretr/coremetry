@@ -7,8 +7,8 @@ import { describe, it, expect } from 'vitest';
 import type { ArgoCDBound, ArgoCDSettings } from '@/lib/types';
 import {
   advError, advSummary, applyBuffer, blankBuffer, bufferDirty, bufferErrorsFromIssues, bufferFrom, diffPhrases, dirtyText,
-  draftFromSettings, effectiveRef, fmtHourMinute, fmtTr, hasControl, instanceInput, issueFromServer, normalizeApiUrl, numToInput,
-  parseAdvInput, parseArgoHttpError, remoteClustersFrom, savedAtText, targetForPath, toPutBody, tokenRank, tokenState,
+  draftFromSettings, effectiveRef, fmtHourMinute, fmtTr, hasControl, instanceInput, issueFromServer, mergeDraft, normalizeApiUrl, numToInput,
+  parseAdvInput, parseArgoHttpError, reloadText, remoteClustersFrom, savedAtText, targetForPath, toPutBody, tokenRank, tokenState,
   trLocative, trPossessive3, validTokenRef, validateBuffer, validateDraft, type Draft, type InstanceDraft, type RemoteCluster,
 } from './argocdForm';
 
@@ -96,8 +96,8 @@ describe('toPutBody — sıra, bölümler, pins', () => {
     const s = settings();
     const d = draftFromSettings(s);
     d.adv['reader.timeoutS'] = '40';
-    const body = toPutBody(d, s.pins ?? []);
-    expect(Object.keys(body).sort()).toEqual(['apiWorker', 'classification', 'enabled', 'envList', 'hubs', 'instances', 'intervals', 'mapping', 'pins', 'reader']);
+    const body = toPutBody(d, s.pins ?? [], 1_790_000_000_000_000_000);
+    expect(Object.keys(body).sort()).toEqual(['apiWorker', 'classification', 'enabled', 'envList', 'expectedUpdatedAt', 'hubs', 'instances', 'intervals', 'mapping', 'pins', 'reader']);
     expect(body.pins).toEqual(s.pins);
     expect(body.hubs).toEqual([{ clusterId: H1, injectClusterLabel: true }, { clusterId: H2, injectClusterLabel: true }]);
     expect(body.apiWorker).toEqual({ rps: 1.5, burst: 0, maxConcurrent: 0 });
@@ -108,7 +108,18 @@ describe('toPutBody — sıra, bölümler, pins', () => {
   it('instances TASLAK sırasıyla (yeni satır sonda)', () => {
     const d = draftFromSettings(settings());
     d.instances.push(inst({ key: 'n:1', id: 'aaa-first-alpha' }));
-    expect(toPutBody(d, []).instances.map(i => i.id)).toEqual(['team-a-prod', 'team-b-int', 'aaa-first-alpha']);
+    expect(toPutBody(d, [], 0).instances.map(i => i.id)).toEqual(['team-a-prod', 'team-b-int', 'aaa-first-alpha']);
+  });
+  // v0.10.978 — iyimser ön koşul: GET'te görülen updatedAt HER PUT'ta geri gider
+  // (hiç kaydedilmemiş blob = 0; sunucu 0'ı da damgayla karşılaştırır — arada
+  // biri kaydettiyse 409). Sunucu sahipli `updatedAt` gövdede YOK.
+  it('expectedUpdatedAt = GET updatedAt (yoksa 0) gövdede; updatedAt gitmez', () => {
+    const d = draftFromSettings(settings());
+    expect(toPutBody(d, [], 1_790_000_000_000_000_000).expectedUpdatedAt).toBe(1_790_000_000_000_000_000);
+    const zero = toPutBody(d, [], 0);
+    expect(zero.expectedUpdatedAt).toBe(0);
+    expect('expectedUpdatedAt' in zero).toBe(true);
+    expect(zero).not.toHaveProperty('updatedAt');
   });
 });
 
@@ -427,6 +438,14 @@ describe('parseArgoHttpError / alan yolu eşlemesi', () => {
     expect(parseArgoHttpError(new Error('HTTP 503: argocd settings not wired'))).toEqual({ status: 503, error: 'argocd settings not wired' });
     expect(parseArgoHttpError(new Error('Request timed out after 75s'))).toEqual({ status: 0, error: 'Request timed out after 75s' });
   });
+  // v0.10.978 — 409 stale: `updatedAt` (kayıtlı damga) sayı olarak taşınır;
+  // sayı olmayan / eksik updatedAt alan olarak gelmez (kutu "kayıt zamanı bilinmiyor" der).
+  it('409 {errorType: stale, updatedAt} → updatedAt sayı; JSON dışı updatedAt atılır', () => {
+    expect(parseArgoHttpError(new Error('HTTP 409: {"error":"ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin","errorType":"stale","updatedAt":1790000000000001000}')))
+      .toEqual({ status: 409, error: 'ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin', errorType: 'stale', updatedAt: 1790000000000001000 });
+    expect(parseArgoHttpError(new Error('HTTP 409: {"error":"x","errorType":"stale","updatedAt":"1"}'))).toEqual({ status: 409, error: 'x', errorType: 'stale' });
+    expect(parseArgoHttpError(new Error('HTTP 409: {"error":"x","errorType":"stale"}'))).toEqual({ status: 409, error: 'x', errorType: 'stale' });
+  });
   it('instances[N] / hubs[N] TASLAK dizisine eşlenir', () => {
     const d = draftFromSettings(settings());
     expect(targetForPath('instances[1].apiUrl', d)).toEqual({ kind: 'instance', key: d.instances[1].key, field: 'apiUrl' });
@@ -444,6 +463,104 @@ describe('parseArgoHttpError / alan yolu eşlemesi', () => {
     expect(targetForPath('instances', d)).toEqual({ kind: 'other' });
     const is = issueFromServer({ status: 400, error: 'm', field: 'instances[0].clearTokenRef' }, d);
     expect(bufferErrorsFromIssues([is], d.instances[0].key)).toEqual({ ref: 'm' });
+  });
+});
+
+// v0.10.978 — 409 sonrası "Yeniden yükle": üç yönlü birleştirme. Alan/satır
+// başına: kullanıcı değiştirdi (base≠draft) VE sunucu değiştirmedi (base=fresh)
+// → kullanıcının değeri korunur; sunucu da değiştirdiyse sunucunun değeri gelir
+// ve düzenleme "atıldı" sayılır. Satırlar hub'da clusterId, instance'ta id ile
+// eşlenir; sıra sunucununki + kullanıcının yeni satırları sonda.
+describe('mergeDraft / reloadText — 409 sonrası üç yönlü birleştirme', () => {
+  const base = () => draftFromSettings(settings());
+  it('düzenleme yokken sunucunun taslağı aynen; sayaçlar sıfır', () => {
+    const fresh = draftFromSettings(settings({ envList: ['prod', 'uat'] }));
+    const m = mergeDraft(base(), base(), fresh);
+    expect(m.draft).toEqual(fresh);
+    expect([m.kept, m.dropped]).toEqual([0, 0]);
+    expect(reloadText(m)).toBe('Yeniden yüklendi — kayıtlı ayar güncel; kaydedilmemiş düzenleme yoktu.');
+  });
+  it('skalarlar: sunucuda değişmeyen alandaki düzenleme korunur, ikisi de değişince sunucunun', () => {
+    const d = base();
+    d.enabled = false;                       // kullanıcı; sunucu dokunmadı → korunur
+    d.adv['reader.timeoutS'] = '40';         // kullanıcı 40; sunucu 35 → sunucunun
+    d.envList = ['prod', 'int', 'dev'];      // kullanıcı ekledi; sunucu dokunmadı → korunur
+    d.metricsOnlyMode = 'unknown';           // kullanıcı; sunucu da 'unknown' yaptı → sunucunun (aynı değer, yine sayılır)
+    const fresh = draftFromSettings(settings({ reader: { timeoutS: 35 }, classification: { metricsOnlyMode: 'unknown' }, apiWorker: { rps: 2 } }));
+    const m = mergeDraft(base(), d, fresh);
+    expect(m.draft.enabled).toBe(false);
+    expect(m.draft.adv['reader.timeoutS']).toBe('35');
+    expect(m.draft.adv['apiWorker.rps']).toBe('2');
+    expect(m.draft.envList).toEqual(['prod', 'int', 'dev']);
+    expect(m.draft.metricsOnlyMode).toBe('unknown');
+    expect([m.kept, m.dropped]).toEqual([2, 2]);
+    expect(reloadText(m)).toBe('Yeniden yüklendi — 2 düzenlemeniz korundu; 2 düzenlemeniz sunucuda da değişen alana ya da satıra dokunduğu için atıldı. Korunanları kaydetmek için Kaydet.');
+  });
+  it('hub satırları: kullanıcının eklediği/kaldırdığı/değiştirdiği hub; sunucunun eklediği hub; çakışan bayrak', () => {
+    const d = base();
+    d.hubs = [
+      { ...d.hubs[0], inject: false },       // kullanıcı bayrağı kapattı; sunucu dokunmadı → korunur
+      // H2 kullanıcı tarafından kaldırıldı; sunucu H2'nin bayrağını değiştirdi → kaldırma atılır, sunucunun H2'si gelir
+      { key: 'h:c-1d2e3f40', clusterId: 'c-1d2e3f40', inject: true }, // kullanıcı ekledi → sonda korunur
+    ];
+    const fresh = draftFromSettings(settings({ hubs: [{ clusterId: H1, injectClusterLabel: true }, { clusterId: H2, injectClusterLabel: false }, { clusterId: 'c-9c0d1e20' }] }));
+    const m = mergeDraft(base(), d, fresh);
+    expect(m.draft.hubs.map(h => [h.clusterId, h.inject])).toEqual([[H1, false], [H2, false], ['c-9c0d1e20', true], ['c-1d2e3f40', true]]);
+    expect([m.kept, m.dropped]).toEqual([2, 1]);
+  });
+  it('instance satırları: id ile eşleme; sunucunun sildiği satırdaki düzenleme atılır; aynı id\'li yeni satırda sunucu kazanır', () => {
+    const d = base();
+    d.instances = [
+      { ...d.instances[0], name: 'Team A prod (ops)' },  // kullanıcı düzenledi; sunucu team-a-prod'u sildi → atılır
+      // team-b-int kullanıcı tarafından kaldırıldı; sunucu dokunmadı → kaldırma korunur
+      inst({ key: 'n:7', id: 'team-c-prod' }),           // kullanıcı ekledi; sunucu da team-c-prod ekledi → sunucunun
+      inst({ key: 'n:8', id: 'team-d-prod', hubClusterId: H2, hubNamespace: 'team-d-prod' }), // kullanıcı ekledi → korunur
+    ];
+    const fresh = draftFromSettings(settings({ instances: [
+      { id: 'team-b-int', hubClusterId: H2, hubNamespace: 'team-b-int', enabled: true },
+      { id: 'team-c-prod', hubClusterId: H1, name: 'Sunucunun C', hubNamespace: 'team-c-prod', enabled: false },
+    ] }));
+    const m = mergeDraft(base(), d, fresh);
+    expect(m.draft.instances.map(i => [i.id, i.key, i.origin, i.name, i.enabled])).toEqual([
+      ['team-c-prod', 's:team-c-prod', 'saved', 'Sunucunun C', false],
+      ['team-d-prod', 'n:8', 'new', '', true],
+    ]);
+    expect([m.kept, m.dropped]).toEqual([2, 2]);
+  });
+  it('kullanıcının düzenlediği kayıtlı satır sunucuda değişmediyse düzenleme (token girdisi dahil) kalır; sunucu değiştirdiyse sunucunun satırı', () => {
+    const d = base();
+    d.instances = d.instances.map(i => (i.id === 'team-a-prod' ? { ...i, tokenInput: 'env:NEW', enabled: false } : { ...i, name: 'B' }));
+    const fresh = draftFromSettings(settings({ instances: [
+      { id: 'team-a-prod', hubClusterId: H1, name: 'Team A prod', hubNamespace: 'team-a-prod', metricsJob: 'team-a-prod-metrics', apiUrl: 'https://argocd.team-a-prod.example.invalid', tokenRef: 'env:ARGOCD_TEAM_A_TOKEN', enabled: true, discovered: true },
+      { id: 'team-b-int', hubClusterId: H2, hubNamespace: 'team-b-int', metricsJob: 'b-metrics', enabled: true },
+    ] }));
+    const m = mergeDraft(base(), d, fresh);
+    expect(m.draft.instances.map(i => [i.id, i.tokenInput, i.enabled, i.name, i.metricsJob])).toEqual([
+      ['team-a-prod', 'env:NEW', false, 'Team A prod', 'team-a-prod-metrics'],
+      ['team-b-int', '', true, '', 'b-metrics'],
+    ]);
+    expect([m.kept, m.dropped]).toEqual([1, 1]);
+    expect(reloadText(m)).toBe('Yeniden yüklendi — 1 düzenlemeniz korundu; 1 düzenlemeniz sunucuda da değişen alana ya da satıra dokunduğu için atıldı. Korunanları kaydetmek için Kaydet.');
+    expect(reloadText({ draft: m.draft, kept: 0, dropped: 1 })).toBe('Yeniden yüklendi — 1 düzenlemeniz sunucuda da değişen alana ya da satıra dokunduğu için atıldı.');
+    expect(reloadText({ draft: m.draft, kept: 3, dropped: 0 })).toBe('Yeniden yüklendi — 3 düzenlemeniz korundu. Korunanları kaydetmek için Kaydet.');
+  });
+  // v0.10.978 — satır bütünlüğü: kullanıcı yalnız enabled'ı, sunucu yalnız name'i
+  // değiştirdi → satır BÜTÜNÜYLE sunucunun (token üçlüsü tek mantıksal alan; alan
+  // başına birleştirme sunucunun token değişikliğini sessizce ezerdi) ve metin
+  // "alana ya da satıra" der. Eski metin ("alana dokunduğu için") yanlıştı:
+  // kullanıcının dokunduğu alan sunucuda değişmemişti.
+  it('instance satırı BÜTÜN olarak birleşir: kullanıcı yalnız enabled\'ı, sunucu yalnız name\'i değiştirdi → satır sunucunun, metin "alana ya da satıra" der', () => {
+    const d = base();
+    d.instances = d.instances.map(i => (i.id === 'team-a-prod' ? { ...i, enabled: false } : i));
+    const fresh = draftFromSettings(settings({ instances: [
+      { id: 'team-a-prod', hubClusterId: H1, name: 'Team A prod (ops)', hubNamespace: 'team-a-prod', metricsJob: 'team-a-prod-metrics', apiUrl: 'https://argocd.team-a-prod.example.invalid', tokenRef: 'env:ARGOCD_TEAM_A_TOKEN', enabled: true, discovered: true },
+      { id: 'team-b-int', hubClusterId: H2, hubNamespace: 'team-b-int', enabled: true },
+    ] }));
+    const m = mergeDraft(base(), d, fresh);
+    const row = m.draft.instances.find(i => i.id === 'team-a-prod')!;
+    expect([row.name, row.enabled]).toEqual(['Team A prod (ops)', true]);
+    expect([m.kept, m.dropped]).toEqual([0, 1]);
+    expect(reloadText(m)).toBe('Yeniden yüklendi — 1 düzenlemeniz sunucuda da değişen alana ya da satıra dokunduğu için atıldı.');
   });
 });
 

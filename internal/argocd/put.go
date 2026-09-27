@@ -47,6 +47,34 @@ package argocd
 // Yol bugünkü instances[i].hubClusterId (mockup'ın kayıt hatası listesi ve
 // settings_test.go pini); mesaj hub'ı (küme adı + id), bağlı instance
 // sayısını ve çareyi (taşı ya da hub'ı bırak) söyler.
+//
+// ── v0.10.978 — (0) iyimser ön koşul: expectedUpdatedAt ───────────────────
+//
+// v0.10.974'te ertelenen karar (docs/DECISIONS.md "Açık kalan"): iki admin
+// aynı anda düzenlerken bütün blob değiştirildiğinden son yazan kazanıyordu.
+// Gövdedeki İSTEK-YALNIZ `expectedUpdatedAt` (GET settings.updatedAt; Instance
+// gibi Settings alanı DEĞİL, bloba/cevaba girmez) kayıtlı blobun (api katmanı
+// PUT'tan hemen önce LoadPersisted ile tazeler) UpdatedAt'iyle karşılaştırılır:
+// tutmazsa StaleError → 409 {error, errorType:"stale", updatedAt:<kayıtlı>};
+// gönderilmemişse kabul (API/token çağıranlar, eski bundle) — api katmanı bunu
+// audit'te "precondition":"none" olarak işaretler. Denetim (a)'dan ÖNCE: bayat
+// taban üzerinde alan hatası anlamsız, kullanıcının gördüğü blob artık yok.
+//
+// Karşılaştırma float64 üzerinden (sameStamp): tarayıcı JSON sayısını çift
+// duyarlıkla okur; ns damgası 2^53'ün üstünde olduğundan 256'nın katına
+// yuvarlanır ve JSON.stringify o yuvarlanmış değeri yazar. Tam int64 eşitliği
+// her tarayıcı PUT'unu 409'a düşürürdü; float64 eşitliği tarayıcının gördüğü
+// değerle aynıdır, iki kayıt arasındaki ≥256 ns farkı yine ayırır (bir kayıt
+// milisaniyeler sürer). Tam sayı gönderen API istemcisi için de birebir.
+//
+// Atomiklik burada DEĞİL: karşılaştırma saf, kilit yok. api katmanı
+// (argocdPutMu) yükle → karşılaştır → yaz sırasını POD BAŞINA mutex'le sıralar;
+// aksi hâlde aynı damgayı taşıyan iki eşzamanlı PUT ikisi de geçer ve ikinci
+// birincinin düzenlemesini ezerdi. Kalıcı blobu okuyamayan pod ön koşulu
+// doğrulayamaz → 503 (bellekteki bayat bloba karşı karşılaştırma yanlış audit +
+// kayıp yazım olurdu). Pod'lar arası aynı-ms çift yazım son-yazan-kazanır kalır:
+// Store'da compare-and-set yok; gerekirse ileride PutSettingIf(key, value,
+// expectedStamp) (docs/DECISIONS.md "Açık kalan").
 
 import (
 	"encoding/json"
@@ -60,12 +88,42 @@ import (
 // bayrakları. ClearTokenRef GÖNDERİLEN instances[] dizinine göre.
 type PutOptions struct {
 	ClearTokenRef map[int]bool
+	// ExpectedUpdatedAt — v0.10.978 — iyimser ön koşul: istemcinin GET'te
+	// gördüğü settings.updatedAt (ns; hiç kaydedilmemiş blob için 0). nil =
+	// gönderilmedi → ön koşul yok (dosya başlığı (0)).
+	ExpectedUpdatedAt *int64
+}
+
+// StaleError — v0.10.978 — ön koşul tutmadı: api katmanı 409 {error,
+// errorType:"stale", updatedAt: Current} yazar (FieldError DEĞİL: 400 değil).
+// Metin kısa ve Türkçe — FE kendi kutusunu çizer, bu metin API/token
+// çağıranlara gider.
+type StaleError struct {
+	Expected int64 // istemcinin gönderdiği
+	Current  int64 // kayıtlı blobun damgası
+}
+
+func (e *StaleError) Error() string {
+	return "ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin"
+}
+
+// sameStamp — SAF: iki ns damgası tarayıcının gördüğü çift duyarlıkta eşit mi
+// (dosya başlığı (0)).
+func sameStamp(a, b int64) bool { return float64(a) == float64(b) }
+
+// checkPrecondition — (0): gönderilmediyse geçer; tutmuyorsa StaleError.
+func checkPrecondition(opts PutOptions, stored Settings) error {
+	if opts.ExpectedUpdatedAt == nil || sameStamp(*opts.ExpectedUpdatedAt, stored.UpdatedAt) {
+		return nil
+	}
+	return &StaleError{Expected: *opts.ExpectedUpdatedAt, Current: stored.UpdatedAt}
 }
 
 // ParsePut — v0.10.974 — ParseInput (düz token + eski tek-hub anahtarı reddi
 // korunur) + instances[i].clearTokenRef. Bayrak varsa JSON bool olmalı (null
 // dahil başka her şey 400); anahtar encoding/json gibi büyük/küçük harf
-// duyarsız eşlenir.
+// duyarsız eşlenir. v0.10.978 — üst düzey expectedUpdatedAt: varsa 0 ya da
+// pozitif JSON tam sayısı (null/dize/ondalık/üstel/negatif 400); yoksa nil.
 func ParsePut(raw []byte) (Settings, PutOptions, error) {
 	s, err := ParseInput(raw)
 	if err != nil {
@@ -73,7 +131,8 @@ func ParsePut(raw []byte) (Settings, PutOptions, error) {
 	}
 	opts := PutOptions{ClearTokenRef: map[int]bool{}}
 	var probe struct {
-		Instances []map[string]json.RawMessage `json:"instances"`
+		Instances         []map[string]json.RawMessage `json:"instances"`
+		ExpectedUpdatedAt json.RawMessage              `json:"expectedUpdatedAt"`
 	}
 	_ = json.Unmarshal(raw, &probe) // ParseInput gövdeyi zaten doğruladı
 	for i, inst := range probe.Instances {
@@ -90,13 +149,23 @@ func ParsePut(raw []byte) (Settings, PutOptions, error) {
 			}
 		}
 	}
+	if v := probe.ExpectedUpdatedAt; len(v) > 0 { // RawMessage: yok → boş, null → "null"
+		var n int64
+		if strings.TrimSpace(string(v)) == "null" || json.Unmarshal(v, &n) != nil || n < 0 {
+			return Settings{}, PutOptions{}, fieldErr("expectedUpdatedAt", "0 ya da pozitif tam sayı olmalı (GET settings.updatedAt)")
+		}
+		opts.ExpectedUpdatedAt = &n
+	}
 	return s, opts, nil
 }
 
 // ApplyPut — v0.10.974 — PUT girdisi + kayıtlı blob → kalıcı yazılacak blob
-// (dosya başlığındaki (a)–(e) sırası). in: ParsePut çıktısı; stored:
+// (dosya başlığındaki (0) + (a)–(e) sırası). in: ParsePut çıktısı; stored:
 // canlı/kalıcı blob (svc.Current); clusters: Validate'in Remote Cluster yüzü.
 func ApplyPut(in Settings, opts PutOptions, stored Settings, clusters []ClusterRef) (Settings, error) {
+	if err := checkPrecondition(opts, stored); err != nil { // (0) v0.10.978
+		return in, err
+	}
 	names := make(map[string]string, len(clusters))
 	for _, c := range clusters {
 		names[c.ID] = c.Name

@@ -1010,3 +1010,23 @@ gelirse düşer), dtNoState 16 (kendini gizleyen "sağlıklı = boş" bölümler
 gerekçeli); diğer altı sayaç 0. Kalan her sayı ratchet'in kendi yorumunda dosya+gerekçeyle
 listeli; düşüş yeni bir olanak (KeyValue sıkı kip, canvas font token'ı) gerektirir, artış
 suçlu dosyada düzeltilir, tavan yükseltilmez.
+
+## 2026-09-27 — Dört küçük sertleştirme (v0.10.978)
+
+**Karar (operatör: "Önerin" → dört öneri tek sürümde):**
+1. **Boot Keeper muhafızı:** gözlem eksikse (roster'daki bir replika probe'a cevap vermediyse)
+   hiç gözlenmeyen bir state tablosu kurulmadan önce Keeper'da `<önek>/<shard-dizini>/<t>/replicas`
+   (gözlenen eski dizinler, yoksa `{shard}` makroları) ve `<önek>/state/<t>/replicas` okunur:
+   yalnız eski yolda replika varsa ona katılır; birleşik varsa ya da hiçbiri yoksa birleşik (kural 4);
+   ikisi de varsa birleşik + uyarı (kurulum zaten bölünmüş, sihirbaza yönlendirir); Keeper okunamazsa
+   v0.10.971 davranışı + yüksek sesli log. Gözlem tamsa Keeper'a hiç gidilmez.
+2. **Argo keşfi "yetki yok":** hub'ın Thanos'u 401/403 dönerse `errorType: unauthorized` +
+   `upstreamStatus` (HTTP 502 kalır; URL/token yankılanmaz); sekmede token/rol yenileme adımı ve
+   "Yeniden ara", diğer hub'ın sonucu durur.
+3. **PUT /api/settings/argocd bayat yazım koruması:** sekme GET'teki `updatedAt`'ı
+   `expectedUpdatedAt` olarak geri yollar; sunucu taze okuyup uyuşmazlıkta 409 `stale` döner;
+   alan yoksa kabul (API/token çağıranlar) ama audit "önkoşul yok" der; pod içi mutex
+   (pod'lar arası son yazan kazanır — belgeli kalan risk). Sekmede "başka biri değiştirdi —
+   yeniden yükle" kutusu; yeniden yükleme sunucuda değişmemiş alanlardaki düzenlemeleri korur.
+4. **CorePanel:** `title=""` ile boş `<h3>` basılmaz; `ariaLabel` prop'u (role=group) — Trace pod
+   grafikleri çift duyurmaz.

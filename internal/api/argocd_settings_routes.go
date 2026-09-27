@@ -55,6 +55,18 @@ package api
 // tek kayıtlı hub kullanılır; birden çok hub varken gövde hub'ı seçmek
 // zorunda (400 guardrail, istek YOK). Enjeksiyon varsayılanı o hub'ın kendi
 // ayarı (listede olmayan hub için true).
+//
+// v0.10.978 — "yetki yok" (v0.10.974'te ertelenen karar, onaylandı): hub
+// Thanos'un 401/403'ü genel "unavailable" değil, sourcestate sözlüğüyle
+// `errorType: "unauthorized"` + `upstreamStatus` (401|403) + `hubClusterId`
+// taşır; HTTP kodu 502 KALIR — 424 bu depoda upstream kimlik reddi için değil
+// "tablo yok" (rollup_routes) için kullanılıyor, promapi.HTTPError da 401/403'ü
+// kodu değiştirmeden sourcestate.ErrUnauthorized'a açıyor; burası aynı sözlüğü
+// aynalar. Sınıflama HTTP koduna göredir (promapi gibi): 403 + JSON
+// errorType "bad_data" da yetki reddidir. Aynı sınıflama aday hatası
+// ("unauthorized: …") ve sayım notuna da uygulanır. Audit satırı değişmez
+// (status/errorType zaten vardı); gövde URL/host/token taşımaz (thanos
+// scrubEndpoint + hub kimliği yalnız id).
 
 import (
 	"bytes"
@@ -66,11 +78,13 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/argocd"
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/sourcestate"
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
@@ -100,6 +114,15 @@ var argocdSettingsStoreOf = func(s *Server) argocd.Store {
 	}
 	return s.store
 }
+
+// argocdPutMu — v0.10.978 — iyimser ön koşul pod içinde ATOMİK: LoadPersisted →
+// ApplyPut (damga karşılaştırması) → SavePersisted tek kilit altında; aksi hâlde
+// aynı expectedUpdatedAt'i taşıyan iki eşzamanlı PUT ikisi de 200 alır ve ikinci
+// birincinin düzenlemesini sessizce ezerdi (kapatılmak istenen kayıp güncelleme,
+// ms penceresine daralmış). Admin yazımı nadir; bir CH gidiş-dönüşü boyunca
+// beklemek kabul. Pod'lar arası aynı ms'lik çift yazım son-yazan-kazanır kalır:
+// system_settings PutSetting koşulsuz INSERT, compare-and-set yok (put.go (0)).
+var argocdPutMu sync.Mutex
 
 // reloadArgoCDSettings — peer sinyali (cache.go reloadConfigOnSignal).
 func (s *Server) reloadArgoCDSettings(ctx context.Context) {
@@ -221,6 +244,21 @@ func writeArgoCDFieldError(w http.ResponseWriter, err error) {
 // bloba karşı birleşir (≤30 s bayat bellek kopyasına değil); okuma hatası
 // loglanır, bellekteki blobla sürülür. Audit details birleşmiş blobdur
 // (clearTokenRef taşımaz).
+//
+// v0.10.978 — iyimser ön koşul (put.go (0)): gövdenin istek-yalnız
+// expectedUpdatedAt'i, TAZE yüklenen kalıcı blobun updatedAt'iyle tutmazsa 409
+// {error, errorType:"stale", updatedAt:<kayıtlı>} — 400 gibi yazım yok, audit
+// yok, canlı ayar değişmez. Gönderilmemişse kabul (API/token çağıranlar, eski
+// bundle) ama audit details `"precondition":"none"`; tutmuşsa
+// `"precondition":"updatedAt"` + gönderilen `expectedUpdatedAt` (hangi sürümün
+// üstüne yazıldığı). Karşılaştırma LoadPersisted'tan SONRA: B pod'unun belleği
+// bayatken A pod'unun damgası tutar. LoadPersisted hata verirse ve
+// expectedUpdatedAt gönderilmişse 503 {error, errorType:"unavailable"} — yazım
+// yok, audit yok (bellekteki bayat bloba karşı doğrulanan ön koşul yanlış audit
+// + kayıp yazım olurdu); ön koşulsuz PUT'ta v0.10.974 logla-sür korunur.
+// LoadPersisted → ApplyPut → SavePersisted argocdPutMu altında: aynı damgayı
+// taşıyan iki eşzamanlı PUT'un ikincisi 409 alır, 200 değil (pod içi; pod'lar
+// arası kalan pencere argocdPutMu yorumunda).
 func (s *Server) putArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 	svc := argocdSettingsSvc.Load()
 	if svc == nil {
@@ -242,11 +280,27 @@ func (s *Server) putArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusServiceUnavailable, "ayar deposu bağlı değil")
 		return
 	}
+	argocdPutMu.Lock() // v0.10.978 — yükle → karşılaştır → yaz tek adım (ayrıştırma 400'leri kilidi almaz)
+	defer argocdPutMu.Unlock()
 	if err := svc.LoadPersisted(r.Context(), st); err != nil {
+		if opts.ExpectedUpdatedAt != nil { // v0.10.978 — ön koşul TAZE bloba karşı doğrulanamaz; bellekteki blob bayat olabilir: kabul = kayıp yazım + yanlış audit
+			log.Printf("[argocd] PUT öncesi kalıcı blob yüklenemedi, ön koşul doğrulanamadı: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "ön koşul doğrulanamadı — ayar deposu okunamadı, yeniden deneyin", "errorType": "unavailable"})
+			return
+		}
 		log.Printf("[argocd] PUT öncesi kalıcı blob yüklenemedi, bellekteki blobla sürülüyor: %v", err)
 	}
 	cfg, err := argocd.ApplyPut(in, opts, svc.Current(), s.argocdClusterRefs())
 	if err != nil {
+		var se *argocd.StaleError
+		if errors.As(err, &se) { // v0.10.978 — bayat taban: 409, FE yeniden yükler
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": se.Error(), "errorType": "stale", "updatedAt": se.Current})
+			return
+		}
 		writeArgoCDFieldError(w, err)
 		return
 	}
@@ -255,7 +309,15 @@ func (s *Server) putArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.publishConfigReload(r.Context(), "argocd") // peer'lar 30 s poll'ü beklemesin (v0.9.237 sınıfı)
-	details, _ := json.Marshal(svc.Current())    // tokenRef referanstır; düz token alanı yok
+	precondition := "none"                       // v0.10.978 — ön koşulsuz yazım denetimde görünür
+	if opts.ExpectedUpdatedAt != nil {
+		precondition = "updatedAt"
+	}
+	details, _ := json.Marshal(struct { // tokenRef referanstır; düz token alanı yok
+		argocd.Settings
+		Precondition      string `json:"precondition"`
+		ExpectedUpdatedAt *int64 `json:"expectedUpdatedAt,omitempty"`
+	}{svc.Current(), precondition, opts.ExpectedUpdatedAt})
 	s.audit(r, "settings.argocd.update", "settings", argocd.SettingsKey, string(details))
 	writeJSON(w, s.argocdResponse(svc))
 }
@@ -314,19 +376,48 @@ func writeArgoCDGuardrail(w http.ResponseWriter, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg, "errorType": "guardrail"})
 }
 
-// argocdDiscoverFailure — hata → (kod, tür, mesaj). ConsoleError mesajı
-// URL/host içermez (thanos scrubEndpoint); tanınmayan hata ASLA ham
-// yankılanmaz (yalnız logda).
-func argocdDiscoverFailure(err error) (int, string, string) {
+// argocdErrUnauthorized — v0.10.978 — hub Thanos 401/403; sourcestate
+// sözlüğünün aynısı (FE HubState 'unauthorized' → "yetki yok").
+const argocdErrUnauthorized = string(sourcestate.Unauthorized)
+
+// argocdConsoleErrType — v0.10.978 — ConsoleError türü, 401/403 kod
+// önceliğiyle (promapi.HTTPError.Unwrap gibi kod kazanır; thanos bunları
+// "unavailable" diye normalize eder). Aday hatası öneki, sayım notu ve
+// yanıt errorType'ı hep buradan geçer.
+func argocdConsoleErrType(ce *thanos.ConsoleError) string {
+	if ce.UpstreamStatus == http.StatusUnauthorized || ce.UpstreamStatus == http.StatusForbidden {
+		return argocdErrUnauthorized
+	}
+	return ce.Type
+}
+
+// argocdDiscoverError — keşif hata gövdesi. v0.10.978 — upstreamStatus hub
+// Thanos'un HTTP kodu (0 = yanıt alınamadı, atlanır); hubClusterId probe
+// edilen hub'ın KİMLİĞİ (URL/host/token asla).
+type argocdDiscoverError struct {
+	Error          string `json:"error"`
+	ErrorType      string `json:"errorType"`
+	UpstreamStatus int    `json:"upstreamStatus,omitempty"`
+	HubClusterID   string `json:"hubClusterId,omitempty"`
+}
+
+// argocdDiscoverFailure — hata → (kod, gövde). ConsoleError mesajı URL/host
+// içermez (thanos scrubEndpoint); tanınmayan hata ASLA ham yankılanmaz
+// (yalnız logda). v0.10.978 — 401/403 → 502 + "unauthorized" (dosya başlığı).
+func argocdDiscoverFailure(err error) (int, argocdDiscoverError) {
 	var ce *thanos.ConsoleError
 	if errors.As(err, &ce) {
-		return ce.StatusCode(), ce.Type, ce.Message
+		body := argocdDiscoverError{Error: ce.Message, ErrorType: argocdConsoleErrType(ce), UpstreamStatus: ce.UpstreamStatus}
+		if body.ErrorType == argocdErrUnauthorized {
+			return http.StatusBadGateway, body
+		}
+		return ce.StatusCode(), body
 	}
 	if errors.Is(err, context.Canceled) {
-		return statusClientClosedRequest, thanos.ConsoleErrCanceled, ""
+		return statusClientClosedRequest, argocdDiscoverError{ErrorType: thanos.ConsoleErrCanceled}
 	}
 	log.Printf("[argocd] keşif: beklenmeyen hata: %v", err)
-	return http.StatusBadGateway, thanos.ConsoleErrInternal, "hub query failed"
+	return http.StatusBadGateway, argocdDiscoverError{Error: "hub query failed", ErrorType: thanos.ConsoleErrInternal}
 }
 
 func (s *Server) discoverArgoCDInstances(w http.ResponseWriter, r *http.Request) {
@@ -396,13 +487,14 @@ func (s *Server) discoverArgoCDInstances(w http.ResponseWriter, r *http.Request)
 	defer cancel()
 	res, err := s.runArgoCDDiscovery(ctx, hub, inject, cur.Instances)
 
-	status, errType, msg := http.StatusOK, "", ""
+	status, fail := http.StatusOK, argocdDiscoverError{}
 	if err != nil {
-		status, errType, msg = argocdDiscoverFailure(err)
+		status, fail = argocdDiscoverFailure(err)
+		fail.HubClusterID = hubID // v0.10.978 — yalnız kimlik; URL/host/token değil
 	}
 	// Probe gerçekten koştu (korkuluklar geçildi): başarılı ya da değil audit.
 	details, _ := json.Marshal(map[string]any{"hubClusterId": hubID, "injectClusterLabel": inject,
-		"candidates": len(res.Candidates), "calls": res.Calls, "status": status, "errorType": errType,
+		"candidates": len(res.Candidates), "calls": res.Calls, "status": status, "errorType": fail.ErrorType,
 		"countsIncomplete": res.CountsIncomplete}) // v0.10.974
 	s.audit(r, "settings.argocd.discover", "settings", argocd.SettingsKey, string(details))
 	switch {
@@ -413,7 +505,7 @@ func (s *Server) discoverArgoCDInstances(w http.ResponseWriter, r *http.Request)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": msg, "errorType": errType})
+		_ = json.NewEncoder(w).Encode(fail)
 	}
 }
 
@@ -535,7 +627,7 @@ func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, 
 		why := thanos.ConsoleErrInternal
 		var ce *thanos.ConsoleError
 		if errors.As(err, &ce) {
-			why = ce.Type
+			why = argocdConsoleErrType(ce) // v0.10.978 — 401/403 → unauthorized
 		} else {
 			log.Printf("[argocd] keşif sayımı: beklenmeyen hata: %v", err)
 		}
@@ -581,11 +673,11 @@ func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, 
 }
 
 // argocdProbeErrText — aday başına hata metni (URL'siz; ConsoleError
-// mesajı zaten maskeli).
+// mesajı zaten maskeli). v0.10.978 — önek 401/403'te "unauthorized".
 func argocdProbeErrText(err error) string {
 	var ce *thanos.ConsoleError
 	if errors.As(err, &ce) {
-		return ce.Type + ": " + ce.Message
+		return argocdConsoleErrType(ce) + ": " + ce.Message
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return "skipped: discovery budget exhausted"

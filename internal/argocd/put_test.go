@@ -347,3 +347,140 @@ func TestApplyPutRenameRejectedLegacyEmptyHub(t *testing.T) {
 		t.Fatalf("FieldError{instances[0].id} beklenirdi: %v", err)
 	}
 }
+
+// ── v0.10.978 — iyimser ön koşul (expectedUpdatedAt) ───────────────────────
+//
+// İki admin aynı anda düzenlerken bütün blob değiştirildiğinden son yazan
+// kazanıyordu (v0.10.974'te ertelenen karar). İstek-yalnız expectedUpdatedAt
+// (GET settings.updatedAt) kayıtlı damgayla karşılaştırılır: tutmazsa
+// StaleError (409), gönderilmemişse kabul (API/token çağıranlar, eski bundle).
+// Karşılaştırma float64 üzerinden: tarayıcı JSON sayısını çift duyarlıkla
+// okur ve 2^53 üstündeki ns damgasını 256'nın katına yuvarlayıp o değeri
+// gönderir; tam eşitlik her tarayıcı PUT'unu 409'a düşürürdü.
+
+func TestParsePutExpectedUpdatedAt(t *testing.T) {
+	ok := []struct {
+		name, body string
+		want       *int64
+	}{
+		{"yok → nil", `{"instances":[{"id":"a","hubNamespace":"a"}]}`, nil},
+		{"0 (hiç kaydedilmemiş blob)", `{"expectedUpdatedAt":0}`, i64(0)},
+		{"tam sayı", `{"expectedUpdatedAt":42}`, i64(42)},
+		{"tarayıcının yuvarladığı ns damgası", `{"expectedUpdatedAt":1758979200123456800}`, i64(1758979200123456800)},
+		{"büyük/küçük harf duyarsız (encoding/json gibi)", `{"ExpectedUpdatedAt":7}`, i64(7)},
+	}
+	for _, tc := range ok {
+		t.Run(tc.name, func(t *testing.T) {
+			s, opts, err := ParsePut([]byte(tc.body))
+			if err != nil {
+				t.Fatalf("geçerli gövde: %v", err)
+			}
+			switch {
+			case tc.want == nil && opts.ExpectedUpdatedAt != nil:
+				t.Fatalf("nil beklenirdi: %d", *opts.ExpectedUpdatedAt)
+			case tc.want != nil && (opts.ExpectedUpdatedAt == nil || *opts.ExpectedUpdatedAt != *tc.want):
+				t.Fatalf("beklenen %d, gelen %v", *tc.want, opts.ExpectedUpdatedAt)
+			}
+			// İstek-yalnız: Settings.UpdatedAt'e (sunucu sahipli) hiç dokunmaz.
+			if s.UpdatedAt != 0 {
+				t.Fatalf("expectedUpdatedAt bloba girdi: %d", s.UpdatedAt)
+			}
+		})
+	}
+	bad := []struct{ name, body string }{
+		{"dize", `{"expectedUpdatedAt":"42"}`},
+		{"null", `{"expectedUpdatedAt":null}`},
+		{"bool", `{"expectedUpdatedAt":true}`},
+		{"ondalık", `{"expectedUpdatedAt":1.5}`},
+		{"üstel", `{"expectedUpdatedAt":1e18}`},
+		{"negatif", `{"expectedUpdatedAt":-1}`},
+	}
+	const wantMsg = "expectedUpdatedAt: 0 ya da pozitif tam sayı olmalı (GET settings.updatedAt)"
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := ParsePut([]byte(tc.body))
+			var fe *FieldError
+			if !errors.As(err, &fe) || fe.Path != "expectedUpdatedAt" || err.Error() != wantMsg {
+				t.Fatalf("FieldError{expectedUpdatedAt} beklenirdi:\n got %v\nwant %q", err, wantMsg)
+			}
+		})
+	}
+	// ParseInput ÖNCE: düz token reddi ön koşul ayrıştırmasını beklemez.
+	_, _, err := ParsePut([]byte(`{"expectedUpdatedAt":"x","instances":[{"id":"a","token":"eyJ"}]}`))
+	var fe *FieldError
+	if !errors.As(err, &fe) || fe.Path != "instances[0].token" {
+		t.Fatalf("düz token önce: %v", err)
+	}
+}
+
+func i64(v int64) *int64 { return &v }
+
+func TestApplyPutPrecondition(t *testing.T) {
+	const (
+		storedNs = int64(1758979200123456789) // Go time.Now().UnixNano()
+		jsNs     = int64(1758979200123456800) // tarayıcının JSON.parse → JSON.stringify çıktısı
+	)
+	cases := []struct {
+		name     string
+		stored   int64
+		expected *int64
+		stale    bool
+	}{
+		{"gönderilmedi → kabul", 42, nil, false},
+		{"birebir eşit", 42, i64(42), false},
+		{"tarayıcı yuvarlaması (256'nın katı) eşit sayılır", storedNs, i64(jsNs), false},
+		{"1000 ns fark → bayat", storedNs, i64(storedNs + 1000), true},
+		{"hiç kaydedilmemiş + 0", 0, i64(0), false},
+		{"hiç kaydedilmemiş görüldü, arada kaydedildi", 42, i64(0), true},
+		{"kayıt görüldü, blob sıfırlandı", 0, i64(42), true},
+		{"eski damga", 43, i64(42), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := putStored()
+			stored.UpdatedAt = tc.stored
+			out, err := ApplyPut(putIncoming(), PutOptions{ExpectedUpdatedAt: tc.expected}, stored, putClusters)
+			var se *StaleError
+			if !tc.stale {
+				if err != nil {
+					t.Fatalf("kabul edilmeli: %v", err)
+				}
+				if out.UpdatedAt != 0 {
+					t.Fatalf("updatedAt sunucu sahipli (SavePersisted damgalar): %d", out.UpdatedAt)
+				}
+				return
+			}
+			if !errors.As(err, &se) {
+				t.Fatalf("StaleError beklenirdi: %#v", err)
+			}
+			if se.Current != tc.stored || se.Expected != *tc.expected {
+				t.Fatalf("StaleError{Expected:%d, Current:%d}, beklenen {%d, %d}", se.Expected, se.Current, *tc.expected, tc.stored)
+			}
+			var fe *FieldError
+			if errors.As(err, &fe) {
+				t.Fatalf("bayatlık alan hatası değil (400 değil 409): %v", err)
+			}
+		})
+	}
+	// Metin kısa ve Türkçe; FE kendi kutusunu çizer, bu metin API/token çağıranlara.
+	const want = "ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin"
+	if got := (&StaleError{Expected: 1, Current: 2}).Error(); got != want {
+		t.Fatalf("metin:\n got %q\nwant %q", got, want)
+	}
+	// Ön koşul her şeyden ÖNCE: bayat taban üzerinde doğrulama hatası anlamsız
+	// (kullanıcının gördüğü blob artık yok) — geçersiz gövde + bayat damga → 409.
+	stored := putStored()
+	in := putIncoming()
+	in.Instances[0].HubNamespace = "Bad_NS"
+	_, err := ApplyPut(in, PutOptions{ExpectedUpdatedAt: i64(41)}, stored, putClusters)
+	var se *StaleError
+	if !errors.As(err, &se) {
+		t.Fatalf("bayatlık doğrulamadan önce gelmeli: %v", err)
+	}
+	// BE4 ön denetimi de sonra (hub kaldırma + bayat → 409).
+	in = putIncoming()
+	in.Hubs = in.Hubs[:1]
+	if _, err := ApplyPut(in, PutOptions{ExpectedUpdatedAt: i64(41)}, stored, putClusters); !errors.As(err, &se) {
+		t.Fatalf("bayatlık BE4'ten önce gelmeli: %v", err)
+	}
+}

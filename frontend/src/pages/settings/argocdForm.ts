@@ -22,6 +22,12 @@
 //   • apiUrl önizlemesi Go NormalizeAPIURL'ün ELLE ayrıştırılmış aynası:
 //     `new URL()` :443'ü düşürür ve yolu yeniden kodlar — sunucunun
 //     kaydedeceği biçim o olmazdı.
+//   • v0.10.978 — iyimser ön koşul: her PUT GET'te görülen `updatedAt`i
+//     `expectedUpdatedAt` olarak taşır (kayıtsız blob = 0); 409 stale'de
+//     sekme yeniden GET'ler ve mergeDraft ile üç yönlü birleştirir (alan /
+//     satır başına: kullanıcı değiştirdi VE sunucu değiştirmedi → kullanıcının;
+//     yoksa sunucunun, düzenleme "atıldı" sayılır). Karar: ~40 satırlık saf
+//     birleştirme, düz "düzenlemeleri at" yerine — tablo düzenlemesi pahalı.
 import type {
   ArgoCDBound, ArgoCDInstanceInput, ArgoCDPin, ArgoCDSettings, ArgoCDSettingsInput,
   ArgoCDTokenStatus, ThanosClusterSnapshot,
@@ -181,9 +187,13 @@ function advNum(d: Draft, k: AdvNumKey): number {
   return v === null || !Number.isFinite(v) ? 0 : v;
 }
 
-/** v0.10.974 — taslak → PUT gövdesi: TASLAK sırası, her bölüm, pins aynen. */
-export function toPutBody(d: Draft, pins: ArgoCDPin[]): ArgoCDSettingsInput {
+/** v0.10.974 — taslak → PUT gövdesi: TASLAK sırası, her bölüm, pins aynen.
+ *  v0.10.978 — `expectedUpdatedAt`: GET'te görülen damga (kayıtsız blob 0);
+ *  sunucu tutmazsa 409 stale. Her zaman gider — "gönderilmedi" yalnız API/token
+ *  çağıranların yoludur. */
+export function toPutBody(d: Draft, pins: ArgoCDPin[], expectedUpdatedAt: number): ArgoCDSettingsInput {
   return {
+    expectedUpdatedAt,
     enabled: d.enabled,
     hubs: d.hubs.map(h => ({ clusterId: h.clusterId, injectClusterLabel: h.inject })),
     envList: [...d.envList],
@@ -771,11 +781,13 @@ export function validateDraft(d: Draft, ctx: ValidateCtx): Issue[] {
 
 // ── Sunucu hatası ──────────────────────────────────────────────────────────
 
-export interface ArgoHttpError { status: number; error: string; field?: string; errorType?: string }
+/** `updatedAt` — v0.10.978 — 409 stale gövdesindeki KAYITLI damga (ns; sayı değilse yok). */
+export interface ArgoHttpError { status: number; error: string; field?: string; errorType?: string; updatedAt?: number }
 
 /**
  * v0.10.974 — api.request'in `Error("HTTP <kod>: <gövde>")`ı → alanlar. Gövde
- * `{error, field}` (PUT 400) ya da `{error, errorType}` (keşif) olabilir;
+ * `{error, field}` (PUT 400), `{error, errorType}` (keşif) ya da
+ * `{error, errorType: 'stale', updatedAt}` (PUT 409, v0.10.978) olabilir;
  * `error` "<field>: " önekiyle gelir — önek atılır (son söz sunucunun, ama
  * yol zaten ayrı gösteriliyor). JSON olmayan gövde metin olarak kalır; HTTP
  * olmayan hata (zaman aşımı, ağ) status 0.
@@ -789,6 +801,7 @@ export function parseArgoHttpError(err: unknown): ArgoHttpError {
   let error = body;
   let field: string | undefined;
   let errorType: string | undefined;
+  let updatedAt: number | undefined;
   try {
     const j: unknown = JSON.parse(body);
     if (j && typeof j === 'object') {
@@ -796,10 +809,94 @@ export function parseArgoHttpError(err: unknown): ArgoHttpError {
       if (typeof r.error === 'string') error = r.error;
       if (typeof r.field === 'string' && r.field) field = r.field;
       if (typeof r.errorType === 'string' && r.errorType) errorType = r.errorType;
+      if (typeof r.updatedAt === 'number' && Number.isFinite(r.updatedAt)) updatedAt = r.updatedAt;
     }
   } catch { /* düz metin gövde */ }
   if (field && error.startsWith(`${field}: `)) error = error.slice(field.length + 2);
-  return { status, error, ...(field ? { field } : {}), ...(errorType ? { errorType } : {}) };
+  return { status, error, ...(field ? { field } : {}), ...(errorType ? { errorType } : {}), ...(updatedAt !== undefined ? { updatedAt } : {}) };
+}
+
+// ── v0.10.978 — 409 sonrası üç yönlü birleştirme ──────────────────────────
+//
+// base = kullanıcının yüklediği taslak, draft = düzenlediği, fresh = sunucunun
+// şimdiki. Alan ya da satır başına: kullanıcı değiştirdi (base≠draft) VE sunucu
+// değiştirmedi (base=fresh) → kullanıcının değeri KORUNUR (kept); kullanıcı
+// değiştirdi ama sunucu da değiştirdi → sunucunun değeri, düzenleme ATILIR
+// (dropped); kullanıcı dokunmadı → sunucunun. Satırlar hub'da clusterId,
+// instance'ta id ile eşlenir (anahtarlar `s:<id>` iki tarafta aynı); sıra
+// sunucununki, kullanıcının yeni satırları sonda. Sunucunun sildiği satırdaki
+// düzenleme ve sunucunun da eklediği id'li yeni satır atılır (sunucu kazanır).
+
+export interface MergeResult { draft: Draft; kept: number; dropped: number }
+type Tally = { kept: number; dropped: number };
+
+/** Anahtar sırasından bağımsız yapısal eşitlik (applyBuffer satırı farklı sırada kurar). */
+function same(a: unknown, b: unknown): boolean {
+  const canon = (v: unknown): unknown => (v && typeof v === 'object' && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([k, x]) => [k, canon(x)]))
+    : Array.isArray(v) ? v.map(canon) : v);
+  return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+}
+
+function pick<T>(b: T, d: T, f: T, t: Tally): T {
+  if (same(b, d)) return f;
+  if (same(b, f)) { t.kept += 1; return d; }
+  t.dropped += 1;
+  return f;
+}
+
+function mergeRows<T>(base: T[], draft: T[], fresh: T[], idOf: (r: T) => string, t: Tally): T[] {
+  const by = (rows: T[]) => new Map(rows.map(r => [idOf(r), r]));
+  const b = by(base), d = by(draft);
+  const out: T[] = [];
+  const freshIds = new Set<string>();
+  for (const fr of fresh) {
+    const id = idOf(fr);
+    freshIds.add(id);
+    const br = b.get(id), dr = d.get(id);
+    if (!br) { if (dr) t.dropped += 1; out.push(fr); continue; }           // sunucu ekledi (aynı id'li yeni satır düşer)
+    if (!dr) { if (same(br, fr)) { t.kept += 1; continue; } t.dropped += 1; out.push(fr); continue; } // kullanıcı sildi
+    out.push(pick(br, dr, fr, t));
+  }
+  for (const dr of draft) {
+    const id = idOf(dr);
+    if (freshIds.has(id)) continue;
+    const br = b.get(id);
+    if (!br) { t.kept += 1; out.push(dr); }                                   // kullanıcı ekledi
+    else if (!same(br, dr)) t.dropped += 1;                                   // sunucu sildi, kullanıcı düzenlemişti
+  }
+  return out;
+}
+
+export function mergeDraft(base: Draft, draft: Draft, fresh: Draft): MergeResult {
+  const t: Tally = { kept: 0, dropped: 0 };
+  const adv = { ...fresh.adv };
+  for (const k of ADV_NUM_KEYS) adv[k] = pick(base.adv[k], draft.adv[k], fresh.adv[k], t);
+  return {
+    draft: {
+      enabled: pick(base.enabled, draft.enabled, fresh.enabled, t),
+      hubs: mergeRows(base.hubs, draft.hubs, fresh.hubs, h => h.clusterId, t),
+      instances: mergeRows(base.instances, draft.instances, fresh.instances, i => i.id, t),
+      envList: pick(base.envList, draft.envList, fresh.envList, t),
+      adv,
+      metricsOnlyMode: pick(base.metricsOnlyMode, draft.metricsOnlyMode, fresh.metricsOnlyMode, t),
+    },
+    ...t,
+  };
+}
+
+/** Yeniden yükleme kutusunun metni (kaç düzenleme korundu / atıldı).
+ *  v0.10.978 — hub/instance satırı BÜTÜN olarak birleşir (applyBuffer satırı
+ *  bütün kurar; token üçlüsü tokenInput/clearToken/storedRef tek mantıksal
+ *  alan) — metin alan YA DA satır der; alan başına birleştirme sunucunun token
+ *  değişikliğini kullanıcının yeni ref'iyle sessizce ezerdi. */
+export function reloadText(m: MergeResult): string {
+  if (!m.kept && !m.dropped) return 'Yeniden yüklendi — kayıtlı ayar güncel; kaydedilmemiş düzenleme yoktu.';
+  const parts = [
+    m.kept ? `${m.kept} düzenlemeniz korundu` : '',
+    m.dropped ? `${m.dropped} düzenlemeniz sunucuda da değişen alana ya da satıra dokunduğu için atıldı` : '',
+  ].filter(Boolean);
+  return `Yeniden yüklendi — ${parts.join('; ')}.${m.kept ? ' Korunanları kaydetmek için Kaydet.' : ''}`;
 }
 
 /** Sunucu alan yolu → taslak hedefi (`instances[N]`/`hubs[N]` TASLAK dizisine). */

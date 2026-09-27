@@ -1951,6 +1951,8 @@ export const api = {
   // `clearTokenRef: true`. Keşif hub başına tek POST ve sunucu bütçesi 60 sn
   // (≤150 çağrı): istemci tavanı 75 sn, çağıranın signal'i (sekme sökülünce) keser.
   getArgoCDSettings: () => get<import('./types').ArgoCDSettingsResponse>(`/api/settings/argocd`),
+  // v0.10.978 — PUT `expectedUpdatedAt` (GET settings.updatedAt) taşır; bayat
+  // tabanda 409 {errorType: 'stale', updatedAt} — sekme yeniden yükleyip birleştirir.
   putArgoCDSettings: (s: import('./types').ArgoCDSettingsInput) =>
     request<import('./types').ArgoCDSettingsResponse>(`/api/settings/argocd`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },

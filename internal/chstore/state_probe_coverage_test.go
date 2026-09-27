@@ -8,10 +8,11 @@
 // ettirmez. Eskiden yalnız okuma HATASI loglanıyordu; atlanan replika sessizdi.
 //
 // Bu dosya şunu çiviler: cevap veren replika sayısı roster'la (system.clusters)
-// karşılaştırılır, eksikse ⚠ loglanır ve obs.complete=false olur — DAVRANIŞ
-// DEĞİŞMEZ (Keeper'dan yokluk kanıtı ayrı operatör kararı). Canlı ClickHouse
-// yok: sahte driver.Conn (sprRows/sprRow, state_path_rebuild_test.go). Host
-// adları sentetik (host-1..4, uptrace_all).
+// karşılaştırılır, eksikse ⚠ loglanır ve obs.complete=false olur. v0.10.978 —
+// eksik gözlem artık yalnız bilgi DEĞİL: gözlenmemiş tablo için Keeper muhafızı
+// bağlanır (state_keeper_probe.go; kanıt yoksa hüküm yine kural 4). Canlı
+// ClickHouse yok: sahte driver.Conn (sprRows/sprRow, state_path_rebuild_test.go).
+// Host adları sentetik (host-1..4, uptrace_all).
 package chstore
 
 import (
@@ -26,6 +27,8 @@ import (
 
 // probeConn — boot probe'unun dört okumasını taklit eder: yerel
 // system.replicas, küme geneli system.replicas, roster ve cevap sayımı.
+// v0.10.978 — artı Keeper muhafızının iki okuması: system.zookeeper (znode →
+// çocuklar; olmayan yol ZNONODE hatası ya da boş sonuç) ve {shard} makroları.
 type probeConn struct {
 	driver.Conn
 	local       [][]any // yerel system.replicas: (table, zookeeper_path)
@@ -36,9 +39,18 @@ type probeConn struct {
 	rosterErr   error
 	answeredErr error
 	queries     []string
+
+	zk              map[string][]string // znode yolu → çocuk adları (yalnız var olanlar)
+	zkErr           error               // her Keeper okuması bu hatayla düşer
+	zkNoNodeAsEmpty bool                // olmayan yol: hata yerine boş sonuç (yeni CH)
+	zkPaths         []string            // sırayla bakılan znode yolları
+	macros          [][]any             // clusterAllReplicas(…, system.macros): (host, macro, substitution)
+	macrosErr       error
+	macrosRead      bool
+	macrosReads     int // v0.10.978 — kaç kez okundu (gözlem başına 1 olmalı)
 }
 
-func (c *probeConn) Query(_ context.Context, q string, _ ...any) (driver.Rows, error) {
+func (c *probeConn) Query(_ context.Context, q string, args ...any) (driver.Rows, error) {
 	c.queries = append(c.queries, q)
 	switch {
 	case strings.Contains(q, "clusterAllReplicas('uptrace_all', system.replicas)"):
@@ -48,6 +60,34 @@ func (c *probeConn) Query(_ context.Context, q string, _ ...any) (driver.Rows, e
 		return &sprRows{vals: c.cluster}, nil
 	case strings.Contains(q, "FROM system.replicas WHERE"):
 		return &sprRows{vals: c.local}, nil
+	case strings.Contains(q, "FROM system.zookeeper"):
+		if len(args) != 1 {
+			return nil, errors.New("Keeper okuması yolu bağlamadı")
+		}
+		path := args[0].(string)
+		c.zkPaths = append(c.zkPaths, path)
+		if c.zkErr != nil {
+			return nil, c.zkErr
+		}
+		children, ok := c.zk[path]
+		if !ok && !c.zkNoNodeAsEmpty {
+			return nil, errors.New("code: 999, message: Coordination::Exception: No node, path: " + path)
+		}
+		var vals [][]any
+		for _, n := range children {
+			vals = append(vals, []any{n})
+			if strings.Contains(q, "LIMIT 1") {
+				break
+			}
+		}
+		return &sprRows{vals: vals}, nil
+	case strings.Contains(q, "clusterAllReplicas('uptrace_all', system.macros)"):
+		c.macrosRead = true
+		c.macrosReads++
+		if c.macrosErr != nil {
+			return nil, c.macrosErr
+		}
+		return &sprRows{vals: c.macros}, nil
 	}
 	return nil, errors.New("beklenmeyen Query: " + q)
 }
@@ -149,11 +189,22 @@ func TestResolveStateReplicaPathsCoverage(t *testing.T) {
 				t.Errorf("cevap sayımı koştu mu = %v, beklenen %v (sorgular: %q)", counted, c.wantCounted, c.conn.queries)
 			}
 
-			// DAVRANIŞ DEĞİŞMEZ: kapsam yalnız bilgi. Gözlenmeyen tablo kural 4
-			// ile birleşik yola, gözlenen eski tablo kural 2 ile kendi yoluna.
+			// v0.10.978 — kapsam artık kararı da yönlendirir: TAM gözlemde
+			// gözlenmeyen tablo doğrudan kural 4 (Keeper'a bakılmaz); EKSİK
+			// gözlemde önce Keeper'a bakılır — bu sahte Keeper boştur (ZNONODE),
+			// hüküm yine kural 4 ama gerekçe Keeper'ın sorulduğunu söyler.
+			// Gözlenen eski tablo her iki durumda kural 2 ile kendi yoluna.
 			pfx := s.zkPrefix()
-			if got, reason := useUnifiedStatePath(s.stateObs, pfx, "ai_eval_runs"); !got || reason != statePathFreshReason {
+			got, reason := useUnifiedStatePath(s.stateObs, pfx, "ai_eval_runs")
+			if !got || !strings.Contains(reason, statePathFreshReason) {
 				t.Errorf("gözlenmeyen ai_eval_runs = (%v, %q), kural 4 bekleniyordu", got, reason)
+			}
+			if c.wantComplete {
+				if reason != statePathFreshReason || len(c.conn.zkPaths) != 0 {
+					t.Errorf("tam gözlemde Keeper'a bakılmamalı: gerekçe %q, bakılan %q", reason, c.conn.zkPaths)
+				}
+			} else if !strings.Contains(reason, "Keeper") || len(c.conn.zkPaths) == 0 {
+				t.Errorf("eksik gözlemde Keeper'a bakılmalı: gerekçe %q, bakılan %q", reason, c.conn.zkPaths)
 			}
 			if got, _ := useUnifiedStatePath(s.stateObs, pfx, "problems"); got {
 				t.Error("gözlenen eski yollu problems komşularına (kural 2) katılmalıydı")

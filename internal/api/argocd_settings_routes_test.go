@@ -16,6 +16,10 @@ package api
 // keşifte ikinci tur uygulama (anlık count, sahte /api/v1/query) ve shard
 // (`pod` label-values) sayımı aynı bütçeden, sayım hatası 200'ü bozmaz; hub
 // Thanos 403 metni FE'nin eşlediği biçimde pinli.
+//
+// v0.10.978 — iyimser ön koşul (expectedUpdatedAt → 409 stale; depo okunamazken
+// 503 unavailable; pod içi argocdPutMu ile atomik: eşzamanlı ikiz PUT'un
+// ikincisi 409) ve keşifte "yetki yok" (401/403 → errorType unauthorized).
 
 import (
 	"context"
@@ -26,9 +30,11 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/argocd"
 	"github.com/cilcenk/coremetry/internal/auth"
@@ -955,6 +961,256 @@ func TestArgoCDSettingsPutMergesAgainstPeerBlob(t *testing.T) {
 	}
 }
 
+// v0.10.978 — iyimser ön koşul (v0.10.974'te ertelenen "iki admin, son yazan
+// kazanır" kararı, onaylandı): PUT gövdesindeki istek-yalnız expectedUpdatedAt,
+// PUT öncesi TAZE yüklenen kalıcı blobun updatedAt'iyle karşılaştırılır.
+// Tutmazsa 409 {error, errorType:"stale", updatedAt:<kayıtlı>} — yazım yok,
+// audit yok, canlı ayar değişmez (400 duruşu). Gönderilmemişse kabul (API/token
+// çağıranlar, eski bundle) ama audit details `"precondition":"none"` taşır;
+// tutarsa `"precondition":"updatedAt"` + `expectedUpdatedAt`. Karşılaştırma
+// LoadPersisted'tan SONRA: B pod'unun belleği bayatken A pod'unun damgası tutar.
+//
+// Adım 6: kalıcı blob OKUNAMIYORKEN ön koşullu PUT 503 {errorType:
+// "unavailable"} — yazım yok, audit yok (bellekteki bayat bloba karşı doğrulama
+// yanlış audit + kayıp yazım olurdu); ön koşulsuz PUT logla-sür (v0.10.974).
+//
+// Eski kod bu testi geçemez: bayat damga 200 döner ve audit details
+// "precondition" taşımaz; depo hatasında ön koşullu PUT 200 alıp peer'ın yeni
+// blobunu ezer ve audit "precondition":"updatedAt" der.
+func TestArgoCDSettingsPutStalePrecondition(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hub := argoClusterID(argoHubName)
+	body := func(pre string) string {
+		return `{` + pre + `"hubs":[{"clusterId":"` + hub + `"}],"instances":[{"id":"team-a-prod","hubNamespace":"team-a-prod"}]}`
+	}
+	stampOf := func(w *httptest.ResponseRecorder) int64 {
+		t.Helper()
+		var g struct {
+			Settings argocd.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &g); err != nil || g.Settings.UpdatedAt == 0 {
+			t.Fatalf("cevapta settings.updatedAt yok: %v %s", err, w.Body)
+		}
+		return g.Settings.UpdatedAt
+	}
+
+	// 1) Ön koşulsuz PUT: kabul, audit "precondition":"none" (blob da orada).
+	w := e.do(t, "PUT", "/api/settings/argocd", body(""), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ön koşulsuz PUT: %d %s", w.Code, w.Body)
+	}
+	first := stampOf(w)
+	rows := e.audits()
+	if len(rows) != 1 || !strings.Contains(rows[0].Details, `"precondition":"none"`) || strings.Contains(rows[0].Details, "expectedUpdatedAt") ||
+		!strings.Contains(rows[0].Details, `"id":"team-a-prod"`) {
+		t.Fatalf("audit details precondition:none + blob taşımalı: %+v", rows)
+	}
+	// GET'in verdiği damga = PUT cevabındaki damga (FE bunu geri gönderir).
+	if got := stampOf(e.do(t, "GET", "/api/settings/argocd", "", auth.RoleAdmin)); got != first {
+		t.Fatalf("GET updatedAt %d ≠ PUT %d", got, first)
+	}
+
+	// 2) Tutan ön koşul: kabul, audit "precondition":"updatedAt" + gönderilen damga.
+	w = e.do(t, "PUT", "/api/settings/argocd", body(fmt.Sprintf(`"expectedUpdatedAt":%d,`, first)), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("tutan ön koşul: %d %s", w.Code, w.Body)
+	}
+	second := stampOf(w)
+	if second == first {
+		t.Fatal("ikinci kayıt yeni damga almalı")
+	}
+	rows = e.audits()
+	if len(rows) != 1 || !strings.Contains(rows[0].Details, `"precondition":"updatedAt"`) ||
+		!strings.Contains(rows[0].Details, fmt.Sprintf(`"expectedUpdatedAt":%d`, first)) {
+		t.Fatalf("audit details tutan ön koşulu taşımalı: %+v", rows)
+	}
+
+	// 3) Bayat damga (ilk kaydın damgası): 409, gövde şekli, yazım/audit/canlı yok.
+	puts := e.store.puts
+	w = e.do(t, "PUT", "/api/settings/argocd", body(fmt.Sprintf(`"expectedUpdatedAt":%d,"enabled":true,`, first)), auth.RoleAdmin)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("bayat damga → 409: %d %s", w.Code, w.Body)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type %q", ct)
+	}
+	var stale struct {
+		Error     string  `json:"error"`
+		ErrorType string  `json:"errorType"`
+		UpdatedAt int64   `json:"updatedAt"`
+		Field     *string `json:"field"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &stale); err != nil {
+		t.Fatalf("409 gövdesi JSON değil: %v %s", err, w.Body)
+	}
+	if stale.ErrorType != "stale" || stale.UpdatedAt != second || stale.Field != nil ||
+		stale.Error != "ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin" {
+		t.Fatalf("409 gövdesi: %s", w.Body)
+	}
+	if e.store.puts != puts || len(e.audits()) != 0 || e.svc.Current().Enabled || e.svc.Current().UpdatedAt != second {
+		t.Fatal("409 yazmamalı / audit etmemeli / canlıyı değiştirmemeli")
+	}
+
+	// 4) Biçim: dize → 400 alan yollu (ön koşul ayrıştırma hatası bayatlık değil).
+	w = e.do(t, "PUT", "/api/settings/argocd", body(`"expectedUpdatedAt":"`+fmt.Sprint(second)+`",`), auth.RoleAdmin)
+	if w.Code != http.StatusBadRequest || argoJSON(t, w)["field"] != "expectedUpdatedAt" {
+		t.Fatalf("dize damga → 400 expectedUpdatedAt: %d %s", w.Code, w.Body)
+	}
+
+	// 5) Pod B: bellek bayat (hiç yüklenmemiş varsayılan, updatedAt 0) ama
+	// karşılaştırma PUT öncesi LoadPersisted'tan SONRA → A'nın damgası tutar.
+	SetArgoCDSettings(argocd.NewSettingsService())
+	w = e.do(t, "PUT", "/api/settings/argocd", body(fmt.Sprintf(`"expectedUpdatedAt":%d,`, second)), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("pod B tutan damga: %d %s", w.Code, w.Body)
+	}
+	// … ve bayat damga pod B'de de 409 (bellekteki 0'a değil kalıcı bloba karşı).
+	SetArgoCDSettings(argocd.NewSettingsService())
+	if w = e.do(t, "PUT", "/api/settings/argocd", body(fmt.Sprintf(`"expectedUpdatedAt":%d,`, first)), auth.RoleAdmin); w.Code != http.StatusConflict {
+		t.Fatalf("pod B bayat damga → 409: %d %s", w.Code, w.Body)
+	}
+
+	// 6) v0.10.978 — depo okunamıyor + ön koşul: 503 unavailable, yazım/audit
+	//    yok, peer'ın yeni blobu korunur (eski kod: bellekteki bayat bloba karşı
+	//    200, audit "precondition":"updatedAt", peer'ın yazımı kayıp). Ön
+	//    koşulsuz PUT'ta logla-sür (v0.10.974) korunur.
+	SetArgoCDSettings(argocd.NewSettingsService())
+	w = e.do(t, "PUT", "/api/settings/argocd", body(""), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("pod B taban: %d %s", w.Code, w.Body)
+	}
+	base := stampOf(w)
+	_ = e.audits()
+	var newer argocd.Settings
+	if err := json.Unmarshal(e.store.rows[argocd.SettingsKey], &newer); err != nil {
+		t.Fatal(err)
+	}
+	newer.UpdatedAt, newer.EnvList = base+1_000_000_000, []string{"from-pod-a"} // peer daha yeni yazdı
+	e.store.rows[argocd.SettingsKey], _ = json.Marshal(newer)
+	e.store.getErr = fmt.Errorf("ch down")
+	puts = e.store.puts
+	w = e.do(t, "PUT", "/api/settings/argocd", body(fmt.Sprintf(`"expectedUpdatedAt":%d,`, base)), auth.RoleAdmin)
+	if w.Code != http.StatusServiceUnavailable || argoJSON(t, w)["errorType"] != "unavailable" {
+		t.Fatalf("depo okunamadı + ön koşul → 503 unavailable: %d %s", w.Code, w.Body)
+	}
+	if e.store.puts != puts || len(e.audits()) != 0 || argocdSettingsSvc.Load().Current().UpdatedAt != base { // e.svc pod A'nın servisi; pod B'ninki bağlı olan
+		t.Fatal("503 yazmamalı / audit etmemeli / canlıyı değiştirmemeli")
+	}
+	if got := argocdEnvListOf(t, e.store.rows[argocd.SettingsKey]); len(got) != 1 || got[0] != "from-pod-a" {
+		t.Fatalf("peer'ın yeni blobu ezilmemeli: %v", got)
+	}
+	w = e.do(t, "PUT", "/api/settings/argocd", body(""), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ön koşulsuz PUT depo hatasında logla-sür kalmalı: %d %s", w.Code, w.Body)
+	}
+	if rows = e.audits(); len(rows) != 1 || !strings.Contains(rows[0].Details, `"precondition":"none"`) {
+		t.Fatalf("ön koşulsuz audit: %+v", rows)
+	}
+	e.store.getErr = nil
+}
+
+// argocdEnvListOf — sahte depodaki blobun envList'i (v0.10.978 adım 6).
+func argocdEnvListOf(t *testing.T, raw []byte) []string {
+	t.Helper()
+	var s argocd.Settings
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatalf("blob JSON değil: %v", err)
+	}
+	return s.EnvList
+}
+
+// argoGatedStore — v0.10.978 — PutSetting'i ZAMANLI kapıyla tutan sahte depo:
+// ilk çağrı ya ikinci çağrı gelene ya da ~300 ms geçene dek bekler, ikinci
+// çağrı kapıyı açar. Sabit "iki çağrı gelsin" kapısı argocdPutMu altında
+// KİLİTLENİRDİ (B, A kilidi PutSetting içinde tutarken PutSetting'e hiç
+// ulaşamaz); zaman aşımı kapıyı her iki kodda da açar.
+type argoGatedStore struct {
+	*argoFakeStore
+	mu    sync.Mutex
+	calls int
+	once  sync.Once
+	first chan struct{}
+}
+
+func (g *argoGatedStore) PutSetting(ctx context.Context, key string, v []byte) error {
+	g.mu.Lock()
+	g.calls++
+	n := g.calls
+	g.mu.Unlock()
+	if n == 1 {
+		select {
+		case <-g.first:
+		case <-time.After(300 * time.Millisecond):
+		}
+	} else {
+		g.once.Do(func() { close(g.first) })
+	}
+	return g.argoFakeStore.PutSetting(ctx, key, v)
+}
+
+// v0.10.978 — ön koşul pod içinde ATOMİK (argocdPutMu): aynı expectedUpdatedAt'i
+// taşıyan iki eşzamanlı PUT'tan yalnız biri 200 alır, öteki 409; tek yazım
+// (tohum + kazanan), tek audit, canlı ayarda yalnız kazananın düzenlemesi.
+//
+// Eski kod bu testi geçemez: A kapılı PutSetting'te beklerken B karşılaştırmayı
+// bellekteki (hâlâ t1) bloba karşı geçer, ikisi de yazar → 200/200, puts=3,
+// A'nın düzenlemesi B'ninkiyle sessizce ezilir.
+func TestArgoCDSettingsPutSerialisedPerPod(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hub := argoClusterID(argoHubName)
+	body := func(pre string) string {
+		return `{` + pre + `"hubs":[{"clusterId":"` + hub + `"}],"instances":[{"id":"team-a-prod","hubNamespace":"team-a-prod"}]}`
+	}
+	w := e.do(t, "PUT", "/api/settings/argocd", body(""), auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("tohum: %d %s", w.Code, w.Body)
+	}
+	t1 := e.svc.Current().UpdatedAt
+	_ = e.audits()
+	gated := &argoGatedStore{argoFakeStore: e.store, first: make(chan struct{})}
+	argocdSettingsStoreOf = func(*Server) argocd.Store { return gated } // env cleanup geri koyar
+
+	var wg sync.WaitGroup
+	var wA, wB *httptest.ResponseRecorder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		wA = e.do(t, "PUT", "/api/settings/argocd", body(fmt.Sprintf(`"expectedUpdatedAt":%d,"enabled":true,`, t1)), auth.RoleAdmin)
+	}()
+	time.Sleep(20 * time.Millisecond) // A kilidi alıp kapıda beklesin
+	wB = e.do(t, "PUT", "/api/settings/argocd", body(fmt.Sprintf(`"expectedUpdatedAt":%d,"envList":["prod"],`, t1)), auth.RoleAdmin)
+	wg.Wait()
+
+	codes := []int{wA.Code, wB.Code}
+	sort.Ints(codes)
+	if codes[0] != http.StatusOK || codes[1] != http.StatusConflict {
+		t.Fatalf("tam bir 200 + bir 409 beklenir: A=%d B=%d (%s | %s)", wA.Code, wB.Code, wA.Body, wB.Body)
+	}
+	if e.store.puts != 2 || gated.calls != 1 {
+		t.Fatalf("tohum + kazanan = 2 yazım (puts=%d, kapılı çağrı=%d)", e.store.puts, gated.calls)
+	}
+	if rows := e.audits(); len(rows) != 1 || !strings.Contains(rows[0].Details, `"precondition":"updatedAt"`) {
+		t.Fatalf("tek audit (kazanan): %+v", rows)
+	}
+	cur := e.svc.Current()
+	aWon := wA.Code == http.StatusOK
+	if cur.Enabled != aWon || (len(cur.EnvList) == 1) != !aWon || cur.UpdatedAt == t1 {
+		t.Fatalf("canlıda yalnız kazananın düzenlemesi olmalı (A kazandı=%v): enabled=%v envList=%v", aWon, cur.Enabled, cur.EnvList)
+	}
+	// 409 gövdesi kazananın damgasını taşır (FE yeniden yükler).
+	loser := wB
+	if !aWon {
+		loser = wA
+	}
+	var lb struct { // int64: map[string]any float64'e yuvarlar (put.go sameStamp)
+		ErrorType string `json:"errorType"`
+		UpdatedAt int64  `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(loser.Body.Bytes(), &lb); err != nil || lb.ErrorType != "stale" || lb.UpdatedAt != cur.UpdatedAt {
+		t.Fatalf("kaybeden 409 gövdesi: %v %s", err, loser.Body)
+	}
+}
+
 // BE3: kayıtlı yuvayı yeni kimlikle almak 400 instances[0].id; yazım ve
 // settings.argocd.update audit'i YOK.
 func TestArgoCDSettingsPutRenameRejected(t *testing.T) {
@@ -1143,20 +1399,107 @@ func TestArgoCDDiscoverErrorCandidatesNoCountCalls(t *testing.T) {
 	}
 }
 
-// FE'nin "Thanos kimlik bilgisini reddetti" eşlemesi bu metne dayanır: hub
-// Thanos 401/403 (JSON'suz gövde, ör. oauth-proxy) → 502 unavailable + sabit
-// metin. Davranış değişmedi; metin pinlendi.
-func TestArgoCDDiscoverHub403TextPinned(t *testing.T) {
-	e := newArgoTestEnv(t)
-	e.fake.fail = func(argoFakeReq) (int, string) { return http.StatusForbidden, "<html>Forbidden</html>" }
-	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+argoClusterID(argoHubName)+`"}`, auth.RoleAdmin)
-	if w.Code != http.StatusBadGateway {
-		t.Fatalf("hub 403 → 502: %d %s", w.Code, w.Body)
+// v0.10.978 — "yetki yok" (v0.10.974'te ertelenen karar, onaylandı): hub
+// Thanos'un 401/403'ü artık genel "unavailable" değil, sourcestate sözlüğüyle
+// `errorType: "unauthorized"` + `upstreamStatus` (401|403) + `hubClusterId`
+// taşır; HTTP kodu 502 KALIR (424 bu depoda upstream kimlik reddi için
+// kullanılmıyor — rollup_routes'ta "tablo yok"). Gövde ve audit satırı
+// yapılandırılmış URL'yi, host'u ya da çözülmüş token'ı ASLA taşımaz; audit
+// yine tek satır (settings.argocd.discover) — şekli değişmez.
+//
+// Eski kod bu testi geçemez: errorType "unavailable", upstreamStatus /
+// hubClusterId alanları yok, aday hatası "unavailable: …" öneklidir.
+func TestArgoCDDiscoverHubUnauthorized(t *testing.T) {
+	const secret = "sa-token-978-never-echoed"
+	for _, tc := range []struct {
+		name string
+		code int
+		body string // JSON'suz (oauth-proxy HTML'i) ya da JSON errorType'lı: HTTP kodu kazanır
+	}{
+		{"403 html", http.StatusForbidden, "<html>Forbidden</html>"},
+		{"401 html", http.StatusUnauthorized, "<html>Unauthorized</html>"},
+		{"403 json bad_data", http.StatusForbidden, `{"status":"error","errorType":"bad_data","error":"forbidden namespace at ` + "%URL%" + `"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newArgoTestEnv(t)
+			hub := argoClusterID(argoHubName)
+			e.s.thanos.Configure(thanos.Settings{Clusters: []thanos.ClusterConfig{
+				{Name: argoHubName, URL: e.fake.URL, ThanosLabelName: "cluster", Enabled: true, Token: secret},
+			}})
+			e.fake.fail = func(argoFakeReq) (int, string) {
+				return tc.code, strings.ReplaceAll(tc.body, "%URL%", e.fake.URL)
+			}
+			w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+hub+`"}`, auth.RoleAdmin)
+			if w.Code != http.StatusBadGateway {
+				t.Fatalf("hub %d → 502 kalır: %d %s", tc.code, w.Code, w.Body)
+			}
+			body := w.Body.String()
+			assertArgoNoLeak(t, body, e.fake.URL)
+			if strings.Contains(body, secret) {
+				t.Fatalf("gövde token'ı yankılıyor: %s", body)
+			}
+			m := argoJSON(t, w)
+			if m["errorType"] != "unauthorized" || m["upstreamStatus"] != float64(tc.code) || m["hubClusterId"] != hub || m["error"] == "" {
+				t.Fatalf("hata gövdesi: %v", m)
+			}
+			if tc.body[0] == '<' {
+				// FE sözleşmesi (argocdDiscovery.ts parseDiscoverError / failureState) bu şekle pinli.
+				want := fmt.Sprintf(`{"error":"thanos rejected the cluster credentials (HTTP %d)","errorType":"unauthorized","upstreamStatus":%d,"hubClusterId":"%s"}`, tc.code, tc.code, hub)
+				if got := strings.TrimSpace(body); got != want {
+					t.Fatalf("gövde:\n got %s\nwant %s", got, want)
+				}
+			}
+			rows := e.audits()
+			if len(rows) != 1 || rows[0].Action != "settings.argocd.discover" || rows[0].TargetKind != "settings" || rows[0].TargetID != argocd.SettingsKey {
+				t.Fatalf("audit tek satır ve şekli değişmez: %+v", rows)
+			}
+			d := rows[0].Details
+			if !strings.Contains(d, `"status":502`) || !strings.Contains(d, `"errorType":"unauthorized"`) ||
+				strings.Contains(d, secret) || strings.Contains(d, e.fake.URL) || strings.Contains(d, "upstreamStatus") {
+				t.Fatalf("audit details: %s", d)
+			}
+			if len(e.fake.requests()) != 1 {
+				t.Fatalf("iş listesi reddedilince tur durur: %d istek", len(e.fake.requests()))
+			}
+		})
 	}
-	const want = `{"error":"thanos rejected the cluster credentials (HTTP 403)","errorType":"unavailable"}`
-	if got := strings.TrimSpace(w.Body.String()); got != want {
-		t.Fatalf("gövde:\n got %s\nwant %s", got, want)
-	}
+
+	// Yalnız bir işin label-values çağrısı 403 → 200 ve o aday "unauthorized: …"
+	// öneki taşır (FE ERR_TR); tur ve öteki aday etkilenmez, sayım turu da
+	// 403'ü aynı sözlükle not eder.
+	t.Run("per-job 403", func(t *testing.T) {
+		e := newArgoTestEnv(t)
+		seedArgoFake(e.fake)
+		hub := argoClusterID(argoHubName)
+		e.fake.fail = func(r argoFakeReq) (int, string) {
+			sel := strings.Join(r.Form["match[]"], " ")
+			switch {
+			case r.Path != "/api/v1/query" && strings.Contains(sel, `job="team-b-uat-metrics"`):
+				return http.StatusForbidden, "<html>Forbidden</html>"
+			case r.Path == "/api/v1/query" && strings.Contains(r.Form.Get("query"), `job="team-a-prod-metrics"`):
+				return http.StatusUnauthorized, `{"status":"error","errorType":"unavailable","error":"token expired at ` + e.fake.URL + `"}`
+			}
+			return 0, ""
+		}
+		w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+hub+`"}`, auth.RoleAdmin)
+		if w.Code != http.StatusOK {
+			t.Fatalf("tek iş 403 → 200 kalır: %d %s", w.Code, w.Body)
+		}
+		assertArgoNoLeak(t, w.Body.String(), e.fake.URL)
+		var res argocdDiscoverResult
+		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Candidates) != 2 || res.Incomplete {
+			t.Fatalf("zarf: %+v", res)
+		}
+		if a := res.Candidates[0]; a.Error != "" || a.AppCount != nil || !strings.HasPrefix(a.CountNote, argocd.AppCountFailNote("unauthorized")) {
+			t.Errorf("A: sayım 401'i unauthorized diye not eder: %+v", a)
+		}
+		if b := res.Candidates[1]; b.MetricsJob != "team-b-uat-metrics" || b.Error != "unauthorized: thanos rejected the cluster credentials (HTTP 403)" {
+			t.Errorf("B: aday hatası unauthorized önekli: %+v", b)
+		}
+	})
 }
 
 // v0.10.974 — sayım sonucu MaxSeries (argocdCountMaxSeries = 101) tavanında

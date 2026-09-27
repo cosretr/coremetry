@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button, LinkButton } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -6,8 +6,8 @@ import type { ArgoCDBound, ArgoCDCandidate, ArgoCDPin, ArgoCDSettings, ArgoCDSet
 import { ConfigStatusBanner, FlashBox, SettingsLoadError, humanize, useSettingsLoad } from './shared';
 import {
   advInputId, applyBuffer, blankBuffer, bufferDirty, bufferErrorsFromIssues, bufferFrom, diffPhrases, dirtyText, domKey,
-  draftFromSettings, hubName, issueFromServer, newKey, parseArgoHttpError, pruneBufferErrors, remoteClustersFrom,
-  savedAtText, toPutBody, trPossessive3, validateBuffer, validateDraft,
+  draftFromSettings, hubName, issueFromServer, mergeDraft, newKey, parseArgoHttpError, pruneBufferErrors, reloadText,
+  remoteClustersFrom, savedAtText, toPutBody, trPossessive3, validateBuffer, validateDraft,
   type AdvNumKey, type BufferErrors, type Draft, type InstanceBuffer, type InstanceDraft, type Issue,
   type MetricsOnlyMode, type RemoteCluster,
 } from './argocdForm';
@@ -45,6 +45,17 @@ import { ArgoCDEmptyPanel } from './ArgoCDEmptyPanel';
 //     ANLIK GÖRÜNTÜSÜ (mockup flash): yazdıkça yeniden yazılıp ekran
 //     okuyucuyu kesmez; taslak düzenlenince kapanır (mockup `flash: null`).
 //     Alan altı hatalar canlı kalır. Gidilecek yeri olmayan yol bağlantı değil.
+//   • v0.10.978 — bayat yazma koruması: her PUT GET'te görülen `updatedAt`i
+//     `expectedUpdatedAt` olarak taşır; 409 `stale` → ayrı role=alert kutusu
+//     ("başka biri tarafından değiştirildi — yeniden yükle") ve tek çıkış
+//     "Yeniden yükle": yeniden GET + argocdForm.mergeDraft (sunucuda
+//     değişmemiş alan/satırlardaki düzenlemeler korunur, çakışanlar sunucunun
+//     değeriyle gelir; sonuç kutusu kaçının korunduğunu/atıldığını söyler).
+//     Bu kutu yazmaya devam edince KAPANMAZ (bir sonraki Kaydet yine 409
+//     olurdu); başarılı yeniden yükleme ya da kayıt kapatır. Yeniden yükleme
+//     sürerken de alan kilitli. Açık formda uygulanmamış düzenleme varken
+//     yeniden yükleme Kaydet gibi engellenir (form birleştirmeye girmez,
+//     sessizce silinirdi).
 
 const EMPTY_ROOT: CSSProperties = { maxWidth: 660 };
 const H2: CSSProperties = { margin: 0, fontSize: 'var(--fs-lg)', fontWeight: 600 };
@@ -57,6 +68,8 @@ const DIRTY: CSSProperties = { fontSize: 'var(--fs-sm)', color: 'var(--text2)' }
 // v0.10.974 — Kaydet kilidinin fieldset'i görünmez: varsayılan kenarlık/dolgu
 // yok; min-width 0 (fieldset'in min-content varsayılanı tabloları taşırırdı).
 const LOCK: CSSProperties = { minWidth: 0, margin: 0, padding: 0, border: 0 };
+// v0.10.978 — bayat kutusunun eylem satırı (kutu metninden ayrık).
+const STALE_ACT: CSSProperties = { marginTop: 'var(--sp-3)' };
 
 const EMPTY_SETTINGS: ArgoCDSettings = { enabled: false, apiWorker: {}, classification: {}, reader: {}, intervals: {}, mapping: {} };
 const PENDING_TEXT = 'Açık düzenleme formunda uygulanmamış değişiklik var: önce “Tabloya uygula” ya da “Vazgeç”.';
@@ -85,6 +98,14 @@ export function ArgoCDTab() {
   const [serverIssue, setServerIssue] = useState<Issue | null>(null);
   const [saveError, setSaveError] = useState('');
   const [okText, setOkText] = useState('');
+  /** v0.10.978 — PUT 409 stale: sunucudaki damga (gövdede yoksa undefined). */
+  const [stale, setStale] = useState<{ updatedAt?: number } | null>(null);
+  /** v0.10.978 — yeniden yükleme sonucu (korunan/atılan sayısı ya da hata). */
+  const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [reloading, setReloading] = useState(false);
+  /** v0.10.978 — yeniden yükleme sonrası odak hedefi: kilit AÇILDIKTAN (commit) sonra; `focus()`'un
+   *  setTimeout(0)'ı React'in toplu güncellemesinden önce koşabilir ve devre dışı Kaydet odak almazdı. */
+  const [focusAfter, setFocusAfter] = useState('');
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState('');
   const [savedNow, setSavedNow] = useState(false);
@@ -110,10 +131,15 @@ export function ArgoCDTab() {
     if (!id) return;
     setTimeout(() => document.getElementById(id)?.focus(), 0);
   }, []);
+  useEffect(() => {
+    if (!focusAfter) return;
+    document.getElementById(focusAfter)?.focus();
+    setFocusAfter('');
+  }, [focusAfter]);
   const change = useCallback((f: (d: Draft) => Draft) => {
     if (busyRef.current) return;
     setDraft(f);
-    setServerIssue(null); setSaveError(''); setOkText(''); setShownIssues([]);
+    setServerIssue(null); setSaveError(''); setOkText(''); setShownIssues([]); setNote(null); // `stale` kalır (v0.10.978)
   }, []);
 
   // ── Satır içi form ──────────────────────────────────────────────────────
@@ -223,7 +249,7 @@ export function ArgoCDTab() {
 
   const save = async () => {
     if (busy) return;
-    setOkText(''); setSaveError(''); setServerIssue(null);
+    setOkText(''); setSaveError(''); setServerIssue(null); setNote(null);
     if (buffer && !formDirty) { setBuffer(null); setBufErr({}); setPending(false); }
     const found = validateDraft(draft, vctx);
     if (formDirty || found.length) {
@@ -236,14 +262,20 @@ export function ArgoCDTab() {
     setBusy(true);
     busyRef.current = true;
     try {
-      const r = await api.putArgoCDSettings(toPutBody(draft, snap.pins));
+      // v0.10.978 — GET'te görülen damga geri gider (kayıtsız blob 0); sunucu tutmazsa 409 stale.
+      const r = await api.putArgoCDSettings(toPutBody(draft, snap.pins, snap.settings.updatedAt ?? 0));
       applyResponse(r);
-      setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]); setSavedNow(true); setInstMsg(''); setHubMsg('');
+      setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]); setSavedNow(true); setInstMsg(''); setHubMsg(''); setStale(null);
       const s = r.settings;
       setOkText(`Kaydedildi — ${s.hubs?.length ?? 0} hub, ${s.instances?.length ?? 0} instance; ${s.pins?.length ?? 0} pin olduğu gibi geri gönderildi. Denetim kaydı yazıldı (settings.argocd.update); Argo işçileri Faz 3'e kadar çalışmaz.`);
       announce('Kaydedildi.');
     } catch (e) {
       const p = parseArgoHttpError(e);
+      if (p.status === 409 && p.errorType === 'stale') {
+        setStale({ updatedAt: p.updatedAt });
+        announce('Kaydedilmedi — ayarlar başka biri tarafından değiştirildi.');
+        return;
+      }
       if (p.status === 400) setServerIssue(issueFromServer(p, draft));
       else setSaveError(p.status ? `HTTP ${p.status}: ${p.error}` : humanize(e));
       announce('Kaydedilmedi.');
@@ -252,10 +284,42 @@ export function ArgoCDTab() {
       setBusy(false);
     }
   };
+  // v0.10.978 — 409 sonrası "Yeniden yükle": yeniden GET, üç yönlü birleştirme
+  // (argocdForm.mergeDraft); yanıt yeni taban, birleşmiş taslak yerinde kalır.
+  // Hata: bayat kutusu KALIR (çıkış yolu hâlâ o), hata ayrı kutuda, taslak dokunulmaz.
+  const reload = async () => {
+    if (busy) return;
+    // v0.10.978 — Kaydet'teki kural burada da geçerli: açık formdaki uygulanmamış
+    // düzenleme birleştirmeye GİRMEZ (yalnız taslak birleşir) ve sessizce silinirdi;
+    // sonuç kutusu bile "düzenleme yoktu" derdi. Önce "Tabloya uygula" ya da "Vazgeç".
+    if (formDirty) { setNote({ kind: 'err', text: PENDING_TEXT }); blockPending(); return; }
+    setBusy(true); setReloading(true);
+    busyRef.current = true;
+    setNote(null);
+    try {
+      const r = await api.getArgoCDSettings();
+      const fresh = draftFromSettings(r.settings);
+      const m = mergeDraft(base, draft, fresh);
+      setSnap({ settings: r.settings, tokens: r.tokens ?? {}, bounds: r.bounds ?? {}, pins: r.settings.pins ?? [] });
+      setBase(fresh); setDraft(m.draft);
+      setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]);
+      setServerIssue(null); setSaveError(''); setOkText(''); setStale(null); setSavedNow(false); setInstMsg(''); setHubMsg('');
+      setNote({ kind: m.dropped ? 'err' : 'ok', text: reloadText(m) });
+      announce('Yeniden yüklendi.');
+      setFocusAfter('acd-save');
+    } catch (e) {
+      const p = parseArgoHttpError(e);
+      setNote({ kind: 'err', text: `Yeniden yüklenemedi — ${p.status ? `HTTP ${p.status}: ${p.error}` : humanize(e)}` });
+      announce('Yeniden yüklenemedi.');
+    } finally {
+      busyRef.current = false;
+      setBusy(false); setReloading(false);
+    }
+  };
   const revert = () => {
     setDraft(base);
     setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]);
-    setServerIssue(null); setSaveError(''); setOkText(''); setInstMsg(''); setHubMsg('');
+    setServerIssue(null); setSaveError(''); setOkText(''); setInstMsg(''); setHubMsg(''); setNote(null);
     announce('Değişiklikler geri alındı.');
   };
   const goTo = (is: Issue) => {
@@ -390,10 +454,25 @@ export function ArgoCDTab() {
           </FlashBox>
         )}
         {saveError && <FlashBox kind="err">Kaydedilmedi — {saveError}. Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.</FlashBox>}
+        {stale && (
+          <FlashBox kind="err">
+            <div style={BOLD}>
+              Kaydedilmedi — ayarlar başka biri tarafından değiştirildi ({savedAtText(stale.updatedAt) || 'kayıt zamanı bilinmiyor'}) — yeniden yükle.
+            </div>
+            <div>
+              Sunucuda değişmemiş alan ya da satırlardaki düzenlemeleriniz korunur; sunucuda da değişen alanlar ve satırlar bütünüyle sunucunun değeriyle gelir.
+              Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.
+            </div>
+            <div style={STALE_ACT}>
+              <Button variant="secondary" size="sm" loading={reloading} onClick={() => { void reload(); }}>Yeniden yükle</Button>
+            </div>
+          </FlashBox>
+        )}
+        {note && <FlashBox kind={note.kind}>{note.text}</FlashBox>}
         {okText && <FlashBox kind="ok">{okText}</FlashBox>}
         <div className="row gap-4 row-wrap">
           <Button variant="secondary" disabled={busy || (phrases.length === 0 && !formDirty)} onClick={revert}>Değişiklikleri geri al</Button>
-          <Button variant="primary" loading={busy} onClick={() => { void save(); }}>Kaydet</Button>
+          <Button variant="primary" id="acd-save" loading={busy && !reloading} disabled={reloading} onClick={() => { void save(); }}>Kaydet</Button>
           <span style={DIRTY}>{dirtyText(phrases, formDirty)}</span>
         </div>
         <ArgoCDNote>

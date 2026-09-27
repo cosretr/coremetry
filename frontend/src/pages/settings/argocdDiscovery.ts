@@ -12,13 +12,41 @@
 // yoksa yalnız iş. "kayıtlı" yalnız KAYITLI satır ve aynı hub.
 //
 // Hub durumu (States sözlüğü): hata > kısmi > limitli > boş > ok; renk yalnız
-// sapmada (ok rozetsiz). 401/403 sunucuda 502 "unavailable" — ayrı "yetki yok"
-// durumu YOK (operatör kararı ertelendi); sabit metin regex'le tanınır ve
-// "erişilemedi" rozetine kimlik iletisi eklenir.
+// sapmada (ok rozetsiz).
+//
+// v0.10.978 — "yetki yok" (v0.10.974'te ertelenen karar, onaylandı): sunucu
+// hub Thanos'un 401/403'ünü `errorType: "unauthorized"` + `upstreamStatus`
+// (401|403) + `hubClusterId` ile döner, HTTP 502 kalır (sourcestate sözlüğü;
+// argocd_settings_routes.go). Durum yalnız errorType'tan okunur — metin
+// regex'i (CRED_RE) kaldırıldı; özet upstream kodunu söyler ("HTTP 403"),
+// ayrıntı satırı yok, alert kutusu (States (b) hub-1) token /
+// cluster-monitoring-view adımları + hub'ı yeniden ara düğmesini taşır.
 import type { ArgoCDCandidate, ArgoCDDiscoverResult } from '@/lib/types';
-import { fmtTr, hubName, trLocative, type ArgoHttpError, type InstanceDraft, type RemoteCluster } from './argocdForm';
+import { fmtTr, hubName, parseArgoHttpError, trLocative, type ArgoHttpError, type InstanceDraft, type RemoteCluster } from './argocdForm';
 
 // ── Hub koşusu ─────────────────────────────────────────────────────────────
+
+/** v0.10.978 — keşif hata yanıtı: ArgoHttpError + hub Thanos'un HTTP kodu (varsa). */
+export interface DiscoverError extends ArgoHttpError { upstreamStatus?: number }
+
+/**
+ * v0.10.978 — api.request'in `Error("HTTP <kod>: <gövde>")`ı → DiscoverError.
+ * Alanlar parseArgoHttpError'dan; `upstreamStatus` yalnız gövde JSON ve alan
+ * pozitif tamsayı ise (sunucu 0'ı atlar; dize kabul edilmez).
+ */
+export function parseDiscoverError(err: unknown): DiscoverError {
+  const base = parseArgoHttpError(err);
+  const msg = err instanceof Error ? err.message : String(err);
+  const m = /^HTTP \d+:\s*([\s\S]*)$/.exec(msg);
+  if (m) {
+    try {
+      const j: unknown = JSON.parse(m[1].trim());
+      const u = j && typeof j === 'object' ? (j as Record<string, unknown>).upstreamStatus : undefined;
+      if (typeof u === 'number' && Number.isInteger(u) && u > 0) return { ...base, upstreamStatus: u };
+    } catch { /* düz metin gövde */ }
+  }
+  return base;
+}
 
 export type HubDone = { kind: 'done'; result: ArgoCDDiscoverResult; ms: number; oneShot: boolean };
 
@@ -29,7 +57,7 @@ export type HubRun =
   | { kind: 'running'; oneShot: boolean; prev?: HubDone }
   | { kind: 'skipped'; reason: 'missing' | 'disabled' }
   | HubDone
-  | { kind: 'failed'; err: ArgoHttpError; ms: number; oneShot: boolean };
+  | { kind: 'failed'; err: DiscoverError; ms: number; oneShot: boolean };
 
 /** Ekranda gösterilecek aday sonucu: bitmişse kendisi, yeniden aranıyorsa önceki. */
 export function shownResult(r: HubRun | undefined): HubDone | undefined {
@@ -38,12 +66,10 @@ export function shownResult(r: HubRun | undefined): HubDone | undefined {
   return r.kind === 'running' ? r.prev : undefined;
 }
 
-export type HubState = 'running' | 'ok' | 'empty' | 'partial' | 'truncated' | 'unreachable' | 'timeout' | 'not_configured' | 'busy';
+// v0.10.978 — 'unauthorized' (sourcestate sözlüğü) → "yetki yok".
+export type HubState = 'running' | 'ok' | 'empty' | 'partial' | 'truncated' | 'unreachable' | 'unauthorized' | 'timeout' | 'not_configured' | 'busy';
 
 export interface HubBadge { text: string; tone: 'neutral' | 'warning' | 'danger' }
-
-/** Sunucunun sabit 401/403 metni (argocd_settings_routes_test pinli). */
-export const CRED_RE = /rejected the cluster credentials \(HTTP (401|403)\)/;
 
 /** Keşfi başlatmadan hub'ı eler: kayıt yok / devre dışı → istek YOK. */
 export function preflight(clusterId: string, clusters: RemoteCluster[]): 'missing' | 'disabled' | null {
@@ -52,9 +78,14 @@ export function preflight(clusterId: string, clusters: RemoteCluster[]): 'missin
   return rc.enabled ? null : 'disabled';
 }
 
-/** Hata yanıtının durumu: 400 guardrail → yapılandırılmamış, 504 → zaman aşımı, 429 → meşgul, kalan → erişilemedi. */
-export function failureState(err: ArgoHttpError): HubState {
+/**
+ * Hata yanıtının durumu: 400 guardrail → yapılandırılmamış, errorType
+ * unauthorized → yetki yok (v0.10.978; yalnız errorType — bizim 401/403'ümüz
+ * oturum kapısıdır, karışmaz), 504 → zaman aşımı, 429 → meşgul, kalan → erişilemedi.
+ */
+export function failureState(err: DiscoverError): HubState {
   if (err.status === 400 && (!err.errorType || err.errorType === 'guardrail')) return 'not_configured';
+  if (err.errorType === 'unauthorized') return 'unauthorized';
   if (err.status === 504 || err.errorType === 'timeout' || (err.status === 0 && /timed out/i.test(err.error))) return 'timeout';
   if (err.status === 429) return 'busy';
   return 'unreachable';
@@ -86,6 +117,7 @@ export function hubBadge(s: HubState): HubBadge | null {
     case 'partial': return { text: 'kısmi', tone: 'warning' };
     case 'truncated': return { text: 'limitli', tone: 'warning' };
     case 'unreachable': return { text: 'erişilemedi', tone: 'danger' };
+    case 'unauthorized': return { text: 'yetki yok', tone: 'danger' }; // v0.10.978
     case 'timeout': return { text: 'zaman aşımı', tone: 'danger' };
     case 'not_configured': return { text: 'yapılandırılmamış', tone: 'danger' };
     default: return null; // ok / running / busy — renk yalnız sapmada
@@ -98,6 +130,7 @@ export function hubBadge(s: HubState): HubBadge | null {
 const ERR_TR: Record<string, string> = {
   timeout: 'zaman aşımı (15 sn)',
   unavailable: 'erişilemedi',
+  unauthorized: 'yetki yok', // v0.10.978 — iş sorgusu 401/403
   internal: 'iç hata',
   bad_data: 'geçersiz sorgu',
   execution: 'değerlendirme hatası',
@@ -242,9 +275,9 @@ export function fmtSec(ms: number): string {
   return (ms / 1000).toFixed(1).replace('.', ',');
 }
 
-/** Ek kutu: kimlik reddi, etiketli boş sonuç, etiketsiz boş sonuç, etiketsiz aramada aday çıktı. */
+/** Ek kutu: yetki yok (v0.10.978), etiketli boş sonuç, etiketsiz boş sonuç, etiketsiz aramada aday çıktı. */
 export type HubNotice =
-  | { kind: 'cred' }
+  | { kind: 'unauthorized' }
   | { kind: 'emptyLabel'; label: string }
   | { kind: 'emptyNoLabel'; afterOneShot: boolean }
   | { kind: 'oneShotFound' };
@@ -284,7 +317,10 @@ export function hubView(run: HubRun, rows: CandRow[], hub: { name: string; label
       };
     case 'failed': {
       const e = run.err;
-      const summary = `0 aday · ${fmtSec(run.ms)} sn${e.status ? ` · HTTP ${e.status}` : ''}`;
+      // v0.10.978 — yetki yok: kod hub Thanos'unki (401|403), bizim 502 değil (mockup "HTTP 403").
+      const code = state === 'unauthorized' ? e.upstreamStatus ?? e.status : e.status;
+      const summary = `0 aday · ${fmtSec(run.ms)} sn${code ? ` · HTTP ${code}` : ''}`;
+      if (state === 'unauthorized') return { state, badge, summary, notice: { kind: 'unauthorized' }, ...empty, detail: [] };
       if (state === 'busy') return { state, badge, summary, notice: null, ...empty, detail: ['Bir Argo CD keşfi zaten koşuyor — bitince yeniden arayın.'] };
       if (state === 'not_configured') return { state, badge, summary, notice: null, ...empty, detail: [`${e.error || 'Hub kaydı yok, devre dışı ya da tokenRef çözülemedi'} → istek hiç gönderilmedi (fail-closed).`] };
       if (state === 'timeout') {
@@ -292,8 +328,6 @@ export function hubView(run: HubRun, rows: CandRow[], hub: { name: string; label
           ? 'İş listesi çağrısı 15 sn içinde yanıt vermedi (HTTP 504) → yeniden dene; sürerse hub Thanos gecikmesine bak.'
           : 'Keşif 75 sn içinde yanıt vermedi → yeniden deneyin; sürerse hub Thanos gecikmesine bakın.'] };
       }
-      const cred = CRED_RE.exec(e.error);
-      if (cred) return { state, badge, summary, notice: { kind: 'cred' }, ...empty, detail: [`Thanos kimlik bilgisini reddetti (HTTP ${cred[1]}).`] };
       return { state, badge, summary, notice: null, ...empty,
         detail: [`Hub Thanos'una erişilemedi${e.error ? `: ${e.error}` : ''}. DNS, bağlantı reddi ya da 5xx → Remote Cluster'daki Thanos URL'sini ve ağ yolunu kontrol edin.`] };
     }

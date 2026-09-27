@@ -483,6 +483,52 @@ describe('ArgoCDTab — keşif', () => {
     expect(block().textContent).not.toContain('aranıyor…');
     expect(block().textContent).not.toContain('limitli');
   });
+
+  // v0.10.978 — "yetki yok" (States (b) hub-1): sunucu 401/403'ü errorType
+  // unauthorized + upstreamStatus ile (HTTP 502) döner; blok "yetki yok"
+  // rozeti, "HTTP 403" özeti ve alert kutusu (token / cluster-monitoring-view
+  // adımları, Remote clusters bağlantısı, alert içi "hub-1'de yeniden ara")
+  // çizer. hub-2'nin aday tablosu görünür kalır; alert düğmesi yalnız hub-1'i
+  // yeniden arar. Eski kod 'erişilemedi' rozeti + HTTP 502 çizer.
+  it('hub-1 yetki yok: rozet + alert + alert içi yeniden ara; hub-2 sonucu kalır', async () => {
+    setup();
+    const H2_CANDS = [{ ...H1_CANDS[0], id: 'team-b-prod', hubClusterId: H2, name: 'team-b-prod', hubNamespace: 'team-b-prod', metricsJob: 'team-b-prod-metrics' }];
+    discoverArgoCD.mockImplementation((b: ArgoCDDiscoverRequest) => (b.hubClusterId === H1
+      ? Promise.reject(new Error(`HTTP 502: {"error":"thanos rejected the cluster credentials (HTTP 403)","errorType":"unauthorized","upstreamStatus":403,"hubClusterId":"${H1}"}`))
+      : Promise.resolve(discoverResult(H2, { candidates: H2_CANDS, calls: 3 }))));
+    const el = render();
+    await tick();
+    click(button(el, "Hub'larda instance ara"));
+    await tick(40);
+    expect(discoverArgoCD).toHaveBeenCalledTimes(2);
+    const block = () => [...el.querySelectorAll('h5')].find(h => h.textContent === 'hub-1')!.parentElement!.parentElement!;
+    const badge = () => block().querySelector('.badge')!;
+    expect(badge().textContent).toBe('yetki yok');
+    expect(badge().classList.contains('b-err')).toBe(true);
+    expect(block().textContent).toContain('0 aday · ');
+    expect(block().textContent).toContain(' · HTTP 403');
+    expect(block().textContent).not.toContain('HTTP 502');
+    expect(block().textContent).not.toContain('erişilemedi');
+    const alert = block().querySelector('[role="alert"]')!;
+    expect(alert.textContent).toContain("hub-1 Thanos'u isteği reddetti: kayıttaki token (ya da tokenRef) bu Thanos'ta okuma yetkisi taşımıyor. Aday listesi boş, ama bu “Argo CD yok” demek değil.");
+    expect(alert.textContent).toContain('cluster-monitoring-view');
+    expect(alert.textContent).toContain('yenileyin, kaydedin, sonra yeniden arayın.');
+    expect(alert.querySelector('a')?.getAttribute('href')).toBe('/settings/clusters');
+    expect(alert.querySelector('a')?.textContent).toBe('Ayarlar › Remote clusters › hub-1');
+    expect(block().querySelector('table')).toBeNull();
+    // hub-2'nin sonucu görünür kalır.
+    expect(el.querySelector('table[aria-label="hub-2 keşif adayları"] tbody tr')!.textContent).toContain('team-b-prod');
+    expect(live(el)).toBe('Keşif tamamlandı: 2 hub, 1 aday.');
+    // Alert içi yeniden ara: yalnız hub-1, hub'ın taslak inject bayrağıyla.
+    const retry = alert.querySelector('button')!;
+    expect(retry.textContent).toBe("hub-1'de yeniden ara");
+    click(retry);
+    await tick(40);
+    expect(discoverArgoCD).toHaveBeenCalledTimes(3);
+    expect(discoverArgoCD.mock.calls[2][0]).toEqual({ hubClusterId: H1, injectClusterLabel: true });
+    expect(el.querySelector('table[aria-label="hub-2 keşif adayları"] tbody tr')!.textContent).toContain('team-b-prod');
+    expect(badge().textContent).toBe('yetki yok');
+  });
 });
 
 describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
@@ -665,5 +711,170 @@ describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
     expect(el.querySelector('#acd-inst-edit')).not.toBeNull();
     click(byId(el, 'acd-inst-btn-s_zeta-prod'));
     expect(el.querySelector('#acd-inst-edit')).toBeNull();
+  });
+});
+
+// v0.10.978 — iyimser ön koşul: her PUT GET'te görülen `updatedAt`i
+// `expectedUpdatedAt` olarak taşır; 409 {errorType: "stale", updatedAt} →
+// role=alert kutusu + "Yeniden yükle" (yeniden GET, üç yönlü birleştirme:
+// sunucuda değişmemiş alan ya da satırlardaki düzenlemeler korunur, çakışanlar
+// sunucunun değeriyle gelir ve kutu bunu söyler); sonraki Kaydet yeni damgayla
+// gider. Açık satır formunda uygulanmamış düzenleme varken yeniden yükleme
+// Kaydet gibi engellenir (form birleştirmeye girmez, sessizce silinirdi).
+describe('ArgoCDTab — v0.10.978 bayat yazma koruması (409)', () => {
+  const STALE = 'HTTP 409: {"error":"ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin","errorType":"stale","updatedAt":1790000000000001000}';
+  const staleBox = (el: HTMLElement) => [...el.querySelectorAll('[role="alert"]')].find(a => a.textContent?.includes('başka biri tarafından değiştirildi'));
+
+  it('Kaydet expectedUpdatedAt = GET updatedAt gönderir; kayıtsız blobda 0', async () => {
+    setup();
+    const el = render();
+    await tick();
+    const body = await save(el);
+    expect(body.expectedUpdatedAt).toBe(1_790_000_000_000_000_000);
+    expect(body).not.toHaveProperty('updatedAt');
+    // Kaydedince yanıtın damgası yeni taban: ikinci Kaydet onu gönderir.
+    putArgoCDSettings.mockImplementationOnce(async (b: ArgoCDSettingsInput) => resp({ ...baseSettings(), ...b, instances: b.instances.map(({ clearTokenRef: _c, ...i }) => i), updatedAt: 1_790_000_000_000_002_000 }));
+    click(button(el, 'Kaydet'));
+    await tick();
+    click(button(el, 'Kaydet'));
+    await tick();
+    expect(putArgoCDSettings).toHaveBeenCalledTimes(3);
+    expect((putArgoCDSettings.mock.calls[2][0] as ArgoCDSettingsInput).expectedUpdatedAt).toBe(1_790_000_000_000_002_000);
+  });
+
+  it('kayıtsız blob (updatedAt yok) → expectedUpdatedAt: 0', async () => {
+    setup({ ...baseSettings(), updatedAt: undefined });
+    const el = render();
+    await tick();
+    const body = await save(el);
+    expect(body.expectedUpdatedAt).toBe(0);
+  });
+
+  it('409 stale → alert kutusu + "Yeniden yükle": düzenlemeler sunucuda değişmemiş alan ya da satırlarda korunur, çakışan atılır, sonraki Kaydet yeni damgayla', async () => {
+    setup();
+    putArgoCDSettings.mockRejectedValueOnce(new Error(STALE));
+    const el = render();
+    await tick();
+    // Kullanıcı: hub-2 bayrağı AÇIK (sunucu dokunmayacak → korunur) ve reader.timeoutS = 40 (sunucu 35 yapacak → atılır).
+    click(el.querySelector('input[aria-label^=\'cluster="hub-2"\']')!);
+    click(byId(el, 'acd-adv-btn'));
+    setInput(byId(el, 'acd-adv-reader-timeoutS'), '40');
+    expect(el.textContent).toContain('2 kaydedilmemiş değişiklik');
+    click(button(el, 'Kaydet'));
+    await tick();
+    expect(putArgoCDSettings).toHaveBeenCalledTimes(1);
+    expect((putArgoCDSettings.mock.calls[0][0] as ArgoCDSettingsInput).expectedUpdatedAt).toBe(1_790_000_000_000_000_000);
+    const box = staleBox(el)!;
+    expect(box).toBeTruthy();
+    expect(box.textContent).toContain('Kaydedilmedi — ayarlar başka biri tarafından değiştirildi');
+    expect(box.textContent).toContain('yeniden yükle');
+    expect(box.textContent).toContain('Hiçbir değişiklik yazılmadı');
+    expect(box.textContent).toContain('son kayıt');
+    expect(live(el)).toBe('Kaydedilmedi — ayarlar başka biri tarafından değiştirildi.');
+    // Taslak yerinde: düzenlemeler kaybolmadı, kilit açık.
+    expect((el.querySelector('input[aria-label^=\'cluster="hub-2"\']') as HTMLInputElement).checked).toBe(true);
+    expect(el.textContent).toContain('2 kaydedilmemiş değişiklik');
+    expect(el.querySelector('fieldset')!.disabled).toBe(false);
+    // Yazmaya devam etmek kutuyu KAPATMAZ (tek çıkış yeniden yükleme; sonraki Kaydet yine 409 olurdu).
+    setInput(byId(el, 'acd-adv-reader-timeoutS'), '41');
+    setInput(byId(el, 'acd-adv-reader-timeoutS'), '40');
+    expect(staleBox(el)).toBeTruthy();
+
+    // Sunucudaki yeni blob: envList'e uat eklendi, reader.timeoutS 35, damga yeni; hub-2 bayrağı DEĞİŞMEDİ.
+    const fresh: ArgoCDSettings = { ...baseSettings(), envList: ['prod', 'int', 'uat'], reader: { timeoutS: 35 }, updatedAt: 1_790_000_000_000_001_000 };
+    getArgoCDSettings.mockImplementation(async () => resp(fresh));
+    click([...box.querySelectorAll('button')].find(b => b.textContent === 'Yeniden yükle')!);
+    await tick();
+    expect(getArgoCDSettings).toHaveBeenCalledTimes(2);
+    expect(staleBox(el)).toBeUndefined();
+    expect((el.querySelector('input[aria-label^=\'cluster="hub-2"\']') as HTMLInputElement).checked).toBe(true);
+    expect(byId<HTMLInputElement>(el, 'acd-adv-reader-timeoutS').value).toBe('35');
+    expect(el.querySelector('button[aria-label="uat ortamını kaldır"]')).not.toBeNull();
+    expect(el.textContent).toContain('1 kaydedilmemiş değişiklik: hub-2: küme etiketi eklenecek');
+    const note = [...el.querySelectorAll('[role="alert"], [role="status"]')].find(a => a.textContent?.startsWith('Yeniden yüklendi —'))!;
+    expect(box.textContent).toContain('değişmemiş alan ya da satırlardaki düzenlemeleriniz korunur');
+    expect(note.textContent).toBe('Yeniden yüklendi — 1 düzenlemeniz korundu; 1 düzenlemeniz sunucuda da değişen alana ya da satıra dokunduğu için atıldı. Korunanları kaydetmek için Kaydet.');
+    expect(note.getAttribute('role')).toBe('alert');
+    expect(live(el)).toBe('Yeniden yüklendi.');
+    expect(document.activeElement?.id).toBe('acd-save');
+    expect(el.textContent).not.toContain('son kayıt şimdi');
+    // Yeni damgayla Kaydet: korunan düzenleme + sunucunun değerleri gider.
+    click(button(el, 'Kaydet'));
+    await tick();
+    expect(putArgoCDSettings).toHaveBeenCalledTimes(2);
+    const again = putArgoCDSettings.mock.calls[1][0] as ArgoCDSettingsInput;
+    expect(again.expectedUpdatedAt).toBe(1_790_000_000_000_001_000);
+    expect(again.hubs).toEqual([{ clusterId: H1, injectClusterLabel: true }, { clusterId: H2, injectClusterLabel: true }]);
+    expect(again.envList).toEqual(['prod', 'int', 'uat']);
+    expect(again.reader.timeoutS).toBe(35);
+    expect(el.textContent).toContain('Kaydedildi — 2 hub, 3 instance');
+  });
+
+  it('düzenleme yokken 409 → yeniden yükle: taslak = sunucu, kutu "düzenleme yoktu"; yeniden yükleme hatası kutuda', async () => {
+    setup();
+    putArgoCDSettings.mockRejectedValue(new Error(STALE));
+    const el = render();
+    await tick();
+    click(button(el, 'Kaydet'));
+    await tick();
+    const box = staleBox(el)!;
+    getArgoCDSettings.mockRejectedValueOnce(new Error('HTTP 503: argocd settings not wired'));
+    click([...box.querySelectorAll('button')].find(b => b.textContent === 'Yeniden yükle')!);
+    await tick();
+    // Hata: bayat kutusu kalır (çıkış yolu hâlâ o), hata ayrı kutuda; taslak dokunulmadı.
+    expect(staleBox(el)).toBeTruthy();
+    expect(el.textContent).toContain('Yeniden yüklenemedi — HTTP 503: argocd settings not wired');
+    expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
+    getArgoCDSettings.mockImplementation(async () => resp({ ...baseSettings(), envList: ['prod'], updatedAt: 1_790_000_000_000_001_000 }));
+    click([...staleBox(el)!.querySelectorAll('button')].find(b => b.textContent === 'Yeniden yükle')!);
+    await tick();
+    expect(staleBox(el)).toBeUndefined();
+    expect(el.textContent).not.toContain('Yeniden yüklenemedi');
+    expect(el.querySelector('button[aria-label="int ortamını kaldır"]')).toBeNull();
+    expect(el.textContent).toContain('Yeniden yüklendi — kayıtlı ayar güncel; kaydedilmemiş düzenleme yoktu.');
+    expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
+    // 409 dışı hatalar eski yolda kalır (genel hata kutusu), bayat kutusu yok.
+    putArgoCDSettings.mockRejectedValueOnce(new Error('HTTP 409: {"error":"başka bir 409"}'));
+    click(button(el, 'Kaydet'));
+    await tick();
+    expect(staleBox(el)).toBeUndefined();
+    expect(el.textContent).toContain('Kaydedilmedi — HTTP 409: başka bir 409.');
+  });
+
+  // v0.10.978 — açık satır formundaki uygulanmamış düzenleme birleştirmeye
+  // GİRMEZ; eski reload onu sessizce siler, ikinci GET'i atar ve sonuç kutusu
+  // "kaydedilmemiş düzenleme yoktu" derdi. Yeni kural Kaydet'inkiyle aynı.
+  it('409 → açık satır formunda uygulanmamış düzenleme varken "Yeniden yükle" GET atmaz: form kalır, uygula/vazgeç istenir; uygulayınca yeniden yükleme düzenlemeyi korur', async () => {
+    setup();
+    putArgoCDSettings.mockRejectedValueOnce(new Error(STALE));
+    const el = render();
+    await tick();
+    click(button(el, 'Kaydet'));
+    await tick();
+    const box = staleBox(el)!;
+    expect(box).toBeTruthy();
+    // Kilit açık: satır formu açılır ve yazılır (taslağa henüz uygulanmadı).
+    click(byId(el, 'acd-inst-btn-s_zeta-prod'));
+    setInput(byId(el, 'acd-ed-name'), 'Zeta prod 2');
+    getArgoCDSettings.mockImplementation(async () => resp({ ...baseSettings(), envList: ['prod', 'int', 'uat'], updatedAt: 1_790_000_000_000_001_000 }));
+    click([...box.querySelectorAll('button')].find(b => b.textContent === 'Yeniden yükle')!);
+    await tick();
+    // Eski kod: ikinci GET + form sessizce silinir + "kaydedilmemiş düzenleme yoktu".
+    expect(getArgoCDSettings).toHaveBeenCalledTimes(1);
+    expect(staleBox(el)).toBeTruthy();
+    expect(byId<HTMLInputElement>(el, 'acd-ed-name').value).toBe('Zeta prod 2');
+    expect(live(el)).toContain('uygulanmamış değişiklik');
+    expect(document.activeElement?.id).toBe('acd-ed-apply');
+    expect(el.textContent).toContain('Açık düzenleme formunda uygulanmamış değişiklik var');
+    expect(el.textContent).not.toContain('kaydedilmemiş düzenleme yoktu');
+    // Uygula → yeniden yükle: ad düzenlemesi sunucuda değişmemiş satırda → korunur.
+    click(byId(el, 'acd-ed-apply'));
+    click([...staleBox(el)!.querySelectorAll('button')].find(b => b.textContent === 'Yeniden yükle')!);
+    await tick();
+    expect(getArgoCDSettings).toHaveBeenCalledTimes(2);
+    expect(staleBox(el)).toBeUndefined();
+    expect(el.textContent).toContain('Yeniden yüklendi — 1 düzenlemeniz korundu. Korunanları kaydetmek için Kaydet.');
+    expect(el.textContent).toContain('1 kaydedilmemiş değişiklik: zeta-prod değişti');
+    expect(el.querySelector('button[aria-label="uat ortamını kaldır"]')).not.toBeNull();
   });
 });

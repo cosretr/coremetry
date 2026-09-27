@@ -561,3 +561,70 @@ describe('CorePanel menuExtra (v0.9.1163)', () => {
     ]);
   });
 });
+
+// ── v0.10.978 — boş başlık: <h3> HİÇ çizilmez; erişilebilir ad açık prop'tan ──
+//
+// v0.10.976 incelemesi: Trace › Metrics pod grafikleri (ve MultiLineChart,
+// PanelRenderer, QueryPanel, MetricQueryEditor) CorePanel'e title="" verir —
+// görsel başlık kendi kabuklarında. CorePanel yine de BOŞ bir <h3> basıyordu:
+// ekran okuyucuda içeriksiz bir başlık düğümü, başlık sırasında bir delik.
+// Kural: başlık boş/yalnız boşluk ise başlık ÖĞESİ yok — satırın kendisi
+// kalır («kısmi» rozeti ve ⋯ menüsü orada, kardeş paneller kaymaz). Ad,
+// ÇAĞIRAN verdiğinde `ariaLabel` prop'undan (role="group"; TracePodCharts
+// kabıyla aynı dil). ariaLabel verilmezse kök ad TAŞIMAZ: role=group ile
+// saran çağıran (TracePodCharts) çift duyurmasın.
+describe('CorePanel boş başlık (v0.10.978)', () => {
+  const card = (el: HTMLElement) => el.firstElementChild as HTMLElement;
+
+  it('🔴 title="" → DOM\'da <h3> YOK; ⋯ menü satırı yerinde', () => {
+    const el = render(
+      <CorePanel title="" storageKey="t-empty" data={{ state: 'loading' }} />);
+    expect(card(el).classList.contains('card')).toBe(true);
+    expect(el.querySelector('h3')).toBeNull();
+    expect(el.querySelector('[aria-label="Panel menüsü"]')).not.toBeNull();
+  });
+
+  it('🔴 yalnız boşluk da boş sayılır', () => {
+    const el = render(
+      <CorePanel title="   " storageKey="t-ws" data={{ state: 'loading' }} />);
+    expect(el.querySelector('h3')).toBeNull();
+  });
+
+  it('başlık varsa TEK <h3> ve metni başlık', () => {
+    const el = render(
+      <CorePanel title="Latency" storageKey="t-title" data={{ state: 'loading' }} />);
+    const hs = el.querySelectorAll('h3');
+    expect(hs.length).toBe(1);
+    expect(hs[0].textContent).toBe('Latency');
+  });
+
+  it('🔴 ariaLabel verilince kök role="group" + aria-label taşır (başlık boşken de)', () => {
+    const el = render(
+      <CorePanel title="" ariaLabel="Bellek (working set)" storageKey="t-aria"
+        data={{ state: 'loading' }} />);
+    expect(card(el).getAttribute('role')).toBe('group');
+    expect(card(el).getAttribute('aria-label')).toBe('Bellek (working set)');
+    expect(el.querySelector('h3')).toBeNull();
+  });
+
+  it('ariaLabel yokken kök AD TAŞIMAZ — role=group ile saran çağıran çift duyurmaz', () => {
+    const el = render(
+      <CorePanel title="" storageKey="t-noaria" data={{ state: 'loading' }} />);
+    expect(card(el).hasAttribute('role')).toBe(false);
+    expect(card(el).hasAttribute('aria-label')).toBe(false);
+  });
+
+  it('boş başlıkta «kısmi» rozeti başlık satırında kalır (satır düzeni bozulmaz)', () => {
+    const el = render(
+      <CorePanel title="" storageKey="t-partial"
+        data={{ state: 'ready', frames: TWO_SERIES, partial: 'son 2 dk eksik' }} />);
+    expect(el.querySelector('h3')).toBeNull();
+    const badge = el.querySelector('.badge.b-warn')!;
+    expect(badge).not.toBeNull();
+    expect(badge.textContent).toBe('kısmi');
+    // Başlık satırı kökün İLK çocuğu olarak durur; rozet ve ⋯ aynı satırda.
+    const row = badge.parentElement!;
+    expect(card(el).firstElementChild).toBe(row);
+    expect(row.contains(el.querySelector('[aria-label="Panel menüsü"]'))).toBe(true);
+  });
+});

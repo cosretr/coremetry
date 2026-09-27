@@ -33,6 +33,10 @@
 // yapalım", öneri 2): hiç var olmayan state tablosu, kümede başka tablolar
 // eski yolda olsa bile HER ZAMAN birleşik yola kurulur. Gerekçe ve prod
 // olayı useUnifiedStatePath'in belgesinde.
+//
+// v0.10.978 — kural 4'ün kör noktası kapandı: gözlem EKSİKKEN (cevap vermeyen
+// replika) hiç gözlenmemiş tablo için önce Keeper'a bakılır
+// (state_keeper_probe.go); eski yolda replika kümesi varsa ona katılır.
 package chstore
 
 import (
@@ -155,10 +159,16 @@ type stateObservation struct {
 	// paths: state tablosu adı → kümede GÖZLENEN zookeeper_path.
 	paths map[string]string
 	// complete — v0.10.971 — küme tanımındaki (system.clusters) HER replika
-	// cevap verdi mi (stateProbeCoverage). YALNIZ BİLGİ: useUnifiedStatePath
-	// buna bakmaz. false iken kural 4'ün "hiçbir node'da yok" hükmü yalnız
-	// cevap verenler için doğrudur; boot bunu ⚠ satırıyla söyler.
+	// cevap verdi mi (stateProbeCoverage). false iken kural 4'ün "hiçbir
+	// node'da yok" hükmü yalnız cevap verenler için doğrudur; boot bunu ⚠
+	// satırıyla söyler. v0.10.978 — artık kararı da yönlendirir: false iken
+	// gözlenmemiş tablo için önce `keeper` sorulur.
 	complete bool
+	// keeper — v0.10.978 — Keeper muhafızı (state_keeper_probe.go). YALNIZ
+	// complete=false iken bağlanır (bindStateKeeperGuard); nil = sorulmaz.
+	// Elle kurulan gözlemler (sihirbazın gölge Store'u, testler) nil bırakır
+	// ve v0.10.971 hükmünü birebir alır.
+	keeper stateKeeperLookup
 }
 
 // useUnifiedStatePath — SPLIT-BRAIN MUHAFIZI. SAF.
@@ -202,6 +212,19 @@ type stateObservation struct {
 //  4. Tablo hiçbir node'da yok → BİRLEŞİK yol, HER ZAMAN — kümede başka
 //     state tabloları hâlâ eski yolda olsa bile. Katılınacak bir grup
 //     yoktur; eski yol ona yalnız shard başına bölünme verir.
+//     v0.10.978 — "hiçbir node'da yok" hükmü gözlem EKSİKKEN (obs.complete=
+//     false: roster'daki bir replika cevap vermedi ya da küme okuması düştü)
+//     yalnız cevap verenler için doğrudur. O hâlde 4'ten ÖNCE Keeper
+//     muhafızı sorulur (decideStatePath, state_keeper_probe.go):
+//     - Keeper'da YALNIZ eski yolda replika kümesi var → ESKİ yol, ona
+//     katıl ("Keeper kanıtı: eski yolda replika var, gözlem eksikti");
+//     - birleşik yolda var (eski yolda da olsa) ya da hiçbir yerde yok →
+//     BİRLEŞİK (kural 4). İki yolda da varsa ⚠: 0009 penceresinde `_old`
+//     yedeği eski yolda durur ve gözlem onu görmez (stateProbeTable);
+//     Keeper yedeğin kümesini `<t>`'ninkinden ayıramaz, eski kazansaydı var
+//     olan birleşik grup BÖLÜNÜRDÜ — v0.10.971'in hükmü korunur;
+//     - Keeper okunamadı → BİRLEŞİK (v0.10.971 davranışı) + ⚠ "muhafız
+//     koşamadı". Gözlem TAMKEN muhafız hiç sorulmaz (bağlanmaz bile).
 //
 // v0.10.971 — KALDIRILAN KURAL 3 (operatör kararı 2026-09-27, "Önerini
 // yapalım", öneri 2). Kurulumun "KUŞAĞI"na bakıyordu: kümede
@@ -228,19 +251,13 @@ type stateObservation struct {
 // Eski kural 3 bu dar durumu yalnız TESADÜFEN örtüyordu (eski yoldaki tablo
 // için doğru, birleşik yoldaki için yanlış). resolveStateReplicaPaths İKİ
 // durumu da GÜRÜLTÜLÜ loglar (ikincisini roster ile cevap verenleri sayarak
-// ayırır: stateProbeCoverage) ve obs.complete'e yazar; davranış kararı
-// operatörde (Keeper'dan yokluk kanıtı onaylanmadı).
+// ayırır: stateProbeCoverage) ve obs.complete'e yazar. v0.10.978 — iki
+// durumda da gözleme Keeper muhafızı bağlanır (bindStateKeeperGuard); karar
+// zinciri decideStatePath'te, bu sarmalayıcı yalnız imzayı korur (cluster.go
+// adaptDDL ve replica_repair.go seed planı buradan çağırır).
 func useUnifiedStatePath(obs stateObservation, zkPrefix, name string) (bool, string) {
-	if !obs.ok {
-		return false, "probe koşmadı — mevcut kuruluma dokunulmuyor (eski yol)"
-	}
-	if p, seen := obs.paths[name]; seen {
-		if p == unifiedStatePath(zkPrefix, name) {
-			return true, "tablo zaten birleşik yolda"
-		}
-		return false, "tablo kümede eski yolda (" + p + ") — komşularına katılıyor"
-	}
-	return true, statePathFreshReason
+	unified, reason, _ := decideStatePath(obs, zkPrefix, name, obs.keeper)
+	return unified, reason
 }
 
 // statePathFreshReason — v0.10.971 — kural 4'ün gerekçe metni (seed planının
@@ -261,8 +278,9 @@ const statePathFreshReason = "tablo kümede yok — hiç var olmayan state tablo
 //     v0.10.971 — "bu tablo HİÇBİR yerde yok" sorusu (kural 4) için
 //     YETERLİ DEĞİLDİR: o, HER replikanın cevap vermesini ister. Bu yüzden
 //     okuma başarılıysa cevap veren replika sayısı küme tanımıyla
-//     (system.clusters) karşılaştırılır; eksikse ⚠ loglanır (davranış
-//     değişmez — obs.complete yalnız bilgi).
+//     (system.clusters) karşılaştırılır; eksikse ⚠ loglanır ve (v0.10.978)
+//     gözleme Keeper muhafızı bağlanır: gözlenmemiş tablo kurulmadan önce
+//     Keeper'da eski yol kanıtı aranır (state_keeper_probe.go).
 //
 // ÇAKIŞMA (aynı tablo, iki farklı yol) = kurulum ZATEN bölünmüş.
 // Muhafazakâr davranılır: ESKİ yol kazanır. Yeni bir yola geçmek
@@ -308,6 +326,11 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 			}
 		}
 	}
+	// v0.10.978 — gözlem eksikse (küme okuması düştü YA DA bir replika
+	// atlandı) kural 4'ün önüne Keeper muhafızı girer; tam gözlemde bağlanmaz.
+	if !obs.complete {
+		s.bindStateKeeperGuard(ctx, &obs)
+	}
 	s.stateObs = obs
 
 	unified, legacy := 0, 0
@@ -318,12 +341,14 @@ func (s *Store) resolveStateReplicaPaths(ctx context.Context) {
 			legacy++
 		}
 	}
-	log.Print(stateProbeLogLine(len(obs.paths), unified, legacy))
+	log.Print(stateProbeLogLine(len(obs.paths), unified, legacy, obs.complete))
 }
 
 // stateProbeBlindTail — v0.10.971 — eksik gözlemin (hata ya da atlanan
 // replika) ⚠ satırlarının ORTAK kuyruğu: kural 4'ün kör noktası tek metinle.
-const stateProbeBlindTail = "GÖZLENMEYEN bir state tablosu birleşik yola kurulur; cevap vermeyen bir komşuda eski yolda duruyorsa " +
+// v0.10.978 — kör nokta Keeper muhafızıyla daraldı; kuyruk bunu söyler.
+const stateProbeBlindTail = "GÖZLENMEYEN bir state tablosu için önce Keeper'da eski yol kanıtı aranır (v0.10.978); " +
+	"Keeper de okunamazsa birleşik yola kurulur ve cevap vermeyen bir komşuda eski yolda duruyorsa " +
 	"o shard BÖLÜNÜR (Admin › ClickHouse › Replika tutarlılığı)"
 
 // stateProbeCoverage — v0.10.971 — SAF: küme geneli state yolu okumasının
@@ -373,10 +398,14 @@ func (s *Store) stateProbeReplicaCoverage(ctx context.Context) (answered, roster
 // sihirbazın başarı notu) — biçimi değişmez. Eski kuşak eki ("yeni state
 // tabloları ESKİ yola kurulacak") kalktı: hiç var olmayan tablo her zaman
 // birleşik yola kurulur. Eski yolda tablo varsa bölünmüş oldukları söylenir.
-func stateProbeLogLine(observed, unified, legacy int) string {
+// v0.10.978 — gözlem eksikse (complete=false) satır Keeper muhafızını duyurur.
+func stateProbeLogLine(observed, unified, legacy int, complete bool) string {
 	line := fmt.Sprintf("[chstore] state ZK yolu probe'u: %d tablo gözlendi (%d birleşik, %d eski)", observed, unified, legacy)
 	if legacy > 0 {
 		line += " — eski yoldakiler shard başına BÖLÜNMÜŞ (Admin › ClickHouse › Replika tutarlılığı); hiç var olmayan state tabloları birleşik yola kurulur"
+	}
+	if !complete {
+		line += " — gözlem EKSİK: hiç var olmayan tablo için önce Keeper'da eski yol kanıtı aranır (v0.10.978)"
 	}
 	return line
 }

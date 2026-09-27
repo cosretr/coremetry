@@ -325,11 +325,11 @@ func TestUseUnifiedStatePathNeverKeyedByOtherTables(t *testing.T) {
 // alıntılanır (0010 AŞAMA B, sihirbazın başarı notu) ve DEĞİŞMEZ; kaldırılan
 // kuşak eki ("yeni state tabloları ESKİ yola kurulacak") geri gelmez.
 func TestStateProbeLogLine(t *testing.T) {
-	clean := stateProbeLogLine(47, 47, 0)
+	clean := stateProbeLogLine(47, 47, 0, true)
 	if !strings.Contains(clean, "47 tablo gözlendi (47 birleşik, 0 eski)") || strings.Contains(clean, "BÖLÜNMÜŞ") {
 		t.Errorf("temiz küme: %q", clean)
 	}
-	split := stateProbeLogLine(47, 37, 10)
+	split := stateProbeLogLine(47, 37, 10, true)
 	if !strings.Contains(split, "(37 birleşik, 10 eski) — eski yoldakiler shard başına BÖLÜNMÜŞ") ||
 		!strings.Contains(split, "hiç var olmayan state tabloları birleşik yola kurulur") {
 		t.Errorf("bölünmüş küme: %q", split)

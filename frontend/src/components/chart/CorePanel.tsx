@@ -122,7 +122,18 @@ export type PanelData =
   | { state: 'ready'; frames: DataFrame[]; partial?: string };
 
 export interface CorePanelProps {
+  // Görünen başlık. BOŞ ya da yalnız boşluk → başlık öğesi HİÇ çizilmez
+  // (v0.10.978): görsel başlığı kendi kabuğunda taşıyan çağıranlar
+  // (MultiLineChart, PanelRenderer, QueryPanel, MetricQueryEditor,
+  // TracePodCharts) title="" verir; boş bir <h3> ekran okuyucuda içeriksiz
+  // bir başlık düğümüydü (v0.10.976 incelemesi). Başlık satırının kendisi
+  // kalır («kısmi» rozeti + ⋯ menüsü), kardeş paneller kaymaz.
   title: string;
+  // v0.10.978 — Kökün ERİŞİLEBİLİR ADI, açıkça. Verilirse kök `role="group"`
+  // + `aria-label` taşır (TracePodCharts kabıyla aynı dil). Verilmezse kök ad
+  // TAŞIMAZ: role=group ile saran çağıran çift duyurmasın, başlıklı panelde
+  // ad zaten <h3>'ten okunur.
+  ariaLabel?: string;
   data: PanelData;
   height?: number;
   // Seri rolleri (indeksle hizalı, eksikse 'data'): hata serisi kırmızı,
@@ -277,7 +288,7 @@ function fullNameOf(frame: { meta?: { custom?: Record<string, unknown> } } | und
 }
 
 export function CorePanel({
-  title, data, height = 200, roles, colors, onZoom, onZoomReset, syncKey, logScale, zeroBase, storageKey,
+  title, ariaLabel, data, height = 200, roles, colors, onZoom, onZoomReset, syncKey, logScale, zeroBase, storageKey,
   thresholds, regions, queryText,
   defaultHidden, xRange, note, onExpandClick, exemplars, onExemplarClick, onRegionClick, regionClickHint,
   onBucketClick, hiddenNames, hideLegend, onCursorTime, dashed, viz = 'line',
@@ -1138,17 +1149,27 @@ export function CorePanel({
     // arka planını gösteriyordu. ChartCard'ın çizdiği kart kabuğu (.card:
     // bg1 + border + radius + gölge) buraya taşındı — redhat/light'ta
     // beyaz, dark'ta koyu; tema token'ları karar verir.
-    <div className="card" style={{
-      display: 'flex', flexDirection: 'column', gap: 6,
-      // Tam ekran: CSS overlay. Route/DOM taşınmaz — uPlot instance'ı
-      // yaşamaya devam eder, ResizeObserver genişliği kendisi yakalar.
-      ...(fullscreen ? {
-        position: 'fixed', inset: 12, zIndex: 'var(--z-modal)',
-        background: 'var(--bg0)', padding: 12, overflow: 'auto',
-      } : {}),
-    }}>
+    <div className="card"
+      // v0.10.978 — ad yalnız ÇAĞIRAN açıkça verdiğinde (role + aria-label
+      // birlikte: rolsüz bir div'de aria-label okunmaz). Aksi hâlde kök
+      // adsız kalır — TracePodCharts gibi role=group ile saran kabuk tek
+      // duyurucu olsun.
+      role={ariaLabel ? 'group' : undefined}
+      aria-label={ariaLabel || undefined}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 6,
+        // Tam ekran: CSS overlay. Route/DOM taşınmaz — uPlot instance'ı
+        // yaşamaya devam eder, ResizeObserver genişliği kendisi yakalar.
+        ...(fullscreen ? {
+          position: 'fixed', inset: 12, zIndex: 'var(--z-modal)',
+          background: 'var(--bg0)', padding: 12, overflow: 'auto',
+        } : {}),
+      }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 12 }}>{title}</h3>
+        {/* v0.10.978 — boş/yalnız boşluk başlıkta <h3> HİÇ yok; satır
+            (rozet + ⋯) olduğu gibi kalır. Boş h3 zaten 0 yükseklikti,
+            yalnız gap'e bir öğe katıyordu — yerleşim kaymaz. */}
+        {title.trim() !== '' && <h3 style={{ margin: 0, fontSize: 12 }}>{title}</h3>}
         {data.state === 'ready' && data.partial && (
           <span className="badge b-warn" title={data.partial}>kısmi</span>
         )}
