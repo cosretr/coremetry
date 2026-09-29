@@ -330,7 +330,9 @@ func TestReadyInstancesAndDigest(t *testing.T) {
 	}
 	a := Registry{ByServer: map[string]string{"u": "c"}, BySpan: map[string]string{"s": "c"}, Suffix: map[string]string{"c": "x"}}
 	b := Registry{ByServer: map[string]string{"u": "c"}, BySpan: map[string]string{"s": "c"}, Suffix: map[string]string{"c": "y"}}
-	if registryDigest(a) == registryDigest(b) || registryDigest(a) != registryDigest(a) {
+	// v0.10.988 — kararlılık iki ayrı çağrıyla (SA4000: aynı ifade iki yanda).
+	da1, da2, db := registryDigest(a), registryDigest(a), registryDigest(b)
+	if da1 == db || da1 != da2 {
 		t.Fatal("suffix değişimi özeti değiştirmeli, özet kararlı olmalı")
 	}
 	ws, unm := mapperWorkloads([]WorkloadObs{{SpanCluster: "s", Namespace: "n", Kind: "Deployment", Workload: "w"}, {SpanCluster: "z"}, {SpanCluster: "z"}}, a.BySpan)

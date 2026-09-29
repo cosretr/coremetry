@@ -66,7 +66,9 @@ func TestBucketRowsDenseAndCap(t *testing.T) {
 	if other != 1 { // OP_B/E2 tek satır
 		t.Fatalf("diğer serisi toplamı %v", other)
 	}
-	if counterFingerprint("a", CounterKey{"x", "y", "z", "-"}) == counterFingerprint("a", CounterKey{"x", "y", "w", "-"}) || counterFingerprint("a", CounterKey{"x", "y", "z", "-"}) != counterFingerprint("a", CounterKey{"x", "y", "z", "-"}) {
+	// v0.10.988 — kararlılık iki ayrı çağrıyla (SA4000: aynı ifade iki yanda).
+	fz1, fz2, fw := counterFingerprint("a", CounterKey{"x", "y", "z", "-"}), counterFingerprint("a", CounterKey{"x", "y", "z", "-"}), counterFingerprint("a", CounterKey{"x", "y", "w", "-"})
+	if fz1 == fw || fz1 != fz2 {
 		t.Fatal("parmak izi seri başına kararlı ve ayrık")
 	}
 	if len(BucketRows("", rows, from, to, nil, nil, 0, nil).Points) != 0 {

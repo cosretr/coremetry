@@ -1363,25 +1363,6 @@ func chatRendersCharts(ctx context.Context, d Deps) bool {
 	return err == nil
 }
 
-// splitCSV: tiny helper kept private so we don't pull in
-// strings just for one Split call further away.
-func splitCSV(s string) []string {
-	var out []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == ',' {
-			if i > start {
-				out = append(out, s[start:i])
-			}
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		out = append(out, s[start:])
-	}
-	return out
-}
-
 // runtimePods — the JVM pod reader, Store when none was injected.
 func (d Deps) runtimePods() chstore.RuntimePodReader {
 	if d.RuntimePods != nil {

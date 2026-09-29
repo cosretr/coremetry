@@ -127,7 +127,9 @@ func TestTokenizerStability(t *testing.T) {
 			t.Errorf("iki koşu farklı jeton: %s vs %s", x, y)
 		}
 	}
-	if a.Value("namespace", "team-x-prod") != "<team-1>-prod" || a.Value("namespace", "team-x-prod") != "<team-1>-prod" {
+	// v0.10.988 — ikinci çağrı ilkine eşit olmalı (SA4000: koşul iki kez aynıydı).
+	v1, v2 := a.Value("namespace", "team-x-prod"), a.Value("namespace", "team-x-prod")
+	if v1 != "<team-1>-prod" || v2 != v1 {
 		t.Error("aynı ham → aynı jeton")
 	}
 	if a.Count() != b.Count() {
