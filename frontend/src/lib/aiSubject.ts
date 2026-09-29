@@ -62,6 +62,18 @@ export function writeAiCodeParam(on: boolean): void {
 // "explain-trace:nudge" yapar (/ai ayrı sayar). Beyaz listeli: bilinmeyen
 // değer HİÇ gönderilmez. aicode gibi yalnız o açılışta yaşar — useAiSubject
 // her özne değişimi/kapanışta siler.
+// AI_QUICK_PARAM (v0.10.987, operatör "3 seçenek") — trace'in "Hızlı açıkla"
+// düğmesi: tek atışlık klasik açıklama (canlı inceleme okuması yok). aicode
+// gibi yalnız o açılışta ve paylaşılan linkte yaşar: useAiSubject her özne
+// değişiminde siler, quick=true ile açılışta yazar. Sunucuya gövdede
+// `quick:true` olarak gider (explainInit).
+export const AI_QUICK_PARAM = 'aiquick';
+
+export function readAiQuickParam(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get(AI_QUICK_PARAM) === '1';
+}
+
 export const AI_SRC_PARAM = 'aisrc';
 export const AI_SRC_VALUES = ['nudge', 'chat'] as const; // chat (v0.10.460) — sohbetten açılan Explain
 export type AISrc = typeof AI_SRC_VALUES[number];

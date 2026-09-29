@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconSparkles } from '@/components/icons';
-import { formatAiParam, type AISubject } from '@/lib/aiSubject';
+import { useSearchParams } from 'react-router-dom';
+import { AI_QUICK_PARAM, formatAiParam, type AISubject } from '@/lib/aiSubject';
 import { useAiSubject } from './useAiSubject';
 import { useCopilotEnabled } from './useCopilotEnabled';
 
@@ -15,8 +16,13 @@ import { useCopilotEnabled } from './useCopilotEnabled';
 //   • copilot kapalıysa buton HİÇ görünmez (eski self-hide davranışı),
 //   • ilk kullanıma dek nabız atar (v0.9.409, operatör isteği),
 //   • Button atomu + variant="accent" (tek tasarım dili).
-export function AIExplainButton({ subject, label, size, emphasis = 'normal', title, className }: {
+export function AIExplainButton({ subject, label, size, emphasis = 'normal', title, className, quick = false }: {
   subject: AISubject;
+  // quick (v0.10.987, operatör "3 seçenek") — trace'in tek atışlık klasik
+  // açıklaması: özneyle birlikte ?aiquick=1 yazılır. Aynı trace'in iki
+  // düğmesi (CoSRE'ye sor / Hızlı açıkla) aynı özneyi taşır; "açık" sayımı
+  // quick bayrağıyla ayrışır ki biri açıkken öteki tık kapatmasın, geçirsin.
+  quick?: boolean;
   label?: ReactNode;
   // 'xs' (v0.9.1033): kart başlığındaki mini ✨ — ikon-only etiketle
   // kullanılır, satır yüksekliğini büyütmez.
@@ -36,13 +42,15 @@ export function AIExplainButton({ subject, label, size, emphasis = 'normal', tit
 }) {
   const enabled = useCopilotEnabled();
   const [ai, setAi] = useAiSubject();
+  const [sp] = useSearchParams();
+  const quickOn = sp.get(AI_QUICK_PARAM) === '1';
   // Nabız "bu mount'ta hiç kullanılmadı" demek; çekmece bu özneyle
   // açıldıysa da susar (operatör zaten bulmuş).
   const [used, setUsed] = useState(false);
   if (enabled !== true) return null;
 
   const key = formatAiParam(subject);
-  const open = ai !== null && formatAiParam(ai) === key;
+  const open = ai !== null && formatAiParam(ai) === key && quickOn === quick;
   const quiet = used || open;
 
   const strong = emphasis === 'strong';
@@ -52,7 +60,7 @@ export function AIExplainButton({ subject, label, size, emphasis = 'normal', tit
       aria-expanded={open}
       title={title ?? 'AI açıklamasını sağ çekmecede aç'}
       className={[quiet ? undefined : 'ai-attn', className].filter(Boolean).join(' ') || undefined}
-      onClick={() => { setUsed(true); setAi(open ? null : subject); }}>
+      onClick={() => { setUsed(true); setAi(open ? null : subject, undefined, quick); }}>
       {label ?? <><IconSparkles /> <span>AI explain</span></>}
     </Button>
   );

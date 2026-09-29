@@ -96,11 +96,12 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 // (operatör: "tepe 22:30" dedi, ekran 01:30). includeCode yalnız
 // operatör isteyince true: kod okuma bir depo listelemesi + dosya
 // çekmesi demek, varsayılan KAPALI olması bilinçli.
-function explainInit(includeCode?: boolean): RequestInit {
+// quick (v0.10.987) — yalnız explain-trace: tek atışlık klasik açıklama.
+function explainInit(includeCode?: boolean, quick?: boolean): RequestInit {
   return {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...(includeCode ? { includeCode: true } : {}), ...tzBodyFields() }),
+    body: JSON.stringify({ ...(includeCode ? { includeCode: true } : {}), ...(quick ? { quick: true } : {}), ...tzBodyFields() }),
   };
 }
 
@@ -2406,10 +2407,11 @@ export const api = {
   // odak servisini belirler — bağlam şeridi ve takip sorularıyla AYNI servis.
   // Yalnız geçerli 16-hex gider (sunucu ötekini zaten yok sayar); yoksa kök.
   // Sıra korunur: 3 argümanlı çağıranlar ve test casusları değişmez.
-  copilotExplainTrace:   (id: string, includeCode?: boolean, opts?: ExplainStreamOpts, spanId?: string) =>
+  // quick (v0.10.987) — "Hızlı açıkla": sunucu klasik tek atışlık yolu koşar (canlı okuma yok).
+  copilotExplainTrace:   (id: string, includeCode?: boolean, opts?: ExplainStreamOpts, spanId?: string, quick?: boolean) =>
     explainCall<ExplainTraceAnswer>(
       `/api/copilot/explain-trace/${id}${spanId && /^[0-9a-f]{16}$/i.test(spanId) ? `?span=${spanId.toLowerCase()}` : ''}`,
-      explainInit(includeCode), opts),
+      explainInit(includeCode, quick), opts),
   // Per-span explain (v0.5.144). Backend pulls target span +
   // parent + children + error siblings for a focused prompt.
   copilotExplainSpan:    (traceId: string, spanId: string, opts?: ExplainStreamOpts) =>

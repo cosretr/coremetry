@@ -13,6 +13,10 @@ package api
 //     bulunamayan sayı uyarısı ve "Kaynak durumu" künyesi eklenir. answer
 //     çerçevesi: text, exchangeId, evidenceSpanIds, code, oracleRows, links,
 //     sources (+ isabette cached/cachedAtMs).
+//   - "Hızlı açıkla" (quick; v0.10.987, operatör "3 seçenek") — KLASİK yol
+//     kodsuz: buildTraceExplainInput + SystemPromptTrace, canlı okuma yok
+//     (inceleme 4-5 araç çağrısı ve adım akışı yerine tek LLM turu). Yol
+//     seçimi saf traceExplainPath'te (testli).
 //   - "Kodu da incele" (includeCode) — KLASİK yol aynen korunur
 //     (buildTraceExplainInput + SystemPromptTrace + kod bağlamı): kod çekici
 //     loglardaki stacktrace'e ve onun servisine bağlı, bağlam taşmasında kodu
@@ -54,8 +58,12 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	// trace'in LOGLARINDAKİ stacktrace'ten çıkar ve o stack'i basan
 	// SERVİSİN deposunda aranır (bkz. traceExplainInput.StackService).
 	opts := decodeExplainOptions(r)
-	if !opts.IncludeCode {
+	switch traceExplainPath(opts) {
+	case traceExplainInvestigation:
 		s.explainTraceInvestigation(w, r, xid)
+		return
+	case traceExplainQuick:
+		s.explainTraceQuick(w, r, xid)
 		return
 	}
 	in, err := s.buildTraceExplainInput(r.Context(), r.PathValue("id"))
@@ -82,6 +90,45 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	})
 	// v0.9.1127 (Faz 1.5) — cevabın çıkışı tek yerden (deliverExplain).
 	s.deliverExplain(w, r, xid, traceExplainExtra(in, cc, opts.IncludeCode), run, in.RootService, cacheKey)
+}
+
+// Yol adları (traceExplainPath).
+const (
+	traceExplainInvestigation = "investigation"
+	traceExplainQuick         = "quick"
+	traceExplainCode          = "code"
+)
+
+// traceExplainPath — SAF: gövde seçeneklerinden yol. Kod dalı hızlıyı yener
+// (ikisi de klasik istem; kodlu olan üstüne kod bağlamı koyar); ikisi de
+// yoksa inceleme. Test: trace_explain_handler_test.go.
+func traceExplainPath(o explainOptions) string {
+	switch {
+	case o.IncludeCode:
+		return traceExplainCode
+	case o.Quick:
+		return traceExplainQuick
+	}
+	return traceExplainInvestigation
+}
+
+// explainTraceQuick — v0.10.987: tek atışlık klasik açıklama. Kod dalıyla
+// aynı paket ve istem, kod bağlamı ve şema kanıtı yok; önbellek anahtarı
+// kodsuz klasik anahtar (explainTraceClassicPrepared ile aynı satır — iki
+// yol aynı cevabı paylaşır).
+func (s *Server) explainTraceQuick(w http.ResponseWriter, r *http.Request, xid string) {
+	in, err := s.buildTraceExplainInput(r.Context(), r.PathValue("id"))
+	if errors.Is(err, errExplainTraceNotFound) {
+		http.Error(w, "trace not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	system := copilot.SystemPromptTrace()
+	s.deliverExplain(w, r, xid, traceExplainExtra(in, devops.CodeContext{}, false),
+		s.explainPrompt(r, system, in.User), in.RootService, explainCacheKey(system, in.User, ""))
 }
 
 // explainTraceInvestigation — v0.10.948: varsayılan yol. Önbellek anahtarı

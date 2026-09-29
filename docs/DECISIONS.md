@@ -987,6 +987,20 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-09-29 — Trace: "Hızlı açıkla" ikinci düğme — tek atışlık klasik açıklama (v0.10.987)
+
+**Karar (operatör: "3 seçenek yapalım"):** trace sayfasında "CoSRE'ye sor"un yanına ikincil
+"Hızlı açıkla" / "Quick explain" düğmesi. Aynı özne (`?ai=trace`) + `?aiquick=1`; çekmece bunu
+gövdede `quick:true` olarak gönderir, sunucu KLASİK tek atışlık yolu koşar (buildTraceExplainInput:
+trace + loglar + Oracle satırları, SystemPromptTrace) — inceleme okumaları (dönem kıyası, pod,
+deploy) ve adım akışı yok, tek LLM turu. Yol seçimi saf `traceExplainPath`: includeCode > quick >
+inceleme (kod dalı zaten klasik istem + kod bağlamı). Önbellek anahtarı kodsuz klasik anahtar
+(explainTraceClassicPrepared ile aynı satır). `aiquick` aicode/aisrc gibi yalnız o açılışta ve
+paylaşılan linkte yaşar (useAiSubject özne değişiminde siler, quick ile yazar). Aynı trace'in iki
+düğmesi aynı özneyi taşıdığından "açık" sayımı quick bayrağıyla ayrışır: biri açıkken ötekine tık
+kapatmaz, kipe geçer. Panelde tek satır not: canlı okuma yok. **Neden:** v0.10.986 ilk cevabı klasik
+biçime aldı; operatör yine de hızlı, okumasız eski cevabı ayrı bir düğme olarak istedi (seçenek 3).
+
 ## 2026-09-29 — CoSRE trace incelemesi: klasik üç başlık, kanıt kimliksiz, güven satırsız (v0.10.986)
 
 **Karar (operatör: "trace'i açıkladığımda K1 T1 kesin gibi çıkarımlar yapıyor … kodu incele

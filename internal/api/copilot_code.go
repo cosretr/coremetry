@@ -26,6 +26,12 @@ import (
 // explainOptions — Explain uçlarının opsiyonel gövdesi.
 type explainOptions struct {
 	IncludeCode bool `json:"includeCode"`
+	// Quick (v0.10.987, operatör: "3 seçenek") — trace için tek atışlık
+	// klasik açıklama: buildTraceExplainInput paketi (trace + loglar + Oracle)
+	// ve SystemPromptTrace; canlı inceleme okumaları (kıyas, pod, deploy)
+	// çalışmaz. includeCode ile birlikte gelirse kod dalı kazanır (o da
+	// klasik yoldur, üstüne kod bağlamı). Yalnız explain-trace okur.
+	Quick bool `json:"quick"`
 	// Tz / TzOffsetMin (v0.10.745) — tarayıcının saat dilimi, sohbet
 	// bağlamındaki çiftin aynısı (copilot_chat.go). Kanıttaki mutlak
 	// damgalar bu dilimde yazılır; yoksa UTC (etiketli). Gövdede ya da

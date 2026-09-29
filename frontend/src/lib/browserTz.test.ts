@@ -66,7 +66,8 @@ describe('browserTz — api.ts kablolaması', () => {
     for (const p of ['/api/copilot/explain-trace/', '/api/copilot/explain-exception/']) {
       const i = src.indexOf(p);
       expect(i, p).toBeGreaterThan(0);
-      expect(src.slice(i, i + 160)).toContain('explainInit(includeCode)');
+      // v0.10.987 — trace ucu quick bayrağını da geçirir; ikisi de explainInit'ten (dilim çifti oradan).
+      expect(src.slice(i, i + 160)).toMatch(/explainInit\(includeCode(, quick)?\)/);
     }
   });
 });
