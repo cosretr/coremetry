@@ -987,6 +987,23 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-09-29 — CoSRE trace incelemesi: klasik üç başlık, kanıt kimliksiz, güven satırsız (v0.10.986)
+
+**Karar (operatör: "trace'i açıkladığımda K1 T1 kesin gibi çıkarımlar yapıyor … kodu incele
+dediğimde daha iyi sonuç veriyor, o hali olsa daha iyi olacak"):** "CoSRE'ye sor" ilk cevabı
+"Kodu da incele" geçişinin biçimine geçer — `systemTraceBody` ile aynı üç başlık: «İşlem Akışı ve
+Veri Özeti» / «Stacktrace Detayı» (yalnız kanıtta stacktrace varsa) / «Kök Neden ve Sonraki Adım»,
+artı «Eksik veri» yalnız durumu ok olmayan kaynak varken. Kanıt kimlikleri ([T1], [L1], [K1] …)
+sunucu istemde yine verir ama cevaba YAZILMAZ (modele yöneliktir); v0.10.972'nin "Güven: kesin /
+olası" satırı kalktı. Arayüz kod değiştirmeden klasik davranışa döner: Kök Neden'in ilk cümlesi
+Karar şeridi (`explainAnatomy` VERDICT_HDR; beşli önbellek metni için eski kural durur).
+**Değişmeyen:** veri toplama (get_trace, loglar, dönem kıyası, pod, deploy, Oracle), kaynak durumu
+künyesi ve sayı denetimi, dürüstlük kuralları (uydurma yok; ilişki ≠ neden; "log bulunamadı" ≠
+"hata yok"; kanıt yetersizse söylenir). Takip eki de aynı başlıklara geçti. Önbellek revizyonu
+inv-v0.10.986. **Neden:** v0.10.948/972'nin kanıt izi (kimlik + güven) cevabı okunmaz kılıyordu;
+operatör kodlu geçişin düz anlatımını tercih etti. Uydurmaya karşı koruma istemdeki değer-aynen
+ve "kanıt yetersiz" kurallarında sürer; kimlikler modele sunulmaya devam eder.
+
 ## 2026-09-27 — Argo CD: şimdilik yalnız metrik (API bağlantısı askıda)
 
 **Karar (operatör: "argocd şimdilik metrikle"):** Argo CD entegrasyonu şimdilik yalnız hub'ların

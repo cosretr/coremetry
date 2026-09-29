@@ -239,3 +239,27 @@ describe('splitSourceFooter (v0.10.948)', () => {
     expect(splitSourceFooter('a\nKAYNAK DURUMU: x').body).toBe('a');
   });
 });
+
+// v0.10.986 — operatör: "kodu incele dediğimde daha iyi sonuç veriyor, o hali
+// olsa daha iyi olacak". İnceleme cevabı klasik üçlüye geçti (kanıt kimliksiz,
+// güven satırsız): «Kök Neden ve Sonraki Adım»ın ilk cümlesi Karar (klasik
+// davranış); kaynak dipnotu yeni başlıklarda da bölümden ayrılır.
+describe('v0.10.986 — klasik üçlü inceleme cevabı', () => {
+  const answer = [
+    '**İşlem Akışı ve Veri Özeti**', '- checkout POST /orders 1840 ms; payments 500 döndü.', '- Loglarda PoolExhaustedException.', '',
+    '**Stacktrace Detayı**', '- Sınıf/metot: com.example.pay.PoolClient.acquire', '',
+    '**Kök Neden ve Sonraki Adım**', '- payments-db bağlantı havuzu tükendi. Havuz 50/50 dolu.', '- Sonraki: payments-db havuz metriği.', '',
+    '**Eksik veri**', '- Pod metrikleri: zaman aşımı — bellek baskısı doğrulanamadı.',
+  ].join('\n');
+  it('Karar = Kök Neden bölümünün ilk cümlesi; güven satırı gerekmez', () => {
+    expect(verdictLine(answer)).toBe('payments-db bağlantı havuzu tükendi.');
+    expect(dropVerdictSentence(answer, 'payments-db bağlantı havuzu tükendi.')).toContain('- Havuz 50/50 dolu.');
+  });
+  it('kaynak dipnotu yeni başlıkta biter (gövdede kalır)', () => {
+    const t = '---\n**Kaynak durumu** (sunucu)\n- trace: tamam\n\n**Kök Neden ve Sonraki Adım**\n- a. b.';
+    const r = splitSourceFooter('**İşlem Akışı ve Veri Özeti**\n- x.\n\n' + t);
+    expect(r.footer).toContain('trace: tamam');
+    expect(r.footer).not.toContain('Kök Neden');
+    expect(r.body).toContain('**Kök Neden ve Sonraki Adım**');
+  });
+});

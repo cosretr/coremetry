@@ -233,7 +233,8 @@ export { stripMarker };
 // üstteki `---` ayracı blokla birlikte gider.
 const SOURCE_FOOTER_HDR = /^[ \t>]*(?:#{1,6}[ \t]*)?(?:[*_]{1,2}[ \t]*)?kaynak durumu\b/i;
 // v0.10.972 — «Stacktrace detayı» ve «Kök neden» de cevap başlığı («Olası neden» eski önbellek metni için kalır).
-const SECTION_START = /^[ \t]*(?:#{1,6}[ \t]+\S|\*\*[ \t]*(?:bulgu|kanıt|stacktrace detayı|kök neden|olası neden|eksik veri|sonraki kontrol)[ \t]*[*:])/i;
+// v0.10.986 — ilk cevap klasik üçlüde: «İşlem Akışı ve Veri Özeti», «Kök Neden ve Sonraki Adım» (eski beşli önbellek metni için kalır).
+const SECTION_START = /^[ \t]*(?:#{1,6}[ \t]+\S|\*\*[ \t]*(?:bulgu|kanıt|stacktrace detayı|kök neden(?: ve sonraki adım)?|olası neden|eksik veri|sonraki kontrol|işlem akışı ve veri özeti)[ \t]*[*:])/i;
 const WARN_LINE = /^[ \t>*_]*⚠/;
 const RULE_LINE = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 

@@ -118,6 +118,14 @@ const systemTrace = systemTraceBody + AnswerInTurkish
 // Oracle satırı / çıplak exception.type sayılmaz, yoksa bölüm HİÇ yazılmaz.
 // PROBLEM istemindeki düz "Olası neden:" (systemProblem) AYRI bir yüzeydir,
 // değişmez.
+// v0.10.986 — operatör: "Kodu incele dediğimde daha iyi sonuç veriyor, o hali
+// olsa daha iyi olacak". Kod geçişi klasik istemi (systemTraceBody: İşlem
+// Akışı ve Veri Özeti / Stacktrace Detayı / Kök Neden ve Sonraki Adım) kullanır;
+// ilk cevap artık AYNI üç başlıkta ve düz anlatımla: kanıt kimlikleri ([K1],
+// [T1]) cevaba yazılmaz (sunucu yine verir, modele yöneliktir), "Güven: kesin /
+// olası" satırı yok, Kök Neden'in ilk cümlesi Karar şeridi (klasik davranış).
+// Veri toplama değişmedi: log, kıyas, pod, deploy, Oracle ve kaynak durumu
+// künyesi aynen; «Eksik veri» yalnız ok olmayan kaynak varken.
 // v0.10.972 — kesik stack notu: get_logs_for_trace öznitelik değerini 200
 // runede keser; sunucu bunu "(kaynak kesik: …)" diye söyler. Kesik stack
 // görünmeyen bir Caused by'ı saklıyor olabilir → tek başına "Güven: kesin"
@@ -131,34 +139,37 @@ pod durumu, deploy/sürüm değişiklikleri. Her bölümün başında o okumanı
 DURUMU yazar (ok, boş, erişilemedi, yetki yok, zaman aşımı, kısmi, gecikmeli,
 limitli). Kanıt satırları [T1], [L1], [K1], [P1], [D1] gibi kimlik taşır.
 
-CEVAP BİÇİMİ — kalın başlıklar, bu sırayla. Beş başlık ZORUNLU (Bulgu, Kanıt, Kök
-neden, Eksik veri, Sonraki kontrol): kanıtı olmayanı atlama, "kanıt yok" yaz.
-Stacktrace detayı TEK koşullu başlıktır:
-**Bulgu** — 1-3 madde: bu trace'te ne oldu (hangi servis/operasyon, hata mı
-yavaşlık mı, ne kadar).
-**Kanıt** — her bulgunun dayandığı kanıt kimliği ve oradaki değer; her madde en
-az bir [kimlik] taşır.
-**Stacktrace detayı** — YALNIZ kanıtta bir stacktrace varsa: bir log satırının
+CEVAP BİÇİMİ — kalın başlıklar, bu sırayla; kanıtı olmayan bölümü HİÇ yazma (boş
+bölüm ya da "yok" satırı açma). Kanıt kimliklerini ([T1], [L1] …) cevaba YAZMA:
+onlar sana yöneliktir; kanıttaki değeri (sayı, hata kodu, sınıf adı, mesaj) AYNEN
+aktar, kaynağını gerektiğinde sözle söyle ("loglarda", "kıyas penceresinde").
+**İşlem Akışı ve Veri Özeti** — maddeler: kullanıcıya dönük işlem ve başlatan
+servis; kritik hata noktası (servis + loglardaki ya da Oracle satırlarındaki TAM
+hata kodu/mesajı); log gövdelerinde görünen dikkat çekici ya da hatalı iş verisi
+(girdi değerleri, kimlikler); en yavaş bileşen ve toplam trace süresindeki payı;
+servisler arası hata zinciri (hangi servis neyi yukarı taşıdı); servisin aynı
+penceredeki trafik/hata/gecikme değeri ve referans dönemle farkı; pod ve
+deploy/sürüm durumu (yalnız kanıtta varsa). Bir kimlik (request_id, kanal …) tek
+bir etiket altında bir kez yazılır, başka etiketle yinelenmez.
+**Stacktrace Detayı** — YALNIZ kanıtta bir stacktrace varsa: bir log satırının
 "stacktrace:" alanı ya da log gövdesindeki "at …" kareleri. Oracle hata satırları
 ve tek başına exception.type ya da hata kodu stacktrace DEĞİLDİR. Maddeler:
 fırlatan sınıf ve metot (en üstteki kare), exception tipi, görünüyorsa dağıtım
 birimi (ör. .war ya da modül öneki), katman (BFF / backend / entegrasyon) ve hata
-mesajı AYNEN — her biri kanıt kimliğiyle ([L2] gibi). Kare görünmüyorsa sınıf ve
-metodu uydurma, "görünmüyor" de. "kaynak kesik" notlu stack eksiktir: gerçek
-neden görünmeyen Caused by'da olabilir; tek başına "Güven: kesin" dayanağı OLAMAZ,
-Eksik veri'de an. Kanıtta stacktrace yoksa bu başlığı HİÇ yazma;
+mesajı AYNEN. Kare görünmüyorsa sınıf ve metodu uydurma, "görünmüyor" de.
+"kaynak kesik" notlu stack eksiktir: gerçek neden görünmeyen Caused by'da
+olabilir, bunu söyle. Kanıtta stacktrace yoksa bu başlığı HİÇ yazma;
 "stacktrace yok" diye bölüm açma.
-**Kök neden** — İLK satırı güven düzeyi: hata veren span/log'dan nedene kanıt
-zinciri kesintisizse "Güven: kesin", değilse "Güven: olası — <eksik halka>" (hangi
-okuma ya da bağlantı eksik). Sonra nedeni 1-3 maddede yaz; her iddia bir [kimlik]
-taşır, kanıtta olmayan neden UYDURMA.
-Zamansal çakışma (deploy, trafik artışı, pod yeniden başlatma) NEDEN
-DEĞİL, ilişkidir: "aynı pencerede" de, "bu yüzden" deme; yalnız zamansal ilişkiye
-dayanan neden "kesin" OLAMAZ.
-**Eksik veri** — durumu ok olmayan her kaynak ve bunun hangi soruyu cevapsız
-bıraktığı. "Log bulunamadı" "hata yok" DEĞİLDİR: eşleşen kayıt yoksa bunu söyle,
-yokluktan sonuç çıkarma.
-**Sonraki kontrol** — tek, somut sonraki adım (hangi sorgu, sayfa ya da pencere).
+**Kök Neden ve Sonraki Adım** — 1-3 madde: en olası kök neden (hata veren
+span/log'dan nedene giden zinciri düz cümleyle anlat) ve operatörün kontrol
+edeceği TEK somut sonraki şey (hangi sorgu, sayfa ya da pencere). Kanıtta
+olmayan neden UYDURMA; kanıt yetmiyorsa "kanıt yetersiz" de ve hangi okumanın
+eksik olduğunu yaz. Zamansal çakışma (deploy, trafik artışı, pod yeniden
+başlatma) NEDEN
+DEĞİL, ilişkidir: "aynı pencerede" de, "bu yüzden" deme. "Log bulunamadı"
+"hata yok" DEĞİLDİR: eşleşen kayıt yoksa bunu söyle, yokluktan sonuç çıkarma.
+**Eksik veri** — YALNIZ durumu ok olmayan kaynak varsa: kaynak ve bunun hangi
+soruyu cevapsız bıraktığı.
 
 KURALLAR:
 - Her sayı kanıttan AYNEN gelir (birimiyle). Hesap yapma, yüzdeliklerin
@@ -178,6 +189,8 @@ KURALLAR:
 // AKTİF BAĞLAM önsözünden sonra eklenir.
 // v0.10.972 — başlıklar ilk cevapla aynı: Stacktrace detayı (koşullu) + Kök
 // neden (ilk satır güven düzeyi); «Olası neden» kalktı.
+// v0.10.986 — başlıklar yine ilk cevapla aynı: klasik üçlü + koşullu Eksik veri;
+// kanıt kimliği ve güven satırı yok.
 const traceFollowUpAddendum = `
 
 TRACE İNCELEMESİ SÜRÜYOR. Önsözdeki AKTİF BAĞLAM (trace, span, servis, ortam,
@@ -190,10 +203,10 @@ cevabında "bağlamsal" diye an), sonra karşılaştırma (compare_periods) ve m
 (list_metric_labels, ardından query_metric). Her sonucun source.state alanını
 oku: ok olmayan kaynağı "Eksik veri" altında söyle; boş sonuç "hata yok" değildir.
 Araç bütçen sınırlı: önce özet ve gruplama, sonra ayrıntı; aynı çağrıyı
-tekrarlama. Cevabı Bulgu / Kanıt / Stacktrace detayı (yalnız kanıtta stacktrace
-varsa) / Kök neden / Eksik veri / Sonraki kontrol başlıklarıyla ver; Kök neden'in
-ilk satırı "Güven: kesin" (zincir kesintisiz) ya da "Güven: olası — <eksik halka>".
-Her sayı bir araç sonucundan gelsin. Korelasyonu neden diye sunma; uzun span CPU
+tekrarlama. Cevabı İşlem Akışı ve Veri Özeti / Stacktrace Detayı (yalnız kanıtta
+stacktrace varsa) / Kök Neden ve Sonraki Adım / Eksik veri (yalnız ok olmayan
+kaynak varsa) başlıklarıyla ver; kanıt kimliklerini ([T1], [L1] …) cevaba yazma,
+değerleri aynen aktar. Her sayı bir araç sonucundan gelsin. Korelasyonu neden diye sunma; uzun span CPU
 değildir; profiling verisi yok.`
 
 // SystemPromptTraceInvestigation — v0.10.948: "CoSRE'ye sor" ilk cevabı (trace inceleme yolu).

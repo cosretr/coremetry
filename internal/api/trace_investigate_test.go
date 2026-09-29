@@ -1625,7 +1625,7 @@ func TestInvestigateTraceStacktraceReachesPrompt(t *testing.T) {
 // v0.10.972 — ÜRETİM şekli: get_logs_for_trace exception.stacktrace'i 200
 // runede keser. L satırı üst kareyi (sınıf/metot/.war) taşır ama Caused by
 // GÖRÜNMEZ ve bu "(kaynak kesik: …)" notuyla SÖYLENİR — model tek kareli
-// stack'i tam sanıp dış exception'a "Güven: kesin" basmasın.
+// stack'i tam sanıp dış exception'ı kesin neden diye yazmasın.
 func TestInvestigateTraceToolCutStacktraceSaysCut(t *testing.T) {
 	f := newFakeInvRunner(invTestT0)
 	f.out[invToolLogs] = invOK(invStackToolCutLogsJSON(invTestT0))
