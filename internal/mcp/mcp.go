@@ -62,9 +62,12 @@
 //     2024-11-05) — legacy, pod-lokal session; 2026-07-28 spec'inde
 //     Deprecated. Yeni istemciler Streamable yolu kullanır.
 //
-// 2026-07-28'in `server/discover` + `_meta` sözleşmesi henüz yok (denetim
-// M1/M2); sunucu sampling/roots/logging kullanmadığı için o spec'in
-// kaldırma saati bu sunucuyu ilgilendirmez.
+// v0.10.994 — sunucu ÇİFT DÖNEMLİ: `POST /api/mcp` 2026-07-28'in el
+// sıkışmasız sözleşmesini de konuşur (`server/discover`, istek başına
+// `_meta`, başlık doğrulaması, `resultType`; modern.go). Dönem istekten
+// seçilir; `_meta` taşımayan istek yukarıdaki legacy yolda bayt bayt aynı
+// kalır. Sunucu sampling/roots/logging kullanmadığı için o spec'in kaldırma
+// saati bu sunucuyu ilgilendirmez.
 //
 // References:
 //   - https://modelcontextprotocol.io
@@ -856,6 +859,13 @@ func (s *Server) HandleStreamable(w http.ResponseWriter, r *http.Request) {
 				s.dispatchNotification(r.Context(), nil, &reqs[i])
 				continue // JSON-RPC: bildirime yanıt girdisi yazılmaz
 			}
+			// v0.10.994 — 2026-07-28'de gövde TEK mesajdır; batch içindeki
+			// modern istek legacy dispatch'e sızmaz, açık hata alır.
+			if isModernRequest(&reqs[i]) {
+				resps = append(resps, errorResp(reqs[i].ID, ErrInvalidRequest,
+					"2026-07-28 requests must be sent as a single JSON-RPC message per POST (no batch)"))
+				continue
+			}
 			resps = append(resps, s.handleStreamableOne(r.Context(), &reqs[i]))
 		}
 		if len(resps) == 0 {
@@ -875,6 +885,14 @@ func (s *Server) HandleStreamable(w http.ResponseWriter, r *http.Request) {
 		// Spec: bildirime 202, gövde yok.
 		s.dispatchNotification(r.Context(), nil, &req)
 		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	// v0.10.994 — dönem seçimi: `_meta` protokol sürümü taşıyan (ya da
+	// server/discover olan) istek 2026-07-28 yolunda (modern.go); gerisi
+	// aşağıdaki legacy yolda, eskisi gibi.
+	if isModernRequest(&req) {
+		status, resp := s.handleModern(r.Context(), r.Header, &req)
+		writeStreamableJSON(w, status, resp)
 		return
 	}
 	writeStreamableJSON(w, http.StatusOK, s.handleStreamableOne(r.Context(), &req))

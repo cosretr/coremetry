@@ -987,6 +987,24 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — MCP sunucusu çift dönemli: 2026-07-28 el sıkışmasız sözleşme (v0.10.994; denetim M1)
+
+**Karar:** `POST /api/mcp` artık iki dönemi birden konuşur. İstek `params._meta` içinde
+`io.modelcontextprotocol/protocolVersion` taşıyorsa (ya da yöntem `server/discover` ise) 2026-07-28'in
+durumsuz sözleşmesiyle (`internal/mcp/modern.go`), aksi hâlde eski `initialize` yoluyla — o yol bayt
+bayt aynı (testle pinli; Claude Code'un bugünkü istemcisi fark görmez). Modern yolda: zorunlu `_meta`
+alanları (eksikse -32602 / 400), başlık ↔ gövde doğrulaması (`MCP-Protocol-Version`, `Mcp-Method`,
+`Mcp-Name`; -32020 / 400), yalnız `2026-07-28` (başkası -32022 / 400 + `data.supported`), bilinmeyen
+yöntem 404 (`initialize` ve `ping` dahil), her sonuçta `resultType: "complete"` + `_meta` içinde
+`serverInfo`, liste / okuma / discover sonuçlarında `ttlMs` + `cacheScope: "private"` (uç kimlik
+doğrulamalı), varlık bulunamadı -32602. Kapı (rol + hız) ve gözlem aynı handler'larda: modern yol
+yalnız zarfı değiştirir. **Kaynak:** belirtimin kendisi okundu; denetim raporundaki M1 reçetesi alan
+adlarında yanlıştı (`protocolVersions`, `_meta.protocolVersion`) ve rapor düzeltildi ("denetim
+reçeteleri uygulanır" dersi — reçete değil birincil kaynak uygulanır). **Kapsam dışı:**
+`subscriptions/listen` (list_changed yayınlamıyoruz), MRTR (sampling / elicitation yok),
+`x-mcp-header`, logLevel; batch modern dönemde tanımsız → batch içindeki modern istek -32600.
+İstemci tarafı (M2, `internal/mcpclient`) ayrı sürüm. CORS izinli başlıklarına üç MCP başlığı eklendi.
+
 ## 2026-10-01 — MCP `bubble_up` aracı yalnız dış istemcilere (v0.10.993; denetim V1 dilim 3)
 
 **Karar:** BubbleUp MCP aracı olarak eklendi (`internal/mcptools/bubble_up.go`; kıyas

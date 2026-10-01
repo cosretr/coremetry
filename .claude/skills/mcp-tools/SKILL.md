@@ -10,8 +10,13 @@ Desktop/Code, agent frameworks) can query telemetry. Two transports
 (v0.10.795 doc fix): **Streamable-HTTP `POST /api/mcp` (2025-03-26,
 stateless, primary)** and legacy HTTP+SSE `/api/mcp/sse` (2024-11-05,
 pod-local session, deprecated by the 2026-07-28 spec). `tools/list` is
-sorted by name. The 2026-07-28 `server/discover` + `_meta` contract is
-not implemented yet (audit 2026-09-19 M1/M2). Infrastructure shipped
+sorted by name. Since v0.10.994 the server is DUAL-ERA: a request whose
+`params._meta` carries `io.modelcontextprotocol/protocolVersion` (or the
+`server/discover` method) is served by the 2026-07-28 stateless contract
+(`internal/mcp/modern.go`: header validation, `resultType`,
+`supportedVersions`, -32020/-32022); anything else keeps the legacy
+`initialize` path byte-for-byte. The client side (`internal/mcpclient`) is
+still handshake-only (audit 2026-09-19 M2). Infrastructure shipped
 v0.6.4-v0.6.7, Streamable v0.9.14:
 
 | Concern | Where |

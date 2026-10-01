@@ -89,7 +89,10 @@ func (p corsPolicy) middleware(h http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
+			// v0.10.994 — MCP 2026-07-28 istek başlıkları (mcp/modern.go):
+			// izinli bir tarayıcı kökenindeki modern istemci bunları
+			// göndermek ZORUNDA; listede yoksa preflight reddeder.
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, MCP-Protocol-Version, Mcp-Method, Mcp-Name")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
