@@ -987,6 +987,21 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Traces hacim şeridi: iş kimlikleri giriş span'i anahtarı değil (v0.10.1006)
+
+**Operatör bildirimi + onayı ("olur düzelt"):** `function_code = …` çipinde tablo dolu, hacim şeridi "No
+traces in view to bucket" (0 istek). **Kök neden:** şerit, çip giriş span'inde yaşayan bir anahtardaysa
+kind IN (server, consumer) kısıtı ekler (v0.10.268 / 323); `channel_code`, `function_code`, `function_id`
+`ENTRY_KEYS` listesindeydi ama prod'da bu iş kimliklerini giriş span'i taşımıyor — yalnız log-yayın MQ
+span'leri (operatörün trace'inde 12 span'in 4'ü). Kısıt AND'lenince eşleşme sıfır. v0.10.323
+(db.statement) ve v0.10.730 (name) ile aynı sınıfın üçüncü örneği. **Karar:** üçü de listeden çıkarıldı;
+şerit bu çiplerde eşleşen SPAN'leri sayar, birim "spans", ipucu neyi saydığını yazar. `function_code`
+için kanıt ekran görüntüsü; `channel_code` / `function_id` aynı yayın mesajının alanları olduğu için
+birlikte çıkarıldı (yanılma bedeli: sayı trace sayısından büyük ve etiketli; tersi boş grafik). **Kabul
+edilen bedel:** bir trace birkaç yayın span'i taşıyorsa şerit sayısı listedeki trace sayısından büyüktür.
+1005'in listeyle ilişkisi: liste çipte trace düzeyinde eşleşir ve satırı tüm span'lerden kurar; şerit
+span sayar — ikisi de etiketli.
+
 ## 2026-10-01 — Traces: çip trace'i seçer, satırı şekillendirmez (v0.10.1005)
 
 **Operatör bildirimi (prod):** `function_code = …` çipiyle gelen listede Name kolonu kök span'in adı yerine

@@ -146,9 +146,24 @@ export type StripScope = 'entry' | 'spans';
 // (yaygın hâl) ikisi aynı serviste olmadığı için fark yok; boş grafik
 // ise her hâlde toplam kayıptı. Kapsam etikette görünür ("spans") ve
 // ipucu neyi saydığını yazar.
+//
+// v0.10.1006 (operator-reported, prod: `function_code = …` çipinde tablo dolu,
+// şerit "No traces in view to bucket", 0 istek) — `channel_code` /
+// `function_code` / `function_id` ENTRY_KEYS'ten ÇIKARILDI.
+//
+// Neden yanlıştı: bu iş kimliklerini giriş span'i TAŞIMIYOR. Prod'da fonksiyon
+// kodunu yalnız log-yayın span'leri (MQ producer) taşıyor — operatörün
+// trace'inde 12 span'in 4'ü; kök HTTP span'inde yok. Üçü aynı yayın mesajının
+// alanları, aynı span'lerde yaşıyorlar. Giriş span'inde olduklarını VARSAYMAK
+// kind kısıtını AND'leyip grafiği boşaltıyordu — db.statement (v0.10.323) ve
+// name (v0.10.730) olaylarının üçüncü ikizi.
+//
+// Kabul edilen bedel aynı: şerit bu çiplerde eşleşen SPAN'leri sayar (bir
+// trace birkaç yayın span'i taşıyorsa sayı trace sayısından büyük), birim
+// "spans" ve ipucu neyi saydığını yazar. Boş grafik toplam kayıptı.
 /** Giriş span'ında yaşayan anahtarlar / önekler — bunlar şeridi giriş kapsamında tutar. */
 const ENTRY_KEYS = new Set(['service.name', 'kind', 'status_code', 'status', 'cluster', 'deployment.environment',
-  'channel_code', 'function_code', 'function_id', 'span.kind']);
+  'span.kind']);
 const ENTRY_PREFIXES = ['http.', 'url.', 'server.', 'k8s.', 'resource.', 'host.', 'service.', 'deployment.', 'telemetry.', 'process.', 'os.', 'container.', 'cloud.'];
 
 export function isEntrySpanKey(key: string): boolean {

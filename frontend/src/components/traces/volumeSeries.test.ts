@@ -170,6 +170,20 @@ describe('stripScope', () => {
     // service.name (servis kimliği) etkilenmedi.
     expect(isEntrySpanKey('service.name')).toBe(true);
   });
+  // v0.10.1006 (operator-reported, prod: function_code çipinde tablo dolu,
+  // şerit boş) — iş kimliklerini giriş span'i taşımıyor (prod'da yalnız
+  // log-yayın MQ span'leri); giriş kapsamı kind kısıtını AND'leyip grafiği
+  // boşaltıyordu.
+  it('channel_code / function_code / function_id giriş anahtarı DEĞİL — şerit eşleşen span\'leri sayar', () => {
+    for (const k of ['function_code', 'FUNCTION_CODE', 'channel_code', 'function_id']) {
+      expect(isEntrySpanKey(k)).toBe(false);
+      expect(stripScope([{ k }], '')).toBe('spans');
+    }
+    expect(stripScope([{ k: 'service.name' }, { k: 'function_code' }], '')).toBe('spans');
+    expect(volumeUnitFor(true, stripScope([{ k: 'function_code' }], ''))).toBe('spans');
+    // Giriş span'inde yaşayanlar etkilenmedi.
+    expect(stripScope([{ k: 'service.name' }, { k: 'http.route' }, { k: 'deployment.environment' }], '')).toBe('entry');
+  });
   it('birim ve ipucu kapsamı söyler', () => {
     expect(volumeUnitFor(true, 'entry')).toBe('traces');
     expect(volumeUnitFor(false, 'entry')).toBe('requests');
