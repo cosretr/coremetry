@@ -231,8 +231,10 @@ export default function MessagingPage() {
           onOpenRowChange={setOpenRow}
           state={depState}
           extraControls={
+            // v0.10.1025 (R1) — /databases ile aynı ipucu: süren pencerede
+            // prior sayaçları (çağrı, hata, üretim/tüketim) dolu kısma oranlı.
             <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-              title="Compare current window against the immediately-preceding equal-length window. Adds a second backend scan; off by default.">
+              title="Bu pencereyi bir önceki pencereyle karşılaştırır. Süren pencerede önceki pencerenin sayıları (çağrı, hata, üretim/tüketim), süren pencerenin dolu kısmına oranlanır. İkinci bir sunucu okuması ekler; varsayılan kapalı.">
               <input type="checkbox"
                 checked={compare}
                 onChange={e => setCompare(e.target.checked)} />

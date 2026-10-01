@@ -579,6 +579,10 @@ export function DependenciesTable({
                     </td>
                     <td className="num">
                       {fmtNum(r.spanCount)}
+                      {/* v0.10.1025 (R2) — burada zeroPrior gerekmez: eşleşen satırın
+                          prior çağrısı ≥ 1 (prior GROUP BY yalnız span'i olan grubu
+                          döndürür, sunucu ölçeklemesi tabanı 1), eşleşmeyende alan
+                          yok (omitempty). Gecikme hücreleri de omitempty → undefined. */}
                       {compare && <TrendDelta cur={r.spanCount} prior={r.priorSpanCount} kind="neutral" />}
                     </td>
                     {/* v0.8.364 (Stage-2 M1) — producer/consumer split.
@@ -605,7 +609,16 @@ export function DependenciesTable({
                     )}
                     <td className="num">
                       <span className={`badge b-${errCls}`}>{r.errorRate.toFixed(2)}%</span>
-                      {compare && <TrendDelta cur={r.errorCount} prior={r.priorErrorCount} kind="lowerBetter" />}
+                      {/* v0.10.1025 (inceleme R2) — zeroPrior="was-zero". Sayfalar
+                          (Databases toRow, Messaging rows) EŞLEŞEN satırın omitempty
+                          priorErrorCount'unu 0'a onarıyor; yani burada prior 0 =
+                          "satır önceki pencerede VARDI, hatası yoktu". Varsayılan
+                          kip ise "listede yeni" basıyordu ve ipucu satırın önceki
+                          listede OLMADIĞINI söylüyordu — 0 → N hata regresyonu
+                          mavi bir "yeni" rozetiyle görünüyordu. Eşleşmeyen satırda
+                          prior undefined → rozet hiç yok; "listede yeni" bu tabloda
+                          hiçbir satır için doğru değil. */}
+                      {compare && <TrendDelta cur={r.errorCount} prior={r.priorErrorCount} kind="lowerBetter" zeroPrior="was-zero" />}
                     </td>
                     {/* v0.9.262 — every latency cell goes through LatencyCell,
                         which renders '—' for a receiver-discovered row. Those
@@ -753,7 +766,10 @@ function KindRateCell({ perMin, count, errors, priorPerMin, compare, what }: {
           {errPct.toFixed(1)}%
         </span>
       )}
-      {compare && <TrendDelta cur={perMin ?? 0} prior={priorPerMin} kind="neutral" />}
+      {/* v0.10.1025 (R2) — Messaging.tsx eşleşen satırın prior üretim/tüketim
+          sayısını 0'a onarıyor: prior 0 = "önceki pencerede bu yönde trafik
+          yoktu", "listede yeni" değil. */}
+      {compare && <TrendDelta cur={perMin ?? 0} prior={priorPerMin} kind="neutral" zeroPrior="was-zero" />}
     </td>
   );
 }

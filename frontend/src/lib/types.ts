@@ -479,6 +479,10 @@ export interface DBErrors {
 export interface DBDetail {
   system: string;
   instance: string;
+  // v0.9.821 — kimlik üçlü (system, instance, dbName); boş/yok = "bu
+  // instance'ın tüm veritabanları". Go tarafı omitempty — v0.10.1025'te
+  // tipe eklendi (payload'da v0.9.821'den beri vardı).
+  dbName?: string;
   spanCount: number;
   errorCount: number;
   errorRate: number;
@@ -501,6 +505,27 @@ export interface DBDetail {
    * "tek adres" diye okumak tekilliği yanlış yere iddia etmek olur.
    */
   physicalAddrs?: PhysicalAddrs;
+  /**
+   * v0.10.1025 (Databases dilim 3) — ÖNCEKİ EŞİT PENCERE. Sunucu aynı
+   * agregeyi chstore.PriorWindow üzerinde her istekte bir kez daha okur.
+   * Go'da omitempty YOK (sıfır bir ölçüm: "önce 0 hata"); ayrımı hasPrior
+   * taşır — true yalnız prior okuması başarılı VE çağrılıyken. false ya da
+   * yok (rolling deploy'da eski yük) iken prior* alanları OKUNMAZ.
+   * Opsiyonel tipler yalnız o deploy penceresi için.
+   */
+  hasPrior?: boolean;
+  /** Sayaçlar (çağrı, hata) priorScale ile ÖLÇEKLİ gelir — canlı
+   *  pencerenin son kovası henüz doluyor (v0.10.1025 R1). */
+  priorSpanCount?: number;
+  priorErrorCount?: number;
+  /** Prior sayaçlarına uygulanan kapsama oranı (0, 1]; 1 = ölçek yok. */
+  priorScale?: number;
+  /** 0..100, errorRate ile aynı birim — karo farkı YÜZDE PUAN gösterir. */
+  priorErrorRate?: number;
+  priorAvgDurationMs?: number;
+  priorP50DurationMs?: number;
+  priorP95DurationMs?: number;
+  priorP99DurationMs?: number;
 }
 
 // DBWaitLock (v0.8.391) v0.9.852'de SİLİNDİ — /api/databases/waitlock

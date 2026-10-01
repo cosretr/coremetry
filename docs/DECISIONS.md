@@ -987,6 +987,58 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Databases dilim 3: önceki pencereyle karşılaştırma (v0.10.1025)
+
+**Operatör yönü:** Databases iyileştirmelerinde "Dynatrace'in Databases bölümünü baz al" (v0.10.1019
+programı, madde 3: detayda önceki pencereyle karşılaştırma). **Bulgular (koddan; yerel ClickHouse'ta
+örnek satırlarla doğrulandı):** (1) `/databases` listesindeki "Compare vs prior" kutusu v0.9.433'ten beri
+ÖLÜYDÜ: sunucu prior'u okuyup satırlara yazıyor (`mergeDBPrior`), sayfa `prior*` alanlarını satıra
+kopyalıyordu, ama iki `<DependenciesTable kind="db">` mount'unun hiçbiri `compare` geçmiyordu ve tablonun
+her delta rozeti `compare &&` kapılı — /messaging geçiyordu. (2) Prior ile current BİR 5 dk kovayı
+paylaşıyordu: current alt sınırı kovaya indiriyor (`time_bucket >= floor5(from)`), prior `[from − dur,
+from)` ise hizasız `from`'da bitiyordu; `from` kova sınırına oturmadığında o kova iki pencerede sayılıyor,
+delta sıfıra doğru suluyordu (doğrulamada: 10:00 kovasındaki 5 hata prior'a da sızdı, "0 → 5" yerine
+"5 → 5" okundu). /messaging listesinde aynı kusur vardı ve aynı düzeltmeyi aldı. `mergeDBPrior` testsizdi.
+**Kararlar:** (a) Prior pencerenin TEK türetimi `chstore.PriorWindow(from, to)`: `pTo = floor5(from)`,
+`pFrom = pTo − N × 5 dk` (N = current'ın okuduğu kova sayısı; `to` saniyeye inerek sayılır çünkü
+clickhouse-go konumsal bağı saniyeye keser). Ortak kova yok, iki pencere aynı sayıda kova; özellik testi
+5000 rastgele pencerede sınıyor. Kullananlar: db listesi, messaging listesi, /database detayı. /databases'in
+env süzgeci (ham spans, kova ızgarası yok) prior'u birebir süre kaydırmasıyla alır (`dbListPriorWindow`).
+(b) Liste kutusu bağlandı: span satırları mount'u `compare` geçer; receiver mount'u BİLEREK geçmez (RED
+tanım gereği sıfır, prior okuması receiver keşfi yapmaz). Kaynak pini + render testi. (c) `/database`
+detayı önceki pencerenin agregesini HER İSTEKTE okur (toggle / URL paramı yok): aynı agrege SQL'i
+(`dbDetailAggregate`'e çıkarıldı) aynı birincil anahtar önekinde tek satır daha; çağıran ve ifade
+okumalarından SONRA koşar (`defer`), yavaş bir prior onların bütçesini yiyemez. `hasPrior` yalnız okuma
+başarılı ve çağrılıyken true; hata yumuşak (log, delta yok, yükün geri kalanı aynen). (d) **Canlı kenar
+ölçeği:** hazır aralıklarda `to = now`, current'ın son kovası henüz doluyor, prior ise N tam kova — düz
+iş yükünde sayaç deltası ortalamada −%25 (5 dk) / −%12,5 (15 dk) / −%3,8 (1 sa) kayıyordu. Prior SAYAÇLARI
+(çağrı, hata, messaging'de üretim/tüketim) `PriorCoverage = (min(now, son kova sonu) − floor5(from)) /
+(N × 5 dk)` ile sunucuda ölçeklenir (detay, db listesi, messaging listesi); oranlar ve gecikmeler
+ölçeklenmez. Yuvarlama en yakın tamsayı, sıfır olmayan prior için TABAN 1: "0" bu yüklerde bir iddia
+("önce 0", listede ise omitempty ile satırın eşleşmemiş görünmesi) — beklenen < 0,5 olsa da (yalnız çok
+kısa canlı pencerelerde) yazılmaz; bedeli o pencerelerde hafif iyimser bir delta. Detay `priorScale`
+taşır. (e) **Okunabilirlik kapıları** (liste + detay): prior'un başı okunan tablonun saklama ufkunun
+dışındaysa okunmaz (`PriorReadable`, 1 gün paylı; MV yolu 90 gün, /databases env yolu span saklaması —
+env + 7d + Compare eskiden [now−14g, now−7g] okuyup Calls ↑%500 basıyordu; ufuk bilinmiyorsa okunmaz).
+MV ileriye dönük olduğundan kaynağın ilk kovası da ölçülür (60 s önbellekli `min(time_bucket), count()`,
+`EnvSummaryCovers` deseni; ilk kova pFrom'dan KESİNLİKLE önce olmalı); env yolunda bunun yerine
+zaman-sınırlı varlık probu (pFrom'dan önceki 24 sa'te span var mı, `LIMIT 1`). Yön: kapsamayan ya da
+kısmen silinmiş prior EKSİK sayar ve current'ı sahte biçimde KÖTÜ gösterir (kırmızı ↑) — iyileşme değil.
+(f) Karolar fark taşır: Calls ve Total time `neutral`, Errors / Avg / P50 / P95 / P99 `lowerBetter`
+(current'ta 0 çağrı varsa gecikme farkı çizilmez — "0.0 ms" ölçüm değil); Err rate farkı YÜZDE PUAN
+(`+0.42 pp`), renk ve gizleme GÖSTERİLEN iki ondalıklı değerden (≥ 0,05 pp kötüleşmede renk, "0.00"
+çizilmez). `TrendDelta`'ya `zeroPrior` eklendi (varsayılan değişmedi): detayda ve listede eşleşen satırın
+sıfır prior'u (hata, üretim/tüketim) "listede yeni" değil "önce 0" der — liste eskiden 0 → N hata
+regresyonunu mavi "listede yeni" rozetiyle gösteriyordu. Renk yalnız kötüleşen değerde (K5/T9); şeridin
+altında tek satır "Karşılaştırma: bir önceki pencere" (+ ölçeklendiyse "sayılar, süren pencerenin dolu
+kısmına oranlandı"); liste kutularının ipucu aynı notu taşır.
+**Değişmeyen:** detay cache anahtarı (`db-detail:v2:`), URL, mevcut yük alanları (yalnız `hasPrior`,
+`prior*`, `priorScale` eklendi); liste uçlarının anahtar ve sözleşmesi. **Sınırlar:** prior'un ufku ya da
+kapsaması tutmuyorsa, kapsama probu düşerse ya da o pencerede çağrı yoksa delta yok; ölçek MV'ye yazım
+gecikmesini hesaba katmaz (now'a kadar okunur varsayılır); env yolunun varlık probu pFrom öncesi 24 sa'te
+hiç trafik yoksa kıyası kapatır; Err rate puanla, diğer karolar göreli; listede P95 için delta yok
+(mevcut tasarım: liste `PriorP95Ms` taşımaz).
+
 ## 2026-10-01 — "Problem değil" kararları yalnız kendi ucundan yazılır: genel kayıtlı-görünüm ucu sistem sayfalarını reddeder (v0.10.1024)
 
 **Kusur (kod incelemesiyle bulundu; prod'da gözlenmedi):** v0.10.1015 kararları ortak durum tablosunda

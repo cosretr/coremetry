@@ -54,20 +54,69 @@ func (s *Server) getDatabases(w http.ResponseWriter, r *http.Request) {
 		// her compare'li sayfa yüklemesinde dört katalog probu, dört
 		// metric_points taraması ve bir tam çağıran taraması BOŞUNA
 		// ödeniyordu.
-		dur := to.Sub(from)
-		priorRows, err := s.store.GetDatabasesRollup(ctx, from.Add(-dur), from, env)
+		// v0.10.1025 — pencere dbListPriorWindow'dan: eski `[from − dur,
+		// from)` hizasız from'da current'ın ilk 5 dk kovasını İKİ pencereye
+		// de sayıyordu (chstore/prior_window.go).
+		pFrom, pTo := dbListPriorWindow(from, to, env)
+		// v0.10.1025 (inceleme R3+R4) — prior OKUNABİLİR mi: okunan yolun
+		// saklama ufku (zarfın SpanHorizonDays'i: MV 90 gün, env/ham yol span
+		// saklaması — 7 günlük env + 7d + Compare prior'u çoktan silinmiş
+		// [now−14g, now−7g] aralığına koyardı) ve kaynağın ileriye dönük
+		// kapsaması. Düşerse prior alanı YOK → rozet yok; eksik bir prior
+		// eşleşen her satırı sahte bir KÖTÜLEŞMEyle (Calls ↑%500) boyardı.
+		now := time.Now()
+		if !s.store.DBListPriorReadable(ctx, pFrom, pTo, now, env != "", ov.SpanHorizonDays) {
+			return ov, nil
+		}
+		priorRows, err := s.store.GetDatabasesRollup(ctx, pFrom, pTo, env)
 		if err != nil {
 			return ov, nil
 		}
-		mergeDBPrior(ov.Rows, priorRows)
+		mergeDBPrior(ov.Rows, priorRows, dbListPriorScale(from, to, now, env))
 		return ov, nil
 	})
+}
+
+// dbListPriorScale — prior SAYAÇLARININ kapsama oranı (v0.10.1025 R1). SAF.
+// MV yolunda canlı pencerenin son kovası henüz doluyor (chstore.PriorCoverage);
+// ham yolda pencere birebir [from, to] ve yalnız geleceğe uzanan özel aralıkta
+// 1'in altına düşer (chstore.RawPriorCoverage).
+func dbListPriorScale(from, to, now time.Time, env string) float64 {
+	if env != "" {
+		return chstore.RawPriorCoverage(from, to, now)
+	}
+	return chstore.PriorCoverage(from, to, now)
+}
+
+// dbListPriorWindow — /databases ?compare=prior okumasının penceresi. SAF
+// (v0.10.1025, Databases dilim 3).
+//
+// İki okuma yolu var ve prior'un şekli yolu izlemek ZORUNDA:
+//   - env yok → MV yolu (db_summary_5m, 5 dk kova). chstore.PriorWindow:
+//     ortak kova yok, iki pencere aynı sayıda kova.
+//   - env var → ham spans yolu (getDatabasesRaw, `time >= from AND time <=
+//     to`, kova ızgarası YOK). Burada PriorWindow'un kovaya yuvarlanmış
+//     boyu (N × 5 dk) current'tan on dakikaya kadar UZUN olurdu ve sayaç
+//     deltası sahte bir düşüş basardı; doğru prior birebir aynı süre geri.
+//     (İki pencere yalnız `from` ANINI paylaşır — ham sınırlar iki uçta da
+//     kapalı; o anda tam düşen bir span iki kez sayılabilir. Kova değil,
+//     tek bir an; bu sürümde dokunulmadı.)
+func dbListPriorWindow(from, to time.Time, env string) (time.Time, time.Time) {
+	if env != "" {
+		return from.Add(-to.Sub(from)), from
+	}
+	return chstore.PriorWindow(from, to)
 }
 
 // mergeDBPrior — prior pencere sayaçlarını (system, instance, dbName)
 // kimliğiyle mevcut satırlara kopyalar; mergeMessagingPrior'un ikizi.
 // Prior'da olmayan satır alanları boş bırakır (omitempty → rozet gizli).
-func mergeDBPrior(cur, prior []chstore.DBInstance) {
+//
+// v0.10.1025 (R1) — scale: SAYAÇLAR kapsama oranıyla ölçeklenir
+// (chstore.ScalePriorCount; taban 1, yani eşleşen satırın prior çağrısı
+// asla 0'a — omitempty ile "eşleşmemiş"e — düşmez). Gecikmeler
+// ölçeklenmez.
+func mergeDBPrior(cur, prior []chstore.DBInstance, scale float64) {
 	type key struct{ system, instance, dbName string }
 	idx := make(map[key]*chstore.DBInstance, len(prior))
 	for i := range prior {
@@ -78,8 +127,8 @@ func mergeDBPrior(cur, prior []chstore.DBInstance) {
 		if !ok {
 			continue
 		}
-		cur[i].PriorSpanCount = p.SpanCount
-		cur[i].PriorErrorCount = p.ErrorCount
+		cur[i].PriorSpanCount = chstore.ScalePriorCount(p.SpanCount, scale)
+		cur[i].PriorErrorCount = chstore.ScalePriorCount(p.ErrorCount, scale)
 		cur[i].PriorAvgMs = p.AvgMs
 		cur[i].PriorP50Ms = p.P50Ms
 		cur[i].PriorP99Ms = p.P99Ms
@@ -138,6 +187,11 @@ func (s *Server) getDatabaseDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	from, to := parseFromTo(r, time.Hour)
+	// v0.10.1025 — yük artık önceki eşit pencerenin agregesini de taşıyor
+	// (hasPrior + prior*). Anahtar BİLEREK değişmedi: prior penceresi
+	// (from, to)'nun saf türevi (chstore.PriorWindow), yeni bir girdi değil;
+	// zarf da yalnız alan EKLEDİ — rolling deploy'da eski yük 30 sn boyunca
+	// hasPrior'suz gelir ve arayüz delta'sız çizer, bozulmaz.
 	key := dbDetailKey(system, instance, dbName, cacheBucket(from, to))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		return s.store.GetDatabaseDetail(ctx, system, instance, dbName, from, to)
@@ -260,12 +314,27 @@ func (s *Server) getMessaging(w http.ResponseWriter, r *http.Request) {
 		// merge only reads counts + quantiles. Prior failure is
 		// non-fatal: return current rows without trends rather
 		// than 500'ing the page.
-		dur := to.Sub(from)
-		priorRows, err := s.store.GetMessagingRollup(ctx, from.Add(-dur), from)
+		// v0.10.1025 — /databases ile AYNI kusur burada da vardı:
+		// getMessaging alt sınırı alignBucketStart ile kovaya indiriyor,
+		// eski prior ise `< from` (hizasız) ile bitiyordu; from'u içeren
+		// 5 dk kovası iki pencereye de giriyordu. messaging_summary_5m
+		// yalnız MV yolu (env yolu yok), dolayısıyla doğrudan PriorWindow.
+		pFrom, pTo := chstore.PriorWindow(from, to)
+		// v0.10.1025 (inceleme R3+R4) — /databases ile aynı iki kapı: MV
+		// TTL ufku ve iki MV'nin (sayaçlar + üretim/tüketim) ileriye dönük
+		// kapsaması. Düşerse prior alanı yok, rozet yok.
+		now := time.Now()
+		if !s.store.MessagingPriorReadable(ctx, pFrom, pTo, now) {
+			return ov, nil
+		}
+		priorRows, err := s.store.GetMessagingRollup(ctx, pFrom, pTo)
 		if err != nil {
 			return ov, nil
 		}
-		mergeMessagingPrior(ov.Rows, priorRows)
+		// v0.10.1025 (R1) — canlı pencerenin son kovası henüz doluyor;
+		// prior sayaçları dolu kısma oranlanır (bu liste de v0.8.364'ten beri
+		// aynı aşağı-yanlılığı taşıyordu).
+		mergeMessagingPrior(ov.Rows, priorRows, chstore.PriorCoverage(from, to, now))
 		return ov, nil
 	})
 }
@@ -277,7 +346,12 @@ func (s *Server) getMessaging(w http.ResponseWriter, r *http.Request) {
 // window keep zero Prior* fields (omitempty → absent in JSON →
 // the frontend renders no delta badge). Pure — table-driven
 // tested in messaging_prior_test.go (v0.8.364).
-func mergeMessagingPrior(cur, prior []chstore.MessagingInstance) {
+//
+// v0.10.1025 (R1) — scale: the COUNTERS (spans, errors, produce,
+// consume) are scaled by the live-window coverage
+// (chstore.ScalePriorCount, floor 1 for a non-zero count); latency
+// quantiles are not.
+func mergeMessagingPrior(cur, prior []chstore.MessagingInstance, scale float64) {
 	type key struct{ system, cluster, dest string }
 	idx := make(map[key]*chstore.MessagingInstance, len(prior))
 	for i := range prior {
@@ -288,10 +362,10 @@ func mergeMessagingPrior(cur, prior []chstore.MessagingInstance) {
 		if !ok {
 			continue
 		}
-		cur[i].PriorSpanCount = p.SpanCount
-		cur[i].PriorErrorCount = p.ErrorCount
-		cur[i].PriorProduceCount = p.ProduceCount
-		cur[i].PriorConsumeCount = p.ConsumeCount
+		cur[i].PriorSpanCount = chstore.ScalePriorCount(p.SpanCount, scale)
+		cur[i].PriorErrorCount = chstore.ScalePriorCount(p.ErrorCount, scale)
+		cur[i].PriorProduceCount = chstore.ScalePriorCount(p.ProduceCount, scale)
+		cur[i].PriorConsumeCount = chstore.ScalePriorCount(p.ConsumeCount, scale)
 		cur[i].PriorAvgMs = p.AvgMs
 		cur[i].PriorP50Ms = p.P50Ms
 		cur[i].PriorP99Ms = p.P99Ms

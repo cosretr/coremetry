@@ -2,6 +2,7 @@ package chstore
 
 import (
 	"context"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -263,6 +264,144 @@ type DBDetail struct {
 	// farklı adresleri TEK satıra çöküyor ve sayfa bunu söylemiyordu
 	// (db_addresses.go). Probed=false iken arayüz hiçbir şey ilan etmez.
 	PhysicalAddrs DBPhysicalAddrs `json:"physicalAddrs"`
+	// v0.10.1025 (Databases dilim 3) — ÖNCEKİ EŞİT PENCERE. Aynı agregenin
+	// PriorWindow(from, to) üzerinde ikinci kez okunmuşu; /database
+	// karolarının delta'ları bundan çizilir. Her istekte hesaplanır (URL
+	// parametresi yok, cache anahtarı değişmedi): aynı birincil anahtar
+	// önekine tek satırlık bir okuma daha.
+	//
+	// omitempty YOK, çünkü sıfır burada BİR ÖLÇÜM: "önceki pencerede 0 hata"
+	// ile "önceki pencere okunmadı" aynı JSON'a düşerse karo ikincisini
+	// birincisi sanıp "önce 0" basardı. Ayrımı HasPrior taşır
+	// (OperationSummary.HasPrior emsali): yalnız prior okuması BAŞARILI ve
+	// span_count > 0 iken true; aksi hâlde Prior* alanları sıfır kalır ve
+	// arayüz hiçbir delta çizmez.
+	//
+	// SAYAÇLAR (PriorSpanCount, PriorErrorCount) PriorScale ile ÖLÇEKLİ
+	// gelir: canlı pencerede current'ın son kovası henüz doluyor, prior ise
+	// tam kovalar (PriorCoverage, prior_window.go). Oranlar ve gecikmeler
+	// ölçeklenmez.
+	HasPrior        bool    `json:"hasPrior"`
+	PriorSpanCount  uint64  `json:"priorSpanCount"`
+	PriorErrorCount uint64  `json:"priorErrorCount"`
+	PriorErrorRate  float64 `json:"priorErrorRate"`
+	PriorAvgMs      float64 `json:"priorAvgDurationMs"`
+	PriorP50Ms      float64 `json:"priorP50DurationMs"`
+	PriorP95Ms      float64 `json:"priorP95DurationMs"`
+	PriorP99Ms      float64 `json:"priorP99DurationMs"`
+	// PriorScale — prior sayaçlarına uygulanan kapsama oranı (0, 1]; 1 =
+	// ölçekleme yok. Arayüz < 1 iken bunu açıklama satırında SÖYLER.
+	PriorScale float64 `json:"priorScale"`
+}
+
+// dbDetailAgg — /database şeridinin tek satırlık agregesi (v0.10.1025).
+// Current ve prior pencere AYNI okumayı (dbDetailAggregate) paylaşır; iki
+// ayrı SQL dizgesi zamanla ayrışır ve delta iki farklı ölçümü kıyaslardı.
+type dbDetailAgg struct {
+	SpanCount, ErrorCount      uint64
+	ErrorRate                  float64
+	AvgMs, P50Ms, P95Ms, P99Ms float64
+}
+
+// dbDetailAggregate — db_caller_summary_5m üzerinde bir (system, instance
+// [, db_name]) kimliğinin pencere agregesi. v0.10.1025'te GetDatabaseDetail'in
+// gövdesinden ÇIKARILDI (SQL ve sınırlar birebir aynı) ki prior pencere de
+// aynı okumadan geçsin. bucketStart çağıranın hizaladığı alt sınırdır;
+// üst sınır `< to` (v0.9.1156 sözleşmesi, db_bucket_bound_test.go).
+func (s *Store) dbDetailAggregate(
+	ctx context.Context, bucketStart, to time.Time,
+	system, mvInstance, mvNameSQL string, mvNameArgs []any,
+) (dbDetailAgg, error) {
+	var a dbDetailAgg
+	// Scan is POSITIONAL — pointer order must mirror the SELECT exactly.
+	var avgMs, p50Ms, p95Ms, p99Ms *float64
+	aggArgs := append([]any{bucketStart, to, system, mvInstance}, mvNameArgs...)
+	row := s.telemetryReadConn().QueryRow(ctx, `
+		SELECT countMerge(span_count_state),
+		       countMerge(error_count_state),
+		       sumMerge(duration_sum_state) / 1e6
+		         / nullIf(countMerge(span_count_state), 0) AS avg_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms
+		FROM db_caller_summary_5m
+		WHERE time_bucket >= ? AND time_bucket < ?
+		  AND db_system = ? AND instance = ?`+mvNameSQL+`
+		SETTINGS max_execution_time = 8`,
+		aggArgs...)
+	if err := row.Scan(&a.SpanCount, &a.ErrorCount, &avgMs, &p50Ms, &p95Ms, &p99Ms); err != nil {
+		return dbDetailAgg{}, err
+	}
+	// v0.5.301 — NaN/Inf scrub before JSON marshal.
+	a.AvgMs = safeF(avgMs)
+	a.P50Ms = safeF(p50Ms)
+	a.P95Ms = safeF(p95Ms)
+	a.P99Ms = safeF(p99Ms)
+	if a.SpanCount > 0 {
+		a.ErrorRate = float64(a.ErrorCount) / float64(a.SpanCount) * 100
+	}
+	return a, nil
+}
+
+// dbDetailHasPrior — prior agregesi delta çizmeye YETER mi? SAF
+// (v0.10.1025). Okuma düştüyse ya da pencerede hiç çağrı yoksa hayır:
+// sıfır çağrılı bir prior'a karşı her karo "önce 0" ya da sonsuz artış
+// basardı — oysa doğru cümle "kıyaslanacak bir şey yok".
+func dbDetailHasPrior(err error, priorSpans uint64) bool {
+	return err == nil && priorSpans > 0
+}
+
+// applyDBDetailPrior — prior agregesini yüke yazar. SAF (v0.10.1025).
+// HasPrior false iken Prior* alanlarına DOKUNULMAZ: düşen ya da boş bir
+// okumanın değerleri yükte "ölçülmüş" gibi durmasın — tek sözcü hasPrior.
+//
+// scale = PriorCoverage: yalnız SAYAÇLAR ölçeklenir (ScalePriorCount, taban
+// 1); hata oranı ve gecikmeler oran/dağılım, pencere boyundan bağımsız.
+// Total time karşılaştırması (çağrı × avg) ölçekli çağrıdan türediği için
+// kendiliğinden ölçeklenir. HasPrior kararı ÖLÇEKSİZ sayaçla verilir.
+func applyDBDetailPrior(out *DBDetail, p dbDetailAgg, err error, scale float64) {
+	if !dbDetailHasPrior(err, p.SpanCount) {
+		return
+	}
+	if !(scale > 0 && scale < 1) {
+		scale = 1
+	}
+	out.HasPrior = true
+	out.PriorScale = scale
+	out.PriorSpanCount = ScalePriorCount(p.SpanCount, scale)
+	out.PriorErrorCount = ScalePriorCount(p.ErrorCount, scale)
+	out.PriorErrorRate = p.ErrorRate
+	out.PriorAvgMs = p.AvgMs
+	out.PriorP50Ms = p.P50Ms
+	out.PriorP95Ms = p.P95Ms
+	out.PriorP99Ms = p.P99Ms
+}
+
+// attachDBDetailPrior — /database yüküne önceki eşit pencereyi ekler
+// (v0.10.1025). GetDatabaseDetail bunu `defer` ile çağırır, yani çağıranlar
+// ve en ağır ifadeler okumalarından SONRA koşar (R6c): yavaş bir prior
+// okuması onların zaman bütçesini yiyemez; bağlam o ana dek tükenmişse
+// prior sessizce düşer.
+//
+// Üç kapı, sırayla: TTL ufku (dbPriorReadable), MV'nin ileriye dönük
+// kapsaması (sourceCovers — ilk kova pFrom'dan önce olmalı) ve okumanın
+// kendisi. Hangisi düşerse düşsün sonuç aynı: HasPrior=false, delta yok.
+// Kapsamayan / kısmen silinmiş bir prior EKSİK sayar ve current'ı sahte
+// biçimde KÖTÜ gösterirdi (kırmızı ↑).
+func (s *Store) attachDBDetailPrior(
+	ctx context.Context, out *DBDetail, from, to time.Time,
+	system, mvInstance, mvNameSQL string, mvNameArgs []any,
+) {
+	now := time.Now()
+	pFrom, pTo := PriorWindow(from, to)
+	if !dbPriorReadable(pFrom, pTo, now) || !s.sourceCovers(ctx, priorSrcDBCallerSummary, pFrom) {
+		return
+	}
+	prior, perr := s.dbDetailAggregate(ctx, pFrom, pTo, system, mvInstance, mvNameSQL, mvNameArgs)
+	if perr != nil {
+		log.Printf("[chstore] db detail prior window read failed (system=%s instance=%s): %v — deltas hidden", system, mvInstance, perr)
+	}
+	applyDBDetailPrior(out, prior, perr, PriorCoverage(from, to, now))
 }
 
 // GetDatabaseDetail returns per-(service, pod) breakdown + top
@@ -350,35 +489,25 @@ func (s *Store) GetDatabaseDetail(
 	if instance == "" {
 		mvInstance = "unknown"
 	}
-	// Scan is POSITIONAL — pointer order must mirror the SELECT exactly.
-	var avgMs, p50Ms, p95Ms, p99Ms *float64
-	aggArgs := append([]any{bucketStart, to, system, mvInstance}, mvNameArgs...)
-	row := s.telemetryReadConn().QueryRow(ctx, `
-		SELECT countMerge(span_count_state),
-		       countMerge(error_count_state),
-		       sumMerge(duration_sum_state) / 1e6
-		         / nullIf(countMerge(span_count_state), 0) AS avg_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms
-		FROM db_caller_summary_5m
-		WHERE time_bucket >= ? AND time_bucket < ?
-		  AND db_system = ? AND instance = ?`+mvNameSQL+`
-		SETTINGS max_execution_time = 8`,
-		aggArgs...)
-	if err := row.Scan(&out.SpanCount, &out.ErrorCount, &avgMs, &p50Ms, &p95Ms, &p99Ms); err != nil {
+	// v0.10.1025 — agrege dbDetailAggregate'e çıktı (SQL birebir aynı) ki
+	// prior pencere de AYNI okumadan geçsin.
+	cur, err := s.dbDetailAggregate(ctx, bucketStart, to, system, mvInstance, mvNameSQL, mvNameArgs)
+	if err != nil {
 		return nil, err
 	}
-	// v0.5.301 — NaN/Inf scrub before JSON marshal.
-	out.AvgMs = safeF(avgMs)
-	out.P50Ms = safeF(p50Ms)
-	out.P95Ms = safeF(p95Ms)
-	out.P99Ms = safeF(p99Ms)
-	if out.SpanCount > 0 {
-		out.ErrorRate = float64(out.ErrorCount) / float64(out.SpanCount) * 100
-	}
+	out.SpanCount, out.ErrorCount, out.ErrorRate = cur.SpanCount, cur.ErrorCount, cur.ErrorRate
+	out.AvgMs, out.P50Ms, out.P95Ms, out.P99Ms = cur.AvgMs, cur.P50Ms, cur.P95Ms, cur.P99Ms
+
+	// v0.10.1025 (Databases dilim 3) — ÖNCEKİ EŞİT PENCERE, her istekte —
+	// ama EN SONDA: `defer`, aşağıdaki çağıran ve ifade okumalarının (erken
+	// `return out, nil` dalları dahil) HEPSİNDEN sonra koşar; yavaş bir prior
+	// onların bütçesini yiyemez. Kapılar ve ölçekleme attachDBDetailPrior'da.
+	// Hata yumuşak: tek satır log, HasPrior=false, yükün geri kalanı aynen.
+	out.PriorScale = 1
+	defer s.attachDBDetailPrior(ctx, out, from, to, system, mvInstance, mvNameSQL, mvNameArgs)
 
 	// Per-(service, pod) breakdown — read from db_caller_summary_5m.
+	aggArgs := append([]any{bucketStart, to, system, mvInstance}, mvNameArgs...)
 	rows, err := s.telemetryReadConn().Query(ctx, `
 		SELECT service_name,
 		       host_name AS pod,

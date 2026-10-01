@@ -27,12 +27,39 @@ import { LIST_NEW_LABEL, LIST_NEW_TITLE } from '@/lib/endpointHonesty';
 // components/-level file) adopted compare=prior, and components/
 // must not import from pages/. Props unchanged; still the single
 // implementation.
-export function TrendDelta({ cur, prior, kind }: {
+//
+// v0.10.1025 (Databases dilim 3) — `zeroPrior`: prior===0 iken NE
+// söylendiği çağırana bağlı. "listede yeni" cümlesi iki TOP-N okumasını
+// kıyaslayan tablolar için doğru; /database gibi TEK varlığın detayında
+// kıyaslanan bir liste YOK, orada doğru cümle "önceki pencerede 0'dı".
+// Varsayılan 'new-in-list' — mevcut çağıranların çıktısı birebir aynı.
+// 'was-zero' rozeti ok'la aynı renk kuralını izler: 0'dan artış
+// lowerBetter'da KÖTÜLEŞME (--err), neutral'da yön tonu (--accent2).
+const WAS_ZERO_LABEL = 'önce 0';
+const WAS_ZERO_TITLE = "Önceki pencerede 0'dı.";
+export function TrendDelta({ cur, prior, kind, zeroPrior = 'new-in-list' }: {
   cur: number; prior?: number; kind: 'lowerBetter' | 'neutral';
+  zeroPrior?: 'new-in-list' | 'was-zero';
 }) {
   if (prior === undefined || prior === null) return null;
   if (prior === 0) {
     if (cur === 0) return null;
+    if (zeroPrior === 'was-zero') {
+      return (
+        <span data-trend-delta="was-zero" style={{
+          marginLeft: 4, fontSize: 9,
+          color: kind === 'lowerBetter' ? 'var(--err)' : 'var(--accent2)',
+          fontFamily: 'var(--font-mono)',
+          display: 'inline-flex', alignItems: 'center', gap: 1,
+          // dar karoda "önce" ile "0" ayrı satırlara düşmesin
+          whiteSpace: 'nowrap',
+        }}
+          title={WAS_ZERO_TITLE}>
+          <ArrowUp size={9} strokeWidth={2.5} />
+          {WAS_ZERO_LABEL}
+        </span>
+      );
+    }
     return (
       <span className="badge b-info" title={LIST_NEW_TITLE}
         style={{ marginLeft: 4, fontSize: 9, textTransform: 'none', letterSpacing: 0 }}>

@@ -1,6 +1,9 @@
 package chstore
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // db_horizon.go — /databases sayfasının İKİ panelinin veri ufku
 // (v0.10.18, F0.9a).
@@ -45,6 +48,28 @@ import "context"
 // ifadesindeki TTL bir dizge; ikisinin ayrışmasını `db_horizon_test.go`
 // içindeki kaynak taraması engelliyor.
 const dbMVHorizonDays = 90
+
+// msgMVHorizonDays — messaging_summary_5m / messaging_caller_summary_5m
+// MV'lerinin TTL'i (v0.10.1025 R3: /messaging listesinin prior kapısı).
+// dbMVHorizonDays gibi elle tekrarlanan bir sayı; CREATE'teki TTL'den
+// ayrışmasını prior_guard_test.go içindeki kaynak taraması engelliyor.
+const msgMVHorizonDays = 90
+
+// dbPriorReadable — /database detayının prior penceresi MV'den TAM okunabilir
+// mi? SAF (v0.10.1025, Databases dilim 3). PriorReadable'ın db MV ufkuyla
+// bağlanmış hâli; bir günlük pay ve gerekçesi orada (prior_window.go).
+//
+// Prior pencere current'tan bir pencere boyu geride; 60 günlük bir aralık
+// seçildiğinde prior 120 gün önceye uzanır ve db_caller_summary_5m o
+// kovaların bir kısmını TTL ile çoktan silmiştir. Kısmen silinmiş bir prior
+// EKSİK sayar, current ona karşı FAZLA görünür ve her sayaç karosunda sahte
+// bir KÖTÜLEŞME basar ("çağrılar ↑%40", kırmızı hata oku) — hiç delta
+// çizmemekten kötü. Bu yüzden prior'un başı ufkun dışındaysa okuma YAPILMAZ
+// ve HasPrior false kalır. (v0.10.1025 ilk taslağı burada yönü "iyileşme"
+// diye yazmıştı; yanlıştı — eksik prior current'ı KÖTÜ gösterir.)
+func dbPriorReadable(pFrom, pTo, now time.Time) bool {
+	return PriorReadable(pFrom, pTo, now, dbMVHorizonDays)
+}
 
 // receiverHorizonDays — receiver panelinin ETKİN ufku (gün).
 //

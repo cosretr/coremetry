@@ -322,6 +322,9 @@ type Store struct {
 	hasTraceEntrySvcCol bool
 	// envSummary — v0.10.881: service_env_summary_5m kapsama probu (60 s).
 	envSummary envSummaryProbe
+	// priorCoverage — v0.10.1025: compare=prior okumalarının kaynak
+	// kapsama probları (prior_coverage.go; kaynak başına 60 s).
+	priorCoverage [priorSourceCount]coverageProbe
 
 	// neighborProvider is the optional 1-hop topology lookup used
 	// by AttachProblemToIncident for rule 3 (cluster a new

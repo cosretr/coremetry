@@ -24,6 +24,8 @@ import type {
 } from '@/lib/types';
 import type { DatabaseRef } from './databaseParam';
 import { addressScopeNotice } from './addressScope';
+import { errRatePpDelta } from './errRateDelta';
+import { TrendDelta } from '@/components/TrendDelta';
 import type { PhysicalAddrs } from '@/lib/types';
 
 // detailSections — the /database page's body (v0.9.1366).
@@ -168,31 +170,117 @@ export function DatabaseIdentityHeader({ refObj, env, range, physicalAddrs }: {
 
 // ── altın-sinyal şeridi ──────────────────────────────────────────────────
 
-/** DatabaseSignalStrip — sekiz karo, `/api/databases/detail` payload'ından. */
+/**
+ * DatabaseSignalStrip — sekiz karo, `/api/databases/detail` payload'ından.
+ *
+ * v0.10.1025 (Databases dilim 3, Dynatrace "compare with previous period"
+ * karşılığı) — `d.hasPrior` iken karolar bir önceki pencereye (aynı sayıda
+ * 5 dk kova; canlı pencerede prior SAYAÇLARI sunucuda dolu kısma oranlı —
+ * priorScale) göre fark taşır. Prior sunucuda her istekte hesaplanır
+ * (toggle / URL paramı yok); hasPrior false (prior okunamadı, MV ufkunun ya
+ * da MV kapsamasının dışında, o pencerede çağrı yok) iken karolar bugünküyle
+ * BİREBİR aynı çizilir.
+ *
+ * Tür kuralı Endpoints/ifade detayıyla aynı: çağrı ve toplam süre neutral
+ * (fazla trafik kendi başına kötü değil), hata ve gecikme lowerBetter.
+ * Err rate YÜZDE PUAN farkı gösterir (errRateDelta.ts gerekçesi). Bütün
+ * karolar `zeroPrior="was-zero"`: burada kıyaslanan bir TOP-N listesi yok,
+ * "listede yeni" cümlesi yanlış olurdu. Renk yalnız kötüleşen değerde
+ * (K5/T9) — TrendDelta ve PpDelta bu kuralı kendileri uygular.
+ */
 export function DatabaseSignalStrip({ d }: { d: DBDetail }) {
+  const cmp = d.hasPrior === true;
+  // v0.10.1025 (inceleme R5) — current pencerede HİÇ çağrı yoksa gecikme
+  // ölçülmemiştir: "0.0 ms" bir ölçüm değil, yokluk. Ona karşı çizilen
+  // "↓100%" bir iyileşme gibi okunuyordu. Gecikme farkları (Avg/P50/P95/P99)
+  // o hâlde çizilmez; Calls / Errors farkı (trafik kesildi) kalır.
+  const cmpLatency = cmp && d.spanCount > 0;
+  const priorTotal = (d.priorSpanCount ?? 0) * (d.priorAvgDurationMs ?? 0);
+  // R1 — sayaçlar canlı pencerenin dolu kısmına oranlandıysa açıklama
+  // satırı bunu SÖYLER (sunucu priorScale < 1 gönderir).
+  const scaled = cmp && d.priorScale !== undefined && d.priorScale > 0 && d.priorScale < 1;
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))',
-      gap: 8, marginBottom: 14,
-    }}>
-      <StatTile label="Calls">{fmtNum(d.spanCount)}</StatTile>
-      <StatTile label="Errors">{fmtNum(d.errorCount)}</StatTile>
-      <StatTile label="Err rate"
-        tone={d.errorRate > 5 ? 'err' : d.errorRate > 0 ? 'warn' : undefined}>
-        {`${d.errorRate.toFixed(2)}%`}
-      </StatTile>
-      <StatTile label="Avg">{`${d.avgDurationMs.toFixed(1)} ms`}</StatTile>
-      <StatTile label="P50">{msOrDash(d.p50DurationMs)}</StatTile>
-      <StatTile label="P95">{msOrDash(d.p95DurationMs)}</StatTile>
-      <StatTile label="P99">{`${d.p99DurationMs.toFixed(1)} ms`}</StatTile>
-      {/* Total time — the mockup's extra tile, and the number
-          that actually ranks a database against its siblings:
-          calls × avg is the wall-clock this DB cost the fleet
-          inside the window. */}
-      <StatTile label="Total time">
-        {fmtTotal(d.spanCount * d.avgDurationMs)}
-      </StatTile>
-    </div>
+    <>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))',
+        gap: 8, marginBottom: cmp ? 6 : 14,
+      }}>
+        <StatTile label="Calls">
+          {fmtNum(d.spanCount)}
+          {cmp && <TrendDelta cur={d.spanCount} prior={d.priorSpanCount} kind="neutral" zeroPrior="was-zero" />}
+        </StatTile>
+        <StatTile label="Errors">
+          {fmtNum(d.errorCount)}
+          {cmp && <TrendDelta cur={d.errorCount} prior={d.priorErrorCount} kind="lowerBetter" zeroPrior="was-zero" />}
+        </StatTile>
+        <StatTile label="Err rate"
+          tone={d.errorRate > 5 ? 'err' : d.errorRate > 0 ? 'warn' : undefined}>
+          {`${d.errorRate.toFixed(2)}%`}
+          {cmp && d.priorErrorRate !== undefined && <PpDelta cur={d.errorRate} prior={d.priorErrorRate} />}
+        </StatTile>
+        <StatTile label="Avg">
+          {`${d.avgDurationMs.toFixed(1)} ms`}
+          {cmpLatency && <TrendDelta cur={d.avgDurationMs} prior={d.priorAvgDurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
+        </StatTile>
+        <StatTile label="P50">
+          {msOrDash(d.p50DurationMs)}
+          {cmpLatency && d.p50DurationMs !== undefined
+            && <TrendDelta cur={d.p50DurationMs} prior={d.priorP50DurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
+        </StatTile>
+        <StatTile label="P95">
+          {msOrDash(d.p95DurationMs)}
+          {cmpLatency && d.p95DurationMs !== undefined
+            && <TrendDelta cur={d.p95DurationMs} prior={d.priorP95DurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
+        </StatTile>
+        <StatTile label="P99">
+          {`${d.p99DurationMs.toFixed(1)} ms`}
+          {cmpLatency && <TrendDelta cur={d.p99DurationMs} prior={d.priorP99DurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
+        </StatTile>
+        {/* Total time — the mockup's extra tile, and the number
+            that actually ranks a database against its siblings:
+            calls × avg is the wall-clock this DB cost the fleet
+            inside the window. v0.10.1025 — prior aynı çarpım, neutral:
+            daha çok toplam süre daha çok iş de olabilir. */}
+        <StatTile label="Total time">
+          {fmtTotal(d.spanCount * d.avgDurationMs)}
+          {cmp && <TrendDelta cur={d.spanCount * d.avgDurationMs} prior={priorTotal} kind="neutral" zeroPrior="was-zero" />}
+        </StatTile>
+      </div>
+      {/* Karşılaştırmanın NEYE karşı olduğu tek satır; yeni kart yok.
+          hasPrior yokken hiçbir şey basılmaz — her zaman duran bir
+          açıklama, delta'sız karoların yanında yalan olurdu.
+          v0.10.1025 (R1) — "eşit uzunluktaki" iddiası kalktı: prior N tam
+          kovadır, canlı current ise son kovası dolmamış bir pencere. Doğru
+          cümle "bir önceki pencere"; sayaçlar oranlandıysa o da yazılır. */}
+      {cmp && (
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 14 }}>
+          Karşılaştırma: bir önceki pencere
+          {scaled && ' · sayılar, süren pencerenin dolu kısmına oranlandı'}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * PpDelta — Err rate karosunun yüzde-puan farkı (v0.10.1025). Karar
+ * errRatePpDelta'da (saf, testli); burası yalnız çizer. Renk yalnız
+ * kötüleşmede (--err), diğer her durum nötr.
+ */
+function PpDelta({ cur, prior }: { cur: number; prior: number }) {
+  const pp = errRatePpDelta(cur, prior);
+  if (!pp) return null;
+  return (
+    <span data-pp-delta={pp.worse ? 'worse' : 'neutral'} style={{
+      marginLeft: 4, fontSize: 9,
+      color: pp.worse ? 'var(--err)' : 'var(--text2)',
+      fontFamily: 'var(--font-mono)',
+      // R6b — 104 px'lik karoda "pp" tek başına alt satıra düşmesin.
+      whiteSpace: 'nowrap',
+    }}
+      title={`Önceki pencere: ${prior.toFixed(2)}% — fark yüzde PUAN (pp), göreli oran değil`}>
+      {pp.text}
+    </span>
   );
 }
 

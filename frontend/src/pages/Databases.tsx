@@ -287,9 +287,12 @@ export default function DatabasesPage() {
           {(dbsys || dbname) && (
             <Button variant="secondary" size="sm" onClick={clearFilters}>Clear</Button>
           )}
-          {/* v0.9.433 — Messaging'in compare toggle'ının birebiri. */}
+          {/* v0.9.433 — Messaging'in compare toggle'ının birebiri.
+              v0.10.1025 (R1) — ipucu doğru olanı söylüyor: prior "eşit
+              uzunlukta" değil, aynı sayıda 5 dk kova; süren pencerede prior
+              sayaçları sunucuda dolu kısma oranlanıyor. */}
           <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-            title="Compare current window against the immediately-preceding equal-length window. Adds a second backend scan; off by default.">
+            title="Bu pencereyi bir önceki pencereyle karşılaştırır. Süren pencerede önceki pencerenin sayıları (çağrı, hata), süren pencerenin dolu kısmına oranlanır. İkinci bir sunucu okuması ekler; varsayılan kapalı.">
             <input type="checkbox" checked={compare}
               onChange={e => setCompare(e.target.checked)} />
             Compare vs prior
@@ -382,7 +385,13 @@ export default function DatabasesPage() {
             {/* v0.10.954 — tablo standardı T12: boş / eşleşme yok paylaşılan
                 tablonun İÇİNDE (DependenciesTable `state`), başlık durur. Tip /
                 db.name süzgeci satırları elediyse "eşleşme yok" + Clear'ın aynısı. */}
-            <DependenciesTable rows={tableRows} kind="db" range={range} onRowNavigate={openDatabasePage}
+            {/* v0.10.1025 — compare GEÇİYOR. v0.9.433'ten beri "Compare vs
+                prior" kutusu sunucudan prior'u çekiyor, toRow prior*'ı
+                satıra kopyalıyordu ama bu mount `compare` geçmiyordu ve
+                DependenciesTable'ın her delta rozeti `compare &&` kapılı:
+                kutu ÖLÜYDÜ (Messaging.tsx geçiyordu). Pin:
+                databases/compareWiring.pin.test.ts. */}
+            <DependenciesTable rows={tableRows} kind="db" range={range} compare={compare} onRowNavigate={openDatabasePage}
               state={dbsys || dbname
                 ? { kind: 'no-match', onClearFilters: clearFilters }
                 : { kind: 'empty', message: "Bu pencerede servislerin yaydığı veritabanı span'i yok — bu bölümün dolması için uygulama servislerinden birine bir OTel SDK bağla." }} />
@@ -420,6 +429,14 @@ export default function DatabasesPage() {
                 {/* v0.10.954 — tablo standardı T12: env kapısı ("SORULMADI") tablonun
                     DIŞINDA kalır — sorgu hiç atılmadı, tablo anlamsız. Diğer boş
                     hâller paylaşılan tablonun İÇİNDE (DependenciesTable `state`). */}
+                {/* v0.10.1025 — bu mount `compare` BİLEREK geçmiyor: receiver
+                    satırları metric_points'ten keşfediliyor, RED'leri tanım
+                    gereği SIFIR ve prior okuması (GetDatabasesRollup) receiver
+                    keşfini hiç yapmıyor — kimlikleri de db.name taşımaz (''),
+                    MV satırlarınınki ise 'default'a çözülür, yani mergeDBPrior
+                    bunlara prior yazmaz. Geçseydi de hiçbir rozet çizilmezdi;
+                    geçmemek, burada kıyas OLMADIĞINI koda yazıyor (pin:
+                    databases/compareWiring.pin.test.ts). */}
                 {receiverRows.length === 0 && ov?.receiversSkipped === 'env' ? (
                   <EmptyHint>
                     {`env=${env} filtresi açıkken receiver keşfi hiç çalışmıyor (metric_points deploy_env taşımıyor) — bu panel "boş" değil, SORULMADI.`}

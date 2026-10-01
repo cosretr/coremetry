@@ -112,7 +112,7 @@ func TestMergeMessagingPrior(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mergeMessagingPrior(tc.cur, tc.prior)
+			mergeMessagingPrior(tc.cur, tc.prior, 1) // v0.10.1025: 1 = tamamlanmış pencere, ölçek yok
 			for i, w := range tc.want {
 				got := tc.cur[i]
 				if got.PriorSpanCount != w.spans || got.PriorErrorCount != w.errs ||
@@ -132,7 +132,7 @@ func TestMergeMessagingPrior(t *testing.T) {
 func TestMergeMessagingPriorLeavesCurrentIntact(t *testing.T) {
 	cur := []chstore.MessagingInstance{msgRow("kafka", "(default)", "orders", 100, 5, 60, 40, 12, 8, 90)}
 	prior := []chstore.MessagingInstance{msgRow("kafka", "(default)", "orders", 80, 2, 50, 30, 10, 7, 70)}
-	mergeMessagingPrior(cur, prior)
+	mergeMessagingPrior(cur, prior, 1)
 	got := cur[0]
 	if got.SpanCount != 100 || got.ErrorCount != 5 || got.ProduceCount != 60 ||
 		got.ConsumeCount != 40 || got.AvgMs != 12 || got.P50Ms != 8 || got.P99Ms != 90 {
