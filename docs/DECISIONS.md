@@ -987,6 +987,20 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Problems sekmesi: varsayılan görünüm HER ŞEY (v0.10.1014; üç kararın tersi)
+
+**Operatör:** "Problems sekmesinde bütün hepsi gelsin, ben hangisi gerçek problem hangisi değil zamanla
+öğretelim." **Karar:** `/inbox` varsayılanı tüm öncelikler (P1 + P2 + P3) ve tüm türler (alarm kuralı
+Problem'leri, exception grupları, HTTP hataları, anomaliler, olaylar). Bu, üç önceki operatör kararının
+TERSİDİR: v0.9.487 (yalnız P1) → v0.9.659 (P1 + P2), v0.9.328 (yalnız exception), v0.9.443 (HTTP hataları
+kapalı). Gerekçe değişti: gürültü varsayılan süzgeçle GİZLENMEYECEK, operatör neyin gerçek olduğunu
+işaretleyerek öğretecek. Çipler ve sayıları aynen; daraltmak tek tık ve `?prio=` / `?kind=` linke biner
+(parametresiz eski linkler artık her şeyi gösterir). Kenar çubuğu rozeti ve sunucu tarafı değişmedi.
+**AÇIK — öğretme mekanizması (ayrı dilim, operatör kararı bekliyor):** satır başına "gerçek problem /
+problem değil" işareti; neyin imzasına bağlanacağı (aynı kural + servis / aynı exception grubu mu, daha geniş
+mi), "problem değil"in yalnız listeden mi yoksa bildirimden de mi düşüreceği ve mevcut exception "Ignore" /
+problem "mute" ile ilişkisi sorulmadan kurulmaz.
+
 ## 2026-10-01 — Argo CD: keşfedilen instance'lar kendiliğinden kaydedilir — anahtarla (v0.10.1013)
 
 **Operatör ("Argocd entegrasyonu da autodiscover etse daha iyi olacak, şu anda tek tek ekle diyorum";

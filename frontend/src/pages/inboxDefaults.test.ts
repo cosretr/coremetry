@@ -31,20 +31,21 @@ describe('test yardımcısı', () => {
   });
 });
 
+// v0.10.1014 — operatör: "Problems sekmesinde bütün hepsi gelsin, hangisi
+// gerçek problem hangisi değil zamanla öğretelim." Üç önceki kararın TERSİ
+// (v0.9.487 yalnız P1 → v0.9.659 P1+P2; v0.9.328 yalnız exception; v0.9.443
+// HTTP hataları kapalı): gürültü varsayılan süzgeçle gizlenmez, operatör
+// işaretleyerek öğretir. Bu testler yeni varsayılanı çiviliyor — eskiye dönüş
+// yine operatör kararı ister.
 describe('Problems varsayılan görünümü', () => {
-  it('öncelik varsayılanı P1 + P2', () => {
-    expect(arr('PRIO_DEFAULT')).toEqual(['P1', 'P2']);
+  it('öncelik varsayılanı: hepsi (P1 + P2 + P3)', () => {
+    expect(arr('PRIO_DEFAULT')).toEqual(['P1', 'P2', 'P3']);
+    expect(arr('PRIO_DEFAULT')).toEqual(arr('PRIO_ALL'));
   });
 
-  // P3 kronik/düşük-şiddet gürültüsü; varsayılan görünümü doldurur ve
-  // v0.9.487'nin çözdüğü sorun buydu.
-  it('P3 varsayılanda YOK', () => {
-    expect(arr('PRIO_DEFAULT')).not.toContain('P3');
-  });
-
-  // v0.9.328 (operatör): "Problems ilk açtığında exception görsün."
-  it('tür varsayılanı exception', () => {
-    expect(arr('KIND_DEFAULT')).toEqual(['exception']);
+  it('tür varsayılanı: hepsi (problem, exception, HTTP hatası, anomali, olay)', () => {
+    expect(arr('KIND_DEFAULT')).toEqual(['problem', 'exception', 'httperror', 'anomaly', 'incident']);
+    expect(arr('KIND_DEFAULT')).toEqual(arr('KIND_ALL'));
   });
 
   // Ekrandaki açıklama sabit "P1" yazıyordu; varsayılan değişince YALAN

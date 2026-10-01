@@ -137,12 +137,21 @@ describe('Inbox kuyruğu — durumlar tablonun içinde (v0.10.967)', () => {
     expect(dataRows(el)).toBe(0);
   });
 
-  it('varsayılan (dar) öncelik/tür süzgeci + boş: eşleşme yok, "genişlet" çaresi; taban şeridi yerinde', async () => {
-    const el = await mount();
+  // v0.10.1014 — varsayılan artık HER ŞEY (operatör: "bütün hepsi gelsin");
+  // dar süzgeç dalı açıkça daraltılmış URL ile sınanır.
+  it('daraltılmış öncelik/tür süzgeci + boş: eşleşme yok, "genişlet" çaresi; taban şeridi yerinde', async () => {
+    const el = await mount('/inbox?prio=P1&kind=exception');
     const row = stateRow(el);
     expect(row?.dataset.dtState).toBe('no-match');
     expect(row?.textContent).toContain('öncelik / tür süzgecini genişlet');
     expect(el.textContent).toContain('groups below 5, single service, hidden');
+  });
+
+  it('varsayılan (parametresiz) + boş: boş satır — varsayılan hiçbir şeyi gizlemez', async () => {
+    const el = await mount();
+    const row = stateRow(el);
+    expect(row?.dataset.dtState).toBe('empty');
+    expect(row?.textContent).toBe('Kuyruk boş — şu an ilgini bekleyen bir şey yok');
   });
 
   it('tüm öncelik/tür + süzgeç yok + boş: boş satır', async () => {

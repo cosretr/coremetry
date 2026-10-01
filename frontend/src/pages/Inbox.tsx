@@ -55,7 +55,15 @@ const PRIO_ALL = ['P1', 'P2', 'P3'] as const;
 //
 // P3 hâlâ dışarıda: kronik/düşük-şiddet gürültüsü varsayılan görünümü
 // doldurur ve v0.9.487'nin çözdüğü sorun buydu.
-const PRIO_DEFAULT = ['P1', 'P2'] as const;
+//
+// v0.10.1014 (operatör kararı, prod) — VARSAYILAN ARTIK HER ŞEY: "Problems
+// sekmesinde bütün hepsi gelsin, hangisi gerçek problem hangisi değil zamanla
+// öğretelim". Üç önceki kararın tersi (487 yalnız P1, 659 P1+P2, 328 yalnız
+// exception, 443 HTTP hataları kapalı): gürültüyü varsayılan süzgeçle
+// GİZLEMEK yerine operatör neyin gerçek olduğunu işaretleyerek öğretecek
+// (öğretme mekanizması ayrı dilim). Çipler ve sayıları aynen duruyor; daraltmak
+// yine tek tık ve ?prio= / ?kind= paylaşılan linke biner.
+const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;
 const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
 // v0.9.328 — operator: "Problems ilk açtığında exception görsün, kullanıcılar
 // ona göre tasarlar." Exceptions are the signal operators trust: a thrown
@@ -65,7 +73,9 @@ const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'an
 // their full counts, so what's excluded is visible and one click away, and
 // ?kind= carries the choice into every shared link. The P1 guard below makes
 // sure a landing default can never hide something urgent.
-const KIND_DEFAULT: readonly InboxKind[] = ['exception'];
+// v0.10.1014 — tüm türler (yukarıdaki PRIO_DEFAULT notu). Dizi BİLEREK açık
+// yazıldı (KIND_ALL'a atıf değil): inboxDefaults testi sabiti metinden okur.
+const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
 // v0.9.443 — 'httperror': error.type fallback'inin ürettiği çıplak
 // durum-kodu grupları ("404"). Varsayılan facet'te KAPALI (KIND_DEFAULT
 // değişmedi) — bankada beklenen istemci hataları triage'ı boğmasın;
@@ -700,8 +710,8 @@ export default function InboxPage() {
         <SavedViewsBar page="inbox" />
         <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 14 }}>
           Everything needing a human — Problems (alert rules), open Exception
-          groups, and active Anomaly detections. Default view:{' '}
-          <b>{PRIO_DEFAULT.join(' + ')}</b> Exceptions. Click any row to
+          groups, and active Anomaly detections. Default view: everything —{' '}
+          <b>{PRIO_DEFAULT.join(' + ')}</b>, all kinds. Click any row to
           triage it in place.
         </p>
 
