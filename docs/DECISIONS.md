@@ -987,6 +987,29 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Histerezis bandındaki açık anomali artık gerçekten tazelenir (v0.10.1022)
+
+**Operatör:** "anomali alarmları çok geliyor" (ekran görüntüsü: saatte ≈130 anomali problemi, ~20 dk
+arayla dalgalar hâlinde). **Kusur (kod okumasıyla bulundu ve doğrulandı; prod'da ölçülmedi):** açık bir
+anomali problemi, değeri açılma eşiğinin altına inip çözülme bandına henüz dönmediğinde ("sürüyor",
+karar `none`) her tik tazelenmelidir — v0.10.889 bunun için `applyOutcome`'a bir touch koymuştu. Ama
+dedektör turunun birinci fazı `none` kararını (v0.9.1069 iki-faz bölünmesinden beri) kendisi eliyor,
+`applyOutcome`'a hiç göndermiyordu: touch ölü koddu, testi de yalnız `applyOutcome`'un içini pinliyordu.
+Sonuç: bantta iki tik (4 dk) kalan her açık anomali evaluator'ın bayat süpürmesiyle (3×1 dk) "kaynak
+sustu" diye kapanıyor; değer eşiği yeniden geçince YENİ kimlikle yeni problem, yeni bildirim ve (vida
+açıksa) yeni incident açılıyordu. Eşik çevresinde gezinen bir servis saatte birkaç "yeni" anomali
+üretiyordu. **Karar:** faz 1 süzgeci saf bir işleve çıktı (`reachesApply`): `none` + açık satır uygulama
+döngüsüne girer ve touch edilir; `skip` (veri yok) girmez — sustu ≠ düzeldi, süpürme kapatmaya devam eder
+(v0.9.1051). Kümeye o tik katılan satır touch'tan önce atlanır (mevcut `merged` kontrolü). **Beklenen
+etki:** açık anomali, değeri çözülme bandına dönene dek TEK satır olarak yaşar; yeniden açılma dalgaları
+kesilir. Açık anomali satırları daha uzun açık kalır — bu, tasarlanan histerezistir (v0.8.220).
+**Filo fırtına kapısı (operatör "evet olsun") GEMİYE ÇIKMADI:** iki tur Opus çelişkili incelemesi
+tasarımda ciddi kusurlar buldu (v1: bantta kalan üyeler sayımdan düşüp fırtınayı erken kapatıyor, daha
+çok bildirim; v2: açık bir fırtına saatler sonra gelen ilgisiz anomaliyi bildirimsiz yutabiliyor,
+okunamayan bir tikte süpürme fırtınayı kapatıyor, kaybolan servisler fırtınayı sonsuza dek açık tutuyor).
+Çalışma `.ai/parked/storm-v2/` altında bekliyor. Önce bu düzeltmenin prod etkisi ölçülecek; kapı hâlâ
+gerekiyorsa üyelerin gerçek satırlarını koruyan (bastırmayan) bir tasarımla yeniden ele alınır.
+
 ## 2026-10-01 — Dış (Oracle) kümeleri servis dedektörünce kapatılmaz (v0.10.1021)
 
 **Bağlam:** operatör "anomali alarmları çok geliyor" + "Oracle'dan gelenler Problems'te gözükmüyor";

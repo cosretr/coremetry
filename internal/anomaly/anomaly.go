@@ -587,7 +587,7 @@ func (d *Detector) scan(ctx context.Context) {
 			existing := snap.ByKey(ruleID, svc)
 			hasOpen := existing != nil && existing.ID != ""
 			oc := evaluateAnomaly(m, buckets, seasonal, rates, minSamples, hasOpen, sens)
-			if oc.Action == "skip" || oc.Action == "none" {
+			if !reachesApply(oc.Action, hasOpen) {
 				continue
 			}
 			pending = append(pending, pendingApply{service: svc, metric: m, oc: oc})
@@ -706,6 +706,35 @@ func (d *Detector) scan(ctx context.Context) {
 	// kendi içinde soft-fail, ani-sapma hattına gecikme bindirmez. Tik
 	// başına iki küçük okuma (triage config + pencere sayımı).
 	d.checkExceptionStorm(ctx)
+}
+
+// reachesApply — SAF: faz 1'in kararı uygulama döngüsüne (applyOutcome) girer mi.
+//
+// v0.10.1022 (operatör: "anomali alarmları çok geliyor") — "none" + AÇIK satır
+// GİRMELİ. "none" = açık problem var ve z histerezis bandında (çözülmedi, ama
+// pencerenin tamamı açılma eşiğinde de değil): karar "sürüyor". v0.10.889 bu
+// durum için applyOutcome'a bir TOUCH koydu (satır aynen yeniden yazılır,
+// updated_at tazelenir) ama faz 1 "none"u — iki-faz bölünmesinden (v0.9.1069)
+// beri — kendisi eliyordu: touch'a hiçbir çağrı ulaşmıyordu, ölü koddu. Sonuç
+// v0.10.889'un kapatmak istediği döngünün ta kendisi: bantta 2 tik (4 dk)
+// kalan her açık anomali evaluator'ın bayat süpürmesiyle (3×1 dk) "kaynak
+// sustu" diye kapanıyor, değer eşiği yeniden geçince YENİ kimlikle yeni
+// problem + yeni bildirim (+ incident) açılıyordu — eşik çevresinde gezinen
+// tek bir servis saatte birkaç "yeni" anomali üretiyordu.
+//
+//	skip             → girmez (veri yok / taban yetersiz; sustu ≠ düzeldi,
+//	                   süpürme "source silent" diye kapatır — v0.9.1051)
+//	none, satır yok  → girmez (yapılacak bir şey yok)
+//	none, satır açık → GİRER (touch)
+//	open / resolve   → girer
+func reachesApply(action string, hasOpen bool) bool {
+	switch action {
+	case "skip":
+		return false
+	case "none":
+		return hasOpen
+	}
+	return true
 }
 
 // batchSeries — bir tikin TOPLU OKUMALARINI toplar: izlenen her metrik
