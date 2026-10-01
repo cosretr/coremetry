@@ -34,7 +34,7 @@ const (
 // enrichStore — chstore.Store'un dört metodu (testte sahte).
 type enrichStore interface {
 	OracleErrorsByKey(ctx context.Context, sourceID, op, code, channel string, from, to time.Time, limit int) ([]chstore.OracleErrorRow, error)
-	SpanSummariesForTraces(ctx context.Context, ids []string, from, to time.Time) ([]chstore.TraceSpanSummary, error)
+	SpanEvidenceForTraces(ctx context.Context, ids []string, from, to time.Time, service string) ([]chstore.TraceSpanSummary, []chstore.TraceEndpointHit, error)
 	GetHypothesis(ctx context.Context, anchorKind, anchorID string) (*chstore.RootCauseHypothesis, error)
 	UpsertHypothesis(ctx context.Context, h chstore.RootCauseHypothesis) error
 }
@@ -166,10 +166,13 @@ func (e *Enricher) OnEvidence(ctx context.Context, ev anomaly.ExternalEvent) {
 	ids := traceIDsNewestFirst(rows, enrichTraceLimit)
 	st.Traces = len(ids)
 	var summaries []chstore.TraceSpanSummary
+	var endpoints []chstore.TraceEndpointHit
 	if len(ids) > 0 {
-		summaries, err = e.store.SpanSummariesForTraces(ctx, ids, ev.From.Add(-enrichPad), ev.To.Add(enrichPad))
+		// v0.10.1004 — aynı okumadan endpoint dökümü; özne gerçek bir servisse
+		// (sentetik ext: değilse) o servisin giriş span'i esas alınır.
+		summaries, endpoints, err = e.store.SpanEvidenceForTraces(ctx, ids, ev.From.Add(-enrichPad), ev.To.Add(enrichPad), evidenceService(ev.Problem.Service))
 		if err != nil {
-			summaries = nil
+			summaries, endpoints = nil, nil
 			st.Error = "span özeti: " + err.Error()
 		}
 	}
@@ -183,7 +186,7 @@ func (e *Enricher) OnEvidence(ctx context.Context, ev anomaly.ExternalEvent) {
 		Source: ev.Target.SourceName, Query: ev.Target.Query, Labels: labels,
 		Current: ev.Current, Median: ev.Median, MAD: ev.MAD, Z: ev.Z,
 		WindowFromNs: ev.From.UnixNano(), WindowToNs: ev.To.UnixNano(),
-		Rows: len(rows), SpanSummary: summaries, UpdatedNs: now.UnixNano(),
+		Rows: len(rows), SpanSummary: summaries, Endpoints: endpoints, UpdatedNs: now.UnixNano(),
 		Distributions: distributions(rows, enrichTopN),
 		Errors:        weightedErrors(rows),
 	}
@@ -220,6 +223,16 @@ func (e *Enricher) OnEvidence(ctx context.Context, ev anomaly.ExternalEvent) {
 		log.Printf("[oracle/enrich] %s: %s", ev.Problem.RuleID, st.Error)
 	}
 	e.record(ev.Problem.ID, st)
+}
+
+// evidenceService — SAF: Problem'in öznesi gerçek bir servis adıysa o; sentetik
+// dış özne ("ext:<kaynak>/…") ya da boşsa "" (endpoint seçimi trace'in hata
+// veren servisine düşer).
+func evidenceService(subject string) string {
+	if subject == "" || strings.HasPrefix(subject, "ext:") {
+		return ""
+	}
+	return subject
 }
 
 func (e *Enricher) record(id string, st EnrichStats) {

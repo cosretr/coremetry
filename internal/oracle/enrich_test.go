@@ -16,18 +16,19 @@ type fakeEnrichStore struct {
 	prev      *chstore.RootCauseHypothesis
 	upserted  []chstore.RootCauseHypothesis
 	sumCalled []string
+	sumSvc    string
 }
 
 func (f *fakeEnrichStore) OracleErrorsByKey(_ context.Context, _, _, _, _ string, _, _ time.Time, _ int) ([]chstore.OracleErrorRow, error) {
 	return f.rows, f.rowsErr
 }
-func (f *fakeEnrichStore) SpanSummariesForTraces(_ context.Context, ids []string, _, _ time.Time) ([]chstore.TraceSpanSummary, error) {
-	f.sumCalled = ids
+func (f *fakeEnrichStore) SpanEvidenceForTraces(_ context.Context, ids []string, _, _ time.Time, service string) ([]chstore.TraceSpanSummary, []chstore.TraceEndpointHit, error) {
+	f.sumCalled, f.sumSvc = ids, service
 	out := []chstore.TraceSpanSummary{}
 	for _, id := range ids {
 		out = append(out, chstore.TraceSpanSummary{TraceID: id, ErrorService: "loan-svc"})
 	}
-	return out, nil
+	return out, []chstore.TraceEndpointHit{{Service: "loan-svc", Path: "/api/loans/apply", Traces: len(ids), ErrorTraces: 3}}, nil
 }
 func (f *fakeEnrichStore) GetHypothesis(context.Context, string, string) (*chstore.RootCauseHypothesis, error) {
 	return f.prev, nil
@@ -79,6 +80,17 @@ func TestEnricherOnEvidence(t *testing.T) {
 	}
 	if len(x.SpanSummary) != enrichTraceLimit {
 		t.Fatalf("span özeti: %d", len(x.SpanSummary))
+	}
+	// v0.10.1004 — endpoint dökümü kanıta girer; özne gerçek servis → okumaya o servis gider.
+	if len(x.Endpoints) != 1 || x.Endpoints[0].Path != "/api/loans/apply" || f.sumSvc != "loan-svc" {
+		t.Fatalf("endpoint kanıtı: %+v (servis %q)", x.Endpoints, f.sumSvc)
+	}
+	// Sentetik dış özne servis DEĞİLDİR: endpoint seçimi trace'in hata servisine bırakılır.
+	evExt := ev
+	evExt.Problem.Service = "ext:oracle-prod/OP_A/E1/MOB"
+	e.OnEvidence(context.Background(), evExt)
+	if f.sumSvc != "" || evidenceService("") != "" || evidenceService("loan-svc") != "loan-svc" {
+		t.Fatalf("sentetik özne servis sayılmamalı: %q", f.sumSvc)
 	}
 	// Satır hatası → yazım yok, istatistikte hata.
 	f2 := &fakeEnrichStore{rowsErr: errors.New("ch down")}

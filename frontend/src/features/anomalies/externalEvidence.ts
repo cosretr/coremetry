@@ -1,7 +1,9 @@
 // externalEvidence.ts — v0.10.230 (Influx D5): dış kaynak kanıt panelinin
 // SAF çekirdeği. Panel JSX'i ince; şekillendirme burada, vitest'te pinli.
 
-import type { DeepEvidence, SpanMetricSeries, TraceSpanSummary } from '@/lib/types';
+import type { DeepEvidence, SpanMetricSeries, TraceSpanSummary, TraceEndpointHit } from '@/lib/types';
+import { endpointDetailHref } from '@/pages/endpoints/endpointParam';
+import { windowRangeParam } from '@/lib/urlState';
 
 export interface ExternalTraceRow extends TraceSpanSummary {
   /** Kanıt listesinde var ama CH'de span'i bulunmadı (retention / henüz
@@ -78,4 +80,32 @@ export function sevTone(sev: string): string {
   if (s.startsWith('FATAL') || s.startsWith('ERROR')) return 'b-err';
   if (s.startsWith('WARN')) return 'b-warn';
   return 'b-gray';
+}
+
+// ── v0.10.1004 — ilgili endpoint'ler ─────────────────────────────────────────
+// Kanıt trace'lerinin geçtiği endpoint'ler (Go foldTraceEndpoints). Link
+// /endpoint sayfasına gider ve PENCERE taşır: kanıt penceresi + 30 dk öncesi /
+// 10 dk sonrası — sayfa "şimdi"yi değil olayın anını göstersin (pencere
+// taşımayan pivot sayfanın kendi varsayılanına düşerdi; pivotHref sınıfı).
+export interface ExternalEndpointRow extends TraceEndpointHit {
+  href: string;
+}
+
+const ENDPOINT_LEAD_NS = 30 * 60e9;
+const ENDPOINT_TAIL_NS = 10 * 60e9;
+
+export function endpointRows(deep: DeepEvidence | undefined): ExternalEndpointRow[] {
+  const ext = deep?.external;
+  const list = ext?.endpoints ?? [];
+  if (!ext || list.length === 0) return [];
+  const range = ext.windowFromNs > 0 && ext.windowToNs > ext.windowFromNs
+    ? windowRangeParam({ fromNs: ext.windowFromNs - ENDPOINT_LEAD_NS, toNs: ext.windowToNs + ENDPOINT_TAIL_NS })
+    : '';
+  return list.map(e => ({
+    ...e,
+    href: endpointDetailHref(
+      { service: e.service, path: e.path, sig: false },
+      { ...(range ? { range } : {}), ...(e.rpc ? { entry: 'rpc' as const } : {}) },
+    ),
+  }));
 }

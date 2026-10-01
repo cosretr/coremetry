@@ -987,6 +987,23 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Oracle Problem'i: ilgili endpoint'ler kanıtta — özne servis KALIR (v0.10.1004)
+
+**Karar (kuyruk "Problem'i endpoint'e bağlama", operatör "devam"):** Problem'in öznesi DEĞİŞTİRİLMEDİ —
+`problems.service` gerçek servis olarak kalır (servis sayfası, ekip yönlendirmesi, bildirim süzgeçleri,
+küme anahtarı hepsi ona bağlı; özneyi endpoint yapmak bunların tamamını sessizce değiştirirdi). Endpoint
+ilişkisi EK KANIT olarak eklendi: kanıt panelinde "İlgili endpoint'ler" (≤5) — Problem'in Oracle
+satırlarındaki trace'lerin geçtiği endpoint'ler, trace ve hatalı trace sayısıyla, /endpoint sayfasına
+OLAY penceresiyle (−30 dk / +10 dk) bağlı. **Kaynak:** yeni sorgu yok — kanıtın zaten yaptığı span
+okuması (`trace_id IN ≤50`, zaman sınırlı) iki kolon daha seçer (`kind`, `http_route`) ve aynı satırlardan
+katlanır (`foldTraceEndpoints`). **Endpoint kimliği** /endpoints sayfasının kuralı: `http_route` doluysa
+(giden çağrı hariç) yol = route; boşsa server/consumer span adı (RPC, link `entry=rpc`). **Trace başına
+tek endpoint:** özne servis trace'te giriş span'i taşıyorsa onunki; taşımıyorsa trace'in EN DERİN hata
+span'inin servisi (v0.10.892 kuralı — ilk hata span'i giriş noktasıdır, hep aynı gateway çıkardı); o da
+yoksa en erken giriş span'i. Sentetik dış özne (`ext:…`) servis sayılmaz. Trace'i Coremetry'de olmayan
+Problem'de blok hiç çizilmez. **Reddedilen:** Problem'i endpoint'e taşımak (yukarıdaki gerekçe) ve
+fonksiyon kodundan endpoint çıkarmak (kodu taşıyan her serviste ayrı endpoint var; kanıt trace'i kesin).
+
 ## 2026-10-01 — Oracle: operasyon adı trace ve endpoint sayfasında (v0.10.1003)
 
 **Karar (kuyruk 1, operatör "devam et"):** 1002'nin TERS yönü — ekranda görülen fonksiyon kodu Oracle

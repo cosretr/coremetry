@@ -1102,11 +1102,25 @@ export interface ExternalMetricEvidence {
   errors?: number;
   notes?: string[];
   spanSummary?: TraceSpanSummary[];
+  /** v0.10.1004 — kanıt trace'lerinin geçtiği endpoint'ler (en çok trace'li
+   *  önce, ≤5). Problem'in öznesi (servis) değişmez; bu "hangi endpoint"
+   *  sorusunun kanıtı. Go chstore.TraceEndpointHit aynası. */
+  endpoints?: TraceEndpointHit[];
   updatedNs: number;
   /** v0.10.898 — Oracle kanıtı: alan başına top-N dağılım + özne kaynağı. */
   distributions?: Record<string, { value: string; count: number }[]>;
   subjectSource?: 'trace' | 'pod' | 'learned' | 'function_code' | 'unknown' | string;
   subjectNote?: string;
+}
+
+/** v0.10.1004 — Go chstore.TraceEndpointHit: yol = http_route (HTTP) ya da
+ *  server/consumer span adı (rpc). */
+export interface TraceEndpointHit {
+  service: string;
+  path: string;
+  rpc?: boolean;
+  traces: number;
+  errorTraces: number;
 }
 
 // TraceSpanSummary — Go chstore.TraceSpanSummary aynası.

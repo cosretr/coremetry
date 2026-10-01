@@ -81,11 +81,12 @@ afterEach(() => {
 });
 
 describe('ExternalEvidencePanel — kanıt tabloları boşken başlık kalır (v0.10.967)', () => {
-  it('üç tablo da çizilir; "yok" cümleleri tablonun içinde boş satır', async () => {
+  // v0.10.1004 — dördüncü tablo: ilgili endpoint'ler (trace'lerin ardından).
+  it('dört tablo da çizilir; "yok" cümleleri tablonun içinde boş satır', async () => {
     m.deep = { external, traceIds: [], affectedPods: [], logSignatures: [] };
     const el = await mount();
     const ts = tables(el);
-    expect(ts.length).toBe(3);
+    expect(ts.length).toBe(4);
     const msgs = ts.map(t => {
       const row = stateOf(t);
       expect(row?.dataset.dtState).toBe('empty');
@@ -94,23 +95,29 @@ describe('ExternalEvidencePanel — kanıt tabloları boşken başlık kalır (v
     });
     expect(msgs).toEqual([
       'Trace kanıtı yok',
+      "Endpoint kanıtı yok — trace'ler Coremetry'de bulunamadı ya da giriş span'i taşımıyor",
       'Pod kanıtı yok — kaynak pod kimliği döndürmedi',
       'Log imzası yok',
     ]);
     // colSpan = o tablonun görünür kolon sayısı (T12 sözleşmesi).
     expect(stateOf(ts[0])!.querySelector('td')!.colSpan).toBe(7);
-    expect(stateOf(ts[1])!.querySelector('td')!.colSpan).toBe(3);
-    expect(stateOf(ts[2])!.querySelector('td')!.colSpan).toBe(4);
+    expect(stateOf(ts[1])!.querySelector('td')!.colSpan).toBe(4);
+    expect(stateOf(ts[2])!.querySelector('td')!.colSpan).toBe(3);
+    expect(stateOf(ts[3])!.querySelector('td')!.colSpan).toBe(4);
   });
 
   it('kanıtlı tablo satır çizer (trace bağlantısı dahil), boş kardeşi durum satırı', async () => {
     m.deep = {
-      external, traceIds: ['abcdef0123456789abcdef0123456789'],
+      external: { ...external, endpoints: [{ service: 'orders-api', path: '/api/orders', traces: 2, errorTraces: 1 }] },
+      traceIds: ['abcdef0123456789abcdef0123456789'],
       affectedPods: [{ pod: 'orders-7d9f', count: 3, lastSeenNs: 0 }], logSignatures: [],
     };
     const el = await mount();
-    const [tt, tp, ts] = tables(el);
+    const [tt, te, tp, ts] = tables(el);
     expect(stateOf(tt)).toBeNull();
+    // v0.10.1004 — endpoint satırı /endpoint sayfasına bağlı.
+    expect(stateOf(te)).toBeNull();
+    expect(te.querySelector('tbody a[href^="/endpoint?service=orders-api"]')?.textContent).toBe('/api/orders');
     expect(tt.querySelector('tbody a[href*="abcdef0123456789"]')).not.toBeNull();
     expect(stateOf(tp)).toBeNull();
     expect(tp.textContent).toContain('orders-7d9f');

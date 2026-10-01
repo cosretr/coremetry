@@ -1,6 +1,6 @@
 // v0.10.230 (Influx D5) — externalEvidence saf çekirdeği.
 import { describe, it, expect } from 'vitest';
-import { traceRows, evidenceCounts, pickSeries, labelKeys, labelValues, toChart, sevTone } from './externalEvidence';
+import { traceRows, evidenceCounts, pickSeries, labelKeys, labelValues, toChart, sevTone, endpointRows } from './externalEvidence';
 import type { DeepEvidence } from '@/lib/types';
 
 const deep: DeepEvidence = {
@@ -68,5 +68,38 @@ describe('pickSeries / labels / toChart', () => {
     expect(sevTone('ERROR')).toBe('b-err');
     expect(sevTone('warn')).toBe('b-warn');
     expect(sevTone('INFO')).toBe('b-gray');
+  });
+});
+
+// v0.10.1004 — ilgili endpoint'ler: Oracle Problem'inin kanıt trace'lerinden
+// çıkan endpoint'ler /endpoint sayfasına OLAY penceresiyle bağlanır; RPC
+// endpoint'i entry=rpc taşır (sayfa satırı aynı popülasyonda arar).
+describe('endpointRows (v0.10.1004)', () => {
+  const ext = {
+    source: 'oracle-prod', query: 'q', current: 1, median: 0, mad: 0, z: 0, rows: 3, updatedNs: 1,
+    windowFromNs: 1_790_000_000_000_000_000, windowToNs: 1_790_000_600_000_000_000,
+    endpoints: [
+      { service: 'eft-svc', path: '/api/eft/confirm', traces: 4, errorTraces: 3 },
+      { service: 'eft-svc', path: 'EftService/Status', rpc: true, traces: 1, errorTraces: 0 },
+    ],
+  };
+  it('her endpoint için /endpoint linki: servis + yol + olay penceresi (30 dk önce, 10 dk sonra)', () => {
+    const rows = endpointRows({ external: ext } as never);
+    expect(rows).toHaveLength(2);
+    const q = new URLSearchParams(rows[0].href.slice(rows[0].href.indexOf('?') + 1));
+    expect(rows[0].href.startsWith('/endpoint?')).toBe(true);
+    expect(q.get('service')).toBe('eft-svc');
+    expect(q.get('path')).toBe('/api/eft/confirm');
+    expect(q.get('entry')).toBeNull();
+    expect(q.get('range')).toBe(`custom:${1_790_000_000_000 - 30 * 60_000}-${1_790_000_600_000 + 10 * 60_000}`);
+    const rpc = new URLSearchParams(rows[1].href.slice(rows[1].href.indexOf('?') + 1));
+    expect(rpc.get('entry')).toBe('rpc');
+    expect(rows[1].traces).toBe(1);
+  });
+  it('endpoint kanıtı yoksa boş; pencere bozuksa link pencere taşımaz', () => {
+    expect(endpointRows(undefined)).toEqual([]);
+    expect(endpointRows({ external: { ...ext, endpoints: [] } } as never)).toEqual([]);
+    const noWin = endpointRows({ external: { ...ext, windowFromNs: 0, windowToNs: 0 } } as never);
+    expect(new URLSearchParams(noWin[0].href.split('?')[1]).get('range')).toBeNull();
   });
 });

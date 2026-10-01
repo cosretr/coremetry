@@ -24,7 +24,7 @@ import { fmtDateTime } from '@/lib/utils';
 import { fmtDur } from '@/components/traces/shared';
 import { traceHref } from '@/lib/traceHref';
 import type { Problem, PodHit, LogSignature } from '@/lib/types';
-import { traceRows, evidenceCounts, pickSeries, labelKeys, labelValues, toChart, sevTone, type ExternalTraceRow } from './externalEvidence';
+import { traceRows, endpointRows, evidenceCounts, pickSeries, labelKeys, labelValues, toChart, sevTone, type ExternalTraceRow, type ExternalEndpointRow } from './externalEvidence';
 
 const BASELINE_LOOKBACK_NS = 3 * 3600e9;
 
@@ -36,6 +36,14 @@ const TRACE_COLS: ColumnDef<ExternalTraceRow>[] = [
   { id: 'dur', label: 'Süre', width: 90, numeric: true, sortValue: r => r.durationNs },
   { id: 'spans', label: 'Span', width: 70, numeric: true, sortValue: r => r.spans },
   { id: 'status', label: 'Durum', width: 100, sortValue: r => (r.missing ? 2 : r.errorSpans > 0 ? 0 : 1), numeric: true },
+];
+
+// v0.10.1004 — ilgili endpoint'ler (kanıt trace'lerinin geçtiği endpoint).
+const ENDPOINT_COLS: ColumnDef<ExternalEndpointRow>[] = [
+  { id: 'service', label: 'Servis', width: 260, sortValue: r => r.service },
+  { id: 'path', label: 'Endpoint', width: 420, sortValue: r => r.path },
+  { id: 'traces', label: 'Trace', width: 80, numeric: true, sortValue: r => r.traces },
+  { id: 'errors', label: 'Hatalı', width: 80, numeric: true, sortValue: r => r.errorTraces },
 ];
 
 const POD_COLS: ColumnDef<PodHit>[] = [
@@ -95,9 +103,11 @@ export function ExternalEvidencePanel({ problem, window: win }: {
   const chart = useMemo(() => toChart(pickSeries(mq.data?.series ?? null, [])), [mq.data]);
 
   const tRows = useMemo(() => traceRows(deep), [deep]);
+  const epRows = useMemo(() => endpointRows(deep), [deep]); // v0.10.1004
   const pods = deep?.affectedPods ?? [];
   const sigs = deep?.logSignatures ?? [];
   const dtT = useDataTable<ExternalTraceRow>({ storageKey: 'ext-evidence-traces', columns: TRACE_COLS, rows: tRows });
+  const dtE = useDataTable<ExternalEndpointRow>({ storageKey: 'ext-evidence-endpoints', columns: ENDPOINT_COLS, rows: epRows });
   const dtP = useDataTable<PodHit>({ storageKey: 'ext-evidence-pods', columns: POD_COLS, rows: pods });
   const dtS = useDataTable<LogSignature>({ storageKey: 'ext-evidence-sigs', columns: SIG_COLS, rows: sigs });
 
@@ -197,6 +207,31 @@ export function ExternalEvidencePanel({ problem, window: win }: {
                     : r.errorSpans > 0
                       ? <span className="badge b-err">{`${r.errorSpans} hata`}</span>
                       : <span style={{ color: 'var(--text3)' }}>ok</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </EvidenceBlock>
+
+      {/* v0.10.1004 — ilgili endpoint'ler: kanıt trace'lerinin geçtiği endpoint
+          (özne servis aynı kalır). Kardeş bloklar gibi hep çizilir; kanıt yoksa
+          boş durumu tablonun içinde. */}
+      <EvidenceBlock title="İlgili endpoint'ler" count={epRows.length}>
+        <div className="table-wrap">
+          <table {...dtE.tableProps}>
+            <DataTableColgroup dt={dtE} />
+            <DataTableHead dt={dtE} />
+            <tbody>
+              {dtE.sortedRows.length === 0 ? <DataTableState dt={dtE} kind="empty" message="Endpoint kanıtı yok — trace'ler Coremetry'de bulunamadı ya da giriş span'i taşımıyor" /> : dtE.sortedRows.map(r => (
+                <tr key={`${r.service}|${r.path}|${r.rpc ? 'rpc' : 'http'}`}>
+                  <td title={r.service}>{r.service}</td>
+                  <td className="mono" title={r.path}>
+                    <Link to={r.href} className="sec" title={`${r.path} — endpoint sayfası (olay penceresi)`}>{r.path}</Link>
+                    {r.rpc ? <span style={{ color: 'var(--text3)' }}> · rpc</span> : null}
+                  </td>
+                  <td className="num">{r.traces}</td>
+                  <td className="num">{r.errorTraces > 0 ? <span className="badge b-err">{r.errorTraces}</span> : <span style={{ color: 'var(--text3)' }}>0</span>}</td>
                 </tr>
               ))}
             </tbody>
