@@ -228,6 +228,10 @@ export function coverageText(c: OracleSubjectCoverage): { headline: string; line
     if (c.fnEnabled || unresolved > 0) {
       lines.push("Fonksiyon kodu eşlemesi okunamıyor: geniş rollup tablosu da FUNCTION_CODE terfi kolonu da yok.");
     }
+  } else if (c.fnChecked && c.fnCodes === 0) {
+    if (c.fnEnabled || unresolved > 0) {
+      lines.push('Satırlarda fonksiyon kodu yok: sorgu çıktısında FUNCTIONCODE kolonu olmalı (eşlenmemiş kalabilir).');
+    }
   } else if (c.fnChecked && !c.fnEnabled && unresolved > 0) {
     if (c.rowsFunctionCode > 0) {
       const withFn = Math.round(((c.rowsResolved + c.rowsFunctionCode) / c.rowsListed) * 100);

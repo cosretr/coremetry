@@ -54,6 +54,37 @@ const (
 	fnCacheMax       = 2000
 )
 
+// isFunctionCodeColumn — SAF: kolon adı bir fonksiyon kodu kolonu mu
+// (FUNCTIONCODE, FUNCTION_CODE, MCA_ERR_FUNCTIONCODE…). Harf ve alt çizgi
+// duyarsız; ad "FUNCTIONCODE" ile biter.
+func isFunctionCodeColumn(name string) bool {
+	n := strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(name)), "_", "")
+	return strings.HasSuffix(n, "FUNCTIONCODE")
+}
+
+// CodeIsFunctionCode — SAF: kaynağın `code` alanı (error.code) bir fonksiyon
+// kodu kolonuna mı eşlenmiş (v0.10.902 eşlemesi: code ← FUNCTIONCODE). Değilse
+// (v0.10.1001 — operatörün güncel sorgusu: code ← ERRORCODE, FUNCTIONCODE ayrı
+// kolon) fonksiyon kodu satırın ATTRIBUTE'larından okunur.
+func CodeIsFunctionCode(src SourceConfig) bool {
+	return isFunctionCodeColumn(src.Columns[FieldCode])
+}
+
+// FunctionCodeOf — SAF (tablo testli): satırın fonksiyon kodu. Önce `code`
+// alanı fonksiyon kodu kolonuna eşlenmişse o; değilse tüketilmeyen kolonlardan
+// (attribute) adı fonksiyon kodu olan ilki. Kırpılmış; yoksa "".
+func FunctionCodeOf(src SourceConfig, row chstore.OracleErrorRow) string {
+	if CodeIsFunctionCode(src) {
+		return strings.TrimSpace(row.ErrorCode) // sayaçla aynı kırpma (Oracle CHAR dolgusu)
+	}
+	for i, k := range row.AttrKeys {
+		if i < len(row.AttrValues) && isFunctionCodeColumn(k) {
+			return strings.TrimSpace(row.AttrValues[i])
+		}
+	}
+	return ""
+}
+
 // FunctionCodeLookup — chstore.Store.FunctionCodeServices.
 type FunctionCodeLookup func(ctx context.Context, codes []string, from, to time.Time) (chstore.FunctionCodeFacts, error)
 
@@ -157,6 +188,7 @@ func (r *SubjectResolver) observeFunctionCodes(ctx context.Context, src SourceCo
 		return ""
 	}
 	r.fnOn[src.ID] = true
+	r.fnFromCode[src.ID] = CodeIsFunctionCode(src)
 	cache := r.fnFacts[src.ID]
 	if cache == nil {
 		cache = map[string]fnFact{}
@@ -165,7 +197,7 @@ func (r *SubjectResolver) observeFunctionCodes(ctx context.Context, src SourceCo
 	seenPair, seenCode := map[string]bool{}, map[string]bool{}
 	var need []string
 	for _, row := range rows {
-		code := strings.TrimSpace(row.ErrorCode) // sayaçla aynı kırpma (Oracle CHAR dolgusu)
+		code := FunctionCodeOf(src, row)
 		if code == "" {
 			continue
 		}
@@ -251,21 +283,23 @@ func pruneFnCache(cache map[string]fnFact, max int) {
 	}
 }
 
-// resolveByFunctionCode — Resolve'un son basamağı (r.mu tutulur). values[1]
-// (error.code = fonksiyon kodu) doluysa o kod; değilse (küme Problem'i yalnız
-// operasyonu verir) operasyonun bu tikteki tüm kodları birleştirilir.
+// resolveByFunctionCode — Resolve'un son basamağı (r.mu tutulur). Serinin
+// kodu (values[1] = error.code) YALNIZ kaynakta `code` alanı fonksiyon koduna
+// eşlenmişse kullanılır; değilse (code ← ERRORCODE) ya da çağıran yalnız
+// operasyonu verdiyse (küme Problem'i) operasyonun bu tikteki tüm fonksiyon
+// kodları birleştirilir.
 // Service boş + Note dolu = "denendi, şu yüzden çıkmadı".
 func (r *SubjectResolver) resolveByFunctionCode(sourceID string, values []string, now time.Time) anomaly.ExternalSubjectResolution {
 	if !r.fnOn[sourceID] {
 		return anomaly.ExternalSubjectResolution{}
 	}
 	var codes []string
-	if len(values) > 1 {
+	if len(values) > 1 && r.fnFromCode[sourceID] {
 		// Seri: kendi kodu. Boş / "-" / tavan serisi ("diğer") kod değildir.
 		if c := values[1]; c != "" && c != counterQualifierNone && c != counterOtherCode {
 			codes = []string{c}
 		}
-	} else if tf := r.tick[sourceID]; tf != nil && len(values) == 1 {
+	} else if tf := r.tick[sourceID]; tf != nil && len(values) > 0 {
 		codes = tf.opCodes[values[0]]
 	}
 	if len(codes) == 0 {

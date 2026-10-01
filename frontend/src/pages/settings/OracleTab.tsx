@@ -453,8 +453,9 @@ export function OracleTab() {
               <label className="oracle-check">
                 <input type="checkbox" checked={!!src.functionCodeMatch}
                   onChange={e => patch(i, { functionCodeMatch: e.target.checked })} />
-                <span>Kod alanı span'lerdeki <code>FUNCTION_CODE</code> ile aynı değer — servisi bulunamayan satırı o
-                  kodu taşıyan span'lerin servisine bağla ve eşlemeyi zamanla öğren (etkisi: özne kapsamı)</span>
+                <span>Satırın fonksiyon kodu (<code>FUNCTIONCODE</code> kolonu) span'lerdeki <code>FUNCTION_CODE</code> ile
+                  aynı değer — servisi bulunamayan satırı o kodu taşıyan span'lerin servisine bağla ve eşlemeyi zamanla
+                  öğren (etkisi: özne kapsamı)</span>
               </label>
               {src.id && <OracleLearnedLine id={src.id} />}
               {src.id && <OracleCoverageLine id={src.id} />}

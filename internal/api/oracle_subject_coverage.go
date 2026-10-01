@@ -75,10 +75,11 @@ func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	id := strings.TrimSpace(r.PathValue("id"))
-	name, fnOn := "", false
+	name, fnOn, fnFromCode := "", false, false
 	for _, c := range s.oracle.CurrentSettings().Sources {
 		if c.ID == id {
-			name, fnOn = c.Name, c.FunctionCodeMatch
+			// v0.10.1001 — fonksiyon kodu `code` alanından mı, satır attribute'undan mı.
+			name, fnOn, fnFromCode = c.Name, c.FunctionCodeMatch, oracle.CodeIsFunctionCode(c)
 			break
 		}
 	}
@@ -87,7 +88,7 @@ func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	hours := oracleCoverageHours(r.URL.Query().Get("hours"))
-	key := fmt.Sprintf("oracle-subject-coverage:id=%s:h=%d:fn=%t", id, hours, fnOn)
+	key := fmt.Sprintf("oracle-subject-coverage:id=%s:h=%d:fn=%t:fc=%t", id, hours, fnOn, fnFromCode)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		now := time.Now()
 		from := now.Add(-time.Duration(hours) * time.Hour)
@@ -95,7 +96,7 @@ func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			return nil, err
 		}
-		fn, fnErr := s.oracleCoverageFn(ctx, id, fnOn, from, now)
+		fn, fnErr := s.oracleCoverageFn(ctx, id, fnOn, fnFromCode, from, now)
 		if fnErr != "" {
 			log.Printf("[oracle] özne kapsamı %s: fonksiyon kodu ölçümü: %s", name, fnErr)
 		}
@@ -130,8 +131,8 @@ func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request
 // kod) çiftleri + kodların span tarafındaki servis dağılımı. Kodlar satır
 // sayısına göre sıralı gider (okuyucu ilk 200'ü alır). Hata raporu düşürmez:
 // nil + mesaj döner.
-func (s *Server) oracleCoverageFn(ctx context.Context, sourceID string, enabled bool, from, to time.Time) (*oracle.CoverageFn, string) {
-	pairs, err := s.store.OracleOpCodes(ctx, sourceID, from, to)
+func (s *Server) oracleCoverageFn(ctx context.Context, sourceID string, enabled, fromCode bool, from, to time.Time) (*oracle.CoverageFn, string) {
+	pairs, err := s.store.OracleOpCodes(ctx, sourceID, from, to, fromCode)
 	if err != nil {
 		return nil, err.Error()
 	}

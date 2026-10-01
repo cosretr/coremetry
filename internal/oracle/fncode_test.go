@@ -65,6 +65,10 @@ func TestPruneFnCache(t *testing.T) {
 	}
 }
 
+// fnCodeCols — v0.10.902 eşlemesi: `code` alanı FUNCTIONCODE kolonuna bağlı
+// (seri değeri values[1] fonksiyon kodudur).
+var fnCodeCols = map[string]string{FieldCode: "FUNCTIONCODE"}
+
 // fnHarness — sahte fonksiyon kodu okuyuculu çözücü.
 type fnHarness struct {
 	r      *SubjectResolver
@@ -110,7 +114,7 @@ func TestSubjectResolverFunctionCode(t *testing.T) {
 	h := newFnHarness(t)
 	h.facts["F100"] = []chstore.FunctionCodeService{{Service: "eft-svc", Spans: 500, Errors: 20}, {Service: "gateway", Spans: 900, Errors: 1}}
 	h.facts["F200"] = []chstore.FunctionCodeService{{Service: "a", Spans: 10, Errors: 5}, {Service: "b", Spans: 10, Errors: 5}}
-	src := SourceConfig{ID: "o-f", Name: "oracle-prod", FunctionCodeMatch: true}
+	src := SourceConfig{ID: "o-f", Name: "oracle-prod", FunctionCodeMatch: true, Columns: fnCodeCols}
 	rows := []chstore.OracleErrorRow{
 		{OperationCode: "DIGITAL_PAYMENT_EFT", ErrorCode: "F100"}, {OperationCode: "DIGITAL_PAYMENT_EFT", ErrorCode: "F100"},
 		{OperationCode: "MULTI", ErrorCode: "F200"}, {OperationCode: "UNSEEN", ErrorCode: "F300"}, {OperationCode: "NOCODE"},
@@ -202,7 +206,7 @@ func TestSubjectResolverFunctionCode(t *testing.T) {
 func TestLearnedChallengerResets(t *testing.T) {
 	ctx := context.Background()
 	h := newFnHarness(t)
-	src := SourceConfig{ID: "o-c", Name: "oracle-prod", FunctionCodeMatch: true}
+	src := SourceConfig{ID: "o-c", Name: "oracle-prod", FunctionCodeMatch: true, Columns: fnCodeCols}
 	rows := []chstore.OracleErrorRow{{OperationCode: "OP", ErrorCode: "F1"}}
 	read := func(svc string) {
 		h.facts["F1"] = []chstore.FunctionCodeService{{Service: svc, Spans: 100, Errors: 10}}
@@ -229,7 +233,7 @@ func TestSubjectResolverFunctionCodeOffByDefault(t *testing.T) {
 	h := newFnHarness(t)
 	h.facts["F100"] = []chstore.FunctionCodeService{{Service: "eft-svc", Spans: 500, Errors: 20}}
 	rows := []chstore.OracleErrorRow{{OperationCode: "OP", ErrorCode: "F100"}}
-	off := SourceConfig{ID: "o-x", Name: "oracle-prod"}
+	off := SourceConfig{ID: "o-x", Name: "oracle-prod", Columns: fnCodeCols}
 	if res := h.observe(off, rows...); res.Learned != 0 || len(h.calls) != 0 {
 		t.Fatalf("kapalı kaynak: learned=%d calls=%v", res.Learned, h.calls)
 	}
@@ -262,7 +266,7 @@ func TestSubjectResolverFunctionCodeNeverOverridesTrace(t *testing.T) {
 		return out, nil
 	}
 	h.facts["F100"] = []chstore.FunctionCodeService{{Service: "eft-svc", Spans: 500, Errors: 20}}
-	src := SourceConfig{ID: "o-t", Name: "oracle-prod", FunctionCodeMatch: true}
+	src := SourceConfig{ID: "o-t", Name: "oracle-prod", FunctionCodeMatch: true, Columns: fnCodeCols}
 	h.observe(src, chstore.OracleErrorRow{OperationCode: "OP", ErrorCode: "F100", TraceID: "t1"})
 	if got := h.r.Resolve(ctx, "o-t", []string{"OP", "F100"}); got.Service != "loan-svc" || got.Source != "trace" {
 		t.Fatalf("trace kazanmalı: %+v", got)
@@ -278,7 +282,7 @@ func TestSubjectResolverFunctionCodeUnavailable(t *testing.T) {
 	ctx := context.Background()
 	h := newFnHarness(t)
 	h.source = ""
-	src := SourceConfig{ID: "o-u", Name: "oracle-prod", FunctionCodeMatch: true}
+	src := SourceConfig{ID: "o-u", Name: "oracle-prod", FunctionCodeMatch: true, Columns: fnCodeCols}
 	rows := []chstore.OracleErrorRow{{OperationCode: "OP", ErrorCode: "F100"}}
 	h.observe(src, rows...)
 	if got := h.r.Resolve(ctx, "o-u", []string{"OP", "F100"}); got.Service != "" || !strings.Contains(got.Note, "fonksiyon kodu okunamıyor") {
@@ -291,5 +295,72 @@ func TestSubjectResolverFunctionCodeUnavailable(t *testing.T) {
 	h.source, h.err = chstore.FunctionCodeSourceRollup, context.DeadlineExceeded
 	if res := h.observe(src, rows...); !strings.Contains(res.Error, "fonksiyon kodu araması") {
 		t.Fatalf("hata özeti: %+v", res)
+	}
+}
+
+// v0.10.1001 — operatörün güncel sorgusunda (prod, 2026-10-01) hem ERRORCODE
+// hem FUNCTIONCODE var: `code` alanı ERRORCODE'a bağlı, FUNCTIONCODE eşlenmeyen
+// kolon olarak satırın attribute'u. v0.10.1000 fonksiyon kodunu `code`
+// alanından okuyordu → span'lerde "COR-91157" aranıyor, hiçbir şey bulunmuyordu.
+func TestFunctionCodeOf(t *testing.T) {
+	row := func(code string, kv ...string) chstore.OracleErrorRow {
+		r := chstore.OracleErrorRow{ErrorCode: code}
+		for i := 0; i+1 < len(kv); i += 2 {
+			r.AttrKeys, r.AttrValues = append(r.AttrKeys, kv[i]), append(r.AttrValues, kv[i+1])
+		}
+		return r
+	}
+	errCols := map[string]string{FieldCode: "ERRORCODE"}
+	cases := []struct {
+		name string
+		src  SourceConfig
+		row  chstore.OracleErrorRow
+		want string
+	}{
+		{"code ← ERRORCODE, FUNCTIONCODE attribute", SourceConfig{Columns: errCols}, row("COR-91157", "ADET", "2", "FUNCTIONCODE", "CAF0001 "), "CAF0001"},
+		{"alt çizgili ad", SourceConfig{Columns: errCols}, row("COR-91157", "FUNCTION_CODE", "INVLD02"), "INVLD02"},
+		{"önekli tablo kolonu", SourceConfig{}, row("E1", "MCA_ERR_FUNCTIONCODE", "F9"), "F9"},
+		{"küçük harf anahtar", SourceConfig{}, row("E1", "functionCode", "F7"), "F7"},
+		{"code ← FUNCTIONCODE (eski eşleme)", SourceConfig{Columns: fnCodeCols}, row(" CAF0001 ", "ADET", "2"), "CAF0001"},
+		{"code ← function_code", SourceConfig{Columns: map[string]string{FieldCode: "function_code"}}, row("F5"), "F5"},
+		{"fonksiyon kodu yok: hata kodu fonksiyon kodu SAYILMAZ", SourceConfig{Columns: errCols}, row("COR-91157", "ADET", "2"), ""},
+		{"eşleme boş, attribute yok", SourceConfig{}, row("ERR_020"), ""},
+	}
+	for _, c := range cases {
+		if got := FunctionCodeOf(c.src, c.row); got != c.want {
+			t.Errorf("%s: %q, istenen %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestSubjectResolverFunctionCodeFromAttribute(t *testing.T) {
+	ctx := context.Background()
+	h := newFnHarness(t)
+	h.facts["CAF0001"] = []chstore.FunctionCodeService{{Service: "mobile-customer-contact-bff-prod", Spans: 400, Errors: 12}}
+	src := SourceConfig{ID: "o-a", Name: "oracle-prod", FunctionCodeMatch: true, Columns: map[string]string{FieldCode: "ERRORCODE"}}
+	attr := func(op, errCode, fn string) chstore.OracleErrorRow {
+		return chstore.OracleErrorRow{OperationCode: op, ErrorCode: errCode, AttrKeys: []string{"ADET", "FUNCTIONCODE"}, AttrValues: []string{"1", fn}}
+	}
+	rows := []chstore.OracleErrorRow{
+		attr("CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST", "COR-91157", "CAF0001"),
+		attr("CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST", "MCA-00196", "CAF0001"),
+		{OperationCode: "NOFN", ErrorCode: "COR-91157"},
+	}
+	h.observe(src, rows...)
+	// Span'lerde aranan FONKSİYON kodu — hata kodu değil.
+	if len(h.calls) != 1 || strings.Join(h.calls[0], ",") != "CAF0001" {
+		t.Fatalf("arama: %v", h.calls)
+	}
+	// Seri (op, HATA kodu, kanal, -): operasyonun fonksiyon kodundan çözülür.
+	got := h.r.Resolve(ctx, "o-a", []string{"CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST", "COR-91157", "060203", "-"})
+	if got.Service != "mobile-customer-contact-bff-prod" || got.Source != SubjectSourceFunctionCode || !strings.HasPrefix(got.Note, "fonksiyon kodundan CAF0001→") {
+		t.Fatalf("attribute'tan: %+v", got)
+	}
+	// Fonksiyon kodu olmayan operasyon: hata kodu span'lerde ARANMAZ, basamak sessiz.
+	if got := h.r.Resolve(ctx, "o-a", []string{"NOFN", "COR-91157", "060203", "-"}); got.Service != "" || got.Note != "operasyon seviyesi — servis bilinmiyor" {
+		t.Fatalf("fonksiyon kodsuz: %+v", got)
+	}
+	if e := h.r.Learned(ctx, "o-a").Entries["CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST"]; e == nil || e.Service != "mobile-customer-contact-bff-prod" || e.Total != 1 {
+		t.Fatalf("(op, fonksiyon kodu) başına tek oy: %+v", e)
 	}
 }

@@ -55,14 +55,15 @@ func TestOracleSubjectCoverageSourcePins(t *testing.T) {
 	st := read("../chstore/oracle_op_coverage.go")
 	// v0.10.1000 — üçüncü okuma: (operasyon, kod) çiftleri (OracleOpCodes).
 	if strings.Count(st, "FROM oracle_error_log FINAL") != 3 || strings.Count(st, "SETTINGS max_execution_time = 10") != 3 ||
-		strings.Count(st, "WHERE source_id = ? AND time >= ? AND time < ?") != 3 || strings.Count(st, "LIMIT ?") != 2 {
+		strings.Count(st, "WHERE source_id = ? AND time >= ? AND time < ?") != 3 || strings.Count(st, "LIMIT ?") != 2 ||
+		!strings.Contains(st, "'FUNCTIONCODE'), attr_keys)") { // v0.10.1001 — kod attribute'tan da okunur
 		t.Error("oracle_op_coverage.go: üç okuma da kaynak + zaman sınırlı, FINAL, max_execution_time; dökümler LIMIT taşımalı")
 	}
 	h := read("oracle_subject_coverage.go")
 	for _, w := range []string{
 		`registerRoutesExtra("oracle-subject-coverage"`,
 		`auth.RequireRole(auth.RoleAdmin, s.getOracleSubjectCoverage)`,
-		`fmt.Sprintf("oracle-subject-coverage:id=%s:h=%d:fn=%t", id, hours, fnOn)`, // v0.10.1000 — ayar anahtarda
+		`fmt.Sprintf("oracle-subject-coverage:id=%s:h=%d:fn=%t:fc=%t", id, hours, fnOn, fnFromCode)`, // v0.10.1000/1001 — ayar + kod kaynağı anahtarda
 		"s.serveCached(w, r, key, 60*time.Second",
 		"oracle.BuildCoverage(obs, totals, learned, alive, now, oracleCoverageUnresolved, fn)",
 		"s.store.FunctionCodeServices(ctx, codes, from, to)",

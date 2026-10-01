@@ -88,7 +88,7 @@ func (s *Store) OracleOpCoverage(ctx context.Context, sourceID string, from, to 
 	return out, totals, rows.Err()
 }
 
-// OracleOpCode — v0.10.1000: bir (operasyon, hata/fonksiyon kodu) çiftinin
+// OracleOpCode — v0.10.1000: bir (operasyon, fonksiyon kodu) çiftinin
 // pencere içi satır sayısı. Özne kapsamı raporunun "fonksiyon kodundan
 // bağlanabilen satır" ölçümünün girdisi (internal/oracle/coverage.go).
 type OracleOpCode struct {
@@ -99,21 +99,39 @@ type OracleOpCode struct {
 
 const oracleOpCodeLimit = 2000
 
-// OracleOpCodes — kaynağın [from, to) penceresinde kodu DOLU satırların
-// (operasyon, kod) dökümü; en çok satırlı önce, ≤ oracleOpCodeLimit çift.
-func (s *Store) OracleOpCodes(ctx context.Context, sourceID string, from, to time.Time) ([]OracleOpCode, error) {
+// oracleFunctionCodeAttrExpr — v0.10.1001: satırın fonksiyon kodu, eşlenmeyen
+// kolonlardan (attribute). Anahtar adı kaynağa göre değişir (FUNCTIONCODE,
+// FUNCTION_CODE, MCA_ERR_FUNCTIONCODE…); kural internal/oracle
+// isFunctionCodeColumn ile AYNI: büyük harf, alt çizgisiz, "FUNCTIONCODE" ile
+// biter. Eşleşme yoksa arrayFirstIndex 0 döner → attr_values[0] = ”.
+const oracleFunctionCodeAttrExpr = `trimBoth(attr_values[arrayFirstIndex(k -> endsWith(replaceAll(upper(k), '_', ''), 'FUNCTIONCODE'), attr_keys)])`
+
+// oracleOpCodesSQL — SAF: (operasyon, fonksiyon kodu) dökümü. fromCode: kod
+// error_code kolonunda (kaynakta code ← FUNCTIONCODE); değilse attribute'tan.
+func oracleOpCodesSQL(fromCode bool) string {
+	expr := oracleFunctionCodeAttrExpr
+	if fromCode {
+		expr = "trimBoth(error_code)"
+	}
+	return `
+		SELECT operation_code, ` + expr + ` AS fc, count() AS n
+		FROM oracle_error_log FINAL
+		WHERE source_id = ? AND time >= ? AND time < ? AND fc != ''
+		GROUP BY operation_code, fc
+		ORDER BY n DESC, operation_code, fc
+		LIMIT ?
+		SETTINGS max_execution_time = 10`
+}
+
+// OracleOpCodes — kaynağın [from, to) penceresinde fonksiyon kodu DOLU
+// satırların (operasyon, kod) dökümü; en çok satırlı önce, ≤ oracleOpCodeLimit
+// çift. fromCode: oracleOpCodesSQL.
+func (s *Store) OracleOpCodes(ctx context.Context, sourceID string, from, to time.Time, fromCode bool) ([]OracleOpCode, error) {
 	out := []OracleOpCode{}
 	if sourceID == "" || !to.After(from) {
 		return out, nil
 	}
-	rows, err := s.conn.Query(ctx, `
-		SELECT operation_code, error_code, count() AS n
-		FROM oracle_error_log FINAL
-		WHERE source_id = ? AND time >= ? AND time < ? AND error_code != ''
-		GROUP BY operation_code, error_code
-		ORDER BY n DESC, operation_code, error_code
-		LIMIT ?
-		SETTINGS max_execution_time = 10`, sourceID, from, to, oracleOpCodeLimit)
+	rows, err := s.conn.Query(ctx, oracleOpCodesSQL(fromCode), sourceID, from, to, oracleOpCodeLimit)
 	if err != nil {
 		return nil, err
 	}

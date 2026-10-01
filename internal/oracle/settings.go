@@ -143,11 +143,13 @@ type SourceConfig struct {
 	GenericCodes []string `json:"genericCodes,omitempty"`
 	IgnoreCodes  []string `json:"ignoreCodes,omitempty"`
 
-	// FunctionCodeMatch — v0.10.1000 (operatör teyidi 2026-10-01): satırın kod
-	// alanı (error.code; özel SQL kipinde FUNCTIONCODE) span'lerdeki
-	// FUNCTION_CODE attribute'u ile AYNI değerdir. Açıkken özne çözücü, servisi
-	// bulunamayan satırı o kodu taşıyan span'lerin servisine bağlar ve eşlemeyi
-	// zamanla öğrenir (fncode.go). Varsayılan kapalı — mevcut kaynaklar aynı.
+	// FunctionCodeMatch — v0.10.1000 (operatör teyidi 2026-10-01): satırın
+	// FONKSİYON KODU span'lerdeki FUNCTION_CODE attribute'u ile AYNI değerdir.
+	// Açıkken özne çözücü, servisi bulunamayan satırı o kodu taşıyan span'lerin
+	// servisine bağlar ve eşlemeyi zamanla öğrenir (fncode.go). Kod nereden
+	// okunur (v0.10.1001, FunctionCodeOf): `code` alanı bir fonksiyon kodu
+	// kolonuna eşlenmişse oradan; değilse satırın FUNCTIONCODE attribute'undan
+	// (eşlenmeyen kolon). Varsayılan kapalı — mevcut kaynaklar aynı.
 	FunctionCodeMatch bool `json:"functionCodeMatch,omitempty"`
 
 	// v0.10.902 (operatör) — ÖZEL SQL kipi (custom.go): QueryMode "custom"

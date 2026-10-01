@@ -987,6 +987,20 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Oracle: fonksiyon kodu doğru kolondan okunur (v0.10.1001; 1000'in düzeltmesi)
+
+**Bulgu (operatörün prod ekran görüntüsü):** güncel sorgu çıktısında hem `ERRORCODE` hem `FUNCTIONCODE`
+var; `code` alanı (error.code) `ERRORCODE`'a bağlı (takma ad önceliği), `FUNCTIONCODE` eşlenmeyen kolon
+olarak satırın attribute'u. v0.10.1000 fonksiyon kodunu `code` alanından okuyordu (v0.10.902 eşlemesi
+varsayımı) → span'lerde hata kodu ("COR-…") aranıyor, hiçbir şey bulunmuyordu; kutu işaretlense de etkisi
+sıfırdı. **Karar:** kod `oracle.FunctionCodeOf` ile okunur — `code` alanı bir fonksiyon kodu kolonuna
+eşliyse (ad alt çizgisiz/büyük harf "FUNCTIONCODE" ile biter) oradan, değilse satırın aynı kurala uyan
+attribute'undan. Yeni eşleme alanı / ayar YOK (sorgu çıktısında kolonun bulunması yeter). Sonuçları:
+seri anahtarı (op, hata kodu, kanal) fonksiyon kodu taşımadığında seri, OPERASYONUNUN o tikteki fonksiyon
+kodlarıyla çözülür; kapsam raporunun (operasyon, kod) dökümü aynı kuralı SQL'de uygular
+(`oracleOpCodesSQL`, yerel ClickHouse'ta doğrulandı); satırlarda fonksiyon kodu hiç yoksa rapor bunu
+söyler ("FUNCTIONCODE kolonu olmalı"). Hata kodu hiçbir durumda fonksiyon kodu sayılmaz.
+
 ## 2026-10-01 — Oracle: fonksiyon kodundan servis — öğrenen eşleme (v0.10.1000)
 
 **Karar (operatör):** "Oracle'dan gelen DIGITAL_PAYMENT_EFT gibi operasyon adı trace'lerde yok, eşleştirebilir

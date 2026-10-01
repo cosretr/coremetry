@@ -140,15 +140,20 @@ type SubjectResolver struct {
 	fnLookup FunctionCodeLookup
 	fnFacts  map[string]map[string]fnFact // kaynak → kod → servis dağılımı
 	fnOn     map[string]bool              // kaynak ayarı açık (son Observe)
-	fnPath   map[string]string            // son okuma yolu ("" = yok)
-	fnErr    map[string]bool              // arama hatası bir kez loglansın
+	// fnFromCode — v0.10.1001: kaynakta `code` alanı fonksiyon kodu kolonuna
+	// eşlenmiş (seri değeri values[1] fonksiyon kodudur); değilse kod satır
+	// attribute'undan gelir ve seri operasyonunun kodlarıyla çözülür.
+	fnFromCode map[string]bool
+	fnPath     map[string]string // son okuma yolu ("" = yok)
+	fnErr      map[string]bool   // arama hatası bir kez loglansın
 }
 
 func NewSubjectResolver(state StateStore, lookup TraceLookup, alive AliveCheck) *SubjectResolver {
 	return &SubjectResolver{state: state, lookup: lookup, alive: alive, now: time.Now,
 		maps: map[string]*LearnedMap{}, loadedAt: map[string]time.Time{}, dirty: map[string]bool{}, tick: map[string]*tickFacts{},
 		lastRes: map[string]anomaly.ExternalSubjectResolution{},
-		fnFacts: map[string]map[string]fnFact{}, fnOn: map[string]bool{}, fnPath: map[string]string{}, fnErr: map[string]bool{}}
+		fnFacts: map[string]map[string]fnFact{}, fnOn: map[string]bool{}, fnPath: map[string]string{}, fnErr: map[string]bool{},
+		fnFromCode: map[string]bool{}}
 }
 
 // ExTypeFor — v0.10.899: bu poll'da çözülen trace'in exception tipi ("" = yok).

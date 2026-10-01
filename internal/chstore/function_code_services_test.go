@@ -65,3 +65,26 @@ func TestCleanFunctionCodes(t *testing.T) {
 		t.Fatalf("tavan: %d", len(got))
 	}
 }
+
+// v0.10.1001 — (operasyon, fonksiyon kodu) dökümü kodu doğru yerden okur:
+// kaynakta code ← FUNCTIONCODE ise error_code, değilse (code ← ERRORCODE;
+// operatörün güncel sorgusu) satırın FUNCTIONCODE attribute'u. İfade yerel
+// ClickHouse'ta doğrulandı (FUNCTIONCODE / MCA_ERR_FUNCTION_CODE anahtarları,
+// dolgulu değer, anahtarsız satır).
+func TestOracleOpCodesSQL(t *testing.T) {
+	attr, code := oracleOpCodesSQL(false), oracleOpCodesSQL(true)
+	if !strings.Contains(attr, "arrayFirstIndex(k -> endsWith(replaceAll(upper(k), '_', ''), 'FUNCTIONCODE'), attr_keys)") || strings.Contains(attr, "error_code") {
+		t.Errorf("attribute yolu:\n%s", attr)
+	}
+	if !strings.Contains(code, "trimBoth(error_code) AS fc") || strings.Contains(code, "attr_keys") {
+		t.Errorf("kod alanı yolu:\n%s", code)
+	}
+	for name, q := range map[string]string{"attr": attr, "code": code} {
+		for _, w := range []string{"FROM oracle_error_log FINAL", "WHERE source_id = ? AND time >= ? AND time < ? AND fc != ''",
+			"GROUP BY operation_code, fc", "LIMIT ?", "SETTINGS max_execution_time = 10"} {
+			if !strings.Contains(q, w) {
+				t.Errorf("%s: SQL %q içermeli", name, w)
+			}
+		}
+	}
+}

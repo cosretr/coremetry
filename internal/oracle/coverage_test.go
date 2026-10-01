@@ -137,7 +137,7 @@ func TestBuildCoverageFunctionCode(t *testing.T) {
 
 	// Kapalı: potansiyel 360 satır, oran ve nedenler DEĞİŞMEZ.
 	off := BuildCoverage(obs, totals, learned, alive, now, 10, fn(false, chstore.FunctionCodeSourceRollup))
-	if !off.FnChecked || off.FnEnabled || off.FnSource != "rollup" || off.RowsFunctionCode != 360 {
+	if !off.FnChecked || off.FnEnabled || off.FnSource != "rollup" || off.RowsFunctionCode != 360 || off.FnCodes != 4 {
 		t.Fatalf("kapalı — fn alanları: %+v", off)
 	}
 	if off.RowsResolved != 400 || off.OpsResolved != 1 || off.ByReason[ReasonNoTraceID] != 400 || off.ByReason[ReasonTraceNotFound] != 50 || len(off.Unresolved) != 3 {

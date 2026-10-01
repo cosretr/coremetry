@@ -144,6 +144,9 @@ type CoverageReport struct {
 	FnEnabled        bool   `json:"fnEnabled"`
 	FnSource         string `json:"fnSource,omitempty"`
 	RowsFunctionCode uint64 `json:"rowsFunctionCode"`
+	// FnCodes — pencerede görülen tekil fonksiyon kodu sayısı. 0 = satırlarda
+	// fonksiyon kodu yok (ne `code` alanı ona eşli ne FUNCTIONCODE kolonu var).
+	FnCodes int `json:"fnCodes"`
 }
 
 // classifyCoverageOp — SAF: tek operasyonun durumu (dosya başı).
@@ -199,6 +202,11 @@ func BuildCoverage(obs []chstore.OracleOpObs, totals chstore.OracleOpTotals, lea
 		ByReason: map[string]uint64{}, Unresolved: []CoverageOp{}, AliveKnown: alive != nil}
 	if fn != nil {
 		rep.FnChecked, rep.FnEnabled, rep.FnSource = true, fn.Enabled, fn.Source
+		codes := map[string]bool{}
+		for _, p := range fn.Pairs {
+			codes[p.Code] = true
+		}
+		rep.FnCodes = len(codes)
 	}
 	fnRows, fnSvc := fnOpCoverage(fn)
 	var unresolved []CoverageOp

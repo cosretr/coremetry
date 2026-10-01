@@ -1652,6 +1652,9 @@ export interface OracleSubjectCoverage {
   fnEnabled: boolean;
   fnSource?: 'rollup' | 'spans' | '';
   rowsFunctionCode: number;
+  /** v0.10.1001 — pencerede görülen tekil fonksiyon kodu sayısı; 0 = satırlarda
+   *  fonksiyon kodu yok (FUNCTIONCODE kolonu sorgu çıktısında olmalı). */
+  fnCodes: number;
   fnError?: string;
   learnedEntries: number;
   generatedAt: number;
@@ -1725,9 +1728,11 @@ export interface OracleSource {
   problemMode?: 'off' | 'shadow' | 'live';
   genericCodes?: string[];
   ignoreCodes?: string[];
-  /** v0.10.1000 — satırın kod alanı (error.code; özel SQL'de FUNCTIONCODE)
-   *  span'lerdeki FUNCTION_CODE ile aynı değerdir: servisi bulunamayan satır o
-   *  kodu taşıyan span'lerin servisine bağlanır, eşleme zamanla öğrenilir. */
+  /** v0.10.1000 — satırın fonksiyon kodu span'lerdeki FUNCTION_CODE ile aynı
+   *  değerdir: servisi bulunamayan satır o kodu taşıyan span'lerin servisine
+   *  bağlanır, eşleme zamanla öğrenilir. v0.10.1001: kod, `code` alanı bir
+   *  FUNCTIONCODE kolonuna eşliyse oradan, değilse satırın FUNCTIONCODE
+   *  kolonundan (eşlenmeyen kolon = attribute) okunur. */
   functionCodeMatch?: boolean;
   /** v0.10.902 — ÖZEL SQL kipi: poller şema/tablo sorgusu üretmez, customSql'i
    *  salt-okunur sarmalayıcıda koşar (tek SELECT/WITH; bind yok — sorgu kendi
