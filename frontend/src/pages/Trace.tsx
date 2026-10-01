@@ -653,12 +653,6 @@ function TraceDetailInner() {
               <AIExplainButton subject={{ kind: 'trace', id }} emphasis="strong"
                 title={tr('ai.askCosreTraceHint')}
                 label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>{tr('ai.askCosre')}</span></>} />
-              {/* v0.10.987 (operatör "3 seçenek") — eski tek atışlık açıklama ikincil
-                  düğme olarak: aynı özne + ?aiquick=1; sunucu klasik yolu koşar
-                  (trace + log + Oracle, canlı okuma yok). Birincil tek kalır (K4). */}
-              <AIExplainButton subject={{ kind: 'trace', id }} quick
-                title={tr('ai.quickExplainHint')}
-                label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>{tr('ai.quickExplain')}</span></>} />
               {/* v0.10.347 (operatör) — alt "Compare with…" (AI karşılaştırma formu)
                   KALDIRILDI: üst şeritteki "↔ Compare trace" zaten var, ikisi aynı
                   soruyu iki yerde soruyordu. */}

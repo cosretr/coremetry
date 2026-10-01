@@ -13,10 +13,9 @@ import { ExplainBody, type ExplainEvidence } from '@/components/ai/ExplainBody';
 import { ExplainSteps } from '@/components/ai/ExplainSteps';
 import { applyExplainStep } from '@/components/ai/investigationSteps';
 import type { IdLink } from '@/components/ai/inlineIdLinks';
-import { readAiCodeParam, readAiQuickParam, readAiSrcParam, writeAiCodeParam } from '@/lib/aiSubject';
+import { readAiCodeParam, readAiSrcParam, writeAiCodeParam } from '@/lib/aiSubject';
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 import { shouldAskForCode, type CodeAskState } from './codeAsk';
-import { useT } from '@/lib/i18n';
 
 // CopilotExplain — drop-in Explain button that calls the
 // CoSRE (copilot) endpoint for the given subject and renders the
@@ -120,7 +119,6 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // useEffect ile düzeltmek, kodsuz isteğin çoktan yola çıkmış olması
   // demekti (düzeltmeye çalıştığımız hatanın ta kendisi).
   const codeCapable = kind === 'exception' || kind === 'trace';
-  const tr = useT(); // v0.10.987 — hızlı açıklama notu
   // v0.10.60 — OPERATÖR KARARI: kutu HER AÇILIŞTA KAPALI başlar.
   //
   // v0.9.1238 tercihi hatırlıyordu (çekmece her özne için yeni mount
@@ -136,8 +134,6 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // Uygulama içi açılışta param zaten silinmiş olur (useAiSubject),
   // yani v0.10.60'ın "her açılışta kapalı" kararı bozulmuyor.
   const [includeCode, setIncludeCode] = useState(() => codeCapable && readAiCodeParam());
-  // v0.10.987 — "Hızlı açıkla" (?aiquick=1, yalnız trace): tek atışlık klasik yol; mount'ta okunur (aicode gibi).
-  const [quick] = useState(() => kind === 'trace' && readAiQuickParam());
   const [code, setCode] = useState<AICodeContext | null>(null);
   // v0.10.83 — isabet yaşı; null = taze LLM cevabı.
   const [cachedAtMs, setCachedAtMs] = useState<number | null>(null);
@@ -228,7 +224,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           ? `Based on ${r.similarCount} past resolved instance${r.similarCount === 1 ? '' : 's'} of this rule on this service.`
           : `No past resolutions found — first-principles only.`);
       } else {
-        const r = kind === 'trace'          ? await api.copilotExplainTrace(id, withCode, opts, spanId, quick).then(rr => { // v0.10.948 — seçili span = odak servis
+        const r = kind === 'trace'          ? await api.copilotExplainTrace(id, withCode, opts, spanId).then(rr => { // v0.10.948 — seçili span = odak servis
                                                   if (rr.evidenceSpanIds?.length) { onEvidence?.(rr.evidenceSpanIds); setEvidence(e => ({ ...e, spans: rr.evidenceSpanIds?.length ?? 0 })); }
                                                   if (rr.oracleRows) setEvidence(e => ({ ...e, oracle: rr.oracleRows })); // v0.10.921
                                                   setCode(rr.code ?? null);
@@ -533,7 +529,6 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
               tıklayınca liste. Önbellek isabetinde çizilmez (hiçbir şey koşmadı). */}
           {cachedAtMs === null && <ExplainSteps steps={steps} live={false} />}
           {/* kod kartı açıkken Karar'ı o kart taşır — iki rakip KARAR şeridi olmaz */}
-          {quick && <div className="field-hint" style={{ marginBottom: 6 }}>{tr('ai.quickExplainNote')}</div>}
           <ExplainBody text={text} busy={busy} links={links} evidence={evidence} verdict={codeAsk !== 'accepted'} sources={sources} />
           {/* v0.9.1127 — akan cevabın imleci (ChatBubble'ın `.cm-ai-cursor`
               atomu). Cevap BİTMEDEN de metin görünür olduğu için, bittiğini

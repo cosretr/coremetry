@@ -1,13 +1,12 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AI_CODE_PARAM, AI_PARAM, AI_QUICK_PARAM, AI_SRC_PARAM, formatAiParamForUrl, parseAiParam, type AISrc, type AISubject } from '@/lib/aiSubject';
+import { AI_CODE_PARAM, AI_PARAM, AI_SRC_PARAM, formatAiParamForUrl, parseAiParam, type AISrc, type AISubject } from '@/lib/aiSubject';
 
 // useAiSubject — AI çekmecesinin açık öznesi, ADRESTEN okunur/yazılır
 // (v0.9.477). Ev kuralı: her operatör seçimi `setSearchParams(prev => …,
 // { replace: true })` ile yazılır, yabancı parametreler KORUNUR ve seçim
 // history'ye durak eklemez.
-// v0.10.987 — quick: trace'in tek atışlık klasik açıklaması (aiquick=1), özneyle birlikte atomik yazılır.
-export function useAiSubject(): [AISubject | null, (s: AISubject | null, src?: AISrc, quick?: boolean) => void] {
+export function useAiSubject(): [AISubject | null, (s: AISubject | null, src?: AISrc) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
   const raw = searchParams.get(AI_PARAM);
   // v0.10.731 — kısa biçim (`?ai=trace`) sayfanın kendi kimliğinden çözülür.
@@ -21,7 +20,7 @@ export function useAiSubject(): [AISubject | null, (s: AISubject | null, src?: A
   }, [searchParams]);
   const subject = useMemo(() => parseAiParam(raw, pageParams), [raw, pageParams]);
 
-  const setSubject = useCallback((s: AISubject | null, src?: AISrc, quick?: boolean) => {
+  const setSubject = useCallback((s: AISubject | null, src?: AISrc) => {
     setSearchParams(prev => {
       // `prev` router'ın konumundan gelir; Trace sayfası ?span= / ?tab='ı
       // ham history.replaceState ile yazdığı için router BAYAT kalabilir —
@@ -43,9 +42,6 @@ export function useAiSubject(): [AISubject | null, (s: AISubject | null, src?: A
       // v0.10.432 (D8) — açılış kaynağı da yalnız o açılışta yaşar.
       if (s && src) next.set(AI_SRC_PARAM, src);
       else next.delete(AI_SRC_PARAM);
-      // v0.10.987 — hızlı açıklama da yalnız o açılışta yaşar.
-      if (s && quick) next.set(AI_QUICK_PARAM, '1');
-      else next.delete(AI_QUICK_PARAM);
       return next;
     }, { replace: true });
   }, [setSearchParams]);

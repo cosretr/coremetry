@@ -161,10 +161,6 @@ const EN: Catalog = {
   // explain-trace yüzeyi ve AIExplainButton aynı kalır.
   'ai.askCosre':          'Ask CoSRE',
   'ai.askCosreTraceHint': 'Ask CoSRE about this trace.',
-  // v0.10.987 (operatör "3 seçenek") — tek atışlık klasik açıklama düğmesi.
-  'ai.quickExplain':      'Quick explain',
-  'ai.quickExplainHint':  'One-shot answer from the trace, its logs and Oracle rows — no live reads.',
-  'ai.quickExplainNote':  'Quick explain: trace + logs + Oracle rows, no live reads (period comparison, pods, deploys).',
   // v0.10.948 (CoSRE Faz B) — çekmece başlığının trace alt satırı: "Ask CoSRE · trace <kısa kimlik>".
   'ai.subject.trace':     'trace',
 
@@ -318,9 +314,6 @@ const TR: Catalog = {
 
   'ai.askCosre':          'CoSRE’ye sor',
   'ai.askCosreTraceHint': 'Bu trace hakkında CoSRE’ye soru sor.',
-  'ai.quickExplain':      'Hızlı açıkla',
-  'ai.quickExplainHint':  'Tek atışta cevap: trace, logları ve Oracle satırları — canlı okuma yok.',
-  'ai.quickExplainNote':  'Hızlı açıklama: trace + loglar + Oracle satırları; canlı okuma yok (dönem kıyası, pod, deploy).',
   'ai.subject.trace':     'trace',
 
   'ai.ctx.label':     'Bağlam',

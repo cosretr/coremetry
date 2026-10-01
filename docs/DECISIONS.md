@@ -987,6 +987,18 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Trace: "Hızlı açıkla" düğmesi kaldırıldı (v0.10.989; v0.10.987 kararının tersi)
+
+**Karar (operatör: "tracelere quick explain butonu koymuşsun onu kaldıralım"):** trace sayfasında
+"CoSRE'ye sor"un yanındaki ikincil "Hızlı açıkla" / "Quick explain" düğmesi ve ona ait her şey
+kaldırıldı: `?aiquick=1` paramı (AI_QUICK_PARAM, useAiSubject/AIExplainButton `quick`), gövdedeki
+`quick:true` (explainInit, explainOptions.Quick), sunucunun `traceExplainPath` / `explainTraceQuick`
+yolu, çekmecedeki "canlı okuma yok" notu, i18n anahtarları ve iki test dosyası. Uyumluluk katmanı
+YOK (CLAUDE.md: özellik kaldırırken shim eklenmez): eski bir `?aiquick=1` linki artık yok sayılır ve
+varsayılan incelemeyi açar; gövdede `quick` gönderen istemci de incelemeye düşer. Trace'te yine iki
+yol var: varsayılan inceleme ve "Kodu da incele" (klasik istem + kod bağlamı). v0.10.986'nın klasik
+üç başlıklı cevap biçimi değişmedi.
+
 ## 2026-09-29 — Trace: "Hızlı açıkla" ikinci düğme — tek atışlık klasik açıklama (v0.10.987)
 
 **Karar (operatör: "3 seçenek yapalım"):** trace sayfasında "CoSRE'ye sor"un yanına ikincil
