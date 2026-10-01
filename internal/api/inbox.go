@@ -275,6 +275,10 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 	subject := normalizeInboxSubject(q.Get("subject"))
 	// v0.10.1017 — dış kaynak şeridi (Oracle / Influx özneleri, kind=external)
 	// db ile AYNI yapıda: tek kaynak problems, tür facet'i zorlanır.
+	// v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — varsayılan şerit
+	// artık servis + dış kaynak problemlerini birlikte gösteriyor
+	// (inboxProblemLane); db satırları hâlâ AYRI şeritte. External şeridi
+	// kalıyor: varsayılan listenin yalnız dış kaynağa daraltılmış görünümü.
 	if subject != inboxSubjectService {
 		// DB öznesi YALNIZ problems kaynağında var: exception grupları,
 		// anomaliler ve incident'lar yapı gereği servis öznelidir (kind
@@ -414,7 +418,9 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 				// v0.9.1342 — şerit SQL'de daralır, LIMIT'ten ÖNCE. Go'da
 				// daraltmak v0.9.322 sınıfı olurdu: db satırları taramanın
 				// yerini yer, servis şeridi eksik gelir.
-				SubjectKind: subject,
+				// v0.10.1026 — şerit chstore değerine ÇEVRİLEREK iner:
+				// varsayılan şerit = servis + dış kaynak (inboxProblemLane).
+				SubjectKind: inboxProblemLane(subject),
 			})
 			if err != nil {
 				return nil, err
@@ -450,10 +456,13 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			// bucket'ı: şerit db satırlarını listeden çıkarıyorsa çip de
 			// onları saymamalı, yoksa "Problems 41" yazarken 39 satır
 			// gösterir ("Exceptions 0" yalanının aynadaki hâli).
+			// v0.10.1026 — varsayılan şeridin sayısı servis + dış kaynak
+			// kovalarının TOPLAMI: liste ikisini birlikte gösteriyor, çip
+			// yalnız servisi sayarsa aynı yalan ters yönden geri gelir.
 			if teamIsEmpty {
 				skippedCounts["problem"] = 0
 			} else {
-				skippedCounts["problem"] = int(subjectCounts[subject])
+				skippedCounts["problem"] = int(inboxLaneProblemCount(subjectCounts, subject))
 			}
 		}
 		probs = s.store.EnrichProblemsWithRunbooks(ctx, probs)
@@ -1115,6 +1124,11 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// :v6: — v0.9.487 forceNonExceptionP3 satır önceliklerini değiştirdi;
 	// eski cache'lenmiş sayfa yeni sözleşmeymiş gibi servis edilemez.
 	// :v7: — v0.9.1342 gövdeye dbSubjectCount ekledi (şekil değişikliği).
+	// :v8: — v0.10.1026 varsayılan şeridin (subject=service) SATIR KÜMESİ
+	// değişti: dış kaynak problemleri de giriyor. :v6: emsali — eski
+	// sürümün cache'lediği sayfa (dış kaynak satırsız) yeni sözleşmeymiş
+	// gibi servis edilmesin; kayan dağıtımda iki sürüm aynı anahtarı
+	// paylaşıp listeyi her poll'da değiştirmesin.
 	//
 	// `subject` anahtara GİRMEK ZORUNDA ve `kind` onun yerine geçemez:
 	// db şeridi kinds'i ["problem"]e ZORLUYOR, yani servis şeridinde
@@ -1122,7 +1136,7 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// aynı kind dizisini üretir. Ayrı bir alan olmasaydı ikisi TEK cache
 	// girdisini paylaşır ve biri diğerinin satırlarını görürdü — v0.5.187
 	// çapraz-zehirlenmesinin birebir şekli.
-	return fmt.Sprintf("inbox:v7:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	return fmt.Sprintf("inbox:v8:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }
@@ -1180,8 +1194,43 @@ const (
 	// Problems'te gözükmüyor." kind=external (v0.10.228) şeritten (v0.9.1342)
 	// SONRA geldi ve iki şerit de `kind = ?` ile süzdüğü için bu satırlar
 	// hiçbirine girmiyordu — kenar çubuğu rozeti sayarken liste göstermiyordu.
+	// v0.10.1026 — bu satırlar artık varsayılan şeritte de görünür
+	// (inboxProblemLane); bu şerit onların yalnız-dış-kaynak görünümü.
 	inboxSubjectExternal = "external"
 )
+
+// inboxProblemLane — inbox şeridinin chstore.ProblemFilter.SubjectKind
+// karşılığı (v0.10.1026, operatör kararı 2026-10-01: "14 girsin").
+//
+// Varsayılan şerit servis + dış kaynak (Oracle / Influx) problemlerini
+// BİRLİKTE gösterir: chstore.ProblemLaneServiceOrExternal. db ve external
+// şeritleri kendi türleriyle birebir geçer. `service` bilerek doğrudan
+// GEÇİRİLMİYOR: chstore'da o değer "yalnız servis" demeye devam ediyor
+// (tür sabiti iki anlam taşımasın — gerekçe problem_subject_lane.go).
+// Girdi normalizeInboxSubject'ten geçmiş kapalı sözlüktür; yine de
+// tanınmayan bir değer olduğu gibi iner ve chstore onu SIFIR satıra
+// çevirir ("filtre yokmuş gibi tüm satırlar" DEĞİL).
+func inboxProblemLane(subject string) string {
+	if subject == inboxSubjectService {
+		return chstore.ProblemLaneServiceOrExternal
+	}
+	return subject
+}
+
+// inboxLaneProblemCount — şeridin PROBLEM sayısı, listenin gösterdiği
+// evrenle AYNI (v0.10.1026). subjectCounts CountProblemsBySubject'in
+// tür-başına kovaları; varsayılan şerit servis + dış kaynak satırlarını
+// birlikte listelediği için sayısı da iki kovanın toplamıdır. Yalnız
+// servis kovasını okumak, "Problems 41 yazarken 39 satır" yalanını ters
+// yönden (çip < liste) geri getirirdi. db / external şeritleri kendi
+// kovalarını okur — dbSubjectCount / externalSubjectCount alanlarıyla
+// aynı sayılar.
+func inboxLaneProblemCount(subjectCounts map[string]uint64, subject string) uint64 {
+	if subject == inboxSubjectService {
+		return subjectCounts[chstore.ProblemKindService] + subjectCounts[chstore.ProblemKindExternal]
+	}
+	return subjectCounts[subject]
+}
 
 // normalizeInboxSubject — kapalı sözlük, varsayılan `service`.
 //

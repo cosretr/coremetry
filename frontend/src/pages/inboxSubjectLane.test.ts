@@ -64,6 +64,19 @@ describe('inbox özne şeridi — bağlantı kapısı', () => {
     expect(page).toContain('externalLaneCount !== undefined');
     expect(page).toContain("external: 'Dış kaynaklar'");
   });
+
+  // v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — dış kaynak
+  // problemleri VARSAYILAN listede de görünür. Yeni şerit yok: varsayılan
+  // çip bunu ipucuyla söylüyor, Dış kaynaklar çipi de kendisinin bir
+  // daraltma olduğunu. İpucu çipe GERÇEKTEN bağlı olmalı — sabit tanımlı
+  // ama hiç basılmayan bir metin kapıyı yeşil tutardı (v0.9.1339 dersi).
+  it('çip ipuçları: varsayılan şerit dış kaynağı da içeriyor', () => {
+    expect(page).toContain("service: 'Servisler ve dış kaynak (ör. Oracle) problemleri'");
+    expect(page).toContain("external: 'Yalnız dış kaynak problemleri — varsayılan listede de görünürler'");
+    expect(page).toContain('title={SUBJECT_TITLE[l]}');
+    // Etiket DEĞİŞMEDİ — yeni şerit ya da yeni ad yok.
+    expect(page).toContain("service: 'Servisler', db: 'Veritabanları', external: 'Dış kaynaklar'");
+  });
 });
 
 describe('özne şeridi ile satır KAYNAĞI karışmıyor', () => {

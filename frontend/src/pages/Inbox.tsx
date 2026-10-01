@@ -124,6 +124,14 @@ const SUBJECT_LANES: readonly SubjectLane[] = ['service', 'db', 'external'];
 const SUBJECT_LABEL: Record<SubjectLane, string> = {
   service: 'Servisler', db: 'Veritabanları', external: 'Dış kaynaklar',
 };
+// v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — dış kaynak
+// problemleri VARSAYILAN listede de görünür (sunucu: varsayılan şerit =
+// servis + dış kaynak). Yeni şerit yok; çip ipuçları kümeyi söylüyor, yoksa
+// "Servisler" çipi altında bir Oracle satırı yanlış şeritte sanılırdı.
+const SUBJECT_TITLE: Partial<Record<SubjectLane, string>> = {
+  service: 'Servisler ve dış kaynak (ör. Oracle) problemleri',
+  external: 'Yalnız dış kaynak problemleri — varsayılan listede de görünürler',
+};
 type InboxStatus = 'open' | 'all' | 'ignored';
 const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];
 
@@ -783,11 +791,16 @@ export default function InboxPage() {
               Sayı yalnız Veritabanları çipinde: o şerit TEK kaynaklı
               (problems), yani sayı TAM. Servis şeridi dört kaynaklı ve
               tek bir COUNT ile dürüstçe ifade edilemez — sunucu onu
-              iddia etmiyor, ekran da uydurmuyor. */}
+              iddia etmiyor, ekran da uydurmuyor.
+
+              v0.10.1026 — varsayılan (Servisler) şeridi dış kaynak
+              satırlarını da içeriyor; Dış kaynaklar çipi onların
+              daraltılmış görünümü. İkisi de title ile söyleniyor. */}
           <span className="facet-grp">
             <span className="gl">Özne</span>
             {SUBJECT_LANES.map(l => (
               <span key={l} onClick={() => setSubjectLane(l)}
+                title={SUBJECT_TITLE[l]}
                 className={`facet${subjectLane === l ? ' on' : ''}`}>
                 {SUBJECT_LABEL[l]}
                 {l === 'db' && dbLaneCount !== undefined && ` (${dbLaneCount})`}

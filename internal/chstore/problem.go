@@ -1075,8 +1075,11 @@ type ProblemFilter struct {
 	// kazancı korunuyor) ve db satırları az sayıda — özne başına bir
 	// kapasite alarmı.
 	ServicesAllowDBSubjects bool
-	// SubjectKind (v0.9.1342) — ÖZNE TÜRÜ süzgeci: "service" | "db".
-	// Boş = kısıt yok.
+	// SubjectKind (v0.9.1342) — ÖZNE TÜRÜ süzgeci: "service" | "db" |
+	// "external" (her biri YALNIZ kendi türü) ya da şerit değeri
+	// ProblemLaneServiceOrExternal (v0.10.1026 — /inbox varsayılan
+	// şeridi: servis + dış kaynak; "service" bilerek sıkı kaldı, gerekçe
+	// problem_subject_lane.go). Boş = kısıt yok.
 	//
 	// Adı bilerek `Kind` DEĞİL. InboxItem.Kind bu kod tabanında BAŞKA bir
 	// şey (satırın KAYNAĞI: problem/exception/anomaly) ve ikisi de string;

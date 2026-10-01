@@ -29,6 +29,38 @@ import "context"
 // dosyaya girmediğini tarar — bu yorumun da o kalıbı harfiyen
 // içermemesinin sebebi bu (kendi kapısını tetikleyen açıklama sınıfı).
 
+// ProblemLaneServiceOrExternal — v0.10.1026 (operatör kararı 2026-10-01,
+// kuyruk maddesi 14: "14 girsin"): /inbox VARSAYILAN şeridinin chstore
+// karşılığı — servis VE dış kaynak (Oracle / Influx, `ext:<kaynak>/…`)
+// özneli problemler BİRLİKTE.
+//
+// Bir ÖZNE TÜRÜ değil, bir ŞERİT değeri: hiçbir satırın kind'ı bu dizge
+// olamaz, SQL'e argüman olarak da gitmez (aşağıdaki sabit literal üretir).
+//
+// Neden "service"in anlamını GENİŞLETMEDİK: v0.10.1026'daki çağıran
+// taramasında ProblemFilter.SubjectKind'ı dolduran TEK yer /inbox
+// handler'ı (api/inbox.go) çıktı — yani genişletmek bugün bir şey
+// kırmazdı. Ama
+// ProblemKindService bir TÜR sabiti; ProblemFilter'a onu veren bir sonraki
+// çağıran (bir MCP aracı, bir guided yol) "yalnız servisler" bekler. Aynı
+// sabite iki anlam yüklemek v0.9.1339'un ad-çakışması sınıfıdır (iki
+// string, derleyici susar). Ayrı değer, birleşimi isteyeni bunu AÇIKÇA
+// yazmaya zorluyor; "service" şeridi sıkı (yalnız servis) kalıyor.
+const ProblemLaneServiceOrExternal = "service+external"
+
+// laneServiceOrExternalSQL — varsayılan şeridin WHERE parçası (v0.10.1026).
+//
+// İki LİTERAL eşitlik, IN-listesi DEĞİL — subjectEscapeSQL ile aynı yazım
+// ve aynı gerekçe (TestSubjectLaneDoesNotHideTheColumnDefault bu dosyada
+// IN-liste yazımını yasaklar). Bu OR yukarıdaki "boş dize VEYA service"
+// yasağının kapsamına GİRMEZ: iki dal da DOLU bir tür adıyla eşleşir, boş
+// değere kapı açmaz. Geçmiş satırlar birinci eşitliğe yalnız CH'nin
+// DEFAULT 'service'i sayesinde düşer, yani şerit o garantiye dayanmaya
+// devam ediyor — default bozulursa bu şerit de görünür biçimde boşalır.
+// Literal GÜVENLİ: paket sabitleri, kullanıcı girdisi değil. Parantez
+// ŞART: whereClause koşulları AND ile birleştirir, çıplak OR zinciri taşar.
+const laneServiceOrExternalSQL = "(kind = '" + ProblemKindService + "' OR kind = '" + ProblemKindExternal + "')"
+
 // problemSubjectConjunct — özne türü için WHERE parçası.
 //
 // Dönüş: (sql, arg, uygulandı mı). arg nil ise ifade parametresizdir.
@@ -38,6 +70,10 @@ import "context"
 //   - her satır zorunlu olarak servis öznesidir (db yazan tek üretici,
 //     db_capacity.go, kolon yokken kind'ı hiç YAZMAZ — problemInsertCols),
 //   - dolayısıyla 'service' şeridi DARALTILMAZ (kısıt yok),
+//   - varsayılan şerit (ProblemLaneServiceOrExternal, v0.10.1026) da
+//     DARALTILMAZ: external yazan üreticiler de kolon yokken kind'ı
+//     yazamaz, yani o boot'ta her satır servis öznesidir — bugünkü
+//     servis şeridiyle birebir aynı cevap,
 //   - 'db' şeridi SIFIR satır almalıdır. `1 = 0` yazmak, var olmayan bir
 //     kolona sorgu göndermekten de, sessizce TÜM satırları döndürmekten
 //     de doğrudur — ikincisi "boş küme yerine dolu küme" sınıfıdır.
@@ -50,6 +86,11 @@ func problemSubjectConjunct(subjectKind string, hasKindCol bool) (string, any, b
 			return "", nil, false
 		}
 		return "kind = ?", ProblemKindService, true
+	case ProblemLaneServiceOrExternal:
+		if !hasKindCol {
+			return "", nil, false
+		}
+		return laneServiceOrExternalSQL, nil, true
 	default:
 		// db — ve ileride eklenecek her yeni özne türü. Bilinmeyen bir
 		// değer için de `kind = ?` doğru cevaptır: sıfır satır döner,

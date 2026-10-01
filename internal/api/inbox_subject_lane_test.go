@@ -3,6 +3,8 @@ package api
 import (
 	"strings"
 	"testing"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // v0.9.1342 — /inbox'ın DB özne şeridi (operatör kararı: db problemleri
@@ -52,7 +54,10 @@ func TestInboxListKeyCarriesSubject(t *testing.T) {
 	// Gövde şekli değişti (dbSubjectCount) → sürüm damgası ilerlemeli,
 	// yoksa yükseltme öncesi cache'lenmiş bir gövde yeni sözleşmeymiş
 	// gibi deserialize edilir.
-	if !strings.HasPrefix(svc, "inbox:v7:") {
+	// v0.10.1026 — :v8:: varsayılan şeridin SATIR kümesi değişti (dış
+	// kaynak problemleri de giriyor); eski sürümün cache'lediği sayfa yeni
+	// anahtardan servis edilmemeli (:v6: emsali).
+	if !strings.HasPrefix(svc, "inbox:v8:") {
 		t.Errorf("anahtar sürümü ilerlememiş: %s", svc)
 	}
 }
@@ -75,7 +80,12 @@ func TestInboxSubjectLaneIsWired(t *testing.T) {
 		// facet varsayılanı ['exception'] — zorlanmasa db şeridi HİÇ
 		// problem çekmez ve BOŞ açılırdı.
 		{"db şeridinde tür zorlanıyor", `kinds = []string{"problem"}`},
-		{"şerit ProblemFilter'a iniyor", "SubjectKind: subject,"},
+		// v0.10.1026 — şerit chstore değerine ÇEVRİLEREK iniyor: varsayılan
+		// şerit = servis + dış kaynak. Çıplak `SubjectKind: subject,` geri
+		// gelirse varsayılan liste yine yalnız servis gösterir.
+		{"şerit ProblemFilter'a iniyor", "SubjectKind: inboxProblemLane(subject),"},
+		// Atlanan problem çipinin sayısı listeyle AYNI evreni sayıyor.
+		{"varsayılan şeridin sayısı servis + dış kaynak", "inboxLaneProblemCount(subjectCounts, subject)"},
 		{"şerit anahtarda", "subject)"},
 		{"db sayısı gövdede", `"dbSubjectCount": subjectCounts[inboxSubjectDB],`},
 		{"dış kaynak sayısı gövdede", `"externalSubjectCount": subjectCounts[inboxSubjectExternal],`},
@@ -89,6 +99,72 @@ func TestInboxSubjectLaneIsWired(t *testing.T) {
 	// söyleyemez hâle getirir.
 	if strings.Contains(src, `counts["db"]`) {
 		t.Error("şerit sayısı kind/prio sözlüğüne yazılmış — iki ayrı evren tek haritada")
+	}
+	if strings.Contains(src, "SubjectKind: subject,") {
+		t.Error("şerit chstore'a ÇEVRİLMEDEN iniyor — varsayılan şerit dış kaynak satırlarını kaybeder (v0.10.1026)")
+	}
+}
+
+// v0.10.1026 (operatör kararı 2026-10-01, kuyruk maddesi 14: "14 girsin") —
+// dış kaynak (Oracle / Influx) problemleri VARSAYILAN listede de görünür.
+//
+// inboxProblemLane: inbox şeridi → chstore.ProblemFilter.SubjectKind.
+// Varsayılan şerit (ve normalizeInboxSubject'in bilinmeyen değerleri
+// düşürdüğü yer) birleşim değerine çevrilir; db / external kendi türleriyle
+// birebir. `service` chstore'a ÇIPLAK gitmez: orada "yalnız servis" demek.
+func TestInboxProblemLane(t *testing.T) {
+	tests := []struct{ raw, want string }{
+		{"", chstore.ProblemLaneServiceOrExternal},
+		{"service", chstore.ProblemLaneServiceOrExternal},
+		{"queue", chstore.ProblemLaneServiceOrExternal}, // bilinmeyen → varsayılan şerit
+		{"db", chstore.ProblemKindDB},
+		{"external", chstore.ProblemKindExternal},
+	}
+	for _, tc := range tests {
+		if got := inboxProblemLane(normalizeInboxSubject(tc.raw)); got != tc.want {
+			t.Errorf("inboxProblemLane(normalizeInboxSubject(%q)) = %q, beklenen %q", tc.raw, got, tc.want)
+		}
+	}
+	// Birleşim değeri bir TÜR adı olmamalı — olsaydı bir satırın kind'ı
+	// onunla eşleşebilir ve "service" sıkı kalmazdı.
+	for _, k := range []string{chstore.ProblemKindService, chstore.ProblemKindDB, chstore.ProblemKindExternal} {
+		if chstore.ProblemLaneServiceOrExternal == k {
+			t.Fatalf("varsayılan şerit değeri bir tür adıyla çakışıyor: %q", k)
+		}
+	}
+}
+
+// inboxLaneProblemCount: şeridin problem sayısı listenin evreniyle AYNI.
+// Varsayılan şerit servis + dış kaynak satırlarını birlikte listelediği için
+// atlanan problem çipi ("Problems N", tür facet'inde problem kapalıyken) iki
+// kovanın TOPLAMINI söyler; db / external şeritleri kendi kovalarını
+// (dbSubjectCount / externalSubjectCount ile aynı sayı).
+func TestInboxLaneProblemCount(t *testing.T) {
+	counts := map[string]uint64{
+		chstore.ProblemKindService:  41,
+		chstore.ProblemKindDB:       5,
+		chstore.ProblemKindExternal: 7,
+	}
+	tests := []struct {
+		subject string
+		want    uint64
+	}{
+		{inboxSubjectService, 48}, // 41 + 7 — db AYRI şeritte, sayılmaz
+		{inboxSubjectDB, 5},
+		{inboxSubjectExternal, 7},
+	}
+	for _, tc := range tests {
+		if got := inboxLaneProblemCount(counts, tc.subject); got != tc.want {
+			t.Errorf("inboxLaneProblemCount(%q) = %d, beklenen %d", tc.subject, got, tc.want)
+		}
+	}
+	// Sayım düşmüşken (boş harita) ve kolon yokken (CountProblemsBySubject
+	// yalnız service kovasını doldurur): toplam yine tanımlı, eksik kova 0.
+	if got := inboxLaneProblemCount(map[string]uint64{}, inboxSubjectService); got != 0 {
+		t.Errorf("boş harita → %d, beklenen 0", got)
+	}
+	if got := inboxLaneProblemCount(map[string]uint64{chstore.ProblemKindService: 3}, inboxSubjectService); got != 3 {
+		t.Errorf("yalnız servis kovası (kolon yok) → %d, beklenen 3", got)
 	}
 }
 

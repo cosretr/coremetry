@@ -35,7 +35,9 @@ func TestKindFacetGatesExpensiveSources(t *testing.T) {
 	// v0.9.1342 — problems çipinin sayısı artık ŞERİDE göre okunuyor
 	// (subjectCounts[subject]). COUNT yolu aynı, saydığı evren daraldı:
 	// şerit db satırlarını listeden çıkarıyorsa çip de onları saymamalı.
-	if !strings.Contains(src, `skippedCounts["problem"] = int(subjectCounts[subject])`) ||
+	// v0.10.1026 — sayı inboxLaneProblemCount'tan: varsayılan şerit servis +
+	// dış kaynak satırlarını birlikte listeliyor, çip de ikisini topluyor.
+	if !strings.Contains(src, `skippedCounts["problem"] = int(inboxLaneProblemCount(subjectCounts, subject))`) ||
 		!strings.Contains(src, `skippedCounts["exception"] = int(n)`) ||
 		!strings.Contains(src, `skippedCounts["httperror"] = int(n)`) {
 		t.Error("skipped kinds must still get chip counts from the cheap COUNT path — a zero chip would reintroduce the v0.9.330 'Exceptions 0' lie")

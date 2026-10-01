@@ -37,6 +37,19 @@ func TestProblemSubjectConjunct(t *testing.T) {
 		// allowlist tüm satırları döndürürdü (v0.9.1300 sınıfı).
 		{"bilinmeyen özne türü sıfır satır", "queue", true, "kind = ?", "queue", true},
 		{"bilinmeyen + kolon yok", "queue", false, "1 = 0", nil, true},
+		// v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — /inbox
+		// varsayılan şeridi servis + dış kaynak. İki literal eşitlik,
+		// parantezli (AND zincirinde OR taşmasın), parametresiz.
+		{"varsayılan şerit: servis + dış kaynak", ProblemLaneServiceOrExternal, true,
+			"(kind = 'service' OR kind = 'external')", nil, true},
+		// İKİ-BOOT: kolon yokken her satır servis öznesi → bugünkü servis
+		// şeridi gibi HİÇ daraltılmaz.
+		{"kolon yok, varsayılan şerit daraltılmaz", ProblemLaneServiceOrExternal, false, "", nil, false},
+		// Dış kaynak şeridi DEĞİŞMEDİ (yalnız external, artık varsayılanın
+		// daraltılmış görünümü). Servis şeridi de SIKI kaldı — yukarıdaki
+		// "servis şeridi" satırı: birleşim yalnız ayrı şerit değeriyle istenir.
+		{"dış kaynak şeridi değişmedi", ProblemKindExternal, true, "kind = ?", ProblemKindExternal, true},
+		{"dış kaynak şeridi, kolon yok: SIFIR satır", ProblemKindExternal, false, "1 = 0", nil, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -76,6 +89,24 @@ func TestSubjectLaneDoesNotHideTheColumnDefault(t *testing.T) {
 	// da sağlanırdı. Aranan ifadenin gerçekten orada olduğunu doğrula.
 	if !strings.Contains(src, `return "kind = ?", ProblemKindService, true`) {
 		t.Error("servis şeridi artık `kind = ?` üretmiyor — kapı boşa bakıyor")
+	}
+	// v0.10.1026 — varsayılan şerit (servis + dış kaynak) dosyaya bir OR
+	// soktu. Bu bir GEVŞETME değil, açık bir izin: yasak "boş dizeyle
+	// eşleşen" yazım ve o hâlâ yukarıdaki listede. İzin verilen yazım
+	// pinli — iki literal eşitlik, paket sabitlerinden; IN-listesi ya da
+	// boş değere bir üçüncü dal eklenirse bu iki kontrolden biri ısırır.
+	if !strings.Contains(src, `"(kind = '" + ProblemKindService + "' OR kind = '" + ProblemKindExternal + "')"`) {
+		t.Error("varsayılan şerit artık iki literal eşitlik değil — DEFAULT 'service' garantisine dayanan yazım değişti")
+	}
+	// DEĞER düzeyinde de: üretilen SQL boş dizeye hiç kapı açmamalı.
+	// Kaynak taraması sabit birleştirmesini göremez (`'" + X + "'`); bu
+	// kontrol çıkan dizgiye bakar.
+	for _, hasKind := range []bool{true, false} {
+		sql, _, _ := problemSubjectConjunct(ProblemLaneServiceOrExternal, hasKind)
+		if strings.Contains(sql, "''") || strings.Contains(sql, " IN (") {
+			t.Errorf("varsayılan şerit SQL'i (hasKindCol=%v) %q — boş dizeyle eşleşen ya da "+
+				"IN-listeli bir yazım DEFAULT 'service' garantisini gizler", hasKind, sql)
+		}
 	}
 	// Ve gerekçe dosyada YAZILI olmalı: bir sonraki okuyucu `kind = ''`
 	// eklemeyi "daha güvenli" sanabilir.

@@ -987,6 +987,37 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Problems: dış kaynak (Oracle) problemleri varsayılan listede de görünür (v0.10.1026)
+
+**Operatör:** kuyruğun 14. maddesine ("Oracle satırları varsayılan Problems listesine de girsin mi")
+"14 girsin". Bu karar, v0.10.1017 girdisinin **Reddedilen** notunu ("external satırları varsayılan
+(servis) listeye katmak … istenirse ayrı karar") operatör kararıyla TERSİNE çevirir — not tam olarak bu
+ayrı kararı bekliyordu. **Karar:** `/inbox` varsayılan şeridi (`subject=service`; bilinmeyen değer de buraya
+düşer) artık servis **ve** dış kaynak (`kind=external`, özne `ext:<kaynak>/…`) problemlerini birlikte
+gösterir. Daraltma yine SQL'de, LIMIT'ten önce: chstore'a ayrı bir şerit değeri
+(`ProblemLaneServiceOrExternal`) iner ve `(kind = 'service' OR kind = 'external')` üretir — paket
+sabitlerinden iki literal eşitlik, IN-listesi değil; boş değerle eşleşmez, yani şerit CH'nin
+`DEFAULT 'service'` garantisine dayanmaya devam eder (`TestSubjectLaneDoesNotHideTheColumnDefault` yeni
+yazımı açıkça pinler, boş-dize yasağı aynen durur). Kolon yokken (iki-boot) varsayılan şerit bugünkü gibi
+hiç daraltılmaz. chstore'daki `"service"` değeri bilerek SIKI kaldı (yalnız servis): çağıran taramasında
+`ProblemFilter.SubjectKind`'ı dolduran tek yer `/inbox` çıktı, ama bir tür sabitine iki anlam yüklemek
+v0.9.1339'un ad-çakışması sınıfıdır. **Sayılar:** tür facet'inde Problems kapalıyken çipin sayısı varsayılan
+şeritte servis + dış kaynak kovalarının toplamı (`inboxLaneProblemCount`); `dbSubjectCount` /
+`externalSubjectCount` alanları değişmedi. Kenar çubuğu rozeti (`/api/inbox/count`) zaten her özne türünü
+sayıyordu — dokunulmadı; liste ona yaklaştı (kalan fark ayrı şeritteki db satırları, önceden de vardı).
+Liste cache anahtarı `inbox:v8:` (satır kümesi değişti, `:v6:` emsali). **FE:** yeni şerit yok; "Servisler"
+çipinin ipucu "Servisler ve dış kaynak (ör. Oracle) problemleri", "Dış kaynaklar (N)" çipininki "Yalnız dış
+kaynak problemleri — varsayılan listede de görünürler". Satırın özne hücresi `SubjectLink`: `ext:` öznesine
+servis linki kurulmaz (EXT rozeti + neden-link-yok ipucu), takım çipi çizilmez. **Değişmeyen:** db şeridi
+(yalnız db) ve Dış kaynaklar şeridi (yalnız external — artık varsayılanın daraltılmış görünümü) ve çipi;
+diğer kaynaklar (exception / anomali / incident) yine yalnız varsayılan şeritte çekilir; öncelik hesabı ve
+inbox'ın "exception dışı türler P3" görünüm kuralı (v0.9.487). **Sınırlar:** (1) takım süzgeci
+(owner/SRE/team) seçiliyken dış kaynak satırları düşer — katalog sahipleri yok ve sahiplik uydurulmadı
+(db'nin türetilmiş sahipliği gibi bir kural yok); kendi şeritlerinde de böyleydi. (2) Dış kaynak satırları
+artık servis satırlarıyla aynı öncelik sırasında yarışır — kabul edilen sonuç; v0.9.1342'nin "yarışmasın"
+gerekçesi db için geçerli kalıyor. (3) env süzgeci seçiliyken dış kaynak satırları satır düzeyinde düşer
+(`EnvScopeKeepsRow` yalnız db'ye kaçış tanır) — Dış kaynaklar şeridinde de önceden böyleydi; ayrı kalem.
+
 ## 2026-10-01 — Databases dilim 3: önceki pencereyle karşılaştırma (v0.10.1025)
 
 **Operatör yönü:** Databases iyileştirmelerinde "Dynatrace'in Databases bölümünü baz al" (v0.10.1019

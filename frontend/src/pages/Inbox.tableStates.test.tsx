@@ -191,3 +191,44 @@ describe('Inbox kuyruğu — durumlar tablonun içinde (v0.10.967)', () => {
     expect(selectAll(el).disabled).toBe(false);
   });
 });
+
+// v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — dış kaynak problemi
+// artık VARSAYILAN şeritte (?subject yok), servis satırlarının yanında.
+// Satır bir servis varsaymamalı: özne hücresi `/service?name=ext:…` linki
+// KURMAZ (o sayfa boş açılırdı — çalışmayan link, linksizlikten kötü),
+// EXT rozeti + okunabilir etiket + "neden link yok" ipucu basar; takım
+// çipi de yok (dış kaynağın katalog sahibi yok, uydurulmaz). Kontrol satırı
+// (servis öznesi) linkini korur — yani ölçülen şey satır sınıflandırması,
+// "hiç link yok" değil.
+describe('Inbox varsayılan şerit — dış kaynak satırı (v0.10.1026)', () => {
+  const extProblem = (): InboxItem => ({
+    id: 'problem:p-ext', kind: 'problem', source: 'Alert rule', priority: 'P3',
+    priorityReason: 'non-exception kinds are P3 in the inbox', severity: 'warning',
+    service: 'ext:orders-db/OP_TRANSFER', subjectKind: 'external',
+    title: 'OP_TRANSFER elapsed above band', description: '',
+    startedAt: 1_700_000_000e9, lastSeen: 1_700_000_600e9, status: 'open',
+    problem: { id: 'p-ext', ruleId: 'anomaly:ext:orders-db/OP_TRANSFER:elapsed', metric: 'elapsed', value: 4, threshold: 2 },
+  });
+  const rowOf = (el: HTMLElement, text: string) =>
+    [...table(el).querySelectorAll('tbody tr:not([data-dt-state])')]
+      .find(r => r.textContent?.includes(text)) as HTMLElement | undefined;
+
+  it('özne hücresi servis linki kurmaz; EXT rozeti + etiket + ipucu; takım çipi yok', async () => {
+    m.items = [extProblem(), item('a')];
+    const el = await mount();
+    expect(dataRows(el)).toBe(2);
+
+    const ext = rowOf(el, 'OP_TRANSFER elapsed above band');
+    expect(ext, 'dış kaynak satırı varsayılan listede çizilmeli').toBeTruthy();
+    expect(ext!.querySelector('a[href^="/service"]'), 'ext: öznesine servis linki kuruldu').toBeNull();
+    const subjectCell = ext!.querySelectorAll('td')[3];
+    expect(subjectCell.textContent).toContain('EXT');
+    expect(subjectCell.textContent).toContain('orders-db · OP_TRANSFER');
+    expect(subjectCell.querySelector('[title*="servis sayfası linki yok"]')).not.toBeNull();
+    expect(subjectCell.querySelector('.btn-chip'), 'sahipsiz dış kaynağa takım çipi çizildi').toBeNull();
+
+    // Kontrol: aynı listedeki servis satırı linkini korur.
+    const svc = rowOf(el, 'SocketTimeout a');
+    expect(svc!.querySelector('a[href^="/service?name=checkout"]')).not.toBeNull();
+  });
+});
