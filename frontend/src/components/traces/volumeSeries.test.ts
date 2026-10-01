@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly } from './volumeSeries';
+import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT } from './volumeSeries';
 
 const S = 1_000_000_000; // 1 saniye, ns
 const T0 = 1_700_000_000 * S;
@@ -193,6 +193,16 @@ describe('stripScope', () => {
     expect(stripRootOnly('spans', true)).toBe(false);
     expect(stripRootOnly(stripScope([{ k: 'function_code' }], ''), true)).toBe(false);
     expect(stripRootOnly(stripScope([{ k: 'http.route' }], ''), true)).toBe(true);
+  });
+  // v0.10.1011 (operator-reported, prod: function_code çipi + Errors → liste
+  // dolu, şerit "No traces in view") — boş şerit nedenini söyler.
+  it('boş şerit: spans kapsamı + Errors nedenini yazar; diğer hâllerde eski metin', () => {
+    const note = volumeEmptyNote('spans', true);
+    expect(note).toContain("hata aynı trace'in başka bir span'inde");
+    expect(note).toContain("Errors'u kaldırın");
+    expect(volumeEmptyNote('spans', false)).toBe(VOLUME_EMPTY_DEFAULT);
+    expect(volumeEmptyNote('traces', true)).toBe(VOLUME_EMPTY_DEFAULT);
+    expect(volumeEmptyNote('requests', true)).toBe(VOLUME_EMPTY_DEFAULT);
   });
   it('birim ve ipucu kapsamı söyler', () => {
     expect(volumeUnitFor(true, 'entry')).toBe('traces');

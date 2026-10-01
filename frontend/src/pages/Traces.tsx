@@ -77,7 +77,7 @@ import { traceHref } from '@/lib/traceHref';
 
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatHeaderLabel, type StripStat } from '@/components/traces/stripStat';
-import { stripScope, stripRootOnly, volumeUnitFor, weightedStatAvg } from '@/components/traces/volumeSeries';
+import { stripScope, stripRootOnly, volumeEmptyNote, volumeUnitFor, weightedStatAvg } from '@/components/traces/volumeSeries';
 import { groupLeaves } from '@/lib/urlState';
 import { LatencyScatter } from '@/components/traces/LatencyScatter';
 import { ShapesView } from '@/components/traces/ShapesView';
@@ -1314,7 +1314,7 @@ function TracesPageInner() {
               // v0.10.268 — Dynatrace ölçeği (mockup A: 200 px).
               // v0.10.486 (operatör: "histogram biraz daha shrink edilebilir") — kompakt 170 → 130.
               // v0.10.513 — shrink/expand kaldırıldı; tek yükseklik.
-              height={130} unit={volumeUnit} onBrush={applyBrush} onZoomReset={clearBrush}
+              height={130} unit={volumeUnit} emptyNote={volumeEmptyNote(volumeUnit, filter.hasError)} onBrush={applyBrush} onZoomReset={clearBrush}
               collapsed={stripCollapsed}
               xRange={{ from: listRangeNs.from / 1e9, to: listRangeNs.to / 1e9 }}
               header={vizToggle}

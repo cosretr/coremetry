@@ -12,11 +12,11 @@
 import { useMemo } from 'react';
 import type { SpanMetricSeries } from '@/lib/types';
 import { TimeChart } from '@/components/charts/TimeChart';
-import { volumeHint, buildVolumeSeries, fmtVolumeDuration } from './volumeSeries';
+import { volumeHint, buildVolumeSeries, fmtVolumeDuration, VOLUME_EMPTY_DEFAULT } from './volumeSeries';
 import { STRIP_STAT_DEFAULT, type StripStat } from './stripStat';
 
 export function VolumeChart({
-  count, errors, latency, stat = STRIP_STAT_DEFAULT, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces', collapsed = false,
+  count, errors, latency, stat = STRIP_STAT_DEFAULT, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces', collapsed = false, emptyNote,
 }: {
   count: SpanMetricSeries[] | null;
   errors: SpanMetricSeries[] | null;
@@ -46,6 +46,8 @@ export function VolumeChart({
   // çizim ve bucket ipucu çizilmez. Durumu çağıran tutar (Traces:
   // localStorage). Şerit sayfanın aracı; tablo sayfanın kendisi.
   collapsed?: boolean;
+  // v0.10.1011 — boş durum cümlesi (volumeEmptyNote); verilmezse eski metin.
+  emptyNote?: string;
 }) {
   const { times, series, bucketMin } = useMemo(
     () => buildVolumeSeries(count, errors, latency, unit, stat),
@@ -79,7 +81,7 @@ export function VolumeChart({
 
       {collapsed ? null : times.length === 0 ? (
         <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
-          No traces in view to bucket.
+          {emptyNote ?? VOLUME_EMPTY_DEFAULT}
         </div>
       ) : (
         <TimeChart

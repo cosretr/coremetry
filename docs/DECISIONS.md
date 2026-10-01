@@ -987,6 +987,19 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Traces şeridi: Errors + giriş-dışı çipte boş durum nedenini söyler (v0.10.1011)
+
+**Kuyruk (operatör "devam sırayla"):** 1010'dan sonra `function_code` çipi + Errors'ta liste dolu, şerit
+"No traces in view to bucket" — listeyle çelişen çıplak bir cümle. Şerit spans kapsamında Errors'u çiple
+AYNI span'de arar ("süzgece uyan span hatalı mı"); fonksiyon kodunu taşıyan span'ler hata vermediği için
+sayım gerçekten sıfır. **Karar:** sayı uydurulmaz, boş durum NEDENİNİ söyler (`volumeEmptyNote`): "Süzgece
+uyan span'lerin hiçbiri hatalı değil — hata aynı trace'in başka bir span'inde. Liste trace düzeyinde
+eşleşir; grafiği görmek için Errors'u kaldırın." Diğer hâllerde eski metin. **Reddedilen:** (a) spans
+kapsamında Errors bayrağını şeritten düşürmek — db.statement gibi çiplerde "hata veren sorgular" anlamlı
+serisini bozar ve hatasız span hacmini hata grafiği gibi gösterir; (b) trace düzeyi kesişim serisi (hata
+trace'lerinin çipli span'leri) — span-metrik motoruna yeni bir süzgeç türü ve pencere boyu GLOBAL IN; talep
+gelirse ayrı karar.
+
 ## 2026-10-01 — Traces: Errors + çip → hata trace düzeyinde (v0.10.1010)
 
 **Operatör bildirimi:** `function_code = …` çipiyle liste dolu ve satırların çoğu ERROR; "Errors"

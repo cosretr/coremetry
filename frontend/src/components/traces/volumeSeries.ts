@@ -190,6 +190,25 @@ export function stripRootOnly(scope: StripScope, rootOnly: boolean): boolean {
   return scope === 'entry' && rootOnly;
 }
 
+/**
+ * volumeEmptyNote — v0.10.1011: şerit boşken yazılan cümle. SAF.
+ *
+ * Operator-reported (prod): `function_code` çipi + Errors → liste dolu (v0.10.1010,
+ * hata trace düzeyinde), şerit "No traces in view to bucket". Şerit spans
+ * kapsamında Errors'u çiple AYNI span'de arar ("süzgece uyan span hatalı mı");
+ * fonksiyon kodunu taşıyan span'ler hata vermediği için sayım GERÇEKTEN sıfır.
+ * Hata başka span'de — bunu grafiğe çevirmek trace düzeyinde bir kesişim serisi
+ * ister (pahalı; bilinçli yapılmadı). Çıplak "No traces" ise listeyle çelişen
+ * bir yalandı: boş durum artık nedenini ve ne yapılacağını söyler.
+ */
+export const VOLUME_EMPTY_DEFAULT = 'No traces in view to bucket.';
+export function volumeEmptyNote(unit: string, hasError: boolean): string {
+  if (unit === 'spans' && hasError) {
+    return "Süzgece uyan span'lerin hiçbiri hatalı değil — hata aynı trace'in başka bir span'inde. Liste trace düzeyinde eşleşir; grafiği görmek için Errors'u kaldırın.";
+  }
+  return VOLUME_EMPTY_DEFAULT;
+}
+
 /** volumeUnitFor — birim etiketi: spans kapsamında "spans", değilse eski kural. */
 export function volumeUnitFor(serviceScoped: boolean, scope: StripScope): string {
   return scope === 'spans' ? 'spans' : volumeUnitLabel(serviceScoped);
