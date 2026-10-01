@@ -433,6 +433,24 @@ func (d *Detector) mergeIntoCluster(ctx context.Context, clusterID string, targe
 	}
 }
 
+// ownsServiceCluster — SAF: satır BU kümeleyicinin (servis topolojisi) açtığı
+// bir küme mi. "anomaly-cluster:" önekini dış seri kümeleri de taşır
+// (chstore.RuleExtClusterPrefix, external.go applyExternalClusters) ve onların
+// yaşam döngüsü dış tarayıcıya aittir.
+//
+// v0.10.1021 — önek tek başına sahiplik sayılıyordu: resolveStaleClusters her
+// 2 dk'lık tikte açık dış (Oracle) kümeleri de "kaynak toparlandı" diye
+// kapatıyordu, çünkü öznesi (ext:… ya da çözülmüş servis) bu tikin
+// anomalili servis kümesinde olmuyor (çözülmüş-servis öznesinde aralıklı:
+// o servisin kendi anomalisi yokken). Dış tarayıcı bir sonraki poll'da
+// (varsayılan 60 sn) aynı kümeyi YENİ başlangıç anıyla yeniden açıyordu →
+// kapan-açıl döngüsü, her turda yeni bir açılış bildirimi (dedup anahtarı
+// started_at taşıdığı için geçer; ekip maili problem kimliğiyle tekilleşir).
+func ownsServiceCluster(ruleID string) bool {
+	return strings.HasPrefix(ruleID, clusterRulePrefix) &&
+		!strings.HasPrefix(ruleID, chstore.RuleExtClusterPrefix)
+}
+
 // resolveStaleClusters — kaynak sinyaliyle yaşam (spec kararı a):
 // kaynak serviste bu tik hiçbir metrik "open" kararı taşımıyorsa küme
 // problemi çözülür. Üyeler hâlâ kötüyse sonraki tiklerde bastırma
@@ -440,7 +458,7 @@ func (d *Detector) mergeIntoCluster(ctx context.Context, clusterID string, targe
 // kalan dertler kendi satırlarında dürüstçe yaşar.
 func (d *Detector) resolveStaleClusters(ctx context.Context, snap *chstore.OpenProblems, openServices map[string]bool) {
 	for _, p := range snap.All() {
-		if !strings.HasPrefix(p.RuleID, clusterRulePrefix) {
+		if !ownsServiceCluster(p.RuleID) {
 			continue
 		}
 		if openServices[p.Service] {

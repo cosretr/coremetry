@@ -987,6 +987,24 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Dış (Oracle) kümeleri servis dedektörünce kapatılmaz (v0.10.1021)
+
+**Bağlam:** operatör "anomali alarmları çok geliyor" + "Oracle'dan gelenler Problems'te gözükmüyor";
+fırtına kapısı için dedektör okunurken koddan bulundu (prod'da gözlenmedi). **Kusur:** `anomaly-cluster:`
+önekini iki üretici taşır — servis topolojisi kümeleyicisi ve dış seri kümeleri (`anomaly-cluster:ext:…`,
+dış tarayıcı). Servis dedektörünün `resolveStaleClusters`'ı önekin tamamını kendi kümesi sayıyor ve
+öznesi bu tikin anomalili servisleri arasında olmayan her kümeyi "kaynak toparlandı" diye kapatıyordu.
+Dış kümenin öznesi (`ext:…` ya da çözülmüş servis) orada olmadığından açık Oracle kümeleri her 2 dk'da
+kapanıyor, dış tarayıcı bir sonraki poll'da (varsayılan 60 sn) aynı kümeyi YENİ başlangıç anıyla yeniden
+açıp kanal bildirimini yeniden gönderiyordu (dedup anahtarı started_at taşır → geçer; ekip maili problem
+kimliğiyle tekilleştiği için tekrar gitmez). Öznesi gerçek servise çözülmüş kümelerde döngü aralıklı.
+Bağımsız bir Opus incelemesi kod okumasıyla doğruladı (çalışma anında yeniden üretilmedi). **Karar:** sahiplik saf bir işlevle ayrılır
+(`ownsServiceCluster`): servis dedektörü yalnız kendi kümelerine dokunur; dış kümelerin yaşam döngüsü dış
+tarayıcıda kalır (`applyExternalClusters` — anahtarında anomali kalmayınca kapanır). Servis kümelerinin
+davranışı değişmez. **Ayrıca kayıt (aynı gün, operatör):** veritabanı motor sağlığı için "collector'a
+Oracle receiver daha sonra ekleyeceğiz" — V$ görünümlerini mevcut Oracle bağlantısından okuma yazılmaz;
+receiver gelince hazır motor panelleri dolar.
+
 ## 2026-10-01 — Databases dilim 2: veritabanı hata kırılımı — "hangi hata" (v0.10.1020)
 
 **Bağlam:** Databases × Dynatrace programı (aşağıdaki kayıt), dilim 2 — hata analizi karşılığı. `/database`
