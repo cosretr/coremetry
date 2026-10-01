@@ -5,10 +5,11 @@ import { Spinner, Empty } from '@/components/Spinner';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
 } from '@/components/ui/DataTable';
-import { useEndpointSplit, useEndpointDownstream, useEndpointCallers } from '@/lib/queries';
+import { useEndpointSplit, useEndpointDownstream, useEndpointCallers, useOracleFunctionCodes } from '@/lib/queries';
 import { fmtNum, tsLong } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { EndpointDetail, EndpointSplitValue, EndpointCaller, EndpointFailingTrace } from '@/lib/types';
+import { functionCodeLabel, functionCodeTitle } from '@/lib/oracleFunctionOps';
 
 // v0.9.874 (tutarlılık denetimi BT10) — aynı dosyadaki Split ve Callers
 // tabloları çoktan primitifteydi, bu kalmıştı. Kolon genişlikleri elle
@@ -328,6 +329,7 @@ export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
 // an id missing there 400s loudly with the allowed list.
 const ENDPOINT_SPLIT_DIMS = [
   'deployment.environment',
+  'function_code',
   'host.name',
   'http.method',
   'http.status_code',
@@ -369,6 +371,10 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
     ...(cluster ? { cluster } : {}),
   } : null);
   const rows = splitQ.data?.values ?? [];
+  // v0.10.1003 — function_code kırılımında değer, Oracle operasyon adıyla
+  // etiketlenir (sözlük yalnız bu boyut seçiliyken çekilir; 5 dk taze).
+  const fnDictQ = useOracleFunctionCodes(by === 'function_code');
+  const fnDict = by === 'function_code' ? fnDictQ.data : undefined;
   const dt = useDataTable<EndpointSplitValue>({
     storageKey: 'endpoint-split',
     columns: SPLIT_COLS,
@@ -415,7 +421,7 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
                 const errCls = r.errorRate >= 5 ? 'b-err' : r.errorRate >= 1 ? 'b-warn' : 'b-gray';
                 return (
                   <tr key={`${r.value}|${i}`}>
-                    <td className="mono" title={r.value}>{r.value}</td>
+                    <td className="mono" title={functionCodeTitle(r.value, fnDict)}>{functionCodeLabel(r.value, fnDict)}</td>
                     <td className="num">{fmtNum(r.calls)}</td>
                     <td className="num">{fmtNum(r.errors)}</td>
                     <td className="num">

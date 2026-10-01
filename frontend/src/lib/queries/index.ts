@@ -80,3 +80,4 @@ export { useTraceRootDef, useSaveTraceRootDef } from './traceRootDef'; // v0.10.
 export {
   aiEvalKeys, useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun,
 } from './aiEval'; // v0.10.940 — Settings › CoSRE › Değerlendirme (evalset paneli)
+export { useOracleFunctionCodes } from './oracleFunctionCodes'; // v0.10.1003 — fonksiyon kodu → Oracle operasyon adı sözlüğü

@@ -987,6 +987,22 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Oracle: operasyon adı trace ve endpoint sayfasında (v0.10.1003)
+
+**Karar (kuyruk 1, operatör "devam et"):** 1002'nin TERS yönü — ekranda görülen fonksiyon kodu Oracle
+operasyon ADINA çevrilir. Tek kaynak bir SÖZLÜK: `GET /api/oracle/function-codes` (kod → en çok satırlı
+≤3 operasyon adı + koda bağlı toplam ad sayısı; `oracle_error_log` son 7 gün, ≤5000 çift, sunucu 5 dk
+önbellek, rol kapısı yok). **Neden sözlüğün tamamı tek cevapta:** trace başına istek atmamak için — FE onu
+tek paylaşılan anahtarla (`useOracleFunctionCodes`) 5 dk tazelikle bir kez çeker ve YALNIZ ekranda bir
+fonksiyon kodu varken. İki yüzey: **(1) Trace özet şeridi** — span'lerdeki `FUNCTION_CODE` / `function_code`
+değerinden "Operasyon: <ad>" çipi; tıklayınca aynı fonksiyon kodunun diğer trace'leri (süzgeç anahtarı
+span'de GÖRÜLEN yazımla). Trace kod taşımıyorsa ya da kod sözlükte yoksa hiçbir şey çizilmez — ad
+uydurulmaz. **(2) Endpoint › Break down by** — beyaz listeye `function_code` boyutu (iki yazımı okuyan
+DİZİ ifadesi: terfi kolonu her kurulumda yok ve harita statik; tarama zaten servis + rota + zamanla
+sınırlı); değer hücresi "CAF0001 · <operasyon adı>". Kod birden çok operasyonda görülüyorsa en çok
+satırlı ad + "(+N)" ve ipucunda diğerleri: 1:n ilişki gizlenmez. Sınır 1002 ile aynı: yalnız son 7 günde
+Oracle'da hata satırı olan operasyonların adı bilinir.
+
 ## 2026-10-01 — Oracle: operasyon adıyla trace bulma — komut paleti (v0.10.1002)
 
 **Karar (operatör: "operasyon ismiyle trace bulabilir miyim" → "yap"):** operasyon adı

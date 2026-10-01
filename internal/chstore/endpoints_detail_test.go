@@ -145,6 +145,11 @@ func TestEndpointSplitDims(t *testing.T) {
 			t.Errorf("dim %q missing from map", d)
 		}
 	}
+	// v0.10.1003 — function_code: iki yazımı da okuyan DİZİ ifadesi (terfi
+	// kolonu her kurulumda yok; harita statik).
+	if e := endpointSplitDims["function_code"]; !strings.Contains(e, "'FUNCTION_CODE'") || !strings.Contains(e, "'function_code'") || strings.Contains(e, "attr_function_code") {
+		t.Errorf("function_code ifadesi: %q", e)
+	}
 	for _, banned := range []string{"service.name", "http.route"} {
 		if _, ok := endpointSplitDims[banned]; ok {
 			t.Errorf("identity dimension %q must not be splittable", banned)

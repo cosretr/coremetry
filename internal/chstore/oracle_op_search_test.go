@@ -62,3 +62,22 @@ func TestPromotedAttrSpelling(t *testing.T) {
 		t.Errorf("kayıt yok → boş: %q", got)
 	}
 }
+
+// v0.10.1003 — (fonksiyon kodu, operasyon) sözlük dökümü: zaman sınırlı, LIMIT,
+// max_execution_time; kod kaynağı arama sorgusuyla aynı kural.
+func TestOracleFnOpsSQL(t *testing.T) {
+	attrOnly, mixed := oracleFnOpsSQL(0), oracleFnOpsSQL(1)
+	for name, q := range map[string]string{"attr": attrOnly, "mixed": mixed} {
+		for _, w := range []string{
+			"FROM oracle_error_log", "WHERE time >= ? AND time < ? AND operation_code != ''", "WHERE fc != ''",
+			"GROUP BY fc, operation_code", "ORDER BY n DESC, fc, operation_code", "LIMIT ?", "SETTINGS max_execution_time = 5",
+		} {
+			if !strings.Contains(q, w) {
+				t.Errorf("%s: SQL %q içermeli", name, w)
+			}
+		}
+	}
+	if strings.Count(attrOnly, "?") != 3 || strings.Count(mixed, "?") != 4 || !strings.Contains(mixed, "if(source_id IN (?), trimBoth(error_code), ") {
+		t.Errorf("yer tutucu sayısı / kaynak dalı:\n%s", mixed)
+	}
+}

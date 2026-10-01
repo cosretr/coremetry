@@ -39,6 +39,7 @@ import type { ExternalLink, LogRow, SpanRow, TimeRange, TraceAnalysis, TraceLink
 import { TraceWaterfall, TraceServiceBreakdown } from '@/components/TraceWaterfall';
 import { SpanDetail } from '@/components/SpanDetail';
 import { TraceHonesty } from '@/components/traces/TraceHonesty';
+import { OracleOperationChip } from '@/components/traces/OracleOperationChip';
 // v0.8.550 — this file used to OWN the strongest of the three hand-rolled
 // clipboard copies (it alone fell back when writeText rejected). That
 // version is now lib/clipboard, and the two local functions are gone.
@@ -554,6 +555,9 @@ function TraceDetailInner() {
               {/* v0.10.347 (operatör: "en üstteki tarih daha belirgin olabilir") —
                   trace zamanı ikincil gri yazı değil, şeridin okunan sayısı. */}
               {root && <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} title="Trace başlangıcı (kök span)">{tsLong(root.startTime)}</span>}
+              {/* v0.10.1003 — Oracle operasyon adı (span'lerdeki FUNCTION_CODE üzerinden);
+                  trace kod taşımıyorsa ya da ad bilinmiyorsa hiçbir şey çizilmez. */}
+              <OracleOperationChip spans={spans} pageRange={range} />
               {/* v0.10.354 (operatör) — Compare / Logs / Share / Export JSON ve kritik
                   yol özeti beyaz şeritten çıktı: Topbar'daki gri alana (actions). */}
 

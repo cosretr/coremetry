@@ -121,3 +121,64 @@ func PromotedAttrSpelling(candidates ...string) string {
 	}
 	return ""
 }
+
+// OracleFnOp — v0.10.1003: bir (fonksiyon kodu, operasyon) çiftinin satır sayısı.
+// Trace / endpoint tarafında görülen fonksiyon kodunu Oracle operasyon ADINA
+// çeviren sözlüğün ham girdisi (GET /api/oracle/function-codes).
+type OracleFnOp struct {
+	Code      string
+	Operation string
+	Rows      uint64
+}
+
+const oracleFnOpLimit = 5000
+
+// oracleFnOpsSQL — SAF: (kod, operasyon) dökümü; kod kaynağı oracleOpSearchSQL
+// ile aynı kural (nCodeSources = `code` alanı fonksiyon kodu olan kaynaklar).
+func oracleFnOpsSQL(nCodeSources int) string {
+	fc := oracleFunctionCodeAttrExpr
+	if nCodeSources > 0 {
+		holders := strings.TrimSuffix(strings.Repeat("?,", nCodeSources), ",")
+		fc = "if(source_id IN (" + holders + "), trimBoth(error_code), " + oracleFunctionCodeAttrExpr + ")"
+	}
+	return `
+		SELECT fc, operation_code, count() AS n
+		FROM (
+			SELECT operation_code, ` + fc + ` AS fc
+			FROM oracle_error_log
+			WHERE time >= ? AND time < ? AND operation_code != ''
+		)
+		WHERE fc != ''
+		GROUP BY fc, operation_code
+		ORDER BY n DESC, fc, operation_code
+		LIMIT ?
+		SETTINGS max_execution_time = 5`
+}
+
+// OracleFunctionOperations — [from, to) penceresinde görülen (fonksiyon kodu,
+// operasyon) çiftleri, en çok satırlı önce, ≤ oracleFnOpLimit. İkinci dönüş:
+// tavan doldu (sözlük eksik olabilir).
+func (s *Store) OracleFunctionOperations(ctx context.Context, codeSources []string, from, to time.Time) ([]OracleFnOp, bool, error) {
+	out := []OracleFnOp{}
+	if !to.After(from) {
+		return out, false, nil
+	}
+	args := make([]any, 0, len(codeSources)+3)
+	for _, id := range codeSources {
+		args = append(args, id)
+	}
+	args = append(args, from, to, oracleFnOpLimit)
+	rows, err := s.conn.Query(ctx, oracleFnOpsSQL(len(codeSources)), args...)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var o OracleFnOp
+		if err := rows.Scan(&o.Code, &o.Operation, &o.Rows); err != nil {
+			return nil, false, err
+		}
+		out = append(out, o)
+	}
+	return out, len(out) >= oracleFnOpLimit, rows.Err()
+}

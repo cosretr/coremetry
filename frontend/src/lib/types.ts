@@ -1683,6 +1683,16 @@ export interface OracleOperationsResponse {
   operations: OracleOperationHit[];
 }
 
+/** v0.10.1003 — fonksiyon kodu → Oracle operasyon adları sözlüğü (GET
+ *  /api/oracle/function-codes). Trace sayfası span'deki FUNCTION_CODE değerini
+ *  bununla operasyon adına çevirir. */
+export interface OracleFunctionCodesResponse {
+  enabled: boolean;
+  /** kod → en çok satırlı ≤3 operasyon adı + koda bağlı toplam ad sayısı. */
+  codes: Record<string, { ops: string[]; total: number }>;
+  truncated?: boolean;
+}
+
 /** v0.10.998 — Oracle kaynağı canlıya geçiş önizlemesi (GET
  *  /api/settings/oracle/{id}/live-preview; internal/api/oracle_live_preview.go).
  *  Sayılar gölgede AÇILAN Problem'lerdir: canlı kip bildirimi yalnız açılışta

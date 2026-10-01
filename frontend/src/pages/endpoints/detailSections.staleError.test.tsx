@@ -31,6 +31,8 @@ vi.mock('@/lib/queries', async (importOriginal) => {
     ...mod,
     useEndpointCallers: () => ({ ...callersQ, refetch: () => Promise.resolve() }),
     useEndpointSplit: () => ({ ...splitQ, refetch: () => Promise.resolve() }),
+    // v0.10.1003 — function_code kırılımının sözlüğü; bu test QueryClient kurmuyor.
+    useOracleFunctionCodes: () => ({ data: undefined }),
   };
 });
 

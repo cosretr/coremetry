@@ -21,6 +21,14 @@ package api
 // Problem başlığında ve Trace › Logs'ta her role görünür. Etkin Oracle kaynağı
 // yoksa ya da q < 3 karakterse CH'ye HİÇ gidilmez. Pencere son 7 gün
 // (oracle_error_log TTL 30 gün); serveCached 60 sn, anahtar q + limit.
+//
+//	GET /api/oracle/function-codes            (v0.10.1003)
+//
+// TERS yön: fonksiyon kodu → operasyon adları SÖZLÜĞÜ. Trace sayfası span'de
+// gördüğü FUNCTION_CODE değerini operasyon adına çevirir ("bu trace hangi
+// operasyon"). Sözlüğün tamamı tek cevapta (kod başına en çok satırlı ≤3 ad +
+// toplam ad sayısı): FE onu 5 dk tazelikle bir kez çeker, trace başına istek
+// atmaz; sunucu da 5 dk önbellekler — eşleme dakikada değişen bir şey değil.
 
 import (
 	"context"
@@ -38,9 +46,13 @@ func init() { registerRoutesExtra("oracle-operations", (*Server).registerOracleO
 
 func (s *Server) registerOracleOperationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/oracle/operations", s.getOracleOperations)
+	mux.HandleFunc("GET /api/oracle/function-codes", s.getOracleFunctionCodes)
 }
 
 const (
+	oracleFnDictTTL    = 5 * time.Minute
+	oracleFnDictMaxOps = 3 // kod başına cevapta listelenen operasyon adı
+
 	oracleOpSearchMinQuery = 3
 	oracleOpSearchMaxQuery = 80
 	oracleOpSearchWindow   = 7 * 24 * time.Hour
@@ -149,5 +161,69 @@ func (s *Server) getOracleOperations(w http.ResponseWriter, r *http.Request) {
 		}
 		return oracleOperationsResponse{Enabled: true, SpanAttrKey: spanKey,
 			Operations: oracleOperationHits(hits, names, learned, now)}, nil
+	})
+}
+
+// oracleFunctionCodeEntry — bir fonksiyon kodunun operasyon adları.
+type oracleFunctionCodeEntry struct {
+	// Ops — en çok satırlı önce, ≤ oracleFnDictMaxOps.
+	Ops []string `json:"ops"`
+	// Total — koda bağlı tekil operasyon adı sayısı (Ops kesilmiş olabilir).
+	Total int `json:"total"`
+}
+
+type oracleFunctionCodesResponse struct {
+	Enabled bool                               `json:"enabled"`
+	Codes   map[string]oracleFunctionCodeEntry `json:"codes"`
+	// Truncated — çift tavanı doldu; sözlük eksik olabilir.
+	Truncated bool `json:"truncated,omitempty"`
+}
+
+// oracleFunctionCodeDict — SAF (tablo testli): (kod, operasyon, satır) çiftleri
+// → sözlük. Girdi en çok satırlı önce gelir (chstore); sıra korunur.
+func oracleFunctionCodeDict(pairs []chstore.OracleFnOp) map[string]oracleFunctionCodeEntry {
+	out := map[string]oracleFunctionCodeEntry{}
+	for _, p := range pairs {
+		if p.Code == "" || p.Operation == "" {
+			continue
+		}
+		e := out[p.Code]
+		e.Total++
+		if len(e.Ops) < oracleFnDictMaxOps {
+			e.Ops = append(e.Ops, p.Operation)
+		}
+		out[p.Code] = e
+	}
+	return out
+}
+
+// oracleFnDictKey — SAF: sözlük, hangi kaynakların kodu `code` alanından
+// okuduğuna bağlı (kaynak eşlemesi değişince anahtar da değişir).
+func oracleFnDictKey(codeSources []string) string {
+	set := make(map[string]bool, len(codeSources))
+	for _, id := range codeSources {
+		set[id] = true
+	}
+	return "oracle-function-codes:src=" + excludeKeyDigest(set) // sıralı + FNV (v0.5.187 kuralı)
+}
+
+func (s *Server) getOracleFunctionCodes(w http.ResponseWriter, r *http.Request) {
+	if s.oracle == nil || s.store == nil || !s.oracle.HasEnabledSources() {
+		writeJSON(w, oracleFunctionCodesResponse{Codes: map[string]oracleFunctionCodeEntry{}})
+		return
+	}
+	var codeSources []string
+	for _, src := range s.oracle.CurrentSettings().Sources {
+		if oracle.CodeIsFunctionCode(src) {
+			codeSources = append(codeSources, src.ID)
+		}
+	}
+	s.serveCached(w, r, oracleFnDictKey(codeSources), oracleFnDictTTL, func(ctx context.Context) (any, error) {
+		now := time.Now()
+		pairs, truncated, err := s.store.OracleFunctionOperations(ctx, codeSources, now.Add(-oracleOpSearchWindow), now)
+		if err != nil {
+			return nil, err
+		}
+		return oracleFunctionCodesResponse{Enabled: true, Codes: oracleFunctionCodeDict(pairs), Truncated: truncated}, nil
 	})
 }
