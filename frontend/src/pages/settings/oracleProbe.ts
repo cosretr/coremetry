@@ -3,7 +3,7 @@
 // Operatör: "full scan / kilitli sorgu atmasın, önce test edelim, sorgu
 // görünür olsun; test ederken hangi servis/operasyon/trace geldiğini
 // göreyim". Hüküm metinleri burada, kablolama OracleTab'da (pinli).
-import type { OracleLivePreview, OracleLongCheck, OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
+import type { OracleCoverageOp, OracleCoverageReason, OracleLivePreview, OracleLongCheck, OracleMappingCheck, OracleScanCheck, OracleSubjectCoverage, OracleWindowSummary } from '@/lib/types';
 
 export const ORACLE_TEST_WINDOWS = [5, 15, 60] as const;
 export type OracleTestWindow = (typeof ORACLE_TEST_WINDOWS)[number];
@@ -165,4 +165,62 @@ export function livePreviewText(p: OracleLivePreview): { headline: string; lines
     lines.push(`En çok açan özneler (7 gün): ${p.top.map(t => `${t.subject} (${n(t.opened)})`).join(', ')}.`);
   }
   return { headline, lines, warn };
+}
+
+// ── v0.10.999 — özne kapsamı (Oracle odak "2") ─────────────────────────────
+//
+// "Hata satırlarının ne kadarı bir servise bağlanıyor, bağlanmayan neden
+// bağlanmıyor?" Boşluğu kapatacak yöntem (pod adı / host adı / elle eşleme)
+// baskın NEDENE göre seçilir; bu metin o nedeni operatörün önüne koyar.
+
+export const COVERAGE_REASON_TR: Record<OracleCoverageReason, string> = {
+  no_trace_id: 'satırlarda trace kimliği yok',
+  trace_not_found: "trace Coremetry'de yok",
+  multi_service: 'çok servisli operasyon',
+  unconfirmed: 'eşleme henüz onaysız',
+  dead_service: 'öğrenilmiş servis canlı değil',
+  no_operation: 'operasyon kodu boş',
+};
+/** Nedenlerin sabit gösterim sırası (eşit satırda kararlı çıktı). */
+const COVERAGE_REASON_ORDER: OracleCoverageReason[] = ['no_trace_id', 'trace_not_found', 'multi_service', 'unconfirmed', 'dead_service', 'no_operation'];
+
+/** Çözülmeyen bir operasyonun satırı: kod · satır · neden · ipucu. */
+export function coverageOpLine(o: OracleCoverageOp): string {
+  const n = (v: number) => v.toLocaleString('tr-TR');
+  const parts = [o.operation || '(boş)', `${n(o.rows)} satır`, o.reason ? COVERAGE_REASON_TR[o.reason] : 'çözülmedi'];
+  if (o.service && (o.reason === 'multi_service' || o.reason === 'unconfirmed' || o.reason === 'dead_service')) {
+    parts.push(`aday ${o.service}${o.votes ? ` (${o.votes})` : ''}`);
+  }
+  if (o.instance) {
+    parts.push(o.podLike ? `pod ${o.instance} (canlı bir servise çözülmedi)` : `instance ${o.instance} (pod adı değil)`);
+  } else if (o.host) {
+    parts.push(`host ${o.host}`);
+  }
+  return parts.join(' · ');
+}
+
+/** Raporun metni. `warn` = satırların yarısından azı servise bağlanıyor. */
+export function coverageText(c: OracleSubjectCoverage): { headline: string; lines: string[]; ops: string[]; warn: boolean } {
+  const n = (v: number) => v.toLocaleString('tr-TR');
+  const lines: string[] = [];
+  if (c.rowsTotal === 0) {
+    return { headline: `Son ${c.hours} saatte bu kaynaktan satır yok.`, lines, ops: [], warn: false };
+  }
+  const pct = c.rowsListed > 0 ? Math.round((c.rowsResolved / c.rowsListed) * 100) : 0;
+  const headline = `Son ${c.hours} saatte ${n(c.rowsListed)} satırın %${pct} kadarı bir servise bağlanıyor (${n(c.rowsResolved)} satır: öğrenilmiş eşleme ${n(c.rowsLearned)}, pod adından ${n(c.rowsPod)}) · ${n(c.opsResolved)}/${n(c.opsListed)} operasyon.`;
+  if (c.rowsListed < c.rowsTotal) {
+    lines.push(`Yalnız en çok satırlı ${n(c.opsListed)} operasyon sınıflandı (${n(c.opsTotal)} operasyon, ${n(c.rowsTotal)} satırın ${n(c.rowsListed)} tanesi).`);
+  }
+  if (!c.aliveKnown) {
+    lines.push('Canlı servis listesi okunamadı: pod adından eşleme doğrulanamadı — oran alt sınırdır.');
+  }
+  const unresolved = c.rowsListed - c.rowsResolved;
+  if (unresolved > 0) {
+    const reasons = COVERAGE_REASON_ORDER
+      .filter(r => (c.byReason[r] ?? 0) > 0)
+      .sort((a, b) => (c.byReason[b] ?? 0) - (c.byReason[a] ?? 0))
+      .map(r => `${COVERAGE_REASON_TR[r]} ${n(c.byReason[r] ?? 0)}`);
+    lines.push(`Bağlanmayan ${n(unresolved)} satır — neden: ${reasons.join(' · ')}.`);
+  }
+  return { headline, lines, ops: c.unresolved.map(coverageOpLine), warn: pct < 50 };
 }

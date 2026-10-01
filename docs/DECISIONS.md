@@ -987,6 +987,26 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Oracle: özne kapsamı raporu — önce ölç, sonra kapat (v0.10.999)
+
+**Karar (operatör, Oracle odak "2" — "nasıl yapacaksın"):** trace'i Coremetry'de olmayan satırların
+servissiz kalması (2026-09-23 canlı testinde ~%58) iki adımda kapatılır; bu sürüm yalnız ADIM 1.
+**Adım 1 — ölç:** Ayarlar › Oracle'da kayıtlı kaynak kartında "Özne kapsamı"
+(`GET /api/settings/oracle/{id}/subject-coverage`, admin, salt okuma, 60 sn önbellek): son 24 saatte
+satırların yüzde kaçı bir servise bağlanıyor (öğrenilmiş eşleme / pod adından) ve bağlanmayanlar
+NEDEN bağlanmıyor — satırlarda trace kimliği yok · trace Coremetry'de yok · çok servisli operasyon ·
+eşleme henüz onaysız · öğrenilmiş servis canlı değil · operasyon kodu boş — artı en çok satırlı 20
+çözülmeyen operasyon (en sık instance / host ile; instance pod adı biçiminde mi). Girdi
+`oracle_error_log` (operasyon başına döküm, canlı Oracle'a gidilmez) + öğrenilmiş harita + canlı servis
+adları; sınıflama saf (`oracle.BuildCoverage`) ve çözücünün kalıcı basamaklarını aynalar. **Neden önce
+ölçüm:** özne yalnız Problem AÇILIRKEN çözülüyor ve cevap Problem notuna yazılıyordu; kaynağın bütününe
+dair sayı hiçbir yerde yoktu, yani kapatma yöntemi tahminle seçilecekti. **Adım 2 — kapat (operatör
+kararı, baskın nedene göre):** "instance pod adı değil" (host adı) baskınsa host adı → servis basamağı
+(servisin span'lerindeki `host.name`); "trace Coremetry'de yok" + pod adı var ama servis canlı değilse
+adlandırma kuralı (pod öneki ↔ servis adı) genişletilir; kalan az sayıda operasyon için elle op → servis
+eşlemesi (pin); "çok servisli" operasyon tek servise bağlanmaz, servissiz kalması doğrudur. Çözücü,
+eşikler (≥3 teyit, ≥%70) ve harita bu sürümde DEĞİŞMEDİ.
+
 ## 2026-10-01 — Oracle: canlıya geçiş önizlemesi (v0.10.998)
 
 **Karar (operatör, Oracle odak "3": kaynak kipi gölge → canlı):** kipi operatör değiştirir; ürün

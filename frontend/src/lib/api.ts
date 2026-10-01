@@ -1851,6 +1851,9 @@ export const api = {
       `/api/settings/oracle/${encodeURIComponent(id)}/learned`),
   oracleLearnedReset: (id: string) =>
     request<{ ok: boolean }>(`/api/settings/oracle/${encodeURIComponent(id)}/learned/reset`, { method: 'POST' }),
+  /** v0.10.999 — özne kapsamı (admin): satırların servise bağlanma oranı + bağlanmayanların nedeni. */
+  oracleSubjectCoverage: (id: string) =>
+    get<import('./types').OracleSubjectCoverage>(`/api/settings/oracle/${encodeURIComponent(id)}/subject-coverage`),
   /** v0.10.998 — canlıya geçiş önizlemesi (admin): gölgede açılan Problem sayıları + bildirimi alacak kanallar. */
   oracleLivePreview: (id: string) =>
     get<import('./types').OracleLivePreview>(`/api/settings/oracle/${encodeURIComponent(id)}/live-preview`),

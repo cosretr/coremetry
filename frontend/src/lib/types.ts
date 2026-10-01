@@ -1604,6 +1604,45 @@ export interface VMTestResult {
 /** oracle.SourceConfig — PUT gövdesi elemanı; id sunucu sahipli ("o-"+8 hex).
  *  Bağlantı İKİ biçimden biri: ya tek parça `dsn` ya host+port+serviceName
  *  üçlüsü — ikisi birden sunucuda reddedilir. */
+/** v0.10.999 — Oracle özne kapsamı (GET /api/settings/oracle/{id}/subject-coverage;
+ *  internal/oracle/coverage.go): satırların ne kadarı bir servise bağlanıyor,
+ *  bağlanmayan NEDEN bağlanmıyor. */
+export type OracleCoverageReason = 'dead_service' | 'multi_service' | 'unconfirmed' | 'no_operation' | 'no_trace_id' | 'trace_not_found';
+export interface OracleCoverageOp {
+  operation: string;
+  rows: number;
+  withTrace: number;
+  status: 'learned' | 'pod' | 'unresolved';
+  reason?: OracleCoverageReason;
+  service?: string;
+  /** Harita girdisinin oyları "isabet/toplam". */
+  votes?: string;
+  instance?: string;
+  /** instance bir pod adı biçiminde mi (host adı değil). */
+  podLike?: boolean;
+  host?: string;
+}
+export interface OracleSubjectCoverage {
+  sourceId: string;
+  sourceName: string;
+  hours: number;
+  rowsTotal: number;
+  /** Sınıflanan (en çok satırlı ≤200) operasyonların satırları. */
+  rowsListed: number;
+  rowsResolved: number;
+  rowsLearned: number;
+  rowsPod: number;
+  opsTotal: number;
+  opsListed: number;
+  opsResolved: number;
+  byReason: Partial<Record<OracleCoverageReason, number>>;
+  unresolved: OracleCoverageOp[];
+  /** false = canlı servis listesi okunamadı; pod basamağı doğrulanamadı. */
+  aliveKnown: boolean;
+  learnedEntries: number;
+  generatedAt: number;
+}
+
 /** v0.10.998 — Oracle kaynağı canlıya geçiş önizlemesi (GET
  *  /api/settings/oracle/{id}/live-preview; internal/api/oracle_live_preview.go).
  *  Sayılar gölgede AÇILAN Problem'lerdir: canlı kip bildirimi yalnız açılışta

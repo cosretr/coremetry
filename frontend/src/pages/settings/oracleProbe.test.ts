@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ORACLE_TEST_WINDOWS, livePreviewText, mappingVerdict, scanVerdict, summaryHeadline } from './oracleProbe';
-import type { OracleLivePreview, OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
+import { ORACLE_TEST_WINDOWS, coverageOpLine, coverageText, livePreviewText, mappingVerdict, scanVerdict, summaryHeadline } from './oracleProbe';
+import type { OracleLivePreview, OracleMappingCheck, OracleScanCheck, OracleSubjectCoverage, OracleWindowSummary } from '@/lib/types';
 
 const base: OracleScanCheck = { checked: true, tsColumn: 'ERR_TIMESTAMP', found: true, indexed: false, partitioned: false, numRows: 12000000 };
 
@@ -166,5 +166,54 @@ describe('oracleProbe — canlıya geçiş önizlemesi', () => {
     const tab = readFileSync(resolve(__dirname, 'OracleTab.tsx'), 'utf8');
     expect(tab).toContain("queryKey: ['oracle-live-preview', id], queryFn: () => api.oracleLivePreview(id), staleTime: 60_000, enabled: open");
     expect(tab).toContain('{src.id && <OracleLivePreviewLine id={src.id} />}');
+  });
+});
+
+// v0.10.999 — özne kapsamı (Oracle odak "2": satır → servis oranı ve nedenleri).
+describe('oracleProbe — özne kapsamı', () => {
+  const base: OracleSubjectCoverage = {
+    sourceId: 's1', sourceName: 'core-oracle', hours: 24,
+    rowsTotal: 1100, rowsListed: 1000, rowsResolved: 703, rowsLearned: 400, rowsPod: 303,
+    opsTotal: 12, opsListed: 9, opsResolved: 3,
+    byReason: { no_trace_id: 120, trace_not_found: 80, multi_service: 50, dead_service: 30, unconfirmed: 12, no_operation: 5 },
+    unresolved: [
+      { operation: 'OP_HOST', rows: 120, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'WMOBAPPP84', host: 'WMOBAPPP84' },
+      { operation: 'OP_MULTI', rows: 50, withTrace: 50, status: 'unresolved', reason: 'multi_service', service: 'bsa-a-prod', votes: '4/10' },
+      { operation: 'OP_PODX', rows: 9, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'legacy-batch-7b9949bb74-l4bg5', podLike: true },
+      { operation: '', rows: 5, withTrace: 0, status: 'unresolved', reason: 'no_operation', host: 'WMOBAPPP90' },
+    ],
+    aliveKnown: true, learnedEntries: 5, generatedAt: 0,
+  };
+  it('özet: oran, basamak kırılımı, kısmi sınıflama notu, nedenler büyükten küçüğe', () => {
+    const t = coverageText(base);
+    expect(t.warn).toBe(false);
+    expect(t.headline).toBe('Son 24 saatte 1.000 satırın %70 kadarı bir servise bağlanıyor (703 satır: öğrenilmiş eşleme 400, pod adından 303) · 3/9 operasyon.');
+    expect(t.lines).toEqual([
+      'Yalnız en çok satırlı 9 operasyon sınıflandı (12 operasyon, 1.100 satırın 1.000 tanesi).',
+      "Bağlanmayan 297 satır — neden: satırlarda trace kimliği yok 120 · trace Coremetry'de yok 80 · çok servisli operasyon 50 · öğrenilmiş servis canlı değil 30 · eşleme henüz onaysız 12 · operasyon kodu boş 5.",
+    ]);
+    expect(t.ops).toEqual([
+      'OP_HOST · 120 satır · satırlarda trace kimliği yok · instance WMOBAPPP84 (pod adı değil)',
+      'OP_MULTI · 50 satır · çok servisli operasyon · aday bsa-a-prod (4/10)',
+      'OP_PODX · 9 satır · satırlarda trace kimliği yok · pod legacy-batch-7b9949bb74-l4bg5 (canlı bir servise çözülmedi)',
+      '(boş) · 5 satır · operasyon kodu boş · host WMOBAPPP90',
+    ]);
+  });
+  it('yarıdan azı bağlanıyorsa uyarı; canlı liste okunamadıysa alt sınır notu; satır yoksa tek cümle', () => {
+    const low = coverageText({ ...base, rowsResolved: 420, aliveKnown: false });
+    expect(low.warn).toBe(true);
+    expect(low.headline).toContain('%42 kadarı');
+    expect(low.lines.some(l => l.includes('oran alt sınırdır'))).toBe(true);
+    const none = coverageText({ ...base, rowsTotal: 0, rowsListed: 0, rowsResolved: 0, unresolved: [], byReason: {} });
+    expect(none).toEqual({ headline: 'Son 24 saatte bu kaynaktan satır yok.', lines: [], ops: [], warn: false });
+    const all = coverageText({ ...base, rowsTotal: 1000, rowsResolved: 1000, unresolved: [], byReason: {} });
+    expect(all.lines).toEqual([]);
+    expect(all.headline).toContain('%100 kadarı');
+  });
+  it('satır metni nedeni olmayan op\'ta da kırılmaz; sekme isteği yalnız açılınca atar', () => {
+    expect(coverageOpLine({ operation: 'X', rows: 1, withTrace: 1, status: 'unresolved' })).toBe('X · 1 satır · çözülmedi');
+    const tab = readFileSync(resolve(__dirname, 'OracleTab.tsx'), 'utf8');
+    expect(tab).toContain("queryKey: ['oracle-subject-coverage', id], queryFn: () => api.oracleSubjectCoverage(id), staleTime: 60_000, enabled: open");
+    expect(tab).toContain('{src.id && <OracleCoverageLine id={src.id} />}');
   });
 });
