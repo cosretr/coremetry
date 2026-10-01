@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"log"
 	"sort"
 	"time"
 )
@@ -73,27 +74,49 @@ func (s *Store) fetchDeploysByService(ctx context.Context, services map[string]s
 	}
 	s.deploysMu.Unlock()
 
-	svcList := make([]any, 0, len(services))
-	for svc := range services {
-		svcList = append(svcList, svc)
-	}
-	holders := ""
-	for i := range svcList {
-		if i > 0 {
-			holders += ","
+	// v0.10.1018 — MV-ÖNCE. Bu okuma ham spans üstündeydi ve penceresi açık
+	// problemlerin EN ESKİSİNE kadar uzanır (deployWindowFloor: 32 gün).
+	// Problems sekmesi varsayılanı her türü çekmeye başlayınca (v0.10.1014)
+	// soğuk yolun her hesabına girdi: onlarca servis × haftalar, satır başına
+	// 14 dizi yoklaması (10 sn tavanlı; tavana takılırsa zenginleştirme boş
+	// döner ve sonuç önbelleğe girmediği için her hesap bedeli yeniden öder).
+	// service_version_5m (v0.9.249) aynı cevabı (servis, sürüm, 5 dk) satırlarından
+	// verir; MV pencereyi kapsamıyorsa (deployMVCovers) ham yol aynen durur.
+	var byService map[string][]spanDeploy
+	if s.deployMVCovers(ctx, from) {
+		got, err := s.queryDeploysByService(ctx, deploysByServiceMVSQL(len(services))+s.shardSkipSetting(),
+			services, alignBucketStart(from), to)
+		if err == nil {
+			byService = got
+		} else {
+			log.Printf("[deploys] service_version_5m toplu okuma düştü, ham yol: %v", err)
 		}
-		holders += "?"
 	}
+	if byService == nil {
+		got, err := s.queryDeploysByService(ctx, deploysByServiceRawSQL(len(services)), services, from, to)
+		if err != nil {
+			return nil, err
+		}
+		byService = got
+	}
+
+	s.storeDeploysCacheEntry(key, deploysCacheEntry{at: now, byService: byService}, now)
+	return byService, nil
+}
+
+// deploysByServiceRawSQL — SAF: ham spans yolu (MV pencereyi kapsamıyorsa).
+// Arg sırası: servisler…, from, to.
+func deploysByServiceRawSQL(n int) string {
 	// v0.9.66 (operator-reported) — bu okuma effectiveVersionExpr
 	// zincirini BYPASS edip yalnız service.version okuyordu; filoda
 	// service.version sabit olduğundan "fresh deploy" sinyali (P1
 	// triage) hiç ateşlemiyordu. Artık merkez zincir (image-tag önde).
-	sql := `
+	return `
 		SELECT service_name,
 		       ` + effectiveVersionExpr + ` AS version,
 		       toUnixTimestamp64Nano(min(time))                 AS first_seen_ns
 		FROM spans
-		WHERE service_name IN (` + holders + `)
+		WHERE service_name IN (` + chPlaceholders(n) + `)
 		  AND time >= ? AND time <= ?
 		  AND (has(res_keys, 'service.version')
 		    OR has(res_keys, 'container.image.tag')
@@ -105,8 +128,35 @@ func (s *Store) fetchDeploysByService(ctx context.Context, services map[string]s
 		GROUP BY service_name, version
 		HAVING version != ''
 		ORDER BY service_name, first_seen_ns ASC
+		LIMIT 50000
 		SETTINGS max_execution_time = 10`
-	args := append([]any{}, svcList...)
+}
+
+// deploysByServiceMVSQL — SAF: aynı sözleşme service_version_5m üstünde
+// (v0.10.1018). Arg sırası: servisler…, from (5 dk kovasına hizalı), to.
+// Çağıran sonuna shardSkipSetting ekler. MV'nin WHERE'i ham yolun res_keys
+// süzgeciyle, version ifadesi effectiveVersionExpr ile AYNI (store.go DDL).
+func deploysByServiceMVSQL(n int) string {
+	return `
+		SELECT service_name,
+		       version,
+		       toUnixTimestamp64Nano(minMerge(first_seen_state)) AS first_seen_ns
+		FROM service_version_5m
+		WHERE service_name IN (` + chPlaceholders(n) + `)
+		  AND time_bucket >= ? AND time_bucket <= ?
+		GROUP BY service_name, version
+		HAVING version != ''
+		ORDER BY service_name, first_seen_ns ASC
+		LIMIT 50000
+		SETTINGS max_execution_time = 10, `
+}
+
+// queryDeploysByService — iki yolun ortak yürütücüsü.
+func (s *Store) queryDeploysByService(ctx context.Context, sql string, services map[string]struct{}, from, to time.Time) (map[string][]spanDeploy, error) {
+	args := make([]any, 0, len(services)+2)
+	for svc := range services {
+		args = append(args, svc)
+	}
 	args = append(args, from, to)
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
 	if err != nil {
@@ -125,8 +175,6 @@ func (s *Store) fetchDeploysByService(ctx context.Context, services map[string]s
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
-	s.storeDeploysCacheEntry(key, deploysCacheEntry{at: now, byService: byService}, now)
 	return byService, nil
 }
 
@@ -240,62 +288,11 @@ func (s *Store) EnrichAnomaliesWithDeploys(ctx context.Context, events []Anomaly
 	if !ok {
 		return events
 	}
-	svcList := make([]any, 0, len(services))
-	for s := range services {
-		svcList = append(svcList, s)
-	}
-
-	holders := ""
-	for i := range svcList {
-		if i > 0 {
-			holders += ","
-		}
-		holders += "?"
-	}
-	// v0.5.286 — uses effectiveVersionExpr (the same Helm /
-	// image-tag / placeholder-filtered chain GetRecentDeploys
-	// uses) so the correlation finds deploys even when
-	// service.version stays at "0.0.1-SNAPSHOT" or the
-	// pipeline only ships labels via Helm.
-	sql := `
-		SELECT service_name,
-		       ` + effectiveVersionExpr + ` AS version,
-		       toUnixTimestamp64Nano(min(time))                 AS first_seen_ns
-		FROM spans
-		WHERE service_name IN (` + holders + `)
-		  AND time >= ? AND time <= ?
-		  AND (has(res_keys, 'service.version')
-		    OR has(res_keys, 'container.image.tag')
-		    OR has(res_keys, 'k8s.container.image.tag')
-		    OR has(res_keys, 'k8s.deployment.labels.app_kubernetes_io_version')
-		    OR has(res_keys, 'k8s.pod.labels.app_kubernetes_io_version')
-		    OR has(res_keys, 'k8s.deployment.labels.version')
-		    OR has(res_keys, 'helm.chart.version'))
-		GROUP BY service_name, version
-		HAVING version != ''
-		ORDER BY service_name, first_seen_ns ASC
-		SETTINGS max_execution_time = 10`
-	args := append([]any{}, svcList...)
-	args = append(args, from, to)
-	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
+	// v0.10.1018 — ikiz artık ORTAK okuyucuyu kullanıyor (fetchDeploysByService:
+	// MV-önce + 15 sn önbellek). Eskiden aynı ham spans sorgusunun ikinci bir
+	// kopyasını taşıyordu ve o kopya MV yoluna da önbelleğe de girmiyordu.
+	byService, err := s.fetchDeploysByService(ctx, services, from, to)
 	if err != nil {
-		return events
-	}
-	defer rows.Close()
-	type d struct {
-		version string
-		ns      int64
-	}
-	byService := map[string][]d{}
-	for rows.Next() {
-		var svc, ver string
-		var ns int64
-		if err := rows.Scan(&svc, &ver, &ns); err != nil {
-			return events
-		}
-		byService[svc] = append(byService[svc], d{ver, ns})
-	}
-	if err := rows.Err(); err != nil {
 		return events
 	}
 	lookbackNs := int64(lookback)
@@ -304,7 +301,7 @@ func (s *Store) EnrichAnomaliesWithDeploys(ctx context.Context, events []Anomaly
 		if len(list) == 0 {
 			continue
 		}
-		var pick *d
+		var pick *spanDeploy
 		for j := len(list) - 1; j >= 0; j-- {
 			if list[j].ns > events[i].StartedAt {
 				continue

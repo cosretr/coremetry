@@ -425,6 +425,38 @@ func (s *Store) clusterExpr() string {
 // simply misses without thrashing them. The cached map is
 // returned SHARED: callers must treat it as read-only (all
 // current callers only index into it).
+// serviceClusterMapMVSQL — v0.10.1018: servis→cluster çiftleri ön-toplamdan.
+// Arg: from (5 dk kovasına hizalı). cluster MV'de clusterDeriveExpr ile doğar
+// (ham yolun clusterExpr'iyle aynı değer; emsal: service_cluster_mv.go).
+const serviceClusterMapMVSQL = `
+		SELECT service_name, cluster
+		FROM service_env_summary_5m
+		WHERE time_bucket >= ? AND service_name != ''
+		GROUP BY service_name, cluster
+		HAVING cluster != ''
+		ORDER BY service_name, cluster
+		LIMIT 50000
+		SETTINGS max_execution_time = 8`
+
+// queryServiceClusterMap — iki yolun (MV / ham) ortak yürütücüsü. Hata
+// durumunda o ana dek okunan kısmi haritayı da döndürür (eski sözleşme).
+func (s *Store) queryServiceClusterMap(ctx context.Context, sql string, from time.Time) (map[string][]string, error) {
+	rows, err := s.telemetryReadConn().Query(ctx, sql, from)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var svc, cl string
+		if err := rows.Scan(&svc, &cl); err != nil {
+			continue
+		}
+		out[svc] = append(out[svc], cl)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) GetServiceClusterMap(ctx context.Context, since time.Duration) (map[string][]string, error) {
 	if since == 0 {
 		since = 1 * time.Hour
@@ -438,7 +470,23 @@ func (s *Store) GetServiceClusterMap(ctx context.Context, since time.Duration) (
 	}
 	s.clusterMapMu.RUnlock()
 	from := time.Now().Add(-since)
-	rows, err := s.telemetryReadConn().Query(ctx, `
+	// v0.10.1018 — MV-ÖNCE (mimari değişmez 3). Bu harita ham spans üstünde
+	// tüm filonun son `since` penceresini GROUP BY'lıyordu (1B+ span/gün
+	// kurulumda saatte on milyonlarca satır) ve Problems / Incidents /
+	// Anomalies okumalarının soğuk yolunda duruyor. service_env_summary_5m
+	// (v0.10.881) aynı (servis, cluster) çiftlerini 5 dk satırlarından verir;
+	// MV pencereyi kapsamıyorsa ya da okuma düşerse ham yol aynen çalışır.
+	var out map[string][]string
+	if s.EnvSummaryCovers(ctx, from) {
+		got, err := s.queryServiceClusterMap(ctx, serviceClusterMapMVSQL, alignBucketStart(from))
+		if err == nil {
+			out = got
+		} else {
+			log.Printf("[chstore] service_env_summary_5m servis→cluster haritası düştü, ham yol: %v", err)
+		}
+	}
+	if out == nil {
+		got, err := s.queryServiceClusterMap(ctx, `
 		SELECT service_name, `+s.clusterExpr()+` AS cluster
 		FROM spans
 		WHERE time >= ? AND service_name != ''
@@ -447,20 +495,10 @@ func (s *Store) GetServiceClusterMap(ctx context.Context, since time.Duration) (
 		ORDER BY service_name, cluster
 		LIMIT 50000
 		SETTINGS max_execution_time = 8`+s.heavyScanSpill(), from)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string][]string{}
-	for rows.Next() {
-		var svc, cl string
-		if err := rows.Scan(&svc, &cl); err != nil {
-			continue
+		if err != nil {
+			return got, err
 		}
-		out[svc] = append(out[svc], cl)
-	}
-	if err := rows.Err(); err != nil {
-		return out, err
+		out = got
 	}
 	// Replace, never mutate — a reader holding the old snapshot
 	// stays consistent (same discipline as the alertRules cache).

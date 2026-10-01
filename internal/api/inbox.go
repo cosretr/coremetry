@@ -940,7 +940,7 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			// v0.10.1017 — dış kaynak şeridinin sayısı (aynı tek COUNT'un
 			// üçüncü kovası; db ile aynı gerekçeyle TAM).
 			"externalSubjectCount": subjectCounts[inboxSubjectExternal],
-			"subject":        subject,
+			"subject":              subject,
 		}, nil
 	})
 }

@@ -987,6 +987,27 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Problems soğuk yolu: iki ham `spans` toplaması ön-toplama taşındı (v0.10.1018)
+
+**Operatör:** "Problems sayfası biraz yavaş, acaba indeks yok mu tablolarda." **Bulgu (koddan; prod'da
+ÖLÇÜLEMEDİ):** state tabloları (problems, exception_groups, anomaly_events, incidents) küçük ve anahtarlı —
+eksik indeks yok. Yavaşlık adayı sayfanın soğuk yolundaki iki ham `spans` toplaması: (1) problem
+satırlarına deploy eşleyen `fetchDeploysByService` — pencere açık problemlerin EN ESKİSİNE dek uzanır
+(≤32 gün), ilgili tüm servisler, satır başına 14 dizi yoklaması, 10 sn tavan; tavana takılırsa sonuç
+önbelleğe girmez ve her hesap bedeli yeniden öder; (2) `GetServiceClusterMap` — tüm filonun son 1 saati.
+İkisi de v0.10.1014'e dek varsayılan görünümde koşmuyordu (varsayılan yalnız exception'dı, problem dalı
+tek COUNT'tu); "hepsi gelsin" varsayılanı onları her soğuk hesaba soktu. **Karar:** ikisi de MV-önce
+(mimari değişmez 3): deploy eşlemesi `service_version_5m` (v0.9.249, `deployMVCovers`), cluster haritası
+`service_env_summary_5m` (v0.10.881, `EnvSummaryCovers`); MV pencereyi kapsamıyorsa ya da okuma düşerse
+ham yol AYNEN çalışır. Anomali ikizi (`EnrichAnomaliesWithDeploys`) kendi ham kopyasını bırakıp ortak
+okuyucuya geçti (MV + 15 sn önbellek). Yerel ClickHouse'ta iki yolun aynı sonucu verdiği doğrulandı.
+**Küçük fark:** MV yolu pencere başını 5 dk kovasına hizalar; en eski problemde pencere başında zaten
+koşan sürümün "az önce deploy" gibi görünmesi (hayalet) azalır. Deploy bilgisi yalnız gösterimdir,
+önceliğe karışmaz. **Faydalanan diğer yüzeyler:** /problems listesi, incidents, anomalies, MCP
+list_problems (aynı zenginleştiriciler). **Açık:** inbox soğuk yolu hâlâ ~10 ardışık CH gidiş-dönüşü;
+kaynakları paralel çekmek ayrı dilim — önce bu değişikliğin prod etkisi ölçülmeli (/api/inbox süresi +
+X-Cache). Not: v0.10.1017'nin CI'ı tek satırlık gofmt hizasından kırmızıydı; düzeltmesi bu sürümde.
+
 ## 2026-10-01 — Problems sekmesi: üçüncü özne şeridi "Dış kaynaklar" (v0.10.1017)
 
 **Operatör:** "Oracle'dan gelenler de Problems'te gözükmüyor." **Kök neden:** dış metrik kaynağı
