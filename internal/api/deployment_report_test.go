@@ -78,39 +78,57 @@ func TestIntersectServices_KeepsOnlyMatchingPreservesOrder(t *testing.T) {
 	}
 }
 
+// TestRedComparisonWindow_SymmetricDuration — v0.10.1028: sözleşme "eşit
+// süre"den "eşit KOVA SAYISI + gerçek kapsama paydası"na döndü
+// (redComparisonPlan). Eski hâli `beforeTo == since` ve eşit süreyi
+// sınıyordu ve yalnız fikstürü 5 dk hizalı olduğu için geçiyordu; gerçek
+// deploy anı hizasızdır ve o kurulumda floor5(since) kovası iki tarafa da
+// sayılıyordu.
 func TestRedComparisonWindow_SymmetricDuration(t *testing.T) {
-	// Deploy was 10 minutes ago.
-	nowNs := int64(20 * time.Minute)
-	sinceNs := int64(10 * time.Minute)
-	beforeFrom, beforeTo, afterFrom, afterTo := redComparisonWindow(sinceNs, nowNs)
+	// Deploy 10 dk önce, HİZASIZ bir anda (10:03:17).
+	since := time.Date(2026, 10, 2, 10, 3, 17, 0, time.UTC)
+	now := since.Add(10 * time.Minute)
+	p := redComparisonPlan(since.UnixNano(), now.UnixNano(), now.UnixNano())
 
-	afterDur := afterTo.Sub(afterFrom)
-	beforeDur := beforeTo.Sub(beforeFrom)
-	if afterDur != beforeDur {
-		t.Fatalf("expected symmetric windows, before=%s after=%s", beforeDur, afterDur)
+	// After okuması değişmedi: [since, now].
+	if !p.AfterFrom.Equal(since) || !p.AfterTo.Equal(now) {
+		t.Fatalf("after [%v, %v], beklenen [since, now]", p.AfterFrom, p.AfterTo)
 	}
-	wantAfterDur := 10 * time.Minute
-	if afterDur != wantAfterDur {
-		t.Fatalf("expected after-window duration %s, got %s", wantAfterDur, afterDur)
+	// Before, after'ın ilk kovasında (floor5(since) = 10:00) biter — since'te değil.
+	floor := time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC)
+	if !p.BeforeTo.Equal(floor) {
+		t.Fatalf("before sonu %v, beklenen floor5(since) = %v", p.BeforeTo, floor)
 	}
-	if !afterTo.Equal(time.Unix(0, nowNs)) {
-		t.Fatalf("expected afterTo == now, got %s", afterTo)
+	// Simetri = KOVA SAYISI: after 10:00, 10:05, 10:10 → before 09:45, 09:50, 09:55.
+	if a, b := len(mv5Read(p.AfterFrom, p.AfterTo)), len(mv5Read(p.BeforeFrom, p.BeforeTo)); a != 3 || b != 3 {
+		t.Fatalf("kova sayısı after %d / before %d, beklenen 3 / 3", a, b)
 	}
-	if !beforeTo.Equal(time.Unix(0, sinceNs)) {
-		t.Fatalf("expected beforeTo == since (the deploy boundary), got %s", beforeTo)
+	// Paydalar ortak plandan: before 3 tam kova, after 10:00 → now (797 sn).
+	if p.BeforeSec != 900 || p.AfterSec != 797 {
+		t.Fatalf("paydalar before %v / after %v, beklenen 900 / 797", p.BeforeSec, p.AfterSec)
 	}
 }
 
 func TestRedComparisonWindow_DeployJustHappened(t *testing.T) {
-	// since == now: after-window has zero duration, before-window mirrors it (also zero).
-	nowNs := int64(5000)
-	sinceNs := int64(5000)
-	beforeFrom, beforeTo, afterFrom, afterTo := redComparisonWindow(sinceNs, nowNs)
-	if !afterFrom.Equal(afterTo) {
-		t.Fatalf("expected zero-width after window when since==now, got %s..%s", afterFrom, afterTo)
+	// v0.10.1028 — since == now. After penceresi süre olarak sıfır ama okuyucu
+	// deploy kovasını (10:00) okur: before onun önündeki TEK kova, after
+	// paydası o kovanın dolu kısmı (197 sn).
+	since := time.Date(2026, 10, 2, 10, 3, 17, 0, time.UTC)
+	p := redComparisonPlan(since.UnixNano(), since.UnixNano(), since.UnixNano())
+	if !p.AfterFrom.Equal(p.AfterTo) {
+		t.Fatalf("since==now'da after penceresi sıfır genişlikte olmalı, %v..%v", p.AfterFrom, p.AfterTo)
 	}
-	if !beforeFrom.Equal(beforeTo) {
-		t.Fatalf("expected zero-width before window when since==now, got %s..%s", beforeFrom, beforeTo)
+	if p.BeforeTo.Sub(p.BeforeFrom) != 5*time.Minute || p.BeforeSec != 300 || p.AfterSec != 197 {
+		t.Fatalf("before [%v, %v) %v sn / after %v sn, beklenen tek kova 300 / 197",
+			p.BeforeFrom, p.BeforeTo, p.BeforeSec, p.AfterSec)
+	}
+	// Hizalı deploy anında since == now: after hiç kova okumaz → before boş,
+	// before paydası 0 (throughput 0), after paydası tabanda 1 sn.
+	aligned := time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC)
+	q := redComparisonPlan(aligned.UnixNano(), aligned.UnixNano(), aligned.UnixNano())
+	if !q.BeforeFrom.Equal(q.BeforeTo) || q.BeforeSec != 0 || q.AfterSec != 1 {
+		t.Fatalf("hizalı since==now: before [%v, %v) %v sn / after %v sn, beklenen boş / 0 / 1",
+			q.BeforeFrom, q.BeforeTo, q.BeforeSec, q.AfterSec)
 	}
 }
 

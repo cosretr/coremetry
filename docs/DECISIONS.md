@@ -987,6 +987,89 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Karşılaştırma okumalarında ortak kova hatası: kalan yüzeyler (v0.10.1028)
+
+**Köken:** v0.10.1025 /databases ve /messaging listelerinde "önceki pencere"nin `[from − (to − from),
+from)` diye kurulduğunu, current okumanın ise alt sınırı 5 dk MV kovasına indirdiğini (`time_bucket >=
+floor5(from)`) buldu: hizasız `from`'da (10:03) 10:00 kovası İKİ pencerede sayılıyor, her delta sıfıra
+doğru sulanıyordu. Düzeltme tek saf kuraldı (`chstore.PriorWindow`). O incelemenin listelediği ama
+bakılmamış aynı biçimli yüzeyler bu sürümde tek tek, okuyucunun SQL sınırlarından okunarak sınandı:
+
+| Yüzey | Current okuma sınırı | Hüküm | Değişiklik |
+|---|---|---|---|
+| `/databases/statements/detail?compare=prior` (`dbstmt_detail.go`) | `db_statement_summary_5m`, `>= From.Truncate(5m)`, `< to` | ETKİLİ (hizasız from) | `chstore.PriorWindow` |
+| `/endpoints?compare=prior` MV yolu (`api.go`) | `spanmetrics_10s` (< 2 sa ve ≤ 24 sa yaşında) / `spanmetrics_1m`; alt sınır İKİ katmanda `floor1m(from)`, `< to` | ETKİLİ (hizasız from; 10 sn katmanında 6 kovaya kadar) | `chstore.EndpointsPriorWindow` |
+| `/endpoints` ham yol (cluster / env) | `spans`, `time >= from AND time <= to` | ETKİLENMEZ (yalnız `from` ANI) | birebir kayma korunur, dal `forcesRaw` ile seçilir |
+| `/endpoints/metric` (`endpoints_metric.go`) | `metric_points` ham satır sınırı (delta) / emit kovası `>= from`, seed atılır (kümülatif) / VM `query_range` start örneği atılır | ETKİLENMEZ (ortak kova yok; kümülatifte < 1 adımlık sayılmayan aralık) | yok |
+| `/services?compare=prior` (`api.go`) | MV: `service_summary_5m` / `service_env_summary_5m`, `>= alignBucketStart(from)`, `< to`; ham: `spans` kapalı sınırlar | YOLA BAĞLI: MV yolu ETKİLİ, ham yol (pencere < 5 dk ya da env MV'nin kapsamadığı cluster/env) değil | `servicesPriorWindow` (MV → PriorWindow, ham → birebir kayma; aynı `useMV`) |
+| `/topology/service` + `/servicegraph` (global + odak) | `topology_edges_5m FINAL`, `>= toStartOfFiveMinute(from)`, `< toStartOfFiveMinute(to) + 5 dk` (to'nun kovası dahil) | ETKİLİ, HER pencerede — hizalı from dahil (okuyucu üst ucu dışa yuvarlıyor) | `chstore.TopologyPriorWindow` |
+| AI analiz baseline'ı (`copilot_aianalyze.go`) | `ServiceWindowRED`: `service_summary_5m`, `>= alignBucketStart(from)`, `< to` | ETKİLİ | `chstore.PriorWindow` |
+| Deploy raporu önce/sonra (`deployment_report.go`) ve Rollouts çekmecesi V1 + V2 (`rollout_detail.go`, `RolloutDrawer` önce → sonra throughput; 6 sa kelepçe) | aynı `service_summary_5m` okuyucusu; deploy/rollout anı neredeyse hiç kova sınırında değil | ETKİLİ | ortak `redComparisonPlan`: before = `PriorWindow(since, end)` + iki tarafın throughput paydası |
+| Log kalıpları tabanı, `GetCorrelatedChanges(MV)` (vardiya sayfası), `ServiceBubbleUp`, MCP `compare_periods` "previous", guided `window_compare` | ham log araması / tek taramada hizalı `is_cur` / ham spans tek an / `periodGrid` / kullanıcının iki mutlak penceresi | ETKİLENMEZ | yok |
+
+**Kararlar:** (a) Kuralın tek uygulaması `PriorWindowGrid(from, to, bucket)` (`pTo = floorB(from)`, `pFrom =
+pTo − N × B`, `to` saniyeye iner); `PriorWindow` onun 5 dk hâli (testle ≡). `bucket ≤ 0` = ızgarasız ham
+okuma: birebir süre kaydırması. (b) `/endpoints` MV okuyucusu alt sınırı katmandan bağımsız DAKİKAYA
+indiriyor, kova greni ise 10 sn ya da 1 dk: 5 dk kuralı orada yanlış olurdu, düz 1 dk kuralı da varsayılan
+yolda (1 sa = 10 sn katmanı) prior'u 50 sn'ye kadar uzun okurdu. `EndpointsPriorWindow`: `pFrom =
+floor1m(from) − n1 × 1 dk` (dakika hizalı — okuyucu prior'un From'unu da indiriyor), `pTo = pFrom + n10 ×
+10 sn`; iki katmanda da ortak kova yok ve kova sayısı eşit (1 dk katmanında ceil(n10/6) = n1). Bedeli 10 sn
+katmanında prior ile current arasında en çok 50 sn'lik okunmayan aralık — bitişiklik değil eşit kova sayısı
+seçildi. Ham yol aynı `forcesRaw` yüklemiyle seçilir. (c) Topoloji okuyucusu `to`'nun kovasını da okuyor;
+`TopologyPriorWindow` current'ın kova kümesini (`floor5(from) … floor5(to)`) PriorWindow'a verir ve
+okuyucunun ARGÜMANINI döndürür (pTo = prior'un son kovasının etiketi); prior grafın dakika paydası current'ınki
+(aynı kova sayısı — argüman bir zaman aralığı değil). (d) **Önce/sonra throughput paydası** (deploy raporu ve
+Rollouts çekmecesi, TEK saf plan `redComparisonPlan(since, end, now)`; eski `redComparisonWindow` kalktı):
+throughput = sayı ÷ o tarafın GERÇEKTEN kapsadığı süre. Before N tam kova okur → N × 300 sn. After
+floor5(since)'ten (deploy kovasının deploy öncesi dakikaları dahil) okunan son kovanın sonuna ya da now'a —
+hangisi önceyse — kadar veri taşır → `min(now, floor5(since) + N × 5 dk) − floor5(since)`, en az 1 sn
+(çekmecenin 6 sa kelepçesinde son kova tamdır; canlı pencerede now'da biter; sürücünün saniye kesmesi
+yalnız hangi kova etiketlerinin okunacağını belirler, N'ye öyle girer). Düz yükte iki taraf her an aynı
+hızı verir. Eski paydalar (iki tarafta `end − since`; çekmecede before için pencere boyu) bu pencerelerle
+sahte sıçrama/düşüş basardı — düz 100 rps, rollout 10:03:17, 2 dk sonra: eski pencere+payda "250 → 264",
+yeni pencere + eski çekmece paydası "100 → 264" (+%164), yeni pencere + eşit payda (bu sürümün ilk
+taslağı, rapor) "500 → 264" (−%47); plan "100 → 100". Bu satır Rollouts çekmecesinde görünür.
+(e) Her yüzeyin yumuşak-hata davranışı aynen (prior düşerse delta yok, 500 yok); hiçbir yüzeyde current okuma, alan adı ya da URL paramı değişmedi. `api.go`
+3 satır kısaldı (taban 11609 → 11606). `PriorWindowGrid` girdi kısıtı: kova 86400 sn'yi TAM bölmeli (Go
+Truncate ızgarası 1. yıla, ClickHouse'unki epoch'a göre; arada 719162 tam gün) — bölmeyen kova (7 sn)
+birebir süre kaydırmasına düşer; pencere boyu Duration taşma aralığının çok altında varsayılır.
+**Doğrulama:** tablo + 5000 pencerelik özellik testleri (okuyucu modeli, kaynak pinleri; dbstmt'te gerçek
+builder'ın bağ argümanlarıyla), önce/sonra planı için düz-yük testi (iki çağıranın kelepçesiyle; 30 sn /
+2 dk / 10 dk / 1 sa / 7 sa sonra, hizalı an, saniye-altı now: iki taraf 1e-9 içinde eşit), mutasyon kontrolü; yerel ClickHouse
+(okuyucunun birebir yüklemi): topoloji 10:03–11:03 ve HİZALI 10:00–11:00 — eski prior 1 ortak kova
+(10:00), yeni 0, 13 = 13 kova; /endpoints 10:03:35–11:03:35 — 10 sn katmanı eski 4 ortak / yeni 0, 364 =
+364 kova; 1 dk katmanı eski 1 / yeni 0, 61 = 61.
+
+**Görünür etki:** hizasız pencerelerde (hazır aralıklarda `to = now`, yani pratikte hep) deltalar biraz
+BÜYÜR — artık sulanmıyor. Örnek: /services 15 dk, trafik 10:00'da ikiye katlandı → eski "+%60", yeni
+"+%100"; topoloji 1 sa → eski "+%86", yeni "+%100". /endpoints'te ortak kısım en çok 1 dk: 1 sa'te
+≈ %1,6, 15 dk'da ≈ %6'ya kadar sulanma kalkar. Deploy raporu ve Rollouts çekmecesinde rollout'tan hemen
+sonraki "sonra" throughput'u artık deploy kovasının fazla dakikalarıyla şişmez; düz yükte önce = sonra.
+
+**Bilinçli YAPILMAYANLAR (ayrı karar ister, açık kalemler):** v0.10.1025'in canlı kenar ölçeği
+(`PriorCoverage`) ve okunabilirlik kapıları (`PriorReadable` + kaynak kapsama probu) bu yüzeylere
+EKLENMEDİ — görünür davranış değişikliği. Durum: (1) **canlı kenar sayaç yanlılığı** (prior N tam kova,
+current'ın son kovası doluyor; yalnız sayaçlar): dbstmt detayı PriorCalls/PriorErrors (düz yükte 15 dk
+−%12,5, 1 sa −%3,8); /services PriorSpanCount (aynı); topoloji PriorCalls/PriorErrors (`to`'nun kovası
+canlı agregatörün dakikada bir yeniden yazdığı kova: 15 dk ≈ −%15, 1 sa ≈ −%5); AI baseline Spans/Errors/
+rate (30 dk ≈ −%7); /endpoints küçük (10 sn katmanı 1 sa ≈ −%0,1, 15 dk ≈ −%0,5; 1 dk katmanı 2 sa ≈
+−%0,4). /servicegraph yalnız p99 birleştirir — sayaç yanlılığı yok. Deploy raporu / Rollouts throughput'u
+bu listede DEĞİL: paydası (d) kapsamayı zaten ölçüyor. (2) **Saklama /
+kapsama kapısı yok:** topoloji + servicegraph (`topology_edges_5m` TTL 14 gün → 7 günden uzun pencerede
+prior kısmen silinmiş, sahte kötüleşme); /endpoints MV (`spanmetrics_1m` 30 gün → ~15 günden uzun pencere)
+ve ham yol (span saklaması: env + 7d prior'u silinmiş aralığa koyar); dbstmt ve /services (90 gün; MV'nin
+ilk kovası probu da yok — taze kurulumda bir pencere boyu sahte kötüleşme); deploy raporu (before
+`2 × yaş` geriden başlar: ~45 günden eski deploy'da 90 gün ufkunu aşar; çekmecenin 6 sa kelepçesi before'u
+`since − 6 sa`'te tutar). (3) **Ayrı bulgular:** /services
+env/cluster süzgeci env MV'den okunurken prior `GetServicesAggFiltered2` ile KAPSAMSIZ okunuyor (tüm
+ortamlar — v0.10.882'den beri; düzeltme prior başı için `EnvSummaryCovers` ister); topoloji okuyucusunun
+üst sınırı `to`'nun kovasını hizalı `to`'da da okuyor (v0.9.823 sınıfı, current'ı değiştirdiği için
+dokunulmadı); /endpoints'te katman karışıklığının TEK kaynağı 24 sa YAŞ kapısı: current başı 24 saatten
+genç (10 sn), prior başı yaşlı (1 dk) ise prior 0–50 sn fazla okur — ≥ 1 sa pencerede ≤ %1,4, yalnız birkaç
+on saniyelik pencerede belirgin; 2 sa BOY sınırında fark 0 (n10 × 10 = n1 × 60; testle pinli,
+`TestEndpointsPriorWindowMixedTier`); FE `MetricsExplorer` / `LogsExplorer` karşılaştırma bindirmesi
+`[from − (to − from), from]`'u istemcide kuruyor (seri bindirmesi, delta sayacı değil — incelenmedi).
+
 ## 2026-10-01 — Databases dilim 4: listede satır başına açık problem işareti (v0.10.1027)
 
 **Operatör yönü:** Databases iyileştirmelerinde "Dynatrace'in Databases bölümünü baz al" (v0.10.1019

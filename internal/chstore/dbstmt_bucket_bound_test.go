@@ -131,10 +131,12 @@ func TestDBStmtReadsExcludeUpperBucket(t *testing.T) {
 func TestDBStmtPriorWindowDisjoint(t *testing.T) {
 	from := time.Date(2026, 8, 19, 10, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 8, 19, 11, 0, 0, 0, time.UTC)
-	// API'nin kurduğu önceki pencere (dbstmt_detail.go: pq.From =
-	// from-dur, pq.To = from) — aynı genişlik, tam bir pencere geriye.
-	dur := to.Sub(from)
-	priorFrom, priorTo := from.Add(-dur), from
+	// API'nin kurduğu önceki pencere. v0.10.1028 — dbstmt_detail.go artık
+	// `pq.From, pq.To = chstore.PriorWindow(from, to)` (eski `from-dur,
+	// from` HİZASIZ from'da 5 dk kovayı iki tarafa sayıyordu; bu tablo
+	// hizalı from kullandığı için o hatayı göremezdi — hizasız durum
+	// prior_window_sites_test.go TestDBStmtDetailPriorWindowRealBuilder'da).
+	priorFrom, priorTo := PriorWindow(from, to)
 
 	for _, r := range dbStmtBucketReads(t, from, to) {
 		op := bucketUpperOp(t, r.name, r.sql)

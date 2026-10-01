@@ -249,7 +249,15 @@ func (s *Server) buildServiceContext(ctx context.Context, service string, from, 
 	} else {
 		cx.curErr = err
 	}
-	if w, err := s.store.ServiceWindowRED(ctx, service, from.Add(-span), from); err == nil {
+	// v0.10.1028 — baseline penceresi chstore.PriorWindow'dan. ServiceWindowRED
+	// alt sınırı 5 dk kovaya indiriyor (alignBucketStart); eski `[from − span,
+	// from)` hizasız from'da current'ın ilk kovasını baseline'a da sayıyordu
+	// (from=10:03 → 10:00 kovası iki pencerede) ve modele giden "önceki
+	// pencere" kıyası şimdinin trafiğiyle sulanıyordu. Rate paydası iki
+	// tarafta da span kaldı: iki pencere aynı sayıda kova okur, oran
+	// sayaç oranına eşit kalır.
+	bFrom, bTo := chstore.PriorWindow(from, to)
+	if w, err := s.store.ServiceWindowRED(ctx, service, bFrom, bTo); err == nil {
 		cx.Baseline = windowRED(w, span.Seconds())
 	} else {
 		cx.baseErr = err

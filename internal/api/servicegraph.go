@@ -402,11 +402,14 @@ func (s *Server) getOtelServiceGraph(w http.ResponseWriter, r *http.Request) {
 		g := buildServiceGraph(edges, focus, scope, hops, dbNames, serviceGraphWindowMinutes(from, to))
 		pruneServiceGraphTopN(&g, topN)
 		if compare {
-			// Prior penceresi: aynı uzunluk, tam pencere genişliği kadar
-			// geriye kaydırılmış. Soft-fail — prior okuması düşerse graf
-			// Δ'sız döner, 500 olmaz (endpoints/services emsali).
-			dur := to.Sub(from)
-			pfrom, pto := from.Add(-dur), from
+			// Prior penceresi: chstore.TopologyPriorWindow (v0.10.1028).
+			// Okuyucu pencereyi iki uçta da 5 dk kovaya DIŞA yuvarlıyor; eski
+			// (from − dur, from) floor5(from) kovasını HER pencerede iki
+			// tarafa da sayıyordu ve kenar p99'u kovaların maksimumu olduğu
+			// için "önce" p99'u "şimdi"nin ilk kovasını da taşıyordu.
+			// Soft-fail — prior okuması düşerse graf Δ'sız döner, 500 olmaz
+			// (endpoints/services emsali).
+			pfrom, pto := chstore.TopologyPriorWindow(from, to)
 			var pedges []chstore.ServiceTopologyEdge
 			var perr error
 			if scope == "neighborhood" && focus != "" {
@@ -416,7 +419,8 @@ func (s *Server) getOtelServiceGraph(w http.ResponseWriter, r *http.Request) {
 			}
 			if perr == nil {
 				pedges = filterHiddenTopologyEdges(pedges, hidPats)
-				pg := buildServiceGraph(pedges, focus, scope, hops, dbNames, serviceGraphWindowMinutes(pfrom, pto))
+				// v0.10.1028 — pfrom/pto okuyucu ARGÜMANI, zaman aralığı değil; prior aynı kova sayısını okur → dakika paydası current'ınki.
+				pg := buildServiceGraph(pedges, focus, scope, hops, dbNames, serviceGraphWindowMinutes(from, to))
 				mergePriorGraphEdges(g.Edges, pg.Edges)
 			}
 		}

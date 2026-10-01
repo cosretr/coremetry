@@ -48,19 +48,55 @@ func filterOpenProblemsSince(all []*chstore.Problem, sinceNs int64) []chstore.Pr
 	return out
 }
 
-// redComparisonWindow returns symmetric before/after windows around the
-// deploy timestamp: after = [since, now], before = [since - (now-since),
-// since]. A deploy from 10 minutes ago compares 10 minutes of before
-// against 10 minutes of after; a 3-day-old deploy compares 3 days against
-// 3 days. Avoids a hardcoded lookback that's wrong at either extreme.
-func redComparisonWindow(sinceNs, nowNs int64) (beforeFrom, beforeTo, afterFrom, afterTo time.Time) {
-	since := time.Unix(0, sinceNs)
-	now := time.Unix(0, nowNs)
-	dur := now.Sub(since)
-	if dur < 0 {
-		dur = 0
+// redPlan — önce/sonra RED kıyasının iki okuma penceresi VE iki throughput
+// paydası. Deploy raporu ile Rollouts çekmecesi (rollout_detail.go, V1+V2)
+// AYNI planı kullanır; payda hiçbir çağıranda ayrıca hesaplanmaz.
+type redPlan struct {
+	BeforeFrom, BeforeTo time.Time // chstore.PriorWindow(since, end)
+	AfterFrom, AfterTo   time.Time // [since, end] — okuma değişmedi
+	BeforeSec, AfterSec  float64   // her tarafın GERÇEKTEN kapsadığı süre (sn)
+}
+
+// redComparisonPlan — v0.10.1028. SAF. since = deploy/rollout anı, end =
+// after okumasının üst ucu (rapor: now; çekmece: 6 sa kelepçeli), now =
+// duvar saati (canlı kenar).
+//
+// İki okuma da service_summary_5m'den (servicesAggFrom): alt sınır 5 dk
+// kovaya iner, üst `< end` saniye bağıyla. After bu yüzden floor5(since) …
+// sec(end) arasındaki N kovayı okur.
+//
+//   - Before = chstore.PriorWindow(since, end): after'ın ilk kovasının hemen
+//     önündeki N TAM kova. Eski before `[since − dur, since)` hizasız
+//     since'te — deploy anı neredeyse hiç kova sınırına oturmaz —
+//     floor5(since) kovasını İKİ tarafa da sayıyordu. BeforeSec = N × 300.
+//   - After verisi floor5(since)'ten başlar (deploy kovasının deploy öncesi
+//     dakikaları dahil) ve okunan son kovanın sonunda ya da now'da biter —
+//     hangisi önceyse (canlı son kova henüz doluyor; kelepçeli geçmiş
+//     pencerede son kova tam). AfterSec bu süredir, en az 1 sn.
+//     chstore.PriorCoverage'ın ölçtüğü kapsama ile aynı kural.
+//
+// Throughput = sayı ÷ gerçekten kapsanan süre: düz yükte iki taraf her an
+// AYNI hızı verir. Eski paydalar (`end − since` iki tarafta; çekmecede
+// before için pencere boyu) after'ı deploy kovasının fazla dakikalarıyla
+// şişiriyor, before'u ise pencere boyuna göre farklı bölüyordu — rollout
+// sonrası sahte sıçrama ya da düşüş (2 dk sonra düz 100 rps: "250 → 264").
+func redComparisonPlan(sinceNs, endNs, nowNs int64) redPlan {
+	since, end, now := time.Unix(0, sinceNs), time.Unix(0, endNs), time.Unix(0, nowNs)
+	bFrom, bTo := chstore.PriorWindow(since, end)
+	span := bTo.Sub(bFrom) // N × 5 dk — after'ın okuduğu kova sayısı kadar
+	covered := bTo.Add(span)
+	if now.Before(covered) {
+		covered = now
 	}
-	return since.Add(-dur), since, since, now
+	after := covered.Sub(bTo) // bTo = floor5(since)
+	if after < time.Second {
+		after = time.Second
+	}
+	return redPlan{
+		BeforeFrom: bFrom, BeforeTo: bTo,
+		AfterFrom: since, AfterTo: end,
+		BeforeSec: span.Seconds(), AfterSec: after.Seconds(),
+	}
 }
 
 // REDStats is the error-rate/latency/throughput triple shown for a
@@ -219,12 +255,14 @@ func (s *Server) buildDeploymentReport(ctx context.Context, sinceNs int64, owner
 
 	// 4. RED before/after, scoped to just the qualifying services —
 	// two calls total, not one per service.
-	beforeFrom, beforeTo, afterFrom, afterTo := redComparisonWindow(sinceNs, nowNs)
-	beforeRows, err := s.store.GetServicesAggFilteredIn(ctx, beforeFrom, beforeTo, "", svcOrder, "", "", 0, 0)
+	// v0.10.1028 — pencereler VE paydalar tek plandan (redComparisonPlan;
+	// Rollouts çekmecesiyle ortak). Rapor kelepçesiz: after now'a kadar.
+	plan := redComparisonPlan(sinceNs, nowNs, nowNs)
+	beforeRows, err := s.store.GetServicesAggFilteredIn(ctx, plan.BeforeFrom, plan.BeforeTo, "", svcOrder, "", "", 0, 0)
 	if err != nil {
 		return nil, err
 	}
-	afterRows, err := s.store.GetServicesAggFilteredIn(ctx, afterFrom, afterTo, "", svcOrder, "", "", 0, 0)
+	afterRows, err := s.store.GetServicesAggFilteredIn(ctx, plan.AfterFrom, plan.AfterTo, "", svcOrder, "", "", 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -236,8 +274,6 @@ func (s *Server) buildDeploymentReport(ctx context.Context, sinceNs int64, owner
 	for _, sv := range afterRows {
 		afterBySvc[sv.Name] = sv
 	}
-	beforeWindowSec := beforeTo.Sub(beforeFrom).Seconds()
-	afterWindowSec := afterTo.Sub(afterFrom).Seconds()
 
 	// 5. Health badge — reuse the exact /api/services scoring so the
 	// report and the Services page never disagree on red/yellow/green.
@@ -253,8 +289,8 @@ func (s *Server) buildDeploymentReport(ctx context.Context, sinceNs int64, owner
 		sections = append(sections, ServiceReportSection{
 			Service:   svc,
 			Health:    health,
-			Before:    redStatsFor(beforeBySvc[svc], beforeWindowSec),
-			After:     redStatsFor(afterSv, afterWindowSec),
+			Before:    redStatsFor(beforeBySvc[svc], plan.BeforeSec),
+			After:     redStatsFor(afterSv, plan.AfterSec),
 			Problems:  nonNilSlice(bySvc[svc]),
 			Anomalies: nonNilSlice(anomaliesBySvc[svc]),
 			NewErrors: nonNilSlice(errorsBySvc[svc]),

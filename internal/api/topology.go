@@ -530,8 +530,13 @@ func (s *Server) getServiceTopology(w http.ResponseWriter, r *http.Request) {
 		// Prior fetch failure is non-fatal: page renders current
 		// edges without trend data rather than 500'ing.
 		if comparePrior && len(edges) > 0 {
-			dur := to.Sub(from)
-			priorEdges, perr := s.store.ReadServiceTopologyAgg(ctx, from.Add(-dur), from, edgeCap)
+			// v0.10.1028 — prior argümanları chstore.TopologyPriorWindow'dan.
+			// Okuyucu pencereyi iki uçta da 5 dk kovaya DIŞA yuvarlıyor; eski
+			// (from − dur, from) floor5(from) kovasını HER pencerede (hizalı
+			// from dahil) iki tarafa da sayıyordu — o kovanın çağrıları hem
+			// "şimdi" hem "önce" görünüp deltayı sıfıra doğru sulandırıyordu.
+			pFrom, pTo := chstore.TopologyPriorWindow(from, to)
+			priorEdges, perr := s.store.ReadServiceTopologyAgg(ctx, pFrom, pTo, edgeCap)
 			if perr == nil {
 				type k struct{ p, c, pr string }
 				idx := make(map[k]*chstore.ServiceTopologyEdge, len(priorEdges))

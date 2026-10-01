@@ -1993,8 +1993,7 @@ func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
 			for i := range rows {
 				names[i] = rows[i].Name
 			}
-			dur := to.Sub(from)
-			pfrom, pto := from.Add(-dur), from
+			pfrom, pto := servicesPriorWindow(from, to, useMV) // v0.10.1028 — MV yolunda ortak kova yok (services_delta.go)
 			var priorRows []chstore.ServiceSummary
 			var perr error
 			if useMV {
@@ -3394,14 +3393,12 @@ func (s *Server) getEndpoints(w http.ResponseWriter, r *http.Request) {
 		if !compare || len(rows) == 0 {
 			return resp, nil
 		}
-		// Prior window: same length, shifted back by exactly the
-		// window width so the comparison stays apples-to-apples.
+		// Prior window: chstore.EndpointsPriorWindow (v0.10.1028) — MV yolunda
+		// ortak kova yok + eşit kova sayısı, ham yolda birebir süre kayması.
 		// SkipStatus: the delta merge only reads calls/errors/avg/p99,
 		// so the prior read skips the status/method sidecar.
-		dur := to.Sub(from)
 		prior := eq
-		prior.From = from.Add(-dur)
-		prior.To = from
+		prior.From, prior.To = chstore.EndpointsPriorWindow(eq)
 		prior.SkipStatus = true
 		priorRows, err := s.store.GetEndpoints(ctx, prior)
 		if err != nil {

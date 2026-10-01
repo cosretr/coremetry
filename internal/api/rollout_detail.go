@@ -7,8 +7,9 @@ package api
 // Satır çekmecesi: rollout satırı + revizyonun servisleri (MV'nin
 // service_name boyutu) + servis başına health verdict ve önce/sonra RED +
 // deploy'dan beri açık problem / aktif anomali / yeni exception —
-// deployment_report.go'nun KORUNAN çekirdeği (redComparisonWindow /
-// redStatsFor / scoreHealth / filterOpenProblemsSince) tek rollout'a
+// deployment_report.go'nun KORUNAN çekirdeği (redComparisonPlan [v0.10.1028;
+// eski adı redComparisonWindow] / redStatsFor / scoreHealth /
+// filterOpenProblemsSince) tek rollout'a
 // daraltılmış hâliyle (audit §4.2 "korunacak parça"). Rapor sayfasının
 // "açık problemi olan servis" GİRİŞ KAPISI burada YOK: çekmece rollout'un
 // TÜM servislerini gösterir (temiz servis "temiz" diye görünür — boş
@@ -153,6 +154,21 @@ func appendDetailNote(cur, add string) string {
 	return cur + "; " + add
 }
 
+// rolloutCmpMax — karşılaştırma penceresi kelepçesi: 30 günlük eski satıra
+// tıklamak 60 günlük tDigest taraması olmasın; deploy etkisi ilk saatlerde
+// görünür.
+const rolloutCmpMax = 6 * time.Hour
+
+// rolloutCompareEnd — after okumasının üst ucu (ns) ve kelepçelendi mi. SAF
+// (v0.10.1028: satır içinden çıkarıldı ki düz-yük testi çağıranın gerçek
+// kelepçesini koşabilsin — prior_window_sites_test.go).
+func rolloutCompareEnd(sinceNs, nowNs int64) (int64, bool) {
+	if time.Duration(nowNs-sinceNs) > rolloutCmpMax {
+		return sinceNs + int64(rolloutCmpMax), true
+	}
+	return nowNs, false
+}
+
 // buildRolloutDetail — deployment_report çekirdeğinin tek-rollout daraltması.
 func (s *Server) buildRolloutDetail(ctx context.Context, row chstore.RolloutRow, svcs []string) (*RolloutDetail, error) {
 	sinceNs := row.StartedAt.UnixNano()
@@ -204,20 +220,21 @@ func (s *Server) buildRolloutDetail(ctx context.Context, row chstore.RolloutRow,
 			errsBySvc[e.Service] = append(errsBySvc[e.Service], e)
 		}
 	}
-	// Karşılaştırma penceresi kelepçesi: 30 günlük eski satıra tıklamak 60 günlük
-	// tDigest taraması olmasın; deploy etkisi ilk saatlerde görünür.
-	const maxCmp = 6 * time.Hour
-	endNs := nowNs
-	if time.Duration(nowNs-sinceNs) > maxCmp {
-		endNs = sinceNs + int64(maxCmp)
+	endNs, clamped := rolloutCompareEnd(sinceNs, nowNs)
+	if clamped {
 		det.Note = appendDetailNote(det.Note, "karşılaştırma penceresi: deploy sonrası ilk 6 sa")
 	}
-	beforeFrom, beforeTo, afterFrom, afterTo := redComparisonWindow(sinceNs, endNs)
-	beforeRows, err := s.store.GetServicesAggFilteredIn(ctx, beforeFrom, beforeTo, "", svcs, "", "", 0, 0)
+	// v0.10.1028 — pencereler VE throughput paydaları deploy raporuyla ortak
+	// plandan (redComparisonPlan). Before artık after'ın ilk kovasının önündeki
+	// N tam kova; payda her tarafın gerçekten kapsadığı süre. Eski `beforeTo −
+	// beforeFrom` / `afterTo − afterFrom` paydaları bu pencerelerle her
+	// rollout'tan sonra sahte bir throughput sıçraması basardı.
+	plan := redComparisonPlan(sinceNs, endNs, nowNs)
+	beforeRows, err := s.store.GetServicesAggFilteredIn(ctx, plan.BeforeFrom, plan.BeforeTo, "", svcs, "", "", 0, 0)
 	if err != nil {
 		return nil, err
 	}
-	afterRows, err := s.store.GetServicesAggFilteredIn(ctx, afterFrom, afterTo, "", svcs, "", "", 0, 0)
+	afterRows, err := s.store.GetServicesAggFilteredIn(ctx, plan.AfterFrom, plan.AfterTo, "", svcs, "", "", 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -229,8 +246,6 @@ func (s *Server) buildRolloutDetail(ctx context.Context, row chstore.RolloutRow,
 	for _, sv := range afterRows {
 		afterBySvc[sv.Name] = sv
 	}
-	beforeSec := beforeTo.Sub(beforeFrom).Seconds()
-	afterSec := afterTo.Sub(afterFrom).Seconds()
 	openCounts, err := s.openProblemCountsCached(ctx)
 	if err != nil {
 		return nil, err
@@ -246,8 +261,8 @@ func (s *Server) buildRolloutDetail(ctx context.Context, row chstore.RolloutRow,
 		det.Services = append(det.Services, ServiceReportSection{
 			Service:   svc,
 			Health:    health,
-			Before:    redStatsFor(beforeBySvc[svc], beforeSec),
-			After:     redStatsFor(afterSv, afterSec),
+			Before:    redStatsFor(beforeBySvc[svc], plan.BeforeSec),
+			After:     redStatsFor(afterSv, plan.AfterSec),
 			Problems:  nonNilSlice(probsBySvc[svc]),
 			Anomalies: nonNilSlice(anomBySvc[svc]),
 			NewErrors: nonNilSlice(errsBySvc[svc]),

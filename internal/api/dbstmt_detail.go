@@ -151,13 +151,14 @@ func (s *Server) getDBStmtDetail(w http.ResponseWriter, r *http.Request) {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		// Prior window: same length, shifted back by exactly the window
-		// width (apples-to-apples). Prior failures are non-fatal — the
+		// Prior window: chstore.PriorWindow (v0.10.1028). Üç okuma da alt
+		// sınırı 5 dk kovaya indiriyor (dbStmtDetailWhere: From.Truncate(5m));
+		// eski `[from − dur, from)` hizasız from'da current'ın İLK kovasını
+		// prior'a da sayıyordu (from=10:03 → 10:00 kovası iki pencerede) ve
+		// delta sıfıra doğru sulanıyordu. Prior failures are non-fatal — the
 		// drawer renders current values without deltas rather than 500'ing.
-		dur := to.Sub(from)
 		pq := dq
-		pq.From = from.Add(-dur)
-		pq.To = from
+		pq.From, pq.To = chstore.PriorWindow(from, to)
 		if psum, err := s.store.GetDBStmtSummary(ctx, pq); err == nil && psum != nil {
 			out.Summary.PriorCalls = psum.Calls
 			out.Summary.PriorErrors = psum.Errors

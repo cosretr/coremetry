@@ -2,6 +2,7 @@ package api
 
 import (
 	"sort"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -57,6 +58,27 @@ func sortServicesByP99Delta(rows []chstore.ServiceSummary, limit int) []chstore.
 		rows = rows[:limit]
 	}
 	return rows
+}
+
+// servicesPriorWindow — /services ?compare=prior okumasının penceresi. SAF
+// (v0.10.1028); dbListPriorWindow'un (v0.10.1025) servis listesi eşi.
+//
+// Prior'un şekli okunan yolu izlemek ZORUNDA (useMV, handler'daki aynı
+// servicesUseMV kararı):
+//   - MV yolu (servicesAggFrom: service_summary_5m / service_env_summary_5m,
+//     `time_bucket >= alignBucketStart(from) AND time_bucket < to`) →
+//     chstore.PriorWindow. Eski `[from − dur, from)` hizasız from'da
+//     current'ın ilk 5 dk kovasını prior'a da sayıyordu: 15 dk'lık bir
+//     pencerede ortak trafik pencerenin üçte biri, delta o oranda sıfıra
+//     sulanıyordu.
+//   - Ham yol (GetServicesQuery: `time >= from AND time <= to`, 5 dk'dan
+//     kısa pencere ya da MV'nin kapsamadığı cluster/env) → birebir süre
+//     kaydırması; ızgara yok, yalnız `from` ANI paylaşılır.
+func servicesPriorWindow(from, to time.Time, useMV bool) (time.Time, time.Time) {
+	if !useMV {
+		return chstore.PriorWindowGrid(from, to, 0)
+	}
+	return chstore.PriorWindow(from, to)
 }
 
 // mergePriorServices — prior penceresinin satırlarını ada göre cari
