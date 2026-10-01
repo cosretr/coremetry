@@ -48,8 +48,9 @@ func extTestExtras() rcaCatalogExtras {
 		BubbleUp: &chstore.BubbleUpResult{
 			SelectionTotal: 40, BaselineTotal: 900,
 			Attributes: []chstore.BubbleUpAttribute{
-				{Key: "http.route", Values: []chstore.BubbleUpValue{{Value: "/v1/pay-now", SelectionPct: 80, BaselinePct: 11, Score: 69}}},
-				{Key: "pod", Values: []chstore.BubbleUpValue{{Value: "api-gw-7f", SelectionPct: 60, BaselinePct: 30, Score: 30}}},
+				// v0.10.991 — paylar chstore'un GERÇEK birimiyle: oran (0–1), yüzde değil.
+				{Key: "http.route", Values: []chstore.BubbleUpValue{{Value: "/v1/pay-now", SelectionPct: 0.80, BaselinePct: 0.11, Score: 0.69}}},
+				{Key: "pod", Values: []chstore.BubbleUpValue{{Value: "api-gw-7f", SelectionPct: 0.60, BaselinePct: 0.30, Score: 0.30}}},
 			},
 		},
 	}
@@ -122,7 +123,7 @@ func TestCatalogExtSkipsEmptyFamilies(t *testing.T) {
 	// Ayrışmayan (Score<=0) boyut da girmez.
 	flat := extTestExtras()
 	flat.BubbleUp.Attributes = []chstore.BubbleUpAttribute{
-		{Key: "pod", Values: []chstore.BubbleUpValue{{Value: "x", SelectionPct: 10, BaselinePct: 10, Score: 0}}},
+		{Key: "pod", Values: []chstore.BubbleUpValue{{Value: "x", SelectionPct: 0.10, BaselinePct: 0.10, Score: 0}}},
 	}
 	out = renderRCAEvidenceCatalog(buildRCAEvidenceCatalogExt(h, flat))
 	if strings.Contains(out, "hatalarda ayrışan boyut") {

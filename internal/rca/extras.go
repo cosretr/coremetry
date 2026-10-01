@@ -103,20 +103,14 @@ func BuildEvidenceCatalogExt(h *chstore.RootCauseHypothesis, extras CatalogExtra
 	// ── 7. Hatalarda ayrışan boyutlar (BubbleUp) ──────────────────────
 	// Boyut değerleri servis değildir → entity boş; tireli değerler
 	// gösterilen-jeton yoluyla K3'te meşrulaşır (checkRCAEntities).
+	// v0.10.991 — seçim ve birim TopBubbleUp'ta (bubbleup.go): chstore payları
+	// ORAN (0–1); eski satır onları doğrudan %-biçimiyle basıp "%1 … %0"
+	// yazıyordu. Puanı ≤ 0 olan (hatalarda AYRIŞMAYAN) boyut kanıt değildir.
 	if bu := extras.BubbleUp; bu != nil && bu.SelectionTotal > 0 {
-		n := 0
-		for _, attr := range bu.Attributes {
-			if n >= extrasBubbleCap || len(attr.Values) == 0 {
-				break
-			}
-			v := attr.Values[0]
-			if v.Score <= 0 {
-				continue // hatalarda AYRIŞMAYAN boyut kanıt değildir
-			}
-			n++
+		for _, t := range TopBubbleUp(bu, extrasBubbleCap, 0) {
 			addPos("", fmt.Sprintf(
 				"hatalarda ayrışan boyut: %s=%s (hatalı kümede %%%.0f, tabanda %%%.0f)",
-				attr.Key, v.Value, v.SelectionPct, v.BaselinePct))
+				t.Key, t.Value, t.SelPct, t.BasePct))
 		}
 	}
 
