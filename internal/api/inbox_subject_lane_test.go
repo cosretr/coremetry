@@ -14,6 +14,8 @@ func TestNormalizeInboxSubject(t *testing.T) {
 		{"service", inboxSubjectService},
 		{"db", inboxSubjectDB},
 		{" db ", inboxSubjectDB},
+		// v0.10.1017 — dış kaynak şeridi (Oracle / Influx özneleri).
+		{"external", inboxSubjectExternal},
 		// Bilinmeyen → varsayılan ŞERİT, db DEĞİL. Elle düzenlenmiş bir
 		// link operatörü tanımadığı bir şeride düşürmemeli.
 		{"queue", inboxSubjectService},
@@ -66,7 +68,9 @@ func TestInboxSubjectLaneIsWired(t *testing.T) {
 		// hiçbir kapıyı ısırmıyordu: zorlama satırı kaynakta DURUYOR,
 		// yalnız ölü bir dalın içinde. Kaynak taraması canlılığı
 		// kanıtlayamaz, ama koşulu pinlemek bu şekli kapatır.
-		{"zorlama canlı bir dalda", "if subject == inboxSubjectDB {"},
+		// v0.10.1017 — koşul "servis DEĞİL" oldu: dış kaynak şeridi de
+		// (kind=external) tek kaynaklı ve aynı zorlamayı ister.
+		{"zorlama canlı bir dalda", "if subject != inboxSubjectService {"},
 		// DB özneli satır YALNIZ problems kaynağında var. Sayfanın tür
 		// facet varsayılanı ['exception'] — zorlanmasa db şeridi HİÇ
 		// problem çekmez ve BOŞ açılırdı.
@@ -74,6 +78,7 @@ func TestInboxSubjectLaneIsWired(t *testing.T) {
 		{"şerit ProblemFilter'a iniyor", "SubjectKind: subject,"},
 		{"şerit anahtarda", "subject)"},
 		{"db sayısı gövdede", `"dbSubjectCount": subjectCounts[inboxSubjectDB],`},
+		{"dış kaynak sayısı gövdede", `"externalSubjectCount": subjectCounts[inboxSubjectExternal],`},
 	} {
 		if !strings.Contains(src, want.frag) {
 			t.Errorf("%s: %q bulunamadı — şerit yarım bağlanmış", want.name, want.frag)

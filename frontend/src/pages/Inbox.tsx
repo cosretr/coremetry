@@ -11,7 +11,7 @@ import { useInbox, useServicesMetadata } from '@/lib/queries';
 import { tsLong, fmtFixed, fmtAgoNs } from '@/lib/utils';
 import { IconSparkles } from '@/components/icons';
 import { teamOptionsCI } from '@/lib/teamOptions';
-import { derivedTeamTitle } from '@/lib/problemSubject';
+import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL } from '@/lib/inboxUrl';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, resolveInitialSort, type DataTableStateProps } from '@/components/ui/DataTable';
@@ -117,9 +117,12 @@ function teamChipTitle(it: InboxItem, filterHint: string): string {
 // (problem/exception/anomaly), SubjectLane satırın NEYİ anlattığı. İkisi
 // de string olsaydı derleyici karışıklığı yakalayamazdı — v0.9.1339 tam
 // olarak o çakışmadan bir bug üretti ve çözümü ayrı ada taşımaktı.
-const SUBJECT_LANES: readonly SubjectLane[] = ['service', 'db'];
+// v0.10.1017 (operatör: "Oracle'dan gelenler Problems'te gözükmüyor") —
+// üçüncü şerit: dış metrik kaynağı özneleri (Oracle / Influx, kind=external).
+// O satırlar ne servis ne db şeridine giriyordu; hiçbir yerde görünmüyorlardı.
+const SUBJECT_LANES: readonly SubjectLane[] = ['service', 'db', 'external'];
 const SUBJECT_LABEL: Record<SubjectLane, string> = {
-  service: 'Servisler', db: 'Veritabanları',
+  service: 'Servisler', db: 'Veritabanları', external: 'Dış kaynaklar',
 };
 type InboxStatus = 'open' | 'all' | 'ignored';
 const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];
@@ -293,8 +296,7 @@ export default function InboxPage() {
   // v0.9.1342 — özne şeridi. Kapalı sözlük + varsayılan 'service':
   // sunucunun normalizeInboxSubject'iyle BİREBİR aynı sözleşme, yoksa
   // elle düzenlenmiş bir link burada bir şerit, orada başkasını açardı.
-  const subjectLane: SubjectLane =
-    searchParams.get('subject') === 'db' ? 'db' : 'service';
+  const subjectLane: SubjectLane = parseSubjectLane(searchParams.get('subject'));
   const setSubjectLane = (s: SubjectLane) =>
     setParam('subject', s === 'service' ? null : s);
 
@@ -437,6 +439,7 @@ export default function InboxPage() {
   // türetilen her sayı 0 çıkardı. undefined = sunucu henüz cevap
   // vermedi; 0 = ölçüldü ve yok — ikisi farklı ve çip öyle gösteriyor.
   const dbLaneCount = inboxQ.data?.dbSubjectCount;
+  const externalLaneCount = inboxQ.data?.externalSubjectCount; // v0.10.1017
   const data: InboxItem[] | null | undefined =
     inboxQ.isPending ? undefined : inboxQ.isError ? null : inboxQ.data?.items ?? [];
   // v0.9.221 — the server caps the queue; say so rather than letting 300 rows
@@ -788,6 +791,7 @@ export default function InboxPage() {
                 className={`facet${subjectLane === l ? ' on' : ''}`}>
                 {SUBJECT_LABEL[l]}
                 {l === 'db' && dbLaneCount !== undefined && ` (${dbLaneCount})`}
+                {l === 'external' && externalLaneCount !== undefined && ` (${externalLaneCount})`}
               </span>
             ))}
           </span>

@@ -273,7 +273,9 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 	// olduğu için TypeScript de Go da karışıklığı yakalayamaz; tek
 	// koruma ayrı ad (v0.9.1339'un aynı çakışmadan çıkardığı ders).
 	subject := normalizeInboxSubject(q.Get("subject"))
-	if subject == inboxSubjectDB {
+	// v0.10.1017 — dış kaynak şeridi (Oracle / Influx özneleri, kind=external)
+	// db ile AYNI yapıda: tek kaynak problems, tür facet'i zorlanır.
+	if subject != inboxSubjectService {
 		// DB öznesi YALNIZ problems kaynağında var: exception grupları,
 		// anomaliler ve incident'lar yapı gereği servis öznelidir (kind
 		// kolonları yok, uydurulamaz). Tür facet'ini burada ZORLAMAK
@@ -935,6 +937,9 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			// bu sayı TAM. Servis şeridi dört kaynaklı, tek bir COUNT ile
 			// dürüstçe ifade edilemez — o yüzden hiç iddia edilmiyor.
 			"dbSubjectCount": subjectCounts[inboxSubjectDB],
+			// v0.10.1017 — dış kaynak şeridinin sayısı (aynı tek COUNT'un
+			// üçüncü kovası; db ile aynı gerekçeyle TAM).
+			"externalSubjectCount": subjectCounts[inboxSubjectExternal],
 			"subject":        subject,
 		}, nil
 	})
@@ -1170,6 +1175,12 @@ var inboxPriosAll = []string{"P1", "P2", "P3"}
 const (
 	inboxSubjectService = "service"
 	inboxSubjectDB      = "db"
+	// inboxSubjectExternal (v0.10.1017) — dış metrik kaynağı özneleri
+	// (`ext:<kaynak>/…`: Oracle, Influx). Operatör: "Oracle'dan gelenler
+	// Problems'te gözükmüyor." kind=external (v0.10.228) şeritten (v0.9.1342)
+	// SONRA geldi ve iki şerit de `kind = ?` ile süzdüğü için bu satırlar
+	// hiçbirine girmiyordu — kenar çubuğu rozeti sayarken liste göstermiyordu.
+	inboxSubjectExternal = "external"
 )
 
 // normalizeInboxSubject — kapalı sözlük, varsayılan `service`.
@@ -1179,8 +1190,11 @@ const (
 // düşürmemeli. normalizeInboxSet'in "bilinmeyen → tüm küme" duruşuyla
 // aynı gerekçe, tekil alan için yazılmış hâli.
 func normalizeInboxSubject(raw string) string {
-	if strings.TrimSpace(raw) == inboxSubjectDB {
+	switch strings.TrimSpace(raw) {
+	case inboxSubjectDB:
 		return inboxSubjectDB
+	case inboxSubjectExternal:
+		return inboxSubjectExternal
 	}
 	return inboxSubjectService
 }

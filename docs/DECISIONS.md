@@ -987,6 +987,20 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Problems sekmesi: üçüncü özne şeridi "Dış kaynaklar" (v0.10.1017)
+
+**Operatör:** "Oracle'dan gelenler de Problems'te gözükmüyor." **Kök neden:** dış metrik kaynağı
+problemleri (Oracle / Influx; özne `ext:<kaynak>/…`) `kind=external` ile açılır (v0.10.228). `/inbox`
+özne şeridi (v0.9.1342) ondan ÖNCE yazıldı ve iki değerliydi: Servisler `kind='service'`, Veritabanları
+`kind='db'`. İkisi de tam eşitlikle süzdüğü için external satırlar HİÇBİR şeride girmiyordu — kenar
+çubuğu rozeti ve bildirimler onları sayarken liste göstermiyordu. Kayıtlı bir karar değil, sonradan
+eklenen türün düştüğü boşluk. **Karar:** üçüncü şerit **Dış kaynaklar (N)** — db şeridinin birebir emsali
+(tek kaynak: problems; tür facet'i zorlanır; sayı aynı tek COUNT'un üçüncü kovası, sunucudan). Varsayılan
+şerit Servisler kalır: özne türleri öncelik sırasında yarışmasın kararı (v0.9.1342) korunur, dış kaynak
+satırları servis listesine KARIŞTIRILMADI. `?subject=external`; bilinmeyen değer yine Servisler.
+**Reddedilen:** external satırları varsayılan (servis) listeye katmak — operatörün db için verdiği
+"ayrı şerit" kararının tersi olurdu; istenirse ayrı karar.
+
 ## 2026-10-01 — "Problem değil" bildirimi de susturabilir — varsayılan KAPALI anahtar (v0.10.1016)
 
 **Operatör:** v0.10.1015 sonrası önerilen sonraki adıma ("problem değil dediklerinin bildirimini de

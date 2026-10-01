@@ -2576,6 +2576,8 @@ export const api = {
       // v0.9.1342 — db şeridindeki toplam. `counts`tan AYRI alan: orası
       // kind/prio evreni, bu özne evreni.
       dbSubjectCount?: number;
+      // v0.10.1017 — dış kaynak şeridindeki toplam (Oracle / Influx özneleri).
+      externalSubjectCount?: number;
       subject?: import('./types').SubjectLane;
     } | null>(`/api/inbox?${qs(params)}`),
   // v0.8.288 — the single triage badge total (not-resolved problems + open

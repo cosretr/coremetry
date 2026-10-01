@@ -2543,7 +2543,7 @@ export type ProblemCategory = 'AVAILABILITY' | 'ERROR' | 'SLOWDOWN' | 'RESOURCE'
  *  yakalayamazdı ve v0.9.1339 tam olarak o yüzden bir bug üretti.
  *  `problemSubject.ts`'in `SubjectKind`i ile aynı evren; orası satır
  *  SINIFLANDIRIR, bu URL/API şeridini adlandırır. */
-export type SubjectLane = 'service' | 'db';
+export type SubjectLane = 'service' | 'db' | 'external';
 export interface InboxItem {
   id: string;             // composite "<kind>:<nativeId>"
   // Satırın KAYNAĞI: problem | exception | anomaly.
@@ -2554,7 +2554,7 @@ export interface InboxItem {
   priority: 'P1' | 'P2' | 'P3';
   priorityReason: string;
   severity: string;
-  // Öznenin TÜRÜ (v0.9.1339): 'service' | 'db'. Boş/yok = service.
+  // Öznenin TÜRÜ (v0.9.1339): 'service' | 'db' | 'external' (v0.10.1017). Boş/yok = service.
   // lib/problemSubject.ts subjectKind() ile sınıflandır.
   subjectKind?: SubjectLane;
   service: string;

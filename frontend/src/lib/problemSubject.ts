@@ -15,6 +15,12 @@
 export type SubjectKind = 'service' | 'db' | 'external';
 export type ExternalSubject = { source: string; values: string[] };
 
+/** v0.10.1017 — /inbox özne şeridi: URL → şerit. Kapalı sözlük, bilinmeyen =
+ *  'service' (sunucunun normalizeInboxSubject'iyle birebir). */
+export function parseSubjectLane(raw: string | null | undefined): SubjectKind {
+  return raw === 'db' || raw === 'external' ? raw : 'service';
+}
+
 /** `db:<system>@<instance>` çözümü. chstore.ParseDBSubjectID'nin ikizi. */
 export type DbSubject = { system: string; instance: string };
 

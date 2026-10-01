@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseSubjectLane } from '@/lib/problemSubject';
 
 // inboxSubjectLane.test.ts — v0.9.1342, ŞERİDİN BAĞLI OLDUĞU kapı.
 //
@@ -23,7 +24,7 @@ describe('inbox özne şeridi — bağlantı kapısı', () => {
     // sunucunun 300'lük cap'i db satırlarını da yer, sonra sayfa onları
     // atar ve kuyruk boş görünür.
     expect(page).toContain('subject: subjectLane');
-    expect(page).toMatch(/searchParams\.get\('subject'\) === 'db'/);
+    expect(page).toContain("parseSubjectLane(searchParams.get('subject'))");
   });
 
   it('şerit URL yazıcısından geçiyor ve varsayılan param BIRAKMIYOR', () => {
@@ -48,8 +49,20 @@ describe('inbox özne şeridi — bağlantı kapısı', () => {
     expect(page).toContain("{subjectLane === 'service' && (");
   });
 
-  it('şerit sözlüğü KAPALI ve iki değerli', () => {
-    expect(page).toMatch(/SUBJECT_LANES: readonly SubjectLane\[\] = \['service', 'db'\]/);
+  it('şerit sözlüğü KAPALI ve üç değerli (v0.10.1017: dış kaynaklar)', () => {
+    expect(page).toMatch(/SUBJECT_LANES: readonly SubjectLane\[\] = \['service', 'db', 'external'\]/);
+  });
+
+  // v0.10.1017 — operatör: "Oracle'dan gelenler Problems'te gözükmüyor."
+  // kind=external satırları iki şeridin de dışında kalıyordu.
+  it('dış kaynak şeridi: URL ayrıştırıcı tanır, çip sayısı sunucudan', () => {
+    expect(parseSubjectLane('external')).toBe('external');
+    expect(parseSubjectLane('db')).toBe('db');
+    expect(parseSubjectLane(null)).toBe('service');
+    expect(parseSubjectLane('queue')).toBe('service');
+    expect(page).toContain('inboxQ.data?.externalSubjectCount');
+    expect(page).toContain('externalLaneCount !== undefined');
+    expect(page).toContain("external: 'Dış kaynaklar'");
   });
 });
 
@@ -60,7 +73,7 @@ describe('özne şeridi ile satır KAYNAĞI karışmıyor', () => {
     // İkisi de string olsaydı derleyici karışıklığı yakalayamazdı ve
     // v0.9.1339 tam olarak o çakışmadan bir bug üretti: nesne alan bir
     // yardımcı yanlış alanı sessizce okuyor.
-    expect(types).toContain("export type SubjectLane = 'service' | 'db'");
+    expect(types).toContain("export type SubjectLane = 'service' | 'db' | 'external'");
     expect(types).toMatch(/export type InboxKind =[^\n]*'incident'/);
     // InboxItem.subjectKind DAR tipte olmalı — düz `string` bırakmak
     // ayrı-tip korumasını yok eder.

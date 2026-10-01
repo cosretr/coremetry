@@ -47,6 +47,8 @@ export type InboxPage = {
   // için bu sayı TAM; servis şeridi dört kaynaklı olduğundan tek bir
   // sayıyla dürüstçe ifade edilemez ve sunucu onu HİÇ iddia etmiyor.
   dbSubjectCount?: number;
+  // v0.10.1017 — dış kaynak şeridindeki toplam (Oracle / Influx özneleri); db ile aynı gerekçeyle TAM.
+  externalSubjectCount?: number;
   subject?: SubjectLane;
 };
 
