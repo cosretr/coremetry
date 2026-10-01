@@ -2894,6 +2894,11 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 			out = out[:f.Limit]
 		}
 	}
+	// v0.10.1005 — çip trace'i SEÇER, satırı şekillendirmez: çipler WHERE'de
+	// span düzeyindeyse sayfanın satırları çipsiz WHERE ile yeniden kurulur
+	// (trace_row_repair.go). Extras'tan ÖNCE: onun zaman aralığı satırların
+	// gerçek başlangıç/süresinden türer.
+	s.repairSpanScopedRows(ctx, out, f)
 	// Common phase-2: extras for the trimmed page only (≤ Limit ids), bounded
 	// by the page rows' real min/max timestamps. Also serves the CSV export
 	// path — there the id list is up to 50k rows, but the derived bounds stay

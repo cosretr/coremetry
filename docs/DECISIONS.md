@@ -987,6 +987,26 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Traces: çip trace'i seçer, satırı şekillendirmez (v0.10.1005)
+
+**Operatör bildirimi (prod):** `function_code = …` çipiyle gelen listede Name kolonu kök span'in adı yerine
+bir MQ "publish" span'inin adını gösteriyor; süre ve span sayısı da eksik (listede 21 ms / 4 span, trace
+detayında 25 ms / 12 span). **Kök neden:** arama yokken çipler WHERE'de SPAN düzeyinde (terfi kolonu / kvh
+indeksi budasın diye, v0.10.341) ve satır aynı WHERE'in bıraktığı span'lerden kuruluyor; çipi kök span
+taşımıyorsa (prod'da fonksiyon kodunu yalnız log-yayın span'leri taşıyor) `anyIf(kök)` boş kalıp
+`any(name)` eşleşen bir span'in adına düşüyor (v0.5.351 yedeği), süre/sayı da yalnız eşleşen span'lerden.
+**Karar:** çip TRACE'İ SEÇER, satırı şekillendirmez — v0.10.258'in Errors için koyduğu kural çiplere
+genellendi. Sayfa belli olduktan sonra satır alanları (ad, servis, rota, başlangıç, süre, span/hata sayısı)
+çipsiz WHERE ile yeniden kurulur (`repairSpanScopedRows`): id listesi PREWHERE'de, pencere sayfanın kendi
+zaman aralığı (alt sınır 5 dk geri — kök eşleşen span'den önce başlar); maliyet pencereden değil id
+sayısından (≤ sayfa) gelir, extras'tan önce koşar. Servis / ortam / küme yüklemleri AYNEN kalır (satır
+"çipler olmasaydı ne olacaksa" odur). Sıra ve sayfa üyeliği 1. geçişin kararıdır, değişmez. Yumuşak düşer:
+onarım okuması hata verirse liste eski satırlarıyla döner. CSV dışa aktarımı (>500 id) onarılmaz.
+**Reddedilen:** çipleri her zaman HAVING'e taşımak (trace düzeyi) — indeks budaması kaybolur, v0.10.341'in
+kaçındığı tam pencere taraması. **Açık (operatör kararı):** aynı ekranda hacim şeridi boş — şerit
+`function_code`'u giriş span'inde yaşıyor sayıyor (`ENTRY_KEYS`, volumeSeries.ts); v0.10.323 / 730 ile aynı
+sınıf, düzeltme o anahtarı listeden çıkarmak (şerit eşleşen span'leri sayar, etiket "spans").
+
 ## 2026-10-01 — Oracle Problem'i: ilgili endpoint'ler kanıtta — özne servis KALIR (v0.10.1004)
 
 **Karar (kuyruk "Problem'i endpoint'e bağlama", operatör "devam"):** Problem'in öznesi DEĞİŞTİRİLMEDİ —
