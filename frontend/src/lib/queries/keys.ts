@@ -47,6 +47,9 @@ export const keys = {
     // it joins the key or an env-scoped table cross-poisons the all-env one.
     operations:  (svc: string, range: { from: number; to: number }, normalized: boolean, compare = false, env = '') =>
                    ['services', 'operations', svc, range, normalized, compare, env] as const,
+    // v0.10.1023 — çıplak fiil → rota kırılımı; her girdi anahtarda.
+    operationRoutes: (svc: string, range: { from: number; to: number }, env: string) =>
+                   ['services', 'operation-routes', svc, range, env] as const,
     // Operator-curated catalog metadata (owner / SRE team / runbook
     // links) — one map for the whole install, joined locally by the
     // consumers (/services team filters, /admin/catalog editor).

@@ -164,7 +164,13 @@ type SpanLinkRow struct {
 // operator can spot a slow-burn vs. spike pattern at a glance without
 // leaving the table.
 type OperationSummary struct {
-	Name       string   `json:"name"`
+	Name string `json:"name"`
+	// v0.10.1023 — yalnız /api/services/{name}/operations/routes doldurur:
+	// çıplak HTTP fiili adlı span'lerin (fiil, http_route) kırılımında
+	// rota. Name gerçek span adı olarak KALIR; bundle / GetOperationSummary
+	// satırlarında boş (omitempty → JSON'da yok), oradaki tüketiciler
+	// (copilot, SpanDetail, ProblemDetail, OpsCard) değişmez.
+	Route      string   `json:"route,omitempty"`
 	SpanCount  uint64   `json:"spanCount"`
 	ErrorCount uint64   `json:"errorCount"`
 	ErrorRate  float64  `json:"errorRate"`

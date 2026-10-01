@@ -11,7 +11,9 @@ import { encodeFilters, encodeRange, buildQuery } from '@/lib/urlState';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { serviceHref } from '@/lib/serviceHref';
-import type { TimeRange, OperationSummary, SpanMetricSeries, SpanAgg } from '@/lib/types';
+import { opDisplayName } from '@/lib/opDisplayName';
+import type { TimeRange, OperationRow, SpanMetricSeries, SpanAgg } from '@/lib/types';
+import { opRowKey, opTraceFilters } from './operationRoutes';
 
 // OperationsTable — per-operation aggregate (count / err / avg / p50 /
 // p95 / p99 / apdex). Click an operation to drill into Traces with
@@ -27,7 +29,7 @@ import type { TimeRange, OperationSummary, SpanMetricSeries, SpanAgg } from '@/l
 // desc (Elastic-APM's heaviest-cumulative-consumer first). Trend /
 // P50 / P95 stay non-sortable (no sortValue) — they had no sort before.
 // Split out of the Service.tsx monolith (v0.8.252 refactor) verbatim.
-function impactOf(r: OperationSummary): number {
+function impactOf(r: OperationRow): number {
   return r.avgDurationMs * r.spanCount;
 }
 
@@ -61,8 +63,14 @@ const TREND_C = {
 } as const;
 
 
-const OP_COLS: DataTableColumn<OperationSummary>[] = [
-  { id: 'name',      label: 'Operation', sortValue: r => r.name,            naturalDir: 'asc', flex: true },
+// v0.10.1023 — satırın gösterim metni: çıplak fiil + rota ("GET /metrics"),
+// Traces listesinin opDisplayName'iyle aynı. Ad sıralaması ve süzgeç de bunu
+// okur (operatör ekranda ne görüyorsa onu yazar / sıralar); ham satırda
+// route yok → ad aynen.
+const opText = (r: OperationRow) => opDisplayName(r.name, r.route);
+
+const OP_COLS: DataTableColumn<OperationRow>[] = [
+  { id: 'name',      label: 'Operation', sortValue: r => opText(r),         naturalDir: 'asc', flex: true },
   // v0.9.347 — Trend hücresi ÜÇE bölündü (calls · errors · p99).
   //
   // Operatör: "doğrudan sparkline olarak göstersek ve üzerine tıklayınca
@@ -89,10 +97,13 @@ const OP_COLS: DataTableColumn<OperationSummary>[] = [
   // devam edebilir gerekirse.
 ];
 
-export function OperationsTable({ service, rows, range, preset, onWiden, normalized, onToggleNormalized, onZoom, onZoomReset, loading }: {
+export function OperationsTable({ service, rows, range, preset, onWiden, normalized, onToggleNormalized, splitVerbs = 0, onZoom, onZoomReset, loading }: {
   service: string;
-  rows: OperationSummary[];
+  rows: OperationRow[];
   range: TimeRange;
+  // v0.10.1023 — rotalarına bölünen çıplak HTTP fiili satırı sayısı
+  // (operationRoutes.expandBareVerbRows); >0 iken sayaç metni bunu söyler.
+  splitVerbs?: number;
   // Madde 4 sweep — modal RED grafiklerinin drag-zoom'u sayfa range'ine
   // (Service.tsx handleZoom), çift-tık geri-yığınına (handleZoomReset).
   onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
@@ -146,7 +157,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // endpoints page uses; here it pulls from the row's stored
   // sparkline + companion errors/p99 sparklines added in the
   // same release.
-  const [opDetail, setOpDetail] = useState<OperationSummary | null>(null);
+  const [opDetail, setOpDetail] = useState<OperationRow | null>(null);
   // v0.9.347 — tıklanan sparkline hangi metrikse detay onunla açılıyor.
   const [opFocus, setOpFocus] = useState<OpMetricKey>('calls');
 
@@ -158,7 +169,8 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // YENİ eksene yaymasıydı (yanlış zamanlara çizilen değerler, YENİ
   // pencerenin EventMarkers'ıyla yan yana). Kimlik/başlık bayat
   // satırdan kalabilir; time-series üretimini modal opIsStale ile keser.
-  const freshOpRow = opDetail ? rows.find(x => x.name === opDetail.name) : undefined;
+  // v0.10.1023 — kimlik opRowKey (ad + rota): bölünmüş GET satırları aynı adı paylaşır.
+  const freshOpRow = opDetail ? rows.find(x => opRowKey(x) === opRowKey(opDetail)) : undefined;
 
   // v0.5.313 — Operator-reported: drill-down used to land on
   // /traces (familiar view with the trace list + aggregate
@@ -173,8 +185,12 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // results, and rootOnly defaulted ON, hiding partial traces.
   // Now: explicit ?view=list&rootOnly=false so the operator
   // lands on the list view with every matching trace visible.
-  const opHref = (op: string) =>
-    `/traces?service=${encodeURIComponent(service)}&filters=${encodeURIComponent(encodeFilters([{ k: 'name', op: '=', v: [op] }]))}&range=${encodeURIComponent(encodeRange(range))}&view=list&rootOnly=false`; // v0.8.488 — kesin isim filtresi (search değil)
+  // v0.10.1023 — satırı alır: bölünmüş çıplak fiil satırı `name = GET`'in
+  // yanında `http.route = /metrics` (artık satırda `http.route NOT EXISTS`)
+  // taşır, yoksa Traces o fiilin TÜM rotalarını listelerdi. Ham satırda çip
+  // listesi bugünküyle aynı (yalnız ad).
+  const opHref = (op: OperationRow) =>
+    `/traces?service=${encodeURIComponent(service)}&filters=${encodeURIComponent(encodeFilters(opTraceFilters(op, !!op.splitResidual)))}&range=${encodeURIComponent(encodeRange(range))}&view=list&rootOnly=false`; // v0.8.488 — kesin isim filtresi (search değil)
 
   // v0.8.416 (Tempo-parity T4) — row → the operation-scoped Details
   // view (?op=, v0.8.414/415): RED triple with the percentile band +
@@ -188,9 +204,10 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // match on the operation name, same idiom as the /endpoints
   // page filter. The shared table primitive (useDataTable below)
   // owns the SORT half; we feed it this filtered array as `rows`.
+  // v0.10.1023 — gösterim metni üzerinde ("GET /metrics" yazınca bölünmüş satır bulunur).
   const filtered = useMemo(() => {
     const trimmed = filter.trim().toLowerCase();
-    return trimmed ? rows.filter(r => r.name.toLowerCase().includes(trimmed)) : rows;
+    return trimmed ? rows.filter(r => opText(r).toLowerCase().includes(trimmed)) : rows;
   }, [rows, filter]);
 
   // Same weighted-aggregate scheme as the services page totals row:
@@ -244,12 +261,12 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // Link's opHref); searchRef binds "/" to focus the filter input; j/k move
   // the row selection and Enter/o open. dt.rowProps(i) on each <tr> paints
   // the .row-selected accent + the data-row-idx the auto-scroll needs.
-  const dt = useDataTable<OperationSummary>({
+  const dt = useDataTable<OperationRow>({
     storageKey: 'service-operations',
     columns: OP_COLS,
     rows: filtered,
     initialSort: { id: 'impact', dir: 'desc' },
-    onOpen: (op) => navigate(opHref(op.name)),
+    onOpen: (op) => navigate(opHref(op)),
     searchRef,
   });
 
@@ -290,7 +307,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // "All" satırı kalıyordu, hiçbir şey söylenmiyordu).
   const isShortWindow = !!preset && ['5m', '10m', '15m', '30m'].includes(preset);
   const showRows = !loading && filtered.length > 0;
-  const tableState: Omit<DataTableStateProps<OperationSummary>, 'dt'> =
+  const tableState: Omit<DataTableStateProps<OperationRow>, 'dt'> =
     loading ? { kind: 'loading' }
     : rows.length === 0 ? (
       // group_id rel C — normalized-empty is a DIFFERENT story than
@@ -327,9 +344,13 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
         <div style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 11, color: 'var(--text3)' }}>
             {normalized && <b style={{ color: 'var(--text2)' }}>normalized · </b>}
+            {/* v0.10.1023 — çıplak fiil satırları bölündüyse satırlar artık
+                "farklı span adı" değil: sayaç bunu söyler. */}
             {filter.trim()
               ? `${dt.sortedRows.length} / ${rows.length} matching`
-              : `${rows.length} ${normalized ? 'operation shape' : 'distinct span name'}${rows.length === 1 ? '' : 's'} in ${service}`}
+              : !normalized && splitVerbs > 0
+                ? `${rows.length} operation${rows.length === 1 ? '' : 's'} in ${service} · HTTP verb rows split by route`
+                : `${rows.length} ${normalized ? 'operation shape' : 'distinct span name'}${rows.length === 1 ? '' : 's'} in ${service}`}
           </span>
           <input ref={searchRef} className="field" value={filter} onChange={e => setFilter(e.target.value)}
             placeholder="Filter by name…  ( / to focus, j/k to move, Enter to open )"
@@ -425,24 +446,36 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                  kılar: sol tık opHref'e, ⌘/Ctrl/orta tık yeni sekmeye (explore/
                  TracesResult deseni). İçteki Link'ler (tık + orta tık) ve trend
                  düğmesi stopPropagation — tek tık iki kez gezinmesin. */
+              /* v0.10.1023 — kimlik opRowKey (ad + rota): bölünmüş GET satırları
+                 aynı adı taşır. Gösterim opDisplayName (Traces listesiyle aynı
+                 "GET /metrics"); bağlantılar rota çipini taşır (opHref). */
               return (
-                <tr key={op.name} {...rp}
-                    {...rowClickHandlers(opHref(op.name), () => navigate(opHref(op.name)))}
+                <tr key={opRowKey(op)} {...rp}
+                    {...rowClickHandlers(opHref(op), () => navigate(opHref(op)))}
                     className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                   <td>
                     <Link
-                      to={opHref(op.name)}
+                      to={opHref(op)}
                       onClick={e => e.stopPropagation()}
                       onAuxClick={e => e.stopPropagation()}
                       style={{ fontWeight: 500 }}
-                      title="Open this operation in Traces — service + name pre-filtered"
-                    >{op.name}</Link>
+                      title={op.route
+                        ? `Open in Traces — name = ${op.name}, http.route = ${op.route}`
+                        : op.splitResidual
+                          ? `Open in Traces — name = ${op.name} spans without http.route`
+                          : 'Open this operation in Traces — service + name pre-filtered'}
+                    >{opText(op)}</Link>
                     {/* v0.8.422 — raw rows only: in Normalized mode op.name is
                         the op_group TEMPLATE ("GET /users/:id"), which matches
                         no real span name, so ?op= scoping (spanmetrics `name`
                         dim, legacy DSL, heatmap filter) would render three
-                        empty panels with no hint why. */}
-                    {!normalized && (
+                        empty panels with no hint why.
+                        v0.10.1023 — bölmeden gelen satırlarda da gizli:
+                        kapsamlı grafikler yalnız span adıyla daralır, "GET
+                        /metrics" satırından ya da rotasız artık "GET"
+                        satırından açılan panel TÜM GET'leri gösterirdi
+                        (inceleme R5). Bölünmemiş ham satırda kalır. */}
+                    {!normalized && !op.route && !op.splitResidual && (
                       <Link
                         to={detailsHref(op.name)}
                         onClick={e => e.stopPropagation()}
@@ -513,9 +546,9 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
               // ve kapatınca sıralama/kaydırma bağlamı gidiyordu. Genişleme
               // tabloyu yerinde bırakıyor.
               const op = dt.sortedRows[i];
-              if (!opDetail || op.name !== opDetail.name) return [rowEl];
+              if (!opDetail || opRowKey(op) !== opRowKey(opDetail)) return [rowEl];
               return [rowEl, (
-                <tr key={`${op.name}::detail`}>
+                <tr key={`${opRowKey(op)}::detail`}>
                   <td colSpan={OP_COLS.length} style={{
                     background: 'var(--bg2)', borderLeft: '2px solid var(--accent)', padding: 0,
                   }}>
@@ -575,7 +608,7 @@ function OperationMetricPanel({
 }: {
   focus: OpMetricKey;
   service: string;
-  op: OperationSummary | null;
+  op: OperationRow | null;
   // v0.9.206 review-fix — true = op, MEVCUT range'in sonuçlarında
   // bulunamayan bayat click-time satırı. Kimlik/başlık ondan çizilir
   // ama time-series ondan ÜRETİLMEZ: seri memo'su eski pencere
@@ -626,9 +659,12 @@ function OperationMetricPanel({
   // KÖK operasyonu gösterdiğinden listeye başka POST'lar da düşüyordu.
   // Artık KESİN isim filtresi (name = "<op>") gider — yalnız bu
   // operasyonu içeren trace'ler.
+  // v0.10.1023 — bölünmüş çıplak fiil satırında rota çipi de gider (opTraceFilters).
+  const opFilters = opTraceFilters(op, !!op.splitResidual);
+  const opLabel = opDisplayName(op.name, op.route);
   const tracesHref =
     `/traces?service=${encodeURIComponent(service)}` +
-    `&filters=${encodeURIComponent(encodeFilters([{ k: 'name', op: '=', v: [op.name] }]))}` +
+    `&filters=${encodeURIComponent(encodeFilters(opFilters))}` +
     `&range=${encodeURIComponent(encodeRange(range))}` +
     `&view=list&rootOnly=false`;
 
@@ -645,7 +681,7 @@ function OperationMetricPanel({
   const exploreHref = (agg: SpanAgg) => {
     const filters = encodeFilters([
       { k: 'service.name', op: '=', v: [service] },
-      { k: 'name', op: '=', v: [op.name] },
+      ...opFilters,
     ]);
     return `/explore?${buildQuery([
       ['range', encodeRange(range)],
@@ -686,7 +722,7 @@ function OperationMetricPanel({
     <div style={{ padding: '12px 14px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
         <span className="mono" style={{ fontSize: 12.5 }}>
-          {op.name}
+          {opLabel}
           <span style={{ color: 'var(--text3)', marginLeft: 8, fontSize: 11 }}>({service})</span>
         </span>
         <Button variant="secondary" size="sm" onClick={onClose}
@@ -714,15 +750,15 @@ function OperationMetricPanel({
             operation-scoped. */}
         <span style={{ fontSize: 11, color: 'var(--text3)' }}>Explore:</span>
         <Link to={exploreHref('rate')} style={{ fontSize: 12, color: 'var(--accent2)' }}
-          title={`Open call rate for ${op.name} in Explore (service + operation scoped)`}>
+          title={`Open call rate for ${opLabel} in Explore (service + operation scoped)`}>
           Calls →
         </Link>
         <Link to={exploreHref('error_rate')} style={{ fontSize: 12, color: 'var(--accent2)' }}
-          title={`Open error rate for ${op.name} in Explore (service + operation scoped)`}>
+          title={`Open error rate for ${opLabel} in Explore (service + operation scoped)`}>
           Errors →
         </Link>
         <Link to={exploreHref('p99')} style={{ fontSize: 12, color: 'var(--accent2)' }}
-          title={`Open p99 latency for ${op.name} in Explore (service + operation scoped)`}>
+          title={`Open p99 latency for ${opLabel} in Explore (service + operation scoped)`}>
           P99 →
         </Link>
       </div>

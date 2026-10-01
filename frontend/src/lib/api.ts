@@ -3051,6 +3051,13 @@ export const api = {
   serviceOperations: (svc: string, r: RangeParams, normalized = false, compare = false, env = '') =>
     get<OperationSummary[] | null>(
       `/api/services/${encodeURIComponent(svc)}/operations?${qs(r)}${normalized ? '&normalized=1' : ''}${compare ? '&compare=prior' : ''}${env ? `&env=${encodeURIComponent(env)}` : ''}`),
+  // v0.10.1023 — Operations (Raw) çıplak HTTP fiili satırlarının (fiil,
+  // http_route) kırılımı, spanmetrics_1m'den; pencere + sparkline ızgarası
+  // bundle'ın operations satırlarıyla aynı. env doluysa sunucu sorgusuz
+  // {rows: [], covered: false} döner (MV'de deploy_env yok).
+  serviceOperationRoutes: (svc: string, r: RangeParams, env = '', signal?: AbortSignal) =>
+    get<import('./types').OperationRoutesResponse>(
+      `/api/services/${encodeURIComponent(svc)}/operations/routes?${qs({ ...r, env })}`, signal),
   // serviceBundle — single round trip that returns the three
   // panels the Service detail mount needs (KPI summary,
   // recent problems, operations table). Server fans out to

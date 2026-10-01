@@ -12,6 +12,7 @@ package chstore
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -69,8 +70,10 @@ type ServiceNameCardinality struct {
 }
 
 // bareHTTPMethodRe — templater.httpMethods ile aynı küme (FE
-// lib/opDisplayName ile de); tek yazım burada SQL'e gömülü.
-const bareHTTPMethodRe = `^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT)$`
+// lib/opDisplayName ile de); SQL'e gömülü. v0.10.1023 — artık elle yazılmaz,
+// BareHTTPMethods'tan (operation_routes.go) türer: Operations sekmesinin rota
+// bölmesi aynı kümeyi IN listesi olarak kullanıyor, iki yazım ıraksamasın.
+var bareHTTPMethodRe = `^(` + strings.Join(BareHTTPMethods, "|") + `)$`
 
 // operationNameQualitySQL — SAF: iç GROUP BY name (ayrık ad ~10k), dış
 // toplamlar; tek zaman sınırı (since), bütçe.

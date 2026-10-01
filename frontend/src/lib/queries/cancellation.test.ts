@@ -21,7 +21,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const HEAVY: { file: string; hooks: string[] }[] = [
-  { file: 'services.ts', hooks: ['api.services(', 'api.serviceMap('] },
+  // v0.10.1023 — serviceOperationRoutes: spanmetrics_1m okuması; sekme / pencere değişince kesilmeli.
+  { file: 'services.ts', hooks: ['api.services(', 'api.serviceMap(', 'api.serviceOperationRoutes('] },
   { file: 'logs.ts', hooks: ['api.logs(', 'api.logsPatterns('] }, // v0.10.297 — desen örneklemesi ≤2000 satır
   // v0.10.131 — entity pivotları: entity_seen_5m taramaları + Thanos delegasyonu.
   { file: 'entities.ts', hooks: ['api.entityServices(', 'api.servicePods(', 'api.entityMetrics(', 'api.entityContainers(', 'api.entityLatency('] },

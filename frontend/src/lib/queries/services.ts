@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
 import type { GoDuration } from '@/lib/utils';
-import type { Service, ServiceMap, InfraMetricSeries, NeighborStat, ServiceRuntime, Deploy, ServiceMetadata } from '@/lib/types';
+import type { Service, ServiceMap, InfraMetricSeries, NeighborStat, ServiceRuntime, Deploy, ServiceMetadata, OperationRoutesFor, OperationRoutesResult } from '@/lib/types';
 
 // /api/services + related — the topology side of the app.
 // `range` carries the time window so two pages with different
@@ -122,6 +122,37 @@ export function useServiceRollouts7d(svc: string) {
     },
     enabled: !!svc,
     staleTime: 60_000,
+  });
+}
+
+// useServiceOperationRoutes — v0.10.1023. Operatör bildirimi: "Operation
+// kısmında POST GET neden detail gözükmüyor, sonra trace'e girince çıkıyor."
+// Operations (Raw) tablosu çıplak fiil satırlarını bu yanıtın (fiil, rota)
+// satırlarıyla değiştirir (pages/service/operationRoutes.ts). `forWin` =
+// bundle'ın çekildiği (servis, pencere, env) — ızgara ancak birebir aynı
+// pencereden eşleşir. Çağıran `enabled`'ı yalnız Raw kip + Operations sekmesi
+// açık + ham satırlarda çıplak fiil var + env boş iken açar (fetch-on-open).
+// staleTime 60 sn ≥ sunucu TTL'i (30 sn).
+//
+// placeholderData: undefined BİLİNÇLİ (inceleme R1): main.tsx küresel
+// keepPreviousData koyuyor; anahtar değişince (aralık, zoom, servis) ya da
+// sorgu kapalıyken `data` ÖNCEKİ anahtarın satırları olurdu ve tablo eski
+// pencerenin / servisin rota satırlarını yeni bundle satırlarının yanına
+// koyardı. Yanıt ayrıca istendiği üçlüyle damgalanır; kullanım yeri damgayı
+// ve isPlaceholderData'yı da denetler (routeRowsForBundle).
+export function useServiceOperationRoutes(forWin: OperationRoutesFor | null, enabled: boolean) {
+  const svc = forWin?.svc ?? '';
+  const range = { from: forWin?.from ?? 0, to: forWin?.to ?? 0 };
+  const env = forWin?.env ?? '';
+  return useQuery<OperationRoutesResult>({
+    queryKey: keys.services.operationRoutes(svc, range, env),
+    queryFn: async ({ signal }) => ({
+      for: { svc, from: range.from, to: range.to, env },
+      resp: await api.serviceOperationRoutes(svc, range, env, signal),
+    }),
+    enabled: enabled && !!forWin && !!svc && !env,
+    staleTime: 60_000,
+    placeholderData: undefined,
   });
 }
 

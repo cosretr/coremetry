@@ -17,6 +17,7 @@ export {
   useServiceInfra, useServiceNeighbors, useServiceRuntime,
   useAllServiceRuntimes, useServiceDeploys, useServiceRollouts,
   useServicesMetadata, useServiceBacktrace, useClusters,
+  useServiceOperationRoutes,
 } from './services';
 export {
   useSystemStats, useCardinality,

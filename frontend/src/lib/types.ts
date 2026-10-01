@@ -3134,6 +3134,10 @@ export interface SystemStatus {
 // Matches chstore.OperationSummary.
 export interface OperationSummary {
   name: string;
+  // v0.10.1023 — yalnız /api/services/{name}/operations/routes doldurur
+  // (Go OperationSummary.Route, omitempty): çıplak HTTP fiili adlı span'in
+  // http_route'u. `name` gerçek span adı olarak kalır; bundle satırlarında yok.
+  route?: string;
   spanCount: number;
   errorCount: number;
   errorRate: number;
@@ -3170,6 +3174,40 @@ export interface OperationSummary {
   priorP99DurationMs?: number;
   priorSparkline?: number[];
   priorErrorsSparkline?: number[];
+}
+
+// v0.10.1023 — Operations tablosunun satır modeli (yalnız FE). Çıplak fiil
+// satırı rota satırlarına bölündüğünde rotasız span'leri taşıyan artık satır
+// `route: ''` + splitResidual ile işaretlenir: Traces/Explore bağlantısı ona
+// `http.route NOT EXISTS` ekler (bölünmemiş ham satır eklemez).
+export interface OperationRow extends OperationSummary {
+  splitResidual?: boolean;
+}
+
+// GET /api/services/{name}/operations/routes — Go opRoutesResponse
+// (internal/api/service_operation_routes.go). covered=false: bölme yok
+// (env seçili, pencere spanmetrics_1m kapsamı dışında ya da 5 dk'dan kısa).
+// truncated: satır tavanına ulaşıldı — tarayıcı bölme yapmaz.
+export interface OperationRoutesResponse {
+  rows: OperationSummary[];
+  covered: boolean;
+  truncated?: boolean;
+}
+
+// v0.10.1023 (inceleme R1/R2) — rota okumasının KİMİN için yapıldığı: servis +
+// bundle'ın çekildiği pencere + env. Yanıt bu damgayla saklanır; tablo yalnız
+// damgası bundle'ın (servis, pencere, env) üçlüsüyle birebir eşleşen yanıtı
+// kullanır (pages/service/operationRoutes.ts routeRowsForBundle).
+export interface OperationRoutesFor {
+  svc: string;
+  from: number;
+  to: number;
+  env: string;
+}
+
+export interface OperationRoutesResult {
+  for: OperationRoutesFor;
+  resp: OperationRoutesResponse;
 }
 
 // One 5-minute bucket from the service_summary_5m MV — used to render

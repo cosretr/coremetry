@@ -17,6 +17,9 @@ import { ServiceInfraTab } from './service/ServiceInfraTab';
 import { ServicePodsTab } from './service/ServicePodsTab';
 import { ServiceGitOpsTab } from './service/ServiceGitOpsTab'; // v0.10.981
 import { OperationsTable } from './service/OperationsTable';
+import { expandBareVerbRows, routeRowsForBundle } from './service/operationRoutes'; // v0.10.1023
+import { isBareHTTPMethod } from '@/lib/opDisplayName';
+import { useServiceOperationRoutes } from '@/lib/queries';
 import { ServiceClusterBreakdown } from './service/ServiceClusterBreakdown';
 import { ServiceLatencyHeatmap } from './service/ServiceLatencyHeatmap';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -39,7 +42,7 @@ import { timeRangeToNs } from '@/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ServiceRuntimeBadge } from '@/components/ServiceRuntimeBadge';
 import { keys } from '@/lib/queries/keys';
-import type { Service, Problem, OperationSummary, SLORow, TimeRange } from '@/lib/types';
+import type { Service, Problem, OperationSummary, OperationRoutesFor, SLORow, TimeRange } from '@/lib/types';
 import { QueryError } from '@/components/QueryError';
 import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { PageShell } from '@/components/ui/PageShell';
@@ -112,6 +115,12 @@ function ServiceDetailInner() {
   const [info, setInfo] = useState<Service | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [operations, setOperations] = useState<OperationSummary[]>([]);
+  // v0.10.1023 — `operations`'ın hangi servis + pencere + env için çekildiği
+  // (bundle ile AYNI anda yazılır). Rota bölmesi (useServiceOperationRoutes)
+  // tam bu üçlüyü sorar: sparkline ızgarası ancak bundle'ınkiyle birebir aynı
+  // pencereden eşleşir; aralık ya da servis değişirken yeni anahtarın rota
+  // satırları eski bundle'ın ham satırlarıyla karışmaz (inceleme R2).
+  const [opsWindow, setOpsWindow] = useState<OperationRoutesFor | null>(null);
   const [endpoints, setEndpoints] = useState<import('@/lib/types').EndpointRow[]>([]);
   // group_id rel C — Raw ⇄ Normalized toggle for the Operations table.
   // Default RAW (forward-only: old windows have no op_group yet). When
@@ -298,6 +307,7 @@ function ServiceDetailInner() {
       setInfo(b?.service ?? null);
       setProblems(b?.problems ?? []);
       setOperations(b?.operations ?? []);
+      setOpsWindow({ svc, from: r.from, to: r.to, env });
       setEndpoints(b?.endpoints ?? []);
       if (b?.deploys) {
         queryClient.setQueryData(
@@ -333,7 +343,7 @@ function ServiceDetailInner() {
         // v0.9.858 (UX denetimi K6) — info=null'ın render dalı yoktu:
         // sayfa sessizce SOYULUYOR, operatör servisin telemetrisiz
         // olduğunu sanıyordu. Hata metni saklanıp gösteriliyor.
-        setInfo(null); setProblems([]); setOperations([]); setEndpoints([]);
+        setInfo(null); setProblems([]); setOperations([]); setOpsWindow(null); setEndpoints([]);
         setBundleErr(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
@@ -381,10 +391,32 @@ function ServiceDetailInner() {
   // da söküldü. Backend yetenekleri (?compare=prior + latency
   // serileri, v0.9.60/64) uyumlu-sessiz durur — UI tekrar istenirse
   // fetch tarafı hazır.
+  // v0.10.1023 — Operatör bildirimi: "Operation kısmında POST GET neden
+  // detail gözükmüyor, sonra trace'e girince çıkıyor." Raw kipte çıplak HTTP
+  // fiili satırları (GET / POST …) rotalarına bölünür (spanmetrics_1m;
+  // operationRoutes.ts). YALNIZ: Raw kip + Operations sekmesi açık
+  // (fetch-on-open) + bundle satırlarında çıplak fiil var + env boş (MV'de
+  // deploy_env yok — sunucu da sorgusuz reddeder). Yüklenirken, yanıt
+  // kapsamıyor / kesik ya da çağrı düştüyse tablo bugünkü ham satırları
+  // gösterir (spinner yok, boşa düşmez). Bundle satırları (`operations`) —
+  // Overview, copilot, SpanDetail, ProblemDetail — değişmez.
+  // inceleme R1/R2 — sorgu yalnız bu servisin bundle penceresiyle anahtarlanır;
+  // satırların kullanılıp kullanılmayacağına TEK yer karar verir
+  // (routeRowsForBundle: yer tutucu veri, başka pencere / servis, env, kapsam,
+  // kesik yanıt → bölme yok). Tablo satırları ve sekme rozeti yalnız onun
+  // çıktısından.
+  const opsHaveBareVerb = useMemo(() => operations.some(o => isBareHTTPMethod(o.name)), [operations]);
+  const routesFor = opsWindow && opsWindow.svc === svc ? opsWindow : null;
+  const routesQ = useServiceOperationRoutes(
+    routesFor,
+    !normalized && tab === 'operations' && opsHaveBareVerb && !!routesFor && !routesFor.env,
+  );
+  const routeRows = routeRowsForBundle(routesQ, opsWindow, svc, normalized);
+  const rawOps = useMemo(() => expandBareVerbRows(operations, routeRows), [operations, routeRows]);
   // The table's data source flips with the toggle: bundle ops when raw,
   // the op_group query when normalized. Everything downstream (row
   // renderer, useDataTable sort, sparkline) is unchanged — only `rows`.
-  const displayedOps = normalized ? (normOpsQ.data ?? []) : operations;
+  const displayedOps = normalized ? (normOpsQ.data ?? []) : rawOps.rows;
   const opsLoading = normalized && normOpsQ.isLoading;
   // v0.10.973 — tablo standardı T12 (tarif P6): Overview'un Operations
   // kartının durumu. Bundle hatası da operations=[] bırakır; boşu hatadan
@@ -512,10 +544,12 @@ function ServiceDetailInner() {
                 per-endpoint table). Tab persists in the URL
                 so a saved link / refresh lands on the same
                 sub-view. */}
+            {/* v0.10.1023 — rozet Raw tablonun gösterdiği satır sayısı
+                (bölünmüş çıplak fiil satırları dahil). */}
             <TabStrip
               tab={tab}
               onChange={setTab}
-              opCount={operations.length} />
+              opCount={rawOps.rows.length} />
 
             {tab === 'overview' && (
               <ServiceOverview service={svc} range={range} windowNs={rangeNs} info={info} operations={operations}
@@ -544,6 +578,7 @@ function ServiceDetailInner() {
                 onWiden={() => setRange({ preset: DEFAULT_RANGE_PRESET })}
                 normalized={normalized}
                 onToggleNormalized={setNormalized}
+                splitVerbs={normalized ? 0 : rawOps.split}
                 onZoom={handleZoom} onZoomReset={handleZoomReset}
                 loading={opsLoading} />
             )}

@@ -269,6 +269,8 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// v0.10.705 — SAF telemetri: spanmetrics_1m route pencere ölçüsü
 		// (http_route hedefli kural). Kural satırları problem.go'da kalır.
 		"alert_target_route.go": true,
+		// v0.10.1023 — SAF telemetri: tek FROM'u spanmetrics_1m (Operations çıplak fiil → rota kırılımı); ops MV okumasıyla aynı havuz.
+		"operation_routes.go": true,
 		// v0.10.712 — SAF telemetri: trace_summary_5m kök kapsaması (admin teşhisi).
 		"trace_root_coverage.go": true,
 		// v0.10.979 — SAF telemetri: Rollouts v2 §11.8 T paketi, tek FROM'u spans

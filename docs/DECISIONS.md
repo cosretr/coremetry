@@ -987,6 +987,63 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Operations: çıplak HTTP fiili satırları rotaya göre açılır (v0.10.1023)
+
+**Operatör:** "Operation kısmında POST GET neden detail gözükmüyor, sonra trace'e girince çıkıyor."
+Servis sayfasının Operations sekmesinde (Raw kip, varsayılan) satırlar yalnız `GET` / `POST`; satıra
+tıklayınca Traces `name = GET` süzgeciyle açılıyor ve oradaki her satır `GET /metrics` (fiil + rota)
+yazıyor. **Kök neden:** http.route'suz enstrümantasyonda span adı yalnız fiildir. Traces listesi
+v0.10.756'dan beri gösterim adını tarayıcıda kuruyor (`opDisplayName`: çıplak fiil + kök span'ın
+`http_route`'u). Operations satırları ise `operation_summary_5m`'den gelir (GROUP BY name, rota boyutu
+yok) — v0.10.756 bu dilimi bilinçli olarak ertelemişti ("bir ad çok route"). **Karar:** yalnız Raw kipte,
+çıplak fiil satırı `spanmetrics_1m`'den (fiil, rota) başına bölünür. Yeni uç
+`GET /api/services/{name}/operations/routes` (kendi dosyası, 30 sn önbellek, anahtar servis + env + pencere
+kovası + okuma ızgarası). Pencere ve sparkline ızgarası ops MV okumasıyla aynı hizalanır — "All" satırı
+serileri eleman eleman topladığı için: alt uç 5 dk'ya aşağı; `to` SANİYEYE aşağı (ops okuması `winEnd`'i
+konumsal `?` ile bağlar, clickhouse-go onu saniye hassasiyetinde yazar — `to` = B + 400 ms iken ops B
+kovasını dışlar, plan da dışlar); ızgara `sparklineGrid(winSec, 300)`. Tarama `to`'nun dakikasında BİTER
+(1 dk kovalardan yalnız başlangıcı `to`'dan önce olanlar): ops `to`'yu içeren 5 dk kovasını TAM alır ama
+bundle o anda hesaplandı; rota okuması sekme açılınca, sonradan koşar ve 5 dk kovanın sonuna dek okusaydı
+bundle'dan sonra gelen trafiği de sayardı (kısa pencerede %20-30'a varan şişme). Satırın `name`'i GERÇEK
+span adı olarak kalır; rota yeni isteğe bağlı `route` alanında (`OperationSummary.Route`, omitempty).
+Değiştirme tarayıcıda, yalnız tabloda (`pages/service/operationRoutes.ts`): fiilin en az bir dolu rotası
+varsa ham satır çıkar, rota satırları girer (rotasız span'ler `route: ''` artık satırında). Hangi rota
+yanıtının uygulanacağına TEK işlev karar verir (`routeRowsForBundle`): yanıt, bundle'ın çekildiği
+(servis, from, to, env) üçlüsüyle damgalanır ve yalnız birebir eşleşen, gerçek (yer tutucu olmayan)
+yanıt kullanılır — `main.tsx` küresel `keepPreviousData` koyduğu için rota sorgusu ondan açıkça çıkar,
+yoksa aralık / zoom / servis değişiminde önceki pencerenin rota satırları yeni bundle satırlarına
+uygulanırdı. Tablo satırları ve sekme rozeti yalnız bu çıktıdan. Gösterim, ad sıralaması ve süzgeç
+`opDisplayName(name, route)`; satır kimliği ad + rota (+ artık satır işareti — ham "GET" ile artık "GET"
+aynı kimliği paylaşmaz). Traces/Explore bağlantıları rota çipini taşır (`name = GET` + `http.route =
+/metrics`; artık satırda `http.route NOT EXISTS`). Kapsamlı grafik simgesi (`?op=`) bölmeden gelen her
+satırda (rota ve artık) gizli: o grafikler yalnız span adıyla daralır, satırın gösterdiği alt kümeyi
+değil tüm GET'leri çizerdi; bölünmemiş ham satırlarda kalır. Bundle'ın operations dilimi ve
+`GetOperationSummary` DEĞİŞMEDİ — copilot, SpanDetail taban çizgisi, ProblemDetail, Overview OpsCard ve
+anomali incelemesi ham adı eşlemeye devam eder. Çıplak fiil kümesi Go'da tek yazıma indi
+(`chstore.BareHTTPMethods`; trace_health regex'i ondan türer), templater ve frontend kümeleriyle eşitlik
+testle pinli. **Bölme YAPILMAYAN durumlar (tablo bugünkü gibi görünür):** env seçili (`spanmetrics_1m`'de
+deploy_env yok; uç sorgusuz `covered: false` döner — bölmek env'e daralmış satırı tüm env'lerin
+rotalarıyla değiştirirdi); pencere `spanmetrics_1m` kapsamı dışında (forward-only MV, 30 gün TTL;
+kapsama yardımcısı `spanmetricsCoverageStart`); pencere 5 dk'dan kısa (ops ham spans yolunda, ızgara
+eşleşmez); fiilin hiç dolu rotası yok; satır tavanı (300) doldu (yarım bölme toplamı eksiltirdi);
+Normalized kip; rota yanıtı yüklenirken, başka pencere / servis için olduğunda ya da çağrı düştüğünde.
+Rota okuması yalnız Operations sekmesi açıkken yapılır (fetch-on-open); sekme rozeti Raw tablonun
+gösterdiği satır sayısıdır. **Bilinen sınırlar:** aynı fiil + rotanın server ve client span'leri tek
+satırda birleşir (çıplak satır da ayırmıyordu). Bölünmüş satırların toplamı çıplak satırınkinden İKİ
+nedenle ayrışabilir: (1) kenar — ops `to`'yu içeren 5 dk kovasını tam alır, rota taraması `to`'nun
+dakikasında biter; geçmiş (mutlak) pencerede bu, kovanın `to`'dan sonraki dakikaları kadar (≤ ~5 dk
+trafik) çıplak satırdan az sayım demektir; canlı pencerede `to`'nun dakikasının rota okumasına kadar
+dolan kısmı (≤ 1 dk trafik) fazla sayılabilir; (2) bundle'ın yaşı — bundle 60 sn önbellekli (+ SWR) ve
+hesaplandığı andaki veriyi taşır; rota okuması (30 sn önbellekli) sonra koşar. Geniş pencerede (>10 sa,
+slot >5 dk) rota satırının p50/p95/p99 çizgisi slotun birleşik yüzdeliğidir, ham satırınki 5 dk kova
+yüzdeliklerinin slot içi maksimumu. Overview'daki Operations kartının "View all N" sayısı ham span adı
+sayısıdır, Operations sekmesinin rozeti ise bölünmüş satır sayısı — ikisi farklı okuyabilir (kabul
+edildi). Bundle'ın operations satırları ham spans geri düşüşünden geldiyse (ops MV boş/hatalı; 1 sn
+ızgara, hizasız köken) rota satırları farklı bir sparkline ızgarasında durur (nadir; kabul edildi).
+**AÇIK BULGU (bu sürümde düzeltilmedi):** Normalized kipte satır tıklaması `name = <op_group şekli>`
+gönderir; şekil rotadan ya da normalize edilmiş yoldan türetildiyse ("GET /metrics", "GET /users/:id")
+hiçbir span adıyla eşleşmez ve Traces listesi boş gelir. Düzeltme bir `op_group` süzgeç anahtarı ister.
+
 ## 2026-10-01 — Histerezis bandındaki açık anomali artık gerçekten tazelenir (v0.10.1022)
 
 **Operatör:** "anomali alarmları çok geliyor" (ekran görüntüsü: saatte ≈130 anomali problemi, ~20 dk

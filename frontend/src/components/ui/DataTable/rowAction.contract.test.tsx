@@ -266,7 +266,11 @@ describe('T2 — işaretli satır işleyicili (ters yön)', () => {
     const src = readFileSync(f, 'utf8');
     const rows = trTags(src).filter(t => openRowProps(src, t.tag));
     expect(rows.length).toBe(1);
-    expect(rows[0].tag).toContain('rowClickHandlers(opHref(op.name), () => navigate(opHref(op.name)))');
+    // v0.10.1023 — opHref artık SATIRI alır (op.name değil): bölünmüş çıplak
+    // fiil satırı ("GET" + "/metrics") Traces'e `http.route` çipini de taşımalı
+    // (operatör: "POST GET neden detail gözükmüyor"). İşleyici + hedef aynı
+    // sözleşme; yalnız argüman satırın kendisi oldu.
+    expect(rows[0].tag).toContain('rowClickHandlers(opHref(op), () => navigate(opHref(op)))');
     expect(unhandledMarkedRows(src)).toEqual([]);
   });
 });
