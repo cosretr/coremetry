@@ -987,6 +987,17 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Argo CD: hub, instance'larıyla birlikte kaldırılabilir (v0.10.997)
+
+**Karar (operatör: "Hub kaldıramıyorum instance varsa" — prod'da hub başına 190+ instance):**
+Ayarlar › Argo CD'de instance'ları bağlı hub'ın "Kaldır"ı artık çıkmaz sokak değil. İlk tık hiçbir
+şeyi kaldırmaz: ileti + "Hub'ı N instance ile birlikte kaldır" / "Vazgeç". Onay hub'ı ve ona bağlı
+tüm instance'ları TEK taslak değişikliğiyle çıkarır; Kaydet'e kadar yazılmaz, "Değişiklikleri geri
+al" geri getirir. Sunucu kuralı (BE4) DEĞİŞMEDİ: hub gövdeden çıkarken ona bağlı instance gövdede
+kalırsa 400 — ikisi birlikte çıkınca kural zaten sağlanıyor, yani düzeltme yalnız arayüzde. Pin'i
+olan instance kaldırılamaz kuralı da aynı: o hub'da onay sunulmaz, kaç pin olduğu söylenir (pin
+editörü API'de). Kaldırılan instance'ların ClickHouse satırları (`instance_id`) TTL'e kadar durur.
+
 ## 2026-10-01 — MCP istemcisi çift dönemli: önce `server/discover`, olmazsa `initialize` (v0.10.995; denetim M2)
 
 **Karar:** dış MCP sunucularına bağlanan istemci (`internal/mcpclient`) dönemi `Initialize`'da bir kez

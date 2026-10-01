@@ -192,12 +192,45 @@ describe('ArgoCDTab — hub\'lar', () => {
     expect(el.textContent).toContain('1 kaydedilmemiş değişiklik: cluster-a hub olarak eklendi');
   });
 
-  it('instance\'ları bağlı hub kaldırılamaz (tarayıcıda engel)', async () => {
+  // v0.10.997 (operatör: "Hub kaldıramıyorum instance varsa") — instance'ları
+  // bağlı hub artık çıkmaz sokak değil: onayla hub + instance'lar TEK taslak
+  // değişikliğiyle kalkar; Kaydet gövdesinde ikisi de yoktur (BE4 sağlanır).
+  it('instance\'ları bağlı hub: "Kaldır" onay ister, onay hub\'ı instance\'larıyla birlikte kaldırır', async () => {
     setup();
     const el = render();
     await tick();
+    const before = instRows(el).length;
     click(el.querySelector('button[aria-label="hub-1 hub listesinden kaldır"]')!);
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe("hub-1 kaldırılamaz: 2 instance bu hub'a bağlı. Önce onları tablodan kaldırın ya da düzenleme formunda başka hub'a taşıyın.");
+    // İlk tık hiçbir şeyi kaldırmaz: ileti + onay düğmeleri.
+    expect(el.querySelector('[role="alert"]')?.textContent).toBe("hub-1 hub'ına 2 instance bağlı. Hub'ı kaldırmak bu instance'ları da tablodan çıkarır; Kaydet'e basana kadar hiçbir şey yazılmaz.");
+    expect(el.textContent).toContain('2 hub');
+    expect(instRows(el)).toHaveLength(before);
+    expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
+    // Vazgeç: ileti ve onay gider, taslak aynı.
+    click(button(el, 'Vazgeç'));
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect(buttons(el, "Hub'ı 2 instance ile birlikte kaldır")).toHaveLength(0);
+    expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
+    // Onay: hub + 2 instance tek seferde.
+    click(el.querySelector('button[aria-label="hub-1 hub listesinden kaldır"]')!);
+    click(button(el, "Hub'ı 2 instance ile birlikte kaldır"));
+    expect(live(el)).toBe("hub-1 hub'ı ve 2 instance tablodan çıkarıldı — kaydedilmedi.");
+    expect(el.textContent).toContain('1 hub');
+    expect(instRows(el)).toHaveLength(before - 2);
+    expect(instRows(el).some(r => r.textContent?.includes('zeta-prod') || r.textContent?.includes('alpha-int'))).toBe(false);
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    const body = await save(el);
+    expect((body.hubs ?? []).map(h => h.clusterId)).toEqual([H2]);
+    expect(body.instances.map(i => i.id)).toEqual(['team-a-prod']);
+  });
+
+  it('pin\'i olan instance\'ı taşıyan hub kaldırılamaz: onay sunulmaz', async () => {
+    setup();
+    const el = render();
+    await tick();
+    click(el.querySelector('button[aria-label="hub-2 hub listesinden kaldır"]')!);
+    expect(el.querySelector('[role="alert"]')?.textContent).toBe("hub-2 kaldırılamaz: bu hub'a bağlı instance'larda 1 pin var; önce API'den pin'leri kaldırın (PUT /api/settings/argocd, pins[]).");
+    expect([...el.querySelectorAll('button')].some(b => b.textContent?.includes('ile birlikte kaldır'))).toBe(false);
     expect(el.textContent).toContain('2 hub');
     expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
   });
@@ -635,13 +668,15 @@ describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
     setup();
     const el = render();
     await tick();
-    const hubAlert = () => [...el.querySelectorAll('[role="alert"]')].find(a => a.textContent?.includes('kaldırılamaz'));
+    // v0.10.997 — ileti artık onay sorusu ("N instance bağlı"); geri al onu ve onay düğmesini siler.
+    const hubAlert = () => [...el.querySelectorAll('[role="alert"]')].find(a => a.textContent?.includes('instance bağlı'));
     click(el.querySelector('button[aria-label="hub-1 hub listesinden kaldır"]')!);
     expect(hubAlert()).toBeTruthy();
     click(el.querySelector('input[aria-label^=\'cluster="hub-2"\']')!);
     expect(el.textContent).toContain('1 kaydedilmemiş değişiklik');
     click(button(el, 'Değişiklikleri geri al'));
     expect(hubAlert()).toBeUndefined();
+    expect([...el.querySelectorAll('button')].some(b => b.textContent?.includes('ile birlikte kaldır'))).toBe(false);
     expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
   });
 

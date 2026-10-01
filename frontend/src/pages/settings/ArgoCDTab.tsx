@@ -251,6 +251,21 @@ export function ArgoCDTab() {
   };
 
   // ── Hub'lar ─────────────────────────────────────────────────────────────
+  // v0.10.997 (operatör: "Hub kaldıramıyorum instance varsa") — hub'ı, ona
+  // bağlı tüm instance'larla birlikte TEK taslak değişikliğiyle kaldırır.
+  // Pin denetimi panelde (pin'li hub'da bu yol sunulmaz); açık düzenleme
+  // formu kaldırılan hub'a aitse kapanır.
+  const removeHubWithInstances = (key: string) => {
+    const hub = draft.hubs.find(h => h.key === key);
+    if (!hub) return;
+    change(d => ({
+      ...d,
+      hubs: d.hubs.filter(h => h.key !== key),
+      instances: d.instances.filter(i => i.hubClusterId !== hub.clusterId),
+    }));
+    if (buffer?.hubClusterId === hub.clusterId) { setBuffer(null); setBufErr({}); setPending(false); }
+    setInstMsg('');
+  };
   const addHub = (clusterId: string) => change(d => (d.hubs.some(h => h.clusterId === clusterId) ? d
     : { ...d, hubs: [...d.hubs, { key: `h:${clusterId}`, clusterId, inject: true }] }));
 
@@ -440,10 +455,11 @@ export function ArgoCDTab() {
       <fieldset disabled={busy} aria-busy={busy || undefined} className="stack gap-6" style={LOCK}>
         {enabledBox}
 
-        <ArgoCDHubsPanel hubs={draft.hubs} instances={draft.instances} clusters={clusters} enabled={draft.enabled} issues={issues}
+        <ArgoCDHubsPanel hubs={draft.hubs} instances={draft.instances} pins={snap.pins} clusters={clusters} enabled={draft.enabled} issues={issues}
           msg={hubMsg} onMsg={setHubMsg}
           onAdd={addHub}
           onRemove={key => change(d => ({ ...d, hubs: d.hubs.filter(h => h.key !== key) }))}
+          onRemoveWithInstances={removeHubWithInstances}
           onInject={(key, v) => change(d => ({ ...d, hubs: d.hubs.map(h => (h.key === key ? { ...h, inject: v } : h)) }))}
           announce={announce} focus={focus} />
 

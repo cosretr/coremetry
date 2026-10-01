@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
+import type { ArgoCDPin } from '@/lib/types';
 import { domKey, type HubDraft, type InstanceDraft, type Issue, type RemoteCluster } from './argocdForm';
 import { ArgoCDNote, ArgoCDSectionPanel } from './ArgoCDSectionPanel';
 
@@ -14,11 +15,18 @@ import { ArgoCDNote, ArgoCDSectionPanel } from './ArgoCDSectionPanel';
 // dilim 5 sonrası tek biçim `useDataTable` + `DataTableHead` (sıralanmaz,
 // satır tıklanmaz) ve durum tablonun İÇİNDE (`DataTableState`). Silinmiş /
 // devre dışı Remote Cluster tam genişlik hata satırıyla, Kaydet'i beklemeden
-// görünür. Instance'ları bağlı hub'ın "Kaldır"ı tarayıcıda engellenir
-// (sunucu da reddeder: BE4, `instances[i].hubClusterId`).
+// görünür.
 // v0.10.974 — engel iletisi sekmenin durumunda (`msg`/`onMsg`): "Değişiklikleri
 // geri al" onu da siler (mockup revert: hubMsg + instMsg); geri alınan
 // taslakta bayat "N instance bağlı" sayısı ekranda kalmaz.
+// v0.10.997 (operatör: "Hub kaldıramıyorum instance varsa" — prod'da hub
+// başına 190+ instance) — instance'ları bağlı hub'ın "Kaldır"ı artık çıkmaz
+// sokak değil: iletinin altında "Hub'ı N instance ile birlikte kaldır" onayı
+// çıkar ve hub + instance'ları TEK taslak değişikliğiyle kaldırır (Kaydet'e
+// kadar yazılmaz; "Değişiklikleri geri al" geri getirir). Sunucu kuralı aynı
+// (BE4): hub gövdeden çıkarken ona bağlı instance gövdede KALIRSA 400 —
+// ikisi birlikte çıkınca kural zaten sağlanır. Tek engel pin: pin'i olan
+// instance kaldırılamaz (pin editörü API'de), o hub'da onay sunulmaz.
 
 interface HubRow { hub: HubDraft; rc: RemoteCluster | undefined; count: number; name: string }
 
@@ -29,9 +37,11 @@ const COLS: ColumnDef<HubRow>[] = [
   { id: 'act', label: 'Eylemler', kind: 'actions', width: 120 },
 ];
 
-export function ArgoCDHubsPanel({ hubs, instances, clusters, enabled, issues, msg, onMsg, onAdd, onRemove, onInject, announce, focus }: {
+export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, enabled, issues, msg, onMsg, onAdd, onRemove, onRemoveWithInstances, onInject, announce, focus }: {
   hubs: HubDraft[];
   instances: InstanceDraft[];
+  /** Kayıtlı pin'ler: pin'i olan instance (ve onu taşıyan hub) kaldırılamaz. */
+  pins: ArgoCDPin[];
   clusters: RemoteCluster[];
   /** Taslaktaki entegrasyon bayrağı (devre dışı hub yalnız açıkken hata). */
   enabled: boolean;
@@ -41,11 +51,16 @@ export function ArgoCDHubsPanel({ hubs, instances, clusters, enabled, issues, ms
   onMsg: (msg: string) => void;
   onAdd: (clusterId: string) => void;
   onRemove: (key: string) => void;
+  /** v0.10.997 — hub'ı, ona bağlı TÜM instance'larla birlikte taslaktan kaldırır. */
+  onRemoveWithInstances: (key: string) => void;
   onInject: (key: string, inject: boolean) => void;
   announce: (text: string) => void;
   focus: (id: string) => void;
 }) {
   const [pick, setPick] = useState('');
+  // Onay bekleyen hub (anahtar). İleti (`msg`) silinince — ör. "Değişiklikleri
+  // geri al" — onay düğmeleri de gizlenir; başka bir ileti yazılırken sıfırlanır.
+  const [confirm, setConfirm] = useState<string | null>(null);
 
   const rows: HubRow[] = hubs.map(h => {
     const rc = clusters.find(c => c.id === h.clusterId);
@@ -55,6 +70,7 @@ export function ArgoCDHubsPanel({ hubs, instances, clusters, enabled, issues, ms
   const isHub = (id: string) => hubs.some(h => h.clusterId === id);
 
   const add = () => {
+    setConfirm(null);
     if (!pick) { onMsg('Önce listeden bir Remote Cluster seçin.'); return; }
     const rc = clusters.find(c => c.id === pick);
     if (isHub(pick)) { onMsg(`${rc?.name ?? pick} zaten hub.`); return; }
@@ -64,13 +80,36 @@ export function ArgoCDHubsPanel({ hubs, instances, clusters, enabled, issues, ms
   };
   const remove = (r: HubRow) => {
     if (r.count > 0) {
-      onMsg(`${r.name} kaldırılamaz: ${r.count} instance bu hub'a bağlı. Önce onları tablodan kaldırın ya da düzenleme formunda başka hub'a taşıyın.`);
+      const ids = new Set(instances.filter(i => i.hubClusterId === r.hub.clusterId).map(i => i.id));
+      const pinned = pins.filter(p => ids.has(p.instanceId)).length;
+      if (pinned > 0) {
+        setConfirm(null);
+        onMsg(`${r.name} kaldırılamaz: bu hub'a bağlı instance'larda ${pinned} pin var; önce API'den pin'leri kaldırın (PUT /api/settings/argocd, pins[]).`);
+        return;
+      }
+      setConfirm(r.hub.key);
+      onMsg(`${r.name} hub'ına ${r.count} instance bağlı. Hub'ı kaldırmak bu instance'ları da tablodan çıkarır; Kaydet'e basana kadar hiçbir şey yazılmaz.`);
+      focus(`acd-hub-rmall-${domKey(r.hub.key)}`);
       return;
     }
+    setConfirm(null);
     onRemove(r.hub.key);
     onMsg('');
     announce(`${r.name} hub listesinden çıkarıldı — kaydedilmedi.`);
     focus('acd-hub-add');
+  };
+  const pending = msg ? rows.find(r => r.hub.key === confirm && r.count > 0) : undefined;
+  const removeAll = (r: HubRow) => {
+    setConfirm(null);
+    onRemoveWithInstances(r.hub.key);
+    onMsg('');
+    announce(`${r.name} hub'ı ve ${r.count} instance tablodan çıkarıldı — kaydedilmedi.`);
+    focus('acd-hub-add');
+  };
+  const cancel = (r: HubRow) => {
+    setConfirm(null);
+    onMsg('');
+    focus(`acd-hub-rm-${domKey(r.hub.key)}`);
   };
 
   return (
@@ -139,9 +178,17 @@ export function ArgoCDHubsPanel({ hubs, instances, clusters, enabled, issues, ms
         </table>
       </div>
       {msg && <div role="alert" className="field-error">{msg}</div>}
+      {pending && (
+        <div className="row gap-4 row-wrap">
+          <Button variant="danger" size="sm" id={`acd-hub-rmall-${domKey(pending.hub.key)}`} onClick={() => removeAll(pending)}>
+            Hub'ı {pending.count} instance ile birlikte kaldır
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => cancel(pending)}>Vazgeç</Button>
+        </div>
+      )}
       <div className="row gap-4 row-wrap">
         <label htmlFor="acd-hub-add" className="sr-only">Hub olarak eklenecek Remote Cluster</label>
-        <select id="acd-hub-add" value={pick} onChange={e => { setPick(e.target.value); onMsg(''); }}>
+        <select id="acd-hub-add" value={pick} onChange={e => { setPick(e.target.value); setConfirm(null); onMsg(''); }}>
           <option value="">Remote Cluster seç…</option>
           {clusters.map(c => (
             <option key={c.id} value={c.id} disabled={isHub(c.id)}>{c.name}{c.enabled ? '' : ' (devre dışı)'}</option>
