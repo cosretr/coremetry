@@ -1660,6 +1660,29 @@ export interface OracleSubjectCoverage {
   generatedAt: number;
 }
 
+/** v0.10.1002 — Oracle operasyon adı araması (GET /api/oracle/operations;
+ *  internal/api/oracle_operations.go). Komut paleti bununla operasyon adından
+ *  trace'e gider: functionCodes span'lerdeki FUNCTION_CODE değerleridir. */
+export interface OracleOperationHit {
+  operation: string;
+  rows: number;
+  /** ms */
+  lastSeen: number;
+  functionCodes: string[];
+  /** Hata satırındaki en yeni trace kimliği (varsa). */
+  lastTraceId?: string;
+  /** Öğrenilmiş op → servis eşlemesi, yalnız onaylıysa. */
+  service?: string;
+  source?: string;
+}
+export interface OracleOperationsResponse {
+  /** false = etkin Oracle kaynağı yok. */
+  enabled: boolean;
+  /** Traces süzgecinin anahtar yazımı (prod'un yazdığı: FUNCTION_CODE / function_code). */
+  spanAttrKey: string;
+  operations: OracleOperationHit[];
+}
+
 /** v0.10.998 — Oracle kaynağı canlıya geçiş önizlemesi (GET
  *  /api/settings/oracle/{id}/live-preview; internal/api/oracle_live_preview.go).
  *  Sayılar gölgede AÇILAN Problem'lerdir: canlı kip bildirimi yalnız açılışta

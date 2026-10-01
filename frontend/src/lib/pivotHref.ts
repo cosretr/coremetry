@@ -160,6 +160,32 @@ export function operationTracesHref(p: {
   });
 }
 
+// functionCodeTracesHref — v0.10.1002: bir iş fonksiyonunun trace'leri.
+//
+// Oracle operasyon adı trace'lerde yok; köprü fonksiyon kodu (span attribute
+// FUNCTION_CODE). `attrKey` sunucudan gelir (GET /api/oracle/operations →
+// spanAttrKey): kullanıcı süzgeci harf DUYARLI ve prod hangi yazımı
+// yazıyorsa o olmalı — burada sabit bir yazım, v0.9.626 sınıfı sessiz boş
+// listeydi. Tek kodda `=`, çok kodda `IN`. `rootOnly:false`: kodu taşıyan
+// span kök olmak zorunda değil (v0.8.585 sınıfı).
+export function functionCodeTracesHref(p: {
+  window: TracesPivot['window'];
+  attrKey: string;
+  codes: string[];
+  hasError?: boolean;
+}): string {
+  const filters: FilterExpr[] = [p.codes.length === 1
+    ? { k: p.attrKey, op: '=', v: [p.codes[0]] }
+    : { k: p.attrKey, op: 'IN', v: p.codes }];
+  return tracesPivotHref({
+    window: p.window,
+    hasError: p.hasError,
+    filters: encodeFilters(filters),
+    view: 'list',
+    rootOnly: false,
+  });
+}
+
 // messagingTracesHref — pivot from a queue/topic row into /traces.
 //
 // v0.9.256, operator-reported: "messaging kısmında tracelere erişemiyorum."

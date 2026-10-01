@@ -20,6 +20,7 @@ import {
 import { toast } from '@/lib/toast';
 import { traceHref } from '@/lib/traceHref';
 import { paletteIdentityQuery, identityTracesHref, paletteProblemId, problemDisplayHref } from '@/lib/paletteIdentity';
+import { oracleOperationQuery, oraclePaletteResults } from '@/lib/paletteOracle';
 import { Button, LinkButton } from '@/components/ui';
 
 // CommandPalette — global Cmd-K / Ctrl-K spotlight (v0.5.162).
@@ -37,7 +38,7 @@ import { Button, LinkButton } from '@/components/ui';
 // catalog size (~30 pages + N services).
 
 type Result = {
-  kind: 'page' | 'service' | 'trace' | 'action' | 'endpoint';
+  kind: 'page' | 'service' | 'trace' | 'action' | 'endpoint' | 'operation';
   label: string;
   // v0.9.1270 (B5#1) — sayfa adı sidebar'la TEK kaynaktan: navKey
   // varsa etiket t(navKey) ile çözülür (i18n + TR paritesi bedava);
@@ -166,6 +167,9 @@ export function CommandPalette() {
   // client list). Refreshed per keystroke; cleared when the query is too
   // short or looks like a trace id. (UX pass #1.)
   const [endpoints, setEndpoints] = useState<Result[]>([]);
+  // v0.10.1002 — Oracle operasyon adı isabetleri (sunucu taraflı arama;
+  // operasyon adı trace'lerde yok, köprü fonksiyon kodu — lib/paletteOracle).
+  const [oracleOps, setOracleOps] = useState<Result[]>([]);
   // v0.7.89 — pinned + recently-viewed services, refreshed each open,
   // shown in the empty-query state as the pivot rotation.
   const [pivotSvcs, setPivotSvcs] = useState<Result[]>([]);
@@ -357,6 +361,22 @@ export function CommandPalette() {
     return () => { cancelled = true; clearTimeout(t); };
   }, [query, open, locationSearch]);
 
+  // v0.10.1002 — Oracle operasyon adı araması: "DIGITAL_TRANSFER_EFT" yazan
+  // operatör o operasyonun trace'lerine gider. Endpoint aramasıyla aynı desen
+  // (200ms debounce + stale-guard); ≥3 karakter, trace id değilse. Etkin
+  // Oracle kaynağı yoksa sunucu CH'ye gitmeden boş döner.
+  useEffect(() => {
+    const q = oracleOperationQuery(query);
+    if (!open || !q || TRACE_ID_RE.test(q)) { setOracleOps([]); return; }
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      api.oracleOperations(q, 6)
+        .then(r => { if (!cancelled) setOracleOps(oraclePaletteResults(r, currentRange(locationSearch))); })
+        .catch(() => { if (!cancelled) setOracleOps([]); });
+    }, 200);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query, open, locationSearch]);
+
   // Score: pages with the query as a prefix beat substring beat
   // fuzzy. Exact matches sort to the top. Hand-rolled rather than
   // pulling in fuzzysort — at this catalog size the diff is in
@@ -394,7 +414,8 @@ export function CommandPalette() {
         all
           .map(r => ({ ...r, score: scorePaletteEntry(q, r.label, r.aliases) }))
           .filter(r => r.score && r.score > 0),
-        endpoints,
+        // Oracle operasyonları endpoint'lerin hemen ardından (v0.10.1002).
+        [...endpoints, ...oracleOps],
       );
     }
     // Action launcher results (v0.5.457). Verb-driven matches like
@@ -448,7 +469,7 @@ export function CommandPalette() {
     // v0.10.126 — endpoint'ler artık rankPaletteResults içinde (servisten
     // sonra, sayfadan önce); burada ikinci kez eklenmez.
     return scored;
-  }, [query, services, endpoints, pivotSvcs, user?.role, localizedPages]);
+  }, [query, services, endpoints, oracleOps, pivotSvcs, user?.role, localizedPages]);
 
   // Reset cursor when results shrink/grow — otherwise the cursor
   // can point past the last row and Enter does nothing.
@@ -786,6 +807,7 @@ export function CommandPalette() {
                 {r.kind === 'trace' ? 'trace'
                  : r.kind === 'service' ? 'service'
                  : r.kind === 'endpoint' ? 'endpoint'
+                 : r.kind === 'operation' ? 'oracle'
                  : r.kind === 'action' ? 'action'
                  : 'page'}
               </span>

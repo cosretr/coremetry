@@ -987,6 +987,24 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Oracle: operasyon adıyla trace bulma — komut paleti (v0.10.1002)
+
+**Karar (operatör: "operasyon ismiyle trace bulabilir miyim" → "yap"):** operasyon adı
+(DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE gibi) trace'lerde yok; arama KOMUT PALETİNE (⌘K / üst arama kutusu)
+üçüncü sunucu taraflı kaynak olarak eklendi (`GET /api/oracle/operations?q=`, ≥3 karakter, 200 ms
+debounce, 60 sn önbellek, rol kapısı yok — operasyon adı zaten Problem başlığında ve Trace › Logs'ta her
+role görünür). Her isabet en çok iki sonuç: **(1) operasyon → trace'ler** — operasyonun son 7 gündeki
+hata satırlarındaki fonksiyon kodları, Traces'te `FUNCTION_CODE = / IN` süzgeci olarak (başarılı + hatalı
+TÜM trace'ler; fonksiyon kodu yoksa öğrenilmiş servisin hatalı trace'leri, ikisi de yoksa sonuç üretilmez);
+**(2) son hata trace'i** — hata satırındaki en yeni trace kimliği, Logs sekmesinde (kesin eşleşme).
+**Neden Traces sayfasına yeni süzgeç türü değil:** çeviri (operasyon → fonksiyon kodu) palette yapılıp
+sıradan bir attribute süzgecine indiği için liste, sayım, grafik ve ısı haritası uçlarının hiçbiri
+değişmedi; Traces'e özel bir `oraOp` parametresi her uçta ayrı çeviri isterdi. **Süzgeç anahtarının
+yazımı sunucudan gelir** (`spanAttrKey` = terfi kolonu probe'unun doğruladığı yazım,
+`chstore.PromotedAttrSpelling`): kullanıcı süzgeci harf duyarlı, sabit bir yazım v0.9.626 sınıfı sessiz
+boş listeydi. Sınır: yalnız son 7 günde hata satırı olan operasyonlar bulunur (kaynak `oracle_error_log`);
+hiç hata vermemiş operasyon adı Coremetry'de hiçbir yerde yok.
+
 ## 2026-10-01 — Oracle: fonksiyon kodu doğru kolondan okunur (v0.10.1001; 1000'in düzeltmesi)
 
 **Bulgu (operatörün prod ekran görüntüsü):** güncel sorgu çıktısında hem `ERRORCODE` hem `FUNCTIONCODE`
