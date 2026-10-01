@@ -37,6 +37,8 @@ import { serviceHref, inboxItemWindow } from '@/lib/serviceHref';
 import { SubjectLink } from '../components/SubjectLink';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle } from '@/features/anomalies/spread'; // v0.10.949
 import type { SubjectLane } from '@/lib/types';
+import { useProblemVerdicts } from '@/lib/queries';
+import { verdictIndex, verdictOf, countNoise, filterByVerdictView, parseVerdictView, type VerdictView } from '@/lib/problemVerdict';
 
 // Facet vocab + defaults (v0.8.291) — both defaults are what the URL codec
 // omits so a fresh link stays clean.
@@ -316,6 +318,10 @@ export default function InboxPage() {
     }, { replace: true });
   };
   const setStatusFilter = (s: InboxStatus) => setParam('status', s === 'open' ? null : s);
+  // v0.10.1015 — öğretme görünümü: ?verdict=noise yalnız "problem değil"
+  // işaretli satırları gösterir; parametresiz (varsayılan) onları GİZLER.
+  const verdictView = parseVerdictView(searchParams.get('verdict'));
+  const setVerdictView = (v: VerdictView) => setParam('verdict', v === 'triage' ? null : v);
   // Multi-select toggles keep the min-1 invariant (can't deselect everything),
   // then serialise the set back to the URL (default selection → param removed).
   const togglePrio = (p: string) => {
@@ -487,13 +493,21 @@ export default function InboxPage() {
   // whole point). Kept as a belt-and-braces pass so a stale cached page from a
   // pre-upgrade pod can't render rows the operator deselected — it must never
   // be the ONLY place the facet is applied again.
+  // v0.10.1015 — öğretme kararları (imza → gerçek / problem değil). Kararlar
+  // yüklenemezse dizin boş kalır: hiçbir satır gizlenmez (güvenli taraf).
+  const verdictsQ = useProblemVerdicts();
+  const verdicts = useMemo(() => verdictIndex(verdictsQ.data?.verdicts), [verdictsQ.data]);
+  // Düz hesap (memo değil): satır başına bir harita bakışı; `data`ya bağlı bir
+  // memo daha, bu dosyadaki "data conditional" lint sınıfını büyütürdü.
+  const noiseCount = countNoise(Array.isArray(data) ? data : null, verdicts);
   const filtered = useMemo(() => {
     if (!data) return data;
-    return data.filter(it =>
+    const facet = data.filter(it =>
       prioSet.has(it.priority) &&
       kindSet.has(it.kind) &&
       catSet.has(it.category ?? 'CUSTOM')); // v0.10.706
-  }, [data, prioSet, kindSet, catSet]);
+    return filterByVerdictView(facet, verdicts, verdictView);
+  }, [data, prioSet, kindSet, catSet, verdicts, verdictView]);
 
   // Deep-link into the source surface with the specific row
   // focused — Problems drawer for problems, expanded exception
@@ -591,6 +605,7 @@ export default function InboxPage() {
   const inboxState: Omit<DataTableStateProps<InboxItem>, 'dt'> =
     data === undefined ? { kind: 'loading' }
     : data === null ? { kind: 'error' }
+    : verdictView === 'noise' ? { kind: 'no-match', message: 'Bu görünümde satır yok — şu an açık olanlar arasında “problem değil” olarak işaretlediğin bir imza yok' } // v0.10.1015
     : facetNarrowed ? { kind: 'no-match', message: 'Kuyruk boş — daha fazlasını görmek için öncelik / tür süzgecini genişlet' }
     : otherNarrowed || data.length > 0 ? { kind: 'no-match' }
     : { kind: 'empty', message: 'Kuyruk boş — şu an ilgini bekleyen bir şey yok' };
@@ -735,6 +750,22 @@ export default function InboxPage() {
                 {s === 'open' ? 'Open / Active' : s === 'all' ? 'All' : 'Ignored'}
               </span>
             ))}
+          </span>
+
+          {/* v0.10.1015 (operatör: "hangisi gerçek problem hangisi değil zamanla
+              öğretelim") — öğretme görünümü. Tek-seçim, URL'de ?verdict=.
+              "Problem değil" işaretli imzalar varsayılanda gizlenir; sayısı
+              çipte hep görünür ve tek tıkla açılır (gizlenen şey saklanmaz). */}
+          <span className="facet-grp">
+            <span className="gl">Öğrenilen</span>
+            <span onClick={() => setVerdictView('triage')} className={`facet${verdictView === 'triage' ? ' on' : ''}`}
+              title="Problem değil olarak işaretlenenler dışındaki her şey">
+              Triage
+            </span>
+            <span onClick={() => setVerdictView('noise')} className={`facet${verdictView === 'noise' ? ' on' : ''}`}
+              title="Problem değil olarak işaretlediğin imzalar — satırı açıp işareti kaldırabilirsin">
+              Problem değil ({noiseCount})
+            </span>
           </span>
 
           {/* v0.9.1342 (operatör kararı) — ÖZNE şeridi. Durum pivotuyla
@@ -1092,6 +1123,11 @@ export default function InboxPage() {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
                       <span style={{ fontWeight: 600 }}>{it.title}</span>
+                      {/* v0.10.1015 — öğretme işareti (yalnız "gerçek problem";
+                          "problem değil" satırları kendi görünümünde). */}
+                      {verdictOf(it, verdicts) === 'real' && (
+                        <span className="badge b-gray" style={{ fontSize: 9 }} title="Gerçek problem olarak işaretlendi">gerçek</span>
+                      )}
                       {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama
                           hiç çizilmiyordu: "all" pivotunda çözülmüş bir satır
                           yenisiyle birebir aynı görünüyordu. */}

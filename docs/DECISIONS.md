@@ -987,6 +987,25 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Problems sekmesinde öğretme: "gerçek problem / problem değil" (v0.10.1015)
+
+**Operatör:** "…ben hangisi gerçek problem hangisi değil zamanla öğretelim" → önerilen tasarıma "tamam".
+**Karar:** her satıra iki karar düğmesi (triage çekmecesi): **Gerçek problem** / **Problem değil** (+ işareti
+kaldır). Karar OLAYA değil İMZAYA yazılır — alarm kuralı `p:<ruleId>|<servis>`, exception / HTTP hata grubu
+`e:<fingerprint>`, anomali `a:<tür>|<servis>|<desen>`; olay (incident) öğretilmez. Aynı imza yeniden
+geldiğinde kendiliğinden aynı sınıfa düşer: "öğrenme" deterministik ve geri alınabilir, model yok.
+**Etkisi yalnız görünüm:** "problem değil" imzaları varsayılan listeden çıkar ve `?verdict=noise`
+görünümünde toplanır (çipte sayısı hep görünür — gizlenen şey saklanmaz); "gerçek" satır rozet alır.
+Bildirimlere, Problem yaşam döngüsüne, dedektörlere ve kenar çubuğu sayacına DOKUNMAZ (ilk aşama bilinçli
+dar). **Depolama:** ortak durum tablosu `saved_views` (page=`problem-verdict`, id=`pv:<imza>`, ad=karar,
+gövde JSON) — mimari değişmez 5, yeni şema yok; tavan 5000 imza. **Uçlar:** `GET /api/problem-verdicts`
+(her rol; viewer görür) · `PUT` (editor+, denetim `problem.verdict`; cevap taze listenin tamamı, FE onu
+doğrudan önbelleğe koyar). Kararlar yüklenemezse hiçbir satır gizlenmez. **Mevcut mekanizmalarla ilişki:**
+exception "Ignore" ve anomali susturma (mute) AKIŞI değiştirir; anomali OLAYI kararı (v0.10.181, «anomali
+/ değil», event başına) dedektör istatistiği içindir — üçü de aynen duruyor, bu karar onların yerine
+geçmez. **Sonraki adımlar (ayrı karar):** "problem değil" imzalarının bildirimini de susturmak; kararı
+kural / dedektör eşiklerine geri beslemek; toplu işaretleme.
+
 ## 2026-10-01 — Problems sekmesi: varsayılan görünüm HER ŞEY (v0.10.1014; üç kararın tersi)
 
 **Operatör:** "Problems sekmesinde bütün hepsi gelsin, ben hangisi gerçek problem hangisi değil zamanla

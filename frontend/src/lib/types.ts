@@ -2502,6 +2502,29 @@ export interface KibanaSettings {
 // merged queue never showed: an operator working from /inbox could miss an
 // open incident entirely while the sidebar's own /incidents badge counted it.
 export type InboxKind = 'problem' | 'exception' | 'httperror' | 'anomaly' | 'incident';
+
+/** v0.10.1015 — Problems sekmesinde öğretme: bir satır İMZASININ kararı (Go
+ *  chstore.ProblemVerdict). real = gerçek problem, noise = problem değil. */
+export type ProblemVerdictKind = 'real' | 'noise';
+export interface ProblemVerdict {
+  signature: string;
+  verdict: ProblemVerdictKind;
+  label?: string;
+  kind?: string;
+  service?: string;
+  by?: string;
+  /** unix ns */
+  at: number;
+}
+export interface ProblemVerdictsResponse { verdicts: ProblemVerdict[] }
+/** PUT gövdesi; verdict '' = kararı kaldır. */
+export interface ProblemVerdictInput {
+  signature: string;
+  verdict: ProblemVerdictKind | '';
+  label?: string;
+  kind?: string;
+  service?: string;
+}
 /** v0.10.747 — kanal başına olay türü süzgeci; sunucu chstore.NotifyKindsAll ile birebir (Inbox grameri). */
 export type NotifyKind = 'problem' | 'anomaly' | 'incident' | 'exception'; // exception: v0.10.782, kanal başına opt-in
 // v0.10.706 — Dynatrace paritesi #5: satır kategorisi (okuma-anı, sunucu türetir).

@@ -23,6 +23,7 @@ import { serviceHref, inboxItemWindow } from '@/lib/serviceHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { logsHref } from '@/lib/logsUrl';
 import { SubjectLink } from './SubjectLink';
+import { ProblemVerdictActions } from './ProblemVerdictActions';
 
 // InboxTriageDrawer — v0.8.292 (Option B slice 3): the /inbox row-click opens
 // this right-side drawer so the operator triages WITHOUT leaving the inbox,
@@ -190,6 +191,9 @@ function DrawerBody({ item, onClose, onOpenSource }: {
       )}
 
       <InboxActions item={item} onClose={onClose} onOpenSource={onOpenSource} />
+      {/* v0.10.1015 — öğretme: "gerçek problem / problem değil". "Problem
+          değil" satırı varsayılan görünümden çıkarır → çekmece kapanır. */}
+      <ProblemVerdictActions item={item} onDone={next => { if (next === 'noise') onClose(); }} />
     </>
   );
 }

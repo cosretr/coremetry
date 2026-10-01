@@ -2512,6 +2512,13 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ aId, bId }),
     }),
+  // v0.10.1015 — Problems sekmesinde öğretme (imza → gerçek / problem değil).
+  problemVerdicts: () =>
+    get<import('./types').ProblemVerdictsResponse>(`/api/problem-verdicts`),
+  putProblemVerdict: (body: import('./types').ProblemVerdictInput) =>
+    request<import('./types').ProblemVerdictsResponse>(`/api/problem-verdicts`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
   acknowledgeProblems: (ids: string[]) =>
     request<{ acknowledged: number }>(`/api/problems/acknowledge`, {
       method: 'POST',
