@@ -1678,3 +1678,38 @@ func TestArgoCDDiscoverParallelBudgetNeverExceeded(t *testing.T) {
 		t.Fatalf("atlanan iş sayısı: %d (en az %d beklenir)", skipped, n-49)
 	}
 }
+
+// v0.10.997 — Operator-reported: "Hub kaldıramıyorum instance varsa". Arayüz
+// artık hub'ı instance'larıyla birlikte tek PUT'ta çıkarıyor; sunucunun bunu
+// KABUL ettiği burada pinli (BE4 yalnız "hub çıkıyor, instance kalıyor"u
+// reddeder). Prod senaryosu ayrıca: çıkarılan hub'ın Remote Cluster kaydı
+// çoktan silinmiş ("bilinmeyen kayıt") — o hub da instance'larıyla çıkarılabilir.
+func TestArgoCDSettingsPutHubRemovedWithItsInstances(t *testing.T) {
+	e := newArgoTestEnv(t)
+	hubA, hubB := argoClusterID(argoHubName), argoClusterID(argoTargetName)
+	var insts []string
+	for i := 0; i < 190; i++ {
+		insts = append(insts, fmt.Sprintf(`{"id":"team-%03d-2","hubClusterId":"%s","hubNamespace":"team-%03d","metricsJob":"team-%03d-metrics","enabled":true,"discovered":true}`, i, hubB, i, i))
+	}
+	keep := `{"id":"team-a-prod","hubClusterId":"` + hubA + `","hubNamespace":"team-a-prod","enabled":true}`
+	two := `{"enabled":true,"hubs":[{"clusterId":"` + hubA + `"},{"clusterId":"` + hubB + `"}],"instances":[` + keep + `,` + strings.Join(insts, ",") + `]}`
+	if w := e.do(t, "PUT", "/api/settings/argocd", two, auth.RoleAdmin); w.Code != http.StatusOK {
+		t.Fatalf("iki hub + 191 instance: %d %s", w.Code, w.Body)
+	}
+	if n := len(e.svc.Current().Instances); n != 191 {
+		t.Fatalf("191 instance kayıtlı olmalı: %d", n)
+	}
+	// Hub B'nin Remote Cluster kaydı SİLİNDİ (prod: "bilinmeyen kayıt").
+	e.s.thanos.Configure(thanos.Settings{Clusters: []thanos.ClusterConfig{
+		{Name: argoHubName, URL: e.fake.URL, ThanosLabelName: "cluster", Enabled: true},
+	}})
+	one := `{"enabled":true,"hubs":[{"clusterId":"` + hubA + `"}],"instances":[` + keep + `]}`
+	w := e.do(t, "PUT", "/api/settings/argocd", one, auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("hub + 190 instance'ı tek PUT'ta çıkarma → 200: %d %s", w.Code, w.Body)
+	}
+	cur := e.svc.Current()
+	if len(cur.Hubs) != 1 || cur.Hubs[0].ClusterID != hubA || len(cur.Instances) != 1 || cur.Instances[0].ID != "team-a-prod" {
+		t.Fatalf("kalan: hubs=%+v instances=%d", cur.Hubs, len(cur.Instances))
+	}
+}
