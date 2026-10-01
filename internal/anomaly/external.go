@@ -68,7 +68,8 @@ type ExternalTarget struct {
 	Subject func(ctx context.Context, values []string) ExternalSubjectResolution
 }
 
-// ExternalSubjectResolution — çözücünün cevabı. Source: "trace" | "learned" |
+// ExternalSubjectResolution — çözücünün cevabı. Source: "trace" | "pod" |
+// "learned" | "function_code" (v0.10.1000) |
 // "" (bilinmiyor); Note açıklamaya eklenir ("trace'ten (7/9)").
 type ExternalSubjectResolution struct {
 	Service string

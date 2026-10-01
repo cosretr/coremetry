@@ -87,3 +87,43 @@ func (s *Store) OracleOpCoverage(ctx context.Context, sourceID string, from, to 
 	}
 	return out, totals, rows.Err()
 }
+
+// OracleOpCode — v0.10.1000: bir (operasyon, hata/fonksiyon kodu) çiftinin
+// pencere içi satır sayısı. Özne kapsamı raporunun "fonksiyon kodundan
+// bağlanabilen satır" ölçümünün girdisi (internal/oracle/coverage.go).
+type OracleOpCode struct {
+	Operation string
+	Code      string
+	Rows      uint64
+}
+
+const oracleOpCodeLimit = 2000
+
+// OracleOpCodes — kaynağın [from, to) penceresinde kodu DOLU satırların
+// (operasyon, kod) dökümü; en çok satırlı önce, ≤ oracleOpCodeLimit çift.
+func (s *Store) OracleOpCodes(ctx context.Context, sourceID string, from, to time.Time) ([]OracleOpCode, error) {
+	out := []OracleOpCode{}
+	if sourceID == "" || !to.After(from) {
+		return out, nil
+	}
+	rows, err := s.conn.Query(ctx, `
+		SELECT operation_code, error_code, count() AS n
+		FROM oracle_error_log FINAL
+		WHERE source_id = ? AND time >= ? AND time < ? AND error_code != ''
+		GROUP BY operation_code, error_code
+		ORDER BY n DESC, operation_code, error_code
+		LIMIT ?
+		SETTINGS max_execution_time = 10`, sourceID, from, to, oracleOpCodeLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var o OracleOpCode
+		if err := rows.Scan(&o.Operation, &o.Code, &o.Rows); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}

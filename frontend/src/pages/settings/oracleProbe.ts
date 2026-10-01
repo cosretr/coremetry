@@ -191,6 +191,9 @@ export function coverageOpLine(o: OracleCoverageOp): string {
   if (o.service && (o.reason === 'multi_service' || o.reason === 'unconfirmed' || o.reason === 'dead_service')) {
     parts.push(`aday ${o.service}${o.votes ? ` (${o.votes})` : ''}`);
   }
+  if (o.fnRows && o.fnService) {
+    parts.push(`fonksiyon kodundan ${o.fnService} (${n(o.fnRows)} satır)`);
+  }
   if (o.instance) {
     parts.push(o.podLike ? `pod ${o.instance} (canlı bir servise çözülmedi)` : `instance ${o.instance} (pod adı değil)`);
   } else if (o.host) {
@@ -207,7 +210,9 @@ export function coverageText(c: OracleSubjectCoverage): { headline: string; line
     return { headline: `Son ${c.hours} saatte bu kaynaktan satır yok.`, lines, ops: [], warn: false };
   }
   const pct = c.rowsListed > 0 ? Math.round((c.rowsResolved / c.rowsListed) * 100) : 0;
-  const headline = `Son ${c.hours} saatte ${n(c.rowsListed)} satırın %${pct} kadarı bir servise bağlanıyor (${n(c.rowsResolved)} satır: öğrenilmiş eşleme ${n(c.rowsLearned)}, pod adından ${n(c.rowsPod)}) · ${n(c.opsResolved)}/${n(c.opsListed)} operasyon.`;
+  const fnOn = c.fnChecked && c.fnEnabled && !!c.fnSource;
+  const fnPart = fnOn ? `, fonksiyon kodundan ${n(c.rowsFunctionCode)}` : '';
+  const headline = `Son ${c.hours} saatte ${n(c.rowsListed)} satırın %${pct} kadarı bir servise bağlanıyor (${n(c.rowsResolved)} satır: öğrenilmiş eşleme ${n(c.rowsLearned)}, pod adından ${n(c.rowsPod)}${fnPart}) · ${n(c.opsResolved)}/${n(c.opsListed)} operasyon.`;
   if (c.rowsListed < c.rowsTotal) {
     lines.push(`Yalnız en çok satırlı ${n(c.opsListed)} operasyon sınıflandı (${n(c.opsTotal)} operasyon, ${n(c.rowsTotal)} satırın ${n(c.rowsListed)} tanesi).`);
   }
@@ -215,6 +220,22 @@ export function coverageText(c: OracleSubjectCoverage): { headline: string; line
     lines.push('Canlı servis listesi okunamadı: pod adından eşleme doğrulanamadı — oran alt sınırdır.');
   }
   const unresolved = c.rowsListed - c.rowsResolved;
+  // v0.10.1000 — fonksiyon kodu basamağı: ölçülemediyse nedenini, kapalıysa
+  // açılınca ne kazandıracağını söyler (açıkken pay zaten başlıkta).
+  if (c.fnError) {
+    lines.push(`Fonksiyon kodu eşlemesi ölçülemedi: ${c.fnError}`);
+  } else if (c.fnChecked && !c.fnSource) {
+    if (c.fnEnabled || unresolved > 0) {
+      lines.push("Fonksiyon kodu eşlemesi okunamıyor: geniş rollup tablosu da FUNCTION_CODE terfi kolonu da yok.");
+    }
+  } else if (c.fnChecked && !c.fnEnabled && unresolved > 0) {
+    if (c.rowsFunctionCode > 0) {
+      const withFn = Math.round(((c.rowsResolved + c.rowsFunctionCode) / c.rowsListed) * 100);
+      lines.push(`Fonksiyon kodu eşlemesi açılırsa ${n(c.rowsFunctionCode)} satır daha servise bağlanır (oran %${pct} → %${withFn}).`);
+    } else {
+      lines.push('Fonksiyon kodu eşlemesi açılsa da ek satır bağlanmıyor: kodlar span\'lerde yok ya da tek bir serviste toplanmıyor.');
+    }
+  }
   if (unresolved > 0) {
     const reasons = COVERAGE_REASON_ORDER
       .filter(r => (c.byReason[r] ?? 0) > 0)

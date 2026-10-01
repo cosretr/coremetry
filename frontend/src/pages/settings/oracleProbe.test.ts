@@ -182,7 +182,7 @@ describe('oracleProbe — özne kapsamı', () => {
       { operation: 'OP_PODX', rows: 9, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'legacy-batch-7b9949bb74-l4bg5', podLike: true },
       { operation: '', rows: 5, withTrace: 0, status: 'unresolved', reason: 'no_operation', host: 'WMOBAPPP90' },
     ],
-    aliveKnown: true, learnedEntries: 5, generatedAt: 0,
+    aliveKnown: true, fnChecked: false, fnEnabled: false, rowsFunctionCode: 0, learnedEntries: 5, generatedAt: 0,
   };
   it('özet: oran, basamak kırılımı, kısmi sınıflama notu, nedenler büyükten küçüğe', () => {
     const t = coverageText(base);
@@ -209,6 +209,25 @@ describe('oracleProbe — özne kapsamı', () => {
     const all = coverageText({ ...base, rowsTotal: 1000, rowsResolved: 1000, unresolved: [], byReason: {} });
     expect(all.lines).toEqual([]);
     expect(all.headline).toContain('%100 kadarı');
+  });
+  // v0.10.1000 — fonksiyon kodu basamağı: kapalıyken "açılırsa ne kazandırır",
+  // açıkken pay başlıkta; okuma yolu yoksa / ölçülemediyse nedeni yazar.
+  it('fonksiyon kodu: kapalıyken potansiyel, açıkken başlıkta pay, yol yoksa neden', () => {
+    const off = coverageText({ ...base, fnChecked: true, fnEnabled: false, fnSource: 'rollup', rowsFunctionCode: 150 });
+    expect(off.headline).toBe(coverageText(base).headline);
+    expect(off.lines).toContain('Fonksiyon kodu eşlemesi açılırsa 150 satır daha servise bağlanır (oran %70 → %85).');
+    const zero = coverageText({ ...base, fnChecked: true, fnEnabled: false, fnSource: 'spans', rowsFunctionCode: 0 });
+    expect(zero.lines.some(l => l.startsWith('Fonksiyon kodu eşlemesi açılsa da ek satır bağlanmıyor'))).toBe(true);
+    const on = coverageText({ ...base, rowsResolved: 853, fnChecked: true, fnEnabled: true, fnSource: 'rollup', rowsFunctionCode: 150 });
+    expect(on.headline).toBe('Son 24 saatte 1.000 satırın %85 kadarı bir servise bağlanıyor (853 satır: öğrenilmiş eşleme 400, pod adından 303, fonksiyon kodundan 150) · 3/9 operasyon.');
+    expect(on.lines.some(l => l.includes('Fonksiyon kodu'))).toBe(false);
+    const noPath = coverageText({ ...base, fnChecked: true, fnEnabled: true, fnSource: '', rowsFunctionCode: 0 });
+    expect(noPath.headline).toBe(coverageText(base).headline);
+    expect(noPath.lines).toContain('Fonksiyon kodu eşlemesi okunamıyor: geniş rollup tablosu da FUNCTION_CODE terfi kolonu da yok.');
+    const failed = coverageText({ ...base, fnError: 'timeout' });
+    expect(failed.lines).toContain('Fonksiyon kodu eşlemesi ölçülemedi: timeout');
+    expect(coverageOpLine({ operation: 'DIGITAL_PAYMENT_EFT', rows: 300, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', fnRows: 300, fnService: 'eft-svc' }))
+      .toBe('DIGITAL_PAYMENT_EFT · 300 satır · satırlarda trace kimliği yok · fonksiyon kodundan eft-svc (300 satır)');
   });
   it('satır metni nedeni olmayan op\'ta da kırılmaz; sekme isteği yalnız açılınca atar', () => {
     expect(coverageOpLine({ operation: 'X', rows: 1, withTrace: 1, status: 'unresolved' })).toBe('X · 1 satır · çözülmedi');

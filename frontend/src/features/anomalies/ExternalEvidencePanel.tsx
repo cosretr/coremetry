@@ -139,7 +139,7 @@ export function ExternalEvidencePanel({ problem, window: win }: {
         {/* v0.10.898 (Oracle Aşama 3 dilim E) — özne kaynağı dürüstçe: trace'ten / ≈ öğrenilmiş / bilinmiyor. */}
         {ext.subjectNote && (
           <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
-            özne: {ext.subjectSource === 'learned' ? '≈ ' : ''}{ext.subjectNote}
+            özne: {ext.subjectSource === 'learned' || ext.subjectSource === 'function_code' ? '≈ ' : ''}{ext.subjectNote}
           </div>
         )}
         {ext.distributions && Object.keys(ext.distributions).length > 0 && (

@@ -11,6 +11,12 @@ package api
 // öğrenilmiş op→servis haritası (system_settings blobu) ve son 24 saatte canlı
 // servis adları. Sınıflama saf: oracle.BuildCoverage.
 //
+// v0.10.1000 — fonksiyon kodu basamağı da ölçülür: (operasyon, kod) çiftleri
+// (chstore.OracleOpCodes) + o kodları taşıyan span'lerin servis dağılımı
+// (chstore.FunctionCodeServices — geniş rollup → terfi kolonu). Kaynakta
+// eşleme kapalıyken de koşar: rapor "açılırsa şu kadar satır bağlanır" der.
+// Bu iki okuma düşerse rapor yine döner (fnError dolu, fnChecked=false).
+//
 // Pencere 1 | 6 | 24 saat (varsayılan 24); serveCached 60 sn, anahtar kaynak
 // kimliği + pencere. Canlı servis listesi okunamazsa rapor yine döner
 // (aliveKnown=false; pod basamağı doğrulanamaz).
@@ -57,8 +63,10 @@ type oracleSubjectCoverage struct {
 	SourceName string `json:"sourceName"`
 	Hours      int    `json:"hours"`
 	oracle.CoverageReport
-	LearnedEntries int   `json:"learnedEntries"`
-	GeneratedAt    int64 `json:"generatedAt"` // ms
+	// FnError — fonksiyon kodu ölçümü okunamadı (rapor geri kalanıyla döner).
+	FnError        string `json:"fnError,omitempty"`
+	LearnedEntries int    `json:"learnedEntries"`
+	GeneratedAt    int64  `json:"generatedAt"` // ms
 }
 
 func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request) {
@@ -67,10 +75,10 @@ func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	id := strings.TrimSpace(r.PathValue("id"))
-	name := ""
+	name, fnOn := "", false
 	for _, c := range s.oracle.CurrentSettings().Sources {
 		if c.ID == id {
-			name = c.Name
+			name, fnOn = c.Name, c.FunctionCodeMatch
 			break
 		}
 	}
@@ -79,12 +87,17 @@ func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	hours := oracleCoverageHours(r.URL.Query().Get("hours"))
-	key := fmt.Sprintf("oracle-subject-coverage:id=%s:h=%d", id, hours)
+	key := fmt.Sprintf("oracle-subject-coverage:id=%s:h=%d:fn=%t", id, hours, fnOn)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		now := time.Now()
-		obs, totals, err := s.store.OracleOpCoverage(ctx, id, now.Add(-time.Duration(hours)*time.Hour), now, oracleCoverageOps)
+		from := now.Add(-time.Duration(hours) * time.Hour)
+		obs, totals, err := s.store.OracleOpCoverage(ctx, id, from, now, oracleCoverageOps)
 		if err != nil {
 			return nil, err
+		}
+		fn, fnErr := s.oracleCoverageFn(ctx, id, fnOn, from, now)
+		if fnErr != "" {
+			log.Printf("[oracle] özne kapsamı %s: fonksiyon kodu ölçümü: %s", name, fnErr)
 		}
 		learned := oracle.LearnedMap{V: 1, Entries: map[string]*oracle.LearnedEntry{}}
 		if raw, err := s.store.GetSetting(ctx, "oracle_opsvc:"+id); err != nil {
@@ -106,8 +119,33 @@ func (s *Server) getOracleSubjectCoverage(w http.ResponseWriter, r *http.Request
 		}
 		return oracleSubjectCoverage{
 			SourceID: id, SourceName: name, Hours: hours,
-			CoverageReport: oracle.BuildCoverage(obs, totals, learned, alive, now, oracleCoverageUnresolved),
+			CoverageReport: oracle.BuildCoverage(obs, totals, learned, alive, now, oracleCoverageUnresolved, fn),
+			FnError:        fnErr,
 			LearnedEntries: len(learned.Entries), GeneratedAt: now.UnixMilli(),
 		}, nil
 	})
+}
+
+// oracleCoverageFn — fonksiyon kodu basamağının girdisi: pencerenin (operasyon,
+// kod) çiftleri + kodların span tarafındaki servis dağılımı. Kodlar satır
+// sayısına göre sıralı gider (okuyucu ilk 200'ü alır). Hata raporu düşürmez:
+// nil + mesaj döner.
+func (s *Server) oracleCoverageFn(ctx context.Context, sourceID string, enabled bool, from, to time.Time) (*oracle.CoverageFn, string) {
+	pairs, err := s.store.OracleOpCodes(ctx, sourceID, from, to)
+	if err != nil {
+		return nil, err.Error()
+	}
+	codes := make([]string, 0, len(pairs))
+	seen := map[string]bool{}
+	for _, p := range pairs {
+		if !seen[p.Code] {
+			seen[p.Code] = true
+			codes = append(codes, p.Code)
+		}
+	}
+	facts, err := s.store.FunctionCodeServices(ctx, codes, from, to)
+	if err != nil {
+		return nil, err.Error()
+	}
+	return &oracle.CoverageFn{Enabled: enabled, Source: facts.Source, Pairs: pairs, ByCode: facts.ByCode}, ""
 }

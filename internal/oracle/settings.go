@@ -143,6 +143,13 @@ type SourceConfig struct {
 	GenericCodes []string `json:"genericCodes,omitempty"`
 	IgnoreCodes  []string `json:"ignoreCodes,omitempty"`
 
+	// FunctionCodeMatch — v0.10.1000 (operatör teyidi 2026-10-01): satırın kod
+	// alanı (error.code; özel SQL kipinde FUNCTIONCODE) span'lerdeki
+	// FUNCTION_CODE attribute'u ile AYNI değerdir. Açıkken özne çözücü, servisi
+	// bulunamayan satırı o kodu taşıyan span'lerin servisine bağlar ve eşlemeyi
+	// zamanla öğrenir (fncode.go). Varsayılan kapalı — mevcut kaynaklar aynı.
+	FunctionCodeMatch bool `json:"functionCodeMatch,omitempty"`
+
 	// v0.10.902 (operatör) — ÖZEL SQL kipi (custom.go): QueryMode "custom"
 	// ise poller şema/tablo sorgusunu üretmez, CustomSQL'i salt-okunur
 	// sarmalayıcıda koşar (bind yok; sorgu kendi penceresini tanımlar).
@@ -522,32 +529,33 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 	for i, src := range in.Sources {
 		label := fmt.Sprintf("kaynak #%d", i+1)
 		s := SourceConfig{
-			ID:               strings.TrimSpace(src.ID),
-			Name:             strings.TrimSpace(src.Name),
-			DSN:              strings.TrimSpace(src.DSN),
-			Host:             strings.TrimSpace(src.Host),
-			Port:             src.Port,
-			ServiceName:      strings.TrimSpace(src.ServiceName),
-			User:             strings.TrimSpace(src.User),
-			Password:         strings.TrimSpace(src.Password),
-			PasswordRef:      strings.TrimSpace(src.PasswordRef),
-			Schema:           strings.TrimSpace(src.Schema),
-			Table:            strings.TrimSpace(src.Table),
-			TimestampColumn:  strings.TrimSpace(src.TimestampColumn),
-			TypeColumn:       strings.TrimSpace(src.TypeColumn),
-			Timezone:         strings.TrimSpace(src.Timezone),
-			TimestampHasZone: src.TimestampHasZone,
-			Columns:          cloneColumns(src.Columns),
-			SelectMappedOnly: src.SelectMappedOnly,
-			ExtraWhere:       strings.TrimSpace(src.ExtraWhere),
-			MaxOpenConns:     src.MaxOpenConns,
-			QueryTimeoutSec:  src.QueryTimeoutSec,
-			IntervalSec:      src.IntervalSec,
-			ProblemMode:      normalizeProblemMode(src.ProblemMode), // v0.10.897
-			QueryMode:        normalizeQueryMode(src.QueryMode),     // v0.10.902
-			CustomSQL:        strings.TrimSpace(src.CustomSQL),
-			WindowMin:        src.WindowMin,
-			Enabled:          src.Enabled,
+			ID:                strings.TrimSpace(src.ID),
+			Name:              strings.TrimSpace(src.Name),
+			DSN:               strings.TrimSpace(src.DSN),
+			Host:              strings.TrimSpace(src.Host),
+			Port:              src.Port,
+			ServiceName:       strings.TrimSpace(src.ServiceName),
+			User:              strings.TrimSpace(src.User),
+			Password:          strings.TrimSpace(src.Password),
+			PasswordRef:       strings.TrimSpace(src.PasswordRef),
+			Schema:            strings.TrimSpace(src.Schema),
+			Table:             strings.TrimSpace(src.Table),
+			TimestampColumn:   strings.TrimSpace(src.TimestampColumn),
+			TypeColumn:        strings.TrimSpace(src.TypeColumn),
+			Timezone:          strings.TrimSpace(src.Timezone),
+			TimestampHasZone:  src.TimestampHasZone,
+			Columns:           cloneColumns(src.Columns),
+			SelectMappedOnly:  src.SelectMappedOnly,
+			ExtraWhere:        strings.TrimSpace(src.ExtraWhere),
+			MaxOpenConns:      src.MaxOpenConns,
+			QueryTimeoutSec:   src.QueryTimeoutSec,
+			IntervalSec:       src.IntervalSec,
+			ProblemMode:       normalizeProblemMode(src.ProblemMode), // v0.10.897
+			FunctionCodeMatch: src.FunctionCodeMatch,                 // v0.10.1000
+			QueryMode:         normalizeQueryMode(src.QueryMode),     // v0.10.902
+			CustomSQL:         strings.TrimSpace(src.CustomSQL),
+			WindowMin:         src.WindowMin,
+			Enabled:           src.Enabled,
 		}
 		if s.Name == "" {
 			return Settings{}, fmt.Errorf("%s: ad zorunlu", label)

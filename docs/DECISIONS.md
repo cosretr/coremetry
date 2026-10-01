@@ -987,6 +987,33 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Oracle: fonksiyon kodundan servis — öğrenen eşleme (v0.10.1000)
+
+**Karar (operatör):** "Oracle'dan gelen DIGITAL_PAYMENT_EFT gibi operasyon adı trace'lerde yok, eşleştirebilir
+miyiz" → evet, FONKSİYON KODU üzerinden; teyit: Oracle satırının kod alanı (özel SQL'de `FUNCTIONCODE` →
+`error.code`) span'lerdeki `FUNCTION_CODE` ile aynı değer; "zaman içinde öğrendikçe güncellersin". Köprü:
+satır (operasyon, fonksiyon kodu) → o kodu taşıyan span'lerin servisi; trace kimliğine gerek yok.
+**Kaynak başına açılır** (`functionCodeMatch`, Ayarlar › Oracle › Problem üretimi; varsayılan KAPALI —
+mevcut kaynakların öznesi değişmez). **Çözücü sırası:** trace → pod adı → öğrenilmiş → *fonksiyon kodu* →
+bilinmiyor; yeni basamak yalnız öncekiler servis bulamadığında çalışır, çözülen hiçbir özneyi değiştirmez.
+**Servis seçimi** (`oracle.PickFunctionService`): kodu taşıyan HATA span'lerinin (≥3 ise; yoksa tüm
+span'lerin) ≥%70'i tek servisteyse o servis. Kod çağrı zinciri boyunca birden çok serviste taşınıyorsa
+çoğunluk çıkmaz → servis uydurulmaz, not adayı söyler ("F200 3 serviste, çoğunluk yok"). **Öğrenme:** her
+taze okuma (kod başına 10 dk önbellek), trace/pod oyu olmayan operasyonda haritaya (operasyon, kod) çifti
+başına BİR oy yazar — aynı okuma üç tikte üç teyit sayılmaz; ≥3 teyit + ≥%70 ile "öğrenilmiş"e döner.
+**Harita güncellemesi (yeni kural, tüm oy türleri):** mevcut servis hiç oy almazken aynı başka servis
+ardışık ≥3 oy biriktirirse girdi ona döner (`LearnedEntry.alt/altHits`); mevcut servis oy alırsa sayaç
+sıfırlanır. Eski kural tek tikte ≥3 oy istiyordu — tik başına 1-2 oy veren pod / fonksiyon kodu
+kanıtında hiç sağlanmıyor, taşınan operasyon 30 gün "onaysız" kalıyordu. **Okuma yolu**
+(`chstore.FunctionCodeServices`): ① geniş rollup (`rollup_spans_wide_1m/5m`, MV-first) varsa o; ② yoksa
+terfi kolonu `attr_function_code` KAYITLIYSA ham spans (set(0) indeks, pencere ≤1 sa); ikisi de yoksa
+basamak çalışmaz ve bunu söyler. Reddedilen: attribute dizisini açan servis süzgeçsiz ham tarama (1B
+span/gün'de poll başına koşulacak sorgu değil). Geniş rollup prod'da önerilmediği için (2026-08-09 A/B)
+beklenen prod yolu ②. **Ölçüm:** özne kapsamı raporu basamağı ayar KAPALIYKEN de ölçer ("açılırsa N satır
+daha bağlanır, oran %X → %Y") — operatör açmadan etkisini görür; açıkken pay başlıkta. **Bu sürümde YOK
+(ayrı karar):** operasyon adını trace / endpoint sayfasında göstermek, trace'leri operasyon adıyla aramak,
+Problem'i servis yerine endpoint'e bağlamak.
+
 ## 2026-10-01 — Oracle: özne kapsamı raporu — önce ölç, sonra kapat (v0.10.999)
 
 **Karar (operatör, Oracle odak "2" — "nasıl yapacaksın"):** trace'i Coremetry'de olmayan satırların

@@ -31,6 +31,11 @@ import (
 //	   (podservice.go); yalnız son 24 saatte CANLI servis adı kabul edilir.
 //	   Trace'siz op'ta çoğunluk (≥%50) → "pod adından (v/n)"; haritayı da
 //	   besler (trace oyu olmayan op'ta).
+//	②b FONKSİYON KODUNDAN (v0.10.1000, kaynak ayarı functionCodeMatch;
+//	   fncode.go): satırın kod alanı span'lerdeki FUNCTION_CODE ile aynı
+//	   değerse, o kodu taşıyan span'lerin servisi. Önceki basamaklar servis
+//	   bulamadığında devreye girer; trace/pod oyu olmayan op'ta haritayı da
+//	   besler (zamanla "öğrenilmiş"e döner).
 //	③ BİLİNMİYOR: boş servis → sentetik ext: özne + "operasyon seviyesi —
 //	   servis bilinmiyor" (çok servisli op'ta "çok servisli operasyon").
 //
@@ -64,6 +69,13 @@ type LearnedEntry struct {
 	FirstSeen     int64  `json:"firstSeen"`
 	LastConfirmed int64  `json:"lastConfirmed"`
 	LastUsed      int64  `json:"lastUsed,omitempty"`
+	// Alt / AltHits — v0.10.1000: meydan okuyan servis ve ardışık oyları.
+	// Mevcut servis hiç oy almazken aynı servis tik çoğunluğunu ≥3 oy
+	// biriktirirse girdi ona döner (tek tikte 3 oy şartı, tik başına 1-2 oy
+	// veren pod / fonksiyon kodu kanıtında hiç sağlanmıyordu → girdi 30 gün
+	// "onaysız" kalıyordu). Mevcut servis oy alırsa sayaç sıfırlanır.
+	Alt     string `json:"alt,omitempty"`
+	AltHits int    `json:"altHits,omitempty"`
 }
 
 // Confirmed — SAF: ≥3 teyit, ≥%70 pay, TTL içinde.
@@ -91,8 +103,13 @@ type tickFacts struct {
 	// v0.10.908 — pod adından türetilmiş servis oyları (op → servis → oy; (op,pod) başına bir oy).
 	podVotes  map[string]map[string]int
 	podTotals map[string]int
-	looked    int
-	found     int
+	// v0.10.1000 — fonksiyon kodu: op → bu tikte görülen kodlar; taze okunan
+	// kodlardan öğrenme oyları (op → servis → oy; (op, kod) başına bir oy).
+	opCodes  map[string][]string
+	fnVotes  map[string]map[string]int
+	fnTotals map[string]int
+	looked   int
+	found    int
 }
 
 // ObserveResult — Observe özeti (log/istatistik).
@@ -118,12 +135,20 @@ type SubjectResolver struct {
 	aliveSet map[string]bool
 	aliveAt  time.Time
 	aliveErr bool
+
+	// v0.10.1000 — fonksiyon kodu basamağı (fncode.go).
+	fnLookup FunctionCodeLookup
+	fnFacts  map[string]map[string]fnFact // kaynak → kod → servis dağılımı
+	fnOn     map[string]bool              // kaynak ayarı açık (son Observe)
+	fnPath   map[string]string            // son okuma yolu ("" = yok)
+	fnErr    map[string]bool              // arama hatası bir kez loglansın
 }
 
 func NewSubjectResolver(state StateStore, lookup TraceLookup, alive AliveCheck) *SubjectResolver {
 	return &SubjectResolver{state: state, lookup: lookup, alive: alive, now: time.Now,
 		maps: map[string]*LearnedMap{}, loadedAt: map[string]time.Time{}, dirty: map[string]bool{}, tick: map[string]*tickFacts{},
-		lastRes: map[string]anomaly.ExternalSubjectResolution{}}
+		lastRes: map[string]anomaly.ExternalSubjectResolution{},
+		fnFacts: map[string]map[string]fnFact{}, fnOn: map[string]bool{}, fnPath: map[string]string{}, fnErr: map[string]bool{}}
 }
 
 // ExTypeFor — v0.10.899: bu poll'da çözülen trace'in exception tipi ("" = yok).
@@ -142,6 +167,19 @@ func (r *SubjectResolver) ExTypeFor(sourceID string) func(traceID string) string
 func (r *SubjectResolver) LastResolution(sourceID, op string) (anomaly.ExternalSubjectResolution, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	res, ok := r.lastRes[sourceID+"\x00"+op]
+	return res, ok
+}
+
+// LastResolutionFor — v0.10.1000: SERİNİN (op, kod) son çözümü; yoksa op'unki.
+// Fonksiyon kodu basamağında aynı operasyonun farklı kodları farklı servise
+// çözülebilir — kanıt notu başka serinin cümlesini taşımasın.
+func (r *SubjectResolver) LastResolutionFor(sourceID, op, code string) (anomaly.ExternalSubjectResolution, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if res, ok := r.lastRes[sourceID+"\x00"+op+"\x00"+code]; ok {
+		return res, true
+	}
 	res, ok := r.lastRes[sourceID+"\x00"+op]
 	return res, ok
 }
@@ -249,7 +287,8 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 	delete(r.loadedAt, src.ID)
 	m := r.mapFor(ctx, src.ID)
 	tf := &tickFacts{votes: map[string]map[string]int{}, totals: map[string]int{}, exTypes: map[string]string{},
-		podVotes: map[string]map[string]int{}, podTotals: map[string]int{}}
+		podVotes: map[string]map[string]int{}, podTotals: map[string]int{},
+		opCodes: map[string][]string{}, fnVotes: map[string]map[string]int{}, fnTotals: map[string]int{}}
 	r.tick[src.ID] = tf
 	for _, row := range rows {
 		if row.TraceID != "" {
@@ -323,17 +362,27 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 			tf.podTotals[row.OperationCode]++
 		}
 	}
-	// Harita güncellemesi: op başına bu tikin çoğunluğu (trace oyu yoksa pod oyu).
+	// v0.10.1000 — fonksiyon kodundan oylar (kaynak ayarı açıksa; fncode.go).
+	if msg := r.observeFunctionCodes(ctx, src, rows, to, tf, now); msg != "" && res.Error == "" {
+		res.Error = msg
+	}
+	// Harita güncellemesi: op başına bu tikin çoğunluğu (trace oyu yoksa pod
+	// oyu, o da yoksa fonksiyon kodu oyu).
 	learnVotes, learnTotals := tf.votes, tf.totals
-	if len(tf.podVotes) > 0 {
-		learnVotes = make(map[string]map[string]int, len(tf.votes)+len(tf.podVotes))
-		learnTotals = make(map[string]int, len(tf.totals)+len(tf.podTotals))
+	if len(tf.podVotes)+len(tf.fnVotes) > 0 {
+		learnVotes = make(map[string]map[string]int, len(tf.votes)+len(tf.podVotes)+len(tf.fnVotes))
+		learnTotals = make(map[string]int, len(tf.totals)+len(tf.podTotals)+len(tf.fnTotals))
 		for op, v := range tf.votes {
 			learnVotes[op], learnTotals[op] = v, tf.totals[op]
 		}
 		for op, v := range tf.podVotes {
 			if _, has := learnVotes[op]; !has {
 				learnVotes[op], learnTotals[op] = v, tf.podTotals[op]
+			}
+		}
+		for op, v := range tf.fnVotes {
+			if _, has := learnVotes[op]; !has {
+				learnVotes[op], learnTotals[op] = v, tf.fnTotals[op]
 			}
 		}
 	}
@@ -358,6 +407,7 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 			e.Hits += bestN
 			e.Total += total
 			e.LastConfirmed = now.UnixNano()
+			e.Alt, e.AltHits = "", 0
 			changed = true
 			res.Learned++
 		default:
@@ -368,12 +418,25 @@ func (r *SubjectResolver) Observe(ctx context.Context, src SourceConfig, rows []
 			if bestN >= learnedMinHits && float64(bestN)/float64(total) >= learnedMinShare {
 				log.Printf("[oracle/subject] %s: %s → %s (eskisi %s, %d/%d)", src.Name, op, best, e.Service, bestN, total)
 				m.Entries[op] = &LearnedEntry{Service: best, Hits: bestN, Total: total, FirstSeen: e.FirstSeen, LastConfirmed: now.UnixNano()}
-			} else {
-				if mine := byS[e.Service]; mine > 0 {
-					e.Hits += mine
-					e.LastConfirmed = now.UnixNano()
-				}
+			} else if mine := byS[e.Service]; mine > 0 {
+				e.Hits += mine
+				e.LastConfirmed = now.UnixNano()
 				e.Total += total
+				e.Alt, e.AltHits = "", 0
+			} else {
+				// v0.10.1000 — mevcut servis bu tikte HİÇ oy almadı: meydan
+				// okuyan birikir; ≥3 ardışık oyda girdi döner (LearnedEntry.Alt).
+				if e.Alt == best {
+					e.AltHits += bestN
+				} else {
+					e.Alt, e.AltHits = best, bestN
+				}
+				if e.AltHits >= learnedMinHits {
+					log.Printf("[oracle/subject] %s: %s → %s (eskisi %s, %d ardışık oy)", src.Name, op, best, e.Service, e.AltHits)
+					m.Entries[op] = &LearnedEntry{Service: best, Hits: e.AltHits, Total: e.AltHits, FirstSeen: e.FirstSeen, LastConfirmed: now.UnixNano()}
+				} else {
+					e.Total += total
+				}
 			}
 			changed = true
 		}
@@ -443,15 +506,37 @@ func (r *SubjectResolver) aliveSetVerified(ctx context.Context) map[string]bool 
 	return r.aliveSet
 }
 
-// Resolve — ExternalTarget.Subject gövdesi; values[0] = operasyon kodu.
+// Resolve — ExternalTarget.Subject gövdesi; values[0] = operasyon kodu,
+// values[1] = hata/fonksiyon kodu (CounterGroupBy sırası).
 func (r *SubjectResolver) Resolve(ctx context.Context, sourceID string, values []string) anomaly.ExternalSubjectResolution {
-	if r == nil || len(values) == 0 || values[0] == "" {
+	if r == nil {
 		return anomaly.ExternalSubjectResolution{Note: "operasyon seviyesi — servis bilinmiyor"}
 	}
-	op := values[0]
 	now := r.now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	res := r.resolveOp(ctx, sourceID, values, now)
+	if res.Service != "" {
+		return res
+	}
+	// ②b fonksiyon kodundan (v0.10.1000) — yalnız önceki basamaklar servis
+	// bulamadıysa; çözülen özneler bu basamaktan ETKİLENMEZ.
+	fn := r.resolveByFunctionCode(sourceID, values, now)
+	if fn.Service != "" {
+		return fn
+	}
+	if fn.Note != "" {
+		res.Note += "; " + fn.Note
+	}
+	return res
+}
+
+// resolveOp — trace → pod → öğrenilmiş basamakları (r.mu tutulur).
+func (r *SubjectResolver) resolveOp(ctx context.Context, sourceID string, values []string, now time.Time) anomaly.ExternalSubjectResolution {
+	if len(values) == 0 || values[0] == "" {
+		return anomaly.ExternalSubjectResolution{Note: "operasyon seviyesi — servis bilinmiyor"}
+	}
+	op := values[0]
 	// ① trace'ten (bu tik)
 	if tf := r.tick[sourceID]; tf != nil {
 		if total := tf.totals[op]; total > 0 {
@@ -507,6 +592,9 @@ func (r *SubjectResolver) ResolveFor(sourceID string) func(ctx context.Context, 
 		if len(values) > 0 {
 			r.mu.Lock()
 			r.lastRes[sourceID+"\x00"+values[0]] = res
+			if len(values) > 1 {
+				r.lastRes[sourceID+"\x00"+values[0]+"\x00"+values[1]] = res
+			}
 			r.mu.Unlock()
 		}
 		return res
@@ -532,6 +620,7 @@ func (r *SubjectResolver) Reset(ctx context.Context, sourceID string) {
 	defer r.mu.Unlock()
 	delete(r.maps, sourceID)
 	delete(r.tick, sourceID)
+	delete(r.fnFacts, sourceID)
 	if r.state != nil {
 		_ = r.state.PutSetting(ctx, learnedKey(sourceID), []byte(`{"v":1,"entries":{}}`))
 	}

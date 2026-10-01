@@ -1105,7 +1105,7 @@ export interface ExternalMetricEvidence {
   updatedNs: number;
   /** v0.10.898 — Oracle kanıtı: alan başına top-N dağılım + özne kaynağı. */
   distributions?: Record<string, { value: string; count: number }[]>;
-  subjectSource?: 'trace' | 'pod' | 'learned' | 'unknown' | string;
+  subjectSource?: 'trace' | 'pod' | 'learned' | 'function_code' | 'unknown' | string;
   subjectNote?: string;
 }
 
@@ -1621,6 +1621,10 @@ export interface OracleCoverageOp {
   /** instance bir pod adı biçiminde mi (host adı değil). */
   podLike?: boolean;
   host?: string;
+  /** v0.10.1000 — bu operasyonun fonksiyon kodundan servise bağlanan satırları
+   *  ve en çok bağlandıkları servis. */
+  fnRows?: number;
+  fnService?: string;
 }
 export interface OracleSubjectCoverage {
   sourceId: string;
@@ -1639,6 +1643,16 @@ export interface OracleSubjectCoverage {
   unresolved: OracleCoverageOp[];
   /** false = canlı servis listesi okunamadı; pod basamağı doğrulanamadı. */
   aliveKnown: boolean;
+  /** v0.10.1000 — fonksiyon kodu basamağı. fnChecked=false: ölçülmedi
+   *  (fnError nedenini söyler). fnSource boş = okuma yolu yok (geniş rollup
+   *  da FUNCTION_CODE terfi kolonu da yok). rowsFunctionCode: diğer
+   *  basamaklarla bağlanmayan operasyonların fonksiyon kodundan bağlanan
+   *  satırları — fnEnabled ise rowsResolved'a DAHİL, değilse potansiyel. */
+  fnChecked: boolean;
+  fnEnabled: boolean;
+  fnSource?: 'rollup' | 'spans' | '';
+  rowsFunctionCode: number;
+  fnError?: string;
   learnedEntries: number;
   generatedAt: number;
 }
@@ -1711,6 +1725,10 @@ export interface OracleSource {
   problemMode?: 'off' | 'shadow' | 'live';
   genericCodes?: string[];
   ignoreCodes?: string[];
+  /** v0.10.1000 — satırın kod alanı (error.code; özel SQL'de FUNCTIONCODE)
+   *  span'lerdeki FUNCTION_CODE ile aynı değerdir: servisi bulunamayan satır o
+   *  kodu taşıyan span'lerin servisine bağlanır, eşleme zamanla öğrenilir. */
+  functionCodeMatch?: boolean;
   /** v0.10.902 — ÖZEL SQL kipi: poller şema/tablo sorgusu üretmez, customSql'i
    *  salt-okunur sarmalayıcıda koşar (tek SELECT/WITH; bind yok — sorgu kendi
    *  penceresini SYSDATE ile tanımlar). windowMin = sayaç/özet penceresi (dk),

@@ -172,16 +172,19 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// (AggregatingMergeTree telemetri MV'si, spans'ten beslenir; state
 		// tablosu DEĞİL). deploys.go'nun service_version_5m okumasıyla aynı
 		// sınıf, aynı havuz. Aşağıdaki pozitif test de pinliyor.
-		"service_seen.go":      true,
-		"oracle.go":            true, // metric_points
-		"profile.go":           true, // profiles (yazma yarısı ingest havuzunda)
-		"spanmetric.go":        true, // service_summary_5m / operation_summary_5m / spans
-		"spans_by_trace.go":    true, // spans — trace_id IN (...) özetleri (Influx D4, v0.10.229)
-		"trace_services.go":    true, // spans — trace id → servis (Oracle test özeti, v0.10.768)
-		"external_seasonal.go": true, // metric_points — dış seri mevsimsel dilim (Influx D6, v0.10.231)
-		"dbstmt_detail.go":     true, // db_statement_summary_5m / spans
-		"db_capacity.go":       true, // metric_points
-		"endpoints_detail.go":  true, // spans
+		"service_seen.go":   true,
+		"oracle.go":         true, // metric_points
+		"profile.go":        true, // profiles (yazma yarısı ingest havuzunda)
+		"spanmetric.go":     true, // service_summary_5m / operation_summary_5m / spans
+		"spans_by_trace.go": true, // spans — trace_id IN (...) özetleri (Influx D4, v0.10.229)
+		"trace_services.go": true, // spans — trace id → servis (Oracle test özeti, v0.10.768)
+		// v0.10.1000 — SAF telemetri: rollup_spans_wide_* (AggregatingMergeTree
+		// telemetri rollup'ı) ya da spans; fonksiyon kodu → servis dağılımı.
+		"function_code_services.go": true,
+		"external_seasonal.go":      true, // metric_points — dış seri mevsimsel dilim (Influx D6, v0.10.231)
+		"dbstmt_detail.go":          true, // db_statement_summary_5m / spans
+		"db_capacity.go":            true, // metric_points
+		"endpoints_detail.go":       true, // spans
 		// v0.9.839 — SAF telemetri: iki FROM'u da spans (rotanın giriş
 		// span'leri + ebeveynlerinin service_name'i). endpoints_detail.go
 		// ile aynı kaynak, aynı havuz.

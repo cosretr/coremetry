@@ -25,6 +25,13 @@ package oracle
 //	  no_trace_id      satırlarda trace kimliği hiç yok
 //	  trace_not_found  trace kimliği var, haritada iz yok (trace Coremetry'de değil)
 //
+// v0.10.1000 — FONKSİYON KODU basamağı (fncode.go) raporda ayrı ölçülür:
+// yukarıdaki basamaklarla çözülmeyen operasyonların satırlarından, kodu
+// span'lerde tek bir serviste toplananlar (PickFunctionService). Kaynakta
+// eşleme AÇIKSA bu satırlar "bağlanan"a sayılır; KAPALIYSA yalnız
+// RowsFunctionCode olarak raporlanır ("açılırsa şu kadar satır bağlanır") —
+// operatör açmadan önce etkisini görür.
+//
 // alive nil = canlı servis listesi okunamadı: pod basamağı DOĞRULANAMAZ
 // (uydurma servis yok), learned canlı varsayılır (çözücüyle aynı yön) ve
 // rapor AliveKnown=false der.
@@ -65,6 +72,53 @@ type CoverageOp struct {
 	Instance string `json:"instance,omitempty"`
 	PodLike  bool   `json:"podLike,omitempty"`
 	Host     string `json:"host,omitempty"`
+	// FnRows — bu operasyonun fonksiyon kodundan servise bağlanan satırları;
+	// FnService o satırların en çok bağlandığı servis.
+	FnRows    uint64 `json:"fnRows,omitempty"`
+	FnService string `json:"fnService,omitempty"`
+}
+
+// CoverageFn — fonksiyon kodu basamağının girdisi (nil = ölçülmedi).
+type CoverageFn struct {
+	Enabled bool   // kaynak ayarı functionCodeMatch
+	Source  string // okuma yolu: rollup | spans | "" (yok)
+	Pairs   []chstore.OracleOpCode
+	ByCode  map[string][]chstore.FunctionCodeService
+}
+
+// fnOpCoverage — SAF: operasyon → fonksiyon kodundan bağlanan satır + servis.
+func fnOpCoverage(fn *CoverageFn) (rows map[string]uint64, service map[string]string) {
+	rows, service = map[string]uint64{}, map[string]string{}
+	if fn == nil || fn.Source == "" {
+		return rows, service
+	}
+	picks := map[string]string{}
+	bySvc := map[string]map[string]uint64{}
+	for _, p := range fn.Pairs {
+		svc, ok := picks[p.Code]
+		if !ok {
+			svc = PickFunctionService(fn.ByCode[p.Code]).Service
+			picks[p.Code] = svc
+		}
+		if svc == "" {
+			continue
+		}
+		rows[p.Operation] += p.Rows
+		if bySvc[p.Operation] == nil {
+			bySvc[p.Operation] = map[string]uint64{}
+		}
+		bySvc[p.Operation][svc] += p.Rows
+	}
+	for op, m := range bySvc {
+		best, bestN := "", uint64(0)
+		for svc, n := range m {
+			if n > bestN || (n == bestN && svc < best) {
+				best, bestN = svc, n
+			}
+		}
+		service[op] = best
+	}
+	return rows, service
 }
 
 // CoverageReport — kaynağın özne kapsamı.
@@ -82,6 +136,14 @@ type CoverageReport struct {
 	// Unresolved — en çok satırlı çözülmeyen operasyonlar (≤ topN).
 	Unresolved []CoverageOp `json:"unresolved"`
 	AliveKnown bool         `json:"aliveKnown"`
+	// Fonksiyon kodu basamağı (v0.10.1000). FnChecked=false: ölçülmedi.
+	// FnSource "" = okuma yolu yok. RowsFunctionCode: diğer basamaklarla
+	// çözülmeyen operasyonların fonksiyon kodundan bağlanan satırları —
+	// FnEnabled ise RowsResolved'a DAHİL, değilse yalnız potansiyel.
+	FnChecked        bool   `json:"fnChecked"`
+	FnEnabled        bool   `json:"fnEnabled"`
+	FnSource         string `json:"fnSource,omitempty"`
+	RowsFunctionCode uint64 `json:"rowsFunctionCode"`
 }
 
 // classifyCoverageOp — SAF: tek operasyonun durumu (dosya başı).
@@ -132,9 +194,13 @@ func classifyCoverageOp(o chstore.OracleOpObs, e *LearnedEntry, alive map[string
 // BuildCoverage — SAF (tablo testli): operasyon gözlemleri + öğrenilmiş harita
 // + canlı servis kümesi → rapor. obs en çok satırlı önce gelir (chstore);
 // Unresolved o sırayı korur ve topN'de kesilir.
-func BuildCoverage(obs []chstore.OracleOpObs, totals chstore.OracleOpTotals, learned LearnedMap, alive map[string]bool, now time.Time, topN int) CoverageReport {
+func BuildCoverage(obs []chstore.OracleOpObs, totals chstore.OracleOpTotals, learned LearnedMap, alive map[string]bool, now time.Time, topN int, fn *CoverageFn) CoverageReport {
 	rep := CoverageReport{RowsTotal: totals.Rows, OpsTotal: totals.Ops, OpsListed: len(obs),
 		ByReason: map[string]uint64{}, Unresolved: []CoverageOp{}, AliveKnown: alive != nil}
+	if fn != nil {
+		rep.FnChecked, rep.FnEnabled, rep.FnSource = true, fn.Enabled, fn.Source
+	}
+	fnRows, fnSvc := fnOpCoverage(fn)
 	var unresolved []CoverageOp
 	for _, o := range obs {
 		c := classifyCoverageOp(o, learned.Entries[o.Operation], alive, now)
@@ -149,7 +215,23 @@ func BuildCoverage(obs []chstore.OracleOpObs, totals chstore.OracleOpTotals, lea
 			rep.RowsPod += o.Rows
 			rep.OpsResolved++
 		default:
-			rep.ByReason[c.Reason] += o.Rows
+			// Fonksiyon kodundan bağlanan pay (çiftler kodu dolu satırları sayar;
+			// operasyon toplamını aşamaz).
+			if c.FnRows = fnRows[o.Operation]; c.FnRows > o.Rows {
+				c.FnRows = o.Rows
+			}
+			c.FnService = fnSvc[o.Operation]
+			rep.RowsFunctionCode += c.FnRows
+			left := o.Rows
+			if rep.FnEnabled {
+				rep.RowsResolved += c.FnRows
+				left -= c.FnRows
+				if left == 0 {
+					rep.OpsResolved++
+					continue
+				}
+			}
+			rep.ByReason[c.Reason] += left
 			unresolved = append(unresolved, c)
 		}
 	}

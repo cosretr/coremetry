@@ -341,6 +341,24 @@ describe('v0.10.603 — zaman dilimi + kolon eşlemesi', () => {
   });
 });
 
+// v0.10.1000 — functionCodeMatch: kapalıyken gövdede anahtar YOK (varsayılan
+// kapalı — mevcut kaynakların öznesi değişmez); snapshot → form → gövde korunur.
+describe('sourceForSave — functionCodeMatch', () => {
+  it('kapalıyken anahtar gövdeye girmez, açıkken true gider (özel SQL kipinde de)', () => {
+    expect('functionCodeMatch' in sourceForSave(goodSource())).toBe(false);
+    expect(sourceForSave(goodSource({ functionCodeMatch: true })).functionCodeMatch).toBe(true);
+    expect(sourceForSave(goodSource({ functionCodeMatch: true, queryMode: 'custom', customSql: 'SELECT 1 FROM DUAL' })).functionCodeMatch).toBe(true);
+  });
+  it('snapshot\'tan forma ve gövdeye taşınır', () => {
+    const snap: OracleSourceSnapshot = {
+      ...goodSource({ functionCodeMatch: true }), id: 'o-1', hasPassword: true, passwordResolved: true,
+    };
+    expect(sourceFromSnapshot(snap).functionCodeMatch).toBe(true);
+    expect(sourceForSave(sourceFromSnapshot(snap), snap).functionCodeMatch).toBe(true);
+    expect(sourceFromSnapshot({ ...snap, functionCodeMatch: undefined }).functionCodeMatch).toBe(false);
+  });
+});
+
 // v0.10.843 — selectMappedOnly: kapalıyken gövdede anahtar YOK (sunucu
 // varsayılanı = SELECT *), açıkken true; snapshot → form → gövde yolunda korunur.
 describe('sourceForSave — selectMappedOnly', () => {

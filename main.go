@@ -1141,6 +1141,8 @@ func main() {
 		// + GÖLGE tarayıcı (notifier nil: Problem açılır, alarm gitmez; audit §6.4).
 		// Kip/kod listeleri kaynak ayarı dilim D. Kaynak başına 15 s bütçe.
 		oracleSubjects := oracle.NewSubjectResolver(store, store.TraceFactsByIDs, store.ListActiveServiceNames)
+		// v0.10.1000 — fonksiyon kodu basamağı (kaynak ayarı functionCodeMatch).
+		oracleSubjects.SetFunctionCodeLookup(store.FunctionCodeServices)
 		oracleShadow := anomaly.NewExternalScanner(store, nil)
 		oracleEnricher := oracle.NewEnricher(store, oracleSubjects) // v0.10.898 — kanıt (satırlar, trace'ler, dağılımlar)
 		oracleWorker.SetRowsHook(func(ctx context.Context, src oracle.SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, capped bool) {

@@ -158,6 +158,7 @@ export function emptyOracleSource(): OracleSource {
     problemMode: 'shadow', // v0.10.897 — gölge: Problem açılır, alarm yok
     genericCodes: ['ERR_020'],
     ignoreCodes: [],
+    functionCodeMatch: false, // v0.10.1000
     queryMode: 'table', // v0.10.902
     customSql: '',
     windowMin: ORACLE_DEFAULT_WINDOW_MIN,
@@ -442,6 +443,7 @@ export function sourceForSave(
   if (gen.length) out.genericCodes = gen;
   const ign = parseTypeFilter((src.ignoreCodes ?? []).join(','));
   if (ign.length) out.ignoreCodes = ign;
+  if (src.functionCodeMatch) out.functionCodeMatch = true; // v0.10.1000 — kapalıyken gövdede yok
   const cols: Record<string, string> = {};
   for (const [field, raw] of Object.entries(src.columns ?? {})) {
     const v = trim(raw);
@@ -483,6 +485,7 @@ export function sourceFromSnapshot(s: OracleSourceSnapshot): OracleSource {
     problemMode: s.problemMode === 'off' || s.problemMode === 'live' ? s.problemMode : 'shadow',
     genericCodes: [...(s.genericCodes ?? ['ERR_020'])],
     ignoreCodes: [...(s.ignoreCodes ?? [])],
+    functionCodeMatch: !!s.functionCodeMatch,
     queryMode: s.queryMode === 'custom' ? 'custom' : 'table', // v0.10.902
     customSql: s.customSql ?? '',
     windowMin: s.windowMin,

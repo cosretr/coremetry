@@ -113,7 +113,8 @@ type ExternalMetricEvidence struct {
 	UpdatedNs   int64              `json:"updatedNs"`
 	// v0.10.898 (Oracle Aşama 3 dilim E) — alan başına top-N değer dağılımı
 	// (external_code, error_type, instance, host, channel, task) ve öznenin
-	// kaynağı: "trace" | "learned" | "unknown" + cümlesi ("trace'ten (7/9)").
+	// kaynağı: "trace" | "pod" | "learned" | "function_code" | "unknown" +
+	// cümlesi ("trace'ten (7/9)").
 	Distributions map[string][]ValueCount `json:"distributions,omitempty"`
 	SubjectSource string                  `json:"subjectSource,omitempty"`
 	SubjectNote   string                  `json:"subjectNote,omitempty"`

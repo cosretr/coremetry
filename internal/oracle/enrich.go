@@ -188,7 +188,7 @@ func (e *Enricher) OnEvidence(ctx context.Context, ev anomaly.ExternalEvent) {
 		Errors:        weightedErrors(rows),
 	}
 	if e.subjects != nil {
-		if res, ok := e.subjects.LastResolution(ev.Target.SourceID, op); ok {
+		if res, ok := e.subjects.LastResolutionFor(ev.Target.SourceID, op, code); ok {
 			ext.SubjectSource, ext.SubjectNote = res.Source, res.Note
 			if ext.SubjectSource == "" {
 				ext.SubjectSource = "unknown"
