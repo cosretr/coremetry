@@ -103,7 +103,8 @@ export function barPanelMaxDataPoints(cols = 1): number {
 // ekran ne kadar geniş olursa olsun 100'ü geçmez, geniş ekranda çubuklar
 // kalınlaşır. Rung'a snap sonrası tipik sayı 60–96 (3 saat = 90 çubuk, 2 dk
 // kova). ~1440px ve altındaki ekranlarda bütçe zaten ≤100'dü — onlar DEĞİŞMEDİ.
-// Taban 30 aynı. Yalnız Traces şeridi: Logs histogramı kendi bütçesinde kaldı.
+// Taban 30 aynı. v0.10.1012 — Logs histogramı da bu tavanı kullanır
+// (logsBucketSec): iki şerit aynı yoğunlukta.
 export const TRACE_STRIP_MAX_BARS = 100;
 export function traceStripMaxDataPoints(): number {
   return Math.min(TRACE_STRIP_MAX_BARS, barPanelMaxDataPoints(1));
@@ -118,7 +119,11 @@ export function traceStripMaxDataPoints(): number {
 export function logsBucketSec(spanSec: number): number {
   // v0.9.715 — bar bütçesine geçti (bunlar da bar yüzeyi; Traces
   // şeridiyle aynı "küçülmüş bar" sınıfı).
-  return Math.max(5, stepForPoints(spanSec, barPanelMaxDataPoints(1)));
+  // v0.10.1012 (operatör, kuyruk: "Logs histogramında da çubuk sayısını
+  // azalt") — Traces şeridiyle AYNI tavan (100 çubuk, traceStripMaxDataPoints):
+  // geniş ekranda 3 saat 180 yerine 90 çubuk; ~1440px ve altı değişmez. Daha
+  // az kova ES date_histogram için de daha ucuz.
+  return Math.max(5, stepForPoints(spanSec, traceStripMaxDataPoints()));
 }
 
 // heatmapBucketCount — sabit 60/80 kova yerine genişlik-türevi sütun

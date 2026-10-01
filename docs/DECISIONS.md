@@ -987,6 +987,19 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Logs histogramı çubuk tavanı + topoloji perf bütçesi makineye ölçekli (v0.10.1012)
+
+**Kuyruk (operatör "devam sırayla"), iki cila işi tek sürümde.** **(1) Logs histogramı:** Traces şeridiyle
+aynı tavan — `logsBucketSec` artık `traceStripMaxDataPoints` (≤100 çubuk) kullanır; geniş ekranda 3 saat
+180 yerine 90 çubuk, ~1440px ve altı değişmez, ES `date_histogram` daha az kova üretir. **(2) Topoloji
+yerleşim perf testi:** mutlak 1500 ms bütçe bir laptopta tanımlanmıştı; CI koşucusu ~7× yavaş ve aynı kod
+orada istikrarlı 1512–1514 ms ölçüyor — gerileme YOK (yerelde 222 ms), yalnız sabit bütçe yavaş makinenin
+sınırındaydı. Bugün iki sürümün (998, 1009) CI'ını kırdı; kırılınca arka uç / güvenlik / lint işleri de
+atlanıyor. **Karar:** bütçe = max(1500 ms, 45 × kalibrasyon) — kalibrasyon, bileşenden bağımsız sabit bir
+iş (sıralama + dize üretimi; yerelde ≈33 ms), 45 ise bütçenin tanımlandığı makinedeki oran. Sıkılık aynı,
+cetvel makineyle uzuyor: hızlı makinede taban 1500 ms (gevşemez), yavaş makinede aynı orandaki gerileme
+yine yakalanır. **Reddedilen:** bütçeyi düz 3000 ms'e çekmek — yerelde 5× gerilemeyi (≈1.9 s) kaçırırdı.
+
 ## 2026-10-01 — Traces şeridi: Errors + giriş-dışı çipte boş durum nedenini söyler (v0.10.1011)
 
 **Kuyruk (operatör "devam sırayla"):** 1010'dan sonra `function_code` çipi + Errors'ta liste dolu, şerit

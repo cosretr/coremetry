@@ -215,4 +215,19 @@ describe('traceStripMaxDataPoints (v0.10.1007)', () => {
       expect(traceStripMaxDataPoints()).toBe(barPanelMaxDataPoints(1));
     });
   });
+  // v0.10.1012 — Logs histogramı aynı tavanda (operatör: "Logs histogramında da").
+  it('Logs histogramı: geniş ekranda 3 saat 180 → 90 çubuk; taban 5 sn ve rung korunur', () => {
+    at(2560, () => {
+      const sec = logsBucketSec(3 * 3600);
+      expect((3 * 3600) / sec).toBe(90);
+      expect(STEP_RUNGS).toContain(sec);
+      expect(logsBucketSec(10)).toBe(5);
+      for (const rangeSec of [900, 3600, 6 * 3600, 86400, 7 * 86400]) {
+        expect(rangeSec / logsBucketSec(rangeSec)).toBeLessThanOrEqual(TRACE_STRIP_MAX_BARS);
+      }
+    });
+    at(1440, () => {
+      expect(logsBucketSec(3 * 3600)).toBe(stepForPoints(3 * 3600, barPanelMaxDataPoints(1))); // dar ekran aynı
+    });
+  });
 });
