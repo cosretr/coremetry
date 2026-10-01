@@ -16,6 +16,7 @@ import {
   DatabaseIdentityHeader, DatabaseSignalStrip, DatabaseTrendCards,
   DatabaseCallersSection, DatabaseStatementsSection, DatabaseEnginePanels,
 } from '@/pages/databases/detailSections';
+import { DatabaseProblemsSection } from '@/pages/databases/DatabaseProblemsSection';
 import type { DBDetail, DBTrend, SlowQueryRow } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -198,6 +199,12 @@ export default function DatabaseDetailPage() {
                 errorMessage={stmtsQ.error instanceof Error ? stmtsQ.error.message : undefined}
                 onRetry={() => { void stmtsQ.refetch(); }}
                 onOpen={openStmt} />
+            </div>
+
+            {/* v0.10.1019 — bu veritabanının problemleri (Dynatrace varlık
+                sayfasındaki Problems kartının karşılığı). */}
+            <div style={{ marginTop: 12 }}>
+              <DatabaseProblemsSection refObj={refObj} range={range} />
             </div>
 
             <DatabaseEnginePanels refObj={refObj} range={range} />

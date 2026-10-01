@@ -987,6 +987,25 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Databases: Dynatrace Databases baz alınır; dilim 1 "bu veritabanının problemleri" (v0.10.1019)
+
+**Operatör:** Databases iyileştirmeleri için "Dynatrace databases kısmını baz al; o database ile ilgili
+veriler gelebilir." **Mevcut `/database` sayfası:** kimlik, RED şeridi, üç trend kartı, çağıranlar (servis ·
+pod + log pivotu), en ağır ifadeler (+ ifade detay sayfası), motor panelleri (yalnız receiver metriği
+varsa — operatör motor metriği ingest ETMİYOR, v0.9.846). **Dynatrace'e göre eksikler ve sıra:**
+(1) varlığın problemleri — **bu sürüm**; (2) hata kırılımı: başarısız çağrılar hata türüne (ORA kodu /
+exception tipi) ve ifadeye göre + trace pivotu; (3) detayda önceki pencereyle karşılaştırma (RED delta);
+(4) `/databases` listesinde satır başına açık problem işareti; (5) motor sağlığı (oturum, bekleme sınıfı,
+kilit, tablespace, top SQL) — Dynatrace bunu veritabanının kendisinden alır; burada iki yol var ve seçim
+OPERATÖRÜN: (a) collector'a oracledb receiver (paneller hazır, kod yok), (b) mevcut Oracle bağlantısından
+V$ görünümlerini periyodik okumak (yeni kod; DB yükü + yetki kararı — "full scan / kilitli sorgu atmasın"
+direktifi geçerli); (6) çağıran tarafı bağlantı havuzu metrikleri (uygulamalar yayıyorsa).
+**Dilim 1 kararı:** `/database` sayfasına "Problems on this database" kartı — açık olanlar + seçili
+pencereyle kesişen çözülmüşler; öncelik, durum, kural adı (problem detayına link), başlangıç, süre. Yeni uç
+YOK: `/api/problems?service=<özne>` kesin eşleşme. Özne iki biçimde açıldığı için iki okuma:
+`db:<system>@<instance>` (kapasite) ve `db:<system>@<dbName>` (yavaş ifade, hedefli kural). 2-6 ayrı
+dilim; (5) operatör kararı gelmeden başlamaz.
+
 ## 2026-10-01 — Problems soğuk yolu: iki ham `spans` toplaması ön-toplama taşındı (v0.10.1018)
 
 **Operatör:** "Problems sayfası biraz yavaş, acaba indeks yok mu tablolarda." **Bulgu (koddan; prod'da
