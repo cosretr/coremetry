@@ -247,16 +247,27 @@ describe('validateDraft — tüm kurallar, sunucu tarzı yollar', () => {
   it('geçerli taslakta sorun yok', () => {
     expect(paths(draftFromSettings(settings()))).toEqual([]);
   });
-  it('açıkken hub yok; silinmiş ve (açıkken) devre dışı hub', () => {
+  // v0.10.1009 (operatör: "hub'lardan biri aktif diğeri pasif") — devre dışı
+  // Remote Cluster kaydı PASİF hub'dır, kaydı engellemez; engel yalnız açıkken
+  // hiç etkin hub kalmaması.
+  it('açıkken hub yok; silinmiş hub sorun, devre dışı (pasif) hub sorun DEĞİL', () => {
     const d = draftFromSettings(settings({ hubs: [], instances: [] }));
     expect(paths(d)).toEqual(['hubs']);
     const d2 = draftFromSettings(settings({ hubs: [{ clusterId: H1 }, { clusterId: H2 }, { clusterId: 'c-77d0aa15' }, { clusterId: 'c-9c0d1e20' }] }));
     const is = validateDraft(d2, ctx(d2));
-    expect(is.map(i => i.path)).toEqual(['hubs[2].clusterId', 'hubs[3].clusterId']);
+    expect(is.map(i => i.path)).toEqual(['hubs[2].clusterId']);
     expect(is[0].short).toBe('Remote Cluster kaydı yok');
     expect(is[0].target).toEqual({ kind: 'hub', key: d2.hubs[2].key });
     d2.enabled = false;
-    expect(paths(d2)).toEqual(['hubs[2].clusterId']); // kapalıyken devre dışı hub serbest
+    expect(paths(d2)).toEqual(['hubs[2].clusterId']);
+  });
+  it('açıkken hub\'ların HEPSİ devre dışıysa engel; kapalıyken serbest', () => {
+    const d = draftFromSettings(settings({ hubs: [{ clusterId: 'c-9c0d1e20' }], instances: [] }));
+    const is = validateDraft(d, ctx(d));
+    expect(is.map(i => i.path)).toEqual(['hubs']);
+    expect(is[0].short).toBe('etkin hub yok');
+    d.enabled = false;
+    expect(paths(d)).toEqual([]);
   });
   it('kimlik: biçim, hub\'lar arası tekrar (mockup metni), namespace hub başına tekil', () => {
     const d = draftFromSettings(settings());

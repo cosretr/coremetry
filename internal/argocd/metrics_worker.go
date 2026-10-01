@@ -124,8 +124,12 @@ type HubInfo struct {
 
 // Registry — hub'lar + dest_server çözümü.
 type Registry struct {
-	Hubs      map[string]HubInfo // yalnız etkin + URL'li kayıtlar
-	ByServer  map[string]string  // normalleşmiş apiServerUrl → EffectiveID
+	Hubs map[string]HubInfo // yalnız etkin + URL'li kayıtlar
+	// Passive — v0.10.1009: Remote Cluster kaydı DEVRE DIŞI olan kayıtlar
+	// (id → ad). Hub listesindeki böyle bir kayıt PASİF hub'dır: instance'ları
+	// planlanmaz (hata değil, bilinçli durum — aktif/pasif çift).
+	Passive   map[string]string
+	ByServer  map[string]string // normalleşmiş apiServerUrl → EffectiveID
 	Normalize func(string) string
 	// v0.10.985 (P3.2 eşleyici): span cluster değeri → EffectiveID (MV iş
 	// yüklerinin kimliği; service_gitops.go bySpan ile aynı kural) ve
@@ -210,6 +214,12 @@ func planShards(s Settings, reg Registry) []shardPlan {
 	var out []shardPlan
 	scopes := map[int]readScope{} // out indeksi → okuma kapsamı (atlanmayanlar)
 	for _, h := range s.Hubs {
+		if _, passive := reg.Passive[h.ClusterID]; passive {
+			// v0.10.1009 — pasif hub taranmaz: parça ÜRETİLMEZ (eskiden her
+			// instance "hub devre dışı" diye sert atlanıyor, koşu her tik
+			// kısmi/başarısız görünüyordu). Özet notu passiveHubNotes yazar.
+			continue
+		}
 		info, ok := reg.Hubs[h.ClusterID]
 		for _, inst := range s.Instances {
 			if !inst.Enabled || inst.HubClusterID != h.ClusterID {
@@ -470,6 +480,32 @@ func metricsTickDeadline(iv time.Duration) time.Duration {
 	return 2 * time.Minute
 }
 
+// passiveHubNotes — v0.10.1009 — SAF: pasif hub başına TEK not ("pasif hub
+// hub-2: 190 instance taranmadı") + taranmayan etkin instance toplamı. Not
+// koşu durumunu DÜŞÜRMEZ: pasif hub hata değil, operatörün kurduğu durumdur.
+func passiveHubNotes(s Settings, reg Registry) ([]string, int) {
+	var notes []string
+	total := 0
+	for _, h := range s.Hubs {
+		name, passive := reg.Passive[h.ClusterID]
+		if !passive {
+			continue
+		}
+		n := 0
+		for _, inst := range s.Instances {
+			if inst.Enabled && inst.HubClusterID == h.ClusterID {
+				n++
+			}
+		}
+		if name == "" {
+			name = h.ClusterID
+		}
+		notes = append(notes, fmt.Sprintf("pasif hub %s: %d instance taranmadı (Remote Cluster kaydı devre dışı)", name, n))
+		total += n
+	}
+	return notes, total
+}
+
 // MetricsRunFreshness — v0.10.985 inceleme — SAF: son argocd-metrics koşusunun
 // (started_at) "işçi canlı" sayıldığı en büyük yaş: iki aralık + bir tik
 // bütçesi (koşu satırı tik bitince yazılır, started_at taşır). GitOps sekmesi
@@ -503,6 +539,10 @@ func (w *MetricsWorker) tick(parent, ctx context.Context, set Settings) {
 
 	reg := w.registry.ArgoRegistry()
 	plans := planShards(set, reg)
+	if pn, pc := passiveHubNotes(set, reg); len(pn) > 0 { // v0.10.1009
+		notes = append(notes, pn...)
+		diag["passive_hub_instances"] = pc
+	}
 	live := map[string]bool{}
 	for _, p := range plans {
 		live[p.Inst.ID] = true

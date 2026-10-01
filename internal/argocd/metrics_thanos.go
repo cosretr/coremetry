@@ -56,10 +56,18 @@ func (r ThanosRegistry) ArgoRegistry() Registry {
 // sayılmaz ve dest_server'ı eşlenmez (service_gitops.go emsali).
 func registryFrom(snap []thanos.ClusterSnapshot, byID func(string) (thanos.ClusterConfig, bool)) Registry {
 	reg := Registry{Hubs: map[string]HubInfo{}, ByServer: map[string]string{}, Normalize: normalizeDestServer,
-		BySpan: map[string]string{}, Suffix: map[string]string{}}
+		BySpan: map[string]string{}, Suffix: map[string]string{}, Passive: map[string]string{}}
 	for _, c := range snap {
 		cc, ok := byID(c.ID)
-		if !ok || strings.TrimSpace(cc.URL) == "" {
+		if !ok {
+			// v0.10.1009 — etkin çözücüde yok VE kayıt devre dışı: hub
+			// listesindeyse PASİF hub (taranmaz; hata değil).
+			if !c.Enabled {
+				reg.Passive[c.ID] = c.Name
+			}
+			continue
+		}
+		if strings.TrimSpace(cc.URL) == "" {
 			continue
 		}
 		ln, lv := cc.EffectiveThanosLabel()

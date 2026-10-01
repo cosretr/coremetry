@@ -749,6 +749,10 @@ func TestRegistryFrom(t *testing.T) {
 	if _, ok := reg.Hubs["c-off"]; ok {
 		t.Fatal("devre dışı kayıt hub değil")
 	}
+	// v0.10.1009 — devre dışı kayıt PASİF olarak işaretlenir; etkin kayıtlar değil.
+	if reg.Passive["c-off"] != "off" || len(reg.Passive) != 1 {
+		t.Fatalf("pasif kayıtlar: %+v", reg.Passive)
+	}
 	if got := DestClusterID("https://api.a.example:6443/", "c-hub", reg.ByServer, reg.Normalize); got != "c-a" {
 		t.Fatalf("dest_server normalleşip eşlenmeli: %q (%v)", got, reg.ByServer)
 	}
@@ -1074,5 +1078,52 @@ func TestMetricsWorkerTTLRefresh(t *testing.T) {
 	}
 	if !strings.Contains(f.st.lastRun(t).Error, "ttl_refresh=1") {
 		t.Fatalf("teşhis: %s", f.st.lastRun(t).Error)
+	}
+}
+
+// v0.10.1009 — Operator-reported ("hub'lardan biri aktif diğeri pasif"): pasif
+// hub'ın (Remote Cluster kaydı devre dışı) instance'ları PLANLANMAZ. Öncesi:
+// her instance "hub devre dışı" diye sert atlanıyor, 190 instance'lık pasif hub
+// koşuyu her tik kısmi gösteriyor ve not listesini dolduruyordu.
+func TestPassiveHubIsNotPlanned(t *testing.T) {
+	s := mwOneHubSettings()
+	s.Hubs = append(s.Hubs, Hub{ClusterID: "c-hub2"})
+	s.Instances = append(s.Instances,
+		Instance{ID: "team-a-prod-2", HubClusterID: "c-hub2", HubNamespace: "team-a-prod", Enabled: true},
+		Instance{ID: "team-b-prod-2", HubClusterID: "c-hub2", HubNamespace: "team-b-prod", Enabled: true},
+		Instance{ID: "team-c-prod-2", HubClusterID: "c-hub2", HubNamespace: "team-c-prod", Enabled: false})
+	reg := mwReg(mwHub1)
+
+	// Kayıt ne etkin ne pasif biliniyorsa (silinmiş / URL'siz) eski davranış: sert atlama.
+	plans := planShards(s, reg)
+	skipped := 0
+	for _, p := range plans {
+		if p.Skip != "" {
+			skipped++
+		}
+	}
+	if len(plans) != 3 || skipped != 2 {
+		t.Fatalf("bilinmeyen hub: %d parça, %d atlanan (3 / 2 beklenir)", len(plans), skipped)
+	}
+	if notes, n := passiveHubNotes(s, reg); len(notes) != 0 || n != 0 {
+		t.Fatalf("pasif işareti yokken not olmamalı: %v", notes)
+	}
+
+	// Pasif hub: parça üretilmez, tek özet notu, koşu durumu düşmez.
+	reg.Passive = map[string]string{"c-hub2": "hub-2"}
+	plans = planShards(s, reg)
+	if len(plans) != 1 || plans[0].Inst.ID != "team-a-prod" || plans[0].Skip != "" {
+		t.Fatalf("pasif hub planlanmamalı: %+v", plans)
+	}
+	notes, n := passiveHubNotes(s, reg)
+	if n != 2 || len(notes) != 1 || notes[0] != "pasif hub hub-2: 2 instance taranmadı (Remote Cluster kaydı devre dışı)" {
+		t.Fatalf("özet notu: %v (n=%d)", notes, n)
+	}
+	if st := metricsRunStatus(len(plans), 1, 0, 0); st != rollout.RunOK {
+		t.Fatalf("aktif hub tamamsa koşu ok kalmalı: %s", st)
+	}
+	// Etkin hub'ın kaydı pasif haritasında değilse hiçbir şey değişmez.
+	if got := planShards(mwOneHubSettings(), reg); len(got) != 1 {
+		t.Fatalf("aktif hub etkilenmemeli: %+v", got)
 	}
 }

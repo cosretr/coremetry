@@ -13,9 +13,10 @@ import { ArgoCDNote, ArgoCDSectionPanel } from './ArgoCDSectionPanel';
 //
 // Tablo türü: en çok 8 satırlık düzenleme listesi — yine de tablo standardı
 // dilim 5 sonrası tek biçim `useDataTable` + `DataTableHead` (sıralanmaz,
-// satır tıklanmaz) ve durum tablonun İÇİNDE (`DataTableState`). Silinmiş /
-// devre dışı Remote Cluster tam genişlik hata satırıyla, Kaydet'i beklemeden
-// görünür.
+// satır tıklanmaz) ve durum tablonun İÇİNDE (`DataTableState`). Silinmiş
+// Remote Cluster tam genişlik hata satırıyla, Kaydet'i beklemeden görünür.
+// Devre dışı kayıt PASİF hub'dır (v0.10.1009): soluk bilgi satırı, hata değil
+// — instance'ları taranmaz, kaydı engellemez.
 // v0.10.974 — engel iletisi sekmenin durumunda (`msg`/`onMsg`): "Değişiklikleri
 // geri al" onu da siler (mockup revert: hubMsg + instMsg); geri alınan
 // taslakta bayat "N instance bağlı" sayısı ekranda kalmaz.
@@ -37,14 +38,12 @@ const COLS: ColumnDef<HubRow>[] = [
   { id: 'act', label: 'Eylemler', kind: 'actions', width: 120 },
 ];
 
-export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, enabled, issues, msg, onMsg, onAdd, onRemove, onRemoveWithInstances, onInject, announce, focus }: {
+export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, onMsg, onAdd, onRemove, onRemoveWithInstances, onInject, announce, focus }: {
   hubs: HubDraft[];
   instances: InstanceDraft[];
   /** Kayıtlı pin'ler: pin'i olan instance (ve onu taşıyan hub) kaldırılamaz. */
   pins: ArgoCDPin[];
   clusters: RemoteCluster[];
-  /** Taslaktaki entegrasyon bayrağı (devre dışı hub yalnız açıkken hata). */
-  enabled: boolean;
   issues: Issue[];
   /** Hub ekleme/kaldırma engelinin iletisi (role=alert); sekme tutar. */
   msg: string;
@@ -134,7 +133,7 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, enabled, issu
                     <td {...dt.cellProps(r, 'cluster', r.name)} aria-describedby={errId}>
                       <span className={deleted ? 'mono is-err' : 'mono'}>{r.name}</span>{' '}
                       <span className="mono cell-faint">{r.hub.clusterId}</span>
-                      {disabled && <>{' '}<Badge tone="neutral">devre dışı</Badge></>}
+                      {disabled && <>{' '}<Badge tone="neutral">pasif</Badge></>}
                     </td>
                     <td {...dt.cellProps(r, 'label')}>
                       {r.rc?.label ? (
@@ -160,13 +159,13 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, enabled, issu
                   {errId && (
                     <tr>
                       <td colSpan={COLS.length} id={errId} tabIndex={-1}
-                        className={issue || deleted || enabled ? 'td-full is-err' : 'td-full cell-muted'}>
+                        className={issue || deleted ? 'td-full is-err' : 'td-full cell-muted'}>
                         {issue ? (
                           <><span className="mono">{issue.path}:</span> {issue.message}</>
                         ) : deleted ? (
                           <>“{r.hub.clusterId}” artık bir Remote Cluster kaydı değil (silinmiş). Bu hub satırını kaldırın; Argo bu kümede çalışıyorsa kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta yeniden ekleyip hub olarak seçin.</>
                         ) : (
-                          <>{r.name} Remote Cluster kaydı devre dışı — Argo CD açıkken kaydedilemez. Kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta etkinleştirin ya da bu hub'ı kaldırın.</>
+                          <>{r.name} Remote Cluster kaydı devre dışı — pasif hub: instance'ları taranmaz, kaydı engellemez. Etkinleştirmek için kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta açın.</>
                         )}
                       </td>
                     </tr>

@@ -987,6 +987,21 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Argo CD: pasif hub kaydı engellemez, taranmaz (v0.10.1009)
+
+**Operatör ("hub'lardan biri aktif diğeri pasif"; kuyruk "devam et"):** Remote Cluster kaydı devre dışı olan
+hub, Argo CD açıkken kaydı engelliyordu (`canonicalHubs`: "her hub etkin olmalı", karar 5) — aktif/pasif
+çiftte pasif tarafın kaydı bilerek kapalı olduğundan Argo ayarlarının HİÇBİRİ kaydedilemiyordu. **Karar:**
+devre dışı kayıt = PASİF HUB. Listede ve instance'larıyla blobda kalır; kaydı engellemez. Tek şart: bayrak
+açıkken EN AZ BİR hub etkin olmalı (hepsi pasifse 400, alan `hubs`). **İşçi:** pasif hub'ın instance'ları
+PLANLANMAZ (`Registry.Passive`, `planShards`); öncesinde her biri "hub devre dışı" diye sert atlanıyor,
+190 instance'lık pasif hub koşuyu her tik kısmi gösteriyordu. Yerine hub başına TEK not ("pasif hub hub-2:
+190 instance taranmadı") + `passive_hub_instances` teşhis sayacı; koşu durumu düşmez. Kayıt yeniden
+etkinleşince instance'lar kendiliğinden planlanır (yeni instance gibi taban alır). Silinmiş / URL'siz kayıt
+eski davranışta (sert atlama — o bir yapılandırma hatası). **FE:** hub satırı "pasif" rozeti + soluk bilgi
+satırı (hata değil); istemci denetimi sunucuyla aynı kural. Keşif pasif hub'a istek göndermez (değişmedi).
+Pasif hub'ın eski CH satırları (argocd_app_status) yaşlanarak düşer; aktif hub'daki ikizleri güncel kalır.
+
 ## 2026-10-01 — Traces: Root kutusu çipli listede kökü daraltılmış kümede aramaz (v0.10.1008)
 
 **Operatör bildirimi ("Root seçiliyken neden gelmiyor"):** `function_code = …` çipi + "Root" → liste boş

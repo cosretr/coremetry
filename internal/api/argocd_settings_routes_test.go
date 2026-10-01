@@ -405,7 +405,8 @@ func TestArgoCDSettingsPutValidation(t *testing.T) {
 		{"düz token", `{"instances":[{"id":"a","hubNamespace":"a","token":"eyJhbGci"}]}`, "instances[0].token"},
 		{"bilinmeyen hub", `{"hubs":[{"clusterId":"c-00000000"}]}`, "hubs[0].clusterId"},
 		{"açık + hub yok", `{"enabled":true}`, "hubs"},
-		{"devre dışı hub + açık", `{"enabled":true,"hubs":[{"clusterId":"` + argoClusterID("cluster-off") + `"}]}`, "hubs[0].clusterId"},
+		// v0.10.1009 — devre dışı hub pasif sayılır; engel hiç etkin hub kalmaması.
+		{"tek hub devre dışı + açık", `{"enabled":true,"hubs":[{"clusterId":"` + argoClusterID("cluster-off") + `"}]}`, "hubs"},
 		// v0.10.957 — tek-hub şekli sessizce atılmaz (§5.6 iki hub)
 		{"eski üst düzey hubClusterId", `{"hubClusterId":"` + hub + `"}`, "hubClusterId"},
 		{"iki hub + instance hub'ı yok", `{"hubs":[{"clusterId":"` + hub + `"},{"clusterId":"` + argoClusterID(argoTargetName) + `"}],

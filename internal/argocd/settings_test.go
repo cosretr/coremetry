@@ -297,7 +297,14 @@ func TestValidateRejectsWithFieldPath(t *testing.T) {
 		{"hub adı id değil", mod(func(s *Settings) { s.Hubs[0].ClusterID = "cluster-a" }), "hubs[0].clusterId"},
 		{"hub id boş", mod(func(s *Settings) { s.Hubs[0].ClusterID = " " }), "hubs[0].clusterId"},
 		{"enabled + hub yok", mod(func(s *Settings) { s.Hubs = nil }), "hubs"},
-		{"enabled + devre dışı hub", mod(func(s *Settings) { s.Hubs = append(s.Hubs, Hub{ClusterID: "c-off00003"}) }), "hubs[1].clusterId"},
+		// v0.10.1009 — devre dışı hub tek başına engel DEĞİL (pasif hub); engel,
+		// bayrak açıkken HİÇ etkin hub kalmaması.
+		{"enabled + tüm hub'lar devre dışı", mod(func(s *Settings) {
+			s.Hubs = []Hub{{ClusterID: "c-off00003"}}
+			for i := range s.Instances {
+				s.Instances[i].HubClusterID = "c-off00003"
+			}
+		}), "hubs"},
 		{"hub tekrar", mod(func(s *Settings) { s.Hubs = append(s.Hubs, Hub{ClusterID: " c-aaaa0001"}) }), "hubs[1].clusterId"},
 		{"instance hub'ı listede değil", mod(func(s *Settings) { s.Instances[0].HubClusterID = "c-bbbb0002" }), "instances[0].hubClusterId"},
 		{"iki hub + instance hub'ı boş", mod(func(s *Settings) { s.Hubs = append(s.Hubs, Hub{ClusterID: "c-bbbb0002"}) }), "instances[1].hubClusterId"},
@@ -708,5 +715,36 @@ func TestLoadPersistedDoesNotClobberConcurrentSave(t *testing.T) {
 	}
 	if tok, err := s.Token("b"); err != nil || tok != "tok" {
 		t.Fatalf("eşit damgalı blob alınmalı: %q %v", tok, err)
+	}
+}
+
+// v0.10.1009 — Operator-reported ("hub'lardan biri aktif diğeri pasif"): Remote
+// Cluster kaydı devre dışı olan hub, Argo CD açıkken kaydı engelliyordu ("her
+// hub etkin olmalı") — aktif/pasif çiftte ayarların hiçbiri kaydedilemiyordu.
+// Pasif hub artık geçerli: listede ve instance'larıyla blobda kalır.
+func TestValidateAllowsPassiveHub(t *testing.T) {
+	s := validBlob()
+	s.Hubs = append(s.Hubs, Hub{ClusterID: "c-off00003"})
+	for i := range s.Instances { // çok hub'da instance'ın hub'ı açık yazılır
+		if s.Instances[i].HubClusterID == "" {
+			s.Instances[i].HubClusterID = s.Hubs[0].ClusterID
+		}
+	}
+	s.Instances = append(s.Instances, Instance{ID: "payments-prod-2", HubClusterID: "c-off00003", HubNamespace: "payments-prod-gitops", Enabled: true})
+	out, err := Validate(s, testClusters)
+	if err != nil {
+		t.Fatalf("aktif + pasif hub geçerli olmalı: %v", err)
+	}
+	if len(out.Hubs) != len(s.Hubs) || out.Hubs[len(out.Hubs)-1].ClusterID != "c-off00003" {
+		t.Fatalf("pasif hub blobda kalmalı: %+v", out.Hubs)
+	}
+	kept := false
+	for _, in := range out.Instances {
+		if in.ID == "payments-prod-2" && in.HubClusterID == "c-off00003" && in.Enabled {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Fatalf("pasif hub'ın instance'ı blobda kalmalı: %+v", out.Instances)
 	}
 }

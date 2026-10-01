@@ -455,7 +455,7 @@ export function ArgoCDTab() {
       <fieldset disabled={busy} aria-busy={busy || undefined} className="stack gap-6" style={LOCK}>
         {enabledBox}
 
-        <ArgoCDHubsPanel hubs={draft.hubs} instances={draft.instances} pins={snap.pins} clusters={clusters} enabled={draft.enabled} issues={issues}
+        <ArgoCDHubsPanel hubs={draft.hubs} instances={draft.instances} pins={snap.pins} clusters={clusters} issues={issues}
           msg={hubMsg} onMsg={setHubMsg}
           onAdd={addHub}
           onRemove={key => change(d => ({ ...d, hubs: d.hubs.filter(h => h.key !== key) }))}

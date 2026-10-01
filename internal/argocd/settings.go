@@ -469,7 +469,8 @@ func hasControl(s string) bool {
 //
 // clusters: Remote Cluster kayıtları (etkin + devre dışı). Her
 // hubs[].clusterId bir kayda EŞİT olmalı (ad değil id) ve tekil; bayrak
-// açıkken en az bir hub zorunlu ve her hub etkin olmalı (karar 5, §5.6).
+// açıkken en az bir hub zorunlu ve en az biri etkin olmalı (karar 5, §5.6;
+// v0.10.1009: devre dışı kayıt = pasif hub, kaydı engellemez).
 // Her instance hubs'taki bir hub'a bağlıdır (tek hub varsa boş alan o
 // hub'a tamamlanır). https://kubernetes.default.svc yalnız bir HUB kaydının
 // apiServerUrls'ünde bulunabilir (§3.2, §5.3: instance'ın kendi hub'ı).
@@ -551,7 +552,16 @@ func Validate(in Settings, clusters []ClusterRef) (Settings, error) {
 }
 
 // canonicalHubs — v0.10.957 — inceleme (§5.6 iki hub): kırp, var olan ve
-// tekil Remote Cluster id'si; bayrak açıkken ≥1 hub ve her hub etkin.
+// tekil Remote Cluster id'si; bayrak açıkken ≥1 hub.
+//
+// v0.10.1009 (operatör: "hub'lardan biri aktif diğeri pasif") — PASİF HUB:
+// Remote Cluster kaydı DEVRE DIŞI olan hub artık kaydı engellemez. Aktif /
+// pasif çiftte pasif tarafın kaydı bilerek kapalıdır; eski kural ("her hub
+// etkin") o kurulumda Argo CD ayarlarının HİÇBİRİNİ kaydettirmiyordu. Pasif
+// hub listede ve instance'ları blobda kalır, hiçbir işçi onu sorgulamaz
+// (planShards / registryFrom); kayıt yeniden etkinleşince kendiliğinden
+// devreye girer. Tek şart: bayrak açıkken EN AZ BİR hub etkin olmalı — hepsi
+// pasifse entegrasyon hiçbir şey okuyamaz, bu sessizce kabul edilmez.
 // Küme-içi adres (https://kubernetes.default.svc) yalnız bir hub kaydında
 // (hub'ı olmayan blobda kural sessiz: henüz Argo yapılandırılmıyor).
 func canonicalHubs(enabled bool, in []Hub, byID map[string]ClusterRef, clusters []ClusterRef) ([]Hub, error) {
@@ -563,6 +573,7 @@ func canonicalHubs(enabled bool, in []Hub, byID map[string]ClusterRef, clusters 
 	}
 	out := copyHubs(in)
 	seen := map[string]int{}
+	active := 0 // Remote Cluster kaydı etkin hub sayısı
 	for i := range out {
 		path := fmt.Sprintf("hubs[%d].clusterId", i)
 		id := strings.TrimSpace(out[i].ClusterID)
@@ -582,12 +593,15 @@ func canonicalHubs(enabled bool, in []Hub, byID map[string]ClusterRef, clusters 
 			return nil, fieldErr(path, "%q zaten hubs[%d]", id, j)
 		}
 		seen[id] = i
-		if enabled && !c.Enabled {
-			return nil, fieldErr(path, "hub Remote Cluster %q devre dışı; Argo CD açıkken her hub etkin olmalı", c.Name)
+		if c.Enabled {
+			active++
 		}
 	}
 	if len(out) == 0 {
 		return out, nil
+	}
+	if enabled && active == 0 {
+		return nil, fieldErr("hubs", "Argo CD açıkken en az bir hub Remote Cluster'ı etkin olmalı; listedeki %d hub'ın hepsi devre dışı (devre dışı hub pasif sayılır ve taranmaz)", len(out))
 	}
 	for _, other := range clusters {
 		if _, isHub := seen[other.ID]; isHub {

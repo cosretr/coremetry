@@ -702,11 +702,15 @@ export function validateDraft(d: Draft, ctx: ValidateCtx): Issue[] {
     if (!rc) {
       out.push({ path, short: 'Remote Cluster kaydı yok', target: { kind: 'hub', key: h.key },
         message: `“${h.clusterId}” artık bir Remote Cluster kaydı değil (silinmiş). Bu hub satırını kaldırın; Argo bu kümede çalışıyorsa kaydı Ayarlar › Remote clusters'ta yeniden ekleyip hub olarak seçin.` });
-    } else if (d.enabled && !rc.enabled) {
-      out.push({ path, short: 'Remote Cluster kaydı devre dışı', target: { kind: 'hub', key: h.key },
-        message: `${rc.name} Remote Cluster kaydı devre dışı; Argo CD açıkken her hub etkin olmalı — kaydı Ayarlar › Remote clusters'ta etkinleştirin ya da bu hub'ı kaldırın.` });
     }
+    // v0.10.1009 — devre dışı kayıt artık sorun DEĞİL: pasif hub (aktif/pasif
+    // çift). Kaydı engellemez, işçiler onu taramaz; satır bunu bilgi olarak yazar.
   });
+  // Tek şart: açıkken en az bir hub ETKİN olmalı (sunucu canonicalHubs ile aynı).
+  if (d.enabled && d.hubs.length > 0 && !d.hubs.some(h => ctx.clusters.find(c => c.id === h.clusterId)?.enabled)) {
+    out.push({ path: 'hubs', short: 'etkin hub yok', target: { kind: 'hubs' },
+      message: "Argo CD açıkken en az bir hub'ın Remote Cluster kaydı etkin olmalı — listedeki hub'ların hepsi devre dışı (pasif). Bir kaydı Ayarlar › Remote clusters'ta etkinleştirin ya da entegrasyonu kapatın." });
+  }
   if (d.envList.length > MAX_ENVS) {
     out.push({ path: 'envList', short: `en çok ${MAX_ENVS} ortam`, target: { kind: 'env' }, message: `En çok ${MAX_ENVS} ortam.` });
   }
