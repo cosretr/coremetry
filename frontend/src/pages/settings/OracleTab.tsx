@@ -27,7 +27,7 @@ import { Badge, Button, Field, SelectField, TextareaField } from '@/components/u
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
 import { useSettingsLoad, SettingsLoadError, FlashBox } from './shared';
-import { ORACLE_TEST_WINDOWS, longVerdict, mappingVerdict, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768, longVerdict v0.10.845, mappingVerdict v0.10.886
+import { ORACLE_TEST_WINDOWS, livePreviewText, longVerdict, mappingVerdict, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768, longVerdict v0.10.845, mappingVerdict v0.10.886
 import {
   emptyOracleSource, sourceFromSnapshot, sourceForSave, validateOracleSource,
   hasOracleErrors, parseTypeFilter, typeFilterToText, numFromForm, numToForm,
@@ -449,6 +449,7 @@ export function OracleTab() {
                   hint="Problem üretmez; satır Trace › Logs'ta yine görünür" />
               </div>
               {src.id && <OracleLearnedLine id={src.id} />}
+              {src.id && <OracleLivePreviewLine id={src.id} />}
               {showCols[i] && (
                 <>
                   <div className="oracle-q">
@@ -667,6 +668,31 @@ export function OracleTab() {
           {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
         </div>
       </form>
+    </div>
+  );
+}
+
+// OracleLivePreviewLine — v0.10.998 (operatör kararı: kaynak kipi gölge →
+// canlı): "canlıya alırsam kaç bildirim gelir, kime gider" — gölgede açılan
+// Problem sayıları + bu türü alan kanallar. KAYITLI kaynağı okur (taslağı
+// değil); istek yalnız açılınca gider (ES-cost disiplini: prefetch yok).
+// Metin oracleProbe.livePreviewText'te (saf, tablo testli).
+function OracleLivePreviewLine({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
+  const q = useQuery({ queryKey: ['oracle-live-preview', id], queryFn: () => api.oracleLivePreview(id), staleTime: 60_000, enabled: open });
+  const t = q.data ? livePreviewText(q.data) : null;
+  return (
+    <div className="oracle-q" style={{ marginTop: 6 }}>
+      Canlıya geçiş önizlemesi{' '}
+      <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(o => !o)}>{open ? 'gizle' : 'göster'}</Button>
+      {open && q.isLoading && <span className="is-quiet"> okunuyor…</span>}
+      {open && q.isError && <div className="oracle-q is-err">önizleme okunamadı — kaynak kayıtlı mı?</div>}
+      {open && t && (
+        <div style={{ marginTop: 6 }}>
+          <div className={t.warn ? 'is-err' : undefined}>{t.headline}</div>
+          {t.lines.map((line, i) => <div key={i} className="is-quiet">{line}</div>)}
+        </div>
+      )}
     </div>
   );
 }

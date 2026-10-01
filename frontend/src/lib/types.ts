@@ -1604,6 +1604,31 @@ export interface VMTestResult {
 /** oracle.SourceConfig — PUT gövdesi elemanı; id sunucu sahipli ("o-"+8 hex).
  *  Bağlantı İKİ biçimden biri: ya tek parça `dsn` ya host+port+serviceName
  *  üçlüsü — ikisi birden sunucuda reddedilir. */
+/** v0.10.998 — Oracle kaynağı canlıya geçiş önizlemesi (GET
+ *  /api/settings/oracle/{id}/live-preview; internal/api/oracle_live_preview.go).
+ *  Sayılar gölgede AÇILAN Problem'lerdir: canlı kip bildirimi yalnız açılışta
+ *  gönderir, yani bu sayı gidecek bildirim sayısının ölçüsüdür. */
+export interface OracleLivePreview {
+  sourceId: string;
+  sourceName: string;
+  mode: 'off' | 'shadow' | 'live';
+  opened24h: number;
+  opened7d: number;
+  critical7d: number;
+  /** Küme satırı — kimlik anahtara sabit olduğundan ALT SINIR. */
+  clusters7d: number;
+  openNow: number;
+  top: { subject: string; opened: number }[];
+  /** Bildirim türü (kanal / ekip maili "olay türü" süzgeci): anomaly. */
+  notifyKind: string;
+  channelsEnabled: number;
+  channelsAccepting: number;
+  channelNames: string[];
+  teamMail: boolean;
+  openCapPerTick: number;
+  generatedAt: number;
+}
+
 export interface OracleSource {
   id?: string;
   name: string;

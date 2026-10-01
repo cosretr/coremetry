@@ -987,6 +987,22 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Oracle: canlıya geçiş önizlemesi (v0.10.998)
+
+**Karar (operatör, Oracle odak "3": kaynak kipi gölge → canlı):** kipi operatör değiştirir; ürün
+kararı VERİYLE verdirir. Ayarlar › Oracle'da kayıtlı her kaynak için "Canlıya geçiş önizlemesi"
+(`GET /api/settings/oracle/{id}/live-preview`, admin, 60 sn önbellek, salt okuma): gölgede son 24 saat
+/ 7 günde açılan Problem sayısı (kritik, küme, şu an açık, en çok açan 5 özne) ve bu Problem'lerin
+bildirim türünü (**anomali** — `ProblemNotifyKind`) alan etkin kanallar + ekip maili. **Neden bu iki
+soru:** canlı kip bildirimi yalnız AÇILIŞTA gönderir (`anomaly/external.go`), yani gölgedeki açılış
+sayısı gidecek bildirim sayısının doğrudan ölçüsüdür; ve operatör anomali maillerini yanlış pozitif
+yüzünden kapatmıştı (v0.10.814) — türü süzen kanal Oracle bildirimini de almaz, "canlıya aldım,
+hiçbir şey gelmedi"nin en olası sebebi ekranda açıkça yazılır. Sayım `problems` FINAL'den, kaynağın
+kural önekleriyle (`anomaly:ext:<kaynak>/`, `anomaly-cluster:ext:<kaynak>/`); seri kimliği her
+açılışta yeni olduğu için açılışlar sayılabilir, küme kimliği anahtara sabit olduğu için küme sayısı
+alt sınırdır ve öyle sunulur. Kip değişiminde zaten açık Problem'ler için bildirim gitmez (yalnız
+yeni açılışlar) — önizleme bunu da söyler. **Değişmeyen:** tarayıcı, eşikler, tavan, kipin kendisi.
+
 ## 2026-10-01 — Argo CD: hub, instance'larıyla birlikte kaldırılabilir (v0.10.997)
 
 **Karar (operatör: "Hub kaldıramıyorum instance varsa" — prod'da hub başına 190+ instance):**

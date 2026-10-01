@@ -241,6 +241,12 @@ func (m ChannelMatchRules) MatchesProblem(in MatchInput) bool {
 	return true
 }
 
+// AllowsKind — v0.10.998 — allowsKind'ın dışa açık yüzü: kanalın yalnız TÜR
+// süzgeci (servis / ekip / sessiz saat / öncelik yüklemleri HARİÇ). Oracle
+// canlıya geçiş önizlemesi "bu türü hangi kanallar alıyor"u bununla sayar;
+// teslim kararının tamamı MatchesProblem'dedir.
+func (m ChannelMatchRules) AllowsKind(kind string) bool { return m.allowsKind(kind) }
+
 // allowsKind — küme üyeliği (v0.10.747). Liste boş → hepsi. Liste dolu
 // ve tür üye değil (bilinmeyen/boş dahil) → düşer: minPriority'nin
 // "hesaplanmamış → açık geç" istisnası burada yok, tür her zaman

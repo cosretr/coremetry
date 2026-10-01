@@ -1851,6 +1851,9 @@ export const api = {
       `/api/settings/oracle/${encodeURIComponent(id)}/learned`),
   oracleLearnedReset: (id: string) =>
     request<{ ok: boolean }>(`/api/settings/oracle/${encodeURIComponent(id)}/learned/reset`, { method: 'POST' }),
+  /** v0.10.998 — canlıya geçiş önizlemesi (admin): gölgede açılan Problem sayıları + bildirimi alacak kanallar. */
+  oracleLivePreview: (id: string) =>
+    get<import('./types').OracleLivePreview>(`/api/settings/oracle/${encodeURIComponent(id)}/live-preview`),
   /** Tüm liste atomik; sunucu Normalize'dan geçirip yeni snapshot döndürür. */
   putOracleSettings: (s: OracleSettingsInput) =>
     request<OracleSnapshot>(`/api/settings/oracle`, {

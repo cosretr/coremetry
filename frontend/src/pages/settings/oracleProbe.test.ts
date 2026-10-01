@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ORACLE_TEST_WINDOWS, mappingVerdict, scanVerdict, summaryHeadline } from './oracleProbe';
-import type { OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
+import { ORACLE_TEST_WINDOWS, livePreviewText, mappingVerdict, scanVerdict, summaryHeadline } from './oracleProbe';
+import type { OracleLivePreview, OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
 
 const base: OracleScanCheck = { checked: true, tsColumn: 'ERR_TIMESTAMP', found: true, indexed: false, partitioned: false, numRows: 12000000 };
 
@@ -115,5 +115,56 @@ describe('mappingVerdict — eşlenmemiş alanlar', () => {
     expect(v?.text).toMatch(/eşlenmemiş/);
     expect(v?.detail).toMatch(/traceIds: eşlenmedi \(öneri TRACEIDS\)/);
     expect(v?.detail).toMatch(/Önerilen eşlemeyi uygula/);
+  });
+});
+
+// v0.10.998 — canlıya geçiş önizlemesi (operatör kararı: kaynak kipi gölge → canlı).
+describe('oracleProbe — canlıya geçiş önizlemesi', () => {
+  const base: OracleLivePreview = {
+    sourceId: 's1', sourceName: 'core-oracle', mode: 'shadow',
+    opened24h: 37, opened7d: 1212, critical7d: 40, clusters7d: 3, openNow: 5,
+    top: [{ subject: 'bsa-payments', opened: 61 }, { subject: 'ext:core-oracle/OP9', opened: 20 }],
+    notifyKind: 'anomaly', channelsEnabled: 4, channelsAccepting: 2, channelNames: ['ops-mail', 'sre-slack'],
+    teamMail: true, openCapPerTick: 20, generatedAt: 0,
+  };
+  it('gölge + alıcı var: sayılar, tür, kanallar, açık Problem notu, tavan, özneler', () => {
+    const t = livePreviewText(base);
+    expect(t.warn).toBe(false);
+    expect(t.headline).toBe('Kayıtlı kip gölge: son 24 saatte 37, son 7 günde 1.212 Problem açıldı (40 kritik, en az 3 küme) · şu an açık 5.');
+    expect(t.lines).toEqual([
+      'Canlıda her yeni açılış bir bildirimdir (tür: Anomali): etkin 4 kanaldan 2 tanesi alıyor (ops-mail, sre-slack); ekip maili alıyor. Kanalın servis / ekip / öncelik süzgeçleri ayrıca uygulanır.',
+      'Kipi canlıya alınca zaten açık olan 5 Problem için bildirim gönderilmez; yalnız yeni açılışlar bildirilir.',
+      "Okuma başına en çok 20 açılış; fazlası tek özet Problem'de toplanır (Anomali ayarları).",
+      'En çok açan özneler (7 gün): bsa-payments (61), ext:core-oracle/OP9 (20).',
+    ]);
+  });
+  it('hiçbir kanal ve ekip maili türü almıyor → uyarı: canlıda bildirim GİTMEZ', () => {
+    const t = livePreviewText({ ...base, channelsAccepting: 0, channelNames: [], teamMail: false });
+    expect(t.warn).toBe(true);
+    expect(t.lines[0]).toContain('Canlıda bildirim GİTMEZ');
+    expect(t.lines[0]).toContain('"Anomali"');
+    expect(t.lines[0]).toContain('etkin 4 kanalın hiçbiri');
+  });
+  it('yalnız ekip maili alıyorsa uyarı yok; adı sığmayan kanallar +N', () => {
+    expect(livePreviewText({ ...base, channelsAccepting: 0, channelNames: [], teamMail: true }).warn).toBe(false);
+    const many = livePreviewText({ ...base, channelsAccepting: 14, channelNames: ['a', 'b'] });
+    expect(many.lines[0]).toContain('(a, b +12)');
+  });
+  it('kapalı kip uyarır; canlı kipte "açık Problem" notu yok; boş hafta ayrı cümle; küme yoksa anılmaz', () => {
+    const off = livePreviewText({ ...base, mode: 'off' });
+    expect(off.warn).toBe(true);
+    expect(off.headline).toContain('Kayıtlı kip kapalı: tarama koşmuyor');
+    const live = livePreviewText({ ...base, mode: 'live' });
+    expect(live.headline.startsWith('Kayıtlı kip canlı:')).toBe(true);
+    expect(live.lines.some(l => l.includes('Kipi canlıya alınca'))).toBe(false);
+    const empty = livePreviewText({ ...base, opened24h: 0, opened7d: 0, critical7d: 0, clusters7d: 0, openNow: 0, top: [] });
+    expect(empty.headline).toBe('Kayıtlı kip gölge: son 7 günde bu kaynaktan hiç Problem açılmadı (şu an açık 0).');
+    expect(empty.lines.some(l => l.startsWith('En çok açan'))).toBe(false);
+    expect(livePreviewText({ ...base, clusters7d: 0 }).headline).toContain('(40 kritik)');
+  });
+  it('sekme: istek yalnız açılınca gider (prefetch yok), kayıtlı kaynakta çizilir', () => {
+    const tab = readFileSync(resolve(__dirname, 'OracleTab.tsx'), 'utf8');
+    expect(tab).toContain("queryKey: ['oracle-live-preview', id], queryFn: () => api.oracleLivePreview(id), staleTime: 60_000, enabled: open");
+    expect(tab).toContain('{src.id && <OracleLivePreviewLine id={src.id} />}');
   });
 });

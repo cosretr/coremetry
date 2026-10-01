@@ -3,7 +3,7 @@
 // Operatör: "full scan / kilitli sorgu atmasın, önce test edelim, sorgu
 // görünür olsun; test ederken hangi servis/operasyon/trace geldiğini
 // göreyim". Hüküm metinleri burada, kablolama OracleTab'da (pinli).
-import type { OracleLongCheck, OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
+import type { OracleLivePreview, OracleLongCheck, OracleMappingCheck, OracleScanCheck, OracleWindowSummary } from '@/lib/types';
 
 export const ORACLE_TEST_WINDOWS = [5, 15, 60] as const;
 export type OracleTestWindow = (typeof ORACLE_TEST_WINDOWS)[number];
@@ -112,4 +112,57 @@ export function mappingVerdict(m: OracleMappingCheck | undefined): { tone: ScanT
     };
   }
   return { tone: 'b-warn', text: `eşlenen ${m.missing.length} kolon ${where} yok`, detail: list + hint };
+}
+
+// ── v0.10.998 — canlıya geçiş önizlemesi (kaynak kipi gölge → canlı) ────────
+//
+// Operatör kararı 2026-10-01. Canlı kip bildirimi YALNIZ yeni açılışta
+// gönderir; gölgede aynı Problem'ler bildirimsiz açılıyor. Bu yüzden
+// "gölgede kaç Problem açıldı" = "canlıda kaç bildirim giderdi". İkinci soru
+// "kime": dış seri Problem'leri bildirimde ANOMALİ türüdür; türü süzen kanal
+// / ekip maili almaz — "canlıya aldım, hiçbir şey gelmedi"nin en olası sebebi.
+
+const NOTIFY_KIND_TR: Record<string, string> = { anomaly: 'Anomali', problem: 'Problem', incident: 'Incident', exception: 'Exception' };
+const MODE_TR: Record<string, string> = { off: 'kapalı', shadow: 'gölge', live: 'canlı' };
+
+/** Önizlemenin metni: özet satırı + ayrıntı satırları. `warn` = canlıya almak
+ *  bugünkü ayarlarla beklenen sonucu vermez (bildirim alıcısı yok ya da tarama
+ *  koşmuyor); renk yalnız o sapmada. */
+export function livePreviewText(p: OracleLivePreview): { headline: string; lines: string[]; warn: boolean } {
+  const kind = NOTIFY_KIND_TR[p.notifyKind] ?? p.notifyKind;
+  const mode = MODE_TR[p.mode] ?? p.mode;
+  const n = (v: number) => v.toLocaleString('tr-TR');
+  const lines: string[] = [];
+  let warn = false;
+
+  let headline: string;
+  if (p.mode === 'off') {
+    headline = `Kayıtlı kip ${mode}: tarama koşmuyor, Problem açılmıyor — önce gölgeye alıp birkaç gün izleyin.`;
+    warn = true;
+  } else if (p.opened7d === 0) {
+    headline = `Kayıtlı kip ${mode}: son 7 günde bu kaynaktan hiç Problem açılmadı (şu an açık ${n(p.openNow)}).`;
+  } else {
+    const extra = [`${n(p.critical7d)} kritik`];
+    if (p.clusters7d > 0) extra.push(`en az ${n(p.clusters7d)} küme`);
+    headline = `Kayıtlı kip ${mode}: son 24 saatte ${n(p.opened24h)}, son 7 günde ${n(p.opened7d)} Problem açıldı (${extra.join(', ')}) · şu an açık ${n(p.openNow)}.`;
+  }
+
+  if (p.channelsAccepting === 0 && !p.teamMail) {
+    warn = true;
+    lines.push(`Canlıda bildirim GİTMEZ: bu Problem'lerin türü "${kind}" ve etkin ${n(p.channelsEnabled)} kanalın hiçbiri ile ekip maili bu türü almıyor. Bildirim kanalında (ya da Team routing'de) olay türlerinden "${kind}"yi açın.`);
+  } else {
+    const more = p.channelsAccepting > p.channelNames.length ? ` +${n(p.channelsAccepting - p.channelNames.length)}` : '';
+    const names = p.channelNames.length ? ` (${p.channelNames.join(', ')}${more})` : '';
+    lines.push(`Canlıda her yeni açılış bir bildirimdir (tür: ${kind}): etkin ${n(p.channelsEnabled)} kanaldan ${n(p.channelsAccepting)} tanesi alıyor${names}; ekip maili ${p.teamMail ? 'alıyor' : 'almıyor'}. Kanalın servis / ekip / öncelik süzgeçleri ayrıca uygulanır.`);
+  }
+  if (p.mode !== 'live') {
+    lines.push(`Kipi canlıya alınca zaten açık olan ${n(p.openNow)} Problem için bildirim gönderilmez; yalnız yeni açılışlar bildirilir.`);
+  }
+  if (p.openCapPerTick > 0) {
+    lines.push(`Okuma başına en çok ${n(p.openCapPerTick)} açılış; fazlası tek özet Problem'de toplanır (Anomali ayarları).`);
+  }
+  if (p.top.length > 0) {
+    lines.push(`En çok açan özneler (7 gün): ${p.top.map(t => `${t.subject} (${n(t.opened)})`).join(', ')}.`);
+  }
+  return { headline, lines, warn };
 }
