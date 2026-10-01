@@ -987,6 +987,23 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — CoSRE kök-neden demetine BubbleUp adımı (v0.10.992; dış skill denetimi V1 dilim 1)
+
+**Karar:** "neden X bozuldu" demeti (guidedRootCauseBundle) RED'den sonra, deploy'dan önce bir
+`bubble_up` adımı taşır: sorun hangi rota / pod / sürümde yoğunlaşıyor. Kıyas tek yerde
+(`chstore.ServiceBubbleUp`; /rootcause'un iki fan-out'u ve verdict kataloğu da onu çağırır): hata
+ailesi → hatalı span'ler aynı penceredeki tüm span'lere karşı, diğerleri → pencere önceki eş-boy
+pencereye karşı. Metin en çok 3 boyut, yalnız ≥5 puan ayrışan; "ayrışma YOK", "kıyas kurulamadı"
+ve "OKUNAMADI (sınıf)" ayrı cümleler (yokluk ≠ okunamadı). **Pencere bilinçli olarak 10 dk**
+(`rca.ExtrasWindow`, katalogla aynı): açık problem varsa açılışını izleyen 10 dk, yoksa son 10 dk
+— /rootcause paneli 1 saate kadar tarar ve ~40 sn sürebiliyor (v0.9.1082 ölçümü), sohbet cevabı
+onu bekleyemez; üstüne 8 sn tavan (`rca.BubbleUpTimeout`), süre dolarsa adım "okunamadı" der.
+Ortam süzgeci uygulanmaz (RED notu gibi, tüm ortamlar). **Uygulanmadı — karar ister (V1 dilim
+2):** BubbleUp'ı `DeepEvidence`'a, yani sentezleyiciye taşımak; açık problem × tik başına ham
+spans taraması ekler ("mevcutların hızlı ve doğru çalışması önce" direktifi). Dilim 3 (MCP
+`bubble_up` aracı) ayrı sürüm. Yan bulgu v0.10.991: katalog satırı yüzdeleri oran (0–1) olarak
+basıyordu ("%1 … %0").
+
 ## 2026-10-01 — Argo CD keşfi: 50 iş tavanı kalktı, "Tümünü ekle" (v0.10.990)
 
 **Karar (operatör: "Argocd entegrasyonu da autodiscover etse daha iyi olacak, şu anda tek tek ekle

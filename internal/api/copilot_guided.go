@@ -2220,6 +2220,11 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 	}
 	emitGuidedStepResult(emit, nCtx, "service_context", guidedStepSegment(&b, atCtx), cx.curErr)
 
+	// v0.10.992 (dış skill denetimi V1) — BubbleUp: sorun hangi rota / pod /
+	// sürümde yoğunlaşıyor. RED'den hemen sonra: "ne değişti"nin ardından
+	// "nerede". Ortam süzgeci uygulanmaz (RED notu gibi, tüm ortamlar).
+	s.guidedBubbleUpStep(ctx, emit, &b, service, probs, cx, to)
+
 	// Deploy: "neden bozuldu" sorusunun en sık cevabı. Ayrı bir adım
 	// olarak emit ediliyor ki operatör hangi kanıtın çekildiğini görsün.
 	nDep := emitGuidedStep(emit, "recent_deploys", `{"service":"`+service+`"}`)
@@ -2265,7 +2270,7 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 		"Onu anlat ve güven skorunu birlikte ver. Hipotez yoksa ya da güveni düşükse sebep UYDURMA — " +
 		"hangi kanıta baktığını yaz ve 'kesin sebep için yeterli kanıt yok' de.\n")
 
-	src := fmt.Sprintf("SLO durumu + kök-neden hipotezi + açık problemler + servis RED değişimi + deploy geçmişi + pencere değişiklikleri (rollout) + log desenleri (son %s)", fmtAgoTR(rangeS))
+	src := fmt.Sprintf("SLO durumu + kök-neden hipotezi + açık problemler + servis RED değişimi + ayrışan boyutlar (BubbleUp) + deploy geçmişi + pencere değişiklikleri (rollout) + log desenleri (son %s)", fmtAgoTR(rangeS))
 	if env != "" {
 		src += fmt.Sprintf("; RED tüm ortamlar, problemler ortam: %s", env) // v0.10.944 — sağlık demetiyle aynı
 	}

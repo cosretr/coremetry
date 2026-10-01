@@ -222,22 +222,12 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 		// (yalnız servis): "hangi attribute değeri önceki pencereye göre
 		// patladı". "Slow temiz FilterExpr alt-kümesi değil" engeli buydu;
 		// kıyası alt-kümeyle değil pencereyle kurunca ortadan kalkıyor.
+		// v0.10.992 — kıyas serviceBubbleUp'ta (copilot_bubbleup.go; CoSRE
+		// kök-neden demetiyle ORTAK), davranış aynı.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			baseline := []chstore.FilterExpr{{Key: "service.name", Op: "=", Values: []string{p.Service}}}
-			if exemplarKindForMetric(p.Metric) == chstore.ExemplarError {
-				selection := []chstore.FilterExpr{
-					{Key: "service.name", Op: "=", Values: []string{p.Service}},
-					{Key: "status_code", Op: "=", Values: []string{"error"}},
-				}
-				if bu, e := s.store.BubbleUp(ctx, baseline, selection, started, end, started, end); e == nil {
-					out.BubbleUp = bu
-				}
-				return
-			}
-			priorFrom := started.Add(-end.Sub(started))
-			if bu, e := s.store.BubbleUp(ctx, baseline, nil, priorFrom, started, started, end); e == nil {
+			if bu, e := s.serviceBubbleUp(ctx, p.Service, exemplarKindForMetric(p.Metric) == chstore.ExemplarError, started, end); e == nil {
 				out.BubbleUp = bu
 			}
 		}()
@@ -377,19 +367,7 @@ func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			baseline := []chstore.FilterExpr{{Key: "service.name", Op: "=", Values: []string{ev.Service}}}
-			if exKind == chstore.ExemplarError {
-				selection := []chstore.FilterExpr{
-					{Key: "service.name", Op: "=", Values: []string{ev.Service}},
-					{Key: "status_code", Op: "=", Values: []string{"error"}},
-				}
-				if bu, e := s.store.BubbleUp(ctx, baseline, selection, started, end, started, end); e == nil {
-					out.BubbleUp = bu
-				}
-				return
-			}
-			priorFrom := started.Add(-end.Sub(started))
-			if bu, e := s.store.BubbleUp(ctx, baseline, nil, priorFrom, started, started, end); e == nil {
+			if bu, e := s.serviceBubbleUp(ctx, ev.Service, exKind == chstore.ExemplarError, started, end); e == nil { // v0.10.992 — ortak kıyas
 				out.BubbleUp = bu
 			}
 		}()

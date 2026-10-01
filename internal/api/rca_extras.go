@@ -61,12 +61,8 @@ func (s *Server) gatherRCACatalogExtras(ctx context.Context, h *chstore.RootCaus
 		defer wg.Done()
 		bctx, cancel := context.WithTimeout(ctx, rca.BubbleUpTimeout)
 		defer cancel()
-		baseline := []chstore.FilterExpr{{Key: "service.name", Op: "=", Values: []string{h.Service}}}
-		selection := []chstore.FilterExpr{
-			{Key: "service.name", Op: "=", Values: []string{h.Service}},
-			{Key: "status_code", Op: "=", Values: []string{"error"}},
-		}
-		if bu, err := s.store.BubbleUp(bctx, baseline, selection, from, to, from, to); err == nil {
+		// v0.10.992 — hata alt kümesi kıyası serviceBubbleUp'ta (ortak).
+		if bu, err := s.serviceBubbleUp(bctx, h.Service, true, from, to); err == nil {
 			out.BubbleUp = bu
 		}
 	}()

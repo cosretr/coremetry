@@ -260,6 +260,30 @@ func (s *Store) BubbleUp(
 	return out, nil
 }
 
+// ServiceBubbleUp — v0.10.992 — servis kapsamlı kıyasın TEK kurulduğu yer
+// (/rootcause'un iki fan-out'u, verdict kataloğu, CoSRE kök-neden demeti ve
+// MCP `bubble_up` aracı ortak; eskiden aynı blok üç yerde kopyaydı).
+//
+//   - errorSubset: aynı pencere [started, end]; seçim = hatalı span'ler,
+//     taban = servisin tüm span'leri ("hatalarda ne özel").
+//   - değilse zaman-kaydırmalı (v0.9.1063): seçim [started, end], taban
+//     ÖNCEKİ eş-boy pencere, filtre iki tarafta yalnız servis ("bu pencerede
+//     hangi değer öncekine göre patladı").
+//
+// Pencereyi ÇAĞIRAN sınırlar (ham spans taraması — invariant: zaman sınırlı).
+func (s *Store) ServiceBubbleUp(ctx context.Context, service string, errorSubset bool, started, end time.Time) (*BubbleUpResult, error) {
+	baseline := []FilterExpr{{Key: "service.name", Op: "=", Values: []string{service}}}
+	if errorSubset {
+		selection := []FilterExpr{
+			{Key: "service.name", Op: "=", Values: []string{service}},
+			{Key: "status_code", Op: "=", Values: []string{"error"}},
+		}
+		return s.BubbleUp(ctx, baseline, selection, started, end, started, end)
+	}
+	priorFrom := started.Add(-end.Sub(started))
+	return s.BubbleUp(ctx, baseline, nil, priorFrom, started, started, end)
+}
+
 // scoreOf — peak value-score for an attribute, used to rank
 // attributes against each other.
 func scoreOf(a BubbleUpAttribute) float64 {
