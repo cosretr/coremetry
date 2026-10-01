@@ -27,6 +27,14 @@ package chstore
 //	name          karar: real | noise ("" = silinmiş; DeleteSavedView mezar taşı)
 //	query_string  JSON {signature, label, kind, service, by}
 //	created_at    karar anı
+//
+// v0.10.1024 — kod incelemesi (prod'da gözlenmedi): genel kayıtlı-görünüm ucu
+// (POST /api/views, rol kapısız) her page değerini kabul ediyordu; viewer
+// page="problem-verdict" ile bir satır yazınca okuma onu ekip kararı sayıyordu
+// (editor kapısı + denetim atlanıyor; susturma politikası açıksa bildirim de
+// susuyordu). Okuma artık yalnız SİSTEM satırına güvenir: owner_id = '' VE
+// id = "pv:" + gövdedeki imza. Genel uç sistem sayfalarını ayrıca reddeder
+// (IsSystemSavedViewPage, saved_view.go).
 
 import (
 	"context"
@@ -83,8 +91,12 @@ func ValidProblemSignature(sig string) bool {
 	return true
 }
 
+// problemVerdictIDPrefix — sistem karar satırlarının kimlik öneki. Genel
+// kayıtlı-görünüm ucu kimliği rastgele üretir (newRandID), bu öneki taşıyamaz.
+const problemVerdictIDPrefix = "pv:"
+
 // problemVerdictID — SAF: imza → saved_views satır kimliği.
-func problemVerdictID(sig string) string { return "pv:" + sig }
+func problemVerdictID(sig string) string { return problemVerdictIDPrefix + sig }
 
 type problemVerdictPayload struct {
 	Signature string `json:"signature"`
@@ -96,7 +108,12 @@ type problemVerdictPayload struct {
 
 // problemVerdictFromRow — SAF: saved_views satırı → karar. Bozuk gövde ya da
 // geçersiz karar ok=false (liste onu atlar; yarım satır karar sayılmaz).
-func problemVerdictFromRow(name, query string, createdAt time.Time) (ProblemVerdict, bool) {
+//
+// v0.10.1024 — satır kimliği gövdedeki imzanın kimliği DEĞİLSE de ok=false:
+// gerçek kararı yalnız SetProblemVerdict yazar ve o kimliği imzadan türetir
+// (id = "pv:" + imza). Başka yoldan (genel POST /api/views, rastgele kimlik)
+// yazılmış sahte bir satır karar olarak ASLA yüzeye çıkmaz.
+func problemVerdictFromRow(id, name, query string, createdAt time.Time) (ProblemVerdict, bool) {
 	if !ValidProblemVerdict(name) {
 		return ProblemVerdict{}, false
 	}
@@ -104,32 +121,46 @@ func problemVerdictFromRow(name, query string, createdAt time.Time) (ProblemVerd
 	if err := json.Unmarshal([]byte(query), &p); err != nil || !ValidProblemSignature(p.Signature) {
 		return ProblemVerdict{}, false
 	}
+	if id != problemVerdictID(p.Signature) {
+		return ProblemVerdict{}, false
+	}
 	return ProblemVerdict{Signature: p.Signature, Verdict: name, Label: p.Label, Kind: p.Kind,
 		Service: p.Service, By: p.By, At: createdAt.UnixNano()}, true
 }
 
-// ListProblemVerdicts — tüm kararlar, en yeni önce (≤ ProblemVerdictMax).
-// saved_views küçük bir durum tablosudur; okuma sayfa süzgeçli + LIMIT'li.
-func (s *Store) ListProblemVerdicts(ctx context.Context) ([]ProblemVerdict, error) {
-	rows, err := s.conn.Query(ctx, `
-		SELECT name, query_string, created_at
+// problemVerdictListSQL — ListProblemVerdicts okuması (testte pinli).
+//
+// v0.10.1024 — boş owner_id ve `startsWith(id, 'pv:')` koşulu SQL'de, yalnız
+// codec'te değil: kişiye ait ya da rastgele kimlikli satırlar LIMIT
+// penceresine hiç girmez — sahte satır seli gerçek kararları 5000 tavanının
+// dışına itemez, PUT'un tavan denetimini de doldurup kilitleyemez. id ORDER BY
+// anahtarıdır; önek koşulu birincil anahtarla budanır.
+const problemVerdictListSQL = `
+		SELECT id, name, query_string, created_at
 		FROM saved_views FINAL
-		WHERE page = ? AND name != ''
+		WHERE page = ? AND owner_id = '' AND startsWith(id, '` + problemVerdictIDPrefix + `') AND name != ''
 		ORDER BY created_at DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 5`, ProblemVerdictPage, ProblemVerdictMax)
+		SETTINGS max_execution_time = 5`
+
+// ListProblemVerdicts — tüm kararlar, en yeni önce (≤ ProblemVerdictMax).
+// saved_views küçük bir durum tablosudur; okuma sayfa süzgeçli + LIMIT'li.
+// v0.10.1024: yalnız sistem satırları (problemVerdictListSQL + codec kimlik
+// denetimi).
+func (s *Store) ListProblemVerdicts(ctx context.Context) ([]ProblemVerdict, error) {
+	rows, err := s.conn.Query(ctx, problemVerdictListSQL, ProblemVerdictPage, ProblemVerdictMax)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []ProblemVerdict{}
 	for rows.Next() {
-		var name, query string
+		var id, name, query string
 		var createdAt time.Time
-		if err := rows.Scan(&name, &query, &createdAt); err != nil {
+		if err := rows.Scan(&id, &name, &query, &createdAt); err != nil {
 			return nil, err
 		}
-		if v, ok := problemVerdictFromRow(name, query, createdAt); ok {
+		if v, ok := problemVerdictFromRow(id, name, query, createdAt); ok {
 			out = append(out, v)
 		}
 	}

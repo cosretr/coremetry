@@ -987,6 +987,34 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — "Problem değil" kararları yalnız kendi ucundan yazılır: genel kayıtlı-görünüm ucu sistem sayfalarını reddeder (v0.10.1024)
+
+**Kusur (kod incelemesiyle bulundu; prod'da gözlenmedi):** v0.10.1015 kararları ortak durum tablosunda
+saklar (`saved_views`, page=`problem-verdict`, id=`pv:<imza>`, owner_id boş, ad=karar). Yazım yolu
+`PUT /api/problem-verdicts` editor+ kapılı ve `problem.verdict` diye denetlenir. Ama genel kayıtlı-görünüm
+ucu `POST /api/views` rol kapısızdır ve HER page değerini kabul ediyordu; okuma (`ListProblemVerdicts`)
+yalnız `page = 'problem-verdict' AND name != ''` ile süzüyordu. Oturum açmış bir viewer page=`problem-verdict`,
+ad=`noise` ve elle kurulmuş bir gövdeyle satır yazınca o satır ekip kararı sayılıyordu: editor kapısı ve
+denetim kaydı atlanıyor, susturma politikası açıksa (v0.10.1016) o imzanın bildirimi de susuyordu.
+`DELETE /api/views/{id}`: karar satırında owner_id boş olduğundan viewer/editor zaten 403 alıyordu; admin
+ise "her şeyi silebilir" dalından gerçek bir kararı mezar taşıyla kaldırabiliyordu — `problem.verdict`
+yerine `saved_view.delete` denetimi düşüyor, karar okuma önbelleği düşürülmüyordu. **Karar (üç katman):**
+(1) okuma yalnız SİSTEM satırına güvenir — SQL'e boş owner_id ve `startsWith(id, 'pv:')` koşulları eklendi
+(sahte satırlar 5000'lik LIMIT penceresine girip gerçek kararları dışarı itemez, PUT'un tavan denetimini
+dolduramaz); satır çözücü de kimliği gövdedeki imzanın kimliği (`pv:<imza>`) olmayan satırı atar.
+(2) chstore'da küçük bir sistem sayfası defteri (`IsSystemSavedViewPage`; bugün yalnız `problem-verdict`,
+yeni sistem sayfası = bir satır). Genel uç bu sayfalara yazmayı her rolde depoya ve denetime dokunmadan
+**400 "reserved page"** ile, silmeyi **admin dahil 403** ile reddeder — kararın tek denetimli yolu kendi
+ucudur (boş verdict = kaldır). Kişisel sayfalar (ai-chat, promql-history, `table:<key>` tercihleri,
+dashboard-star, alert-template, SavedViewsBar sayfaları) BİLEREK defterde değil: kendi uçları sahibin
+owner_id'siyle yazar, genel uçtan yazılan satır en fazla yazanın kendi görünümünü etkiler. Genel liste
+(`GET /api/views`) değişmedi: FE her çağrıda sabit bir page gönderir, karar satırları zaten
+`GET /api/problem-verdicts`'te her role açık. (3) Testler: çözücü (geçerli / başka imzanın kimliği / rastgele
+kimlik), defter tablosu, uç (viewer/editor/admin, paylaşımlı dahil → 400, denetim yok), silme yetkisi tablosu
+ve kaynak pinleri. **Etkisi:** mevcut meşru kararlar etkilenmez — `SetProblemVerdict` onları zaten boş
+owner_id ve `pv:<imza>` kimliğiyle yazıyor. Daha önce genel uçtan yazılmış sahte bir satır varsa artık
+okunmaz (rastgele kimlik) ve zararsız çöp olarak kalır.
+
 ## 2026-10-01 — Operations: çıplak HTTP fiili satırları rotaya göre açılır (v0.10.1023)
 
 **Operatör:** "Operation kısmında POST GET neden detail gözükmüyor, sonra trace'e girince çıkıyor."

@@ -25,6 +25,31 @@ type SavedView struct {
 	CreatedAt   int64  `json:"createdAt"` // unix ns
 }
 
+// systemSavedViewPages — v0.10.1024 — SİSTEM sayfaları defteri: satırını
+// yalnız kendi (rol kapılı + denetimli) ucunun yazdığı, okuyucusunun ekip
+// durumu saydığı page değerleri. Genel kayıtlı-görünüm ucu (/api/views)
+// bunları yazamaz ve silemez. Kusur: viewer POST /api/views ile
+// page="problem-verdict" satırı yazıp ekip kararı taklit edebiliyordu (editor
+// kapısı ve denetim atlanıyordu). Yeni bir sistem sayfası = buraya bir satır.
+//
+// KAPSAM DIŞI (bilerek): kişisel sayfalar — ai-chat, promql-history,
+// table:<key> tercihleri, dashboard-star, alert-template (paylaşımlı
+// şablonu zaten admin kapılı) ve SavedViewsBar sayfaları. Onlar sahibe
+// aittir; kendi uçları çağıranın kendi owner_id'siyle yazar ve okuyucuları
+// sahibe (ya da deterministik kimliğe) göre süzer. Genel uçtan yazılan satır
+// en fazla yazanın KENDİ görünümünü etkiler.
+var systemSavedViewPages = map[string]struct{}{
+	ProblemVerdictPage: {}, // v0.10.1015 — PUT /api/problem-verdicts (editor+, denetimli)
+}
+
+// IsSystemSavedViewPage — SAF: page bir sistem sayfası mı (systemSavedViewPages).
+// Tam eşitlik: saklanan page değeriyle karşılaştırılır (okuyucular da tam
+// eşitlikle süzer).
+func IsSystemSavedViewPage(page string) bool {
+	_, ok := systemSavedViewPages[page]
+	return ok
+}
+
 // savedViewsInsertCols is the explicit INSERT column list for saved_views. It
 // MUST stay 1:1 with the Append() arguments in UpsertSavedView and OMIT
 // `version` (which defaults so it auto-increments per upsert). See the v0.7.36

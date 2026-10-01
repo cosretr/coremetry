@@ -347,6 +347,11 @@ func claimEmail(c *auth.Claims) string {
 
 // ── Saved views ──────────────────────────────────────────────────
 
+// listSavedViews — v0.10.1024 notu: okuma bilerek değişmedi. FE her çağrıda
+// sabit bir page gönderir (SavedViewsBar sayfaları, alert-template,
+// dashboard-star), sistem sayfası satırı Topbar listesine düşmez; page'siz
+// doğrudan çağrının döndürdüğü "pv:" satırları da GET /api/problem-verdicts'te
+// zaten her role açık. Yazma / silme sistem sayfalarına kapalı (aşağıda).
 func (s *Server) listSavedViews(w http.ResponseWriter, r *http.Request) {
 	claims := auth.FromContext(r.Context())
 	page := strings.TrimSpace(r.URL.Query().Get("page"))
@@ -378,6 +383,11 @@ func (s *Server) createSavedView(w http.ResponseWriter, r *http.Request) {
 	body.Page = strings.TrimSpace(body.Page)
 	if body.Name == "" || body.Page == "" {
 		http.Error(w, "name and page required", http.StatusBadRequest)
+		return
+	}
+	// v0.10.1024 — sistem sayfası depoya ve denetime DOKUNMADAN 400 (her rol).
+	if msg := savedViewCreateRejection(body.Page); msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 	claims := auth.FromContext(r.Context())
@@ -430,12 +440,8 @@ func (s *Server) deleteSavedView(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	claims := auth.FromContext(r.Context())
-	switch {
-	case claims != nil && claims.Role == auth.RoleAdmin:
-		// admins can delete anything
-	case cur.OwnerID == "" || (claims != nil && claims.UserID != cur.OwnerID):
-		http.Error(w, "not your view", http.StatusForbidden)
+	if code, msg := savedViewDeleteRejection(*cur, auth.FromContext(r.Context())); code != 0 {
+		http.Error(w, msg, code)
 		return
 	}
 	if err := s.store.DeleteSavedView(r.Context(), id); err != nil {
@@ -444,6 +450,46 @@ func (s *Server) deleteSavedView(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "saved_view.delete", "saved_view", id, "")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// savedViewCreateRejection — v0.10.1024 — SAF: POST /api/views'in yazamayacağı
+// page değeri için hata metni ("" = yazılabilir). Kusur (kod incelemesi, prod'da
+// gözlenmedi): uç rol kapısız ve her page'i kabul ediyordu; viewer
+// page="problem-verdict", name="noise" ve elle kurulmuş bir gövdeyle ekip
+// kararı taklit edebiliyordu — PUT /api/problem-verdicts'in editor kapısı ve
+// "problem.verdict" denetimi atlanıyor, susturma politikası açıksa (v0.10.1016)
+// o imzanın bildirimi de susuyordu. Sistem sayfaları (chstore.
+// IsSystemSavedViewPage) yalnız kendi uçlarından yazılır; ret depoya ve
+// denetime dokunmadan, admin dahil her rol için.
+func savedViewCreateRejection(page string) string {
+	if chstore.IsSystemSavedViewPage(page) {
+		return fmt.Sprintf("reserved page %q: sistem durumudur, genel kayıtlı-görünüm ucundan yazılamaz (kendi ucunu kullanın)", page)
+	}
+	return ""
+}
+
+// savedViewDeleteRejection — v0.10.1024 — SAF: DELETE /api/views/{id} için
+// yetki kararı (code 0 = silinebilir). Sahiplik kuralı aynen korunur: admin her
+// görünümü siler; diğerleri yalnız kendi paylaşımsız görünümünü (paylaşımlı,
+// yani owner_id boş satır → 403).
+//
+// Sistem sayfası satırı ise ADMİN DAHİL 403: "pv:" karar satırlarında owner_id
+// boş olduğundan viewer/editor zaten 403 alıyordu, ama admin bu uçtan
+// gerçek bir ekip kararını mezar taşıyla silebiliyordu — "problem.verdict"
+// denetimi yerine "saved_view.delete" düşüyor, karar okuma önbelleği
+// düşürülmüyordu. Karar PUT /api/problem-verdicts ile boş verdict göndererek
+// kaldırılır (editor+, denetimli) — tek denetimli yol orası.
+func savedViewDeleteRejection(cur chstore.SavedView, claims *auth.Claims) (int, string) {
+	if chstore.IsSystemSavedViewPage(cur.Page) {
+		return http.StatusForbidden, fmt.Sprintf("reserved page %q: sistem durumudur, genel kayıtlı-görünüm ucundan silinemez (kendi ucunu kullanın)", cur.Page)
+	}
+	switch {
+	case claims != nil && claims.Role == auth.RoleAdmin:
+		// admins can delete anything (except system pages, above)
+	case cur.OwnerID == "" || (claims != nil && claims.UserID != cur.OwnerID):
+		return http.StatusForbidden, "not your view"
+	}
+	return 0, ""
 }
 
 func newRandID(n int) string {
