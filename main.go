@@ -1465,6 +1465,9 @@ func main() {
 	authSvc.EnableAPITokens(ctx, tokenSourceAdapter{store})
 	// v0.8.442 — wiki/URL kaynaklarının 30 dk'lık leader-gated senkronu.
 	go srv.StartRAGSync(ctx, lockImpl)
+	// v0.10.1013 — Argo CD: keşfedilen instance'ların kendiliğinden kaydı
+	// (argocd.autoRegister.enabled, varsayılan kapalı; kapalıyken sorgu / kilit yok).
+	go srv.StartArgoCDAutoRegister(ctx, lockImpl)
 
 	// v0.8.346 (HA audit H6) — the role guard the old comment only claimed:
 	// OTLP HTTP routes 501 off the ingest role (a collector mis-pointed at

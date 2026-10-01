@@ -97,7 +97,7 @@ describe('toPutBody — sıra, bölümler, pins', () => {
     const d = draftFromSettings(s);
     d.adv['reader.timeoutS'] = '40';
     const body = toPutBody(d, s.pins ?? [], 1_790_000_000_000_000_000);
-    expect(Object.keys(body).sort()).toEqual(['apiWorker', 'classification', 'enabled', 'envList', 'expectedUpdatedAt', 'hubs', 'instances', 'intervals', 'mapping', 'metricsWorker', 'pins', 'reader']);
+    expect(Object.keys(body).sort()).toEqual(['apiWorker', 'autoRegister', 'classification', 'enabled', 'envList', 'expectedUpdatedAt', 'hubs', 'instances', 'intervals', 'mapping', 'metricsWorker', 'pins', 'reader']);
     expect(body.pins).toEqual(s.pins);
     expect(body.hubs).toEqual([{ clusterId: H1, injectClusterLabel: true }, { clusterId: H2, injectClusterLabel: true }]);
     expect(body.apiWorker).toEqual({ rps: 1.5, burst: 0, maxConcurrent: 0 });
@@ -598,6 +598,32 @@ describe('trLocative / fmtTr / savedAtText', () => {
     expect(savedAtText(undefined)).toBe('');
     expect(savedAtText(Date.UTC(2026, 8, 26, 20, 41) * 1e6)).toMatch(/^son kayıt 26 Eyl \d\d:41$/);
     expect(fmtHourMinute(new Date(2026, 8, 26, 7, 5))).toBe('07:05');
+  });
+});
+
+// v0.10.1013 — otomatik kayıt anahtarı (`autoRegister.enabled`): eski blobda
+// yok → kapalı; PUT'ta HER ZAMAN gider (tam değiştirme: gönderilmezse sessizce
+// kapanırdı) ve entegrasyon kapalıysa kapalı gider; değişiklik cümlesi etkin
+// değeri karşılaştırır; 409 birleştirmesi alanı taşır.
+describe('autoRegister bayrağı', () => {
+  it('eski blob (alan yok) → kapalı; PUT her zaman taşır ve entegrasyona bağlıdır', () => {
+    const d = draftFromSettings(settings());
+    expect(d.autoRegister).toBe(false);
+    expect(toPutBody(d, [], 0).autoRegister).toEqual({ enabled: false });
+    d.autoRegister = true;
+    expect(toPutBody(d, [], 0).autoRegister).toEqual({ enabled: true });
+    d.enabled = false;
+    expect(toPutBody(d, [], 0).autoRegister).toEqual({ enabled: false });
+    expect(draftFromSettings(settings({ autoRegister: { enabled: true } })).autoRegister).toBe(true);
+  });
+  it('değişiklik cümlesi etkin değerle; birleştirme alanı taşır; metrik işçisinden bağımsız', () => {
+    const base = draftFromSettings(settings());
+    const d = { ...base, autoRegister: true };
+    expect(diffPhrases(d, base, CLUSTERS)).toEqual(['otomatik kayıt açıldı']);
+    const on = draftFromSettings(settings({ autoRegister: { enabled: true } }));
+    expect(diffPhrases({ ...on, enabled: false }, on, CLUSTERS)).toEqual(['Argo CD kapatıldı', 'otomatik kayıt kapatıldı']);
+    expect(mergeDraft(base, d, base).draft.autoRegister).toBe(true);
+    expect(d.metricsWorker).toBe(false);
   });
 });
 

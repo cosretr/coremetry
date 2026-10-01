@@ -384,7 +384,7 @@ export function ArgoCDTab() {
       <div style={CHECK}>
         <input id="acd-enabled" type="checkbox" checked={emptyMode ? false : draft.enabled} disabled={emptyMode}
           aria-describedby="acd-enabled-h"
-          onChange={e => { const v = e.target.checked; change(d => ({ ...d, enabled: v, metricsWorker: v ? d.metricsWorker : false })); }} />
+          onChange={e => { const v = e.target.checked; change(d => ({ ...d, enabled: v, metricsWorker: v ? d.metricsWorker : false, autoRegister: v ? d.autoRegister : false })); }} />
         <div>
           <label htmlFor="acd-enabled">Argo CD entegrasyonu açık</label>
           <div id="acd-enabled-h" className="field-hint">
@@ -403,6 +403,21 @@ export function ArgoCDTab() {
             {!emptyMode && !draft.enabled
               ? 'Önce Argo CD entegrasyonunu açın.'
               : <>Açıkken worker lideri her tik aralığında (Gelişmiş › <code>intervals.metricsS</code>, varsayılan 60 sn) hub Thanos'undaki <code>argocd_*</code> metriklerini okur ve Application durum değişimleriyle tamamlanan senkronları kaydeder. Argo CD API'sine bağlanılmaz; kapalıyken hiçbir hub sorgusu atılmaz.</>}
+          </div>
+        </div>
+      </div>
+      {/* v0.10.1013 (operatör: "autodiscover etse daha iyi olacak, tek tek ekle
+          diyorum") — keşfedilen instance'ların kendiliğinden kaydı. Varsayılan
+          kapalı; yalnız EKLER. Silinen instance'ın geri geleceği açıkça yazılır. */}
+      <div style={CHECK}>
+        <input id="acd-autoreg" type="checkbox" checked={!emptyMode && draft.enabled && draft.autoRegister} disabled={emptyMode || !draft.enabled}
+          aria-describedby="acd-autoreg-h" onChange={e => { const v = e.target.checked; change(d => ({ ...d, autoRegister: v })); }} />
+        <div>
+          <label htmlFor="acd-autoreg">Keşfedilen instance'ları kendiliğinden kaydet</label>
+          <div id="acd-autoreg-h" className="field-hint">
+            {!emptyMode && !draft.enabled
+              ? 'Önce Argo CD entegrasyonunu açın.'
+              : <>Açıkken 30 dakikada bir her etkin hub keşfedilir ve yeni, namespace'i belli adaylar instance tablosuna eklenir (elle “Tümünü ekle” ile aynı kural). Yalnız ekler: mevcut instance'lara dokunmaz, pasif hub'ı taramaz. Sildiğiniz bir instance Argo'da hâlâ varsa <b>geri eklenir</b> — istemediğiniz instance'ı silmeyin, devre dışı bırakın. Her ekleme denetim kaydına <code>settings.argocd.autoregister</code> olarak düşer.</>}
           </div>
         </div>
       </div>

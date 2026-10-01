@@ -104,6 +104,9 @@ type Settings struct {
 	// bayrağı (MetricsActive: enabled VE metricsWorker.enabled VE ≥1 hub).
 	// Eski bloblarda yok → false → işçi başlamaz.
 	MetricsWorker MetricsWorkerSettings `json:"metricsWorker"`
+	// AutoRegister — v0.10.1013: keşfedilen instance'ların kendiliğinden
+	// kaydı (autoregister.go). Eski bloblarda yok → false → hiçbir şey yazılmaz.
+	AutoRegister AutoRegisterSettings `json:"autoRegister"`
 	// Hubs — Argo metriklerini taşıyan hub Remote Cluster'ları (en çok
 	// maxHubs; clusterId tekil). Keşif hub başına koşar.
 	Hubs []Hub `json:"hubs,omitempty"`
@@ -484,6 +487,8 @@ func Validate(in Settings, clusters []ClusterRef) (Settings, error) {
 	// entegrasyonda açık işçi bayrağı saklanmaz (yeniden açılış işçiyi
 	// sessizce başlatmasın).
 	out.MetricsWorker.Enabled = in.MetricsWorker.Enabled && in.Enabled
+	// v0.10.1013 — otomatik kayıt da entegrasyon anahtarına bağlı (aynı gerekçe).
+	out.AutoRegister.Enabled = in.AutoRegister.Enabled && in.Enabled
 
 	byID := make(map[string]ClusterRef, len(clusters))
 	for _, c := range clusters {

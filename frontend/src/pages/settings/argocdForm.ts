@@ -105,6 +105,8 @@ export interface Draft {
   enabled: boolean;
   /** v0.10.983 — argocd-metrics işçisi (`metricsWorker.enabled`); yalnız `enabled` açıkken anlamlı. */
   metricsWorker: boolean;
+  /** v0.10.1013 — keşfedilen instance'ların kendiliğinden kaydı (`autoRegister.enabled`); yalnız `enabled` açıkken anlamlı. */
+  autoRegister: boolean;
   hubs: HubDraft[];
   instances: InstanceDraft[];
   envList: string[];
@@ -158,6 +160,7 @@ export function draftFromSettings(s: ArgoCDSettings): Draft {
   return {
     enabled: !!s.enabled,
     metricsWorker: !!s.metricsWorker?.enabled,
+    autoRegister: !!s.autoRegister?.enabled,
     hubs: (s.hubs ?? []).map(h => ({ key: `h:${h.clusterId}`, clusterId: h.clusterId, inject: h.injectClusterLabel ?? true })),
     instances: (s.instances ?? []).map(i => ({
       key: `s:${i.id}`, origin: 'saved' as const, savedId: i.id,
@@ -201,6 +204,8 @@ export function toPutBody(d: Draft, pins: ArgoCDPin[], expectedUpdatedAt: number
     enabled: d.enabled,
     // v0.10.983 — sunucu da kapalı entegrasyonda işçi bayrağını kapatır (Validate).
     metricsWorker: { enabled: d.enabled && d.metricsWorker },
+    // v0.10.1013 — her zaman gider: PUT tam değiştirmedir, gönderilmezse anahtar sessizce kapanırdı.
+    autoRegister: { enabled: d.enabled && d.autoRegister },
     hubs: d.hubs.map(h => ({ clusterId: h.clusterId, injectClusterLabel: h.inject })),
     envList: [...d.envList],
     instances: d.instances.map(instanceInput),
@@ -410,6 +415,8 @@ export function diffPhrases(d: Draft, base: Draft, clusters: RemoteCluster[]): s
   // v0.10.983 — metrik işçisinin AYRI bayrağı (etkin değer: entegrasyon açık VE işçi açık).
   const mw = d.enabled && d.metricsWorker, bmw = base.enabled && base.metricsWorker;
   if (mw !== bmw) out.push(mw ? 'metrik işçisi açıldı' : 'metrik işçisi kapatıldı');
+  const ar = d.enabled && d.autoRegister, bar = base.enabled && base.autoRegister; // v0.10.1013
+  if (ar !== bar) out.push(ar ? 'otomatik kayıt açıldı' : 'otomatik kayıt kapatıldı');
   for (const h of d.hubs) {
     const b = base.hubs.find(x => x.clusterId === h.clusterId);
     if (!b) out.push(`${hn(h.clusterId)} hub olarak eklendi`);
@@ -889,6 +896,7 @@ export function mergeDraft(base: Draft, draft: Draft, fresh: Draft): MergeResult
     draft: {
       enabled: pick(base.enabled, draft.enabled, fresh.enabled, t),
       metricsWorker: pick(base.metricsWorker, draft.metricsWorker, fresh.metricsWorker, t),
+      autoRegister: pick(base.autoRegister, draft.autoRegister, fresh.autoRegister, t),
       hubs: mergeRows(base.hubs, draft.hubs, fresh.hubs, h => h.clusterId, t),
       instances: mergeRows(base.instances, draft.instances, fresh.instances, i => i.id, t),
       envList: pick(base.envList, draft.envList, fresh.envList, t),

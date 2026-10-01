@@ -987,6 +987,26 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Argo CD: keşfedilen instance'lar kendiliğinden kaydedilir — anahtarla (v0.10.1013)
+
+**Operatör ("Argocd entegrasyonu da autodiscover etse daha iyi olacak, şu anda tek tek ekle diyorum";
+kuyruktan "devam sırayla"):** annex §7.2'nin kuralı "öner, asla otomatik yazma" idi. Prod'da ekip × ortam
+başına ayrı instance var (hub başına ~190); her yeni ekipte Ayarlar'a girip "Tümünü ekle + Kaydet"
+gerekiyordu, kaydı olmayan instance'ın uygulamaları eşleyicide yoktu. **Karar:** kural AÇIK BİR ANAHTARLA
+tersine çevrildi — `autoRegister.enabled`, varsayılan KAPALI; entegrasyon kapalıyken saklanmaz (Validate).
+**Tur** (api rolündeki pod'larda, lider kilidiyle tek pod, 30 dk'da bir; kapalıyken sorgu da Redis kilidi de
+yok): her ETKİN hub için elle keşifle AYNI probe; hub'lar sırayla koşar ve bir hub'ın adayları sonrakinin
+"mevcut" listesine girer (aynı namespace iki hub'da aynı turda çakışan kimlik almaz). Uygun aday varsa
+`argocdPutMu` altında TAZE bloba eklenir, sonuç PUT ile aynı doğrulamadan geçer ve yazılır; doğrulama
+düşerse hiçbir şey yazılmaz. **Yalnız ekler:** aday kuralı elle "Tümünü ekle" ile aynı (yeni, hatasız,
+namespace'i belli); mevcut instance'ın hiçbir alanı değişmez; kimliği ya da (hub, namespace) yuvası dolu
+aday atlanır; tavan 500. Pasif hub ve tokenRef'i çözülemeyen hub taranmaz. Yazım denetimde
+`settings.argocd.autoregister` (aktör: system). **Bilinen sonuç (ekranda yazılı):** silinen instance Argo'da
+hâlâ varsa geri eklenir — istenmeyen instance silinmez, devre dışı bırakılır. **Yan etki:** yazım
+`updatedAt`'i ilerletir; o sırada açık bir taslak Kaydet'te 409 alıp yeniden yükler (yalnız gerçekten yeni
+instance bulunduğunda). **Reddedilen:** "reddedilenler listesi" tutmak (silineni hatırlayıp eklememek) —
+yeni bir kalıcı durum ve ayrı bir ekran; devre dışı bırakma aynı işi görüyor.
+
 ## 2026-10-01 — Logs histogramı çubuk tavanı + topoloji perf bütçesi makineye ölçekli (v0.10.1012)
 
 **Kuyruk (operatör "devam sırayla"), iki cila işi tek sürümde.** **(1) Logs histogramı:** Traces şeridiyle
