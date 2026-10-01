@@ -1613,6 +1613,12 @@ export const api = {
   //
   // v0.10.576 — `signal`: çekmece açılışı React Query'ye taşındı; operatör
   // çekmeceyi kapatınca ya da başka satıra geçince eski okuma iptal olur.
+  // v0.10.1020 — başarısız çağrıların hata türüne göre kırılımı (detayla aynı kimlik + pencere).
+  databaseErrors: (system: string, instance: string, dbName: string, fromNs: number, toNs: number, signal?: AbortSignal) =>
+    get<import('./types').DBErrors | null>(
+      `/api/databases/errors?system=${encodeURIComponent(system)}&instance=${encodeURIComponent(instance)}`
+      + (dbName ? `&dbName=${encodeURIComponent(dbName)}` : '')
+      + `&from=${fromNs}&to=${toNs}`, signal),
   databaseDetail: (system: string, instance: string, dbName: string, fromNs: number, toNs: number, signal?: AbortSignal) =>
     get<import('./types').DBDetail | null>(
       `/api/databases/detail?system=${encodeURIComponent(system)}&instance=${encodeURIComponent(instance)}`

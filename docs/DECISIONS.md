@@ -987,6 +987,23 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Databases dilim 2: veritabanı hata kırılımı — "hangi hata" (v0.10.1020)
+
+**Bağlam:** Databases × Dynatrace programı (aşağıdaki kayıt), dilim 2 — hata analizi karşılığı. `/database`
+hata ORANINI gösteriyordu, hangi hatanın olduğunu göstermiyordu. **Karar:** sayfaya "Errors on this
+database" kartı: başarısız çağrılar imzaya göre gruplanır — en belirleyiciden kabaya üç basamak: Oracle
+hata kodu (`ORA-/PLS-/TNS-NNNNN`; status mesajında ya da exception mesajında geçen ilk kod) → exception
+tipi (event ya da `error.type`; exception hattıyla AYNI ifadeler) → hata mesajının ilk 80 karakteri;
+hiçbiri yoksa "(mesajsız hata)". Satır: adet, pay, en çok üreten çağıran (+ diğerlerinin sayısı), son
+görülme, örnek trace; altta "hatalı trace'leri aç" pivotu. **Veri yolu:** `GET /api/databases/errors`
+(kendi dosyası; detayla aynı kimlik üçlüsü + pencere, 30 sn önbellek; detay yükünü geciktirmesin diye
+ayrı ve paralel). İki okuma: (1) `db_caller_summary_5m` — bu kimliğe HATA üretmiş çağıranlar (yoksa ham
+okuma yapılmaz); (2) ham `spans` — yalnız o çağıranlar (≤200), pencere, `status_code='error'`, ≤20 imza.
+**Ham okuma bilinçli bir istisna** (mimari değişmez 3): hata mesajı / exception event'i hiçbir ön-toplamda
+yok; tarama birincil anahtara (service_name, time) ve hata satırlarına budanır, `max_execution_time = 10`
+— "Top statements" okumasının emsali. Sorgu yerel ClickHouse'ta örnek satırlarla doğrulandı. **Sınır:**
+kod çıkarımı yalnız Oracle ailesi; diğer motorlarda imza exception tipine / mesaja düşer.
+
 ## 2026-10-01 — Databases: Dynatrace Databases baz alınır; dilim 1 "bu veritabanının problemleri" (v0.10.1019)
 
 **Operatör:** Databases iyileştirmeleri için "Dynatrace databases kısmını baz al; o database ile ilgili

@@ -17,6 +17,7 @@ import {
   DatabaseCallersSection, DatabaseStatementsSection, DatabaseEnginePanels,
 } from '@/pages/databases/detailSections';
 import { DatabaseProblemsSection } from '@/pages/databases/DatabaseProblemsSection';
+import { DatabaseErrorsSection } from '@/pages/databases/DatabaseErrorsSection';
 import type { DBDetail, DBTrend, SlowQueryRow } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
 
@@ -203,6 +204,12 @@ export default function DatabaseDetailPage() {
 
             {/* v0.10.1019 — bu veritabanının problemleri (Dynatrace varlık
                 sayfasındaki Problems kartının karşılığı). */}
+            {/* v0.10.1020 — hangi hata: başarısız çağrılar hata koduna /
+                exception tipine göre (Dynatrace hata analizi karşılığı). */}
+            <div style={{ marginTop: 12 }}>
+              <DatabaseErrorsSection refObj={refObj} range={range} fromNs={from} toNs={to} />
+            </div>
+
             <div style={{ marginTop: 12 }}>
               <DatabaseProblemsSection refObj={refObj} range={range} />
             </div>

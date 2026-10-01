@@ -451,6 +451,31 @@ export interface PhysicalAddrs {
   capped?: boolean;
 }
 
+/** v0.10.1020 — veritabanı hata kırılımı (Go chstore.DBErrorGroup / DBErrors).
+ *  kind: imzanın nereden geldiği — code = Oracle hata kodu (ORA-/PLS-/TNS-),
+ *  type = exception tipi, message = hata mesajının başı, none = mesajsız hata. */
+export type DBErrorKind = 'code' | 'type' | 'message' | 'none';
+export interface DBErrorGroup {
+  signature: string;
+  kind: DBErrorKind;
+  count: number;
+  services: number;
+  topService: string;
+  sample: string;
+  /** unix ns */
+  lastSeen: number;
+  sampleTraceId: string;
+}
+export interface DBErrors {
+  system: string;
+  instance: string;
+  dbName?: string;
+  total: number;
+  groups: DBErrorGroup[];
+  truncated: boolean;
+  callersCapped: boolean;
+}
+
 export interface DBDetail {
   system: string;
   instance: string;

@@ -187,6 +187,7 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// v0.10.1000 — SAF telemetri: rollup_spans_wide_* (AggregatingMergeTree
 		// telemetri rollup'ı) ya da spans; fonksiyon kodu → servis dağılımı.
 		"function_code_services.go": true,
+		"db_errors.go":              true, // v0.10.1020 — db_caller_summary_5m + spans (hata kırılımı)
 		"external_seasonal.go":      true, // metric_points — dış seri mevsimsel dilim (Influx D6, v0.10.231)
 		"dbstmt_detail.go":          true, // db_statement_summary_5m / spans
 		"db_capacity.go":            true, // metric_points
