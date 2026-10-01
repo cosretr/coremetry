@@ -987,6 +987,24 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Traces: Errors + çip → hata trace düzeyinde (v0.10.1010)
+
+**Operatör bildirimi:** `function_code = …` çipiyle liste dolu ve satırların çoğu ERROR; "Errors"
+işaretlenince "Trace bulunamadı". **Kök neden:** çipler WHERE'de span düzeyinde, Errors ise başka span
+yüklemi varken HAVING'de (v0.10.258) — ama o HAVING, WHERE'in bıraktığı span'lerde sayar: fiilî anlam
+"çipe uyan span'in KENDİSİ hatalı". Prod'da fonksiyon kodunu taşıyan log-yayın span'leri hata vermiyor;
+hata aynı trace'in başka span'inde. 1005 (satır) ve 1008 (Root) ile aynı sınıf. **Karar — iki basamak,
+sayfadan bağımsız:** ① kapsamda çipe uyan VE hatalı bir span varsa eski anlam AYNEN (v0.10.812'nin "çipe
+uyan hatalı span" yolu; mevcut dolu sonuçların hiçbiri değişmez). ② yoksa hata TRACE düzeyinde: "çipe uyan
+span'i olan VE herhangi bir span'i hatalı olan trace" — eski cevap bu durumda kesin boştu. **②'nin
+maliyeti:** iki indeksli taramanın kesişimi (çip: terfi kolonu / kvh; hata: idx_status). Tavanlı sayımla
+küçük taraf seçilir ve KÜME olur (en yeni ≤300k satır), büyük taraf `trace_id GLOBAL IN (küme)` ile
+süzülür, en yeni ≤6000 trace liste adayı olur; küme ya da aday tavana çarparsa `RankedWithin` ilan eder.
+Adaylar hata-doğrulandığı için liste aşamalarında HasError kapanır. **Reddedilen:** çipleri HAVING'e
+taşıyıp tam pencereyi GROUP BY trace_id ile taramak (v0.10.341'in kaçındığı maliyet) ve sınırsız GLOBAL IN
+(v0.10.238'in 241 sınıfı). **Şerit değişmedi:** spans kapsamında Errors bayrağı "çipe uyan hatalı span"
+sayar (db.statement için anlamlı); fonksiyon kodunda bu sıfırdır — şerit boş, liste dolu görünür.
+
 ## 2026-10-01 — Argo CD: pasif hub kaydı engellemez, taranmaz (v0.10.1009)
 
 **Operatör ("hub'lardan biri aktif diğeri pasif"; kuyruk "devam et"):** Remote Cluster kaydı devre dışı olan

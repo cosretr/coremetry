@@ -2416,6 +2416,27 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 			return []TraceRow{}, 0, false, nil
 		}
 	}
+	// v0.10.1010 — Operator-reported: Errors + attribute çipi → "Trace
+	// bulunamadı" (çip bir span'de, hata başka span'de). Çipe uyan hatalı span
+	// YOKSA hata trace düzeyinde aranır (trace_error_tracelevel.go); varsa eski
+	// anlam aynen. Adaylar hata-doğrulanmıştır → liste aşamalarında HasError
+	// kapanır (yoksa HAVING yine çipli span'lerde hata arar).
+	if traceLevelErrorEligible(f) {
+		ids, mode, bounded, err := s.traceLevelErrorCandidates(ctx, f)
+		if err != nil {
+			return nil, 0, false, err
+		}
+		if mode == traceErrModeTrace {
+			f.Explain.note("errors=trace-level (çip + hata ayrı span'lerde; %d aday, v0.10.1010)", len(ids))
+			if len(ids) == 0 {
+				return []TraceRow{}, 0, false, nil
+			}
+			f.CandidateIDs, f.HasError = ids, false
+			if bounded && f.RankedWithin != nil {
+				*f.RankedWithin = len(ids)
+			}
+		}
+	}
 	// v0.10.307 — Operator-reported: Errors + attribute filtresi + servis ham
 	// yolda tam taramayla 25 s bütçesini aşıyor, pencere yarılanıyor, sonuç
 	// "boş" görünüyordu. Önce servisin hatalı trace id'leri (ucuz), sonra her

@@ -178,6 +178,9 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		"spanmetric.go":     true, // service_summary_5m / operation_summary_5m / spans
 		"spans_by_trace.go": true, // spans — trace_id IN (...) özetleri (Influx D4, v0.10.229)
 		"trace_services.go": true, // spans — trace id → servis (Oracle test özeti, v0.10.768)
+		// v0.10.1010 — SAF telemetri: tek FROM'u spans (çip ∩ hata trace kesişimi,
+		// tavanlı sayım + GLOBAL IN). Liste sorgusuyla aynı havuz.
+		"trace_error_tracelevel.go": true,
 		// v0.10.1005 — SAF telemetri: tek FROM'u spans (sayfa id'leri PREWHERE'de;
 		// çipli listenin satır onarımı). Liste sorgusuyla aynı havuz.
 		"trace_row_repair.go": true,
