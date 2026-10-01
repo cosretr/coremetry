@@ -39,10 +39,16 @@ package api
 // exported_namespace, name) (argocd_app_info{job="J"}))` (§5.4 kural 1–3:
 // anlık, listelemeden önce say, shard/HA kopyalarını grupla; `name` label
 // browser'ı ASLA, kural 4), shard sayısı sınırlı `pod` label-values (≤100).
-// Sınırlar: ≤50 iş, iş başına ≤100 değer, ≤150 çağrı (sayımlar DAHİL), çağrı
+// Sınırlar: ≤500 iş, iş başına ≤500 değer, ≤2000 çağrı (sayımlar DAHİL), çağrı
 // başına 15 s, toplam 60 s; pod başına tek eşzamanlı keşif (429). Sayım
 // yalnız ARTAN bütçeyi kullanır: aday düşürmez, error/incomplete üretmez,
 // 200'ü bozmaz; bütçe biterse kalan adaylara not + countsIncomplete.
+// v0.10.990 (operatör: "sadece ilk 50'yi bulduğu için eksikleri oluyor") —
+// tavanlar 50 iş / 100 değer / 150 çağrıdan yukarı çekildi: instance başına
+// ayrı `job` (<team>-<env>-metrics) taşıyan kurulumda 50'den sonraki
+// instance'lar hiç aday olmuyordu. İş başına çağrılar (hepsi `job` süzgeçli,
+// §5.4 "asla süzgeçsiz") aynı 60 s'ye sığsın diye argocdDiscoverParallel
+// kadar eşzamanlı koşar; aday sırası ve iş başına sözleşme aynıdır.
 // Hub yok / bilinmiyor / devre dışı / tokenRef'i çözülemiyor → 400
 // guardrail ve upstream'e İSTEK YOK (§7.2 fail-closed ruhu). Upstream
 // hatası ConsoleError.StatusCode ile eşlenir; gövde yapılandırılmış URL'yi
@@ -216,7 +222,7 @@ func (s *Server) getArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.argocdResponse(svc))
 }
 
-// argocdSettingsMaxBody — PUT gövde tavanı (≤100 instance + ≤500 pin sığar).
+// argocdSettingsMaxBody — PUT gövde tavanı (≤500 instance + ≤500 pin sığar; v0.10.990).
 const argocdSettingsMaxBody = 1 << 20
 
 // writeArgoCDFieldError — 400 {error, field}; field JSON alan yoludur
@@ -325,12 +331,14 @@ func (s *Server) putArgoCDSettings(w http.ResponseWriter, r *http.Request) {
 // ── Keşif probe'u ──────────────────────────────────────────────────────────
 
 const (
-	argocdDiscoverMaxJobs     = 50
-	argocdDiscoverMaxValues   = 100
-	argocdDiscoverMaxCalls    = 150
+	// argocdDiscoverMaxValues — iş başına namespace / exported_namespace değer
+	// tavanı (v0.10.990: 100 → 500; paylaşılan iş adında namespace = instance).
+	argocdDiscoverMaxValues = 500
+	// argocdDiscoverMaxPods — shard sayımının `pod` değer tavanı (FE "≥100").
+	argocdDiscoverMaxPods     = 100
 	argocdDiscoverBudget      = 60 * time.Second
 	argocdDiscoverCallTimeout = 15 * time.Second
-	argocdDiscoverMaxBodyB    = int64(4 << 20) // label-values gövdesi: onlarca değer
+	argocdDiscoverMaxBodyB    = int64(4 << 20) // label-values gövdesi: yüzlerce değer
 	argocdDiscoverWindow      = time.Hour      // §5.4 kural 4: metadata HER ZAMAN pencereli
 	argocdDiscoverReqMaxBody  = 4 << 10
 	// argocdCountMaxSeries — v0.10.974 — anlık count'un seri tavanı: iş başına
@@ -338,7 +346,19 @@ const (
 	argocdCountMaxSeries = argocdDiscoverMaxValues + 1
 )
 
-// argocdDiscoverBusy — pod başına tek eşzamanlı keşif (≤150 hub çağrısı).
+// v0.10.990 — iş ve çağrı tavanları + eşzamanlılık. Değişken: testler bütçe
+// tükenmesini küçük sayılarla ve sıralı (parallel=1) kipte pinler.
+var (
+	argocdDiscoverMaxJobs  = 500  // `job` label-values limiti (eski 50)
+	argocdDiscoverMaxCalls = 2000 // hub başına toplam çağrı, sayımlar dahil (eski 150)
+	// argocdDiscoverParallel — aynı anda hub Thanos'una giden keşif çağrısı.
+	// 1 = v0.10.974 sıralı davranışı. Küçük tutulur: pod başına tek keşif
+	// kuralı (429) hub'ı korumak içindi; 4 hafif label-values çağrısı o ruhu
+	// bozmaz, 500 işi 60 s'ye sığdırır.
+	argocdDiscoverParallel = 4
+)
+
+// argocdDiscoverBusy — pod başına tek eşzamanlı keşif (≤argocdDiscoverMaxCalls hub çağrısı).
 var argocdDiscoverBusy atomic.Bool
 
 // argocdDiscoverNow — pencere saati (testler sabitleyebilir).
@@ -522,100 +542,188 @@ func (s *Server) runArgoCDDiscovery(ctx context.Context, hub thanos.ClusterConfi
 	lim := thanos.ConsoleLimits{Timeout: argocdDiscoverCallTimeout, MaxBodyBytes: argocdDiscoverMaxBodyB, PartialResponse: false}
 	res := &argocdDiscoverResult{HubClusterID: hub.EffectiveID(), HubName: hub.Name, InjectClusterLabel: inject,
 		Window: argocdDiscoverWindowMs{Start: start.UnixMilli(), End: end.UnixMilli()}, Candidates: []argocd.Candidate{}}
-	warns := map[string]bool{}
+	run := &argocdProbeRun{ctx: ctx, res: res, warns: map[string]bool{}}
+	// values — tek label-values çağrısı. Çağrı SAYMAZ: bütçe çağırandadır
+	// (run.take), böylece eşzamanlı işler tavanı aşamaz.
 	values := func(label, sel string, limit int) (*thanos.ConsoleLabelsResult, error) {
-		res.Calls++
 		out, err := s.thanos.ConsoleLabelValues(ctx, hub, label,
 			thanos.ConsoleMetaQuery{Match: []string{sel}, Start: start, End: end, Limit: limit}, lim)
 		if err == nil {
-			for _, w := range out.Warnings {
-				warns[w] = true
-			}
+			run.warn(out.Warnings)
 		}
 		return out, err
 	}
-	budgetLeft := func(need int) bool { return ctx.Err() == nil && res.Calls+need <= argocdDiscoverMaxCalls }
 
+	res.Calls++ // iş listesi çağrısı bütçeden bağımsız atılır (tur onsuz başlayamaz)
 	jobs, err := values("job", argocd.AppInfoSelector("", ""), argocdDiscoverMaxJobs)
 	if err != nil {
 		return res, err
 	}
 	res.JobsTruncated = jobs.Truncated
-	probes := make([]argocd.JobProbe, 0, len(jobs.Values))
+	names := make([]string, 0, len(jobs.Values))
 	for _, job := range jobs.Values {
-		if job == "" {
-			continue
+		if job != "" {
+			names = append(names, job)
 		}
+	}
+	// v0.10.990 — iş başına probe eşzamanlı (argocdDiscoverParallel); sonuç
+	// dizine yazılır, yani aday sırası iş listesinin sırası olarak kalır.
+	const skipped = "skipped: discovery budget exhausted"
+	probes := make([]argocd.JobProbe, len(names))
+	argocdForEach(len(names), argocdDiscoverParallel, func(i int) {
+		job := names[i]
 		p := argocd.JobProbe{Job: job}
-		if !budgetLeft(2) {
-			p.Err, res.Incomplete = "skipped: discovery budget exhausted", true
-			probes = append(probes, p)
-			continue
+		defer func() { probes[i] = p }()
+		if !run.take(2) {
+			p.Err = skipped
+			run.markIncomplete()
+			return
 		}
 		ns, err := values("namespace", argocd.AppInfoSelector(job, ""), argocdDiscoverMaxValues)
 		if err != nil {
+			run.giveBack(1) // ikinci çağrı atılmadı
 			p.Err = argocdProbeErrText(err)
-			probes = append(probes, p)
-			continue
+			return
 		}
 		ex, err := values("exported_namespace", argocd.AppInfoSelector(job, ""), argocdDiscoverMaxValues)
 		if err != nil {
 			p.Err = argocdProbeErrText(err)
-			probes = append(probes, p)
-			continue
+			return
 		}
 		p.Namespaces, p.Truncated = ns.Values, ns.Truncated || ex.Truncated
-		if len(ex.Values) > 0 {
-			p.Exported = map[string][]string{}
-			if len(ns.Values) == 1 {
-				p.Exported[ns.Values[0]] = ex.Values
-			} else {
-				// Paylaşılan iş adı: namespace başına exported_namespace.
-				for _, n := range ns.Values {
-					if !budgetLeft(1) {
-						p.Err, res.Incomplete = "skipped: discovery budget exhausted", true
-						break
-					}
-					exn, err := values("exported_namespace", argocd.AppInfoSelector(job, n), argocdDiscoverMaxValues)
-					if err != nil {
-						p.Err = argocdProbeErrText(err)
-						break
-					}
-					p.Exported[n] = exn.Values
-					p.Truncated = p.Truncated || exn.Truncated
-				}
-			}
+		if len(ex.Values) == 0 {
+			return
 		}
-		probes = append(probes, p)
-	}
+		p.Exported = map[string][]string{}
+		if len(ns.Values) == 1 {
+			p.Exported[ns.Values[0]] = ex.Values
+			return
+		}
+		// Paylaşılan iş adı: namespace başına exported_namespace.
+		for _, n := range ns.Values {
+			if !run.take(1) {
+				p.Err = skipped
+				run.markIncomplete()
+				return
+			}
+			exn, err := values("exported_namespace", argocd.AppInfoSelector(job, n), argocdDiscoverMaxValues)
+			if err != nil {
+				p.Err = argocdProbeErrText(err)
+				return
+			}
+			p.Exported[n] = exn.Values
+			p.Truncated = p.Truncated || exn.Truncated
+		}
+	})
 	res.Candidates = argocd.BuildCandidates(res.HubClusterID, probes, existing)
 	if res.Candidates == nil {
 		res.Candidates = []argocd.Candidate{}
 	}
-	s.argocdCountPass(ctx, hub, end, res, values, budgetLeft, warns)
-	for w := range warns {
+	s.argocdCountPass(ctx, hub, end, run, values)
+	for w := range run.warns {
 		res.Warnings = append(res.Warnings, w)
 	}
 	sort.Strings(res.Warnings)
 	return res, nil
 }
 
+// argocdProbeRun — v0.10.990 — bir keşif turunun paylaşılan durumu: çağrı
+// bütçesi (res.Calls), Incomplete / CountsIncomplete bayrakları ve upstream
+// uyarıları. İş başına probe'lar eşzamanlı koştuğu için hepsi mu altında.
+type argocdProbeRun struct {
+	mu    sync.Mutex
+	ctx   context.Context
+	res   *argocdDiscoverResult
+	warns map[string]bool
+}
+
+// take — n çağrılık bütçe ayırır; bağlam bittiyse ya da tavan (≤
+// argocdDiscoverMaxCalls) aşılacaksa false ve HİÇBİR ŞEY ayrılmaz. Denetim
+// ile sayım tek kilit altında: eşzamanlı işler tavanı aşamaz.
+func (p *argocdProbeRun) take(n int) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.ctx.Err() != nil || p.res.Calls+n > argocdDiscoverMaxCalls {
+		return false
+	}
+	p.res.Calls += n
+	return true
+}
+
+// giveBack — ayrılıp ATILMAYAN çağrıyı bütçeye geri verir (calls = gerçekten
+// giden istek sayısı; audit ve testler bunu okur).
+func (p *argocdProbeRun) giveBack(n int) {
+	p.mu.Lock()
+	p.res.Calls -= n
+	p.mu.Unlock()
+}
+
+func (p *argocdProbeRun) warn(ws []string) {
+	if len(ws) == 0 {
+		return
+	}
+	p.mu.Lock()
+	for _, w := range ws {
+		p.warns[w] = true
+	}
+	p.mu.Unlock()
+}
+
+func (p *argocdProbeRun) markIncomplete() {
+	p.mu.Lock()
+	p.res.Incomplete = true
+	p.mu.Unlock()
+}
+
+func (p *argocdProbeRun) markCountsIncomplete() {
+	p.mu.Lock()
+	p.res.CountsIncomplete = true
+	p.mu.Unlock()
+}
+
+// argocdForEach — fn(0..n-1), en çok `parallel` eşzamanlı. İşler DİZİN
+// SIRASIYLA başlatılır (yuva boşaldıkça), yani bütçe önce baştaki işlere
+// gider; parallel ≤ 1 tam sıralı (v0.10.974 davranışı).
+func argocdForEach(n, parallel int, fn func(i int)) {
+	if parallel <= 1 || n <= 1 {
+		for i := 0; i < n; i++ {
+			fn(i)
+		}
+		return
+	}
+	sem := make(chan struct{}, parallel)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			fn(i)
+		}(i)
+	}
+	wg.Wait()
+}
+
 // argocdCountPass — v0.10.974 — BE2 ikinci tur (dosya başlığı): hatasız
 // adaylar iş başına (argocd.PlanCounts) bir anlık count + kapsam başına bir
-// `pod` label-values. Her çağrı res.Calls'a sayılır ve AYNI budgetLeft'e
-// (≤150 çağrı, 60 s bağlam) tabidir; adaylar zaten kurulu olduğundan sayım
-// hiçbir adaya mal olamaz. Başarısız sayım yalnız CountNote yazar (error,
-// incomplete, 200 dokunulmaz); bütçe/bağlam biterse kalan adaylar
+// `pod` label-values. Her çağrı res.Calls'a sayılır ve AYNI bütçeye (run.take:
+// ≤argocdDiscoverMaxCalls çağrı, 60 s bağlam) tabidir; adaylar zaten kurulu
+// olduğundan sayım hiçbir adaya mal olamaz. Başarısız sayım yalnız CountNote
+// yazar (error, incomplete, 200 dokunulmaz); bütçe/bağlam biterse kalan adaylar
 // CountNoteBudget ve sonuç CountsIncomplete alır. Hub küme etiketi inject=false
 // ise çağıran tarafından zaten temizlenmiştir (count da etiketsiz koşar).
-func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, end time.Time, res *argocdDiscoverResult,
-	values func(label, sel string, limit int) (*thanos.ConsoleLabelsResult, error), budgetLeft func(int) bool, warns map[string]bool) {
-	cands := res.Candidates
+// v0.10.990 — işler eşzamanlı (argocdDiscoverParallel): her iş yalnız KENDİ
+// adaylarının dizinlerine yazar (PlanCounts işleri ayrık böler), yani aday
+// dilimi kilitsiz; paylaşılan durum (bütçe, bayrak, uyarı) run'da.
+func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, end time.Time, run *argocdProbeRun,
+	values func(label, sel string, limit int) (*thanos.ConsoleLabelsResult, error)) {
+	cands := run.res.Candidates
 	qlim := thanos.ConsoleLimits{Timeout: argocdDiscoverCallTimeout, MaxSeries: argocdCountMaxSeries,
 		MaxBodyBytes: argocdDiscoverMaxBodyB, PartialResponse: false}
 	skip := func(idx []int) {
 		argocd.NoteCounts(cands, idx, argocd.CountNoteBudget)
-		res.CountsIncomplete = true
+		run.markCountsIncomplete()
 	}
 	// fail — sayım hatası: bağlam bittiyse bütçe (atlandı), değilse kısa ve
 	// URL'siz neden (ConsoleError.Type; tanınmayan hata yalnız logda).
@@ -633,12 +741,13 @@ func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, 
 		}
 		argocd.NoteCounts(cands, idx, note(why))
 	}
-	for _, j := range argocd.PlanCounts(cands) {
-		if !budgetLeft(1) {
+	jobs := argocd.PlanCounts(cands)
+	argocdForEach(len(jobs), argocdDiscoverParallel, func(k int) {
+		j := jobs[k]
+		if !run.take(1) {
 			skip(j.Idx)
-			continue
+			return
 		}
-		res.Calls++
 		qr, err := s.thanos.ConsoleQuery(ctx, hub, thanos.ConsoleInstantQuery{Query: argocd.AppCountQuery(j.Job, j.JobWide), Time: end}, qlim)
 		switch {
 		case err != nil:
@@ -646,9 +755,7 @@ func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, 
 		case qr.ResultType != "vector":
 			argocd.NoteCounts(cands, j.Idx, argocd.AppCountFailNote("beklenmeyen sonuç türü "+qr.ResultType))
 		default:
-			for _, w := range qr.Warnings {
-				warns[w] = true
-			}
+			run.warn(qr.Warnings)
 			byNS, perr := argocd.ParseCountVector(qr.Result)
 			if perr != nil {
 				log.Printf("[argocd] keşif sayımı %s: %v", j.Job, perr)
@@ -658,18 +765,18 @@ func (s *Server) argocdCountPass(ctx context.Context, hub thanos.ClusterConfig, 
 			argocd.ApplyAppCounts(cands, j, byNS, qr.Truncated)
 		}
 		for _, sc := range j.Shards {
-			if !budgetLeft(1) {
+			if !run.take(1) {
 				skip(sc.Idx)
 				continue
 			}
-			pods, err := values("pod", argocd.AppInfoSelector(sc.Job, sc.Namespace), argocdDiscoverMaxValues)
+			pods, err := values("pod", argocd.AppInfoSelector(sc.Job, sc.Namespace), argocdDiscoverMaxPods)
 			if err != nil {
 				fail(sc.Idx, err, argocd.ShardCountFailNote)
 				continue
 			}
 			argocd.ApplyShardCount(cands, sc, len(pods.Values), pods.Truncated)
 		}
-	}
+	})
 }
 
 // argocdProbeErrText — aday başına hata metni (URL'siz; ConsoleError

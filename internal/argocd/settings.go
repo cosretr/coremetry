@@ -249,12 +249,16 @@ const (
 )
 
 // Liste tavanları — blob küçük kalsın (config export + audit details
-// bütün blobu taşır); gerçekçi ölçek onlarca instance, yüzlerce pin.
+// bütün blobu taşır); gerçekçi ölçek yüzlerce instance, yüzlerce pin.
+// v0.10.990 — maxInstances 100 → 500: ekip × ortam başına bir Argo CD
+// instance'ı olan kurulumda (operatör, 2026-10-01) keşif 50'den, kayıt
+// 100'den fazlasını taşıyamıyordu; 500 satır ≈ 150 KB, 1 MiB PUT tavanının
+// altında.
 const (
 	maxHubs      = 8 // v0.10.957 — bugün iki hub (§5.6); pay bırakır
 	maxEnvs      = 50
 	maxEnvLen    = 32
-	maxInstances = 100
+	maxInstances = 500
 	maxPins      = 500
 	maxNameLen   = 128
 	maxJobLen    = 256

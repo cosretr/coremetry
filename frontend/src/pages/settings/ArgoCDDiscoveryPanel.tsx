@@ -6,7 +6,7 @@ import { api, isCanceled } from '@/lib/api';
 import type { ArgoCDCandidate } from '@/lib/types';
 import { domKey, fmtHourMinute, hubName, trLocative, type HubDraft, type InstanceDraft, type RemoteCluster } from './argocdForm';
 import {
-  completionText, hubView, markCandidates, panelMeta, parseDiscoverError, preflight, progressText, shownResult,
+  addableRows, completionText, hubView, markCandidates, panelMeta, parseDiscoverError, preflight, progressText, shownResult,
   type CandRow, type HubRun, type HubView,
 } from './argocdDiscovery';
 import { ArgoCDNote } from './ArgoCDSectionPanel';
@@ -38,6 +38,12 @@ import { ArgoCDNote } from './ArgoCDSectionPanel';
 //     alert kutusu (token / cluster-monitoring-view adımları, Remote clusters
 //     bağlantısı, alert içi "<hub>'de yeniden ara") çizer. Öteki hub'ın sonucu
 //     yerinde kalır (koşular hub başına).
+//   • v0.10.990 (operatör: "tek tek ekle diyorum ve sadece ilk 50'yi bulduğu
+//     için eksikleri oluyor") — hub bloğunda "Tümünü ekle (N)": namespace'i
+//     belli olan TÜM yeni adayları tek tıkla taslağa koyar (yine kaydedilmemiş
+//     satır; Kaydet'e kadar hiçbir şey yazılmaz). Namespace'i bilinmeyen aday
+//     (durum B, çok namespace) toplu eklemeye girmez — "+ Ekle" ile alınıp
+//     satırı elle tamamlanır. Sunucu tavanları 500 iş / 500 değer / 2.000 çağrı.
 
 // `.card` kabı: içindeki aday tabloları çerçevesiz (tablo standardı T10, tek
 // çerçeve); dolgu blokların kendisinde.
@@ -121,13 +127,15 @@ function HubCandidates({ name, rows, onAdd, onUndo }: {
   ) : <div className="table-wrap">{table}</div>;
 }
 
-export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd, onUndo, announce, focus }: {
+export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd, onAddAll, onUndo, announce, focus }: {
   hubs: HubDraft[];
   clusters: RemoteCluster[];
   instances: InstanceDraft[];
   /** Araç satırının başı ("Instance ekle" — sekmenin düğmesi). */
   leading: ReactNode;
   onAdd: (hubClusterId: string, cand: ArgoCDCandidate, id: string) => void;
+  /** v0.10.990 — hub'ın namespace'i belli tüm yeni adaylarını tek seferde taslağa ekler. */
+  onAddAll: (hubClusterId: string, items: { cand: ArgoCDCandidate; id: string }[]) => void;
   onUndo: (instanceKey: string) => void;
   announce: (text: string) => void;
   focus: (id: string) => void;
@@ -206,6 +214,12 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
     onAdd(h.clusterId, r.cand, r.id);
     focus(`acd-cand-undo-${domKey(r.key)}`);
   };
+  const addAll = (h: HubDraft, rows: CandRow[]) => {
+    const list = addableRows(rows);
+    if (list.length === 0) return;
+    onAddAll(h.clusterId, list.map(r => ({ cand: r.cand, id: r.id })));
+    focus(`acd-cand-undo-${domKey(list[0].key)}`);
+  };
   const undo = (r: CandRow) => {
     if (!r.matchKey) return;
     onUndo(r.matchKey);
@@ -240,9 +254,9 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
           </div>
           <p style={INTRO}>
             Her hub'da <code>argocd_app_info</code> serilerinin <code>job</code>, <code>namespace</code> ve <code>exported_namespace</code> değerleri
-            label-values API'siyle okunur (≤50 iş, iş başına ≤100 değer, çağrı başına 15 sn); ayrıca iş başına bir count sorgusu (uygulama) ile
-            pod değerleri (shard) — hub başına ≤150 çağrı ve 60 sn. “Ekle” adayı tabloya kaydedilmemiş satır olarak koyar; Kaydet'e basmadan
-            hiçbir şey yazılmaz.
+            label-values API'siyle okunur (≤500 iş, iş başına ≤500 değer, çağrı başına 15 sn); ayrıca iş başına bir count sorgusu (uygulama) ile
+            pod değerleri (shard) — hub başına ≤2.000 çağrı ve 60 sn. “Ekle” adayı, “Tümünü ekle” hub'ın namespace'i belli tüm yeni adaylarını
+            tabloya kaydedilmemiş satır olarak koyar; Kaydet'e basmadan hiçbir şey yazılmaz.
           </p>
           {shown.map((h, ix) => {
             const v = views[ix];
@@ -250,6 +264,7 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
             const r = runs[h.clusterId];
             const rows = marked.get(h.clusterId) ?? [];
             const running = r.kind === 'running';
+            const nAdd = addableRows(rows).length;
             return (
               <div key={h.key} style={BLOCK}>
                 <div style={BLOCK_HEAD}>
@@ -257,6 +272,14 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
                   {v.badge && <Badge tone={v.badge.tone}>{v.badge.text}</Badge>}
                   <span style={TEXT}>{v.summary}</span>
                   <span className="row-grow" />
+                  {nAdd > 0 && (
+                    <Button variant="secondary" size="xs" id={`acd-disc-addall-${domKey(h.clusterId)}`}
+                      aria-label={`${name} · ${nAdd} yeni adayın tümünü ekle`}
+                      title="Namespace'i belli tüm yeni adayları tabloya kaydedilmemiş satır olarak ekler; Kaydet'e basmadan hiçbir şey yazılmaz."
+                      onClick={() => addAll(h, rows)}>
+                      Tümünü ekle ({nAdd})
+                    </Button>
+                  )}
                   <Button variant="ghost" size="xs" aria-disabled={busy || undefined} style={busy ? DIM : undefined}
                     onClick={() => { if (!busy) void run(one(h)); }}>
                     {running ? `${name} aranıyor…` : `${name}${trLocative(name)} yeniden ara`}

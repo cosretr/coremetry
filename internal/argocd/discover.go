@@ -22,7 +22,7 @@ package argocd
 // pod'ları çarpmasın). `name` üzerinde label browser ASLA (kural 4) ve `name`
 // tek başına durum C'yi eksik sayar (§5.2: anahtar (instance, app_ns, name)).
 // Shard sayısı sınırlı `pod` label-values (≤100, 1 sa pencere). Sayım
-// çağrıları aynı ≤150 çağrı / 60 s bütçesinin ARTANINI kullanır (api katmanı):
+// çağrıları aynı ≤2000 çağrı / 60 s bütçesinin (v0.10.990; eski 150) ARTANINI kullanır (api katmanı):
 // hiçbir adayı düşürmez, error/incomplete üretmez, 200'ü bozmaz; bütçe biterse
 // kalan adaylar "sayım atlandı" notu, sonuç countsIncomplete alır.
 //

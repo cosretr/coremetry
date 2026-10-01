@@ -231,14 +231,23 @@ export function ArgoCDTab() {
     announce(`${row.id} ${row.enabled ? 'devre dışı bırakıldı' : 'etkinleştirildi'} — kaydedilmedi.`);
     focus(`acd-inst-menu-${domKey(key)}`);
   };
+  const candidateRow = (hubClusterId: string, c: ArgoCDCandidate, id: string): InstanceDraft => ({
+    key: newKey('n:'), origin: 'new', savedId: '', id, hubClusterId, name: '', hubNamespace: c.hubNamespace,
+    metricsJob: c.metricsJob, apiUrl: '', storedRef: '', tokenInput: '', clearToken: false, insecureSkipVerify: false,
+    enabled: true, discovered: true, appsAnyNamespace: c.appsAnyNamespace || c.namespaceCase === 'C',
+  });
   const addCandidate = (hubClusterId: string, c: ArgoCDCandidate, id: string) => {
-    const row: InstanceDraft = {
-      key: newKey('n:'), origin: 'new', savedId: '', id, hubClusterId, name: '', hubNamespace: c.hubNamespace,
-      metricsJob: c.metricsJob, apiUrl: '', storedRef: '', tokenInput: '', clearToken: false, insecureSkipVerify: false,
-      enabled: true, discovered: true, appsAnyNamespace: c.appsAnyNamespace || c.namespaceCase === 'C',
-    };
+    const row = candidateRow(hubClusterId, c, id);
     change(d => ({ ...d, instances: [...d.instances, row] }));
     announce(`${id} tabloya eklendi — kaydedilmedi. API URL, tokenRef ya da kimlik için satırı açın.`);
+  };
+  // v0.10.990 (operatör: "tek tek ekle diyorum") — keşif panelinin "Tümünü
+  // ekle"si: N aday TEK taslak güncellemesiyle (tek "kaydedilmedi" geçişi).
+  const addCandidates = (hubClusterId: string, items: { cand: ArgoCDCandidate; id: string }[]) => {
+    if (items.length === 0) return;
+    const rows = items.map(it => candidateRow(hubClusterId, it.cand, it.id));
+    change(d => ({ ...d, instances: [...d.instances, ...rows] }));
+    announce(`${rows.length} instance tabloya eklendi — kaydedilmedi. Kaydet'e basınca yazılır.`);
   };
 
   // ── Hub'lar ─────────────────────────────────────────────────────────────
@@ -451,7 +460,7 @@ export function ArgoCDTab() {
                 + Instance ekle
               </Button>
             )}
-            onAdd={addCandidate} onUndo={key => removeInstance(key, { ok: '' })} announce={announce} focus={focus} />
+            onAdd={addCandidate} onAddAll={addCandidates} onUndo={key => removeInstance(key, { ok: '' })} announce={announce} focus={focus} />
         </ArgoCDSectionPanel>
 
         <ArgoCDEnvPanel envList={draft.envList} issues={issues} onChange={next => change(d => ({ ...d, envList: next }))} />

@@ -1949,7 +1949,7 @@ export const api = {
   // v0.10.974 — Argo CD ayarları (admin; argocd_settings_routes.go). PUT boş
   // tokenRef'te kayıtlı referansı korur; kaldırmak istek-yalnız
   // `clearTokenRef: true`. Keşif hub başına tek POST ve sunucu bütçesi 60 sn
-  // (≤150 çağrı): istemci tavanı 75 sn, çağıranın signal'i (sekme sökülünce) keser.
+  // (≤2.000 çağrı, v0.10.990): istemci tavanı 75 sn, çağıranın signal'i (sekme sökülünce) keser.
   getArgoCDSettings: () => get<import('./types').ArgoCDSettingsResponse>(`/api/settings/argocd`),
   // v0.10.978 — PUT `expectedUpdatedAt` (GET settings.updatedAt) taşır; bayat
   // tabanda 409 {errorType: 'stale', updatedAt} — sekme yeniden yükleyip birleştirir.

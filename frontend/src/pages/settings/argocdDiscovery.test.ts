@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import type { ArgoCDCandidate, ArgoCDDiscoverResult } from '@/lib/types';
 import type { InstanceDraft, RemoteCluster } from './argocdForm';
 import {
-  candidateErrorNote, completionText, failureState, fmtCount, fmtSec, hubBadge, hubState, hubView, markCandidates,
+  addableRows, candidateErrorNote, completionText, failureState, fmtCount, fmtSec, hubBadge, hubState, hubView, markCandidates,
   matchInstance, panelMeta, parseDiscoverError, preflight, progressText, shownResult, suggestId, uniqueId, type HubRun,
 } from './argocdDiscovery';
 
@@ -217,8 +217,8 @@ describe('özet / ayrıntı satırları', () => {
     expect(v.summary).toBe('1 aday · 1 yeni · 2 iş okunamadı · 3 çağrı · 15,8 sn · küme etiketi eklenmedi');
     expect(v.detail).toEqual([
       "team-d-uat-metrics işinin namespace'i 15 sn'de okunamadı; diğer adaylar tam.",
-      'Keşif bütçesi doldu (hub başına ≤150 çağrı / 60 sn): kalan işler atlandı; listelenen adaylar doğru → yeniden arayın.',
-      "≤50 iş ya da iş başına ≤100 değer sınırı doldu; liste eksik → eksik namespace'i elle ekleyin.",
+      'Keşif bütçesi doldu (hub başına ≤2.000 çağrı / 60 sn): kalan işler atlandı; listelenen adaylar doğru → yeniden arayın.',
+      "≤500 iş ya da iş başına ≤500 değer sınırı doldu; liste eksik → eksik namespace'i elle ekleyin.",
     ]);
   });
   it('boş + etiket → etiketsiz yeniden ara kutusu; tek seferlikten sonra etiketsiz kutu', () => {
@@ -257,5 +257,35 @@ describe('yeniden arama: önceki sonuç görünür kalır', () => {
     expect(shownResult(undefined)).toBeUndefined();
     const v = hubView(running, [], { name: 'hub-1', label: 'cluster="hub-1"', clusterId: H1 });
     expect(v).toMatchObject({ summary: 'aranıyor…', badge: null, detail: [], notice: null });
+  });
+});
+
+// v0.10.990 (operatör: "tek tek ekle diyorum") — "Tümünü ekle"nin kapsamı.
+describe('addableRows', () => {
+  it('yalnız yeni ve namespace\'i belli adaylar; kayıtlı / eklenmiş / hatalı / namespace\'siz girmez', () => {
+    const cands = [
+      cand({ hubNamespace: 'new-a', metricsJob: 'new-a-metrics' }),
+      cand({ hubNamespace: 'saved', metricsJob: 'saved-metrics' }),
+      cand({ hubNamespace: 'added', metricsJob: 'added-metrics' }),
+      cand({ hubNamespace: '', metricsJob: 'shared-metrics', namespaceCase: 'B' }),
+      cand({ hubNamespace: '', metricsJob: 'broken-metrics', error: 'timeout: t' }),
+      cand({ hubNamespace: 'new-b', metricsJob: 'new-b-metrics' }),
+    ];
+    const instances = [
+      inst({ key: 's1', origin: 'saved', id: 'saved', savedId: 'saved', hubNamespace: 'saved', metricsJob: 'saved-metrics' }),
+      inst({ key: 'n1', origin: 'new', id: 'added', savedId: '', hubNamespace: 'added', metricsJob: 'added-metrics' }),
+    ];
+    const rows = markCandidates([{ clusterId: H1, candidates: cands }], instances, CLUSTERS).get(H1)!;
+    expect(rows).toHaveLength(6);
+    const add = addableRows(rows);
+    expect(add.map(r => r.cand.hubNamespace)).toEqual(['new-a', 'new-b']);
+    // Kimlikler aday listesi içinde tekil ve taslaktakilerle çakışmaz: toplu ekleme aynen kullanır.
+    expect(add.map(r => r.id)).toEqual(['new-a', 'new-b']);
+  });
+  it('120 yeni aday → 120 tekil kimlik (50 tavanı yok)', () => {
+    const cands = Array.from({ length: 120 }, (_, i) => cand({ hubNamespace: `team-${i}`, metricsJob: `team-${i}-metrics` }));
+    const add = addableRows(markCandidates([{ clusterId: H1, candidates: cands }], [], CLUSTERS).get(H1)!);
+    expect(add).toHaveLength(120);
+    expect(new Set(add.map(r => r.id)).size).toBe(120);
   });
 });

@@ -268,6 +268,17 @@ export function markCandidates(
   return out;
 }
 
+/**
+ * v0.10.990 — "Tümünü ekle"nin kapsamı: yeni (taslakta ve kayıtta olmayan)
+ * ve namespace'i belli adaylar. Namespace'i bilinmeyen aday (durum B, çok
+ * namespace) girmez: boş hubNamespace'li satır Kaydet'te reddedilir, onu
+ * operatör "+ Ekle" ile alıp satırı elle tamamlar. Hatalı / kayıtlı /
+ * eklenmiş satır da girmez.
+ */
+export function addableRows(rows: CandRow[]): CandRow[] {
+  return rows.filter(r => r.status === 'new' && !!r.cand.hubNamespace);
+}
+
 // ── Özet / ayrıntı satırları ───────────────────────────────────────────────
 
 /** "3,1" — istemci kronometresi. */
@@ -293,7 +304,8 @@ export interface HubView {
   errors: number;
 }
 
-const TRUNC_TEXT = "≤50 iş ya da iş başına ≤100 değer sınırı doldu; liste eksik → eksik namespace'i elle ekleyin.";
+// v0.10.990 — sunucu tavanları 50 iş / 100 değer / 150 çağrıdan 500 / 500 / 2.000'e çıktı.
+const TRUNC_TEXT = "≤500 iş ya da iş başına ≤500 değer sınırı doldu; liste eksik → eksik namespace'i elle ekleyin.";
 
 /**
  * v0.10.974 — bir hub bloğunun başlık özeti + ayrıntı satırları + ek kutusu.
@@ -350,7 +362,7 @@ export function hubView(run: HubRun, rows: CandRow[], hub: { name: string; label
         detail.push(`${failed.length} iş okunamadı (${failed.map(x => x.cand.metricsJob).join(', ')}); diğer adaylar tam.`);
       }
       if (r.incomplete || errRows.length > failed.length) {
-        detail.push('Keşif bütçesi doldu (hub başına ≤150 çağrı / 60 sn): kalan işler atlandı; listelenen adaylar doğru → yeniden arayın.');
+        detail.push('Keşif bütçesi doldu (hub başına ≤2.000 çağrı / 60 sn): kalan işler atlandı; listelenen adaylar doğru → yeniden arayın.');
       }
       if (r.jobsTruncated || r.candidates.some(isTruncatedNote)) detail.push(TRUNC_TEXT);
       if (r.countsIncomplete) {

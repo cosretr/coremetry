@@ -195,9 +195,21 @@ func newArgoTestEnv(t *testing.T) *argoTestEnv {
 		argocdSettingsStoreOf = prevStore
 		argocdDiscoverBusy.Store(false)
 	})
+	// v0.10.990 — keşif testleri istek SIRASINI pinler: varsayılan sıralı kip.
+	// Eşzamanlı kipi TestArgoCDDiscoverManyJobsParallel açıkça dener.
+	argoDiscoverLimits(t, argocdDiscoverMaxJobs, argocdDiscoverMaxCalls, 1)
 	mux := http.NewServeMux()
 	s.registerArgoCDSettingsRoutes(mux)
 	return &argoTestEnv{s: s, mux: mux, svc: svc, store: st, fake: f}
+}
+
+// argoDiscoverLimits — v0.10.990 — keşfin iş / çağrı tavanını ve
+// eşzamanlılığını test süresince değiştirir (paket değişkenleri geri konur).
+func argoDiscoverLimits(t *testing.T, jobs, calls, parallel int) {
+	t.Helper()
+	pj, pc, pp := argocdDiscoverMaxJobs, argocdDiscoverMaxCalls, argocdDiscoverParallel
+	argocdDiscoverMaxJobs, argocdDiscoverMaxCalls, argocdDiscoverParallel = jobs, calls, parallel
+	t.Cleanup(func() { argocdDiscoverMaxJobs, argocdDiscoverMaxCalls, argocdDiscoverParallel = pj, pc, pp })
 }
 
 func (e *argoTestEnv) do(t *testing.T, method, path, body, role string) *httptest.ResponseRecorder {
@@ -1309,9 +1321,12 @@ func TestArgoCDDiscoverCountFailureKeeps200(t *testing.T) {
 
 // Bütçe ikinci turda biter: aday listesi TAM (50 iş, hatasız, incomplete
 // yok), kalan adaylar "sayım atlandı" notu, sonuç countsIncomplete; toplam
-// çağrı ≤150 (1 + 50×2 aday turu = 101; sayıma 49 kalır).
+// çağrı ≤150 (1 + 50×2 aday turu = 101; sayıma 49 kalır). v0.10.990 —
+// üretim tavanları 500 iş / 2000 çağrı; aritmetik burada küçük sayılarla
+// ve sıralı kipte pinlenir.
 func TestArgoCDDiscoverCountBudgetExhausted(t *testing.T) {
 	e := newArgoTestEnv(t)
+	argoDiscoverLimits(t, 50, 150, 1)
 	hub := argoClusterID(argoHubName)
 	var jobs []string
 	for i := 0; i < argocdDiscoverMaxJobs; i++ {
@@ -1572,5 +1587,94 @@ func TestArgoCDDiscoverCountCtxExhausted(t *testing.T) {
 		if c.Error != "" || c.AppCount != nil || c.ShardCount != nil || c.CountNote != argocd.CountNoteBudget {
 			t.Fatalf("aday %d: tam olarak bütçe notu beklenir (okunamadı değil): %+v", i, c)
 		}
+	}
+}
+
+// argoSeedJobs — n ayrı iş (instance başına bir `job`), her biri tek
+// namespace (durum A), 7 uygulama, 1 shard.
+func argoSeedJobs(f *argoFakeThanos, n int) {
+	var jobs []string
+	for i := 0; i < n; i++ {
+		job, ns := fmt.Sprintf("job-%03d", i), fmt.Sprintf("ns-%03d", i)
+		jobs = append(jobs, job)
+		sel := `job="` + job + `"`
+		f.values["namespace"] = append(f.values["namespace"], argoFakeRule{sel, []string{ns}})
+		f.values["exported_namespace"] = append(f.values["exported_namespace"], argoFakeRule{sel, []string{ns}})
+		f.queries = append(f.queries, argoFakeQueryRule{sel, `[{"metric":{"namespace":"` + ns + `"},"value":[1700000000,"7"]}]`})
+	}
+	f.values["job"] = []argoFakeRule{{"argocd_app_info", jobs}}
+	f.values["pod"] = []argoFakeRule{{"argocd_app_info", []string{"argocd-application-controller-0"}}}
+}
+
+// v0.10.990 — Operator-reported: "sadece ilk 50'yi bulduğu için eksikleri
+// oluyor". Instance başına ayrı `job` taşıyan hub'da 50'den fazla iş vardı;
+// eski tavan (50 iş, 150 çağrı) 51. instance'ı hiç aday yapmıyordu. 120 iş
+// üretim tavanları ve eşzamanlı kiple TAM keşfedilir: kesik yok, eksik yok,
+// her aday sayılı, aday sırası iş sırası, çağrı sayısı = giden istek.
+func TestArgoCDDiscoverManyJobsParallel(t *testing.T) {
+	e := newArgoTestEnv(t)
+	argoDiscoverLimits(t, 500, 2000, 4)
+	const n = 120
+	argoSeedJobs(e.fake, n)
+	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+argoClusterID(argoHubName)+`"}`, auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var res argocdDiscoverResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.JobsTruncated || res.Incomplete || res.CountsIncomplete {
+		t.Fatalf("120 iş tavanların altında: truncated=%v incomplete=%v countsIncomplete=%v", res.JobsTruncated, res.Incomplete, res.CountsIncomplete)
+	}
+	if len(res.Candidates) != n {
+		t.Fatalf("her iş bir aday olmalı: %d / %d", len(res.Candidates), n)
+	}
+	// 1 iş listesi + iş başına 2 (namespace, exported_namespace) + 1 count + 1 pod.
+	if want := 1 + n*4; res.Calls != want || len(e.fake.requests()) != want {
+		t.Fatalf("calls=%d istek=%d, istenen %d", res.Calls, len(e.fake.requests()), want)
+	}
+	for i, c := range res.Candidates {
+		job, ns := fmt.Sprintf("job-%03d", i), fmt.Sprintf("ns-%03d", i)
+		if c.MetricsJob != job || c.HubNamespace != ns || c.Error != "" || c.NamespaceCase != "A" {
+			t.Fatalf("aday %d sırası/şekli: %+v", i, c)
+		}
+		if c.AppCount == nil || *c.AppCount != 7 || c.ShardCount == nil || *c.ShardCount != 1 || c.CountNote != "" {
+			t.Fatalf("aday %d sayılmalı: %+v", i, c)
+		}
+	}
+}
+
+// v0.10.990 — eşzamanlı kipte bütçe: ayırma ile sayım tek kilit altında,
+// yani tavan aşılmaz ve calls gerçekten giden istek sayısıdır. Hiçbir iş
+// düşmez: bütçeye sığmayan iş "skipped" hatalı aday olur, sonuç incomplete.
+func TestArgoCDDiscoverParallelBudgetNeverExceeded(t *testing.T) {
+	e := newArgoTestEnv(t)
+	const n, maxCalls = 60, 100
+	argoDiscoverLimits(t, 500, maxCalls, 4)
+	argoSeedJobs(e.fake, n)
+	w := e.do(t, "POST", "/api/settings/argocd/discover", `{"hubClusterId":"`+argoClusterID(argoHubName)+`"}`, auth.RoleAdmin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var res argocdDiscoverResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Calls > maxCalls || res.Calls != len(e.fake.requests()) {
+		t.Fatalf("bütçe: calls=%d istek=%d tavan=%d", res.Calls, len(e.fake.requests()), maxCalls)
+	}
+	if !res.Incomplete || len(res.Candidates) != n {
+		t.Fatalf("zarf: incomplete=%v aday=%d", res.Incomplete, len(res.Candidates))
+	}
+	skipped := 0
+	for _, c := range res.Candidates {
+		if strings.Contains(c.Error, "budget exhausted") {
+			skipped++
+		}
+	}
+	// 1 + 2×k ≤ 100 → en çok 49 iş probe edilir; kalan en az 11 iş atlanır.
+	if skipped < n-49 {
+		t.Fatalf("atlanan iş sayısı: %d (en az %d beklenir)", skipped, n-49)
 	}
 }

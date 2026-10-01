@@ -397,6 +397,41 @@ describe('ArgoCDTab — keşif', () => {
     expect(inst(body, 'team-a-prod-2')).toMatchObject({ discovered: true, hubClusterId: H1, hubNamespace: 'team-a-prod', metricsJob: 'team-a-prod-metrics', clearTokenRef: true });
   });
 
+  // v0.10.990 (operatör: "tek tek ekle diyorum ve sadece ilk 50'yi bulduğu için
+  // eksikleri oluyor") — "Tümünü ekle (N)": namespace'i belli tüm yeni adaylar
+  // tek tıkla taslağa; kayıtlı aday ve namespace'siz aday dokunulmaz kalır.
+  it('"Tümünü ekle" → hub\'ın tüm yeni adayları tek tıkla taslağa; namespace\'siz aday elle kalır', async () => {
+    setup();
+    const many = [
+      ...H1_CANDS,
+      ...Array.from({ length: 60 }, (_, i) => ({
+        id: `team-${i}`, hubClusterId: H1, name: `team-${i}`, hubNamespace: `team-${i}`, metricsJob: `team-${i}-metrics`,
+        appsAnyNamespace: false, discovered: true, namespaceCase: 'A' as const, appCount: 3, shardCount: 1,
+      })),
+      { id: 'shared', hubClusterId: H1, name: 'shared-metrics', hubNamespace: '', metricsJob: 'shared-metrics', appsAnyNamespace: true, discovered: true, namespaceCase: 'B' as const },
+    ];
+    discoverArgoCD.mockImplementation(async (b: ArgoCDDiscoverRequest) =>
+      discoverResult(b.hubClusterId, b.hubClusterId === H1 ? { candidates: many, calls: 249 } : { candidates: [] }));
+    const el = render();
+    await tick();
+    const before = instRows(el).length;
+    click(button(el, "Hub'larda instance ara"));
+    await tick(40);
+    // 1 (team-a-prod, hub-1'de yeni) + 60 = 61 eklenebilir; alpha-int kayıtlı, shared namespace'siz.
+    click(button(el, 'Tümünü ekle (61)'));
+    expect(live(el)).toBe("61 instance tabloya eklendi — kaydedilmedi. Kaydet'e basınca yazılır.");
+    expect(instRows(el)).toHaveLength(before + 61);
+    expect(buttons(el, 'Tümünü ekle (61)')).toHaveLength(0);
+    const table = el.querySelector('table[aria-label="hub-1 keşif adayları"]')!;
+    const cells = [...table.querySelectorAll('tbody tr')].map(r => r.textContent ?? '');
+    expect(cells.filter(t => t.includes('eklendi'))).toHaveLength(61);
+    expect(cells.filter(t => t.includes('+ Ekle'))).toHaveLength(1); // shared: elle
+    const body = await save(el);
+    expect(body.instances).toHaveLength(before + 61);
+    expect(inst(body, 'team-59')).toMatchObject({ discovered: true, hubClusterId: H1, hubNamespace: 'team-59', metricsJob: 'team-59-metrics', enabled: true });
+    expect(inst(body, 'team-a-prod-2')).toMatchObject({ discovered: true, hubClusterId: H1, hubNamespace: 'team-a-prod' });
+  });
+
   it('etiketli boş sonuç → "etiketsiz yeniden ara" injectClusterLabel: false gönderir (tek seferlik)', async () => {
     setup();
     discoverArgoCD.mockImplementation(async (b: ArgoCDDiscoverRequest) => discoverResult(b.hubClusterId, { injectClusterLabel: !!b.injectClusterLabel }));
@@ -467,14 +502,14 @@ describe('ArgoCDTab — keşif', () => {
     const block = () => [...el.querySelectorAll('h5')].find(h => h.textContent === 'hub-1')!.parentElement!.parentElement!;
     const rowsOf = () => [...el.querySelectorAll('table[aria-label="hub-1 keşif adayları"] tbody tr')];
     expect(block().textContent).toContain('limitli');
-    expect(block().textContent).toContain('≤50 iş ya da iş başına ≤100 değer sınırı doldu');
+    expect(block().textContent).toContain('≤500 iş ya da iş başına ≤500 değer sınırı doldu');
     expect(rowsOf()).toHaveLength(2);
     click(button(el, "hub-1'de yeniden ara"));
     await tick();
     expect(discoverArgoCD).toHaveBeenCalledTimes(3);
     expect(block().textContent).toContain('aranıyor…');
     expect(block().textContent).not.toContain('limitli');
-    expect(block().textContent).not.toContain('≤50 iş');
+    expect(block().textContent).not.toContain('≤500 iş');
     expect(rowsOf()).toHaveLength(2);
     expect(rowsOf()[0].textContent).toContain('team-a-prod-2');
     await act(async () => { release!(); });

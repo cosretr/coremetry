@@ -987,6 +987,26 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Argo CD keşfi: 50 iş tavanı kalktı, "Tümünü ekle" (v0.10.990)
+
+**Karar (operatör: "Argocd entegrasyonu da autodiscover etse daha iyi olacak, şu anda tek tek ekle
+diyorum ve sadece ilk 50'yi bulduğu için eksikleri oluyor"):** ekip × ortam başına ayrı Argo CD
+instance'ı (ayrı `job`) olan hub'da keşif 50 işte kesiliyor, 51. instance hiç aday olmuyordu.
+Tavanlar: iş 50 → 500, iş başına namespace/exported_namespace değeri 100 → 500, çağrı 150 → 2000;
+shard (`pod`) tavanı 100 kaldı; kaydedilebilir instance 100 → 500 (`maxInstances`). Süre bütçesi
+aynı (60 s; istemci 75 s): sığsın diye iş başına çağrılar 4 eşzamanlı koşar
+(`argocdDiscoverParallel`). **Tasarım değişmedi:** aday bulma yine `job` süzgeçli label-values
+(§5.4 "asla süzgeçsiz"; hub genelinde tek toplu sorgu bilinçli olarak SEÇİLMEDİ), sayım yine iş
+başına tek anlık count; bütçe ayırma ile sayım tek kilit altında (`argocdProbeRun.take`), yani
+eşzamanlı kip tavanı aşamaz ve `calls` giden istek sayısıdır. Aday sırası iş listesinin sırası.
+Arayüz: hub bloğunda "Tümünü ekle (N)" namespace'i belli tüm yeni adayları tek tıkla TASLAĞA koyar;
+namespace'i bilinmeyen aday (durum B, çok namespace) elle kalır. "Öner, asla otomatik yazma"
+(annex §7.2) duruyor: kayıt yine Kaydet'le yazılır. **Açık (operatör kararı):** arka planda
+kendiliğinden kayıt (keşfi işçinin koşup blob'a yazması) bu sürümde YOK — instance kimliği kalıcı
+CH `instance_id`'dir ve işçi açıkken her yeni instance hub'a tur başına sorgu ekler. Not:
+argocd-metrics işçisi instance başına shard koşar; yüzlerce instance'ta tur maliyeti ölçülmedi
+(bayrak varsayılan kapalı).
+
 ## 2026-10-01 — Trace: "Hızlı açıkla" düğmesi kaldırıldı (v0.10.989; v0.10.987 kararının tersi)
 
 **Karar (operatör: "tracelere quick explain butonu koymuşsun onu kaldıralım"):** trace sayfasında
