@@ -987,6 +987,19 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — MCP `bubble_up` aracı yalnız dış istemcilere (v0.10.993; denetim V1 dilim 3)
+
+**Karar:** BubbleUp MCP aracı olarak eklendi (`internal/mcptools/bubble_up.go`; kıyas
+`chstore.ServiceBubbleUp`, yeni SQL yok) ama **uygulama içi sohbet kataloğuna GİRMEZ**. Yeni
+ayrım: `externalOnlyTools` + `ChatToolList` — `Register` aracı dış MCP'ye kaydeder, sohbet ve
+sunucu-yürütmeli inceleme `ChatToolList` okur (kaynak pinli). **Neden:** denetimin kararı "küçük
+LLM için prefetch adımı, tool değil" (v0.10.992 o adımı getirdi); ayrıca sohbetin her tur yuttuğu
+kompakt katalog 9.098 / 9.100 B'ydi — yer yoktu ve bütçeyi büyütmek her sohbet turunu
+pahalılaştırırdı. Kompakt bütçe artık yalnız sohbetin gördüğü araçları sayar; alan kuralları
+(dolu, taban/tavan, Türkçe) dış-yalnız araç için de geçerli. Maliyet dürüstçe ilan edilir: ham
+spans taraması, pencere [300, 3600] sn (varsayılan 600), çağrı 15 sn tavanlı, yalnız ≥5 puan
+ayrışan değerler; boş liste `note` ile gelir ("yoğunlaşmıyor" ≠ "bakılmadı"). Katalog 60 → 61.
+
 ## 2026-10-01 — CoSRE kök-neden demetine BubbleUp adımı (v0.10.992; dış skill denetimi V1 dilim 1)
 
 **Karar:** "neden X bozuldu" demeti (guidedRootCauseBundle) RED'den sonra, deploy'dan önce bir

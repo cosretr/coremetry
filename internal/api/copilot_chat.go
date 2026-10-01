@@ -377,7 +377,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	if c != nil {
 		role = c.Role
 	}
-	tools := toolsForRole(mcptools.ToolList(s.mcpDeps()), role)
+	tools := toolsForRole(mcptools.ChatToolList(s.mcpDeps()), role) // v0.10.993 — dış-yalnız araçlar (bubble_up) hariç
 	byName := make(map[string]mcp.ToolHandler, len(tools))
 	specs := make([]copilot.ToolSpec, 0, len(tools))
 	// v0.9.1230 (AI perf) — katalog DİYETİ: spec'e t.Description değil

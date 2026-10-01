@@ -201,7 +201,13 @@ the in-app chat's function-calling spec — one registry, two consumers.
 Place the tool next to the tools it chains with; the list order is
 deliberate (see the adjacency comments) and is what the chat model sees.
 Tools that need in-app conversation state go in `chatOnlyTools` too:
-`Register` hides them from external MCP clients.
+`Register` hides them from external MCP clients. The reverse exists since
+v0.10.993: a tool meant ONLY for external MCP clients goes in
+`externalOnlyTools` — `Register` exposes it, the in-app chat reads
+`ChatToolList(d)` and never sees it (`bubble_up`: the small in-app model
+gets that analysis pre-fetched instead). Use it when a tool is expensive
+or redundant for the in-app model; the compact-catalogue budget
+(`short_desc_test.go`) counts chat-visible tools only and is nearly full.
 
 ### 9. Auth gating
 

@@ -64,8 +64,13 @@ func TestEveryToolHasShortDescription(t *testing.T) {
 	}
 	totalShort, totalFull := 0, 0
 	for _, tl := range tools {
-		totalShort += len(tl.ShortDescription)
-		totalFull += len(tl.Description)
+		// v0.10.993 — BÜTÇE sohbetin her tur ödediği katalogdur: dış-yalnız
+		// araçlar (externalOnlyTools; ChatToolList'te yok) toplama girmez.
+		// Alan kuralları (dolu, tavan/taban, Türkçe) onlar için de geçerli.
+		if !externalOnlyTools[tl.Name] {
+			totalShort += len(tl.ShortDescription)
+			totalFull += len(tl.Description)
+		}
 		if tl.ShortDescription == "" {
 			t.Errorf("%s: ShortDescription BOŞ — sohbet yolu bu tool için her tur tam metni ödüyor", tl.Name)
 			continue

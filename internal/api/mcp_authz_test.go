@@ -268,8 +268,10 @@ func TestAllShippedToolsAreViewerLevel(t *testing.T) {
 	// v0.10.478 — 44 → 47: set/get/clear_context (kişisel sohbet durumu, viewer).
 	// v0.10.545 — 47 → 48: list_deployments (REST eşi GET /api/changes, viewer).
 	// v0.10.809 — product_guide (viewer; REST eşi yok, salt statik rehber).
-	if len(tools) != 60 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
-		t.Errorf("katalog %d tool (60 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
+	// v0.10.993 — 60 → 61: bubble_up (REST eşi GET /api/spans/bubbleup RequireRole'süz → MinRole ""; yalnız dış MCP,
+	// sohbet kataloğu mcptools.ChatToolList ile 60'ta kalır).
+	if len(tools) != 61 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
+		t.Errorf("katalog %d tool (61 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
 			"RequireAnyRole) kontrol et, MinRole'ü ona eşitle, sonra bu sayıyı güncelle", len(tools))
 	}
 	for _, tool := range tools {
@@ -291,8 +293,9 @@ func TestChatSpecFilterWiredToRole(t *testing.T) {
 		t.Fatalf("copilot_chat.go okunamadı: %v", err)
 	}
 	src := string(b)
-	if !strings.Contains(src, "toolsForRole(mcptools.ToolList(") {
-		t.Error("sohbet tool kümesi role göre SÜZÜLMÜYOR — toolsForRole(mcptools.ToolList(...), role) bekleniyor")
+	// v0.10.993 — sohbet ChatToolList okur (dış-yalnız araçlar hariç); ToolList'e dönerse bubble_up sohbete sızar.
+	if !strings.Contains(src, "toolsForRole(mcptools.ChatToolList(") || strings.Contains(src, "mcptools.ToolList(") {
+		t.Error("sohbet tool kümesi role göre SÜZÜLMÜYOR ya da tam kataloğu okuyor — toolsForRole(mcptools.ChatToolList(...), role) bekleniyor")
 	}
 	idxFilter := strings.Index(src, "toolsForRole(")
 	idxByName := strings.Index(src, "byName[t.Name] = t.Handler")

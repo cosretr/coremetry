@@ -20,6 +20,7 @@ func TestLimitedToolEnvelopesCarryHasMore(t *testing.T) {
 		"team_ownership.go":    {`"has_more":         hasMore,`},
 		"guided_parity.go":     {`"has_more":       data.HeapTruncated`},
 		"analysis.go":          {`"has_more":`},
+		"bubble_up.go":         {`out["attributes"], out["count"], out["has_more"] = rows, len(rows), hasMore`}, // v0.10.993
 	} {
 		b, err := os.ReadFile(file)
 		if err != nil {

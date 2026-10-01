@@ -177,7 +177,7 @@ func (s *Server) traceInvestigationExecutor(r *http.Request) invToolRunner {
 		}
 	}
 	byName := map[string]agenttools.Handler{}
-	for _, t := range toolsForRole(mcptools.ToolList(s.mcpDeps()), role) {
+	for _, t := range toolsForRole(mcptools.ChatToolList(s.mcpDeps()), role) { // v0.10.993 — sohbetle aynı katalog
 		if invReadOnlyTools[t.Name] {
 			byName[t.Name] = t.Handler
 		}

@@ -122,7 +122,8 @@ func TestGuidedParityToolsGroupedNearFamilies(t *testing.T) {
 	// v0.10.475 — 43 → 44 (build_link.go).
 	// v0.10.478 — 44 → 47 (context_tools.go).
 	// v0.10.809 — 56 → 57: product_guide.go.
-	if len(tools) != 60 /* v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız) */ {
+	// v0.10.993 — 60 → 61: bubble_up.go (yalnız dış MCP).
+	if len(tools) != 61 /* v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız) */ {
 		t.Errorf("katalog %d tool — sayı değiştiyse tools.go başlığındaki sayımı, "+
 			"api/mcp_authz_test.go'daki duruş notunu, discovery_test.go'daki pini ve "+
 			"docs/runbooks/mcp-claude-code.md'yi de güncelle", len(tools))
