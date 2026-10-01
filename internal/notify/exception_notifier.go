@@ -212,6 +212,11 @@ func (e *ExceptionNotifier) routeGroups(ctx context.Context, now time.Time) {
 			if prio != "P1" && prio != "P2" {
 				continue
 			}
+			// v0.10.1016 — "problem değil" grubu tik tavanını yemesin
+			// (SendProblemAlert zaten susturur; burada defter de kirlenmez).
+			if e.n.verdictSilenced(ctx, exceptionVerdictSignature(g.Fingerprint)) {
+				continue
+			}
 			id := exceptionGroupID(g.Fingerprint, state)
 			if _, done := e.sent[id]; done {
 				continue
@@ -249,6 +254,9 @@ func (e *ExceptionNotifier) run(ctx context.Context, tc chstore.TeamContacts) {
 		for _, g := range groups {
 			if !isP1ExceptionCandidate(g, now) {
 				continue
+			}
+			if e.n.verdictSilenced(ctx, exceptionVerdictSignature(g.Fingerprint)) {
+				continue // v0.10.1016 — "problem değil": P1 anonsu da susar
 			}
 			if seen, herr := e.store.HasNotification(ctx, "exception", g.Fingerprint, teamRoutingChannelName); herr != nil || seen {
 				continue

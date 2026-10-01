@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { inboxSignature, verdictIndex, verdictOf, filterByVerdictView, countNoise, parseVerdictView } from './problemVerdict';
+import { inboxSignature, verdictIndex, verdictOf, filterByVerdictView, countNoise, parseVerdictView,
+  verdictMutesNotifications, verdictCoversNotifications, verdictNotifyHint } from './problemVerdict';
 import type { InboxItem, ProblemVerdict } from './types';
 
 // v0.10.1015 — operatör: "Problems sekmesinde bütün hepsi gelsin, ben hangisi
@@ -82,6 +83,44 @@ describe('kablolama', () => {
     expect(drawer).toContain('<ProblemVerdictActions item={item}');
     const actions = readFileSync(resolve(__dirname, '../components/ProblemVerdictActions.tsx'), 'utf8');
     expect(actions).toContain("const isEditor = user?.role === 'admin' || user?.role === 'editor';");
-    expect(actions).toContain('bildirimleri susturmaz');
+    // v0.10.1016 — açıklama artık politikaya göre değişir (sabit "susturmaz" değil).
+    expect(actions).toContain('{verdictNotifyHint(sig, q.data?.policy)}');
+  });
+  it('v0.10.1016 — "Problem değil" görünümü politika satırını taşır; anahtar yalnız admin, açmak onay ister', () => {
+    const inbox = readFileSync(resolve(__dirname, '../pages/Inbox.tsx'), 'utf8');
+    expect(inbox).toContain("{verdictView === 'noise' && <ProblemVerdictPolicyBar />}");
+    const bar = readFileSync(resolve(__dirname, '../components/ProblemVerdictPolicyBar.tsx'), 'utf8');
+    expect(bar).toContain("const isAdmin = user?.role === 'admin';");
+    expect(bar).toContain('if (!on && !await confirm({');
+    expect(bar).toContain('set.mutate(!on);');
+  });
+});
+
+// v0.10.1016 — "problem değil" bildirimi de sustursun mu: varsayılan KAPALI;
+// açıkken yalnız p: (alarm kuralı) ve e: (exception / HTTP hata) imzaları.
+describe('bildirim politikası', () => {
+  it('eksik / kapalı politika susturmaz (eski sunucu cevabı dahil)', () => {
+    expect(verdictMutesNotifications(undefined)).toBe(false);
+    expect(verdictMutesNotifications(null)).toBe(false);
+    expect(verdictMutesNotifications({ muteNotifications: false })).toBe(false);
+    expect(verdictMutesNotifications({ muteNotifications: true })).toBe(true);
+  });
+  it('kapsam: p: ve e: evet, a: ve imzasız hayır', () => {
+    expect(verdictCoversNotifications('p:rule|svc')).toBe(true);
+    expect(verdictCoversNotifications('e:9f8a')).toBe(true);
+    expect(verdictCoversNotifications('a:latency|svc|p99')).toBe(false);
+    expect(verdictCoversNotifications(null)).toBe(false);
+  });
+  it('açıklama durumu doğru söyler', () => {
+    expect(verdictNotifyHint('p:r|s', undefined)).toContain('bildirimleri susturmaz');
+    expect(verdictNotifyHint('p:r|s', { muteNotifications: false })).toContain('bildirimleri susturmaz');
+    expect(verdictNotifyHint('p:r|s', { muteNotifications: true })).toContain('bildirimlerini de susturur');
+    expect(verdictNotifyHint('e:fp', { muteNotifications: true })).toContain('bildirimlerini de susturur');
+    expect(verdictNotifyHint('a:k|s|p', { muteNotifications: true })).toContain('etkilenmez');
+  });
+  it('imza kalıbı sunucudakiyle aynı (internal/notify/verdict_silence.go)', () => {
+    const go = readFileSync(resolve(__dirname, '../../../internal/notify/verdict_silence.go'), 'utf8');
+    expect(go).toContain('return "p:" + p.RuleID + "|" + p.Service');
+    expect(go).toContain('return "e:" + fingerprint');
   });
 });

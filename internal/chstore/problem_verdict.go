@@ -14,8 +14,9 @@ package chstore
 //
 // Anomali OLAYI kararından (anomaly_verdict.go, v0.10.181: «anomali / değil»,
 // event_id başına, dedektör istatistiği için) AYRIDIR: o tek bir olayı etiketler,
-// bu triage listesinde bir imzanın yerini belirler. Bildirimlere ve Problem
-// yaşam döngüsüne DOKUNMAZ — yalnız görünüm.
+// bu triage listesinde bir imzanın yerini belirler. Problem yaşam döngüsüne
+// DOKUNMAZ; bildirimlere de — yönetici politikayı açmadıkça (v0.10.1016,
+// dosya sonu: ProblemVerdictPolicy; varsayılan kapalı = yalnız görünüm).
 //
 // Depolama: ortak durum tablosu saved_views (mimari değişmez 5: "kayıtlı durum
 // için tek tablo, yüzey başına yeni şema yok"). Satır = bir imza:
@@ -148,4 +149,49 @@ func (s *Store) SetProblemVerdict(ctx context.Context, v ProblemVerdict) error {
 // ClearProblemVerdict — imzanın kararını kaldırır (mezar taşı; satır yoksa no-op).
 func (s *Store) ClearProblemVerdict(ctx context.Context, signature string) error {
 	return s.DeleteSavedView(ctx, problemVerdictID(signature))
+}
+
+// ── v0.10.1016 — karar POLİTİKASI: "problem değil" bildirimi de sustursun mu ──
+//
+// Varsayılan KAPALI: kararlar yalnız görünümdür (v0.10.1015). Yönetici açarsa
+// "problem değil" imzalı alarm kuralı problemleri ve exception / HTTP hata
+// grupları dış kanallara ve ekip mailine GİTMEZ (kapı: internal/notify/
+// verdict_silence.go). Problem yine açılır, listede ve canlı akışta görünür.
+
+// ProblemVerdictPolicyKey — system_settings anahtarı.
+const ProblemVerdictPolicyKey = "problem_verdict_policy"
+
+// ProblemVerdictPolicy — kararların görünüm dışındaki etkisi.
+type ProblemVerdictPolicy struct {
+	MuteNotifications bool   `json:"muteNotifications"`
+	UpdatedBy         string `json:"updatedBy,omitempty"`
+	UpdatedAt         int64  `json:"updatedAt,omitempty"` // unix ns
+}
+
+// parseProblemVerdictPolicy — SAF: blob → politika. Boş / bozuk blob = sıfır
+// değer (susturma KAPALI): okunamayan ayar alarm kaybettirmez.
+func parseProblemVerdictPolicy(raw []byte) ProblemVerdictPolicy {
+	var p ProblemVerdictPolicy
+	if len(raw) == 0 || json.Unmarshal(raw, &p) != nil {
+		return ProblemVerdictPolicy{}
+	}
+	return p
+}
+
+// GetProblemVerdictPolicy — saklanan politika (yoksa sıfır değer).
+func (s *Store) GetProblemVerdictPolicy(ctx context.Context) (ProblemVerdictPolicy, error) {
+	raw, err := s.GetSetting(ctx, ProblemVerdictPolicyKey)
+	if err != nil {
+		return ProblemVerdictPolicy{}, err
+	}
+	return parseProblemVerdictPolicy(raw), nil
+}
+
+// PutProblemVerdictPolicy — politikayı yazar.
+func (s *Store) PutProblemVerdictPolicy(ctx context.Context, p ProblemVerdictPolicy) error {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	return s.PutSetting(ctx, ProblemVerdictPolicyKey, raw)
 }

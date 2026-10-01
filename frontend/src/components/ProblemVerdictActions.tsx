@@ -1,7 +1,7 @@
 import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/ui';
 import { useProblemVerdicts, useSetProblemVerdict } from '@/lib/queries';
-import { inboxSignature, verdictIndex } from '@/lib/problemVerdict';
+import { inboxSignature, verdictIndex, verdictNotifyHint } from '@/lib/problemVerdict';
 import type { InboxItem, ProblemVerdictKind } from '@/lib/types';
 import { useMemo } from 'react';
 
@@ -11,8 +11,9 @@ import { useMemo } from 'react';
 //
 // Karar satırın İMZASINA yazılır (lib/problemVerdict inboxSignature): aynı
 // kural + servis / aynı exception grubu yeniden geldiğinde kendiliğinden aynı
-// sınıfa düşer. Yalnız görünüm — bildirim ve yaşam döngüsü değişmez; bunu
-// ekranda da söyler. Viewer kararı GÖRÜR, düğmeleri görmez (sunucu da kapalı).
+// sınıfa düşer. Yaşam döngüsü değişmez; bildirim yalnız yönetici politikayı
+// açtıysa susar (v0.10.1016) — açıklama hangi durumda olduğunu ekranda söyler.
+// Viewer kararı GÖRÜR, düğmeleri görmez (sunucu da kapalı).
 // İmzası olmayan satırda (olay) hiçbir şey çizilmez.
 export function ProblemVerdictActions({ item, onDone }: {
   item: InboxItem;
@@ -65,7 +66,7 @@ export function ProblemVerdictActions({ item, onDone }: {
       <div className="field-hint">
         Karar bu satırın imzasına yazılır: aynı kural + servis (ya da aynı exception grubu) yeniden geldiğinde
         kendiliğinden aynı sınıfa düşer. “Problem değil” satırı varsayılan listeden çıkarır ve “Problem değil”
-        görünümünde toplar; bildirimleri susturmaz, geri alınabilir.
+        görünümünde toplar; {verdictNotifyHint(sig, q.data?.policy)}
       </div>
       {set.isError && <div role="alert" className="field-error">Karar yazılamadı — yeniden deneyin.</div>}
     </div>

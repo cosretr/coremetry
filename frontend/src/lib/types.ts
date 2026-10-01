@@ -2516,7 +2516,15 @@ export interface ProblemVerdict {
   /** unix ns */
   at: number;
 }
-export interface ProblemVerdictsResponse { verdicts: ProblemVerdict[] }
+/** v0.10.1016 — kararların görünüm DIŞINDAKİ etkisi (Go chstore.ProblemVerdictPolicy).
+ *  muteNotifications açıkken "problem değil" imzaları mail / kanal bildirimi de üretmez. */
+export interface ProblemVerdictPolicy {
+  muteNotifications: boolean;
+  updatedBy?: string;
+  /** unix ns */
+  updatedAt?: number;
+}
+export interface ProblemVerdictsResponse { verdicts: ProblemVerdict[]; policy?: ProblemVerdictPolicy }
 /** PUT gövdesi; verdict '' = kararı kaldır. */
 export interface ProblemVerdictInput {
   signature: string;

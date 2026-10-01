@@ -12,6 +12,15 @@ export function useProblemVerdicts() {
   return useQuery({ queryKey: KEY, queryFn: () => api.problemVerdicts(), staleTime: 30_000 });
 }
 
+/** v0.10.1016 — politika (bildirimi de sustur) yaz. Cevap aynı biçim → aynı önbellek. */
+export function useSetProblemVerdictPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (muteNotifications: boolean) => api.putProblemVerdictPolicy(muteNotifications),
+    onSuccess: (res: ProblemVerdictsResponse) => { qc.setQueryData(KEY, res); },
+  });
+}
+
 /** Karar yaz / kaldır. Cevap taze listenin tamamıdır → doğrudan önbelleğe. */
 export function useSetProblemVerdict() {
   const qc = useQueryClient();

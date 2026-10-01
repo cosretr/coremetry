@@ -4,13 +4,16 @@ package api
 // "bütün hepsi gelsin, ben hangisi gerçek problem hangisi değil zamanla
 // öğretelim"). Depolama ve kavram: internal/chstore/problem_verdict.go.
 //
-//	GET /api/problem-verdicts      her rol   — tüm kararlar (≤5000)
-//	PUT /api/problem-verdicts      editor+   — {signature, verdict, label?, kind?, service?}
-//	                                           verdict: "real" | "noise" | "" (kaldır)
+//	GET /api/problem-verdicts         her rol — tüm kararlar (≤5000) + politika
+//	PUT /api/problem-verdicts         editor+ — {signature, verdict, label?, kind?, service?}
+//	                                            verdict: "real" | "noise" | "" (kaldır)
+//	PUT /api/problem-verdicts/policy  admin   — {muteNotifications} (v0.10.1016)
 //
 // Karar İMZAYA bağlıdır (aynı kural + servis / aynı exception grubu); FE imzayı
-// üretir, sunucu biçimini doğrular. Yalnız GÖRÜNÜM: bildirimlere, Problem yaşam
-// döngüsüne ve dedektörlere dokunmaz. Viewer kararları GÖRÜR (salt okuma),
+// üretir, sunucu biçimini doğrular. Varsayılan yalnız GÖRÜNÜM: Problem yaşam
+// döngüsüne ve dedektörlere dokunmaz; bildirimlere de — yönetici politikada
+// muteNotifications'ı açmadıkça (v0.10.1016, kapı: internal/notify/
+// verdict_silence.go; varsayılan KAPALI). Viewer kararları GÖRÜR (salt okuma),
 // yazamaz. Yazım denetim kaydına "problem.verdict" olarak düşer ve okuma
 // önbelleğini düşürür; PUT cevabı taze listenin tamamıdır (FE onu doğrudan
 // kullanır — yazdığını bir sonraki okumada bayat önbellekten geri kaybetmez).
@@ -31,6 +34,7 @@ func init() { registerRoutesExtra("problem-verdicts", (*Server).registerProblemV
 func (s *Server) registerProblemVerdictRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/problem-verdicts", s.getProblemVerdicts)
 	mux.HandleFunc("PUT /api/problem-verdicts", auth.RequireAnyRole(editorRoles, s.putProblemVerdict))
+	mux.HandleFunc("PUT /api/problem-verdicts/policy", auth.RequireRole(auth.RoleAdmin, s.putProblemVerdictPolicy))
 }
 
 const (
@@ -42,7 +46,27 @@ const (
 )
 
 type problemVerdictsResponse struct {
-	Verdicts []chstore.ProblemVerdict `json:"verdicts"`
+	Verdicts []chstore.ProblemVerdict     `json:"verdicts"`
+	Policy   chstore.ProblemVerdictPolicy `json:"policy"` // v0.10.1016
+}
+
+// problemVerdictPolicyInput — muteNotifications ZORUNLU (işaretçi: eksik alan
+// "kapat" diye okunmasın).
+type problemVerdictPolicyInput struct {
+	MuteNotifications *bool `json:"muteNotifications"`
+}
+
+// problemVerdictsPayload — okuma cevabı: kararlar + politika.
+func (s *Server) problemVerdictsPayload(ctx context.Context) (problemVerdictsResponse, error) {
+	list, err := s.store.ListProblemVerdicts(ctx)
+	if err != nil {
+		return problemVerdictsResponse{}, err
+	}
+	pol, err := s.store.GetProblemVerdictPolicy(ctx)
+	if err != nil {
+		return problemVerdictsResponse{}, err
+	}
+	return problemVerdictsResponse{Verdicts: list, Policy: pol}, nil
 }
 
 type problemVerdictInput struct {
@@ -78,11 +102,11 @@ func normalizeProblemVerdictInput(in problemVerdictInput, by string, now time.Ti
 
 func (s *Server) getProblemVerdicts(w http.ResponseWriter, r *http.Request) {
 	s.serveCached(w, r, problemVerdictCacheKey, 10*time.Second, func(ctx context.Context) (any, error) {
-		list, err := s.store.ListProblemVerdicts(ctx)
+		res, err := s.problemVerdictsPayload(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return problemVerdictsResponse{Verdicts: list}, nil
+		return res, nil
 	})
 }
 
@@ -130,14 +154,50 @@ func (s *Server) putProblemVerdict(w http.ResponseWriter, r *http.Request) {
 	s.cacheInvalidatePrefix(ctx, problemVerdictCachePfx)
 	details, _ := json.Marshal(map[string]string{"signature": v.Signature, "verdict": v.Verdict, "kind": v.Kind, "service": v.Service, "label": v.Label})
 	s.audit(r, "problem.verdict", "problem", v.Signature, string(details))
-	list, err := s.store.ListProblemVerdicts(ctx)
+	res, err := s.problemVerdictsPayload(ctx)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	// Yeni yazılan satır okumaya henüz yansımadıysa (eşzamansız ekleme) cevabı
 	// yazılanla uzlaştır: FE yazdığını geri kaybetmesin.
-	writeJSON(w, problemVerdictsResponse{Verdicts: reconcileProblemVerdicts(list, v, clear)})
+	res.Verdicts = reconcileProblemVerdicts(res.Verdicts, v, clear)
+	writeJSON(w, res)
+}
+
+// putProblemVerdictPolicy — v0.10.1016 — "problem değil" bildirimi de sustursun
+// mu. Yalnız admin; denetim kaydı "problem.verdict.policy". Bildirim tarafı
+// politikayı 30 sn önbellekler — değişiklik en geç o kadar sonra etkir.
+func (s *Server) putProblemVerdictPolicy(w http.ResponseWriter, r *http.Request) {
+	var in problemVerdictPolicyInput
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, problemVerdictMaxBody)).Decode(&in); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
+		return
+	}
+	if in.MuteNotifications == nil {
+		writeJSONError(w, http.StatusBadRequest, "muteNotifications zorunlu (true | false)")
+		return
+	}
+	ctx := r.Context()
+	pol := chstore.ProblemVerdictPolicy{
+		MuteNotifications: *in.MuteNotifications,
+		UpdatedBy:         claimEmail(auth.FromContext(ctx)),
+		UpdatedAt:         time.Now().UnixNano(),
+	}
+	if err := s.store.PutProblemVerdictPolicy(ctx, pol); err != nil {
+		writeErr(w, err)
+		return
+	}
+	s.cacheInvalidatePrefix(ctx, problemVerdictCachePfx)
+	details, _ := json.Marshal(map[string]bool{"muteNotifications": pol.MuteNotifications})
+	s.audit(r, "problem.verdict.policy", "settings", chstore.ProblemVerdictPolicyKey, string(details))
+	res, err := s.problemVerdictsPayload(ctx)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	res.Policy = pol // yazılan kazanır (okuma henüz görmediyse)
+	writeJSON(w, res)
 }
 
 // reconcileProblemVerdicts — SAF: okunan liste + az önce yazılan karar → cevap.

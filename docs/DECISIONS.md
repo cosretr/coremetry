@@ -987,6 +987,29 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — "Problem değil" bildirimi de susturabilir — varsayılan KAPALI anahtar (v0.10.1016)
+
+**Operatör:** v0.10.1015 sonrası önerilen sonraki adıma ("problem değil dediklerinin bildirimini de
+susturmak") "devam". **Karar:** öğretme bildirime bağlanır ama YALNIZ yönetici politikayı açarsa —
+`system_settings["problem_verdict_policy"].muteNotifications`, varsayılan **kapalı**. Kapalıyken hiçbir
+bildirim değişmez (v0.10.1015 davranışı). Alarm kaybettirebilen bir değişiklik olduğu için açık bir
+anahtar ve onay diyaloğu; tek tıkla kapanır. **Açıkken susan:** "problem değil" imzalı alarm kuralı
+problemi (`p:<ruleId>|<servis>`) ve exception / HTTP hata grubu (`e:<fingerprint>`) — ekip maili, kanallar,
+çözüm bildirimi ve P1 exception anonsu dahil. **Susmayan:** Problem kaydının kendisi (yine açılır, "Problem
+değil" görünümünde listelenir), canlı akış (SSE), olaylar (incident — imzası yok) ve anomali imzaları
+(`a:…`; bildirim hunisine ayrı kimlikle girmezler — kapsam dışı, ekran bunu söyler). **Kapı:**
+`internal/notify/verdict_silence.go` — `SendProblemAlert` içinde SSE yayınından sonra, bakım penceresi /
+ack / "Sustur bağlantısı" kapılarının yanında; exception kanal yolu ve P1 anons yolu da aynı kapıyı
+çağırır. İmza sunucuda Problem'den yeniden üretilir; FE kalıbıyla aynı olduğu iki yönlü testle pinli.
+Politika + noise imza kümesi 30 sn önbellekli (işaretleme / geri alma / anahtar en geç 30 sn'de etkir);
+**ayar ya da karar listesi okunamazsa susturma YOK** (bildirim kaybetmek fazladan bir mailden kötü).
+**Uç:** `PUT /api/problem-verdicts/policy` (yalnız admin, denetim `problem.verdict.policy`); politika
+`GET /api/problem-verdicts` cevabında gelir (her rol görür). **Ekran:** "Problem değil" görünümünün
+başında durum satırı ("Bildirim: gönderiliyor / susturuluyor") + admin düğmesi; çekmecedeki açıklama
+duruma göre değişir. **Bilinen sınır:** imza işaretlenmeden ÖNCE açılıp bildirilmiş bir problemin çözüm
+bildirimi de susar. **Hâlâ ayrı karar:** kararı kural / dedektör eşiklerine geri beslemek; toplu
+işaretleme; noise satırlarını kenar çubuğu sayacından düşmek.
+
 ## 2026-10-01 — Problems sekmesinde öğretme: "gerçek problem / problem değil" (v0.10.1015)
 
 **Operatör:** "…ben hangisi gerçek problem hangisi değil zamanla öğretelim" → önerilen tasarıma "tamam".

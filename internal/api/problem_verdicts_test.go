@@ -82,6 +82,22 @@ func TestProblemVerdictRouteGates(t *testing.T) {
 			t.Errorf("%s → %d, 400 beklenir", name, code)
 		}
 	}
+	// v0.10.1016 — politika yalnız admin; eksik alan "kapat" diye okunmaz.
+	putPolicy := func(role, body string) int {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, asRole(httptest.NewRequest("PUT", "/api/problem-verdicts/policy", strings.NewReader(body)), role))
+		return w.Code
+	}
+	for _, role := range []string{auth.RoleViewer, auth.RoleEditor} {
+		if code := putPolicy(role, `{"muteNotifications":true}`); code != http.StatusForbidden {
+			t.Errorf("%s politika PUT → %d, 403 beklenir", role, code)
+		}
+	}
+	for name, body := range map[string]string{"bozuk JSON": `{`, "eksik alan": `{}`} {
+		if code := putPolicy(auth.RoleAdmin, body); code != http.StatusBadRequest {
+			t.Errorf("politika %s → %d, 400 beklenir", name, code)
+		}
+	}
 	src, err := os.ReadFile("problem_verdicts.go")
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +108,8 @@ func TestProblemVerdictRouteGates(t *testing.T) {
 		`s.serveCached(w, r, problemVerdictCacheKey, 10*time.Second`,
 		`s.cacheInvalidatePrefix(ctx, problemVerdictCachePfx)`,
 		`s.audit(r, "problem.verdict", "problem", v.Signature`,
+		`auth.RequireRole(auth.RoleAdmin, s.putProblemVerdictPolicy)`,
+		`s.audit(r, "problem.verdict.policy", "settings", chstore.ProblemVerdictPolicyKey`,
 	} {
 		if !strings.Contains(string(src), w) {
 			t.Errorf("problem_verdicts.go %q taşımalı", w)

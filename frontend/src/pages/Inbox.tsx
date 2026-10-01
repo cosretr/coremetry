@@ -38,6 +38,7 @@ import { SubjectLink } from '../components/SubjectLink';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle } from '@/features/anomalies/spread'; // v0.10.949
 import type { SubjectLane } from '@/lib/types';
 import { useProblemVerdicts } from '@/lib/queries';
+import { ProblemVerdictPolicyBar } from '@/components/ProblemVerdictPolicyBar';
 import { verdictIndex, verdictOf, countNoise, filterByVerdictView, parseVerdictView, type VerdictView } from '@/lib/problemVerdict';
 
 // Facet vocab + defaults (v0.8.291) — both defaults are what the URL codec
@@ -1014,6 +1015,9 @@ export default function InboxPage() {
             </span>
           </div>
         )}
+        {/* v0.10.1016 — "Problem değil" görünümü: bu işaret bildirimi de
+            susturuyor mu (durum herkese; anahtar yalnız admin). */}
+        {verdictView === 'noise' && <ProblemVerdictPolicyBar />}
         {/* NOT VirtualTable: rows are variable-height (DetailLine renders a
             multi-line exception message + team chips), which breaks the
             VirtualTable uniform-row assumption. content-visibility keeps the

@@ -54,3 +54,16 @@ func TestProblemVerdictRowRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.1016 — politika: boş / bozuk blob susturmayı AÇMAZ (alarm kaybettirmez).
+func TestParseProblemVerdictPolicy(t *testing.T) {
+	for name, raw := range map[string]string{"boş": "", "bozuk": "{", "yanlış tür": `{"muteNotifications":"yes"}`, "kapalı": `{"muteNotifications":false}`} {
+		if parseProblemVerdictPolicy([]byte(raw)).MuteNotifications {
+			t.Errorf("%s blob susturmayı açmamalı", name)
+		}
+	}
+	p := parseProblemVerdictPolicy([]byte(`{"muteNotifications":true,"updatedBy":"a@b","updatedAt":7}`))
+	if !p.MuteNotifications || p.UpdatedBy != "a@b" || p.UpdatedAt != 7 {
+		t.Fatalf("açık politika okunmalı: %+v", p)
+	}
+}

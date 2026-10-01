@@ -253,6 +253,13 @@ type Notifier struct {
 	mwMu   sync.Mutex
 	mwAt   time.Time
 	mwList []chstore.MaintenanceWindow
+
+	// pvMu — v0.10.1016 "problem değil" susturma önbelleği (verdict_silence.go):
+	// politika + noise imza kümesi, 30 sn.
+	pvMu    sync.Mutex
+	pvAt    time.Time
+	pvMute  bool
+	pvNoise map[string]struct{}
 }
 
 // maintenanceSilenced reports whether any active maintenance
@@ -485,6 +492,12 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 	// susturulmamış say: bildirim kaybetmek fazladan bir mailden kötü.
 	if ok, err := n.store.NotificationIgnored(ctx, p.ID); err == nil && ok {
 		log.Printf("[notify] ignored via notification link — skipping fan-out: %s · %s", p.ID, p.RuleName)
+		return
+	}
+	// v0.10.1016 — operatörün "problem değil" diye öğrettiği imza: politika
+	// AÇIKSA (varsayılan kapalı) hiçbir fan-out yok. Ayrıntı: verdict_silence.go.
+	if sig := verdictSignature(p); n.verdictSilenced(ctx, sig) {
+		log.Printf("[notify] marked \"problem değil\" — skipping fan-out: %s · %s", sig, p.RuleName)
 		return
 	}
 	// Service catalog row — shared by the team-routing mail below AND

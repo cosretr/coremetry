@@ -2519,6 +2519,11 @@ export const api = {
     request<import('./types').ProblemVerdictsResponse>(`/api/problem-verdicts`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
+  // v0.10.1016 — "problem değil" bildirimi de sustursun mu (yalnız admin).
+  putProblemVerdictPolicy: (muteNotifications: boolean) =>
+    request<import('./types').ProblemVerdictsResponse>(`/api/problem-verdicts/policy`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ muteNotifications }),
+    }),
   acknowledgeProblems: (ids: string[]) =>
     request<{ acknowledged: number }>(`/api/problems/acknowledge`, {
       method: 'POST',

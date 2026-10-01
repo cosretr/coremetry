@@ -12,10 +12,14 @@
 //   anomali                     a:<tür>|<servis>|<desen>
 //   olay (incident)             imza YOK — elle açılan kayıt, öğretilmez
 //
-// Yalnız GÖRÜNÜM: "problem değil" imzaları varsayılan listeden çıkar ve kendi
-// görünümünde toplanır; bildirimlere ve Problem yaşam döngüsüne dokunmaz.
+// Varsayılan yalnız GÖRÜNÜM: "problem değil" imzaları varsayılan listeden çıkar
+// ve kendi görünümünde toplanır; Problem yaşam döngüsüne dokunmaz. v0.10.1016:
+// yönetici politikayı açarsa (muteNotifications; varsayılan KAPALI) p: ve e:
+// imzalarının mail / kanal bildirimi de susar — a: (anomali) kapsam dışı.
+// İmza kalıpları sunucuda yeniden üretilir (internal/notify/verdict_silence.go
+// verdictSignature) — biri değişirse diğeri de değişmeli (Go testi pinler).
 
-import type { InboxItem, ProblemVerdict, ProblemVerdictKind } from '@/lib/types';
+import type { InboxItem, ProblemVerdict, ProblemVerdictKind, ProblemVerdictPolicy } from '@/lib/types';
 
 /** Satırın imzası; öğretilemeyen satırda (olay, eksik kimlik) null. */
 export function inboxSignature(it: Pick<InboxItem, 'kind' | 'service' | 'problem' | 'exception' | 'anomaly'>): string | null {
@@ -30,6 +34,25 @@ export function inboxSignature(it: Pick<InboxItem, 'kind' | 'service' | 'problem
     default:
       return null;
   }
+}
+
+/** Politika "problem değil" bildirimi de susturuyor mu (eksik politika = hayır). */
+export function verdictMutesNotifications(policy: ProblemVerdictPolicy | null | undefined): boolean {
+  return policy?.muteNotifications === true;
+}
+
+/** Bu imzanın bildirimi politikadan etkilenir mi: alarm kuralı (p:) ve
+ *  exception / HTTP hata grubu (e:). Anomali (a:) kapsam dışı. */
+export function verdictCoversNotifications(sig: string | null | undefined): boolean {
+  return !!sig && (sig.startsWith('p:') || sig.startsWith('e:'));
+}
+
+/** Çekmecedeki açıklamanın bildirimle ilgili son cümlesi. */
+export function verdictNotifyHint(sig: string | null | undefined, policy: ProblemVerdictPolicy | null | undefined): string {
+  if (!verdictMutesNotifications(policy)) return 'bildirimleri susturmaz, geri alınabilir.';
+  return verdictCoversNotifications(sig)
+    ? 'bu imzanın mail / kanal bildirimlerini de susturur (yönetici ayarı açık), geri alınabilir.'
+    : 'anomali satırlarının bildirimi bu işaretten etkilenmez, geri alınabilir.';
 }
 
 export type VerdictIndex = Map<string, ProblemVerdict>;
