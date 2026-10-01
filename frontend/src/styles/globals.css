@@ -1786,6 +1786,13 @@ td.col-actions, th.col-actions { text-align: right; }
    v0.10.922 (sade palet) — kategori renk almaz: mor ton kaldırıldı, nötr
    rozet + "WATCHER" yazısı ayrımı taşır. Sınıf adı çağıranlar için kalır. */
 .b-watcher { background: var(--bg3); color: var(--text2); }
+/* v0.10.1027 — /databases satırının ad hücresindeki açık problem işareti
+   (DependenciesTable OpenProblemsMark): adın önünde, rozet altı çizilmez.
+   .dep-prob-note: işaret okuması ilk yüklemede düşünce tablonun üstündeki
+   tek nötr satır (hata kutusu değil). */
+.dep-prob-mark { margin-right: var(--sp-3); vertical-align: middle; }
+a.dep-prob-mark:hover { text-decoration: none; }
+.dep-prob-note { margin-bottom: var(--sp-4); font-size: var(--fs-xs); color: var(--text3); }
 
 /* Severity */
 .s-trace { color: var(--text3); } .s-debug { color: var(--text2); } .s-info { color: var(--info); }

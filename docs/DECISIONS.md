@@ -987,6 +987,57 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Databases dilim 4: listede satır başına açık problem işareti (v0.10.1027)
+
+**Operatör yönü:** Databases iyileştirmelerinde "Dynatrace'in Databases bölümünü baz al" (v0.10.1019
+programı, madde 4: `/databases` listesinde satır başına açık problem işareti). Dynatrace'in veritabanı
+listesi her satırda varlığın açık problemini söyler; bizde bu bilgi yalnız `/database` detayının problem
+kartında (v0.10.1019) ve Problems sekmesinin Veritabanları şeridindeydi. **Uç:** `GET
+/api/databases/problems` (kendi dosyası `internal/api/database_problems.go`, parametresiz — açık problem
+"şimdi"dir ve db özneleri env'e bağlı değildir; önbellek 15 sn, statik anahtar `db-problems:v1`; rol kapısı
+yok, `/api/databases` duruşu). Tek okuma `ListProblems(kind=db, status NOT IN …)`; "bitti" tanımı Problems
+sekmesininkiyle AYNI değişkenden (`pickExcludedStatuses("open")` → `inboxDoneStatuses`), iki daraltma da
+SQL'de, LIMIT'ten önce. **Biçim farkında eşleştirme (neden):** özne dizgisi `db:<system>@<X>` X'in instance
+mı veritabanı adı mı olduğunu söylemez ve iki uzay gerçekten çakışır — span satırlarının instance'ı çoğu kez
+"oracle" / "postgres" gibi genel bir ad; aynı adlı bir veritabanının yavaş ifadesi tek havuzla eşleştirmede
+instance'ı o ad olan HER satırı işaretlerdi. Biçim kuraldan türer: rule_id `db-capacity:` önekli (tek tanım
+`chstore.RuleDBCapacityPrefix`; üretici `capacityRuleID` onu kullanır, FE ikizi testle pinli) → instance
+biçimi, gerisi (yavaş ifade, hedefli kural) → dbName biçimi (`chstore.DBProblemSubjectForm` / FE
+`dbProblemForm`). Cevap özne başına iki biçimi AYRI taşır (`{instance?, dbName?}` → `{open, topSeverity}`);
+istemci instance biçimini YALNIZ satırın instance'ıyla, dbName biçimini YALNIZ satırın db.name'iyle ve yalnız
+span satırında eşleştirir; toplam ikisinin toplamı (bir problemin tek biçimi var, çift sayım yok). Detay kartı
+AYNI kuralı uygular: aday kümesi tek fonksiyon (`dbProblemSubjectForms`), instance kimliğinden çekilenlerden
+yalnız kapasite, dbName kimliğinden çekilenlerden yalnız kapasite dışı problemler kalır (`keepProblemForms`;
+kimlikler aynıysa ikisi). **Önem, öncelik değil (neden):** `/inbox` exception dışı her satırı P3'e çiviliyor
+(`forceNonExceptionP3`, operatör kararı v0.9.487); listede kırmızı "P1 · 2" Problems sekmesinde aynı satırın
+P3'üyle olağan biçimde çelişirdi. İşaret "N problem" yazar, tonu eşleşen problemlerin saklanan en ağır
+önemi: critical `b-err`, warning `b-warn`, gerisi nötr (renk yalnız sapan değerde). Önem saklanan kolon —
+uç öncelik zenginleştirmesi (ve deploy okuması) yapmaz. Detay kartında da "Öncelik" sütunu "Önem" oldu
+(sıra critical > warning > info, aynı ton kuralı). **"Problem değil":** operatörün "problem değil" diye
+işaretlediği imzalar (`p:<kural>|<özne>`, sunucuda tek tanım `chstore.RuleProblemVerdictSignature` —
+bildirim hunisi de onu çağırır) işareti saymaz/renklendirmez, çünkü Problems sekmesi onları varsayılan
+listede gizliyor. Karar listesi okunamazsa her şey sayılır (açık kapı, hata serisinin ilki loglanır).
+Detay kartı bu satırları listelemeye devam eder (bilinçli fark; kart pencerede ne olduğunu anlatır). İpucu
+bunu söyler ve pencere vaadi vermez: "Şu an açık N problem (“problem değil” işaretliler hariç). Tıklayınca
+veritabanı detayı açılır."; `aria-label` görünen metinle başlar. **Görünüm:** YENİ KOLON DEĞİL — kolon
+kümesi değişseydi `useDataTable` `deps-db` altında kayıtlı kolon genişliklerini sıfırlardı. İşaret mevcut
+ad (Instance) hücresinde, adın ÖNÜNDE (hücre nowrap + `overflow: hidden`; arkasında uzun adlı satırda
+kırpılırdı), satır tıkının gittiği detay sayfasına bağlı (tablonun `rowHref`'i; adres satır tıkıyla tek
+fonksiyondan), yayılımı keser. Sorgu anahtarı statik (`['database-problems']`), polling yok; okuma
+beklerken satırlar işaretsiz; İLK okuma düşerse span tablosunun üstünde tek nötr satır "Problem işaretleri
+yüklenemedi." (hata kutusu değil, liste engellenmez); eski veri varken düşen tazeleme işaretleri korur.
+**Eşleşmeyenler:** (1) `default` db.name — MV'lerin "span db.name taşımıyordu" nöbetçisi; `db:<system>@default`
+öznesi ne listede ne detay kartında sorulur (kural ortak aday kümesinde), yalnız Problems sekmesinin
+Veritabanları şeridinde görünür. (2) **Bilinen açık — PostgreSQL takma adı:** kapasite denetimi motoru
+"POSTGRES" yazar, özne `db:postgres@<instance>` olur; satırlar `postgresql` taşır. Bu problemler İKİ yüzeyde
+de hiçbir satıra bağlanmaz (liste ve detay tutarlı); düzeltme üreticide (özne kimliği kanonikleştirme) ayrı
+bir değişiklik — bugünkü davranış iki yüzey için aynı testle pinli, tek taraflı bir düzeltme onu kırar.
+(3) Bu pencerede listede satırı olmayan veritabanlarının problemleri (trafik yok, receiver yok) çizilecek
+yer bulamaz — Veritabanları şeridinde görünmeye devam eder. **Sınırlar:** dbName biçimli bir problem o
+veritabanı adına hizmet eden HER instance satırında görünür (özne host bilmez); tarama tavanı 2000 — dolarsa
+span tablosunun üstünde "Problem işaretleri eksik olabilir" notu; işaret "şimdi"yi anlatır, seçili pencereyi
+değil.
+
 ## 2026-10-01 — Problems: dış kaynak (Oracle) problemleri varsayılan listede de görünür (v0.10.1026)
 
 **Operatör:** kuyruğun 14. maddesine ("Oracle satırları varsayılan Problems listesine de girsin mi")

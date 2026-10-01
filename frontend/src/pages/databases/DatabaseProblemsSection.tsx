@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, PanelTitle } from '@/components/ui';
-import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,
@@ -10,7 +9,9 @@ import { useProblems } from '@/lib/queries';
 import { timeRangeToNs, tsLong } from '@/lib/utils';
 import type { Problem, TimeRange } from '@/lib/types';
 import type { DatabaseRef } from './databaseParam';
-import { dbProblemSubjects, dbProblemsForWindow, problemDurationText } from './databaseProblems';
+import {
+  dbProblemSubjectForms, dbProblemsForWindow, dbSeverityBadgeClass, dbSeverityRank, keepProblemForms, problemDurationText,
+} from './databaseProblems';
 
 // DatabaseProblemsSection — v0.10.1019 — bu veritabanının problemleri
 // (operatör: Databases için Dynatrace'in Databases bölümü baz; "o database ile
@@ -20,9 +21,17 @@ import { dbProblemSubjects, dbProblemsForWindow, problemDurationText } from './d
 // Yeni uç YOK: /api/problems?service=<özne> (kesin eşleşme, 30 sn paylaşılan
 // önbellek). Özne iki biçimde açıldığı için iki okuma (databaseProblems.ts);
 // dbName yoksa ya da instance ile aynıysa ikincisi koşmaz.
+//
+// v0.10.1027 — (1) BİÇİM: instance kimliğinden çekilenlerden yalnız kapasite
+// kuralı problemleri, dbName kimliğinden çekilenlerden yalnız kapasite DIŞI
+// problemler kalır (keepProblemForms; liste işaretiyle aynı aday kümesi
+// dbProblemSubjectForms — 'default' db.name nöbetçisi iki yüzeyde de
+// sorulmaz). (2) ÖNEM sütunu öncelik yerine: /inbox exception dışı satırları
+// P3'e çiviliyor (operatör kararı v0.9.487), burada basılan "P1" Problems
+// sekmesiyle çelişiyordu. Sıra critical > warning > info; renk yalnız sapanda.
 
 const PROBLEM_COLS: ColumnDef<Problem>[] = [
-  { id: 'priority', label: 'Öncelik', width: 70, sortValue: p => (p.priority === 'P1' ? 3 : p.priority === 'P2' ? 2 : 1) },
+  { id: 'severity', label: 'Önem', width: 96, sortValue: p => dbSeverityRank(p.severity) },
   { id: 'status', label: 'Durum', width: 86, sortValue: p => (p.status === 'resolved' ? 0 : 1) },
   { id: 'problem', label: 'Problem', sortValue: p => p.ruleName },
   { id: 'started', label: 'Başladı', width: 150, sortValue: p => p.startedAt, numeric: true },
@@ -32,15 +41,18 @@ const PROBLEM_COLS: ColumnDef<Problem>[] = [
 
 export function DatabaseProblemsSection({ refObj, range }: { refObj: DatabaseRef; range: TimeRange }) {
   const subjects = useMemo(
-    () => dbProblemSubjects({ system: refObj.system, instance: refObj.instance, dbName: refObj.dbName }),
-    [refObj.system, refObj.instance, refObj.dbName]);
-  const first = useProblems({ status: 'all', service: subjects[0] ?? '', limit: 100 }, { enabled: subjects.length > 0 });
-  const second = useProblems({ status: 'all', service: subjects[1] ?? '', limit: 100 }, { enabled: subjects.length > 1 });
+    () => dbProblemSubjectForms({ system: refObj.system, instance: refObj.instance, dbName: refObj.dbName, source: refObj.source }),
+    [refObj.system, refObj.instance, refObj.dbName, refObj.source]);
+  const first = useProblems({ status: 'all', service: subjects[0]?.id ?? '', limit: 100 }, { enabled: subjects.length > 0 });
+  const second = useProblems({ status: 'all', service: subjects[1]?.id ?? '', limit: 100 }, { enabled: subjects.length > 1 });
 
   const rows = useMemo(() => {
     const { from, to } = timeRangeToNs(range);
-    return dbProblemsForWindow([first.data?.items, second.data?.items], from, to);
-  }, [first.data, second.data, range]);
+    return dbProblemsForWindow([
+      keepProblemForms(first.data?.items, subjects[0]?.forms),
+      keepProblemForms(second.data?.items, subjects[1]?.forms),
+    ], from, to);
+  }, [first.data, second.data, subjects, range]);
 
   const dt = useDataTable<Problem>({
     storageKey: 'database-detail-problems',
@@ -70,8 +82,8 @@ export function DatabaseProblemsSection({ refObj, range }: { refObj: DatabaseRef
           <tbody>
             {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...state} /> : dt.sortedRows.map(p => (
               <tr key={p.id} className="cv-row">
-                <DataTableCell dt={dt} col="priority" row={p}>
-                  <PriorityBadge p={p.priority ?? 'P3'} reason={p.priorityReason} />
+                <DataTableCell dt={dt} col="severity" row={p}>
+                  <span className={dbSeverityBadgeClass(p.severity)}>{p.severity ? p.severity.toUpperCase() : '—'}</span>
                 </DataTableCell>
                 <DataTableCell dt={dt} col="status" row={p}>
                   {/* Renk yalnız sapan değerde: açık = uyarı, çözülmüş = nötr. */}

@@ -118,7 +118,34 @@ const (
 	RuleExtClusterPrefix = "anomaly-cluster:ext:"
 	RuleExtDownPrefix    = "anomaly:ext-down:"
 	RuleExtCapPrefix     = "anomaly:ext-cap:"
+
+	// RuleDBCapacityPrefix — v0.10.1027: db kapasite denetimi problemlerinin
+	// rule_id öneki ("db-capacity:<denetim>", evaluator/db_capacity.go
+	// capacityRuleID). TEK tanım: üretici bunu kullanır, okuyucular özne
+	// BİÇİMİNİ bundan türetir (DBProblemSubjectForm); FE ikizi
+	// pages/databases/databaseProblems.ts DB_CAPACITY_RULE_PREFIX (testle pinli).
+	RuleDBCapacityPrefix = "db-capacity:"
 )
+
+// db özneli problemin özne BİÇİMİ (v0.10.1027). `db:<system>@<X>` X'in bir
+// INSTANCE mı (kapasite denetimi, receiver instance adı) yoksa bir VERİTABANI
+// ADI mı (yavaş ifade, hedefli kural — db.name) olduğunu söylemez; iki uzay
+// aynı dizgide çakışır (span satırının instance'ı çoğu kez "oracle" /
+// "postgres" gibi genel bir ad, aynı adlı bir veritabanı da olabilir). Biçim
+// kuraldan türer.
+const (
+	DBSubjectFormInstance = "instance"
+	DBSubjectFormDBName   = "dbName"
+)
+
+// DBProblemSubjectForm — SAF: kapasite kuralı → instance biçimi; diğer her db
+// problemi (yavaş ifade db-slow-stmt, hedefli kural) → dbName biçimi.
+func DBProblemSubjectForm(ruleID string) string {
+	if strings.HasPrefix(ruleID, RuleDBCapacityPrefix) {
+		return DBSubjectFormInstance
+	}
+	return DBSubjectFormDBName
+}
 
 // ProblemSubjectKind — bir satırın özne türü, boş değeri normalize eder.
 // Boş İKİ yoldan gelir ve İKİSİ de "servis" demek: (a) kolonun eklendiği

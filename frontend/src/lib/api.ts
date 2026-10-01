@@ -1619,6 +1619,10 @@ export const api = {
       `/api/databases/errors?system=${encodeURIComponent(system)}&instance=${encodeURIComponent(instance)}`
       + (dbName ? `&dbName=${encodeURIComponent(dbName)}` : '')
       + `&from=${fromNs}&to=${toNs}`, signal),
+  // v0.10.1027 — /databases listesinin satır başına açık problem işareti. Parametresiz:
+  // açık problem "şimdi"dir (pencereye bağlı değil), db özneleri env'e bağlı değil.
+  databaseProblems: (signal?: AbortSignal) =>
+    get<import('./types').DBProblemsResponse | null>('/api/databases/problems', signal),
   databaseDetail: (system: string, instance: string, dbName: string, fromNs: number, toNs: number, signal?: AbortSignal) =>
     get<import('./types').DBDetail | null>(
       `/api/databases/detail?system=${encodeURIComponent(system)}&instance=${encodeURIComponent(instance)}`

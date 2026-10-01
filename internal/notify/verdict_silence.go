@@ -42,10 +42,9 @@ func verdictSignature(p chstore.Problem) string {
 	if fp := exceptionGroupFingerprint(p.ID); fp != "" {
 		return exceptionVerdictSignature(fp)
 	}
-	if p.RuleID == "" {
-		return ""
-	}
-	return "p:" + p.RuleID + "|" + p.Service
+	// v0.10.1027 — kural imzası chstore'daki TEK tanımdan (/api/databases/problems
+	// da aynı fonksiyonla "problem değil" işaretlilerini dışlar).
+	return chstore.RuleProblemVerdictSignature(p.RuleID, p.Service)
 }
 
 // exceptionVerdictSignature — SAF: exception / HTTP hata grubu imzası.
@@ -57,14 +56,9 @@ func exceptionVerdictSignature(fingerprint string) string {
 }
 
 // noiseSignatureSet — SAF: karar listesi → "problem değil" imza kümesi.
+// v0.10.1027 — gövde chstore.NoiseVerdictSignatures'ta (ortak tanım).
 func noiseSignatureSet(list []chstore.ProblemVerdict) map[string]struct{} {
-	out := make(map[string]struct{})
-	for _, v := range list {
-		if v.Verdict == chstore.ProblemVerdictNoise {
-			out[v.Signature] = struct{}{}
-		}
-	}
-	return out
+	return chstore.NoiseVerdictSignatures(list)
 }
 
 // loadVerdictSilence — politika + (yalnız açıksa) karar listesi. Herhangi bir

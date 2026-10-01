@@ -476,6 +476,27 @@ export interface DBErrors {
   callersCapped: boolean;
 }
 
+/** v0.10.1027 — /databases listesinde satır başına açık problem işareti
+ *  (Go api.dbProblemCount / dbProblemForms / dbProblemsResponse,
+ *  GET /api/databases/problems). subjects anahtarı problem öznesi (DBSubjectID
+ *  biçimi db:<system>@<X>); X'in instance mı (kapasite) db.name mi (yavaş ifade,
+ *  hedefli kural) olduğu kuraldan türer ve özet o BİÇİMİN altında gelir. Satırla
+ *  eşleştirme pages/databases/databaseProblems.ts rowProblemSummary. Önem
+ *  (saklanan kolon), öncelik DEĞİL. truncated: sunucu taraması tavana dayandı. */
+export type DBProblemSeverity = 'critical' | 'warning' | 'info';
+export interface DBProblemCount {
+  open: number;
+  topSeverity: DBProblemSeverity;
+}
+export interface DBProblemForms {
+  instance?: DBProblemCount;
+  dbName?: DBProblemCount;
+}
+export interface DBProblemsResponse {
+  subjects: Record<string, DBProblemForms>;
+  truncated: boolean;
+}
+
 export interface DBDetail {
   system: string;
   instance: string;

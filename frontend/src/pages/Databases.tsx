@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { DependenciesTable, type DepRow } from '@/components/DependenciesTable';
 import { depRowMatches, normalizeDepSearch } from '@/lib/depRowFilter';
 import { databaseDetailHref, legacyDatabaseRowTarget } from '@/pages/databases/databaseParam';
 import { receiverHorizonNotice, spanHorizonNotice } from '@/pages/databases/horizonNotice';
+import { rowProblemSummary } from '@/pages/databases/databaseProblems';
 import { api } from '@/lib/api';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
@@ -167,6 +168,21 @@ export default function DatabasesPage() {
     placeholderData: keepPreviousData,
   });
   const ov = q.data as DatabasesOverview | null | undefined;
+  // v0.10.1027 (Databases dilim 4) — satır başına AÇIK problem işareti.
+  // Anahtar STATİK: açık problem "şimdi"dir (pencereye bağlı değil) ve db
+  // özneleri env'e bağlı değil — uç parametresiz. Statik anahtar global
+  // keepPreviousData'nın bayat-anahtar tuzağına da düşmez (main.tsx).
+  // Polling yok; yükleniyor / hata hâlinde satırlar işaretsiz çizilir — bir
+  // süsleme için spinner ya da hata kutusu basılmaz. İLK okuma düşerse tablonun
+  // üstünde tek nötr satır söyler (problemsLoadFailed); eski veri varken düşen
+  // bir tazeleme işaretleri korur ve hiçbir şey basmaz.
+  const problemsQ = useQuery({
+    queryKey: ['database-problems'],
+    queryFn: ({ signal }) => api.databaseProblems(signal),
+    staleTime: 30_000,
+  });
+  const problemSubjects = problemsQ.data?.subjects;
+  const problemsLoadFailed = problemsQ.isError && !problemsQ.data;
 
   // Split rows by origin. Span-derived rows go to the top
   // panel; receiver-discovered rows go to the bottom. Either
@@ -224,41 +240,54 @@ export default function DatabasesPage() {
   // hedefi. Kimlik ÜÇLÜ (system, instance, dbName) ve ETİKETTEN
   // bağımsız (v0.9.821): nameOf() instance 'unknown' iken db.name'i
   // etiket olarak basıyor, onu kimlik sanmak boş bir sayfa demekti.
-  const openDatabasePage = (r: DepRow) => navigate(databaseDetailHref({
+  // v0.10.1027 — adres ayrı bir fonksiyon: açık problem işareti (tablonun
+  // `rowHref`'i) satır tıkıyla AYNI sayfaya bağlanır, ikinci bir kurulum yok.
+  const databasePageHref = (r: DepRow) => databaseDetailHref({
     system: r.system,
     instance: r.instance ?? '',
     dbName: r.dbName ?? '',
     source: r.source === 'receiver' ? 'receiver' : 'spans',
-  }, { range: encodeRange(range), env: env || undefined }));
+  }, { range: encodeRange(range), env: env || undefined });
+  const openDatabasePage = (r: DepRow) => navigate(databasePageHref(r));
 
-  const toRow = (d: DBInstance) => ({
-    system: d.system,
-    instance: d.instance,
-    dbName: d.dbName,
-    spanCount: d.spanCount,
-    errorCount: d.errorCount,
-    errorRate: d.errorRate,
-    avgDurationMs: d.avgDurationMs,
-    // toRow copies EXPLICITLY — a field missing here never reaches the table,
-    // however well-populated the payload is (v0.9.259's dead-P95 lesson on
-    // /messaging was exactly this).
-    p50DurationMs: d.p50DurationMs,
-    p95DurationMs: d.p95DurationMs,
-    p99DurationMs: d.p99DurationMs,
-    // v0.9.433 — prior ikizi eşleşen satırların delta rozetleri
-    // (DepRow bunları zaten biliyor; Messaging sözleşmesinin aynısı:
-    // prior yoksa alanlar undefined kalır, rozet gizli).
-    priorSpanCount: d.priorSpanCount,
-    priorErrorCount: d.priorSpanCount !== undefined ? (d.priorErrorCount ?? 0) : undefined,
-    priorAvgMs: d.priorAvgMs,
-    priorP50Ms: d.priorP50Ms,
-    priorP99Ms: d.priorP99Ms,
-    callers: d.callers ?? [],
-    source: d.source,
-  });
+  // v0.10.1027 — useCallback([problemSubjects]): toRow artık problem okumasına
+  // bağlı; okuma satırlardan SONRA inerse tableRows yeniden kurulur ve
+  // işaretler gelir (memo yalnız spanRows'a bağlı kalsaydı gelmezdi).
+  const toRow = useCallback((d: DBInstance): DepRow => {
+    // Açık problem özeti; biçim farkında eşleştirme, detay kartıyla aynı aday
+    // kümesinden (databaseProblems.ts dbProblemSubjectForms).
+    const prob = rowProblemSummary(d, problemSubjects);
+    return {
+      system: d.system,
+      instance: d.instance,
+      dbName: d.dbName,
+      spanCount: d.spanCount,
+      errorCount: d.errorCount,
+      errorRate: d.errorRate,
+      avgDurationMs: d.avgDurationMs,
+      // toRow copies EXPLICITLY — a field missing here never reaches the table,
+      // however well-populated the payload is (v0.9.259's dead-P95 lesson on
+      // /messaging was exactly this).
+      p50DurationMs: d.p50DurationMs,
+      p95DurationMs: d.p95DurationMs,
+      p99DurationMs: d.p99DurationMs,
+      // v0.9.433 — prior ikizi eşleşen satırların delta rozetleri
+      // (DepRow bunları zaten biliyor; Messaging sözleşmesinin aynısı:
+      // prior yoksa alanlar undefined kalır, rozet gizli).
+      priorSpanCount: d.priorSpanCount,
+      priorErrorCount: d.priorSpanCount !== undefined ? (d.priorErrorCount ?? 0) : undefined,
+      priorAvgMs: d.priorAvgMs,
+      priorP50Ms: d.priorP50Ms,
+      priorP99Ms: d.priorP99Ms,
+      callers: d.callers ?? [],
+      source: d.source,
+      openProblems: prob?.open,
+      topSeverity: prob?.topSeverity,
+    };
+  }, [problemSubjects]);
   // v0.10.704 — başlık sayacı tablonun q/msys filtresini GÖRÜR: aynı saf
   // predicate (lib/depRowFilter.ts). Filtre yokken "N", varken "X / N".
-  const tableRows = useMemo(() => spanRows.map(toRow), [spanRows]);
+  const tableRows = useMemo(() => spanRows.map(toRow), [spanRows, toRow]);
   const callerTerm = normalizeDepSearch(sp.get('q'));
   const callerSystem = sp.get('msys') ?? '';
   const callerCountLabel = useMemo(() => {
@@ -391,7 +420,21 @@ export default function DatabasesPage() {
                 DependenciesTable'ın her delta rozeti `compare &&` kapılı:
                 kutu ÖLÜYDÜ (Messaging.tsx geçiyordu). Pin:
                 databases/compareWiring.pin.test.ts. */}
+            {/* v0.10.1027 — işaret kümesi eksik olabilir: sunucu taraması
+                tavana dayandı. Yalnız o zaman çıkar; sessizce eksik bir
+                küme "bu veritabanında problem yok" diye okunurdu. */}
+            {problemsQ.data?.truncated && (
+              <HonestyStrip tone="var(--warn)">
+                Problem işaretleri eksik olabilir — açık veritabanı problemi sayısı tarama tavanını aştı.
+              </HonestyStrip>
+            )}
+            {/* İşaretsiz satırlar "problem yok" diye okunmasın — ama bir süsleme
+                için hata kutusu da basılmaz, liste engellenmez. */}
+            {problemsLoadFailed && (
+              <div className="dep-prob-note">Problem işaretleri yüklenemedi.</div>
+            )}
             <DependenciesTable rows={tableRows} kind="db" range={range} compare={compare} onRowNavigate={openDatabasePage}
+              rowHref={databasePageHref}
               state={dbsys || dbname
                 ? { kind: 'no-match', onClearFilters: clearFilters }
                 : { kind: 'empty', message: "Bu pencerede servislerin yaydığı veritabanı span'i yok — bu bölümün dolması için uygulama servislerinden birine bir OTel SDK bağla." }} />
@@ -443,6 +486,7 @@ export default function DatabasesPage() {
                   </EmptyHint>
                 ) : (
                   <DependenciesTable rows={receiverRows.map(toRow)} kind="db" range={range} onRowNavigate={openDatabasePage}
+                    rowHref={databasePageHref}
                     state={dbsys
                       ? { kind: 'no-match', onClearFilters: clearFilters }
                       /* v0.10.18 (F0.9a) — SIRA ÖNEMLİ. Pencere saklama

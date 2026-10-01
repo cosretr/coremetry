@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { rowActivation } from '@/lib/a11y';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { messagingTopicHref } from '@/pages/messaging/topicHref'; // v0.10.586
+import { dbSeverityBadgeClass } from '@/pages/databases/databaseProblems'; // v0.10.1027
 import { Link, useSearchParams } from 'react-router-dom';
 import { Sparkline } from './Sparkline';
 import { TrendDelta } from './TrendDelta';
@@ -83,6 +84,13 @@ export interface DepRow {
   priorAvgMs?: number;
   priorP50Ms?: number;
   priorP99Ms?: number;
+  // v0.10.1027 — db-only: bu veritabanının ŞU AN açık problem sayısı ve en
+  // ağır önemi (GET /api/databases/problems, biçim farkında eşleştirme
+  // pages/databases/databaseProblems.ts rowProblemSummary; "problem değil"
+  // işaretliler hariç). undefined = problem yok ya da okuma henüz
+  // gelmedi/düştü → işaret çizilmez.
+  openProblems?: number;
+  topSeverity?: 'critical' | 'warning' | 'info';
 }
 
 type SortKey = 'system' | 'cluster' | 'name' | 'spanCount' | 'errorRate' | 'avg' | 'p99';
@@ -97,7 +105,7 @@ const NATURAL: Record<SortKey, 'asc' | 'desc'> = {
 // click lands on /explore scoped to that system+instance.
 export function DependenciesTable({
   rows, kind, range, compare, extraControls, openRowKey, onOpenRowChange,
-  onRowNavigate, state,
+  onRowNavigate, rowHref, state,
 }: {
   rows: DepRow[];
   // 'db' → uses instance + filters by db.system; 'queue' → uses
@@ -130,6 +138,10 @@ export function DependenciesTable({
   // Both affordances move together: the mouse click and the keyboard
   // Enter/o must never disagree about what opening a row means.
   onRowNavigate?: (row: DepRow) => void;
+  // v0.10.1027 — satırın detay sayfası adresi (onRowNavigate'in gittiği
+  // yerin AYNISI). Açık problem işareti bu adrese bağlanır; verilmezse
+  // işaret bağlantısız çizilir.
+  rowHref?: (row: DepRow) => string;
   // v0.10.954 — tablo standardı T12 (VirtualTable `state` emsali): `rows`
   // boşken tablonun İÇİNDE çizilecek durum (ebeveynin yükleniyor / hata /
   // boş'u). Verilmezse türe özgü boş satırı basılır.
@@ -537,6 +549,20 @@ export function DependenciesTable({
                       </td>
                     )}
                     <td onClick={e => e.stopPropagation()}>
+                      {/* v0.10.1027 — AÇIK PROBLEM İŞARETİ (Databases dilim 4).
+                          Yeni kolon DEĞİL: kolon kümesi değişirse useDataTable
+                          `deps-db` altında kayıtlı kolon genişliklerini sıfırlar.
+                          Adın ÖNÜNDE: `tbody td` nowrap + overflow:hidden; uzun bir
+                          instance adının ARKASINA konsaydı tam da o satırda
+                          kırpılırdı — böyle kırpılan ad olur, işaret değil.
+                          Yalnız db satırında ve yalnız problem varken; renk
+                          yalnız bu sapan değerde (ÖNEM tonu — öncelik değil:
+                          /inbox exception dışını P3'e çiviliyor). Bağlantı satır
+                          tıkının gittiği detay sayfasına. "Şimdi"yi anlatır,
+                          seçili pencereyi değil. */}
+                      {kind === 'db' && (r.openProblems ?? 0) > 0 && (
+                        <OpenProblemsMark row={r} href={rowHref?.(r)} />
+                      )}
                       <Link to={exploreHref(r)} className="mono"
                             style={{ fontWeight: 500 }}
                             title={r.instance === 'unknown'
@@ -930,6 +956,25 @@ function TrendCell({ trend, loading }: {
       </div>
     </div>
   );
+}
+
+// OpenProblemsMark — v0.10.1027: db satırının ad hücresinde "2 problem"
+// işareti, en ağır öneme göre tonlu (critical err, warning warn, gerisi nötr).
+// İpucu pencere vaadi VERMEZ: işaret "şimdi"yi sayar, detay kartı ise seçili
+// pencereyi listeler. aria-label görünen metinle BAŞLAR (WCAG label-in-name).
+// Bağlantı satırın kendi tıkını tetiklemesin diye yayılımı keser — hücre de
+// keser, ama işaret kendi başına doğru davranmalı (testi hücresiz çizer).
+export function OpenProblemsMark({ row, href }: { row: DepRow; href?: string }) {
+  const open = row.openProblems ?? 0;
+  const text = `${open} problem`;
+  const tip = `Şu an açık ${open} problem (“problem değil” işaretliler hariç).`
+    + (href ? ' Tıklayınca veritabanı detayı açılır.' : '');
+  const badge = <span className={dbSeverityBadgeClass(row.topSeverity)}>{text}</span>;
+  return href
+    ? <Link to={href} className="dep-prob-mark" title={tip}
+        aria-label={`${text} — şu an açık, “problem değil” işaretliler hariç; tıklayınca veritabanı detayı açılır`}
+        onClick={e => e.stopPropagation()}>{badge}</Link>
+    : <span className="dep-prob-mark" title={tip}>{badge}</span>;
 }
 
 // SystemBadge renders the system name in its conventional colour

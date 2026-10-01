@@ -237,9 +237,11 @@ func capacityReasonETA(c capacityCheck, instance, subkey string, pct, etaHours f
 // capacityRuleID / capacityProblemID build the stable dedup keys. rule_id
 // is per-check; the Problem id additionally carries instance + subkey so a
 // re-fire on the next tick collapses onto the same ReplacingMergeTree row.
-func capacityRuleID(checkID string) string { return "db-capacity:" + checkID }
+// v0.10.1027 — önek chstore.RuleDBCapacityPrefix'ten (tek tanım): okuyucular
+// özne biçimini (instance) bu önekten türetir.
+func capacityRuleID(checkID string) string { return chstore.RuleDBCapacityPrefix + checkID }
 func capacityProblemID(checkID, instance, subkey string) string {
-	id := "db-capacity:" + checkID + ":" + instance
+	id := chstore.RuleDBCapacityPrefix + checkID + ":" + instance
 	if subkey != "" {
 		id += ":" + subkey
 	}

@@ -120,7 +120,12 @@ describe('bildirim politikası', () => {
   });
   it('imza kalıbı sunucudakiyle aynı (internal/notify/verdict_silence.go)', () => {
     const go = readFileSync(resolve(__dirname, '../../../internal/notify/verdict_silence.go'), 'utf8');
-    expect(go).toContain('return "p:" + p.RuleID + "|" + p.Service');
+    // v0.10.1027 — kural imzasının sunucu tanımı chstore'a taşındı (tek tanım:
+    // bildirim hunisi ve /api/databases/problems ikisi de çağırır); pin
+    // bilinçli güncellendi: notify o fonksiyonu çağırıyor, kalıp chstore'da.
+    expect(go).toContain('return chstore.RuleProblemVerdictSignature(p.RuleID, p.Service)');
+    const store = readFileSync(resolve(__dirname, '../../../internal/chstore/problem_verdict.go'), 'utf8');
+    expect(store).toContain('return "p:" + ruleID + "|" + subject');
     expect(go).toContain('return "e:" + fingerprint');
   });
 });

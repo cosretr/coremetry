@@ -91,6 +91,31 @@ func ValidProblemSignature(sig string) bool {
 	return true
 }
 
+// RuleProblemVerdictSignature — SAF (v0.10.1027): alarm kuralı problemi imzası
+// `p:<ruleId>|<özne>` — FE lib/problemVerdict.ts inboxSignature 'problem'
+// dalının sunucu ikizi. TEK sunucu tanımı: bildirim hunisi (notify
+// verdictSignature) ve /api/databases/problems ikisi de bunu çağırır.
+// Kural kimliği yoksa "" (öğretilemez).
+func RuleProblemVerdictSignature(ruleID, subject string) string {
+	if ruleID == "" {
+		return ""
+	}
+	return "p:" + ruleID + "|" + subject
+}
+
+// NoiseVerdictSignatures — SAF (v0.10.1027): karar listesi → "problem değil"
+// imza kümesi ("gerçek" kararlar girmez). notify ve /api/databases/problems
+// ortak kullanır.
+func NoiseVerdictSignatures(list []ProblemVerdict) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, v := range list {
+		if v.Verdict == ProblemVerdictNoise {
+			out[v.Signature] = struct{}{}
+		}
+	}
+	return out
+}
+
 // problemVerdictIDPrefix — sistem karar satırlarının kimlik öneki. Genel
 // kayıtlı-görünüm ucu kimliği rastgele üretir (newRandID), bu öneki taşıyamaz.
 const problemVerdictIDPrefix = "pv:"
