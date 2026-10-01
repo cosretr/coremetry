@@ -2459,7 +2459,9 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 	// sınırlı bir MV sorgusuyla SONRADAN yapılır (filterRootTraces) — anlam
 	// aynı (kök herhangi bir serviste olabilir, v0.10.107), maliyet id
 	// sayısıyla sınırlı.
-	rootPostFilter := f.RootOnly && (f.Service != "" || len(f.RequireServices) > 0)
+	// v0.10.1008 — çipler de WHERE'i daraltır (rootScopeNarrowed): kök çipi
+	// taşımıyorsa daraltılmış kümede aranamaz.
+	rootPostFilter := f.RootOnly && rootScopeNarrowed(f)
 	// v0.10.245 — HAVING'in ilk iki argümanı kök alt sorgusunun (from, to)
 	// unix sn sınırı; zaman sıralı probe bunları BASAMAK penceresiyle
 	// bağlar (probeHavingArgs) — 1 saatlik basamak için 30 günlük alt
@@ -2490,7 +2492,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) ([]TraceRow, uint6
 		// artık DARALTILMAMIŞ kaynaktan sorulur: trace_summary_5m üyeliği
 		// (bucket-budanmış, GLOBAL — 288 sınıfı değil). Daraltmasız ham
 		// taramada eski countIf doğru ve ucuz: kök zaten görünür.
-		if f.Service != "" || len(f.RequireServices) > 0 {
+		if rootScopeNarrowed(f) { // v0.10.1008 — servis VEYA span-düzeyi çip
 			if f.MVGap {
 				// v0.10.755 — MV-gap günü: trace_summary_5m'de o güne satır YOK,
 				// MV alt sorgusu her adayı elerdi (boş liste). Ham alt sorgu:

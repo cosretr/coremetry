@@ -178,6 +178,18 @@ export function stripScope(filters: { k: string }[], search: string): StripScope
   return filters.every(f => isEntrySpanKey(f.k)) ? 'entry' : 'spans';
 }
 
+/**
+ * stripRootOnly — v0.10.1008 (operator-reported, prod: `function_code` çipi +
+ * Root → liste de şerit de boş). Şeridin Root bayrağı "kök span" yüklemini
+ * çiple AYNI span'de AND'ler; çip giriş span'inde yaşamıyorsa (spans kapsamı)
+ * eşleşme sıfırdır. O kapsamda şerit zaten eşleşen span'leri sayıyor — Root
+ * bayrağı gönderilmez (liste kökü trace düzeyinde ayrıca doğrular). Giriş
+ * kapsamında bayrak aynen gider (v0.10.484). SAF.
+ */
+export function stripRootOnly(scope: StripScope, rootOnly: boolean): boolean {
+  return scope === 'entry' && rootOnly;
+}
+
 /** volumeUnitFor — birim etiketi: spans kapsamında "spans", değilse eski kural. */
 export function volumeUnitFor(serviceScoped: boolean, scope: StripScope): string {
   return scope === 'spans' ? 'spans' : volumeUnitLabel(serviceScoped);

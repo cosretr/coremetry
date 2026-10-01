@@ -167,8 +167,14 @@ func TestRawRootOnlyLooksBeyondServiceFilter(t *testing.T) {
 		!strings.Contains(rootHavingRaw(TraceRootDefStrict), `countIf((parent_id = '' OR parent_id = '0000000000000000')`) {
 		t.Error("daraltmasız dalın span-içi kök koşulu düşmüş — o dalda doğru ve ucuz olan buydu")
 	}
-	if !strings.Contains(block, "f.Service != \"\" || len(f.RequireServices) > 0") {
+	// v0.10.1008 — dallanma koşulu tek yardımcıda (rootScopeNarrowed): servis
+	// daraltması AYNEN içinde, üstüne span-düzeyi çipler eklendi (aynı sınıf:
+	// kök çipi taşımıyorsa daraltılmış kümede görünmez).
+	if !strings.Contains(block, "if rootScopeNarrowed(f) {") {
 		t.Error("dallanma koşulu değişmiş — hangi şekil hangi kaynağa bakıyor belirsizleşir")
+	}
+	if !rootScopeNarrowed(TraceFilter{Service: "x"}) || !rootScopeNarrowed(TraceFilter{RequireServices: []string{"a"}}) || rootScopeNarrowed(TraceFilter{RootOnly: true}) {
+		t.Error("rootScopeNarrowed servis daraltmasını kapsamalı, daraltmasız şekli kapsamamalı")
 	}
 }
 

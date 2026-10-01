@@ -77,7 +77,7 @@ import { traceHref } from '@/lib/traceHref';
 
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatHeaderLabel, type StripStat } from '@/components/traces/stripStat';
-import { stripScope, volumeUnitFor, weightedStatAvg } from '@/components/traces/volumeSeries';
+import { stripScope, stripRootOnly, volumeUnitFor, weightedStatAvg } from '@/components/traces/volumeSeries';
 import { groupLeaves } from '@/lib/urlState';
 import { LatencyScatter } from '@/components/traces/LatencyScatter';
 import { ShapesView } from '@/components/traces/ShapesView';
@@ -707,7 +707,8 @@ function TracesPageInner() {
     // gelmiyor") — kind kısıtı YALNIZ filtre giriş span'ında yaşayan
     // anahtarlardaysa; db./messaging./… ya da serbest metin varsa şerit
     // eşleşen span'leri sayar (volumeSeries.ts stripScope başlığı).
-    if (stripScope([...chartFilters, ...groupLeaves(grouped ? advGroup : null)], effectiveTraceSearch(filter) ?? '') === 'entry') {
+    const scope = stripScope([...chartFilters, ...groupLeaves(grouped ? advGroup : null)], effectiveTraceSearch(filter) ?? '');
+    if (scope === 'entry') {
       chartFilters.push({ k: 'kind', op: 'IN', v: ['server', 'consumer'] });
     }
     if (env) chartFilters.push({ k: 'deployment.environment', op: '=', v: [env] });
@@ -740,7 +741,9 @@ function TracesPageInner() {
       search: common.search, filters: common.filters, filterGroup: common.filterGroup, dsl: common.dsl,
       // v0.10.484 (operatör: "Root seçince histogram değişmiyor") — tablonun
       // iki bayrağı şeride de gider; effect bağımlılığında da (yeniden çekim).
-      rootOnly: filter.rootOnly || undefined,
+      // v0.10.1008 — spans kapsamında (çip giriş span'inde yaşamıyor) Root
+      // bayrağı gitmez: kök yüklemi çiple aynı span'de AND'lenir → sıfır.
+      rootOnly: stripRootOnly(scope, filter.rootOnly) || undefined,
       hasError: filter.hasError || undefined,
       aggs: [
         { name: 'count', agg: 'count' },

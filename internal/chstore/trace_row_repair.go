@@ -55,6 +55,17 @@ func spanScopedChips(f TraceFilter) bool {
 	return f.FilterRoot != nil && f.FilterRoot.hasPredicate()
 }
 
+// rootScopeNarrowed — SAF (v0.10.1008): liste WHERE'i span kümesini DARALTIYOR
+// mu? Daraltıyorsa "Root" kutusunun kök-varlığı kontrolü o daraltılmış kümede
+// YAPILAMAZ — kök çoğu zaman kümenin dışındadır (başka serviste, ya da çipi
+// taşımıyor) ve her trace sessizce düşer. Servis daraltması bunu v0.10.107'de
+// öğrendi; çipler aynı sınıf (operator-reported, prod: `function_code` çipi +
+// Root → boş liste; fonksiyon kodunu kök span taşımıyor). Daraltılmış şekilde
+// kök, daraltılmamış kaynaktan sorulur (aday id'ler üstünde MV nokta okuması).
+func rootScopeNarrowed(f TraceFilter) bool {
+	return f.Service != "" || len(f.RequireServices) > 0 || spanScopedChips(f)
+}
+
 // withoutChips — SAF: aynı süzgecin çipsiz, hata-WHERE'siz kopyası (satırı
 // TÜM span'lerden kurmak için). Trace seçimi çoktan yapıldı.
 func withoutChips(f TraceFilter) TraceFilter {

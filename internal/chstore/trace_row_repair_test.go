@@ -127,3 +127,54 @@ func TestRowRepairWiring(t *testing.T) {
 		t.Errorf("onarım WHERE'i: %s", sql)
 	}
 }
+
+// v0.10.1008 — Operator-reported (prod): `function_code = …` çipi + "Root" →
+// boş liste. Kök-varlığı WHERE'in daralttığı span kümesinde aranıyordu
+// (countIf(kök)); fonksiyon kodunu kök span taşımadığı için her trace
+// düşüyordu. v0.10.107'nin servis daraltması için koyduğu kural çiplere
+// genellendi: daraltılmış şekilde kök, aday id'ler üstünde MV'den sorulur.
+func TestRootScopeNarrowed(t *testing.T) {
+	chip := []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SPE0017"}}}
+	cases := []struct {
+		name string
+		f    TraceFilter
+		want bool
+	}{
+		{"daraltma yok", TraceFilter{RootOnly: true}, false},
+		{"servis", TraceFilter{Service: "svc"}, true},
+		{"RequireServices", TraceFilter{RequireServices: []string{"a", "b"}}, true},
+		{"span-düzeyi çip", TraceFilter{Filters: chip}, true},
+		{"gruplu çip", TraceFilter{FilterRoot: &FilterGroup{Join: "OR", Filters: chip}}, true},
+		{"arama + çip: çip HAVING'de, WHERE daralmıyor", TraceFilter{Filters: chip, Search: "x"}, false},
+	}
+	for _, c := range cases {
+		if got := rootScopeNarrowed(c.f); got != c.want {
+			t.Errorf("%s: %v", c.name, got)
+		}
+	}
+}
+
+func TestRootCheckUsesNarrowedRule(t *testing.T) {
+	repo, err := os.ReadFile("repo.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(repo)
+	for _, w := range []string{
+		"rootPostFilter := f.RootOnly && rootScopeNarrowed(f)",
+		"if rootScopeNarrowed(f) { // v0.10.1008",
+	} {
+		if !strings.Contains(src, w) {
+			t.Errorf("repo.go %q taşımalı (kök kontrolü daraltılmamış kaynaktan)", w)
+		}
+	}
+	if strings.Contains(src, `rootPostFilter := f.RootOnly && (f.Service != ""`) {
+		t.Error("eski servis-yalnız kural geri gelmiş")
+	}
+	// Çipli + Root: WHERE'de çip var, HAVING'de ham countIf(kök) OLMAMALI.
+	f := TraceFilter{RootOnly: true, From: time.Unix(100, 0), To: time.Unix(4000, 0),
+		Filters: []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SPE0017"}}}}
+	if !rootScopeNarrowed(f) || !spanScopedChips(f) {
+		t.Fatal("çipli süzgeç daraltılmış sayılmalı")
+	}
+}

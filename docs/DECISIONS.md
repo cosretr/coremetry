@@ -987,6 +987,22 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Traces: Root kutusu çipli listede kökü daraltılmış kümede aramaz (v0.10.1008)
+
+**Operatör bildirimi ("Root seçiliyken neden gelmiyor"):** `function_code = …` çipi + "Root" → liste boş
+(şerit de boş). **Kök neden:** daraltmasız ham şekilde kök-varlığı `countIf(kök)` ile WHERE'in bıraktığı
+span'lerde aranır; çipler WHERE'de span düzeyinde olduğundan o küme yalnız çipi taşıyan span'lerdir ve
+prod'da fonksiyon kodunu kök span taşımıyor → her trace düşüyor. v0.10.107 aynı hatayı SERVİS daraltması
+için kapatmıştı (kök başka serviste). **Karar:** tek kural `rootScopeNarrowed` — servis, RequireServices
+VEYA span-düzeyi çip WHERE'i daraltıyorsa kök, daraltılmamış kaynaktan sorulur: aday id'ler üstünde
+`trace_summary_5m` nokta okuması (rootPostFilter; −2..+1 kova, MV-gap gününde ham ikiz), tek geçişte
+`trace_id GLOBAL IN (MV)`. Yeni mekanizma yok; servis daraltmasının üretimde çalışan yolu çiplere açıldı.
+Arama + çip şeklinde çipler zaten HAVING'de (WHERE daralmıyor) → değişmedi. **Şerit:** Root bayrağı kök
+yüklemini çiple aynı span'de AND'liyordu; çip giriş span'inde yaşamıyorsa (spans kapsamı, v0.10.1006)
+bayrak artık gönderilmez (`stripRootOnly`) — o kapsamda şerit zaten eşleşen span'leri sayar ve bunu
+etiketler; giriş kapsamında bayrak aynen gider (v0.10.484). db.statement gibi diğer giriş-dışı çipler de
+aynı düzeltmeyi alır.
+
 ## 2026-10-01 — Traces hacim şeridi: çubuk sayısı tavanı 100 (v0.10.1007)
 
 **Operatör ("histogram bar sayısı daha iyi olabilir mi … çok"):** şeridin çubuk bütçesi ekran genişliğiyle

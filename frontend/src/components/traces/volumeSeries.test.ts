@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent } from './volumeSeries';
+import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly } from './volumeSeries';
 
 const S = 1_000_000_000; // 1 saniye, ns
 const T0 = 1_700_000_000 * S;
@@ -183,6 +183,16 @@ describe('stripScope', () => {
     expect(volumeUnitFor(true, stripScope([{ k: 'function_code' }], ''))).toBe('spans');
     // Giriş span'inde yaşayanlar etkilenmedi.
     expect(stripScope([{ k: 'service.name' }, { k: 'http.route' }, { k: 'deployment.environment' }], '')).toBe('entry');
+  });
+  // v0.10.1008 (operator-reported, prod: function_code çipi + Root → şerit boş)
+  // — Root bayrağı kök yüklemini çiple aynı span'de AND'ler; çip giriş
+  // span'inde yaşamıyorsa şerit bayrağı göndermez.
+  it('Root bayrağı yalnız giriş kapsamında şeride gider', () => {
+    expect(stripRootOnly('entry', true)).toBe(true);
+    expect(stripRootOnly('entry', false)).toBe(false);
+    expect(stripRootOnly('spans', true)).toBe(false);
+    expect(stripRootOnly(stripScope([{ k: 'function_code' }], ''), true)).toBe(false);
+    expect(stripRootOnly(stripScope([{ k: 'http.route' }], ''), true)).toBe(true);
   });
   it('birim ve ipucu kapsamı söyler', () => {
     expect(volumeUnitFor(true, 'entry')).toBe('traces');
