@@ -35,7 +35,7 @@ import { IconButton, SegmentedControl } from '@/components/ui'; // v0.10.676 —
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ColumnManager } from '@/components/ColumnManager';
-import { stepForPoints, barPanelMaxDataPoints } from '@/lib/chartStep';
+import { stepForPoints, traceStripMaxDataPoints } from '@/lib/chartStep';
 import { VirtualTable, ROW_H } from '@/components/ui/DataTable';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
 import type { DataTable, DataTableStateProps, VirtualTableProps } from '@/components/ui/DataTable';
@@ -684,7 +684,8 @@ function TracesPageInner() {
     // piksel-türevi + rung-kuantalı; step sunucu cache anahtarına sınırlı
     // kardinaliteyle biner.
     // v0.9.715 (operatör: "barlar çok küçülmüş") — bar bütçesi: ~12px/bar.
-    const step = stepForPoints(windowSec, barPanelMaxDataPoints(1));
+    // v0.10.1007 (operatör: "histogram bar sayısı … çok") — tavan 100 çubuk.
+    const step = stepForPoints(windowSec, traceStripMaxDataPoints());
     // v0.10.655 (operatör, prod: "filtreli sorguda 34 trace, histogram milyon")
     // — metric-batch artık filterGroup alıyor: gruplu kipte grup olduğu gibi
     // gider (düz advFilters DEĞİL, çünkü grup onların üst kümesi), bağlam

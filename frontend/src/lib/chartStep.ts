@@ -93,6 +93,22 @@ export function barPanelMaxDataPoints(cols = 1): number {
   return Math.max(30, Math.min(240, Math.round(quantizeWidth(content / Math.max(1, cols)) / 12)));
 }
 
+// traceStripMaxDataPoints — Traces hacim şeridinin çubuk bütçesi (v0.10.1007,
+// operatör: "histogram bar sayısı … çok").
+//
+// barPanelMaxDataPoints (~12px/çubuk, tavan 240) çubuk sayısını ekran
+// genişliğiyle büyütüyordu: geniş ekranda 3 saatlik pencere 180 çubuk (1 dk
+// kova) — operatörün ekranı. Okunan şey trend ve tepeler; 180 ince çubuk ikisini
+// de zorlaştırıyor. Yoğunluk aynı (~12px/çubuk) ama TAVAN 100: çubuk sayısı
+// ekran ne kadar geniş olursa olsun 100'ü geçmez, geniş ekranda çubuklar
+// kalınlaşır. Rung'a snap sonrası tipik sayı 60–96 (3 saat = 90 çubuk, 2 dk
+// kova). ~1440px ve altındaki ekranlarda bütçe zaten ≤100'dü — onlar DEĞİŞMEDİ.
+// Taban 30 aynı. Yalnız Traces şeridi: Logs histogramı kendi bütçesinde kaldı.
+export const TRACE_STRIP_MAX_BARS = 100;
+export function traceStripMaxDataPoints(): number {
+  return Math.min(TRACE_STRIP_MAX_BARS, barPanelMaxDataPoints(1));
+}
+
 // logsBucketSec — Logs hacim şeridi + LogsHistogram İKİSİ İÇİN TEK kaynak.
 // İkisi ayrı ama "aynı kalmalı" yorumlu iki kopya merdivendi (5s/30s/1m/
 // 5m/15m) — 1 saatte 120 kova ≈ 0.1 nokta/px. Şimdi piksel bütçesinden:

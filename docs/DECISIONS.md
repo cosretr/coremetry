@@ -987,6 +987,17 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — Traces hacim şeridi: çubuk sayısı tavanı 100 (v0.10.1007)
+
+**Operatör ("histogram bar sayısı daha iyi olabilir mi … çok"):** şeridin çubuk bütçesi ekran genişliğiyle
+büyüyordu (`barPanelMaxDataPoints`: ~12px/çubuk, tavan 240) — geniş ekranda 3 saatlik pencere 1 dk kovayla
+180 çubuk. Okunan şey trend ve tepeler; 180 ince çubuk ikisini de zorlaştırıyor. **Karar:** Traces şeridine
+özel bütçe `traceStripMaxDataPoints` = min(100, eski bütçe). Çubuk sayısı ekran ne kadar geniş olursa olsun
+100'ü geçmez; geniş ekranda çubuklar kalınlaşır. Rung'a snap sonrası tipik sayı 60–96 (3 saat → 2 dk kova,
+90 çubuk). ~1440px ve altındaki ekranlarda bütçe zaten ≤100'dü — değişmedi. Step yine rung'da (cache
+anahtarı kardinalitesi aynı). **Kapsam bilinçli dar:** Logs histogramı aynı eski bütçede kaldı (istenmedi).
+v0.9.715 ("barlar çok küçülmüş" → 12px/çubuk) kararı yerinde; bu, onun geniş ekran ucunu kapatır.
+
 ## 2026-10-01 — Traces hacim şeridi: iş kimlikleri giriş span'i anahtarı değil (v0.10.1006)
 
 **Operatör bildirimi + onayı ("olur düzelt"):** `function_code = …` çipinde tablo dolu, hacim şeridi "No

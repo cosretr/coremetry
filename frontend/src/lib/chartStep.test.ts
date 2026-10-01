@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STEP_RUNGS, stepForWidth, stepForPoints, quantizeWidth, barPanelMaxDataPoints, logsBucketSec } from './chartStep';
+import { STEP_RUNGS, stepForWidth, stepForPoints, quantizeWidth, barPanelMaxDataPoints, logsBucketSec, traceStripMaxDataPoints, TRACE_STRIP_MAX_BARS } from './chartStep';
 import { THANOS_MDP_RUNGS, thanosMaxDataPoints } from './chartStep';
 
 // GRAN-A (v0.8.245) — Grafana-style width-aware step. stepForWidth picks the
@@ -175,5 +175,44 @@ describe('thanosMaxDataPoints (v0.10.287)', () => {
     }
     expect(thanosMaxDataPoints(1)).toBeGreaterThanOrEqual(thanosMaxDataPoints(4));
     expect([...THANOS_MDP_RUNGS].sort((a, b) => a - b)).toEqual(THANOS_MDP_RUNGS);
+  });
+});
+
+// v0.10.1007 (operatör, prod: "histogram bar sayısı … çok") — Traces hacim
+// şeridi geniş ekranda 3 saatte 180 çubuk çiziyordu (bütçe ekran genişliğiyle
+// büyüyordu, tavan 240). Tavan artık 100: geniş ekranda çubuk sayısı artmaz,
+// çubuk kalınlaşır; dar ekranlar (bütçe zaten ≤100) değişmez.
+describe('traceStripMaxDataPoints (v0.10.1007)', () => {
+  const at = (innerWidth: number, fn: () => void) => {
+    const prev = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = { innerWidth };
+    try { fn(); } finally { (globalThis as { window?: unknown }).window = prev; }
+  };
+  const bars = (rangeSec: number) => rangeSec / stepForPoints(rangeSec, traceStripMaxDataPoints());
+
+  it('geniş ekran (2560px): eski bütçe 200 → 3 saatte 180 çubuk; yeni tavan 100 → 90 çubuk', () => {
+    at(2560, () => {
+      expect(barPanelMaxDataPoints(1)).toBe(200);
+      expect((3 * 3600) / stepForPoints(3 * 3600, barPanelMaxDataPoints(1))).toBe(180); // hatanın şekli
+      expect(traceStripMaxDataPoints()).toBe(TRACE_STRIP_MAX_BARS);
+      expect(bars(3 * 3600)).toBe(90); // 2 dk kova
+    });
+  });
+  it('hiçbir pencerede 100 çubuğu geçmez, 30\'un altına düşmez; step rung\'da', () => {
+    for (const vw of [1280, 1440, 1920, 2560, 3840]) {
+      at(vw, () => {
+        for (const rangeSec of [900, 1800, 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86400, 2 * 86400, 7 * 86400]) {
+          const step = stepForPoints(rangeSec, traceStripMaxDataPoints());
+          expect(STEP_RUNGS).toContain(step);
+          expect(rangeSec / step).toBeLessThanOrEqual(TRACE_STRIP_MAX_BARS);
+          expect(rangeSec / step).toBeGreaterThanOrEqual(30);
+        }
+      });
+    }
+  });
+  it('1440px ekran değişmedi (bütçe zaten tavanın altında)', () => {
+    at(1440, () => {
+      expect(traceStripMaxDataPoints()).toBe(barPanelMaxDataPoints(1));
+    });
   });
 });
