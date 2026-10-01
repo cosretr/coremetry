@@ -21,6 +21,8 @@ type fakeMCPHTTP struct {
 	mu       sync.Mutex
 	calls    []string // gelen method'lar
 	sessions []string // gelen Mcp-Session-Id başlıkları
+	protos   []string // gelen MCP-Protocol-Version başlıkları (v0.10.995)
+	hits     int      // kimlik denetiminden ÖNCE sayılan istek (v0.10.995)
 	sse      bool     // tools/call yanıtını SSE olarak dön
 	authTok  string   // doluysa Bearer eşleşmesi ister
 	srv      *httptest.Server
@@ -30,6 +32,9 @@ func newFakeMCPHTTP(t *testing.T) *fakeMCPHTTP {
 	t.Helper()
 	f := &fakeMCPHTTP{}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.hits++
+		f.mu.Unlock()
 		if f.authTok != "" && r.Header.Get("Authorization") != "Bearer "+f.authTok {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -42,6 +47,7 @@ func newFakeMCPHTTP(t *testing.T) *fakeMCPHTTP {
 		f.mu.Lock()
 		f.calls = append(f.calls, env.Method)
 		f.sessions = append(f.sessions, r.Header.Get("Mcp-Session-Id"))
+		f.protos = append(f.protos, r.Header.Get(headerProtocolVersion))
 		f.mu.Unlock()
 
 		if env.ID == nil { // bildirim
@@ -132,11 +138,12 @@ func TestHTTPEndToEnd(t *testing.T) {
 	if len(tools) != 2 || tools[0].Name != "search_kb" || tools[1].Name != "get_doc" {
 		t.Fatalf("sayfalama katalogu toplamadı: %+v", tools)
 	}
-	// initialize BİR kez + initialized bildirimi gitmiş olmalı.
+	// v0.10.995 — önce dönem yoklaması (server/discover; bu sahte sunucu
+	// legacy: -32601 döner), sonra initialize BİR kez + initialized bildirimi.
 	f.mu.Lock()
 	seq := strings.Join(f.calls, ",")
 	f.mu.Unlock()
-	if !strings.HasPrefix(seq, "initialize,notifications/initialized,tools/list") {
+	if !strings.HasPrefix(seq, "server/discover,initialize,notifications/initialized,tools/list") {
 		t.Fatalf("el sıkışma sırası yanlış: %s", seq)
 	}
 
@@ -156,12 +163,29 @@ func TestHTTPEndToEnd(t *testing.T) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for i, m := range f.calls {
-		if i == 0 {
-			continue // initialize'ın kendisi oturumsuz
+		if i <= 1 {
+			continue // yoklama ve initialize'ın kendisi oturumsuz
 		}
 		if f.sessions[i] != "ses-42" {
 			t.Errorf("%s isteği oturum başlığı taşımıyor (%q)", m, f.sessions[i])
 		}
+	}
+	// v0.10.995 — MCP-Protocol-Version: yoklama modern sürümü, initialize
+	// başlıksız, sonrası sunucunun döndürdüğü legacy sürümü taşır.
+	for i, m := range f.calls {
+		want := protocolVersion
+		switch i {
+		case 0:
+			want = modernProtocolVersion
+		case 1:
+			want = ""
+		}
+		if f.protos[i] != want {
+			t.Errorf("%s isteğinin MCP-Protocol-Version başlığı %q, istenen %q", m, f.protos[i], want)
+		}
+	}
+	if strings.Count(strings.Join(f.calls, ","), "server/discover") != 1 || strings.Count(strings.Join(f.calls, ","), "initialize,") != 1 {
+		t.Errorf("yoklama ve el sıkışma istemci başına BİR kez: %v", f.calls)
 	}
 }
 

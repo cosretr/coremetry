@@ -658,11 +658,20 @@ func newFakeTrackerMCP(t *testing.T) (*httptest.Server, func() int) {
 			result = map[string]any{"tools": []any{map[string]any{
 				"name": "create_issue", "description": "issue aç", "inputSchema": map[string]any{"type": "object"},
 			}}}
-		default:
+		case "tools/call":
 			mu.Lock()
 			toolCalls++
 			mu.Unlock()
 			result = map[string]any{"content": []any{map[string]any{"type": "text", "text": "issue açıldı"}}}
+		default:
+			// v0.10.995 — istemci artık önce server/discover ile dönemi yoklar;
+			// bu sahte sunucu LEGACY: bilinmeyen yönteme -32601 döner ve
+			// istemci initialize'a düşer. Eskiden "geri kalan her yöntem"
+			// tools/call sayılıyordu — yoklama da sayaca giriyordu.
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": *env.ID,
+				"error": map[string]any{"code": -32601, "message": "method not found: " + env.Method}})
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": *env.ID, "result": result})

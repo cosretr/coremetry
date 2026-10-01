@@ -15,11 +15,38 @@
 //
 // Güvenlik duruşu: sunucu listesi YALNIZ operatör ayarından gelir
 // (izin listesi); bu paket kendi başına hiçbir adrese bağlanmaz.
+//
+// v0.10.995 — ÇİFT DÖNEMLİ istemci (dış skill denetimi 2026-09-19 M2; sunucu
+// tarafı internal/mcp/modern.go, v0.10.994). MCP 2026-07-28 el sıkışmasını
+// kaldırdı: modern sunucu `initialize`'ı tanımaz, her istek sürümünü ve
+// istemci yeteneklerini `_meta`'da taşır. Eski istemci böyle bir sunucuda
+// initialize'da düşüyor, ListTools / CallTool hiç çalışmıyordu. Artık:
+//
+//   - Initialize önce `server/discover` ile YOKLAR (belirtim: stdio ›
+//     Backward Compatibility; HTTP'de "modern isteği önce dene"). Üç sonuç:
+//     DiscoverResult ve 2026-07-28 destekli → MODERN (el sıkışma yok); tanınan
+//     modern hata (-32022 UnsupportedProtocolVersion) → sunucu modern, ilan
+//     ettiği sürümlerden konuşabildiğimiz varsa ona geçilir, initialize'a
+//     KÖRLEMESİNE düşülmez; başka her hata ya da zaman aşımı → LEGACY
+//     (initialize + initialized). Düşüş TEK bir hata koduna bağlı değildir —
+//     eski sunucular bilinmeyen yönteme -32601, -32602 ya da hiç yanıt verir.
+//   - Modern kipte her istek `_meta` (protocolVersion, clientInfo,
+//     clientCapabilities) ve HTTP'de `MCP-Protocol-Version` / `Mcp-Method` /
+//     `Mcp-Name` başlıklarını taşır; sonuçta `resultType` okunur (yok =
+//     "complete"; "input_required" desteklenmez ve AÇIK hata olur).
+//   - Legacy kipte davranış aynı; tek ek: initialize'ın döndürdüğü sürüm
+//     sonraki HTTP isteklerinde `MCP-Protocol-Version` başlığına yazılır
+//     (2025-06-18+ sunucular bekler).
+//
+// Dönem sunucunun özelliğidir: istemci nesnesi boyunca bir kez belirlenir
+// (Registry aynı istemciyi yeniden kullanır).
 package mcpclient
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -30,8 +57,33 @@ import (
 	"github.com/cilcenk/coremetry/internal/selfobs"
 )
 
-// protocolVersion — konuşulan MCP sürümü; internal/mcp sunucusuyla aynı.
+// protocolVersion — LEGACY el sıkışmasında ilan edilen MCP sürümü.
 const protocolVersion = "2024-11-05"
+
+// modernProtocolVersion — el sıkışmasız dönemin konuşulan sürümü (v0.10.995).
+const modernProtocolVersion = "2026-07-28"
+
+// `_meta` anahtarları, istek başlıkları ve modern hata kodları (belirtim
+// 2026-07-28; internal/mcp/modern.go ile aynı değerler — bilinçli kopya,
+// paket başlığındaki gerekçe).
+const (
+	metaProtocolVersion    = "io.modelcontextprotocol/protocolVersion"
+	metaClientInfo         = "io.modelcontextprotocol/clientInfo"
+	metaClientCapabilities = "io.modelcontextprotocol/clientCapabilities"
+
+	headerProtocolVersion = "MCP-Protocol-Version"
+	headerMethod          = "Mcp-Method"
+	headerName            = "Mcp-Name"
+
+	rpcHeaderMismatch          = -32020
+	rpcMissingClientCapability = -32021
+	rpcUnsupportedVersion      = -32022
+)
+
+// errAuthRejected — sunucu kimliği reddetti (http 401/403). Yoklama bunu
+// "legacy sunucu" saymaz: token yanlışken initialize'a düşmek aynı hatayı
+// ikinci kez üretir ve nedeni gizler.
+var errAuthRejected = errors.New("mcp sunucusu kimliği reddetti")
 
 // callTimeout — TEK tool çağrısının istemci tavanı. Sohbet döngüsünün
 // runChatTool 20s tavanından BİLİNÇLİ kısa: dış sunucu ağ gecikmesi o
@@ -130,6 +182,160 @@ type Client struct {
 	initialized bool
 	// server — span attribute'u için sunucu adı; boş olabilir (test).
 	server string
+	// modern (v0.10.995) — sunucu 2026-07-28 konuşuyor: el sıkışma yok, her
+	// istek `_meta` + başlık taşır. false = legacy (initialize yapıldı).
+	modern bool
+	// legacyVersion — initialize'ın döndürdüğü sürüm; legacy HTTP isteklerinin
+	// MCP-Protocol-Version başlığı. Boş = başlık gönderilmez (eski davranış).
+	legacyVersion string
+}
+
+// ── HTTP başlıklarının taşıma katmanına inişi ───────────────────────────
+
+// mcpHeadersKey — Client'ın bir çağrı için istediği HTTP başlıkları ctx ile
+// iner; Transport arayüzü değişmez (stdio'da başlık katmanı yok, yok sayar).
+type mcpHeadersKey struct{}
+
+func withMCPHeaders(ctx context.Context, h map[string]string) context.Context {
+	if len(h) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, mcpHeadersKey{}, h)
+}
+
+func mcpHeadersFrom(ctx context.Context) map[string]string {
+	h, _ := ctx.Value(mcpHeadersKey{}).(map[string]string)
+	return h
+}
+
+// encodeHeaderValue — SAF: `Mcp-Name` değeri düz ASCII başlık değeri olarak
+// güvenle taşınamıyorsa (ASCII dışı, kontrol karakteri, baş/son boşluk) ya da
+// nöbetçi kalıbına benziyorsa `=?base64?…?=` (belirtim: Value Encoding).
+func encodeHeaderValue(v string) string {
+	const pre, suf = "=?base64?", "?="
+	safe := v != "" && v == strings.TrimSpace(v) && !(strings.HasPrefix(v, pre) && strings.HasSuffix(v, suf))
+	if safe {
+		for i := 0; i < len(v); i++ {
+			if c := v[i]; c != ' ' && (c < 0x21 || c > 0x7e) {
+				safe = false
+				break
+			}
+		}
+	}
+	if safe {
+		return v
+	}
+	return pre + base64.StdEncoding.EncodeToString([]byte(v)) + suf
+}
+
+// modernHeaders — SAF: modern isteğin HTTP başlıkları. name yalnız
+// tools/call, prompts/get (params.name) ve resources/read (params.uri) için.
+func modernHeaders(method, name string) map[string]string {
+	h := map[string]string{headerProtocolVersion: modernProtocolVersion, headerMethod: method}
+	if name != "" {
+		h[headerName] = encodeHeaderValue(name)
+	}
+	return h
+}
+
+// modernParams — SAF: params'ın `_meta` eklenmiş KOPYASI (çağıranın haritası
+// değişmez). Zorunlu iki alan + kimlik.
+func modernParams(params map[string]any) map[string]any {
+	out := make(map[string]any, len(params)+1)
+	for k, v := range params {
+		out[k] = v
+	}
+	out["_meta"] = map[string]any{
+		metaProtocolVersion:    modernProtocolVersion,
+		metaClientInfo:         map[string]any{"name": "coremetry", "version": "1"},
+		metaClientCapabilities: map[string]any{},
+	}
+	return out
+}
+
+// checkResultType — SAF: modern sonucun `resultType`'ı. Yok ya da "complete"
+// → tamam (eski sürüm sunucuları alanı taşımaz). "input_required" (MRTR:
+// sunucu sampling / elicitation istiyor) bu istemcide DESTEKLENMEZ ve sessizce
+// boş sonuç sayılmaz; bilinmeyen değer belirtim gereği geçersizdir.
+func checkResultType(raw json.RawMessage) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	var r struct {
+		ResultType string `json:"resultType"`
+	}
+	if json.Unmarshal(raw, &r) != nil {
+		return nil // nesne olmayan sonuç: tür alanı yok
+	}
+	switch r.ResultType {
+	case "", "complete":
+		return nil
+	case "input_required":
+		return errors.New("mcp sunucusu ek girdi istedi (resultType input_required: sampling / elicitation) — Coremetry istemcisi desteklemiyor")
+	}
+	return fmt.Errorf("mcp sunucusu bilinmeyen resultType döndürdü: %q", r.ResultType)
+}
+
+// isModernRPCError — hata, belirtimin modern döneme ayırdığı kodlardan biri mi.
+func isModernRPCError(err error) (*rpcError, bool) {
+	var re *rpcError
+	if !errors.As(err, &re) {
+		return nil, false
+	}
+	switch re.Code {
+	case rpcHeaderMismatch, rpcMissingClientCapability, rpcUnsupportedVersion:
+		return re, true
+	}
+	return nil, false
+}
+
+// eraOf — SAF: yoklamanın (server/discover) sonucundan dönem kararı.
+// supported: DiscoverResult.supportedVersions ya da -32022'nin data.supported
+// listesi. Döner: modern mi; legacy el sıkışmasına düşülsün mü; ikisi de
+// değilse err (sunucu modern ama ortak sürüm yok / isteğimizi reddetti).
+func eraOf(supported []string, probeErr error) (modern, legacy bool, err error) {
+	usable := func(vs []string) (bool, bool) {
+		m, l := false, false
+		for _, v := range vs {
+			switch {
+			case v == modernProtocolVersion:
+				m = true
+			case v < modernProtocolVersion: // tarih biçimli sürümler sözlük sırasıyla kıyaslanır
+				l = true
+			}
+		}
+		return m, l
+	}
+	if probeErr == nil {
+		if m, _ := usable(supported); m {
+			return true, false, nil
+		}
+		// Sürüm listesi yok (era-belirsiz bir legacy sunucu boş sonuç döndü)
+		// ya da yalnız el sıkışmalı sürümler var → legacy.
+		return false, true, nil
+	}
+	if errors.Is(probeErr, errAuthRejected) {
+		return false, false, probeErr
+	}
+	re, ok := isModernRPCError(probeErr)
+	if !ok {
+		return false, true, nil // tanınmayan her hata / zaman aşımı: legacy sunucu
+	}
+	if re.Code != rpcUnsupportedVersion {
+		return false, false, fmt.Errorf("mcp sunucusu modern isteği reddetti: %w", probeErr)
+	}
+	var data struct {
+		Supported []string `json:"supported"`
+	}
+	_ = json.Unmarshal(re.Data, &data)
+	switch m, l := usable(data.Supported); {
+	case m:
+		return true, false, nil
+	case l:
+		return false, true, nil
+	}
+	return false, false, fmt.Errorf("mcp sunucusu %s sürümünü desteklemiyor (desteklediği: %s) — ortak sürüm yok",
+		modernProtocolVersion, strings.Join(data.Supported, ", "))
 }
 
 func NewClient(tr Transport) *Client { return &Client{tr: tr} }
@@ -161,14 +367,36 @@ func (c *Client) startSpan(ctx context.Context, op string, extra ...attribute.Ke
 	}
 }
 
-// Initialize — el sıkışma + initialized bildirimi. İkinci çağrı no-op:
-// Registry tembel başlatır ve aynı istemciyi yeniden kullanır.
+// Initialize — dönem yoklaması + (legacy sunucuda) el sıkışma ve initialized
+// bildirimi. İkinci çağrı no-op: Registry tembel başlatır ve aynı istemciyi
+// yeniden kullanır. v0.10.995: önce server/discover (paket başlığı).
 func (c *Client) Initialize(ctx context.Context) (err error) {
 	if c.initialized {
 		return nil
 	}
 	ctx, end := c.startSpan(ctx, "mcpclient.initialize")
 	defer func() { end(err) }()
+
+	var disc struct {
+		SupportedVersions []string `json:"supportedVersions"`
+	}
+	pctx, pcancel := context.WithTimeout(ctx, callTimeout)
+	probeErr := c.tr.Call(withMCPHeaders(pctx, modernHeaders("server/discover", "")), "server/discover", modernParams(nil), &disc)
+	pcancel()
+	if ctx.Err() != nil {
+		return fmt.Errorf("server/discover: %w", ctx.Err()) // çağıran vazgeçti: düşüş denenmez
+	}
+	modern, legacy, eerr := eraOf(disc.SupportedVersions, probeErr)
+	switch {
+	case eerr != nil:
+		return eerr
+	case modern:
+		c.modern, c.initialized = true, true
+		return nil
+	case !legacy:
+		return errors.New("mcp sunucusunun dönemi belirlenemedi")
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
 	params := map[string]any{
@@ -186,10 +414,43 @@ func (c *Client) Initialize(ctx context.Context) (err error) {
 	// evriliyor ve sert kapı her yeni sunucu sürümünde operatörü
 	// kilitlemek olurdu. Uyumsuzluk gerçek bir kırılım üretirse hata
 	// zaten tools/list'te görünür.
-	if err := c.tr.Notify(ctx, "notifications/initialized", map[string]any{}); err != nil {
+	// v0.10.995 — sunucunun döndürdüğü sürüm sonraki HTTP isteklerinin
+	// MCP-Protocol-Version başlığıdır (2025-06-18+; yoksa başlık gönderilmez).
+	c.legacyVersion = res.ProtocolVersion
+	if err := c.tr.Notify(c.legacyCtx(ctx), "notifications/initialized", map[string]any{}); err != nil {
 		return fmt.Errorf("initialized bildirimi: %w", err)
 	}
 	c.initialized = true
+	return nil
+}
+
+// legacyCtx — legacy kipte müzakere edilen sürümü başlık olarak taşıyan ctx.
+func (c *Client) legacyCtx(ctx context.Context) context.Context {
+	if c.legacyVersion == "" {
+		return ctx
+	}
+	return withMCPHeaders(ctx, map[string]string{headerProtocolVersion: c.legacyVersion})
+}
+
+// call — tek istek/yanıt turu, döneme göre. Legacy: params ve result aynen
+// (v0.10.86 davranışı) + sürüm başlığı. Modern: `_meta` + başlıklar, sonra
+// resultType denetimi. name = Mcp-Name'in kaynağı (tool adı); listelerde "".
+func (c *Client) call(ctx context.Context, method, name string, params map[string]any, result any) error {
+	if !c.modern {
+		return c.tr.Call(c.legacyCtx(ctx), method, params, result)
+	}
+	var raw json.RawMessage
+	if err := c.tr.Call(withMCPHeaders(ctx, modernHeaders(method, name)), method, modernParams(params), &raw); err != nil {
+		return err
+	}
+	if err := checkResultType(raw); err != nil {
+		return fmt.Errorf("%s: %w", method, err)
+	}
+	if result != nil && len(raw) > 0 {
+		if err := json.Unmarshal(raw, result); err != nil {
+			return fmt.Errorf("mcp %s: yanıt çözümlenemedi: %w", method, err)
+		}
+	}
 	return nil
 }
 
@@ -212,7 +473,7 @@ func (c *Client) ListTools(ctx context.Context) (tools []ToolDef, truncated bool
 			Tools      []ToolDef `json:"tools"`
 			NextCursor string    `json:"nextCursor"`
 		}
-		callErr := c.tr.Call(cctx, "tools/list", params, &res)
+		callErr := c.call(cctx, "tools/list", "", params, &res)
 		cancel()
 		if callErr != nil {
 			return nil, false, fmt.Errorf("tools/list: %w", callErr)
@@ -245,7 +506,7 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 	defer cancel()
 	params := map[string]any{"name": name}
 	if len(args) > 0 {
-		params["arguments"] = json.RawMessage(args)
+		params["arguments"] = args
 	}
 	var res struct {
 		Content []struct {
@@ -254,7 +515,7 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 		} `json:"content"`
 		IsError bool `json:"isError"`
 	}
-	if err := c.tr.Call(ctx, "tools/call", params, &res); err != nil {
+	if err := c.call(ctx, "tools/call", name, params, &res); err != nil {
 		return "", false, err
 	}
 	var sb strings.Builder

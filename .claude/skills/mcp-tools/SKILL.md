@@ -15,8 +15,9 @@ sorted by name. Since v0.10.994 the server is DUAL-ERA: a request whose
 `server/discover` method) is served by the 2026-07-28 stateless contract
 (`internal/mcp/modern.go`: header validation, `resultType`,
 `supportedVersions`, -32020/-32022); anything else keeps the legacy
-`initialize` path byte-for-byte. The client side (`internal/mcpclient`) is
-still handshake-only (audit 2026-09-19 M2). Infrastructure shipped
+`initialize` path byte-for-byte. The client side (`internal/mcpclient`,
+v0.10.995) is dual-era too: it probes `server/discover` first and falls
+back to the `initialize` handshake for legacy servers. Infrastructure shipped
 v0.6.4-v0.6.7, Streamable v0.9.14:
 
 | Concern | Where |

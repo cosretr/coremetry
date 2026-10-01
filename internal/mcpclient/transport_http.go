@@ -19,7 +19,8 @@ import (
 // Her JSON-RPC mesajı tek POST; sunucu ya düz application/json (tek
 // yanıt) ya da text/event-stream (aynı isteğin yanıtı + araya bildirim)
 // döndürür. Oturum kimliği initialize yanıtının Mcp-Session-Id
-// başlığından alınır ve sonraki her isteğe geri yazılır.
+// başlığından alınır ve sonraki her isteğe geri yazılır (legacy; 2026-07-28
+// sunucuları oturum üretmez, başlık hiç gelmez ve gönderilmez).
 //
 // ⚠ BAĞIMSIZ GET akışı BİLİNÇLİ olarak AÇILMIYOR (dilim ① sınırı):
 // bildirimler yalnız POST yanıt akışlarına binmiş hâlleriyle görülür.
@@ -103,6 +104,11 @@ func (t *httpTransport) post(ctx context.Context, env rpcEnvelope, wantID *int64
 	if t.token != "" {
 		req.Header.Set("Authorization", "Bearer "+t.token)
 	}
+	// v0.10.995 — Client'ın bu çağrı için istediği MCP başlıkları
+	// (MCP-Protocol-Version / Mcp-Method / Mcp-Name; mcpclient.go).
+	for k, v := range mcpHeadersFrom(ctx) {
+		req.Header.Set(k, v)
+	}
 	t.mu.Lock()
 	if t.session != "" {
 		req.Header.Set("Mcp-Session-Id", t.session)
@@ -123,10 +129,21 @@ func (t *httpTransport) post(ctx context.Context, env rpcEnvelope, wantID *int64
 	// Tek biçim kimlik hatası (devops doGet sözleşmesi): 401 ile 403'ü
 	// ayrı ayrı açıklamak yerine operatörün yapacağı tek işi söyle.
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("mcp sunucusu kimliği reddetti (http %d) — token'ı Ayarlar'dan kontrol edin", resp.StatusCode)
+		return nil, fmt.Errorf("%w (http %d) — token'ı Ayarlar'dan kontrol edin", errAuthRejected, resp.StatusCode)
 	}
 	if resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		// v0.10.995 — 2026-07-28 sunucuları hatayı HTTP 400 / 404 ile ve
+		// gövdede JSON-RPC hata zarfıyla döner (-32020, -32022, -32601).
+		// Zarf varsa onu taşı: kod, dönem yoklamasının ve operatörün
+		// göreceği hata metninin kaynağıdır.
+		var e rpcEnvelope
+		if wantID != nil && json.Unmarshal(raw, &e) == nil && e.Error != nil {
+			return &e, nil
+		}
+		if len(raw) > 512 {
+			raw = raw[:512]
+		}
 		return nil, fmt.Errorf("mcp http %d: %s", resp.StatusCode, firstLineTrim(string(raw)))
 	}
 	// Bildirim POST'u (202/204, gövdesiz) — zarf beklenmez.

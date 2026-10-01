@@ -987,6 +987,23 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-01 — MCP istemcisi çift dönemli: önce `server/discover`, olmazsa `initialize` (v0.10.995; denetim M2)
+
+**Karar:** dış MCP sunucularına bağlanan istemci (`internal/mcpclient`) dönemi `Initialize`'da bir kez
+belirler: `server/discover` yoklaması DiscoverResult ve `2026-07-28` döndürürse MODERN (el sıkışma
+yok; her istek `_meta` + HTTP'de üç MCP başlığı, `Mcp-Name` gerekirse base64 nöbetçili; sonuçta
+`resultType`), aksi hâlde LEGACY (`initialize` + `initialized`, v0.10.86 davranışı). **Düşüş kuralı
+belirtimden:** tek bir hata koduna bağlanmaz (eski sunucular -32601, -32602 döner ya da hiç
+yanıtlamaz → hepsi legacy); tanınan modern hata -32022 ise sunucu moderndir — ilan ettiği sürümlerde
+konuşabildiğimiz varsa ona geçilir, yoksa "ortak sürüm yok" hatası (initialize'a körlemesine düşülmez);
+-32020 / -32021 ve 401 / 403 düşüş üretmez. **Bedel:** legacy sunucuda bağlantı başına bir fazladan
+istek; yanıt vermeyen legacy stdio sunucusunda ilk bağlantı yoklama tavanı (15 sn) kadar gecikir —
+tavan bilinçli olarak kısa tutulmadı, çünkü yavaş açılan (`npx …`) modern bir sunucuyu legacy sanmak
+initialize'da kalıcı hata üretirdi. **Desteklenmeyen:** MRTR (`input_required`) — sessizce boş sonuç
+sayılmaz, açık hata. Legacy HTTP'de initialize'ın döndürdüğü sürüm sonraki isteklerin
+`MCP-Protocol-Version` başlığıdır (2025-06-18+). Uçtan uca test kendi sunucumuza karşı: iki taraf
+birbirinin başlık / `_meta` sözleşmesini doğrular.
+
 ## 2026-10-01 — MCP sunucusu çift dönemli: 2026-07-28 el sıkışmasız sözleşme (v0.10.994; denetim M1)
 
 **Karar:** `POST /api/mcp` artık iki dönemi birden konuşur. İstek `params._meta` içinde
