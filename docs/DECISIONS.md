@@ -987,6 +987,55 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — OpenTelemetry 1.45.0: GO-2026-6505 (v0.10.1029)
+
+**Köken:** CI'ın govulncheck adımı GO-2026-6505'te kırıldı (yayın 2026-10-01, geri çekilmedi):
+"OpenTelemetry-Go: Exporter config logging may leak endpoint URLs in info logs". `otel/sdk` < 1.45.0 ve
+`otlptrace`/`otlptracegrpc` < 1.45.0, TracerProvider kurulurken yapılandırmasını OTel iç günlüğüne
+("TracerProvider created", `global.Info` = V(4)) yazıyor; satırda dışa aktarıcının uç adresi var. Düşük
+önem: bize yalnız self-observability'den (`internal/selfobs`, `COREMETRY_SELF_OBS_OTLP_ENDPOINT`;
+govulncheck izi `selfobs.go:132` `otlptracegrpc.New`, `:150` `WithBatcher`) erişiliyor ve OTel'in varsayılan
+günlükçüsü V(4)'ü basmıyor (repoda `otel.SetLogger` yok) — pratikte uyuyan sızıntı, ama erişilebilir.
+
+**Karar (operatör: "1 evet yükselt"):** en küçük yükseltme — yalnız `otel/sdk`, `otlptrace`, `otlptracegrpc`
+→ v1.45.0, ardından `go mod tidy`. Taşınan modüllerin TAMAMI:
+
+| Modül | Eski → Yeni | Kim zorladı / not |
+|---|---|---|
+| `otel`, `otel/metric`, `otel/trace`, `otel/sdk`, `otel/sdk/metric` | v1.44.0 → v1.45.0 | çekirdek birlikte (beklenen) |
+| `exporters/otlp/otlptrace/otlptracegrpc` (doğrudan), `otlptrace` (dolaylı) | v1.32.0 → v1.45.0 | düzeltmenin kendisi |
+| `otel/metric/x` (yalnız modül grafında) | v0.66.0 → v0.67.0 | `sdk/metric` 1.45.0 |
+| `proto/otlp` | v1.10.0 → v1.11.0 | `otlptrace(grpc)` 1.45.0; YALNIZ yorum farkı, tanımlayıcı baytları aynı → alıcının (`internal/otlp`) tel biçimi değişmedi |
+| `genproto/googleapis/rpc` (doğrudan), `/api` (dolaylı) | `20260526163538` → `20260803160001` | `otlptracegrpc` 1.45.0; rpc kodu bayt bayt aynı, api'de yalnız go.mod |
+| `grpc-gateway/v2` (dolaylı) | v2.28.0 → v2.29.0 | `otlptracegrpc` + `proto/otlp`; yalnız bağlanıyor, kullanılmıyor; fark isteğe bağlı yeni seçenek |
+| `go-logr/logr` (dolaylı) | v1.4.3 → v1.4.4 | otel 1.45.0 |
+| `cenkalti/backoff/v5` (YENİ, dolaylı) | — → v5.0.3 | `otlptracegrpc` yeniden denemesi v4 → v5; v4.3.0 `otlpmetricgrpc` için kalıyor |
+
+**Bilinçli DOKUNULMAYANLAR:** `otlpmetricgrpc` v1.32.0 (advisory'de yok), `contrib` otelhttp v0.61.0 /
+runtime v0.57.0, grpc v1.83.2, x/net v0.58.0, x/sys v0.47.0, protobuf v1.36.11, auto/sdk v1.2.1 —
+hiçbiri sürüklenmedi. `go 1.25.0` aynı, `toolchain` satırı yok. Kaynak kodda değişiklik yok.
+`selfobs.go`'nun kendi `[selfobs] enabled — endpoint=…` satırı da uç adresini yazıyor; advisory'nin
+konusu değil, dokunulmadı (ayrı karar).
+
+**Davranış farkları (exporter 1.32 → 1.45, sdk 1.44 → 1.45):** açılış yolu aynı — `otlptracegrpc` iki
+sürümde de tembel `grpc.NewClient`; yeni öz-ölçüm (`observ.NewInstrumentation`) `OTEL_GO_X_OBSERVABILITY`
+yokken no-op (chart/compose'da yok). Zaman aşımı, sıkıştırma, yeniden deneme varsayılanları aynı; yeni 64 MiB
+istek tavanı (512 span'lik batch'in çok üstü). Kısmi başarı artık `otel.Handle` yerine hata olarak döner
+(yalnız günlük). `Span.Flags` W3C trace-flags bitlerini de taşır (alıcımız `Flags` okumuyor).
+`resource.Default()` şeması semconv 1.41.0 → 1.43.0; `buildResource` `NewSchemaless` kullandığı için
+Merge çakışmaz.
+
+**Doğrulama:** Go 1.25.0 ve 1.25.14 (CI'ın `'1.25'`i) ile `go build ./...` + `go vet ./...`; yerel
+1.26.2 ile build/vet, `go test ./...` (FAIL yok), `make audit` temiz, gofmt temiz. govulncheck v1.7.0 +
+Go 1.25.14: önce GO-2026-6505, sonra 0 erişilebilir bulgu (erişilemeyen 4 modül bulgusu — x/crypto v0.55.0
+×3, klauspost/compress v1.18.3 — önceden de vardı). Eski/yeni karşılaştırması: kapalı port ve çözülmeyen
+adla `selfobs.Init` iki tarafta < 1,1 ms, paket init toplamı < 1,5 ms, kapanış aynı; OTel günlükçüsü V(8)'de
+eski sürüm "TracerProvider created" satırına uç adresi yazıyor, yeni yazmıyor.
+
+**Doğrulanmayan:** prod açılışı. 2026-07-16 olayı kuralı gereği operatör deploy edip pod'ların sağlıklı
+ayağa kalktığını (ready, restart yok, `[selfobs] enabled` satırı) teyit edene dek bitmiş sayılmaz.
+Geri dönüş: v0.10.1028'i yeniden deploy.
+
 ## 2026-10-02 — Karşılaştırma okumalarında ortak kova hatası: kalan yüzeyler (v0.10.1028)
 
 **Köken:** v0.10.1025 /databases ve /messaging listelerinde "önceki pencere"nin `[from − (to − from),
