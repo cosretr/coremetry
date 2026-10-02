@@ -2261,6 +2261,9 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 // metric got at its worst; current_ratio is right now. We use
 // the peak for ranking — "worst hit so far" predicts how much
 // the operator should care, even if the burst has subsided.
+// v0.10.1045 — "so far" = in the CURRENT episode: a re-fire after a long
+// clear (gap > 22m30s) starts from zero (chstore.MergeAnomalyCarry), so an old
+// load-driven 66× no longer makes a fresh 3.2× re-fire a P1.
 //
 //	P1 — peak ≥ 5x baseline (extraordinary spike)
 //	P2 — peak ≥ 2x baseline (clear anomaly worth a look)

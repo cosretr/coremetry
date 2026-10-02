@@ -54,9 +54,11 @@ Ne üretiyorsun?
 │    escalationExempt, silentProblemsToResolve, resolveStaleClusters.
 │    Yeni önek = her tüketiciye satır + kendi paketinden *_notify_kind_pin_test.
 ├─ Terfi hattına aday, henüz problem değil? ──────► anomaly_events
-│    kind + FingerprintAnomaly(kind,pattern,service) (anomaly_event.go:62);
-│    yazım yalnız mergeAnomalyCarry üzerinden (started_at korunur, peak yalnız
-│    yükselir). Terfi: evaluator.go:1265 anomaly_promotion vidaları.
+│    kind + FingerprintAnomaly(kind,pattern,service) (anomaly_event.go:65);
+│    yazım yalnız MergeAnomalyCarry üzerinden (bölüm İÇİNDE started_at
+│    korunur, peak yalnız yükselir; satır "cleared" iken gelen yazım YENİ
+│    bölüm — §5). Terfi: evaluator.go:1296 anomaly_promotion vidaları,
+│    sayısal kapı SAF `promotionGate`.
 ├─ Yalnız bildirim, saklanmayacak? ───────────────► notify-only Problem
 │    (incident:* ve exception P1 duyurusu böyle; incident_alert.go:35,
 │    exception_notifier.go:124). UpsertProblem ÇAĞIRMA.
@@ -97,7 +99,7 @@ Ne üretiyorsun?
 | `exception:shared-dependency` | `shared_exception.go:26-132` | aynı tip ≥3 servis / 5 dk kova; ≥10 critical | 24 sa / 15 dk aktif | id kova taşır |
 | `exception:fatal-infrastructure` | `fatal_exception.go:28-74` | 1 oluşum, IsFatalExceptionType | 24 sa / 15 dk | id kova TAŞIMAZ |
 | `self-*` (5) | `selfhealth.go:54-69`, `selfhealth_volume.go` | ingest-stall / spool / disk ETA / kanal / hacim ×4 | 10 dk … 24 sa | Service="" (hacim hariç); `self-volume-spike` eskalasyondan muaf ve **batch servislerde açılmaz** (v0.10.1039, `dropBatchVolumeRows` saatlik önbellekten SONRA); `self-disk-eta` **varsayılan KAPALI** (v0.10.1031, `self_health.diskEta`; ölçüm + kalıcı seri sürer) — yeniden önerme |
-| `anomaly-auto:<fp>` | `evaluator.go:1265` terfi | PeakRatio + Count + MinSustained | son 1 sa anomaly_events | mute'lara uyar |
+| `anomaly-auto:<fp>` | `evaluator.go:1296` terfi | PeakRatio + Count + MinSustained (`promotionGate`, saf) — üçü de anomali BÖLÜMÜNÜN değerleri (§5); kapı yalnız AÇILIŞI yönetir, olayı aktif açık satır kapı geçmese de tazelenir (`anomalyPromotionStep`, v0.10.1045) | son 1 sa anomaly_events | mute'lara uyar |
 | `anomaly:<svc>:<metric>` | `anomaly.go:579-797`, `verdict.go:34` | \|z\| ≥ CriticalZ, DwellBuckets | 5 dk kova; 24 sa ardışık ya da mevsimsel 14 g ±3 | Threshold = baseline medyanı, Comparator yöne göre (v0.9.978); batch serviste `request_rate` faz 1'de atlanır, açık satırı `resolveBatchLoadProblems` dürüst gerekçeyle kapatır (v0.10.1039, `batch_load.go`) |
 | `anomaly:<svc>:service_silent` | `anomaly.go:876-1023` | 3 sıfır kova + %90 aktif taban | — | **varsayılan KAPALI** (v0.10.543) — yeniden önerme |
 | `anomaly-cluster:<source>` | `clustering.go:23-441` | ≥3 yayılım-bağlı taze açılış, katılım ≤30 dk | 60 dk kanıt | üyeler bastırılır |
@@ -207,7 +209,8 @@ RESOURCE/CUSTOM); `DisplayID` `P-<base36>` (:92).
 | Yaş eskalasyonu | `evaluator.go:1203-1251` | 15/30 dk; `effectiveSeverity` kelepçesi (:1553); terfi edilen şiddet eskalasyon tabanına kelepçeli (v0.8.309) |
 | Incident kaskadı | `evaluator.go:640-724` | bağlı problemlerin hepsi kapanınca, `maxResolvedAt`; yetim incident 1 sa sonra (v0.9.332) |
 | Sustu = düzeldi DEĞİL | `anomaly.go:839-852,885-900` | sıfır-dolgulu kuyrukta resolve gerekçesi "source silent"; tabandan sondaki sıfırlar kırpılır (v0.9.1051/1052) |
-| Yumuşak-hata yönü | `evaluator.go:1323,1467`; `selfhealth.go:277`; `rca_auto_verdict.go:101`; `trace_ops.go` `readTraceOpBatchExt` | mute listesi okunamadı → süzgeçsiz terfi; aktif set okunamadı → hiçbir şeyi kapatma; ölçülmemiş ≠ temiz; dedup okunamadı → üret; batch uzun tabanı okunamadı → new_error aynen (v0.10.1043). Her kapı için yön BİLİNÇLİ seçilir ve yorumda yazar |
+| Anomali bölümü (episode) | `anomaly_event.go` `MergeAnomalyCarry` / `anomalyNewEpisode`; sabit `anomalyEpisodeGap` = 2 × `anomalyActiveAge` + 150 sn = 22 dk 30 sn | v0.10.1045, operatör: "Eski yüksek oran taşınmasın … Yeni tetiklenme sıfırdan başlasın." Gelen last_seen − saklı last_seen > 22 dk 30 sn (OLAY saati; tam sınır = aynı bölüm) → YENİ bölüm: started_at + peak yalnız gelen olaydan. Sınır aktif yaşa (10 dk, status) EŞİTLENMEZ: 5 dk kovalı yazıcı tek kova kaçırınca ~10 dk boşluk üretir ve bölüm yazı-turayla sıfırlanırdı; 1–3 kaçırılmış kova aynı bölüm, her sıfırlamadan önce satır ≥ 12 dk 30 sn "cleared" → terfi Problem'i resolve geçişinde zaten kapanmış. Bölüm içinde started_at korunur, peak yalnız yükselir, last_seen GERİ GİTMEZ (sırası bozuk / 0'lı yazım sahte bölüm açmasın); taşıma okuması aynı id'ye iki sürüm döndürürse last_seen'i büyük olan (`foldAnomalyCarryRow`). Sonuç: yeniden tetiklenmede terfi 300 sn'yi YENİDEN bekler, /inbox önceliği yeni tepeden, `/anomalies` satırı SON bölümü gösterir (ilk-ever başlangıç + tüm zamanların tepesi artık yok), TTL son bölümden. Kısıt: yazım aralığı > 22 dk 30 sn olan yazıcı her yazımda yeni bölüm açar (kayıtçı olayları hiç terfi etmez) — koşulsuz taşımaya DÖNME, sınırı aktif yaşa ÇEKME |
+| Yumuşak-hata yönü | `evaluator.go:1341,1544`; `selfhealth.go:277`; `rca_auto_verdict.go:101`; `trace_ops.go` `readTraceOpBatchExt`; `anomaly_event.go` `UpsertAnomalyEvents` | mute listesi okunamadı → süzgeçsiz terfi; aktif set okunamadı → hiçbir şeyi kapatma; ölçülmemiş ≠ temiz; dedup okunamadı → üret; batch uzun tabanı okunamadı → new_error aynen (v0.10.1043); anomaly_events taşıma okuması okunamadı → o tik YAZMA (v0.10.1045; "ilk görülme" yazımı çağrıdaki her bölümü sıfırlardı). Her kapı için yön BİLİNÇLİ seçilir ve yorumda yazar |
 | Sürdürme damgaları | `stamps.go` | ForSec/Cooldown Redis'e aynalanır; failover sürdürme saatini sıfırlamaz (v0.8.354) |
 
 **Kayan pencere kuralı (feedback, üç kez ısırdı):** olay = yalnız GÖZLENMİŞ
@@ -315,7 +318,7 @@ TEK YÖNLÜ eylem süren bir ayar (kapatma) okuma hatasında varsayılan YAYINLA
 | v0.8.250 / v0.9.957 | Örnek kıtlığı: mevsimsel taban 14 g ±3 kova, cmt/paz ayrı; davranış motoru kova başına ≥3 FARKLI gün ister (sayı yeterken gün çeşitliliği kapısı şart) | `anomaly.go:59-74`; `behavior_scarcity_test.go` |
 | v0.8.507 / v0.9.691 / v0.10.156 | Tik başına toplu MV okuması + tek anlık görüntü; (servis,metrik) başına nokta sorgusu YOK | `anomaly.go:518-563`; `open_snapshot_test.go` |
 | v0.9.1069 / v0.10.699 / v0.10.199 | İki faz karar→uygula; küme ≥3 üye; katılım gözlenmiş StartedAt'e bağlı | `clustering.go:21-50` |
-| v0.9.337 / v0.9.444 | Terfi mute'lara uyar; tazeleme Status/Assignee/Pod/AISummary taşır | `evaluator.go:1308-1330,1419-1455` |
+| v0.9.337 / v0.9.444 | Terfi mute'lara uyar; tazeleme Status/Assignee/Pod/AISummary taşır | `evaluator.go:1320-1343,1428` |
 | v0.9.587 / v0.9.825 | İki katmanlı bildirim dedup'ı; şiddet salınımı fırtına yapamaz; harita süreç-yerel (restart bir kopyaya izin verir) | `problem_dedup.go` |
 | v0.9.516 / v0.9.1060 / v0.9.1281 | Derin kanıt tek yazıcı; derin kapı = P1 VEYA deploy; oto-hüküm hipotez yazıldıktan SONRA, 30 dk dedup zamana göre | `rootcause_worker.go:263-324` |
 | v0.9.1304 / v0.9.1335 | problems / anomaly_events / root_cause_hypotheses PARTITION BY'sız (Kural P1) | `store.go` ilgili DDL yorumları |
@@ -325,6 +328,7 @@ TEK YÖNLÜ eylem süren bir ayar (kapatma) okuma hatasında varsayılan YAYINLA
 | v0.10.587 / 588 / 597 | Dış seri: tik başına açılış tavanı (20) + özet problem; 3 hata = down; yalnız başarılı poll sonrası tarama (sıfır dolgulu sahte düzelme yok) | `external.go:3-24,132-151,489-511` |
 | v0.9.572 / v0.9.609 | Paylaşılan patlama id'si zaman kovası taşır, ölümcül taşımaz | `shared_exception.go:52`; `fatal_exception.go:43` |
 | v0.10.700 | Zamansal sıralama gölge kipte | `anomaly_sensitivity.go:83-88` |
+| v0.10.1045 | anomaly_events tepe + ilk started_at'i parmak izi başına 30 gün taşıyordu: günler sonra yeniden tetiklenen olay eski tepeyle P1, terfi kapısını ilk tikte geçip critical açılıyordu. Artık 22 dk 30 sn'yi aşan boşluk yeni bölüm (aktif yaş DEĞİL — tek kaçırılmış 5 dk kova); kapı yalnız açılışı yönetir, açık satır kapı geçmese de tazelenir | `anomaly_event.go` `MergeAnomalyCarry`; `evaluator.go` `anomalyPromotionStep`; pinler `chstore/anomaly_event_test.go`, `evaluator/anomaly_episode_test.go`, `api/inbox_anomaly_episode_test.go` |
 
 ## 13. Değişiklik kontrol listesi
 

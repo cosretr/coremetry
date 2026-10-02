@@ -56,7 +56,7 @@ import (
 //
 //	O pencerede UpsertAnomalyEvents'in taşıma SELECT'i (anomaly_event.go
 //	:153) chc-1'e düşüyor. Sorgu HATA VERMİYOR — shard'da satır olmadığı
-//	için dürüstçe 0 satır dönüyor. mergeAnomalyCarry exists=false görüyor
+//	için dürüstçe 0 satır dönüyor. MergeAnomalyCarry exists=false görüyor
 //	ve started_at'i TAZELİYOR; sonraki INSERT chc-0'a düşünce taze değer
 //	eski satırın YANINA, BAŞKA bir partition'a yazılıyor.
 //

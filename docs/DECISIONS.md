@@ -987,6 +987,63 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Anomali olayı: yeniden tetiklenme yeni bölüm, eski tepe taşınmaz (v0.10.1045)
+
+**Operatör:** "Eski yüksek oran taşınmasın: kapanıp yeniden tetiklenen anomali, eski en yüksek oranıyla (ör.
+'66×', P1) görünüyor. Yeni tetiklenme sıfırdan başlasın." **Önce:** `UpsertAnomalyEvents` aynı parmak izinin
+en yüksek `peak_ratio`'sunu ve İLK `started_at`'ini olay "cleared" olduktan sonra da, satır TTL'i
+(`toDate(started_at) + 30 gün`) bitene dek taşıyordu. Günler sonra 3.2× ile yeniden tetiklenen olay eski, yük
+kaynaklı 66× ile /inbox'ta P1 görünüyor; terfi kapısının 300 sn sürme şartını eski `started_at` yüzünden ilk
+tikte geçip eski tepeyle (≥ 20) ve eski StartedAt'in yaş tabanlı eskalasyonuyla doğrudan critical açılıyor,
+açıklaması eski tepeyi alıntılıyordu (v0.10.1039 bedel (d) bunun özel hâliydi).
+
+**Kural:** gelen olayın `last_seen`'i saklı satırınkinden `anomalyEpisodeGap`'ten (2 × aktif yaş + 150 sn =
+22 dk 30 sn) FAZLA ilerideyse → YENİ BÖLÜM: `started_at` ve `peak_ratio` yalnız gelen olaydan, hiçbir şey
+taşınmaz; tam sınır = aynı bölüm. Sınır aktif yaşa (10 dk, status) bilinçli EŞİT DEĞİL: 5 dk kovalı yazıcılar
+(`trace_op`, `trace_op_latency`) TEK kova kaçırınca ~10 dk ± saniyelik boşluk üretir; sınır 10 dk olsaydı
+sürekli ateşleyen anomali yazı-turayla sıfırlanır, satır yalnız saniyelerce "cleared" göründüğü için
+evaluator çoğu zaman görmez, terfi Problem'i tazelenmeden bayat süpürmede "source silent" ile (ack, atanan,
+AI özeti kaybıyla) kapanır ve taze bir sayfayla yeniden açılırdı. 22 dk 30 sn 5 dk'nın katı değil: 1–3
+kaçırılmış kova aynı bölüm, 4+ yeni bölüm; her sıfırlamadan önce satır ≥ 12 dk 30 sn "cleared" görünür, değişmeyen
+`resolveClearedAnomalyPromotions` terfi Problem'ini o sürede "anomaly cleared" ile kapatmıştır — sıfırlama
+yalnız YENİDEN terfiyi etkiler (taze başlangıç, 300 sn bekleme, yeni tepe). Saat OLAY saati, duvar saati
+değil (ingest/tik gecikmesi ve pod–CH saat kayması karara girmez; sırası bozuk yazım yeni bölüm açmaz).
+`anomalyActiveAge` yalnız status sabiti (dört ayrı literal'in yerine).
+
+**Bölüm içinde değişmeyen:** started_at korunur, tepe yalnız yükselir. Ekler: `last_seen` geri gitmez (max) —
+0'lı ya da sırası bozuk bir yazım saklı değeri geri çekseydi sonraki normal yazım sahte boşluk görürdü; taşıma
+okuması aynı id için iki sürüm döndürürse (0010'suz kurulum) last_seen'i büyük olan alınır. Taşıma okuması
+HATA verirse o tik YAZILMAZ, hata çağırana döner (eskiden her olay "ilk görülme" gibi yazılıyordu: çağrıdaki
+tüm bölümler sıfırlanırdı, davranış motorunda bütün filo); yazıcılar durumsuz, sonraki tikte yeniden üretir.
+Şema değişmedi; taşıma okuması aynı sorgu, bir kolon fazla.
+
+**Terfi:** kapı (`promotionGate`: tepe, sayım, 300 sn) yalnız YENİ Problem açılışını yönetir. Olayı aktif ve
+susturulmamış açık bir `anomaly-auto:` satırı kapı o tik geçmese de tazelenir (`anomalyPromotionStep`; mevcut
+tazelemeyle aynı alanlar, bildirim YOK) — eskiden sayım ~3 dk (3 × evaluator aralığı) tabanın altında kalınca
+olay sürerken satır bayat süpürmede "source silent" ile kapanıyordu. Cleared ve susturulmuş olaylar eski
+yollarından kapanır.
+
+**Sonuçlar:** yeniden tetiklenen olayın terfisi 300 sn'yi YENİDEN bekler; /inbox önceliği yeni bölümün
+tepesinden; karar ve susturma (parmak izi anahtarlı) değişmedi. `/anomalies` geçmiş satırı (parmak izi başına
+tek satır) SON bölümün başlangıcını ve tepesini gösterir — ilk-ever başlangıç ve tüm zamanların tepesi artık
+yok (bilinçli). Süre, grafik bandı, deploy çipi, annotation şeridi ve kök neden çıpası da son bölümden okunur;
+TTL son bölümün başlangıcından sayılır. **Tekrarlayan anomaliler** (ör. gece işi) her seferinde YENİ bölüm
+görünür: deploy raporu / rollout "deploy sonrası" listeleri ve kök nedenin deploy şüphelisi her yeniden
+tetiklenmeyi ondan önceki deploy'a bağlar; "yeni" ile "tekrarlayan"ı ayırmak bölüm sayacı ya da ilk-ever
+kolonu (şema değişikliği) ister — kuyrukta.
+
+**Yazıcılar ve kısıtlar:** kayıtçı 60 sn — `log_pattern` kayan 5 dk pencere; `trace_op` / `trace_op_latency`
+5 dk hizalı kova; `log_template_new` şablonun ilk ~10 dk'sı, tepe 0. Davranış motoru dedektör tiki 2 dk,
+started_at = kaymanın başlangıcı. **Kısıt:** yazım aralığı 22 dk 30 sn'yi aşan yazıcı (ör. yapılandırılmış
+`anomaly_record_interval` / `anomaly_interval`) her yazımda yeni bölüm açar — kayıtçı olayları hiç terfi
+etmez (started_at = tik anı, 300 sn dolmaz). `elastic_ml` 5 dk poll, last_seen = kova sonu: 15 dk'lık
+bucket_span'de ardışık kayıtlar (boşluk 15 dk) AYNI bölüm, en az bir kova atlayan kayıt (≥ 30 dk) yeni bölüm
+(tepe = skor/100 ≤ 1 → P3, varsayılan terfi tabanının altında); `exclude_interim` verilmediği için ara
+kayıtlar gelecekteki bir last_seen taşıyabilir ve max onu tutar — satır en çok bir kova daha uzun aktif
+görünür (kozmetik, kuyrukta). migrations/0010'u uygulamamış kurulumda farklı günde açılan bölüm aynı id'yi
+iki gün-partition'ında bırakabilir (eski kopya kendi TTL'ine dek); FINAL varsayılan ayarla doğru okur, taşıma
+okuması büyük last_seen'i alır.
+
 ## 2026-10-02 — Kod inceleme çalışan sürümden okur (v0.10.1044)
 
 **Operatör:** "Kod, dalın ucundan değil çalışan sürümden okunsun." **Önce:** "Kodu da incele" (trace ve exception

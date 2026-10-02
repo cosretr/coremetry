@@ -2404,12 +2404,13 @@ func canonicalTables(sd, ld, md int) []string {
 		// PARTITION BY YOK ve bu bilinçli (v0.9.1335, Kural P1 — emsal
 		// root_cause_hypotheses/v0.9.1304, ai_feedback, rca_verdicts).
 		// Tablo v0.9.1334'e dek `PARTITION BY toDate(started_at)`
-		// taşıyordu ve started_at ORDER BY'da DEĞİL. mergeAnomalyCarry
+		// taşıyordu ve started_at ORDER BY'da DEĞİL. MergeAnomalyCarry
 		// started_at'i taşımaya söz veriyor ama sözü tutamadığı İKİ dal
 		// var ve ikisi de bugün canlı:
 		//   (a) taşıma SELECT'i hata verirse `prev` boş kalır (yumuşak
 		//       düşüş, anomaly_event.go) → o tikin TÜM olayları "ilk
-		//       görülme" gibi yazılır, started_at TAZELENİR;
+		//       görülme" gibi yazılır, started_at TAZELENİR (v0.10.1045'te
+		//       KAPANDI: okuma hatası artık o tikin yazımını atlar);
 		//   (b) satır 30 günlük TTL ile düştükten sonra aynı parmak izi
 		//       yeniden ateşlerse started_at yeni pencereden gelir.
 		// İkisinde de aynı id ikinci bir GÜN partition'ına düşer ve
@@ -2417,6 +2418,10 @@ func canonicalTables(sd, ld, md int) []string {
 		// sınırını AŞMAZ → kopya TTL'e kadar ölümsüz. Doğruluk tek bir
 		// SUNUCU AYARINA asılı kalır: do_not_merge_across_partitions_
 		// select_final=1 açıldığı an FINAL iki satırı da döndürür.
+		// v0.10.1045'ten beri BİLİNÇLİ bir dal da var: olay-saati boşluğu
+		// anomalyEpisodeGap'i (22 dk 30 sn) aşan yazım yeni bölüm açar ve
+		// started_at'i yeniden yazar — partition'sız bu şemada zararsız;
+		// TTL son bölümün başlangıcından sayılır.
 		//
 		// ÖLÇÜM (lokal chc-0, 2026-08-24, 0009 birleştirmesi SONRASI):
 		// 186 id'nin 32'si hâlâ >1 gün-partition'ında. v0.9.1306'nın

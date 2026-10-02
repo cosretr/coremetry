@@ -4,28 +4,31 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
 	"time"
 )
 
 // AnomalyEvent is one continuously-occurring anomaly tracked over
 // time. Same fingerprint (kind, pattern, service) keeps re-using
 // the row — last_seen advances on every detection, started_at and
-// peak_ratio capture history. An event is "active" iff last_seen
-// is recent; the "cleared" status is derived in the query layer
-// from last_seen freshness so we don't need a separate sweep.
+// peak_ratio capture the CURRENT EPISODE (v0.10.1045: a re-fire after a
+// gap longer than anomalyEpisodeGap starts a new one, MergeAnomalyCarry). An
+// event is "active" iff last_seen is recent; the "cleared" status is
+// derived in the query layer from last_seen freshness so we don't need
+// a separate sweep.
 type AnomalyEvent struct {
 	ID           string  `json:"id"`
 	Kind         string  `json:"kind"`    // "log_pattern" | "trace_op"
 	Pattern      string  `json:"pattern"` // pattern name (logs) or operation name (trace ops)
 	Service      string  `json:"service"`
-	StartedAt    int64   `json:"startedAt"`    // unix ns — first observation
+	StartedAt    int64   `json:"startedAt"`    // unix ns — first observation of the current episode
 	LastSeen     int64   `json:"lastSeen"`     // unix ns — most recent observation
-	PeakRatio    float64 `json:"peakRatio"`    // worst ratio seen during the event
+	PeakRatio    float64 `json:"peakRatio"`    // worst ratio seen during the current episode
 	CurrentRatio float64 `json:"currentRatio"` // ratio at last_seen
 	CurrentCount uint64  `json:"currentCount"`
 	Sample       string  `json:"sample"`
 	// Status is computed in the query, not stored. "active" while
-	// last_seen >= now() - 10m, otherwise "cleared".
+	// last_seen >= now() - anomalyActiveAge (10m), otherwise "cleared".
 	Status string `json:"status"`
 	// Clusters — k8s/openshift cluster names the anomaly's
 	// service was active in around the time of detection.
@@ -113,25 +116,125 @@ func uniqueAnomalyIDs(evs []AnomalyEvent) []string {
 	return ids
 }
 
-// mergeAnomalyCarry — var olan satırın started_at/peak_ratio'sunun yeni
-// gözlemle birleşimi. SAF ve tablo-testli (anomaly_event_test.go), çünkü
-// toplu yazıma geçerken (v0.9.957) sessizce bozulabilecek TEK semantik
-// bu: started_at'ın korunması "süregelen anomali tek satırdır"
-// sözleşmesinin tamamı, peak_ratio'nun monotonluğu da terfi kapısının
-// girdisi.
+// anomalyActiveAge — bir olayın "active" sayıldığı last_seen tazeliği.
+// Okuma tarafındaki status türetmesinin TEK varsayılanı (GetAnomalyEvent,
+// CountActiveAnomalyEvents, CountAnomalyEventsByStatus, ListAnomalyEvents —
+// dördü de eskiden kendi `10 * time.Minute` literal'ini taşıyordu). Bölüm
+// kararı bu sabiti DOĞRUDAN kullanmaz, ondan türeyen anomalyEpisodeGap'i
+// kullanır (aşağıda neden).
+const anomalyActiveAge = 10 * time.Minute
+
+// anomalyEpisodeGap — yeni bölüm için gereken olay-saati boşluğu (v0.10.1045):
+// 2 × aktif yaş + 150 sn = 22 dk 30 sn.
 //
-//	exists=false → ilk görülme: olayın kendi değerleri.
-//	exists=true  → started_at KORUNUR (asla tazelenmez),
-//	               peak_ratio yalnız YÜKSELİR.
-func mergeAnomalyCarry(e AnomalyEvent, prevStartedAt time.Time, prevPeak float64, exists bool) (time.Time, float64) {
-	if !exists {
-		return time.Unix(0, e.StartedAt), e.CurrentRatio
+// Aktif yaşa EŞİT DEĞİL, bilinçli. 5 dk kovaya hizalı yazıcılar (trace_op,
+// trace_op_latency) TEK kova kaçırınca (ör. kovada hata sayısı tabanın bir
+// altında kaldı) ~10 dk ± saniyelik bir boşluk üretir; sınır aktif yaş olsaydı
+// sürekli ateşleyen bir anomali yazı-tura ile "yeni bölüm" açardı. Satır o
+// arada yalnız saniyelerce "cleared" görünür, evaluator'ın 60 sn'lik tiki
+// çoğu zaman bunu hiç görmez; terfi Problem'i tazelenmeden kalır, 300 sn
+// kapısı yeniden başlar, bayat süpürme onu yanlış gerekçeyle ("source
+// silent") kapatır — ack, atanan kişi ve AI özeti gider — ve taze bir
+// sayfayla warning olarak yeniden açılır.
+//
+// 22 dk 30 sn: en az aktif yaş + birkaç evaluator tiki + bir kova, ve 5 dk'nın
+// katı DEĞİL — hizalı yazıcıların boşlukları (5 dk'nın katları ± saniye)
+// sınıra hiç oturmaz: 1, 2 ve 3 kaçırılmış kova (≈10/15/20 dk) aynı bölüm, 4
+// kova (≈25 dk) yeni bölüm. Sıralı yazıcıda her sıfırlamadan önce satır en az
+// 12 dk 30 sn "cleared" görünmüştür; değişmeyen resolveClearedAnomalyPromotions
+// geçişi terfi Problem'ini o sürede deterministik olarak "anomaly cleared" ile
+// kapatmıştır. Sıfırlama yalnız YENİDEN terfiyi etkiler (taze başlangıç, 300 sn
+// bekleme, yeni tepe) — operatörün istediği tam olarak bu.
+//
+// Kısıt: bir yazıcının yazım aralığı bu boşluktan uzunsa (ör. yapılandırılmış
+// anomaly_record_interval > 22 dk 30 sn) her yazımı yeni bölüm açar ve kayıtçı
+// olayları hiç terfi etmez (started_at = tik anı, 300 sn kapısı hiç dolmaz).
+const anomalyEpisodeGap = 2*anomalyActiveAge + 150*time.Second
+
+// anomalyNewEpisode — gelen gözlem saklı satırın bölümünü mü sürdürüyor,
+// yoksa satır uzun süre "cleared" kalmış ve bu YENİ bir bölüm mü? SAF.
+//
+// Operatör (v0.10.1045): "Eski yüksek oran taşınmasın: kapanıp yeniden
+// tetiklenen anomali, eski en yüksek oranıyla (ör. '66×', P1) görünüyor.
+// Yeni tetiklenme sıfırdan başlasın."
+//
+// SAAT: olay saati, duvar saati DEĞİL — gelen olayın last_seen'i ile
+// saklı last_seen arasındaki boşluk:
+//   - sıralı yazıcılarda gelen last_seen ≤ yazım anı, yani olay-saati
+//     boşluğu > anomalyEpisodeGap ⇒ yazım anında satır en az
+//     (anomalyEpisodeGap − anomalyActiveAge) süredir "cleared" görünüyordu
+//     (pod–CH saat kayması payı hariç). Tersi doğru değil: ingest gecikmesi
+//     ya da geç kalan tik duvar saatinde "cleared" gösterip veride
+//     kesintisiz olabilir — o hâlde bölüm korunur, bugünkü davranış;
+//   - pod ile CH arasındaki saat kayması ve yazıcının tik gecikmesi karara
+//     girmez; karar iki satırın saf işlevi, testte now() yok;
+//   - sırası bozuk yazıcı (elastic_ml kayıtları skora göre sıralı gelir)
+//     negatif boşluk üretir → yeni bölüm DEĞİL.
+//
+// SINIR: boşluk == anomalyEpisodeGap → AYNI bölüm; bir nanosaniye fazlası
+// yeni bölüm.
+func anomalyNewEpisode(incomingLastSeen, storedLastSeen int64) bool {
+	return incomingLastSeen-storedLastSeen > int64(anomalyEpisodeGap)
+}
+
+// MergeAnomalyCarry — yazılacak satır: gelen olayın saklı satırla
+// birleşimi (StartedAt / LastSeen / PeakRatio; diğer alanlar gelen
+// olaydan). SAF ve tablo-testli (anomaly_event_test.go; terfi kapısı ve
+// /inbox önceliği kendi paketlerinde bunun üstünden pinli), çünkü toplu
+// yazıma geçerken (v0.9.957) sessizce bozulabilecek TEK semantik bu:
+// started_at'ın bölüm içinde korunması "süregelen anomali tek satırdır"
+// sözleşmesinin tamamı, peak_ratio'nun bölüm içi monotonluğu da terfi
+// kapısının girdisi.
+//
+//	exists=false                → ilk görülme: olayın kendi değerleri.
+//	boşluk > anomalyEpisodeGap  → YENİ BÖLÜM (v0.10.1045): started_at ve
+//	  (anomalyNewEpisode)          peak_ratio YALNIZ gelen olaydan; hiçbir
+//	                               şey taşınmaz. Önceden tepe ve ilk
+//	                               başlangıç aynı parmak izi için 30 gün
+//	                               (TTL) taşınıyordu: günler sonra yeniden
+//	                               tetiklenen olay eski, yük kaynaklı
+//	                               tepeyle /inbox'ta P1 görünüyor, terfi
+//	                               kapısının 300 sn'lik yaş şartını eski
+//	                               started_at yüzünden ilk tikte geçip
+//	                               yaş tabanlı eskalasyonla doğrudan
+//	                               critical açılıyordu.
+//	aynı bölüm                  → started_at KORUNUR, peak_ratio yalnız
+//	                               YÜKSELİR, last_seen GERİ GİTMEZ.
+//
+// last_seen'in geri gitmemesi bölüm kararının parçası: sırası bozuk ya da
+// last_seen'i 0 olan bir yazım (örnek sorgusu düşen trace_op_latency,
+// skora göre sıralı elastic_ml kayıtları) saklı last_seen'i geriye
+// çekseydi, BİR SONRAKİ normal yazım sahte bir boşluk görür ve süren
+// bölümü sıfırlardı.
+func MergeAnomalyCarry(e, stored AnomalyEvent, exists bool) AnomalyEvent {
+	out := e
+	if !exists || anomalyNewEpisode(e.LastSeen, stored.LastSeen) {
+		out.PeakRatio = e.CurrentRatio
+		return out
 	}
-	peak := prevPeak
-	if e.CurrentRatio > peak {
-		peak = e.CurrentRatio
+	out.StartedAt = stored.StartedAt
+	out.PeakRatio = stored.PeakRatio
+	if e.CurrentRatio > out.PeakRatio {
+		out.PeakRatio = e.CurrentRatio
 	}
-	return prevStartedAt, peak
+	if stored.LastSeen > out.LastSeen {
+		out.LastSeen = stored.LastSeen
+	}
+	return out
+}
+
+// foldAnomalyCarryRow — taşıma okumasının bir satırını haritaya katar; aynı
+// id İKİ kez gelirse last_seen'i BÜYÜK olan kalır (v0.10.1045). SAF.
+//
+// migrations/0010'u uygulamamış (hâlâ `PARTITION BY toDate(started_at)`)
+// bir kurulumda FINAL partition sınırını aşmayan bir ayarla koşarsa aynı
+// id'nin iki sürümü döner. Son yazan kazansaydı ve o bayat sürüm olsaydı,
+// bölüm kararı her tikte sahte bir boşluk görüp yeni bölüm açardı.
+func foldAnomalyCarryRow(prev map[string]AnomalyEvent, id string, p AnomalyEvent) {
+	if old, ok := prev[id]; ok && old.LastSeen >= p.LastSeen {
+		return
+	}
+	prev[id] = p
 }
 
 // UpsertAnomalyEvent records (or refreshes) one event. Thin wrapper over
@@ -168,39 +271,42 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 	if len(evs) == 0 {
 		return nil
 	}
-	// TEK okuma: mevcut satırların started_at + peak_ratio'su. Var olan
-	// bir olayın started_at'ı KORUNUR (satır tek sürekli bir anomaliyi
-	// temsil eder) ve peak_ratio yalnız yükselir — CH'de bu motorda
-	// atomik max-on-upsert primitifi yok, uygulama katmanı taşıyor.
-	type prevRow struct {
-		startedAt time.Time
-		peak      float64
-	}
-	prev := make(map[string]prevRow, len(evs))
+	// TEK okuma: mevcut satırların started_at + last_seen + peak_ratio'su.
+	// Süren bir bölümde started_at KORUNUR (satır tek sürekli bir anomaliyi
+	// temsil eder) ve peak_ratio yalnız yükselir — CH'de bu motorda atomik
+	// max-on-upsert primitifi yok, uygulama katmanı taşıyor. last_seen
+	// v0.10.1045'te eklendi: bölüm kararı (MergeAnomalyCarry) olay-saati
+	// boşluğunu ondan ölçer — ek sorgu değil, aynı satırın bir kolonu daha.
+	prev := make(map[string]AnomalyEvent, len(evs))
 	ids := uniqueAnomalyIDs(evs)
 	rows, err := s.conn.Query(ctx,
-		`SELECT id, started_at, peak_ratio FROM anomaly_events FINAL
+		`SELECT id, toUnixTimestamp64Nano(started_at), toUnixTimestamp64Nano(last_seen), peak_ratio
+		 FROM anomaly_events FINAL
 		 WHERE id IN (`+chPlaceholders(len(ids))+`)`, toAnySlice(ids)...)
 	if err != nil {
-		// YUMUŞAK DÜŞÜŞ: geçmişi okuyamamak yazmamak için gerekçe değil.
-		// prev boş kalır → her olay "ilk görülme" gibi yazılır; sonuç
-		// started_at'ın tazelenmesi, olayın kaybolması değil.
-		prev = map[string]prevRow{}
-	} else {
-		for rows.Next() {
-			var id string
-			var p prevRow
-			if err := rows.Scan(&id, &p.startedAt, &p.peak); err != nil {
-				rows.Close()
-				return err
-			}
-			prev[id] = p
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
+		// v0.10.1045 — okuma hatasında YAZMA YOK (yumuşak-hata yönü
+		// bilinçli ters çevrildi). Eskiden prev boş bırakılıp her olay
+		// "ilk görülme" gibi yazılıyordu: çağrıdaki TÜM olayların
+		// started_at'i ve tepesi sıfırlanıyordu — davranış motorunun toplu
+		// yazımında bütün filo için. Yazıcılar durumsuz ve bir sonraki
+		// tikte aynı olayları yeniden üretir; bir tiklik gecikme, süren
+		// bölümleri sessizce sıfırlamaktan ucuz. Hata çağırana döner, o
+		// loglar ve diğer işine devam eder.
+		return fmt.Errorf("anomaly_events carry read (write skipped this tick): %w", err)
+	}
+	for rows.Next() {
+		var id string
+		var p AnomalyEvent
+		if err := rows.Scan(&id, &p.StartedAt, &p.LastSeen, &p.PeakRatio); err != nil {
+			rows.Close()
 			return err
 		}
+		foldAnomalyCarryRow(prev, id, p)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
 	}
 
 	// Explicit column list: anomaly_events has a `version` column with a
@@ -221,12 +327,12 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 	}
 	for _, e := range evs {
 		p, exists := prev[e.ID]
-		startedAt, peak := mergeAnomalyCarry(e, p.startedAt, p.peak, exists)
+		w := MergeAnomalyCarry(e, p, exists)
 		if err := batch.Append(
-			e.ID, e.Kind, e.Pattern, e.Service,
-			startedAt,
-			time.Unix(0, e.LastSeen),
-			peak, e.CurrentRatio, e.CurrentCount, e.Sample,
+			w.ID, w.Kind, w.Pattern, w.Service,
+			time.Unix(0, w.StartedAt),
+			time.Unix(0, w.LastSeen),
+			w.PeakRatio, w.CurrentRatio, w.CurrentCount, w.Sample,
 		); err != nil {
 			return err
 		}
@@ -244,7 +350,7 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 // small state table, not spans/metric_points, so no time-bound is needed.
 func (s *Store) GetAnomalyEvent(ctx context.Context, id string, activeAge time.Duration) (*AnomalyEvent, error) {
 	if activeAge == 0 {
-		activeAge = 10 * time.Minute
+		activeAge = anomalyActiveAge
 	}
 	var e AnomalyEvent
 	row := s.conn.QueryRow(ctx, `
@@ -345,7 +451,7 @@ func anomalyExcludeIDsSQL(ids []string) (string, []any) {
 // listede olmayan satırı vaat eder. nil/boş = kısıt yok.
 func (s *Store) CountActiveAnomalyEvents(ctx context.Context, activeAge time.Duration, envServices []string, excludeIDs []string) (uint64, error) {
 	if activeAge == 0 {
-		activeAge = 10 * time.Minute
+		activeAge = anomalyActiveAge
 	}
 	args := []any{int64(activeAge.Seconds())}
 	envSQL := ""
@@ -375,7 +481,7 @@ func (s *Store) CountActiveAnomalyEvents(ctx context.Context, activeAge time.Dur
 // (last_seen tazeliği, 10dk varsayılan).
 func (s *Store) CountAnomalyEventsByStatus(ctx context.Context, sinceNs int64, activeAge time.Duration) (active, cleared uint64, err error) {
 	if activeAge == 0 {
-		activeAge = 10 * time.Minute
+		activeAge = anomalyActiveAge
 	}
 	row := s.conn.QueryRow(ctx, `
 		SELECT countIf(last_seen >= now64() - INTERVAL ? SECOND),
@@ -395,7 +501,7 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 		f.Limit = 200
 	}
 	if f.ActiveAge == 0 {
-		f.ActiveAge = 10 * time.Minute
+		f.ActiveAge = anomalyActiveAge
 	}
 	since := f.SinceNs
 	if since == 0 {

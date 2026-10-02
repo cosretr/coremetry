@@ -1304,7 +1304,6 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 	// Same snapshot discipline as the escalation sweep — the promoted
 	// severity is clamped to the age floor, so it needs the windows.
 	esc := e.escalationCfg(ctx)
-	minSustained := time.Duration(cfg.MinSustainedSec) * time.Second
 
 	events, err := e.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
 		// Last hour is enough — the detector re-emits every
@@ -1351,10 +1350,23 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 	lazy := e.store.LazyOpenSnapshot()
 	snapWarned := false
 	for _, ev := range events {
-		if ev.Status != "active" {
-			continue
-		}
-		if muted[ev.ID] {
+		ruleID := promoteAnomalyRuleID + ev.ID
+		// Re-use the existing open Problem row when one is
+		// in flight for the same fingerprint — keeps the
+		// notify channel from refiring on every sweep.
+		var open *chstore.Problem
+		step := anomalyPromotionStep(ev.Status == "active", muted[ev.ID], promotionGate(ev, cfg, now),
+			func() bool {
+				snap, snapErr := lazy.Get(ctx) // v0.10.158 — ilk ihtiyaçta bir kez
+				if snapErr != nil && !snapWarned {
+					log.Printf("[evaluator] anomaly promotion: open snapshot: %v", snapErr)
+					snapWarned = true
+				}
+				open = snap.ByKey(ruleID, ev.Service) // v0.10.156 — süpürme-yerel snapshot, kopya
+				return open != nil
+			})
+		switch step {
+		case promoteSkipMuted:
 			// ev.ID IS the fingerprint (recorder.go builds it with
 			// FingerprintAnomaly), the same key the mute was written under.
 			// Logged rather than skipped in silence: a suppressed promotion
@@ -1363,16 +1375,10 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 			log.Printf("[evaluator] anomaly promotion SKIPPED (muted): %s · %s · %s",
 				ev.Service, ev.Kind, ev.Pattern)
 			continue
-		}
-		if ev.PeakRatio < cfg.MinPeakRatio {
+		case promoteSkipCleared, promoteSkipGate:
 			continue
 		}
-		if ev.CurrentCount < cfg.MinCount {
-			continue
-		}
-		if now.Sub(time.Unix(0, ev.StartedAt)) < minSustained {
-			continue
-		}
+		isNew := step == promoteCreate
 		// v0.9.247 — cut-off comes from config (was a hard-coded 20).
 		// GetAnomalyPromotion guarantees it is >= MinPeakRatio, so
 		// "everything promoted is critical" only happens when the
@@ -1380,20 +1386,6 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		sev := "warning"
 		if ev.PeakRatio >= cfg.CriticalPeakRatio {
 			sev = "critical"
-		}
-		ruleID := promoteAnomalyRuleID + ev.ID
-		// Re-use the existing open Problem row when one is
-		// in flight for the same fingerprint — keeps the
-		// notify channel from refiring on every sweep.
-		isNew := false
-		snap, snapErr := lazy.Get(ctx) // v0.10.158 — ilk ihtiyaçta bir kez
-		if snapErr != nil && !snapWarned {
-			log.Printf("[evaluator] anomaly promotion: open snapshot: %v", snapErr)
-			snapWarned = true
-		}
-		open := snap.ByKey(ruleID, ev.Service) // v0.10.156 — süpürme-yerel snapshot, kopya
-		if open == nil {
-			isNew = true
 		}
 		desc := truncate(
 			"Auto-promoted from anomaly: "+ev.Kind+" / "+ev.Pattern+
@@ -1448,6 +1440,69 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		}
 	}
 	e.resolveClearedAnomalyPromotions(ctx, muted)
+}
+
+// promotionStep — terfi süpürmesinin olay başına sonucu.
+type promotionStep int
+
+const (
+	promoteSkipCleared promotionStep = iota // olay aktif değil → resolveClearedAnomalyPromotions kapatır
+	promoteSkipMuted                        // susturulmuş → loglanır; açık satırı resolve geçişi "anomaly muted" ile kapatır
+	promoteSkipGate                         // kapı geçmedi, açık Problem yok → hiçbir şey
+	promoteCreate                           // kapı geçti, açık Problem yok → yeni Problem + bildirim
+	promoteRefresh                          // açık Problem var → tazele (bildirim YOK)
+)
+
+// anomalyPromotionStep — v0.10.1045: sayısal kapı (promotionGate) yalnız
+// YENİ Problem AÇILMASINI yönetir. Olayı hâlâ aktif ve susturulmamış bir
+// açık `anomaly-auto:` Problem'i kapı bu tik geçmese de (sayım tabanın
+// altına indi, yeni bölümün 300 sn'si dolmadı, yeni bölümün tepesi eşiğin
+// altında) TAZELENİR. Eskiden tazelenmeyen satır bayat süpürmeye kalıyor ve
+// olay sürerken yanlış gerekçeyle ("source silent") kapanıyordu — ack,
+// atanan kişi ve AI özeti gidiyor, kapı yeniden geçince taze bir sayfayla
+// yeniden açılıyordu. Aktif olmayan ve susturulan olaylar AYNEN eski
+// yollarından kapanır (resolveClearedAnomalyPromotions).
+//
+// hasOpen TEMBEL: yalnız aktif + susturulmamış olay için çağrılır (açık
+// Problem anlık görüntüsü v0.10.158'den beri ilk ihtiyaçta okunur).
+func anomalyPromotionStep(active, muted, gateOK bool, hasOpen func() bool) promotionStep {
+	if !active {
+		return promoteSkipCleared
+	}
+	if muted {
+		return promoteSkipMuted
+	}
+	if hasOpen() {
+		return promoteRefresh
+	}
+	if gateOK {
+		return promoteCreate
+	}
+	return promoteSkipGate
+}
+
+// promotionGate — terfi kapısının SAF sayısal çekirdeği: bölüm tepesi
+// (PeakRatio ≥ MinPeakRatio), hacim tabanı (CurrentCount ≥ MinCount) ve
+// sürme süresi (now − StartedAt ≥ MinSustainedSec). Yalnız YENİ Problem
+// açılışını yönetir; açık Problem'in tazelenmesi buna bağlı değil
+// (anomalyPromotionStep). Durum (active), susturma ve şiddet çağıranda.
+//
+// v0.10.1045'te gövdeden ayrıldı ki yeniden tetiklenen bir olayın bu
+// kapıyı İLK tikte geçMEDİĞİ pinlenebilsin (anomaly_episode_test.go).
+// Önceden anomaly_events started_at'i aynı parmak izi için 30 gün
+// taşıyordu: günler sonra yeniden tetiklenen olay 300 sn'lik sürme
+// şartını eski başlangıç yüzünden anında geçiyor, eski tepeyle (≥ 20)
+// ve eski StartedAt'in yaş tabanlı eskalasyonuyla doğrudan critical
+// açılıyordu. Artık yeni bölüm started_at'i sıfırdan alır
+// (chstore.MergeAnomalyCarry) ve bu kapı yeniden 300 sn bekler.
+func promotionGate(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig, now time.Time) bool {
+	if ev.PeakRatio < cfg.MinPeakRatio {
+		return false
+	}
+	if ev.CurrentCount < cfg.MinCount {
+		return false
+	}
+	return now.Sub(time.Unix(0, ev.StartedAt)) >= time.Duration(cfg.MinSustainedSec)*time.Second
 }
 
 // carryProblemOperatorState — terfi refresh'inin saf çekirdeği: mevcut

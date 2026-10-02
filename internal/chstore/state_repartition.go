@@ -26,7 +26,8 @@
 //
 //	anomaly_events · UpsertAnomalyEvents'in taşıma SELECT'i HATA verirse
 //	  `prev` boş kalır (bilinçli yumuşak düşüş) → o tikin TÜM olayları
-//	  "ilk görülme" gibi yazılır, started_at tazelenir. Ayrıca 30 günlük
+//	  "ilk görülme" gibi yazılır, started_at tazelenir (v0.10.1045'te
+//	  kapandı: okuma hatası artık yazımı atlar). Ayrıca 30 günlük
 //	  TTL satırı düşürdükten sonra aynı parmak izi yeniden ateşlerse
 //	  started_at yeni pencereden gelir.
 //	problems · problem id'si birçok dedektörde DETERMİNİSTİK
