@@ -4,8 +4,9 @@
 //   Karar (Kök Neden / Olası neden bölümünün ilk cümlesi; bölüm tek cümleyse
 //   ÇİZİLMEZ — kopya olurdu; çizilince aynı cümle gövdeden DÜŞER; kod kartı
 //   açıkken ilk kart Karar çizmez — iki rakip Karar olmasın, `verdict`) →
-//   Kanıt (span/trace kimlik sayısı; listeleri AIDrawer'ın altındaki bölümler
-//   taşır — yalnız gerçekten listelenenler sayılır) → kod alıntıları (oluklu
+//   Kanıt (span/trace kimlik sayısı; v0.10.1033'ten beri span'ler waterfall'da
+//   kutulu, trace'ler AIDrawer'ın altındaki listede — yalnız sayfada gerçekten
+//   gösterilenler sayılır, ipucu `evidenceHint`) → kod alıntıları (oluklu
 //   çitler gövdeden buraya hoist; Markdown CodeBlock anatomy: satır numarası
 //   oluğu, dosya başlığı, mapper etiketi) → bölümler (Stacktrace Detayı'nın
 //   stack çiti yerinde kalır, katlanır) → dipnot/geri bildirim (çağıran çizer).
@@ -34,6 +35,21 @@ import { ExplainEvidenceLinks, ExplainSourceFooter } from './ExplainEvidence';
 // oracle — v0.10.921 (Kademe A): Explain'e giren Oracle hata satırı sayısı.
 export interface ExplainEvidence { spans: number; traces: number; oracle?: number }
 
+// evidenceHint — Kanıt satırının ipucu; yalnız DOĞRU olanı söyler.
+// v0.10.1033 (operatör: "Kanıt span'lere gerek yok") — span kimlikleri artık
+// çekmecede listelenmiyor; görünür oldukları tek yer waterfall'daki kutu
+// (v0.9.408). Trace kimlikleri exception çekmecesinin altındaki "Kanıt
+// trace'leri" listesinde kalıyor. Oracle satırı hiçbir yerde listelenmez →
+// tek başına ipucu yok (eski "kimlikler çekmecenin altında" orada da yanlıştı).
+function evidenceHint(ev: ExplainEvidence): string {
+  const spans = ev.spans > 0;
+  const traces = ev.traces > 0;
+  if (spans && traces) return "span'ler waterfall'da kutulu, trace'ler çekmecenin altında";
+  if (spans) return "waterfall'da kutulu";
+  if (traces) return 'kimlikler çekmecenin altında, satır satır';
+  return '';
+}
+
 export function ExplainBody({ text: raw, busy, links, evidence, verdict: wantVerdict = true, sources }: {
   text: string;
   busy: boolean;
@@ -55,6 +71,7 @@ export function ExplainBody({ text: raw, busy, links, evidence, verdict: wantVer
     return verdict ? { quotes: h.quotes, rest: dropVerdictSentence(h.rest, verdict) } : h;
   }, [busy, text, verdict]);
   const ev = evidence && (evidence.spans > 0 || evidence.traces > 0 || (evidence.oracle ?? 0) > 0) ? evidence : null;
+  const hint = ev ? evidenceHint(ev) : '';
   return (
     <>
       {verdict && (
@@ -67,7 +84,7 @@ export function ExplainBody({ text: raw, busy, links, evidence, verdict: wantVer
             ev.traces > 0 ? `${ev.traces} trace` : '',
             (ev.oracle ?? 0) > 0 ? `${ev.oracle} Oracle satırı` : '',
           ].filter(Boolean).join(' · ')}
-          <span className="field-hint"> · kimlikler çekmecenin altında, satır satır</span>
+          {hint && <span className="field-hint"> · {hint}</span>}
         </div>
       )}
       {hoisted.quotes.map((q, i) => <CodeBlock key={`q${i}`} lang={q.lang} lines={q.lines} anatomy />)}

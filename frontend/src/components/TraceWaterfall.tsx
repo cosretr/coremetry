@@ -789,8 +789,9 @@ export function TraceWaterfall({
           && spaceRightPx < OUTSIDE_LABEL_MIN_PX
           && spaceLeftPx > spaceRightPx + OUTSIDE_LABEL_MIN_PX;
 
-        // data-span-id (v0.9.477): AI çekmecesindeki kanıt satırı tıklanınca
-        // sayfa bu satırı bulup görünüme kaydırır.
+        // data-span-id (v0.9.477): seekRow (derin bağlantı / harita tıklaması)
+        // bu satırı bulup görünüme kaydırır. v0.10.1033 — AI çekmecesinin span
+        // kanıt listesi kaldırıldı; kanıt artık yalnız `.wf-evidence` kutusu.
         return (
           <div key={s.spanId} data-span-id={pickId} data-index={v ? v.index : undefined}
             ref={v ? virtualizer.measureElement : undefined}

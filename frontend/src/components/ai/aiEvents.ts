@@ -14,8 +14,11 @@ export const AI_EVIDENCE_EVENT = 'coremetry:ai-evidence';
 export const AI_FOCUS_EVENT = 'coremetry:ai-focus';
 
 export type AIEvidenceDetail = { spanIds?: string[]; traceIds?: string[] };
-// Çekmecedeki kanıt satırına tıklama: sayfa hedefe kaydırır + seçer.
-export type AIFocusDetail = { spanId?: string; traceId?: string };
+// Çekmecedeki kanıt satırına tıklama. v0.10.1033 — yalnız trace satırı kaldı
+// ("Kanıt span'leri" listesi ve Trace.tsx'in span-seçim dinleyicisi
+// useAiFocus kaldırıldı; operatör: "Kanıt span'lere gerek yok"). Exception
+// örnek satırı DOM üzerinden kaydırılır (scrollToAttr), dinleyici gerekmez.
+export type AIFocusDetail = { traceId?: string };
 
 export function emitAiEvidence(detail: AIEvidenceDetail) {
   if (typeof window === 'undefined') return;
@@ -41,10 +44,6 @@ function useWindowEvent<T>(name: string, handler: (detail: T) => void) {
 
 export function useAiEvidence(handler: (d: AIEvidenceDetail) => void) {
   useWindowEvent<AIEvidenceDetail>(AI_EVIDENCE_EVENT, handler);
-}
-
-export function useAiFocus(handler: (d: AIFocusDetail) => void) {
-  useWindowEvent<AIFocusDetail>(AI_FOCUS_EVENT, handler);
 }
 
 // scrollToAttr — kanıt satırına git. Waterfall satırları `data-span-id`,

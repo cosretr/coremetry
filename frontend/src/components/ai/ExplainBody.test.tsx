@@ -82,6 +82,35 @@ describe('ExplainBody (v0.10.165)', () => {
   });
 });
 
+// v0.10.1033 — operatör: "Kanıt span'lere gerek yok." Çekmecedeki "Kanıt
+// span'leri" listesi kaldırıldı; ipucu artık olmayan bir listeyi işaret
+// etmez. Her varyant yalnız doğru olanı söyler: span → waterfall'daki kutu
+// (v0.9.408), trace → exception çekmecesinin altındaki liste (duruyor),
+// yalnız Oracle → hiçbir yerde listelenmez, ipucu yok.
+describe('ExplainBody — Kanıt satırının ipucu (v0.10.1033)', () => {
+  const line = (ev: { spans: number; traces: number; oracle?: number }) => {
+    const h = renderToStaticMarkup(<ExplainBody text={TEXT} busy={false} evidence={ev} />);
+    const m = h.match(/<div class="cx-evidence">([\s\S]*?)<\/div>/);
+    return (m?.[1] ?? '').replace(/<[^>]+>/g, '').replace(/&#x27;|&#39;/g, "'");
+  };
+  it('trace (yalnız span): "waterfall\'da kutulu"; çekmece listesi denmez', () => {
+    expect(line({ spans: 6, traces: 0 })).toBe("Kanıt: 6 span · waterfall'da kutulu");
+    expect(line({ spans: 6, traces: 0 })).not.toContain('çekmecenin altında');
+  });
+  it('trace + Oracle: sayılar aynen, ipucu span\'lere ait', () => {
+    expect(line({ spans: 19, traces: 0, oracle: 2 })).toBe("Kanıt: 19 span · 2 Oracle satırı · waterfall'da kutulu");
+  });
+  it('exception (yalnız trace): liste duruyor, ipucu doğru kalır', () => {
+    expect(line({ spans: 0, traces: 2 })).toBe('Kanıt: 2 trace · kimlikler çekmecenin altında, satır satır');
+  });
+  it('ikisi birden: her kimlik türü kendi yerini söyler', () => {
+    expect(line({ spans: 3, traces: 2 })).toBe("Kanıt: 3 span · 2 trace · span'ler waterfall'da kutulu, trace'ler çekmecenin altında");
+  });
+  it('yalnız Oracle: listelenecek kimlik yok → ipucu yok', () => {
+    expect(line({ spans: 0, traces: 0, oracle: 1 })).toBe('Kanıt: 1 Oracle satırı');
+  });
+});
+
 // v0.10.948 (CoSRE Faz B) — gövdenin altındaki iki deterministik satır:
 // `id`siz kanıt linkleri ve `sources` kaynak dipnotu. Akış SÜRERKEN ikisi de
 // yok (yarım cevabın altında "kaynak durumu" erken olurdu); `sources` varken

@@ -19,7 +19,7 @@ import { toggleSpanSelection } from './trace/kioskModel'; // v0.10.693
 import { TraceKiosk } from './TraceKiosk'; // v0.10.675 — ?kiosk=1 dalı
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { renderExternalLink, collectLinkCtx, pickGroupedLinks, identityKeysFromLinks, identityOverrideCtx, shortIdentity, identityRoleTR, type ExternalLinkCtx } from '@/lib/externalLinks';
-import { useAiEvidence, useAiFocus } from '@/components/ai/aiEvents';
+import { useAiEvidence } from '@/components/ai/aiEvents';
 import { IconLink, IconCheck, IconDownload, IconSparkles } from '@/components/icons';
 import { Button } from '@/components/ui/Button';
 import { IconButton, MenuItem } from '@/components/ui'; // v0.10.568 — kimlik menüsü tetiği + satırları
@@ -96,10 +96,10 @@ function TraceDetailInner() {
   const linkedIds = useMemo(() => linkedSpanIds(linkIndex), [linkIndex]);
   // v0.9.477 — kanıt artık AppShell'deki AI çekmecesinden window köprüsüyle
   // geliyor (eski onEvidence prop'unun yerine); kutulama sözleşmesi aynı.
+  // v0.10.1033 — çekmecedeki "Kanıt span'leri" listesi (ve satır tıklamasının
+  // useAiFocus → span seçimi köprüsü) kaldırıldı; kanıtın görünür olduğu tek
+  // yer bu kutulama. Operatör: "Kanıt span'lere gerek yok."
   useAiEvidence(d => { if (d.spanIds?.length) setEvidenceIds(new Set(d.spanIds)); });
-  // Çekmecedeki kanıt satırına tıklama: span'i seç + waterfall'da ona kaydır
-  // (çekmece kapandığı için kutulanan satır görünür olur).
-  useAiFocus(d => { if (d.spanId) setSelectedId(d.spanId); });
   // Side-tab state — Trace (waterfall + detail) vs Logs (entries
   // matching this trace_id, Uptrace-style). Logs are fetched lazily
   // on first tab click so the trace page stays fast for users who

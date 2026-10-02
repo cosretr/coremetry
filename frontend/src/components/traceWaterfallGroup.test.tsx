@@ -117,8 +117,9 @@ describe('TraceWaterfall × groupSimilar', () => {
     expect(picked).toHaveLength(1);
     expect(picked[0]).toBe('db3');            // en uzun üye = temsilci
     expect(picked[0].startsWith('group:')).toBe(false);
-    // data-span-id de gerçek id taşımalı: AI çekmecesi kanıt satırını
-    // bununla bulup kaydırıyor.
+    // data-span-id de gerçek id taşımalı: DOM'dan span arayan her kod onu
+    // bulsun (v0.9.477-v0.10.1032 AI çekmecesinin kanıt span listesi
+    // bununla kaydırıyordu; v0.10.1033'te o liste kaldırıldı).
     expect(groupRow.getAttribute('data-span-id')).toBe('db3');
   });
 

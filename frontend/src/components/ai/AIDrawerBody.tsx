@@ -98,33 +98,17 @@ export function AIDrawerBody({ subject, onClose, traceCtx, resume, onResumed }: 
           : undefined}
         fromNs={subject.kind === 'service-health' ? subject.fromNs : undefined}
         toNs={subject.kind === 'service-health' ? subject.toNs : undefined}
-        // v0.9.408 / v0.9.414 kanıt sözleşmesi: çekmece kanıtı hem kendi
-        // listesinde gösterir hem de sayfaya duyurur — waterfall satırları
-        // ve exception örnek-trace satırları `.wf-evidence` ile kutulanmaya
-        // devam eder (çekmece kapansa da kutular kalır).
+        // v0.9.408 / v0.9.414 kanıt sözleşmesi: çekmece kanıtı sayfaya duyurur —
+        // waterfall satırları ve exception örnek-trace satırları `.wf-evidence`
+        // ile kutulanmaya devam eder (çekmece kapansa da kutular kalır).
+        // v0.10.1033 (operatör: "Kanıt span'lere gerek yok") — span kimlikleri
+        // artık çekmecede LİSTELENMEZ (ham hex satırlar, kimse okumuyordu); yalnız
+        // waterfall'ı kutular ve takip sohbetinin bağlamına girer (spanIds →
+        // AIDrawerChat → buildExplainContext). Kanıt trace'leri listesi aşağıda kalır.
         onEvidence={ids => { setSpanIds(ids); emitAiEvidence({ spanIds: ids }); }}
         onEvidenceTraces={ids => { setTraceIds(ids); emitAiEvidence({ traceIds: ids }); }}
         onAnswer={setExplainText}
       />
-
-      {/* Kanıt span'leri yalnız trace yüzeylerinde tıklanabilir bir hedefe
-          karşılık gelir (waterfall). exception yanıtı da span id taşıyabilir
-          ama o sayfada gidilecek satır yok — ölü affordance koymuyoruz. */}
-      {spanIds.length > 0 && (subject.kind === 'trace' || subject.kind === 'span') && (
-        <div style={{ marginTop: 16 }}>
-          <DrawerSection title={`Kanıt span'leri (${spanIds.length})`}>
-            {spanIds.map(id => (
-              <EvidenceRow key={id} id={id}
-                title="Waterfall'da bu span'e git"
-                onClick={() => {
-                  onClose();
-                  emitAiFocus({ spanId: id });
-                  scrollToAttr('data-span-id', id);
-                }} />
-            ))}
-          </DrawerSection>
-        </div>
-      )}
 
       {traceIds.length > 0 && (
         <div style={{ marginTop: 16 }}>
@@ -349,7 +333,9 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
 }
 
 // Kanıt satırı — sayfadaki kutulanmış satırla AYNI görsel dil (.wf-evidence),
-// böylece çekmecedeki liste ile waterfall'daki kutu aynı şeyi anlatır.
+// böylece çekmecedeki liste ile exception'ın kutulu örnek-trace satırı aynı
+// şeyi anlatır. v0.10.1033 — yalnız "Kanıt trace'leri" kullanır (span listesi
+// kaldırıldı; span kanıtı waterfall'daki kutunun kendisi).
 // v0.10.924 — buton bütünlüğü Faz 2: `div role=button` + elle Enter/Space →
 // gerçek ghost Button (klavye yerleşik). Atom çocukları `.row` flex'ine
 // sardığı için kırpma (ellipsis) id'nin kendi span'inde.

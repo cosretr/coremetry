@@ -85,7 +85,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   const enabled = useCopilotEnabled();
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState<string | null>(null);
-  // v0.10.165 — kanıt kimlik SAYILARI (listeleri AIDrawer taşır); kart üstündeki Kanıt satırı.
+  // v0.10.165 — kanıt kimlik SAYILARI; kart üstündeki Kanıt satırı. v0.10.1033 —
+  // span'ler waterfall'da kutulu (çekmece listesi kaldırıldı), trace'leri AIDrawer listeler.
   const [evidence, setEvidence] = useState<ExplainEvidence>({ spans: 0, traces: 0 });
   // v0.10.35 — sunucunun linklenebilir saydığı kimlikler (request_id).
   // Aynı köprü, çipin kullandığının aynısı; burada SATIR İÇİ çiziliyor.
@@ -233,9 +234,9 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
                                                   return rr;
                                                 })
                 : kind === 'exception'      ? await api.copilotExplainException(id, withCode, opts).then(rr => {
-                                                  // Kanıt satırı span SAYMAZ: exception sayfasında span listesi
-                                                  // çizilmiyor (AIDrawer v0.9.408 — gidilecek satır yok); yalnız
-                                                  // trace kimlikleri listelenir, yalnız onlar sayılır.
+                                                  // Kanıt satırı span SAYMAZ: exception sayfasında waterfall yok,
+                                                  // span'ler hiçbir yerde kutulanmaz (v0.10.1033'ten beri çekmecede
+                                                  // de listelenmez); yalnız trace kimlikleri listelenir, onlar sayılır.
                                                   if (rr.evidenceSpanIds?.length) onEvidence?.(rr.evidenceSpanIds);
                                                   if (rr.evidenceTraceIds?.length) { onEvidenceTraces?.(rr.evidenceTraceIds); setEvidence(e => ({ ...e, traces: rr.evidenceTraceIds?.length ?? 0 })); }
                                                   setCode(rr.code ?? null);
@@ -298,7 +299,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
     const opts = { onDelta: (d: string) => setCodeText(prev => (prev ?? '') + d), signal: ac.signal, fresh: false, src: readAiSrcParam() ?? undefined };
     try {
       const finish = (r: { explanation: string; links?: IdLink[]; exchangeId?: string; code?: AICodeContext; evidenceSpanIds?: string[] }) => {
-        // kod geçişi listeyi değiştirirse Kanıt sayısı da onu izler (trace: liste çizilir)
+        // kod geçişi listeyi değiştirirse Kanıt sayısı da onu izler (trace: waterfall kutuları yenilenir)
         if (r.evidenceSpanIds?.length) { onEvidence?.(r.evidenceSpanIds); if (kind === 'trace') setEvidence(e => ({ ...e, spans: r.evidenceSpanIds?.length ?? 0 })); }
         setCode(r.code ?? null);
         setCodeLinks(r.links);

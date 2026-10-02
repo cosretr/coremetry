@@ -987,6 +987,20 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — AI paneli: "Kanıt span'leri" listesi kaldırıldı (v0.10.1033)
+
+**Operatör (prod, trace'ten açılan AI paneli):** "Kanıt span'lere gerek yok." Açıklamanın altındaki "Kanıt span'leri (N)"
+bölümü (≤ 6 satır ham hex span kimliği, "Waterfall'da bu span'e git") gürültüydü; kimse okumuyordu.
+**Kaldırılan:** o bölüm (`AIDrawerBody`, trace/span özneleri) ve yalnız ona hizmet eden span-seçim köprüsü (`useAiFocus` +
+`Trace.tsx` dinleyicisi). Kartın Kanıt satırı olmayan listeyi göstermiyor: "Kanıt: N span · waterfall'da kutulu"; exception
+varyantı ("kimlikler çekmecenin altında") liste durduğu için aynen, yalnız-Oracle satırı ipucusuz.
+**Kalan:** v0.9.408 waterfall kutulaması (`onEvidence` → `emitAiEvidence` → `Trace.tsx` → `.wf-evidence`; operatör: "kök neden
+soruşturulması gereken kısımlar kutulanmıyor"), exception'ın "Kanıt trace'leri" listesi ve kimliklerin takip sohbeti bağlamı
+(`buildExplainContext`, "Kanıt span'leri: …" ≤ 10; operatöre görünmez, "Hangi kanıta dayanıyorsun?" çipini besler).
+**Neden yalnız ön yüz:** kimlikler sunucuda türetiliyor (`invEvidenceSpans`: hata span'leri ≤ 5 + en büyük öz süre), modelden
+istenmiyor; alan cevap çerçevesinde, istemde değil — kaldırmak tek prompt token'ı kazandırmaz, kutulamayı kırardı. Bilinen
+boşluk (önceden var): kiosk görünümü (`TraceKiosk`) kutulamayı bağlamıyor. Pin: `AIDrawerBody.evidence.test.tsx`.
+
 ## 2026-10-02 — Problems: anomali ve alarm kuralı satırı tam sayfa detay açar (v0.10.1032)
 
 **Köken (operatör, prod):** "Anomali ve alert rule'lara girdiğimde drawer çıkıyor. Exception gibi detay
