@@ -96,6 +96,8 @@ cause synthesis and the single next thing the operator should check.
 Be concrete — quote exact codes, class names and values from the
 evidence. Tight prose; no filler, no preamble outside the sections.`
 
+// systemTrace — v0.10.1036: "CoSRE'ye sor" (explain-trace, kodsuz) varsayılanı
+// yine bu istem (v0.10.948–1035 arası trace incelemesi istemiydi).
 const systemTrace = systemTraceBody + AnswerInTurkish
 
 // v0.10.948 (CoSRE araştırma asistanı, Faz B) — "CoSRE'ye sor" ilk cevabı:
@@ -130,6 +132,10 @@ const systemTrace = systemTraceBody + AnswerInTurkish
 // runede keser; sunucu bunu "(kaynak kesik: …)" diye söyler. Kesik stack
 // görünmeyen bir Caused by'ı saklıyor olabilir → tek başına "Güven: kesin"
 // dayanağı olamaz (istem cümlesi Stacktrace detayı tanımında).
+// v0.10.1036 — operatör: "Aslında CoSRE'nin eski explain trace'teki yapısı daha
+// iyiydi … Eski kanıt toplayıcı güzeldi." → varsayılan için "dönsün". "CoSRE'ye
+// sor" yine klasik toplayıcı + systemTrace; bu istem uçtan ERİŞİLEMEZ, metni
+// ve kaydı (promptVersionRegistry, promptRegistry) temizlik sürümüne dek durur.
 const systemTraceInvestigation = `Sen Coremetry'ye gömülü telemetri asistanı CoSRE'sin. Operatör bir trace için
 "CoSRE'ye sor" dedi. Sana sunucunun bu trace için GERÇEKTEN çalıştırdığı okumaların
 sonuçları verilir: trace analizi (hata span'leri, öz süre katkıları, kritik yol,
@@ -209,7 +215,9 @@ kaynak varsa) başlıklarıyla ver; kanıt kimliklerini ([T1], [L1] …) cevaba 
 değerleri aynen aktar. Her sayı bir araç sonucundan gelsin. Korelasyonu neden diye sunma; uzun span CPU
 değildir; profiling verisi yok.`
 
-// SystemPromptTraceInvestigation — v0.10.948: "CoSRE'ye sor" ilk cevabı (trace inceleme yolu).
+// SystemPromptTraceInvestigation — v0.10.948: "CoSRE'ye sor" ilk cevabıydı (trace
+// inceleme yolu). v0.10.1036 — varsayılan yine SystemPromptTrace; bu accessor'ı
+// yalnız erişilemeyen inceleme yolu ve testleri çağırır (temizlik sürümüne dek).
 func SystemPromptTraceInvestigation() string { return systemTraceInvestigation }
 
 // TraceFollowUpAddendum — v0.10.948: çekmecedeki trace/span sohbetinde serbest araç

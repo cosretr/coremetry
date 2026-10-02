@@ -93,6 +93,8 @@ export function AIDrawerBody({ subject, onClose, traceCtx, resume, onResumed }: 
         // şeridi ve takip sorularıyla AYNI servis. Seçim yoksa kök incelenir.
         // Bağlam henüz yayınlanmadıysa (yenileme / paylaşılan link) URL'deki
         // span; yayınlanınca o devralır (açık seçimsizlik → kök).
+        // v0.10.1036 — açıklama varsayılanı yine klasik toplayıcı: span istekte
+        // gider ama sunucu yok sayar (takip sohbetinin bağlamı ayrı yoldan).
         spanId={subject.kind === 'span' ? subject.spanId
           : subject.kind === 'trace' ? (traceCtx?.traceId === subject.id ? traceCtx.spanId : urlSpan)
           : undefined}

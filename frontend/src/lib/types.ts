@@ -6674,6 +6674,8 @@ export interface ExplainAnswerBase {
 
 // v0.10.948 (CoSRE Faz B) — explain-trace artık sunucuda GERÇEK okumalar
 // çalıştırıyor (get_trace → loglar · dönem kıyası · pod/metrik · deploy).
+// v0.10.1036 — varsayılan yine klasik tek atış: sunucu `sources`, adım olayı
+// ve `id`siz kanıt linki GÖNDERMEZ; tipler temizlik sürümüne dek duruyor.
 // ExplainSourceStatus: cevap çerçevesinin `sources` satırı — internal/
 // sourcestate.Status'un aynası; ChatStepSourceState'in (rozet alt kümesi)
 // üst kümesi, yani iki şekil de bu tiple okunur. `ok` DAHİL her kaynak gelir:

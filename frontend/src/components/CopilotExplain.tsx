@@ -78,6 +78,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // v0.10.948 — kind === 'trace' için de: operatörün SEÇTİĞİ span (isteğe
   // bağlı); inceleme odak servisini ondan alır (bağlam şeridi ve takip
   // sorularıyla aynı servis). Yoksa kök servis incelenir.
+  // v0.10.1036 — varsayılan yine klasik toplayıcı: istek `?span=` taşımaya devam
+  // eder ama sunucu yok sayar (klasik toplayıcı odak bilmez).
   spanId?: string;
 }) {
   // v0.9.477 — config artık paylaşılan, modül düzeyinde cache'lenen hook'tan
@@ -153,6 +155,10 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // sabit ilerleme metni yok; `sources` cevap çerçevesinin kaynak durumları
   // (dipnot). İkisi de her koşuda sıfırlanır; önbellek isabetinde liste
   // çizilmez (hiçbir şey koşmadı).
+  // v0.10.1036 — "CoSRE'ye sor" varsayılanı yine KLASİK tek atış: sunucu adım
+  // olayı ve `sources` GÖNDERMEZ, ikisi boş kalır ve liste/dipnot hiç çizilmez
+  // (ExplainSteps / ExplainSourceFooter boşta null). Bu dallar temizlik
+  // sürümüne dek duruyor (trace_explain_handler.go başlığı).
   const [steps, setSteps] = useState<ChatStepDetail[]>([]);
   const [sources, setSources] = useState<ExplainSourceStatus[] | undefined>(undefined);
 
@@ -225,7 +231,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           ? `Based on ${r.similarCount} past resolved instance${r.similarCount === 1 ? '' : 's'} of this rule on this service.`
           : `No past resolutions found — first-principles only.`);
       } else {
-        const r = kind === 'trace'          ? await api.copilotExplainTrace(id, withCode, opts, spanId).then(rr => { // v0.10.948 — seçili span = odak servis
+        const r = kind === 'trace'          ? await api.copilotExplainTrace(id, withCode, opts, spanId).then(rr => { // v0.10.948 — seçili span = odak servis; v0.10.1036 — klasik varsayılan span'i yok sayar
                                                   if (rr.evidenceSpanIds?.length) { onEvidence?.(rr.evidenceSpanIds); setEvidence(e => ({ ...e, spans: rr.evidenceSpanIds?.length ?? 0 })); }
                                                   if (rr.oracleRows) setEvidence(e => ({ ...e, oracle: rr.oracleRows })); // v0.10.921
                                                   setCode(rr.code ?? null);
@@ -351,9 +357,11 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // "Yeniden sor" (hata hâlinde tekrar deneme yolu da bu).
   const showButton = !auto || (!busy && (text !== null || error !== null || stopped));
   // v0.10.948 — yalnız trace incelemesi (gerçek okumalar koşar); öteki Explain'ler değişmedi.
+  // v0.10.1036 — varsayılan yine klasik açıklama (adımlı inceleme yok): düğme
+  // kalır (ilk token'a kadar isteği keser), metni artık incelemeden söz etmez.
   const stopButton = kind === 'trace' && busy && text === null && (
     <Button variant="secondary" size="sm" type="button" onClick={stopRun}
-      title="İncelemeyi durdur — kalan okumalar başlatılmaz">
+      title="Açıklamayı durdur — istek kesilir">
       Durdur
     </Button>
   );
@@ -459,7 +467,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
       )}
       {stopped && !busy && text === null && (
         <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-          Durduruldu — inceleme yarıda kesildi; “Yeniden sor” baştan başlatır.
+          Durduruldu — açıklama yarıda kesildi; “Yeniden sor” baştan başlatır.
         </div>
       )}
       {/* v0.10.948 — cevap gelmeden düşen (ya da durdurulan) incelemede HANGİ okumaların koştuğu kaybolmasın. */}

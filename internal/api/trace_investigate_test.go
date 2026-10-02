@@ -40,6 +40,10 @@ import (
 // span'in servisi; get_trace sonrası iptal → başka çağrı yok; SSE sırası
 // (adımlar deltadan önce); önbellek isabeti → adım yok; sayı denetimi;
 // bağlantılar göreli + gerçek rotalar; 404 aynen; rol süzgeci.
+//
+// v0.10.1036 — "CoSRE'ye sor" varsayılanı yine klasik toplayıcı; inceleme uçtan
+// erişilemez (trace_explain_handler.go başlığı). Bu dosya temizlik sürümüne dek
+// incelemenin kendi davranışını pinler (handler testleri invServe ile).
 
 const (
 	invTestTrace   = "4bf92f3577b34da6a3ce929d0e0e4736"
@@ -1080,6 +1084,16 @@ func invExplainReq(query string) *http.Request {
 	return r
 }
 
+// invServe — v0.10.1036: copilotExplainTrace'in varsayılanı yine klasik
+// toplayıcı; inceleme uçtan ERİŞİLEMEZ ama temizlik sürümüne dek kodu duruyor.
+// Aşağıdaki inceleme testleri onu handler'ın kurduğu exchange kimliğiyle
+// DOĞRUDAN çağırır (davranış iddiaları aynen). Uçtan varsayılan yolun klasik
+// olduğu trace_explain_default_test.go'da pinlenir.
+func invServe(s *Server, w http.ResponseWriter, r *http.Request) {
+	r, xid := withExchange(r)
+	s.explainTraceInvestigation(w, r, xid)
+}
+
 const invAnswerP1 = "**Bulgu**\n- payments POST /charge hata verdi, p95 480.2 ms [K1].\n"
 
 // v0.10.972 — sahte cevap güncel biçimde: «Olası neden» → «Kök neden», ilk
@@ -1092,7 +1106,7 @@ func TestExplainTraceInvestigationSSEOrder(t *testing.T) {
 	s := invHandlerServer(t, p, f)
 
 	w := httptest.NewRecorder()
-	s.copilotExplainTrace(w, invExplainReq("?stream=1"))
+	invServe(s, w, invExplainReq("?stream=1"))
 	frames := parseSSE(t, w.Body.String())
 	firstDelta, answerAt := -1, -1
 	var deltas strings.Builder
@@ -1158,14 +1172,14 @@ func TestExplainTraceInvestigationCacheHitNoSteps(t *testing.T) {
 	s := invHandlerServer(t, p, f)
 
 	w1 := httptest.NewRecorder()
-	s.copilotExplainTrace(w1, invExplainReq("?stream=1"))
+	invServe(s, w1, invExplainReq("?stream=1"))
 	callsAfterFirst, llmAfterFirst := f.callCount(), p.requests()
 	if callsAfterFirst != 5 || llmAfterFirst != 1 {
 		t.Fatalf("ilk istek: araç=%d llm=%d", callsAfterFirst, llmAfterFirst)
 	}
 
 	w2 := httptest.NewRecorder()
-	s.copilotExplainTrace(w2, invExplainReq("?stream=1"))
+	invServe(s, w2, invExplainReq("?stream=1"))
 	if f.callCount() != callsAfterFirst || p.requests() != llmAfterFirst {
 		t.Fatalf("isabette okuma/LLM çalıştı (araç=%d llm=%d)", f.callCount(), p.requests())
 	}
@@ -1193,8 +1207,8 @@ func TestExplainTraceInvestigationCacheHitNoSteps(t *testing.T) {
 	f3 := newFakeInvRunner(invTestT0)
 	f3.out[invToolLogs] = invOK(invLogsUnreachableJSON)
 	s3 := invHandlerServer(t, p, f3)
-	s3.copilotExplainTrace(httptest.NewRecorder(), invExplainReq(""))
-	s3.copilotExplainTrace(httptest.NewRecorder(), invExplainReq(""))
+	invServe(s3, httptest.NewRecorder(), invExplainReq(""))
+	invServe(s3, httptest.NewRecorder(), invExplainReq(""))
 	if f3.callCount() != 10 {
 		t.Errorf("erişilemeyen kaynaklı cevap önbellekten servis edildi (araç çağrısı %d; 10 bekleniyordu)", f3.callCount())
 	}
@@ -1210,7 +1224,7 @@ func TestExplainTraceInvestigationOracleRowsFrame(t *testing.T) {
 	s.oracle = invOracleService(true)
 	answer := func() map[string]any {
 		w := httptest.NewRecorder()
-		s.copilotExplainTrace(w, invExplainReq("?stream=1"))
+		invServe(s, w, invExplainReq("?stream=1"))
 		for _, fr := range parseSSE(t, w.Body.String()) {
 			if fr.event == "answer" {
 				return fr.data
@@ -1243,7 +1257,7 @@ func TestExplainTraceInvestigationBufferedFallbackNoTailDelta(t *testing.T) {
 	f := newFakeInvRunner(invTestT0)
 	s := invHandlerServer(t, p, f)
 	w := httptest.NewRecorder()
-	s.copilotExplainTrace(w, invExplainReq("?stream=1"))
+	invServe(s, w, invExplainReq("?stream=1"))
 	var text string
 	deltas := 0
 	for _, fr := range parseSSE(t, w.Body.String()) {
@@ -1335,6 +1349,8 @@ func TestDeliverExplainPreparedEmptyAnswerNoStore(t *testing.T) {
 // v0.10.948 — Tempo yedeği (trace ClickHouse'ta yok): klasik cevap klasik
 // anahtarla saklanır VE okunur — ikinci tıklama LLM'e gitmez, isabet etiketli,
 // exchangeId saklanan kimlik, adım olayı yok; ?refresh=1 yeniden üretir.
+// v0.10.1036 — incelemenin Tempo yedeği (erişilemez yol); varsayılan uçun
+// Tempo'daki trace'i aynı klasik anahtarla açtığı trace_explain_default_test.go'da.
 func TestExplainTraceTempoFallbackCached(t *testing.T) {
 	ns := invTestT0.UnixNano()
 	tsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1358,7 +1374,7 @@ func TestExplainTraceTempoFallbackCached(t *testing.T) {
 
 	call := func(q string) (map[string]any, []sseFrame) {
 		w := httptest.NewRecorder()
-		s.copilotExplainTrace(w, invExplainReq(q))
+		invServe(s, w, invExplainReq(q))
 		frames := parseSSE(t, w.Body.String())
 		for _, fr := range frames {
 			if fr.event == "answer" {
@@ -1403,7 +1419,7 @@ func TestExplainTraceInvestigationNumericWarning(t *testing.T) {
 	f := newFakeInvRunner(invTestT0)
 	s := invHandlerServer(t, p, f)
 	w := httptest.NewRecorder()
-	s.copilotExplainTrace(w, invExplainReq(""))
+	invServe(s, w, invExplainReq(""))
 	var body map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("buffered gövde: %v (%s)", err, w.Body.String())
@@ -1424,7 +1440,7 @@ func TestExplainTraceInvestigationNotFound404(t *testing.T) {
 		f.out[invToolTrace] = invOK(`{"source":{"source":"traces","backend":"clickhouse","state":"empty","returned":0},"trace_id":"x","spans":[],"span_count":0}`)
 		s := invHandlerServer(t, p, f)
 		w := httptest.NewRecorder()
-		s.copilotExplainTrace(w, invExplainReq(q))
+		invServe(s, w, invExplainReq(q))
 		if w.Code != http.StatusNotFound || strings.TrimSpace(w.Body.String()) != "trace not found" {
 			t.Errorf("q=%q: %d %q; bugünkü 404 gövdesi bekleniyordu", q, w.Code, w.Body.String())
 		}

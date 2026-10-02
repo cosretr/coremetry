@@ -78,6 +78,10 @@ func (s *Server) guidedTraceExplain(ctx context.Context, emit func(string, any),
 	// Sohbet balonu deterministik bir yönlendirme yazar (LLM yok, exchangeId
 	// yok). Trace'e dair AÇIK soru ("neden yavaş") aşağıdaki odaklı yolda
 	// sohbette cevaplanır.
+	// v0.10.1036 — çekmecenin varsayılanı yine klasik toplayıcı + SystemPromptTrace
+	// (v0.10.948–1035 arası trace incelemesiydi): balondaki "aynı motor, aynı
+	// önbellek" yeniden birebir doğru — çekmece explainTraceClassicPrepared'ın
+	// klasik anahtarını kullanır, odaklı yol aynı kanıt ve aynı istemle cevaplar.
 	if isTraceExplainAsk(question) {
 		href := "/trace?id=" + url.QueryEscape(route.TraceID) + "&ai=" + url.QueryEscape("trace:"+route.TraceID) + "&aisrc=chat"
 		links := guidedAnswerLinks(route, linkWindowBetween(from, to))

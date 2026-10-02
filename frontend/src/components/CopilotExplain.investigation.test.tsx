@@ -15,6 +15,11 @@
 //   (5) kanıt linkleri gerçek <a href> (SPA Link), kimlik köprüleri satır içi kalır,
 //   (6) "Yeniden sor" listeyi sıfırlar; öteki Explain türleri onStep ALMAZ.
 // Adlar sentetik: checkout / payments, env prod.
+//
+// v0.10.1036 — "CoSRE'ye sor" varsayılanı yine klasik tek atış; sunucu bu
+// olayları ve `sources`u artık GÖNDERMEZ (inceleme uçtan erişilemez). Bu dosya
+// temizlik sürümüne dek, olaylar gelirse çizen dallar durduğu için onları
+// pinler; varsayılanın gerçek görünümü CopilotExplain.classicDefault.test.tsx.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';

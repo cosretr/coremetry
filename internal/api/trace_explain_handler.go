@@ -5,23 +5,34 @@ package api
 // buraya TAŞINDI (aynı ad, aynı rota — ai_routes.go). api.go büyümez kuralı:
 // yeni davranış kendi dosyasında, api.go'dan yalnız eksildi.
 //
-// İki yol:
+// v0.10.1036 (operatör: "Aslında CoSRE'nin eski explain trace'teki yapısı daha
+// iyiydi, neden sonradan değişti. … Eski kanıt toplayıcı güzeldi."; varsayılan
+// için: "dönsün") — İKİ yol da KLASİK kanıt toplayıcısından geçer
+// (buildTraceExplainInput: trace — Tempo önce, sonra CH — + loglar + Oracle
+// satırları; kanıt span'leri sunucuda, traceEvidenceSpanIDs):
 //
-//   - VARSAYILAN — trace incelemesi (trace_investigate.go): sunucu salt-okunur
-//     araçları sohbetin yürütme yolundan çalıştırır, adımları akıtır, cevap
-//     SystemPromptTraceInvestigation ile beş başlıkta gelir; sonuna kanıtta
-//     bulunamayan sayı uyarısı ve "Kaynak durumu" künyesi eklenir. answer
-//     çerçevesi: text, exchangeId, evidenceSpanIds, code, oracleRows, links,
-//     sources (+ isabette cached/cachedAtMs).
-//   - "Kodu da incele" (includeCode) — KLASİK yol aynen korunur
-//     (buildTraceExplainInput + SystemPromptTrace + kod bağlamı): kod çekici
-//     loglardaki stacktrace'e ve onun servisine bağlı, bağlam taşmasında kodu
-//     yarıya indirip çağrıyı yeniden yapıyor — incelemeyle birleştirmek iki
-//     taşma stratejisini çarpıştırırdı. Aynı klasik yol, trace ClickHouse'ta
-//     yok ama Tempo'da olabilir durumunda da koşar (get_trace Tempo'ya bakmaz).
+//   - VARSAYILAN ("CoSRE'ye sor") — explainTraceClassicPrepared:
+//     SystemPromptTrace, akan üretim, klasik önbellek anahtarı
+//     (explainCacheKey(SystemPromptTrace(), in.User, "")), trace hiçbir yerde
+//     yoksa düz metin 404. answer çerçevesi: text, exchangeId,
+//     evidenceSpanIds (waterfall kutulaması), code (nil), oracleRows, kimlik
+//     köprüsü links (+ isabette cached/cachedAtMs). Adım olayı, `sources`,
+//     sayı uyarısı ve "Kaynak durumu" künyesi YOK. `?span=` istekte gelebilir
+//     ama yok sayılır: klasik toplayıcı odak bilmez, anahtara da girmez.
+//   - "Kodu da incele" (includeCode) — klasik + kod bağlamı (v0.10.1035,
+//     değişmedi): kod çekici loglardaki stacktrace'e ve onun servisine bağlı,
+//     bağlam taşmasında kodu yarıya indirip çağrıyı yeniden yapar.
 //
-// Seçili span `?span=<16 hex>` ile gelir (copilotExplainSpan'in sorgu
-// sözleşmesi); odak servisi o span'in servisi olur.
+// İKİ ADIMLI PLAN (v0.10.1036): v0.10.948 trace incelemesi bu uçtan artık
+// ERİŞİLEMEZ ama bu sürümde SİLİNMEDİ; operatör eski davranışı prod'da
+// onaylayınca ayrı bir temizlik sürümü kaldırır. Erişilemeyen: bu dosyada
+// explainTraceInvestigation, traceInvestigationPrepared, invAnswerWithTail;
+// trace_investigate.go'nun tamamı (investigateTrace, traceInvestigationCacheKey,
+// traceInvestigationSpanParam, traceInvestigationMetaGet/Set,
+// newTraceInvestigationRunner …) — invCompareWindow ve invCompareMin/Max
+// HARİÇ (takip sohbeti chat_trace_followup.go kullanır); istem
+// copilot.SystemPromptTraceInvestigation. Testleri yeşil kalır ve
+// explainTraceInvestigation'ı doğrudan çağırır.
 
 import (
 	"context"
@@ -46,8 +57,8 @@ import (
 // cevaplanıyordu). Prompt bayt-bayt aynıdır — explain_trace_input_test.go
 // pinler. Emsal: anomaly.BuildExceptionExplainInput (v0.9.415).
 //
-// v0.10.948 — varsayılan yol trace incelemesi (dosya başlığı); klasik gövde
-// yalnız "Kodu da incele" dalında.
+// v0.10.948 — varsayılan yol trace incelemesiydi; v0.10.1036 — varsayılan yine
+// klasik toplayıcı (dosya başlığı), inceleme bu uçtan erişilemez.
 func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	r, xid := withExchange(r)
 	// v0.9.831 — "Kodu da incele" (opsiyonel gövde). Kod bağlamı
@@ -55,7 +66,14 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	// SERVİSİN deposunda aranır (bkz. traceExplainInput.StackService).
 	opts := decodeExplainOptions(r)
 	if !opts.IncludeCode {
-		s.explainTraceInvestigation(w, r, xid)
+		// v0.10.1036 — operatör: "dönsün". v0.10.948 öncesinin varsayılanı:
+		// klasik kanıt + SystemPromptTrace, akan; trace yoksa 404 (Tempo ve CH).
+		p, err := s.explainTraceClassicPrepared(r)
+		if err != nil {
+			writeExplainPrepareErr(w, err)
+			return
+		}
+		s.deliverExplain(w, r, xid, p.extra, p.run, p.service, p.cacheKey)
 		return
 	}
 	in, err := s.buildTraceExplainInput(r.Context(), r.PathValue("id"))
@@ -84,9 +102,11 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	s.deliverExplain(w, r, xid, traceExplainExtra(in, cc, opts.IncludeCode), run, in.RootService, cacheKey)
 }
 
-// explainTraceInvestigation — v0.10.948: varsayılan yol. Önbellek anahtarı
+// explainTraceInvestigation — v0.10.948: varsayılan yoldu. Önbellek anahtarı
 // incelemeden ÖNCE (isabet hiçbir okuma çalıştırmaz, adım olayı çıkmaz);
 // ıskada inceleme akan kipte adımlarını yayınlar, sonra model akar.
+// v0.10.1036 — copilotExplainTrace artık çağırmaz (ERİŞİLEMEZ, dosya başlığı);
+// temizlik sürümüne dek yalnız testler doğrudan çağırır.
 func (s *Server) explainTraceInvestigation(w http.ResponseWriter, r *http.Request, xid string) {
 	traceID, spanID := r.PathValue("id"), traceInvestigationSpanParam(r)
 	system := copilot.SystemPromptTraceInvestigation()
@@ -160,14 +180,18 @@ func invAnswerWithTail(base explainRun, inv *traceInvestigation) explainRun {
 	}
 }
 
-// explainTraceClassicPrepared — trace ClickHouse'ta yok, Tempo yapılandırılmış:
-// klasik yol (Tempo önce, sonra CH). Trace yoksa 404 aynen.
+// explainTraceClassicPrepared — klasik kodsuz yol (Tempo önce, sonra CH). Trace
+// yoksa errExplainTraceNotFound (çağıran düz metin 404'e çevirir).
 //
 // v0.10.948 — anahtar klasik prompt'tan (explainCacheKey(SystemPromptTrace…));
 // deliverExplainPrepared hazırlıktan SONRA bu anahtara da bakar (Tempo'daki
 // trace'e her tıklama LLM'e gitmesin). Sohbetle PAYLAŞILMAZ: sohbetin odaklı
-// yolu anahtarsız (cacheKey ""), açıklama isteği ise Explain çekmecesini açar
-// (varsayılan yol: trace incelemesi, traceInvestigationCacheKey).
+// yolu anahtarsız (cacheKey ""), açıklama isteği ise Explain çekmecesini açar.
+//
+// v0.10.1036 — VARSAYILAN yol yine bu (copilotExplainTrace'in kodsuz dalı);
+// incelemenin Tempo yedeği olarak da çağrılır ama o yol artık erişilemez.
+// İnceleme anahtarı (traceInvestigationCacheKey) bu anahtardan farklı: eski
+// inceleme satırları hiç okunmaz, TTL'le (explainCacheTTL) düşer.
 func (s *Server) explainTraceClassicPrepared(r *http.Request) (explainPrepared, error) {
 	in, err := s.buildTraceExplainInput(r.Context(), r.PathValue("id"))
 	if err != nil {

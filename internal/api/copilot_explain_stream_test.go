@@ -540,7 +540,8 @@ func TestDeliverExplainPreparedBufferedNoStoreKeepsLinks(t *testing.T) {
 }
 
 // Kaynak pini: trace incelemesi hazırlıklı çekirdekten çıkar (ikinci bir
-// SSE yazıcısı yok).
+// SSE yazıcısı yok). v0.10.1036 — inceleme uçtan erişilemez (varsayılan yine
+// klasik, deliverExplain); temizlik sürümüne dek kodu ve bu pin durur.
 func TestTraceInvestigationUsesPreparedDelivery(t *testing.T) {
 	body, ok := serverFuncBodies(t)["explainTraceInvestigation"]
 	if !ok || !strings.Contains(body, "s.deliverExplainPrepared(") {

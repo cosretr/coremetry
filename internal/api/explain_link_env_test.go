@@ -76,8 +76,17 @@ func TestTraceExplainUsesRootService(t *testing.T) {
 		t.Error("trace explain (Kodu da incele) kök servisi deliverExplain'e GEÇİRMİYOR — " +
 			"prod-dışı trace'in linki yanlış ortama gider")
 	}
+	// v0.10.1036 — varsayılan yol yine klasik: kök servis
+	// explainTraceClassicPrepared'dan deliverExplain'e geçer.
+	if !strings.Contains(h, "service: in.RootService,") ||
+		!strings.Contains(h, "s.deliverExplain(w, r, xid, p.extra, p.run, p.service, p.cacheKey)") {
+		t.Error("trace explain (varsayılan, klasik) kök servisi deliverExplain'e GEÇİRMİYOR — " +
+			"prod-dışı trace'in linki yanlış ortama gider")
+	}
+	// v0.10.948 incelemesi (v0.10.1036'dan beri uçtan erişilemez, temizlik
+	// sürümüne dek kodu duruyor) aynı kuralı taşımaya devam eder.
 	if !strings.Contains(h, "service: inv.RootService") {
-		t.Error("trace incelemesi (varsayılan yol) kök servisi explainPrepared'a GEÇİRMİYOR — " +
+		t.Error("trace incelemesi kök servisi explainPrepared'a GEÇİRMİYOR — " +
 			"prod-dışı trace'in linki yanlış ortama gider")
 	}
 }

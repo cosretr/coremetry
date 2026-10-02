@@ -987,6 +987,50 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — "CoSRE'ye sor" varsayılanı da klasik kanıt toplayıcısına döndü (v0.10.1036; v0.10.948 varsayılanının tersi)
+
+**Karar (operatör: "Aslında CoSRE'nin eski explain trace'teki yapısı daha iyiydi, neden sonradan değişti. Kodu
+incele kısmının da eski yapısı aynı şekilde güzel açıklama yapıyordu. Eski kanıt toplayıcı güzeldi."; nelerin
+gideceği söylenip varsayılan da dönsün mü diye sorulunca: "dönsün"):** trace'te kodsuz "CoSRE'ye sor"
+(`POST /api/copilot/explain-trace/{id}`) yine v0.10.948 öncesinin klasik tek atışı: `explainTraceClassicPrepared`
+— `buildTraceExplainInput` (trace: Tempo önce, sonra CH; trace kimliğiyle loglar; Oracle satırları) +
+`SystemPromptTrace`, akan cevap, klasik önbellek anahtarı `explainCacheKey(SystemPromptTrace(), in.User, "")`,
+trace hiçbir yerde yoksa düz metin 404. v0.10.1035'in "Açık (operatör kararı)" maddesi böylece kapandı: iki yol
+("CoSRE'ye sor" ve "Kodu da incele") yine tek toplayıcıdan geçer.
+
+**Operatörün bilerek bıraktığı:** adım adım inceleme görünümü (canlı okuma listesi); dönem kıyası, pod ve
+deploy/sürüm kanıtı; cevabın altındaki "Kaynak durumu" künyesi (`sources`, id'siz kanıt linkleri); kanıtta
+bulunamayan sayı uyarısı (sayı denetimi). Ayrıca seçili span odağı: `?span=` istekte gider ama klasik toplayıcı
+yok sayar, anahtara girmez.
+
+**Kalan:** "Kodu da incele" (klasik + kod, v0.10.1035 aynen); waterfall kutulaması (`evidenceSpanIds`, klasik
+toplayıcı `traceEvidenceSpanIDs` ile sunucuda hesaplar) ve Kanıt satırı; Oracle satır sayısı; kimlik köprüleri;
+takip sohbeti (SOHBET: araç döngüsü + `TraceFollowUpAddendum`, `chat_trace_followup.go`) ve sohbetin "trace'i
+açıkla" yönlendirmesi (balondaki "aynı motor, aynı önbellek" yeniden birebir doğru); exception explain. Ön yüzde
+yeni arayüz yok: adım listesi ve dipnot veri gelmeyince zaten çizilmez; Durdur kalır, metni incelemeden söz
+etmez ("Açıklamayı durdur — istek kesilir", "Durduruldu — açıklama yarıda kesildi"). Eski inceleme önbellek
+satırları başka anahtarda (`traceInvestigationCacheKey` + `:inv` yan kaydı): hiç okunmaz, 1 saatlik TTL'le düşer.
+`/ai`: yüzey yine `explain-trace`, istemi artık gerçekten `SystemPromptTrace` (evalset "Trace" eşlemesi yeniden
+doğru); istem metni değişmediği için global istem sürümü aynı.
+
+**İki adım:** bu sürümde v0.10.948 incelemesi uçtan ERİŞİLEMEZ ama silinmedi (testleri yeşil, doğrudan
+çağrılır); operatör eski davranışı prod'da onaylayınca ayrı bir temizlik sürümü kaldırır. Kapsam:
+`trace_explain_handler.go`'da `explainTraceInvestigation`, `traceInvestigationPrepared`, `invAnswerWithTail`;
+`trace_investigate.go`'nun tamamı (`invCompareWindow` + `invCompareMin/Max` HARİÇ — takip sohbeti kullanır,
+taşınmalı) ve `trace_investigate_test.go`; `SystemPromptTraceInvestigation` / `systemTraceInvestigation` (+
+`promptRegistry`, `promptVersionRegistry` kaydı, `prompt_trace_investigation_test.go`); `copilot_explain_stream.go`'da
+üreticisi kalmayan mekanizmalar (hazırlığın ikinci anahtarı, `onStore`, eklerin kendi linkleri, hazırlık adım
+olayları). Ön yüz: `ExplainSteps.tsx`, `investigationSteps.ts` (+ testi), `ExplainEvidence.tsx` (Kanıt linkleri +
+Kaynak durumu dipnotu), `explainAnatomy`'de `splitSourceFooter` ve inceleme şekli (Bulgu / güven satırı),
+`api.ts`'te `explainStepFrame` / `onStep`, `CopilotExplain`'deki steps/sources durumu, tipler `ExplainStepEvent`,
+`ExplainSourceStatus`, `ExplainTraceAnswer.sources`, CSS `cx-steps` / `cx-step*` / `cx-sources`,
+`CopilotExplain.investigation.test.tsx`. `StateBadges` takip sohbetinde kullanılır, kalır.
+
+**Tarihçe:** v0.10.944/948 (operatör araştırma asistanı istedi → varsayılan inceleme) → v0.10.986 (operatör kod
+incelemesi tarzı cevabı tercih etti; yalnız biçim değişti, toplayıcı aynı kaldı) → v0.10.987/989 (okumasız
+"Hızlı açıkla" düğmesi eklendi, sonra kaldırıldı) → v0.10.1034/1035 (kodlu yol incelemeye taşındı, geri alındı) →
+bu kayıt: varsayılan da klasik.
+
 ## 2026-10-02 — "Kodu da incele" eski kanıt toplayıcısına geri döndü (v0.10.1035; v0.10.1034 kararının tersi)
 
 **Karar (operatör: "Kodu incele kısmının da eski yapısı aynı şekilde güzel açıklama yapıyordu. Eski kanıt
