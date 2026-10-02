@@ -7697,6 +7697,13 @@ export interface AnomalySensitivityConfig {
   // sunucu Normalize'da varsayılanlarla dolduruyor, ama tip GET'in
   // döndürebileceği her şekli kabul etmeli.
   behavior?: AnomalyBehaviorConfig;
+  /** v0.10.1039 — batch servis ad kalıpları (backend *[]string): adında biri
+   *  geçen (ASCII büyük-küçük duyarsız alt dizgi) servislerde yük artışı
+   *  anomali sayılmaz. YOK = varsayılan ['-batch']; BOŞ dizi = kural KAPALI —
+   *  ikisi farklı, boş liste `[]` olarak gönderilmeli (alanı atlamak
+   *  varsayılanı geri getirir). Sunucu normalize eder (küçük harf, tekrar,
+   *  <3 karakter, tavan 10). Metin ↔ liste: pages/settings/batchPatterns.ts. */
+  batchServicePatterns?: string[];
 }
 
 // v0.9.936 — davranış motorunun eşikleri (backend:

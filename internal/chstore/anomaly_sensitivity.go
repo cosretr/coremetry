@@ -3,6 +3,8 @@ package chstore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"math"
 	"strings"
 )
@@ -89,6 +91,16 @@ type AnomalySensitivityConfig struct {
 	// Runtime — v0.10.890 (paritesi #4 dilim 2): JVM heap bandı → Problem
 	// vidaları (anomaly_sensitivity_runtime.go). Varsayılan kip off.
 	Runtime AnomalyRuntimeConfig `json:"runtime"`
+	// BatchServicePatterns — v0.10.1039 (operatör: "Bazı batch işlerde ani
+	// yük artışı olabilir, onları anomali gibi düşünme — özellikle `-batch`
+	// geçen servis isimlerinde"): adında bu kalıplardan biri (ASCII büyük-
+	// küçük duyarsız ALT DİZGİ) geçen servislerde yük artışı anomali sayılmaz
+	// (anomaly_sensitivity_batch.go). *[]string ÇÜNKÜ "yok" ile "boş"
+	// AYRI anlamlar taşıyor — AttachToIncident'ın *bool gerekçesinin aynısı:
+	// nil = alan yazılmamış = varsayılan ["-batch"]; boş liste = operatör
+	// kuralı KAPATTI. Normalize somutlaştırır (nil → varsayılan liste), boş
+	// liste `[]` olarak yazılır, `null` olarak DEĞİL.
+	BatchServicePatterns *[]string `json:"batchServicePatterns,omitempty"`
 }
 
 const (
@@ -380,6 +392,9 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		AttachToIncident: boolPtr(true),
 		ServiceSilent:    boolPtr(false),          // v0.10.543 — operatör kararı
 		Runtime:          DefaultAnomalyRuntime(), // v0.10.890 — heap kipi off
+		// v0.10.1039 — BİLİNÇLİ varsayılan davranış değişikliği: operatörün
+		// adını verdiği `-batch` kalıbı kutudan açık gelir.
+		BatchServicePatterns: batchPatternsPtr(DefaultBatchServicePatterns()),
 	}
 }
 
@@ -412,6 +427,10 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// dolayısıyla Normalize onu varsayılanlara doldurur.
 		Behavior: NormalizeAnomalyBehavior(c.Behavior),
 		Runtime:  NormalizeAnomalyRuntime(c.Runtime), // v0.10.890 — kopyalanmazsa PUT'ta düşer
+		// v0.10.1039 — kopyalanmazsa PUT'ta sessizce düşer ve her kayıt
+		// kuralı varsayılana döndürürdü. SOMUTLAŞTIRIR: nil → varsayılan
+		// liste; boş liste boş kalır (kural kapalı) ve `[]` yazılır.
+		BatchServicePatterns: batchPatternsPtr(c.BatchServicePatternList()),
 	}
 	for _, m := range AnomalySensitivityMetrics {
 		def := d.Metrics[m]
@@ -466,19 +485,43 @@ func (c AnomalySensitivityConfig) For(metric string) AnomalyMetricSensitivity {
 
 const anomalySensitivityKey = "anomaly_sensitivity"
 
-// GetAnomalySensitivity — KAYITLI blob (ya da varsayılanlar). CH
-// hatasında varsayılana yumuşak düşer: geçici bir tökezleme dedektörün
-// eşiklerini sessizce değiştiremez (GetAnomalyTracked ile aynı duruş).
-func (s *Store) GetAnomalySensitivity(ctx context.Context) AnomalySensitivityConfig {
+// ReadAnomalySensitivity — KAYITLI blob, hatayı SAKLAMADAN (v0.10.1039).
+// Satır yok (hiç kaydedilmemiş) → varsayılanlar + nil: bu BAŞARILI bir
+// okumadır, "ayar yok" bilgisi. CH ya da JSON hatası → hata döner; çağıran
+// ne yapacağına kendisi karar verir.
+//
+// NEDEN AYRILDI: GetAnomalySensitivity hatada varsayılana düşüyordu ve
+// LoadAnomalySensitivity o varsayılanı YAYINLIYORDU. v0.10.1039 öncesi
+// bunun bedeli bir tikte eşik kaymasıydı; batch kalıplarıyla birlikte
+// varsayılan liste TEK YÖNLÜ kapatma eylemleri sürüyor (açık batch
+// request_rate / hacim satırları kapanır, sonra YENİ problem + yeni
+// bildirim olarak geri açılır). Tek okuma hıçkırığı bunu tetiklememeli.
+func (s *Store) ReadAnomalySensitivity(ctx context.Context) (AnomalySensitivityConfig, error) {
 	raw, err := s.GetSetting(ctx, anomalySensitivityKey)
-	if err != nil || len(raw) == 0 {
-		return DefaultAnomalySensitivity()
+	if err != nil {
+		return AnomalySensitivityConfig{}, err
+	}
+	if len(raw) == 0 {
+		return DefaultAnomalySensitivity(), nil
 	}
 	var c AnomalySensitivityConfig
 	if err := json.Unmarshal(raw, &c); err != nil {
+		return AnomalySensitivityConfig{}, fmt.Errorf("anomaly_sensitivity blob'u çözülemedi: %w", err)
+	}
+	return NormalizeAnomalySensitivity(c), nil
+}
+
+// GetAnomalySensitivity — ReadAnomalySensitivity'nin hatada varsayılana
+// yumuşak düşen hâli (eski imza ve davranış). v0.10.1039 itibarıyla iki
+// çağıranı da (Load* ve ayar GET ucu) ReadAnomalySensitivity'ye geçti:
+// ikisi için de "hata = varsayılan" YANLIŞTI (Load varsayılanı yayınlıyordu,
+// GET ekranı varsayılanla doldurup bir Kaydet'te kayıtlı değeri ezdirebilirdi).
+func (s *Store) GetAnomalySensitivity(ctx context.Context) AnomalySensitivityConfig {
+	c, err := s.ReadAnomalySensitivity(ctx)
+	if err != nil {
 		return DefaultAnomalySensitivity()
 	}
-	return NormalizeAnomalySensitivity(c)
+	return c
 }
 
 // SaveAnomalySensitivity — system_settings'e yazar (yeni şema yok,
@@ -492,10 +535,12 @@ func (s *Store) SaveAnomalySensitivity(ctx context.Context, c AnomalySensitivity
 }
 
 // SetAnomalySensitivity yayınlar (atomic) — anomaly_tracked kablosunun
-// aynısı.
+// aynısı. YETKİLİ değer yayınıdır (başarılı okuma ya da admin PUT'u) ve
+// ayarı DOĞRULANMIŞ işaretler (v0.10.1039, AnomalySensitivityConfirmed).
 func (s *Store) SetAnomalySensitivity(c AnomalySensitivityConfig) {
 	n := NormalizeAnomalySensitivity(c)
 	s.anomalySensitivity.Store(&n)
+	s.anomalySensitivityConfirmed.Store(true)
 }
 
 // AnomalySensitivity — yayınlanmış ayar. Hiç hidrate edilmemişse
@@ -507,11 +552,67 @@ func (s *Store) AnomalySensitivity() AnomalySensitivityConfig {
 	return DefaultAnomalySensitivity()
 }
 
-// LoadAnomalySensitivity = oku + yayınla. Boot hidrasyonunun tek gövdesi;
-// hem API sunucusu hem de dedektör (kendi Start'ında, sunucudan önce
-// koşabildiği için) bunu çağırır.
-func (s *Store) LoadAnomalySensitivity(ctx context.Context) AnomalySensitivityConfig {
-	c := s.GetAnomalySensitivity(ctx)
-	s.SetAnomalySensitivity(c)
+// AnomalySensitivityConfirmed — v0.10.1039: bu süreçte ayar en az bir kez
+// YETKİLİ kaynaktan geldi mi (başarılı CH okuması ya da admin PUT'u)?
+// false iken yayınlanmış değer yalnız varsayılan TAHMİNİDİR.
+func (s *Store) AnomalySensitivityConfirmed() bool {
+	return s.anomalySensitivityConfirmed.Load()
+}
+
+// AnomalySensitivityForDetectors — v0.10.1039: batch kuralını tüketen karar
+// noktalarının (metrik dedektörü + davranış motoru, trace_op,
+// self-volume-spike) tik okuması. Ayar henüz DOĞRULANMADIYSA batch listesi
+// BOŞ döner = kural devre dışı = v0.10.1039 öncesi davranış.
+//
+// Yumuşak-hata yönü bilinçli SÜZGEÇSİZ (aiops §5: "mute listesi okunamadı →
+// süzgeçsiz terfi"): varsayılan liste bir tahmin; operatör kuralı kapattıysa
+// ya da başka kalıplar yazdıysa, tahminle susturmak satırları tek yönlü
+// kapatır (açık problem kapanır, bayat süpürme dokunulmayan satırı kapatır,
+// olaylar yaşlanıp terfi problemini kapatır) ve doğrulanınca hepsi YENİ
+// bildirimle geri açılır. Süzgeçsiz kalmanın bedeli en kötü ihtimalle
+// doğrulanana dek bugünkü gürültü. Diğer eşikler (z, taban, davranış)
+// yayınlanan değerden aynen gelir.
+func (s *Store) AnomalySensitivityForDetectors() AnomalySensitivityConfig {
+	c := s.AnomalySensitivity()
+	if !s.AnomalySensitivityConfirmed() {
+		c.BatchServicePatterns = batchPatternsPtr(nil)
+	}
 	return c
+}
+
+// LoadAnomalySensitivity = oku + yayınla. Boot hidrasyonunun ve 30 sn
+// yenilemesinin tek gövdesi; hem API sunucusu hem dedektör/evaluator/
+// recorder (kendi Start'larında) bunu çağırır.
+//
+// v0.10.1039 — OKUMA HATASINDA SON YAYINLANAN DEĞER KORUNUR. Varsayılan
+// yalnız HİÇBİR ŞEY yayınlanmamışsa yayınlanır ve bu durumda ayar
+// doğrulanmamış kalır (AnomalySensitivityConfirmed false → batch kuralı
+// devre dışı). Hata geçişte BİR KEZ loglanır (30 sn'de bir değil); başarılı
+// okuma dönünce bir kez daha.
+func (s *Store) LoadAnomalySensitivity(ctx context.Context) AnomalySensitivityConfig {
+	return s.loadAnomalySensitivityWith(func() (AnomalySensitivityConfig, error) {
+		return s.ReadAnomalySensitivity(ctx)
+	})
+}
+
+// loadAnomalySensitivityWith — Load'un okuyucusu enjekte edilebilir gövdesi
+// (test: iyi değer → hata → iyi değer geçişleri CH'siz).
+func (s *Store) loadAnomalySensitivityWith(read func() (AnomalySensitivityConfig, error)) AnomalySensitivityConfig {
+	c, err := read()
+	if err != nil {
+		if s.anomalySensitivityReadFailing.CompareAndSwap(false, true) {
+			log.Printf("[settings] anomaly_sensitivity okunamadı: %v — son yayınlanan değer korunuyor (doğrulanmış: %v)",
+				err, s.AnomalySensitivityConfirmed())
+		}
+		if s.anomalySensitivity.Load() == nil {
+			d := DefaultAnomalySensitivity()
+			s.anomalySensitivity.CompareAndSwap(nil, &d) // doğrulanmış SAYILMAZ
+		}
+		return s.AnomalySensitivity()
+	}
+	if s.anomalySensitivityReadFailing.CompareAndSwap(true, false) {
+		log.Printf("[settings] anomaly_sensitivity yeniden okunabiliyor — kayıtlı değer yayınlandı")
+	}
+	s.SetAnomalySensitivity(c)
+	return s.AnomalySensitivity()
 }

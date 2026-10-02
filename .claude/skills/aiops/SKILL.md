@@ -96,9 +96,9 @@ Ne üretiyorsun?
 | `runtime:jvm-gc*` | `runtime_vm.go:66` (yalnız VM) | RuntimeAlertConfig | 10 dk | service; heap kuralı EMEKLİ v0.9.551 |
 | `exception:shared-dependency` | `shared_exception.go:26-132` | aynı tip ≥3 servis / 5 dk kova; ≥10 critical | 24 sa / 15 dk aktif | id kova taşır |
 | `exception:fatal-infrastructure` | `fatal_exception.go:28-74` | 1 oluşum, IsFatalExceptionType | 24 sa / 15 dk | id kova TAŞIMAZ |
-| `self-*` (5) | `selfhealth.go:54-69`, `selfhealth_volume.go` | ingest-stall / spool / disk ETA / kanal / hacim ×4 | 10 dk … 24 sa | Service="" (hacim hariç); `self-volume-spike` eskalasyondan muaf; `self-disk-eta` **varsayılan KAPALI** (v0.10.1031, `self_health.diskEta`; ölçüm + kalıcı seri sürer) — yeniden önerme |
+| `self-*` (5) | `selfhealth.go:54-69`, `selfhealth_volume.go` | ingest-stall / spool / disk ETA / kanal / hacim ×4 | 10 dk … 24 sa | Service="" (hacim hariç); `self-volume-spike` eskalasyondan muaf ve **batch servislerde açılmaz** (v0.10.1039, `dropBatchVolumeRows` saatlik önbellekten SONRA); `self-disk-eta` **varsayılan KAPALI** (v0.10.1031, `self_health.diskEta`; ölçüm + kalıcı seri sürer) — yeniden önerme |
 | `anomaly-auto:<fp>` | `evaluator.go:1265` terfi | PeakRatio + Count + MinSustained | son 1 sa anomaly_events | mute'lara uyar |
-| `anomaly:<svc>:<metric>` | `anomaly.go:579-797`, `verdict.go:34` | \|z\| ≥ CriticalZ, DwellBuckets | 5 dk kova; 24 sa ardışık ya da mevsimsel 14 g ±3 | Threshold = baseline medyanı, Comparator yöne göre (v0.9.978) |
+| `anomaly:<svc>:<metric>` | `anomaly.go:579-797`, `verdict.go:34` | \|z\| ≥ CriticalZ, DwellBuckets | 5 dk kova; 24 sa ardışık ya da mevsimsel 14 g ±3 | Threshold = baseline medyanı, Comparator yöne göre (v0.9.978); batch serviste `request_rate` faz 1'de atlanır, açık satırı `resolveBatchLoadProblems` dürüst gerekçeyle kapatır (v0.10.1039, `batch_load.go`) |
 | `anomaly:<svc>:service_silent` | `anomaly.go:876-1023` | 3 sıfır kova + %90 aktif taban | — | **varsayılan KAPALI** (v0.10.543) — yeniden önerme |
 | `anomaly-cluster:<source>` | `clustering.go:23-441` | ≥3 yayılım-bağlı taze açılış, katılım ≤30 dk | 60 dk kanıt | üyeler bastırılır |
 | `exception-storm` | `exception_storm.go:31-129` | ≥N servis yeni grup / pencere | exception_triage | Service="" — filo düzeyi, tanım gereği P1 |
@@ -110,6 +110,25 @@ anomaly_events üreticileri (Problem değil): recorder (`recorder.go:107,129`),
 trace_op (`trace_ops.go:171`), davranış motoru (`behavior.go:224`,
 kind=`behavior_change`, LLM dedektör DEĞİL hüküm katmanı — deterministik
 kapılardan geçer, alert AÇAMAZ).
+
+**Batch yüklemi (v0.10.1039, operatör: "Bazı batch işlerde ani yük artışı
+olabilir, onları anomali gibi düşünme"):** `anomaly_sensitivity.batchServicePatterns`
+(`*[]string`; nil = `["-batch"]`, `[]` = kapalı) → TEK yüklem
+`AnomalySensitivityConfig.IsBatchService` (ASCII büyük-küçük duyarsız alt dizgi;
+SQL ikizi `BatchServiceSQL` aynı listeden; Go↔SQL fikstür testleri `clickhouse` ikilisi
+ister, CI'da atlanır — CI'yı şekil/golden + özellik tablosu kapsar). Kapsam: davranış
+motoru batch'te `request_rate`'i değerlendirmez (`behaviorFleetCandidates`); metrik
+dedektörü atlar + açık satırı kapatır; `self-volume-spike` açılmaz; `trace_op` batch'te
+`error_spike` için **SAYIM VE PAY** ister (`traceOpBatchShareHolds`, SQL HAVING'de) —
+SAF SUSTURMA: batch olayları eski kümenin alt kümesi, batch olmayan çiftler LIMIT/ilk
+50'de yalnız yer kazanır; pay kuralını sayımın YERİNE koyma (yeni olay açar). Yükte
+**SUSMAYANLAR** (yeniden genişletme — aşırı susturma en kötü sonuç): `error_rate`,
+`p99_ms`, `new_error`, `trace_op_latency`, `log_pattern`, exception P1 hacmi, gömülü
+kurallar. Bedeller: taban payı ≥ %33 batch op `error_spike` açamaz; batch servis span
+sızıntısında hacim (maliyet) uyarısı almaz. Kalıplar tik başına
+`AnomalySensitivityForDetectors()`'tan (atomic, CH okuması yok): ayar bu süreçte hiç
+doğrulanmadıysa batch listesi BOŞ (süzgeçsiz) ve kapatma geçişi koşmaz; okuma hatası
+son değeri KORUR (`LoadAnomalySensitivity`).
 
 ## 4. Problem modeli ve öncelik
 
@@ -256,7 +275,12 @@ değil. Golden pinler: `anomaly/prompt_golden_test.go`, `rootcause_prompt_test.g
 `system_settings` JSON blobu: `Default*` / `Normalize*` / `Get*` (hataya
 varsayılana düşer) + boot `Load*` + 30 s `Start*Refresh` + sıcak yol için paket
 düzeyi atomic. Varsayılanı TRUE olan her bayrak `*bool` (AttachToIncident,
-Behavior.Enabled, SelfHealth.Enabled) — `false` ile "yok" ayrılsın.
+Behavior.Enabled, SelfHealth.Enabled) — `false` ile "yok" ayrılsın. Varsayılanı DOLU
+liste `*[]string` (`batchServicePatterns`, v0.10.1039): nil = varsayılan, `[]` = kapalı;
+Normalize boş listeyi `[]` (nil olmayan dilim) yazar — `null` geri okununca nil olur ve
+kural sessizce geri açılırdı. Normalize'a kopyalanmayan alan PUT'ta düşer. Varsayılanı
+TEK YÖNLÜ eylem süren bir ayar (kapatma) okuma hatasında varsayılan YAYINLAMAMALI:
+`anomaly_sensitivity` son değeri korur + "doğrulandı" bayrağı taşır (v0.10.1039).
 
 ## 12. Sessiz bozulmalar — sürüm etiketli
 

@@ -187,6 +187,14 @@ func (e *Evaluator) Start(ctx context.Context) {
 	if err := e.seedBuiltinRules(ctx); err != nil {
 		log.Printf("[evaluator] seed built-in rules: %v", err)
 	}
+	// v0.10.1039 — self-volume-spike'ın batch süzgeci anomaly_sensitivity
+	// atomic'ini okuyor. Evaluator main.go'da API sunucusunun hidrasyonundan
+	// ÖNCE başlıyor ve ilk tiki hemen koşuyor; bu satır olmasa ilk tik
+	// varsayılan kalıplarla süzer ve operatör listesi farklıysa (ya da kural
+	// kapalıysa) bir satır açılıp/kapanıp bir tik sonra geri dönerdi
+	// (anomaly.Detector.Start'taki hidrasyonun aynı gerekçesi). Tek okuma,
+	// hata hâlinde varsayılana yumuşak düşer.
+	e.store.LoadAnomalySensitivity(ctx)
 
 	e.leader.Start(ctx)
 	t := time.NewTicker(e.interval)

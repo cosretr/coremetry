@@ -65,6 +65,11 @@ func (r *Recorder) Start(ctx context.Context) {
 		// time to ingest some logs / spans before the first
 		// detection runs against an empty window.
 		time.Sleep(15 * time.Second)
+		// v0.10.1039 — trace_op'un batch kalıpları anomaly_sensitivity
+		// atomic'inden okunuyor (tik başına CH okuması YOK). API sunucusu da
+		// hidrate ediyor ama sıralamaya güvenmeden ilk tikten önce bir kez
+		// burada: operatörün listesi ilk tikte de geçerli olsun.
+		r.store.LoadAnomalySensitivity(ctx)
 		r.tick(ctx)
 
 		t := time.NewTicker(r.interval)

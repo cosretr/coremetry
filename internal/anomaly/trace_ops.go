@@ -38,6 +38,10 @@ type traceOpBucket struct {
 	CurErrs   uint64
 	BaseErrs  uint64 // RAW baseline count over the whole lookback (un-normalized)
 	CurCalls  uint64 // total calls in the current window — the denominator
+	// BaseCalls — v0.10.1039: taban penceresindeki çağrı sayısı; YALNIZ batch
+	// kalıp listesi boş değilken okunur (aynı iç alt sorgudan, ek tarama yok).
+	// Liste boşken 0 kalır ve hiçbir dal ona bakmaz.
+	BaseCalls uint64
 }
 
 // Qualification thresholds — v0.9.327, operator (prod): "active anomalyler
@@ -82,7 +86,26 @@ const (
 // windowRatio = current window length / baseline lookback; the raw
 // baseline is normalized with it so a 12× longer baseline doesn't
 // inflate base counts and mask spikes.
-func classifyTraceOps(rows []traceOpBucket, windowRatio float64) []TraceOpAnomaly {
+//
+// v0.10.1039 — isBatch (nil = kural kapalı; üretimde
+// AnomalySensitivityConfig.IsBatchService): batch serviste error_spike için
+// sayım kuralı (DEĞİŞMEDİ) YETMEZ, hata PAYI da aynı eşikle artmış olmalı
+// (traceOpBatchShareHolds) — SAYIM VE PAY. Operatör: "Bazı batch işlerde ani
+// yük artışı olabilir, onları anomali gibi düşünme". 20× yükte hata sayısı da
+// 20× olur ama pay sabit kalır; sayım kuralı yükün kendisini "hata
+// sıçraması" diye raporluyordu.
+//
+// SAF SUSTURMA (inceleme kararı): pay kuralı sayım kuralının YERİNE geçseydi
+// yeni olay da ÜRETİRDİ (cari 5 dk hacmi 24 sa ortalamasının altındayken pay
+// artar, sayım artmaz) ve bu batch çifti LIMIT 200 / ilk 50'de batch olmayan
+// bir çiftin yerini alabilirdi. VE ile batch olayları eski kümenin ALT
+// KÜMESİ; batch olmayan çiftler yalnız yer KAZANABİLİR. Raporlanan ratio ve
+// BaselineErrors bugünkü sayım değerleri (UI yanında sayıları yazıyor — tek
+// birim). new_error (tabanda HİÇ hata yok) batch'te de AYNEN. Taban çağrısı 0
+// (savunma; hata ⊆ çağrı, pratikte olmaz) → pay ölçülemez, sayım kararı kalır.
+//
+// SQL ikizi traceOpQuery'nin HAVING'inde AYNI kural; burası kemer.
+func classifyTraceOps(rows []traceOpBucket, windowRatio float64, isBatch func(service string) bool) []TraceOpAnomaly {
 	out := []TraceOpAnomaly{}
 	for _, r := range rows {
 		if r.CurErrs == 0 {
@@ -120,6 +143,10 @@ func classifyTraceOps(rows []traceOpBucket, windowRatio float64) []TraceOpAnomal
 		if kind == "" {
 			continue
 		}
+		// v0.10.1039 — batch: sayım kuralının üstüne EK koşul (yalnız eler).
+		if kind == "error_spike" && r.BaseCalls > 0 && isBatch != nil && isBatch(r.Service) && !traceOpBatchShareHolds(r) {
+			continue
+		}
 		out = append(out, TraceOpAnomaly{
 			Service:        r.Service,
 			Operation:      r.Operation,
@@ -146,6 +173,93 @@ func classifyTraceOps(rows []traceOpBucket, windowRatio float64) []TraceOpAnomal
 		out = out[:50]
 	}
 	return out
+}
+
+// traceOpBatchShareHolds — v0.10.1039, batch serviste sayım kuralına EK
+// koşul: cari hata payı ≥ traceOpMinRatio × taban hata payı.
+//
+//	(cur_errs / cur_calls) >= 3 × (base_errs / base_calls)
+//
+// PENCERE NORMALİZASYONU YOK ve gerekmiyor: pay, AYNI pencerenin iki
+// toplamının oranı (taban 24 saatin hatası / 24 saatin çağrısı); pencere
+// uzunluğu pay ile paydada sadeleşir. windowRatio yalnız SAYIM kuralının
+// derdi (5 dk sayımı 24 saat sayımıyla kıyaslamak).
+//
+// İşlem sırası SQL ikiziyle (traceOpQuery HAVING) BİREBİR aynı — iki bölme,
+// bir çarpma, aynı IEEE çift — ki eşiğin tam üstündeki bir çift iki tarafta
+// farklı yuvarlanmasın. Çağıran CurCalls > 0 (pay tabanı) ve BaseCalls > 0,
+// BaseErrs > 0 garantiler.
+//
+// Bilinen bedel: taban payı zaten ≥ %33 olan bir batch operasyonunda pay
+// üçe katlanamaz → error_spike HİÇ açılmaz; tam çöküş error_rate
+// dedektörleri ve new_error ile yakalanır (docs/DECISIONS.md v0.10.1039).
+func traceOpBatchShareHolds(r traceOpBucket) bool {
+	curShare := float64(r.CurErrs) / float64(r.CurCalls)
+	baseShare := float64(r.BaseErrs) / float64(r.BaseCalls)
+	return curShare >= traceOpMinRatio*baseShare
+}
+
+// traceOpQuery — tespitin MV sorgusu + argümanları (v0.10.1039'da saf
+// kurucuya çıkarıldı ki batch dalı SQL düzeyinde pinlenebilsin).
+//
+// batchCond == "" (kalıp listesi boş = kural kapalı) → metin ve argümanlar
+// v0.10.1039 ÖNCESİYLE BİREBİR aynı (TestTraceOpQueryLegacyIdentity).
+//
+// batchCond dolu → iki ek: (a) `base_calls` — aynı iç alt sorgunun
+// `calls`'ı, is_cur = 0 tarafı; ek tarama yok; (b) HAVING'in spike koluna
+// batch servisler için PAY koşulu VE ile eklenir (sayım koşulu aynen).
+// Batch koşulu HAVING'de, Go'da DEĞİL: LIMIT 200 cur_errs'e göre sıralıyor ve
+// yük altında en çok hata sayan çiftler tam da sabit-paylı batch çiftleri —
+// Go'da elenseler LIMIT'i doldurup gerçek sıçramaları dışarıda bırakırlardı
+// (v0.9.327'nin dersi: LIMIT yalnız hayatta kalabilecek satırlarda ısırmalı).
+// Koşul yalnız ELEDİĞİ için batch olmayan çiftler LIMIT'te yalnız yer kazanır.
+func traceOpQuery(curStart, baseStart, alignedNow time.Time, windowRatio float64, batchCond string, batchArgs []any) (string, []any) {
+	sel := `
+		SELECT service_name, name,
+		       sumIf(errs,  is_cur = 1) AS cur_errs,
+		       sumIf(errs,  is_cur = 0) AS base_errs,
+		       sumIf(calls, is_cur = 1) AS cur_calls`
+	spike := `((base_errs = 0) OR (cur_errs >= ? * base_errs * ?))`
+	args := []any{curStart, baseStart, alignedNow, traceOpMinErrs, traceOpMinErrShare}
+	if batchCond == "" {
+		args = append(args, traceOpMinRatio, windowRatio)
+	} else {
+		sel += `,
+		       sumIf(calls, is_cur = 0) AS base_calls`
+		// classifyTraceOps ile aynı: taban hatası yok → new_error (dokunulmaz);
+		// aksi → bugünkü sayım koşulu VE (batch değil YA DA taban çağrısı 0
+		// YA DA pay ≥ 3× taban payı).
+		spike = `((base_errs = 0)
+		        OR (cur_errs >= ? * base_errs * ?
+		            AND (NOT (` + batchCond + ` AND base_calls > 0)
+		                 OR cur_errs / cur_calls >= ? * (base_errs / base_calls))))`
+		args = append(args, traceOpMinRatio, windowRatio)
+		args = append(args, batchArgs...)
+		args = append(args, traceOpMinRatio)
+	}
+	return sel + `
+		FROM (
+		  SELECT service_name, name,
+		         time_bucket >= ? AS is_cur,
+		         countIfMerge(error_count_state) AS errs,
+		         countMerge(span_count_state)    AS calls
+		  FROM operation_summary_5m
+		  WHERE time_bucket >= ? AND time_bucket < ?
+		  GROUP BY service_name, name, is_cur
+		)
+		GROUP BY service_name, name
+		-- v0.9.327 — the coarse filter now carries the SAME floors the Go
+		-- classifier applies. It used to be deliberately looser, which meant
+		-- the LIMIT 200 filled with pairs Go would then reject: the ranking
+		-- was spent on rows that could never qualify. Same lesson as the
+		-- inbox status narrow (v0.9.322) — the LIMIT has to bite on rows
+		-- that can actually survive.
+		HAVING cur_errs >= ? AND cur_calls > 0
+		   AND cur_errs >= ? * cur_calls
+		   AND ` + spike + `
+		ORDER BY cur_errs DESC
+		LIMIT 200
+		SETTINGS max_execution_time = 25`, args
 }
 
 const traceOpBucketLen = 5 * time.Minute
@@ -206,40 +320,21 @@ func DetectTraceOpAnomalies(ctx context.Context, store *chstore.Store, window ti
 	baseStart := curStart.Add(-baseLookback)
 	windowRatio := float64(curWindow) / float64(baseLookback)
 
+	// v0.10.1039 — batch kalıpları: metrik dedektörünün okuduğu AYNI atomic
+	// ayar (tik başına CH okuması YOK; boot hidrasyonu + 30 sn yenileme).
+	// Bu işlev hem recorder'dan hem /api/anomalies/trace-ops'tan çağrılıyor;
+	// ikisi de aynı Store'u taşıdığı için seam burası. Liste boşsa (kural
+	// kapalı) batchCond "" ve sorgu bugünküyle birebir. ForDetectors: ayar
+	// hiç doğrulanmadıysa liste boş (kural devre dışı, tahminle susturma yok).
+	sens := store.AnomalySensitivityForDetectors()
+	batchCond, batchArgs := sens.BatchServiceSQL("service_name")
+
 	// Tek MV geçişi: iç seviye (pair, is_cur) bazında state merge, dış
 	// seviye cur/base'i yan yana koyar. Kaba eleme SQL'de kalır ki
 	// LIMIT anlamlı olsun (eşiğin gevşek hâli); kesin eşik/kind
 	// sınıflaması Go'da (classifyTraceOps, tablo-testli).
-	rows, err := conn.Query(ctx, `
-		SELECT service_name, name,
-		       sumIf(errs,  is_cur = 1) AS cur_errs,
-		       sumIf(errs,  is_cur = 0) AS base_errs,
-		       sumIf(calls, is_cur = 1) AS cur_calls
-		FROM (
-		  SELECT service_name, name,
-		         time_bucket >= ? AS is_cur,
-		         countIfMerge(error_count_state) AS errs,
-		         countMerge(span_count_state)    AS calls
-		  FROM operation_summary_5m
-		  WHERE time_bucket >= ? AND time_bucket < ?
-		  GROUP BY service_name, name, is_cur
-		)
-		GROUP BY service_name, name
-		-- v0.9.327 — the coarse filter now carries the SAME floors the Go
-		-- classifier applies. It used to be deliberately looser, which meant
-		-- the LIMIT 200 filled with pairs Go would then reject: the ranking
-		-- was spent on rows that could never qualify. Same lesson as the
-		-- inbox status narrow (v0.9.322) — the LIMIT has to bite on rows
-		-- that can actually survive.
-		HAVING cur_errs >= ? AND cur_calls > 0
-		   AND cur_errs >= ? * cur_calls
-		   AND ((base_errs = 0) OR (cur_errs >= ? * base_errs * ?))
-		ORDER BY cur_errs DESC
-		LIMIT 200
-		SETTINGS max_execution_time = 25`,
-		curStart, baseStart, alignedNow,
-		traceOpMinErrs, traceOpMinErrShare, traceOpMinRatio, windowRatio,
-	)
+	q, args := traceOpQuery(curStart, baseStart, alignedNow, windowRatio, batchCond, batchArgs)
+	rows, err := conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +343,11 @@ func DetectTraceOpAnomalies(ctx context.Context, store *chstore.Store, window ti
 	buckets := []traceOpBucket{}
 	for rows.Next() {
 		var b traceOpBucket
-		if err := rows.Scan(&b.Service, &b.Operation, &b.CurErrs, &b.BaseErrs, &b.CurCalls); err != nil {
+		dest := []any{&b.Service, &b.Operation, &b.CurErrs, &b.BaseErrs, &b.CurCalls}
+		if batchCond != "" {
+			dest = append(dest, &b.BaseCalls)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
 		buckets = append(buckets, b)
@@ -257,7 +356,11 @@ func DetectTraceOpAnomalies(ctx context.Context, store *chstore.Store, window ti
 		return nil, err
 	}
 
-	out := classifyTraceOps(buckets, windowRatio)
+	var isBatch func(string) bool
+	if batchCond != "" {
+		isBatch = sens.IsBatchService
+	}
+	out := classifyTraceOps(buckets, windowRatio, isBatch)
 	if len(out) == 0 {
 		return out, nil
 	}

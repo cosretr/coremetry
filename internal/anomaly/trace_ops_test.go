@@ -82,7 +82,7 @@ func TestClassifyTraceOpsThresholds(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := classifyTraceOps([]traceOpBucket{c.in}, wr)
+			got := classifyTraceOps([]traceOpBucket{c.in}, wr, nil)
 			if c.wantKind == "" {
 				if len(got) != 0 {
 					t.Fatalf("kalifiye olmamalıydı: %+v", got)
@@ -118,7 +118,7 @@ func TestClassifyTraceOpsRejectsTheMeasuredNoiseProfile(t *testing.T) {
 		{Service: "sms-gateway", Operation: "Send", CurErrs: 4, BaseErrs: 1, CurCalls: 12_000},
 		{Service: "web-bff", Operation: "Get", CurErrs: 3, BaseErrs: 2, CurCalls: 88_000},
 	}
-	if got := classifyTraceOps(noise, wr); len(got) != 0 {
+	if got := classifyTraceOps(noise, wr, nil); len(got) != 0 {
 		t.Fatalf("ölçülen gürültü profili hâlâ event açıyor: %+v", got)
 	}
 }
@@ -131,7 +131,7 @@ func TestClassifyTraceOpsOrderAndCap(t *testing.T) {
 		{Service: "s", Operation: "spike-big", CurErrs: 200, BaseErrs: 120, CurCalls: 1_000}, // ratio 20
 		{Service: "s", Operation: "new-2", CurErrs: 90, BaseErrs: 0, CurCalls: 500},          // ratio 90
 	}
-	got := classifyTraceOps(rows, wr)
+	got := classifyTraceOps(rows, wr, nil)
 	// Kind FIRST (a brand-new error outranks any spike), then ratio — so
 	// spike-big's 20× still sits below new-1's 10×. Non-obvious, hence pinned.
 	wantOrder := []string{"new-2", "new-1", "spike-big", "spike-small"}
@@ -152,7 +152,7 @@ func TestClassifyTraceOpsOrderAndCap(t *testing.T) {
 			CurErrs: uint64(traceOpMinErrs + i), CurCalls: 200,
 		})
 	}
-	if got := classifyTraceOps(many, wr); len(got) != 50 {
+	if got := classifyTraceOps(many, wr, nil); len(got) != 50 {
 		t.Fatalf("50 tavanı uygulanmalıydı, got=%d", len(got))
 	}
 }

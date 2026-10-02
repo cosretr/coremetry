@@ -5,6 +5,7 @@ import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { AnomalyTrackedConfig, AnomalySensitivityConfig, AnomalyBehaviorConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig } from '@/lib/types';
 import { Field, FlashBox, humanize } from './shared';
+import { droppedPatternCount, formatBatchPatterns, parseBatchPatterns } from './batchPatterns'; // v0.10.1039
 
 // ── Anomaly promotion tab ───────────────────────────────────────
 //
@@ -314,10 +315,18 @@ function SensitivitySection() {
   const [cfg, setCfg] = useState<AnomalySensitivityConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // v0.10.1039 — batch kalıpları ayrı METİN state'inde: her tuşta listeye
+  // çevirip geri yazmak "a, " yazarken virgülü yutardı. Kaydette listeye
+  // çevrilir; yüklemede ve kayıttan sonra sunucunun döndürdüğü (normalize)
+  // listeden yeniden doldurulur.
+  const [batchText, setBatchText] = useState('');
+  // Son kayıtta sunucu normalizasyonunun düşürdüğü giriş sayısı (kısa /
+  // tavan / tekrar) — kural sessizce daralmasın, operatör görsün.
+  const [batchDropped, setBatchDropped] = useState(0);
 
   useEffect(() => {
     api.getAnomalySensitivity()
-      .then(c => setCfg(c))
+      .then(c => { setCfg(c); setBatchText(formatBatchPatterns(c.batchServicePatterns)); })
       .catch(err => setFlash({ kind: 'err', text: humanize(err) }));
   }, []);
 
@@ -329,8 +338,13 @@ function SensitivitySection() {
       // şart — operatör anlamsız bir değer girdiyse (negatif, aralık
       // dışı) alanın varsayılana döndüğünü GÖRMELİ, yoksa yazdığını
       // kaydedilmiş sanır.
-      const saved = await api.putAnomalySensitivity(cfg);
+      // v0.10.1039 — boş metin `[]` gider (kural KAPALI); alan atlanmaz,
+      // atlansa sunucu varsayılanı (-batch) geri getirirdi.
+      const sentPatterns = parseBatchPatterns(batchText);
+      const saved = await api.putAnomalySensitivity({ ...cfg, batchServicePatterns: sentPatterns });
       setCfg(saved);
+      setBatchText(formatBatchPatterns(saved.batchServicePatterns));
+      setBatchDropped(droppedPatternCount(sentPatterns, saved.batchServicePatterns));
       setFlash({ kind: 'ok', text: 'Kaydedildi — dedektör bir sonraki taramada yeni eşikleri kullanır.' });
     } catch (err) {
       setFlash({ kind: 'err', text: humanize(err) });
@@ -441,6 +455,38 @@ function SensitivitySection() {
             onChange={r => setCfg({ ...cfg, runtime: r })}
           />
 
+          {/* v0.10.1039 — batch servis ad kalıpları (operatör: "Bazı batch
+              işlerde ani yük artışı olabilir, onları anomali gibi düşünme —
+              özellikle `-batch` geçen servis isimlerinde"). Etkin liste
+              gösterilir (alan yoksa -batch); boş kayıt kuralı KAPATIR. */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+            <Field label="Batch servis ad kalıpları">
+              <input type="text" aria-label="Batch servis ad kalıpları"
+                placeholder="boş = kural kapalı"
+                value={batchText}
+                onChange={e => setBatchText(e.target.value)} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+                Adında bu kalıplardan biri geçen servislerde ani yük artışı anomali sayılmaz
+                (istek hızı, hacim sıçraması; hata sayısı artışı ancak hata oranı da artmışsa
+                olay sayılır). Hata
+                oranı ve gecikme anomalileri etkilenmez. Boş bırakırsanız kural kapanır.
+                <br />
+                Virgül ya da boşlukla ayırın; büyük-küçük harf fark etmez, 3 karakterden kısa
+                kalıp yok sayılır, en çok 10 kalıp. Varsayılan <code>-batch</code>.
+              </div>
+              {/* v0.10.1039 (inceleme) — kural fark edilmeden kapanmasın ya da daralmasın. */}
+              {cfg.batchServicePatterns?.length === 0 && (
+                <div style={{ fontSize: 11, color: 'var(--warn)', marginTop: 4 }}>
+                  Kural kapalı — batch servisler de diğerleri gibi değerlendirilir.
+                </div>
+              )}
+              {batchDropped > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--warn)', marginTop: 4 }}>
+                  {batchDropped} kalıp alınmadı: 3 karakterden kısa / 10&apos;dan fazla / tekrar.
+                </div>
+              )}
+            </Field>
+          </div>
           {/* v0.9.827 — dedektör → incident kapısı.
               Bu çağrı bugüne kadar KOŞULSUZDU ve Settings'teki hiçbir vida
               ona ulaşmıyordu: üstteki "terfi ettir" kutucuğu BAŞKA bir
@@ -501,11 +547,20 @@ function SensitivitySection() {
             </div>
           </div>
 
+          {/* v0.10.1039 — kapsam notu düzeltildi: batch kalıpları metrik
+              dedektörünün DIŞINA da (iz operasyon anomalileri, hacim sıçraması
+              uyarısı) uzanıyor; eski "yalnız metrik dedektörü" cümlesi yanlış
+              kalırdı. */}
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 16, lineHeight: 1.5 }}>
-            Bu eşikler yalnız <b>metrik anomali dedektörünü</b> bağlar. Elle kurduğunuz
-            alarm kuralları kendi eşiklerini kullanır; log/iz desen anomalileri ise
+            Bu eşikler <b>metrik anomali dedektörünü</b> ve davranış motorunu bağlar;
+            <b> batch servis ad kalıpları</b> ayrıca iz (trace) operasyon hata anomalilerini
+            ve servis hacmi sıçraması uyarısını da etkiler. Elle kurduğunuz alarm kuralları
+            kendi eşiklerini kullanır; log/iz desen anomalilerinin Problem&apos;e terfisi
             yukarıdaki terfi hattından geçer. Sertleştirmek açık kayıtları silmez: yeni
-            tespit üretilmez, mevcut anomaliler kendi bantlarına dönünce kapanır.
+            tespit üretilmez, mevcut anomaliler kendi bantlarına dönünce kapanır. Batch
+            kalıbına giren servislerin açık istek hızı ve hacim sıçraması problemleri ise
+            bir sonraki taramada kapanır (davranış değişiminden terfi edenler, olay
+            yenilenmeyi bıraktıktan ~10 dakika sonra).
           </div>
 
           <div style={{ marginTop: 18, display: 'flex', gap: 8, alignItems: 'center' }}>

@@ -58,8 +58,19 @@ func (s *Server) StartAnomalySensitivityRefresh(ctx context.Context, interval ti
 // ayrışmış olabilir (bu pod henüz yenilemedi) ve ayar sayfası
 // KAYDEDİLENİ göstermeli — operatör ne yazdığını görsün, isteğinin
 // hangi pod'a düştüğünü değil (v0.9.797/800 ile aynı gerekçe).
+//
+// v0.10.1039 — okuma HATASI artık varsayılan döndürmüyor, hata döndürüyor:
+// varsayılanla dolan ekran, bir Kaydet'le kayıtlı değeri (ör. operatörün
+// boş bıraktığı batch listesini → "-batch") sessizce ezerdi. Ekran hatayı
+// gösterir ve Kaydet çizilmez. Satır yoksa (hiç kaydedilmemiş) varsayılan
+// meşru cevaptır ve aynen döner.
 func (s *Server) getAnomalySensitivity(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.store.GetAnomalySensitivity(r.Context()))
+	c, err := s.store.ReadAnomalySensitivity(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, c)
 }
 
 // putAnomalySensitivity validates + persists the thresholds and swaps the

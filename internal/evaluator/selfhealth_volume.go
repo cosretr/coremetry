@@ -127,6 +127,26 @@ func escalationExempt(ruleID string) bool {
 	return ruleID == selfVolumeRuleID || strings.HasPrefix(ruleID, "slo:")
 }
 
+// dropBatchVolumeRows — v0.10.1039, SAF: batch servislerin hacim sıçraması
+// satırlarını düşürür. Operatör: "Bazı batch işlerde ani yük artışı
+// olabilir, onları anomali gibi düşünme — özellikle `-batch` geçen servis
+// isimlerinde." Bir batch işinin hacmi tanımı gereği dalgalı; dünle
+// kıyaslanan 4× bu servislerde olağan çalışma.
+//
+// YENİ dilim döner, girdiyi DEĞİŞTİRMEZ: girdi volCache'in kendisi; yerinde
+// süzme (rows[:0]) önbelleği bozar ve kural tekrar açıldığında (liste
+// boşaltılınca) batch satırı bir saat boyunca geri gelmezdi.
+func dropBatchVolumeRows(rows []selfProblem, sens chstore.AnomalySensitivityConfig) []selfProblem {
+	out := make([]selfProblem, 0, len(rows))
+	for _, r := range rows {
+		if r.ruleID == selfVolumeRuleID && sens.IsBatchService(r.service) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 // ── Tik ─────────────────────────────────────────────────────────────────
 
 // selfVolumeSpike — evaluateSelfHealth geçişi.
@@ -136,7 +156,24 @@ func escalationExempt(ruleID string) bool {
 // Ölçemediğimiz bir tikte hüküm vermiyoruz — ama son geçerli ölçümü
 // sunmaya devam ediyoruz, çünkü "ölçemedim" ne "temiz" ne de "sustu"
 // demektir.
+//
+// v0.10.1039 — batch süzgeci ÖNBELLEKTEN SONRA, her tikte: önbellek ham
+// ölçümü (saatlik) tutar, süzgeç atomic ayardan (CH okuması yok) tik
+// başına uygulanır. Böylece ayar değişikliği saatlik yenilemeyi beklemeden
+// bir sonraki tikte etkili olur; kural kapsandığı (ok=true) için açık batch
+// satırları reconcileSelfHealth'in normal kapatma dalıyla kapanır.
 func (e *Evaluator) selfVolumeSpike(ctx context.Context, cfg chstore.SelfHealthConfig) ([]selfProblem, bool) {
+	rows, ok := e.selfVolumeMeasured(ctx, cfg)
+	if !ok {
+		return nil, false
+	}
+	// ForDetectors: ayar bu süreçte hiç doğrulanmadıysa batch listesi boş →
+	// süzgeç yok (tahmini varsayılanla açık satır kapatılmaz).
+	return dropBatchVolumeRows(rows, e.store.AnomalySensitivityForDetectors()), true
+}
+
+// selfVolumeMeasured — saatlik ölçüm + önbellek (v0.9.1294 gövdesi, aynen).
+func (e *Evaluator) selfVolumeMeasured(ctx context.Context, cfg chstore.SelfHealthConfig) ([]selfProblem, bool) {
 	e.volMu.Lock()
 	cached, scannedAt := e.volCache, e.volAt
 	e.volMu.Unlock()

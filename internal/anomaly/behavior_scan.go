@@ -138,27 +138,7 @@ func (d *Detector) scanBehavior(ctx context.Context, now time.Time, cfg chstore.
 	}
 
 	recentCutoff := lastCompleteBucketStart(now).Add(-behaviorRecentHours * time.Hour).Unix()
-	var cands []behaviorCandidate
-	scarce := 0
-	for service, rows := range rowsByService {
-		for mi, metric := range behaviorMetrics {
-			pol := policyFor(metric, cfg)
-			baseline, recent := splitBehaviorSeries(rows, metric, recentCutoff)
-			// Kıtlık sayımı METRİKTEN BAĞIMSIZ (kovanın örnek sayısı ve
-			// gün çeşitliliği aynı satırlardan çıkıyor), o yüzden servis
-			// başına BİR KEZ — üç metrikte saymak aynı kovayı üç kez
-			// raporlar ve kart üç katı bir sayı gösterirdi.
-			if mi == 0 {
-				scarce += countScarceBuckets(baseline, b)
-			}
-			c, ok := evalBehavior(service, metric, baseline, recent, pol, b)
-			if !ok {
-				continue
-			}
-			c.Deploy = pickBehaviorDeploy(deploysByService[service], c.OnsetUnix)
-			cands = append(cands, c)
-		}
-	}
+	cands, scarce := behaviorFleetCandidates(rowsByService, deploysByService, recentCutoff, cfg)
 	cands = capBehaviorCandidates(cands, b.MaxCandidatesPerTick)
 
 	// TEK TOPLU YAZIM (v0.9.957). Eskiden burada aday başına bir
@@ -203,6 +183,51 @@ func (d *Detector) scanBehavior(ctx context.Context, now time.Time, cfg chstore.
 	behaviorObs.lastCands.Store(int64(written))
 	behaviorObs.lastServices.Store(int64(len(rowsByService)))
 	behaviorObs.lastScarce.Store(int64(scarce))
+}
+
+// behaviorFleetCandidates — tikin SAF karar döngüsü: her servis × her
+// davranış metriği için evalBehavior, deploy ilişkisi iliştirilmiş aday
+// listesi ve yetersiz-geçmiş kova sayısı. scanBehavior'dan v0.10.1039'da
+// ayrıldı ki batch kapısı CH'siz tablo-testlenebilsin; davranış birebir.
+//
+// v0.10.1039 — batch servislerde request_rate HİÇ değerlendirilmez (iki
+// yön de), aday kurulmadan atlanır: operatör "Bazı batch işlerde ani yük
+// artışı olabilir, onları anomali gibi düşünme". error_rate ve p99_ms
+// AYNEN değerlendirilir. Kapı kıtlık sayımından SONRA: kıtlık metrikten
+// bağımsız ve servis başına bir kez sayılıyor, batch kuralı onu
+// değiştirmemeli.
+func behaviorFleetCandidates(
+	rowsByService map[string][]behaviorRow,
+	deploysByService map[string][]chstore.RecentDeployEntry,
+	recentCutoff int64,
+	cfg chstore.AnomalySensitivityConfig,
+) ([]behaviorCandidate, int) {
+	b := cfg.Behavior
+	var cands []behaviorCandidate
+	scarce := 0
+	for service, rows := range rowsByService {
+		for mi, metric := range behaviorMetrics {
+			pol := policyFor(metric, cfg)
+			baseline, recent := splitBehaviorSeries(rows, metric, recentCutoff)
+			// Kıtlık sayımı METRİKTEN BAĞIMSIZ (kovanın örnek sayısı ve
+			// gün çeşitliliği aynı satırlardan çıkıyor), o yüzden servis
+			// başına BİR KEZ — üç metrikte saymak aynı kovayı üç kez
+			// raporlar ve kart üç katı bir sayı gösterirdi.
+			if mi == 0 {
+				scarce += countScarceBuckets(baseline, b)
+			}
+			if batchLoadSkipped(cfg, service, metric) {
+				continue
+			}
+			c, ok := evalBehavior(service, metric, baseline, recent, pol, b)
+			if !ok {
+				continue
+			}
+			c.Deploy = pickBehaviorDeploy(deploysByService[service], c.OnsetUnix)
+			cands = append(cands, c)
+		}
+	}
+	return cands, scarce
 }
 
 const (

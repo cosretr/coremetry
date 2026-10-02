@@ -298,6 +298,26 @@ func TestSensitivityNormalize(t *testing.T) {
 		}
 	})
 
+	// v0.10.1039 — Normalize her alanı AÇIKÇA kopyalar; kopyalanmayan alan
+	// PUT'ta sessizce düşer. Batch kalıpları düşerse her kayıt kuralı
+	// varsayılana döndürür, operatörün boş listesi (kural kapalı) geri açılır.
+	t.Run("batch kalıpları kopyalanır, boş liste boş kalır", func(t *testing.T) {
+		pats := []string{" ETL- ", "-cron"}
+		got := chstore.NormalizeAnomalySensitivity(chstore.AnomalySensitivityConfig{
+			DwellBuckets: 3, CriticalZ: 6, BatchServicePatterns: &pats,
+		})
+		if l := got.BatchServicePatternList(); len(l) != 2 || l[0] != "etl-" || l[1] != "-cron" {
+			t.Errorf("batch kalıpları Normalize'da kayboldu/bozuldu: %q", l)
+		}
+		empty := []string{}
+		off := chstore.NormalizeAnomalySensitivity(chstore.AnomalySensitivityConfig{
+			DwellBuckets: 3, CriticalZ: 6, BatchServicePatterns: &empty,
+		})
+		if off.BatchServicePatterns == nil || len(*off.BatchServicePatterns) != 0 || off.IsBatchService("orders-batch") {
+			t.Error("açık boş liste Normalize'da varsayılana döndü — kural geri açıldı")
+		}
+	})
+
 	t.Run("aralık dışı global vidalar", func(t *testing.T) {
 		for _, c := range []struct {
 			name  string
@@ -323,7 +343,8 @@ func TestSensitivityNormalize(t *testing.T) {
 
 // TestDefaultsMatchShippedBehaviour — varsayılanlar = bugünkü davranış
 // ARTI iki cerrahi düzeltme. Başka hiçbir metrik değişmemeli; bu sürüm
-// bir AYAR sürümü, bir davranış sürümü değil.
+// bir AYAR sürümü, bir davranış sürümü değil. Tek bilinçli istisna:
+// v0.10.1039 batch kalıp varsayılanı (aşağıda, gerekçesiyle).
 func TestDefaultsMatchShippedBehaviour(t *testing.T) {
 	d := chstore.DefaultAnomalySensitivity()
 
@@ -352,6 +373,17 @@ func TestDefaultsMatchShippedBehaviour(t *testing.T) {
 	if d.DwellBuckets != 3 || d.CriticalZ != 6.0 {
 		t.Errorf("global varsayılanlar dwell=%d criticalZ=%.1f — 3 / 6.0 olmalı",
 			d.DwellBuckets, d.CriticalZ)
+	}
+	// v0.10.1039 — BİLİNÇLİ VARSAYILAN DAVRANIŞ DEĞİŞİKLİĞİ (bu testin
+	// "davranış değişmesin" ilkesinin tek istisnası): operatör "Bazı batch
+	// işlerde ani yük artışı olabilir, onları anomali gibi düşünme —
+	// özellikle `-batch` geçen servis isimlerinde" dedi ve kalıbın adını
+	// verdi; kutudan açık gelir. Kapatmanın yolu boş liste kaydetmek.
+	if got := d.BatchServicePatternList(); len(got) != 1 || got[0] != "-batch" {
+		t.Errorf("batch kalıp varsayılanı %q — [\"-batch\"] olmalı (v0.10.1039 operatör kararı)", got)
+	}
+	if !d.IsBatchService("orders-batch") || d.IsBatchService("payments-api") {
+		t.Error("varsayılan batch yüklemi operatörün tarif ettiği kümeyi seçmiyor")
 	}
 }
 

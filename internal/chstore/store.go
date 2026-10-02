@@ -110,6 +110,12 @@ type Store struct {
 	// Sıfır değeri (hiç Store edilmemiş) nil'dir ve AnomalySensitivity()
 	// nil-güvenli: hidrasyondan önceki ilk tik varsayılanları görür.
 	anomalySensitivity atomic.Pointer[AnomalySensitivityConfig]
+	// anomalySensitivityConfirmed / anomalySensitivityReadFailing
+	// (v0.10.1039) — yayınlanan değer YETKİLİ mi (başarılı okuma ya da
+	// PUT), ve okuma şu an hata veriyor mu (hata logu geçişte bir kez).
+	// Gerekçe: anomaly_sensitivity.go LoadAnomalySensitivity.
+	anomalySensitivityConfirmed   atomic.Bool
+	anomalySensitivityReadFailing atomic.Bool
 
 	// memPlan (v0.9.975) — the per-query memory ceilings actually in
 	// force, proportioned to the server's own max_server_memory_usage at

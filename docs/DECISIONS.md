@@ -987,6 +987,67 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Batch servislerde yük artışı anomali değil (v0.10.1039)
+
+**Operatör (prod):** "Bazı batch işlerde ani yük artışı olabilir, onları anomali gibi düşünme — özellikle
+`-batch` geçen servis isimlerinde." **Önce ne oluyordu:** `orders-batch` gibi bir serviste hata yüzdesi
+SABİTKEN 20× istek artışı iki yoldan olay açıyordu: (1) davranış motoru `request_rate` için `behavior_change`
+yazıyordu (Problems'ta P1, `promoteStrongAnomalies` ile `anomaly-auto:` Problem'e terfi; motor üç metriği
+`anomaly_tracked`'den bağımsız ölçüyor); (2) `trace_op` hata SAYISINI (5 dk vs 24 sa pencere-normalize taban)
+kıyasladığı için 20× yük = 20× hata = "error_spike 20×". Metrik dedektörünün `request_rate`'i (izleniyorsa;
+varsayılan kapalı) ve `self-volume-spike` (24 sa hacim ×4) de aynı yükü olay sayıyordu.
+
+**Kural:** `anomaly_sensitivity.batchServicePatterns` — adında kalıplardan biri ALT DİZGİ olarak geçen
+servis "batch"tir; büyük-küçük harf yalnız ASCII'de katlanır (SQL ikizi `positionCaseInsensitive` ile birebir).
+Alan yoksa varsayılan `["-batch"]` (bilinçli varsayılan davranış değişikliği); **boş liste kuralı kapatır**
+(`*[]string`: nil = varsayılan, `[]` = kapalı; Normalize somutlaştırır, boş liste `[]` yazılır, `null` değil).
+Normalize: kırp, küçült, <3 karakteri ve tekrarı at, en çok 10. Tek yüklem `IsBatchService`; trace_op SQL
+koşulu aynı listeden üretilir. Ayar: Settings → Anomaly → Dedektör hassasiyeti → "Batch servis ad
+kalıpları" (virgül ya da boşlukla ayrılır; kayıtlı liste boşsa "Kural kapalı" notu, normalizasyon giriş
+düşürdüyse sayısı yazılır).
+
+**Batch serviste ne değişti:** davranış motoru `request_rate`'i hiç değerlendirmez (iki yön); metrik
+dedektörü `request_rate`'i atlar; `self-volume-spike` açılmaz (süzgeç saatlik önbellekten SONRA, ayar bir
+sonraki tikte etkili); `trace_op` `error_spike` için bugünkü SAYIM kuralı (değişmedi) VE hata PAYI kuralı
+birlikte gerekir: (cur_errs/cur_calls) ≥ 3 × (base_errs/base_calls) — pay iki toplamın oranı, pencere
+normalizasyonu gerekmez. **Saf susturma:** batch olayları eski kümenin ALT KÜMESİ (pay kuralı sayımın yerine
+geçseydi cari hacim 24 sa ortalamasının altındayken YENİ olay açardı — inceleme bulgusu); koşul SQL HAVING'de
+(sabit-paylı batch çiftleri LIMIT 200'ü dolduramaz), Go aynı kuralı kemer olarak uygular; yalnız elediği için
+batch olmayan çiftler LIMIT 200 / ilk 50'de yalnız yer KAZANIR. Raporlanan oran ve taban sayısı bugünkü
+sayım değerleri. **Değişmeyen:** `error_rate` ve `p99_ms` (metrik + davranış), `new_error`, servisin diğer
+metrikleriyle kümeleme adaylığı; batch olmayan servislerde her karar ve kural kapalıyken trace_op SQL metni
+birebir aynı.
+
+**Bedeller (açıkça):** (a) taban hata payı zaten ≥ %33 olan bir batch operasyonu `error_spike` açamaz (pay
+üçe katlanamaz) — tam çöküşü `error_rate` dedektörleri ve `new_error` yakalar; (b) `self-volume-spike` aynı
+zamanda ingest MALİYETİ alarmı: span sızdıran bir batch servisi artık bu uyarıyı almaz; (c) KAPSAM DIŞI ve
+muhtemelen hâlâ gürültülü: 24 sa taban penceresinde koşmamış batch işlerinde `new_error` (taban yok → her
+koşu "yeni" görünür), yük altındaki gecikme (`trace_op_latency`, p99 davranış/metrik), `log_pattern` sayım
+sıçramaları (servis başına tabanı olmayan filo sayımı — batch'i dışlamak gerçek OOM/ORA satırlarını kör
+ederdi), exception P1 hacim eşikleri (yapışkan P1 operatör direktifi), gömülü alarm kuralları, k8s
+Job/CronJob tabanlı tespit (hiçbir MV iş kimliği taşımıyor); (d) gösterim: anomali satırı aynı parmak izi
+için şimdiye dek saklanan EN YÜKSEK tepe oranını taşır — deploy sonrası yeniden ateşleyen bir batch olayı
+30 güne kadar eski, yük kaynaklı bir tepe gösterebilir (tüm türlerde mevcut yaşam döngüsü; ayrıca kuyrukta).
+
+**Ayar okunamazsa:** okuma hatasında son yayınlanan değer KORUNUR (varsayılan yalnız hiçbir şey
+yayınlanmamışsa); hata geçişte bir kez loglanır. Ayar bu süreçte hiç doğrulanmadıysa (başarılı okuma ya da
+PUT yok) batch kuralı her karar noktasında DEVRE DIŞI (`AnomalySensitivityForDetectors`; süzgeçsiz = eski
+davranış) ve kapatma geçişi hiç koşmaz — tahmini varsayılanla tek yönlü kapatma yok. Ayar GET ucu okuma
+hatasında varsayılan değil hata döner (varsayılanla dolan ekran bir Kaydet'le kayıtlı değeri ezerdi).
+
+**Testler:** Go↔SQL fikstür testleri (yüklem + trace_op HAVING) `clickhouse` ikilisi gerektirir ve CI'da
+ATLANIR; CI'yı şekil/golden testleri (SQL metni, argüman sırası, boş listede birebir eski SQL) ve saf
+özellik tablosu (batch-yeni ⊆ batch-eski, batch olmayan çift ilk 50'den düşmez) kapsar.
+
+**Açık satırların yaşam döngüsü:** metrik dedektörünün açık `anomaly:<svc>:request_rate` satırları (open ve
+acknowledged) bir sonraki tikte açık gerekçeyle kapanır ("batch servis — yük sinyali anomali sayılmaz";
+bayat süpürmenin yanıltıcı "source silent"ine bırakılmaz) ve o tik kümeleme adayı olmaz. `behavior_change` /
+`trace_op` olayları yazılmayı bırakınca ~10 dk'da aktif görünümden düşer, terfi Problem'i
+`resolveClearedAnomalyPromotions` ile "anomaly cleared" kapanır. Açık `self-volume-spike` satırı reconcile'ın
+normal kapatma dalıyla kapanır (acknowledged olan bayat süpürmeyle). Kalıplar tik başına atomic ayardan
+okunur (CH okuması yok); evaluator ve recorder ilk tikten önce bir kez hidrate eder. `/api/anomalies/trace-ops`
+60 sn önbellekli ve anahtarı kalıpları taşımaz: ayar değişince o liste en çok 60 sn eski kalır.
+
 ## 2026-10-02 — Kod bütçesi ayar oldu, varsayılan 10.000 karakter (v0.10.1038)
 
 **Operatör (prod, "Kodu da incele"):** "kod bütçesi (4000 karakter) doldu — 1 pencere düştü, kalanlar hata satırı

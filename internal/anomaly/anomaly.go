@@ -434,6 +434,9 @@ func sensitivityLogLine(c chstore.AnomalySensitivityConfig) string {
 	r := c.Runtime // v0.10.890 — heap bandı vidaları aynı satırda
 	fmt.Fprintf(&b, " | runtime heapMode=%s heapSource=%s minMAD=%.1f floorPct=%.2f minAbsDelta=%.1f silent=%d maxPods=%d",
 		r.HeapMode, r.HeapSource, r.HeapMinMAD, r.HeapFloorPct, r.HeapMinAbsDelta, r.HeapSilentBuckets, r.HeapMaxPods)
+	// v0.10.1039 — etkin batch kalıpları ("neden açılmadı" sorusunun ilk
+	// cevabı); boş liste `[]` = kural kapalı.
+	fmt.Fprintf(&b, " | batch=%q", c.BatchServicePatternList())
 	return b.String()
 }
 
@@ -516,7 +519,10 @@ func (d *Detector) scan(ctx context.Context) {
 	// aynı taramanın ilk ve son servisi farklı eşiklerle değerlendirilebilir,
 	// yani tarama kendi içinde tutarsız olurdu (aynı gerekçe `now` için de
 	// geçerli, v0.8.507).
-	sens := d.store.AnomalySensitivity()
+	// v0.10.1039 — ForDetectors: ayar bu süreçte hiç doğrulanmadıysa batch
+	// kuralı devre dışı (varsayılan liste bir tahmin; tahminle tek yönlü
+	// kapatma yok). Diğer eşikler yayınlanan değerden aynen.
+	sens := d.store.AnomalySensitivityForDetectors()
 	if line := sensitivityLogLine(sens); line != d.lastSensitivity {
 		log.Printf("[anomaly] hassasiyet: %s", line)
 		d.lastSensitivity = line
@@ -580,6 +586,14 @@ func (d *Detector) scan(ctx context.Context) {
 	var pending []pendingApply
 	for _, svc := range services {
 		for _, m := range tracked {
+			// v0.10.1039 — batch serviste yük (request_rate) anomali değil
+			// (operatör: "Bazı batch işlerde ani yük artışı olabilir, onları
+			// anomali gibi düşünme"). Karar hiç üretilmez; açık satırı aşağıdaki
+			// resolveBatchLoadProblems kapatır. error_rate / p99_ms ve kümeleme
+			// adaylığı AYNEN sürer.
+			if batchLoadSkipped(sens, svc, m) {
+				continue
+			}
 			buckets := seriesFor(bucketsByMetric[m], svc)
 			seasonal := seriesFor(seasonalByMetric[m], svc)
 			rates := seriesFor(ratesByMetric[m], svc)
@@ -593,6 +607,11 @@ func (d *Detector) scan(ctx context.Context) {
 			pending = append(pending, pendingApply{service: svc, metric: m, oc: oc})
 		}
 	}
+	// v0.10.1039 — batch servislerin AÇIK request_rate problemleri açık
+	// gerekçeyle kapanır (faz 1 onları artık değerlendirmiyor; bayat
+	// süpürmeye kalsa "source silent" derdi). Kümelemeden ÖNCE: kapanan
+	// satır bu tik join-on-open adayı olmasın.
+	batchResolved := d.resolveBatchLoadProblems(ctx, snap, sens)
 	// v0.9.1070 (F1.6-R3) — FAZ 1.5: kümeleme. Yalnız TAZE açılışlar
 	// (önceden açık problemi olmayan) aday olur; yeterli aday yoksa ya
 	// da komşuluk okuması düşerse kümeleme SESSİZCE atlanır ve herkes
@@ -601,6 +620,9 @@ func (d *Detector) scan(ctx context.Context) {
 	sourceSeverity := map[string]string{}
 	var freshOpens []openCandidate
 	resolving := map[string]bool{}
+	for k := range batchResolved {
+		resolving[k] = true
+	}
 	for _, pa := range pending {
 		if pa.oc.Action == "resolve" {
 			resolving["anomaly:"+pa.service+":"+pa.metric+"|"+pa.service] = true
