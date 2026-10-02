@@ -1214,9 +1214,12 @@ export default function InboxPage() {
                           onClick={e => e.stopPropagation()}
                           className="badge b-gray" title="Runbook aç">📕 runbook</a>
                       )}
+                      {/* v0.10.1055 (operatör: "Okdir") — ipucu "undefined v…"
+                          başlıyordu: deploy nesnesinde `service` yok
+                          (chstore.RecentDeploy), servis satırın kendisinde. */}
                       {it.recentDeploy && (
                         <span className="badge b-warn"
-                          title={`${it.recentDeploy.service} ${it.recentDeploy.version} — ${tsLong(it.recentDeploy.timeUnixNs)}`}>
+                          title={`${it.service} ${it.recentDeploy.version} — ${tsLong(it.recentDeploy.timeUnixNs)}`}>
                           ⟳ deploy {it.recentDeploy.version}
                         </span>
                       )}

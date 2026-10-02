@@ -47,7 +47,7 @@ import { ProblemLogEvidence } from '@/features/anomalies/ProblemLogEvidence'; //
 import { operationTracesHref } from '@/lib/pivotHref';
 import { traceHref } from '@/lib/traceHref';
 import { SubjectLink } from '../../components/SubjectLink';
-import { subjectKind, derivedTeamTitle } from '../../lib/problemSubject';
+import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
 import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
@@ -808,7 +808,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   useEscBack(onBack);
   const qc = useQueryClient();
   const [acking, setAcking] = useState(false);
-  const isAnomaly = problem.ruleId?.startsWith('anomaly:');
+  // v0.10.1055 (operatör: "Okdir") — terfi ("anomaly-auto:") ve küme
+  // ("anomaly-cluster:") Problem'leri de ANOMALY rozeti taşır; tek yüklem.
+  const isAnomaly = isAnomalyProblem(problem.ruleId);
   const endNs = problem.resolvedAt || Date.now() * 1e6;
 
   const ack = async () => {
@@ -1217,7 +1219,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
             <ProblemRunbookPanel problemId={problem.id} />
           </Sect>
 
-          {problem.description && !isAnomaly && (
+          {/* v0.10.1055 — gizleme rozetle (isAnomaly) DEĞİL, yalnız "anomaly:"
+              dedektör ailesiyle: terfi Problem'inin açıklaması (tür / desen /
+              tepe oranı / sayı) ve kümenin üye listesi sayfadaki tek insan-okur
+              metin — rozet gelince kaybolmamalı. */}
+          {problem.description && !isAnomalyDetectorRule(problem.ruleId) && (
             <Sect title="Description" collapsible>
               <pre className="mono" style={{
                 margin: 0, fontSize: 11.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',

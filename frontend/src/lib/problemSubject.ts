@@ -204,3 +204,45 @@ export function externalSummaryNote(kind: ExternalSummaryKind): { title: string;
       return { title: 'Küme özeti — seri kanıtı üyelerde', body: 'Aynı üst boyutta aynı anda patlayan seriler tek Problem\'de toplandı; üyeler gerekçede. Üyelerin bireysel Problem\'i açılmadığı için trace/pod/log kanıtı bu satırda değil, kaynağın seri Problem\'lerinde aranır.' };
   }
 }
+
+// ── Anomali Problem'i mi? (v0.10.1055) ─────────────────────────────────────
+//
+// Operatör ("Okdir"): anomaliden terfi etmiş Problem'de ANOMALY rozeti yoktu.
+// Rozet iki yüzeyde (alarm detay sayfası, Alert rules listesi) elle
+// `startsWith('anomaly:')` diye yazılmıştı; terfi öneki "anomaly-auto:" onu BİR
+// karakterle ıskalıyor — backend'in v0.10.814'te bildirim türünde düzelttiği
+// hatanın birebir ikizi. Önek listesi chstore.ProblemNotifyKind'in anomali
+// motoru önekleri: "anomaly:" (metrik / service_silent / dış tarayıcı),
+// "anomaly-cluster:" (kümeleme), PromotedAnomalyRulePrefix (terfi).
+//
+// Bilerek AYNALANMAYAN iki şey: (1) ProblemNotifyKind "anomaly:ext-down:"u
+// "problem" türüne yönlendirir — bu bir BİLDİRİM yönlendirme istisnası (Anomali
+// tikini kaldıran operatör kaynak-düştü alarmını kaybetmesin), kaynak iddiası
+// değil; satır anomali motorunun yazdığı satır, rozeti bugünkü gibi kalır.
+// (2) "exception-storm" / "exception:" de bildirimde anomali türüdür ama
+// anomali kural ailesi değil; rozetleri hiç olmadı, olmayacak.
+
+/** Terfi Problem'i kural öneki (chstore.PromotedAnomalyRulePrefix). */
+export const PROMOTED_ANOMALY_RULE_PREFIX = 'anomaly-auto:';
+
+const ANOMALY_RULE_PREFIXES: readonly string[] = ['anomaly:', 'anomaly-cluster:', PROMOTED_ANOMALY_RULE_PREFIX];
+
+/** isAnomalyProblem — Problem'i anomali motoru mu açtı (ANOMALY tür rozeti). */
+export function isAnomalyProblem(ruleId: string | null | undefined): boolean {
+  const id = ruleId ?? '';
+  return ANOMALY_RULE_PREFIXES.some(p => id.startsWith(p));
+}
+
+/**
+ * isAnomalyDetectorRule — yalnız "anomaly:" ailesi (z-skor / service_silent /
+ * dış seri dedektörü). isAnomalyProblem'in ALT kümesi ve ondan BİLEREK ayrı:
+ * bu ailede `threshold` bir eşik değil olağan (medyan) değerdir ve açıklama
+ * metni üstteki özet cümlesinin istatistik tekrarıdır. Terfi Problem'inde
+ * `threshold` gerçek bir kapı (MinPeakRatio), kümede üye sayısı alt sınırı;
+ * açıklamaları da sayfadaki TEK insan-okur metin (terfi: tür / desen / sayı,
+ * küme: üye listesi). O yüzden "eşik" kelimesi ve Description bölümü bu
+ * yüklemle karar verir, rozetle değil.
+ */
+export function isAnomalyDetectorRule(ruleId: string | null | undefined): boolean {
+  return (ruleId ?? '').startsWith('anomaly:');
+}

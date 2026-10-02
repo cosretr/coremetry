@@ -143,6 +143,12 @@ describe('alertProblemSummary — "<kural>: <metrik> değeri <değer>, eşik <e�
       'High error rate — checkout: error_rate olağan dışı.'],
     ['eşik kuralı aynen', { ...p(), ruleId: 'builtin:error_rate' },
       'High error rate — checkout: error_rate değeri 12.40, eşik 5.00.'],
+    // v0.10.1055 — terfi Problem'i ANOMALY rozeti alır ama threshold'u gerçek
+    // kapı (MinPeakRatio): "eşik" kalır; küme de (üye alt sınırı).
+    ['terfi Problem\'i: eşik gerçek kapı', { ...p({ ruleName: 'Anomaly · nightly-job', metric: 'anomaly_ratio', value: 5, threshold: 3 }), ruleId: 'anomaly-auto:0123456789abcdef' },
+      'Anomaly · nightly-job — checkout: anomaly_ratio değeri 5.00, eşik 3.00.'],
+    ['küme Problem\'i: eşik üye alt sınırı', { ...p({ ruleName: 'Anomaly cluster · checkout', metric: 'cluster', value: 4, threshold: 2 }), ruleId: 'anomaly-cluster:checkout' },
+      'Anomaly cluster · checkout — checkout: cluster değeri 4.00, eşik 2.00.'],
   ])('%s', (_n, prob, want) => {
     const got = alertProblemSummary(prob);
     expect(got).toBe(want);

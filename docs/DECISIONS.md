@@ -987,6 +987,17 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Problems: deploy çipi ipucu ve terfi Problem'inde ANOMALY rozeti (v0.10.1055)
+
+**Operatör onayı:** "Okdir". **(1)** Problems kuyruğunda deploy çipinin ipucu "undefined v…" başlıyordu:
+`InboxItem.recentDeploy` tipinde `service` vardı, sunucu `chstore.RecentDeploy` (version / timeUnixNs / ageSeconds)
+gönderiyor. Tip ortak `PriorDeploy` şekline indi, ipucu servisi satırın `service`'inden alır; başka okuyucu yoktu.
+**(2)** ANOMALY rozeti iki yüzeyde `startsWith('anomaly:')` idi, terfi öneki `anomaly-auto:` onu ıskalıyordu
+(backend'in v0.10.814 bildirim türü hatasının ikizi). Tek yüklem `isAnomalyProblem` (`lib/problemSubject.ts`)
+`ProblemNotifyKind`'in anomali motoru öneklerini aynalar: `anomaly:`, `anomaly-cluster:`, `anomaly-auto:`. "Olağan
+değer" kelimesi ve detaydaki Description gizlemesi rozete BAĞLANMADI (`isAnomalyDetectorRule`, yalnız `anomaly:`):
+terfi/küme Problem'inde threshold gerçek kapı, açıklama sayfadaki tek insan-okur metin — kaybolmaz.
+
 ## 2026-10-02 — Anomaliden terfi eden Problem de yinelenen kuralına uyar (v0.10.1054)
 
 **Operatör:** "Anomaliden terfi eden problem de 'yinelenen' kuralına uysun; bugün deploy'a hâlâ eski kurala göre

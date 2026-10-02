@@ -53,6 +53,7 @@ import { useInsightRow, InsightRowChip, InsightRowSlot } from '@/components/ai/i
 import { SubjectLink } from '../../components/SubjectLink';
 import { RecurringMarker } from './RecurringMarker'; // v0.10.1054 — terfi Problem'i "yinelenen"
 import { promotedRecurrence } from './detailSummary'; // v0.10.1054
+import { isAnomalyProblem } from '@/lib/problemSubject'; // v0.10.1055
 
 // Problems-specific severity + priority ordering.
 const SEV_RANK: Record<string, number> = { critical: 3, warning: 2, info: 1 };
@@ -616,7 +617,9 @@ export function ProblemsSection({ serviceFilter, navDisabled = false }: {
             trailing={<><th>Assignee</th><th>Triage</th></>} />
           <tbody>
             {rowsOnScreen.length === 0 ? <DataTableState dt={dt} leading={[28]} trailing={[170, 90]} {...tableState} /> : rowsOnScreen.map((p, i) => {
-              const isAnomaly = p.ruleId?.startsWith('anomaly:');
+              // v0.10.1055 — terfi / küme Problem'i de ANOMALY rozeti + açıklama
+              // alt satırı alır (tek yüklem, lib/problemSubject).
+              const isAnomaly = isAnomalyProblem(p.ruleId);
               // v0.10.221 — düz hücreler gerçek <Link> (orta tık / ⌘-tık
               // yeni sekme); satırın onClick'i etkileşimli hücreler için
               // kalıyor, Link kendi tıkını yutuyor (çift gezinme yok).

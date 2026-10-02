@@ -315,3 +315,32 @@ describe('AlertProblemDetail — Triyaj (tek satır)', () => {
     expect(button(el, 'Acknowledge')).toBeUndefined();
   });
 });
+
+// v0.10.1055 (operatör: "Okdir") — anomaliden terfi etmiş Problem'de ANOMALY
+// rozeti yoktu ("anomaly-auto:" `startsWith('anomaly:')`i ıskalıyordu). Rozet
+// gelir; Description bölümü KALIR (terfi açıklaması — tür / desen / tepe oranı /
+// sayı — sayfadaki tek insan-okur metin), özet "eşik" der (threshold gerçek
+// kapı). "anomaly:" dedektör ailesinde Description bugünkü gibi gizli.
+describe('AlertProblemDetail — terfi / küme Problem\'inde ANOMALY rozeti (v0.10.1055)', () => {
+  it.each([
+    ['terfi', 'anomaly-auto:0123456789abcdef', 'Auto-promoted from anomaly: trace_op / nightly-job (peak ratio 5.0×, count 42)'],
+    ['küme', 'anomaly-cluster:checkout', 'Correlated incident rooted at checkout — 3 services degraded together'],
+  ])('%s: rozet var, Description yerinde ve açılınca metni taşır', async (_n, ruleId, desc) => {
+    const el = await mount(prob({ ruleId, ruleName: 'Anomaly · nightly-job', metric: 'anomaly_ratio', value: 5, threshold: 3, description: desc }));
+    expect(sect(el, 'Root cause analysis')!.textContent).toContain('ANOMALY');
+    expect(el.querySelector('.pd-summary__what')?.textContent).toContain('eşik 3.00');
+    const d = sect(el, 'Description');
+    expect(d, 'Description silinmemeli').toBeTruthy();
+    act(() => { toggleOf(d!)!.click(); });
+    expect(sect(el, 'Description')!.textContent).toContain(desc);
+  });
+  it('"anomaly:" dedektörü: rozet var, Description bugünkü gibi gizli', async () => {
+    const el = await mount(prob({ ruleId: 'anomaly:checkout:p99_ms', description: 'p99 on checkout — current 900 vs baseline 300' }));
+    expect(sect(el, 'Root cause analysis')!.textContent).toContain('ANOMALY');
+    expect(sect(el, 'Description')).toBeUndefined();
+  });
+  it('alarm kuralı: rozet yok', async () => {
+    const el = await mount();
+    expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('ANOMALY');
+  });
+});

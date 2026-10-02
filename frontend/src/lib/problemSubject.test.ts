@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDbSubject, subjectKind, subjectLabel, subjectIsLinkable, subjectTitle, derivedTeamTitle, externalSummaryKind, externalSummaryNote } from './problemSubject';
+import { parseDbSubject, subjectKind, subjectLabel, subjectIsLinkable, subjectTitle, derivedTeamTitle, externalSummaryKind, externalSummaryNote, isAnomalyProblem, isAnomalyDetectorRule, PROMOTED_ANOMALY_RULE_PREFIX } from './problemSubject';
 
 // problemSubject.test.ts — v0.9.1339.
 //
@@ -191,5 +191,45 @@ describe('externalSummaryKind', () => {
       expect(n.title).not.toMatch(/henüz|toplan/i);
       expect(n.body).toMatch(/gerekçe/);
     }
+  });
+});
+
+// v0.10.1055 (operatör: "Okdir") — anomaliden terfi etmiş Problem'de ANOMALY
+// rozeti yoktu: iki yüzey `startsWith('anomaly:')` yazıyordu, "anomaly-auto:"
+// onu bir karakterle ıskalıyor. Önek listesi chstore.ProblemNotifyKind'in anomali
+// motoru önekleri; yazım backend sabitleriyle aynı (PromotedAnomalyRulePrefix,
+// anomaly clusterRulePrefix, RuleExtSeriesPrefix).
+describe('isAnomalyProblem / isAnomalyDetectorRule', () => {
+  it.each([
+    // ruleId                                   rozet  dedektör ("anomaly:")
+    ['anomaly:checkout:p99_ms',                  true,  true],
+    ['anomaly:checkout:service_silent',          true,  true],
+    ['anomaly-auto:0123456789abcdef',            true,  false],
+    ['anomaly-cluster:shop-payment',             true,  false],
+    ['anomaly-cluster:ext:extsrc/OP_PAY',        true,  false],
+    ['anomaly:ext:extsrc/OP1/E1:ext:fail_count', true,  true],
+    ['anomaly:ext-cap:ext:extsrc:ext:fail',      true,  true],
+    // Bildirimde "problem" türü (yönlendirme istisnası) ama anomali motorunun
+    // satırı — rozet bugünkü gibi kalır (problemSubject.ts yorumu).
+    ['anomaly:ext-down:ext:oracle-errlog',       true,  true],
+    ['slo:checkout-availability',                false, false],
+    ['self-disk',                                false, false],
+    ['builtin:error_rate',                       false, false],
+    ['exception-storm',                          false, false],
+    ['exception:fatal-infra',                    false, false],
+    ['anomaly',                                  false, false], // önek değil, ayırıcı yok
+    ['anomaly-autox:1',                          false, false],
+    ['',                                         false, false],
+  ] as const)('%s → rozet=%s dedektör=%s', (ruleId, badge, detector) => {
+    expect(isAnomalyProblem(ruleId)).toBe(badge);
+    expect(isAnomalyDetectorRule(ruleId)).toBe(detector);
+  });
+  it('null / undefined güvenli', () => {
+    expect(isAnomalyProblem(undefined)).toBe(false);
+    expect(isAnomalyProblem(null)).toBe(false);
+    expect(isAnomalyDetectorRule(undefined)).toBe(false);
+  });
+  it('terfi öneki backend sabitiyle bayt bayt aynı', () => {
+    expect(PROMOTED_ANOMALY_RULE_PREFIX).toBe('anomaly-auto:');
   });
 });

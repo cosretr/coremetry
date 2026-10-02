@@ -65,7 +65,9 @@ const base = {
   description: '', startedAt: 1_700_000_000e9, lastSeen: 1_700_000_600e9, status: 'open',
 };
 const FIRST = 1_699_827_200e9;
-const deploy = { service: 'batch-svc', version: 'v2.0.0', timeUnixNs: 1_699_999_400e9 };
+// v0.10.1055 — tel şekli (chstore.RecentDeploy): `service` YOK. Eski fikstür
+// alanı uyduruyordu ve ipucundaki "undefined v…" hatasını gizliyordu.
+const deploy = { version: 'v2.0.0', timeUnixNs: 1_699_999_400e9, ageSeconds: 600 };
 // v0.10.1054 inceleme senaryosu: gece işi 7 gece, deploy, 8. bölüm — kural deploy'u
 // "olası neden" saymadı; sunucu onu nötr priorDeploy'da gönderir (çip yok).
 const PRIOR = { version: 'v2.0.0', timeUnixNs: 1_699_999_400e9, ageSeconds: 600 };
@@ -145,6 +147,21 @@ describe('Problems kuyruğu — terfi Problem\'i anomali satırıyla aynı işar
     for (const t of ['fresh-op', 'High error rate']) {
       expect(mark(row(el, t)), t).toBeNull();
       expect(deployChip(row(el, t)), t).toBeTruthy();
+    }
+  });
+});
+
+// v0.10.1055 (operatör: "Okdir") — deploy çipinin ipucu "undefined v2.0.0 — …"
+// başlıyordu: InboxItem.recentDeploy tipinde `service` vardı ama sunucu
+// chstore.RecentDeploy gönderiyor (version / timeUnixNs / ageSeconds). Servis
+// satırın kendisinden gelir.
+describe('Problems kuyruğu — deploy çipi ipucu (v0.10.1055)', () => {
+  it('ipucu servisi ve sürümü taşır, "undefined" asla', async () => {
+    const el = await mount();
+    for (const t of ['broken-by-deploy', 'fresh-op', 'High error rate']) {
+      const title = deployChip(row(el, t))?.getAttribute('title') ?? '';
+      expect(title, t).toMatch(/^batch-svc v2\.0\.0 — /);
+      expect(title, t).not.toContain('undefined');
     }
   });
 });

@@ -2664,7 +2664,10 @@ export interface InboxItem {
   // (EnrichProblemsWithRunbooks / WithDeploys, poll başına üç CH turu) ama
   // satıra kopyalamıyordu: sorgu faturalanıp cevap çöpe gidiyordu.
   runbookUrl?: string;
-  recentDeploy?: { service: string; version: string; timeUnixNs: number };
+  // v0.10.1055 — tel şekli chstore.RecentDeploy (version / timeUnixNs /
+  // ageSeconds); `service` alanı HİÇ gelmedi, tip yalan söylüyordu ve çip
+  // ipucu "undefined v…" basıyordu. Deploy'un servisi satırın `service`'i.
+  recentDeploy?: PriorDeploy;
   /** v0.10.1054 — Problem.priorDeploy ile aynı: yinelenen kuralının "olası
    *  neden" saymadığı deploy, nötr (satır işaretinin ipucunda). */
   priorDeploy?: PriorDeploy;

@@ -10,7 +10,7 @@
 
 import type { AnomalyEvent, BehaviorChangeDetails, PriorDeploy, Problem } from '@/lib/types';
 import { fmtFixed, fmtNum, tsMinute } from '@/lib/utils';
-import { subjectLabel } from '@/lib/problemSubject';
+import { subjectLabel, isAnomalyDetectorRule, PROMOTED_ANOMALY_RULE_PREFIX } from '@/lib/problemSubject';
 import { fmtDurationNs } from './problemTime';
 import { anomalyDurationNs } from './anomalyDetail';
 
@@ -126,6 +126,9 @@ export function anomalySummary(
 // açtığı problemler) ikinci sayı bir EŞİK değil, olağan / medyan değerdir:
 // "eşik 5.00" demek operatöre aşılmış bir sınır varmış gibi okutur. O
 // kurallarda kelime "olağan değer".
+// v0.10.1055 — yüklem isAnomalyDetectorRule (rozetin isAnomalyProblem'i DEĞİL):
+// terfi Problem'inde threshold gerçek kapı (MinPeakRatio), kümede üye alt
+// sınırı — "eşik" orada doğru kelime.
 export function alertProblemSummary(
   p: Pick<Problem, 'ruleName' | 'metric' | 'value' | 'threshold' | 'service'> & { ruleId?: string },
 ): string {
@@ -135,7 +138,7 @@ export function alertProblemSummary(
   const head = `${name}${svc}`;
   const hasV = finite(p.value);
   const hasT = finite(p.threshold);
-  const anomalyRule = (p.ruleId ?? '').startsWith('anomaly:');
+  const anomalyRule = isAnomalyDetectorRule(p.ruleId);
   if (!metric) return `${head}: alarm tetiklendi.`;
   if (anomalyRule) {
     if (hasV && hasT) return `${head}: ${metric} değeri ${fmtFixed(p.value, 2)}, olağan değer ${fmtFixed(p.threshold, 2)}.`;
@@ -252,8 +255,8 @@ export function recurrenceTitle(
 // Problem'in bölümündeyken); satır ve detay sayfası anomali tarafıyla AYNI işaret
 // ve AYNI ek. Yeni bölüm yok.
 
-/** Terfi Problem'i kural öneki (chstore.PromotedAnomalyRulePrefix). */
-export const PROMOTED_ANOMALY_RULE_PREFIX = 'anomaly-auto:';
+// Terfi öneki (PROMOTED_ANOMALY_RULE_PREFIX) v0.10.1055'te lib/problemSubject.ts'e
+// taşındı: anomali rozeti yüklemi (isAnomalyProblem) de onu okuyor, tek yazım.
 
 /** Terfi Problem'inin yinelenme bilgisi; diğer her Problem null — alan gelse
  *  bile (kural, exception, `anomaly:` dedektörü). */
