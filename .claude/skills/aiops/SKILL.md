@@ -123,12 +123,32 @@ dedektörü atlar + açık satırı kapatır; `self-volume-spike` açılmaz; `tr
 SAF SUSTURMA: batch olayları eski kümenin alt kümesi, batch olmayan çiftler LIMIT/ilk
 50'de yalnız yer kazanır; pay kuralını sayımın YERİNE koyma (yeni olay açar). Yükte
 **SUSMAYANLAR** (yeniden genişletme — aşırı susturma en kötü sonuç): `error_rate`,
-`p99_ms`, `new_error`, `trace_op_latency`, `log_pattern`, exception P1 hacmi, gömülü
-kurallar. Bedeller: taban payı ≥ %33 batch op `error_spike` açamaz; batch servis span
-sızıntısında hacim (maliyet) uyarısı almaz. Kalıplar tik başına
-`AnomalySensitivityForDetectors()`'tan (atomic, CH okuması yok): ayar bu süreçte hiç
-doğrulanmadıysa batch listesi BOŞ (süzgeçsiz) ve kapatma geçişi koşmaz; okuma hatası
-son değeri KORUR (`LoadAnomalySensitivity`).
+`p99_ms`, `new_error` (aşağıdaki uzun taban dalı hariç), `trace_op_latency`,
+`log_pattern`, exception P1 hacmi, gömülü kurallar. Bedeller: taban payı ≥ %33 batch op
+`error_spike` açamaz; batch servis span sızıntısında hacim (maliyet) uyarısı almaz.
+Kalıplar tik başına `AnomalySensitivityForDetectors()`'tan (atomic, CH okuması yok): ayar
+bu süreçte hiç doğrulanmadıysa batch listesi BOŞ (süzgeçsiz) ve kapatma geçişi koşmaz;
+okuma hatası son değeri KORUR (`LoadAnomalySensitivity`).
+
+**Seyrek koşan batch işi (v0.10.1043, operatör: "son 24 saatte hiç koşmamış bir iş her
+koşuda 'yeni hata' diye açılıyor"):** batch çiftinde 24 sa tabanda hata yoksa trace_op
+new_error demeden önce UZUN tabana bakar — aynı MV, [hizalı şimdi − 8 g, taban başı) yarı
+açık (`traceOpBatchExtWindow`). Uzun tabanda hata varsa taban payı = ext_errs /
+(ext_calls + base_calls) (24 sa'in temiz çağrıları paydada) ve `traceOpBatchExtShare`:
+cari pay − taban payı ≥ 25 puan → bugünkü new_error (mutlak artış kaçışı — seyrek işte
+`error_rate` emniyeti YOK, ≥15 kova / ≥3 gün taban ister); değilse cari pay ≥ 3× →
+`error_spike` (Ratio = pay oranı, BaselineErrors = taban payı × cari çağrı); değilse olay
+yok. Uzun tabanda hata yok → new_error AYNEN. Kaçışın kapsamadığı: yüksek tabandan 25
+puanın altındaki artış (%40 → %60) susar.
+
+Okuma (`readTraceOpBatchExt`): tik başına ≤1 ek MV sorgusu, yalnız batch new_error adayı
+varken; SQL'de batch koşulu + `(service_name, name) IN (tuple(?, ?), …)`, LIMIT 50,
+max_execution_time 10; aday tavanı 50 (tavan dışı = bugünkü new_error + tik başına bir
+sayı logu). Okuma/tarama hatası → SÜZGEÇ yönü: hiçbir aday susmaz, yarım sonuç
+uygulanmaz, tek log. Aylık işler kapsam dışı. Sahte bağlantı seam'i
+`detectTraceOps(ctx, traceOpConn, sens, now, window, logf)`. Kalan gürültü (kuyrukta):
+koşu ortasında başlayan hatalar sonraki kovalarda v0.10.1039 yolundan sayı oranlı
+`error_spike` açar.
 
 ## 4. Problem modeli ve öncelik
 
@@ -187,7 +207,7 @@ RESOURCE/CUSTOM); `DisplayID` `P-<base36>` (:92).
 | Yaş eskalasyonu | `evaluator.go:1203-1251` | 15/30 dk; `effectiveSeverity` kelepçesi (:1553); terfi edilen şiddet eskalasyon tabanına kelepçeli (v0.8.309) |
 | Incident kaskadı | `evaluator.go:640-724` | bağlı problemlerin hepsi kapanınca, `maxResolvedAt`; yetim incident 1 sa sonra (v0.9.332) |
 | Sustu = düzeldi DEĞİL | `anomaly.go:839-852,885-900` | sıfır-dolgulu kuyrukta resolve gerekçesi "source silent"; tabandan sondaki sıfırlar kırpılır (v0.9.1051/1052) |
-| Yumuşak-hata yönü | `evaluator.go:1323,1467`; `selfhealth.go:277`; `rca_auto_verdict.go:101` | mute listesi okunamadı → süzgeçsiz terfi; aktif set okunamadı → hiçbir şeyi kapatma; ölçülmemiş ≠ temiz; dedup okunamadı → üret. Her kapı için yön BİLİNÇLİ seçilir ve yorumda yazar |
+| Yumuşak-hata yönü | `evaluator.go:1323,1467`; `selfhealth.go:277`; `rca_auto_verdict.go:101`; `trace_ops.go` `readTraceOpBatchExt` | mute listesi okunamadı → süzgeçsiz terfi; aktif set okunamadı → hiçbir şeyi kapatma; ölçülmemiş ≠ temiz; dedup okunamadı → üret; batch uzun tabanı okunamadı → new_error aynen (v0.10.1043). Her kapı için yön BİLİNÇLİ seçilir ve yorumda yazar |
 | Sürdürme damgaları | `stamps.go` | ForSec/Cooldown Redis'e aynalanır; failover sürdürme saatini sıfırlamaz (v0.8.354) |
 
 **Kayan pencere kuralı (feedback, üç kez ısırdı):** olay = yalnız GÖZLENMİŞ

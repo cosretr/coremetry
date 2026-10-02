@@ -987,6 +987,66 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Batch: seyrek koşan işte "yeni hata" artık uzun tabana bakar (v0.10.1043)
+
+**Operatör (prod):** "Batch'te 'yeni hata' gürültüsü: son 24 saatte hiç koşmamış bir iş her koşuda 'yeni hata'
+diye açılıyor." **Neden her koşu yeniydi:** `trace_op` cari 5 dk'yı 24 sa tabanla kıyaslar; tabanda hata yoksa
+(`base_errs = 0`) `new_error` der ve oranı cari hata SAYISI yazar. 24 saatten seyrek koşan bir iş (haftalık ya da
+koşusu taban penceresinin hemen dışına düşen günlük iş) tabanda hiç çağrı ve hata taşımaz → her koşunun her
+zamanki hata payı "yeni hata ×300" olur (Problems'ta P1 ≥5×, terfi kapısında critical `anomaly-auto`). v0.10.1039
+bunu kapsam dışı bırakmıştı (bedel (c)).
+
+**Kural (yalnız batch servisler — aynı `IsBatchService` / `BatchServiceSQL` listesi):** batch çiftinde 24 sa
+tabanda hata yoksa new_error demeden önce aynı MV'den UZUN taban okunur: [hizalı şimdi − 8 gün, 24 sa tabanın
+başı), yarı açık — üst sınır ana sorgunun taban başıyla aynı değer, kova iki kez sayılmaz (8 gün = haftalık iş +
+1 gün kayma). Uzun tabanda hata VAR → taban payı = uzun taban hatası / (uzun taban çağrısı + 24 sa tabanın
+çağrısı) — 24 sa penceresinde hata yok, yani oradaki çağrılar TEMİZ koşudur ve paydaya girer (dün 1M temiz çağrı
++ altı gün önce 10/1.000 hatalı iş %1 değil ≈%0.001 tabanla kıyaslanır; iş 24 sa'de koşmadıysa payda değişmez —
+bu yalnız ateşlemeyi artırır). Sonra: (1) **mutlak artış kaçışı** — cari pay − taban payı ≥ 25 puan
+(`traceOpBatchExtAbsRise`) → bugünkü `new_error` (sayı oranı; 3×'ün altında pay oranlı bir error_spike terfi
+tabanını hiç geçemezdi); (2) değilse cari pay ≥ 3 × taban payı → `error_spike`; (3) değilse olay yok. Kaçış 3×'ten
+önce: %2 → %30 gibi büyük sıçrama bugünkü gibi yüksek sesle açılır. Olay dürüst raporlanır: error_spike oranı =
+PAY oranı (sayı değil); UI'nin "N prev"i = taban payı × cari çağrı ("her zamanki payında N hata olurdu"; zamana
+bölünmüş taban seyrek işte ≈0 çıkıp yalan söylerdi) — Ratio ≈ cari/prev sözleşmesi korunur, yeni alan yok. Uzun
+tabanda hata YOK (çağrı olsun olmasın) → `new_error` AYNEN: hiç hata vermemiş bir işin hata vermeye başlaması
+gerçek sinyal. Sayım (≥10) ve pay (≥%1) tabanları önce, aynen.
+
+**Ek okumanın bedeli:** tik başına EN ÇOK BİR `operation_summary_5m` sorgusu, YALNIZ en az bir batch new_error
+adayı varken; SQL'de batch koşulu + aday çiftler birebir `(service_name, name) IN (tuple(?, ?), …)` (birincil
+anahtar önekini budar; clickhouse-local EXPLAIN, 2 çift / 8 gün: 7.813 granülün 5'i), zaman sınırlı, `LIMIT 50`,
+`max_execution_time = 10`. Aday tavanı **50** (cari hata çoktan aza; sınıflandırıcının çıktı tavanıyla aynı — ana
+sorgunun LIMIT 200'ünde bu kural en çok 50 satırı susturur, ilk 50'yi boşaltamaz); tavan dışı adaylar bugünkü
+new_error, tik başına tek satır sayı logu. `/api/anomalies/trace-ops` aynı işlevi çağırır (60 sn önbellek).
+
+**Hata yönü (süzgeç kuralı: okunamadıysa süzme):** uzun okuma ya da taraması başarısız → hiçbir aday susmaz,
+yarım sonuç da uygulanmaz; bugünkü new_error + tek log satırı. Taban başı = şimdi − pencere − max(24 sa, 12 ×
+pencere); 13 × pencere ≥ 8 g olunca (5 dk hizalı pencere ≥ 14 sa 50 dk — yalnız API `?window=` buraya ulaşır) uzun
+pencere boştur, okuma yapılmaz.
+
+**Değişmeyen:** batch olmayan servislerde her karar; kural kapalıyken (boş liste) ana SQL metni birebir ve ek
+okuma yok; `base_errs > 0` batch çiftlerinde v0.10.1039 sayım+pay kuralı; şema yok (MV TTL'i 90 gün, 8 gün
+kapsanıyor; MV saklama düşürücüsü bu MV'ye dokunmuyor).
+
+**Bedeller:** (a) aylık (8 günden seyrek) işler kapsam dışı — her koşu hâlâ new_error; (b) **seyrek işte başka
+emniyet YOK**: `error_rate` metrik/davranış dedektörleri ≥15 dolu kova / ≥3 farklı gün taban ister, haftalık bir
+işte bu tabanı hiç kuramaz. Haftalık işte uzun taban TEK koşudur; kaçış olmasa geçen hafta %40 bozuk iş bu hafta
+%100 bozulunca 2.5× der ve susardı, taban ≥ %33.4 iken hiçbir şey ateşlenemezdi ve susan kötü koşu gelecek
+haftanın tabanı olurdu. Mutlak artış kaçışı (≥25 puan → new_error) bunu kapatır (%40 → %100, %60 → %100 açılır);
+KAPSAMADIĞI: zaten yüksek bir tabandan 25 puanın altında kalan artış (%40 → %60 gibi; 3× de tutmaz) SUSAR, kronik
+%60 → %60 da susar (kasıtlı); (c) uzun-taban olayı aynı `trace_op` parmak izini günceller — yükseltmeden önceki
+"×300" tepe oranı satırda kalabilir (v0.10.1039 bedel (d) yaşam döngüsü).
+
+**Bilinen kalan gürültü (ayrıca kuyrukta):** hataları koşunun ORTASINDA, ≥ 2 temiz kovadan sonra başlayan işte
+yalnız ilk hatalı kova bu dala girer; sonraki kovalarda 24 sa tabanda aynı koşunun hatalı kovaları vardır
+(base_errs > 0) ve v0.10.1039 sayım+pay yolu onları koşunun KENDİ seyreltilmiş 24 sa payıyla kıyaslar → her koşuda
+sayı oranlı `error_spike` açılır.
+
+**Testler:** saf sınıflandırıcı tablosu + özellik ızgarası (olay sayısı artmaz, batch olmayan / kural kapalı
+birebir, dönen olay pay oranında, batch olmayan çift ilk 50'den düşmez); sorgu kurucu şekli (batch koşulu, çift
+kısıtı, yarı açık sınır, LIMIT, max_execution_time); sahte bağlantıyla davranış (okuma hatası ve rows.Err → bugünkü
+new_error + tek log, tavan aşımı, boş listede eski SQL ve ek okuma yok); `clickhouse local` uçtan uca sınır kovaları
+(ikili yoksa atlanır — CI'da atlanır, CI'yı şekil + davranış testleri kapsar).
+
 ## 2026-10-02 — Problems: susturulan anomali kuyruktan düşer (v0.10.1042)
 
 **Operatör:** "Anomalide 'Mute' sonrası satır listeden düşsün." **Önce:** anomali detayında Mute… susturmayı
