@@ -987,6 +987,17 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — GitOps sekmesi: sütun genişletme çalışır, ayrı "İş yükleri" bloğu kaldırıldı (v0.10.1057)
+
+**Operatör:** "GitOps sekmesinde de sütun başlıkları kaymıyor." + "İş yükleri ayrıca yazmasına gerek yok."
+**Kök (paylaşılan primitif):** `DataTableColgroup`ın sığdırması (`fitColumnWidths`) SÜRÜKLENEN kolonu da küçültüyordu:
+kabı aşan tabloda (Argo: 1650px beyan, 1178px kap) +100px sürükleme ~+22px, tabanlar bile sığmayınca (838px kap) sıfır
+etki — genişlik yazılıyor, ekrana yansımıyordu. Tutamak dışında biten sürükleme de başlık tıkı olup sıralamayı çeviriyordu.
+**Çare:** sürüklenen kolon `pinned` (küçültülmez; tabanda tablo taşar, kap kaydırır), sürükleme çizilen genişlikten başlar,
+sürükleme sonrası tık yutulur; Autosync tabanı 76 → 90. Başlık/gövde hizası zaten doğruydu (col = th = td). Rozet bloğu
+gitti; veri tablolar için gerekli (istek durur), eşlenemeyen cluster notu Argo bölümünde. **Kapsam:** `DataTableColgroup`
+kullanan her tablo; tarayıcıda GitOps'un iki tablosu + SlowQueries, pin `resizeFit.contract.test.tsx`.
+
 ## 2026-10-02 — Operasyon gecikmesi (trace_op_latency) anomalileri varsayılan kapalı (v0.10.1056)
 
 **Operatör (prod, "Operasyon gecikmesi" anomali detayı, iki ekran görüntüsü):** "Trace op latency false pozitif

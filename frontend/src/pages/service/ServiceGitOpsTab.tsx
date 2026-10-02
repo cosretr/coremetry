@@ -2,9 +2,9 @@
 // v2 P3.5'in metrics-only iskeleti; operatör: "o sekmede rolloutları argocd
 // app info metriklerinden ve rollout sayfasından anlasın").
 //
-// Tek uç: GET /api/services/{name}/gitops (api/service_gitops.go). Üç bölüm
-// aynı iş yükü kümesine bağlı:
-//   - İş yükleri — servisin son 24 saatte span ürettiği (cluster, ns, workload).
+// Tek uç: GET /api/services/{name}/gitops (api/service_gitops.go). İki tablo
+// aynı iş yükü kümesine (servisin son 24 saatte span ürettiği cluster / ns /
+// workload) bağlı:
 //   - Argo CD uygulamaları — hub Thanos'undaki argocd_app_info; eşleme pin
 //     (kesin) ya da ad tahmini. Senkron fazları argocd_app_sync_total (24 sa).
 //   - Rollout'lar — Rollouts sayfasının satırı (workload_rollouts, 7 gün);
@@ -15,6 +15,13 @@
 //
 // Tablo standardı: iki kayıt listesi DataTable, durumları tablonun İÇİNDE
 // (T12); satırlar tıklanmaz (bağlantılar hücrede) — satır tıklanır görünmez.
+//
+// v0.10.1057 — ayrı "İş yükleri" bloğu (rozet listesi) KALDIRILDI. Operatör:
+// "İş yükleri ayrıca yazmasına gerek yok." Aynı bilgi Argo tablosunun
+// "İş yükü" kolonunda ve rollout satırlarında zaten var. Veri aynı tek
+// cevaptan gelir ve tablolar için gerekli (cluster adı eşlemesi, "iş yükü
+// yok" boş durumu) — istek durur, yalnız blok gider. Eşlenemeyen cluster
+// notu bir yapılandırma uyarısı olduğu için Argo bölümüne taşındı.
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, SectionHead } from '@/components/ui';
@@ -36,11 +43,13 @@ import type { ArgoServiceApp, ServiceGitOpsResponse, WorkloadRollout } from '@/l
 
 const appKey = (a: ArgoServiceApp) => `${a.hubClusterId}|${a.instanceNamespace ?? ''}|${a.appNamespace}|${a.name}`;
 
+// v0.10.1057 — Autosync tabanı 76 → 90: dar kapta sığdırma kolonu tabanına
+// indirince başlık "Autosyn…" diye kırpılıyordu (etiket + ok 84px ister).
 const APP_COLS: ColumnDef<ArgoServiceApp>[] = [
   { id: 'name', label: 'Uygulama', width: 260, minWidth: 180, naturalDir: 'asc', sortValue: a => a.name },
   { id: 'sync', label: 'Sync', width: 110, minWidth: 90, naturalDir: 'asc', sortValue: a => a.syncStatus ?? '' },
   { id: 'health', label: 'Health', width: 110, minWidth: 90, naturalDir: 'asc', sortValue: a => a.healthStatus ?? '' },
-  { id: 'auto', label: 'Autosync', width: 90, minWidth: 76, naturalDir: 'asc', sortValue: a => autoSyncLabel(a.autoSync) },
+  { id: 'auto', label: 'Autosync', width: 96, minWidth: 90, naturalDir: 'asc', sortValue: a => autoSyncLabel(a.autoSync) },
   { id: 'syncs', label: 'Senkron (24 sa)', width: 170, minWidth: 120, sortValue: a => syncsTotal(a.syncs24h), tone: a => (syncsFailed(a.syncs24h) ? 'err' : undefined) },
   { id: 'dest', label: 'Hedef', width: 200, minWidth: 140, naturalDir: 'asc', sortValue: a => `${a.destClusterId ?? ''}/${a.destNamespace ?? ''}` },
   { id: 'match', label: 'Eşleme', width: 110, minWidth: 90, sortValue: a => a.confidence, tone: a => (a.match === 'manual' ? undefined : 'muted') },
@@ -72,36 +81,9 @@ export function ServiceGitOpsTab({ service }: { service: string }) {
   }, [d]);
   return (
     <div>
-      <WorkloadsSection d={d} pending={q.isPending} err={err} clusterName={clusterName} />
       <ArgoSection d={d} pending={q.isPending} err={err} onRetry={() => { void q.refetch(); }} clusterName={clusterName} />
       <RolloutsSection d={d} pending={q.isPending} err={err} onRetry={() => { void q.refetch(); }} clusterName={clusterName} />
     </div>
-  );
-}
-
-function WorkloadsSection({ d, pending, err, clusterName }: { d?: ServiceGitOpsResponse; pending: boolean; err: Error | null; clusterName: (id: string) => string }) {
-  const ws = d?.workloads ?? [];
-  return (
-    <section>
-      <SectionHead id="gitops-workloads" title="İş yükleri" source="span · son 24 saat"
-        meta={pending || err ? undefined : `${ws.length}${d?.workloadsCapped ? '+' : ''} iş yükü`} />
-      {err && <p className="field-hint" role="alert">İş yükleri yüklenemedi — ayrıntı aşağıdaki tablolarda.</p>}
-      {!pending && !err && ws.length === 0 && (
-        <p className="field-hint">Son 24 saatte bu servisin span'lerinde k8s iş yükü adı (deployment / statefulset / daemonset) görülmedi — Argo ve rollout eşlemesi iş yüküne dayandığı için aşağıdaki bölümler boş kalır.</p>
-      )}
-      {ws.length > 0 && (
-        <div className="svc-gitops__chips">
-          {ws.map(w => (
-            <Badge key={`${w.clusterId}|${w.namespace}|${w.workload}`} title={`${clusterName(w.clusterId)} / ${w.namespace} / ${w.workload}`}>
-              {w.workload} <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span>
-            </Badge>
-          ))}
-        </div>
-      )}
-      {!!d?.unmappedClusters?.length && (
-        <div className="pod-cap">Remote Cluster kaydına eşlenemeyen span cluster değerleri atlandı: {d.unmappedClusters.join(', ')} (Ayarlar › Remote Clusters'ta span cluster değerini ekleyin).</div>
-      )}
-    </section>
   );
 }
 
@@ -123,7 +105,7 @@ function ArgoSection({ d, pending, err, onRetry, clusterName }: {
     pending ? { kind: 'loading', skeletonRows: 3 }
     : err ? { kind: 'error', message: `GitOps bilgisi yüklenemedi: ${err.message}`, onRetry }
     : !argo?.configured ? { kind: 'empty', message: argo?.note || 'Argo CD yapılandırılmamış.', detail: <Link to="/settings/argocd">Ayarlar › Argo CD</Link> }
-    : (d?.workloads.length ?? 0) === 0 ? { kind: 'empty', message: 'İş yükü görülmediği için Argo uygulaması aranmadı.' }
+    : (d?.workloads.length ?? 0) === 0 ? { kind: 'empty', message: "Son 24 saatte bu servisin span'lerinde k8s iş yükü adı (deployment / statefulset / daemonset) görülmedi — Argo eşlemesi iş yüküne dayandığı için uygulama aranmadı." }
     : { kind: 'empty', message: `Bu servisin iş yüklerine eşlenen Argo uygulaması yok${other > 0 ? ` — aynı namespace'e deploy eden ${other} uygulama var ama adları iş yükü adını içermiyor` : ''}.`,
         detail: <Link to="/settings/argocd">Pin ekleyerek elle bağlayın (Ayarlar › Argo CD)</Link> };
   return (
@@ -135,6 +117,9 @@ function ArgoSection({ d, pending, err, onRetry, clusterName }: {
           Hub {h.hubName || h.hubClusterId}: {h.status === 'skipped' ? 'atlandı' : 'sorgu başarısız'} — {h.error}
         </div>
       ))}
+      {!pending && !err && !!d?.unmappedClusters?.length && (
+        <div className="pod-cap">Remote Cluster kaydına eşlenemeyen span cluster değerleri atlandı: {d.unmappedClusters.join(', ')} (Ayarlar › Remote Clusters'ta span cluster değerini ekleyin).</div>
+      )}
       {truncHubs.map(h => (
         <div key={`t-${h.hubClusterId}`} className="pod-cap">Hub {h.hubName || h.hubClusterId}: sonuç 50 uygulamada kesildi — bu servisin namespace'i çok sayıda uygulama taşıyor; pin ekleyin.</div>
       ))}

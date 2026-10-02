@@ -413,16 +413,34 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
     e.stopPropagation();
     const col = columns.find(c => c.id === id);
     const startX = e.clientX;
-    const startW = colWidths[id] ?? col?.width ?? DEFAULT_W;
+    // v0.10.1057 — başlangıç EKRANDAKİ genişlik (başlık hücresi ölçülür).
+    // Sığdırılmış bir kolon beyanından dar çizilir (Argo tablosunda Health
+    // 110 beyan, 90 çizim); beyandan başlamak ilk harekette kolonu aradaki
+    // fark kadar zıplatıyordu. Ölçüm yoksa (jsdom, gizli tablo) eski zincir.
+    const th = (e.currentTarget as Element | null)?.closest?.('th');
+    const drawn = th ? th.getBoundingClientRect().width : 0;
+    const startW = drawn > 0 ? Math.round(drawn) : colWidths[id] ?? col?.width ?? DEFAULT_W;
     const min = col?.minWidth ?? DEFAULT_MIN;
+    let moved = false;
     const onMove = (ev: PointerEvent) => {
+      if (ev.clientX !== startX) moved = true;
       const w = Math.max(min, startW + (ev.clientX - startX));
       setColWidths(s => ({ ...s, [id]: w }));
     };
+    // v0.10.1057 — sürüklemenin ardından gelen TIK yutulur. Bırakma tutamağın
+    // dışında ama aynı başlığın içinde olunca tık ortak ataya (`th`) düşüyor
+    // ve sıralamayı çeviriyordu: operatör genişletmeye çalışırken tablo
+    // yeniden sıralanıyordu (Argo tablosunda tekrarlandı). Yalnız gerçek
+    // sürüklemede; düz tık / çift tık (sıfırla) etkilenmez.
+    const swallowClick = (ev: MouseEvent) => { ev.stopPropagation(); ev.preventDefault(); };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      if (moved) {
+        window.addEventListener('click', swallowClick, { capture: true, once: true });
+        window.setTimeout(() => window.removeEventListener('click', swallowClick, { capture: true }), 0);
+      }
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
@@ -755,6 +773,9 @@ export function DataTableColgroup<T>({ dt, leading, trailing }: { dt: DataTable<
         id: c.id,
         px: dt.colWidths[c.id] ?? (c.flex ? null : c.width ?? DEFAULT_W),
         min: c.minWidth ?? DEFAULT_MIN,
+        // v0.10.1057 — sürüklenen kolon sığdırmadan muaf (lib/dataTable.ts
+        // fitColumnWidths şerhi): yoksa sürükleme yazılır ama ekrana yansımaz.
+        pinned: dt.colWidths[c.id] != null,
       })),
       fixedPx,
       fitPx,

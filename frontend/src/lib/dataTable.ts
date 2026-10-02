@@ -340,14 +340,35 @@ export interface FitColumnInput {
   px: number | null;
   /** Küçültme tabanı (resize'ın kullandığı minWidth ?? DEFAULT_MIN). */
   min: number;
+  /** v0.10.1057 — operatörün SÜRÜKLEDİĞİ kolon (kalıcı genişlik): küçültülmez,
+   *  px'i aynen çıktıya girer ve sabit pay sayılır; sığdırma kalanlara düşer. */
+  pinned?: boolean;
 }
 
+// v0.10.1057 — Operator-reported ("GitOps sekmesinde de sütun başlıkları
+// kaymıyor"): sığdırma SÜRÜKLENEN kolonu da oransal küçültüyordu. Toplam kabı
+// aşan bir tabloda (Argo CD uygulamaları: beyan 1650px, kap 1178px) +100px
+// sürükleme kolonu ~+22px büyütüyordu; tabanlar bile sığmayan kapta (1100px
+// pencere, kap 838px) herkes tabanda kalıyor ve sürükleme HİÇ etki
+// etmiyordu — genişlik localStorage'a yazılıyor, ekrana yansımıyordu. Kural:
+// sürüklenen (pinned) kolon tam px'inde durur; küçültme yalnız sürüklenmemiş
+// kolonlara uygulanır, onlar da tabana dayanınca tablo taşar ve kabın
+// `overflow-x: auto`su kaydırır (operatörün eli kazanır, v0.9.542 sözü).
 export function fitColumnWidths(
   cols: FitColumnInput[],
   fixedExtraPx: number,
   containerPx: number,
 ): Record<string, number> | null {
   if (!(containerPx > 0)) return null;
+  const pinned = cols.filter((c): c is FitColumnInput & { px: number } => !!c.pinned && c.px != null);
+  if (pinned.length > 0) {
+    const pinnedPx = pinned.reduce((s, c) => s + c.px, 0);
+    const free = cols.filter(c => !(c.pinned && c.px != null));
+    const rest = fitColumnWidths(free, fixedExtraPx + pinnedPx, containerPx);
+    if (!rest) return null;
+    for (const c of pinned) rest[c.id] = c.px;
+    return rest;
+  }
   // 'auto' kolonlar kalan alanı alır ama en az min ister — o payı ayır.
   const flexMin = cols.reduce((s, c) => s + (c.px == null ? c.min : 0), 0);
   const avail = containerPx - fixedExtraPx - flexMin;

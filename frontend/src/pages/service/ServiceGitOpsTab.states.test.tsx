@@ -84,8 +84,34 @@ describe('ServiceGitOpsTab', () => {
     h.q = { ...h.q, isPending: false, error: new Error('boom') };
     const el = mount();
     expect(el.textContent?.match(/GitOps bilgisi yüklenemedi: boom/g)?.length).toBe(2);
-    expect(el.textContent).toContain('İş yükleri yüklenemedi');
     expect(el.textContent).not.toContain('Son 24 saatte bu servisin');
+  });
+
+  // v0.10.1057 — operatör: "İş yükleri ayrıca yazmasına gerek yok." Ayrı
+  // rozet bloğu yok; iş yükleri tablolarda. Veri tablolar için gerekli
+  // (cluster adı, "iş yükü yok" boş durumu), eşlenemeyen cluster notu Argo
+  // bölümünde.
+  it('ayrı "İş yükleri" bloğu yok; iş yükü tablonun kolonunda', () => {
+    h.q = { ...h.q, isPending: false, data: base({
+      unmappedClusters: ['dc-x'],
+      argo: { configured: true, hubs: [], otherInNamespace: 0, apps: [{
+        hubClusterId: 'h1', appNamespace: 'apps', name: 'p-shop-checkout-prod-e', match: 'name', confidence: 70, workloads: [W], syncs24h: {},
+      }] },
+    }) };
+    const el = mount();
+    expect(el.querySelector('#gitops-workloads')).toBeNull();
+    expect(el.textContent).not.toContain('İş yükleri');
+    expect(el.querySelectorAll('section').length).toBe(2);
+    expect(el.querySelector('table')?.textContent).toContain('checkout (prod-east)');
+    expect(el.querySelector('#gitops-argo')?.closest('section')?.textContent)
+      .toContain('Remote Cluster kaydına eşlenemeyen span cluster değerleri atlandı: dc-x');
+  });
+
+  it('iş yükü görülmedi: açıklama Argo tablosunun boş durumunda', () => {
+    h.q = { ...h.q, isPending: false, data: base({ workloads: [] }) };
+    const el = mount();
+    expect(el.querySelector('table')?.textContent)
+      .toContain("Son 24 saatte bu servisin span'lerinde k8s iş yükü adı");
   });
 
   it('Argo yapılandırılmamış + Rollouts kapalı: notlar ve ayar bağlantıları', () => {

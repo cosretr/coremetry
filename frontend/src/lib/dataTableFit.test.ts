@@ -64,6 +64,22 @@ describe('fitColumnWidths (v0.9.1030)', () => {
     expect(fitColumnWidths([c('fixed', 500)], 34, 600)).toBeNull();
   });
 
+  // v0.10.1057 — Operator-reported ("GitOps sekmesinde de sütun başlıkları
+  // kaymıyor"): sürüklenen kolon da küçültülüyordu → sürükleme sönümleniyor
+  // ya da (tabanlar sığmayınca) hiç etki etmiyordu.
+  it('pinned (sürüklenmiş) kolon küçültülmez; kalanlar artan alana sığdırılır', () => {
+    const p = (id: string, px: number, min = 48): FitColumnInput => ({ id, px, min, pinned: true });
+    // Argo şekli, 1100px pencere: tabanlar bile sığmıyor → eskiden health de 90'da kalıyordu.
+    const out = fitColumnWidths([c('name', 260, 180), p('health', 190, 90), c('repo', 240, 140)], 0, 400)!;
+    expect(out).toEqual({ name: 180, health: 190, repo: 140 });
+    // Oransal band: pinned px aynen, diğerleri kalan 600-300=300'e sığar.
+    const out2 = fitColumnWidths([p('a', 300), c('b', 300), c('c', 300)], 0, 600)!;
+    expect(out2.a).toBe(300);
+    expect(out2.b + out2.c).toBeLessThanOrEqual(300);
+    // Pinned ile toplam sığıyorsa null (beyan aynen).
+    expect(fitColumnWidths([p('a', 100), c('b', 100)], 0, 600)).toBeNull();
+  });
+
   it('genişlikler tamsayı (colgroup px değerleri)', () => {
     const out = fitColumnWidths([c('a', 333), c('b', 334)], 0, 500)!;
     for (const v of Object.values(out)) expect(Number.isInteger(v)).toBe(true);
