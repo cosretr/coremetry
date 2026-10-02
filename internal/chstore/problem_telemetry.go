@@ -219,9 +219,24 @@ func (s *Store) storeDeploysCacheEntry(key string, e deploysCacheEntry, now time
 // (cached ~15s, v0.8.359), then per-problem in-memory match
 // against the highest first_seen time ≤ that problem's
 // started_at.
+//
+// v0.10.1054 — anomaliden terfi etmiş Problem (anomaly-auto:) anomali
+// çipiyle AYNI kurala uyar. Operatör: "Anomaliden terfi eden problem de
+// 'yinelenen' kuralına uysun; bugün deploy'a hâlâ eski kurala göre
+// bağlanıyor." Önce kaynak olaylar TEK toplu okumayla gelir
+// (PromotedAnomalySources — sayfada terfi satırı yoksa okuma yok) ve
+// eşleşen Problem'e bölüm sayacı + ilk görülme iliştirilir; seçim
+// pickProblemDeploy'dan. Kaynak okunamazsa / olay düşmüşse / başka bölümdeyse
+// iliştirme yok ve atıf bugünkü gibi (okunamayan süzgeç süzmez). Diğer her
+// Problem'in seçimi bayt bayt aynı.
 func (s *Store) EnrichProblemsWithDeploys(ctx context.Context, problems []Problem, lookback time.Duration) []Problem {
 	if len(problems) == 0 {
 		return problems
+	}
+	// Deploy okumasından ÖNCE: "yinelenen" işareti deploy'dan bağımsız
+	// (deploy okuması düşse de işaret anomali satırıyla aynı kalır).
+	if srcs, err := s.PromotedAnomalySources(ctx, problems); err == nil {
+		attachPromotedEpisodes(problems, srcs)
 	}
 	// Distinct services + global time window across the page.
 	services, from, to, ok := deployEnrichWindow(problems, lookback, time.Now())
@@ -241,25 +256,13 @@ func (s *Store) EnrichProblemsWithDeploys(ctx context.Context, problems []Proble
 		}
 		// Find latest deploy with ns ≤ problem.StartedAt and
 		// ns ≥ problem.StartedAt-lookback. List is asc, so
-		// walk from the end.
-		var pick *spanDeploy
-		for j := len(list) - 1; j >= 0; j-- {
-			if list[j].ns > problems[i].StartedAt {
-				continue
-			}
-			if list[j].ns < problems[i].StartedAt-lookbackNs {
-				break
-			}
-			pick = &list[j]
-			break
-		}
+		// walk from the end (pickProblemDeploy, v0.10.1054; kuralın
+		// bastırdığı deploy atılmaz → nötr PriorDeploy).
+		pick, prior := pickProblemDeploy(list, problems[i], lookbackNs)
 		if pick != nil {
-			problems[i].RecentDeploy = &RecentDeploy{
-				Version:    pick.version,
-				TimeUnixNs: pick.ns,
-				AgeSeconds: (problems[i].StartedAt - pick.ns) / 1e9,
-			}
+			problems[i].RecentDeploy = deployAt(pick, problems[i].StartedAt)
 		}
+		problems[i].PriorDeploy = deployAt(prior, problems[i].StartedAt)
 	}
 	return problems
 }
@@ -301,13 +304,12 @@ func (s *Store) EnrichAnomaliesWithDeploys(ctx context.Context, events []Anomaly
 		if len(list) == 0 {
 			continue
 		}
-		if pick := pickAnomalyDeploy(list, events[i], lookbackNs); pick != nil {
-			events[i].RecentDeploy = &RecentDeploy{
-				Version:    pick.version,
-				TimeUnixNs: pick.ns,
-				AgeSeconds: (events[i].StartedAt - pick.ns) / 1e9,
-			}
+		// v0.10.1054 — kuralın bastırdığı deploy atılmaz: nötr PriorDeploy.
+		pick, prior := pickAnomalyDeploy(list, events[i], lookbackNs)
+		if pick != nil {
+			events[i].RecentDeploy = deployAt(pick, events[i].StartedAt)
 		}
+		events[i].PriorDeploy = deployAt(prior, events[i].StartedAt)
 	}
 	return events
 }
@@ -321,7 +323,12 @@ func (s *Store) EnrichAnomaliesWithDeploys(ctx context.Context, events []Anomaly
 // iliştirilmez (satır çipi, detay sayfasının deploy kutusu, /anomalies
 // çekmecesi ve kök-neden ucu hep buradan okur). İki bölümlü ya da seyrek
 // yinelenen olayda çip bugünkü gibi. Tek bölümlü satırda seçim birebir aynı.
-func pickAnomalyDeploy(list []spanDeploy, ev AnomalyEvent, lookbackNs int64) *spanDeploy {
+//
+// v0.10.1054 — "hiçbir şey kaybolmaz": kuralın "olası neden" saymadığı en yeni
+// pencere-içi deploy ATILMAZ, ikinci dönüş değeri (prior) olarak gelir ve
+// çağıran onu nötr PriorDeploy alanına koyar. pick'in anlamı ve seçimi
+// değişmedi; kural hiçbir deploy'u bastırmadıysa prior nil.
+func pickAnomalyDeploy(list []spanDeploy, ev AnomalyEvent, lookbackNs int64) (pick, prior *spanDeploy) {
 	for j := len(list) - 1; j >= 0; j-- {
 		if list[j].ns > ev.StartedAt {
 			continue
@@ -330,11 +337,45 @@ func pickAnomalyDeploy(list []spanDeploy, ev AnomalyEvent, lookbackNs int64) *sp
 			break
 		}
 		if AnomalyPredatesDeploy(ev.FirstStartedAt, ev.StartedAt, ev.EpisodeCount, list[j].ns) {
+			if prior == nil {
+				prior = &list[j]
+			}
 			continue
 		}
-		return &list[j]
+		return &list[j], prior
 	}
-	return nil
+	return nil, prior
+}
+
+// deployAt — seçilen span deploy'unun RecentDeploy şekli (yaş = başlangıç −
+// deploy, saniye). nil → nil. SAF.
+func deployAt(d *spanDeploy, startedAt int64) *RecentDeploy {
+	if d == nil {
+		return nil
+	}
+	return &RecentDeploy{Version: d.version, TimeUnixNs: d.ns, AgeSeconds: (startedAt - d.ns) / 1e9}
+}
+
+// pickProblemDeploy — EnrichProblemsWithDeploys'un seçim yarısı, SAF
+// (v0.10.1054). TEK kural: anomali çipinin seçimi (pickAnomalyDeploy) Problem'in
+// StartedAt'i ve iliştirilmiş bölüm alanlarıyla (attachPromotedEpisodes) koşar.
+//
+//   - Terfi Problem'i, kaynak olay aynı bölümde ve sayaç > 1: kaynak olay o
+//     deploy'dan önce de DÜZENLİ görülüyorsa (AnomalyPredatesDeploy: ≥ 3
+//     bölüm, ortalama aralık ≤ 48 sa) deploy iliştirilmez — satır çipi,
+//     detay sayfasının deploy kutusu, kök-neden ucu, Insight kartı ve
+//     açıklama istemleri hep bu seçimden okur. Vaka A (2. bölüm) / vaka B
+//     (seyrek) atfı KORUR.
+//   - Diğer her Problem (bölüm alanları boş): kural pencere içi her deploy
+//     için false döner (earliest = StartedAt ≥ deploy) ve seçim bu sürümden
+//     önceki satır-içi döngüyle bayt bayt aynıdır (tablo testi eski döngüyü
+//     referans tutar) ve prior hep nil.
+func pickProblemDeploy(list []spanDeploy, p Problem, lookbackNs int64) (pick, prior *spanDeploy) {
+	return pickAnomalyDeploy(list, AnomalyEvent{
+		StartedAt:      p.StartedAt,
+		EpisodeCount:   p.EpisodeCount,
+		FirstStartedAt: p.FirstStartedAt,
+	}, lookbackNs)
 }
 
 // CalleesOf returns services that `service` calls (outgoing dependency view).

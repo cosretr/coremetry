@@ -57,6 +57,17 @@ describe('RecurringMarker', () => {
     expect(b.title).toMatch(/^Yinelenen anomali: bu 3\. kez, ilk kez \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}\./);
   });
 
+  // v0.10.1054 — kuralın bastırdığı deploy atılmaz: rozet aynı (renk yok),
+  // ipucunun yeni satırında nötr deploy metni.
+  it('priorDeploy → ipucunda "deploy <sürüm> N dk önce — öncesinde de görülüyordu", rozet aynı', () => {
+    const el = render(<RecurringMarker episodeCount={8} priorDeploy={{ version: 'v2.0.0', timeUnixNs: 1, ageSeconds: 600 }} />);
+    const b = el.querySelector('[data-recurring]') as HTMLElement;
+    expect(b.className).toBe('badge b-gray');
+    expect(b.textContent).toBe('yinelenen');
+    expect(b.title).toBe('Yinelenen anomali: bu 8. kez. Sayaç kaydın ömrüyle sınırlı (son tetiklenmeden 30 gün sonra kayıt düşer).\n' +
+      'deploy v2.0.0 10 dk önce — öncesinde de görülüyordu');
+  });
+
   it('satır kipi → damga altındaki yaş satırı kalıbında', () => {
     const el = render(<RecurringMarker episodeCount={2} line />);
     expect(el.firstElementChild?.className).toBe('ib-when__ago');
@@ -69,6 +80,6 @@ describe('RecurringMarker', () => {
     expect(read('../../pages/Inbox.tsx')).toContain(
       '<RecurringMarker episodeCount={it.anomaly.episodeCount} firstStartedAt={it.anomaly.firstStartedAt} />');
     expect(read('./streams.tsx')).toContain(
-      '<RecurringMarker episodeCount={e.episodeCount} firstStartedAt={e.firstStartedAt} line />');
+      '<RecurringMarker episodeCount={e.episodeCount} firstStartedAt={e.firstStartedAt} priorDeploy={e.priorDeploy} line />');
   });
 });

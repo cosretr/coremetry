@@ -142,8 +142,10 @@ type SynthesisInput struct {
 	// bugünküyle bayt-bayt aynı.
 	DeployImpact *chstore.DeployImpact
 	// DeployRecurring (v0.10.1049) — çıpa anomali bu deploy'dan önce de
-	// DÜZENLİ görülüyordu (chstore.AnomalyPredatesDeploy true; yalnız anomali
-	// çıpasında dolar). nil = bugünkü davranış. Doluyken deploy adayı DÜŞMEZ,
+	// DÜZENLİ görülüyordu (chstore.AnomalyPredatesDeploy true; anomali
+	// çıpasında ve v0.10.1054'ten beri anomaliden terfi etmiş Problem
+	// çıpasında — kaynak olayın sayacıyla — dolar; worker deployRecurrence).
+	// nil = bugünkü davranış. Doluyken deploy adayı DÜŞMEZ,
 	// recurringDeployScore'a İNER — DeployImpact gerileme gösterirse
 	// (deployImpactRegressed) normal puanını geri alır.
 	DeployRecurring *DeployRecurrence
@@ -424,8 +426,9 @@ func Synthesize(
 				// Deploy olayı + rollout kaydı aynı imaj: tek aday, doğrulanmış.
 				// v0.10.1049 — indirgenmiş (yinelenen) deploy adayı rollout
 				// kaydıyla YÜKSELMEZ: kayıt deploy'un olduğunu doğrular,
-				// anomaliyi açıkladığını değil. (Bugün Rollouts yalnız problem
-				// çıpasında, DeployRecurring yalnız anomali çıpasında dolar.)
+				// anomaliyi açıkladığını değil. (Rollouts yalnız problem
+				// çıpasında dolar; v0.10.1054'ten beri terfi Problem'i çıpasında
+				// ikisi BİRLİKTE dolabilir — bu dal o durumu karşılar.)
 				if demoted {
 					continue
 				}

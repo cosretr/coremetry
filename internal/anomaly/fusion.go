@@ -43,6 +43,13 @@ type EvidenceBundle struct {
 	Signals   []chstore.AnomalyEvent     // active log_pattern / trace_op anomalies on the service
 	Deploy    *chstore.RecentDeployEntry // a deploy of the service just before onset
 	Neighbors []NeighborProblem          // open problems on direct topology neighbours
+	// DeployPredates (v0.10.1054) — anomaliden terfi etmiş Problem'in kaynak
+	// olayı bu deploy'dan önce de DÜZENLİ görülüyordu (yinelenen kuralı) ve
+	// kök-neden işçisi ölçülen gerilemeyle adayı geri ALMADI. renderEvidence
+	// deploy'u "ana şüpheli" diye değil nötr satırla yazar. Yalnız
+	// ProblemExplainer doldurur (problemExplainerDeployPredates); false =
+	// bugünkü metin bayt bayt.
+	DeployPredates bool
 	// NeighborSignals (v0.9.1056) — komşulardaki aktif anomaliler;
 	// confidence sayımında Neighbors ile TEK kanal (ölçek /5 sabit).
 	NeighborSignals []NeighborSignal
@@ -279,8 +286,16 @@ func renderEvidence(sb *strings.Builder, b EvidenceBundle) {
 	fmt.Fprintf(sb, "\nCorrelated evidence (confidence %d/5 — likely ONE incident):\n", b.Confidence)
 	if b.Deploy != nil {
 		mins := (b.Problem.StartedAt - b.Deploy.FirstSeenNs) / int64(time.Minute)
-		fmt.Fprintf(sb, "- DEPLOY (prime 'what changed' suspect): %s %s deployed %dm before onset\n",
-			b.Deploy.Service, b.Deploy.Version, mins)
+		if b.DeployPredates {
+			// v0.10.1054 — terfi Problem'i, düzenli yinelenen kaynak olay:
+			// deploy kanıt olarak KALIR ama ana şüpheli diye yazılmaz (sayfadaki
+			// hipotez bloğuyla çelişmesin).
+			fmt.Fprintf(sb, "- DEPLOY %s %s deployed %dm before onset — yinelenen anomali, deploy'dan önce de görülüyordu; ana şüpheli değil\n",
+				b.Deploy.Service, b.Deploy.Version, mins)
+		} else {
+			fmt.Fprintf(sb, "- DEPLOY (prime 'what changed' suspect): %s %s deployed %dm before onset\n",
+				b.Deploy.Service, b.Deploy.Version, mins)
+		}
 	}
 	if n := len(b.CoFiring); n > 0 {
 		parts := make([]string, 0, n)

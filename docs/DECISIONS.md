@@ -987,6 +987,70 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Anomaliden terfi eden Problem de yinelenen kuralına uyar (v0.10.1054)
+
+**Operatör:** "Anomaliden terfi eden problem de 'yinelenen' kuralına uysun; bugün deploy'a hâlâ eski kurala göre
+bağlanıyor." **Önce:** v0.10.1049 deploy atfının tek kuralını (`AnomalyPredatesDeploy`) yalnız anomali olayına bağladı
+(bilinen sınır diye kuyruğa yazıldı). Güçlü olaydan terfi eden Problem (`anomaly-auto:<fp>`) bölüm sayacını bilmiyordu:
+Problems kuyruğunda anomali satırı "yinelenen" der ve deploy çipi göstermezken hemen yanındaki terfi Problem'i aynı
+deploy'u çip, detay sayfasının deploy kutusu, kök-neden adayı (0.80 taban) ve deploy raporu satırıyla "olası neden"
+gösteriyordu.
+
+**Eşleme (sorgusuz):** saklanan rule_id = `anomaly-auto:` + `FingerprintAnomaly` (16 küçük harf hex) = olay kimliği;
+Problem kimliği aynısı + `:<servis>`. `chstore.PromotedAnomalyEventID` ikisini de kabul eder; önek ya da şekil tutmazsa
+terfi Problem'i sayılmaz. Bölüm eşleşmesi: terfi Problem'inin `StartedAt`'i olayın bölüm başlangıcıdır ve bölüm içinde
+değişmez; olay o zamandan beri yeni bölüme geçtiyse (eski, kapanmış terfi) eşleşme yok.
+
+**Okuma:** `Store.PromotedAnomalySources` — çağrı (sayfa, rapor, tik) başına TEK toplu okuma: `SELECT id, started_at,
+last_seen, episode_count, first_started_at FROM anomaly_events FINAL WHERE id IN (…) LIMIT 2n SETTINGS
+max_execution_time = 2` (yalnız kullanılan beş kolon, PK, bind değer listesi, en çok 1000 tekil kimlik; sıcak okuma
+yolunda 2 sn tavan). Terfi Problem'i yoksa ya da bölüm kolonları bu süreçte görülmediyse okuma YOK. Satır başına okuma
+yok.
+
+**Tüketiciler — yeni mekanizma yok, 1049'unkiler:** (1) **`EnrichProblemsWithDeploys`** (her problem okuma zinciri
+buradan: Problems kuyruğu, alarm detayı, /rootcause ucu, Insight kartı, açıklama/runbook istemleri, vardiya, sohbet ve
+MCP listeleri): eşleşen terfi Problem'ine olayın sayacı (> 1) ve ilk başlangıcı iliştirilir (`episodeCount` /
+`firstStartedAt`, saklanmaz); seçim `pickProblemDeploy` → `pickAnomalyDeploy` — kural true ise deploy "olası neden"
+(`recentDeploy`) olarak iliştirilmez. Ekran: kuyruk satırı (birleşik akış + Alert rules tablosu) anomali satırıyla aynı
+nötr `RecurringMarker`; alarm detayının "ne zaman" satırına anomaliyle aynı tek ek (`problemWhenLine`). Yeni bölüm yok.
+İşaret anomali satırının kuralını izler (sayaç > 1): vaka A'da iki satırda da çip + işaret. (2) **Kök-neden işçisi,
+PROBLEM çıpası:** tik başına tek okuma; `promotedDeployRecurrence` anomali çıpasıyla ORTAK `deployRecurrence`'ı çağırır
+→ `DeployRecurring`: aday `recurringDeployScore`'a iner, düz gerekçe, ölçülen gerilemede geri; aynı imajın rollout
+kaydı yükseltmez (mevcut dal). (3) **Deploy raporu + rollout çekmecesi:** tek seçim `problemsSinceDeploy`; dahil etme
+kapısı aynen `StartedAt >= since`, HİÇBİR satır düşmez, satır servisi nitelemeye devam eder; kural o deploy'a göre true
+ise `predatesDeploy` ve çekmecede aynı "yinelenen" işareti. (4) **Arka plan ProblemExplainer:** tik başına tek okuma
+(yalnız aday varken); kanıt paketinin DEPLOY satırı kural true ve işçi deploy'u geri ALMADIYSA nötr: "DEPLOY <servis>
+<sürüm> … — yinelenen anomali, deploy'dan önce de görülüyordu; ana şüpheli değil" (sayfadaki hipotez bloğuyla çelişmez).
+
+**Hiçbir şey kaybolmaz (inceleme):** kural deploy'u "olası neden" saymadığında deploy ATILMAZ: aynı seçici
+(`pickAnomalyDeploy`, problem ve anomali yolu) onu ayrı, saklanmayan `priorDeploy` alanına koyar (`recentDeploy` ile aynı
+şekil; `recentDeploy` anlamını korur: olası neden — istemler, Insight kartı ve /rootcause tüketicileri değişmez). Renksiz,
+yeni bölümsüz gösterilir: satır işaretinin ipucunda "deploy <sürüm> <N> dk önce — öncesinde de görülüyordu"; alarm ve
+anomali detayının "ne zaman" ekinde "… · yinelenen · bu N. kez · ilk kez <tarih> · deploy <sürüm> <N> dk önce (öncesinde
+de görülüyordu)"; alarm detayının zaman çizelgesinde nötr (warn değil) "Deploy <sürüm>" satırı. **Ölçülen gerileme:**
+`chstore.RestoreMeasuredDeploy` — `priorDeploy` doluyken (kural o satırda gerçekten bir deploy bastırdı) ve kök-neden
+işçisinin hipotezi deploy'u ölçülen gerilemeyle geri aldıysa (hipotezin `RecentDeploy`'u dolu) o deploy yeniden
+`recentDeploy` olur, `priorDeploy` boşalır. Uygulandığı yerler: problem ve anomali kök-neden özeti
+(`Enrich*WithRootCause` — aynı toplu hipotez okuması, ek sorgu yok; liste, by-id, sohbet ve MCP yolları) ve /rootcause
+uçları (problem + anomali, paralel okumalardan sonra; anomali ucundaki boşluk v0.10.1049'dan beri vardı). `priorDeploy`
+boşsa yanıt bayt bayt bugünkü. **Warning terfi Problem'i:** kök-neden işçisi yalnız critical açık problemleri çıpa alır,
+yani warning'de hipotez yoktur — operatör çip görmez, yalnız nötr deploy metnini (ipucu, ne zaman eki, zaman çizelgesi)
+ve "yinelenen" işaretini görür; ölçülen-gerileme geri alımı o satırda çalışmaz. Problems kuyruğunun anomali satırı
+bugün de deploy okuması yapmaz (çip yok), ipucunda deploy metni yoktur; /anomalies satırı ve anomali detayı taşır.
+
+**Hata yönü:** okuma hatası, TTL ile düşmüş olay, başka bölüm, kolon yok, tavan aşımı → iliştirme yok, atıf BUGÜNKÜ gibi
+(okunamayan süzgeç süzmez): yanlış "yinelenen" gerçek bir gerilemeyi gizler, eksik işaret yalnız bugünkü atfı bırakır.
+
+**Değişmeyen:** diğer her Problem'in (alarm kuralı, exception, `anomaly:` metrik dedektörü, küme) deploy seçimi eski
+döngüyle bayt bayt aynı (tablo testi eski döngüyü referans tutar), `priorDeploy` hep boş, teli aynı (omitempty); öncelik
+/ şiddet, terfi kapısı, bölüm kuralı; rollout listesinin "problemler" rozeti (çekmeceyle aynı sayım, gizleme yok).
+**Bilinen sınırlar (kuyrukta):** açıklama / runbook istemleri (`api.go` explain-problem / runbook) ve MCP problem haritası
+bu Problem'lerde "Recent deploy" satırını kaybeder, yerine yinelenme satırı gelmez (hipotez bloğu indirgenmiş gerekçeyi
+taşır); ertelenen ALTER'dan önce açılmış pod'lar bölüm kolonlarını yeniden probe / restart'a dek görmez (1049'la aynı —
+o pod'da atıf bugünkü gibi); kapanmış eski terfi Problem'i, olay yeni bölüme geçince bugünkü atfa döner; derin kanıt
+kapısı (`shouldDeepInvestigate(…, bundle.Deploy != nil)`) kurala bakmaz; problem çıpasında imaj etiketi deploy sürümüyle
+eşleşmeyen rollout adayı ayrı aday olarak kalır.
+
 ## 2026-10-02 — Exception takip sohbeti de kaynak kodu okuyabilir (v0.10.1053)
 
 **Operatör:** "Exception panelindeki takip sohbeti de kod okuyabilsin." **Önce:** `read_source_code` (v0.10.1050) yalnız

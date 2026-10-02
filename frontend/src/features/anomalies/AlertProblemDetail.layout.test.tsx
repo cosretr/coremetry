@@ -197,6 +197,78 @@ describe('AlertProblemDetail — özet önce, ikincil bölümler kapalı (v0.10.
   });
 });
 
+// v0.10.1054 — anomaliden terfi eden Problem. Operatör: "Anomaliden terfi eden
+// problem de 'yinelenen' kuralına uysun; bugün deploy'a hâlâ eski kurala göre
+// bağlanıyor." Kural tutunca sunucu recentDeploy göndermez (deploy kutusu yok)
+// ve bölüm alanlarını gönderir: "ne zaman" satırında anomaliyle aynı tek ek,
+// YENİ BÖLÜM YOK. Kural satırında alan gelse bile hiçbir şey değişmez.
+describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () => {
+  it('gece işi 3. gece: deploy kutusu yok, ne zaman satırında "yinelenen · bu 3. kez · ilk kez …"', async () => {
+    const started = Date.UTC(2026, 9, 2, 2, 0) * 1e6;
+    const el = await mount(prob({
+      ruleId: 'anomaly-auto:0123456789abcdef', ruleName: 'Anomaly · nightly-job', metric: 'anomaly_ratio',
+      startedAt: started, status: 'resolved', resolvedAt: started + 20 * 60e9,
+      episodeCount: 3, firstStartedAt: started - 2 * 86_400e9,
+    }));
+    const when = el.querySelector('.pd-summary__when')?.textContent ?? '';
+    expect(when).toMatch(/başladı · 20m · \d{2}:\d{2} bitti · yinelenen · bu 3\. kez · ilk kez \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/);
+    expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('Deploy correlation');
+    // Yeni bölüm yok: başlıklar bugünkülerle aynı küme.
+    expect(sects(el).some(s => /yinelen/i.test(s.querySelector(':scope > .h')?.textContent ?? ''))).toBe(false);
+  });
+  // İnceleme senaryosu (gece işi 7 gece, deploy, 8. bölüm).
+  const PRIOR = { version: 'v2.0.0', timeUnixNs: 1, ageSeconds: 600 };
+  const ep8 = (over: Partial<Problem> = {}) => prob({
+    ruleId: 'anomaly-auto:0123456789abcdef', ruleName: 'Anomaly · nightly-job', metric: 'anomaly_ratio',
+    episodeCount: 8, firstStartedAt: Date.now() * 1e6 - 7 * 86_400e9, ...over,
+  });
+  const timelineLis = async (el: HTMLElement) => {
+    const s = sect(el, 'Problem timeline')!;
+    act(() => { toggleOf(s)!.click(); });
+    await settle();
+    return [...sect(el, 'Problem timeline')!.querySelectorAll('li')].filter(li => li.textContent?.startsWith('Deploy'));
+  };
+  it('(b) warning, ölçüm yok: deploy kutusu yok; ne zaman ekinde ve zaman çizelgesinde NÖTR deploy', async () => {
+    const el = await mount(ep8({ severity: 'warning', priorDeploy: PRIOR }));
+    expect(el.querySelector('.pd-summary__when')?.textContent)
+      .toMatch(/sürüyor · yinelenen · bu 8\. kez · ilk kez \S+ \S+ · deploy v2\.0\.0 10 dk önce \(öncesinde de görülüyordu\)$/);
+    expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('Deploy correlation');
+    const lis = await timelineLis(el);
+    expect(lis).toHaveLength(1);
+    expect(lis[0].className).toBe(''); // warn DEĞİL — nötr nokta
+    expect(lis[0].hasAttribute('data-prior-deploy')).toBe(true);
+    expect(lis[0].textContent).toContain('v2.0.0');
+  });
+  it('(a) critical, ölçülen gerileme: sunucu deploy\'u yeniden olası neden yapar → deploy kutusu + warn satırı, nötr satır yok', async () => {
+    const el = await mount(ep8({ recentDeploy: { version: 'v2.0.0', timeUnixNs: 1, ageSeconds: 600 } }));
+    expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
+    expect(el.querySelector('.pd-summary__when')?.textContent).not.toContain('deploy v2.0.0');
+    const lis = await timelineLis(el);
+    expect(lis).toHaveLength(1);
+    expect(lis[0].className).toBe('warn');
+    expect(lis[0].hasAttribute('data-prior-deploy')).toBe(false);
+  });
+
+  it('vaka A (2. bölüm, deploy KORUNUR): deploy kutusu VE ek birlikte', async () => {
+    const el = await mount(prob({
+      ruleId: 'anomaly-auto:0123456789abcdef', episodeCount: 2, firstStartedAt: Date.now() * 1e6 - 75 * 60e9,
+      recentDeploy: { version: 'v2.0.0', timeUnixNs: Date.now() * 1e6 - 25 * 60e9, ageSeconds: 600 },
+    }));
+    expect(el.querySelector('.pd-summary__when')?.textContent).toMatch(/sürüyor · yinelenen · bu 2\. kez · ilk kez /);
+    expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
+  });
+  it('alarm kuralı: alan gelse bile ne zaman satırı bugünkü gibi, deploy kutusu yerinde', async () => {
+    const el = await mount(prob({
+      episodeCount: 3, firstStartedAt: 1,
+      recentDeploy: { version: 'v2.0.0', timeUnixNs: Date.now() * 1e6 - 25 * 60e9, ageSeconds: 600 },
+    }));
+    const when = el.querySelector('.pd-summary__when')?.textContent ?? '';
+    expect(when).toMatch(/başladı · 15m · sürüyor$/);
+    expect(when).not.toContain('yinelenen');
+    expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
+  });
+});
+
 describe('AlertProblemDetail — Triyaj (tek satır)', () => {
   const row = (el: HTMLElement) => el.querySelector<HTMLElement>('.pd-triage')!;
   it('atanan görünür; Assign… prompt\'u ile atar (boş = kaldır), kuyruğu tazeler', async () => {

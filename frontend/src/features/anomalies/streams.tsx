@@ -524,7 +524,7 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
                   {tsLong(e.startedAt)}
                   {/* v0.10.1049 — Started bu bölümün başlangıcı; yinelenen
                       olayda altında nötr işaret, ilk görülme ipucunda. */}
-                  <RecurringMarker episodeCount={e.episodeCount} firstStartedAt={e.firstStartedAt} line />
+                  <RecurringMarker episodeCount={e.episodeCount} firstStartedAt={e.firstStartedAt} priorDeploy={e.priorDeploy} line />
                 </td>
                 <td className="mono ib-when cell-faint">{tsLong(e.lastSeen)}</td>
                 <td>

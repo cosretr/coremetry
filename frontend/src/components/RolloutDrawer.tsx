@@ -138,7 +138,14 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
           {/* v0.10.954 — sinyal önizlemeleri servislerden türer; servis yokken eskisi gibi çizilmez. */}
           {d.services.length > 0 && (
             <>
-              <SignalSection title="Deploy'dan beri açık problemler" rows={d.services.flatMap(s => s.problems.map(p => ({ key: p.id, svc: s.service, a: p.severity, b: p.ruleName, at: p.startedAt })))} moreHref="/problems" />
+              {/* v0.10.1054 — anomaliden terfi etmiş Problem de aynı kurala uyar:
+                  kaynak olayı rollout'tan önce de düzenli görülüyorsa listede
+                  KALIR, anomali satırıyla aynı nötr "yinelenen" işaretini taşır
+                  (sunucu kararı: predatesDeploy — problemsSinceDeploy). */}
+              <SignalSection title="Deploy'dan beri açık problemler" rows={d.services.flatMap(s => s.problems.map(p => ({
+                key: p.id, svc: s.service, a: p.severity, b: p.ruleName, at: p.startedAt,
+                mark: p.predatesDeploy ? <RecurringMarker episodeCount={p.episodeCount} firstStartedAt={p.firstStartedAt} /> : undefined,
+              })))} moreHref="/problems" />
               {/* v0.10.1049 — rollout'tan önce de DÜZENLİ görülen anomali listede
                   KALIR, yalnız nötr "yinelenen" işareti taşır (sunucu kararı:
                   predatesDeploy — anomaliesSinceDeploy). Liste hiçbir satırı gizlemez. */}

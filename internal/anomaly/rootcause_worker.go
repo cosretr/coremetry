@@ -240,6 +240,14 @@ func (s *RootCauseSynthesizer) run(ctx context.Context) {
 		} else {
 			problems = snap.Filter("open", "critical", s.batch)
 		}
+		// v0.10.1054 — anomaliden terfi etmiş çıpaların kaynak olayları, tik
+		// başına TEK toplu okuma (terfi çıpası yoksa okuma yok; ≤ batch kimlik).
+		// Okunamazsa o tik bugünkü atıf: okunamayan süzgeç süzmez.
+		promoted, perr := s.store.PromotedAnomalySources(ctx, problems)
+		if perr != nil {
+			log.Printf("[rootcause-synth] promoted anomaly sources (bugünkü deploy atfı): %v", perr)
+			promoted = nil
+		}
 		for _, p := range problems {
 			if done >= s.batch {
 				break
@@ -249,6 +257,10 @@ func (s *RootCauseSynthesizer) run(ctx context.Context) {
 			}
 			bundle := buildEvidenceBundle(p, in)
 			synthIn := synthInputForProblem(p, bundle)
+			// v0.10.1054 — terfi Problem'i anomali çıpasıyla AYNI mekanizma:
+			// kaynak olay bu deploy'dan önce de düzenli görülüyorsa aday İNER
+			// (DeployRecurring); enrichDeployImpact yine koşar, gerilemede geri.
+			synthIn.DeployRecurring = promotedDeployRecurrence(p, bundle.Deploy, promoted)
 			appendNodeCauses(&synthIn, in, p.Service)
 			s.enrichDeployImpact(ctx, p.Service, &synthIn)               // v0.9.1059
 			rolloutEv := s.rolloutCauses(ctx, p, &synthIn)               // v0.10.242
@@ -407,9 +419,7 @@ func synthInputForAnomaly(ev chstore.AnomalyEvent, in evidenceInputs) correlator
 	// altına indirir; etki gerileme gösterirse normal puanını geri alır. İki
 	// bölümlü / seyrek yinelenen olayda (deploy kırdı → rollback → bozuk
 	// yeniden deploy; 20 gün önceki tek kıpırtı) kural false: bugünkü atıf.
-	if deploy != nil && chstore.AnomalyPredatesDeploy(ev.FirstStartedAt, ev.StartedAt, ev.EpisodeCount, deploy.FirstSeenNs) {
-		out.DeployRecurring = &correlator.DeployRecurrence{Count: ev.EpisodeCount, FirstSeenNs: ev.FirstStartedAt}
-	}
+	out.DeployRecurring = deployRecurrence(ev.FirstStartedAt, ev.StartedAt, ev.EpisodeCount, deploy)
 
 	// Propagation-ranked downstream suspects over the weighted graph, anchored
 	// on the anomaly's service. Same scorer the bundle uses. Only neighbours
@@ -483,6 +493,35 @@ func synthInputForAnomaly(ev chstore.AnomalyEvent, in evidenceInputs) correlator
 		})
 	}
 	return out
+}
+
+// deployRecurrence — deploy adayının "yinelenen" işareti, İKİ çıpanın TEK
+// mekanizması (v0.10.1049 anomali çıpası, v0.10.1054 terfi Problem'i). SAF.
+// Kural chstore.AnomalyPredatesDeploy; true ise Synthesize adayı
+// recurringDeployScore'a İNDİRİR (ölçülen gerilemede geri alır), değilse nil
+// = bugünkü atıf. Deploy adayı yoksa nil.
+func deployRecurrence(firstStartedAt, startedAt int64, episodeCount uint32, deploy *chstore.RecentDeployEntry) *correlator.DeployRecurrence {
+	if deploy == nil || !chstore.AnomalyPredatesDeploy(firstStartedAt, startedAt, episodeCount, deploy.FirstSeenNs) {
+		return nil
+	}
+	return &correlator.DeployRecurrence{Count: episodeCount, FirstSeenNs: firstStartedAt}
+}
+
+// promotedDeployRecurrence — problem çıpası (v0.10.1054). Operatör:
+// "Anomaliden terfi eden problem de 'yinelenen' kuralına uysun; bugün
+// deploy'a hâlâ eski kurala göre bağlanıyor." Anomaliden terfi etmiş
+// Problem'in (anomaly-auto:) kaynak olayı aynı bölümdeyse
+// (chstore.PromotedProblemSource) deploy adayına anomali çıpasıyla AYNI
+// işaret: deployRecurrence(olayın ilk başlangıcı, Problem'in StartedAt'i =
+// olayın bölüm başlangıcı, olayın sayacı). Kaynak okunamadıysa / olay
+// düşmüşse / başka bölümdeyse ve diğer her Problem'de (kural, exception,
+// `anomaly:` dedektörü) nil — bugünkü atıf. SAF.
+func promotedDeployRecurrence(p chstore.Problem, deploy *chstore.RecentDeployEntry, srcs map[string]chstore.AnomalyEvent) *correlator.DeployRecurrence {
+	ev, ok := chstore.PromotedProblemSource(p, srcs)
+	if !ok {
+		return nil
+	}
+	return deployRecurrence(ev.FirstStartedAt, p.StartedAt, ev.EpisodeCount, deploy)
 }
 
 // deployFromEntry converts the evidence bundle's *RecentDeployEntry into the

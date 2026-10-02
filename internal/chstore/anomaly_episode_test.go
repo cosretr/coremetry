@@ -259,7 +259,7 @@ func TestPickAnomalyDeploy(t *testing.T) {
 		{"düzenli, ilk görülme v2 ile v3 arasında — v2", AnomalyEvent{StartedAt: start, FirstStartedAt: start - 24*m, EpisodeCount: 3}, "v2"},
 	}
 	for _, c := range cases {
-		got := pickAnomalyDeploy(list, c.ev, lookback)
+		got, _ := pickAnomalyDeploy(list, c.ev, lookback) // v0.10.1054: ikinci değer bastırılan deploy (promoted_anomaly_source_test.go)
 		gotV := ""
 		if got != nil {
 			gotV = got.version

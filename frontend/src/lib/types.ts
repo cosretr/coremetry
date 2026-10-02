@@ -2665,6 +2665,9 @@ export interface InboxItem {
   // satıra kopyalamıyordu: sorgu faturalanıp cevap çöpe gidiyordu.
   runbookUrl?: string;
   recentDeploy?: { service: string; version: string; timeUnixNs: number };
+  /** v0.10.1054 — Problem.priorDeploy ile aynı: yinelenen kuralının "olası
+   *  neden" saymadığı deploy, nötr (satır işaretinin ipucunda). */
+  priorDeploy?: PriorDeploy;
   // v0.9.530 — arka plan işçilerinin proaktif kök-sebep cümlesi.
   // Sunucuda 240 bayta kırpılır (satırın işi tarama; tam metin detay
   // yüzeyinde). aiSummaryAt olmadan çizilmez — özet tek yazımlık ama
@@ -2674,6 +2677,9 @@ export interface InboxItem {
   problem?: {
     id: string; ruleId: string; metric: string;
     value: number; threshold: number;
+    /** v0.10.1054 — Problem.episodeCount / firstStartedAt ile aynı anlam
+     *  (yalnız anomaliden terfi etmiş Problem). */
+    episodeCount?: number; firstStartedAt?: number;
   };
   exception?: {
     fingerprint: string; type: string; message: string;
@@ -4823,6 +4829,14 @@ export interface EvaluatorHealth {
   version?: string;
 }
 
+/** v0.10.1054 — yinelenen kuralının "olası neden" saymadığı, nötr kalan
+ *  deploy (chstore.RecentDeploy şekli; Problem / AnomalyEvent / InboxItem). */
+export interface PriorDeploy {
+  version: string;
+  timeUnixNs: number;
+  ageSeconds: number;
+}
+
 export interface Problem {
   id: string;
   // v0.10.706 — okuma-anı: kategori + görüntü kimliği ("P-xxxxx", türetilmiş,
@@ -4904,6 +4918,22 @@ export interface Problem {
     timeUnixNs: number;
     ageSeconds: number;
   };
+  // v0.10.1054 — "hiçbir şey kaybolmaz": yinelenen kuralı deploy'u "olası
+  // neden" saymadığında (recentDeploy yok) o deploy burada, NÖTR. Ekran onu
+  // renksiz yazar: satır ipucu, "ne zaman" eki, zaman çizelgesinde düz satır.
+  // Ölçülen gerilemede sunucu onu yeniden recentDeploy yapar (bu alan boşalır).
+  priorDeploy?: PriorDeploy;
+  // v0.10.1054 — yalnız anomaliden terfi etmiş Problem'de (ruleId
+  // "anomaly-auto:…") ve kaynak olay hâlâ bu Problem'in bölümündeyken:
+  // olayın bölüm sayacı (> 1) ve ilk başlangıcı (AnomalyEvent.episodeCount /
+  // firstStartedAt ile aynı anlam). Satır anomali satırıyla aynı "yinelenen"
+  // işaretini çizer; kural tutarsa recentDeploy zaten gelmez.
+  episodeCount?: number;
+  firstStartedAt?: number;
+  // v0.10.1054 — yalnız deploy raporu / rollout çekmecesi: kaynak olay o
+  // deploy'dan önce de DÜZENLİ görülüyordu (AnomalyEvent.predatesDeploy ikizi).
+  // Satır listede kalır, "yinelenen" işaretli.
+  predatesDeploy?: boolean;
   // AI auto-explain summary (v0.5.254) — populated by the
   // background problemExplainer goroutine within ~30s of a critical
   // problem opening. Empty when Copilot isn't configured or the
@@ -5923,6 +5953,10 @@ export interface AnomalyEvent {
     timeUnixNs: number;
     ageSeconds: number;
   };
+  // v0.10.1054 — Problem.priorDeploy ile aynı: yinelenen kuralının "olası
+  // neden" saymadığı deploy, nötr; ölçülen gerilemede sunucu onu yeniden
+  // recentDeploy yapar.
+  priorDeploy?: PriorDeploy;
   // Root-cause ribbon summary (rc #3) — the worker's persisted top-suspect
   // for this anomaly, joined at read time by the /anomalies events handler.
   // Absent until synthesized (→ honest "no clear cause yet" ribbon). Powers

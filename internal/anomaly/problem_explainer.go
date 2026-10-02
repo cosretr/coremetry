@@ -162,6 +162,14 @@ func (e *ProblemExplainer) run(ctx context.Context) {
 		log.Printf("[problem-explainer] hypotheses: %v", err)
 		hyps = nil
 	}
+	// v0.10.1054 — anomaliden terfi etmiş adayların kaynak olayları, tik
+	// başına TEK toplu okuma (terfi adayı yoksa okuma yok). Okunamazsa kanıt
+	// satırı bugünkü gibi.
+	promoted, perr := e.store.PromotedAnomalySources(ctx, candidates)
+	if perr != nil {
+		log.Printf("[problem-explainer] promoted anomaly sources (bugünkü kanıt satırı): %v", perr)
+		promoted = nil
+	}
 	filled := 0
 	for _, p := range candidates {
 		var hyp *chstore.RootCauseHypothesis
@@ -170,6 +178,7 @@ func (e *ProblemExplainer) run(ctx context.Context) {
 			hyp = &hh
 		}
 		bundle := buildEvidenceBundle(p, inputs)
+		bundle.DeployPredates = problemExplainerDeployPredates(p, bundle.Deploy, promoted, hyp) // v0.10.1054
 		// v0.9.516 — derin kanıt ARTIK TOPLANMIYOR burada; synthesizer
 		// topluyor ve hipotezle birlikte KALICI yazıyor. Explainer onu
 		// okuyor. Böylece tek toplama / tek yazma / iki okuyucu olur ve
@@ -205,6 +214,19 @@ func (e *ProblemExplainer) run(ctx context.Context) {
 	if filled > 0 {
 		log.Printf("[problem-explainer] filled %d summary/ies", filled)
 	}
+}
+
+// problemExplainerDeployPredates — v0.10.1054: arka plan özetinin kanıt
+// paketi deploy'u "ana şüpheli" diye yazmasın mı? Yalnız anomaliden terfi
+// etmiş Problem'de, kaynak olay bu deploy'dan önce de DÜZENLİ görülüyorsa
+// (kök-neden çıpasıyla AYNI promotedDeployRecurrence) VE işçinin hipotezi
+// deploy'u ölçülen gerilemeyle geri ALMADIYSA (hipotez yok ya da RecentDeploy
+// boş). Gerilemede bugünkü "prime suspect" satırı kalır. SAF.
+func problemExplainerDeployPredates(p chstore.Problem, deploy *chstore.RecentDeployEntry, srcs map[string]chstore.AnomalyEvent, hyp *chstore.RootCauseHypothesis) bool {
+	if promotedDeployRecurrence(p, deploy, srcs) == nil {
+		return false
+	}
+	return hyp == nil || hyp.RecentDeploy == nil
 }
 
 // explain runs one Problem's prompt through the Copilot with surface

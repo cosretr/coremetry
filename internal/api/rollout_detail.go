@@ -187,14 +187,12 @@ func (s *Server) buildRolloutDetail(ctx context.Context, row chstore.RolloutRow,
 	}
 	// Önce DARALT sonra zenginleştir: enrich CH işi problem sayısıyla orantılı
 	// (filonun tamamını zenginleştirip atmak israftı — inceleme).
-	all := filterOpenProblemsSince(snapshot.All(), sinceNs)
-	mine := make([]chstore.Problem, 0, 8)
-	for _, p := range all {
-		if inSet[p.Service] {
-			mine = append(mine, p)
-		}
-	}
-	probs := s.enrichProblemsForRead(ctx, mine)
+	// v0.10.1054 — deploy raporuyla AYNI seçim (problemsSinceDeploy): satır
+	// gizlenmez; kaynak olayı rollout'tan önce de düzenli görülen terfi
+	// Problem'i "yinelenen" işaretli (PredatesDeploy).
+	probs := problemsSinceDeploy(snapshot.All(), sinceNs, func(svc string) bool { return inSet[svc] }, func(ps []chstore.Problem) []chstore.Problem {
+		return s.enrichProblemsForRead(ctx, ps)
+	})
 	probsBySvc := map[string][]chstore.Problem{}
 	for _, p := range probs {
 		probsBySvc[p.Service] = append(probsBySvc[p.Service], p)

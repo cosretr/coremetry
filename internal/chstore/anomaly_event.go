@@ -58,6 +58,14 @@ type AnomalyEvent struct {
 	// the "did this break because of a deploy?" question into
 	// a single glance.
 	RecentDeploy *RecentDeploy `json:"recentDeploy,omitempty"`
+	// PriorDeploy — v0.10.1054, SAKLANMAZ: yinelenen kuralı (AnomalyPredatesDeploy)
+	// pencere içindeki bir deploy'u "olası neden" saymadığında o deploy
+	// ATILMAZ, burada nötr kalır (RecentDeploy ile aynı şekil). RecentDeploy
+	// anlamını korur (olası neden); ekran bunu "deploy <sürüm> N dk önce —
+	// öncesinde de görülüyordu" diye renksiz yazar. Kök-neden işçisi ölçülen
+	// gerilemeyle adayı geri aldıysa RestoreMeasuredDeploy onu yeniden
+	// RecentDeploy yapar ve bu alan boşalır.
+	PriorDeploy *RecentDeploy `json:"priorDeploy,omitempty"`
 	// v0.10.181 — operatör kararı (anomaly_verdicts, okuma zamanı eklenir):
 	// 'anomaly' | 'not_anomaly'; yoksa boş. Susturmadan bağımsız.
 	Verdict   string `json:"verdict,omitempty"`

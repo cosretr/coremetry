@@ -166,8 +166,12 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 			Correlations: []chstore.ChangedService{},
 		}
 		// Recent deploy — reuse the same enrichment the /problems list uses.
+		// v0.10.1054 — kuralın bastırdığı deploy (prior) wg.Wait'ten sonra
+		// hipotezle birlikte değerlendirilir (RestoreMeasuredDeploy).
+		var prior *chstore.RecentDeploy
 		if enr := s.store.EnrichProblemsWithDeploys(ctx, []chstore.Problem{*p}, 30*time.Minute); len(enr) == 1 {
 			out.RecentDeploy = enr[0].RecentDeploy
+			prior = enr[0].PriorDeploy
 		}
 
 		var wg sync.WaitGroup
@@ -232,6 +236,10 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		wg.Wait()
+		// v0.10.1054 — kural deploy'u bastırdıysa ve kök-neden işçisi ölçülen
+		// gerilemeyle adayı geri aldıysa (hipotezin RecentDeploy'u dolu) o
+		// deploy yeniden "olası neden". Bastırma yoksa çıktı bayt bayt aynı.
+		out.RecentDeploy, _ = chstore.RestoreMeasuredDeploy(out.RecentDeploy, prior, out.Hypothesis)
 		return out, nil
 	})
 }
@@ -300,8 +308,11 @@ func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 			Pattern:     ev.Pattern,
 		}
 		// Recent deploy — reuse the SAME enrichment the /anomalies list uses.
+		// v0.10.1054 — bastırılan deploy (prior) wg.Wait'ten sonra hipotezle.
+		var prior *chstore.RecentDeploy
 		if enr := s.store.EnrichAnomaliesWithDeploys(ctx, []chstore.AnomalyEvent{*ev}, 30*time.Minute); len(enr) == 1 {
 			out.RecentDeploy = enr[0].RecentDeploy
+			prior = enr[0].PriorDeploy
 		}
 
 		var wg sync.WaitGroup
@@ -372,6 +383,9 @@ func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		wg.Wait()
+		// v0.10.1054 — problem ucuyla AYNI kural (v0.10.1049'dan kalan boşluk):
+		// ölçülen gerilemede bastırılan deploy yeniden "olası neden".
+		out.RecentDeploy, _ = chstore.RestoreMeasuredDeploy(out.RecentDeploy, prior, out.Hypothesis)
 		return out, nil
 	})
 }

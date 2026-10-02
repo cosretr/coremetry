@@ -260,7 +260,32 @@ type Problem struct {
 	// problem row. Populated at READ time from spans (NOT
 	// stored on the problems table) — the deploy might be
 	// confirmed retroactively after the row was written.
+	//
+	// v0.10.1054 — anomaliden terfi etmiş Problem'de (anomaly-auto:) seçim
+	// anomali çipiyle AYNI kurala uyar (pickProblemDeploy →
+	// AnomalyPredatesDeploy): kaynak olay o deploy'dan önce de DÜZENLİ
+	// görülüyorsa deploy iliştirilmez.
 	RecentDeploy *RecentDeploy `json:"recentDeploy,omitempty"`
+	// PriorDeploy — v0.10.1054, SAKLANMAZ: AnomalyEvent.PriorDeploy'un ikizi.
+	// Kural deploy'u "olası neden" saymadığında o deploy atılmaz, burada nötr
+	// kalır; yalnız terfi Problem'inde dolabilir. Ölçülen gerilemede
+	// RestoreMeasuredDeploy onu yeniden RecentDeploy yapar.
+	PriorDeploy *RecentDeploy `json:"priorDeploy,omitempty"`
+	// EpisodeCount / FirstStartedAt — v0.10.1054, SAKLANMAZ. Yalnız
+	// anomaliden terfi etmiş Problem'de ve kaynak olay HÂLÂ bu Problem'in
+	// bölümündeyken (olayın started_at'i = Problem'in StartedAt'i): olayın
+	// bölüm sayacı (yalnız > 1) ve ilk bölümün başlangıcı, AnomalyEvent ile
+	// aynı anlam. EnrichProblemsWithDeploys tek toplu okumayla iliştirir
+	// (attachPromotedEpisodes); deploy seçimi ve ekranın "yinelenen" işareti
+	// buradan okur. Diğer her Problem'de boş — tel bugünkü gibi.
+	EpisodeCount   uint32 `json:"episodeCount,omitempty"`
+	FirstStartedAt int64  `json:"firstStartedAt,omitempty"`
+	// PredatesDeploy — v0.10.1054, SAKLANMAZ: AnomalyEvent.PredatesDeploy'un
+	// ikizi. Yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
+	// problemler" satırında, o deploy'a göre AnomalyPredatesDeploy true ise
+	// dolar (api problemsSinceDeploy). Satır listeden düşmez; ekran onu
+	// "yinelenen" diye işaretler.
+	PredatesDeploy bool `json:"predatesDeploy,omitempty"`
 	// Priority (v0.5.210) — computed at read time from severity +
 	// breach magnitude + deploy proximity. Three buckets:
 	//   • P1 — handle now (critical + significant overshoot

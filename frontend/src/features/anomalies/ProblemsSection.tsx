@@ -51,6 +51,8 @@ import { PageShell } from '@/components/ui/PageShell';
 // RootCauseRibbon ile BİRLEŞİK (iki ayrı kanıt yüzeyi değil).
 import { useInsightRow, InsightRowChip, InsightRowSlot } from '@/components/ai/insightRow';
 import { SubjectLink } from '../../components/SubjectLink';
+import { RecurringMarker } from './RecurringMarker'; // v0.10.1054 — terfi Problem'i "yinelenen"
+import { promotedRecurrence } from './detailSummary'; // v0.10.1054
 
 // Problems-specific severity + priority ordering.
 const SEV_RANK: Record<string, number> = { critical: 3, warning: 2, info: 1 };
@@ -689,6 +691,13 @@ export function ProblemsSection({ serviceFilter, navDisabled = false }: {
                         <span className="badge b-gray" style={{ marginRight: 6 }}>ANOMALY</span>
                       )}
                       <Link to={href} replace className="row-link row-link--inline" onClick={e => e.stopPropagation()}>{p.ruleName}</Link>
+                      {/* v0.10.1054 — anomaliden terfi etmiş Problem: kaynak olay
+                          yineleniyorsa anomali satırıyla aynı nötr işaret
+                          (sunucu yalnız terfi Problem'ine iliştirir; diğer
+                          satırlarda hiçbir şey çizilmez). */}
+                      {promotedRecurrence(p) && (
+                        <>{' '}<RecurringMarker episodeCount={p.episodeCount} firstStartedAt={p.firstStartedAt} priorDeploy={p.priorDeploy} /></>
+                      )}
                       {p.runbookUrl && (
                         <a href={p.runbookUrl} target="_blank" rel="noopener"
                           onClick={e => e.stopPropagation()}

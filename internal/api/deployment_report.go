@@ -48,6 +48,43 @@ func filterOpenProblemsSince(all []*chstore.Problem, sinceNs int64) []chstore.Pr
 	return out
 }
 
+// problemsSinceDeploy — "deploy sonrası problemler" listesinin TEK seçimi:
+// deploy raporu (buildDeploymentReport) ve rollout çekmecesi
+// (buildRolloutDetail) aynı işlevden okur. Seçim bugünküyle birebir aynı
+// (filterOpenProblemsSince — `StartedAt >= since` dahil etme kapısı), keep
+// (nil = herkes) zenginleştirmeden ÖNCE daraltır (rollout çekmecesinin
+// "önce daralt sonra zenginleştir" kuralı), enrich okuma zinciridir
+// (s.enrichProblemsForRead — terfi Problem'ine kaynak olayın bölüm alanlarını
+// da o iliştirir, tek toplu okuma).
+//
+// v0.10.1054 — operatör: "Anomaliden terfi eden problem de 'yinelenen'
+// kuralına uysun; bugün deploy'a hâlâ eski kurala göre bağlanıyor." Anomali
+// listesiyle (anomaliesSinceDeploy) AYNI tavır: HİÇBİR satır gizlenmez;
+// kaynak olayı bu deploy'dan önce de DÜZENLİ görülen terfi Problem'i
+// (chstore.AnomalyPredatesDeploy, iliştirilmiş EpisodeCount / FirstStartedAt
+// ile) listede KALIR, servisini nitelemeye devam eder ve PredatesDeploy=true
+// taşır — ekran onu "yinelenen" diye işaretler. Bölüm alanı iliştirilmemiş her
+// Problem (kural, exception, `anomaly:` dedektörü, kaynağı okunamayan terfi)
+// işaretsiz: bugünkü gibi.
+func problemsSinceDeploy(all []*chstore.Problem, sinceNs int64, keep func(service string) bool, enrich func([]chstore.Problem) []chstore.Problem) []chstore.Problem {
+	sel := filterOpenProblemsSince(all, sinceNs)
+	if keep != nil {
+		mine := make([]chstore.Problem, 0, len(sel))
+		for _, p := range sel {
+			if keep(p.Service) {
+				mine = append(mine, p)
+			}
+		}
+		sel = mine
+	}
+	sel = enrich(sel)
+	for i := range sel {
+		p := &sel[i]
+		p.PredatesDeploy = p.EpisodeCount > 0 && chstore.AnomalyPredatesDeploy(p.FirstStartedAt, p.StartedAt, p.EpisodeCount, sinceNs)
+	}
+	return sel
+}
+
 // anomaliesSinceDeploy — "deploy sonrası anomaliler" listesinin TEK seçimi:
 // deploy raporu (buildDeploymentReport) ve rollout çekmecesi
 // (buildRolloutDetail) aynı işlevden okur. SAF. Aktif, keep(servis) ve bu
@@ -197,14 +234,17 @@ func (s *Server) buildDeploymentReport(ctx context.Context, sinceNs int64, owner
 	if err != nil {
 		return nil, err
 	}
-	qualifying := filterOpenProblemsSince(snapshot.All(), sinceNs)
 	// ⚠ v0.10.79 uyarlaması: yalın EnrichProblemsWithPriority yerine
 	// tam zincir. PR yazıldığında zincir yoktu (v0.9.553 sonrası kural:
 	// önce deploy, sonra öncelik — sıra zorunlu); yalın çağrı deploy
 	// bilgisiz öncelik basar ve TestNoBarePriorityEnrich bunu yakaladı.
 	// Bir deploy RAPORUNDA problemlerin deploy zenginleştirmesini
 	// atlamak ayrıca içerik olarak da ironikti.
-	qualifying = s.enrichProblemsForRead(ctx, qualifying)
+	// v0.10.1054 — seçim + zincir + "yinelenen" işareti problemsSinceDeploy'da
+	// (rollout çekmecesiyle ortak; hiçbir satır gizlenmez).
+	qualifying := problemsSinceDeploy(snapshot.All(), sinceNs, nil, func(ps []chstore.Problem) []chstore.Problem {
+		return s.enrichProblemsForRead(ctx, ps)
+	})
 
 	bySvc := map[string][]chstore.Problem{}
 	svcOrder := []string{} // nil DEĞİL — bkz. intersectServices çağrısındaki not

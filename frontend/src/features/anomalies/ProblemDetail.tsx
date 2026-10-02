@@ -49,7 +49,7 @@ import { traceHref } from '@/lib/traceHref';
 import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
-import { alertProblemSummary, detailWhenLine } from './detailSummary'; // v0.10.1032
+import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -919,11 +919,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           şey tek cümlelik özet + "ne zaman" satırı (./detailSummary, tablo
           testli); hemen altında Triyaj. Hiçbir bölüm silinmedi: ikincil
           olanlar (zaman çizelgesi, bildirim, runbook, açıklama) kapalı gelir. */}
+      {/* v0.10.1054 — terfi Problem'i yineleniyorsa "ne zaman" satırına
+          anomaliyle aynı tek ek (problemWhenLine); diğer her Problem'de metin
+          bayt bayt aynı. Yeni bölüm yok. */}
       <DetailSummary sentence={alertProblemSummary(problem)}
-        when={detailWhenLine({
-          startedAt: problem.startedAt, durationNs: endNs - problem.startedAt,
-          ongoing: problem.status !== 'resolved', endedAt: problem.resolvedAt,
-        })} />
+        when={problemWhenLine(problem, endNs)} />
       <ProblemTriage problem={problem} isAdmin={isAdmin} onBack={onBack} onChanged={onChanged} />
 
       {/* v0.10.562 — deterministik insight şeridi (şüpheli · ilk anomali ·
@@ -1023,6 +1023,17 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   <b>Deploy</b> <code className="mono">{problem.recentDeploy.version}</code>
                   <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>
                     {fmtStartedTs(problem.startedAt - problem.recentDeploy.ageSeconds * 1e9)}
+                  </span>
+                </li>
+              )}
+              {/* v0.10.1054 — "hiçbir şey kaybolmaz": yinelenen kuralı deploy'u
+                  "olası neden" saymadıysa satır KALIR, nötr (warn değil, gri
+                  nokta); neden "olası neden" olmadığı ipucunda. */}
+              {!problem.recentDeploy && problem.priorDeploy && (
+                <li data-prior-deploy title="Yinelenen anomali: deploy'dan önce de görülüyordu — olası neden sayılmadı">
+                  <b>Deploy</b> <code className="mono">{problem.priorDeploy.version}</code>
+                  <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>
+                    {fmtStartedTs(problem.startedAt - problem.priorDeploy.ageSeconds * 1e9)}
                   </span>
                 </li>
               )}

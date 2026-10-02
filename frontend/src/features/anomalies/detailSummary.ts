@@ -8,7 +8,7 @@
 // ekranda asla "NaN", "0 katına" ya da boş parantez basılmaz (tablo testi:
 // detailSummary.test.ts, her tür + her eksik-alan düşüşü + yukarı/aşağı yön).
 
-import type { AnomalyEvent, BehaviorChangeDetails, Problem } from '@/lib/types';
+import type { AnomalyEvent, BehaviorChangeDetails, PriorDeploy, Problem } from '@/lib/types';
 import { fmtFixed, fmtNum, tsMinute } from '@/lib/utils';
 import { subjectLabel } from '@/lib/problemSubject';
 import { fmtDurationNs } from './problemTime';
@@ -204,30 +204,93 @@ export function anomalyRecurrence(e: { episodeCount?: number; firstStartedAt?: n
   return { count: Math.floor(n), firstNs: first };
 }
 
+/** v0.10.1054 — "hiçbir şey kaybolmaz": kuralın "olası neden" saymadığı deploy
+ *  (priorDeploy) nötr metin olarak: "deploy <sürüm> <N> dk önce". Sürüm ya da
+ *  yaş taşımayan (bozuk) girdi → boş dize (hiçbir şey basılmaz). */
+export function priorDeployText(d: PriorDeploy | null | undefined): string {
+  if (!d || typeof d.version !== 'string' || d.version.trim() === '' || !finite(d.ageSeconds)) return '';
+  return `deploy ${d.version} ${Math.max(1, Math.round(d.ageSeconds / 60))} dk önce`;
+}
+
 /** "yinelenen · bu N. kez · ilk kez <tarih>"; ilk görülme bilinmiyorsa son
- *  parça düşer; yinelenmemişse boş dize. */
-export function recurrenceClause(r: AnomalyRecurrence | null, fmtTs: (ns: number) => string = tsMinute): string {
+ *  parça düşer; yinelenmemişse boş dize. v0.10.1054 — priorDeploy varsa tek ek:
+ *  " · deploy <sürüm> <N> dk önce (öncesinde de görülüyordu)"; yoksa metin
+ *  bayt bayt aynı. */
+export function recurrenceClause(
+  r: AnomalyRecurrence | null,
+  fmtTs: (ns: number) => string = tsMinute,
+  prior?: PriorDeploy | null,
+): string {
   if (!r) return '';
   const parts = ['yinelenen', `bu ${r.count}. kez`];
   if (r.firstNs !== null) parts.push(`ilk kez ${fmtTs(r.firstNs)}`);
+  const dep = priorDeployText(prior);
+  if (dep) parts.push(`${dep} (öncesinde de görülüyordu)`);
   return parts.join(' · ');
 }
 
 /** Satır işaretinin ipucu: sayı + ilk tarih + sayacın sınırı (kayıt son
- *  tetiklenmeden 30 gün sonra düşer). */
-export function recurrenceTitle(r: AnomalyRecurrence | null, fmtTs: (ns: number) => string = tsMinute): string {
+ *  tetiklenmeden 30 gün sonra düşer). v0.10.1054 — priorDeploy varsa yeni
+ *  satırda "deploy <sürüm> <N> dk önce — öncesinde de görülüyordu". */
+export function recurrenceTitle(
+  r: AnomalyRecurrence | null,
+  fmtTs: (ns: number) => string = tsMinute,
+  prior?: PriorDeploy | null,
+): string {
   if (!r) return '';
   const first = r.firstNs !== null ? `, ilk kez ${fmtTs(r.firstNs)}` : '';
-  return `Yinelenen anomali: bu ${r.count}. kez${first}. Sayaç kaydın ömrüyle sınırlı (son tetiklenmeden 30 gün sonra kayıt düşer).`;
+  const base = `Yinelenen anomali: bu ${r.count}. kez${first}. Sayaç kaydın ömrüyle sınırlı (son tetiklenmeden 30 gün sonra kayıt düşer).`;
+  const dep = priorDeployText(prior);
+  return dep ? `${base}\n${dep} — öncesinde de görülüyordu` : base;
+}
+
+// ── Anomaliden terfi eden Problem (v0.10.1054) ───────────────────────────
+//
+// Operatör: "Anomaliden terfi eden problem de 'yinelenen' kuralına uysun; bugün
+// deploy'a hâlâ eski kurala göre bağlanıyor." Sunucu terfi Problem'ine kaynak
+// olayın bölüm sayacını ve ilk görülmesini iliştirir (yalnız olay hâlâ bu
+// Problem'in bölümündeyken); satır ve detay sayfası anomali tarafıyla AYNI işaret
+// ve AYNI ek. Yeni bölüm yok.
+
+/** Terfi Problem'i kural öneki (chstore.PromotedAnomalyRulePrefix). */
+export const PROMOTED_ANOMALY_RULE_PREFIX = 'anomaly-auto:';
+
+/** Terfi Problem'inin yinelenme bilgisi; diğer her Problem null — alan gelse
+ *  bile (kural, exception, `anomaly:` dedektörü). */
+export function promotedRecurrence(
+  p: Pick<Problem, 'ruleId' | 'episodeCount' | 'firstStartedAt'>,
+): AnomalyRecurrence | null {
+  if (!(p.ruleId ?? '').startsWith(PROMOTED_ANOMALY_RULE_PREFIX)) return null;
+  return anomalyRecurrence(p);
+}
+
+// problemWhenLine — alarm detay sayfasının "ne zaman" satırı: detailWhenLine
+// (bitiş = resolvedAt; açıkken sürüyor) + terfi Problem'i yineleniyorsa
+// anomaliyle aynı TEK ek (" · yinelenen · bu N. kez · ilk kez <tarih>"). Diğer
+// her Problem'de çıktı detailWhenLine'ınkiyle BAYT BAYT aynı (tablo testli).
+export function problemWhenLine(
+  p: Pick<Problem, 'ruleId' | 'startedAt' | 'status' | 'resolvedAt' | 'episodeCount' | 'firstStartedAt' | 'priorDeploy'>,
+  endNs: number,
+  fmtTs: (ns: number) => string = tsMinute,
+  fmtClock: (ns: number) => string = clockMinute,
+): string {
+  const base = detailWhenLine({
+    startedAt: p.startedAt, durationNs: endNs - p.startedAt,
+    ongoing: p.status !== 'resolved', endedAt: p.resolvedAt,
+  }, fmtTs, fmtClock);
+  const clause = recurrenceClause(promotedRecurrence(p), fmtTs, p.priorDeploy);
+  return clause ? `${base} · ${clause}` : base;
 }
 
 // anomalyWhenLine — anomali detay sayfasının "ne zaman" satırı:
 // detailWhenLine (bitmiş olayda bitiş = son gözlem; durum last_seen
 // tazeliğinden, chstore GetAnomalyEvent) + yinelenen olayda TEK ek
 // (" · yinelenen · bu N. kez · ilk kez <tarih>"). Sayaç ≤ 1 / yoksa çıktı
-// detailWhenLine'ınkiyle BAYT BAYT aynı (tablo testli).
+// detailWhenLine'ınkiyle BAYT BAYT aynı (tablo testli). v0.10.1054 — kuralın
+// bastırdığı deploy (priorDeploy) ekin sonunda nötr: " · deploy <sürüm> <N> dk
+// önce (öncesinde de görülüyordu)".
 export function anomalyWhenLine(
-  e: Pick<AnomalyEvent, 'startedAt' | 'lastSeen' | 'status' | 'episodeCount' | 'firstStartedAt'>,
+  e: Pick<AnomalyEvent, 'startedAt' | 'lastSeen' | 'status' | 'episodeCount' | 'firstStartedAt' | 'priorDeploy'>,
   fmtTs: (ns: number) => string = tsMinute,
   fmtClock: (ns: number) => string = clockMinute,
 ): string {
@@ -236,6 +299,6 @@ export function anomalyWhenLine(
     startedAt: e.startedAt, durationNs: anomalyDurationNs(e), ongoing,
     endedAt: ongoing ? undefined : e.lastSeen,
   }, fmtTs, fmtClock);
-  const clause = recurrenceClause(anomalyRecurrence(e), fmtTs);
+  const clause = recurrenceClause(anomalyRecurrence(e), fmtTs, e.priorDeploy);
   return clause ? `${base} · ${clause}` : base;
 }

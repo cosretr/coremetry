@@ -34,6 +34,7 @@ import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
 // gibi modül yolundan (barrel AnomaliesPage'i bu parçaya sürüklerdi).
 import { AnomalyEventHost } from '@/features/anomalies/AnomalyEventDetail';
 import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10.1049
+import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { useAuth } from '@/components/AuthProvider';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { InboxItem, InboxKind } from '@/lib/types';
@@ -1193,6 +1194,12 @@ export default function InboxPage() {
                           ilk görülme ipucunda (yinelenmemişte hiçbir şey). */}
                       {it.anomaly && (
                         <RecurringMarker episodeCount={it.anomaly.episodeCount} firstStartedAt={it.anomaly.firstStartedAt} />
+                      )}
+                      {/* v0.10.1054 — anomaliden terfi etmiş Problem satırı da aynı
+                          işareti taşır (sunucu yalnız terfi Problem'ine kaynak
+                          olayın sayacını iliştirir; diğer satırlarda hiçbir şey). */}
+                      {it.problem && promotedRecurrence(it.problem) && (
+                        <RecurringMarker episodeCount={it.problem.episodeCount} firstStartedAt={it.problem.firstStartedAt} priorDeploy={it.priorDeploy} />
                       )}
                       {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama
                           hiç çizilmiyordu: "all" pivotunda çözülmüş bir satır

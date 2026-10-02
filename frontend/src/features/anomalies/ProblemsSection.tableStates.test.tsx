@@ -177,3 +177,29 @@ describe('Alert rules — durumlar tablonun içinde (v0.10.967)', () => {
     expect(selectAll(el)?.disabled).toBe(false);
   });
 });
+
+// v0.10.1054 — operatör: "Anomaliden terfi eden problem de 'yinelenen' kuralına
+// uysun; bugün deploy'a hâlâ eski kurala göre bağlanıyor." Terfi Problem'i
+// satırı anomali satırıyla aynı nötr "yinelenen" işaretini taşır (kural
+// tutunca sunucu deploy çipini zaten göndermez); diğer satırlar bugünkü gibi.
+describe('Alert rules — terfi Problem\'i "yinelenen" (v0.10.1054)', () => {
+  const rowOf = (el: HTMLElement, name: string) =>
+    [...el.querySelectorAll<HTMLTableRowElement>('tbody tr')].find(tr => tr.textContent?.includes(name))!;
+  it('yinelenen terfi satırı işaretli; tek bölümlü terfi ve alarm kuralı (alan gelse bile) işaretsiz', async () => {
+    m.items = [
+      { ...prob('a1'), ruleId: 'anomaly-auto:0123456789abcdef', ruleName: 'Anomaly · nightly-job', episodeCount: 3, firstStartedAt: 1_699_800_000e9,
+        priorDeploy: { version: 'v2.0.0', timeUnixNs: 1, ageSeconds: 600 } },
+      { ...prob('a2'), ruleId: 'anomaly-auto:1123456789abcdef', ruleName: 'Anomaly · fresh-op', episodeCount: 1 },
+      { ...prob('r1'), ruleName: 'rule with stray fields', episodeCount: 3, firstStartedAt: 1 },
+    ];
+    const el = await mount('/inbox?prio=P1,P2,P3');
+    const mark = rowOf(el, 'nightly-job').querySelector('[data-recurring]') as HTMLElement | null;
+    expect(mark?.textContent).toBe('yinelenen');
+    expect(mark?.getAttribute('data-recurring')).toBe('3');
+    expect(mark?.className).toBe('badge b-gray');
+    // Kuralın bastırdığı deploy atılmaz: ipucunda nötr (v0.10.1054).
+    expect(mark?.title).toMatch(/\ndeploy v2\.0\.0 10 dk önce — öncesinde de görülüyordu$/);
+    expect(rowOf(el, 'fresh-op').querySelector('[data-recurring]')).toBeNull();
+    expect(rowOf(el, 'rule with stray fields').querySelector('[data-recurring]')).toBeNull();
+  });
+});

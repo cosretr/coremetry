@@ -485,12 +485,39 @@ func (s *Store) EnrichProblemsWithRootCause(ctx context.Context, problems []Prob
 	if err != nil || len(hyps) == 0 {
 		return problems
 	}
+	attachProblemRootCause(problems, hyps)
+	return problems
+}
+
+// attachProblemRootCause — EnrichProblemsWithRootCause'un SAF yarısı: özet +
+// v0.10.1054 ölçülen-gerileme geri alımı (RestoreMeasuredDeploy) — aynı toplu
+// okumadan, ek sorgu yok. Hipotezi olmayan satıra dokunulmaz.
+func attachProblemRootCause(problems []Problem, hyps map[string]RootCauseHypothesis) {
 	for i := range problems {
 		if h, ok := hyps[problems[i].ID]; ok {
 			problems[i].RootCause = summaryOf(h)
+			problems[i].RecentDeploy, problems[i].PriorDeploy = RestoreMeasuredDeploy(problems[i].RecentDeploy, problems[i].PriorDeploy, &h)
 		}
 	}
-	return problems
+}
+
+// RestoreMeasuredDeploy — v0.10.1054: yinelenen kuralının bastırdığı deploy
+// (prior) kök-neden işçisi tarafından ÖLÇÜLEN gerilemeyle geri alındıysa
+// (hipotezin RecentDeploy'u dolu — Synthesize indirgenmiş adayda onu boş
+// bırakır, gerilemede ölçülmüş etkisiyle doldurur) o deploy yeniden "olası
+// neden" olur: dönüş (hipotezin deploy'u, nil). SAF. Çağıranlar: problem ve
+// anomali kök-neden özeti (Enrich*WithRootCause, aynı toplu okuma) ve
+// /rootcause uçları (rootcause.go, paralel okumalardan sonra).
+//
+// Yalnız prior DOLUYKEN (kural o satırda gerçekten bir deploy bastırdı): diğer
+// her satırda (kural / exception / tek bölümlü / bastırılmamış) ikili AYNEN
+// döner — çıktı bayt bayt bugünkü. Zaten bir recent varsa da dokunulmaz.
+func RestoreMeasuredDeploy(recent, prior *RecentDeploy, hyp *RootCauseHypothesis) (*RecentDeploy, *RecentDeploy) {
+	if recent != nil || prior == nil || hyp == nil || hyp.RecentDeploy == nil {
+		return recent, prior
+	}
+	d := *hyp.RecentDeploy
+	return &d, nil
 }
 
 // EnrichAnomaliesWithRootCause is the anomaly-anchored sibling — same single
@@ -508,10 +535,17 @@ func (s *Store) EnrichAnomaliesWithRootCause(ctx context.Context, events []Anoma
 	if err != nil || len(hyps) == 0 {
 		return events
 	}
+	attachAnomalyRootCause(events, hyps)
+	return events
+}
+
+// attachAnomalyRootCause — EnrichAnomaliesWithRootCause'un SAF yarısı (problem
+// ikiziyle aynı: özet + RestoreMeasuredDeploy, v0.10.1054).
+func attachAnomalyRootCause(events []AnomalyEvent, hyps map[string]RootCauseHypothesis) {
 	for i := range events {
 		if h, ok := hyps[events[i].ID]; ok {
 			events[i].RootCause = summaryOf(h)
+			events[i].RecentDeploy, events[i].PriorDeploy = RestoreMeasuredDeploy(events[i].RecentDeploy, events[i].PriorDeploy, &h)
 		}
 	}
-	return events
 }

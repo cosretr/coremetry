@@ -84,6 +84,10 @@ type InboxItem struct {
 	// deploy correlation paths and are not enriched on this route.
 	RunbookURL   string                `json:"runbookUrl,omitempty"`
 	RecentDeploy *chstore.RecentDeploy `json:"recentDeploy,omitempty"`
+	// PriorDeploy (v0.10.1054) — chstore.Problem.PriorDeploy: yinelenen kuralının
+	// "olası neden" saymadığı deploy, atılmadan nötr; satır işaretinin
+	// ipucuna "deploy <sürüm> N dk önce — öncesinde de görülüyordu" diye girer.
+	PriorDeploy *chstore.RecentDeploy `json:"priorDeploy,omitempty"`
 	// AISummary (v0.9.530) — AYNI hata sınıfının ikinci nüshası. Hem
 	// Problem.AISummary (problem.go:789 SELECT'inde) hem
 	// ExceptionGroup.AISummary (exception_inbox.go SELECT'inde) bu
@@ -125,6 +129,12 @@ type InboxProblemRef struct {
 	Metric    string  `json:"metric"`
 	Value     float64 `json:"value"`
 	Threshold float64 `json:"threshold"`
+	// v0.10.1054 — anomaliden terfi etmiş Problem'in kaynak olayının bölüm
+	// sayacı / ilk görülmesi (chstore.Problem.EpisodeCount / FirstStartedAt;
+	// okuma zinciri iliştirir, ek okuma yok). Satır anomali satırıyla aynı
+	// "yinelenen" işaretini çizer. Diğer her Problem'de boş (omitempty).
+	EpisodeCount   uint32 `json:"episodeCount,omitempty"`
+	FirstStartedAt int64  `json:"firstStartedAt,omitempty"`
 }
 
 type InboxExceptionRef struct {
@@ -1907,12 +1917,14 @@ func problemToInbox(p chstore.Problem) InboxItem {
 		// enrichment chain in listInbox and then discarded here.
 		RunbookURL:   p.RunbookURL,
 		RecentDeploy: p.RecentDeploy,
+		PriorDeploy:  p.PriorDeploy, // v0.10.1054 — nötr, bastırılan deploy
 		// v0.9.530 — aynı sınıf: ListProblems bunu zaten SELECT ediyordu.
 		AISummary:   inboxTruncate(p.AISummary, inboxAISummaryMax),
 		AISummaryAt: p.AISummaryAt,
 		Problem: &InboxProblemRef{
 			ID: p.ID, RuleID: p.RuleID, Metric: p.Metric,
 			Value: p.Value, Threshold: p.Threshold,
+			EpisodeCount: p.EpisodeCount, FirstStartedAt: p.FirstStartedAt, // v0.10.1054
 		},
 	}
 }

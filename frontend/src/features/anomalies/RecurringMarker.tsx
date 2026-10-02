@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui';
+import type { PriorDeploy } from '@/lib/types';
 import { anomalyRecurrence, recurrenceTitle } from './detailSummary';
 
 // RecurringMarker — v0.10.1049, yinelenen anomali ayrımı.
@@ -10,15 +11,19 @@ import { anomalyRecurrence, recurrenceTitle } from './detailSummary';
 // sapan değerde, durum paleti kuralı). Sayı ve ilk görülme tarihi ipucunda.
 // Yinelenmemiş (sayaç yok / ≤ 1) satırda HİÇBİR ŞEY çizilmez (sarmalayıcı da).
 // `line`: tarih hücresinde damganın altına, yaş satırıyla aynı kalıpta.
-export function RecurringMarker({ episodeCount, firstStartedAt, line = false }: {
+// v0.10.1054 — `priorDeploy`: kuralın "olası neden" saymadığı deploy atılmaz;
+// ipucunun yeni satırında "deploy <sürüm> N dk önce — öncesinde de
+// görülüyordu" (renk yok, rozet aynı).
+export function RecurringMarker({ episodeCount, firstStartedAt, priorDeploy, line = false }: {
   episodeCount?: number;
   firstStartedAt?: number;
+  priorDeploy?: PriorDeploy;
   line?: boolean;
 }) {
   const r = anomalyRecurrence({ episodeCount, firstStartedAt });
   if (!r) return null;
   const badge = (
-    <Badge tone="neutral" style={{ fontSize: 9 }} title={recurrenceTitle(r)} data-recurring={r.count}>
+    <Badge tone="neutral" style={{ fontSize: 9 }} title={recurrenceTitle(r, undefined, priorDeploy)} data-recurring={r.count}>
       yinelenen
     </Badge>
   );
