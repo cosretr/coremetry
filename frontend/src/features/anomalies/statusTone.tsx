@@ -14,10 +14,19 @@
 // kullanan her sayfa parçasına o zinciri geri getirir.
 //
 // Operatör kararı K5: normal/sağlıklı durum NÖTR, yeşil yalnız bir GEÇİŞ için.
-//   open / active / acknowledged / ignored / muted → nötr (b-gray)
+//   open / active / acknowledged / ignored / muted / new → nötr (b-gray)
 //   resolved              → b-ok  (geçiş: düzeldi)
-//   regressed / new       → b-warn (dikkat, alarm değil)
+//   regressed             → b-warn (dikkat, alarm değil)
 // Aciliyetin rengi ÖNCELİK rozetinde (P1 kırmızı); durum onu tekrar etmez.
+//
+// v0.10.1037 (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı,
+// düzelt.") — v0.10.922/929'un "new/regressed amber" satırı değişti: new
+// artık NÖTR. NEW, triaj görmemiş her grubun normal, varsayılan durumu —
+// alarm problemlerindeki open gibi (o zaten nötr); K5 kuralıyla normal durum
+// renk taşımaz. Listede neredeyse her satır amber NEW olunca amber bilgi
+// taşımıyordu ve seyrek REGRESSED satırı (çözülmüştü, geri geldi) onunla
+// aynı tonda kayboluyordu. Şimdi amber yalnız regressed'te: sapma o.
+// Rozetin kelimesi ve NEW'in ipucu (StateBadge title) aynen kalıyor.
 // Renk hiçbir yerde tek taşıyıcı değil — rozetin kelimesi aynen kalıyor.
 // Bilinmeyen durum GİZLENMEZ, nötr tonda ham kelimesiyle basılır.
 import type { CSSProperties } from 'react';
@@ -26,8 +35,9 @@ import type { CSSProperties } from 'react';
 // aktarır); içerik statusPalette.pin.test.ts'te kaynaktan çivilenir.
 const STATUS_TONE: Record<string, string> = {
   open: 'b-gray', active: 'b-gray', acknowledged: 'b-gray', ignored: 'b-gray', muted: 'b-gray',
+  new: 'b-gray', // v0.10.1037 — normal durum (open gibi) nötr; amber yalnız regressed
   resolved: 'b-ok',
-  regressed: 'b-warn', new: 'b-warn',
+  regressed: 'b-warn',
 };
 
 /** Durumun rozet sınıfı; bilinmeyen durum nötr (b-gray) düşer. */

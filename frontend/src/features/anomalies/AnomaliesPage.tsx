@@ -927,6 +927,12 @@ function StateBadge({ s }: { s: ExceptionGroupState }) {
   // resolved yeşil (geçiş). Eskiden new kırmızı, acknowledged maviydi —
   // aynı durum detay sayfasında başka tonda basılıyordu.
   //
+  // v0.10.1037 (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı,
+  // düzelt.") — new artık NÖTR (triaj görmemiş grubun normal durumu, open
+  // gibi; K5), amber yalnız regressed'te: neredeyse her satır amber NEW iken
+  // çözülüp geri gelen grup göze çarpmıyordu. Değişiklik sözlükte
+  // (statusTone.tsx STATUS_TONE); kelime ve NEW ipucu aynen.
+  //
   // v0.9.314 (operatör) — untriaged reads NEW again, which is what the
   // column actually stores (exception_groups.state DEFAULT 'new').
   //

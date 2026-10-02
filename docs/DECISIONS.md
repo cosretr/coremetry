@@ -987,6 +987,17 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Durum rozeti: NEW nötr, REGRESSED amber (v0.10.1037)
+
+**Karar (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı, düzelt."):** tek durum → ton sözlüğünde
+(`features/anomalies/statusTone.tsx` `STATUS_TONE`) `new` amber'den nötre (`b-gray`) indi; `regressed` amber
+(`b-warn`), `resolved` yeşil kaldı. **Neden:** NEW triaj görmemiş her grubun normal, varsayılan durumu — alarm
+problemlerindeki OPEN gibi (o zaten nötr); K5 kuralıyla normal durum renk taşımaz. Neredeyse her satır amber
+NEW iken amber bilgi taşımıyordu ve çözülüp geri gelen REGRESSED satırı aynı tonda kayboluyordu; artık tek amber
+durum o. Sözlüğü paylaşan yüzeyler: Exceptions listesi (`StateBadge`), exception detayı, Problems kuyruğu
+(Inbox `StatusBadge`); ayrı eşleme yok. Rozet kelimesi, NEW ipucu ve öncelik rozetleri değişmedi. Bu, v0.10.922 /
+v0.10.929 palet kararlarının "new/regressed amber" satırını değiştirir; `statusPalette.pin` yeni eşlemeyi çiviler.
+
 ## 2026-10-02 — "CoSRE'ye sor" varsayılanı da klasik kanıt toplayıcısına döndü (v0.10.1036; v0.10.948 varsayılanının tersi)
 
 **Karar (operatör: "Aslında CoSRE'nin eski explain trace'teki yapısı daha iyiydi, neden sonradan değişti. Kodu

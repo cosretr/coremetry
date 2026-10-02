@@ -41,12 +41,24 @@ function statusTone(): Record<string, string> {
 }
 
 describe('v0.10.922 — tek durum → ton sözlüğü', () => {
-  it('eşleme: open/ack/ignored/muted nötr, new/regressed amber, resolved yeşil', () => {
+  // v0.10.1037 (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı,
+  // düzelt.") — new nötre indi (normal durum, open gibi; K5), amber yalnız
+  // regressed'te kaldı. Eski "new/regressed amber" eşlemesi bilerek değişti.
+  it('eşleme: open/ack/ignored/muted/new nötr, regressed amber, resolved yeşil', () => {
     expect(statusTone()).toEqual({
       open: 'b-gray', active: 'b-gray', acknowledged: 'b-gray', ignored: 'b-gray', muted: 'b-gray',
+      new: 'b-gray',
       resolved: 'b-ok',
-      regressed: 'b-warn', new: 'b-warn',
+      regressed: 'b-warn',
     });
+  });
+
+  it('v0.10.1037 — NEW ile REGRESSED aynı tonda basılmaz; amber yalnız regressed', () => {
+    const t = statusTone();
+    expect(t.new).toBe('b-gray');
+    expect(t.regressed).toBe('b-warn');
+    expect(t.new).not.toBe(t.regressed);
+    expect(Object.entries(t).filter(([, v]) => v === 'b-warn').map(([k]) => k)).toEqual(['regressed']);
   });
 
   it('bilinmeyen durum nötr düşer (gizlenmez)', () => {

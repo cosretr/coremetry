@@ -1308,6 +1308,9 @@ export default function InboxPage() {
 // acknowledged/ignored nötr, new/regressed amber, resolved yeşil (geçiş).
 // Eskiden "open" burada amber, Problems satırında kırmızıydı; "acknowledged"
 // burada mavi, detayda amberdi. Kelime (ham durum) aynen basılıyor.
+// v0.10.1037 (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı,
+// düzelt.") — sözlükte new nötre indi; amber yalnız regressed. Bu rozet
+// sözlükten okuduğu için burada ayrı eşleme yok.
 function StatusBadge({ s }: { s?: string }) {
   if (!s) return null;
   const k = s.toLowerCase();
