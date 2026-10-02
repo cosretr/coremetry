@@ -137,6 +137,9 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // Uygulama içi açılışta param zaten silinmiş olur (useAiSubject),
   // yani v0.10.60'ın "her açılışta kapalı" kararı bozulmuyor.
   const [includeCode, setIncludeCode] = useState(() => codeCapable && readAiCodeParam());
+  // v0.10.1041 — İLK kartın kod künyesi: yalnız run() yazar, yani yalnız ilk
+  // kartın KENDİ isteği kodlu olduğunda dolar (çip / ?aicode). "Evet"in kod
+  // geçişi buraya YAZMAZ — onun künyesi aşağıdaki codeCtx.
   const [code, setCode] = useState<AICodeContext | null>(null);
   // v0.10.83 — isabet yaşı; null = taze LLM cevabı.
   const [cachedAtMs, setCachedAtMs] = useState<number | null>(null);
@@ -148,6 +151,12 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   const [codeError, setCodeError] = useState<string | null>(null);
   const [codeLinks, setCodeLinks] = useState<IdLink[] | undefined>(undefined);
   const [codeExchangeId, setCodeExchangeId] = useState<string | undefined>(undefined);
+  // v0.10.1041 (operatör: "'Kodu da incele → Evet' sonrası ilk kart da kaynak
+  // satırlarını basıyor; düzeltilsin.") — kod geçişinin künyesi (depo/branş
+  // satırı, dosya + "hata satırı N", bütçe / "Kod okunamadı" notu) KENDİ
+  // state'inde. Eskiden iki geçiş tek `code`u paylaşıyordu ve iki kart da onu
+  // çiziyordu: kodsuz ilk cevap, okumadığı dosyaları kaynak gösteriyordu.
+  const [codeCtx, setCodeCtx] = useState<AICodeContext | null>(null);
   const codeAbortRef = useRef<AbortController | null>(null);
   // v0.10.948 (CoSRE Faz B) — "CoSRE'ye sor" (kind=trace) sunucuda GERÇEK
   // okumalar çalıştırıyor (get_trace → loglar · dönem kıyası · pod/metrik ·
@@ -214,8 +223,9 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
     setCachedAtMs(null);
     setSteps([]); setSources(undefined); // v0.10.948 — önceki koşunun adımları/durumları yeni cevaba ait değil
     // v0.10.153 — yeni ilk geçiş: kod geçişi ve karar sıfırlanır.
+    // v0.10.1041 — kod kartının künyesi (codeCtx) de; ilk kartınki yukarıda (setCode).
     codeAbortRef.current?.abort();
-    setCodeAsk('idle'); setCodeText(null); setCodeBusy(false); setCodeError(null); setCodeLinks(undefined); setCodeExchangeId(undefined);
+    setCodeAsk('idle'); setCodeText(null); setCodeBusy(false); setCodeError(null); setCodeLinks(undefined); setCodeExchangeId(undefined); setCodeCtx(null);
     onAnswer?.(''); // "Yeniden sor" bayat bağlamı taşımasın
     try {
       if (kind === 'runbook') {
@@ -297,7 +307,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
     const ac = new AbortController();
     codeAbortRef.current = ac;
     setCodeAsk('accepted');
-    setCodeBusy(true); setCodeError(null); setCodeText(null); setCode(null);
+    // v0.10.1041 — yalnız KENDİ künyesini sıfırlar; ilk kartın `code`u onun isteğine ait, dokunulmaz.
+    setCodeBusy(true); setCodeError(null); setCodeText(null); setCodeCtx(null);
     // Evet = kutuyu da işaretle (operatör: "Chip de kalsın"): "Yeniden sor"
     // artık tek turda kodlu koşar; URL'e de yazılır (deep link).
     setIncludeCode(true);
@@ -307,7 +318,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
       const finish = (r: { explanation: string; links?: IdLink[]; exchangeId?: string; code?: AICodeContext; evidenceSpanIds?: string[] }) => {
         // kod geçişi listeyi değiştirirse Kanıt sayısı da onu izler (trace: waterfall kutuları yenilenir)
         if (r.evidenceSpanIds?.length) { onEvidence?.(r.evidenceSpanIds); if (kind === 'trace') setEvidence(e => ({ ...e, spans: r.evidenceSpanIds?.length ?? 0 })); }
-        setCode(r.code ?? null);
+        setCodeCtx(r.code ?? null);
         setCodeLinks(r.links);
         setCodeExchangeId(r.exchangeId);
         setCodeText(r.explanation || '⚠ Model boş yanıt döndürdü.');
@@ -352,6 +363,12 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   }, [auto, enabled]);
 
   if (enabled !== true) return null;
+
+  // v0.10.1041 — kutunun altındaki depo linki kartlara ait değil: kodu hangi
+  // geçiş istediyse onun künyesi (çip / ?aicode → ilk kart, Evet → kod kartı).
+  // İkisi aynı anda dolu olamaz — run() kod kartını sıfırlar, Evet yalnız
+  // kodsuz ilk cevaptan sonra çıkar. Görünüm Evet sonrasında da eskisi gibi.
+  const repoCode = code ?? codeCtx;
 
   // Çekmecede tetik buton yok: sonuç gelene kadar Spinner, sonrasında
   // "Yeniden sor" (hata hâlinde tekrar deneme yolu da bu).
@@ -413,11 +430,11 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           <span>Kodu da incele</span>
         </Chip>
       )}
-      {includeCode && code?.browseUrl && (
+      {includeCode && repoCode?.browseUrl && (
         <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, wordBreak: 'break-all' }}>
-          <a href={code.browseUrl} target="_blank" rel="noreferrer noopener"
-             style={{ color: 'var(--accent2)' }} title="Depoyu tarayıcıda aç">{code.browseUrl}</a>
-          {code.source && <span> · kaynak: {code.source === 'pin' ? 'katalog pini' : 'konvansiyon'}</span>}
+          <a href={repoCode.browseUrl} target="_blank" rel="noreferrer noopener"
+             style={{ color: 'var(--accent2)' }} title="Depoyu tarayıcıda aç">{repoCode.browseUrl}</a>
+          {repoCode.source && <span> · kaynak: {repoCode.source === 'pin' ? 'katalog pini' : 'konvansiyon'}</span>}
         </div>
       )}
       {/* v0.9.1127 — Spinner yalnız İLK token'a kadar. Token'lar akmaya
@@ -624,19 +641,20 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           {codeError && (
             <div style={{ padding: 10, borderRadius: 6, fontSize: 12, background: 'rgba(255,82,82,.10)', color: 'var(--err)', border: '1px solid rgba(255,82,82,.25)' }}>{codeError}</div>
           )}
-          {code && !code.files?.length && (
+          {/* v0.10.1041 — bu kartın künyesi KENDİ isteğinden (codeCtx); ilk kart onu çizmez. */}
+          {codeCtx && !codeCtx.files?.length && (
             <div style={{ fontSize: 11, color: 'var(--warn, var(--text3))', marginBottom: 8, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
               <span>⚠</span>
-              <span>Kod okunamadı — <strong>kodsuz</strong> analiz.{code.reason ? ` (${code.reason})` : ''}</span>
+              <span>Kod okunamadı — <strong>kodsuz</strong> analiz.{codeCtx.reason ? ` (${codeCtx.reason})` : ''}</span>
             </div>
           )}
           {codeText && <ExplainBody text={codeText} busy={codeBusy} links={codeLinks} />}
           {codeBusy && codeText !== null && <span className="cm-ai-cursor" />}
-          {code && !!code.files?.length && (
+          {codeCtx && !!codeCtx.files?.length && (
             <div style={{ marginTop: 10, fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.6 }}>
-              <div>📄 Kaynak: <strong>{code.repo}</strong>{code.branch ? ` · ${code.branch}` : ''}{code.source === 'pin' ? ' · katalog pini' : code.source === 'convention' ? ' · ad konvansiyonu' : ''}</div>
-              {code.reason && <div style={{ color: 'var(--warn, var(--text3))' }}>{code.reason}</div>}
-              {code.files.map(f => (
+              <div>📄 Kaynak: <strong>{codeCtx.repo}</strong>{codeCtx.branch ? ` · ${codeCtx.branch}` : ''}{codeCtx.source === 'pin' ? ' · katalog pini' : codeCtx.source === 'convention' ? ' · ad konvansiyonu' : ''}</div>
+              {codeCtx.reason && <div style={{ color: 'var(--warn, var(--text3))' }}>{codeCtx.reason}</div>}
+              {codeCtx.files.map(f => (
                 <div key={`${f.path}:${f.fromLine}`} style={{ fontFamily: 'var(--font-mono)' }}>
                   {f.url
                     ? <a href={f.url} target="_blank" rel="noreferrer" title={`DevOps'ta aç: ${f.path}${f.line ? ` satır ${f.line}` : ''}`}>{f.path}:{f.fromLine}-{f.toLine} ↗</a>

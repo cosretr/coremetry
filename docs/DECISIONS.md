@@ -987,6 +987,15 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — AI paneli: kod künyesi yalnız kod kartında (v0.10.1041)
+
+**Karar (operatör: "'Kodu da incele → Evet' sonrası ilk kart da kaynak satırlarını basıyor; düzeltilsin."):**
+her kart yalnız KENDİ isteğinin kod künyesini çizer (depo/branş satırı, dosya + "hata satırı N", bütçe notu,
+"Kod okunamadı"). Kök neden: iki geçiş `CopilotExplain`'de tek `code` state'ini paylaşıyordu; Evet'in kod geçişi
+yazınca kodsuz ilk kart okumadığı dosyaları kaynak gösteriyordu. Artık ilk kartınki `code` (yalnız `run()`),
+"Kod incelemesi" kartınınki `codeCtx` (yalnız `runCode()`); çip ve `?aicode` yolunda ilk kart kendi künyesini
+çizmeye devam eder. Kutunun altındaki depo linki kodu isteyen geçişi izler; sohbet bağlamı değişmedi.
+
 ## 2026-10-02 — Kod inceleme: "depo ağacı kesildi" uyarısı yalnız dosya bulunamadığında (v0.10.1040)
 
 **Operatör:** "'Depo ağacı … kesildi' uyarısı yalnız dosya bulunamadığında çıksın." AI panelinin kod incelemesinde
