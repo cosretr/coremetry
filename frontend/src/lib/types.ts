@@ -2011,9 +2011,6 @@ export interface AICodeContext {
   /** Tarayıcıda açılabilir depo linki — depo bir TAHMİN olabilir, operatör
    *  onu ancak bakarak doğrulayabilir (v0.10.60). */
   browseUrl?: string;
-  /** v0.10.1034 — kodun dayandığı stack seçili span'in DEĞİLSE (seçili span'in
-   *  logunda stack yok → trace'in en ciddi stack'i) tek satırlık köken notu. */
-  stackOrigin?: string;
 }
 
 export type DevOpsFlavor = 'auto' | 'azure-devops-server' | 'tfs';

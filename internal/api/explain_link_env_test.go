@@ -71,25 +71,14 @@ func TestTraceExplainUsesRootService(t *testing.T) {
 	// servisin deliverExplain'e GEÇMESİ, haritanın biçimi değil.
 	// v0.10.948 — handler api.go'dan trace_explain_handler.go'ya taşındı;
 	// "Kodu da incele" dalı + varsayılan inceleme dalı ayrı ayrı pinlenir.
-	// v0.10.1034 — "Kodu da incele" artık incelemenin kod varyantı
-	// (trace_investigate_code.go); klasik kodlu gövde yalnız Tempo yedeğinde.
-	// DÖRT dal, her biri KENDİ gövdesinde pinlenir (dosya geneli arama bir
-	// dalın kaybını öteki dalın satırıyla örterdi).
-	bodies := serverFuncBodies(t)
-	for fn, want := range map[string]string{
-		"explainTraceClassicPrepared":     "service: in.RootService",  // Tempo yedeği, kodsuz
-		"explainTraceClassicCodePrepared": "service: in.RootService",  // Tempo yedeği, kodlu
-		"traceInvestigationPrepared":      "service: inv.RootService", // inceleme, kodsuz
-		"traceInvestigationCodePrepared":  "service: inv.RootService", // inceleme, kodlu
-	} {
-		body, ok := bodies[fn]
-		if !ok {
-			t.Errorf("%s pakette yok (yeniden adlandırıldı mı?)", fn)
-			continue
-		}
-		if !strings.Contains(flatWS(body), want) {
-			t.Errorf("%s kök servisi explainPrepared'a GEÇİRMİYOR — prod-dışı trace'in linki yanlış ortama gider", fn)
-		}
+	h := flatWS(readSourceFile(t, "trace_explain_handler.go"))
+	if !strings.Contains(h, ", run, in.RootService, cacheKey)") {
+		t.Error("trace explain (Kodu da incele) kök servisi deliverExplain'e GEÇİRMİYOR — " +
+			"prod-dışı trace'in linki yanlış ortama gider")
+	}
+	if !strings.Contains(h, "service: inv.RootService") {
+		t.Error("trace incelemesi (varsayılan yol) kök servisi explainPrepared'a GEÇİRMİYOR — " +
+			"prod-dışı trace'in linki yanlış ortama gider")
 	}
 }
 

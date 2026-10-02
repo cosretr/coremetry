@@ -156,8 +156,6 @@ func TestCodeAddendumDemandsAQuote(t *testing.T) {
 	for _, p := range map[string]string{
 		"TraceWithCode":     SystemPromptTraceWithCode(),
 		"ExceptionWithCode": SystemPromptExceptionWithCode(),
-		// v0.10.1034 — "Kodu da incele"nin ana yolu (inceleme + aynı ek)
-		"TraceInvestigationWithCode": SystemPromptTraceInvestigationWithCode(),
 	} {
 		if !strings.Contains(p, "KOD ALINTISI ZORUNLU") {
 			t.Error("kod-bağlamlı prompt alıntı İSTEMİYOR — cevap dosya/satır adı " +

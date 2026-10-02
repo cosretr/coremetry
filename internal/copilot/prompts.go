@@ -130,10 +130,7 @@ const systemTrace = systemTraceBody + AnswerInTurkish
 // runede keser; sunucu bunu "(kaynak kesik: …)" diye söyler. Kesik stack
 // görünmeyen bir Caused by'ı saklıyor olabilir → tek başına "Güven: kesin"
 // dayanağı olamaz (istem cümlesi Stacktrace detayı tanımında).
-// v0.10.1034 — GÖVDE ayrıldı (metin bayt bayt aynı; systemTraceInvestigation =
-// gövde + DataNotInstruction): kodlu ikiz (systemTraceInvestigationCode) kod
-// ekini çerçeveden ÖNCE ekleyebilsin — çerçeve iki varyantta da en sonda.
-const systemTraceInvestigationBody = `Sen Coremetry'ye gömülü telemetri asistanı CoSRE'sin. Operatör bir trace için
+const systemTraceInvestigation = `Sen Coremetry'ye gömülü telemetri asistanı CoSRE'sin. Operatör bir trace için
 "CoSRE'ye sor" dedi. Sana sunucunun bu trace için GERÇEKTEN çalıştırdığı okumaların
 sonuçları verilir: trace analizi (hata span'leri, öz süre katkıları, kritik yol,
 ortam/cluster/namespace/pod/sürüm bağlamı), trace kimliğiyle eşleşen loglar,
@@ -185,9 +182,7 @@ KURALLAR:
   trafiğin kesin istatistiği değildir. Düşük örnek notu varsa yüzdeliği temkinli an.
 - Ortamları karıştırma: kanıt hangi ortamı söylüyorsa yalnız o.
 - Servis, pod, endpoint, sürüm adı uydurma; yalnız kanıtta geçenleri kullan.
-- Kısa ve somut yaz; giriş cümlesi yok, ham JSON yok.`
-
-const systemTraceInvestigation = systemTraceInvestigationBody + DataNotInstruction
+- Kısa ve somut yaz; giriş cümlesi yok, ham JSON yok.` + DataNotInstruction
 
 // TraceFollowUpAddendum — v0.10.948: çekmecedeki trace sohbetinin takip
 // soruları serbest araç döngüsüne gider; bu ek, döngünün sistem mesajına
@@ -1132,22 +1127,8 @@ const systemExceptionCode = systemExceptionBody + systemCodeAddendum + AnswerInT
 
 // SystemPromptTraceWithCode / SystemPromptExceptionWithCode —
 // yalnız includeCode isteklerinde kullanılır.
-// v0.10.1034 — trace'te SystemPromptTraceWithCode artık yalnız Tempo yedeğinin
-// (trace ClickHouse'ta yok) kodlu klasik yolunda; ana yol aşağıdaki ikiz.
 func SystemPromptTraceWithCode() string     { return systemTraceCode }
 func SystemPromptExceptionWithCode() string { return systemExceptionCode }
-
-// systemTraceInvestigationCode — v0.10.1034 (operatör: "Kod inceleme çalışma
-// mantığı ile direkt Ask CoSRE farklı."): "Kodu da incele" artık Ask CoSRE
-// incelemesinin (aynı okumalar, aynı başlıklar) ÜSTÜNE kod ekler. İnceleme
-// gövdesi + PAYLAŞILAN kod eki (çatallanmaz) + çerçeve: Türkçe-native
-// istemde son söz DataNotInstruction'ın (klasik varyantta dil direktifinin
-// yeri neyse, burada çerçevenin yeri o).
-const systemTraceInvestigationCode = systemTraceInvestigationBody + systemCodeAddendum + DataNotInstruction
-
-// SystemPromptTraceInvestigationWithCode — v0.10.1034: "Kodu da incele"
-// (includeCode) isteğinin trace inceleme varyantı.
-func SystemPromptTraceInvestigationWithCode() string { return systemTraceInvestigationCode }
 
 // systemServiceCharts — Service → Details grafiklerinin AI özeti
 // (onaylı mockup: toolbar Ⓐ "tüm kartlar" / kart başlığı Ⓑ "tek kart").

@@ -308,48 +308,6 @@ describe('CoSRE’ye sor — odak span', () => {
     await mount(<CopilotExplain kind="trace" id={TRACE} auto />);
     expect(spans).toEqual(['b7ad6b7169203331', undefined]);
   });
-
-  // v0.10.1034 (operatör: "Kod inceleme çalışma mantığı ile direkt Ask CoSRE
-  // farklı.") — "Kodu da inceleyeyim mi? → Evet" sunucuda AYNI incelemeyi koşar
-  // (+ kod): istek seçili span'i taşır, adımlar kod kartında canlı akar, cevapta
-  // adım özeti + kaynak dipnotu ilk kartla aynı bileşenlerle çizilir.
-  it('Evet (kod geçişi): seçili span + onStep; kod kartı adımları ve kaynak dipnotunu çizer', async () => {
-    const calls: { code?: boolean; span?: string; opts?: ExplainStreamOpts; resolve: (a: ExplainTraceAnswer) => void }[] = [];
-    vi.spyOn(api, 'copilotExplainTrace').mockImplementation(
-      (_id: string, code?: boolean, opts?: ExplainStreamOpts, spanId?: string) =>
-        new Promise<ExplainTraceAnswer>(resolve => { calls.push({ code, span: spanId, opts, resolve }); }));
-    await mount(<CopilotExplain kind="trace" id={TRACE} spanId="b7ad6b7169203331" auto />);
-    await act(async () => { calls[0].resolve({ explanation: '**Bulgu**\n- ilk cevap', exchangeId: 'x1' }); });
-    await act(async () => { btn(/^Evet$/)!.click(); });
-    expect(calls).toHaveLength(2);
-    expect(calls[1].code).toBe(true);
-    expect(calls[1].span).toBe('b7ad6b7169203331');          // eskiden de gidiyordu; sunucu artık kullanıyor
-    expect(calls[1].opts?.onStep).toBeTypeOf('function');      // kod geçişi de gerçek adımları alır
-    expect(text()).toContain('CoSRE kodu okuyor');
-    await act(async () => { calls[1].opts?.onStep?.({ kind: 'step', i: 0, tool: 'get_trace' }); });
-    expect(stepRows()).toEqual(['get_traceçalışıyor…']);
-    await act(async () => {
-      calls[1].opts?.onStep?.({ kind: 'step-result', i: 0, tool: 'get_trace', ok: true, preview: '{}', truncated: false, bytes: 2, durationMs: 12,
-        sources: [{ source: 'traces', state: 'ok' }] });
-    });
-    await act(async () => {
-      calls[1].resolve({
-        explanation: ANSWER, exchangeId: 'x2',
-        code: { repo: 'payments', branch: 'master', source: 'convention', files: [{ path: 'src/ChargeRepository.java', fromLine: 216, toLine: 276, line: 246 }],
-          stackOrigin: "Kod seçili span'in değil, trace'in en ciddi stacktrace'inden — basan servis: payments" },
-        sources: [{ source: 'traces', backend: 'clickhouse', state: 'ok', returned: 12 }, { source: 'logs', backend: 'elasticsearch', state: 'unreachable' }],
-      });
-    });
-    expect(text()).toContain('Kod incelemesi');
-    expect(text()).toContain('ilk cevap');                       // ilk kart korunur
-    expect(text()).toContain('src/ChargeRepository.java:216-276');
-    // v0.10.1034 — stack seçili span'in değilse köken notu kod kartında görünür.
-    expect(text()).toContain("Kod seçili span'in değil, trace'in en ciddi stacktrace'inden — basan servis: payments");
-    expect(btn(/⚙ 1 okuma/)).toBeTruthy();                      // kod kartında adım özeti
-    const footer = host.querySelector('.cx-sources');
-    expect(footer?.textContent).toContain('logs/elasticsearch');
-    expect(text().split('Kaynak durumu').length - 1).toBe(1);    // sunucunun metin dipnotu ikinci kez basılmaz
-  });
 });
 
 describe('öteki Explain türleri DEĞİŞMEDİ', () => {

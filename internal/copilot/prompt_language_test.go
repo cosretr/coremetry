@@ -86,8 +86,6 @@ func promptRegistry() map[string]promptClass {
 		"LogPatterns":        classTurkishNative,
 		"Postmortem":         classTurkishNative, // Faz 5.4 — markdown taslak, Türkçe talimat
 		"RunbookUpdate":      classTurkishNative, // Faz 5.5 — güncelleme önerisi bloğu
-		// v0.10.1034 — "Kodu da incele": inceleme gövdesi + paylaşılan kod eki
-		"TraceInvestigationWithCode": classTurkishNative,
 		// ── Makine-parse edilen çıktı
 		"NLToQuery":       classStructured,
 		"CHQueryOptimize": classStructured,
@@ -112,8 +110,8 @@ func promptTexts() map[string]string {
 		"GeneralChat":    SystemPromptGeneralChat(),
 		"DrawerChat":     SystemPromptDrawerChat(), "Chat": SystemPromptChat(),
 		"ChatRoundCap": SystemPromptChatRoundCap(), "ChatAgentLoop": SystemPromptChatAgentLoop(),
-		"TraceInvestigation": SystemPromptTraceInvestigation(), "TraceInvestigationWithCode": SystemPromptTraceInvestigationWithCode(),
-		"RCAVerdict": SystemPromptRCAVerdict(), "ServiceAnalysis": SystemPromptServiceAnalysis(),
+		"TraceInvestigation": SystemPromptTraceInvestigation(),
+		"RCAVerdict":         SystemPromptRCAVerdict(), "ServiceAnalysis": SystemPromptServiceAnalysis(),
 		"RAGChat": SystemPromptRAGChat(), "ShiftSummary": SystemPromptShiftSummary(),
 		"AlertNoise": SystemPromptAlertNoise(), "LogPatterns": SystemPromptLogPatterns(),
 		"Postmortem": SystemPromptPostmortem(), "RunbookUpdate": SystemPromptRunbookUpdate(),
@@ -202,43 +200,6 @@ func TestCodePromptsExtendBaseVerbatim(t *testing.T) {
 		if strings.Contains(p, "KOD BAĞLAMI") {
 			t.Errorf("%s kodsuz olmasına rağmen kod eki taşıyor", name)
 		}
-	}
-}
-
-// TestTraceInvestigationCodeExtendsBaseVerbatim — v0.10.1034 (operatör: "Kod
-// inceleme çalışma mantığı ile direkt Ask CoSRE farklı."). "Kodu da incele"
-// artık Ask CoSRE incelemesinin üstüne kod ekler: kodlu ikiz = inceleme
-// GÖVDESİ + PAYLAŞILAN kod eki + çerçeve. Gövde kopyalanıp ayrışırsa iki
-// cevap yine farklı mantıkla üretilir (operatörün kapattığı sınıf); ek
-// çatallanırsa kod kuralları (alıntı zorunlu, numara uydurma yasağı) iki
-// yüzeyde ayrışır. Çerçeve (DataNotInstruction) iki varyantta da SON söz.
-func TestTraceInvestigationCodeExtendsBaseVerbatim(t *testing.T) {
-	plain, code := SystemPromptTraceInvestigation(), SystemPromptTraceInvestigationWithCode()
-	if plain != systemTraceInvestigationBody+DataNotInstruction {
-		t.Fatal("inceleme istemi gövde + çerçeve değil — gövde ayrımı metni değiştirdi")
-	}
-	if !strings.HasPrefix(code, systemTraceInvestigationBody) {
-		t.Fatal("kodlu inceleme istemi inceleme gövdesinden başlamıyor")
-	}
-	if !strings.Contains(code, systemCodeAddendum) {
-		t.Fatal("kodlu inceleme isteminde paylaşılan kod eki yok")
-	}
-	if !strings.HasSuffix(code, DataNotInstruction) || strings.Count(code, DataNotInstruction) != 1 {
-		t.Fatal("kodlu inceleme istemi çerçeveyle (bir kez) bitmiyor")
-	}
-	if strings.Index(code, systemCodeAddendum) > strings.Index(code, DataNotInstruction) {
-		t.Fatal("kod eki çerçeveden SONRA — çerçeve son söz olmalı")
-	}
-	if strings.Contains(plain, "KOD BAĞLAMI") {
-		t.Error("kodsuz inceleme istemi kod eki taşıyor — modele olmayan kanıt vaat eder")
-	}
-	// Sürüm sicili: mevcut inceleme istemi AYNI anahtar + AYNI metinle kayıtlı
-	// (kimliği sebepsiz kaymasın); kodlu ikiz YENİ kayıt.
-	if promptVersionRegistry["systemTraceInvestigation"] != plain {
-		t.Error("systemTraceInvestigation sicil kaydı değişti")
-	}
-	if promptVersionRegistry["systemTraceInvestigationCode"] != code {
-		t.Error("kodlu inceleme istemi sürüm sicilinde yok")
 	}
 }
 

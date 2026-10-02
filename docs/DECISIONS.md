@@ -987,7 +987,28 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — "Kodu da incele" eski kanıt toplayıcısına geri döndü (v0.10.1035; v0.10.1034 kararının tersi)
+
+**Karar (operatör: "Kodu incele kısmının da eski yapısı aynı şekilde güzel açıklama yapıyordu. Eski kanıt
+toplayıcı güzeldi."):** v0.10.1034 commit'i bütünüyle geri alındı (`git revert`, uyumluluk katmanı yok). Trace'te
+"Kodu da incele" yine KLASİK yoldan koşar: `buildTraceExplainInput` (trace + loglar + Oracle satırları) +
+`buildCodeContext` + şema kanıtı + `SystemPromptTraceWithCode`, buffered üretim, anahtar kod çekiminden sonra.
+`SystemPromptTraceInvestigationWithCode`, `trace_investigate_code.go` ve `mcptools.WithTraceLogsSink` kaldırıldı.
+
+**Yanlış okunan şikâyet:** operatörün "kod inceleme çalışma mantığı ile direkt Ask CoSRE farklı" cümlesi "kodlu
+yolu incelemeye taşı" diye okundu; kastedilen tersiydi — tercih edilen, kodlu yolun eski toplayıcısı. İpucu
+kayıtlardaydı (v0.10.986: "kodu incele dediğimde daha iyi sonuç veriyor, o hali olsa daha iyi olacak";
+v0.10.987: okumasız eski cevap ayrı düğme olarak istendi) ve atlandı. **Kural:** operatör iki yolun farklı
+olduğunu söylediğinde yön varsayılmaz; önceki kayıtlardaki tercihe bakılır, belirsizse sorulur.
+
+**Açık (operatör kararı):** varsayılan "CoSRE'ye sor" hâlâ v0.10.948 trace incelemesi (v0.10.986 biçimiyle);
+operatör eski açıklamanın yapısını daha iyi buluyor. Varsayılanı da klasik toplayıcıya döndürmek ayrı karar —
+inceleme adımları, dönem kıyası / pod / deploy kanıtı, "Kaynak durumu" künyesi ve sayı denetimi o yolla gider.
+v0.10.1033 (kanıt span listesi kaldırıldı) etkilenmedi.
+
 ## 2026-10-02 — "Kodu da incele" artık Ask CoSRE incelemesinin üstüne kod ekler (v0.10.1034)
+
+> **v0.10.1035'te geri alındı** (üstteki kayıt). Aşağısı tarihçe.
 
 **Operatör (prod):** "Kod inceleme çalışma mantığı ile direkt Ask CoSRE farklı." **Ne farklıydı:** trace'te
 iki ayrı kanıt toplayıcısı vardı. Ask CoSRE (varsayılan) trace incelemesiydi (get_trace, loglar, dönem kıyası,

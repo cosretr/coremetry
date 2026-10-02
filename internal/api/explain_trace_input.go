@@ -33,16 +33,6 @@ import (
 // (explain_trace_input_test.go bunu pinler) — bu bir davranış değişikliği
 // değil, çıkarma işlemidir.
 
-// traceExplainLogLimit / traceExplainLogRows — klasik toplayıcının log okuması
-// (≤30 kayıt) ve prompt'a giren, stack adayı olan satırlar (≤15, önce yüksek
-// severity). v0.10.1034 — "Kodu da incele"nin stack seçimi (traceLogStack) ve
-// seçili span'de stack yokken yapılan trace geneli okuma AYNI tavanları
-// paylaşır; sayılar tek yerde.
-const (
-	traceExplainLogLimit = 30
-	traceExplainLogRows  = 15
-)
-
 // errExplainTraceNotFound — trace'in span'i yok. Handler 404'e çevirir;
 // çekmece yolunda sessizce kanıtsız devam edilir (soft-fail).
 var errExplainTraceNotFound = errors.New("trace not found")
@@ -216,7 +206,7 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 		from := time.Unix(0, minT).Add(-time.Minute)
 		to := time.Unix(0, maxT).Add(time.Minute)
 		lctx, cancel := context.WithTimeout(ctx, 6*time.Second)
-		if page, lerr := logstore.LogsForTrace(lctx, s.logs, id, from, to, traceExplainLogLimit); lerr == nil && page != nil && len(page.Logs) > 0 {
+		if page, lerr := logstore.LogsForTrace(lctx, s.logs, id, from, to, 30); lerr == nil && page != nil && len(page.Logs) > 0 {
 			type liteLog struct {
 				Sev    string `json:"sev,omitempty"`
 				Svc    string `json:"svc,omitempty"`
@@ -226,9 +216,9 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 			}
 			logs := page.Logs
 			sort.SliceStable(logs, func(i, j int) bool { return logs[i].Severity > logs[j].Severity })
-			ll := make([]liteLog, 0, traceExplainLogRows)
+			ll := make([]liteLog, 0, 15)
 			for _, lg := range logs {
-				if len(ll) >= traceExplainLogRows {
+				if len(ll) >= 15 {
 					break
 				}
 				// v0.9.1182 (operatör-bildirimli) — stack ARANIR, tek bir

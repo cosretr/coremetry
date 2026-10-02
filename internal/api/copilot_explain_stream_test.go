@@ -338,15 +338,6 @@ var explainStreamWired = []string{
 	"runbookUpdateSuggest", // v0.9.1198 Faz 5.5
 }
 
-// explainStreamDelegated — v0.10.1034: gövdesi çıkışı TEK bir yardımcıya
-// devreden bağlı handler'lar (handler → yardımcı). copilotExplainTrace eskiden
-// "Kodu da incele" dalında deliverExplain'i doğrudan çağırıyordu; artık kodlu
-// ve kodsuz istek AYNI incelemeden (explainTraceInvestigation →
-// deliverExplainPrepared, deliverExplain'in çekirdeği) çıkar.
-var explainStreamDelegated = map[string]string{
-	"copilotExplainTrace": "explainTraceInvestigation",
-}
-
 // explainStreamDeferred — bilinçli olarak buffered kalan POST
 // /api/copilot/ uçları + GEREKÇE. Bu slice CopilotExplain'in jenerik
 // gövdesinden akan yüzeyleri kapsıyor; aşağıdakiler kendi küçük
@@ -425,15 +416,7 @@ func TestExplainStreamHandlersUseDeliverExplain(t *testing.T) {
 			t.Errorf("handler %q pakette bulunamadı (yeniden adlandırıldı mı?)", h)
 			continue
 		}
-		if d, delegated := explainStreamDelegated[h]; delegated {
-			// v0.10.1034 — çıkış TEK yardımcıda: handler ona devreder, yardımcının
-			// gövdesi deliverExplain'in çekirdeğini (deliverExplainPrepared) çağırır.
-			if !strings.Contains(body, "s."+d+"(") {
-				t.Errorf("%s, %s'a devretmiyor — akan çıkış kayboldu", h, d)
-			} else if db := bodies[d]; !strings.Contains(db, "s.deliverExplainPrepared(") {
-				t.Errorf("%s (← %s) deliverExplainPrepared çağırmıyor — akan kip o uçta ÖLÜ", d, h)
-			}
-		} else if !strings.Contains(body, "s.deliverExplain(") {
+		if !strings.Contains(body, "s.deliverExplain(") {
 			t.Errorf("%s deliverExplain çağırmıyor — akan kip o uçta ÖLÜ", h)
 		}
 		// Eski çıkış yolu kalıntısı: iki çıkış = biri sessizce kazanır.
