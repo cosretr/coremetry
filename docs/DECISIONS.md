@@ -987,6 +987,64 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — "Yeni log şablonu" anomalisi yalnız gerçekten yeni şekilde açılır (v0.10.1030)
+
+**Operatör (prod, ekran görüntüsüyle):** "Çok fazla problem geliyor." Problems sekmesi (v0.10.1014'ten beri
+her türü gösteriyor) `log_template_new` satırlarıyla doluydu: TEK servis için on+ satır, hepsi aynı saniyede
+doğmuş, hepsi "peak 0.0x · now 0.0x · no signal", desenleri aynı uzun JSON önekiyle
+(`{"Timestamp":"<*>","Level":"Warning","MessageTemplate":"U…`) başlıyor.
+
+**Kök neden:** dedektör (`anomaly/log_templates.go`) `log_templates` defterinde pencerede (2 × 5 dk) doğmuş ve
+`total_count ≥ 3` olan HER şablonu ayrı olay yapıyordu (parmak izi = şablon kimliği). Defteri yazan puller
+her 5 dk'da ~1000 satırlık ÖRNEKTEN Drain ağacını soğuk kurar (`Reset`); küme kimliği şablon belirteçlerinin
+sha1'i ve her inceltmede YENİDEN hesaplanır. Aynı satır ailesi her tikte hangi satırlar örneklendiyse ona
+göre farklı `<*>` konumlarında biter → yeni kimlik → `first_seen = şimdi` olan yeni defter satırı → "yeni
+şablon"; serbest metinli uzun JSON satırlarında çok daha sık. Kimlik eşitliği "yeni" için kurgu gereği
+kararsızdı.
+
+**Karar:** "yeni" = servisin BİLİNEN hiçbir şablonu onunla Drain'in kendi kuralına göre aynı kümeye
+girmezdi. (a) `templater.SameTemplateFamily(a, b)` (ayrılmış hâli `ParseTemplate(..).SameFamily`): saklanan
+dizgeyi Tokenize'ın ayırıcılarıyla geri böler (yalnız boşluk/sekme, yeniden maskeleme yok); eşit belirteç
+sayısı + uyumlu yönlendirme öneki (ilk Depth − 1 = 3 belirteç) + mevcut `similarity ≥ 0.4`; ayarlar
+`NewDrain` ile ORTAK sabitler. Yaprakta `<*>` iki tarafta da eşleşir (iki girdi de şablon). Yönlendirmede
+Drain değişmezi KENDİ çocuğuna yollar, "*"a yalnız maske ya da MaxChildren taşması düşer: konumlar birebir
+aynı olmalı (`<*>` == `<*>` dahil); `<*>` ↔ değişmeze yalnız iki şablon bir yönlendirme konumunda aynı
+DEĞİŞMEZİ paylaşıyorsa izin var (taşma) — öneki tümü joker bir şablon aynı boydaki her şeyi yutamaz. (b)
+Tik başına en çok iki okuma, AYNI pencere başıyla ve tam tümleyen (`first_seen >=` / `<`, ns kesin bind
+`fromUnixTimestamp64Nano`; konumsal `time.Time` saniyeye kesilirdi). Aday: `first_seen` pencerede (eskiden
+`last_seen` üzerinden; puller örneği yeniden eskiye okuduğundan `first_seen > last_seen` olan satır iki
+kümeye de girmiyordu), `total_count ≥ 3` SQL'de, en ERKEN doğan önce, 500 satır. Bilinen (yalnız aday
+varsa): `first_seen <` pencere başı, `total_count ≥ 3` (bir-iki kez görülmüş blip "bilinen" olup kendi
+gerçek ≥3 şablonunu 7 gün bastırmasın — v0.9.47 sözü), `last_seen` son 7 gün, adayların servisleri
+(`hasAny`; servissiz aday varsa `OR empty(services)`), adayların belirteç sayıları (`countSubstrings(template,
+' ') + 1`; saklama biçimi tek boşluk olduğundan kesin), `last_seen DESC`, 500 satır. Süzgeçler SQL'de
+(`ListLogTemplatesFilter`'a isteğe bağlı alanlar + `first_seen_asc` sırası) ki LIMIT ilgili satırlara
+harcansın (`ListLogTemplates` 500 üstünü sessizce 100'e indirir). Go'da aynı sınırlar emniyet kemeri olarak
+tekrar. (c) En az bir servisi paylaşan bilinen bir şablonun ailesi olan aday bastırılır; servissiz aday
+okunan her bilinenle karşılaştırılır. (d) Kalanlardan aynı tikte aile başına TEK aday: en erken
+`first_seen`, sonra ID — temsilci kayıtçı tikleri arasında kararlı kalmalı; `total_count` her puller
+tikinde üzerine yazıldığından sıralamaya girmez. Olayın servisi şablon servislerinin sözlükte en küçüğü
+(`Services[0]` varış sırasını izleyip parmak izini değiştiriyordu). (e) Bilinen okuması düşerse
+FAIL-CLOSED: bu tik bu dedektörden hiçbir şey çıkmaz, hata tik başına bir kez loglanır, kayıtçı tiki
+düşmez (kaçan bir not selden ucuz; aday 10 dk pencerede kalır, sonraki tik yakalar). Bastırma olan tikte
+tek özet log satırı, yalnız sayılar.
+
+**Değişmeyen:** templater'ın öğrenme/sıfırlama davranışı, defter şeması, olay biçimi ve parmak izi
+formülü, kayıtçının öbür dedektörleri, API ve ön yüz.
+
+**Sınırlar:** Drain'in mevcut bir şablonla aynı kümeye koyacağı gerçekten yeni bir satır (aynı yönlendirme
+öneki, aynı belirteç sayısı, belirteçlerin ≥ %40'ı ortak — ör. "established" yerine "failed") Drain'in
+tanımıyla yeni biçim DEĞİLDİR ve duyurulmaz. Satırları BELİRTEÇ SAYISINDA oynayan aileler (serbest metinli
+mesajlar) her sayı için ayrı ailedir: her sayı bir kez duyurulur, yani bir miktar tekrar kalabilir.
+Kabalık: sabit önekli metin biçimlerinde aynı kelime sayılı, aynı seviye/logger önekli kısa mesajlar 7 gün
+boyunca tek aile sayılır (Drain'in 0.4 benzerliği tikler arası uygulanıyor) — daha az satır yönünde
+bilinçli bir takas. Bilinen kümesi 500 satır: 7 gün susup dönen aile yeniden "yeni" sayılır; o servis ve
+sayılarda 500'ü aşan daha taze şablon varsa eski bir ailenin varyantı çıkabilir (yine aile başına tek).
+Mevcut sel satırları artık yeniden yazılmıyor: durumları kendi `last_seen`'lerinden 10 dk sonra "cleared"
+olur, yani varsayılan Problems görünümü (`status=open`, yalnız aktif) onları dağıtımdan en geç ~10 dk sonra
+göstermez; "all" görünümünde 24 sa "cleared" (P3) kalır, tablo TTL'i 30 gün (`started_at`). Temizlik işi
+eklenmedi.
+
 ## 2026-10-02 — OpenTelemetry 1.45.0: GO-2026-6505 (v0.10.1029)
 
 **Köken:** CI'ın govulncheck adımı GO-2026-6505'te kırıldı (yayın 2026-10-01, geri çekilmedi):

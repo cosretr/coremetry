@@ -116,6 +116,16 @@ type Cluster struct {
 	Sample    string // representative raw line (for UI hover)
 }
 
+// Drain-3 varsayılanları — v0.10.1030: NewDrain ile SameTemplateFamily
+// (family.go) AYNI sabitleri okur. "Yeni log şablonu" dedektörünün "aynı
+// aile mi" yargısı ağacın kendi kümeleme kuralıdır; biri ayarlanırsa öteki
+// de onunla kayar, iki kopya sessizce ayrışamaz.
+const (
+	defaultDepth        = 4
+	defaultMaxChildren  = 100
+	defaultSimThreshold = 0.4
+)
+
 // NewDrain builds a tree with the canonical Drain-3 defaults:
 // depth 4, max-children 100, similarity 0.4. Tuned in the
 // paper across multiple log datasets; we've kept these values
@@ -123,9 +133,9 @@ type Cluster struct {
 // scale isn't a quick test.
 func NewDrain() *Drain {
 	return &Drain{
-		Depth:        4,
-		MaxChildren:  100,
-		SimThreshold: 0.4,
+		Depth:        defaultDepth,
+		MaxChildren:  defaultMaxChildren,
+		SimThreshold: defaultSimThreshold,
 		root:         &node{children: map[string]*node{}},
 	}
 }
@@ -150,7 +160,9 @@ func (d *Drain) Add(line, service string, tsNs int64) *Cluster {
 	// Layer 2..Depth-1: token-by-token literal traversal. Last
 	// layer holds the cluster list — depth=4 means 4 internal
 	// levels then the cluster list at depth 4.
-	for i := 0; i < d.Depth-1 && i < len(tokens); i++ {
+	// v0.10.1030 — yönlendirme önekinin boyu routePrefixLen'den gelir;
+	// SameTemplateFamily aynı uzunluğu karşılaştırır (tek kural).
+	for i := 0; i < routePrefixLen(d.Depth, len(tokens)); i++ {
 		key := tokens[i]
 		// "<*>" tokens collapse to a wildcard child so a line
 		// like "<*> connection refused" + "<*> timeout exceeded"

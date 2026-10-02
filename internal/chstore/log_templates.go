@@ -68,11 +68,42 @@ func (s *Store) UpsertLogTemplate(ctx context.Context, t LogTemplate) error {
 // order. SinceNs filters last_seen ≥ X; Limit caps the response.
 type ListLogTemplatesFilter struct {
 	SinceNs int64
-	SortBy  string // "first_seen" | "last_seen" | "count" (default "count")
-	Limit   int
+	// "first_seen" | "first_seen_asc" (v0.10.1030) | "last_seen" | "count"
+	// (default "count").
+	SortBy string
+	Limit  int
 	// Service — v0.10.310 (/logs Şablonlar sekmesi): has(services, ?).
 	// Boş = tüm servisler.
 	Service string
+
+	// ── v0.10.1030 ("yeni log şablonu" seli) — dedektörün aday ve
+	// bilinen-şablon okumaları. Hepsinin sıfır değeri = kısıt yok, yani
+	// mevcut çağıranlar bayt-bayt eski SQL'i üretir. Filtreler SQL'de, çünkü
+	// sel anında pencere içi doğumlar yüzlerce satır olabilir; Go'da süzmek
+	// LIMIT-sonrası süzgeç sınıfı (audit CHECK 8).
+	//
+	// FirstSeenSinceNs / FirstSeenBeforeNs: first_seen >= X / first_seen < X.
+	// Bind NANOSANİYE kesin (fromUnixTimestamp64Nano, kolon DateTime64(9)):
+	// clickhouse-go konumsal time.Time'ı SANİYEYE keserdi, aynı X ile kurulan
+	// aday ve bilinen kümeleri o zaman tam tümleyen olmazdı.
+	FirstSeenSinceNs  int64
+	FirstSeenBeforeNs int64
+	// MinTotalCount: total_count >= X (0 = kısıt yok).
+	MinTotalCount uint64
+	// AnyServices: hasAny(services, [...]) — tik başına TEK okumada birden
+	// çok servisin şablonları. IncludeServiceless: servissiz satırları da al
+	// (AnyServices ile VEYA'lanır; AnyServices boşken YALNIZ servissiz
+	// satırlar). İkisi de sıfırsa servis kısıtı yok (ListAnomalyEventsFilter
+	// .Services'in "boş = hiçbir şey" sözleşmesinden FARKLI).
+	AnyServices        []string
+	IncludeServiceless bool
+	// TokenCounts: şablonun belirteç sayısı bu kümede. KESİN: saklanan şablon
+	// her zaman strings.Join(belirteçler, " ") (templater puller; Tokenize ve
+	// TemplateString v0.5.244'ten beri aynı, tek yazıcı UpsertLogTemplate) ve
+	// belirteçler boş değil, boşluk/sekme içermez → boşluk sayısı + 1 =
+	// belirteç sayısı (templater/family_test.go sabitler). countSubstrings,
+	// splitByChar'ın aksine dizi kurmaz.
+	TokenCounts []int
 }
 
 // logTemplatesWhere — v0.10.310: WHERE + ORDER BY saf kurucu (tablo testi
@@ -82,6 +113,10 @@ func logTemplatesWhere(f ListLogTemplatesFilter) (string, []any) {
 	switch f.SortBy {
 	case "first_seen":
 		order = "first_seen DESC"
+	case "first_seen_asc":
+		// v0.10.1030 — aday okuması: tavanı en ERKEN doğanlar (aile
+		// temsilcileri) atlatsın.
+		order = "first_seen ASC"
 	case "last_seen":
 		order = "last_seen DESC"
 	}
@@ -94,6 +129,36 @@ func logTemplatesWhere(f ListLogTemplatesFilter) (string, []any) {
 	if f.Service != "" {
 		wc += " AND has(services, ?)"
 		args = append(args, f.Service)
+	}
+	if f.FirstSeenSinceNs > 0 {
+		wc += " AND first_seen >= fromUnixTimestamp64Nano(?)"
+		args = append(args, f.FirstSeenSinceNs)
+	}
+	if f.FirstSeenBeforeNs > 0 {
+		wc += " AND first_seen < fromUnixTimestamp64Nano(?)"
+		args = append(args, f.FirstSeenBeforeNs)
+	}
+	if f.MinTotalCount > 0 {
+		wc += " AND total_count >= ?"
+		args = append(args, f.MinTotalCount)
+	}
+	// Dilim TEK bind argümanıdır: clickhouse-go onu ['a', 'b'] dizi
+	// değişmezi olarak biçimler.
+	switch {
+	case len(f.AnyServices) > 0 && f.IncludeServiceless:
+		wc += " AND (hasAny(services, ?) OR empty(services))"
+		args = append(args, f.AnyServices)
+	case len(f.AnyServices) > 0:
+		wc += " AND hasAny(services, ?)"
+		args = append(args, f.AnyServices)
+	case f.IncludeServiceless:
+		wc += " AND empty(services)"
+	}
+	if len(f.TokenCounts) > 0 {
+		wc += " AND (countSubstrings(template, ' ') + 1) IN (" + chPlaceholders(len(f.TokenCounts)) + ")"
+		for _, n := range f.TokenCounts {
+			args = append(args, n)
+		}
 	}
 	return wc + "\n\t\tORDER BY " + order, args
 }
