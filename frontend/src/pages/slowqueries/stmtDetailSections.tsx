@@ -1,15 +1,17 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { SectionUnavailable, StatTile } from '@/components/ui';
-import { Sparkline } from '@/components/Sparkline';
+import { Spinner } from '@/components/Spinner';
+import { LazyMount } from '@/components/LazyMount';
 import { TrendDelta } from '@/components/TrendDelta';
+import { msSyncKey } from '@/lib/chart/syncNamespace';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import { fmtNum } from '@/lib/utils';
 import type { TimeRange, DBStmtDetail, DBStmtCaller } from '@/lib/types';
-import { densifyTrend } from './stmtParam';
+import { stmtTrendGrid, stmtTrendSeries, stmtBucketLabel } from './stmtTrend';
 import { serviceHref } from '@/lib/serviceHref';
 import { repeatsExploreHref } from '@/lib/pivotHref';
 import { traceHref } from '@/lib/traceHref';
@@ -24,9 +26,8 @@ import { traceHref } from '@/lib/traceHref';
 // drawer is the one surface that cannot give any of them width.
 //
 // The sections themselves are unchanged — this is a MOVE, not a redesign.
-// The only page-shaped parameter is `sparkWidth`: the drawer's 420px was
-// a constant sized to its own shell, and a page that keeps it would look
-// like a drawer pasted onto a page.
+// v0.10.1058 — tek istisna Trend: Sparkline şeritleri standart zaman
+// grafiğine (CorePanelMulti) geçti, gerekçe StmtTrendSection başında.
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -121,64 +122,84 @@ export function StmtSummarySection({ detail, compare }: {
   );
 }
 
-// StmtTrendSection — three sparkline rows over the densified 5m-grain
-// series (Sparkline primitive — the house no-chart-dep affordance for
-// row-scale trends; uPlot buys crosshair/zoom this page doesn't need).
-export function StmtTrendSection({ detail, sparkWidth = 420 }: {
-  detail: DBStmtDetail; sparkWidth?: number;
+// StmtTrendSection — v0.10.1058: standart zaman grafiği.
+//
+// Operatör (prod): "Statement detail grafikleri de çok kötü, Coremetry
+// geneline uymuyor. Ayrıca zaman yok vs., hiç olmamış." Eski hâl üç
+// Sparkline şeridiydi — zaman ekseni yok, değer ekseni yok, ipucu
+// "bucket 17/37: 3.8k". Ürünün geri kalanı (Databases detay, servis
+// Overview, Endpoint detay) RED serilerini CorePanel'le çiziyor; bu
+// bölüm artık Databases detayın DatabaseTrendCards düzenini birebir
+// kullanıyor: `ov-charts-3` ızgarası (dar ekranda alta kayar), LazyMount
+// + lazy CorePanelMulti, 150 px, tek senkron grubu (crosshair üç
+// grafikte birlikte). Sürükle-yakınlaştır sayfanın ?range='ine yazar
+// (usePageZoomRange; çift tık bir adım geri — Endpoint detay kalıbı).
+//
+// "vs prior": uç önceki pencerenin KOVA serisini döndürmüyor (yalnız
+// özet + çağıran toplamları, chstore.PriorWindow). Grafik bu yüzden
+// yalnız bu pencereyi çizer, fark özet karolarında kalır — ve başlık
+// bunu söyler. Hayalet seri (CorePanelMulti ghostItems) sunucuda ikinci
+// bir trend okuması ister; bu sürümde yok.
+const CorePanelMultiLazy = lazy(() =>
+  import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
+
+export function StmtTrendSection({ detail, compare = false, onZoom, onZoomReset }: {
+  detail: DBStmtDetail;
+  compare?: boolean;
+  onZoom?: (fromSec: number, toSec: number) => void;
+  onZoomReset?: () => void;
 }) {
-  const dense = useMemo(
-    () => densifyTrend(detail.trend ?? [], detail.fromNs, detail.toNs,
-      detail.trendBucketSec ?? 0),
-    [detail],
-  );
+  const view = useMemo(() => {
+    const g = stmtTrendGrid(detail.trend ?? [], detail.fromNs, detail.toNs,
+      detail.trendBucketSec ?? 0);
+    return g ? stmtTrendSeries(g, detail.toNs) : null;
+  }, [detail]);
   if (!detail.trend) return (
     <div>
       <SectionTitle>Trend</SectionTitle>
       <SectionUnavailable what="Trend" />
     </div>
   );
-  const bucketMin = Math.round((detail.trendBucketSec ?? 0) / 60);
-  const hasData = dense.calls.some(v => v > 0);
+  const bucket = stmtBucketLabel(detail.trendBucketSec ?? 0);
+  const empty = view?.hasCalls ? undefined : 'Bu pencerede bu ifade için çağrı yok';
+  const charts = [
+    { key: 'calls', title: 'Calls / s', unit: 'reqps', role: 'data' as const,
+      series: view?.callsPerSec ?? [] },
+    { key: 'errors', title: bucket ? `Errors / ${bucket}` : 'Errors', unit: 'short',
+      role: 'error' as const, series: view?.errors ?? [] },
+    { key: 'p95', title: 'P95 latency', unit: 'ms', role: 'data' as const,
+      series: view?.p95Ms ?? [] },
+  ];
   return (
     <div>
       <SectionTitle>
         Trend
-        {bucketMin > 0 && (
+        {bucket && (
           <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text3)', marginLeft: 6 }}>
-            {bucketMin}m buckets
+            {bucket} buckets
+            {compare && ' · vs prior yalnız özet karolarında'}
           </span>
         )}
       </SectionTitle>
-      {!hasData && (
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>No calls in window.</div>
-      )}
-      {hasData && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <TrendRow label="Calls" values={dense.calls} width={sparkWidth} />
-          <TrendRow label="Errors" values={dense.errors} color="var(--err)" width={sparkWidth} />
-          <TrendRow label="P95 ms" values={dense.p95Ms} color="var(--orange)" unit="ms" width={sparkWidth} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TrendRow({ label, values, color, unit, width }: {
-  label: string; values: number[]; color?: string; unit?: string; width: number;
-}) {
-  const max = values.reduce((m, v) => Math.max(m, v), 0);
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontSize: 10, color: 'var(--text3)', width: 52, flexShrink: 0 }}>
-        {label}
-      </span>
-      <Sparkline values={values} width={width} height={34}
-        color={color} unit={unit}
-        title={`${label} per bucket across the window`} />
-      <span className="mono" style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
-        max {unit === 'ms' ? max.toFixed(0) : fmtNum(max)}{unit ? ` ${unit}` : ''}
-      </span>
+      <div className="ov-grid ov-charts-3 ov-mb">
+        {charts.map(c => (
+          <LazyMount key={c.key} minHeight={170}>
+            <Suspense fallback={<div style={{ height: 170, display: 'grid', placeItems: 'center' }}><Spinner /></div>}>
+              <CorePanelMultiLazy
+                title={c.title}
+                storageKey={`stmt-detail-${c.key}`}
+                height={150}
+                unit={c.unit}
+                xRange={view?.xRange ?? null}
+                // '-ms' = motor ad alanı (v0.9.789); tek grup, crosshair üçünde.
+                syncKey={msSyncKey('statement-detail')}
+                onZoom={onZoom} onZoomReset={onZoomReset}
+                emptyReason={empty}
+                items={[{ name: c.title, role: c.role, series: c.series }]} />
+            </Suspense>
+          </LazyMount>
+        ))}
+      </div>
     </div>
   );
 }

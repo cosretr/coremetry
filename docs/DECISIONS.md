@@ -987,6 +987,16 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Statement detail: trend grafikleri standart zaman grafiğine geçti (v0.10.1058)
+
+**Operatör:** "Statement detail grafikleri de çok kötü, Coremetry geneline uymuyor. Ayrıca zaman yok vs., hiç olmamış."
+Trend bölümü üç Sparkline şeridiydi: x = kova sırası (ipucu "bucket 17/37"), değer ekseni ve birim yok. Artık
+Databases detayın düzeni: `ov-charts-3` ızgarasında üç CorePanelMulti (Calls / s reqps · Errors / <kova> adet ·
+P95 latency ms), tek crosshair senkron grubu, brush sayfanın `?range=`'ini yazar. Zaman damgası backend'de zaten
+vardı (`trend[].tsNs` = kova başı); `densifyTrend` onu atıyordu — yerine `stmtTrend.ts` (yarı-açık kova, oran böleni
+kovanın MV kapsamı, çağrısız kovada P95 boşluk). Backend değişmedi. "vs prior" grafiğe hayalet çizmez: uç önceki
+pencerenin kova serisini döndürmüyor; fark özet karolarında kalır ve başlık bunu söyler.
+
 ## 2026-10-02 — GitOps sekmesi: sütun genişletme çalışır, ayrı "İş yükleri" bloğu kaldırıldı (v0.10.1057)
 
 **Operatör:** "GitOps sekmesinde de sütun başlıkları kaymıyor." + "İş yükleri ayrıca yazmasına gerek yok."

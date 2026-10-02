@@ -46,7 +46,7 @@ export default function StatementDetailPage() {
   const [params, setParams] = useSearchParams();
   const search = params.toString();
   const refObj = useMemo(() => decodeStmtParam(params.get('stmt')), [params]);
-  const { range, setRange } = usePageZoomRange(DEFAULT_RANGE_PRESET);
+  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
 
   // Compare toggle rides the URL (house rule §4): ?stmtcmp=1,
@@ -159,9 +159,10 @@ export default function StatementDetailPage() {
         {detail && (
           <>
             <StmtSummarySection detail={detail} compare={compare} />
-            {/* Sayfa genişliği çekmecenin 420px'inden fazlasını veriyor —
-                dönüşümün asıl kazancı bu, sabiti taşımak onu çöpe atardı. */}
-            <StmtTrendSection detail={detail} sparkWidth={720} />
+            {/* v0.10.1058 — standart zaman grafiği; brush sayfanın
+                ?range='ini yazar (URL tek doğruluk kaynağı). */}
+            <StmtTrendSection detail={detail} compare={compare}
+              onZoom={handleZoom} onZoomReset={handleZoomReset} />
             <StmtCallersSection detail={detail} compare={compare} range={range} />
             <StmtExemplarsSection detail={detail} range={range} />
           </>
