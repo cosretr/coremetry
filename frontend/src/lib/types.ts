@@ -7758,6 +7758,11 @@ export interface AnomalySensitivityConfig {
   // VARSAYILAN KAPALI (operatör: "Trace op latency false pozitif geliyor").
   // Backend *bool, yok = kapalı: okuma `=== true`, kayıt AÇIK boolean gönderir.
   opLatency?: boolean;
+  // v0.10.1061 — log_template_new (Drain'in ilk kez gördüğü log biçimi)
+  // dedektörü; VARSAYILAN KAPALI (operatör onaylı: "Bu log anomalileri de
+  // false pozitif geliyor"). opLatency ile aynı sözleşme: okuma `=== true`,
+  // kayıt AÇIK boolean gönderir. log_pattern bu anahtara bağlı değil.
+  logTemplateNew?: boolean;
   // v0.10.700 — kök neden hipotezinde zamansal çarpan: 'shadow' (varsayılan,
   // yok dahil) yalnız yazar, 'on' skoru çarpar. Okuma `=== 'on'`.
   temporalRanking?: 'shadow' | 'on';

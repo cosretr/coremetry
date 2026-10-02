@@ -131,29 +131,17 @@ func (r *Recorder) tick(ctx context.Context) {
 	// curated-regex detector (log_pattern) which only catches
 	// known failure shapes. Window is 2× the recorder window
 	// to absorb any drift between templater + recorder cadences.
-	newTemplateHits, err := DetectNewLogTemplates(ctx, r.store, 2*r.window)
-	if err != nil {
-		log.Printf("[anomaly-recorder] new log templates: %v", err)
-	}
-	for _, a := range newTemplateHits {
-		ev := chstore.AnomalyEvent{
-			// Fingerprint on the stable template ID (Drain hash),
-			// NOT the rendered pattern text — the same template
-			// keeps the same row across recorder ticks.
-			ID:           chstore.FingerprintAnomaly("log_template_new", a.TemplateID, a.Service),
-			Kind:         "log_template_new",
-			Pattern:      a.Template,
-			Service:      a.Service,
-			StartedAt:    a.FirstSeenNs,
-			LastSeen:     a.LastSeenNs,
-			CurrentRatio: 0, // "first appearance" — no ratio over baseline
-			CurrentCount: a.TotalCount,
-			Sample:       a.Sample,
-		}
-		if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
-			log.Printf("[anomaly-recorder] upsert new log template %s: %v", a.TemplateID, err)
-		}
-	}
+	//
+	// v0.10.1061 — varsayılan KAPALI (anomaly_sensitivity.logTemplateNew;
+	// operatör onaylı: "Bu log anomalileri de false pozitif geliyor").
+	// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım
+	// dedektörü HİÇ çağırmaz. Yukarıdaki log_pattern adımı anahtara bağlı
+	// DEĞİL; templater kendi döngüsünde yazmaya devam eder.
+	recordNewLogTemplates(ctx, r.store.AnomalySensitivityForDetectors().LogTemplateNewOn(),
+		func(ctx context.Context) ([]LogTemplateAnomaly, error) {
+			return DetectNewLogTemplates(ctx, r.store, 2*r.window)
+		},
+		r.store.UpsertAnomalyEvent)
 
 	// ── Trace-op anomalies ────────────────────────────────────
 	traceHits, err := DetectTraceOpAnomalies(ctx, r.store, r.window)
@@ -192,6 +180,42 @@ func (r *Recorder) tick(ctx context.Context) {
 			return DetectOpLatencyAnomalies(ctx, r.store, r.window)
 		},
 		r.store.UpsertAnomalyEvent)
+}
+
+// recordNewLogTemplates — recorder'ın yeni-log-şablonu adımı (v0.10.1061'te
+// tick'ten çıkarıldı ki anahtar sahte dedektör/upsert ile sınanabilsin;
+// recordOpLatency emsali). on=false → detect ÇAĞRILMAZ: log_templates aday /
+// bilinen okuması ve upsert yok; açık olaylar yazılmadıkları için aktif
+// yaştan sonra düşer. on=true → v0.10.1061 öncesi gövdenin aynısı.
+func recordNewLogTemplates(ctx context.Context, on bool,
+	detect func(context.Context) ([]LogTemplateAnomaly, error),
+	upsert func(context.Context, chstore.AnomalyEvent) error) {
+	if !on {
+		return
+	}
+	newTemplateHits, err := detect(ctx)
+	if err != nil {
+		log.Printf("[anomaly-recorder] new log templates: %v", err)
+	}
+	for _, a := range newTemplateHits {
+		ev := chstore.AnomalyEvent{
+			// Fingerprint on the stable template ID (Drain hash),
+			// NOT the rendered pattern text — the same template
+			// keeps the same row across recorder ticks.
+			ID:           chstore.FingerprintAnomaly("log_template_new", a.TemplateID, a.Service),
+			Kind:         "log_template_new",
+			Pattern:      a.Template,
+			Service:      a.Service,
+			StartedAt:    a.FirstSeenNs,
+			LastSeen:     a.LastSeenNs,
+			CurrentRatio: 0, // "first appearance" — no ratio over baseline
+			CurrentCount: a.TotalCount,
+			Sample:       a.Sample,
+		}
+		if err := upsert(ctx, ev); err != nil {
+			log.Printf("[anomaly-recorder] upsert new log template %s: %v", a.TemplateID, err)
+		}
+	}
 }
 
 // recordOpLatency — recorder'ın operasyon-gecikme adımı (v0.10.1056'te

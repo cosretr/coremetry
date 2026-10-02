@@ -108,7 +108,11 @@ Ne üretiyorsun?
 | `monitor:<id>` | `monitor/runner.go:378-461` | prob durumu | — | Value 0 / Threshold 1 → totalLoss P1 |
 | `incident:<id>` (notify-only) | `incident_alert.go:35` | created/resolved | — | saklanmaz |
 
-anomaly_events üreticileri (Problem değil): recorder (`recorder.go:107,129`),
+anomaly_events üreticileri (Problem değil): recorder (`recorder.go:107,129`; `log_pattern`
+koşulsuz; `log_template_new` **varsayılan KAPALI** v0.10.1061, `anomaly_sensitivity.logTemplateNew`
+*bool nil = kapalı — operatör onaylı: "Bu log anomalileri de false pozitif geliyor"; kapı
+`DetectNewLogTemplates` başında + recorder adımı `recordNewLogTemplates`; templater / `log_templates`
+defteri sürer, açık olaylar 10 dk sonra düşer — yeniden önerme),
 trace_op (`trace_ops.go:171`), trace_op_latency (`op_latency.go`, recorder'dan; batch
 yük kapısı v0.10.1046; **varsayılan KAPALI** v0.10.1056, `anomaly_sensitivity.opLatency` *bool
 nil = kapalı — operatör: "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence";
@@ -374,7 +378,7 @@ TEK YÖNLÜ eylem süren bir ayar (kapatma) okuma hatasında varsayılan YAYINLA
    söylemesin, `problem_priority_*`/`exception_triage_test` tablosuna satır;
    operatör direktiflerini (P1 yapışkan, taban 2, Inbox tüm durumlar, service
    silent kapalı, disk ETA kapalı, operasyon gecikmesi (`trace_op_latency`) kapalı,
-   fresh deploy yok) YENİDEN AÇMA.
+   yeni log deseni (`log_template_new`) kapalı, fresh deploy yok) YENİDEN AÇMA.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;
    ölçüm seyrekse §5 tasarımı; kayan pencere simülasyon testi.
 5. Kanıt/skor mu? → `hypothesis_*_test.go` tablo, kalibrasyon, tek yazıcı.

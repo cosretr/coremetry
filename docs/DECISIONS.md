@@ -987,6 +987,23 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Yeni log deseni (log_template_new) anomalileri varsayılan kapalı (v0.10.1061)
+
+Operatör onaylı: "Bu log anomalileri de false pozitif geliyor." Drain'in ilk kez gördüğü log biçimi
+(`log_template_new`, `internal/anomaly/log_templates.go`) prod'da yanlış alarm üretiyordu. Öbür log anomalisi
+`log_pattern` (seçilmiş desen sıçraması, `log_patterns.go`) operatörce doğru yakalama sayıldı — dokunulmadı.
+
+**Karar:** `anomaly_sensitivity.logTemplateNew` (`*bool`, nil = KAPALI), v0.10.1056 `opLatency`'nin birebir emsali:
+aynı blob, aynı yükleme / son-iyi-değeri-koru yolu, Normalize somutlaştırır (nil → false), eski blob kapalı okunur.
+Kapalıyken recorder adımı (`recordNewLogTemplates`) dedektörü hiç çağırmaz; dedektör (`DetectNewLogTemplates`) de
+her G/Ç'den önce anahtara bakıp boş liste döner — aday / bilinen-şablon okuması ve upsert yok. Dedektör
+`log_templates` defterini yalnız OKUR; defteri templater puller'ı yazar ve anahtardan bağımsız sürer (Logs
+"patterns" görünümü etkilenmez). Eşikler ve aile süzgeci (v0.10.1030) silinmedi.
+
+**Açık satırlar — göç yok (1056 gibi):** yazılmayan olay 10 dk aktif yaştan sonra düşer; terfi etmiş
+`anomaly-auto:` Problem'i `resolveClearedAnomalyPromotions` ile "anomaly cleared" kapanır; satırlar 30 gün TTL ile
+tarihte kalır. **Geri açmak:** Settings → Anomaly → "Yeni log deseni anomalileri". Varsayılanı yeniden açmayı önerme.
+
 ## 2026-10-02 — Log deseni anomalisi: zaman içinde sayım grafiği (v0.10.1060)
 
 **Operatör:** "Bunu doğru yakalamış ama artışın ne zaman başladığını göstermiyor. Elastic'e gidip bakınca

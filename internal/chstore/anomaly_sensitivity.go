@@ -114,6 +114,17 @@ type AnomalySensitivityConfig struct {
 	// olaylar yazılmadıkları için 10 dk aktif yaştan sonra düşer; terfi
 	// Problem'i "anomaly cleared" ile kapanır. Açmak için Settings → Anomaly.
 	OpLatency *bool `json:"opLatency,omitempty"`
+	// LogTemplateNew — v0.10.1061 (operatör onaylı, prod: "Bu log anomalileri
+	// de false pozitif geliyor"): Drain'in ilk kez gördüğü log biçimi
+	// (`log_template_new`, internal/anomaly/log_templates.go). OpLatency'nin
+	// birebir emsali: *bool, nil = KAPALI; bu sürümden ESKİ her blob KAPALI
+	// okunur. Kapalıyken recorder dedektörü HİÇ koşturmaz (aday + bilinen
+	// şablon okuması, upsert — hiçbiri). Templater (log_templates defteri,
+	// Logs "patterns" görünümü) bu anahtardan BAĞIMSIZ yazmaya devam eder.
+	// Açık olaylar yazılmadıkları için 10 dk aktif yaştan sonra düşer; terfi
+	// Problem'i "anomaly cleared" ile kapanır. `log_pattern` (seçilmiş desen
+	// sıçraması) bu anahtara BAĞLI DEĞİL — operatör doğru yakalama dedi.
+	LogTemplateNew *bool `json:"logTemplateNew,omitempty"`
 }
 
 const (
@@ -144,6 +155,12 @@ func (c AnomalySensitivityConfig) ServiceSilentEnabled() bool {
 // KAPALI (ServiceSilentEnabled gibi; gerekçe alanda). Yalnız açıkça true.
 func (c AnomalySensitivityConfig) OpLatencyOn() bool {
 	return c.OpLatency != nil && *c.OpLatency
+}
+
+// LogTemplateNewOn — v0.10.1061: log_template_new dedektörü koşsun mu? nil ⇒
+// KAPALI (OpLatencyOn gibi; gerekçe alanda). Yalnız açıkça true.
+func (c AnomalySensitivityConfig) LogTemplateNewOn() bool {
+	return c.LogTemplateNew != nil && *c.LogTemplateNew
 }
 
 // AttachesToIncident — nil-güvenli okuma. Yazılmamış = BAĞLA (bugünkü
@@ -415,6 +432,7 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// adını verdiği `-batch` kalıbı kutudan açık gelir.
 		BatchServicePatterns: batchPatternsPtr(DefaultBatchServicePatterns()),
 		OpLatency:            boolPtr(false), // v0.10.1056 — operatör kararı: varsayılan KAPALI
+		LogTemplateNew:       boolPtr(false), // v0.10.1061 — operatör onaylı: varsayılan KAPALI
 	}
 }
 
@@ -455,6 +473,8 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// dedektör bir sonraki kayıtta sessizce kapanırdı. SOMUTLAŞTIRIR
 		// (ServiceSilent gibi): nil → false, true/false aynen.
 		OpLatency: boolPtr(c.OpLatencyOn()),
+		// v0.10.1061 — aynı gerekçe: kopyalanmazsa PUT'ta düşer. nil → false.
+		LogTemplateNew: boolPtr(c.LogTemplateNewOn()),
 	}
 	for _, m := range AnomalySensitivityMetrics {
 		def := d.Metrics[m]

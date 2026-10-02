@@ -100,7 +100,17 @@ const (
 // aday okuması + aday varsa TEK bilinen-şablon okuması. İkisi AYNI sinceNs
 // ile kurulur ve tam tümleyendir: aday = first_seen >= sinceNs, bilinen =
 // first_seen < sinceNs (ns kesin bind).
+//
+// v0.10.1061 — anahtar (anomaly_sensitivity.logTemplateNew, nil = KAPALI;
+// operatör onaylı: "Bu log anomalileri de false pozitif geliyor"). Kapı HER
+// G/Ç'den ÖNCE ve burada (v0.10.1056 DetectOpLatencyAnomalies emsali):
+// kapalıyken ne aday ne bilinen-şablon okuması, boş liste döner — hata
+// DEĞİL. Bu dedektör log_templates defterini yalnız OKUR; defteri templater
+// puller'ı yazar ve anahtardan bağımsız sürer (Logs "patterns" etkilenmez).
 func DetectNewLogTemplates(ctx context.Context, store *chstore.Store, window time.Duration) ([]LogTemplateAnomaly, error) {
+	if !store.AnomalySensitivityForDetectors().LogTemplateNewOn() {
+		return []LogTemplateAnomaly{}, nil
+	}
 	return detectNewLogTemplates(ctx, store, window, time.Now())
 }
 

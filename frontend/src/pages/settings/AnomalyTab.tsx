@@ -343,8 +343,10 @@ function SensitivitySection() {
       const sentPatterns = parseBatchPatterns(batchText);
       // v0.10.1056 — opLatency daima AÇIK boolean gider (alan yoksa false):
       // kayıtlı blob ne olduğunu söylesin, eski sunucu varsayılanına kalmasın.
+      // v0.10.1061 — logTemplateNew aynı gerekçeyle.
       const saved = await api.putAnomalySensitivity({
         ...cfg, batchServicePatterns: sentPatterns, opLatency: cfg.opLatency === true,
+        logTemplateNew: cfg.logTemplateNew === true,
       });
       setCfg(saved);
       setBatchText(formatBatchPatterns(saved.batchServicePatterns));
@@ -531,6 +533,23 @@ function SensitivitySection() {
               Kapalı (varsayılan): operasyon bazında p99 sıçramaları anomali açmaz — tek kovalık
               sıçramalar çok yanlış alarm üretiyordu. Servis düzeyindeki gecikme anomalileri
               etkilenmez.
+            </div>
+          </div>
+          {/* v0.10.1061 — log_template_new dedektörü: VARSAYILAN KAPALI (operatör
+              onaylı: "Bu log anomalileri de false pozitif geliyor"). Alan yoksa
+              kapalı okunur; kayıt açık boolean gönderir. log_pattern etkilenmez. */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" aria-label="Yeni log deseni anomalileri"
+                checked={cfg.logTemplateNew === true}
+                onChange={e => setCfg({ ...cfg, logTemplateNew: e.target.checked })} />
+              <span style={{ fontSize: 13, color: 'var(--text)' }}>
+                Yeni log deseni anomalileri
+              </span>
+            </label>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, marginLeft: 24, lineHeight: 1.5 }}>
+              Kapalı (varsayılan): ilk kez görülen log desenleri anomali açmaz; log desen
+              sıçramaları etkilenmez.
             </div>
           </div>
           {/* v0.10.700 — kök neden hipotezinde zamansal çarpan. Gölge
