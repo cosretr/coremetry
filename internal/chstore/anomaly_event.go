@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -27,6 +28,20 @@ type AnomalyEvent struct {
 	CurrentRatio float64 `json:"currentRatio"` // ratio at last_seen
 	CurrentCount uint64  `json:"currentCount"`
 	Sample       string  `json:"sample"`
+	// EpisodeCount / FirstStartedAt — v0.10.1049, yinelenen anomali ayrımı
+	// (taşıma kuralı MergeAnomalyCarry'de). EpisodeCount: satırın ömründe bu
+	// kaçıncı bölüm (1 = ilk; 0 = kolon okunmadı, 1 sayılır). FirstStartedAt:
+	// İLK bölümün başlangıcı, unix ns; 0 = bilinmiyor (kolondan önce yazılmış
+	// satır) → okuyucu StartedAt sayar (AnomalyPredatesDeploy). Satır son
+	// bölümün başlangıcından 30 gün sonra TTL ile düştüğü için "yinelenen" =
+	// "satırın ömrü içinde yeniden tetiklenmiş" demek.
+	EpisodeCount   uint32 `json:"episodeCount,omitempty"`
+	FirstStartedAt int64  `json:"firstStartedAt,omitempty"`
+	// PredatesDeploy — v0.10.1049, SAKLANMAZ: yalnız deploy raporu / rollout
+	// çekmecesinin "deploy sonrası anomaliler" satırında, o deploy'a göre
+	// AnomalyPredatesDeploy true ise (düzenli yinelenen olay) dolar. Satır
+	// listeden düşmez; ekran onu "yinelenen" diye işaretler.
+	PredatesDeploy bool `json:"predatesDeploy,omitempty"`
 	// Status is computed in the query, not stored. "active" while
 	// last_seen >= now() - anomalyActiveAge (10m), otherwise "cleared".
 	Status string `json:"status"`
@@ -178,8 +193,9 @@ func anomalyNewEpisode(incomingLastSeen, storedLastSeen int64) bool {
 }
 
 // MergeAnomalyCarry — yazılacak satır: gelen olayın saklı satırla
-// birleşimi (StartedAt / LastSeen / PeakRatio; diğer alanlar gelen
-// olaydan). SAF ve tablo-testli (anomaly_event_test.go; terfi kapısı ve
+// birleşimi (StartedAt / LastSeen / PeakRatio / EpisodeCount /
+// FirstStartedAt; diğer alanlar gelen olaydan). SAF ve tablo-testli
+// (anomaly_event_test.go, anomaly_episode_test.go; terfi kapısı ve
 // /inbox önceliği kendi paketlerinde bunun üstünden pinli), çünkü toplu
 // yazıma geçerken (v0.9.957) sessizce bozulabilecek TEK semantik bu:
 // started_at'ın bölüm içinde korunması "süregelen anomali tek satırdır"
@@ -206,12 +222,39 @@ func anomalyNewEpisode(incomingLastSeen, storedLastSeen int64) bool {
 // skora göre sıralı elastic_ml kayıtları) saklı last_seen'i geriye
 // çekseydi, BİR SONRAKİ normal yazım sahte bir boşluk görür ve süren
 // bölümü sıfırlardı.
+//
+// v0.10.1049 — bölüm SAYACI ve İLK başlangıç. Operatör: "Yinelenen anomali
+// ayrımı: her gece tekrar eden bir anomali artık her seferinde 'yeni'
+// görünüyor ve önceki deploy'a bağlanıyor." v0.10.1045 yeni bölümde hiçbir
+// şey taşımıyordu; "yeni mi, yinelenen mi" sorusunun cevabı satırda yoktu.
+// İki alan, aynı üç dal:
+//
+//	ilk görülme  → episode_count 1, first_started_at = gelen started_at.
+//	YENİ BÖLÜM   → episode_count = saklı + 1; first_started_at = saklı
+//	               (saklı 0 = kolondan önceki satır → saklı started_at).
+//	               started_at / tepe yine YALNIZ gelen olaydan (1045 aynen).
+//	aynı bölüm   → ikisi de saklı satırdan, değişmeden.
+//
+// Sırası bozuk yazım bölüm açmadığı için sayacı da artırmaz (aynı karar).
 func MergeAnomalyCarry(e, stored AnomalyEvent, exists bool) AnomalyEvent {
 	out := e
-	if !exists || anomalyNewEpisode(e.LastSeen, stored.LastSeen) {
+	if !exists {
 		out.PeakRatio = e.CurrentRatio
+		out.EpisodeCount = 1
+		out.FirstStartedAt = e.StartedAt
 		return out
 	}
+	if anomalyNewEpisode(e.LastSeen, stored.LastSeen) {
+		out.PeakRatio = e.CurrentRatio
+		out.EpisodeCount = storedEpisodeCount(stored) + 1
+		out.FirstStartedAt = stored.FirstStartedAt
+		if out.FirstStartedAt <= 0 {
+			out.FirstStartedAt = stored.StartedAt
+		}
+		return out
+	}
+	out.EpisodeCount = storedEpisodeCount(stored)
+	out.FirstStartedAt = stored.FirstStartedAt
 	out.StartedAt = stored.StartedAt
 	out.PeakRatio = stored.PeakRatio
 	if e.CurrentRatio > out.PeakRatio {
@@ -221,6 +264,198 @@ func MergeAnomalyCarry(e, stored AnomalyEvent, exists bool) AnomalyEvent {
 		out.LastSeen = stored.LastSeen
 	}
 	return out
+}
+
+// storedEpisodeCount — saklı satırın bölüm sayısı; 0 (kolon okunmadı) 1
+// sayılır. Kolon varken eski satır DEFAULT 1 okur; 0 yalnız probe'suz
+// okumada görülür ve o yazım kolonu zaten INSERT listesine koymaz.
+func storedEpisodeCount(stored AnomalyEvent) uint32 {
+	if stored.EpisodeCount == 0 {
+		return 1
+	}
+	return stored.EpisodeCount
+}
+
+// Düzenli yinelenme eşikleri (AnomalyPredatesDeploy). Bir anomali, deploy'dan
+// SONRA başlamış bir bölümünde ancak en az anomalyRegularMinEpisodes bölüm
+// görülmüşse VE bölümler arası ortalama aralık anomalyRegularMaxMeanGap'i
+// aşmıyorsa "deploy'dan önce de görülüyordu" sayılır: her gece koşan iş
+// üçüncü gecesinden itibaren (ortalama 24 sa). İki bölüm (deploy kırdı →
+// rollback → bozuk yeniden deploy) ya da seyrek bir eski kıpırtı (20 gün
+// önce bir kez) bu tanıma GİRMEZ — deploy atfı korunur.
+const (
+	anomalyRegularMinEpisodes = 3
+	anomalyRegularMaxMeanGap  = 48 * time.Hour
+)
+
+// AnomalyPredatesDeploy — bu deploy anomaliyi AÇIKLAMIYOR mu, çünkü anomali
+// deploy'dan önce de DÜZENLİ olarak görülüyordu? SAF, tablo-testli.
+// v0.10.1049; deploy atfının TEK kuralı — üç tüketici aynı işlevden okur:
+//
+//   - deploy raporu / rollout çekmecesi (api anomaliesSinceDeploy): satır
+//     listede KALIR, yalnız "yinelenen" diye işaretlenir (gizlenmez);
+//   - kök-neden işçisi (anomaly synthInputForAnomaly): deploy adayı DÜŞMEZ,
+//     diğer kanıt katmanlarının altına iner — ölçülen etki gerileme
+//     gösterirse normal puanını geri alır (correlator.Synthesize);
+//   - deploy çipi (EnrichAnomaliesWithDeploys / pickAnomalyDeploy): o deploy
+//     satıra "olası neden" diye iliştirilmez.
+//
+// Kural (sırayla):
+//
+//	earliest = min(firstStartedAt (> 0 ise), startedAt)
+//	earliest ≥ deploy            → false (anomali deploy'dan sonra doğdu)
+//	startedAt < deploy           → true  (bu bölüm deploy'dan önce başladı —
+//	                                     bugünkü `StartedAt >= since` kuralı,
+//	                                     tek bölümlü satırda birebir)
+//	count ≥ 3 VE (startedAt − earliest) / (count − 1) ≤ 48 sa → true
+//	aksi                         → false (deploy atfı korunur)
+//
+// Kabul edilen bedel: ortalama aralığa deploy'dan SONRAKİ bölümler de girer
+// (sayaç bölümlerin deploy'a göre nerede olduğunu bilmez). Deploy'dan bir
+// gün önce tek bölüm görülüp deploy sonrası saatte bir yeniden tetiklenen
+// bir anomali üçüncü bölümünde (ortalama ~12 sa) "düzenli" görünür; o hâlde
+// rapor satırı işaretli kalır (gizlenmez) ve kök-neden adayı ölçülen
+// gerilemeyle normal puanını geri alır.
+//
+// Sınır: earliest == deploy anı → false (bugünkü kapsayıcılık). firstStartedAt
+// 0 (kolondan önceki satır) → started_at; bozuk satırda first > started olsa
+// da küçüğü alınır.
+func AnomalyPredatesDeploy(firstStartedAt, startedAt int64, episodeCount uint32, deployTime int64) bool {
+	earliest := startedAt
+	if firstStartedAt > 0 && firstStartedAt < earliest {
+		earliest = firstStartedAt
+	}
+	if earliest >= deployTime {
+		return false
+	}
+	if startedAt < deployTime {
+		return true
+	}
+	if episodeCount < anomalyRegularMinEpisodes {
+		return false
+	}
+	meanGap := (startedAt - earliest) / int64(episodeCount-1)
+	return meanGap <= int64(anomalyRegularMaxMeanGap)
+}
+
+// probeAnomalyEpisodeCols — anomaly_events episode_count + first_started_at
+// kolonlarını taşıyor mu (v0.10.1049). ai_calls probe'larının şekli
+// (probeAICallsCachedColumn): system.columns METADATA okuması — veri
+// hacminden bağımsız, tek geçici zaman aşımı yanlış-false üretmez (v0.10.834
+// dersi). İki kolon birlikte: ikisi aynı ALTER turunda gidiyor, biri yoksa
+// ikisi de yok sayılır.
+//
+// İKİ yerde koşar: boot (migrate, ALTER'lardan sonra) ve ertelenen DDL indikten
+// sonra reprobePromotedAttrs → reprobeAnomalyEpisodeCols (ddl_defer.go).
+// İkincisi şart: küme kipinde kolonu EKLEYEN boot burayı false okur ve sayaç /
+// ilk görülme BİRİKİMLİ olduğu için o pod'un her yazımı onları DEFAULT'a (1 /
+// 0) geri yazar — bayrak süreç ömrü boyunca donsaydı bu bir sonraki restart'a
+// dek sürerdi.
+func (s *Store) probeAnomalyEpisodeCols(ctx context.Context) (bool, error) {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'anomaly_events'
+		   AND name IN ('episode_count', 'first_started_at')
+		 SETTINGS max_execution_time = 5`).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n == 2, nil
+}
+
+// reprobeAnomalyEpisodeCols — ertelenen DDL sonrası yeniden deneme. Bayrak
+// yalnız false → true döner (kolon düşmez); geçiş BİR KEZ loglanır
+// (CompareAndSwap — eşzamanlı iki deneme iki satır basmaz). Dönüş: bayrağın
+// SON hâli. Sonraki her çağrı (UpsertAnomalyEvents / Get / List) bayrağı kendi
+// başında bir kez okur, yani geçiş bir sonraki çağrıdan itibaren geçerli.
+func (s *Store) reprobeAnomalyEpisodeCols(ctx context.Context) bool {
+	if s.hasAnomalyEpisodeCols.Load() {
+		return true
+	}
+	if ok, _ := s.probeAnomalyEpisodeCols(ctx); ok && s.hasAnomalyEpisodeCols.CompareAndSwap(false, true) {
+		log.Printf("[chstore] anomaly_events episode_count/first_started_at ertelenen DDL sonrası görüldü — bölüm sayacı yazımı ve okuması devrede (restart gerekmedi)")
+	}
+	return s.hasAnomalyEpisodeCols.Load()
+}
+
+// anomalyEventSelectExpr — GetAnomalyEvent / ListAnomalyEvents'in ortak satır
+// listesi (status ayrı, çağıran ekler). episode = store'un probe'u
+// (hasAnomalyEpisodeCols): küme kipinde kolonu ekleyen boot DDL'i arka plana
+// ertelediği için (v0.9.614) kolonu koşulsuz okumak her anomali okumasını
+// "no such column" ile düşürürdü. Sıra anomalyEventScanDest'le birebir aynı
+// (pozisyonel Scan); ikisi AYNI bool'dan türer.
+func anomalyEventSelectExpr(episode bool) string {
+	expr := `id, kind, pattern, service,
+		       toUnixTimestamp64Nano(started_at),
+		       toUnixTimestamp64Nano(last_seen),
+		       peak_ratio, current_ratio, current_count, sample`
+	if episode {
+		expr += `,
+		       episode_count, toUnixTimestamp64Nano(first_started_at)`
+	}
+	return expr
+}
+
+// anomalyEventScanDest — anomalyEventSelectExpr'in hedefleri, aynı sırayla.
+func anomalyEventScanDest(e *AnomalyEvent, episode bool) []any {
+	dst := []any{
+		&e.ID, &e.Kind, &e.Pattern, &e.Service,
+		&e.StartedAt, &e.LastSeen,
+		&e.PeakRatio, &e.CurrentRatio, &e.CurrentCount, &e.Sample,
+	}
+	if episode {
+		dst = append(dst, &e.EpisodeCount, &e.FirstStartedAt)
+	}
+	return dst
+}
+
+// anomalyCarrySelectSQL — UpsertAnomalyEvents'in taşıma okuması (n id).
+func anomalyCarrySelectSQL(n int, episode bool) string {
+	cols := `id, toUnixTimestamp64Nano(started_at), toUnixTimestamp64Nano(last_seen), peak_ratio`
+	if episode {
+		cols += `, episode_count, toUnixTimestamp64Nano(first_started_at)`
+	}
+	return `SELECT ` + cols + `
+		 FROM anomaly_events FINAL
+		 WHERE id IN (` + chPlaceholders(n) + `)`
+}
+
+// anomalyCarryScanDest — anomalyCarrySelectSQL'in hedefleri, aynı sırayla.
+func anomalyCarryScanDest(id *string, p *AnomalyEvent, episode bool) []any {
+	dst := []any{id, &p.StartedAt, &p.LastSeen, &p.PeakRatio}
+	if episode {
+		dst = append(dst, &p.EpisodeCount, &p.FirstStartedAt)
+	}
+	return dst
+}
+
+// anomalyInsertSQL / anomalyInsertRow — toplu yazımın kolon listesi ve bir
+// satırın değerleri, AYNI bool'dan. Probe false iken (kolon henüz inmemiş)
+// iki kolon listeden düşer: satır DEFAULT'u alır (1 / 0 = "yinelenmemiş,
+// ilk görülme bilinmiyor"), yazım code 16 ile ölmez.
+func anomalyInsertSQL(episode bool) string {
+	cols := `id, kind, pattern, service, started_at, last_seen,
+		 peak_ratio, current_ratio, current_count, sample`
+	if episode {
+		cols += `,
+		 episode_count, first_started_at`
+	}
+	return `INSERT INTO anomaly_events
+		(` + cols + `)`
+}
+
+func anomalyInsertRow(w AnomalyEvent, episode bool) []any {
+	row := []any{
+		w.ID, w.Kind, w.Pattern, w.Service,
+		time.Unix(0, w.StartedAt),
+		time.Unix(0, w.LastSeen),
+		w.PeakRatio, w.CurrentRatio, w.CurrentCount, w.Sample,
+	}
+	if episode {
+		row = append(row, w.EpisodeCount, time.Unix(0, w.FirstStartedAt))
+	}
+	return row
 }
 
 // foldAnomalyCarryRow — taşıma okumasının bir satırını haritaya katar; aynı
@@ -277,12 +512,14 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 	// max-on-upsert primitifi yok, uygulama katmanı taşıyor. last_seen
 	// v0.10.1045'te eklendi: bölüm kararı (MergeAnomalyCarry) olay-saati
 	// boşluğunu ondan ölçer — ek sorgu değil, aynı satırın bir kolonu daha.
+	// v0.10.1049 — episode_count + first_started_at da aynı okumada (probe
+	// true iken); okuma ve yazım çağrı başına TEK anlık görüntüden (`ep`)
+	// kurulur — yeniden probe (ddl_defer.go) çağrının ortasında bayrağı
+	// çevirse bile bir çağrı ya baştan sona kolonlu ya kolonsuz.
+	ep := s.hasAnomalyEpisodeCols.Load()
 	prev := make(map[string]AnomalyEvent, len(evs))
 	ids := uniqueAnomalyIDs(evs)
-	rows, err := s.conn.Query(ctx,
-		`SELECT id, toUnixTimestamp64Nano(started_at), toUnixTimestamp64Nano(last_seen), peak_ratio
-		 FROM anomaly_events FINAL
-		 WHERE id IN (`+chPlaceholders(len(ids))+`)`, toAnySlice(ids)...)
+	rows, err := s.conn.Query(ctx, anomalyCarrySelectSQL(len(ids), ep), toAnySlice(ids)...)
 	if err != nil {
 		// v0.10.1045 — okuma hatasında YAZMA YOK (yumuşak-hata yönü
 		// bilinçli ters çevrildi). Eskiden prev boş bırakılıp her olay
@@ -297,7 +534,7 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 	for rows.Next() {
 		var id string
 		var p AnomalyEvent
-		if err := rows.Scan(&id, &p.StartedAt, &p.LastSeen, &p.PeakRatio); err != nil {
+		if err := rows.Scan(anomalyCarryScanDest(&id, &p, ep)...); err != nil {
 			rows.Close()
 			return err
 		}
@@ -311,29 +548,25 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 
 	// Explicit column list: anomaly_events has a `version` column with a
 	// DEFAULT (toUnixTimestamp64Nano(now64(9))). The bare-form
-	// "INSERT INTO anomaly_events" requires all 11 columns; supplying
-	// 10 args trips clickhouse-go's "expected 11 arguments" error,
+	// "INSERT INTO anomaly_events" requires EVERY column (11 before
+	// v0.10.1049, 13 once episode_count / first_started_at land); supplying
+	// fewer args trips clickhouse-go's "expected N arguments" error,
 	// which spammed the logs once the table grew that DEFAULT column.
 	// Naming the columns we actually populate lets the DEFAULT do its
 	// job and the recorder stays in sync without handcrafting a version
 	// value here. DEFAULT toplu yazımda da doğru çalışır: her satır
 	// KENDİ now64()'ünü alır, yani ReplacingMergeTree'nin version
 	// semantiği (aynı id için en son sürüm kazanır) korunur.
-	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO anomaly_events
-		(id, kind, pattern, service, started_at, last_seen,
-		 peak_ratio, current_ratio, current_count, sample)`)
+	// v0.10.1049 — liste ve satır anomalyInsertSQL/anomalyInsertRow'dan, aynı
+	// `ep` ile (arite şekil testi: anomaly_episode_test.go).
+	batch, err := s.conn.PrepareBatch(ctx, anomalyInsertSQL(ep))
 	if err != nil {
 		return err
 	}
 	for _, e := range evs {
 		p, exists := prev[e.ID]
 		w := MergeAnomalyCarry(e, p, exists)
-		if err := batch.Append(
-			w.ID, w.Kind, w.Pattern, w.Service,
-			time.Unix(0, w.StartedAt),
-			time.Unix(0, w.LastSeen),
-			w.PeakRatio, w.CurrentRatio, w.CurrentCount, w.Sample,
-		); err != nil {
+		if err := batch.Append(anomalyInsertRow(w, ep)...); err != nil {
 			return err
 		}
 	}
@@ -353,11 +586,9 @@ func (s *Store) GetAnomalyEvent(ctx context.Context, id string, activeAge time.D
 		activeAge = anomalyActiveAge
 	}
 	var e AnomalyEvent
+	ep := s.hasAnomalyEpisodeCols.Load() // v0.10.1049 — liste ve hedefler aynı anlık görüntüden
 	row := s.conn.QueryRow(ctx, `
-		SELECT id, kind, pattern, service,
-		       toUnixTimestamp64Nano(started_at),
-		       toUnixTimestamp64Nano(last_seen),
-		       peak_ratio, current_ratio, current_count, sample,
+		SELECT `+anomalyEventSelectExpr(ep)+`,
 		       if(last_seen >= now64() - INTERVAL ? SECOND, 'active', 'cleared') AS status
 		FROM anomaly_events FINAL
 		WHERE id = ?
@@ -365,12 +596,7 @@ func (s *Store) GetAnomalyEvent(ctx context.Context, id string, activeAge time.D
 		int64(activeAge.Seconds()),
 		id,
 	)
-	if err := row.Scan(
-		&e.ID, &e.Kind, &e.Pattern, &e.Service,
-		&e.StartedAt, &e.LastSeen,
-		&e.PeakRatio, &e.CurrentRatio, &e.CurrentCount, &e.Sample,
-		&e.Status,
-	); err != nil {
+	if err := row.Scan(append(anomalyEventScanDest(&e, ep), &e.Status)...); err != nil {
 		// clickhouse-go's QueryRow surfaces an empty result as this exact
 		// string (no typed sentinel) — the same no-rows idiom the other
 		// by-id reads use (dashboard.go, monitor.go). Soft "not found".
@@ -545,11 +771,9 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 	}
 	args = append(args, exclArgs...)
 	args = append(args, f.Limit)
+	ep := s.hasAnomalyEpisodeCols.Load() // v0.10.1049 — liste ve hedefler aynı anlık görüntüden
 	rows, err := s.conn.Query(ctx, `
-		SELECT id, kind, pattern, service,
-		       toUnixTimestamp64Nano(started_at),
-		       toUnixTimestamp64Nano(last_seen),
-		       peak_ratio, current_ratio, current_count, sample,
+		SELECT `+anomalyEventSelectExpr(ep)+`,
 		       if(last_seen >= now64() - INTERVAL ? SECOND, 'active', 'cleared') AS status
 		FROM anomaly_events FINAL
 		WHERE toUnixTimestamp64Nano(last_seen) >= ?`+activeSQL+svcSQL+winSQL+exclSQL+`
@@ -574,12 +798,7 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 	var out []AnomalyEvent
 	for rows.Next() {
 		var e AnomalyEvent
-		if err := rows.Scan(
-			&e.ID, &e.Kind, &e.Pattern, &e.Service,
-			&e.StartedAt, &e.LastSeen,
-			&e.PeakRatio, &e.CurrentRatio, &e.CurrentCount, &e.Sample,
-			&e.Status,
-		); err != nil {
+		if err := rows.Scan(append(anomalyEventScanDest(&e, ep), &e.Status)...); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

@@ -399,6 +399,17 @@ func synthInputForAnomaly(ev chstore.AnomalyEvent, in evidenceInputs) correlator
 	}
 	out.Deploy = deployFromEntry(deploy, ev.StartedAt)
 	out.FreshnessFrac = freshnessFrac(deploy, ev.StartedAt)
+	// v0.10.1049 — yinelenen anomali (operatör: "her gece tekrar eden bir
+	// anomali … önceki deploy'a bağlanıyor"). Anomali bu deploy'dan önce de
+	// DÜZENLİ görülüyorsa (chstore.AnomalyPredatesDeploy) deploy adayı DÜŞMEZ:
+	// kanıt olarak kalır, ölçülen etki adımı (enrichDeployImpact — in.Deploy
+	// dolu olduğu için) yine koşar ve Synthesize adayı diğer katmanların
+	// altına indirir; etki gerileme gösterirse normal puanını geri alır. İki
+	// bölümlü / seyrek yinelenen olayda (deploy kırdı → rollback → bozuk
+	// yeniden deploy; 20 gün önceki tek kıpırtı) kural false: bugünkü atıf.
+	if deploy != nil && chstore.AnomalyPredatesDeploy(ev.FirstStartedAt, ev.StartedAt, ev.EpisodeCount, deploy.FirstSeenNs) {
+		out.DeployRecurring = &correlator.DeployRecurrence{Count: ev.EpisodeCount, FirstSeenNs: ev.FirstStartedAt}
+	}
 
 	// Propagation-ranked downstream suspects over the weighted graph, anchored
 	// on the anomaly's service. Same scorer the bundle uses. Only neighbours

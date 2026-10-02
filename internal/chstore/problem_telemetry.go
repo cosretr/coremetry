@@ -301,18 +301,7 @@ func (s *Store) EnrichAnomaliesWithDeploys(ctx context.Context, events []Anomaly
 		if len(list) == 0 {
 			continue
 		}
-		var pick *spanDeploy
-		for j := len(list) - 1; j >= 0; j-- {
-			if list[j].ns > events[i].StartedAt {
-				continue
-			}
-			if list[j].ns < events[i].StartedAt-lookbackNs {
-				break
-			}
-			pick = &list[j]
-			break
-		}
-		if pick != nil {
+		if pick := pickAnomalyDeploy(list, events[i], lookbackNs); pick != nil {
 			events[i].RecentDeploy = &RecentDeploy{
 				Version:    pick.version,
 				TimeUnixNs: pick.ns,
@@ -321,6 +310,31 @@ func (s *Store) EnrichAnomaliesWithDeploys(ctx context.Context, events []Anomaly
 		}
 	}
 	return events
+}
+
+// pickAnomalyDeploy — EnrichAnomaliesWithDeploys'un seçim yarısı, SAF (liste
+// ns'e göre ARTAN): [started_at − lookback, started_at] içindeki en son deploy.
+//
+// v0.10.1049 — yinelenen anomali: deploy'dan önce de DÜZENLİ görülen
+// (AnomalyPredatesDeploy: ≥ 3 bölüm, ortalama aralık ≤ 48 sa — ör. her gece
+// koşan iş üçüncü gecesinden itibaren) olaya o deploy "olası neden" diye
+// iliştirilmez (satır çipi, detay sayfasının deploy kutusu, /anomalies
+// çekmecesi ve kök-neden ucu hep buradan okur). İki bölümlü ya da seyrek
+// yinelenen olayda çip bugünkü gibi. Tek bölümlü satırda seçim birebir aynı.
+func pickAnomalyDeploy(list []spanDeploy, ev AnomalyEvent, lookbackNs int64) *spanDeploy {
+	for j := len(list) - 1; j >= 0; j-- {
+		if list[j].ns > ev.StartedAt {
+			continue
+		}
+		if list[j].ns < ev.StartedAt-lookbackNs {
+			break
+		}
+		if AnomalyPredatesDeploy(ev.FirstStartedAt, ev.StartedAt, ev.EpisodeCount, list[j].ns) {
+			continue
+		}
+		return &list[j]
+	}
+	return nil
 }
 
 // CalleesOf returns services that `service` calls (outgoing dependency view).

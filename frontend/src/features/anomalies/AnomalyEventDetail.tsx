@@ -21,9 +21,9 @@ import { anomalyVerdictSubject } from '@/lib/problemVerdict';
 import { tsLong } from '@/lib/utils';
 import type { AnomalyEvent } from '@/lib/types';
 import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections';
-import { anomalySummary, detailWhenLine } from './detailSummary';
+import { anomalySummary, anomalyWhenLine } from './detailSummary';
 import {
-  ANOMALY_CHART_EMPTY, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalyDurationNs, anomalySignalHrefs,
+  ANOMALY_CHART_EMPTY, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalySignalHrefs,
   behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
 } from './anomalyDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
@@ -173,11 +173,9 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
   const isLog = isLogAnomalyKind(event.kind);
   const sentence = anomalySummary(event, details);
   // Bitmiş (cleared) olayda bitiş = son gözlem (durum last_seen tazeliğinden
-  // türer: chstore GetAnomalyEvent).
-  const when = detailWhenLine({
-    startedAt: event.startedAt, durationNs: anomalyDurationNs(event), ongoing: event.status === 'active',
-    endedAt: event.status === 'active' ? undefined : event.lastSeen,
-  });
+  // türer: chstore GetAnomalyEvent). v0.10.1049 — yinelenen olayda satırın
+  // sonunda tek ek: "yinelenen · bu N. kez · ilk kez <tarih>" (yeni bölüm yok).
+  const when = anomalyWhenLine(event);
 
   return (
     <PageShell>

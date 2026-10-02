@@ -233,6 +233,27 @@ type Store struct {
 	// etkilenmez: muhasebe, tanıyı düşüremez.
 	hasRCAVerdictBodyCol bool
 
+	// hasAnomalyEpisodeCols — anomaly_events episode_count + first_started_at
+	// kolonlarını taşıyor mu (v0.10.1049, yinelenen anomali ayrımı).
+	// hasRCAVerdictBodyCol ile AYNI sınıf: Coremetry'nin kendi state tablosu,
+	// dış Distributed değil; ALTER alters diliminden ON CLUSTER iner, ama küme
+	// kipinde DDL ertelendiği için kolonu EKLEYEN boot burayı false okur.
+	// İki kolon TEK probe'la: ikisi aynı ALTER turunda gidiyor, tek SELECT
+	// ikisini birden kanıtlar (rca_verdicts body/source emsali).
+	//
+	// false ⇒ taşıma okuması, INSERT ve liste/tekil okumalar iki kolonu
+	// ATLAR (anomaly_event.go, çağrı başına tek anlık görüntüden kurulan
+	// listeler): EpisodeCount 0 ve FirstStartedAt 0 okunur = "yinelenmemiş,
+	// ilk görülme bilinmiyor" → deploy atfı bugünkü started_at kıyasına düşer
+	// (güvenli yön). Bu sürede yazılan satırlar kolon inince DEFAULT (1 / 0)
+	// alır — sayaç birikimli olduğu için bu bir SIFIRLAMADIR.
+	//
+	// atomic: ertelenen DDL indikten sonra reprobePromotedAttrs
+	// (ddl_defer.go → reprobeAnomalyEpisodeCols) bayrağı restart beklemeden
+	// true'ya çevirir; sıfırlama penceresi o ana dek sürer, bir sonraki boot'a
+	// dek değil.
+	hasAnomalyEpisodeCols atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -3730,6 +3751,21 @@ func (s *Store) migrate(ctx context.Context) error {
 		// dizgi. `problems` Coremetry'nin kendi state tablosu, dış Distributed
 		// wrapper değil — comparator ALTER'ıyla birebir aynı sınıf.
 		`ALTER TABLE problems ADD COLUMN IF NOT EXISTS kind LowCardinality(String) DEFAULT 'service'`,
+		// v0.10.1049 — yinelenen anomali ayrımı. Operatör: "Yinelenen anomali
+		// ayrımı: her gece tekrar eden bir anomali artık her seferinde 'yeni'
+		// görünüyor ve önceki deploy'a bağlanıyor." Bölüm sayacı + İLK bölümün
+		// başlangıcı; taşıma kuralı MergeAnomalyCarry'de.
+		//
+		// DEFAULT'lar "bilinmiyor = bugünkü davranış" demek: kolondan önce
+		// yazılmış satır 1. bölüm ve ilk görülme 0 (okuyucu started_at sayar,
+		// AnomalyPredatesDeploy). ORDER BY / TTL'e girmez (dedup anahtarı `id`,
+		// TTL hâlâ son bölümün started_at'i). CREATE TABLE'a bilinçli
+		// EKLENMEDİ (problems.comparator/kind emsali): taze ve yükseltilmiş
+		// kurulumda fiziksel kolon sırası aynı kalsın (iki kolon da `version`
+		// ardından). `anomaly_events` dış Distributed değil; probe
+		// hasAnomalyEpisodeCols (iki-boot sözleşmesi).
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS episode_count UInt32 DEFAULT 1`,
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS first_started_at DateTime64(9) DEFAULT toDateTime64(0, 9)`,
 		// v0.9.415 — P1 exception gruplarına proaktif kök-sebep özeti
 		// (ExceptionExplainer, problems ai_summary'nin exception ikizi).
 		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS ai_summary String DEFAULT ''`,
@@ -4129,6 +4165,18 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasProblemKindCol = kindErr == nil
 	if !s.hasProblemKindCol {
 		log.Printf("[chstore] `kind` column not present on problems (%v) — INSERT/SELECT omit it; every problem reads back as kind=service, i.e. exactly the pre-v0.9.1338 behaviour", kindErr)
+	}
+
+	// anomaly_events bölüm kolonları probe'u (v0.10.1049) — ai_calls
+	// probe'larının şekli (system.columns metadata; iki kolon aynı ALTER
+	// turunda, tek sorgu ikisini kanıtlar). false iken taşıma okuması / INSERT
+	// / okumalar iki kolonu atlar; yinelenme işareti ve deploy atfı bugünkü
+	// davranışta. Küme kipinde ertelenen ALTER inince reprobePromotedAttrs
+	// bayrağı restart beklemeden çevirir (ddl_defer.go).
+	aeOK, aeErr := s.probeAnomalyEpisodeCols(ctx)
+	s.hasAnomalyEpisodeCols.Store(aeOK)
+	if !aeOK {
+		log.Printf("[chstore] `episode_count`/`first_started_at` columns not present on anomaly_events (err=%v) — carry read/INSERT/SELECT omit them and every write resets the counter to its DEFAULT; every anomaly reads as a first episode (recurring marker off, deploy attribution by started_at — the pre-v0.10.1049 behaviour) until the deferred-DDL re-probe or the next boot", aeErr)
 	}
 
 	// topology_edges_5m.cluster probe (v0.9.1025) — comparator ile birebir

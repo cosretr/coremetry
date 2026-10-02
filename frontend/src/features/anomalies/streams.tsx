@@ -31,6 +31,7 @@ import {
 import { fmtNum, tsLong } from '@/lib/utils';
 import { logsHref } from '@/lib/logsUrl';
 import { AnomalyDetailDrawer } from './AnomalyDetailDrawer';
+import { RecurringMarker } from './RecurringMarker'; // v0.10.1049
 import { SnoozeButton } from './SnoozeButton';
 import { serviceHref, inboxItemWindow, pointEventWindow, eventLifespanWindow } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
@@ -519,7 +520,12 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
                 </td>
                 <td className="num" style={{ fontWeight: 700 }}>{e.peakRatio.toFixed(1)}</td>
                 {/* v0.10.739 — tarih damgası 13 px (.ib-when). */}
-                <td className="mono ib-when cell-faint">{tsLong(e.startedAt)}</td>
+                <td className="mono ib-when cell-faint">
+                  {tsLong(e.startedAt)}
+                  {/* v0.10.1049 — Started bu bölümün başlangıcı; yinelenen
+                      olayda altında nötr işaret, ilk görülme ipucunda. */}
+                  <RecurringMarker episodeCount={e.episodeCount} firstStartedAt={e.firstStartedAt} line />
+                </td>
                 <td className="mono ib-when cell-faint">{tsLong(e.lastSeen)}</td>
                 <td>
                   {/* v0.9.477 — satır-içi panel bir tablo hücresinde

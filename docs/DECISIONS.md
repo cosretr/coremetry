@@ -987,6 +987,78 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Anomali: yinelenen bölüm sayacı ve ilk görülme (v0.10.1049)
+
+**Operatör:** "Yinelenen anomali ayrımı: her gece tekrar eden bir anomali artık her seferinde 'yeni' görünüyor ve
+önceki deploy'a bağlanıyor. 'Yeni mi, yinelenen mi' ayrımı için küçük bir şema eki gerekir." **Önce:** v0.10.1045'ten
+beri 22 dk 30 sn'yi aşan boşluk yeni bölüm açar ve hiçbir şey taşınmaz; satırda "bu daha önce de ateşledi mi"
+bilgisi yoktu. Sonuç: gece işi her gece yeni bir `started_at` taşıyor, deploy raporu / rollout çekmecesinin "deploy
+sonrası anomaliler" listesine, kök-neden işçisinin deploy şüphelisine (0.80 taban, en güçlü katman) ve satırın
+deploy çipine bir önceki deploy'un hanesine yazılıyordu.
+
+**Şema (`anomaly_events`, `migrate()` `alters` dilimi):** `episode_count UInt32 DEFAULT 1`, `first_started_at
+DateTime64(9) DEFAULT toDateTime64(0, 9)` — `ADD COLUMN IF NOT EXISTS`, ORDER BY / TTL'e girmez, CREATE TABLE'a
+eklenmedi (problems.comparator/kind emsali: taze ve yükseltilmiş kurulumda kolon sırası aynı). DEFAULT'lar
+"bilinmiyor = bugünkü davranış": eski satır 1. bölüm, ilk görülme 0 → okuyucu `started_at` sayar.
+
+**Taşıma (`MergeAnomalyCarry`):** ilk görülme → sayaç 1, ilk = gelen `started_at`; aynı bölüm → ikisi saklı satırdan
+değişmeden; YENİ bölüm → sayaç = saklı + 1, ilk = saklı ilk (0 ise saklı `started_at`). Bölüm kuralı (boşluk,
+sınır, sırası bozuk yazım) v0.10.1045'in aynısı — sırası bozuk yazım bölüm açmadığı için sayacı da artırmaz.
+
+**Ekran (yeni bölüm yok):** anomali detay sayfasının "ne zaman" satırına yalnız sayaç > 1 iken tek ek: "· yinelenen ·
+bu N. kez · ilk kez <tarih>" (sayaç ≤ 1 / yok → metin bayt bayt aynı). Problems kuyruğunun anomali satırı ve
+`/anomalies` geçmiş satırı (Started hücresi) nötr tek kelime "yinelenen" (`Badge tone="neutral"`, renk yok — renk
+yalnız sapan değerde); sayı ve ilk tarih ipucunda. API: `AnomalyEvent.episodeCount/firstStartedAt` ve inbox
+`anomaly.episodeCount/firstStartedAt` (omitempty).
+
+**Deploy atfı — tek kural "düzenli yinelenme", `chstore.AnomalyPredatesDeploy(first, started, count, deploy)`:**
+`earliest = min(first (> 0 ise), started)`; `earliest ≥ deploy` → false; `started < deploy` → true (bugünkü kural,
+tek bölümlü satırda birebir); aksi hâlde YALNIZ `count ≥ 3` VE ortalama aralık `(started − earliest) / (count − 1)
+≤ 48 sa` iken true (`anomalyRegularMinEpisodes`, `anomalyRegularMaxMeanGap`). Gece işi üçüncü gecesinden itibaren
+"deploy'dan önce de görülüyordu"; **vaka A** (deploy kırdı → 1. bölüm; rollback; "düzeltme" yeniden deploy hâlâ
+bozuk → 2. bölüm) ve **vaka B** (20 gün önce tek kıpırtı, bugün deploy gerçekten bozuyor) atfı KORUR. İlk taslak
+"herhangi bir eski bölüm"ü yeterli sayıyordu; parmak izi `kind|pattern|service` ve satır 30 günde bir ateşledikçe
+yaşadığı için birkaç haftada sık görülen her operasyonun ilk görülmesi her yeni deploy'dan önce düşer ve gerçek bir
+deploy gerilemesi rapordan, kök-neden adayından (ölçülen etkisiyle birlikte) ve çipten kaybolurdu (inceleme).
+**Kabul edilen bedel:** ortalamaya deploy'dan SONRAKİ bölümler de girer — deploy'dan bir gün önce tek bölüm görülüp
+deploy sonrası saatte bir yeniden tetiklenen anomali 3. bölümünde (ortalama ~12 sa) düzenli görünür; o hâlde bile
+rapor satırı işaretli KALIR ve kök-neden adayı ölçülen gerilemeyle normal puanını geri alır.
+
+Üç tüketici: (1) **deploy raporu + rollout çekmecesi** `anomaliesSinceDeploy` — seçim bugünküyle aynı
+(`StartedAt >= since`), HİÇBİR satır gizlenmez; kural true olan satır `predatesDeploy` taşır ve rollout
+çekmecesinin "Aktif anomaliler" listesinde aynı nötr "yinelenen" işaretiyle çizilir (işaretli, gizli değil).
+(2) **kök-neden işçisi** `synthInputForAnomaly` — deploy adayı DÜŞMEZ, İNER: `SynthesisInput.DeployRecurring`
+doluyken `correlator.Synthesize` adayı `recurringDeployScore` = 0.10'a indirir (eş-ateşleme 0.20, sinyal bandı
+≥ 0.30, komşu-sinyal ≥ 0.168 altında; yayılımda yalnız %14'ün altındaki zayıf bir komşu tahmini daha aşağıda),
+gerekçe düz: "yinelenen anomali: N. kez, ilk <tarih UTC> — deploy'dan önce de görülüyordu (deploy <sürüm> Nm
+önce)", breadth'e sayılmaz, `RecentDeploy` boş (ribbon / istem onu "olası neden" göstermesin). Ölçülen etki adımı
+(`enrichDeployImpact`) yine koşar; gerileme gösterirse (p99 ≥ +%20 ya da hata ≥ +1 puan — Insight kartının deploy
+kırmızısıyla aynı eşik) aday normal puanını geri alır ve gerekçeye yinelenme notu eklenir. İndirgenen aday aynı
+imajın rollout kaydıyla yükselmez. (3) **çip** `EnrichAnomaliesWithDeploys` (`pickAnomalyDeploy`) — yalnız kural
+true iken o deploy iliştirilmez (satır çipi, detay deploy kutusu, `/anomalies` çekmecesi, kök-neden ucu aynı
+seçimden); aksi hâlde bugünkü gibi.
+
+**Sınırlar:** "yinelenen" = satırın ömrü içinde yeniden tetiklenmiş — satır son bölümün başlangıcından 30 gün
+sonra TTL ile düşer, 30 günden uzun sessizlik sayacı 1'e döndürür (her gece ateşleyen iş için satır hiç düşmez,
+ilk görülme aylar öncesi olabilir). Eski satırlar 1. bölüm ve ilk görülme bilinmiyor diye başlar; ilk yeni
+bölümde ilk = o anki saklı `started_at`. Bölüm başına geçmiş YOK (yalnız sayaç + ilk başlangıç). Kapsam dışı:
+yinelenen anomaliye öncelik/terfi farkı ve anomali AI açıklama isteminin deploy listesi
+(`PickDeploysAroundStart`, `started_at`'e bakar). **Bilinen sınır (kuyrukta):** anomaliden terfi etmiş Problem'ler
+(`anomaly-auto:`) deploy'u hâlâ bölüm başlangıcına göre bağlar (problem çıpası, problem deploy zenginleştirmesi,
+deploy raporunun problem kapısı) — problem satırı deploy çipi gösterirken anomali satırı "yinelenen" diyebilir.
+
+**Rolling deploy:** kolon ekleme düşük hacimli state tablosu sınıfı; probe `hasAnomalyEpisodeCols` (`atomic.Bool`,
+system.columns metadata, iki kolon tek sorguda — ai_calls emsali). Küme kipinde kolonu EKLEYEN boot DDL'i
+ertelediği için false okur: taşıma okuması, INSERT ve okumalar iki kolonu atlar (yinelenme işareti yok, deploy
+atfı `started_at` ile — bugünkü davranış). **Probe'u false olan pod'un her yazımı sayacı ve ilk görülmeyi
+DEFAULT'a (1 / 0) geri yazar** — sayaç birikimli olduğu için bu bir sıfırlamadır; ertelenen DDL indikten sonra
+`reprobePromotedAttrs` (ddl_defer.go → `reprobeAnomalyEpisodeCols`; 0 / 1 / 5 / 15 dk denemeleri) bayrağı restart
+beklemeden çevirir, geçiş bir kez loglanır, sıfırlama penceresi o ana dek sürer. Her çağrı bayrağı başında bir kez
+okur (yarım kolonlu sorgu yok). ESKİ binary açık kolon listeleriyle yazıp okur (`SELECT *` / çıplak INSERT yok) →
+hata yok, ama yazdığı her satırda sayaç 1'e, ilk görülme 0'a döner (tam-satır replace); yön güvenli (bugünkü
+atıf). Gerçek ClickHouse gidiş-dönüşü (UInt32 ↔ uint32, DateTime64(9) ns) `chsmoke_test.go`
+`TestCHSmokeAnomalyEpisodeRoundTrip`'te.
+
 ## 2026-10-02 — Exception sayfası dosya bağlantıları çalışan sürüme gider (v0.10.1048)
 
 **Operatör:** "Exception sayfasındaki dosya bağlantıları hâlâ daldan açılıyor; kod incelemesi artık sürümden okuyor. İkisi

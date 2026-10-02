@@ -2684,6 +2684,8 @@ export interface InboxItem {
   anomaly?: {
     id: string; kind: string; pattern: string;
     peakRatio: number; currentRatio: number;
+    /** v0.10.1049 — AnomalyEvent.episodeCount / firstStartedAt ile aynı anlam. */
+    episodeCount?: number; firstStartedAt?: number;
   };
   incident?: { id: string; severity: string; status: string };
 }
@@ -5888,13 +5890,24 @@ export interface AnomalyEvent {
   kind: 'log_pattern' | 'trace_op' | 'trace_op_latency' | 'elastic_ml' | 'log_template_new' | 'behavior_change';
   pattern: string;
   service: string;
-  startedAt: number;     // unix ns — first observation
+  startedAt: number;     // unix ns — first observation of the CURRENT episode (v0.10.1045)
   lastSeen: number;      // unix ns — most recent observation
   peakRatio: number;
   currentRatio: number;
   currentCount: number;
   sample: string;
   status: 'active' | 'cleared';
+  // v0.10.1049 — yinelenen anomali ayrımı (chstore MergeAnomalyCarry).
+  // episodeCount: satırın ömründe bu kaçıncı bölüm (yok / ≤ 1 = yinelenmemiş);
+  // firstStartedAt: İLK bölümün başlangıcı, unix ns (yok / 0 = bilinmiyor —
+  // sütundan önce yazılmış satır). Satır son bölümden 30 gün sonra düştüğü
+  // için "yinelenen" = o ömür içinde yeniden tetiklenmiş.
+  episodeCount?: number;
+  firstStartedAt?: number;
+  // v0.10.1049 — yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
+  // anomaliler" satırında: anomali o deploy'dan önce de DÜZENLİ görülüyordu
+  // (chstore.AnomalyPredatesDeploy). Satır listede kalır, "yinelenen" işaretli.
+  predatesDeploy?: boolean;
   // k8s/openshift clusters where the anomaly's service was
   // active around the detection — read-time enriched.
   clusters?: string[];

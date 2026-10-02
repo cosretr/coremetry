@@ -204,12 +204,9 @@ func (s *Server) buildRolloutDetail(ctx context.Context, row chstore.RolloutRow,
 	if err != nil {
 		return nil, err
 	}
-	anomBySvc := map[string][]chstore.AnomalyEvent{}
-	for _, a := range allAnomalies {
-		if a.Status == "active" && a.StartedAt >= sinceNs && inSet[a.Service] {
-			anomBySvc[a.Service] = append(anomBySvc[a.Service], a)
-		}
-	}
+	// v0.10.1049 — deploy raporuyla AYNI seçim (anomaliesSinceDeploy): satır
+	// gizlenmez; rollout'tan önce de düzenli görülen olay "yinelenen" işaretli.
+	anomBySvc := anomaliesSinceDeploy(allAnomalies, sinceNs, func(svc string) bool { return inSet[svc] })
 	allErrors, err := s.store.ListExceptionGroups(ctx, chstore.ExceptionGroupFilter{State: "open", Services: svcs, Limit: 500})
 	if err != nil {
 		return nil, err

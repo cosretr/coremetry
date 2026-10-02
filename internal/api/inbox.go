@@ -146,6 +146,11 @@ type InboxAnomalyRef struct {
 	Pattern      string  `json:"pattern"`
 	PeakRatio    float64 `json:"peakRatio"`
 	CurrentRatio float64 `json:"currentRatio"`
+	// v0.10.1049 — yinelenen anomali işareti (chstore.AnomalyEvent ile aynı
+	// alanlar; 0 / yok = yinelenmemiş ya da bilinmiyor). Satır zaten olay
+	// satırından kuruluyor, ek okuma yok.
+	EpisodeCount   uint32 `json:"episodeCount,omitempty"`
+	FirstStartedAt int64  `json:"firstStartedAt,omitempty"`
 }
 
 // inbox unifies the three triage sources into one ranked list.
@@ -2297,6 +2302,7 @@ func anomalyToInbox(e chstore.AnomalyEvent) InboxItem {
 		Anomaly: &InboxAnomalyRef{
 			ID: e.ID, Kind: e.Kind, Pattern: e.Pattern,
 			PeakRatio: e.PeakRatio, CurrentRatio: e.CurrentRatio,
+			EpisodeCount: e.EpisodeCount, FirstStartedAt: e.FirstStartedAt,
 		},
 	}
 }

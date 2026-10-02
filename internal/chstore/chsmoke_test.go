@@ -119,6 +119,80 @@ func seedSmokeRows(t *testing.T, st *Store, now time.Time) {
 	}
 }
 
+// TestCHSmokeAnomalyEpisodeRoundTrip — v0.10.1049 bölüm kolonlarının GERÇEK
+// ClickHouse'ta gidiş-dönüşü. Saf testler (anomaly_episode_test.go) arite ve
+// taşıma kuralını sahte bağlantıyla çiviliyor; burada yakalanan sınıf v0.9.543'ün
+// kendisi: Go tipi ↔ kolon tipi (episode_count UInt32 ↔ uint32,
+// first_started_at DateTime64(9) ↔ time.Time yazım / int64 ns okuma).
+//
+// İKİ yazım: ikincisi taşıma okumasını (anomalyCarrySelectSQL + Scan) yeni
+// kolonlarla GERÇEKTEN koşturur ve yeni bölüm açar (boşluk > 22 dk 30 sn) →
+// sayaç 2, ilk görülme = birinci yazımın started_at'i. Sonra Get ve List aynı
+// değerleri okumalı. Kimlik her koşuda benzersiz (kalıcı bir CH'ye karşı
+// yeniden koşmak önceki satırı görmesin); ns kesirli zamanlar DateTime64(9)
+// hassasiyetini de denetler.
+func TestCHSmokeAnomalyEpisodeRoundTrip(t *testing.T) {
+	st := smokeStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if !st.hasAnomalyEpisodeCols.Load() {
+		t.Fatal("tek düğüm, taze şema: bölüm kolonları boot probe'unda görülmeliydi — " +
+			"görülmediyse aşağıdaki gidiş-dönüş kolonsuz koşar ve hiçbir şey kanıtlamaz")
+	}
+	now := time.Now()
+	pattern := "smoke-episode-" + now.Format("20060102T150405.000000000")
+	id := FingerprintAnomaly("log_pattern", pattern, "smoke-service")
+	firstStart := now.Add(-2 * time.Hour).Truncate(time.Second).Add(123456789 * time.Nanosecond).UnixNano()
+	secondStart := now.Add(-10 * time.Minute).Truncate(time.Second).Add(987654321 * time.Nanosecond).UnixNano()
+	ev := func(start int64) AnomalyEvent {
+		return AnomalyEvent{ID: id, Kind: "log_pattern", Pattern: pattern, Service: "smoke-service",
+			StartedAt: start, LastSeen: start, CurrentRatio: 3, CurrentCount: 7, Sample: "smoke"}
+	}
+
+	var logBuf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logBuf)
+	err1 := st.UpsertAnomalyEvent(ctx, ev(firstStart))
+	err2 := st.UpsertAnomalyEvent(ctx, ev(secondStart)) // taşıma okuması yeni kolonlarla
+	got, errGet := st.GetAnomalyEvent(ctx, id, 0)
+	list, errList := st.ListAnomalyEvents(ctx, ListAnomalyEventsFilter{
+		SinceNs: now.Add(-3 * time.Hour).UnixNano(), Services: []string{"smoke-service"}, Limit: 500,
+	})
+	log.SetOutput(prev)
+	for _, e := range []error{err1, err2, errGet, errList} {
+		if e != nil {
+			t.Fatalf("GERÇEK ClickHouse'ta hata: %v", e)
+		}
+	}
+	if out := logBuf.String(); chErrRe.MatchString(out) {
+		t.Fatalf("yumuşak başarısızlık logu:\n%s", strings.TrimSpace(out))
+	}
+
+	check := func(where string, e *AnomalyEvent) {
+		t.Helper()
+		if e == nil {
+			t.Fatalf("%s: satır dönmedi", where)
+		}
+		if e.EpisodeCount != 2 {
+			t.Errorf("%s: episode_count = %d, want 2 (ikinci yazım yeni bölüm)", where, e.EpisodeCount)
+		}
+		if e.FirstStartedAt != firstStart {
+			t.Errorf("%s: first_started_at = %d, want %d (DateTime64(9) ns gidiş-dönüşü)", where, e.FirstStartedAt, firstStart)
+		}
+		if e.StartedAt != secondStart {
+			t.Errorf("%s: started_at = %d, want %d (yeni bölümün başlangıcı)", where, e.StartedAt, secondStart)
+		}
+	}
+	check("GetAnomalyEvent", got)
+	var fromList *AnomalyEvent
+	for i := range list {
+		if list[i].ID == id {
+			fromList = &list[i]
+		}
+	}
+	check("ListAnomalyEvents", fromList)
+}
+
 // TestCHSmokeReads — her okuma yolunu bir kez çalıştırır.
 //
 // Her vaka AYRI t.Run: biri patlarsa hangisi olduğu adıyla belli olur

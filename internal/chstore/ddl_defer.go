@@ -125,12 +125,19 @@ func (s *Store) runDeferredDDL(list []string) {
 // Kayıt kopyala-ve-değiştir + atomic pointer üzerinden (repo.go), yani
 // bu goroutine okuyucularla yarışmıyor.
 func (s *Store) reprobePromotedAttrs() {
+	attrsDone := false
 	for _, wait := range []time.Duration{0, time.Minute, 5 * time.Minute, 15 * time.Minute} {
 		if wait > 0 {
 			time.Sleep(wait)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		found := s.probePromotedAttrs(ctx)
+		if !attrsDone {
+			if found := s.probePromotedAttrs(ctx); len(found) > 0 {
+				registerTraceAttrMaterialized(found)
+				log.Printf("[chstore] terfi kolonları ertelenen DDL sonrası devreye girdi (%d yazım) — restart gerekmedi", len(found))
+				attrsDone = true
+			}
+		}
 		// v0.10.299 — attribute hash indeksi de ertelenen DDL ile iner; kolonlar
 		// görünür görünmez derleyici bloom yoluna geçer (restart gerekmez).
 		if !AttrIndexAvailable() && s.probeAttrIndex(ctx) {
@@ -145,13 +152,20 @@ func (s *Store) reprobePromotedAttrs() {
 		if !AICallsCachedCol() { // v0.10.807
 			s.probeAICallsCachedColumn(ctx)
 		}
+		// v0.10.1049 — anomaly_events bölüm kolonları (episode_count,
+		// first_started_at). ai_calls'tan farkı: sayaç BİRİKİMLİ, bayrak false
+		// kaldıkça bu pod'un her yazımı onu DEFAULT'a geri yazar — o yüzden
+		// terfi kolonları bulunsa bile bu doğrulanana dek denemeye devam edilir.
+		episodeDone := s.reprobeAnomalyEpisodeCols(ctx)
 		cancel()
-		if len(found) == 0 {
-			continue
+		if attrsDone && episodeDone {
+			return
 		}
-		registerTraceAttrMaterialized(found)
-		log.Printf("[chstore] terfi kolonları ertelenen DDL sonrası devreye girdi (%d yazım) — restart gerekmedi", len(found))
-		return
 	}
-	log.Printf("[chstore] terfi kolonları hâlâ doğrulanamadı — dizi yolunda kalınıyor, sonraki boot yeniden deneyecek")
+	if !attrsDone {
+		log.Printf("[chstore] terfi kolonları hâlâ doğrulanamadı — dizi yolunda kalınıyor, sonraki boot yeniden deneyecek")
+	}
+	if !s.hasAnomalyEpisodeCols.Load() {
+		log.Printf("[chstore] anomaly_events bölüm kolonları hâlâ doğrulanamadı — sayaç yazılmıyor (yazımlar DEFAULT'a sıfırlar), sonraki boot yeniden deneyecek")
+	}
 }

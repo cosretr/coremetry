@@ -8,7 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import type { AnomalyEvent, BehaviorChangeDetails, Problem } from '@/lib/types';
 import {
-  alertProblemSummary, anomalySummary, behaviorMetricLabel, detailWhenLine, fmtRatio, genericAnomalySentence,
+  alertProblemSummary, anomalyRecurrence, anomalySummary, anomalyWhenLine, behaviorMetricLabel, detailWhenLine, fmtRatio,
+  genericAnomalySentence, recurrenceClause, recurrenceTitle,
 } from './detailSummary';
 
 type Ev = Pick<AnomalyEvent, 'kind' | 'service' | 'pattern' | 'peakRatio'>;
@@ -178,5 +179,67 @@ describe('detailWhenLine — "<başlangıç> başladı · <süre> · sürüyor /
     expect(s).toMatch(/^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2} başladı · 60s · sürüyor$/);
     const t = detailWhenLine({ startedAt: D0, durationNs: D0b - D0, ongoing: false, endedAt: D0b });
     expect(t).toMatch(/^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2} başladı · 2\.5h · \d{2}:\d{2} bitti$/);
+  });
+});
+
+// v0.10.1049 — yinelenen anomali. Operatör: "Yinelenen anomali ayrımı: her
+// gece tekrar eden bir anomali artık her seferinde 'yeni' görünüyor ve önceki
+// deploy'a bağlanıyor." Detay sayfasının "ne zaman" satırına TEK ek; sayaç
+// ≤ 1 / yoksa satır detailWhenLine'ınkiyle bayt bayt aynı.
+describe('anomalyWhenLine — yinelenen olayda tek ek', () => {
+  const fmt = (ns: number) => `T${ns / 1e9}`;
+  const clock = (ns: number) => `C${ns / 1e9}`;
+  type W = Parameters<typeof anomalyWhenLine>[0];
+  const base: W = { startedAt: 100e9, lastSeen: 100e9 + 12 * 60e9, status: 'active' };
+  // v0.10.1032'deki satır-içi kurulumun birebir kopyası (sayfa eskiden bunu yazıyordu).
+  const before = (e: W) => detailWhenLine({
+    startedAt: e.startedAt, durationNs: Math.max(0, e.lastSeen - e.startedAt), ongoing: e.status === 'active',
+    endedAt: e.status === 'active' ? undefined : e.lastSeen,
+  }, fmt, clock);
+
+  it.each<[string, W]>([
+    ['sayaç yok (eski satır / kolon yok)', base],
+    ['sayaç 1', { ...base, episodeCount: 1, firstStartedAt: 100e9 }],
+    ['sayaç 0', { ...base, episodeCount: 0 }],
+    ['sayaç NaN', { ...base, episodeCount: Number.NaN }],
+    ['bitti, sayaç 1', { ...base, status: 'cleared', episodeCount: 1 }],
+  ])('%s → bugünkü metin, bayt bayt', (_n, e) => {
+    const got = anomalyWhenLine(e, fmt, clock);
+    expect(got).toBe(before(e));
+    expect(got).not.toContain('yinelenen');
+  });
+
+  it('sayaç 3, ilk görülme biliniyor → "yinelenen · bu 3. kez · ilk kez <tarih>"', () => {
+    expect(anomalyWhenLine({ ...base, episodeCount: 3, firstStartedAt: 40e9 }, fmt, clock))
+      .toBe('T100 başladı · 12m · sürüyor · yinelenen · bu 3. kez · ilk kez T40');
+  });
+  it('sayaç 2, bitmiş olay → ek bitişten sonra', () => {
+    expect(anomalyWhenLine({ ...base, status: 'cleared', episodeCount: 2, firstStartedAt: 40e9 }, fmt, clock))
+      .toBe('T100 başladı · 12m · C820 bitti · yinelenen · bu 2. kez · ilk kez T40');
+  });
+  it('ilk görülme bilinmiyor (0) → tarih parçası düşer', () => {
+    expect(anomalyWhenLine({ ...base, episodeCount: 2, firstStartedAt: 0 }, fmt, clock))
+      .toBe('T100 başladı · 12m · sürüyor · yinelenen · bu 2. kez');
+  });
+  it('hiçbir dalda NaN / undefined basılmaz', () => {
+    for (const e of [{ ...base, episodeCount: 5, firstStartedAt: Number.NaN }, { ...base, episodeCount: 2.7 }]) {
+      expect(anomalyWhenLine(e, fmt, clock)).not.toMatch(NEVER);
+    }
+  });
+});
+
+describe('recurrence — satır işaretinin ipucu', () => {
+  const fmt = (ns: number) => `T${ns / 1e9}`;
+  it('yinelenmemiş → null / boş', () => {
+    expect(anomalyRecurrence({})).toBeNull();
+    expect(anomalyRecurrence({ episodeCount: 1, firstStartedAt: 5e9 })).toBeNull();
+    expect(recurrenceClause(null)).toBe('');
+    expect(recurrenceTitle(null)).toBe('');
+  });
+  it('sayı + ilk tarih + sayacın sınırı', () => {
+    const r = anomalyRecurrence({ episodeCount: 4, firstStartedAt: 7e9 });
+    expect(r).toEqual({ count: 4, firstNs: 7e9 });
+    expect(recurrenceTitle(r, fmt)).toBe(
+      'Yinelenen anomali: bu 4. kez, ilk kez T7. Sayaç kaydın ömrüyle sınırlı (son tetiklenmeden 30 gün sonra kayıt düşer).');
   });
 });

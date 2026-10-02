@@ -10,8 +10,10 @@
 // v0.10.984 (Rollouts v2 P2.3) — 6 parçalı kimlik (rollout_events) de açılır;
 // v2 satırında Geçiş paneli nesil, replika, tam imaj listesi ve takılma
 // nedenini ekler; durum ipucu KSM anlamıyla (statusTitle v2).
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Drawer, DrawerSection, Badge, KeyValue, KeyValueRow } from '@/components/ui';
+import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10.1049
 import { Spinner, Empty } from '@/components/Spinner';
 import { serviceHref } from '@/lib/serviceHref';
 import { fmtDateTime, fmtNum } from '@/lib/utils';
@@ -137,7 +139,13 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
           {d.services.length > 0 && (
             <>
               <SignalSection title="Deploy'dan beri açık problemler" rows={d.services.flatMap(s => s.problems.map(p => ({ key: p.id, svc: s.service, a: p.severity, b: p.ruleName, at: p.startedAt })))} moreHref="/problems" />
-              <SignalSection title="Aktif anomaliler" rows={d.services.flatMap(s => s.anomalies.map(a => ({ key: `${s.service}/${a.id}`, svc: s.service, a: a.kind, b: a.pattern, at: a.startedAt })))} moreHref="/anomalies" />
+              {/* v0.10.1049 — rollout'tan önce de DÜZENLİ görülen anomali listede
+                  KALIR, yalnız nötr "yinelenen" işareti taşır (sunucu kararı:
+                  predatesDeploy — anomaliesSinceDeploy). Liste hiçbir satırı gizlemez. */}
+              <SignalSection title="Aktif anomaliler" rows={d.services.flatMap(s => s.anomalies.map(a => ({
+                key: `${s.service}/${a.id}`, svc: s.service, a: a.kind, b: a.pattern, at: a.startedAt,
+                mark: a.predatesDeploy ? <RecurringMarker episodeCount={a.episodeCount} firstStartedAt={a.firstStartedAt} /> : undefined,
+              })))} moreHref="/anomalies" />
               <SignalSection title="Yeni hatalar" rows={d.services.flatMap(s => s.newErrors.map(e => ({ key: `${s.service}/${e.fingerprint}`, svc: s.service, a: e.type, b: e.message, at: e.firstSeen })))} moreHref="/problems" />
             </>
           )}
@@ -147,7 +155,7 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
   );
 }
 
-function SignalSection({ title, rows, moreHref }: { title: string; rows: { key: string | number; svc: string; a: string; b: string; at: number }[]; moreHref: string }) {
+function SignalSection({ title, rows, moreHref }: { title: string; rows: { key: string | number; svc: string; a: string; b: string; at: number; mark?: ReactNode }[]; moreHref: string }) {
   return (
     <DrawerSection title={`${title} (${rows.length})`}>
       {rows.length === 0 ? (
@@ -163,7 +171,7 @@ function SignalSection({ title, rows, moreHref }: { title: string; rows: { key: 
                 <tr key={r.key}>
                   <td className="mono">{r.svc}</td>
                   <td className="field-hint">{r.a}</td>
-                  <td title={r.b}>{r.b}</td>
+                  <td title={r.b}>{r.b}{r.mark && <> {r.mark}</>}</td>
                   <td className="num">{fmtDateTime(new Date(Math.round(r.at / 1e6)))}</td>
                 </tr>
               ))}

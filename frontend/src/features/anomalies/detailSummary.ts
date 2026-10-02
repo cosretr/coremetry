@@ -12,6 +12,7 @@ import type { AnomalyEvent, BehaviorChangeDetails, Problem } from '@/lib/types';
 import { fmtFixed, fmtNum, tsMinute } from '@/lib/utils';
 import { subjectLabel } from '@/lib/problemSubject';
 import { fmtDurationNs } from './problemTime';
+import { anomalyDurationNs } from './anomalyDetail';
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -181,4 +182,60 @@ export function detailWhenLine(
     parts.push('bitti');
   }
   return parts.join(' · ');
+}
+
+// ── Yinelenen anomali (v0.10.1049) ───────────────────────────────────────
+//
+// Operatör: "Yinelenen anomali ayrımı: her gece tekrar eden bir anomali artık
+// her seferinde 'yeni' görünüyor ve önceki deploy'a bağlanıyor." Satır artık
+// bölüm sayacını (episodeCount) ve İLK bölümün başlangıcını (firstStartedAt)
+// taşıyor (chstore MergeAnomalyCarry). Ekranda YENİ BÖLÜM YOK: detay
+// sayfasının "ne zaman" satırına tek kısa ek, satırlarda nötr tek kelime
+// (RecurringMarker). Renk yok — renk yalnız sapan değerde (durum paleti).
+
+/** Yinelenme bilgisi; null = yinelenmemiş (sayaç yok / ≤ 1). firstNs null =
+ *  ilk görülme bilinmiyor (sütundan önce yazılmış satır). */
+export interface AnomalyRecurrence { count: number; firstNs: number | null }
+
+export function anomalyRecurrence(e: { episodeCount?: number; firstStartedAt?: number }): AnomalyRecurrence | null {
+  const n = e.episodeCount;
+  if (!finite(n) || n <= 1) return null;
+  const first = finite(e.firstStartedAt) && e.firstStartedAt > 0 ? e.firstStartedAt : null;
+  return { count: Math.floor(n), firstNs: first };
+}
+
+/** "yinelenen · bu N. kez · ilk kez <tarih>"; ilk görülme bilinmiyorsa son
+ *  parça düşer; yinelenmemişse boş dize. */
+export function recurrenceClause(r: AnomalyRecurrence | null, fmtTs: (ns: number) => string = tsMinute): string {
+  if (!r) return '';
+  const parts = ['yinelenen', `bu ${r.count}. kez`];
+  if (r.firstNs !== null) parts.push(`ilk kez ${fmtTs(r.firstNs)}`);
+  return parts.join(' · ');
+}
+
+/** Satır işaretinin ipucu: sayı + ilk tarih + sayacın sınırı (kayıt son
+ *  tetiklenmeden 30 gün sonra düşer). */
+export function recurrenceTitle(r: AnomalyRecurrence | null, fmtTs: (ns: number) => string = tsMinute): string {
+  if (!r) return '';
+  const first = r.firstNs !== null ? `, ilk kez ${fmtTs(r.firstNs)}` : '';
+  return `Yinelenen anomali: bu ${r.count}. kez${first}. Sayaç kaydın ömrüyle sınırlı (son tetiklenmeden 30 gün sonra kayıt düşer).`;
+}
+
+// anomalyWhenLine — anomali detay sayfasının "ne zaman" satırı:
+// detailWhenLine (bitmiş olayda bitiş = son gözlem; durum last_seen
+// tazeliğinden, chstore GetAnomalyEvent) + yinelenen olayda TEK ek
+// (" · yinelenen · bu N. kez · ilk kez <tarih>"). Sayaç ≤ 1 / yoksa çıktı
+// detailWhenLine'ınkiyle BAYT BAYT aynı (tablo testli).
+export function anomalyWhenLine(
+  e: Pick<AnomalyEvent, 'startedAt' | 'lastSeen' | 'status' | 'episodeCount' | 'firstStartedAt'>,
+  fmtTs: (ns: number) => string = tsMinute,
+  fmtClock: (ns: number) => string = clockMinute,
+): string {
+  const ongoing = e.status === 'active';
+  const base = detailWhenLine({
+    startedAt: e.startedAt, durationNs: anomalyDurationNs(e), ongoing,
+    endedAt: ongoing ? undefined : e.lastSeen,
+  }, fmtTs, fmtClock);
+  const clause = recurrenceClause(anomalyRecurrence(e), fmtTs);
+  return clause ? `${base} · ${clause}` : base;
 }

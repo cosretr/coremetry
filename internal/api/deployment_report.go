@@ -48,6 +48,32 @@ func filterOpenProblemsSince(all []*chstore.Problem, sinceNs int64) []chstore.Pr
 	return out
 }
 
+// anomaliesSinceDeploy — "deploy sonrası anomaliler" listesinin TEK seçimi:
+// deploy raporu (buildDeploymentReport) ve rollout çekmecesi
+// (buildRolloutDetail) aynı işlevden okur. SAF. Aktif, keep(servis) ve bu
+// bölümü deploy'dan SONRA başlamış olay — seçim bugünküyle (`StartedAt >=
+// since`) birebir aynı; HİÇBİR satır gizlenmez.
+//
+// Operatör (v0.10.1049): "Yinelenen anomali ayrımı: her gece tekrar eden bir
+// anomali artık her seferinde 'yeni' görünüyor ve önceki deploy'a
+// bağlanıyor." v0.10.1045'ten beri her yeniden tetiklenme yeni bir bölüm ve
+// started_at'i yeni; gece işi her sabah bir önceki akşamın deploy'unun
+// listesinde "yeni" görünüyordu. Artık o deploy'dan önce de DÜZENLİ görülen
+// satır (chstore.AnomalyPredatesDeploy) PredatesDeploy=true taşır ve ekran
+// onu "yinelenen" diye işaretler — listede KALIR: aynı işlemi deploy'un
+// gerçekten bozduğu durumu gizlemek, yanlış atıftan daha pahalıdır.
+func anomaliesSinceDeploy(all []chstore.AnomalyEvent, sinceNs int64, keep func(service string) bool) map[string][]chstore.AnomalyEvent {
+	out := map[string][]chstore.AnomalyEvent{}
+	for _, a := range all {
+		if a.Status != "active" || a.StartedAt < sinceNs || !keep(a.Service) {
+			continue
+		}
+		a.PredatesDeploy = chstore.AnomalyPredatesDeploy(a.FirstStartedAt, a.StartedAt, a.EpisodeCount, sinceNs)
+		out[a.Service] = append(out[a.Service], a)
+	}
+	return out
+}
+
 // redPlan — önce/sonra RED kıyasının iki okuma penceresi VE iki throughput
 // paydası. Deploy raporu ile Rollouts çekmecesi (rollout_detail.go, V1+V2)
 // AYNI planı kullanır; payda hiçbir çağıranda ayrıca hesaplanmaz.
@@ -218,19 +244,16 @@ func (s *Server) buildDeploymentReport(ctx context.Context, sinceNs int64, owner
 	// started at/after the deploy. ListAnomalyEvents bounds on
 	// last_seen >= SinceNs (a superset of "started after deploy" —
 	// an anomaly active now that started earlier still has a recent
-	// last_seen), so we narrow further in Go by StartedAt + Service.
+	// last_seen), so we narrow further in Go by StartedAt + Service
+	// (v0.10.1049: anomaliesSinceDeploy — düzenli yinelenen olay listede
+	// kalır, PredatesDeploy ile "yinelenen" diye işaretlenir).
 	allAnomalies, err := s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
 		SinceNs: sinceNs, Limit: 2000,
 	})
 	if err != nil {
 		return nil, err
 	}
-	anomaliesBySvc := map[string][]chstore.AnomalyEvent{}
-	for _, a := range allAnomalies {
-		if a.Status == "active" && a.StartedAt >= sinceNs && bySvc[a.Service] != nil {
-			anomaliesBySvc[a.Service] = append(anomaliesBySvc[a.Service], a)
-		}
-	}
+	anomaliesBySvc := anomaliesSinceDeploy(allAnomalies, sinceNs, func(svc string) bool { return bySvc[svc] != nil })
 
 	// 3. New errors: exception groups not yet closed out (new /
 	// acknowledged / regressed — the same "open" convenience bucket

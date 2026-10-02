@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -140,6 +141,12 @@ type SynthesisInput struct {
 	// nil = ölçüm yok; aday gerekçesi ve RecentDeploy.Impact o zaman
 	// bugünküyle bayt-bayt aynı.
 	DeployImpact *chstore.DeployImpact
+	// DeployRecurring (v0.10.1049) — çıpa anomali bu deploy'dan önce de
+	// DÜZENLİ görülüyordu (chstore.AnomalyPredatesDeploy true; yalnız anomali
+	// çıpasında dolar). nil = bugünkü davranış. Doluyken deploy adayı DÜŞMEZ,
+	// recurringDeployScore'a İNER — DeployImpact gerileme gösterirse
+	// (deployImpactRegressed) normal puanını geri alır.
+	DeployRecurring *DeployRecurrence
 	// Neighbours — the propagation-ranked downstream suspects (best first),
 	// straight from RankRootCausesFromEdges. Score ∈ [0,1] is the error-share,
 	// hop-decayed. Empty when nothing downstream carries error volume.
@@ -183,6 +190,57 @@ type SynthesisInput struct {
 	// korur, tam uyumlu aday tamamını; nötr (0.5) aday 0.75. Operatör
 	// anahtarı chstore.AnomalySensitivityConfig.TemporalRanking.
 	TemporalApply bool
+}
+
+// DeployRecurrence — çıpa anomalinin yinelenme kanıtı: bölüm sayısı ve İLK
+// bölümün başlangıcı (unix ns). Gerekçe cümlesine girer.
+type DeployRecurrence struct {
+	Count       uint32
+	FirstSeenNs int64
+}
+
+// v0.10.1049 — yinelenen anomalide deploy adayının yeri.
+//
+// Operatör: "Yinelenen anomali ayrımı: her gece tekrar eden bir anomali artık
+// her seferinde 'yeni' görünüyor ve önceki deploy'a bağlanıyor." Düzenli
+// yinelenen bir anomalinin bu bölümünden 30 dk önce bir deploy olması onu
+// AÇIKLAMAZ; ama aday tamamen düşerse deploy'un gerçekten bozduğu durumda
+// (ölçülen etki) kanıt da kaybolurdu. Bu yüzden İNDİRGEME, düşürme değil:
+//
+//   - recurringDeployScore = 0.10: eş-ateşleme (0.20), kendi-servis sinyal
+//     bandı (≥ 0.30) ve komşu-sinyal bandının (upstream çarpanıyla ≥ 0.168)
+//     altında; yayılım katmanının altında da, hata payı %14'ün altındaki
+//     zayıf bir komşu tahmini dışında (katmanlar zaten tam ayrık değil —
+//     yukarıdaki signal tier notu). Breadth'e SAYILMAZ: "açıklamıyor" diye
+//     işaretlenmiş bir kanıt başka bir şüphelinin güvenini şişirmesin.
+//   - Ölçülen etki gerileme gösteriyorsa (deployImpactRegressed) indirgeme
+//     YOK: normal puan, normal gerekçe + yinelenme notu, RecentDeploy dolu.
+//   - Eşikler Insight kartının deploy kırmızısıyla aynı (ai/insight
+//     signals.go: p99 ≥ +%20 ya da hata ≥ +1 puan) — iki yüzey aynı deploy'a
+//     iki ayrı hüküm vermesin.
+const (
+	recurringDeployScore      = 0.10
+	deployRegressionP99Pct    = 20.0
+	deployRegressionErrRatePP = 1.0
+)
+
+// deployImpactRegressed — ölçülen önce/sonra kıyası bir gerileme mi? nil =
+// ölçüm yok = gerileme kanıtı yok. Saf.
+func deployImpactRegressed(imp *chstore.DeployImpact) bool {
+	if imp == nil {
+		return false
+	}
+	return imp.P99DeltaPct >= deployRegressionP99Pct || imp.ErrorRateDeltaPct >= deployRegressionErrRatePP
+}
+
+// recurringDeployNote — yinelenme cümlesi; tarih UTC (Synthesize saf ve
+// deterministik kalsın, operatör dilimi gerektirmesin).
+func recurringDeployNote(r *DeployRecurrence) string {
+	first := "bilinmiyor"
+	if r.FirstSeenNs > 0 {
+		first = time.Unix(0, r.FirstSeenNs).UTC().Format("2006-01-02 15:04 UTC")
+	}
+	return fmt.Sprintf("yinelenen anomali: %d. kez, ilk %s — deploy'dan önce de görülüyordu", r.Count, first)
 }
 
 // RolloutCandidate — anomaly paketinin rollout.Scored'dan indirgediği
@@ -298,7 +356,26 @@ func Synthesize(
 	distinctTypes := 0
 
 	// Tier 1 — the deploy. Strongest single signal; floors above propagation.
-	if in.Deploy != nil {
+	// v0.10.1049 — düzenli yinelenen anomalide (DeployRecurring) ve ölçülen
+	// etki gerileme göstermiyorsa aday İNER (recurringDeployScore, düz
+	// gerekçe, breadth'e sayılmaz, RecentDeploy boş — çip ve ribbon onu "olası
+	// neden" diye göstermesin); gerileme varsa bugünkü puan + yinelenme notu.
+	demoted := in.Deploy != nil && in.DeployRecurring != nil && !deployImpactRegressed(in.DeployImpact)
+	if in.Deploy != nil && demoted {
+		ageMin := in.Deploy.AgeSeconds / 60
+		reason := fmt.Sprintf("%s (deploy %s %dm önce)", recurringDeployNote(in.DeployRecurring), in.Deploy.Version, ageMin)
+		if in.DeployImpact != nil {
+			reason += " — " + deployImpactSummary(in.DeployImpact)
+		}
+		cands = append(cands, chstore.ScoredCause{
+			Service: service,
+			Score:   recurringDeployScore,
+			Hops:    0,
+			Path:    []string{service},
+			Reason:  reason,
+		})
+	}
+	if in.Deploy != nil && !demoted {
 		distinctTypes++
 		frac := in.FreshnessFrac
 		if frac < 0 {
@@ -322,6 +399,11 @@ func Synthesize(
 		} else {
 			h.RecentDeploy = in.Deploy
 		}
+		// v0.10.1049 — yinelenen ama ölçülen etkisi gerileme gösteren deploy:
+		// normal puan; okuyucu olayın yeni olmadığını gerekçeden görür.
+		if in.DeployRecurring != nil {
+			reason += " — " + recurringDeployNote(in.DeployRecurring)
+		}
 		cands = append(cands, chstore.ScoredCause{
 			Service: service, // a deploy of the anchor's OWN service is the suspect
 			Score:   score,
@@ -340,6 +422,13 @@ func Synthesize(
 			}
 			if in.Deploy != nil && rc.ImageTag != "" && deployMatchesTag(in.Deploy.Version, rc.ImageTag) {
 				// Deploy olayı + rollout kaydı aynı imaj: tek aday, doğrulanmış.
+				// v0.10.1049 — indirgenmiş (yinelenen) deploy adayı rollout
+				// kaydıyla YÜKSELMEZ: kayıt deploy'un olduğunu doğrular,
+				// anomaliyi açıkladığını değil. (Bugün Rollouts yalnız problem
+				// çıpasında, DeployRecurring yalnız anomali çıpasında dolar.)
+				if demoted {
+					continue
+				}
 				for i := range cands {
 					if cands[i].Service == service && cands[i].Kind == "" && cands[i].Hops == 0 {
 						sc := cands[i].Score
