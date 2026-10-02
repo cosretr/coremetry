@@ -220,11 +220,14 @@ dependency is configured. `chatOffered(d, name)` (`tools.go`) gates it in
 `ChatToolList` (nil Deps field → not offered: no schema cost, no dead tool);
 the always-on compact budget does not count it, a separate conditional cap
 does. Today: `read_source_code` (`source_code.go`; chat-only AND conditional
-on `Deps.SourceCode`, i.e. a configured DevOps connection; MinRole editor).
+on `Deps.SourceCode`, i.e. a configured DevOps connection; MinRole "" =
+viewer level since v0.10.1052 — it was editor in v0.10.1050, so no tool is an
+exception to the viewer-level stance any more).
 The api narrows it further per request (`sourceCodeToolsFor`,
 api/chat_source_code.go): offered ONLY in the panel trace/span follow-up loop
 (native tools only — never next to external MCP tools) and never to `cmk_`
-token callers; the service must be in the subject trace. Its result is code:
+token callers or an empty identity, whatever their role; the service must be
+in the subject trace. Its result is code:
 the chat preview / ai_calls sample / follow-up number-check evidence go
 through the whitelisted `SourceCodeReference` / `SourceCodeLogSummary` /
 `SourceCodeRefLine` views, never the raw result — a new tool returning

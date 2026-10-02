@@ -12,9 +12,10 @@ package api
 //     akışına (step / step-result / sources / answer), ai_calls kaydına, audit
 //     satırına ve span'lere GİRMEZ ("kod tarayıcıya gitmez").
 //   - Sunulma (güvenlik incelemesi): YALNIZ panel trace takibinde, oturum
-//     kullanıcısına, editor+ rolde ve DevOps bağlıyken. Bağımsız sohbette (dış
-//     MCP olsun olmasın) ve API token'ında YOK; sunulmadığında katalog ve
-//     prompt bayt bayt eski.
+//     kullanıcısına (v0.10.1052: viewer dahil her rol; v0.10.1050'de editor+)
+//     ve DevOps bağlıyken. Bağımsız sohbette (dış MCP olsun olmasın) ve API
+//     token'ında (rolü ne olursa olsun) YOK; sunulmadığında katalog ve prompt
+//     bayt bayt eski.
 //   - Kapsam: servis öznenin trace'inde olmalı; trace okunamazsa dürüst ıska.
 //   - Sürüm: model seçemez; öznenin span'lerinden (explain'in yardımcısı).
 //   - Sayı denetimi kanıtına kod GİRMEZ (yalnız referans satırı).
@@ -452,8 +453,12 @@ func TestReadSourceCodeNeverInStandaloneLoop(t *testing.T) {
 	}
 }
 
-// API TOKEN'I ve ROL: token principal'ına (cmk_, UserID "token:…") ve viewer'a
-// sunulmaz; editor ve admin görür. MinRole tek sabit = auth.RoleEditor.
+// API TOKEN'I ve ROL — v0.10.1052 (operatör: "Kod okuma aracı viewer'lara da
+// açılsın (bugün editor ve admin)."): oturum kullanıcısı viewer/editor/admin
+// görür; token principal'ı (cmk_, UserID "token:…") ve kimliksiz çağıran
+// ROLDEN BAĞIMSIZ görmez — viewer token'ı da dahil. MinRole tek sabit = ""
+// (viewer tabanı). Mutasyon: editor kapısı geri gelirse viewer satırı,
+// token dışlaması kalkarsa token satırları kırmızı.
 func TestReadSourceCodeCallerAndRoleGate(t *testing.T) {
 	listed := func(uid, role string) (bool, string) {
 		llm := newLoopLLM(t, func(int, map[string]any) map[string]any { return answerMsg("tamam") })
@@ -470,11 +475,13 @@ func TestReadSourceCodeCallerAndRoleGate(t *testing.T) {
 		uid, role string
 		want      bool
 	}{
+		{"u-a", auth.RoleViewer, true},
 		{"u-a", auth.RoleEditor, true},
 		{"u-a", auth.RoleAdmin, true},
-		{"u-a", auth.RoleViewer, false},
+		{"token:t0", auth.RoleViewer, false},
 		{"token:t1", auth.RoleAdmin, false},
 		{"token:t2", auth.RoleEditor, false},
+		{"", auth.RoleViewer, false}, // kimliksiz (boş UserID) — rol tek başına açmaz
 	} {
 		got, sys := listed(c.uid, c.role)
 		if got != c.want {
@@ -484,8 +491,8 @@ func TestReadSourceCodeCallerAndRoleGate(t *testing.T) {
 			t.Errorf("%s/%s: araç yokken prompt eki var", c.uid, c.role)
 		}
 	}
-	if mcptools.SourceCodeMinRole != auth.RoleEditor {
-		t.Fatalf("SourceCodeMinRole %q — auth.RoleEditor olmalı", mcptools.SourceCodeMinRole)
+	if mcptools.SourceCodeMinRole != "" {
+		t.Fatalf("SourceCodeMinRole %q — viewer tabanı (\"\") olmalı", mcptools.SourceCodeMinRole)
 	}
 	for _, c := range []struct {
 		claims *auth.Claims
@@ -493,6 +500,9 @@ func TestReadSourceCodeCallerAndRoleGate(t *testing.T) {
 	}{
 		{&auth.Claims{UserID: "u-1"}, true}, {&auth.Claims{UserID: "token:abc"}, false},
 		{&auth.Claims{UserID: " "}, false}, {nil, false},
+		{&auth.Claims{UserID: "u-1", Role: auth.RoleViewer}, true},
+		{&auth.Claims{UserID: "token:abc", Role: auth.RoleViewer}, false},
+		{&auth.Claims{UserID: "", Role: auth.RoleAdmin}, false},
 	} {
 		if got := sourceCodeCallerAllowed(c.claims); got != c.want {
 			t.Errorf("sourceCodeCallerAllowed(%+v) = %v", c.claims, got)

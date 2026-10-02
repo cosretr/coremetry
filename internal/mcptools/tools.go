@@ -35,9 +35,9 @@
 //     salt-okunur ve hepsinin REST eşi viewer'a açık. Tek sapma
 //     list_anomalies↔GET /api/anomalies/active idi (REST editor,
 //     tool kapısız); A7 kararıyla REST viewer'a indi, tool ""
-//     kaldı — sapma sıfır. v0.10.1050 — tek bilinçli istisna
-//     read_source_code: MinRole editor (SourceCodeMinRole; sohbet-yalnız,
-//     REST eşi yok — serbest kaynak dosya okuması viewer'a açılmaz).
+//     kaldı — sapma sıfır. read_source_code v0.10.1050'de editor'dü;
+//     v0.10.1052 (operatör: viewer'lara da açılsın) "" — istisna yok
+//     (SourceCodeMinRole; sohbet-yalnız, REST eşi yok, token'a sunulmaz).
 //     YENİ TOOL EKLERKEN: REST eşinin kapısına bak. auth.RequireRole
 //     /RequireAnyRole ile sarılıysa MinRole'ü aynı role AYARLA;
 //     yazma tool'u eklenirse (bu tasarımda yok) MinRole en az

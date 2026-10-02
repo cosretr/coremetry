@@ -49,10 +49,11 @@ GET /api/services-metadata ve GET /api/services?ownerTeam=… viewer'a
 açık). Kayıt defteri v0.10.1050'te 62 oldu ama dış MCP yüzeyi
 DEĞİŞMEDİ: eklenen `read_source_code` (incelenen trace'teki servisin
 deposundan kaynak kod okuyucusu) yalnız uygulama içi panel trace
-takibinde, oturum kullanıcısına (cmk_ token'ına DEĞİL), editor/admin
-rolde ve DevOps bağlıyken sunulur; bu sunucuya kayıtlı değildir
-(`chatOnlyTools`, set/get/clear_context gibi). Tek MinRole istisnası
-odur (editor); dış MCP'deki tool'ların tamamı viewer tabanında.
+takibinde, oturum kullanıcısına (cmk_ token'ına DEĞİL — token'ın rolü
+ne olursa olsun) ve DevOps bağlıyken sunulur; bu sunucuya kayıtlı
+değildir (`chatOnlyTools`, set/get/clear_context gibi). v0.10.1050'de
+tek MinRole istisnasıydı (editor); v0.10.1052'te viewer'lara da açıldı
+— kayıt defterindeki tool'ların tamamı viewer tabanında.
 
 ### "Benim servislerim" MCP'de YOK (bilinçli)
 

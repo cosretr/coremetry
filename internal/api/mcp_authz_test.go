@@ -222,15 +222,16 @@ func TestToolsForRoleFiltersByMinRole(t *testing.T) {
 			if names["synthetic_editor_tool"] || names["synthetic_admin_tool"] {
 				t.Errorf("%s kümesinde yükseltilmiş tool var: %v", role, names)
 			}
-			// v0.10.1050 — gerçek kayıt defterinde de bir editor tool'u var
-			// (read_source_code): viewer MinRole>"" olanların TAMAMINI kaybeder.
+			// Viewer MinRole>"" olanların TAMAMINI kaybeder; gerçek kayıt
+			// defterinde yükseltilmiş tool YOK (v0.10.1052 — read_source_code
+			// v0.10.1050'deki editor'den viewer tabanına indi), yalnız iki sentetik.
 			elevated := 0
 			for _, tool := range registry {
 				if tool.MinRole != "" {
 					elevated++
 				}
 			}
-			if elevated != 3 || len(got) != len(registry)-elevated {
+			if elevated != 2 || len(got) != len(registry)-elevated {
 				t.Errorf("%s N-%d tool görmeli: %d/%d", role, elevated, len(got), len(registry))
 			}
 		case "":
@@ -278,21 +279,15 @@ func TestAllShippedToolsAreViewerLevel(t *testing.T) {
 	// v0.10.809 — product_guide (viewer; REST eşi yok, salt statik rehber).
 	// v0.10.993 — 60 → 61: bubble_up (REST eşi GET /api/spans/bubbleup RequireRole'süz → MinRole ""; yalnız dış MCP,
 	// sohbet kataloğu mcptools.ChatToolList ile 60'ta kalır).
-	// v0.10.1050 — 61 → 62: read_source_code — REST eşi yok. TEK bilinçli istisna:
-	// MinRole editor (güvenlik incelemesi — serbest dosya okuması viewer'a açılmaz;
-	// viewer "Kodu da incele"nin stack frame pencerelerini kullanır). Sohbet-yalnız
-	// (dış MCP'de kayıtlı değil), yalnız panel trace takibinde ve DevOps bağlıyken.
+	// v0.10.1050 — 61 → 62: read_source_code — REST eşi yok; sohbet-yalnız (dış
+	// MCP'de kayıtlı değil), yalnız panel trace takibinde, oturum kullanıcısına ve
+	// DevOps bağlıyken. v0.10.1050'de MinRole editor'dü (tek istisna); v0.10.1052
+	// (operatör: "Kod okuma aracı viewer'lara da açılsın") "" — istisna YOK.
 	if len(tools) != 62 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
 		t.Errorf("katalog %d tool (62 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
 			"RequireAnyRole) kontrol et, MinRole'ü ona eşitle, sonra bu sayıyı güncelle", len(tools))
 	}
 	for _, tool := range tools {
-		if tool.Name == mcptools.SourceCodeToolName {
-			if tool.MinRole != auth.RoleEditor {
-				t.Errorf("%s MinRole=%q — editor olmalı (viewer serbest dosya okumaz)", tool.Name, tool.MinRole)
-			}
-			continue
-		}
 		if tool.MinRole != "" {
 			t.Errorf("%s MinRole=%q — REST eşinin kapısıyla eşleştiğini doğrula, sonra bu testi güncelle",
 				tool.Name, tool.MinRole)

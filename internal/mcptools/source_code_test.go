@@ -84,10 +84,11 @@ func scCall(t *testing.T, tool mcp.Tool, args string) (sourceCodeResult, string,
 
 func TestReadSourceCodeRegistration(t *testing.T) {
 	tool := scTool(t, Deps{})
-	// v0.10.1050 (güvenlik incelemesi) — serbest dosya okuması editor+; viewer
-	// "Kodu da incele"yi (stack frame pencereleri) kullanır.
-	if tool.MinRole != "editor" || SourceCodeMinRole != "editor" {
-		t.Fatalf("MinRole %q — editor olmalı (viewer serbest dosya okumaz)", tool.MinRole)
+	// v0.10.1052 (operatör: "Kod okuma aracı viewer'lara da açılsın") — viewer
+	// tabanı, diğer salt-okunur tool'larla aynı gösterim (""). v0.10.1050'de
+	// editor'dü. Token/kimliksiz dışlaması rolden bağımsız (api testi pinler).
+	if tool.MinRole != "" || SourceCodeMinRole != "" {
+		t.Fatalf("MinRole %q — viewer tabanı (\"\") olmalı", tool.MinRole)
 	}
 	if !chatOnlyTools[SourceCodeToolName] {
 		t.Fatal("read_source_code sohbet-yalnız olmalı (dış MCP'ye kod açılmaz)")

@@ -15,9 +15,9 @@ package mcptools
 //   - KOŞULLU: Deps.SourceCode nil ise (DevOps bağlantısı yok) ChatToolList
 //     aracı hiç sunmaz. api ayrıca YALNIZ panel trace takibinde ve yalnız
 //     oturum kullanıcısına (API token'ı değil) sunar.
-//   - Salt-okunur, MinRole editor (SourceCodeMinRole): serbest dosya okuması
-//     viewer'a açılmaz — viewer "Kodu da incele"yi (stack frame pencereleri)
-//     kullanmaya devam eder. Operatörün değiştirebileceği varsayılan.
+//   - Salt-okunur, viewer tabanı (SourceCodeMinRole ""; v0.10.1052 — v0.10.1050'de
+//     editor'dü, operatör viewer'a açtı). Token ve kimliksiz çağıran dışlaması
+//     ROLDEN BAĞIMSIZ kalır (api sourceCodeCallerAllowed).
 //   - Argümanlar telemetri metniyle YÖNLENDİRİLEBİLİR: servis yalnız sohbetin
 //     trace'indekilerden, depo yalnız servisten, dosya yalnız ağaç
 //     eşleşmesinden, yalnız kaynak dosya, sınırlı çıktı; ref'i model SEÇEMEZ
@@ -49,11 +49,15 @@ import (
 // ai_calls özeti, prompt eki) bu sabitten okur.
 const SourceCodeToolName = "read_source_code"
 
-// SourceCodeMinRole — v0.10.1050 (güvenlik incelemesi): serbest kaynak dosya
-// okuması editor ve admin'e. TEK sabit; operatörün değiştirebileceği varsayılan
-// (DECISIONS). Değer auth.RoleEditor ile aynı (api testi pinler; mcptools auth'u
-// içe aktarmaz).
-const SourceCodeMinRole = "editor"
+// SourceCodeMinRole — v0.10.1052 (operatör: "Kod okuma aracı viewer'lara da
+// açılsın (bugün editor ve admin)."): viewer tabanı — diğer salt-okunur
+// tool'larla AYNI gösterim (""), "hepsi viewer" duruşunda istisna yok.
+// v0.10.1050'de "editor"dü (güvenlik incelemesi; DECISIONS'ta operatörün
+// değiştirebileceği varsayılan). TEK sabit kalır. Rol yalnız bu kapıyı
+// değiştirir: API token'ı ve kimliksiz çağıran rolden BAĞIMSIZ dışlanır
+// (api sourceCodeCallerAllowed), sunulma yalnız panel trace takibinde, kapsam
+// öznenin trace'i, yalnız kaynak dosya (api testleri pinler).
+const SourceCodeMinRole = ""
 
 // SourceResultMaxRunes — modele giden JSON sonucunun tavanı. api'nin tool
 // sonucu kırpması (chat_tool_budget.go chatToolResultMaxRunes = 6000) bunun
@@ -140,7 +144,7 @@ func readSourceCodeTool(d Deps) mcp.Tool {
 			"The repository comes only from the service (catalog pin / naming convention) and the service must be part of the trace: you cannot name a repository, project, URL, ref or version. " +
 			"The file is matched by name against the repository tree; several matches return candidate paths and NO content — call again with a more specific file (directory or package suffix). " +
 			"Only source files (Java, Kotlin, Scala, Groovy, C#, Go, Python, JS/TS, Ruby, PHP, mapper SQL, MyBatis *Mapper.xml); configuration and credential files are refused. " +
-			"Window: line ± context_lines (default 30, max 60), bounded to ~5800 characters. In-app trace follow-up only, editor role — not exposed on the MCP server.",
+			"Window: line ± context_lines (default 30, max 60), bounded to ~5800 characters. In-app trace follow-up only, signed-in users (not API tokens) — not exposed on the MCP server.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

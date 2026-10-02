@@ -987,6 +987,16 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Sohbet kod okuma aracı viewer'lara da açık (v0.10.1052)
+
+**Operatör:** "Kod okuma aracı viewer'lara da açılsın (bugün editor ve admin)." **Değişen YALNIZ rol:**
+`mcptools.SourceCodeMinRole` "editor" → "" (diğer salt-okunur tool'larla aynı viewer tabanı; aşağıdaki v0.10.1050 madde 9'un
+"operatörün değiştirebileceği varsayılan"ı). "Hepsi viewer" duruşunda (`TestAllShippedToolsAreViewerLevel`) istisna kalmadı.
+**Viewer'ın yeni yapabildiği:** baktığı trace'teki servislerin kaynak dosyalarını sohbette serbestçe okutmak — önce yalnız
+"Kodu da incele" ile gerçek stack frame'lerinin çevresindeki pencereleri görüyordu. **Sınırlar aynen:** kapsam sohbetin trace'i,
+yalnız kaynak dosya izin/yasak listesi, API token'ı (viewer token'ı dahil) ve kimliksiz çağıran rolden BAĞIMSIZ dışlı, yalnız
+panel trace takibi (bağımsız sohbet ve dış MCP'de yok), okuma git PAT'inin kendi erişebildiği depolarla sınırlı.
+
 ## 2026-10-02 — Sohbet kaynak kodu okuyabilir: salt-okunur, yalnız kaynak dosya (v0.10.1050)
 
 **Operatör:** "Sohbet kod okuyabilsin: takip soruları bugün kod okuyamıyor." **Önce:** AI panelinde açıklamadan sonra
