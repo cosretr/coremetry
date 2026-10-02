@@ -182,7 +182,30 @@ func (r *Recorder) tick(ctx context.Context) {
 	// ("hangi endpoint yavaşladı" bugüne dek cevapsızdı). Ratio = p99
 	// oranı; CurrentCount = cari çağrı hacmi (terfi kapılarının hacim
 	// sezgisiyle uyumlu); Sample = en yavaş cari span'in trace'i.
-	latHits, err := DetectOpLatencyAnomalies(ctx, r.store, r.window)
+	//
+	// v0.10.1056 — varsayılan KAPALI (anomaly_sensitivity.opLatency; operatör:
+	// "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence.").
+	// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım dedektörü
+	// HİÇ çağırmaz.
+	recordOpLatency(ctx, r.store.AnomalySensitivityForDetectors().OpLatencyOn(), now,
+		func(ctx context.Context) ([]OpLatencyAnomaly, error) {
+			return DetectOpLatencyAnomalies(ctx, r.store, r.window)
+		},
+		r.store.UpsertAnomalyEvent)
+}
+
+// recordOpLatency — recorder'ın operasyon-gecikme adımı (v0.10.1056'te
+// tick'ten çıkarıldı ki anahtar sahte dedektör/upsert ile sınanabilsin).
+// on=false → detect ÇAĞRILMAZ: MV sorgusu, v0.10.1046 batch kapısının
+// aktif-olay okuması ve upsert yok; açık olaylar yazılmadıkları için aktif
+// yaştan sonra düşer. on=true → v0.10.1056 öncesi gövdenin aynısı.
+func recordOpLatency(ctx context.Context, on bool, now time.Time,
+	detect func(context.Context) ([]OpLatencyAnomaly, error),
+	upsert func(context.Context, chstore.AnomalyEvent) error) {
+	if !on {
+		return
+	}
+	latHits, err := detect(ctx)
 	if err != nil {
 		log.Printf("[anomaly-recorder] op latency: %v", err)
 	}
@@ -198,7 +221,7 @@ func (r *Recorder) tick(ctx context.Context) {
 			CurrentCount: a.CurCalls,
 			Sample:       a.SampleTraceID,
 		}
-		if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
+		if err := upsert(ctx, ev); err != nil {
 			log.Printf("[anomaly-recorder] upsert op-latency %s/%s: %v", a.Service, a.Operation, err)
 		}
 	}

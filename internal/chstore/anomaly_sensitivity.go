@@ -101,6 +101,19 @@ type AnomalySensitivityConfig struct {
 	// kuralı KAPATTI. Normalize somutlaştırır (nil → varsayılan liste), boş
 	// liste `[]` olarak yazılır, `null` olarak DEĞİL.
 	BatchServicePatterns *[]string `json:"batchServicePatterns,omitempty"`
+	// OpLatency — v0.10.1056 (operatör, prod: "Trace op latency false pozitif
+	// geliyor, gerek yok gelmelerine bence."): operasyon bazında p99 sıçraması
+	// dedektörü (`trace_op_latency`, internal/anomaly/op_latency.go). BİLİNÇLİ
+	// varsayılan davranış değişikliği, operatör kararı: *bool, nil = KAPALI
+	// (ServiceSilent v0.10.543 ve self_health.diskEta v0.10.1031 emsali). Bu
+	// sürümden ESKİ her blob alanı taşımaz ve KAPALI okunur. Neden gürültü:
+	// tek 5 dk kovanın p99'u 24 sa p99'una karşı — düşük gecikmeli bir
+	// operasyonda TEK yavaş çağrı ×3'ü kendi başına geçer, dwell yok.
+	// Kapalıyken recorder dedektörü HİÇ koşturmaz (MV sorgusu, v0.10.1046
+	// batch kapısının aktif-olay okuması, upsert — hiçbiri). Açık kalan
+	// olaylar yazılmadıkları için 10 dk aktif yaştan sonra düşer; terfi
+	// Problem'i "anomaly cleared" ile kapanır. Açmak için Settings → Anomaly.
+	OpLatency *bool `json:"opLatency,omitempty"`
 }
 
 const (
@@ -125,6 +138,12 @@ func (c AnomalySensitivityConfig) TemporalRankingOn() bool {
 // ServiceSilentEnabled — nil ⇒ KAPALI (AttachToIncident'ın tersi; gerekçe alanda).
 func (c AnomalySensitivityConfig) ServiceSilentEnabled() bool {
 	return c.ServiceSilent != nil && *c.ServiceSilent
+}
+
+// OpLatencyOn — v0.10.1056: trace_op_latency dedektörü koşsun mu? nil ⇒
+// KAPALI (ServiceSilentEnabled gibi; gerekçe alanda). Yalnız açıkça true.
+func (c AnomalySensitivityConfig) OpLatencyOn() bool {
+	return c.OpLatency != nil && *c.OpLatency
 }
 
 // AttachesToIncident — nil-güvenli okuma. Yazılmamış = BAĞLA (bugünkü
@@ -395,6 +414,7 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// v0.10.1039 — BİLİNÇLİ varsayılan davranış değişikliği: operatörün
 		// adını verdiği `-batch` kalıbı kutudan açık gelir.
 		BatchServicePatterns: batchPatternsPtr(DefaultBatchServicePatterns()),
+		OpLatency:            boolPtr(false), // v0.10.1056 — operatör kararı: varsayılan KAPALI
 	}
 }
 
@@ -431,6 +451,10 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// kuralı varsayılana döndürürdü. SOMUTLAŞTIRIR: nil → varsayılan
 		// liste; boş liste boş kalır (kural kapalı) ve `[]` yazılır.
 		BatchServicePatterns: batchPatternsPtr(c.BatchServicePatternList()),
+		// v0.10.1056 — kopyalanmazsa PUT'ta düşer ve operatörün açtığı
+		// dedektör bir sonraki kayıtta sessizce kapanırdı. SOMUTLAŞTIRIR
+		// (ServiceSilent gibi): nil → false, true/false aynen.
+		OpLatency: boolPtr(c.OpLatencyOn()),
 	}
 	for _, m := range AnomalySensitivityMetrics {
 		def := d.Metrics[m]

@@ -110,7 +110,11 @@ Ne üretiyorsun?
 
 anomaly_events üreticileri (Problem değil): recorder (`recorder.go:107,129`),
 trace_op (`trace_ops.go:171`), trace_op_latency (`op_latency.go`, recorder'dan; batch
-yük kapısı v0.10.1046), davranış motoru (`behavior.go:224`,
+yük kapısı v0.10.1046; **varsayılan KAPALI** v0.10.1056, `anomaly_sensitivity.opLatency` *bool
+nil = kapalı — operatör: "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence";
+kapı dedektörün başında, her G/Ç'den önce + recorder adımı `recordOpLatency`; kapalıyken MV
+sorgusu / aktif-olay okuması / upsert yok, açık olaylar 10 dk sonra düşer, terfi Problem'i
+"anomaly cleared" — yeniden önerme), davranış motoru (`behavior.go:224`,
 kind=`behavior_change`, LLM dedektör DEĞİL hüküm katmanı — deterministik
 kapılardan geçer, alert AÇAMAZ; batch p99 yük kapısı `behaviorFleetCandidates`).
 
@@ -369,7 +373,8 @@ TEK YÖNLÜ eylem süren bir ayar (kapatma) okuma hatasında varsayılan YAYINLA
 3. Öncelik/merdivene dokunuyor mu? → SAF işlevde kal, gerekçe cümlesi yalan
    söylemesin, `problem_priority_*`/`exception_triage_test` tablosuna satır;
    operatör direktiflerini (P1 yapışkan, taban 2, Inbox tüm durumlar, service
-   silent kapalı, disk ETA kapalı, fresh deploy yok) YENİDEN AÇMA.
+   silent kapalı, disk ETA kapalı, operasyon gecikmesi (`trace_op_latency`) kapalı,
+   fresh deploy yok) YENİDEN AÇMA.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;
    ölçüm seyrekse §5 tasarımı; kayan pencere simülasyon testi.
 5. Kanıt/skor mu? → `hypothesis_*_test.go` tablo, kalibrasyon, tek yazıcı.

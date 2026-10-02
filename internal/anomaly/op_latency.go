@@ -272,7 +272,20 @@ func opLatencyQuery(curStart, baseStart, alignedNow time.Time, plan opLatBatchPl
 // Örnek trace yalnız kalifiye ≤50 çift için dar, PK-prefix'li raw
 // sorgudan (DetectTraceOpAnomalies ile aynı bedel modeli; pencereler 5m
 // bucket'a hizalı, tespit ≤~5dk gecikir — kabul edilmiş desen).
+//
+// v0.10.1056 — anahtar (anomaly_sensitivity.opLatency, nil = KAPALI; operatör:
+// "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence.").
+// Kapı HER G/Ç'den ÖNCE ve burada, çağıranda değil: dedektörün her çağıranı
+// (bugün yalnız recorder) anahtara uyar, kapalıyken boş liste döner — hata
+// DEĞİL. Kapalıyken ne MV sorgusu ne v0.10.1046 aktif-olay okuması ne örnek
+// sorgusu. Ayar bu süreçte henüz doğrulanmadıysa yayınlanan varsayılan
+// (KAPALI) okunur: birkaç tiklik boşluk açık olayı düşürmez (10 dk aktif yaş).
+// Açıkken aşağıdaki gövde bayt bayt öncekiyle aynı.
 func DetectOpLatencyAnomalies(ctx context.Context, store *chstore.Store, window time.Duration) ([]OpLatencyAnomaly, error) {
+	sens := store.AnomalySensitivityForDetectors()
+	if !sens.OpLatencyOn() {
+		return []OpLatencyAnomaly{}, nil
+	}
 	conn := store.TelemetryReadConn()
 	now := time.Now()
 
@@ -295,8 +308,8 @@ func DetectOpLatencyAnomalies(ctx context.Context, store *chstore.Store, window 
 	// batch servislerde son opLatActiveAge (15 dk) içinde yazılmış olayları —
 	// o çiftler kapıdan muaf (yalnız açılışı keser). Okuma hatası → kapı bu tik
 	// HİÇ yok, geçişte bir kez log; sayı ya da bayt tavanı aşımı → en tazeler
-	// muaf, ötesi muaf değil, geçişte bir kez log.
-	sens := store.AnomalySensitivityForDetectors()
+	// muaf, ötesi muaf değil, geçişte bir kez log. (sens yukarıda, anahtarla
+	// aynı okuma — v0.10.1056.)
 	var active []chstore.ActiveAnomalyKey
 	var readErr error
 	if svcCond, svcArgs := sens.BatchServiceSQL("service"); svcCond != "" {

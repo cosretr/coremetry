@@ -7740,6 +7740,10 @@ export interface AnomalySensitivityConfig {
   // v0.10.543 — service_silent dedektörü; VARSAYILAN KAPALI (operatör kararı):
   // okuma `=== true` (attachToIncident'ın tersi).
   serviceSilent?: boolean;
+  // v0.10.1056 — trace_op_latency (operasyon bazında p99 sıçraması) dedektörü;
+  // VARSAYILAN KAPALI (operatör: "Trace op latency false pozitif geliyor").
+  // Backend *bool, yok = kapalı: okuma `=== true`, kayıt AÇIK boolean gönderir.
+  opLatency?: boolean;
   // v0.10.700 — kök neden hipotezinde zamansal çarpan: 'shadow' (varsayılan,
   // yok dahil) yalnız yazar, 'on' skoru çarpar. Okuma `=== 'on'`.
   temporalRanking?: 'shadow' | 'on';

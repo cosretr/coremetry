@@ -987,6 +987,37 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Operasyon gecikmesi (trace_op_latency) anomalileri varsayılan kapalı (v0.10.1056)
+
+**Operatör (prod, "Operasyon gecikmesi" anomali detayı, iki ekran görüntüsü):** "Trace op latency false pozitif
+geliyor, gerek yok gelmelerine bence." İki örnek de normalde milisaniyenin altında / ~20 ms p99'lu bir operasyon; tek
+kovalık 200 ms ve 350 ms sıçramalar "gecikme normalin 3.6 / 4 katına çıktı" diye üçüncü kez yineleniyordu.
+
+**Neden gürültü:** dedektör (`internal/anomaly/op_latency.go`, recorder'dan 60 sn'de bir) TEK 5 dk kovanın p99'unu 24 sa
+p99'una karşı koyar; eşikler ×3, ≥ 200 ms, iki pencerede ≥ 30 çağrı. Düşük gecikmeli bir operasyonda 30–100 çağrılık
+kovanın p99'u fiilen en yavaş bir-iki çağrıdır: tek yavaş çağrı (GC duraklaması, soğuk bağlantı) ×3'ü ve 200 ms'yi kendi
+başına geçer. Dwell yok — tek kova olay açar.
+
+**Karar:** `anomaly_sensitivity.opLatency` (`*bool`, nil = KAPALI) — bilinçli varsayılan davranış değişikliği, emsaller
+`service_silent` (v0.10.543) ve `self-disk-eta` (v0.10.1031). Eski her blob kapalı okunur; Normalize somutlaştırır
+(nil → false), açıkça true tur atar. Kapalıyken recorder adımı (`recordOpLatency`) dedektörü HİÇ çağırmaz; dedektörün
+kendisi de (`DetectOpLatencyAnomalies`) her G/Ç'den önce anahtara bakar ve boş liste döner (hata değil) — MV sorgusu,
+v0.10.1046 batch kapısının aktif-olay okuması, örnek-trace sorgusu ve upsert yok. Bugün tek çağıran recorder; kapı
+dedektörde olduğu için ileride eklenecek çağıranlar da uyar. Açıkken gövde bayt bayt aynı (batch kapısı dahil).
+Dedektör kodu, eşikleri ve v0.10.1046 batch kapısı SİLİNMEDİ — kapı yalnız dedektör açıkken anlam taşır.
+
+**Açık satırlar — göç yok:** yazılmayan olay `last_seen`'den 10 dk sonra (`anomalyActiveAge`) aktif görünümden düşer
+(yeni sürümün ilk tikinden en geç ~10 dk sonra); ondan terfi etmiş `anomaly-auto:` Problem'ini evaluator'ın
+`resolveClearedAnomalyPromotions`'ı bir sonraki tikte "anomaly cleared" ile kapatır. Satırlar 30 günlük TTL ile tarihte
+kalır.
+
+**Etkilenmeyenler:** servis düzeyi p99 anomalileri (metrik dedektörü `anomaly:<svc>:p99_ms`, davranış motoru
+`behavior_change`), `trace_op` hata anomalileri (`error_spike` / `new_error`), log desen anomalileri.
+
+**Geri açmak:** Settings → Anomaly → Dedektör hassasiyeti → "Operasyon gecikmesi anomalileri" (kayıt açık boolean
+gönderir). Yeniden varsayılan açık yapmayı önerme; gürültünün çaresi dwell / mutlak fark tabanı olur, varsayılanı
+çevirmek değil.
+
 ## 2026-10-02 — Problems: deploy çipi ipucu ve terfi Problem'inde ANOMALY rozeti (v0.10.1055)
 
 **Operatör onayı:** "Okdir". **(1)** Problems kuyruğunda deploy çipinin ipucu "undefined v…" başlıyordu:
