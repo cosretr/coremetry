@@ -460,6 +460,9 @@ export function DevOpsTab() {
             ref'e bağlanır: ref bulunursa link ve dosya yolu o commit'ten gider, bulunmazsa branş
             ucu + uyarı. <code>{'{version}'}</code> zorunlu; <code>tags/</code> ya da
             <code>heads/</code> ile başlar. Boş = <code>tags/{'{version}'}</code>.
+            {/* v0.10.1047 — mono-repo: {service} = önek ve ortam eki soyulmuş servis adı. */}
+            {' '}Aynı depoda birden çok servis varsa <code>{'{service}'}</code> kullanın,
+            ör. <code>tags/{'{service}'}-{'{version}'}</code>.
           </div>
         </label>
 

@@ -987,6 +987,19 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Sürüm → ref eşlemesine {service} yer tutucusu (mono-repo) (v0.10.1047)
+
+**Operatör:** "Mono-repo'da sürüm etiketi: aynı depoda birden çok servis varsa, başka servisin etiketi bu servisin
+sürümü sanılabiliyor." Desenin tek yer tutucusu `{version}`'dı; başka servis için kesilmiş düz `1.4.2` tag'i bu servisin
+çalışan kodu sanılıyordu (v0.10.1044 "Bilinen sınırlar"). **Kural:** isteğe bağlı ikinci yer tutucu `{service}`
+(`tags/{service}-{version}`, `tags/{service}/v{version}`) = konvansiyonun soyduğu servis adı (önek + -prod/-int/-uat/-prep;
+ResolveRepo ile tek fonksiyon `conventionName`; pinli mono-repoda da depo değil servis adı). Soyma tek yerde, `resolveRevision`:
+frame linkleri (ucun service alanı) ve AI kod incelemesi (`buildCodeContext` → `FetchCodeAt`) aynı ham adı verir, aynı ref'i
+sorar. Servis adı da telemetri: sürümle aynı ref-güvenli kapı; boş/güvensiz ad → ref yok, dal ucu, istek ve yankı yok
+(`tags/-1.4.2` asla). **Doğrulama** (`NormalizeVersionRef`, kayıt ve çözüm aynı kapı): `{version}` zorunlu, başka `{…}` 400.
+**Varsayılan aynen** `tags/{version}`: `{service}`'siz kurulumda istekler bayt bayt eskisi (golden); ref cache anahtarı zaten
+tam ref'i taşıyor. Ayarlar → Kod entegrasyonu ipucu güncellendi.
+
 ## 2026-10-02 — Batch: yük altında gecikme artışı anomali açmaz (v0.10.1046)
 
 **Operatör (prod):** "Batch servislerde yük altındaki gecikme artışı da anomali sayılmasın." v0.10.1039

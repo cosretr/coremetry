@@ -67,7 +67,7 @@ func (f *fakeTFS) countReqs(frag string) int {
 
 func TestFetchCodeAt_VersionTagReadsCommit(t *testing.T) {
 	f, svc, frames := runningVersionFixture(t)
-	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, rvVersion)
+	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion)
 	if cc.Empty() {
 		t.Fatalf("kod gelmedi: %s", cc.Reason)
 	}
@@ -115,7 +115,7 @@ func TestFetchCodeAt_VersionTagReadsCommit(t *testing.T) {
 
 func TestFetchCodeAt_VersionTagMissingFallsBackToBranch(t *testing.T) {
 	f, svc, frames := runningVersionFixture(t)
-	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "9.9.9")
+	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", "9.9.9")
 	if cc.Empty() {
 		t.Fatalf("ref yokken de kod gelmeli (dal ucundan): %s", cc.Reason)
 	}
@@ -155,7 +155,7 @@ func TestFetchCodeAt_RefLookupErrorFallsBackAndIsNotCached(t *testing.T) {
 	f, svc, frames := runningVersionFixture(t)
 	f.tagsFail = true
 	for i := 0; i < 2; i++ {
-		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, rvVersion)
+		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion)
 		if cc.Empty() || cc.Windows[0].Path != rvBranchPath {
 			t.Fatalf("hata da dal ucuna düşmeli, kod gelmeli: %+v / %s", cc.Windows, cc.Reason)
 		}
@@ -178,7 +178,7 @@ func TestFetchCodeAt_RefLookupCachedIncludingNegative(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f, svc, frames := runningVersionFixture(t)
 			for i := 0; i < 3; i++ {
-				svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, c.version)
+				svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", c.version)
 			}
 			if n := f.countReqs("filter=tags%2F"); n != 1 {
 				t.Fatalf("ref sorgusu cache'lenmeli: %d istek, 1 beklenen", n)
@@ -205,16 +205,16 @@ func TestFetchCodeAt_NoVersionRequestsUnchanged(t *testing.T) {
 			return s.FetchCode(context.Background(), "core-service", ProjectHint{}, fr, nil, nil)
 		}},
 		{"boş sürüm", func(s *Service, fr []stackparse.Frame) CodeContext {
-			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "")
+			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "", "")
 		}},
 		{"yer tutucu latest", func(s *Service, fr []stackparse.Frame) CodeContext {
-			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "latest")
+			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "", "latest")
 		}},
 		{"yer tutucu SNAPSHOT", func(s *Service, fr []stackparse.Frame) CodeContext {
-			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "2.3.0-SNAPSHOT")
+			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "", "2.3.0-SNAPSHOT")
 		}},
 		{"yer tutucu master", func(s *Service, fr []stackparse.Frame) CodeContext {
-			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "master")
+			return s.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, fr, nil, nil, "", "master")
 		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -253,11 +253,11 @@ func TestFetchCodeAt_ExtraRequestBudget(t *testing.T) {
 	}
 	run := func(version string, times int) (cold, warm [3]int) {
 		f, svc, frames := runningVersionFixture(t)
-		svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, version)
+		svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", version)
 		r, tr, it := count(f)
 		cold = [3]int{r, tr, it}
 		for i := 1; i < times; i++ {
-			svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, version)
+			svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", version)
 		}
 		r2, tr2, it2 := count(f)
 		warm = [3]int{r2 - r, tr2 - tr, it2 - it}
@@ -286,13 +286,13 @@ func TestFetchCodeAt_ExtraRequestBudget(t *testing.T) {
 func TestFetchCodeAt_CommitAndBranchTreesDoNotCollide(t *testing.T) {
 	f, svc, frames := runningVersionFixture(t)
 	ctx := context.Background()
-	if cc := svc.FetchCodeAt(ctx, "core-service", ProjectHint{}, frames, nil, nil, rvVersion); cc.Windows[0].Path != rvCommitPath {
+	if cc := svc.FetchCodeAt(ctx, "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion); cc.Windows[0].Path != rvCommitPath {
 		t.Fatalf("ilk çekim commit'ten: %s", cc.Windows[0].Path)
 	}
-	if cc := svc.FetchCodeAt(ctx, "core-service", ProjectHint{}, frames, nil, nil, ""); cc.Windows[0].Path != rvBranchPath {
+	if cc := svc.FetchCodeAt(ctx, "core-service", ProjectHint{}, frames, nil, nil, "", ""); cc.Windows[0].Path != rvBranchPath {
 		t.Fatalf("sürümsüz çekim dal ağacını görmeli, cache'teki commit ağacını değil: %s", cc.Windows[0].Path)
 	}
-	if cc := svc.FetchCodeAt(ctx, "core-service", ProjectHint{}, frames, nil, nil, rvVersion); cc.Windows[0].Path != rvCommitPath {
+	if cc := svc.FetchCodeAt(ctx, "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion); cc.Windows[0].Path != rvCommitPath {
 		t.Fatalf("sürümlü çekim commit ağacını görmeli, cache'teki dal ağacını değil: %s", cc.Windows[0].Path)
 	}
 	cfg := f.settings()
@@ -399,7 +399,7 @@ func TestFetchCodeAt_UnsafeVersionIsNoVersion(t *testing.T) {
 		"-1.4.2",
 	} {
 		f, svc, frames := runningVersionFixture(t)
-		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, v)
+		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", v)
 		if cc.Revision != nil {
 			t.Errorf("%q: güvensiz sürüm çözücüye girmemeli: %+v", v, cc.Revision)
 		}
@@ -439,7 +439,7 @@ func TestFetchCodeAt_SemverBuildMetadataEscaped(t *testing.T) {
 	f, svc, frames := runningVersionFixture(t)
 	f.tags = map[string]string{"refs/tags/1.4.2+77": rvSHA}
 	f.peeled = nil
-	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "1.4.2+77")
+	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", "1.4.2+77")
 	if !cc.FromRunningVersion() || cc.Revision.SHA != rvSHA {
 		t.Fatalf("1.4.2+77 tag'i bulunmalı: %+v / %s", cc.Revision, cc.Reason)
 	}
@@ -453,7 +453,7 @@ func TestFetchCodeAt_SemverBuildMetadataEscaped(t *testing.T) {
 func TestFetchCodeAt_AnnotatedAndLightweightTags(t *testing.T) {
 	t.Run("annotated", func(t *testing.T) {
 		f, svc, frames := runningVersionFixture(t) // tagobj0042 → peeled rvSHA
-		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, rvVersion)
+		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion)
 		if !cc.FromRunningVersion() || cc.Revision.SHA != rvSHA {
 			t.Fatalf("annotated tag peeled commit'e çözülmeli: %+v / %s", cc.Revision, cc.Reason)
 		}
@@ -470,7 +470,7 @@ func TestFetchCodeAt_AnnotatedAndLightweightTags(t *testing.T) {
 		f, svc, frames := runningVersionFixture(t)
 		f.tags = map[string]string{"refs/tags/" + rvVersion: rvSHA}
 		f.peeled = nil
-		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, rvVersion)
+		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion)
 		if !cc.FromRunningVersion() || cc.Revision.SHA != rvSHA || cc.Windows[0].Path != rvCommitPath {
 			t.Fatalf("lightweight tag objectId=commit: %+v / %s", cc.Revision, cc.Reason)
 		}
@@ -482,7 +482,7 @@ func TestFetchCodeAt_UnparsableRefsBodyIsError(t *testing.T) {
 	f, svc, frames := runningVersionFixture(t)
 	f.tagsRaw = `{"value": 42}`
 	for i := 0; i < 2; i++ {
-		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, rvVersion)
+		cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion)
 		if cc.Revision == nil || cc.Revision.Missing || !strings.Contains(cc.Reason, "okunamadı (ref sorgusu başarısız") {
 			t.Fatalf("bozuk gövde 'ref yok' değil hata olmalı: %+v / %q", cc.Revision, cc.Reason)
 		}
@@ -502,7 +502,7 @@ func TestFetchCodeAt_SlowCommitTreeFallsBackInTime(t *testing.T) {
 	f.commitTreeDelay = 5 * time.Second
 	svc.codeDeadline = 800 * time.Millisecond
 	start := time.Now()
-	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, rvVersion)
+	cc := svc.FetchCodeAt(context.Background(), "core-service", ProjectHint{}, frames, nil, nil, "", rvVersion)
 	if cc.Empty() || cc.Windows[0].Path != rvBranchPath {
 		t.Fatalf("yavaş commit ağacında dal koduna düşmeli: %+v / %s", cc.Windows, cc.Reason)
 	}

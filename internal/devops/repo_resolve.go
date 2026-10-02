@@ -153,8 +153,7 @@ func ResolveRepo(service, metaRepository string, cfg ResolveConfig) RepoResoluti
 	// tuttuğu yalnız burada biliniyor; çağırana taşımazsak bilgi
 	// kaybolur ve operatör aynı şeyi bir kez daha, elle yazmak zorunda
 	// kalır.
-	name, project := matchRepoPrefix(svc, cfg.RepoPrefixes)
-	name = stripEnvSuffix(name)
+	name, project := conventionName(svc, cfg.RepoPrefixes)
 
 	if name == "" {
 		return RepoResolution{Source: RepoSourceNone,
@@ -162,6 +161,21 @@ func ResolveRepo(service, metaRepository string, cfg ResolveConfig) RepoResoluti
 	}
 	return RepoResolution{Repo: name, Source: RepoSourceConvention,
 		Project: projectHintFor(project, svc, false, cfg.RepoPrefixes)}
+}
+
+// conventionName — servis adının ad konvansiyonundaki NORMAL hâli: ilk
+// eşleşen yapılandırılmış önek ve ortam eki (-prod/-int/-uat/-prep)
+// soyulur; ikinci dönüş önekten türeyen proje önerisi. SAF.
+//
+// v0.10.1047 (operatör: "Mono-repo'da sürüm etiketi: aynı depoda birden
+// çok servis varsa, başka servisin etiketi bu servisin sürümü
+// sanılabiliyor") — TEK yazım: konvansiyon yolunun depo adı ve sürüm →
+// ref deseninin {service} yer tutucusu buradan okur (resolveRevision).
+// İki ayrı soyma kuralı ilk önek düzeltmesinde ayrışır ve tag adı depo
+// adından başka bir servisi anlatırdı.
+func conventionName(service string, prefixes []string) (name, project string) {
+	name, project = matchRepoPrefix(strings.TrimSpace(service), prefixes)
+	return stripEnvSuffix(name), project
 }
 
 // matchRepoPrefix — ilk EŞLEŞEN öneki soyar ve o önekten proje adını

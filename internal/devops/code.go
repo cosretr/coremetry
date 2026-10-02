@@ -574,9 +574,9 @@ func evictOldest(m map[string]treeEntry) {
 // refs (v0.10.73) — hata METNİNİN andığı kaynak dosya adayları
 // (stackparse.ResourceRefs). Boş geçilebilir: kaynak avı atlanır.
 //
-// v0.10.1044 — sürümsüz çağrı: FetchCodeAt(…, "") ile birebir (dal ucu).
+// v0.10.1044 — sürümsüz çağrı: FetchCodeAt(…, "", "") ile birebir (dal ucu).
 func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, frames []stackparse.Frame, refs []stackparse.ResourceRef, errTokens []string) CodeContext {
-	return s.FetchCodeAt(ctx, repo, hint, frames, refs, errTokens, "")
+	return s.FetchCodeAt(ctx, repo, hint, frames, refs, errTokens, "", "")
 }
 
 // FetchCodeAt — FetchCode + stack'i basan servisin ÇALIŞAN SÜRÜMÜ
@@ -593,7 +593,12 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 // boşsa dal ucuna düşülür ve gerekçe Reason'a yazılır — kod çekimi sürüm
 // yüzünden ASLA düşmez. version boş ya da yer tutucuysa tek ekstra istek
 // bile yok: bugünkü davranış bayt bayt.
-func (s *Service) FetchCodeAt(ctx context.Context, repo string, hint ProjectHint, frames []stackparse.Frame, refs []stackparse.ResourceRef, errTokens []string, version string) (out CodeContext) {
+//
+// service (v0.10.1047, mono-repo) — stack'i basan servisin HAM adı; frame
+// linkleri uca gelen service alanını aynı yere verir. Yalnız desen
+// `{service}` taşıyorsa okunur (normalizasyon resolveRevision'da). Boş ad
+// ile `{service}` deseni = ref yok, dal ucu (boş yerleştirme yok).
+func (s *Service) FetchCodeAt(ctx context.Context, repo string, hint ProjectHint, frames []stackparse.Frame, refs []stackparse.ResourceRef, errTokens []string, service, version string) (out CodeContext) {
 	class := CodeOther
 	// v0.10.85 — cfg defer'den ÖNCE bildiriliyor ki link YÜRÜRLÜKTEKİ
 	// yapılandırmayla kurulsun: pickProject / organizasyon araması
@@ -743,7 +748,7 @@ func (s *Service) FetchCodeAt(ctx context.Context, repo string, hint ProjectHint
 	// bağlanmaz. Commit ağacının kesik bayrağı ch'ye yazılır: kesik-ağaç notu
 	// ve kapsamlı geri-deneme OKUNAN ağacı anlatmalı.
 	src := RefSpec{Kind: "branch", Name: branch}
-	if rev, tree := s.resolveRevision(ctx, cli, cfg, ver, repo, version); rev != nil {
+	if rev, tree := s.resolveRevision(ctx, cli, cfg, ver, repo, service, version); rev != nil {
 		out.Revision = rev
 		if rev.Verified {
 			src, paths = RefSpec{Kind: "commit", Name: rev.SHA}, tree.paths

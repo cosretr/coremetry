@@ -258,10 +258,12 @@ func (s *Service) ResolveFrameLinks(ctx context.Context, service string, pin Pin
 	// (Revision.Note) ama link üretimini durdurmaz — branş ucu + uyarı.
 	// v0.10.1044 — zincir resolveRevision'a taşındı: kod incelemesi
 	// (FetchCodeAt) AYNI çözücüyü çağırır, iki kopya yok.
+	// v0.10.1047 — `{service}` için HAM servis adı (isteğin service alanı);
+	// normalizasyon resolveRevision'da, kod incelemesiyle aynı yerde.
 	paths := ch.paths
 	linkRef := RefSpec{Kind: "branch", Name: ch.branch}
 	if ch.class == "" {
-		rev, tree := s.resolveRevision(ctx, s.clientFor(cfg.InsecureSkipVerify), cfg, ch.ver, out.Repo, version)
+		rev, tree := s.resolveRevision(ctx, s.clientFor(cfg.InsecureSkipVerify), cfg, ch.ver, out.Repo, service, version)
 		out.Revision = rev
 		if rev != nil && rev.Verified {
 			paths, linkRef = tree.paths, RefSpec{Kind: "commit", Name: rev.SHA}

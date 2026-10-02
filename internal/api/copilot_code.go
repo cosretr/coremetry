@@ -145,9 +145,11 @@ func (s *Server) buildCodeContext(ctx context.Context, service, stack, version s
 	// kodunun kendisi dil-bağımsız arama anahtarıdır — zincir başka
 	// dildeki bir servise indiğinde (.cs fırlatıcı) frame-türevi arama
 	// yapısal olarak ıskalar, token araması bulur.
+	// v0.10.1047 (mono-repo) — HAM servis adı da gider: `{service}`'li sürüm
+	// deseni onu frame linkleriyle aynı yerde (resolveRevision) soyar.
 	cc := s.devops.FetchCodeAt(ctx, res.Repo, res.Project,
 		stackparse.ParseJava(stack), stackparse.ResourceRefs(stack),
-		stackparse.ErrorCodeTokens(stack), version)
+		stackparse.ErrorCodeTokens(stack), service, version)
 	cc.Source = res.Source
 	return cc
 }

@@ -475,9 +475,17 @@ func (s *Service) ResolveConfig() ResolveConfig {
 
 // resolveConfigLocked — caller holds at least the read lock.
 func (s *Service) resolveConfigLocked() ResolveConfig {
+	return s.cfg.resolveConfig()
+}
+
+// resolveConfig — bir ayar ANLIK GÖRÜNTÜSÜNÜN konvansiyonu, varsayılanlar
+// katlanmış. v0.10.1047: resolveRevision {service}'i isteğin kendi
+// anlık görüntüsünden (desenle aynı cfg) soyar; ResolveConfig() ile aynı
+// kural, tek yazım.
+func (c Settings) resolveConfig() ResolveConfig {
 	return ResolveConfig{
-		RepoPrefixes: s.cfg.RepoPrefixes,
-		BranchOrder:  s.cfg.BranchOrder,
+		RepoPrefixes: c.RepoPrefixes,
+		BranchOrder:  c.BranchOrder,
 	}.withDefaults()
 }
 

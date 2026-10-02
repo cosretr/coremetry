@@ -32,7 +32,7 @@ func TestResolveVersionRef(t *testing.T) {
 		{"tags/{version}", "${project.version}", "", false},
 	}
 	for _, c := range cases {
-		got, ok := ResolveVersionRef(c.pattern, c.version)
+		got, ok := ResolveVersionRef(c.pattern, "core-service", c.version)
 		if ok != c.ok || got != c.want {
 			t.Errorf("(%q,%q) → %q,%v; beklenen %q,%v", c.pattern, c.version, got, ok, c.want, c.ok)
 		}

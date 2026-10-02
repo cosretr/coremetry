@@ -27,6 +27,8 @@ type RefSpec struct {
 // DefaultVersionRef — ayar boşsa. En yaygın kural: image tag'i ile aynı adlı
 // git tag'i. Bulunamazsa branş ucuna düşülür (uyarıyla); yani yanlış bir
 // varsayılanın bedeli bir ekstra refs isteğidir, yanlış link değil.
+// v0.10.1047: varsayılan `{service}` TAŞIMAZ — mono-repo kurulumu deseni
+// kendisi yazar (tags/{service}-{version}); tek servisli depo bayt bayt eskisi.
 const DefaultVersionRef = "tags/{version}"
 
 // versionPlaceholders — chstore/deploys.go placeholderVersionList'in Go
@@ -126,6 +128,12 @@ func PickRunningVersion(samples []VersionSample) string {
 // `tags/` ya da `heads/` ile başlamalı (refs/ öneki YAZILMAZ, API filter
 // biçimi). Geçersiz desen 400 — sessizce varsayılana düşmek operatörün
 // yazdığını yok saymak olurdu.
+//
+// v0.10.1047 — ikinci yer tutucu `{service}` (isteğe bağlı; mono-repo:
+// tags/{service}-{version}). Bunların dışında `{…}` (ya da tek başına `{`/`}`)
+// reddedilir: tanınmayan bir yer tutucu ref'e harfiyen girer ve hiçbir tag'le
+// eşleşmeden her tıkta bir refs isteği yakardı. Kaydetme VE çözüm aynı
+// kapıdan geçer — elle düzenlenmiş bir blob da geçersiz desenle ref üretemez.
 func NormalizeVersionRef(p string) (string, error) {
 	p = strings.TrimSpace(p)
 	if p == "" {
@@ -134,21 +142,41 @@ func NormalizeVersionRef(p string) (string, error) {
 	if !strings.Contains(p, "{version}") {
 		return "", errors.New("desen {version} yer tutucusunu taşımalı")
 	}
+	if rest := refPlaceholders.Replace(p); strings.ContainsAny(rest, "{}") {
+		bad := unknownPlaceholderRe.FindString(rest)
+		if bad == "" {
+			bad = "(eşlenmemiş { ya da })"
+		}
+		return "", fmt.Errorf("desende bilinmeyen yer tutucu %s — yalnız {version} ve {service} kullanılabilir", bad)
+	}
 	if !strings.HasPrefix(p, "tags/") && !strings.HasPrefix(p, "heads/") {
 		return "", errors.New("desen tags/ ya da heads/ ile başlamalı (refs/ öneksiz)")
 	}
 	return p, nil
 }
 
-// ResolveVersionRef — desen + sürüm → ref adı ("tags/release.1"). Yer tutucu
-// sürüm ref ÜRETMEZ.
+// refPlaceholders — tanınan iki yer tutucuyu silen yer değiştirici; geriye
+// `{`/`}` kalırsa desen tanınmayan bir yer tutucu taşıyordur.
+var refPlaceholders = strings.NewReplacer("{version}", "", "{service}", "")
+
+// unknownPlaceholderRe — hata mesajında anılacak ilk tanınmayan `{…}`.
+var unknownPlaceholderRe = regexp.MustCompile(`\{[^{}]*\}`)
+
+// ResolveVersionRef — desen + servis + sürüm → ref adı ("tags/release.1").
+// Yer tutucu sürüm ref ÜRETMEZ.
 //
 // v0.10.1044 — TEK GİRİŞ KAPISI: sürüm telemetriden gelir (service.version /
 // image tag; span gönderebilen herkes yazar) ve buradan sonra PAT'lı bir
 // isteğin sorgusuna, modelin bloğuna (çit dışında), gerekçe satırına ve
 // panele gider. Biçimi ref-güvenli olmayan sürüm (refSafeVersion) "sürüm
 // yok" sayılır: istek yok, bugünkü başlık, hiçbir yerde yankılanmaz.
-func ResolveVersionRef(pattern, version string) (string, bool) {
+//
+// v0.10.1047 — service: konvansiyonla NORMALİZE edilmiş servis adı
+// (conventionName; resolveRevision soyar). Yalnız desen `{service}`
+// taşıyorsa okunur — taşımayan desenin çıktısı bayt bayt eskisi. Servis adı
+// da telemetridir: aynı ref-güvenli kapıdan geçer; boş ya da güvensiz ad →
+// "ref yok" (tags/-1.4.2 gibi boş yerleştirme ASLA), istek yok, yankı yok.
+func ResolveVersionRef(pattern, service, version string) (string, bool) {
 	p, err := NormalizeVersionRef(pattern)
 	if err != nil {
 		return "", false
@@ -157,7 +185,22 @@ func ResolveVersionRef(pattern, version string) (string, bool) {
 	if IsPlaceholderVersion(version) || !refSafeVersion(version) {
 		return "", false
 	}
-	return strings.ReplaceAll(p, "{version}", version), true
+	if !strings.Contains(p, "{service}") {
+		return strings.ReplaceAll(p, "{version}", version), true
+	}
+	service = strings.TrimSpace(service)
+	if !refSafeVersion(service) {
+		return "", false
+	}
+	// Eşzamanlı yerleştirme: bir değerin içeriği öbür yer tutucu gibi
+	// okunamaz (kapı `{`'yi zaten geçirmiyor; bu ikinci kemer).
+	ref := strings.NewReplacer("{version}", version, "{service}", service).Replace(p)
+	if strings.Contains(ref, "..") {
+		// "orders." + ".{version}" — tek tek güvenli iki değer birleşince
+		// git'in yasak dizisi.
+		return "", false
+	}
+	return ref, true
 }
 
 // refSafeVersionRe — v0.10.1044: muhafazakâr ref-güvenli sürüm biçimi. Harf/
@@ -168,7 +211,8 @@ func ResolveVersionRef(pattern, version string) (string, bool) {
 var refSafeVersionRe = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z._+\-/]{0,99}$`)
 
 // refSafeVersion — SAF: sürüm ref adına girebilir mi? `..` (yol tırmanma /
-// git'in yasak ref dizisi) ayrıca reddedilir.
+// git'in yasak ref dizisi) ayrıca reddedilir. v0.10.1047: `{service}`'e
+// giren normalize servis adı da AYNI kapıdan geçer (ikinci bir biçim kuralı yok).
 func refSafeVersion(v string) bool {
 	return refSafeVersionRe.MatchString(v) && !strings.Contains(v, "..")
 }
@@ -248,7 +292,9 @@ func (s *Service) refCommit(ctx context.Context, cli *http.Client, cfg Settings,
 
 // refCacheKey — ref→commit cache anahtarı (v0.10.1044): taban adres,
 // koleksiyon, proje, depo, TAM ref adı ("tags/1.4.2"). Desen değişirse ref
-// adı da değişir, yani eski cevap yeni desene sızmaz.
+// adı da değişir, yani eski cevap yeni desene sızmaz. v0.10.1047: `{service}`
+// yerleşmiş ad TAM ref'in parçası — aynı mono-repoda iki servisin aynı
+// sürümü (tags/payments-api-1.4.2 / tags/orders-api-1.4.2) ayrı girdidir.
 func refCacheKey(cfg Settings, repo, ref string) string {
 	return cfg.BaseURL + "|" + cfg.Collection + "|" + cfg.Project + "|" + repo + "|ref|" + ref
 }
@@ -267,8 +313,18 @@ func refCacheKey(cfg Settings, repo, ref string) string {
 //   - Verified=false — Note nedeni söyler (Missing: ref depoda yok — hata
 //     değil); ağaç boş, çağıran dal ucunda kalır. Sürüm yüzünden hiçbir şey
 //     DÜŞMEZ.
-func (s *Service) resolveRevision(ctx context.Context, cli *http.Client, cfg Settings, ver, repo, version string) (*Revision, treeResult) {
-	ref, ok := ResolveVersionRef(cfg.VersionRef, version)
+//
+// v0.10.1047 — service: stack'i basan servisin HAM adı (frame linkleri:
+// isteğin service alanı; kod incelemesi: buildCodeContext'in servisi →
+// FetchCodeAt). `{service}` için normalizasyon BURADA, tek yerde:
+// conventionName (ResolveRepo'nun konvansiyon soyması) + desenle aynı ayar
+// anlık görüntüsünün önekleri. İki yüzey aynı ham adı verir, aynı fonksiyon
+// soyar — biri tags/payments-api-1.4.2'ye, öbürü başka bir tag'e bakamaz.
+// repo burada YETMEZ: pinli mono-repoda depo adı servisi anlatmaz, zincir de
+// depo adını düzeltebilir.
+func (s *Service) resolveRevision(ctx context.Context, cli *http.Client, cfg Settings, ver, repo, service, version string) (*Revision, treeResult) {
+	svcName, _ := conventionName(service, cfg.resolveConfig().RepoPrefixes)
+	ref, ok := ResolveVersionRef(cfg.VersionRef, svcName, version)
 	if !ok || strings.TrimSpace(repo) == "" {
 		return nil, treeResult{}
 	}

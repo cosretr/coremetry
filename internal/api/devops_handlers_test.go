@@ -140,6 +140,16 @@ func TestMergeDevOpsSettings_Validation(t *testing.T) {
 			func(in *devopsSettingsInput) { in.BaseURL = "HTTPS://dev.example.local" }, ""},
 		{"empty URL accepted — that's how you clear the connection",
 			func(in *devopsSettingsInput) { in.BaseURL = "" }, ""},
+		// v0.10.1047 — mono-repo: {service} isteğe bağlı ikinci yer tutucu;
+		// başkası 400 (mesaj alanı ve izinli ikisini söyler), {version} zorunlu.
+		{"versionRef {service} accepted",
+			func(in *devopsSettingsInput) { in.VersionRef = "tags/{service}-{version}" }, ""},
+		{"versionRef unknown placeholder rejected",
+			func(in *devopsSettingsInput) { in.VersionRef = "tags/{svc}-{version}" },
+			"versionRef: desende bilinmeyen yer tutucu {svc} — yalnız {version} ve {service} kullanılabilir"},
+		{"versionRef {service} without {version} rejected",
+			func(in *devopsSettingsInput) { in.VersionRef = "tags/{service}" },
+			"versionRef: desen {version} yer tutucusunu taşımalı"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
