@@ -59,6 +59,7 @@ var promptVersionRegistry = map[string]string{
 	"systemChat":                 systemChat,
 	"systemChatRoundCap":         systemChatRoundCap,
 	"systemChatRoundCapAddendum": systemChatRoundCapAddendum, // v0.10.806
+	"sourceCodeChatAddendum":     sourceCodeChatAddendum,     // v0.10.1050 — read_source_code sunulunca
 	"systemChatAgentLoop":        systemChatAgentLoop,        // v0.10.482
 	"systemIntentClassify":       systemIntentClassify,
 	"IntentNoInstructionLine":    IntentNoInstructionLine,

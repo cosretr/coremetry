@@ -90,7 +90,8 @@ func roleSatisfies(role, minRole string) bool {
 // Not: guided router (copilot_guided.go) tool katmanını bilerek
 // ATLAR — veriyi kendisi prefetch eder. MinRole > "" olan bir tool
 // eklendiğinde onun guided ikizine de aynı rol kontrolü GEREKİR;
-// bugün tüm tool'lar "" olduğu için açık bir delik yok.
+// bugün tek istisna read_source_code (editor, v0.10.1050) ve guided ikizi
+// YOK — açık bir delik yok.
 func toolsForRole(tools []mcp.Tool, role string) []mcp.Tool {
 	out := make([]mcp.Tool, 0, len(tools))
 	for _, t := range tools {

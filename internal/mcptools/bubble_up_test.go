@@ -147,9 +147,20 @@ func TestBubbleUpSchemaMirrorsArgs(t *testing.T) {
 // bubble_up YALNIZ dış MCP'de: Register kaydeder, sohbet kataloğu
 // (ChatToolList) görmez ve geri kalanı ToolList ile aynı sırada taşır.
 func TestBubbleUpIsExternalOnly(t *testing.T) {
+	// v0.10.1050 — koşullu araçlar (chatOffered) bağımlılıkları olmadan sohbete
+	// sunulmaz: Deps{} ile read_source_code da düşer; sayı ve sıra ondan arındırılır.
 	all, chat := ToolList(Deps{}), ChatToolList(Deps{})
-	if len(chat) != len(all)-len(externalOnlyTools) {
-		t.Fatalf("sohbet kataloğu %d, tam katalog %d, dış-yalnız %d", len(chat), len(all), len(externalOnlyTools))
+	absent := 0
+	for _, tl := range all {
+		if !externalOnlyTools[tl.Name] && !chatOffered(Deps{}, tl.Name) {
+			absent++
+		}
+	}
+	if absent != 1 {
+		t.Fatalf("Deps{} ile sunulmayan koşullu araç sayısı %d (beklenen 1: read_source_code)", absent)
+	}
+	if len(chat) != len(all)-len(externalOnlyTools)-absent {
+		t.Fatalf("sohbet kataloğu %d, tam katalog %d, dış-yalnız %d, koşullu-yok %d", len(chat), len(all), len(externalOnlyTools), absent)
 	}
 	inAll := map[string]bool{}
 	for _, tl := range all {
@@ -165,7 +176,7 @@ func TestBubbleUpIsExternalOnly(t *testing.T) {
 	}
 	i := 0
 	for _, tl := range all {
-		if externalOnlyTools[tl.Name] {
+		if externalOnlyTools[tl.Name] || !chatOffered(Deps{}, tl.Name) {
 			continue
 		}
 		if chat[i].Name != tl.Name {

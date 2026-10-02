@@ -54,6 +54,13 @@ const shortDescMinBytes = 60
 // başına ~160 B ortalama korunuyor; yeni tool eklerken uzunları kırp).
 const shortCatalogMaxBytes = 9100
 
+// shortCatalogConditionalMaxBytes — v0.10.1050: KOŞULLU sohbet araçlarının
+// (chatOffered; bugün yalnız read_source_code, DevOps bağlıyken) kompakt
+// toplamının AYRI tavanı. Koşulsuz katalog 9.1 KB'ta kalır (her kurulumun her
+// turu); koşullu araç yalnız bağımlılığı yapılandırılmış kurulumda ödenir ve
+// bedeli burada açıkça sayılır: read_source_code 271 B → tavan 300 B.
+const shortCatalogConditionalMaxBytes = 300
+
 // TAMLIK — her tool'un kompakt metni olmalı. Yeni bir tool kompakt
 // açıklamasız gemiye giremez (mcp.Tool.ChatDescription() tam metne
 // düşerdi: güvenli ama pahalı, ve sessiz).
@@ -62,12 +69,17 @@ func TestEveryToolHasShortDescription(t *testing.T) {
 	if len(tools) < 30 {
 		t.Fatalf("katalog beklenmedik biçimde küçük (%d) — test yanlış şeyi ölçüyor olabilir", len(tools))
 	}
-	totalShort, totalFull := 0, 0
+	totalShort, totalFull, conditional := 0, 0, 0
 	for _, tl := range tools {
 		// v0.10.993 — BÜTÇE sohbetin her tur ödediği katalogdur: dış-yalnız
 		// araçlar (externalOnlyTools; ChatToolList'te yok) toplama girmez.
 		// Alan kuralları (dolu, tavan/taban, Türkçe) onlar için de geçerli.
-		if !externalOnlyTools[tl.Name] {
+		// v0.10.1050 — koşullu araçlar (chatOffered) ayrı tavanda sayılır.
+		switch {
+		case externalOnlyTools[tl.Name]:
+		case !chatOffered(Deps{}, tl.Name):
+			conditional += len(tl.ShortDescription)
+		default:
 			totalShort += len(tl.ShortDescription)
 			totalFull += len(tl.Description)
 		}
@@ -96,12 +108,15 @@ func TestEveryToolHasShortDescription(t *testing.T) {
 	if totalShort > shortCatalogMaxBytes {
 		t.Errorf("kompakt katalog %d B — tavan %d B (diyet eriyor)", totalShort, shortCatalogMaxBytes)
 	}
+	if conditional > shortCatalogConditionalMaxBytes {
+		t.Errorf("koşullu araçların kompakt toplamı %d B — tavan %d B", conditional, shortCatalogConditionalMaxBytes)
+	}
 	// Diyetin ANLAMLI olması: kompakt görünüm tam metnin yarısından
 	// küçük kalmalı, yoksa her tur ödenen bedel aynı sınıfta kalır.
 	if totalShort*2 >= totalFull {
 		t.Errorf("kompakt katalog (%d B) tam kataloğun (%d B) yarısından küçük değil", totalShort, totalFull)
 	}
-	t.Logf("katalog: %d tool, tam %d B → kompakt %d B", len(tools), totalFull, totalShort)
+	t.Logf("katalog: %d tool, tam %d B → kompakt %d B (+ koşullu %d B)", len(tools), totalFull, totalShort, conditional)
 }
 
 // ChatDescription() BOŞKEN tam metne düşer — güvenli yön. Tamlık kapısı

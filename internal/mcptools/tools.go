@@ -35,7 +35,9 @@
 //     salt-okunur ve hepsinin REST eşi viewer'a açık. Tek sapma
 //     list_anomalies↔GET /api/anomalies/active idi (REST editor,
 //     tool kapısız); A7 kararıyla REST viewer'a indi, tool ""
-//     kaldı — sapma sıfır.
+//     kaldı — sapma sıfır. v0.10.1050 — tek bilinçli istisna
+//     read_source_code: MinRole editor (SourceCodeMinRole; sohbet-yalnız,
+//     REST eşi yok — serbest kaynak dosya okuması viewer'a açılmaz).
 //     YENİ TOOL EKLERKEN: REST eşinin kapısına bak. auth.RequireRole
 //     /RequireAnyRole ile sarılıysa MinRole'ü aynı role AYARLA;
 //     yazma tool'u eklenirse (bu tasarımda yok) MinRole en az
@@ -57,7 +59,7 @@
 //     doğru çağrının koşulu, orada kazanılan bayt yanlış argümanla
 //     harcanan bir tura değmez.
 //
-// Tool catalogue (61 tools; v0.10.993 — 60 → 61: bubble_up.go, yalnız dış MCP; v0.10.944 — 57 → 60: logs_tools.go list_log_fields, metrics_tools.go list_metric_labels, compare_periods.go; search_logs / query_metric / get_trace yeni dosyalarında; v0.10.809 — 56 → 57: product_guide.go; v0.10.559 — 54 → 56: knowledge_tools.go get_runbook / search_knowledge; v0.10.556 — 52 → 54: signal_tools.go log_patterns / cluster_metric; v0.10.555 — 48 → 52: problem_tools.go get_problem / get_correlation_evidence / similar_problems / get_capabilities; v0.10.545 — 47 → 48: list_deployments.go; v0.10.478 — 44 → 47: context_tools.go; v0.10.475 — 43 → 44: build_link.go; v0.10.474 — 42 → 43: trace_stats.go; v0.10.472 — 40 → 42: attr_discovery.go; v0.10.469 — 39 → 40: resolve_entity.go; v0.10.468 — 36 → 39: entity_catalog.go list_namespaces / list_workloads / list_pods; sayım v0.9.1050'de düzeltildi — blok
+// Tool catalogue (62 tools; v0.10.1050 — 61 → 62: source_code.go read_source_code, yalnız uygulama içi sohbet ve yalnız DevOps bağlıyken; v0.10.993 — 60 → 61: bubble_up.go, yalnız dış MCP; v0.10.944 — 57 → 60: logs_tools.go list_log_fields, metrics_tools.go list_metric_labels, compare_periods.go; search_logs / query_metric / get_trace yeni dosyalarında; v0.10.809 — 56 → 57: product_guide.go; v0.10.559 — 54 → 56: knowledge_tools.go get_runbook / search_knowledge; v0.10.556 — 52 → 54: signal_tools.go log_patterns / cluster_metric; v0.10.555 — 48 → 52: problem_tools.go get_problem / get_correlation_evidence / similar_problems / get_capabilities; v0.10.545 — 47 → 48: list_deployments.go; v0.10.478 — 44 → 47: context_tools.go; v0.10.475 — 43 → 44: build_link.go; v0.10.474 — 42 → 43: trace_stats.go; v0.10.472 — 40 → 42: attr_discovery.go; v0.10.469 — 39 → 40: resolve_entity.go; v0.10.468 — 36 → 39: entity_catalog.go list_namespaces / list_workloads / list_pods; sayım v0.9.1050'de düzeltildi — blok
 // v0.6.5'te kalmıştı, get_problem_root_cause/render_chart sayılmıyordu;
 // v0.9.1227'de get_operation_health ile 33; v0.9.1233'te
 // get_exception_samples ile 34; v0.9.1244'te list_teams +
@@ -86,6 +88,7 @@
 //   - get_correlated_changes (v0.9.1092 — MV'li "başka ne değişti")
 //   - get_deploy_diff (v0.9.1092 — deploy önce/sonra RED kıyası)
 //   - render_chart (v0.9.520)
+//   - read_source_code (v0.10.1050 — sohbet-yalnız, koşullu; source_code.go)
 //
 // Keşif tool'ları (v0.9.1141, AI Faz 3.2 — discovery.go). Hepsi bir
 // ARG'ın eşi: arg'ı kabul edip listesini vermeyen tool = kimlik
@@ -223,6 +226,9 @@ type Deps struct {
 	// v0.10.556 (Faz 4b) — cluster_metric: Thanos sabit handler aynası; nil =
 	// Thanos yok (tool disabled döner). api/mcp_deps.go mcpClusterMetrics.
 	ClusterMetrics ClusterMetricReader
+	// v0.10.1050 — read_source_code okuyucusu (source_code.go; api/chat_source_code.go
+	// doldurur). nil = DevOps bağlantısı yok → ChatToolList aracı HİÇ sunmaz.
+	SourceCode SourceCodeReader
 }
 
 // MetricSource is the metric-read half of Deps, satisfied by
@@ -359,6 +365,11 @@ func ToolList(d Deps) []mcp.Tool {
 		// yüzden hemen yanında: model kataloğu okurken "sayıyı gördüm,
 		// peki neden" sorusunun cevabını komşu satırda bulsun.
 		getExceptionSamplesTool(d),
+		// v0.10.1050 — stack'in DEVAMI: frame'deki dosya/satırın kaynak kodu
+		// (source_code.go). SOHBET-YALNIZ ve KOŞULLU (DevOps bağlıysa sunulur);
+		// stack taşıyan örneklerin hemen yanında ki model frame'i görünce okuyucuyu
+		// da görsün.
+		readSourceCodeTool(d),
 		// v0.9.1092 (Faz 4) — "o anda başka ne değişti" (MV okuması).
 		getCorrelatedChangesTool(d),
 		// v0.9.1092 (Faz 4) — deploy önce/sonra RED kıyası.
@@ -411,7 +422,19 @@ func ToolList(d Deps) []mcp.Tool {
 
 // chatOnlyTools — uygulama içi konuşma durumuna muhtaç; düz MCP üzerinden
 // yalnız hata dönebilirler (gizlemek reddetmekten iyi — mcp.go MinRole notu).
-var chatOnlyTools = map[string]bool{"set_context": true, "get_context": true, "clear_context": true}
+// v0.10.1050 — read_source_code: kaynak kodu dış istemciye açmak operatörün
+// onayladığı kapsamın dışında ("kod tarayıcıya gitmez" sözleşmesi sohbet içi).
+var chatOnlyTools = map[string]bool{"set_context": true, "get_context": true, "clear_context": true, SourceCodeToolName: true}
+
+// chatOffered — v0.10.1050 — KOŞULLU sohbet araçları: bağımlılığı
+// yapılandırılmadıkça sohbete SUNULMAZ (şema bedeli yok, ölü araç yok).
+// Koşulsuz araçlar için true.
+func chatOffered(d Deps, name string) bool {
+	if name == SourceCodeToolName {
+		return d.SourceCode != nil
+	}
+	return true
+}
 
 // externalOnlyTools — v0.10.993 — yalnız DIŞ MCP istemcilerine açık araçlar:
 // Register kaydeder, uygulama içi sohbet (ChatToolList) görmez. Gerekçe araç
@@ -424,11 +447,12 @@ var externalOnlyTools = map[string]bool{"bubble_up": true}
 // gördüğü katalog: ToolList eksi externalOnlyTools, sıra aynı. Sohbet
 // yollarında ToolList DEĞİL bu çağrılır (api/copilot_chat.go,
 // api/trace_investigate.go; kaynak pini mcptools/bubble_up_test.go).
+// v0.10.1050 — koşullu araçlar (chatOffered) bağımlılıkları yoksa düşer.
 func ChatToolList(d Deps) []mcp.Tool {
 	all := ToolList(d)
 	out := make([]mcp.Tool, 0, len(all))
 	for _, t := range all {
-		if !externalOnlyTools[t.Name] {
+		if !externalOnlyTools[t.Name] && chatOffered(d, t.Name) {
 			out = append(out, t)
 		}
 	}

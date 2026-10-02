@@ -378,6 +378,10 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		role = c.Role
 	}
 	tools := toolsForRole(mcptools.ChatToolList(s.mcpDeps()), role) // v0.10.993 — dış-yalnız araçlar (bubble_up) hariç
+	// v0.10.1050 — read_source_code YALNIZ panel trace takibinde ve oturum
+	// kullanıcısına (API token'ı değil); bağımsız döngüde dış MCP araçlarının
+	// yanında sunulmaz (chat_source_code.go). Katalog/spec/prompt bundan kurulur.
+	tools = sourceCodeToolsFor(tools, isTraceFollowUp, c)
 	byName := make(map[string]mcp.ToolHandler, len(tools))
 	specs := make([]copilot.ToolSpec, 0, len(tools))
 	// v0.9.1230 (AI perf) — katalog DİYETİ: spec'e t.Description değil
@@ -467,6 +471,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// v0.10.29 — döngü boyunca çağrılan araçlar; cevabın altındaki
 	// deterministik "Kaynak:" künyesini besliyor (chat_source_note.go).
 	var calledTools []string
+	// v0.10.1050 — okunan kodun MASKELİ özetleri (ai_calls örneği; kod yok).
+	var codeReads []string
 	// v0.10.948 — trace takibinin sayı denetimi kanıtı: sunucu bağlamı + operatör
 	// mesajları + YÜRÜTÜLEN çağrıların argümanı ve tam çıktısı (chat_trace_followup.go).
 	var fuEvidence strings.Builder
@@ -549,12 +555,16 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		tf := buildTraceFollowUp(traceSubj, pageCtx, loopEnv, req.Context.RangeS, anchorTo, time.Now())
 		traceFU = &tf
 		emit("step", map[string]string{"label": traceFollowUpChipTR(tf)})
+		// v0.10.1050 — read_source_code sürümü argümansız çağrıldığında öznenin
+		// span'lerinden çözer (chat_source_code.go; tembel, alışveriş başına bir okuma).
+		ctx = withSourceSubject(ctx, tf.TraceID, tf.SpanID)
 	}
 	loopPrompt := copilot.SystemPromptChatAgentLoop() + // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A)
 		screenContextPreambleTR(screenCtx) +
 		agentctx.PreambleTR(pageCtx, pinnedCtx) + // v0.10.539 — sayfa bağlamı (pin önce)
 		chatContextPreambleTR(cst.ctx) + // v0.10.478 — aktif sohbet bağlamı (Ek A ACTIVE_CONTEXT)
 		traceFollowUpPromptTR(traceFU, req.Context.Explain) + // v0.10.948 — boşsa ""
+		chatSourceCodePromptTR(tools) + // v0.10.1050 — read_source_code sunulmuyorsa ""
 		withAddressee(addressee, copilot.SystemPromptChat())
 	if isTraceFollowUp {
 		// v0.10.948 — sayı denetiminin tohumu: açıklamasız AKTİF BAĞLAM + ekran ve
@@ -721,7 +731,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				// ve TAM çıktısı (modele giden kırpık kopya değil).
 				fuEvidence.Write(tc.Input)
 				fuEvidence.WriteByte('\n')
-				fuEvidence.WriteString(oc.Content)
+				// v0.10.1050 — read_source_code'dan YALNIZ referans satırı (kod sayıyı temellendirmez).
+				fuEvidence.WriteString(chatFollowUpEvidence(tc.Name, oc.Content))
 				fuEvidence.WriteByte('\n')
 			}
 			// CoSRE Faz-2 — render_chart: handler'ın DOĞRULANMIŞ çıktısı
@@ -749,7 +760,12 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				// başarılı sonuç; tüm kaynakları hata sınıfındaysa veri yok, künyeye girmez.
 				calledTools = append(calledTools, tc.Name)
 			}
-			preview, truncated := clipStepPreview(tr.Content)
+			// v0.10.1050 — read_source_code'un başarılı sonucu tele YALNIZ referans
+			// olarak çıkar (chat_source_code.go chatStepPreview; kod modele gider).
+			preview, truncated := chatStepPreview(tc.Name, tr.Content, tr.IsError)
+			if sum := chatCodeReadSummary(tc.Name, tr.Content, tr.IsError); sum != "" {
+				codeReads = append(codeReads, sum)
+			}
 			stepEv := map[string]any{
 				"i": stepN, "tool": tc.Name, "ok": !tr.IsError,
 				"preview": preview, "truncated": truncated, "bytes": len(tr.Content),
@@ -913,7 +929,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		status, errMsg = "error", lastErr.Error()
 	}
 	cspan.finish(totalIn, totalOut, totalCached, lastErr) // v0.10.425 — span ve satır aynı toplamlar
-	s.copilot.RecordUsage(ctx, chatT0, totalIn, totalOut, totalCached, status, errMsg, lastUserText(req.Messages), finalText)
+	// v0.10.1050 — read_source_code okunduysa örneğe maskeli "[kod: …]" özetleri
+	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
+	s.copilot.RecordUsage(ctx, chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
 	emit("done", map[string]bool{"ok": lastErr == nil})
 }

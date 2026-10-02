@@ -56,6 +56,9 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		MetricsName:     func() string { return s.metricSource().Name() },
 		RAGReady:        func() bool { return s.rag != nil && s.rag.Ready() },
 		ClusterMetrics:  s.mcpClusterMetricsOrNil(), // v0.10.556
+		// v0.10.1050 — read_source_code (chat_source_code.go); DevOps yoksa nil →
+		// araç sohbete sunulmaz. Dış MCP'de araç hiç kayıtlı değil (chatOnlyTools).
+		SourceCode: s.sourceCodeReaderOrNil(),
 		CopilotModel: func() string {
 			if s.copilot == nil || !s.copilot.Configured() {
 				return ""

@@ -6,8 +6,8 @@ docs/plans/ai-assistant-design-2026-08-16.md §K7)
 
 ## 1. Token üret
 
-Settings → API Tokens → **New token**, rol: **viewer** (61 tool'un
-tamamı salt-okunur ve hepsi viewer seviyesinde — editor/admin
+Settings → API Tokens → **New token**, rol: **viewer** (bu sunucuya kayıtlı
+tool'ların tamamı salt-okunur ve hepsi viewer seviyesinde — editor/admin
 GEREKMEZ). `cmk_…` değeri yalnız oluşturma anında görünür; kasaya
 koy. İptal: aynı ekrandan Revoke (anında, cache invalidation'lı).
 
@@ -32,7 +32,7 @@ Rol zorlaması nerede: her tool/resource/prompt kaydı bir `MinRole`
 taşır (`internal/mcp`), kapı (`internal/api/mcp_gate.go`) çağrı
 öncesi token rolüyle karşılaştırır. Yetersizse JSON-RPC **-32001** ve
 gereken rolü söyleyen okunur bir metin döner (model boşuna yeniden
-denemez). Bugün 61 tool'un tamamı `MinRole=""` (viewer tabanı; v0.9.1141'ta
+denemez). Bugün bu sunucuya kayıtlı tool'ların tamamı `MinRole=""` (viewer tabanı; v0.9.1141'ta
 beş keşif tool'u eklendi — list_operations / list_environments /
 list_clusters / list_deploys / find_trace_by_span; v0.9.1142'de
 find_trace_by_request_id — yapılandırılmış kurumsal istek numarası →
@@ -46,7 +46,13 @@ grubunun gerçek oluşumları: stacktrace + trace_id pivotu, REST eşi
 GET /api/exception-groups/{fp}/samples viewer'a açık; v0.9.1244'te iki
 takım/sahiplik tool'u — list_teams / get_team_services, REST eşleri
 GET /api/services-metadata ve GET /api/services?ownerTeam=… viewer'a
-açık).
+açık). Kayıt defteri v0.10.1050'te 62 oldu ama dış MCP yüzeyi
+DEĞİŞMEDİ: eklenen `read_source_code` (incelenen trace'teki servisin
+deposundan kaynak kod okuyucusu) yalnız uygulama içi panel trace
+takibinde, oturum kullanıcısına (cmk_ token'ına DEĞİL), editor/admin
+rolde ve DevOps bağlıyken sunulur; bu sunucuya kayıtlı değildir
+(`chatOnlyTools`, set/get/clear_context gibi). Tek MinRole istisnası
+odur (editor); dış MCP'deki tool'ların tamamı viewer tabanında.
 
 ### "Benim servislerim" MCP'de YOK (bilinçli)
 
