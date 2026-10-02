@@ -444,10 +444,10 @@ func (s *CHStore) countOnePattern(
 ) (PatternStats, error) {
 	var out PatternStats
 	tokensSQL := chBuildTokenLiteral(pat.Tokens)
-	where := "time >= ? AND time < ? AND match(body, ?)"
-	if tokensSQL != "" {
-		where = "time >= ? AND time < ? AND multiSearchAnyCaseInsensitive(body, " + tokensSQL + ") AND match(body, ?)"
-	}
+	// v0.10.1060 — eşleşme yüklemi chPatternMatchSQL'de: PatternHistogram
+	// (anomali detayının desen sayısı grafiği) AYNI yüklemle sayar. Üretilen
+	// SQL bayt bayt öncekiyle aynı.
+	where := "time >= ? AND time < ? AND " + chPatternMatchSQL(tokensSQL)
 	sql := `
 		SELECT
 		  countIf(time >= ?)                                      AS cur,
@@ -480,13 +480,7 @@ func (s *CHStore) countOnePattern(
 		topSQL := `
 			SELECT service_name, count() AS cnt
 			FROM logs
-			WHERE time >= ? AND time < ? AND ` +
-			func() string {
-				if tokensSQL != "" {
-					return "multiSearchAnyCaseInsensitive(body, " + tokensSQL + ") AND match(body, ?)"
-				}
-				return "match(body, ?)"
-			}() + `
+			WHERE time >= ? AND time < ? AND ` + chPatternMatchSQL(tokensSQL) + `
 			GROUP BY service_name
 			ORDER BY cnt DESC
 			LIMIT 5

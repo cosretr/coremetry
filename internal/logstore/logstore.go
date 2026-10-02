@@ -311,6 +311,15 @@ type PatternStats struct {
 	TopServices []PatternServiceHit
 }
 
+// PatternHistogramResult — PatternHistogram cevabı (v0.10.1060). Points
+// seyrek ve zaman sıralı (T = kova başı, unix ns). Partial: ES yumuşak zaman
+// aşımı ya da düşen shard — kovalar gerçeğin alt kümesi (Page.Partial
+// ikizi); CH hiç kurmaz.
+type PatternHistogramResult struct {
+	Points  []LogPoint
+	Partial bool
+}
+
 // PatternServiceHit pairs a service name with how many times it
 // produced the pattern in the current detection window.
 type PatternServiceHit struct {
@@ -416,6 +425,15 @@ type Store interface {
 	// input slice index; empty PatternStats indicates "no match
 	// in current window" (detector ignores these).
 	CountPatterns(ctx context.Context, pats []PatternSpec, curStart, baseStart, now time.Time) ([]PatternStats, error)
+
+	// PatternHistogram — v0.10.1060: CountPatterns'ın ZAMAN EKSENİ. Tek
+	// desenin [from, to) penceresindeki eşleşme sayısını bucketSec'lik
+	// kovalarla döndürür (seyrek: boş kova yok; çağıran sıfırla doldurur).
+	// Eşleşme yüklemi CountPatterns'ınkiyle AYNI (CH: token ön süzgeci +
+	// regex; ES: token-OR query_string) — grafik dedektörün saydığını
+	// çizer, başka bir şeyi değil. Anomali detay sayfası açıkken bir kez
+	// (+ aktif olayda ≥60 s yoklama) çağrılır; kova sayısı çağıranda sınırlı.
+	PatternHistogram(ctx context.Context, pat PatternSpec, from, to time.Time, bucketSec int) (*PatternHistogramResult, error)
 
 	// Histogram returns one bucketed timeseries per group_value for
 	// the requested filter. Powers the Logs source in /explore — the

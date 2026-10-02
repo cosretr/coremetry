@@ -96,6 +96,9 @@ export const keys = {
     // yapılan toplu invalidate bunu da tazeler. 'events' ile KARDEŞ (alt
     // dalı değil): events zarfı ile tek kayıt aynı dala düşmesin.
     event:       (id: string) => ['anomalies', 'event', id] as const,
+    // v0.10.1060 — desen sayısı serisi; toNs 0 = "şimdi" (aktif olay).
+    logPatternSeries: (pattern: string, fromNs: number, toNs: number) =>
+      ['anomalies', 'log-pattern-series', pattern, fromNs, toNs] as const,
   },
 
   exceptions: {

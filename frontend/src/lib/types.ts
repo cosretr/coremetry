@@ -5974,6 +5974,20 @@ export interface AnomalyEvent {
   verdictAt?: number; // unix ns
 }
 export type AnomalyVerdictKind = 'anomaly' | 'not_anomaly';
+// LogPatternSeries — GET /api/anomalies/log-pattern-series (v0.10.1060; Go:
+// api.logPatternSeriesResponse). Log deseni anomalisinin zaman içindeki
+// eşleşme sayısı, dedektörün kendi yüklemiyle. from/to kovaya hizalı unix ns
+// (to dahil değil); points sıfırla doldurulmuş, her kova bir nokta (t = kova
+// başı, unix ns). partial: ES zaman aşımı / düşen shard — sayımlar alt küme.
+export interface LogPatternSeries {
+  pattern: string;
+  bucketSec: number;
+  from: number;
+  to: number;
+  points: { t: number; v: number }[];
+  partial?: boolean;
+}
+
 export interface AnomalyVerdict { eventId: string; fingerprint: string; kind: string; pattern: string; service: string; verdict: AnomalyVerdictKind; note?: string; createdBy: string; createdAt: number }
 
 // ── Deployment analysis report ──────────────────────────────────────────────

@@ -14,6 +14,9 @@
 //     kök-neden şeridi (sayfa açılışında çekmez), "Ne yapabilirim", Triyaj;
 //     "Teknik ayrıntı" kapalı ve kapalıyken MOUNT EDİLMEZ;
 //   • Mute… çekmeceyle aynı gövdeyi yazar ve kuyruğa döner; viewer düğme görmez.
+//   • v0.10.1060 — log_pattern'ın tek grafiği "Desen sayısı" barları (servis log
+//     hacmi DEĞİL); diğer log türleri log hacmini korur, log dışı türlerde
+//     desen grafiği yok; desen okuması düşerse sayfanın geri kalanı ayakta.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -35,6 +38,8 @@ const m = vi.hoisted(() => {
     silences: [] as unknown[],
     rcOpen: [] as boolean[],
     logSeries: [{ name: 'ERROR', total: 12 }] as { name: string; total: number }[] | null,
+    patternMode: 'ok' as 'ok' | 'fail',
+    patternCalls: 0,
   };
 });
 vi.mock('@/lib/api', () => {
@@ -47,6 +52,11 @@ vi.mock('@/lib/api', () => {
     },
     problemVerdicts: async () => ({ verdicts: [], policy: { muteNotifications: false } }),
     createAnomalySilence: async (body: unknown) => { m.silences.push(body); return {}; },
+    anomalyLogPatternSeries: async () => {
+      m.patternCalls++;
+      if (m.patternMode === 'fail') throw new Error('HTTP 502: log backend slow');
+      return { pattern: 'p', bucketSec: 60, from: 0, to: 120e9, points: [{ t: 0, v: 3 }, { t: 60e9, v: 900 }] };
+    },
   };
   return {
     api: new Proxy({}, { get: (_t, k: string) => stub[k] ?? (() => Promise.resolve(null)) }),
@@ -73,6 +83,10 @@ vi.mock('@/components/LogsHistogram', async () => {
 vi.mock('@/components/CosreChart', () => ({
   CosreChart: ({ spec, presentation }: { spec: { agg: string; operation?: string }; presentation?: { title: string; emptyNote?: string } }) =>
     <div data-chart={spec.agg} data-op={spec.operation ?? ''} data-title={presentation?.title ?? ''} data-empty={presentation?.emptyNote ?? ''} />,
+}));
+vi.mock('@/components/chart/corePanelEntry', () => ({
+  CorePanelMulti: ({ viz, error }: { viz?: string; error?: string }) =>
+    <div data-pattern-panel={viz ?? ''} data-error={error ?? ''} />,
 }));
 vi.mock('@/components/RootCauseRibbon', () => ({
   RootCauseRibbon: ({ defaultOpen }: { defaultOpen?: boolean }) => {
@@ -128,6 +142,7 @@ beforeEach(() => {
   m.events = { a1: ev(), b2: ev({ id: 'b2', kind: 'log_pattern', pattern: 'ORA-00060', service: 'billing', peakRatio: 6, sample: 'deadlock' }) };
   m.mode = 'ok'; m.pendingIds = new Set(); m.role = 'editor'; m.silences = []; m.rcOpen = [];
   m.logSeries = [{ name: 'ERROR', total: 12 }];
+  m.patternMode = 'ok'; m.patternCalls = 0;
   onBack.mockReset();
 });
 afterEach(() => {
@@ -185,6 +200,10 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
     expect(el.querySelector('.rb-bar')?.textContent).toContain('Operasyon hatası');
     expect(el.querySelector('.rb-bar')?.textContent).not.toContain('TRACE OP');
     expect(el.querySelector('[data-loghist]')).toBeNull();
+    // v0.10.1060 — log dışı türde desen grafiği yok, okuması da yok.
+    expect(el.querySelector('[data-pattern-panel]')).toBeNull();
+    expect(byText(el, '.pb-sect', 'Desen sayısı')).toBeUndefined();
+    expect(m.patternCalls).toBe(0);
     expect(m.rcOpen.length).toBeGreaterThan(0);
     expect(m.rcOpen.every(o => o === false), 'kök neden sayfa açılışında açılmamalı').toBe(true);
     const actions = byText(el, '.pb-sect', 'Ne yapabilirim')!;
@@ -206,26 +225,54 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
     expect(el.textContent).toContain('Penceredeki sayım');
   });
 
-  it('log_pattern: log hacmi grafiği, Seyir yok, desen özetin altında', async () => {
+  // v0.10.1060 (operatör: "artışın ne zaman başladığını göstermiyor.
+  // Elastic'e gidip bakınca barlardan net görüyorum") — tek grafik desenin
+  // KENDİ sayısı (bar), "Teknik ayrıntı"nın ÜSTÜNDE ve açık; servis log hacmi yok.
+  it('log_pattern: TEK grafik "Desen sayısı" barları, log hacmi / Seyir yok, desen özetin altında', async () => {
     const el = await mount('b2');
     expect(el.querySelector('.pd-summary__what')?.textContent).toBe('billing loglarında bu desen normalin 6 katına çıktı.');
     expect(el.querySelector('.pd-summary__detail')?.textContent).toBe('ORA-00060');
-    expect(el.querySelector('[data-loghist]')).not.toBeNull();
+    expect(el.querySelector('[data-loghist]')).toBeNull();
     expect(el.querySelectorAll('[data-chart]').length).toBe(0);
+    const sect = byText(el, '.pb-sect', 'Desen sayısı')!;
+    expect(sect.querySelector('[data-pattern-panel]')?.getAttribute('data-pattern-panel')).toBe('bars');
+    expect(sect.querySelector('.pb-sect-toggle'), 'kapalı bölüm değil, her zaman görünür').toBeNull();
+    const sects = [...el.querySelectorAll('.pb-sect')];
+    expect(sects.indexOf(sect)).toBeLessThan(sects.indexOf(byText(el, '.pb-sect', 'Teknik ayrıntı')!));
+    expect(m.patternCalls).toBe(1);
     expect(byText(el, '.pb-sect', 'Ne yapabilirim')!.textContent).toContain("Hatalı trace'ler");
     // Bölüm başlığı yeterli: bileşenin İngilizce alt yazısı tam sayfada YOK.
     expect(el.textContent).not.toContain('log volume around the spike');
     expect(el.querySelector('.rb-bar')?.textContent).toContain('Log deseni');
   });
 
-  it('log hacmi boş / hatalı: sayfanın kısa notu (sessiz boşluk yok)', async () => {
-    m.logSeries = [];
+  it('desen okuması düşerse: panel içinde hata, sayfanın geri kalanı ayakta', async () => {
+    m.patternMode = 'fail';
     const el = await mount('b2');
+    await settle(); // kancanın tek yeniden denemesi
+    expect(el.querySelector('[data-pattern-panel]')?.getAttribute('data-error')).toBe('Desen sayısı okunamadı.');
+    expect(el.querySelector('.pd-summary__what')?.textContent).toContain('normalin 6 katına');
+    expect(byText(el, '.pb-sect', 'Ne yapabilirim')!.textContent).toContain('Logları aç');
+    expect(el.querySelector('.pd-triage')).not.toBeNull();
+  });
+
+  it('log_template_new: log hacmi grafiği kalır, desen grafiği yok', async () => {
+    m.events.c3 = ev({ id: 'c3', kind: 'log_template_new', pattern: 'user <*> logged in', service: 'billing', peakRatio: 0, currentRatio: 0, sample: 'user 7 logged in' });
+    const el = await mount('c3');
+    expect(el.querySelector('[data-loghist]')).not.toBeNull();
+    expect(el.querySelector('[data-pattern-panel]')).toBeNull();
+    expect(m.patternCalls).toBe(0);
+  });
+
+  it('log hacmi boş / hatalı: sayfanın kısa notu (sessiz boşluk yok)', async () => {
+    m.events.c3 = ev({ id: 'c3', kind: 'log_template_new', pattern: 'user <*> logged in', service: 'billing', peakRatio: 0, currentRatio: 0, sample: 'user 7 logged in' });
+    m.logSeries = [];
+    const el = await mount('c3');
     expect(byText(el, '.pb-sect', 'Log hacmi')!.textContent).toContain('Bu pencere için seri yok — olay saklama süresinin dışında olabilir.');
     act(() => { root!.unmount(); });
     host?.remove();
     m.logSeries = null;
-    const el2 = await mount('b2');
+    const el2 = await mount('c3');
     expect(byText(el2, '.pb-sect', 'Log hacmi')!.textContent).toContain('Log hacmi okunamadı');
   });
 });

@@ -188,6 +188,21 @@ var patterns = []logPattern{
 	{"SQL exception", `SqlException|SQLException`, []string{"sqlexception"}}, {"DB constraint violation", `(DataIntegrityViolation|ConstraintViolation|SQLIntegrityConstraintViolation)Exception`, []string{"dataintegrityviolation", "constraintviolation", "sqlintegrityconstraint"}},
 }
 
+// LogPatternSpecByName — v0.10.1060: kayıtlı log_pattern olayının desen ADI
+// (anomaly_events.pattern = logPattern.Name) → dedektörün kendi eşleşme
+// tanımı. Anomali detayının "desen sayısı" grafiği bununla sayar: grafik
+// dedektörün saydığını çizer. Bilinmeyen ad (yeniden adlandırılmış /
+// çıkarılmış desen, eski satır) → false; çağıran uydurmaz. Ad listesi
+// küratörlü ve küçük, yani bu ad önbellek anahtarının sınırlı bir boyutu.
+func LogPatternSpecByName(name string) (logstore.PatternSpec, bool) {
+	for _, p := range patterns {
+		if p.Name == name {
+			return logstore.PatternSpec{Regex: p.Regex, Tokens: p.Tokens}, true
+		}
+	}
+	return logstore.PatternSpec{}, false
+}
+
 // DetectLogPatterns runs each pattern against the raw `logs` CH
 // table over a current window + a much longer trailing baseline
 // (default: 5-min current vs 1-hour trailing). Returns only the

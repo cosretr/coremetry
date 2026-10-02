@@ -70,6 +70,10 @@ func (s *Switchable) CountPatterns(ctx context.Context, pats []PatternSpec, curS
 	return s.Current().CountPatterns(ctx, pats, curStart, baseStart, now)
 }
 
+func (s *Switchable) PatternHistogram(ctx context.Context, pat PatternSpec, from, to time.Time, bucketSec int) (*PatternHistogramResult, error) {
+	return s.Current().PatternHistogram(ctx, pat, from, to, bucketSec)
+}
+
 func (s *Switchable) Histogram(ctx context.Context, f Filter, bucketSec int, groupBy string) ([]LogSeries, error) {
 	return s.Current().Histogram(ctx, f, bucketSec, groupBy)
 }

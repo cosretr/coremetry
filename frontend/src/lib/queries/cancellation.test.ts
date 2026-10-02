@@ -64,6 +64,8 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // v0.10.940 — evalset paneli: koşu listesi / detayı 10 s yoklanır, kıyas
   // iki koşunun vaka kayıtlarını çözer; sekme ya da çekmece kapanınca eski
   // istek kesilmeli. Başlat / durdur mutasyonları kapsam dışı (iptal edilmez).
+  // v0.10.1060 — log deseni sayısı: ES'e giden histogram; detay sayfası kapanınca kesilmeli.
+  { file: 'anomalies.ts', hooks: ['api.anomalyLogPatternSeries('] },
   { file: 'aiEval.ts', hooks: ['api.aiEvalsetCatalog(', 'api.aiEvalsetRuns(', 'api.aiEvalsetRun(', 'api.aiEvalsetCompare('] },
 ];
 

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
 import type {
-  LogPatternAnomaly, TraceOpAnomaly, AnomalyEvent, AnomalySilence, Problem,
+  LogPatternAnomaly, TraceOpAnomaly, AnomalyEvent, AnomalySilence, Problem, LogPatternSeries,
 } from '@/lib/types';
 
 // /anomalies is the heaviest fan-out page in the app — five
@@ -102,6 +102,43 @@ export function useAnomalyEventByID(id: string, opts?: { enabled?: boolean }) {
     placeholderData: undefined,
     // Yok olan bir kimlik yeniden denemekle var olmaz.
     retry: (count, err) => (err instanceof Error && err.message.startsWith('HTTP 404') ? false : count < 2),
+  });
+}
+
+// useLogPatternSeries — v0.10.1060 (operatör: "Bunu doğru yakalamış ama
+// artışın ne zaman başladığını göstermiyor. Elastic'e gidip bakınca barlardan
+// net görüyorum."). Log deseni anomalisi detayının bar grafiği.
+//
+// ES-maliyet disiplini: yalnız detay sayfası açıkken (args null → sorgu yok,
+// liste ön-yüklemesi yok); staleTime = sunucu TTL'i (60 s); yoklama YALNIZ
+// aktif olayda ve 60 s — refetchIntervalInBackground varsayılanı (false)
+// gizli sekmede durdurur. Aktif olayda toNs = null: anahtar yoklamada sabit,
+// sunucu "şimdi"yi kovaya hizalar.
+//
+// data === null → sunucu 404 (desen tanımı artık yok — eski satır).
+// placeholderData: undefined — başka desenin barları bu olayın altında
+// görünmesin (küresel keepPreviousData tuzağı, useAnomalyEventByID ile aynı).
+export function useLogPatternSeries(
+  args: { pattern: string; fromNs: number; toNs: number | null } | null,
+  opts: { live: boolean },
+) {
+  return useQuery<LogPatternSeries | null>({
+    queryKey: keys.anomalies.logPatternSeries(args?.pattern ?? '', args?.fromNs ?? 0, args?.toNs ?? 0),
+    queryFn: async ({ signal }) => {
+      if (!args) return null;
+      try {
+        return (await api.anomalyLogPatternSeries(
+          { pattern: args.pattern, fromNs: args.fromNs, toNs: args.toNs ?? undefined }, signal)) ?? null;
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith('HTTP 404')) return null;
+        throw err;
+      }
+    },
+    enabled: !!args,
+    staleTime: 60_000,
+    refetchInterval: opts.live ? 60_000 : false,
+    placeholderData: undefined,
+    retry: (count, err) => (err instanceof Error && err.message.startsWith('HTTP 404') ? false : count < 1),
   });
 }
 

@@ -8,7 +8,7 @@ export { useHealth } from './health';
 export { useProblems, useProblemByID, useOpenProblemCount, useOpenCriticalCount, useEvaluatorHealth } from './problems';
 export {
   useLogPatternAnomalies, useTraceOpAnomalies, useMetricAnomalies,
-  useAnomalyEvents, useAnomalySilences, useAnomalyEventByID,
+  useAnomalyEvents, useAnomalySilences, useAnomalyEventByID, useLogPatternSeries,
   useCreateAnomalySilence, usePutAnomalyVerdict, useDeleteAnomalySilence,
   useBulkDeleteAnomalySilences,
 } from './anomalies';

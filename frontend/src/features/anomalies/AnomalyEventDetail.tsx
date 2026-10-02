@@ -27,6 +27,8 @@ import {
   behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
 } from './anomalyDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
+import { hasLogPatternSeries } from './logPatternSeries';
+import { LogPatternCountSection } from './LogPatternCountSection';
 
 // AnomalyEventDetail — anomali olayının TAM SAYFA detayı (v0.10.1032).
 //
@@ -45,8 +47,9 @@ import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from 
 // görünümde sırayla
 //   1. tek cümlelik özet + "ne zaman" satırı (./detailSummary, tablo testli),
 //      hemen altında TEK satırlık triyaj (Mute… + "Gerçek problem mi?"),
-//   2. türün TEK grafiği (log türleri: log hacmi; trace / gecikme / davranış:
-//      Seyir) ve kapalı kök-neden şeridi (açılınca çeker),
+//   2. türün TEK grafiği (log deseni: desen sayısı barları — v0.10.1060;
+//      diğer log türleri: log hacmi; trace / gecikme / davranış: Seyir) ve
+//      kapalı kök-neden şeridi (açılınca çeker),
 //   3. "Ne yapabilirim" (log / trace / servis sayfası pivotları).
 // Geri kalan her şey — olgu ızgarası, robust z, kıyas saati, ham örnek,
 // cluster'lar, deploy — TEK kapalı "Teknik ayrıntı" bölümünde (kalıcı değil).
@@ -56,9 +59,10 @@ import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from 
 // blokları (./detailSections). Anlatım parçaları /anomalies çekmecesiyle ORTAK
 // (./anomalyDetailParts, ./anomalyDetail) — aynı olay iki ekranda ayrışamaz.
 //
-// ES-maliyet disiplini korunur: log türlerinde tek sınırlı log hacmi çağrısı,
-// diğerlerinde tek Seyir grafiği (CosreChart, span rollup — ES değil) —
-// hepsi YALNIZ sayfa açıkken, yoklama yok; kök neden ve Teknik ayrıntı
+// ES-maliyet disiplini korunur: log türlerinde tek sınırlı log hacmi / desen
+// sayısı çağrısı, diğerlerinde tek Seyir grafiği (CosreChart, span rollup —
+// ES değil) — hepsi YALNIZ sayfa açıkken, yoklama yok (tek istisna: aktif log
+// deseni olayında desen sayısı 60 s, gizli sekmede durur); kök neden ve Teknik ayrıntı
 // açılmadan hiçbir şey çekmez. Tekil okuma (useAnomalyEventByID)
 // placeholderData: undefined: başka bir olayın gövdesi bu adresin altında
 // görünemez.
@@ -171,6 +175,7 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
     [chart]);
   const sampleTrace = sampleTraceHref({ kind: event.kind, sample: event.sample });
   const isLog = isLogAnomalyKind(event.kind);
+  const patternSeries = hasLogPatternSeries(event);
   const sentence = anomalySummary(event, details);
   // Bitmiş (cleared) olayda bitiş = son gözlem (durum last_seen tazeliğinden
   // türer: chstore GetAnomalyEvent). v0.10.1049 — yinelenen olayda satırın
@@ -204,9 +209,16 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       <div className="pd-cols pd-cols-15">
         {/* ── Sol kolon: türün tek grafiği, kök neden, teknik ayrıntı ── */}
         <div style={{ minWidth: 0 }}>
-          {/* Log biçimli türler: servisin spike çevresindeki log hacmi —
-              çekmeceyle aynı TEK sınırlı çağrı, yalnız sayfa açıkken. */}
-          {isLog && event.service && (
+          {/* v0.10.1060 (operatör: "artışın ne zaman başladığını
+              göstermiyor. Elastic'e gidip bakınca barlardan net görüyorum")
+              — log_pattern'ın tek grafiği desenin KENDİ sayısı (bar, olay
+              başlangıcında işaret); servisin genel log hacmi bu türde
+              çizilmez ("Logları aç" pivotu duruyor). */}
+          {patternSeries && <LogPatternCountSection event={event} />}
+          {/* Diğer log biçimli türler (yeni log biçimi, Elastic ML): servisin
+              spike çevresindeki log hacmi — çekmeceyle aynı TEK sınırlı çağrı,
+              yalnız sayfa açıkken. */}
+          {isLog && !patternSeries && event.service && (
             <Sect title="Log hacmi" sub="servis · olay penceresi">
               {/* Bölüm başlığı zaten söylüyor: bileşenin İngilizce alt yazısı
                   burada basılmaz; boş / hata için sayfanın kendi notu. */}

@@ -128,6 +128,9 @@ func (s *stubLogStore) CountPatterns(context.Context, []logstore.PatternSpec, ti
 func (s *stubLogStore) Histogram(context.Context, logstore.Filter, int, string) ([]logstore.LogSeries, error) {
 	return nil, s.histErr
 }
+func (s *stubLogStore) PatternHistogram(context.Context, logstore.PatternSpec, time.Time, time.Time, int) (*logstore.PatternHistogramResult, error) {
+	return &logstore.PatternHistogramResult{}, nil
+}
 func (s *stubLogStore) EQLSearch(context.Context, logstore.EQLQuery) ([]logstore.EQLSequence, error) {
 	return nil, nil
 }

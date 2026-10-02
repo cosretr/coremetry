@@ -987,6 +987,20 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Log deseni anomalisi: zaman içinde sayım grafiği (v0.10.1060)
+
+**Operatör:** "Bunu doğru yakalamış ama artışın ne zaman başladığını göstermiyor. Elastic'e gidip bakınca
+barlardan net görüyorum." **Karar:** `log_pattern` detayının TEK grafiği artık desenin kendi sayısı — "Desen
+sayısı" bar grafiği (CorePanelMulti `bars`, kova genişliği başlıkta, olay penceresi "başladı" bölgesiyle),
+"Teknik ayrıntı"nın üstünde, açık. Servisin genel log hacmi bu türde çizilmez ("Logları aç" duruyor); yeni
+log biçimi / Elastic ML log hacmini korur (zaman kovalı sayımları yok). **Okuma:** var olanlar ifade
+edemiyordu (`/api/logs/timeseries` serbest metin; CH'de dedektörün regex'i değil), yeni
+`GET /api/anomalies/log-pattern-series` desen ADINI dedektörün tanımına çevirir ve `logstore.PatternHistogram`
+ile sayar — CountPatterns'ın yüklemi, CH + ES. Sınırlar: pencere başlangıç − 1 sa'ten (ya da olay
+penceresinden), kova basamaklı ve ≤120, pencere ≤7 gün, 60 s önbellek; yalnız sayfa açıkken, aktif olayda
+60 s yoklama. Sayım TÜM servislerin (dedektörün oranı da öyle). Terfi Problem'i (`anomaly-auto:`) detayına
+taşınmadı: kaynak olayı ayrıca okumak gerekir, basit yeniden kullanım değil.
+
 ## 2026-10-02 — Operations: trend üzerine gelince tek, okunur ipucu (v0.10.1059)
 
 **Operatör (prod, servis → Operations):** "Operations sayfasında bir servisin herhangi birinin üzerine gelince bir şey

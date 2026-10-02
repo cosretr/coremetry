@@ -29,6 +29,9 @@ func (stubLogStore) CountPatterns(context.Context, []logstore.PatternSpec, time.
 func (stubLogStore) Histogram(context.Context, logstore.Filter, int, string) ([]logstore.LogSeries, error) {
 	return nil, nil
 }
+func (stubLogStore) PatternHistogram(context.Context, logstore.PatternSpec, time.Time, time.Time, int) (*logstore.PatternHistogramResult, error) {
+	return &logstore.PatternHistogramResult{}, nil
+}
 func (stubLogStore) EQLSearch(context.Context, logstore.EQLQuery) ([]logstore.EQLSequence, error) {
 	return nil, nil
 }

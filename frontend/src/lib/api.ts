@@ -1062,6 +1062,12 @@ export const api = {
   // {id}/rootcause kalıbıyla çakışıp boot'u panic'letiyordu (v465-470).
   anomalyEvent:        (id: string) =>
     get<import('./types').AnomalyEvent | null>(`/api/anomalies/event?id=${encodeURIComponent(id)}`),
+  // v0.10.1060 — log deseni anomalisinin desen sayısı (bar grafiği). toNs
+  // verilmezse sunucu "şimdi" alır (aktif olay; sorgu anahtarı yoklamada sabit).
+  anomalyLogPatternSeries: (p: { pattern: string; fromNs: number; toNs?: number }, signal?: AbortSignal) =>
+    get<import('./types').LogPatternSeries>(
+      `/api/anomalies/log-pattern-series?pattern=${encodeURIComponent(p.pattern)}&from=${p.fromNs}${p.toNs ? `&to=${p.toNs}` : ''}`,
+      signal),
 
   // Active anomalies autocomplete — backs the Cmd-K silence
   // action's first param. Returns slim shape: id (fingerprint),
