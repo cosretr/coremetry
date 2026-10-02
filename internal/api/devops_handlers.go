@@ -50,6 +50,9 @@ type devopsSettingsInput struct {
 	AppPrefixes     []string `json:"appPrefixes"`
 	CodeLookupLimit int      `json:"codeLookupLimit"`
 	CodeSearchLimit int      `json:"codeSearchLimit"` // v0.10.353
+	// CodeBudgetRunes (v0.10.1038) — modele giden kodun rune tavanı; 0/yok
+	// = varsayılan 10.000, aralık dışı sıkıştırılır (devops.ClampCodeBudgetRunes).
+	CodeBudgetRunes int `json:"codeBudgetRunes"`
 }
 
 // mergeDevOpsSettings validates the input and folds it over the
@@ -87,6 +90,7 @@ func mergeDevOpsSettings(in devopsSettingsInput, cur devops.Settings) (devops.Se
 		AppPrefixes:        cleanConventionList(in.AppPrefixes),
 		CodeLookupLimit:    devops.ClampCodeLookupLimit(in.CodeLookupLimit),
 		CodeSearchLimit:    devops.ClampCodeSearchLimit(in.CodeSearchLimit),
+		CodeBudgetRunes:    devops.ClampCodeBudgetRunes(in.CodeBudgetRunes),
 	}
 	if cfg.Flavor == "" {
 		cfg.Flavor = devops.FlavorAuto
@@ -193,6 +197,10 @@ func (s *Server) putDevOpsSettings(w http.ResponseWriter, r *http.Request) {
 // SOURCE FILE every AI answer quotes for every other admin. That is
 // exactly the class of change the trail exists for, and neither
 // field is a secret.
+//
+// v0.10.1038 — codeBudgetRunes da izde: kaç karakter kodun modele
+// gideceğini (ve küçük bağlamlı modelde taşma riskini) her admin için
+// değiştirir; codeLookupLimit ile aynı sınıf, sır değil.
 func devopsAuditDetails(snap devops.Snapshot) []byte {
 	b, _ := json.Marshal(map[string]any{
 		"baseUrl":            snap.BaseURL,
@@ -206,6 +214,7 @@ func devopsAuditDetails(snap devops.Snapshot) []byte {
 		"branchOrder":        snap.BranchOrder,
 		"appPrefixes":        snap.AppPrefixes,
 		"codeLookupLimit":    snap.CodeLookupLimit,
+		"codeBudgetRunes":    snap.CodeBudgetRunes,
 	})
 	return b
 }

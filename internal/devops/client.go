@@ -120,6 +120,14 @@ type Settings struct {
 	// hata-kodu için denenir. 0 = varsayılan (DefaultCodeSearchLimit);
 	// [1, MaxCodeSearchLimit] aralığına sıkıştırılır (searchLimit()).
 	CodeSearchLimit int `json:"codeSearchLimit,omitempty"`
+	// CodeBudgetRunes (v0.10.1038, operatör: "Kod bütçesi daha fazla
+	// karakter olabilir bence, default 10k gibi, performans sorunu
+	// olmayacaksa") — modele giden kaynak kodun TOPLAM rune tavanı (tüm
+	// pencereler birlikte). 0 = varsayılan (DefaultCodeBudgetRunes);
+	// [MinCodeBudgetRunes, MaxCodeBudgetRunes] aralığına sıkıştırılır
+	// (ClampCodeBudgetRunes → codeBudget()). Neden 4000'di, büyük bütçenin
+	// riski ne: code.go defaultCodeBudgetRunes.
+	CodeBudgetRunes int `json:"codeBudgetRunes,omitempty"`
 }
 
 // Deneme tavanı sınırları (v0.10.112). Varsayılan 6 = 3 pencere + 3
@@ -134,6 +142,14 @@ const (
 	// 20 tavan (her arama ayrı bir DevOps çağrısı).
 	DefaultCodeSearchLimit = 6
 	MaxCodeSearchLimit     = 20
+	// v0.10.1038 — kod bütçesi (rune). Varsayılan 10.000 (eski sabit 4000).
+	// Alt sınır 2000 = eski bütçenin taşma yarısı: altında tek bir ±30
+	// satırlık pencere bile hata satırı çevresinde yarıya iner. Üst sınır
+	// 20.000 ≈ 5-7 bin token — ~8K token bağlamlı bir modeli kod TEK BAŞINA
+	// doldurur; daha yukarısı hiçbir kurulumda kanıta yer bırakmaz.
+	DefaultCodeBudgetRunes = 10000
+	MinCodeBudgetRunes     = 2000
+	MaxCodeBudgetRunes     = 20000
 )
 
 // lookupLimit — yürürlükteki deneme tavanı; 0 → varsayılan, aşırı
@@ -183,6 +199,32 @@ func ClampCodeLookupLimit(n int) int {
 	return n
 }
 
+// ClampCodeBudgetRunes — v0.10.1038: kod bütçesinin TEK normalizasyonu.
+// 0/negatif → 0 (= varsayılan), alt sınırın altı → MinCodeBudgetRunes,
+// üst sınırın üstü → MaxCodeBudgetRunes. PUT girdisi (mergeDevOpsSettings)
+// ve yürürlükteki değer (codeBudget) ikisi de buradan geçer: sınırlar iki
+// yerde yazılmaz, elle düzenlenmiş bir blob da aralık dışına çıkamaz. Saf.
+func ClampCodeBudgetRunes(n int) int {
+	switch {
+	case n <= 0:
+		return 0
+	case n < MinCodeBudgetRunes:
+		return MinCodeBudgetRunes
+	case n > MaxCodeBudgetRunes:
+		return MaxCodeBudgetRunes
+	}
+	return n
+}
+
+// codeBudget — yürürlükteki kod bütçesi (rune); 0 → varsayılan, aralık dışı
+// sıkıştırılır (ClampCodeBudgetRunes). Saf.
+func (c Settings) codeBudget() int {
+	if n := ClampCodeBudgetRunes(c.CodeBudgetRunes); n > 0 {
+		return n
+	}
+	return DefaultCodeBudgetRunes
+}
+
 // Snapshot is the public view returned by GET /api/settings/devops.
 // Mirrors Settings with the PAT replaced by a HasPAT signal.
 //
@@ -220,6 +262,11 @@ type Snapshot struct {
 	CodeLookupLimit      int      `json:"codeLookupLimit,omitempty"`
 	CodeSearchLimit      int      `json:"codeSearchLimit,omitempty"` // v0.10.353
 	EffectiveLookupLimit int      `json:"effectiveLookupLimit"`
+	// CodeBudgetRunes / EffectiveCodeBudgetRunes (v0.10.1038) — lookup
+	// tavanının çifti: kayıtlı değer olduğu gibi (0 = varsayılan), yürürlükteki
+	// değer ayrıca — kutu boşken de ekran gerçekten kullanılan sayıyı söyler.
+	CodeBudgetRunes          int `json:"codeBudgetRunes,omitempty"`
+	EffectiveCodeBudgetRunes int `json:"effectiveCodeBudgetRunes"`
 }
 
 // TestResult is the POST /api/settings/devops/test response.
@@ -408,6 +455,9 @@ func (s *Service) Snapshot() Snapshot {
 		CodeLookupLimit:      s.cfg.CodeLookupLimit,
 		CodeSearchLimit:      s.cfg.CodeSearchLimit,
 		EffectiveLookupLimit: s.cfg.lookupLimit(),
+		// v0.10.1038
+		CodeBudgetRunes:          s.cfg.CodeBudgetRunes,
+		EffectiveCodeBudgetRunes: s.cfg.codeBudget(),
 	}
 }
 

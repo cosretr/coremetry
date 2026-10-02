@@ -775,13 +775,19 @@ func TestFetchCodeEndToEnd(t *testing.T) {
 	if !strings.Contains(masked, "[kod: core-service"+path) {
 		t.Fatalf("maskeli logda kaynak özeti yok:\n%s", masked)
 	}
-	// (f) bütçe: toplam kod ~4000 rune'u aşmaz
+	// (f) bütçe: toplam kod yürürlükteki bütçeyi aşmaz. v0.10.1038 — pin
+	// eski sabit 4000'den VARSAYILAN ayara (10.000) taşındı: ayar boşken
+	// bağlama damgalanan bütçe varsayılandır. 4000 vakası ayar üzerinden
+	// code_budget_setting_test.go'da.
+	if cc.Budget != DefaultCodeBudgetRunes {
+		t.Errorf("Budget=%d, ayar boşken varsayılan %d beklenir", cc.Budget, DefaultCodeBudgetRunes)
+	}
 	total := 0
 	for _, win := range cc.Windows {
 		total += len([]rune(win.Content))
 	}
-	if total > codeBudgetRunes {
-		t.Errorf("kod bütçesi aşıldı: %d > %d", total, codeBudgetRunes)
+	if total > cc.Budget {
+		t.Errorf("kod bütçesi aşıldı: %d > %d", total, cc.Budget)
 	}
 
 	// (g) ağaç cache'i: ikinci çağrı yeni listeleme yapmaz

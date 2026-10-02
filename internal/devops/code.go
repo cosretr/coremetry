@@ -26,7 +26,8 @@ import (
 // adını yol SONEKİ olarak eşleştir (birden çok aday varsa paket yoluna
 // en çok benzeyen kazanır) → dosya içeriğini çek → hatalı satırın ±30
 // satırı. En fazla 3 PENCERE (aday frame değil, v0.9.1237), toplam
-// ~4.000 rune.
+// bütçe Ayarlar'dan (v0.10.1038; varsayılan 10.000 rune, eskiden sabit
+// ~4.000 — gerekçe defaultCodeBudgetRunes).
 //
 // İKİ SÖZLEŞME, İKİSİ DE PAZARLIKSIZ:
 //
@@ -78,10 +79,32 @@ const (
 	codeFetchDeadline = 25 * time.Second
 	// codeWindowRadius — hatalı satırın etrafından ±N satır.
 	codeWindowRadius = 30
-	// codeBudgetRunes — tüm pencerelerin TOPLAM tavanı. Rune, byte
-	// değil: Türkçe yorum satırı taşıyan kaynak dosyalarda byte
-	// kesmesi karakter böler (v0.9.414 dersi).
-	codeBudgetRunes = 4000
+	// defaultCodeBudgetRunes — tüm pencerelerin TOPLAM tavanının SON ÇARE
+	// varsayılanı. Rune, byte değil: Türkçe yorum satırı taşıyan kaynak
+	// dosyalarda byte kesmesi karakter böler (v0.9.414 dersi).
+	//
+	// Tarihçe: v0.9.830'dan v0.10.1038'e kadar sabit 4000'di (adı
+	// codeBudgetRunes). Gerekçe codeWindowLimit'inkiyle aynıydı: küçük yerel
+	// model (gemma4) bağlamında kod büyüdükçe kod-dışı kanıt (trace, log,
+	// stack) sıkışır. Bedeli: tipik bir Java ±30 satır penceresi satır
+	// numarasıyla ~2.000-3.000 rune; 4000 ikinci pencereyi kırpıyor,
+	// üçüncüsünü düşürüyordu ve "kod bütçesi (4000 karakter) doldu — 1
+	// pencere düştü" notu rutin hâle gelmişti.
+	//
+	// v0.10.1038 (operatör: "Kod bütçesi daha fazla karakter olabilir bence,
+	// default 10k gibi, performans sorunu olmayacaksa") — bütçe artık AYAR:
+	// Settings.CodeBudgetRunes → codeBudget(), varsayılan 10.000, aralık
+	// [2.000, 20.000] (client.go). Ağ maliyeti DEĞİŞMEZ: pencereler bütçeden
+	// bağımsız çekilir, bütçe yalnız modele gideni kırpar.
+	//
+	// RİSK (açıkça): bağlamı küçük bir model (~8K token) 10.000 rune kodla
+	// taşabilir; sağlayıcı 400 dönerse taşma zinciri (gönderilen kodun
+	// yarısı → kodsuz) devreye girer, ama bağlamı aşan girdiyi SESSİZCE
+	// kesen sağlayıcılarda hata yoktur — prompt'un kesilen ucu (kuyruk: kod bloğu ve arkasındaki
+	// yönergeler; bazı yerel sunucularda baş: system prompt) modele hiç
+	// ulaşmaz ve cevap eksik kanıtla üretilir. O kurulumda Ayarlar → Kod
+	// entegrasyonu → "Kod bütçesi (karakter)" düşürülür (eski davranış: 4000).
+	defaultCodeBudgetRunes = DefaultCodeBudgetRunes
 	// treeTTL — depo ağacı cache'i. Depo ağacı dakikalar ölçeğinde
 	// değişmez; 10 dk aynı exception'a arka arkaya bakan operatörü
 	// tek listelemeyle idare eder.
@@ -220,10 +243,29 @@ type CodeContext struct {
 	Trimmed string `json:"trimmed,omitempty"`
 	// Stats (v0.10.112) — sayılar; bkz. FetchStats.
 	Stats FetchStats `json:"stats,omitempty"`
+	// Budget (v0.10.1038) — pencerelerin kırpıldığı YÜRÜRLÜKTEKİ rune
+	// bütçesi (Settings.CodeBudgetRunes'tan). FetchCode damgalar; Halved
+	// min(Budget, gönderilen)'i yarıya indirir ve yarıyı buraya yazar. 0 =
+	// elle kurulmuş bağlam → varsayılan (budgetRunes).
+	Budget int `json:"budget,omitempty"`
 }
 
 // Empty — kod bağlamı yok mu?
 func (c CodeContext) Empty() bool { return len(c.Windows) == 0 }
+
+// halvedMinRunes — v0.10.1038: taşma yarılamasının tabanı. Yarısı bunun
+// altında kalacak bir blok (≈ 30 satırdan kısa) yarıya inince kanıt
+// değeri kalmaz; küçültülmez, çağıran kodsuz denemeye düşer.
+const halvedMinRunes = 1000
+
+// budgetRunes — v0.10.1038: bu bağlamın yürürlükteki kod bütçesi; damga
+// yoksa son çare varsayılan.
+func (c CodeContext) budgetRunes() int {
+	if c.Budget > 0 {
+		return c.Budget
+	}
+	return defaultCodeBudgetRunes
+}
 
 // Halved — kod bütçesini YARIYA indirir (v0.9.831).
 //
@@ -239,15 +281,36 @@ func (c CodeContext) Empty() bool { return len(c.Windows) == 0 }
 // "kod geldi" diyordu; oysa modele giden pencereler kırpılmış ya da
 // düşmüştü. Not BAŞA yazılıyor: gerekçe tavana çarparsa kesilecek olan
 // eski kuyruk olsun, yeni kayıp değil.
+//
+// v0.10.1038 — yarıya inen, modelin AZ ÖNCE taştığı kod: min(bütçe,
+// gönderilen) / 2. Bütçenin yarısı (ilk sürüm) 10.000'lik varsayılanda
+// ≤ 5.000 rune'luk bir bloğu hiç küçültemiyor ve taşma doğrudan kodsuz
+// denemeye düşüyordu — 4000'deki zarif düşüşten kötü. Taban: yarısı
+// halvedMinRunes'ın altında kalacak MİNİK blok küçültülmez (aynı blok
+// döner → çağıran kodsuza düşer; eski "küçültecek bir şey kalmadı" kuralı).
+// Not gerçek yarı sayıyı söyler. Zincir aynı: gönderilen → yarısı → kodsuz.
 func (c CodeContext) Halved() CodeContext {
 	if c.Empty() {
 		return c
 	}
+	sent := 0
+	for _, w := range c.Windows {
+		sent += utf8.RuneCountInString(w.Content)
+	}
+	base := c.budgetRunes()
+	if sent < base {
+		base = sent
+	}
+	half := base / 2
+	if half < halvedMinRunes {
+		return c
+	}
 	before := len(c.Windows)
 	var trimmed bool
-	c.Windows, trimmed = ClampCodeWindows(c.Windows, codeBudgetRunes/2)
+	c.Windows, trimmed = ClampCodeWindows(c.Windows, half)
+	c.Budget = half
 	if dropped := before - len(c.Windows); trimmed || dropped > 0 {
-		note := "bağlam taşması — kod bütçesi yarıya indirildi"
+		note := fmt.Sprintf("bağlam taşması — gönderilen kod yarıya indirildi (%d karakter)", half)
 		if dropped > 0 {
 			note += fmt.Sprintf(", %d pencere düştü", dropped)
 		}
@@ -688,7 +751,13 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 			return fetchItemContent(c, cli, cfg, ver, repo, branch, pth)
 		})...)
 
-	windows, trimmed := ClampCodeWindows(hunt.windows, codeBudgetRunes)
+	// v0.10.1038 — bütçe AYARDAN (cfg.codeBudget(): 0 → 10.000, aralık
+	// 2.000-20.000); bağlama damgalanır ki taşma yarılaması (Halved)
+	// min(bütçe, gönderilen)'i bilsin. Çekim sayısı bütçeden bağımsız — burası
+	// yalnız modele gideni kırpar.
+	budget := cfg.codeBudget()
+	windows, trimmed := ClampCodeWindows(hunt.windows, budget)
+	out.Budget = budget
 	// v0.10.353 — her pencereye kaynağı ve DevOps dosya linki: arama
 	// isabetleri kendi depo/proje/branşını taşır, ötekiler zincirinkini alır.
 	stampWindowLinks(cfg, repo, branch, windows)
@@ -713,10 +782,10 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 		// yerine düşürüyor ve bu, "kısaltıldı" ile aynı cümleye
 		// sığmayacak kadar farklı bir kayıp.
 		out.Reason = fmt.Sprintf("kod bütçesi (%d karakter) doldu — %d pencere düştü, kalanlar hata satırı çevresinde kısaltıldı",
-			codeBudgetRunes, len(hunt.windows)-len(windows))
+			budget, len(hunt.windows)-len(windows))
 		out.Trimmed = out.Reason
 	case trimmed:
-		out.Reason = fmt.Sprintf("kod bütçesi (%d karakter) doldu — pencereler hata satırı çevresinde kısaltıldı", codeBudgetRunes)
+		out.Reason = fmt.Sprintf("kod bütçesi (%d karakter) doldu — pencereler hata satırı çevresinde kısaltıldı", budget)
 		out.Trimmed = out.Reason
 	}
 	// v0.10.112 — SAYILAR (span attribute'ları ve /ai için).
@@ -1881,7 +1950,8 @@ func indentOf(ln string) int {
 // prompt başlığı hâlâ "… (Y.java:246)" diye satırı gösterir, o satır
 // pencerede YOKTUR. Küçük model bunu "246 bu blokta bir yerde" diye
 // okuyup gördüğü rastgele satırdan kök neden uydurur. Halved() bütçeyi
-// 2000'e indirdiğinde ilk pencere bile merkezini kaybediyordu, yani
+// 2000'e (o günkü sabit 4000'in yarısı; v0.10.1038'den beri yürürlükteki
+// ayarın yarısı) indirdiğinde ilk pencere bile merkezini kaybediyordu, yani
 // taşma yeniden-denemesi tam da en çok kanıt gereken anda pencereyi
 // işe yaramaz hâle getiriyordu.
 //

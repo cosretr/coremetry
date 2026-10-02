@@ -2038,6 +2038,10 @@ export interface DevOpsSnapshot {
   codeSearchLimit?: number;
   /** Yürürlükteki tavan (varsayılan dahil) — kutu boşken de gösterilir. */
   effectiveLookupLimit?: number;
+  /** v0.10.1038 — modele giden kodun karakter (rune) tavanı; 0/yok = varsayılan 10000. */
+  codeBudgetRunes?: number;
+  /** v0.10.1038 — yürürlükteki kod bütçesi (varsayılan ve 2000–20000 sıkıştırması dahil). */
+  effectiveCodeBudgetRunes?: number;
 }
 export interface DevOpsSettingsInput {
   baseUrl: string;
@@ -2052,6 +2056,8 @@ export interface DevOpsSettingsInput {
   versionRef?: string; // v0.10.590 — tags/{version} | heads/…/{version}
   appPrefixes?: string[];
   codeLookupLimit?: number;
+  /** v0.10.1038 — 0 = varsayılan (10000); sunucu 2000–20000'e sıkıştırır. */
+  codeBudgetRunes?: number;
 }
 // SchemaCatalogSummary (v0.10.115) — uygulama DB şema kataloğu anlık
 // görüntüsünün ÖZETİ; kolon içeriği tarayıcıya dönmez. snapshotSql

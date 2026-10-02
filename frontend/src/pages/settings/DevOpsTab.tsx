@@ -23,6 +23,22 @@ function splitList(s: string): string[] {
   return s.split(',').map(x => x.trim()).filter(Boolean);
 }
 
+// v0.10.1038 — kod bütçesi sınırları; tek kaynak sunucu
+// (devops.ClampCodeBudgetRunes), burada yalnız kutunun min/max'ı ve metni.
+const CODE_BUDGET_DEFAULT = 10000;
+const CODE_BUDGET_MIN = 2000;
+const CODE_BUDGET_MAX = 20000;
+
+// budgetBoxValue — v0.10.1038: kutunun tohumu. Kayıtlı değer aralık
+// dışındaysa (elle düzenlenmiş blob, ör. 500) kutu YÜRÜRLÜKTEKİ (sunucunun
+// sıkıştırdığı) değerle dolar; yoksa tarayıcının min/max doğrulaması tüm
+// formun Kaydet'ini sessizce kilitlerdi. Ayar yoksa boş (= varsayılan).
+function budgetBoxValue(stored?: number, effective?: number): string {
+  if (!stored) return '';
+  if (stored >= CODE_BUDGET_MIN && stored <= CODE_BUDGET_MAX) return String(stored);
+  return String(effective || Math.min(Math.max(stored, CODE_BUDGET_MIN), CODE_BUDGET_MAX));
+}
+
 export function DevOpsTab() {
   const confirm = useConfirm();
   const [baseUrl, setBaseUrl] = useState('');
@@ -46,6 +62,11 @@ export function DevOpsTab() {
   const [lookupLimit, setLookupLimit] = useState('');
   const [searchLimit, setSearchLimit] = useState(''); // v0.10.353
   const [effectiveLimit, setEffectiveLimit] = useState(6);
+  // v0.10.1038 (operatör: "Kod bütçesi daha fazla karakter olabilir bence,
+  // default 10k gibi") — tavanın kalıbı: metin tutulur, boş = varsayılan
+  // (sunucu 0'ı "ayar yok" okur); yürürlükteki değer ayrıca gösterilir.
+  const [codeBudget, setCodeBudget] = useState('');
+  const [effectiveBudget, setEffectiveBudget] = useState(CODE_BUDGET_DEFAULT);
   const [detected, setDetected] = useState<{ flavor?: DevOpsFlavor; apiVersion?: string }>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -118,6 +139,8 @@ export function DevOpsTab() {
       setLookupLimit(s.codeLookupLimit ? String(s.codeLookupLimit) : '');
       setSearchLimit(s.codeSearchLimit ? String(s.codeSearchLimit) : '');
       setEffectiveLimit(s.effectiveLookupLimit || 6);
+      setCodeBudget(budgetBoxValue(s.codeBudgetRunes, s.effectiveCodeBudgetRunes));
+      setEffectiveBudget(s.effectiveCodeBudgetRunes || CODE_BUDGET_DEFAULT);
       setDetected({ flavor: s.detectedFlavor, apiVersion: s.detectedApiVersion });
     },
   );
@@ -135,6 +158,7 @@ export function DevOpsTab() {
     appPrefixes: splitList(appPrefixes),
     codeLookupLimit: Math.max(0, parseInt(lookupLimit, 10) || 0),
     codeSearchLimit: Math.max(0, parseInt(searchLimit, 10) || 0),
+    codeBudgetRunes: Math.max(0, parseInt(codeBudget, 10) || 0), // v0.10.1038 — boş = 0 = varsayılan
     ...(pat ? { pat } : {}),
   });
 
@@ -186,6 +210,9 @@ export function DevOpsTab() {
       setRepoPrefixes((next.repoPrefixes || []).join(', '));
       setBranchOrder((next.branchOrder || []).join(', '));
       setVersionRef(next.versionRef || '');
+      // v0.10.1038 — sunucu sıkıştırdıysa (ör. 500 → 2000) kutu kaydedileni gösterir.
+      setCodeBudget(budgetBoxValue(next.codeBudgetRunes, next.effectiveCodeBudgetRunes));
+      setEffectiveBudget(next.effectiveCodeBudgetRunes || CODE_BUDGET_DEFAULT);
       setDetected({ flavor: next.detectedFlavor, apiVersion: next.detectedApiVersion });
       setMsg({ kind: 'ok', text: next.baseUrl
         ? 'Kaydedildi — bağlantı bilgileri saklandı (tüm pod’lar <30s içinde eşitlenir).'
@@ -389,6 +416,21 @@ export function DevOpsTab() {
             açıklamada "eşleşmeyen" olarak listelenir.
           </div>
         </label>
+
+        {/* v0.10.1038 — kod bütçesi (operatör: "default 10k gibi"). Eskiden sabit
+            4000'di ve "1 pencere düştü" notu rutindi. Çekilen dosya sayısını
+            değiştirmez; yalnız modele giden kodu kırpar. */}
+        <div style={{ marginBottom: 12 }}>
+          <Field label="Kod bütçesi (karakter)" type="number" inputMode="numeric"
+            min={CODE_BUDGET_MIN} max={CODE_BUDGET_MAX}
+            value={codeBudget}
+            onChange={e => setCodeBudget(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder={String(CODE_BUDGET_DEFAULT)}
+            style={{ width: 120 }}
+            hint={<>Modele gönderilen kaynak kod miktarı. Küçük bağlamlı modellerde cevap
+              kesiliyorsa düşürün. {CODE_BUDGET_MIN}–{CODE_BUDGET_MAX}, boş = varsayılan;
+              yürürlükte: <strong>{effectiveBudget}</strong>.</>} />
+        </div>
 
         <label style={{ display: 'block', marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>

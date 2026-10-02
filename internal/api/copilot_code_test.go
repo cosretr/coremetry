@@ -250,9 +250,13 @@ func fetchFakeCodeContext(t *testing.T) devops.CodeContext {
 	t.Cleanup(srv.Close)
 
 	dv := devops.New()
+	// v0.10.1038 — bütçe AYARLA eski 4000'de tutuluyor: bu fikstürün tek
+	// penceresi (~5.200 rune) varsayılan 10.000'e sığar ve "bütçe dolu →
+	// kısmi isabet" ile "yarıya inen pencere hata satırını taşır" pinleri
+	// sınanamaz olurdu. Varsayılanın kendisi code_budget_prompt_test.go'da.
 	dv.Configure(devops.Settings{
 		BaseURL: srv.URL, Collection: "DefaultCollection", Project: "Payments",
-		PAT: "test-pat", Flavor: devops.FlavorServer,
+		PAT: "test-pat", Flavor: devops.FlavorServer, CodeBudgetRunes: 4000,
 	})
 	stack := "\tat deployment.APPWEB.war//com.example.card.CardDetailBusiness.handle(CardDetailBusiness.java:246)\n"
 	// v0.9.1183 — üçüncü arg proje ÖNERİSİ (servis önekinden). Burada boş:

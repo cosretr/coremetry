@@ -107,13 +107,28 @@ func TestPromptBlockTellsTheModelAboutTrimming(t *testing.T) {
 		t.Fatalf("kırpma notu prompt'ta yok:\n%s", b)
 	}
 	// Halved: iki büyük pencere → yarı bütçe birini düşürür → Trimmed dolu.
-	big := strings.Repeat("x", 1500)
-	h := CodeContext{Repo: "r", Windows: []CodeWindow{
-		{Path: "/A.java", Line: 1, FromLine: 1, ToLine: 1, Content: "1| " + big},
-		{Path: "/B.java", Line: 1, FromLine: 1, ToLine: 1, Content: "1| " + big},
-	}}.Halved()
-	if h.Trimmed == "" || !strings.Contains(h.PromptBlock(), "kod bağlamı EKSİK") {
-		t.Fatalf("Halved kırpmayı modele söylemedi: trimmed=%q", h.Trimmed)
+	// v0.10.1038 — yarılanan min(bütçe, gönderilen): iki 1503'lük pencere
+	// (gönderilen 3006) hem eski 4000'de hem varsayılanda 1503'e iner ve
+	// ikincisi düşer; not gerçek yarıyı söyler.
+	for _, c := range []struct {
+		budget, width int
+		wantNote      string
+	}{
+		{4000, 1500, "gönderilen kod yarıya indirildi (1503 karakter), 1 pencere düştü"},
+		{0, 1500, "gönderilen kod yarıya indirildi (1503 karakter), 1 pencere düştü"},
+		{0, 3000, "gönderilen kod yarıya indirildi (3003 karakter), 1 pencere düştü"},
+	} {
+		big := strings.Repeat("x", c.width)
+		h := CodeContext{Repo: "r", Budget: c.budget, Windows: []CodeWindow{
+			{Path: "/A.java", Line: 1, FromLine: 1, ToLine: 1, Content: "1| " + big},
+			{Path: "/B.java", Line: 1, FromLine: 1, ToLine: 1, Content: "1| " + big},
+		}}.Halved()
+		if h.Trimmed == "" || !strings.Contains(h.PromptBlock(), "kod bağlamı EKSİK") {
+			t.Fatalf("bütçe=%d: Halved kırpmayı modele söylemedi: trimmed=%q", c.budget, h.Trimmed)
+		}
+		if !strings.Contains(h.Trimmed, c.wantNote) {
+			t.Errorf("bütçe=%d: not %q içermiyor: %q", c.budget, c.wantNote, h.Trimmed)
+		}
 	}
 }
 

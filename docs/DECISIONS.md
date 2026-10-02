@@ -987,6 +987,52 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Kod bütçesi ayar oldu, varsayılan 10.000 karakter (v0.10.1038)
+
+**Operatör (prod, "Kodu da incele"):** "kod bütçesi (4000 karakter) doldu — 1 pencere düştü, kalanlar hata satırı
+çevresinde kısaltıldı" notu rutindi. "Kod bütçesi daha fazla karakter olabilir bence, default 10k gibi, performans
+sorunu olmayacaksa."
+
+**Karar:** modele giden kodun toplam rune tavanı DevOps bağlantı blob'unda bir ayar: `codeBudgetRunes` (Ayarlar → Kod
+entegrasyonu → "Kod bütçesi (karakter)", deneme/arama tavanlarının yanında). Yok/0 = varsayılan **10.000**; aralık
+**2.000–20.000**, tek normalizasyon `devops.ClampCodeBudgetRunes` (PUT girdisi ve yürürlükteki değer `codeBudget()` aynı
+fonksiyondan geçer; emsal `codeLookupLimit`). Mevcut admin GET/PUT ile gider-gelir (yeni uç yok); snapshot
+`effectiveCodeBudgetRunes` da döner; audit detayına `codeBudgetRunes` girdi; PAT sözleşmesi (kayıtlı göstergesi, boş
+girdi saklıyı korur) dokunulmadı. `FetchCode` yürürlükteki bütçeyi bağlama damgalar (`CodeContext.Budget`) ve "kod
+bütçesi (N karakter) doldu" notu bu sayıyı söyler. Kayıtlı değer aralık dışındaysa (elle düzenlenmiş blob) kutu
+yürürlükteki (sıkıştırılmış) değerle dolar — tarayıcının min/max doğrulaması Kaydet'i kilitlemez. Trace ve exception
+açıklamasının kod yolu aynı çekimi paylaştığı için ikisi birden değişti.
+
+**Taşma yarılaması — gönderilenin yarısı:** sağlayıcı bağlam taşması 400'ü dönünce `Halved` artık bütçeyi değil modelin
+AZ ÖNCE taştığı kodu yarıya indirir: hedef `min(bütçe, gönderilen) / 2`, not gerçek sayıyı söyler ("gönderilen kod
+yarıya indirildi (N karakter)"). Bütçe yarısı kuralı 10.000'de ≤ 5.000 rune'luk bir bloğu hiç küçültemiyor ve taşma
+doğrudan kodsuz denemeye düşüyordu (4000'deki zarif düşüşten kötü). Yalnız yarısı 1.000 rune'un altında kalacak minik
+blok (`halvedMinRunes`) ya da hiçbir penceresi kırpılamayan blok küçültülmez → kodsuz deneme (eski "küçültecek bir şey
+kalmadı" kuralı). Örnek: 10.000'de 4.512 gönderildi → 2.256; 9.879 → 4.939; eski 4000 ayarında 3.998 → 1.999
+(`TestClampAndHalvedUseEffectiveBudget`, `TestOverflowRetryKeepsHalfOfSentCode`).
+
+**Neden 4000'dü, büyük bütçenin riski:** v0.9.830'da küçük yerel modelin (gemma4) bağlamında kod büyüdükçe kod-dışı
+kanıt (trace, log, stack) sıkışmasın diye. Tipik Java ±30 satır penceresi satır numarasıyla ~2.300–2.750 rune
+(repodaki JBoss demo kaynağı, medyan 2.520) — 4000 ikinci pencereyi kırpıp üçüncüyü düşürüyordu. Risk: bağlamı küçük
+(~8K token) bir model 10.000 rune kodla taşabilir. Sağlayıcı 400 dönerse zincir (gönderilen → yarısı → kodsuz)
+çalışır; ama girdiyi SESSİZCE kesen sağlayıcılarda hata yoktur — prompt'un kesilen ucu (kod bloğu ve arkasındaki
+yönergeler; bazı yerel sunucularda system prompt) modele ulaşmaz. O kurulumda ayar düşürülür (4000 = eski davranış).
+
+**Değişmeyenler:** ≤3 frame penceresi, ±30 satır, şema bölümü (800), hata span'ının SQL ifadesi (600, trace JSON'u
+içinde), taşma zincirinin adımları (tam → küçültülmüş → kodsuz; en çok 2 LLM çağrısı), git ve LLM çağrı sayısı (bütçe çekimi değil, yalnız gönderileni kırpar). Mapper/statement
+pencereleri zaten kod bütçesinin İÇİNDE kırpılıyordu; bütçe büyüyünce onlar da daha az düşer.
+
+**Ölçüm (rune; `TestFetchCodeHonoursCodeBudgetSetting`, `TestTraceCodePromptByCodeBudget`):** gerçekçi 3 pencere
+(2.586 + 2.609 + 2.626 = 7.821): 4000'de 2 pencere (ikincisi kırpık) + "1 pencere düştü" notu; 10.000'de üçü tam, not
+yok. Eşik: 10.000'de üç tam pencere ortalama satır ≲ 48 karakterde sığar; daha geniş kodda üçüncü pencere hata
+satırı çevresinde kısalır, pencere başına ~5.000 rune'u (satır ≳ 75 karakter) aşınca düşer. Klasik trace + kod user
+prompt'u: küçük fikstür (12 span, 3 log, ~2.4K'lık 3 pencere) 8.835 → 12.054 (+3.219; kod 3.998 → 7.264); tavan
+fikstürü (150 span, 100 log, şema, ~6.1K'lık pencereler) 56.265 → 62.433 (+6.168; kanıt 50.738 ve şema 832 aynı;
+10.000'de bile 1 pencere düşer). Kodlu sistem istemi 4.423. Git çağrısı 5 = 5; LLM 1 = 1 (taşmada 2 = 2).
+
+Bu kayıt `docs/plans/spec-ai-evidence-2026-08-28.md`'deki "kod 4000" satırlarının (Q6 tablosu "4000 rune (yarı:
+2000)", "kod 4000 + şema 800 + SQL 400") yerine geçer; spec tarihçe olarak kalır.
+
 ## 2026-10-02 — Durum rozeti: NEW nötr, REGRESSED amber (v0.10.1037)
 
 **Karar (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı, düzelt."):** tek durum → ton sözlüğünde

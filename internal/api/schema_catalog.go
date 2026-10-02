@@ -103,8 +103,9 @@ type schemaEvidence struct {
 	Signal  bool
 }
 
-// schemaSectionBudget — şema bölümü rune tavanı (kod 4000 > şema 800 >
-// SQL(kod penceresi içinde) > log). Operatör direktifi 2026-08-28.
+// schemaSectionBudget — şema bölümü rune tavanı (kod > şema 800 >
+// SQL(kod penceresi içinde) > log). Operatör direktifi 2026-08-28. Kod
+// bütçesi v0.10.1038'den beri ayar (varsayılan 10.000, eskiden 4000).
 const schemaSectionBudget = 800
 
 func (s *Server) buildSchemaEvidence(errText string, dbStatements []string, mapperBlocks []string) schemaEvidence {

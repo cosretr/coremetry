@@ -232,9 +232,11 @@ func TestDevOpsAuditDetails_NoSecrets(t *testing.T) {
 	// appPrefixes / codeLookupLimit v0.10.112: önek listesi hangi
 	// dosyanın ÖNCE kanıt olacağını, tavan kaç dosyanın kanıt olabileceğini
 	// değiştirir — repoPrefixes ile aynı sınıf, izde durmalı.
+	// codeBudgetRunes v0.10.1038: modele kaç karakter kod gideceğini (ve
+	// küçük bağlamlı modelde taşma riskini) herkes için değiştirir.
 	want := []string{"baseUrl", "collection", "project", "flavor", "hasPat",
 		"insecureSkipVerify", "repoPrefixes", "branchOrder", "codeSearch",
-		"appPrefixes", "codeLookupLimit"}
+		"appPrefixes", "codeLookupLimit", "codeBudgetRunes"}
 	if len(got) != len(want) {
 		t.Errorf("audit keys = %v, want exactly %v", keysOf(got), want)
 	}
@@ -385,5 +387,63 @@ func TestMergeDevOpsSettings_AppPrefixesAndLookupLimit(t *testing.T) {
 	det := string(devopsAuditDetails(svc.Snapshot()))
 	if !strings.Contains(det, `"appPrefixes":["com.banka."]`) || !strings.Contains(det, `"codeLookupLimit":9`) {
 		t.Errorf("audit detayı eksik: %s", det)
+	}
+}
+
+// TestMergeDevOpsSettings_CodeBudgetRunes — v0.10.1038 (operatör: "Kod
+// bütçesi daha fazla karakter olabilir bence, default 10k gibi"). Kod
+// bütçesi mevcut PUT gövdesinde gider-gelir (yeni uç yok): 0/yok = varsayılan
+// (kayıtta 0 kalır), alt sınırın altı 2000'e, üstü 20000'e sıkışır. Alan PAT
+// sözleşmesine DOKUNMAZ: boş PAT saklıyı korur; snapshot PAT'ı yankılamaz;
+// audit izi bütçeyi taşır.
+func TestMergeDevOpsSettings_CodeBudgetRunes(t *testing.T) {
+	cases := []struct {
+		name string
+		body string // gerçek tel gövdesi: alanın HİÇ gelmediği eski istemci dahil
+		want int
+	}{
+		{"alan yok (eski istemci) → 0 = varsayılan", `{"baseUrl":"https://dev.example.local/tfs"}`, 0},
+		{"boş kutu → 0", `{"baseUrl":"https://dev.example.local/tfs","codeBudgetRunes":0}`, 0},
+		{"negatif → 0", `{"baseUrl":"https://dev.example.local/tfs","codeBudgetRunes":-1}`, 0},
+		{"alt sınırın altı → 2000", `{"baseUrl":"https://dev.example.local/tfs","codeBudgetRunes":500}`, devops.MinCodeBudgetRunes},
+		{"eski davranış ayarla", `{"baseUrl":"https://dev.example.local/tfs","codeBudgetRunes":4000}`, 4000},
+		{"aralık içi", `{"baseUrl":"https://dev.example.local/tfs","codeBudgetRunes":12000}`, 12000},
+		{"üst sınırın üstü → 20000", `{"baseUrl":"https://dev.example.local/tfs","codeBudgetRunes":99999}`, devops.MaxCodeBudgetRunes},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var in devopsSettingsInput
+			if err := json.Unmarshal([]byte(c.body), &in); err != nil {
+				t.Fatal(err)
+			}
+			cfg, bad := mergeDevOpsSettings(in, baseCur())
+			if bad != "" {
+				t.Fatalf("beklenmeyen ret: %s", bad)
+			}
+			if cfg.CodeBudgetRunes != c.want {
+				t.Errorf("CodeBudgetRunes=%d, istenen %d", cfg.CodeBudgetRunes, c.want)
+			}
+			if cfg.PAT != storedPAT {
+				t.Errorf("bütçe alanı PAT sözleşmesini bozdu: PAT=%q", cfg.PAT)
+			}
+		})
+	}
+
+	svc := devops.New()
+	svc.Configure(devops.Settings{BaseURL: "https://x", PAT: storedPAT, CodeBudgetRunes: 6000})
+	snap := svc.Snapshot()
+	if snap.CodeBudgetRunes != 6000 || snap.EffectiveCodeBudgetRunes != 6000 {
+		t.Errorf("snapshot: kayıtlı=%d yürürlükte=%d", snap.CodeBudgetRunes, snap.EffectiveCodeBudgetRunes)
+	}
+	wire, _ := json.Marshal(snap)
+	if strings.Contains(string(wire), storedPAT) || !strings.Contains(string(wire), `"codeBudgetRunes":6000`) {
+		t.Errorf("snapshot tel biçimi: %s", wire)
+	}
+	if det := string(devopsAuditDetails(snap)); !strings.Contains(det, `"codeBudgetRunes":6000`) || strings.Contains(det, storedPAT) {
+		t.Errorf("audit detayı: %s", det)
+	}
+	svc.Configure(devops.Settings{BaseURL: "https://x"})
+	if s := svc.Snapshot(); s.CodeBudgetRunes != 0 || s.EffectiveCodeBudgetRunes != devops.DefaultCodeBudgetRunes {
+		t.Errorf("ayarsız snapshot: kayıtlı=%d yürürlükte=%d", s.CodeBudgetRunes, s.EffectiveCodeBudgetRunes)
 	}
 }
