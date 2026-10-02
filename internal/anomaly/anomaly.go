@@ -541,8 +541,18 @@ func (d *Detector) scan(ctx context.Context) {
 	// consistent across every service, instead of the old per-checkOne
 	// time.Now() drift.
 	now := time.Now()
+	// v0.10.1046 — mevsimsel okumanın hacim kolonu (aynı satırlar) batch
+	// gecikme kapısı için burada tutulur (yalnız p99_ms'te dolu,
+	// fetchAllSeasonal); batchSeries'in
+	// sözleşmesi (hata = metriğin mevsimseli yok) aynen: hata dalında harita
+	// yazılmaz, kapı o metrikte hacmi bilinmiyor sayar.
+	seasonalRatesByMetric := make(map[string]map[string][]float64, len(tracked))
 	fetchSeasonal := func(m string) (map[string][]float64, error) {
-		return d.fetchAllSeasonal(ctx, m, now, days, neighbor)
+		vals, rates, err := d.fetchAllSeasonal(ctx, m, now, days, neighbor)
+		if err == nil {
+			seasonalRatesByMetric[m] = rates
+		}
+		return vals, err
 	}
 	if !seasonalBaseline {
 		fetchSeasonal = nil
@@ -585,6 +595,9 @@ func (d *Detector) scan(ctx context.Context) {
 	}
 	var pending []pendingApply
 	for _, svc := range services {
+		// v0.10.1046 — batch yüklemi servis başına BİR kez; evaluateAnomaly
+		// yalnız p99_ms açılışında okur (yük altında gecikme artışı açılmaz).
+		batchSvc := sens.IsBatchService(svc)
 		for _, m := range tracked {
 			// v0.10.1039 — batch serviste yük (request_rate) anomali değil
 			// (operatör: "Bazı batch işlerde ani yük artışı olabilir, onları
@@ -600,7 +613,8 @@ func (d *Detector) scan(ctx context.Context) {
 			ruleID := "anomaly:" + svc + ":" + m
 			existing := snap.ByKey(ruleID, svc)
 			hasOpen := existing != nil && existing.ID != ""
-			oc := evaluateAnomaly(m, buckets, seasonal, rates, minSamples, hasOpen, sens)
+			bl := batchLatSeries{Batch: batchSvc, SeasonalRates: seriesFor(seasonalRatesByMetric[m], svc)}
+			oc := evaluateAnomaly(m, buckets, seasonal, rates, minSamples, hasOpen, bl, sens)
 			if !reachesApply(oc.Action, hasOpen) {
 				continue
 			}
@@ -1367,8 +1381,15 @@ func buildAllSeasonalQuery(vexpr string) string {
 	// v0.8.316'nın ardışık okuma için düzelttiği tamamlanmamış-kova
 	// hatasının mevsimsel ikizi). Üst sınır çağıranda at−(radius+bucket):
 	// bugünün penceresi tamamen dışarıda, dünün aynı slotu içeride.
+	//
+	// v0.10.1046 — HACİM AYNI SORGUDA (buildAllBucketsQuery'nin v0.9.826
+	// deseni): `rate` kolonu aynı satırların aynı granüllerinden gelir; satır
+	// kümesi, GROUP BY, LIMIT BY ve `v` değişmez (batch olmayan servislerin
+	// sonucu birebir). Tüketen tek yer batch gecikme kapısı: mevsimsel
+	// tabanda işin o saatteki olağan çalışma hacmi.
 	return fmt.Sprintf(`
-		SELECT service_name, toUnixTimestamp(time_bucket) AS t, %[1]s AS v
+		SELECT service_name, toUnixTimestamp(time_bucket) AS t, %[1]s AS v,
+		       countMerge(span_count_state) / 300.0 AS rate
 		FROM service_summary_5m
 		WHERE time_bucket >= ?
 		  AND time_bucket < ?
@@ -1393,10 +1414,15 @@ func buildAllSeasonalQuery(vexpr string) string {
 // samples for new/sparse services; chooseBaseline falls back to the consecutive
 // window. `at` is fixed by the caller for the whole tick so the slot is
 // consistent across every service. v0.8.507.
-func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.Time, days, neighborBuckets int) (map[string][]float64, error) {
+//
+// v0.10.1046 — ikinci dönüş: aynı satırların istek hızı serisi (değer
+// serisiyle hizalı, aynı gün-çeşitliliği budaması). YALNIZ p99_ms için
+// biriktirilir (tek tüketen batch gecikme kapısı); diğer metriklerde nil →
+// kapı orada zaten koşmaz, koşsaydı da "bilinmiyor → susturma yok".
+func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.Time, days, neighborBuckets int) (map[string][]float64, map[string][]float64, error) {
 	vexpr, err := metricValueExpr(metric)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// v0.8.323 — slot + day class derive from UTC so they match the SQL's
 	// UTC-pinned toHour/toDayOfWeek (see buildAllSeasonalQuery). With no DST
@@ -1414,10 +1440,14 @@ func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.
 
 	rows, err := d.store.TelemetryReadConn().Query(ctx, buildAllSeasonalQuery(vexpr), cutoff, upper, class, targetSod, targetSod, radius)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 	out := make(map[string][]float64)
+	var rates map[string][]float64
+	if metric == batchLatencyMetric {
+		rates = make(map[string][]float64)
+	}
 	// v0.9.1052 (Q2) — gün-çeşitliliği. seasonalMinSamples=4 +
 	// neighbor=3 ile 7 aday kova TEK GÜNDE var: iki günlük yeni bir
 	// servis "mevsimsel" baseline'ı tek günün gürültüsünden kurup MAD'i
@@ -1429,11 +1459,14 @@ func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.
 	for rows.Next() {
 		var svc string
 		var t uint32
-		var v float64
-		if err := rows.Scan(&svc, &t, &v); err != nil {
-			return nil, err
+		var v, rate float64
+		if err := rows.Scan(&svc, &t, &v, &rate); err != nil {
+			return nil, nil, err
 		}
 		accumulateSeries(out, svc, v)
+		if rates != nil {
+			accumulateSeries(rates, svc, rate)
+		}
 		day := int64(t) / 86400
 		if daysSeen[svc] == nil {
 			daysSeen[svc] = map[int64]struct{}{}
@@ -1441,10 +1474,13 @@ func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.
 		daysSeen[svc][day] = struct{}{}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	pruneSeasonalByDayDiversity(out, daysSeen, seasonalMinDaysFor(class))
-	return out, nil
+	if rates != nil {
+		pruneSeasonalByDayDiversity(rates, daysSeen, seasonalMinDaysFor(class))
+	}
+	return out, rates, nil
 }
 
 // seasonalMinDays — mevsimsel baseline'ın en az kaç FARKLI günden örnek
@@ -1489,10 +1525,17 @@ func pruneSeasonalByDayDiversity(out map[string][]float64, daysSeen map[string]m
 // on AND there are at least minSamples of them; otherwise it falls back to the
 // 24h consecutive baseline (new / sparse service, or seasonal disabled).
 func chooseBaseline(seasonal, consecutive []float64, minSamples int) []float64 {
-	if seasonalBaseline && len(seasonal) >= minSamples {
+	if usesSeasonalBaseline(seasonal, minSamples) {
 		return seasonal
 	}
 	return consecutive
+}
+
+// usesSeasonalBaseline — chooseBaseline'ın seçim koşulu, TEK yerde
+// (v0.10.1046): batch gecikme kapısı hacim tabanını p99 tabanıyla AYNI
+// kovalardan almak zorunda (mevsimsel ya da ardışık).
+func usesSeasonalBaseline(seasonal []float64, minSamples int) bool {
+	return seasonalBaseline && len(seasonal) >= minSamples
 }
 
 // medianMAD returns the median and the Median Absolute Deviation

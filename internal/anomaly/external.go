@@ -298,7 +298,8 @@ func (s *ExternalScanner) Scan(ctx context.Context, t ExternalTarget) (ExternalS
 		if len(season) >= seasonalMin {
 			rep.Seasonal++
 		}
-		oc := evaluateAnomaly(metric, buckets, season, ones(len(buckets)), seasonalMin, hasOpen, cfg)
+		// batchLatSeries{}: dış seriler batch gecikme kuralının dışında (v0.10.1046).
+		oc := evaluateAnomaly(metric, buckets, season, ones(len(buckets)), seasonalMin, hasOpen, batchLatSeries{}, cfg)
 		pending = append(pending, pendingSeries{sr: sr, subject: subject, ruleID: ruleID, open: open, hasOpen: hasOpen, oc: oc})
 	}
 	// Yeni açılış adayları: en güçlü z önce, eşitlikte ruleID (deterministik).

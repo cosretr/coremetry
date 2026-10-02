@@ -109,7 +109,7 @@ func TestBehaviorBatchLoadGate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cands, _ := behaviorFleetCandidates(map[string][]behaviorRow{tt.svc: tt.rows}, nil, cutoff, tt.cfg)
+			cands, _ := behaviorFleetCandidates(map[string][]behaviorRow{tt.svc: tt.rows}, nil, cutoff, tt.cfg, nil)
 			got := candidateMetrics(cands, tt.svc)
 			if len(got) != len(tt.want) {
 				t.Fatalf("aday metrikleri %v, beklenen %v", got, tt.want)
@@ -124,8 +124,8 @@ func TestBehaviorBatchLoadGate(t *testing.T) {
 
 	// Kıtlık sayımı kapıdan ETKİLENMEZ (servis başına bir kez, metrikten bağımsız).
 	short := []behaviorRow{{Unix: cutoff - 86400, HOW: 10, Spans: 100}, {Unix: cutoff, HOW: 10, Spans: 100}}
-	_, sBatch := behaviorFleetCandidates(map[string][]behaviorRow{"orders-batch": short}, nil, cutoff, def)
-	_, sPlain := behaviorFleetCandidates(map[string][]behaviorRow{"payments-api": short}, nil, cutoff, def)
+	_, sBatch := behaviorFleetCandidates(map[string][]behaviorRow{"orders-batch": short}, nil, cutoff, def, nil)
+	_, sPlain := behaviorFleetCandidates(map[string][]behaviorRow{"payments-api": short}, nil, cutoff, def, nil)
 	if sBatch != sPlain || sBatch == 0 {
 		t.Fatalf("kıtlık sayımı batch kapısından etkilendi: batch=%d sıradan=%d", sBatch, sPlain)
 	}

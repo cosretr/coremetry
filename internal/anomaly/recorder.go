@@ -188,8 +188,8 @@ func (r *Recorder) tick(ctx context.Context) {
 	}
 	for _, a := range latHits {
 		ev := chstore.AnomalyEvent{
-			ID:           chstore.FingerprintAnomaly("trace_op_latency", a.Operation, a.Service),
-			Kind:         "trace_op_latency",
+			ID:           chstore.FingerprintAnomaly(opLatencyKind, a.Operation, a.Service),
+			Kind:         opLatencyKind,
 			Pattern:      a.Operation,
 			Service:      a.Service,
 			StartedAt:    now.UnixNano(),

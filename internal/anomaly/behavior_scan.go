@@ -138,7 +138,10 @@ func (d *Detector) scanBehavior(ctx context.Context, now time.Time, cfg chstore.
 	}
 
 	recentCutoff := lastCompleteBucketStart(now).Add(-behaviorRecentHours * time.Hour).Unix()
-	cands, scarce := behaviorFleetCandidates(rowsByService, deploysByService, recentCutoff, cfg)
+	// v0.10.1046 — batch p99 kapısının aktif-olay muafiyeti TEMBEL: okuma
+	// yalnız bir batch p99 adayı susturulmak üzereyken, tik başına en çok bir
+	// kez yapılır (batch_latency_active.go).
+	cands, scarce := behaviorFleetCandidates(rowsByService, deploysByService, recentCutoff, cfg, d.batchLatBehaviorActive(ctx, cfg))
 	cands = capBehaviorCandidates(cands, b.MaxCandidatesPerTick)
 
 	// TEK TOPLU YAZIM (v0.9.957). Eskiden burada aday başına bir
@@ -196,16 +199,26 @@ func (d *Detector) scanBehavior(ctx context.Context, now time.Time, cfg chstore.
 // AYNEN değerlendirilir. Kapı kıtlık sayımından SONRA: kıtlık metrikten
 // bağımsız ve servis başına bir kez sayılıyor, batch kuralı onu
 // değiştirmemeli.
+//
+// v0.10.1046 — batch servisin p99_ms ARTIŞ adayı, penceresinin her dilimi
+// kendi haftanın-saati kovasının hacim medyanının ≥ 2 katı yük taşıyorsa ve
+// servisin p99 davranış olayı zaten AKTİF değilse aday olmaz
+// (behaviorBatchLatencyGate, batch_latency.go). batchLatActive: servis muaf
+// mı (aktif ya da bilinmiyor); nil = bilinmiyor = susturma yok. Yük artmadan
+// gelen p99 artışı batch'te de AYNEN aday.
 func behaviorFleetCandidates(
 	rowsByService map[string][]behaviorRow,
 	deploysByService map[string][]chstore.RecentDeployEntry,
 	recentCutoff int64,
 	cfg chstore.AnomalySensitivityConfig,
+	batchLatActive func(service string) bool,
 ) ([]behaviorCandidate, int) {
 	b := cfg.Behavior
 	var cands []behaviorCandidate
 	scarce := 0
 	for service, rows := range rowsByService {
+		// v0.10.1046 — batch yüklemi servis başına BİR kez (gecikme kapısı).
+		batchSvc := cfg.IsBatchService(service)
 		for mi, metric := range behaviorMetrics {
 			pol := policyFor(metric, cfg)
 			baseline, recent := splitBehaviorSeries(rows, metric, recentCutoff)
@@ -220,6 +233,16 @@ func behaviorFleetCandidates(
 				continue
 			}
 			c, ok := evalBehavior(service, metric, baseline, recent, pol, b)
+			// v0.10.1046 — batch: yük altındaki gecikme ARTIŞI aday olmaz
+			// (operatör: "Batch servislerde yük altındaki gecikme artışı da
+			// anomali sayılmasın"). Hacim tabanı p99 tabanıyla AYNI satırlardan,
+			// aynı kova + aynı kesimle (ek okuma yok); kova bilinmiyorsa aday
+			// kalır; olayı zaten aktifse aday kalır. Kapı tavandan
+			// (capBehaviorCandidates) ÖNCE: susan aday tavanda yer tutmaz.
+			if ok && batchSvc && metric == batchLatencyMetric {
+				volBase, _ := splitBehaviorSeries(rows, "request_rate", recentCutoff)
+				c, ok = behaviorBatchLatencyGate(c, baseline, recent, volBase, pol, b, batchLatActive)
+			}
 			if !ok {
 				continue
 			}
@@ -228,6 +251,29 @@ func behaviorFleetCandidates(
 		}
 	}
 	return cands, scarce
+}
+
+// batchLatBehaviorActive — v0.10.1046: davranış motorunun batch p99
+// kapısına TEMBEL aktif-olay muafiyeti. Dönen işlev ilk çağrıldığında TEK
+// sınırlı okuma yapar (behavior_change + p99 pattern'i, batch servisler,
+// aktif = son 10 dk, tavan+1) ve
+// tik boyunca onu kullanır; hiç çağrılmazsa (susturulacak aday yoksa) okuma
+// da yok. Okuma hatası ya da tavan aşımı → herkes muaf (susturma yok),
+// geçişte bir kez log.
+func (d *Detector) batchLatBehaviorActive(ctx context.Context, cfg chstore.AnomalySensitivityConfig) func(service string) bool {
+	var exempt func(string) bool
+	return func(service string) bool {
+		if exempt == nil {
+			cond, args := cfg.BatchServiceSQL("service")
+			keys, err := d.store.ListActiveAnomalyKeys(ctx, behaviorKind, behaviorPattern(batchLatencyMetric), 0, cond, args, batchLatActiveCap+1)
+			behaviorActiveReadLatch.report(err != nil,
+				"[behavior] aktif olay okunamadı (%v) — batch p99 kapısı bu okuma düzelene dek UYGULANMIYOR", err)
+			behaviorActiveCapLatch.report(err == nil && len(keys) > batchLatActiveCap,
+				"[behavior] batch servislerde aktif davranış olayı tavanı (%d) aştı — bu tik batch p99 adayı susturulmuyor", batchLatActiveCap)
+			exempt = batchLatBehaviorExempt(keys, err)
+		}
+		return exempt(service)
+	}
 }
 
 const (

@@ -11,7 +11,7 @@ func TestClassifyOpLatency(t *testing.T) {
 	}
 
 	t.Run("gerçek sıçrama kalifiye + oran doğru", func(t *testing.T) {
-		out := classifyOpLatency([]opLatencyBucket{mk("s", "GET /x", 900, 100, 500, 5000)})
+		out := classifyOpLatency([]opLatencyBucket{mk("s", "GET /x", 900, 100, 500, 5000)}, opLatBatchGate{})
 		if len(out) != 1 || out[0].Ratio != 9 || out[0].Operation != "GET /x" {
 			t.Fatalf("out=%+v", out)
 		}
@@ -21,25 +21,25 @@ func TestClassifyOpLatency(t *testing.T) {
 		if out := classifyOpLatency([]opLatencyBucket{
 			mk("s", "az-cari", 900, 100, 20, 5000),
 			mk("s", "az-base", 900, 100, 500, 20),
-		}); len(out) != 0 {
+		}, opLatBatchGate{}); len(out) != 0 {
 			t.Fatalf("düşük hacim geçti: %+v", out)
 		}
 	})
 
 	t.Run("mutlak taban: 60ms→180ms (3×) ama <200ms → olay değil", func(t *testing.T) {
-		if out := classifyOpLatency([]opLatencyBucket{mk("s", "hızlı-op", 180, 60, 500, 5000)}); len(out) != 0 {
+		if out := classifyOpLatency([]opLatencyBucket{mk("s", "hızlı-op", 180, 60, 500, 5000)}, opLatBatchGate{}); len(out) != 0 {
 			t.Fatalf("200ms tabanı delindi: %+v", out)
 		}
 	})
 
 	t.Run("oran tabanı: 2.5× → elenir", func(t *testing.T) {
-		if out := classifyOpLatency([]opLatencyBucket{mk("s", "op", 500, 200, 500, 5000)}); len(out) != 0 {
+		if out := classifyOpLatency([]opLatencyBucket{mk("s", "op", 500, 200, 500, 5000)}, opLatBatchGate{}); len(out) != 0 {
 			t.Fatalf("3× altı geçti: %+v", out)
 		}
 	})
 
 	t.Run("sıfır baseline p99 → oran kurulamaz, elenir", func(t *testing.T) {
-		if out := classifyOpLatency([]opLatencyBucket{mk("s", "op", 500, 0, 500, 5000)}); len(out) != 0 {
+		if out := classifyOpLatency([]opLatencyBucket{mk("s", "op", 500, 0, 500, 5000)}, opLatBatchGate{}); len(out) != 0 {
 			t.Fatalf("sıfır baseline geçti: %+v", out)
 		}
 	})
@@ -49,7 +49,7 @@ func TestClassifyOpLatency(t *testing.T) {
 		for i := 0; i < 60; i++ {
 			in = append(in, mk("s", "op", 200+float64(i)*100, 50, 500, 5000))
 		}
-		out := classifyOpLatency(in)
+		out := classifyOpLatency(in, opLatBatchGate{})
 		if len(out) != 50 || out[0].Ratio < out[1].Ratio {
 			t.Fatalf("len=%d first=%.1f second=%.1f", len(out), out[0].Ratio, out[1].Ratio)
 		}

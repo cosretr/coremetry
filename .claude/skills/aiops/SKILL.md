@@ -100,7 +100,7 @@ Ne üretiyorsun?
 | `exception:fatal-infrastructure` | `fatal_exception.go:28-74` | 1 oluşum, IsFatalExceptionType | 24 sa / 15 dk | id kova TAŞIMAZ |
 | `self-*` (5) | `selfhealth.go:54-69`, `selfhealth_volume.go` | ingest-stall / spool / disk ETA / kanal / hacim ×4 | 10 dk … 24 sa | Service="" (hacim hariç); `self-volume-spike` eskalasyondan muaf ve **batch servislerde açılmaz** (v0.10.1039, `dropBatchVolumeRows` saatlik önbellekten SONRA); `self-disk-eta` **varsayılan KAPALI** (v0.10.1031, `self_health.diskEta`; ölçüm + kalıcı seri sürer) — yeniden önerme |
 | `anomaly-auto:<fp>` | `evaluator.go:1296` terfi | PeakRatio + Count + MinSustained (`promotionGate`, saf) — üçü de anomali BÖLÜMÜNÜN değerleri (§5); kapı yalnız AÇILIŞI yönetir, olayı aktif açık satır kapı geçmese de tazelenir (`anomalyPromotionStep`, v0.10.1045) | son 1 sa anomaly_events | mute'lara uyar |
-| `anomaly:<svc>:<metric>` | `anomaly.go:579-797`, `verdict.go:34` | \|z\| ≥ CriticalZ, DwellBuckets | 5 dk kova; 24 sa ardışık ya da mevsimsel 14 g ±3 | Threshold = baseline medyanı, Comparator yöne göre (v0.9.978); batch serviste `request_rate` faz 1'de atlanır, açık satırı `resolveBatchLoadProblems` dürüst gerekçeyle kapatır (v0.10.1039, `batch_load.go`) |
+| `anomaly:<svc>:<metric>` | `anomaly.go:579-797`, `verdict.go:34` | \|z\| ≥ CriticalZ, DwellBuckets | 5 dk kova; 24 sa ardışık ya da mevsimsel 14 g ±3 | Threshold = baseline medyanı, Comparator yöne göre (v0.9.978); batch serviste `request_rate` faz 1'de atlanır, açık satırı `resolveBatchLoadProblems` dürüst gerekçeyle kapatır (v0.10.1039, `batch_load.go`); batch serviste `p99_ms` her dwell kovasının hızı ≥ 2× p99 tabanının kendi kovalarının (mevsimsel ya da ardışık) hız medyanıyken AÇILMAZ — yalnız açık satır yokken (v0.10.1046, `evaluateAnomaly` + `batch_latency.go`) |
 | `anomaly:<svc>:service_silent` | `anomaly.go:876-1023` | 3 sıfır kova + %90 aktif taban | — | **varsayılan KAPALI** (v0.10.543) — yeniden önerme |
 | `anomaly-cluster:<source>` | `clustering.go:23-441` | ≥3 yayılım-bağlı taze açılış, katılım ≤30 dk | 60 dk kanıt | üyeler bastırılır |
 | `exception-storm` | `exception_storm.go:31-129` | ≥N servis yeni grup / pencere | exception_triage | Service="" — filo düzeyi, tanım gereği P1 |
@@ -109,9 +109,10 @@ Ne üretiyorsun?
 | `incident:<id>` (notify-only) | `incident_alert.go:35` | created/resolved | — | saklanmaz |
 
 anomaly_events üreticileri (Problem değil): recorder (`recorder.go:107,129`),
-trace_op (`trace_ops.go:171`), davranış motoru (`behavior.go:224`,
+trace_op (`trace_ops.go:171`), trace_op_latency (`op_latency.go`, recorder'dan; batch
+yük kapısı v0.10.1046), davranış motoru (`behavior.go:224`,
 kind=`behavior_change`, LLM dedektör DEĞİL hüküm katmanı — deterministik
-kapılardan geçer, alert AÇAMAZ).
+kapılardan geçer, alert AÇAMAZ; batch p99 yük kapısı `behaviorFleetCandidates`).
 
 **Batch yüklemi (v0.10.1039, operatör: "Bazı batch işlerde ani yük artışı
 olabilir, onları anomali gibi düşünme"):** `anomaly_sensitivity.batchServicePatterns`
@@ -123,14 +124,40 @@ motoru batch'te `request_rate`'i değerlendirmez (`behaviorFleetCandidates`); me
 dedektörü atlar + açık satırı kapatır; `self-volume-spike` açılmaz; `trace_op` batch'te
 `error_spike` için **SAYIM VE PAY** ister (`traceOpBatchShareHolds`, SQL HAVING'de) —
 SAF SUSTURMA: batch olayları eski kümenin alt kümesi, batch olmayan çiftler LIMIT/ilk
-50'de yalnız yer kazanır; pay kuralını sayımın YERİNE koyma (yeni olay açar). Yükte
-**SUSMAYANLAR** (yeniden genişletme — aşırı susturma en kötü sonuç): `error_rate`,
-`p99_ms`, `new_error` (aşağıdaki uzun taban dalı hariç), `trace_op_latency`,
-`log_pattern`, exception P1 hacmi, gömülü kurallar. Bedeller: taban payı ≥ %33 batch op
-`error_spike` açamaz; batch servis span sızıntısında hacim (maliyet) uyarısı almaz.
-Kalıplar tik başına `AnomalySensitivityForDetectors()`'tan (atomic, CH okuması yok): ayar
-bu süreçte hiç doğrulanmadıysa batch listesi BOŞ (süzgeçsiz) ve kapatma geçişi koşmaz;
-okuma hatası son değeri KORUR (`LoadAnomalySensitivity`).
+50'de yalnız yer kazanır; pay kuralını sayımın YERİNE koyma (yeni olay açar).
+**Yük altında gecikme (v0.10.1046, operatör: "Batch servislerde yük altındaki gecikme
+artışı da anomali sayılmasın"):** hacim işin OLAĞAN ÇALIŞMA hacminin ≥ 2 katıyken gecikme
+artışı YENİ olay açmaz. Tek sabit `batchLoadSurgeFactor = 2`; kollar `batchLoadSurge`
+(ondalık, medyan) ve `batchLoadSurgeCounts` (tamsayı) — `batch_latency.go`; taban
+bilinmiyorsa SUSTURMA YOK. `trace_op_latency`: `cur_calls × base_buckets ≥ 2 × base_calls ×
+cur_buckets`, `base_buckets` = taban penceresinin AKTİF kovaları (`uniqExact(time_bucket)`,
+aynı geçiş; 24 sa ortalaması seyrek işin HER koşusunu sıçrama yapardı) — SQL HAVING
+`opLatencyQuery` + aynı tamsayı Go kemeri `classifyOpLatency`; kapı yoksa SQL golden-birebir.
+Metrik `p99_ms`: her dwell kovası hızı ≥ 2× p99 tabanının KENDİ kovalarının hız medyanı —
+mevsimselde `buildAllSeasonalQuery`'nin `rate` kolonu (aynı okuma, tek kolon), ardışıkta 24 sa
+(`batchLatMetricUnderLoad`, `evaluateAnomaly`). Davranış `p99_ms`: penceredeki her dilim ≥ 2×
+kendi HOW kovasının hacim medyanı (yalnız yukarı; rejim yük altındaysa mevsimsel sorulur, yük
+dışı dilim varsa REJİM adayı aynen kalır; kapı tavandan önce). **Zaten aktif olana kapı
+uygulanmaz:** metrik → `!hasOpen`; `trace_op_latency` → son 15 dk içinde yazılmış olay
+çiftleri (`opLatActiveAge` = 10 dk aktiflik + bir 5 dk kova: tek kaçırılmış kova muafiyeti
+düşürmesin; `ListActiveAnomalyKeys`, recorder tikinde sorgudan önce tek okuma, HAVING'de tuple
+`NOT IN`, tavan 200 çift + 64 KiB metin, tavan ötesi muaf değil); davranış → servisin aktif
+(son 10 dk) p99 olayı (TEMBEL okuma, WHERE'de p99 pattern'i, tavan aşımı = okunamadı). Aktif
+küme okunamazsa o tik kapı YOK. Kapatma geçişi YOK.
+Yükte **SUSMAYANLAR** (yeniden genişletme — aşırı susturma en kötü sonuç): `error_rate`,
+olağan çalışma yükündeki `p99_ms` / `trace_op_latency` artışı, zaten aktif her gecikme
+olayı/problemi, `new_error` (aşağıdaki uzun taban dalı hariç), `log_pattern`, exception P1 hacmi, gömülü kurallar. Bedeller:
+taban payı ≥ %33 batch op `error_spike` açamaz; batch servis span sızıntısında hacim
+(maliyet) uyarısı almaz; gecikme kapısında ORANTI YOK (2× yük + 50× gecikme de susar);
+susan batch p99 adayı küme en az üye sayısına (3) sayılmaz; `trace_op_latency` tabanı aktif
+kova başına ORTALAMA (max/p90 değil — onlarla kayan taban sıçramayı dakikalar içinde yutar):
+damla profilinde (çoğu kovada birkaç çağrı + gerçek koşu) aynı yükteki koşu da sıçrama sayılır,
+operasyon düzeyi olay hiç açılmaz (servis p99'u görür); rampada (50, 50, 50, 2.000) büyük kova
+sıçrama sayılır, küçük kovalar açabilir; 7/24 batch'te 24 sa ortalamasının ≥ 2× günlük tepesi
+YENİ olayları susturur. Kalıplar tik başına
+`AnomalySensitivityForDetectors()`'tan (atomic, CH okuması yok): ayar bu süreçte hiç
+doğrulanmadıysa batch listesi BOŞ (süzgeçsiz) ve kapatma geçişi koşmaz; okuma hatası
+son değeri KORUR (`LoadAnomalySensitivity`).
 
 **Seyrek koşan batch işi (v0.10.1043, operatör: "son 24 saatte hiç koşmamış bir iş her
 koşuda 'yeni hata' diye açılıyor"):** batch çiftinde 24 sa tabanda hata yoksa trace_op

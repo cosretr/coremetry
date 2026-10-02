@@ -561,8 +561,9 @@ func (s *Store) AnomalySensitivityConfirmed() bool {
 
 // AnomalySensitivityForDetectors — v0.10.1039: batch kuralını tüketen karar
 // noktalarının (metrik dedektörü + davranış motoru, trace_op,
-// self-volume-spike) tik okuması. Ayar henüz DOĞRULANMADIYSA batch listesi
-// BOŞ döner = kural devre dışı = v0.10.1039 öncesi davranış.
+// trace_op_latency — v0.10.1046, self-volume-spike) tik okuması. Ayar
+// henüz DOĞRULANMADIYSA batch listesi BOŞ döner = kural devre dışı =
+// v0.10.1039 öncesi davranış.
 //
 // Yumuşak-hata yönü bilinçli SÜZGEÇSİZ (aiops §5: "mute listesi okunamadı →
 // süzgeçsiz terfi"): varsayılan liste bir tahmin; operatör kuralı kapattıysa

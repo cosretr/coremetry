@@ -9,9 +9,12 @@ package chstore
 // NE DEĞİŞİR: adında bu kalıplardan biri geçen servislerde YÜKÜN KENDİSİ
 // (istek hızı, span hacmi) anomali sayılmaz; yükün yan etkisi olan hata
 // SAYISI artışı ancak hata ORANI da artmışsa olay sayılır (SAYIM VE PAY —
-// yalnız susturur, yeni olay açmaz). Hata oranı ve gecikme
-// anomalileri bu servislerde de AYNEN açılır — batch işi patlarsa sinyal
-// susmamalı. Kapsam listesi docs/DECISIONS.md'de (v0.10.1039).
+// yalnız susturur, yeni olay açmaz). Hata oranı anomalileri bu servislerde
+// de AYNEN açılır — batch işi patlarsa sinyal susmamalı. Gecikme: v0.10.1046
+// ile hacim işin olağan çalışma hacminin ≥ 2 katıyken gelen gecikme artışı
+// YENİ olay açmaz; olağan yükte gelen artış ve zaten aktif olaylar AYNEN
+// sürer (internal/anomaly/batch_latency.go). Kapsam listesi
+// docs/DECISIONS.md'de (v0.10.1039, v0.10.1046).
 //
 // TEK YÜKLEM: her karar noktası (davranış motoru, metrik dedektörü,
 // trace_op, self-volume-spike) IsBatchService'i çağırır; SQL tarafı

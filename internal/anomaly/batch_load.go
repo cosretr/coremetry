@@ -10,8 +10,10 @@
 //
 // NE SUSAR: yalnız YÜKÜN KENDİSİ — request_rate (iki yön de: batch işinin
 // başlaması da bitmesi de olay değil). error_rate ve p99_ms bu servislerde
-// de AYNEN değerlendirilir; servis kümelemeden de ÇIKMAZ (diğer
-// metrikleriyle aday olmaya devam eder).
+// de değerlendirilir; servis kümelemeden de ÇIKMAZ (diğer metrikleriyle
+// aday olmaya devam eder). p99_ms'in YÜK ALTINDAKİ artışı ayrı ve daha dar
+// bir kural (v0.10.1046, batch_latency.go: yalnız açılışı keser, kapatma
+// geçişi yok) — bu dosyanın kapatma geçişi ona UZANMAZ.
 package anomaly
 
 import (

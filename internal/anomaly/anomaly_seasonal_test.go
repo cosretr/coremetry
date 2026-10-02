@@ -108,6 +108,9 @@ func TestSeasonalBaselineSQLShape(t *testing.T) {
 		"UTC hour grid":             "toHour(time_bucket, 'UTC')",
 		"circular distance (near)":  "least(abs(",
 		"circular wrap (far side)":  "86400 - abs(",
+		// v0.10.1046 — batch gecikme kapısının mevsimsel hacmi AYNI okumada
+		// (tek kolon; satır kümesi değişmez — TestBatchLatSeasonalRateRidesTheSameQuery).
+		"volume column (same read)": "countMerge(span_count_state) / 300.0 AS rate",
 		"per-service row cap":       "LIMIT 700 BY service_name",
 		"overall row cap":           "LIMIT 14000000",
 		"execution-time bound":      "max_execution_time = 25",

@@ -987,6 +987,72 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Batch: yük altında gecikme artışı anomali açmaz (v0.10.1046)
+
+**Operatör (prod):** "Batch servislerde yük altındaki gecikme artışı da anomali sayılmasın." v0.10.1039
+yükün kendisini susturmuş, gecikmeyi bilinçli olarak dışarıda bırakmıştı (o kaydın "KAPSAM DIŞI" maddesi).
+
+**Kural:** batch kalıbına giren serviste (aynı `batchServicePatterns` / `IsBatchService`; boş liste ya da
+doğrulanmamış ayar = kural kapalı) gecikme artışı, istek hacmi işin **olağan çalışma hacminin en az 2 katındayken**
+YENİ olay açmaz. Tek sabit `batchLoadSurgeFactor = 2`; iki saf kol: ondalık `batchLoadSurge` (medyanlar) ve
+tamsayı `batchLoadSurgeCounts` (trace_op_latency; `internal/anomaly/batch_latency.go`). "Olağan çalışma hacmi"
+her noktada gecikme kıyasının KENDİ tabanından:
+1. **`trace_op_latency`:** çiftin cari kova başına çağrısı ≥ 2 × taban penceresinin (24 sa) AKTİF kova başına
+   çağrısı — `cur_calls × base_buckets ≥ 2 × base_calls × cur_buckets`, `base_buckets = uniqExact(time_bucket)`
+   aynı geçişten. Boş kovalar sayılmaz: günde bir saat koşan işin olağan hacmi koşu hacmidir (24 sa ortalaması
+   her koşuyu "sıçrama" yapardı). Koşul SQL HAVING'de (LIMIT 200 yük altındaki batch çiftleriyle dolmaz) + aynı
+   tamsayı aritmetiğiyle Go kemeri. Kural kapalıyken ya da aktif küme okunamadığında SQL metni ve argümanlar
+   birebir eski (golden); ek kolon yalnız batch kolunda.
+2. **Metrik dedektörü `p99_ms`:** dwell kovalarının HER BİRİNİN istek hızı ≥ 2 × p99 tabanının KENDİ kovalarının
+   hız medyanı: mevsimsel tabanda aynı mevsimsel okumanın yeni `rate` kolonu (aynı slot ±15 dk, 14 gün — işin o
+   saatteki olağan hacmi), ardışık tabanda 24 sa ardışık kovalar. Mevsimsel okumaya tek kolon eklendi (aynı
+   satırlar/granüller, satır kümesi değişmez; ikinci sorgu yok).
+3. **Davranış motoru `p99_ms`:** adayın penceresindeki HER dilimin span hacmi ≥ 2 × kendi haftanın-saati
+   kovasının hacim medyanı (aynı satırlar). Yalnız ARTIŞ yönü; rejim adayı yük altındaysa mevsimsel pencere
+   ayrıca sorulur ve yükün açıklamadığı dilim taşıyorsa rejim adayı (alanları aynen) kalır.
+
+**Yalnız açılışı keser — zaten aktif olana dokunmaz:** metrik dedektöründe açık `anomaly:<svc>:p99_ms` satırı
+(open/acknowledged) varsa kapı koşmaz. `trace_op_latency`'de o çiftin olayı son **15 dk** içinde yazılmışsa çift
+muaf (`opLatActiveAge` = 10 dk aktiflik + bir 5 dk kova: olay k kovasında yazıldıysa ve k+1 eşiği bir kez
+kaçırırsa — ör. p99 oranı 2.9× — k+2 en erken 10 dk sonra değerlendirilir; 10 dk'lık pencere çifti tam o anda
+muafiyetten düşürür, kapı tepenin geri kalanında onu susturur ve terfi Problem'i "anomaly cleared" ile kapanırdı).
+Recorder tikinde sorgudan önce TEK sınırlı okuma (tür + son 15 dk + batch servis koşulu SQL'de, en çok 201 satır
+DÖNER, max_execution_time 5), muaflar HAVING'de tuple `NOT IN`; muaf liste 200 çift ve 64 KiB servis+operasyon
+metniyle sınırlı (operasyon adları sınırsız) — tavan aşılırsa en tazeler muaf, ötesi muaf değil (bir kez log,
+sayılarla). Davranış motorunda servisin p99 davranış olayı aktifse (son 10 dk; olaylar her taramada yeniden
+yazılır) aday kalır; okuma TEMBEL (yalnız bir aday susturulacakken, tik başına en çok bir kez, WHERE'de p99
+pattern'i, tavan 200); tavan aşımı da okuma hatası gibi sayılır. Aktif küme
+okunamazsa o tik kapı hiç uygulanmaz (bir kez log). Kapatma geçişi yok. Sonuç: yük tepesinden ÖNCE başlamış,
+yükle ilgisiz bir gerileme yük gelince "anomaly cleared" diye kapanıp tepe sonrası yeni bildirimle açılmaz.
+
+**Bilinmeyen taban = susturma yok:** taban sıfır/yok, aktif kova 0, kova yetersiz, hacim serisi hizasız ya da
+mevsimsel hacim yok → bugünkü gibi açılır.
+
+**Hâlâ açılan:** batch serviste olağan çalışma hacminde (ya da yükten önce başlamış / yükün açıklamadığı bir kova
+taşıyan) gecikme artışı; zaten aktif her gecikme olayı/problemi; `error_rate` (metrik + davranış), `new_error`,
+trace_op `error_spike` (v0.10.1039 kuralı aynen); davranış motorunda p99 düşüşü. Batch olmayan servislerde her
+karar birebir aynı.
+
+**Bedeller (açıkça):** (a) Orantı denetimi YOK: yük ≥ 2× iken gelen gecikme artışı büyüklüğünden bağımsız susar —
+2× yükle 50× gecikme de yeni olay açmaz; yükten bağımsız bir neden (yavaş bağımlılık) aynı anda gelirse de susar;
+aynı anda hata oranı artarsa `error_rate` açılır. (b) İkinci derece etki: susturulan batch p99 adayı kümeleme
+adayı da değildir, yani bir kümenin en az üye sayısına (3) sayılmaz — üç servislik bir kaskad o tik kümelenmeyip
+üyeleri bireysel açılabilir. (c) `trace_op_latency` tabanı aktif kova başına ORTALAMA — üç doğrulanmış şekil:
+damla profili (kovaların çoğunda birkaç çağrı + gerçek bir koşu, ör. 276 kovada 1 çağrı + 12 kova × 1.000 →
+ortalama ~43) koşu yükünün çok altında kalır, AYNI yükteki bir koşu da "sıçrama" sayılır ve o operasyon için
+operasyon düzeyi gecikme olayı hiç açılmaz (servis düzeyi p99 yine görür); rampa profilinde (50, 50, 50, 2.000)
+olağan büyük kova sıçrama sayılır, küçük kovalar olayı yine açabilir ve açıldıktan sonra çift muaftır; 7/24 batch
+servislerde 24 sa ortalamasının ≥ 2 katı günlük tepe, tepe saatlerinde YENİ olayları susturur. Ortalama max / p90
+yerine bilinçli seçildi: onlarla kayan taban gerçek bir sıçramayı birkaç dakikada kendine katar ve susturma
+sıçramanın ortasında kalkıp olay açılırdı. (d) Ek okumalar: recorder dakikada bir küçük `anomaly_events` tablosunda
+bir FINAL taraması (en çok 201 satır DÖNER); davranış taraması 2 dk'da en çok bir kez, yalnız gerektiğinde.
+
+**Bilinen sınırlar:** son yazımdan 15–22,5 dk sonra yeniden ateşleyen bir `trace_op_latency` olayı yaşam döngüsü
+kuralına göre aynı epizottur ama muaf değildir (yük tepesinde susar) — o ana dek terfi Problem'i "cleared"
+geçişiyle zaten kapanmış olur.
+
+Settings → Anomaly: "Batch servis ad kalıpları" ipucu ve alttaki kapsam notu buna göre düzeltildi.
+
 ## 2026-10-02 — Anomali olayı: yeniden tetiklenme yeni bölüm, eski tepe taşınmaz (v0.10.1045)
 
 **Operatör:** "Eski yüksek oran taşınmasın: kapanıp yeniden tetiklenen anomali, eski en yüksek oranıyla (ör.

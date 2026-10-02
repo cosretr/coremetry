@@ -23,7 +23,7 @@ func TestEvaluateAnomaly(t *testing.T) {
 	}
 
 	t.Run("kısa geçmiş → skip", func(t *testing.T) {
-		oc := evaluateAnomaly("p99_ms", steady(4, 100), nil, steady(4, 5), 4, false, cfg)
+		oc := evaluateAnomaly("p99_ms", steady(4, 100), nil, steady(4, 5), 4, false, batchLatSeries{}, cfg)
 		if oc.Action != "skip" {
 			t.Fatalf("action=%q, want skip", oc.Action)
 		}
@@ -34,7 +34,7 @@ func TestEvaluateAnomaly(t *testing.T) {
 		for i := len(buckets) - cfg.DwellBuckets; i < len(buckets); i++ {
 			buckets[i] = 900 // dwell penceresi boyunca 9×
 		}
-		oc := evaluateAnomaly("p99_ms", buckets, nil, steady(40, 5), 4, false, cfg)
+		oc := evaluateAnomaly("p99_ms", buckets, nil, steady(40, 5), 4, false, batchLatSeries{}, cfg)
 		if oc.Action != "open" || oc.Direction != "spiked" {
 			t.Fatalf("action=%q dir=%q, want open/spiked (z=%.1f)", oc.Action, oc.Direction, oc.Z)
 		}
@@ -44,7 +44,7 @@ func TestEvaluateAnomaly(t *testing.T) {
 	})
 
 	t.Run("açık problem + bant-içi son kova → resolve, LatestHasData=true", func(t *testing.T) {
-		oc := evaluateAnomaly("p99_ms", steady(40, 100), nil, steady(40, 5), 4, true, cfg)
+		oc := evaluateAnomaly("p99_ms", steady(40, 100), nil, steady(40, 5), 4, true, batchLatSeries{}, cfg)
 		if oc.Action != "resolve" || !oc.LatestHasData {
 			t.Fatalf("action=%q latestHasData=%v, want resolve/true", oc.Action, oc.LatestHasData)
 		}
@@ -56,14 +56,14 @@ func TestEvaluateAnomaly(t *testing.T) {
 		for i := 37; i < 40; i++ { // padlenmiş sessiz kuyruk
 			buckets[i], rates[i] = 0, 0
 		}
-		oc := evaluateAnomaly("p99_ms", buckets, nil, rates, 4, true, cfg)
+		oc := evaluateAnomaly("p99_ms", buckets, nil, rates, 4, true, batchLatSeries{}, cfg)
 		if oc.Action != "resolve" || oc.LatestHasData {
 			t.Fatalf("action=%q latestHasData=%v, want resolve/false", oc.Action, oc.LatestHasData)
 		}
 	})
 
 	t.Run("açık yokken bant-içi → none", func(t *testing.T) {
-		oc := evaluateAnomaly("p99_ms", steady(40, 100), nil, steady(40, 5), 4, false, cfg)
+		oc := evaluateAnomaly("p99_ms", steady(40, 100), nil, steady(40, 5), 4, false, batchLatSeries{}, cfg)
 		if oc.Action != "none" {
 			t.Fatalf("action=%q, want none", oc.Action)
 		}

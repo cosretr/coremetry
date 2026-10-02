@@ -469,7 +469,8 @@ function SensitivitySection() {
                 Adında bu kalıplardan biri geçen servislerde ani yük artışı anomali sayılmaz
                 (istek hızı, hacim sıçraması; hata sayısı artışı ancak hata oranı da artmışsa
                 olay sayılır). Hata
-                oranı ve gecikme anomalileri etkilenmez. Boş bırakırsanız kural kapanır.
+                oranı anomalileri etkilenmez; gecikme artışı, istek hacmi olağan çalışma hacminin en az
+                2 katındayken yeni anomali açmaz; zaten açık olanlar sürer. Boş bırakırsanız kural kapanır.
                 <br />
                 Virgül ya da boşlukla ayırın; büyük-küçük harf fark etmez, 3 karakterden kısa
                 kalıp yok sayılır, en çok 10 kalıp. Varsayılan <code>-batch</code>.
@@ -553,8 +554,8 @@ function SensitivitySection() {
               kalırdı. */}
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 16, lineHeight: 1.5 }}>
             Bu eşikler <b>metrik anomali dedektörünü</b> ve davranış motorunu bağlar;
-            <b> batch servis ad kalıpları</b> ayrıca iz (trace) operasyon hata anomalilerini
-            ve servis hacmi sıçraması uyarısını da etkiler. Elle kurduğunuz alarm kuralları
+            <b> batch servis ad kalıpları</b> ayrıca iz (trace) operasyon hata ve gecikme
+            anomalilerini ve servis hacmi sıçraması uyarısını da etkiler. Elle kurduğunuz alarm kuralları
             kendi eşiklerini kullanır; log/iz desen anomalilerinin Problem&apos;e terfisi
             yukarıdaki terfi hattından geçer. Sertleştirmek açık kayıtları silmez: yeni
             tespit üretilmez, mevcut anomaliler kendi bantlarına dönünce kapanır. Batch

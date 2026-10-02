@@ -31,11 +31,16 @@ type anomalyOutcome struct {
 // sırayla birebir: yeterlilik kapıları (skip), dwell penceresi,
 // baseline seçimi (mevsimsel > kırpılmış ardışık), modified z,
 // hacim kapısı (yalnız açılmaya), anomalyAction.
+//
+// v0.10.1046 — bl: batch gecikme kapısının girdisi (scan: servis batch mi +
+// mevsimsel okumanın hacim kolonu; dış seriler sıfır değer = kapı yok).
+// Yalnız p99_ms'te ve yalnız AÇILIŞTA okunur (aşağıdaki batch yük kapısı).
 func evaluateAnomaly(
 	metric string,
 	buckets, seasonal, rates []float64,
 	seasonalMinSamples int,
 	hasOpen bool,
+	bl batchLatSeries,
 	cfg chstore.AnomalySensitivityConfig,
 ) anomalyOutcome {
 	out := anomalyOutcome{Action: "skip"}
@@ -65,6 +70,25 @@ func evaluateAnomaly(
 	// orijinal blokta; çözülmeye uygulamak donmuş-kuyruk sınıfını geri
 	// getirirdi).
 	if allOpen && !hasEnoughVolume(rates, pol.minBaselineRate) {
+		allOpen = false
+	}
+	// v0.10.1046 — batch: YÜK ALTINDAKİ gecikme artışı YENİ problem açmaz
+	// (operatör: "Batch servislerde yük altındaki gecikme artışı da anomali
+	// sayılmasın"). Kıyas p99 kararıyla AYNI kovalar: dwell kovalarının
+	// istek hızı (aynı sorgunun `rate` kolonu) vs p99 tabanının KENDİ
+	// kovalarının istek hızı medyanı — mevsimsel tabanda aynı mevsimsel
+	// okumanın `rate` kolonu (işin o saatteki olağan çalışma hacmi), ardışık
+	// tabanda kırpılmış ardışık kovalar; her dwell kovası ≥ 2×
+	// (batchLatMetricUnderLoad). Ek okuma yok.
+	//
+	// Bilinçli sınırlar (aşırı susturma en kötü sonuç):
+	//   - yalnız !hasOpen: açık satırın tazelenmesi/kapanması/küme kaynağı
+	//     olması değişmez (yalnız AÇILIŞI keser);
+	//   - hacim serisi değer serisiyle hizalı değilse (ardışık ya da
+	//     mevsimsel) → bilinmiyor → açılır.
+	if allOpen && !hasOpen && bl.Batch && metric == batchLatencyMetric && len(rates) == len(buckets) &&
+		batchLatMetricUnderLoad(rates, split, len(consecutive),
+			usesSeasonalBaseline(seasonal, seasonalMinSamples), seasonal, bl.SeasonalRates) {
 		allOpen = false
 	}
 	out = anomalyOutcome{
