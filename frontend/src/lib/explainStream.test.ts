@@ -250,6 +250,19 @@ describe('akan ✨ Explain — step / step-result (v0.10.948)', () => {
     expect(calls[2].url).toContain(`/explain-trace/${TRACE}?stream=1`);
     expect(calls[3].url).toContain(`/explain-trace/${TRACE}?span=b7ad6b7169203331&refresh=1&stream=1`);
   });
+
+  // v0.10.1034 (operatör: "Kod inceleme çalışma mantığı ile direkt Ask CoSRE
+  // farklı.") — "Kodu da incele" isteği de AYNI incelemeyi koşar: seçili span
+  // kodlu istekte de ?span= ile gider (odak servis), gövde includeCode taşır.
+  it('kodlu istek de seçili span\'i ?span= ile taşır; gövdede includeCode', async () => {
+    mockFetch(() => sseResponse('event: answer\ndata: {"text":"t"}\n\nevent: done\ndata: {"ok":true}\n\n'));
+    await api.copilotExplainTrace(TRACE, true, { onDelta: () => {}, onStep: () => {} }, 'B7AD6B7169203331');
+    await api.copilotExplainTrace(TRACE, false, { onDelta: () => {}, onStep: () => {} }, 'B7AD6B7169203331');
+    expect(calls[0].url).toContain(`/explain-trace/${TRACE}?span=b7ad6b7169203331&stream=1`);
+    expect(calls[0].url).toBe(calls[1].url);                       // kodlu = kodsuz URL (yalnız gövde farklı)
+    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({ includeCode: true });
+    expect(JSON.parse(String(calls[1].init.body)).includeCode).toBeUndefined();
+  });
 });
 
 describe('explainStepFrame (v0.10.948) — güven sınırı', () => {

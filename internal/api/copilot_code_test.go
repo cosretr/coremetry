@@ -790,8 +790,13 @@ func TestExplainEvidenceExpandsQuotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(src)
-	if !strings.Contains(s, "return devops.ExpandQuotes(out, cc), nil") || !strings.Contains(s, "out = devops.ExpandQuotes(out, half)") {
+	// v0.10.1034 — zincirin gövdesi copilotExplainEvidenceSent'e taşındı (gönderilen
+	// kodu da döndürür); copilotExplainEvidence ona devreder. İki kodlu yol AYNI pin.
+	if !strings.Contains(s, "return devops.ExpandQuotes(out, cc), cc, nil") || !strings.Contains(s, "return devops.ExpandQuotes(out, half), half, nil") {
 		t.Fatal("copilotExplainEvidence kod alıntılarını pencereden genişletmeli (her iki kodlu yol)")
+	}
+	if body := serverFuncBodies(t)["copilotExplainEvidence"]; !strings.Contains(body, "s.copilotExplainEvidenceSent(") {
+		t.Fatal("copilotExplainEvidence zinciri copilotExplainEvidenceSent'ten geçmiyor — iki zincir ayrışır")
 	}
 }
 

@@ -987,6 +987,67 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — "Kodu da incele" artık Ask CoSRE incelemesinin üstüne kod ekler (v0.10.1034)
+
+**Operatör (prod):** "Kod inceleme çalışma mantığı ile direkt Ask CoSRE farklı." **Ne farklıydı:** trace'te
+iki ayrı kanıt toplayıcısı vardı. Ask CoSRE (varsayılan) trace incelemesiydi (get_trace, loglar, dönem kıyası,
+pod, deploy, Oracle; seçili span'e odaklı; adımlar akar). "Kodu da incele" ise klasik toplayıcıdan
+(`buildTraceExplainInput`: ≤100 span, ≤15 log) geçiyordu: kıyas/pod/deploy kanıtı yoktu, seçili span yok
+sayılıyordu, istem de farklıydı (`SystemPromptTraceWithCode`).
+
+**Karar — tek hat:** `includeCode` AYNI incelemeyi koşar (aynı okumalar, adımlar, odak; `inv.User` kodsuz
+istekle bayt bayt aynı), sonra üstüne kod + şema kanıtı ekler. Stack ve onu basan servis incelemenin
+get_logs_for_trace okumasının HAM kayıtlarından alınır; seçim kuralı klasik toplayıcınınki: önce yüksek severity,
+yalnız ilk 15 kayıt aday (`traceExplainLogRows`, klasik yolla paylaşılan sabit — INFO'da yakalanmış bir exception
+16. sırada kodu sürmez), stack taşıyan ilki. Araç çıktısı stack'i 200 runede kestiği için dikiş
+`mcptools.WithTraceLogsSink` (ctx kancası; araç çıktısı ve MCP/sohbet sözleşmesi değişmez). Kanca ve stack
+ayrıştırması YALNIZ kod istendiğinde kurulur; varsayılan (kodsuz) yol hiçbir ek iş yapmaz (inv.User, künye ve
+çerçeve ekleri HEAD ile bayt bayt aynı — 9 senaryolu karşılaştırma).
+**Seçili span geri düşüşü:** span seçiliyken L okuması o span'e süzülü; operatör çoğu zaman log basmayan bir
+span'e (kırmızı CLIENT yaprağı) ya da köke tıklar, exception'ı aşağı akıştaki servis basmıştır. Seçili span'in
+logunda stack YOKSA TEK ek trace geneli get_logs_for_trace (span süzgeçsiz, klasik limit 30
+`traceExplainLogLimit`, L bütçesi, aynı koşucu → rol süzgeci + audit, aynı kanca) koşar; step + step-result olarak
+görünür. Çıktısı inceleme kanıtına GİRMEZ, yalnız stack + servis alınır; kökeni prompt'un kod bölümünün başında ve
+kod künyesinde (`code.stackOrigin`) tek satırla söylenir ("seçili span'in değil, trace'in en ciddi stacktrace'i —
+basan servis: X"). Seçili span'in kendi stack'i varsa o kazanır, ek okuma yok. Ek okuma kalıcı değilse (zaman
+aşımı, erişilemedi …) cevap saklanmaz. Hata metni (stack'i gömer) + SQL stack belli OLDUKTAN sonra get_trace'in
+span listesinden kurulur; bütçe sırası kod > şema > SQL > log aynen.
+**Kod çekimi bir adım:** `source_code` step (argüman: stack'i basan servis) + step-result (depo, dosya:satır,
+gerekçe, `source` rozeti; kod İÇERİĞİ yok — "kod tarayıcıya gitmez"): 25 sn'ye varan çekim akışı sessiz bırakmaz.
+**İstem:** `SystemPromptTraceInvestigationWithCode` = inceleme gövdesi + paylaşılan `systemCodeAddendum` + çerçeve;
+mevcut `systemTraceInvestigation` sürüm kaydı anahtar ve metin olarak aynen, kodlu istem YENİ kayıt (gövde
+literal'i kapı gereği ayrıca kayıtlı); global istem sürümü yeni istem eklendiği için değişir.
+**Model çağrısı** BUFFERED, mevcut taşma zinciri (`copilotExplainEvidence`: tam kod → yarım kod — yarım da taşarsa
+hata; yarıya inemezse kodsuz + "kod sığmadı" notu, düz inceleme istemiyle) değişmeden kullanılır; cevabı
+incelemenin kuyruğu (sayı uyarısı + Kaynak durumu) kapatır. **Sayı denetimi kodla kandırılamaz:** cevaptaki çitli
+kod blokları iddia sayılmaz; kanıta kod GÖVDESİ değil, yalnız cevabı üreten denemede GERÇEKTEN gönderilen kodun
+(tam / yarım / düştüyse hiç) pencere başına hata satırı, ilk/son satır, imza satırı ve şema bloğu eklenir
+(`copilotExplainEvidenceSent` gönderileni bildirir) — pencere içindeki bir satır numarasına eşit uydurma "87 ms"
+yine işaretlenir. Kodsuz yol bugünkü gibi akar; iki taşma stratejisi aynı istekte hiç birlikte koşmaz (eski
+çekince buydu). Önbellek anahtarı okumalardan ÖNCE (`traceInvestigationCacheKey`, kodlu istemle → kodlu/kodsuz
+ayrı satır); yan kayıt kod künyesini de taşır, isabette okuma da git çağrısı da yok. Saklama kuralı incelemeninki;
+ek olarak kod çekiminin GEÇİCİ çıkmazında (deadline, iptal, backend hatası, katalog okunamadı) ya da kalıcı
+olmayan ek stack okumasında saklanmaz. Ön yüz: üç kod girişi (çip, `ai=code`, "Kodu da inceleyeyim mi? → Evet")
+seçili span'i taşır; kod kartı adımları, kaynak dipnotunu ve köken notunu ilk kartla aynı bileşenlerle çizer.
+
+**Değişmeyenler:** klasik kodlu/kodsuz gövde YALNIZ Tempo yedeğinde (trace ClickHouse'ta yok) koşar; exception
+explain'in kod yolu, sohbet, takip soruları, arka plan açıklayıcıları dokunulmadı; kod bütçesi (4000 rune) ve
+inceleme bölüm bütçeleri aynı.
+
+**Ölçüm (bütçe tavanlarında fikstür, rune; `TestTraceCodePromptSizeCeilings`):** eski klasik + kod user prompt'u
+54.349 (kanıt 48.777 + kod 4.740 + şema 832; klasik toplayıcıda span adı ve durum mesajı tavansız — fikstürde
+~56 / ~180 rune, 15 log 600 bayt gövde + 1500/900 bayt stack; Oracle yok), sistem 4.423 → toplam 58.772. Yeni
+inceleme + kod user prompt'u 16.199 (kanıt 10.627: T 2.237 · L 2.797 · K 2.061 · P 917 · D 736 · O 1.235;
+Oracle'sız 14.964), sistem 6.546 → toplam 22.745. Kodsuz sistem istemleri: klasik 1.910, inceleme 4.033. Küçük
+fikstürde (2 span, 3 log) yeni kodlu user 9.333 / eski 6.112. Çağrı sayısı (istek başına): yeni = 5 araç
+çağrısı (+ seçili span'de stack yoksa 1 ek log okuması; + Oracle varsa 1 doğrudan okuma) + aynı git zinciri + 1
+LLM (taşmada 2); eski = trace + log (+ Oracle) okuması + git zinciri + 1 LLM (taşmada 2). Kod sabit tavanlı kalırken kanıt bölüm bütçeli: küçük yerel modelde
+kodlu istem eski klasik yolun tavanından kısa, kodsuz incelemeden (14.660) ~8 bin rune uzun (kod 4.740 + şema
+832 + istem farkı 2.513).
+
+Bu kayıt v0.10.948 (trace_explain_handler.go başlığı) ve v0.10.989 kayıtlarındaki "iki yol: varsayılan inceleme
+ve 'Kodu da incele' (klasik istem + kod bağlamı)" ifadesinin yerine geçer.
+
 ## 2026-10-02 — AI paneli: "Kanıt span'leri" listesi kaldırıldı (v0.10.1033)
 
 **Operatör (prod, trace'ten açılan AI paneli):** "Kanıt span'lere gerek yok." Açıklamanın altındaki "Kanıt span'leri (N)"

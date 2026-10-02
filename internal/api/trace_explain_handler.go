@@ -5,23 +5,36 @@ package api
 // buraya TAŞINDI (aynı ad, aynı rota — ai_routes.go). api.go büyümez kuralı:
 // yeni davranış kendi dosyasında, api.go'dan yalnız eksildi.
 //
-// İki yol:
+// v0.10.1034 (operatör: "Kod inceleme çalışma mantığı ile direkt Ask CoSRE
+// farklı.") — TEK kanıt hattı. "Kodu da incele" artık ayrı bir toplayıcı
+// değil, Ask CoSRE incelemesinin üstüne kod:
 //
-//   - VARSAYILAN — trace incelemesi (trace_investigate.go): sunucu salt-okunur
-//     araçları sohbetin yürütme yolundan çalıştırır, adımları akıtır, cevap
-//     SystemPromptTraceInvestigation ile beş başlıkta gelir; sonuna kanıtta
-//     bulunamayan sayı uyarısı ve "Kaynak durumu" künyesi eklenir. answer
-//     çerçevesi: text, exchangeId, evidenceSpanIds, code, oracleRows, links,
-//     sources (+ isabette cached/cachedAtMs).
-//   - "Kodu da incele" (includeCode) — KLASİK yol aynen korunur
-//     (buildTraceExplainInput + SystemPromptTrace + kod bağlamı): kod çekici
-//     loglardaki stacktrace'e ve onun servisine bağlı, bağlam taşmasında kodu
-//     yarıya indirip çağrıyı yeniden yapıyor — incelemeyle birleştirmek iki
-//     taşma stratejisini çarpıştırırdı. Aynı klasik yol, trace ClickHouse'ta
-//     yok ama Tempo'da olabilir durumunda da koşar (get_trace Tempo'ya bakmaz).
+//   - KODSUZ (varsayılan) — trace incelemesi (trace_investigate.go): sunucu
+//     salt-okunur araçları sohbetin yürütme yolundan çalıştırır, adımları
+//     akıtır, cevap SystemPromptTraceInvestigation ile gelir ve AKAR; sonuna
+//     kanıtta bulunamayan sayı uyarısı ve "Kaynak durumu" künyesi eklenir.
+//   - "Kodu da incele" (includeCode) — AYNI inceleme (aynı okumalar, aynı
+//     adımlar, aynı seçili-span odağı), ardından kod + şema kanıtı
+//     (trace_investigate_code.go): stack + onu basan servis incelemenin log
+//     okumasının ham kayıtlarından (seçili span'in logunda stack yoksa TEK ek
+//     trace geneli okuma — adım olarak görünür, inceleme kanıtına girmez, kökeni
+//     söylenir), hata metni + SQL get_trace'in span listesinden; kod çekimi de
+//     bir adım. Model SystemPromptTraceInvestigationWithCode ile BUFFERED
+//     çağrılır (copilotExplainEvidence: bağlam taşmasında kod yarıya iner ya da
+//     düşer); kuyruk aynı. Eski çekince ("incelemeyle birleştirmek iki taşma
+//     stratejisini çarpıştırırdı") karşılandı: akan yol ile yarıya-indirme
+//     zinciri aynı istekte hiç birlikte koşmaz.
+//
+// İkisinde de answer çerçevesi: text, exchangeId, evidenceSpanIds, code
+// (kodluda depo/dosya:satır künyesi, kodsuzda null), oracleRows, links,
+// sources (+ isabette cached/cachedAtMs). Önbellek anahtarı okumalardan ÖNCE
+// (traceInvestigationCacheKey; sistem istemi anahtarda → kodlu/kodsuz ayrı
+// satır). KLASİK yol (buildTraceExplainInput + SystemPromptTrace[WithCode])
+// YALNIZ Tempo yedeği: trace ClickHouse'ta yok ama Tempo'da olabilir
+// (get_trace Tempo'ya bakmaz) — kodlu da kodsuz da bugünkü gibi.
 //
 // Seçili span `?span=<16 hex>` ile gelir (copilotExplainSpan'in sorgu
-// sözleşmesi); odak servisi o span'in servisi olur.
+// sözleşmesi); odak servisi o span'in servisi olur — kodlu istekte de.
 
 import (
 	"context"
@@ -46,50 +59,31 @@ import (
 // cevaplanıyordu). Prompt bayt-bayt aynıdır — explain_trace_input_test.go
 // pinler. Emsal: anomaly.BuildExceptionExplainInput (v0.9.415).
 //
-// v0.10.948 — varsayılan yol trace incelemesi (dosya başlığı); klasik gövde
-// yalnız "Kodu da incele" dalında.
+// v0.10.948 — varsayılan yol trace incelemesi (dosya başlığı).
+// v0.10.1034 — "Kodu da incele" de aynı incelemeden geçer (+ kod); klasik
+// gövde yalnız Tempo yedeğinde (explainTraceClassicPrepared).
 func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	r, xid := withExchange(r)
 	// v0.9.831 — "Kodu da incele" (opsiyonel gövde). Kod bağlamı
 	// trace'in LOGLARINDAKİ stacktrace'ten çıkar ve o stack'i basan
 	// SERVİSİN deposunda aranır (bkz. traceExplainInput.StackService).
 	opts := decodeExplainOptions(r)
-	if !opts.IncludeCode {
-		s.explainTraceInvestigation(w, r, xid)
-		return
-	}
-	in, err := s.buildTraceExplainInput(r.Context(), r.PathValue("id"))
-	if errors.Is(err, errExplainTraceNotFound) {
-		http.Error(w, "trace not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	// v0.10.83 — önbellek anahtarı GERÇEK prompt'tan: kod dalında kod
-	// bloğu da kimliğe girer (kodlu/kodsuz cevap ayrı satır; blok
-	// değişirse anahtar değişir). Kodsuz klasik anahtar:
-	// explainTraceClassicPrepared.
-	cc := s.buildCodeContext(r.Context(), in.StackService, in.Stack)
-	// v0.10.115 — SQL hatasında şema kanıtı (hata span'ının db_statement'ı
-	// → katalog); kod bloğunun arkasına, kendi bütçesiyle.
-	se := s.buildSchemaEvidence(in.ErrorText, in.DBStatements, mapperBlocks(cc))
-	cacheKey := explainCacheKey(copilot.SystemPromptTraceWithCode(), in.User, cc.PromptBlock()+se.Block)
-	run := explainPromptBuffered(func() (string, error) {
-		return s.copilotExplainEvidence(r,
-			copilot.SystemPromptTrace(), copilot.SystemPromptTraceWithCode(), in.User, cc, se)
-	})
-	// v0.9.1127 (Faz 1.5) — cevabın çıkışı tek yerden (deliverExplain).
-	s.deliverExplain(w, r, xid, traceExplainExtra(in, cc, opts.IncludeCode), run, in.RootService, cacheKey)
+	s.explainTraceInvestigation(w, r, xid, opts.IncludeCode)
 }
 
 // explainTraceInvestigation — v0.10.948: varsayılan yol. Önbellek anahtarı
 // incelemeden ÖNCE (isabet hiçbir okuma çalıştırmaz, adım olayı çıkmaz);
 // ıskada inceleme akan kipte adımlarını yayınlar, sonra model akar.
-func (s *Server) explainTraceInvestigation(w http.ResponseWriter, r *http.Request, xid string) {
+//
+// v0.10.1034 — includeCode: aynı inceleme, ardından kod (buffered üretim,
+// trace_investigate_code.go). Anahtar kodlu sistem istemiyle (ayrı satır);
+// isabette ne okuma ne kod çekimi koşar, künye yan kayıttan gelir.
+func (s *Server) explainTraceInvestigation(w http.ResponseWriter, r *http.Request, xid string, includeCode bool) {
 	traceID, spanID := r.PathValue("id"), traceInvestigationSpanParam(r)
 	system := copilot.SystemPromptTraceInvestigation()
+	if includeCode {
+		system = copilot.SystemPromptTraceInvestigationWithCode()
+	}
 	key := traceInvestigationCacheKey(system, traceID, spanID)
 	runner := newTraceInvestigationRunner(s, r)
 	s.deliverExplainPrepared(w, r, xid, key,
@@ -98,12 +92,19 @@ func (s *Server) explainTraceInvestigation(w http.ResponseWriter, r *http.Reques
 			return m.frameExtra(), m.Service
 		},
 		func(emit func(string, any)) (explainPrepared, error) {
-			inv, err := s.investigateTrace(withInvestigationRunner(r.Context(), runner), traceID, spanID, emit)
+			ictx := withInvestigationRunner(r.Context(), runner)
+			if includeCode {
+				ictx = withInvestigationCodeInputs(ictx) // L okuması ham-kayıt kancasıyla (yalnız kodlu istekte)
+			}
+			inv, err := s.investigateTrace(ictx, traceID, spanID, emit)
 			if errors.Is(err, errTraceInvestigationFallback) {
-				return s.explainTraceClassicPrepared(r)
+				return s.explainTraceClassicPrepared(r, includeCode)
 			}
 			if err != nil {
 				return explainPrepared{}, err
+			}
+			if includeCode {
+				return s.traceInvestigationCodePrepared(r, runner, emit, inv, key), nil
 			}
 			return s.traceInvestigationPrepared(r, system, inv, key), nil
 		})
@@ -168,10 +169,16 @@ func invAnswerWithTail(base explainRun, inv *traceInvestigation) explainRun {
 // trace'e her tıklama LLM'e gitmesin). Sohbetle PAYLAŞILMAZ: sohbetin odaklı
 // yolu anahtarsız (cacheKey ""), açıklama isteği ise Explain çekmecesini açar
 // (varsayılan yol: trace incelemesi, traceInvestigationCacheKey).
-func (s *Server) explainTraceClassicPrepared(r *http.Request) (explainPrepared, error) {
+//
+// v0.10.1034 — includeCode: Tempo yedeğinde "Kodu da incele"nin ESKİ klasik
+// gövdesi aynen (explainTraceClassicCodePrepared); artık ana yol değil.
+func (s *Server) explainTraceClassicPrepared(r *http.Request, includeCode bool) (explainPrepared, error) {
 	in, err := s.buildTraceExplainInput(r.Context(), r.PathValue("id"))
 	if err != nil {
 		return explainPrepared{}, err
+	}
+	if includeCode {
+		return s.explainTraceClassicCodePrepared(r, in), nil
 	}
 	return explainPrepared{
 		extra:    traceExplainExtra(in, devops.CodeContext{}, false),
@@ -179,4 +186,24 @@ func (s *Server) explainTraceClassicPrepared(r *http.Request) (explainPrepared, 
 		service:  in.RootService,
 		cacheKey: explainCacheKey(copilot.SystemPromptTrace(), in.User, ""),
 	}, nil
+}
+
+// explainTraceClassicCodePrepared — v0.10.1034: v0.9.831'den beri "Kodu da
+// incele"nin klasik gövdesi, BAYT BAYT eskisi (yalnız handler'dan taşındı):
+// kod bağlamı klasik toplayıcının stack'inden, şema kanıtı (v0.10.115), anahtar
+// GERÇEK prompt'tan (v0.10.83 — kod bloğu kimliğe girer; deliverExplainPrepared
+// hazırlıktan sonra bu anahtara da bakar), buffered üretim + taşma zinciri.
+// Yalnız Tempo yedeğinde koşar (trace ClickHouse'ta yok).
+func (s *Server) explainTraceClassicCodePrepared(r *http.Request, in traceExplainInput) explainPrepared {
+	cc := s.buildCodeContext(r.Context(), in.StackService, in.Stack)
+	se := s.buildSchemaEvidence(in.ErrorText, in.DBStatements, mapperBlocks(cc))
+	return explainPrepared{
+		extra: traceExplainExtra(in, cc, true),
+		run: explainPromptBuffered(func() (string, error) {
+			return s.copilotExplainEvidence(r,
+				copilot.SystemPromptTrace(), copilot.SystemPromptTraceWithCode(), in.User, cc, se)
+		}),
+		service:  in.RootService,
+		cacheKey: explainCacheKey(copilot.SystemPromptTraceWithCode(), in.User, cc.PromptBlock()+se.Block),
+	}
 }

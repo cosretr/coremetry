@@ -64,6 +64,12 @@ var promptVersionRegistry = map[string]string{
 	"IntentNoInstructionLine":    IntentNoInstructionLine,
 	"systemGeneralChat":          systemGeneralChat,
 	"AnswerInTurkish":            AnswerInTurkish,
+
+	// v0.10.1034 — "Kodu da incele"nin kodlu inceleme istemi YENİ kayıt. Üstteki
+	// systemTraceInvestigation anahtarı ve metni aynen (gövde ayrımı bayt bayt
+	// aynı bileşim); gövde literal taşıdığı için kapı gereği ayrıca kayıtlı.
+	"systemTraceInvestigationCode": systemTraceInvestigationCode,
+	"systemTraceInvestigationBody": systemTraceInvestigationBody,
 }
 
 var (

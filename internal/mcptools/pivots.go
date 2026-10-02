@@ -186,6 +186,11 @@ func getLogsForTraceTool(d Deps) mcp.Tool {
 			if logsCallerCancelled(ctx) {
 				return nil, ctx.Err()
 			}
+			// v0.10.1034 — aynı okumanın HAM kayıtları (kesilmemiş stack) kancaya;
+			// çıktı değişmez (trace_logs_sink.go — "Kodu da incele" kod çekicisi).
+			if sink := traceLogsSinkOf(ctx); sink != nil {
+				sink(page.Logs)
+			}
 			st := searchLogsSourceStatus(backend, page, logstore.Filter{}, m, limit, hasMore).WithWindow(from, to)
 			match := logsMatchKind(true, spanID != "", m)
 			if match == "contextual" {

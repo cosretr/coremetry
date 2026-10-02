@@ -50,6 +50,12 @@ import { shouldAskForCode, type CodeAskState } from './codeAsk';
 // prompt'a ekler. Varsayılan KAPALI. Kod GELMEZSE cevabın başında tek
 // satır dürüst not, geldiyse altında hangi depo/branş/dosya okunduğu.
 // Kodun kendisi tarayıcıya inmez — yalnız künyesi.
+//
+// v0.10.1034 (operatör: "Kod inceleme çalışma mantığı ile direkt Ask CoSRE
+// farklı.") — trace'te üç kod girişi (çip, URL ai=code, "Kodu da inceleyeyim
+// mi? → Evet") sunucuda Ask CoSRE incelemesinin AYNISINI koşar + kod: istek
+// seçili span'i taşır (?span=), adımlar ve kaynak durumları kod kartında da
+// ilk kartla aynı bileşenlerle çizilir.
 export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, onEvidence, onEvidenceTraces, onAnswer }: {
   kind: AIKind;
   id: string;
@@ -146,6 +152,11 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   const [codeError, setCodeError] = useState<string | null>(null);
   const [codeLinks, setCodeLinks] = useState<IdLink[] | undefined>(undefined);
   const [codeExchangeId, setCodeExchangeId] = useState<string | undefined>(undefined);
+  // v0.10.1034 (operatör: "Kod inceleme çalışma mantığı ile direkt Ask CoSRE
+  // farklı.") — trace'te kod geçişi artık AYNI incelemeyi koşar (+ kod): onun
+  // adımları ve kaynak durumları ikinci kartta, ilk kartla aynı bileşenlerle.
+  const [codeSteps, setCodeSteps] = useState<ChatStepDetail[]>([]);
+  const [codeSources, setCodeSources] = useState<ExplainSourceStatus[] | undefined>(undefined);
   const codeAbortRef = useRef<AbortController | null>(null);
   // v0.10.948 (CoSRE Faz B) — "CoSRE'ye sor" (kind=trace) sunucuda GERÇEK
   // okumalar çalıştırıyor (get_trace → loglar · dönem kıyası · pod/metrik ·
@@ -210,6 +221,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
     // v0.10.153 — yeni ilk geçiş: kod geçişi ve karar sıfırlanır.
     codeAbortRef.current?.abort();
     setCodeAsk('idle'); setCodeText(null); setCodeBusy(false); setCodeError(null); setCodeLinks(undefined); setCodeExchangeId(undefined);
+    setCodeSteps([]); setCodeSources(undefined); // v0.10.1034
     onAnswer?.(''); // "Yeniden sor" bayat bağlamı taşımasın
     try {
       if (kind === 'runbook') {
@@ -292,11 +304,19 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
     codeAbortRef.current = ac;
     setCodeAsk('accepted');
     setCodeBusy(true); setCodeError(null); setCodeText(null); setCode(null);
+    setCodeSteps([]); setCodeSources(undefined); // v0.10.1034 — önceki kod geçişinin adımları bu cevaba ait değil
     // Evet = kutuyu da işaretle (operatör: "Chip de kalsın"): "Yeniden sor"
     // artık tek turda kodlu koşar; URL'e de yazılır (deep link).
     setIncludeCode(true);
     writeAiCodeParam(true);
-    const opts = { onDelta: (d: string) => setCodeText(prev => (prev ?? '') + d), signal: ac.signal, fresh: false, src: readAiSrcParam() ?? undefined };
+    const opts = {
+      onDelta: (d: string) => setCodeText(prev => (prev ?? '') + d), signal: ac.signal, fresh: false, src: readAiSrcParam() ?? undefined,
+      // v0.10.1034 — trace kod geçişi incelemenin GERÇEK adımlarını yayınlar (ilk kartın
+      // sözleşmesi); kesilmiş eski geçişin geç adımı yeni listeye karışmaz (ac muhafızı).
+      ...(kind === 'trace' ? {
+        onStep: (ev: ExplainStepEvent) => { if (codeAbortRef.current === ac) setCodeSteps(prev => applyExplainStep(prev, ev)); },
+      } : {}),
+    };
     try {
       const finish = (r: { explanation: string; links?: IdLink[]; exchangeId?: string; code?: AICodeContext; evidenceSpanIds?: string[] }) => {
         // kod geçişi listeyi değiştirirse Kanıt sayısı da onu izler (trace: waterfall kutuları yenilenir)
@@ -307,7 +327,13 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
         setCodeText(r.explanation || '⚠ Model boş yanıt döndürdü.');
       };
       if (kind === 'trace') {
-        finish(await api.copilotExplainTrace(id, true, opts, spanId)); // v0.10.948 — klasik (kodlu) yol span'i yok sayar
+        // v0.10.1034 — kod geçişi de seçili span'i taşır (?span=) ve sunucuda
+        // AYNI incelemeyi koşar: odak servis, adımlar ve kaynak durumları ilk
+        // cevapla aynı aileden; klasik toplayıcı yalnız Tempo yedeği.
+        const r = await api.copilotExplainTrace(id, true, opts, spanId);
+        setCodeSources(r.sources?.length ? r.sources : undefined);
+        if (r.cached) setCodeSteps([]); // isabet: sunucu hiçbir okuma koşturmadı
+        finish(r);
       } else {
         const r = await api.copilotExplainException(id, true, opts);
         if (r.evidenceTraceIds?.length) onEvidenceTraces?.(r.evidenceTraceIds);
@@ -506,6 +532,10 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
                 {code.reason ? ` (${code.reason})` : ''}</span>
             </div>
           )}
+          {/* v0.10.1034 — kodun stack'i seçili span'in DEĞİLSE (trace'in en ciddi stack'i) sunucunun tek satırlık köken notu. */}
+          {code?.stackOrigin && (
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>{code.stackOrigin}</div>
+          )}
           {/* v0.9.641 — operatör-bildirimli: "neden kök neden ipucu veya
               öncelikli inceleme başlıkları bold yazmıyor". Model markdown
               üretiyor (**Kök Neden İpucu:**) ama burası {text}'i HAM
@@ -610,19 +640,27 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           {codeBusy && codeText === null && (
             <div style={{ display: 'grid', placeItems: 'center', minHeight: 200, padding: '24px 16px' }}>
               {/* v0.10.944 — nötr ipucu (gerekçe yukarıdaki yükleniyor bloğunda): istenen söylenir, yapılan değil. */}
-              <LoaderMark size="lg" label="CoSRE kodu okuyor…" hint="Kaynak kodu da istendi; cevap bekleniyor — ilk bölüm gelince burada görünür." />
+              {/* v0.10.1034 — altında incelemenin GERÇEK okumaları (ilk kartla aynı liste; olay yoksa liste yok). */}
+              <div className="cx-live">
+                <LoaderMark size="lg" label="CoSRE kodu okuyor…" hint="Kaynak kodu da istendi; cevap bekleniyor — ilk bölüm gelince burada görünür." />
+                <ExplainSteps steps={codeSteps} live />
+              </div>
             </div>
           )}
           {codeError && (
             <div style={{ padding: 10, borderRadius: 6, fontSize: 12, background: 'rgba(255,82,82,.10)', color: 'var(--err)', border: '1px solid rgba(255,82,82,.25)' }}>{codeError}</div>
           )}
+          {codeError && !codeBusy && codeText === null && <ExplainSteps steps={codeSteps} live={false} />}
           {code && !code.files?.length && (
             <div style={{ fontSize: 11, color: 'var(--warn, var(--text3))', marginBottom: 8, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
               <span>⚠</span>
               <span>Kod okunamadı — <strong>kodsuz</strong> analiz.{code.reason ? ` (${code.reason})` : ''}</span>
             </div>
           )}
-          {codeText && <ExplainBody text={codeText} busy={codeBusy} links={codeLinks} />}
+          {code?.stackOrigin && <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>{code.stackOrigin}</div>}
+          {/* v0.10.1034 — kod cevabı da incelemenin adımlarını (özet satırı) ve kaynak dipnotunu taşır. */}
+          {codeText && <ExplainSteps steps={codeSteps} live={false} />}
+          {codeText && <ExplainBody text={codeText} busy={codeBusy} links={codeLinks} sources={codeSources} />}
           {codeBusy && codeText !== null && <span className="cm-ai-cursor" />}
           {code && !!code.files?.length && (
             <div style={{ marginTop: 10, fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.6 }}>

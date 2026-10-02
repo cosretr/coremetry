@@ -192,6 +192,10 @@ type codeContextPayload struct {
 	// Depo bir TAHMİNE dayanabiliyor (konvansiyon); operatörün tahmini
 	// doğrulamasının tek yolu linke bakmak.
 	BrowseURL string `json:"browseUrl,omitempty"`
+	// StackOrigin — v0.10.1034: kodun dayandığı stack seçili span'in DEĞİLSE
+	// (seçili span'in logunda stack yok → trace geneli en ciddi stack) tek
+	// satırlık köken notu; operatör seçili span'in bastığını varsaymasın.
+	StackOrigin string `json:"stackOrigin,omitempty"`
 }
 
 type codeFileRefDTO struct {
@@ -283,6 +287,16 @@ func (s *Server) copilotExplainCode(r *http.Request, systemNoCode, systemWithCod
 // gider (SQLCODE'lu hatada tablo/kolon tanımı kod olmadan da kanıttır).
 // Maske: şema bloğu ai_calls kopyasında "[şema: T · N kolon]" özetiyle.
 func (s *Server) copilotExplainEvidence(r *http.Request, systemNoCode, systemWithCode, user string, cc devops.CodeContext, se schemaEvidence) (string, error) {
+	out, _, err := s.copilotExplainEvidenceSent(r, systemNoCode, systemWithCode, user, cc, se)
+	return out, err
+}
+
+// copilotExplainEvidenceSent — v0.10.1034: copilotExplainEvidence'ın zinciri
+// AYNEN; ek olarak cevabı üreten denemede modele GERÇEKTEN giden kod bağlamı
+// (tam / yarım / yok — taşmada düşen ya da çözülemeyen kodda boş). "Kodu da
+// incele"nin sayı denetimi yalnız gönderilen kodun satır referanslarını kanıt
+// sayar (trace_investigate_code.go codeRefEvidence).
+func (s *Server) copilotExplainEvidenceSent(r *http.Request, systemNoCode, systemWithCode, user string, cc devops.CodeContext, se schemaEvidence) (string, devops.CodeContext, error) {
 	// v0.10.114 — kod bağlamı span'a gitsin diye isteğe iliştirilir
 	// (ai_span.go); sarmalayıcılar ctx'ten okur.
 	r = withExplainEvidence(r, cc, se)
@@ -294,15 +308,16 @@ func (s *Server) copilotExplainEvidence(r *http.Request, systemNoCode, systemWit
 		// "kaynak çözülemedi" kuralı orada. Kayıt kopyası eskisi gibi
 		// yalnız ıska işaretini taşır — blok kod içermediği için maskeye
 		// gerek yok, ama kaydın sözleşmesi "[kod alınamadı: sınıf]".
-		return s.explainMissingCode(r, systemWithCode, user, cc, se)
+		out, err := s.explainMissingCode(r, systemWithCode, user, cc, se)
+		return out, devops.CodeContext{}, err
 	}
 	out, err := s.explainWithCodeBlock(r, systemWithCode, user, block+se.Block, cc.LogSummary()+se.Summary)
 	if err == nil {
 		// v0.10.544 — kod alıntıları ±1 satır bağlam + vurgu (pencereden).
-		return devops.ExpandQuotes(out, cc), nil
+		return devops.ExpandQuotes(out, cc), cc, nil
 	}
 	if !isContextOverflowErr(err) {
-		return out, err
+		return out, devops.CodeContext{}, err
 	}
 	half := cc.Halved()
 	hb := half.PromptBlock()
@@ -314,14 +329,15 @@ func (s *Server) copilotExplainEvidence(r *http.Request, systemNoCode, systemWit
 		// v0.10.112 — model de öğrenir: pencereler düşürülür, gerekçe
 		// MissingBlock'la gider (kodsuz system prompt: bağlam zaten dar).
 		dropped := devops.CodeContext{Repo: cc.Repo, Reason: "bağlam taşması — kod bloğu prompt'a sığmadı"}
-		return s.explainNoCode(r, systemNoCode, user+dropped.MissingBlock()+se.Block,
+		out, err := s.explainNoCode(r, systemNoCode, user+dropped.MissingBlock()+se.Block,
 			devops.FormatCodeMissNote("", "bağlam taşması — kod bloğu prompt'a sığmadı")+se.Summary)
+		return out, devops.CodeContext{}, err
 	}
 	out, err = s.explainWithCodeBlock(r, systemWithCode, user, hb+se.Block, half.LogSummary()+se.Summary)
-	if err == nil {
-		out = devops.ExpandQuotes(out, half) // v0.10.544
+	if err != nil {
+		return out, devops.CodeContext{}, err
 	}
-	return out, err
+	return devops.ExpandQuotes(out, half), half, nil // v0.10.544
 }
 
 // explainMissingCode (v0.10.112) — kod istendi, çözülemedi: gerçek

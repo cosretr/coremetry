@@ -49,7 +49,6 @@ import (
 	agenttools "github.com/cilcenk/coremetry/internal/ai/agent/tools"
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
-	"github.com/cilcenk/coremetry/internal/devops"
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/mcptools"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
@@ -232,6 +231,34 @@ type traceInvestigation struct {
 	EvidenceSpanIDs []string
 	Links           []guidedAnswerLink
 	User            string
+	// Stack / StackService — v0.10.1034 ("Kodu da incele" = bu inceleme + kod):
+	// kod çekicisinin girdisi, get_logs_for_trace'in HAM kayıtlarından
+	// (mcptools.WithTraceLogsSink; klasik seçim kuralı: traceLogStack). Yalnız
+	// kod istendiğinde dolar (wantCode); kodsuz incelemede kanca kurulmaz.
+	// Anlamları traceExplainInput'takilerle aynı.
+	Stack, StackService string
+	// wantCode — v0.10.1034: istek "Kodu da incele" (withInvestigationCodeInputs).
+	wantCode bool
+	// spans — v0.10.1034: get_trace'in span listesi (zaten ayrıştırılmış; yalnız
+	// referans). Kod varyantı şema kanıtını (hata metni + SQL) buradan kurar.
+	spans []invTraceSpan
+	// codeEvidence — v0.10.1034: kod varyantında sayı denetiminin EK kanıtı:
+	// modele GERÇEKTEN giden kodun satır referansları + şema bloğu
+	// (codeRefEvidence); kodsuz incelemede boş.
+	codeEvidence string
+}
+
+type invCodeInputsKey struct{}
+
+// withInvestigationCodeInputs — v0.10.1034: inceleme "Kodu da incele" için
+// koşuyor; L okuması ham-kayıt kancasıyla (stack + servis) yapılır.
+func withInvestigationCodeInputs(ctx context.Context) context.Context {
+	return context.WithValue(ctx, invCodeInputsKey{}, true)
+}
+
+func investigationWantsCodeInputs(ctx context.Context) bool {
+	v, _ := ctx.Value(invCodeInputsKey{}).(bool)
+	return v
 }
 
 // invFocus — incelemenin kapsamı: odak servis ve onun ortam bağlamı.
@@ -276,6 +303,8 @@ type invSection struct {
 	// direct — v0.10.948: registry aracı olmayan sunucu okuması (Oracle).
 	// Outcome + Statuses + data'yı kendisi kurar; koşucudan GEÇMEZ.
 	direct func(ctx context.Context, sec *invSection)
+	// callCtx — v0.10.1034: koşucuya giden ctx'i süsler (L: ham-kayıt kancası).
+	callCtx func(ctx context.Context) context.Context
 }
 
 // invSourceEntry — answer çerçevesindeki `sources` öğesi: step-result rozet
@@ -336,7 +365,7 @@ func (s *Server) investigateTrace(ctx context.Context, traceID, spanID string, e
 	ctx, cancel := context.WithTimeout(ctx, invTotalBudget)
 	defer cancel()
 
-	inv := &traceInvestigation{TraceID: traceID, SpanID: spanID}
+	inv := &traceInvestigation{TraceID: traceID, SpanID: spanID, wantCode: investigationWantsCodeInputs(ctx)}
 
 	// (1) get_trace — adım olayı sonuçla BİRLİKTE (404 sözleşmesi, dosya başlığı).
 	tsec := newInvSection("T", "Trace", invToolTrace, map[string]any{"trace_id": traceID}, invBudgetTrace, invRunesT)
@@ -353,6 +382,7 @@ func (s *Server) investigateTrace(ctx context.Context, traceID, spanID string, e
 	invEmitStepResult(safeEmit, tsec)
 
 	a := tr.Analysis
+	inv.spans = tr.Spans // v0.10.1034 — kod varyantının şema girdisi (referans; iş yok)
 	inv.RootService = a.Root.Service
 	inv.Focus = invDeriveFocus(tr, spanID)
 	inv.TraceFrom, inv.TraceTo = time.Unix(0, a.StartUnixNs).UTC(), time.Unix(0, a.EndUnixNs).UTC()
@@ -389,7 +419,11 @@ func (s *Server) investigateTrace(ctx context.Context, traceID, spanID string, e
 				if sec.direct != nil {
 					sec.direct(actx, sec) // v0.10.948 — durumu kendisi kurar
 				} else {
-					sec.Outcome = run(actx, sec.Tool, sec.Args, sec.Budget)
+					cctx := actx
+					if sec.callCtx != nil {
+						cctx = sec.callCtx(actx) // v0.10.1034 — L: ham-kayıt kancası
+					}
+					sec.Outcome = run(cctx, sec.Tool, sec.Args, sec.Budget)
 				}
 			}
 			if sec.direct == nil || !sec.Called {
@@ -446,6 +480,14 @@ func (s *Server) invParallelSections(inv *traceInvestigation) []*invSection {
 		logArgs["span_id"] = inv.SpanID
 	}
 	lsec := newInvSection("L", "Loglar", invToolLogs, logArgs, invBudgetLogs, invRunesL)
+	// v0.10.1034 — YALNIZ "Kodu da incele"de: kod çekicisinin stack'i + servisi
+	// bu okumanın HAM kayıtlarından (araç çıktısı stack'i 200 runede keser).
+	// Kodsuz incelemede kanca yok, stack ayrıştırılmaz (varsayılan yol aynen).
+	if inv.wantCode {
+		lsec.callCtx = func(ctx context.Context) context.Context {
+			return mcptools.WithTraceLogsSink(ctx, inv.stackSink())
+		}
+	}
 
 	cmpArgs := map[string]any{
 		"service":   f.Service,
@@ -707,6 +749,11 @@ type invTraceSpan struct {
 	Name               string            `json:"name"`
 	HostName           string            `json:"hostName"`
 	ResourceAttributes map[string]string `json:"resourceAttributes"`
+	// v0.10.1034 — şema kanıtının girdisi (hata span'inin durum mesajı + SQL);
+	// get_trace'in span listesi chstore.SpanRow'u kesmeden taşır.
+	StatusCode    string `json:"statusCode"`
+	StatusMessage string `json:"statusMessage"`
+	DBStatement   string `json:"dbStatement"`
 }
 
 type invLogsOut struct {
@@ -1749,9 +1796,18 @@ func invStatusLine(sts []sourcestate.Status) string {
 // answerTail — modelin metninin ARKASINA sunucunun eklediği kısım: kanıtta
 // bulunamayan sayılar uyarısı (varsa) + "Kaynak durumu" künyesi. Model
 // kaynakları atlasa da künye her cevapta.
+//
+// v0.10.1034 — kod varyantında (wantCode): cevaptaki ÇİTLİ kod blokları
+// iddia sayılmaz (maskFencedCode — alıntılanan kodun rakamları), kanıta yalnız
+// GERÇEKTEN gönderilen kodun satır referansları + şema bloğu eklenir
+// (codeEvidence). Kodsuz yol aynen.
 func (inv *traceInvestigation) answerTail(answer string) string {
+	claims := answer
+	if inv.wantCode {
+		claims = maskFencedCode(answer)
+	}
 	var b strings.Builder
-	if w := numericClaimWarningTR(ungroundedNumbers(answer, inv.User)); w != "" {
+	if w := numericClaimWarningTR(ungroundedNumbers(claims, inv.User+inv.codeEvidence)); w != "" {
 		b.WriteString("\n\n" + w)
 	}
 	b.WriteString(inv.footerTR())
@@ -1881,16 +1937,26 @@ func (inv *traceInvestigation) cacheable(now time.Time) bool {
 		return false
 	}
 	for _, sec := range inv.Sections {
-		for _, st := range sec.Statuses {
-			switch st.State {
-			case sourcestate.OK, sourcestate.Empty, sourcestate.Truncated, sourcestate.NotConfigured:
-			default:
+		if !invStatusesSettled(sec.Statuses) {
+			return false
+		}
+	}
+	return true
+}
+
+// invStatusesSettled — SAF: durumların hepsi kalıcı mı (ok, boş, limitli,
+// yapılandırılmamış; kısmi/gecikmeli bayrağı yok). v0.10.1034 — cacheable'dan
+// çıkarıldı: kod varyantının trace geneli stack okuması da aynı kuralla.
+func invStatusesSettled(sts []sourcestate.Status) bool {
+	for _, st := range sts {
+		switch st.State {
+		case sourcestate.OK, sourcestate.Empty, sourcestate.Truncated, sourcestate.NotConfigured:
+		default:
+			return false
+		}
+		for _, fl := range st.Flags {
+			if fl == sourcestate.Partial || fl == sourcestate.Delayed {
 				return false
-			}
-			for _, fl := range st.Flags {
-				if fl == sourcestate.Partial || fl == sourcestate.Delayed {
-					return false
-				}
 			}
 		}
 	}
@@ -1973,6 +2039,9 @@ const traceInvestigationCacheRev = "inv-v0.10.986"
 // geçici durumdayken (erişilemedi, zaman aşımı, yetki, hata, kısmi, gecikmeli —
 // bayraklar dahil) cevap saklanmaz. Saklanan cevabın kanıtı yeniden okunacak
 // kanıtla ancak bu koşullarda aynıdır; ?refresh=1 her zaman yeniden okur.
+//
+// v0.10.1034 — "Kodu da incele" aynı formülle, kodlu sistem istemiyle
+// (SystemPromptTraceInvestigationWithCode): kodlu/kodsuz cevap ayrı satır.
 func traceInvestigationCacheKey(system, traceID, spanID string) string {
 	return explainCacheKey(system, "trace-investigation\x00"+strings.ToLower(strings.TrimSpace(traceID))+"\x00"+spanID, traceInvestigationCacheRev)
 }
@@ -1999,6 +2068,11 @@ type invCacheMeta struct {
 	Service         string             `json:"service"`
 	// OracleRows — v0.10.948: prompt'a giren Oracle satırı (O bölümü); isabette de korunur.
 	OracleRows int `json:"oracleRows"`
+	// Code — v0.10.1034: "Kodu da incele" varyantının kod künyesi (depo, dosya:
+	// satır, kırpma/çözülememe gerekçesi; kod GÖVDESİ yok — codePayload).
+	// İsabette de aynen döner: dosya linkleri için git sunucusuna gidilmez.
+	// Kodsuz incelemede nil (alan null — klasik sözleşme).
+	Code *codeContextPayload `json:"code,omitempty"`
 }
 
 func (inv *traceInvestigation) cacheMeta() invCacheMeta {
@@ -2014,6 +2088,8 @@ func (inv *traceInvestigation) cacheMeta() invCacheMeta {
 // frameExtra — answer çerçevesi / buffered gövde ekleri. evidenceSpanIds,
 // code, oracleRows klasik yolun anahtarları (FE aynı okuyucu); links +
 // sources yeni. v0.10.948 — oracleRows O bölümünden (Oracle yoksa 0).
+// v0.10.1034 — code: kod varyantında künye (m.Code), kodsuzda nil — eskiden de
+// codePayload(boş, false) = nil'di.
 func (m invCacheMeta) frameExtra() map[string]any {
 	ev := m.EvidenceSpanIDs
 	if ev == nil {
@@ -2029,7 +2105,7 @@ func (m invCacheMeta) frameExtra() map[string]any {
 	}
 	return map[string]any{
 		"evidenceSpanIds": ev,
-		"code":            codePayload(devops.CodeContext{}, false),
+		"code":            m.Code,
 		"oracleRows":      m.OracleRows,
 		"links":           links,
 		"sources":         srcs,
