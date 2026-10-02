@@ -11,16 +11,20 @@ package api
 //
 // ── NEREDE SUNULUR (güvenlik incelemesi, v0.10.1050) ───────────────────────
 //
-//   - YALNIZ panel trace takibinde (trace/span öznesi → serbest döngü). O döngü
-//     yalnız YERLİ araçlarla koşar. Bağımsız sohbetin döngüsünde dış MCP
-//     araçları da var ve onay adımı yok: OTLP ingest kimliksiz, yani ekilmiş
-//     bir log satırı modeli bir dosyayı okuyup kodunu bir dış aracın
-//     argümanına koymaya yönlendirebilirdi — kod üçüncü tarafa çıkardı.
+//   - YALNIZ panel takibinde: trace/span öznesi → serbest döngü (yalnız YERLİ
+//     araçlar); v0.10.1053 — exception öznesi → çekmecenin TEK araçlı döngüsü
+//     (yalnız bu araç; chat_exception_followup.go). Bağımsız sohbetin
+//     döngüsünde dış MCP araçları da var ve onay adımı yok: OTLP ingest
+//     kimliksiz, yani ekilmiş bir log satırı modeli bir dosyayı okuyup kodunu
+//     bir dış aracın argümanına koymaya yönlendirebilirdi — kod üçüncü tarafa
+//     çıkardı.
 //   - YALNIZ oturum kullanıcısına: cmk_ API token'ı da /api/copilot/chat'e
 //     girer (claims UserID "token:<id>"); ek modelden AYNEN alıntı istediği
-//     için "MCP sunucusunda yok" sözleşmesi token'la dolanılırdı.
-//   - YALNIZ DevOps bağlıyken (Deps.SourceCode nil → ChatToolList düşürür) ve
-//     editor+ rolde (MinRole, toolsForRole).
+//     için "MCP sunucusunda yok" sözleşmesi token'la dolanılırdı. Token ve
+//     kimliksiz çağrı ROLDEN BAĞIMSIZ dışarıda (sourceCodeCallerAllowed).
+//   - YALNIZ DevOps bağlıyken (Deps.SourceCode nil → ChatToolList düşürür).
+//     Rol kapısı aracın kendi MinRole'ü (mcptools.SourceCodeMinRole,
+//     toolsForRole) — viewer düzeyi: viewer, editor ve admin görür.
 //   Sunulmadığında katalog ve döngü prompt'u bayt bayt eski (pinli).
 //
 // ── NEYE ERİŞİR ────────────────────────────────────────────────────────────
@@ -30,6 +34,9 @@ package api
 //     herkes bir servis adı "yaratabilir" ve ad konvansiyonu onu projedeki
 //     HERHANGİ bir depoya çevirirdi; "telemetride bir yerde var" sınır değildir,
 //     "operatörün baktığı trace'in parçası" sınırdır. Trace okunamazsa dürüst ıska.
+//     v0.10.1053 — exception öznesinde sınır daha dar: YALNIZ grubun servisi ve
+//     explain'in stack'ini basan servis (örnek trace'teki öteki servisler DEĞİL);
+//     sürüm o stack'i veren olaydan (sourceExceptionScope).
 //   - Depo YALNIZ katalog pini / ad konvansiyonu (buildCodeContext ile aynı
 //     pinReadDecision + ResolveRepo). Sürümü model SEÇEMEZ: öznenin span'lerinden
 //     explain'in yardımcısıyla (anomaly.StackVersion) ya da dal sırası.
@@ -84,10 +91,11 @@ func sourceCodeCallerAllowed(c *auth.Claims) bool {
 
 // sourceCodeToolsFor — SAF: read_source_code bu alışverişte sunulacak mı?
 // Değilse ADIYLA düşer — katalog, spec'ler ve prompt eki ondan önce kurulmaz.
-// Sunulma: panel trace takibi + oturum kullanıcısı (rol ve DevOps kapıları
-// zaten tools'a uygulandı).
-func sourceCodeToolsFor(tools []mcp.Tool, traceFollowUp bool, c *auth.Claims) []mcp.Tool {
-	if traceFollowUp && sourceCodeCallerAllowed(c) {
+// Sunulma: panel takibi (trace/span serbest döngüsü; v0.10.1053 — exception
+// çekmecesinin tek araçlı döngüsü de) + oturum kullanıcısı (rol ve DevOps
+// kapıları zaten tools'a uygulandı).
+func sourceCodeToolsFor(tools []mcp.Tool, panelFollowUp bool, c *auth.Claims) []mcp.Tool {
+	if panelFollowUp && sourceCodeCallerAllowed(c) {
 		return tools
 	}
 	out := make([]mcp.Tool, 0, len(tools))
@@ -101,7 +109,7 @@ func sourceCodeToolsFor(tools []mcp.Tool, traceFollowUp bool, c *auth.Claims) []
 
 // readSourceCode — mcptools.SourceCodeReader. req argüman kapısından geçti
 // (mcptools.validateReadSourceArgs). error yalnız argüman sınıfı (servis
-// trace'te yok); anlatılabilir her arıza Outcome'da.
+// öznenin kapsamında yok); anlatılabilir her arıza Outcome'da.
 func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequest) (mcptools.SourceCodeRead, error) {
 	var out mcptools.SourceCodeRead
 	if s.devops == nil || !s.devops.Configured() {
@@ -111,6 +119,19 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 	svc := req.Service
 	if !mcptools.ValidSourceService(svc) { // biçim kapısı — istekten ÖNCE (savunma; araç da uygular)
 		return out, errors.New("service geçersiz (harf/rakamla başlar; yalnız harf, rakam, . _ -)")
+	}
+	// v0.10.1053 — exception öznesi (chat_exception_followup.go): kapsam ve
+	// sürüm explain girdisinden; trace dalına hiç girilmez.
+	if ex, _ := ctx.Value(sourceExceptionKey{}).(*sourceExceptionScope); ex != nil {
+		version, miss, reason, err := ex.decide(svc)
+		if err != nil {
+			return out, err
+		}
+		if miss != "" {
+			out.Outcome, out.Reason = miss, reason
+			return out, nil
+		}
+		return s.readScopedSource(ctx, req, version, "sohbet öznesi (exception örneği)"), nil
 	}
 	// KAPSAM: servis sohbetin trace öznesinde geçmeli.
 	sub, _ := ctx.Value(sourceSubjectKey{}).(*sourceSubject)
@@ -129,6 +150,16 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 		}
 		return out, fmt.Errorf("service %q bu trace'te bulunamadı — yalnız trace'teki servislerin kodu okunur: %s", svc, strings.Join(names, ", "))
 	}
+	// Sürüm SUNUCUDA: öznenin span'lerinden (model ref seçemez); yoksa dal.
+	return s.readScopedSource(ctx, req, subjectServiceVersion(spans, svc, sub.spanID), "sohbet öznesi (trace)"), nil
+}
+
+// readScopedSource — kapsamdan GEÇMİŞ servisin depo çözümü ve okuması (iki
+// öznenin ortak kuyruğu). version sunucunun öznesinden ("" → dal); basis
+// okunan ref çalışan sürümse "neden bu ref" cevabı.
+func (s *Server) readScopedSource(ctx context.Context, req mcptools.SourceCodeRequest, version, basis string) mcptools.SourceCodeRead {
+	var out mcptools.SourceCodeRead
+	svc := req.Service
 	pin := ""
 	if s.store != nil {
 		// Katalog pini — buildCodeContext ile AYNI karar (fail-closed: pin
@@ -141,7 +172,7 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 		p, abort := pinReadDecision(mdRepo, md != nil, err)
 		if abort != "" {
 			out.Outcome, out.Reason = devops.SourceCatalogError, abort
-			return out, nil
+			return out
 		}
 		pin = p
 	}
@@ -153,18 +184,16 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 			reason = "servis için depo çözülemedi"
 		}
 		out.Outcome, out.Reason = devops.SourceRepoUnresolved, reason
-		return out, nil
+		return out
 	}
-	// Sürüm SUNUCUDA: öznenin span'lerinden (model ref seçemez); yoksa dal.
-	version := subjectServiceVersion(spans, svc, sub.spanID)
 	out.SourceRead = s.devops.ReadSource(ctx, devops.SourceRequest{
 		Repo: res.Repo, Hint: res.Project, Service: svc,
 		File: req.File, Line: req.Line, Context: req.ContextLines, Version: version,
 	})
 	if out.Version != "" {
-		out.VersionBasis = "sohbet öznesi (trace)"
+		out.VersionBasis = basis
 	}
-	return out, nil
+	return out
 }
 
 // traceServiceNames — SAF: span'lerdeki servis adları (tekil, sıralı).

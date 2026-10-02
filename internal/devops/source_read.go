@@ -66,6 +66,10 @@ const (
 	// trace'i okunamadı → trace_unreadable (api/chat_source_code.go).
 	SourceOutOfScope      SourceOutcome = "out_of_scope"
 	SourceTraceUnreadable SourceOutcome = "trace_unreadable"
+	// v0.10.1053 — exception öznesinin takibinde grup okunamadı: kod kapsamı
+	// (grubun servisi + stack'i basan servis) doğrulanamaz, kod okunmaz
+	// (api/chat_exception_followup.go).
+	SourceExceptionUnreadable SourceOutcome = "exception_unreadable"
 )
 
 // sourceDeniedReasonTR — reddin modele ve operatöre giden cümlesi (içerik yok).

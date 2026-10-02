@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/cilcenk/coremetry/internal/ai/assemble"
-	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
@@ -66,7 +65,8 @@ import (
 //
 //	trace / span → buildTraceExplainInput (explain_trace_input.go;
 //	               explain handler'ıyla TEK kurucu)
-//	exception    → anomaly.BuildExceptionExplainInput (v0.9.415)
+//	exception    → anomaly.BuildExceptionExplainInput (v0.9.415;
+//	               drawerExceptionInput, chat_exception_followup.go)
 //	diğerleri    → kanıtsız, v0.9.479 davranışı aynen (operatör:
 //	               problem explain takipleri zaten iyi çalışıyor)
 //
@@ -391,7 +391,12 @@ const drawerEvidenceHeader = "HAM KANIT (bu açıklamanın dayandığı veri —
 //
 // Maliyet: soru başına TEK sınırlı pass, üst-zaman aşımı ile çitlenir —
 // yavaş bir CH/ES sohbeti askıda bırakamaz.
-func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject, loc *time.Location) string {
+//
+// v0.10.1053 — exception öznesinde ikinci dönüş değer o AYNI girdiden kod
+// kapsamıdır (grup servisi + stack servisi + sürüm; chat_exception_followup.go):
+// takibin read_source_code'u ek okuma yapmaz. Grup okunamadıysa loaded=false
+// kapsam (dürüst ıska); öteki özneler nil.
+func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject, loc *time.Location) (string, *sourceExceptionScope) {
 	ectx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	switch subj.Kind {
@@ -401,25 +406,24 @@ func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject, 
 		// Odak span ayrıca yazılır ki model hangi satırın sorulduğunu bilsin.
 		in, err := s.buildTraceExplainInput(ectx, subj.ID)
 		if err != nil {
-			return ""
+			return "", nil
 		}
 		body := clampDrawerEvidence(in.User, in.LogsBlock)
 		if body == "" {
-			return ""
+			return "", nil
 		}
 		if subj.Kind == "span" && subj.SpanID != "" {
 			body = "Odak span: " + subj.SpanID + "\n" + body
 		}
-		return body
+		return body, nil
 	case "exception":
-		g, err := s.store.GetExceptionGroup(ectx, subj.ID)
-		if err != nil || g == nil {
-			return ""
+		g, in, ok := s.drawerExceptionInput(ectx, subj.ID, loc)
+		if !ok {
+			return "", exceptionCodeScopeFrom(nil, in)
 		}
-		in := anomaly.BuildExceptionExplainInput(ectx, s.store, s.logs, g, loc)
-		return clampDrawerEvidence(in.User, in.LogsBlock)
+		return clampDrawerEvidence(in.User, in.LogsBlock), exceptionCodeScopeFrom(g, in)
 	}
-	return ""
+	return "", nil
 }
 
 // drawerEvidenceStep — kanıt çekildiğinde operatöre gösterilen şeffaflık
@@ -514,7 +518,12 @@ func drawerNarrationUser(question, explain string, msgs []copilot.ChatMessage, e
 // v0.9.482: subject (frontend `?ai=` kodeği) doluysa ilgili explain'in
 // kanıt paketi yeniden kurulur ve anlatıma girer. Kanıt YOKSA/çekilemezse
 // akış v0.9.479'daki metin-tabanlı anlatımdır — soft-fail.
-func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, explain, subject, ctxService string, loc *time.Location) (handled, ok bool) {
+//
+// v0.10.1053 — exception öznesi yüklendiyse ve read_source_code bu çağırana
+// sunulabiliyorsa (env + sohbetin kapıları) AYNI prompt ve blokla tek araçlı
+// döngü koşar (chat_exception_followup.go); sunulamıyorsa aşağıdaki tek çağrı
+// bayt bayt eski. Döngü cevap üretemezse bir düz çiple aynı tek çağrıya düşer.
+func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, explain, subject, ctxService string, loc *time.Location, env drawerLoopEnv) (handled, ok bool) {
 	ex := clampDrawerExplain(explain)
 	question := strings.TrimSpace(lastUserText(msgs))
 	if ex == "" || question == "" {
@@ -526,8 +535,9 @@ func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), 
 	// Kanıt: operatör SORU SORDUĞU için çekilir (v0.9.166 disiplini),
 	// soru başına tek pass. Çekilemezse çip de düşmez, akış bozulmaz.
 	evidence, evidenceKind := "", ""
+	var exScope *sourceExceptionScope
 	if subj, sok := parseDrawerSubject(subject); sok {
-		if evidence = s.drawerSubjectEvidence(ctx, subj, loc); evidence != "" {
+		if evidence, exScope = s.drawerSubjectEvidence(ctx, subj, loc); evidence != "" {
 			evidenceKind = subj.Kind
 			if step := drawerEvidenceStep(subj.Kind); step != "" {
 				// v0.9.1229 — çipin kanıtı, anlatıma giren HAM kanıt paketinin
@@ -536,6 +546,17 @@ func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), 
 				nEv := emitGuidedStep(emit, step, "")
 				emitGuidedStepResult(emit, nEv, step, evidence, nil)
 			}
+		}
+	}
+	if exScope != nil && exScope.loaded {
+		if tools := s.exceptionCodeToolsFor(env); len(tools) > 0 {
+			lok, fallback := s.exceptionCodeLoop(ctx, emit, env, tools, msgs, question, ex, evidence, evidenceKind, exScope, ctxService)
+			if !fallback {
+				return true, lok
+			}
+			// Döngü cevap üretemedi (sağlayıcı / taşma): bugünkü tek çağrı aynen;
+			// kanıtsız tek düz çip (çip kimliği katmanından).
+			emitGuidedContextStep(emit, exceptionCodeFallbackLabel)
 		}
 	}
 

@@ -1626,6 +1626,8 @@ func ChatRoundCapAddendum() string { return systemChatRoundCapAddendum }
 // read_source_code araç kataloğunda SUNULUYORSA (DevOps bağlı) eklenir; sunulmuyorsa
 // döngü prompt'u bayt bayt eskisi (api/chat_source_code.go chatSourceCodePromptTR).
 // Yeri sohbet çekirdeğinin ÖNÜ: DataNotInstruction sistem mesajının sonunda kalır.
+// v0.10.1053 — exception takibinin tek araçlı döngüsü aynı eki aynı kuralla
+// çekmece çekirdeğinin önüne koyar (api/chat_exception_followup.go); çatal yok.
 // Kısa tutuldu (küçük model, "schema soup" v0.10.172/194): ne zaman çağrılır,
 // nasıl alıntılanır, okunamayınca ne denir, dosya içeriği veri.
 const sourceCodeChatAddendum = `KAYNAK KOD: read_source_code servisin deposundan tek bir kaynak dosyanın

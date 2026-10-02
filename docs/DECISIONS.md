@@ -987,6 +987,69 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Exception takip sohbeti de kaynak kodu okuyabilir (v0.10.1053)
+
+**Operatör:** "Exception panelindeki takip sohbeti de kod okuyabilsin." **Önce:** `read_source_code` (v0.10.1050) yalnız
+trace/span öznesinin panel takibinde (serbest döngü) sunuluyordu. Exception'ın "Explain"inden açılan panelde takip
+`drawerTraceFollowUp`'a girmez, çekmece anlatımına düşer (`copilotChatDrawer`): `SystemPromptDrawerChat` + açıklama
+(≤3000 rune) + HAM KANIT (`BuildExceptionExplainInput`: grup meta, trend, temsilî stack, örnek trace, loglar, deploy, pod;
+≤6000 rune) + son 6 tur, araçsız TEK akan çağrı. Kod okuma yolu yoktu.
+
+**Karar — tek araçlı döngü (`api/chat_exception_followup.go`):** araç bu çağırana sunulabiliyorsa — sohbetin kendi
+kapıları: DevOps bağlı (`ChatToolList`), aracın kendi MinRole'ü (`toolsForRole`; `SourceCodeMinRole`, viewer düzeyi),
+oturum kullanıcısı (`sourceCodeToolsFor`; token ve kimliksiz çağrı rolden bağımsız dışarıda) — exception takibi AYNI
+çekmece prompt'u ve kullanıcı bloğuyla koşar; önüne yalnız `SourceCodeChatAddendum` gelir (çatal yok, DataNotInstruction
+sonda) ve modele YALNIZ `read_source_code` sunulur. Döngü serbest döngünün parçalarıyla kurulur: 5 tur / 6 çağrı,
+Executor (tekrar muhafızı, 20 sn, audit `mcp.tool.call`, `ai.tool` span'ı), step/step-result, aynı maskeler (önizleme
+yalnız referans, ai_calls `[kod: …]`), tavan turu; taşmada ilk blok (soru) korunur. Bütçe çipi tek araca göre: "kod okuma:
+en çok 6 dosya penceresi". Dış MCP araçları ve öteki yerli araçlar YOK (sunulmayan bir ad — ör. `get_trace` — bilinmeyen
+araç olarak reddedilir, yürütülmez). **Neden tam döngü değil:** küçük modelde otuzu aşkın şema "schema soup"
+(v0.10.172/194); exception'ın kanıtı zaten prompt'ta, eksik olan yalnız kod. Cevap sözleşmesi çekmeceninki: künye aynen (+
+veri döndürdüyse "read_source_code (kaynak kod)"); ai_calls yüzeyi `chat-drawer`, döngü başına tek satır.
+
+**Sayı denetimi YOK:** çekmece anlatımında hiç yoktu. Trace takibindeki gerekçe ("ilk cevap zaten denetlendi") exception
+açıklamasına uymaz; açıklamadaki bir sayıyı ya da ekin istediği gibi aynen aktarılan kod sabitini / satır numarasını
+tekrarlayan takip, yalnız DevOps'lu kurulumlarda yanlış "kanıtta bulunamayan sayı" kuyruğu alırdı
+(`TestExceptionFollowUpNoNumericTail`).
+
+**Düşüş (döngü cevap üretemezse):** cevap çıkmadı, istek bağlamı canlı ve arıza sağlayıcıdan — araç tanımını reddeden uç
+(araç desteksiz yerel modeller 400 döner), küçültülemeyen bağlam taşması (tek araç turunda küçültülecek çift yok), tavan
+turu hatası. Hata olayı YAYINLANMAZ; operatör tek düz çip görür ("kod okuma kullanılamadı — araçsız yanıt") ve bugünkü tek
+akan anlatım aynen koşar (aynı sistem/kullanıcı metni). Döngünün ai_calls satırı `status=error` kalır (/ai arızayı görür),
+anlatım kendi satırını yazar. İstemci iptali ve alışveriş tavanı düşmez: hata yayınlanır, ikinci çağrı yakılmaz
+(`TestExceptionFollowUpFallsBackToNarration`).
+
+**Kapsam (trace kuralının yerine):** servis YALNIZ exception'ın kendi kod incelemesinin okuyacağı servisler — grubun servisi
+ve explain'in stack'ini basan servis (`ExceptionExplainInput.CodeService`: log-fallback'te logu atan servis; kural artık
+tek yerde, "Kodu da incele" de oradan okur). Örnek trace'teki öteki servisler kapsam DIŞI. Kapsam dışı servis argüman
+hatası (izinli servisler anılır), git'e istek yok. **Döngüye yalnız grup yüklendiyse girilir** (`exScope.loaded`); grup
+okunamadıysa takip bugünkü anlatımdır. Okuyucu yine de `exception_unreadable` "exception okunamadı" ıskasıyla savunur, git'e
+istek yok. **Sürüm:** stack'i veren olayın çalışan sürümü (`StackVersion`, v0.10.1044) ve YALNIZ o servis için; stack'i
+basmayan grup servisi dal ucundan. Model seçemez.
+
+**Sunulamıyorsa bayt bayt eski:** DevOps yok / yapılandırılmamış, API token'ı, kimliksiz çağıran, aracın rol kapısı altı →
+aynı tek AKAN çağrı, aynı sistem ve kullanıcı metni, aynı olay dizisi (golden: `TestExceptionFollowUpFallbackByteIdentical`).
+Trace/span takibi, bağımsız sohbet (araç yine yok) ve MCP sunucusu (araç yine yok) değişmedi. **Araç açıklaması
+özne-nötr:** kısa açıklama "konuşmanın konusundaki servis (trace'teki servisler ya da exception'ın servisi)" der — model
+kapsam dışı bir servise çağrı harcamasın; bu, trace takibinin araç tanımı baytlarını da değiştirir (kısa açıklama 271 → 321
+B, araç başına tur bedeli 901 → 1003 B; tavanlar 330 / 1050 B).
+
+**DevOps'lu kurulumda KOD SORMAYAN exception takibi için görünür farklar:** cevap akmaz, tek blok hâlinde gelir (döngü
+tamponlu, trace takibiyle aynı); model gerekmediği hâlde bir dosya okuyabilir (bir tur + git isteği) — ölçülecek; her tur
+ek ~1,4 KB (şema + kısa açıklama + prompt eki) ve çekmece bloğu (≤~9 K rune) her turda yeniden gider. Araç desteksiz
+modelde fark düz çip + araçsız cevaptır.
+
+**Maliyet:** ek CH/ES okuması YOK — kapsam ve sürüm çekmecenin her takipte zaten kurduğu explain girdisinden
+(`GetExceptionGroup` + `BuildExceptionExplainInput`, alışveriş başına bir kez; testte sayılır); git isteği yalnız model
+aracı çağırınca (v0.10.1050 bütçesi). Yüzey→profil eşlemesi `chat-drawer` profilini kullanır.
+
+**Geçersiz kılınanlar:** v0.10.1050'nin "Exception öznesinin panel takibi bugün çekmece anlatımına gider (araçsız) — araç
+orada yok" kalıntısı ve v0.10.1052 (viewer rolü) kaydındaki "yalnız panel trace takibi" ifadesi: araç artık exception
+takibinde de sunulur. Rol kapısı aracın kendi MinRole'ü olduğundan viewer'lar exception takibinde de kod okutabilir.
+
+**Kalıntılar:** log-fallback servisi telemetriden gelir (trace kapsamıyla ve "Kodu da incele" ile aynı güven düzeyi).
+Örnekler her takipte yeniden okunduğu için kapsam, açıklamanın okuduğu örnekten kayabilir.
+
 ## 2026-10-02 — Sohbet kod okuma aracı viewer'lara da açık (v0.10.1052)
 
 **Operatör:** "Kod okuma aracı viewer'lara da açılsın (bugün editor ve admin)." **Değişen YALNIZ rol:**

@@ -335,7 +335,10 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	}
 	traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)
 	if !isTraceFollowUp {
-		if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
+		// v0.10.1053 — exception takibinin tek araçlı kod döngüsü bu alışverişin
+		// audit'ini, span'ını, tavanını kullanır (chat_exception_followup.go).
+		drawerEnv := drawerLoopEnv{r: r, span: cspan, exchangeMax: exchangeMax, started: chatT0}
+		if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), drawerEnv); handled {
 			cspan.tier("drawer", dok)
 			emit("done", map[string]bool{"ok": dok})
 			return

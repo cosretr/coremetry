@@ -228,6 +228,18 @@ type ExceptionExplainInput struct {
 	Pods PodConcentration
 }
 
+// CodeService — "Kodu da incele"nin depoyu çözdüğü servis (v0.9.1225 kuralı):
+// stack log-fallback'ten geldiyse logu atan servis (StackService), değilse
+// grubun servisi. StackVersion YALNIZ bu servisin sürümüdür. v0.10.1053 —
+// explain (api/copilot_exception.go) ile exception takibinin kod kapsamı
+// (api/chat_exception_followup.go) kuralı buradan okur; ikinci kopya yok.
+func (in ExceptionExplainInput) CodeService(groupService string) string {
+	if in.StackService != "" {
+		return in.StackService
+	}
+	return groupService
+}
+
 // ExceptionTrend — occurrence serisinin sıkıştırılmış hâli (v0.9.1129).
 // Eskiden yalnız prompt satırı olarak vardı; kart aynı sayıları
 // göstereceği için sayılar tek yerde hesaplanıp iki yere veriliyor.

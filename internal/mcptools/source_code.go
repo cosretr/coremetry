@@ -13,15 +13,16 @@ package mcptools
 // başlıkları):
 //   - SOHBET-YALNIZ (chatOnlyTools): dış MCP sunucusuna kaydedilmez.
 //   - KOŞULLU: Deps.SourceCode nil ise (DevOps bağlantısı yok) ChatToolList
-//     aracı hiç sunmaz. api ayrıca YALNIZ panel trace takibinde ve yalnız
+//     aracı hiç sunmaz. api ayrıca YALNIZ panel takibinde (trace/span; v0.10.1053 exception) ve yalnız
 //     oturum kullanıcısına (API token'ı değil) sunar.
 //   - Salt-okunur, viewer tabanı (SourceCodeMinRole ""; v0.10.1052 — v0.10.1050'de
 //     editor'dü, operatör viewer'a açtı). Token ve kimliksiz çağıran dışlaması
 //     ROLDEN BAĞIMSIZ kalır (api sourceCodeCallerAllowed).
 //   - Argümanlar telemetri metniyle YÖNLENDİRİLEBİLİR: servis yalnız sohbetin
-//     trace'indekilerden, depo yalnız servisten, dosya yalnız ağaç
+//     trace'indekilerden (exception takibinde grubun servisi + stack'i basan
+//     servis), depo yalnız servisten, dosya yalnız ağaç
 //     eşleşmesinden, yalnız kaynak dosya, sınırlı çıktı; ref'i model SEÇEMEZ
-//     (sürüm sunucuda öznenin trace'inden türer).
+//     (sürüm sunucuda öznenin trace'inden ya da exception örneğinden türer).
 //   - Sonuç `source` (sourcestate) taşır; anlatılabilir her arıza başarılı
 //     sonuçtur (outcome + hint), Go hatası yalnız argüman hatasıdır.
 //   - Kod VERİDİR, talimat değil (data_note); tarayıcıya giden önizleme,
@@ -137,20 +138,20 @@ type sourceCodeResult struct {
 func readSourceCodeTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             SourceCodeToolName,
-		ShortDescription: "İncelenen trace'teki bir servisin deposundan TEK kaynak dosyanın numaralı satırlarını oku (çalışan sürüm, yoksa dal). Kod sorulunca ya da cevap alıntılanmamış koda dayanınca çağır; dosya/satırı stack'ten al. Çok aday dönerse daha belirgin file ver.",
+		ShortDescription: "Konuşmanın konusundaki servisin (trace'teki servisler ya da exception'ın servisi) deposundan TEK kaynak dosyanın numaralı satırlarını oku (çalışan sürüm, yoksa dal). Kod sorulunca ya da cevap alıntılanmamış koda dayanınca çağır; dosya/satırı stack'ten al. Çok aday dönerse daha belirgin file ver.",
 		MinRole:          SourceCodeMinRole,
-		Description: "Read a numbered window of ONE source file from the repository of a service that appears in the trace under discussion (DevOps), at the running version's commit when the trace reveals it, else the configured branch order. " +
+		Description: "Read a numbered window of ONE source file from the repository of a service in the subject under discussion — a service of the trace, or the exception's group / stack-printing service — (DevOps), at the running version's commit when the subject reveals it, else the configured branch order. " +
 			"Use when the operator asks about code or the answer needs code that is not already quoted; take service, file and line from the evidence (stack frames, the previous explanation). " +
-			"The repository comes only from the service (catalog pin / naming convention) and the service must be part of the trace: you cannot name a repository, project, URL, ref or version. " +
+			"The repository comes only from the service (catalog pin / naming convention) and the service must be in the subject's scope (the trace's services; for an exception its group and stack-printing service): you cannot name a repository, project, URL, ref or version. " +
 			"The file is matched by name against the repository tree; several matches return candidate paths and NO content — call again with a more specific file (directory or package suffix). " +
 			"Only source files (Java, Kotlin, Scala, Groovy, C#, Go, Python, JS/TS, Ruby, PHP, mapper SQL, MyBatis *Mapper.xml); configuration and credential files are refused. " +
-			"Window: line ± context_lines (default 30, max 60), bounded to ~5800 characters. In-app trace follow-up only, signed-in users (not API tokens) — not exposed on the MCP server.",
+			"Window: line ± context_lines (default 30, max 60), bounded to ~5800 characters. In-app panel follow-ups only (trace/span and exception), signed-in users (not API tokens) — not exposed on the MCP server.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"service": map[string]any{
 					"type": "string", "maxLength": sourceServiceMaxBytes,
-					"description": "Exact name of a service in the trace; the repository comes from it.",
+					"description": "Exact name of a service in the subject (trace, or the exception's group / stack service); the repository comes from it.",
 				},
 				"file": map[string]any{
 					"type": "string", "maxLength": devops.SourceQueryMaxBytes,

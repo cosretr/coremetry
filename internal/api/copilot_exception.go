@@ -43,10 +43,9 @@ func (s *Server) copilotExplainException(w http.ResponseWriter, r *http.Request)
 	if opts.IncludeCode {
 		// v0.9.1225 — stack log-fallback'ten geldiyse depo çözümü logu
 		// atan servise gider (svc- önek deseni servis adından türetilir).
-		codeSvc := g.Service
-		if in.StackService != "" {
-			codeSvc = in.StackService
-		}
+		// v0.10.1053 — kural tek yerde (anomaly CodeService); exception
+		// takibinin kod kapsamı da oradan okur.
+		codeSvc := in.CodeService(g.Service)
 		// v0.10.1044 — örnek trace'ten çalışan sürüm (in.StackVersion; aynı
 		// servis, ek okuma yok); boşsa dal ucu.
 		cc = s.buildCodeContext(r.Context(), codeSvc, in.Stack, in.StackVersion)

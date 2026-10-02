@@ -24,6 +24,8 @@ package api
 // AKTİF BAĞLAM (trace, span, servis, ortam, cluster/namespace, pencere) +
 // copilot.TraceFollowUpAddendum() + önceki açıklama VERİ bloğu olarak.
 // Diğer özneler (exception, problem, …) bayt-bayt eski yolda kalır.
+// v0.10.1053 — exception öznesi çekmece yolunda kalır; read_source_code
+// sunulabiliyorsa orada TEK araçlı döngüye geçer (chat_exception_followup.go).
 //
 // Bağlam SUNUCUDA kurulur, modelden çıkarılmaz (chat_screen_context.go
 // dersi): özne kimliği `subject`ten (çekmecenin kendi öznesi), geri kalanı

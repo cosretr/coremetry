@@ -178,12 +178,14 @@ func TestReadSourceCodeNotExposedOnMCPServer(t *testing.T) {
 }
 
 // ŞEMA ÇORBASI ölçümü (v0.10.172/194): sohbetin her tur ödediği ek bayt.
+// v0.10.1053 — özne-nötr metin (trace ya da exception takibi): 901 → 1003 B,
+// tavan 950 → 1050 (model kapsam dışı servise çağrı harcamasın diye).
 func TestReadSourceCodeSchemaSize(t *testing.T) {
 	tool := scTool(t, Deps{})
 	schema, _ := json.Marshal(tool.InputSchema)
 	short := len(tool.ShortDescription)
 	t.Logf("read_source_code: kompakt açıklama %d B + şema %d B = %d B / tur (yalnız DevOps bağlıyken)", short, len(schema), short+len(schema))
-	if short+len(schema) > 950 {
+	if short+len(schema) > 1050 {
 		t.Fatalf("araç tur başına %d B — sıkı tut (küçük model)", short+len(schema))
 	}
 }

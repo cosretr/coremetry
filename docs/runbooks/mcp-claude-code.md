@@ -47,13 +47,14 @@ GET /api/exception-groups/{fp}/samples viewer'a açık; v0.9.1244'te iki
 takım/sahiplik tool'u — list_teams / get_team_services, REST eşleri
 GET /api/services-metadata ve GET /api/services?ownerTeam=… viewer'a
 açık). Kayıt defteri v0.10.1050'te 62 oldu ama dış MCP yüzeyi
-DEĞİŞMEDİ: eklenen `read_source_code` (incelenen trace'teki servisin
-deposundan kaynak kod okuyucusu) yalnız uygulama içi panel trace
-takibinde, oturum kullanıcısına (cmk_ token'ına DEĞİL — token'ın rolü
-ne olursa olsun) ve DevOps bağlıyken sunulur; bu sunucuya kayıtlı
-değildir (`chatOnlyTools`, set/get/clear_context gibi). v0.10.1050'de
-tek MinRole istisnasıydı (editor); v0.10.1052'te viewer'lara da açıldı
-— kayıt defterindeki tool'ların tamamı viewer tabanında.
+DEĞİŞMEDİ: eklenen `read_source_code` (panelde incelenen trace'in ya da
+exception'ın servisinin deposundan kaynak kod okuyucusu) yalnız uygulama
+içi panel takibinde (trace/span; v0.10.1053'ten beri exception da),
+oturum kullanıcısına (cmk_ token'ına DEĞİL — token'ın rolü ne olursa
+olsun) ve DevOps bağlıyken sunulur; bu sunucuya kayıtlı değildir
+(`chatOnlyTools`, set/get/clear_context gibi). v0.10.1050'de tek MinRole
+istisnasıydı (editor); v0.10.1052'te viewer'lara da açıldı — kayıt
+defterindeki tool'ların tamamı viewer tabanında.
 
 ### "Benim servislerim" MCP'de YOK (bilinçli)
 

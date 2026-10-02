@@ -59,7 +59,9 @@ const shortCatalogMaxBytes = 9100
 // toplamının AYRI tavanı. Koşulsuz katalog 9.1 KB'ta kalır (her kurulumun her
 // turu); koşullu araç yalnız bağımlılığı yapılandırılmış kurulumda ödenir ve
 // bedeli burada açıkça sayılır: read_source_code 271 B → tavan 300 B.
-const shortCatalogConditionalMaxBytes = 300
+// v0.10.1053 — özne-nötr metin (trace ya da exception takibi; model kapsam
+// dışı bir servise çağrı harcamasın) 321 B → tavan 330 B.
+const shortCatalogConditionalMaxBytes = 330
 
 // TAMLIK — her tool'un kompakt metni olmalı. Yeni bir tool kompakt
 // açıklamasız gemiye giremez (mcp.Tool.ChatDescription() tam metne

@@ -224,11 +224,17 @@ on `Deps.SourceCode`, i.e. a configured DevOps connection; MinRole "" =
 viewer level since v0.10.1052 — it was editor in v0.10.1050, so no tool is an
 exception to the viewer-level stance any more).
 The api narrows it further per request (`sourceCodeToolsFor`,
-api/chat_source_code.go): offered ONLY in the panel trace/span follow-up loop
-(native tools only — never next to external MCP tools) and never to `cmk_`
-token callers or an empty identity, whatever their role; the service must be
-in the subject trace. Its result is code:
-the chat preview / ai_calls sample / follow-up number-check evidence go
+api/chat_source_code.go): offered ONLY in panel follow-ups — the trace/span
+free loop (native tools only) and, since v0.10.1053, the exception drawer's
+single-tool loop (api/chat_exception_followup.go: drawer prompt + only this
+tool, no number check; falls back to the tool-less drawer narration when the
+provider rejects tools or the context overflows) — never next to external MCP
+tools, never in the standalone chat, never to `cmk_` token callers or an
+empty identity, whatever their role. Scope: trace subject → a service of the
+subject trace; exception subject → only the group service and the
+stack-printing service (`ExceptionExplainInput.CodeService`), version
+`StackVersion` only for that service. Its result is code:
+the chat preview / ai_calls sample / trace follow-up number-check evidence go
 through the whitelisted `SourceCodeReference` / `SourceCodeLogSummary` /
 `SourceCodeRefLine` views, never the raw result — a new tool returning
 sensitive bodies follows the same pattern.
