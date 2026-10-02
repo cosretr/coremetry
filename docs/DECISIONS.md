@@ -987,6 +987,54 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — "Coremetry · disk dolacak" alarmı varsayılan kapalı (v0.10.1031)
+
+**Operatör (prod, ekran görüntüsüyle):** "Disk dolacak niye geliyor, gerek yok." Problems sekmesinde disk/düğüm
+başına birer "Coremetry · disk dolacak" satırı (kaynak alarm kuralı, RESOURCE, servis yok; ör.
+`self.disk_eta_days = 6.83 / 7.00 · warning`).
+
+**Kural ne yapıyordu:** `self-disk-eta` (`internal/evaluator/selfhealth.go`, v0.9.1279) liderin belleğinde
+(host, disk) başına son ≤ 6 saatin (360 × 1 dk) kullanılan bayt serisini tutar, `forecast.Fit` ile düz OLS doğrusu
+uydurur (≥ 4 nokta, ≥ 30 dk, R² ≥ 0.6) ve "kaç gün sonra dolar" projeksiyonu `diskEtaDays`'in (varsayılan 7)
+altına inince disk başına problem açar (< 2 gün critical).
+
+**Neden yanıltıyor:** projeksiyon retention TTL'ini bilmiyor — girdisi yalnız seri + kapasite; son altı saatin
+eğimini ileri uzatıyor. Tablolar gün bölümlü ve TTL süresi dolan parçaları topluca düşürüyor; disk doluluğu bu
+yüzden testere dişi: gün içinde ingest'le düzgün tırmanır (yüksek R²), eski bölüm düşünce iner. Altı saatlik
+pencere çoğu zaman yalnız tırmanışı görür ve "6.8 gün sonra dolacak" der; dengede retention aynı hızda siler.
+Düz/inen ya da gürültülü seride ETA üretilmez, ama tırmanış yeniden başlayınca satır yeniden açılır — TTL'li
+depoda yapısal yanlış pozitif.
+
+**Karar:** `SelfHealthConfig.DiskEta *bool` (`diskEta`), **nil = KAPALI** — bilinçli varsayılan değişikliği,
+emsal `service_silent` (v0.10.543, "olmasınlar"). Sahadaki kayıtlı bloblar alanı taşımaz → kapalı okunur;
+`patchSelfHealth` alana dokunmaz. Kapalıyken `selfDiskETA` diski yine okur, kalıcı seriyi
+(`coremetry.self.disk_used_bytes`, v0.10.911) yazar, bellek serisini tazeler; yalnız problem üretmez ve ok=true
+döner (kural kapsanmış, hiçbir şey istemiyor). Kapı saf `diskETAProblems`'ın ilk satırı — ısınma taşıması
+(`diskCarryOver`) da arkasında. **Açık satırlar:** bir sonraki evaluator tikinde (≤ 1 dk) `resolved` olur
+(açıklamaya ek yok; self-health reconcile çözümde bildirim göndermez). Satırların bağlı olduğu incident'ta başka
+açık problem kalmadıysa incident kaskadı onu kapatır ve olağan incident "resolved" bildirimi gider (incident
+başına bir). Acknowledged satırları reconcile kapatmaz; tazelenmedikleri için bayat süpürme ~3 tikte "source
+silent" ekiyle kapatır. **`/admin/stats` rozeti:** açık problem kalmayınca v0.10.911 yolu — 7 günlük saatlik
+kalıcı tarihçeden tahmin (problem bağlantısı yok); pencere günlük düşüşleri de içerdiği için net eğilimi görür.
+
+**Yeniden açmak:** `PUT /api/settings/self-health` (admin). Uç blobu BİRLEŞTİRMEZ, gönderileni aynen kaydeder —
+yalnız `{"diskEta":true}` özelleştirilmiş eşikleri varsayılana döndürür. Doğrusu: `GET` cevabına
+`"diskEta":true` ekleyip tamamını PUT etmek; varsayılan kurulumda
+`{"enabled":true,"ingestStallMin":10,"spoolMaxFiles":100000,"spoolMaxBytes":10737418240,"diskEtaDays":7,"channelConsecFails":3,"volumeSpikeFactor":4,"volumeSpikeMinSpans":100000,"diskEta":true}`.
+Bir sonraki tikte devrede; bellek serisi kapalıyken de beslendiği için ısınma beklemez (lider değişimi hariç).
+Denetim kaydı `settings.self_health.update` artık `diskEta`'yı da yazar (api.go satır sayısı aynı). PUT tam
+değiştirme olduğu için `diskEta`'yı içermeyen SONRAKİ her PUT (ör. 1031 öncesi blobu gönderen eski bir betik)
+kuralı sessizce yeniden KAPATIR; GET-değiştir-PUT güvenlidir, çünkü alan bir kez yazıldıktan sonra GET
+`"diskEta":true` döndürür.
+
+**Değişmeyenler:** diğer dört self-* kuralı, eşikler (`diskEtaDays` — kural açılınca geçerli), runbook haritası,
+kuralın kodu, `/admin/stats`, ön yüz (self-health ayar sekmesi hâlâ yok). **Sonuç (bilinçli kabul):** kural
+KAPALIYKEN Coremetry'nin kendi ClickHouse diski gerçekten dolarken hiçbir şey önceden alarm vermez —
+`db_capacity` yalnız dış veritabanlarını kapsar; operatörün göreceği ilk problem `self-ingest-stall`, yani
+kesintinin kendisi olur. Geriye kalan tek erken sinyal `/admin/stats` disk tahmin rozetidir; bakılması gerekir,
+bildirim göndermez. Pin: `chstore/selfhealth_disk_eta_switch_test.go`,
+`evaluator/selfhealth_disk_eta_switch_test.go` (saf tablo + "anahtar seri yazımından SONRA" kaynak pini).
+
 ## 2026-10-02 — "Yeni log şablonu" anomalisi yalnız gerçekten yeni şekilde açılır (v0.10.1030)
 
 **Operatör (prod, ekran görüntüsüyle):** "Çok fazla problem geliyor." Problems sekmesi (v0.10.1014'ten beri

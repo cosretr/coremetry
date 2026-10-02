@@ -24,6 +24,8 @@
 //     temiz (v0.9.984 fail-open dersi) → o tik atlanır, hüküm verilmez.
 //   - disk-eta    : büyümüyorsa/küçülüyorsa ETA YOKTUR; zayıf uyum
 //     (R²) tahmin üretmez; seri boot'ta boştur, ilk yarım saat sessiz.
+//     v0.10.1031'den beri varsayılan KAPALI (operatör: "gerek yok";
+//     SelfHealthConfig.DiskEta) — ölçüm ve seriler sürer, problem açmaz.
 //   - channel     : kanal HÂLÂ YAPILANDIRILMIŞ ve AÇIK olmalı — silinmiş
 //     bir test kanalının kuyruk hatası sonsuza dek alarm çalamaz.
 //
@@ -456,6 +458,10 @@ func spoolReason(q *chstore.DistributionQueue, dim selfSpoolDim, cfg chstore.Sel
 // StartedAt + yeni bildirimle yeniden açılıyordu — her deploy'da bir sahte
 // çözülme ve bir mükerrer sayfalama. Taşıma yalnız ISINMADA: seri yeterli
 // olup uydurma "düz/eriyor/gürültülü" diyorsa satır gerçekten kapanır.
+//
+// v0.10.1031: kural varsayılan KAPALI (cfg.DiskEtaOn, SelfHealthConfig.
+// DiskEta). Ölçüm + kalıcı seri + bellek serisi her tikte sürer; yalnız
+// problem üretimi anahtara bağlı (diskETAProblems).
 func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfig, snap *chstore.OpenProblems) ([]selfProblem, bool) {
 	disks, err := e.store.CollectDisks(ctx)
 	if err != nil {
@@ -502,6 +508,30 @@ func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfi
 	}
 	e.diskMu.Unlock()
 
+	// v0.10.1031 (operatör 2026-10-02: "Disk dolacak niye geliyor, gerek
+	// yok.") — "problem açılsın mı" kararı ÖLÇÜMDEN SONRA, saf çekirdekte
+	// (diskETAProblems) verilir. Sıra bilinçli: kural kapalıyken de disk
+	// okunur, kalıcı seri yazılır (/admin/stats rozeti beslenmeye devam
+	// eder) ve bellek serisi tazelenir (kural yeniden açılınca boş seriden
+	// başlamaz). Kapalıyken boş liste + ok=true döner: kural KAPSANMIŞ ve
+	// hiçbir şey istemiyor → reconcileSelfHealth açık self-disk-eta
+	// satırlarını bu tikte kapatır (ServiceSilent emsali, v0.10.543).
+	return diskETAProblems(cfg, disks, series, snap), true
+}
+
+// diskETAProblems — SAF (v0.10.1031; tablo testli —
+// selfhealth_disk_eta_switch_test.go): bellek serisi + disk okuması →
+// bu tikte AÇIK OLMASI GEREKEN self-disk-eta satırları.
+//
+// İLK SATIR KAPIDIR ve iki dalı birden kapatır: hem ETA dalını hem
+// ısınma taşımasını (diskCarryOver). Kapı döngünün içinde, yalnız ETA
+// dalında olsaydı, lider değişiminden sonraki ilk yarım saatte taşıma
+// dalı açık satırı "son değeriyle" yeniden sunar ve kapalı kuralın
+// satırı kapanmak yerine yaşamaya devam ederdi.
+func diskETAProblems(cfg chstore.SelfHealthConfig, disks []chstore.DiskFree, series map[string][]diskSample, snap *chstore.OpenProblems) []selfProblem {
+	if !cfg.DiskEtaOn() {
+		return nil
+	}
 	var out []selfProblem
 	for _, d := range disks {
 		if d.Total == 0 || d.Free > d.Total {
@@ -545,7 +575,7 @@ func (e *Evaluator) selfDiskETA(ctx context.Context, cfg chstore.SelfHealthConfi
 			description: diskReason(d.Host, d.Disk, days, usedPct, d.Free, cfg.DiskEtaDays),
 		})
 	}
-	return out, true
+	return out
 }
 
 // selfDiskCriticalDays — bunun altındaki koşu payı kritiktir (operatör

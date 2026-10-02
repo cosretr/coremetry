@@ -84,6 +84,9 @@ type Evaluator struct {
 	// sözleşmesi: kabul edilmiş, sessiz-değil tarafta hata yapan bir
 	// takas); v0.10.901'den beri o pencerede AÇIK satır son değeriyle
 	// taşınır (selfhealth.go diskCarryOver), kapanıp yeniden açılmaz.
+	// v0.10.1031'den beri kural varsayılan KAPALI (self_health.diskEta):
+	// seri yine her tikte beslenir (açılınca ısınma yok), ama normalde
+	// açık satır yoktur — taşıma yalnız bir admin kuralı açtıysa işler.
 	// diskMu, breachMu ile aynı gerekçeyle var.
 	diskMu     sync.Mutex
 	diskSeries map[string][]diskSample

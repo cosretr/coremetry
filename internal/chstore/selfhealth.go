@@ -43,8 +43,18 @@ type SelfHealthConfig struct {
 	SpoolMaxFiles uint64 `json:"spoolMaxFiles"`
 	SpoolMaxBytes uint64 `json:"spoolMaxBytes"`
 	// DiskEtaDays — bu kadar günden yakın bir "dolacak" projeksiyonu
-	// problem açar.
+	// problem açar (yalnız DiskEta açıkken; v0.10.1031).
 	DiskEtaDays float64 `json:"diskEtaDays"`
+	// DiskEta — v0.10.1031 (operatör 2026-10-02: "Disk dolacak niye
+	// geliyor, gerek yok."): self-disk-eta kuralı PROBLEM açar mı?
+	// *bool ama Enabled'ın TERSİ: nil = KAPALI. Bu BİLİNÇLİ bir varsayılan
+	// değişikliği (operatör kararı; emsal AnomalySensitivityConfig.
+	// ServiceSilent, v0.10.543 "olmasınlar"): bu sürümden önce kaydedilmiş
+	// her blob alanı taşımaz ve KAPALI okunur. Kapalıyken disk okuması,
+	// kalıcı seri (/admin/stats rozeti, v0.10.911) ve bellek serisi AYNEN
+	// sürer; yalnız problem açılmaz ve açık self-disk-eta satırları bir
+	// sonraki tikte kapanır. DiskEtaDays eşiği kural açılınca geçerlidir.
+	DiskEta *bool `json:"diskEta,omitempty"`
 	// ChannelConsecFails — bir bildirim kanalını ÖLÜ saymak için gereken
 	// ardışık başarısız gönderim.
 	ChannelConsecFails int `json:"channelConsecFails"`
@@ -75,7 +85,9 @@ type SelfHealthConfig struct {
 //     (Spool bekçisinin kendi 2000'lik tabanı /api/health sinyalini
 //     sürüyor; bu farklı ve daha ağır bir kapı: PROBLEM açıyor.)
 //   - 7 gün: bir haftalık koşu payı, retention/disk büyütme kararını
-//     mesai içinde vermeye yeter.
+//     mesai içinde vermeye yeter. v0.10.1031'den beri kural varsayılan
+//     KAPALI (DiskEta burada nil — operatör: "gerek yok"); eşik kural
+//     açıldığında geçerli.
 //   - 3 ardışık hata: tek bir ağ blip'i kanalı ölü ilan etmesin.
 //   - 4× / 100k span: v0.9.1294 sıçrama kuralı, ikisi de CANLI ÖLÇÜMLE
 //     kalibre edildi (101 servislik yerel demo, iki 24s penceresi):
@@ -107,6 +119,13 @@ func (c SelfHealthConfig) SelfHealthOn() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
+// DiskEtaOn — v0.10.1031: self-disk-eta problem açar mı? nil ⇒ KAPALI
+// (SelfHealthOn'un tersi; gerekçe alanın yorumunda). Aile kapısı ayrıca
+// geçerlidir: aile kapalıysa bu bayrak okunmaz bile.
+func (c SelfHealthConfig) DiskEtaOn() bool {
+	return c.DiskEta != nil && *c.DiskEta
+}
+
 // GetSelfHealth — kalıcı config ya da varsayılanlar. CH hatasında
 // varsayılana düşer: uzun ömürlü evaluator'da geçici bir blip
 // self-health ailesini kapatmamalı (GetRuntimeAlerts ile aynı duruş).
@@ -124,8 +143,9 @@ func (s *Store) GetSelfHealth(ctx context.Context) SelfHealthConfig {
 }
 
 // patchSelfHealth — saf zero-patch çekirdeği (tablo testli).
-// 0/negatif sayısal alan varsayılana döner; Enabled pointer olduğu için
-// AYNEN korunur (açık false, "yazılmamış"tan farklıdır).
+// 0/negatif sayısal alan varsayılana döner; Enabled ve DiskEta pointer
+// olduğu için AYNEN korunur (açık false, "yazılmamış"tan farklıdır;
+// DiskEta'da yazılmamış = kapalı, v0.10.1031 — burada doldurulmaz).
 func patchSelfHealth(c, d SelfHealthConfig) SelfHealthConfig {
 	if c.IngestStallMin <= 0 {
 		c.IngestStallMin = d.IngestStallMin

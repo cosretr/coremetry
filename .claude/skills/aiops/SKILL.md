@@ -96,7 +96,7 @@ Ne üretiyorsun?
 | `runtime:jvm-gc*` | `runtime_vm.go:66` (yalnız VM) | RuntimeAlertConfig | 10 dk | service; heap kuralı EMEKLİ v0.9.551 |
 | `exception:shared-dependency` | `shared_exception.go:26-132` | aynı tip ≥3 servis / 5 dk kova; ≥10 critical | 24 sa / 15 dk aktif | id kova taşır |
 | `exception:fatal-infrastructure` | `fatal_exception.go:28-74` | 1 oluşum, IsFatalExceptionType | 24 sa / 15 dk | id kova TAŞIMAZ |
-| `self-*` (5) | `selfhealth.go:46-66`, `selfhealth_volume.go` | ingest-stall / spool / disk ETA / kanal / hacim ×4 | 10 dk … 24 sa | Service="" (hacim hariç); `self-volume-spike` eskalasyondan muaf |
+| `self-*` (5) | `selfhealth.go:54-69`, `selfhealth_volume.go` | ingest-stall / spool / disk ETA / kanal / hacim ×4 | 10 dk … 24 sa | Service="" (hacim hariç); `self-volume-spike` eskalasyondan muaf; `self-disk-eta` **varsayılan KAPALI** (v0.10.1031, `self_health.diskEta`; ölçüm + kalıcı seri sürer) — yeniden önerme |
 | `anomaly-auto:<fp>` | `evaluator.go:1265` terfi | PeakRatio + Count + MinSustained | son 1 sa anomaly_events | mute'lara uyar |
 | `anomaly:<svc>:<metric>` | `anomaly.go:579-797`, `verdict.go:34` | \|z\| ≥ CriticalZ, DwellBuckets | 5 dk kova; 24 sa ardışık ya da mevsimsel 14 g ±3 | Threshold = baseline medyanı, Comparator yöne göre (v0.9.978) |
 | `anomaly:<svc>:service_silent` | `anomaly.go:876-1023` | 3 sıfır kova + %90 aktif taban | — | **varsayılan KAPALI** (v0.10.543) — yeniden önerme |
@@ -211,9 +211,13 @@ Exceptions sayfası P1 çizmiyordu (`docs/INCIDENTS.md:285`). Ayar `exception_tr
 ## 8. Self-health (kendi kendini izleme)
 
 `self-ingest-stall` / `self-spool-depth` / `self-disk-eta` / `self-channel-broken`
-/ `self-volume-spike` (`selfhealth.go:46-66`). Kapı: ölçülen ↔ kapsanan ayrımı
-(`covered` haritası :277-280; ölçülmemiş = temiz DEĞİL, v0.9.984); kapatınca
-açık satırlar boşaltılır (:268). Ayar `self_health` (pointer Enabled). Runbook
+/ `self-volume-spike` (`selfhealth.go:54-69`). Kapı: ölçülen ↔ kapsanan ayrımı
+(`covered` haritası :278-281; ölçülmemiş = temiz DEĞİL, v0.9.984); kapatınca
+açık satırlar boşaltılır (:273). Ayar `self_health` (pointer Enabled; disk ETA
+ayrıca `diskEta` *bool, nil = KAPALI — v0.10.1031 operatör "gerek yok": kapalıyken
+ölçüm/kalıcı seri sürer, problem üretilmez; `open` satırlar bir sonraki tikte
+çözülür, `acknowledged` satırları reconcile kapatmaz — bayat süpürme ~3 aralık
+sonra "source silent" ekiyle kapatır). Runbook
 haritası `problem.go:708`. `selfobs` paketi BAŞKA şey: Coremetry'nin kendi OTel
 yayını. Yeni "sinyal kaybı = critical" dedektörü EKLENMEZ (service silent
 kararı, v0.10.543).
@@ -285,7 +289,7 @@ Behavior.Enabled, SelfHealth.Enabled) — `false` ile "yok" ayrılsın.
 3. Öncelik/merdivene dokunuyor mu? → SAF işlevde kal, gerekçe cümlesi yalan
    söylemesin, `problem_priority_*`/`exception_triage_test` tablosuna satır;
    operatör direktiflerini (P1 yapışkan, taban 2, Inbox tüm durumlar, service
-   silent kapalı, fresh deploy yok) YENİDEN AÇMA.
+   silent kapalı, disk ETA kapalı, fresh deploy yok) YENİDEN AÇMA.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;
    ölçüm seyrekse §5 tasarımı; kayan pencere simülasyon testi.
 5. Kanıt/skor mu? → `hypothesis_*_test.go` tablo, kalibrasyon, tek yazıcı.

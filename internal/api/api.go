@@ -8269,9 +8269,9 @@ func (s *Server) putSelfHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "settings.self_health.update", "settings", "self_health",
-		fmt.Sprintf(`{"enabled":%v,"ingestStallMin":%d,"spoolMaxFiles":%d,"spoolMaxBytes":%d,"diskEtaDays":%v,"channelConsecFails":%d,"volumeSpikeFactor":%v,"volumeSpikeMinSpans":%d}`,
+		fmt.Sprintf(`{"enabled":%v,"ingestStallMin":%d,"spoolMaxFiles":%d,"spoolMaxBytes":%d,"diskEtaDays":%v,"channelConsecFails":%d,"volumeSpikeFactor":%v,"volumeSpikeMinSpans":%d,"diskEta":%v}`,
 			c.SelfHealthOn(), c.IngestStallMin, c.SpoolMaxFiles, c.SpoolMaxBytes,
-			c.DiskEtaDays, c.ChannelConsecFails, c.VolumeSpikeFactor, c.VolumeSpikeMinSpans))
+			c.DiskEtaDays, c.ChannelConsecFails, c.VolumeSpikeFactor, c.VolumeSpikeMinSpans, c.DiskEtaOn())) // v0.10.1031
 	writeJSON(w, s.store.GetSelfHealth(r.Context()))
 }
 

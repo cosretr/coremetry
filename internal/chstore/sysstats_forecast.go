@@ -6,15 +6,17 @@ import "strings"
 // Onay 2026-09-23): /admin/stats disk satırına "kaç gün kaldı" chip'i.
 //
 // KAYNAK: yeni rota yok, polling yok, hesap yok. Evaluator (yalnız liderde,
-// bellek-içi 6 saatlik seri) zaten self-disk-eta problemini yazıyor;
+// bellek-içi 6 saatlik seri) self-disk-eta kuralı AÇIKKEN problemini yazar;
 // Problem.Value = gün (evaluator/selfhealth.go). Sayı problems tablosunda
 // yaşıyor → OpenProblemsSnapshot (5 s memo) her pod'dan okur; zarf zaten
-// 60 s serveCached. Chip yalnız ÇÖZÜLMEMİŞ satır varken görünür — "açık"
+// 60 s serveCached. Bu dal yalnız ÇÖZÜLMEMİŞ satır varken bağlanır — "açık"
 // bu projede open|acknowledged demektir (snapshot sözleşmesi; ack edilmiş
-// disk yine dolar). Eşik SelfHealthConfig.DiskEtaDays (varsayılan 7 gün):
-// "chip yok" = "7 günden uzak ya da tahmin yok" — panel alt yazısı bunu
-// söyler. Sayı satırda yoksa yazılmaz (R² satırda yok → chip'te R² yok;
-// dilim 3+).
+// disk yine dolar). Eşik SelfHealthConfig.DiskEtaDays (varsayılan 7 gün).
+// v0.10.1031'den beri kural varsayılan KAPALI (SelfHealthConfig.DiskEta):
+// normalde açık satır YOKTUR ve rozet kalıcı serinin tarihçe yolundan
+// gelir (sysstats_disk_history.go, v0.10.911); açık-satır yolu yalnız bir
+// admin kuralı açtıysa geçerlidir. Sayı satırda yoksa yazılmaz (R² satırda
+// yok → chip'te R² yok; dilim 3+).
 //
 // TAZELİK: sayı değerlendiricinin son tikinden gelir. Değerlendirici
 // durursa satır donar (süpürme de değerlendiricinin içinde koşar) — FE bu
