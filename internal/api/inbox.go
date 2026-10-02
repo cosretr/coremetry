@@ -62,7 +62,8 @@ type InboxItem struct {
 	// örnek düzeyinde değil.
 	TeamsVia string `json:"teamsVia,omitempty"`
 	Status   string `json:"status"` // open | acknowledged | resolved (problems);
-	// open | regressed (exceptions); active | cleared (anomalies)
+	// open | regressed (exceptions); active | cleared (anomalies);
+	// muted (v0.10.1042 — aktif susturmalı anomali, yalnız "all" görünümü)
 	Clusters []string `json:"clusters,omitempty"`
 	// Category / DisplayID (v0.10.706, Dynatrace paritesi #5) — satır
 	// sınıfı (AVAILABILITY|ERROR|SLOWDOWN|RESOURCE|CUSTOM; problem satırı
@@ -651,8 +652,16 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 		// şeridinde çekmek iki sorguyu boşa harcayıp facet sayaçlarına
 		// o şeritte ASLA görünemeyecek türleri yazardı.
 		var evs []chstore.AnomalyEvent
+		// v0.10.1042 (operatör: "Anomalide 'Mute' sonrası satır listeden
+		// düşsün") — aktif susturmalar derleme başına TEK okuma (evaluator
+		// terfisi ve /anomalies canlı uçlarıyla aynı ActiveSilencedFingerprints).
+		// open görünümde SQL'de elenir (LIMIT ayakta kalan satıra harcanır),
+		// all görünümde satır kalır, durumu "muted" olur. Okuma hatası → nil →
+		// hiçbir şey gizlenmez (applyInboxAnomalySilences).
+		var muted map[string]bool
 		if statusFilter != "ignored" && subject == inboxSubjectService {
 			var err error
+			muted = s.activeSilencedAnomalies(ctx, "inbox list")
 			// v0.9.335 — the "open" pivot keeps only ACTIVE events, so say so
 			// in SQL. Dropping cleared ones in Go after the LIMIT spent the
 			// whole scan budget on history: the fourth and last source still
@@ -661,6 +670,8 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 				Limit: srcLimit, ActiveOnly: statusFilter == "open",
 				// v0.9.353 — nil = no constraint; empty = match nothing.
 				Services: teamServices,
+				// v0.10.1042 — susturulmuşlar LIMIT'ten ÖNCE elenir (yalnız open).
+				ExcludeIDs: inboxAnomalyExcludeIDs(muted, statusFilter),
 			})
 			if err != nil {
 				return nil, err
@@ -675,6 +686,11 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			}
 			items = append(items, anomalyToInbox(e))
 		}
+		// v0.10.1042 — Go bekçisi SQL elemesinin AYNI kümesiyle (open'da no-op
+		// olur; pickExcludedStatuses emsali: pivot anlamı tek yerde okunur),
+		// all görünümünde "muted" damgası. Sayaçlar (counts/total) bundan
+		// SONRA, aynı satırlar üzerinden hesaplanır.
+		items = applyInboxAnomalySilences(items, muted, statusFilter)
 
 		// ── Incidents ────────────────────────────────────────────
 		// v0.9.321 — the fourth source. Skipped on `ignored` for the same
@@ -1644,6 +1660,11 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 	// tek memo okuması).
 	badgeFloor := effectiveDefaultFloor(currentExceptionTriage())
 	badgeExempt := s.exceptionSpread(ctx).ExemptBelow(badgeFloor)
+	// v0.10.1042 — susturulmuş anomaliler open listesinden düştüğü için
+	// rozet de onları saymaz: aynı tek okuma, aynı eleme kümesi
+	// (inboxAnomalyExcludeIDs "open"), aynı SQL yüklemi. Okuma hatası → nil
+	// → süzgeçsiz sayım (liste de o hâlde hiçbir şey gizlemez).
+	badgeMuted := inboxAnomalyExcludeIDs(s.activeSilencedAnomalies(ctx, "inbox count"), "open")
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
@@ -1706,7 +1727,7 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 	})
 	g.Go(func() error {
 		var err error
-		anN, err = s.store.CountActiveAnomalyEvents(gctx, 0, envServices)
+		anN, err = s.store.CountActiveAnomalyEvents(gctx, 0, envServices, badgeMuted)
 		return err
 	})
 	g.Go(func() error {
@@ -2292,6 +2313,69 @@ func anomalyPriority(e chstore.AnomalyEvent) (string, string) {
 	default:
 		return "P3", "mild"
 	}
+}
+
+// inboxMutedStatus — aktif susturmalı anomali satırının "all" görünümündeki
+// durumu (v0.10.1042). Durum sözlüğünde zaten var (statusTone.tsx STATUS_TONE
+// `muted` → nötr), paylaşılan StatusBadge ayrı eşleme istemeden basar.
+const inboxMutedStatus = "muted"
+
+// inboxAnomalyExcludeIDs — SQL'e inen eleme kümesi (v0.10.1042): yalnız open
+// görünümde (ve savunmacı olarak tanınmayan pivotta) aktif susturmaların
+// parmak izleri, sıralı (bağ argümanları deterministik). "all" → nil: o
+// görünüm susturulmuş satırı GÖSTERİR (damgalı). Liste (ListAnomalyEvents
+// ExcludeIDs) ve rozet (CountActiveAnomalyEvents) bu TEK işlevden beslenir.
+func inboxAnomalyExcludeIDs(muted map[string]bool, statusFilter string) []string {
+	if statusFilter == "all" || len(muted) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(muted))
+	for fp, on := range muted {
+		if on {
+			out = append(out, fp)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// inboxAnomalyMuted — satır, aktif susturması olan bir anomali mi? Anahtar
+// olay kimliği (InboxAnomalyRef.ID = FingerprintAnomaly), evaluator'ın
+// `muted[ev.ID]` kapısıyla aynı.
+func inboxAnomalyMuted(it InboxItem, muted map[string]bool) bool {
+	return it.Kind == "anomaly" && it.Anomaly != nil && muted[it.Anomaly.ID]
+}
+
+// applyInboxAnomalySilences — v0.10.1042 (operatör: "Anomalide 'Mute'
+// sonrası satır listeden düşsün"). SAF, tablo testli.
+//
+//   - open (ve tanınmayan pivot): susturulmuş anomali satırı DÜŞER. Asıl
+//     eleme SQL'de (inboxAnomalyExcludeIDs → ExcludeIDs, LIMIT'ten önce);
+//     bu bekçi aynı kümeyi uygular, yani orada no-op'tur ve LIMIT sonrası
+//     bir süzgeç DEĞİLDİR — pivot anlamı tek yerde okunsun diye durur
+//     (pickExcludedStatuses / inboxKeepsProblem emsali).
+//   - all: satır KALIR, Status "muted" olur — operatör bulup susturmayı
+//     kaldırabilsin (/anomalies "Muted" şeridi).
+//   - muted nil/boş (okuma hatası ya da susturma yok): dokunulmaz.
+//
+// Anomali dışı satırlar hiçbir dalda değişmez. Sayaçlar (counts, total)
+// bu işlevden SONRAKİ satırlardan hesaplanır, rozet aynı kümeyi SQL'de eler.
+func applyInboxAnomalySilences(items []InboxItem, muted map[string]bool, statusFilter string) []InboxItem {
+	if len(muted) == 0 {
+		return items
+	}
+	kept := items[:0]
+	for _, it := range items {
+		if !inboxAnomalyMuted(it, muted) {
+			kept = append(kept, it)
+			continue
+		}
+		if statusFilter == "all" {
+			it.Status = inboxMutedStatus
+			kept = append(kept, it)
+		}
+	}
+	return kept
 }
 
 // inboxTruncate caps a string at n characters; the package's

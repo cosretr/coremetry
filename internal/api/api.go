@@ -10817,7 +10817,7 @@ func (s *Server) getTraceOpAnomalies(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
-		muted, _ := s.store.ActiveSilencedFingerprints(ctx)
+		muted := s.activeSilencedAnomalies(ctx, "trace-ops") // v0.10.1042 — hata loglanır, süzgeçsiz
 		out := hits[:0]
 		for _, a := range hits {
 			fp := chstore.FingerprintAnomaly("trace_op", a.Operation, a.Service)
@@ -10922,7 +10922,7 @@ func (s *Server) getLogPatternAnomalies(w http.ResponseWriter, r *http.Request) 
 		// Drop silenced fingerprints — operator has muted them
 		// explicitly. They still get persisted into anomaly_events
 		// by the recorder so history shows them with status.
-		muted, _ := s.store.ActiveSilencedFingerprints(ctx)
+		muted := s.activeSilencedAnomalies(ctx, "log-patterns") // v0.10.1042 — hata loglanır, süzgeçsiz
 		out := hits[:0]
 		for _, a := range hits {
 			fp := chstore.FingerprintAnomaly("log_pattern", a.Pattern, a.Service)

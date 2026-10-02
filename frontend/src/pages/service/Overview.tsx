@@ -8,7 +8,8 @@ import { entryLatencyDSL, envDSL } from '@/lib/entrySpans';
 import { panelMaxDataPoints, stepForWidth } from '@/lib/chartStep';
 import { encodeFilters } from '@/lib/urlState';
 import { useServiceDeploys, useAnomalyEvents, useAnomalySilences, useCreateAnomalySilence, usePutAnomalyVerdict } from '@/lib/queries';
-import { windowAnomalies, anomalyRegions, silencedSet, silenceKey } from '@/lib/anomalyRegions';
+import { windowAnomalies, anomalyRegions, silencedSet } from '@/lib/anomalyRegions';
+import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
 import { readBandsParam, writeBandsParam } from '@/lib/bandsParam';
 import { toast } from '@/lib/toast';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
@@ -528,12 +529,18 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     return p;
   }, { replace: true });
   const muteAnomaly = async (e: AnomalyEvent, durationSec: number) => {
-    // /anomalies sayfasının anahtarı (streams.tsx onMute); sunucu kanonik sha1'e
-    // çevirir (v0.10.162 anomaly_extra.go silenceFingerprint) — akış + terfi kapısı okur.
+    // v0.10.1042 — gövde ORTAK kurucudan (lib/inboxDrawer anomalyEventSilenceBody):
+    // fingerprint = OLAY KİMLİĞİ, sunucu iyi biçimli kimliği olduğu gibi saklar
+    // (anomaly_extra.go silenceFingerprint). Eskiden `kind|pattern|service`
+    // gidiyordu; log_template_new / behavior_change'te desen görüntü metni
+    // olduğu için yeniden hesaplanan sha1 olayla hiç eşleşmiyordu.
     // v0.10.181 — «Değil» aynı zamanda karardır; v0.10.184 (inceleme #6): iki
     // yazım birlikte beklenir, biri düşerse operatör toast'la görür (sessiz no-op yok).
+    const silenceBody = anomalyEventSilenceBody(e, durationSec);
     const results = await Promise.allSettled([
-      createSilence.mutateAsync({ fingerprint: silenceKey(e), kind: e.kind, pattern: e.pattern, service: e.service, durationSec, reason: 'operator: değil (servis sayfası)' }),
+      silenceBody
+        ? createSilence.mutateAsync({ ...silenceBody, reason: 'operator: değil (servis sayfası)' })
+        : Promise.reject(new Error('anomaly id missing')),
       putVerdict.mutateAsync({ id: e.id, verdict: 'not_anomaly', kind: e.kind, pattern: e.pattern, service: e.service }),
     ]);
     const failed = results.map((r, i) => (r.status === 'rejected' ? (i === 0 ? 'susturma' : 'karar') : null)).filter(Boolean);

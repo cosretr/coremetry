@@ -987,6 +987,55 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Problems: susturulan anomali kuyruktan düşer (v0.10.1042)
+
+**Operatör:** "Anomalide 'Mute' sonrası satır listeden düşsün." **Önce:** anomali detayında Mute… susturmayı
+yazıyor, sayfa kuyruğa dönüyor ve satır HÂLÂ orada duruyordu. Inbox anomali satırlarını aktif `anomaly_events`'ten,
+rozeti `CountActiveAnomalyEvents` SQL sayımından kuruyordu; ikisi de susturmalara bakmıyordu (terfi ve /anomalies
+canlı uçları bakıyordu). Susturma yazım uçları da yalnız `anomaly:` önbelleğini düşürüyordu.
+
+**Kural:** aktif susturmalar (`ActiveSilencedFingerprints`, `until_at > now`) inbox derlemesi başına TEK okunur,
+anahtar olay kimliği (= susturma parmak izi; evaluator'ın `muted[ev.ID]` kapısıyla aynı). **open** görünümü:
+susturulmuş anomali listelenmez ve sayılmaz — eleme SQL'de, LIMIT'ten ÖNCE (`ListAnomalyEventsFilter.ExcludeIDs`;
+Go'da sonradan düşürmek v0.9.335'in kapattığı tarama-bütçesi açığını açardı); kind/öncelik çipleri ve `total`
+aynı satırlardan; kenar çubuğu rozeti aynı kümeyi aynı SQL yüklemiyle (`anomalyExcludeIDsSQL`) eler. **all**
+görünümü: satır kalır, durumu `muted` (durum sözlüğünde zaten nötr) — operatör bulur, susturmayı /anomalies
+"Muted" şeridinden kaldırır; yeni UI yok. **Ignored** görünümü değişmedi (yalnız exception). Susturma süresi
+dolunca okuma onu artık döndürmez; satır bir sonraki derlemede geri gelir (≤ önbellek TTL'i, ek iş yok).
+
+**Önbellek:** ack / exception durumu / incident yazımlarının emsali — açık önek düşürme. Susturma oluştur / sil /
+toplu sil uçları `invalidateSilenceReaders` ile `anomaly:` VE `inbox:` (liste + rozet, sürümsüz önek, v0.9.321)
+önbelleğini düşürür; bir sonraki istek mute öncesi gövdeyi alamaz. Anahtara susturma özeti KATILMADI: anahtar
+serveCached'in dışında kuruluyor, özet her isabette bir CH okuması demekti; yazım seyrek, düşürme ucuz.
+
+**Hata yönü:** okunamayan süzgeç süzmez — susturma listesi okunamazsa hiçbir satır gizlenmez, rozet süzgeçsiz
+sayar, derleme başına tek log (evaluator terfisinin "promoting unfiltered" yönüyle aynı). Kapsam dışı:
+`anomaly-auto:` terfi Problem'leri (evaluator mute'ta zaten kapatıyor), /anomalies sayfası, susturma oluşturma UX'i.
+
+**Susturma o olayın kimliğini taşır (aynı sürüm):** `log_template_new` (kimlik şablon kimliğinden) ve
+`behavior_change` (kimlik ham metrik adından) türlerinde desen görüntü metni; sunucu susturmayı her zaman
+`sha1(kind|pattern|service)`'ten yeniden hesapladığı için (`silenceFingerprint`, v0.10.162) yazılan parmak izi
+olayla HİÇ eşleşmiyordu — operatörün en sık gördüğü iki türde Mute kuyrukta, terfide ve /anomalies'te etkisizdi.
+**Kural:** bir olay için yazılan susturma o olayla eşleşir. Tek saf karar `silenceFingerprint`: gönderilen değer
+`FingerprintAnomaly` ŞEKLİNDE bir olay kimliğiyse (`chstore.IsAnomalyFingerprint`: tam 16 karakter, yalnız
+`[0-9a-f]`; şekil üreticiyle aynı sabitten) olduğu gibi saklanır; değilse desen+servis varsa bugünkü yeniden hesap,
+o da yoksa raw (v0.10.162 köprüsü). Biçimi bozuk değer kimlik sayılmaz. Detay sayfası, inbox çekmecesi ve Cmd-K
+zaten olay kimliğini gönderiyordu; servis sayfasının «Değil → sessize al» yolu `kind|pattern|service`
+gönderiyordu, artık ortak kurucudan (`anomalyEventSilenceBody`) olay kimliğini gönderir. /anomalies canlı akışı
+olay değil dedektör isabeti susturur (kimliği yok) ve yalnız `log_pattern` / `trace_op` gösterir — o türlerde
+yeniden hesap = olay kimliği, değişmedi.
+
+**Okuyucular, iki tür için düzeltmeden sonra:** inbox listesi ve rozet satırı düşürür; evaluator terfiyi atlar
+(`muted[ev.ID]`) ve açık `anomaly-auto:<id>` Problem'ini "anomaly muted" gerekçesiyle kapatır; /anomalies "sessiz"
+rozeti (`e.id` eşleşmesi) çizilir; "Muted" şeridi susturmayı listeler ve kimliğiyle (parmak iziyle değil) siler.
+**Sonuç (bilinçli):** bir `behavior_change` olayını susturmak artık gerçekten terfisini durdurur ve terfi
+Problem'ini kapatır — Mute'un anlamı bu, ve sessizce olmuyordu. **Eski susturmalar:** desenden türeyen türlerde
+yeniden hesaplanmış eski kayıtlar kimlikle aynı, çalışmaya devam eder; iki bozuk türde eski kayıtlar hiçbir şeyle
+eşleşmiyordu ve eşleşmemeye devam eder (düzeltilmez, süreleri dolar).
+
+**Canlı uçlar:** /anomalies trace-ops ve log-patterns uçları susturma okuma hatasını `muted, _ :=` ile yutuyordu;
+artık aynı tek kapıdan (`activeSilencedAnomalies`) geçer — yön aynı (süzgeçsiz), hata bir kez loglanır.
+
 ## 2026-10-02 — AI paneli: kod künyesi yalnız kod kartında (v0.10.1041)
 
 **Karar (operatör: "'Kodu da incele → Evet' sonrası ilk kart da kaynak satırlarını basıyor; düzeltilsin."):**

@@ -56,6 +56,11 @@ type AnomalyEvent struct {
 	RootCause *RootCauseSummary `json:"rootCause,omitempty"`
 }
 
+// anomalyFingerprintLen — FingerprintAnomaly kimliğinin uzunluğu: sha1'in
+// küçük harf hex dökümünün ilk 16 karakteri. Kimlik ŞEKLİ tek yerde
+// (v0.10.1042): üretici ve IsAnomalyFingerprint aynı sabiti okur.
+const anomalyFingerprintLen = 16
+
 // FingerprintAnomaly stitches the same (kind, pattern, service)
 // detections into one event row across detector ticks. Stable
 // across process restarts — sha1 is deterministic.
@@ -66,7 +71,25 @@ func FingerprintAnomaly(kind, pattern, service string) string {
 	h.Write([]byte(pattern))
 	h.Write([]byte("|"))
 	h.Write([]byte(service))
-	return hex.EncodeToString(h.Sum(nil))[:16]
+	return hex.EncodeToString(h.Sum(nil))[:anomalyFingerprintLen]
+}
+
+// IsAnomalyFingerprint — s, FingerprintAnomaly'nin ürettiği şekilde bir olay
+// kimliği mi: tam anomalyFingerprintLen karakter, yalnız [0-9a-f] (hex.Encode
+// küçük harf yazar). v0.10.1042: susturma yazımı istemcinin gönderdiği olay
+// kimliğini ancak bu şekildeyse olduğu gibi saklar; düz `kind|pattern|service`
+// metni, büyük harf, kısa/uzun ya da boş değer kimlik SAYILMAZ.
+func IsAnomalyFingerprint(s string) bool {
+	if len(s) != anomalyFingerprintLen {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // uniqueAnomalyIDs — toplu okumanın IN listesi: her id BİR KEZ.
@@ -286,6 +309,26 @@ type ListAnomalyEventsFilter struct {
 	// derived from, so this adds no new notion — it moves an existing one to
 	// where the LIMIT can respect it.
 	ActiveOnly bool
+	// ExcludeIDs (v0.10.1042, operatör: "Anomalide 'Mute' sonrası satır
+	// listeden düşsün") — bu olay kimlikleri (FingerprintAnomaly = susturma
+	// parmak izi) SQL'de elenir. Inbox'ın open görünümü aktif susturmaları
+	// buradan geçirir: Go'da LIMIT'ten SONRA düşürmek ActiveOnly'nin
+	// (v0.9.335) kapattığı sınıfı geri açardı — susturulmuş satırlar tarama
+	// bütçesini yer, scanCapped yalan söyler. nil/boş = kısıt yok.
+	// CountActiveAnomalyEvents aynı yüklemi (anomalyExcludeIDsSQL) kullanır
+	// ki rozet ile liste aynı kümeyi saysın.
+	ExcludeIDs []string
+}
+
+// anomalyExcludeIDsSQL — ExcludeIDs'in TEK SQL karşılığı (v0.10.1042). Liste
+// ve rozet sayımı aynı işlevden geçer: iki ayrı yazım, rozet ile listenin
+// ayrışması demek olurdu (v0.9.322 sınıfı). Boş küme koşul ÜRETMEZ (bugünkü
+// SQL birebir).
+func anomalyExcludeIDsSQL(ids []string) (string, []any) {
+	if len(ids) == 0 {
+		return "", nil
+	}
+	return " AND id NOT IN (" + chPlaceholders(len(ids)) + ")", toAnySlice(ids)
 }
 
 // CountActiveAnomalyEvents returns the number of anomaly events currently
@@ -295,7 +338,12 @@ type ListAnomalyEventsFilter struct {
 // envServices follows the same nil/empty contract as
 // CountProblemsInStatuses: nil = unscoped, empty = env resolved to no
 // services (only service-less rows count), otherwise membership.
-func (s *Store) CountActiveAnomalyEvents(ctx context.Context, activeAge time.Duration, envServices []string) (uint64, error) {
+//
+// excludeIDs (v0.10.1042) — aktif susturmaların parmak izleri: inbox open
+// listesi bu olayları SQL'de eliyor (ListAnomalyEventsFilter.ExcludeIDs),
+// rozet de aynı yüklemle (anomalyExcludeIDsSQL) saymazsa kenar çubuğu
+// listede olmayan satırı vaat eder. nil/boş = kısıt yok.
+func (s *Store) CountActiveAnomalyEvents(ctx context.Context, activeAge time.Duration, envServices []string, excludeIDs []string) (uint64, error) {
 	if activeAge == 0 {
 		activeAge = 10 * time.Minute
 	}
@@ -309,10 +357,12 @@ func (s *Store) CountActiveAnomalyEvents(ctx context.Context, activeAge time.Dur
 			args = append(args, envServices)
 		}
 	}
+	exclSQL, exclArgs := anomalyExcludeIDsSQL(excludeIDs)
+	args = append(args, exclArgs...)
 	var n uint64
 	err := s.conn.QueryRow(ctx, `
 		SELECT count() FROM anomaly_events FINAL
-		WHERE last_seen >= now64() - INTERVAL ? SECOND`+envSQL,
+		WHERE last_seen >= now64() - INTERVAL ? SECOND`+envSQL+exclSQL,
 		args...,
 	).Scan(&n)
 	return n, err
@@ -374,6 +424,8 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 	if f.ToNs > 0 {
 		winSQL += " AND toUnixTimestamp64Nano(started_at) < ?"
 	}
+	// v0.10.1042 — susturulmuş olaylar LIMIT'ten ÖNCE elenir (ExcludeIDs).
+	exclSQL, exclArgs := anomalyExcludeIDsSQL(f.ExcludeIDs)
 	args := []any{int64(f.ActiveAge.Seconds()), since}
 	if f.ActiveOnly {
 		args = append(args, int64(f.ActiveAge.Seconds()))
@@ -385,6 +437,7 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 	if f.ToNs > 0 {
 		args = append(args, f.ToNs)
 	}
+	args = append(args, exclArgs...)
 	args = append(args, f.Limit)
 	rows, err := s.conn.Query(ctx, `
 		SELECT id, kind, pattern, service,
@@ -393,7 +446,7 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 		       peak_ratio, current_ratio, current_count, sample,
 		       if(last_seen >= now64() - INTERVAL ? SECOND, 'active', 'cleared') AS status
 		FROM anomaly_events FINAL
-		WHERE toUnixTimestamp64Nano(last_seen) >= ?`+activeSQL+svcSQL+winSQL+`
+		WHERE toUnixTimestamp64Nano(last_seen) >= ?`+activeSQL+svcSQL+winSQL+exclSQL+`
 		-- v0.9.326 — this used to order by the status STRING descending,
 		-- which puts CLEARED FIRST.
 		-- ClickHouse compares these lexically and 'active' < 'cleared', so

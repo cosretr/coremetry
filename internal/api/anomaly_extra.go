@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -142,7 +143,9 @@ func (s *Server) createAnomalySilence(w http.ResponseWriter, r *http.Request) {
 	// kept showing — or a just-unmuted one stayed hidden — for the TTL
 	// window. Topology solves the same shape by hashing its hidden-pattern
 	// set into the key; here a prefix drop is cheaper and mutations are rare.
-	s.cacheInvalidatePrefix(r.Context(), "anomaly:")
+	// v0.10.1042 — inbox listesi + rozeti de artık bu kümeyi okuyor:
+	// invalidateSilenceReaders ikisini birden düşürür.
+	s.invalidateSilenceReaders(r.Context())
 	s.audit(r, "anomaly_silence.create", "anomaly_silence", id,
 		fmt.Sprintf(`{"fp":%q,"kind":%q,"service":%q,"durationSec":%d,"reason":%q}`,
 			body.Fingerprint, body.Kind, body.Service, body.DurationSec, body.Reason))
@@ -160,7 +163,7 @@ func (s *Server) deleteAnomalySilence(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s.cacheInvalidatePrefix(r.Context(), "anomaly:") // v0.9.234
+	s.invalidateSilenceReaders(r.Context()) // v0.9.234 + v0.10.1042 (inbox)
 	s.audit(r, "anomaly_silence.delete", "anomaly_silence", id, "")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -192,9 +195,48 @@ func (s *Server) bulkDeleteAnomalySilences(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	details, _ := json.Marshal(map[string]any{"ids": body.IDs, "deleted": n})
-	s.cacheInvalidatePrefix(r.Context(), "anomaly:") // v0.9.234
+	s.invalidateSilenceReaders(r.Context()) // v0.9.234 + v0.10.1042 (inbox)
 	s.audit(r, "anomaly_silence.bulk_delete", "anomaly_silence", "", string(details))
 	writeJSON(w, map[string]any{"deleted": n})
+}
+
+// invalidateSilenceReaders — susturma kümesini OKUYAN her önbellekli yüzeyi
+// düşürür; üç yazım ucu (oluştur / sil / toplu sil) yazım commit olduktan
+// hemen sonra çağırır.
+//
+// v0.10.1042 (operatör: "Anomalide 'Mute' sonrası satır listeden düşsün") —
+// inbox listesi (inbox:v8:…) ve rozeti (inbox:count:…) artık susturmaları
+// okuyor ama 15 sn önbellekli (+SWR 45 sn). Ack / exception durumu /
+// incident yazımlarının emsali AYNEN: açık önek düşürme (inboxListCachePrefix,
+// sürümsüz — v0.9.321), anahtara susturma özeti DEĞİL. Özet her cache
+// isabetinde bir CH okuması demek olurdu (anahtar serveCached'in dışında
+// kuruluyor; inboxListKey'in alias gerekçesiyle aynı); yazım seyrek, düşürme
+// ucuz. Ön yüz `['inbox']` sorgularını mute sonrası tazeliyor — bir sonraki
+// istek mute öncesi gövdeyi önbellekten alamaz.
+func (s *Server) invalidateSilenceReaders(ctx context.Context) {
+	s.cacheInvalidatePrefix(ctx, "anomaly:")
+	s.cacheInvalidatePrefix(ctx, inboxListCachePrefix)
+}
+
+// activeSilencedAnomalies — aktif susturmaların parmak izi kümesi; API
+// tarafındaki TEK okuma kapısı (v0.10.1042): inbox listesi ve rozeti
+// derleme başına bir kez, /anomalies canlı uçları (trace-ops, log-patterns)
+// istek başına bir kez çağırır — satır başına asla. ActiveSilencedFingerprints
+// `until_at > now64()` ile süzer, yani süresi dolan susturma bir sonraki
+// derlemede satırı geri getirir — ek iş yok.
+//
+// Yumuşak-hata yönü BİLİNÇLİ: okunamayan süzgeç süzmez. Hata → nil → hiçbir
+// satır gizlenmez, rozet süzgeçsiz sayar (evaluator.go "promoting unfiltered"
+// ile aynı yön: en kötü durum operatörün zaten bildiği gürültü, kaybolan bir
+// satır değil). Çağrı başına tek log satırı — canlı uçlar eskiden hatayı
+// `muted, _ :=` ile sessizce yutuyordu.
+func (s *Server) activeSilencedAnomalies(ctx context.Context, where string) map[string]bool {
+	muted, err := s.store.ActiveSilencedFingerprints(ctx)
+	if err != nil {
+		log.Printf("[anomaly-silence] %s: silence list unreadable (nothing hidden): %v", where, err)
+		return nil
+	}
+	return muted
 }
 
 // ── Audit log ─────────────────────────────────────────────────────
@@ -507,7 +549,28 @@ func newRandID(n int) string {
 // yazılır; desensiz eski çağıranlar (Cmd-K vb.) gönderdiklerini korur.
 // Frontend eşleyicisi (lib/anomalyRegions.ts isSilenced) iki yazımı da kabul
 // eder — eski düz satırlar için köprü.
+//
+// v0.10.1042 (operatör: "Anomalide 'Mute' sonrası satır listeden düşsün") —
+// KURAL: bir OLAY için yazılan susturma O OLAYLA eşleşir. Yeniden hesaplama
+// yalnız olay kimliği desenden türeyen türlerde kimliği verir (log_pattern,
+// trace_op, trace_op_latency, elastic_ml). log_template_new kimliği şablon
+// kimliğinden (recorder.go), behavior_change ham metrik adından (behavior.go
+// behaviorEventID) türer; desen ise görüntü metnidir — yeniden hesaplanan
+// sha1 o olayın kimliği DEĞİLDİR ve susturma hiçbir okuyucuyla (inbox,
+// evaluator terfisi, /anomalies) eşleşmiyordu. Sıra:
+//  1. raw, FingerprintAnomaly ŞEKLİNDE bir olay kimliğiyse (detay sayfası,
+//     inbox çekmecesi, servis sayfası, Cmd-K hepsi olay kimliğini gönderir)
+//     olduğu gibi saklanır;
+//  2. değilse desen+servis varsa kanonik sha1 (/anomalies canlı akış satırı:
+//     olay değil, `kind|pattern|service` gönderir — o türlerde sha1 = kimlik);
+//  3. değilse raw (v0.10.162'nin desensiz eski çağıran köprüsü).
+//
+// Biçimi bozuk değer asla kimlik sayılmaz (chstore.IsAnomalyFingerprint).
+// SAF; tablo testi anomaly_silence_fp_test.go.
 func silenceFingerprint(raw, kind, pattern, service string) string {
+	if chstore.IsAnomalyFingerprint(raw) {
+		return raw
+	}
 	if pattern != "" && service != "" {
 		return chstore.FingerprintAnomaly(kind, pattern, service)
 	}
