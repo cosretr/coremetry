@@ -987,6 +987,16 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Operations: trend üzerine gelince tek, okunur ipucu (v0.10.1059)
+
+**Operatör (prod, servis → Operations):** "Operations sayfasında bir servisin herhangi birinin üzerine gelince bir şey
+çıkıyor ama anlaşılmıyor." Trend hücresinde iki şey açılıyordu: TrendSpark'ın hücre İÇİNDE absolute çizilen kova okuması
+(`tbody td { overflow: hidden }` onu yarıdan kesiyordu, "kova 16/30" — saat yok) ve düğmenin `title`ı (pencere toplamları,
+başka şey). Karar: tek okuma, `SparkReadout` — body portalı + `position: fixed`, grafik ipucu şablonu `.ov-tt`, yerleşim
+`tipPlacement.placeTip` (üstte, sığmazsa alta; yatayda kıstırma); kovanın saat penceresi + calls · errors · p99 + soluk
+"tıkla: grafik". `title` kalktı (ad aria-label'da), "All" satırı Sparkline `readout` ile aynı okumayı alır. Klasik düzen
+aynen: kolonlar, çizim ve tık davranışı değişmedi; durum hover edilen hücrede yerel, tablo yeniden çizilmez.
+
 ## 2026-10-02 — Statement detail: trend grafikleri standart zaman grafiğine geçti (v0.10.1058)
 
 **Operatör:** "Statement detail grafikleri de çok kötü, Coremetry geneline uymuyor. Ayrıca zaman yok vs., hiç olmamış."

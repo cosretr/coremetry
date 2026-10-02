@@ -4,6 +4,8 @@
 // the bar-mode bucket→rect projection and the two-level threshold
 // classification that colours breach buckets. No DOM, no React.
 
+import { fmtTooltipTime } from './chartFmt';
+
 export type SparkThresholdClass = 'ok' | 'warn' | 'err';
 
 // v0.9.498 — bir sparkline'ın ÜÇ hali vardır ve ikisi uzun süre tek
@@ -227,4 +229,35 @@ export function sparkMarkerX(markerAt: number, count: number, width: number, bar
   if (bars) return ((markerAt + 0.5) * width) / count;
   if (count === 1) return width / 2;
   return (markerAt * width) / (count - 1);
+}
+
+// ── v0.10.1059 — Operations trend ipucu: çizilen kovanın SAAT penceresi ──
+// Operatör (prod, servis → Operations): "üzerine gelince bir şey çıkıyor ama
+// anlaşılmıyor." Okuma "kova 16/30" diyordu — kova İNDEKSİ, saat değil.
+// Seri pencereye eşit aralıklı yayılır (OperationMetricPanel'in seri
+// fabrikasıyla aynı varsayım: kova = (to − from) / rawCount). Çizilen kova
+// downsampleBuckets ile k = ceil(rawCount / drawnCount) ham kovayı
+// birleştirmiş olabilir; pencere o k kovanın tamamıdır, sonuncusu `to`da
+// kesilir. drawnCount downsampleBuckets'ın GERÇEK çıktı uzunluğu olmalı
+// (bütçe değil: 60 kova / 53 bütçe → k = 2 → 30 çubuk). Geçersiz girdi →
+// null (çağıran saat satırı yerine kova sırasını basar).
+export function sparkBucketWindow(
+  drawnIdx: number, drawnCount: number, rawCount: number, fromMs: number, toMs: number,
+): { startMs: number; endMs: number; stepSec: number } | null {
+  if (!(drawnCount >= 1) || !(rawCount >= 1) || !(toMs > fromMs)) return null;
+  if (!Number.isInteger(drawnIdx) || drawnIdx < 0 || drawnIdx >= drawnCount) return null;
+  const k = drawnCount < rawCount ? Math.ceil(rawCount / drawnCount) : 1;
+  const rawStep = (toMs - fromMs) / rawCount;
+  const startMs = fromMs + drawnIdx * k * rawStep;
+  const endMs = Math.min(toMs, startMs + k * rawStep);
+  return { startMs, endMs, stepSec: (k * rawStep) / 1000 };
+}
+
+// fmtBucketWindow — "02.10.2026 21:35 – 21:40". Başlangıç, grafik ipuçlarının
+// ortak biçimi (chartFmt.fmtTooltipTime: tarih koşulsuz, adım < 60 sn ise
+// saniye); bitiş aynı gündeyse yalnız saat, değilse tam damga.
+export function fmtBucketWindow(startMs: number, endMs: number, stepSec: number): string {
+  const head = fmtTooltipTime(startMs / 1000, stepSec);
+  const tail = fmtTooltipTime(endMs / 1000, stepSec);
+  return `${head} – ${head.slice(0, 10) === tail.slice(0, 10) ? tail.slice(11) : tail}`;
 }

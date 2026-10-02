@@ -1,4 +1,5 @@
-import { useId, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
+import { SparkReadout, type SparkReadoutRow } from './SparkReadout';
 import { SPARK_DEFAULT_WIDTH, barGeometry, barIndexAt, classifyThreshold, downsampleBuckets, maxBarsForWidth, maxLinePointsForWidth, sparkMarkerX, sparkRenderMode } from '@/lib/sparkline';
 import { downsampleXY } from '@/lib/perf/lttb';
 
@@ -85,15 +86,22 @@ interface Props {
   // işaret (var(--text2)): "trace anı". Geometri saf yardımcıda
   // (lib/sparkline.ts sparkMarkerX); verilmezse çizim bayt bayt aynı.
   markerAt?: number;
+  // v0.10.1059 (Operations "All" satırı) — verilirse kova okuması yerel
+  // <title> ipucu ("bucket 3/40: …", saat yok) yerine SparkReadout'ta
+  // (portal, .ov-tt) çizilir ve <title> hiç basılmaz: iki ipucu üst üste
+  // binmesin. İndeks ÇİZİLEN seriye göredir (alan kipinde = values).
+  // Verilmezse davranış bayt bayt aynı.
+  readout?: (idx: number, drawnCount: number) => { title: string; rows: SparkReadoutRow[]; hint?: string } | null;
 }
 
 export function Sparkline({
   values, width = SPARK_DEFAULT_WIDTH, height = 22, color, title, className,
   unit, threshold, thresholdComparator = '>', onClick, showDelta, domainMax,
-  mode = 'area', markerAt,
+  mode = 'area', markerAt, readout,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const dismissReadout = useCallback(() => setHoverIdx(null), []);
   // Gradient ids must be document-unique; useId's colons are stripped
   // because url(#…) references choke on them.
   const gid = 'slg-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -283,7 +291,10 @@ export function Sparkline({
     }
     return null;
   })();
+  // v0.10.1059 — `readout` verilmişse üzerine gelinen kovanın okuması.
+  const ro = readout && hoverIdx != null && hoverIdx < drawn.length ? readout(hoverIdx, drawn.length) : null;
   const wrapped = (
+    <>
     <svg
       ref={svgRef}
       width={width}
@@ -292,7 +303,7 @@ export function Sparkline({
       className={className}
       style={{ display: 'block', cursor: onClick ? 'pointer' : 'default' }}
       role="img"
-      aria-label={liveTitle}
+      aria-label={readout ? (title || 'sparkline') : liveTitle}
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
       // v0.6.14 — stop propagation so a wrapping row's onClick
@@ -301,7 +312,7 @@ export function Sparkline({
       // any ambient row navigation behind it.
       onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
     >
-      <title>{liveTitle}</title>
+      {!readout && <title>{liveTitle}</title>}
       {!barMode && (
         <>
           {/* M4 — alan gradyanı: seri renginden şeffafa. stop-color
@@ -352,6 +363,12 @@ export function Sparkline({
           fill={stroke} stroke="var(--bg)" strokeWidth={0.75} />
       )}
     </svg>
+    {ro && hoverIdx != null && (
+      <SparkReadout anchorRef={svgRef}
+        at={barMode ? (hoverIdx + 0.5) / drawn.length : (step > 0 ? (hoverIdx * step) / width : 0.5)}
+        title={ro.title} rows={ro.rows} hint={ro.hint} onDismiss={dismissReadout} />
+    )}
+    </>
   );
 
   if (!showDelta || deltaPct === null) return wrapped;

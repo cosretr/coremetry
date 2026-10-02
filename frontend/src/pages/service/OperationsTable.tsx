@@ -7,6 +7,8 @@ import { TrendSpark } from '@/components/TrendSpark'; // v0.10.697
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { EventMarkers } from '@/components/EventMarkers';
 import { fmtNum, timeRangeToNs, rowClickHandlers } from '@/lib/utils';
+import { fmtSmart } from '@/lib/chartFmt';
+import { sparkBucketWindow, fmtBucketWindow } from '@/lib/sparkline';
 import { encodeFilters, encodeRange, buildQuery } from '@/lib/urlState';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -252,6 +254,29 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
     return out;
   }, [rows]);
 
+  // v0.10.1059 (operatör, prod: "üzerine gelince bir şey çıkıyor ama
+  // anlaşılmıyor") — Trend okuması kovanın SAATİNİ söyler: seri pencereye
+  // eşit yayılır (OperationMetricPanel'in seri fabrikasıyla aynı varsayım).
+  // timeRangeToNs yalnız memo içinde (CLAUDE.md, v0.5.184).
+  const trendWin = useMemo(() => {
+    const { from, to } = timeRangeToNs(range);
+    return { fromMs: from / 1e6, toMs: to / 1e6 };
+  }, [range]);
+
+  // "All" satırının okuması: kovada toplam hata (toplam) ve en yüksek op
+  // p99'u (satırın P99 kolonuyla aynı anlam: işlemler arası maksimum).
+  const aggErrP99 = useMemo(() => {
+    const errs: number[] = new Array(aggSparkline.length).fill(0);
+    const p99: (number | null)[] = new Array(aggSparkline.length).fill(null);
+    for (const r of rows) {
+      r.errorsSparkline?.forEach((v, i) => { if (i < errs.length) errs[i] += v; });
+      r.p99Sparkline?.forEach((v, i) => {
+        if (i < p99.length && Number.isFinite(v)) p99[i] = Math.max(p99[i] ?? 0, v);
+      });
+    }
+    return { errs, p99 };
+  }, [rows, aggSparkline.length]);
+
   // Shared sortable + resizable table primitive (v0.7.54). Feed the
   // FILTERED rows so sorting acts on what's visible; default sort
   // preserved as impact desc. Hook is unconditional + above the
@@ -410,7 +435,21 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                       reported). Reverted to a plain Sparkline —
                       this page is already the service detail, so
                       a self-link wouldn't help anyway. */}
-                  <Sparkline values={aggSparkline} title={`total calls/bucket × ${rows.length} ops`} />
+                  {/* v0.10.1059 — kova okuması satırlarla AYNI biçimde (saat +
+                      calls · errors · p99, SparkReadout); eski yerel <title>
+                      ("bucket 3/40: …") basılmaz. Çizim değişmedi. */}
+                  <Sparkline values={aggSparkline} title={`total calls/bucket × ${rows.length} ops`}
+                    readout={i => {
+                      const w = sparkBucketWindow(i, aggSparkline.length, aggSparkline.length, trendWin.fromMs, trendWin.toMs);
+                      return {
+                        title: w ? fmtBucketWindow(w.startMs, w.endMs, w.stepSec) : `kova ${i + 1}/${aggSparkline.length}`,
+                        rows: [
+                          { label: `Calls (${rows.length} op)`, color: TREND_C.calls, value: fmtNum(aggSparkline[i] ?? 0) },
+                          { label: 'Errors', color: TREND_C.errors, value: fmtNum(aggErrP99.errs[i] ?? 0) },
+                          { label: 'P99 (op maks.)', color: TREND_C.p99, value: fmtSmart(aggErrP99.p99[i], 'ms') },
+                        ],
+                      };
+                    }} />
                 </td>
                 <td className="num" style={{ fontWeight: 700 }}>
                   {fmtImpact(rows.reduce((n, r) => n + impactOf(r), 0))}
@@ -516,10 +555,19 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                         tek commit, geri alması tek adım.
                         v0.10.924 — buton bütünlüğü Faz 2: ham `.btn-bare` sarmalayıcı →
                         Button ghost xs (zeminsiz; hover'da bg2 tıklanabilirliği söyler). */}
+                    {/* v0.10.1059 (operatör, prod: "üzerine gelince bir şey
+                        çıkıyor ama anlaşılmıyor") — düğmenin `title`ı kalktı:
+                        yarıdan kesik kova okumasının yanında ikinci, BAŞKA
+                        şey söyleyen yerel ipucu açıyordu (pencere toplamları —
+                        zaten satırın kendi kolonlarında). Tek okuma
+                        TrendSpark'ın SparkReadout'u: kovanın saati + calls ·
+                        errors · p99, son soluk satır "tıkla: grafik". Erişilebilir
+                        ad aria-label'da; tık davranışı aynı. */}
                     <Button variant="ghost" size="xs" style={{ padding: '1px 2px', border: 0 }}
                       onClick={e => { e.stopPropagation(); setOpFocus('calls'); setOpDetail(op); }}
-                      title={`Calls ${fmtNum(op.spanCount)} · Err %${op.errorRate.toFixed(2)} · P99 ${op.p99DurationMs.toFixed(0)}ms · tıkla: grafik`}>
-                      <TrendSpark calls={op.sparkline ?? []} errors={op.errorsSparkline ?? []} p99={op.p99Sparkline ?? []} width={TREND_W} />
+                      aria-label={`${opText(op)} — trend grafiğini aç`}>
+                      <TrendSpark calls={op.sparkline ?? []} errors={op.errorsSparkline ?? []} p99={op.p99Sparkline ?? []} width={TREND_W}
+                        fromMs={trendWin.fromMs} toMs={trendWin.toMs} hint="tıkla: grafik" />
                     </Button>
                   </td>
                   <td className="num">

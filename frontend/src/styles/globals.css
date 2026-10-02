@@ -411,7 +411,8 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; } /* v0.10.93
    `:where(table)` özgüllüğü 0,1,0'da tutar: üstteki `.mono { 12px }`'i
    (0,1,0) SONRA geldiği için yener, dosyada daha sonra gelen tek sınıflı
    boyut kuralları ise yine kazanır — .ib-when 13px tarih damgası (operatör
-   kararı v0.10.736/739), .badge, .trend-spark__tt, .mtp-*, .field-hint.
+   kararı v0.10.736/739), .badge, .mtp-*, .field-hint. (.trend-spark__tt
+   v0.10.1059'te kalktı: kova okuması tablo dışına, SparkReadout'a taşındı.)
    `table .mono` (0,1,1) hepsini eziyordu. Yer BİLEREK burası: .field-hint
    (tablo hücresinde `field-hint mono`, AiProfilesPanel) `table {}`
    bloğundan önce tanımlı; kural orada kalsaydı onu da ezerdi. */
@@ -4165,7 +4166,13 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 .trend-spark .ts-err { fill: var(--err); }
 .trend-spark .ts-p99 { fill: none; stroke: var(--teal); stroke-width: 1.5; stroke-linejoin: round; }
 .trend-spark .ts-cur { fill: var(--teal); }
-.trend-spark__tt { position: absolute; left: 0; bottom: calc(100% + 4px); z-index: var(--z-tooltip); white-space: nowrap; font-size: var(--fs-3xs); color: var(--text); background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 2px 6px; box-shadow: var(--shadow-pop); pointer-events: none; }
+.trend-spark g.is-hover .ts-bar { opacity: .8; }
+/* v0.10.1059 (operatör: "üzerine gelince bir şey çıkıyor ama anlaşılmıyor") —
+   eski .trend-spark__tt hücrenin İÇİNDE absolute çiziliyordu ve
+   `tbody td { overflow: hidden }` onu yarıdan kesiyordu. Kova okuması artık
+   SparkReadout: body'ye portal, fixed, grafik ipucu şablonu .ov-tt; left/top
+   JS'ten (lib/tipPlacement.placeTip — transform ile ortalama YOK). */
+.ov-tt.spark-readout { position: fixed; z-index: var(--z-tooltip); pointer-events: none; min-width: 150px; }
 tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 
 /* ══ DAR EKRAN KATMANI (v0.9.980) ══════════════════════════════════════

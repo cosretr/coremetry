@@ -130,7 +130,9 @@ describe('T4/T5 — tek yazı boyu, sayılar arayüz fontunda, tek mono yığın
     expect(rulesFor('table .mono'), '`table .mono` (0,1,1) tek sınıflı boyutları ezer').toEqual([]);
     expect(bodyOf('.mono')).toMatch(/font-size:\s*12px/);
     expect(indexOf(':where(table) .mono'), 'taban `.mono` 12px\'i sırayla yenmeli').toBeGreaterThan(indexOf('.mono'));
-    for (const sel of ['.ib-when', '.badge', '.trend-spark__tt', '.mtp-id-dim', '.mtp-id-name', '.field-hint']) {
+    // v0.10.1059 — `.trend-spark__tt` listeden düştü: kova okuması tablo
+    // dışına (SparkReadout, body portalı) taşındı, sınıf silindi.
+    for (const sel of ['.ib-when', '.badge', '.mtp-id-dim', '.mtp-id-name', '.field-hint']) {
       expect(indexOf(sel), `${sel} :where kuralından SONRA gelmeli`).toBeGreaterThan(indexOf(':where(table) .mono'));
       expect(bodyOf(sel), sel).toMatch(/font-size:/);
     }
