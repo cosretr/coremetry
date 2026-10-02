@@ -17,7 +17,10 @@ export interface CosreChartSpec {
   // operation (v0.9.184) — verilirse grafik tek span-name'e daralır
   // (DSL: name = "..."). Boşsa servis-geneli.
   operation?: string;
-  agg: 'rate' | 'error_rate' | 'p50' | 'p95' | 'p99';
+  // v0.10.1032 — 'errors' (kova başına hata SAYISI; spanmetric.go aggToSQL
+  // "errors" = countIf(status_code='error')): anomali tam sayfasının
+  // trace_op grafiği — dedektör hata sayısını kıyaslar, oranı değil.
+  agg: 'rate' | 'error_rate' | 'errors' | 'p50' | 'p95' | 'p99';
   unit?: string;
   rangeS?: number; // pencere (saniye); default 1800 (30 dk)
   // v0.9.1186 — TEK anahtar kırılım: her farklı değer için bir çizgi.
@@ -44,7 +47,7 @@ export interface CosreChartSpec {
 export const COSRE_SERIES_CAP = 8;
 
 const AGG_UNIT: Record<CosreChartSpec['agg'], string> = {
-  rate: 'req/s', error_rate: '%', p50: 'ms', p95: 'ms', p99: 'ms',
+  rate: 'req/s', error_rate: '%', errors: '', p50: 'ms', p95: 'ms', p99: 'ms',
 };
 
 /** dslQuote — DSL string literali için kaçış. */
@@ -107,7 +110,7 @@ export function cosreChartItems(
       name: seriesLabel(spec, s, i, total),
       // error_rate tek seriyken hata rengini hak eder; kırılımda rol
       // vermeyiz — 8 kırmızı çizgi rolün taşıdığı anlamı yok eder.
-      role: !spec.groupBy && spec.agg === 'error_rate' ? 'error' : 'data',
+      role: !spec.groupBy && (spec.agg === 'error_rate' || spec.agg === 'errors') ? 'error' : 'data',
     })),
     unit,
     truncated: total > COSRE_SERIES_CAP,

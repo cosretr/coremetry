@@ -34,8 +34,16 @@ func TestAnomalyVerdictRoutesOutsideAPIGo(t *testing.T) {
 	if strings.Contains(string(apiGo), "/api/anomalies/{id}/verdict") {
 		t.Fatal("verdict rotası api.go'ya yazılmış (api.go büyümeyecek kuralı)")
 	}
-	if !strings.Contains(string(apiGo), "EnrichAnomaliesWithVerdicts") {
-		t.Fatal("events ucu kararı eklemiyor")
+	// v0.10.1032 — pin BİLİNÇLİ taşındı, korunan değişmez aynı: events ucu
+	// kararı ekler. Zenginleştirme zinciri artık tek yerde
+	// (anomaly_event_get.go enrichAnomalyEvents) ve events ucu + tekil uç
+	// ikisi de onu çağırır (anomaly_event_get_test.go).
+	if !strings.Contains(funcBody(string(apiGo), "getAnomalyEvents"), "enrichAnomalyEvents(ctx, s.store, ") {
+		t.Fatal("events ucu ortak zenginleştirme zincirini çağırmıyor — karar eklenmez")
+	}
+	chain, _ := os.ReadFile("anomaly_event_get.go")
+	if !strings.Contains(funcBody(string(chain), "enrichAnomalyEvents"), "EnrichAnomaliesWithVerdicts") {
+		t.Fatal("events ucu kararı eklemiyor (zincirde EnrichAnomaliesWithVerdicts yok)")
 	}
 	own, _ := os.ReadFile("anomaly_verdicts.go")
 	if strings.Contains(string(own), "GET /api/anomalies/verdicts") {

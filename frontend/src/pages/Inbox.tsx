@@ -19,7 +19,9 @@ import { FacetMultiSelect } from '@/components/ui/FacetMultiSelect';
 import { InboxTriageDrawer } from '@/components/InboxTriageDrawer';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { resolveSelectedItem } from '@/lib/inboxDrawer';
-import { inboxItemHref, isInboxExcFamily } from '@/lib/inboxHref';
+import {
+  inboxItemHref, isInboxExcFamily, inboxRowOpen, readInboxDetail, withInboxDetail, type InboxDetailParam,
+} from '@/lib/inboxHref';
 // v0.9.837 (operator-reported) — "Alert rules" bölümü Exceptions
 // sayfasından buraya taşındı: alert kuralları triage kuyruğunun
 // parçası, exception kuyruğunun değil. Modül yolundan import (barrel
@@ -28,7 +30,9 @@ import { ProblemsSection, AlertProblemHost } from '@/features/anomalies/Problems
 // v0.10.922 (sade palet adım 1) — tek durum sözlüğü; ProblemDetail zaten bu
 // parçada (ProblemsSection → ProblemDetail), yeni chunk bağımlılığı yok.
 import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
-import { withProblemParam } from '@/features/anomalies/problemLink';
+// v0.10.1032 — anomali olayının tam sayfa detayı (?anomaly=<id>), ProblemsSection
+// gibi modül yolundan (barrel AnomaliesPage'i bu parçaya sürüklerdi).
+import { AnomalyEventHost } from '@/features/anomalies/AnomalyEventDetail';
 import { useAuth } from '@/components/AuthProvider';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { InboxItem, InboxKind } from '@/lib/types';
@@ -144,6 +148,9 @@ const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];
 // slice 3): root-cause ribbon + inline ack/assign/mute, without
 // leaving /inbox. The drawer keeps an "Open source →" deep-link
 // escape hatch to the per-source workspaces, which still exist.
+// v0.10.1032 — bugün çekmece yalnız incident satırları ve eski ?item=
+// linkleri için; exception / alarm kuralı / anomali satırı TAM SAYFA detay
+// açar (karar lib/inboxHref inboxRowOpen'da, aşağıdaki openRow notu).
 
 const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 
@@ -315,7 +322,13 @@ export default function InboxPage() {
   // Alert-rules bölümünün satır tıkı bu parametreyi yazar, yani detay
   // AYNI sayfada açılır; liste + bölüm MOUNTED kalır (display:none) ki
   // facet/seçim state'i "← Problems"te yerinde dursun.
-  const problemParam = searchParams.get('problem');
+  // v0.10.1032 — ikinci tam sayfa: ?anomaly=<id> (AnomalyEventHost), aynı
+  // desen. İkisi KARŞILIKLI DIŞLAYICI (lib/inboxHref readInboxDetail /
+  // withInboxDetail): elle ikisi birden yazılmışsa problem okunur, biri
+  // açılınca öteki silinir — iki tam sayfa üst üste çizilmez.
+  const openDetailParam = readInboxDetail(searchParams);
+  const problemParam = openDetailParam?.param === 'problem' ? openDetailParam.id : null;
+  const anomalyParam = openDetailParam?.param === 'anomaly' ? openDetailParam.id : null;
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'editor';
 
@@ -385,17 +398,40 @@ export default function InboxPage() {
   // Other kinds keep the drawer: it exists so a Problem or an anomaly can be
   // acked without leaving the queue (v0.8.292), and neither has a richer
   // destination that the drawer is hiding.
+  //
+  // v0.10.1032 — the last sentence above STOPPED BEING TRUE and this is the
+  // correction. Operator (prod): "Anomali ve alert rule'lara girdiğimde drawer
+  // çıkıyor. Exception gibi detay gözükmüyor."
+  //   • Alert-rule problems got a full page in v0.9.837 (AlertProblemHost →
+  //     AlertProblemDetail: root cause, metric, offenders, timeline, blast
+  //     radius, correlated signals, log evidence, notifications, runbook),
+  //     hosted RIGHT HERE via ?problem=. The row click kept opening the 560px
+  //     drawer, i.e. it hid an existing richer destination behind a title, a
+  //     ribbon and three buttons — exactly the v0.9.341 exception story again.
+  //   • Anomaly events had no page at all; now they do (AnomalyEventHost,
+  //     ?anomaly=, same in-place pattern).
+  // So both kinds open their full page in place, like exceptions do. This
+  // supersedes the v0.8.292 / v0.9.341 "drawer for non-exception kinds" call
+  // for these two kinds. Nothing the drawer could do is lost: Assign… and
+  // "Gerçek problem / Problem değil" are on the alert page (Acknowledge was
+  // already there), Mute… and the verdict on the anomaly page.
+  // Incident rows and old ?item= links keep the drawer (out of scope).
+  // The decision itself is a pure, table-tested helper (lib/inboxHref
+  // inboxRowOpen); click and keyboard Enter/o both call openRow.
   // Satırın kaynağına git — adres lib/inboxHref'ten (v0.10.784).
   const goTo = (it: InboxItem) => {
     const href = inboxItemHref(it);
     if (href) navigate(href);
   };
-  const openDrawer = (it: InboxItem) => {
-    if (isExcFamily(it)) {
-      goTo(it);
-      return;
-    }
-    setParam('item', it.id);
+  // Tam sayfa detayı aç / kapat — tek yazıcı, replace:true, yabancı
+  // parametreler (süzgeçler, ?env=) korunur; ?item= ve diğer detay silinir.
+  const openDetail = (param: InboxDetailParam, id: string | null) =>
+    setSearchParams(prev => withInboxDetail(prev, param, id), { replace: true });
+  const openRow = (it: InboxItem) => {
+    const o = inboxRowOpen(it);
+    if (o.to === 'page') navigate(o.href);
+    else if (o.to === 'detail') openDetail(o.param, o.id);
+    else setParam('item', o.id);
   };
   const closeDrawer = () => setParam('item', null);
 
@@ -531,15 +567,14 @@ export default function InboxPage() {
       // bölümüyle birlikte taşındı), o yüzden /problems'a atlamak yerine
       // ?problem= yazıyoruz. ?item= siliniyor: "kaynağı aç" çekmeceden
       // ÇIKMAK demek, geri dönüş kuyruğun kendisine olmalı.
-      setSearchParams(prev => {
-        const p = withProblemParam(prev, it.problem!.id);
-        p.delete('item');
-        return p;
-      }, { replace: true });
+      // v0.10.1032 — aynı yazıcı satır tıkıyla ortak (withInboxDetail).
+      openDetail('problem', it.problem.id);
     } else if (isExcFamily(it)) {
       navigate(`/problems?tab=open&exception=${encodeURIComponent(it.exception!.fingerprint)}`);
     } else if (it.kind === 'anomaly' && it.anomaly) {
-      goTo(it);
+      // v0.10.1032 — anomalinin "kaynağı" artık tam sayfa detayı, BU sayfada
+      // (?anomaly=); eskiden /anomalies?event= çekmecesine gidiliyordu.
+      openDetail('anomaly', it.anomaly.id);
     } else if (it.kind === 'incident' && it.incident) {
       // The incident DETAIL route (/incident?id=), not the list — the row
       // already told the operator the incident exists; the click is a request
@@ -568,8 +603,11 @@ export default function InboxPage() {
     // rank the page — the same lie the filters told before v0.9.318.
     serverSort: true,
     onSortChange: setSrvSort,
-    onOpen: openDrawer,
-    searchRef,
+    // v0.10.1032 (inceleme) — tam sayfa detay açıkken GİZLİ kuyruğun klavye
+    // gezinmesi KAPALI: yoksa detay sayfasında `j` + Enter görünmeyen bir
+    // satırı açıyordu. onOpen yokken useDataTable gezinmeyi hiç kurmaz.
+    onOpen: problemParam || anomalyParam ? undefined : openRow,
+    searchRef: problemParam || anomalyParam ? undefined : searchRef,
   });
 
   // Selection resolves against the rows actually on screen, so a row
@@ -723,12 +761,13 @@ export default function InboxPage() {
       {/* v0.9.837 — ?problem= tam-sayfa detayı açıkken kuyruk GİZLENİR
           (unmount DEĞİL): facet/seçim/scroll state'i "← Problems"te
           yerinde duruyor. /problems'taki v0.8.426/428 deseninin aynısı. */}
-      {!problemParam && <Topbar title="Problems" showEnv envApplies />}
+      {/* v0.10.1032 — ?anomaly= tam sayfası da aynı kuralla (kendi Topbar'ı var). */}
+      {!problemParam && !anomalyParam && <Topbar title="Problems" showEnv envApplies />}
       {/* v0.9.981 (D3.1) — `id="content"` DEĞİL `.page-body`: detay açıkken
           bu kap gizli ama MOUNT'lu kalıyor, dolayısıyla id'li olsaydı aynı
           DOM'da iki `#content` bulunurdu (geçersiz HTML + `getElementById`
           gizli olanı döndürür). Stil `#content` ile birebir aynı. */}
-      <div className="page-body" style={problemParam ? { display: 'none' } : undefined}>
+      <div className="page-body" style={problemParam || anomalyParam ? { display: 'none' } : undefined}>
         {/* v0.9.255 — kayıtlı görünümler. Backend `page`'i serbest string alıyor,
             yani bu tek satır; birleşik triage yüzeyinin /problems'ın yerini
             tutabilmesi için gereken paritenin en ucuz parçası.
@@ -739,7 +778,7 @@ export default function InboxPage() {
           Everything needing a human — Problems (alert rules), open Exception
           groups, and active Anomaly detections. Default view: everything —{' '}
           <b>{PRIO_DEFAULT.join(' + ')}</b>, all kinds. Click any row to
-          triage it in place.
+          open its detail.
         </p>
 
         {/* One grouped facet bar (v0.8.38) — status pivot + priority + kind
@@ -1073,7 +1112,7 @@ export default function InboxPage() {
                 return (
                 <tr key={it.id}
                   {...rp}
-                  {...rowActivation(() => openDrawer(it))}
+                  {...rowActivation(() => openRow(it))}
                   onMouseEnter={() => dt.nav.setSelected(i)}
                   className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                   <td style={{ textAlign: 'center' }}
@@ -1220,7 +1259,7 @@ export default function InboxPage() {
             ?service= süzgecini feed ile PAYLAŞIR. Kolon genişlikleri
             hâlâ 'alert-rules' storageKey'inde — operatörün ayarladığı
             genişlikler taşınmayla kaybolmasın. */}
-        <ProblemsSection serviceFilter={serviceFilter} />
+        <ProblemsSection serviceFilter={serviceFilter} navDisabled={!!(problemParam || anomalyParam)} />
       </div>
 
       {/* In-place triage drawer (v0.8.292). Rendered only once the list has
@@ -1228,16 +1267,30 @@ export default function InboxPage() {
           soft-fallback during the initial load. `selected` is undefined when
           the id isn't in the current list → the drawer's own fallback shows.
           v0.9.837 — ?problem= tam-sayfa detayı açıkken çekmece çizilmez:
-          ikisi aynı anda görünürse detayın üstüne panel biner. */}
-      {!problemParam && selectedId && Array.isArray(data) && (
+          ikisi aynı anda görünürse detayın üstüne panel biner.
+          v0.10.1032 — ?anomaly= için de aynı. Çekmece artık yalnız incident
+          satırları ve eski ?item= linkleri için (satır tıkı: openRow). */}
+      {!problemParam && !anomalyParam && selectedId && Array.isArray(data) && (
         <InboxTriageDrawer item={selected} onClose={closeDrawer} onOpenSource={goToSource} />
       )}
       {problemParam && (
+        // v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
+        // açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz.
         <AlertProblemHost
+          key={problemParam}
           id={problemParam}
           isAdmin={isAdmin}
           backLabel="← Problems"
-          onBack={() => setSearchParams(prev => withProblemParam(prev, null), { replace: true })}
+          onBack={() => openDetail('problem', null)}
+        />
+      )}
+      {anomalyParam && (
+        <AnomalyEventHost
+          key={anomalyParam}
+          id={anomalyParam}
+          isAdmin={isAdmin}
+          backLabel="← Problems"
+          onBack={() => openDetail('anomaly', null)}
         />
       )}
     </>

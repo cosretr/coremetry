@@ -145,9 +145,18 @@ describe('grafik birimi/başlığı spec\'ten alınmıyor', () => {
     expect(src).not.toContain('spec.unit ?? unit');
   });
 
-  it('başlık YALNIZ defaultTitle\'dan', () => {
-    expect(src).toContain('title={defaultTitle(spec)}');
+  // v0.10.1032 — pin metni BİLİNÇLİ güncellendi, korunan değişmez aynı:
+  // başlık SPEC'ten (modelin yazabildiği çit) gelemez. Tek yeni kaynak
+  // `presentation` — yalnız kodun verdiği sunum prop'u (anomali tam sayfası);
+  // sohbet balonu onu vermez, sohbet grafiği yine defaultTitle(spec) basar.
+  it('başlık spec\'ten DEĞİL: kodun sunum prop\'u ya da defaultTitle', () => {
+    expect(src).toContain('title={presentation?.title ?? defaultTitle(spec)}');
     expect(src).not.toContain('spec.title ?? defaultTitle');
+    expect(src.replace(/\/\/.*$/gm, '')).not.toMatch(/spec\.title/);
+  });
+  it('sohbet balonu sunum prop\'u vermez (sohbet grafiği davranışı aynı)', () => {
+    const bubble = readFileSync(new URL('./ai/ChatBubble.tsx', import.meta.url), 'utf8');
+    expect(bubble).not.toContain('presentation=');
   });
 
   it('birim kaynağı AGG_UNIT tablosu', () => {

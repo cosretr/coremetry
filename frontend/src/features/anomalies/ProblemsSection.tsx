@@ -96,7 +96,11 @@ const PROBLEMS_PRIO_DEFAULT = ['P1', 'P2'] as const;
 // Polls via useProblems (30s default), supports status filter +
 // column sort + j/k row nav. Single section per the merged
 // Exceptions page UX.
-export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
+export function ProblemsSection({ serviceFilter, navDisabled = false }: {
+  serviceFilter: string;
+  /** v0.10.1032 — tam sayfa detay açıkken bölüm GİZLİ: klavye gezinmesi kapalı. */
+  navDisabled?: boolean;
+}) {
   const { user } = useAuth();
   const currentUserEmail = user?.email ?? '';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -342,7 +346,9 @@ export function ProblemsSection({ serviceFilter }: { serviceFilter: string }) {
     columns: PROBLEM_COLS,
     rows,
     initialSort: { id: 'priority', dir: 'desc' },
-    onOpen: (p) => openDetail(p.id),
+    // v0.10.1032 (inceleme) — /inbox'ta tam sayfa detay açıkken bu tablo gizli;
+    // j/k + Enter görünmeyen bir satırı açmasın (onOpen yok = gezinme yok).
+    onOpen: navDisabled ? undefined : (p) => openDetail(p.id),
   });
   // Preserve the tri-state contract (undefined loading / null error /
   // rows) the render below branches on.

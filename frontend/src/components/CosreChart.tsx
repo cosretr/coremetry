@@ -27,7 +27,21 @@ const CorePanelMulti = lazy(() =>
 export type { CosreChartSpec } from './cosreChartSpec';
 import type { CosreChartSpec } from './cosreChartSpec';
 
-export function CosreChart({ spec }: { spec: CosreChartSpec }) {
+// CosreChartPresentation — v0.10.1032 (anomali tam sayfası, operatör:
+// "Anlaşılır olsun"). Başlık / tek serinin adı / boş not, GÜVENİLEN çağıranın
+// verdiği SUNUM bilgisi — spec'in DEĞİL. Spec sohbette modelin yazdığı çitten
+// gelebilir ve o yüzden başlığı/birimi belirleyemez (aşağıdaki v0.10.43 notu);
+// bu prop'u yalnız kod çağıranlar (AnomalyEventDetail) verir, sohbet balonu
+// vermez — sohbet grafiği davranışı bire bir aynı.
+export interface CosreChartPresentation {
+  title: string;
+  /** Kırılımsız tek serinin lejant adı (ham agg kimliği yerine). */
+  seriesName?: string;
+  /** Sıfır seri döndüğünde basılacak not (sohbetin çit-dili notu yerine). */
+  emptyNote?: string;
+}
+
+export function CosreChart({ spec, presentation }: { spec: CosreChartSpec; presentation?: CosreChartPresentation }) {
   const rangeS = spec.rangeS && spec.rangeS > 0 ? spec.rangeS : 1800;
   // Mutlak pencere doluysa RangeS'i EZER. Guided/insight yolları olayın
   // penceresini zaten biliyor; "son 30dk" onların cevabını kaydırırdı.
@@ -74,7 +88,9 @@ export function CosreChart({ spec }: { spec: CosreChartSpec }) {
   const base = cosreChartItems(spec, q.data?.series ?? []);
   const unit = q.data?.unit || base.unit;
   const { truncated, total } = base;
-  const items: CorePanelMultiItem[] = [...base.items];
+  const items: CorePanelMultiItem[] = presentation?.seriesName && !groupBy
+    ? base.items.map(it => ({ ...it, name: presentation.seriesName! }))
+    : [...base.items];
   if (shiftS > 0 && (qc.data?.series?.length ?? 0) > 0) {
     // Karşılaştırma tek seri: kırılım karşılaştırmayla birlikte okunmaz (sunucu da kırılımı düşürür).
     items.push({ series: shiftSeries(qc.data!.series.slice(0, 1), shiftS * 1e9), name: compareLabelTR(shiftS), role: 'muted', dashed: true });
@@ -99,9 +115,11 @@ export function CosreChart({ spec }: { spec: CosreChartSpec }) {
           fontSize: 11, lineHeight: 1.5, color: 'var(--text2)',
         }}>
           <div style={{ color: 'var(--text)', marginBottom: 4 }}>
-            {noScope ? 'Grafik kurulamadı' : `${defaultTitle(spec)} — veri yok`}
+            {noScope ? 'Grafik kurulamadı' : `${presentation?.title ?? defaultTitle(spec)} — veri yok`}
           </div>
-          {cosreEmptyNoteTR(spec)}
+          {/* v0.10.1032 — güvenilen çağıran kendi notunu verir; servissiz
+              (kapsamsız) çit notu ise HER ZAMAN çitin kendi açıklaması. */}
+          {!noScope && presentation?.emptyNote ? presentation.emptyNote : cosreEmptyNoteTR(spec)}
         </div>
       </div>
     );
@@ -117,7 +135,9 @@ export function CosreChart({ spec }: { spec: CosreChartSpec }) {
           // spec.title'a saygı duymak yalnız MODELİN kendi yazdığı çiti
           // onurlandırırdı; meşru grafik zaten defaultTitle'a düşüyordu,
           // dolayısıyla bu değişiklik hiçbir gerçek grafiği etkilemiyor.
-          title={defaultTitle(spec)}
+          // v0.10.1032 — kodun verdiği `presentation.title` (spec DEĞİL)
+          // düz Türkçe başlık getirir; sohbet çağrısı prop vermez.
+          title={presentation?.title ?? defaultTitle(spec)}
           height={180}
           // storageKey lejant katlanma durumunun kimliği. Spec'in
           // KAPSAMINDAN türetiliyor, sohbet turundan değil: aynı grafiği
@@ -151,7 +171,7 @@ export function CosreChart({ spec }: { spec: CosreChartSpec }) {
 // AGG_FIELD — gecikme yüzdelikleri bir ALAN üstünde hesaplanır; sayım
 // sınıfı aggler alansız. cosreChartSpec.ts'teki AGG_META'nın alan yarısı.
 const AGG_FIELD: Record<string, string | undefined> = {
-  rate: undefined, error_rate: undefined,
+  rate: undefined, error_rate: undefined, errors: undefined, // v0.10.1032 — hata SAYISI (alansız sayım)
   p50: 'duration_ms', p95: 'duration_ms', p99: 'duration_ms',
 };
 

@@ -71,6 +71,10 @@ export function useProblemByID(id: string, opts?: { enabled?: boolean }) {
     // Tek kayıt okuması; sunucu 15 sn cache'liyor. Daha sık sormak yeni
     // bir şey öğretmez — bu ekran bir ARŞİV görünümü, canlı bir liste değil.
     staleTime: 15_000,
+    // v0.10.1032 (inceleme) — main.tsx küresel keepPreviousData koyuyor; kimlik
+    // değişince `data` ÖNCEKİ problemin kaydı olurdu ve detay A'nın gövdesini
+    // B'nin adresi altında gösterebilirdi. Tekil okumada önceki veri yok.
+    placeholderData: undefined,
     // Yok olan bir kimlik yeniden denemekle var olmaz.
     retry: (count, err) => (err instanceof Error && err.message.startsWith('HTTP 404') ? false : count < 2),
   });

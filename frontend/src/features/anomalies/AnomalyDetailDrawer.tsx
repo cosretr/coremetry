@@ -4,12 +4,14 @@ import { Badge, Drawer } from '@/components/ui';
 import { ClusterChips } from '@/components/ClusterChips';
 import { CopilotExplain } from '@/components/CopilotExplain';
 import { RootCauseRibbon } from '@/components/RootCauseRibbon';
-import { LogsHistogram } from '@/components/LogsHistogram';
-import { fmtNum, tsLong } from '@/lib/utils';
-import { tracesPivotHref } from '@/lib/pivotHref';
-import type { AnomalyEvent, BehaviorChangeDetails } from '@/lib/types';
+import { tsLong } from '@/lib/utils';
+import type { AnomalyEvent } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
-import { logsHref } from '@/lib/logsUrl';
+import { anomalyDetailHref } from '@/lib/inboxHref';
+import {
+  ANOMALY_KIND_LABEL, anomalyChartWindow, anomalySignalHrefs, behaviorDetailsOf, isLogAnomalyKind,
+} from './anomalyDetail';
+import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
 
 // AnomalyDetailDrawer — v0.8.267, operator-requested: "Anomalies
 // sayfasında üzerine tıklayınca ne zaman spike oldu ve benzeri
@@ -26,181 +28,48 @@ import { logsHref } from '@/lib/logsUrl';
 // log-shaped kinds. It rides the endpoint's existing 30s server
 // cache; trace_op anomalies fetch nothing at all. Rows in the
 // table never prefetch.
-
-function fmtDuration(ns: number): string {
-  const s = Math.max(0, Math.round(ns / 1e9));
-  if (s < 90) return `${s}s`;
-  if (s < 90 * 60) return `${Math.round(s / 60)}m`;
-  if (s < 36 * 3600) return `${(s / 3600).toFixed(1)}h`;
-  return `${(s / 86400).toFixed(1)}d`;
-}
-
-function Fact({ k, v, title }: { k: string; v: React.ReactNode; title?: string }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{
-        fontSize: 10, color: 'var(--text3)', fontWeight: 600,
-        textTransform: 'uppercase', letterSpacing: '.05em',
-      }}>{k}</div>
-      <div className="mono" style={{
-        fontSize: 12, color: 'var(--text)', marginTop: 2,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }} title={title}>{v}</div>
-    </div>
-  );
-}
-
-const KIND_LABEL: Record<AnomalyEvent['kind'], string> = {
-  log_pattern: 'LOG PATTERN',
-  trace_op: 'TRACE OP',
-  trace_op_latency: 'TRACE OP · LATENCY',
-  elastic_ml: 'ELASTIC ML',
-  log_template_new: 'NEW LOG SHAPE',
-  behavior_change: 'BEHAVIOR',
-};
-
-// v0.9.936 — davranış olaylarının `sample` alanı serbest metin DEĞİL,
-// yapılandırılmış kanıt (BehaviorChangeDetails JSON). Ham JSON'u <pre>
-// içinde göstermek teknik olarak "boş panel değil" ama operasyonel
-// olarak okunamaz; bu kutu onu tek bakışta okunur hâle getiriyor.
 //
-// AYRIŞTIRMA HER ZAMAN KORUMALI: eski bir satır, elle düzenlenmiş bir
-// kayıt ya da ileride değişen bir şekil geçerli JSON olmayabilir.
-// Ayrıştırılamazsa null döner ve çağıran ham <pre>'ye düşer — çekmece
-// asla patlamaz, en kötü ihtimalle daha az güzel görünür.
-function parseBehaviorDetails(sample: string): BehaviorChangeDetails | null {
-  try {
-    const d = JSON.parse(sample) as BehaviorChangeDetails;
-    if (!d || typeof d.metric !== 'string' || typeof d.ratio !== 'number') return null;
-    return d;
-  } catch {
-    return null;
-  }
-}
-
-// hourOfWeekLabel — 0..167 kovasını insan diline çevirir. Kova UTC'de
-// hesaplanıyor (Go ve SQL tarafı da öyle), etiket de öyle diyor:
-// operatörün "10:00 dedin ama bizde 13:00'tü" demesi bir hata raporu
-// değil, bir birim karışıklığı olurdu.
-const HOW_DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-function hourOfWeekLabel(how: number): string {
-  if (!Number.isFinite(how) || how < 0 || how > 167) return '—';
-  const day = HOW_DAYS[Math.floor(how / 24)] ?? '—';
-  return `${day} ${String(how % 24).padStart(2, '0')}:00 UTC`;
-}
-
-function BehaviorDetailsBox({ d }: { d: BehaviorChangeDetails }) {
-  const up = d.direction === 'up';
-  const signalLabel = d.signal === 'regime'
-    ? 'Regime shift — sustained against the same hour-of-week baseline'
-    : 'Seasonal deviation — far from its own hour-of-week baseline';
-  const fmt = (v: number) => `${fmtNum(Math.round(v * 100) / 100)}${d.unit}`;
-  return (
-    <div style={{
-      border: '1px solid var(--border)', borderRadius: 6,
-      padding: '10px 12px', marginBottom: 12, background: 'var(--bg1)',
-    }}>
-      <div style={{ fontSize: 12, color: 'var(--text)', marginBottom: 8 }}>
-        {signalLabel}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12 }}>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>BASELINE</div>
-          <div className="mono">{fmt(d.baseline)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>NOW</div>
-          <div className="mono" style={{ color: up ? 'var(--err)' : 'var(--warn)' }}>{fmt(d.current)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>CHANGE</div>
-          <div className="mono">{up ? '↑' : '↓'} {fmtNum(Math.round(d.ratio * 100) / 100)}×</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>ROBUST z</div>
-          <div className="mono">{fmtNum(Math.round(d.z * 10) / 10)}σ</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>SUSTAINED</div>
-          <div className="mono">{d.dwell} × 5 min</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>BASELINE BUCKET</div>
-          <div className="mono">{hourOfWeekLabel(d.hourOfWeek)}</div>
-        </div>
-      </div>
-      {d.deploy && (
-        <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
-          ⬇ Deploy <b className="mono">{d.deploy.version}</b> landed{' '}
-          <b>{Math.max(1, Math.round(d.deploy.ageSeconds / 60))}m before</b> the shift started.
-        </div>
-      )}
-    </div>
-  );
-}
+// v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde drawer
+// çıkıyor. Exception gibi detay gözükmüyor.") — gövdenin parçaları (spike
+// olguları, davranış kanıtı, ham örnek, log hacmi) ve saf kararları (tür
+// etiketi, grafik penceresi, pivot linkleri) anomalyDetailParts.tsx /
+// anomalyDetail.ts'e çıkarıldı: Problems kuyruğundaki TAM SAYFA anomali
+// detayı (AnomalyEventDetail) aynı parçalardan çiziyor, iki ekran ayrışamaz.
+// Çekmece yerinde kalıyor (/anomalies + servis Overview) ve bir bağlantı
+// kazandı: "Tam detay →" (/inbox?anomaly=<id>).
 
 export function AnomalyDetailDrawer({ event, onClose }: {
   event: AnomalyEvent;
   onClose: () => void;
 }) {
-  const isLogKind = event.kind === 'log_pattern' || event.kind === 'log_template_new'
-    || event.kind === 'elastic_ml';
-  const durationNs = Math.max(0, event.lastSeen - event.startedAt);
+  const isLogKind = isLogAnomalyKind(event.kind);
 
   // v0.9.936 — davranış olayının yapılandırılmış kanıtı. Memo: her
   // render'da JSON.parse etmek gereksiz, ve yeni bir nesne kimliği
   // aşağıdaki koşulu her seferinde yeniden değerlendirtirdi.
   const behaviorDetails = useMemo(
-    () => (event.kind === 'behavior_change' && event.sample
-      ? parseBehaviorDetails(event.sample)
-      : null),
+    () => behaviorDetailsOf({ kind: event.kind, sample: event.sample }),
     [event.kind, event.sample],
   );
 
   // Chart window: 3× the spike duration of lead-in (min 30 min) so
   // the baseline is visible left of the spike, plus a 10-minute
   // tail. Memoised — a fresh object each render would refire the
-  // histogram fetch (v0.5.184 class).
-  const chartRange = useMemo(() => {
-    const lead = Math.max(3 * durationNs, 30 * 60 * 1e9);
-    return {
-      from: event.startedAt - lead,
-      to: event.lastSeen + 10 * 60 * 1e9,
-    };
-  }, [event.startedAt, event.lastSeen, durationNs]);
-  const chartFilter = useMemo(() => ({
-    service: event.service, search: '', severity: 0, traceId: '', spanId: '',
-  }), [event.service]);
+  // histogram fetch (v0.5.184 class). v0.10.1032 — formül
+  // anomalyDetail.anomalyChartWindow'da (tam sayfa ile ortak).
+  const win = useMemo(
+    () => anomalyChartWindow({ startedAt: event.startedAt, lastSeen: event.lastSeen }),
+    [event.startedAt, event.lastSeen],
+  );
 
-  // /logs deep link scoped to the service + the spike window.
-  //
-  // v0.9.1348 — el-yapımı `custom:` kopyası logsHref üreticisine indi. Bu
-  // site pencereyi Math.round ile kodluyordu: yuvarlama İKİ kenarı da
-  // içeri çekebilir, yani kodlanmış pencere istenenden DAR olabilir ve
-  // spike'ın ilk/son milisaniyesindeki log pivottan düşer. Üretici
-  // floor/ceil kullanır (urlState.ts:28 kuralı), pencere asla daralmaz.
-  //
-  // v0.9.1381 — `service=`, `q=` DEĞİL. Eski şerh v0.8.521'i "sunucu
-  // serbest-metin sorgusunu kolonla DA eşliyor" diye genel bir kural gibi
-  // aktarıyordu; o kural yalnız TRACE ID'leri için doğru (CH'de
-  // `isBareHexID` dalı). Servis adı için karşılığı yok: `q` yalnız
-  // gövdede arar ve `service.name:"x"` hiçbir gövdede geçmez.
-  // Ölçüldü: 0 satır → 535.
-  const logsLink = useMemo(() => logsHref({
-    window: { fromNs: chartRange.from, toNs: chartRange.to },
-    service: event.service || undefined,
-  }), [event.service, chartRange]);
-
-  // v0.9.213 — the error-traces pivot used to carry only the service, so
-  // /traces opened on the operator's sticky range (useUrlRange) instead of
-  // the spike. On an anomaly older than that range the list came back EMPTY,
-  // which reads as "no error traces" rather than "wrong window". Same spike
-  // bounds as logsLink above.
-  const tracesHref = useMemo(() => tracesPivotHref({
-    window: { fromNs: chartRange.from, toNs: chartRange.to },
-    service: event.service,
-    hasError: true,
-  }), [event.service, chartRange]);
+  // /logs + hatalı-trace pivotları spike penceresiyle (v0.9.213 / v0.9.1348
+  // / v0.9.1381 dersleri üreticilerde: logsHref service= + floor/ceil
+  // pencere, tracesPivotHref hasError → rootOnly kapalı). v0.10.1032 —
+  // üreticiler anomalyDetail.anomalySignalHrefs'te, tam sayfa ile ortak.
+  const hrefs = useMemo(
+    () => anomalySignalHrefs({ kind: event.kind, service: event.service, pattern: event.pattern }, win),
+    [event.kind, event.service, event.pattern, win],
+  );
 
   // v0.8.499 (sadeleştirme #2, 5/5) — kabuk ui/Drawer'a taşındı:
   // overlay/Esc/✕ tek evden; başlık ve gövde (ES-cost sözleşmesi
@@ -212,12 +81,12 @@ export function AnomalyDetailDrawer({ event, onClose }: {
         <Badge tone={event.status === 'active' ? 'neutral' : 'success'} style={{ fontSize: 10 }}>
           {event.status === 'active' ? 'ACTIVE' : 'CLEARED'}
         </Badge>
-        <span className="badge b-gray" style={{ fontSize: 10 }}>{KIND_LABEL[event.kind]}</span>
+        <span className="badge b-gray" style={{ fontSize: 10 }}>{ANOMALY_KIND_LABEL[event.kind]}</span>
         {event.service && (
           /* v0.9.860 (UX denetimi K1) — kardeş logs/traces linkleri (yukarıda)
              spike penceresini v0.9.213'ten beri taşırken servis linki
              taşımıyordu: aynı bileşende iki standart. */
-          <Link to={serviceHref(event.service, { range: { fromNs: chartRange.from, toNs: chartRange.to } })}
+          <Link to={serviceHref(event.service, { range: win })}
             style={{ fontWeight: 700, fontSize: 14 }}>
             {event.service}
           </Link>
@@ -232,25 +101,7 @@ export function AnomalyDetailDrawer({ event, onClose }: {
           }} title={event.pattern}>{event.pattern}</div>
 
           {/* Spike timeline — the "ne zaman spike oldu" answer. */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: 12, padding: 12, marginBottom: 12,
-            background: 'var(--bg1)', border: '1px solid var(--border)', borderRadius: 8,
-          }}>
-            <Fact k="Spike started" v={tsLong(event.startedAt)} />
-            <Fact k="Last seen" v={tsLong(event.lastSeen)} />
-            <Fact k="Duration" v={event.status === 'active'
-              ? `${fmtDuration(durationNs)} · ongoing`
-              : fmtDuration(durationNs)} />
-            <Fact k="Peak ratio" v={`×${event.peakRatio.toFixed(1)}`}
-              title="Peak count vs the pre-spike baseline window" />
-            {event.currentRatio > 0 && (
-              <Fact k="Current ratio" v={`×${event.currentRatio.toFixed(1)}`} />
-            )}
-            {event.currentCount > 0 && (
-              <Fact k="Count in window" v={fmtNum(event.currentCount)} />
-            )}
-          </div>
+          <SpikeFacts event={event} />
 
           {event.recentDeploy && (
             <div style={{
@@ -270,35 +121,27 @@ export function AnomalyDetailDrawer({ event, onClose }: {
               devreye girer (şekil değişse bile kanıt kaybolmaz). */}
           {behaviorDetails && <BehaviorDetailsBox d={behaviorDetails} />}
 
-          {event.sample && !behaviorDetails && (
-            <pre style={{
-              fontSize: 11,
-              whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-              background: 'var(--bg1)', border: '1px solid var(--border)',
-              borderRadius: 6, padding: '8px 10px', marginBottom: 12,
-              color: 'var(--text2)', maxHeight: 120, overflowY: 'auto',
-            }} title="Sample line captured at detection">{event.sample}</pre>
-          )}
+          {event.sample && !behaviorDetails && <AnomalySample sample={event.sample} />}
 
           {/* Service log volume around the spike — mounted only while
               the drawer is open, one 30s-cached timeseries call, log
               kinds only (ES-cost contract in the header comment). */}
-          {isLogKind && event.service && (
-            <div style={{ marginBottom: 4 }}>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                {event.service} log volume around the spike
-                (window {tsLong(chartRange.from)} → {tsLong(chartRange.to)})
-              </div>
-              <LogsHistogram range={chartRange} filter={chartFilter} />
-            </div>
-          )}
+          {isLogKind && event.service && <AnomalyLogVolume service={event.service} win={win} />}
 
           {/* Root cause + AI — same affordances the row had, in situ. */}
           <div style={{ marginBottom: 12 }}>
             <RootCauseRibbon anchor="anomaly" id={event.id} summary={event.rootCause}
-          window={{ fromNs: chartRange.from, toNs: chartRange.to }} />
+          window={win} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* v0.10.1032 — tam sayfa detay (Problems kuyruğunda yerinde açılır):
+                kök neden açık, ilgili sinyaller, Seyir grafiği, Mute… ve
+                "Gerçek problem / Problem değil" orada. */}
+            <Link to={anomalyDetailHref(event.id)} className="sec"
+              style={{ fontSize: 12, padding: '4px 10px', textDecoration: 'none' }}
+              title="Bu anomalinin tam sayfa detayını aç (Problems)">
+              Tam detay →
+            </Link>
             {/* v0.9.477 — BİLEREK satır-içi kaldı (tek istisna). Bu yüzey
                 zaten bir ui/Drawer; AI çekmecesi üstüne ikinci bir çekmece
                 açardı ve iki kabuk da window'da Escape dinlediğinden tek
@@ -308,8 +151,8 @@ export function AnomalyDetailDrawer({ event, onClose }: {
             {/* v0.10.6 — v0.9.1372'nin İKİZİ. O sürüm detay sayfalarının
                 pivotlarını `.accent`e taşımıştı; bu çekmecedeki aynı türden
                 pivot gözden kaçmıştı. */}
-            {isLogKind && event.service && (
-              <Link to={logsLink} className="accent"
+            {isLogKind && hrefs && (
+              <Link to={hrefs.logs} className="accent"
                 style={{ fontSize: 12, padding: '4px 10px', textDecoration: 'none' }}
                 title="Open /logs scoped to the service + spike window">
                 ≡ Logs in spike window ↗
@@ -318,8 +161,8 @@ export function AnomalyDetailDrawer({ event, onClose }: {
             {/* v0.8.585 — Operator-reported: rootOnly default'u TRUE
                 olduğundan hata izleri (çoğu non-root span) boş
                 listeleniyordu; hasError linki root filtresini kapatır. */}
-            {event.kind === 'trace_op' && event.service && (
-              <Link to={tracesHref}
+            {event.kind === 'trace_op' && hrefs && (
+              <Link to={hrefs.errorTraces}
                 className="sec"
                 style={{ fontSize: 12, padding: '4px 10px', textDecoration: 'none' }}
                 title="Open error traces for this service, scoped to the spike window">

@@ -43,6 +43,13 @@ import { ProblemVerdictActions } from './ProblemVerdictActions';
 //
 // item === undefined ⇒ ?item=<id> pointed at a row not in the current list
 // (stale deep-link / filtered out) — a soft fallback, not a blank panel.
+//
+// v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde drawer çıkıyor.
+// Exception gibi detay gözükmüyor.") — satır tıkı bu çekmeceyi artık yalnız
+// incident satırlarında (ve yükü eksik satırda) açar; alarm kuralı ve anomali
+// satırı tam sayfa detaya gider (Inbox.tsx openRow / lib/inboxHref
+// inboxRowOpen). Çekmece eski ?item= linkleri için de yerinde; eylemleri
+// (Acknowledge, Assign…, Mute…, öğretme) tam sayfalarda da var.
 export function InboxTriageDrawer({ item, onClose, onOpenSource }: {
   item: InboxItem | undefined;
   onClose: () => void;

@@ -72,6 +72,39 @@ export function useAnomalyEvents(enabled = true) {
   });
 }
 
+// useAnomalyEventByID — v0.10.1032 (operatör: "Anomali ve alert rule'lara
+// girdiğimde drawer çıkıyor. Exception gibi detay gözükmüyor."). Problems
+// kuyruğundaki tam sayfa anomali detayının okuması: tek kayıt, id ile
+// (GET /api/anomalies/event?id=, v0.9.465 deep-link kurtarma ucu — yeni uç
+// YOK). Sayfa açıkken bir kez; yoklama YOK (SSE anomali olayı 'anomalies'
+// ağacını zaten tazeler).
+//
+// placeholderData: undefined BİLİNÇLİ — main.tsx küresel keepPreviousData
+// koyuyor; anahtar (id) değişince `data` ÖNCEKİ olayın gövdesi olurdu ve
+// detay sayfası A olayının içeriğini B'nin adresi altında gösterirdi.
+//
+// data === null → kayıt gerçekten yok (sunucu 404). undefined → henüz
+// yüklenmedi. Ayrı tutulur: "kayıt yok" ekranını yalnız null çizmeli
+// (useProblemByID sözleşmesi). 404 dışındaki her hata fırlatır.
+export function useAnomalyEventByID(id: string, opts?: { enabled?: boolean }) {
+  return useQuery<AnomalyEvent | null>({
+    queryKey: keys.anomalies.event(id),
+    queryFn: async () => {
+      try {
+        return (await api.anomalyEvent(id)) ?? null;
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith('HTTP 404')) return null;
+        throw err;
+      }
+    },
+    enabled: (opts?.enabled ?? true) && !!id,
+    staleTime: 30_000,
+    placeholderData: undefined,
+    // Yok olan bir kimlik yeniden denemekle var olmaz.
+    retry: (count, err) => (err instanceof Error && err.message.startsWith('HTTP 404') ? false : count < 2),
+  });
+}
+
 export function useAnomalySilences(enabled = true) {
   return useQuery<AnomalySilence[]>({
     queryKey: keys.anomalies.silences,

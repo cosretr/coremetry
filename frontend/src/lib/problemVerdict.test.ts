@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { inboxSignature, verdictIndex, verdictOf, filterByVerdictView, countNoise, parseVerdictView,
-  verdictMutesNotifications, verdictCoversNotifications, verdictNotifyHint } from './problemVerdict';
-import type { InboxItem, ProblemVerdict } from './types';
+  verdictMutesNotifications, verdictCoversNotifications, verdictNotifyHint, verdictCompactHint,
+  problemSignature, exceptionSignature, anomalySignature,
+  inboxVerdictSubject, problemVerdictSubject, exceptionVerdictSubject, anomalyVerdictSubject } from './problemVerdict';
+import type { AnomalyEvent, ExceptionGroup, InboxItem, Problem, ProblemVerdict } from './types';
 
 // v0.10.1015 — operatör: "Problems sekmesinde bütün hepsi gelsin, ben hangisi
 // gerçek problem hangisi değil zamanla öğretelim." Karar İMZAYA bağlıdır:
@@ -36,6 +38,79 @@ describe('inboxSignature', () => {
   it('önekler sunucunun kabul ettikleriyle aynı (p: e: a:)', () => {
     const go = readFileSync(resolve(__dirname, '../../../internal/chstore/problem_verdict.go'), 'utf8');
     expect(go).toContain('case "p:", "e:", "a:":');
+  });
+});
+
+// v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde drawer çıkıyor.
+// Exception gibi detay gözükmüyor.") — tam sayfa detaylar imzayı InboxItem
+// OLMADAN, ellerindeki kayıttan kurar. Aynı kayıt kuyruktan da detaydan da
+// işaretlenebildiği için iki yol AYNI dizgeyi üretmek ZORUNDA: ayrışırsa
+// detayda "problem değil" denen satır kuyrukta görünmeye devam eder.
+// Satırlar sunucunun eşlemesiyle kuruluyor (inbox.go problemToInbox /
+// exceptionToInbox / anomalyToInbox: aynı alanlar → aynı satır).
+describe('kayıttan imza = satırdan imza (alan alan eşitlik)', () => {
+  const P = (ruleId: string, service: string, ruleName = 'High error rate'): Problem =>
+    ({ id: 'p-1', ruleId, ruleName, service, metric: 'error_rate', value: 9, threshold: 1,
+      severity: 'critical', status: 'open', description: '', startedAt: 1 });
+  const G = (fingerprint: string, type = 'SocketTimeoutException', service = 'checkout'): ExceptionGroup =>
+    ({ fingerprint, type, message: 'm', service, state: 'new', assignee: '', firstSeen: 1, lastSeen: 2,
+      occurrences: 3, notes: '' });
+  const A = (kind: AnomalyEvent['kind'], service: string, pattern: string): AnomalyEvent =>
+    ({ id: 'a-9', kind, service, pattern, startedAt: 1, lastSeen: 2, peakRatio: 3, currentRatio: 2,
+      currentCount: 5, sample: '', status: 'active' });
+  // Sunucunun satır eşlemesinin aynısı (Title dahil).
+  const rowOfProblem = (p: Problem): InboxItem => ({ ...base, id: `problem:${p.id}`, kind: 'problem',
+    service: p.service, title: p.ruleName,
+    problem: { id: p.id, ruleId: p.ruleId, metric: p.metric, value: p.value, threshold: p.threshold } }) as InboxItem;
+  const rowOfGroup = (g: ExceptionGroup): InboxItem => ({ ...base, id: `exception:${g.fingerprint}`,
+    kind: /^[0-9]{3}$/.test(g.type) ? 'httperror' : 'exception', service: g.service, title: g.type,
+    exception: { fingerprint: g.fingerprint, type: g.type, message: g.message, occurrences: g.occurrences } }) as InboxItem;
+  const rowOfAnomaly = (e: AnomalyEvent): InboxItem => ({ ...base, id: `anomaly:${e.id}`, kind: 'anomaly',
+    service: e.service, title: `${e.kind} · ${e.pattern}`,
+    anomaly: { id: e.id, kind: e.kind, pattern: e.pattern, peakRatio: e.peakRatio, currentRatio: e.currentRatio } }) as InboxItem;
+
+  it.each([
+    P('rule-err', 'payments-api'), P('rule-err', ''), P('slo:abc:critical', 'orders-api'),
+    P('runtime:heap', 'db:oracle@core-scan.prod'),
+  ])('problem %#', (p) => {
+    const row = rowOfProblem(p);
+    expect(problemSignature(p)).toBe(inboxSignature(row));
+    expect(problemVerdictSubject(p)).toEqual(inboxVerdictSubject(row));
+  });
+  it.each([G('9f8a7c'), G('404', '404', 'gw'), G('fp/with|pipe')])('exception %#', (g) => {
+    const row = rowOfGroup(g);
+    expect(exceptionSignature(g)).toBe(inboxSignature(row));
+    expect(exceptionVerdictSubject(g)).toEqual(inboxVerdictSubject(row));
+  });
+  it.each([
+    A('log_pattern', 'checkout', 'ORA-00060'), A('trace_op', 'orders-api', 'POST /pay'),
+    A('trace_op_latency', '', 'GET /x'), A('behavior_change', 'payments-api', 'P99 latency · davranış değişimi'),
+    A('log_template_new', 'checkout', ''),
+  ])('anomaly %#', (e) => {
+    const row = rowOfAnomaly(e);
+    expect(anomalySignature(e)).toBe(inboxSignature(row));
+    expect(anomalyVerdictSubject(e)).toEqual(inboxVerdictSubject(row));
+  });
+  it('öğretilemeyen kayıt: boş kural / parmak izi / tür → null (düğmeler çizilmez)', () => {
+    expect(problemSignature(P('', 'svc'))).toBeNull();
+    expect(problemVerdictSubject(P('', 'svc'))).toBeNull();
+    expect(exceptionSignature(G(''))).toBeNull();
+    expect(exceptionVerdictSubject(G(''))).toBeNull();
+    expect(anomalySignature({ kind: '', service: 's', pattern: 'p' })).toBeNull();
+    expect(inboxVerdictSubject(incident())).toBeNull();
+  });
+  it('HTTP hata grubu tanımı sunucudakiyle aynı (chstore.HTTPErrorTypeRe)', () => {
+    const go = readFileSync(resolve(__dirname, '../../../internal/chstore/exception_inbox.go'), 'utf8');
+    expect(go).toContain('const HTTPErrorTypeRe = `^[0-9]{3}$`');
+    expect(exceptionVerdictSubject(G('f1', '503'))?.kind).toBe('httperror');
+    expect(exceptionVerdictSubject(G('f2', '5030'))?.kind).toBe('exception');
+  });
+  it('detay sayfaları öğretme düğmelerini taşır (exception detayı v0.10.1015 boşluğu dahil)', () => {
+    const detail = readFileSync(resolve(__dirname, '../features/anomalies/ProblemDetail.tsx'), 'utf8');
+    expect(detail).toContain('<ProblemVerdictActions subject={exceptionVerdictSubject(group)} compact');
+    expect(detail).toContain('<ProblemVerdictActions subject={problemVerdictSubject(problem)} compact');
+    const anomaly = readFileSync(resolve(__dirname, '../features/anomalies/AnomalyEventDetail.tsx'), 'utf8');
+    expect(anomaly).toContain('<ProblemVerdictActions subject={anomalyVerdictSubject(event)} compact');
   });
 });
 
@@ -117,6 +192,17 @@ describe('bildirim politikası', () => {
     expect(verdictNotifyHint('p:r|s', { muteNotifications: true })).toContain('bildirimlerini de susturur');
     expect(verdictNotifyHint('e:fp', { muteNotifications: true })).toContain('bildirimlerini de susturur');
     expect(verdictNotifyHint('a:k|s|p', { muteNotifications: true })).toContain('etkilenmez');
+  });
+  // v0.10.1032 (operatör: "Çok detay verince daha anlaşılır olmuyor") — detay
+  // sayfalarının TEK kısa cümlesi; bildirim cümleciği yalnız politika açıkken.
+  it('kompakt açıklama: her tür için doğru tek cümle; bildirim yalnız politika açıkken', () => {
+    const core = 'Aynısı yeniden gelirse aynı sınıfa düşer; geri alınabilir.';
+    expect(verdictCompactHint('p:r|s', undefined)).toBe(core);
+    expect(verdictCompactHint('e:fp', { muteNotifications: false })).toBe(core);
+    expect(verdictCompactHint('a:k|s|p', null)).toBe(core);
+    expect(verdictCompactHint('p:r|s', { muteNotifications: true })).toBe(`${core} “Problem değil” bildirimini de susturur.`);
+    expect(verdictCompactHint('e:fp', { muteNotifications: true })).toContain('bildirimini de susturur');
+    expect(verdictCompactHint('a:k|s|p', { muteNotifications: true })).toBe(`${core} Anomali bildirimini etkilemez.`);
   });
   it('imza kalıbı sunucudakiyle aynı (internal/notify/verdict_silence.go)', () => {
     const go = readFileSync(resolve(__dirname, '../../../internal/notify/verdict_silence.go'), 'utf8');

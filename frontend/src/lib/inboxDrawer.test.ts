@@ -5,6 +5,7 @@ import {
   rootCauseAnchor,
   resolveSelectedItem,
   buildAnomalySilenceBody,
+  anomalyEventSilenceBody,
 } from './inboxDrawer';
 import type { InboxItem, InboxKind } from './types';
 
@@ -142,5 +143,25 @@ describe('buildAnomalySilenceBody', () => {
   it('null when the anomaly sub-object is missing', () => {
     const a = mk('anomaly'); delete a.anomaly;
     expect(buildAnomalySilenceBody(a, 3600)).toBeNull();
+  });
+});
+
+// v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde drawer çıkıyor.
+// Exception gibi detay gözükmüyor.") — Mute… tam sayfa anomali detayına taşındı;
+// sayfanın elinde AnomalyEvent var. İki yol AYNI gövdeyi (aynı parmak izi)
+// yazmalı: satırdan kurulan = olaydan kurulan.
+describe('anomalyEventSilenceBody', () => {
+  it('çekmecenin satırdan kurduğu gövdeyle birebir aynı', () => {
+    const it_ = mk('anomaly');
+    const fromEvent = anomalyEventSilenceBody(
+      { id: 'anom-9', kind: 'log_pattern', pattern: 'timeout x', service: 'checkout' }, 900);
+    expect(fromEvent).toEqual(buildAnomalySilenceBody(it_, 900));
+    expect(fromEvent).toEqual({
+      fingerprint: 'anom-9', kind: 'log_pattern', pattern: 'timeout x', service: 'checkout', durationSec: 900,
+    });
+  });
+  it('boş kimlik → null (Mute düğmesini korur)', () => {
+    expect(anomalyEventSilenceBody({ id: '', kind: 'k', pattern: 'p', service: 's' }, 60)).toBeNull();
+    expect(buildAnomalySilenceBody(mk('anomaly', { anomaly: { id: '', kind: 'k', pattern: 'p', peakRatio: 1, currentRatio: 1 } }), 60)).toBeNull();
   });
 });

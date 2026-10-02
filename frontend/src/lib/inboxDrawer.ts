@@ -103,11 +103,27 @@ export interface AnomalySilenceBody {
 // for any non-anomaly kind or a missing sub-object (guards the mute button).
 export function buildAnomalySilenceBody(it: InboxItem, durationSec: number): AnomalySilenceBody | null {
   if (it.kind !== 'anomaly' || !it.anomaly) return null;
+  return anomalyEventSilenceBody(
+    { id: it.anomaly.id, kind: it.anomaly.kind, pattern: it.anomaly.pattern, service: it.service },
+    durationSec);
+}
+
+// anomalyEventSilenceBody — v0.10.1032 (operatör: "Anomali ve alert rule'lara
+// girdiğimde drawer çıkıyor. Exception gibi detay gözükmüyor."). Anomali satırı
+// artık tam sayfa detay açıyor ve Mute… oraya taşındı; sayfanın elinde bir
+// InboxItem değil AnomalyEvent var. Gövde TEK yerde kurulur: çekmecenin
+// yukarıdaki kurucusu da buna iner, iki susturma yolu aynı parmak izini yazar.
+// Boş kimlik → null (düğmeyi korur).
+export function anomalyEventSilenceBody(
+  e: { id: string; kind: string; pattern: string; service: string },
+  durationSec: number,
+): AnomalySilenceBody | null {
+  if (!e.id) return null;
   return {
-    fingerprint: it.anomaly.id,
-    kind: it.anomaly.kind,
-    pattern: it.anomaly.pattern,
-    service: it.service,
+    fingerprint: e.id,
+    kind: e.kind,
+    pattern: e.pattern,
+    service: e.service,
     durationSec,
   };
 }

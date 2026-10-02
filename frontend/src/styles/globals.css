@@ -3920,6 +3920,29 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 .pb-sect > .h { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--divider); background: var(--bg2); border-radius: var(--radius-sm) var(--radius-sm) 0 0; font-size: 12px; font-weight: 700; }
 .pb-sect > .h.accent { background: var(--accent-bg); border-bottom-color: var(--accent-border); color: var(--accent2); }
 .pb-sect > .b { padding: 10px 12px; min-width: 0; }
+/* v0.10.1032 — başlığın sağındaki soluk alt yazı (eskiden satır içi stil). */
+.pb-sect-sub { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--text3); }
+/* v0.10.1032 (operatör: "Anlaşılır olsun. Çok detay verince daha anlaşılır
+   olmuyor") — açılır-kapanır Sect: ikincil bölümler kapalı gelir. Başlık
+   DisclosureButton'ı başlık satırının tipografisini DEVRALIR (dsc-row'un
+   11px'i değil); kapalıyken gövde yok, başlık kartın tamamı olur. */
+.pb-sect > .h > .pb-sect-toggle { flex: 1; min-width: 0; padding: 0; gap: 6px; font: inherit; color: inherit; }
+.pb-sect > .h > .pb-sect-toggle:hover:not(:disabled) { color: var(--text); }
+.pb-sect--closed > .h { border-bottom-color: transparent; border-radius: var(--radius-sm); }
+/* v0.10.1032 — detayın "ne oldu" özeti: tek cümle + "ne zaman" satırı. */
+.pd-summary { margin-bottom: 14px; min-width: 0; }
+.pd-summary__what { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.4; overflow-wrap: anywhere; }
+.pd-summary__detail { margin-top: 4px; font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-summary__when { margin-top: 4px; font-size: 12px; color: var(--text3); }
+/* v0.10.1032 (inceleme: "Triyaj bloğu çok büyük") — detay sayfalarının TEK
+   satırlık triyajı: kutu ve paragraf yok; dar ekranda satır sarar. */
+.pd-triage { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; font-size: 12px; min-width: 0; }
+.pd-triage__k { color: var(--text3); font-size: 11px; }
+.pd-triage__sep { color: var(--text3); }
+.pv-compact { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.pv-compact__q { font-weight: 600; color: var(--text2); }
+.pv-compact__state { color: var(--text3); }
+.pv-compact__hint { color: var(--text3); font-size: 11px; }
 /* Vertical dot-line timeline. */
 .pb-tl { list-style: none; margin: 0; padding: 0; }
 .pb-tl li { position: relative; padding: 0 0 14px 20px; font-size: 12px; }

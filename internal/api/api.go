@@ -10858,23 +10858,9 @@ func (s *Server) getAnomalyEvents(w http.ResponseWriter, r *http.Request) {
 			// dürüstlük şeridi sayfayı asla boşaltmaz.
 			activeN, clearedN = 0, 0
 		}
-		rows = s.store.EnrichAnomaliesWithClusters(ctx, rows, time.Hour)
-		// v0.5.286 — attach the most recent deploy per service
-		// in the 30 min preceding each event's startedAt so the
-		// /anomalies page can answer "did this break because of a
-		// deploy?" without a context switch. Uses the v0.5.283
-		// effective-version chain (Helm labels, image tags) so
-		// installs with no service.version still correlate.
-		rows = s.store.EnrichAnomaliesWithDeploys(ctx, rows, 30*time.Minute)
-		// rc #3 — attach the persisted root-cause top-suspect summary in
-		// ONE batch read (GetHypotheses) so each anomaly row renders the
-		// in-page ribbon without a per-row /rootcause fetch. Soft-fails to
-		// the unenriched rows; rows with no hypothesis keep RootCause=nil
-		// (honest "no clear cause yet" state). Stays inside serveCached —
-		// the existing key already hashes since+limit; this join is
-		// read-only, no new audit.
-		rows = s.store.EnrichAnomaliesWithRootCause(ctx, rows)
-		rows = s.store.EnrichAnomaliesWithVerdicts(ctx, rows) // v0.10.181
+		// v0.10.1032 — zenginleştirme zinciri (cluster → deploy → kök neden
+		// → karar) tekil okumayla ORTAK: anomaly_event_get.go.
+		rows = enrichAnomalyEvents(ctx, s.store, rows)
 		return map[string]any{
 			"items":        rows,
 			"activeTotal":  activeN,
@@ -10882,22 +10868,6 @@ func (s *Server) getAnomalyEvents(w http.ResponseWriter, r *http.Request) {
 			"truncated":    len(rows) >= limit,
 		}, nil
 	})
-}
-
-// getAnomalyEvent (v0.9.465, dürüstlük A9) — tek event, id ile.
-// ?event= deep-link'i 200'lük liste penceresinin dışına düşünce sayfa
-// sessiz hiçlik gösteriyordu; frontend bu uçtan kurtarır.
-func (s *Server) getAnomalyEvent(w http.ResponseWriter, r *http.Request) {
-	ev, err := s.store.GetAnomalyEvent(r.Context(), r.URL.Query().Get("id"), 0)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	if ev == nil {
-		http.Error(w, "anomaly not found", http.StatusNotFound)
-		return
-	}
-	writeJSON(w, ev)
 }
 
 // getMetricAnomalies returns the open Problems whose rule_id

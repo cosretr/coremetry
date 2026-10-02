@@ -987,6 +987,72 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Problems: anomali ve alarm kuralı satırı tam sayfa detay açar (v0.10.1032)
+
+**Köken (operatör, prod):** "Anomali ve alert rule'lara girdiğimde drawer çıkıyor. Exception gibi detay
+gözükmüyor." Problems kuyruğunda (`/inbox`) exception satırı v0.9.341'den beri tam sayfa açıyordu; alarm
+kuralı ve anomali satırı 560px triyaj çekmecesini (başlık + kök-neden şeridi + birkaç düğme). Çekmece alarm
+kuralında VAR OLAN bir tam sayfayı saklıyordu: v0.9.837'den beri aynı sayfa `?problem=` ile
+AlertProblemDetail'i barındırıyor, ona yalnız çekmecenin "Open source →"u götürüyordu. Anomali olayının ise
+çekmeceden zengin hiçbir sayfası yoktu (yalnız /anomalies çekmecesi). v0.9.341 yorumundaki "ikisinin de
+çekmecenin sakladığı daha zengin bir hedefi yok" cümlesi v0.9.837'de yanlışlaşmıştı.
+
+**Karar:** satır tıkı (ve klavye Enter/o) türe göre: exception ailesi `/problems?exc=` (değişmedi); alarm
+kuralı `?problem=<id>`, anomali `?anomaly=<id>` — ikisi de YERİNDE tam sayfa (kuyruk `display:none` ile
+mount'lu kalır, "← Problems" / Esc geri döner). `?problem=` ile `?anomaly=` karşılıklı dışlayıcı: biri açılınca
+öteki ve `?item=` silinir, ikisi birden gelirse problem okunur. Karar saf ve tablo testli
+(`lib/inboxHref` `inboxRowOpen` / `withInboxDetail` / `readInboxDetail`). Detayı kapatmak `problem`,
+`anomaly` ve `item`'ın HEPSİNİ siler (elle yazılmış link geri dönüşte başka detaya / çekmeceye sıçramaz);
+detay açıkken gizli kuyruğun (ve Alert rules tablosunun) klavye gezinmesi kapalı. `inboxItemHref` anomali
+için artık `/inbox?anomaly=` (servis dikkat şeridi ve "Open source" oraya iner). Bu, v0.8.292 / v0.9.341'in
+"exception dışı türler çekmecede" kararını BU İKİ TÜR için geçersiz kılar.
+
+**Anlaşılırlık (operatör, aynı sürüm):** "Anlaşılır olsun. Çok detay verince daha anlaşılır olmuyor — alert ve
+anomaliler de." İki sayfanın ilk satırı tek Türkçe cümle + "ne zaman" satırı (saf kurucular `detailSummary.ts`;
+eksik alanda daha sade cümleye düşer, NaN / "0 katına" / boş parantez basmaz; bitmiş olayda bitişi söyler;
+`anomaly:` önekli kuralda ikinci sayı "eşik" değil "olağan değer"). Hemen altında TEK satırlık triyaj — kutu ve
+paragraf yok: alarmda "Atanan ‹çip› [Assign…] · Gerçek problem mi? [Gerçek problem] [Problem değil]",
+anomalide "[süre] [Mute…] · Gerçek problem mi? …"; uzun öğretme açıklaması yerine tek kısa cümle ("Aynısı
+yeniden gelirse aynı sınıfa düşer; geri alınabilir.", bildirim cümleciği yalnız yönetici politikası açıkken).
+Triyaj çekmecesi uzun biçimi korur; exception detayı aynı kompakt satırı kendi kartında kullanır.
+Anomali sayfası yalın: özet, türün TEK grafiği (aşağıda), kapalı kök-neden şeridi, "Ne yapabilirim" (log /
+trace / servis); gerisi tek kapalı "Teknik ayrıntı"da; tür rozeti ve grafik başlığı düz Türkçe. Alarm sayfası:
+kök neden / blast radius / correlated signals görünür; Metric (özet değeri zaten söylüyor), zaman çizelgesi,
+Bildirim, Runbook, Description kapalı gelir (`Sect collapsible`, kapalıyken mount edilmez → bildirim geçmişi
+ve runbook koşuları açılınca çekilir). "Log kanıtı" zaten kendi açıcısıyla kapalı; ikinci kapak eklenmedi.
+Kök-neden kartındaki kural adı satırı kalktı (özet onunla başlıyor). Hiçbir bölüm silinmedi.
+
+**Seyir grafiği:** mevcut CosreChart (tek sınırlı span sorgusu, yoklama yok). `trace_op` için HATA SAYISI (agg
+`errors`; sunucu `aggToSQL` zaten destekliyor) — dedektör hata sayısını tabanla kıyaslar; hata ORANI çizmek,
+yüzdesi sabitken trafiği artan operasyonda "5 katına çıktı"nın altına düz çizgi koyardı. `trace_op_latency` →
+p99; davranış → kayan metrik; dış kaynak / ayrıştırılamayan kanıt / log türleri → Seyir yok (log türlerinin
+grafiği log hacmi). Başlık / lejant / boş notu kodun verdiği `presentation` prop'u taşır, spec DEĞİL (sohbet
+çitinin modelin yazabildiği spec'i başlık belirleyemez — pin güncellendi, değişmez aynı). Pencere dakikaya
+yuvarlanır (açık olayda sorgu anahtarı kaymaz) ve giriş en çok 6 sa.
+
+**Tekil okuma zenginleşti (backend):** `GET /api/anomalies/event` artık liste ucuyla AYNI zincirden geçer
+(cluster → son deploy → kök-neden özeti → karar; `internal/api/anomaly_event_get.go`
+`enrichAnomalyEvents`, sıra ve paylaşım Go testli). /inbox liste önbelleğini hiç doldurmadığı için tam
+sayfanın ana yolu bu okuma ve kök-neden çipi hipotez varken "no clear cause yet" diyordu. Handler api.go'dan
+taşındı (api.go küçüldü, taban indirildi). Sayfada tekil okuma HER ZAMAN koşar; /anomalies liste önbelleği
+yalnız anında ilk boyamadır (eskiden okumayı kapatıyor, bitmiş olayı "sürüyor" diye donduruyordu).
+
+**Taşınanlar (hiçbir yetenek kaybolmasın):** alarm sayfasına Assign… + "Gerçek problem / Problem değil"
+(Acknowledge şeritte kaldı, artık kuyruğu da tazeler; çekmecedeki P-xxxxx görüntü kimliği şeritte); anomali
+sayfasına Mute… (çekmeceyle ortak gövde kurucusu `anomalyEventSilenceBody`) + öğretme; exception detayına da
+öğretme (v0.10.1015'ten beri bir exception arayüzden "problem değil" diye işaretlenemiyordu).
+`ProblemVerdictActions` InboxItem olmadan da sürülür; kayıttan kurulan imza (`problemSignature` /
+`exceptionSignature` / `anomalySignature`) satırdan kurulanla aynı dizgedir (test alan alan çiviler).
+`AlertProblemHost` iki sayfada da kimlikle anahtarlı; `useProblemByID` önceki problemin kaydını yer tutucu
+olarak göstermez.
+
+**Değişmeyenler:** incident satırları ve eski `?item=` linkleri çekmeceyi açar; /anomalies (ve servis Overview)
+çekmecesi yerinde — gövde parçaları tam sayfayla ortak modüle (`anomalyDetail.ts` / `anomalyDetailParts.tsx`)
+çıktı ve "Tam detay →" bağlantısı kazandı; /problems exception yönlendirmesi.
+
+**Ertelenen (kuyrukta):** Mute'un satırı kuyruktan düşürmemesi (/api/inbox tarafı), tarayıcı Geri anlamı,
+alarm sayfasının İngilizce bölüm başlıkları, anomali "Error logs" / "Desenler" pivotları, alarm özetinde birim.
+
 ## 2026-10-02 — "Coremetry · disk dolacak" alarmı varsayılan kapalı (v0.10.1031)
 
 **Operatör (prod, ekran görüntüsüyle):** "Disk dolacak niye geliyor, gerek yok." Problems sekmesinde disk/düğüm

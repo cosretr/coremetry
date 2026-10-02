@@ -91,6 +91,11 @@ export const keys = {
     metrics:     ['anomalies', 'metrics'] as const,
     events:      ['anomalies', 'events'] as const,
     silences:    ['anomalies', 'silences'] as const,
+    // v0.10.1032 — tekil olay (Problems kuyruğundaki tam sayfa anomali
+    // detayı). 'anomalies' ağacının altında: susturma / karar / SSE ile
+    // yapılan toplu invalidate bunu da tazeler. 'events' ile KARDEŞ (alt
+    // dalı değil): events zarfı ile tek kayıt aynı dala düşmesin.
+    event:       (id: string) => ['anomalies', 'event', id] as const,
   },
 
   exceptions: {

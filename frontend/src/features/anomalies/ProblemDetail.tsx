@@ -3,10 +3,10 @@ import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim
 import { useEscLayer } from '@/lib/escLayer';
 import { Link, useNavigate } from 'react-router-dom';
 import { rolloutEvidenceHref } from '@/lib/rolloutRow';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowDownToLine } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Users } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useServicesMetadata } from '@/lib/queries';
+import { keys, useServicesMetadata } from '@/lib/queries';
 import { fmtFixed, fmtNum, tsLong } from '@/lib/utils';
 import { Spinner, Empty } from '@/components/Spinner';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
@@ -20,7 +20,7 @@ import { IconSparkles } from '@/components/icons';
 import { TimeChart } from '@/components/charts/TimeChart';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { statusColor } from '@/lib/statusColor';
-import { fmtDurationNs, fmtStartedTs } from './problemTime';
+import { fmtStartedTs } from './problemTime';
 import { emptySamplesNote } from './exceptionSamples';
 import { ExceptionPodsPanel } from './ExceptionPodsPanel';
 import { fmtOccTick } from './occTick'; // v0.10.734
@@ -47,6 +47,12 @@ import { operationTracesHref } from '@/lib/pivotHref';
 import { traceHref } from '@/lib/traceHref';
 import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle } from '../../lib/problemSubject';
+import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
+import { alertProblemSummary, detailWhenLine } from './detailSummary'; // v0.10.1032
+// v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
+// "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
+import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
+import { problemVerdictSubject, exceptionVerdictSubject } from '@/lib/problemVerdict';
 
 // ProblemDetail — Variant B (Dynatrace problem feed) full-page details.
 // Two surfaces share one skeleton: a top triage bar (badges + ID +
@@ -93,19 +99,8 @@ function useEscBack(onBack: () => void) {
   useEscLayer(true, onBack);
 }
 
-function Sect({ title, accent, sub, children }: {
-  title: string; accent?: boolean; sub?: React.ReactNode; children: React.ReactNode;
-}) {
-  return (
-    <div className="pb-sect">
-      <div className={accent ? 'h accent' : 'h'}>
-        {title}
-        {sub && <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>{sub}</span>}
-      </div>
-      <div className="b">{children}</div>
-    </div>
-  );
-}
+// v0.10.1032 — Sect / SignalLink / DeployBox ./detailSections'a taşındı
+// (anomali olayının tam sayfası AnomalyEventDetail aynı parçaları kullanıyor).
 
 // ProblemOffenders — v0.9.962 (UX denetimi G5 / Ö8). "Hangi endpoint
 // yavaşlattı / hata verdi" sorusunun SAYFADAKİ cevabı.
@@ -193,40 +188,6 @@ function ProblemOffenders({ problem }: { problem: Problem }) {
         </table>
       )}
     </Sect>
-  );
-}
-
-function SignalLink({ to, label, sub }: { to: string; label: string; sub?: string }) {
-  return (
-    <Link to={to} style={{
-      display: 'flex', alignItems: 'baseline', gap: 8,
-      padding: '7px 10px', marginBottom: 6,
-      border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
-      background: 'var(--bg2)', textDecoration: 'none',
-      color: 'var(--accent2)', fontSize: 12,
-    }}>
-      <span style={{ fontWeight: 600 }}>{label} ↗</span>
-      {sub && <span style={{ color: 'var(--text3)', fontSize: 11 }}>{sub}</span>}
-    </Link>
-  );
-}
-
-// DeployBox — renders ONLY when the row carries a recentDeploy (spec:
-// no placeholder, no "no deploy detected", no extra fetch).
-function DeployBox({ version, ageSeconds }: { version: string; ageSeconds: number }) {
-  return (
-    <div style={{
-      fontSize: 12, padding: '8px 12px', marginTop: 10,
-      borderRadius: 'var(--radius-sm)',
-      background: 'color-mix(in srgb, var(--warn) 10%, transparent)',
-      border: '1px solid color-mix(in srgb, var(--warn) 35%, transparent)',
-    }}>
-      <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        <ArrowDownToLine size={13} strokeWidth={1.75} /> Deploy correlation
-      </span>{' — '}
-      <code className="mono">{version}</code> landed{' '}
-      <b>{Math.max(1, Math.round(ageSeconds / 60))}m before</b> this problem opened.
-    </div>
   );
 }
 
@@ -747,9 +708,84 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             </table>
           </div>
         </div>
+        {/* v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde drawer
+            çıkıyor. Exception gibi detay gözükmüyor.") — öğretme düğmeleri
+            exception detayında da. Exception satırı hiçbir zaman çekmeceye
+            açılmadığı için v0.10.1015'ten beri bir exception arayüzden "problem
+            değil" diye İŞARETLENEMİYORDU. Klasik düzen değişmez: sağ kolonun
+            dibinde küçük bir kart. "Problem değil" satırı varsayılan kuyruktan
+            çıkarır → listeye dönülür (çekmecenin kendini kapatmasının ikizi).
+            Kompakt biçim (inceleme: tek satır, tek kısa cümle). */}
+        <div className="card" style={{ minWidth: 0 }}>
+          <div className="ov-card-h"><h3>Triyaj</h3></div>
+          <div className="ov-card-b">
+            <ProblemVerdictActions subject={exceptionVerdictSubject(group)} compact
+              onDone={next => { if (next === 'noise') onBack(); }} />
+          </div>
+        </div>
         </div>
       </div>
     </PageShell>
+  );
+}
+
+// ProblemTriage — v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde
+// drawer çıkıyor. Exception gibi detay gözükmüyor."). Alarm kuralı satırı artık
+// çekmece yerine bu tam sayfayı açıyor; çekmecenin triyaj eylemleri buraya
+// taşındı ki hiçbir yetenek kaybolmasın: Assign… (api.setProblemAssignee,
+// prompt, boş = atamayı kaldır — çekmece ve Problems satırındaki AssigneeCell ile
+// aynı) ve öğretme düğmeleri. Acknowledge üst şeritte kalır. Yazan düğmeler
+// editor/admin'e; viewer atananı ve kararı SALT OKUNUR görür (değişmez #7).
+// v0.10.1032 (inceleme: "Triyaj bloğu çok büyük") — kutu ve paragraf YOK:
+// özetin altında TEK satır, "Atanan <çip> [Assign…] · Gerçek problem mi? …".
+function ProblemTriage({ problem, isAdmin, onBack, onChanged }: {
+  problem: Problem;
+  isAdmin: boolean;
+  onBack: () => void;
+  onChanged: () => void;
+}) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const assignee = problem.assignee ?? '';
+  const onAssign = async () => {
+    const v = window.prompt('Assignee (email or team name; empty = unassign):', assignee);
+    if (v === null) return;
+    const next = v.trim();
+    if (next === assignee) return;
+    setBusy(true); setErr(null);
+    try {
+      await api.setProblemAssignee(problem.id, next);
+      onChanged();
+      // Kuyruğun Assignee kolonu da tazelensin (satır listede durmaya devam ediyor).
+      void qc.invalidateQueries({ queryKey: ['inbox'] });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="pd-triage" role="group" aria-label="Triyaj">
+      <span className="pd-triage__k">Atanan</span>
+      {assignee
+        ? (
+          // v0.10.922 (sade palet adım 1) — atanan üst veri: nötr (Inbox AssigneePill ile aynı).
+          <span className="badge b-gray">
+            {!assignee.includes('@') && <Users size={11} strokeWidth={1.75} />}{assignee}
+          </span>
+        )
+        : <span className="pd-triage__k">—</span>}
+      {isAdmin && (
+        <Button variant="secondary" size="sm" loading={busy} onClick={() => { void onAssign(); }}>
+          Assign…
+        </Button>
+      )}
+      {err && <span role="alert" className="field-error">Atama yazılamadı — {err}</span>}
+      <span className="pd-triage__sep" aria-hidden="true">·</span>
+      <ProblemVerdictActions subject={problemVerdictSubject(problem)} compact
+        onDone={next => { if (next === 'noise') onBack(); }} />
+    </div>
   );
 }
 
@@ -762,6 +798,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   onChanged: () => void;
 }) {
   useEscBack(onBack);
+  const qc = useQueryClient();
   const [acking, setAcking] = useState(false);
   const isAnomaly = problem.ruleId?.startsWith('anomaly:');
   const endNs = problem.resolvedAt || Date.now() * 1e6;
@@ -771,6 +808,10 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
     try {
       await api.acknowledgeProblems([problem.id]);
       onChanged();
+      // v0.10.1032 (inceleme) — satır tıkı artık bu sayfayı açtığı için
+      // Acknowledge'ın ANA yolu burası: kuyruk (ve sayaç) da tazelensin,
+      // yoksa onaylanan satır bir yoklama turu boyunca kuyrukta kalır.
+      void qc.invalidateQueries({ queryKey: keys.inbox.all });
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
     } finally {
@@ -843,11 +884,19 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <span className="badge b-gray">{problem.severity.toUpperCase()}</span>
         <ProblemStatusBadge status={problem.status} />
         {problem.priority && <PriorityBadge p={problem.priority} reason={problem.priorityReason} />}
+        {/* v0.10.1032 (inceleme) — görüntü kimliği (P-xxxxx) çekmecede vardı;
+            satır tıkı çekmeceyi atlayınca kayboluyordu. Tıkla-kopyala, palete
+            yazınca bu problem açılır. */}
+        {problem.displayId && (
+          <span className="badge b-gray mono" style={{ cursor: 'copy' }}
+            title="Görüntü kimliği — kopyalamak için tıkla; palete yazınca bu problem açılır"
+            onClick={() => { void copyToClipboard(problem.displayId!); }}>
+            {problem.displayId}
+          </span>
+        )}
         <span className="badge b-gray mono">{problem.id.slice(0, 12)}</span>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>
-          Started {fmtStartedTs(problem.startedAt)} · {fmtDurationNs(endNs - problem.startedAt)}
-          {problem.status !== 'resolved' ? ' · ongoing' : ''}
-        </span>
+        {/* v0.10.1032 — "Started … · süre · ongoing" buradan özetin "ne
+            zaman" satırına taşındı (aynı bilgi iki kez basılmasın). */}
         <span className="spacer" />
         <ShareButton copiedLabel="Copied" />
         {isAdmin && problem.status === 'open' && (
@@ -856,6 +905,18 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           </Button>
         )}
       </div>
+
+      {/* v0.10.1032 (operatör: "Anlaşılır olsun. Çok detay verince daha
+          anlaşılır olmuyor — alert ve anomaliler de.") — şeridin altındaki İLK
+          şey tek cümlelik özet + "ne zaman" satırı (./detailSummary, tablo
+          testli); hemen altında Triyaj. Hiçbir bölüm silinmedi: ikincil
+          olanlar (zaman çizelgesi, bildirim, runbook, açıklama) kapalı gelir. */}
+      <DetailSummary sentence={alertProblemSummary(problem)}
+        when={detailWhenLine({
+          startedAt: problem.startedAt, durationNs: endNs - problem.startedAt,
+          ongoing: problem.status !== 'resolved', endedAt: problem.resolvedAt,
+        })} />
+      <ProblemTriage problem={problem} isAdmin={isAdmin} onBack={onBack} onChanged={onChanged} />
 
       {/* v0.10.562 — deterministik insight şeridi (şüpheli · ilk anomali ·
           rollout · daha önce); ilk ekranın üstünde, sormadan dolar. */}
@@ -867,12 +928,17 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         {/* ── Left column ── */}
         <div style={{ minWidth: 0 }}>
           <Sect title="Root cause analysis" accent>
-            <div style={{ fontSize: 13, marginBottom: 8 }}>
-              {/* v0.10.922 (sade palet adım 1) — ANOMALY bir tür etiketi
-                  (üst veri), mavi değil nötr. */}
-              {isAnomaly && <span className="badge b-gray" style={{ marginRight: 6 }}>ANOMALY</span>}
-              <b>{problem.ruleName}</b>
-            </div>
+            {/* v0.10.1032 (inceleme) — kural adı satırı KALKTI: hemen üstteki
+                özet cümlesi kural adıyla başlıyor (ad boşsa metrikle), yani
+                satır ekranın üstünde saf bir tekrardı. ANOMALY tür etiketi
+                tekrar değil, kalır. */}
+            {isAnomaly && (
+              <div style={{ fontSize: 13, marginBottom: 8 }}>
+                {/* v0.10.922 (sade palet adım 1) — ANOMALY bir tür etiketi
+                    (üst veri), mavi değil nötr. */}
+                <span className="badge b-gray">ANOMALY</span>
+              </div>
+            )}
             {/* v0.10.230 (Influx D5) — dış kaynak öznesinde topoloji/servis
                 tabanlı analiz yok; kanıt zinciri (metrik şeridi, trace'ler,
                 pod'lar, log imzaları) D4'ün yazdığı hipotezden çizilir. */}
@@ -907,7 +973,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
             </div>
           </Sect>
 
-          <Sect title="Metric" sub={<span className="mono">{problem.metric}</span>}>
+          {/* v0.10.1032 (inceleme) — kapalı gelir: özet cümlesi değeri ve
+              eşiği zaten söylüyor; açınca öncelik gerekçesiyle aynı blok. */}
+          <Sect title="Metric" collapsible sub={<span className="mono">{problem.metric}</span>}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
               <span className="pb-headline" style={{ fontSize: 24 }}>{problem.value.toFixed(2)}</span>
               <span className="mono" style={{ color: 'var(--text3)', fontSize: 13 }}>
@@ -923,7 +991,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               öznede boş tablo "suçlu yok" diye okunurdu. */}
           {!isExternal && <ProblemOffenders problem={problem} />}
 
-          <Sect title="Problem timeline">
+          {/* v0.10.1032 — ikincil: kapalı gelir (istek atmaz — rollout
+              işaretleri RootCausePanel'in zaten yaptığı okumadan gelir). */}
+          <Sect title="Problem timeline" collapsible>
             <ul className="pb-tl">
               {rcRollouts.map(ev => (
                 <li key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`} className={ev.band === 'high' ? 'warn' : ''}>
@@ -1087,7 +1157,10 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
 
           {/* v0.10.452 (log arama denetimi C1) — log kanıtı: yalnız servis
               özneli problemde (db/dış öznenin logu yok — yukarıdaki kapı),
-              varsayılan kapalı, açılınca tek istek (ES maliyeti). */}
+              varsayılan kapalı, açılınca tek istek (ES maliyeti).
+              v0.10.1032 — Sect BİLEREK açılır-kapanır yapılmadı: gövdesi zaten
+              tek satırlık kapalı bir disclosure ve isteği o açılınca atıyor;
+              üstüne ikinci bir kapak, kanıta ulaşmayı iki tıka çıkarırdı. */}
           {subjectKind(problem.service, problem.kind) === 'service' && (
             <Sect title="Log kanıtı" sub="ERROR+ desenler, problem penceresi · açılınca yüklenir">
               <ProblemLogEvidence service={problem.service} startedAt={problem.startedAt} resolvedAt={problem.resolvedAt} linkWindow={probWindow} />
@@ -1098,11 +1171,17 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               operatörün bu soruyu soracağı yer burası; cevabı bugüne
               kadar YALNIZ /events'te, elle pencere daraltarak
               bulunabiliyordu — yani pratikte hiç bulunamıyordu. */}
-          <Sect title="Bildirim">
+          {/* v0.10.1032 — ikincil, KAPALI gelir. Panel kendi sorgusunu mount
+              anında atıyor (yoklama yok); kapalı Sect gövdeyi mount etmediği
+              için bildirim geçmişi artık ancak bölüm açılınca çekilir. */}
+          <Sect title="Bildirim" collapsible>
             <ProblemNotifyPanel problemId={problem.id} />
           </Sect>
 
-          <Sect title="Runbook">
+          {/* v0.10.1032 — ikincil, KAPALI gelir; runbook koşuları
+              (useRunbookExecutions) bölüm açılınca çekilir. */}
+          <Sect title="Runbook" collapsible
+            sub={problem.runbookUrl ? 'runbook bağlantısı var' : undefined}>
             {problem.runbookUrl && (
               <a href={problem.runbookUrl} target="_blank" rel="noopener"
                 style={{
@@ -1120,7 +1199,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           </Sect>
 
           {problem.description && !isAnomaly && (
-            <Sect title="Description">
+            <Sect title="Description" collapsible>
               <pre className="mono" style={{
                 margin: 0, fontSize: 11.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
                 color: 'var(--text2)', background: 'var(--bg2)',

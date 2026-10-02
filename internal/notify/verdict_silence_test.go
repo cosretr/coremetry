@@ -46,9 +46,14 @@ func TestVerdictSignatureMatchesFrontend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// v0.10.1032 — kalıplar problemSignature / exceptionSignature'a taşındı
+	// (tam sayfa detaylar da aynı imzayı kursun diye); satır imzası onlara
+	// satırın KENDİ servisi ve kural kimliğiyle devreder. Korunan sözleşme aynı.
 	for _, w := range []string{
-		"`p:${it.problem.ruleId}|${it.service ?? ''}`",
-		"`e:${it.exception.fingerprint}`",
+		"`p:${p.ruleId}|${p.service ?? ''}`",
+		"`e:${g.fingerprint}`",
+		"problemSignature({ ruleId: it.problem.ruleId, service: it.service })",
+		"exceptionSignature(it.exception)",
 	} {
 		if !strings.Contains(string(fe), w) {
 			t.Errorf("problemVerdict.ts %s kalıbını taşımalı (sunucu: verdict_silence.go verdictSignature)", w)

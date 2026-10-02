@@ -746,7 +746,10 @@ export default function ProblemsPage() {
         )}
       </div>
       {problemParam && (
+        // v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
+        // açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz.
         <AlertProblemHost
+          key={problemParam}
           id={problemParam}
           isAdmin={isAdmin}
           onBack={() => setSearchParams(prev => withProblemParam(prev, null), { replace: true })}

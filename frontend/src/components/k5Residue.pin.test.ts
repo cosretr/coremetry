@@ -166,6 +166,8 @@ describe('v0.10.929 — normal durum için kırmızı/amber yok', () => {
   it('anomali ACTIVE nötr; CLEARED geçiş yeşil — üç yüzey tek kural', () => {
     expect(code('features/anomalies/streams.tsx')).toContain("e.status === 'active' ? 'b-gray' : 'b-ok'");
     expect(code('features/anomalies/AnomalyDetailDrawer.tsx')).toContain("event.status === 'active' ? 'neutral' : 'success'");
+    // v0.10.1032 — anomalinin tam sayfa detayı çekmeceyle AYNI tonu basar.
+    expect(code('features/anomalies/AnomalyEventDetail.tsx')).toContain("event.status === 'active' ? 'neutral' : 'success'");
     const w = code('features/anomalies/AnomalyWindowTable.tsx');
     expect(w).toContain('<Badge tone="neutral">active</Badge> : <Badge tone="success">cleared</Badge>');
     expect(w).toContain(`{e.verdict === 'anomaly' && <Badge tone="neutral"`);
