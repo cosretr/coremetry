@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/devops"
 )
 
 // ── Exception Inbox ─────────────────────────────────────────────────────────
@@ -932,6 +934,43 @@ type ExceptionSample struct {
 	Stacktrace string `json:"stacktrace"` // raw, may be empty
 	SpanName   string `json:"spanName"`   // operation that errored
 	StatusMsg  string `json:"statusMsg"`  // span status message
+	// RunningVersion (v0.10.1048, operatör: "Exception sayfasındaki dosya
+	// bağlantıları hâlâ daldan açılıyor; kod incelemesi artık sürümden okuyor.
+	// İkisi aynı yere baksın.") — BU örneğin KENDİ span'inin çalışan sürümü:
+	// devops.RunningVersion (image tag → k8s image tag → service.version, yer
+	// tutucu atlanır), kod incelemesinin exceptionStackVersion → SpanVersion
+	// yoluyla aynı yardımcı. Exception sayfası frame linklerine stack'i
+	// gösterilen örneğin bu alanını yollar. Boş = bilinmiyor → linkler bugünkü
+	// gibi dal ucunda.
+	RunningVersion string `json:"runningVersion,omitempty"`
+}
+
+// exSampleVersionKeys — örnek sorgusunun okuduğu resource anahtarları; sıra
+// ve küme devops.runningVersionKeys ile birebir (exception_sample_version_
+// test.go kaynaktan pinler). Seçimi devops.RunningVersion yapar — sıra burada
+// yalnız SELECT'in kolon sırasıdır.
+var exSampleVersionKeys = [...]string{"container.image.tag", "k8s.container.image.tag", "service.version"}
+
+// exSampleVersionCols — örnek sorgusunun SELECT'ine giren üç ifade: AYNI
+// satırların resource dizilerinden tek değer (anahtar yoksa indexOf 0 → boş dizgi).
+// Ek sorgu YOK; satır kümesi, WHERE, LIMIT ve max_execution_time aynı.
+func exSampleVersionCols() string {
+	cols := make([]string, len(exSampleVersionKeys))
+	for i, k := range exSampleVersionKeys {
+		cols[i] = "res_values[indexOf(res_keys, '" + k + "')]"
+	}
+	return strings.Join(cols, ", ")
+}
+
+// sampleRunningVersion — SAF: örnek satırının üç resource değerinden çalışan
+// sürüm, devops.RunningVersion ile (kod incelemesiyle aynı yardımcı; ikinci
+// bir yer tutucu listesi açılmaz). vals exSampleVersionKeys sırasında.
+func sampleRunningVersion(vals [len(exSampleVersionKeys)]string) string {
+	res := make(map[string]string, len(vals))
+	for i, k := range exSampleVersionKeys {
+		res[k] = vals[i]
+	}
+	return devops.RunningVersion(res)
 }
 
 // ExceptionSamples is the sample-scan envelope. The counters are not
@@ -1072,11 +1111,15 @@ func (s *Store) GetExceptionGroupSamples(ctx context.Context, fingerprint string
 	// type + time-bounded WHERE + LIMIT + max_execution_time. Every page
 	// reuses this exact shape, so the hard constraint holds per page and
 	// scanExceptionSamples caps how many pages there can be.
+	//
+	// v0.10.1048 — son üç kolon örneğin çalışan sürümü (exSampleVersionCols):
+	// aynı satırlardan, ikinci sorgu yok.
 	query := `
 		SELECT trace_id, span_id, toUnixTimestamp64Nano(time),
 		       ` + f.Msg + ` AS message,
 		       ` + f.Stack + ` AS stacktrace,
-		       name, status_msg
+		       name, status_msg,
+		       ` + exSampleVersionCols() + `
 		FROM spans
 		WHERE service_name = ?
 		  AND time >= ? AND time <= ?
@@ -1095,9 +1138,15 @@ func (s *Store) GetExceptionGroupSamples(ctx context.Context, fingerprint string
 			page := make([]ExceptionSample, 0, size)
 			for rows.Next() {
 				var sm ExceptionSample
-				if err := rows.Scan(&sm.TraceID, &sm.SpanID, &sm.Time, &sm.Message, &sm.Stacktrace, &sm.SpanName, &sm.StatusMsg); err != nil {
+				var ver [len(exSampleVersionKeys)]string
+				dest := []any{&sm.TraceID, &sm.SpanID, &sm.Time, &sm.Message, &sm.Stacktrace, &sm.SpanName, &sm.StatusMsg}
+				for i := range ver {
+					dest = append(dest, &ver[i])
+				}
+				if err := rows.Scan(dest...); err != nil {
 					return nil, err
 				}
+				sm.RunningVersion = sampleRunningVersion(ver)
 				page = append(page, sm)
 			}
 			return page, rows.Err()

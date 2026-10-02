@@ -90,7 +90,8 @@ describe('stack frame süsü (v0.10.735)', () => {
   it('StackTrace bileşeni, kanonik metin, fetch-on-open, katlı altküme aynı indeks', () => {
     const src = read('./ProblemDetail.tsx');
     expect(src).toContain("stack.replace(/\\r\\n/g, '\\n').trimEnd()");
-    expect(src).toContain('useStackFrameLinks({ service: group.service, stack: stackNorm, enabled: !!stackNorm })');
+    // v0.10.1048 — gösterilen örneğin sürümü de gider (stackSource.test.ts).
+    expect(src).toContain('useStackFrameLinks({ service: group.service, stack: stackNorm, version: stackVersion, enabled: !!stackNorm })');
     expect(src).toContain("<StackTrace stack={shownStackLines.join('\\n')}");
     expect(src).toContain('headClass="ex-head-line"');
     expect(src).not.toContain("color: i === 0 ? 'var(--err)'");

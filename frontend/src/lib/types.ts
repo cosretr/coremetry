@@ -4967,6 +4967,10 @@ export interface ExceptionSample {
   stacktrace: string;    // raw, may be empty
   spanName: string;      // operation that errored
   statusMsg: string;
+  // v0.10.1048 — BU örneğin kendi span'inin çalışan sürümü (sunucuda
+  // devops.RunningVersion; kod incelemesiyle aynı yardımcı). Yoksa/boşsa
+  // bilinmiyor → frame linkleri bugünkü gibi dal ucunda.
+  runningVersion?: string;
 }
 
 // One time-bucket of the "occurrences over time" histogram on the

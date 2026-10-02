@@ -29,6 +29,13 @@ import { api } from '@/lib/api';
 // `configured:false` dönerse çağıran bugünkü düz metin görünümünde
 // kalır; operatöre hata/uyarı GÖSTERİLMEZ. Yeniden denemek, kimsenin
 // görmeyeceği bir cevap için DevOps sunucusuna üç kat yük demekti.
+//
+// placeholderData: undefined BİLİNÇLİ (v0.10.1048): main.tsx küresel
+// keepPreviousData koyuyor; anahtar değişince (exception detayında örnek
+// listesi tazelenip temsilî örnek — stack'i ya da sürümü — değişince) `data`
+// ÖNCEKİ anahtarın künyesi olurdu: A örneğinin satır indeksli linkleri B'nin
+// satırlarına, A'nın commit'i B'nin sürümüne yapışırdı. Yükleme boyunca düz
+// metin (bugünkü degradasyon), sonra doğru künye.
 export function useStackFrameLinks(p: {
   service: string;
   stack: string;
@@ -41,5 +48,6 @@ export function useStackFrameLinks(p: {
     enabled: (p.enabled ?? true) && !!p.service && !!p.stack,
     staleTime: 5 * 60_000,
     retry: false,
+    placeholderData: undefined,
   });
 }

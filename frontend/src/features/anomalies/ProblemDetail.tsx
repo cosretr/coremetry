@@ -26,6 +26,7 @@ import { ExceptionPodsPanel } from './ExceptionPodsPanel';
 import { fmtOccTick } from './occTick'; // v0.10.734
 import { StackTrace } from '@/components/StackTrace'; // v0.10.735
 import { useStackFrameLinks } from '@/lib/queries'; // v0.10.735
+import { representativeStack, frameLinksRef } from './stackSource'; // v0.10.1048
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import type { ExceptionGroup, ExceptionGroupState, Problem, RolloutEvidence } from '@/lib/types';
@@ -418,7 +419,11 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   }, [occTimes, group.firstSeen, group.resolvedAt, state]);
 
   // Representative stack = the first sample that carries one.
-  const stack = samples.find(s => s.stacktrace)?.stacktrace ?? '';
+  // v0.10.1048 (operatör: "Exception sayfasındaki dosya bağlantıları hâlâ
+  // daldan açılıyor; kod incelemesi artık sürümden okuyor. İkisi aynı yere
+  // baksın.") — sürüm AYNI örnekten (representativeStack): kod incelemesi gibi
+  // stack'i veren olayın çalışan sürümü; yoksa '' → bugünkü dal ucu.
+  const { stack, version: stackVersion } = representativeStack(samples);
   // v0.10.735 — KANONİK metin (CRLF → LF, sondaki boşluk kırpık): ekrana
   // çizilen dizgi ile /api/devops/stack-frames'e giden dizgi AYNI olmak
   // zorunda (SpanDetail formatStack sözleşmesi: sunucu frame'leri satır
@@ -429,8 +434,11 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   // kütüphane frame'i soluk: SpanDetail'in v0.10.581 makinesi. Fetch-on-open:
   // yalnız bu detay açıkken, stack varsa; DevOps ayarlı değilse
   // (configured:false) düz metin, uyarı yok.
-  const frameLinks = useStackFrameLinks({ service: group.service, stack: stackNorm, enabled: !!stackNorm });
+  const frameLinks = useStackFrameLinks({ service: group.service, stack: stackNorm, version: stackVersion, enabled: !!stackNorm });
   const framed = frameLinks.data?.configured ? frameLinks.data : undefined;
+  // v0.10.1048 — linklerin gittiği ref, AI panelinin "Kaynak:" kelimeleriyle;
+  // başlıktaki alt yazının sonuna kısa ek (düzen aynı).
+  const linkRef = frameLinksRef(framed);
   // v0.10.734 (operatör onaylı mockup a42a0b31: "stack trace çok uzunsa
   // collapsed gösterelim, sayfa çok aşağı gidiyor") — 20 satırdan uzun
   // stack ilk 12 satırla açılır (mesaj + en üst frame'ler), "▾ N satır
@@ -609,7 +617,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h">
             <h3>Stack trace</h3>
-            <span className="ov-sub">representative sample{stackLines.length > 0 ? ` · ${stackLines.length} satır` : ''}</span>
+            <span className="ov-sub">representative sample{stackLines.length > 0 ? ` · ${stackLines.length} satır` : ''}{linkRef}</span>
             <span className="ov-right">
               <Button variant="secondary" size="sm" onClick={copyStack} disabled={!stack}>
                 {copied ? 'Copied' : 'Copy'}

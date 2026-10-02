@@ -987,6 +987,17 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Exception sayfası dosya bağlantıları çalışan sürüme gider (v0.10.1048)
+
+**Operatör:** "Exception sayfasındaki dosya bağlantıları hâlâ daldan açılıyor; kod incelemesi artık sürümden okuyor. İkisi
+aynı yere baksın." (v0.10.1044 "Bilinen sınırlar" maddesi.) **Kural:** frame linkleri stack'i GÖSTERİLEN örneğin kendi sürümünü
+yollar (`representativeStack`: stack ve sürüm aynı örnekten, en yeninin sürümü eski bir stack'e yamanmaz). Sürüm sunucuda: örnek
+sorgusu aynı satırlardan üç resource değeri daha okur (`exSampleVersionCols`, ikinci sorgu yok), `runningVersion` alanını
+`devops.RunningVersion` doldurur — kod incelemesinin `exceptionStackVersion → SpanVersion` yardımcısı; anahtarlar kaynaktan pinli.
+Sürüm yok → gövde bayt bayt eski, dal ucu. Kart alt yazısına ek: "· 1.4.2 (çalışan sürüm)" / "· release (dal)" (`codeSourceRef`,
+yalnız link varken). `useStackFrameLinks` keepPreviousData'dan çıktı: temsilî örnek değişince eski linkler yeni satırlara yapışmaz
+(aynı kanca, span çekmecesi de). **Sınır:** stack'li örnek ilk trace'li örnek değilse inceleme dal ucundan okur, linkler sürümden.
+
 ## 2026-10-02 — Sürüm → ref eşlemesine {service} yer tutucusu (mono-repo) (v0.10.1047)
 
 **Operatör:** "Mono-repo'da sürüm etiketi: aynı depoda birden çok servis varsa, başka servisin etiketi bu servisin
