@@ -313,13 +313,13 @@ func TestReadSourceCodeNoLeakEndToEnd(t *testing.T) {
 			sawTool = true
 		}
 		for _, kv := range sp.Attributes {
-			if strings.Contains(kv.Value.Emit(), scLeakMarker) {
+			if strings.Contains(kv.Value.String(), scLeakMarker) {
 				t.Fatalf("span %s özniteliği kod taşıyor", sp.Name)
 			}
 		}
 		for _, ev := range sp.Events {
 			for _, kv := range ev.Attributes {
-				if strings.Contains(kv.Value.Emit(), scLeakMarker) {
+				if strings.Contains(kv.Value.String(), scLeakMarker) {
 					t.Fatalf("span %s olayı kod taşıyor", sp.Name)
 				}
 			}
