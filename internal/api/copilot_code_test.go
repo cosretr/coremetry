@@ -596,6 +596,50 @@ func TestCodePayload(t *testing.T) {
 			t.Fatal("boş bağlamda dosya listesi dolu")
 		}
 	})
+	// v0.10.1044 — kaynak satırı "1.4.2 (çalışan sürüm)" / "release (dal)":
+	// sürüm alanı YALNIZ kod o sürümün commit'inden okunduysa dolu.
+	t.Run("çalışan sürümden okunduysa sürüm ve commit", func(t *testing.T) {
+		v := cc
+		v.Revision = &devops.Revision{Version: "1.4.2", Ref: "tags/1.4.2", SHA: "c0ffee42", Verified: true}
+		p := codePayload(v, true)
+		if p.Version != "1.4.2" || p.Commit != "c0ffee42" || p.Branch != "release" {
+			t.Fatalf("sürüm künyesi: %+v", p)
+		}
+	})
+	t.Run("sürüm bulunamadıysa dal (sürüm alanı boş)", func(t *testing.T) {
+		v := cc
+		v.Revision = &devops.Revision{Version: "9.9.9", Ref: "tags/9.9.9", Missing: true, Note: "tags/9.9.9 bulunamadı"}
+		p := codePayload(v, true)
+		if p.Version != "" || p.Commit != "" {
+			t.Fatalf("doğrulanmamış sürüm kaynak satırına girmemeli: %+v", p)
+		}
+		b, _ := json.Marshal(codePayload(cc, true))
+		if strings.Contains(string(b), `"version"`) || strings.Contains(string(b), `"commit"`) {
+			t.Fatalf("sürümsüz yanıt şekli değişmemeli: %s", b)
+		}
+	})
+}
+
+// TestCodeFetchCarriesRunningVersion — v0.10.1044 ulaşılabilirlik: iki kodlu
+// yol da stack'i basan servisin çalışan sürümünü kod çekicisine geçirir;
+// sürüm elde olan span'lerden seçilir (ek okuma yok)
+// ([[feedback-tested-but-unreachable]]).
+func TestCodeFetchCarriesRunningVersion(t *testing.T) {
+	for _, c := range []struct{ file, want string }{
+		{"trace_explain_handler.go", "s.buildCodeContext(r.Context(), in.StackService, in.Stack, in.StackVersion)"},
+		{"copilot_exception.go", "s.buildCodeContext(r.Context(), codeSvc, in.Stack, in.StackVersion)"},
+		{"explain_trace_input.go", "StackVersion: anomaly.StackVersion(allSpans, stackService, stackSpanID, stackRes),"},
+		{"explain_trace_input.go", "stackSpanID, stackRes = lg.SpanID, lg.ResourceAttributes"},
+		{"copilot_code.go", "stackparse.ErrorCodeTokens(stack), version)"},
+	} {
+		b, err := os.ReadFile(c.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(strings.Fields(string(b)), " "), c.want) {
+			t.Errorf("%s: %q yok — sürüm kod çekicisine ulaşmıyor", c.file, c.want)
+		}
+	}
 }
 
 // TestExplainCodeDropsCodeWhenHalvingCannotShrink — kod zaten bütçenin

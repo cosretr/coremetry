@@ -201,6 +201,11 @@ func (s *Server) putDevOpsSettings(w http.ResponseWriter, r *http.Request) {
 // v0.10.1038 — codeBudgetRunes da izde: kaç karakter kodun modele
 // gideceğini (ve küçük bağlamlı modelde taşma riskini) her admin için
 // değiştirir; codeLookupLimit ile aynı sınıf, sır değil.
+//
+// v0.10.1044 — versionRef da izde: desen artık yalnız frame linklerini
+// değil, her AI kod incelemesinin HANGİ commit'ten okunduğunu belirliyor
+// ("Kod, dalın ucundan değil çalışan sürümden okunsun") — tam olarak bu
+// izin var olma sebebi olan değişiklik sınıfı. Sır değil.
 func devopsAuditDetails(snap devops.Snapshot) []byte {
 	b, _ := json.Marshal(map[string]any{
 		"baseUrl":            snap.BaseURL,
@@ -212,6 +217,7 @@ func devopsAuditDetails(snap devops.Snapshot) []byte {
 		"codeSearch":         snap.CodeSearch,
 		"repoPrefixes":       snap.RepoPrefixes,
 		"branchOrder":        snap.BranchOrder,
+		"versionRef":         snap.VersionRef,
 		"appPrefixes":        snap.AppPrefixes,
 		"codeLookupLimit":    snap.CodeLookupLimit,
 		"codeBudgetRunes":    snap.CodeBudgetRunes,

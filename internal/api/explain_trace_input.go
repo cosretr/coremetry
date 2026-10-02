@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
 	"github.com/cilcenk/coremetry/internal/stackparse"
@@ -89,6 +90,12 @@ type traceExplainInput struct {
 	// stacktrace olmayabilir. Kök servis her trace'te var.
 	RootService  string
 	StackService string
+	// StackVersion (v0.10.1044, operatör: "Kod, dalın ucundan değil çalışan
+	// sürümden okunsun") — stack'i taşıyan logun çalışan sürümü
+	// (anomaly.StackVersion: logun kendi span'i → logun resource'u →
+	// StackService'in bu trace'teki çoğunluğu). Ek okuma YOK — span'ler ve
+	// log zaten elde. Boş = bilinmiyor → kod dal ucundan (bugünkü davranış).
+	StackVersion string
 	// DBStatements / ErrorText (v0.10.115) — hata span'larının SQL
 	// ifadeleri (≤3, tekil) ve hata metni (status mesajları + stack başı):
 	// şema kanıtının girdisi (api/schema_catalog.go buildSchemaEvidence).
@@ -148,6 +155,9 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// hataları + en yavaşları garantiler, kalanı kronolojik doldurur ve
 	// seçimi zaman sırasına geri koyar (model akışı sırayla okur).
 	totalSpans := len(spans)
+	// v0.10.1044 — çalışan sürüm seçimi TÜM span'lerden (100'lük prompt
+	// kesiminden önce): sayım ne kadar çok örnekse o kadar sağlam.
+	allSpans := spans
 	spans = pickExplainSpans(spans, 100)
 	compact := make([]traceLite, 0, len(spans))
 	var dbStmts, errTexts []string
@@ -183,6 +193,10 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// truncate'li (2B prompt bütçesi). Log store yok/yavaş/boşsa sessizce
 	// trace-only'e düşer — explain'i asla düşürmez.
 	var logsBlock, rawStack, stackService string
+	// v0.10.1044 — stack'li logun KENDİ span'i ve resource'u: çalışan sürüm
+	// önce oradan (anomaly.StackVersion; canary'de çoğunluk yanlış seçer).
+	var stackSpanID string
+	var stackRes map[string]string
 	// v0.10.921 (Kademe A) — Oracle hata satırları loglarla PARALEL okunur
 	// (ClickHouse kopyası; canlı Oracle sorgusu yok). Aynı ±1 dk pencere,
 	// kendi 4 sn bütçesi, sessiz düşüş: Explain'i asla düşürmez.
@@ -266,6 +280,7 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 					// olduğu için bu, trace'in EN CİDDİ hatası.
 					if rawStack == "" {
 						rawStack, stackService = stackText, lg.ServiceName
+						stackSpanID, stackRes = lg.SpanID, lg.ResourceAttributes
 					}
 				}
 				ll = append(ll, e)
@@ -288,6 +303,7 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 		OracleRows:   oracleRows,
 		Stack:        rawStack,
 		StackService: stackService,
+		StackVersion: anomaly.StackVersion(allSpans, stackService, stackSpanID, stackRes),
 		RootService:  rootService,
 		DBStatements: dbStmts,
 		ErrorText:    truncRunesN(strings.Join(errTexts, "\n")+"\n"+rawStack, 2000),

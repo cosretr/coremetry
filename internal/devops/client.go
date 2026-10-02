@@ -726,12 +726,20 @@ func doGetCapped(ctx context.Context, cli *http.Client, rawURL string, cfg Setti
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, cap))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, cap))
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, fmt.Errorf("http %d — check the PAT and its scopes (Code: Read)", resp.StatusCode)
 	}
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, firstLine(string(body)))
+	}
+	// v0.10.1044 — gövde okuması YARIDA kesildiyse (süre tavanı, bağlantı
+	// koptu) bu bir HATADIR. Eskiden hata yutuluyor ve yarım gövde başarılı
+	// yanıt sayılıyordu: depo ağacında parseTreeItems onu "kesik ama
+	// kullanılabilir" diye 10 dk cache'liyordu. Tavana dayanmak (LimitReader)
+	// hata değildir — o yol değişmedi.
+	if readErr != nil {
+		return nil, fmt.Errorf("yanıt gövdesi okunamadı: %w", readErr)
 	}
 	// Azure DevOps answers an unauthenticated request with 200/203
 	// + an HTML sign-in page rather than a 401 when the endpoint

@@ -89,7 +89,9 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	// bloğu da kimliğe girer (kodlu/kodsuz cevap ayrı satır; blok
 	// değişirse anahtar değişir). Kodsuz klasik anahtar:
 	// explainTraceClassicPrepared.
-	cc := s.buildCodeContext(r.Context(), in.StackService, in.Stack)
+	// v0.10.1044 — kod stack'i basan servisin ÇALIŞAN sürümünden
+	// (in.StackVersion; boşsa dal ucu).
+	cc := s.buildCodeContext(r.Context(), in.StackService, in.Stack, in.StackVersion)
 	// v0.10.115 — SQL hatasında şema kanıtı (hata span'ının db_statement'ı
 	// → katalog); kod bloğunun arkasına, kendi bütçesiyle.
 	se := s.buildSchemaEvidence(in.ErrorText, in.DBStatements, mapperBlocks(cc))

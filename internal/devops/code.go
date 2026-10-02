@@ -248,6 +248,18 @@ type CodeContext struct {
 	// min(Budget, gönderilen)'i yarıya indirir ve yarıyı buraya yazar. 0 =
 	// elle kurulmuş bağlam → varsayılan (budgetRunes).
 	Budget int `json:"budget,omitempty"`
+	// Revision (v0.10.1044, operatör: "Kod, dalın ucundan değil çalışan
+	// sürümden okunsun") — stack'i basan servisin çalışan sürümünün çözümü
+	// (frame linkleriyle aynı resolveRevision). nil = sürüm bilinmiyordu ya
+	// da yer tutucuydu: kod bugünkü gibi dal ucundan. Verified = yollar ve
+	// dosyalar o sürümün COMMIT'inden okundu; değilse Note nedeni söyler ve
+	// kod Branch'in ucundan geldi.
+	Revision *Revision `json:"revision,omitempty"`
+}
+
+// FromRunningVersion — kod çalışan sürümün commit'inden mi okundu?
+func (c CodeContext) FromRunningVersion() bool {
+	return c.Revision != nil && c.Revision.Verified
 }
 
 // Empty — kod bağlamı yok mu?
@@ -371,6 +383,47 @@ type codeCache struct {
 	// recency — (proje/depo) → son commit tarihi (v0.10.226); başarısız
 	// istek de kısa süre negatif-cache'lenir ki her arama N istek üretmesin.
 	recency map[string]recencyEntry
+	// refs — ref adı → commit (v0.10.1044, refCommit). sha "" = ref depoda
+	// YOK (negatif sonuç da cache'lenir); hata hiç yazılmaz. Ağaçla aynı
+	// TTL ve tavan.
+	refs map[string]refEntry
+}
+
+type refEntry struct {
+	sha string // "" = bulunamadı
+	at  time.Time
+}
+
+// getRef / putRef — ref→commit cache'i (v0.10.1044). İkinci dönüş "cache'te
+// var mı"; sha boşsa cevap "ref yok"tur, ıska değil.
+func (c *codeCache) getRef(key string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.refs[key]
+	if !ok || time.Since(e.at) > treeTTL {
+		return "", false
+	}
+	return e.sha, true
+}
+
+func (c *codeCache) putRef(key, sha string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.refs == nil {
+		c.refs = map[string]refEntry{}
+	}
+	if len(c.refs) >= treeMaxRepos {
+		oldestKey, oldestAt := "", time.Now()
+		for k, v := range c.refs {
+			if v.at.Before(oldestAt) {
+				oldestKey, oldestAt = k, v.at
+			}
+		}
+		if oldestKey != "" {
+			delete(c.refs, oldestKey)
+		}
+	}
+	c.refs[key] = refEntry{sha: sha, at: time.Now()}
 }
 
 type recencyEntry struct {
@@ -520,7 +573,27 @@ func evictOldest(m map[string]treeEntry) {
 // bir "ok" değil.
 // refs (v0.10.73) — hata METNİNİN andığı kaynak dosya adayları
 // (stackparse.ResourceRefs). Boş geçilebilir: kaynak avı atlanır.
-func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, frames []stackparse.Frame, refs []stackparse.ResourceRef, errTokens []string) (out CodeContext) {
+//
+// v0.10.1044 — sürümsüz çağrı: FetchCodeAt(…, "") ile birebir (dal ucu).
+func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, frames []stackparse.Frame, refs []stackparse.ResourceRef, errTokens []string) CodeContext {
+	return s.FetchCodeAt(ctx, repo, hint, frames, refs, errTokens, "")
+}
+
+// FetchCodeAt — FetchCode + stack'i basan servisin ÇALIŞAN SÜRÜMÜ
+// (v0.10.1044, operatör: "Kod, dalın ucundan değil çalışan sürümden
+// okunsun"). Önceden kod hep release → master → varsayılan dalın UCUNDAN
+// okunuyordu; stack'teki satır numarası koşan koddan başka bir satıra
+// düşebiliyordu.
+//
+// Kural frame linklerinin AYNISI (resolveRevision, tek çözücü): dal
+// zinciri önce koşar (api-version, depo adı düzeltmesi), sonra
+// VersionRef deseni (varsayılan tags/{version}) sürümü ref'e, ref'i
+// commit'e bağlar; bulunursa ağaç ve dosyalar o COMMIT'ten
+// (versionType=commit) okunur. Ref yoksa / sorgu düşerse / commit ağacı
+// boşsa dal ucuna düşülür ve gerekçe Reason'a yazılır — kod çekimi sürüm
+// yüzünden ASLA düşmez. version boş ya da yer tutucuysa tek ekstra istek
+// bile yok: bugünkü davranış bayt bayt.
+func (s *Service) FetchCodeAt(ctx context.Context, repo string, hint ProjectHint, frames []stackparse.Frame, refs []stackparse.ResourceRef, errTokens []string, version string) (out CodeContext) {
 	class := CodeOther
 	// v0.10.85 — cfg defer'den ÖNCE bildiriliyor ki link YÜRÜRLÜKTEKİ
 	// yapılandırmayla kurulsun: pickProject / organizasyon araması
@@ -664,14 +737,32 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 	// satırındaki yabancı adı kendi ayarlarında arar.
 	note, ver, branch, paths := withNote(searchNote, ch.note), ch.ver, ch.branch, ch.paths
 
+	// v0.10.1044 — ÇALIŞAN SÜRÜM. src: zincirin KENDİ dosyalarının okunduğu
+	// ref (frame + kaynak avı, kapsamlı alt-ağaç, pencere linki). Arama
+	// isabetleri başka depodan gelebilir ve dal ucundan okunur — onlar src'ye
+	// bağlanmaz. Commit ağacının kesik bayrağı ch'ye yazılır: kesik-ağaç notu
+	// ve kapsamlı geri-deneme OKUNAN ağacı anlatmalı.
+	src := RefSpec{Kind: "branch", Name: branch}
+	if rev, tree := s.resolveRevision(ctx, cli, cfg, ver, repo, version); rev != nil {
+		out.Revision = rev
+		if rev.Verified {
+			src, paths = RefSpec{Kind: "commit", Name: rev.SHA}, tree.paths
+			ch.capped, ch.cappedWhy = tree.capped, tree.why
+		} else {
+			note = withNote(note, revisionFallbackNote(rev, branch))
+		}
+	}
+
 	// v0.9.1269 — KESİK AĞAÇTA kapsamlı geri-deneme. Tam ağaç ıskaladı
 	// ve ağaç kesikse, frame'in paket yolundan türeyen alt-ağaçlar
 	// (scopePath) tek tek denenir. Yalnız KESİKKEN: tam bir ağaçta
 	// "yok" gerçekten yoktur ve her ıskaya üç istek eklemek çerçeve
 	// frame'lerinde saf israf olurdu.
+	// v0.10.1044 — anahtar refCacheName'den: commit ile dal aynı alt-ağaç
+	// girdisini paylaşamaz (dal anahtarı bayt bayt eskisi).
 	scoped := &scopedHunt{
-		svc: s, cli: cli, cfg: cfg, ver: ver, repo: repo, branch: branch,
-		treeKey: treeCacheKey(cfg, repo, branch),
+		svc: s, cli: cli, cfg: cfg, ver: ver, repo: repo, ref: src,
+		treeKey: treeCacheKey(cfg, repo, refCacheName(src)),
 		on:      ch.capped, budget: scopedFetchLimit,
 	}
 	hunt := huntWindows(ctx, targets,
@@ -683,7 +774,7 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 			return scoped.find(ctx, f)
 		},
 		func(c context.Context, p string) (string, error) {
-			return fetchItemContent(c, cli, cfg, ver, repo, branch, p)
+			return fetchItemContentAt(c, cli, cfg, ver, repo, src, p)
 		})
 
 	// v0.10.74 — ISKALAYANLAR İÇİN ORGANİZASYON ARAMASI (opt-in).
@@ -748,7 +839,7 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 	// yerel ve bedava; yalnız ÇEKİM sayılıyor (v0.10.71'in aynı kuralı).
 	hunt.windows = append(hunt.windows, huntResources(ctx, refs, paths,
 		func(c context.Context, pth string) (string, error) {
-			return fetchItemContent(c, cli, cfg, ver, repo, branch, pth)
+			return fetchItemContentAt(c, cli, cfg, ver, repo, src, pth)
 		})...)
 
 	// v0.10.1038 — bütçe AYARDAN (cfg.codeBudget(): 0 → 10.000, aralık
@@ -760,7 +851,8 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 	out.Budget = budget
 	// v0.10.353 — her pencereye kaynağı ve DevOps dosya linki: arama
 	// isabetleri kendi depo/proje/branşını taşır, ötekiler zincirinkini alır.
-	stampWindowLinks(cfg, repo, branch, windows)
+	// v0.10.1044 — zincirin penceresi okunduğu ref'e (sürüm → GC<sha>).
+	stampWindowLinksAt(cfg, repo, branch, src, windows)
 	out.Windows = windows
 	ours := deadlineHit(parent, ctx)
 	switch {
@@ -1274,7 +1366,7 @@ type scopedHunt struct {
 	cfg     Settings
 	ver     string
 	repo    string
-	branch  string
+	ref     RefSpec // v0.10.1044 — dal ya da çalışan sürümün commit'i
 	treeKey string
 	on      bool // ağaç kesik mi — değilse bu yol hiç açılmaz
 	budget  int  // kalan GERÇEK istek hakkı (cache isabeti harcamaz)
@@ -1292,7 +1384,7 @@ func (h *scopedHunt) find(ctx context.Context, f stackparse.Frame) string {
 			return ""
 		}
 		h.mark(sp)
-		res, cached, err := h.svc.scopedTree(ctx, h.cli, h.cfg, h.ver, h.repo, h.branch, sp, h.treeKey)
+		res, cached, err := h.svc.scopedTreeAt(ctx, h.cli, h.cfg, h.ver, h.repo, h.ref, sp, h.treeKey)
 		if !cached {
 			h.budget--
 		}
@@ -1619,6 +1711,13 @@ func parseTreeItems(body []byte, max int, truncated bool) (treeResult, error) {
 // İkinci dönüş: sonuç CACHE'ten mi geldi — istek bütçesi yalnız
 // gerçek isteklerde harcansın diye.
 func (s *Service) scopedTree(ctx context.Context, cli *http.Client, cfg Settings, ver, repo, branch, scopePath, treeKey string) (treeResult, bool, error) {
+	return s.scopedTreeAt(ctx, cli, cfg, ver, repo, RefSpec{Kind: "branch", Name: branch}, scopePath, treeKey)
+}
+
+// scopedTreeAt — v0.10.1044: alt-ağaç herhangi bir ref'ten (dal / çalışan
+// sürümün commit'i). Dal için URL bayt bayt eskisi; treeKey çağıranın
+// refCacheName'li anahtarı, yani commit ile dal aynı girdiye düşmez.
+func (s *Service) scopedTreeAt(ctx context.Context, cli *http.Client, cfg Settings, ver, repo string, ref RefSpec, scopePath, treeKey string) (treeResult, bool, error) {
 	key := scopedCacheKey(treeKey, scopePath)
 	if r, ok := s.code.getScoped(key); ok {
 		return r, true, nil
@@ -1626,7 +1725,7 @@ func (s *Service) scopedTree(ctx context.Context, cli *http.Client, cfg Settings
 	v, err, _ := s.treeFlight.Do(key, func() (any, error) {
 		u := repoURL(cfg, repo) + "/items?recursionLevel=Full" +
 			"&scopePath=" + url.QueryEscape(scopePath) +
-			"&versionDescriptor.versionType=branch&versionDescriptor.version=" + url.QueryEscape(branch) +
+			"&versionDescriptor.versionType=" + refKind(ref) + "&versionDescriptor.version=" + url.QueryEscape(ref.Name) +
 			"&api-version=" + ver
 		r, err := s.listItems(ctx, cli, cfg, u)
 		if err != nil {
@@ -1648,8 +1747,16 @@ func (s *Service) scopedTree(ctx context.Context, cli *http.Client, cfg Settings
 // yok sayıp içeriksiz metadata döndürebiliyor; "boş dosya" ile
 // "bu sürüm bu parametreyi bilmiyor" ayırt edilemiyor.
 func fetchItemContent(ctx context.Context, cli *http.Client, cfg Settings, ver, repo, branch, path string) (string, error) {
+	return fetchItemContentAt(ctx, cli, cfg, ver, repo, RefSpec{Kind: "branch", Name: branch}, path)
+}
+
+// fetchItemContentAt — v0.10.1044: dosya herhangi bir ref'ten (dal / çalışan
+// sürümün commit'i). Ağaç commit'ten okunup dosya daldan çekilseydi yol ile
+// içerik iki ayrı koda bakardı — satır kayması sınıfının ta kendisi. Dal
+// için URL bayt bayt eskisi.
+func fetchItemContentAt(ctx context.Context, cli *http.Client, cfg Settings, ver, repo string, ref RefSpec, path string) (string, error) {
 	base := repoURL(cfg, repo) + "/items?path=" + url.QueryEscape(path) +
-		"&versionDescriptor.versionType=branch&versionDescriptor.version=" + url.QueryEscape(branch) +
+		"&versionDescriptor.versionType=" + refKind(ref) + "&versionDescriptor.version=" + url.QueryEscape(ref.Name) +
 		"&api-version=" + ver
 	body, err := doGetCapped(ctx, cli, base+"&includeContent=true&$format=json", cfg, fileBodyCap)
 	if err == nil {
@@ -2148,8 +2255,21 @@ func (c CodeContext) PromptBlock() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n\nKOD BAĞLAMI (depo: %s", c.Repo)
-	if c.Branch != "" {
+	// v0.10.1044 — model kodun HANGİ ref'ten geldiğini bilir: çalışan
+	// sürümün commit'i mi, dal ucu mu. Sürüm bilinmiyorsa (Revision nil)
+	// başlık bayt bayt eskisi — cevap önbelleği anahtarı da.
+	switch rv := c.Revision; {
+	case rv != nil && rv.Verified:
+		fmt.Fprintf(&b, ", çalışan sürüm: %s, commit %s", rv.Version, shortSHA(rv.SHA))
+	case c.Branch != "":
 		fmt.Fprintf(&b, ", branş: %s", c.Branch)
+		if rv != nil {
+			word := "okunamadı"
+			if rv.Missing {
+				word = "depoda bulunamadı"
+			}
+			fmt.Fprintf(&b, "; çalışan sürüm %s %s — satırlar çalışan koddan farklı olabilir", rv.Version, word)
+		}
 	}
 	b.WriteString("). Satır başındaki sayı GERÇEK dosya satırıdır; " +
 		frameMarker + " ile işaretli satır stack'in gösterdiği hata satırıdır — analizini oradan başlat:")
@@ -2603,8 +2723,18 @@ func bestPathForResource(paths []string, r stackparse.ResourceRef) string {
 // değerleri; WebURL FileURL ile. Arama isabetinde Path "depo:yol" — URL için
 // önek düşer, Path gösterim için olduğu gibi kalır.
 func stampWindowLinks(cfg Settings, repo, branch string, windows []CodeWindow) {
+	stampWindowLinksAt(cfg, repo, branch, RefSpec{Kind: "branch", Name: branch}, windows)
+}
+
+// stampWindowLinksAt — v0.10.1044: zincirin KENDİ penceresi (depo alanı boş:
+// frame ve kaynak avı) okunduğu ref'e linklenir — çalışan sürüm çözüldüyse
+// commit (GC<sha>), link ile okunan kod aynı satırı göstersin. Arama isabeti
+// kendi depo/branşını taşır ve dal ucundan okunduğu için dal linkinde kalır.
+// src dal ise çıktı stampWindowLinks'inkiyle bayt bayt aynı.
+func stampWindowLinksAt(cfg Settings, repo, branch string, src RefSpec, windows []CodeWindow) {
 	for i := range windows {
 		w := &windows[i]
+		fromChain := w.Repo == ""
 		if w.Repo == "" {
 			w.Repo = repo
 		}
@@ -2617,6 +2747,10 @@ func stampWindowLinks(cfg Settings, repo, branch string, windows []CodeWindow) {
 		p := w.Path
 		if w.Repo != "" && strings.HasPrefix(p, w.Repo+":") {
 			p = strings.TrimPrefix(p, w.Repo+":")
+		}
+		if fromChain && src.Kind == "commit" {
+			w.WebURL = FileURLAt(cfg, w.Project, w.Repo, src, p, w.Line)
+			continue
 		}
 		w.WebURL = FileURL(cfg, w.Project, w.Repo, w.Branch, p, w.Line)
 	}

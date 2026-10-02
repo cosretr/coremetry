@@ -363,6 +363,19 @@ type fakeTFS struct {
 	// treeAt — versionDescriptor.version → o ref'e ÖZGÜ ağaç. Yoksa f.tree.
 	// Link ile yolun aynı ref'ten geldiğini ancak farklı ağaçlarla ölçebilirsin.
 	treeAt map[string][]string
+	// v0.10.1044 (çalışan sürümden kod) — reqs: her isteğin TAM yolu+sorgusu
+	// (RequestURI; golden "sürüm yokken istekler bayt bayt aynı" kanıtı).
+	// itemVersions: DOSYA isteklerinin versionDescriptor'ı (tür:ad) — dosyanın
+	// hangi ref'ten okunduğunun kanıtı. tagsFail: tags/ süzgeçli refs isteği
+	// 500 döner (hata cache'lenmez sözleşmesi).
+	reqs         []string
+	itemVersions []string
+	tagsFail     bool
+	// tagsRaw — doluysa tags/ süzgeçli refs isteği bu gövdeyi 200 ile döner
+	// (çözülemeyen yanıt = hata, "ref yok" değil). commitTreeDelay — commit
+	// ağacı listelemesi bu kadar bekler (ctx-duyarlı; alt süre tavanı testi).
+	tagsRaw         string
+	commitTreeDelay time.Duration
 	// repos — sunucudaki KANONİK depo adları (v0.9.1236). Boşsa her ad
 	// kabul edilir; mevcut testler bu yüzden dokunulmadan geçiyor.
 	// Doluysa eşleşme BAYT BAYT: gerçek Azure DevOps ada göre çözümde
@@ -446,6 +459,7 @@ func newFakeTFS(t *testing.T) *fakeTFS {
 		// birleştiği için handler hiç çakışmıyordu.
 		f.mu.Lock()
 		f.seen = append(f.seen, p)
+		f.reqs = append(f.reqs, r.URL.RequestURI())
 		f.mu.Unlock()
 		// v0.9.1236 — liste DENEMESİ en tepede sayılır, kimlik ve
 		// api-version muhafızlarından ÖNCE. Sayacı aşağıya, başarı
@@ -540,6 +554,19 @@ func newFakeTFS(t *testing.T) *fakeTFS {
 			// v0.10.590 — tags/<ad> süzgeci: gerçek API gibi objectId (+ annotated
 			// için peeledObjectId) taşır. Tam ad eşleşmesi; yoksa boş liste.
 			if tf := q.Get("filter"); strings.HasPrefix(tf, "tags/") {
+				if f.tagsFail {
+					w.WriteHeader(http.StatusInternalServerError)
+					_, _ = w.Write([]byte(`{"message":"geçici arıza"}`))
+					return
+				}
+				if f.tagsRaw != "" {
+					_, _ = w.Write([]byte(f.tagsRaw))
+					return
+				}
+				// v0.10.1044 — gerçek API gibi: peeledObjectId YALNIZ
+				// peelTags=true ile döner; yoksa annotated tag'in objectId'si
+				// TAG NESNESİDİR (commit değil).
+				peel := q.Get("peelTags") == "true"
 				var tout struct {
 					Value []struct {
 						Name     string `json:"name"`
@@ -550,11 +577,15 @@ func newFakeTFS(t *testing.T) *fakeTFS {
 				f.mu.Lock()
 				for name, oid := range f.tags {
 					if name == "refs/"+tf {
+						peeled := ""
+						if peel {
+							peeled = f.peeled[name]
+						}
 						tout.Value = append(tout.Value, struct {
 							Name     string `json:"name"`
 							ObjectID string `json:"objectId"`
 							Peeled   string `json:"peeledObjectId,omitempty"`
-						}{name, oid, f.peeled[name]})
+						}{name, oid, peeled})
 					}
 				}
 				f.mu.Unlock()
@@ -587,11 +618,19 @@ func newFakeTFS(t *testing.T) *fakeTFS {
 			f.mu.Lock()
 			f.treeVersions = append(f.treeVersions, q.Get("versionDescriptor.versionType")+":"+q.Get("versionDescriptor.version"))
 			f.mu.Unlock()
+			isCommit := q.Get("versionDescriptor.versionType") == "commit"
 			if alt, ok := f.treeAt[q.Get("versionDescriptor.version")]; ok {
 				// v0.10.590 — ref'e özgü ağaç: gerçek API gibi versionDescriptor'a göre farklı içerik.
 				f.mu.Lock()
 				f.hits["tree"]++
 				f.mu.Unlock()
+				if isCommit && f.commitTreeDelay > 0 {
+					select {
+					case <-time.After(f.commitTreeDelay):
+					case <-r.Context().Done():
+						return
+					}
+				}
 				var out struct {
 					Value []struct {
 						Path   string `json:"path"`
@@ -614,6 +653,14 @@ func newFakeTFS(t *testing.T) *fakeTFS {
 			// Süzmeyi taklit etmemek, kapsamlı geri-denemeyi tam ağacın
 			// kopyasıyla test etmek olurdu — yani hiç test etmemek.
 			scope := strings.TrimRight(q.Get("scopePath"), "/")
+			// v0.10.1044 — bilinmeyen bir commit'in TAM ağacı yok (gerçek API:
+			// nesne bulunamadı / commit değil). Tag NESNESİ id'siyle ağaç
+			// istemek, peelTags'siz annotated tag'in tam olarak düştüğü yer.
+			if isCommit && scope == "" {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"message":"TF401175: version descriptor could not be resolved"}`))
+				return
+			}
 			bucket := "tree"
 			if scope != "" {
 				bucket = "scoped"
@@ -657,6 +704,7 @@ func newFakeTFS(t *testing.T) *fakeTFS {
 			f.mu.Lock()
 			f.hits["item"]++
 			items := f.hits["item"]
+			f.itemVersions = append(f.itemVersions, q.Get("versionDescriptor.versionType")+":"+q.Get("versionDescriptor.version"))
 			f.mu.Unlock()
 			if f.itemDelay > 0 && items >= f.slowItemAfter {
 				select {

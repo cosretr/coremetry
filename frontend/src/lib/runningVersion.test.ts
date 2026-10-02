@@ -17,4 +17,10 @@ describe('runningVersion', () => {
     expect(runningVersion({ 'service.version': '${project.version}' })).toBe('');
     expect(runningVersion(undefined)).toBe('');
   });
+  // v0.10.1044 — SQL listesiyle eşit: dal adı / null bir sürüm değildir.
+  it('main/master/HEAD/null/n/a yer tutucu', () => {
+    for (const v of ['main', 'master', 'HEAD', 'null', 'n/a', 'NULL']) {
+      expect(runningVersion({ 'container.image.tag': v, 'service.version': '2.3.4' })).toBe('2.3.4');
+    }
+  });
 });

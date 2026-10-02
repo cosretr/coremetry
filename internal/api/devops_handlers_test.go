@@ -234,8 +234,11 @@ func TestDevOpsAuditDetails_NoSecrets(t *testing.T) {
 	// değiştirir — repoPrefixes ile aynı sınıf, izde durmalı.
 	// codeBudgetRunes v0.10.1038: modele kaç karakter kod gideceğini (ve
 	// küçük bağlamlı modelde taşma riskini) herkes için değiştirir.
+	// versionRef v0.10.1044: desen her AI kod incelemesinin HANGİ commit'ten
+	// okunduğunu belirliyor ("Kod, dalın ucundan değil çalışan sürümden
+	// okunsun") — repoPrefixes ile aynı sınıf, izde durmalı.
 	want := []string{"baseUrl", "collection", "project", "flavor", "hasPat",
-		"insecureSkipVerify", "repoPrefixes", "branchOrder", "codeSearch",
+		"insecureSkipVerify", "repoPrefixes", "branchOrder", "versionRef", "codeSearch",
 		"appPrefixes", "codeLookupLimit", "codeBudgetRunes"}
 	if len(got) != len(want) {
 		t.Errorf("audit keys = %v, want exactly %v", keysOf(got), want)

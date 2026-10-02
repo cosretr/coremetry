@@ -16,6 +16,7 @@ import type { IdLink } from '@/components/ai/inlineIdLinks';
 import { readAiCodeParam, readAiSrcParam, writeAiCodeParam } from '@/lib/aiSubject';
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 import { shouldAskForCode, type CodeAskState } from './codeAsk';
+import { codeSourceRef } from './codeSourceRef'; // v0.10.1044 — çalışan sürüm / dal
 
 // CopilotExplain — drop-in Explain button that calls the
 // CoSRE (copilot) endpoint for the given subject and renders the
@@ -569,7 +570,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
             <div style={{ marginTop: 10, fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.6 }}>
               <div>
                 📄 Kaynak: <strong>{code.repo}</strong>
-                {code.branch ? ` · ${code.branch}` : ''}
+                {codeSourceRef(code)}
                 {code.source === 'pin' ? ' · katalog pini' : code.source === 'convention' ? ' · ad konvansiyonu' : ''}
               </div>
               {/* v0.9.1236 — kod GELDİĞİNDE de bir not olabilir: depo adı
@@ -652,7 +653,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           {codeBusy && codeText !== null && <span className="cm-ai-cursor" />}
           {codeCtx && !!codeCtx.files?.length && (
             <div style={{ marginTop: 10, fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.6 }}>
-              <div>📄 Kaynak: <strong>{codeCtx.repo}</strong>{codeCtx.branch ? ` · ${codeCtx.branch}` : ''}{codeCtx.source === 'pin' ? ' · katalog pini' : codeCtx.source === 'convention' ? ' · ad konvansiyonu' : ''}</div>
+              <div>📄 Kaynak: <strong>{codeCtx.repo}</strong>{codeSourceRef(codeCtx)}{codeCtx.source === 'pin' ? ' · katalog pini' : codeCtx.source === 'convention' ? ' · ad konvansiyonu' : ''}</div>
               {codeCtx.reason && <div style={{ color: 'var(--warn, var(--text3))' }}>{codeCtx.reason}</div>}
               {codeCtx.files.map(f => (
                 <div key={`${f.path}:${f.fromLine}`} style={{ fontFamily: 'var(--font-mono)' }}>

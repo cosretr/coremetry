@@ -2011,6 +2011,10 @@ export interface AICodeContext {
   /** Tarayıcıda açılabilir depo linki — depo bir TAHMİN olabilir, operatör
    *  onu ancak bakarak doğrulayabilir (v0.10.60). */
   browseUrl?: string;
+  /** v0.10.1044 — kod ÇALIŞAN SÜRÜMÜN commit'inden okunduysa o sürüm ve
+   *  commit; yoksa kod `branch`'in ucundan (sürüm bulunamadıysa neden `reason`'da). */
+  version?: string;
+  commit?: string;
 }
 
 export type DevOpsFlavor = 'auto' | 'azure-devops-server' | 'tfs';

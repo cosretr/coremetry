@@ -84,7 +84,13 @@ func decodeExplainOptions(r *http.Request) explainOptions {
 // görünür. TEK sayılmayan dal s.devops==nil: sayaçlar Service'e ait,
 // Service yoksa sayacak yer de yok — ve o hâlde ölçülecek bir
 // entegrasyon zaten yoktur.
-func (s *Server) buildCodeContext(ctx context.Context, service, stack string) devops.CodeContext {
+//
+// version (v0.10.1044, operatör: "Kod, dalın ucundan değil çalışan
+// sürümden okunsun") — stack'i basan servisin olay anındaki çalışan sürümü
+// (anomaly.StackServiceVersion; trace explain ve exception explain elindeki
+// span'lerden seçer, ek okuma yok). FetchCodeAt onu frame linklerinin
+// VersionRef eşlemesiyle commit'e bağlar; boşsa ya da ref yoksa dal ucu.
+func (s *Server) buildCodeContext(ctx context.Context, service, stack, version string) devops.CodeContext {
 	if s.devops == nil {
 		// Sayaç YOK (Service yok), ama SINIF var: v0.9.1243'ten beri
 		// sınıf tek bir çağrının kaydına da yazılıyor ve o kayıt
@@ -139,9 +145,9 @@ func (s *Server) buildCodeContext(ctx context.Context, service, stack string) de
 	// kodunun kendisi dil-bağımsız arama anahtarıdır — zincir başka
 	// dildeki bir servise indiğinde (.cs fırlatıcı) frame-türevi arama
 	// yapısal olarak ıskalar, token araması bulur.
-	cc := s.devops.FetchCode(ctx, res.Repo, res.Project,
+	cc := s.devops.FetchCodeAt(ctx, res.Repo, res.Project,
 		stackparse.ParseJava(stack), stackparse.ResourceRefs(stack),
-		stackparse.ErrorCodeTokens(stack))
+		stackparse.ErrorCodeTokens(stack), version)
 	cc.Source = res.Source
 	return cc
 }
@@ -192,6 +198,12 @@ type codeContextPayload struct {
 	// Depo bir TAHMİNE dayanabiliyor (konvansiyon); operatörün tahmini
 	// doğrulamasının tek yolu linke bakmak.
 	BrowseURL string `json:"browseUrl,omitempty"`
+	// Version / Commit (v0.10.1044) — kod ÇALIŞAN SÜRÜMÜN commit'inden
+	// okunduysa o sürüm ve commit; boş = kod Branch'in ucundan. Kaynak
+	// satırı bunu "1.4.2 (çalışan sürüm)" / "release (dal)" diye ayırır.
+	// Sürüm bilinip ref bulunamadıysa ikisi de boş, neden Reason'da.
+	Version string `json:"version,omitempty"`
+	Commit  string `json:"commit,omitempty"`
 }
 
 type codeFileRefDTO struct {
@@ -218,6 +230,9 @@ func codePayload(cc devops.CodeContext, requested bool) *codeContextPayload {
 	p := &codeContextPayload{
 		Repo: cc.Repo, Branch: cc.Branch, Source: cc.Source, Reason: cc.Reason,
 		BrowseURL: cc.BrowseURL,
+	}
+	if cc.FromRunningVersion() {
+		p.Version, p.Commit = cc.Revision.Version, cc.Revision.SHA
 	}
 	for _, w := range cc.Windows {
 		p.Files = append(p.Files, codeFileRefDTO{Path: w.Path, FromLine: w.FromLine, ToLine: w.ToLine, Line: w.Line, Repo: w.Repo, URL: w.WebURL})

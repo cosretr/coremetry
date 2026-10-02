@@ -47,7 +47,9 @@ func (s *Server) copilotExplainException(w http.ResponseWriter, r *http.Request)
 		if in.StackService != "" {
 			codeSvc = in.StackService
 		}
-		cc = s.buildCodeContext(r.Context(), codeSvc, in.Stack)
+		// v0.10.1044 — örnek trace'ten çalışan sürüm (in.StackVersion; aynı
+		// servis, ek okuma yok); boşsa dal ucu.
+		cc = s.buildCodeContext(r.Context(), codeSvc, in.Stack, in.StackVersion)
 		// v0.10.115 — SQL hatasında şema kanıtı: grup tipi+mesajı ve örnek
 		// trace'in hata span'larındaki db_statement → katalog.
 		se := s.buildSchemaEvidence(in.ErrorText, in.DBStatements, mapperBlocks(cc))

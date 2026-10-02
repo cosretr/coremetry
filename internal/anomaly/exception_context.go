@@ -33,16 +33,42 @@ import (
 // exception yüzeyindeki eksik yarısı — prompt logdaki stack'i gösterip
 // kod çekici "stacktrace yok" diyordu). Fallback'te forPrompt boş kalır:
 // prompt'un stack bölümü eskiden de boştu, bayt-parite korunur.
-func pickExceptionStack(sampleStacks []string, logStack, logStackSvc string) (forPrompt, raw, svc string) {
-	for _, st := range sampleStacks {
+//
+// v0.10.1044 — sample: stack'i veren ÖRNEĞİN indeksi (log-fallback'te ya da
+// stack yoksa -1). Çalışan sürüm AYNI olaydan okunmalı: bir olayın stack'i
+// başka bir olayın sürümüyle eşleşirse satırlar yine kayar.
+func pickExceptionStack(sampleStacks []string, logStack, logStackSvc string) (forPrompt, raw, svc string, sample int) {
+	for i, st := range sampleStacks {
 		if st != "" {
-			return truncRunes(st, 1800), st, ""
+			return truncRunes(st, 1800), st, "", i
 		}
 	}
 	if logStack != "" {
-		return "", logStack, logStackSvc
+		return "", logStack, logStackSvc, -1
 	}
-	return "", "", ""
+	return "", "", "", -1
+}
+
+// exceptionStackVersion — SAF (v0.10.1044): exception explain'in stack'inin
+// çalışan sürümü — YALNIZ stack'i veren olaydan.
+//   - stack bir ÖRNEKTEN geldiyse: o örneğin trace'i eldeki trace ise o
+//     örneğin span'i (SpanVersion); değilse "" (başka bir olayın sürümü
+//     kullanılmaz → kod bugünkü gibi dal ucundan).
+//   - stack eldeki trace'in LOGUNDAN geldiyse: StackVersion zinciri (logun
+//     span'i → logun resource'u → o trace'te servisin çoğunluğu).
+func exceptionStackVersion(samples []chstore.ExceptionSample, sample int, traceID string, traceSpans []chstore.SpanRow,
+	service, logSpanID string, logRes map[string]string, haveStack bool) string {
+	if sample >= 0 && sample < len(samples) {
+		sm := samples[sample]
+		if sm.TraceID == "" || sm.TraceID != traceID {
+			return ""
+		}
+		return SpanVersion(traceSpans, sm.SpanID)
+	}
+	if !haveStack {
+		return ""
+	}
+	return StackVersion(traceSpans, service, logSpanID, logRes)
 }
 
 // liteLog — prompt'a giren log satırı. Paket düzeyinde: Stack alanı
@@ -169,6 +195,11 @@ type ExceptionExplainInput struct {
 	// (v0.9.1225): depo çözümü grubun servisi yerine buna gitmeli.
 	// Boşsa grup servisi geçerli.
 	StackService string
+	// StackVersion (v0.10.1044, operatör: "Kod, dalın ucundan değil çalışan
+	// sürümden okunsun") — stack'i basan servisin örnek trace'teki ÇALIŞAN
+	// sürümü (StackServiceVersion). Yeni okuma YOK: aşağıda zaten yüklenen
+	// örnek trace'in span'lerinden. Boş = bilinmiyor → kod dal ucundan.
+	StackVersion string
 	// DBStatements / ErrorText (v0.10.115) — örnek trace'in hata
 	// span'larındaki SQL ifadeleri (≤3) ve grup tipi+mesajı+stack başı:
 	// şema kanıtının girdisi (api buildSchemaEvidence).
@@ -285,6 +316,10 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	// v0.9.1225 — kod çekicinin log-fallback istihkakı (aşağıdaki logs
 	// döngüsünde dolar; yalnız örnekler stack taşımıyorsa kullanılır).
 	var logStack, logStackSvc string
+	// v0.10.1044 — stack'li logun KENDİ span'i ve resource'u (çalışan sürüm
+	// önce oradan; canary'de çoğunluk yanlış sürümü seçer).
+	var logStackSpan string
+	var logStackRes map[string]string
 	// v0.9.1239 — log satırları ve HAM stack'leri; JSON'a çevirme
 	// pickExceptionStack'ten SONRAYA ertelendi (bkz. foldDuplicateLogStacks).
 	var logLines []liteLog
@@ -292,6 +327,9 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	var evTraces, evSpans []string
 	traceID := ""
 	var traceMinT, traceMaxT int64
+	// v0.10.1044 — örnek trace'in span'leri, çalışan sürüm seçimi için
+	// saklanır (StackVersion; ek okuma yok).
+	var traceSpans []chstore.SpanRow
 	for _, sm := range samples {
 		if sm.TraceID != "" {
 			traceID = sm.TraceID
@@ -304,6 +342,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 		cancel()
 		if terr == nil && len(spans) > 0 {
 			evTraces = append(evTraces, traceID)
+			traceSpans = spans
 			traceMinT, traceMaxT = spans[0].StartTime, spans[0].EndTime
 			for _, sp := range spans {
 				if sp.StartTime < traceMinT {
@@ -391,6 +430,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 				// svc- depo çözümü yanlış depoya gitmesin.
 				if logStack == "" && stackText != "" {
 					logStack, logStackSvc = stackText, lg.ServiceName
+					logStackSpan, logStackRes = lg.SpanID, lg.ResourceAttributes
 				}
 				bodyForPrompt := lg.Body
 				if stackFromBody {
@@ -436,7 +476,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	for _, sm := range samples {
 		sampleStacks = append(sampleStacks, sm.Stacktrace)
 	}
-	stackForPrompt, stackRaw, stackSvc := pickExceptionStack(sampleStacks, logStack, logStackSvc)
+	stackForPrompt, stackRaw, stackSvc, stackSample := pickExceptionStack(sampleStacks, logStack, logStackSvc)
 
 	// v0.9.1239 — log bloğu ANCAK ŞİMDİ kurulabilir: her logun stack'i
 	// prompt'ta GÖRÜNEN temsilî stack'e karşı katlanıyor ve o seçim
@@ -458,6 +498,15 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	// kanıt "ölçülemedi" olur; prompt'un geri kalanı etkilenmez.
 	pods := buildPodConcentration(ctx, store, g.Fingerprint, g.Service)
 
+	// v0.10.1044 — kod çekici depoyu stackSvc'den (boşsa grup servisi)
+	// çözer; çalışan sürüm stack'i veren OLAYDAN (exceptionStackVersion).
+	verSvc := stackSvc
+	if verSvc == "" {
+		verSvc = g.Service
+	}
+	stackVersion := exceptionStackVersion(samples, stackSample, traceID, traceSpans,
+		verSvc, logStackSpan, logStackRes, stackRaw != "")
+
 	return ExceptionExplainInput{
 		User: assembleExceptionPrompt(g, loc, trend, stackForPrompt, traceBlock, logsBlock, deployBlock,
 			renderPodConcentration(pods)),
@@ -466,6 +515,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 		LogsBlock:    logsBlock,
 		Stack:        stackRaw,
 		StackService: stackSvc,
+		StackVersion: stackVersion,
 		DBStatements: dbStmts,
 		ErrorText:    truncRunes(g.Type+": "+g.Message+"\n"+stackRaw, 2000),
 		TraceID:      traceID,

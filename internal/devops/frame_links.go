@@ -125,6 +125,11 @@ type Revision struct {
 	SHA      string // commit; Verified=true iken dolu
 	Verified bool
 	Note     string
+	// Missing (v0.10.1044) — ref depoda YOK (hata değil; tag'ler desene
+	// uymuyor ya da o sürüm etiketlenmemiş). Kod incelemesinin gerekçe
+	// cümlesi "depoda bulunamadı" ile "okunamadı"yı bundan ayırır; metni
+	// Note'tan çıkarmak ilk yeniden yazımda kayardı.
+	Missing bool
 }
 
 // frameLinkDeadline — yürürlükteki tavan. Operatörün daha KISA bir
@@ -251,25 +256,15 @@ func (s *Service) ResolveFrameLinks(ctx context.Context, service string, pin Pin
 	// v0.10.590 — sürüm → ref → commit. Başarılıysa AĞAÇ DA o commit'ten
 	// okunur: link ile yol aynı ref'e bakmalı. Başarısızlık sessiz DEĞİL
 	// (Revision.Note) ama link üretimini durdurmaz — branş ucu + uyarı.
+	// v0.10.1044 — zincir resolveRevision'a taşındı: kod incelemesi
+	// (FetchCodeAt) AYNI çözücüyü çağırır, iki kopya yok.
 	paths := ch.paths
 	linkRef := RefSpec{Kind: "branch", Name: ch.branch}
-	if ref, ok := ResolveVersionRef(cfg.VersionRef, version); ok && ch.class == "" && out.Repo != "" {
-		out.Revision = &Revision{Version: strings.TrimSpace(version), Ref: ref}
-		cli := s.clientFor(cfg.InsecureSkipVerify)
-		sha, err := s.refCommit(ctx, cli, cfg, ch.ver, out.Repo, ref)
-		switch {
-		case err != nil:
-			out.Revision.Note = "ref sorgusu başarısız: " + err.Error()
-		case sha == "":
-			out.Revision.Note = ref + " bulunamadı"
-		default:
-			tree, terr := s.repoTreeAt(ctx, cli, cfg, ch.ver, out.Repo, RefSpec{Kind: "commit", Name: sha})
-			if terr != nil || len(tree.paths) == 0 {
-				out.Revision.Note = "commit ağacı okunamadı: " + sha
-			} else {
-				paths, linkRef = tree.paths, RefSpec{Kind: "commit", Name: sha}
-				out.Revision.SHA, out.Revision.Verified = sha, true
-			}
+	if ch.class == "" {
+		rev, tree := s.resolveRevision(ctx, s.clientFor(cfg.InsecureSkipVerify), cfg, ch.ver, out.Repo, version)
+		out.Revision = rev
+		if rev != nil && rev.Verified {
+			paths, linkRef = tree.paths, RefSpec{Kind: "commit", Name: rev.SHA}
 		}
 	}
 	if ch.class != "" {

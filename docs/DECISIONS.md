@@ -987,6 +987,88 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Kod inceleme çalışan sürümden okur (v0.10.1044)
+
+**Operatör:** "Kod, dalın ucundan değil çalışan sürümden okunsun." **Önce:** "Kodu da incele" (trace ve exception
+açıklaması) kaynağı dalın UCUNDAN okuyordu (BranchOrder: release → master → deponun varsayılanı; ağaç ve dosya
+`versionType=branch`); stack'teki satır numarası koşan koddan başka bir satıra düşebiliyordu. Frame linkleri v0.10.590'dan
+beri sürümü commit'e bağlıyordu, kod incelemesi bağlamıyordu.
+
+**Kural — tek çözücü:** frame linklerinin mekanizması aynen; `resolveRevision` (frame_links.go'dan çıkarıldı, iki yüzey
+de onu çağırır). Dal zinciri önce koşar (api-version, depo adı düzeltmesi); `VersionRef` deseni sürümü ref'e
+(`ResolveVersionRef`), `refs?filter=<ref>&peelTags=true` ref'i commit'e bağlar; ağaç, dosyalar, kapsamlı alt-ağaç ve pencere
+linkleri o COMMIT'ten (`versionType=commit`, link `GC<sha>`). Ref yok / sorgu hatası / çözülemeyen yanıt / commit ağacı
+okunamadı → bugünkü dal sırası ve gerekçe satırında düz cümle: "çalışan sürüm 1.4.2 depoda bulunamadı (tags/1.4.2), release
+dalından okundu" (hatada "… okunamadı (…), release dalından okundu"). Kod çekimi sürüm yüzünden düşmez, sınıf (outcome)
+değişmez.
+
+**Annotated tag:** refs listesi commit'i (`peeledObjectId`) YALNIZ `peelTags=true` ile döner; parametresiz `objectId` TAG
+NESNESİDİR, commit ağacı okuması düşer ve özellik release-plugin tag'lerinde sessizce hiçbir şey yapmazdı (her tıkta da
+başarısız bir ağaç isteği öderdi). İstek artık parametreyi taşır; sahte sunucu da peeled'i yalnız parametreyle döner
+(önceden koşulsuz döndüğü için testler bunu göremiyordu). v0.10.590 frame linkleri de aynı kusuru taşıyordu, birlikte düzeldi.
+
+**Sürüm kapısı (güvenlik):** sürüm telemetriden gelir — span gönderebilen herkes `service.version` / image tag yazar — ve
+PAT'lı bir isteğin sorgusuna, model bloğuna (çit dışında), gerekçe satırına ve panele gider. Tek kapı `ResolveVersionRef`'te:
+yalnız `^[0-9A-Za-z][0-9A-Za-z._+\-/]{0,99}$` ve `..` içermeyen sürüm kabul; gerisi "sürüm yok" (istek yok, bugünkü başlık,
+hiçbir yerde yankı yok). Süzgeç değerinin tamamı `QueryEscape`'li: eski `PathEscape` `& = + $`'ı bırakıyordu — `x&$top=1`
+isteğe parametre ekliyor, geçerli semver `1.4.2+77`'nin `+`'sı boşluğa çözülüp hiç eşleşmiyordu. Kapı frame linklerini de
+korur (gövdedeki sürüm de aynı çözücüden geçer).
+
+**Bu sürüm HER kurulumu değiştirir:** `VersionRef`'in kapalı hâli yok — boş = varsayılan `tags/{version}` (v0.10.590) ve ayar
+kaydı bu varsayılanı yazıyor. Varsayılan eşleme artık AI kod incelemesini de yönetir: stack'i basan servis gerçek bir sürüm
+taşıyor ve depoda aynı adlı tag varsa kod o commit'ten okunur. Tag'leri desene uymayan kurulum dalı okumaya devam eder; bedeli
+bir refs sorgusu (10 dk cache'li, yokluk dahil). Desen: Ayarlar → Kod entegrasyonu → "Sürüm → ref deseni"
+(`heads/release/{version}` vb.).
+
+**Sürüm nereden (ek okuma yok) — stack'i taşıyan KAYIT önce:** tek Go yardımcısı `devops.RunningVersion` —
+`container.image.tag` → `k8s.container.image.tag` → `service.version`, yer tutucu atlanır; frontend `runningVersion.ts` ve
+chstore `effectiveVersionExpr` ile aynı sıra, üçü kaynaktan pinli (`running_version_test.go`). Trace (`anomaly.StackVersion`):
+(1) stack'li logun KENDİ span'i (eldeki span'lerden), (2) logun kendi resource attribute'ları, (3) son çare stack servisinin o
+trace'teki span'lerinde çoğunluk (eşitlikte en yeni span, o da eşitse sözlük sırası). Neden çoğunluk önce değil: canary —
+yeni sürümdeki tek pod düşer, eski sürümdeki iki deneme başarılı olur; çoğunluk tam da patlayan sürümü kaybeder (test: hatalı
+span 1.5.0 + iki deneme 1.4.2 → 1.5.0). Exception: sürüm YALNIZ stack'i veren olaydan — stack bir örnekten geldiyse o örneğin
+trace'i eldeki trace ise o örneğin span'i, değilse sürüm yok (bugünkü davranış); stack eldeki trace'in logundan geldiyse
+trace'teki sıra. Bir olayın stack'i başka bir olayın sürümüyle asla eşleşmez. Sürüm yok ya da yer tutucu → istekler bayt
+bayt bugünkü (golden, v0.10.1039 koduyla kaydedildi). Yer tutucu listesi SQL'le eşitlendi: `main`, `master`, `HEAD`, `null`,
+`n/a`, `NULL` artık sürüm sayılmaz (frame linkleri dahil).
+
+**Süre:** iki tam ağaç listelemesi (dal + commit) tek 25 sn tavanı paylaşıyor. Commit ağacı kalan sürenin YARISIYLA okunur;
+yetişmezse dal ağacına (zaten elde) düşülür ve gerekçe "commit ağacı süre payında okunamadı" der — dal dosyalarına süre kalır,
+"dalından okundu" cümlesi doğru olur. Ayrıca `doGetCapped` gövde okuması yarıda kesilirse (süre, bağlantı) artık HATA döner:
+eskiden hata yutuluyor, yarım ağaç "kesik ama kullanılabilir" sayılıp 10 dk cache'leniyordu — dal ağaçlarında da var olan
+gizli kusur.
+
+**Panel ve model:** "Kaynak: <depo> · 1.4.2 (çalışan sürüm)" ya da "· release (dal)" (iki çizim yeri, `codeSourceRef`);
+yanıtın `code` alanında `version`/`commit` yalnız commit'ten okunduysa dolu. Model bloğu başlığı "depo: X, çalışan sürüm:
+1.4.2, commit c0ffee00" ya da "depo: X, branş: release; çalışan sürüm 9.9.9 depoda bulunamadı — satırlar çalışan koddan
+farklı olabilir"; sürüm yoksa başlık (ve cevap önbelleği anahtarı) bayt bayt eski.
+
+**Cache:** ref→commit cevabı ağaçla aynı ömür ve tavanda (10 dk, 8 girdi; taban adres/koleksiyon/proje/depo/ref anahtarlı);
+yokluk da cache'lenir; hata ve çözülemeyen 2xx gövde cache'lenmez. Ağaç anahtarı zaten ref türüyle ayrıktı
+(`refCacheName`); FetchCode'un kapsamlı alt-ağaç anahtarı da artık oradan (dal anahtarı bayt bayt eski). Cevap önbelleği
+anahtarı model bloğundan kurulduğu için ref'e göre ayrışır.
+
+**İstek sayısı (sahte TFS, `TestFetchCodeAt_ExtraRequestBudget`):** sürüm + tag var: soğuk +1 refs +1 commit ağacı, sıcak
++0; tag yok: soğuk +1 refs, sıcak +0; sürüm yok: +0. Dosya çekimi sayısı aynı, yalnız ref'i değişir.
+
+**Audit:** `versionRef` artık DevOps ayar audit detayında — her AI kod cevabının hangi commit'ten okunduğunu belirliyor.
+
+**Bilinen sınırlar:**
+- Mono-repo: desende `{service}` yer tutucusu yok; başka bir servis için kesilmiş düz bir tag (ör. `1.4.2`) bu servisin
+  sürümü sanılır.
+- Zincir İLK yer-tutucu-olmayan anahtarda durur (frame linkleriyle kilit adım): depoda karşılığı olmayan bir image tag,
+  çözülebilecek bir `service.version`'ı gizler — dal ucuna düşülür.
+- Organizasyon araması isabetleri (başka depo) dal ucundan okunur ama "çalışan sürüm" başlıklı bloğun içinde durur.
+- 10 dk ref cache'i artık frame linklerinde de geçerli: zorla taşınan (force-moved) bir tag en çok 10 dk eski commit'i gösterir;
+  yeni basılan tag en çok 10 dk görünmeyebilir.
+- Commit ağacının alt süre tavanı frame linklerinde de geçerli (10 sn tavanın kalan yarısı).
+- Exception detay sayfasının frame linkleri hâlâ sürüm göndermiyor (`ProblemDetail.tsx`): o sayfada linkler dal ucundayken
+  "Kodu da incele" commit'ten okuyabilir — ayrı iş.
+- SQL `placeholderVersionList`'te SNAPSHOT alt-dizgi kuralı yok (`2.3.0-SNAPSHOT` deploy tespitinde sürüm sayılır) —
+  dokunulmadı.
+
+Kod bütçesi, pencere seçimi, kesik-ağaç notu, sohbet ve kanıt değişmedi.
+
 ## 2026-10-02 — Batch: seyrek koşan işte "yeni hata" artık uzun tabana bakar (v0.10.1043)
 
 **Operatör (prod):** "Batch'te 'yeni hata' gürültüsü: son 24 saatte hiç koşmamış bir iş her koşuda 'yeni hata'
