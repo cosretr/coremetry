@@ -74,7 +74,11 @@ func TestChPatternHistogramSQL_Bounded(t *testing.T) {
 
 func TestPatternHistogramBody_Guards(t *testing.T) {
 	body := patternHistogramBody(`message:"ora-"`, "message", "ts_custom",
-		"2026-10-02T10:00:00Z", "2026-10-02T12:00:00Z", 60, "10s")
+		"2026-10-02T10:00:00Z", "2026-10-02T12:00:00Z", 60, "10s", nil)
+	// v0.10.1062 — servis alanı yoksa agg kümesi 1060'takiyle aynı: yalnız kovalar.
+	if aggs := body["aggs"].(map[string]any); len(aggs) != 1 {
+		t.Fatalf("servis alanı yokken ek agg eklenmemeli: %v", aggs)
+	}
 	if body["size"] != 0 || body["track_total_hits"] != false || body["timeout"] != "10s" {
 		t.Fatalf("maliyet korumaları eksik: size=%v tth=%v timeout=%v", body["size"], body["track_total_hits"], body["timeout"])
 	}

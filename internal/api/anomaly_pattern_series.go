@@ -20,6 +20,16 @@ package api
 // pencere, kova). Kardinalite sınırlı: desen küratörlü ad listesinden (≤~25,
 // bilinmeyen ad 404 — anahtara hiç girmez), pencere kova sınırına hizalı,
 // kova genişliği sabit basamaklardan, kova sayısı ≤120, pencere ≤7 gün.
+//
+// v0.10.1062 (operatör, prod ES: servissiz log deseni anomalisinde "Ne
+// yapabilirim" kartı yalnız "servis adı yok" diyordu, operatör Kibana'ya elle
+// gidiyordu) — cevap iki alan daha taşır, ikisi de yeni sorgu DEĞİL:
+//   • logsQuery: desenin /logs arama metni (logstore.PatternSearchText —
+//     dedektörün token'ları; istemci desenin yalnız ADINI bilir). Saf türetme.
+//   • topServices: deseni en çok üreten ≤5 servis — ES'te aynı _search'ün
+//     terms zinciri; CH boş (gerekçe CHStore.PatternHistogram).
+// İkisi de anahtardaki girdilerden türer (desen + pencere); anahtarın sürüm
+// öneki yalnız eski şekilli önbellek girdisi sunulmasın diye.
 
 import (
 	"context"
@@ -119,7 +129,7 @@ func fillPatternBuckets(points []logstore.LogPoint, from, to time.Time, bucketSe
 
 // logPatternSeriesKey — SAF; her girdi anahtarda (v0.5.187).
 func logPatternSeriesKey(pattern string, from, to time.Time, bucketSec int) string {
-	return fmt.Sprintf("anomaly-pattern-series:p=%s:from=%d:to=%d:b=%d",
+	return fmt.Sprintf("anomaly-pattern-series:v2:p=%s:from=%d:to=%d:b=%d",
 		pattern, from.UnixNano(), to.UnixNano(), bucketSec)
 }
 
@@ -131,6 +141,10 @@ type logPatternSeriesResponse struct {
 	Points    []logstore.LogPoint `json:"points"`
 	// Partial — ES yumuşak zaman aşımı / düşen shard: kovalar alt küme.
 	Partial bool `json:"partial,omitempty"`
+	// LogsQuery — v0.10.1062: /logs `q=` metni; token'sız desende boş.
+	LogsQuery string `json:"logsQuery,omitempty"`
+	// TopServices — v0.10.1062: penceredeki en çok ≤5 servis (yalnız ES).
+	TopServices []logstore.PatternServiceHit `json:"topServices,omitempty"`
 }
 
 func (s *Server) getLogPatternSeries(w http.ResponseWriter, r *http.Request) {
@@ -172,15 +186,18 @@ func (s *Server) getLogPatternSeries(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		var pts []logstore.LogPoint
+		var top []logstore.PatternServiceHit
 		partial := false
 		if res != nil {
-			pts, partial = res.Points, res.Partial
+			pts, partial, top = res.Points, res.Partial, res.TopServices
 		}
 		return logPatternSeriesResponse{
 			Pattern: name, BucketSec: bucketSec,
 			From: from.UnixNano(), To: to.UnixNano(),
-			Points:  fillPatternBuckets(pts, from, to, bucketSec),
-			Partial: partial,
+			Points:      fillPatternBuckets(pts, from, to, bucketSec),
+			Partial:     partial,
+			LogsQuery:   logstore.PatternSearchText(spec),
+			TopServices: top,
 		}, nil
 	})
 }

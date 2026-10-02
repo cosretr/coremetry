@@ -4,8 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import type { AnomalyEvent, LogPatternSeries } from '@/lib/types';
 import {
-  anomalyRegion, bucketLabel, hasLogPatternSeries, logPatternSeriesState, logPatternSeriesToSpan,
-  logPatternSeriesWindow,
+  anomalyRegion, bucketLabel, hasLogPatternSeries, logPatternSeriesArgs, logPatternSeriesState,
+  logPatternSeriesToSpan, logPatternSeriesWindow, patternLogsPivot,
 } from './logPatternSeries';
 
 const MIN = 60e9;
@@ -90,5 +90,43 @@ describe('logPatternSeriesState', () => {
     ['veri', { isPending: false, isError: false, data: series([0, 12, 9000]) }, 'ready'],
   ])('%s', (_n, q, want) => {
     expect(logPatternSeriesState(q)).toBe(want);
+  });
+});
+
+// v0.10.1062 (operatör, prod ES: servissiz log deseni anomalisinde "Ne
+// yapabilirim" yalnız "servis adı yok" diyordu) — servissiz olayın /logs
+// bağlantısı: arama metni SUNUCUDAN (dedektörün token'ları), pencere olayınki.
+describe('logPatternSeriesArgs', () => {
+  it('grafik bölümüyle aynı anahtar: desen + logPatternSeriesWindow', () => {
+    const e = { pattern: 'Service quota', startedAt: T0, lastSeen: T0 + 10 * MIN, status: 'cleared' as const };
+    expect(logPatternSeriesArgs(e)).toEqual({ pattern: 'Service quota', ...logPatternSeriesWindow(e) });
+    expect(logPatternSeriesArgs({ ...e, status: 'active' }).toNs).toBeNull();
+  });
+});
+
+describe('patternLogsPivot', () => {
+  const win = { fromNs: T0 - 30 * MIN, toNs: T0 + 20 * MIN };
+  const range = `custom:${(T0 - 30 * MIN) / 1e6}-${(T0 + 20 * MIN) / 1e6}`;
+  const href = (q: string) => `/logs?${new URLSearchParams({ q, range }).toString()}`;
+  type In = Pick<LogPatternSeries, 'logsQuery' | 'topServices'> | null | undefined;
+  it.each<[string, In, { href: string; topServices: string[] } | null]>([
+    ['okuma yok (yükleniyor / hata)', undefined, null],
+    ['404 (desen tanımı kalkmış)', null, null],
+    ["logsQuery yok (token'sız desen / eski sunucu)", {}, null],
+    ['boşluk logsQuery', { logsQuery: '  ' }, null],
+    ['çok token, servis yok (CH)', { logsQuery: '"service quota" OR "quota exceeded"' },
+      { href: href('"service quota" OR "quota exceeded"'), topServices: [] }],
+    ['tek token + servisler (ES), en çok 3, boş ad atılır',
+      { logsQuery: '"sqlexception"', topServices: [
+        { service: 'orders-svc', count: 700 }, { service: '', count: 90 }, { service: 'billing-svc', count: 81 },
+        { service: 'ORDER_QUEUE_LISTENER', count: 9 }, { service: 'audit-svc', count: 2 }] },
+      { href: href('"sqlexception"'), topServices: ['orders-svc', 'billing-svc', 'ORDER_QUEUE_LISTENER'] }],
+  ])('%s', (_name, series, want) => {
+    expect(patternLogsPivot(series, win)).toEqual(want);
+  });
+  it('servis kapsamı YAZMAZ (servissiz olay; atıf yalnız bilgi)', () => {
+    const p = patternLogsPivot({ logsQuery: '"ora-"', topServices: [{ service: 'orders-svc', count: 3 }] }, win)!;
+    expect(new URL(p.href, 'http://x').searchParams.has('service')).toBe(false);
+    expect(new URL(p.href, 'http://x').searchParams.get('q')).toBe('"ora-"');
   });
 });

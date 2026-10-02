@@ -10,6 +10,7 @@
 
 import type { AnomalyEvent, LogPatternSeries, SpanMetricSeries } from '@/lib/types';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
+import { logsHref } from '@/lib/logsUrl';
 import { anomalyChartWindow } from './anomalyDetail';
 
 // Grafiği olan türler: YALNIZ log_pattern. Desen adı dedektörün küratörlü
@@ -42,6 +43,38 @@ export function logPatternSeriesWindow(
     fromNs: Math.min(lead, ev.fromNs),
     toNs: e.status === 'active' ? null : ev.toNs,
   };
+}
+
+/** Desen sayısı okumasının argümanları — grafik bölümü ve "Ne yapabilirim"
+ *  kartı AYNI anahtarla sorar (tek istek, React Query paylaşır). */
+export function logPatternSeriesArgs(
+  e: Pick<AnomalyEvent, 'pattern' | 'startedAt' | 'lastSeen' | 'status'>,
+): { pattern: string; fromNs: number; toNs: number | null } {
+  return { pattern: e.pattern, ...logPatternSeriesWindow(e) };
+}
+
+// patternLogsPivot — v0.10.1062 (operatör, prod ES: servissiz log deseni
+// anomalisinde "Ne yapabilirim" yalnız "servis adı yok" diyordu; operatör
+// Kibana'ya elle gidiyordu). Servissiz log_pattern olayının TEK eylemi:
+// olay penceresinde, desene uyan satırlarla /logs. Arama metni sunucudan
+// (logsQuery — dedektörün token'ları; istemci desenin yalnız ADINI bilir),
+// token'lar burada YAZILMAZ. Metin yoksa (okuma bitmedi / hata / eski satır /
+// token'sız desen) null — sahte ya da boş dönecek bir bağlantı basılmaz.
+// topServices: en çok ≤3 ad ("En çok: …" satırı; sunucu ≤5 döner).
+export interface PatternLogsPivot { href: string; topServices: string[] }
+
+export function patternLogsPivot(
+  series: Pick<LogPatternSeries, 'logsQuery' | 'topServices'> | null | undefined,
+  win: { fromNs: number; toNs: number },
+): PatternLogsPivot | null {
+  const q = (series?.logsQuery ?? '').trim();
+  if (!q) return null;
+  const href = logsHref({ window: win, q });
+  const topServices = (series?.topServices ?? [])
+    .map(s => (s?.service ?? '').trim())
+    .filter(s => s !== '')
+    .slice(0, 3);
+  return { href, topServices };
 }
 
 /** Kova genişliği düz Türkçe ("1 dk", "2 sa", "1 gün"). */

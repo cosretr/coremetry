@@ -318,6 +318,10 @@ type PatternStats struct {
 type PatternHistogramResult struct {
 	Points  []LogPoint
 	Partial bool
+	// TopServices — v0.10.1062: pencerede deseni en çok üreten ≤5 servis
+	// (sayı azalan). Yalnız ES doldurur (aynı _search'te terms zinciri); CH
+	// boş bırakır (gerekçe CHStore.PatternHistogram'da).
+	TopServices []PatternServiceHit
 }
 
 // PatternServiceHit pairs a service name with how many times it

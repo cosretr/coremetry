@@ -4,8 +4,8 @@ import { useLogPatternSeries } from '@/lib/queries';
 import type { AnomalyEvent } from '@/lib/types';
 import { Sect } from './detailSections';
 import {
-  LOG_PATTERN_SERIES_TEXT, anomalyRegion, bucketLabel, logPatternSeriesState, logPatternSeriesToSpan,
-  logPatternSeriesWindow,
+  LOG_PATTERN_SERIES_TEXT, anomalyRegion, bucketLabel, logPatternSeriesArgs, logPatternSeriesState,
+  logPatternSeriesToSpan,
 } from './logPatternSeries';
 
 // LogPatternCountSection — log deseni anomalisinin "Desen sayısı" bar grafiği
@@ -25,12 +25,11 @@ const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
 export function LogPatternCountSection({ event }: { event: AnomalyEvent }) {
-  const win = useMemo(
-    () => logPatternSeriesWindow({ startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }),
-    [event.startedAt, event.lastSeen, event.status]);
+  // v0.10.1062 — argümanlar ortak kurucudan: "Ne yapabilirim" kartı AYNI
+  // anahtarla okur (ikinci istek yok).
   const args = useMemo(
-    () => ({ pattern: event.pattern, fromNs: win.fromNs, toNs: win.toNs }),
-    [event.pattern, win]);
+    () => logPatternSeriesArgs({ pattern: event.pattern, startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }),
+    [event.pattern, event.startedAt, event.lastSeen, event.status]);
   const q = useLogPatternSeries(args, { live: event.status === 'active' });
   const data = q.data;
   const state = logPatternSeriesState({ isPending: q.isPending, isError: q.isError, data });

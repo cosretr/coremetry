@@ -987,6 +987,19 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
+
+**Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
+diyordu; loglara Kibana'dan elle gidiliyordu. **Neden servissiz:** ES dedektörü servisi tek alanda
+(`fields.service`, varsayılan `service.name`) terms agg ile arar; cluster-logging dokümanında kimlik
+`kubernetes.container_name`'de, terms boş döner. CH servisi `service_name` kolonundan alır, pratikte hep
+dolu. **Karar:** servissiz `log_pattern`'da kart tek eylem verir: "Logları aç" — olay penceresi + desenin
+arama metni (`"t1" OR "t2"`). Metin sunucudan, dedektörün token'larından: `log-pattern-series` cevabına
+`logsQuery` eklendi, istemcide token yok. ES'te dedektörün yüklemiyle birebir; CH'de token ön süzgeci
+(arama dilinde regex yok — üst küme, desenin her satırı içinde). Aynı ES okumasına servis atfı zinciri
+(servis süzgecinin aday alanları, sırayla, ≤5): "En çok: …" satırı. CH'de atıf yok (ikinci regex taraması
+olurdu, olay zaten servisli). Dedektör ve kayıt değişmedi; diğer servissiz türlerde cümle aynen.
+
 ## 2026-10-02 — Yeni log deseni (log_template_new) anomalileri varsayılan kapalı (v0.10.1061)
 
 Operatör onaylı: "Bu log anomalileri de false pozitif geliyor." Drain'in ilk kez gördüğü log biçimi

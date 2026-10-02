@@ -17,6 +17,8 @@
 //   • v0.10.1060 — log_pattern'ın tek grafiği "Desen sayısı" barları (servis log
 //     hacmi DEĞİL); diğer log türleri log hacmini korur, log dışı türlerde
 //     desen grafiği yok; desen okuması düşerse sayfanın geri kalanı ayakta.
+//   • v0.10.1062 — servissiz log_pattern'da "Ne yapabilirim" desene uyan
+//     loglara gider (+ "En çok"); diğer servissiz türler / servisli olay aynen.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -40,6 +42,7 @@ const m = vi.hoisted(() => {
     logSeries: [{ name: 'ERROR', total: 12 }] as { name: string; total: number }[] | null,
     patternMode: 'ok' as 'ok' | 'fail',
     patternCalls: 0,
+    patternExtra: {} as Record<string, unknown>,
   };
 });
 vi.mock('@/lib/api', () => {
@@ -55,7 +58,7 @@ vi.mock('@/lib/api', () => {
     anomalyLogPatternSeries: async () => {
       m.patternCalls++;
       if (m.patternMode === 'fail') throw new Error('HTTP 502: log backend slow');
-      return { pattern: 'p', bucketSec: 60, from: 0, to: 120e9, points: [{ t: 0, v: 3 }, { t: 60e9, v: 900 }] };
+      return { pattern: 'p', bucketSec: 60, from: 0, to: 120e9, points: [{ t: 0, v: 3 }, { t: 60e9, v: 900 }], ...m.patternExtra };
     },
   };
   return {
@@ -96,6 +99,7 @@ vi.mock('@/components/RootCauseRibbon', () => ({
 }));
 
 import { AnomalyEventHost } from './AnomalyEventDetail';
+import { anomalyChartWindow } from './anomalyDetail';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -142,7 +146,7 @@ beforeEach(() => {
   m.events = { a1: ev(), b2: ev({ id: 'b2', kind: 'log_pattern', pattern: 'ORA-00060', service: 'billing', peakRatio: 6, sample: 'deadlock' }) };
   m.mode = 'ok'; m.pendingIds = new Set(); m.role = 'editor'; m.silences = []; m.rcOpen = [];
   m.logSeries = [{ name: 'ERROR', total: 12 }];
-  m.patternMode = 'ok'; m.patternCalls = 0;
+  m.patternMode = 'ok'; m.patternCalls = 0; m.patternExtra = {};
   onBack.mockReset();
 });
 afterEach(() => {
@@ -274,6 +278,98 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
     m.logSeries = null;
     const el2 = await mount('c3');
     expect(byText(el2, '.pb-sect', 'Log hacmi')!.textContent).toContain('Log hacmi okunamadı');
+  });
+});
+
+// v0.10.1062 (operatör, prod ES: servissiz log deseni anomalisinde "Ne
+// yapabilirim" yalnız "Bu olay bir servis adı taşımıyor…" diyordu; operatör
+// Kibana'ya elle gidiyordu). Servissiz log_pattern → desene uyan satırlarla
+// "Logları aç" (arama metni sunucudan, pencere olayınki) + "En çok: …"; diğer
+// servissiz türler ve servisli olaylar AYNEN.
+describe('AnomalyEventDetail — "Ne yapabilirim" servissiz log deseni', () => {
+  const svcless = (over: Partial<AnomalyEvent> = {}) => ev({
+    id: 'd4', kind: 'log_pattern', pattern: 'Service quota', service: '', peakRatio: 781,
+    sample: 'Service quota warning: ORDER_QUEUE_LISTENER', ...over,
+  });
+  const card = (el: HTMLElement) => byText(el, '.pb-sect', 'Ne yapabilirim')!;
+  const logsLink = (el: HTMLElement) =>
+    [...card(el).querySelectorAll('a')].find(a => a.textContent?.includes('Logları aç'));
+  // Desen okuması olay okuması ÇİZİLDİKTEN sonra başlar (ilk settle'ın
+  // sonunda); cevabın çizimi için ikinci bir settle.
+  const mountRead = async (id: string) => { const el = await mount(id); await settle(); return el; };
+
+  it('servissiz log_pattern: "Logları aç" desenin aramasıyla, olay penceresinde; "En çok"; tek okuma', async () => {
+    m.events.d4 = svcless();
+    m.patternExtra = {
+      logsQuery: '"service quota" OR "quota exceeded"',
+      topServices: [{ service: 'orders-svc', count: 700 }, { service: 'billing-svc', count: 81 }],
+    };
+    const el = await mountRead('d4');
+    expect(el.querySelector('.pd-summary__what')?.textContent).toBe('Loglarda bu desen normalin 781 katına çıktı.');
+    const a = logsLink(el)!;
+    expect(a).toBeTruthy();
+    const url = new URL(a.getAttribute('href')!, 'http://x');
+    const win = anomalyChartWindow(svcless());
+    expect(url.pathname).toBe('/logs');
+    expect(url.searchParams.get('q')).toBe('"service quota" OR "quota exceeded"');
+    expect(url.searchParams.get('range')).toBe(`custom:${win.fromNs / 1e6}-${win.toNs / 1e6}`);
+    expect(url.searchParams.has('service')).toBe(false);
+    expect(a.textContent).toContain('desene uyan satırlar, olay penceresi');
+    expect(card(el).textContent).toContain('En çok: orders-svc, billing-svc');
+    expect(card(el).textContent).not.toContain('servis adı taşımıyor');
+    // Servis gerektiren pivotlar yine YOK.
+    expect(card(el).textContent).not.toContain("Hatalı trace'ler");
+    expect(card(el).textContent).not.toContain('Servis sayfası');
+    // Grafik bölümü ile kart AYNI okumayı paylaşır.
+    expect(m.patternCalls).toBe(1);
+  });
+
+  it('servis atfı yoksa (CH) yalnız bağlantı, "En çok" satırı yok', async () => {
+    m.events.d4 = svcless();
+    m.patternExtra = { logsQuery: '"service quota" OR "quota exceeded"' };
+    const el = await mountRead('d4');
+    expect(logsLink(el)).toBeTruthy();
+    expect(card(el).textContent).not.toContain('En çok');
+  });
+
+  it('desen okuması düşerse / arama metni yoksa: sahte bağlantı yok, eski dürüst cümle', async () => {
+    m.events.d4 = svcless();
+    m.patternMode = 'fail';
+    const el = await mountRead('d4');
+    await settle(); // kancanın tek yeniden denemesi
+    expect(logsLink(el)).toBeUndefined();
+    expect(card(el).textContent).toContain('Bu olay bir servis adı taşımıyor');
+    act(() => { root!.unmount(); });
+    host?.remove();
+    m.patternMode = 'ok';
+    m.patternExtra = {}; // eski sunucu: logsQuery yok
+    const el2 = await mountRead('d4');
+    expect(logsLink(el2)).toBeUndefined();
+    expect(card(el2).textContent).toContain('Bu olay bir servis adı taşımıyor');
+  });
+
+  it('diğer servissiz türler değişmez: cümle aynen, desen okuması yok', async () => {
+    m.events.e5 = ev({ id: 'e5', service: '' });
+    m.events.f6 = ev({ id: 'f6', kind: 'log_template_new', pattern: 'user <*> logged in', service: '', peakRatio: 0, currentRatio: 0, sample: 'user 7 logged in' });
+    for (const id of ['e5', 'f6']) {
+      const el = await mountRead(id);
+      expect(card(el).textContent).toBe('Ne yapabilirimBu olay bir servis adı taşımıyor — log / trace / servis pivotları bir servis adı gerektiriyor.');
+      act(() => { root!.unmount(); });
+      host?.remove();
+    }
+    expect(m.patternCalls).toBe(0);
+  });
+
+  it('servisli log_pattern: mevcut pivotlar aynen (servis kapsamı, q yok, "En çok" yok)', async () => {
+    m.patternExtra = { logsQuery: '"ora-"', topServices: [{ service: 'orders-svc', count: 3 }] };
+    const el = await mountRead('b2');
+    const url = new URL(logsLink(el)!.getAttribute('href')!, 'http://x');
+    expect(url.searchParams.get('service')).toBe('billing');
+    expect(url.searchParams.has('q')).toBe(false);
+    expect(logsLink(el)!.textContent).toContain('servis, olay penceresi');
+    expect(card(el).textContent).toContain("Hatalı trace'ler");
+    expect(card(el).textContent).toContain('Servis sayfası');
+    expect(card(el).textContent).not.toContain('En çok');
   });
 });
 

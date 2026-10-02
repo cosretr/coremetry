@@ -13,7 +13,7 @@ import { IconSparkles } from '@/components/icons';
 import { CosreChart } from '@/components/CosreChart';
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { api } from '@/lib/api';
-import { keys, useAnomalyEventByID } from '@/lib/queries';
+import { keys, useAnomalyEventByID, useLogPatternSeries } from '@/lib/queries';
 import { useEscLayer } from '@/lib/escLayer';
 import { DEFAULT_DURATIONS } from '@/lib/actions';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
@@ -27,7 +27,7 @@ import {
   behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
 } from './anomalyDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
-import { hasLogPatternSeries } from './logPatternSeries';
+import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './logPatternSeries';
 import { LogPatternCountSection } from './LogPatternCountSection';
 
 // AnomalyEventDetail — anomali olayının TAM SAYFA detayı (v0.10.1032).
@@ -50,7 +50,8 @@ import { LogPatternCountSection } from './LogPatternCountSection';
 //   2. türün TEK grafiği (log deseni: desen sayısı barları — v0.10.1060;
 //      diğer log türleri: log hacmi; trace / gecikme / davranış: Seyir) ve
 //      kapalı kök-neden şeridi (açılınca çeker),
-//   3. "Ne yapabilirim" (log / trace / servis sayfası pivotları).
+//   3. "Ne yapabilirim" (log / trace / servis sayfası pivotları; servissiz
+//      log deseni olayında desene uyan loglar — v0.10.1062).
 // Geri kalan her şey — olgu ızgarası, robust z, kıyas saati, ham örnek,
 // cluster'lar, deploy — TEK kapalı "Teknik ayrıntı" bölümünde (kalıcı değil).
 // Özetteki sayı görünür bloklarda tekrar basılmaz.
@@ -261,7 +262,9 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
         <div style={{ minWidth: 0 }}>
           <Sect title="Ne yapabilirim">
             {/* Servis adı gerektiren pivotlar servis yoksa hiç basılmaz —
-                boş açılan bir liste "olay yok" diye okunur (v0.9.1331). */}
+                boş açılan bir liste "olay yok" diye okunur (v0.9.1331).
+                v0.10.1062 — servissiz log deseni olayında servis gerekmez:
+                desene uyan satırlar (PatternLogsAction). */}
             {hrefs ? (
               <>
                 <SignalLink to={hrefs.logs} label="Logları aç" sub="servis, olay penceresi" />
@@ -275,16 +278,56 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
                 )}
                 <SignalLink to={hrefs.servicePage} label="Servis sayfası" sub="olay penceresiyle" />
               </>
+            ) : patternSeries ? (
+              <PatternLogsAction event={event} win={win} />
             ) : (
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                Bu olay bir servis adı taşımıyor — log / trace / servis pivotları bir servis adı gerektiriyor.
-              </div>
+              <NoServiceNote />
             )}
           </Sect>
         </div>
       </div>
     </PageShell>
   );
+}
+
+function NoServiceNote() {
+  return (
+    <div className="pd-pivot-note">
+      Bu olay bir servis adı taşımıyor — log / trace / servis pivotları bir servis adı gerektiriyor.
+    </div>
+  );
+}
+
+// PatternLogsAction — v0.10.1062 (operatör, prod ES: servissiz log deseni
+// anomalisinde bu kart yalnız "servis adı yok" diyordu, operatör Kibana'ya elle
+// gidiyordu). Servissiz log_pattern olayının tek eylemi: olay penceresinde
+// desene uyan satırlarla "Logları aç" + biliniyorsa tek satır "En çok: …".
+// Arama metni ve servisler desen sayısı okumasından (sunucu, dedektörün
+// token'ları) — grafik bölümüyle AYNI anahtar, ikinci istek yok; yoklamayı
+// bölüm yapar (burada live: false). Bağlantı kurulamıyorsa (okuma sürüyor /
+// hata / tanımı kalkmış desen) sahte bağlantı yok: bekleme göstergesi ya da
+// eski dürüst cümle.
+function PatternLogsAction({ event, win }: {
+  event: AnomalyEvent;
+  win: { fromNs: number; toNs: number };
+}) {
+  const args = useMemo(
+    () => logPatternSeriesArgs({ pattern: event.pattern, startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }),
+    [event.pattern, event.startedAt, event.lastSeen, event.status]);
+  const q = useLogPatternSeries(args, { live: false });
+  const pivot = useMemo(() => patternLogsPivot(q.data, win), [q.data, win]);
+  if (pivot) {
+    return (
+      <>
+        <SignalLink to={pivot.href} label="Logları aç" sub="desene uyan satırlar, olay penceresi" />
+        {pivot.topServices.length > 0 && (
+          <div className="pd-pivot-note">En çok: {pivot.topServices.join(', ')}</div>
+        )}
+      </>
+    );
+  }
+  if (q.isPending) return <Spinner />;
+  return <NoServiceNote />;
 }
 
 // AnomalyTechnical — "Teknik ayrıntı" gövdesi (yalnız bölüm açıkken mount):

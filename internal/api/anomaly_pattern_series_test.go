@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,7 +175,8 @@ func TestGetLogPatternSeries(t *testing.T) {
 		}
 	})
 	t.Run("veri → dedektörün spec'iyle sayılır, ızgara doldurulur", func(t *testing.T) {
-		st := &patternSeriesLogStore{res: &logstore.PatternHistogramResult{Partial: true}}
+		st := &patternSeriesLogStore{res: &logstore.PatternHistogramResult{Partial: true,
+			TopServices: []logstore.PatternServiceHit{{Service: "orders-svc", Count: 700}, {Service: "billing-svc", Count: 81}}}}
 		w := httptest.NewRecorder()
 		patternSeriesServer(st).getLogPatternSeries(w,
 			httptest.NewRequest("GET", url("pattern=Disk+full&from="+itoa64(from)), nil))
@@ -191,6 +193,26 @@ func TestGetLogPatternSeries(t *testing.T) {
 		n := int((body.To - body.From) / int64(time.Minute))
 		if body.Pattern != "Disk full" || body.BucketSec != 60 || len(body.Points) != n || n < 70 || n > 72 || !body.Partial {
 			t.Fatalf("gövde: pattern=%q b=%d n=%d points=%d partial=%v", body.Pattern, body.BucketSec, n, len(body.Points), body.Partial)
+		}
+		// v0.10.1062 — /logs arama metni dedektörün token'larından (istemci
+		// desenin yalnız adını bilir); servis atfı arka uçtan olduğu gibi.
+		if body.LogsQuery != `"no space left" OR "disk full" OR "enospc"` {
+			t.Fatalf("logsQuery=%q", body.LogsQuery)
+		}
+		if len(body.TopServices) != 2 || body.TopServices[0].Service != "orders-svc" || body.TopServices[1].Count != 81 {
+			t.Fatalf("topServices=%+v", body.TopServices)
+		}
+	})
+	t.Run("servis atfı yok (CH) → topServices JSON'da yok, logsQuery var", func(t *testing.T) {
+		st := &patternSeriesLogStore{res: &logstore.PatternHistogramResult{}}
+		w := httptest.NewRecorder()
+		patternSeriesServer(st).getLogPatternSeries(w,
+			httptest.NewRequest("GET", url("pattern=SQL+exception&from="+itoa64(from)), nil))
+		if w.Code != 200 {
+			t.Fatalf("code=%d", w.Code)
+		}
+		if b := w.Body.String(); strings.Contains(b, "topServices") || !strings.Contains(b, `"logsQuery":"\"sqlexception\""`) {
+			t.Fatalf("gövde: %s", b)
 		}
 	})
 	t.Run("yavaş arka uç → 502 (500 değil)", func(t *testing.T) {
