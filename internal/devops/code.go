@@ -812,13 +812,19 @@ func (s *Service) FetchCode(ctx context.Context, repo string, hint ProjectHint, 
 	// çarpma hiçbir yere yazılmıyor, "kod geldi" cevabının yanında
 	// NEYİN gelmediği görünmüyordu.
 	out.Reason = withNote(out.Reason, hunt.note(len(windows), len(targets), cutoffLabel(ours, s.fetchDeadline())))
-	// v0.9.1269 — KESİLME her hâlde söylenir. Iskada "eşleşme yok"
-	// cümlesi tek başına YANILTICIYDI (dosya orada, biz bakmadık);
-	// isabette de kısmi-not doktrini (v0.9.1237/1241) geçerli: kayıp
-	// varsa söyle. Outcome taksonomisine DOKUNULMAZ — kesik ağaçtaki
-	// bir ıska hâlâ tree-miss, sayaçlar v0.9.1241'de pinlendi.
-	out.Reason = withNote(out.Reason,
-		cappedTreeNote(ch.capped, ch.cappedWhy, len(paths), s.treePathCap(), scoped.tried, scoped.found))
+	// v0.9.1269 — KESİLME söylenir: ıskada "eşleşme yok" cümlesi tek
+	// başına YANILTICIYDI (dosya orada, biz bakmadık). Outcome
+	// taksonomisine DOKUNULMAZ — kesik ağaçtaki bir ıska hâlâ tree-miss,
+	// sayaçlar v0.9.1241'de pinlendi.
+	// v0.10.1040 (operatör: "'Depo ağacı … kesildi' uyarısı yalnız dosya
+	// bulunamadığında çıksın") — not artık YALNIZ bir şeyi açıklayabildiğinde:
+	// kapsamlı geri-denemeden sonra da ağaçta bulunamayan frame varsa. Her
+	// frame dosyasına eşlendiyse kesilme hiçbir kaybı anlatmıyor; cevabın
+	// yanında (panel + model bloğu) saf gürültüydü.
+	if treeCapNoteApplies(ch.capped, len(hunt.missedFrames)) {
+		out.Reason = withNote(out.Reason,
+			cappedTreeNote(ch.capped, ch.cappedWhy, len(paths), s.treePathCap(), scoped.tried, scoped.found))
+	}
 	// v0.9.1236 — düzeltme izi BAŞARILI çekmede de kalır. Kod geldi
 	// diye susmak, operatörün katalogdaki/konvansiyondaki yanlış adı
 	// hiç öğrenmemesi demek olurdu; ekrandaki "Kaynak: <depo>" satırı
@@ -1336,6 +1342,18 @@ func scopePathCandidates(f stackparse.Frame) []string {
 		out = append(out, c)
 	}
 	return out
+}
+
+// treeCapNoteApplies — kesilme notu basılsın mı (v0.10.1040). SAF;
+// tablo-testli. Operatör: "'Depo ağacı … kesildi' uyarısı yalnız dosya
+// bulunamadığında çıksın."
+//
+// missed: kapsamlı geri-denemeden SONRA da ağaçta yolu bulunamayan frame
+// sayısı (huntOutcome.missedFrames). "(okunamadı)" / "(satır aralığı boş)"
+// ıskaları SAYILMAZ: yol ağaçta bulundu, kesilme onları açıklayamaz. Ağaç
+// tamsa not zaten yok; kesik ama her frame eşlendiyse de yok.
+func treeCapNoteApplies(capped bool, missed int) bool {
+	return capped && missed > 0
 }
 
 // cappedTreeNote — kesilmenin insan-okunur karşılığı. SAF;

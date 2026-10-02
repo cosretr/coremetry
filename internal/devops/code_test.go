@@ -1778,9 +1778,12 @@ func TestCappedTreeScopedRetryFindsFile(t *testing.T) {
 	if scoped == 0 {
 		t.Fatalf("scopePath isteği hiç çıkmadı — geri-deneme adımı devrede değil")
 	}
-	// Kesilme İSABETTE de söylenir (kısmi doktrini, v0.9.1237/1241).
-	if !strings.Contains(cc.Reason, "kesildi") {
-		t.Fatalf("Reason kesilmeyi söylemiyor: %q", cc.Reason)
+	// v0.10.1040 — BİLİNÇLİ ÇEVİRME: v0.9.1269 burada kesilmenin isabette
+	// de söylenmesini pinliyordu. Operatör: "'Depo ağacı … kesildi'
+	// uyarısı yalnız dosya bulunamadığında çıksın" — tek frame kapsamlı
+	// denemeyle BULUNDU, açıklanacak kayıp yok, not da yok.
+	if strings.Contains(cc.Reason, "kesildi") {
+		t.Fatalf("her frame eşlendi ama Reason kesilme notu taşıyor: %q", cc.Reason)
 	}
 	// Outcome taksonomisi v0.9.1241'de pinli: kesik ağaçta bulunan
 	// pencere hâlâ normal bir isabet, yeni sınıf YOK.
@@ -1814,8 +1817,11 @@ func TestCappedFlagSurvivesCache(t *testing.T) {
 	if len(second.Windows) != 1 {
 		t.Fatalf("cache'ten gelen ikinci çağrı pencereyi kaybetti (reason=%q)", second.Reason)
 	}
-	if !strings.Contains(second.Reason, "kesildi") {
-		t.Fatalf("ikinci çağrının Reason'ı kesilmeyi söylemiyor: %q", second.Reason)
+	// v0.10.1040 — BİLİNÇLİ ÇEVİRME: eskiden "kesildi" bekleniyordu. Bayrağın
+	// cache'ten sağ çıktığının kanıtı yukarıdaki pencere (geri-deneme yalnız
+	// kesik ağaçta açılır); her frame eşlendiği için not artık basılmaz.
+	if strings.Contains(second.Reason, "kesildi") {
+		t.Fatalf("her frame eşlendi ama ikinci çağrının Reason'ı kesilme notu taşıyor: %q", second.Reason)
 	}
 	f.mu.Lock()
 	tree := f.hits["tree"]

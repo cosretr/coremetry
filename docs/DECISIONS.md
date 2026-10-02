@@ -987,6 +987,17 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-02 — Kod inceleme: "depo ağacı kesildi" uyarısı yalnız dosya bulunamadığında (v0.10.1040)
+
+**Operatör:** "'Depo ağacı … kesildi' uyarısı yalnız dosya bulunamadığında çıksın." AI panelinin kod incelemesinde
+"depo ağacı N yolda kesildi (yanıt tavanı 8 MB) — eşleşme kesik bölgede olabilir" notu ağaç tavana dayandığında HER
+çekimde basılıyordu; her frame dosyasına eşlendiğinde de — cevabın yanında (panel Reason'ı + model bloğu) saf gürültü.
+**Kural:** not yalnız ağaç kesikse VE kapsamlı geri-denemeden sonra da yolu bulunamayan en az bir frame varsa basılır
+(`treeCapNoteApplies(capped, missed)`, saf, tablo-testli; `missed` = `huntOutcome.missedFrames`; "(okunamadı)" /
+"(satır aralığı boş)" sayılmaz, yol ağaçta bulundu). Iskada not metni bugünkü gibi. Değişmeyen: tavanlar, geri-deneme,
+kod bütçesi notu, dry-run'ın "liste kesildi" satırı, outcome taksonomisi. Bedel: her frame eşlendiğinde "N dosya
+kapsamlı aramayla bulundu" izi de artık basılmaz.
+
 ## 2026-10-02 — Batch servislerde yük artışı anomali değil (v0.10.1039)
 
 **Operatör (prod):** "Bazı batch işlerde ani yük artışı olabilir, onları anomali gibi düşünme — özellikle
