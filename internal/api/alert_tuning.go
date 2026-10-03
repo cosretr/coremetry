@@ -74,10 +74,6 @@ func (s *Server) alertTuningNoisyRules(w http.ResponseWriter, r *http.Request) {
 // (v0.9.1079'da handler gövdesinden çıkarıldı; explain-alert-noise da
 // aynı paketi kullanır). Davranış bire bir aynı.
 func (s *Server) noisyRulesWithSuggestions(ctx context.Context, from, to time.Time, limit int) ([]NoisyRuleWithSuggestion, error) {
-	rules, err := s.store.NoisyRules(ctx, from, to, limit)
-	if err != nil {
-		return nil, err
-	}
 	// Fetch the rule list once to surface current knob values
 	// + scope the suggestion to "this rule already has X set?"
 	allRules, err := s.store.ListAlertRules(ctx)
@@ -88,6 +84,16 @@ func (s *Server) noisyRulesWithSuggestions(ctx context.Context, from, to time.Ti
 	for _, ar := range allRules {
 		byID[ar.ID] = ar
 	}
+	// v0.10.1069 — devre dışı kural "sıkılabilir gürültü" değildir: artık
+	// açılmaz. Yerleşikler varsayılan kapandığında (builtins_default_off.go)
+	// 24 saatlik pencere onları hâlâ en gürültülü diye listeliyor, panel zaten
+	// kapalı kural için "Disable" öneriyordu. Kapalılar SQL sonrası düşülür;
+	// boşalan yer için o kadar fazla satır istenir (store tavanı 200).
+	rules, err := s.store.NoisyRules(ctx, from, to, noisyFetchLimit(limit, allRules))
+	if err != nil {
+		return nil, err
+	}
+	rules = dropDisabledNoisy(rules, byID, limit)
 	out := make([]NoisyRuleWithSuggestion, 0, len(rules))
 	for _, n := range rules {
 		row := NoisyRuleWithSuggestion{NoisyRule: n}
@@ -141,4 +147,38 @@ func deriveSuggestion(n chstore.NoisyRule, cur chstore.AlertRule) (string, uint3
 			n.OpenCount), 0, 0, 0
 	}
 	return "", 0, 0, 0
+}
+
+// noisyFetchLimit — SAF: dropDisabledNoisy'nin düşeceği satırlar için
+// store'dan istenecek satır sayısı = limit + kapalı kural sayısı, store
+// tavanında (200; üstü store'da 50'ye düşer) kelepçeli.
+func noisyFetchLimit(limit int, rules []chstore.AlertRule) int {
+	n := limit
+	for _, r := range rules {
+		if !r.Enabled {
+			n++
+		}
+	}
+	if n > 200 {
+		n = 200
+	}
+	return n
+}
+
+// dropDisabledNoisy — SAF: şu an devre dışı olan kuralların satırlarını
+// düşer, sırayı korur, limit'e keser. Kural tablosunda olmayan rule_id
+// (anomali, SLO, self-health …) korunur — onları bu rapor zaten
+// kural olarak ayarlayamaz ama gizlemek de bu değişikliğin işi değil.
+func dropDisabledNoisy(rows []chstore.NoisyRule, byID map[string]chstore.AlertRule, limit int) []chstore.NoisyRule {
+	out := make([]chstore.NoisyRule, 0, len(rows))
+	for _, n := range rows {
+		if cur, ok := byID[n.RuleID]; ok && !cur.Enabled {
+			continue
+		}
+		out = append(out, n)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
 }

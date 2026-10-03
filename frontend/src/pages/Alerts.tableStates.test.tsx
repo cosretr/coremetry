@@ -174,3 +174,54 @@ describe('/alerts — durumlar tablonun içinde (v0.10.967)', () => {
     expect(dataRows(el)).toBe(2);
   });
 });
+
+// v0.10.1069 — yerleşik kurallar varsayılan kapalı (operatör: "Built-in
+// alertleri kaldıralım, çok false pozitif geliyor."). Her şey kapalıyken
+// tablo BOŞ DURUM basmaz: satırlar BUILT-IN · OFF + Enable ile listelenir,
+// tablonun üstünde tek satırlık Türkçe not durur.
+describe('/alerts — yerleşikler varsayılan kapalı (v0.10.1069)', () => {
+  const builtinOff = (id: string, name: string): AlertRule => ({
+    id, name, service: '', metric: 'http_p99_ms', comparator: '>', threshold: 3000,
+    windowSec: 600, severity: 'warning', enabled: false, builtIn: true, createdAt: 1,
+  });
+  const NOTE = 'Yerleşik kurallar varsayılan kapalı (v0.10.1069); dilediğini açabilirsin.';
+  const note = (el: HTMLElement) => el.querySelector('[data-builtin-off-note]') as HTMLElement | null;
+
+  it('hepsi kapalı: not görünür, boş/eşleşme-yok satırı yok, her satır BUILT-IN · OFF + Enable', async () => {
+    m.rules = [
+      builtinOff('builtin-warn-http-p99-3s', 'HTTP P99 latency >3s (sustained 10 min)'),
+      builtinOff('builtin-http-p99-5s', 'HTTP P99 latency >5s (5 min)'),
+    ];
+    const el = await mount();
+    expect(note(el)?.textContent).toBe(NOTE);
+    // Not tablonun ÜSTÜNDE (aynı kapsayıcıda, tablodan önce).
+    const wrap = el.querySelector('.table-wrap')!;
+    expect(note(el)!.compareDocumentPosition(wrap) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(stateRow(el)).toBeNull();
+    expect(dataRows(el)).toBe(2);
+    for (const tr of el.querySelectorAll('table tbody tr')) {
+      expect(tr.textContent).toContain('BUILT-IN');
+      expect(tr.textContent).toContain('OFF');
+      expect(button(tr as HTMLElement, 'Enable')).toBeDefined();
+      expect(button(tr as HTMLElement, 'Disable')).toBeUndefined();
+    }
+    // Eski "ship pre-configured" cümlesi yalan söylemesin.
+    expect(el.textContent).not.toContain('pre-configured');
+  });
+
+  it('viewer: not ve satırlar görünür, Enable yok (salt okuma)', async () => {
+    m.role = 'viewer';
+    m.rules = [builtinOff('builtin-db-p99-5s', 'DB P99 latency >5s (5 min)')];
+    const el = await mount();
+    expect(note(el)?.textContent).toBe(NOTE);
+    expect(dataRows(el)).toBe(1);
+    expect(button(el, 'Enable')).toBeUndefined();
+  });
+
+  it('yerleşik satır yok: not basılmaz', async () => {
+    m.rules = [rule('a')];
+    const el = await mount();
+    expect(note(el)).toBeNull();
+  });
+});
+

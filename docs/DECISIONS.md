@@ -1098,6 +1098,28 @@ paylaşır. Kırpılan hücreye `title` otomatik. **Sayfalar:** Exceptions, Prob
 Messaging/DB bağımlılık tablosu, Rollouts, GitOps, Slow queries, Cluster pod'ları — taban/öncelik; listelerde
 yılsız damga (`tsCompact`, tam damga title'da). Ölçüm sonrası 15 sayfa × 10 genişlikte taşma yok.
 
+## 2026-10-03 — Yerleşik alarm kuralları varsayılan kapalı (v0.10.1069)
+
+**Operatör (prod, Alert rules sayfası):** "Built-in alertleri kaldıralım, çok false pozitif geliyor." Son 24 saatte
+"HTTP P99 latency >3s (sustained 10 min)" 340×, "HTTP P99 latency >5s (5 min)" 215× açılmış; ikisinden 26 + 12 açık
+problem vardı. Binlerce servisin gecikme profili çok farklı — filo geneli mutlak eşik gürültü.
+
+**Karar — varsayılan değişikliği, özellik kaldırma değil:** dokuz `builtin-*` kuralı `Enabled:false` gemiye biner
+(`internal/evaluator/evaluator.go` `builtins`); tanımlar ve satırlar durur, Alert rules sayfasında BUILT-IN · OFF
+listelenir, operatör istediğini açar. **Yükseltme:** tek seferlik göç (`builtins_default_off.go`), lider tikinde,
+`evaluateAll`'dan önce: açık her yerleşiği kapatır, yerleşiklerin açık/ack problemlerini normal kapatma yolundan
+(`MarkResolved` + `UpsertProblem`, Value ezilmez) "rule disabled by default v0.10.1069" gerekçesiyle kapatır — bugün
+kapalı kuralın problemi ~3 dk sonra bayat süpürmeyle "source silent" diye (yanlış gerekçe) kapanıyordu; incident'lar
+aynı tikin kaskadında kapanır. Tek audit satırı (`alert_rule.builtin_default_off`, aktör `system`, kapatılan id'ler).
+İşaret `system_settings` → `builtin_rules_default_off`; varken göç bir daha koşmaz → operatörün sonradan açtığı kural
+yeniden kapatılmaz (`deprecatedBuiltinIDs` her boot'ta kapatır — bilinçli fark). Hata yönü: işaret okunamaz ya da bir
+yazım düşerse işaret yazılmaz, sonraki tik dener; yeniden deneme çift audit/kapatma üretmez. Yeni kurulumda göç yalnız
+işareti yazar. "Noisy rules" raporu ve paneli kapalı kuralları düşer (yoksa zaten kapalı kurala "Disable" önerirdi).
+
+**Bedel:** P1 "critical × 2" yolu (`computePriority` critical + `bigBreach`) kural tarafında çoğunlukla beş yerleşik
+critical kuraldan besleniyordu; artık nadiren tetiklenir. Eşik alarmı operatörün kendi (servis bazlı) kurallarından,
+SLO burn ve anomali hattından gelir. Varsayılanı yeniden açmayı önerme.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

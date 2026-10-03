@@ -35,8 +35,11 @@ func TestBuiltinRules_HardeningInvariants(t *testing.T) {
 		if deprecated[r.ID] {
 			t.Errorf("%s: id is also in deprecatedBuiltinIDs — boot would seed then disable it", r.ID)
 		}
-		if !r.BuiltIn || !r.Enabled {
-			t.Errorf("%s: builtins must ship BuiltIn+Enabled (got builtIn=%v enabled=%v)", r.ID, r.BuiltIn, r.Enabled)
+		// v0.10.1069 — yerleşikler varsayılan KAPALI (operatör: "çok false
+		// pozitif geliyor"); BuiltIn bayrağı durur ki satır BUILT-IN · OFF
+		// listelensin ve operatör açabilsin.
+		if !r.BuiltIn || r.Enabled {
+			t.Errorf("%s: builtins must ship BuiltIn + disabled (got builtIn=%v enabled=%v)", r.ID, r.BuiltIn, r.Enabled)
 		}
 		if r.Severity != "critical" && r.Severity != "warning" {
 			t.Errorf("%s: unexpected severity %q", r.ID, r.Severity)

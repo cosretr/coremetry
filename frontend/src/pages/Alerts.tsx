@@ -367,9 +367,10 @@ export default function AlertsPage() {
       <Topbar title="Alert rules" />
       <PageShell>
         <div className="controls" style={{ marginBottom: 14 }}>
+          {/* v0.10.1069 — "Built-in rules ship pre-configured" cümlesi kalktı:
+              yerleşikler artık varsayılan kapalı (tablonun üstündeki not). */}
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>
-            Evaluator runs every minute. Built-in rules ship pre-configured but
-            can be edited or disabled to taste.
+            Evaluator runs every minute.
           </span>
           {canEdit && (
             <>
@@ -663,6 +664,15 @@ export default function AlertsPage() {
                 }}>{t.count}</span>
               </Button>
             ))}
+          </div>
+        )}
+        {/* v0.10.1069 — yerleşik kurallar varsayılan KAPALI (operatör: "çok
+            false pozitif geliyor"). Tek satır not, yalnız listede yerleşik
+            satır varken; satırlar BUILT-IN · OFF durur, Enable aynı tuş. */}
+        {rulesAll?.some(r => r.builtIn) && (
+          <div data-builtin-off-note
+            style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>
+            Yerleşik kurallar varsayılan kapalı (v0.10.1069); dilediğini açabilirsin.
           </div>
         )}
         <div className="table-wrap">

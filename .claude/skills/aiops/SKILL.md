@@ -91,7 +91,7 @@ Ne üretiyorsun?
 
 | Önek / id | Üretici | Tetik | Pencere | Kind / kapsam |
 |---|---|---|---|---|
-| `builtin-*`, kural id | `evaluator.go:771` evaluateOne (+9 builtin :286) | compare + ForSec + Cooldown + MinSamples | kural WindowSec; MV fast-path | service |
+| `builtin-*`, kural id | `evaluator.go:771` evaluateOne (+9 builtin :286) | compare + ForSec + Cooldown + MinSamples | kural WindowSec; MV fast-path | service; **9 yerleşik varsayılan KAPALI** (v0.10.1069 — operatör: "Built-in alertleri kaldıralım, çok false pozitif geliyor"; HTTP P99 >3s 340×/24 sa, >5s 215×). Satırlar durur (BUILT-IN · OFF), operatör açar. Yükseltme göçü `builtins_default_off.go`: lider tikinde `evaluateAll`'dan önce, tek seferlik — açıkları kapatır, açık/ack problemlerini "rule disabled by default v0.10.1069" ile kapatır (yoksa bayat süpürme "source silent" derdi), tek audit (`alert_rule.builtin_default_off`), işaret `system_settings.builtin_rules_default_off` (varken bir daha koşmaz → elle açılan kural kapanmaz). Devre dışı kural ölçülmez/değerlendirilmez (`evaluableRules`, `collectMeasureKeys`); "Noisy rules" kapalıyı düşer (`dropDisabledNoisy`) — yeniden önerme |
 | `slo:<id>:<sev>` | `slo_burn.go:35-86` | hızlı VE yavaş burn | 1h/6h · 6h/24h | service |
 | `db-capacity:<check>` | `db_capacity.go:157-273` | ≥85 warn / ≥90 crit, histerezis 2pp, ETA | 2 sa regresyon | db |
 | `db-slow-stmt` | `db_slow_statement.go:25` | DBSlowQueryConfig | — | db |
@@ -211,6 +211,11 @@ totalLoss   = Value==0 && Threshold>0 → bigBreach  (v0.9.825)
 staleCrit   = critical açık ≥ StaleCriticalHours (4)  → P1 "critical open N h"
 critical: bigBreach→P1 | staleCrit→P1 | P2      warning: bigBreach→P2 | P3
 ```
+**v0.10.1069 notu:** kural tarafında "critical × 2" (critical + bigBreach) P1 yolunu çoğunlukla beş yerleşik
+critical kural (`builtin-error-rate-15pct`, `-error-majority-50pct`, `-http-p99-5s`, `-db-p99-5s`, `-mq-consume-p99-2m`)
+besliyordu; yerleşikler varsayılan kapalı olduğundan bu yol artık NADİREN tetiklenir — P1 çoğunlukla operatör kuralı,
+SLO burn, staleCrit (eskalasyonla critical'a çıkan), exception-storm, incident ve monitor totalLoss'tan gelir.
+"P1 neden az" sorusunda önce bunu düşün; yerleşikleri varsayılan açmak çözüm DEĞİL.
 `fresh deploy` tetikleyicisi v0.9.612'de KALDIRILDI — deploy bilgisi görünür,
 sıralamaya karışmaz. Vidalar `problem_priority` blobu (`problem_priority.go:27-116`);
 sıfır struct = varsayılan, `StaleCriticalHours=0` anlamlı. Kapatma yolu
@@ -379,7 +384,8 @@ TEK YÖNLÜ eylem süren bir ayar (kapatma) okuma hatasında varsayılan YAYINLA
    söylemesin, `problem_priority_*`/`exception_triage_test` tablosuna satır;
    operatör direktiflerini (P1 yapışkan, taban 2, Inbox tüm durumlar, service
    silent kapalı, disk ETA kapalı, operasyon gecikmesi (`trace_op_latency`) kapalı,
-   yeni log deseni (`log_template_new`) kapalı, fresh deploy yok) YENİDEN AÇMA.
+   yeni log deseni (`log_template_new`) kapalı, yerleşik alarm kuralları (`builtin-*`) kapalı,
+   fresh deploy yok) YENİDEN AÇMA.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;
    ölçüm seyrekse §5 tasarımı; kayan pencere simülasyon testi.
 5. Kanıt/skor mu? → `hypothesis_*_test.go` tablo, kalibrasyon, tek yazıcı.

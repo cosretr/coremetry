@@ -38,7 +38,15 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
   // "rapor alınamadı" AYNI DEĞERDİ ve ikisi de `return null` ile sessizce
   // gizleniyordu. Gürültülü kural raporu 500'lediğinde operatör panelin hiç
   // olmadığını sanıyordu. Tri-state: undefined = yükleniyor, null = hata.
-  const [noisy, setNoisy] = useState<NoisyRule[] | null | undefined>(undefined);
+  const [noisyRaw, setNoisy] = useState<NoisyRule[] | null | undefined>(undefined);
+  // v0.10.1069 — devre dışı kural "sıkılabilir gürültü" değildir: artık
+  // açılmaz. Yerleşikler varsayılan kapandığında 24 saatlik rapor onları hâlâ
+  // en gürültülü sayar (sunucu da düşer — alert_tuning.go dropDisabledNoisy —
+  // ama yanıt 5 dk önbellekte). Burada da düşülür ki her şey kapalıyken panel
+  // zaten kapalı kurala "Disable" önermesin, kendini gizlesin. Liste dışı
+  // (tür çipiyle elenmiş) kural bilinmiyor → satır kalır.
+  const offIds = new Set((rules ?? []).filter(r => !r.enabled).map(r => r.id));
+  const noisy = noisyRaw == null ? noisyRaw : noisyRaw.filter(n => !offIds.has(n.ruleId));
   // Bulk-apply selection set (v0.5.151). One operator complaint we
   // kept hitting: 5+ rules need the same flap-suppression treatment
   // and clicking Apply → save → close for each one is annoying.

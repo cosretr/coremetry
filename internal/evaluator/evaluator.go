@@ -128,6 +128,12 @@ type Evaluator struct {
 	//              yoksa kendi kesintimiz mi olduğunu buradan ayırır.
 	lastTickAt time.Time
 	contSince  time.Time
+	// builtinsOffDone — v0.10.1069: yerleşik kuralların tek seferlik
+	// varsayılan-kapalı göçü bu süreçte BAŞARIYLA bitti mi (işaret
+	// okundu ya da yazıldı). Bittiyse tik başına system_settings okuması
+	// yapılmaz; hata hâlinde false kalır ve sonraki tik yeniden dener.
+	// Bkz. builtins_default_off.go.
+	builtinsOffDone atomic.Bool
 	// version — kalp atışını yazan binary'nin kimliği. main'den
 	// SetVersion ile geçer (evaluator main'i import edemez).
 	// Bir dağıtım sonrası eski pod'un bayat kalp atışını taze
@@ -240,6 +246,13 @@ func (e *Evaluator) runIfLeader(ctx context.Context) {
 	// cevabına ihtiyacı var.
 	e.noteTickContinuity(started)
 
+	// v0.10.1069 — yerleşik kuralların tek seferlik varsayılan-kapalı göçü
+	// (builtins_default_off.go). Lider-kapılı: iki replika aynı anda iki
+	// audit satırı yazmasın. evaluateAll'dan ÖNCE: kapatılan kural bu tikte
+	// değerlendirilmez, kapanan problemlerin incident'ları bu tikin kaskadında
+	// kapanır.
+	e.builtinsDefaultOffStep(tickCtx)
+
 	rules := e.evaluateAll(tickCtx)
 
 	hb := Heartbeat{
@@ -296,6 +309,14 @@ func (e *Evaluator) runIfLeader(ctx context.Context) {
 // documented steady-state ceilings (3s HTTP / 2.5s DB) with longer
 // windows + sustain gates, so it flags true degradation, not morning
 // warm-up.
+//
+// v0.10.1069 — HEPSİ varsayılan KAPALI (Enabled:false). Operatör: "Built-in
+// alertleri kaldıralım, çok false pozitif geliyor." — HTTP P99 >3s 24 saatte
+// 340×, >5s 215× açıldı; binlerce servisin gecikme profili çok farklı, filo
+// geneli mutlak eşik gürültü. Tanımlar SİLİNMEDİ: satırlar BUILT-IN · OFF
+// listelenir, operatör istediğini açar. Mevcut kurulumların tek seferlik
+// göçü + açık problemlerin kapatılması: builtins_default_off.go. Yeniden
+// varsayılan AÇIK yapma.
 var builtins = []chstore.AlertRule{
 	// ── Critical floor ──────────────────────────────────────────
 	// Service-wide error rate. 15% is the "something is clearly
@@ -304,7 +325,7 @@ var builtins = []chstore.AlertRule{
 	// RPC-error sub-rates (all flow into this metric).
 	{ID: "builtin-error-rate-15pct", Name: "Critical error rate (>15% over 5 min)",
 		Metric: "error_rate", Comparator: ">", Threshold: 15, WindowSec: 5 * 60,
-		Severity: "critical", Enabled: true, BuiltIn: true,
+		Severity: "critical", Enabled: false, BuiltIn: true,
 		MinSamples: 50, ForSec: 120, CooldownSec: 300},
 
 	// v0.10.207 (operatör isteği): başarısızlık BAŞARIYI aşarsa — servis
@@ -315,21 +336,21 @@ var builtins = []chstore.AlertRule{
 	// TÜM span'ler) — giriş-span/trace kapsamı farkı için bkz. commit gövdesi.
 	{ID: "builtin-error-majority-50pct", Name: "Failures exceed successes (>50% over 5 min)",
 		Metric: "error_rate", Comparator: ">", Threshold: 50, WindowSec: 5 * 60,
-		Severity: "critical", Enabled: true, BuiltIn: true,
+		Severity: "critical", Enabled: false, BuiltIn: true,
 		MinSamples: 20, ForSec: 120, CooldownSec: 300},
 
 	// HTTP latency. P99 >5s in a banking call chain is SLO-
 	// violating territory regardless of which service.
 	{ID: "builtin-http-p99-5s", Name: "HTTP P99 latency >5s (5 min)",
 		Metric: "http_p99_ms", Comparator: ">", Threshold: 5000, WindowSec: 5 * 60,
-		Severity: "critical", Enabled: true, BuiltIn: true,
+		Severity: "critical", Enabled: false, BuiltIn: true,
 		MinSamples: 50, ForSec: 120, CooldownSec: 300},
 
 	// Database latency. 5s is when the DB is actually broken
 	// (lock storm, undersized, network blip) — not warm-up.
 	{ID: "builtin-db-p99-5s", Name: "DB P99 latency >5s (5 min)",
 		Metric: "db_p99_ms", Comparator: ">", Threshold: 5000, WindowSec: 5 * 60,
-		Severity: "critical", Enabled: true, BuiltIn: true,
+		Severity: "critical", Enabled: false, BuiltIn: true,
 		MinSamples: 30, ForSec: 120, CooldownSec: 300},
 
 	// Message-queue consumer lag. 2 minutes processing P99 on a
@@ -337,7 +358,7 @@ var builtins = []chstore.AlertRule{
 	// errors fold into error_rate so we don't double-page.
 	{ID: "builtin-mq-consume-p99-2m", Name: "MQ consume P99 >2 min — consumer lag (5 min)",
 		Metric: "mq_consume_p99_ms", Comparator: ">", Threshold: 120000, WindowSec: 5 * 60,
-		Severity: "critical", Enabled: true, BuiltIn: true,
+		Severity: "critical", Enabled: false, BuiltIn: true,
 		MinSamples: 20, ForSec: 120, CooldownSec: 300},
 
 	// ── Warning tier (sustained degradation) ────────────────────
@@ -347,7 +368,7 @@ var builtins = []chstore.AlertRule{
 	// low-traffic services quiet.
 	{ID: "builtin-warn-error-rate-5pct", Name: "Elevated error rate (>5% sustained 10 min)",
 		Metric: "error_rate", Comparator: ">", Threshold: 5, WindowSec: 10 * 60,
-		Severity: "warning", Enabled: true, BuiltIn: true,
+		Severity: "warning", Enabled: false, BuiltIn: true,
 		MinSamples: 100, ForSec: 180, CooldownSec: 600},
 
 	// 3s HTTP P99 sits above the documented 800ms–2s multi-hop
@@ -355,7 +376,7 @@ var builtins = []chstore.AlertRule{
 	// degradation, with headroom before the 5s critical floor.
 	{ID: "builtin-warn-http-p99-3s", Name: "HTTP P99 latency >3s (sustained 10 min)",
 		Metric: "http_p99_ms", Comparator: ">", Threshold: 3000, WindowSec: 10 * 60,
-		Severity: "warning", Enabled: true, BuiltIn: true,
+		Severity: "warning", Enabled: false, BuiltIn: true,
 		MinSamples: 100, ForSec: 180, CooldownSec: 600},
 
 	// 2.5s DB P99 sustained — above the 500ms–1s warm steady
@@ -363,14 +384,14 @@ var builtins = []chstore.AlertRule{
 	// broken" floor. Catches lock contention building up.
 	{ID: "builtin-warn-db-p99-2500ms", Name: "DB P99 latency >2.5s (sustained 10 min)",
 		Metric: "db_p99_ms", Comparator: ">", Threshold: 2500, WindowSec: 10 * 60,
-		Severity: "warning", Enabled: true, BuiltIn: true,
+		Severity: "warning", Enabled: false, BuiltIn: true,
 		MinSamples: 60, ForSec: 180, CooldownSec: 600},
 
 	// 30s consume P99 sustained = back-pressure forming well
 	// before the 2-minute critical lag floor.
 	{ID: "builtin-warn-mq-consume-p99-30s", Name: "MQ consume P99 >30s — back-pressure (sustained 10 min)",
 		Metric: "mq_consume_p99_ms", Comparator: ">", Threshold: 30000, WindowSec: 10 * 60,
-		Severity: "warning", Enabled: true, BuiltIn: true,
+		Severity: "warning", Enabled: false, BuiltIn: true,
 		MinSamples: 20, ForSec: 180, CooldownSec: 600},
 }
 
@@ -399,6 +420,9 @@ func (e *Evaluator) seedBuiltinRules(ctx context.Context) error {
 		byID[r.ID] = r
 	}
 	// Seed any new builtins that aren't in the table yet.
+	// v0.10.1069 — dilim Enabled:false taşır: yeni kurulumda satırlar
+	// KAPALI ekilir. Mevcut satırın Enabled'ına burada DOKUNULMAZ (operatör
+	// açtıysa açık kalır); yükseltme göçü builtins_default_off.go'da.
 	for _, r := range builtins {
 		if have[r.ID] {
 			continue
@@ -459,6 +483,20 @@ func (e *Evaluator) seedBuiltinRules(ctx context.Context) error {
 
 // ── Evaluation loop ──────────────────────────────────────────────────────────
 
+// evaluableRules — SAF: bu tik değerlendirilecek kurallar = yalnız AÇIK
+// olanlar, sıra korunur. Devre dışı kural (v0.10.1069'ten beri her
+// yerleşik kural varsayılan) hiçbir ölçüm, problem ya da bildirim
+// üretmez; prefetch tarafındaki eşi collectMeasureKeys.
+func evaluableRules(rules []chstore.AlertRule) []chstore.AlertRule {
+	out := make([]chstore.AlertRule, 0, len(rules))
+	for _, r := range rules {
+		if r.Enabled {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // evaluateAll bir turu koşar ve DEĞERLENDİRİLEN kural sayısını döner
 // (v0.9.550 — kalp atışı için; devre dışı kurallar sayılmaz). Dönüş
 // değeri yalnız gözlemlenebilirlik içindir, akış kararı vermez.
@@ -507,10 +545,7 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 	}
 
 	evaluated := 0
-	for _, r := range rules {
-		if !r.Enabled {
-			continue
-		}
+	for _, r := range evaluableRules(rules) {
 		evaluated++
 		// v0.8.342 (HA audit H9) — log-query rules evaluate ONCE per rule:
 		// the KQL carries its own filters and evaluateLogQuery ignores the

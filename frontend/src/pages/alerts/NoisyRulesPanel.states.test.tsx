@@ -54,12 +54,12 @@ const RULES: AlertRule[] = [{
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 
-async function mount(): Promise<HTMLElement> {
+async function mount(rules: AlertRule[] = RULES): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<ConfirmProvider><NoisyRulesPanel rules={RULES} onEditFromSuggestion={() => {}} /></ConfirmProvider>);
+    root!.render(<ConfirmProvider><NoisyRulesPanel rules={rules} onEditFromSuggestion={() => {}} /></ConfirmProvider>);
   });
   await flush();
   return host;
@@ -139,5 +139,32 @@ describe('NoisyRulesPanel — hata tablonun içinde (P-2), self-hide aynen', () 
     expect(h.mutate).toHaveBeenCalledTimes(1);
     expect(stateRow(el, 'error'), 'düşen tazeleme bayat öneri listesinin arkasında kayboldu').not.toBeNull();
     expect(dataRows(el)).toHaveLength(0);
+  });
+});
+
+// v0.10.1069 — yerleşik kurallar varsayılan kapalı. 24 saatlik rapor (5 dk
+// önbellek) kapatılan yerleşikleri hâlâ en gürültülü sayabilir; panel zaten
+// kapalı kurala "Disable" önermemeli. Her şey kapalıyken panel kendini gizler
+// (boş tablo / "0 rules" yok); açık kuralın satırı kalır.
+describe('NoisyRulesPanel — kapalı kurallar (v0.10.1069)', () => {
+  const BUILTIN_OFF: AlertRule = {
+    id: 'builtin-warn-http-p99-3s', name: 'HTTP P99 latency >3s (sustained 10 min)', service: '', metric: 'http_p99_ms',
+    comparator: '>', threshold: 3000, windowSec: 600, severity: 'warning', enabled: false, builtIn: true, createdAt: 0,
+  };
+  const NOISY_BUILTIN: NoisyRule = { ...NOISY, ruleId: BUILTIN_OFF.id, ruleName: BUILTIN_OFF.name, openCount: 340 };
+
+  it('her şey kapalı: panel gizli, boş tablo yok', async () => {
+    h.noisy.mockResolvedValue({ rules: [NOISY_BUILTIN] });
+    const el = await mount([BUILTIN_OFF]);
+    expect(el.innerHTML).toBe('');
+  });
+
+  it('karışık: kapalı yerleşik düşer, açık kural kalır', async () => {
+    h.noisy.mockResolvedValue({ rules: [NOISY_BUILTIN, NOISY] });
+    const el = await mount([BUILTIN_OFF, ...RULES]);
+    expect(dataRows(el)).toHaveLength(1);
+    expect(el.textContent).toContain('checkout p99');
+    expect(el.textContent).not.toContain(BUILTIN_OFF.name);
+    expect(el.textContent).toContain('1 rule could be tightened');
   });
 });
