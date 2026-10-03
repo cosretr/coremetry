@@ -119,11 +119,21 @@ gövde) Go'da regex'e karşı doğrulanır: r=0 bastırır, 0<r<1 cur VE taban �
 `DetectNewLogTemplates` başında + recorder adımı `recordNewLogTemplates`; templater / `log_templates`
 defteri sürer, açık olaylar 10 dk sonra düşer — yeniden önerme),
 trace_op (`trace_ops.go:171`), trace_op_latency (`op_latency.go`, recorder'dan; batch
-yük kapısı v0.10.1046; **varsayılan KAPALI** v0.10.1056, `anomaly_sensitivity.opLatency` *bool
-nil = kapalı — operatör: "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence";
-kapı dedektörün başında, her G/Ç'den önce + recorder adımı `recordOpLatency`; kapalıyken MV
-sorgusu / aktif-olay okuması / upsert yok, açık olaylar 10 dk sonra düşer, terfi Problem'i
-"anomaly cleared" — yeniden önerme), davranış motoru (`behavior.go` `evalBehaviorWindow`,
+yük kapısı v0.10.1046; v0.10.1056'da kapatıldı — "Trace op latency false pozitif geliyor": tek
+kovalık sıçrama (30 çağrılık kovada tek 4 sn'lik istek = "168×") olay açıyordu. **v0.10.1085
+varsayılan AÇIK, YALNIZ sürdürme kuralıyla** (operatör: "Önerini yapalım"): çift ancak ardışık
+`anomaly_sensitivity.opLatencyDwellBuckets` (vars. 2, 1–6; 1 = eski tek kova) tamamlanmış kovanın
+HER BİRİNDE ≥30 çağrı + p99 ≥200 ms + ≥3× taban ise olay; tek MV pivotu kova numarasıyla
+(`multiIf … AS slot`, GROUP BY slot, önceki kova başına `p99_<i>`/`calls_<i>`, HAVING'de), saf
+`classifyOpLatency(rows, dwell, gate)`; batch kapısı yalnız her kova yük altındaysa susturur.
+`opLatency` *bool nil = açık, açıkça false kapalı, doğrulanmamış ayarda kapalı
+(`AnomalySensitivityForDetectors`); 1056 döneminin somutlaştırılmış false'u tek seferlik göçle
+nil'e (`anomaly_sensitivity_oplatency_migrate.go`, işaret `anomaly_sensitivity_oplatency_v2`,
+yalnız `opLatencyDwellBuckets` alanı yoksa). Kapı dedektörün başında, her G/Ç'den önce + recorder
+adımı `recordOpLatency`. Sürdürme yalnız AÇILIŞA: aktif olayı olan çift (aynı 1046 aktif-olay okuması, dwell ≥ 2'de
+servis daraltmasız; satırda `Active`, SQL'de önceki kova koşullarına `OR (service_name, name) IN`) en yeni kova tek
+başına ihlal ettikçe tazelenir, en yeni kova temizse yazım durur ve olağan aktif yaşla düşer. Sürdürmeyi kaldırıp tek kovaya DÖNME — gürültü geri gelir; susturma
+gerekiyorsa vida dwell'dir), davranış motoru (`behavior.go` `evalBehaviorWindow`,
 kind=`behavior_change`, LLM dedektör DEĞİL hüküm katmanı — deterministik
 kapılardan geçer, alert AÇAMAZ; batch p99 yük kapısı `behaviorFleetCandidates`; v0.10.1070
 operatör onaylı "Bu da mesela false pozitif": mutlak taban `behavior.minP99Ms` 200 /
@@ -148,7 +158,7 @@ artışı da anomali sayılmasın"):** hacim işin OLAĞAN ÇALIŞMA hacminin �
 artışı YENİ olay açmaz. Tek sabit `batchLoadSurgeFactor = 2`; kollar `batchLoadSurge`
 (ondalık, medyan) ve `batchLoadSurgeCounts` (tamsayı) — `batch_latency.go`; taban
 bilinmiyorsa SUSTURMA YOK. `trace_op_latency`: `cur_calls × base_buckets ≥ 2 × base_calls ×
-cur_buckets`, `base_buckets` = taban penceresinin AKTİF kovaları (`uniqExact(time_bucket)`,
+cur_buckets` (v0.10.1085: sürdürme penceresinin HER kovası için, AND), `base_buckets` = taban penceresinin AKTİF kovaları (`uniqExact(time_bucket)`,
 aynı geçiş; 24 sa ortalaması seyrek işin HER koşusunu sıçrama yapardı) — SQL HAVING
 `opLatencyQuery` + aynı tamsayı Go kemeri `classifyOpLatency`; kapı yoksa SQL golden-birebir.
 Metrik `p99_ms`: her dwell kovası hızı ≥ 2× p99 tabanının KENDİ kovalarının hız medyanı —
@@ -439,10 +449,13 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
 3. Öncelik/merdivene dokunuyor mu? → SAF işlevde kal, gerekçe cümlesi yalan
    söylemesin, `problem_priority_*`/`exception_triage_test` tablosuna satır;
    operatör direktiflerini (P1 yapışkan, taban 2, Inbox tüm durumlar, service
-   silent kapalı, disk ETA kapalı, operasyon gecikmesi (`trace_op_latency`) kapalı,
+   silent kapalı, disk ETA kapalı,
    yeni log deseni (`log_template_new`) kapalı, yerleşik alarm kuralları (`builtin-*`) kapalı,
    SLO burn Problem'i (`problem_priority.sloBurnProblems`) kapalı, Problems varsayılanı
-   yalnız P1 + ilk görülme, fresh deploy yok) YENİDEN AÇMA.
+   yalnız P1 + ilk görülme, fresh deploy yok) YENİDEN AÇMA. Operasyon gecikmesi
+   (`trace_op_latency`) bu listeden v0.10.1085'te ÇIKTI: operatör iki ardışık kova sürdürme
+   kuralıyla yeniden açılmasını onayladı ("Önerini yapalım") — varsayılanı açık; sürdürmesiz
+   tek-kova kararına geri dönme.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;
    ölçüm seyrekse §5 tasarımı; kayan pencere simülasyon testi.
 5. Kanıt/skor mu? → `hypothesis_*_test.go` tablo, kalibrasyon, tek yazıcı.

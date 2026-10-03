@@ -2,6 +2,7 @@ package anomaly
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -16,6 +17,9 @@ import (
 // operation_summary_5m zaten duration_q_state taşıyor; trace_ops'un
 // cur/base şekli p99'a uygulanır (aynı MV-pivot, aynı LIMIT/timeout
 // disiplini, aynı dar örnek-trace ikinci sorgusu).
+//
+// v0.10.1085 — sürdürme: tek kova değil, ardışık N (vars. 2) tamamlanmış
+// kovanın her biri ihlal etmeli; aynı tek MV geçişi kovaları ayrı döndürür.
 
 // OpLatencyAnomaly — kalifiye bir (servis, operasyon) gecikme sıçraması.
 type OpLatencyAnomaly struct {
@@ -51,6 +55,8 @@ const (
 const opLatencyKind = "trace_op_latency"
 
 // opLatencyBucket — MV pivotunun ham satırı (saf sınıflayıcı girdisi).
+// Cur* = sürdürme penceresinin EN YENİ tamamlanmış kovası (olayın raporladığı
+// değerler); daha eskileri Earlier'da.
 type opLatencyBucket struct {
 	Service   string
 	Operation string
@@ -63,6 +69,22 @@ type opLatencyBucket struct {
 	// listesi doluyken okunur (aynı iç alt sorgudan, ek tarama yok); aksi
 	// hâlde 0 ve hiçbir dal ona bakmaz.
 	BaseBuckets uint64
+	// Earlier — v0.10.1085: sürdürme penceresinin en yeni kovadan ÖNCEKİ
+	// kovaları, yeniden eskiye (Earlier[0] = bir önceki tamamlanmış kova).
+	// dwell = 1'de boş. Verisiz kova sıfır değer taşır (çağrı 0 → hacim
+	// tabanının altı → ihlal DEĞİL).
+	Earlier []opLatencySlot
+	// Active — v0.10.1085: çiftin trace_op_latency olayı zaten AKTİF (son
+	// opLatActiveAge içinde yazılmış). Sürdürme yalnız AÇILIŞI yönetir: aktif
+	// çift, en yeni kova tek başına ihlal ettiği sürece tazelenir. Tarayıcı
+	// aktif-olay okumasından doldurur (SQL ikizi: HAVING'deki tuple IN).
+	Active bool
+}
+
+// opLatencySlot — sürdürme penceresinin tek bir önceki kovası (v0.10.1085).
+type opLatencySlot struct {
+	P99Ms float64
+	Calls uint64
 }
 
 // opLatPair — (servis, operasyon) çifti: trace_op_latency olayının kimliği
@@ -128,7 +150,24 @@ func planOpLatBatch(sens chstore.AnomalySensitivityConfig, curBuckets uint64, ac
 // artışı da anomali sayılmasın". SAF SUSTURMA: kalan olaylar eski kümenin alt
 // kümesi, alanları birebir; batch olmayan çiftler ilk 50'de yalnız yer
 // kazanır. SQL ikizi opLatencyQuery'nin HAVING'inde; burası kemer.
-func classifyOpLatency(rows []opLatencyBucket, gate opLatBatchGate) []OpLatencyAnomaly {
+//
+// v0.10.1085 — dwell (sürdürme): çift ancak ardışık `dwell` tamamlanmış
+// kovanın HER BİRİNDE ihlal ederse olaydır — her kova ≥ opLatencyMinCalls
+// çağrı, p99 ≥ opLatencyMinP99Ms ve p99 ≥ opLatencyMinRatio × taban.
+// Operatör: tek yavaş istek (~30 çağrılık kovada tek 4 sn'lik publish) o
+// kovanın p99'u olup "168×" açıyor, sonraki kovada 1×'e iniyordu. dwell ≤ 1 =
+// v0.10.1085 öncesi tek-kova kararı birebir. Olay alanları (oran, p99, çağrı)
+// EN YENİ kovadan — şekil değişmedi. Batch kapısı yalnız pencerenin HER
+// kovası yük altındaysa susturur (metrik dedektörünün "her dwell kovası"
+// emsali): yükün açıklamadığı tek bir ihlal kovası olayı açar.
+//
+// Sürdürme yalnız AÇILIŞA uygulanır (histerezis): olayı zaten aktif çift
+// (r.Active) en yeni kova tek başına ihlal ettikçe tazelenir; en yeni kova
+// temizse yazım durur ve olay olağan aktif yaşla düşer.
+func classifyOpLatency(rows []opLatencyBucket, dwell int, gate opLatBatchGate) []OpLatencyAnomaly {
+	if dwell < 1 {
+		dwell = 1
+	}
 	out := []OpLatencyAnomaly{}
 	for _, r := range rows {
 		if r.CurCalls < opLatencyMinCalls || r.BaseCalls < opLatencyMinCalls {
@@ -141,9 +180,14 @@ func classifyOpLatency(rows []opLatencyBucket, gate opLatBatchGate) []OpLatencyA
 		if ratio < opLatencyMinRatio {
 			continue
 		}
+		// v0.10.1085 — sürdürme yalnız açılışa: aktif olay tek dip kovada
+		// yazımı bırakıp "anomaly cleared" + yeni bildirimle dalgalanmasın.
+		if !r.Active && !opLatencySustained(r, dwell) {
+			continue
+		}
 		if gate.isBatch != nil && gate.isBatch(r.Service) &&
 			!gate.exempt[opLatPair{Service: r.Service, Operation: r.Operation}] &&
-			opLatencyUnderLoad(r, gate.curBuckets) {
+			opLatencyUnderLoad(r, dwell, gate.curBuckets) {
 			continue
 		}
 		out = append(out, OpLatencyAnomaly{
@@ -192,16 +236,68 @@ func classifyOpLatency(rows []opLatencyBucket, gate opLatBatchGate) []OpLatencyA
 // Ortalama bilinçli seçildi, max / p90 DEĞİL: onlarla kayan taban gerçek bir
 // sıçramanın ilk kovasını birkaç dakika içinde kendine katar ve susturma
 // sıçramanın ortasında kalkıp olay açılırdı.
-func opLatencyUnderLoad(r opLatencyBucket, curBuckets uint64) bool {
-	return batchLoadSurgeCounts(r.CurCalls, curBuckets, r.BaseCalls, r.BaseBuckets)
+//
+// v0.10.1085 — sürdürme penceresinin HER kovası yük altında olmalı (en yeni +
+// dwell−1 önceki); biri değilse yük gecikmeyi açıklamıyor → false. dwell = 1
+// → yalnız en yeni kova (v0.10.1046 birebir). Eksik önceki kova → false
+// (bilinmiyor = susturma yok).
+func opLatencyUnderLoad(r opLatencyBucket, dwell int, curBuckets uint64) bool {
+	if !batchLoadSurgeCounts(r.CurCalls, curBuckets, r.BaseCalls, r.BaseBuckets) {
+		return false
+	}
+	if len(r.Earlier) < dwell-1 {
+		return false
+	}
+	for i := 0; i < dwell-1; i++ {
+		if !batchLoadSurgeCounts(r.Earlier[i].Calls, curBuckets, r.BaseCalls, r.BaseBuckets) {
+			return false
+		}
+	}
+	return true
+}
+
+// opLatencySustained — v0.10.1085: en yeni kovadan önceki dwell−1 kovanın HER
+// BİRİ de ihlal ediyor mu? En yeni kova ve taban çağıranda (classifyOpLatency)
+// zaten sınandı; burada aynı üç eşik, aynı biçimde (oran bölmeyle — en yeni
+// kovanın sınamasıyla eşikte birebir). Eksik kova → false.
+func opLatencySustained(r opLatencyBucket, dwell int) bool {
+	if len(r.Earlier) < dwell-1 {
+		return false
+	}
+	for i := 0; i < dwell-1; i++ {
+		s := r.Earlier[i]
+		if s.Calls < opLatencyMinCalls || s.P99Ms < opLatencyMinP99Ms || s.P99Ms/r.BaseP99Ms < opLatencyMinRatio {
+			return false
+		}
+	}
+	return true
 }
 
 // opLatencyQuery — tespitin MV sorgusu + argümanları (v0.10.1046'te saf
 // kurucuya çıkarıldı ki batch kolu SQL düzeyinde pinlenebilsin; traceOpQuery
 // deseni).
 //
-// plan sıfır değer (kural kapalı / aktif küme okunamadı) → metin ve
-// argümanlar v0.10.1046 ÖNCESİYLE BİREBİR aynı (TestOpLatencyQueryLegacyIdentity).
+// slotStarts — sürdürme penceresinin kova başları, yeniden eskiye
+// (opLatencyWindows): [0] en yeni tamamlanmış kova, len = dwell ≥ 1.
+//
+// dwell = 1 VE plan sıfır değer (kural kapalı / aktif küme okunamadı) → metin
+// ve argümanlar v0.10.1046 ÖNCESİYLE BİREBİR aynı (TestOpLatencyQueryLegacyIdentity);
+// dwell = 1 + plan dolu → v0.10.1046 metni birebir.
+//
+// v0.10.1085 — dwell ≥ 2 (sürdürme), AYNI tek geçiş (ek tarama yok, çift başına
+// döngü yok): iç alt sorgunun is_cur'u kova numarasına genişler —
+// multiIf(time_bucket >= ?, 1, time_bucket >= ?, 2, …, 0) AS slot (1 = en yeni,
+// 0 = taban) ve GROUP BY slot; dış sorgu her önceki kova için p99_<i> /
+// calls_<i> kolonu taşır, HAVING her kovaya aynı üç tabanı uygular (LIMIT
+// yalnız sürdürmeyi geçebilecek satırlarda ısırır). Verisiz kova maxIf/sumIf'te
+// 0 → çağrı tabanının altı → elenir. Batch kolunda susturma YALNIZ her kova
+// yük altındaysa (opLatencyUnderLoad ile birebir).
+//
+// active — olayı zaten AKTİF çiftler (dwell ≥ 2'de anlamlı): önceki kovaların
+// koşulları `((…) OR (service_name, name) IN ((?, ?), …))` ile aktif çiftlere
+// muaf — sürdürme yalnız açılışı yönetir, aktif olay en yeni kovayla tazelenir.
+// Liste boşsa metin dwell 2 golden'ıyla birebir. Liste tavanlı (200 çift +
+// 64 KiB; batchLatCapKeys / opLatCapExemptBytes).
 //
 // plan dolu → üç ek, hepsi aynı geçişte (ek tarama yok):
 //   - iç alt sorguya uniqExact(time_bucket) AS buckets (uniqExact ŞART:
@@ -216,23 +312,69 @@ func opLatencyUnderLoad(r opLatencyBucket, curBuckets uint64) bool {
 // altındaki batch çiftleri tam da en büyük oranı taşıyanlar — Go'da elenseler
 // LIMIT'i doldurup gerçek sıçramaları dışarıda bırakırlardı (v0.9.327'nin
 // dersi: LIMIT yalnız hayatta kalabilecek satırlarda ısırmalı).
-func opLatencyQuery(curStart, baseStart, alignedNow time.Time, plan opLatBatchPlan) (string, []any) {
+func opLatencyQuery(slotStarts []time.Time, baseStart, alignedNow time.Time, plan opLatBatchPlan, active []opLatPair) (string, []any) {
+	dwell := len(slotStarts)
+	// dwell = 1 → v0.10.1046 metni (is_cur). Kova numarası 1 = cari, 0 = taban
+	// iki biçimde de aynı, dış kolonlar yalnız adı değiştirir.
+	slot, slotExpr := "is_cur", `time_bucket >= ? AS is_cur`
+	if dwell > 1 {
+		conds := make([]string, dwell)
+		for i := range conds {
+			conds[i] = fmt.Sprintf("time_bucket >= ?, %d", i+1)
+		}
+		slot, slotExpr = "slot", "multiIf("+strings.Join(conds, ", ")+", 0) AS slot"
+	}
 	sel := `
 		SELECT service_name, name,
-		       maxIf(p99, is_cur = 1)   AS cur_p99,
-		       maxIf(p99, is_cur = 0)   AS base_p99,
-		       sumIf(calls, is_cur = 1) AS cur_calls,
-		       sumIf(calls, is_cur = 0) AS base_calls`
+		       maxIf(p99, ` + slot + ` = 1)   AS cur_p99,
+		       maxIf(p99, ` + slot + ` = 0)   AS base_p99,
+		       sumIf(calls, ` + slot + ` = 1) AS cur_calls,
+		       sumIf(calls, ` + slot + ` = 0) AS base_calls`
 	inner := `
 		         countMerge(span_count_state) AS calls`
 	having := `
 		HAVING cur_calls >= ? AND base_calls >= ?
 		   AND base_p99 > 0 AND cur_p99 >= ? * base_p99 AND cur_p99 >= ?`
-	args := []any{curStart, baseStart, alignedNow,
-		opLatencyMinCalls, opLatencyMinCalls, opLatencyMinRatio, opLatencyMinP99Ms}
+	args := make([]any, 0, 16)
+	for _, s := range slotStarts {
+		args = append(args, s)
+	}
+	args = append(args, baseStart, alignedNow,
+		opLatencyMinCalls, opLatencyMinCalls, opLatencyMinRatio, opLatencyMinP99Ms)
+	// v0.10.1085 — önceki kovalar: kolon + aynı üç taban (en yeni kovanınkiyle
+	// aynı biçim). Tamsayı kova numarası metne gömülür, bind değil. Aktif
+	// çiftler önceki kova koşullarından muaf (OR tuple IN).
+	var earlier []string
+	for i := 2; i <= dwell; i++ {
+		sel += fmt.Sprintf(`,
+		       maxIf(p99, slot = %d)   AS p99_%d,
+		       sumIf(calls, slot = %d) AS calls_%d`, i, i, i, i)
+		earlier = append(earlier, fmt.Sprintf(`calls_%d >= ? AND p99_%d >= ? * base_p99 AND p99_%d >= ?`, i, i, i))
+		args = append(args, opLatencyMinCalls, opLatencyMinRatio, opLatencyMinP99Ms)
+	}
+	switch {
+	case len(earlier) == 0:
+	case len(active) == 0:
+		for _, c := range earlier {
+			having += `
+		   AND ` + c
+		}
+	default:
+		tuples := make([]string, len(active))
+		for i := range tuples {
+			tuples[i] = "(?, ?)"
+		}
+		having += `
+		   AND ((` + strings.Join(earlier, `
+		         AND `) + `)
+		        OR (service_name, name) IN (` + strings.Join(tuples, ", ") + `))`
+		for _, p := range active {
+			args = append(args, p.Service, p.Operation)
+		}
+	}
 	if plan.cond != "" {
 		sel += `,
-		       maxIf(buckets, is_cur = 0) AS base_buckets`
+		       maxIf(buckets, ` + slot + ` = 0) AS base_buckets`
 		inner += `,
 		         uniqExact(time_bucket) AS buckets`
 		exempt := ""
@@ -245,26 +387,99 @@ func opLatencyQuery(curStart, baseStart, alignedNow time.Time, plan opLatBatchPl
 		}
 		having += `
 		   AND NOT (` + plan.cond + exempt + `
-		            AND cur_calls * base_buckets >= ? * base_calls * ?)`
+		            AND cur_calls * base_buckets >= ? * base_calls * ?`
+		for i := 2; i <= dwell; i++ {
+			having += fmt.Sprintf(`
+		            AND calls_%d * base_buckets >= ? * base_calls * ?`, i)
+		}
+		having += `)`
 		args = append(args, plan.args...)
 		for _, p := range plan.exempt {
 			args = append(args, p.Service, p.Operation)
 		}
-		args = append(args, batchLoadSurgeFactor, plan.gate.curBuckets)
+		for i := 1; i <= dwell; i++ {
+			args = append(args, batchLoadSurgeFactor, plan.gate.curBuckets)
+		}
 	}
 	return sel + `
 		FROM (
 		  SELECT service_name, name,
-		         time_bucket >= ? AS is_cur,
+		         ` + slotExpr + `,
 		         arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99,` + inner + `
 		  FROM operation_summary_5m
 		  WHERE time_bucket >= ? AND time_bucket < ?
-		  GROUP BY service_name, name, is_cur
+		  GROUP BY service_name, name, ` + slot + `
 		)
 		GROUP BY service_name, name` + having + `
 		ORDER BY cur_p99 / base_p99 DESC
 		LIMIT 200
 		SETTINGS max_execution_time = 25`, args
+}
+
+// opLatSustainExempt — SAF (v0.10.1085): sürdürmeden muaf AKTİF çiftler,
+// tekilleştirilmiş, okuma sırasıyla (en taze önce; tavan önceden uygulanmış).
+// dwell ≤ 1 (sürdürme yok) ya da okuma hatası → boş.
+func opLatSustainExempt(dwell int, active []chstore.ActiveAnomalyKey, readErr error) []opLatPair {
+	if dwell <= 1 || readErr != nil {
+		return nil
+	}
+	seen := make(map[opLatPair]bool, len(active))
+	out := make([]opLatPair, 0, len(active))
+	for _, k := range active {
+		p := opLatPair{Service: k.Service, Operation: k.Pattern}
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// opLatencyScanDest — v0.10.1085: satırın Scan hedefleri, opLatencyQuery'nin
+// kolon sırasıyla (6 temel kolon, önceki kovalar p99_<i> / calls_<i>, batch
+// kolunda base_buckets). Tek yerde ki sorgu ile tarayıcı ayrışmasın
+// (clickhouse local testi aynı yardımcıyla ayrıştırır).
+func opLatencyScanDest(b *opLatencyBucket, dwell int, batch bool) []any {
+	dest := []any{&b.Service, &b.Operation, &b.CurP99Ms, &b.BaseP99Ms, &b.CurCalls, &b.BaseCalls}
+	if dwell < 1 {
+		dwell = 1
+	}
+	b.Earlier = make([]opLatencySlot, dwell-1)
+	for i := range b.Earlier {
+		dest = append(dest, &b.Earlier[i].P99Ms, &b.Earlier[i].Calls)
+	}
+	if batch {
+		dest = append(dest, &b.BaseBuckets)
+	}
+	return dest
+}
+
+// opLatencyWindows — SAF (v0.10.1085): tespitin zaman sınırları. Kova =
+// recorder penceresi (varsayılan 5 dk = MV kovası; daha geniş pencere kova
+// başına curBuckets MV kovası). slotStarts[i] = en yeni (i+1). kovanın başı —
+// hepsi TAMAMLANMIŞ (alignedNow'dan önce). Taban, sürdürme penceresinin
+// TAMAMINDAN önce biter: sıçrayan kovalar kendi tabanlarını şişirmez. dwell =
+// 1 → v0.10.1085 öncesi pencerelerle birebir (curStart = slotStarts[0]).
+func opLatencyWindows(now time.Time, window time.Duration, dwell int) (slotStarts []time.Time, baseStart, alignedNow time.Time, curBuckets int) {
+	if dwell < 1 {
+		dwell = 1
+	}
+	alignedNow = now.Truncate(traceOpBucketLen)
+	curBuckets = int(window / traceOpBucketLen)
+	if curBuckets < 1 {
+		curBuckets = 1
+	}
+	curWindow := time.Duration(curBuckets) * traceOpBucketLen
+	slotStarts = make([]time.Time, dwell)
+	for i := range slotStarts {
+		slotStarts[i] = alignedNow.Add(-time.Duration(i+1) * curWindow)
+	}
+	baseLookback := 24 * time.Hour
+	if 12*curWindow > baseLookback {
+		baseLookback = 12 * curWindow
+	}
+	baseStart = slotStarts[dwell-1].Add(-baseLookback)
+	return slotStarts, baseStart, alignedNow, curBuckets
 }
 
 // DetectOpLatencyAnomalies — cari pencere p99 vs 24h (ya da 12×pencere)
@@ -273,34 +488,30 @@ func opLatencyQuery(curStart, baseStart, alignedNow time.Time, plan opLatBatchPl
 // sorgudan (DetectTraceOpAnomalies ile aynı bedel modeli; pencereler 5m
 // bucket'a hizalı, tespit ≤~5dk gecikir — kabul edilmiş desen).
 //
-// v0.10.1056 — anahtar (anomaly_sensitivity.opLatency, nil = KAPALI; operatör:
-// "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence.").
+// v0.10.1056 — anahtar (anomaly_sensitivity.opLatency; operatör: "Trace op
+// latency false pozitif geliyor, gerek yok gelmelerine bence.").
 // Kapı HER G/Ç'den ÖNCE ve burada, çağıranda değil: dedektörün her çağıranı
 // (bugün yalnız recorder) anahtara uyar, kapalıyken boş liste döner — hata
 // DEĞİL. Kapalıyken ne MV sorgusu ne v0.10.1046 aktif-olay okuması ne örnek
-// sorgusu. Ayar bu süreçte henüz doğrulanmadıysa yayınlanan varsayılan
-// (KAPALI) okunur: birkaç tiklik boşluk açık olayı düşürmez (10 dk aktif yaş).
-// Açıkken aşağıdaki gövde bayt bayt öncekiyle aynı.
+// sorgusu. Ayar bu süreçte henüz doğrulanmadıysa KAPALI okunur
+// (AnomalySensitivityForDetectors): birkaç tiklik boşluk açık olayı düşürmez
+// (10 dk aktif yaş).
+//
+// v0.10.1085 — varsayılan AÇIK (nil = açık), sürdürme kuralıyla: çift ancak
+// ardışık opLatencyDwellBuckets (vars. 2) tamamlanmış kovanın HER BİRİNDE
+// ihlal ederse olay (operatör: "Önerini yapalım"). Pencere aynı atomic
+// okumadan; tek MV sorgusu tüm kovaları birlikte döndürür.
 func DetectOpLatencyAnomalies(ctx context.Context, store *chstore.Store, window time.Duration) ([]OpLatencyAnomaly, error) {
 	sens := store.AnomalySensitivityForDetectors()
 	if !sens.OpLatencyOn() {
 		return []OpLatencyAnomaly{}, nil
 	}
 	conn := store.TelemetryReadConn()
-	now := time.Now()
-
-	alignedNow := now.Truncate(traceOpBucketLen)
-	curBuckets := int(window / traceOpBucketLen)
-	if curBuckets < 1 {
-		curBuckets = 1
-	}
-	curWindow := time.Duration(curBuckets) * traceOpBucketLen
-	curStart := alignedNow.Add(-curWindow)
-	baseLookback := 24 * time.Hour
-	if 12*curWindow > baseLookback {
-		baseLookback = 12 * curWindow
-	}
-	baseStart := curStart.Add(-baseLookback)
+	dwell := sens.OpLatencyDwell()
+	slotStarts, baseStart, alignedNow, curBuckets := opLatencyWindows(time.Now(), window, dwell)
+	// curStart — en yeni kovanın başı: örnek trace bu kovadan (olayın
+	// raporladığı p99 da onun).
+	curStart := slotStarts[0]
 
 	// v0.10.1046 — batch kapısı. Kalıplar trace_op'un ve metrik dedektörünün
 	// okuduğu AYNI atomic ayardan (ForDetectors: doğrulanmamış ayarda liste
@@ -310,24 +521,38 @@ func DetectOpLatencyAnomalies(ctx context.Context, store *chstore.Store, window 
 	// HİÇ yok, geçişte bir kez log; sayı ya da bayt tavanı aşımı → en tazeler
 	// muaf, ötesi muaf değil, geçişte bir kez log. (sens yukarıda, anahtarla
 	// aynı okuma — v0.10.1056.)
+	//
+	// v0.10.1085 — AYNI okuma sürdürme histerezisini de besler: dwell ≥ 2'de
+	// servis daraltması YOK (her servisin aktif olayı açılış sürdürmesinden
+	// muaf), yeni sorgu yok. Okuma hatası → o tik ne batch muafiyeti ne
+	// sürdürme muafiyeti (aktif çift de iki kova ister — sessiz yön).
 	var active []chstore.ActiveAnomalyKey
 	var readErr error
-	if svcCond, svcArgs := sens.BatchServiceSQL("service"); svcCond != "" {
+	svcCond, svcArgs := sens.BatchServiceSQL("service")
+	if dwell > 1 {
+		svcCond, svcArgs = "", nil
+	}
+	if dwell > 1 || svcCond != "" {
 		keys, err := store.ListActiveAnomalyKeys(ctx, opLatencyKind, "", opLatActiveAge, svcCond, svcArgs, batchLatActiveCap+1)
 		readErr = err
 		opLatActiveReadLatch.report(err != nil,
-			"[anomaly-recorder] op latency: aktif olay okunamadı (%v) — batch gecikme kapısı bu okuma düzelene dek UYGULANMIYOR", err)
+			"[anomaly-recorder] op latency: aktif olay okunamadı (%v) — batch gecikme kapısı ve sürdürme muafiyeti bu okuma düzelene dek UYGULANMIYOR", err)
 		var overflow bool
 		var droppedBytes int
 		active, overflow = batchLatCapKeys(keys)
 		active, droppedBytes = opLatCapExemptBytes(active)
 		opLatActiveCapLatch.report(err == nil && overflow,
-			"[anomaly-recorder] op latency: batch servislerde aktif gecikme olayı tavanı (%d) aştı — tavan ötesindekiler kapıdan muaf DEĞİL", batchLatActiveCap)
+			"[anomaly-recorder] op latency: aktif gecikme olayı tavanı (%d) aştı — tavan ötesindekiler kapıdan ve sürdürmeden muaf DEĞİL", batchLatActiveCap)
 		opLatActiveBytesLatch.report(err == nil && droppedBytes > 0,
 			"[anomaly-recorder] op latency: muaf listesi metin tavanını (%d bayt) aştı — %d çift muaf, %d çift muaf DEĞİL", opLatExemptMaxBytes, len(active), droppedBytes)
 	}
 	plan := planOpLatBatch(sens, uint64(curBuckets), active, readErr)
-	q, args := opLatencyQuery(curStart, baseStart, alignedNow, plan)
+	sustainExempt := opLatSustainExempt(dwell, active, readErr)
+	q, args := opLatencyQuery(slotStarts, baseStart, alignedNow, plan, sustainExempt)
+	activeSet := make(map[opLatPair]bool, len(sustainExempt))
+	for _, p := range sustainExempt {
+		activeSet[p] = true
+	}
 	rows, err := conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -336,20 +561,17 @@ func DetectOpLatencyAnomalies(ctx context.Context, store *chstore.Store, window 
 	buckets := []opLatencyBucket{}
 	for rows.Next() {
 		var b opLatencyBucket
-		dest := []any{&b.Service, &b.Operation, &b.CurP99Ms, &b.BaseP99Ms, &b.CurCalls, &b.BaseCalls}
-		if plan.cond != "" {
-			dest = append(dest, &b.BaseBuckets)
-		}
-		if err := rows.Scan(dest...); err != nil {
+		if err := rows.Scan(opLatencyScanDest(&b, dwell, plan.cond != "")...); err != nil {
 			return nil, err
 		}
+		b.Active = activeSet[opLatPair{Service: b.Service, Operation: b.Operation}]
 		buckets = append(buckets, b)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	out := classifyOpLatency(buckets, plan.gate)
+	out := classifyOpLatency(buckets, dwell, plan.gate)
 	if len(out) == 0 {
 		return out, nil
 	}

@@ -1,7 +1,8 @@
 package anomaly
 
 // op_latency_switch_test.go — v0.10.1056: trace_op_latency dedektörü
-// varsayılan KAPALI (anomaly_sensitivity.opLatency, nil = kapalı).
+// anahtarı (anomaly_sensitivity.opLatency). v0.10.1085: nil = AÇIK (iki ardışık
+// kova sürdürme kuralıyla); açıkça false ve doğrulanmamış ayar kapalı.
 //
 // Operatör (prod, "Operasyon gecikmesi" anomali detayı, iki örnek): "Trace op
 // latency false pozitif geliyor, gerek yok gelmelerine bence." Normalde
@@ -90,12 +91,14 @@ func TestDetectOpLatencyOffDoesNoIO(t *testing.T) {
 	ctx := context.Background()
 	on, off := true, false
 
+	// v0.10.1085 — nil artık AÇIK; kapalı hâller: açıkça false ve DOĞRULANMAMIŞ
+	// ayar (AnomalySensitivityForDetectors, 1056'nın "henüz okunamadı → kapalı"
+	// güvencesi).
 	cases := []struct {
 		name    string
-		publish *chstore.AnomalySensitivityConfig // nil = hiç yayınlanmamış (varsayılan)
+		publish *chstore.AnomalySensitivityConfig // nil = hiç yayınlanmamış (doğrulanmamış)
 	}{
-		{"hiç yayınlanmamış ayar (varsayılan)", nil},
-		{"eski blob, alan yok (nil)", &chstore.AnomalySensitivityConfig{}},
+		{"hiç yayınlanmamış ayar (doğrulanmamış)", nil},
 		{"açıkça false — batch listesi dolu, doğrulanmış", &chstore.AnomalySensitivityConfig{OpLatency: &off}},
 	}
 	for _, tc := range cases {
@@ -120,24 +123,29 @@ func TestDetectOpLatencyOffDoesNoIO(t *testing.T) {
 		})
 	}
 
-	t.Run("açık → G/Ç'ye ulaşır", func(t *testing.T) {
-		s := &chstore.Store{}
-		s.SetAnomalySensitivity(chstore.AnomalySensitivityConfig{OpLatency: &on})
-		reached := false
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					reached = true // nil bağlantıda sorgu = G/Ç denendi
+	for name, pub := range map[string]chstore.AnomalySensitivityConfig{
+		"açıkça true → G/Ç'ye ulaşır":                                  {OpLatency: &on},
+		"eski blob, alan yok (nil) → AÇIK, G/Ç'ye ulaşır (v0.10.1085)": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := &chstore.Store{}
+			s.SetAnomalySensitivity(pub)
+			reached := false
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						reached = true // nil bağlantıda sorgu = G/Ç denendi
+					}
+				}()
+				if _, err := DetectOpLatencyAnomalies(ctx, s, 5*time.Minute); err != nil {
+					reached = true
 				}
 			}()
-			if _, err := DetectOpLatencyAnomalies(ctx, s, 5*time.Minute); err != nil {
-				reached = true
+			if !reached {
+				t.Fatal("açıkken dedektör hiçbir sorgu denemedi — kapı her şeyi susturuyor")
 			}
-		}()
-		if !reached {
-			t.Fatal("açıkken dedektör hiçbir sorgu denemedi — kapı her şeyi susturuyor")
-		}
-	})
+		})
+	}
 }
 
 // TestOpLatencySwitchWiring — kaynak pini: tik anahtarı atomic ayardan okuyup

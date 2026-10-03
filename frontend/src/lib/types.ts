@@ -7841,10 +7841,15 @@ export interface AnomalySensitivityConfig {
   // v0.10.543 — service_silent dedektörü; VARSAYILAN KAPALI (operatör kararı):
   // okuma `=== true` (attachToIncident'ın tersi).
   serviceSilent?: boolean;
-  // v0.10.1056 — trace_op_latency (operasyon bazında p99 sıçraması) dedektörü;
-  // VARSAYILAN KAPALI (operatör: "Trace op latency false pozitif geliyor").
-  // Backend *bool, yok = kapalı: okuma `=== true`, kayıt AÇIK boolean gönderir.
+  // v0.10.1056 — trace_op_latency (operasyon bazında p99 sıçraması) dedektörü
+  // (operatör: "Trace op latency false pozitif geliyor"). v0.10.1085 —
+  // VARSAYILAN AÇIK, yalnız sürdürme kuralıyla (operatör: "Önerini yapalım").
+  // Backend *bool, yok = AÇIK: okuma `!== false`, kayıt AÇIK boolean gönderir.
   opLatency?: boolean;
+  // v0.10.1085 — trace_op_latency için ihlalin sürmesi gereken ardışık
+  // tamamlanmış 5 dk kova sayısı; 1–6, yok/aralık dışı = 2 (sunucu
+  // kelepçeler). 1 = eski tek-kova davranışı.
+  opLatencyDwellBuckets?: number;
   // v0.10.1061 — log_template_new (Drain'in ilk kez gördüğü log biçimi)
   // dedektörü; VARSAYILAN KAPALI (operatör onaylı: "Bu log anomalileri de
   // false pozitif geliyor"). opLatency ile aynı sözleşme: okuma `=== true`,

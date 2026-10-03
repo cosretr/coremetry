@@ -173,10 +173,12 @@ func (r *Recorder) tick(ctx context.Context) {
 	// oranı; CurrentCount = cari çağrı hacmi (terfi kapılarının hacim
 	// sezgisiyle uyumlu); Sample = en yavaş cari span'in trace'i.
 	//
-	// v0.10.1056 — varsayılan KAPALI (anomaly_sensitivity.opLatency; operatör:
-	// "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence.").
+	// v0.10.1056 — anahtar (anomaly_sensitivity.opLatency; operatör: "Trace op
+	// latency false pozitif geliyor, gerek yok gelmelerine bence.").
 	// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım dedektörü
-	// HİÇ çağırmaz.
+	// HİÇ çağırmaz. v0.10.1085 — varsayılan yeniden AÇIK, ama yalnız sürdürme
+	// kuralıyla (ardışık opLatencyDwellBuckets kova, vars. 2 — dedektörde);
+	// olay şekli değişmedi.
 	recordOpLatency(ctx, r.store.AnomalySensitivityForDetectors().OpLatencyOn(), now,
 		func(ctx context.Context) ([]OpLatencyAnomaly, error) {
 			return DetectOpLatencyAnomalies(ctx, r.store, r.window)

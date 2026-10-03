@@ -341,11 +341,12 @@ function SensitivitySection() {
       // v0.10.1039 — boş metin `[]` gider (kural KAPALI); alan atlanmaz,
       // atlansa sunucu varsayılanı (-batch) geri getirirdi.
       const sentPatterns = parseBatchPatterns(batchText);
-      // v0.10.1056 — opLatency daima AÇIK boolean gider (alan yoksa false):
-      // kayıtlı blob ne olduğunu söylesin, eski sunucu varsayılanına kalmasın.
-      // v0.10.1061 — logTemplateNew aynı gerekçeyle.
+      // v0.10.1056 — opLatency daima AÇIK boolean gider: kayıtlı blob ne
+      // olduğunu söylesin, eski sunucu varsayılanına kalmasın. v0.10.1085 —
+      // alan yoksa TRUE (varsayılan açık, sürdürme kuralıyla).
+      // v0.10.1061 — logTemplateNew aynı gerekçeyle (alan yoksa false).
       const saved = await api.putAnomalySensitivity({
-        ...cfg, batchServicePatterns: sentPatterns, opLatency: cfg.opLatency === true,
+        ...cfg, batchServicePatterns: sentPatterns, opLatency: cfg.opLatency !== false,
         logTemplateNew: cfg.logTemplateNew === true,
       });
       setCfg(saved);
@@ -517,22 +518,37 @@ function SensitivitySection() {
               kalanlar bir sonraki tikte çözülür.
             </div>
           </div>
-          {/* v0.10.1056 — trace_op_latency dedektörü: VARSAYILAN KAPALI (operatör:
-              "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence").
-              Alan yoksa kapalı okunur; kayıt açık boolean gönderir. */}
+          {/* v0.10.1056 — trace_op_latency dedektörü anahtarı (operatör: "Trace op
+              latency false pozitif geliyor"). v0.10.1085 — varsayılan yeniden AÇIK,
+              yalnız sürdürme kuralıyla (operatör: "Önerini yapalım"): alan yoksa AÇIK
+              okunur (`!== false`); kayıt açık boolean + kova sayısı gönderir. */}
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input type="checkbox" aria-label="Operasyon gecikmesi anomalileri"
-                checked={cfg.opLatency === true}
+                checked={cfg.opLatency !== false}
                 onChange={e => setCfg({ ...cfg, opLatency: e.target.checked })} />
               <span style={{ fontSize: 13, color: 'var(--text)' }}>
                 Operasyon gecikmesi anomalileri
               </span>
             </label>
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, marginLeft: 24, lineHeight: 1.5 }}>
-              Kapalı (varsayılan): operasyon bazında p99 sıçramaları anomali açmaz — tek kovalık
-              sıçramalar çok yanlış alarm üretiyordu. Servis düzeyindeki gecikme anomalileri
-              etkilenmez.
+              Açık (varsayılan): bir operasyonun p99&apos;u iki ardışık kovada sürmeli; tek sıçrama
+              alarm açmaz. Her kovada en az 30 çağrı, en az 200 ms ve normalin en az 3 katı
+              gerekir. Servis düzeyindeki gecikme anomalileri etkilenmez.
+            </div>
+            <div style={{ marginTop: 10, marginLeft: 24 }}>
+              <Field label="Operasyon gecikmesi: kaç ardışık 5-dakikalık kova">
+                <input type="number" min={1} max={6} step={1}
+                  aria-label="Operasyon gecikmesi ardışık kova"
+                  disabled={cfg.opLatency === false}
+                  value={cfg.opLatencyDwellBuckets ?? 2}
+                  onChange={e => setCfg({ ...cfg, opLatencyDwellBuckets: Number(e.target.value) })} />
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+                  Sıçrama bu kadar ardışık tamamlanmış kovanın her birinde sürmeli. 1–6,
+                  varsayılan 2 ({(cfg.opLatencyDwellBuckets ?? 2) * 5} dakika). 1 = eski
+                  davranış: tek kovalık sıçrama da anomali açar.
+                </div>
+              </Field>
             </div>
           </div>
           {/* v0.10.1061 — log_template_new dedektörü: VARSAYILAN KAPALI (operatör

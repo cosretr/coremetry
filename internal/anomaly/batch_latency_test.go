@@ -135,12 +135,12 @@ func TestClassifyOpLatencyBatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classifyOpLatency([]opLatencyBucket{tt.in}, tt.gate)
+			got := classifyOpLatency([]opLatencyBucket{tt.in}, 1, tt.gate)
 			if tt.want != (len(got) == 1) {
 				t.Fatalf("olay=%v bekleniyordu, got=%+v", tt.want, got)
 			}
 			if tt.want {
-				ref := classifyOpLatency([]opLatencyBucket{tt.in}, opLatBatchGate{})
+				ref := classifyOpLatency([]opLatencyBucket{tt.in}, 1, opLatBatchGate{})
 				if !reflect.DeepEqual(got, ref) {
 					t.Fatalf("raporlanan alanlar değişti:\n%+v\n%+v", got, ref)
 				}
@@ -166,12 +166,12 @@ func TestOpLatencyBatchCap(t *testing.T) {
 	plan := planOpLatBatch(chstore.AnomalySensitivityConfig{}, 1, kept, nil)
 	first := opLatRow("orders-batch", "op-000", 800, 200, 5_000, opLatBaseCalls, 288)
 	beyond := opLatRow("orders-batch", fmt.Sprintf("op-%03d", batchLatActiveCap), 800, 200, 5_000, opLatBaseCalls, 288)
-	got := classifyOpLatency([]opLatencyBucket{first, beyond}, plan.gate)
+	got := classifyOpLatency([]opLatencyBucket{first, beyond}, 1, plan.gate)
 	if len(got) != 1 || got[0].Operation != "op-000" {
 		t.Fatalf("tavan içindeki aktif çift sürmeli, tavan ötesi susmalı: %+v", got)
 	}
 	cur, base, now := traceOpTimes()
-	q, args := opLatencyQuery(cur, base, now, plan)
+	q, args := opLatencyQuery([]time.Time{cur}, base, now, plan, nil)
 	if strings.Count(q, "(?, ?)") != batchLatActiveCap || strings.Count(q, "?") != len(args) {
 		t.Fatalf("bind listesi tavanı aştı: %d çift, %d yer tutucu / %d argüman",
 			strings.Count(q, "(?, ?)"), strings.Count(q, "?"), len(args))
@@ -198,7 +198,7 @@ func TestOpLatCapExemptBytes(t *testing.T) {
 	plan := planOpLatBatch(chstore.AnomalySensitivityConfig{}, 1, kept, nil)
 	fresh := opLatRow("orders-batch", long(0), 800, 200, 5_000, opLatBaseCalls, 288)
 	beyond := opLatRow("orders-batch", long(2), 800, 200, 5_000, opLatBaseCalls, 288)
-	got := classifyOpLatency([]opLatencyBucket{fresh, beyond}, plan.gate)
+	got := classifyOpLatency([]opLatencyBucket{fresh, beyond}, 1, plan.gate)
 	if len(got) != 1 || got[0].Operation != long(0) {
 		t.Fatalf("tavan içindeki (en taze) çift sürmeli, tavan ötesi susmalı: %d olay", len(got))
 	}
@@ -235,8 +235,8 @@ func TestOpLatencyBatchIsPureSuppression(t *testing.T) {
 	}
 	nonEmpty, suppressed := 0, 0
 	for _, r := range all {
-		old := classifyOpLatency([]opLatencyBucket{r}, opLatBatchGate{})
-		neu := classifyOpLatency([]opLatencyBucket{r}, gate)
+		old := classifyOpLatency([]opLatencyBucket{r}, 1, opLatBatchGate{})
+		neu := classifyOpLatency([]opLatencyBucket{r}, 1, gate)
 		if len(old) > 0 {
 			nonEmpty++
 		}
@@ -257,8 +257,8 @@ func TestOpLatencyBatchIsPureSuppression(t *testing.T) {
 		t.Fatalf("ızgara anlamsız: %d olay, %d susturma", nonEmpty, suppressed)
 	}
 
-	oldTop := classifyOpLatency(all, opLatBatchGate{})
-	newTop := classifyOpLatency(all, gate)
+	oldTop := classifyOpLatency(all, 1, opLatBatchGate{})
+	newTop := classifyOpLatency(all, 1, gate)
 	if len(oldTop) != 50 {
 		t.Fatalf("ilk 50 tavanı ısırmıyor (%d) — yer kaybı testi anlamsız", len(oldTop))
 	}
@@ -318,7 +318,7 @@ func TestOpLatencyQueryLegacyIdentity(t *testing.T) {
 		if plan.cond != "" || plan.gate.isBatch != nil || len(plan.exempt) != 0 {
 			t.Fatalf("%s: kapı kuruldu: %+v", name, plan)
 		}
-		q, args := opLatencyQuery(cur, base, now, plan)
+		q, args := opLatencyQuery([]time.Time{cur}, base, now, plan, nil)
 		if q != goldenLegacyOpLatencySQL {
 			t.Fatalf("%s: SQL metni değişti:\n%s", name, q)
 		}
@@ -336,7 +336,7 @@ func TestOpLatencyQueryBatchBranchInHaving(t *testing.T) {
 	cond, _ := sens.BatchServiceSQL("service_name")
 	// Tekrarlanan anahtar bir kez bind edilir.
 	plan := planOpLatBatch(sens, 1, opLatKeys("a-batch", "op1", "b-batch", "op2", "a-batch", "op1"), nil)
-	q, args := opLatencyQuery(cur, base, now, plan)
+	q, args := opLatencyQuery([]time.Time{cur}, base, now, plan, nil)
 
 	iHaving := strings.Index(q, "HAVING ")
 	iOrder := strings.Index(q, "ORDER BY cur_p99 / base_p99 DESC")
@@ -375,7 +375,7 @@ func TestOpLatencyQueryBatchBranchInHaving(t *testing.T) {
 		t.Fatalf("argümanlar\n%v\nbeklenen\n%v", args, want)
 	}
 	// Aktif küme boşsa NOT IN yok (boş tuple listesi geçersiz SQL olurdu).
-	q0, _ := opLatencyQuery(cur, base, now, planOpLatBatch(sens, 1, nil, nil))
+	q0, _ := opLatencyQuery([]time.Time{cur}, base, now, planOpLatBatch(sens, 1, nil, nil), nil)
 	if strings.Contains(q0, "NOT IN") || !strings.Contains(q0, "AND NOT ("+cond+"\n") {
 		t.Fatalf("boş aktif kümede beklenmeyen şekil:\n%s", q0)
 	}
@@ -402,8 +402,8 @@ func TestOpLatencyReadsPublishedSettings(t *testing.T) {
 		"active, overflow = batchLatCapKeys(keys)",
 		"active, droppedBytes = opLatCapExemptBytes(active)",
 		"planOpLatBatch(sens, uint64(curBuckets), active, readErr)",
-		"opLatencyQuery(curStart, baseStart, alignedNow, plan)",
-		"classifyOpLatency(buckets, plan.gate)",
+		"opLatencyQuery(slotStarts, baseStart, alignedNow, plan, sustainExempt)",
+		"classifyOpLatency(buckets, dwell, plan.gate)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("DetectOpLatencyAnomalies %q taşımıyor", want)
@@ -456,7 +456,7 @@ func TestOpLatencyHavingAgreesWithGo(t *testing.T) {
 		"aktif yok":      planOpLatBatch(sens, 1, nil, nil),
 		"bir çift aktif": planOpLatBatch(sens, 1, opLatKeys("orders-batch", "activeSurge"), nil),
 	} {
-		q, args := opLatencyQuery(cur, base, now, plan)
+		q, args := opLatencyQuery([]time.Time{cur}, base, now, plan, nil)
 		having := q[strings.Index(q, "HAVING ")+len("HAVING ") : strings.Index(q, "ORDER BY cur_p99 / base_p99 DESC")]
 		pred := inlineTraceOpArgs(t, having, args[3:]) // ilk üçü alt sorgunun zaman sınırları
 		sql := "SELECT service_name, name FROM values('service_name String, name String, cur_p99 Float64, base_p99 Float64, cur_calls UInt64, base_calls UInt64, base_buckets UInt64', " +
@@ -472,7 +472,7 @@ func TestOpLatencyHavingAgreesWithGo(t *testing.T) {
 			}
 		}
 		goSet := map[string]bool{}
-		for _, a := range classifyOpLatency(rows, plan.gate) {
+		for _, a := range classifyOpLatency(rows, 1, plan.gate) {
 			goSet[a.Service+"/"+a.Operation] = true
 		}
 		if !reflect.DeepEqual(sqlSet, goSet) {

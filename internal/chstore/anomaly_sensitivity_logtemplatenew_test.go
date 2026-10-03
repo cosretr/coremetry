@@ -43,8 +43,13 @@ func TestLogTemplateNewOn(t *testing.T) {
 	if (AnomalySensitivityConfig{OpLatency: &tr}).LogTemplateNewOn() {
 		t.Fatal("opLatency=true logTemplateNew'i açtı")
 	}
-	if (AnomalySensitivityConfig{LogTemplateNew: &tr}).OpLatencyOn() {
+	// v0.10.1085 — opLatency'nin nil'i artık AÇIK; komşu sınaması açıkça
+	// kapalı opLatency ile.
+	if (AnomalySensitivityConfig{LogTemplateNew: &tr, OpLatency: &fa}).OpLatencyOn() {
 		t.Fatal("logTemplateNew=true opLatency'yi açtı")
+	}
+	if !(AnomalySensitivityConfig{LogTemplateNew: &fa}).OpLatencyOn() {
+		t.Fatal("logTemplateNew=false opLatency'yi kapattı")
 	}
 }
 

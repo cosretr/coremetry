@@ -35,9 +35,10 @@ vi.mock('@/lib/api', () => {
     getAnomalySensitivity: async () => m.sens,
     putAnomalySensitivity: async (body: unknown) => {
       m.puts.push(body as Record<string, unknown>);
-      // Sunucu Normalize'ının taklidi: iki anahtar da somutlaşır (yok → false).
+      // Sunucu Normalize'ının taklidi: iki anahtar da somutlaşır (opLatency yok → true
+      // v0.10.1085'ten beri; logTemplateNew yok → false).
       const b = body as Record<string, unknown>;
-      return { ...b, opLatency: b.opLatency === true, logTemplateNew: b.logTemplateNew === true };
+      return { ...b, opLatency: b.opLatency !== false, logTemplateNew: b.logTemplateNew === true };
     },
   };
   return {

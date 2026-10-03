@@ -1398,6 +1398,42 @@ kapanınca problem kendisi olarak döner; incident satırı süzgeçle elendiyse
 listesiyle ORTAK bileşen (`TriageTitleCell`): kalın başlık + satır içi durum çipi, soluk ayrıntı; ayrı Source kolonu
 kalktı. Bilinen sınırlar: rozet (/api/inbox/count) katlamayı uygulamaz; Problems türü seçili değilken tür çipi COUNT'tan.
 
+## 2026-10-03 — Operasyon gecikmesi: iki ardışık kova şartıyla yeniden açık (v0.10.1085)
+
+**Operatör (prod):** dedektör açıkken ~30 çağrılı bir operasyonda TEK yavaş istek (4 sn'lik bir Kafka publish) o
+5 dk kovanın p99'u olup "168×" anomali açıyor, sonraki kovada 1×'e iniyordu — 1056'nın kapatma sebebi. Sürdürme
+önerisine onay: "Önerini yapalım". **v0.10.1056'yı kısmen revize eder:** varsayılan ve "yeniden açmayı önerme" notu
+değişti; dedektörün eşikleri, anahtarı ve v0.10.1046 batch kapısı aynen.
+
+**Kural:** (servis, operasyon) ancak ardışık `anomaly_sensitivity.opLatencyDwellBuckets` (vars. 2, aralık 1–6)
+TAMAMLANMIŞ kovanın HER BİRİNDE ihlal ederse olay: her kova ≥ 30 çağrı, p99 ≥ 200 ms, p99 ≥ 3 × taban (24 sa; taban
+sürdürme penceresinden önce biter). Olay şekli aynı, alanlar en yeni kovadan; 1 = eski tek-kova davranışı. Batch
+kapısı yalnız HER kova yük altındaysa susturur (metrik dedektörünün "her dwell kovası" emsali).
+
+**Okuma:** aynı tek MV pivotu (`operation_summary_5m`): iç sorgunun `is_cur`'u kova numarasına genişler
+(`multiIf(time_bucket >= ?, 1, time_bucket >= ?, 2, 0) AS slot`, GROUP BY slot), dışta önceki kova başına
+`p99_<i>` / `calls_<i>`, HAVING her kovaya aynı tabanları uygular (LIMIT yalnız sürdürmeyi geçebilecek satırlarda
+ısırır). LIMIT 200 + `max_execution_time` aynen, çift başına döngü yok; dwell 1'de metin v0.10.1046 ile birebir.
+Sınıflayıcı iki kova üstünde saf (`classifyOpLatency(rows, dwell, gate)`).
+
+**Varsayılan + göç:** `opLatency` nil = AÇIK, açıkça false kapalı; ayar henüz doğrulanmadıysa (boot okuması
+düştü) dedektör kapalı okunur. 1056'nın Normalize'ı nil'i false'a somutlaştırdığı için o dönemde Kaydet'e basılmış
+her blob `opLatency:false` taşır — o false varsayılan sayılır. Tek seferlik göç (ayar yükleyicisinde okumadan önce):
+`opLatency:false` VE `opLatencyDwellBuckets` alanı yok → alan silinir (nil = açık) + system audit; alan varsa (bu
+sürümde kaydedilmiş false) dokunulmaz. İşaret `system_settings.anomaly_sensitivity_oplatency_v2`; varken bir daha
+koşmaz, sonradan kapatan operatörün false'u kalır.
+
+**Bedeller:** tespit bir kova (~5 dk) geç; 1056 döneminde bilerek kapatılmış false varsayılandan ayırt edilemez ve
+açılır (audit'te görünür, Settings → Anomaly'den tek tık kapanır). Olay kova sayısını taşımadığı için açıklama
+cümlesine "2 kovada sürdü" eklenmedi.
+
+**Histerezis — sürdürme yalnız AÇILIŞA:** olayı zaten aktif çift (son 15 dk'da yazılmış; v0.10.1046 batch kapısının
+AYNI `ListActiveAnomalyKeys` okuması, dwell ≥ 2'de servis daraltmasız, 200 çift / 64 KiB tavan) en yeni kova tek
+başına ihlal ettikçe tazelenir — SQL'de önceki kova koşulları `OR (service_name, name) IN (…)` ile muaf; en yeni kova
+temizse yazım durur ve olay olağan aktif yaşla düşer (tek dip kovada "anomaly cleared" + yeni bildirim dalgalanması
+yok). Okuma hatası ya da tavan ötesi → muafiyet yok, aktif çift de iki kova ister. Bedel: recorder dakikada bir
+küçük `anomaly_events` FINAL okuması artık her kurulumda (eskiden yalnız batch listesi doluyken).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
