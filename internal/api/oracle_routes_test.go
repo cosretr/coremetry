@@ -43,7 +43,7 @@ func asRole(r *http.Request, role string) *http.Request {
 
 func oracleSourceJSON(extra string) string {
 	return `{"name":"core-oracle","host":"db.example.local","serviceName":"ORCLPDB",
-	"user":"coremetry","schema":"APPOWNER","table":"ERROR_LOG"` + extra + `}`
+	"user":"coremetry","schema":"APP_SCHEMA","table":"ERROR_LOG"` + extra + `}`
 }
 
 // ── 1. test ucu: başarısızlık 200 + ok:false ────────────────────
@@ -179,7 +179,7 @@ func TestOracleGet_MasksPassword(t *testing.T) {
 	s, mux := oracleTestServer(t)
 	cfg, err := oracle.Normalize(oracle.Settings{Sources: []oracle.SourceConfig{{
 		Name: "core-oracle", Host: "db.example.local", ServiceName: "ORCLPDB",
-		User: "coremetry", Password: "s3cret", Schema: "APPOWNER", Table: "ERROR_LOG", Enabled: true,
+		User: "coremetry", Password: "s3cret", Schema: "APP_SCHEMA", Table: "ERROR_LOG", Enabled: true,
 	}}}, oracle.Settings{}, oracle.NewSourceID)
 	if err != nil {
 		t.Fatal(err)

@@ -13,12 +13,15 @@ import (
 
 // Tavana çarpan özel sorgu hemen yeniden koşmaz (pencere SYSDATE'e bağlı;
 // aynı 5000 satır, 5 s'de bir ağır aggregate). Kanca capped=true alır.
+// v0.10.1092 — "tavan" artık satır tavanıdır (maxPages × 5000): TEK sıralı
+// ifade tavan+1 satır döndürürse pencere KESİK ilan edilir; sonraki tik yine
+// bir sonraki aralıkta.
 func TestPollCustomCappedNoHotLoop(t *testing.T) {
 	src := customSource()
 	src.ID, src.Name, src.IntervalSec = "o-dddddddd", "master-log", 60
 	slice := float64(time.Date(2026, 9, 10, 8, 58, 0, 0, time.UTC).Unix())
 	w, _, calls, now := newTestWorker(t, src, &fakeState{}, func(int, []any) ([]map[string]any, error) {
-		out := make([]map[string]any, pollRowCap)
+		out := make([]map[string]any, DefaultMaxPages*pollRowCap+1)
 		for i := range out {
 			out[i] = map[string]any{"TIMESLICE": slice, "OPERATIONCODE": "OP", "FUNCTIONCODE": "F", "KANALKOD": "K", "ADET": float64(2)}
 		}
@@ -30,8 +33,11 @@ func TestPollCustomCappedNoHotLoop(t *testing.T) {
 	})
 	w.Tick(context.Background())
 	st := w.Status()[0]
-	if !st.Capped || !gotCapped {
-		t.Fatalf("tavan durumu/kanca: st=%v kanca=%v", st.Capped, gotCapped)
+	if !st.Capped || !gotCapped || !st.Truncated || st.Pages != DefaultMaxPages {
+		t.Fatalf("tavan durumu/kanca: st=%+v kanca=%v", st, gotCapped)
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("tek ifade: %d sorgu", len(*calls))
 	}
 	if want := now.Add(60 * time.Second).UnixMilli(); st.NextDueAt != want {
 		t.Fatalf("özel kipte tavan bir sonraki aralığa: %d, beklenen %d", st.NextDueAt, want)

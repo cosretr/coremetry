@@ -76,6 +76,38 @@ type ExceptionGroup struct {
 	// doldurur; 0 = yayılım yok/bilinmiyor.
 	Spread         int      `json:"spread,omitempty"`
 	SpreadServices []string `json:"spreadServices,omitempty"`
+	// Oracle — v0.10.1092 — YALNIZ JSON (CH kolonu değil): Oracle hata
+	// tablosu grubunun (`ora:`) kaynağı ve kırılımı (kanal, servisler).
+	// api.annotateOracleGroups doldurur; span grubunda nil.
+	Oracle *OracleGroupInfo `json:"oracle,omitempty"`
+}
+
+// OracleGroupInfo — v0.10.1092: Exceptions satırı ve detay paneli için
+// Oracle grubunun kimliği + kırılımı (tazeleyicinin kalıcı blob'undan).
+type OracleGroupInfo struct {
+	SourceID   string           `json:"sourceId,omitempty"`
+	SourceName string           `json:"sourceName"`
+	Code       string           `json:"code"`
+	Operation  string           `json:"operation"`
+	Channels   []OracleNamedNum `json:"channels"`
+	Services   []OracleNamedNum `json:"services"`
+	// ServiceCount — kırılımdaki ayrık servis sayısı ("N servis").
+	ServiceCount int `json:"serviceCount"`
+	// Known — kaynak çözüldü (false: kaynak silinmiş / blob yok — kırılım boş).
+	Known bool `json:"known"`
+	// LagSec — last_seen'in yapısal gecikmesi (yalnız kapanmış dakikalar
+	// sayılır; oracle.GroupLag). Öncelik gerekçesi tazeliği bu kadar geriden ölçer.
+	LagSec int64 `json:"lagSec,omitempty"`
+	// LastHour / PrevHour — son 1 sa ve önceki 1 sa ağırlığı (Oracle öncelik
+	// kuralının girdisi; kapanış ucundan geriye, 10 dk tanesi).
+	LastHour uint64 `json:"lastHour"`
+	PrevHour uint64 `json:"prevHour"`
+}
+
+// OracleNamedNum — ad + sayı.
+type OracleNamedNum struct {
+	Name  string `json:"name"`
+	Count uint64 `json:"count"`
 }
 
 // FingerprintException computes a stable identifier for "the same
@@ -304,6 +336,12 @@ func mergeExceptionGroup(g ExceptionGroup, existing *ExceptionGroup) ExceptionGr
 		// yaşını sıfırlar ve UI 6 saatlik bir çıkarımı "az önce" gösterir.
 		g.AISummaryAt = existing.AISummaryAt
 		g.FirstSeen = existing.FirstSeen
+		// v0.10.1092 — Oracle grubunun servisi: bu turda trace → servis çözümü
+		// yoksa (sentetik `oracle:<kaynak>`) önceki GERÇEK servis korunur;
+		// satır servisler arasında gidip gelmesin.
+		if IsOracleGroup(g.Fingerprint) && isOracleFallbackService(g.Service) && !isOracleFallbackService(existing.Service) {
+			g.Service = existing.Service
+		}
 		// Regression detection — a resolved group reopens only if it KEEPS firing
 		// past a grace window after the resolve. v0.8.99 (operator-reported:
 		// "resolve doesn't stick"): a continuously-firing exception flipped
@@ -413,20 +451,32 @@ func (s *Store) UpsertExceptionGroups(ctx context.Context, gs []ExceptionGroup) 
 	if err != nil {
 		return err
 	}
+	merged := make([]ExceptionGroup, 0, len(gs))
 	for _, g := range gs {
 		var prev *ExceptionGroup
 		if e, ok := existing[g.Fingerprint]; ok {
 			ee := e
 			prev = &ee
 		}
-		if err := s.writeExceptionGroup(ctx, mergeExceptionGroup(g, prev)); err != nil {
-			return err
-		}
+		merged = append(merged, mergeExceptionGroup(g, prev))
 	}
-	return nil
+	// v0.10.1092 — TEK batch INSERT: grup başına ayrı INSERT'te yarıda düşen
+	// yazım bir kısmı yazılmış ARTIMI bırakıyordu; çağıran (imleçli Oracle
+	// tazeleyicisi) aralığı yeniden denediğinde yazılmış yarı İKİNCİ kez
+	// toplanırdı. Tek Send ya hepsi ya hiçbiri (aynı blok).
+	return s.writeExceptionGroups(ctx, merged)
 }
 
+// writeExceptionGroup — tekil yol (durum/atama/özet yazımları).
 func (s *Store) writeExceptionGroup(ctx context.Context, g ExceptionGroup) error {
+	return s.writeExceptionGroups(ctx, []ExceptionGroup{g})
+}
+
+// writeExceptionGroups — tam satırlar, tek PrepareBatch + tek Send.
+func (s *Store) writeExceptionGroups(ctx context.Context, gs []ExceptionGroup) error {
+	if len(gs) == 0 {
+		return nil
+	}
 	// v0.10.1072 — occurrences_at_resolve yalnız kolon varken (iki-boot
 	// sözleşmesi; probe false iken kolonu anmak her yazımı code 16 ile düşürür).
 	snap := s.hasExResolveSnapCol.Load()
@@ -441,26 +491,28 @@ func (s *Store) writeExceptionGroup(ctx context.Context, g ExceptionGroup) error
 	if err != nil {
 		return fmt.Errorf("prepare exception_groups: %w", err)
 	}
-	var resolved *time.Time
-	if g.ResolvedAt != nil {
-		t := time.Unix(0, *g.ResolvedAt).UTC()
-		resolved = &t
-	}
-	vals := []any{
-		g.Fingerprint, g.Type, g.Message, g.Service, g.State, g.Assignee,
-		time.Unix(0, g.FirstSeen).UTC(),
-		time.Unix(0, g.LastSeen).UTC(),
-		resolved,
-		g.Occurrences,
-		g.Notes,
-		g.AISummary,
-		time.Unix(0, g.AISummaryAt).UTC(),
-	}
-	if snap {
-		vals = append(vals, g.OccurrencesAtResolve)
-	}
-	if err := batch.Append(vals...); err != nil {
-		return fmt.Errorf("append exception_group: %w", err)
+	for _, g := range gs {
+		var resolved *time.Time
+		if g.ResolvedAt != nil {
+			t := time.Unix(0, *g.ResolvedAt).UTC()
+			resolved = &t
+		}
+		vals := []any{
+			g.Fingerprint, g.Type, g.Message, g.Service, g.State, g.Assignee,
+			time.Unix(0, g.FirstSeen).UTC(),
+			time.Unix(0, g.LastSeen).UTC(),
+			resolved,
+			g.Occurrences,
+			g.Notes,
+			g.AISummary,
+			time.Unix(0, g.AISummaryAt).UTC(),
+		}
+		if snap {
+			vals = append(vals, g.OccurrencesAtResolve)
+		}
+		if err := batch.Append(vals...); err != nil {
+			return fmt.Errorf("append exception_group: %w", err)
+		}
 	}
 	return batch.Send()
 }
@@ -518,7 +570,8 @@ func (s *Store) GetExceptionGroup(ctx context.Context, fingerprint string) (*Exc
 func (s *Store) MaxExceptionGroupLastSeen(ctx context.Context) (time.Time, bool) {
 	row := s.conn.QueryRow(ctx, `
 		SELECT max(last_seen) FROM exception_groups
-		SETTINGS max_execution_time = 3`)
+		WHERE `+NotOracleGroupSQL+`
+		SETTINGS max_execution_time = 3`) // v0.10.1092 — Oracle grupları span checkpoint'ini ileri itmesin
 	var t time.Time
 	if err := row.Scan(&t); err != nil {
 		return time.Time{}, false
@@ -590,6 +643,9 @@ type ExceptionGroupFilter struct {
 	// "only" = yalnız HTTP-hata grupları. Deseni HTTPErrorTypeRe taşır —
 	// Go tarafı sınıflandırmayla (api.isHTTPErrorType) AYNI kaynak.
 	HTTPErrors string
+	// Oracle — v0.10.1092: Oracle kökenli gruplar (`ora:` parmak izi). "" =
+	// ikisi de (varsayılan görünüm onları İÇERİR); "only" / "exclude".
+	Oracle string
 	// FloorExempt — v0.10.949 — MinOccurrences tabanından MUAF parmak izleri
 	// (aynı anda ≥2 serviste görülen, tabanın altındaki gruplar;
 	// ExceptionSpread.ExemptBelow). Yalnız MinOccurrences > 0 iken anlamlı:
@@ -687,6 +743,12 @@ func buildExceptionGroupWhere(f ExceptionGroupFilter) whereClause {
 		wc.add("NOT match(ex_type, ?)", HTTPErrorTypeRe)
 	case "only":
 		wc.add("match(ex_type, ?)", HTTPErrorTypeRe)
+	}
+	switch f.Oracle { // v0.10.1092
+	case "exclude":
+		wc.add(NotOracleGroupSQL)
+	case "only":
+		wc.add("startsWith(fingerprint, ?)", OracleGroupPrefix)
 	}
 	return wc
 }
@@ -1106,6 +1168,11 @@ func (s *Store) GetExceptionGroupSamples(ctx context.Context, fingerprint string
 	if g == nil {
 		return ExceptionSamples{}, nil
 	}
+	if IsOracleGroup(fingerprint) {
+		// v0.10.1092 — Oracle kökenli grup: örnekler span'lerden değil Oracle
+		// satırlarından (oracle_exception_groups.go; sınırlı, FINAL).
+		return s.oracleGroupSamples(ctx, g, limit)
+	}
 	winFrom, winTo := exceptionScanWindow(g.FirstSeen, g.LastSeen)
 	// One page = one bounded raw-spans read: single service + exception
 	// type + time-bounded WHERE + LIMIT + max_execution_time. Every page
@@ -1219,6 +1286,10 @@ func (s *Store) GetExceptionOccurrences(ctx context.Context, fingerprint string)
 	}
 	if g == nil {
 		return nil, nil
+	}
+	if IsOracleGroup(fingerprint) {
+		// v0.10.1092 — Oracle grubu: dakika başına satır AĞIRLIĞI (Adet).
+		return s.oracleGroupOccurrences(ctx, g)
 	}
 	fromNs, toNs := g.FirstSeen, g.LastSeen
 	if toNs <= fromNs {

@@ -1922,6 +1922,9 @@ export interface OracleSource {
   queryMode?: 'table' | 'custom';
   customSql?: string;
   windowMin?: number;
+  /** v0.10.1092 — özel SQL kipinde poll başına okunan en çok sayfa (5000
+   *  satır/sayfa; boş = 10 → 50k satır, 1–20). Tavan dolarsa pencere kesik. */
+  maxPages?: number;
   enabled: boolean;
 }
 /** oracle.SourceSnapshot — GET görünümü: password MASKELİ, rozet alanları eklidir. */
@@ -2025,6 +2028,12 @@ export interface OraclePollStatus {
   expandCapped?: boolean;
   capped?: boolean;
   lastError?: string;
+  /** v0.10.1092 — özel SQL: satır tavanı (sayfa = 5000 satır), pencerenin
+   *  tamamı okunamadı (satır > tavan), eşlenen sıralama kolonları çıktıda
+   *  olmadığı için SIRASIZ okundu. Özel kipte capped = truncated || unordered. */
+  pages?: number;
+  truncated?: boolean;
+  unordered?: boolean;
 }
 /** oracle.WorkerStatusSnapshot — lider pod'un yayınladığı blob. */
 export interface OraclePollSnapshot {
@@ -5074,6 +5083,29 @@ export interface ExceptionGroup {
    *  spreadServices: diğer servisler (≤5, sıralı). Yoksa/1 = tek servis. */
   spread?: number;
   spreadServices?: string[];
+  /** v0.10.1092 — Oracle hata tablosu grubu (`ora:` parmak izi): kaynak +
+   *  kanal / servis kırılımı. Span grubunda yok. */
+  oracle?: OracleGroupInfo;
+}
+
+/** v0.10.1092 — chstore.OracleGroupInfo: Oracle grubunun kimliği + kırılımı
+ *  (tazeleyicinin blob'u). type = hata kodu, message = operasyon kodu. */
+export interface OracleGroupInfo {
+  sourceId?: string;
+  sourceName: string;
+  code: string;
+  operation: string;
+  channels: { name: string; count: number }[];
+  services: { name: string; count: number }[];
+  /** kırılımdaki ayrık servis sayısı ("N servis") */
+  serviceCount: number;
+  /** kaynak çözüldü (false: kaynak silinmiş — kırılım boş) */
+  known: boolean;
+  /** last_seen'in yapısal gecikmesi (yalnız kapanmış dakikalar sayılır), sn */
+  lagSec?: number;
+  /** son 1 sa / önceki 1 sa ağırlığı (Oracle öncelik kuralının girdisi) */
+  lastHour?: number;
+  prevHour?: number;
 }
 
 export interface ExceptionSample {
@@ -7722,6 +7754,10 @@ export interface ExceptionTriageConfig {
   // vakası — hiçbiri tek başına eşik geçmiyordu).
   stormWindowMinutes: number;
   stormMinServices: number;
+  // v0.10.1092 — Oracle hata tablosu gruplarının (ora:) hacim P1 eşiği
+  // (p1MinOccurrences'ın Oracle ikizi; patlamanın hacim tabanı da bu).
+  // Varsayılan 5000 — durgun akış ilk gün tüm Exceptions'ı P1 yapmasın.
+  oracleP1MinOccurrences?: number;
 }
 
 // v0.9.838 — ALERT PROBLEMİ öncelik merdiveninin vidaları (backend:

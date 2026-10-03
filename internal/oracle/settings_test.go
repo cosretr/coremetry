@@ -17,7 +17,7 @@ func base() SourceConfig {
 	return SourceConfig{
 		Name: "core-oracle", Host: "db.example.local", Port: 1521,
 		ServiceName: "ORCLPDB", User: "coremetry", Password: "s3cret",
-		Schema: "APPOWNER", Table: "ERROR_LOG", Enabled: true,
+		Schema: "APP_SCHEMA", Table: "ERROR_LOG", Enabled: true,
 	}
 }
 
@@ -143,7 +143,7 @@ func TestNormalize_RejectsBadIdentifiers(t *testing.T) {
 		})
 	}
 	// Geçerli olanlar geçmeli — kapı kapalı kalmasın.
-	for _, ok := range []string{"APPOWNER", "App_Owner", "A$B#C", "X1"} {
+	for _, ok := range []string{"APP_SCHEMA", "App_Owner", "A$B#C", "X1"} {
 		src := base()
 		src.Schema = ok
 		if _, err := Normalize(one(src), Settings{}, NewSourceID); err != nil {
@@ -347,7 +347,7 @@ func TestNormalize_DeepCopy(t *testing.T) {
 func TestNormalize_ConnectionShape(t *testing.T) {
 	// DSN tek başına yeter (credential DSN'in içinde).
 	src := SourceConfig{Name: "dsnlu", DSN: "oracle://u:p@db.local:1521/ORCL",
-		Schema: "APPOWNER", Table: "ERROR_LOG", Enabled: true}
+		Schema: "APP_SCHEMA", Table: "ERROR_LOG", Enabled: true}
 	if _, err := Normalize(one(src), Settings{}, NewSourceID); err != nil {
 		t.Fatalf("dsn'li kaynak reddedildi: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestNormalize_ConnectionShape(t *testing.T) {
 	}
 	// Şema/biçim hatası.
 	src = SourceConfig{Name: "dsnlu", DSN: "jdbc:oracle:thin:@db:1521/ORCL",
-		Schema: "APPOWNER", Table: "ERROR_LOG", Enabled: true}
+		Schema: "APP_SCHEMA", Table: "ERROR_LOG", Enabled: true}
 	if _, err := Normalize(one(src), Settings{}, NewSourceID); err == nil {
 		t.Error("jdbc dsn kabul edildi")
 	}

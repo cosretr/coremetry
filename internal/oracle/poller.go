@@ -101,6 +101,14 @@ type PollStatus struct {
 	ExpandCapped bool   `json:"expandCapped,omitempty"`
 	Capped       bool   `json:"capped,omitempty"`
 	LastError    string `json:"lastError,omitempty"`
+	// Pages / Truncated / Unordered — v0.10.1092 (özel SQL): satır tavanı
+	// (maxPages × 5000, "sayfa" cinsinden), pencerenin tamamının OKUNAMADIĞI
+	// (satır > tavan) ve eşlenen sıralama kolonları çıktıda olmadığı için
+	// sırasız okunduğu. Özel kipte Capped = Truncated || Unordered (tablo
+	// kipinde Capped "devam ediyor" demektir).
+	Pages     int  `json:"pages,omitempty"`
+	Truncated bool `json:"truncated,omitempty"`
+	Unordered bool `json:"unordered,omitempty"`
 }
 
 // WorkerStatusSnapshot — paylaşılan durum blobu (influx v0.10.333 şekli).
@@ -259,8 +267,9 @@ func (w *Worker) Tick(ctx context.Context) {
 		next := now.Add(pollInterval(src))
 		// Arkada satır var — bir sonraki granülde devam. v0.10.902: özel SQL
 		// kipinde DEĞİL: pencere SYSDATE'e bağlı, watermark bind'i yok; hemen
-		// yeniden koşmak aynı 5000 satırı döndürür ve ağır aggregate'i 5 s'de
-		// bir bankanın DB'sinde koşturur. Tavan orada yalnız durumdur.
+		// yeniden koşmak aynı satırları döndürür ve ağır aggregate'i 5 s'de
+		// bir bankanın DB'sinde koşturur. v0.10.1092: özel kip pencereyi poll
+		// İÇİNDE sayfalarla okur; kesikse (sayfa tavanı) bu durumdur, devam yok.
 		if st.Capped && st.LastError == "" && !IsCustom(src) {
 			next = now
 		}
@@ -379,8 +388,62 @@ func (w *Worker) defaultQueryRows(ctx context.Context, src SourceConfig, sqlText
 		return nil, err
 	}
 	defer db.Close()
-	_, rows, err := runRows(ctx, db, sqlText, args, queryTimeout(src), secret)
+	budget := queryTimeout(src)
+	if IsCustom(src) {
+		// v0.10.1092 — özel SQL penceresi TEK sıralı ifadeyle (tavan maxPages ×
+		// 5000 + 1) okunur; bütçe sorgu süresinin customPageBudgetFactor katı.
+		budget *= customPageBudgetFactor
+	}
+	_, rows, err := runRows(ctx, db, sqlText, args, budget, secret)
 	return rows, err
+}
+
+// customReadResult — readCustomWindow çıktısı.
+type customReadResult struct {
+	rows      []map[string]any
+	pages     int  // satır tavanı / 5000 (durum cümlesi)
+	truncated bool // satır > tavan: pencerenin tamamı okunamadı
+	unordered bool // eşlenen sıralama kolonları çıktıda yok → sırasız yedek
+}
+
+// readCustomWindow — v0.10.1092: özel SQL penceresini TEK ifadeyle okur —
+// `SELECT * FROM (q) ORDER BY "<zaman>", "<eşlenen anahtarlar>" FETCH FIRST
+// tavan+1 ROWS ONLY`. Tek anlık görüntü, tek SYSDATE: sayfalar arası boşluk
+// ya da tekrar yok, DB maliyeti pencere başına 1×. Satır > tavan → kesik.
+// ORA-00904 (sıralama adı çıktıda yok): önce büyük harfe çevrilmiş tırnaklı
+// adlar (tırnaksız takma ad), o da düşerse SIRASIZ yedek (eski sarmalayıcı
+// şekli) — kesiklik yine satır sayısından, durum "sırasız" ve Capped.
+func (w *Worker) readCustomWindow(ctx context.Context, src SourceConfig) (customReadResult, error) {
+	res := customReadResult{pages: MaxPagesOf(src)}
+	limit := customRowCap(src)
+	var rows []map[string]any
+	var err error
+	for _, ord := range customOrderVariants(src) {
+		rows, err = w.queryRows(ctx, src, buildCustomOrderedQuery(src, ord), nil)
+		if err == nil || !isInvalidIdentifier(err) {
+			break
+		}
+		log.Printf("[oracle] %s: sıralama kolonu sorgu çıktısında yok (%v) — sıradaki yazımla yeniden deneniyor", src.Name, err)
+	}
+	if err != nil && isInvalidIdentifier(err) {
+		log.Printf("[oracle] %s: eşlenen sıralama kolonları çıktıda yok — SIRASIZ okunuyor (Capped); eşlemeyi sorgunun takma adlarıyla düzeltin", src.Name)
+		rows, err = w.queryRows(ctx, src, WrapConsoleSQLOrdered(src.CustomSQL, nil, limit+1), nil)
+		res.unordered = true
+	}
+	if err != nil {
+		return res, err
+	}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		res.truncated = true
+	}
+	res.rows = rows
+	return res, nil
+}
+
+// isInvalidIdentifier — SAF: Oracle "geçersiz tanımlayıcı" (ORA-00904).
+func isInvalidIdentifier(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "ORA-00904")
 }
 
 // pollBatch — v0.10.893: rowsHook'a giden eşlenmiş satırlar + pencere.
@@ -406,24 +469,33 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 	wm := w.watermarkFor(ctx, src.ID, now)
 	st.WatermarkNs = wm.UnixNano()
 	from, to := pollWindow(wm, now)
-	var sqlText string
-	var args []any
-	if IsCustom(src) {
+	var rows []map[string]any
+	custom := IsCustom(src)
+	var pg customReadResult
+	if custom {
 		// v0.10.902 — özel SQL: sorgu kendi penceresini tanımlar (bind yok);
 		// sayaç/özet penceresi [now − WindowMin, now]. Watermark yalnız durum.
+		// v0.10.1092 — pencere TEK sıralı ifadeyle, satır tavanlı okunur.
 		from, to = customWindow(src, now)
-		sqlText = buildCustomPollQuery(src, pollRowCap)
-	} else {
-		sqlText, args, err = buildPollQuery(src, from, to, pollRowCap, w.tsTypeFor(ctx, src, now))
+		batch.from, batch.to = from, to
+		w.count(w.mPolls, ctx, 1, attrs)
+		pg, err = w.readCustomWindow(ctx, src)
 		if err != nil {
-			return fail("sorgu: " + err.Error())
+			return fail(err.Error()) // runRows/open zaten redakte etti
 		}
-	}
-	batch.from, batch.to = from, to
-	w.count(w.mPolls, ctx, 1, attrs)
-	rows, err := w.queryRows(ctx, src, sqlText, args)
-	if err != nil {
-		return fail(err.Error()) // runRows/open zaten redakte etti
+		rows = pg.rows
+		st.Pages, st.Truncated, st.Unordered = pg.pages, pg.truncated, pg.unordered
+	} else {
+		sqlText, args, qerr := buildPollQuery(src, from, to, pollRowCap, w.tsTypeFor(ctx, src, now))
+		if qerr != nil {
+			return fail("sorgu: " + qerr.Error())
+		}
+		batch.from, batch.to = from, to
+		w.count(w.mPolls, ctx, 1, attrs)
+		rows, err = w.queryRows(ctx, src, sqlText, args)
+		if err != nil {
+			return fail(err.Error()) // runRows/open zaten redakte etti
+		}
 	}
 	st.LastRows = len(rows)
 	mapped, ms := mapper.MapAll(rows)
@@ -453,8 +525,14 @@ func (w *Worker) pollSource(ctx context.Context, src SourceConfig, now time.Time
 		w.count(w.mRows, ctx, int64(len(toWrite)), attrs)
 	}
 	st.Capped = len(rows) >= pollRowCap // KAYNAK satırı (patlatma öncesi)
-	if st.Capped && IsCustom(src) {
-		log.Printf("[oracle] %s: özel sorgu %d satır tavanına dayandı — pencere sonu gözlenmedi; sorgunun INTERVAL'ini/HAVING'ini daraltın", src.Name, pollRowCap)
+	if custom {
+		// v0.10.1092 — özel kipte "tavan" yalnız pencere GERÇEKTEN kesikken
+		// (satır > maxPages × 5000) ya da sırasız yedekte; 7000 satırlık tam
+		// okunmuş pencere kesik değildir, sayaç son-kesimi uygulanmaz.
+		st.Capped = pg.truncated || pg.unordered
+		if pg.truncated {
+			log.Printf("[oracle] %s: %s; sorgunun GROUP BY'ını daraltın ya da maxPages'i artırın", src.Name, CustomTruncatedText(pg.pages))
+		}
 	}
 	newWM := advanceWatermark(wm, mapped, to, st.Capped)
 	if !newWM.Equal(wm) {

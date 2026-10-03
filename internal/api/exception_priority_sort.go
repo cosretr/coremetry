@@ -95,8 +95,11 @@ type exceptionPage struct {
 	Hidden        int64
 	FloorDefault  bool
 	SpreadOK      bool
-	prio          bool
-	dir           string
+	// OracleCount — v0.10.1092: süzgeçlerden (Oracle çipi HARİÇ) geçen Oracle
+	// grubu sayısı; -1 = sayılmadı (Oracle kaynağı tanımlı değil). Çip etiketi.
+	OracleCount int64
+	prio        bool
+	dir         string
 }
 
 // listExceptionGroupsPage — sort=priority ise tavanlı küme (offset 0,
@@ -111,7 +114,10 @@ type exceptionPage struct {
 // Taban varken tabansız bir COUNT daha: gizlenen sayı yanıtta (yeni alan).
 // Yayılım işaretleri her kipte.
 func (s *Server) listExceptionGroupsPage(ctx context.Context, f chstore.ExceptionGroupFilter, q url.Values) ([]chstore.ExceptionGroup, int64, exceptionPage, error) {
-	pg := exceptionPage{Limit: f.Limit, Offset: f.Offset, prio: f.Sort == exceptionPrioritySortKey, dir: f.Dir}
+	pg := exceptionPage{Limit: f.Limit, Offset: f.Offset, prio: f.Sort == exceptionPrioritySortKey, dir: f.Dir, OracleCount: -1}
+	// v0.10.1092 — Exceptions "Oracle" çipi: ?oracle=only|exclude; param yok =
+	// Oracle grupları DAHİL (varsayılan görünüm).
+	f.Oracle = normalizeOracleFacet(q.Get("oracle"))
 	sp := s.exceptionSpread(ctx)
 	pg.SpreadOK = sp != nil
 	if q.Get("floor") == "default" {
@@ -143,6 +149,15 @@ func (s *Server) listExceptionGroupsPage(ctx context.Context, f chstore.Exceptio
 		pg.Hidden = floorHidden(noFloor, total)
 	}
 	annotateExceptionSpread(items, sp)
+	// v0.10.1092 — Oracle grubu satırları: kaynak + kanal + servis kırılımı.
+	items = s.annotateOracleGroups(items)
+	if s.oracle != nil && len(s.oracle.CurrentSettings().Sources) > 0 {
+		of := f
+		of.Oracle = "only"
+		if n, err := s.store.CountExceptionGroups(ctx, of); err == nil {
+			pg.OracleCount = n
+		}
+	}
 	return items, total, pg, nil
 }
 
@@ -170,6 +185,7 @@ func (pg *exceptionPage) body(items []chstore.ExceptionGroup, total int64) map[s
 		"floorDefault":    pg.FloorDefault,
 		"spreadWindowMin": spreadWindowMin(),
 		"spreadAvailable": pg.SpreadOK,
+		"oracleCount":     pg.OracleCount, // v0.10.1092 — -1 = Oracle kaynağı yok
 	}
 }
 

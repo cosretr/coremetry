@@ -167,6 +167,10 @@ type SourceConfig struct {
 	QueryMode string `json:"queryMode,omitempty"`
 	CustomSQL string `json:"customSql,omitempty"`
 	WindowMin int    `json:"windowMin,omitempty"`
+	// MaxPages — v0.10.1092: özel SQL kipinde poll başına okunan en çok sayfa
+	// (5000 satır/sayfa). 0 = DefaultMaxPages (10 → 50k satır); MinMaxPages–
+	// MaxMaxPages. Tablo kipinde anlamsız (orada watermark yeniden poll'u var).
+	MaxPages int `json:"maxPages,omitempty"`
 
 	Enabled bool `json:"enabled"`
 }
@@ -580,6 +584,7 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 			QueryMode:         normalizeQueryMode(src.QueryMode),     // v0.10.902
 			CustomSQL:         strings.TrimSpace(src.CustomSQL),
 			WindowMin:         src.WindowMin,
+			MaxPages:          src.MaxPages, // v0.10.1092
 			Enabled:           src.Enabled,
 		}
 		if s.Name == "" {
@@ -686,6 +691,10 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 		}
 		if s.WindowMin < MinWindowMin || s.WindowMin > MaxWindowMin {
 			return Settings{}, fmt.Errorf("%s: windowMin %d-%d dk arasında olmalı", label, MinWindowMin, MaxWindowMin)
+		}
+		// v0.10.1092 — sayfa tavanı: 0 = varsayılan (blob'a yazılmaz), aralık dışı = hata.
+		if s.MaxPages != 0 && (s.MaxPages < MinMaxPages || s.MaxPages > MaxMaxPages) {
+			return Settings{}, fmt.Errorf("%s: maxPages %d-%d arasında olmalı", label, MinMaxPages, MaxMaxPages)
 		}
 		// v0.10.600 — Aşama 2 eşleme ayarları kayıtta doğrulanır: kötü TZ /
 		// bilinmeyen alan / identifier olmayan kolon poller'da değil burada

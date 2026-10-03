@@ -101,6 +101,15 @@ type ExceptionTriageConfig struct {
 	// StormMinServices — eşik: pencerede yeni grup açan FARKLI servis
 	// sayısı bunu bulunca tek bir P1 fırtına problemi açılır. Varsayılan 5.
 	StormMinServices int `json:"stormMinServices"`
+
+	// OracleP1MinOccurrences — v0.10.1092 (operatör: "Oracle hataları
+	// Exceptions gibi görünsün"): Oracle hata tablosu gruplarının (`ora:`)
+	// SON 1 SAATLİK hacim eşiği. Oracle satırları DURGUN bir akış (dakikada
+	// binlerce); span merdiveninin yapışkan hacim P1'i (ömür boyu ≥500) ilk
+	// saatte her grubu kalıcı P1 yapardı. Oracle grubunda P1 YALNIZ: son 1 sa
+	// ≥ bu eşik VE ≥ 3× önceki 1 sa (patlama) ya da grup yeni (ilk görülme P1
+	// penceresinde) ve son 1 sa ≥ bu eşik — api.oraclePriorityAt. Varsayılan 5000.
+	OracleP1MinOccurrences int `json:"oracleP1MinOccurrences"`
 }
 
 // DefaultExceptionTriage — v0.9.775'in gemiye giren davranışı.
@@ -128,6 +137,8 @@ func DefaultExceptionTriage() ExceptionTriageConfig {
 		// v0.9.1189 — eski gömülü değerin aynısı; değişen sabitin DEĞERİ
 		// değil, arkasındaki PENCERE (5dk → P1FreshHours).
 		P1MinOccurrences: 500,
+		// v0.10.1092 — Oracle grupları için ayrı hacim eşiği.
+		OracleP1MinOccurrences: 5000,
 	}
 }
 
@@ -192,6 +203,9 @@ func NormalizeExceptionTriage(c ExceptionTriageConfig) ExceptionTriageConfig {
 	}
 	if c.StormMinServices <= 0 {
 		c.StormMinServices = d.StormMinServices
+	}
+	if c.OracleP1MinOccurrences <= 0 { // v0.10.1092 — eski blob (alan yok) varsayılana
+		c.OracleP1MinOccurrences = d.OracleP1MinOccurrences
 	}
 	return c
 }

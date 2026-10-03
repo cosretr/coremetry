@@ -1075,6 +1075,10 @@ func main() {
 		log.Printf("[oracle] load persisted config: %v", err)
 	}
 	cfgRefresh.Add("oracle", func(ctx context.Context) error { return oracleSvc.LoadPersisted(ctx, store) })
+	// v0.10.1092 — Oracle exception gruplarının öncelik / satır istatistiği
+	// (kaynak başına TTL'li blob: saatlik toplamlar, kırılım, kapanmış dakika
+	// gecikmesi). Her rolde: Exceptions/inbox (api) ve bildirimci (worker) aynı yol.
+	api.SetOracleGroupStats(oracle.NewGroupStatsCache(store.GetSetting, oracleSvc.CurrentSettings).Stats)
 	// v0.10.605 — bayat süpürme muafiyeti (592) yalnız YAŞAYAN poller
 	// kaynakları için: özne ext:<ad> etkin bir Oracle kaynağına
 	// karşılık gelmiyorsa ext-down/ext-cap Problem'i süpürülür — silinen
@@ -1143,6 +1147,10 @@ func main() {
 		oracleSubjects.SetFunctionCodeLookup(store.FunctionCodeServices)
 		oracleShadow := anomaly.NewExternalScanner(store, nil)
 		oracleEnricher := oracle.NewEnricher(store, oracleSubjects) // v0.10.898 — kanıt (satırlar, trace'ler, dağılımlar)
+		// v0.10.1092 — Oracle satırları Exceptions'ta hata grubu (exgroups.go):
+		// kapanmış dakikalar (kaynak, kod, operasyon) başına exception_groups'a;
+		// servis bu tikin trace → servis oylarından. Kip kapısı tazeleyicide.
+		oracleExGroups := oracle.NewExGroupRefresher(store, store, oracleSubjects.ServiceVotes)
 		oracleWorker.SetRowsHook(func(ctx context.Context, src oracle.SourceConfig, rows []chstore.OracleErrorRow, from, to time.Time, capped bool) {
 			hctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			defer cancel()
@@ -1151,6 +1159,16 @@ func main() {
 			oracleSubjects.Observe(hctx, src, rows, from, to)
 			oracleCounter.Handle(hctx, src, rows, from, to, capped, oracle.IgnoreSet(src),
 				oracle.QualifierFor(oracle.GenericSet(src), oracleSubjects.ExTypeFor(src.ID)))
+			// v0.10.1092 — exception grupları (kendi bütçesi; toplama sorgusu ≤20 sn).
+			// Hata poll'u / sayacı etkilemez; imleç yalnız başarılı yazımda ilerler.
+			gctx, gcancel := context.WithTimeout(ctx, 30*time.Second)
+			if gres, gerr := oracleExGroups.Refresh(gctx, src); gerr != nil {
+				log.Printf("[oracle/exgroups] %s: tazeleme düştü (imleç ilerlemedi): %v", src.Name, gerr)
+			} else if gres.Groups > 0 {
+				log.Printf("[oracle/exgroups] %s: %d grup tazelendi [%s, %s)", src.Name, gres.Groups,
+					gres.From.Format("15:04"), gres.To.Format("15:04"))
+			}
+			gcancel()
 			// v0.10.897 — kaynak kipi: off = sayaç yazar, tarayıcı koşmaz (açık
 			// satırlar süpürmede "source silent" kapanır); shadow = Problem, alarm
 			// yok; live = bildirimli tarayıcı (extScanner).
@@ -1366,7 +1384,13 @@ func main() {
 		// dedup — grup ömrü başına tek anons).
 		// v0.10.782 — kanal yolu: P1/P2'ye ulaşan TAZE gruplar (Kind=exception,
 		// kanal başına opt-in); merdiven api'den enjekte.
-		go notify.NewExceptionNotifier(store, notifier, lockImpl, api.ExceptionPriority).Start(ctx)
+		exNotifier := notify.NewExceptionNotifier(store, notifier, lockImpl, api.ExceptionPriority)
+		// v0.10.1092 — Oracle grupları (`ora:`) yalnız kaynağı problemMode=live
+		// iken bildirilir (shadow = Exceptions'ta görünür, bildirim yok).
+		exNotifier.SetGroupGate(func(g chstore.ExceptionGroup) (bool, time.Duration) {
+			return oracle.GroupNotifyGate(oracleSvc.CurrentSettings(), g, time.Now())
+		})
+		go exNotifier.Start(ctx)
 	}
 
 	// ── Root-cause synthesizer (rc #2, v0.8.x) ───────────────────────────────

@@ -1551,6 +1551,46 @@ operasyon) ve YAVAŞ PAY (p95 ≥ 2.5 s — çağrıların ~%6'sından fazlası 
 aynı kovada) birlikte aranır; tek trace p95'i kıpırdatmaz. Okuma kova başına iki MV sorgusu (op_latency'nin pivotu +
 service_summary_5m); trace_op_latency sürdürme kuralı (1085) ve metni değişmedi.
 
+## 2026-10-03 — Oracle hata tablosu satırları Exceptions'ta hata grubu; özel SQL sayfalama; UI testi durumu düzeltildi (v0.10.1092)
+
+**Operatör:** "Oracle hataları Exceptions gibi görünsün, hatta Exceptions altında da olabilir." Oracle hata tablosu
+satırları DURGUN bir akış (dakikada binlerce); sıçrama-anomalisi yolu (`ext:error_count` → dış tarayıcı) tasarım
+gereği onlarda ateşlemez. **Karar:** (kaynak, hata kodu, operasyon kodu) başına bir `exception_groups` satırı —
+parmak izi `ora:` + sha1(kaynak kimliği | kod | operasyon)[:16]; kanal / host / servis anahtar değil kırılım.
+`ex_type` = kod, `ex_message` = operasyon, servis = trace → servis oylarının baskını yoksa `oracle:<kaynak>`.
+Tazeleyici (`oracle/exgroups.go`) poller kancasında, worker liderinde: yalnız KAPANMIŞ dakikalar (özel SQL'de
+`trunc(now) − windowMin − 1 dk`, tablo kipinde overlap + aralık) `oracle_error_log FINAL`'dan dakika tanesiyle
+toplanır; imleç + kırılım + 10 dk dilimler `system_settings.oracle_exgroups:<kaynak>`'ta, imleç HER turda oradan
+yeniden okunur (liderlik el değiştirince eski bellek imleci ikinci sayım yapmasın). Artımlar TEK batch INSERT
+(ya hepsi ya hiçbiri); imleç yalnız ondan sonra ilerler. Toplama tavanında (20 000 satır, dakika sıralı) imleç tam
+okunan son dakikaya kadar. Kalan risk (bilinçli): gerçek ayrık beyin (bölünmüş Redis kilidi) ya da imleç kaydı
+düşüp liderlik el değiştirmesi bir aralığı iki kez sayabilir. Kip: off = grup yazılmaz; shadow = grup var,
+bildirim yok; live = olağan exception bildirim hattı (tazelik kapıları kapanmış dakika gecikmesi kadar geriden).
+
+**Öncelik — "kazanılmış P1 düşmez" ilkesinden BİLİNÇLİ sapma (koordinatör kararı, operatör "az ama gerçek
+P1" istiyor):** Oracle grupları span merdiveninin yapışkan hacim P1'inden ve regressed "açıldıktan sonra ≥N"
+P1'inden MUAF — durgun bir akışın ömür toplamı birkaç saatte her eşiği geçer, her grup kalıcı P1 olurdu. Oracle
+grubunda P1 yalnız son 1 sa ≥ `exception_triage.oracleP1MinOccurrences` (varsayılan 5000) VE ≥ 3× önceki 1 sa
+(patlama) ya da grup YENİ (ilk görülme P1 penceresinde) ve son 1 sa ≥ eşik; P2 son 1 sa ≥ 100 ve taze/regressed;
+gerisi P3 "sürekli akış (Oracle)". Saatlik toplamlar ve gecikme her rolde enjekte edilen önbellekten
+(`oracle.GroupStatsCache`, kaynak başına 30 sn TTL) — /inbox, Exceptions ve bildirimci aynı sayıyı görür, akan grup
+"17 dk önce durdu" okunmaz; takım anonsu Oracle grubunda 500'lük span eşiği değil merdivenin P1'i. Resolve /
+ignore / assign, AI özeti, bayat oto-çözüm aynen. Fırtına, paylaşılan patlama, ölümcül dedektör, yayılım işareti
+ve span tazeleyicisinin boot tohumu `ora:` gruplarını okumaz. Örnek / oluşum ucu önekte Oracle satırlarına dallanır
+(seri: dakika başına ağırlık, son 24 sa). Exceptions satırı aynı biçim: "<kod> · <operasyon>" + "Oracle" rozeti,
+soluk "Oracle · <kaynak> · N servis"; "Oracle" çipi (tümü / yalnız / hariç, varsayılan dahil).
+
+**Önkoşul A — UI testi:** `TestWith`'in defer'i yerel sonucu yakalıyordu; özel SQL dalı kopya döndürdüğü için her
+başarılı test "başarısız (gerekçesiz)" kaydediliyordu. Adlı dönüş; satır "Son UI testi (bu API pod'u, formdaki
+değerler)", sağlık satırı "Son okuma (worker)"; test sorgunun `INTERVAL 'N' MINUTE` geriye bakışını pencereyle
+karşılaştırıp uyarır. **Önkoşul B — özel SQL tavanı:** sırasız `FETCH FIRST 5000` her poll aynı pencerenin
+gelişigüzel ilk 5000 satırını okuyordu. Artık TEK ifade: `ORDER BY "<zaman>", "<eşlenen anahtarlar>" FETCH FIRST
+maxPages × 5000 + 1` (tek anlık görüntü, tek SYSDATE — OFFSET sayfaları ayrı ifade/ayrı SYSDATE olurdu), bütçe
+3 × sorgu süresi; adlar eşlemedeki yazımla tırnaklı, ORA-00904'te büyük harf, o da düşerse sırasız yedek (Capped).
+Satır > tavan → "tavan: pencerenin tamamı okunamadı (N sayfa)", sayaç son-kesimi yalnız o zaman. **Bedeller:** grubun
+last_seen'i duvar saatinin ~windowMin gerisinde; saatlik pencereler 10 dk tanesinde; trace → servis oyları operasyon
+düzeyinde.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

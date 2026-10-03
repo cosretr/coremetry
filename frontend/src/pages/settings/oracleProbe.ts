@@ -6,6 +6,23 @@
 import type { OracleCoverageOp, OracleCoverageReason, OracleLivePreview, OracleLongCheck, OracleMappingCheck, OracleScanCheck, OracleSubjectCoverage, OracleWindowSummary } from '@/lib/types';
 
 export const ORACLE_TEST_WINDOWS = [5, 15, 60] as const;
+
+/** v0.10.1092 — özel SQL sayfa tavanı cümlesi (Go ikizi oracle.CustomTruncatedText):
+ *  pencere poll içinde sayfalarla okundu ama tavan dolduğu için TAMAMI okunamadı. */
+export function customTruncatedText(pages: number | undefined): string {
+  return `tavan: pencerenin tamamı okunamadı (${pages ?? 0} sayfa)`;
+}
+
+/** v0.10.1092 — "Son UI testi" satırının hükmü. Bu, Settings'te formdaki
+ *  değerlerle BU API pod'unda koşan testtir (kaydedilmemiş olabilir) — poller'ın
+ *  okuma sağlığı DEĞİL ("Son okuma (worker)" satırı). Başarısız ama gerekçesiz
+ *  bir kayıt dürüstçe "gerekçe yok" der (eski sürüm başarılı özel testi böyle
+ *  kaydediyordu). */
+export function uiTestVerdict(ok: boolean | undefined, error: string | undefined): { ok: boolean; text: string } {
+  if (ok) return { ok: true, text: 'başarılı' };
+  const e = (error ?? '').trim();
+  return { ok: false, text: e || 'başarısız (gerekçe yok)' };
+}
 export type OracleTestWindow = (typeof ORACLE_TEST_WINDOWS)[number];
 
 // v0.10.929 (K5) — 'b-ok' tondan çıktı: iyi yapılandırma hükmü (indeksli,

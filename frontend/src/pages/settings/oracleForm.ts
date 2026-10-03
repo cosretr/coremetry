@@ -56,6 +56,10 @@ export const ORACLE_MAX_NAME_LEN = 64;
 export const ORACLE_DEFAULT_WINDOW_MIN = 15;
 export const ORACLE_MIN_WINDOW_MIN = 1;
 export const ORACLE_MAX_WINDOW_MIN = 240;
+// v0.10.1092 — özel SQL sayfalaması: poll başına sayfa tavanı (5000 satır/sayfa).
+export const ORACLE_DEFAULT_MAX_PAGES = 10;
+export const ORACLE_MIN_MAX_PAGES = 1;
+export const ORACLE_MAX_MAX_PAGES = 20;
 export const ORACLE_MAX_CUSTOM_SQL = 8000;
 // v0.10.603 — Aşama 2 eşleme ayarları (internal/oracle/mapping.go aynası).
 export const ORACLE_DEFAULT_TIMEZONE = 'Europe/Istanbul';
@@ -116,7 +120,7 @@ export type OracleField =
   | 'name' | 'dsn' | 'host' | 'port' | 'serviceName' | 'user' | 'password'
   | 'passwordRef' | 'schema' | 'table' | 'timestampColumn' | 'typeColumn'
   | 'extraWhere' | 'typeFilter' | 'maxOpenConns' | 'queryTimeoutSec' | 'intervalSec'
-  | 'timezone' | 'columns' | 'customSql' | 'windowMin' | 'dwellMinutes';
+  | 'timezone' | 'columns' | 'customSql' | 'windowMin' | 'dwellMinutes' | 'maxPages';
 
 export type OracleFieldErrors = Partial<Record<OracleField, string>>;
 
@@ -281,6 +285,8 @@ export function validateOracleSource(
     else if (mustBeComplete && !trim(src.customSql)) e.customSql = 'Özel SQL kipinde sorgu metni zorunlu.';
     const wm = clampError(src.windowMin, ORACLE_MIN_WINDOW_MIN, ORACLE_MAX_WINDOW_MIN, 'Pencere (dk)');
     if (wm) e.windowMin = wm;
+    const mp = clampError(src.maxPages, ORACLE_MIN_MAX_PAGES, ORACLE_MAX_MAX_PAGES, 'Sayfa tavanı'); // v0.10.1092
+    if (mp) e.maxPages = mp;
     // Boş zaman kutusu sunucuda ERR_TIMESTAMP'e düşer; sorgu çıktısında o ad
     // yok → her satır zamansız düşerdi (sunucu da reddeder).
     if (trim(src.customSql) && !trim(src.timestampColumn)) {
@@ -442,6 +448,8 @@ export function sourceForSave(
     const q = trim(src.customSql);
     if (q) out.customSql = q;
     if (Number.isFinite(src.windowMin) && (src.windowMin ?? 0) > 0) out.windowMin = src.windowMin;
+    // v0.10.1092 — sayfa tavanı: boş / 0 gövdeye girmez (sunucu varsayılanı 10).
+    if (Number.isFinite(src.maxPages) && (src.maxPages ?? 0) > 0) out.maxPages = src.maxPages;
   }
   // v0.10.897 — kip her zaman gider (sunucu boşu shadow'a normalize eder); kod
   // listeleri kırpılmış + tekrarsız, boşsa gövdeye girmez.
@@ -499,6 +507,7 @@ export function sourceFromSnapshot(s: OracleSourceSnapshot): OracleSource {
     queryMode: s.queryMode === 'custom' ? 'custom' : 'table', // v0.10.902
     customSql: s.customSql ?? '',
     windowMin: s.windowMin,
+    maxPages: s.maxPages, // v0.10.1092
     // "" (kapalı alan) formda `-` olarak görünür — boş kutuyla (varsayılan)
     // karışmasın.
     columns: Object.fromEntries(Object.entries(s.columns ?? {}).map(([k, v]) => [k, v === '' ? ORACLE_COLUMN_DISABLED : v])),

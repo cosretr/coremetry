@@ -87,6 +87,8 @@ func (s *Store) FindFatalExceptions(ctx context.Context, lookback time.Duration)
 		       sum(occurrences)                       AS occ
 		FROM exception_groups FINAL
 		WHERE last_seen >= ? AND ex_type != ''
+		  -- v0.10.1092 — Oracle hata tablosu grupları (ora:) span exception'ı değil.
+		  AND `+NotOracleGroupSQL+`
 		  -- 'ignored' operatörün açık kararı: bu tipi görmek istemiyor.
 		  -- P1 bile olsa o kararı ezmiyoruz.
 		  AND state != 'ignored'

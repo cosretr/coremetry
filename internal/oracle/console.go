@@ -113,6 +113,26 @@ func WrapConsoleSQL(q string, n int) string {
 	return fmt.Sprintf("SELECT * FROM (\n%s\n) FETCH FIRST %d ROWS ONLY", trimTrailingTerminator(q), n)
 }
 
+// WrapConsoleSQLOrdered — SAF (v0.10.1092): özel SQL kipinin SIRALI
+// salt-okunur sarmalayıcısı. Konsolun WrapConsoleSQL'i aynen kalır (konsol
+// sıralama istemez); poller pencereyi TEK ifadeyle okur:
+//
+//	SELECT * FROM ( <q> ) ORDER BY "<zaman>", "<anahtar>"… FETCH FIRST n ROWS ONLY
+//
+// orderBy elemanları ÇAĞIRANDA tırnaklanmış, identifier kapısından (identRe)
+// geçmiş adlardır; boş liste = sırasız (eski sarmalayıcı şekli — yedek). n ≤ 0
+// ya da maxCustomFetch üstü → maxCustomFetch.
+func WrapConsoleSQLOrdered(q string, orderBy []string, n int) string {
+	if n <= 0 || n > maxCustomFetch {
+		n = maxCustomFetch
+	}
+	order := ""
+	if len(orderBy) > 0 {
+		order = "\nORDER BY " + strings.Join(orderBy, ", ")
+	}
+	return fmt.Sprintf("SELECT * FROM (\n%s\n)%s\nFETCH FIRST %d ROWS ONLY", trimTrailingTerminator(q), order, n)
+}
+
 // trimTrailingTerminator — SAF: sondaki boşluk ve ';' düşer; ';' ile metin
 // sonu arasında YALNIZ yorum/boşluk varsa (SELECT …; -- not) o ';' de düşer.
 func trimTrailingTerminator(q string) string {

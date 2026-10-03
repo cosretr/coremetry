@@ -37,6 +37,13 @@ import { QueryErrorInline } from '@/components/QueryError';
 import { PageShell } from '@/components/ui/PageShell';
 import { stripMarkdown } from '@/components/Markdown';
 import { TriageTitleCell } from './TriageTitleCell'; // v0.10.1084 — Problems kuyruğuyla ortak
+import { Badge } from '@/components/ui/Badge';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+// v0.10.1092 — Oracle hata tablosu grupları (`ora:`) bu listede, aynı satır biçimiyle.
+import {
+  isOracleGroup, isSyntheticOracleService, oracleRowTitle, oracleRowDetail, oracleRowTooltip,
+  parseOracleFacet, oracleFacetParam, type OracleFacet,
+} from './oracleGroup';
 
 // v0.10.751 — sekmeler tek kaynaktan (tabs.ts): Inbox = ignored hariç her
 // durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
@@ -165,6 +172,14 @@ export default function ProblemsPage() {
   }, { replace: true });
   const ownerTeam = searchParams.get('owner') || '';
   const sreTeam   = searchParams.get('sre')   || '';
+  // v0.10.1092 — "Oracle" çipi (?oracle=only|exclude); yok = Oracle grupları DAHİL.
+  const oracleFacet = parseOracleFacet(searchParams.get('oracle'));
+  const setOracleFacet = (v: OracleFacet) => setSearchParams(prev => {
+    const p = new URLSearchParams(prev);
+    if (v === 'all') p.delete('oracle'); else p.set('oracle', v);
+    p.delete('page');
+    return p;
+  }, { replace: true });
   const page    = Math.max(0, parseInt(searchParams.get('page') || '0', 10) || 0);
   const setTab = (v: string) => setSearchParams(prev => {
     const p = new URLSearchParams(prev);
@@ -217,6 +232,8 @@ export default function ProblemsPage() {
   const dataRef = useRef<ExceptionGroup[] | null | undefined>(undefined);
   dataRef.current = data;
   const [total, setTotal] = useState(0);
+  // v0.10.1092 — Oracle çipi hariç süzgeçlerden geçen Oracle grubu sayısı (-1 = kaynak yok → çip gizli).
+  const [oracleCount, setOracleCount] = useState(-1);
   // v0.10.949 — yanıttaki taban alanları (etkin taban, gizlenen sayı, pencere).
   const [floorMeta, setFloorMeta] = useState<FloorMeta>({});
   // v0.10.949 — floorMeta kip değişiminde yeni yanıt gelene dek ÖNCEKİ (açık
@@ -324,10 +341,12 @@ export default function ProblemsPage() {
       // floor: 'default' ile sunucu seçer (taban + çoklu-servis istisnası).
       minOccurrences: !floorDefault && minOcc > 0 ? minOcc : undefined,
       floor: floorDefault ? 'default' : undefined,
+      oracle: oracleFacetParam(oracleFacet), // v0.10.1092
     };
     api.exceptionGroups(params)
       .then(d => {
         setData(d.items ?? []); setTotal(d.total ?? 0); setFloorMeta(readFloorMeta(d));
+        setOracleCount(typeof d.oracleCount === 'number' ? d.oracleCount : -1);
         setLoadErr(null); setRefreshing(false);
       })
       // v0.9.858 (UX denetimi K6) — null hiçbir render dalına girmiyordu:
@@ -360,7 +379,7 @@ export default function ProblemsPage() {
     // env (v0.9.941) dep listesinde: Topbar'dan ortam değiştirildiğinde
     // liste yeniden okunmalı, yoksa süzgeç bir sonraki başka değişikliğe
     // kadar uygulanmamış görünür.
-  }, [tab, service, ownerTeam, sreTeam, env, page, sortSig, committedSearch, minOcc, floorDefault]); // v0.10.949 — ?minOcc=5 ↔ param yok aynı minOcc, farklı kip
+  }, [tab, service, ownerTeam, sreTeam, env, page, sortSig, committedSearch, minOcc, floorDefault, oracleFacet]); // v0.10.949 — ?minOcc=5 ↔ param yok aynı minOcc, farklı kip; v0.10.1092 — Oracle çipi
 
 
   useEffect(() => {
@@ -393,7 +412,7 @@ export default function ProblemsPage() {
   // Eşleşme yok = isteğin kendisi kullanıcı süzgeci taşıdı (servis, takım,
   // arama — hepsi sunucuda); sekme ve occurrence tabanı süzgeç değil (taban
   // şeridi gizlenen sayıyı kendisi söyler).
-  const excFiltered = !!(service || ownerTeam || sreTeam || committedSearch);
+  const excFiltered = !!(service || ownerTeam || sreTeam || committedSearch || oracleFacet !== 'all');
   const excTableState: Omit<DataTableStateProps<ExceptionGroup>, 'dt'> =
     data === undefined ? { kind: 'loading' }
     : data === null ? {
@@ -535,6 +554,18 @@ export default function ProblemsPage() {
             <option value="">All SRE teams</option>
             {sreTeamOptions.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
+          {/* v0.10.1092 — Oracle hata tablosu grupları: varsayılan DAHİL; tek tıkla
+              yalnız onlar ya da onlarsız. Oracle kaynağı tanımlı değilse gizli. */}
+          {(oracleCount >= 0 || oracleFacet !== 'all') && (
+            <SegmentedControl<OracleFacet> size="sm" aria-label="Oracle hata grupları"
+              value={oracleFacet} onChange={setOracleFacet}
+              title="Oracle hata tablosu satırlarından oluşan gruplar (kod × operasyon)"
+              options={[
+                { value: 'all', label: 'Tümü', title: 'Span exception\'ları + Oracle grupları (varsayılan)' },
+                { value: 'only', label: <>Oracle{oracleCount >= 0 ? ` ${fmtNum(oracleCount)}` : ''}</>, title: 'Yalnız Oracle hata tablosu grupları' },
+                { value: 'exclude', label: 'Oracle hariç', title: 'Oracle gruplarını gizle' },
+              ]} />
+          )}
           <span style={{ color: 'var(--text3)', fontSize: 12, marginLeft: 'auto' }}>
             {total > 0 && (
               <>
@@ -599,6 +630,7 @@ export default function ProblemsPage() {
               {filtered.length === 0 ? <DataTableState dt={dt} leading={[24]} {...excTableState} /> : filtered.map(g => {
                 const open = expanded.has(g.fingerprint);
                 const spread = spreadOf(g); // v0.10.949
+                const ora = isOracleGroup(g); // v0.10.1092
                 // v0.10.221 — düz hücreler gerçek <Link> (orta tık yeni
                 // sekme); caret/servis/eylem hücreleri kendi tıklarını
                 // taşır, satır onClick'i kalan boşluk için kalıyor.
@@ -631,23 +663,30 @@ export default function ProblemsPage() {
                             fetch; yoksa hiçbir şey çizilmez. stripMarkdown ŞART
                             (kırpılmış yüzeyde `**` dökülür, v0.9.641/696). */}
                         <TriageTitleCell
-                          title={g.type}
+                          title={ora ? oracleRowTitle(g) : g.type}
                           code
-                          chips={
-                            /* First observed within the last hour — the
+                          chips={<>
+                            {/* v0.10.1092 — Oracle hata tablosu grubu rozeti. */}
+                            {ora && (
+                              <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
+                                title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
+                                Oracle
+                              </Badge>
+                            )}
+                            {/* First observed within the last hour — the
                                highest-signal marker for an SRE scanning the
                                list in the morning. v0.9.314 — "<1h", not
-                               "NEW" (NEW is the STATE column's word). */
-                            Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
+                               "NEW" (NEW is the STATE column's word). */}
+                            {Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
                               <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
                                 title="First seen within the last hour — this exception did not exist before that.">
                                 &lt;1h
                               </span>
-                            )
-                          }
-                          detail={g.message || '—'}
-                          detailTitle={g.message}
-                          detailMono
+                            )}
+                          </>}
+                          detail={ora ? oracleRowDetail(g) : (g.message || '—')}
+                          detailTitle={ora ? oracleRowTooltip(g) : g.message}
+                          detailMono={!ora}
                           ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined} />
                         </Link>
                       </td>
@@ -657,11 +696,23 @@ export default function ProblemsPage() {
                             zaten bu pencereyi kullanıyor; listeden ve
                             detaydan açılan servis sayfası aynı zamana
                             bakmalı. */}
-                        <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
-                          onClick={e => e.stopPropagation()}
-                          className="mono">
-                          {g.service}
-                        </Link>
+                        {ora && isSyntheticOracleService(g.service) ? (
+                          // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
+                          <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{g.service}</span>
+                        ) : (
+                          <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
+                            onClick={e => e.stopPropagation()}
+                            className="mono">
+                            {g.service}
+                          </Link>
+                        )}
+                        {/* v0.10.1092 — Oracle grubu: etkilenen servislerin ilk 3'ü (baskın yukarıda). */}
+                        {ora && (g.oracle?.serviceCount ?? 0) > 1 && (
+                          <div className="cell-faint" title={(g.oracle?.services ?? []).map(sv => sv.name).join(', ')}
+                            style={{ marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            +{(g.oracle?.serviceCount ?? 1) - 1} servis
+                          </div>
+                        )}
                         {/* v0.10.949 — aynı exception aynı anda N serviste (Inbox ile aynı işaret). */}
                         {spread && (
                           <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, floorMeta.spreadWindowMin)}

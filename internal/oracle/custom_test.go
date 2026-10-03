@@ -16,22 +16,22 @@ import (
 
 // operatorSQL — ekran görüntüsündeki sorgunun şekli (şema/tablo adları
 // sentetik; JOIN + HAVING + XMLAGG + SYSDATE penceresi, bind yok).
-const operatorSQL = `SELECT ROUND((TRUNC(M.OPM_TIMESTAMP, 'MI') - DATE '1970-01-01') * 86400) - 10800 AS TimeSlice,
-       TO_CHAR(TRUNC(M.OPM_TIMESTAMP, 'MI'), 'DD.MM.YYYY HH24:MI') AS Zaman,
-       COALESCE(M.OPM_CHANNELCODE, 'XXX') AS KanalKod,
-       M.OPM_FUNCTIONCODE AS FUNCTIONCODE,
-       M.OPM_OPERATIONCODE AS OPERATIONCODE,
-       UPPER(M.OPM_WEBSRVNAME) AS HOSTNAME,
-       'TFAIL' AS Sonuc,
+const operatorSQL = `SELECT ROUND((TRUNC(M.APP_ERR_TIMESTAMP, 'MI') - DATE '1970-01-01') * 86400) - 10800 AS TimeSlice,
+       TO_CHAR(TRUNC(M.APP_ERR_TIMESTAMP, 'MI'), 'DD.MM.YYYY HH24:MI') AS Zaman,
+       COALESCE(M.APP_ERR_CHANNELCODE, 'XXX') AS KanalKod,
+       M.APP_ERR_FUNCTIONCODE AS FUNCTIONCODE,
+       M.APP_ERR_OPERATIONCODE AS OPERATIONCODE,
+       UPPER(M.APP_ERR_WEBSRVNAME) AS HOSTNAME,
+       'APP_FAIL' AS Sonuc,
        COUNT(*) AS Adet,
-       COUNT(M.OPM_TRACEID) AS TraceIdAdet,
-       DBMS_LOB.SUBSTR(RTRIM(XMLAGG(XMLELEMENT(e, M.OPM_TRACEID || ', ') ORDER BY M.OPM_TIMESTAMP).EXTRACT('//text()').getClobVal(), ', '), 4000, 1) AS TRACEIDS
-FROM   APPOWNER.MASTER_LOG M
-LEFT JOIN APPOWNER.ERROR_CODE_LOOKUP B ON M.OPM_ERRORCODE = B.ERROR_CODE
-WHERE  M.OPM_TIMESTAMP >= TRUNC(SYSDATE, 'MI') - INTERVAL '15' MINUTE
-  AND  M.OPM_TIMESTAMP <  TRUNC(SYSDATE, 'MI')
+       COUNT(M.APP_ERR_TRACEID) AS TraceIdAdet,
+       DBMS_LOB.SUBSTR(RTRIM(XMLAGG(XMLELEMENT(e, M.APP_ERR_TRACEID || ', ') ORDER BY M.APP_ERR_TIMESTAMP).EXTRACT('//text()').getClobVal(), ', '), 4000, 1) AS TRACEIDS
+FROM   APP_SCHEMA.APP_ERR_LOG M
+LEFT JOIN APP_SCHEMA.APP_ERR_CODES B ON M.APP_ERR_ERRORCODE = B.ERROR_CODE
+WHERE  M.APP_ERR_TIMESTAMP >= TRUNC(SYSDATE, 'MI') - INTERVAL '15' MINUTE
+  AND  M.APP_ERR_TIMESTAMP <  TRUNC(SYSDATE, 'MI')
   AND  (B.ERRORTYPE = 'T' OR B.ERROR_CODE IS NULL)
-GROUP BY TRUNC(M.OPM_TIMESTAMP, 'MI'), COALESCE(M.OPM_CHANNELCODE, 'XXX'), M.OPM_FUNCTIONCODE, M.OPM_OPERATIONCODE, UPPER(M.OPM_WEBSRVNAME)
+GROUP BY TRUNC(M.APP_ERR_TIMESTAMP, 'MI'), COALESCE(M.APP_ERR_CHANNELCODE, 'XXX'), M.APP_ERR_FUNCTIONCODE, M.APP_ERR_OPERATIONCODE, UPPER(M.APP_ERR_WEBSRVNAME)
 HAVING COUNT(*) > 1
 ORDER BY TimeSlice, Adet DESC;`
 
@@ -168,8 +168,8 @@ func TestPollCustomMode(t *testing.T) {
 	slice := float64(time.Date(2026, 9, 10, 8, 58, 0, 0, time.UTC).Unix())
 	w, sink, calls, now := newTestWorker(t, src, state, func(int, []any) ([]map[string]any, error) {
 		return []map[string]any{{
-			"TIMESLICE": slice, "ZAMAN": "10.09.2026 11:58", "KANALKOD": "059912", "FUNCTIONCODE": "FSR0002",
-			"OPERATIONCODE": "COMPLIANCE_ACTIMIZE", "HOSTNAME": "GATEWAY-01", "SONUC": "TFAIL",
+			"TIMESLICE": slice, "ZAMAN": "10.09.2026 11:58", "KANALKOD": "CH0001", "FUNCTIONCODE": "APPFN0002",
+			"OPERATIONCODE": "OP_COMPLIANCE_CHECK", "HOSTNAME": "APP-HOST-01", "SONUC": "APP_FAIL",
 			"ADET": float64(3), "TRACEIDADET": float64(2), "DURATION": float64(412),
 			"TRACEIDS": "4bf92f3577b34da6a3ce929d0e0e4736, 0af7651916cd43dd8448eb211c80319c",
 		}}, nil
@@ -184,7 +184,7 @@ func TestPollCustomMode(t *testing.T) {
 		t.Fatalf("sorgu sayısı %d", len(*calls))
 	}
 	c := (*calls)[0]
-	if c.args != nil || !strings.HasPrefix(c.sql, "SELECT * FROM (") || !strings.Contains(c.sql, "HAVING COUNT(*) > 1") || !strings.HasSuffix(c.sql, "FETCH FIRST 5000 ROWS ONLY") {
+	if c.args != nil || !strings.HasPrefix(c.sql, "SELECT * FROM (") || !strings.Contains(c.sql, "HAVING COUNT(*) > 1") || !strings.HasSuffix(c.sql, "\nORDER BY \"TIMESLICE\", \"OPERATIONCODE\", \"FUNCTIONCODE\", \"KANALKOD\", \"HOSTNAME\"\nFETCH FIRST 50001 ROWS ONLY") { // v0.10.1092 — tek sıralı ifade
 		t.Fatalf("özel kip sorgusu: args=%v sql=%q", c.args, c.sql)
 	}
 	if !hTo.Equal(*now) || !hFrom.Equal(now.Add(-15*time.Minute)) {
@@ -196,8 +196,8 @@ func TestPollCustomMode(t *testing.T) {
 	}
 	var traces, rest int
 	for _, r := range hooked {
-		if r.SourceID != src.ID || !r.Time.Equal(time.Unix(int64(slice), 0).UTC()) || r.OperationCode != "COMPLIANCE_ACTIMIZE" ||
-			r.ErrorCode != "FSR0002" || r.ChannelCode != "059912" || r.HostName != "GATEWAY-01" || r.ErrorType != "TFAIL" {
+		if r.SourceID != src.ID || !r.Time.Equal(time.Unix(int64(slice), 0).UTC()) || r.OperationCode != "OP_COMPLIANCE_CHECK" ||
+			r.ErrorCode != "APPFN0002" || r.ChannelCode != "CH0001" || r.HostName != "APP-HOST-01" || r.ErrorType != "APP_FAIL" {
 			t.Fatalf("satır alanları: %+v", r)
 		}
 		if r.TraceID != "" {
@@ -216,7 +216,7 @@ func TestPollCustomMode(t *testing.T) {
 		t.Fatalf("trace=%d artan=%d", traces, rest)
 	}
 	st := w.Status()[0]
-	if st.LastRows != 1 || st.LastMapped != 3 || st.LastError != "" || st.Capped {
+	if st.LastRows != 1 || st.LastMapped != 3 || st.LastError != "" || st.Capped || st.Pages != DefaultMaxPages || st.Truncated || st.Unordered {
 		t.Fatalf("durum: %+v", st)
 	}
 }

@@ -35,7 +35,7 @@ func TestNormalizeExceptionTriage(t *testing.T) {
 		{
 			name: "kısmi PUT — yalnız P1 verilmiş",
 			in:   ExceptionTriageConfig{P1FreshHours: 8},
-			want: ExceptionTriageConfig{P1FreshHours: 8, P2SameDayHours: 24, StaleResolveHours: 24, BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500, StormWindowMinutes: 10, StormMinServices: 5},
+			want: ExceptionTriageConfig{P1FreshHours: 8, P2SameDayHours: 24, StaleResolveHours: 24, BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500, StormWindowMinutes: 10, StormMinServices: 5, OracleP1MinOccurrences: 5000},
 		},
 		{
 			// Ters basamak: P2 penceresi P1'den darsa taze bir
@@ -43,12 +43,12 @@ func TestNormalizeExceptionTriage(t *testing.T) {
 			// v0.9.699'un düzelttiği uçurumun ta kendisi.
 			name: "ters basamak kelepçelenir",
 			in:   ExceptionTriageConfig{P1FreshHours: 12, P2SameDayHours: 4, StaleResolveHours: 24},
-			want: ExceptionTriageConfig{P1FreshHours: 12, P2SameDayHours: 12, StaleResolveHours: 24, BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500, StormWindowMinutes: 10, StormMinServices: 5},
+			want: ExceptionTriageConfig{P1FreshHours: 12, P2SameDayHours: 12, StaleResolveHours: 24, BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500, StormWindowMinutes: 10, StormMinServices: 5, OracleP1MinOccurrences: 5000},
 		},
 		{
 			name: "geçerli ayar aynen geçer",
 			in:   ExceptionTriageConfig{P1FreshHours: 2, P2SameDayHours: 48, StaleResolveHours: 72},
-			want: ExceptionTriageConfig{P1FreshHours: 2, P2SameDayHours: 48, StaleResolveHours: 72, BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500, StormWindowMinutes: 10, StormMinServices: 5},
+			want: ExceptionTriageConfig{P1FreshHours: 2, P2SameDayHours: 48, StaleResolveHours: 72, BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500, StormWindowMinutes: 10, StormMinServices: 5, OracleP1MinOccurrences: 5000},
 		},
 	}
 	for _, c := range cases {
@@ -113,11 +113,12 @@ func TestExceptionTriageJSONKeys(t *testing.T) {
 		// v0.9.1188 — patlama kapıları da tel şeklinin parçası.
 		BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500,
 		StormWindowMinutes: 10, StormMinServices: 5,
+		OracleP1MinOccurrences: 5000, // v0.10.1092
 	})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	want := `{"p1FreshHours":4,"p2SameDayHours":24,"staleResolveHours":24,"burstMinRate":100,"burstMinTotal":1000,"p1MinOccurrences":500,"stormWindowMinutes":10,"stormMinServices":5}`
+	want := `{"p1FreshHours":4,"p2SameDayHours":24,"staleResolveHours":24,"burstMinRate":100,"burstMinTotal":1000,"p1MinOccurrences":500,"stormWindowMinutes":10,"stormMinServices":5,"oracleP1MinOccurrences":5000}`
 	if string(raw) != want {
 		t.Fatalf("JSON = %s, beklenen %s", raw, want)
 	}
@@ -129,8 +130,26 @@ func TestExceptionTriageJSONKeys(t *testing.T) {
 	if back != (ExceptionTriageConfig{
 		P1FreshHours: 4, P2SameDayHours: 24, StaleResolveHours: 24,
 		BurstMinRate: 100, BurstMinTotal: 1000, P1MinOccurrences: 500,
-		StormWindowMinutes: 10, StormMinServices: 5,
+		StormWindowMinutes: 10, StormMinServices: 5, OracleP1MinOccurrences: 5000,
 	}) {
 		t.Fatalf("round-trip bozuldu: %+v", back)
+	}
+}
+
+// v0.10.1092 — Oracle gruplarının son-1-saat P1 eşiği: varsayılan 5000, eski
+// blob (alan yok) varsayılana düşer, açık değer korunur.
+func TestOracleP1MinOccurrencesDefault(t *testing.T) {
+	if d := DefaultExceptionTriage(); d.OracleP1MinOccurrences != 5000 || d.P1MinOccurrences != 500 {
+		t.Fatalf("varsayılanlar: %+v", d)
+	}
+	var old ExceptionTriageConfig
+	if err := json.Unmarshal([]byte(`{"p1FreshHours":4,"p1MinOccurrences":800}`), &old); err != nil {
+		t.Fatal(err)
+	}
+	if n := NormalizeExceptionTriage(old); n.OracleP1MinOccurrences != 5000 || n.P1MinOccurrences != 800 {
+		t.Fatalf("eski blob: %+v", n)
+	}
+	if n := NormalizeExceptionTriage(ExceptionTriageConfig{OracleP1MinOccurrences: 20000}); n.OracleP1MinOccurrences != 20000 {
+		t.Fatalf("açık değer korunmalı: %+v", n)
 	}
 }

@@ -606,6 +606,37 @@ func (r *SubjectResolver) ResolveFor(sourceID string) func(ctx context.Context, 
 	}
 }
 
+// ServiceVotes — v0.10.1092 (Oracle exception grupları, exgroups.go): bir
+// (operasyon, kod) satırının BU tikteki servis dağılımı — trace oyları (hata
+// veren en derin span'ın servisi), yoksa pod adı oyları, o da yoksa Resolve'un
+// tek servisi (öğrenilmiş / fonksiyon kodu) 1 oy. Kopya döner; boş = bilinmiyor.
+func (r *SubjectResolver) ServiceVotes(ctx context.Context, sourceID, op, code string) map[string]int {
+	if r == nil || op == "" {
+		return nil
+	}
+	r.mu.Lock()
+	var src map[string]int
+	if tf := r.tick[sourceID]; tf != nil {
+		if len(tf.votes[op]) > 0 {
+			src = tf.votes[op]
+		} else if len(tf.podVotes[op]) > 0 {
+			src = tf.podVotes[op]
+		}
+	}
+	out := make(map[string]int, len(src))
+	for s, n := range src {
+		out[s] = n
+	}
+	r.mu.Unlock()
+	if len(out) > 0 {
+		return out
+	}
+	if res := r.Resolve(ctx, sourceID, []string{op, code}); res.Service != "" {
+		return map[string]int{res.Service: 1}
+	}
+	return nil
+}
+
 // Learned — kaynağın haritası (kopya; salt okuma API'si için).
 func (r *SubjectResolver) Learned(ctx context.Context, sourceID string) LearnedMap {
 	r.mu.Lock()

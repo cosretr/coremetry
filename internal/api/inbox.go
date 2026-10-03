@@ -2041,6 +2041,11 @@ func exceptionToInbox(g chstore.ExceptionGroup) InboxItem {
 	if isHTTPErrorType(g.Type) {
 		kind, source = "httperror", "HTTP error"
 	}
+	if chstore.IsOracleGroup(g.Fingerprint) {
+		// v0.10.1092 — Oracle hata tablosu grubu: tür exception (aynı merdiven,
+		// aynı triyaj), kaynak etiketi "Oracle" (arama + satır rozeti).
+		kind, source = "exception", "Oracle"
+	}
 	return InboxItem{
 		ID:             "exception:" + g.Fingerprint,
 		Kind:           kind,
@@ -2141,6 +2146,15 @@ var inboxSinceRungs = []string{"30m", "1h", "2h", "24h", "7d"}
 // okuması YOK, aksi hâlde 200 satırlık bir inbox listesi 200 ayar
 // sorgusu demek olurdu.
 func exceptionPriority(g chstore.ExceptionGroup) (string, string) {
+	if chstore.IsOracleGroup(g.Fingerprint) {
+		// v0.10.1092 — Oracle grubu kendi kuralıyla (exception_oracle.go
+		// oraclePriorityAt): saatlik toplamlar enjekte edilen önbellekten; tazelik
+		// kapanmış dakika gecikmesi kadar geriden ölçülür (yalnız kapanmış
+		// dakikalar sayılır — akan grup "durdu" okunmasın). /inbox, Exceptions ve
+		// bildirimci aynı yoldan.
+		st, _ := oracleGroupStats(g)
+		return oraclePriorityAt(g, currentExceptionTriage(), time.Now().Add(-st.Lag), st.LastHour, st.PrevHour)
+	}
 	return exceptionPriorityAt(g, currentExceptionTriage(), time.Now())
 }
 

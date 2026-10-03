@@ -33,6 +33,8 @@ package oracle
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -107,6 +109,146 @@ func buildCustomPollQuery(src SourceConfig, limit int) string {
 		limit = pollRowCap
 	}
 	return WrapConsoleSQL(src.CustomSQL, limit)
+}
+
+// ── v0.10.1092 — özel SQL penceresinin tam okunması ──────────────────────
+//
+// Kusur: özel sorgu `FETCH FIRST 5000 ROWS ONLY` ile sarılıyordu — ORDER BY yok,
+// watermark bind'i yok (pencere SYSDATE'e bağlı), tavanda yeniden poll kapalı.
+// Dakika × kanal × fonksiyon × operasyon × hata × host × instance kırılımı 15
+// dakikada 5000'i kolayca aşıyordu: her poll aynı pencerenin GELİŞİGÜZEL ilk
+// 5000 satırını okuyor, kalanı hiç okunmuyor, sayaç serisinin son kovası yarım
+// kalıyor ve durum şeridi "tavana çarptı — devam ediyor" diyordu (devam eden
+// bir şey yoktu). Artık pencere TEK ifadeyle okunur: ORDER BY zaman + eşlenen
+// anahtar kolonlar, FETCH FIRST maxPages × 5000 + 1 — tek anlık görüntü, tek
+// SYSDATE (OFFSET sayfalarının her biri ayrı ifade, ayrı SYSDATE olurdu: sayfa
+// sınırında boşluk ya da tekrar). Satır > tavan → pencere KESİK
+// (CustomTruncatedText), sayaç son-kesimi yalnız o zaman.
+
+const (
+	// customPageSize — "sayfa" birimi (satır tavanı maxPages × bu).
+	customPageSize = pollRowCap
+	// DefaultMaxPages / MaxMaxPages — poll başına satır tavanı (sayfa cinsinden;
+	// 10 × 5000 = 50k satır).
+	DefaultMaxPages = 10
+	MinMaxPages     = 1
+	MaxMaxPages     = 20
+	// customPageBudgetFactor — tek ifadenin bütçesi = sorgu bütçesi × bu
+	// katsayı (varsayılan 20 sn × 3 = 60 sn).
+	customPageBudgetFactor = 3
+	// maxCustomFetch — sıralı sarmalayıcının FETCH tavanı (MaxMaxPages × 5000 + 1).
+	maxCustomFetch = MaxMaxPages*customPageSize + 1
+)
+
+// MaxPagesOf — SAF: kaynağın etkin sayfa tavanı (0 / aralık dışı → varsayılan).
+func MaxPagesOf(src SourceConfig) int {
+	if src.MaxPages >= MinMaxPages && src.MaxPages <= MaxMaxPages {
+		return src.MaxPages
+	}
+	return DefaultMaxPages
+}
+
+// customRowCap — SAF: poll başına okunacak en çok satır.
+func customRowCap(src SourceConfig) int { return MaxPagesOf(src) * customPageSize }
+
+// customOrderNames — SAF: sıralama adları (tırnaksız, eşlemedeki yazım). Önce
+// zaman kolonu, sonra operatörün AÇIKÇA eşlediği kararlı anahtarlar (operasyon,
+// kod, kanal, host, instance, harici kod) — ERR_* varsayılanları özel sorgu
+// çıktısında yoktur. count (geç commit'te değişir) ve traceIds (CLOB olabilir)
+// sıraya GİRMEZ. Adlar ResolveColumns'un identifier kapısından geçmiştir.
+func customOrderNames(src SourceConfig) []string {
+	cols, err := ResolveColumns(src)
+	if err != nil {
+		return nil
+	}
+	ts := cols[FieldTimestamp]
+	out := []string{ts}
+	seen := map[string]bool{strings.ToUpper(ts): true}
+	for _, f := range []string{FieldService, FieldCode, FieldChannel, FieldHost, FieldInstance, FieldExternalCode} {
+		if strings.TrimSpace(src.Columns[f]) == "" {
+			continue
+		}
+		c := cols[f]
+		if c == "" || seen[strings.ToUpper(c)] {
+			continue
+		}
+		seen[strings.ToUpper(c)] = true
+		out = append(out, c)
+	}
+	return out
+}
+
+// customOrderVariants — SAF: denenecek ORDER BY yazımları. (1) Eşlemedeki
+// yazımla TIRNAKLI — tırnaklı takma ad (`AS "TimeSlice"`) büyük-küçük harf
+// korur, tırnaksız ad onu bulamaz; (2) büyük harfe çevrilmiş TIRNAKLI —
+// tırnaksız takma ad Oracle'da büyük harfe iner (eşleme "TimeSlice" yazmış
+// olabilir). İkisi aynıysa tek yazım. Tırnak içinde tırnak yok (identRe).
+func customOrderVariants(src SourceConfig) [][]string {
+	names := customOrderNames(src)
+	if len(names) == 0 {
+		return [][]string{nil}
+	}
+	exact := make([]string, len(names))
+	upper := make([]string, len(names))
+	same := true
+	for i, n := range names {
+		exact[i] = `"` + n + `"`
+		upper[i] = `"` + strings.ToUpper(n) + `"`
+		if exact[i] != upper[i] {
+			same = false
+		}
+	}
+	if same {
+		return [][]string{exact}
+	}
+	return [][]string{exact, upper}
+}
+
+// buildCustomOrderedQuery — SAF: pencerenin tek sıralı ifadesi (tavan + 1).
+func buildCustomOrderedQuery(src SourceConfig, orderBy []string) string {
+	return WrapConsoleSQLOrdered(src.CustomSQL, orderBy, customRowCap(src)+1)
+}
+
+// customIntervalRe — `INTERVAL 'N' MINUTE|HOUR` literal'i (Oracle aralık
+// sabiti; boşluk ve büyük-küçük harf serbest).
+var customIntervalRe = regexp.MustCompile(`(?i)INTERVAL\s*'\s*(\d+)\s*'\s*(MINUTE|HOUR)`)
+
+// customIntervalWarning — SAF (v0.10.1092): sorgunun geriye bakışı ile pencere
+// (windowMin) tutarlı mı. Birden çok literal varsa en büyüğü geriye bakıştır.
+//   - N > pencere: tazeleyicinin "kapanmış" saydığı dakikaları sorgu yeniden
+//     okur; geç commit'le değişen Adet Exceptions grubunda kaybolur.
+//   - N < pencere: sorgunun görmediği dakikalara sayaç 0 yazar (sahte "düzeldi").
+//   - literal yok: elle doğrulama uyarısı. Tutarlıysa "".
+func customIntervalWarning(sql string, windowMin int) string {
+	maxMin := -1
+	for _, m := range customIntervalRe.FindAllStringSubmatch(sql, -1) {
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			continue
+		}
+		if strings.EqualFold(m[2], "HOUR") {
+			n *= 60
+		}
+		if n > maxMin {
+			maxMin = n
+		}
+	}
+	switch {
+	case maxMin < 0:
+		return fmt.Sprintf("Sorguda INTERVAL 'N' MINUTE bulunamadı — geriye bakışın pencereyle (%d dk) aynı olduğunu elle doğrulayın.", windowMin)
+	case maxMin > windowMin:
+		return fmt.Sprintf("Sorgunun geriye bakışı %d dk > pencere %d dk: kapanmış sayılan dakikalar sorguda yeniden okunur, geç commit'le değişen Adet Exceptions grubunda kaybolur — pencereyi %d yapın.", maxMin, windowMin, maxMin)
+	case maxMin < windowMin:
+		return fmt.Sprintf("Pencere %d dk > sorgunun geriye bakışı %d dk: sorgunun görmediği dakikalara sayaç 0 yazar (sahte \"düzeldi\") — pencereyi %d yapın.", windowMin, maxMin, maxMin)
+	}
+	return ""
+}
+
+// CustomTruncatedText — SAF: satır tavanında pencerenin kesik olduğunu söyleyen
+// TEK cümle (log + Settings durum şeridi aynı metni kullanır; FE ikizi
+// oracleProbe.ts customTruncatedText).
+func CustomTruncatedText(pages int) string {
+	return fmt.Sprintf("tavan: pencerenin tamamı okunamadı (%d sayfa)", pages)
 }
 
 // mappingCheckFromColumns — SAF: eşlenen kolonlar sorgunun ÇIKTI kolonları
@@ -250,9 +392,17 @@ func (s *Service) testCustom(ctx context.Context, src SourceConfig, opt TestOpti
 		res.Hint = fmt.Sprintf("Özel sorgu satır döndürmedi — pencereyi (SYSDATE aralığı, son %d dk) ve süzgeçleri (HAVING, hata tipi) sorgunun kendisi belirler; "+
 			"Coremetry buraya bind eklemez.", res.WindowMin)
 	}
+	// v0.10.1092 — sorgunun geriye bakışı (INTERVAL 'N' MINUTE) pencereyle
+	// tutarlı mı: Exceptions tazeleyicisi "kapanmış dakika"yı pencereden türetir.
+	if w := customIntervalWarning(src.CustomSQL, windowMinOf(src)); w != "" {
+		if res.Hint != "" {
+			res.Hint += " · "
+		}
+		res.Hint += w
+	}
 	now := time.Now()
 	from, to := customWindow(src, now)
-	res.PollQuery = buildCustomPollQuery(src, pollRowCap)
+	res.PollQuery = buildCustomOrderedQuery(src, customOrderVariants(src)[0]) // v0.10.1092 — poller'ın tek sıralı ifadesi
 	res.Summary = summarizeCustomRows(ctx, src, raw, budget, from, to, opt)
 	res.OK = true
 	return res

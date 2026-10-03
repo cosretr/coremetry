@@ -105,6 +105,8 @@ func (s *Store) FindSharedExceptionBursts(ctx context.Context, since time.Durati
 		    WHERE last_seen >= ?
 		      AND state != 'ignored'
 		      AND ex_type != ''
+		      -- v0.10.1092 — Oracle grupları (ora:) hariç: hacimleri baskın çıkar.
+		      AND `+NotOracleGroupSQL+`
 		)
 		GROUP BY ex_type, bucket
 		HAVING uniqExact(service) >= ?

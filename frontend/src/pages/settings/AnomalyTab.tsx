@@ -1057,6 +1057,21 @@ function ExceptionTriageSection() {
               </div>
             </Field>
 
+            {/* v0.10.1092 — Oracle hata tablosu gruplarının (Exceptions'taki
+                "Oracle" rozetli satırlar) AYRI hacim eşiği: durgun akış ilk gün
+                tüm sayfayı P1 yapmasın. Patlamanın hacim tabanı da bu sayıdır. */}
+            <Field label="Oracle grubu P1 eşiği (son 1 saat, olay)">
+              <input type="number" min={1} max={10000000} step={500}
+                value={cfg.oracleP1MinOccurrences ?? 5000}
+                onChange={e => setCfg({ ...cfg, oracleP1MinOccurrences: Number(e.target.value) })} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                Oracle hata tablosu gruplarında (kod × operasyon) P1 yalnız son 1
+                saat bu eşiği aşıp önceki saatin en az 3 katıysa (patlama) ya da grup
+                yeniyse olur; yapışkan hacim P1&apos;i Oracle&apos;a uygulanmaz &mdash;
+                satırlar dakikada binlerce akar. Varsayılan 5000.
+              </div>
+            </Field>
+
             {/* v0.9.1194 — FIRTINA. Tekil eşiklerin göremediği sinyal:
                 birden çok servisin EŞ-ZAMANLI patlaması (tipik kök: ortak
                 bağımlılık). Dedektör anomali tikinde koşar; satır critical

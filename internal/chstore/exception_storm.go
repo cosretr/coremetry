@@ -26,6 +26,9 @@ type ExceptionStormCandidate struct {
 // state != 'ignored': operatörün açıkça susturduğu bir grup fırtına
 // kanıtına giremez. resolved DAHİL (bilinçli): "yeni açıldı ve hızla
 // kendiliğinden kapandı" da fırtınanın parçasıdır — olay yaşandı.
+// v0.10.1092 — Oracle grupları (`ora:`) SAYILMAZ: durgun bir hata tablosu
+// akışı (kod × operasyon) onlarca "yeni grup" açar ve servisi (çözülen trace
+// servisi) fırtınayı tek başına doldururdu.
 // FINAL: ReplacingMergeTree ev kuralı; LIMIT 50 — eşik 5 civarında
 // yaşar, 50'den kalabalık bir fırtınada ilk 50 zaten hikâyeyi anlatır.
 func (s *Store) RecentNewExceptionServices(ctx context.Context, since time.Time) ([]ExceptionStormCandidate, error) {
@@ -36,6 +39,7 @@ func (s *Store) RecentNewExceptionServices(ctx context.Context, since time.Time)
 		FROM exception_groups FINAL
 		WHERE first_seen >= toDateTime64(?, 9, 'UTC')
 		  AND state != 'ignored'
+		  AND `+NotOracleGroupSQL+`
 		GROUP BY service
 		ORDER BY groups DESC, service
 		LIMIT 50

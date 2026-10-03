@@ -25,7 +25,7 @@ function goodSource(over: Partial<OracleSource> = {}): OracleSource {
     serviceName: 'ORCLPDB1',
     user: 'coremetry_ro',
     password: 'gizli',
-    schema: 'APPOWNER',
+    schema: 'APP_SCHEMA',
     table: 'ERROR_LOG',
     enabled: true,
     ...over,
@@ -143,7 +143,7 @@ describe('validateOracleSource — identifier kapısı (SQL enjeksiyonu)', () =>
         const e = validateOracleSource(goodSource({ [field]: bad } as Partial<OracleSource>));
         expect(e[field], `${field}=${bad} geçmemeliydi`).toMatch(/identifier/);
       }
-      for (const ok of ['APPOWNER', 'ERROR_LOG', 'A$B#C', 'a'.repeat(30)]) {
+      for (const ok of ['APP_SCHEMA', 'ERROR_LOG', 'A$B#C', 'a'.repeat(30)]) {
         const e = validateOracleSource(goodSource({ [field]: ok } as Partial<OracleSource>));
         expect(e[field], `${field}=${ok} geçmeliydi`).toBeUndefined();
       }
@@ -262,9 +262,9 @@ describe('sourceForSave — gövde hijyeni', () => {
     expect('typeFilter' in sourceForSave(goodSource({ typeFilter: ['  ', ''] }))).toBe(false);
   });
   it('metin alanları kırpılır', () => {
-    const body = sourceForSave(goodSource({ name: ' core ', schema: ' APPOWNER ', extraWhere: '  1=1  ' }));
+    const body = sourceForSave(goodSource({ name: ' core ', schema: ' APP_SCHEMA ', extraWhere: '  1=1  ' }));
     expect(body.name).toBe('core');
-    expect(body.schema).toBe('APPOWNER');
+    expect(body.schema).toBe('APP_SCHEMA');
     expect(body.extraWhere).toBe('1=1');
   });
 });
@@ -382,7 +382,7 @@ describe('sourceForSave — selectMappedOnly', () => {
 describe('validateOracleSource — özel SQL kipi', () => {
   const custom = (over: Partial<OracleSource> = {}) => goodSource({
     queryMode: 'custom', schema: '', table: '', windowMin: 15, timestampColumn: 'TIMESLICE',
-    customSql: "SELECT TRUNC(ts,'MI') AS TimeSlice, COUNT(*) AS Adet FROM APPOWNER.MASTER_LOG WHERE ts >= TRUNC(SYSDATE,'MI') - INTERVAL '15' MINUTE GROUP BY TRUNC(ts,'MI') HAVING COUNT(*) > 1 ORDER BY 1;",
+    customSql: "SELECT TRUNC(ts,'MI') AS TimeSlice, COUNT(*) AS Adet FROM APP_SCHEMA.APP_ERR_LOG WHERE ts >= TRUNC(SYSDATE,'MI') - INTERVAL '15' MINUTE GROUP BY TRUNC(ts,'MI') HAVING COUNT(*) > 1 ORDER BY 1;",
     ...over,
   });
   it('şema/tablo zorunlu DEĞİL; metin + pencere geçerli → hata yok', () => {

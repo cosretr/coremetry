@@ -14,7 +14,7 @@ OracleLogsResponse,
   Runbook, RunbookExecution,
   Dashboard, DashboardSummary, SLO, SLORow, SLOStatus,
   SMTPSettings, NotificationChannel, ChannelHealthRow,
-  ExceptionGroup, ExceptionGroupState, ExceptionSample, OccurrencePoint,
+  ExceptionGroup, ExceptionGroupState, ExceptionSample, OccurrencePoint, OracleGroupInfo,
   SparklineBucket, OperationSummary,
   SystemStatus,
   Monitor, MonitorResult, MonitorRow,
@@ -3084,14 +3084,21 @@ export const api = {
     minOccurrences?: number;
     // v0.10.949 — 'default' = sunucu varsayılan tabanı (5, P1 eşiği küçükse o)
     // + çok servisli / regressed muafiyeti; minOccurrences ile birlikte gönderilmez.
-    floor?: 'default' }) =>
+    floor?: 'default';
+    // v0.10.1092 — "Oracle" çipi: only / exclude; yok = Oracle grupları DAHİL.
+    oracle?: 'only' | 'exclude' }) =>
     get<{
       items: ExceptionGroup[]; total: number; limit: number; offset: number;
       capped?: boolean;
       // v0.10.949 — taban meta verisi (features/anomalies/spread.ts readFloorMeta).
       minOcc?: number; hiddenByMinOcc?: number; floorDefault?: boolean;
       spreadWindowMin?: number; spreadAvailable?: boolean;
+      // v0.10.1092 — Oracle çipi hariç süzgeçlerden geçen Oracle grubu sayısı; -1 = kaynak yok.
+      oracleCount?: number;
     }>(`/api/exception-groups?${qs(params)}`),
+  // v0.10.1092 — Oracle grubunun detay kırılımı (Oracle grubu değilse 404).
+  exceptionGroupOracle: (fingerprint: string) =>
+    get<OracleGroupInfo>(`/api/exception-groups/${encodeURIComponent(fingerprint)}/oracle`),
   // getExceptionGroup — point lookup by fingerprint, used to resolve a
   // shared /problems?exc=<fp> link when the group isn't on the
   // requester's currently-loaded page/filter. Throws on 404 (see

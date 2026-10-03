@@ -27,7 +27,7 @@ import { Badge, Button, Field, SelectField, TextareaField } from '@/components/u
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
 import { useSettingsLoad, SettingsLoadError, FlashBox } from './shared';
-import { ORACLE_TEST_WINDOWS, coverageText, livePreviewText, longVerdict, mappingVerdict, scanVerdict, summaryHeadline, type OracleTestWindow } from './oracleProbe'; // v0.10.768, longVerdict v0.10.845, mappingVerdict v0.10.886
+import { ORACLE_TEST_WINDOWS, coverageText, customTruncatedText, livePreviewText, longVerdict, mappingVerdict, scanVerdict, summaryHeadline, uiTestVerdict, type OracleTestWindow } from './oracleProbe'; // v0.10.768, longVerdict v0.10.845, mappingVerdict v0.10.886, v0.10.1092 uiTestVerdict/customTruncatedText
 import {
   emptyOracleSource, sourceFromSnapshot, sourceForSave, validateOracleSource,
   hasOracleErrors, parseTypeFilter, typeFilterToText, numFromForm, numToForm,
@@ -35,6 +35,7 @@ import {
   ORACLE_DEFAULT_MAX_OPEN_CONNS, ORACLE_DEFAULT_QUERY_TIMEOUT_SEC, ORACLE_DEFAULT_INTERVAL_SEC,
   ORACLE_DEFAULT_TIMEZONE, ORACLE_MAPPING_FIELDS, ORACLE_COLUMN_DISABLED,
   ORACLE_DEFAULT_WINDOW_MIN, ORACLE_CUSTOM_ONLY_FIELDS, isCustomQuery,
+  ORACLE_DEFAULT_MAX_PAGES, ORACLE_MIN_MAX_PAGES, ORACLE_MAX_MAX_PAGES,
   ORACLE_DEFAULT_DWELL_MIN, ORACLE_MIN_DWELL_MIN, ORACLE_MAX_DWELL_MIN,
   type OracleFieldErrors,
 } from './oracleForm';
@@ -179,7 +180,8 @@ export function OracleTab() {
         Bir Oracle hata tablosunu (ör. <code>&lt;ŞEMA&gt;.ERROR_LOG</code>) dış kaynak
         olarak bağlar. Satırlar <b>periyodik olarak okunur</b> (worker lideri, kalıcı
         watermark), Coremetry'de saklanır ve ilgili trace'in Logs sekmesinde <b>oracle</b>
-        rozetiyle görünür; Problem üretimi sonraki aşamada. Şema, tablo ve kolon
+        rozetiyle görünür; hata satırları Exceptions'ta (kaynak · kod · operasyon) grup olarak
+        triyaj edilir. Şema, tablo ve kolon
         adları koda gömülü değildir — hepsi buradan yönetilir. Sorgu daima{' '}
         <b>salt-okunur</b>, zaman aralığıyla sınırlı ve satır tavanlıdır; değerler bind
         edilir. Şifre <b>saklanır ama geri gösterilmez</b>; alternatifi referanstır
@@ -203,12 +205,15 @@ export function OracleTab() {
               {st && (
                 <div className="oracle-status">
                   {/* v0.10.929 (K5) — başarılı/çözüldü/sağlıklı arka plan durumu: nötr (is-quiet); renk yalnız is-err'de. */}
+                  {/* v0.10.1092 — bu satır Settings'teki TESTİN izi (bu API pod'u,
+                      formdaki değerler); okuma sağlığı aşağıdaki "Son okuma (worker)". */}
                   {st.lastCheckAt
-                    ? <>Son bağlantı denemesi <b>{fmtDateTime(st.lastCheckAt)}</b>{' · '}
-                      {st.lastCheckOK
-                        ? <span className="is-quiet">başarılı</span>
-                        : <span className="is-err">{st.lastError || 'başarısız'}</span>}</>
-                    : <span className="is-quiet">Bu sunucuda henüz bağlantı denenmedi.</span>}
+                    ? (() => {
+                      const v = uiTestVerdict(st.lastCheckOK, st.lastError);
+                      return <>Son UI testi (bu API pod'u, formdaki değerler) <b>{fmtDateTime(st.lastCheckAt)}</b>{' · '}
+                        <span className={v.ok ? 'is-quiet' : 'is-err'}>{v.text}</span></>;
+                    })()
+                    : <span className="is-quiet">Bu API pod'unda henüz UI testi koşmadı.</span>}
                   {src.passwordRef && (
                     <> · şifre referansı{' '}
                       {st.passwordResolved
@@ -227,7 +232,7 @@ export function OracleTab() {
                   <div className="oracle-status">
                     {ps ? (
                       <>
-                        Son okuma <b>{fmtDateTime(ps.lastPollAt)}</b>
+                        Son okuma (worker) <b>{fmtDateTime(ps.lastPollAt)}</b>
                         {' · '}{ps.lastRows} satır okundu, {ps.lastMapped} yazıldı
                         {(ps.lastExpanded ?? 0) > 0 && <> ({ps.lastExpanded} trace listesinden)</>}
                         {(ps.lastSkipped ?? 0) > 0 && <>, {ps.lastSkipped} değişmediği için yeniden yazılmadı</>}
@@ -235,7 +240,12 @@ export function OracleTab() {
                         {ps.lastNoTimestamp > 0 && <> · <span className="is-err">{ps.lastNoTimestamp} zamansız satır düştü</span></>}
                         {ps.lastBadTraceId > 0 && <> · {ps.lastBadTraceId} geçersiz trace id</>}
                         {' · '}watermark <b>{fmtDateTime(ps.watermarkNs / 1e6)}</b>
-                        {ps.capped && <> · <span className="badge b-warn">tavana çarptı — devam ediyor</span></>}
+                        {/* v0.10.1092 — özel SQL: pencere poll içinde sayfalarla okunur; tavan
+                            dolarsa "devam ediyor" DEĞİL (devam eden bir şey yok), kesik. */}
+                        {ps.unordered && <> · <span className="badge b-warn" title="Eşlenen sıralama kolonları (zaman / operasyon / kod …) sorgu çıktısında bulunamadı (ORA-00904); pencere sırasız okundu. Eşlemeyi sorgunun takma adlarıyla düzeltin.">sırasız okuma</span></>}
+                        {ps.truncated
+                          ? <> · <span className="badge b-warn" title="Poll başına satır tavanı (sayfa tavanı × 5000) doldu; pencerenin kalanı okunmadı. Sorgunun GROUP BY'ını daraltın ya da sayfa tavanını artırın.">{customTruncatedText(ps.pages)}</span></>
+                          : ps.capped && !ps.unordered && <> · <span className="badge b-warn">tavana çarptı — devam ediyor</span></>}
                         {ps.lastError
                           ? <> · <span className="is-err">{ps.lastError}</span></>
                           : <> · <span className="is-quiet">okuma sağlıklı</span></>}
@@ -344,7 +354,7 @@ export function OracleTab() {
                   <>
                     <Field label="Şema" value={src.schema} error={err.schema}
                       onChange={e => patch(i, { schema: e.target.value })}
-                      placeholder="APPOWNER" />
+                      placeholder="APP_SCHEMA" />
                     <Field label="Tablo" value={src.table} error={err.table}
                       onChange={e => patch(i, { table: e.target.value })}
                       placeholder="ERROR_LOG" />
@@ -369,7 +379,11 @@ export function OracleTab() {
                       onChange={e => patch(i, { customSql: e.target.value })}
                       placeholder={"SELECT ROUND((TRUNC(ts,'MI') - DATE '1970-01-01') * 86400) - 10800 AS TimeSlice, …, COUNT(*) AS Adet, … AS TRACEIDS\nFROM …\nWHERE ts >= TRUNC(SYSDATE,'MI') - INTERVAL '15' MINUTE AND ts < TRUNC(SYSDATE,'MI')\nGROUP BY … HAVING COUNT(*) > 1"}
                       hint={err.customSql ? undefined
-                        : 'Bind eklenmez: pencereyi (SYSDATE aralığı) ve süzgeçleri sorgu belirler. `SELECT * FROM (…) FETCH FIRST 5000 ROWS ONLY` ile sarılır (yorum ve /*+ ipuçları korunur); sondaki `;` düşer. Alan eşlemesi → göster, kutulara çıktı TAKMA ADLARINI yazın (Oracle büyük harfe çevirir): count (sayaç ağırlığı) ← ADET, trace_id listesi ← TRACEIDS, operation.code ← OPERATIONCODE, error.code ← FUNCTIONCODE (sorguda hata kodu yok; fonksiyon kodu Problem başlığında error.code olarak görünür), channel.code ← KANALKOD, host.name ← HOSTNAME. HAVING COUNT(*) > 1 varsa dakikada tek hata sayaçta 0 görünür. Hesap yalnız SELECT yetkili olmalı: sorgu içinden çağrılan fonksiyonların yan etkisini Coremetry kesemez.'} />
+                        : 'Bind eklenmez: pencereyi (SYSDATE aralığı) ve süzgeçleri sorgu belirler. Poller pencereyi TEK ifadeyle okur: `SELECT * FROM (…) ORDER BY "<zaman>", "<eşlenen anahtar kolonlar>" FETCH FIRST <sayfa tavanı × 5000 + 1> ROWS ONLY` (adlar tırnaklı — eşlemedeki yazımla, olmazsa büyük harf; yorum ve /*+ ipuçları korunur); sondaki `;` düşer. Alan eşlemesi → göster, kutulara çıktı TAKMA ADLARINI yazın (Oracle büyük harfe çevirir): count (sayaç ağırlığı) ← ADET, trace_id listesi ← TRACEIDS, operation.code ← OPERATIONCODE, error.code ← FUNCTIONCODE (sorguda hata kodu yok; fonksiyon kodu Problem başlığında error.code olarak görünür), channel.code ← KANALKOD, host.name ← HOSTNAME. HAVING COUNT(*) > 1 varsa dakikada tek hata sayaçta 0 görünür. Hesap yalnız SELECT yetkili olmalı: sorgu içinden çağrılan fonksiyonların yan etkisini Coremetry kesemez.'} />
+                  </div>
+                  {/* v0.10.1092 — satır sayısı ipucu (sayfa tavanının nedeni). */}
+                  <div className="oracle-note" style={{ marginTop: 4 }}>
+                    Dakika × kanal × fonksiyon × operasyon × hata × host × instance çok satır üretir; HOSTNAME/INSTANCEID'yi GROUP BY'dan çıkarmak satır sayısını ~10× düşürür.
                   </div>
                   <div className="oracle-row">
                     <Field label="Pencere (dk)" className="is-narrow" inputMode="numeric" error={err.windowMin}
@@ -377,6 +391,11 @@ export function OracleTab() {
                       onChange={e => patch(i, { windowMin: numFromForm(e.target.value) })}
                       placeholder={String(ORACLE_DEFAULT_WINDOW_MIN)}
                       hint={err.windowMin ? undefined : `Sorgunuzun INTERVAL'i ile AYNI olmalı — büyük yazılırsa sorgunun görmediği dakikalara 0 yazılır (sahte "düzeldi"); 1-240, boş = ${ORACLE_DEFAULT_WINDOW_MIN}`} />
+                    <Field label="Sayfa tavanı" className="is-narrow" inputMode="numeric" error={err.maxPages}
+                      value={numToForm(src.maxPages)}
+                      onChange={e => patch(i, { maxPages: numFromForm(e.target.value) })}
+                      placeholder={String(ORACLE_DEFAULT_MAX_PAGES)}
+                      hint={err.maxPages ? undefined : `Poll başına satır tavanı, sayfa cinsinden (1 sayfa = 5000 satır); aşılırsa pencere kesik ilan edilir. ${ORACLE_MIN_MAX_PAGES}-${ORACLE_MAX_MAX_PAGES}, boş = ${ORACLE_DEFAULT_MAX_PAGES}`} />
                   </div>
                 </>
               ) : (

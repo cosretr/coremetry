@@ -55,6 +55,10 @@ import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.10
 import { alertSeriesArgs, hasAlertMetricChart, isProblemLive } from './alertMetricSeries'; // v0.10.1064
 import { dbHealthPivots } from './dbHealthPivots'; // v0.10.1073
 import { isSvcSlowdownRule, svcSlowdownPivots } from './svcSlowdownPivots'; // v0.10.1091
+import { Badge } from '@/components/ui/Badge';
+// v0.10.1092 — Oracle hata tablosu grubu (`ora:`): stack yerine Oracle kırılımı.
+import { OracleGroupPanel } from './OracleGroupPanel';
+import { isOracleGroup, isSyntheticOracleService } from './oracleGroup';
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -294,6 +298,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   const navigate = useNavigate();
   const [state, setState] = useState<ExceptionGroupState>(group.state);
   const [copied, setCopied] = useState(false);
+  const ora = isOracleGroup(group); // v0.10.1092
   // v0.9.414 — Explain'in deterministik kanıt trace'leri: örnek-trace
   // satırları kutulanır (Explain trace'in waterfall kutulaması gibi).
   const [evTraces, setEvTraces] = useState<string[]>([]);
@@ -497,6 +502,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           Problems
         </Button>
         <TriageStatusBadge s={state} label={STATE_LABEL[state]} />
+        {ora && <Badge tone="info" title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">Oracle</Badge>}
         <span className="badge b-gray">{group.occurrences.toLocaleString()} occurrences</span>
         <span className="spacer" />
         <ShareButton copiedLabel="Copied" />
@@ -530,12 +536,22 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         {/* v0.9.860 (UX denetimi K1) — grubun kendi penceresi (ilk→son
             görülme) linke biner: aksi hâlde servis sayfası "şimdi" ile
             açılır ve exception'ın izi görünmez. */}
-        <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })}
-          className="chip" style={{ textDecoration: 'none' }}
-          title="Servis sayfasını aç">
-          <span className="k">service</span><b className="mono" style={{ color: 'var(--accent2)' }}>{group.service}</b>
-        </Link>
-        <TeamChips service={group.service} />
+        {ora && isSyntheticOracleService(group.service) ? (
+          // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
+          <span className="chip" title="Trace → servis çözümü bu operasyon için servis bulamadı">
+            <span className="k">service</span><b className="mono">{group.service}</b>
+          </span>
+        ) : (
+          <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })}
+            className="chip" style={{ textDecoration: 'none' }}
+            title="Servis sayfasını aç">
+            <span className="k">service</span><b className="mono" style={{ color: 'var(--accent2)' }}>{group.service}</b>
+          </Link>
+        )}
+        {ora && group.message && (
+          <span className="chip" title="Oracle operasyon kodu"><span className="k">operasyon</span><b className="mono">{group.message}</b></span>
+        )}
+        {!(ora && isSyntheticOracleService(group.service)) && <TeamChips service={group.service} />}
         {/* v0.10.734 (operatör: "pencere boyu yazmasına gerek var mı, open/closed
             yeter") — first seen / last seen çipleri KALKTI; durum rozeti şeritte,
             pencerenin kendisi Occurrences grafiğinde ve servis linkinde yaşıyor. */}
@@ -622,7 +638,8 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           kolonda monospace). Değerler AYNEN sınıfa taşındı; masaüstü
           görünümü bit bit aynı, yalnız <640px'te tek kolona iniyor. */}
       <div className="pd-cols pd-cols-11">
-        {/* Stack trace */}
+        {/* Stack trace — v0.10.1092: Oracle grubunda Oracle kırılımı (satır stack taşımaz). */}
+        {ora ? <OracleGroupPanel group={group} samples={samples} /> : (
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h">
             <h3>Stack trace</h3>
@@ -673,6 +690,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             </div>
           )}
         </div>
+        )}
 
         {/* v0.10.734 (operatör onaylı mockup a42a0b31: "pod ismi üste,
             occurrences ile stack trace adasına gelebilir") — sağ kolon: Pods ·
@@ -682,7 +700,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         {/* v0.10.737 (operatör: "biraz kayma var") — sağ kolon flex sütun, gap
             ızgarayla aynı (14); kartların üstü Stack trace kartıyla aynı hizada. */}
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <ExceptionPodsPanel fingerprint={group.fingerprint} service={group.service} groupOccurrences={group.occurrences} />
+        {!ora && <ExceptionPodsPanel fingerprint={group.fingerprint} service={group.service} groupOccurrences={group.occurrences} />}
         {/* Sample traces */}
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h"><h3>Sample traces</h3>{samples.length > 0 && <span className="ov-sub">{Math.min(samples.length, 14)}{samples.length > 14 ? ` / ${samples.length}` : ''}</span>}</div>

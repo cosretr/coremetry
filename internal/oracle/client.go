@@ -743,10 +743,16 @@ func (s *Service) Test(ctx context.Context, src SourceConfig) TestResult {
 
 // TestWith — v0.10.768: pencere seçimi + tam-tarama ön kontrolü + pencere
 // özeti (poller sorgusu, tavan summaryRowCap) + CH'de trace/servis araması.
-func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOptions) TestResult {
+//
+// v0.10.1092 — dönüş ADLI (res): kapanış (defer recordCheck) çağırana giden
+// değeri görür. Eskiden yerel `res`i yakalıyordu; özel SQL dalı
+// `return s.testCustom(…, res)` bir KOPYA döndürdüğü için yerel değer OK=false,
+// Error="" kalıyor ve her başarılı özel SQL testi durum şeridine "başarısız"
+// (gerekçesiz) yazılıyordu — okuma sağlıklıyken.
+func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOptions) (res TestResult) {
 	opt.WindowMin = ClampTestWindow(opt.WindowMin)
 	testWindow := time.Duration(opt.WindowMin) * time.Minute
-	res := TestResult{Columns: []string{}, WindowMin: opt.WindowMin}
+	res = TestResult{Columns: []string{}, WindowMin: opt.WindowMin}
 	if s == nil {
 		res.Error = "oracle servisi yok"
 		return res
@@ -771,7 +777,8 @@ func (s *Service) TestWith(ctx context.Context, src SourceConfig, opt TestOption
 
 	budget := queryTimeout(src)
 	if IsCustom(src) {
-		return s.testCustom(ctx, src, opt, db, secret, budget, res) // v0.10.902 — özel SQL kipi (custom.go)
+		res = s.testCustom(ctx, src, opt, db, secret, budget, res) // v0.10.902 — özel SQL kipi (custom.go); v0.10.1092 — adlı dönüşe atanır
+		return res
 	}
 	// v0.10.885 — zaman kolonunun tipi sözlükten; bind ifadesi ona göre
 	// (partition budaması). Okunamazsa "" → TimestampHasZone kutusu karar verir.

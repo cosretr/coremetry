@@ -59,6 +59,30 @@ type ExceptionNotifier struct {
 	sent map[string]int64
 	// logged — kalıcı defter sorusu (v0.10.1078; testte sahte).
 	logged func(ctx context.Context, id string) (bool, error)
+	// gate — v0.10.1092: grubun bildirim hattına girip girmeyeceği + tazelik
+	// ölçüsünün kayması (nil = hepsi, kayma 0). main.go Oracle kaynak kipini
+	// bağlar: `ora:` grubu yalnız kaynağı problemMode=live iken bildirilir
+	// (shadow = grup var, bildirim yok). Kayma: Oracle grubu yalnız KAPANMIŞ
+	// dakikaları sayar, last_seen'i duvar saatinin ~WindowMin gerisindedir;
+	// tazelik kapıları (≤10 dk / ≤5 dk) o kadar geriden ölçülmezse canlı bir
+	// Oracle grubu HİÇBİR ZAMAN aday olmazdı.
+	gate GroupGate
+}
+
+// GroupGate — (bildirilsin mi, tazelik kayması).
+type GroupGate func(g chstore.ExceptionGroup) (ok bool, lag time.Duration)
+
+// SetGroupGate — v0.10.1092: Start'tan ÖNCE çağrılır.
+func (e *ExceptionNotifier) SetGroupGate(f GroupGate) { e.gate = f }
+
+// admit — SAF yardımcı: kapı yoksa her grup, kayma 0. Dönen zaman tazelik
+// kapılarının ölçüleceği "şimdi".
+func (e *ExceptionNotifier) admit(g chstore.ExceptionGroup, now time.Time) (bool, time.Time) {
+	if e.gate == nil {
+		return true, now
+	}
+	ok, lag := e.gate(g)
+	return ok, now.Add(-lag)
 }
 
 func NewExceptionNotifier(store *chstore.Store, n *Notifier, lock cache.Lock, prio ExceptionPriorityFn) *ExceptionNotifier {
@@ -154,11 +178,18 @@ func exceptionRegressionP1ID(fp string, resolvedAt *int64) string {
 
 // exceptionGroupFingerprint — SAF: kimlikten parmak izi ("" = bu tür değil).
 // Parmak izi onaltılık (':' içermez); sonrasındaki durum/damga/p1 ekleri atılır.
+// v0.10.1092 — Oracle grubunun parmak izi `ora:<hex>` (tek ':' içerir):
+// önek korunur, ilk ':' kesimi ondan SONRA aranır.
 func exceptionGroupFingerprint(id string) string {
 	if !strings.HasPrefix(id, chstore.ExceptionGroupRulePrefix) {
 		return ""
 	}
-	fp, _, _ := strings.Cut(strings.TrimPrefix(id, chstore.ExceptionGroupRulePrefix), ":")
+	rest := strings.TrimPrefix(id, chstore.ExceptionGroupRulePrefix)
+	if strings.HasPrefix(rest, chstore.OracleGroupPrefix) {
+		fp, _, _ := strings.Cut(strings.TrimPrefix(rest, chstore.OracleGroupPrefix), ":")
+		return chstore.OracleGroupPrefix + fp
+	}
+	fp, _, _ := strings.Cut(rest, ":")
 	return fp
 }
 
@@ -229,7 +260,8 @@ func (e *ExceptionNotifier) routeGroups(ctx context.Context, now time.Time) {
 				log.Printf("[exception-notifier] tik tavanı (%d) — kalan gruplar sonraki tikte", exChannelMaxPerTick)
 				return
 			}
-			if !isChannelCandidate(g, state, now) {
+			ok, gnow := e.admit(g, now)
+			if !ok || !isChannelCandidate(g, state, gnow) {
 				continue
 			}
 			prio, reason := e.prio(g)
@@ -329,7 +361,21 @@ func (e *ExceptionNotifier) run(ctx context.Context, tc chstore.TeamContacts) {
 			continue
 		}
 		for _, g := range groups {
-			if !isP1ExceptionCandidate(g, now) {
+			ok, gnow := e.admit(g, now)
+			if !ok {
+				continue
+			}
+			if chstore.IsOracleGroup(g.Fingerprint) {
+				// v0.10.1092 — Oracle grubu: 500'lük span hacim eşiği DEĞİL, grubun
+				// kendi merdiveni P1 demeli (patlama / yeni; api.oraclePriorityAt).
+				prio := ""
+				if e.prio != nil {
+					prio, _ = e.prio(g)
+				}
+				if !oracleAnnounceCandidate(g, prio, gnow) {
+					continue
+				}
+			} else if !isP1ExceptionCandidate(g, gnow) {
 				continue
 			}
 			if e.n.verdictSilenced(ctx, exceptionVerdictSignature(g.Fingerprint)) {
@@ -346,6 +392,12 @@ func (e *ExceptionNotifier) run(ctx context.Context, tc chstore.TeamContacts) {
 	if sent > 0 {
 		log.Printf("[exception-notifier] %d P1 exception anonsu gönderildi", sent)
 	}
+}
+
+// oracleAnnounceCandidate — SAF (v0.10.1092): Oracle grubunun takım anonsu
+// yalnız merdiven P1 derken ve grup (gecikme kaydırılmış) taze iken.
+func oracleAnnounceCandidate(g chstore.ExceptionGroup, prio string, gnow time.Time) bool {
+	return prio == "P1" && time.Duration(gnow.UnixNano()-g.LastSeen) <= exNotifyFreshWindow
 }
 
 // isP1ExceptionCandidate — inbox P1 formülünün saf ikizi (tablo-testli).

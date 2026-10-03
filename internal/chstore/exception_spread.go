@@ -411,6 +411,7 @@ func (s *Store) exceptionSpreadUncached(ctx context.Context, slack time.Duration
 		SELECT ex_type
 		FROM exception_groups FINAL
 		WHERE state != ? AND last_seen >= fromUnixTimestamp64Nano(?) AND ex_message != ''
+		  AND `+NotOracleGroupSQL+` -- v0.10.1092 — Oracle grupları yayılım işareti almaz
 		GROUP BY ex_type
 		HAVING uniqExact(service) >= 2
 		LIMIT ?
@@ -443,6 +444,7 @@ func (s *Store) exceptionSpreadUncached(ctx context.Context, slack time.Duration
 		       occurrences
 		FROM exception_groups FINAL
 		WHERE state != ? AND last_seen >= fromUnixTimestamp64Nano(?) AND ex_message != ''
+		  AND `+NotOracleGroupSQL+`
 		  AND ex_type IN (?)
 		ORDER BY last_seen DESC
 		LIMIT ?
