@@ -50,6 +50,8 @@ import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
 import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
+import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
+import { hasAlertMetricChart } from './alertMetricSeries'; // v0.10.1064
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -937,6 +939,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       <div className="pd-cols pd-cols-15">
         {/* ── Left column ── */}
         <div style={{ minWidth: 0 }}>
+          {/* v0.10.1064 (operatör: "grafik olmadığı için de anlamak çok zor
+              artışları") — sol kolonun İLK bölümü: kuralın kendi serisi, eşik
+              ve başlangıç işaretli. Yalnız span-metrik alarm kurallarında;
+              dizisi olmayan türde hiç çizilmez. */}
+          {hasAlertMetricChart(problem) && <AlertMetricChartSection problem={problem} />}
           <Sect title="Root cause analysis" accent>
             {/* v0.10.1032 (inceleme) — kural adı satırı KALKTI: hemen üstteki
                 özet cümlesi kural adıyla başlıyor (ad boşsa metrikle), yani

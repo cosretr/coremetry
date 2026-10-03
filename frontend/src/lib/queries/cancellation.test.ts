@@ -66,6 +66,8 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // istek kesilmeli. Başlat / durdur mutasyonları kapsam dışı (iptal edilmez).
   // v0.10.1060 — log deseni sayısı: ES'e giden histogram; detay sayfası kapanınca kesilmeli.
   { file: 'anomalies.ts', hooks: ['api.anomalyLogPatternSeries('] },
+  // v0.10.1064 — alarm metriği dizisi: MV ya da ham spans (≤6 sa) okuması; detay kapanınca kesilmeli.
+  { file: 'alerts.ts', hooks: ['api.alertRuleSeries('] },
   { file: 'aiEval.ts', hooks: ['api.aiEvalsetCatalog(', 'api.aiEvalsetRuns(', 'api.aiEvalsetRun(', 'api.aiEvalsetCompare('] },
 ];
 

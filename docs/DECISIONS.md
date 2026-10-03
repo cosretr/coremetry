@@ -1010,6 +1010,18 @@ değişmedi. Trafiği kesilen ama aşağı akışta BAĞLI servis uygun kalır �
 dışlamaz: tamamen sönen servis de 0 span'le "%0 hata" okunur, kesici (circuit breaker) açan çağıranın
 arkasındaki bağımlılık da temiz bir damla gösterir; ikisi de gerçek neden olabilir.
 
+## 2026-10-03 — Alarm problemi detayı: tetiklenen metriğin grafiği (v0.10.1064)
+
+**Operatör (prod, "HTTP P99 latency >3s (sustained 10 min)"):** "grafik olmadığı için de anlamak çok zor
+artışları". **Karar:** span-metrik alarm kuralının problem detayında sol kolonun ilk bölümü tek grafik:
+kuralın metriği · servis, eşik kesik çizgi, başlangıç "başladı" bölgesiyle (CorePanelMulti); açıklama
+paragrafı yok. Seri yeni `GET /api/alert-rules/{id}/series`'ten: değerlendiricinin KENDİ kaynağı ve süzgeci
+(`measureAllServicesPlan` ikizi, parite testli) ve kayan penceresi (kuralın `WindowSec`'i, SQL'de `-Merge`
+pencere işlevi) — çizgi eşiği problemin açıldığı yerde keser. Kural editörünün önizlemesi kullanılmadı: yalnız
+dört temel metriği tanıyor, spanmetrics'ten ve kova başına okuyor. http_/db_/rpc_ değerlendirici gibi ham
+spans'tan (tek servis, ≤6 sa); temel RED + mq_* MV'den (≤24 sa). Log sorgusu, watcher, hedefli kurallar ve
+dedektör problemleri (anomali, SLO, runtime …) grafik almaz — sahte grafik yok.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

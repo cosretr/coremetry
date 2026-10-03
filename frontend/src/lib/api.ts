@@ -3297,6 +3297,13 @@ export const api = {
   alertRules: () => get<AlertRule[] | null>('/api/alert-rules'),
   // v0.9.1109 — /alerts satır rozeti: kural başına açık problem sayısı.
   problemRuleCounts: () => get<{ counts: Record<string, number> } | null>('/api/problems/rule-counts'),
+  // v0.10.1064 — alarm problemi detayının grafiği: kuralın metriği,
+  // değerlendiricinin penceresiyle. toNs yok = sunucu "şimdi" (açık problem).
+  alertRuleSeries: (p: { ruleId: string; service: string; metric: string; fromNs: number; toNs?: number }, signal?: AbortSignal) =>
+    get<import('./types').AlertRuleSeries>(
+      `/api/alert-rules/${encodeURIComponent(p.ruleId)}/series?service=${encodeURIComponent(p.service)}` +
+        `&metric=${encodeURIComponent(p.metric)}&from=${p.fromNs}${p.toNs ? `&to=${p.toNs}` : ''}`,
+      signal),
   alertBaseline: (params: { service?: string; metric: string; comparator?: string }) => {
     const qs = new URLSearchParams();
     if (params.service)    qs.set('service',    params.service);

@@ -4877,6 +4877,9 @@ export interface Problem {
   metric: string;
   value: number;
   threshold: number;
+  // v0.9.976 — ihlalin yönü, kuraldan açılışta kopyalanır (> >= < <=); eski
+  // satırlarda yok. v0.10.1064: alarm grafiğinin eşik etiketi.
+  comparator?: string;
   // v0.9.403 — runtime pod alarmının pod kimliği (401: service artık
   // birleşik ad taşımaz); diğer üreticilerde boş.
   pod?: string;
@@ -6002,6 +6005,21 @@ export interface LogPatternSeries {
   logsQuery?: string;
   // v0.10.1062 — penceredeki en çok ≤5 servis, sayı azalan (yalnız ES; CH yok).
   topServices?: { service: string; count: number }[];
+}
+
+// AlertRuleSeries — GET /api/alert-rules/{id}/series (v0.10.1064; Go:
+// api.alertRuleSeriesResponse). Alarm kuralının metriği, değerlendiricinin
+// kayan penceresiyle (windowSec) kova kova: t = değerlendirme anı (kova sonu,
+// şimdiyle kırpık, unix ns), v = o andaki pencere değeri; null = pencerede
+// veri yok. from/to kovaya hizalı unix ns (to dahil değil).
+export interface AlertRuleSeries {
+  metric: string;
+  service: string;
+  windowSec: number;
+  stepSec: number;
+  from: number;
+  to: number;
+  points: { t: number; v: number | null }[];
 }
 
 export interface AnomalyVerdict { eventId: string; fingerprint: string; kind: string; pattern: string; service: string; verdict: AnomalyVerdictKind; note?: string; createdBy: string; createdAt: number }

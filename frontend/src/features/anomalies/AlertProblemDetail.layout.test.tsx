@@ -58,6 +58,9 @@ vi.mock('@/components/ProblemRunbookPanel', () => ({
 }));
 vi.mock('@/components/ai/AIExplainButton', () => ({ AIExplainButton: () => null }));
 vi.mock('@/components/ShareButton', () => ({ ShareButton: () => null }));
+vi.mock('./AlertMetricChartSection', () => ({
+  AlertMetricChartSection: ({ problem }: { problem: Problem }) => <div data-alert-chart={problem.metric} />,
+}));
 
 import { AlertProblemDetail } from './ProblemDetail';
 
@@ -342,5 +345,29 @@ describe('AlertProblemDetail — terfi / küme Problem\'inde ANOMALY rozeti (v0.
   it('alarm kuralı: rozet yok', async () => {
     const el = await mount();
     expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('ANOMALY');
+  });
+});
+
+// v0.10.1064 (operatör: "grafik olmadığı için de anlamak çok zor artışları") —
+// tetiklenen metriğin grafiği sol kolonun İLK bölümü, yalnız span-metrik alarm
+// kuralında. Grafik bölümü sahte (kendi testi AlertMetricChartSection.render).
+describe('AlertProblemDetail — tetiklenen metriğin grafiği (v0.10.1064)', () => {
+  const leftCol = (el: HTMLElement) => el.querySelector<HTMLElement>('.pd-cols > div')!;
+  it('alarm kuralı: sol kolonun ilk bölümü, kök nedenin ÜSTÜNDE', async () => {
+    const el = await mount(prob({ ruleId: 'builtin-warn-http-p99-3s', metric: 'http_p99_ms', value: 3872.62, threshold: 3000 }));
+    const first = leftCol(el).firstElementChild as HTMLElement;
+    expect(first.dataset.alertChart).toBe('http_p99_ms');
+    expect(el.querySelectorAll('[data-alert-chart]')).toHaveLength(1);
+  });
+  it.each([
+    ['anomali', { ruleId: 'anomaly:checkout:p99_ms', metric: 'p99_ms' }],
+    ['terfi anomalisi', { ruleId: 'anomaly-auto:0123456789abcdef', metric: 'anomaly_ratio' }],
+    ['SLO', { ruleId: 'slo:checkout:critical', metric: 'error_rate' }],
+    ['log sorgusu kuralı', { ruleId: 'builtin-x', metric: 'log_query' }],
+    ['db öznesi', { ruleId: 'builtin-x', kind: 'db', service: 'db:oracle@core-db-01' }],
+  ] as const)('%s: grafik yok, sayfa aynı', async (_n, over) => {
+    const el = await mount(prob(over as Partial<Problem>));
+    expect(el.querySelector('[data-alert-chart]')).toBeNull();
+    expect(sect(el, 'Root cause analysis')).toBeTruthy();
   });
 });
