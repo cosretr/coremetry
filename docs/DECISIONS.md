@@ -1120,6 +1120,25 @@ işareti yazar. "Noisy rules" raporu ve paneli kapalı kuralları düşer (yoksa
 critical kuraldan besleniyordu; artık nadiren tetiklenir. Eşik alarmı operatörün kendi (servis bazlı) kurallarından,
 SLO burn ve anomali hattından gelir. Varsayılanı yeniden açmayı önerme.
 
+## 2026-10-03 — Davranış değişimi: mutlak taban + sıçramalı geçmiş toleransı (v0.10.1070)
+
+**Operatör (prod, `behavior_change`):** "Bu da mesela false pozitif." Başlık: "svc-gate servisinde p99 gecikme
+normalin 28 katına çıktı (4.26ms → 118.51ms)". Grafik: haftalardır p99 ≈ 4 ms, birkaç dakikada bir ~100 ms'e kısa
+sıçramalar. İki kusur: mutlak taban yoktu (118 ms p99 kimsenin sorunu değil) ve kovanın kendi üst bandı bu
+sıçramaları zaten içerirken medyan+MAD onu görmüyordu.
+
+**Karar (onaylı, `anomaly_sensitivity.behavior` altında üç vida):** `minP99Ms` (vars. 200 — op-latency'nin
+`opLatencyMinP99Ms`'iyle aynı sayı), `minErrorRatePct` (vars. %1): son dilim tabanın altındaysa aday yok — rejim ve
+mevsimsel dal aynı `evalBehaviorWindow`'dan geçer, yön fark etmez (tabanın altına inen değer de olay değil; tabanın
+üstündeki düşüşler aynen raporlanır); `request_rate`'te taban yok. `spikyBandFactor` (vars. 1.5): yukarı yönlü HER
+dilim kendi haftanın-saati kovasının p90'ının bu katını aşmalı (z / oran testlerine ek). p90, medyan+MAD ile aynı
+örnek kümesinden Go'da hesaplanır — sorgu zaten ham 5 dk satırlarını döndürüyor, SQL değişmedi. Saklanan `baseline`
+alanı medyan kalır; UI'ya ek metin yok. Eski blob alanları taşımaz → Normalize varsayılanı yazar (0 meşru değil).
+
+**Bedel:** sıkı bir kovada 1.3× yükseliş artık mevsimsel aday değil (1.5×p90 altında) — mevsimsel sinyal yukarı yönde
+fiilen "rejimden önce, 15 dk'da görülen belirgin kayma"ya daraldı; düşüş tarafı değişmedi. Pin:
+`behavior_floor_test.go`. Tabanları kaldırmayı önerme; ihtiyaç varsa Settings → Anomaly → Davranış değişimi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

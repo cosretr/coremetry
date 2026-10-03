@@ -640,6 +640,7 @@ function BehaviorSubsection({ behavior, onChange }: {
     enabled: true, seasonalZ: 4, regimeRatio: 1.5,
     dwellSeasonal: 3, dwellRegime: 6, maxCandidatesPerTick: 50,
     minSamplesPerBucket: 12, minBucketRepeats: 3,
+    minP99Ms: 200, minErrorRatePct: 1, spikyBandFactor: 1.5,
   };
   // `!== false` ŞART: alan yoksa (eski satır) motor AÇIKtır.
   const on = b.enabled !== false;
@@ -772,6 +773,37 @@ function BehaviorSubsection({ behavior, onChange }: {
             kestiriliyor demektir, sapma ölçüsü patlar ve normal dalgalanmalar
             bulgu görünür. 28 günlük pencerede en fazla <b>4</b> tekrar olur;
             varsayılan <b>3</b>.
+          </div>
+        </Field>
+
+        {/* v0.10.1070 — mutlak taban + sıçramalı geçmiş toleransı. */}
+        <Field label="P99 için en düşük değer (ms)">
+          <input type="number" min={1} max={60000} step={10}
+            value={b.minP99Ms ?? 200}
+            onChange={e => set({ minP99Ms: Number(e.target.value) })}
+            disabled={!on} />
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+            P99 bu değerin altındaysa oran ne olursa olsun bulgu üretilmez. Varsayılan <b>200</b>.
+          </div>
+        </Field>
+
+        <Field label="Hata oranı için en düşük değer (%)">
+          <input type="number" min={0.01} max={100} step={0.1}
+            value={b.minErrorRatePct ?? 1}
+            onChange={e => set({ minErrorRatePct: Number(e.target.value) })}
+            disabled={!on} />
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+            Hata oranı bu yüzdenin altındaysa oran ne olursa olsun bulgu üretilmez. Varsayılan <b>1</b>.
+          </div>
+        </Field>
+
+        <Field label="Sıçramalı geçmiş toleransı (× geçmiş p90)">
+          <input type="number" min={1} max={10} step={0.1}
+            value={b.spikyBandFactor ?? 1.5}
+            onChange={e => set({ spikyBandFactor: Number(e.target.value) })}
+            disabled={!on} />
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+            Yükseliş, o saatin geçmişteki p90 değerinin bu katını aşmazsa (düzenli kısa sıçramalar) bulgu sayılmaz. Varsayılan <b>1,5</b>.
           </div>
         </Field>
       </div>

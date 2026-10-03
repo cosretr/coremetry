@@ -375,6 +375,9 @@ func behaviorLogLine(b chstore.AnomalyBehaviorConfig) string {
 	if !b.IsEnabled() {
 		return " | davranış: KAPALI"
 	}
-	return fmt.Sprintf(" | davranış: seasonalZ=%.1f regimeRatio=%.2f dwell=%d/%d tavan=%d",
-		b.SeasonalZ, b.RegimeRatio, b.DwellSeasonal, b.DwellRegime, b.MaxCandidatesPerTick)
+	// v0.10.1070 — mutlak taban + sıçrama bandı da satırda: vida
+	// çevrildiğinde canlıya indiği buradan doğrulanır.
+	return fmt.Sprintf(" | davranış: seasonalZ=%.1f regimeRatio=%.2f dwell=%d/%d tavan=%d taban=%.0fms/%.2f%% bant=%.2f×p90",
+		b.SeasonalZ, b.RegimeRatio, b.DwellSeasonal, b.DwellRegime, b.MaxCandidatesPerTick,
+		b.MinP99Ms, b.MinErrorRatePct, b.SpikyBandFactor)
 }

@@ -118,9 +118,14 @@ yük kapısı v0.10.1046; **varsayılan KAPALI** v0.10.1056, `anomaly_sensitivit
 nil = kapalı — operatör: "Trace op latency false pozitif geliyor, gerek yok gelmelerine bence";
 kapı dedektörün başında, her G/Ç'den önce + recorder adımı `recordOpLatency`; kapalıyken MV
 sorgusu / aktif-olay okuması / upsert yok, açık olaylar 10 dk sonra düşer, terfi Problem'i
-"anomaly cleared" — yeniden önerme), davranış motoru (`behavior.go:224`,
+"anomaly cleared" — yeniden önerme), davranış motoru (`behavior.go` `evalBehaviorWindow`,
 kind=`behavior_change`, LLM dedektör DEĞİL hüküm katmanı — deterministik
-kapılardan geçer, alert AÇAMAZ; batch p99 yük kapısı `behaviorFleetCandidates`).
+kapılardan geçer, alert AÇAMAZ; batch p99 yük kapısı `behaviorFleetCandidates`; v0.10.1070
+operatör onaylı "Bu da mesela false pozitif": mutlak taban `behavior.minP99Ms` 200 /
+`minErrorRatePct` %1 — son dilim, rejim+mevsimsel, yön fark etmez, request_rate'te yok — ve
+sıçramalı geçmiş toleransı `spikyBandFactor` 1.5: yukarı HER dilim kovasının p90'ının 1.5×'ini
+aşmalı, p90 aynı `Values`'tan Go'da, SQL aynı; saklanan baseline medyan. Bedel: sıkı kovada
+1.3× mevsimsel artık açılmaz — tabanları kaldırmayı önerme).
 
 **Batch yüklemi (v0.10.1039, operatör: "Bazı batch işlerde ani yük artışı
 olabilir, onları anomali gibi düşünme"):** `anomaly_sensitivity.batchServicePatterns`

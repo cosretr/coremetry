@@ -734,6 +734,11 @@ func TestBehaviorBatchLatencyGate(t *testing.T) {
 		}
 	}
 	activeBatch := func(svc string) bool { return svc == "orders-batch" }
+	// v0.10.1070 — düşüş vakası 100 → 25 ms: davranış motorunun mutlak tabanı
+	// (MinP99Ms, vars. 200) yön fark etmeden onu eler. Bu testin konusu batch
+	// kapısının yalnız ARTIŞI susturması, taban değil → taban en alta.
+	lowFloor := def
+	lowFloor.Behavior.MinP99Ms = 1
 
 	tests := []struct {
 		name   string
@@ -757,7 +762,7 @@ func TestBehaviorBatchLatencyGate(t *testing.T) {
 		{"batch olmayan + p99 ×4 + hacim ×5 → p99 + request_rate", def, "payments-api", surge, batchLatNoneActive, map[string]bool{"p99_ms": true, "request_rate": true}},
 		{"kural kapalı → batch adlı servis de p99 + request_rate", off, "orders-batch", surge, batchLatNoneActive, map[string]bool{"p99_ms": true, "request_rate": true}},
 		{"batch + hacim ×5 + hata %15 → error_rate adayı (kural yalnız gecikme)", def, "orders-batch", surgeErr, batchLatNoneActive, map[string]bool{"error_rate": true}},
-		{"batch + hacim ×5 + p99 DÜŞÜŞÜ → p99 adayı (yalnız artış susar)", def, "orders-batch", surgeDown, batchLatNoneActive, map[string]bool{"p99_ms": true}},
+		{"batch + hacim ×5 + p99 DÜŞÜŞÜ → p99 adayı (yalnız artış susar)", lowFloor, "orders-batch", surgeDown, batchLatNoneActive, map[string]bool{"p99_ms": true}},
 		{"taban hacmi bilinmiyor → p99 adayı", def, "orders-batch", unknown, batchLatNoneActive, map[string]bool{"p99_ms": true}},
 	}
 	for _, tt := range tests {
@@ -842,13 +847,17 @@ func TestBatchLatencyCandidateFieldsUnchanged(t *testing.T) {
 		mixed = append(mixed, behaviorRow{Spans: spans, Errs: spans * 3 / 100, P99Ms: 400})
 	}
 	activeAll := func(string) bool { return true }
+	// v0.10.1070 — düşüş vakası (100 → 25 ms) mutlak tabanın altında; konu
+	// taban değil batch kapısı → iki tarafta da taban en alta.
+	lowDef, lowOff := def, off
+	lowDef.Behavior.MinP99Ms, lowOff.Behavior.MinP99Ms = 1, 1
 	for name, tc := range map[string]struct {
 		on, off chstore.AnomalySensitivityConfig
 		rows    []behaviorRow
 		active  func(string) bool
 	}{
 		"yük artmadan p99 ×4":                {def, off, behaviorFleetRows(cutoff, 8, 30_000, 900, 400), batchLatNoneActive},
-		"hacim ×5 + p99 ÷4":                  {def, off, behaviorFleetRows(cutoff, 8, 150_000, 4_500, 25), batchLatNoneActive},
+		"hacim ×5 + p99 ÷4":                  {lowDef, lowOff, behaviorFleetRows(cutoff, 8, 150_000, 4_500, 25), batchLatNoneActive},
 		"hacim ×5 + p99 ×4, olay aktif":      {def, off, behaviorFleetRows(cutoff, 8, 150_000, 4_500, 400), activeAll},
 		"rejim yük altında, mevsimsel değil": {wide, wideOff, batchLatBehaviorRows(cutoff, mixed), batchLatNoneActive},
 	} {

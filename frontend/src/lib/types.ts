@@ -7882,6 +7882,16 @@ export interface AnomalyBehaviorConfig {
   // patlar. Ölçülmüş vaka: lokal 9 günlük geçmişte tek tikte 178 aday.
   minSamplesPerBucket?: number;
   minBucketRepeats?: number;
+  // v0.10.1070 — mutlak taban + sıçramalı geçmiş toleransı. OPSİYONEL
+  // çünkü eski backend/blob alanı taşımaz; sunucu Normalize'da doldurur.
+  //
+  // minP99Ms        : p99 bu değerin altındaysa bulgu yok (vars. 200 ms).
+  // minErrorRatePct : hata oranı bunun altındaysa bulgu yok (vars. %1).
+  // spikyBandFactor : yükseliş, kovanın geçmiş p90'ının bu katını aşmalı
+  //                   (vars. 1.5) — düzenli kısa sıçramalar normal sayılır.
+  minP99Ms?: number;
+  minErrorRatePct?: number;
+  spikyBandFactor?: number;
 }
 
 // BehaviorChangeDetails — `behavior_change` kindli bir AnomalyEvent'in

@@ -244,6 +244,27 @@ type AnomalyBehaviorConfig struct {
 	// (ya da lokal 9 günü) susturuyor — ki orada söyleyecek dürüst bir
 	// şey zaten yok.
 	MinBucketRepeats int `json:"minBucketRepeats"`
+	// MinP99Ms / MinErrorRatePct — v0.10.1070 (operatör onaylı, prod: "Bu
+	// da mesela false pozitif"): MUTLAK taban. Son dilimin değeri bunun
+	// altındaysa p99_ms / error_rate adayı açılmaz — mevsimsel ve rejim
+	// dalı AYNI kapıdan geçer, yön fark etmez (tabanın altına inen bir
+	// değer de olay değildir). Vaka: medyanı 4 ms olan bir servisin 118 ms
+	// p99'u "28×" diye geldi; oran büyük ama 118 ms kimsenin sorunu değil.
+	// 200 ms = op-latency dedektörünün opLatencyMinP99Ms'i (aynı sayı,
+	// aynı gerekçe); %1 = ani-sapma error_rate AbsFloor'u. request_rate'te
+	// taban YOK: orada düşüşün kendisi sinyal.
+	//
+	// 0 meşru DEĞİL (bölümün kelepçe duruşu): bu sürümden ESKİ blob alanı
+	// taşımaz ve 0 okunur — 0'ı "kapalı" saymak tabanı sessizce kaldırırdı.
+	MinP99Ms        float64 `json:"minP99Ms"`
+	MinErrorRatePct float64 `json:"minErrorRatePct"`
+	// SpikyBandFactor — v0.10.1070: SIÇRAMALI GEÇMİŞ toleransı. Yukarı
+	// yönlü bir dilim ancak kendi kovasının baseline p90'ının bu katını
+	// AŞARSA ateşler (z / oran testlerine EK). Medyan düzenli kısa
+	// sıçramaları görmez (4 ms medyan, birkaç dakikada bir ~100 ms); p90
+	// görür ve o sıçramalar zaten "normal"in parçasıdır. p90, medyan+MAD
+	// ile AYNI örnek kümesinden (kova.Values) — ek sorgu yok.
+	SpikyBandFactor float64 `json:"spikyBandFactor"`
 }
 
 // IsEnabled — nil-güvenli okuma. Yazılmamış = AÇIK.
@@ -274,6 +295,15 @@ const (
 	// anomaly zaten chstore'u import ediyor), AnomalySensitivityMetrics
 	// ile aynı durum. Pencere değişirse burası da değişmeli.
 	behaviorBaselineWeeks = 4
+	// v0.10.1070 — mutlak taban ve sıçrama bandı kelepçeleri. Alt sınırlar
+	// "neredeyse kapalı"ya izin verir (1 ms, %0.01, 1× = p90'ı aşmak yeter);
+	// üst sınırlar "motoru kalıcı susturdum" hâlini engeller.
+	behaviorMinP99MsLo        = 1.0
+	behaviorMinP99MsHi        = 60000.0 // 60 sn: ötesi "p99'da hiç açma"
+	behaviorMinErrRateLo      = 0.01
+	behaviorMinErrRateHi      = 100.0
+	behaviorSpikyBandFactorLo = 1.0
+	behaviorSpikyBandFactorHi = 10.0
 )
 
 // DefaultAnomalyBehavior — spec'te onaylanan varsayılanlar
@@ -292,6 +322,10 @@ func DefaultAnomalyBehavior() AnomalyBehaviorConfig {
 		// MinBucketRepeats alanının yorumunda.
 		MinSamplesPerBucket: 12,
 		MinBucketRepeats:    3,
+		// v0.10.1070 — operatör onaylı varsayılanlar; gerekçe alanlarda.
+		MinP99Ms:        200,
+		MinErrorRatePct: 1.0,
+		SpikyBandFactor: 1.5,
 	}
 }
 
@@ -315,6 +349,10 @@ func NormalizeAnomalyBehavior(b AnomalyBehaviorConfig) AnomalyBehaviorConfig {
 		MaxCandidatesPerTick: clampRangeI(b.MaxCandidatesPerTick, behaviorMinCandidates, behaviorMaxCandidates, d.MaxCandidatesPerTick),
 		MinSamplesPerBucket:  clampRangeI(b.MinSamplesPerBucket, behaviorMinSamplesLo, behaviorMinSamplesHi, d.MinSamplesPerBucket),
 		MinBucketRepeats:     clampRangeI(b.MinBucketRepeats, behaviorMinRepeatsLo, behaviorMinRepeatsHi, d.MinBucketRepeats),
+		// v0.10.1070 — eksik alan (eski blob) 0 okunur → varsayılan.
+		MinP99Ms:        clampRangeF(b.MinP99Ms, behaviorMinP99MsLo, behaviorMinP99MsHi, d.MinP99Ms),
+		MinErrorRatePct: clampRangeF(b.MinErrorRatePct, behaviorMinErrRateLo, behaviorMinErrRateHi, d.MinErrorRatePct),
+		SpikyBandFactor: clampRangeF(b.SpikyBandFactor, behaviorSpikyBandFactorLo, behaviorSpikyBandFactorHi, d.SpikyBandFactor),
 	}
 	return out
 }

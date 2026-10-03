@@ -424,26 +424,32 @@ func TestBehaviorTransientSpikeRejected(t *testing.T) {
 	}
 }
 
-// TestBehaviorSeasonalDeviation — mevsimsel sapma: rejim eşiğini
-// geçmeyen ama kendi kovasına göre çok uzak bir değer. Sıkı bir
-// baseline'da %30'luk bir kayma 1.5× değildir ama 4σ'dır.
+// TestBehaviorSeasonalDeviation — mevsimsel sapma: rejimin kalıcılık
+// penceresi (6 dilim) dolmadan, kendi kovasına göre çok uzak bir değer.
+//
+// v0.10.1070 — eski vaka (sıkı baseline'da 1.3×) artık varsayılanda
+// AÇILMAZ: yukarı dilim kovanın p90'ının 1.5 katını aşmalı (sıçramalı
+// geçmiş toleransı). Bedel bilinçli ve behavior_floor_test.go'da pinli;
+// burada mevsimsel sinyalin kalan işi sınanıyor: 4 dilimlik (rejim
+// dwell'inin altında) belirgin sapma.
 func TestBehaviorSeasonalDeviation(t *testing.T) {
 	cfg := behaviorDefaults()
 	// MAD'i küçük tutmak için gürültüsüz-yakın baseline; effectiveMAD
-	// p99_ms için minMAD=1.0 tabanını uygular.
+	// p99_ms için minMAD=1.0 tabanını uygular. 300 ms: mutlak taban
+	// (MinP99Ms 200) bu testin konusu değil.
 	b := behaviorBucket{Repeats: behaviorTestFullRepeats}
 	for i := 0; i < 48; i++ {
-		b.Values = append(b.Values, 100+float64(i%3))
+		b.Values = append(b.Values, 300+float64(i%3))
 	}
 	baseline := map[int]behaviorBucket{10: b}
-	recent := rowsAt(10, 4, 3000, 0, 130) // 1.3× → rejim eşiği (1.5) ALTINDA
+	recent := rowsAt(10, 4, 3000, 0, 480) // 1.6×, 4 dilim → rejim dwell'i (6) DOLMADI
 
 	c, ok := evalBehavior("checkout", "p99_ms", baseline, recent, p99Policy(), cfg)
 	if !ok {
 		t.Fatal("kendi kovasından çok uzak bir değer aday üretmedi")
 	}
 	if c.Signal != "seasonal" {
-		t.Errorf("Signal = %q, want seasonal — 1.3× rejim eşiğinin altında", c.Signal)
+		t.Errorf("Signal = %q, want seasonal — rejim penceresi dolmadı", c.Signal)
 	}
 	if math.Abs(c.Z) < cfg.SeasonalZ {
 		t.Errorf("|z| = %.2f, seasonalZ = %.2f — eşiğin altındaki bir değer açılmamalıydı", c.Z, cfg.SeasonalZ)
@@ -485,6 +491,9 @@ func TestBehaviorOperationalFloorsShared(t *testing.T) {
 	// vidası, motorun kör noktası değil.
 	pol := p99Policy()
 	pol.absFloor, pol.minAbsDelta, pol.floorPct = 0, 0, 0
+	// v0.10.1070 — motorun kendi tabanı ve sıçrama bandı da kapalı (0 =
+	// kapı yok; Normalize buna izin vermez, saf çekirdek izin verir).
+	cfg.MinP99Ms, cfg.SpikyBandFactor = 0, 0
 	if _, ok := evalBehavior("checkout", "p99_ms", baseline, recent, pol, cfg); !ok {
 		t.Error("tabanlar kapalıyken de elendi — eleme sebebi operatörün vidası değilmiş")
 	}

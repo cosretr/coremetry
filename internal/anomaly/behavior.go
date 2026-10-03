@@ -358,7 +358,14 @@ func evalBehavior(
 //  2. her dilimin kovası YETERLİ baseline görmüş — hem örnek sayısı
 //     (MinSamplesPerBucket) hem de gün çeşitliliği (MinBucketRepeats);
 //     baseline'sız servis SESSİZ, uydurma yok,
-//  3. SON dilim operatörün anlamlılık tabanlarını geçiyor.
+//  3. SON dilim operatörün anlamlılık tabanlarını geçiyor,
+//  4. v0.10.1070 — YUKARI yönlü her dilim kendi kovasının baseline
+//     p90'ının SpikyBandFactor katını aşıyor (sıçramalı geçmiş toleransı),
+//  5. v0.10.1070 — SON dilim davranış motorunun MUTLAK tabanını geçiyor
+//     (p99_ms ≥ MinP99Ms, error_rate ≥ MinErrorRatePct; yön fark etmez).
+//
+// 4 ve 5 her iki sinyalde (rejim + mevsimsel) aynı fonksiyondan geçer;
+// batch kapısının mevsimsel yeniden sorusu da dahil.
 func evalBehaviorWindow(
 	service, metric string,
 	baseline map[int]behaviorBucket,
@@ -402,6 +409,13 @@ func evalBehaviorWindow(
 			// Yön değiştirdi: bu kalıcı bir kayma değil, salınım.
 			return behaviorCandidate{}, false
 		}
+		// v0.10.1070 — sıçramalı geçmiş: kovanın KENDİ üst bandını
+		// (p90) aşmayan yükseliş, o saatte zaten görülen şeydir. Medyan
+		// düzenli kısa sıçramaları görmez; dilim başına sorulur ki rejim
+		// penceresinin her dilimi bandın üstünde olsun.
+		if d == "up" && !aboveSpikyBand(v, bucket.Values, cfg.SpikyBandFactor) {
+			return behaviorCandidate{}, false
+		}
 		spans += r.Spans
 		lastZ, lastRatio, lastMedian, lastValue = z, ratio, med, v
 	}
@@ -418,6 +432,13 @@ func evalBehaviorWindow(
 	if dir == "up" && pol.absFloor > 0 && lastValue < pol.absFloor {
 		return behaviorCandidate{}, false
 	}
+	// v0.10.1070 — motorun KENDİ mutlak tabanı (ani-sapmanın absFloor'undan
+	// ayrı ve daha yüksek: kalıcı değişim ancak operasyonel olarak anlamlı
+	// bir değerde olay). Yön fark etmez: tabanın altına inen p99 / hata
+	// oranı da olay değildir.
+	if f := behaviorAbsFloor(metric, cfg); f > 0 && lastValue < f {
+		return behaviorCandidate{}, false
+	}
 
 	return behaviorCandidate{
 		Service: service, Metric: metric,
@@ -430,6 +451,53 @@ func evalBehaviorWindow(
 		Spans:     spans,
 		Score:     behaviorScore(lastZ, lastRatio),
 	}, true
+}
+
+// behaviorAbsFloor — v0.10.1070: metriğin davranış motoru mutlak tabanı.
+// request_rate'te taban YOK (düşüşün kendisi sinyal); 0 = taban yok
+// (Normalize 0'a izin vermez, saf testler kapatmak için kullanır).
+func behaviorAbsFloor(metric string, cfg behaviorConfigView) float64 {
+	switch metric {
+	case "p99_ms":
+		return cfg.MinP99Ms
+	case "error_rate":
+		return cfg.MinErrorRatePct
+	}
+	return 0
+}
+
+// behaviorBandQuantile — sıçramalı geçmiş toleransının üst bant
+// quantile'ı. p90: düzenli sıçramalar örneklerin ~%10'unu geçince bant
+// onları kapsar; tek seferlik bir sıçrama (örneklerin <%10'u) bandı
+// şişirmez.
+const behaviorBandQuantile = 0.90
+
+// aboveSpikyBand — v0.10.1070: v, kovanın baseline p90'ının factor katını
+// AŞIYOR mu? factor ≤ 0 ya da boş kova → kapı yok (true): Normalize
+// factor'ü ≥ 1'e kelepçeler; boş kova zaten kıtlık kapısında elenir.
+func aboveSpikyBand(v float64, values []float64, factor float64) bool {
+	if factor <= 0 || len(values) == 0 {
+		return true
+	}
+	return v > factor*quantileOf(values, behaviorBandQuantile)
+}
+
+// quantileOf — doğrusal ara değerli q-quantile (R tip 7 / numpy
+// varsayılanı); medianOf gibi çağıranın dilimini DEĞİŞTİRMEZ.
+func quantileOf(xs []float64, q float64) float64 {
+	n := len(xs)
+	if n == 0 {
+		return 0
+	}
+	s := append([]float64(nil), xs...)
+	sort.Float64s(s)
+	pos := q * float64(n-1)
+	lo := int(math.Floor(pos))
+	if lo >= n-1 {
+		return s[n-1]
+	}
+	frac := pos - float64(lo)
+	return s[lo] + frac*(s[lo+1]-s[lo])
 }
 
 // behaviorFires — tek dilimin verdicti: "up" | "down" | "" (ateşlemedi).
