@@ -35,12 +35,13 @@ func TestPatternServiceAggs_Golden(t *testing.T) {
 	}
 }
 
-// Zincir aynı gövdeye eklenir: sorgu (pencere + token query_string) ve
+// Zincir aynı gövdeye eklenir: sorgu (pencere + desen yan tümcesi) ve
 // maliyet korumaları değişmez, yalnız aggs'e svc / svc_rest gelir.
 func TestPatternHistogramBody_WithServiceChain(t *testing.T) {
-	plain := patternHistogramBody(`message:"ora-"`, "message", "@timestamp",
+	ora := patternMatchClause(PatternSpec{Tokens: []string{"ora-"}}, "message")
+	plain := patternHistogramBody(ora, "message", "@timestamp",
 		"2026-10-02T10:00:00Z", "2026-10-02T12:00:00Z", 60, "10s", nil)
-	withSvc := patternHistogramBody(`message:"ora-"`, "message", "@timestamp",
+	withSvc := patternHistogramBody(ora, "message", "@timestamp",
 		"2026-10-02T10:00:00Z", "2026-10-02T12:00:00Z", 60, "10s", []string{"service.name.keyword", "kubernetes.container_name"})
 	for _, k := range []string{"size", "track_total_hits", "timeout", "query"} {
 		if !reflect.DeepEqual(plain[k], withSvc[k]) {

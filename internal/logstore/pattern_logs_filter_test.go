@@ -43,7 +43,7 @@ func parityES() *ESStore {
 // tümcesi: bool.filter[1] (filter[0] pencere).
 func chartClause(t *testing.T, s *ESStore, p PatternSpec) any {
 	t.Helper()
-	body := patternHistogramBody(buildPatternTokenQuery(p.Tokens, s.fields.Body), s.fields.Body, s.fields.Timestamp,
+	body := patternHistogramBody(patternMatchClause(p, s.fields.Body), s.fields.Body, s.fields.Timestamp,
 		"2026-10-03T12:00:00Z", "2026-10-03T13:00:00Z", 60, "10s", nil)
 	return body["query"].(map[string]any)["bool"].(map[string]any)["filter"].([]any)[1]
 }
@@ -74,11 +74,20 @@ func TestPatternFilter_ES_SameClauseAsChartAndDetector(t *testing.T) {
 		t.Run(p.Name, func(t *testing.T) {
 			chart := chartClause(t, s, p)
 			// Dedektör (CountPatterns) aynı yan tümceyi taşır.
-			count := patternCountBody(buildPatternTokenQuery(p.Tokens, s.fields.Body), s.fields.Body, s.fields.Timestamp,
+			count := patternCountBody(patternMatchClause(p, s.fields.Body), s.fields.Body, s.fields.Timestamp,
 				"service.name.keyword", "a", "b", "c", "10s")
 			countClause := count["query"].(map[string]any)["bool"].(map[string]any)["filter"].([]any)[1]
 			if !reflect.DeepEqual(chart, countClause) {
 				t.Fatalf("grafik ≠ dedektör:\n%v\n%v", chart, countClause)
+			}
+			// v0.10.1087 — 1080 örneklemi de aynı yan tümceyi taşır (bayt bayt).
+			sample := patternSampleBody(patternMatchClause(p, s.fields.Body), s.fields.Body, s.fields.Timestamp,
+				"a", "c", patternSampleSize, "5s")
+			sampleClause := sample["query"].(map[string]any)["bool"].(map[string]any)["filter"].([]any)[1]
+			cb, _ := json.Marshal(countClause)
+			sb, _ := json.Marshal(sampleClause)
+			if string(cb) != string(sb) {
+				t.Fatalf("örneklem ≠ dedektör:\n%s\n%s", sb, cb)
 			}
 			// /logs listesi + histogram + fieldstats buildQuery'den okur.
 			q := s.buildQuery(Filter{Pattern: &p})
@@ -114,7 +123,7 @@ func TestPatternFilter_ES_ANDsWithFreeText(t *testing.T) {
 func TestPatternFilter_ES_NilAndTokenless(t *testing.T) {
 	s := parityES()
 	raw, _ := json.Marshal(s.buildQuery(Filter{Search: "x"}))
-	if strings.Contains(string(raw), `"default_operator":"OR"`) || strings.Contains(string(raw), "match_none") {
+	if strings.Contains(string(raw), `"minimum_should_match"`) || strings.Contains(string(raw), "match_none") {
 		t.Fatalf("desensiz sorguya desen yan tümcesi sızdı: %s", raw)
 	}
 	q := s.buildQuery(Filter{Pattern: &PatternSpec{Name: "x", Regex: "x"}})

@@ -21,9 +21,9 @@ var tnsSpec = PatternSpec{Name: "Oracle TNS errors", Regex: `TNS-[0-9]+`, Tokens
 
 // Örnek alt sorgusu SINIRLI: size ≤ 50, shard başına terminate_after, _source
 // yalnız gövde, _doc sırası, sayım yok, yumuşak timeout; yüklem sayımınkiyle
-// aynı (pencere + patternQueryStringClause).
+// aynı (pencere + patternMatchClause).
 func TestPatternSampleBody_Bounded(t *testing.T) {
-	b := patternSampleBody(`message:"tns-"`, "message", "@timestamp", "F", "T", patternSampleSize, "5s")
+	b := patternSampleBody(patternMatchClause(tnsSpec, "message"), "message", "@timestamp", "F", "T", patternSampleSize, "5s")
 	if b["size"] != patternSampleSize || patternSampleSize > 50 {
 		t.Fatalf("size = %v, tavan 50", b["size"])
 	}
@@ -46,7 +46,7 @@ func TestPatternSampleBody_Bounded(t *testing.T) {
 			t.Errorf("gövde %q taşımıyor: %s", want, s)
 		}
 	}
-	clause, _ := json.Marshal(patternQueryStringClause(`message:"tns-"`, "message"))
+	clause, _ := json.Marshal(patternMatchClause(tnsSpec, "message"))
 	if !strings.Contains(s, string(clause)) {
 		t.Errorf("yüklem CountPatterns'ınkiyle aynı olmalı: %s", s)
 	}

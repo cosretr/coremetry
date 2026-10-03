@@ -1,6 +1,12 @@
 package logstore
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
+
+// tokClause — v0.10.1087: gövde kurucuları hazır yan tümce alır.
+var tokClause = patternMatchClause(PatternSpec{Tokens: []string{"tok"}}, "message")
 
 // v0.8.164 — every per-pattern CountPatterns _msearch subquery is a
 // size:0 aggregation, the same shape that drove the v0.8.3 histogram
@@ -13,7 +19,7 @@ import "testing"
 // regressed.
 func TestPatternCountBody_CarriesCostGuards(t *testing.T) {
 	body := patternCountBody(
-		`body:"tok"`, "message", "@timestamp", "service.name.keyword", // v0.10.500 — çözümlenmiş yazım çağırandan
+		tokClause, "message", "@timestamp", "service.name.keyword", // v0.10.500 — çözümlenmiş yazım çağırandan
 		"2026-06-15T00:00:00Z", "2026-06-15T09:00:00Z", "2026-06-15T10:00:00Z",
 		"10s")
 
@@ -45,16 +51,16 @@ func TestPatternCountBody_CarriesCostGuards(t *testing.T) {
 // = cur_window ∪ base_window — sayılar değişmez, tarama küçülür.
 func TestPatternCountBody_QueryCarriesWindow(t *testing.T) {
 	body := patternCountBody(
-		`body:"tok"`, "message", "ts_custom", "service.name.keyword", // v0.10.500 — çözümlenmiş yazım çağırandan // v0.10.420 — özel alan: "@timestamp" sabitine düşen mutasyon ölür
+		tokClause, "message", "ts_custom", "service.name.keyword", // v0.10.500 — çözümlenmiş yazım çağırandan // v0.10.420 — özel alan: "@timestamp" sabitine düşen mutasyon ölür
 		"2026-06-15T00:00:00Z", "2026-06-15T09:00:00Z", "2026-06-15T10:00:00Z",
 		"10s")
 	q, _ := body["query"].(map[string]any)
 	b, _ := q["bool"].(map[string]any)
 	filters, _ := b["filter"].([]any)
 	if len(filters) != 2 {
-		t.Fatalf("query.bool.filter 2 üye olmalı (range + query_string), %v", body["query"])
+		t.Fatalf("query.bool.filter 2 üye olmalı (range + desen yan tümcesi), %v", body["query"])
 	}
-	var sawRange, sawQS bool
+	var sawRange, sawClause bool
 	for _, f := range filters {
 		m := f.(map[string]any)
 		if rng, ok := m["range"].(map[string]any); ok {
@@ -64,14 +70,11 @@ func TestPatternCountBody_QueryCarriesWindow(t *testing.T) {
 			}
 			sawRange = true
 		}
-		if qs, ok := m["query_string"].(map[string]any); ok {
-			if qs["query"] != `body:"tok"` || qs["default_field"] != "message" || qs["allow_leading_wildcard"] != false {
-				t.Fatalf("query_string bozuldu: %v", qs)
-			}
-			sawQS = true
+		if reflect.DeepEqual(f, tokClause) { // v0.10.1087 — yan tümce olduğu gibi
+			sawClause = true
 		}
 	}
-	if !sawRange || !sawQS {
-		t.Fatalf("range=%v query_string=%v", sawRange, sawQS)
+	if !sawRange || !sawClause {
+		t.Fatalf("range=%v desen=%v", sawRange, sawClause)
 	}
 }

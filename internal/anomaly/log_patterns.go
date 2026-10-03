@@ -203,6 +203,71 @@ var patterns = []logPattern{
 	{"SQL exception", `SqlException|SQLException`, []string{"sqlexception"}}, {"DB constraint violation", `(DataIntegrityViolation|ConstraintViolation|SQLIntegrityConstraintViolation)Exception`, []string{"dataintegrityviolation", "constraintviolation", "sqlintegrityconstraint"}},
 }
 
+// esPrefixForms — v0.10.1087 (operatör, prod ES: "Elastic'te eksik."): desen
+// adı → YALNIZ ES'te `prefix` sorgusuyla Tokens'a eklenen terim başları
+// (logstore.PatternSpec.ESPrefixes). CH listesi (Tokens) ve CH yüklemi
+// değişmez: alt-dize eşleşmesi bunları zaten kapsar.
+//
+// Neden ayrı liste: standart çözümleyici iki harf arasındaki noktayı ayırmaz —
+// `java.lang.NullPointerException` TEK terimdir (`java.lang.nullpointerexception`),
+// `nullpointer` öneki bile onu bulamaz. Paket-nitelikli sınıf adı Java yığın
+// izinin asıl biçimi ("Caused by: java.sql.SQLException: …"); prefix ancak
+// terimin BAŞINDAN eşler, dolayısıyla paket yazılmalı. İçeriden arama
+// (`*nullpointer*`) terim sözlüğünün tamamını gezer — yok.
+//
+//   - kısa kod önekleri: otomatik kural ≥5 karakter ister (`ora*` "oracle"ı
+//     sayardı); `wfly` / `jbas` yalnız WildFly/JBoss mesaj kodlarının başı,
+//     açıkça buraya yazıldı.
+//   - paket-nitelikli biçimler: yalnız kararlı JDK / Spring / Hibernate /
+//     JPA adları. Kurum içi paket (ExternalSystemException) bilinmiyor, yok.
+//   - "Java exceptions": tek token `exception` sözcüğü; sınıf adları
+//     (`classcast…`) ES'te ayrıca aranmazsa hiç sayılmaz.
+//
+// Her girdi küçük harf, tek terim biçimli ve son noktadan sonraki parçası
+// desen regex'inin (küçük harfli) alt-dizesi — test: TestESPrefixForms_*.
+var esPrefixForms = map[string][]string{
+	"Out of memory":        {"java.lang.outofmemoryerror"},
+	"Null pointer":         {"java.lang.nullpointer"},
+	"Database deadlock":    {"org.springframework.dao.deadlockloser"},
+	"Read / write timeout": {"java.util.concurrent.timeoutexception"},
+	"Java exceptions": {
+		"classcast", "illegalstate", "illegalargument", "unsupportedoperation",
+		"arrayindexoutofbounds", "concurrentmodification", "numberformat", "stackoverflow",
+		"java.lang.classcast", "java.lang.illegalstate", "java.lang.illegalargument",
+		"java.lang.unsupportedoperation", "java.lang.arrayindexoutofbounds",
+		"java.util.concurrentmodification", "java.lang.numberformat",
+	},
+	"JBoss / WildFly errors": {"wfly", "jbas"},
+	"Spring bean failure": {
+		"org.springframework.beans.factory.beancreation",
+		"org.springframework.beans.factory.nosuchbeandefinition",
+		"org.springframework.beans.beaninstantiation",
+		"org.springframework.beans.factory.unsatisfieddependency",
+	},
+	"Hibernate / JPA": {
+		"org.hibernate.lazyinitialization", "org.hibernate.staleobjectstate",
+		"javax.persistence.optimisticlock", "jakarta.persistence.optimisticlock",
+		"org.springframework.transaction.transactiontimedout",
+		"javax.persistence.transactionrequired", "jakarta.persistence.transactionrequired",
+	},
+	"JNDI / lookup failure": {"javax.naming.namenotfound"},
+	"Class init / load failure": {
+		"java.lang.noclassdeffound", "java.lang.exceptionininitializer", "java.lang.classnotfound",
+	},
+	"SQL exception": {"java.sql.sqlexception"},
+	"DB constraint violation": {
+		"org.springframework.dao.dataintegrityviolation", "java.sql.sqlintegrityconstraint",
+		"org.hibernate.exception.constraintviolation",
+		"javax.validation.constraintviolation", "jakarta.validation.constraintviolation",
+	},
+}
+
+// spec — v0.10.1087: desenin logstore karşılığı; dedektör, grafik (1060),
+// `pattern=` pivotu (1071) ve örneklem (1080) aynı spec'i görür.
+func (p logPattern) spec() logstore.PatternSpec {
+	return logstore.PatternSpec{Name: p.Name, Regex: p.Regex, Tokens: p.Tokens, ESPrefixes: esPrefixForms[p.Name]}
+}
+
 // LogPatternSpecByName — v0.10.1060: kayıtlı log_pattern olayının desen ADI
 // (anomaly_events.pattern = logPattern.Name) → dedektörün kendi eşleşme
 // tanımı. Anomali detayının "desen sayısı" grafiği bununla sayar: grafik
@@ -212,7 +277,7 @@ var patterns = []logPattern{
 func LogPatternSpecByName(name string) (logstore.PatternSpec, bool) {
 	for _, p := range patterns {
 		if p.Name == name {
-			return logstore.PatternSpec{Name: p.Name, Regex: p.Regex, Tokens: p.Tokens}, true
+			return p.spec(), true
 		}
 	}
 	return logstore.PatternSpec{}, false
@@ -251,6 +316,10 @@ func LogPatternSpecByName(name string) (logstore.PatternSpec, bool) {
 // vs the regex). Cross-backend correctness depends on detector
 // authors keeping the Tokens list synchronized with the Regex.
 //
+// v0.10.1087 — ES'te query_string ifadesi yerine token başına prefix /
+// match_phrase (logstore es_pattern_clause.go) + esPrefixForms: kod benzeri
+// sözcüğün içindeki token'lar ("Elastic'te eksik") artık sayılır.
+//
 // v0.10.1080 — ES'in token sayımı regex'in ÜST kümesidir (çıplak `tns`
 // terimi); tetiklemek üzere olan adaylar verifyLogPatternCands ile örneklemle
 // regex'e karşı doğrulanır (CH'de no-op).
@@ -275,7 +344,7 @@ func DetectLogPatterns(ctx context.Context, store logstore.Store, window time.Du
 	// cluster, that's the only way to keep wall time bounded.
 	specs := make([]logstore.PatternSpec, len(patterns))
 	for i, p := range patterns {
-		specs[i] = logstore.PatternSpec{Regex: p.Regex, Tokens: p.Tokens}
+		specs[i] = p.spec()
 	}
 	stats, err := store.CountPatterns(ctx, specs, curStart, baseStart, now)
 	if err != nil {
@@ -429,8 +498,7 @@ func verifyLogPatternCands(ctx context.Context, store logstore.Store, cands []lo
 	}
 	specs := make([]logstore.PatternSpec, len(pick))
 	for k, ci := range pick {
-		p := patterns[cands[ci].idx]
-		specs[k] = logstore.PatternSpec{Name: p.Name, Regex: p.Regex, Tokens: p.Tokens}
+		specs[k] = patterns[cands[ci].idx].spec()
 	}
 	vs, err := store.VerifyPatterns(ctx, specs, from, to)
 	if err != nil {

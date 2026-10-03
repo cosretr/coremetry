@@ -1452,6 +1452,37 @@ liste derlemesi (sayfanın varsayılan açılışıyla aynı okuma); ısıtma d�
 parametresiz /inbox sıcak açılır. Rozet liste girdisinin anlık görüntüsünü taşıdığı için iki SWR katmanı üst üste
 biner (en kötü ~1 dk gecikme); mutasyonlar `inbox:` önekini düşürdüğünden ikisi birlikte tazelenir.
 
+## 2026-10-03 — ES log desenleri: sözcük içindeki token'lar prefix sorgusuyla eşleşir (v0.10.1087)
+
+**Operatör (prod, ES):** "Elastic'te eksik." **Neden:** ES dedektörü token'ları `message:"token"` ifadesiyle sayıyordu;
+standart çözümleyici (UAX#29) kod benzeri sözcüğü TEK terim tutar — harf/rakam bitişikliği (`MQJCA1011` → `mqjca1011`)
+ve iki harf arasındaki nokta (`java.lang.NullPointerException` → `java.lang.nullpointerexception`) bölünmez. Terimin
+öneki/içi olan token (`nullpointer`, `mqjca`, `jbas`, `sqlexception`, `timeout`) hiç eşleşmez; CH alt-dize eşler.
+Sentetik fikstürde regex'in (= CH'nin) eşlediği 57 satırın 10'unu sayıyordu, şimdi 57'sini.
+
+**Karar:** `query_string` yerine token başına `bool.should` (`minimum_should_match: 1`, filtre bağlamı) —
+`logstore.patternMatchClause`, dedektör / grafik (1060) / `pattern=` pivotu (1071) / örneklem (1080) aynı haritayı okur
+(parite testi dördünü bayt bayt karşılaştırır).
+
+| Token sınıfı | Mod | Örnek |
+|---|---|---|
+| tek terim biçimli (`[a-z0-9_]`, nokta yalnız iki harf arası), ≥5 karakter | `prefix` (küçük harf, `case_insensitive`) | `nullpointer`, `mqjca`, `timeout`, `exception`, `ij000655` |
+| çok sözcüklü | `match_phrase` | `not allowed for uri`, `service quota` |
+| tire / iki nokta taşıyan ya da <5 karakter | `match_phrase` (tam terim) | `ora-`, `tns-`, `401`, `panic:`, `x509:` |
+| `esPrefixForms` (desen adı → ES'e özel ek) | `prefix` | kısa kod öneki `wfly`, `jbas`; paket-nitelikli `java.lang.nullpointer`, `java.sql.sqlexception`, `org.springframework.beans.factory.beancreation` … |
+
+Kısa önek `ora*` "oracle"ı, `401*` "4012"yi sayardı — ifade kalır, fazlasını 1080 örneklemi ayıklar. Paket-nitelikli
+biçimler yalnız kararlı JDK / Spring / Hibernate / JPA adları (`PatternSpec.ESPrefixes`); kurum içi paket bilinmediği
+için "External system rejected" yalnız bare `externalsystemexception` önekiyle kalır. "Java exceptions" artık sınıf
+köklerini (`classcast`, `java.lang.illegalstate` …) de arar. CH listesi (`Tokens`) ve CH yüklemi değişmedi.
+
+**Maliyet:** `prefix` terim sözlüğünde tek seek + yalnız öneki taşıyan terimler (konum okumaz; çok sözcüklü ifadeden
+ucuz). Baştaki joker (`*token*`) YOK — sözlüğün tamamını gezer. `_msearch` alt sorgu sayısı aynı (desen başına bir);
+eklenen ~40 prefix üyesi 12 desene dağılır. **ES varsayımı:** `prefix.case_insensitive` ≥ 7.10 (depo v0.8.377 seviye
+bantlarından beri varsayıyor); `query_string` reddi tuzağı burada yok. **Bedel / risk:** `search.allow_expensive_queries:
+false` kümede prefix reddedilir (seviye histogramıyla aynı risk); `wfly` öneki WildFly kodlarını (`WFLYCTL0013`) artık
+bulur ama regex `(WFLY|JBAS)[0-9]+` onları eşlemez — 1080 örneklemi bastırır, CH ile aynı (regex düzeltmesi ayrı iş).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

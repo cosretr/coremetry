@@ -2287,11 +2287,10 @@ func (s *ESStore) CountPatterns(
 			continue
 		}
 
-		tokenQuery := buildPatternTokenQuery(pat.Tokens, s.fields.Body)
 		// v0.10.500 (A2) — servis agg yazımı çözümlü (cache'li; döngüde
 		// ilk çağrıdan sonra map bakışı).
 		body := patternCountBody(
-			tokenQuery, s.fields.Body, s.fields.Timestamp, s.termsAggField(ctx, s.fields.Service),
+			patternMatchClause(pat, s.fields.Body), s.fields.Body, s.fields.Timestamp, s.termsAggField(ctx, s.fields.Service),
 			baseFrom, curFrom, curEnd, patTimeout)
 		bb, _ := json.Marshal(body)
 		ndjson.Write(bb)
@@ -2410,8 +2409,9 @@ func (s *ESStore) CountPatterns(
 // never reads) and a per-body timeout (the _msearch API can't carry a
 // request-level one, so a slow shard on a billion-doc external ES would
 // otherwise hold the slot to the handler deadline). At parity with
-// buildHistogramBody.
-func patternCountBody(tokenQuery, bodyField, tsField, svcField, baseFrom, curFrom, curEnd, timeout string) map[string]any {
+// buildHistogramBody. v0.10.1087 — desen yan tümcesi (patternMatchClause)
+// çağırandan hazır gelir: grafik / pivot / örneklemle aynı harita.
+func patternCountBody(patClause map[string]any, bodyField, tsField, svcField, baseFrom, curFrom, curEnd, timeout string) map[string]any {
 	return map[string]any{
 		"size":             0,
 		"track_total_hits": false,
@@ -2426,7 +2426,7 @@ func patternCountBody(tokenQuery, bodyField, tsField, svcField, baseFrom, curFro
 			"bool": map[string]any{
 				"filter": []any{
 					map[string]any{"range": map[string]any{tsField: map[string]any{"gte": baseFrom, "lt": curEnd}}},
-					patternQueryStringClause(tokenQuery, bodyField),
+					patClause,
 				},
 			},
 		},
@@ -2475,48 +2475,11 @@ func patternCountBody(tokenQuery, bodyField, tsField, svcField, baseFrom, curFro
 	}
 }
 
-// buildPatternTokenQuery composes the detector tokens into a
-// Lucene query_string clause: `body:"tok1" OR body:"tok2" OR …`
-// Quoted phrases so dashes / dots inside tokens (e.g. "401",
-// "ora-", "tls: handshake") parse as literal substrings rather
-// than as boolean expressions.
-func buildPatternTokenQuery(tokens []string, bodyField string) string {
-	parts := make([]string, 0, len(tokens))
-	for _, t := range tokens {
-		t = strings.ReplaceAll(t, `\`, `\\`)
-		t = strings.ReplaceAll(t, `"`, `\"`)
-		parts = append(parts, fmt.Sprintf(`%s:"%s"`, bodyField, t))
-	}
-	return strings.Join(parts, " OR ")
-}
-
-// patternQueryStringClause — v0.10.1071, SAF: desen eşleşme yan tümcesi.
-// CountPatterns (patternCountBody), anomali grafiği (patternHistogramBody) ve
-// /logs'un `pattern=` süzgeci (buildQuery → Search / Histogram / FieldStats)
-// bu TEK haritadan okur — üçü ayrışamaz (parite testi: pattern_logs_filter_test).
-// /logs'un serbest metin kutusundan FARKI bilinçli: o metin expandShorthand'dan
-// geçer, default_operator AND'dir ve must'ta skorlanır; bu yan tümce alan-
-// nitelikli token-OR, filtre bağlamında.
-func patternQueryStringClause(tokenQuery, bodyField string) map[string]any {
-	return map[string]any{
-		"query_string": map[string]any{
-			"query":                  tokenQuery,
-			"default_field":          bodyField,
-			"default_operator":       "OR",
-			"allow_leading_wildcard": false,
-			"lenient":                true,
-		},
-	}
-}
-
 // patternFilterClause — v0.10.1071, SAF: Filter.Pattern → ES filtre yan
-// tümcesi. Token'sız desen CountPatterns'taki gibi match_none (regex ES'te
-// sorgulanmaz; sahte "her şey" yerine dürüst sıfır).
+// tümcesi. v0.10.1087: dedektörle ortak patternMatchClause'un kendisi
+// (token'sız desen orada match_none).
 func patternFilterClause(p *PatternSpec, bodyField string) map[string]any {
-	if len(p.Tokens) == 0 {
-		return map[string]any{"match_none": map[string]any{}}
-	}
-	return patternQueryStringClause(buildPatternTokenQuery(p.Tokens, bodyField), bodyField)
+	return patternMatchClause(*p, bodyField)
 }
 
 // buildQuery constructs the ES bool/must query corresponding to a Filter.

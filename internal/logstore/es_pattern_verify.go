@@ -23,7 +23,7 @@ import (
 const patternVerifyTimeout = 5 * time.Second
 
 // patternSampleBody — SAF: bir desenin örnek alt sorgusu. Yüklem
-// patternCountBody'ninkiyle AYNI (zaman aralığı + patternQueryStringClause) —
+// patternCountBody'ninkiyle AYNI (zaman aralığı + patternMatchClause) —
 // sayılan dokümanlardan örnek çekilir, başka bir kümeden değil.
 //
 //   - size + terminate_after = size: shard başına en çok `size` doküman
@@ -31,7 +31,7 @@ const patternVerifyTimeout = 5 * time.Second
 //   - sort _doc: dizin sırası, skor/sıralama yok (en ucuz okuma);
 //   - _source yalnız gövde alanı: 50 tam doküman değil 50 metin;
 //   - track_total_hits:false: sayıyı CountPatterns zaten verdi.
-func patternSampleBody(tokenQuery, bodyField, tsField, from, to string, size int, timeout string) map[string]any {
+func patternSampleBody(patClause map[string]any, bodyField, tsField, from, to string, size int, timeout string) map[string]any {
 	return map[string]any{
 		"size":             size,
 		"terminate_after":  size,
@@ -43,7 +43,7 @@ func patternSampleBody(tokenQuery, bodyField, tsField, from, to string, size int
 			"bool": map[string]any{
 				"filter": []any{
 					map[string]any{"range": map[string]any{tsField: map[string]any{"gte": from, "lt": to}}},
-					patternQueryStringClause(tokenQuery, bodyField),
+					patClause,
 				},
 			},
 		},
@@ -70,7 +70,7 @@ func patternVerifyNDJSON(pats []PatternSpec, indices []string, bodyField, tsFiel
 			nd.WriteString(`{"size":0,"query":{"match_none":{}}}` + "\n")
 			continue
 		}
-		bb, _ := json.Marshal(patternSampleBody(buildPatternTokenQuery(pat.Tokens, bodyField),
+		bb, _ := json.Marshal(patternSampleBody(patternMatchClause(pat, bodyField),
 			bodyField, tsField, from, to, patternSampleSize, timeout))
 		nd.Write(bb)
 		nd.WriteByte('\n')

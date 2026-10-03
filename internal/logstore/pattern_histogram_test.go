@@ -8,6 +8,7 @@ package logstore
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -73,7 +74,8 @@ func TestChPatternHistogramSQL_Bounded(t *testing.T) {
 }
 
 func TestPatternHistogramBody_Guards(t *testing.T) {
-	body := patternHistogramBody(`message:"ora-"`, "message", "ts_custom",
+	oraClause := patternMatchClause(PatternSpec{Tokens: []string{"ora-"}}, "message")
+	body := patternHistogramBody(oraClause, "message", "ts_custom",
 		"2026-10-02T10:00:00Z", "2026-10-02T12:00:00Z", 60, "10s", nil)
 	// v0.10.1062 — servis alanı yoksa agg kümesi 1060'takiyle aynı: yalnız kovalar.
 	if aggs := body["aggs"].(map[string]any); len(aggs) != 1 {
@@ -84,15 +86,20 @@ func TestPatternHistogramBody_Guards(t *testing.T) {
 	}
 	filters := body["query"].(map[string]any)["bool"].(map[string]any)["filter"].([]any)
 	if len(filters) != 2 {
-		t.Fatalf("filter 2 üye (range + query_string) olmalı: %v", filters)
+		t.Fatalf("filter 2 üye (range + desen yan tümcesi) olmalı: %v", filters)
 	}
 	rng, ok := filters[0].(map[string]any)["range"].(map[string]any)["ts_custom"].(map[string]any)
 	if !ok || rng["gte"] != "2026-10-02T10:00:00Z" || rng["lt"] != "2026-10-02T12:00:00Z" {
 		t.Fatalf("pencere sorguda değil / yanlış alan: %v", filters[0])
 	}
-	qs := filters[1].(map[string]any)["query_string"].(map[string]any)
-	if qs["query"] != `message:"ora-"` || qs["default_operator"] != "OR" || qs["allow_leading_wildcard"] != false {
-		t.Fatalf("query_string CountPatterns'tan ayrışmış: %v", qs)
+	// v0.10.1087 — `ora-` kısa + tireli: ifade kalır (prefix `ora*` "oracle"ı sayardı).
+	if !reflect.DeepEqual(filters[1], oraClause) {
+		t.Fatalf("desen yan tümcesi CountPatterns'tan ayrışmış: %v", filters[1])
+	}
+	want := map[string]any{"bool": map[string]any{"should": []any{
+		map[string]any{"match_phrase": map[string]any{"message": "ora-"}}}, "minimum_should_match": 1}}
+	if !reflect.DeepEqual(oraClause, want) {
+		t.Fatalf("ora- ifade olmalı: %v", oraClause)
 	}
 	dh := body["aggs"].(map[string]any)["buckets"].(map[string]any)["date_histogram"].(map[string]any)
 	if dh["fixed_interval"] != "60s" || dh["field"] != "ts_custom" || dh["min_doc_count"] != 1 {

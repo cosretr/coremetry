@@ -70,8 +70,8 @@ type Filter struct {
 	// pivotu desenin token'larını arama metnine çevirip /logs'a veriyordu,
 	// sayfa grafiğin saydığından başka satırlar gösterdi) — küratörlü log
 	// deseninin DEDEKTÖR yüklemi, Search'e ek AND. Arama diline ÇEVRİLMEZ:
-	// ES'te buildPatternTokenQuery'nin query_string'i (CountPatterns /
-	// PatternHistogram ile aynı yan tümce, patternQueryStringClause), CH'de
+	// ES'te patternMatchClause (CountPatterns / PatternHistogram / örneklemle
+	// aynı yan tümce; v0.10.1087 token başına prefix / ifade), CH'de
 	// chPatternMatchSQL (token ön süzgeci + regex). nil = desen süzgeci yok.
 	// Search / Histogram / FieldStats üçü de uygular (sessiz no-op sınıfı).
 	Pattern     *PatternSpec
@@ -291,9 +291,10 @@ type IndexInfo struct {
 //     Tokens list driving the tokenbf_v1 prefilter so granules
 //     with none of the tokens are pruned before the regex pass.
 //   - Elasticsearch ignores Regex (regex queries are slow on
-//     large indices) and uses Tokens directly as a query_string
-//     OR clause against the body field — inverted-index lookup
-//     stays sub-second at billion-log scale.
+//     large indices) and ORs Tokens (+ ESPrefixes) against the body
+//     field — inverted-index lookup stays sub-second at billion-log
+//     scale. v0.10.1087: tek terim biçimli ≥5 karakterlik token
+//     `prefix`, diğerleri `match_phrase` (es_pattern_clause.go).
 //
 // Tokens are lowercase substrings the body must contain when
 // the regex matches. The detector author picks them so the OR
@@ -306,6 +307,13 @@ type PatternSpec struct {
 	Name   string
 	Regex  string
 	Tokens []string
+	// ESPrefixes — v0.10.1087 (operatör, prod ES: "Elastic'te eksik."):
+	// yalnız ES'te `prefix` sorgusuyla Tokens'a EKLENEN terim başları —
+	// otomatik kuralın (≥5 karakter) dışında kalan kısa kod önekleri
+	// (`wfly`) ve standart çözümleyicinin tek terim tuttuğu paket-nitelikli
+	// sınıf adlarının başı (`java.lang.nullpointer`). CH okumaz: alt-dize
+	// eşleşmesi Tokens'la bunları zaten kapsar. Token'sız desende etkisiz.
+	ESPrefixes []string
 }
 
 // PatternKey — v0.10.1071, SAF: Filter.Pattern'in önbellek anahtarı parçası.
@@ -319,7 +327,11 @@ func PatternKey(p *PatternSpec) string {
 	if p.Name != "" {
 		return p.Name
 	}
-	return "spec:" + p.Regex + "|" + strings.Join(p.Tokens, "\x00")
+	k := "spec:" + p.Regex + "|" + strings.Join(p.Tokens, "\x00")
+	if len(p.ESPrefixes) > 0 { // v0.10.1087 — ES yüklemine girer
+		k += "|" + strings.Join(p.ESPrefixes, "\x00")
+	}
+	return k
 }
 
 // PatternStats is the per-pattern signal a detector consumes:

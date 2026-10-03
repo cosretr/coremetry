@@ -13,8 +13,8 @@ package logstore
 //   CH: chPatternMatchSQL (token ön süzgeci tokenbf_v1'i kullanır + regex),
 //       countOnePattern ile ORTAK yüklem; zaman-sınırlı WHERE + LIMIT +
 //       max_execution_time.
-//   ES: buildPatternTokenQuery (token-OR query_string; regex yok sayılır —
-//       CountPatterns ES yolu da böyle) + date_histogram; size:0,
+//   ES: patternMatchClause (token başına prefix / match_phrase OR'u, v0.10.1087;
+//       regex yok sayılır — CountPatterns ES yolu da böyle) + date_histogram; size:0,
 //       track_total_hits:false, yumuşak timeout, request_cache.
 //
 // Kova sayısını ÇAĞIRAN sınırlar (API katmanı ≤120 kova); burada yalnız
@@ -127,13 +127,13 @@ func (s *CHStore) PatternHistogram(ctx context.Context, pat PatternSpec, from, t
 }
 
 // patternHistogramBody — ES desen histogramı gövdesi (SAF, testli). Yüklem
-// patternCountBody'ninkiyle aynı query_string; pencere SORGUDA (v0.10.412
+// patternCountBody'ninkiyle aynı patternMatchClause; pencere SORGUDA (v0.10.412
 // dersi: yalnız agg'de olsaydı token taraması tüm indeks saklamasını
 // gezerdi). Kova agg'i Histogram'ın histogramDateAgg'i (min_doc_count:1 —
 // v0.8.3 yoğun ızgara korunması; sıfır doldurma çağıranda).
 // v0.10.1062 — svcFields boş değilse aynı gövdeye servis atfı zinciri
 // (patternServiceAggs) eklenir; boşsa gövde 1060'takiyle bayt bayt aynı.
-func patternHistogramBody(tokenQuery, bodyField, tsField, from, to string, bucketSec int, timeout string, svcFields []string) map[string]any {
+func patternHistogramBody(patClause map[string]any, bodyField, tsField, from, to string, bucketSec int, timeout string, svcFields []string) map[string]any {
 	aggs := map[string]any{"buckets": histogramDateAgg(tsField, bucketSec)}
 	for k, v := range patternServiceAggs(svcFields) {
 		aggs[k] = v
@@ -146,7 +146,7 @@ func patternHistogramBody(tokenQuery, bodyField, tsField, from, to string, bucke
 			"bool": map[string]any{
 				"filter": []any{
 					map[string]any{"range": map[string]any{tsField: map[string]any{"gte": from, "lt": to}}},
-					patternQueryStringClause(tokenQuery, bodyField),
+					patClause,
 				},
 			},
 		},
@@ -299,7 +299,7 @@ func (s *ESStore) PatternHistogram(ctx context.Context, pat PatternSpec, from, t
 // patternHistogramOnce — tek _search; dönen int HTTP durumu (taşıma hatasında 0).
 func (s *ESStore) patternHistogramOnce(ctx context.Context, pat PatternSpec, from, to time.Time, bucketSec int, svcFields []string) (*PatternHistogramResult, int, error) {
 	bodyMap := patternHistogramBody(
-		buildPatternTokenQuery(pat.Tokens, s.fields.Body), s.fields.Body, s.fields.Timestamp,
+		patternMatchClause(pat, s.fields.Body), s.fields.Body, s.fields.Timestamp,
 		from.UTC().Format(time.RFC3339Nano), to.UTC().Format(time.RFC3339Nano),
 		bucketSec, esTimeseriesTimeoutFromEnv("10s"), svcFields)
 	body, err := json.Marshal(bodyMap)
