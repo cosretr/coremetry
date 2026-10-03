@@ -1006,6 +1006,14 @@ export interface ChangedService {
   p99DeltaPct: number;
   score: number;
   reasons: string[];          // pre-formatted human bullets, render verbatim
+  // v0.10.1063 — değişimin yönü (skor yönsüz büyüklük). worse = hata/p99 ↑
+  // ya da trafik sıçraması; lost = trafik ≥%90 düştü; better = hata ya da p99
+  // gerçekten düştü; quieter = yalnız trafik düştü (%25–%90); unknown = okunamadı.
+  direction?: 'worse' | 'lost' | 'better' | 'quieter' | 'unknown';
+  // v0.10.1063 — yalnız /rootcause demeti: özneyle topoloji kenarı ve
+  // "olası neden" uygunluğu (kötüleşen/kesilen VE kenarlı).
+  relation?: 'upstream' | 'downstream' | 'both';
+  causeEligible?: boolean;
 }
 
 // RootCause — the assembled "what changed / likely cause" bundle for one
@@ -1028,6 +1036,9 @@ export interface RootCause {
     ageSeconds: number;
   };
   correlations: ChangedService[];   // always present (possibly empty)
+  // v0.10.1063 — correlations'ın kenar işaretlemesi için topoloji okundu mu.
+  // false/yok = "bağlantı doğrulanamadı" (bağlı değil DEMEK DEĞİL).
+  topologyKnown?: boolean;
   blastRadius?: BlastRadius;
   // v0.9.1063 — hata problemlerinde aynı-pencere hata alt-kümesi;
   // gecikme/diğer ailelerde ZAMAN-KAYDIRMALI kıyas (baseline = önceki

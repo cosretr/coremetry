@@ -28,9 +28,13 @@ type RootCause struct {
 	ToNs         int64                    `json:"toNs"`
 	RecentDeploy *chstore.RecentDeploy    `json:"recentDeploy,omitempty"`
 	Correlations []chstore.ChangedService `json:"correlations"`
-	BlastRadius  *chstore.BlastRadius     `json:"blastRadius,omitempty"`
-	BubbleUp     *chstore.BubbleUpResult  `json:"bubbleUp,omitempty"`
-	Exemplar     *chstore.Exemplar        `json:"exemplar,omitempty"`
+	// TopologyKnown (v0.10.1063) — correlations'ın kenar işaretlemesi için
+	// topoloji okundu mu. false = okunamadı/atlandı: causeEligible'ın
+	// yokluğu "bağlı değil" DEĞİL, "doğrulanamadı" demektir (panel metni).
+	TopologyKnown bool                    `json:"topologyKnown"`
+	BlastRadius   *chstore.BlastRadius    `json:"blastRadius,omitempty"`
+	BubbleUp      *chstore.BubbleUpResult `json:"bubbleUp,omitempty"`
+	Exemplar      *chstore.Exemplar       `json:"exemplar,omitempty"`
 	// Hypothesis (v0.9.1066, Faz 3.1 / K6+K7) — sentezleyicinin kalıcı
 	// hipotezi TEK pakette: adaylar+gerekçeler, deploy (ölçülmüş
 	// etkisiyle), temsilî trace ve Deep (P1/deploy soruşturması +
@@ -67,6 +71,12 @@ type AnomalyRootCause struct {
 	AnomalyKind string `json:"anomalyKind"` // log_pattern | log_template_new | trace_op
 	Pattern     string `json:"pattern"`     // log pattern name OR operation name (trace_op)
 }
+
+// rootCauseTopoEdgeCap — özne odaklı topoloji okumasının kenar tavanı
+// (v0.10.1063). Çağrı sayısına göre azalan sırada kesilir; geniş bir
+// ağ geçidinin seyrek komşusu tavan dışında kalırsa "bağlantısız" sayılır
+// (güvenli yön: yanlış yayılım iddiası yerine iddia yok).
+const rootCauseTopoEdgeCap = 500
 
 // rootcauseCacheKey — v0.9.1082 regresyon yüzeyi: anahtar YALNIZ
 // problemin kimliğinden türetilir, saatten ASLA. Saat-türevli bir
@@ -185,8 +195,29 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 			// ile aynı sınıf).
 			// v0.9.1062 (Faz 2.1) — MV sürümü: pencereler ≥5dk, aggregate
 			// sabit (invariant #3); ham spans taraması tık-yolundan kalktı.
-			if cs, e := s.store.GetCorrelatedChangesMV(ctx, started, windowSec, windowSec*4); e == nil && cs != nil {
+			// v0.10.1063 — işaretleme havuzu (50) üzerinden; gösterim tavanı
+			// (20) kenar+yön işaretlemesinden SONRA uygulanır (aynı sorgu).
+			if cs, e := s.store.GetCorrelatedChangesMVTop(ctx, started, windowSec, windowSec*4, chstore.ChangedServicesMarkPool); e == nil && cs != nil {
 				out.Correlations = cs
+			}
+		}()
+		// (a2) v0.10.1063 — öznenin topoloji komşuluğu, correlations'ın
+		// taban+cari penceresinde. Yeni sorgu DEĞİL: servis haritasının
+		// odaklı okuması (topology_edges_5m, özne süzgeçli, LIMIT + 10 sn).
+		// Okunamazsa topoKnown=false → hiçbir satır "olası neden" olmaz.
+		// Servissiz problemde (watcher) okuma YOK: boş özne süzgeci tüm
+		// grafın ilk 500 kenarını okuyup çöpe atardı.
+		var topoEdges []chstore.ServiceEdge
+		topoKnown := false
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if p.Service == "" {
+				return
+			}
+			from := started.Add(-time.Duration(windowSec*4) * time.Second)
+			if es, e := s.store.GetServiceGraphTopN(ctx, p.Service, 0, from, end, rootCauseTopoEdgeCap); e == nil {
+				topoEdges, topoKnown = es, true
 			}
 		}()
 		// (b) Blast radius — who calls this service + how many are cascading.
@@ -236,6 +267,13 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		wg.Wait()
+		// v0.10.1063 — yön + kenar: iyileşen ya da bağlantısız servis
+		// "olası neden" manşetine çıkamaz (satır listede kalır).
+		out.Correlations = chstore.MarkCorrelationCauses(out.Correlations, p.Service, topoEdges, topoKnown)
+		if len(out.Correlations) > chstore.ChangedServicesTop {
+			out.Correlations = out.Correlations[:chstore.ChangedServicesTop]
+		}
+		out.TopologyKnown = topoKnown
 		// v0.10.1054 — kural deploy'u bastırdıysa ve kök-neden işçisi ölçülen
 		// gerilemeyle adayı geri aldıysa (hipotezin RecentDeploy'u dolu) o
 		// deploy yeniden "olası neden". Bastırma yoksa çıktı bayt bayt aynı.

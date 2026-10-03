@@ -4,7 +4,7 @@ import { Spinner, Empty } from './Spinner';
 import { IconFlame } from './icons';
 import { api } from '@/lib/api';
 import { fmtFixed, fmtDurShort } from '@/lib/utils';
-import type { RootCause, BubbleUpValue, RolloutEvidence } from '@/lib/types';
+import type { RootCause, BubbleUpValue, RolloutEvidence, ChangedService } from '@/lib/types';
 import { rolloutEvidenceHref, shortRevision, statusTone as rolloutStatusTone } from '@/lib/rolloutRow';
 import { Badge } from '@/components/ui/Badge';
 import { DataTableState } from '@/components/ui/DataTable';
@@ -13,6 +13,7 @@ import { TriageStatusBadge } from '@/features/anomalies/statusTone';
 import { tsLong } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
+import { coMovingCause, localizedNote } from '@/lib/rootCauseCandidates';
 
 // RootCausePanel — the single "what changed / likely cause" surface for a
 // Problem (v0.7.52, backend bundle shipped v0.7.51). Fetches
@@ -171,9 +172,10 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
       {/* 4. What changed — correlated services (folded-in CorrelationsPanel). */}
       {corr.length > 0 && (
         <Section title="What else changed"
-                 subtitle="services that moved around the fire (current vs prior window, by composite score)">
+                 subtitle="services that moved around the fire (current vs prior window; connected + worsening first, improved / quieter last, then by composite score)">
           <div className="table-wrap">
-            {/* v0.10.945 — statik tablo (T1): en çok 8 servis, sıra sunucunun bileşik puanı; sıralanmaz. */}
+            {/* v0.10.945 — statik tablo (T1): en çok 8 servis, sıralanmaz. v0.10.1063 — sıra
+                sunucudan: olası neden (kenarlı + kötüleşen) önce, iyileşenler sonda; grup içi bileşik puan. */}
             <table>
               <thead><tr>
                 <th className="num" style={{ width: 36 }}>#</th>
@@ -189,6 +191,8 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                       <Link to={serviceHref(c.service, { range: win })} style={{ fontWeight: 600 }}>
                         {c.service}
                       </Link>
+                      {c.relation && <span className="cell-faint" style={{ marginLeft: 6, fontSize: 11 }}>{c.relation}</span>}
+                      {changeBadge(c)}
                     </td>
                     <td style={{ lineHeight: 1.5 }}>
                       {c.reasons.map((r, k) => <div key={k}>{r}</div>)}
@@ -390,18 +394,33 @@ function likelyCause(
         error spans vs {pct(top.baselinePct)} of all spans.</>,
     };
   }
-  const co = (rc.correlations ?? []).find(c => c.service !== service && c.score >= 20);
+  const co = coMovingCause(rc, service);
   if (co) {
+    const rel = co.relation === 'upstream' ? 'upstream' : co.relation === 'downstream' ? 'downstream' : 'upstream / downstream';
+    // v0.10.1063 — trafiği kesilen bağımlılık "co-moving" değil, SÖNEN komşu.
     return {
       ...corr,
-      text: <>Co-moving with <b>{co.service}</b> in the same window (score {co.score.toFixed(0)}) — possible
-        upstream / downstream propagation.</>,
+      text: co.direction === 'lost'
+        ? <>Connected {rel} service <b>{co.service}</b> lost its traffic in the same window (score {co.score.toFixed(0)}) — possible
+          {' '}{rel} propagation.</>
+        : <>Co-moving with <b>{co.service}</b> in the same window (score {co.score.toFixed(0)}) — possible
+          {' '}{rel} propagation.</>,
     };
   }
+  // v0.10.1063 — başka servisler kıpırdadıysa ama hiçbiri neden değilse
+  // bunu SÖYLE (topoloji okunamadıysa "doğrulanamadı" — localizedNote).
   return {
     ...local,
-    text: <>No strong external signal — the fire appears <b>localized to {service}</b>.</>,
+    text: <>No strong external signal — the fire appears <b>localized to {service}</b>{localizedNote(rc, service)}.</>,
   };
+}
+
+// changeBadge — v0.10.1063. "What else changed" satırında yön/bağ etiketi.
+function changeBadge(c: ChangedService): ReactNode {
+  if (c.direction === 'better') return <Badge tone="success" style={{ marginLeft: 6 }} title="hata/gecikme/trafik yalnız düştü — bozulmanın nedeni sayılmaz">iyileşti</Badge>;
+  if (c.direction === 'lost') return <Badge tone="warning" style={{ marginLeft: 6 }} title="trafik ≥%90 düştü">trafik kesildi</Badge>;
+  if (c.direction === 'quieter') return <Badge tone="neutral" style={{ marginLeft: 6 }} title="yalnız trafik düştü; hata/gecikme yerinde">trafik azaldı</Badge>;
+  return null;
 }
 
 // topBubble flattens the bubble-up result to the single most over-represented

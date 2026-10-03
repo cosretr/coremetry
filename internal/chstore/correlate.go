@@ -36,7 +36,47 @@ type ChangedService struct {
 	// from re-implementing the formatting logic and keeps the
 	// "why did this surface?" answer co-located with the data.
 	Reasons []string `json:"reasons"`
+	// Direction (v0.10.1063) — değişimin YÖNÜ; Score yönsüz büyüklüktür.
+	// ChangeWorse | ChangeLost | ChangeBetter | ChangeQuieter | ChangeUnknown
+	// (scoreChangedService basar).
+	// Operatör: hatası %76.8 → %0'a inen, trafiği çöken servis bir
+	// gecikme yangınının "olası nedeni" diye manşete çıkıyordu.
+	Direction string `json:"direction,omitempty"`
+	// Relation / CauseEligible (v0.10.1063) — YALNIZ kök-neden demeti
+	// doldurur (MarkCorrelationCauses): özneyle topoloji kenarı ve
+	// "olası neden" uygunluğu. Diğer tüketicilerde boş/false.
+	Relation      string `json:"relation,omitempty"` // upstream | downstream | both
+	CauseEligible bool   `json:"causeEligible,omitempty"`
+	// surge — hacim kapılı trafik sıçraması (> +%25, >100 span). Yukarı akış
+	// (çağıran) adayın TEK neden yolu: özneye yük bindirmesi. JSON'a çıkmaz.
+	surge bool
 }
+
+// Değişim yönleri (v0.10.1063). "lost" ayrı sınıf: trafiğin ~0'a
+// çökmesi kendi başına bir olay olabilir ama ne iyileşme ne kötüleşme —
+// başka servisin yangınına ancak KENARLA (ve aşağı akışta) bağlıysa neden
+// adayıdır. "quieter": yalnız trafik düştü (%25–%90), hata/p99 yerinde —
+// "iyileşti" demek yalan olurdu. "unknown": NaN/Inf delta, yön okunamadı;
+// asla "better" sayılmaz.
+const (
+	ChangeWorse   = "worse"   // hata ↑, p99 ↑ ya da trafik sıçraması
+	ChangeLost    = "lost"    // trafik ≥ %90 düştü, kötüleşen sinyal yok
+	ChangeBetter  = "better"  // hata ya da p99 GERÇEKTEN düştü, kötüleşen yok
+	ChangeQuieter = "quieter" // yalnız trafik düştü (%25–%90)
+	ChangeUnknown = "unknown" // delta okunamadı (NaN/Inf) ya da sınıfsız
+)
+
+// changeLostPct — "trafik kesildi" eşiği (RateDeltaPct ≤ −90).
+const changeLostPct = -90.0
+
+// ChangedServicesTop — "ne değişti" listesinin gösterim tavanı. /rootcause
+// yolu yön+kenar işaretlemesini daha GENİŞ listede yapar
+// (ChangedServicesMarkPool) ve tavanı işaretlemeden SONRA uygular: yönsüz
+// skorla 25. sıradaki bağlı bir aşağı akış servisi kesilip görünmez olmasın.
+const (
+	ChangedServicesTop      = 20
+	ChangedServicesMarkPool = 50
+)
 
 // GetCorrelatedChanges runs one ClickHouse pass that pivots span
 // stats by service across two adjacent time windows: the baseline
@@ -178,14 +218,55 @@ func scoreChangedService(
 	if len(c.Reasons) == 0 {
 		return ChangedService{}, false
 	}
+	c.Direction = changeDirection(c, baseCnt+curCnt)
+	c.surge = baseCnt+curCnt > 100 && c.RateDeltaPct > 25
 	return c, true
+}
+
+// changeDirection — v0.10.1063. Eşikler reason kapılarıyla aynı (hata
+// ≥1 puan, rate/p99 %25); skor formülüne dokunmaz. Sıra önemli:
+//   - Kötüleşen tek sinyal satırı "worse" yapar (karışık satır iyileşme
+//     sayılmaz). p99 artışı HACİM KAPISIZ: düşük hacimde p99 10× + hata
+//     −1 puan "better" çıkmasın (uygunluk zaten kenar + skor ≥ 20 ister).
+//     Trafik sıçraması hacim kapılı (küçük tabanda yüzde gürültü).
+//   - NaN/Inf delta → "unknown" (asla "better").
+//   - Trafik ≥ %90 düştü (hacim kapılı) → "lost".
+//   - Hata ≥1 puan ya da p99 > %25 GERÇEKTEN düştü → "better".
+//   - Yalnız trafik düştü (> %25) → "quieter"; kalan → "unknown".
+func changeDirection(c ChangedService, volume uint64) string {
+	vol := volume > 100
+	errDelta := (c.CurrentErr - c.BaselineErr) * 100 // puan
+	if errDelta > 1 || c.P99DeltaPct > 25 || (vol && c.RateDeltaPct > 25) {
+		return ChangeWorse
+	}
+	for _, v := range []float64{errDelta, c.P99DeltaPct, c.RateDeltaPct} {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return ChangeUnknown
+		}
+	}
+	switch {
+	case vol && c.RateDeltaPct <= changeLostPct:
+		return ChangeLost
+	case errDelta < -1 || c.P99DeltaPct < -25:
+		return ChangeBetter
+	case c.RateDeltaPct < -25:
+		return ChangeQuieter
+	default:
+		return ChangeUnknown
+	}
 }
 
 // rankChangedServices — skor desc + ilk 20 (saf).
 func rankChangedServices(out []ChangedService) []ChangedService {
+	return rankChangedServicesTop(out, ChangedServicesTop)
+}
+
+// rankChangedServicesTop — skor desc + ilk n (saf; v0.10.1063 /rootcause
+// işaretleme havuzu için n parametresi).
+func rankChangedServicesTop(out []ChangedService, n int) []ChangedService {
 	sort.Slice(out, func(i, j int) bool { return out[i].Score > out[j].Score })
-	if len(out) > 20 {
-		out = out[:20]
+	if n > 0 && len(out) > n {
+		out = out[:n]
 	}
 	return out
 }
@@ -204,6 +285,16 @@ func rankChangedServices(out []ChangedService) []ChangedService {
 // okuyucuyla AYNI saf fonksiyondan geçer.
 func (s *Store) GetCorrelatedChangesMV(
 	ctx context.Context, at time.Time, windowSec, baselineSec int,
+) ([]ChangedService, error) {
+	return s.GetCorrelatedChangesMVTop(ctx, at, windowSec, baselineSec, ChangedServicesTop)
+}
+
+// GetCorrelatedChangesMVTop — GetCorrelatedChangesMV, ilk `top` satırla
+// (v0.10.1063). AYNI sorgu (LIMIT 500 SQL'de); tavan yalnız Go sıralamasında.
+// /rootcause ChangedServicesMarkPool ile çağırır, tavanı işaretlemeden sonra
+// uygular.
+func (s *Store) GetCorrelatedChangesMVTop(
+	ctx context.Context, at time.Time, windowSec, baselineSec, top int,
 ) ([]ChangedService, error) {
 	if windowSec <= 0 {
 		windowSec = 600
@@ -273,7 +364,7 @@ func (s *Store) GetCorrelatedChangesMV(
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return rankChangedServices(out), nil
+	return rankChangedServicesTop(out, top), nil
 }
 
 func safeRate(num, denom uint64) float64 {

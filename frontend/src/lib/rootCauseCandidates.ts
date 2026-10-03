@@ -1,4 +1,4 @@
-import type { ChangedService, RootCauseHypothesis } from '@/lib/types';
+import type { ChangedService, RootCause, RootCauseHypothesis } from '@/lib/types';
 
 // rootCauseCandidates.ts — v0.10.700 (Dynatrace paritesi #2, dilim 1).
 //
@@ -41,14 +41,41 @@ export function ribbonCandidates(rc: {
         source: 'hypothesis' as const,
       }));
   }
+  // v0.10.1063 — canlı yolda iyileşen / yalnız sakinleşen servis "aday"
+  // değildir (operatör: "<svc-B> ile ilgili olduğunu düşünüyor ama alakasız");
+  // sunucunun uygun işaretlediği (kenarlı + kötüleşen) önce, sonra skor.
   return (rc.correlations ?? [])
-    .filter(c => c.service && c.service !== rc.service)
+    .filter(c => c.service && c.service !== rc.service
+      && c.direction !== 'better' && c.direction !== 'quieter')
+    .sort((a, b) => Number(b.causeEligible === true) - Number(a.causeEligible === true) || b.score - a.score)
     .map(c => ({
       service: c.service,
       scoreLabel: String(Math.round(c.score)),
       hops: 0,
       reason: c.reasons?.[0],
       source: 'live' as const,
-    }))
-    .sort((a, b) => Number(b.scoreLabel) - Number(a.scoreLabel));
+    }));
+}
+
+// coMovingCause — v0.10.1063. "Co-moving … propagation" manşetine çıkabilecek
+// satır: YALNIZ sunucunun uygun işaretlediği (kötüleşen ya da trafiği kesilen
+// VE özneyle topoloji kenarı olan) ve skoru ≥ 20 olan. Operatör: "<svc-B> ile
+// ilgili olduğunu düşünüyor ama alakasız" — en yüksek skorlu satır iyileşen,
+// bağlantısız bir servisti. causeEligible taşımayan (eski önbellekli) yanıt →
+// manşet yok.
+export function coMovingCause(rc: RootCause, service: string): ChangedService | undefined {
+  return (rc.correlations ?? []).find(c => c.service !== service && c.causeEligible === true && c.score >= 20);
+}
+
+// localizedNote — v0.10.1063. "localized" manşetinin eki: başka servisler
+// kıpırdadıysa neden hiçbiri manşette değil, DÜRÜSTÇE. "Hiçbiri bağlı ve
+// kötüleşen değil" yalnız topoloji GERÇEKTEN okunduysa (topologyKnown) söylenir;
+// okunamadıysa ya da alan yoksa (eski yanıt) "bağlantı doğrulanamadı".
+export function localizedNote(rc: RootCause, service: string): string {
+  const moved = (rc.correlations ?? []).some(c => c.service !== service);
+  if (!moved) return '';
+  if (rc.topologyKnown === true) {
+    return `; services below moved in the same window but none is a connected, worsening dependency of ${service}`;
+  }
+  return '; services below moved in the same window — bağlantı doğrulanamadı (topology unavailable)';
 }

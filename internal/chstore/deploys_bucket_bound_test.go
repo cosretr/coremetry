@@ -38,8 +38,10 @@ func deploysBucketReads(t *testing.T) []struct {
 		// İkisi de paket sabiti — kaynak dilimlemeye gerek yok.
 		{"serviceVersionMVSQL (servis dağıtımları)", serviceVersionMVSQL},
 		{"deploysWindowMVSQL (filo /deploys)", deploysWindowMVSQL},
+		// v0.10.1063 — sorgu GetCorrelatedChangesMVTop'a taşındı (MV sürümü
+		// ona ince sarmalayıcı); sınır kontrolü sorgunun YAŞADIĞI gövdede.
 		{"GetCorrelatedChangesMV (korele değişiklikler)",
-			funcBody(t, "correlate.go", "func (s *Store) GetCorrelatedChangesMV(")},
+			funcBody(t, "correlate.go", "func (s *Store) GetCorrelatedChangesMVTop(")},
 	}
 }
 

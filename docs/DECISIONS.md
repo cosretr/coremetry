@@ -987,6 +987,29 @@ etiketleri AYRI yüzey, değişmedi. Takip (onay ister): mcptools logAttrs'ta st
 (exception.stacktrace, error.stack_trace, …) sınırlı büyük tavan (~1500 rune, FenceSafe) — MCP
 çıktısını dış istemciler ve sohbet için de değiştirir.
 
+## 2026-10-03 — Kök neden: iyileşen / bağlantısız servis "olası neden" olamaz (v0.10.1063)
+
+**Operatör (prod, alarm-kuralı Problem'i, bff p99 3872 ms > 3000):** panel "LIKELY CAUSE: Co-moving with
+svc-b (score 404) — possible upstream / downstream propagation" diyordu; svc-b'nin hatası %76.8 → %0'a,
+trafiği −%99.5'e, p99'u −%93.7'ye inmişti. "<svc-B> ile ilgili olduğunu düşünüyor ama alakasız."
+**Kök neden:** "What else changed" bileşik skoru yönsüz büyüklük (hata düşüşü skorun ¾'ü) ve topolojiden
+habersiz; manşet skoru ≥ 20 olan ilk satırı yayılım diye ilan ediyordu. **Karar:** manşete yalnız
+sunucunun `causeEligible` işaretlediği satır çıkar. (KENAR) özneyle analiz penceresinde (taban + cari)
+DOĞRUDAN `topology_edges_5m` kenarı (kuyruk üzerinden bağ sayılmaz). (YÖN, konuma göre) aşağı akış /
+iki yönlü aday: `worse` (hata ≥ +1 puan, p99 > +%25, trafik > +%25) ya da `lost` (trafik ≤ −%90);
+yukarı akış (çağıran): YALNIZ trafik sıçraması — çağıranın yavaşlaması öznenin etki alanıdır, neden
+değil. `better` yalnız hata ya da p99 GERÇEKTEN düştüğünde ("iyileşti"); yalnız trafik düşüşü (%25–%90)
+`quieter` ("trafik azaldı"); NaN delta `unknown` (asla better). p99 artışı hacim kapısız. Yön
+`scoreChangedService`'te, kenar `MarkCorrelationCauses`'ta — yeni sorgu yok, servis haritasının özne
+odaklı okuması (`GetServiceGraphTopN`, tavan 500; servissiz problemde okuma yok). Skor DEĞİŞMEZ;
+/rootcause 50'lik havuzu işaretler, 20 tavanını SONRA keser (sıra: uygun → diğer → iyileşen /
+sakinleşen). Uygun satır yoksa "localized" manşeti + topoloji okunduysa "hiçbiri bağlı ve kötüleşen
+bağımlılık değil", okunamadıysa "bağlantı doğrulanamadı" (`topologyKnown`). Ribbon canlı adayları da
+uygun-önce, better/quieter hariç. Hipotez işçisi, RCA kalkanları ve hakem kataloğu (`rca/extras.go`)
+değişmedi. Trafiği kesilen ama aşağı akışta BAĞLI servis uygun kalır — hata oranının ~0'a inmesi onu
+dışlamaz: tamamen sönen servis de 0 span'le "%0 hata" okunur, kesici (circuit breaker) açan çağıranın
+arkasındaki bağımlılık da temiz bir damla gösterir; ikisi de gerçek neden olabilir.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
