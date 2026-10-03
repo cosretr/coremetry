@@ -2686,6 +2686,16 @@ export type ProblemCategory = 'AVAILABILITY' | 'ERROR' | 'SLOWDOWN' | 'RESOURCE'
  *  `problemSubject.ts`'in `SubjectKind`i ile aynı evren; orası satır
  *  SINIFLANDIRIR, bu URL/API şeridini adlandırır. */
 export type SubjectLane = 'service' | 'db' | 'external';
+/** GET /api/inbox/count — v0.10.1086: `count` Problems listesinin VARSAYILAN
+ *  görünümünün satır sayısı (open, yalnız P1, incident katlaması dahil;
+ *  sunucu aynı derlemeden okur). `scanCapped` listeyle aynı yaklaşıklık
+ *  bayrağı. exceptions + httpErrors Exceptions girişinin sönük rozeti. */
+export interface InboxCountResponse {
+  count: number;
+  scanCapped?: boolean;
+  exceptions: number;
+  httpErrors: number;
+}
 export interface InboxItem {
   id: string;             // composite "<kind>:<nativeId>"
   // Satırın KAYNAĞI: problem | exception | anomaly.

@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -174,7 +176,22 @@ type InboxAnomalyRef struct {
 // shrink further. Cached 15s — see the TTL comment at the
 // serveCached call below for why it can't be 10.
 func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	cacheKey, build := s.inboxView(r.URL.Query())
+	s.serveCached(w, r, cacheKey, inboxListTTL, build)
+}
+
+// inboxListTTL — liste önbelleğinin TTL'i (gerekçe aşağıdaki v0.9.228 notu).
+// Rozet (computeInboxCountFor) varsayılan görünümün girdisini AYNI TTL ile
+// okur (v0.10.1086).
+const inboxListTTL = 15 * time.Second
+
+// inboxView — v0.10.1086: liste uç noktasının HTTP'siz çekirdeği; sorgu
+// parametrelerinden önbellek anahtarını ve derleme işlevini kurar. Gövde
+// değişmedi (handler'dan taşındı). İki çağıran: /api/inbox ve kenar çubuğu
+// rozeti — rozet varsayılan görünümün satır sayısını AYNI boru hattından
+// (aynı süzgeçler, forceNonExceptionP3, istisna listesi, incident katlaması)
+// ve aynı önbellek girdisinden okur; ayrı bir COUNT liste ile ayrışıyordu.
+func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any, error)) {
 	service := strings.TrimSpace(q.Get("service"))
 	// v0.9.251 — free-text triage search. `service` stays a
 	// service-only substring filter (older shared links and other
@@ -338,7 +355,7 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 		len(kinds) < len(inboxKindsAll) || len(prios) < len(inboxPriosAll)
 	srcLimit := inboxSourceLimit(limit, narrowed)
 
-	s.serveCached(w, r, cacheKey, 15*time.Second, func(ctx context.Context) (any, error) {
+	return cacheKey, func(ctx context.Context) (any, error) {
 		items := make([]InboxItem, 0, 256)
 
 		// v0.9.353 (operator-reported) — the team filter moves INTO the
@@ -983,7 +1000,7 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 			"externalSubjectCount": subjectCounts[inboxSubjectExternal],
 			"subject":              subject,
 		}, nil
-	})
+	}
 }
 
 // forceNonExceptionP3 pins every non-exception kind to P3 for the inbox
@@ -1016,11 +1033,12 @@ func forceNonExceptionP3(items []InboxItem) {
 // "open" inbox shows open + acknowledged (still in-flight);
 // "all" passes through to the store's no-filter.
 // inboxCount serves GET /api/inbox/count — the single triage badge total
-// (v0.8.288, Option B Slice 1b). Sums the three inbox sources with the SAME
-// "open" semantics the inbox uses: not-resolved Problems (open+acknowledged,
-// consistent with inboxKeepsProblem), open Exception groups, and active
-// Anomaly events. COUNT-only on small state tables (no enrichment/sort), 10s
-// cache — cheap enough for the 30s sidebar poll at scale.
+// (v0.8.288, Option B Slice 1b).
+// v0.10.1086 — `count` artık Problems listesinin VARSAYILAN görünümünün satır
+// sayısıdır (open, yalnız P1, tüm türler, servis şeridi, varsayılan taban;
+// görünüm öncelikleri + istisna listesi + incident katlaması dahil). Eskiden
+// kaynak başına COUNT'ların toplamıydı (tüm öncelikler, katlamasız): rozet
+// sayfanın gösterdiği satırdan büyük olabiliyordu. Ayrıntı computeInboxCountFor.
 func (s *Server) inboxCount(w http.ResponseWriter, r *http.Request) {
 	// v0.8.472 (perf dalga-1 #2) — ölçülen en büyük tekil gecikme (rozet
 	// 24h p95 7.9s): 4 ARDIŞIK CH count'u 3 paralel sorguya indi
@@ -1041,7 +1059,45 @@ func (s *Server) inboxCount(w http.ResponseWriter, r *http.Request) {
 
 // inboxCountKey is shared by the handler and the warm loop (api.go) so the
 // pre-warmed payload and the served one can never diverge.
-func inboxCountKey(env string) string { return "inbox:count:env=" + env }
+// :v2: — v0.10.1086 `count`un ANLAMI (varsayılan görünümün satır sayısı) ve
+// gövde şekli (scanCapped; problems/anomalies/incidents kırılımı kalktı)
+// değişti; kayan dağıtımda eski sürümün toplamı yeni sözleşmeymiş gibi
+// servis edilmesin. Önek "inbox:count" aynen (mutasyon düşürmesi).
+func inboxCountKey(env string) string { return "inbox:count:v2:env=" + env }
+
+// inboxDefaultPageLimit — Problems sayfasının (/inbox) istediği satır tavanı
+// (Inbox.tsx `limit: 300`). Rozet tavandan ÖNCEKİ `total`ı okur; tavan yalnız
+// önbellek anahtarını sayfanınkiyle aynı tutmak için burada.
+const inboxDefaultPageLimit = 300
+
+// inboxBadgeQuery — v0.10.1086: Problems sayfasının PARAMETRESİZ açılışta
+// gönderdiği istek (Inbox.tsx: status open, limit 300, sort firstSeen desc,
+// tüm türler, PRIO_DEFAULT ['P1'], servis şeridi, minOcc yok = varsayılan
+// taban + istisna, since/cat yok) + kenar çubuğunun env'i. Aynı parametreler
+// → inboxView'da aynı anahtar: rozet sayfanın önbellek girdisini paylaşır.
+func inboxBadgeQuery(env string) url.Values {
+	q := url.Values{}
+	q.Set("status", "open")
+	q.Set("limit", strconv.Itoa(inboxDefaultPageLimit))
+	q.Set("sort", "firstSeen")
+	q.Set("dir", "desc")
+	q.Set("kind", strings.Join(inboxKindsAll, ","))
+	q.Set("prio", "P1")
+	if env != "" {
+		q.Set("env", env)
+	}
+	return q
+}
+
+// inboxBadgeView — liste gövdesinden rozetin okuduğu iki alan.
+type inboxBadgeView struct {
+	// Total — facet'lerden (öncelik/tür/kategori) ve katlamadan SONRA,
+	// tavandan ÖNCE kalan satır sayısı (inboxSortAndCap).
+	Total int `json:"total"`
+	// ScanCapped — bir kaynak tarama tavanına dayandı; sayı "en az bu kadar"
+	// (liste şeridinin söylediği aynı yaklaşıklık).
+	ScanCapped bool `json:"scanCapped"`
+}
 
 // inboxNarrowScan is the per-source candidate ceiling used when a narrowing
 // filter is active. All three sources are small ReplacingMergeTree state
@@ -1689,6 +1745,19 @@ func (s *Server) computeInboxCount(ctx context.Context) (any, error) {
 // On an env-map error the count stays UNFILTERED — identical to the list's
 // soft-fail (inbox.go:184) and for the same reason: a transient CH blip must
 // never hide a firing P1 behind a badge that silently reads 0.
+//
+// v0.10.1086 (operatör onaylı) — manşet `count` ayrı COUNT'lardan DEĞİL,
+// Problems listesinin varsayılan görünümünden gelir: inboxView(inboxBadgeQuery)
+// derlemesi, sayfanın kendisiyle AYNI önbellek girdisi üzerinden (cachedJSON,
+// aynı anahtar + TTL), gövdenin `total`ı. Böylece env kapsamı, susturulmuş
+// anomaliler, forceNonExceptionP3 + istisna listesi, incident katlaması
+// (v0.10.1084) ve P1 süzgeci listeyle birebir; rozet ekrandaki satır sayısıdır.
+// Eski toplam (problems + anomalies + incidents, tüm öncelikler, katlamasız)
+// incident'ı ve bağlı problemlerini ayrı sayıyor, P2/P3'ü de katıyordu.
+// `scanCapped` listeyle aynı yaklaşıklık bayrağı (bir kaynak tarama tavanında).
+//
+// Exceptions girişinin sönük rozeti (exceptions + httpErrors) AYRI kalır: o
+// /problems (Exceptions) sayfasının ailesidir, öncelik süzgeci yok.
 func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, error) {
 	// nil = no env constraint. Non-nil (possibly empty) = constrain.
 	var envServices []string
@@ -1701,24 +1770,25 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 		}
 	}
 	var (
-		probN, anN, incN uint64
-		exN, httpN       int64
+		view       inboxBadgeView
+		exN, httpN int64
 	)
 	// v0.10.949 — varsayılan listenin tabanı + istisnası (çoklu-servis +
 	// regressed); iki exception sayımı da bunu kullanır (errgroup'tan önce,
 	// tek memo okuması).
 	badgeFloor := effectiveDefaultFloor(currentExceptionTriage())
 	badgeExempt := s.exceptionSpread(ctx).ExemptBelow(badgeFloor)
-	// v0.10.1042 — susturulmuş anomaliler open listesinden düştüğü için
-	// rozet de onları saymaz: aynı tek okuma, aynı eleme kümesi
-	// (inboxAnomalyExcludeIDs "open"), aynı SQL yüklemi. Okuma hatası → nil
-	// → süzgeçsiz sayım (liste de o hâlde hiçbir şey gizlemez).
-	badgeMuted := inboxAnomalyExcludeIDs(s.activeSilencedAnomalies(ctx, "inbox count"), "open")
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		var err error
-		probN, err = s.store.CountProblemsNotInStatuses(gctx, inboxDoneStatuses, envServices)
-		return err
+		// v0.10.1086 — varsayılan görünüm: sayfanın anahtarı, sayfanın
+		// derlemesi. Isıtma döngüsü bu yolu da ısıtır (parametresiz /inbox
+		// açılışı sıcak gelir).
+		key, build := s.inboxView(inboxBadgeQuery(env))
+		body, _, err := s.cachedJSON(gctx, key, inboxListTTL, false, build)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(body, &view)
 	})
 	g.Go(func() error {
 		// Exception groups always carry a service (they're derived from
@@ -1774,32 +1844,14 @@ func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, err
 		})
 		return err
 	})
-	g.Go(func() error {
-		var err error
-		anN, err = s.store.CountActiveAnomalyEvents(gctx, 0, envServices, badgeMuted)
-		return err
-	})
-	g.Go(func() error {
-		// v0.9.321 — the list gained incidents, so the badge must too. A
-		// badge that counts three of four sources disagrees with the page it
-		// links to, which is exactly the drift v0.9.219 fixed for env.
-		// Statuses match inboxKeepsIncident's "open" pivot.
-		var err error
-		incN, err = s.store.CountIncidentsNotInStatuses(gctx, inboxDoneStatuses, envServices)
-		return err
-	})
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
-	problems := probN
-	exceptions := uint64(exN)
 	return map[string]any{
-		"count":      problems + exceptions + anN + incN,
-		"problems":   problems,
-		"exceptions": exceptions,
+		"count":      view.Total,
+		"scanCapped": view.ScanCapped,
+		"exceptions": uint64(exN),
 		"httpErrors": uint64(httpN),
-		"anomalies":  anN,
-		"incidents":  incN,
 	}, nil
 }
 

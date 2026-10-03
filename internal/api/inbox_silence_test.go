@@ -289,7 +289,9 @@ func TestInboxSilenceListAndCountersAgree(t *testing.T) {
 // kullanıldığını sabitler (CH'siz test edilemeyen kısım).
 func TestInboxSilenceWiring(t *testing.T) {
 	src := readSrc(t, "inbox.go")
-	h := funcBody(src, "inbox")
+	// v0.10.1086 — liste derlemesi handler'dan inboxView'a taşındı (rozet de
+	// aynı derlemeyi kullanır).
+	h := funcBody(src, "inboxView")
 	if h == "" {
 		t.Fatal("inbox handler gövdesi bulunamadı")
 	}
@@ -314,11 +316,13 @@ func TestInboxSilenceWiring(t *testing.T) {
 	if guard < 0 || counts < 0 || total < 0 || guard > counts || guard > total {
 		t.Error("applyInboxAnomalySilences çip sayaçlarından ve total'den ÖNCE çağrılmalı — yoksa çip olmayan satırı sayar")
 	}
-	// Rozet aynı kümeyi aynı SQL yükleminden eler.
+	// Rozet aynı kümeyi eler: v0.10.1086'ten beri ayrı bir anomali COUNT'u
+	// yok, rozet varsayılan görünümün derlemesini (yukarıdaki eleme dahil)
+	// okur.
 	cnt := funcBody(src, "computeInboxCountFor")
-	if !strings.Contains(cnt, `inboxAnomalyExcludeIDs(s.activeSilencedAnomalies(ctx, "inbox count"), "open")`) ||
-		!strings.Contains(cnt, "s.store.CountActiveAnomalyEvents(gctx, 0, envServices, badgeMuted)") {
-		t.Error("rozet susturulmuş anomalileri listeyle aynı kümeden elemiyor — kenar çubuğu sayfadan büyük olur")
+	if !strings.Contains(cnt, "s.inboxView(inboxBadgeQuery(env))") ||
+		strings.Contains(cnt, "CountActiveAnomalyEvents") {
+		t.Error("rozet liste derlemesinden geçmiyor — susturulmuş anomaliler kenar çubuğunda sayılabilir")
 	}
 	// Okuma tek kapıdan: yumuşak-hata yönü tek yerde. inbox.go ve api.go
 	// (canlı uçlar) depoyu DOĞRUDAN okumaz; kapı anomaly_extra.go'da.

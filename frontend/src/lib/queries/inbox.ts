@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { InboxItem, SubjectLane } from '@/lib/types';
+import type { InboxCountResponse, InboxItem, SubjectLane } from '@/lib/types';
 
 // v0.9.221 — one page of the triage queue. `total` is the pre-cap count, so
 // the UI can say "200 of 912" instead of implying it showed everything.
@@ -115,18 +115,18 @@ export function useInbox(filter: {
 // Exceptions menü girişinde sönük rozet olarak görünür. Prod'da 3.1K
 // canlı exception grubu manşeti 3607'ye şişiriyordu — sayı triage
 // sinyali olmaktan çıkmıştı. Sunucu kırılımı zaten döndürüyor; toplam
-// `count` alanı bilerek OKUNMUYOR (dört türün toplamı, eski semantik).
+// v0.10.1086 — manşet artık sunucunun `count`unu AYNEN gösterir: Problems
+// listesinin varsayılan görünümünün satır sayısı (yalnız P1, incident
+// katlaması dahil; sunucu aynı derlemeden okur). problems + anomalies +
+// incidents toplamı tüm öncelikleri ve katlanan satırları sayıyordu — rozet
+// sayfadan büyük okunuyordu. Burada toplama / düzeltme YOK.
 export function useInboxCount(env?: string) {
-  return useQuery<
-    { count: number; problems: number; exceptions: number; httpErrors: number; anomalies: number; incidents: number },
-    Error,
-    { triage: number; exceptions: number }
-  >({
+  return useQuery<InboxCountResponse, Error, { triage: number; exceptions: number }>({
     queryKey: keys.inbox.count(env),
     queryFn: async () =>
-      (await api.inboxCount(env)) ?? { count: 0, problems: 0, exceptions: 0, httpErrors: 0, anomalies: 0, incidents: 0 },
+      (await api.inboxCount(env)) ?? { count: 0, exceptions: 0, httpErrors: 0 },
     select: (r) => ({
-      triage: (r.problems ?? 0) + (r.anomalies ?? 0) + (r.incidents ?? 0),
+      triage: r.count ?? 0,
       // Sönük rozet /problems girişini süsler; o sayfa HER grubu listeler
       // (http-errors dahil) — rozet de aile toplamı olmalı ki rozet ile
       // arkasındaki sayfa asla ayrışmasın (v0.9.219 drift sınıfı).

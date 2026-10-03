@@ -1621,7 +1621,7 @@ func (s *Server) warmDependenciesCache() {
 			})
 		// v0.9.219 — key via inboxCountKey so the warmed payload lands on the
 		// exact key the handler reads. Only the unscoped badge is warmed; an
-		// env-scoped one computes on demand (15s TTL, three parallel COUNTs)
+		// env-scoped one computes on demand (15s TTL; v0.10.1086: liste derlemesi)
 		// rather than multiplying the warm loop by the env cardinality.
 		warm("inbox-count", inboxCountKey(""), 15*time.Second, s.computeInboxCount)
 		warm("services-metadata", "services-metadata", 60*time.Second,

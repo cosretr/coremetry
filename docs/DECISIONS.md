@@ -1434,6 +1434,24 @@ temizse yazım durur ve olay olağan aktif yaşla düşer (tek dip kovada "anoma
 yok). Okuma hatası ya da tavan ötesi → muafiyet yok, aktif çift de iki kova ister. Bedel: recorder dakikada bir
 küçük `anomaly_events` FINAL okuması artık her kurulumda (eskiden yalnız batch listesi doluyken).
 
+## 2026-10-03 — Problems rozeti varsayılan listeyle aynı sayar (katlama dahil) (v0.10.1086)
+
+**Kusur (operatör onaylı):** v0.10.1084'ün bilinen sınırı — liste açık incident'ın bağlı problemlerini tek satıra
+katlıyor, kenar çubuğu rozeti (`/api/inbox/count`) ise kaynak başına COUNT topluyordu: problems + anomalies +
+incidents, TÜM öncelikler, katlamasız (exception'lar v0.9.442'den beri manşet dışı). Rozet ekrandaki satırdan büyük
+okunuyordu. **Karar:** manşet = Problems listesinin VARSAYILAN görünümünün satır sayısı (open, yalnız P1, tüm türler,
+servis şeridi, varsayılan taban + istisna; görünüm önceliği + istisna listesi + incident katlaması dahil). Ayrı sayım
+yok: liste derlemesi handler'dan `inboxView`'a taşındı (gövde aynen), rozet sayfanın parametresiz isteğini
+(`inboxBadgeQuery`) kurar ve AYNI önbellek girdisini (`cachedJSON`, aynı anahtar + 15 s TTL) okur; sayı gövdenin
+`total`ı (facet + katlamadan sonra, 300 tavanından önce), tarama tavanı listeyle aynı `scanCapped` bayrağıyla gelir.
+Sonuç: P1 exception'lar artık manşette (v0.9.442'nin manşet tanımını revize eder — P1 süzgeci 3.1K grup şişmesini
+zaten keser); P2/P3 ve katlanan problem satırları sayılmaz. Exceptions girişinin sönük rozeti (exceptions +
+httpErrors COUNT'ları) aynen. Anahtar `inbox:count:v2:` (anlam + gövde değişti; `problems/anomalies/incidents`
+kırılımı kalktı), TTL / 30 s poll / gizli sekmede durma aynen. **Bedel:** rozetin soğuk yolu artık üç COUNT değil tam
+liste derlemesi (sayfanın varsayılan açılışıyla aynı okuma); ısıtma döngüsü bunu 30 s'de bir öder ve karşılığında
+parametresiz /inbox sıcak açılır. Rozet liste girdisinin anlık görüntüsünü taşıdığı için iki SWR katmanı üst üste
+biner (en kötü ~1 dk gecikme); mutasyonlar `inbox:` önekini düşürdüğünden ikisi birlikte tazelenir.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

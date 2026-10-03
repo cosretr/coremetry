@@ -206,6 +206,8 @@ export function Sidebar() {
   // rozettir. Prod'da 3.1K canlı exception grubu manşeti 3607'ye
   // şişiriyor, sayı triage sinyali olmaktan çıkıyordu. Occurrence
   // tabanı sunucuda aynı (v0.9.322).
+  // v0.10.1086 — manşet = Problems listesinin varsayılan görünümünün satır
+  // sayısı (yalnız P1, incident katlaması dahil), sunucunun `count`u aynen.
   const inboxCounts = useInboxCount(env).data ?? { triage: 0, exceptions: 0 };
   // Footer only shows when the backend is unreachable — pre-v0.5.0
   // it always rendered the queue depths, which on a quiet
