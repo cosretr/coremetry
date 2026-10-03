@@ -13,6 +13,7 @@
 import type { AlertRuleSeries, Problem, SpanMetricSeries } from '@/lib/types';
 import type { ChartThreshold, ChartTimeRegion } from '@/lib/chart/overlays';
 import { comparatorSide } from '@/lib/chart/thresholdLines';
+import { isSvcSlowdownRule } from './svcSlowdownPivots'; // v0.10.1091
 
 // Değerlendiricinin span-metrik yolunun ölçtüğü metrikler (Go:
 // chstore.measureAllServicesPlan + TransportFilter/TransportOp). Hedefli kural
@@ -38,13 +39,18 @@ export function isAlertSeriesMetric(metric: string): boolean {
 // onaltılık. Sunucu yine de kuralı okuyup türünü doğrular (404 → bölüm yok).
 const DETECTOR_IDS = new Set(['exception-storm', 'db-slow-stmt']);
 
+// v0.10.1091 — yaygın yavaşlama (`svc-slowdown:<servis>`) kural satırı
+// taşımaz ama ölçüsü servis p99'u: sunucu sentetik kuralla (pencere 300 s,
+// service_summary_5m) diziyi verir — grafik servis p99'u + eşik (operasyon
+// kolunda 5000 ms) çizer. Yalnız p99_ms (sunucu başka metrikte 404).
 export function hasAlertMetricChart(
   p: Pick<Problem, 'ruleId' | 'metric' | 'service' | 'kind' | 'threshold'>,
 ): boolean {
   const id = p.ruleId ?? '';
-  if (!id || id.includes(':') || id.startsWith('self-') || id.startsWith('anomaly') || DETECTOR_IDS.has(id)) return false;
   if (!p.service || (p.kind && p.kind !== 'service')) return false;
   if (!Number.isFinite(p.threshold)) return false;
+  if (isSvcSlowdownRule(id)) return p.metric === 'p99_ms';
+  if (!id || id.includes(':') || id.startsWith('self-') || id.startsWith('anomaly') || DETECTOR_IDS.has(id)) return false;
   return isAlertSeriesMetric(p.metric ?? '');
 }
 
@@ -98,6 +104,45 @@ export function alertThreshold(
     color: p.severity === 'critical' ? 'var(--err)' : 'var(--warn)',
     side: comparatorSide(p.comparator),
   };
+}
+
+// alertLineThreshold — v0.10.1091: grafiğin eşik çizgisi. Sunucu cevabı
+// `threshold` taşıyorsa (sentetik kural — yaygın yavaşlamada ayardaki
+// minP99Ms) o; yoksa problemin threshold'u (bugünkü davranış).
+export function alertLineThreshold(problemThreshold: number, s: Pick<AlertRuleSeries, 'threshold'> | null | undefined): number {
+  const t = s?.threshold;
+  return typeof t === 'number' && Number.isFinite(t) && t > 0 ? t : problemThreshold;
+}
+
+/** Go evaluator svcSlowRuleNameCollapse ikizi (testle pinli): YALNIZ trafik
+ *  çöküşü koluyla açılmış yaygın yavaşlama satırı. */
+export const SVC_SLOWDOWN_COLLAPSE_RULE_NAME = 'Yaygın yavaşlama · trafik çöküşü';
+
+function fmtOpFloor(ms: number): string {
+  return ms >= 1000 ? `${Number((ms / 1000).toFixed(1))} s` : `${Math.round(ms)} ms`;
+}
+
+// alertChartThresholds — v0.10.1091 (inceleme E): grafiğin eşik çizgileri.
+// Yaygın yavaşlamada çizgi "op tabanı 5 s" (ayardaki minP99Ms, sunucu dizi
+// cevabından) — Problem'in threshold'u değil; yalnız trafik çöküşü koluyla
+// açılmış satırda (kural adı) çizgi YOK: orada operasyon tabanı karara girmedi.
+// Değer henüz yoksa çizgi yok (yanlış çizgi çizmektense hiç). Diğer türlerde
+// bugünkü davranış (alertLineThreshold).
+export function alertChartThresholds(
+  p: Pick<Problem, 'ruleId' | 'ruleName' | 'threshold' | 'comparator' | 'severity' | 'metric'>,
+  serverThreshold: number | undefined,
+): ChartThreshold[] {
+  if (isSvcSlowdownRule(p.ruleId)) {
+    const t = serverThreshold;
+    if (p.ruleName === SVC_SLOWDOWN_COLLAPSE_RULE_NAME || typeof t !== 'number' || !Number.isFinite(t) || t <= 0) return [];
+    return [{
+      value: t, label: `op tabanı ${fmtOpFloor(t)}`,
+      color: p.severity === 'critical' ? 'var(--err)' : 'var(--warn)', side: comparatorSide('>='),
+    }];
+  }
+  return [alertThreshold({
+    ...p, threshold: alertLineThreshold(p.threshold, serverThreshold === undefined ? null : { threshold: serverThreshold }),
+  })];
 }
 
 /** Pencere uzunluğu düz Türkçe ("10 dk pencere", "1 sa pencere"). */

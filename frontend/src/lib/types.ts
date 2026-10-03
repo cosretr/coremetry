@@ -6089,6 +6089,9 @@ export interface AlertRuleSeries {
   from: number;
   to: number;
   points: { t: number; v: number | null }[];
+  /** v0.10.1091 — grafiğin eşik çizgisi; varsa problemin threshold'unu EZER
+   *  (yalnız sentetik kural: yaygın yavaşlamada ayardaki minP99Ms). */
+  threshold?: number;
 }
 
 export interface AnomalyVerdict { eventId: string; fingerprint: string; kind: string; pattern: string; service: string; verdict: AnomalyVerdictKind; note?: string; createdBy: string; createdAt: number }
@@ -7832,6 +7835,30 @@ export interface AnomalyMetricSensitivity {
   minBaselineRate: number;
 }
 
+/** v0.10.1091 — yaygın yavaşlama hızlı yolunun vidaları (Go
+ *  chstore.ServiceSlowdownConfig). Aralık dışı değer sunucuda varsayılana döner. */
+export interface ServiceSlowdownConfig {
+  /** Yok = AÇIK; okuma `!== false`. */
+  enabled?: boolean;
+  /** Aynı kovada tabanları geçen en az operasyon (vars. 3, 2–20). */
+  minOps: number;
+  /** Operasyon başına kovadaki en az çağrı (vars. 30). */
+  minCallsPerOp: number;
+  /** Operasyon p99 mutlak tabanı, ms (vars. 5000) — grafik çizgisi ve yavaş
+   *  trace süzgeci (Problem'in threshold'u en yavaş operasyonun kendi tabanı). */
+  minP99Ms: number;
+  /** p99 ≥ bu kat × operasyonun 24 sa tabanı (vars. 20). */
+  riseFactor: number;
+  /** Servisin kovadaki toplam çağrısı (vars. 100). */
+  minCallsTotal: number;
+  /** Trafik çöküşü kolu: önceki saatin ortalamasına göre düşüş yüzdesi (vars. 40). */
+  dropPct: number;
+  /** Kapanış için ardışık temiz kova (vars. 2). */
+  clearBuckets: number;
+  /** Tik başına en çok yeni Problem (vars. 10). */
+  maxNewPerTick: number;
+}
+
 export interface AnomalySensitivityConfig {
   metrics: Record<string, AnomalyMetricSensitivity>;
   // Açılmak için üst üste ateşlemesi gereken 5-dk bucket sayısı.
@@ -7867,6 +7894,10 @@ export interface AnomalySensitivityConfig {
   // false pozitif geliyor"). opLatency ile aynı sözleşme: okuma `=== true`,
   // kayıt AÇIK boolean gönderir. log_pattern bu anahtara bağlı değil.
   logTemplateNew?: boolean;
+  // v0.10.1091 — yaygın yavaşlama hızlı yolu (`svc-slowdown:<servis>`, operatör
+  // onaylı). Bölüm yoksa sunucu varsayılanlarla doldurur; enabled okuması
+  // `!== false` (backend *bool, yok = AÇIK).
+  serviceSlowdown?: ServiceSlowdownConfig;
   // v0.10.700 — kök neden hipotezinde zamansal çarpan: 'shadow' (varsayılan,
   // yok dahil) yalnız yazar, 'on' skoru çarpar. Okuma `=== 'on'`.
   temporalRanking?: 'shadow' | 'on';

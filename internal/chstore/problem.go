@@ -130,6 +130,11 @@ const (
 	// veritabanı ÜÇLÜSÜNÜ taşır (DBHealthRuleID / ParseDBHealthRuleID); FE
 	// ikizi lib/problemSubject.ts DB_HEALTH_RULE_PREFIX (testle pinli).
 	RuleDBHealthPrefix = "db-health:"
+	// RuleSvcSlowdownPrefix — v0.10.1091: yaygın yavaşlama hızlı yolu
+	// ("svc-slowdown:<servis>", evaluator/service_slowdown.go; rule id = problem
+	// id). FE ikizi features/anomalies/svcSlowdownPivots.ts
+	// SVC_SLOWDOWN_RULE_PREFIX (testle pinli).
+	RuleSvcSlowdownPrefix = "svc-slowdown:"
 )
 
 // db özneli problemin özne BİÇİMİ (v0.10.1027). `db:<system>@<X>` X'in bir

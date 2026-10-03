@@ -3,10 +3,12 @@
 // problem türleri, sorulan pencere, birim, eşik etiketi, başlangıç bölgesi,
 // çizim durumu — tablo testleri.
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { AlertRuleSeries, Problem } from '@/lib/types';
 import {
   alertMetricUnit, alertSeriesArgs, alertSeriesState, alertSeriesToSpan, alertSeriesXRange, alertThreshold,
-  hasAlertMetricChart, isAlertSeriesMetric, problemRegion, windowLabel,
+  alertChartThresholds, alertLineThreshold, hasAlertMetricChart, SVC_SLOWDOWN_COLLAPSE_RULE_NAME, isAlertSeriesMetric, problemRegion, windowLabel,
 } from './alertMetricSeries';
 
 const MIN = 60e9;
@@ -43,6 +45,13 @@ describe('hasAlertMetricChart — grafiği olan türler', () => {
     // VE özne db) — iki kapı da tek başına kapatır.
     ['db-health (db öznesi)', { ruleId: 'db-health:oracle@db-host-01/crm-db', metric: 'db.error_pct', kind: 'db', service: 'db:oracle@crm-db', threshold: 5 }, false],
     ['db-health, kind boş gelse bile', { ruleId: 'db-health:oracle@db-host-01/crm-db', metric: 'db_p99_ms', threshold: 2000 }, false],
+    // v0.10.1091 — yaygın yavaşlama: kural satırı yok, sunucu sentetik kuralla
+    // servis p99 dizisini verir; yalnız p99_ms + servis öznesi.
+    ['yaygın yavaşlama (svc-slowdown:) servis p99', { ruleId: 'svc-slowdown:crm-svc', metric: 'p99_ms', service: 'crm-svc', kind: 'service', threshold: 5000 }, true],
+    ['yaygın yavaşlama, kind boş', { ruleId: 'svc-slowdown:crm-svc', metric: 'p99_ms', service: 'crm-svc', threshold: 5000 }, true],
+    ['yaygın yavaşlama, başka metrik', { ruleId: 'svc-slowdown:crm-svc', metric: 'error_rate', service: 'crm-svc', threshold: 5 }, false],
+    ['yaygın yavaşlama, servis yok', { ruleId: 'svc-slowdown:crm-svc', metric: 'p99_ms', service: '', threshold: 5000 }, false],
+    ['çıplak önek (servissiz kural id)', { ruleId: 'svc-slowdown:', metric: 'p99_ms', threshold: 5000 }, false],
     ['servis yok', { service: '' }, false],
     ['eşik sayı değil', { threshold: Number.NaN }, false],
   ];
@@ -126,5 +135,49 @@ describe('çizim', () => {
     ['0 değer de veridir', { isPending: false, isError: false, data: { ...s, points: [{ t: 1, v: 0 }] } }, 'ready'],
   ] as const)('%s', (_n, q, want) => {
     expect(alertSeriesState(q as Parameters<typeof alertSeriesState>[0])).toBe(want);
+  });
+});
+
+// v0.10.1091 — yaygın yavaşlama: Problem threshold'u en yavaş operasyonun kendi
+// tabanı (120 ms; öncelik oranı); grafik çizgisi sunucunun verdiği minP99Ms.
+describe('alertLineThreshold — çizgi eşiği problem eşiğinden ayrık', () => {
+  const series = (threshold?: number) => ({ metric: 'p99_ms', service: 'crm-svc', windowSec: 300, stepSec: 300, from: 0, to: 1, points: [], ...(threshold === undefined ? {} : { threshold }) });
+  it('sunucu threshold verdiyse o çizilir (5000), problemin 120 ms\'si değil', () => {
+    expect(alertLineThreshold(120, series(5000))).toBe(5000);
+  });
+  it('vermediyse / geçersizse / veri yoksa problemin eşiği (bugünkü davranış)', () => {
+    expect(alertLineThreshold(3000, series())).toBe(3000);
+    expect(alertLineThreshold(3000, series(0))).toBe(3000);
+    expect(alertLineThreshold(3000, null)).toBe(3000);
+    expect(alertLineThreshold(3000, undefined)).toBe(3000);
+  });
+});
+
+// İnceleme E — yaygın yavaşlamanın grafik çizgisi: "op tabanı 5 s" (sunucu
+// minP99Ms), Problem'in threshold'u (en yavaş op'un kendi tabanı) DEĞİL; yalnız
+// trafik çöküşü koluyla açılmış satırda çizgi yok.
+describe('alertChartThresholds', () => {
+  const svc = { ruleId: 'svc-slowdown:crm-svc', ruleName: 'Yaygın yavaşlama', threshold: 120, comparator: '>=', severity: 'critical', metric: 'p99_ms' };
+  it('operasyon kolu: çizgi 5000, etiket "op tabanı 5 s"', () => {
+    const t = alertChartThresholds(svc, 5000);
+    expect(t).toHaveLength(1);
+    expect(t[0].value).toBe(5000);
+    expect(t[0].label).toBe('op tabanı 5 s');
+    expect(alertChartThresholds(svc, 2500)[0].label).toBe('op tabanı 2.5 s');
+  });
+  it('yalnız çöküş kolu → çizgi yok', () => {
+    expect(alertChartThresholds({ ...svc, ruleName: SVC_SLOWDOWN_COLLAPSE_RULE_NAME, threshold: 300 }, 5000)).toEqual([]);
+  });
+  it('sunucu eşiği yoksa çizgi yok (120 ms çizilmez)', () => {
+    expect(alertChartThresholds(svc, undefined)).toEqual([]);
+  });
+  it('diğer kurallar: bugünkü çizgi', () => {
+    const t = alertChartThresholds({ ruleId: 'builtin-http-p99-5s', ruleName: 'HTTP p99', threshold: 3000, comparator: '>', severity: 'warning', metric: 'http_p99_ms' }, undefined);
+    expect(t[0].value).toBe(3000);
+    expect(t[0].label).toBe('> 3000 ms');
+  });
+  it('çöküş kural adı Go ikiziyle aynı', () => {
+    const go = readFileSync(resolve(__dirname, '../../../../internal/evaluator/service_slowdown.go'), 'utf8');
+    expect(go).toContain(`svcSlowRuleNameCollapse = "${SVC_SLOWDOWN_COLLAPSE_RULE_NAME}"`);
   });
 });

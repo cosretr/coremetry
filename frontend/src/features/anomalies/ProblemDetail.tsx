@@ -26,6 +26,7 @@ import { ExceptionPodsPanel } from './ExceptionPodsPanel';
 import { fmtOccTick } from './occTick'; // v0.10.734
 import { StackTrace } from '@/components/StackTrace'; // v0.10.735
 import { useStackFrameLinks } from '@/lib/queries'; // v0.10.735
+import { useAlertRuleSeries } from '@/lib/queries'; // v0.10.1091
 import { representativeStack, frameLinksRef } from './stackSource'; // v0.10.1048
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
@@ -51,8 +52,9 @@ import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule 
 import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
 import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
-import { hasAlertMetricChart } from './alertMetricSeries'; // v0.10.1064
+import { alertSeriesArgs, hasAlertMetricChart, isProblemLive } from './alertMetricSeries'; // v0.10.1064
 import { dbHealthPivots } from './dbHealthPivots'; // v0.10.1073
+import { isSvcSlowdownRule, svcSlowdownPivots } from './svcSlowdownPivots'; // v0.10.1091
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -886,6 +888,13 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   const isExternal = subjectKind(problem.service, problem.kind) === 'external';
   // v0.10.1073 — db-health problemi: Databases detayı + trace pivotları (null = başka tür).
   const dbHealthLinks = dbHealthPivots(problem.ruleId, probWindow);
+  // v0.10.1091 — yaygın yavaşlama: servis sayfası + Operations + yavaş trace'ler (null = başka tür).
+  // Yavaş trace süzgeci ayardaki minP99Ms: grafikle AYNI dizi sorgusunun
+  // cevabından (aynı anahtar → ek istek yok); Problem'in threshold'u değil.
+  const svcSlowSeries = useAlertRuleSeries(
+    isSvcSlowdownRule(problem.ruleId) && hasAlertMetricChart(problem) ? alertSeriesArgs(problem) : null,
+    { live: isProblemLive(problem) });
+  const svcSlowLinks = svcSlowdownPivots(problem, probWindow, svcSlowSeries.data?.threshold);
   // v0.10.898 — dış SERİ Problem'i özne melezken (kind=service, gerçek servis) de
   // dış kanıt panelini alır (ruleID öneki tip sistemi; sentezleyici bu anchor'ı atlar).
   const isExtSeries = isExternal || (problem.ruleId ?? '').startsWith('anomaly:ext:');
@@ -1154,6 +1163,14 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   : 'Bu alarmın öznesi bir veritabanı örneği, bir servis değil — log/trace/servis-haritası pivotları bir servis adı gerektiriyor.'}
               </div>
             ) : (<>
+            {/* v0.10.1091 — yaygın yavaşlama (svc-slowdown): önce hangi
+                operasyonların yavaşladığı ve yavaş trace'ler (svcSlowdownPivots.ts). */}
+            {svcSlowLinks && (<>
+              <SignalLink to={svcSlowLinks.serviceHref} label="◫ Servis sayfası" sub="problem penceresi" />
+              <SignalLink to={svcSlowLinks.operationsHref} label="☰ Operasyonlar" sub="Operations sekmesi, problem penceresi" />
+              <SignalLink to={svcSlowLinks.slowTracesHref} label="◷ Yavaş trace'ler"
+                sub={`≥ ${Math.round(svcSlowLinks.slowMinMs)} ms, problem penceresi`} />
+            </>)}
             <SignalLink to={logsLink} label="≡ Logs" sub="service, problem window" />
             <SignalLink to={logsErrorLink} label="≡ Logs (yalnız hatalar)" sub="service, problem window, severity ≥ ERROR" />
             <SignalLink to={logsPatternsLink} label="≡ Loglar (desenler)" sub="service, problem window, Desenler paneli açık" />
@@ -1184,7 +1201,8 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                 trace yok" diye okunurdu (v0.6.36 sınıfı). */}
             {(() => {
               const thr = latencyThresholdMs(problem);
-              if (thr === null) return null;
+              // v0.10.1091 — yaygın yavaşlamada yavaş trace linki yukarıda.
+              if (thr === null || svcSlowLinks) return null;
               return (
                 // v0.9.1331 — probWindow DOĞRUDAN geçiyor (gerçek ns). Önce
                 // logsFrom/logsTo (ms) geçiliyordu ve imza fromNs diyordu:

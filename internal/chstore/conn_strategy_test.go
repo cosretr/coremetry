@@ -277,6 +277,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// db_caller_summary_5m (Databases detayıyla aynı MV ve havuz). Problem
 		// satırları evaluator → problem.go'da, ana bağlantıda kalır.
 		"db_health.go": true,
+		// v0.10.1091 — SAF telemetri: yaygın yavaşlama okumaları, FROM'ları
+		// operation_summary_5m + service_summary_5m. Problem satırları evaluator
+		// → problem.go'da, ana bağlantıda kalır.
+		"service_slowdown.go": true,
 		// v0.10.1023 — SAF telemetri: tek FROM'u spanmetrics_1m (Operations çıplak fiil → rota kırılımı); ops MV okumasıyla aynı havuz.
 		"operation_routes.go": true,
 		// v0.10.712 — SAF telemetri: trace_summary_5m kök kapsaması (admin teşhisi).

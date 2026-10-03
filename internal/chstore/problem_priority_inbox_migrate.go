@@ -21,6 +21,12 @@ package chstore
 // genişletilmez). Blobun diğer alanları (bigBreachRatio, staleCriticalHours,
 // bilinmeyen alanlar) AYNEN korunur — json.RawMessage haritası üstünde değişir.
 // Çok-pod yarışı zararsız: iki pod aynı girdiden aynı çıktıyı yazar.
+//
+// v0.10.1091 — AYNI desenle ikinci adım (v3): varsayılana yaygın yavaşlama
+// (`svc-slowdown:*`) eklendi; kayıtlı liste 1083 varsayılanına KÜME olarak
+// eşitse yeniye taşınır, işaret `problem_priority_inbox_keep_v3`. Adımlar sırayla
+// koşar (v2 → v3): v2 eski 1072 listesini doğrudan GÜNCEL varsayılana taşır,
+// v3 o hâlde "current" der.
 
 import (
 	"context"
@@ -37,8 +43,33 @@ const (
 	inboxKeepMigrateKey = "problem_priority_inbox_keep_v2"
 	// inboxKeepMigrateVersion — işaret + audit damgası.
 	inboxKeepMigrateVersion = "v0.10.1083"
+	// inboxKeepMigrateKeyV3 / inboxKeepMigrateVersionV3 — v0.10.1091 adımı.
+	inboxKeepMigrateKeyV3     = "problem_priority_inbox_keep_v3"
+	inboxKeepMigrateVersionV3 = "v0.10.1091"
 	// inboxKeepField — problem_priority blobundaki alan adı (JSON etiketi).
 	inboxKeepField = "inboxKeepSourcePriority"
+)
+
+// inboxKeepMigrateStep — tek göç adımı: işaret, sürüm, "önceki varsayılan"
+// (kayıtlı liste buna KÜME olarak eşitse güncel varsayılana taşınır), audit
+// gerekçesi ve özelleştirilmiş listede bir kez yazılan ipucu.
+type inboxKeepMigrateStep struct {
+	key, version string
+	from         func() []string
+	reason, hint string
+}
+
+var (
+	inboxKeepStepV2 = inboxKeepMigrateStep{
+		key: inboxKeepMigrateKey, version: inboxKeepMigrateVersion, from: legacyInboxKeepSourcePriority,
+		reason: "inbox istisna listesi eski varsayılandaydı — yeni varsayılana taşındı (dış kaynak hata serisi + kümesi + tavan özeti)",
+		hint:   "dış kaynak hata kalıplarını (" + InboxKeepExtErrorCount + ", " + InboxKeepExtCluster + ", " + InboxKeepExtCap + ") istersen elle ekle",
+	}
+	inboxKeepStepV3 = inboxKeepMigrateStep{
+		key: inboxKeepMigrateKeyV3, version: inboxKeepMigrateVersionV3, from: inboxKeepDefault1083,
+		reason: "inbox istisna listesi önceki (v0.10.1083) varsayılandaydı — yeni varsayılana taşındı (yaygın yavaşlama)",
+		hint:   "yaygın yavaşlama kalıbını (" + InboxKeepSvcSlowdown + ") istersen elle ekle",
+	}
 )
 
 // Göç sonuçları (işarete ve loga yazılır).
@@ -96,6 +127,12 @@ func sameStringSet(a, b []string) bool {
 // yeni blob ya da nil, sonuç, kayıtlı liste). Karşılaştırma NORMALIZE edilmiş
 // listeyle (elle düzenlenmiş boşluklu/tekrarlı eski varsayılan da eski sayılır).
 func planInboxKeepMigration(raw []byte) (newRaw []byte, outcome string, stored []string, err error) {
+	return planInboxKeepMigrationFrom(raw, legacyInboxKeepSourcePriority())
+}
+
+// planInboxKeepMigrationFrom — planInboxKeepMigration'ın "önceki varsayılan"ı
+// parametreli gövdesi (v0.10.1091: v2 ve v3 adımları aynı planı kullanır).
+func planInboxKeepMigrationFrom(raw []byte, from []string) (newRaw []byte, outcome string, stored []string, err error) {
 	if len(raw) == 0 {
 		return nil, InboxKeepMigrateNoRow, nil, nil
 	}
@@ -115,7 +152,7 @@ func planInboxKeepMigration(raw []byte) (newRaw []byte, outcome string, stored [
 	switch {
 	case sameStringSet(stored, DefaultInboxKeepSourcePriority()):
 		return nil, InboxKeepMigrateCurrent, stored, nil
-	case len(stored) > 0 && sameStringSet(stored, legacyInboxKeepSourcePriority()):
+	case len(stored) > 0 && sameStringSet(stored, from):
 		next, err := json.Marshal(DefaultInboxKeepSourcePriority())
 		if err != nil {
 			return nil, "", stored, err
@@ -130,12 +167,23 @@ func planInboxKeepMigration(raw []byte) (newRaw []byte, outcome string, stored [
 	return nil, InboxKeepMigrateCustomised, stored, nil
 }
 
-// MigrateInboxKeepDefaults — tek seferlik göç. İdempotent: işaret varken hiçbir
-// şey yapmaz ("" döner). Hata yönü: herhangi bir okuma/yazma düşerse işaret
-// YAZILMAZ ve hata döner — çağıran sonraki turda yeniden dener (aynı girdiden
-// aynı çıktı, çift iş yok). Audit yalnız liste değiştiyse, en-iyi-çaba.
+// MigrateInboxKeepDefaults — tek seferlik göç (v0.10.1083 adımı, v2).
+// İdempotent: işaret varken hiçbir şey yapmaz ("" döner). Hata yönü: herhangi
+// bir okuma/yazma düşerse işaret YAZILMAZ ve hata döner — çağıran sonraki turda
+// yeniden dener (aynı girdiden aynı çıktı, çift iş yok). Audit yalnız liste
+// değiştiyse, en-iyi-çaba.
 func MigrateInboxKeepDefaults(ctx context.Context, st inboxKeepMigrateStore, now time.Time) (string, error) {
-	marker, err := st.GetSetting(ctx, inboxKeepMigrateKey)
+	return migrateInboxKeepStep(ctx, st, now, inboxKeepStepV2)
+}
+
+// MigrateInboxKeepDefaultsV3 — v0.10.1091 adımı (yaygın yavaşlama); aynı
+// sözleşme, ayrı işaret.
+func MigrateInboxKeepDefaultsV3(ctx context.Context, st inboxKeepMigrateStore, now time.Time) (string, error) {
+	return migrateInboxKeepStep(ctx, st, now, inboxKeepStepV3)
+}
+
+func migrateInboxKeepStep(ctx context.Context, st inboxKeepMigrateStore, now time.Time, step inboxKeepMigrateStep) (string, error) {
+	marker, err := st.GetSetting(ctx, step.key)
 	if err != nil {
 		// İşaret okunamadı — kör koşma: operatörün sonradan daralttığı listeyi
 		// genişletmek, bir tur beklemekten pahalı.
@@ -148,7 +196,7 @@ func MigrateInboxKeepDefaults(ctx context.Context, st inboxKeepMigrateStore, now
 	if err != nil {
 		return "", fmt.Errorf("read problem_priority: %w", err)
 	}
-	newRaw, outcome, stored, err := planInboxKeepMigration(raw)
+	newRaw, outcome, stored, err := planInboxKeepMigrationFrom(raw, step.from())
 	if err != nil {
 		return "", err
 	}
@@ -157,10 +205,10 @@ func MigrateInboxKeepDefaults(ctx context.Context, st inboxKeepMigrateStore, now
 			return "", fmt.Errorf("write problem_priority: %w", err)
 		}
 		details, _ := json.Marshal(map[string]any{
-			"version": inboxKeepMigrateVersion,
+			"version": step.version,
 			"from":    stored,
 			"to":      DefaultInboxKeepSourcePriority(),
-			"reason":  "inbox istisna listesi eski varsayılandaydı — yeni varsayılana taşındı (dış kaynak hata serisi + kümesi + tavan özeti)",
+			"reason":  step.reason,
 		})
 		// Aktör "system": göç bir HTTP isteğinden değil ayar tazeleyicisinden
 		// gelir (builtins_default_off emsali). Düşerse loglanır, geri alınmaz.
@@ -172,16 +220,16 @@ func MigrateInboxKeepDefaults(ctx context.Context, st inboxKeepMigrateStore, now
 			log.Printf("[settings] problem_priority göçü: audit: %v", err)
 		}
 	}
-	body, _ := json.Marshal(inboxKeepMigrateMarker{Version: inboxKeepMigrateVersion, AppliedAt: now.UnixNano(), Outcome: outcome, Stored: stored})
-	if err := st.PutSetting(ctx, inboxKeepMigrateKey, body); err != nil {
+	body, _ := json.Marshal(inboxKeepMigrateMarker{Version: step.version, AppliedAt: now.UnixNano(), Outcome: outcome, Stored: stored})
+	if err := st.PutSetting(ctx, step.key, body); err != nil {
 		return outcome, fmt.Errorf("write marker: %w", err)
 	}
 	switch outcome {
 	case InboxKeepMigrateReplaced:
-		log.Printf("[settings] problem_priority: inbox istisna listesi eski varsayılandaydı → yeni varsayılan %v", DefaultInboxKeepSourcePriority())
+		log.Printf("[settings] problem_priority (%s): inbox istisna listesi önceki varsayılandaydı → yeni varsayılan %v", step.version, DefaultInboxKeepSourcePriority())
 	case InboxKeepMigrateCustomised:
-		log.Printf("[settings] problem_priority: inbox istisna listesi özelleştirilmiş %v — dokunulmadı; dış kaynak hata kalıplarını (%s, %s, %s) istersen elle ekle",
-			stored, InboxKeepExtErrorCount, InboxKeepExtCluster, InboxKeepExtCap)
+		log.Printf("[settings] problem_priority (%s): inbox istisna listesi özelleştirilmiş %v — dokunulmadı; %s",
+			step.version, stored, step.hint)
 	}
 	return outcome, nil
 }
@@ -195,8 +243,15 @@ func MigrateInboxKeepDefaultsOnce(ctx context.Context, st inboxKeepMigrateStore)
 	if inboxKeepMigrated.Load() || st == nil {
 		return
 	}
-	if _, err := MigrateInboxKeepDefaults(ctx, st, time.Now()); err != nil {
+	// v0.10.1091 — iki adım SIRAYLA (v2 → v3); v2 düşerse v3 o tur koşmaz
+	// (v3'ün "önceki varsayılan" kıyası v2'nin sonucuna dayanır).
+	now := time.Now()
+	if _, err := MigrateInboxKeepDefaults(ctx, st, now); err != nil {
 		log.Printf("[settings] problem_priority göçü (sonraki turda yeniden): %v", err)
+		return
+	}
+	if _, err := MigrateInboxKeepDefaultsV3(ctx, st, now); err != nil {
+		log.Printf("[settings] problem_priority göçü v3 (sonraki turda yeniden): %v", err)
 		return
 	}
 	inboxKeepMigrated.Store(true)

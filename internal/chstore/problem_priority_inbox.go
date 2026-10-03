@@ -44,6 +44,11 @@ const (
 	// InboxKeepExtCap — tavan ÖZET satırı (critical, Value = tavana takılan seri
 	// / Threshold = tavan): üyeleri P1 görünürken özet P3'e çivilenmesin.
 	InboxKeepExtCap = "anomaly:ext-cap:*"
+	// InboxKeepSvcSlowdown — v0.10.1091 (operatör: "Dün söylediğim CRM sorunu
+	// yine oldu, bir sürü anomali geldi ama P1 problem gelmedi" → "Onay"):
+	// yaygın yavaşlama hızlı yolu. Kaynağı critical + ≥ 2× → P1; inbox'ta P3'e
+	// çivilenirse kuralın varlık sebebi kaybolur.
+	InboxKeepSvcSlowdown = "svc-slowdown:*"
 )
 
 // DefaultInboxKeepSourcePriority — alan YOKKEN geçerli liste. BİLİNÇLİ
@@ -55,7 +60,16 @@ const (
 // (operatör onaylı; kaynak sağlığı `anomaly:ext-down:` bilinçli DIŞARIDA).
 // Kayıtlı ESKİ varsayılan liste tek seferlik göçle yeniye taşınır
 // (problem_priority_inbox_migrate.go); özelleştirilmiş liste dokunulmaz.
+//
+// v0.10.1091 — yaygın yavaşlama (`svc-slowdown:*`) eklendi (operatör onaylı);
+// 1083 varsayılanında kayıtlı liste v3 göçüyle yeniye taşınır.
 func DefaultInboxKeepSourcePriority() []string {
+	return append(inboxKeepDefault1083(), InboxKeepSvcSlowdown)
+}
+
+// inboxKeepDefault1083 — v0.10.1083'ün varsayılanı (v3 göçünün "önceki
+// varsayılan" tanımı; DEĞİŞTİRME — kayıtlı listeyi bununla kıyaslıyoruz).
+func inboxKeepDefault1083() []string {
 	return []string{InboxKeepErrorRateAnomaly, InboxKeepBuiltin, InboxKeepDBHealth, InboxKeepCriticalIncident,
 		InboxKeepExtErrorCount, InboxKeepExtCluster, InboxKeepExtCap}
 }

@@ -2,9 +2,7 @@ package anomaly
 
 import (
 	"context"
-	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -88,8 +86,9 @@ type opLatencySlot struct {
 }
 
 // opLatPair — (servis, operasyon) çifti: trace_op_latency olayının kimliği
-// (FingerprintAnomaly(kind, operasyon, servis)).
-type opLatPair struct{ Service, Operation string }
+// (FingerprintAnomaly(kind, operasyon, servis)). v0.10.1091 — pivot chstore'a
+// taşındığı için onun çift tipinin takma adı.
+type opLatPair = chstore.OpPair
 
 // opLatBatchGate — classifyOpLatency'nin batch kapısı (v0.10.1046). Sıfır
 // değer = kural kapalı (bugünkü davranış).
@@ -275,145 +274,30 @@ func opLatencySustained(r opLatencyBucket, dwell int) bool {
 
 // opLatencyQuery — tespitin MV sorgusu + argümanları (v0.10.1046'te saf
 // kurucuya çıkarıldı ki batch kolu SQL düzeyinde pinlenebilsin; traceOpQuery
-// deseni).
+// deseni). v0.10.1091 — gövde chstore.OpP99PivotQuery'ye taşındı (yaygın
+// yavaşlama kuralı aynı pivotu başka tabanlarla kullanıyor); burası yalnız
+// trace_op_latency'nin tabanlarını ve batch planını bağlar. Metin ve
+// argümanlar taşımadan önceyle BAYT BAYT aynı (golden testler).
 //
 // slotStarts — sürdürme penceresinin kova başları, yeniden eskiye
 // (opLatencyWindows): [0] en yeni tamamlanmış kova, len = dwell ≥ 1.
 //
-// dwell = 1 VE plan sıfır değer (kural kapalı / aktif küme okunamadı) → metin
-// ve argümanlar v0.10.1046 ÖNCESİYLE BİREBİR aynı (TestOpLatencyQueryLegacyIdentity);
-// dwell = 1 + plan dolu → v0.10.1046 metni birebir.
-//
-// v0.10.1085 — dwell ≥ 2 (sürdürme), AYNI tek geçiş (ek tarama yok, çift başına
-// döngü yok): iç alt sorgunun is_cur'u kova numarasına genişler —
-// multiIf(time_bucket >= ?, 1, time_bucket >= ?, 2, …, 0) AS slot (1 = en yeni,
-// 0 = taban) ve GROUP BY slot; dış sorgu her önceki kova için p99_<i> /
-// calls_<i> kolonu taşır, HAVING her kovaya aynı üç tabanı uygular (LIMIT
-// yalnız sürdürmeyi geçebilecek satırlarda ısırır). Verisiz kova maxIf/sumIf'te
-// 0 → çağrı tabanının altı → elenir. Batch kolunda susturma YALNIZ her kova
-// yük altındaysa (opLatencyUnderLoad ile birebir).
-//
 // active — olayı zaten AKTİF çiftler (dwell ≥ 2'de anlamlı): önceki kovaların
-// koşulları `((…) OR (service_name, name) IN ((?, ?), …))` ile aktif çiftlere
-// muaf — sürdürme yalnız açılışı yönetir, aktif olay en yeni kovayla tazelenir.
-// Liste boşsa metin dwell 2 golden'ıyla birebir. Liste tavanlı (200 çift +
-// 64 KiB; batchLatCapKeys / opLatCapExemptBytes).
+// koşullarından muaf — sürdürme yalnız açılışı yönetir. Liste tavanlı (200
+// çift + 64 KiB; batchLatCapKeys / opLatCapExemptBytes).
 //
-// plan dolu → üç ek, hepsi aynı geçişte (ek tarama yok):
-//   - iç alt sorguya uniqExact(time_bucket) AS buckets (uniqExact ŞART:
-//     birleşmemiş parçalarda aynı kova birden çok satırdır), dışa
-//     maxIf(buckets, is_cur = 0) AS base_buckets;
-//   - HAVING'e TEK eleme: batch servis VE çift muaf değil VE
-//     cur_calls * base_buckets >= 2 * base_calls * cur_buckets (tamsayı —
-//     batchLoadSurgeCounts ile birebir);
-//   - muaf çiftler (aktif olaylar) skaler yer tutucularla tuple NOT IN.
-//
-// Koşul HAVING'de, Go'da DEĞİL: LIMIT 200 p99 oranına göre sıralıyor ve yük
-// altındaki batch çiftleri tam da en büyük oranı taşıyanlar — Go'da elenseler
-// LIMIT'i doldurup gerçek sıçramaları dışarıda bırakırlardı (v0.9.327'nin
-// dersi: LIMIT yalnız hayatta kalabilecek satırlarda ısırmalı).
+// plan dolu → batch yük kapısı (v0.10.1046) aynı geçişte, HAVING'de: Go'da
+// elenseler LIMIT'i doldurup gerçek sıçramaları dışarıda bırakırlardı.
 func opLatencyQuery(slotStarts []time.Time, baseStart, alignedNow time.Time, plan opLatBatchPlan, active []opLatPair) (string, []any) {
-	dwell := len(slotStarts)
-	// dwell = 1 → v0.10.1046 metni (is_cur). Kova numarası 1 = cari, 0 = taban
-	// iki biçimde de aynı, dış kolonlar yalnız adı değiştirir.
-	slot, slotExpr := "is_cur", `time_bucket >= ? AS is_cur`
-	if dwell > 1 {
-		conds := make([]string, dwell)
-		for i := range conds {
-			conds[i] = fmt.Sprintf("time_bucket >= ?, %d", i+1)
-		}
-		slot, slotExpr = "slot", "multiIf("+strings.Join(conds, ", ")+", 0) AS slot"
-	}
-	sel := `
-		SELECT service_name, name,
-		       maxIf(p99, ` + slot + ` = 1)   AS cur_p99,
-		       maxIf(p99, ` + slot + ` = 0)   AS base_p99,
-		       sumIf(calls, ` + slot + ` = 1) AS cur_calls,
-		       sumIf(calls, ` + slot + ` = 0) AS base_calls`
-	inner := `
-		         countMerge(span_count_state) AS calls`
-	having := `
-		HAVING cur_calls >= ? AND base_calls >= ?
-		   AND base_p99 > 0 AND cur_p99 >= ? * base_p99 AND cur_p99 >= ?`
-	args := make([]any, 0, 16)
-	for _, s := range slotStarts {
-		args = append(args, s)
-	}
-	args = append(args, baseStart, alignedNow,
-		opLatencyMinCalls, opLatencyMinCalls, opLatencyMinRatio, opLatencyMinP99Ms)
-	// v0.10.1085 — önceki kovalar: kolon + aynı üç taban (en yeni kovanınkiyle
-	// aynı biçim). Tamsayı kova numarası metne gömülür, bind değil. Aktif
-	// çiftler önceki kova koşullarından muaf (OR tuple IN).
-	var earlier []string
-	for i := 2; i <= dwell; i++ {
-		sel += fmt.Sprintf(`,
-		       maxIf(p99, slot = %d)   AS p99_%d,
-		       sumIf(calls, slot = %d) AS calls_%d`, i, i, i, i)
-		earlier = append(earlier, fmt.Sprintf(`calls_%d >= ? AND p99_%d >= ? * base_p99 AND p99_%d >= ?`, i, i, i))
-		args = append(args, opLatencyMinCalls, opLatencyMinRatio, opLatencyMinP99Ms)
-	}
-	switch {
-	case len(earlier) == 0:
-	case len(active) == 0:
-		for _, c := range earlier {
-			having += `
-		   AND ` + c
-		}
-	default:
-		tuples := make([]string, len(active))
-		for i := range tuples {
-			tuples[i] = "(?, ?)"
-		}
-		having += `
-		   AND ((` + strings.Join(earlier, `
-		         AND `) + `)
-		        OR (service_name, name) IN (` + strings.Join(tuples, ", ") + `))`
-		for _, p := range active {
-			args = append(args, p.Service, p.Operation)
-		}
-	}
-	if plan.cond != "" {
-		sel += `,
-		       maxIf(buckets, ` + slot + ` = 0) AS base_buckets`
-		inner += `,
-		         uniqExact(time_bucket) AS buckets`
-		exempt := ""
-		if len(plan.exempt) > 0 {
-			tuples := make([]string, len(plan.exempt))
-			for i := range tuples {
-				tuples[i] = "(?, ?)"
-			}
-			exempt = ` AND (service_name, name) NOT IN (` + strings.Join(tuples, ", ") + `)`
-		}
-		having += `
-		   AND NOT (` + plan.cond + exempt + `
-		            AND cur_calls * base_buckets >= ? * base_calls * ?`
-		for i := 2; i <= dwell; i++ {
-			having += fmt.Sprintf(`
-		            AND calls_%d * base_buckets >= ? * base_calls * ?`, i)
-		}
-		having += `)`
-		args = append(args, plan.args...)
-		for _, p := range plan.exempt {
-			args = append(args, p.Service, p.Operation)
-		}
-		for i := 1; i <= dwell; i++ {
-			args = append(args, batchLoadSurgeFactor, plan.gate.curBuckets)
-		}
-	}
-	return sel + `
-		FROM (
-		  SELECT service_name, name,
-		         ` + slotExpr + `,
-		         arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99,` + inner + `
-		  FROM operation_summary_5m
-		  WHERE time_bucket >= ? AND time_bucket < ?
-		  GROUP BY service_name, name, ` + slot + `
-		)
-		GROUP BY service_name, name` + having + `
-		ORDER BY cur_p99 / base_p99 DESC
-		LIMIT 200
-		SETTINGS max_execution_time = 25`, args
+	return chstore.OpP99PivotQuery(chstore.OpP99PivotSpec{
+		SlotStarts: slotStarts, BaseStart: baseStart, AlignedNow: alignedNow,
+		Floors: chstore.OpP99Floors{MinCalls: opLatencyMinCalls, Ratio: opLatencyMinRatio, MinP99Ms: opLatencyMinP99Ms},
+		Batch: chstore.OpP99BatchGate{
+			Cond: plan.cond, Args: plan.args, Exempt: plan.exempt,
+			SurgeFactor: batchLoadSurgeFactor, CurBuckets: plan.gate.curBuckets,
+		},
+		Active: active,
+	})
 }
 
 // opLatSustainExempt — SAF (v0.10.1085): sürdürmeden muaf AKTİF çiftler,

@@ -141,6 +141,12 @@ type AnomalySensitivityConfig struct {
 	// Problem'i "anomaly cleared" ile kapanır. `log_pattern` (seçilmiş desen
 	// sıçraması) bu anahtara BAĞLI DEĞİL — operatör doğru yakalama dedi.
 	LogTemplateNew *bool `json:"logTemplateNew,omitempty"`
+	// ServiceSlowdown — v0.10.1091 (operatör: "Dün söylediğim CRM sorunu yine
+	// oldu, bir sürü anomali geldi ama P1 problem gelmedi" → "Onay"): yaygın
+	// yavaşlama hızlı yolu (`svc-slowdown:<servis>`, evaluator). Tek kovada ≥ 3
+	// operasyon p99 ≥ 5 s VE ≥ 20× kendi tabanı → servis üzerinde P1. Vidalar
+	// ve gerekçe anomaly_sensitivity_slowdown.go'da; Enabled nil = AÇIK.
+	ServiceSlowdown ServiceSlowdownConfig `json:"serviceSlowdown"`
 }
 
 const (
@@ -506,6 +512,8 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		OpLatency:             boolPtr(true),
 		OpLatencyDwellBuckets: opLatencyDwellDefault,
 		LogTemplateNew:        boolPtr(false), // v0.10.1061 — operatör onaylı: varsayılan KAPALI
+		// v0.10.1091 — yaygın yavaşlama hızlı yolu, operatör onaylı: AÇIK.
+		ServiceSlowdown: DefaultServiceSlowdown(),
 	}
 }
 
@@ -551,6 +559,9 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		OpLatencyDwellBuckets: c.OpLatencyDwell(),
 		// v0.10.1061 — aynı gerekçe: kopyalanmazsa PUT'ta düşer. nil → false.
 		LogTemplateNew: boolPtr(c.LogTemplateNewOn()),
+		// v0.10.1091 — kopyalanmazsa PUT'ta düşerdi. Eksik bölüm (eski blob)
+		// sıfır değerdir → kelepçe varsayılanlara doldurur, bayrak nil → açık.
+		ServiceSlowdown: NormalizeServiceSlowdown(c.ServiceSlowdown),
 	}
 	for _, m := range AnomalySensitivityMetrics {
 		def := d.Metrics[m]

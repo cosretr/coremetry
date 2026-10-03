@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import type { AnomalyTrackedConfig, AnomalySensitivityConfig, AnomalyBehaviorConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig, DBHealthConfig } from '@/lib/types';
 import { Field, FlashBox, humanize } from './shared';
 import { droppedPatternCount, formatBatchPatterns, parseBatchPatterns } from './batchPatterns'; // v0.10.1039
+import { ServiceSlowdownSubsection } from './ServiceSlowdownSubsection'; // v0.10.1091
 
 // ── Anomaly promotion tab ───────────────────────────────────────
 //
@@ -348,6 +349,10 @@ function SensitivitySection() {
       const saved = await api.putAnomalySensitivity({
         ...cfg, batchServicePatterns: sentPatterns, opLatency: cfg.opLatency !== false,
         logTemplateNew: cfg.logTemplateNew === true,
+        // v0.10.1091 — bölüm varsa bayrak AÇIK boolean gider (yok = açık).
+        ...(cfg.serviceSlowdown
+          ? { serviceSlowdown: { ...cfg.serviceSlowdown, enabled: cfg.serviceSlowdown.enabled !== false } }
+          : {}),
       });
       setCfg(saved);
       setBatchText(formatBatchPatterns(saved.batchServicePatterns));
@@ -551,6 +556,11 @@ function SensitivitySection() {
               </Field>
             </div>
           </div>
+          {/* v0.10.1091 — yaygın yavaşlama hızlı yolu (operatör: "Dün söylediğim
+              CRM sorunu yine oldu, bir sürü anomali geldi ama P1 problem
+              gelmedi" → "Onay"). Operasyon gecikmesinin yanında, aynı Kaydet. */}
+          <ServiceSlowdownSubsection value={cfg.serviceSlowdown}
+            onChange={serviceSlowdown => setCfg({ ...cfg, serviceSlowdown })} />
           {/* v0.10.1061 — log_template_new dedektörü: VARSAYILAN KAPALI (operatör
               onaylı: "Bu log anomalileri de false pozitif geliyor"). Alan yoksa
               kapalı okunur; kayıt açık boolean gönderir. log_pattern etkilenmez. */}

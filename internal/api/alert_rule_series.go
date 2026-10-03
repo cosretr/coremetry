@@ -57,6 +57,9 @@ const alertRuleSeriesTTL = 60 * time.Second
 type alertRuleSeriesStore interface {
 	GetAlertRule(ctx context.Context, id string) (*chstore.AlertRule, error)
 	AlertMetricSeries(ctx context.Context, q chstore.AlertMetricSeriesQuery) ([]chstore.AlertMetricPoint, error)
+	// AnomalySensitivity — v0.10.1091: yaygın yavaşlamanın GÖRÜNTÜ eşiği
+	// (serviceSlowdown.minP99Ms; atomic yayın, CH okuması yok).
+	AnomalySensitivity() chstore.AnomalySensitivityConfig
 }
 
 var alertRuleSeriesStoreOf = func(s *Server) alertRuleSeriesStore { return s.store }
@@ -77,6 +80,24 @@ func alertRuleSeriesUnsupported(r *chstore.AlertRule) string {
 		return "kuralın penceresi yok"
 	}
 	return ""
+}
+
+// alertRuleSeriesSynthetic — SAF (v0.10.1091). Kural satırı alert_rules'ta
+// OLMAYAN ama ölçüsü değerlendiricinin span-metrik yoluyla aynı olan problem
+// ailesi için sentetik kural; nil = sentetik değil (bugünkü okuma). Yaygın
+// yavaşlama (`svc-slowdown:<servis>`) kararını TEK tamamlanmış 5 dk kovada verir
+// → pencere 300 s, yalnız servis p99'u (service_summary_5m kova p99'u; Problem
+// metriği p99_ms). Başka metrik istenirse sentetik yok → kural okuması 404.
+//
+// Threshold = minP99Ms (ayardaki operasyon p99 tabanı, vars. 5000 ms) — grafiğin
+// çizgisi. Problem'in Threshold'u BİLEREK ondan ayrı (en yavaş operasyonun kendi
+// tabanı; öncelik oranı için): çizgi kuralın mutlak tabanını göstermeli, 120
+// ms'lik bir taban değil. Cevabın `threshold` alanıyla istemciye gider.
+func alertRuleSeriesSynthetic(id, metric string, minP99Ms float64) *chstore.AlertRule {
+	if strings.HasPrefix(id, chstore.RuleSvcSlowdownPrefix) && metric == "p99_ms" {
+		return &chstore.AlertRule{ID: id, Metric: metric, WindowSec: uint32(chstore.SvcSlowdownBucket / time.Second), Threshold: minP99Ms}
+	}
+	return nil
 }
 
 // snapAlertRuleSeriesWindow — SAF. to boş ya da gelecekteyse now; pencere
@@ -102,9 +123,10 @@ func snapAlertRuleSeriesWindow(from, to, now time.Time, sp chstore.AlertSeriesSp
 }
 
 // alertRuleSeriesKey — SAF; her girdi anahtarda (v0.5.187).
-func alertRuleSeriesKey(ruleID, metric, service string, windowSec int, from, to time.Time, stepSec int) string {
-	return fmt.Sprintf("alert-rule-series:v1:r=%s:m=%s:svc=%s:w=%d:from=%d:to=%d:b=%d",
-		ruleID, metric, service, windowSec, from.UnixNano(), to.UnixNano(), stepSec)
+// v0.10.1091 — thr: cevaba giren görüntü eşiği (sentetik kural; 0 = yok).
+func alertRuleSeriesKey(ruleID, metric, service string, windowSec int, from, to time.Time, stepSec int, thr float64) string {
+	return fmt.Sprintf("alert-rule-series:v2:r=%s:m=%s:svc=%s:w=%d:from=%d:to=%d:b=%d:thr=%g",
+		ruleID, metric, service, windowSec, from.UnixNano(), to.UnixNano(), stepSec, thr)
 }
 
 type alertRuleSeriesResponse struct {
@@ -115,6 +137,10 @@ type alertRuleSeriesResponse struct {
 	From      int64                      `json:"from"` // ns, kovaya hizalı
 	To        int64                      `json:"to"`   // ns, kovaya hizalı (dahil değil)
 	Points    []chstore.AlertMetricPoint `json:"points"`
+	// Threshold — v0.10.1091: grafiğin eşik çizgisi, Problem'in Threshold'unu
+	// EZER (yalnız sentetik kural — yaygın yavaşlamada minP99Ms). Yok = istemci
+	// problemin eşiğini çizer (bugünkü davranış).
+	Threshold *float64 `json:"threshold,omitempty"`
 }
 
 func (s *Server) getAlertRuleSeries(w http.ResponseWriter, r *http.Request) {
@@ -132,13 +158,20 @@ func (s *Server) getAlertRuleSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st := alertRuleSeriesStoreOf(s)
-	rule, err := st.GetAlertRule(r.Context(), id)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		writeErr(w, err)
-		return
-	}
-	if err != nil {
-		rule = nil
+	// v0.10.1091 — kural satırı olmayan ama dizisi çizilebilen aile (yaygın
+	// yavaşlama): alert_rules okuması YOK, pencere ailenin karar penceresi.
+	rule := alertRuleSeriesSynthetic(id, metric, st.AnomalySensitivity().ServiceSlowdown.MinP99Ms)
+	synthetic := rule != nil
+	if rule == nil {
+		var err error
+		rule, err = st.GetAlertRule(r.Context(), id)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, err)
+			return
+		}
+		if err != nil {
+			rule = nil
+		}
 	}
 	if reason := alertRuleSeriesUnsupported(rule); reason != "" {
 		writeJSONError(w, http.StatusNotFound, reason)
@@ -156,7 +189,16 @@ func (s *Server) getAlertRuleSeries(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "from, to'dan önce olmalı")
 		return
 	}
-	key := alertRuleSeriesKey(id, metric, service, windowSec, f, t, spec.StepSec)
+	var thr *float64
+	if synthetic && rule.Threshold > 0 {
+		v := rule.Threshold
+		thr = &v
+	}
+	thrKey := 0.0
+	if thr != nil {
+		thrKey = *thr
+	}
+	key := alertRuleSeriesKey(id, metric, service, windowSec, f, t, spec.StepSec, thrKey)
 	s.serveCached(w, r, key, alertRuleSeriesTTL, func(ctx context.Context) (any, error) {
 		pts, err := st.AlertMetricSeries(ctx, chstore.AlertMetricSeriesQuery{
 			Metric: metric, Service: service, WindowSec: windowSec, From: f, To: t, Now: time.Now(),
@@ -168,7 +210,7 @@ func (s *Server) getAlertRuleSeries(w http.ResponseWriter, r *http.Request) {
 			pts = []chstore.AlertMetricPoint{}
 		}
 		return alertRuleSeriesResponse{
-			Metric: metric, Service: service, WindowSec: windowSec, StepSec: spec.StepSec,
+			Metric: metric, Service: service, WindowSec: windowSec, StepSec: spec.StepSec, Threshold: thr,
 			From: f.UnixNano(), To: t.UnixNano(), Points: pts,
 		}, nil
 	})

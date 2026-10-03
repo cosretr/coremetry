@@ -503,7 +503,7 @@ func TestOpLatSustainExempt(t *testing.T) {
 	if got := opLatSustainExempt(2, keys, errors.New("ch down")); len(got) != 0 {
 		t.Fatalf("okuma hatasında muafiyet olmamalı: %v", got)
 	}
-	want := []opLatPair{{"a", "op1"}, {"b", "op2"}}
+	want := []opLatPair{{Service: "a", Operation: "op1"}, {Service: "b", Operation: "op2"}}
 	if got := opLatSustainExempt(2, keys, nil); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, beklenen %v", got, want)
 	}
@@ -516,7 +516,7 @@ func TestOpLatencyQueryDwellActive(t *testing.T) {
 	if q, _ := opLatencyQuery(slots, base, now, opLatBatchPlan{}, []opLatPair{}); q != goldenDwell2OpLatencySQL {
 		t.Fatalf("boş aktif listede metin değişti:\n%s", q)
 	}
-	q, args := opLatencyQuery(slots, base, now, opLatBatchPlan{}, []opLatPair{{"svc-a", "GET /x"}, {"svc-b", "op"}})
+	q, args := opLatencyQuery(slots, base, now, opLatBatchPlan{}, []opLatPair{{Service: "svc-a", Operation: "GET /x"}, {Service: "svc-b", Operation: "op"}})
 	frag := "\n\t\t   AND ((calls_2 >= ? AND p99_2 >= ? * base_p99 AND p99_2 >= ?)\n\t\t        OR (service_name, name) IN ((?, ?), (?, ?)))"
 	if !strings.Contains(q, frag) {
 		t.Fatalf("aktif muafiyeti yok:\n%s", q)
@@ -530,7 +530,7 @@ func TestOpLatencyQueryDwellActive(t *testing.T) {
 		t.Fatalf("argüman kuyruğu %v, beklenen %v", tail, want)
 	}
 	// dwell 1'de liste yok sayılır (önceki kova yok) — legacy metin.
-	q1, _ := opLatencyQuery(slots[:1], base, now, opLatBatchPlan{}, []opLatPair{{"svc-a", "GET /x"}})
+	q1, _ := opLatencyQuery(slots[:1], base, now, opLatBatchPlan{}, []opLatPair{{Service: "svc-a", Operation: "GET /x"}})
 	if strings.Contains(q1, " IN (") {
 		t.Fatalf("dwell 1'de IN listesi olmamalı:\n%s", q1)
 	}

@@ -63,10 +63,15 @@ func TestDefaultInboxKeep_IncludesExternalErrorSeries(t *testing.T) {
 			t.Errorf("Match(%q) = (%q, %v), istenen %q", c.id, got, ok, c.want)
 		}
 	}
-	legacy := legacyInboxKeepSourcePriority()
-	if !reflect.DeepEqual(def[:len(legacy)], legacy) || len(def) != len(legacy)+3 ||
-		def[len(def)-1] != InboxKeepExtCap {
-		t.Errorf("yeni varsayılan = eski varsayılan + 3 dış kaynak kalıbı (seri, küme, tavan) olmalı: %v", def)
+	// v0.10.1091 — 1083 varsayılanı ayrı tanımda (v3 göçünün "önceki"si);
+	// güncel varsayılan onun üstüne yalnız svc-slowdown ekler.
+	legacy, d1083 := legacyInboxKeepSourcePriority(), inboxKeepDefault1083()
+	if !reflect.DeepEqual(d1083[:len(legacy)], legacy) || len(d1083) != len(legacy)+3 ||
+		d1083[len(d1083)-1] != InboxKeepExtCap {
+		t.Errorf("1083 varsayılanı = eski varsayılan + 3 dış kaynak kalıbı (seri, küme, tavan) olmalı: %v", d1083)
+	}
+	if !reflect.DeepEqual(def, append(append([]string{}, d1083...), InboxKeepSvcSlowdown)) {
+		t.Errorf("güncel varsayılan = 1083 varsayılanı + svc-slowdown:* olmalı: %v", def)
 	}
 }
 

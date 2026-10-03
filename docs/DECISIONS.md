@@ -1522,6 +1522,35 @@ ad basılmaz ki gösterilen jeton olup K3'ü geçmesin. `copilot/prompts.go` de�
 anomalilerde topoloji okunabilirken "doğrulanamadı" derdi. Hipotez işçisinin kendi adayları değişmedi. Çivi:
 `api/correlation_consumers_pin_test.go`.
 
+## 2026-10-03 — Yaygın yavaşlama hızlı yolu: tek kovada aşırı sapma → servis üzerinde P1 (v0.10.1091)
+
+**Operatör (prod, iki gün üst üste):** "Dün söylediğim CRM sorunu yine oldu, bir sürü anomali geldi ama P1 problem
+gelmedi." ~10 dk'lık ağır olay: bir servisin birçok operasyonunda p99 ms'lerden 15–20 s'ye çıktı, trafik ~%40 düştü;
+20 operasyon anomalisi (×700–×2000) açılıp 5–10 dk'da düştü. P1 yok: bu hafta eklenen her kural 2 ardışık kova / 10
+dk istiyor, operasyon anomalileri bilinçli P3. Onay: "Onay".
+
+**Karar:** evaluator'da lider pası `svc-slowdown:<servis>` (kural id = problem id, servis başına tek, SLOWDOWN,
+critical). TEK tamamlanmış 5 dk kovada ≥ 3 operasyonun her biri ≥ 30 çağrı, p99 ≥ 5 s, p99 ≥ 20× kendi 24 sa tabanı
+VE kova p95'i ≥ 2.5 s (yavaş pay); servis toplamı ≥ 100 çağrı; batch değil. Taban 24 sa'in HAVUZLANMIŞ p95'i (aynı
+tDigest): dünkü 10 dk'lık olay taban p99'unu şişirip bugünkü aynı olayı susturuyordu; kova başı p99 medyanı filo
+ölçeğinde (işlem × 288 kova tDigest durumu) bellek olarak ağır bulundu. İkinci kol (aynı id): kova trafiği önceki
+saatin ortalamasına göre ≥ %40 düşük, cari kovada ≥ 100 çağrı, servis p99'u ≥ 5 s VE ≥ 3× p95 tabanı. Kural
+tetiklenince HER ZAMAN P1 (operatör): Value = en yüksek operasyon p99'u, Threshold = O operasyonun kendi tabanı (oran ≥
+20× → 5.5 s / 120 ms da P1); çöküş kolunda servis p99'u / servis tabanı (≥ 3×). Bu güvence `problem_priority.
+bigBreachRatio` ≤ 3 (vars. 2) iken geçerli; operatör onu 3'ün (ya da riseFactor'ün) üstüne çekerse ilgili kol critical P2
+olur (pinli). Detay grafiğinin çizgisi ("op tabanı 5 s") ve yavaş trace süzgeci Problem eşiğinden AYRIK — ayardaki
+minP99Ms; yalnız çöküşle açılan satırda çizgi yok. Açıkken ölçü yalnız yükselir; 2 ardışık temiz kovada kapanır;
+okumalar 10 s bütçeli, hata kova başına bir kez yeniden denenir, sonra açıklar yalnız tazelenir. Vidalar
+`anomaly_sensitivity.serviceSlowdown`; inbox istisnasına `svc-slowdown:*` (v3 göçü). Operasyon anomalileri aynen
+sürer — bastırılmaz.
+
+**Neden tek kova burada güvenli:** 1056'nın gürültüsü TEK operasyonda TEK yavaş isteğin p99'u şişirmesiydi. p99
+tek başına yetmez: iç içe span'leri olan TEK yavaş trace (sunucu + iç + istemci operasyonu, ~40'ar çağrı) üç
+operasyonun p99'unu birden çeker. Bu yüzden mutlak (p99 ≥ 5 s), göreli (≥ 20× kendi tabanı), hacim (≥ 30 çağrı /
+operasyon) ve YAVAŞ PAY (p95 ≥ 2.5 s — çağrıların ~%6'sından fazlası yavaş) tabanları ile genişlik (≥ 3 operasyon
+aynı kovada) birlikte aranır; tek trace p95'i kıpırdatmaz. Okuma kova başına iki MV sorgusu (op_latency'nin pivotu +
+service_summary_5m); trace_op_latency sürdürme kuralı (1085) ve metni değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

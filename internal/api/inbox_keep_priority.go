@@ -84,6 +84,8 @@ func inboxKeepLabel(pattern, severity string) string {
 		return "dış kaynak hata kümesi"
 	case chstore.InboxKeepExtCap:
 		return "dış kaynak tavan özeti"
+	case chstore.InboxKeepSvcSlowdown: // v0.10.1091
+		return "yaygın yavaşlama"
 	}
 	return "istisna listesi: " + pattern
 }

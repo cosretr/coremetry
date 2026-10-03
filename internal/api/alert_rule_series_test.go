@@ -83,22 +83,23 @@ func TestSnapAlertRuleSeriesWindow(t *testing.T) {
 
 func TestAlertRuleSeriesKey_HashesAllInputs(t *testing.T) {
 	f, to := time.Unix(6000, 0), time.Unix(9600, 0)
-	base := alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to, 300)
+	base := alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to, 300, 0)
 	variants := []string{
-		alertRuleSeriesKey("builtin-http-p99-5s", "http_p99_ms", "checkout-svc", 600, f, to, 300),
-		alertRuleSeriesKey("builtin-warn-http-p99-3s", "p99_ms", "checkout-svc", 600, f, to, 300),
-		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "billing-svc", 600, f, to, 300),
-		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 300, f, to, 300),
-		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f.Add(5*time.Minute), to, 300),
-		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to.Add(5*time.Minute), 300),
-		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to, 60),
+		alertRuleSeriesKey("builtin-http-p99-5s", "http_p99_ms", "checkout-svc", 600, f, to, 300, 0),
+		alertRuleSeriesKey("builtin-warn-http-p99-3s", "p99_ms", "checkout-svc", 600, f, to, 300, 0),
+		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "billing-svc", 600, f, to, 300, 0),
+		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 300, f, to, 300, 0),
+		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f.Add(5*time.Minute), to, 300, 0),
+		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to.Add(5*time.Minute), 300, 0),
+		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to, 60, 0),
+		alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to, 300, 5000), // v0.10.1091 görüntü eşiği
 	}
 	for i, v := range variants {
 		if v == base {
 			t.Fatalf("varyant %d anahtarı değiştirmedi: %s", i, v)
 		}
 	}
-	if alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to, 300) != base {
+	if alertRuleSeriesKey("builtin-warn-http-p99-3s", "http_p99_ms", "checkout-svc", 600, f, to, 300, 0) != base {
 		t.Fatal("anahtar kararlı değil")
 	}
 }
@@ -110,10 +111,17 @@ type fakeAlertRuleSeriesStore struct {
 	err      error
 	calls    int
 	gotQuery chstore.AlertMetricSeriesQuery
+	sens     *chstore.AnomalySensitivityConfig // v0.10.1091; nil = varsayılan
 }
 
 func (f *fakeAlertRuleSeriesStore) GetAlertRule(context.Context, string) (*chstore.AlertRule, error) {
 	return f.rule, f.ruleErr
+}
+func (f *fakeAlertRuleSeriesStore) AnomalySensitivity() chstore.AnomalySensitivityConfig {
+	if f.sens != nil {
+		return *f.sens
+	}
+	return chstore.DefaultAnomalySensitivity()
 }
 func (f *fakeAlertRuleSeriesStore) AlertMetricSeries(_ context.Context, q chstore.AlertMetricSeriesQuery) ([]chstore.AlertMetricPoint, error) {
 	f.calls++

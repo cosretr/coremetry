@@ -4,8 +4,8 @@ import { useAlertRuleSeries } from '@/lib/queries';
 import type { Problem } from '@/lib/types';
 import { Sect } from './detailSections';
 import {
-  ALERT_SERIES_TEXT, alertMetricUnit, alertSeriesArgs, alertSeriesState, alertSeriesToSpan, alertSeriesXRange,
-  alertThreshold, isProblemLive, problemRegion, windowLabel,
+  ALERT_SERIES_TEXT, alertChartThresholds, alertMetricUnit, alertSeriesArgs, alertSeriesState, alertSeriesToSpan, alertSeriesXRange,
+  isProblemLive, problemRegion, windowLabel,
 } from './alertMetricSeries';
 
 // AlertMetricChartSection — alarm problemi detayının "tetiklenen metrik"
@@ -41,9 +41,15 @@ export function AlertMetricChartSection({ problem }: { problem: Problem }) {
     () => (xRange ? [problemRegion({ startedAt, resolvedAt, status }, xRange.to)] : []),
     [xRange, startedAt, resolvedAt, status]);
   // Eşik dizisi KİMLİĞİ sabit: CorePanel eşik değişince grafiği yeniden kurar.
+  // v0.10.1091 — sunucu çizgi eşiği verdiyse (sentetik kural: yaygın
+  // yavaşlamada ayardaki minP99Ms) o çizilir; Problem'in threshold'u orada en
+  // yavaş operasyonun kendi tabanı (öncelik oranı), çizgi değil.
+  // İnceleme E — yaygın yavaşlamada çizgi "op tabanı 5 s", yalnız çöküş kolunda yok.
+  const { ruleName } = problem;
+  const serverThr = data?.threshold;
   const thresholds = useMemo(
-    () => [alertThreshold({ threshold, comparator, severity, metric })],
-    [threshold, comparator, severity, metric]);
+    () => alertChartThresholds({ ruleId, ruleName, threshold, comparator, severity, metric }, serverThr),
+    [ruleId, ruleName, threshold, comparator, severity, metric, serverThr]);
 
   if (state === 'gone') return null;
   const title = `${metric} · ${service}`;
