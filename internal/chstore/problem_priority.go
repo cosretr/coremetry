@@ -55,6 +55,20 @@ type ProblemPriorityConfig struct {
 	// emsali): nil = alan yazılmamış = varsayılan liste; boş liste = operatör
 	// istisnayı KAPATTI (saf v0.9.487). Normalize somutlaştırır.
 	InboxKeepSourcePriority *[]string `json:"inboxKeepSourcePriority,omitempty"`
+	// SLOBurnProblems — v0.10.1081 (operatör: "SLO burn rate problem olmasın,
+	// çıkar. SLO ile ilgili beklentim yok."): SLO burn-rate alarmı
+	// (`slo:<id>:<severity>`) Problem — dolayısıyla incident ve bildirim —
+	// üretsin mi. *bool, nil = KAPALI (opLatency / logTemplateNew emsali):
+	// alan hiç yazılmamış blob da kapalı okunur. SLO sayfası, burn hesabı ve
+	// grafikler bu bayraktan BAĞIMSIZ; yalnız Problem üretimi kapanır.
+	// Okuyucu: evaluator/slo_burn.go (CurrentProblemPriority, atomik).
+	SLOBurnProblems *bool `json:"sloBurnProblems,omitempty"`
+}
+
+// SLOBurnProblemsEnabled — nil = kapalı (v0.10.1081 varsayılanı); yalnız
+// açıkça true yazılmışsa SLO burn-rate Problem'i üretilir.
+func (c ProblemPriorityConfig) SLOBurnProblemsEnabled() bool {
+	return c.SLOBurnProblems != nil && *c.SLOBurnProblems
 }
 
 // DefaultProblemPriority — v0.9.838 ÖNCESİNİN gömülü sabitleri, birebir.
@@ -101,6 +115,12 @@ const problemPriorityKey = "problem_priority"
 func NormalizeProblemPriority(c ProblemPriorityConfig) ProblemPriorityConfig {
 	c = normalizeProblemPriorityKnobs(c)
 	c.InboxKeepSourcePriority = inboxKeepPtr(c.InboxKeepSourcePriorityList())
+	// v0.10.1081 — bayrak taze bir işaretçiye kopyalanır: yayınlanan değer
+	// çağıranın struct'ıyla bellek paylaşmasın (PUT decode'u yerinde yazar).
+	if c.SLOBurnProblems != nil {
+		v := *c.SLOBurnProblems
+		c.SLOBurnProblems = &v
+	}
 	return c
 }
 
@@ -145,6 +165,15 @@ func CurrentProblemPriority() ProblemPriorityConfig {
 		return *c
 	}
 	return DefaultProblemPriority()
+}
+
+// ProblemPriorityPublished — v0.10.1081: bu süreçte kayıtlı blob (ya da PUT)
+// en az bir kez yayınlandı mı. SLO burn kapısı "kapalı" kararını açık
+// problemleri KAPATMAK için kullanmadan önce buna bakar: boot'ta okuma
+// düşmüşse varsayılan (kapalı) bir TAHMİNDİR, operatörün açtığı bayrağın
+// problemlerini kapatma gerekçesi olamaz (aiops §11 tek yönlü eylem kuralı).
+func ProblemPriorityPublished() bool {
+	return problemPriorityCfg.Load() != nil
 }
 
 // SetProblemPriority — normalize EDİLMİŞ hâlini yayınlar, böylece

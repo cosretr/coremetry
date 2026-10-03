@@ -137,15 +137,16 @@ func (s *Server) putProblemPriority(w http.ResponseWriter, r *http.Request) {
 	// görünümü servis etmesin (susturma yazımlarıyla aynı önek düşürme).
 	s.invalidateInboxCaches(r)
 	keepJSON, _ := json.Marshal(c.InboxKeepSourcePriorityList())
+	// v0.10.1081 — SLO burn-rate Problem anahtarı da audit'te (etkin değer).
 	s.audit(r, "settings.update", "problem_priority", "problem_priority",
-		fmt.Sprintf(`{"bigBreachRatio":%g,"staleCriticalHours":%g,"inboxKeepSourcePriority":%s}`,
-			c.BigBreachRatio, c.StaleCriticalHours, keepJSON))
+		fmt.Sprintf(`{"bigBreachRatio":%g,"staleCriticalHours":%g,"inboxKeepSourcePriority":%s,"sloBurnProblems":%t}`,
+			c.BigBreachRatio, c.StaleCriticalHours, keepJSON, c.SLOBurnProblemsEnabled()))
 	staleNote := fmt.Sprintf("%gsa", c.StaleCriticalHours)
 	if c.StaleCriticalHours == 0 {
 		staleNote = "KAPALI"
 	}
-	log.Printf("[settings] problem_priority: ihlal katı %g× · bayat-critical %s",
-		c.BigBreachRatio, staleNote)
+	log.Printf("[settings] problem_priority: ihlal katı %g× · bayat-critical %s · SLO burn problemi %t",
+		c.BigBreachRatio, staleNote, c.SLOBurnProblemsEnabled())
 	writeJSON(w, c)
 }
 
@@ -159,6 +160,12 @@ func decodeProblemPriorityPut(stored chstore.ProblemPriorityConfig, body io.Read
 	if stored.InboxKeepSourcePriority != nil {
 		cp := append([]string{}, *stored.InboxKeepSourcePriority...)
 		c.InboxKeepSourcePriority = &cp
+	}
+	// v0.10.1081 — SLO burn bayrağı da taze işaretçiye: decode kayıtlı değerin
+	// bool'unu yerinde ezmesin. Gövdede alan yoksa kayıtlı değer kalır.
+	if stored.SLOBurnProblems != nil {
+		v := *stored.SLOBurnProblems
+		c.SLOBurnProblems = &v
 	}
 	if err := json.NewDecoder(body).Decode(&c); err != nil {
 		return chstore.ProblemPriorityConfig{}, err

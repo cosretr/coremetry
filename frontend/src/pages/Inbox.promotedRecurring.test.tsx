@@ -51,7 +51,6 @@ vi.mock('@/features/anomalies/ProblemsSection', () => ({
   AlertProblemHost: () => null,
 }));
 vi.mock('@/features/anomalies/AnomalyEventDetail', () => ({ AnomalyEventHost: () => null }));
-vi.mock('@/components/InboxTriageDrawer', () => ({ InboxTriageDrawer: () => null }));
 
 import Inbox from './Inbox';
 

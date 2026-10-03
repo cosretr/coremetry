@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { Incident, IncidentEvent } from '@/lib/types';
+import type { Incident, IncidentEvent, Problem } from '@/lib/types';
 
 // Incidents — list, detail, events. The list refreshes every
 // 30s alongside problems (keys.incidents.all is invalidated
@@ -45,6 +45,31 @@ export function useIncidentProblems(id: string) {
     queryFn: async () => (await api.incidentProblems(id)) ?? [],
     enabled: !!id,
     staleTime: 30_000,
+  });
+}
+
+// v0.10.1081 — incident sayfasının manşeti ve bağlı problemler listesi
+// problemlerin KENDİ kaydını ister (açıklama, kural, özne, pencere); bağlı
+// uç yalnız kimlik döndürür. Kimlik başına tekil okuma, problem detay
+// sayfasıyla AYNI anahtar (keys.problems.byID) — oradan gelince önbellek
+// paylaşılır. Tavan INCIDENT_PROBLEM_DETAIL_CAP: sayfa kalanları kimlikle
+// listeler (sessiz kesim yok). Yoklama yok.
+export const INCIDENT_PROBLEM_DETAIL_CAP = 12;
+
+export function useIncidentProblemDetails(ids: readonly string[]) {
+  const capped = ids.slice(0, INCIDENT_PROBLEM_DETAIL_CAP);
+  return useQueries({
+    queries: capped.map(id => ({
+      queryKey: keys.problems.byID(id),
+      queryFn: () => api.problem(id),
+      staleTime: 15_000,
+      placeholderData: undefined,
+      retry: (count: number, err: Error) => (err.message.startsWith('HTTP 404') ? false : count < 2),
+    })),
+    combine: (rs) => ({
+      problems: rs.map(r => r.data).filter((p): p is Problem => !!p),
+      pending: rs.some(r => r.isPending),
+    }),
   });
 }
 

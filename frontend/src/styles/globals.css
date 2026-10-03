@@ -3982,6 +3982,14 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 /* v0.10.1062 — "Ne yapabilirim" kartındaki kısa not satırı ("En çok: …",
    "servis adı yok"). */
 .pd-pivot-note { font-size: 12px; color: var(--text3); overflow-wrap: anywhere; }
+/* v0.10.1081 — incident sayfasının "Bağlı problemler" satırı: ad + durum, altında
+   problemin kendi cümlesi; satırın tamamı problem detayına bağlantı. */
+.inc-prob { display: block; padding: 7px 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text); text-decoration: none; min-width: 0; }
+.inc-prob:hover { border-color: var(--accent-border); }
+.inc-prob--bare { font-size: 11px; color: var(--accent2); }
+.inc-prob__head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.inc-prob__name { font-size: 12px; overflow-wrap: anywhere; }
+.inc-prob__what { display: block; margin-top: 3px; font-size: 12px; color: var(--text2); overflow-wrap: anywhere; }
 .pv-compact { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .pv-compact__q { font-weight: 600; color: var(--text2); }
 .pv-compact__state { color: var(--text3); }

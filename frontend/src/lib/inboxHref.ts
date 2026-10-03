@@ -43,7 +43,7 @@ export function inboxItemHref(it: InboxItem): string | null {
   return null;
 }
 
-// ── Satır tıkı (v0.10.1032) ─────────────────────────────────────────────
+// ── Satır tıkı (v0.10.1032; v0.10.1081 çekmece kalktı) ───────────────────
 //
 // Operatör: "Anomali ve alert rule'lara girdiğimde drawer çıkıyor. Exception
 // gibi detay gözükmüyor." Problems kuyruğunda (Inbox.tsx) satır tıkının
@@ -53,30 +53,72 @@ export function inboxItemHref(it: InboxItem): string | null {
 //   exception / httperror → tam sayfa exception detayı (/problems?exc=, gezinme)
 //   problem (alarm kuralı) → ?problem=<id>, YERİNDE tam sayfa (AlertProblemHost)
 //   anomaly               → ?anomaly=<id>, YERİNDE tam sayfa (AnomalyEventHost)
-//   incident / yükü eksik → ?item=<id> triyaj çekmecesi (değişmedi)
+//   incident              → /incident?id=<id> tam sayfa (gezinme)
 //
-// ?problem= ile ?anomaly= KARŞILIKLI DIŞLAYICI: biri açılınca öteki ve
-// çekmecenin ?item='ı silinir (withInboxDetail). Elle ikisi birden yazılmışsa
-// okuma sırası INBOX_DETAIL_PARAMS'tır (problem önce) — iki tam sayfa aynı
-// anda çizilmez.
+// v0.10.1081 (operatör: "Drawer çıkmasın, problem sayfasında direkt içeriğine
+// girebileyim, Exceptions sayfası gibi.") — triyaj çekmecesi KALDIRILDI.
+// Yükü eksik satır kimliğinden (`<tür>:<doğal kimlik>`) aynı hedefe gider
+// (inboxItemIdTarget); o da çözülemezse satır hiçbir şey açmaz ('none').
+//
+// ?problem= ile ?anomaly= KARŞILIKLI DIŞLAYICI: biri açılınca öteki ve eski
+// ?item= silinir (withInboxDetail). Elle ikisi birden yazılmışsa okuma sırası
+// INBOX_DETAIL_PARAMS'tır (problem önce) — iki tam sayfa aynı anda çizilmez.
 export type InboxDetailParam = 'problem' | 'anomaly';
 export const INBOX_DETAIL_PARAMS: readonly InboxDetailParam[] = ['problem', 'anomaly'];
 
 export type InboxRowOpen =
   | { to: 'page'; href: string }
   | { to: 'detail'; param: InboxDetailParam; id: string }
-  | { to: 'drawer'; id: string };
+  | { to: 'none' };
 
 export function inboxRowOpen(it: InboxItem): InboxRowOpen {
   const href = inboxItemHref(it);
   if (isInboxExcFamily(it) && href) return { to: 'page', href };
   if (it.kind === 'problem' && it.problem?.id) return { to: 'detail', param: 'problem', id: it.problem.id };
   if (it.kind === 'anomaly' && it.anomaly?.id) return { to: 'detail', param: 'anomaly', id: it.anomaly.id };
-  return { to: 'drawer', id: it.id };
+  if (it.kind === 'incident' && it.incident?.id && href) return { to: 'page', href };
+  return inboxItemIdTarget(it.id);
+}
+
+/** Eski `?item=<tür>:<doğal kimlik>` linki (ve yükü eksik satır) → tam sayfa
+ *  hedefi. Doğal kimlik ilk ':'dan sonrası (kimliğin kendisi ':' taşıyabilir —
+ *  `runtime:<check>:<svc>:<pod>`). Tanınmayan tür / boş kimlik → 'none'. */
+export function inboxItemIdTarget(itemId: string | null | undefined): InboxRowOpen {
+  const raw = itemId ?? '';
+  const i = raw.indexOf(':');
+  if (i <= 0) return { to: 'none' };
+  const kind = raw.slice(0, i);
+  const id = raw.slice(i + 1);
+  if (!id) return { to: 'none' };
+  switch (kind) {
+    case 'problem': return { to: 'detail', param: 'problem', id };
+    case 'anomaly': return { to: 'detail', param: 'anomaly', id };
+    case 'incident': return { to: 'page', href: `/incident?id=${encodeURIComponent(id)}` };
+    case 'exception':
+    case 'httperror': return { to: 'page', href: `/problems?exc=${encodeURIComponent(id)}` };
+    default: return { to: 'none' };
+  }
+}
+
+// v0.10.1081 — incident tam sayfası Problems kuyruğundan açılınca geri
+// bağlantısı kuyruğa (aynı süzgeçlerle) dönsün: kuyruk adresini gezinme
+// durumuyla taşır. Yalnız /inbox adresleri kabul edilir — durum serbest bir
+// nesne, başka bir adres geri bağlantıya sızmasın.
+export interface IncidentBackState { backTo: string }
+
+export function incidentBackState(inboxPathAndSearch: string): IncidentBackState {
+  return { backTo: inboxPathAndSearch };
+}
+
+export function readIncidentBackTo(state: unknown): string | null {
+  if (!state || typeof state !== 'object') return null;
+  const v = (state as Partial<IncidentBackState>).backTo;
+  return typeof v === 'string' && (v === '/inbox' || v.startsWith('/inbox?')) ? v : null;
 }
 
 /** Tam sayfa detayı aç (id) ya da kapat (null). Açarken diğer detay paramı ve
- *  çekmecenin ?item='ı silinir; yabancı parametreler (süzgeçler, ?env=) kalır.
+ *  eski ?item= (v0.10.1081'te çekmece kalktı; yönlendirme bunu da kullanır)
+ *  silinir; yabancı parametreler (süzgeçler, ?env=) kalır.
  *  v0.10.1032 (inceleme) — KAPATMAK da hepsini siler (problem, anomaly,
  *  item): elle yazılmış bir link "← Problems"ten sonra öteki detaya ya da
  *  çekmeceye sıçramasın; geri dönüş her zaman kuyruğun kendisidir. */

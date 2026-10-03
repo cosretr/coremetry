@@ -209,7 +209,8 @@ const HANDROLLED_ALLOWLIST = new Set<string>([]);
 const CONVERTED = [
   'features/anomalies/ProblemDetail.tsx',
   'features/anomalies/AnomalyDetailDrawer.tsx',
-  'components/InboxTriageDrawer.tsx',
+  // v0.10.1081 — InboxTriageDrawer silindi; incident pivotları serviceHref'ten.
+  'features/anomalies/incidentSummary.ts',
   'components/RootCausePanel.tsx',
   'components/RootCauseRibbon.tsx',
   'pages/Inbox.tsx',

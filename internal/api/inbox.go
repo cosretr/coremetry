@@ -929,19 +929,8 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 		keptBySpread, keptRegressed := countFloorKept(items, minOcc, floorEx)
 
 		// Rank the WHOLE candidate set before the cap (v0.9.318 scan fix +
-		// v0.9.319 server sort). Sorting after the cap would rank a page,
-		// which is the same lie the filters used to tell.
-		sortInboxItems(items, sortID, sortDir)
-		// v0.9.221 — the cap used to truncate SILENTLY: the response was a
-		// bare array, so 200 rows looked identical whether that was the whole
-		// queue or the top slice of 900. Since the sort above is priority-desc,
-		// what fell off was the low-priority tail — the operator cleared the
-		// visible list and believed the queue was empty. CLAUDE.md's "no
-		// silent caps" rule; the total travels with the page now.
-		total := len(items)
-		if len(items) > limit {
-			items = items[:limit]
-		}
+		// v0.9.319 server sort) — inboxSortAndCap.
+		items, total := inboxSortAndCap(items, sortID, sortDir, limit)
 		return map[string]any{
 			"items":     items,
 			"total":     total,
@@ -1606,6 +1595,31 @@ func sortInboxItems(items []InboxItem, id, dir string) {
 		}
 		return less(items[j], items[i])
 	})
+}
+
+// inboxSortAndCap — SAF: facet'lerden (tür/öncelik/kategori) SONRA kalan
+// adayların tamamını sıralar, sonra tavanı uygular; `total` tavandan önceki
+// sayı. Sıralama tavandan ÖNCE: sonra sıralamak bir sayfayı sıralamak olurdu,
+// süzgeçlerin eskiden söylediği yalanın aynısı (v0.9.318/319).
+//
+// v0.9.221 — the cap used to truncate SILENTLY: the response was a bare
+// array, so 200 rows looked identical whether that was the whole queue or the
+// top slice of 900. CLAUDE.md's "no silent caps" rule; the total travels with
+// the page now.
+//
+// v0.10.1081 (operatör: "Problems sayfasında sadece P1'ler gözüksün ve first
+// seen'e göre sıralı olsun") — sayfanın varsayılan isteği prio=P1 &
+// sort=firstSeen&dir=desc. Öncelik süzgeci (applyInboxFacets) bu çağrıdan
+// ÖNCE koştuğu için tavan yalnız P1'ler arasında ve ilk görülmeye göre
+// keser: en yeni P1 hiçbir zaman tavanın altında kalmaz
+// (inbox_first_seen_default_test.go çiviler).
+func inboxSortAndCap(items []InboxItem, sortID, sortDir string, limit int) ([]InboxItem, int) {
+	sortInboxItems(items, sortID, sortDir)
+	total := len(items)
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, total
 }
 
 // inboxOccurrences is the row's occurrence count, or 0 for the kinds that

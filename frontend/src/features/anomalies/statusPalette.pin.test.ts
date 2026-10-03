@@ -22,7 +22,6 @@ const leaf = read('./statusTone.tsx');
 const section = read('./ProblemsSection.tsx');
 const anomalies = read('./AnomaliesPage.tsx');
 const inbox = read('../../pages/Inbox.tsx');
-const drawer = read('../../components/InboxTriageDrawer.tsx');
 
 // Yorum satırları eski tonları tarihçe olarak anıyor; kod pinleri yorumsuz
 // metin üzerinde koşar.
@@ -159,12 +158,6 @@ describe('v0.10.922 — bir olgu = bir sinyal (renk yalnız öncelikte)', () => 
   });
 });
 
-// İnceleme bulgusu (v0.10.922): Inbox satırından açılan drawer atananı
-// satırla aynı (nötr) tonda basar — tıklayınca renk değişmez.
-describe('v0.10.922 — Inbox drawer satırla aynı', () => {
-  it('atanan kişi rozeti nötr (mavi değil)', () => {
-    const d = code(drawer);
-    expect(d).not.toContain('badge b-info');
-    expect(d).toMatch(/item\?\.assignee && \(\s*<span className="badge b-gray"/);
-  });
-});
+// v0.10.922 "Inbox drawer satırla aynı" pini v0.10.1081'te kalktı: triyaj
+// çekmecesi (InboxTriageDrawer) silindi, satır tam sayfa açar (operatör:
+// "Drawer çıkmasın …"). Atanan rozeti satırda (AssigneePill) nötr kalır.

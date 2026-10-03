@@ -1125,7 +1125,9 @@ function ProblemPrioritySection() {
     if (!cfg) return;
     setBusy(true); setFlash(null);
     try {
-      const saved = await api.putProblemPriority(cfg);
+      // v0.10.1081 — sloBurnProblems daima AÇIK boolean gider (alan yoksa
+      // false): sunucu gövdeyi kayıtlı değerin üstüne çözer.
+      const saved = await api.putProblemPriority({ ...cfg, sloBurnProblems: cfg.sloBurnProblems === true });
       setCfg(saved);
       setFlash({ kind: 'ok', text: 'Kaydedildi — /inbox ve bildirimler bir sonraki okumada yeni merdiveni kullanır.' });
     } catch (err) {
@@ -1212,6 +1214,19 @@ function ProblemPrioritySection() {
                 <code>*</code> herhangi bir dizi, eşleşme tam.
               </div>
             </Field>
+
+            {/* v0.10.1081 — SLO burn-rate Problem'leri: VARSAYILAN KAPALI (operatör:
+                "SLO burn rate problem olmasın, çıkar. SLO ile ilgili beklentim yok.").
+                Alan yoksa kapalı okunur; kayıt açık boolean gönderir. */}
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" aria-label="SLO burn-rate problemleri"
+                checked={cfg.sloBurnProblems === true}
+                onChange={e => setCfg({ ...cfg, sloBurnProblems: e.target.checked })} />
+              <span style={{ fontSize: 13, color: 'var(--text)' }}>SLO burn-rate problemleri</span>
+            </label>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -6, marginLeft: 24, lineHeight: 1.5 }}>
+              Kapalı (varsayılan): SLO bütçe yanması Problem, incident ve bildirim açmaz; SLO sayfası ve grafikler aynen çalışır.
+            </div>
           </div>
 
           <div style={{ marginTop: 18, display: 'flex', gap: 8, alignItems: 'center' }}>

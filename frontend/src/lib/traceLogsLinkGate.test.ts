@@ -148,7 +148,8 @@ const ALLOWED_FILES = new Set(ALLOWED.map(a => a.file));
 const CONVERTED = [
   // /logs — v0.9.1348-1349
   'components/CorrelationContextDrawer.tsx',
-  'components/InboxTriageDrawer.tsx',
+  // v0.10.1081 — InboxTriageDrawer silindi; pivotları incident sayfasında aynı üreticiden.
+  'features/anomalies/incidentSummary.ts',
   'components/ServiceMapNodeDrawer.tsx',
   'components/TracePeekDrawer.tsx',
   'components/SpanDetail.tsx',

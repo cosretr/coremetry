@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Button, Chip, SearchField } from '@/components/ui';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Shield } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
 import { useInbox, useServicesMetadata } from '@/lib/queries';
@@ -16,11 +16,12 @@ import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, resolveInitialSort, type DataTableStateProps } from '@/components/ui/DataTable';
 import { FacetMultiSelect } from '@/components/ui/FacetMultiSelect';
-import { InboxTriageDrawer } from '@/components/InboxTriageDrawer';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
-import { resolveSelectedItem } from '@/lib/inboxDrawer';
+// v0.10.1081 — triyaj çekmecesi (InboxTriageDrawer) KALDIRILDI: her satır tam
+// sayfa detayına açılır; eski ?item= linkleri oraya yönlendirilir.
 import {
-  inboxItemHref, isInboxExcFamily, inboxRowOpen, readInboxDetail, withInboxDetail, type InboxDetailParam,
+  isInboxExcFamily, inboxRowOpen, inboxItemIdTarget, incidentBackState, readInboxDetail, withInboxDetail,
+  type InboxDetailParam, type InboxRowOpen,
 } from '@/lib/inboxHref';
 // v0.9.837 (operator-reported) — "Alert rules" bölümü Exceptions
 // sayfasından buraya taşındı: alert kuralları triage kuyruğunun
@@ -72,7 +73,23 @@ const PRIO_ALL = ['P1', 'P2', 'P3'] as const;
 // GİZLEMEK yerine operatör neyin gerçek olduğunu işaretleyerek öğretecek
 // (öğretme mekanizması ayrı dilim). Çipler ve sayıları aynen duruyor; daraltmak
 // yine tek tık ve ?prio= / ?kind= paylaşılan linke biner.
-const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;
+//
+// v0.10.1081 (operatör kararı, prod) — VARSAYILAN YENİDEN YALNIZ P1: "Problems
+// sayfasında sadece P1'ler gözüksün ve first seen'e göre sıralı olsun".
+// v0.10.1014'ün öncelik yarısının tersi (tür varsayılanı HER ŞEY kalıyor).
+// Süzgeç sunucuda tavandan ÖNCE uygulanır (inboxSortAndCap), çip sayıları
+// süzgeçten önceki kümeyi sayar; P2/P3 tek tıkla açılır ("tüm öncelikler")
+// ve ?prio= linke biner. Parametresiz eski link artık yalnız P1 gösterir;
+// açık ?prio=P1,P2,P3 bugünkü gibi hepsini.
+const PRIO_DEFAULT = ['P1'] as const;
+// v0.10.1081 — varsayılan sıralama İLK GÖRÜLME, en yeni önce (aynı karar).
+// URL'de `s_inbox` (DataTable sözleşmesi); parametresiz adres bu varsayılanı
+// alır — kişisel localStorage sıralaması OKUNMAZ (persistSort:false), yoksa
+// "parametresiz link = varsayılan" sözü tarayıcıya göre değişirdi.
+const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };
+// Sunucunun tanıdığı sıralama kimlikleri (normalizeInboxSort ile birebir);
+// bayat bir `s_inbox` varsayılana düşer.
+const INBOX_SORT_IDS = ['priority', 'source', 'service', 'detail', 'occurrences', 'firstSeen', 'lastSeen', 'assignee'] as const;
 const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
 // v0.9.328 — operator: "Problems ilk açtığında exception görsün, kullanıcılar
 // ona göre tasarlar." Exceptions are the signal operators trust: a thrown
@@ -153,6 +170,8 @@ const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];
 // v0.10.1032 — bugün çekmece yalnız incident satırları ve eski ?item=
 // linkleri için; exception / alarm kuralı / anomali satırı TAM SAYFA detay
 // açar (karar lib/inboxHref inboxRowOpen'da, aşağıdaki openRow notu).
+// v0.10.1081 — çekmece TAMAMEN kalktı: incident satırı da tam sayfaya
+// (/incident?id=) gider; eski ?item= linki tam sayfaya yönlendirilir.
 
 const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 
@@ -199,6 +218,7 @@ const DEFAULT_MIN_OCC = 5;
 
 export default function InboxPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   // "/" focuses this filter via the shared table keyboard-nav.
   const searchRef = useRef<HTMLInputElement>(null);
@@ -321,9 +341,10 @@ export default function InboxPage() {
   const setSubjectLane = (s: SubjectLane) =>
     setParam('subject', s === 'service' ? null : s);
 
-  // Drawer selection is one more URL-backed facet (v0.8.292): ?item=<inboxId>.
-  // Deep-linking /inbox?item=<id> opens the drawer; closing deletes the key.
-  const selectedId = searchParams.get('item');
+  // v0.10.1081 — ?item=<inboxId> artık çekmece AÇMAZ (çekmece kalktı); eski
+  // link (bildirim, kayıtlı görünüm, sohbet) aşağıdaki efektte satırın tam
+  // sayfasına YÖNLENDİRİLİR (replace — geri tuşu yönlendirmeye takılmaz).
+  const legacyItem = searchParams.get('item');
   // v0.9.837 — ?problem=<id> tam-sayfa host'u, /problems'takinin aynısı.
   // Alert-rules bölümünün satır tıkı bu parametreyi yazar, yani detay
   // AYNI sayfada açılır; liste + bölüm MOUNTED kalır (display:none) ki
@@ -424,22 +445,49 @@ export default function InboxPage() {
   // Incident rows and old ?item= links keep the drawer (out of scope).
   // The decision itself is a pure, table-tested helper (lib/inboxHref
   // inboxRowOpen); click and keyboard Enter/o both call openRow.
-  // Satırın kaynağına git — adres lib/inboxHref'ten (v0.10.784).
-  const goTo = (it: InboxItem) => {
-    const href = inboxItemHref(it);
-    if (href) navigate(href);
-  };
+  //
+  // v0.10.1081 (operatör: "Drawer çıkmasın, problem sayfasında direkt
+  // içeriğine girebileyim, Exceptions sayfası gibi.") — the "incident rows
+  // keep the drawer" exception above is GONE and so is the drawer: an incident
+  // row navigates to its full page (/incident?id=, readable top since this
+  // release), carrying the queue URL so its back link returns here. Bulk
+  // checkboxes and keyboard j/k + Enter are unchanged.
   // Tam sayfa detayı aç / kapat — tek yazıcı, replace:true, yabancı
   // parametreler (süzgeçler, ?env=) korunur; ?item= ve diğer detay silinir.
   const openDetail = (param: InboxDetailParam, id: string | null) =>
     setSearchParams(prev => withInboxDetail(prev, param, id), { replace: true });
-  const openRow = (it: InboxItem) => {
-    const o = inboxRowOpen(it);
-    if (o.to === 'page') navigate(o.href);
-    else if (o.to === 'detail') openDetail(o.param, o.id);
-    else setParam('item', o.id);
+  const applyOpen = (o: InboxRowOpen, replace = false) => {
+    if (o.to === 'page') {
+      navigate(o.href, {
+        replace,
+        // Incident sayfasının geri bağlantısı kuyruğa döner (süzgeçler dahil).
+        state: o.href.startsWith('/incident?') ? incidentBackState(location.pathname + location.search) : undefined,
+      });
+    } else if (o.to === 'detail') {
+      openDetail(o.param, o.id);
+    }
   };
-  const closeDrawer = () => setParam('item', null);
+  const openRow = (it: InboxItem) => applyOpen(inboxRowOpen(it));
+  // Eski ?item= linki → satırın tam sayfası (çözülemeyen kimlikte yalnız
+  // param silinir; kuyruk açık kalır). Yükü değil KİMLİĞİ okur: liste
+  // yüklenmeden ve satır süzgeç dışında olsa da çalışır.
+  // Elle yazılmış ?problem= / ?anomaly= zaten açıksa o kazanır: ?item= yalnız
+  // silinir (iki hedef arasında sıçrama yok).
+  const detailOpen = !!openDetailParam;
+  useEffect(() => {
+    if (!legacyItem) return;
+    const o = detailOpen ? ({ to: 'none' } as const) : inboxItemIdTarget(legacyItem);
+    if (o.to === 'detail') {
+      setSearchParams(prev => withInboxDetail(prev, o.param, o.id), { replace: true });
+    } else if (o.to === 'page') {
+      navigate(o.href, {
+        replace: true,
+        state: o.href.startsWith('/incident?') ? incidentBackState('/inbox') : undefined,
+      });
+    } else {
+      setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('item'); return p; }, { replace: true });
+    }
+  }, [legacyItem, detailOpen, navigate, setSearchParams]);
 
   // Global env picker (v0.8.387) — service-scoped: the server keeps
   // rows whose service ran in the env in the last hour (+ service-
@@ -451,9 +499,12 @@ export default function InboxPage() {
   // the first fetch and the header arrow agree at mount instead of the page
   // showing a lastSeen arrow over a priority-ranked response. onSortChange
   // below keeps them in step afterwards.
+  // v0.10.1081 — varsayılan ilk görülme (SORT_DEFAULT), kişisel kayıt
+  // okunmaz (persist=false) ve kimlik sunucu kümesine karşı doğrulanır —
+  // useDataTable'ın kendi başlangıcıyla AYNI argümanlar, ilk istek ile başlık
+  // oku montajda ayrışmasın. URL useSearchParams'tan (window.location değil).
   const [srvSort, setSrvSort] = useState(() =>
-    resolveInitialSort('inbox', new URLSearchParams(window.location.search).get('s_inbox'),
-      { id: 'priority', dir: 'desc' as const }));
+    resolveInitialSort('inbox', searchParams.get('s_inbox'), SORT_DEFAULT, undefined, false, INBOX_SORT_IDS));
 
   const inboxQ = useInbox({
     status: statusFilter,
@@ -464,7 +515,7 @@ export default function InboxPage() {
     team: teamFilter || undefined,
     env: env || undefined,
     limit: 300,
-    sort: srvSort.id ?? 'priority',
+    sort: srvSort.id ?? SORT_DEFAULT.id,
     dir: srvSort.dir,
     // v0.10.949 — param yoksa GÖNDERME (sunucu varsayılan kipi: taban +
     // çoklu-servis istisnası); açık değer (0 dahil) aynen gider.
@@ -537,12 +588,6 @@ export default function InboxPage() {
   // türler sunucuda artık HEP P3 (inbox.go forceNonExceptionP3), yani
   // varsayılan P1 görünümüne hiçbir zaman karışmazlar.
 
-  // The drawer's selected row, resolved from ?item= against the loaded list.
-  // Uses the full (pre-facet) list so a deep-link to a row hidden by the
-  // priority/kind filter still opens; undefined when the id isn't present →
-  // the drawer shows a soft fallback, never a blank panel.
-  const selected = useMemo(() => resolveSelectedItem(data, selectedId), [data, selectedId]);
-
   // v0.9.330 — the server already applied these (before the cap, which is the
   // whole point). Kept as a belt-and-braces pass so a stale cached page from a
   // pre-upgrade pod can't render rows the operator deselected — it must never
@@ -563,32 +608,6 @@ export default function InboxPage() {
     return filterByVerdictView(facet, verdicts, verdictView);
   }, [data, prioSet, kindSet, catSet, verdicts, verdictView]);
 
-  // Deep-link into the source surface with the specific row
-  // focused — Problems drawer for problems, expanded exception
-  // group, scrolled-to anomaly history row. Each destination
-  // page reads its respective query param on mount.
-  const goToSource = (it: InboxItem) => {
-    if (it.kind === 'problem' && it.problem) {
-      // v0.9.837 — problem detayı artık BU sayfada açılıyor (alert-rules
-      // bölümüyle birlikte taşındı), o yüzden /problems'a atlamak yerine
-      // ?problem= yazıyoruz. ?item= siliniyor: "kaynağı aç" çekmeceden
-      // ÇIKMAK demek, geri dönüş kuyruğun kendisine olmalı.
-      // v0.10.1032 — aynı yazıcı satır tıkıyla ortak (withInboxDetail).
-      openDetail('problem', it.problem.id);
-    } else if (isExcFamily(it)) {
-      navigate(`/problems?tab=open&exception=${encodeURIComponent(it.exception!.fingerprint)}`);
-    } else if (it.kind === 'anomaly' && it.anomaly) {
-      // v0.10.1032 — anomalinin "kaynağı" artık tam sayfa detayı, BU sayfada
-      // (?anomaly=); eskiden /anomalies?event= çekmecesine gidiliyordu.
-      openDetail('anomaly', it.anomaly.id);
-    } else if (it.kind === 'incident' && it.incident) {
-      // The incident DETAIL route (/incident?id=), not the list — the row
-      // already told the operator the incident exists; the click is a request
-      // for the response timeline.
-      goTo(it);
-    }
-  };
-
   // Shared sortable + resizable table. Pre-sort by lastSeen desc so the
   // primitive's stable priority-desc sort reproduces the prior fixed
   // ordering (P1 first, newest within priority). Hook is unconditional.
@@ -603,7 +622,11 @@ export default function InboxPage() {
     storageKey: 'inbox',
     columns: INBOX_COLS,
     rows: inboxRows,
-    initialSort: { id: 'priority', dir: 'desc' },
+    // v0.10.1081 — varsayılan ilk görülme (en yeni önce); kişisel kayıt yok,
+    // URL `s_inbox` kazanır, bayat kimlik varsayılana düşer.
+    initialSort: SORT_DEFAULT,
+    persistSort: false,
+    sortIds: INBOX_SORT_IDS,
     // serverSort: the ORDER BY happens in the handler over the FULL candidate
     // set, so sortedRows is the response verbatim. Client-side sorting would
     // rank the page — the same lie the filters told before v0.9.318.
@@ -780,11 +803,12 @@ export default function InboxPage() {
             #content'in İÇİNDE — Traces/Explore ile aynı yerleşim; dışarıda
             konteyner padding'i almaz. */}
         <SavedViewsBar page="inbox" />
+        {/* v0.10.1081 — varsayılan metni sabitlerden türer (elle yazılmaz). */}
         <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 14 }}>
           Everything needing a human — Problems (alert rules), open Exception
-          groups, and active Anomaly detections. Default view: everything —{' '}
-          <b>{PRIO_DEFAULT.join(' + ')}</b>, all kinds. Click any row to
-          open its detail.
+          groups, and active Anomaly detections. Default view:{' '}
+          <b>{PRIO_DEFAULT.join(' + ')}</b> only, all kinds, newest first seen
+          first. Click any row to open its detail page.
         </p>
 
         {/* One grouped facet bar (v0.8.38) — status pivot + priority + kind
@@ -864,6 +888,14 @@ export default function InboxPage() {
               value: pp, label: pp, count: counts[pp] ?? 0 }))}
             selected={prioSet}
             onToggle={togglePrio} onSolo={soloPrio} onAll={allPrio} />
+          {/* v0.10.1081 — varsayılan yalnız P1; dışarıda kalan öncelikler TEK
+              tıkla açılır (açılır menüye girmeden), sayılarıyla. */}
+          {prioSet.size < PRIO_ALL.length && (
+            <Button variant="ghost" size="sm" onClick={allPrio}
+              title="P1, P2 ve P3'ün hepsini göster (?prio=P1,P2,P3)">
+              {`tüm öncelikler (${PRIO_ALL.reduce((n, pp) => n + (counts[pp] ?? 0), 0)})`}
+            </Button>
+          )}
 
           {/* v0.9.1342 — db şeridinde Tür facet'i GİZLİ ve bu bir
               gizleme değil dürüstlük: o şeritte sunucu `kind`i
@@ -1070,10 +1102,12 @@ export default function InboxPage() {
         )}
         {capped && (
           <div style={{ marginBottom: 8 }}>
+            {/* v0.10.1081 — kırpma SEÇİLİ sıralamaya göre (varsayılan ilk
+                görülme); öncelik süzgeci tavandan önce uygulanır. */}
             <span className="badge b-warn"
-              title="The server ranks the whole queue by priority and returns the top slice. The rows beyond the cap are the LOWEST priority ones — narrow by service, team or environment to reach them.">
-              ⚠ {capped.total} kalemden ilk {capped.shown}'i gösteriliyor —
-              öncelik sırasına göre kırpıldı
+              title="The server filters by the chosen priorities, sorts the whole matching queue by the chosen column and returns the top slice. Narrow by service, team or environment to reach the rest.">
+              ⚠ {capped.total} kalemden ilk {capped.shown}'i gösteriliyor —{' '}
+              {capSortLabel(srvSort.id, srvSort.dir)} kırpıldı
             </span>
           </div>
         )}
@@ -1123,8 +1157,8 @@ export default function InboxPage() {
                   className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                   <td style={{ textAlign: 'center' }}
                     onClick={e => { e.stopPropagation(); }}>
-                    {/* stopPropagation: the row itself opens the triage
-                        drawer, and ticking a box must not also navigate. */}
+                    {/* stopPropagation: the row itself opens the detail
+                        page, and ticking a box must not also navigate. */}
                     <input type="checkbox" checked={picked.has(it.id)}
                       aria-label={`Seç: ${it.title}`}
                       onChange={() => toggleRow(it.id)} />
@@ -1282,17 +1316,8 @@ export default function InboxPage() {
         <ProblemsSection serviceFilter={serviceFilter} navDisabled={!!(problemParam || anomalyParam)} />
       </div>
 
-      {/* In-place triage drawer (v0.8.292). Rendered only once the list has
-          settled (Array.isArray) so a deep-linked ?item= doesn't flash the
-          soft-fallback during the initial load. `selected` is undefined when
-          the id isn't in the current list → the drawer's own fallback shows.
-          v0.9.837 — ?problem= tam-sayfa detayı açıkken çekmece çizilmez:
-          ikisi aynı anda görünürse detayın üstüne panel biner.
-          v0.10.1032 — ?anomaly= için de aynı. Çekmece artık yalnız incident
-          satırları ve eski ?item= linkleri için (satır tıkı: openRow). */}
-      {!problemParam && !anomalyParam && selectedId && Array.isArray(data) && (
-        <InboxTriageDrawer item={selected} onClose={closeDrawer} onOpenSource={goToSource} />
-      )}
+      {/* v0.10.1081 — yerinde triyaj çekmecesi (v0.8.292) KALDIRILDI; her
+          satır tam sayfa açar (openRow), eski ?item= yönlendirilir. */}
       {problemParam && (
         // v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
         // açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz.
@@ -1331,6 +1356,21 @@ export default function InboxPage() {
 // v0.10.1037 (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı,
 // düzelt.") — sözlükte new nötre indi; amber yalnız regressed. Bu rozet
 // sözlükten okuduğu için burada ayrı eşleme yok.
+// capSortLabel — v0.10.1081: kırpma rozetinin "neye göre" yarısı. Sunucu
+// tavanı seçili sıralamayla keser; eski metin her durumda "öncelik sırasına
+// göre" diyordu ve varsayılan artık ilk görülme.
+const CAP_SORT_LABEL: Record<string, string> = {
+  priority: 'öncelik', firstSeen: 'ilk görülme', lastSeen: 'son görülme', occurrences: 'oluşum sayısı',
+  service: 'servis', source: 'kaynak', detail: 'başlık', assignee: 'atanan',
+};
+function capSortLabel(id: string | null, dir: 'asc' | 'desc'): string {
+  const name = CAP_SORT_LABEL[id ?? ''] ?? CAP_SORT_LABEL.priority;
+  const order = id === 'firstSeen' || id === 'lastSeen'
+    ? (dir === 'desc' ? ', en yeni önce' : ', en eski önce')
+    : '';
+  return `${name} sırasına göre${order}`;
+}
+
 function StatusBadge({ s }: { s?: string }) {
   if (!s) return null;
   const k = s.toLowerCase();
@@ -1434,20 +1474,19 @@ function DetailLine({ it }: { it: InboxItem }) {
     );
   }
   if (it.kind === 'incident' && it.incident) {
+    // v0.10.1081 (operatör: "ekteki hata mesela hiç anlaşılmıyor") — satırın
+    // metni incident'ın DÜZ cümlesi: otomatik açılışta incident özeti = onu
+    // açan problemin açıklaması (ör. "couchbase orders veritabanında hata
+    // oranı %100 (eşik %5), 3 çağıran servis etkilendi"), incident sayfasının
+    // manşetiyle aynı kaynak. "Declared incident, critical" / "kaynak önceliği
+    // korundu …" gerekçesi satırdan çıktı — P rozetinin ipucunda duruyor.
+    // Özet yoksa (elle açılmış, özetsiz) gerekçe tek satır kalır. Duruma özel
+    // rozet yok (v0.9.571: durum başlık satırındaki StatusBadge'de, bir kez).
     return (
-      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
-        {/* v0.9.571 (operator-reported: "open open iki defa yazan kayıtlar
-            var") — buradaki duruma özel rozet KALDIRILDI. Başlık satırı
-            v0.9.255'ten beri paylaşılan <StatusBadge s={it.status}/>
-            basıyor ve incidentToInbox `Status: inc.Status` set ediyor,
-            yani AYNI durum iki kez çiziliyordu — üstelik iki FARKLI
-            tonda (başlıkta amber b-warn, burada kırmızı b-err), sanki
-            iki ayrı şey söylüyorlarmış gibi.
-            Genel rozet korundu çünkü ton eşlemesi tüm türlerde ortak;
-            burada bırakmak, incident satırlarını diğerlerinden farklı
-            renklendiren tek istisna olurdu. */}
-        {it.priorityReason && <span>{it.priorityReason}</span>}
-        {it.description && <div className="dt-trunc" style={{ marginTop: 2, color: 'var(--text2)' }}>{it.description}</div>}
+      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text2)' }}>
+        {it.description
+          ? <span title={it.description}>{it.description}</span>
+          : it.priorityReason && <span style={{ color: 'var(--text3)' }}>{it.priorityReason}</span>}
       </div>
     );
   }

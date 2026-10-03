@@ -706,9 +706,10 @@ func TestInboxFloorFetchesBothSides(t *testing.T) {
 	// ÖNCE (total ile aynı küme): şerit tabloda olmayan satırı saymasın.
 	iKept := strings.Index(src, "keptBySpread, keptRegressed := countFloorKept(items, minOcc, floorEx)")
 	iCat := strings.Index(src, "items = applyInboxCategoryFacet(items, cats)")
-	iSort := strings.Index(src, "sortInboxItems(items, sortID, sortDir)")
+	// v0.10.1081 — sıralama + tavan tek saf işlevde (inboxSortAndCap).
+	iSort := strings.Index(src, "items, total := inboxSortAndCap(items, sortID, sortDir, limit)")
 	if iKept < 0 || iCat < 0 || iSort < 0 || iKept < iCat || iKept > iSort {
-		t.Errorf("countFloorKept facet'lerden sonra, sortInboxItems'tan önce olmalı (kept=%d cat=%d sort=%d)", iKept, iCat, iSort)
+		t.Errorf("countFloorKept facet'lerden sonra, inboxSortAndCap'ten önce olmalı (kept=%d cat=%d sort=%d)", iKept, iCat, iSort)
 	}
 	// Go ayrımı SQL'le aynı (kırpılmış) istisna kümesini kullanır.
 	if !strings.Contains(src, "floorExempt = sp.ExemptBelow(minOcc)\n\t\t\tfloorEx = newFloorExemption(floorExempt)") {

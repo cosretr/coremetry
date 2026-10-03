@@ -7715,6 +7715,10 @@ export interface ProblemPriorityConfig {
   // döner (varsayılan: anomaly:*:error_rate, builtin-*, db-health:*,
   // incident:critical); boş liste = istisna kapalı. Ayar ekranında salt-okunur.
   inboxKeepSourcePriority?: string[];
+  // v0.10.1081 — SLO burn-rate alarmı Problem (ve incident / bildirim) üretsin
+  // mi. Yok / null / false = KAPALI (varsayılan; operatör: "SLO burn rate
+  // problem olmasın"). SLO sayfası ve burn grafikleri bundan bağımsız.
+  sloBurnProblems?: boolean | null;
 }
 
 // v0.9.1036 — failure-rate (%) SLO eşiği (backend:

@@ -149,13 +149,14 @@ describe('karar dizini ve görünüm', () => {
 });
 
 describe('kablolama', () => {
-  it('liste kararları süzer, çip sayıyı gösterir; çekmece düğmeleri taşır', () => {
+  it('liste kararları süzer, çip sayıyı gösterir; detay sayfaları düğmeleri taşır', () => {
     const inbox = readFileSync(resolve(__dirname, '../pages/Inbox.tsx'), 'utf8');
     expect(inbox).toContain('return filterByVerdictView(facet, verdicts, verdictView);');
     expect(inbox).toContain('Problem değil ({noiseCount})');
     expect(inbox).toContain("setParam('verdict', v === 'triage' ? null : v)");
-    const drawer = readFileSync(resolve(__dirname, '../components/InboxTriageDrawer.tsx'), 'utf8');
-    expect(drawer).toContain('<ProblemVerdictActions item={item}');
+    // v0.10.1081 — çekmece kalktı; öğretme düğmeleri tam sayfa detaylarda.
+    const detail = readFileSync(resolve(__dirname, '../features/anomalies/ProblemDetail.tsx'), 'utf8');
+    expect(detail).toContain('<ProblemVerdictActions subject={problemVerdictSubject(problem)}');
     const actions = readFileSync(resolve(__dirname, '../components/ProblemVerdictActions.tsx'), 'utf8');
     expect(actions).toContain("const isEditor = user?.role === 'admin' || user?.role === 'editor';");
     // v0.10.1016 — açıklama artık politikaya göre değişir (sabit "susturmaz" değil).

@@ -147,11 +147,15 @@ describe('Inbox kuyruğu — durumlar tablonun içinde (v0.10.967)', () => {
     expect(el.textContent).toContain('groups below 5, single service, hidden');
   });
 
-  it('varsayılan (parametresiz) + boş: boş satır — varsayılan hiçbir şeyi gizlemez', async () => {
+  // v0.10.1081 — varsayılan yeniden YALNIZ P1 (operatör: "Problems sayfasında
+  // sadece P1'ler gözüksün …"): parametresiz + boş artık "eşleşme yok" der ve
+  // süzgeci genişletmeyi önerir — boş bir P1 listesi kuyruğun boş olduğu
+  // anlamına gelmez.
+  it('varsayılan (parametresiz, yalnız P1) + boş: eşleşme yok, "genişlet" çaresi', async () => {
     const el = await mount();
     const row = stateRow(el);
-    expect(row?.dataset.dtState).toBe('empty');
-    expect(row?.textContent).toBe('Kuyruk boş — şu an ilgini bekleyen bir şey yok');
+    expect(row?.dataset.dtState).toBe('no-match');
+    expect(row?.textContent).toContain('öncelik / tür süzgecini genişlet');
   });
 
   it('tüm öncelik/tür + süzgeç yok + boş: boş satır', async () => {
@@ -215,7 +219,9 @@ describe('Inbox varsayılan şerit — dış kaynak satırı (v0.10.1026)', () =
 
   it('özne hücresi servis linki kurmaz; EXT rozeti + etiket + ipucu; takım çipi yok', async () => {
     m.items = [extProblem(), item('a')];
-    const el = await mount();
+    // v0.10.1081 — dış kaynak satırı P3; varsayılan artık yalnız P1, şerit
+    // davranışı tüm önceliklerle ölçülür.
+    const el = await mount('/inbox?prio=P1,P2,P3');
     expect(dataRows(el)).toBe(2);
 
     const ext = rowOf(el, 'OP_TRANSFER elapsed above band');

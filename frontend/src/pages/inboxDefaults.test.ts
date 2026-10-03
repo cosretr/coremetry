@@ -38,9 +38,18 @@ describe('test yardımcısı', () => {
 // işaretleyerek öğretir. Bu testler yeni varsayılanı çiviliyor — eskiye dönüş
 // yine operatör kararı ister.
 describe('Problems varsayılan görünümü', () => {
-  it('öncelik varsayılanı: hepsi (P1 + P2 + P3)', () => {
-    expect(arr('PRIO_DEFAULT')).toEqual(['P1', 'P2', 'P3']);
-    expect(arr('PRIO_DEFAULT')).toEqual(arr('PRIO_ALL'));
+  // v0.10.1081 — operatör: "Problems sayfasında sadece P1'ler gözüksün ve
+  // first seen'e göre sıralı olsun". v0.10.1014'ün öncelik yarısının tersi;
+  // tür varsayılanı HER ŞEY kalır. İstek düzeyi Inbox.rowOpen.test.tsx'te.
+  it('öncelik varsayılanı: yalnız P1', () => {
+    expect(arr('PRIO_DEFAULT')).toEqual(['P1']);
+    expect(arr('PRIO_ALL')).toEqual(['P1', 'P2', 'P3']);
+  });
+
+  it('sıralama varsayılanı: ilk görülme, en yeni önce; kişisel kayıt okunmaz', () => {
+    expect(src).toContain("const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };");
+    expect(src).toContain('initialSort: SORT_DEFAULT,');
+    expect(src).toContain('persistSort: false,');
   });
 
   it('tür varsayılanı: hepsi (problem, exception, HTTP hatası, anomali, olay)', () => {

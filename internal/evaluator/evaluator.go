@@ -134,6 +134,9 @@ type Evaluator struct {
 	// yapılmaz; hata hâlinde false kalır ve sonraki tik yeniden dener.
 	// Bkz. builtins_default_off.go.
 	builtinsOffDone atomic.Bool
+	// sloBurnOffDone — v0.10.1081: SLO burn problemlerinin tek seferlik
+	// varsayılan-kapalı göçü bu süreçte bitti mi (slo_burn_default_off.go).
+	sloBurnOffDone atomic.Bool
 	// dbHealthCfg — v0.10.1073 db-health ayarının son iyi değeri
 	// (keep-last-good, db_health.go).
 	dbHealthCfg dbHealthCfgMemo
@@ -255,6 +258,9 @@ func (e *Evaluator) runIfLeader(ctx context.Context) {
 	// değerlendirilmez, kapanan problemlerin incident'ları bu tikin kaskadında
 	// kapanır.
 	e.builtinsDefaultOffStep(tickCtx)
+	// v0.10.1081 — SLO burn problemlerinin tek seferlik varsayılan-kapalı göçü
+	// (slo_burn_default_off.go); aynı gerekçeyle evaluateAll'dan ÖNCE.
+	e.sloBurnDefaultOffStep(tickCtx)
 
 	rules := e.evaluateAll(tickCtx)
 
@@ -589,6 +595,7 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 	// the same pipeline as everything else, so the existing
 	// notify / incident-attach / SSE wiring all picks up
 	// burn-rate breaches without additional plumbing.
+	// v0.10.1081 — varsayılan KAPALI (problem_priority.sloBurnProblems).
 	e.evaluateSLOs(ctx)
 
 	// DB capacity / saturation alarms (feature #5) — page off the

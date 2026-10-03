@@ -27,10 +27,12 @@ describe('Problem → Logs error pivot (C2)', () => {
     expect(panel).toContain('sample: PROBLEM_LOG_SAMPLE');
     expect(panel).not.toContain('refetchInterval');
   });
-  it('InboxTriageDrawer: Logs + Error logs', () => {
-    const src = read('./InboxTriageDrawer.tsx');
-    expect(src).toContain('logsHref({ window: w, service: item.service })');
-    expect(src).toContain('logsHref({ window: w, service: item.service, severity: 17 })');
-    expect(src).toContain("logsHref({ window: w, service: item.service, panel: 'patterns' })"); // v0.10.449
+  // v0.10.1081 — Inbox triyaj çekmecesi kalktı (operatör: "Drawer
+  // çıkmasın …"); incident tam sayfasının "Ne yapabilirim" kartı aynı iki
+  // log pivotunu (tüm loglar + ERROR+) aynı üreticiden kurar.
+  it('incident "Ne yapabilirim": Logs + Error logs', () => {
+    const src = read('../features/anomalies/incidentSummary.ts');
+    expect(src).toContain('logsHref({ window, service: subject })');
+    expect(src).toContain('logsHref({ window, service: subject, severity: 17 })');
   });
 });

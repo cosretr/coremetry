@@ -19,7 +19,11 @@ describe('v0.10.796 — incident priority badge', () => {
   });
   it('Incident detail bar shows the badge next to severity', () => {
     const src = read('./Incident.tsx');
-    expect(src).toContain('{inc.priority && <PriorityBadge p={inc.priority} reason={inc.priorityReason} />}');
+    // v0.10.1081 — gerekçe metni ("Declared incident, critical") şeritten
+    // çıktı (operatör: "ekteki hata mesela hiç anlaşılmıyor"); Teknik
+    // ayrıntı bölümünde. Rozet yalnız önceliği söyler.
+    expect(src).toContain('{inc.priority && <PriorityBadge p={inc.priority} />}');
+    expect(src).toContain('Öncelik gerekçesi: {inc.priorityReason}');
   });
   it('Incident type carries priority + reason from the server', () => {
     const t = read('../lib/types.ts');

@@ -309,7 +309,8 @@ func TestInboxSilenceWiring(t *testing.T) {
 	// Bekçi sayaçlardan ÖNCE.
 	guard := strings.Index(h, "items = applyInboxAnomalySilences(items, muted, statusFilter)")
 	counts := strings.Index(h, "counts := inboxFacetCounts(items)")
-	total := strings.Index(h, "total := len(items)")
+	// v0.10.1081 — total artık inboxSortAndCap'in dönüşü.
+	total := strings.Index(h, "items, total := inboxSortAndCap(items, sortID, sortDir, limit)")
 	if guard < 0 || counts < 0 || total < 0 || guard > counts || guard > total {
 		t.Error("applyInboxAnomalySilences çip sayaçlarından ve total'den ÖNCE çağrılmalı — yoksa çip olmayan satırı sayar")
 	}

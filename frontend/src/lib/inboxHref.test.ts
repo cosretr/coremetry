@@ -5,7 +5,8 @@
 // sayfa detaya (/inbox?anomaly=) taşınması.
 import { describe, it, expect } from 'vitest';
 import {
-  anomalyDetailHref, attentionRows, inboxItemHref, inboxRowOpen, isSloProblem, readInboxDetail, withInboxDetail,
+  anomalyDetailHref, attentionRows, inboxItemHref, inboxItemIdTarget, inboxRowOpen, incidentBackState,
+  isSloProblem, readIncidentBackTo, readInboxDetail, withInboxDetail,
 } from './inboxHref';
 import type { InboxItem } from './types';
 
@@ -60,15 +61,55 @@ describe('inboxRowOpen — Problems kuyruğunda satır nereye açılır', () => 
     ['problem', prob('p 1'), { to: 'detail', param: 'problem', id: 'p 1' }],
     // anomali: çekmece DEĞİL, yerinde tam sayfa (?anomaly=, AnomalyEventHost).
     ['anomaly', anom('e1'), { to: 'detail', param: 'anomaly', id: 'e1' }],
-    // incident DEĞİŞMEDİ: triyaj çekmecesi (?item=).
-    ['incident', inc('i1'), { to: 'drawer', id: 'incident:i1' }],
-    // yükü / doğal kimliği eksik satır: çekmecenin yumuşak düşüşü (eskisi gibi).
-    ['problem, payload yok', item({ id: 'problem:x', kind: 'problem' }), { to: 'drawer', id: 'problem:x' }],
-    ['problem, boş id', item({ id: 'problem:', kind: 'problem', problem: { id: '', ruleId: 'r', metric: 'm', value: 1, threshold: 1 } }), { to: 'drawer', id: 'problem:' }],
-    ['anomaly, payload yok', item({ id: 'anomaly:x', kind: 'anomaly' }), { to: 'drawer', id: 'anomaly:x' }],
-    ['exception, payload yok', item({ id: 'exception:x', kind: 'exception' }), { to: 'drawer', id: 'exception:x' }],
+    // v0.10.1081 (operatör: "Drawer çıkmasın …") — incident: çekmece DEĞİL,
+    // tam sayfa (/incident?id=).
+    ['incident', inc('i 1'), { to: 'page', href: '/incident?id=i%201' }],
+    // yükü / doğal kimliği eksik satır: çekmece yok — kimlikten aynı hedef.
+    ['problem, payload yok', item({ id: 'problem:x', kind: 'problem' }), { to: 'detail', param: 'problem', id: 'x' }],
+    ['problem, boş id', item({ id: 'problem:', kind: 'problem', problem: { id: '', ruleId: 'r', metric: 'm', value: 1, threshold: 1 } }), { to: 'none' }],
+    ['anomaly, payload yok', item({ id: 'anomaly:x', kind: 'anomaly' }), { to: 'detail', param: 'anomaly', id: 'x' }],
+    ['exception, payload yok', item({ id: 'exception:x', kind: 'exception' }), { to: 'page', href: '/problems?exc=x' }],
+    ['incident, payload yok', item({ id: 'incident:i9', kind: 'incident' }), { to: 'page', href: '/incident?id=i9' }],
+    ['tanınmayan kimlik', item({ id: 'garbage', kind: 'problem' }), { to: 'none' }],
   ])('%s', (_name, it_, want) => {
     expect(inboxRowOpen(it_)).toEqual(want);
+  });
+  it('hiçbir tür çekmeceye açılmaz', () => {
+    for (const it_ of [prob('a'), exc('b'), exc('c', 'httperror'), anom('d'), inc('e')]) {
+      expect(['page', 'detail']).toContain(inboxRowOpen(it_).to);
+    }
+  });
+});
+
+// v0.10.1081 — eski ?item=<tür>:<kimlik> linkleri tam sayfaya yönlendirilir.
+describe('inboxItemIdTarget — eski ?item= linkinin hedefi', () => {
+  it.each<[string | null, ReturnType<typeof inboxItemIdTarget>]>([
+    ['problem:p1', { to: 'detail', param: 'problem', id: 'p1' }],
+    ['problem:runtime:jvm-gc:svc-a:pod-1', { to: 'detail', param: 'problem', id: 'runtime:jvm-gc:svc-a:pod-1' }],
+    ['anomaly:e1', { to: 'detail', param: 'anomaly', id: 'e1' }],
+    ['incident:i 1', { to: 'page', href: '/incident?id=i%201' }],
+    ['exception:fp/1', { to: 'page', href: '/problems?exc=fp%2F1' }],
+    ['httperror:404', { to: 'page', href: '/problems?exc=404' }],
+    ['problem:', { to: 'none' }],
+    [':x', { to: 'none' }],
+    ['other:x', { to: 'none' }],
+    ['', { to: 'none' }],
+    [null, { to: 'none' }],
+  ])('%s', (raw, want) => {
+    expect(inboxItemIdTarget(raw)).toEqual(want);
+  });
+});
+
+// v0.10.1081 — incident sayfasının geri bağlantısı yalnız /inbox adresini kabul eder.
+describe('readIncidentBackTo', () => {
+  it('kuyruk adresini taşır, başka her şeyi reddeder', () => {
+    expect(readIncidentBackTo(incidentBackState('/inbox?prio=P1&s_inbox=firstSeen.desc'))).toBe('/inbox?prio=P1&s_inbox=firstSeen.desc');
+    expect(readIncidentBackTo(incidentBackState('/inbox'))).toBe('/inbox');
+    expect(readIncidentBackTo({ backTo: 'https://evil.example/' })).toBeNull();
+    expect(readIncidentBackTo({ backTo: '/inboxes' })).toBeNull();
+    expect(readIncidentBackTo({ backTo: 42 })).toBeNull();
+    expect(readIncidentBackTo(null)).toBeNull();
+    expect(readIncidentBackTo('/inbox')).toBeNull();
   });
 });
 

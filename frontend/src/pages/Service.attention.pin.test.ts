@@ -39,8 +39,9 @@ describe('v0.10.784 — service attention strip', () => {
     expect(inbox).not.toContain('navigate(`/anomalies?event=');
     expect(inbox).not.toContain('navigate(`/incident?id=');
     expect(inbox).not.toContain('navigate(`/problems?exc=');
-    // "Kaynağı aç" için exception satırı listede GENİŞLETİR (tab=open&exception=)
-    // — bu davranış değişmedi; helper'ın detay hedefinden ayrı kalır.
-    expect(inbox).toContain('/problems?tab=open&exception=');
+    // v0.10.1081 — çekmecenin "Open source →" kaçışı (exception satırını
+    // listede GENİŞLETEN tab=open&exception=) çekmeceyle birlikte kalktı:
+    // satır tıkı zaten tam sayfa detayına iner (lib/inboxHref).
+    expect(inbox).not.toContain('/problems?tab=open&exception=');
   });
 });

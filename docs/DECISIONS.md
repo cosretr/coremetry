@@ -1302,6 +1302,37 @@ doğrulandı", grafik alt başlığı "token eşleşmesi · örneklemde %r doğr
 `pattern=` pivotu token tabanlı kalır. CH yolu değişmedi (`VerifyPatterns` sorgusuz nil). Oracle token'ları
 değişmedi: standart çözümleyicide "tire + rakam" AND'i kurulamaz, örnekleme yeterli.
 
+## 2026-10-03 — SLO burn-rate problem üretmez (varsayılan kapalı); Problems varsayılanı yalnız P1, first seen sıralı; drawer kalktı, incident sayfası okunur (v0.10.1081)
+
+**Operatör (prod, dört istek):** "SLO burn rate problem olmasın, çıkar. SLO ile ilgili beklentim yok." · "Problems
+sayfasında sadece P1'ler gözüksün ve first seen'e göre sıralı olsun" · "Drawer çıkmasın, problem sayfasında direkt
+içeriğine girebileyim, Exceptions sayfası gibi." · "ekteki hata mesela hiç anlaşılmıyor" (db-health problemiyle açılmış
+bir incident: yalnız başlık, "Declared incident, critical" gerekçesi ve dört düğme).
+
+**SLO burn:** varsayılan değişikliği, özellik kaldırma değil (v0.10.1069 emsali). `problem_priority.sloBurnProblems`
+(*bool, nil = kapalı; Settings → Anomaly → Alert problemi önceliği, tek satır Türkçe ipucu). Kapalıyken evaluator burn
+ölçmez, `slo:*` Problem / incident / bildirim yok; SLO sayfası, burn hesabı ve grafikler aynen. Ayar yayınlanmışken
+kapatılırsa açık burn satırları "slo burn problems disabled" ile kapanır; boot okuması düşmüşse açıklara dokunulmaz.
+Yükseltme: tek seferlik göç (`evaluator/slo_burn_default_off.go`), lider tikinde `evaluateAll`'dan önce, açık/ack `slo:*`
+problemlerini normal kapatma yolundan "slo burn problems disabled by default v0.10.1081" ile kapatır (incident'lar
+aynı tikin kaskadında), tek audit `slo.burn_problems_default_off`, işaret `system_settings.slo_burn_problems_default_off`;
+bayrak açıksa yalnız işaret. Kapanışlar bildirim göndermez.
+
+**Problems varsayılanı:** v0.10.1014'ün öncelik yarısının tersi — parametresiz `/inbox` yalnız P1, ilk görülmeye göre
+en yeni önce (tür varsayılanı her şey kalır). URL durumu (`?prio=`, `?s_inbox=`); kişisel localStorage sıralaması artık
+okunmaz, yoksa "parametresiz link = varsayılan" tarayıcıya göre değişirdi. Sunucu öncelik süzgecini tavandan ÖNCE
+uygular, sonra ilk görülmeye göre sıralayıp keser (`inboxSortAndCap`, saf, testli) — en yeni P1 kırpılmaz; çip
+sayaçları tüm öncelikleri sayar, "tüm öncelikler" tek tık. **Bedel:** parametresiz kaydedilmiş görünümler (1014–NEXT
+arası) artık yalnız P1 açar.
+
+**Drawer kalktı:** `InboxTriageDrawer` silindi; her satır tam sayfa açar (incident → `/incident?id=`, geri bağlantı
+kuyruğa döner). Eski `?item=<tür>:<kimlik>` linki kimlikten tam sayfaya yönlendirilir (liste beklenmez). Toplu seçim ve
+j/k + Enter aynen. **Incident sayfası okunur:** başlığın altında birincil (en erken) bağlı problemin kendi açıklaması +
+"ne zaman" satırı, bağlı problemler (her biri kendi grafikli detayına), problem sayfalarıyla aynı üreticilerden "Ne
+yapabilirim" (tek problemde ondan — db-health'te Veritabanı sayfası + trace'ler; çoklu problemde incident servisinden),
+zaman çizelgesi altta. "Declared incident" / "kaynak önceliği korundu" gerekçesi şeritten ve satırdan çıktı (kapalı
+Teknik ayrıntı'da); kuyruk satırı incident özetini (= onu açan problemin açıklaması) basar.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

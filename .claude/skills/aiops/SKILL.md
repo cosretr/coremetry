@@ -92,7 +92,7 @@ Ne üretiyorsun?
 | Önek / id | Üretici | Tetik | Pencere | Kind / kapsam |
 |---|---|---|---|---|
 | `builtin-*`, kural id | `evaluator.go:771` evaluateOne (+9 builtin :286) | compare + ForSec + Cooldown + MinSamples | kural WindowSec; MV fast-path | service; **9 yerleşik varsayılan KAPALI** (v0.10.1069 — operatör: "Built-in alertleri kaldıralım, çok false pozitif geliyor"; HTTP P99 >3s 340×/24 sa, >5s 215×). Satırlar durur (BUILT-IN · OFF), operatör açar. Yükseltme göçü `builtins_default_off.go`: lider tikinde `evaluateAll`'dan önce, tek seferlik — açıkları kapatır, açık/ack problemlerini "rule disabled by default v0.10.1069" ile kapatır (yoksa bayat süpürme "source silent" derdi), tek audit (`alert_rule.builtin_default_off`), işaret `system_settings.builtin_rules_default_off` (varken bir daha koşmaz → elle açılan kural kapanmaz). Devre dışı kural ölçülmez/değerlendirilmez (`evaluableRules`, `collectMeasureKeys`); "Noisy rules" kapalıyı düşer (`dropDisabledNoisy`) — yeniden önerme |
-| `slo:<id>:<sev>` | `slo_burn.go:35-86` | hızlı VE yavaş burn | 1h/6h · 6h/24h | service |
+| `slo:<id>:<sev>` | `slo_burn.go` `evaluateSLOsWith` | hızlı VE yavaş burn | 1h/6h · 6h/24h | service; **Problem üretimi varsayılan KAPALI** (v0.10.1081 — operatör: "SLO burn rate problem olmasın, çıkar. SLO ile ilgili beklentim yok."): `problem_priority.sloBurnProblems` *bool, nil = kapalı (Settings → Anomaly → Alert problemi önceliği). Kapalıyken burn ÖLÇÜLMEZ, Problem/incident/bildirim yok; ayar yayınlanmışsa açık slo:* satırları "slo burn problems disabled" ile kapanır, yayınlanmamışsa (boot okuması düştü) dokunulmaz. SLO sayfası / burn grafikleri / explain-slo aynen. Yükseltme göçü `slo_burn_default_off.go` (lider tikinde `evaluateAll`'dan önce, tek seferlik, açıkları "slo burn problems disabled by default v0.10.1081" ile kapatır, tek audit `slo.burn_problems_default_off`, işaret `system_settings.slo_burn_problems_default_off`; bayrak açıksa yalnız işaret). Açıkken davranış birebir eskisi — yeniden varsayılan açmayı önerme |
 | `db-capacity:<check>` | `db_capacity.go:157-273` | ≥85 warn / ≥90 crit, histerezis 2pp, ETA | 2 sa regresyon | db |
 | `db-slow-stmt` | `db_slow_statement.go:25` | DBSlowQueryConfig | — | db |
 | `db-health:<system>@<instance>/<db>` (rule id = problem id) | `db_health.go` `evaluateDBHealth` (saf `dbHealthDecide`) | 2 ardışık kova: hata % ≥ 5 (mutlak) YA DA p99 ≥ 2000 ms VE ≥ 3× dünkü aynı kova (GÖRELİ; dünkü kova yoksa p99 kapalı); kova başına ≥ 100 çağrı VE ≥ 2 etkilenen çağıran (≥ 10 çağrılı); 2× → critical (P1), tazelemede şiddet yükselirse yeniden bildirim; kapanış son iki TAMAMLANMIŞ kova temiz (ihlalsiz / çağrı tabanı altı / verisiz) × 2 ardışık okuma; tik başına ≤ 20 açılış | 5 dk kova (açılış: cari kova çağrı tabanını geçtiyse önceki+cari, yoksa son iki tamamlanmış) | db; v0.10.1073, operatör: "Dün akşam CRM database'inde sorun oldu ama problemlerde P1 gelmedi". Okuma `chstore.DBHealthBuckets` ← `db_caller_summary_5m`, tik başına bir sorgu (iç: çağıran başına -MergeState + finalizeAggregation; batch çağıranlar iç WHERE'de düşer; HAVING yalnız ihlal + AÇIK problem satırları) + p99 adayı varken `DBHealthReferenceP99` ← `db_summary_5m` (24 sa önce). Vidalar `db_slow_query.health` (keep-last-good). Özne `DBHealthSubject`: gerçek db.name → `db:<sys>@<db>`, `default` → instance biçimi; `DBProblemSubjectForm` aynı kuralı id'den türetir (FE `dbProblemForm`). Yumuşak-hata: ayar yok / ana ya da referans okuması düştü → açıklar yalnız TAZELENİR; kural kapalı → "rule disabled" kapanışı; kesik okumada kapanış yok. Metrik `db.error_pct` / `db.p99_ms` (kategori ERROR / SLOWDOWN); alarm grafiği yok (`hasAlertMetricChart`), detay pivotları `dbHealthPivots` |
@@ -224,7 +224,8 @@ critical: bigBreach→P1 | staleCrit→P1 | P2      warning: bigBreach→P2 | P3
 **v0.10.1069 notu:** kural tarafında "critical × 2" (critical + bigBreach) P1 yolunu çoğunlukla beş yerleşik
 critical kural (`builtin-error-rate-15pct`, `-error-majority-50pct`, `-http-p99-5s`, `-db-p99-5s`, `-mq-consume-p99-2m`)
 besliyordu; yerleşikler varsayılan kapalı olduğundan bu yol artık NADİREN tetiklenir — P1 çoğunlukla operatör kuralı,
-SLO burn, staleCrit (eskalasyonla critical'a çıkan), exception-storm, incident ve monitor totalLoss'tan gelir.
+staleCrit (eskalasyonla critical'a çıkan), exception-storm, incident, db-health ve monitor totalLoss'tan gelir (SLO burn
+v0.10.1081'ten beri varsayılan Problem üretmez).
 "P1 neden az" sorusunda önce bunu düşün; yerleşikleri varsayılan açmak çözüm DEĞİL.
 `fresh deploy` tetikleyicisi v0.9.612'de KALDIRILDI — deploy bilgisi görünür,
 sıralamaya karışmaz. Vidalar `problem_priority` blobu (`problem_priority.go:27-116`);
@@ -265,6 +266,17 @@ açık ?minOcc=N ve show all = minOcc=0 istisnasız. Rozet aynı kümeyi sayar.
 Exceptions varsayılan sırası ÖNCELİK (v0.10.703).
 Inbox = ignored hariç TÜM durumlar, durum rozetiyle (v0.10.751); yalnız Ignored
 ayrı sekme; `open` kovası /inbox rozet sayacı için aynen.
+**Problems (/inbox) varsayılanı (v0.10.1081, operatör: "Problems sayfasında sadece
+P1'ler gözüksün ve first seen'e göre sıralı olsun"):** parametresiz adres
+`prio=P1` + `sort=firstSeen&dir=desc` ister (FE `PRIO_DEFAULT`/`SORT_DEFAULT`,
+`s_inbox` URL durumu, kişisel localStorage sıralaması okunmaz); tür varsayılanı
+HER ŞEY (v0.10.1014 aynen). Sunucuda öncelik süzgeci (`applyInboxFacets`)
+tavandan ÖNCE, sonra `inboxSortAndCap` — en yeni P1 kırpılmaz; çip sayaçları
+süzgeçten önceki küme. "tüm öncelikler" tek tık. Açık `?prio=` / `?s_inbox=`
+ve kayıtlı görünümler kendi değerini taşır. Satır tıkı HER türde tam sayfa
+(çekmece v0.10.1081'te kalktı; incident → `/incident?id=`, eski `?item=`
+yönlendirilir); incident sayfasının manşeti birincil (en erken) bağlı
+problemin açıklaması (`features/anomalies/incidentSummary.ts`).
 
 Kategori `problem_category.go:38-85` (önek → AVAILABILITY/ERROR/SLOWDOWN/
 RESOURCE/CUSTOM); `DisplayID` `P-<base36>` (:92).
@@ -413,7 +425,8 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
    operatör direktiflerini (P1 yapışkan, taban 2, Inbox tüm durumlar, service
    silent kapalı, disk ETA kapalı, operasyon gecikmesi (`trace_op_latency`) kapalı,
    yeni log deseni (`log_template_new`) kapalı, yerleşik alarm kuralları (`builtin-*`) kapalı,
-   fresh deploy yok) YENİDEN AÇMA.
+   SLO burn Problem'i (`problem_priority.sloBurnProblems`) kapalı, Problems varsayılanı
+   yalnız P1 + ilk görülme, fresh deploy yok) YENİDEN AÇMA.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;
    ölçüm seyrekse §5 tasarımı; kayan pencere simülasyon testi.
 5. Kanıt/skor mu? → `hypothesis_*_test.go` tablo, kalibrasyon, tek yazıcı.

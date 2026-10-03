@@ -20,9 +20,10 @@ describe('v0.10.1042 — olay susturma gövdesi olay kimliğini taşır', () => 
     expect(src).toContain("createSilence.mutateAsync({ ...silenceBody, reason: 'operator: değil (servis sayfası)' })");
     expect(src).not.toMatch(/fingerprint:\s*silenceKey\(/);
   });
-  it('anomali detay sayfası ve inbox çekmecesi ortak kurucudan', () => {
+  // v0.10.1081 — inbox çekmecesi (ikinci tüketici) kalktı; tek tüketici
+  // anomali detay sayfası, aynı ortak kurucudan.
+  it('anomali detay sayfası ortak kurucudan', () => {
     expect(read('../features/anomalies/AnomalyEventDetail.tsx')).toContain('anomalyEventSilenceBody(');
-    expect(read('../components/InboxTriageDrawer.tsx')).toContain('buildAnomalySilenceBody(item, durationSec)');
   });
   it("Cmd-K olay kimliğini gönderir (öneri satırının id'si = olay kimliği)", () => {
     expect(read('./actions.ts')).toContain('fingerprint: picked.id,');
