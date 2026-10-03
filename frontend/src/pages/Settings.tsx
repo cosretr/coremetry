@@ -36,7 +36,7 @@ import { ElasticTab } from './settings/ElasticTab';
 import { KibanaTab } from './settings/KibanaTab';
 import { LogBridgeTab } from './settings/LogBridgeTab';
 import { LDAPTab } from './settings/LdapTab';
-import { SSOPresetsTab } from './settings/SsoTab';
+import { SSOTab } from './settings/SsoTab';
 import { RetentionTab } from './settings/RetentionTab';
 import { AnomalyPromotionTab } from './settings/AnomalyTab';
 import { BrandingTab } from './settings/BrandingTab';
@@ -81,7 +81,7 @@ const TAB_COMPS: Record<string, ComponentType> = {
   'devops': DevOpsTab,
   'mcp-servers': McpServersTab,
   'ldap': LDAPTab,
-  'sso': SSOPresetsTab,
+  'sso': SSOTab,
   'retention': RetentionTab,
   'anomaly': AnomalyPromotionTab,
   'branding': BrandingTab,

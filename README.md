@@ -430,7 +430,7 @@ auth:
   initial_admin: "admin@coremetry.local"
   initial_password: "admin"     # rotate after first login
   oidc:
-    enabled: false
+    enabled: false              # or manage live from Settings > SSO (overrides this block)
   # LDAP / AD configured live from Settings UI.
 
 logs:

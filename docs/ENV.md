@@ -203,6 +203,16 @@ Settings → Elasticsearch'ün tohumu; UI'dan kaydedilen blob env'i ezer
 
 LDAP'ın env'i yoktur — Settings UI'dan canlı yapılandırılır.
 
+OIDC (v0.10.1067): Settings > SSO'dan da canlı yapılandırılır (`system_settings` `auth_oidc`). Orada
+kayıt **varsa** aşağıdaki `COREMETRY_OIDC_*` env'leri ve yaml `auth.oidc` yok sayılır; kayıt yoksa
+bunlar kaynaktır. Settings'teki secret boş bırakılırsa env/yaml'daki secret bloba taşınır (yalnız
+issuer + client id aynıysa). Settings kaynaklı OIDC https ister ve loopback / link-local (metadata) adrese
+bağlanmaz; özel ağdaki (RFC1918) kurum içi IdP ayarsız çalışır. Tek yaml anahtarı
+`auth.oidc.allow_insecure_issuer` (Helm `config.auth.oidc.allowInsecureIssuer`; yalnız geliştirme: http issuer
++ loopback). Settings > Backup dışa
+aktarımı `system_settings`'i bütün taşır — OIDC client secret dahil (LDAP bind parolası / Tempo token'ı
+gibi); dosyayı secret gibi saklayın.
+
 | Değişken | Okunduğu yer | Yokken / varsayılan | Etki | Rol | Gizli |
 |---|---|---|---|---|---|
 | `COREMETRY_JWT_SECRET` | `config.go:682` | `""` → **her boot'ta rastgele 32 bayt** (`auth.go:118-122`) | HS256 imza anahtarı. Yokken restart'ta tüm oturumlar düşer; çok pod'da her pod farklı anahtar → auth flap (`values-minikube.yaml` notu). Zayıf/yer tutucu değer boot'u durdurmaz ama `[auth] ⚠ GÜVENLİK` + `/admin/stats` (`auth.go:123+`). Üret: `openssl rand -hex 32`. | api | **evet** |

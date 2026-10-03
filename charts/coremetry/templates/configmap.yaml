@@ -50,3 +50,4 @@ data:
         display_name: "{{ .Values.config.auth.oidc.displayName }}"
         default_role: "{{ .Values.config.auth.oidc.defaultRole }}"
         allowed_domains: {{ toJson .Values.config.auth.oidc.allowedDomains }}
+        allow_insecure_issuer: {{ .Values.config.auth.oidc.allowInsecureIssuer | default false }}

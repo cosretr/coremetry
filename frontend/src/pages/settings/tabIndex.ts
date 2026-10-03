@@ -28,7 +28,7 @@ export const SETTINGS_TAB_INDEX: SettingsTabRef[] = [
   { slug: 'devops', label: 'Kod entegrasyonu' },
   { slug: 'mcp-servers', label: 'MCP sunucuları' },
   { slug: 'ldap', label: 'LDAP / AD' },
-  { slug: 'sso', label: 'SSO presets' },
+  { slug: 'sso', label: 'SSO (OIDC)' },
   { slug: 'retention', label: 'Data retention' },
   { slug: 'anomaly', label: 'Anomaly promotion' },
   { slug: 'branding', label: 'Branding' },

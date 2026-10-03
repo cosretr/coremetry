@@ -1049,6 +1049,34 @@ Sol eksen bölmeleri `[0, max/2, max]` ve headroom'lu max → "0 · 0.55 · 1.1"
 **Karar:** `OTEL_YELLOW` (#f5a800, logo rengi) sabit; `TimeChart.leftInteger` → bölmeler tam sayıya yuvarlı ve tekilleşmiş
 (`integerSplits`). Yalnız bu grafik `leftInteger` kullanır; oran/süre eksenleri değişmedi.
 
+## 2026-10-03 — OIDC girişi Settings'ten yönetilir (v0.10.1067)
+
+**Operatör:** "Settings'ten yönetebilsem Helm'e göre daha iyi olur." OIDC yalnız `config.yaml`
+`auth.oidc` (Helm `config.auth.oidc` + `oidcClientSecret`) ile kuruluyor, keşif boot'ta bir kez koşuyordu;
+değişiklik = Helm upgrade + restart. **Karar:** ayar `system_settings` `auth_oidc` blobunda (invariant #6);
+Settings > SSO formu + `GET`/`PUT /api/settings/oidc` + `POST /api/settings/oidc/test`, üçü de admin.
+**Öncelik:** kayıtlı blob varsa `config.yaml`'ın `auth.oidc`'sinin önüne geçer; blob yoksa `config.yaml`
+kaynak kalır (Helm'li kurulumlar aynen çalışır, form etkin değerlerle dolu açılır). **Secret:** `client_secret`
+hiçbir GET'te dönmez (`clientSecretStored`); PUT'ta boş secret kayıtlıyı (yoksa `config.yaml`'dakini) YALNIZ
+issuer + client id değişmemişse korur, değiştiyse 400 (yoksa tek girişle kayıtlı secret yeni token ucuna
+giderdi); audit'e yalnız `clientSecretChanged` bayrağı. **Canlı uygulama:** PUT keşfi koşar ve istemciyi atomik
+takaslar (restart yok, giriş düğmesi aynı anda); keşif başarısızsa kayıt reddedilir — `enabled:false` her zaman
+kaydedilir (kapatma anahtarı). Peer pod'lar `config:oidc` sinyali + 30 s değişim tespitli yenilemeyle alır;
+issuer aynıysa yeniden kurulum ağsız (alan adı/rol değişikliği peer'da hemen), uygulanamayan yapılandırmada
+istemci kaldırılır (`active:false`). `system_settings` okunamazsa SSO kapalı başlar, `config.yaml`'a düşülmez.
+**Ağ sınırı (Settings kaynağı):** keşif + JWKS + token değişimi tek sınırlı istemciyle — https, dial anında
+loopback / link-local (169.254/16 metadata dahil, fe80::/10) / belirtilmemiş / multicast / eşlemeli adres reddi,
+ad çözülüp IP'ye sabitlenir (http/loopback yalnız yaml `allow_insecure_issuer`, dev), ≤10 s, ≤3 yönlendirme,
+gövde ≤1 MiB, sorgulu uç reddi; hata metni tek genel cümle; giriş hatasında kullanıcıya genel mesaj, loga yalnız
+sınıf (IdP gövdesi hiçbir yere). **Özel ağ (RFC1918, fc00::/7) serbest:** operatörün IdP'si banka ağı içinde;
+bir Helm anahtarı istemek "Settings'ten yönet"i boşa çıkarırdı. Bedeli kabul edildi: oturum admin'i keşif
+üzerinden özel bir https ana makinesinin erişilebilir olup olmadığını öğrenebilir — admin zaten küme/ağ
+erişimine sahip, loopback ve metadata kapalı, gövde/durum kodu hiç dönmez, ve test ucu audit'lenir
+(`settings.oidc.test`: issuer + ok, gövde yok). Üç uç yalnız oturum admin'i (API token 403). viewer dışı varsayılan rol izinli alan adı ister; `default_role: editor` artık editor
+verir (callback eskiden admin dışını viewer'a indiriyordu). **Güvenlik sıkılaştırması:** id_token'da
+`email_verified` VARSA ve false ise giriş reddedilir (her kaynakta). Yedek dışa aktarımı OIDC secret'ını da
+taşır (LDAP/Tempo gibi). Yerel kullanıcı/parola girişi her zaman açık.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -24,6 +24,7 @@ OracleLogsResponse,
   AISettings, AISettingsInput, AIModelProfileInput, AIProfilesPayload, AIProfileTestResult, AISurfaceMap,
   AnomalyVerdict, AnomalyVerdictKind,
   TempoSnapshot, TempoSettingsInput,
+  OidcSettingsSnapshot, OidcSettingsInput, OidcTestResult,
   VMSnapshot, VMSettingsInput, VMTestResult,
   OracleSnapshot, OracleSettingsInput, OracleSource, OracleTestResult, OracleStatusPayload,
   DevOpsSnapshot, DevOpsSettingsInput, DevOpsTestResult, DevOpsResolveDryRun, StackFramesResult,
@@ -2148,6 +2149,21 @@ export const api = {
       method: 'POST',
       headers: draft ? { 'Content-Type': 'application/json' } : undefined,
       body: draft ? JSON.stringify(draft) : undefined,
+    }),
+
+  // OIDC / SSO (v0.10.1067, admin). GET secret taşımaz (clientSecretStored);
+  // PUT'ta boş clientSecret kayıtlıyı korur; test yalnız keşif koşar, yazmaz
+  // ve başarısız keşfi 200 + {ok:false, error} döner.
+  getOidcSettings: () => get<OidcSettingsSnapshot>(`/api/settings/oidc`),
+  putOidcSettings: (s: OidcSettingsInput) =>
+    request<OidcSettingsSnapshot>(`/api/settings/oidc`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(s),
+    }),
+  testOidcSettings: (s: OidcSettingsInput) =>
+    request<OidcTestResult>(`/api/settings/oidc/test`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(s),
     }),
   searchLDAPUsers: (q: string, limit = 25) =>
     get<{ users: LDAPDirectoryUser[] | null }>(`/api/settings/ldap/search?q=${encodeURIComponent(q)}&limit=${limit}`),

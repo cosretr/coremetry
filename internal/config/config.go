@@ -277,6 +277,14 @@ type OIDCConfig struct {
 	DisplayName    string   `yaml:"display_name"`    // shown on login button (default: "SSO")
 	DefaultRole    string   `yaml:"default_role"`    // role for first-time OIDC users (default: viewer)
 	AllowedDomains []string `yaml:"allowed_domains"` // optional email-domain whitelist (e.g. ["acme.com"])
+
+	// AllowInsecureIssuer — v0.10.1067, yalnız geliştirme: Settings > SSO'dan
+	// kaydedilen OIDC'de http issuer + loopback/link-local adres serbest.
+	// Yalnız config.yaml'dan okunur, Settings DEĞİŞTİREMEZ. Varsayılan:
+	// issuer https; IdP'ye giden her bağlantı (keşif, JWKS, token) loopback /
+	// link-local / metadata adresine gidemez (özel ağ serbest — auth/oidc.go).
+	// config.yaml kaynaklı OIDC bu sınırın dışında (operatör yazdı).
+	AllowInsecureIssuer bool `yaml:"allow_insecure_issuer"`
 }
 
 type ListenConfig struct {

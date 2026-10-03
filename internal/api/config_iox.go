@@ -72,6 +72,7 @@ var configImportReloadTopics = []string{
 	// kipinde damgalanan üç blobdan biri; sinyal yoktu, yedek ancak 30 s
 	// tazelemesinde canlıya geçiyordu.
 	"entities",
+	"oidc", // v0.10.1067 — Settings > SSO blobu (auth_oidc) hydrate eder
 }
 
 type configExportPayload struct {

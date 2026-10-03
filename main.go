@@ -845,18 +845,16 @@ func main() {
 
 	// ── Optional OIDC ─────────────────────────────────────────────────────────
 	// Discovery failure is non-fatal: we keep local auth working and surface
-	// the issue in the log. Operators can fix config and restart.
-	var oidcSvc *auth.OIDCService
-	if cfg.Auth.OIDC.Enabled {
-		var err error
-		oidcSvc, err = auth.NewOIDCService(ctx, cfg.Auth.OIDC)
-		if err != nil {
-			log.Printf("[auth] OIDC disabled — %v", err)
-			oidcSvc = nil
-		} else {
-			log.Printf("[auth] OIDC ready — issuer=%s display=%q", cfg.Auth.OIDC.IssuerURL, oidcSvc.DisplayName())
-		}
+	// the issue in the log. v0.10.1067 — Settings > SSO'dan yönetilir:
+	// system_settings `auth_oidc` blobu varsa config.yaml'ın önüne geçer.
+	// Servis her zaman dolu; canlı istemci PUT / 30 s yenileme (değişim
+	// tespitli, başarısız keşfi yeniden dener) / config:oidc sinyaliyle
+	// restart'sız takaslanır.
+	oidcSvc := auth.NewOIDCService(cfg.Auth.OIDC, cfg.PublicURL, store)
+	if err := oidcSvc.LoadPersisted(ctx); err != nil {
+		log.Printf("[auth] OIDC disabled — %v", err)
 	}
+	cfgRefresh.Add("oidc", func(ctx context.Context) error { return oidcSvc.LoadPersisted(ctx) })
 
 	// ── Logs read backend (CH default, ES opt-in) ────────────────────────────
 	// Ingest still always writes to CH; this only changes /api/logs's read

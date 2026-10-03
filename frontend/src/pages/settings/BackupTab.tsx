@@ -120,8 +120,8 @@ export function BackupTab() {
           maintenance_windows, anomaly_silences, monitors,
           service_metadata, service_contracts, status_page_*.
           Includes secrets in their stored form (AI keys, SMTP
-          passwords, LDAP bind passwords) — treat the file like a
-          secret.
+          passwords, LDAP bind passwords, Tempo tokens, the SSO / OIDC
+          client secret) — treat the file like a secret.
         </div>
       </div>
 

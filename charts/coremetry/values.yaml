@@ -303,6 +303,7 @@ config:
   auth:
     tokenTTL: "24h"
     initialAdmin: "admin@coremetry.local"
+    # OIDC Settings > SSO'dan da yönetilebilir; orada kayıt varsa bu blok yok sayılır.
     oidc:
       enabled: false
       issuerUrl: ""
@@ -312,6 +313,7 @@ config:
       displayName: "SSO"
       defaultRole: "viewer"
       allowedDomains: []
+      allowInsecureIssuer: false   # yalnız geliştirme: Settings OIDC için http issuer + loopback
 
 # Sensitive values land in a Secret. Override these or point existingSecret
 # at a pre-created Secret with the same keys.

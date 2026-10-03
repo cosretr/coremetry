@@ -138,7 +138,7 @@ type Server struct {
 	lockDegraded atomic.Bool
 	webFS        embed.FS
 	auth         *auth.Service
-	oidc         *auth.OIDCService // nil when SSO disabled
+	oidc         *auth.OIDCService // canlı istemci atomik; Enabled() = SSO açık (v0.10.1067)
 	ldap         *ldap.Service     // always set; Enabled() reports config presence
 	// ldapGroupSync — LDAP/AD group-membership sync engine (v0.8.526).
 	// Set via SetLdapGroupSync from main(); nil-safe — the group-sync
@@ -6383,8 +6383,8 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := s.oidc.Exchange(r.Context(), code, verifier.Value, nonce.Value)
 	if err != nil {
-		log.Printf("[oidc] callback: %v", err)
-		s.oidcFail(w, r, err.Error())
+		// v0.10.1067 — kullanıcıya genel mesaj, loga yalnız sınıf (IdP gövdesi değil).
+		s.oidcLoginFail(w, r, err)
 		return
 	}
 
@@ -6398,7 +6398,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	if user == nil {
 		role := s.oidc.DefaultRole()
-		if role != auth.RoleAdmin {
+		if !auth.IsValidRole(role) { // v0.10.1067 — editor de geçerli (Settings > SSO)
 			role = auth.RoleViewer
 		}
 		user = &chstore.User{

@@ -1607,6 +1607,53 @@ export interface TempoSettingsInput {
   tokenRef?: string;
 }
 
+// OIDC / SSO ayarı (v0.10.1067, Settings > SSO). Go aynası:
+// auth.OIDCSnapshot (GET/PUT cevabı), auth.OIDCSettings (PUT/test gövdesi),
+// auth.OIDCDiscovery (test sonucu) — internal/auth/oidc_settings.go, oidc.go.
+// Secret sözleşmesi: clientSecret hiçbir cevapta yok (clientSecretStored);
+// PUT'ta boş clientSecret kayıtlıyı korur.
+export type OidcSettingsSource = 'settings' | 'config';
+export interface OidcSettingsSnapshot {
+  enabled: boolean;
+  issuerUrl: string;
+  clientId: string;
+  clientSecretStored: boolean;
+  redirectUrl: string;
+  defaultRedirectUrl?: string;
+  scopes: string[];
+  displayName: string;
+  defaultRole: string;
+  allowedDomains: string[];
+  source: OidcSettingsSource;
+  active: boolean;
+  lastError?: string;
+}
+export interface OidcSettingsInput {
+  enabled: boolean;
+  issuerUrl: string;
+  clientId: string;
+  clientSecret?: string;
+  redirectUrl: string;
+  scopes: string[];
+  displayName: string;
+  defaultRole: string;
+  allowedDomains: string[];
+}
+export interface OidcDiscovery {
+  issuer: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  userinfoEndpoint?: string;
+  jwksUri: string;
+  scopesSupported?: string[];
+  unsupportedScopes?: string[];
+}
+export interface OidcTestResult {
+  ok: boolean;
+  error?: string;
+  discovery?: OidcDiscovery;
+}
+
 // External VictoriaMetrics READ backend (v0.9.1150, Faz 1). When
 // enabled, the metric discovery/query surfaces (catalogue + picker,
 // Explore, dashboard metric panels, MCP query_metric, label values,

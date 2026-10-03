@@ -500,6 +500,17 @@ func (s *Server) reloadConfigOnSignal(ctx context.Context, svc string) {
 				log.Printf("[cache] config-reload copilot: %v", err)
 			}
 		}
+	// v0.10.1067 — OIDC/SSO ayarı (auth_oidc_settings.go PUT). Case uçla AYNI
+	// sürümde (thanos v0.9.237 dersi): peer pod'un giriş düğmesi ve IdP'si
+	// 30 s poll'ü beklemeden yeni yapılandırmaya geçer. LoadPersisted değişim
+	// tespitli — blob aynıysa keşif koşmaz; gerekirse keşif bu 5 s'lik
+	// bağlamdan AYRILMIŞ kendi ≤10 s süresiyle koşar (auth/oidc_settings.go apply).
+	case "oidc":
+		if s.oidc != nil {
+			if err := s.oidc.LoadPersisted(ctx); err != nil {
+				log.Printf("[cache] config-reload oidc: %v", err)
+			}
+		}
 	case "ldap":
 		if s.ldap != nil {
 			if err := s.ldap.LoadPersisted(ctx, s.store); err != nil {

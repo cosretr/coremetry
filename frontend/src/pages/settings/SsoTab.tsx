@@ -1,200 +1,204 @@
-import { useState } from 'react';
-import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
-import { Button } from '@/components/ui/Button';
-import { copyToClipboard } from '@/lib/clipboard';
+import { useState, type FormEvent } from 'react';
+import { Spinner } from '@/components/Spinner';
+import { Button, Field, KeyValue, KeyValueRow, SelectField } from '@/components/ui';
+import { useAuth } from '@/components/AuthProvider';
+import { api } from '@/lib/api';
+import type { OidcSettingsSnapshot, OidcTestResult } from '@/lib/types';
+import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner, FlashBox, humanize } from './shared';
+import {
+  OIDC_ROLES, formToInput, oidcStatus, publicOidcSnapshot, snapshotToForm, type OidcForm,
+} from './oidcForm';
+import { SsoPresets } from './SsoPresets';
 
-// SSOPresetsTab — provider-template reference for OIDC + the
-// trusted-header proxy mode. Today OIDC + trusted-header are
-// configured via config.yaml / env vars (the runtime-persisted
-// flow lives next to LDAP / AI / Branding and is queued for a
-// follow-up); meanwhile operators paste a known-good snippet
-// per provider here, apply it to their deployment, and
-// restart the pod.
+// SSOTab — v0.10.1067 (operatör: "Settings'ten yönetebilsem Helm'e göre
+// daha iyi olur"). OIDC girişi artık burada yönetilir: kaydedince restart
+// gerekmez, giriş sayfasındaki düğme aynı anda gelir/gider. Kayıtlı ayar
+// config.yaml / Helm'deki auth.oidc'nin önüne geçer; kayıt yoksa form
+// etkin config.yaml değerleriyle dolu gelir.
 //
-// Each card is a copy-paste-ready YAML block with the issuer
-// URL pattern, recommended scopes, and any provider-specific
-// notes (e.g. Azure AD's tenant placeholder, Keycloak's realm
-// segment, oauth2-proxy's trusted-proxy CIDR). Same shape as
-// the Profiling setup recipes that ship per-language.
-export function SSOPresetsTab() {
-  type Preset = { key: string; label: string; description: string; yaml: string };
-  const presets: Preset[] = [
-    {
-      key: 'keycloak',
-      label: 'Keycloak',
-      description: 'Most common self-hosted identity provider for banks. Replace <realm> with your realm name; Coremetry discovers the rest via /.well-known/openid-configuration.',
-      yaml:
-`auth:
-  oidc:
-    enabled: true
-    issuer_url: "https://keycloak.example.com/realms/<realm>"
-    client_id: "coremetry"
-    client_secret: "<from-keycloak-client-credentials>"
-    redirect_url: "https://coremetry.example.com/api/auth/oidc/callback"
-    scopes: ["openid", "email", "profile"]
-    display_name: "Keycloak"
-    default_role: "viewer"
-    allowed_domains: []   # optional ["bank.com"]`,
-    },
-    {
-      key: 'dex',
-      label: 'Dex',
-      description: 'CoreOS Dex — popular OIDC bridge in front of LDAP/SAML/GitHub for k8s shops. Issuer URL is the public host:port the SPA can reach.',
-      yaml:
-`auth:
-  oidc:
-    enabled: true
-    issuer_url: "https://dex.example.com"
-    client_id: "coremetry"
-    client_secret: "<dex-static-client-secret>"
-    redirect_url: "https://coremetry.example.com/api/auth/oidc/callback"
-    scopes: ["openid", "email", "profile", "groups"]
-    display_name: "Dex"
-    default_role: "viewer"`,
-    },
-    {
-      key: 'google',
-      label: 'Google Workspace',
-      description: 'Hosted Google. Restrict to a single GSuite domain via allowed_domains so anyone with a personal gmail.com can\'t sign in.',
-      yaml:
-`auth:
-  oidc:
-    enabled: true
-    issuer_url: "https://accounts.google.com"
-    client_id: "<google-cloud-oauth-client-id>"
-    client_secret: "<google-cloud-oauth-secret>"
-    redirect_url: "https://coremetry.example.com/api/auth/oidc/callback"
-    scopes: ["openid", "email", "profile"]
-    display_name: "Google"
-    default_role: "viewer"
-    allowed_domains: ["yourcompany.com"]`,
-    },
-    {
-      key: 'azure-ad',
-      label: 'Azure AD (Entra)',
-      description: 'Microsoft Entra ID (formerly Azure AD). Replace <tenant-id> with your tenant GUID; the v2.0 endpoint is the one to use.',
-      yaml:
-`auth:
-  oidc:
-    enabled: true
-    issuer_url: "https://login.microsoftonline.com/<tenant-id>/v2.0"
-    client_id: "<app-registration-client-id>"
-    client_secret: "<app-registration-client-secret>"
-    redirect_url: "https://coremetry.example.com/api/auth/oidc/callback"
-    scopes: ["openid", "email", "profile"]
-    display_name: "Microsoft"
-    default_role: "viewer"`,
-    },
-    {
-      key: 'okta',
-      label: 'Okta',
-      description: 'Okta-as-a-service. Replace <your-okta-domain> with the host Okta assigned you (e.g. acme.okta.com).',
-      yaml:
-`auth:
-  oidc:
-    enabled: true
-    issuer_url: "https://<your-okta-domain>"
-    client_id: "<okta-app-client-id>"
-    client_secret: "<okta-app-client-secret>"
-    redirect_url: "https://coremetry.example.com/api/auth/oidc/callback"
-    scopes: ["openid", "email", "profile"]
-    display_name: "Okta"
-    default_role: "viewer"`,
-    },
-    {
-      key: 'auth0',
-      label: 'Auth0',
-      description: 'Hosted Auth0. Issuer URL includes the tenant slug.',
-      yaml:
-`auth:
-  oidc:
-    enabled: true
-    issuer_url: "https://<your-tenant>.auth0.com/"
-    client_id: "<auth0-application-client-id>"
-    client_secret: "<auth0-application-client-secret>"
-    redirect_url: "https://coremetry.example.com/api/auth/oidc/callback"
-    scopes: ["openid", "email", "profile"]
-    display_name: "Auth0"
-    default_role: "viewer"`,
-    },
-    {
-      key: 'oauth2-proxy',
-      label: 'oauth2-proxy / IAP (trusted headers)',
-      description: 'Banks running oauth2-proxy / Google IAP / Cloudflare Access in front of every internal app — Coremetry trusts the upstream identity headers without re-doing OIDC itself. trusted_proxies CIDR is REQUIRED so an attacker bypassing the proxy can\'t spoof X-Auth-Request-Email.',
-      yaml:
-`auth:
-  trusted_header:
-    enabled: true
-    email_header: "X-Auth-Request-Email"
-    user_header: "X-Auth-Request-User"
-    groups_header: "X-Auth-Request-Groups"
-    auto_provision: true        # first-sight email lands as DefaultRole
-    default_role: "viewer"
-    trusted_proxies:            # ← REQUIRED — your oauth2-proxy node CIDRs
-      - "10.0.0.0/8"
-      - "172.16.0.0/12"`,
-    },
-  ];
-  const [activeKey, setActiveKey] = useState(presets[0].key);
-  const active = presets.find(p => p.key === activeKey) ?? presets[0];
-  const [copied, setCopied] = useState(false);
-  // v0.8.550 — was `navigator.clipboard.writeText(...)` with a .catch().
-  // The catch never fired on the case it described: with no secure context
-  // `navigator.clipboard` is undefined, so reading `.writeText` throws
-  // SYNCHRONOUSLY and no promise is ever created for .catch to attach to.
-  // The shared helper handles the missing API, a rejection, AND supplies
-  // the textarea fallback this surface never had — the operator can now
-  // actually copy the YAML on a plain-HTTP install instead of falling back
-  // to selecting it by hand.
-  const copy = async () => {
-    if (await copyToClipboard(active.yaml)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+// Secret sözleşmesi (Tempo/Oracle emsali): sunucu secret'ı hiç döndürmez,
+// "· kayıtlı" işareti clientSecretStored'dan; boş bırakılan kutu kayıtlıyı
+// korur. "Bağlantıyı test et" yalnız keşif koşar, hiçbir şey kaydetmez.
+//
+// Admin olmayan: ayar ucu admin-only (IdP adresi / client id hassas); form
+// yine BOŞ çizilmez — public /api/auth/config'ten SSO'nun açık olup
+// olmadığı ve düğme etiketi gelir, alanlar salt-okunur.
+export function SSOTab() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  // Rol değişirse (oturum geç yüklendi) okuma yolu da değişir: key ile yeniden kur.
+  return <SSOTabBody key={isAdmin ? 'admin' : 'limited'} isAdmin={isAdmin} />;
+}
+
+function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
+  const [snap, setSnap] = useState<OidcSettingsSnapshot | null>(null);
+  const [form, setForm] = useState<OidcForm | null>(null);
+  const [busy, setBusy] = useState<'save' | 'test' | null>(null);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [tr, setTr] = useState<OidcTestResult | null>(null);
+
+  const { loaded, error: loadErr, retry } = useSettingsLoad<OidcSettingsSnapshot>(
+    () => (isAdmin ? api.getOidcSettings() : api.authConfig().then(publicOidcSnapshot)),
+    s => { setSnap(s); setForm(snapshotToForm(s)); },
+  );
+
+  const patch = (p: Partial<OidcForm>) => setForm(f => (f ? { ...f, ...p } : f));
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!form || !isAdmin) return;
+    setBusy('save'); setMsg(null);
+    try {
+      const next = await api.putOidcSettings(formToInput(form));
+      setSnap(next);
+      setForm(snapshotToForm(next));
+      setMsg({ kind: 'ok', text: next.enabled
+        ? 'Kaydedildi — SSO düğmesi giriş sayfasında, restart gerekmez.'
+        : 'Kaydedildi — SSO kapalı, yalnız yerel giriş açık.' });
+    } catch (err) {
+      setMsg({ kind: 'err', text: humanize(err) });
+    } finally {
+      setBusy(null);
     }
   };
+
+  const runTest = async () => {
+    if (!form) return;
+    setBusy('test'); setTr(null);
+    try {
+      setTr(await api.testOidcSettings(formToInput(form)));
+    } catch (err) {
+      setTr({ ok: false, error: humanize(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (loadErr) return <SettingsLoadError error={loadErr} onRetry={retry} />;
+  if (!loaded || !form || !snap) return <Spinner />;
+
+  const status = oidcStatus(snap);
+  const adminOnly = isAdmin ? undefined : 'Yalnız yönetici görür';
+
   return (
-    <div style={{ maxWidth: 920 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>SSO presets</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
-        Provider-specific config snippets for OIDC + the oauth2-proxy trusted-header mode.
-        Paste the YAML into your <code>config.yaml</code> (or the equivalent
-        <code>COREMETRY_OIDC_*</code> / <code>COREMETRY_TRUSTED_HEADER_*</code> env vars in your
-        deployment), then restart the pod. Live runtime persistence of OIDC config is queued for
-        a follow-up — for now the file-driven path keeps things auditable in source control.
+    <div className="settings-pane">
+      <h2 className="sso-title">SSO (OIDC)</h2>
+      <p className="sso-note">
+        Burada kaydedilen ayar config.yaml / Helm'deki <code>auth.oidc</code>'nin önüne geçer ve
+        restart'sız uygulanır; yerel kullanıcı/parola girişi her zaman açık kalır.
       </p>
-      <TabStrip ariaLabel="SSO sağlayıcı ön ayarları" value={activeKey} onChange={setActiveKey}
-        tabs={presets.map(p => ({ key: p.key, label: p.label }))} />
-      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.6 }}>
-        {active.description}
+
+      <ConfigStatusBanner label={status.label}>{status.text}</ConfigStatusBanner>
+      {isAdmin && (
+        <div className="sso-source">
+          {snap.source === 'settings'
+            ? 'Kaynak: Settings.'
+            : 'Kaynak: config.yaml (Helm) — Kaydet’e basınca Settings’e geçer.'}
+          {snap.lastError && <> · <span className="is-err">Son hata: {snap.lastError}</span></>}
+        </div>
+      )}
+      {!isAdmin && (
+        <div className="sso-source">Ayarları yalnız yöneticiler görür ve değiştirir.</div>
+      )}
+
+      <form onSubmit={save} className="sso-form">
+        <fieldset disabled={!isAdmin} className="sso-fieldset">
+          <label className="sso-check">
+            <input type="checkbox" checked={form.enabled}
+              onChange={e => patch({ enabled: e.target.checked })} />
+            <span>SSO ile girişi aç</span>
+          </label>
+
+          <div className="sso-row">
+            <Field label="Issuer URL" value={form.issuerUrl} autoComplete="off"
+              onChange={e => patch({ issuerUrl: e.target.value })}
+              placeholder={adminOnly ?? 'https://idp.example.test/realms/coremetry'}
+              hint="Kimlik sağlayıcının adresi; https olmalı." />
+            <Field label="Client ID" value={form.clientId} autoComplete="off"
+              onChange={e => patch({ clientId: e.target.value })}
+              placeholder={adminOnly ?? 'coremetry'} />
+          </div>
+
+          <div className="sso-row">
+            <Field type="password" autoComplete="new-password" value={form.clientSecret}
+              label={<>Client secret{snap.clientSecretStored && <span style={{ color: 'var(--text3)' }}> · kayıtlı</span>}</>}
+              onChange={e => patch({ clientSecret: e.target.value })}
+              placeholder={adminOnly ?? (snap.clientSecretStored
+                ? '(kayıtlı değeri korumak için boş bırakın)'
+                : 'kimlik sağlayıcıdaki istemci parolası')}
+              hint="Saklanır, geri gösterilmez; issuer ya da client id değişirse yeniden girin." />
+            <Field label="Yönlendirme adresi (redirect URL)" value={form.redirectUrl} autoComplete="off"
+              onChange={e => patch({ redirectUrl: e.target.value })}
+              placeholder={adminOnly ?? (snap.defaultRedirectUrl || 'https://coremetry.example.test/api/auth/oidc/callback')}
+              hint="Kimlik sağlayıcıda geri dönüş adresi olarak tanımlayın." />
+          </div>
+
+          <div className="sso-row">
+            <Field label="Kapsamlar (scopes)" value={form.scopes} autoComplete="off"
+              onChange={e => patch({ scopes: e.target.value })}
+              placeholder={adminOnly ?? 'openid email profile'}
+              hint="Boşlukla ayırın; openid zorunlu." />
+            <Field label="Düğme etiketi" value={form.displayName} maxLength={40}
+              onChange={e => patch({ displayName: e.target.value })}
+              placeholder="SSO"
+              hint="Giriş sayfasındaki düğmede görünür." />
+          </div>
+
+          <div className="sso-row">
+            <SelectField label="Varsayılan rol" value={form.defaultRole}
+              onChange={e => patch({ defaultRole: e.target.value })}
+              hint="İlk kez SSO ile girene verilir; viewer dışı rol izinli alan adı ister.">
+              {OIDC_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </SelectField>
+            <Field label="İzinli alan adları" value={form.allowedDomains} autoComplete="off"
+              onChange={e => patch({ allowedDomains: e.target.value })}
+              placeholder={adminOnly ?? 'example.test, corp.example.test'}
+              hint="Virgülle ayırın; boş bırakılırsa herkes girebilir." />
+          </div>
+        </fieldset>
+
+        {tr && <OidcTestResultView tr={tr} />}
+        {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
+
+        {isAdmin && (
+          <div className="sso-actions">
+            <Button type="button" variant="secondary" loading={busy === 'test'}
+              disabled={busy !== null || !form.issuerUrl.trim()} onClick={() => void runTest()}>
+              Bağlantıyı test et
+            </Button>
+            <Button type="submit" variant="primary" loading={busy === 'save'} disabled={busy !== null}>
+              Kaydet
+            </Button>
+          </div>
+        )}
+      </form>
+
+      <SsoPresets />
+    </div>
+  );
+}
+
+// Test sonucu — yalnız keşif alanları (sunucu ham gövde döndürmez).
+function OidcTestResultView({ tr }: { tr: OidcTestResult }) {
+  const d = tr.discovery;
+  return (
+    <div className="sso-result" role="status" aria-live="polite">
+      <div className="sso-result__head" style={{ color: tr.ok ? 'var(--ok)' : 'var(--err)' }}>
+        {tr.ok ? '✓ Kimlik sağlayıcı bulundu' : `✗ Bağlantı başarısız: ${tr.error ?? 'bilinmeyen hata'}`}
       </div>
-      <div style={{ position: 'relative' }}>
-        {/* v0.10.928 — <pre> üstünde yüzer: dolgusuz secondary'de kod satırı
-            etiketin altından akmasın diye opak (is-overlay). */}
-        <Button variant="secondary" size="sm" onClick={copy} className="is-overlay"
-          style={{ position: 'absolute', top: 8, right: 8 }}>
-          {copied ? '✓ copied' : 'Copy'}
-        </Button>
-        <pre style={{
-          margin: 0, padding: 14, background: 'var(--bg)',
-          border: '1px solid var(--border)', borderRadius: 6,
-          lineHeight: 1.6, overflowX: 'auto',
-        }}>
-          <code>{active.yaml}</code>
-        </pre>
-      </div>
-      <div style={{
-        marginTop: 14, padding: '10px 12px', borderRadius: 6,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-        fontSize: 12, color: 'var(--text2)', lineHeight: 1.6,
-      }}>
-        <b>Notes:</b>
-        <ul style={{ paddingLeft: 18, margin: '6px 0 0' }}>
-          <li>Restart the pod after applying — OIDC discovery runs at boot.</li>
-          <li>Local username/password login stays available alongside OIDC so admins always have a fallback.</li>
-          <li>Trusted-header mode <b>requires</b> <code>trusted_proxies</code> — empty list = boot refused. Source-IP gate prevents header spoofing from any caller outside the proxy mesh.</li>
-          <li>First-sight OIDC / trusted-header users land with <code>default_role</code> (viewer). Admins promote via <code>/users</code>.</li>
-        </ul>
-      </div>
+      {tr.ok && d && (
+        <KeyValue>
+          <KeyValueRow k="Issuer" v={d.issuer} mono />
+          <KeyValueRow k="Yetkilendirme" v={d.authorizationEndpoint} mono />
+          <KeyValueRow k="Token" v={d.tokenEndpoint} mono />
+          {d.userinfoEndpoint && <KeyValueRow k="Userinfo" v={d.userinfoEndpoint} mono />}
+          <KeyValueRow k="JWKS" v={d.jwksUri} mono />
+          {d.unsupportedScopes && d.unsupportedScopes.length > 0 && (
+            <KeyValueRow k="Uyarı"
+              v={<span className="is-err">IdP bu kapsamları listelemiyor: {d.unsupportedScopes.join(', ')}</span>} />
+          )}
+        </KeyValue>
+      )}
     </div>
   );
 }
