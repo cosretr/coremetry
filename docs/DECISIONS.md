@@ -1489,6 +1489,23 @@ bulur ama regex `(WFLY|JBAS)[0-9]+` onları eşlemez — 1080 örneklemi bastır
 Aggregated'ın grup alanları şeridin sonuna (`margin-left:auto`), servis seçici Services sayfasındaki gibi en solda.
 Davranış değişmedi.
 
+## 2026-10-03 — Seçici açılır listesi: ortak popover (kart, klavye, son kullanılan, kenarda kırpılmaz) (v0.10.1089)
+
+**Operatör (prod, Services "Filter services…", Traces "Filter by service…"):** "Search daha iyi bir deneyim
+sunabilir. Şu an sanki geçici bir menü açılmış gibi hissiyat var, iframe içinde geliyor." **Neden:** Combobox
+listeyi girdinin yanına `position: absolute` çiziyordu — kart/tablo `overflow`u kesiyor, uzun ad yatay kaydırma
+açıyor, satırlar çıplak, klavye satırı ve sonuç sayısı yok. **Karar:** tek primitif `ui/PickerPopover`, Combobox
+onu çizer; ServicePicker / OperationPicker / MetricNamePicker ve Combobox'lı her alan birlikte değişir. Body'ye
+portal + `position: fixed`, yerleşim saf `lib/pickerPopover.placePickerPop` (sol kenara hizalı, alta sığmazsa
+üst, girdiyi asla örtmez, yükseklik o tarafın boşluğuna iner); çapa `[role="dialog"]` içindeyse `--z-modal-nested`.
+Kart yüzeyi (`--bg`/`--border`/`--radius`/`--shadow-pop`), başlıkta "N sonuç" (sunucu toplamı) ya da
+"aranıyor…" / "arama başarısız", boşta "eşleşme yok"; ad üç noktayla kısalır, tam ad `title`da, yatay kaydırma
+yok; klavye satırı `aria-activedescendant`. "Son kullanılan": listeden SEÇİLEN son 5 değer, tarayıcı başına
+(`lib/pickerRecents`, kapsam servis / `operation:<servis>` / `metric:<servis>`), yalnız alan boşken. Services
+satır ipucu (runtime · span) sayfanın ELDEKİ verisinden; yeni istek yok. Sunucu araması aynı (180 ms debounce,
+aynı uçlar, 200 satır) — üç kopya `usePickerSearch` kancasına indi, geç dönen eski cevap yenisini ezemez.
+`ui/Popover` kullanılmadı: odağı içine alır, seçicide odak girdide kalmalı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

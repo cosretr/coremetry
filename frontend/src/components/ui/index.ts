@@ -120,3 +120,6 @@ export { KeyValue, KeyValueRow } from './KeyValue';
 export type { KeyValueProps, KeyValueRowProps, KeyValueItem, KeyValueLabelWidth } from './KeyValue';
 
 export { Popover, PopoverLinkItem, type PopoverProps } from './Popover'; // v0.10.968 — çapaya bağlı menü/diyalog (satır ⋯, "+N" çip menüsü, kapsam)
+// v0.10.1089 — seçicilerin ortak açılır listesi (Combobox → Service/Operation/MetricName picker).
+export { PickerPopover } from './PickerPopover';
+export type { PickerPopoverProps, PickerItem, PickerStatus } from './PickerPopover';

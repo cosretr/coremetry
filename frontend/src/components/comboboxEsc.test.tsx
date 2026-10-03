@@ -29,6 +29,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act, useState } from 'react';
 import { Combobox } from './Combobox';
 
+// v0.10.1089 — açılır liste artık body'ye PORTAL edilen ui/PickerPopover
+// (`.pick-pop`). Liste/satır sorguları bu yüzden `host` yerine `document`
+// üzerinden yapılıyor; sözleşmelerin hiçbiri değişmedi. Boş-eşleşme metni
+// "No matches" → "eşleşme yok".
+
 let host: HTMLDivElement;
 let root: Root;
 
@@ -115,10 +120,10 @@ describe('Combobox Esc katman sözleşmesi', () => {
   it('liste AÇIKKEN Esc tüketilir ve yalnız listeyi kapatır', () => {
     const input = mountBox();
     typeToOpen(input, 'al');
-    expect(host.textContent).toContain('alpha'); // liste açık
+    expect(document.body.textContent).toContain('alpha'); // liste açık
     const { consumed } = pressEsc(input);
     expect(consumed).toBe(true);                  // defaultPrevented
-    expect(host.textContent).not.toContain('alpha'); // liste kapandı
+    expect(document.body.textContent).not.toContain('alpha'); // liste kapandı
   });
 
   it('liste KAPALIYKEN Esc tüketilmez — üst katmana akar', () => {
@@ -138,11 +143,11 @@ describe('Combobox — onEscape (düzenlemeden iptal-çıkış)', () => {
     let escapes = 0;
     const input = mountHarness({ onEscape: () => { escapes++; } });
     typeToOpen(input, 'al');
-    expect(host.textContent).toContain('alpha');
+    expect(document.body.textContent).toContain('alpha');
     const { consumed } = pressEsc(input);
     expect(consumed).toBe(true);
     expect(escapes, 'liste açıkken onEscape çağrıldı').toBe(0);
-    expect(host.textContent).not.toContain('alpha');
+    expect(document.body.textContent).not.toContain('alpha');
   });
 
   it('liste KAPALIYKEN onEscape çağrılır VE olay tüketilir', () => {
@@ -167,10 +172,10 @@ describe('Combobox — onBlurCommit', () => {
     const seen: string[] = [];
     const input = mountHarness({ onBlurCommit: v => seen.push(v) });
     typeToOpen(input, 'beta-x');
-    expect(host.querySelector('.cb-list'), 'yazınca liste açılmadı').toBeTruthy();
+    expect(document.querySelector('.pick-pop'), 'yazınca liste açılmadı').toBeTruthy();
     blurAway(input);
     expect(seen).toEqual(['beta-x']);
-    expect(host.querySelector('.cb-list'), 'blur listeyi kapatmadı').toBeNull();
+    expect(document.querySelector('.pick-pop'), 'blur listeyi kapatmadı').toBeNull();
   });
 
   it('Esc iptalinden SONRAKİ blur commit ETMEZ', () => {
@@ -244,8 +249,8 @@ describe('Combobox — serverFiltered', () => {
     });
     const input = host.querySelector('input') as HTMLInputElement;
     focusIn(input);
-    expect(host.textContent).toContain('payment-api');
-    expect(host.textContent).toContain('payments-worker');
+    expect(document.body.textContent).toContain('payment-api');
+    expect(document.body.textContent).toContain('payments-worker');
   });
 
   it('serverFiltered YOKKEN istemci süzgeci hâlâ çalışıyor', () => {
@@ -259,8 +264,8 @@ describe('Combobox — serverFiltered', () => {
     });
     const input = host.querySelector('input') as HTMLInputElement;
     focusIn(input);
-    expect(host.textContent).not.toContain('payment-api');
-    expect(host.textContent).toContain('No matches');
+    expect(document.body.textContent).not.toContain('payment-api');
+    expect(document.body.textContent).toContain('eşleşme yok');
   });
 
   it('footer kesinti notunu listeye ekler', () => {
@@ -272,10 +277,10 @@ describe('Combobox — serverFiltered', () => {
     });
     const input = host.querySelector('input') as HTMLInputElement;
     focusIn(input);
-    expect(host.textContent).toContain('+198 more');
+    expect(document.body.textContent).toContain('+198 more');
     // Not satırı TIKLANAMAZ olmalı — seçilebilir bir satır olsaydı
     // operatör "… +198 more" dizesini servis adı olarak commit ederdi.
-    const rows = Array.from(host.querySelectorAll('[role="option"]'));
+    const rows = Array.from(document.querySelectorAll('[role="option"]'));
     expect(rows.some(r => r.textContent?.includes('+198 more'))).toBe(false);
   });
 
@@ -289,7 +294,7 @@ describe('Combobox — serverFiltered', () => {
     });
     const input = host.querySelector('input') as HTMLInputElement;
     focusIn(input);
-    expect(host.querySelector('.cb-meta')?.textContent).toBe('ms · histogram');
+    expect(document.querySelector('.pick-meta')?.textContent).toBe('ms · histogram');
   });
 });
 
@@ -299,7 +304,7 @@ describe('Combobox — disabled / autoFocus', () => {
     expect(input.disabled).toBe(true);
     focusIn(input);
     act(() => { input.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(host.querySelector('.cb-list'), 'kilitli alan liste açtı').toBeNull();
+    expect(document.querySelector('.pick-pop'), 'kilitli alan liste açtı').toBeNull();
   });
 
   it('disabled iken gelen odak `open` durumunu SIZDIRMAZ', () => {
@@ -313,7 +318,7 @@ describe('Combobox — disabled / autoFocus', () => {
     focusIn(input);
     act(() => { input.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     act(() => { root.render(<Harness value="alpha" disabled={false} />); });
-    expect(host.querySelector('.cb-list'), 'kilit kalkınca liste kendiliğinden açıldı').toBeNull();
+    expect(document.querySelector('.pick-pop'), 'kilit kalkınca liste kendiliğinden açıldı').toBeNull();
   });
 
   it('AÇIK listeyle kilitlenen alan listeyi bırakır', () => {
@@ -323,9 +328,9 @@ describe('Combobox — disabled / autoFocus', () => {
     // satırın üstünde asılı kalırdı.
     const input = mountHarness({ onBlurCommit: () => {} });
     typeToOpen(input, 'al');
-    expect(host.querySelector('.cb-list'), 'liste açılmadı — öncül bayat').toBeTruthy();
+    expect(document.querySelector('.pick-pop'), 'liste açılmadı — öncül bayat').toBeTruthy();
     act(() => { root.render(<Harness value="al" disabled />); });
-    expect(host.querySelector('.cb-list'), 'kilitlenen alan listeyi açık bıraktı').toBeNull();
+    expect(document.querySelector('.pick-pop'), 'kilitlenen alan listeyi açık bıraktı').toBeNull();
   });
 
   it('disabled: ✕ (temizle) çalışır KALIR', () => {

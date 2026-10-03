@@ -3171,7 +3171,6 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   transition: background 0.1s;
 }
 .cb-row-on { background: var(--bg3); }
-.cb-row-cur { color: var(--accent2); }
 /* v0.10.687 — CoSRE girişi ad tamamlama: popup girişin ÜSTÜNDE (composer
    çekmecenin dibinde; aşağı açılsa ekran dışına taşardı). */
 .chat-composer-field { position: relative; flex: 1; display: flex; min-width: 0; }
@@ -3182,13 +3181,71 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
   font-style: italic;
   cursor: default;
 }
-/* v0.9.1024 — sunucu-taraflı picker'lar için iki satır süsü.
-   `.cb-meta`: satır sonunda birim/tip etiketi (datalist'in `label`
-   niteliğinin yerine — o nitelik Safari'de hiç görünmüyordu).
-   `.cb-foot`: "… +N more — refine search" kesinti notu; tıklanamaz,
-   listeden AYRI okunsun diye üstten çizgili. */
-.cb-meta { margin-left: 10px; color: var(--text3); font-size: 11px; }
+/* `.cb-foot`: liste dibindeki tıklanamaz not (NameCompletionPopup'ın
+   klavye ipucu). v0.10.1089 — `.cb-list`/`.cb-row*` artık YALNIZ CoSRE ad
+   tamamlama listesinin (NameCompletionPopup); seçicilerin açılır listesi
+   aşağıdaki `.pick-*` ailesi (ui/PickerPopover). `.cb-meta`/`.cb-row-cur`
+   Combobox'la birlikte gitti. */
 .cb-foot { border-top: 1px solid var(--divider); }
+
+/* ── v0.10.1089 — ui/PickerPopover: seçicilerin ortak açılır listesi ──────
+   Operatör (prod, Services/Traces): "sanki geçici bir menü açılmış gibi,
+   iframe içinde geliyor". Kart yüzeyi (komut paleti / başlık ⋯ menüsü
+   ailesi), body'ye portal + `position: fixed` — koordinat ve kenarda
+   kısılan yükseklik lib/pickerPopover.ts'ten (JS yazar). Yatay kaydırma
+   YOK (ad üç noktayla kısalır, tam ad `title`da); dikey kaydırma yalnız
+   gerekince ve ince. `data-layer="over"`: çapa bir Modal/Drawer içinde —
+   liste o diyaloğun üstüne çıkar. */
+.pick-pop {
+  position: fixed; left: 0; top: 0; z-index: var(--z-popover);
+  display: flex; flex-direction: column; box-sizing: border-box;
+  max-width: min(520px, calc(100vw - 16px)); max-height: 50vh;
+  padding: var(--sp-3); overflow: hidden;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-md); text-align: left; user-select: none;
+}
+.pick-pop[data-layer="over"] { z-index: var(--z-modal-nested); }
+.pick-head {
+  flex: none; padding: var(--sp-1) var(--sp-3) var(--sp-3);
+  color: var(--text3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+}
+.pick-list {
+  flex: 1 1 auto; min-height: 0;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: var(--border-control) transparent;
+}
+.pick-list::-webkit-scrollbar { width: 6px; }
+.pick-list::-webkit-scrollbar-thumb { background: var(--border-control); border-radius: var(--radius-xs); }
+.pick-list::-webkit-scrollbar-track { background: transparent; }
+.pick-group {
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  color: var(--text3); font-size: var(--fs-2xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.pick-opt {
+  display: flex; align-items: baseline; gap: var(--sp-4); min-width: 0;
+  padding: var(--sp-4) var(--sp-3); border-radius: var(--radius-sm);
+  cursor: pointer; white-space: nowrap;
+}
+.pick-opt.is-on { background: var(--bg2); box-shadow: inset 2px 0 0 var(--accent2); }
+.pick-opt.is-cur .pick-name { color: var(--accent2); }
+.pick-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pick-hit { color: var(--accent2); font-weight: 600; }
+.pick-meta {
+  /* Yüzde DEĞİL: kabın genişliği içerikten (shrink-to-fit) — yüzde bir
+     döngü kurar ve kısa etiketi bile kırpar. */
+  flex: none; max-width: 24ch; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+}
+.pick-state { padding: var(--sp-4) var(--sp-3); color: var(--text3); font-size: var(--fs-sm); }
+.pick-state.is-err { color: var(--err); }
+.pick-state-hint { color: var(--text3); }
+.pick-foot {
+  flex: none; margin-top: var(--sp-2); padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  border-top: 1px solid var(--divider); color: var(--text3); font-size: var(--fs-xs);
+}
 /* Kilitli alan (EnvPicker'ın "env uygulanmıyor" hâli). Eskiden satır
    içi style'daydı; `@media` satır içini yenemediği için token
    katmanına indi (v0.9.980 dersinin aynısı). */

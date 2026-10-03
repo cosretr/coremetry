@@ -1,5 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
+import { PickerPopover, type PickerItem, type PickerStatus } from '@/components/ui/PickerPopover';
+import { pickerOptionId } from '@/lib/pickerPopover';
+import { getPickerRecents, recordPickerRecent } from '@/lib/pickerRecents';
 
 /**
  * Free-text input with a custom dropdown panel that filters as you
@@ -7,6 +10,12 @@ import { IconButton } from '@/components/ui/IconButton';
  * datalist's browser-controlled rendering cuts off long option
  * strings when the input is narrow, which made operation /
  * peer-service pickers unreadable on /traces.
+ *
+ * v0.10.1089 — açılır liste artık `ui/PickerPopover`: body'ye portal edilen
+ * kart yüzeyi (kırpılmaz, kenarda çevrilir), "N sonuç" başlığı, durumlar
+ * (aranıyor… / eşleşme yok / arama başarısız), isteğe bağlı "Son
+ * kullanılan" grubu (`recentKey`), `aria-activedescendant` ile klavye
+ * satırı. Tüm seçiciler bu atomdan geçtiği için görünüm TEK yerde değişir.
  *
  * Behaviour:
  *   - Opens on focus or arrow click; closes on outside click / Esc.
@@ -33,7 +42,7 @@ export function Combobox({
   value, onChange, options, placeholder, width, onEnter,
   autoFocus, disabled, onBlurCommit, onEscape,
   serverFiltered, title, ariaLabel, className, shortcutSearch,
-  footer, optionMeta,
+  footer, optionMeta, resultCount, status, recentKey,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -87,12 +96,30 @@ export function Combobox({
   // datalist'in `label` niteliğinin yerini alıyor — o nitelik
   // Chromium/Firefox'ta görünür, Safari'de HİÇ görünmez.
   optionMeta?: (option: string) => string | undefined;
+
+  // ——— v0.10.1089 · ortak seçici popover'ı ————————————————————
+  //
+  // resultCount — başlıktaki "N sonuç". Sunucu-taraflı picker'lar
+  // SUNUCU TOPLAMINI verir (liste 200'de kesilse de gerçek eşleşme
+  // sayısı); verilmezse istemci süzgecinin eşleşme sayısı.
+  resultCount?: number;
+  // status — sunucu araması sürüyor ('loading' → "aranıyor…") ya da
+  // düştü ('error'). undefined = hazır.
+  status?: PickerStatus;
+  // recentKey — "Son kullanılan" grubunun kapsamı (lib/pickerRecents).
+  // Verilirse listeden SEÇİLEN değer kaydedilir ve alan BOŞKEN son 5
+  // değer sonuçların üstünde ayrı grupta gösterilir. Yalnız seçim
+  // kaydedilir: Enter'la gönderilen serbest metin (joker sorgu) değil.
+  recentKey?: string;
 }) {
   const id = useId();
+  const listId = `${id}-list`;
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  // "Son kullanılan" — liste her AÇILDIĞINDA depodan okunur (başka bir
+  // sekmede ya da aynı sayfanın ikinci seçicisinde yapılan seçim de görünür).
+  const [recents, setRecents] = useState<string[]>([]);
   const [highlight, setHighlight] = useState<number>(-1);
   // Esc ile İPTAL edildi mi? Sonraki blur'un commit ETMEMESİ için.
   // Tuzak: iptal çoğu çağırıcıda düzenleyiciyi söker ya da odağı
@@ -106,18 +133,41 @@ export function Combobox({
   // Cap to 200 rows; service / operation lists in the wild stay
   // well under this but the cap keeps render cheap on degenerate
   // inputs.
-  const filtered = useMemo(() => {
+  const matched = useMemo(() => {
     // serverFiltered: liste ZATEN cevap — dokunma (joker karakterler
     // ve sunucu sıralaması bozulur).
-    if (serverFiltered) return options.slice(0, 200);
+    if (serverFiltered) return options;
     const q = value.trim().toLowerCase();
-    if (!q) return options.slice(0, 200);
-    return options.filter(o => o.toLowerCase().includes(q)).slice(0, 200);
+    if (!q) return options;
+    return options.filter(o => o.toLowerCase().includes(q));
   }, [value, options, serverFiltered]);
+  const filtered = useMemo(() => matched.slice(0, 200), [matched]);
 
-  // Reset highlight whenever the filtered set changes — otherwise
+  useEffect(() => {
+    if (open && recentKey) setRecents(getPickerRecents(recentKey));
+  }, [open, recentKey]);
+
+  // Popover'ın düz satır sırası: alan BOŞKEN önce "Son kullanılan", sonra
+  // sonuçlar (son kullanılanlar sonuç grubunda tekrar edilmez).
+  const items = useMemo<PickerItem[]>(() => {
+    const meta = (v: string) => optionMeta?.(v);
+    const showRecents = !!recentKey && !value.trim() && recents.length > 0;
+    if (!showRecents) return filtered.map(v => ({ value: v, meta: meta(v) }));
+    const seen = new Set(recents);
+    return [
+      ...recents.map(v => ({ value: v, meta: meta(v), group: 'recent' as const })),
+      ...filtered.filter(v => !seen.has(v)).map(v => ({ value: v, meta: meta(v) })),
+    ];
+  }, [filtered, recents, recentKey, value, optionMeta]);
+
+  // Reset highlight whenever the visible set changes — otherwise
   // the index points into a stale list and arrow nav jumps around.
-  useEffect(() => { setHighlight(-1); }, [filtered]);
+  // İmza DEĞERLERDEN: çağıranlar `optionMeta`yı satır içi ok fonksiyonu
+  // olarak veriyor, yani `items` kimliği ebeveynin her çiziminde değişir;
+  // kimliğe bağlı bir sıfırlama ok tuşuyla gezilen satırı ilgisiz bir
+  // yeniden çizimde (arama durumu) silerdi.
+  const itemsSig = items.map(it => `${it.group ?? ''}:${it.value}`).join('\n');
+  useEffect(() => { setHighlight(-1); }, [itemsSig]);
 
   // Satır içi düzenleyici açılışı: odak + metni seç. Yalnız mount'ta.
   useEffect(() => {
@@ -127,7 +177,9 @@ export function Combobox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Click-outside / Esc close.
+  // Click-outside / Esc close. Portal edilen popover kendi mousedown'ını
+  // durdurur (PickerPopover), yani buraya ulaşan her basış alanın dışıdır
+  // ya da sarmalayıcının içindedir.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -137,15 +189,8 @@ export function Combobox({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  // Scroll the highlighted row into view when arrow-navigating past
-  // the visible portion of the dropdown.
-  useEffect(() => {
-    if (!listRef.current || highlight < 0) return;
-    const row = listRef.current.querySelector<HTMLElement>(`[data-i="${highlight}"]`);
-    row?.scrollIntoView({ block: 'nearest' });
-  }, [highlight]);
-
   const pick = (v: string) => {
+    if (recentKey) recordPickerRecent(recentKey, v);
     onChange(v);
     setOpen(false);
     setHighlight(-1);
@@ -159,14 +204,14 @@ export function Combobox({
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (!open) setOpen(true);
-      setHighlight(h => Math.min(filtered.length - 1, h + 1));
+      setHighlight(h => Math.min(items.length - 1, h + 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlight(h => Math.max(-1, h - 1));
     } else if (e.key === 'Enter') {
-      if (open && highlight >= 0 && highlight < filtered.length) {
+      if (open && highlight >= 0 && highlight < items.length) {
         e.preventDefault();
-        pick(filtered[highlight]);
+        pick(items[highlight].value);
       } else {
         // No highlight → take the typed value as-is and let the
         // caller submit. Common case: user typed a custom search.
@@ -196,13 +241,19 @@ export function Combobox({
         onEscape();
       }
     } else if (e.key === 'Tab') {
-      if (open && highlight >= 0 && highlight < filtered.length) {
-        pick(filtered[highlight]);
+      if (open && highlight >= 0 && highlight < items.length) {
+        pick(items[highlight].value);
       } else {
         setOpen(false);
       }
     }
   };
+
+  // Liste ne zaman görünür: gösterecek satır varsa, sunucu araması sürüyor/
+  // düştüyse ya da operatör bir şey yazdıysa ("eşleşme yok"). Boş alan +
+  // boş seçenek listesi (veri daha gelmemiş bir istemci listesi) boş bir
+  // kart açmaz — eski davranış.
+  const showList = open && !disabled && (items.length > 0 || !!status || !!value.trim());
 
   return (
     <div ref={wrapRef} className={className ? `cb-wrap ${className}` : 'cb-wrap'} style={{ width }}>
@@ -214,6 +265,11 @@ export function Combobox({
         disabled={disabled}
         title={title}
         aria-label={ariaLabel}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={showList}
+        aria-controls={showList ? listId : undefined}
+        aria-activedescendant={showList && highlight >= 0 ? pickerOptionId(listId, highlight) : undefined}
         {...(shortcutSearch ? { 'data-shortcut-search': '' } : {})}
         onChange={e => { escapedRef.current = false; onChange(e.target.value); setOpen(true); }}
         onFocus={() => { if (!disabled) setOpen(true); }}
@@ -258,51 +314,23 @@ export function Combobox({
       {/* `disabled` liste render'ını da kapatır: alan AÇIK LİSTEYLE
           kilitlenebiliyor (TeamEditor Enter'da busy=true yapıyor,
           alan hâlâ odakta) — o hâlde liste satırın üstünde asılı
-          kalırdı. */}
-      {open && !disabled && filtered.length > 0 && (
-        <div ref={listRef} className="cb-list" role="listbox">
-          {filtered.map((o, i) => {
-            const meta = optionMeta?.(o);
-            return (
-              <div
-                key={o + i}
-                role="option"
-                aria-selected={i === highlight}
-                data-i={i}
-                className={`cb-row${i === highlight ? ' cb-row-on' : ''}${o === value ? ' cb-row-cur' : ''}`}
-                onMouseDown={e => { e.preventDefault(); pick(o); }}
-                onMouseEnter={() => setHighlight(i)}>
-                {renderMatch(o, value)}
-                {meta && <span className="cb-meta">{meta}</span>}
-              </div>
-            );
-          })}
-          {footer && <div className="cb-row cb-row-empty cb-foot">{footer}</div>}
-        </div>
-      )}
-      {open && !disabled && filtered.length === 0 && value.trim() && (
-        <div className="cb-list">
-          <div className="cb-row cb-row-empty">No matches — Enter will use the typed value</div>
-        </div>
+          kalırdı. v0.10.1089 — liste ortak PickerPopover (body portalı). */}
+      {showList && (
+        <PickerPopover
+          anchorRef={wrapRef}
+          listId={listId}
+          items={items}
+          highlight={highlight}
+          onHighlight={setHighlight}
+          onPick={pick}
+          query={value}
+          current={value}
+          count={resultCount ?? matched.length}
+          status={status}
+          emptyHint="Enter yazılanı kullanır"
+          footer={footer}
+          ariaLabel={ariaLabel ?? placeholder} />
       )}
     </div>
-  );
-}
-
-// renderMatch highlights the matched substring inside the option
-// label so the user sees why each row qualified. Bolded run is the
-// first occurrence (case-insensitive); rest stays plain.
-function renderMatch(option: string, query: string): React.ReactNode {
-  const q = query.trim();
-  if (!q) return option;
-  const lc = option.toLowerCase();
-  const i = lc.indexOf(q.toLowerCase());
-  if (i < 0) return option;
-  return (
-    <>
-      {option.slice(0, i)}
-      <b style={{ color: 'var(--accent2)' }}>{option.slice(i, i + q.length)}</b>
-      {option.slice(i + q.length)}
-    </>
   );
 }

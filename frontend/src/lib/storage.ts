@@ -35,6 +35,9 @@ export const STORAGE_KEYS = {
   recentServices:   'coremetry.recentServices',
   pinnedServices:   'coremetry.pinnedServices',
   recentMetrics:    'coremetry.recentMetrics',
+  // v0.10.1089 — seçicilerin "Son kullanılan" grubu (lib/pickerRecents.ts):
+  // { kapsam: string[] }, kapsam başına 5 değer.
+  pickerRecents:    'coremetry.pickerRecents',
   // v0.9.301 — /traces histogram height. Dynatrace keeps the trace
   // list's overview chart a THIN brush strip so the table gets the
   // page; ours was a 140px headline that pushed rows below the fold.

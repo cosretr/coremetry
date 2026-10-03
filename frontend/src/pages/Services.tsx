@@ -7,7 +7,7 @@ import { Topbar } from '@/components/Topbar';
 import { passesLocalDisplayFilters } from '@/lib/serviceFilters';
 import { ServicePicker } from '@/components/ServicePicker';
 import { Sparkline } from '@/components/Sparkline';
-import { ServiceRuntimeBadge } from '@/components/ServiceRuntimeBadge';
+import { ServiceRuntimeBadge, formatRuntime } from '@/components/ServiceRuntimeBadge';
 import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -69,6 +69,17 @@ export default function ServicesPage() {
   // listing, server-cached 5 min. The component renders per-row
   // ServiceRuntimeBadge inside the name cell.
   const runtimes = useAllServiceRuntimes().data;
+  // v0.10.1089 — seçici satırının soluk ek etiketi ("Java 21 · 12.4K span").
+  // YENİ İSTEK YOK: runtime eşlemesi ve bu sayfanın satırları zaten elde;
+  // sayfada olmayan bir servis için etiket boş kalır.
+  const pickerMeta = useMemo(() => {
+    const spans = new Map((data ?? []).map(s => [s.name, s.spanCount]));
+    return (name: string) => {
+      const rt = runtimes?.[name] ? formatRuntime(runtimes[name]) : '';
+      const n = spans.get(name);
+      return [rt, n != null ? `${fmtNum(n)} span` : ''].filter(Boolean).join(' · ') || undefined;
+    };
+  }, [data, runtimes]);
   // Service-catalog metadata — pulled once, joined locally so
   // operators can filter the list by SRE team / owner team
   // and see "their" services. The endpoint is server-cached
@@ -634,7 +645,7 @@ export default function ServicesPage() {
           <PageControls sticky>
             <ServicePicker value={serviceFilter} onChange={setServiceFilter}
               onEnter={apply}
-              placeholder="Filter services…" width={220} />
+              placeholder="Filter services…" width={220} optionMeta={pickerMeta} />
             <Button variant="primary" size="sm" onClick={apply}
                     title="Search server-side for matching services">Search</Button>
             <input placeholder="Min spans" aria-label="Minimum spans" value={minSpans} type="number"

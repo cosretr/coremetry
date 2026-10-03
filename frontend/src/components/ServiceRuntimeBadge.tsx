@@ -87,7 +87,8 @@ export function ServiceRuntimeBadge({
 //   4. Just the language name with no version — better than
 //      hiding the badge entirely; the operator at least sees
 //      "Go" / "Python" and knows the stack.
-function formatRuntime(rt: ServiceRuntime): string {
+// v0.10.1089 — export: Services seçicisinin satır ipucu aynı etiketi basar.
+export function formatRuntime(rt: ServiceRuntime): string {
   const lang = (rt.language || '').toLowerCase();
   const name = friendlyLanguageName(lang) || rt.runtimeName || '';
   let ver = simplifyVersion(rt.runtimeVersion || '');

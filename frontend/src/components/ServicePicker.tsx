@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { api } from '@/lib/api';
 import { Combobox } from '@/components/Combobox';
+import { usePickerSearch } from '@/components/usePickerSearch';
+import { getPickerRecents } from '@/lib/pickerRecents';
+
+// "Son kullanılan" kapsamı (lib/pickerRecents) — servis adları sayfadan
+// bağımsız: /services'te seçilen servis /traces'te de son kullanılandır.
+export const SERVICE_RECENT_KEY = 'service';
 
 // shouldAutoCommit decides whether a single onChange event represents a
 // PICK (or paste) rather than the operator typing — only then does the
@@ -45,7 +51,7 @@ export function shouldAutoCommit(prev: string, next: string, isKnownOption: bool
  * users understand they're seeing a subset and need to type to narrow.
  */
 export function ServicePicker({
-  value, onChange, placeholder, width, onEnter, shortcutSearch,
+  value, onChange, placeholder, width, onEnter, shortcutSearch, optionMeta,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -67,10 +73,18 @@ export function ServicePicker({
   // undefined; the parent should read the latest input value
   // from its own state.
   onEnter?: (value?: string) => void;
+  // v0.10.1089 — satır sonunda soluk ek etiket. YENİ İSTEK YOK: yalnız
+  // çağıran sayfanın ZATEN elindeki veriden (Services: runtime + span
+  // sayısı). /api/service-names yalnız ad döndürüyor; ipucu için seçicinin
+  // kendisi bir şey çekseydi "tam katalog yok" kuralı arkadan dolanmış olurdu.
+  optionMeta?: (name: string) => string | undefined;
 }) {
-  const [opts, setOpts] = useState<string[]>([]);
-  const [total, setTotal] = useState(0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // v0.10.1089 — debounce + sunucu araması ortak kancada (davranış aynı:
+  // 180 ms, /api/service-names, 200 satır); kanca durum ve sıra bekçisi ekler.
+  const search = usePickerSearch(value, '', q =>
+    api.serviceNames(q, 200).then(r => ({ items: r.names, total: r.total })));
+  const opts = search.items;
+  const total = search.total;
   // Remembers what the user typed character-by-character. When
   // onChange fires with a value that jumps to an exact match of
   // a known option, we infer it came from a datalist click
@@ -81,26 +95,9 @@ export function ServicePicker({
   const lastValueRef = useRef(value);
   // Holds the freshest options list so the click-detection
   // logic sees current names even when the state hasn't
-  // re-rendered yet (the useEffect that updates opts runs
-  // after the synchronous onChange).
-  const optsRef = useRef<string[]>([]);
-
-  // Debounced server fetch keyed off the typed value. Empty value → load
-  // top-200 (alphabetical). Updates the datalist options so the browser's
-  // native dropdown reflects whatever the user is filtering for.
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      api.serviceNames(value, 200)
-        .then(r => {
-          setOpts(r.names);
-          optsRef.current = r.names;
-          setTotal(r.total);
-        })
-        .catch(() => { setOpts([]); optsRef.current = []; setTotal(0); });
-    }, 180);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [value]);
+  // re-rendered yet (the effect that updates opts runs
+  // after the synchronous onChange). Empty value → top-200.
+  const optsRef = search.itemsRef;
 
   const handleChange = (next: string) => {
     const prev = lastValueRef.current;
@@ -112,7 +109,11 @@ export function ServicePicker({
     // Multi-char jumps almost always come from a click on the
     // dropdown row. Schedule onEnter for the next tick so the
     // parent has applied the state from onChange first.
-    if (shouldAutoCommit(prev, next, optsRef.current.includes(next)) && onEnter) {
+    // v0.10.1089 — "Son kullanılan" grubundan seçilen ad o anki sunucu
+    // listesinde (boş sorgu → ilk 200, alfabetik) olmayabilir; o da bir
+    // SEÇİMDİR.
+    const known = optsRef.current.includes(next) || getPickerRecents(SERVICE_RECENT_KEY).includes(next);
+    if (shouldAutoCommit(prev, next, known) && onEnter) {
       // Pass the picked value through so the parent can
       // commit immediately, sidestepping React's setState
       // batching (parent's draft hasn't propagated yet when
@@ -137,6 +138,10 @@ export function ServicePicker({
       onChange={handleChange}
       options={opts}
       serverFiltered
+      resultCount={total}
+      status={search.status}
+      recentKey={SERVICE_RECENT_KEY}
+      optionMeta={optionMeta}
       placeholder={placeholder}
       width={width}
       onEnter={() => onEnter?.(undefined)}

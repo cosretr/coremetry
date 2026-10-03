@@ -68,7 +68,12 @@ saklanmasıydı); (2) **barrel'a ekle**; (3) CSS adını sahiplen.
 `Modal` · `Drawer` · `Badge` · `MenuItem` · `PageControls` ·
 `DisclosureButton` · `LinkButton` · `SearchField` · `ActionRow` ·
 `ConfirmProvider`/`useConfirm` · `FacetMultiSelect` · `VirtualList` ·
-`VirtualTable` · `RouteSkeleton` · `PageShell`
+`VirtualTable` · `RouteSkeleton` · `PageShell` · `Popover` (çapaya bağlı
+menü/diyalog, odağı içine alır) · **`PickerPopover`** (v0.10.1089 — seçici
+açılır listesi: body portalı, kenarda çevrilir, "N sonuç" + durumlar, "Son
+kullanılan", `aria-activedescendant`; odak GİRDİDE kalır). Seçici yazarken
+`Combobox`'ı kullan — liste ondan gelir; yeni açılır liste YAZMA. Sunucu
+araması `components/usePickerSearch.ts` (180 ms debounce, durum, sıra bekçisi).
 
 **Kanonik ama barrel DIŞINDA** (aramayı ıskalatan grup):
 `Spinner` (202) · `Empty` (204) · `Pager` (7) · `Skeleton*` ·

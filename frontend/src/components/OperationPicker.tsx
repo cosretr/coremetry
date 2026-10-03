@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { api } from '@/lib/api';
 import { Combobox } from '@/components/Combobox';
 import { shouldAutoCommit } from '@/components/ServicePicker';
+import { usePickerSearch } from '@/components/usePickerSearch';
+import { getPickerRecents } from '@/lib/pickerRecents';
 
 /**
  * OperationPicker — operations-picker counterpart to ServicePicker
@@ -31,25 +33,17 @@ export function OperationPicker({
   // çağrılır; çağıran bunu alt-dizge arama yerine tam eşleşme yapar.
   onPick?: (v: string) => void;
 }) {
-  const [opts, setOpts] = useState<string[]>([]);
-  const [total, setTotal] = useState(0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // v0.10.1089 — ortak debounce kancası (180 ms, /api/operation-names,
+  // servis kapsamı, 200 satır — davranış aynı).
+  const search = usePickerSearch(value, service ?? '', q =>
+    api.operationNames(service || undefined, q, 200).then(r => ({ items: r.names, total: r.total })));
+  const opts = search.items;
+  const total = search.total;
   const lastValueRef = useRef(value);
-  const optsRef = useRef<string[]>([]);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      api.operationNames(service || undefined, value, 200)
-        .then(r => {
-          setOpts(r.names);
-          optsRef.current = r.names;
-          setTotal(r.total);
-        })
-        .catch(() => { setOpts([]); optsRef.current = []; setTotal(0); });
-    }, 180);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [value, service]);
+  const optsRef = search.itemsRef;
+  // "Son kullanılan" servis BAŞINA: başka servisin operasyonunu önermek
+  // boş sonuçlu bir süzgeç üretirdi.
+  const recentKey = `operation:${service || '*'}`;
 
   const handleChange = (next: string) => {
     const prev = lastValueRef.current;
@@ -58,7 +52,7 @@ export function OperationPicker({
     // v0.9.1024 — ServicePicker'ın SAF fonksiyonu. Buradaki kopya da
     // eski (v0.7.27 öncesi) ifadeydi: ilk tuş vuruşunda ve çok
     // karakterli SİLME sıçramalarında yanlış commit ediyordu.
-    const isPick = optsRef.current.includes(next);
+    const isPick = optsRef.current.includes(next) || getPickerRecents(recentKey).includes(next);
     if (isPick && onPick) onPick(next); // v0.10.752
     if (shouldAutoCommit(prev, next, isPick) && onEnter) {
       setTimeout(() => onEnter(next), 0);
@@ -76,6 +70,9 @@ export function OperationPicker({
       onChange={handleChange}
       options={opts}
       serverFiltered
+      resultCount={total}
+      status={search.status}
+      recentKey={recentKey}
       placeholder={placeholder}
       width={width}
       onEnter={() => onEnter?.(undefined)}

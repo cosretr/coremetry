@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { Combobox } from '@/components/Combobox';
 import { shouldAutoCommit } from '@/components/ServicePicker';
+import { usePickerSearch } from '@/components/usePickerSearch';
+import { getPickerRecents } from '@/lib/pickerRecents';
 import type { MetricInfo } from '@/lib/types';
 
 /**
@@ -36,38 +38,50 @@ export function MetricNamePicker({
   // type without a second round-trip. Optional.
   onPick?: (m: MetricInfo) => void;
 }) {
-  const [opts, setOpts] = useState<MetricInfo[]>([]);
-  const [total, setTotal] = useState(0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // v0.10.1089 — ortak debounce kancası (180 ms, /api/metrics/names,
+  // servis kapsamı, 200 satır — davranış aynı).
+  const search = usePickerSearch(value, service, q =>
+    api.metricNamesSearch(service, q, 200).then(r => ({ items: r.names ?? [], total: r.total })));
+  const opts = search.items;
+  const total = search.total;
   const lastValueRef = useRef(value);
-  const optsRef = useRef<MetricInfo[]>([]);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      api.metricNamesSearch(service, value, 200)
-        .then(r => {
-          const arr = r.names ?? [];
-          setOpts(arr);
-          optsRef.current = arr;
-          setTotal(r.total);
-        })
-        .catch(() => { setOpts([]); optsRef.current = []; setTotal(0); });
-    }, 180);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [value, service]);
+  const optsRef = search.itemsRef;
+  const recentKey = `metric:${service || '*'}`;
+  // "Son kullanılan"dan seçilen ad o anki listede olmayabilir; onPick ise
+  // TAM MetricInfo ister (birim/tip — uydurulmuş boş birim yanlış eksen
+  // biçimi demek). Seçim bekletilir: değer değiştiği için debounce'lu arama
+  // zaten o adla koşar, cevapta tam eşleşme gelince commit edilir. Yeni
+  // istek YOK — aynı arama.
+  const pendingRef = useRef<string | null>(null);
 
   const handleChange = (next: string) => {
     const prev = lastValueRef.current;
     lastValueRef.current = next;
+    pendingRef.current = null;
     onChange(next);
     // v0.9.1024 — ServicePicker'ın saf fonksiyonu (v0.7.27 sözleşmesi).
     const picked = optsRef.current.find(m => m.name === next);
-    if (shouldAutoCommit(prev, next, !!picked) && picked) {
-      if (onPick) setTimeout(() => onPick(picked), 0);
-      if (onEnter) setTimeout(() => onEnter(next), 0);
+    const recent = !picked && getPickerRecents(recentKey).includes(next);
+    if (shouldAutoCommit(prev, next, !!picked || recent)) {
+      if (picked) {
+        if (onPick) setTimeout(() => onPick(picked), 0);
+        if (onEnter) setTimeout(() => onEnter(next), 0);
+      } else {
+        pendingRef.current = next;
+      }
     }
   };
+
+  useEffect(() => {
+    const want = pendingRef.current;
+    if (!want || search.forQuery !== want || search.status === 'loading') return;
+    pendingRef.current = null;
+    const m = search.items.find(x => x.name === want);
+    if (!m) return;
+    onPick?.(m);
+    onEnter?.(want);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız arama cevabına tepki; geri çağrılar her çizimde yeni
+  }, [search.items, search.status, search.forQuery]);
 
   const truncated = total > opts.length;
 
@@ -89,6 +103,9 @@ export function MetricNamePicker({
       onChange={handleChange}
       options={names}
       serverFiltered
+      resultCount={total}
+      status={search.status}
+      recentKey={recentKey}
       placeholder={placeholder}
       width={width}
       onEnter={() => onEnter?.(undefined)}
