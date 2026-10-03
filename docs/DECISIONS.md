@@ -1139,6 +1139,23 @@ alanı medyan kalır; UI'ya ek metin yok. Eski blob alanları taşımaz → Norm
 fiilen "rejimden önce, 15 dk'da görülen belirgin kayma"ya daraldı; düşüş tarafı değişmedi. Pin:
 `behavior_floor_test.go`. Tabanları kaldırmayı önerme; ihtiyaç varsa Settings → Anomaly → Davranış değişimi.
 
+## 2026-10-03 — Log deseni: "Logları aç" dedektörün kendi yüklemiyle açılır; sistem adı token'ı kaldırıldı (v0.10.1071)
+
+**Operatör (prod, ES):** "External system rejected" grafiği ~24 bin sayarken "Logları aç" 80 bin ilgisiz DEBUG/INFO
+satırı açtı; ayrıca "'OR <sistem adı>' ibaresi yanlış olmuş, o bir hata değil." (ad depo kuralı gereği yazılmadı).
+**Bulunan neden:** 1062 pivotu deseni arama DİLİNE çeviriyordu (`q="t1" OR …`) — o metin dedektörün yüklemi değil:
+CH'de token'ların harf-duyarsız alt-dize OR'u (dedektör ayrıca büyük-küçük duyarlı regex ister → üst küme); ES'te
+gövde yan tümcesi Lucene anlamında eşdeğer ama başka bağlamda (`expandShorthand`, `default_operator` AND, `must`,
+düzenlenebilir kutu) ve başka pencereyle (pivot `anomalyChartWindow`, grafik basamağa hizalı ≥1 sa öncesi). İlgisiz
+satırların kaynağı token'ın kendisi: ES dedektörü regex'i hiç uygulamaz, yalnız token'larla sayar; bir sistem ADI olan
+token o adın geçtiği her satırı desene katıyordu. **Karar:** (1) çeviri yok — `/logs?pattern=<küratörlü ad>`; mevcut
+okumalar (`/api/logs`, `/search`, `/timeseries`, `/fieldstats`, `/patterns`, `/stream`) `pattern` alır, sunucu
+`LogPatternSpecByName` → `Filter.Pattern` → ES `patternQueryStringClause` (CountPatterns/grafikle aynı harita) / CH
+`chPatternMatchSQL`; serbest metinle AND, bilinmeyen ad 400, önbellek anahtarları desenli. Sayfa çip gösterir ("desen:
+…", ×), kutu boş kalır; desen etkinken Kibana bağlantısı çizilmez (KQL'e çevrilemez). `logsQuery` /
+`PatternSearchText` silindi; /anomalies "logs ↗" ve AI kartının "Loglar (desen)"i de `pattern=` (`PatternKQL` silindi). (2) Sistem adı alternasyondan ve token'dan çıktı,
+testte adı `payments-bpm` sentetiğiyle değişti.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

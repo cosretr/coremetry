@@ -181,7 +181,14 @@ var patterns = []logPattern{
 	//      sorgusu istendiğinde koşuyor, detektör sonsuza dek koşuyor.
 	//
 	// Net: 19 → 24 desen (+26%), panodaki hacmin ~%97'si kapsandı.
-	{"External system rejected", `ExternalSystemException|Request not allowed for URI|FACEX|Service Unavailable`, []string{"externalsystemexception", "not allowed for uri", "facex", "service unavailable"}},
+	//
+	// v0.10.1071 (operatör, prod: "'OR <sistem adı>' ibaresi yanlış olmuş,
+	// o bir hata değil." — ad depo kuralı gereği yazılmadı) — kurum içi bir
+	// sistem ADI alternasyondan ve token listesinden çıkarıldı: hata değil,
+	// o sistemin adı geçen her satır (DEBUG/INFO dahil) desene sayılıyordu;
+	// ES dedektörü regex'i yok sayıp yalnız token'larla saydığından orada
+	// etkisi tam token kadar genişti.
+	{"External system rejected", `ExternalSystemException|Request not allowed for URI|Service Unavailable`, []string{"externalsystemexception", "not allowed for uri", "service unavailable"}},
 	{"JNDI / lookup failure", `NameNotFoundException|Service (endpoint|definition) not found|Queue connection definition not found`, []string{"namenotfound", "endpoint not found", "definition not found"}},
 	{"Service quota", `Service quota (warning|error)|quota exceeded`, []string{"service quota", "quota exceeded"}},
 	{"Class init / load failure", `NoClassDefFoundError|ExceptionInInitializerError|ClassNotFoundException`, []string{"noclassdeffound", "exceptionininitializer", "classnotfound"}},
@@ -197,7 +204,7 @@ var patterns = []logPattern{
 func LogPatternSpecByName(name string) (logstore.PatternSpec, bool) {
 	for _, p := range patterns {
 		if p.Name == name {
-			return logstore.PatternSpec{Regex: p.Regex, Tokens: p.Tokens}, true
+			return logstore.PatternSpec{Name: p.Name, Regex: p.Regex, Tokens: p.Tokens}, true
 		}
 	}
 	return logstore.PatternSpec{}, false

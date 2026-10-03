@@ -667,10 +667,10 @@ func TestLogPatternEvidenceProjection(t *testing.T) {
 		ev.TopServices[0].Count != 900 {
 		t.Errorf("servis kırılımı taşınmadı: %+v", ev.TopServices)
 	}
-	// Tokens LİNK malzemesi — düşerse /logs pivotu yalnız servise
-	// daralır ve operatör desenin satırlarını GÖRMEZ (v0.5.306).
-	if len(ev.Tokens) != 2 {
-		t.Errorf("tokenlar taşınmadı: %+v", ev.Tokens)
+	// v0.10.1071 — /logs pivotu desenin ADINI taşır (`pattern=`); ad
+	// düşerse "Loglar (desen)" linki hiç üretilmez.
+	if ev.Pattern != a.Pattern {
+		t.Errorf("desen adı taşınmadı: %q", ev.Pattern)
 	}
 	// Regex kanıta GİRMEZ: operatöre gösterilmiyor, modele de gerekmiyor.
 	if strings.Contains(ev.Sample, "OutOfMemoryError:") {

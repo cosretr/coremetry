@@ -35,6 +35,11 @@ type Filter = {
   cluster?: string; // v0.9.216 — was absent, so the chart ignored the toolbar's cluster select
   env?: string; // v0.8.400 — global ?env= deployment-environment filter
   search: string;
+  // v0.10.1071 — küratörlü log deseni adı (`?pattern=`). Liste ve çipler
+  // taşıyıp grafik taşımasaydı v0.9.216 sınıfı olurdu: aynı ekranda iki
+  // farklı nüfus. Sunucu dedektörün yüklemini uygular (anomali grafiğiyle
+  // aynı sayım).
+  pattern?: string;
   severity: number;
   traceId: string;
   spanId: string;
@@ -151,6 +156,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       cluster: filter.cluster || undefined, // v0.9.216
       env:     filter.env     || undefined, // v0.8.400 — global env filter
       search:  filter.search  || undefined,
+      pattern: filter.pattern || undefined, // v0.10.1071
       severity: filter.severity > 0 ? filter.severity : undefined,
       traceId: filter.traceId || undefined,
       hasTrace: filter.hasTrace || undefined, // v0.9.287
@@ -181,7 +187,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         if (bd === 'severity') onSeriesRef.current?.(null);
       });
     return () => { alive = false; };
-  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.severity, filter.traceId, filter.hasTrace, bd]);
+  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.severity, filter.traceId, filter.hasTrace, bd]);
 
   const { times, series, totals } = useMemo(
     // v0.9.1250 — seviye DIŞINDAKİ her eksen grup katlamasını kullanır

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -63,8 +64,17 @@ type Filter struct {
 	// SELF-DISCOVERED field (cached field_caps over the candidate
 	// shapes — es_env_field.go); when no field resolves, the filter is
 	// NOT applied and Page.EnvUnapplied reports it honestly.
-	Env         string
-	Search      string
+	Env    string
+	Search string
+	// Pattern (v0.10.1071 — operatör, prod ES: anomali "Logları aç"
+	// pivotu desenin token'larını arama metnine çevirip /logs'a veriyordu,
+	// sayfa grafiğin saydığından başka satırlar gösterdi) — küratörlü log
+	// deseninin DEDEKTÖR yüklemi, Search'e ek AND. Arama diline ÇEVRİLMEZ:
+	// ES'te buildPatternTokenQuery'nin query_string'i (CountPatterns /
+	// PatternHistogram ile aynı yan tümce, patternQueryStringClause), CH'de
+	// chPatternMatchSQL (token ön süzgeci + regex). nil = desen süzgeci yok.
+	// Search / Histogram / FieldStats üçü de uygular (sessiz no-op sınıfı).
+	Pattern     *PatternSpec
 	From, To    time.Time
 	SeverityMin uint8 // OTel severity number ≥ this; 0 = no filter
 	TraceID     string
@@ -289,8 +299,26 @@ type IndexInfo struct {
 // the regex matches. The detector author picks them so the OR
 // clause has zero false-negatives vs the regex.
 type PatternSpec struct {
+	// Name — v0.10.1071: küratörlü desen adı (anomaly.LogPatternSpecByName
+	// doldurur). Yalnız kimlik: /logs önbellek anahtarı ve çip; eşleşmeye
+	// GİRMEZ. Dedektörün kendi listesi boş bırakabilir.
+	Name   string
 	Regex  string
 	Tokens []string
+}
+
+// PatternKey — v0.10.1071, SAF: Filter.Pattern'in önbellek anahtarı parçası.
+// nil → "" (desensiz istek). Ad küratörlü listeden (bilinmeyen ad API'de
+// reddedilir), yani anahtarın sınırlı bir boyutu. Adsız spec (elle kurulmuş)
+// yüklemin kendisiyle anahtarlanır — iki farklı yüklem tek girdiyi paylaşmasın.
+func PatternKey(p *PatternSpec) string {
+	if p == nil {
+		return ""
+	}
+	if p.Name != "" {
+		return p.Name
+	}
+	return "spec:" + p.Regex + "|" + strings.Join(p.Tokens, "\x00")
 }
 
 // PatternStats is the per-pattern signal a detector consumes:

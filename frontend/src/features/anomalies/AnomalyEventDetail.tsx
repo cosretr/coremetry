@@ -267,7 +267,8 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
                 desene uyan satırlar (PatternLogsAction). */}
             {hrefs ? (
               <>
-                <SignalLink to={hrefs.logs} label="Logları aç" sub="servis, olay penceresi" />
+                <SignalLink to={hrefs.logs} label="Logları aç"
+                  sub={patternSeries ? 'servis + desen, olay penceresi' : 'servis, olay penceresi'} />
                 {hrefs.operationTraces
                   ? <SignalLink to={hrefs.operationTraces}
                       label={event.kind === 'trace_op' ? "Operasyonun hatalı trace'leri" : "Operasyonun trace'leri"}
@@ -302,11 +303,13 @@ function NoServiceNote() {
 // anomalisinde bu kart yalnız "servis adı yok" diyordu, operatör Kibana'ya elle
 // gidiyordu). Servissiz log_pattern olayının tek eylemi: olay penceresinde
 // desene uyan satırlarla "Logları aç" + biliniyorsa tek satır "En çok: …".
-// Arama metni ve servisler desen sayısı okumasından (sunucu, dedektörün
-// token'ları) — grafik bölümüyle AYNI anahtar, ikinci istek yok; yoklamayı
-// bölüm yapar (burada live: false). Bağlantı kurulamıyorsa (okuma sürüyor /
-// hata / tanımı kalkmış desen) sahte bağlantı yok: bekleme göstergesi ya da
-// eski dürüst cümle.
+// v0.10.1071 — bağlantı `pattern=<desen adı>` (arama metni değil): /logs
+// sunucusu dedektörün yüklemini uygular, grafikle aynı sayım. Ad olayın
+// kendisinden, yani bağlantı okumayı BEKLEMEZ; "En çok" servisleri desen
+// sayısı okumasından (grafik bölümüyle AYNI anahtar, ikinci istek yok;
+// yoklamayı bölüm yapar, burada live: false). Okuma 404 (desenin tanımı
+// artık yok) → sunucu /logs?pattern= isteğini de reddeder: sahte bağlantı
+// yok, eski dürüst cümle.
 function PatternLogsAction({ event, win }: {
   event: AnomalyEvent;
   win: { fromNs: number; toNs: number };
@@ -315,7 +318,9 @@ function PatternLogsAction({ event, win }: {
     () => logPatternSeriesArgs({ pattern: event.pattern, startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }),
     [event.pattern, event.startedAt, event.lastSeen, event.status]);
   const q = useLogPatternSeries(args, { live: false });
-  const pivot = useMemo(() => patternLogsPivot(q.data, win), [q.data, win]);
+  const pivot = useMemo(
+    () => (q.data === null ? null : patternLogsPivot(event.pattern, q.data, win)),
+    [event.pattern, q.data, win]);
   if (pivot) {
     return (
       <>
@@ -326,7 +331,6 @@ function PatternLogsAction({ event, win }: {
       </>
     );
   }
-  if (q.isPending) return <Spinner />;
   return <NoServiceNote />;
 }
 

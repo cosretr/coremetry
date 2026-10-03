@@ -14,7 +14,7 @@ import { decodeRange } from './urlState';
 
 const base: LogsUrlFilter = {
   service: '', cluster: '', search: '', severity: 0,
-  traceId: '', spanId: '', hasTrace: false,
+  traceId: '', spanId: '', hasTrace: false, pattern: '',
 };
 const rt = (f: LogsUrlFilter) => readLogsParams(writeLogsParams(new URLSearchParams(), f, '', ''));
 
@@ -93,9 +93,41 @@ describe('logsUrlSig — the guard', () => {
     // clobbers the state the operator just set.
     const f: LogsUrlFilter = {
       service: 'api', cluster: 'eu', search: 'boom', severity: 17,
-      traceId: 'abc', spanId: 'def', hasTrace: true,
+      traceId: 'abc', spanId: 'def', hasTrace: true, pattern: 'External system rejected',
     };
     expect(logsUrlSig(rt(f), '', '')).toBe(logsUrlSig(f, '', ''));
+  });
+});
+
+// v0.10.1071 (operatör, prod ES: anomali "Logları aç" grafiğin saydığından
+// başka satırlar gösterdi) — desen `?pattern=<ad>` olarak taşınır, arama
+// metnine çevrilmez. URL ⇄ durum gidiş-dönüşü, sig'i ve boş hâlin izsizliği.
+describe('pattern — URL round-trip (v0.10.1071)', () => {
+  it('write → read gidiş-dönüş; q ile birlikte, ikisi ayrı', () => {
+    const f = { ...base, search: 'level:error', pattern: 'External system rejected' };
+    const p = writeLogsParams(new URLSearchParams(), f, '', '');
+    expect(p.get('pattern')).toBe('External system rejected');
+    expect(p.get('q')).toBe('level:error');
+    expect(rt(f)).toEqual(f);
+  });
+  it('boş desen paramı silinir; yabancı paramlar korunur', () => {
+    const p = writeLogsParams(new URLSearchParams('pattern=Disk+full&range=1h'), base, '', '');
+    expect(p.has('pattern')).toBe(false);
+    expect(p.get('range')).toBe('1h');
+  });
+  it('deseni değiştirmek sig\'i oynatır (sig-guard deseni görür)', () => {
+    expect(logsUrlSig({ ...base, pattern: 'Disk full' }, '', '')).not.toBe(logsUrlSig(base, '', ''));
+  });
+  it('okumada kırpılır; yoksa boş', () => {
+    expect(readLogsParams(new URLSearchParams('pattern=%20Disk%20full%20')).pattern).toBe('Disk full');
+    expect(readLogsParams(new URLSearchParams('q=x')).pattern).toBe('');
+  });
+  it('logsHref pattern yazar, q yazmaz (token çevirisi yok)', () => {
+    const href = logsHref({ window: { fromNs: 1_700_000_000_000_000_000, toNs: 1_700_000_060_000_000_000 }, pattern: 'External system rejected' });
+    const sp = new URL(href, 'http://x').searchParams;
+    expect(sp.get('pattern')).toBe('External system rejected');
+    expect(sp.has('q')).toBe(false);
+    expect(readLogsParams(sp).pattern).toBe('External system rejected');
   });
 });
 
@@ -283,10 +315,12 @@ describe('logsHref — agrees with readLogsParams, its own consumer', () => {
       window: { preset: '6h' },
       service: 'checkout', cluster: 'prod-eu', q: 'timeout',
       severity: 17, traceId: 'abc', spanId: 'def', hasTrace: true,
+      pattern: 'Disk full', // v0.10.1071
     });
     expect(readLogsParams(lp(href))).toEqual({
       service: 'checkout', cluster: 'prod-eu', search: 'timeout',
       severity: 17, traceId: 'abc', spanId: 'def', hasTrace: true,
+      pattern: 'Disk full',
     });
   });
 

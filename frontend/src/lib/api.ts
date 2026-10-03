@@ -911,6 +911,7 @@ export const api = {
     cluster?: string; // v0.9.216 — toolbar cluster select; the table honoured it, this endpoint didn't
     env?: string; // v0.8.400 — global ?env= deployment-environment filter
     search?: string;
+    pattern?: string; // v0.10.1071 — küratörlü log deseni adı (liste ile aynı süzgeç)
     from?: number;
     to?: number;
     severity?: number;
@@ -961,6 +962,7 @@ export const api = {
     severity?: number;
     traceId?: string;
     spanId?: string;
+    pattern?: string; // v0.10.1071 — küratörlü log deseni adı (liste ile aynı süzgeç)
     size?: number; // v0.9.1223 — yalnız 5|20 basamakları (sunucu kıskacı)
     errorLift?: 1; // v0.10.509 (C5) — hata seçimi vs taban lift'i (iki fieldstats)
   }) =>
@@ -4131,6 +4133,9 @@ export interface LogsParams {
   cluster?: string;  // v0.5.471 — k8s/openshift cluster name
   env?: string;      // v0.8.400 — global ?env= deployment-environment filter
   search?: string;
+  // pattern (v0.10.1071) — küratörlü log deseni ADI; sunucu dedektörün
+  // yüklemini uygular (anomali grafiğiyle aynı sayım), `search` ile AND.
+  pattern?: string;
   severity?: number;
   traceId?: string;
   spanId?: string;

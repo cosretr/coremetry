@@ -124,6 +124,9 @@ func (s *Server) streamLogs(w http.ResponseWriter, r *http.Request) {
 		HasTrace:    parseBoolParam(q.Get("hasTrace")), // v0.8.406 — trace-only filter
 		Limit:       logstore.LogsTailMax,
 	}
+	if !applyLogsPatternParam(w, q, &base) { // v0.10.1071 — /logs?pattern=
+		return
+	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -212,9 +215,11 @@ func logsFieldStatsKeyLift(field string, f logstore.Filter, fromRaw, toRaw strin
 	// v0.9.1223 — size anahtara girer: 5'lik yanıtın 20'lik isteğe (ya da
 	// tersine) 60 sn TTL içinde servis edilmesi v0.5.187 sınıfı çapraz
 	// zehirlenme olurdu.
-	return fmt.Sprintf("logs-fieldstats:f=%s:svc=%s:cl=%s:env=%s:sev=%d:trace=%s:span=%s:from=%s:to=%s:q=%s:n=%d:lift=%t",
+	// v0.10.1071 — desen süzgeci (pattern=) anahtarda: desenli sayım desensize
+	// (ya da başka desene) servis edilmesin.
+	return fmt.Sprintf("logs-fieldstats:f=%s:svc=%s:cl=%s:env=%s:sev=%d:trace=%s:span=%s:from=%s:to=%s:q=%s:pat=%s:n=%d:lift=%t",
 		field, f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID,
-		fromRaw, toRaw, f.Search, size, lift)
+		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), size, lift)
 }
 
 // logsErrorLiftSeverity — hata seçimi eşiği (OTel ERROR = 17); sayfada
@@ -232,10 +237,11 @@ func logsErrorLiftSelection(f logstore.Filter) logstore.Filter {
 // v0.9.216 — cluster joined the filter set, so it MUST join the key: a
 // cluster-scoped histogram served from an unscoped entry (or vice versa)
 // inside the 30s TTL is the v0.5.187 cross-poisoning class exactly.
+// v0.10.1071 — desen (pattern=) da anahtarda (aynı sınıf).
 func logsTimeseriesKey(f logstore.Filter, fromRaw, toRaw string, bucketSec int, groupBy string) string {
-	return fmt.Sprintf("logs-ts:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:ht=%t:from=%s:to=%s:b=%d:g=%s:q=%s",
+	return fmt.Sprintf("logs-ts:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:ht=%t:from=%s:to=%s:b=%d:g=%s:q=%s:pat=%s",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.HasTrace, fromRaw, toRaw,
-		bucketSec, groupBy, f.Search)
+		bucketSec, groupBy, f.Search, logstore.PatternKey(f.Pattern))
 }
 
 // logsSearchKey builds the /api/logs cache key. Pure + extracted
@@ -285,9 +291,11 @@ func logsSearchKey(f logstore.Filter, fromRaw, toRaw string) string {
 	// v0.9.295 — direction is in the key. Same rows, opposite order is a
 	// DIFFERENT answer; sharing an entry would serve one operator's
 	// newest-first page to another asking for oldest-first.
-	return fmt.Sprintf("logs:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:span=%s:ht=%t:from=%s:to=%s:lim=%d:off=%d:cur=%s:pg=%t:asc=%t:q=%s",
+	// v0.10.1071 — desen (pattern=) anahtarda: desenli liste desensiz isteğe
+	// 15 sn TTL içinde servis edilmesin (v0.5.187 sınıfı).
+	return fmt.Sprintf("logs:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:span=%s:ht=%t:from=%s:to=%s:lim=%d:off=%d:cur=%s:pg=%t:asc=%t:q=%s:pat=%s",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID, f.HasTrace,
-		fromRaw, toRaw, f.Limit, f.Offset, f.Cursor, f.WantCursor, f.Ascending, f.Search)
+		fromRaw, toRaw, f.Limit, f.Offset, f.Cursor, f.WantCursor, f.Ascending, f.Search, logstore.PatternKey(f.Pattern))
 }
 
 func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
@@ -417,6 +425,9 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 	// v0.10.280 — CH arka ucunda ayrışmayan arama metni 400 (mesaj
 	// operatöre); sessiz alt-dize düşüşü yalnız derin katmanda kalır.
 	if s.rejectLogQuerySyntax(w, f.Search) {
+		return
+	}
+	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern=
 		return
 	}
 	keyFrom, keyTo := snapLogsWindow(&f, q.Get("from"), q.Get("to"), 15*time.Second) // v0.10.446 (A6-V2: TTL kadar)
@@ -971,6 +982,9 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 	if q.Get("size") == "20" {
 		size = 20
 	}
+	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern=
+		return
+	}
 	errorLift := q.Get("errorLift") == "1"                                           // v0.10.509 (C5) — hatalıyı ayıran alan
 	keyFrom, keyTo := snapLogsWindow(&f, q.Get("from"), q.Get("to"), 60*time.Second) // v0.10.446 (A6-V2: TTL kadar)
 	key := logsFieldStatsKeyLift(field, f, keyFrom, keyTo, size, errorLift)
@@ -1062,6 +1076,9 @@ func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
 		HasTrace:    parseBoolParam(q.Get("hasTrace")), // v0.8.406 — trace-only filter
 	}
 	if s.rejectLogQuerySyntax(w, f.Search) { // v0.10.280
+		return
+	}
+	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern=
 		return
 	}
 	bucketSec := parseInt(q.Get("bucketSec"), 30)

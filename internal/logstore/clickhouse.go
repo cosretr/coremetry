@@ -26,7 +26,19 @@ func (s *CHStore) Backend() string { return "clickhouse" }
 func (s *CHStore) Ping(ctx context.Context) error { return s.store.Ping(ctx) }
 
 func (s *CHStore) Search(ctx context.Context, f Filter) (*Page, error) {
-	rows, total, next, err := s.store.GetLogs(ctx, chstore.LogFilter{
+	rows, total, next, err := s.store.GetLogs(ctx, chSearchLogFilter(f))
+	if err != nil {
+		return nil, err
+	}
+	return s.searchPage(f, rows, total, next), nil
+}
+
+// chSearchLogFilter — v0.10.1071, SAF: logstore.Filter → chstore.LogFilter.
+// Ayrı işlev, çünkü desen süzgecinin liste yoluna ULAŞTIĞI testle pinlenir
+// (chstore desenleri bilmez; yüklemi buradan hazır alır — chPatternConjunct).
+func chSearchLogFilter(f Filter) chstore.LogFilter {
+	patSQL, patArgs := chPatternConjunct(f.Pattern)
+	return chstore.LogFilter{
 		Service:     f.Service,
 		Env:         f.Env, // v0.8.400 — env-separation Phase 4
 		Pod:         f.Pod, // v0.9.1249 — bağlam pod kapsamı
@@ -45,10 +57,14 @@ func (s *CHStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		Ascending: f.Ascending, // v0.7.83 — oldest-first for Context "after"
 		SinceNs:   f.SinceNs,   // v0.8.x — forward-tail (live-tail SSE)
 		SkipTotal: f.SkipTotal, // v0.10.414 — sayaç sorgusu atlanır (A7)
-	})
-	if err != nil {
-		return nil, err
+
+		PatternSQL:  patSQL, // v0.10.1071 — desen süzgeci (dedektörün yüklemi)
+		PatternArgs: patArgs,
 	}
+}
+
+// searchPage — GetLogs satırları → Page (Search'ün gövdesi, davranış aynen).
+func (s *CHStore) searchPage(f Filter, rows []chstore.LogRow, total uint64, next string) *Page {
 	out := make([]*LogRecord, 0, len(rows))
 	for _, l := range rows {
 		rec := &LogRecord{
@@ -101,7 +117,7 @@ func (s *CHStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	// toplam "en az" demektir (ES'in track_total_hits tavanıyla aynı ilan).
 	// v0.10.414 — SkipTotal'da total 0 "sayılmadı"dır; tavan bayrağı da kurulmaz.
 	return &Page{Total: int(total), TotalIsLowerBound: !f.SkipTotal && total >= chstore.LogsCountCap, Logs: out, NextCursor: next,
-		UnappliedFilters: chSearchUnapplied(f)}, nil // v0.10.944
+		UnappliedFilters: chSearchUnapplied(f)} // v0.10.944
 }
 
 // chSearchUnapplied — v0.10.944 (CoSRE kaynak durumu), SAF: CH Search'ün
@@ -266,26 +282,10 @@ func chLogsGroupExpr(groupBy string) string {
 	return "'_total'"
 }
 
-// Histogram buckets log volume server-side via the same logs
-// table. Whitelisted groupBy options ("service", "severity",
-// "cluster", "namespace", or "" for total) map to indexed columns or
-// res-array derivations so the query stays partition-pruned +
-// index-friendly even at billion log/day. Unknown groupBy collapses
-// to a single _total series rather than failing — operator notices
-// empty break-down and can pick a different field.
-func (s *CHStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupBy string) ([]LogSeries, error) {
-	if bucketSec <= 0 {
-		bucketSec = 30
-	}
-	groupExpr := chLogsGroupExpr(groupBy)
-
-	from, to := f.From, f.To
-	if from.IsZero() {
-		from = time.Now().Add(-1 * time.Hour)
-	}
-	if to.IsZero() {
-		to = time.Now()
-	}
+// chLogsHistogramWhere — v0.10.1071, SAF: Histogram'ın WHERE gövdesi + bağları
+// (eskiden işlevin içindeydi; desen süzgecinin histograma ULAŞTIĞI ve grafiğin
+// yüklemiyle AYNI metin olduğu testle pinlensin diye çıkarıldı). Davranış aynen.
+func chLogsHistogramWhere(f Filter, from, to time.Time) (string, []any) {
 	args := []any{from, to}
 	wc := "time >= ? AND time <= ?"
 	if f.Cluster != "" {
@@ -337,6 +337,12 @@ func (s *CHStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupB
 			args = append(args, sargs...)
 		}
 	}
+	if expr, pargs := chPatternConjunct(f.Pattern); expr != "" {
+		// v0.10.1071 — desen süzgeci: anomali grafiğiyle (chPatternHistogramSQL)
+		// AYNI yüklem; serbest metinle AND.
+		wc += " AND " + expr
+		args = append(args, pargs...)
+	}
 	if f.SeverityMin > 0 {
 		wc += " AND severity_num >= ?"
 		args = append(args, f.SeverityMin)
@@ -358,6 +364,30 @@ func (s *CHStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupB
 	if f.HasTrace {
 		wc += " AND trace_id != ''" // v0.8.406 — trace-only filter
 	}
+	return wc, args
+}
+
+// Histogram buckets log volume server-side via the same logs
+// table. Whitelisted groupBy options ("service", "severity",
+// "cluster", "namespace", or "" for total) map to indexed columns or
+// res-array derivations so the query stays partition-pruned +
+// index-friendly even at billion log/day. Unknown groupBy collapses
+// to a single _total series rather than failing — operator notices
+// empty break-down and can pick a different field.
+func (s *CHStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupBy string) ([]LogSeries, error) {
+	if bucketSec <= 0 {
+		bucketSec = 30
+	}
+	groupExpr := chLogsGroupExpr(groupBy)
+
+	from, to := f.From, f.To
+	if from.IsZero() {
+		from = time.Now().Add(-1 * time.Hour)
+	}
+	if to.IsZero() {
+		to = time.Now()
+	}
+	wc, args := chLogsHistogramWhere(f, from, to)
 
 	// Top-20 groups by total count (mirrors the ES path's
 	// terms.size:20 cap). Without this a high-cardinality group
@@ -648,6 +678,11 @@ func (s *CHStore) FieldStats(ctx context.Context, f Filter, field string, limit 
 			wc += " AND " + expr
 			args = append(args, sargs...)
 		}
+	}
+	if expr, pargs := chPatternConjunct(f.Pattern); expr != "" {
+		// v0.10.1071 — desen süzgeci (Histogram / liste ile aynı yüklem).
+		wc += " AND " + expr
+		args = append(args, pargs...)
 	}
 	if f.SeverityMin > 0 {
 		wc += " AND severity_num >= ?"

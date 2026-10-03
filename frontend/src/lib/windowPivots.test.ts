@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { tracesURL } from '@/components/DBQueriesPanel';
-import { patternLogWindow } from '@/features/anomalies/streams';
+import { patternLogWindow, logsLinkForPattern } from '@/features/anomalies/patternLogsLink';
 import { decodeRange } from './urlState';
 import type { DBQueryStat } from './types';
 
@@ -101,5 +101,27 @@ describe('patternLogWindow — Ö2 düşen spike penceresi', () => {
     for (const v of [undefined, null, 0, NaN, -1, 1e9 /* epoch'a çok yakın */]) {
       expect(patternLogWindow(v as never), String(v)).toBe('');
     }
+  });
+});
+
+// v0.10.1071 (operatör, prod ES: "Logları aç" grafiğin saydığından başka
+// satırlar gösterdi) — /anomalies desen kartının "logs ↗" bağlantısı deseni
+// `pattern=<ad>` ile taşır; token'lar `q`ya çevrilmez (eskiden tek token'lı
+// desende `q`, çok token'lıda HİÇ desen yoktu).
+describe('logsLinkForPattern — pattern= (token çevirisi yok)', () => {
+  it('servis + pattern + pencere + desen paneli; q yok', () => {
+    const href = logsLinkForPattern({ pattern: 'External system rejected', service: 'orders-svc', lastSeenNs: 1_700_000_000_000_000_000 });
+    const sp = new URL(href, 'http://x').searchParams;
+    expect(sp.get('pattern')).toBe('External system rejected');
+    expect(sp.get('service')).toBe('orders-svc');
+    expect(sp.has('q')).toBe(false);
+    expect(sp.get('panel')).toBe('patterns');
+    expect(sp.get('range')?.startsWith('custom:')).toBe(true);
+  });
+  it('servissiz kart: servis yazılmaz, desen yine gider', () => {
+    const sp = new URL(logsLinkForPattern({ pattern: 'Disk full', service: '', lastSeenNs: 0 }), 'http://x').searchParams;
+    expect(sp.has('service')).toBe(false);
+    expect(sp.get('pattern')).toBe('Disk full');
+    expect(sp.has('range')).toBe(false); // damga yok → pencere yazılmaz (v0.9.862)
   });
 });

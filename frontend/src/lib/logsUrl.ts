@@ -24,6 +24,12 @@ export interface LogsUrlFilter {
   traceId: string;
   spanId: string;
   hasTrace: boolean;
+  /**
+   * v0.10.1071 — küratörlü log deseninin ADI (`?pattern=`), boş = yok. Arama
+   * metnine ÇEVRİLMEZ: sunucu dedektörün kendi yüklemini uygular (anomali
+   * grafiğiyle aynı sayım); serbest metin (`q`) onunla AND'lenir.
+   */
+  pattern: string;
 }
 
 // The identity of a URL-bearing view. Every field the URL carries must be
@@ -31,7 +37,7 @@ export interface LogsUrlFilter {
 export function logsUrlSig(f: LogsUrlFilter, filtersRaw: string, colsRaw: string): string {
   return JSON.stringify([
     f.service, f.cluster, f.search, f.severity, f.traceId, f.spanId, f.hasTrace,
-    filtersRaw, colsRaw,
+    filtersRaw, colsRaw, f.pattern,
   ]);
 }
 
@@ -50,6 +56,7 @@ export function writeLogsParams(
   setOrDel('traceId', f.traceId);
   setOrDel('spanId', f.spanId);
   setOrDel('hasTrace', f.hasTrace ? '1' : ''); // v0.8.406
+  setOrDel('pattern', f.pattern); // v0.10.1071
   setOrDel('filters', filtersRaw);
   setOrDel('cols', colsRaw);
   return p;
@@ -67,6 +74,7 @@ export function readLogsParams(p: URLSearchParams): LogsUrlFilter {
     traceId:  p.get('traceId') ?? '',
     spanId:   p.get('spanId')  ?? '',
     hasTrace: p.get('hasTrace') === '1', // v0.8.406
+    pattern:  (p.get('pattern') ?? '').trim(), // v0.10.1071
   };
 }
 
@@ -203,6 +211,12 @@ export interface LogsPivot {
   cluster?: string;
   /** Free-text search box (`q=`). See the service/q note above. */
   q?: string;
+  /**
+   * v0.10.1071 — küratörlü log deseni ADI (`pattern=`). Desenden gelen pivot
+   * bunu verir, token'ları `q`ya ÇEVİRMEZ: sunucu dedektörün yüklemini
+   * uygular, /logs anomali grafiğinin saydığını listeler.
+   */
+  pattern?: string;
   /** OTel severity-number FLOOR; 0/undefined = all levels (13 = warn). */
   severity?: number;
   /** Exact trace-id column filter. See the service/q note above. */
@@ -263,6 +277,7 @@ export function logsHref(p: LogsPivot): string {
   if (p.service) q.set('service', p.service);
   if (p.cluster) q.set('cluster', p.cluster);
   if (p.q) q.set('q', p.q);
+  if (p.pattern) q.set('pattern', p.pattern); // v0.10.1071
   if (p.severity && p.severity > 0) q.set('severity', String(p.severity));
   if (p.traceId) q.set('traceId', p.traceId);
   if (p.spanId) q.set('spanId', p.spanId);

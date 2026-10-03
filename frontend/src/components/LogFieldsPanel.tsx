@@ -35,6 +35,7 @@ export interface FieldStatsScope {
   cluster?: string;
   env?: string; // v0.8.400 — global ?env= deployment-environment filter
   search?: string;
+  pattern?: string; // v0.10.1071 — küratörlü log deseni adı (liste ile aynı süzgeç)
   severity?: number;
   traceId?: string;
   spanId?: string;

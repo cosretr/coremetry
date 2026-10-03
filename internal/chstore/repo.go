@@ -4917,6 +4917,12 @@ type LogFilter struct {
 	SinceNs int64
 	// SkipTotal (v0.10.414) — count() sorgusu atlanır; bkz. logstore.Filter.SkipTotal.
 	SkipTotal bool
+	// PatternSQL / PatternArgs (v0.10.1071) — `/logs?pattern=` desen süzgecinin
+	// ÖNCEDEN KURULMUŞ yüklemi (logstore.chPatternConjunct: dedektörün
+	// chPatternMatchSQL'i). chstore desenleri bilmez (import yönü
+	// logstore → chstore); metni olduğu gibi AND'ler. Boş = süzgeç yok.
+	PatternSQL  string
+	PatternArgs []any
 }
 
 // logsMaxLimit caps the per-page row count on the logs table. A
@@ -5155,6 +5161,10 @@ func logsWhere(f LogFilter) whereClause {
 		if expr, args := LogSearchConjunct(f.Search); expr != "" {
 			wc.add(expr, args...)
 		}
+	}
+	if f.PatternSQL != "" {
+		// v0.10.1071 — desen süzgeci: serbest metinle AND, yüklem dedektörünki.
+		wc.add(f.PatternSQL, f.PatternArgs...)
 	}
 	if f.SeverityMin > 0 {
 		wc.add("severity_num >= ?", f.SeverityMin)

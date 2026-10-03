@@ -56,20 +56,24 @@ export function logPatternSeriesArgs(
 // patternLogsPivot — v0.10.1062 (operatör, prod ES: servissiz log deseni
 // anomalisinde "Ne yapabilirim" yalnız "servis adı yok" diyordu; operatör
 // Kibana'ya elle gidiyordu). Servissiz log_pattern olayının TEK eylemi:
-// olay penceresinde, desene uyan satırlarla /logs. Arama metni sunucudan
-// (logsQuery — dedektörün token'ları; istemci desenin yalnız ADINI bilir),
-// token'lar burada YAZILMAZ. Metin yoksa (okuma bitmedi / hata / eski satır /
-// token'sız desen) null — sahte ya da boş dönecek bir bağlantı basılmaz.
-// topServices: en çok ≤3 ad ("En çok: …" satırı; sunucu ≤5 döner).
+// olay penceresinde, desene uyan satırlarla /logs.
+//
+// v0.10.1071 (operatör, prod ES: "Logları aç" 80 bin ilgisiz satır açtı,
+// grafik ~24 bin sayıyordu) — bağlantı artık deseni ARAMA METNİNE ÇEVİRMEZ
+// (1062'nin sunucudan gelen `logsQuery`'si silindi): `pattern=<desen adı>`
+// yazar, /logs sunucusu dedektörün kendi yüklemini uygular — grafikle aynı
+// sayım. Ad olayın kendisinden; okuma beklenmez. Boş ad → null (sahte
+// bağlantı yok). topServices: en çok ≤3 ad ("En çok: …"; sunucu ≤5 döner).
 export interface PatternLogsPivot { href: string; topServices: string[] }
 
 export function patternLogsPivot(
-  series: Pick<LogPatternSeries, 'logsQuery' | 'topServices'> | null | undefined,
+  pattern: string | null | undefined,
+  series: Pick<LogPatternSeries, 'topServices'> | null | undefined,
   win: { fromNs: number; toNs: number },
 ): PatternLogsPivot | null {
-  const q = (series?.logsQuery ?? '').trim();
-  if (!q) return null;
-  const href = logsHref({ window: win, q });
+  const name = (pattern ?? '').trim();
+  if (!name) return null;
+  const href = logsHref({ window: win, pattern: name });
   const topServices = (series?.topServices ?? [])
     .map(s => (s?.service ?? '').trim())
     .filter(s => s !== '')

@@ -104,29 +104,32 @@ describe('logPatternSeriesArgs', () => {
   });
 });
 
+// v0.10.1071 — bağlantı `pattern=<ad>` yazar (1062'nin token'lardan kurulan
+// `q=` metni silindi): /logs sunucusu dedektörün yüklemini uygular.
 describe('patternLogsPivot', () => {
   const win = { fromNs: T0 - 30 * MIN, toNs: T0 + 20 * MIN };
   const range = `custom:${(T0 - 30 * MIN) / 1e6}-${(T0 + 20 * MIN) / 1e6}`;
-  const href = (q: string) => `/logs?${new URLSearchParams({ q, range }).toString()}`;
-  type In = Pick<LogPatternSeries, 'logsQuery' | 'topServices'> | null | undefined;
-  it.each<[string, In, { href: string; topServices: string[] } | null]>([
-    ['okuma yok (yükleniyor / hata)', undefined, null],
-    ['404 (desen tanımı kalkmış)', null, null],
-    ["logsQuery yok (token'sız desen / eski sunucu)", {}, null],
-    ['boşluk logsQuery', { logsQuery: '  ' }, null],
-    ['çok token, servis yok (CH)', { logsQuery: '"service quota" OR "quota exceeded"' },
-      { href: href('"service quota" OR "quota exceeded"'), topServices: [] }],
-    ['tek token + servisler (ES), en çok 3, boş ad atılır',
-      { logsQuery: '"sqlexception"', topServices: [
+  const href = (pattern: string) => `/logs?${new URLSearchParams({ pattern, range }).toString()}`;
+  type In = Pick<LogPatternSeries, 'topServices'> | null | undefined;
+  it.each<[string, string, In, { href: string; topServices: string[] } | null]>([
+    ['ad yok → bağlantı yok', '', undefined, null],
+    ['boşluk ad → bağlantı yok', '   ', {}, null],
+    ['okuma beklenmez (yükleniyor): ad yeter', 'Service quota', undefined,
+      { href: href('Service quota'), topServices: [] }],
+    ['servisler (ES), en çok 3, boş ad atılır', 'SQL exception',
+      { topServices: [
         { service: 'orders-svc', count: 700 }, { service: '', count: 90 }, { service: 'billing-svc', count: 81 },
         { service: 'ORDER_QUEUE_LISTENER', count: 9 }, { service: 'audit-svc', count: 2 }] },
-      { href: href('"sqlexception"'), topServices: ['orders-svc', 'billing-svc', 'ORDER_QUEUE_LISTENER'] }],
-  ])('%s', (_name, series, want) => {
-    expect(patternLogsPivot(series, win)).toEqual(want);
+      { href: href('SQL exception'), topServices: ['orders-svc', 'billing-svc', 'ORDER_QUEUE_LISTENER'] }],
+  ])('%s', (_name, pattern, series, want) => {
+    expect(patternLogsPivot(pattern, series, win)).toEqual(want);
   });
-  it('servis kapsamı YAZMAZ (servissiz olay; atıf yalnız bilgi)', () => {
-    const p = patternLogsPivot({ logsQuery: '"ora-"', topServices: [{ service: 'orders-svc', count: 3 }] }, win)!;
-    expect(new URL(p.href, 'http://x').searchParams.has('service')).toBe(false);
-    expect(new URL(p.href, 'http://x').searchParams.get('q')).toBe('"ora-"');
+  it('servis kapsamı YAZMAZ, q YAZMAZ — yalnız pattern + range', () => {
+    const p = patternLogsPivot('External system rejected', { topServices: [{ service: 'orders-svc', count: 3 }] }, win)!;
+    const sp = new URL(p.href, 'http://x').searchParams;
+    expect(sp.has('service')).toBe(false);
+    expect(sp.has('q')).toBe(false);
+    expect(sp.get('pattern')).toBe('External system rejected');
+    expect([...sp.keys()].sort()).toEqual(['pattern', 'range']);
   });
 });

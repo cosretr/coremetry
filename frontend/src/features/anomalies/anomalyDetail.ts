@@ -153,7 +153,13 @@ export function anomalySignalHrefs(
 ): AnomalySignalHrefs | null {
   if (!e.service) return null;
   return {
-    logs: logsHref({ window: win, service: e.service }),
+    // v0.10.1071 — log_pattern olayında "Logları aç" servise EK olarak deseni
+    // de taşır (`pattern=` — sunucu dedektörün yüklemini uygular; token'lar
+    // arama metnine çevrilmez). Diğer türlerde desen bir log yüklemi değil.
+    logs: logsHref({
+      window: win, service: e.service,
+      pattern: e.kind === 'log_pattern' && e.pattern ? e.pattern : undefined,
+    }),
     errorTraces: tracesPivotHref({ window: win, service: e.service, hasError: true }),
     servicePage: serviceHref(e.service, { range: win }),
     // v0.10.1032 (inceleme) — trace_op bir HATA anomalisi: operasyonun

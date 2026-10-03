@@ -384,11 +384,12 @@ func TestPatternLogWindow(t *testing.T) {
 }
 
 // TestPatternLogWindowMatchesFrontendSpelling — KAYNAK PİNİ. Aynı desen
-// için satırın "logs ↗" çipi (patternLogWindow, streams.tsx v0.9.862) ve
+// için satırın "logs ↗" çipi (patternLogWindow — v0.9.862, v0.10.1071'te
+// streams.tsx'ten patternLogsLink.ts'e taşındı) ve
 // kartın "Loglar (desen)" pivotu AYNI pencereyi açmalı; ayrışırlarsa
 // operatör aynı olay için iki farklı sayı görür.
 func TestPatternLogWindowMatchesFrontendSpelling(t *testing.T) {
-	const src = "../../../frontend/src/features/anomalies/streams.tsx"
+	const src = "../../../frontend/src/features/anomalies/patternLogsLink.ts"
 	b, err := os.ReadFile(src)
 	if err != nil {
 		t.Fatalf("%s okunamadı (patternLogWindow taşındıysa pini yeniden konumlandır): %v", src, err)
@@ -410,41 +411,10 @@ func TestPatternLogWindowMatchesFrontendSpelling(t *testing.T) {
 	}
 }
 
-func TestPatternKQL(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		service string
-		tokens  []string
-		want    string
-	}{
-		{name: "servis + tek token", service: "checkout", tokens: []string{"oomkilled"},
-			want: `service.name:"checkout" AND "oomkilled"`},
-		{name: "servis + çok token OR'lanır", service: "checkout",
-			tokens: []string{"no space left", "disk full", "enospc"},
-			want:   `service.name:"checkout" AND ("no space left" OR "disk full" OR "enospc")`},
-		{name: "servissiz yalnız tokenlar", tokens: []string{"deadlock"}, want: `"deadlock"`},
-		{name: "tokensuz yalnız servis", service: "web", want: `service.name:"web"`},
-		{name: "ikisi de yok", want: ""},
-		// Alıntı kaçışı: bir servis adı ya da token içinde " geçerse KQL
-		// bozulur ve /logs sorgusu sessizce başka bir şey arar.
-		{name: "alıntı kaçışı", service: `we"b`, tokens: []string{`a"b`},
-			want: `service.name:"we\"b" AND "a\"b"`},
-		{name: "boş token süzülür", service: "web", tokens: []string{"", "  ", "x"},
-			want: `service.name:"web" AND "x"`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := PatternKQL(tc.service, tc.tokens); got != tc.want {
-				t.Errorf("PatternKQL = %q; want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestLogPatternLinks(t *testing.T) {
 	now := int64(1_700_000_000) * sec
 	ev := LogPatternEvidence{
 		Pattern: "Out of memory", Kind: "spike", Service: "checkout svc",
-		Tokens:     []string{"oomkilled", "out of memory"},
 		LastSeenNs: now, NowNs: now, WindowSec: 300,
 	}
 	links := LogPatternLinks(ev)
@@ -464,13 +434,17 @@ func TestLogPatternLinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%q ayrıştırılamadı: %v", lg, err)
 	}
-	// Param adı `q` — readLogsParams'ın okuduğu tek serbest arama alanı.
-	if q := u.Query().Get("q"); !strings.Contains(q, `service.name:"checkout svc"`) ||
-		!strings.Contains(q, "oomkilled") {
-		t.Errorf("log linki KQL taşımıyor: %q", q)
+	// v0.10.1071 — desen ADI `pattern=` ile (sunucu dedektörün yüklemini
+	// uygular), servis `service=`le; token'lar `q`ya çevrilmez.
+	if got := u.Query().Get("pattern"); got != "Out of memory" {
+		t.Errorf("log linki pattern taşımıyor: %q", lg)
 	}
-	// ÖLÜ PARAM DİSİPLİNİ: /logs'un okumadığı hiçbir anahtar yazılmaz.
-	for _, dead := range []string{"pattern", "tokens", "regex", "search", "minSev"} {
+	if got := u.Query().Get("service"); got != "checkout svc" {
+		t.Errorf("log linki service taşımıyor: %q", lg)
+	}
+	// ÖLÜ PARAM DİSİPLİNİ: /logs'un okumadığı hiçbir anahtar yazılmaz; `q`
+	// da yazılmaz (token metni dedektörün yüklemi değil).
+	for _, dead := range []string{"q", "tokens", "regex", "search", "minSev"} {
 		if u.Query().Has(dead) {
 			t.Errorf("log linki ölü `%s` paramı taşıyor: %s", dead, lg)
 		}
@@ -486,7 +460,7 @@ func TestLogPatternLinksWithoutWindowProducesNothingWindowBearing(t *testing.T) 
 	// ve bu desen için pencere-çapasız hedef de YOK (desen bir kimlik
 	// sayfasına sahip değil) → hiç link olmaz. Kırık pencereli bir link,
 	// link yokluğundan kötü (v0.9.655).
-	ev := LogPatternEvidence{Pattern: "Disk full", Service: "web", Tokens: []string{"enospc"}}
+	ev := LogPatternEvidence{Pattern: "Disk full", Service: "web"}
 	if links := LogPatternLinks(ev); len(links) != 0 {
 		t.Errorf("penceresiz kurulumda link üretildi: %+v", links)
 	}
@@ -595,12 +569,12 @@ func TestLinkParamsAreActuallyReadByTheTargetPages(t *testing.T) {
 		note   string
 	}{
 		{
-			src:   "../../../frontend/src/lib/logsUrl.ts",
-			reads: []string{`p.get('q')`, `p.get('severity')`, `p.get('service')`},
-			// `pattern` /logs'ta OKUNMUYOR: kart onu yazmıyor, kapı da
-			// bir gün yazılmasını engelliyor.
-			absent: []string{`p.get('pattern')`},
-			note:   "/logs okuyucusu readLogsParams",
+			src: "../../../frontend/src/lib/logsUrl.ts",
+			// v0.10.1071 — `pattern` artık OKUNUYOR (kart "Loglar (desen)" onu
+			// yazıyor; sunucu dedektörün yüklemini uygular). Okuyucu düşerse
+			// kartın linki ölü param taşır — kapı bunu yakalar.
+			reads: []string{`p.get('q')`, `p.get('severity')`, `p.get('service')`, `p.get('pattern')`},
+			note:  "/logs okuyucusu readLogsParams",
 		},
 		{
 			// v0.10.449 — `panel` bir GÖRÜNÜM ipucu: süzgeç okuyucusunda değil,

@@ -396,8 +396,8 @@ func logPatternEvidence(a anomaly.LogPatternAnomaly, window time.Duration, nowNs
 		Pattern: a.Pattern, Kind: a.Kind,
 		CurrentCount: a.CurrentCount, BaselineCount: a.BaselineCount,
 		Ratio: a.Ratio, Service: a.Service, Sample: a.Sample,
-		Tokens: a.Tokens, LastSeenNs: a.LastSeenNs,
-		WindowSec: int64(window / time.Second), NowNs: nowNs,
+		LastSeenNs: a.LastSeenNs,
+		WindowSec:  int64(window / time.Second), NowNs: nowNs,
 	}
 	for _, ts := range a.TopServices {
 		ev.TopServices = append(ev.TopServices,

@@ -199,6 +199,9 @@ function LogsInner() {
     // hasTrace (v0.8.406 — operator ask): keep only rows with a trace
     // correlation so every visible line can pivot to its trace.
     hasTrace: false,
+    // v0.10.1071 — küratörlü log deseni adı (`?pattern=`); sunucu dedektörün
+    // yüklemini uygular, serbest metin onunla AND. Kutuya YAZILMAZ — çip.
+    pattern: '',
   });
   const [draft, setDraft] = useState(filter);
   // v0.10.298 — "Desenler" paneli (log-search Dilim 2b): açık/kapalı kalıcı;
@@ -487,16 +490,18 @@ function LogsInner() {
     cluster: filter.cluster || undefined,
     env: env || undefined, // v0.8.400 — global env filter
     search: compiledSearch || undefined,
+    pattern: filter.pattern || undefined, // v0.10.1071
     severity: filter.severity > 0 ? filter.severity : undefined,
     traceId: filter.traceId || undefined,
     spanId: filter.spanId || undefined,
-  }), [from, to, filter.service, filter.cluster, env, compiledSearch, filter.severity, filter.traceId, filter.spanId]);
+  }), [from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.severity, filter.traceId, filter.spanId]);
   const staticQ = useLogs({
     limit: 100, after: cursor || undefined, from, to,
     service: filter.service || undefined,
     cluster: filter.cluster || undefined,
     env: env || undefined, // v0.8.400 — global env filter
     search: compiledSearch || undefined,
+    pattern: filter.pattern || undefined, // v0.10.1071 — desen süzgeci (sunucuda dedektörün yüklemi)
     severity: filter.severity > 0 ? filter.severity : undefined,
     traceId: filter.traceId || undefined,
     spanId:  filter.spanId  || undefined,
@@ -539,17 +544,18 @@ function LogsInner() {
     // dep: ERROR tabanındayken onSeries ALT-KÜME toplamları vermişti;
     // All'a dönüşte o alt-küme "tüm seviyelerin sayımı" gibi görünmesin.
     setHistTotals(undefined);
-  }, [from, to, filter.service, filter.cluster, env, compiledSearch, filter.severity, filter.traceId, filter.hasTrace, breakdown]);
+  }, [from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.severity, filter.traceId, filter.hasTrace, breakdown]);
   const volumeQ = useQuery({
     // v0.9.216 — cluster joins the key AND the request: without it the chips
     // counted every cluster while the table below showed one.
-    queryKey: ['logs', 'sev-volume', from, to, filter.service, filter.cluster, env, compiledSearch, filter.traceId, filter.hasTrace, volumeBucket],
+    queryKey: ['logs', 'sev-volume', from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.traceId, filter.hasTrace, volumeBucket],
     queryFn: () => api.logsTimeseries({
       from, to,
       service: filter.service || undefined,
       cluster: filter.cluster || undefined,
       env:     env || undefined, // v0.8.400 — global env filter
       search:  compiledSearch || undefined,
+      pattern: filter.pattern || undefined, // v0.10.1071
       traceId: filter.traceId || undefined,
       hasTrace: filter.hasTrace || undefined, // v0.8.406 — trace-only filter
       groupBy: 'severity',
@@ -602,6 +608,7 @@ function LogsInner() {
       if (compiledSearch) p.set('search', compiledSearch);
       if (filter.severity > 0) p.set('severity', String(filter.severity));
       if (filter.hasTrace) p.set('hasTrace', '1'); // v0.8.406 — trace-only filter
+      if (filter.pattern) p.set('pattern', filter.pattern); // v0.10.1071 — desen süzgeci canlı kuyrukta da
       // v0.10.416 (log arama denetimi B2) — trace kilidi canlı kuyruğa da
       // taşınır; eskiden "Filtered to trace" şeridi dururken kuyruk tüm
       // servisi akıtıyordu. Sunucu zaten okuyor (streamLogs traceId/spanId).
@@ -635,7 +642,7 @@ function LogsInner() {
       es?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, filter.service, filter.cluster, env, compiledSearch, filter.severity, filter.hasTrace, filter.traceId, filter.spanId]); // v0.10.416 — kilit değişince akış yeniden açılır
+  }, [live, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.severity, filter.hasTrace, filter.traceId, filter.spanId]); // v0.10.416 — kilit değişince akış yeniden açılır
 
   // When live, the table renders the SSE buffer; otherwise the static
   // windowed query. Live has no loading/error gate — rows fill in as they
@@ -726,7 +733,7 @@ function LogsInner() {
     if (range.preset === 'custom') void staticQ.refetch(); else setNowTick(t => t + 1);
   };
   const reset = () => {
-    const empty = { service: '', cluster: '', search: '', severity: 0, traceId: '', spanId: '', hasTrace: false };
+    const empty = { service: '', cluster: '', search: '', severity: 0, traceId: '', spanId: '', hasTrace: false, pattern: '' };
     setDraft(empty); setFilter(empty); setFilters([]); resetPaging();
     writeUrl(empty, []);
   };
@@ -765,6 +772,14 @@ function LogsInner() {
   const clearTraceLock = () => {
     const next = { ...filter, traceId: '', spanId: '' };
     setFilter(next); setDraft(d => ({ ...d, traceId: '', spanId: '' }));
+    writeUrl(next, filters);
+  };
+  // v0.10.1071 — desen çipinin ×'i: yalnız deseni kaldırır; serbest metin,
+  // pill'ler ve pencere durur (trace kilidinin "✕ Clear"ı gibi oto-uygula).
+  const clearPattern = () => {
+    const next = { ...filter, pattern: '' };
+    setFilter(next); setDraft(d => ({ ...d, pattern: '' }));
+    resetPaging();
     writeUrl(next, filters);
   };
   const toggle = (id: number) => {
@@ -943,6 +958,10 @@ function LogsInner() {
             <IconSparkles /> Desenleri anlat
           </Button>
           {(() => {
+            // v0.10.1071 — desen süzgeci KQL'e çevrilemez (yüklem sunucuda,
+            // istemci token bilmez); desen etkinken Kibana bağlantısı başka bir
+            // dilimi açardı — "aynı dilim" sözü tutmayacaksa bağlantı çizilmez.
+            if (filter.pattern) return null;
             const kql = buildKQLFromFilter({ ...filter, search: compiledSearch });
             const href = buildKibanaURL(kibana, {
               fromNs: from ?? undefined,
@@ -972,6 +991,20 @@ function LogsInner() {
               <code>{filter.spanId}</code>
             </>)}
             <Button variant="secondary" onClick={clearTraceLock}>✕ Clear</Button>
+          </div>
+        )}
+        {/* v0.10.1071 (operatör, prod ES: "Logları aç" grafiğin saydığından
+            başka satırlar gösterdi) — desen süzgeci ÇİP olarak, arama
+            kutusunda metin olarak DEĞİL: sunucu dedektörün yüklemini uygular
+            (anomali grafiğiyle aynı sayım), kutu boş ve düzenlenebilir kalır,
+            yazılan sorgu desenle AND'lenir. × yalnız deseni kaldırır. */}
+        {filter.pattern && (
+          <div className="trace-lock" data-testid="logs-pattern-chip">
+            <span>desen:</span>
+            <code title="Küratörlü log deseni — dedektörün eşleşme yüklemi sunucuda uygulanır">{filter.pattern}</code>
+            <Button variant="ghost" size="sm" onClick={clearPattern}
+              aria-label={`Desen süzgecini kaldır: ${filter.pattern}`}
+              title="Desen süzgecini kaldır (arama metni ve diğer süzgeçler kalır)">×</Button>
           </div>
         )}
         <PageControls sticky>

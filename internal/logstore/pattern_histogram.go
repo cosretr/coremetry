@@ -22,15 +22,21 @@ package logstore
 //
 // v0.10.1062 (operatör, prod ES: servissiz log deseni anomalisinde "Ne
 // yapabilirim" yalnız "servis adı yok" diyordu, operatör Kibana'ya elle
-// gidiyordu) — iki ek, ikisi de BU okumanın üstünde, yeni istek yok:
-//   • PatternSearchText: desenin /logs arama metni (token'ların tırnaklı
-//     OR'u) — sayfanın "Logları aç" bağlantısı dedektörün token listesinden.
+// gidiyordu) — BU okumanın üstünde, yeni istek yok:
 //   • ES servis atfı: aynı _search'e sınırlı terms zinciri (patternServiceAggs).
 //     Dedektörün servis atfı tek alana (fields.Service) bakıyor; OpenShift
 //     cluster-logging dokümanında iş yükü kimliği kubernetes.container_name'de
 //     ve service.name çoğu kayıtta YOK → terms agg boş, olay servissiz yazılır.
 //     Zincir servis SÜZGECİNİN aday alanlarını (buildQuery svcFields) sırayla
 //     dener: gösterilen ad /logs'ta süzülebilen addır (v0.8.265 sınıfı).
+//
+// v0.10.1071 — 1062'nin ikinci eki (PatternSearchText: token'ların tırnaklı
+// OR'u /logs `q=` metni olarak) SİLİNDİ. Metin dedektörün yüklemi DEĞİLDİ:
+// CH'de token'ların harf-duyarsız alt-dize eşleşmesi (dedektör ayrıca regex
+// ister — üst küme), ES'te expandShorthand + default_operator AND + must
+// bağlamı ve aynı pencere/kapsam garantisi yok. /logs artık `pattern=<ad>`
+// alır ve sunucu yüklemin KENDİSİNİ uygular (Filter.Pattern →
+// patternFilterClause / chPatternConjunct).
 
 import (
 	"bytes"
@@ -43,44 +49,7 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/esapi"
-
-	"github.com/cilcenk/coremetry/internal/logql"
 )
-
-// PatternSearchText — v0.10.1062, SAF: desenin /logs arama kutusu metni.
-// Her token tırnaklı ifade (LİTERAL, joker yok), birden çoksa " OR " ile:
-//
-//	["service quota", "quota exceeded"] → "service quota" OR "quota exceeded"
-//
-// İki arka uçta da aynı satırları seçer:
-//   - ES: Search bunu query_string'e default_field = gövde ile verir; dedektörün
-//     buildPatternTokenQuery'si (`<gövde>:"t1" OR <gövde>:"t2"`) ile AYNI
-//     yüklem — ES dedektörü regex'i zaten yok sayar, yani birebir.
-//   - CH: logql her ifadeyi multiSearchAnyCaseInsensitive(body, [?]) yapar —
-//     dedektörün token ön süzgeci. Regex (match) /logs arama dilinde YOK: CH'de
-//     liste token'ların eşleştiği her satırı gösterir, dedektör bunların regex'e
-//     de uyanını sayar (üst küme; token'lar regex'in sıfır-yanlış-negatif
-//     alt dizeleri olduğundan desenin her satırı listededir).
-//
-// Metin logql.Expr.String() ile kurulur: kaçış ayrıştırıcının kendisinden.
-// Token'sız desen → "" (sadık bir arama ifade edilemez; çağıran bağlantı
-// basmaz).
-func PatternSearchText(pat PatternSpec) string {
-	kids := make([]*logql.Expr, 0, len(pat.Tokens))
-	for _, t := range pat.Tokens {
-		if strings.TrimSpace(t) == "" {
-			continue
-		}
-		kids = append(kids, &logql.Expr{Kind: logql.KindClause, Op: logql.OpMatch, Value: t, Phrase: true})
-	}
-	switch len(kids) {
-	case 0:
-		return ""
-	case 1:
-		return kids[0].String()
-	}
-	return (&logql.Expr{Kind: logql.KindOr, Kids: kids}).String()
-}
 
 // patternTopServices — servis atfı tavanı (dedektörün v0.5.287 top-5'i).
 const patternTopServices = 5
@@ -99,6 +68,16 @@ func chPatternMatchSQL(tokensSQL string) string {
 		return "multiSearchAnyCaseInsensitive(body, " + tokensSQL + ") AND match(body, ?)"
 	}
 	return "match(body, ?)"
+}
+
+// chPatternConjunct — v0.10.1071, SAF: Filter.Pattern → CH WHERE parçası +
+// bağları. Yüklem chPatternMatchSQL'in KENDİSİ (dedektör + grafik + /logs
+// `pattern=` tek metin), parantezli ki WHERE'e `AND` ile eklensin. nil → "".
+func chPatternConjunct(p *PatternSpec) (string, []any) {
+	if p == nil {
+		return "", nil
+	}
+	return "(" + chPatternMatchSQL(chBuildTokenLiteral(p.Tokens)) + ")", []any{p.Regex}
 }
 
 // chPatternHistogramSQL — CH desen histogramı sorgusu (SAF, golden testli).
@@ -167,15 +146,7 @@ func patternHistogramBody(tokenQuery, bodyField, tsField, from, to string, bucke
 			"bool": map[string]any{
 				"filter": []any{
 					map[string]any{"range": map[string]any{tsField: map[string]any{"gte": from, "lt": to}}},
-					map[string]any{
-						"query_string": map[string]any{
-							"query":                  tokenQuery,
-							"default_field":          bodyField,
-							"default_operator":       "OR",
-							"allow_leading_wildcard": false,
-							"lenient":                true,
-						},
-					},
+					patternQueryStringClause(tokenQuery, bodyField),
 				},
 			},
 		},

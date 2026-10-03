@@ -6047,9 +6047,6 @@ export interface LogPatternSeries {
   to: number;
   points: { t: number; v: number }[];
   partial?: boolean;
-  // v0.10.1062 — desenin /logs arama metni (sunucu dedektörün token'larından
-  // kurar: `"t1" OR "t2"`); token'sız desende yok.
-  logsQuery?: string;
   // v0.10.1062 — penceredeki en çok ≤5 servis, sayı azalan (yalnız ES; CH yok).
   topServices?: { service: string; count: number }[];
 }

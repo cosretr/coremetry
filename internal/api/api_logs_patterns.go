@@ -57,9 +57,10 @@ func logsPatternsSample(want int) int {
 }
 
 func logsPatternsKey(f logstore.Filter, fromRaw, toRaw string, limit, sample int, baseline bool) string {
-	return fmt.Sprintf("logs-patterns:v3:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:span=%s:ht=%t:from=%s:to=%s:q=%s:lim=%d:smp=%d:base=%t",
+	// v0.10.1071 — desen (pattern=) anahtarda (v0.5.187 sınıfı).
+	return fmt.Sprintf("logs-patterns:v3:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:span=%s:ht=%t:from=%s:to=%s:q=%s:pat=%s:lim=%d:smp=%d:base=%t",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID, f.HasTrace,
-		fromRaw, toRaw, f.Search, limit, sample, baseline)
+		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), limit, sample, baseline)
 }
 
 // logsPatternsBaselineWindow — v0.10.508 (C6) SAF: tabanın penceresi =
@@ -98,6 +99,9 @@ func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 		f.From = f.To.Add(-time.Hour)
 	}
 	if s.rejectLogQuerySyntax(w, f.Search) { // v0.10.280 sözleşmesi
+		return
+	}
+	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern= (panel listeyle aynı kümeyi örnekler)
 		return
 	}
 	limit := logsPatternsLimit(parseInt(q.Get("limit"), 0))

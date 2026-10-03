@@ -465,11 +465,9 @@ type LogPatternEvidence struct {
 	Service       string // pencerede en çok basan servis
 	Sample        string
 	TopServices   []PatternServiceRef
-	// Tokens — desenin gövde alt dizeleri (küratörlü patterns[] listesi).
-	// SİNYAL değil, LİNK malzemesi: /logs sorgusu bunlardan kuruluyor
-	// (PatternKQL). Kanıt yapısında durması bilinçli — linki üreten yer
-	// kanıtı üreten yerle aynı olsun (v0.9.831'in "iki yerde seçim" tuzağı).
-	Tokens     []string
+	// v0.10.1071 — Tokens alanı silindi: tek tüketicisi PatternKQL'di (/logs
+	// `q=` metni); link artık desenin ADINI taşır (`pattern=`), sunucu
+	// dedektörün yüklemini uygular.
 	LastSeenNs int64
 	// WindowSec — sayımların penceresi. Sinyal olarak BASILIYOR çünkü
 	// "1.240" tek başına birimsiz bir sayı: hangi pencerede 1.240?

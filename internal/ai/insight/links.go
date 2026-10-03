@@ -186,7 +186,7 @@ func ProblemLinks(ev ProblemEvidence) []Link {
 // ── log-pattern linkleri (v0.9.1137, Faz 2.4) ───────────────────────
 
 // PatternLogWindow — desenin OLAY penceresi: son görülmenin 30dk öncesi
-// → 10dk sonrası. patternLogWindow (streams.tsx, v0.9.862) ile AYNI
+// → 10dk sonrası. patternLogWindow (patternLogsLink.ts, v0.9.862) ile AYNI
 // formül: aynı desen için satırın "logs ↗" çipi ile kartın pivotu farklı
 // pencere açarsa operatör iki farklı cevap görür.
 //
@@ -203,43 +203,16 @@ func PatternLogWindow(lastSeenNs int64) (fromNs, toNs int64) {
 	return from, to
 }
 
-// PatternKQL — desenin /logs sorgusu.
-//
-// PARAM DOĞRULAMASI (ölü-param disiplini, v0.9.1130 sınıfı): /logs
-// okuyucusu readLogsParams (frontend/src/lib/logsUrl.ts) YALNIZ
-// service · cluster · q · severity · traceId · spanId · hasTrace ·
-// filters · cols okur, pencere de `range`ten. `pattern=` ya da
-// `tokens=` diye bir param YOK — yazsak sessizce düşer ve hedef sayfa
-// FİLTRESİZ açılır.
-//
-// Servis de `q`ya giriyor, `service=`ye DEĞİL: v0.5.311'de
-// operatör-bildirimli karar ("servis picker'da ön-seçili gelmesin,
-// KQL'e girsin") — kardeş üretici logsLinkForPattern bugün aynen bunu
-// yapıyor. İki üretici aynı çipi çiziyor; ayrışmaları operatörün
-// "aynı link neden farklı" sorusudur.
-func PatternKQL(service string, tokens []string) string {
-	var clauses []string
-	if s := strings.TrimSpace(service); s != "" {
-		clauses = append(clauses, `service.name:"`+strings.ReplaceAll(s, `"`, `\"`)+`"`)
-	}
-	quoted := make([]string, 0, len(tokens))
-	for _, t := range tokens {
-		if strings.TrimSpace(t) == "" {
-			continue
-		}
-		quoted = append(quoted, `"`+strings.ReplaceAll(t, `"`, `\"`)+`"`)
-	}
-	switch len(quoted) {
-	case 0:
-	case 1:
-		clauses = append(clauses, quoted[0])
-	default:
-		clauses = append(clauses, "("+strings.Join(quoted, " OR ")+")")
-	}
-	return strings.Join(clauses, " AND ")
-}
-
 // LogPatternLinks — desen kartının çipleri, sıra sabit.
+//
+// v0.10.1071 (operatör, prod ES: anomali "Logları aç" grafiğin saydığından
+// başka satırlar gösterdi) — "Loglar (desen)" artık `pattern=<desen adı>` +
+// `service=` yazar. Eski PatternKQL (`service.name:"x" AND ("t1" OR …)` →
+// `q=`) silindi: token'ların arama metni dedektörün yüklemi değildi (CH'de
+// regex'siz üst küme) ve `service.name:"x"` CH'de hiçbir gövdeye uymaz
+// (v0.9.1386 ölçümü). /logs okuyucusu readLogsParams `pattern`i okur, sunucu
+// dedektörün kendi yüklemini uygular (logs_pattern_param.go); kardeş üretici
+// logsLinkForPattern (patternLogsLink.ts) aynı paramları yazar.
 func LogPatternLinks(ev LogPatternEvidence) []Link {
 	from, to := PatternLogWindow(ev.LastSeenNs)
 	rng := RangeParam(from, to)
@@ -248,11 +221,13 @@ func LogPatternLinks(ev LogPatternEvidence) []Link {
 	// Loglar — desenin GERÇEK satırlarına inen tek link. Pencere ZORUNLU:
 	// penceresiz açılan /logs yapışkan aralığa düşer ve boş liste
 	// "böyle log yok" diye okunur (v0.9.862'nin düzelttiği tam bu).
-	if q := PatternKQL(ev.Service, ev.Tokens); q != "" && rng != "" {
+	if pat := strings.TrimSpace(ev.Pattern); pat != "" && rng != "" {
 		// v0.10.449 (C8 üretici) — Desenler paneli açık iner; `panel` /logs'ta
 		// Logs.tsx okur (görünüm ipucu, süzgeç okuyucusunda DEĞİL — kapı aşağıda).
+		// Boş servis href'te düşer (servissiz desen yalnız desenle açılır).
 		out = append(out, Link{Label: "Loglar (desen)",
-			Href: href("/logs", kv{"q", q}, kv{"range", rng}, kv{"panel", "patterns"})})
+			Href: href("/logs", kv{"pattern", pat}, kv{"service", strings.TrimSpace(ev.Service)},
+				kv{"range", rng}, kv{"panel", "patterns"})})
 	}
 	if svc := strings.TrimSpace(ev.Service); svc != "" {
 		if rng != "" {

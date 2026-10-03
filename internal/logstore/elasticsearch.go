@@ -2423,15 +2423,7 @@ func patternCountBody(tokenQuery, bodyField, tsField, svcField, baseFrom, curFro
 			"bool": map[string]any{
 				"filter": []any{
 					map[string]any{"range": map[string]any{tsField: map[string]any{"gte": baseFrom, "lt": curEnd}}},
-					map[string]any{
-						"query_string": map[string]any{
-							"query":                  tokenQuery,
-							"default_field":          bodyField,
-							"default_operator":       "OR",
-							"allow_leading_wildcard": false,
-							"lenient":                true,
-						},
-					},
+					patternQueryStringClause(tokenQuery, bodyField),
 				},
 			},
 		},
@@ -2493,6 +2485,35 @@ func buildPatternTokenQuery(tokens []string, bodyField string) string {
 		parts = append(parts, fmt.Sprintf(`%s:"%s"`, bodyField, t))
 	}
 	return strings.Join(parts, " OR ")
+}
+
+// patternQueryStringClause — v0.10.1071, SAF: desen eşleşme yan tümcesi.
+// CountPatterns (patternCountBody), anomali grafiği (patternHistogramBody) ve
+// /logs'un `pattern=` süzgeci (buildQuery → Search / Histogram / FieldStats)
+// bu TEK haritadan okur — üçü ayrışamaz (parite testi: pattern_logs_filter_test).
+// /logs'un serbest metin kutusundan FARKI bilinçli: o metin expandShorthand'dan
+// geçer, default_operator AND'dir ve must'ta skorlanır; bu yan tümce alan-
+// nitelikli token-OR, filtre bağlamında.
+func patternQueryStringClause(tokenQuery, bodyField string) map[string]any {
+	return map[string]any{
+		"query_string": map[string]any{
+			"query":                  tokenQuery,
+			"default_field":          bodyField,
+			"default_operator":       "OR",
+			"allow_leading_wildcard": false,
+			"lenient":                true,
+		},
+	}
+}
+
+// patternFilterClause — v0.10.1071, SAF: Filter.Pattern → ES filtre yan
+// tümcesi. Token'sız desen CountPatterns'taki gibi match_none (regex ES'te
+// sorgulanmaz; sahte "her şey" yerine dürüst sıfır).
+func patternFilterClause(p *PatternSpec, bodyField string) map[string]any {
+	if len(p.Tokens) == 0 {
+		return map[string]any{"match_none": map[string]any{}}
+	}
+	return patternQueryStringClause(buildPatternTokenQuery(p.Tokens, bodyField), bodyField)
 }
 
 // buildQuery constructs the ES bool/must query corresponding to a Filter.
@@ -2853,6 +2874,11 @@ func (s *ESStore) buildQuery(f Filter) map[string]any {
 				"lenient":                true, // tolerate type mismatches (e.g. searching numeric column with a word)
 			},
 		})
+	}
+	// v0.10.1071 — desen süzgeci (`/logs?pattern=`): dedektörün / anomali
+	// grafiğinin yan tümcesinin AYNISI, filtre bağlamında; serbest metinle AND.
+	if f.Pattern != nil {
+		filter = append(filter, patternFilterClause(f.Pattern, s.fields.Body))
 	}
 	if f.SeverityMin > 0 && s.fields.SeverityNo != "" {
 		filter = append(filter, map[string]any{

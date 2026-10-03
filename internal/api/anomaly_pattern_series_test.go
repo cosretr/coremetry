@@ -194,16 +194,16 @@ func TestGetLogPatternSeries(t *testing.T) {
 		if body.Pattern != "Disk full" || body.BucketSec != 60 || len(body.Points) != n || n < 70 || n > 72 || !body.Partial {
 			t.Fatalf("gövde: pattern=%q b=%d n=%d points=%d partial=%v", body.Pattern, body.BucketSec, n, len(body.Points), body.Partial)
 		}
-		// v0.10.1062 — /logs arama metni dedektörün token'larından (istemci
-		// desenin yalnız adını bilir); servis atfı arka uçtan olduğu gibi.
-		if body.LogsQuery != `"no space left" OR "disk full" OR "enospc"` {
-			t.Fatalf("logsQuery=%q", body.LogsQuery)
+		// v0.10.1062 — servis atfı arka uçtan olduğu gibi. (v0.10.1071: 1062'nin
+		// logsQuery arama metni silindi — pivot /logs?pattern=<ad> açar.)
+		if strings.Contains(w.Body.String(), "logsQuery") {
+			t.Fatalf("logsQuery cevaptan kalkmalıydı: %s", w.Body.String())
 		}
 		if len(body.TopServices) != 2 || body.TopServices[0].Service != "orders-svc" || body.TopServices[1].Count != 81 {
 			t.Fatalf("topServices=%+v", body.TopServices)
 		}
 	})
-	t.Run("servis atfı yok (CH) → topServices JSON'da yok, logsQuery var", func(t *testing.T) {
+	t.Run("servis atfı yok (CH) → topServices JSON'da yok", func(t *testing.T) {
 		st := &patternSeriesLogStore{res: &logstore.PatternHistogramResult{}}
 		w := httptest.NewRecorder()
 		patternSeriesServer(st).getLogPatternSeries(w,
@@ -211,7 +211,7 @@ func TestGetLogPatternSeries(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("code=%d", w.Code)
 		}
-		if b := w.Body.String(); strings.Contains(b, "topServices") || !strings.Contains(b, `"logsQuery":"\"sqlexception\""`) {
+		if b := w.Body.String(); strings.Contains(b, "topServices") || strings.Contains(b, "logsQuery") {
 			t.Fatalf("gövde: %s", b)
 		}
 	})

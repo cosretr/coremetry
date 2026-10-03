@@ -2,110 +2,20 @@ package logstore
 
 // pattern_logs_pivot_test.go — v0.10.1062 (operatör, prod ES: servissiz log
 // deseni anomalisinde "Ne yapabilirim" yalnız "servis adı yok" diyordu,
-// operatör Kibana'ya elle gidiyordu). Çivilenen:
-//   (1) PatternSearchText — desenin /logs arama metni; İKİ arka uçta da
-//       dedektörün token yüklemine derlenir (CH: multiSearchAnyCaseInsensitive
-//       ön süzgeci, ES: buildPatternTokenQuery ile aynı query_string);
-//   (2) ES servis atfı zinciri — aynı _search'te, öncelik sırasıyla, doküman
-//       ilk taşıdığı alanda sayılır; cevap ≤5 servise birleşir.
+// operatör Kibana'ya elle gidiyordu). Çivilenen: ES servis atfı zinciri —
+// aynı _search'te, öncelik sırasıyla, doküman ilk taşıdığı alanda sayılır;
+// cevap ≤5 servise birleşir.
+//
+// v0.10.1071 — 1062'nin PatternSearchText testleri silindi (işlev silindi:
+// /logs artık arama metni değil `pattern=` alır; parite testi
+// pattern_logs_filter_test.go).
 
 import (
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
-
-	"github.com/cilcenk/coremetry/internal/chstore"
 )
-
-func TestPatternSearchText(t *testing.T) {
-	cases := []struct {
-		name   string
-		tokens []string
-		want   string
-	}{
-		{"tek token", []string{"sqlexception"}, `"sqlexception"`},
-		{"çok token OR", []string{"service quota", "quota exceeded"}, `"service quota" OR "quota exceeded"`},
-		{"üç token", []string{"no space left", "disk full", "enospc"}, `"no space left" OR "disk full" OR "enospc"`},
-		{"boş token atlanır", []string{"", "  ", "ora-"}, `"ora-"`},
-		{"tırnak ve ters bölü kaçışlı", []string{`say "hi"`, `a\b`}, `"say \"hi\"" OR "a\\b"`},
-		{"token yok → boş (sadık arama yok)", nil, ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := PatternSearchText(PatternSpec{Regex: "x", Tokens: c.tokens}); got != c.want {
-				t.Fatalf("got %q, want %q", got, c.want)
-			}
-		})
-	}
-}
-
-// CH: /logs araması (chstore.LogSearchConjunct — liste, histogram ve
-// FieldStats'ın ORTAK yüklemi) metni token başına
-// multiSearchAnyCaseInsensitive(body, [?]) yapar — dedektörün
-// chPatternMatchSQL ön süzgeciyle aynı harf-duyarsız alt-dize eşleşmesi.
-// ES: Search metni query_string'e default_field = gövde ile verir; metin
-// buildPatternTokenQuery'nin (dedektörün ES yüklemi) alan öneksiz hâli ve
-// expandShorthand ona DOKUNMAZ.
-func TestPatternSearchText_CompilesToDetectorPredicate(t *testing.T) {
-	es := &ESStore{}
-	es.cfg.defaults()
-	es.fields = es.cfg.Fields
-	for _, tokens := range [][]string{
-		{"sqlexception"},
-		{"service quota", "quota exceeded"},
-		{"hikaripool", "exhausted", "ij000453", "ij000655", "could not acquire jdbc", "managed connection", "mqjca"},
-		{"ora-"},
-		{"panic:", "runtime error"}, // sonda ':' — kısayol genişletmesine girmez
-	} {
-		text := PatternSearchText(PatternSpec{Tokens: tokens})
-		t.Run(text, func(t *testing.T) {
-			// ── CH ──
-			sql, args := chstore.LogSearchConjunct(text)
-			one := "multiSearchAnyCaseInsensitive(body, [?])"
-			wantSQL := one
-			if len(tokens) > 1 {
-				wantSQL = "(" + strings.TrimSuffix(strings.Repeat(one+" OR ", len(tokens)), " OR ") + ")"
-			}
-			if sql != wantSQL {
-				t.Fatalf("CH yüklemi:\n got %s\nwant %s", sql, wantSQL)
-			}
-			gotArgs := make([]string, len(args))
-			for i, a := range args {
-				gotArgs[i], _ = a.(string)
-			}
-			if !reflect.DeepEqual(gotArgs, tokens) {
-				t.Fatalf("CH bağları %v, want token'lar %v", gotArgs, tokens)
-			}
-			// ── ES ──
-			body := es.fields.Body
-			if det := strings.ReplaceAll(buildPatternTokenQuery(tokens, body), body+":", ""); det != text {
-				t.Fatalf("ES: dedektör yüklemi %q, arama metni %q", det, text)
-			}
-			raw, err := json.Marshal(es.buildQuery(Filter{Search: text}))
-			if err != nil {
-				t.Fatal(err)
-			}
-			var q struct {
-				Bool struct {
-					Must []struct {
-						QS struct {
-							Query        string `json:"query"`
-							DefaultField string `json:"default_field"`
-						} `json:"query_string"`
-					} `json:"must"`
-				} `json:"bool"`
-			}
-			if err := json.Unmarshal(raw, &q); err != nil || len(q.Bool.Must) != 1 {
-				t.Fatalf("ES sorgu şekli: %s (%v)", raw, err)
-			}
-			if q.Bool.Must[0].QS.Query != text || q.Bool.Must[0].QS.DefaultField != body {
-				t.Fatalf("ES query_string: %+v (metin %q, gövde %q)", q.Bool.Must[0].QS, text, body)
-			}
-		})
-	}
-}
 
 func TestPatternServiceAggs_Golden(t *testing.T) {
 	if patternServiceAggs(nil) != nil {

@@ -26,20 +26,20 @@ func TestServiceFilterTriesBothFieldShapes(t *testing.T) {
 	s := &ESStore{}
 	s.cfg.defaults()
 	s.fields = s.cfg.Fields
-	raw, err := json.Marshal(s.buildQuery(Filter{Service: "facex-bpm"}))
+	raw, err := json.Marshal(s.buildQuery(Filter{Service: "payments-bpm"}))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	q := string(raw)
 	for _, want := range []string{
-		`"service.name.keyword":"facex-bpm"`, // dynamic mapping
-		`"service.name":"facex-bpm"`,         // ECS keyword-typed (guarded)
+		`"service.name.keyword":"payments-bpm"`, // dynamic mapping
+		`"service.name":"payments-bpm"`,         // ECS keyword-typed (guarded)
 		// operator-directed fallback: pipeline stamps the workload on
 		// the container name (both spellings, both shapes).
-		`"kubernetes.container.name.keyword":"facex-bpm"`,
-		`"kubernetes.container.name":"facex-bpm"`,
-		`"kubernetes.container_name.keyword":"facex-bpm"`,
-		`"kubernetes.container_name":"facex-bpm"`,
+		`"kubernetes.container.name.keyword":"payments-bpm"`,
+		`"kubernetes.container.name":"payments-bpm"`,
+		`"kubernetes.container_name.keyword":"payments-bpm"`,
+		`"kubernetes.container_name":"payments-bpm"`,
 		// every bare term must ride with its exists-guard so dynamic
 		// mappings never token-match through the analyzed field.
 		`"must_not":[{"exists":{"field":"service.name.keyword"}}]`,
@@ -55,7 +55,7 @@ func TestServiceFilterTriesBothFieldShapes(t *testing.T) {
 func TestIndexKnown(t *testing.T) {
 	names := []string{
 		"app-checkout.prod",                         // plain index
-		"app-facex-bpm-int-000079",                  // rollover child
+		"app-payments-bpm-int-000079",               // rollover child
 		"app-orders.prod-2026.07.03",                // dated child
 		".ds-app-identityhub-int-2026.06.24-000391", // data-stream backing
 	}
@@ -63,13 +63,13 @@ func TestIndexKnown(t *testing.T) {
 		resolved string
 		want     bool
 	}{
-		{"app-checkout.prod", true},   // exact
-		{"app-facex-bpm-int", true},   // rollover parent
-		{"app-orders.prod", true},     // dated parent
-		{"app-identityhub-int", true}, // data-stream name via .ds- backing
-		{"app-checkout.uat", false},   // wrong namespace
-		{"app-identityhub", false},    // prefix of a LONGER stream name must NOT match…
-		{"app-facex", false},          // …same (app-facex-bpm-int is a different stream)
+		{"app-checkout.prod", true},    // exact
+		{"app-payments-bpm-int", true}, // rollover parent
+		{"app-orders.prod", true},      // dated parent
+		{"app-identityhub-int", true},  // data-stream name via .ds- backing
+		{"app-checkout.uat", false},    // wrong namespace
+		{"app-identityhub", false},     // prefix of a LONGER stream name must NOT match…
+		{"app-payments", false},        // …same (app-payments-bpm-int is a different stream)
 	}
 	for _, c := range cases {
 		if got := indexKnown(names, c.resolved); got != c.want {

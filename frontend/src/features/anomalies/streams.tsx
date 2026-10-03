@@ -29,7 +29,7 @@ import {
   useBulkDeleteAnomalySilences,
 } from '@/lib/queries';
 import { fmtNum, tsCompact, tsLong } from '@/lib/utils';
-import { logsHref } from '@/lib/logsUrl';
+import { logsLinkForPattern } from './patternLogsLink'; // v0.10.1071 — saf modüle taşındı
 import { AnomalyDetailDrawer } from './AnomalyDetailDrawer';
 import { RecurringMarker } from './RecurringMarker'; // v0.10.1049
 import { SnoozeButton } from './SnoozeButton';
@@ -599,13 +599,10 @@ function LogPatternsSection({ items, onMute, canEdit }: {
               }} title={a.pattern}>
                 {a.pattern}
               </span>
-              {/* v0.5.306 — link now narrows to the pattern's
-                  body tokens too, not just the service. Builds
-                  an OR query from a.tokens so a "Disk full"
-                  anomaly lands the operator on the actual
-                  matching log lines ("no space left" OR "disk
-                  full" OR "enospc"). Falls back to service-only
-                  when tokens absent (older backends). */}
+              {/* v0.5.306 — link narrows to the pattern, not just the
+                  service. v0.10.1071: via `pattern=<name>` — the server
+                  applies the detector's own predicate (no token→query
+                  translation), so /logs lists what the detector counted. */}
               <Link to={logsLinkForPattern(a)}
                     style={{ fontSize: 11, color: 'var(--accent2)', flexShrink: 0 }}
                     title="Open /logs filtered to this pattern + service">
@@ -649,72 +646,6 @@ function LogPatternsSection({ items, onMute, canEdit }: {
       </div>
     </Card>
   );
-}
-
-// logsLinkForPattern — v0.5.306. Builds a /logs URL that
-// narrows to both the service AND the body substrings the
-// detector pattern matches on. Token list comes from the
-// curated patterns[] slice in internal/anomaly/log_patterns.go,
-// exposed via LogPatternAnomaly.tokens. Multiple tokens are
-// OR'd; single-token patterns get a bare body match. Falls
-// back to service-only when tokens are absent so older API
-// responses still produce a usable link.
-function logsLinkForPattern(a: LogPatternAnomaly): string {
-  // v0.5.311 — Operator-reported: service shouldn't pre-select
-  // in the service picker dropdown; merge into the KQL query
-  // instead. Cleaner state for the operator to widen/narrow
-  // without first clearing the picker. Lucene/KQL on the Logs
-  // page already handles service.name:"X" natively.
-  // v0.9.1386 — SERVİS `service=`e, TOKEN'lar `q=`ye.
-  //
-  // Buradaki v0.5.311 şerhi ("service picker'da ön-seçili gelmesin; KQL'e
-  // gömülsün — Logs sayfası service.name:\"X\"i zaten anlıyor") bir
-  // operatör TERCİHİYDİ ve son cümlesi ClickHouse'da YANLIŞ: CH arama
-  // metnini gövdede arıyor, `service.name:"X"` hiçbir gövdede geçmiyor.
-  // Ölçüm: aynı servis için yapısal filtre 858 satır, bu yazım 0.
-  //
-  // Yani tercih korunduğunda link HİÇBİR ŞEY döndürmüyordu. Tercihin
-  // amacı "operatör kapsamı kolayca genişletip daraltabilsin"di; sıfır
-  // satırlık bir liste o amacın tam tersi. Doğruluk kazandı, ama amaç
-  // korunuyor: servis picker'dan tek tıkla temizlenebilir durumda.
-  const toks = a.tokens ?? [];
-  // TOKEN'lar: CH serbest metni LİTERAL alt-dize olarak arıyor, yani tek
-  // token ÇALIŞIR ama `("a" OR "b")` çalışmaz — o dizge hiçbir gövdede
-  // geçmez ve link yine sıfır döner. Çok token'lı desenlerde bu yüzden
-  // `q` HİÇ yazılmıyor: operatör servisin o penceredeki loglarına iner
-  // (desenden GENİŞ ama DOĞRU), token'lar da geldiği anomali kartında
-  // zaten yazılı. Sessizce ilk token'ı seçmek daraltmayı gizlerdi.
-  const q = toks.length === 1 ? `"${toks[0].replace(/"/g, '\\"')}"` : undefined;
-
-  // v0.9.862 (UX denetimi Ö2) — PENCERE. Bu link yalnız `q` yazıyordu:
-  // birkaç saat önceki bir anomaliden /logs'a geçen operatör sticky
-  // pencerede boş sonuç görüyor, "loglar silinmiş" sanıyordu. Kardeş yüzey
-  // (AnomalyDetailDrawer) spike penceresini v0.9.213'ten beri taşıyor;
-  // aynı lead-in formülü burada da: desenin son görülmesi etrafında
-  // 30 dk öncesi + 10 dk sonrası, karşılaştırılacak bir taban kalsın.
-  //
-  // v0.9.1349 — el-yapımı query string logsHref üreticisine indi.
-  // patternLogWindow zaten kodlanmış bir `custom:` token'ı döndürüyor ve
-  // damga bozuksa '' — `|| null` onu üreticinin AÇIK reddetmesine çevirir,
-  // yani "pencere yok" bir unutkanlık değil, kayda geçmiş bir karar.
-  return logsHref({
-    window: patternLogWindow(a.lastSeenNs) || null,
-    service: a.service || undefined,
-    q,
-    panel: 'patterns', // v0.10.449 (C8 üretici) — anomali → desen paneli açık iner
-  });
-}
-
-// patternLogWindow — v0.9.862. lastSeenNs etrafındaki /logs penceresi,
-// `custom:<fromMs>-<toMs>` olarak. Damga yoksa/bozuksa '' döner ve çağıran
-// paramı hiç yazmaz: decodeRange'in reddedeceği bir token yazmak adres
-// çubuğunda kendinden emin ama SAHTE bir pencere gösterirdi.
-export function patternLogWindow(lastSeenNs: number | undefined | null): string {
-  if (!lastSeenNs || !Number.isFinite(lastSeenNs)) return '';
-  const fromMs = Math.floor((lastSeenNs - 30 * 60 * 1e9) / 1e6);
-  const toMs = Math.ceil((lastSeenNs + 10 * 60 * 1e9) / 1e6);
-  if (!(fromMs > 0) || !(toMs > fromMs)) return '';
-  return `custom:${fromMs}-${toMs}`;
 }
 
 // DeployChip — v0.5.286. Inline chip on the anomaly row when a
