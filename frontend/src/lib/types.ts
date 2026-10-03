@@ -8563,6 +8563,24 @@ export interface DBSlowQueryConfig {
   minExecutions: number;
   forBuckets: number;
   cooldownSec: number;
+  /** v0.10.1073 — veritabanı sağlık kuralı (db-health) vidaları; sunucu daima doldurur. */
+  health?: DBHealthConfig;
+}
+
+// v0.10.1073 — db-health: 2 ardışık 5 dk kovada db hata % ≥ errorPct YA DA
+// p99 ≥ p99Ms VE ≥ p99RiseFactor × dünkü aynı kova (göreli; dünkü kova yoksa
+// p99 boyutu kapalı); kova başına ≥ minCalls çağrı ve ≥ minCallers etkilenen
+// (batch olmayan, kovada ≥ minCallerCalls çağrılı) çağıran. maxNewPerTick =
+// tik başına yeni açılış tavanı.
+export interface DBHealthConfig {
+  enabled: boolean;
+  errorPct: number;
+  p99Ms: number;
+  p99RiseFactor: number;
+  minCallerCalls: number;
+  minCalls: number;
+  minCallers: number;
+  maxNewPerTick: number;
 }
 
 // /api/settings/trace-facets (v0.10.302/303, trace arama Dilim 2) — operatör

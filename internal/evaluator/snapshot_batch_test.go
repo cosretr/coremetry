@@ -20,7 +20,7 @@ import (
 // Bu test dönüşün geri alınmasını engelliyor: sıcak döngülerde per-item
 // tekil arama YASAK.
 func TestHotLoopsUseSnapshotNotPerItemLookup(t *testing.T) {
-	for _, f := range []string{"runtime_pods.go", "db_capacity.go"} {
+	for _, f := range []string{"runtime_pods.go", "db_capacity.go", "db_health.go"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)

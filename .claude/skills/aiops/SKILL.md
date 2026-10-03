@@ -33,7 +33,7 @@ Tüm döngüler `if mode.worker` (`main.go:652,1221,1251`) + Redis lider kilidi
 | Synthetic monitor | `monitor/runner.go:32` | tik | problems (monitor:*) |
 
 **Evaluator tik sırası** (`evaluator.go:452-622`): kurallar → SLO → DB kapasite
-→ DB yavaş ifade → runtime → paylaşılan exception patlaması → ölümcül
+→ DB yavaş ifade → DB sağlığı (`db-health`, v0.10.1073) → runtime → paylaşılan exception patlaması → ölümcül
 exception → self-health → **yaş eskalasyonu** (:588) → **bayat süpürme** (:601)
 → incident kaskadı (:611) → anomali terfisi (:619). Sıra önemli: eskalasyon
 süpürmeden ÖNCE koşar.
@@ -95,6 +95,7 @@ Ne üretiyorsun?
 | `slo:<id>:<sev>` | `slo_burn.go:35-86` | hızlı VE yavaş burn | 1h/6h · 6h/24h | service |
 | `db-capacity:<check>` | `db_capacity.go:157-273` | ≥85 warn / ≥90 crit, histerezis 2pp, ETA | 2 sa regresyon | db |
 | `db-slow-stmt` | `db_slow_statement.go:25` | DBSlowQueryConfig | — | db |
+| `db-health:<system>@<instance>/<db>` (rule id = problem id) | `db_health.go` `evaluateDBHealth` (saf `dbHealthDecide`) | 2 ardışık kova: hata % ≥ 5 (mutlak) YA DA p99 ≥ 2000 ms VE ≥ 3× dünkü aynı kova (GÖRELİ; dünkü kova yoksa p99 kapalı); kova başına ≥ 100 çağrı VE ≥ 2 etkilenen çağıran (≥ 10 çağrılı); 2× → critical (P1), tazelemede şiddet yükselirse yeniden bildirim; kapanış son iki TAMAMLANMIŞ kova temiz (ihlalsiz / çağrı tabanı altı / verisiz) × 2 ardışık okuma; tik başına ≤ 20 açılış | 5 dk kova (açılış: cari kova çağrı tabanını geçtiyse önceki+cari, yoksa son iki tamamlanmış) | db; v0.10.1073, operatör: "Dün akşam CRM database'inde sorun oldu ama problemlerde P1 gelmedi". Okuma `chstore.DBHealthBuckets` ← `db_caller_summary_5m`, tik başına bir sorgu (iç: çağıran başına -MergeState + finalizeAggregation; batch çağıranlar iç WHERE'de düşer; HAVING yalnız ihlal + AÇIK problem satırları) + p99 adayı varken `DBHealthReferenceP99` ← `db_summary_5m` (24 sa önce). Vidalar `db_slow_query.health` (keep-last-good). Özne `DBHealthSubject`: gerçek db.name → `db:<sys>@<db>`, `default` → instance biçimi; `DBProblemSubjectForm` aynı kuralı id'den türetir (FE `dbProblemForm`). Yumuşak-hata: ayar yok / ana ya da referans okuması düştü → açıklar yalnız TAZELENİR; kural kapalı → "rule disabled" kapanışı; kesik okumada kapanış yok. Metrik `db.error_pct` / `db.p99_ms` (kategori ERROR / SLOWDOWN); alarm grafiği yok (`hasAlertMetricChart`), detay pivotları `dbHealthPivots` |
 | `runtime:jvm-gc*` | `runtime_vm.go:66` (yalnız VM) | RuntimeAlertConfig | 10 dk | service; heap kuralı EMEKLİ v0.9.551 |
 | `exception:shared-dependency` | `shared_exception.go:26-132` | aynı tip ≥3 servis / 5 dk kova; ≥10 critical | 24 sa / 15 dk aktif | id kova taşır |
 | `exception:fatal-infrastructure` | `fatal_exception.go:28-74` | 1 oluşum, IsFatalExceptionType | 24 sa / 15 dk | id kova TAŞIMAZ |
@@ -421,7 +422,7 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
 
 ## 14. Sayım tabanları
 
-- 19 saklanan kural-id ailesi + 2 notify-only = `internal/{anomaly,evaluator,monitor}` test-dışı dosyalarda `RuleID:` / `ruleID :=`.
+- 20 saklanan kural-id ailesi (v0.10.1073 `db-health:` dahil) + 2 notify-only = `internal/{anomaly,evaluator,monitor}` test-dışı dosyalarda `RuleID:` / `ruleID :=`.
 - 13 arka plan döngüsü = AIOps paketleri + `main.go`'da `NewLeaderHolder` / `time.NewTicker` sahipleri.
 - 7 ayar anahtarı = `internal/chstore/{anomaly_tracked,anomaly_sensitivity,anomaly_promotion,problem_priority,problem_escalation,exception_triage,selfhealth}.go` içindeki `const *Key`.
 - 12 state tablosu = `store.go`'da problems|anomaly_*|root_cause_hypotheses|rca_verdicts|incident*|exception_groups|events|notification_log CREATE'leri.

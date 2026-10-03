@@ -31,6 +31,7 @@
 //     yalnız instance biçimi (kapasite) sorulur.
 
 import type { DBProblemCount, DBProblemForms, DBProblemSeverity, Problem } from '@/lib/types';
+import { parseDbHealthRuleId } from '@/lib/problemSubject';
 
 /** chstore.DBSubjectID'nin ikizi: system küçük harf + kırpılmış; biri boşsa ''. */
 export function dbSubjectId(system: string, instance: string): string {
@@ -47,9 +48,14 @@ export const DB_CAPACITY_RULE_PREFIX = 'db-capacity:';
 
 export type DBProblemForm = 'instance' | 'dbName';
 
-/** Go chstore.DBProblemSubjectForm ikizi: kapasite kuralı → instance, gerisi → dbName. */
+/** Go chstore.DBProblemSubjectForm ikizi: kapasite kuralı → instance, gerisi → dbName.
+ *  v0.10.1073 — sağlık kuralı (db-health:) gerçek db.name taşımıyorsa ('default'
+ *  nöbetçisi) instance biçimi; Go DBHealthSubject ile aynı seçim. */
 export function dbProblemForm(ruleId: string | undefined | null): DBProblemForm {
-  return (ruleId ?? '').startsWith(DB_CAPACITY_RULE_PREFIX) ? 'instance' : 'dbName';
+  if ((ruleId ?? '').startsWith(DB_CAPACITY_RULE_PREFIX)) return 'instance';
+  const h = parseDbHealthRuleId(ruleId);
+  if (h && (h.dbName.trim() === '' || h.dbName.trim() === DB_NAME_SENTINEL)) return 'instance';
+  return 'dbName';
 }
 
 /** Bir özne kimliği ve o kimlikte SORULAN biçimler. instance == dbName iken tek

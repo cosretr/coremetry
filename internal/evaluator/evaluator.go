@@ -134,6 +134,9 @@ type Evaluator struct {
 	// yapılmaz; hata hâlinde false kalır ve sonraki tik yeniden dener.
 	// Bkz. builtins_default_off.go.
 	builtinsOffDone atomic.Bool
+	// dbHealthCfg — v0.10.1073 db-health ayarının son iyi değeri
+	// (keep-last-good, db_health.go).
+	dbHealthCfg dbHealthCfgMemo
 	// version — kalp atışını yazan binary'nin kimliği. main'den
 	// SetVersion ile geçer (evaluator main'i import edemez).
 	// Bir dağıtım sonrası eski pod'un bayat kalp atışını taze
@@ -597,6 +600,9 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 	// pipeline like every other Problem.
 	e.evaluateDBCapacity(ctx)
 	e.evaluateDBSlowStatements(ctx) // v0.10.325 — yavaş SQL → Problem (Kind=db → sahibi + SRE maili)
+	// v0.10.1073 — veritabanı SAĞLIĞI (db-health): db hata % / p99, ≥2 çağıran,
+	// 2 ardışık kova. Yavaş ifadeden SONRA (db_health_test.go sırayı pinler).
+	e.evaluateDBHealth(ctx)
 
 	// Runtime pod detector (v0.9.90) — JVM heap saturation + GC pause per
 	// pod. Overview's Runtime panel only SHOWS these; this pass makes them

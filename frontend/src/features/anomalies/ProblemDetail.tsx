@@ -52,6 +52,7 @@ import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; /
 import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
 import { hasAlertMetricChart } from './alertMetricSeries'; // v0.10.1064
+import { dbHealthPivots } from './dbHealthPivots'; // v0.10.1073
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -882,6 +883,8 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   // ilk iki link pinli ve dokunulmadı.
   const logsPatternsLink = logsHref({ window: probWindow, service: problem.service, panel: 'patterns' });
   const isExternal = subjectKind(problem.service, problem.kind) === 'external';
+  // v0.10.1073 — db-health problemi: Databases detayı + trace pivotları (null = başka tür).
+  const dbHealthLinks = dbHealthPivots(problem.ruleId, probWindow);
   // v0.10.898 — dış SERİ Problem'i özne melezken (kind=service, gerçek servis) de
   // dış kanıt panelini alır (ruleID öneki tip sistemi; sentezleyici bu anchor'ı atlar).
   const isExtSeries = isExternal || (problem.ruleId ?? '').startsWith('anomaly:ext:');
@@ -1133,7 +1136,14 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                 spans.service_name ile eşleşmiyor (kesişim 0 satır).
                 Çalışmayan dört link yerine NEDEN olmadığını söyleyen tek
                 satır. */}
-            {subjectKind(problem.service, problem.kind) !== 'service' ? (
+            {/* v0.10.1073 — db-health kural id'si veritabanı ÜÇLÜSÜNÜ taşır:
+                Databases detayı ve o veritabanının trace'leri boş açılmaz
+                (dbHealthPivots.ts). Diğer db öznelerinde aşağıdaki cümle sürer. */}
+            {dbHealthLinks ? (<>
+              <SignalLink to={dbHealthLinks.databaseHref} label="◫ Veritabanı sayfası" sub="db detayı, problem penceresi" />
+              <SignalLink to={dbHealthLinks.tracesHref} label="⋮ Trace'ler" sub="bu veritabanı, problem penceresi" />
+              <SignalLink to={dbHealthLinks.errorTracesHref} label="⋮ Hatalı trace'ler" sub="bu veritabanı, problem penceresi, yalnız hatalar" />
+            </>) : subjectKind(problem.service, problem.kind) !== 'service' ? (
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>
                 {isExternal
                   ? 'Bu alarmın öznesi bir dış metrik kaynağı serisi, bir servis değil — ilgili trace/pod/log kanıtı yukarıdaki kanıt zincirinde.'

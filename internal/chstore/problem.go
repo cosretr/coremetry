@@ -125,6 +125,11 @@ const (
 	// BİÇİMİNİ bundan türetir (DBProblemSubjectForm); FE ikizi
 	// pages/databases/databaseProblems.ts DB_CAPACITY_RULE_PREFIX (testle pinli).
 	RuleDBCapacityPrefix = "db-capacity:"
+	// RuleDBHealthPrefix — v0.10.1073: veritabanı sağlık kuralı
+	// ("db-health:<system>@<instance>/<db>", evaluator/db_health.go). Kural id
+	// veritabanı ÜÇLÜSÜNÜ taşır (DBHealthRuleID / ParseDBHealthRuleID); FE
+	// ikizi lib/problemSubject.ts DB_HEALTH_RULE_PREFIX (testle pinli).
+	RuleDBHealthPrefix = "db-health:"
 )
 
 // db özneli problemin özne BİÇİMİ (v0.10.1027). `db:<system>@<X>` X'in bir
@@ -140,8 +145,14 @@ const (
 
 // DBProblemSubjectForm — SAF: kapasite kuralı → instance biçimi; diğer her db
 // problemi (yavaş ifade db-slow-stmt, hedefli kural) → dbName biçimi.
+// v0.10.1073 — sağlık kuralı (db-health:) özneyi kendi üçlüsünden seçer
+// (DBHealthSubject): gerçek db.name varsa dbName biçimi, yoksa ('default'
+// nöbetçisi) instance biçimi — biçim yine kural id'sinden türer.
 func DBProblemSubjectForm(ruleID string) string {
 	if strings.HasPrefix(ruleID, RuleDBCapacityPrefix) {
+		return DBSubjectFormInstance
+	}
+	if _, _, db, ok := ParseDBHealthRuleID(ruleID); ok && !DBHealthHasDBName(db) {
 		return DBSubjectFormInstance
 	}
 	return DBSubjectFormDBName

@@ -30,8 +30,9 @@ export function isAlertSeriesMetric(metric: string): boolean {
 // hasAlertMetricChart — grafiği olan Problem türleri: kullanıcı / yerleşik
 // alarm kuralının span-metrik problemi (sürdürülen — for: — kurallar dahil).
 // Dedektör aileleri kural id ÖNEKİYLE ayrılır (aiops §3): "anomaly:",
-// "anomaly-auto:", "slo:", "db-capacity:", "runtime:", "exception:",
-// "monitor:", "incident:" iki nokta taşır; "self-*", "exception-storm",
+// "anomaly-auto:", "slo:", "db-capacity:", "db-health:" (v0.10.1073 — db
+// öznesi, serisi yok), "runtime:", "exception:", "monitor:", "incident:" iki
+// nokta taşır; "self-*", "exception-storm",
 // "db-slow-stmt" taşımaz ama kural değildir. Kural id'leri "builtin-*" ya da
 // onaltılık. Sunucu yine de kuralı okuyup türünü doğrular (404 → bölüm yok).
 const DETECTOR_IDS = new Set(['exception-storm', 'db-slow-stmt']);

@@ -20,6 +20,8 @@ func TestEvaluatorRuleIDsClassify(t *testing.T) {
 		{sharedBurstRuleID, chstore.NotifyKindAnomaly}, // shared_exception.go
 		{dbSlowStmtRuleID, chstore.NotifyKindProblem},  // db_slow_statement.go
 		{"runtime:jvm-gc", chstore.NotifyKindProblem},  // runtime_vm.go
+		// v0.10.1073 — db_health.go: veritabanı sağlığı bir eşik kuralı → problem.
+		{chstore.DBHealthRuleID("oracle", "db-host-01", "crm-db"), chstore.NotifyKindProblem},
 		{"slo:slo-1:critical", chstore.NotifyKindProblem},
 		{"builtin-error-rate", chstore.NotifyKindProblem},
 		{"r-1a2b3c", chstore.NotifyKindProblem}, // operatör kuralı (r.ID)

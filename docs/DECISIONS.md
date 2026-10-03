@@ -1184,6 +1184,46 @@ Yükseltme yalnız GÖRÜNÜM/öncelik değişikliği: exception bildiricisinin 
 `notify/exception_notifier.go` routeGroups) regresyonda bir kez gönderir, yani grup sonradan 500'ü aşıp P1 olunca
 yalnız-P1 kanallar bildirim ALMAZ. Bildirici bu sürümde bilinçli olarak değişmedi.
 
+## 2026-10-03 — Veritabanı sağlık kuralı (db-health): hata oranı / p99, ≥2 çağıran (v0.10.1073)
+
+**Operatör:** "Dün akşam CRM database'inde sorun oldu ama problemlerde P1 gelmedi." 2026-10-02 ~21:30–22:30: bir
+veritabanının hata oranı ~%0 → ~%10 (~15 dk), p99'u ms → ~5 s; çağıranların p99'u 8 s, ardından 55k HTTP 503.
+Veritabanı öznesinde hiçbir şey açılmadı: db-capacity yalnız doyma gauge'u, db-slow-stmt tek ifade, `db_p99_ms`
+yerleşikleri çağıran başına ve varsayılan kapalı (v0.10.1069). Operatör onayı: "go".
+
+**Karar:** yeni evaluator pası `evaluateDBHealth` (db-slow-stmt'ten sonra, lider tiki). 2 ardışık 5 dk kovada ihlal:
+db hata % ≥ 5 (MUTLAK) YA DA p99 ≥ 2000 ms VE ≥ 3 × aynı veritabanının 24 sa önceki aynı kovası (GÖRELİ). p99 bilerek
+göreli: aynı günün v0.10.1069 kararı filo geneli mutlak gecikme eşiğini gürültü saydı; raporlama veritabanları gün boyu
+2 s üstünde. Dünkü kova yoksa (yeni DB, dün veri yok) p99 boyutu o kova için KAPALI, hata % çalışır. Kova başına ≥ 100
+çağrı VE ≥ 2 etkilenen çağıran servis. Etkilenen çağıran: kovada ≥ 10 çağrı yapmış ve kendi hata %'si ya da p99'u
+tabanı aşmış (çağıran p99'u mutlak). Batch kalıbına uyan çağıranlar hem sayımdan hem agregeden düşer. Eşiğin 2 katı
+critical → `computePriority` P1; tazelemede warning → critical yükselirse yeniden bildirim. Açılış, çağrı tabanını
+geçmiş yarım cari kovayı kullanabilir. Kapanış yalnız son iki TAMAMLANMIŞ kovaya bakar (temiz = iki boyut ihlalsiz ya
+da kova çağrı tabanı altında/verisiz) ve iki ardışık okumada (tik) temiz ister. Düşük hacimde sonsuz tutma (4 sa sonra
+bayat-critical P1) yok. Ayar hiç okunamadı, ana okuma ya da referans okuması düştü → açık problemler yalnız tazelenir
+(süpürme olay ortasında P1'i "source silent" diye kapatmaz). Kural kapatılınca açıklar "rule disabled" gerekçesiyle
+kapanır (v0.10.1069 emsali).
+
+**Okuma:** `db_caller_summary_5m` (Databases detayıyla aynı MV, çağıran boyutu olan tek db MV'si). Tik başına tek
+sorgu: iç sorgu çağıran başına tDigest durumu (-MergeState + finalizeAggregation, tek birleştirme). `HAVING` yalnız
+tabanı aşan satırları ve AÇIK problemlerin tüm satırlarını geçirir (açık kural id'leri bağlı dizi). Böylece kesik
+okumada düzelmiş DB'nin temiz satırı düşmez; açık DB okumada hiç yoksa (gerçekten verisiz) temiz sayılır. LIMIT 20000,
+kesik okumada hiçbir şey kapanmaz. p99 adayı varken ikinci sorgu `db_summary_5m`'den dünkü 3 kovayı okur (aday kural
+id'leriyle süzülü, LIMIT, max_execution_time). Referans tüm çağıranları kapsar, ana okuma batch'siz: küçük tutarsızlık
+kabul. Ham spans yok. **Maliyet notu:** iki MV'nin ORDER BY'ı `time_bucket` ile BİTİYOR; zaman budaması yalnız
+partition (`toDate`) + minmax. Prod'da güvenmeden önce `system.query_log` `read_bytes` ölçülmeli. Takip (bu sürümde
+yok): iki adımlı okuma — önce `db_summary_5m`'den aday DB'ler, sonra yalnız onlar için `db_caller_summary_5m`.
+
+**Kimlik:** kural id `db-health:<system>@<instance>/<db>` (detay sayfasının üçlüsü). Özne gerçek db.name varsa
+`db:<sys>@<db>`, yoksa instance biçimi. Vidalar `db_slow_query` blobunun `health` alanında (yeni anahtar yok, son iyi
+değer korunur); tik başına ≤ 20 yeni açılış. Problem detayı "Veritabanı sayfası" ve "Trace'ler" pivotlarını kural
+id'sinden kurar; alarm metrik grafiği bu türde çizilmez.
+
+**Bedel (kabul):** `db:<sys>@<db>` öznesi aynı db adlı farklı instance'larda (ör. prod/staging) çakışır; incident'lar
+birleşebilir. `db:` öznelerinin topoloji komşusu yok, bu yüzden problem çağıranların incident'ına katılmaz. Çağıran
+"etkilenen" bayrağında p99 mutlak (kronik yavaş çağıran, hata % ihlalinde çağıran kapısını doldurabilir). db.name'inde
+'/' olan veritabanının id çözümü instance'a kayar.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

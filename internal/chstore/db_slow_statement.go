@@ -31,10 +31,87 @@ type DBSlowQueryConfig struct {
 	// CooldownSec — açık Problem, eşik altına inse bile bu süre dolmadan
 	// çözülmez (flap önleyici tutma süresi).
 	CooldownSec int `json:"cooldownSec"`
+	// Health — v0.10.1073 veritabanı sağlık kuralı (db-health, evaluator/
+	// db_health.go) vidaları. AYNI blobda (yeni ayar anahtarı yok — aiops §11).
+	// İşaretçi: alanı hiç yazılmamış eski blob (nil) ile operatörün kaydettiği
+	// değer ayrılsın; Normalize daima doldurur. PUT'ta nil gelirse (eski
+	// sekme) saklı değer korunur (api/db_slow_query_routes.go).
+	Health *DBHealthConfig `json:"health,omitempty"`
+}
+
+// DBHealthConfig — veritabanı sağlık kuralı (v0.10.1073). İki ardışık 5 dk
+// kovada db hata % ≥ ErrorPct YA DA db p99 ≥ P99Ms; kova başına ≥ MinCalls
+// çağrı VE ≥ MinCallers etkilenen (batch olmayan) çağıran servis.
+type DBHealthConfig struct {
+	// Enabled — varsayılan AÇIK (operatör onayı "go"); *bool: false ile
+	// "alan yok" ayrılsın (aiops §11). Normalize nil'i true yapar.
+	Enabled *bool `json:"enabled"`
+	// ErrorPct — db hata oranı tabanı (yüzde, varsayılan 5).
+	ErrorPct float64 `json:"errorPct"`
+	// P99Ms — db p99 tabanı (ms, varsayılan 2000). Mutlak taban TEK BAŞINA
+	// yetmez: p99 boyutu yalnız p99 ≥ P99RiseFactor × aynı veritabanının 24 sa
+	// önceki aynı kovasının p99'uyken ihlaldir (v0.10.1069: filo geneli mutlak
+	// gecikme eşiği gürültü). Dünkü kova yoksa p99 boyutu o kova için KAPALI.
+	P99Ms float64 `json:"p99Ms"`
+	// P99RiseFactor — p99'un dünkü aynı kovaya göre kat tabanı (varsayılan 3).
+	P99RiseFactor float64 `json:"p99RiseFactor"`
+	// MinCallerCalls — bir çağıranın "etkilenen" sayılması için kovadaki
+	// çağrı tabanı (varsayılan 10): tek hatalı çağrı çağıran kapısını geçirmesin.
+	MinCallerCalls uint64 `json:"minCallerCalls"`
+	// MinCalls — kova başına çağrı tabanı (varsayılan 100); altı gürültü.
+	MinCalls uint64 `json:"minCalls"`
+	// MinCallers — etkilenen farklı çağıran servis tabanı (varsayılan 2);
+	// batch kalıbına uyan çağıranlar sayılmaz.
+	MinCallers int `json:"minCallers"`
+	// MaxNewPerTick — tik başına yeni açılış tavanı (fırtına kemeri, vars. 20).
+	MaxNewPerTick int `json:"maxNewPerTick"`
+}
+
+// On — etkin mi (nil = varsayılan açık).
+func (h DBHealthConfig) On() bool { return h.Enabled == nil || *h.Enabled }
+
+func DefaultDBHealth() DBHealthConfig {
+	on := true
+	return DBHealthConfig{Enabled: &on, ErrorPct: 5, P99Ms: 2000, P99RiseFactor: 3, MinCallerCalls: 10, MinCalls: 100, MinCallers: 2, MaxNewPerTick: 20}
+}
+
+// NormalizeDBHealth — sıfır/negatif alan varsayılana; ErrorPct 100'de
+// kesilir; Enabled daima nil olmayan işaretçi (JSON'da true/false yazılsın).
+func NormalizeDBHealth(h DBHealthConfig) DBHealthConfig {
+	d := DefaultDBHealth()
+	on := h.On()
+	h.Enabled = &on
+	if h.ErrorPct <= 0 {
+		h.ErrorPct = d.ErrorPct
+	}
+	if h.ErrorPct > 100 {
+		h.ErrorPct = 100
+	}
+	if h.P99Ms <= 0 {
+		h.P99Ms = d.P99Ms
+	}
+	if h.P99RiseFactor < 1 {
+		// 0 (alan yok) ve <1 (dünden DÜŞÜK p99'u "artış" sayardı) → varsayılan.
+		h.P99RiseFactor = d.P99RiseFactor
+	}
+	if h.MinCallerCalls == 0 {
+		h.MinCallerCalls = d.MinCallerCalls
+	}
+	if h.MinCalls == 0 {
+		h.MinCalls = d.MinCalls
+	}
+	if h.MinCallers <= 0 {
+		h.MinCallers = d.MinCallers
+	}
+	if h.MaxNewPerTick <= 0 {
+		h.MaxNewPerTick = d.MaxNewPerTick
+	}
+	return h
 }
 
 func DefaultDBSlowQuery() DBSlowQueryConfig {
-	return DBSlowQueryConfig{Enabled: true, ThresholdMs: 1000, CriticalMs: 5000, MinExecutions: 20, ForBuckets: 2, CooldownSec: 900}
+	h := DefaultDBHealth()
+	return DBSlowQueryConfig{Enabled: true, ThresholdMs: 1000, CriticalMs: 5000, MinExecutions: 20, ForBuckets: 2, CooldownSec: 900, Health: &h}
 }
 
 const dbSlowQueryKey = "db_slow_query"
@@ -59,19 +136,40 @@ func NormalizeDBSlowQuery(c DBSlowQueryConfig) DBSlowQueryConfig {
 	if c.CooldownSec < 0 {
 		c.CooldownSec = 0
 	}
+	var h DBHealthConfig
+	if c.Health != nil {
+		h = *c.Health
+	}
+	h = NormalizeDBHealth(h)
+	c.Health = &h
 	return c
 }
 
 func (s *Store) GetDBSlowQuery(ctx context.Context) DBSlowQueryConfig {
-	raw, err := s.GetSetting(ctx, dbSlowQueryKey)
-	if err != nil || len(raw) == 0 {
+	c, err := s.LoadDBSlowQuery(ctx)
+	if err != nil {
 		return DefaultDBSlowQuery()
+	}
+	return c
+}
+
+// LoadDBSlowQuery — GetDBSlowQuery'nin hatayı SÖYLEYEN hâli (v0.10.1073).
+// Satır yok → varsayılan, hata yok; okuma ya da JSON hatası → hata. db-health
+// dedektörü bununla son iyi değeri korur (keep-last-good): okuma hatasında
+// varsayılana düşmek, operatörün kapattığı kuralı o tik geri açardı.
+func (s *Store) LoadDBSlowQuery(ctx context.Context) (DBSlowQueryConfig, error) {
+	raw, err := s.GetSetting(ctx, dbSlowQueryKey)
+	if err != nil {
+		return DBSlowQueryConfig{}, err
+	}
+	if len(raw) == 0 {
+		return DefaultDBSlowQuery(), nil
 	}
 	var c DBSlowQueryConfig
 	if err := json.Unmarshal(raw, &c); err != nil {
-		return DefaultDBSlowQuery()
+		return DBSlowQueryConfig{}, err
 	}
-	return NormalizeDBSlowQuery(c)
+	return NormalizeDBSlowQuery(c), nil
 }
 
 func (s *Store) SaveDBSlowQuery(ctx context.Context, c DBSlowQueryConfig) (DBSlowQueryConfig, error) {

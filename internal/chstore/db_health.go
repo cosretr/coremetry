@@ -1,0 +1,290 @@
+package chstore
+
+// db_health.go — v0.10.1073: veritabanı SAĞLIK kuralının (db-health) okuma
+// yarısı + kural id / özne sözleşmesi. Karar ve Problem yaşam döngüsü
+// evaluator/db_health.go'da (lider kilidi, dedup, notify, incident).
+//
+// Neden (prod olayı 2026-10-02 ~21:30–22:30): bir veritabanının hata oranı
+// ~%0'dan ~%10'a, p99'u ms'lerden ~5 s'ye çıktı; çağıranların p99'u 8 s'ye
+// vurdu, ardından 55k HTTP 503 geldi. VERİTABANI öznesinde hiçbir Problem
+// açılmadı: db-capacity yalnız doyma gauge'larını, db-slow-stmt tek tek
+// ifadeleri okuyor; `db_p99_ms` yerleşikleri ÇAĞIRAN servis başına ve
+// varsayılan kapalı (v0.10.1069).
+//
+// KAYNAK: db_caller_summary_5m — Databases sayfasının detay okumasıyla
+// (dbDetailAggregate) AYNI MV ve AYNI kimlik üçlüsü (db_system, instance,
+// db_name); ÇAĞIRAN boyutu (service_name) taşıyan tek db MV'si. db_summary_5m
+// çağıran taşımıyor ("≥2 çağıran" kapısı onda kurulamaz), ham spans yasak.
+//
+// TEK okuma, tik başına, tüm veritabanları için: iç sorgu (db, çağıran, kova)
+// başına sayım + hata + tDigest DURUMU (-MergeState) ve çağıranın "etkilendi"
+// bayrağı; dış sorgu (db, kova) başına toplar, durumları birleştirip db p99'u
+// çıkarır, etkilenen çağıranları sayar ve en çok çağıran ≤3'ünü listeler.
+// Batch kalıbına uyan çağıranlar İÇ WHERE'de düşer: hem sayımdan hem
+// agregelerden (batch işinin kendi hatası/gecikmesi DB'yi "hasta" yapmasın).
+//
+// HAVING (inceleme düzeltmesi): yalnız tabanı aşan (db, kova) satırları ve
+// ŞU AN AÇIK db-health problemlerinin TÜM satırları döner. Eskiden LIMIT tüm
+// filonun agregesinden sonra kesiyordu ve "ORDER BY affected DESC" sağlıklı
+// satırları önce atıyordu: kesik okumada düzelmiş veritabanının "temiz"
+// satırı hiç gelmez, problem açık kalıp eskalasyonla büyürdü.
+//
+// p99 GÖRELİ (inceleme düzeltmesi, v0.10.1069 kararıyla uyum: filo geneli
+// mutlak gecikme eşiği gürültü — raporlama veritabanları gün boyu 2 s
+// üstünde): ikinci okuma DBHealthReferenceP99 aynı veritabanının 24 sa önceki
+// aynı kovalarının p99'unu db_summary_5m'den getirir; karar evaluator'da.
+
+import (
+	"context"
+	"math"
+	"strings"
+	"time"
+)
+
+// db-health Problem metrikleri — kategori (problem_category.go) ve FE
+// biçimi bu iki dizgiye bakar. Noktalı ad bilerek: `db_error_rate` /
+// `db_p99_ms` çağıran-servis alarm metrikleri (TransportOp), bu ise
+// VERİTABANI öznesinin ölçüsü — karıştırılmasın.
+const (
+	DBHealthMetricErrorPct = "db.error_pct"
+	DBHealthMetricP99Ms    = "db.p99_ms"
+)
+
+// dbHealthRowLimit — iki okumanın satır tavanı. HAVING yalnız ihlal eden ve
+// açık problemlere ait satırları geçirdiği için gerçek sonuç küçük; tavan
+// kemerdir. Tavana dayanınca okuma "kesik" döner ve dedektör görünmeyen açık
+// problemleri KAPATMAZ (yalnız tazeler).
+const dbHealthRowLimit = 20000
+
+// dbHealthRuleIDSQL — DBHealthRuleID'nin SQL ikizi (aynı biçim; Go tarafı
+// system'i kırpıp küçültür). Açık problem kimlikleriyle eşleşme ve referans
+// okumasının süzgeci bunu kullanır. Önek sabitten gelir (kullanıcı girdisi değil).
+const dbHealthRuleIDSQL = `concat('` + RuleDBHealthPrefix + `', lower(trimBoth(db_system)), '@', instance, '/', db_name)`
+
+// DBHealthBucket — bir veritabanının bir 5 dk kovadaki sağlık ölçüsü
+// (batch olmayan çağıranlar üzerinden).
+type DBHealthBucket struct {
+	DBSystem string
+	Instance string
+	DBName   string
+	Bucket   time.Time
+	Calls    uint64
+	Errors   uint64
+	P99Ms    float64
+	// Callers — kovada bu veritabanını çağıran farklı (batch olmayan) servis.
+	Callers uint64
+	// AffectedCallers — kovada ≥ MinCallerCalls çağrı yapmış VE kendi
+	// çağrılarında hata % ≥ ErrorPct YA DA p99 ≥ P99Ms olan farklı çağıran.
+	AffectedCallers uint64
+	// TopCallers — etkilenen çağıranlardan çağrı sayısına göre ilk ≤3.
+	TopCallers []string
+	// RefP99Ms / HasRef — aynı veritabanının 24 sa önceki aynı kovasındaki
+	// p99'u (DBHealthReferenceP99; okumadan sonra evaluator doldurur). HasRef
+	// false = referans yok → p99 boyutu bu kova için KAPALI.
+	RefP99Ms float64
+	HasRef   bool
+}
+
+// RuleID — satırın db-health kural id'si.
+func (b DBHealthBucket) RuleID() string { return DBHealthRuleID(b.DBSystem, b.Instance, b.DBName) }
+
+// ErrorPct — kovanın hata yüzdesi (çağrı yoksa 0).
+func (b DBHealthBucket) ErrorPct() float64 {
+	if b.Calls == 0 {
+		return 0
+	}
+	return float64(b.Errors) * 100 / float64(b.Calls)
+}
+
+// dbHealthBucketsSQL — SAF. batchCond boşsa batch dalı YOK (kalıp listesi
+// boş = kural kapalı). Bind sırası: minCallerCalls, errorPct, p99Ms, since,
+// until, [kalıplar], errorPct, p99Ms, açık kural id'leri (dizi).
+//
+// Çağıranın p99'u TEK birleştirmeyle: durum bir kez -MergeState ile kurulur,
+// finalizeAggregation onu sonlandırır (ikinci tDigest birleştirmesi yok).
+func dbHealthBucketsSQL(batchCond string) string {
+	excl := ""
+	if batchCond != "" {
+		excl = `
+			  AND NOT ` + batchCond
+	}
+	return `
+		SELECT db_system, instance, db_name, time_bucket,
+		       sum(c_calls)                                                       AS calls,
+		       sum(c_errs)                                                        AS errs,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(c_q), 3) / 1e6 AS p99_ms,
+		       count()                                                            AS callers,
+		       countIf(c_affected)                                                AS affected,
+		       arraySlice(arrayMap(x -> x.1, arrayReverseSort(x -> x.2,
+		         groupArrayIf((service_name, c_calls), c_affected))), 1, 3)       AS top_callers
+		FROM (
+			SELECT db_system, instance, db_name, service_name, time_bucket,
+			       countMerge(span_count_state)                                  AS c_calls,
+			       countIfMerge(error_count_state)                               AS c_errs,
+			       quantilesTDigestMergeState(0.5, 0.95, 0.99)(duration_q_state) AS c_q,
+			       c_calls >= ? AND ((c_errs * 100 >= ? * c_calls)
+			         OR (arrayElement(finalizeAggregation(c_q), 3) / 1e6 >= ?))  AS c_affected
+			FROM db_caller_summary_5m
+			WHERE time_bucket >= ? AND time_bucket < ?` + excl + `
+			GROUP BY db_system, instance, db_name, service_name, time_bucket
+		)
+		GROUP BY db_system, instance, db_name, time_bucket
+		HAVING (errs * 100 >= ? * calls) OR (p99_ms >= ?)
+		    OR ` + dbHealthRuleIDSQL + ` IN ?
+		ORDER BY affected DESC, calls DESC
+		LIMIT ` + itoa(dbHealthRowLimit) + `
+		SETTINGS max_execution_time = 10`
+}
+
+// dbHealthBucketsQuery — SAF: SQL + argümanlar (golden test bunu pinler).
+// Batch yüklemi IsBatchService'in SQL ikizi (BatchServiceSQL), aynı listeden.
+// openIDs: açık db-health problemlerinin kural id'leri — onların satırları
+// eşikten bağımsız döner (temiz kova görülebilsin diye). nil → boş dizi.
+func dbHealthBucketsQuery(since, until time.Time, cfg DBHealthConfig, sens AnomalySensitivityConfig, openIDs []string) (string, []any) {
+	if openIDs == nil {
+		openIDs = []string{}
+	}
+	cond, bargs := sens.BatchServiceSQL("service_name")
+	args := []any{cfg.MinCallerCalls, cfg.ErrorPct, cfg.P99Ms, since, until}
+	args = append(args, bargs...)
+	args = append(args, cfg.ErrorPct, cfg.P99Ms, openIDs)
+	return dbHealthBucketsSQL(cond), args
+}
+
+// DBHealthBuckets — [since, until) arasındaki (db, kova) sağlık satırları:
+// tabanı aşanlar + openIDs'in tüm satırları. truncated: satır tavanına
+// dayandı (küme eksik olabilir).
+func (s *Store) DBHealthBuckets(ctx context.Context, since, until time.Time, cfg DBHealthConfig, sens AnomalySensitivityConfig, openIDs []string) ([]DBHealthBucket, bool, error) {
+	q, args := dbHealthBucketsQuery(since, until, cfg, sens, openIDs)
+	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	out := []DBHealthBucket{}
+	for rows.Next() {
+		var b DBHealthBucket
+		if err := rows.Scan(&b.DBSystem, &b.Instance, &b.DBName, &b.Bucket,
+			&b.Calls, &b.Errors, &b.P99Ms, &b.Callers, &b.AffectedCallers, &b.TopCallers); err != nil {
+			return nil, false, err
+		}
+		b.P99Ms = finiteOrZero(b.P99Ms)
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	return out, len(out) >= dbHealthRowLimit, nil
+}
+
+// dbHealthReferenceSQL — SAF: aynı veritabanlarının 24 sa önceki kovalarının
+// p99'u. Kaynak db_summary_5m (çağıran boyutu gerekmez; Databases listesinin
+// MV'si). Süzgeç: yalnız p99 adayı veritabanlarının kural id'leri (dizi).
+// Bind sırası: since, until, kural id'leri.
+func dbHealthReferenceSQL() string {
+	return `
+		SELECT db_system, instance, db_name, time_bucket,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms
+		FROM db_summary_5m
+		WHERE time_bucket >= ? AND time_bucket < ?
+		  AND ` + dbHealthRuleIDSQL + ` IN ?
+		GROUP BY db_system, instance, db_name, time_bucket
+		LIMIT ` + itoa(dbHealthRowLimit) + `
+		SETTINGS max_execution_time = 10`
+}
+
+// DBHealthRefKey — referans haritasının anahtarı: kural id + kova (unix sn,
+// 24 sa İLERİ kaydırılmış — cari kovayla doğrudan eşleşsin).
+type DBHealthRefKey struct {
+	RuleID string
+	Bucket int64
+}
+
+// DBHealthReferenceP99 — ruleIDs için [since, until) penceresindeki kova
+// p99'ları; anahtarın kovası shift kadar ileri kaydırılır (24 sa önceki kova
+// → bugünkü karşılığı). ruleIDs boşsa okuma yok.
+func (s *Store) DBHealthReferenceP99(ctx context.Context, since, until time.Time, shift time.Duration, ruleIDs []string) (map[DBHealthRefKey]float64, error) {
+	out := map[DBHealthRefKey]float64{}
+	if len(ruleIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.telemetryReadConn().Query(ctx, dbHealthReferenceSQL(), since, until, ruleIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			sys, inst, db string
+			bucket        time.Time
+			p99           float64
+		)
+		if err := rows.Scan(&sys, &inst, &db, &bucket, &p99); err != nil {
+			return nil, err
+		}
+		if p99 = finiteOrZero(p99); p99 > 0 {
+			out[DBHealthRefKey{RuleID: DBHealthRuleID(sys, inst, db), Bucket: bucket.Add(shift).Unix()}] = p99
+		}
+	}
+	return out, rows.Err()
+}
+
+func finiteOrZero(v float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	return v
+}
+
+// ── Kural id ve özne sözleşmesi ───────────────────────────────────────────
+
+// dbHealthNameSentinel — MV'nin "span db.name taşımıyordu" nöbetçisi
+// (coalesce(…, 'default')); gerçek bir veritabanı adı değil.
+const dbHealthNameSentinel = "default"
+
+// DBHealthHasDBName — db.name gerçek bir ad mı (boş ya da nöbetçi değil).
+func DBHealthHasDBName(dbName string) bool {
+	n := strings.TrimSpace(dbName)
+	return n != "" && n != dbHealthNameSentinel
+}
+
+// DBHealthRuleID — `db-health:<system>@<instance>/<db>`. system küçük harf
+// (DBSubjectID ile aynı gerekçe). Kural id = problem id: veritabanı başına
+// tek satır; Databases detay sayfasının üçlüsü bu dizgiden geri çözülür.
+// SQL ikizi dbHealthRuleIDSQL — biri değişirse öbürü de.
+func DBHealthRuleID(system, instance, dbName string) string {
+	return RuleDBHealthPrefix + strings.ToLower(strings.TrimSpace(system)) + "@" + instance + "/" + dbName
+}
+
+// ParseDBHealthRuleID — DBHealthRuleID'nin tersi. Ayırıcılar: İLK '@'
+// (system '@' taşımaz) ve SON '/' (db.name'de '/' beklenmez; instance bir
+// host adı ya da peer.service). Bilinen sınır: '/' içeren bir db.name
+// instance'a kayar — o veritabanının detay linki eksik daralır.
+func ParseDBHealthRuleID(ruleID string) (system, instance, dbName string, ok bool) {
+	if !strings.HasPrefix(ruleID, RuleDBHealthPrefix) {
+		return "", "", "", false
+	}
+	rest := ruleID[len(RuleDBHealthPrefix):]
+	at := strings.Index(rest, "@")
+	if at <= 0 {
+		return "", "", "", false
+	}
+	system, rest = rest[:at], rest[at+1:]
+	slash := strings.LastIndex(rest, "/")
+	if slash <= 0 || slash == len(rest)-1 {
+		return "", "", "", false
+	}
+	return system, rest[:slash], rest[slash+1:], true
+}
+
+// DBHealthSubject — Problem.Service: gerçek db.name varsa dbName biçimi
+// (`db:<system>@<db>`, yavaş ifadeyle aynı uzay — Databases satırı db.name
+// ile eşleşir), yoksa instance biçimi. DBProblemSubjectForm aynı kuralı kural
+// id'sinden türetir; ikisi ayrışırsa liste işareti ve detay kartı problemi
+// kaçırır (db_health_test.go pinler).
+func DBHealthSubject(system, instance, dbName string) string {
+	if DBHealthHasDBName(dbName) {
+		return DBSubjectID(system, dbName)
+	}
+	return DBSubjectID(system, instance)
+}

@@ -39,6 +39,10 @@ describe('hasAlertMetricChart — grafiği olan türler', () => {
     ['hedefli route', { ruleId: 'abc123', metric: 'http_route_p99_ms' }, false],
     ['Kafka istemcisi', { ruleId: 'abc123', metric: 'kafka_lag_max' }, false],
     ['db öznesi', { kind: 'db', service: 'db:oracle@core-db-01' }, false],
+    // v0.10.1073 — db-health: grafik kapsamı iddia etmez (kural id ':' taşır
+    // VE özne db) — iki kapı da tek başına kapatır.
+    ['db-health (db öznesi)', { ruleId: 'db-health:oracle@db-host-01/crm-db', metric: 'db.error_pct', kind: 'db', service: 'db:oracle@crm-db', threshold: 5 }, false],
+    ['db-health, kind boş gelse bile', { ruleId: 'db-health:oracle@db-host-01/crm-db', metric: 'db_p99_ms', threshold: 2000 }, false],
     ['servis yok', { service: '' }, false],
     ['eşik sayı değil', { threshold: Number.NaN }, false],
   ];

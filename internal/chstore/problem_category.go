@@ -70,6 +70,10 @@ func ProblemCategory(p Problem) string {
 		return CategoryError
 	case strings.HasPrefix(metric, "mq_") && strings.HasSuffix(metric, "_error_rate"):
 		return CategoryError
+	case metric == DBHealthMetricErrorPct: // v0.10.1073 db-health
+		return CategoryError
+	case metric == DBHealthMetricP99Ms:
+		return CategorySlowdown
 	// Yavaşlama ailesi.
 	case metric == "p50_ms" || metric == "p95_ms" || metric == "p99_ms" || metric == "avg_ms":
 		return CategorySlowdown

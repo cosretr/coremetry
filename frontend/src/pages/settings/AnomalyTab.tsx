@@ -3,7 +3,7 @@ import type { AnomalyRuntimeConfig } from '@/lib/types'; // v0.10.890
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
-import type { AnomalyTrackedConfig, AnomalySensitivityConfig, AnomalyBehaviorConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig } from '@/lib/types';
+import type { AnomalyTrackedConfig, AnomalySensitivityConfig, AnomalyBehaviorConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig, DBHealthConfig } from '@/lib/types';
 import { Field, FlashBox, humanize } from './shared';
 import { droppedPatternCount, formatBatchPatterns, parseBatchPatterns } from './batchPatterns'; // v0.10.1039
 
@@ -1226,6 +1226,10 @@ function ProblemPrioritySection() {
   );
 }
 
+// v0.10.1073 — db-health varsayılanları (Go chstore.DefaultDBHealth ikizi;
+// dbSlowQuery.test.ts pinler).
+const DB_HEALTH_DEFAULTS: DBHealthConfig = { enabled: true, errorPct: 5, p99Ms: 2000, p99RiseFactor: 3, minCallerCalls: 10, minCalls: 100, minCallers: 2, maxNewPerTick: 20 };
+
 // ── DB yavaş sorgu dedektörü (v0.10.325, operatör isteği) ────────────
 // EscalationSection ile aynı anatomi: yükle → düzenle → kaydet; evaluator
 // bir sonraki tik'te okur. Yönlendirme mevcut takım kuralı (DB sahibi + SRE).
@@ -1251,6 +1255,13 @@ function DBSlowQuerySection() {
   };
   const num = (k: keyof DBSlowQueryConfig) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setCfg(c => (c ? { ...c, [k]: Number(e.target.value) } : c));
+  // v0.10.1073 — db-health vidaları aynı blobda; eski backend health döndürmezse
+  // varsayılanlarla çizilir (sunucu Normalize ile aynı değerler).
+  const health: DBHealthConfig = cfg?.health ?? DB_HEALTH_DEFAULTS;
+  const setHealth = (patch: Partial<DBHealthConfig>) =>
+    setCfg(c => (c ? { ...c, health: { ...(c.health ?? DB_HEALTH_DEFAULTS), ...patch } } : c));
+  const hnum = (k: Exclude<keyof DBHealthConfig, 'enabled'>) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setHealth({ [k]: Number(e.target.value) });
   return (
     <div style={{ marginTop: 28 }}>
       <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Slow SQL statements</h2>
@@ -1288,6 +1299,48 @@ function DBSlowQuerySection() {
             <Field label="hold before resolve (seconds)">
               <input type="number" min={0} max={86400} step={60} value={cfg.cooldownSec} onChange={num('cooldownSec')} disabled={!cfg.enabled} />
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Default 900 s — an open Problem is not resolved before this age.</div>
+            </Field>
+          </div>
+          {/* v0.10.1073 — veritabanı sağlık kuralı (db-health): yavaş ifadenin
+              yanında, aynı blob ve aynı Kaydet. */}
+          <h3 style={{ fontSize: 13, fontWeight: 600, margin: '22px 0 6px' }}>Database health</h3>
+          <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.55 }}>
+            Veritabanının hata oranı (mutlak) ya da p99'u (eşik + dünkü aynı saate göre artış) 2 ardışık 5 dk
+            kovada aşılır ve en az iki çağıran servis etkilenirse veritabanı öznesinde Problem açılır; eşiğin 2 katı critical (P1).
+          </p>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+            <input type="checkbox" checked={health.enabled}
+              onChange={e => setHealth({ enabled: e.target.checked })} />
+            <span style={{ fontSize: 13, color: 'var(--text)' }}>Open a Problem for unhealthy databases</span>
+          </label>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', opacity: health.enabled ? 1 : 0.5 }}>
+            <Field label="error rate threshold (%)">
+              <input type="number" min={0.1} max={100} step={0.5} value={health.errorPct} onChange={hnum('errorPct')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan %5 — veritabanı çağrılarının hata yüzdesi.</div>
+            </Field>
+            <Field label="p99 threshold (ms)">
+              <input type="number" min={50} max={600000} step={100} value={health.p99Ms} onChange={hnum('p99Ms')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 2000 ms — mutlak taban; tek başına yetmez, artış katı da aşılmalı.</div>
+            </Field>
+            <Field label="p99 rise vs. yesterday (×)">
+              <input type="number" min={1} max={100} step={0.5} value={health.p99RiseFactor} onChange={hnum('p99RiseFactor')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 3 — p99, dün aynı 5 dk'nın bu katı olmalı; dünkü veri yoksa p99 kontrolü kapalı.</div>
+            </Field>
+            <Field label="minimum calls per caller / 5 min">
+              <input type="number" min={1} max={1000000} value={health.minCallerCalls} onChange={hnum('minCallerCalls')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 10 — bundan az çağrı yapan servis "etkilenen" sayılmaz.</div>
+            </Field>
+            <Field label="minimum calls / 5 min">
+              <input type="number" min={1} max={10000000} value={health.minCalls} onChange={hnum('minCalls')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 100 — bunun altındaki kova gürültü sayılır.</div>
+            </Field>
+            <Field label="minimum affected callers">
+              <input type="number" min={1} max={50} value={health.minCallers} onChange={hnum('minCallers')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 2 — batch servisler sayılmaz.</div>
+            </Field>
+            <Field label="max new Problems / tick">
+              <input type="number" min={1} max={200} value={health.maxNewPerTick} onChange={hnum('maxNewPerTick')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 20 — fırtınada her dakika en çok bu kadar yeni açılış.</div>
             </Field>
           </div>
           <div style={{ marginTop: 18, display: 'flex', gap: 8, alignItems: 'center' }}>

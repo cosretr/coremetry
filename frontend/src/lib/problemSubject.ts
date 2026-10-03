@@ -54,6 +54,32 @@ export function parseDbSubject(subject: string): DbSubject | null {
   return { system: rest.slice(0, at), instance: rest.slice(at + 1) };
 }
 
+// ── Veritabanı sağlık kuralı (v0.10.1073, db-health) ───────────────────────
+// Kural id veritabanı ÜÇLÜSÜNÜ taşır: `db-health:<system>@<instance>/<db>`
+// (Go chstore.DBHealthRuleID / ParseDBHealthRuleID ikizi; problemSubject.test.ts
+// Go kaynağına karşı pinler). Problem detayı Databases detay sayfasına ve
+// trace listesine bu üçlüyle bağlanır — özne dizgisi (`db:<sys>@<X>`) X'in
+// instance mı db.name mi olduğunu söylemediği için yetmez.
+
+/** Go chstore.RuleDBHealthPrefix ikizi. */
+export const DB_HEALTH_RULE_PREFIX = 'db-health:';
+
+export type DbHealthRef = { system: string; instance: string; dbName: string };
+
+/** `db-health:<system>@<instance>/<db>` çözer, değilse null. Ayırıcılar İLK
+ *  '@' ve SON '/' (Go ile aynı; '/' içeren db.name instance'a kayar). */
+export function parseDbHealthRuleId(ruleId: string | null | undefined): DbHealthRef | null {
+  const id = ruleId ?? '';
+  if (!id.startsWith(DB_HEALTH_RULE_PREFIX)) return null;
+  const rest = id.slice(DB_HEALTH_RULE_PREFIX.length);
+  const at = rest.indexOf('@');
+  if (at <= 0) return null;
+  const tail = rest.slice(at + 1);
+  const slash = tail.lastIndexOf('/');
+  if (slash <= 0 || slash === tail.length - 1) return null;
+  return { system: rest.slice(0, at), instance: tail.slice(0, slash), dbName: tail.slice(slash + 1) };
+}
+
 /**
  * subjectKind — satırın özne türü.
  *

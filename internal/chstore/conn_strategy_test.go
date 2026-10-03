@@ -273,6 +273,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// spanmetrics_1m / ham spans; değerlendiricinin ölçümüyle aynı havuz).
 		// Kural satırı (alert_rules) problem.go'da, ana bağlantıda kalır.
 		"alert_metric_series.go": true,
+		// v0.10.1073 — SAF telemetri: db-health okuması, tek FROM'u
+		// db_caller_summary_5m (Databases detayıyla aynı MV ve havuz). Problem
+		// satırları evaluator → problem.go'da, ana bağlantıda kalır.
+		"db_health.go": true,
 		// v0.10.1023 — SAF telemetri: tek FROM'u spanmetrics_1m (Operations çıplak fiil → rota kırılımı); ops MV okumasıyla aynı havuz.
 		"operation_routes.go": true,
 		// v0.10.712 — SAF telemetri: trace_summary_5m kök kapsaması (admin teşhisi).
