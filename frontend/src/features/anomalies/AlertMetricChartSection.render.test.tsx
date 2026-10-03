@@ -56,7 +56,7 @@ vi.mock('@/components/chart/corePanelEntry', () => ({
     ariaLabel?: string; unit?: string; loading?: boolean; error?: string; emptyReason?: string;
     xRange?: { from: number; to: number } | null;
     regions?: { fromSec: number; toSec: number; label?: string }[];
-    thresholds?: { value: number; label?: string; color?: string }[];
+    thresholds?: { value: number; label?: string; color?: string; side?: string }[];
     items: { name: string; series: { points: { time: number; value: number }[] }[] }[];
   }) => (
     <div data-panel
@@ -123,7 +123,7 @@ describe('AlertMetricChartSection', () => {
     // x ekseni: sunucunun hizalı başı → son nokta.
     expect(p.dataset.xrange).toBe(`${(T0 - 60 * MIN) / 1e9}-${(T0 - 35 * MIN) / 1e9}`);
     const thr = JSON.parse(p.dataset.thresholds!) as { value: number; label: string; color: string }[];
-    expect(thr).toEqual([{ value: 3000, label: '> 3000 ms', color: 'var(--warn)' }]);
+    expect(thr).toEqual([{ value: 3000, label: '> 3000 ms', color: 'var(--warn)', side: 'above' }]);
     const regions = JSON.parse(p.dataset.regions!) as { fromSec: number; label: string; endSec?: number }[];
     expect(regions).toHaveLength(1);
     expect(regions[0].fromSec).toBe(T0 / 1e9);
@@ -167,6 +167,12 @@ describe('AlertMetricChartSection', () => {
   it('critical kural: eşik kırmızı, yüzde birimi', async () => {
     const p = panel(await mount(prob({ metric: 'error_rate', threshold: 15, severity: 'critical', ruleId: 'builtin-error-rate-15pct' })));
     expect(p.dataset.unit).toBe('percent');
-    expect(JSON.parse(p.dataset.thresholds!)).toEqual([{ value: 15, label: '> 15%', color: 'var(--err)' }]);
+    expect(JSON.parse(p.dataset.thresholds!)).toEqual([{ value: 15, label: '> 15%', color: 'var(--err)', side: 'above' }]);
+  });
+
+  // v0.10.1077 — "<" kuralında ihlal bandı çizginin ALTINDA (side 'below').
+  it('"<" kuralı: eşik gölgesi altta', async () => {
+    const p = panel(await mount(prob({ metric: 'request_rate', comparator: '<', threshold: 2, ruleId: 'r-low-traffic' })));
+    expect(JSON.parse(p.dataset.thresholds!)).toEqual([{ value: 2, label: '< 2/s', color: 'var(--warn)', side: 'below' }]);
   });
 });

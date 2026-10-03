@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { severityThresholdLines, bandThresholdLines } from './thresholdLines';
+import { severityThresholdLines, bandThresholdLines, comparatorSide } from './thresholdLines';
 
 describe('severityThresholdLines', () => {
   it('err → var(--err), varsayılan warn; etiket taşınır; boş → []', () => {
@@ -12,6 +12,21 @@ describe('severityThresholdLines', () => {
     expect(severityThresholdLines([{ value: 500, label: 'SLO', severity: 'err' }, { value: 300 }])).toEqual([
       { value: 500, label: 'SLO', color: 'var(--err)' },
       { value: 300, label: undefined, color: 'var(--warn)' },
+    ]);
+  });
+});
+
+// v0.10.1077 — "<" kuralında ihlal bandı çizginin altında: yön karşılaştırıcıdan.
+describe('comparatorSide', () => {
+  it.each([
+    ['>', 'above'], ['>=', 'above'], ['<', 'below'], ['<=', 'below'], [' < ', 'below'],
+    ['==', 'above'], ['', 'above'], [undefined, 'above'], [null, 'above'],
+  ] as const)('%o → %s', (c, want) => { expect(comparatorSide(c)).toBe(want); });
+
+  it('severityThresholdLines side\'ı taşır; yoksa alan hiç eklenmez', () => {
+    expect(severityThresholdLines([{ value: 1, side: 'below' }, { value: 2 }])).toEqual([
+      { value: 1, label: undefined, color: 'var(--warn)', side: 'below' },
+      { value: 2, label: undefined, color: 'var(--warn)' },
     ]);
   });
 });

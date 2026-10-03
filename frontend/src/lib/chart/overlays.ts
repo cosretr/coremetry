@@ -32,7 +32,12 @@ export interface ChartThreshold {
   value: number;
   label?: string;
   color?: string; // CSS rengi/token (var(--warn) default'u preset'te)
+  /** v0.10.1077 — ihlal bandı hangi yanda: "<" / "<=" kuralında ihlal çizginin
+   *  ALTI. Yoksa 'above' (eski davranış birebir). */
+  side?: ThresholdSide;
 }
+
+export type ThresholdSide = 'above' | 'below';
 
 // ChartTimeRegion — 4 preset'in ortak `regions` prop tipi. fromSec/toSec unix
 // SANİYE (uPlot x ekseni ile aynı birim).
@@ -53,6 +58,7 @@ export interface ResolvedThreshold {
   value: number;
   label?: string;
   color: string;
+  side?: ThresholdSide;
 }
 
 // ── Saf yardımcılar (vitest: overlays.test.ts) ─────────────────────────────
@@ -112,7 +118,8 @@ export function fitLabel(
 
 // ── Çizim çekirdekleri (draw hook içinden; canvas gerektirir) ──────────────
 
-// drawThresholds — yatay kesikli eşik çizgisi + üstünde ihlal bandı + sağ
+// drawThresholds — yatay kesikli eşik çizgisi + ihlal bandı (varsayılan
+// üstte; side 'below' → altta, "<" kuralları, v0.10.1077) + sağ
 // kenarda etiket. TSP/MLC kopyalarının birebiri: font 10px --font-mono (v0.10.980),
 // lineWidth 1.2, dash [6,4], etiket sağdan 4px içeride ve çizginin 4px
 // üstünde. bandAlpha: MLC 0.07 (globalAlpha yolu); TSP 0x14/255 (eski
@@ -135,11 +142,13 @@ export function drawThresholds(
   for (const th of thresholds) {
     if (!thresholdVisible(th.value, yMin, yMax)) continue;
     const y = u.valToPos(th.value, scaleKey, true);
-    // İhlal bandı — çizginin ÜSTÜ hafifçe eşik renginde (canvas fillStyle
-    // color-mix bilmez; globalAlpha hex+alfa dolgusuyla aynı kompoziti verir).
+    // İhlal bandı — çizginin ÜSTÜ (ya da side 'below' ise ALTI, v0.10.1077)
+    // hafifçe eşik renginde (canvas fillStyle color-mix bilmez; globalAlpha
+    // hex+alfa dolgusuyla aynı kompoziti verir).
     ctx.globalAlpha = bandAlpha;
     ctx.fillStyle = th.color;
-    ctx.fillRect(u.bbox.left, u.bbox.top, u.bbox.width, y - u.bbox.top);
+    if (th.side === 'below') ctx.fillRect(u.bbox.left, y, u.bbox.width, u.bbox.top + u.bbox.height - y);
+    else ctx.fillRect(u.bbox.left, u.bbox.top, u.bbox.width, y - u.bbox.top);
     ctx.globalAlpha = 1;
     // Çizginin kendisi.
     ctx.strokeStyle = th.color;
@@ -279,6 +288,23 @@ export function fmtRegionSpan(sec: number): string {
   return `${(sec / 86400).toFixed(1)} g`;
 }
 
+// regionLabelPlacement — v0.10.1077: etiket bandın İÇİNE mi, SOLUNA mı?
+// Yeni açılmış problemde (ör. 2 dk açık, 1 sa pencere) "başladı" bandı sağ
+// kenarda ince bir şerit; fitLabel etiketi '' yapıyor, hiçbir yerde
+// "başladı" okunmuyordu. Kural: etiket bant içine (2×pad ile) sığıyorsa
+// içeride (eski yerleşim birebir); sığmıyorsa ve bandın solunda — çizim
+// alanının içinde, aynı şeritte soldaki son bandın bitişinden (floorX) sonra —
+// yer varsa solda, bant başına sağdan hizalı; o da yoksa içeride (fitLabel
+// kısaltır ya da susturur, eski davranış). Piksel birimi çağıranınki. SAF.
+export type RegionLabelPlacement = 'inside' | 'left';
+export function regionLabelPlacement(o: {
+  labelW: number; x1: number; x2: number; floorX: number; pad: number;
+}): RegionLabelPlacement {
+  if (o.labelW <= o.x2 - o.x1 - 2 * o.pad) return 'inside';
+  if (o.x1 - o.pad - o.labelW >= o.floorX) return 'left';
+  return 'inside';
+}
+
 export function drawTimeRegions(u: uPlot, regions: ChartTimeRegion[], xUnit = 1): void {
   if (regions.length === 0) return;
   const xMin = u.scales.x.min ?? 0;
@@ -309,13 +335,17 @@ export function drawTimeRegions(u: uPlot, regions: ChartTimeRegion[], xUnit = 1)
     ctx.fillRect(x1, u.bbox.top, Math.max(1, x2 - x1), u.bbox.height);
   }
   ctx.globalAlpha = 1;
+  // v0.10.1077 — sola yerleşen etiketin tabanı: aynı şeritte bu bandın
+  // solunda biten bandların en sağ ucu (etiket komşu banda binmesin).
+  const xs = clamped.map(cl => cl ? [u.valToPos(cl.from, 'x', true), u.valToPos(cl.to, 'x', true)] : null);
+  const pad = 4 * dpr;
   for (let ri = 0; ri < regions.length; ri++) {
     const rg = regions[ri];
     const cl = clamped[ri];
-    if (!cl) continue;
+    const px = xs[ri];
+    if (!cl || !px) continue;
     const colour = resolveVar(rg.color ?? 'var(--err)');
-    const x1 = u.valToPos(cl.from, 'x', true);
-    const x2 = u.valToPos(cl.to, 'x', true);
+    const [x1, x2] = px;
     const w = Math.max(1, x2 - x1);
     const laneTop = u.bbox.top + lanes[ri] * LANE_H * dpr;
     if (laneTop >= u.bbox.top + u.bbox.height) continue; // çizim alanını aşan şerit çizilmez
@@ -324,12 +354,24 @@ export function drawTimeRegions(u: uPlot, regions: ChartTimeRegion[], xUnit = 1)
     ctx.fillStyle = colour;
     ctx.fillRect(x1, laneTop, w, REGION_STRIP_H * dpr);
     ctx.globalAlpha = 1;
-    // Küçük etiket — şeridin altında; sığmazsa kısalt, hiç sığmazsa çizme (fitLabel).
+    // Küçük etiket — şeridin altında; bant içine sığmazsa SOLA (v0.10.1077,
+    // regionLabelPlacement), orada da yer yoksa kısalt, hiç sığmazsa çizme (fitLabel).
     if (rg.label) {
-      const text = fitLabel('▮ ' + rg.label + (chronic[ri] ? ' · pencere boyu' : ''), w - 8 * dpr, s => ctx.measureText(s).width);
-      if (text) {
-        ctx.fillStyle = colour;
-        ctx.fillText(text, x1 + 4 * dpr, laneTop + (LANE_H - 1) * dpr);
+      const full = '▮ ' + rg.label + (chronic[ri] ? ' · pencere boyu' : '');
+      const labelW = ctx.measureText(full).width;
+      let floorX = u.bbox.left;
+      for (let j = 0; j < regions.length; j++) {
+        const pj = xs[j];
+        if (j !== ri && pj && lanes[j] === lanes[ri] && pj[1] <= x1) floorX = Math.max(floorX, pj[1] + pad);
+      }
+      const baseY = laneTop + (LANE_H - 1) * dpr;
+      ctx.fillStyle = colour;
+      if (regionLabelPlacement({ labelW, x1, x2: x1 + w, floorX, pad }) === 'left') {
+        // Hiza yine 'left' (v0.10.168 dersi): x'i biz hesaplıyoruz, bant başına sağdan hizalı.
+        ctx.fillText(full, x1 - pad - labelW, baseY);
+      } else {
+        const text = fitLabel(full, w - 2 * pad, s => ctx.measureText(s).width);
+        if (text) ctx.fillText(text, x1 + pad, baseY);
       }
     }
   }

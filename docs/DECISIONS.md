@@ -1247,6 +1247,20 @@ Milyar-belge indekste her derin linkte boşa giden bir tam-pencere sorgusu. **Ka
 aktarma no-op olur; sonraki URL değişimleri (geri/ileri, kayıtlı görünüm) eskisi gibi içe aktarılır. URL
 şeması değişmedi. Çıplak `/logs` davranışı aynı (tek varsayılan istek). Test: `Logs.firstLoad.test.tsx`.
 
+## 2026-10-03 — Grafik: "<" eşiklerinde gölge altta, dar "başladı" bandında etiket solda (v0.10.1077)
+
+**Eşik gölgesi:** `drawThresholds` ihlal bandını her zaman çizginin ÜSTÜNE boyuyordu; `request_rate <` gibi
+kurallarda ihlal ALTTA, grafik ters tarafı işaretliyordu. `ChartThreshold` / `Threshold`'a `side?: 'above' | 'below'`
+(varsayılan `above` — mevcut çağıranlar birebir); yön `comparatorSide`'dan (`lib/chart/thresholdLines.ts`): `<` / `<=`
+→ `below`, gerisi `above`. Alarm problemi grafiği (v0.10.1064, `alertThreshold`) ve kural editörü önizlemesi
+(`ConditionPreview` → MultiLineChart → CorePanel) aynı kapıdan geçer. CorePanel + TimeChart yönü taşır (CorePanel'in overlay
+imzası zaten tüm eşik nesnesini, `chartBuildSig` eşik özeti artık yönü de içerir); TimeSeriesPanel'in kendi `TSThreshold`'u değişmedi (karşılaştırıcısı yok).
+**"başladı" etiketi:** ~2 dk açık problemde başlangıç bandı (v0.10.1060 deseni) sağ kenarda ince bir şerit; etiket
+sığmadığı için `fitLabel` onu susturuyordu. `drawTimeRegions` artık bant içine sığmayan etiketi bandın SOLUNA, bant
+başına sağdan hizalı yazar (`regionLabelPlacement`, saf) — yalnız çizim alanının içinde ve aynı şeritte soldaki bandın
+bitişini aşmıyorsa; yoksa eski yol (kısalt / sustur). Renkler, şerit ve isabet satırı değişmedi; anomali bantları da
+aynı kuraldan yararlanır.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

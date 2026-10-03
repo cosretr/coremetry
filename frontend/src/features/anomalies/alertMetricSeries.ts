@@ -12,6 +12,7 @@
 
 import type { AlertRuleSeries, Problem, SpanMetricSeries } from '@/lib/types';
 import type { ChartThreshold, ChartTimeRegion } from '@/lib/chart/overlays';
+import { comparatorSide } from '@/lib/chart/thresholdLines';
 
 // Değerlendiricinin span-metrik yolunun ölçtüğü metrikler (Go:
 // chstore.measureAllServicesPlan + TransportFilter/TransportOp). Hedefli kural
@@ -84,7 +85,8 @@ export function alertMetricUnit(metric: string): string {
 const UNIT_SUFFIX: Record<string, string> = { ms: ' ms', percent: '%', reqps: '/s', short: '' };
 
 // alertThreshold — kesik eşik çizgisi + etiket ("> 3000 ms"). Renk şiddetten:
-// critical kırmızı, diğerleri sarı.
+// critical kırmızı, diğerleri sarı. İhlal bandı karşılaştırıcının yönünde
+// (v0.10.1077): "<" / "<=" kuralında gölge çizginin ALTINDA.
 export function alertThreshold(
   p: Pick<Problem, 'threshold' | 'comparator' | 'severity' | 'metric'>,
 ): ChartThreshold {
@@ -94,6 +96,7 @@ export function alertThreshold(
     value: p.threshold,
     label: `${p.comparator || '>'} ${v}${UNIT_SUFFIX[unit] ?? ''}`,
     color: p.severity === 'critical' ? 'var(--err)' : 'var(--warn)',
+    side: comparatorSide(p.comparator),
   };
 }
 

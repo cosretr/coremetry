@@ -6,7 +6,7 @@
 // birleşik aralıkla tek kat, sn bölgeleri xUnit=1000 ile ms eksenine oturur.
 import { describe, it, expect } from 'vitest';
 import type uPlot from 'uplot';
-import { drawTimeRegions, isChronic, regionAt } from './overlays';
+import { drawTimeRegions, isChronic, regionAt, regionLabelPlacement } from './overlays';
 
 // Renkler LİTERAL: resolveVar yalnız `var(--x)` için DOM'a gider; node ortamında getComputedStyle yok.
 const C = '#d29922';
@@ -103,5 +103,46 @@ describe('regionAt (v0.10.180)', () => {
     expect(regionAt(u, rg, 1000, 300, 60)).toBeNull();
     expect(regionAt(u, rg, 1000, 5, 4)).toBeNull();
     expect(regionAt(u, undefined, 1000, 200, 4)).toBeNull();
+  });
+});
+
+// v0.10.1077 — 2 dk'lık açık problemde "başladı" bandı sağ kenarda ince
+// şerit; etiket bant içine sığmayınca bandın SOLUNA, başa sağdan hizalı.
+describe('regionLabelPlacement (v0.10.1077)', () => {
+  it.each([
+    ['geniş bant → içeride', { labelW: 54, x1: 100, x2: 400, floorX: 0, pad: 4 }, 'inside'],
+    ['tam sığan (2×pad dahil) → içeride', { labelW: 54, x1: 100, x2: 162, floorX: 0, pad: 4 }, 'inside'],
+    ['dar bant, solda yer var → solda', { labelW: 54, x1: 1066, x2: 1100, floorX: 100, pad: 4 }, 'left'],
+    ['dar bant, solda tam yer (sınır dahil) → solda', { labelW: 54, x1: 162, x2: 170, floorX: 104, pad: 4 }, 'left'],
+    ['dar bant, çizim alanının sol kenarında → içeride (kısaltılır)', { labelW: 54, x1: 120, x2: 130, floorX: 100, pad: 4 }, 'inside'],
+    ['dar bant, soldaki komşu bant engelliyor → içeride', { labelW: 54, x1: 1066, x2: 1100, floorX: 1040, pad: 4 }, 'inside'],
+  ] as const)('%s', (_n, o, want) => { expect(regionLabelPlacement(o)).toBe(want); });
+
+  const xMin = 1_700_000_000_000, xMax = 1_700_003_600_000; // 1 sa, ms
+  const endSec = xMax / 1000;
+  it('2 dk\'lık bant sağ kenarda: etiket bandın solunda, sağ ucu x1−4\'te; kısaltılmamış', () => {
+    const { u, calls } = fakeU(xMin, xMax);
+    drawTimeRegions(u, [{ fromSec: endSec - 120, toSec: endSec, label: 'başladı', color: C }], 1000);
+    const t = calls.filter(c => c.fn === 'fillText');
+    expect(t.length).toBe(1);
+    expect(t[0].args[0]).toBe('▮ başladı');
+    const x1 = 100 + (3480 / 3600) * 1000;
+    expect(t[0].args[1]).toBeCloseTo(x1 - 4 - '▮ başladı'.length * 6, 6);
+    expect(t[0].textAlign).toBe('left');
+    // Şerit yine bandın kendisinde (renk/konum değişmedi).
+    const strip = calls.find(c => c.fn === 'fillRect' && c.args[3] === 3);
+    expect(strip?.args[0]).toBeCloseTo(x1, 6);
+  });
+  it('aynı şeritte solda bitişik komşu varsa sola taşmaz — içeride, x1+4 (eski yol)', () => {
+    const { u, calls } = fakeU(xMin, xMax);
+    drawTimeRegions(u, [
+      { fromSec: endSec - 600, toSec: endSec - 125, label: 'önce', color: C },
+      { fromSec: endSec - 120, toSec: endSec, label: 'başladı', color: C },
+    ], 1000);
+    const t = calls.filter(c => c.fn === 'fillText');
+    const x1 = 100 + (3480 / 3600) * 1000;
+    const late = t.find(c => String(c.args[0]).startsWith('▮ b'));
+    expect(late?.args[1]).toBeCloseTo(x1 + 4, 6);
+    expect(String(late?.args[0])).toMatch(/…$/);
   });
 });

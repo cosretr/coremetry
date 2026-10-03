@@ -45,9 +45,10 @@ export interface ChartSigColorThreshold {
   value: number;
   label?: string;
   color?: string;
+  side?: 'above' | 'below'; // v0.10.1077 — bant yönü de yeniden kurulum ister
 }
 const colorThresholdsDigest = (ts?: ChartSigColorThreshold[]) =>
-  (ts ?? []).map(t => [t.value, t.label ?? '', t.color ?? '']);
+  (ts ?? []).map(t => [t.value, t.label ?? '', t.color ?? '', t.side ?? 'above']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // timeChartBuildSignature (v0.8.531 — perf #5/#15 follow-up) — the same

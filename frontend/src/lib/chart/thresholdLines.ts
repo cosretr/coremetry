@@ -7,7 +7,7 @@
 //     green TABAN banttır, çizgi basılmaz (0 değerinde anlamsız çizgi olurdu).
 // Renkler token (var(--warn)/var(--err)) — tema ile birlikte çözülür; hex yok.
 // Saf; React yok.
-import type { ChartThreshold } from '@/lib/chart/overlays';
+import type { ChartThreshold, ThresholdSide } from '@/lib/chart/overlays';
 import type { PanelThresholdBand } from '@/lib/types';
 
 // Threshold — horizontal line at a y-value, optionally coloured by
@@ -17,12 +17,24 @@ export interface Threshold {
   value: number;
   label?: string;            // e.g. "SLO 500ms"
   severity?: 'warn' | 'err'; // default 'warn'
+  side?: ThresholdSide;      // v0.10.1077 — ihlal bandı yönü; default 'above'
+}
+
+// comparatorSide — v0.10.1077: alarm kuralı karşılaştırıcısından ihlal
+// bandının yönü. "<" / "<=" (ör. request_rate <) kuralında ihlal çizginin
+// ALTI; ">" / ">=" ve tanınmayan her şey 'above' (eski davranış). Alarm
+// problemi grafiği (alertMetricSeries) ve kural editörü önizlemesi
+// (ConditionPreview) aynı kapıdan geçer.
+export function comparatorSide(comparator: string | null | undefined): ThresholdSide {
+  const c = (comparator ?? '').trim();
+  return c === '<' || c === '<=' ? 'below' : 'above';
 }
 
 export function severityThresholdLines(ts?: Threshold[]): ChartThreshold[] {
   return (ts ?? []).map(t => ({
     value: t.value, label: t.label,
     color: t.severity === 'err' ? 'var(--err)' : 'var(--warn)',
+    ...(t.side ? { side: t.side } : {}),
   }));
 }
 

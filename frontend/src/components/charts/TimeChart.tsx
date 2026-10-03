@@ -218,6 +218,7 @@ export function TimeChart({
             drawThresholds(u, thresholds.map(th => ({
               value: th.value,
               label: th.label,
+              side: th.side,
               color: resolveVar(th.color ?? 'var(--warn)'),
             })));
           }

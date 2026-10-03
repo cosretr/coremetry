@@ -80,15 +80,17 @@ describe('birim / eşik / pencere etiketi', () => {
     ['request_rate', 'reqps'], ['error_count', 'short'], ['db_count', 'short'],
   ])('%s → %s', (metric, unit) => { expect(alertMetricUnit(metric)).toBe(unit); });
 
+  // v0.10.1077 — side: "<" / "<=" kuralında ihlal bandı çizginin ALTINDA.
   it.each([
-    [{ threshold: 3000, comparator: '>', severity: 'warning', metric: 'http_p99_ms' }, '> 3000 ms', 'var(--warn)'],
-    [{ threshold: 0.01, comparator: '<', severity: 'critical', metric: 'request_rate' }, '< 0.01/s', 'var(--err)'],
-    [{ threshold: 5, comparator: undefined, severity: 'warning', metric: 'error_rate' }, '> 5%', 'var(--warn)'],
-    [{ threshold: 100, comparator: '>=', severity: 'info', metric: 'error_count' }, '>= 100', 'var(--warn)'],
-    [{ threshold: 2.3456, comparator: '>', severity: 'warning', metric: 'avg_ms' }, '> 2.35 ms', 'var(--warn)'],
-  ] as const)('%o → %s', (p, label, color) => {
+    [{ threshold: 3000, comparator: '>', severity: 'warning', metric: 'http_p99_ms' }, '> 3000 ms', 'var(--warn)', 'above'],
+    [{ threshold: 0.01, comparator: '<', severity: 'critical', metric: 'request_rate' }, '< 0.01/s', 'var(--err)', 'below'],
+    [{ threshold: 5, comparator: undefined, severity: 'warning', metric: 'error_rate' }, '> 5%', 'var(--warn)', 'above'],
+    [{ threshold: 100, comparator: '>=', severity: 'info', metric: 'error_count' }, '>= 100', 'var(--warn)', 'above'],
+    [{ threshold: 2, comparator: '<=', severity: 'warning', metric: 'request_rate' }, '<= 2/s', 'var(--warn)', 'below'],
+    [{ threshold: 2.3456, comparator: '>', severity: 'warning', metric: 'avg_ms' }, '> 2.35 ms', 'var(--warn)', 'above'],
+  ] as const)('%o → %s', (p, label, color, side) => {
     expect(alertThreshold(p as Pick<Problem, 'threshold' | 'comparator' | 'severity' | 'metric'>))
-      .toEqual({ value: p.threshold, label, color });
+      .toEqual({ value: p.threshold, label, color, side });
   });
 
   it.each([[600, '10 dk pencere'], [3600, '1 sa pencere'], [60, '1 dk pencere'], [90, '90 sn pencere'], [0, '']])(

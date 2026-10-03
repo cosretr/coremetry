@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MultiLineChart } from '@/components/MultiLineChart';
+import { comparatorSide } from '@/lib/chart/thresholdLines';
 import { metricQuery, type MetricAgg, type MetricUnit } from '@/lib/metricQuery';
 import { api } from '@/lib/api';
 import type { AlertRule } from '@/lib/types';
@@ -69,7 +70,7 @@ export function ConditionPreview({ draft }: { draft: Partial<AlertRule> }) {
         </div>
       ) : (
         <MultiLineChart series={series} unit={m.unit} height={130}
-          thresholds={[{ value: threshold, label: `${comparator} ${threshold}`, severity: sevTone }]} />
+          thresholds={[{ value: threshold, label: `${comparator} ${threshold}`, severity: sevTone, side: comparatorSide(comparator) }]} />
       )}
     </div>
   );
