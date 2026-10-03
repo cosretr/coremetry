@@ -9,7 +9,7 @@ import { aiSubjectSubtitle, aiSubjectTitle, formatAiParam, type AISubject } from
 import { emitAiEvidence, emitAiFocus, scrollToAttr } from './aiEvents';
 import { ChatBubble } from './ChatBubble';
 import { ServiceChartsExplainBody } from './ServiceChartsExplainBody';
-import { aiSubjectQuestion, buildExplainContext, drawerFollowups, traceUrlSpan } from './drawerChat';
+import { aiSubjectQuestion, buildExplainContext, drawerFollowups } from './drawerChat';
 import { useChatThread } from './useChatThread';
 import { useStickToBottom } from './stickToBottom';
 import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './chatInputKey';
@@ -55,12 +55,6 @@ export function AIDrawerBody({ subject, onClose, traceCtx, resume, onResumed }: 
   // sonra gelirse `explain` memo'su güncellenir, sohbet yerinde kalır.
   const [resumed, setResumed] = useState(false);
   if (resume && !resumed) setResumed(true);
-  // v0.10.948 — yenilemede span'ler yüklenmeden auto-koşu atar; odak o ana kadar
-  // URL'deki seçili span. Gövde özneyle key'li: tembel başlangıç mount anını
-  // yakalar. window.location (useLocation değil): Trace.tsx seçimi
-  // history.replaceState ile yansıtıyor, router onu hiç görmüyor.
-  const [urlSpan] = useState(() => (subject.kind === 'trace'
-    ? traceUrlSpan(window.location.pathname, window.location.search, subject.id) : undefined));
 
   // v0.9.1033 — `charts` öznesinin gövdesi AYRI: bu yüzey düz metin
   // değil, anlatım + YAPISAL sinyal tablosu + pivot linkleri döndürüyor
@@ -88,16 +82,10 @@ export function AIDrawerBody({ subject, onClose, traceCtx, resume, onResumed }: 
         auto
         kind={subject.kind}
         id={subject.id}
-        // v0.10.948 — trace öznesinde operatörün SEÇTİĞİ span (traceCtx.spanId
-        // yalnız seçim varken dolu) incelemenin odak servisini belirler: bağlam
-        // şeridi ve takip sorularıyla AYNI servis. Seçim yoksa kök incelenir.
-        // Bağlam henüz yayınlanmadıysa (yenileme / paylaşılan link) URL'deki
-        // span; yayınlanınca o devralır (açık seçimsizlik → kök).
-        // v0.10.1036 — açıklama varsayılanı yine klasik toplayıcı: span istekte
-        // gider ama sunucu yok sayar (takip sohbetinin bağlamı ayrı yoldan).
-        spanId={subject.kind === 'span' ? subject.spanId
-          : subject.kind === 'trace' ? (traceCtx?.traceId === subject.id ? traceCtx.spanId : urlSpan)
-          : undefined}
+        // v0.10.1065 — trace öznesinin seçili span'i artık açıklamaya gitmez
+        // (v0.10.948 inceleme odağıydı; v0.10.1036'dan beri sunucu yok sayıyordu).
+        // Seçili span takip sohbetinin bağlamında kalır (traceCtx → AIDrawerChat).
+        spanId={subject.kind === 'span' ? subject.spanId : undefined}
         fromNs={subject.kind === 'service-health' ? subject.fromNs : undefined}
         toNs={subject.kind === 'service-health' ? subject.toNs : undefined}
         // v0.9.408 / v0.9.414 kanıt sözleşmesi: çekmece kanıtı sayfaya duyurur —

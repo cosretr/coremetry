@@ -1022,6 +1022,24 @@ dört temel metriği tanıyor, spanmetrics'ten ve kova başına okuyor. http_/db
 spans'tan (tek servis, ≤6 sa); temel RED + mq_* MV'den (≤24 sa). Log sorgusu, watcher, hedefli kurallar ve
 dedektör problemleri (anomali, SLO, runtime …) grafik almaz — sahte grafik yok.
 
+## 2026-10-03 — CoSRE'ye sor: ulaşılamayan "investigation" hattı silindi (v0.10.1065)
+
+Operatör onaylı: "CoSRE'ye sor eskisi gibi" (prod) — v0.10.1036'nın iki adımlı planının ikinci adımı. Uçtan
+erişilemeyen v0.10.948 trace incelemesi bütünüyle silindi; uyumluluk katmanı, bayrak yok. **Arka uç:**
+`trace_investigate.go` + testi; `trace_explain_handler.go`'da `explainTraceInvestigation`,
+`traceInvestigationPrepared`, `invAnswerWithTail`; `deliverExplainPrepared` çekirdeği (hazırlık adım olayları,
+ikinci anahtar, `onStore`, eklerin kendi linkleri) — `deliverExplain` yine v0.10.947'deki tek çıkış;
+`systemTraceInvestigation` / `SystemPromptTraceInvestigation` (+ `promptVersionRegistry`, dil sicili, istem
+testi). Kayıttan düştüğü için global istem sürümü (`ai_calls.prompt_version`) bir kez değişir. **Ön yüz:**
+`ExplainSteps.tsx`, `ExplainEvidence.tsx`, `investigationSteps.ts`; `api.ts` `onStep` / `explainStepFrame`;
+tipler `ExplainSourceStatus`, `ExplainStepEvent`, `ExplainTraceAnswer.sources`; `explainAnatomy`'de
+`splitSourceFooter` ve Bulgu / güven satırı şekli (Karar kuralı v0.10.947'deki hâline döndü); CSS `cx-step*`,
+`cx-sources`; trace açıklamasının `?span=` odağı (`copilotExplainTrace` 4. argümanı, `traceUrlSpan`) ve ona ait
+testler. **Kalan:** klasik varsayılan + "Kodu da incele" (`explainTraceClassicPrepared`, `writeExplainPrepareErr`,
+`explainPrepared` dörtlüsü), takip sohbeti (`TraceFollowUpAddendum`, kıyas penceresi `traceCompareWindow` olarak
+`chat_trace_followup.go`'ya taşındı), sohbet `read_source_code`, `StateBadges`, Durdur. Klasik varsayılanı
+pinleyen testler (`trace_explain_default_test.go`, `CopilotExplain.classicDefault.test.tsx`) yerinde.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

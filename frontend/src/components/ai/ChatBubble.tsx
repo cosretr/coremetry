@@ -17,7 +17,7 @@ import { parseStepPreview, fmtPreviewBytes } from './stepPreview';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { Chip } from '@/components/ui/Chip';
 import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, stateUnknown, stepRunning, toolErrorLabel } from './toolSteps';
-import { StateBadges } from './StateBadges'; // v0.10.948 — ExplainSteps ile paylaşılan rozetler
+import { StateBadges } from './StateBadges'; // v0.10.948 — paylaşılan durum rozetleri
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
 // buraya taşındı: AI çekmecesi içindeki sohbet (AIDrawer) aynı balonu
@@ -233,8 +233,7 @@ export function renderMessage(text: string, streaming = false, typed?: ChatTyped
 // gecikmeli · limitli), `skipped:true` ise "yürütülmedi". Bağlam etiketleri
 // (araç adı olmayan) "çalışıyor…" demez — onlara hiç sonuç gelmez.
 // v0.10.948 — StateBadges (kaynak öneki yalnız birden çok kaynakta, pencere
-// öneki detail'den) ./StateBadges.tsx'e taşındı: "CoSRE'ye sor" ilerleme
-// listesi (ExplainSteps) aynı rozetleri çiziyor — tek yazım.
+// öneki detail'den) ./StateBadges.tsx'e taşındı — tek yazım.
 
 function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
   steps: string[];

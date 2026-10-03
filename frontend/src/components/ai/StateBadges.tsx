@@ -2,8 +2,9 @@ import { sourceStateTone, windowPrefix, type SourceStateView } from './toolSteps
 
 // StateBadges — araç sonucunun kaynak durumu rozetleri (boş · erişilemedi ·
 // yetki yok · zaman aşımı · kısmi · gecikmeli · limitli). v0.10.948'da
-// ChatBubble'dan taşındı: sohbet çipi, adım tablosu ve "CoSRE'ye sor"
-// ilerleme listesi (ExplainSteps) aynı rozeti çizer — tek yazım.
+// ChatBubble'dan taşındı: sohbet çipi ve adım tablosu aynı rozeti çizer —
+// tek yazım. v0.10.1065 — üçüncü kullanıcı ("CoSRE'ye sor" ilerleme listesi,
+// ExplainSteps) erişilemeyen inceleme hattıyla silindi.
 // v0.10.944 — kaynak öneki yalnız BİRDEN ÇOK kaynak varken: tek kaynağın
 // ikincil bayrakları (kısmi + limitli) "logs · " tekrarı taşımaz.
 // v0.10.944 — pencere öneki (compare_periods: "sorun · " / "referans · ")

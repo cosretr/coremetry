@@ -144,7 +144,7 @@ func TestBuildTraceFollowUp(t *testing.T) {
 }
 
 // TestTraceFollowUpCompareWindow — v0.10.948: takibin kıyas penceresi ilk
-// cevabınkiyle (invCompareWindow, trace'in kendi kapsamı) AYNI; ÖNCEKİ
+// cevabınkiyle (traceCompareWindow, trace'in kendi kapsamı) AYNI; ÖNCEKİ
 // AÇIKLAMA'nın K sayıları ile takibin compare_periods'u aynı dönemden.
 func TestTraceFollowUpCompareWindow(t *testing.T) {
 	anchor := time.Date(2026, 9, 26, 10, 20, 0, 0, time.UTC)
@@ -165,7 +165,7 @@ func TestTraceFollowUpCompareWindow(t *testing.T) {
 	}
 	for _, now := range []time.Time{anchor.Add(time.Hour), anchor} { // ikincisi: kırpma ufkunda
 		tf := buildTraceFollowUp(subj, page, "", 660, anchor, now)
-		wantFrom, wantTo, _ := invCompareWindow(time.UnixMilli(fromMs).UnixNano(), time.UnixMilli(toMs).UnixNano(), now)
+		wantFrom, wantTo, _ := traceCompareWindow(time.UnixMilli(fromMs).UnixNano(), time.UnixMilli(toMs).UnixNano(), now)
 		if !tf.CmpFrom.Equal(wantFrom) || !tf.CmpTo.Equal(wantTo) || wantTo.Sub(wantFrom) != 15*time.Minute {
 			t.Fatalf("now=%v: kıyas %v → %v, want %v → %v (15 dk)", now, tf.CmpFrom, tf.CmpTo, wantFrom, wantTo)
 		}
@@ -385,5 +385,42 @@ func TestTraceFollowUpSourceNoteTR(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			c.check(t, traceFollowUpSourceNoteTR(c.isFollowUp, c.tools, chatSourceNoteTR(c.tools)))
 		})
+	}
+}
+
+// TestTraceCompareWindow — v0.10.948 (trace_investigate_test.go'dan; v0.10.1065
+// — inceleme silinince pencere ve testi takip sohbetine taşındı, içerik aynı).
+func TestTraceCompareWindow(t *testing.T) {
+	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	t0 := time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name          string
+		start, end    time.Time
+		wantLen       time.Duration
+		wantNote      bool
+		wantEndAtWall bool
+	}{
+		{"kısa trace → 15 dk", t0, t0.Add(2 * time.Second), 15 * time.Minute, false, false},
+		{"uzun trace → kendi süresi", t0, t0.Add(40 * time.Minute), 40 * time.Minute, false, false},
+		{"24 saat tavanı", t0.Add(-30 * time.Hour), t0, 24 * time.Hour, true, false},
+		{"yeni trace → şimdiye çekilir", now.Add(-time.Minute), now.Add(-time.Minute + time.Second), 15 * time.Minute, true, true},
+	}
+	for _, c := range cases {
+		from, to, note := traceCompareWindow(c.start.UnixNano(), c.end.UnixNano(), now)
+		if to.Sub(from) != c.wantLen {
+			t.Errorf("%s: uzunluk %s; %s", c.name, to.Sub(from), c.wantLen)
+		}
+		if (note != "") != c.wantNote {
+			t.Errorf("%s: not = %q", c.name, note)
+		}
+		if c.wantEndAtWall && !to.Equal(now) {
+			t.Errorf("%s: pencere sonu %s; şimdi (%s)", c.name, to, now)
+		}
+		if !c.wantEndAtWall && c.wantLen < 24*time.Hour && (from.After(c.start) || to.Before(c.end)) {
+			t.Errorf("%s: pencere trace'i kapsamıyor (%s → %s)", c.name, from, to)
+		}
+		if to.After(now) {
+			t.Errorf("%s: pencere sonu gelecekte", c.name)
+		}
 	}
 }

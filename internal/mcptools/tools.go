@@ -443,10 +443,10 @@ func chatOffered(d Deps, name string) bool {
 // bir yol açmamak.
 var externalOnlyTools = map[string]bool{"bubble_up": true}
 
-// ChatToolList — uygulama içi sohbetin ve sunucu-yürütmeli incelemenin
-// gördüğü katalog: ToolList eksi externalOnlyTools, sıra aynı. Sohbet
-// yollarında ToolList DEĞİL bu çağrılır (api/copilot_chat.go,
-// api/trace_investigate.go; kaynak pini mcptools/bubble_up_test.go).
+// ChatToolList — uygulama içi sohbetin gördüğü katalog: ToolList eksi
+// externalOnlyTools, sıra aynı. Sohbet yollarında ToolList DEĞİL bu çağrılır
+// (api/copilot_chat.go; kaynak pini mcptools/bubble_up_test.go). v0.10.1065 —
+// ikinci okuyucu (api/trace_investigate.go, sunucu-yürütmeli inceleme) silindi.
 // v0.10.1050 — koşullu araçlar (chatOffered) bağımlılıkları yoksa düşer.
 func ChatToolList(d Deps) []mcp.Tool {
 	all := ToolList(d)

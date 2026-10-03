@@ -6784,45 +6784,16 @@ export interface ExplainAnswerBase {
   cachedAtMs?: number;
 }
 
-// v0.10.948 (CoSRE Faz B) — explain-trace artık sunucuda GERÇEK okumalar
-// çalıştırıyor (get_trace → loglar · dönem kıyası · pod/metrik · deploy).
-// v0.10.1036 — varsayılan yine klasik tek atış: sunucu `sources`, adım olayı
-// ve `id`siz kanıt linki GÖNDERMEZ; tipler temizlik sürümüne dek duruyor.
-// ExplainSourceStatus: cevap çerçevesinin `sources` satırı — internal/
-// sourcestate.Status'un aynası; ChatStepSourceState'in (rozet alt kümesi)
-// üst kümesi, yani iki şekil de bu tiple okunur. `ok` DAHİL her kaynak gelir:
-// dipnot "hangi kaynak okundu" sorusunu da cevaplar, yalnız sapmayı değil.
-export interface ExplainSourceStatus extends ChatStepSourceState {
-  backend?: string;
-  returned?: number;
-  limit?: number;
-  fromIso?: string;
-  toIso?: string;
-  notes?: string[];
-  // v0.10.948 — inceleme bölümünün kimliği (Go invSourceEntry aynası): section
-  // (T/L/K/P/D), label ("Karşılaştırma"), tool ("compare_periods"; bölüm
-  // KOŞMADIYSA yok). Dipnot adı bunlardan — traces/clickhouse iki bölümde
-  // (trace okuması · dönem kıyası) aynı görünmesin.
-  section?: string;
-  label?: string;
-  tool?: string;
-}
-
-// ExplainTraceAnswer — v0.10.948: explain-trace yanıtı. `links` (taban tipte)
-// artık iki aile taşır: `id`li kimlik köprüleri (satır içi, v0.10.35) ve
-// `id`siz, sunucunun gerçek kayıtlardan kurduğu göreli kanıt linkleri
-// (/trace, /logs, /service, /traces) — ikincisi kartın altında satır olur.
+// ExplainTraceAnswer — v0.10.948: explain-trace yanıtı (klasik kanıt
+// toplayıcı: kanıt span'leri, kod künyesi, Oracle satır sayısı; `links` taban
+// tipte, `id`li kimlik köprüleri). v0.10.1065 — v0.10.948 incelemesinin
+// `sources` kaynak durumu, `id`siz kanıt linkleri ve adım olayı tipi
+// (ExplainSourceStatus, ExplainStepEvent) erişilemeyen hatla birlikte silindi.
 export interface ExplainTraceAnswer extends ExplainAnswerBase {
   evidenceSpanIds?: string[];
   code?: AICodeContext;
   oracleRows?: number;
-  sources?: ExplainSourceStatus[];
 }
-
-// ExplainStepEvent — v0.10.948: explain akışında sunucunun yürüttüğü okuma
-// adımları; sohbetin step / step-result çerçeveleriyle AYNI şekil (tek
-// sözleşme, iki yüzey). Önbellek isabetinde hiç gelmez (hiçbir şey koşmadı).
-export type ExplainStepEvent = Extract<ChatStreamEvent, { kind: 'step' } | { kind: 'step-result' }>;
 
 // ChatTurn (v0.9.479) — ekranda çizilen bir sohbet turu: wire shape'i
 // (ChatMessage) + yalnız UI'ın bildiği alanlar. İKİ yüzey paylaşır —

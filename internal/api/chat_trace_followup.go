@@ -102,7 +102,7 @@ type traceFollowUp struct {
 	// traceChatWindow); ekran önsözü ve araç çıpasıyla AYNI değerler.
 	From, To time.Time
 	// CmpFrom/CmpTo — v0.10.948 — ilk cevabın kıyas penceresi: trace'in KENDİ
-	// kapsamı üzerinden invCompareWindow (max(15 dk, kapsam), trace ortalı).
+	// kapsamı üzerinden traceCompareWindow (max(15 dk, kapsam), trace ortalı).
 	// ÖNCEKİ AÇIKLAMA'nın K bölümü bu pencereden; takip kıyası da buradan.
 	CmpFrom, CmpTo time.Time
 }
@@ -139,7 +139,7 @@ func buildTraceFollowUp(subj drawerSubject, page *agentctx.PageContext, ctxEnv s
 		tf.Service, tf.Env, tf.Cluster, tf.Namespace, tf.Pod = p.Service, p.Env, p.Cluster, p.Namespace, p.Pod
 		if r := p.TimeRange; r != nil && r.Preset == "custom" && r.FromMs > 0 && r.ToMs >= r.FromMs {
 			tf.TraceFrom, tf.TraceTo = time.UnixMilli(r.FromMs).UTC(), time.UnixMilli(r.ToMs).UTC()
-			tf.CmpFrom, tf.CmpTo, _ = invCompareWindow(tf.TraceFrom.UnixNano(), tf.TraceTo.UnixNano(), now)
+			tf.CmpFrom, tf.CmpTo, _ = traceCompareWindow(tf.TraceFrom.UnixNano(), tf.TraceTo.UnixNano(), now)
 		}
 	}
 	if tf.Env == "" && (page == nil || p != nil) {
@@ -307,4 +307,40 @@ func traceFollowUpSourceNoteTR(isFollowUp bool, tools []string, note string) str
 	}
 	return "\n\n⚠ Kaynak: bu turda hiçbir telemetri aracı çağrılmadı — cevap yalnız " +
 		"önceki CoSRE açıklamasına ve modelin kendi bilgisine dayanıyor, canlı veriye değil."
+}
+
+// Kıyas penceresi sınırları — v0.10.948 (trace incelemesiyle doğdu). v0.10.1065 —
+// inceleme silinince tek kullanıcısı takip sohbeti kaldı; buraya taşındı.
+const (
+	traceCompareMin = 15 * time.Minute
+	traceCompareMax = 24 * time.Hour // compare_periods pencere tavanı
+)
+
+// traceCompareWindow — SAF: trace ortalı kıyas penceresi. Uzunluk
+// max(15 dk, trace kapsamı), tavan 24 saat (compare_periods sınırı; aşılırsa
+// not). Pencere sonu şimdiyi geçemez (compare_periods geleceği reddeder):
+// uzunluk korunarak geri kaydırılır.
+func traceCompareWindow(startNs, endNs int64, now time.Time) (from, to time.Time, note string) {
+	extent := time.Duration(endNs - startNs)
+	if extent < 0 {
+		extent = 0
+	}
+	l := max(extent, traceCompareMin)
+	if l > traceCompareMax {
+		l = traceCompareMax
+		note = "trace kapsamı 24 saati aşıyor; kıyas penceresi trace ortalı 24 saatle sınırlandı"
+	}
+	l = l.Round(time.Second)
+	center := time.Unix(0, startNs+int64(extent/2)).UTC()
+	from = center.Add(-l / 2).Truncate(time.Second)
+	to = from.Add(l)
+	if wall := now.UTC().Truncate(time.Second); to.After(wall) {
+		to = wall
+		from = to.Add(-l)
+		if note != "" {
+			note += "; "
+		}
+		note += "pencere sonu şimdiye çekildi (trace yeni)"
+	}
+	return from, to, note
 }

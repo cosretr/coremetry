@@ -70,7 +70,7 @@ func TestTraceExplainUsesRootService(t *testing.T) {
 	// v0.10.921 — meta haritası traceExplainExtra'ya taşındı; iddia kök
 	// servisin deliverExplain'e GEÇMESİ, haritanın biçimi değil.
 	// v0.10.948 — handler api.go'dan trace_explain_handler.go'ya taşındı;
-	// "Kodu da incele" dalı + varsayılan inceleme dalı ayrı ayrı pinlenir.
+	// "Kodu da incele" dalı + varsayılan dal ayrı ayrı pinlenir.
 	h := flatWS(readSourceFile(t, "trace_explain_handler.go"))
 	if !strings.Contains(h, ", run, in.RootService, cacheKey)") {
 		t.Error("trace explain (Kodu da incele) kök servisi deliverExplain'e GEÇİRMİYOR — " +
@@ -81,12 +81,6 @@ func TestTraceExplainUsesRootService(t *testing.T) {
 	if !strings.Contains(h, "service: in.RootService,") ||
 		!strings.Contains(h, "s.deliverExplain(w, r, xid, p.extra, p.run, p.service, p.cacheKey)") {
 		t.Error("trace explain (varsayılan, klasik) kök servisi deliverExplain'e GEÇİRMİYOR — " +
-			"prod-dışı trace'in linki yanlış ortama gider")
-	}
-	// v0.10.948 incelemesi (v0.10.1036'dan beri uçtan erişilemez, temizlik
-	// sürümüne dek kodu duruyor) aynı kuralı taşımaya devam eder.
-	if !strings.Contains(h, "service: inv.RootService") {
-		t.Error("trace incelemesi kök servisi explainPrepared'a GEÇİRMİYOR — " +
 			"prod-dışı trace'in linki yanlış ortama gider")
 	}
 }

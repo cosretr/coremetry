@@ -114,17 +114,3 @@ export function drawerFollowups(s: AISubject): string[] {
   }
   return ['Bu neden oluyor?', 'Nasıl düzeltirim?', 'Hangi kanıta dayanıyorsun?'];
 }
-
-// traceUrlSpan — v0.10.948: sayfanın ?span='i: bağlam henüz yayınlanmamışken
-// (yenileme / paylaşılan link) ilk incelemenin odağı. Trace sayfası span'leri
-// yüklendikten SONRA traceCtx yayınlar; CopilotExplain ise config çözülür
-// çözülmez BİR KEZ koşar — arada odak URL'deki seçili span. Yalnız /trace
-// (kiosk da aynı rota: /trace?id=&span=&kiosk=1), yalnız aynı trace, yalnız
-// geçerli 16-hex; aksi hâlde undefined (kök incelenir).
-export function traceUrlSpan(pathname: string, search: string, traceId: string): string | undefined {
-  if (pathname !== '/trace') return undefined;
-  const q = new URLSearchParams(search);
-  if ((q.get('id') ?? '').toLowerCase() !== traceId.toLowerCase()) return undefined;
-  const sp = (q.get('span') ?? '').toLowerCase();
-  return /^[0-9a-f]{16}$/.test(sp) ? sp : undefined;
-}

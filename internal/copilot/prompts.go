@@ -98,97 +98,8 @@ evidence. Tight prose; no filler, no preamble outside the sections.`
 
 // systemTrace — v0.10.1036: "CoSRE'ye sor" (explain-trace, kodsuz) varsayılanı
 // yine bu istem (v0.10.948–1035 arası trace incelemesi istemiydi).
+// v0.10.1065 — erişilemeyen inceleme istemi (systemTraceInvestigation) silindi.
 const systemTrace = systemTraceBody + AnswerInTurkish
-
-// v0.10.948 (CoSRE araştırma asistanı, Faz B) — "CoSRE'ye sor" ilk cevabı:
-// sunucunun GERÇEKTEN çalıştırdığı okumaların sonuçlarından kanıta dayalı
-// inceleme. systemTraceBody (tek-atış Explain) MCP istemi ve evalset için
-// yerinde kalır; bu metin onun yerine geçmez, trace inceleme yoluna aittir.
-// DataNotInstruction BURADA var: log gövdeleri artık kanıtın parçası
-// (tek-atış istemlerin bilinçli istisnası bu yola uygulanmaz). Türkçe-native
-// (sohbet kademeleri gibi): ortak dil direktifiyle BİTMEZ, çerçeve en sonda.
-//
-// v0.10.972 — operatör: "CoSRE de neden kök neden çıkmıyor artık" → "Kök neden
-// olsun yine de" + "Stacktrace detayı bölümü de geri gelsin". «Olası neden»
-// → «Kök neden»; İLK satırı güven: "Güven: kesin" (hata veren span/log'dan
-// nedene zincir kesintisiz) ya da "Güven: olası — <eksik halka>". Kanıt
-// kuralları aynen (kimlik, uydurmama, ilişki ≠ neden; yalnız zamansal ilişki
-// kesin olamaz). Arayüz (explainAnatomy.ts) yalnız "kesin"de Karar şeridi
-// çizer. «Stacktrace detayı» TEK koşullu başlık (Kanıt'tan sonra, Kök
-// neden'den önce): yalnız L satırında stacktrace varken (sunucu üst kareleri
-// "stacktrace:" alanıyla verir — trace_investigate.go invStackExcerpt);
-// Oracle satırı / çıplak exception.type sayılmaz, yoksa bölüm HİÇ yazılmaz.
-// PROBLEM istemindeki düz "Olası neden:" (systemProblem) AYRI bir yüzeydir,
-// değişmez.
-// v0.10.986 — operatör: "Kodu incele dediğimde daha iyi sonuç veriyor, o hali
-// olsa daha iyi olacak". Kod geçişi klasik istemi (systemTraceBody: İşlem
-// Akışı ve Veri Özeti / Stacktrace Detayı / Kök Neden ve Sonraki Adım) kullanır;
-// ilk cevap artık AYNI üç başlıkta ve düz anlatımla: kanıt kimlikleri ([K1],
-// [T1]) cevaba yazılmaz (sunucu yine verir, modele yöneliktir), "Güven: kesin /
-// olası" satırı yok, Kök Neden'in ilk cümlesi Karar şeridi (klasik davranış).
-// Veri toplama değişmedi: log, kıyas, pod, deploy, Oracle ve kaynak durumu
-// künyesi aynen; «Eksik veri» yalnız ok olmayan kaynak varken.
-// v0.10.972 — kesik stack notu: get_logs_for_trace öznitelik değerini 200
-// runede keser; sunucu bunu "(kaynak kesik: …)" diye söyler. Kesik stack
-// görünmeyen bir Caused by'ı saklıyor olabilir → tek başına "Güven: kesin"
-// dayanağı olamaz (istem cümlesi Stacktrace detayı tanımında).
-// v0.10.1036 — operatör: "Aslında CoSRE'nin eski explain trace'teki yapısı daha
-// iyiydi … Eski kanıt toplayıcı güzeldi." → varsayılan için "dönsün". "CoSRE'ye
-// sor" yine klasik toplayıcı + systemTrace; bu istem uçtan ERİŞİLEMEZ, metni
-// ve kaydı (promptVersionRegistry, promptRegistry) temizlik sürümüne dek durur.
-const systemTraceInvestigation = `Sen Coremetry'ye gömülü telemetri asistanı CoSRE'sin. Operatör bir trace için
-"CoSRE'ye sor" dedi. Sana sunucunun bu trace için GERÇEKTEN çalıştırdığı okumaların
-sonuçları verilir: trace analizi (hata span'leri, öz süre katkıları, kritik yol,
-ortam/cluster/namespace/pod/sürüm bağlamı), trace kimliğiyle eşleşen loglar,
-servisin aynı penceredeki trafik/hata/gecikme değerleri ve referans dönem kıyası,
-pod durumu, deploy/sürüm değişiklikleri. Her bölümün başında o okumanın KAYNAK
-DURUMU yazar (ok, boş, erişilemedi, yetki yok, zaman aşımı, kısmi, gecikmeli,
-limitli). Kanıt satırları [T1], [L1], [K1], [P1], [D1] gibi kimlik taşır.
-
-CEVAP BİÇİMİ — kalın başlıklar, bu sırayla; kanıtı olmayan bölümü HİÇ yazma (boş
-bölüm ya da "yok" satırı açma). Kanıt kimliklerini ([T1], [L1] …) cevaba YAZMA:
-onlar sana yöneliktir; kanıttaki değeri (sayı, hata kodu, sınıf adı, mesaj) AYNEN
-aktar, kaynağını gerektiğinde sözle söyle ("loglarda", "kıyas penceresinde").
-**İşlem Akışı ve Veri Özeti** — maddeler: kullanıcıya dönük işlem ve başlatan
-servis; kritik hata noktası (servis + loglardaki ya da Oracle satırlarındaki TAM
-hata kodu/mesajı); log gövdelerinde görünen dikkat çekici ya da hatalı iş verisi
-(girdi değerleri, kimlikler); en yavaş bileşen ve toplam trace süresindeki payı;
-servisler arası hata zinciri (hangi servis neyi yukarı taşıdı); servisin aynı
-penceredeki trafik/hata/gecikme değeri ve referans dönemle farkı; pod ve
-deploy/sürüm durumu (yalnız kanıtta varsa). Bir kimlik (request_id, kanal …) tek
-bir etiket altında bir kez yazılır, başka etiketle yinelenmez.
-**Stacktrace Detayı** — YALNIZ kanıtta bir stacktrace varsa: bir log satırının
-"stacktrace:" alanı ya da log gövdesindeki "at …" kareleri. Oracle hata satırları
-ve tek başına exception.type ya da hata kodu stacktrace DEĞİLDİR. Maddeler:
-fırlatan sınıf ve metot (en üstteki kare), exception tipi, görünüyorsa dağıtım
-birimi (ör. .war ya da modül öneki), katman (BFF / backend / entegrasyon) ve hata
-mesajı AYNEN. Kare görünmüyorsa sınıf ve metodu uydurma, "görünmüyor" de.
-"kaynak kesik" notlu stack eksiktir: gerçek neden görünmeyen Caused by'da
-olabilir, bunu söyle. Kanıtta stacktrace yoksa bu başlığı HİÇ yazma;
-"stacktrace yok" diye bölüm açma.
-**Kök Neden ve Sonraki Adım** — 1-3 madde: en olası kök neden (hata veren
-span/log'dan nedene giden zinciri düz cümleyle anlat) ve operatörün kontrol
-edeceği TEK somut sonraki şey (hangi sorgu, sayfa ya da pencere). Kanıtta
-olmayan neden UYDURMA; kanıt yetmiyorsa "kanıt yetersiz" de ve hangi okumanın
-eksik olduğunu yaz. Zamansal çakışma (deploy, trafik artışı, pod yeniden
-başlatma) NEDEN
-DEĞİL, ilişkidir: "aynı pencerede" de, "bu yüzden" deme. "Log bulunamadı"
-"hata yok" DEĞİLDİR: eşleşen kayıt yoksa bunu söyle, yokluktan sonuç çıkarma.
-**Eksik veri** — YALNIZ durumu ok olmayan kaynak varsa: kaynak ve bunun hangi
-soruyu cevapsız bıraktığı.
-
-KURALLAR:
-- Her sayı kanıttan AYNEN gelir (birimiyle). Hesap yapma, yüzdeliklerin
-  ortalamasını alma, span sürelerini TOPLAMA: iç içe ve paralel span'ler üst üste
-  biner; kritik yolun uzunluğu kök span'in süresidir.
-- Uzun span CPU tüketimi DEĞİLDİR (bekleme, ağ, kilit, alt çağrı olabilir).
-  Profiling verisi yok: bir metodun CPU ya da bellek (allocation) dağılımı
-  hakkında sonuç çıkarma.
-- Sayılar Coremetry'ye ulaşan span'lerden gelir; upstream örnekleme varsa
-  trafiğin kesin istatistiği değildir. Düşük örnek notu varsa yüzdeliği temkinli an.
-- Ortamları karıştırma: kanıt hangi ortamı söylüyorsa yalnız o.
-- Servis, pod, endpoint, sürüm adı uydurma; yalnız kanıtta geçenleri kullan.
-- Kısa ve somut yaz; giriş cümlesi yok, ham JSON yok.` + DataNotInstruction
 
 // TraceFollowUpAddendum — v0.10.948: çekmecedeki trace sohbetinin takip
 // soruları serbest araç döngüsüne gider; bu ek, döngünün sistem mesajına
@@ -214,11 +125,6 @@ stacktrace varsa) / Kök Neden ve Sonraki Adım / Eksik veri (yalnız ok olmayan
 kaynak varsa) başlıklarıyla ver; kanıt kimliklerini ([T1], [L1] …) cevaba yazma,
 değerleri aynen aktar. Her sayı bir araç sonucundan gelsin. Korelasyonu neden diye sunma; uzun span CPU
 değildir; profiling verisi yok.`
-
-// SystemPromptTraceInvestigation — v0.10.948: "CoSRE'ye sor" ilk cevabıydı (trace
-// inceleme yolu). v0.10.1036 — varsayılan yine SystemPromptTrace; bu accessor'ı
-// yalnız erişilemeyen inceleme yolu ve testleri çağırır (temizlik sürümüne dek).
-func SystemPromptTraceInvestigation() string { return systemTraceInvestigation }
 
 // TraceFollowUpAddendum — v0.10.948: çekmecedeki trace/span sohbetinde serbest araç
 // döngüsünün sistem mesajına eklenen inceleme talimatı.

@@ -7,11 +7,9 @@ import { Spinner, LoaderMark } from '@/components/Spinner';
 import { useCopilotEnabled } from '@/components/ai/useCopilotEnabled';
 import { aiSubjectQuestion } from '@/components/ai/drawerChat';
 import type { AIKind } from '@/lib/aiSubject';
-import type { AICodeContext, ChatStepDetail, ExplainSourceStatus, ExplainStepEvent } from '@/lib/types';
+import type { AICodeContext } from '@/lib/types';
 import { IconSparkles } from './icons';
 import { ExplainBody, type ExplainEvidence } from '@/components/ai/ExplainBody';
-import { ExplainSteps } from '@/components/ai/ExplainSteps';
-import { applyExplainStep } from '@/components/ai/investigationSteps';
 import type { IdLink } from '@/components/ai/inlineIdLinks';
 import { readAiCodeParam, readAiSrcParam, writeAiCodeParam } from '@/lib/aiSubject';
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
@@ -76,11 +74,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   toNs?: number;
   // Only used when kind === 'span'. The target span inside the
   // trace identified by `id`. v0.5.144 per-span explain.
-  // v0.10.948 — kind === 'trace' için de: operatörün SEÇTİĞİ span (isteğe
-  // bağlı); inceleme odak servisini ondan alır (bağlam şeridi ve takip
-  // sorularıyla aynı servis). Yoksa kök servis incelenir.
-  // v0.10.1036 — varsayılan yine klasik toplayıcı: istek `?span=` taşımaya devam
-  // eder ama sunucu yok sayar (klasik toplayıcı odak bilmez).
+  // v0.10.1065 — kind === 'trace' için gönderilen `?span=` (v0.10.948 inceleme
+  // odağı; v0.10.1036'dan beri sunucu yok sayıyordu) inceleme hattıyla kalktı.
   spanId?: string;
 }) {
   // v0.9.477 — config artık paylaşılan, modül düzeyinde cache'lenen hook'tan
@@ -96,7 +91,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   const [links, setLinks] = useState<IdLink[] | undefined>(undefined);
   const [meta, setMeta] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // v0.10.948 — operatör incelemeyi cevap gelmeden DURDURDU (hata değil; nötr not).
+  // v0.10.948 — operatör açıklamayı cevap gelmeden DURDURDU (hata değil; nötr not).
   const [stopped, setStopped] = useState(false);
   // v0.9.1121 (Faz 0.3b) — cevabın ai_calls kimliği; 👍/👎 buna asılı.
   // Her çalıştırmada SIFIRLANIR: "Yeniden sor" yeni bir kimlik üretir ve
@@ -159,18 +154,10 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // çiziyordu: kodsuz ilk cevap, okumadığı dosyaları kaynak gösteriyordu.
   const [codeCtx, setCodeCtx] = useState<AICodeContext | null>(null);
   const codeAbortRef = useRef<AbortController | null>(null);
-  // v0.10.948 (CoSRE Faz B) — "CoSRE'ye sor" (kind=trace) sunucuda GERÇEK
-  // okumalar çalıştırıyor (get_trace → loglar · dönem kıyası · pod/metrik ·
-  // deploy). `steps` yalnız akıştaki step/step-result olaylarından dolar —
-  // sabit ilerleme metni yok; `sources` cevap çerçevesinin kaynak durumları
-  // (dipnot). İkisi de her koşuda sıfırlanır; önbellek isabetinde liste
-  // çizilmez (hiçbir şey koşmadı).
-  // v0.10.1036 — "CoSRE'ye sor" varsayılanı yine KLASİK tek atış: sunucu adım
-  // olayı ve `sources` GÖNDERMEZ, ikisi boş kalır ve liste/dipnot hiç çizilmez
-  // (ExplainSteps / ExplainSourceFooter boşta null). Bu dallar temizlik
-  // sürümüne dek duruyor (trace_explain_handler.go başlığı).
-  const [steps, setSteps] = useState<ChatStepDetail[]>([]);
-  const [sources, setSources] = useState<ExplainSourceStatus[] | undefined>(undefined);
+  // v0.10.1065 (operatör onaylı: "CoSRE'ye sor eskisi gibi") — v0.10.948
+  // incelemesinin adım listesi (`steps`, step/step-result olayları) ve kaynak
+  // durumu dipnotu (`sources`) silindi: v0.10.1036'dan beri sunucu ikisini de
+  // göndermiyordu (klasik tek atış).
 
   // applyText — cevabı hem panele yaz hem üst bileşene duyur (v0.9.479).
   // BOŞ model cevabı bağlam olamaz: onAnswer'a boş string gider, çekmece
@@ -196,11 +183,6 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   const streamOpts = (ac: AbortController) => ({
     onDelta: (d: string) => setText(prev => (prev ?? '') + d),
     signal: ac.signal,
-    // v0.10.948 — yalnız trace adım yayınlar; öteki Explain'ler DEĞİŞMEDİ.
-    // Kesilmiş eski akışın geç gelen adımı yeni listeye karışmaz (ac muhafızı).
-    ...(kind === 'trace' ? {
-      onStep: (ev: ExplainStepEvent) => { if (abortRef.current === ac) setSteps(prev => applyExplainStep(prev, ev)); },
-    } : {}),
   });
 
   // withCode parametresi state yerine ARGÜMAN: checkbox onChange'inden
@@ -222,7 +204,6 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
     setBusy(true); setError(null); setStopped(false); setText(null); setMeta(null); setCode(null); setEvidence({ spans: 0, traces: 0 });
     setExchangeId(undefined);
     setCachedAtMs(null);
-    setSteps([]); setSources(undefined); // v0.10.948 — önceki koşunun adımları/durumları yeni cevaba ait değil
     // v0.10.153 — yeni ilk geçiş: kod geçişi ve karar sıfırlanır.
     // v0.10.1041 — kod kartının künyesi (codeCtx) de; ilk kartınki yukarıda (setCode).
     codeAbortRef.current?.abort();
@@ -242,12 +223,11 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           ? `Based on ${r.similarCount} past resolved instance${r.similarCount === 1 ? '' : 's'} of this rule on this service.`
           : `No past resolutions found — first-principles only.`);
       } else {
-        const r = kind === 'trace'          ? await api.copilotExplainTrace(id, withCode, opts, spanId).then(rr => { // v0.10.948 — seçili span = odak servis; v0.10.1036 — klasik varsayılan span'i yok sayar
+        const r = kind === 'trace'          ? await api.copilotExplainTrace(id, withCode, opts).then(rr => {
                                                   if (rr.evidenceSpanIds?.length) { onEvidence?.(rr.evidenceSpanIds); setEvidence(e => ({ ...e, spans: rr.evidenceSpanIds?.length ?? 0 })); }
                                                   if (rr.oracleRows) setEvidence(e => ({ ...e, oracle: rr.oracleRows })); // v0.10.921
                                                   setCode(rr.code ?? null);
                                                   setLinks(rr.links);
-                                                  setSources(rr.sources?.length ? rr.sources : undefined); // v0.10.948
                                                   return rr;
                                                 })
                 : kind === 'exception'      ? await api.copilotExplainException(id, withCode, opts).then(rr => {
@@ -269,8 +249,6 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
         setLinks(r.links);
         setExchangeId(r.exchangeId);
         setCachedAtMs(r.cached ? (r.cachedAtMs ?? 0) : null);
-        // v0.10.948 — isabet: sunucu hiçbir okuma koşturmadı; liste çizilmez.
-        if (r.cached) setSteps([]);
       }
     } catch (e: unknown) {
       // İptal HATA DEĞİL: "Yeniden sor" kendi öncülünü keser, bileşen
@@ -286,8 +264,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
     }
   };
 
-  // v0.10.948 — incelemeyi DURDUR (gereksinim 7): akış kesilir, sunucu istek
-  // ctx'i düşünce kalan okumaları başlatmaz. İptal HATA DEĞİL (catch erken
+  // v0.10.948 — açıklamayı DURDUR (gereksinim 7): akış kesilir, sunucu istek
+  // ctx'i düşünce üretimi bırakır. İptal HATA DEĞİL (catch erken
   // döner, finally busy'yi düşürür) ama cevap gelmeden durduysa görünür bir
   // "durduruldu" hâli gerekir: yoksa auto kipte "Yeniden sor" gizli kalır.
   const stopRun = () => {
@@ -325,7 +303,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
         setCodeText(r.explanation || '⚠ Model boş yanıt döndürdü.');
       };
       if (kind === 'trace') {
-        finish(await api.copilotExplainTrace(id, true, opts, spanId)); // v0.10.948 — klasik (kodlu) yol span'i yok sayar
+        finish(await api.copilotExplainTrace(id, true, opts));
       } else {
         const r = await api.copilotExplainException(id, true, opts);
         if (r.evidenceTraceIds?.length) onEvidenceTraces?.(r.evidenceTraceIds);
@@ -374,9 +352,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // Çekmecede tetik buton yok: sonuç gelene kadar Spinner, sonrasında
   // "Yeniden sor" (hata hâlinde tekrar deneme yolu da bu).
   const showButton = !auto || (!busy && (text !== null || error !== null || stopped));
-  // v0.10.948 — yalnız trace incelemesi (gerçek okumalar koşar); öteki Explain'ler değişmedi.
-  // v0.10.1036 — varsayılan yine klasik açıklama (adımlı inceleme yok): düğme
-  // kalır (ilk token'a kadar isteği keser), metni artık incelemeden söz etmez.
+  // v0.10.948 — yalnız trace; öteki Explain'ler değişmedi. v0.10.1036 — varsayılan
+  // yine klasik açıklama: düğme kalır (ilk token'a kadar isteği keser).
   const stopButton = kind === 'trace' && busy && text === null && (
     <Button variant="secondary" size="sm" type="button" onClick={stopRun}
       title="Açıklamayı durdur — istek kesilir">
@@ -453,18 +430,14 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
              (pin/konvansiyon deposu yok) ya da önbellekten gelir ve arayüz
              bunu ancak çağrı bitince öğrenir ("Kod okunamadı" uyarısı). Kodlu
              ipucu yalnız İSTENENİ söyler, yapılanı değil. */}
-          {/* v0.10.948 — yükleniyor işaretinin ALTINDA sunucunun gerçekten
-              başlattığı okumalar (step olayı gelmediyse liste yok). */}
           <div className="cx-live">
             <LoaderMark size="lg"
               label={includeCode ? 'CoSRE kodu okuyor…' : 'CoSRE düşünüyor…'}
               hint={includeCode ? 'Kaynak kodu da istendi; cevap bekleniyor — ilk bölüm gelince burada görünür.' : 'Cevap bekleniyor — ilk bölüm gelince burada görünür.'} />
-            <ExplainSteps steps={steps} live />
             {stopButton}
           </div>
         </div>
       )}
-      {!auto && busy && text === null && <ExplainSteps steps={steps} live />}
       {!auto && stopButton}
       {showButton && (
         <Button variant="accent" size="sm" onClick={() => void run(includeCode, true)} disabled={busy}
@@ -488,8 +461,6 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           Durduruldu — açıklama yarıda kesildi; “Yeniden sor” baştan başlatır.
         </div>
       )}
-      {/* v0.10.948 — cevap gelmeden düşen (ya da durdurulan) incelemede HANGİ okumaların koştuğu kaybolmasın. */}
-      {(error || stopped) && !busy && text === null && <ExplainSteps steps={steps} live={false} />}
       {/* v0.10.461 — kart anatomisi paylaşılan sınıfta (ai/answerCard.ts):
           asistan sohbet turu da aynı kartla çizilir. */}
       {text && (
@@ -552,11 +523,8 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
               ♻ önbellekten{cachedAtMs > 0 ? ` · ${Math.max(1, Math.round((Date.now() - cachedAtMs) / 60000))} dk önce üretildi` : ''} — taze cevap için “Yeniden sor”
             </div>
           )}
-          {/* v0.10.948 — sunucunun bu cevap için yürüttüğü okumalar: tek satır özet,
-              tıklayınca liste. Önbellek isabetinde çizilmez (hiçbir şey koşmadı). */}
-          {cachedAtMs === null && <ExplainSteps steps={steps} live={false} />}
           {/* kod kartı açıkken Karar'ı o kart taşır — iki rakip KARAR şeridi olmaz */}
-          <ExplainBody text={text} busy={busy} links={links} evidence={evidence} verdict={codeAsk !== 'accepted'} sources={sources} />
+          <ExplainBody text={text} busy={busy} links={links} evidence={evidence} verdict={codeAsk !== 'accepted'} />
           {/* v0.9.1127 — akan cevabın imleci (ChatBubble'ın `.cm-ai-cursor`
               atomu). Cevap BİTMEDEN de metin görünür olduğu için, bittiğini
               gösteren bir işaret gerekiyor: imleçsiz akan metin yarıda
