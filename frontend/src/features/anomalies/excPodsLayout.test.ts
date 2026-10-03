@@ -16,7 +16,7 @@ describe('exception detayı Pods · nodes (v0.10.173 → v0.10.734)', () => {
     const pods = src.indexOf('<ExceptionPodsPanel');
     const samples = src.indexOf('<h3>Sample traces</h3>');
     const stack = src.indexOf('<h3>Stack trace</h3>');
-    const grid = src.indexOf('<div className="pd-cols pd-cols-14">');
+    const grid = src.indexOf('<div className="pd-cols pd-cols-11">');
     expect(grid).toBeGreaterThan(-1);
     expect(pods).toBeGreaterThan(stack);
     expect(pods).toBeLessThan(samples);

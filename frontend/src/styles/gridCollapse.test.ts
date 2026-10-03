@@ -39,18 +39,18 @@ describe('D5 — kritik yolculukların dar ekran dalları', () => {
     const src = stripComments(readFileSync(join(SRC, 'features/anomalies/ProblemDetail.tsx'), 'utf8'));
     expect(src, 'ızgara satır içine geri taşınmış — @media onu yenemez')
       .not.toMatch(/gridTemplateColumns:\s*'1\.[45]fr 1fr'/);
-    expect(src).toContain('className="pd-cols pd-cols-14"');
+    expect(src).toContain('className="pd-cols pd-cols-11"');
     expect(src).toContain('className="pd-cols pd-cols-15"');
   });
 
   it('masaüstü oranları AYNEN korunmuş', () => {
     // Sınıfa taşımak bir yeniden tasarım DEĞİL: değerler birebir aynı.
-    expect(CSS).toMatch(/\.pd-cols-14 \{ grid-template-columns: 1\.4fr 1fr; gap: 16px; \}/);
+    expect(CSS).toMatch(/\.pd-cols-11 \{ grid-template-columns: 1fr 1fr; gap: 16px; \}/);
     expect(CSS).toMatch(/\.pd-cols-15 \{ grid-template-columns: 1\.5fr 1fr; gap: 14px;/);
   });
 
   it('<640px\'te üç ızgara da tek kolona iniyor', () => {
-    expect(phoneLayer()).toMatch(/\.pd-cols-14, \.pd-cols-15, \.lcm-row \{ grid-template-columns: 1fr; \}/);
+    expect(phoneLayer()).toMatch(/\.pd-cols-11, \.pd-cols-15, \.lcm-row \{ grid-template-columns: 1fr; \}/);
   });
 
   // ── Yolculuk B: trace şelalesi ─────────────────────────────────────

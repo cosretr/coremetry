@@ -1280,6 +1280,12 @@ gürültü azlığı: her gün resolve/regress olan kronik bir grup her regresyo
 başına damga reddedildi. Bilinen kenar: P1 başlayan bir regresyonda taban yalnız bellekte kapanır (log'da yalnız `:p1`
 var), bu yüzden 90 gün içindeki SONRAKİ bir P2 regresyonu tabanı bir kez gönderir.
 
+## 2026-10-03 — Exception detayı: stack trace / pods / sample traces kolonları eşit (v0.10.1079)
+
+**Operatör:** "Stack trace'le pods · nodes ve sample traces panelleri orantısız gözüküyor. Eşit olsa sayfaya daha
+iyi sığar." **Karar:** `.pd-cols-14` (1.4fr 1fr, v0.8.61) → `.pd-cols-11` (1fr 1fr); telefon katmanı tek kolon
+aynen. Anomali detayının `.pd-cols-15`i (grafik 1.5fr / "Ne yapabilirim" 1fr) değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

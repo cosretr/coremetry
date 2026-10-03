@@ -3558,7 +3558,10 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    taşındı: satır-içi stili medya sorgusu yenemediği için dar ekran
    çökmesi ancak sınıfla mümkün. Masaüstünde tek piksel değişmiyor. */
 .pd-cols { display: grid; }
-.pd-cols-14 { grid-template-columns: 1.4fr 1fr; gap: 16px; }
+/* v0.10.1079 (operatör: "Stack trace, pods · nodes ve sample traces panelleri
+   orantısız; eşit olsa sayfaya daha iyi sığar") — exception detayının iki
+   kolonu 1.4fr/1fr idi, artık eşit. Sınıf adı orana göre (11 = 1:1). */
+.pd-cols-11 { grid-template-columns: 1fr 1fr; gap: 16px; }
 .pd-cols-15 { grid-template-columns: 1.5fr 1fr; gap: 14px; align-items: start; }
 .lcm-row {
   display: grid; grid-template-columns: 60px 50px 110px 1fr 70px;
@@ -4459,7 +4462,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
      yerinde duruyor (destek yoksa bugünkü davranış). */
   /* D5.1/5.2/5.8 — üç ızgara tek kolona. `1.5fr 1fr` 366px'te 210+140px
      eder; sol kolonda RootCausePanel + AI özeti, sağda offender listesi. */
-  .pd-cols-14, .pd-cols-15, .lcm-row { grid-template-columns: 1fr; }
+  .pd-cols-11, .pd-cols-15, .lcm-row { grid-template-columns: 1fr; }
 
   /* D5.6 (B3) — `#td-outer` sabit `calc(100vh - 185px)` idi ve mobilde
      DEĞİŞMİYORDU: 844px'lik bir viewport'ta şelaleye 659px, span paneli

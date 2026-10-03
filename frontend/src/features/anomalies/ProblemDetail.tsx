@@ -612,13 +612,14 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
 
       {/* Stack trace (left) · Sample traces (right). minWidth:0 on the columns
           so the long Java stack frames don't force the left column past 1.4fr
-          (the v0.8.61 ratio fix — stack trace forced into the left column). */}
+          (the v0.8.61 ratio fix — stack trace forced into the left column;
+          v0.10.1079: oran 1.4fr/1fr → eşit, operatör isteği). */}
       {/* v0.9.983 (D5.2 / A1) — oran satır içiydi ve satır-içi stili
           `@media` YENEMEZ, dolayısıyla 366px'lik telefonda bu ızgara
           210px + 140px iki kolona çöküyordu (stack trace 210px'lik bir
           kolonda monospace). Değerler AYNEN sınıfa taşındı; masaüstü
           görünümü bit bit aynı, yalnız <640px'te tek kolona iniyor. */}
-      <div className="pd-cols pd-cols-14">
+      <div className="pd-cols pd-cols-11">
         {/* Stack trace */}
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h">
