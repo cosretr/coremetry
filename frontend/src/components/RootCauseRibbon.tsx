@@ -12,7 +12,7 @@ import type {
 import { RCAVerdictPanel } from './RCAVerdictPanel';
 import { fmtDurShort, fmtDateTime } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
-import { ribbonCandidates } from '@/lib/rootCauseCandidates';
+import { ribbonCandidates, ribbonNoCandidateNote } from '@/lib/rootCauseCandidates';
 import { traceHref } from '@/lib/traceHref';
 
 // RootCauseRibbon (rc #3) — the in-page "Root cause: <suspect> (NN%) ▸" chip on
@@ -200,7 +200,11 @@ function ExpandedBody({ rc, window: win }: {
   // v0.10.700 — kalıcı hipotez adayları varsa onlar (hop/kind/zamansal
   // gerekçe taşır), yoksa canlı correlations (eski yol).
   const candidates = ribbonCandidates(rc);
-  const nothing = candidates.length === 0 && !rc.recentDeploy && !rc.exemplar;
+  // v0.10.1090 — canlı yolda yalnız causeEligible aday; yoksa ama başka
+  // servisler kıpırdadıysa panelin hükmü (bağlı + kötüleşen yok /
+  // bağlantı doğrulanamadı) "Ranked candidates" yerine basılır.
+  const noCandNote = candidates.length === 0 ? ribbonNoCandidateNote(rc) : '';
+  const nothing = candidates.length === 0 && !noCandNote && !rc.recentDeploy && !rc.exemplar;
 
   if (nothing) {
     return (
@@ -261,6 +265,14 @@ function ExpandedBody({ rc, window: win }: {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+      {noCandNote && (
+        <div>
+          <Label>Ranked candidates</Label>
+          <div data-testid="ribbon-no-candidate" style={{ fontSize: 12, color: 'var(--text3)' }}>
+            {noCandNote}
           </div>
         </div>
       )}

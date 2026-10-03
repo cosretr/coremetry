@@ -34,6 +34,41 @@ func shiftWindow(raw string) (string, time.Duration) {
 	return "12h", shiftWindows["12h"]
 }
 
+// shiftChangeCap — vardiya değişim gruplarının her birinin gösterim tavanı.
+const shiftChangeCap = 10
+
+// shiftChangeGroups — v0.10.1090 (saf). "En çok kötüleşen" tablosu yönsüz
+// skorla sıralı ilk 10'u basıyordu; hatası %76.8 → %0'a inen servis
+// "kötüleşen" diye listeleniyordu (v0.10.1063'ün kök-neden manşetindeki
+// hatanın vardiya yüzü). Yön scoreChangedService'in Direction'ı:
+//   - worse → Worsened
+//   - lost  → Lost ("trafik kesildi" — ne iyileşme ne kötüleşme, ayrı olay)
+//   - better / quieter → Improved ("iyileşen / trafiği azalan")
+//   - unknown / boş → HİÇBİR grup: yönü okunamayan satıra iki başlıktan
+//     birini yapıştırmak yalan olurdu (NaN delta; pratikte çok seyrek).
+//
+// Girdi sırası (skor desc) grup içinde korunur; tavan grup başına.
+func shiftChangeGroups(cs []chstore.ChangedService, limit int) (worse, lost, improved []chstore.ChangedService) {
+	worse, lost, improved = []chstore.ChangedService{}, []chstore.ChangedService{}, []chstore.ChangedService{}
+	add := func(dst []chstore.ChangedService, c chstore.ChangedService) []chstore.ChangedService {
+		if len(dst) >= limit {
+			return dst
+		}
+		return append(dst, c)
+	}
+	for _, c := range cs {
+		switch c.Direction {
+		case chstore.ChangeWorse:
+			worse = add(worse, c)
+		case chstore.ChangeLost:
+			lost = add(lost, c)
+		case chstore.ChangeBetter, chstore.ChangeQuieter:
+			improved = add(improved, c)
+		}
+	}
+	return worse, lost, improved
+}
+
 // ShiftSummary — GET /api/shift cevabı.
 type ShiftSummary struct {
 	WindowSec int64 `json:"windowSec"`
@@ -44,8 +79,13 @@ type ShiftSummary struct {
 	// listede: "gece ne kendi kendine düzeldi" sorusu vardiyanın yarısı.
 	Problems []chstore.Problem `json:"problems"`
 	// Worsened — pencere vs önceki eş-boy pencere RED kıyası
-	// (CorrelatedChangesMV; en fazla 10).
+	// (CorrelatedChangesMV; en fazla 10). v0.10.1090: YALNIZ
+	// Direction == worse; trafiği kesilenler Lost'ta, iyileşen /
+	// sakinleşenler Improved'da (shiftChangeGroups). Eskiden yönsüz skor
+	// sırasıyla hepsi "kötüleşen" başlığı altındaydı.
 	Worsened []chstore.ChangedService `json:"worsened"`
+	Lost     []chstore.ChangedService `json:"lost"`
+	Improved []chstore.ChangedService `json:"improved"`
 	// NewExceptions — first_seen pencerede olan gruplar (en fazla 20;
 	// kesme truncated ile İFŞA edilir).
 	NewExceptions      []chstore.ExceptionGroup `json:"newExceptions"`
@@ -70,6 +110,8 @@ func (s *Server) getShiftSummary(w http.ResponseWriter, r *http.Request) {
 			ToNs:          to.UnixNano(),
 			Problems:      []chstore.Problem{},
 			Worsened:      []chstore.ChangedService{},
+			Lost:          []chstore.ChangedService{},
+			Improved:      []chstore.ChangedService{},
 			NewExceptions: []chstore.ExceptionGroup{},
 		}
 
@@ -84,12 +126,12 @@ func (s *Server) getShiftSummary(w http.ResponseWriter, r *http.Request) {
 			out.Problems = probs
 		}
 
-		// 2. Kötüleşenler — baseline = önceki eş-boy pencere (at=from).
-		if cs, err := s.store.GetCorrelatedChangesMV(ctx, from, int(dur.Seconds()), int(dur.Seconds())); err == nil && cs != nil {
-			if len(cs) > 10 {
-				cs = cs[:10]
-			}
-			out.Worsened = cs
+		// 2. Değişenler — baseline = önceki eş-boy pencere (at=from).
+		// v0.10.1090 — 50'lik havuz (aynı sorgu, tavan Go'da), YÖNE göre
+		// gruplanır, tavan grup başına SONRA: yönsüz skorla ilk 10'u
+		// iyileşenler doldurup gerçek kötüleşeni kesmesin.
+		if cs, err := s.store.GetCorrelatedChangesMVTop(ctx, from, int(dur.Seconds()), int(dur.Seconds()), chstore.ChangedServicesMarkPool); err == nil {
+			out.Worsened, out.Lost, out.Improved = shiftChangeGroups(cs, shiftChangeCap)
 		}
 
 		// 3. Pencerede doğan exception grupları. first_seen filtresi

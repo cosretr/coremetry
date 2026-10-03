@@ -11,7 +11,9 @@ package api
 //
 // Nedensellik ayrımı BİLİNÇLİ:
 //   - Correlations komşuları OLASI NEDENDİR → entity dolu, K3 beyaz
-//     listesi (ve şemanın root_cause.entity enum'u) GENİŞLER.
+//     listesi (ve şemanın root_cause.entity enum'u) GENİŞLER. v0.10.1090:
+//     YALNIZ causeEligible (özneyle kenarlı + konuma göre kötüleşen)
+//     satırlar; iyileşen / bağlantısız olanlar adsız tek satıra iner.
 //   - Blast çağıranları MAĞDURDUR, neden değil → entity boş; adları
 //     yalnız gösterilen-jeton yoluyla meşrulaşır (model zincirde
 //     anabilir ama kök neden İLAN EDEMEZ).
@@ -43,19 +45,32 @@ func (s *Server) gatherRCACatalogExtras(ctx context.Context, h *chstore.RootCaus
 	from := time.Unix(0, anchorStartNs)
 	to := from.Add(rca.ExtrasWindow)
 
+	winSec := int(rca.ExtrasWindow.Seconds())
+	var cs []chstore.ChangedService
+	var topoEdges []chstore.ServiceEdge
+	topoKnown := false
+
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
 		if br, err := s.store.GetServiceBlastRadius(ctx, h.Service, from, to); err == nil && br.TotalCallers > 0 {
 			out.Blast = &br
 		}
 	}()
+	// v0.10.1090 — /rootcause ile AYNI işaretleme: 50'lik havuz (aynı
+	// sorgu) + öznenin topoloji komşuluğu (rootCauseTopo). Katalog yalnız
+	// causeEligible satırı "kötüleşen komşu" (olası neden) yapar; 1063'e dek
+	// burası skora göre ilk 3'ü yönsüz / kenarsız alıyordu.
 	go func() {
 		defer wg.Done()
-		if cs, err := s.store.GetCorrelatedChangesMV(ctx, from, int(rca.ExtrasWindow.Seconds()), int(4*rca.ExtrasWindow.Seconds())); err == nil {
-			out.Correlations = cs
+		if got, err := s.store.GetCorrelatedChangesMVTop(ctx, from, winSec, 4*winSec, chstore.ChangedServicesMarkPool); err == nil {
+			cs = got
 		}
+	}()
+	go func() {
+		defer wg.Done()
+		topoEdges, topoKnown = s.rootCauseTopo(ctx, h.Service, from, to, 4*winSec)
 	}()
 	go func() {
 		defer wg.Done()
@@ -67,5 +82,9 @@ func (s *Server) gatherRCACatalogExtras(ctx context.Context, h *chstore.RootCaus
 		}
 	}()
 	wg.Wait()
+	if cs != nil {
+		out.Correlations = chstore.MarkCorrelationCauses(cs, h.Service, topoEdges, topoKnown)
+	}
+	out.TopologyKnown = topoKnown
 	return out
 }

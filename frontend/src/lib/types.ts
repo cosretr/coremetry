@@ -1238,7 +1238,9 @@ export interface ShiftSummary {
   fromNs: number;
   toNs: number;
   problems: Problem[];               // pencerede açılan + çözülen (enriched)
-  worsened: ChangedService[];        // pencere vs önceki eş-boy pencere
+  worsened: ChangedService[];        // pencere vs önceki eş-boy pencere; v0.10.1090 yalnız direction=worse
+  lost?: ChangedService[];           // v0.10.1090 — trafiği kesilen (direction=lost)
+  improved?: ChangedService[];       // v0.10.1090 — iyileşen / trafiği azalan (better | quieter)
   newExceptions: ExceptionGroup[];   // first_seen pencerede (≤20)
   newExceptionsTotal: number;        // kesme ifşası
   problemsTotal: number;             // v0.9.1073 — kesme ifşası (≤100 gösterilir)

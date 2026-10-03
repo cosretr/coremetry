@@ -39,12 +39,16 @@ func extTestExtras() rcaCatalogExtras {
 				{Service: "web-gw", ErrorRate: 3.0},
 			},
 		},
+		// v0.10.1090 — satırlar MarkCorrelationCauses'tan geçmiş hâliyle:
+		// yön + uygunluk taşır (gatherRCACatalogExtras işaretler).
 		Correlations: []chstore.ChangedService{
-			{Service: "checkout", P99DeltaPct: 90}, // ankorun kendisi — elenmeli
-			{Service: "payment-db", P99DeltaPct: 240, ErrDeltaPct: 4.2, RateDeltaPct: -3},
-			{Service: "auth-svc", P99DeltaPct: 55, ErrDeltaPct: 0.4, RateDeltaPct: 1},
-			{Service: "c3", P99DeltaPct: 30}, {Service: "c4", P99DeltaPct: 20}, // kap: 3'ten sonrası düşer
+			{Service: "checkout", P99DeltaPct: 90, Direction: chstore.ChangeWorse, CauseEligible: true}, // ankorun kendisi — elenmeli
+			{Service: "payment-db", P99DeltaPct: 240, ErrDeltaPct: 4.2, RateDeltaPct: -3, Direction: chstore.ChangeWorse, Relation: chstore.RelationDownstream, CauseEligible: true},
+			{Service: "auth-svc", P99DeltaPct: 55, ErrDeltaPct: 0.4, RateDeltaPct: 1, Direction: chstore.ChangeWorse, Relation: chstore.RelationDownstream, CauseEligible: true},
+			{Service: "c3", P99DeltaPct: 30, Direction: chstore.ChangeWorse, Relation: chstore.RelationBoth, CauseEligible: true},
+			{Service: "c4", P99DeltaPct: 26, Direction: chstore.ChangeWorse, Relation: chstore.RelationDownstream, CauseEligible: true}, // kap: 3'ten sonrası düşer
 		},
+		TopologyKnown: true,
 		BubbleUp: &chstore.BubbleUpResult{
 			SelectionTotal: 40, BaselineTotal: 900,
 			Attributes: []chstore.BubbleUpAttribute{

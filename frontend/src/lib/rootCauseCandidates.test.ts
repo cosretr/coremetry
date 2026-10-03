@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { ribbonCandidates, pctLabel, coMovingCause, localizedNote } from './rootCauseCandidates';
+import { ribbonCandidates, pctLabel, coMovingCause, localizedNote, ribbonNoCandidateNote } from './rootCauseCandidates';
 import type { ChangedService, RootCause, RootCauseHypothesis } from '@/lib/types';
 
 // v0.10.700 — ribbon adayları: kalıcı hipotez varsa o (sıra korunur, kendisi
 // süzülür, yüzde etiketi, zamansal gerekçe), yoksa canlı correlations.
+// v0.10.1090 — canlı yol yalnız causeEligible satırı aday sayar; bu
+// fikstürler sunucunun uygun işaretlediği satırlardır.
 const corr = (service: string, score: number): ChangedService => ({
   service, baselineRate: 0, currentRate: 0, rateDeltaPct: 0, baselineErrorRate: 0,
   currentErrorRate: 0, errDeltaPct: 0, baselineP99Ms: 0, currentP99Ms: 0, p99DeltaPct: 0,
-  score, reasons: [`r-${service}`],
+  score, reasons: [`r-${service}`], direction: 'worse', relation: 'downstream', causeEligible: true,
 });
 const hyp = (cands: RootCauseHypothesis['candidates']): RootCauseHypothesis => ({
   anchorKind: 'problem', anchorId: 'p', service: 'shop-api', computedAt: 0,
@@ -116,16 +118,54 @@ describe('ribbonCandidates canlı yol — yön + uygunluk (v0.10.1063)', () => {
     currentErrorRate: 0, errDeltaPct: 0, baselineP99Ms: 0, currentP99Ms: 0, p99DeltaPct: 0,
     score, reasons: [], ...o,
   });
-  it('svc-b (lost, bağlantısız) uygun svc-x\'in ARKASINDA; better/quieter düşer', () => {
+  // v0.10.1090 — 1063 bağlantısız worse/lost satırı uygun adayın ARKASINA
+  // diziyordu; artık hiç listelenmez (yalnız causeEligible).
+  it('yalnız uygun svc-x; bağlantısız lost/worse ve better/quieter düşer', () => {
     const got = ribbonCandidates({
       service: 'svc-a',
       correlations: [
         r('svc-b', 404, { direction: 'lost' }),
         r('svc-c', 213, { direction: 'better' }),
+        r('svc-u', 120, { direction: 'worse' }),
         r('svc-z', 90, { direction: 'quieter' }),
         r('svc-x', 62, { direction: 'worse', relation: 'downstream', causeEligible: true }),
+        r('svc-y', 80, { direction: 'lost', relation: 'downstream', causeEligible: true }),
       ],
     }).map(c => c.service);
-    expect(got).toEqual(['svc-x', 'svc-b']);
+    expect(got).toEqual(['svc-y', 'svc-x']);
+  });
+  it('uygun satır yoksa boş — eski (causeEligible taşımayan) yanıt da', () => {
+    expect(ribbonCandidates({ service: 'svc-a', correlations: [r('svc-u', 120, { direction: 'worse' }), r('svc-v', 50)] })).toEqual([]);
+  });
+});
+
+// v0.10.1090 — şeridin "aday yok" satırı panelin localizedNote hükmüyle aynı.
+describe('ribbonNoCandidateNote (v0.10.1090)', () => {
+  const moved = (o: Partial<ChangedService> = {}): ChangedService => ({
+    service: 'svc-b', baselineRate: 2.77, currentRate: 0.01, rateDeltaPct: -99.5,
+    baselineErrorRate: 0.768, currentErrorRate: 0, errDeltaPct: -100,
+    baselineP99Ms: 32, currentP99Ms: 2.01, p99DeltaPct: -93.7, score: 404,
+    reasons: [], direction: 'lost', ...o,
+  });
+  const rcOf = (corr: ChangedService[], topologyKnown?: boolean): RootCause => ({
+    problemId: 'p1', service: 'svc-a', metric: 'http_p99_ms', startedAt: 0, fromNs: 0, toNs: 60e9,
+    correlations: corr, ...(topologyKnown === undefined ? {} : { topologyKnown }),
+  } as RootCause);
+  it('topoloji okundu → bağlı ve kötüleşen yok', () => {
+    expect(ribbonNoCandidateNote(rcOf([moved()], true)))
+      .toBe('Other services moved in the same window but none is a connected, worsening dependency of svc-a.');
+  });
+  it('topoloji okunamadı / alan yok → bağlantı doğrulanamadı', () => {
+    const want = 'Other services moved in the same window — bağlantı doğrulanamadı (topology unavailable).';
+    expect(ribbonNoCandidateNote(rcOf([moved()], false))).toBe(want);
+    expect(ribbonNoCandidateNote(rcOf([moved()]))).toBe(want);
+  });
+  it('kıpırdayan başka servis yok → boş', () => {
+    expect(ribbonNoCandidateNote(rcOf([], true))).toBe('');
+    expect(ribbonNoCandidateNote(rcOf([moved({ service: 'svc-a' })], true))).toBe('');
+  });
+  it('panel metni değişmedi (varsayılan "services below")', () => {
+    expect(localizedNote(rcOf([moved()], true), 'svc-a'))
+      .toBe('; services below moved in the same window but none is a connected, worsening dependency of svc-a');
   });
 });

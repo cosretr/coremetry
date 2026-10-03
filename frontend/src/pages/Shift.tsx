@@ -85,6 +85,10 @@ export default function ShiftPage() {
 
   const problems = useMemo(() => q.data?.problems ?? [], [q.data]);
   const worsened = useMemo(() => q.data?.worsened ?? [], [q.data]);
+  // v0.10.1090 — sunucu yöne göre gruplar (shiftChangeGroups): iyileşen
+  // servis artık "kötüleşen" başlığı altında değil.
+  const lost = useMemo(() => q.data?.lost ?? [], [q.data]);
+  const improved = useMemo(() => q.data?.improved ?? [], [q.data]);
   const excs = useMemo(() => q.data?.newExceptions ?? [], [q.data]);
 
   // v0.9.1322 (§3.1 K3) — "en çok kötüleşen" satırının kendi zaman damgası
@@ -96,6 +100,8 @@ export default function ShiftPage() {
 
   const probT = useDataTable({ rows: problems, columns: PROBLEM_COLS, storageKey: 'shift-problems', initialSort: { id: 'opened', dir: 'desc' } });
   const worseT = useDataTable({ rows: worsened, columns: WORSE_COLS, storageKey: 'shift-worsened', initialSort: { id: 'score', dir: 'desc' } });
+  const lostT = useDataTable({ rows: lost, columns: WORSE_COLS, storageKey: 'shift-lost', initialSort: { id: 'score', dir: 'desc' } });
+  const betterT = useDataTable({ rows: improved, columns: WORSE_COLS, storageKey: 'shift-improved', initialSort: { id: 'score', dir: 'desc' } });
   const excT = useDataTable({ rows: excs, columns: EXC_COLS, storageKey: 'shift-exceptions', initialSort: { id: 'occ', dir: 'desc' } });
 
   return (
@@ -174,15 +180,29 @@ export default function ShiftPage() {
               <DataTableColgroup dt={worseT} />
               <DataTableHead dt={worseT} />
               <tbody>
-                {worsened.length === 0 ? <DataTableState dt={worseT} kind="empty" message="Kayda değer kötüleşme yok — önceki pencereye göre sapan servis bulunmadı." /> : worseT.sortedRows.map((c: ChangedService) => (
-                  <tr key={c.service}>
-                    <td><Link to={serviceHref(c.service, { range: pageWindow })}>{c.service}</Link></td>
-                    <td className="num">{deltaCell(c.baselineErrorRate * 100, c.currentErrorRate * 100, '%', c.errDeltaPct)}</td>
-                    <td className="num">{deltaCell(c.baselineP99Ms, c.currentP99Ms, 'ms', c.p99DeltaPct)}</td>
-                    <td className="num">{deltaCell(c.baselineRate, c.currentRate, '/s', c.rateDeltaPct)}</td>
-                    <td className="num">{fmtFixed(c.score, 1)}</td>
-                  </tr>
-                ))}
+                {worsened.length === 0 ? <DataTableState dt={worseT} kind="empty" message="Kayda değer kötüleşme yok — önceki pencereye göre kötüleşen servis bulunmadı." /> : worseT.sortedRows.map((c: ChangedService) => changeRow(c, pageWindow))}
+              </tbody>
+            </table>
+          </Section>
+
+          <Section title="Trafiği kesilen servisler"
+            sub="trafik ≥ %90 düştü — ne iyileşme ne kötüleşme, ayrı bir olay">
+            <table {...lostT.tableProps}>
+              <DataTableColgroup dt={lostT} />
+              <DataTableHead dt={lostT} />
+              <tbody>
+                {lost.length === 0 ? <DataTableState dt={lostT} kind="empty" message="Trafiği kesilen servis yok." /> : lostT.sortedRows.map((c: ChangedService) => changeRow(c, pageWindow))}
+              </tbody>
+            </table>
+          </Section>
+
+          <Section title="İyileşen servisler"
+            sub="hata / p99 düştü ya da yalnız trafik azaldı">
+            <table {...betterT.tableProps}>
+              <DataTableColgroup dt={betterT} />
+              <DataTableHead dt={betterT} />
+              <tbody>
+                {improved.length === 0 ? <DataTableState dt={betterT} kind="empty" message="İyileşen servis yok." /> : betterT.sortedRows.map((c: ChangedService) => changeRow(c, pageWindow))}
               </tbody>
             </table>
           </Section>
@@ -223,6 +243,20 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
       </div>
       {children}
     </div>
+  );
+}
+
+// changeRow — üç değişim tablosunun (kötüleşen / trafiği kesilen /
+// iyileşen) ortak satırı; sütunlar WORSE_COLS.
+function changeRow(c: ChangedService, pageWindow: { fromNs: number; toNs: number }) {
+  return (
+    <tr key={c.service}>
+      <td><Link to={serviceHref(c.service, { range: pageWindow })}>{c.service}</Link></td>
+      <td className="num">{deltaCell(c.baselineErrorRate * 100, c.currentErrorRate * 100, '%', c.errDeltaPct)}</td>
+      <td className="num">{deltaCell(c.baselineP99Ms, c.currentP99Ms, 'ms', c.p99DeltaPct)}</td>
+      <td className="num">{deltaCell(c.baselineRate, c.currentRate, '/s', c.rateDeltaPct)}</td>
+      <td className="num">{fmtFixed(c.score, 1)}</td>
+    </tr>
   );
 }
 

@@ -32,9 +32,15 @@ const (
 // CatalogExtras — katalog genişlemesinin girdileri. Sıfır değeri
 // "hiçbiri toplanamadı" demek ve katalog bugünkü hâliyle kurulur.
 type CatalogExtras struct {
-	Blast        *chstore.BlastRadius
+	Blast *chstore.BlastRadius
+	// Correlations — MarkCorrelationCauses'tan GEÇMİŞ satırlar (v0.10.1090):
+	// katalog yalnız CauseEligible olanı aday yapar; işaretsiz satır aday
+	// değildir (güvenli yön).
 	Correlations []chstore.ChangedService
-	BubbleUp     *chstore.BubbleUpResult
+	// TopologyKnown — işaretleme için topoloji okundu mu; adsız "aday
+	// değil" satırının dürüst gerekçesi ("bağlı değil" / "doğrulanamadı").
+	TopologyKnown bool
+	BubbleUp      *chstore.BubbleUpResult
 }
 
 // BuildEvidenceCatalogExt — taban kataloğu kurar, üç yeni aileyi
@@ -84,20 +90,44 @@ func BuildEvidenceCatalogExt(h *chstore.RootCauseHypothesis, extras CatalogExtra
 		addPos("", txt)
 	}
 
-	// ── 6. Aynı pencerede kötüleşen komşular (Correlations) ───────────
+	// ── 6. Aynı pencerede kötüleşen BAĞLI komşular (Correlations) ─────
 	// Olası nedenler: entity dolu → beyaz liste (ve şema enum'u) genişler.
-	added := 0
+	// v0.10.1090 — YALNIZ CauseEligible satır (özneyle topoloji kenarı +
+	// konuma göre kötüleşen / trafiği kesilen; MarkCorrelationCauses).
+	// v0.10.1063 manşeti düzeltti ama burası skora göre ilk 3'ü yönsüz ve
+	// kenarsız alıyordu: iyileşen, bağlantısız servis hakeme "kötüleşen
+	// komşu" diye sunulup beyaz listeye giriyordu. Kalanlar ADSIZ tek
+	// satırda: ne entity ne gösterilen jeton olurlar, model yalnız "başka
+	// servis de kıpırdadı ama neden değil" bilgisini alır.
+	added, other := 0, 0
 	for _, cs := range extras.Correlations {
 		if cs.Service == "" || cs.Service == anchor {
 			continue
 		}
+		if !cs.CauseEligible {
+			other++
+			continue
+		}
 		if added >= extrasCorrCap {
-			break
+			continue
 		}
 		added++
+		what := "kötüleşen"
+		if cs.Direction == chstore.ChangeLost {
+			what = "trafiği kesilen"
+		}
 		addPos(cs.Service, fmt.Sprintf(
-			"aynı pencerede kötüleşen komşu: %s (p99 Δ%+.0f%%, hata Δ%+.1f%%, istek Δ%+.0f%%)",
-			cs.Service, cs.P99DeltaPct, cs.ErrDeltaPct, cs.RateDeltaPct))
+			"aynı pencerede %s komşu: %s (p99 Δ%+.0f%%, hata Δ%+.1f%%, istek Δ%+.0f%%)",
+			what, cs.Service, cs.P99DeltaPct, cs.ErrDeltaPct, cs.RateDeltaPct))
+	}
+	if other > 0 {
+		why := "özneyle topoloji kenarı yok ya da kötüleşmedi (iyileşen / trafiği azalan)"
+		if !extras.TopologyKnown {
+			why = "özneyle bağlantıları doğrulanamadı (topoloji okunamadı)"
+		}
+		addPos("", fmt.Sprintf(
+			"aynı pencerede değişen ama bağlantısız / iyileşen %d servis daha var — %s. Bunlar kök neden adayı DEĞİLDİR.",
+			other, why))
 	}
 
 	// ── 7. Hatalarda ayrışan boyutlar (BubbleUp) ──────────────────────

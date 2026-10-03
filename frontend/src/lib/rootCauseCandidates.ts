@@ -42,12 +42,14 @@ export function ribbonCandidates(rc: {
       }));
   }
   // v0.10.1063 — canlı yolda iyileşen / yalnız sakinleşen servis "aday"
-  // değildir (operatör: "<svc-B> ile ilgili olduğunu düşünüyor ama alakasız");
-  // sunucunun uygun işaretlediği (kenarlı + kötüleşen) önce, sonra skor.
+  // değildir (operatör: "<svc-B> ile ilgili olduğunu düşünüyor ama alakasız").
+  // v0.10.1090 — YALNIZ sunucunun uygun işaretlediği (özneyle kenarlı +
+  // konuma göre kötüleşen) satır; 1063 bağlantısız worse/lost satırları hâlâ
+  // "Ranked candidates" altında listeliyordu. Hiçbiri yoksa şerit
+  // ribbonNoCandidateNote'u (panelin localizedNote'u) basar.
   return (rc.correlations ?? [])
-    .filter(c => c.service && c.service !== rc.service
-      && c.direction !== 'better' && c.direction !== 'quieter')
-    .sort((a, b) => Number(b.causeEligible === true) - Number(a.causeEligible === true) || b.score - a.score)
+    .filter(c => c.service && c.service !== rc.service && c.causeEligible === true)
+    .sort((a, b) => b.score - a.score)
     .map(c => ({
       service: c.service,
       scoreLabel: String(Math.round(c.score)),
@@ -71,11 +73,21 @@ export function coMovingCause(rc: RootCause, service: string): ChangedService | 
 // kıpırdadıysa neden hiçbiri manşette değil, DÜRÜSTÇE. "Hiçbiri bağlı ve
 // kötüleşen değil" yalnız topoloji GERÇEKTEN okunduysa (topologyKnown) söylenir;
 // okunamadıysa ya da alan yoksa (eski yanıt) "bağlantı doğrulanamadı".
-export function localizedNote(rc: RootCause, service: string): string {
+// v0.10.1090 — `who`: panel listeyi ALTTA çizer ("services below"), şerit
+// çizmez ("other services"); hüküm cümlesi iki yüzeyde aynı.
+export function localizedNote(rc: RootCause, service: string, who = 'services below'): string {
   const moved = (rc.correlations ?? []).some(c => c.service !== service);
   if (!moved) return '';
   if (rc.topologyKnown === true) {
-    return `; services below moved in the same window but none is a connected, worsening dependency of ${service}`;
+    return `; ${who} moved in the same window but none is a connected, worsening dependency of ${service}`;
   }
-  return '; services below moved in the same window — bağlantı doğrulanamadı (topology unavailable)';
+  return `; ${who} moved in the same window — bağlantı doğrulanamadı (topology unavailable)`;
+}
+
+// ribbonNoCandidateNote — v0.10.1090. Şeridin canlı yolunda uygun aday
+// yokken "Ranked candidates" yerine basılan DÜRÜST satır: localizedNote'un
+// aynı hükmü, tek başına cümle olarak. Kıpırdayan başka servis yoksa ''.
+export function ribbonNoCandidateNote(rc: RootCause): string {
+  const note = localizedNote(rc, rc.service, 'other services').replace(/^; /, '');
+  return note ? note.charAt(0).toUpperCase() + note.slice(1) + '.' : '';
 }

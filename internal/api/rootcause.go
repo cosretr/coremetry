@@ -78,6 +78,25 @@ type AnomalyRootCause struct {
 // (güvenli yön: yanlış yayılım iddiası yerine iddia yok).
 const rootCauseTopoEdgeCap = 500
 
+// rootCauseTopo — öznenin topoloji komşuluğu, correlations'ın taban+cari
+// penceresinde (v0.10.1063; v0.10.1090'te ortak yardımcı: problem + anomali
+// kök-neden demeti ve verdict kataloğu AYNI okumayı kullanır). Yeni sorgu
+// DEĞİL: servis haritasının odaklı okuması (topology_edges_5m, özne
+// süzgeçli, LIMIT + 10 sn). known=false → hiçbir satır "olası neden" olmaz.
+// Servissiz öznede okuma YOK: boş özne süzgeci tüm grafın ilk 500 kenarını
+// okuyup çöpe atardı.
+func (s *Server) rootCauseTopo(ctx context.Context, service string, at, end time.Time, baselineSec int) ([]chstore.ServiceEdge, bool) {
+	if service == "" {
+		return nil, false
+	}
+	from := at.Add(-time.Duration(baselineSec) * time.Second)
+	es, err := s.store.GetServiceGraphTopN(ctx, service, 0, from, end, rootCauseTopoEdgeCap)
+	if err != nil {
+		return nil, false
+	}
+	return es, true
+}
+
 // rootcauseCacheKey — v0.9.1082 regresyon yüzeyi: anahtar YALNIZ
 // problemin kimliğinden türetilir, saatten ASLA. Saat-türevli bir
 // bileşen (eski end.Truncate(minute)) hesap süresi TTL'e yaklaştığında
@@ -201,24 +220,14 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 				out.Correlations = cs
 			}
 		}()
-		// (a2) v0.10.1063 — öznenin topoloji komşuluğu, correlations'ın
-		// taban+cari penceresinde. Yeni sorgu DEĞİL: servis haritasının
-		// odaklı okuması (topology_edges_5m, özne süzgeçli, LIMIT + 10 sn).
-		// Okunamazsa topoKnown=false → hiçbir satır "olası neden" olmaz.
-		// Servissiz problemde (watcher) okuma YOK: boş özne süzgeci tüm
-		// grafın ilk 500 kenarını okuyup çöpe atardı.
+		// (a2) v0.10.1063 — öznenin topoloji komşuluğu (rootCauseTopo).
+		// Servissiz problemde (watcher) okuma yok, topoKnown=false.
 		var topoEdges []chstore.ServiceEdge
 		topoKnown := false
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if p.Service == "" {
-				return
-			}
-			from := started.Add(-time.Duration(windowSec*4) * time.Second)
-			if es, e := s.store.GetServiceGraphTopN(ctx, p.Service, 0, from, end, rootCauseTopoEdgeCap); e == nil {
-				topoEdges, topoKnown = es, true
-			}
+			topoEdges, topoKnown = s.rootCauseTopo(ctx, p.Service, started, end, windowSec*4)
 		}()
 		// (b) Blast radius — who calls this service + how many are cascading.
 		wg.Add(1)
@@ -364,9 +373,21 @@ func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 			// ile aynı sınıf).
 			// v0.9.1062 (Faz 2.1) — MV sürümü: pencereler ≥5dk, aggregate
 			// sabit (invariant #3); ham spans taraması tık-yolundan kalktı.
-			if cs, e := s.store.GetCorrelatedChangesMV(ctx, started, windowSec, windowSec*4); e == nil && cs != nil {
+			// v0.10.1090 — problem ucunun ikizi: 50'lik havuz işaretlenir,
+			// 20 tavanı SONRA (aynı sorgu). Eskiden işaretleme yoktu; şerit
+			// "Ranked candidates" artık yalnız causeEligible çizdiği için
+			// anomali demeti de yön+kenar taşımalı.
+			if cs, e := s.store.GetCorrelatedChangesMVTop(ctx, started, windowSec, windowSec*4, chstore.ChangedServicesMarkPool); e == nil && cs != nil {
 				out.Correlations = cs
 			}
+		}()
+		// (a2) v0.10.1090 — öznenin topoloji komşuluğu (problem ucuyla aynı).
+		var topoEdges []chstore.ServiceEdge
+		topoKnown := false
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			topoEdges, topoKnown = s.rootCauseTopo(ctx, ev.Service, started, end, windowSec*4)
 		}()
 		// (b) Blast radius — who calls this service + how many are cascading.
 		wg.Add(1)
@@ -421,6 +442,12 @@ func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		wg.Wait()
+		// v0.10.1090 — yön + kenar işaretlemesi problem ucuyla AYNI.
+		out.Correlations = chstore.MarkCorrelationCauses(out.Correlations, ev.Service, topoEdges, topoKnown)
+		if len(out.Correlations) > chstore.ChangedServicesTop {
+			out.Correlations = out.Correlations[:chstore.ChangedServicesTop]
+		}
+		out.TopologyKnown = topoKnown
 		// v0.10.1054 — problem ucuyla AYNI kural (v0.10.1049'dan kalan boşluk):
 		// ölçülen gerilemede bastırılan deploy yeniden "olası neden".
 		out.RecentDeploy, _ = chstore.RestoreMeasuredDeploy(out.RecentDeploy, prior, out.Hypothesis)

@@ -1506,6 +1506,22 @@ satır ipucu (runtime · span) sayfanın ELDEKİ verisinden; yeni istek yok. Sun
 aynı uçlar, 200 satır) — üç kopya `usePickerSearch` kancasına indi, geç dönen eski cevap yenisini ezemez.
 `ui/Popover` kullanılmadı: odağı içine alır, seçicide odak girdide kalmalı.
 
+## 2026-10-03 — Kök neden adayları: verdict, shift ve şerit de yön/bağlantı süzgecinden geçer (v0.10.1090)
+
+**Bağlam:** v0.10.1063 yalnız panel manşetini (`coMovingCause`) `causeEligible`'a bağladı; aynı yönsüz skor üç
+yerde daha aday / "kötüleşen" diye sızıyordu. **Karar:** (1) ✨ RCA hakem kataloğu (`rca/extras.go`) yalnız
+`causeEligible` satırı "aynı pencerede kötüleşen (ya da trafiği kesilen) komşu" yapar — beyaz liste ve
+`root_cause.entity` enum'u yalnız bunlarla genişler. `gatherRCACatalogExtras` /rootcause ile aynı işaretlemeyi yapar
+(50'lik havuz + `rootCauseTopo` → `MarkCorrelationCauses`; yeni sorgu şekli yok). Kalanlar ADSIZ tek satır: "değişen
+ama bağlantısız / iyileşen N servis daha var … kök neden adayı DEĞİLDİR" (topoloji okunamadıysa "doğrulanamadı");
+ad basılmaz ki gösterilen jeton olup K3'ü geçmesin. `copilot/prompts.go` değişmedi — talimat katalog satırında
+(blast satırı emsali). (2) `/shift`: "En çok kötüleşen" yalnız `direction=worse`; `lost` ayrı "Trafiği kesilen",
+`better`/`quieter` "İyileşen" tablosunda; `unknown` hiçbirinde. Tavan (10) grup başına, 50'lik havuzdan sonra.
+(3) Şerit "Ranked candidates" canlı yolu yalnız `causeEligible`; yoksa panelin hükmü (`localizedNote` →
+`ribbonNoCandidateNote`). Anomali kök-neden demeti de artık işaretlenir (problem ucunun ikizi) — yoksa şerit
+anomalilerde topoloji okunabilirken "doğrulanamadı" derdi. Hipotez işçisinin kendi adayları değişmedi. Çivi:
+`api/correlation_consumers_pin_test.go`.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -43,8 +43,9 @@ type ChangedService struct {
 	// gecikme yangınının "olası nedeni" diye manşete çıkıyordu.
 	Direction string `json:"direction,omitempty"`
 	// Relation / CauseEligible (v0.10.1063) — YALNIZ kök-neden demeti
-	// doldurur (MarkCorrelationCauses): özneyle topoloji kenarı ve
-	// "olası neden" uygunluğu. Diğer tüketicilerde boş/false.
+	// (problem + anomali) ve verdict kataloğu (v0.10.1090) doldurur
+	// (MarkCorrelationCauses): özneyle topoloji kenarı ve "olası neden"
+	// uygunluğu. Diğer tüketicilerde boş/false.
 	Relation      string `json:"relation,omitempty"` // upstream | downstream | both
 	CauseEligible bool   `json:"causeEligible,omitempty"`
 	// surge — hacim kapılı trafik sıçraması (> +%25, >100 span). Yukarı akış
