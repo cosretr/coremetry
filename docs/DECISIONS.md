@@ -1077,6 +1077,27 @@ verir (callback eskiden admin dışını viewer'a indiriyordu). **Güvenlik sık
 `email_verified` VARSA ve false ise giriş reddedilir (her kaynakta). Yedek dışa aktarımı OIDC secret'ını da
 taşır (LDAP/Tempo gibi). Yerel kullanıcı/parola girişi her zaman açık.
 
+## 2026-10-03 — Tablolar kaba sığar: bütçeli sığdırma, pinned taşmadan önce küçülür, sütun önceliği (v0.10.1068)
+
+**Operatör (prod, ~1440px laptop, sidebar açık, Exceptions):** "Kolonlar kayıyor, sığmıyor; sayfa responsive
+değil ve bu hemen hemen her tabloda böyle. Kötü bir deneyim." **Ölçüm (sentetik veri, 1280–1680 px, sidebar
+açık/kapalı):** boş localStorage'da Rollouts her genişlikte, GitOps 1280–1366'da taşıyordu; Exceptions taşmıyordu
+ama Exception kolonu 40–72 px'e eziliyordu. Kalıcı (sürüklenmiş) genişlikle Exceptions 1366 ve 1440'ta taşıyordu
+(scroll 1412 px, kap 1178 px; diğer kolonlar 48 px'te). **Kök (paylaşılan primitif):** (1) sığdırma tabanı düz 48 px
+(okunmaz ama "sığmış"), esneyen kolon da 48 px'le yetiniyordu; (2) v0.10.1057 sürüklenen kolonu hiç küçültmüyordu;
+(3) tabanlar sığmayınca tek çare yatay kaydırmaydı. **Karar — `fitColumnWidths` sözleşmesi:** a) beyan sığıyorsa
+dokunulmaz; b) sürüklenmemişler oransal küçülür, esneyen kolon (beyan `flex` ya da yoksa en geniş metin kolonu)
+tabanını korur; c) **v0.10.1057 REVİZYONU:** sürüklenen genişlik SIĞDIĞI sürece aynen kazanır, sığmazsa
+sürüklenmemişler tabana indikten sonra o da küçülür — taşmaz (sürükleme çizilen genişlikten başlar, sonraki tık
+yutulur, kalıyor); d) tabanlar sığmazsa yeni `priority` alanına göre kolon gizlenir (1 asla; büyük önce; eşitlikte
+sağdaki), başlıkta "+N sütun" belirir, oradan geri açılan kolon aynı storageKey'de kalıcı; e) yalnız öncelik-1
+tabanlar sığmazsa taşma. Taban (`fitFloor`): `minWidth`, yoksa beyanın %60'ı, esneyen kolonda 160 px. Gizlenen
+kolonun başlığı ve `<col>`u basılmaz, gövde hücresini primitif tam hücre sayılı satırlarda CSS ile düşürür (sayfalar
+`<td>` atlamaz); colSpan'lı detay satırı için 0 px yuva; birden çok esneyen kolon kalanı tabanlarıyla orantılı
+paylaşır. Kırpılan hücreye `title` otomatik. **Sayfalar:** Exceptions, Problems inbox (+ alert-rules), Anomalies,
+Messaging/DB bağımlılık tablosu, Rollouts, GitOps, Slow queries, Cluster pod'ları — taban/öncelik; listelerde
+yılsız damga (`tsCompact`, tam damga title'da). Ölçüm sonrası 15 sayfa × 10 genişlikte taşma yok.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/DataTable';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { timeRangeToNs } from '@/lib/utils';
-import { fmtNum, fmtDateTime, fmtDurShort } from '@/lib/utils';
+import { fmtNum, fmtDateTime, fmtDurShort, tsCompact } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { keys, useRollouts, useRolloutStats, useRolloutRuns, useEntityClusters } from '@/lib/queries';
@@ -55,25 +55,29 @@ const STATUSES = ['', 'in_progress', 'completed', 'rolled_back', 'superseded', '
 // genişlik; toplam kabı aşarsa .table-wrap zaten overflow-x:auto kaydırır
 // (v0.9.1078). Başlık kırpılması da biter: taban her başlığın tam adını
 // taşıyacak kadar geniş.
+// v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — tabanların toplamı
+// (1464 px) 1366'lık laptopta kabı aşıyor ve tablo yatay kayıyordu. Artık
+// öncelikle gizlenir ("+N sütun"): önce Not / Kaynak / Span / Tür, sonra Süre
+// ve Revizyon; Workload esneyen kimlik kolonu.
 const COLS: ColumnDef<WorkloadRollout>[] = [
-  { id: 'status', label: 'Durum', width: 120, minWidth: 96 },
-  { id: 'workload', label: 'Workload', width: 260, minWidth: 180 },
+  { id: 'status', label: 'Durum', width: 120, minWidth: 96, priority: 1 },
+  { id: 'workload', label: 'Workload', flex: true, minWidth: 180, priority: 1 },
   // v0.10.565 (operatör-raporlu): cluster adı Workload hücresinin SONUNDA
   // soluk ek olarak duruyordu ve 300px kolonda ellipsis'e kurban gidiyordu
   // ("workload · ns · c…"). Kendi kolonu: her zaman okunur, ayrı
   // genişletilebilir, üstteki Cluster süzgeciyle aynı adı gösterir.
-  { id: 'cluster', label: 'Cluster', width: 150, minWidth: 110 },
-  { id: 'kind', label: 'Tür', width: 100, minWidth: 64 },
-  { id: 'change', label: 'Değişiklik', width: 130, minWidth: 100 }, // v0.10.234 — imaj değişti mi (Deployment) / aynı mı (config)
-  { id: 'revision', label: 'Revizyon', width: 150, minWidth: 120, mono: true },
-  { id: 'image', label: 'İmaj (eski → yeni)', width: 300, minWidth: 170, mono: true },
-  { id: 'started', label: 'Başladı', width: 170, minWidth: 140, numeric: true },
-  { id: 'dur', label: 'Süre', width: 90, minWidth: 64, numeric: true },
-  { id: 'spans', label: 'Span', width: 90, minWidth: 64, numeric: true },
-  { id: 'problems', label: 'Problem', width: 90, minWidth: 64, numeric: true }, // v0.10.244 — D4: başlangıçtan beri açık problemler (çekmece sayımı)
-  { id: 'by', label: 'Kaynak', width: 90, minWidth: 76 },
-  { id: 'note', label: 'Not', width: 260, minWidth: 120 },
-  { id: 'links', label: '', width: 120, minWidth: 96 },
+  { id: 'cluster', label: 'Cluster', width: 150, minWidth: 110, priority: 2 },
+  { id: 'kind', label: 'Tür', width: 100, minWidth: 64, priority: 4 },
+  { id: 'change', label: 'Değişiklik', width: 130, minWidth: 100, priority: 2 }, // v0.10.234 — imaj değişti mi (Deployment) / aynı mı (config)
+  { id: 'revision', label: 'Revizyon', width: 150, minWidth: 120, mono: true, priority: 3 },
+  { id: 'image', label: 'İmaj (eski → yeni)', width: 300, minWidth: 170, mono: true, priority: 2 },
+  { id: 'started', label: 'Başladı', width: 136, minWidth: 128, numeric: true, priority: 2 }, // v0.10.1068 — yılsız damga (tsCompact), tam damga title'da
+  { id: 'dur', label: 'Süre', width: 90, minWidth: 64, numeric: true, priority: 3 },
+  { id: 'spans', label: 'Span', width: 90, minWidth: 64, numeric: true, priority: 4 },
+  { id: 'problems', label: 'Problem', width: 90, minWidth: 64, numeric: true, priority: 2 }, // v0.10.244 — D4: başlangıçtan beri açık problemler (çekmece sayımı)
+  { id: 'by', label: 'Kaynak', width: 90, minWidth: 76, priority: 4 },
+  { id: 'note', label: 'Not', width: 260, minWidth: 120, priority: 4 },
+  { id: 'links', label: '', width: 120, minWidth: 96, priority: 2 },
 ];
 
 // v0.10.984 — v2 kolon seti (rollout_events): span / Kaynak yok (karar 4 —
@@ -81,7 +85,7 @@ const COLS: ColumnDef<WorkloadRollout>[] = [
 // sonra Nesil (+ güncel/hazır/istenen replika).
 const COLS_V2: ColumnDef<WorkloadRollout>[] = COLS.flatMap(c =>
   c.id === 'spans' || c.id === 'by' ? []
-  : c.id === 'revision' ? [c, { id: 'gen', label: 'Nesil', width: 130, minWidth: 96, numeric: true }]
+  : c.id === 'revision' ? [c, { id: 'gen', label: 'Nesil', width: 130, minWidth: 96, numeric: true, priority: 3 }]
   : [c]);
 
 const ROLLOUTS_PAGE_TITLE = 'Deployment/Rollouts';
@@ -238,7 +242,7 @@ export default function RolloutsPage() {
                         <DataTableCell dt={dt} col="image" row={r} title={r.image || undefined}>{imageDiff(r)}</DataTableCell>
                         {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar); kolon
                             `numeric` olduğundan DataTableCell `num` basar ve mono'yu nötrlerdi. */}
-                        <td className="mono">{fmtDateTime(new Date(r.startedAt))}</td>
+                        <td className="mono" title={fmtDateTime(new Date(r.startedAt))}>{tsCompact(r.startedAt * 1e6)}</td>
                         <DataTableCell dt={dt} col="dur" row={r} value={fmtDurShort(rolloutDurationSec(r, Date.now()))} />
                         {!v2 && <DataTableCell dt={dt} col="spans" row={r} value={fmtNum(r.spanCount)} />}
                         <DataTableCell dt={dt} col="problems" row={r}>{r.problemsCaused

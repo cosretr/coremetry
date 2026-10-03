@@ -30,25 +30,28 @@ import { PageShell } from '@/components/ui/PageShell';
 // first paint is unchanged; the operator can now re-sort/resize any.
 // v0.10.943 — tablo standardı dilim 3: hücre görünümü kolon bayraklarında
 // (mono / numeric / tone); satır içi küçük punto yerine renk (S3).
+// v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — okunurluk tabanları +
+// öncelik: Statement en az 220 px; kap tabanları taşıyamazsa önce P50, sonra
+// Avg düşer ("+N sütun"). Engine rozeti ("postgresql") 96 px'te kırpılmaz.
 const SLOW_COLS: ColumnDef<SlowQueryRow>[] = [
-  { id: 'service',    label: 'Service',                sortValue: r => r.service,    naturalDir: 'asc', width: 180, mono: true },
-  { id: 'dbSystem',   label: 'Engine',                 sortValue: r => r.dbSystem,   naturalDir: 'asc', width: 90 },
+  { id: 'service',    label: 'Service',                sortValue: r => r.service,    naturalDir: 'asc', width: 180, minWidth: 140, priority: 1, mono: true },
+  { id: 'dbSystem',   label: 'Engine',                 sortValue: r => r.dbSystem,   naturalDir: 'asc', width: 100, minWidth: 96, priority: 2 },
   // v0.9.272 — the column that used to say "oracle" on every row now says
   // which database it actually was. 'Engine' above keeps the old value under
   // an honest label rather than being repurposed.
-  { id: 'dbName',     label: 'Database',               sortValue: r => r.dbName ?? '', naturalDir: 'asc', width: 130, mono: true, tone: () => 'muted' },
-  { id: 'statement',  label: 'Statement (normalised)', sortValue: r => r.statement,  naturalDir: 'asc', flex: true, mono: true },
-  { id: 'count',      label: 'Calls',      sortValue: r => r.count,      numeric: true, width: 90 },
-  { id: 'avgMs',      label: 'Avg ms',     sortValue: r => r.avgMs,      numeric: true, width: 90 },
+  { id: 'dbName',     label: 'Database',               sortValue: r => r.dbName ?? '', naturalDir: 'asc', width: 130, minWidth: 110, priority: 2, mono: true, tone: () => 'muted' },
+  { id: 'statement',  label: 'Statement (normalised)', sortValue: r => r.statement,  naturalDir: 'asc', flex: true, minWidth: 220, priority: 1, mono: true },
+  { id: 'count',      label: 'Calls',      sortValue: r => r.count,      numeric: true, width: 90, minWidth: 72, priority: 2 },
+  { id: 'avgMs',      label: 'Avg ms',     sortValue: r => r.avgMs,      numeric: true, width: 90, minWidth: 72, priority: 3 },
   // v0.9.265 — P50 next to Avg so a row reads "typical" then "tail".
-  { id: 'p50Ms',      label: 'P50 ms',     sortValue: r => r.p50Ms,      numeric: true, width: 90 },
-  { id: 'p99Ms',      label: 'P99 ms',     sortValue: r => r.p99Ms,      numeric: true, width: 90,
+  { id: 'p50Ms',      label: 'P50 ms',     sortValue: r => r.p50Ms,      numeric: true, width: 90, minWidth: 72, priority: 4 },
+  { id: 'p99Ms',      label: 'P99 ms',     sortValue: r => r.p99Ms,      numeric: true, width: 90, minWidth: 72, priority: 2,
     tone: r => (r.p99Ms > 1000 ? 'err' : r.p99Ms > 200 ? 'warn' : undefined) },
-  { id: 'totalMs',    label: 'Total time', sortValue: r => r.totalMs,    numeric: true, width: 110 },
-  { id: 'errorCount', label: 'Errors',     sortValue: r => r.errorCount, numeric: true, width: 90,
+  { id: 'totalMs',    label: 'Total time', sortValue: r => r.totalMs,    numeric: true, width: 110, minWidth: 96, priority: 1 },
+  { id: 'errorCount', label: 'Errors',     sortValue: r => r.errorCount, numeric: true, width: 90, minWidth: 64, priority: 2,
     tone: r => (r.errorCount > 0 ? 'err' : 'faint') },
   // v0.10.652 (operatör) — trace araması satırın kendisinde, en sağda; link kolonu sıralanmaz.
-  { id: 'traces',     label: 'Traces',     width: 80 },
+  { id: 'traces',     label: 'Traces',     width: 84, minWidth: 80, priority: 2 },
 ];
 
 // v0.9.1137 (AI Faz 2.4) — SATIR-İÇİ ✨ EXPLAIN SÖKÜLDÜ.

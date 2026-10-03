@@ -15,7 +15,24 @@ import {
   timeRangeToNs,
   tsLong,
   tsMinute,
+  tsCompact,
 } from './utils';
+
+// v0.10.1068 — tsCompact: liste tablolarında yılsız damga (bu yıl), başka
+// yıl tsLong; boş damga em-dash. Üç dal da.
+describe('tsCompact', () => {
+  const now = new Date(2026, 9, 3, 12, 0, 0).getTime();
+  it('bu yıl: gün.ay saat — yıl düşer', () => {
+    expect(tsCompact(new Date(2026, 9, 3, 6, 26, 9).getTime() * 1e6, now)).toBe('03.10 06:26:09');
+  });
+  it('başka yıl: tam damga (tsLong)', () => {
+    const ns = new Date(2025, 11, 31, 23, 59, 59).getTime() * 1e6;
+    expect(tsCompact(ns, now)).toBe(tsLong(ns));
+  });
+  it('damga yoksa em-dash', () => {
+    expect(tsCompact(0, now)).toBe('—');
+  });
+});
 
 // First-ever frontend test file (v0.7.25). Targets the pure helpers in
 // utils.ts that carry real incident history — every assertion below pins

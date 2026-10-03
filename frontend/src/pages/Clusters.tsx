@@ -97,27 +97,31 @@ const DEP_COLS: ColumnDef<ClusterDeploymentRow>[] = [
   { id: 'memBytes',   label: 'Memory',   sortValue: r => r.memBytes,   numeric: true, width: 100 },
 ];
 
+// v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — iki esneyen kolonun
+// varsayılan tabanı (160+160) sayıları 60 px'e eziyordu: okunurluk tabanları +
+// öncelik; kap taşıyamazsa önce Net in/out, sonra Memory / Mem % / Namespace /
+// Cluster düşer ("+N sütun").
 const POD_COLS: ColumnDef<ClusterPodRow>[] = [
-  { id: 'cluster',   label: 'Cluster',   sortValue: r => r.cluster,   naturalDir: 'asc', width: 130, tone: () => 'muted' },
+  { id: 'cluster',   label: 'Cluster',   sortValue: r => r.cluster,   naturalDir: 'asc', width: 130, minWidth: 100, priority: 3, tone: () => 'muted' },
   // v0.9.649 — ikinci ESNEK kolon: pod tek başına 1154px bırakıyordu
   // (eşik 1150). Namespace de değişken uzunlukta, artanı paylaşıyorlar.
-  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', flex: true, tone: () => 'muted' },
-  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true },
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', flex: true, minWidth: 110, priority: 3, tone: () => 'muted' },
+  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true, minWidth: 180, priority: 1 },
   // v0.9.12 — Coremetry servis eşleşmesi (korelasyon audit'i).
-  { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 150 },
-  { id: 'phase',     label: 'Status',    sortValue: r => r.phase ?? '', naturalDir: 'asc', width: 100 },
-  { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90 },
-  { id: 'cpuPct',    label: 'CPU %',     sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.cpuPct) },
-  { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100 },
-  { id: 'memPct',    label: 'Mem %',     sortValue: r => r.memPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.memPct) },
+  { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 150, minWidth: 110, priority: 2 },
+  { id: 'phase',     label: 'Status',    sortValue: r => r.phase ?? '', naturalDir: 'asc', width: 100, minWidth: 90, priority: 1 },
+  { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90, minWidth: 72, priority: 2 },
+  { id: 'cpuPct',    label: 'CPU %',     sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, minWidth: 72, priority: 2, tone: r => pctTone(r.cpuPct) },
+  { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100, minWidth: 84, priority: 3 },
+  { id: 'memPct',    label: 'Mem %',     sortValue: r => r.memPct ?? 0, numeric: true, width: 80, minWidth: 72, priority: 3, tone: r => pctTone(r.memPct) },
   // v0.9.10 — network (best-effort).
-  { id: 'netIn',     label: 'Net in',    sortValue: r => r.netInBps ?? 0, numeric: true, width: 90 },
-  { id: 'netOut',    label: 'Net out',   sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90 },
+  { id: 'netIn',     label: 'Net in',    sortValue: r => r.netInBps ?? 0, numeric: true, width: 90, minWidth: 84, priority: 4 },
+  { id: 'netOut',    label: 'Net out',   sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90, minWidth: 84, priority: 4 },
   // v0.9.1276 — hücre artık sayının yanında son-sonlanma rozeti de
   // taşıyor ("OOMKilled"); varsayılan genişlik 84→150. Kaydedilmiş
   // genişliği olan operatörde eski değer kalır — rozet ellipsis +
   // title ile okunur kalsın diye ikisi de var (tablo-kırpma olayı).
-  { id: 'restarts',  label: 'Restarts',  sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150 },
+  { id: 'restarts',  label: 'Restarts',  sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150, minWidth: 96, priority: 2 },
 ];
 
 // fmtCores v0.9.51'de thresholds.ts'e taşındı (PodDrawer + §8 ortak).

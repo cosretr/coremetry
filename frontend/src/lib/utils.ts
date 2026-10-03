@@ -244,6 +244,17 @@ export function tsLong(ns: number): string {
   return fmtDateTime(ns / 1e6);
 }
 
+// tsCompact — v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor"). Liste
+// tablolarında yıl her satırda aynı ve 13 px mono damgada ~40 px yiyor:
+// bu yılsa "dd.mm HH:mm:ss", değilse tsLong. Tam damga hücrenin `title`ında
+// (tsLong) kalır.
+export function tsCompact(ns: number, nowMs: number = Date.now()): string {
+  if (!ns) return '—';
+  const d = new Date(ns / 1e6);
+  if (d.getFullYear() !== new Date(nowMs).getFullYear()) return tsLong(ns);
+  return tsLong(ns).replace(/^(\d\d\.\d\d)\.\d{4} /, '$1 ');
+}
+
 // tsRel renders a unix-ns timestamp as a coarse relative duration
 // ("in 12h", "3d ago"). Used for expiry indicators where the
 // absolute date is less load-bearing than "how much longer". For

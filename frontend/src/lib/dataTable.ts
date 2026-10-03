@@ -85,6 +85,16 @@ export interface DataTableColumn<T> {
   // kuruldu, ilk tüketici (log tablosunun kolon alt-kümesi, D5.7'nin
   // ikinci yarısı) kendi sürümünde gelecek.
   mobileHide?: boolean;
+  // priority — v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor; sayfa
+  // responsive değil"). Kap, kolonların okunurluk TABANLARINI bile
+  // taşıyamadığında hangi kolonun önce düşeceği: 1 = asla gizlenmez,
+  // büyük sayı = önce gizlenir; eşitlikte SAĞDAKİ önce gider. Verilmezse
+  // ilk görünür kolon, esneyen (flex) kolon ve eylem kolonu 1, diğerleri 2
+  // (fitColumnWidths → defaultPriority). Gizlenen kolon başlıkta "+N sütun"
+  // olur ve operatör oradan geri açabilir (aynı storageKey'de kalıcı).
+  // Rehber: kimlik/metin ve durum/öncelik 1; sayılar 2; zamanlar ve
+  // sahip/atanan 3.
+  priority?: number;
 }
 
 // visibleColumns — `<colgroup>`/`<thead>`de GERÇEKTEN çizilen kolonlar.
@@ -302,6 +312,10 @@ export function columnLayoutSig<T>(columns: DataTableColumn<T>[]): string {
 export interface PersistedLayout {
   sig: string;
   widths: Record<string, number>;
+  // v0.10.1068 — operatörün "+N sütun"dan GERİ AÇTIĞI kolonlar: dar kapta da
+  // otomatik gizlenmez. Aynı anahtarda, aynı imzaya mühürlü (kolon tanımı
+  // değişince genişliklerle birlikte düşer).
+  shown?: string[];
 }
 
 export function readPersistedWidths(
@@ -313,6 +327,13 @@ export function readPersistedWidths(
   if (typeof p.sig !== 'string' || p.sig !== sig) return {};
   if (!p.widths || typeof p.widths !== 'object') return {};
   return p.widths as Record<string, number>;
+}
+
+export function readPersistedShown(stored: unknown, sig: string): string[] {
+  if (!stored || typeof stored !== 'object') return [];
+  const p = stored as Partial<PersistedLayout>;
+  if (typeof p.sig !== 'string' || p.sig !== sig) return [];
+  return Array.isArray(p.shown) ? p.shown.filter((s): s is string => typeof s === 'string') : [];
 }
 
 // ── fitColumnWidths — v0.9.1030 ─────────────────────────────────────────
@@ -328,79 +349,233 @@ export function readPersistedWidths(
 // (v0.9.660 Users taşmasının yapısal hâli; o gün gelen çare yalnız
 // reset butonuydu).
 //
-// Sözleşme: kap yatay kaydırMIYORsa (is-fit, masaüstü) beyan+kalıcı px
-// genişlikler kabı AŞAMAZ. Aşan küme, minWidth tabanlarına saygılı
-// oransal küçültmeyle kaba sığdırılır. Sığıyorsa null döner — çağıran
-// beyan edilen genişlikleri AYNEN kullanır (davranış değişmez).
-// Ölçüm yoksa (containerPx ≤ 0: jsdom, ilk mount) null = fail-open.
+// Sözleşme (v0.10.1068'te yeniden yazıldı — aşağıdaki "BÜTÇELİ SIĞDIRMA"):
+// beyan+kalıcı px genişlikler kabı AŞAMAZ; yatay taşma yalnız öncelik-1
+// kolonların tabanları bile sığmadığında kalır. Ölçüm yoksa (containerPx ≤
+// 0: jsdom, ilk mount) null = fail-open.
+//
+// ── BÜTÇELİ SIĞDIRMA — v0.10.1068 ───────────────────────────────────────
+//
+// Operatör (prod, ~1440px laptop, sidebar açık, Exceptions): "Kolonlar
+// kayıyor, sığmıyor; sayfa responsive değil ve bu hemen hemen her tabloda
+// böyle. Kötü bir deneyim." Üç ayrı kusur birleşiyordu:
+//   1. Taban 48px'ti (beyan edilmemiş minWidth): 168px'lik zaman damgası
+//      48'e kadar ezilebiliyordu — "sığdı" ama okunmuyordu. Esneyen metin
+//      kolonu (Exception) da 48'le yetiniyordu.
+//   2. v0.10.1057 sürüklenen (pinned) kolonu HİÇ küçültmüyordu: bir kez
+//      geniş ekranda sürüklenmiş genişlik dar laptopta tabloyu taşırıyordu.
+//   3. Tabanlar sığmayınca tek çare yatay kaydırmaydı; son kolon kartın
+//      kenarında "As…" diye kesiliyordu.
+//
+// Sıra (her adım bir öncekine yetmezse):
+//   a. Beyan + kalıcı genişlikler sığıyorsa dokunulmaz; esneyen kolon
+//      ('auto') artanı emer.
+//   b. Sürüklenmemiş kolonlar oransal küçülür (taban kilitli waterfall);
+//      esneyen kolon en az tabanını korur.
+//   c. Sürüklenmiş (pinned) kolonlar da oransal küçülür — v0.10.1057'nin
+//      REVİZYONU: sürükleme SIĞDIĞI sürece aynen kazanır, taşırmadan önce
+//      geri çekilir.
+//   d. Tabanlar bile sığmıyorsa en büyük `priority`li kolon (eşitlikte en
+//      sağdaki) gizlenir; tekrarlanır. Öncelik-1 ve operatörün geri açtığı
+//      (forceShow) kolon gizlenmez. Gizleme varsa son görünür kolona
+//      "+N sütun" tetiği için `reservePx` eklenir.
+//   e. Kalan öncelik-1 tabanlar bile sığmıyorsa herkes tabanda, kap kaydırır.
 
 export interface FitColumnInput {
   id: string;
-  /** Beyan/kalıcı px; sürüklenmemiş flex kolon için null ('auto'). */
+  /** Beyan/kalıcı px; sürüklenmemiş esneyen kolon için null ('auto'). */
   px: number | null;
-  /** Küçültme tabanı (resize'ın kullandığı minWidth ?? DEFAULT_MIN). */
+  /** Okunurluk tabanı — `fitFloor` (minWidth ya da beyanın ~%60'ı). */
   min: number;
-  /** v0.10.1057 — operatörün SÜRÜKLEDİĞİ kolon (kalıcı genişlik): küçültülmez,
-   *  px'i aynen çıktıya girer ve sabit pay sayılır; sığdırma kalanlara düşer. */
+  /** v0.10.1057 — operatörün SÜRÜKLEDİĞİ kolon (kalıcı genişlik). v0.10.1068:
+   *  sığdığı sürece px'i aynen; sığmazsa sürüklenmemişlerden SONRA küçülür. */
   pinned?: boolean;
+  /** v0.10.1068 — 1 = asla gizlenmez; büyük = önce gizlenir. Verilmezse 1. */
+  priority?: number;
+  /** v0.10.1068 — operatör "+N sütun"dan geri açtı: otomatik gizlenmez. */
+  forceShow?: boolean;
+  /** v0.10.1068 — `flex` beyan etmemiş tablonun seçilmiş metin kolonu
+   *  (pickFlexColumn): küme sığmadığında 'auto' olur (sonuçta `auto`). */
+  flex?: boolean;
 }
 
-// v0.10.1057 — Operator-reported ("GitOps sekmesinde de sütun başlıkları
-// kaymıyor"): sığdırma SÜRÜKLENEN kolonu da oransal küçültüyordu. Toplam kabı
-// aşan bir tabloda (Argo CD uygulamaları: beyan 1650px, kap 1178px) +100px
-// sürükleme kolonu ~+22px büyütüyordu; tabanlar bile sığmayan kapta (1100px
-// pencere, kap 838px) herkes tabanda kalıyor ve sürükleme HİÇ etki
-// etmiyordu — genişlik localStorage'a yazılıyor, ekrana yansımıyordu. Kural:
-// sürüklenen (pinned) kolon tam px'inde durur; küçültme yalnız sürüklenmemiş
-// kolonlara uygulanır, onlar da tabana dayanınca tablo taşar ve kabın
-// `overflow-x: auto`su kaydırır (operatörün eli kazanır, v0.9.542 sözü).
-export function fitColumnWidths(
-  cols: FitColumnInput[],
-  fixedExtraPx: number,
-  containerPx: number,
-): Record<string, number> | null {
-  if (!(containerPx > 0)) return null;
-  const pinned = cols.filter((c): c is FitColumnInput & { px: number } => !!c.pinned && c.px != null);
-  if (pinned.length > 0) {
-    const pinnedPx = pinned.reduce((s, c) => s + c.px, 0);
-    const free = cols.filter(c => !(c.pinned && c.px != null));
-    const rest = fitColumnWidths(free, fixedExtraPx + pinnedPx, containerPx);
-    if (!rest) return null;
-    for (const c of pinned) rest[c.id] = c.px;
-    return rest;
+export interface FitResult {
+  /** Değişen kolonların px'i; listede olmayan beyan/kalıcı genişliğinde (ya da 'auto') kalır. */
+  widths: Record<string, number>;
+  /** Kaba sığmadığı için gizlenen kolonlar (gizlenme sırasıyla). */
+  hidden: string[];
+  /** Beyanı px olduğu hâlde 'auto' çizilecek (artanı/açığı emen) kolon. */
+  auto: string | null;
+}
+
+// fitFloor — sığdırmanın OKUNURLUK tabanı (resize'ın sürükleme tabanı değil:
+// operatör elle 48'e kadar daraltabilir). minWidth beyan edilmişse o; yoksa
+// esneyen kolon için 160, diğerleri için beyanın %60'ı (en az 48, en çok
+// beyanın kendisi). v0.10.1068 öncesi taban düz 48'di.
+export const FIT_MIN_PX = 48;
+export const FLEX_FLOOR_PX = 160;
+export function fitFloor(c: { width?: number; minWidth?: number; flex?: boolean }, defaultW: number): number {
+  if (c.minWidth != null) return c.minWidth;
+  if (c.flex) return FLEX_FLOOR_PX;
+  const w = c.width ?? defaultW;
+  return Math.min(w, Math.max(FIT_MIN_PX, Math.round(w * 0.6)));
+}
+
+// pickFlexColumn — esneyen kolon. Beyan edilmiş `flex` yoksa (v0.10.1068) en
+// geniş METİN kolonu (sayısal / eylem / headerHidden değil) seçilir: artan
+// genişlik oraya gider ve tablo daralınca o kolon tabanını korur. Hiç aday
+// yoksa null (table-layout:fixed artanı orantılı dağıtır — eski davranış).
+export function pickFlexColumn<T>(
+  cols: (DataTableColumn<T> & { kind?: string })[],
+  defaultW: number,
+): string | null {
+  const declared = cols.find(c => c.flex);
+  if (declared) return declared.id;
+  let best: string | null = null;
+  let bestW = -1;
+  for (const c of cols) {
+    if (c.numeric || c.kind === 'actions' || c.headerHidden) continue;
+    const w = c.width ?? defaultW;
+    if (w > bestW) { best = c.id; bestW = w; }
   }
-  // 'auto' kolonlar kalan alanı alır ama en az min ister — o payı ayır.
-  const flexMin = cols.reduce((s, c) => s + (c.px == null ? c.min : 0), 0);
-  const avail = containerPx - fixedExtraPx - flexMin;
-  const fixed = cols.filter(c => c.px != null) as (FitColumnInput & { px: number })[];
-  const sum = fixed.reduce((s, c) => s + c.px, 0);
-  if (sum <= avail) return null;
-  // Tabanlar tek başına sığmıyorsa yapılabilecek en iyi şey tabanlar:
-  // taşma sınırlı kalır ve ≤1024 bandında D2'nin kaydırma ağı devreye
-  // girer zaten.
-  const minSum = fixed.reduce((s, c) => s + c.min, 0);
-  const out: Record<string, number> = {};
-  if (minSum >= avail) {
-    for (const c of fixed) out[c.id] = c.min;
-    return out;
-  }
-  // Oransal küçültme, taban kilitlemeli (waterfall): tabana çarpan
-  // kolon kilitlenir, kalan pay kilitsizlere yeniden oranlanır.
+  return best;
+}
+
+// defaultPriority — `priority` verilmemiş kolonun önceliği: ilk görünür kolon
+// (kimlik), esneyen kolon ve eylem kolonu 1 (asla gizlenmez), diğerleri 2.
+export function defaultPriority(
+  c: { priority?: number; kind?: string },
+  isFirst: boolean,
+  isFlex: boolean,
+): number {
+  if (c.priority != null) return c.priority;
+  if (isFirst || isFlex || c.kind === 'actions') return 1;
+  return 2;
+}
+
+// waterfall — oransal küçültme, taban kilitlemeli: tabana çarpan kolon
+// kilitlenir, kalan pay kilitsizlere yeniden oranlanır. `target` ≥ Σmin
+// varsayılır (çağıran garanti eder).
+function waterfall(cols: { id: string; px: number; min: number }[], target: number, out: Record<string, number>) {
   const locked = new Set<string>();
   for (;;) {
-    const freePx = fixed.reduce((s, c) => s + (locked.has(c.id) ? 0 : c.px), 0);
-    const target = avail - fixed.reduce((s, c) => s + (locked.has(c.id) ? c.min : 0), 0);
-    const f = target / freePx;
+    const freePx = cols.reduce((s, c) => s + (locked.has(c.id) ? 0 : c.px), 0);
+    const room = target - cols.reduce((s, c) => s + (locked.has(c.id) ? c.min : 0), 0);
+    const f = freePx > 0 ? room / freePx : 0;
     let relocked = false;
-    for (const c of fixed) {
+    for (const c of cols) {
       if (locked.has(c.id)) continue;
       if (c.px * f < c.min) { locked.add(c.id); relocked = true; }
     }
     if (!relocked) {
-      for (const c of fixed) out[c.id] = locked.has(c.id) ? c.min : Math.floor(c.px * f);
-      return out;
+      for (const c of cols) out[c.id] = locked.has(c.id) ? c.min : Math.min(c.px, Math.floor(c.px * f));
+      return;
     }
   }
+}
+
+export function fitColumnWidths(
+  cols: FitColumnInput[],
+  fixedExtraPx: number,
+  containerPx: number,
+  // "+N sütun" tetiğinin payı: yalnız bir kolon gizlendiğinde ayrılır ve son
+  // görünür kolona eklenir (tetik o başlığın sağ ucuna biner).
+  reservePx = 0,
+): FitResult | null {
+  if (!(containerPx > 0)) return null;
+  const budget = containerPx - fixedExtraPx;
+  // a — beyan (+ kalıcı) küme sığıyorsa dokunma.
+  if (cols.reduce((s, c) => s + (c.px ?? c.min), 0) <= budget) {
+    return { widths: splitAutos(cols, {}, budget), hidden: [], auto: null };
+  }
+  // Sığmıyor: seçilmiş metin kolonu (`flex`, sürüklenmemiş) 'auto' olur —
+  // açığı önce O tabanına kadar emer, sonra diğerleri küçülür. Eşikte
+  // süreklidir: 'auto' kolon tam beyanına eşit genişlik alır.
+  let auto: string | null = null;
+  const work = cols.map(c => {
+    if (c.flex && !c.pinned && c.px != null && auto == null) { auto = c.id; return { ...c, px: null }; }
+    return c;
+  });
+  // d — gizleme: tabanlar (+ gizleme varsa tetik payı) bütçeye sığana dek.
+  const shown = [...work];
+  const hidden: string[] = [];
+  const need = () => shown.reduce((s, c) => s + c.min, 0) + (hidden.length ? reservePx : 0);
+  while (need() > budget) {
+    let pick = -1;
+    for (let i = 0; i < shown.length; i++) {
+      const c = shown[i];
+      const p = c.priority ?? 1;
+      if (p <= 1 || c.forceShow) continue;
+      if (pick < 0 || p >= (shown[pick].priority ?? 1)) pick = i; // eşitlikte sağdaki
+    }
+    if (pick < 0) break; // e — gizlenecek aday yok: tabanlarda taşar
+    hidden.push(shown[pick].id);
+    shown.splice(pick, 1);
+  }
+  const out: Record<string, number> = {};
+  const reserve = hidden.length ? reservePx : 0;
+  // 'auto' (sürüklenmemiş esneyen) kolon kalan alanı alır ama tabanını ister.
+  const autoMin = shown.reduce((s, c) => s + (c.px == null ? c.min : 0), 0);
+  const avail = budget - autoMin - reserve;
+  const fixed = shown.filter(c => c.px != null) as (FitColumnInput & { px: number })[];
+  const sum = fixed.reduce((s, c) => s + c.px, 0);
+  if (sum > avail) {
+    const free = fixed.filter(c => !c.pinned);
+    const pinned = fixed.filter(c => c.pinned);
+    const pinnedPx = pinned.reduce((s, c) => s + c.px, 0);
+    const freeMin = free.reduce((s, c) => s + c.min, 0);
+    if (freeMin <= avail - pinnedPx) {
+      // b — sürüklenmemişler küçülür, sürüklenenler aynen.
+      waterfall(free, avail - pinnedPx, out);
+    } else {
+      // c — sürüklenmemişler tabanda; sürüklenenler kalan alana küçülür.
+      for (const c of free) out[c.id] = c.min;
+      const room = avail - freeMin;
+      const pinnedMin = pinned.reduce((s, c) => s + Math.min(c.min, c.px), 0);
+      if (pinnedMin <= room) waterfall(pinned.map(c => ({ ...c, min: Math.min(c.min, c.px) })), room, out);
+      else for (const c of pinned) out[c.id] = Math.min(c.min, c.px); // e
+    }
+  }
+  if (reserve > 0) {
+    const last = shown[shown.length - 1];
+    if (last && last.px != null) out[last.id] = (out[last.id] ?? last.px) + reserve;
+  }
+  return { widths: splitAutos(shown, out, budget), hidden, auto };
+}
+
+// splitAutos — birden çok 'auto' kolon (ör. Clusters pod tablosunda Namespace +
+// Pod) varsa tarayıcı kalan alanı onlara EŞİT böler ve büyük tabanlı kolon
+// (Pod 180) tabanının altına düşer (ölçüm: 146 px). Kalan alan tabanlarla
+// orantılı paylaştırılır; sonuncusu 'auto' kalır ve yuvarlama artığını alır.
+// Tek 'auto' kolonda dokunulmaz.
+function splitAutos(shown: FitColumnInput[], out: Record<string, number>, budget: number): Record<string, number> {
+  const autos = shown.filter(c => c.px == null && out[c.id] == null);
+  if (autos.length < 2) return out;
+  const used = shown.reduce((s, c) => s + (out[c.id] ?? c.px ?? 0), 0);
+  const room = budget - used;
+  const minSum = autos.reduce((s, c) => s + c.min, 0);
+  for (const c of autos.slice(0, -1)) out[c.id] = room > minSum ? Math.floor(room * (c.min / minSum)) : c.min;
+  return out;
+}
+
+// hiddenCellCss — gizlenen kolonların gövde/elle-başlık hücresini düşüren
+// kapsamlı kural (saf; test edilir). `k`: 1-tabanlı hücre sırası, `n`: tam
+// satırın hücre sayısı — `:nth-child(k):nth-last-child(n-k+1)` yalnız TAM
+// sayılı satırda eşleşir.
+export function hiddenCellCss(
+  fitId: string, nLead: number, nCells: number,
+  visibleIds: string[], hidden: ReadonlySet<string>,
+): string {
+  if (!hidden.size) return '';
+  const scope = `table:has(> colgroup[data-dt-fit="${fitId}"])`;
+  const sels: string[] = [];
+  visibleIds.forEach((id, i) => {
+    if (!hidden.has(id)) return;
+    const k = nLead + i + 1;
+    const nth = `:nth-child(${k}):nth-last-child(${nCells - k + 1})`;
+    sels.push(`${scope} > tbody > tr > td${nth}`, `${scope} > thead > tr > th${nth}`);
+  });
+  return `${sels.join(',\n')} { display: none; }`;
 }
 
 // stickyLeftOffsets — v0.9.1256 saf çekirdek: görünür kolon listesi +

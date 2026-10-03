@@ -2,6 +2,7 @@ import {
   useCallback, useId, useLayoutEffect, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent, type SyntheticEvent,
 } from 'react';
+import { Button } from '../Button';
 import { IconButton } from '../IconButton';
 import { MenuItem } from '../Menu';
 import { useEscLayer } from '@/lib/escLayer';
@@ -54,6 +55,16 @@ import type { DataTable } from './DataTable';
 // VirtualTable; transform'lu çekmece) varsa konum ölçülüp FARK kadar
 // düzeltilir; o atanın kırpması kalır (menü tablonun içine açılır).
 
+// v0.10.1068 — "+N sütun" (operatör: "Kolonlar kayıyor, sığmıyor"). Kap
+// öncelik-1 olmayan kolonların okunurluk tabanlarını taşıyamayınca primitif
+// kolon GİZLER (lib/dataTable.ts fitColumnWidths, `priority`); gizleme
+// varken tetik ⋯ yerine "+N sütun" yazar ve HEP görünür (gizli bir kolonun
+// varlığı hover'a bağlı olmamalı). Menü gizlenenleri "Göster: …" olarak
+// listeler; geri açılan kolon kalıcıdır (aynı storageKey) ve yerine sıradaki
+// en düşük öncelikli kolon düşer — hiçbiri kalmazsa tablo kaydırır (operatörün
+// açık seçimi). "Dar ekranda gizle: …" geri açmayı otomatiğe bırakır;
+// "Kolonları sıfırla" ikisini birden temizler.
+
 interface HeadMenuItem { key: string; label: string; onSelect: () => void; disabled?: boolean }
 
 export function DataTableHeadMenu<T>({ dt }: { dt: DataTable<T> }) {
@@ -71,11 +82,17 @@ export function DataTableHeadMenu<T>({ dt }: { dt: DataTable<T> }) {
   const closeOutside = useCallback(() => close(false), [close]);
   useOutsideClose(wrapRef, open, closeOutside);
 
+  const hiddenCols = dt.visibleColumns.filter(c => dt.hiddenColumnIds.has(c.id));
+  const forcedCols = dt.visibleColumns.filter(c => dt.forcedShown.has(c.id));
+  const colName = (c: { id: string; label: string }) => c.label || c.id;
   const items: HeadMenuItem[] = [
+    ...hiddenCols.map(c => ({ key: `show-${c.id}`, label: `Göster: ${colName(c)}`, onSelect: () => dt.setColumnShown(c.id, true) })),
+    ...forcedCols.map(c => ({ key: `auto-${c.id}`, label: `Dar ekranda gizle: ${colName(c)}`, onSelect: () => dt.setColumnShown(c.id, false) })),
     // v0.10.939 (tablo standardı S8) — kalıcı (sürüklenmiş) genişlikleri
-    // temizler; kolon tanımının genişlikleri geri gelir. Sıralama ve
-    // kolon görünürlüğü etkilenmez. Kayıtlı genişlik yoksa devre dışı.
-    { key: 'reset', label: 'Kolonları sıfırla', onSelect: dt.resetLayout, disabled: Object.keys(dt.colWidths).length === 0 },
+    // temizler; kolon tanımının genişlikleri geri gelir. Sıralama
+    // etkilenmez. v0.10.1068 — geri açılan kolonları da otomatiğe bırakır.
+    // Kayıtlı bir şey yoksa devre dışı.
+    { key: 'reset', label: 'Kolonları sıfırla', onSelect: dt.resetLayout, disabled: Object.keys(dt.colWidths).length === 0 && forcedCols.length === 0 },
   ];
 
   useLayoutEffect(() => {
@@ -143,14 +160,27 @@ export function DataTableHeadMenu<T>({ dt }: { dt: DataTable<T> }) {
     <span ref={wrapRef} className="dt-menu" onClick={stopClick} onDoubleClick={stopClick} onKeyDown={stopKeys}>
       {/* v0.10.939 (tablo standardı S8) — tooltip YOK (aria-label yeter; ipucu
           katmanı Esc'i menüden önce yutuyordu). */}
-      <IconButton ref={btnRef} size="xs"
-        aria-label="Tablo seçenekleri"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        onClick={() => setOpen(o => !o)}
-        onKeyDown={e => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true); } }}
-        icon="⋯" />
+      {hiddenCols.length > 0 ? (
+        // v0.10.1068 — gizlenen kolon sayısı tetiğin kendisi (hep görünür).
+        <Button ref={btnRef} variant="ghost" size="xs" className="dt-hidden-cols"
+          aria-label={`${hiddenCols.length} sütun gizli — tablo seçenekleri`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls={open ? menuId : undefined}
+          onClick={() => setOpen(o => !o)}
+          onKeyDown={e => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true); } }}>
+          +{hiddenCols.length} sütun
+        </Button>
+      ) : (
+        <IconButton ref={btnRef} size="xs"
+          aria-label="Tablo seçenekleri"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls={open ? menuId : undefined}
+          onClick={() => setOpen(o => !o)}
+          onKeyDown={e => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true); } }}
+          icon="⋯" />
+      )}
       {open && (
         <div ref={popRef} id={menuId} role="menu" aria-label="Tablo seçenekleri"
           tabIndex={-1} className="dt-menu-pop" onKeyDown={onMenuKeyDown}>

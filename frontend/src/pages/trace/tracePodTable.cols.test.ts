@@ -23,7 +23,7 @@ describe('TracePodTable kolonları — v0.10.976 CPU/Bellek tabanı', () => {
   it.each([1280, 1000, 900, 760, 700])('sığdırma %i px kapta CPU/Bellek ≥ 116', (containerPx) => {
     const out = fitColumnWidths(fitInput(), 0, containerPx);
     for (const id of ['cpu', 'mem']) {
-      const w = out ? out[id] : TRACE_POD_COLS.find(x => x.id === id)!.width!;
+      const w = out?.widths[id] ?? TRACE_POD_COLS.find(x => x.id === id)!.width!;
       expect(w, `${id} @ ${containerPx}`).toBeGreaterThanOrEqual(116);
     }
   });

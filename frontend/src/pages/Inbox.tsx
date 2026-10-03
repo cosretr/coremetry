@@ -8,7 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Shield } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
 import { useInbox, useServicesMetadata } from '@/lib/queries';
-import { tsLong, fmtFixed, fmtAgoNs } from '@/lib/utils';
+import { tsCompact, tsLong, fmtFixed, fmtAgoNs } from '@/lib/utils';
 import { IconSparkles } from '@/components/icons';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
@@ -160,13 +160,17 @@ const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 // priority desc (P1 first); rows are pre-sorted by lastSeen desc so the
 // stable sort yields "P1 first, newest within priority" — the prior
 // fixed ordering, now re-sortable + resizable per column.
+// v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — okunurluk tabanları
+// + öncelik: kap taşıyamazsa önce First seen, sonra Assignee / Last seen /
+// Source düşer ("+N sütun"); Detail en az 240 px. Damgalar yılsız
+// (tsCompact, tam damga title'da) — 168 px'lik tam damga 1366'da kırpılıyordu.
 const INBOX_COLS: DataTableColumn<InboxItem>[] = [
-  { id: 'priority', label: 'Priority', sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 80 },
-  { id: 'source',   label: 'Source',   sortValue: it => it.source,           naturalDir: 'asc', width: 100 },
-  { id: 'service',  label: 'Service',  sortValue: it => it.service,          naturalDir: 'asc', width: 190 },
+  { id: 'priority', label: 'Priority', sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
+  { id: 'source',   label: 'Source',   sortValue: it => it.source,           naturalDir: 'asc', width: 100, minWidth: 90, priority: 3 },
+  { id: 'service',  label: 'Service',  sortValue: it => it.service,          naturalDir: 'asc', width: 190, minWidth: 140, priority: 1 },
   // v0.9.648 — ESNEK kolon: başlık serbest metin ve en geniş olan.
   // Sabit toplam 1330 → 950px, tablo sığıyor.
-  { id: 'detail',   label: 'Detail',   sortValue: it => it.title,            naturalDir: 'asc', flex: true },
+  { id: 'detail',   label: 'Detail',   sortValue: it => it.title,            naturalDir: 'asc', flex: true, minWidth: 240, priority: 1 },
   // v0.9.331 — Occurrences is back. The operator insisted on keeping this
   // column on /problems (v0.9.315: "ben occurences kolonu kalkmasını
   // istemedim"); when the merged queue took over the Problems name in
@@ -175,16 +179,16 @@ const INBOX_COLS: DataTableColumn<InboxItem>[] = [
   // once. It sits next to Detail because that is the comparison the eye makes.
   { id: 'occurrences', label: 'Occurrences',
     sortValue: it => it.exception?.occurrences ?? 0,
-    naturalDir: 'desc', numeric: true, width: 110 },
+    naturalDir: 'desc', numeric: true, width: 110, minWidth: 96, priority: 2 },
   // v0.9.333 — First seen is its own column again (operator: "First seen ayrı
   // kolon olabilir, öyleydi"). It was folded into the Last seen cell as a
   // conditional "· ilk …" suffix, which meant it vanished whenever the two
   // timestamps matched and could never be sorted on. "What started first" is
   // the question that orders a cascade; "what fired last" is a different one.
   // v0.10.736 — 13 px mono damga ("16.09.2026 11:00:15" ≈ 150 px) sığsın: 150/170 → 168/180.
-  { id: 'firstSeen', label: 'First seen', sortValue: it => it.startedAt, naturalDir: 'desc', width: 168 },
-  { id: 'lastSeen', label: 'Last seen', sortValue: it => it.lastSeen,        naturalDir: 'desc', width: 180 },
-  { id: 'assignee', label: 'Assignee', sortValue: it => it.assignee ?? '',   naturalDir: 'asc', width: 150 },
+  { id: 'firstSeen', label: 'First seen', sortValue: it => it.startedAt, naturalDir: 'desc', width: 136, minWidth: 136, priority: 4 },
+  { id: 'lastSeen', label: 'Last seen', sortValue: it => it.lastSeen,        naturalDir: 'desc', width: 136, minWidth: 136, priority: 3 },
+  { id: 'assignee', label: 'Assignee', sortValue: it => it.assignee ?? '',   naturalDir: 'asc', width: 150, minWidth: 110, priority: 3 },
 ];
 
 // v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
@@ -1184,7 +1188,7 @@ export default function InboxPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                      <span style={{ fontWeight: 600 }}>{it.title}</span>
+                      <span className="dt-trunc" style={{ fontWeight: 600 }} title={it.title}>{it.title}</span>
                       {/* v0.10.1015 — öğretme işareti (yalnız "gerçek problem";
                           "problem değil" satırları kendi görünümünde). */}
                       {verdictOf(it, verdicts) === 'real' && (
@@ -1234,10 +1238,10 @@ export default function InboxPage() {
                   </td>
                   {/* v0.10.736 (operatör: "tarih fontu biraz daha büyük olabilir")
                       — 11 → 13 px (--fs-md), sınıfta; yaş satırı 11 px kalır. */}
-                  <td className="mono ib-when">
+                  <td className="mono ib-when" title={it.startedAt ? tsLong(it.startedAt) : undefined}>
                     {it.startedAt
                       ? <>
-                          {tsLong(it.startedAt)}
+                          {tsCompact(it.startedAt)}
                           {/* Age belongs to first-seen: "how long has this
                               been going on" is read off the start, not the
                               last hit. */}
@@ -1247,13 +1251,13 @@ export default function InboxPage() {
                         </>
                       : <span style={{ color: 'var(--text3)' }}>—</span>}
                   </td>
-                  <td className="mono ib-when">
+                  <td className="mono ib-when" title={tsLong(it.lastSeen)}>
                     {/* v0.9.333 — yaş ve ilk-görülme artık kendi kolonunda.
                         v0.9.255'te ikisi bu hücreye sıkıştırılmıştı ve ilk
                         görülme yalnız iki damga FARKLIYSA çiziliyordu: yani
                         exception satırlarında çoğu zaman hiç görünmüyordu ve
                         hiçbir zaman sıralanamıyordu. */}
-                    {tsLong(it.lastSeen)}
+                    {tsCompact(it.lastSeen)}
                   </td>
                   <td>
                     {it.assignee
@@ -1397,10 +1401,12 @@ function AISummaryLine({ it }: { it: InboxItem }) {
   );
 }
 
+// v0.10.1068 — satırlar `dt-trunc`: iç içe blok satırda `tbody td`nin "…"su
+// işlemiyor, metin kolonda "…" olmadan kesiliyordu.
 function DetailLine({ it }: { it: InboxItem }) {
   if (it.kind === 'problem' && it.problem) {
     return (
-      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
         <span className="mono">{it.problem.metric}</span>
         {' = '}
         {/* v0.10.922 (sade palet adım 1) — değer düz metin (--text, 600),
@@ -1413,12 +1419,12 @@ function DetailLine({ it }: { it: InboxItem }) {
   }
   if (isExcFamily(it)) {
     return (
-      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
         <span className="mono">{it.exception!.occurrences.toLocaleString()}</span>
         {' occurrences'}
         {it.priorityReason && <span> · {it.priorityReason}</span>}
         {it.exception!.message && (
-          <div style={{ marginTop: 2, color: 'var(--text2)' }}>
+          <div className="dt-trunc" style={{ marginTop: 2, color: 'var(--text2)' }}>
             {it.exception!.message.length > 160
               ? `${it.exception!.message.slice(0, 160)}…`
               : it.exception!.message}
@@ -1429,7 +1435,7 @@ function DetailLine({ it }: { it: InboxItem }) {
   }
   if (it.kind === 'incident' && it.incident) {
     return (
-      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
         {/* v0.9.571 (operator-reported: "open open iki defa yazan kayıtlar
             var") — buradaki duruma özel rozet KALDIRILDI. Başlık satırı
             v0.9.255'ten beri paylaşılan <StatusBadge s={it.status}/>
@@ -1441,13 +1447,13 @@ function DetailLine({ it }: { it: InboxItem }) {
             burada bırakmak, incident satırlarını diğerlerinden farklı
             renklendiren tek istisna olurdu. */}
         {it.priorityReason && <span>{it.priorityReason}</span>}
-        {it.description && <div style={{ marginTop: 2, color: 'var(--text2)' }}>{it.description}</div>}
+        {it.description && <div className="dt-trunc" style={{ marginTop: 2, color: 'var(--text2)' }}>{it.description}</div>}
       </div>
     );
   }
   if (it.kind === 'anomaly' && it.anomaly) {
     return (
-      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
         peak <span className="mono">{fmtFixed(it.anomaly.peakRatio, 1)}x</span>
         {' · '}now <span className="mono">{fmtFixed(it.anomaly.currentRatio, 1)}x</span>
         {it.priorityReason && <span> · {it.priorityReason}</span>}
@@ -1455,7 +1461,7 @@ function DetailLine({ it }: { it: InboxItem }) {
     );
   }
   return (
-    <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+    <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
       {it.priorityReason || it.description}
     </div>
   );

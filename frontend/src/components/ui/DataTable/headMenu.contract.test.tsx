@@ -323,7 +323,12 @@ const bodyOf = (sel: string, media = ''): string => {
 
 describe('⋯ CSS — tetik yer ayırmaz, üstüne biner', () => {
   it('host th\'ye kalıcı dolgu YOK; dolgu yalnız @media (hover: none) içinde', () => {
-    const padded = RULES.filter(r => r.selectors.some(x => x.includes('dt-menu-host')) && /padding/.test(r.body));
+    // v0.10.1068 — tek istisna "+N sütun" (`--hidden`): gizlenen kolon varken
+    // tetik HEP görünür ve sığdırma son kolona payını ayırır; dolgu o payı
+    // etiketten korur (sağa yaslı başlık tetiğin altında kalıyordu).
+    const hiddenHost = RULES.filter(r => r.selectors.some(x => x.includes('dt-menu-host--hidden')));
+    expect(hiddenHost.some(r => r.media === '' && /padding-right:\s*82px/.test(r.body))).toBe(true);
+    const padded = RULES.filter(r => r.selectors.some(x => x.includes('dt-menu-host') && !x.includes('dt-menu-host--hidden')) && /padding/.test(r.body));
     expect(padded.length).toBeGreaterThan(0);
     for (const r of padded) {
       expect(r.media, `${r.selectors.join(', ')} dolgusu hover:none dışında`).toBe('@media (hover: none)');

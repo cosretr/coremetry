@@ -46,16 +46,19 @@ const appKey = (a: ArgoServiceApp) => `${a.hubClusterId}|${a.instanceNamespace ?
 // v0.10.1057 — Autosync tabanı 76 → 90: dar kapta sığdırma kolonu tabanına
 // indirince başlık "Autosyn…" diye kırpılıyordu (etiket + ok 84px ister).
 const APP_COLS: ColumnDef<ArgoServiceApp>[] = [
-  { id: 'name', label: 'Uygulama', width: 260, minWidth: 180, naturalDir: 'asc', sortValue: a => a.name },
+  // v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — tabanlar (1170 px)
+  // laptop kabını aşınca kaydırma yerine öncelikle gizleme ("+N sütun"):
+  // önce Repo / Argo örneği / Eşleme / Autosync. Uygulama esneyen kolon.
+  { id: 'name', label: 'Uygulama', flex: true, minWidth: 180, priority: 1, naturalDir: 'asc', sortValue: a => a.name },
   { id: 'sync', label: 'Sync', width: 110, minWidth: 90, naturalDir: 'asc', sortValue: a => a.syncStatus ?? '' },
   { id: 'health', label: 'Health', width: 110, minWidth: 90, naturalDir: 'asc', sortValue: a => a.healthStatus ?? '' },
-  { id: 'auto', label: 'Autosync', width: 96, minWidth: 90, naturalDir: 'asc', sortValue: a => autoSyncLabel(a.autoSync) },
+  { id: 'auto', label: 'Autosync', width: 96, minWidth: 90, priority: 3, naturalDir: 'asc', sortValue: a => autoSyncLabel(a.autoSync) },
   { id: 'syncs', label: 'Senkron (24 sa)', width: 170, minWidth: 120, sortValue: a => syncsTotal(a.syncs24h), tone: a => (syncsFailed(a.syncs24h) ? 'err' : undefined) },
   { id: 'dest', label: 'Hedef', width: 200, minWidth: 140, naturalDir: 'asc', sortValue: a => `${a.destClusterId ?? ''}/${a.destNamespace ?? ''}` },
-  { id: 'match', label: 'Eşleme', width: 110, minWidth: 90, sortValue: a => a.confidence, tone: a => (a.match === 'manual' ? undefined : 'muted') },
+  { id: 'match', label: 'Eşleme', width: 110, minWidth: 90, priority: 3, sortValue: a => a.confidence, tone: a => (a.match === 'manual' ? undefined : 'muted') },
   { id: 'workloads', label: 'İş yükü', width: 200, minWidth: 120, naturalDir: 'asc', sortValue: a => a.workloads.map(w => w.workload).join(',') },
-  { id: 'instance', label: 'Argo örneği', width: 160, minWidth: 110, naturalDir: 'asc', sortValue: a => a.instanceName || a.instanceId || a.instanceNamespace || '', tone: () => 'muted' },
-  { id: 'repo', label: 'Repo', width: 240, minWidth: 140, mono: true, truncate: 'middle', naturalDir: 'asc', sortValue: a => a.repo ?? '' },
+  { id: 'instance', label: 'Argo örneği', width: 160, minWidth: 110, priority: 3, naturalDir: 'asc', sortValue: a => a.instanceName || a.instanceId || a.instanceNamespace || '', tone: () => 'muted' },
+  { id: 'repo', label: 'Repo', width: 240, minWidth: 140, priority: 3, mono: true, truncate: 'middle', naturalDir: 'asc', sortValue: a => a.repo ?? '' },
 ];
 
 const RO_COLS: ColumnDef<WorkloadRollout>[] = [

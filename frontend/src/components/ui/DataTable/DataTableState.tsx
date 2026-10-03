@@ -248,7 +248,7 @@ const STATIC_SKEL_LINE: SkelCell[] = [{ key: 'line', flex: '1 1 0px', num: false
  * gerçek satır geldiğinde gözün sütun hizasında kalması.
  */
 function skeletonCells<T>(dt: DataTable<T>, leading: number[], trailing: number[]): SkelCell[] {
-  const cols = dt.visibleColumns;
+  const cols = dt.shownColumns; // v0.10.1068 — gizlenen kolon çizgi/colSpan almaz
   const anyFlex = cols.some(c => c.flex && dt.colWidths[c.id] == null);
   const fixed = (prefix: string) => (w: number, i: number): SkelCell =>
     ({ key: `${prefix}-${i}`, flex: `0 0 ${w}px`, num: false, bar: false });
@@ -285,7 +285,7 @@ export function DataTableState<T>(props: DataTableStateProps<T> | DataTableState
   // tablonun verdiği colSpan. Tip ikisini birden yasaklar; JS'den ikisi
   // birden gelirse dt kazanır (colgroup'la aynı sayım).
   const span = props.dt
-    ? leading.length + props.dt.visibleColumns.length + trailing.length
+    ? leading.length + props.dt.shownColumns.length + trailing.length
     : props.colSpan;
 
   // v0.10.939 (tablo standardı T12) — `returnFocusRef` bir ref'te: iniş

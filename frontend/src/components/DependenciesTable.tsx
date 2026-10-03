@@ -227,10 +227,16 @@ export function DependenciesTable({
   // Shared sortable + resizable table. Columns built per-render so the
   // name label (Instance vs Destination) + the optional Cluster column
   // track kind/hasClusterCol. Accessors mirror the prior sort keys.
+  //
+  // v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — /messaging'de 16
+  // kolon 1366 px'te ~55 px'e eziliyor, sayılar "12.5…" okunuyordu. Okunurluk
+  // tabanları (minWidth) + öncelik: kap tabanları taşıyamazsa önce Trend /
+  // P50 / P95, sonra Top callers / Avg / ayrışmış P95'ler düşer ("+N sütun").
+  // Destination/Instance esneyen kimlik kolonu (artanı o alır).
   const depCols = useMemo<DataTableColumn<DepRow>[]>(() => [
-    { id: 'system', label: 'System', sortValue: r => r.system, naturalDir: NATURAL.system, width: 150, stickyLeft: true },
+    { id: 'system', label: 'System', sortValue: r => r.system, naturalDir: NATURAL.system, width: 150, minWidth: 110, priority: 1, stickyLeft: true },
     ...(hasClusterCol
-      ? [{ id: 'cluster', label: 'Cluster', sortValue: (r: DepRow) => r.cluster ?? '', naturalDir: NATURAL.cluster, width: 120 } as DataTableColumn<DepRow>]
+      ? [{ id: 'cluster', label: 'Cluster', sortValue: (r: DepRow) => r.cluster ?? '', naturalDir: NATURAL.cluster, width: 120, minWidth: 100, priority: 3 } as DataTableColumn<DepRow>]
       : []),
     // db.name only makes sense for databases — Kafka/RabbitMQ/etc.
     // (kind === 'queue') have no db.name, so the column is db-only.
@@ -238,18 +244,18 @@ export function DependenciesTable({
     // System | Database | Instance | Calls reads engine → logical DB
     // → physical host, matching how operators scan the page.
     ...(kind === 'db'
-      ? [{ id: 'database', label: 'Database', sortValue: (r: DepRow) => r.dbName ?? '', naturalDir: 'asc', width: 120 } as DataTableColumn<DepRow>]
+      ? [{ id: 'database', label: 'Database', sortValue: (r: DepRow) => r.dbName ?? '', naturalDir: 'asc', width: 120, minWidth: 100, priority: 2 } as DataTableColumn<DepRow>]
       : []),
-    { id: 'name', label: kind === 'db' ? 'Instance' : 'Destination', sortValue: r => nameOf(r), naturalDir: NATURAL.name, width: 210 },
-    { id: 'spanCount', label: 'Calls', sortValue: r => r.spanCount, numeric: true, naturalDir: NATURAL.spanCount, width: 96 },
+    { id: 'name', label: kind === 'db' ? 'Instance' : 'Destination', sortValue: r => nameOf(r), naturalDir: NATURAL.name, flex: true, minWidth: 180, priority: 1 },
+    { id: 'spanCount', label: 'Calls', sortValue: r => r.spanCount, numeric: true, naturalDir: NATURAL.spanCount, width: 96, minWidth: 72, priority: 2 },
     // v0.8.364 (Stage-2 M1) — messaging-only producer/consumer
     // split. Rates are precomputed by the page (it owns the window
     // length); zero-produce / zero-consume destinations sort to the
     // bottom naturally.
     ...(kind === 'queue'
       ? [
-          { id: 'produce', label: 'Produce/min', sortValue: (r: DepRow) => r.producePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116 } as DataTableColumn<DepRow>,
-          { id: 'consume', label: 'Consume/min', sortValue: (r: DepRow) => r.consumePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116 } as DataTableColumn<DepRow>,
+          { id: 'produce', label: 'Produce/min', sortValue: (r: DepRow) => r.producePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116, minWidth: 100, priority: 2 } as DataTableColumn<DepRow>,
+          { id: 'consume', label: 'Consume/min', sortValue: (r: DepRow) => r.consumePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116, minWidth: 100, priority: 2 } as DataTableColumn<DepRow>,
           // v0.9.835 — v0.9.815'in "Denge" kolonu KALDIRILDI. Broker
           // metriği (consumer lag) OTel'e ingest edilmediği için
           // span-türevli denge yanıltıcı sayılar üretiyordu (canlıda
@@ -259,7 +265,7 @@ export function DependenciesTable({
           // göre kötüleşme oranı; kapalıyken HER satır null döner, sortRows
           // hepsini kararlı bırakır ve sıra sunucudan gelen spanCount DESC
           // olarak kalır (brief'teki "prior yoksa spanCount DESC'e düş").
-          { id: 'p99delta', label: 'P99 Δ', sortValue: (r: DepRow) => msgP99Delta(r.p99DurationMs, r.priorP99Ms), numeric: true, naturalDir: 'desc', width: 92 } as DataTableColumn<DepRow>,
+          { id: 'p99delta', label: 'P99 Δ', sortValue: (r: DepRow) => msgP99Delta(r.p99DurationMs, r.priorP99Ms), numeric: true, naturalDir: 'desc', width: 92, minWidth: 72, priority: 3 } as DataTableColumn<DepRow>,
           // v0.9.816 — GECİKME AYRIŞMASI. Aşağıdaki tek P95 kolonu
           // üretici + tüketici span'lerini TEK dağılımda topluyor:
           // publish (broker'a yazma, hızlı) ile process (iş mantığı,
@@ -267,20 +273,20 @@ export function DependenciesTable({
           // yavaş olduğunu söylemiyor. Bu ikisi soruyu bitiriyor.
           // sortValue null → ölçümsüz satırlar en alta (0 DEĞİL: 0 ms
           // "anında" diye okunurdu, v0.9.262 dersi).
-          { id: 'producep95', label: 'Üretim P95', sortValue: (r: DepRow) => r.produceP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104 } as DataTableColumn<DepRow>,
-          { id: 'consumep95', label: 'İşleme P95', sortValue: (r: DepRow) => r.consumeP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104 } as DataTableColumn<DepRow>,
+          { id: 'producep95', label: 'Üretim P95', sortValue: (r: DepRow) => r.produceP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104, minWidth: 96, priority: 3 } as DataTableColumn<DepRow>,
+          { id: 'consumep95', label: 'İşleme P95', sortValue: (r: DepRow) => r.consumeP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104, minWidth: 96, priority: 3 } as DataTableColumn<DepRow>,
         ]
       : []),
-    { id: 'errorRate', label: 'Err %', sortValue: r => r.errorRate, numeric: true, naturalDir: NATURAL.errorRate, width: 96 },
-    { id: 'avg', label: 'Avg', sortValue: r => r.avgDurationMs, numeric: true, naturalDir: NATURAL.avg, width: 90 },
+    { id: 'errorRate', label: 'Err %', sortValue: r => r.errorRate, numeric: true, naturalDir: NATURAL.errorRate, width: 96, minWidth: 72, priority: 2 },
+    { id: 'avg', label: 'Avg', sortValue: r => r.avgDurationMs, numeric: true, naturalDir: NATURAL.avg, width: 90, minWidth: 72, priority: 3 },
     // P50 + P95 alongside P99. v0.8.364 added P50 for queues only; v0.9.259
     // added P95 there; v0.9.262 opens both to the DB grid too, since
     // db_summary_5m carries the identical 3-wide TDigest state and
     // GetDatabases now projects indices 1 and 2 off the same merge — no extra
     // ClickHouse scan on either page. Order reads Avg → P50 → P95 → P99.
-    { id: 'p50', label: 'P50', sortValue: (r: DepRow) => r.p50DurationMs ?? 0, numeric: true, naturalDir: 'desc', width: 84 },
-    { id: 'p95', label: 'P95', sortValue: (r: DepRow) => r.p95DurationMs ?? 0, numeric: true, naturalDir: 'desc', width: 84 },
-    { id: 'p99', label: 'P99', sortValue: r => r.p99DurationMs, numeric: true, naturalDir: NATURAL.p99, width: 90 },
+    { id: 'p50', label: 'P50', sortValue: (r: DepRow) => r.p50DurationMs ?? 0, numeric: true, naturalDir: 'desc', width: 84, minWidth: 72, priority: 4 },
+    { id: 'p95', label: 'P95', sortValue: (r: DepRow) => r.p95DurationMs ?? 0, numeric: true, naturalDir: 'desc', width: 84, minWidth: 72, priority: 4 },
+    { id: 'p99', label: 'P99', sortValue: r => r.p99DurationMs, numeric: true, naturalDir: NATURAL.p99, width: 90, minWidth: 72, priority: 2 },
     // #1 — non-sortable RED sparkline column. No sortValue so the
     // shared DataTable head renders it as a plain (un-clickable)
     // header. Body cell joins the row to its DBTrend via trendFor.
@@ -294,9 +300,9 @@ export function DependenciesTable({
     // '—' 100% of the time while the page paid a LIMIT 200000 scan
     // for it on every range change.
     ...(trendsEnabled(kind)
-      ? [{ id: 'trend', label: 'Trend', width: 140 } as DataTableColumn<DepRow>]
+      ? [{ id: 'trend', label: 'Trend', width: 140, minWidth: 120, priority: 4 } as DataTableColumn<DepRow>]
       : []),
-    { id: 'callers', label: 'Top callers', width: 240 },
+    { id: 'callers', label: 'Top callers', width: 240, minWidth: 160, priority: 3 },
   ], [hasClusterCol, kind]);
 
   const dt = useDataTable<DepRow>({

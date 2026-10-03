@@ -45,6 +45,24 @@ one exists because its violation shipped a bug or an incident.
   a deep-link needs the target row mounted (anomaly history).
 - Header customisation goes through `DataTableHead`'s
   `renderLabel` hook — the pure core's `label: string` stays.
+- **Fit contract (v0.10.1068, `lib/dataTable.ts` fitColumnWidths):** a
+  record list never scrolls sideways while its priority-1 floors fit.
+  Order: declared widths if they fit → unpinned columns shrink to their
+  floors (the `flex` column — or, if none, the widest text column — keeps
+  its floor and absorbs the rest) → dragged (pinned) widths shrink too
+  (revises v0.10.1057: a drag wins only while it fits) → columns hide by
+  `priority`, header shows "+N sütun" (re-show persists in the same
+  storageKey) → only then horizontal scroll. Floor = `minWidth`, else 60%
+  of `width`, flex 160.
+- **Every column declaration gets a readable `minWidth` and a `priority`**
+  (1 = never hide; higher hides first; ties hide rightmost first): key/text
+  and status/prio 1, counts 2, times + owner/assignee 3. One `flex` text
+  column per table. Unset priority = 1 for first/flex/actions, else 2.
+- Hidden columns: `dt.shownColumns` drives `<col>`/`<th>`/state colSpan;
+  pages still render EVERY `<td>` (the primitive hides the cell via CSS on
+  full-length rows) — never skip a cell by hand. Flex rows inside a cell
+  wrap their text in `.dt-trunc` (ellipsis); list timestamps use
+  `tsCompact` with the full stamp in `title`.
 
 ## 3. Pickers & catalogues
 

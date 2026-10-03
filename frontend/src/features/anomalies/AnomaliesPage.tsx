@@ -16,7 +16,7 @@ import { useServicesMetadata, keys } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, type UserRow } from '@/lib/api';
 import { useUrlEnv } from '@/lib/useUrlEnv';
-import { fmtNum, tsLong } from '@/lib/utils';
+import { fmtNum, tsCompact, tsLong } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type {
@@ -65,15 +65,21 @@ const DEFAULT_EXC_SORT = { id: 'priority' as SortKey, dir: 'desc' as const };
 const EXC_COLS: ColumnDef<ExceptionGroup>[] = [
   // v0.10.703 — öncelik kendi sütununda (Problems inbox PRIO ile aynı anatomi);
   // sıralama sunucuda (exception_priority_sort.go), sortValue yalnız işaret.
-  { id: 'priority',    label: 'Prio',        sortValue: g => g.priority ?? '', naturalDir: 'desc', width: 60 },
-  { id: 'state',       label: 'State',       sortValue: g => g.state,       naturalDir: 'desc', width: 108 },
-  { id: 'type',        label: 'Exception',   sortValue: g => g.type,        naturalDir: 'asc', flex: true },
-  { id: 'service',     label: 'Service',     sortValue: g => g.service,     naturalDir: 'asc',  width: 150 },
-  { id: 'occurrences', label: 'Occurrences', sortValue: g => g.occurrences, numeric: true,      width: 100 },
-  // v0.10.739 — 13 px damga ("16.09.2026 11:00:15") sığsın: 124 → 168.
-  { id: 'firstSeen',   label: 'First seen',  sortValue: g => g.firstSeen,   width: 168 },
-  { id: 'lastSeen',    label: 'Last seen',   sortValue: g => g.lastSeen,    width: 168 },
-  { id: 'assignee',    label: 'Assignee',    sortValue: g => g.assignee,    naturalDir: 'asc',  width: 120 },
+  //
+  // v0.10.1068 (operatör, ~1440px laptop: "Kolonlar kayıyor, sığmıyor") —
+  // okunurluk tabanları (minWidth) + öncelik: kap tabanları taşıyamazsa önce
+  // First seen, sonra Assignee, sonra Last seen gizlenir ("+N sütun");
+  // Exception (esneyen) en az 200 px. Damgalar yılsız (tsCompact, tam damga
+  // title'da): 13 px mono "03.10 06:26:09" 136 px'e kırpılmadan sığar —
+  // eski 168 px tam damgayı (173 px isteyen) zaten 5 px kesiyordu.
+  { id: 'priority',    label: 'Prio',        sortValue: g => g.priority ?? '', naturalDir: 'desc', width: 68, minWidth: 64, priority: 1 },
+  { id: 'state',       label: 'State',       sortValue: g => g.state,       naturalDir: 'desc', width: 140, minWidth: 140, priority: 1 },
+  { id: 'type',        label: 'Exception',   sortValue: g => g.type,        naturalDir: 'asc', flex: true, minWidth: 200, priority: 1 },
+  { id: 'service',     label: 'Service',     sortValue: g => g.service,     naturalDir: 'asc',  width: 170, minWidth: 120, priority: 1 },
+  { id: 'occurrences', label: 'Occurrences', sortValue: g => g.occurrences, numeric: true,      width: 100, minWidth: 92, priority: 2 },
+  { id: 'firstSeen',   label: 'First seen',  sortValue: g => g.firstSeen,   width: 136, minWidth: 136, priority: 4 },
+  { id: 'lastSeen',    label: 'Last seen',   sortValue: g => g.lastSeen,    width: 136, minWidth: 136, priority: 3 },
+  { id: 'assignee',    label: 'Assignee',    sortValue: g => g.assignee,    naturalDir: 'asc',  width: 150, minWidth: 120, priority: 3 },
 ];
 // v0.10.945 (tablo standardı T8) — eylem kolonu yalnız admin/editor'de;
 // `minWidth = width` onu eski sabit `trailing` genişliğinde kilitler.
@@ -617,8 +623,10 @@ export default function ProblemsPage() {
                       <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}><StateBadge s={g.state} /></Link></td>
                       <td className="row-cell">
                         <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>
-                        <div className="mono" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 11.5, color: 'var(--err)' }}>
-                          {g.type}
+                        <div className="mono" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 11.5, color: 'var(--err)' }}
+                          title={g.type}>
+                          {/* v0.10.1068 — flex satırda tip "…" ile kırpılsın (dt-trunc). */}
+                          <span className="dt-trunc">{g.type}</span>
                           {/* First observed within the last hour —
                               the highest-signal marker for an SRE
                               scanning the list in the morning: these
@@ -691,12 +699,14 @@ export default function ProblemsPage() {
                         <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>
                       </td>
                       {/* v0.10.739 — tarih damgası 13 px (.ib-when, Inbox 736 ile aynı). */}
-                      <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.firstSeen)}</Link></td>
-                      <td className="mono row-cell ib-when cell-faint"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(g.lastSeen)}</Link></td>
+                      {/* v0.10.1068 — yılsız damga (tsCompact), tam damga title'da. */}
+                      <td className="mono row-cell ib-when cell-faint" title={tsLong(g.firstSeen)}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsCompact(g.firstSeen)}</Link></td>
+                      <td className="mono row-cell ib-when cell-faint" title={tsLong(g.lastSeen)}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsCompact(g.lastSeen)}</Link></td>
                       <td onClick={e => e.stopPropagation()}>
                         {isAdmin ? (
+                          // v0.10.1068 — seçici hücreye sığar (eskiden 160 px sabit, 120 px hücrede kesiliyordu).
                           <select value={g.assignee} onChange={e => setAssignee(g, e.target.value)}
-                            style={{ fontSize: 11, maxWidth: 160 }}>
+                            style={{ fontSize: 11, maxWidth: '100%' }}>
                             <option value="">— unassigned —</option>
                             {users.map(u => (
                               <option key={u.id} value={u.id}>{u.email}</option>

@@ -1,5 +1,5 @@
 import {
-  useCallback, useEffect, useMemo, useRef, useState,
+  useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject,
 } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -9,9 +9,9 @@ import { useTableNav, type TableNav } from '@/lib/useTableNav';
 import { useShortcuts } from '@/lib/keyboard';
 import { useIsNarrow } from '@/lib/useNarrow';
 import {
-  columnLayoutSig, computeSortedRows, fitColumnWidths, formatSortParam,
-  parseSortParam, readPersistedWidths, resolveToggle, sortIdKnown, visibleColumns,
-  type DataTableColumn, type SortState,
+  columnLayoutSig, computeSortedRows, defaultPriority, fitColumnWidths, fitFloor, formatSortParam,
+  hiddenCellCss, parseSortParam, pickFlexColumn, readPersistedShown, readPersistedWidths, resolveToggle, sortIdKnown, visibleColumns,
+  type DataTableColumn, type FitResult, type SortState,
   stickyLeftOffsets,
 } from '@/lib/dataTable';
 import { getItem, setItem, dtSortKey, dtWidthKey } from '@/lib/storage';
@@ -95,6 +95,13 @@ import { DEFAULT_W } from './rowHeight';
 // v0.10.939 (tablo standardı T12) — DEFAULT_W rowHeight.ts'te (DataTableState
 // iskeleti aynı değeri okur); burada yalnız alt sınır.
 const DEFAULT_MIN = 48;
+// v0.10.1068 — "+N sütun" tetiğinin son görünür başlıkta ayrılan payı (px);
+// yalnız bir kolon gizlendiğinde (lib/dataTable.ts fitColumnWidths reservePx).
+const HIDDEN_AFFORD_PX = 76;
+function lastIsWideActions<T>(cols: ColumnDef<T>[]): boolean {
+  const last = cols[cols.length - 1];
+  return !!last && last.kind === 'actions' && (last.width ?? 0) >= HIDDEN_AFFORD_PX + 24;
+}
 
 /** v0.10.939 (tablo standardı T9/T5) — ton → sınıf. Sınıflar globals.css'te
  *  (.cell-err/.cell-warn v0.10.931, .cell-muted/.cell-faint v0.10.939). */
@@ -203,6 +210,22 @@ export interface DataTable<T> {
   /** v0.10.939 (T7) — hücrenin satır linki; getRowHref yok / href null /
    *  ownLink / actions kolonu → null. */
   rowLink: (row: T, colId: string) => RowLinkProps | null;
+  // ── v0.10.1068 — bütçeli sığdırma + kolon önceliği ──────────────────────
+  /** Kaba sığdırmanın sonucu (DataTableColgroup kabı ölçünce); ölçüm yoksa null. */
+  fit: FitResult | null;
+  /** Kaba sığmadığı için gizlenen kolonlar (`priority`). Başlık ve `<col>`
+   *  basılmaz; GÖVDE hücresini sayfa yine basar — primitif onu CSS ile
+   *  gizler (DataTableColgroup `hideCss`). Sayfa hücre ATLAMAZ: atlarsa
+   *  satırın hücre sayısı tutmaz ve gizleme o satırda uygulanmaz. */
+  hiddenColumnIds: ReadonlySet<string>;
+  /** `visibleColumns` eksi gizlenenler: `<col>`/`<th>`/durum satırı colSpan'ı. */
+  shownColumns: ColumnDef<T>[];
+  /** Operatörün "+N sütun"dan geri açtığı kolonlar (kalıcı). */
+  forcedShown: ReadonlySet<string>;
+  /** Gizlenen kolonu geri aç (true) / otomatiğe bırak (false). */
+  setColumnShown: (id: string, shown: boolean) => void;
+  /** DataTableColgroup'un ölçüm kanalı: kap genişliği + leading/trailing px. */
+  reportLayout: (containerPx: number, fixedPx: number) => void;
 }
 
 export interface DataTableSelection<T> {
@@ -329,6 +352,10 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
   const layoutSig = useMemo(() => columnLayoutSig(declaredColumns), [declaredColumns]);
   const [colWidths, setColWidths] = useState<Record<string, number>>(() =>
     readPersistedWidths(getItem<unknown>(widthLSKey, null), layoutSig));
+  // v0.10.1068 — "+N sütun"dan geri açılan kolonlar; genişliklerle AYNI
+  // anahtarda ve imzada (kolon tanımı değişince birlikte düşer).
+  const [forcedShownArr, setForcedShownArr] = useState<string[]>(() =>
+    readPersistedShown(getItem<unknown>(widthLSKey, null), layoutSig));
 
   // v0.10.831 — kalıcılık OPERATÖRÜN EYLEMİNE bağlı, `sort` state'ine değil.
   //
@@ -344,8 +371,8 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
     if (persistSort) setItem(sortLSKey, s); // v0.10.669 — persistSort:false yazmaz
   }, [persistSort, sortLSKey]);
   useEffect(() => {
-    setItem(widthLSKey, { sig: layoutSig, widths: colWidths });
-  }, [colWidths, widthLSKey, layoutSig]);
+    setItem(widthLSKey, { sig: layoutSig, widths: colWidths, ...(forcedShownArr.length ? { shown: forcedShownArr } : {}) });
+  }, [colWidths, forcedShownArr, widthLSKey, layoutSig]);
 
   // Apply a sort to state + URL, then notify the page (serverSort pages
   // re-fetch off this — or off the returned `sort`, same thing).
@@ -452,7 +479,11 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
     const min = col?.minWidth ?? DEFAULT_MIN;
     setColWidths(prev => ({ ...prev, [id]: Math.max(min, (prev[id] ?? col?.width ?? DEFAULT_W) + deltaPx) }));
   }, [columns]);
-  const resetLayout = useCallback(() => setColWidths({}), []);
+  // v0.10.1068 — sıfırlama geri açılan kolonları da otomatiğe bırakır.
+  const resetLayout = useCallback(() => { setColWidths({}); setForcedShownArr([]); }, []);
+  const setColumnShown = useCallback((id: string, on: boolean) => {
+    setForcedShownArr(prev => (on ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter(x => x !== id)));
+  }, []);
 
   // serverSort mode returns `rows` verbatim (reference-equal) — the
   // backend's ORDER BY already shaped the page; see computeSortedRows.
@@ -627,10 +658,46 @@ export function useDataTable<T>({ storageKey, columns: declaredColumns, rows, in
     return out;
   }, [colById]);
 
+  // ── v0.10.1068 — bütçeli sığdırma (lib/dataTable.ts "BÜTÇELİ SIĞDIRMA") ──
+  // Ölçüm DataTableColgroup'ta (kap ResizeObserver'ı), karar BURADA: başlık
+  // (gizlenen <th>, "+N sütun"), colgroup ve durum satırı aynı sonucu okusun.
+  const [layout, setLayout] = useState<{ px: number; fixed: number }>({ px: 0, fixed: 0 });
+  const reportLayout = useCallback((px: number, fixed: number) => {
+    setLayout(prev => (prev.px === px && prev.fixed === fixed ? prev : { px, fixed }));
+  }, []);
+  const forcedShown = useMemo(() => new Set(forcedShownArr), [forcedShownArr]);
+  const fit = useMemo(() => {
+    if (!layout.px) return null; // 0 = ölçüm yok (jsdom, ilk mount): fail-open
+    const flexId = pickFlexColumn(visible, DEFAULT_W);
+    return fitColumnWidths(
+      visible.map((c, i) => ({
+        id: c.id,
+        px: colWidths[c.id] ?? (c.flex ? null : c.width ?? DEFAULT_W),
+        min: Math.min(fitFloor({ ...c, flex: c.flex || c.id === flexId }, DEFAULT_W), colWidths[c.id] ?? Infinity),
+        // v0.10.1057 — sürüklenen kolon; v0.10.1068: sığmazsa en son küçülür.
+        pinned: colWidths[c.id] != null,
+        flex: c.id === flexId && !c.flex,
+        priority: defaultPriority(c, i === 0, c.id === flexId),
+        forceShow: forcedShown.has(c.id),
+      })),
+      layout.fixed,
+      layout.px,
+      // Son kolon geniş bir eylem kolonuysa (etiketsiz başlık) tetik oraya
+      // zaten sığar; pay ayrılmaz.
+      lastIsWideActions(visible) ? 0 : HIDDEN_AFFORD_PX,
+    );
+  }, [layout, visible, colWidths, forcedShown]);
+  const hiddenColumnIds = useMemo(() => new Set(fit?.hidden ?? []), [fit]);
+  const shownColumns = useMemo(
+    () => (hiddenColumnIds.size ? visible.filter(c => !hiddenColumnIds.has(c.id)) : visible),
+    [visible, hiddenColumnIds],
+  );
+
   return {
     storageKey, columns, visibleColumns: visible, narrow, sortedRows, sort, toggleSort, setSort, colWidths, startResize, resizeBy, resetLayout, nav, rowProps,
     allColumns: declaredColumns, selection: selectionApi, server: server ?? null, getRowHref: getRowHref ?? null,
     tableProps: TABLE_PROPS, cellProps, rowLink,
+    fit, hiddenColumnIds, shownColumns, forcedShown, setColumnShown, reportLayout,
   };
 }
 
@@ -720,7 +787,11 @@ export function ColResizeHandle<T>({ dt, colId }: { dt: DataTable<T>; colId: str
 // kalır — sığdırma saf çekirdekte, tablo-güdümlü testle.
 export function DataTableColgroup<T>({ dt, leading, trailing }: { dt: DataTable<T>; leading?: number[]; trailing?: number[] }) {
   const ref = useRef<HTMLTableColElement | null>(null);
-  const [fitPx, setFitPx] = useState(0); // 0 = ölçüm yok (fail-open)
+  // v0.10.387 (dış skill denetimi C10) — çağıran satır içi dizi geçiyor
+  // (`leading={[24]}`), yani her render yeni referans ve memo hiç isabet
+  // etmiyordu; bağımlılık PRİMİTİF toplam (rerender-memo-with-default-value).
+  const fixedPx = (leading ?? []).reduce((s, w) => s + w, 0) + (trailing ?? []).reduce((s, w) => s + w, 0);
+  const { reportLayout } = dt;
   useEffect(() => {
     // v0.10.357 — Operator-reported (Traces: "sağa sola kaydırma olmasın, bir
     // türlü düzeltemedik"): sanal tablonun kabı `.vt-scroll`, `.table-wrap`
@@ -745,57 +816,104 @@ export function DataTableColgroup<T>({ dt, leading, trailing }: { dt: DataTable<
     // gibi") ve 2026-08-24 ("neden sayfa yatayda kayıyor"). İkincisinin
     // sebebi birincinin çaresinin kapatılmasıydı.
     //
-    // NİYE GÜVENLİ: fitColumnWidths sığan tabloya DOKUNMUYOR — toplam
-    // kaba sığıyorsa `null` döner (lib/dataTable.ts:332) ve çağıran beyan
-    // edilen genişlikleri aynen kullanır. Yani etki alanı yalnız ŞU AN
-    // TAŞAN tablolar. Ölçüm yoksa (jsdom, ilk mount) yine `null`:
+    // NİYE GÜVENLİ: fitColumnWidths sığan tabloya DOKUNMUYOR (boş sonuç,
+    // beyan genişlikler aynen). Ölçüm yoksa (jsdom, ilk mount) `null`:
     // fail-open.
     //
-    // İKİ MEKANİZMA BESTELENİYOR: min genişlikler bile sığmazsa fonksiyon
-    // tabanları döndürüyor (:338) — taşma sınırlı kalır ve kabın
-    // `overflow-x: auto`su güvenlik ağı olarak devreye girer. Eski
-    // muhafaza aslında "ağ var mı" sorusunun vekiliydi; ağ varken de
-    // sığdırmak daha iyi ilk cevap.
-    const measure = () => setFitPx(wrap.clientWidth);
+    // v0.10.1068 — ölçüm HOOK'a raporlanır (dt.reportLayout): sığdırma
+    // kararı (genişlikler + gizlenen kolonlar) başlıkla, durum satırıyla ve
+    // "+N sütun" tetiğiyle ORTAK olmalı; colgroup'ta kalsaydı başlık
+    // gizlenen kolonu bilemezdi.
+    const measure = () => reportLayout(wrap.clientWidth, fixedPx);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
     return () => ro.disconnect();
+  }, [reportLayout, fixedPx]);
+
+  // v0.10.1068 — kırpılan hücreye TAM metin ipucu. Taban kural (`tbody td`
+  // nowrap + ellipsis) "…" basıyor ama elle çizilen hücrelerin çoğu `title`
+  // taşımıyordu: kırpılan değer hiçbir yoldan okunamıyordu. Tek dinleyici
+  // tablo başına (her hücreye değil); yalnız GERÇEKTEN kırpılmış ve kendi
+  // `title`ı olmayan hücreye yazılır, sığınca geri alınır.
+  useEffect(() => {
+    const table = ref.current?.closest('table');
+    if (!table) return;
+    const onOver = (e: Event) => autoTitle(e.target);
+    table.addEventListener('mouseover', onOver);
+    return () => table.removeEventListener('mouseover', onOver);
   }, []);
-  // v0.10.387 (dış skill denetimi C10) — çağıran satır içi dizi geçiyor
-  // (`leading={[24]}`), yani her render yeni referans ve memo hiç isabet
-  // etmiyordu; bağımlılık PRİMİTİF toplam (rerender-memo-with-default-value).
-  const fixedPx = (leading ?? []).reduce((s, w) => s + w, 0) + (trailing ?? []).reduce((s, w) => s + w, 0);
-  const fitted = useMemo(() => {
-    if (!fitPx) return null;
-    return fitColumnWidths(
-      dt.visibleColumns.map(c => ({
-        id: c.id,
-        px: dt.colWidths[c.id] ?? (c.flex ? null : c.width ?? DEFAULT_W),
-        min: c.minWidth ?? DEFAULT_MIN,
-        // v0.10.1057 — sürüklenen kolon sığdırmadan muaf (lib/dataTable.ts
-        // fitColumnWidths şerhi): yoksa sürükleme yazılır ama ekrana yansımaz.
-        pinned: dt.colWidths[c.id] != null,
-      })),
-      fixedPx,
-      fitPx,
-    );
-  }, [fitPx, dt.visibleColumns, dt.colWidths, fixedPx]);
+
+  // v0.10.1068 — gizlenen kolonun GÖVDE hücresi. Sayfalar `<td>`leri elle
+  // basıyor (~100 tablo); her birine "bu kolon gizli mi" sordurmak yerine
+  // primitif, TAM hücre sayılı satırlarda o sıradaki hücreyi CSS ile düşürür
+  // (`display: none` hücreyi tablo ızgarasından çıkarır, sonrakiler kayar).
+  // `:nth-last-child` eşi satırın hücre SAYISINI da doğrular: colSpan'lı
+  // detay / durum satırı ve elle çizilmiş eksik satır etkilenmez. Elle
+  // `<thead>` basan (resize-only) tablolarda başlık hücresi de aynı kuralla
+  // düşer; DataTableHead gizleneni zaten basmaz.
+  const fitId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const nLead = (leading ?? []).length;
+  const nCells = nLead + dt.visibleColumns.length + (trailing ?? []).length;
+  const hideCss = useMemo(
+    () => hiddenCellCss(fitId, nLead, nCells, dt.visibleColumns.map(c => c.id), dt.hiddenColumnIds),
+    [fitId, nLead, nCells, dt.visibleColumns, dt.hiddenColumnIds],
+  );
+  useLayoutEffect(() => {
+    if (!hideCss) return;
+    const el = document.createElement('style');
+    el.setAttribute('data-dt-fit', fitId);
+    el.textContent = hideCss;
+    document.head.appendChild(el);
+    return () => el.remove();
+  }, [hideCss, fitId]);
+
+  const fitted = dt.fit;
   return (
-    <colgroup ref={ref}>
+    <colgroup ref={ref} data-dt-fit={fitId}>
       {(leading ?? []).map((w, i) => <col key={`lead-${i}`} style={{ width: w }} />)}
-      {dt.visibleColumns.map(c => {
+      {dt.shownColumns.map(c => {
         // v0.9.542 — flex kolon SÜRÜKLENMEDİYSE 'auto': table-layout:fixed
         // artan genişliği ona verir, diğerleri kendi genişliğinde kalır.
-        // Sürüklendiği an colWidths dolar ve sabit genişliğe döner —
-        // operatörün eli her zaman kazanır (kaba SIĞDIĞI sürece).
-        const w = fitted?.[c.id]
+        // Sürüklendiği an colWidths dolar ve sabit genişliğe döner.
+        // v0.10.1068 — flex beyan etmemiş tabloda seçilen metin kolonu da
+        // küme kaba sığmadığında 'auto' (fitted.auto) olur.
+        const w = fitted?.widths[c.id]
+          ?? (fitted?.auto === c.id ? 'auto' : undefined)
           ?? dt.colWidths[c.id] ?? (c.flex ? 'auto' : c.width ?? DEFAULT_W);
         return <col key={c.id} style={{ width: w }} />;
       })}
       {(trailing ?? []).map((w, i) => <col key={`trail-${i}`} style={{ width: w }} />)}
+      {/* v0.10.1068 — gizlenen her kolon için sonda 0 px'lik YUVA. Sayfaların
+          açılır/detay satırı `colSpan`ı tüm kolonları sayar (ör. 10); yuva
+          olmasa ızgara o satır açılınca fazladan 'auto' kolon kazanıyor ve
+          esneyen kolonun genişliğini onunla bölüşüyordu (Exceptions: 200 →
+          100 px). Normal satırda bu kolonlarda hücre yok (gizlenen hücre
+          `display: none`), genişlik 0. */}
+      {Array.from({ length: dt.visibleColumns.length - dt.shownColumns.length }, (_, i) => (
+        <col key={`hidden-slot-${i}`} data-dt-hidden-slot="" style={{ width: 0 }} />
+      ))}
     </colgroup>
   );
+}
+
+// autoTitle — kırpılmış hücreye (ya da içindeki satır linkine) tam metni
+// `title` olarak yazar; kendi `title`ı olan hücreye dokunmaz.
+function autoTitle(target: EventTarget | null) {
+  const cell = (target as Element | null)?.closest?.('td, th');
+  if (!(cell instanceof HTMLElement)) return;
+  if (cell.hasAttribute('title') && !cell.hasAttribute('data-auto-title')) return;
+  const inner = cell.firstElementChild as HTMLElement | null;
+  const clipped = cell.scrollWidth > cell.clientWidth + 1
+    || (!!inner && inner.scrollWidth > inner.clientWidth + 1);
+  const text = clipped ? (cell.innerText || cell.textContent || '').trim() : '';
+  if (text) {
+    cell.setAttribute('title', text);
+    cell.setAttribute('data-auto-title', '');
+  } else if (cell.hasAttribute('data-auto-title')) {
+    cell.removeAttribute('title');
+    cell.removeAttribute('data-auto-title');
+  }
 }
 
 // (ResetLayoutButton — v0.9.660 → v0.10.939 SİLİNDİ. Sayfa başına "Reset
@@ -827,7 +945,10 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
   // verilmiş tabloda o hücre sayfanındır; menü ondan önceki son kolonda
   // durur (dilim 3'te eylem sütunları `kind: 'actions'`e göçünce menü
   // boş başlıklı eylem sütununa, yani satırın sağ ucuna oturur).
-  const cols = dt.visibleColumns;
+  // v0.10.1068 — kaba sığmadığı için gizlenen kolonun başlığı BASILMAZ
+  // (gövde hücresini DataTableColgroup'un kuralı düşürür); ⋯ / "+N sütun"
+  // son GÖRÜNEN başlıkta.
+  const cols = dt.shownColumns;
   const menuHostId = cols.some(c => c.kind !== 'actions') ? cols[cols.length - 1]?.id : undefined;
   return (
     // v0.9.928 — başlık da tablonun kimliğini taşıyor: bir kolona tıklayıp
@@ -849,7 +970,9 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
           const cls = [c.numeric && !actions ? 'num' : '', sortable ? 'sortable' : '', active ? 'sorted' : '', c.stickyRight ? 'sticky-right' : '', c.stickyLeft ? 'sticky-left' : '', actions ? 'col-actions' : '', menuHost ? 'dt-menu-host' : '',
             // Kayıtlı genişlik varken ⋯ hep görünür: sıfırlanacak bir şey var ve
             // taşan tabloda son başlık kaydırılmış olabilir (eski görünür düğmenin işi).
-            menuHost && Object.keys(dt.colWidths).length > 0 ? 'dt-menu-host--dirty' : '']
+            menuHost && (Object.keys(dt.colWidths).length > 0 || dt.forcedShown.size > 0) ? 'dt-menu-host--dirty' : '',
+            // v0.10.1068 — gizlenen kolon varken "+N sütun" tetiği hep görünür.
+            menuHost && dt.hiddenColumnIds.size > 0 ? 'dt-menu-host--hidden' : '']
             .filter(Boolean).join(' ');
           // v0.10.939 (tablo standardı S8) — ⋯ taşıyan başlığın adı etiketi:
           // yoksa columnheader adı içerikten hesaplanır ve tetiğin
@@ -861,7 +984,7 @@ export function DataTableHead<T>({ dt, leading, trailing, renderLabel, stickyLef
           // v0.9.1256 — sola sabit başlıkların kümülatif left'i (saf
           // çekirdek; resize edilmiş genişlik anında yansır).
           const leftOff = c.stickyLeft
-            ? stickyLeftOffsets(dt.visibleColumns, dt.colWidths, DEFAULT_W)[c.id]
+            ? stickyLeftOffsets(dt.shownColumns, dt.colWidths, DEFAULT_W)[c.id]
             : undefined;
           return (
             <th key={c.id}

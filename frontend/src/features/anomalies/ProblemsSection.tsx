@@ -33,7 +33,7 @@ import { useProblems, useProblemByID, useServicesMetadata, keys } from '@/lib/qu
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useBlastRadiusBatch } from '@/lib/queries/problems';
-import { fmtFixed, tsLong } from '@/lib/utils';
+import { fmtFixed, tsCompact, tsLong } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { getItem, setItem, STORAGE_KEYS } from '@/lib/storage';
 import { decodeCsvSet, encodeCsvSet } from '@/lib/inboxUrl';
@@ -79,14 +79,16 @@ const PROBLEM_COLS: DataTableColumn<Problem>[] = [
     sortValue: p => (PRIO_RANK[p.priority ?? 'P3'] ?? 0) * 1e11
                   + (SEV_RANK[p.severity] ?? 0) * 1e10
                   + p.startedAt / 1e9,
-    width: 90 },
-  { id: 'severity', label: 'Severity', sortValue: p => SEV_RANK[p.severity] ?? 0, width: 90 },
-  { id: 'service',  label: 'Service',  sortValue: p => p.service,   naturalDir: 'asc', width: 170 },
-  { id: 'metric',   label: 'Metric',   sortValue: p => p.metric,    naturalDir: 'asc', width: 150 },
-  { id: 'value',    label: 'Value',    sortValue: p => p.value,     numeric: true,     width: 110 },
-  { id: 'rule',     label: 'Rule',     sortValue: p => p.ruleName,  naturalDir: 'asc', flex: true },
-  { id: 'started',  label: 'Started',  sortValue: p => p.startedAt, width: 150 },
-  { id: 'status',   label: 'Status',   sortValue: p => p.status,    naturalDir: 'asc', width: 100 },
+    width: 90, minWidth: 84, priority: 1 },
+  // v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — okunurluk tabanları
+  // + öncelik ("+N sütun"); Started yılsız (tsCompact, tam damga title'da).
+  { id: 'severity', label: 'Severity', sortValue: p => SEV_RANK[p.severity] ?? 0, width: 96, minWidth: 90, priority: 2 },
+  { id: 'service',  label: 'Service',  sortValue: p => p.service,   naturalDir: 'asc', width: 170, minWidth: 130, priority: 1 },
+  { id: 'metric',   label: 'Metric',   sortValue: p => p.metric,    naturalDir: 'asc', width: 150, minWidth: 110, priority: 3 },
+  { id: 'value',    label: 'Value',    sortValue: p => p.value,     numeric: true,     width: 110, minWidth: 90, priority: 2 },
+  { id: 'rule',     label: 'Rule',     sortValue: p => p.ruleName,  naturalDir: 'asc', flex: true, minWidth: 180, priority: 1 },
+  { id: 'started',  label: 'Started',  sortValue: p => p.startedAt, width: 128, minWidth: 128, priority: 3 },
+  { id: 'status',   label: 'Status',   sortValue: p => p.status,    naturalDir: 'asc', width: 100, minWidth: 84, priority: 2 },
 ];
 
 // ProblemsSection — embeds the former /problems page table inline.
@@ -793,7 +795,7 @@ export function ProblemsSection({ serviceFilter, navDisabled = false }: {
                           } />
                       </div>
                     </td>
-                    <td className="mono row-cell"><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{tsLong(p.startedAt)}</Link></td>
+                    <td className="mono row-cell" title={tsLong(p.startedAt)}><Link to={href} replace className="row-link" onClick={e => e.stopPropagation()}>{tsCompact(p.startedAt)}</Link></td>
                     <td className="row-cell">
                       {/* v0.10.922 (sade palet adım 1) — durum tonu tek
                           sözlükten (ProblemDetail STATUS_TONE): OPEN/ACK

@@ -28,7 +28,7 @@ import {
   useCreateAnomalySilence, useDeleteAnomalySilence,
   useBulkDeleteAnomalySilences,
 } from '@/lib/queries';
-import { fmtNum, tsLong } from '@/lib/utils';
+import { fmtNum, tsCompact, tsLong } from '@/lib/utils';
 import { logsHref } from '@/lib/logsUrl';
 import { AnomalyDetailDrawer } from './AnomalyDetailDrawer';
 import { RecurringMarker } from './RecurringMarker'; // v0.10.1049
@@ -405,18 +405,21 @@ function anomalyKindLabel(kind: AnomalyEvent['kind']): string {
 // içerikleri AYNEN korundu; kazanılan tek şey sıralama + yeniden
 // boyutlandırma + kalıcı genişlik. Pattern kolonu '24%' yerine flex:true —
 // yüzde bir px genişliğe çevrilseydi geniş desenler kırpılırdı.
+// v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — okunurluk tabanları +
+// öncelik ("+N sütun"); damgalar yılsız (tsCompact, tam damga title'da) —
+// 168 px'lik tam damga (173 px isteyen) her genişlikte 5 px kesiliyordu.
 const ANOMALY_HISTORY_COLS: ColumnDef<AnomalyEvent>[] = [
-  { id: 'status',   label: 'Status',      sortValue: e => e.status,                 naturalDir: 'asc', width: 76 },
-  { id: 'pattern',  label: 'Pattern',     sortValue: e => e.pattern,                naturalDir: 'asc', flex: true },
-  { id: 'service',  label: 'Service',     sortValue: e => e.service,                naturalDir: 'asc', width: 260 },
-  { id: 'kind',     label: 'Kind',        sortValue: e => anomalyKindLabel(e.kind), naturalDir: 'asc', width: 80 },
+  { id: 'status',   label: 'Status',      sortValue: e => e.status,                 naturalDir: 'asc', width: 80, minWidth: 76, priority: 1 },
+  { id: 'pattern',  label: 'Pattern',     sortValue: e => e.pattern,                naturalDir: 'asc', flex: true, minWidth: 200, priority: 1 },
+  { id: 'service',  label: 'Service',     sortValue: e => e.service,                naturalDir: 'asc', width: 240, minWidth: 140, priority: 1 },
+  { id: 'kind',     label: 'Kind',        sortValue: e => anomalyKindLabel(e.kind), naturalDir: 'asc', width: 80, minWidth: 72, priority: 2 },
   // Etiketteki boşluk SERT boşluk (U+00A0) — eski markup'taki &nbsp;'in
   // aynısı, "Peak" ile "×" iki satıra bölünmesin.
-  { id: 'peak',     label: 'Peak ×', sortValue: e => e.peakRatio,              numeric: true, width: 56 },
+  { id: 'peak',     label: 'Peak ×', sortValue: e => e.peakRatio,              numeric: true, width: 76, minWidth: 76, priority: 2 },
   // Zaman kolonları sola hizalı mono kalıyor (numeric:true başlığı sağa
   // iterdi) — yalnız sıralanabilirlik ekleniyor.
-  { id: 'started',  label: 'Started',     sortValue: e => e.startedAt,              width: 168 }, // v0.10.739 — 13 px damga
-  { id: 'lastSeen', label: 'Last seen',   sortValue: e => e.lastSeen,               width: 168 },
+  { id: 'started',  label: 'Started',     sortValue: e => e.startedAt,              width: 136, minWidth: 136, priority: 3 }, // v0.10.739 — 13 px damga
+  { id: 'lastSeen', label: 'Last seen',   sortValue: e => e.lastSeen,               width: 136, minWidth: 136, priority: 3 },
 ];
 
 // AnomalyTable — extracted from HistorySection so the active +
@@ -520,13 +523,13 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
                 </td>
                 <td className="num" style={{ fontWeight: 700 }}>{e.peakRatio.toFixed(1)}</td>
                 {/* v0.10.739 — tarih damgası 13 px (.ib-when). */}
-                <td className="mono ib-when cell-faint">
-                  {tsLong(e.startedAt)}
+                <td className="mono ib-when cell-faint" title={tsLong(e.startedAt)}>
+                  {tsCompact(e.startedAt)}
                   {/* v0.10.1049 — Started bu bölümün başlangıcı; yinelenen
                       olayda altında nötr işaret, ilk görülme ipucunda. */}
                   <RecurringMarker episodeCount={e.episodeCount} firstStartedAt={e.firstStartedAt} priorDeploy={e.priorDeploy} line />
                 </td>
-                <td className="mono ib-when cell-faint">{tsLong(e.lastSeen)}</td>
+                <td className="mono ib-when cell-faint" title={tsLong(e.lastSeen)}>{tsCompact(e.lastSeen)}</td>
                 <td>
                   {/* v0.9.477 — satır-içi panel bir tablo hücresinde
                       satırı şişiriyordu; cevap artık sağ AI çekmecesinde. */}

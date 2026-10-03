@@ -1763,6 +1763,28 @@ tbody td.cell-wrap { max-width: none; white-space: normal; overflow: visible; te
    `.row-link`in İÇİNDE: link kendi nowrap + "…" kuralını taşır (blok) ve
    td.cell-wrap'in sarmasını geri alırdı. Link de sarar (aynı dört bildirim). */
 tbody td.cell-wrap > .row-link { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — hücre içindeki flex
+   satırın METİN parçası. `tbody td`nin "…" kuralı yalnız satır içi içeriğe
+   işler; flex bir satırda (tip + "<1h" rozeti gibi) metin "…" olmadan
+   kesiliyordu (CLAUDE.md tuzağı: fixed + nowrap + dar genişlik sessizce
+   kırpar). `min-width: 0` flex öğesinin içerik genişliğinin altına inmesine
+   izin verir. */
+.dt-trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v0.10.1068 — "+N sütun" (ui/DataTable/HeadMenu.tsx): kaba sığmadığı için
+   gizlenen kolon varken ⋯'nin yerini alır ve HEP görünür (hover beklemez);
+   zemin ⋯ ile aynı (altındaki etiket ucunu örter). Yer, sığdırmada son
+   görünür kolona ayrılır (DataTable.tsx HIDDEN_AFFORD_PX). */
+.dt-menu .dt-hidden-cols {
+  max-height: 100%; white-space: nowrap; color: var(--text2);
+  background: var(--bg1); box-shadow: -4px 0 0 var(--bg1);
+}
+.dt-menu .dt-hidden-cols:hover, .dt-menu .dt-hidden-cols[aria-expanded="true"] { color: var(--text); }
+/* Tetik hep görünür olduğundan host başlığın etiketi altında kalmasın (sağa
+   yaslı sayı/zaman başlığında tam üstüne biniyordu): ayrılan pay kadar sağ
+   dolgu. Yoğunluk kuralını (`[data-density] thead th`, dosyada SONRA) ikinci
+   seçici yener. */
+thead th.dt-menu-host--hidden, [data-density] thead th.dt-menu-host--hidden { padding-right: 82px; }
+thead th.dt-menu-host--hidden.col-actions, [data-density] thead th.dt-menu-host--hidden.col-actions { padding-right: 12px; }
 /* v0.10.939 (tablo standardı T8) — `kind: 'actions'` kolonu (`col-actions`,
    td + th): başlıksız, sağa yaslı (satır içi eylem + ⋯). Hücre table-cell
    KALIR; esneme gerekirse içteki `.cell-actions` sarmalayıcısında (aşağıdaki
