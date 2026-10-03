@@ -14,7 +14,7 @@
 // SAF: React yok, yalnız href.
 
 import { parseDbHealthRuleId } from '@/lib/problemSubject';
-import { databaseDetailHref } from '@/pages/databases/databaseParam';
+import { databaseDetailHref, DATABASE_ERRORS_ANCHOR } from '@/pages/databases/databaseParam';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { windowRangeParam } from '@/lib/urlState';
 
@@ -25,6 +25,10 @@ export interface DbHealthPivots {
   tracesHref: string;
   /** Yalnız hatalı trace'ler. */
   errorTracesHref: string;
+  /** v0.10.1083 — Databases detayının "Errors on this database" kartı (hata
+   *  kodu → exception tipi → mesaj kırılımı, /api/databases/errors), aynı
+   *  pencere; sayfa çapaya kayar. */
+  errorsHref: string;
 }
 
 export function dbHealthPivots(
@@ -44,5 +48,8 @@ export function dbHealthPivots(
   const traces = (hasError: boolean) => dbTracesHref({
     window, system: ref.system, instance: ref.instance, dbName: ref.dbName, hasError,
   });
-  return { databaseHref, tracesHref: traces(false), errorTracesHref: traces(true) };
+  return {
+    databaseHref, tracesHref: traces(false), errorTracesHref: traces(true),
+    errorsHref: `${databaseHref}#${DATABASE_ERRORS_ANCHOR}`,
+  };
 }

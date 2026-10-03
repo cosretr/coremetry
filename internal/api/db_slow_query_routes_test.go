@@ -45,6 +45,11 @@ func TestValidateDBHealthAndKeepStored(t *testing.T) {
 		{"çağıran çağrı tabanı 0", func(h *chstore.DBHealthConfig) { h.MinCallerCalls = 0 }},
 		{"çağıran 0", func(h *chstore.DBHealthConfig) { h.MinCallers = 0 }},
 		{"tavan 0", func(h *chstore.DBHealthConfig) { h.MaxNewPerTick = 0 }},
+		// v0.10.1083 — mutlak hata sayısı kolu.
+		{"hata sayısı tabanı 5 altı", func(h *chstore.DBHealthConfig) { h.MinErrorCount = 4 }},
+		{"hata artış katı 1 altı", func(h *chstore.DBHealthConfig) { h.ErrorRiseFactor = 0.5 }},
+		{"hata artış katı 100 üstü", func(h *chstore.DBHealthConfig) { h.ErrorRiseFactor = 101 }},
+		{"çağıran hata tabanı çok büyük", func(h *chstore.DBHealthConfig) { h.MinCallerErrors = 2000000 }},
 	} {
 		c := base
 		h := *base.Health
@@ -52,6 +57,21 @@ func TestValidateDBHealthAndKeepStored(t *testing.T) {
 		c.Health = &h
 		if err := validateDBSlowQuery(c); err == nil {
 			t.Errorf("%s: hata bekleniyordu", tc.n)
+		}
+	}
+	// v0.10.1083 — alanı bilmeyen eski sekme (yeni alanlar 0) reddedilmez;
+	// Normalize varsayılanı (50 / 3 / 10) yazar.
+	{
+		c := base
+		h := *base.Health
+		h.MinErrorCount, h.ErrorRiseFactor, h.MinCallerErrors = 0, 0, 0
+		c.Health = &h
+		if err := validateDBSlowQuery(c); err != nil {
+			t.Errorf("eski sekmenin sıfır alanları kabul edilmeli: %v", err)
+		}
+		n := chstore.NormalizeDBSlowQuery(c)
+		if n.Health.MinErrorCount != 50 || n.Health.ErrorRiseFactor != 3 || n.Health.MinCallerErrors != 10 {
+			t.Errorf("normalize varsayılanı yazmalı: %+v", n.Health)
 		}
 	}
 

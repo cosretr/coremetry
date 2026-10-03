@@ -63,6 +63,17 @@ func validateDBSlowQuery(c chstore.DBSlowQueryConfig) error {
 		if h.MaxNewPerTick < 1 || h.MaxNewPerTick > 200 {
 			return fmt.Errorf("health.maxNewPerTick must be between 1 and 200")
 		}
+		// v0.10.1083 — mutlak hata sayısı kolu. 0 = alan gelmedi (alanı bilmeyen
+		// eski sekme) → Normalize varsayılanı yazar; yalnız DOLU değer sınanır.
+		if h.MinErrorCount != 0 && (h.MinErrorCount < 5 || h.MinErrorCount > 10000000) {
+			return fmt.Errorf("health.minErrorCount must be between 5 and 10000000")
+		}
+		if h.ErrorRiseFactor != 0 && (h.ErrorRiseFactor < 1 || h.ErrorRiseFactor > 100) {
+			return fmt.Errorf("health.errorRiseFactor must be between 1 and 100")
+		}
+		if h.MinCallerErrors != 0 && (h.MinCallerErrors < 1 || h.MinCallerErrors > 1000000) {
+			return fmt.Errorf("health.minCallerErrors must be between 1 and 1000000")
+		}
 	}
 	return nil
 }
@@ -107,8 +118,10 @@ func (s *Server) putDBSlowQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "settings.db_slow_query.update", "settings", "db_slow_query",
 		fmt.Sprintf(`{"enabled":%v,"thresholdMs":%v,"criticalMs":%v,"minExecutions":%d,"forBuckets":%d,"cooldownSec":%d,`+
-			`"health":{"enabled":%v,"errorPct":%v,"p99Ms":%v,"p99RiseFactor":%v,"minCalls":%d,"minCallerCalls":%d,"minCallers":%d,"maxNewPerTick":%d}}`,
+			`"health":{"enabled":%v,"errorPct":%v,"p99Ms":%v,"p99RiseFactor":%v,"minCalls":%d,"minCallerCalls":%d,"minCallers":%d,"maxNewPerTick":%d,`+
+			`"minErrorCount":%d,"errorRiseFactor":%v,"minCallerErrors":%d}}`,
 			saved.Enabled, saved.ThresholdMs, saved.CriticalMs, saved.MinExecutions, saved.ForBuckets, saved.CooldownSec,
-			h.On(), h.ErrorPct, h.P99Ms, h.P99RiseFactor, h.MinCalls, h.MinCallerCalls, h.MinCallers, h.MaxNewPerTick))
+			h.On(), h.ErrorPct, h.P99Ms, h.P99RiseFactor, h.MinCalls, h.MinCallerCalls, h.MinCallers, h.MaxNewPerTick,
+			h.MinErrorCount, h.ErrorRiseFactor, h.MinCallerErrors))
 	writeJSON(w, saved)
 }

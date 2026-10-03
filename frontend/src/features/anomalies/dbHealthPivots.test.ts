@@ -82,5 +82,21 @@ describe('dbHealthPivots — Problem detayı pivotları', () => {
     expect(src).toContain('dbHealthPivots(problem.ruleId, probWindow)');
     expect(src).toContain('label="◫ Veritabanı sayfası"');
     expect(src).toContain(`label="⋮ Trace'ler"`);
+    // v0.10.1083 — "Hata kırılımı" pivotu (ORA kodu → exception → mesaj kartı).
+    expect(src).toContain('to={dbHealthLinks.errorsHref} label="⚠ Hata kırılımı"');
+  });
+  // v0.10.1083 — operatör: "Oracle hataları da problemse hâlâ düşmüyor". Hata
+  // sayısı kolunun açtığı Problem'den Databases detayının "Errors on this
+  // database" kartına (/api/databases/errors) tek tık.
+  it('Hata kırılımı: Databases detayı + aynı pencere + #db-errors çapası; sayfa çapayı taşıyor', () => {
+    const p = dbHealthPivots('db-health:oracle@db-host-01/crm-db', win)!;
+    const u = new URL(p.errorsHref, 'http://x');
+    expect(u.pathname).toBe('/database');
+    expect(u.hash).toBe('#db-errors');
+    expect(u.searchParams.get('name')).toBe('crm-db');
+    expect(u.searchParams.get('range')).toBe(new URL(p.databaseHref, 'http://x').searchParams.get('range'));
+    const page = readFileSync(resolve(__dirname, '../../pages/DatabaseDetail.tsx'), 'utf8');
+    expect(page).toContain('<div id={DATABASE_ERRORS_ANCHOR} style={{ marginTop: 12 }}>\n              <DatabaseErrorsSection');
+    expect(page).toContain('scrollIntoView');
   });
 });

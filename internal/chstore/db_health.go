@@ -31,8 +31,13 @@ package chstore
 //
 // p99 GÖRELİ (inceleme düzeltmesi, v0.10.1069 kararıyla uyum: filo geneli
 // mutlak gecikme eşiği gürültü — raporlama veritabanları gün boyu 2 s
-// üstünde): ikinci okuma DBHealthReferenceP99 aynı veritabanının 24 sa önceki
+// üstünde): ikinci okuma DBHealthReference aynı veritabanının 24 sa önceki
 // aynı kovalarının p99'unu db_summary_5m'den getirir; karar evaluator'da.
+//
+// v0.10.1083 — MUTLAK hata sayısı kolu (span tarafı ORA patlaması tüm
+// veritabanının çağrıları içinde %5'e ulaşmıyordu): ana okuma çağıran başına
+// "≥ minCallerErrors hata" bayrağını sayar, referans okuması dünkü kovanın
+// hata sayısını da getirir (DBHealthReference). Okuma sayısı DEĞİŞMEDİ.
 
 import (
 	"context"
@@ -48,6 +53,9 @@ import (
 const (
 	DBHealthMetricErrorPct = "db.error_pct"
 	DBHealthMetricP99Ms    = "db.p99_ms"
+	// DBHealthMetricErrorCount — v0.10.1083 mutlak hata sayısı kolu (5 dk kova
+	// başına hata; eşik MinErrorCount). Kategori ERROR.
+	DBHealthMetricErrorCount = "db.error_count"
 )
 
 // dbHealthRowLimit — iki okumanın satır tavanı. HAVING yalnız ihlal eden ve
@@ -76,13 +84,22 @@ type DBHealthBucket struct {
 	// AffectedCallers — kovada ≥ MinCallerCalls çağrı yapmış VE kendi
 	// çağrılarında hata % ≥ ErrorPct YA DA p99 ≥ P99Ms olan farklı çağıran.
 	AffectedCallers uint64
-	// TopCallers — etkilenen çağıranlardan çağrı sayısına göre ilk ≤3.
+	// ErrorCallers — v0.10.1083: kovada ≥ MinCallerErrors HATA üretmiş farklı
+	// (batch olmayan) çağıran — mutlak hata sayısı kolunun çağıran kapısı.
+	ErrorCallers uint64
+	// TopCallers — etkilenen (ya da ≥ MinCallerErrors hatalı) çağıranlardan
+	// çağrı sayısına göre ilk ≤3.
 	TopCallers []string
 	// RefP99Ms / HasRef — aynı veritabanının 24 sa önceki aynı kovasındaki
-	// p99'u (DBHealthReferenceP99; okumadan sonra evaluator doldurur). HasRef
+	// p99'u (DBHealthReference; okumadan sonra evaluator doldurur). HasRef
 	// false = referans yok → p99 boyutu bu kova için KAPALI.
 	RefP99Ms float64
 	HasRef   bool
+	// RefErrors / HasErrRef — v0.10.1083: aynı kovanın 24 sa önceki HATA sayısı.
+	// HasErrRef = dünkü kova VAR (çağrısı olan satır; hata 0 olabilir). false →
+	// mutlak hata sayısı kolu bu kova için KAPALI.
+	RefErrors uint64
+	HasErrRef bool
 }
 
 // RuleID — satırın db-health kural id'si.
@@ -97,11 +114,16 @@ func (b DBHealthBucket) ErrorPct() float64 {
 }
 
 // dbHealthBucketsSQL — SAF. batchCond boşsa batch dalı YOK (kalıp listesi
-// boş = kural kapalı). Bind sırası: minCallerCalls, errorPct, p99Ms, since,
-// until, [kalıplar], errorPct, p99Ms, açık kural id'leri (dizi).
+// boş = kural kapalı). Bind sırası: minCallerCalls, errorPct, p99Ms,
+// minCallerErrors, since, until, [kalıplar], errorPct, p99Ms, minErrorCount,
+// açık kural id'leri (dizi).
 //
 // Çağıranın p99'u TEK birleştirmeyle: durum bir kez -MergeState ile kurulur,
 // finalizeAggregation onu sonlandırır (ikinci tDigest birleştirmesi yok).
+//
+// v0.10.1083 — mutlak hata sayısı kolu AYNI sorguda: çağıranın "hata
+// üretti" bayrağı (c_err_affected, ≥ minCallerErrors hata), dışta sayısı
+// (err_callers), HAVING'de hata sayısı tabanı. Yeni okuma YOK.
 func dbHealthBucketsSQL(batchCond string) string {
 	excl := ""
 	if batchCond != "" {
@@ -115,21 +137,23 @@ func dbHealthBucketsSQL(batchCond string) string {
 		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(c_q), 3) / 1e6 AS p99_ms,
 		       count()                                                            AS callers,
 		       countIf(c_affected)                                                AS affected,
+		       countIf(c_err_affected)                                            AS err_callers,
 		       arraySlice(arrayMap(x -> x.1, arrayReverseSort(x -> x.2,
-		         groupArrayIf((service_name, c_calls), c_affected))), 1, 3)       AS top_callers
+		         groupArrayIf((service_name, c_calls), c_affected OR c_err_affected))), 1, 3) AS top_callers
 		FROM (
 			SELECT db_system, instance, db_name, service_name, time_bucket,
 			       countMerge(span_count_state)                                  AS c_calls,
 			       countIfMerge(error_count_state)                               AS c_errs,
 			       quantilesTDigestMergeState(0.5, 0.95, 0.99)(duration_q_state) AS c_q,
 			       c_calls >= ? AND ((c_errs * 100 >= ? * c_calls)
-			         OR (arrayElement(finalizeAggregation(c_q), 3) / 1e6 >= ?))  AS c_affected
+			         OR (arrayElement(finalizeAggregation(c_q), 3) / 1e6 >= ?))  AS c_affected,
+			       c_errs >= ?                                                   AS c_err_affected
 			FROM db_caller_summary_5m
 			WHERE time_bucket >= ? AND time_bucket < ?` + excl + `
 			GROUP BY db_system, instance, db_name, service_name, time_bucket
 		)
 		GROUP BY db_system, instance, db_name, time_bucket
-		HAVING (errs * 100 >= ? * calls) OR (p99_ms >= ?)
+		HAVING (errs * 100 >= ? * calls) OR (p99_ms >= ?) OR (errs >= ?)
 		    OR ` + dbHealthRuleIDSQL + ` IN ?
 		ORDER BY affected DESC, calls DESC
 		LIMIT ` + itoa(dbHealthRowLimit) + `
@@ -145,9 +169,9 @@ func dbHealthBucketsQuery(since, until time.Time, cfg DBHealthConfig, sens Anoma
 		openIDs = []string{}
 	}
 	cond, bargs := sens.BatchServiceSQL("service_name")
-	args := []any{cfg.MinCallerCalls, cfg.ErrorPct, cfg.P99Ms, since, until}
+	args := []any{cfg.MinCallerCalls, cfg.ErrorPct, cfg.P99Ms, cfg.MinCallerErrors, since, until}
 	args = append(args, bargs...)
-	args = append(args, cfg.ErrorPct, cfg.P99Ms, openIDs)
+	args = append(args, cfg.ErrorPct, cfg.P99Ms, cfg.MinErrorCount, openIDs)
 	return dbHealthBucketsSQL(cond), args
 }
 
@@ -165,7 +189,7 @@ func (s *Store) DBHealthBuckets(ctx context.Context, since, until time.Time, cfg
 	for rows.Next() {
 		var b DBHealthBucket
 		if err := rows.Scan(&b.DBSystem, &b.Instance, &b.DBName, &b.Bucket,
-			&b.Calls, &b.Errors, &b.P99Ms, &b.Callers, &b.AffectedCallers, &b.TopCallers); err != nil {
+			&b.Calls, &b.Errors, &b.P99Ms, &b.Callers, &b.AffectedCallers, &b.ErrorCallers, &b.TopCallers); err != nil {
 			return nil, false, err
 		}
 		b.P99Ms = finiteOrZero(b.P99Ms)
@@ -178,13 +202,20 @@ func (s *Store) DBHealthBuckets(ctx context.Context, since, until time.Time, cfg
 }
 
 // dbHealthReferenceSQL — SAF: aynı veritabanlarının 24 sa önceki kovalarının
-// p99'u. Kaynak db_summary_5m (çağıran boyutu gerekmez; Databases listesinin
-// MV'si). Süzgeç: yalnız p99 adayı veritabanlarının kural id'leri (dizi).
-// Bind sırası: since, until, kural id'leri.
+// p99'u ve (v0.10.1083) çağrı + hata sayısı — aynı okuma, iki ek kolon.
+// Kaynak db_summary_5m (çağıran boyutu gerekmez; Databases listesinin MV'si).
+// Süzgeç: yalnız p99 ya da hata sayısı adayı veritabanlarının kural id'leri
+// (dizi). Bind sırası: since, until, kural id'leri.
+//
+// Bilinen asimetri: db_summary_5m batch çağıranları da sayar (cari okuma
+// düşürür) — referans en kötü ihtimalle YÜKSEK çıkar, kol temkinli yönde
+// susar (sahte açılış değil).
 func dbHealthReferenceSQL() string {
 	return `
 		SELECT db_system, instance, db_name, time_bucket,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms,
+		       countMerge(span_count_state)                                                     AS calls,
+		       countIfMerge(error_count_state)                                                  AS errs
 		FROM db_summary_5m
 		WHERE time_bucket >= ? AND time_bucket < ?
 		  AND ` + dbHealthRuleIDSQL + ` IN ?
@@ -200,11 +231,21 @@ type DBHealthRefKey struct {
 	Bucket int64
 }
 
-// DBHealthReferenceP99 — ruleIDs için [since, until) penceresindeki kova
-// p99'ları; anahtarın kovası shift kadar ileri kaydırılır (24 sa önceki kova
-// → bugünkü karşılığı). ruleIDs boşsa okuma yok.
-func (s *Store) DBHealthReferenceP99(ctx context.Context, since, until time.Time, shift time.Duration, ruleIDs []string) (map[DBHealthRefKey]float64, error) {
-	out := map[DBHealthRefKey]float64{}
+// DBHealthRef — dünkü aynı kovanın ölçüsü. P99Ms 0 = p99 referansı yok (kova
+// var ama tDigest boş); çağrısı olan satırın VARLIĞI hata sayısı referansıdır
+// (Errors 0 olabilir: "dün bu saatte hiç hata yoktu" geçerli bir referans).
+type DBHealthRef struct {
+	P99Ms  float64
+	Calls  uint64
+	Errors uint64
+}
+
+// DBHealthReference — ruleIDs için [since, until) penceresindeki kova
+// ölçüleri; anahtarın kovası shift kadar ileri kaydırılır (24 sa önceki kova
+// → bugünkü karşılığı). ruleIDs boşsa okuma yok. Çağrısı da p99'u da olmayan
+// satır atlanır (referans yok).
+func (s *Store) DBHealthReference(ctx context.Context, since, until time.Time, shift time.Duration, ruleIDs []string) (map[DBHealthRefKey]DBHealthRef, error) {
+	out := map[DBHealthRefKey]DBHealthRef{}
 	if len(ruleIDs) == 0 {
 		return out, nil
 	}
@@ -217,14 +258,16 @@ func (s *Store) DBHealthReferenceP99(ctx context.Context, since, until time.Time
 		var (
 			sys, inst, db string
 			bucket        time.Time
-			p99           float64
+			ref           DBHealthRef
 		)
-		if err := rows.Scan(&sys, &inst, &db, &bucket, &p99); err != nil {
+		if err := rows.Scan(&sys, &inst, &db, &bucket, &ref.P99Ms, &ref.Calls, &ref.Errors); err != nil {
 			return nil, err
 		}
-		if p99 = finiteOrZero(p99); p99 > 0 {
-			out[DBHealthRefKey{RuleID: DBHealthRuleID(sys, inst, db), Bucket: bucket.Add(shift).Unix()}] = p99
+		ref.P99Ms = finiteOrZero(ref.P99Ms)
+		if ref.Calls == 0 && ref.P99Ms <= 0 {
+			continue
 		}
+		out[DBHealthRefKey{RuleID: DBHealthRuleID(sys, inst, db), Bucket: bucket.Add(shift).Unix()}] = ref
 	}
 	return out, rows.Err()
 }

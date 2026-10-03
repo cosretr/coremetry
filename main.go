@@ -1169,6 +1169,8 @@ func main() {
 				SourceID: src.ID, SourceName: src.Name, Query: oracle.CounterQuery, GroupBy: oracle.CounterGroupBy,
 				Subject:    oracleSubjects.ResolveFor(src.ID),
 				OnEvidence: oracleEnricher.OnEvidence,
+				// v0.10.1083 — sürdürme: kaynak ayarındaki ardışık dakika (varsayılan 10).
+				Thresholds: anomaly.ExternalThresholds{Dwell: oracle.DwellOf(src)},
 			})
 			if err != nil {
 				log.Printf("[oracle/%s] %s: tarama düştü: %v", mode, src.Name, err)

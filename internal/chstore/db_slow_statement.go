@@ -41,7 +41,9 @@ type DBSlowQueryConfig struct {
 
 // DBHealthConfig — veritabanı sağlık kuralı (v0.10.1073). İki ardışık 5 dk
 // kovada db hata % ≥ ErrorPct YA DA db p99 ≥ P99Ms; kova başına ≥ MinCalls
-// çağrı VE ≥ MinCallers etkilenen (batch olmayan) çağıran servis.
+// çağrı VE ≥ MinCallers etkilenen (batch olmayan) çağıran servis. v0.10.1083:
+// YA DA mutlak hata sayısı kolu (MinErrorCount / ErrorRiseFactor /
+// MinCallerErrors).
 type DBHealthConfig struct {
 	// Enabled — varsayılan AÇIK (operatör onayı "go"); *bool: false ile
 	// "alan yok" ayrılsın (aiops §11). Normalize nil'i true yapar.
@@ -65,6 +67,16 @@ type DBHealthConfig struct {
 	MinCallers int `json:"minCallers"`
 	// MaxNewPerTick — tik başına yeni açılış tavanı (fırtına kemeri, vars. 20).
 	MaxNewPerTick int `json:"maxNewPerTick"`
+	// v0.10.1083 — MUTLAK hata SAYISI kolu (operatör: "Oracle hataları da
+	// problemse hâlâ düşmüyor"): span tarafındaki ORA patlaması tüm
+	// veritabanının çağrıları içinde %5'e ulaşmıyordu. Kova ihlali: hata sayısı
+	// ≥ MinErrorCount VE ≥ ErrorRiseFactor × aynı veritabanının 24 sa önceki
+	// aynı kovası (dünkü kova yoksa kol o kova için KAPALI) VE ≥ MinCallers
+	// çağıranın her biri ≥ MinCallerErrors hata. 0 = varsayılan (eski blob /
+	// alanı bilmeyen eski sekme).
+	MinErrorCount   uint64  `json:"minErrorCount"`   // varsayılan 50 / 5 dk; 2× → critical
+	ErrorRiseFactor float64 `json:"errorRiseFactor"` // varsayılan 3 (dünkü aynı kovaya göre)
+	MinCallerErrors uint64  `json:"minCallerErrors"` // varsayılan 10 — çağıran başına hata tabanı
 }
 
 // On — etkin mi (nil = varsayılan açık).
@@ -72,7 +84,8 @@ func (h DBHealthConfig) On() bool { return h.Enabled == nil || *h.Enabled }
 
 func DefaultDBHealth() DBHealthConfig {
 	on := true
-	return DBHealthConfig{Enabled: &on, ErrorPct: 5, P99Ms: 2000, P99RiseFactor: 3, MinCallerCalls: 10, MinCalls: 100, MinCallers: 2, MaxNewPerTick: 20}
+	return DBHealthConfig{Enabled: &on, ErrorPct: 5, P99Ms: 2000, P99RiseFactor: 3, MinCallerCalls: 10, MinCalls: 100, MinCallers: 2, MaxNewPerTick: 20,
+		MinErrorCount: 50, ErrorRiseFactor: 3, MinCallerErrors: 10}
 }
 
 // NormalizeDBHealth — sıfır/negatif alan varsayılana; ErrorPct 100'de
@@ -105,6 +118,16 @@ func NormalizeDBHealth(h DBHealthConfig) DBHealthConfig {
 	}
 	if h.MaxNewPerTick <= 0 {
 		h.MaxNewPerTick = d.MaxNewPerTick
+	}
+	if h.MinErrorCount == 0 {
+		h.MinErrorCount = d.MinErrorCount
+	}
+	if h.ErrorRiseFactor < 1 {
+		// 0 (alan yok) ve <1 (dünden AZ hatayı "artış" sayardı) → varsayılan.
+		h.ErrorRiseFactor = d.ErrorRiseFactor
+	}
+	if h.MinCallerErrors == 0 {
+		h.MinCallerErrors = d.MinCallerErrors
 	}
 	return h
 }

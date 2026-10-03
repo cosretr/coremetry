@@ -54,8 +54,10 @@ func TestExternalScan_ClustersSameFirstDimension(t *testing.T) {
 	if cluster == nil || len(f.upserts) != 1 {
 		t.Fatalf("tek küme Problem'i bekleniyordu: %+v", f.upserts)
 	}
-	if cluster.Service != "ext:extsrc/OP_PAY" || cluster.Kind != chstore.ProblemKindExternal || cluster.Value != 4 {
-		t.Fatalf("özne ext:<kaynak>/<ilk boyut>, kind external, Value=üye sayısı: %+v", *cluster)
+	// v0.10.1083 — Value/Threshold = en güçlü üyenin değeri / tabanlı eşiği
+	// (60 / max(medyan 5, taban 5)); üye sayısı gerekçede kalır.
+	if cluster.Service != "ext:extsrc/OP_PAY" || cluster.Kind != chstore.ProblemKindExternal || cluster.Value != 60 || cluster.Threshold != 5 {
+		t.Fatalf("özne ext:<kaynak>/<ilk boyut>, kind external, Value=en güçlü üye: %+v", *cluster)
 	}
 	if !strings.Contains(cluster.Description, "E00") || !strings.Contains(cluster.Description, "4") {
 		t.Fatalf("gerekçe üyeleri ve sayıyı söylemeli: %q", cluster.Description)

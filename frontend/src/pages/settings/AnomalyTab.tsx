@@ -1243,7 +1243,7 @@ function ProblemPrioritySection() {
 
 // v0.10.1073 — db-health varsayılanları (Go chstore.DefaultDBHealth ikizi;
 // dbSlowQuery.test.ts pinler).
-const DB_HEALTH_DEFAULTS: DBHealthConfig = { enabled: true, errorPct: 5, p99Ms: 2000, p99RiseFactor: 3, minCallerCalls: 10, minCalls: 100, minCallers: 2, maxNewPerTick: 20 };
+const DB_HEALTH_DEFAULTS: DBHealthConfig = { enabled: true, errorPct: 5, p99Ms: 2000, p99RiseFactor: 3, minCallerCalls: 10, minCalls: 100, minCallers: 2, maxNewPerTick: 20, minErrorCount: 50, errorRiseFactor: 3, minCallerErrors: 10 };
 
 // ── DB yavaş sorgu dedektörü (v0.10.325, operatör isteği) ────────────
 // EscalationSection ile aynı anatomi: yükle → düzenle → kaydet; evaluator
@@ -1320,8 +1320,9 @@ function DBSlowQuerySection() {
               yanında, aynı blob ve aynı Kaydet. */}
           <h3 style={{ fontSize: 13, fontWeight: 600, margin: '22px 0 6px' }}>Database health</h3>
           <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.55 }}>
-            Veritabanının hata oranı (mutlak) ya da p99'u (eşik + dünkü aynı saate göre artış) 2 ardışık 5 dk
-            kovada aşılır ve en az iki çağıran servis etkilenirse veritabanı öznesinde Problem açılır; eşiğin 2 katı critical (P1).
+            Veritabanının hata oranı (mutlak), p99'u (eşik + dünkü aynı saate göre artış) ya da hata sayısı (taban + dünkü
+            aynı saate göre artış) 2 ardışık 5 dk kovada aşılır ve en az iki çağıran servis etkilenirse veritabanı öznesinde
+            Problem açılır; eşiğin 2 katı critical (P1).
           </p>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
             <input type="checkbox" checked={health.enabled}
@@ -1356,6 +1357,20 @@ function DBSlowQuerySection() {
             <Field label="max new Problems / tick">
               <input type="number" min={1} max={200} value={health.maxNewPerTick} onChange={hnum('maxNewPerTick')} disabled={!health.enabled} />
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 20 — fırtınada her dakika en çok bu kadar yeni açılış.</div>
+            </Field>
+            {/* v0.10.1083 — mutlak hata sayısı kolu: yüksek hacimli veritabanında ORA
+                patlaması hata yüzdesine yansımıyordu. */}
+            <Field label="error count threshold / 5 min">
+              <input type="number" min={5} max={10000000} value={health.minErrorCount} onChange={hnum('minErrorCount')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 50 — yüzdeden bağımsız hata sayısı tabanı; 2 katı critical (P1).</div>
+            </Field>
+            <Field label="error count rise vs. yesterday (×)">
+              <input type="number" min={1} max={100} step={0.5} value={health.errorRiseFactor} onChange={hnum('errorRiseFactor')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 3 — hata sayısı dün aynı 5 dk'nın bu katı olmalı; dünkü veri yoksa bu kontrol kapalı.</div>
+            </Field>
+            <Field label="minimum errors per caller / 5 min">
+              <input type="number" min={1} max={1000000} value={health.minCallerErrors} onChange={hnum('minCallerErrors')} disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 10 — hata sayısı kolunda bundan az hata alan servis "etkilenen" sayılmaz.</div>
             </Field>
           </div>
           <div style={{ marginTop: 18, display: 'flex', gap: 8, alignItems: 'center' }}>

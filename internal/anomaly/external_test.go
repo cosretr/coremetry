@@ -131,6 +131,11 @@ func TestExternalScan_OpensProblemOnSpike(t *testing.T) {
 	if p.Threshold != 5 {
 		t.Fatalf("baseline median must come from the live series (5), got %v", p.Threshold)
 	}
+	// v0.10.1083 — Threshold artık max(medyan, taban 5): medyan 0 da 5 verirdi.
+	// Medyanın canlı seriden geldiği gerekçe cümlesinden doğrulanır.
+	if !strings.Contains(p.Description, "vs baseline 5 ") {
+		t.Fatalf("gerekçe gerçek medyanı (5) yazmalı: %q", p.Description)
+	}
 	q := f.queries[0]
 	if q.Name != "ext:fail_count" || q.Service != "extsrc" || q.StepSeconds != 60 || len(q.GroupBy) != 2 || q.GroupBy[0] != "OP_CODE" {
 		t.Fatalf("metric query filter: %+v", q)

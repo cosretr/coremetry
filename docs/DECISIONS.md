@@ -1352,6 +1352,31 @@ nitelik taşımadığı için ham `spans`, zaman sınırı + LIMIT + `max_execut
 dolu (ör. arama + Errors). Pin: `chstore/trace_error_histogram_test.go`, `api/trace_error_histogram_test.go`,
 `pages/traces/scopeParams.test.ts`, `volumeSeries.test.ts`.
 
+## 2026-10-03 — Oracle hataları P1'e ulaşır: tablo yolu taban+süre+istisna listesi, db-health mutlak hata sayısı kolu (v0.10.1083)
+
+**Operatör:** "Oracle hataları da problemse hâlâ düşmüyor" → onay "Yap". **Kök neden (iki yol):** (1) Oracle hata
+tablosu serisi seyrek, taban medyanı 0; Problem.Threshold = medyan = 0 iken `computePriority` oran kuramıyor, critical
+satır kaynakta P2'de kalıyordu; üstüne kural id'si (`anomaly:ext:…:ext:error_count`) inbox istisna listesinde
+olmadığından Problems listesinde P3'e çiviliydi. (2) Span tarafındaki ORA patlaması db-health'in hata yüzdesine
+(tüm veritabanının çağrıları üzerinden) yansımıyordu.
+
+**Karar A — tablo yolu:** `Threshold = max(medyan, MinAbsDelta)` (taban 5/dk; ≥10/dk critical → P1; gerekçe gerçek
+medyanı yazar; eski Threshold 0 satırı tazelemede tabana çıkar). Dış küme Problem'i üye sayısıyla değil EN GÜÇLÜ
+ÜYENİN değeri/eşiği ile yayılımın (N / 3) BÜYÜĞÜYLE ölçülür — tek güçlü üye de 50 serilik 6/dk fırtına da P1;
+gerekçe hangi kolun kazandığını yazar. Sürdürme kaynak ayarında `dwellMinutes` (varsayılan 10 ardışık
+dakika, 3–30) → tarayıcının Dwell üst-yazımı. Inbox varsayılan istisna listesine `anomaly:ext:*:ext:error_count` +
+`anomaly-cluster:ext:*` + `anomaly:ext-cap:*`; kayıtlı liste ESKİ varsayılana küme olarak eşitse tek seferlik göçle yeniye taşınır (audit,
+işaret `problem_priority_inbox_keep_v2`), özelleştirilmişse dokunulmaz, bir kez loglanır. `ext-down` listede DEĞİL.
+Kabul edilen bedeller: gölge kipteki Oracle kaynaklarının Problem'leri de Problems listesinde P1/P2 görünür (sayfalama
+yok; kural id'si gölgeyi canlıdan ayıramaz). Oracle kaynaklarında sürdürme küresel 3 dakikadan 10 dakikaya çıkar;
+eski küme satırları tazelenene dek N/3 ölçüsünü taşır.
+
+**Karar B — db-health hata sayısı kolu:** iki ardışık 5 dk kovanın her birinde hata SAYISI ≥ `minErrorCount` (50)
+VE ≥ `errorRiseFactor` (3) × dünkü aynı kova (yoksa kol kapalı) VE ≥ 2 çağıranın her biri ≥ `minCallerErrors` (10)
+hata; ≥ 2×50 critical → P1 (metrik `db.error_count`, kategori ERROR). Okuma sayısı aynı (ana sorgu + referans
+sorgusuna kolon). Kapanış/histerezis diğer kollarla aynı. Problem detayına "Hata kırılımı" pivotu (Databases
+detayının hata kartı, `#db-errors`). Bilinen asimetri: dünkü referans batch çağıranları da sayar → kol temkinli yönde susar.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

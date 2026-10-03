@@ -3,7 +3,7 @@ import {
   emptyOracleSource, validateOracleSource, sourceForSave, sourceFromSnapshot,
   parseTypeFilter, typeFilterToText, defaultTypeFilter,
   ORACLE_DEFAULT_PORT, ORACLE_MAX_EXTRA_WHERE,
-  ORACLE_COLUMN_DISABLED, ORACLE_MAPPING_FIELDS,
+  ORACLE_COLUMN_DISABLED, ORACLE_MAPPING_FIELDS, ORACLE_DEFAULT_DWELL_MIN,
 } from './oracleForm';
 import type { OracleSource, OracleSourceSnapshot } from '@/lib/types';
 
@@ -187,6 +187,9 @@ describe('validateOracleSource — sayısal kelepçeler', () => {
     ['queryTimeoutSec', 4, /5-120/], ['queryTimeoutSec', 121, /5-120/],
     ['intervalSec', 0, undefined], ['intervalSec', 10, undefined], ['intervalSec', 3600, undefined],
     ['intervalSec', 9, /10-3600/], ['intervalSec', 3601, /10-3600/],
+    // v0.10.1083 — sürdürme dakikası (Go oracle.Min/MaxDwellMinutes aynası).
+    ['dwellMinutes', 0, undefined], ['dwellMinutes', 3, undefined], ['dwellMinutes', 30, undefined],
+    ['dwellMinutes', 2, /3-30/], ['dwellMinutes', 31, /3-30/],
   ] as const)('%s=%j', (field, value, want) => {
     const e = validateOracleSource(goodSource({ [field]: value } as Partial<OracleSource>));
     if (want === undefined) expect(e[field]).toBeUndefined();
@@ -467,5 +470,24 @@ describe('özel SQL kipi — inceleme regresyonları', () => {
   it('uzunluk BAYT sayılır (sunucu ile aynı); yalnız-yorum metni reddedilir', () => {
     expect(validateOracleSource(custom({ customSql: "SELECT '" + 'ş'.repeat(4001) + "' FROM dual" })).customSql).toMatch(/bayt/);
     expect(validateOracleSource(custom({ customSql: '-- yalnız not' })).customSql).toMatch(/yorum/);
+  });
+});
+
+// v0.10.1083 — operatör: "Oracle hataları da problemse hâlâ düşmüyor". Hata
+// serisinin sürdürme dakikası kaynak ayarında; varsayılan Go ile aynı (10).
+describe('dwellMinutes — sürdürme dakikası', () => {
+  it('yeni taslak varsayılanı 10, Go DefaultDwellMinutes ile aynı', async () => {
+    expect(emptyOracleSource().dwellMinutes).toBe(ORACLE_DEFAULT_DWELL_MIN);
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const go = readFileSync(resolve(__dirname, '../../../../internal/oracle/settings.go'), 'utf8');
+    expect(go).toMatch(new RegExp(`DefaultDwellMinutes = ${ORACLE_DEFAULT_DWELL_MIN}\\b`));
+    expect(go).toContain('json:"dwellMinutes,omitempty"');
+  });
+  it('gövdeye yalnız > 0 iken girer; snapshot gidiş-dönüşü korur', () => {
+    expect(sourceForSave(goodSource({ dwellMinutes: 15 })).dwellMinutes).toBe(15);
+    expect('dwellMinutes' in sourceForSave(goodSource({ dwellMinutes: 0 }))).toBe(false);
+    const snap = { ...goodSource({ dwellMinutes: 12 }), hasPassword: true, passwordResolved: true } as OracleSourceSnapshot;
+    expect(sourceFromSnapshot(snap).dwellMinutes).toBe(12);
   });
 });

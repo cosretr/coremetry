@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { navHref } from '@/lib/navHref';
@@ -11,7 +11,7 @@ import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { timeRangeToNs } from '@/lib/utils';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
-import { parseDatabasePageRef } from '@/pages/databases/databaseParam';
+import { parseDatabasePageRef, DATABASE_ERRORS_ANCHOR } from '@/pages/databases/databaseParam';
 import {
   DatabaseIdentityHeader, DatabaseSignalStrip, DatabaseTrendCards,
   DatabaseCallersSection, DatabaseStatementsSection, DatabaseEnginePanels,
@@ -112,6 +112,18 @@ export default function DatabaseDetailPage() {
     staleTime: 30_000,
   });
 
+  // v0.10.1083 — `#db-errors` çapası (db-health Problem'inin "Hata kırılımı"
+  // pivotu): hata kartı detay yükü geldikten SONRA DOM'a girer, tarayıcı
+  // kendiliğinden kaydırmaz (Service.tsx #deploys emsali).
+  const detailReady = detailQ.isSuccess;
+  useEffect(() => {
+    if (!detailReady || window.location.hash !== `#${DATABASE_ERRORS_ANCHOR}`) return;
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(DATABASE_ERRORS_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [detailReady]);
+
   // Eski `?stmt=` linkleri (yer imi / paylaşılmış URL) sayfaya taşınır.
   useStmtParamRedirect(range);
   // v0.9.1374 — çekmece emekli, satır tıklaması sayfaya gidiyor.
@@ -206,7 +218,7 @@ export default function DatabaseDetailPage() {
                 sayfasındaki Problems kartının karşılığı). */}
             {/* v0.10.1020 — hangi hata: başarısız çağrılar hata koduna /
                 exception tipine göre (Dynatrace hata analizi karşılığı). */}
-            <div style={{ marginTop: 12 }}>
+            <div id={DATABASE_ERRORS_ANCHOR} style={{ marginTop: 12 }}>
               <DatabaseErrorsSection refObj={refObj} range={range} fromNs={from} toNs={to} />
             </div>
 

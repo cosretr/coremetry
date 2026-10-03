@@ -42,6 +42,10 @@ export const ORACLE_MAX_QUERY_TIMEOUT_SEC = 120;
 export const ORACLE_DEFAULT_INTERVAL_SEC = 60;
 export const ORACLE_MIN_INTERVAL_SEC = 10;
 export const ORACLE_MAX_INTERVAL_SEC = 3600;
+// v0.10.1083 — hata serisinin Problem açması için ardışık dakika (sürdürme).
+export const ORACLE_DEFAULT_DWELL_MIN = 10;
+export const ORACLE_MIN_DWELL_MIN = 3;
+export const ORACLE_MAX_DWELL_MIN = 30;
 export const ORACLE_DEFAULT_TIMESTAMP_COLUMN = 'ERR_TIMESTAMP';
 export const ORACLE_DEFAULT_TYPE_COLUMN = 'ERR_TYPE';
 export const ORACLE_MAX_EXTRA_WHERE = 500;
@@ -112,7 +116,7 @@ export type OracleField =
   | 'name' | 'dsn' | 'host' | 'port' | 'serviceName' | 'user' | 'password'
   | 'passwordRef' | 'schema' | 'table' | 'timestampColumn' | 'typeColumn'
   | 'extraWhere' | 'typeFilter' | 'maxOpenConns' | 'queryTimeoutSec' | 'intervalSec'
-  | 'timezone' | 'columns' | 'customSql' | 'windowMin';
+  | 'timezone' | 'columns' | 'customSql' | 'windowMin' | 'dwellMinutes';
 
 export type OracleFieldErrors = Partial<Record<OracleField, string>>;
 
@@ -158,6 +162,7 @@ export function emptyOracleSource(): OracleSource {
     problemMode: 'shadow', // v0.10.897 — gölge: Problem açılır, alarm yok
     genericCodes: ['ERR_020'],
     ignoreCodes: [],
+    dwellMinutes: ORACLE_DEFAULT_DWELL_MIN, // v0.10.1083
     functionCodeMatch: false, // v0.10.1000
     queryMode: 'table', // v0.10.902
     customSql: '',
@@ -328,6 +333,8 @@ export function validateOracleSource(
   if (qt) e.queryTimeoutSec = qt;
   const iv = clampError(src.intervalSec, ORACLE_MIN_INTERVAL_SEC, ORACLE_MAX_INTERVAL_SEC, 'Poll aralığı (sn)');
   if (iv) e.intervalSec = iv;
+  const dw = clampError(src.dwellMinutes, ORACLE_MIN_DWELL_MIN, ORACLE_MAX_DWELL_MIN, 'Sürdürme (dk)'); // v0.10.1083
+  if (dw) e.dwellMinutes = dw;
 
   // ── zaman dilimi + kolon eşlemesi (v0.10.603) ──────────────────────────
   const tz = trim(src.timezone);
@@ -443,6 +450,8 @@ export function sourceForSave(
   if (gen.length) out.genericCodes = gen;
   const ign = parseTypeFilter((src.ignoreCodes ?? []).join(','));
   if (ign.length) out.ignoreCodes = ign;
+  // v0.10.1083 — sürdürme dakikası: 0 / boş gövdeye girmez (sunucu varsayılanı 10).
+  if (Number.isFinite(src.dwellMinutes) && (src.dwellMinutes ?? 0) > 0) out.dwellMinutes = src.dwellMinutes;
   if (src.functionCodeMatch) out.functionCodeMatch = true; // v0.10.1000 — kapalıyken gövdede yok
   const cols: Record<string, string> = {};
   for (const [field, raw] of Object.entries(src.columns ?? {})) {
@@ -485,6 +494,7 @@ export function sourceFromSnapshot(s: OracleSourceSnapshot): OracleSource {
     problemMode: s.problemMode === 'off' || s.problemMode === 'live' ? s.problemMode : 'shadow',
     genericCodes: [...(s.genericCodes ?? ['ERR_020'])],
     ignoreCodes: [...(s.ignoreCodes ?? [])],
+    dwellMinutes: s.dwellMinutes, // v0.10.1083
     functionCodeMatch: !!s.functionCodeMatch,
     queryMode: s.queryMode === 'custom' ? 'custom' : 'table', // v0.10.902
     customSql: s.customSql ?? '',

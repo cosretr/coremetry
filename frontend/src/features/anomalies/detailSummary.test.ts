@@ -137,7 +137,7 @@ describe('alertProblemSummary — "<kural>: <metrik> değeri <değer>, eşik <e�
       'Error rate anomaly — checkout: error_rate değeri 12.40, olağan değer 5.00.'],
     ['anomali kuralı, olağan değer yok', { ...p({ threshold: Number.NaN }), ruleId: 'anomaly:p99' },
       'High error rate — checkout: error_rate değeri 12.40.'],
-    ['anomali kuralı, değer yok', { ...p({ value: Number.NaN }), ruleId: 'anomaly:ext:oracle' },
+    ['anomali kuralı, değer yok', { ...p({ value: Number.NaN }), ruleId: 'anomaly:checkout:error_rate' },
       'High error rate — checkout: error_rate olağan dışı (olağan değer 5.00).'],
     ['anomali kuralı, ikisi de yok', { ...p({ value: Number.NaN, threshold: Number.NaN }), ruleId: 'anomaly:x' },
       'High error rate — checkout: error_rate olağan dışı.'],
@@ -153,6 +153,20 @@ describe('alertProblemSummary — "<kural>: <metrik> değeri <değer>, eşik <e�
     const got = alertProblemSummary(prob);
     expect(got).toBe(want);
     if (prob.ruleId.startsWith('anomaly:')) expect(got).not.toContain('eşik');
+  });
+
+  // v0.10.1083 — operatör: "Oracle hataları da problemse hâlâ düşmüyor". Dış
+  // seride (`anomaly:ext:`) threshold = max(medyan, taban 5): medyan 0'lı
+  // Oracle satırı "olağan değer 5.00" diyerek yalan söylerdi → "eşik".
+  // ext-down / ext-cap ("anomaly:ext-…") zaten anomaly: ailesi; ext: serisi değil.
+  it('Oracle hata serisi (medyan 0, taban eşik 5) → "eşik", "olağan değer" değil', () => {
+    const got = alertProblemSummary({
+      ruleName: 'Anomaly · error_count (external)', metric: 'ext:error_count', value: 12, threshold: 5,
+      service: 'ext:oracle-errlog/OP_PAY/ORA-00060',
+      ruleId: 'anomaly:ext:oracle-errlog/OP_PAY/ORA-00060:ext:error_count',
+    });
+    expect(got).toContain('ext:error_count değeri 12.00, eşik 5.00.');
+    expect(got).not.toContain('olağan değer');
   });
 });
 

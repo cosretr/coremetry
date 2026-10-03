@@ -78,6 +78,12 @@ func inboxKeepLabel(pattern, severity string) string {
 		return "DB sağlık kuralı"
 	case chstore.InboxKeepCriticalIncident:
 		return "kritik incident"
+	case chstore.InboxKeepExtErrorCount: // v0.10.1083
+		return "dış kaynak hata serisi"
+	case chstore.InboxKeepExtCluster:
+		return "dış kaynak hata kümesi"
+	case chstore.InboxKeepExtCap:
+		return "dış kaynak tavan özeti"
 	}
 	return "istisna listesi: " + pattern
 }

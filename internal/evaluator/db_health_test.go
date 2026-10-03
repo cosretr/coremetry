@@ -183,7 +183,7 @@ func TestDBHealthRefCandidatesAndApply(t *testing.T) {
 	if got := dbHealthRefCandidates(rows, cfg); len(got) != 1 || got[0] != dbhID {
 		t.Errorf("yalnız mutlak tabana ulaşan DB referans ister: %v", got)
 	}
-	refs := map[chstore.DBHealthRefKey]float64{{RuleID: dbhID, Bucket: slow.Bucket.Unix()}: 400}
+	refs := map[chstore.DBHealthRefKey]chstore.DBHealthRef{{RuleID: dbhID, Bucket: slow.Bucket.Unix()}: {P99Ms: 400, Calls: 1000}}
 	dbHealthApplyRefs(rows, refs)
 	if !rows[0].HasRef || rows[0].RefP99Ms != 400 || rows[1].HasRef || rows[2].HasRef {
 		t.Errorf("referans yalnız eşleşen (id, kova)'ya işlenmeli: %+v", rows)
@@ -266,12 +266,12 @@ func TestDBHealthSeverityRoseNotifies(t *testing.T) {
 func TestDBHealthReasonSentence(t *testing.T) {
 	cfg := chstore.DefaultDBHealth()
 	k := dbHealthKey{System: "oracle", Instance: "db-host-01", DBName: "crm-db"}
-	r := dbHealthReason(k, dbhRow(0, 1000, 102, 50, 2), cfg)
+	r := dbHealthReason(k, dbhRow(0, 1000, 102, 50, 2), dbHealthSpan{}, cfg)
 	want := "oracle crm-db (db-host-01) veritabanında hata oranı %10.2 (eşik %5), 2 çağıran servis etkilendi (svc-a, svc-b, svc-c) — 1000 çağrı / 5 dk."
 	if r != want {
 		t.Errorf("gerekçe:\n got %s\nwant %s", r, want)
 	}
-	both := dbHealthReason(dbHealthKey{System: "oracle", Instance: "db-host-01", DBName: "default"}, withRef(dbhRow(0, 1000, 100, 5200, 3), 400), cfg)
+	both := dbHealthReason(dbHealthKey{System: "oracle", Instance: "db-host-01", DBName: "default"}, withRef(dbhRow(0, 1000, 100, 5200, 3), 400), dbHealthSpan{}, cfg)
 	for _, w := range []string{"oracle db-host-01 veritabanında", "hata oranı %10.0 (eşik %5) ve p99 5.20 s (eşik 2.00 s; dün aynı saatte 400 ms, 13.0×)", "3 çağıran"} {
 		if !strings.Contains(both, w) {
 			t.Errorf("gerekçede %q yok: %s", w, both)

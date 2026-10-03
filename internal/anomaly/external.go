@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -270,6 +271,9 @@ func (s *ExternalScanner) Scan(ctx context.Context, t ExternalTarget) (ExternalS
 		return rep, err
 	}
 	cfg := externalSensitivity(s.store.AnomalySensitivity(), metric, t.Thresholds)
+	// v0.10.1083 — Problem.Threshold tabanı: bu metriğin mutlak fark tabanı
+	// (sorgu eşiği ya da varsayılan 5). Ayrıntı externalThreshold başlığında.
+	floor := cfg.Metrics[metric].MinAbsDelta
 	seasonal, seasonalMin := s.seasonalFor(ctx, t, metric, now)
 	enriched := 0
 	// v0.10.587 — İKİ FAZ. Önce her seri değerlendirilir, sonra YENİ açılış
@@ -371,7 +375,7 @@ func (s *ExternalScanner) Scan(ctx context.Context, t ExternalTarget) (ExternalS
 			rep.Capped++
 			continue
 		}
-		live := s.apply(ctx, &rep, t, metric, ps.subject, ps.ruleID, ps.sr.GroupKey, ps.oc, ps.open, ps.hasOpen, now)
+		live := s.apply(ctx, &rep, t, metric, ps.subject, ps.ruleID, ps.sr.GroupKey, ps.oc, ps.open, ps.hasOpen, floor, now)
 		if live != nil && t.OnEvidence != nil && enriched < externalEnrichPerTick && s.enrichDue(ps.ruleID, live.StartedAt, now) {
 			enriched++
 			s.lastEnriched[ps.ruleID] = now
@@ -392,7 +396,7 @@ func (s *ExternalScanner) Scan(ctx context.Context, t ExternalTarget) (ExternalS
 			}
 		}
 	}
-	s.applyExternalClusters(ctx, t, metric, now, openSnap, pending, clusters, activeKeys)
+	s.applyExternalClusters(ctx, t, metric, floor, now, openSnap, pending, clusters, activeKeys)
 	s.applyOpenCap(ctx, t, metric, now, openSnap, cap, rep.Capped, cappedSample)
 	return rep, nil
 }
@@ -423,7 +427,7 @@ const externalClusterDescMax = 10
 // applyExternalClusters — küme Problem'leri. Kimlik anahtara sabit
 // (clusterProblemID(key)): tazelemeler aynı satıra biner. Üyeler taze
 // açılış adayları; anahtarında hiç anomali kalmayınca resolve.
-func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalTarget, metric string, now time.Time,
+func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalTarget, metric string, floor float64, now time.Time,
 	openSnap *chstore.OpenProblems, pending []pendingSeries, clusters map[string][]int, activeKeys map[string]bool) {
 	if len(t.GroupBy) < 2 {
 		return
@@ -454,22 +458,28 @@ func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalT
 	for _, k := range keys {
 		idx := clusters[k]
 		members := make([]openCandidate, 0, len(idx))
+		outcomes := make([]anomalyOutcome, 0, len(idx))
 		labels := make([]string, 0, len(idx))
 		for _, i := range idx {
 			members = append(members, openCandidate{Service: pending[i].subject, Metric: metric, Outcome: pending[i].oc})
+			outcomes = append(outcomes, pending[i].oc)
 			if len(labels) < externalClusterDescMax {
 				labels = append(labels, strings.Join(pending[i].sr.GroupKey, "/"))
 			}
 		}
+		// v0.10.1083 — küme ölçüsü iki koldan BÜYÜĞÜ: en güçlü üye (değer /
+		// tabanlı eşik) ya da yayılım (N / clusterMinMembers). Tek güçlü üye de
+		// geniş fırtına da P1'e ulaşır; gerekçe hangisinin kazandığını söyler.
+		cm := externalClusterMeasure(outcomes, floor)
 		desc := fmt.Sprintf("%d seri aynı anda anomali eşiğini geçti (ortak üst boyut: %s) — tek küme Problem'i, üyeler ayrı açılmadı. Üyeler: %s",
 			len(idx), strings.TrimPrefix(k, ExternalMetricPrefix), strings.Join(labels, ", "))
 		if len(idx) > externalClusterDescMax {
 			desc += fmt.Sprintf(" (+%d daha)", len(idx)-externalClusterDescMax)
 		}
-		desc += fmt.Sprintf(". Kaynak %s · sorgu %s.", t.SourceName, t.Query)
+		desc += ". " + cm.reason() + fmt.Sprintf(". Kaynak %s · sorgu %s.", t.SourceName, t.Query)
 		sev := clusterSeverity(members, "")
 		if open := openSnap.ByRule(clusterRulePrefix + k); open != nil && open.ID != "" { // v0.10.900 — özne melez olabilir
-			open.Value = float64(len(idx))
+			open.Value, open.Threshold = cm.Value, cm.Threshold
 			open.Severity = sev
 			open.Description = desc
 			if err := s.store.UpsertProblem(ctx, *open); err != nil {
@@ -485,8 +495,8 @@ func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalT
 			Service:     k,
 			Kind:        chstore.ProblemKindExternal,
 			Metric:      metric,
-			Value:       float64(len(idx)),
-			Threshold:   float64(clusterMinMembers),
+			Value:       cm.Value,
+			Threshold:   cm.Threshold,
 			Comparator:  ">=",
 			Status:      "open",
 			Description: desc,
@@ -639,12 +649,15 @@ func (s *ExternalScanner) enrichDue(ruleID string, startedAt int64, now time.Tim
 // apply — kararı uygular; dönüş = hâlâ AÇIK problem (kanıt kancası için),
 // çözüldü/yok ise nil.
 func (s *ExternalScanner) apply(ctx context.Context, rep *ExternalScanReport, t ExternalTarget,
-	metric, subject, ruleID string, values []string, oc anomalyOutcome, open *chstore.Problem, hasOpen bool, now time.Time) *chstore.Problem {
+	metric, subject, ruleID string, values []string, oc anomalyOutcome, open *chstore.Problem, hasOpen bool, floor float64, now time.Time) *chstore.Problem {
 	switch oc.Action {
 	case "open":
 		desc := externalDescription(metric, subject, t.GroupBy, values, oc)
 		if hasOpen {
 			open.Value = oc.Current
+			// v0.10.1083 — tabandan önce açılmış satır (Threshold = medyan 0)
+			// tazelemede tabana yükselir; daha büyük açılış medyanı korunur.
+			open.Threshold = externalThreshold(open.Threshold, floor)
 			open.Comparator = anomalyComparator(oc.Direction)
 			open.Description = keepSubjectNote(open.Description, desc) // v0.10.900 — özne notu tazelemede kalır
 			if err := s.store.UpsertProblem(ctx, *open); err != nil {
@@ -663,7 +676,7 @@ func (s *ExternalScanner) apply(ctx context.Context, rep *ExternalScanReport, t 
 			Kind:        chstore.ProblemKindExternal,
 			Metric:      metric,
 			Value:       oc.Current,
-			Threshold:   oc.Median,
+			Threshold:   externalThreshold(oc.Median, floor), // v0.10.1083 — gerekçe gerçek medyanı yazar
 			Comparator:  anomalyComparator(oc.Direction),
 			Status:      "open",
 			Description: desc,
@@ -732,6 +745,64 @@ func keepSubjectNote(oldDesc, newDesc string) string {
 		return newDesc + oldDesc[i:]
 	}
 	return newDesc
+}
+
+// externalThreshold — SAF (v0.10.1083, operatör: "Oracle hataları da
+// problemse hâlâ düşmüyor"): Problem.Threshold = max(taban medyanı, mutlak
+// fark tabanı). Seyrek hata serisinde medyan 0'dır; Threshold 0 iken
+// computePriority oran kuramaz ve critical satır P2'de takılırdı. Taban
+// (MinAbsDelta, varsayılan 5/dk) zaten açılış kapısı — "büyük ihlal" (P1)
+// onun 2 katı (≥10/dk) demek. Gerekçe cümlesi GERÇEK medyanı yazmaya devam
+// eder (externalDescription oc.Median okur).
+func externalThreshold(median, floor float64) float64 {
+	return math.Max(median, floor)
+}
+
+// externalClusterMeas — küme Problem'inin ölçüsü: Value/Threshold + hangi kolun
+// kazandığı (gerekçe için). Breadth true → Value = üye sayısı, Threshold =
+// clusterMinMembers; false → en güçlü üyenin değeri / tabanlı eşiği.
+type externalClusterMeas struct {
+	Value, Threshold float64
+	Breadth          bool
+	// Peak* — en güçlü üye (yayılım kazansa da gerekçede söylenir).
+	PeakValue, PeakThreshold, PeakMedian float64
+	Members                              int
+}
+
+// reason — gerekçe cümlesinin ölçü parçası (hangi kol Value/Threshold'u verdi).
+func (m externalClusterMeas) reason() string {
+	peak := fmt.Sprintf("en güçlü üye %.0f/dk (taban medyanı %.0f, eşik %.0f)", m.PeakValue, m.PeakMedian, m.PeakThreshold)
+	if m.Breadth {
+		return fmt.Sprintf("Ölçü: yayılım — %d seri / en az %d (%s)", m.Members, clusterMinMembers, peak)
+	}
+	return "Ölçü: " + peak + fmt.Sprintf(" — %d seri", m.Members)
+}
+
+// externalClusterMeasure — SAF (v0.10.1083): küme Problem'inin Value /
+// Threshold'u iki koldan ORANI BÜYÜK olan: (a) en güçlü üye — akım / tabanlı
+// eşik oranı en yüksek üye (eşitlikte ilk); (b) yayılım — N /
+// clusterMinMembers. Yalnız üye sayısı (eski Value = N, Threshold = 3) hata
+// hacmini söylemiyordu: 60/dk patlayan 3 seri 1.0× sayılıp P2'de kalırdı;
+// yalnız en güçlü üye ise 50 seride 6/dk'lık geniş fırtınayı (1.2×) P2'de
+// bırakırdı. Eşitlikte en güçlü üye (birim = hata/dk, daha okunur).
+func externalClusterMeasure(members []anomalyOutcome, floor float64) externalClusterMeas {
+	m := externalClusterMeas{Members: len(members)}
+	best := -1.0
+	for _, oc := range members {
+		th := externalThreshold(oc.Median, floor)
+		r := oc.Current
+		if th > 0 {
+			r = oc.Current / th
+		}
+		if r > best {
+			best, m.PeakValue, m.PeakThreshold, m.PeakMedian = r, oc.Current, th, oc.Median
+		}
+	}
+	m.Value, m.Threshold = m.PeakValue, m.PeakThreshold
+	if breadth := float64(len(members)) / float64(clusterMinMembers); breadth > best {
+		m.Value, m.Threshold, m.Breadth = float64(len(members)), float64(clusterMinMembers), true
+	}
+	return m
 }
 
 // ExternalSubject — Problem.Service: `ext:<kaynak>/<v1>/<v2>` (db: emsali).

@@ -142,6 +142,13 @@ type SourceConfig struct {
 	ProblemMode  string   `json:"problemMode,omitempty"`
 	GenericCodes []string `json:"genericCodes,omitempty"`
 	IgnoreCodes  []string `json:"ignoreCodes,omitempty"`
+	// DwellMinutes — v0.10.1083 (operatör: "Oracle hataları da problemse hâlâ
+	// düşmüyor"): bir hata serisinin Problem açması için gereken ARDIŞIK
+	// 1 dk'lık ihlal kovası (dış tarayıcının Dwell üst-yazımı). 0 = varsayılan
+	// (DefaultDwellMinutes); aralık MinDwellMinutes–MaxDwellMinutes. Süre
+	// kapısı, eşik tabanının (≥5/dk açılış, ≥10/dk P1) tek dakikalık
+	// kıpırtıyı P1 yapmasını önler.
+	DwellMinutes int `json:"dwellMinutes,omitempty"`
 
 	// FunctionCodeMatch — v0.10.1000 (operatör teyidi 2026-10-01): satırın
 	// FONKSİYON KODU span'lerdeki FUNCTION_CODE attribute'u ile AYNI değerdir.
@@ -171,7 +178,22 @@ const (
 	ProblemModeLive   = "live"
 	maxCodeList       = 50
 	maxCodeLen        = 64
+
+	// v0.10.1083 — sürdürme kapısı (dk = 1 dk'lık kova). 3 altı tek kıpırtıya
+	// yakın, 30 üstü 4 saatlik okuma penceresinde tabanı daraltır.
+	DefaultDwellMinutes = 10
+	MinDwellMinutes     = 3
+	MaxDwellMinutes     = 30
 )
+
+// DwellOf — kaynağın ETKİN sürdürme kovası: Normalize'dan geçmemiş eski
+// blobda (0 ya da aralık dışı) varsayılan. SAF.
+func DwellOf(src SourceConfig) int {
+	if src.DwellMinutes >= MinDwellMinutes && src.DwellMinutes <= MaxDwellMinutes {
+		return src.DwellMinutes
+	}
+	return DefaultDwellMinutes
+}
 
 // DefaultGenericCodes — audit §6.1 başlangıç listesi.
 func DefaultGenericCodes() []string { return []string{"ERR_020"} }
@@ -553,6 +575,7 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 			QueryTimeoutSec:   src.QueryTimeoutSec,
 			IntervalSec:       src.IntervalSec,
 			ProblemMode:       normalizeProblemMode(src.ProblemMode), // v0.10.897
+			DwellMinutes:      src.DwellMinutes,                      // v0.10.1083
 			FunctionCodeMatch: src.FunctionCodeMatch,                 // v0.10.1000
 			QueryMode:         normalizeQueryMode(src.QueryMode),     // v0.10.902
 			CustomSQL:         strings.TrimSpace(src.CustomSQL),
@@ -714,6 +737,12 @@ func Normalize(in Settings, prev Settings, newID func() string) (Settings, error
 		}
 		if s.IntervalSec < MinIntervalSec || s.IntervalSec > MaxIntervalSec {
 			return Settings{}, fmt.Errorf("%s: aralık %d-%d sn arasında olmalı", label, MinIntervalSec, MaxIntervalSec)
+		}
+		if s.DwellMinutes == 0 {
+			s.DwellMinutes = DefaultDwellMinutes
+		}
+		if s.DwellMinutes < MinDwellMinutes || s.DwellMinutes > MaxDwellMinutes {
+			return Settings{}, fmt.Errorf("%s: dwellMinutes %d-%d dk arasında olmalı", label, MinDwellMinutes, MaxDwellMinutes)
 		}
 
 		if s.Enabled {

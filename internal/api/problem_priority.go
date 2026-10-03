@@ -43,6 +43,12 @@ import (
 // istisna listesi inbox'ın P1 görünümünü belirliyor, bir CH hıçkırığı onu
 // varsayılana döndürüp satırları bir tik oynatmamalı.
 func (s *Server) LoadProblemPriority(ctx context.Context) {
+	// v0.10.1083 — tek seferlik inbox istisna listesi göçü (kayıtlı ESKİ
+	// varsayılan → yeni varsayılan), okumadan ÖNCE: aynı tur yeni listeyi yayınlar.
+	// İşaretli; başarana dek her 30 sn'lik turda yeniden dener.
+	if s.store != nil {
+		chstore.MigrateInboxKeepDefaultsOnce(ctx, s.store)
+	}
 	chstore.LoadProblemPriorityWith(func() (chstore.ProblemPriorityConfig, error) {
 		return s.store.ReadProblemPriority(ctx)
 	})

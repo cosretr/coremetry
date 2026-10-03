@@ -1144,6 +1144,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               <SignalLink to={dbHealthLinks.databaseHref} label="◫ Veritabanı sayfası" sub="db detayı, problem penceresi" />
               <SignalLink to={dbHealthLinks.tracesHref} label="⋮ Trace'ler" sub="bu veritabanı, problem penceresi" />
               <SignalLink to={dbHealthLinks.errorTracesHref} label="⋮ Hatalı trace'ler" sub="bu veritabanı, problem penceresi, yalnız hatalar" />
+              {/* v0.10.1083 — hata sayısı kolu (ORA patlaması): hangi hata kodu,
+                  hangi çağıran — Databases detayının hata kartı. */}
+              <SignalLink to={dbHealthLinks.errorsHref} label="⚠ Hata kırılımı" sub="hata kodu → exception tipi → mesaj, problem penceresi" />
             </>) : subjectKind(problem.service, problem.kind) !== 'service' ? (
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>
                 {isExternal

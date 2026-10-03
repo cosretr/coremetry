@@ -114,6 +114,10 @@ export function anomalySummary(
   }
 }
 
+// EXT_SERIES_RULE_PREFIX — dış seri anomalisi (Go `anomaly:` + ExternalSubject
+// `ext:` öneki); ext-down / ext-cap ("anomaly:ext-…") bu öneke UYMAZ.
+const EXT_SERIES_RULE_PREFIX = 'anomaly:ext:';
+
 // alertProblemSummary — alarm kuralı problemi:
 //   "<kural adı> — <servis>: <metrik> değeri <değer>, eşik <eşik>."
 // Sayı biçimi detay sayfasının "Metric" bölümüyle aynı (iki ondalık, fmtFixed).
@@ -129,6 +133,9 @@ export function anomalySummary(
 // v0.10.1055 — yüklem isAnomalyDetectorRule (rozetin isAnomalyProblem'i DEĞİL):
 // terfi Problem'inde threshold gerçek kapı (MinPeakRatio), kümede üye alt
 // sınırı — "eşik" orada doğru kelime.
+// v0.10.1083 — dış seri (`anomaly:ext:`) istisnası: orada threshold artık
+// max(medyan, mutlak taban 5) — bir TABAN, olağan değer değil (medyan 0 iken 5
+// yazardı). Kelime "eşik"; gerçek medyan açıklama cümlesinde.
 export function alertProblemSummary(
   p: Pick<Problem, 'ruleName' | 'metric' | 'value' | 'threshold' | 'service'> & { ruleId?: string },
 ): string {
@@ -138,7 +145,7 @@ export function alertProblemSummary(
   const head = `${name}${svc}`;
   const hasV = finite(p.value);
   const hasT = finite(p.threshold);
-  const anomalyRule = isAnomalyDetectorRule(p.ruleId);
+  const anomalyRule = isAnomalyDetectorRule(p.ruleId) && !(p.ruleId ?? '').startsWith(EXT_SERIES_RULE_PREFIX);
   if (!metric) return `${head}: alarm tetiklendi.`;
   if (anomalyRule) {
     if (hasV && hasT) return `${head}: ${metric} değeri ${fmtFixed(p.value, 2)}, olağan değer ${fmtFixed(p.threshold, 2)}.`;

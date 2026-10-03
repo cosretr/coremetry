@@ -35,6 +35,7 @@ import {
   ORACLE_DEFAULT_MAX_OPEN_CONNS, ORACLE_DEFAULT_QUERY_TIMEOUT_SEC, ORACLE_DEFAULT_INTERVAL_SEC,
   ORACLE_DEFAULT_TIMEZONE, ORACLE_MAPPING_FIELDS, ORACLE_COLUMN_DISABLED,
   ORACLE_DEFAULT_WINDOW_MIN, ORACLE_CUSTOM_ONLY_FIELDS, isCustomQuery,
+  ORACLE_DEFAULT_DWELL_MIN, ORACLE_MIN_DWELL_MIN, ORACLE_MAX_DWELL_MIN,
   type OracleFieldErrors,
 } from './oracleForm';
 import type {
@@ -447,6 +448,12 @@ export function OracleTab() {
                 <Field label="Sayılmayan kodlar (virgül)" className="is-narrow" value={(src.ignoreCodes ?? []).join(', ')}
                   onChange={e => patch(i, { ignoreCodes: parseTypeFilter(e.target.value) })}
                   hint="Problem üretmez; satır Trace › Logs'ta yine görünür" />
+                {/* v0.10.1083 — sürdürme: tek dakikalık kıpırtı Problem (ve ≥10/dk'da P1) açmasın. */}
+                <Field label="Sürdürme (dk)" className="is-narrow" inputMode="numeric" error={err.dwellMinutes}
+                  value={numToForm(src.dwellMinutes)}
+                  onChange={e => patch(i, { dwellMinutes: numFromForm(e.target.value) })}
+                  placeholder={String(ORACLE_DEFAULT_DWELL_MIN)}
+                  hint={err.dwellMinutes ? undefined : `Hata serisi bu kadar ardışık dakika eşik üstünde kalınca Problem açılır; ${ORACLE_MIN_DWELL_MIN}-${ORACLE_MAX_DWELL_MIN}, boş = ${ORACLE_DEFAULT_DWELL_MIN}`} />
               </div>
               {/* v0.10.1000 (operatör teyidi) — Oracle'daki fonksiyon kodu span'lerdeki
                   FUNCTION_CODE ile aynı değer: trace'i olmayan satır da servise bağlanır. */}

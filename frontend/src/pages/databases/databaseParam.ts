@@ -21,6 +21,10 @@ export interface DatabaseRef {
 
 export const DATABASE_PAGE = '/database';
 
+/** v0.10.1083 — detay sayfasındaki "Errors on this database" kartının çapası
+ *  (db-health Problem'inin "Hata kırılımı" pivotu buraya iner). */
+export const DATABASE_ERRORS_ANCHOR = 'db-errors';
+
 export interface DatabasePageScope {
   range?: string;
   env?: string;

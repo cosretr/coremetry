@@ -27,22 +27,24 @@ func TestDBHealthBucketsSQLGolden(t *testing.T) {
 		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(c_q), 3) / 1e6 AS p99_ms,
 		       count()                                                            AS callers,
 		       countIf(c_affected)                                                AS affected,
+		       countIf(c_err_affected)                                            AS err_callers,
 		       arraySlice(arrayMap(x -> x.1, arrayReverseSort(x -> x.2,
-		         groupArrayIf((service_name, c_calls), c_affected))), 1, 3)       AS top_callers
+		         groupArrayIf((service_name, c_calls), c_affected OR c_err_affected))), 1, 3) AS top_callers
 		FROM (
 			SELECT db_system, instance, db_name, service_name, time_bucket,
 			       countMerge(span_count_state)                                  AS c_calls,
 			       countIfMerge(error_count_state)                               AS c_errs,
 			       quantilesTDigestMergeState(0.5, 0.95, 0.99)(duration_q_state) AS c_q,
 			       c_calls >= ? AND ((c_errs * 100 >= ? * c_calls)
-			         OR (arrayElement(finalizeAggregation(c_q), 3) / 1e6 >= ?))  AS c_affected
+			         OR (arrayElement(finalizeAggregation(c_q), 3) / 1e6 >= ?))  AS c_affected,
+			       c_errs >= ?                                                   AS c_err_affected
 			FROM db_caller_summary_5m
 			WHERE time_bucket >= ? AND time_bucket < ?
 			  AND NOT (positionCaseInsensitive(service_name, ?) > 0 OR positionCaseInsensitive(service_name, ?) > 0)
 			GROUP BY db_system, instance, db_name, service_name, time_bucket
 		)
 		GROUP BY db_system, instance, db_name, time_bucket
-		HAVING (errs * 100 >= ? * calls) OR (p99_ms >= ?)
+		HAVING (errs * 100 >= ? * calls) OR (p99_ms >= ?) OR (errs >= ?)
 		    OR concat('db-health:', lower(trimBoth(db_system)), '@', instance, '/', db_name) IN ?
 		ORDER BY affected DESC, calls DESC
 		LIMIT 20000
@@ -53,7 +55,8 @@ func TestDBHealthBucketsSQLGolden(t *testing.T) {
 	if strings.Count(sql, "?") != len(args) {
 		t.Fatalf("bind sayısı %d, argüman %d", strings.Count(sql, "?"), len(args))
 	}
-	wantArgs := []any{uint64(10), 5.0, 2000.0, since, until, "-batch", "nightly-job", 5.0, 2000.0}
+	// v0.10.1083 — çağıran hata tabanı (10) iç SELECT'te, hata sayısı tabanı (50) HAVING'de.
+	wantArgs := []any{uint64(10), 5.0, 2000.0, uint64(10), since, until, "-batch", "nightly-job", 5.0, 2000.0, uint64(50)}
 	for i := range wantArgs {
 		if args[i] != wantArgs[i] {
 			t.Errorf("arg[%d] = %v, istenen %v", i, args[i], wantArgs[i])
@@ -74,11 +77,17 @@ func TestDBHealthBucketsSQLGolden(t *testing.T) {
 
 	// Batch listesi boş (`[]` = kural kapalı) → batch dalı YOK; açık id yok → boş dizi (nil değil).
 	off, offArgs := dbHealthBucketsQuery(since, until, cfg, AnomalySensitivityConfig{BatchServicePatterns: ptrStrings([]string{})}, nil)
-	if strings.Contains(off, "positionCaseInsensitive") || len(offArgs) != 8 {
+	if strings.Contains(off, "positionCaseInsensitive") || len(offArgs) != 10 {
 		t.Errorf("boş batch listesinde batch koşulu olmamalı: %d arg\n%s", len(offArgs), off)
 	}
-	if ids, ok := offArgs[7].([]string); !ok || ids == nil {
-		t.Errorf("açık id yokken boş dizi bağlanmalı: %#v", offArgs[7])
+	if ids, ok := offArgs[9].([]string); !ok || ids == nil {
+		t.Errorf("açık id yokken boş dizi bağlanmalı: %#v", offArgs[9])
+	}
+	// v0.10.1083 — hâlâ TEK sorgu, sınırlı (LIMIT + max_execution_time + zaman WHERE).
+	for _, w := range []string{"LIMIT 20000", "max_execution_time = 10", "time_bucket >= ? AND time_bucket < ?"} {
+		if strings.Count(sql, w) != 1 {
+			t.Errorf("%q tam bir kez olmalı", w)
+		}
 	}
 }
 
@@ -94,7 +103,9 @@ func TestDBHealthRuleIDSQLTwin(t *testing.T) {
 
 func TestDBHealthReferenceSQLContract(t *testing.T) {
 	sql := dbHealthReferenceSQL()
+	// v0.10.1083 — aynı okuma dünkü kovanın çağrı + hata sayısını da getirir.
 	for _, w := range []string{"FROM db_summary_5m", "time_bucket >= ? AND time_bucket < ?", dbHealthRuleIDSQL + " IN ?",
+		"countMerge(span_count_state)", "countIfMerge(error_count_state)",
 		"GROUP BY db_system, instance, db_name, time_bucket", "LIMIT 20000", "max_execution_time = 10"} {
 		if !strings.Contains(sql, w) {
 			t.Errorf("%q yok:\n%s", w, sql)
@@ -108,7 +119,8 @@ func TestDBHealthReferenceSQLContract(t *testing.T) {
 func TestDBHealthConfigDefaultsAndNormalize(t *testing.T) {
 	d := DefaultDBHealth()
 	if !d.On() || d.ErrorPct != 5 || d.P99Ms != 2000 || d.P99RiseFactor != 3 || d.MinCallerCalls != 10 ||
-		d.MinCalls != 100 || d.MinCallers != 2 || d.MaxNewPerTick != 20 {
+		d.MinCalls != 100 || d.MinCallers != 2 || d.MaxNewPerTick != 20 ||
+		d.MinErrorCount != 50 || d.ErrorRiseFactor != 3 || d.MinCallerErrors != 10 {
 		t.Fatalf("varsayılanlar spec ile uyuşmuyor: %+v", d)
 	}
 	// Eski blob (health alanı yok) → varsayılan, AÇIK.
@@ -139,6 +151,16 @@ func TestDBHealthConfigDefaultsAndNormalize(t *testing.T) {
 	}
 	if k := NormalizeDBHealth(DBHealthConfig{P99RiseFactor: 1.5, MinCallerCalls: 1}); k.P99RiseFactor != 1.5 || k.MinCallerCalls != 1 {
 		t.Errorf("geçerli değerler korunmalı: %+v", k)
+	}
+	// v0.10.1083 — hata sayısı kolu: eski blob (alan yok) varsayılana; kat < 1 varsayılana; geçerli değer korunur.
+	if n.Health.MinErrorCount != 50 || n.Health.ErrorRiseFactor != 3 || n.Health.MinCallerErrors != 10 {
+		t.Errorf("eski blob hata sayısı kolunu varsayılanla almalı: %+v", n.Health)
+	}
+	if c := NormalizeDBHealth(DBHealthConfig{ErrorRiseFactor: 0.5}); c.ErrorRiseFactor != 3 || c.MinErrorCount != 50 || c.MinCallerErrors != 10 {
+		t.Errorf("hata kolu normalize: %+v", c)
+	}
+	if c := NormalizeDBHealth(DBHealthConfig{MinErrorCount: 200, ErrorRiseFactor: 1.5, MinCallerErrors: 3}); c.MinErrorCount != 200 || c.ErrorRiseFactor != 1.5 || c.MinCallerErrors != 3 {
+		t.Errorf("geçerli hata kolu değerleri korunmalı: %+v", c)
 	}
 }
 
@@ -181,5 +203,9 @@ func TestDBHealthMetricCategory(t *testing.T) {
 	}
 	if got := ProblemCategory(Problem{RuleID: DBHealthRuleID("oracle", "h", "d"), Metric: DBHealthMetricP99Ms}); got != CategorySlowdown {
 		t.Errorf("p99 boyutu kategorisi %q", got)
+	}
+	// v0.10.1083 — mutlak hata sayısı kolu da ERROR.
+	if got := ProblemCategory(Problem{RuleID: DBHealthRuleID("oracle", "h", "d"), Metric: DBHealthMetricErrorCount}); got != CategoryError {
+		t.Errorf("hata sayısı boyutu kategorisi %q", got)
 	}
 }

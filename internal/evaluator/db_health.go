@@ -16,10 +16,18 @@ package evaluator
 //     eşiği gürültü; dünkü kova yoksa p99 boyutu o kova için KAPALI); kova
 //     başına ≥ MinCalls (100) çağrı VE ≥ MinCallers (2) etkilenen çağıran
 //     (≥ MinCallerCalls (10) çağrılı; batch çağıranlar okumada düşer).
-//   - Şiddet: hata % ≥ 2×ErrorPct ya da (ihlal eden) p99 ≥ 2×P99Ms → critical
-//     (oran ≥ 2 → computePriority P1), değilse warning. Tazelemede şiddet
+//   - v0.10.1083 — MUTLAK HATA SAYISI kolu (operatör: "Oracle hataları da
+//     problemse hâlâ düşmüyor"; span tarafındaki ORA patlaması tüm veritabanı
+//     çağrıları içinde %5'e ulaşmıyordu): kova hata SAYISI ≥ MinErrorCount (50)
+//     VE ≥ ErrorRiseFactor (3) × aynı veritabanının 24 sa önceki aynı kovası
+//     (dünkü kova yoksa kol o kova için KAPALI — p99 ile aynı kural) VE ≥
+//     MinCallers çağıranın her biri ≥ MinCallerErrors (10) HATA (batch
+//     çağıranlar okumada düşer). Çağrı tabanı (MinCalls) bu kolda da geçerli.
+//   - Şiddet: hata % ≥ 2×ErrorPct ya da (ihlal eden) p99 ≥ 2×P99Ms ya da
+//     (ihlal eden) hata sayısı ≥ 2×MinErrorCount → critical (oran ≥ 2 →
+//     computePriority P1), değilse warning. Tazelemede şiddet
 //     warning → critical yükselirse yeniden bildirim (P1 kanalları sayfalasın).
-//   - KAPANIŞ: son iki TAMAMLANMIŞ kova temiz (iki boyut da ihlalsiz ya da
+//   - KAPANIŞ: son iki TAMAMLANMIŞ kova temiz (üç boyut da ihlalsiz ya da
 //     kova MinCalls altında / verisiz) VE bu iki ardışık okumada (tikte) böyle.
 //
 // Kova çiftleri: tik 1 dk, kova 5 dk. AÇILIŞ cari (yarım) kova çağrı tabanını
@@ -34,8 +42,8 @@ package evaluator
 // (v0.10.1069 emsali; süpürmeye bırakılmaz).
 //
 // Karar SAF (dbHealthDecide, tablo-testli); G/Ç yalnız evaluateDBHealth'te.
-// Okuma tik başına bir ana sorgu (chstore.DBHealthBuckets) + yalnız p99
-// adayı varken bir referans sorgusu (chstore.DBHealthReferenceP99).
+// Okuma tik başına bir ana sorgu (chstore.DBHealthBuckets) + yalnız p99 ya da
+// hata sayısı adayı varken bir referans sorgusu (chstore.DBHealthReference).
 
 import (
 	"context"
@@ -77,20 +85,72 @@ func dbHealthP99Breach(b chstore.DBHealthBucket, cfg chstore.DBHealthConfig) boo
 	return b.HasRef && b.RefP99Ms > 0 && b.P99Ms >= cfg.P99Ms && b.P99Ms >= cfg.P99RiseFactor*b.RefP99Ms
 }
 
-// dbHealthBreach — açılış kovası: boyut ihlali + çağrı + etkilenen çağıran.
+// dbHealthCountBreach — v0.10.1083 mutlak hata sayısı BOYUTU (çağıran
+// kapısından bağımsız; p99 gibi GÖRELİ): dünkü kova yoksa daima false. Dünkü
+// kova var ama hatasızsa (RefErrors 0) kat şartı kendiliğinden tutar.
+func dbHealthCountBreach(b chstore.DBHealthBucket, cfg chstore.DBHealthConfig) bool {
+	return b.HasErrRef && b.Errors >= cfg.MinErrorCount &&
+		float64(b.Errors) >= cfg.ErrorRiseFactor*float64(b.RefErrors)
+}
+
+// dbHealthBreach — açılış kovası: çağrı tabanı + (hata % ya da p99 boyutu VE
+// ≥ MinCallers etkilenen çağıran) YA DA (hata sayısı boyutu VE ≥ MinCallers
+// çağıranın her biri ≥ MinCallerErrors hata). Kolların çağıran kapıları ayrı:
+// hata sayısı kolunda çağıranın hata YÜZDESİ düşük olabilir (yüksek hacim).
 func dbHealthBreach(b chstore.DBHealthBucket, ok bool, cfg chstore.DBHealthConfig) bool {
-	return ok && b.Calls >= cfg.MinCalls && b.AffectedCallers >= uint64(cfg.MinCallers) &&
-		(dbHealthErrBreach(b, cfg) || dbHealthP99Breach(b, cfg))
+	if !ok || b.Calls < cfg.MinCalls {
+		return false
+	}
+	pctOrP99 := b.AffectedCallers >= uint64(cfg.MinCallers) && (dbHealthErrBreach(b, cfg) || dbHealthP99Breach(b, cfg))
+	count := b.ErrorCallers >= uint64(cfg.MinCallers) && dbHealthCountBreach(b, cfg)
+	return pctOrP99 || count
 }
 
 // dbHealthClear — kapanış kovası (yalnız TAMAMLANMIŞ kovalar): verisiz,
 // çağrı tabanı altında (düşük hacimde sonsuz tutma → 4 sa sonra bayat-critical
-// P1 olmasın) ya da iki boyut da ihlalsiz.
+// P1 olmasın) ya da üç boyut da ihlalsiz (çağıran kapısı kapanışa girmez —
+// diğer kollarla aynı histerezis).
 func dbHealthClear(b chstore.DBHealthBucket, ok bool, cfg chstore.DBHealthConfig) bool {
 	if !ok || b.Calls < cfg.MinCalls {
 		return true
 	}
-	return !dbHealthErrBreach(b, cfg) && !dbHealthP99Breach(b, cfg)
+	return !dbHealthErrBreach(b, cfg) && !dbHealthP99Breach(b, cfg) && !dbHealthCountBreach(b, cfg)
+}
+
+// dbHealthSpan — v0.10.1083: açılış çiftinin hata toplamı (gerekçe cümlesi:
+// "10 dakikada 340 hata … dün aynı saatte 20"). Minutes 10 = iki kova da
+// verili; 5 = yalnız en yeni verili kova. RefKnown = toplanan her kovanın dünkü
+// karşılığı var.
+type dbHealthSpan struct {
+	Minutes   int
+	Errors    uint64
+	RefErrors uint64
+	RefKnown  bool
+	// Partial — çiftin yenisi henüz bitmemiş CARİ kova: süre "10 dakika"
+	// değil, "son iki 5 dk kovası" (yarım kova + önceki) olarak söylenir.
+	Partial bool
+}
+
+// dbHealthSpanOf — SAF: çiftten toplam (yalnız verili kovalar).
+func dbHealthSpanOf(oldB chstore.DBHealthBucket, oldOK bool, newB chstore.DBHealthBucket, newOK bool) dbHealthSpan {
+	var sp dbHealthSpan
+	sp.RefKnown = true
+	for _, x := range []struct {
+		b  chstore.DBHealthBucket
+		ok bool
+	}{{oldB, oldOK}, {newB, newOK}} {
+		if !x.ok {
+			continue
+		}
+		sp.Minutes += int(dbHealthBucket / time.Minute)
+		sp.Errors += x.b.Errors
+		sp.RefErrors += x.b.RefErrors
+		sp.RefKnown = sp.RefKnown && x.b.HasErrRef
+	}
+	if sp.Minutes == 0 {
+		sp.RefKnown = false
+	}
+	return sp
 }
 
 // dbHealthVerdict — bir veritabanının bu tikteki kararı.
@@ -102,6 +162,8 @@ type dbHealthVerdict struct {
 	// Latest — açılış çiftinin en yeni VERİLİ kovası (ölçü + gerekçe).
 	Latest    chstore.DBHealthBucket
 	HasLatest bool
+	// Span — açılış çiftinin hata toplamı (v0.10.1083, gerekçe cümlesi).
+	Span      dbHealthSpan
 	Metric    string
 	Value     float64
 	Threshold float64
@@ -109,16 +171,30 @@ type dbHealthVerdict struct {
 }
 
 // dbHealthMeasure — SAF: kovanın baskın boyutu (değer/taban oranı en yüksek
-// İHLAL EDEN boyut; Value/Threshold dürüst oran taşısın) ve şiddeti.
+// İHLAL EDEN boyut; Value/Threshold dürüst oran taşısın) ve şiddeti. Hiçbir
+// boyut ihlalde değilse hata % (histerezis bandında son ölçü).
+//
+// v0.10.1083 — hata sayısı boyutu: Value = kovanın hata SAYISI, Threshold =
+// MinErrorCount; ≥ 2× → critical → computePriority P1.
 func dbHealthMeasure(b chstore.DBHealthBucket, cfg chstore.DBHealthConfig) (metric string, value, threshold float64, severity string) {
 	errPct := b.ErrorPct()
+	errOn := dbHealthErrBreach(b, cfg)
 	p99On := dbHealthP99Breach(b, cfg)
+	countOn := dbHealthCountBreach(b, cfg)
 	metric, value, threshold = chstore.DBHealthMetricErrorPct, errPct, cfg.ErrorPct
-	if p99On && (!dbHealthErrBreach(b, cfg) || b.P99Ms/cfg.P99Ms > errPct/cfg.ErrorPct) {
+	best := -1.0
+	if errOn {
+		best = errPct / cfg.ErrorPct
+	}
+	if p99On && (!errOn || b.P99Ms/cfg.P99Ms > best) {
 		metric, value, threshold = chstore.DBHealthMetricP99Ms, b.P99Ms, cfg.P99Ms
+		best = b.P99Ms / cfg.P99Ms
+	}
+	if countOn && (best < 0 || float64(b.Errors)/float64(cfg.MinErrorCount) > best) {
+		metric, value, threshold = chstore.DBHealthMetricErrorCount, float64(b.Errors), float64(cfg.MinErrorCount)
 	}
 	severity = "warning"
-	if errPct >= 2*cfg.ErrorPct || (p99On && b.P99Ms >= 2*cfg.P99Ms) {
+	if errPct >= 2*cfg.ErrorPct || (p99On && b.P99Ms >= 2*cfg.P99Ms) || (countOn && b.Errors >= 2*cfg.MinErrorCount) {
 		severity = "critical"
 	}
 	return metric, value, threshold, severity
@@ -155,8 +231,9 @@ func dbHealthDecide(rows []chstore.DBHealthBucket, cfg chstore.DBHealthConfig, c
 			continue
 		}
 		older, newer := b2t, b1t
+		partial := false
 		if b0, ok := m[b0t]; ok && b0.Calls >= cfg.MinCalls {
-			older, newer = b1t, b0t
+			older, newer, partial = b1t, b0t, true
 		}
 		oldB, oldOK := m[older]
 		newB, newOK := m[newer]
@@ -166,7 +243,9 @@ func dbHealthDecide(rows []chstore.DBHealthBucket, cfg chstore.DBHealthConfig, c
 			Key: k, ID: id,
 			Fire:  dbHealthBreach(oldB, oldOK, cfg) && dbHealthBreach(newB, newOK, cfg),
 			Clear: !truncated && dbHealthClear(c2, c2ok, cfg) && dbHealthClear(c1, c1ok, cfg),
+			Span:  dbHealthSpanOf(oldB, oldOK, newB, newOK),
 		}
+		v.Span.Partial = partial && newOK
 		switch {
 		case newOK:
 			v.Latest, v.HasLatest = newB, true
@@ -182,13 +261,14 @@ func dbHealthDecide(rows []chstore.DBHealthBucket, cfg chstore.DBHealthConfig, c
 	return out
 }
 
-// dbHealthRefCandidates — SAF: p99 referansı gereken veritabanları (bir
-// kovası mutlak tabana ulaşan), sıralı ve tekrarsız. Boşsa referans okuması yok.
+// dbHealthRefCandidates — SAF: dünkü referansı gereken veritabanları (bir
+// kovası p99 mutlak tabanına YA DA hata sayısı tabanına ulaşan — v0.10.1083),
+// sıralı ve tekrarsız. Boşsa referans okuması yok.
 func dbHealthRefCandidates(rows []chstore.DBHealthBucket, cfg chstore.DBHealthConfig) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, r := range rows {
-		if r.P99Ms < cfg.P99Ms {
+		if r.P99Ms < cfg.P99Ms && r.Errors < cfg.MinErrorCount {
 			continue
 		}
 		if id := r.RuleID(); !seen[id] {
@@ -200,11 +280,20 @@ func dbHealthRefCandidates(rows []chstore.DBHealthBucket, cfg chstore.DBHealthCo
 	return out
 }
 
-// dbHealthApplyRefs — SAF: referans p99'larını satırlara işler.
-func dbHealthApplyRefs(rows []chstore.DBHealthBucket, refs map[chstore.DBHealthRefKey]float64) {
+// dbHealthApplyRefs — SAF: dünkü ölçüleri satırlara işler. p99 referansı
+// yalnız > 0 iken; hata sayısı referansı çağrısı olan dünkü kovada (hata 0
+// olabilir — "dün bu saatte hiç hata yoktu" geçerli referans).
+func dbHealthApplyRefs(rows []chstore.DBHealthBucket, refs map[chstore.DBHealthRefKey]chstore.DBHealthRef) {
 	for i := range rows {
-		if p, ok := refs[chstore.DBHealthRefKey{RuleID: rows[i].RuleID(), Bucket: rows[i].Bucket.Unix()}]; ok && p > 0 {
-			rows[i].RefP99Ms, rows[i].HasRef = p, true
+		r, ok := refs[chstore.DBHealthRefKey{RuleID: rows[i].RuleID(), Bucket: rows[i].Bucket.Unix()}]
+		if !ok {
+			continue
+		}
+		if r.P99Ms > 0 {
+			rows[i].RefP99Ms, rows[i].HasRef = r.P99Ms, true
+		}
+		if r.Calls > 0 {
+			rows[i].RefErrors, rows[i].HasErrRef = r.Errors, true
 		}
 	}
 }
@@ -282,8 +371,9 @@ func dbHealthLabel(k dbHealthKey) string {
 }
 
 // dbHealthReason — TEK düz Türkçe cümle: ihlal eden boyut(lar) + etkilenen
-// çağıran sayısı + en çok çağıran ≤3 servis.
-func dbHealthReason(k dbHealthKey, b chstore.DBHealthBucket, cfg chstore.DBHealthConfig) string {
+// çağıran sayısı + en çok çağıran ≤3 servis. sp = açılış çiftinin hata
+// toplamı (hata sayısı boyutu cümlesi; v0.10.1083).
+func dbHealthReason(k dbHealthKey, b chstore.DBHealthBucket, sp dbHealthSpan, cfg chstore.DBHealthConfig) string {
 	var dims []string
 	if dbHealthErrBreach(b, cfg) {
 		dims = append(dims, fmt.Sprintf("hata oranı %%%.1f (eşik %%%s)", b.ErrorPct(), fmtNum(cfg.ErrorPct)))
@@ -292,11 +382,31 @@ func dbHealthReason(k dbHealthKey, b chstore.DBHealthBucket, cfg chstore.DBHealt
 		dims = append(dims, fmt.Sprintf("p99 %s (eşik %s; dün aynı saatte %s, %.1f×)",
 			fmtMs(b.P99Ms), fmtMs(cfg.P99Ms), fmtMs(b.RefP99Ms), b.P99Ms/b.RefP99Ms))
 	}
+	callers := b.AffectedCallers
+	if dbHealthCountBreach(b, cfg) {
+		// Çift toplamı yoksa (tek verili kova) yalnız en yeni kova söylenir.
+		mins, errs, ref := int(dbHealthBucket/time.Minute), b.Errors, b.RefErrors
+		if sp.Minutes > 0 && sp.RefKnown {
+			mins, errs, ref = sp.Minutes, sp.Errors, sp.RefErrors
+		}
+		span := fmt.Sprintf("%d dakikada", mins)
+		if sp.Partial && sp.RefKnown { // yenisi yarım cari kova: süreyi uydurma
+			span = "son 5 dk kovasında"
+			if mins > int(dbHealthBucket/time.Minute) {
+				span = "son iki 5 dk kovasında"
+			}
+		}
+		dims = append(dims, fmt.Sprintf("%s %d hata (eşik 5 dk'da %d; dün aynı saatte %d)",
+			span, errs, cfg.MinErrorCount, ref))
+		if b.ErrorCallers > callers {
+			callers = b.ErrorCallers
+		}
+	}
 	if len(dims) == 0 {
 		dims = append(dims, fmt.Sprintf("hata oranı %%%.1f, p99 %s (eşiklerin altında)", b.ErrorPct(), fmtMs(b.P99Ms)))
 	}
 	s := fmt.Sprintf("%s %s veritabanında %s, %d çağıran servis etkilendi",
-		strings.ToLower(k.System), dbHealthLabel(k), strings.Join(dims, " ve "), b.AffectedCallers)
+		strings.ToLower(k.System), dbHealthLabel(k), strings.Join(dims, " ve "), callers)
 	if len(b.TopCallers) > 0 {
 		top := b.TopCallers
 		if len(top) > 3 {
@@ -416,12 +526,12 @@ func (e *Evaluator) evaluateDBHealth(ctx context.Context) {
 		return
 	}
 	refStart := cur.Add(-dbHealthRefShift - 2*dbHealthBucket)
-	refs, err := e.store.DBHealthReferenceP99(ctx, refStart, refStart.Add(3*dbHealthBucket), dbHealthRefShift,
+	refs, err := e.store.DBHealthReference(ctx, refStart, refStart.Add(3*dbHealthBucket), dbHealthRefShift,
 		dbHealthRefCandidates(rows, cfg))
 	if err != nil {
-		// Referanssız p99 boyutu KAPALI sayılırdı → açık p99 problemi sahte
-		// "temiz" görünüp kapanırdı. Ana okuma hatasıyla aynı yön: yalnız tazele.
-		log.Printf("[evaluator] db-health p99 referans okuması: %v — açık problemler tazelendi, karar yok", err)
+		// Referanssız p99 / hata sayısı boyutu KAPALI sayılırdı → açık problem
+		// sahte "temiz" görünüp kapanırdı. Ana okuma hatasıyla aynı yön: yalnız tazele.
+		log.Printf("[evaluator] db-health referans okuması: %v — açık problemler tazelendi, karar yok", err)
 		e.keepDBHealth(ctx, open)
 		return
 	}
@@ -463,7 +573,7 @@ func (e *Evaluator) reconcileDBHealth(ctx context.Context, q chstore.Problem, v 
 		prev := q.Severity
 		q.Metric, q.Value, q.Threshold = v.Metric, v.Value, v.Threshold
 		q.Severity = effectiveSeverity(v.Severity, time.Since(time.Unix(0, q.StartedAt)), e.escalationCfg(ctx))
-		q.Description = dbHealthReason(v.Key, v.Latest, cfg)
+		q.Description = dbHealthReason(v.Key, v.Latest, v.Span, cfg)
 		rose = dbHealthSeverityRose(prev, q.Severity)
 	}
 	// Fire değilse histerezis bandı (ya da ilk temiz okuma): satır tazelenir
@@ -539,7 +649,7 @@ func dbHealthProblem(v dbHealthVerdict, cfg chstore.DBHealthConfig, now time.Tim
 		Threshold:   v.Threshold,
 		Comparator:  ">=",
 		Status:      "open",
-		Description: dbHealthReason(v.Key, v.Latest, cfg),
+		Description: dbHealthReason(v.Key, v.Latest, v.Span, cfg),
 		StartedAt:   now.UnixNano(),
 	}
 }

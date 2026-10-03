@@ -1904,6 +1904,9 @@ export interface OracleSource {
   problemMode?: 'off' | 'shadow' | 'live';
   genericCodes?: string[];
   ignoreCodes?: string[];
+  /** v0.10.1083 — hata serisinin Problem açması için gereken ARDIŞIK 1 dk'lık
+   *  ihlal kovası (3-30, boş = 10). */
+  dwellMinutes?: number;
   /** v0.10.1000 — satırın fonksiyon kodu span'lerdeki FUNCTION_CODE ile aynı
    *  değerdir: servisi bulunamayan satır o kodu taşıyan span'lerin servisine
    *  bağlanır, eşleme zamanla öğrenilir. v0.10.1001: kod, `code` alanı bir
@@ -7725,7 +7728,9 @@ export interface ProblemPriorityConfig {
   // "incident:<severity>") bu glob'lardan birine uyan satır kendi P1/P2'sini
   // korur. `*` herhangi bir dizi; tam eşleşme. Sunucu her zaman somut liste
   // döner (varsayılan: anomaly:*:error_rate, builtin-*, db-health:*,
-  // incident:critical); boş liste = istisna kapalı. Ayar ekranında salt-okunur.
+  // incident:critical; v0.10.1083 + anomaly:ext:*:ext:error_count,
+  // anomaly-cluster:ext:* — Oracle hata serisi/kümesi); boş liste = istisna
+  // kapalı. Ayar ekranında salt-okunur.
   inboxKeepSourcePriority?: string[];
   // v0.10.1081 — SLO burn-rate alarmı Problem (ve incident / bildirim) üretsin
   // mi. Yok / null / false = KAPALI (varsayılan; operatör: "SLO burn rate
@@ -8591,7 +8596,9 @@ export interface DBSlowQueryConfig {
 // p99 ≥ p99Ms VE ≥ p99RiseFactor × dünkü aynı kova (göreli; dünkü kova yoksa
 // p99 boyutu kapalı); kova başına ≥ minCalls çağrı ve ≥ minCallers etkilenen
 // (batch olmayan, kovada ≥ minCallerCalls çağrılı) çağıran. maxNewPerTick =
-// tik başına yeni açılış tavanı.
+// tik başına yeni açılış tavanı. v0.10.1083 — mutlak hata SAYISI kolu: kova
+// hata sayısı ≥ minErrorCount VE ≥ errorRiseFactor × dünkü aynı kova (dünkü
+// kova yoksa kapalı) VE ≥ minCallers çağıranın her biri ≥ minCallerErrors hata.
 export interface DBHealthConfig {
   enabled: boolean;
   errorPct: number;
@@ -8601,6 +8608,9 @@ export interface DBHealthConfig {
   minCalls: number;
   minCallers: number;
   maxNewPerTick: number;
+  minErrorCount: number;
+  errorRiseFactor: number;
+  minCallerErrors: number;
 }
 
 // /api/settings/trace-facets (v0.10.302/303, trace arama Dilim 2) — operatör

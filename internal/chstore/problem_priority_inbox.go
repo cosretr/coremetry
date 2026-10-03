@@ -37,13 +37,32 @@ const (
 	InboxKeepBuiltin          = "builtin-*"            // yerleşik kurallar (v0.10.1069'dan beri varsayılan kapalı)
 	InboxKeepDBHealth         = "db-health:*"          // DB sağlık kuralları (ayrı dilimde ekleniyor)
 	InboxKeepCriticalIncident = "incident:critical"    // kritik incident
+	// v0.10.1083 (operatör: "Oracle hataları da problemse hâlâ düşmüyor") —
+	// dış kaynak (Oracle hata tablosu) hata SAYISI serisi ve onun kümesi.
+	InboxKeepExtErrorCount = "anomaly:ext:*:ext:error_count" // dış kaynak hata serisi
+	InboxKeepExtCluster    = "anomaly-cluster:ext:*"         // dış kaynak hata kümesi
+	// InboxKeepExtCap — tavan ÖZET satırı (critical, Value = tavana takılan seri
+	// / Threshold = tavan): üyeleri P1 görünürken özet P3'e çivilenmesin.
+	InboxKeepExtCap = "anomaly:ext-cap:*"
 )
 
 // DefaultInboxKeepSourcePriority — alan YOKKEN geçerli liste. BİLİNÇLİ
 // olarak DAR: trace_op / trace_op_latency / log_* / behavior_change /
 // `anomaly-auto:*` (terfi etmiş anomali) / SLO burn (`slo:*`) / yavaş ifade /
 // self-health burada YOK — v0.9.487'nin susturduğu gürültü tam o sınıflar.
+//
+// v0.10.1083 — dış kaynak hata serisi + kümesi + tavan özeti eklendi
+// (operatör onaylı; kaynak sağlığı `anomaly:ext-down:` bilinçli DIŞARIDA).
+// Kayıtlı ESKİ varsayılan liste tek seferlik göçle yeniye taşınır
+// (problem_priority_inbox_migrate.go); özelleştirilmiş liste dokunulmaz.
 func DefaultInboxKeepSourcePriority() []string {
+	return []string{InboxKeepErrorRateAnomaly, InboxKeepBuiltin, InboxKeepDBHealth, InboxKeepCriticalIncident,
+		InboxKeepExtErrorCount, InboxKeepExtCluster, InboxKeepExtCap}
+}
+
+// legacyInboxKeepSourcePriority — v0.10.1072'nin varsayılanı (göçün "eski
+// varsayılan" tanımı; DEĞİŞTİRME — kayıtlı listeyi bununla kıyaslıyoruz).
+func legacyInboxKeepSourcePriority() []string {
 	return []string{InboxKeepErrorRateAnomaly, InboxKeepBuiltin, InboxKeepDBHealth, InboxKeepCriticalIncident}
 }
 

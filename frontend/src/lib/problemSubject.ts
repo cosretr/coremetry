@@ -263,8 +263,12 @@ export function isAnomalyProblem(ruleId: string | null | undefined): boolean {
  * isAnomalyDetectorRule — yalnız "anomaly:" ailesi (z-skor / service_silent /
  * dış seri dedektörü). isAnomalyProblem'in ALT kümesi ve ondan BİLEREK ayrı:
  * bu ailede `threshold` bir eşik değil olağan (medyan) değerdir ve açıklama
- * metni üstteki özet cümlesinin istatistik tekrarıdır. Terfi Problem'inde
- * `threshold` gerçek bir kapı (MinPeakRatio), kümede üye sayısı alt sınırı;
+ * metni üstteki özet cümlesinin istatistik tekrarıdır (v0.10.1083 istisnası:
+ * dış seride `anomaly:ext:` threshold = max(medyan, taban) — özet "eşik" der,
+ * detailSummary.ts). Terfi Problem'inde `threshold` gerçek bir kapı
+ * (MinPeakRatio); servis kümesinde üye sayısı alt sınırı, dış kümede
+ * (v0.10.1083) ya üye sayısı alt sınırı (yayılım) ya da en güçlü üyenin
+ * tabanlı eşiği — hangisi olduğu açıklamada yazar;
  * açıklamaları da sayfadaki TEK insan-okur metin (terfi: tür / desen / sayı,
  * küme: üye listesi). O yüzden "eşik" kelimesi ve Description bölümü bu
  * yüklemle karar verir, rozetle değil.
