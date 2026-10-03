@@ -49,6 +49,11 @@ func TestExceptionGroupIDRoundTrip(t *testing.T) {
 	if id := exceptionGroupID("abc", chstore.ExStateRegressed); id != "exception-group:abc:regressed" || exceptionGroupFingerprint(id) != "abc" {
 		t.Errorf("regressed: %q", id)
 	}
+	// v0.10.1078 — P1 yükseltme anahtarı regresyon damgası taşır; parmak izi korunur.
+	r := time.Date(2026, 10, 3, 7, 0, 0, 0, time.UTC).UnixNano()
+	if id := exceptionRegressionP1ID("abc", &r); id != "exception-group:abc:regressed:p1:1791010800" || exceptionGroupFingerprint(id) != "abc" {
+		t.Errorf("p1+damga: %q", id)
+	}
 	if exceptionGroupFingerprint("incident:1") != "" {
 		t.Error("başka kimlik → boş")
 	}

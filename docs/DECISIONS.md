@@ -1261,6 +1261,25 @@ başına sağdan hizalı yazar (`regionLabelPlacement`, saf) — yalnız çizim 
 bitişini aşmıyorsa; yoksa eski yol (kısalt / sustur). Renkler, şerit ve isabet satırı değişmedi; anomali bantları da
 aynı kuraldan yararlanır.
 
+## 2026-10-03 — Exception bildirici: regressed grup P1'e yükselince bir kez bildirir (v0.10.1078)
+
+**Boşluk (v0.10.1072):** regressed grup yeniden açıldıktan sonra ≥500 oluşumda P1 oluyor, ama bildirici
+`<fp>:regressed`'i ilk (P2) değerlendirmede gönderilmiş sayıyordu; yalnız-P1 kanallar yükselmeyi hiç duymuyordu.
+Operatör onaylı.
+
+**Karar:** yeni anahtar `exception-group:<fp>:regressed:p1:<epoch>` (epoch = resolve anı, sn; damgasız eski satırda
+`…:p1`). Grup regressed iken önceliği P1 olunca regresyon başına BİR kez gönderilir; kanallar P1 ve kendi
+minPriority'leriyle değerlendirir, şablon aynı, gerekçe "yeniden açıldıktan sonra ≥N oluşum". Sonraki bir regresyonda
+500'ü yeniden aşan grup gerçek bir P1'dir, yine bildirilir. Regresyon zaten P1 başlarsa yalnız `:p1` gider ve taban da
+gönderilmiş sayılır (P1 kanala çift yok). Dedup eskisi gibi lider-yerel defter + `notification_log`
+(`HasAnyNotification`), restart çift göndermez; P2 tiklerinde `:p1` için CH okuması yok. Yükseltme tabanın Sustur'unu da
+dinler. Pin: `notify/exception_regressed_p1_test.go`.
+
+**Taban anahtar DEĞİŞMEDİ (bilinçli):** `<fp>:regressed` damgasız, 90 günde bir; Sustur anlamı aynı. Operatör önceliği
+gürültü azlığı: her gün resolve/regress olan kronik bir grup her regresyonda bildirim üretmemeli. Taban için regresyon
+başına damga reddedildi. Bilinen kenar: P1 başlayan bir regresyonda taban yalnız bellekte kapanır (log'da yalnız `:p1`
+var), bu yüzden 90 gün içindeki SONRAKİ bir P2 regresyonu tabanı bir kez gönderir.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

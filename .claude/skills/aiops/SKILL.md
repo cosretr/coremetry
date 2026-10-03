@@ -61,7 +61,7 @@ Ne üretiyorsun?
 │    sayısal kapı SAF `promotionGate`.
 ├─ Yalnız bildirim, saklanmayacak? ───────────────► notify-only Problem
 │    (incident:* ve exception P1 duyurusu böyle; incident_alert.go:35,
-│    exception_notifier.go:124). UpsertProblem ÇAĞIRMA.
+│    exception_notifier.go:136). UpsertProblem ÇAĞIRMA.
 └─ Kanıt (RCA girdisi)? ──────────────────────────► correlator.Synthesize'a sinyal
      (hypothesis.go:284); yeni skor katmanı = hypothesis_*_test.go'ya tablo.
 ```
@@ -234,7 +234,7 @@ RuleID / incident `incident:<severity>`) uyan satır kaynak P1/P2'sini korur, ge
 "kaynak önceliği korundu (…)". Varsayılan `anomaly:*:error_rate`, `builtin-*`,
 `db-health:*`, `incident:critical`; nil = varsayılan, `[]` = saf v0.9.487; geniş kalıp
 400 (literal önek + ≥3 literal; `*:*` red); PUT kayıtlı değerin üstüne çözülür (alan
-yoksa liste korunur). Regressed P1 yükseltmesi bildirim tetiklemez (`<fp>:regressed` dedup). Bilinçli DIŞARIDA: trace_op(_latency) / log_* / behavior_change /
+yoksa liste korunur). Regressed P1 yükseltmesi regresyon başına bir kez bildirilir (v0.10.1078: `<fp>:regressed:p1:<epoch>`, `claimRegressed`); taban `<fp>:regressed` 90 günde bir, damgasız (kronik grup gürültüsü). Bilinçli DIŞARIDA: trace_op(_latency) / log_* / behavior_change /
 `anomaly-auto:*` / `slo:*` / yavaş ifade / self-health — listeye ekleme önerme.
 Facet sayaçlarından ÖNCE (`inbox_keep_priority_test.go` sırayı pinler). Kod
 `chstore/problem_priority_inbox.go` + `api/inbox_keep_priority.go`.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,6 +57,8 @@ type ExceptionNotifier struct {
 	// sent — lider-yerel "bu grup/durum gönderildi" defteri; notification_log
 	// (HasAnyNotification) restart sonrası aynı görevi görür.
 	sent map[string]int64
+	// logged — kalıcı defter sorusu (v0.10.1078; testte sahte).
+	logged func(ctx context.Context, id string) (bool, error)
 }
 
 func NewExceptionNotifier(store *chstore.Store, n *Notifier, lock cache.Lock, prio ExceptionPriorityFn) *ExceptionNotifier {
@@ -66,6 +69,9 @@ func NewExceptionNotifier(store *chstore.Store, n *Notifier, lock cache.Lock, pr
 		interval: interval,
 		prio:     prio,
 		sent:     map[string]int64{},
+		logged: func(ctx context.Context, id string) (bool, error) {
+			return store.HasAnyNotification(ctx, "exception", id)
+		},
 	}
 }
 
@@ -113,6 +119,12 @@ func (e *ExceptionNotifier) tickIfLeader(ctx context.Context) {
 // ömrü + durum başına BİR kez (notification_log + lider-yerel defter), tik
 // başına tavan exChannelMaxPerTick. Eski yapışkan P1 yığını (ilk görülme
 // saatler önce) tetiklenmez: tazelik kapısı bunun için.
+//
+// v0.10.1078 — regressed grup P1'e yükselince (v0.10.1072 hacim kapısı)
+// `<fp>:regressed:p1:<epoch>` BİR kez daha — yalnız-P1 kanallar o ana dek
+// hiçbir şey almamıştı. Damga resolve anı: sonraki regresyonda 500'ü yeniden
+// aşan grup gerçek bir P1'dir. Taban `<fp>:regressed` DEĞİŞMEDİ (90 gün,
+// damgasız): her gün resolve/regress olan kronik grup her seferinde bildirmez.
 
 const (
 	exChannelNewMaxAge  = 15 * time.Minute
@@ -130,12 +142,24 @@ func exceptionGroupID(fp, state string) string {
 	return chstore.ExceptionGroupRulePrefix + fp
 }
 
+// exceptionRegressionP1ID — SAF (v0.10.1078): regresyonun P1 yükseltme
+// anahtarı; resolve damgası (sn) ekli. Damgasız (eski) satır: `…:p1`.
+func exceptionRegressionP1ID(fp string, resolvedAt *int64) string {
+	id := exceptionGroupID(fp, chstore.ExStateRegressed) + ":p1"
+	if resolvedAt != nil && *resolvedAt > 0 {
+		id += ":" + strconv.FormatInt(*resolvedAt/int64(time.Second), 10)
+	}
+	return id
+}
+
 // exceptionGroupFingerprint — SAF: kimlikten parmak izi ("" = bu tür değil).
+// Parmak izi onaltılık (':' içermez); sonrasındaki durum/damga/p1 ekleri atılır.
 func exceptionGroupFingerprint(id string) string {
 	if !strings.HasPrefix(id, chstore.ExceptionGroupRulePrefix) {
 		return ""
 	}
-	return strings.TrimSuffix(strings.TrimPrefix(id, chstore.ExceptionGroupRulePrefix), ":regressed")
+	fp, _, _ := strings.Cut(strings.TrimPrefix(id, chstore.ExceptionGroupRulePrefix), ":")
+	return fp
 }
 
 // isChannelCandidate — SAF: tazelik kapısı (state'e göre) + oluşum tabanı.
@@ -217,16 +241,28 @@ func (e *ExceptionNotifier) routeGroups(ctx context.Context, now time.Time) {
 			if e.n.verdictSilenced(ctx, exceptionVerdictSignature(g.Fingerprint)) {
 				continue
 			}
-			id := exceptionGroupID(g.Fingerprint, state)
-			if _, done := e.sent[id]; done {
-				continue
-			}
-			if seen, herr := e.store.HasAnyNotification(ctx, "exception", id); herr == nil && seen {
+			var id string
+			if state == chstore.ExStateRegressed {
+				id = e.claimRegressed(ctx, g, prio, now)
+				if id == "" {
+					continue
+				}
+				// Yükseltme, aynı regresyonun Sustur'unu da dinler (kimliği ayrı).
+				if base := exceptionGroupID(g.Fingerprint, state); id != base {
+					if ok, ierr := e.store.NotificationIgnored(ctx, base); ierr == nil && ok {
+						continue
+					}
+				}
+			} else {
+				id = exceptionGroupID(g.Fingerprint, state)
+				if e.alreadySent(ctx, id, now) {
+					continue
+				}
 				e.sent[id] = now.UnixNano()
-				continue
 			}
-			e.sent[id] = now.UnixNano()
-			e.n.SendProblemAlert(ctx, exceptionGroupProblem(g, state, prio, reason))
+			p := exceptionGroupProblem(g, state, prio, reason)
+			p.ID = id
+			e.n.SendProblemAlert(ctx, p)
 			sent++
 		}
 	}
@@ -238,6 +274,47 @@ func (e *ExceptionNotifier) routeGroups(ctx context.Context, now time.Time) {
 			delete(e.sent, id)
 		}
 	}
+}
+
+// alreadySent — önce lider-yerel defter, sonra notification_log (restart /
+// lider değişimi). Log okunamadı = gönderilmemiş say (v0.10.782 yönü).
+func (e *ExceptionNotifier) alreadySent(ctx context.Context, id string, now time.Time) bool {
+	if _, done := e.sent[id]; done {
+		return true
+	}
+	if seen, err := e.logged(ctx, id); err == nil && seen {
+		e.sent[id] = now.UnixNano()
+		return true
+	}
+	return false
+}
+
+// claimRegressed — v0.10.1078: regressed grup için bu tikte gidecek kimlik
+// ("" = yok) ve defter kaydı:
+//   - P2 → taban `<fp>:regressed` (eski davranış: 90 günde bir, damgasız);
+//   - grup bu regresyonda P1 olur → `:p1:<epoch>` BİR kez (P1 kanallar ilk kez alır);
+//   - regresyon zaten P1 başlarsa yalnız `:p1` gider ve taban da gönderilmiş
+//     sayılır (P1 kanala çift gitmez).
+//
+// P2 tikinde `:p1` defteri yalnız taban gönderilmemişse sorulur — her tikte
+// fazladan CH okuması yok.
+func (e *ExceptionNotifier) claimRegressed(ctx context.Context, g chstore.ExceptionGroup, prio string, now time.Time) string {
+	base := exceptionGroupID(g.Fingerprint, chstore.ExStateRegressed)
+	up := exceptionRegressionP1ID(g.Fingerprint, g.ResolvedAt)
+	if prio != "P1" {
+		if e.alreadySent(ctx, base, now) || e.alreadySent(ctx, up, now) {
+			e.sent[base] = now.UnixNano() // P1 doğmuş regresyon: sonraki tikler sorgusuz
+			return ""
+		}
+		e.sent[base] = now.UnixNano()
+		return base
+	}
+	if e.alreadySent(ctx, up, now) {
+		return ""
+	}
+	e.sent[up] = now.UnixNano()
+	e.sent[base] = now.UnixNano() // P1 doğan regresyonda taban da kapanır
+	return up
 }
 
 func (e *ExceptionNotifier) run(ctx context.Context, tc chstore.TeamContacts) {
