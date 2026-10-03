@@ -432,7 +432,7 @@ func computePriority(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string,
 	// Kelepçe BURADA da uygulanıyor: elle kurulmuş bir config ile
 	// çağıran bir test/çağıran, BigBreachRatio 0'da `ratio >= 0`
 	// yüzünden HER problemi büyük ihlal yapardı.
-	cfg = NormalizeProblemPriority(cfg)
+	cfg = normalizeProblemPriorityKnobs(cfg) // v0.10.1072 — liste merdivene girmez
 	sev := p.Severity
 	if sev == "info" {
 		return "P3", "info"

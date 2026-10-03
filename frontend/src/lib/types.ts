@@ -5044,6 +5044,9 @@ export interface ExceptionGroup {
   lastSeen: number;       // unix ns
   resolvedAt?: number;    // unix ns, present only when state was/is resolved
   occurrences: number;
+  /** v0.10.1072 — grubun en son resolve edildiği andaki occurrences (regressed
+   *  grubun P1 kapısı bunun üstündeki hacme bakar). Yok/0 = anlık görüntü yok. */
+  occurrencesAtResolve?: number;
   notes: string;
   // v0.9.415 — ExceptionExplainer'ın proaktif kök-sebep özeti (P1
   // gruplara arka planda dolar); boş/yok = henüz üretilmedi.
@@ -7701,6 +7704,13 @@ export interface ProblemPriorityConfig {
   // Bir critical problem bu kadar saattir AÇIKSA tek başına P1'e terfi
   // eder. Varsayılan 4. 0 = terfi tamamen kapalı.
   staleCriticalHours: number;
+  // v0.10.1072 — inbox görünüm kuralının (exception dışı türler P3) DAR
+  // istisna listesi: kaynak kimliği (Problem ruleId; incident için
+  // "incident:<severity>") bu glob'lardan birine uyan satır kendi P1/P2'sini
+  // korur. `*` herhangi bir dizi; tam eşleşme. Sunucu her zaman somut liste
+  // döner (varsayılan: anomaly:*:error_rate, builtin-*, db-health:*,
+  // incident:critical); boş liste = istisna kapalı. Ayar ekranında salt-okunur.
+  inboxKeepSourcePriority?: string[];
 }
 
 // v0.9.1036 — failure-rate (%) SLO eşiği (backend:

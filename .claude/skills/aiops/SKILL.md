@@ -226,9 +226,25 @@ sıralamaya karışmaz. Vidalar `problem_priority` blobu (`problem_priority.go:2
 sıfır struct = varsayılan, `StaleCriticalHours=0` anlamlı. Kapatma yolu
 `MarkResolved` (:549) `Value`'yu EZMEZ (v0.9.977: açık/kapalı öncelik simetrisi).
 
+**Inbox görünüm önceliği** (`forceNonExceptionP3`, v0.9.487; v0.10.1072 kısmi revizyon):
+exception/httperror dışı satırlar inbox'ta P3 — YALNIZ dar istisna listesine
+(`problem_priority.inboxKeepSourcePriority`, glob `*`, tam eşleşme; kimlik Problem
+RuleID / incident `incident:<severity>`) uyan satır kaynak P1/P2'sini korur, gerekçe
+"kaynak önceliği korundu (…)". Varsayılan `anomaly:*:error_rate`, `builtin-*`,
+`db-health:*`, `incident:critical`; nil = varsayılan, `[]` = saf v0.9.487; geniş kalıp
+400 (literal önek + ≥3 literal; `*:*` red); PUT kayıtlı değerin üstüne çözülür (alan
+yoksa liste korunur). Regressed P1 yükseltmesi bildirim tetiklemez (`<fp>:regressed` dedup). Bilinçli DIŞARIDA: trace_op(_latency) / log_* / behavior_change /
+`anomaly-auto:*` / `slo:*` / yavaş ifade / self-health — listeye ekleme önerme.
+Facet sayaçlarından ÖNCE (`inbox_keep_priority_test.go` sırayı pinler). Kod
+`chstore/problem_priority_inbox.go` + `api/inbox_keep_priority.go`.
+
 **Exception merdiveni** ayrı SAF işlev `exceptionPriorityAt` (`inbox.go:1832`):
 patlama (BurstMinTotal + BurstMinRate) → **P1 yapışkan** (v0.9.1205); `regressed`
-→ P2; `Occurrences ≥ P1MinOccurrences` → **P1 yapışkan** (v0.10.741, kronik
+→ yeniden açıldıktan sonra (`Occurrences − OccurrencesAtResolve`) ≥ P1MinOccurrences
+ise P1 "yeniden açıldıktan sonra ≥N oluşum", değilse P2 (v0.10.1072; anlık görüntü
+resolve anında `markExceptionResolved` ile `exception_groups.occurrences_at_resolve`'a,
+iki-boot probe `hasExResolveSnapCol`; anlık görüntüsüz grup P2 — kapıyı ömür toplamıyla
+regressed'in üstüne taşıma, sel olur); `Occurrences ≥ P1MinOccurrences` → **P1 yapışkan** (v0.10.741, kronik
 damlama istisnası kalktı); taze && ≥100 → P2; oran ≥ BurstMinRate/2 → P3
 gerekçeli; değilse P3. **Operatör direktifleri (yeniden önerme):** P1 zamanla
 P2/P3'e İNMEZ; "kuyruk şişer" cevabı `p1MinOccurrences` vidasıdır, zaman
@@ -352,7 +368,9 @@ liste `*[]string` (`batchServicePatterns`, v0.10.1039): nil = varsayılan, `[]` 
 Normalize boş listeyi `[]` (nil olmayan dilim) yazar — `null` geri okununca nil olur ve
 kural sessizce geri açılırdı. Normalize'a kopyalanmayan alan PUT'ta düşer. Varsayılanı
 TEK YÖNLÜ eylem süren bir ayar (kapatma) okuma hatasında varsayılan YAYINLAMAMALI:
-`anomaly_sensitivity` son değeri korur + "doğrulandı" bayrağı taşır (v0.10.1039).
+`anomaly_sensitivity` son değeri korur + "doğrulandı" bayrağı taşır (v0.10.1039);
+`problem_priority` da okuma hatasında son değeri korur (`LoadProblemPriorityWith`,
+v0.10.1072 — inbox istisna listesi taşıdığı için).
 
 ## 12. Sessiz bozulmalar — sürüm etiketli
 

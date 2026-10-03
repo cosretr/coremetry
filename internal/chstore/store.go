@@ -254,6 +254,15 @@ type Store struct {
 	// dek değil.
 	hasAnomalyEpisodeCols atomic.Bool
 
+	// hasExResolveSnapCol — exception_groups.occurrences_at_resolve taşıyor
+	// mu (v0.10.1072, regressed grupta yeniden açılış hacmi).
+	// hasAnomalyEpisodeCols ile AYNI sınıf ve aynı iki-boot sözleşmesi:
+	// kendi state tablomuz, küme kipinde kolonu EKLEYEN boot probe'u false
+	// okur. false ⇒ okuma/INSERT kolonu ATLAR, anlık görüntü 0 okunur =
+	// "yok" → regressed grup P2'de kalır (güvenli yön: ömür boyu toplamla P1
+	// ASLA). Ertelenen DDL inince reprobePromotedAttrs bayrağı çevirir.
+	hasExResolveSnapCol atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -3775,6 +3784,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		// kendisi enjekte eder, _local tehlikesi yok (monitors/users
 		// ALTER'larıyla aynı şekil). problems.ai_summary_at ile birebir tip.
 		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS ai_summary_at DateTime64(9) DEFAULT toDateTime64(0, 9)`,
+		// v0.10.1072 — resolve anındaki occurrences anlık görüntüsü. Regressed
+		// grubun P1 kapısı ömür boyu toplama değil "yeniden açıldıktan sonra"
+		// hacme bakar (occurrences − bu). DEFAULT 0 = "anlık görüntü yok":
+		// bu sürümden önce çözülmüş her grup P2'de kalır. ORDER BY'a girmez
+		// (dedup anahtarı fingerprint). CREATE TABLE'a bilinçli EKLENMEDİ
+		// (anomaly_events episode emsali): taze ve yükseltilmiş kurulumda
+		// fiziksel kolon sırası aynı. Probe hasExResolveSnapCol (iki-boot).
+		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS occurrences_at_resolve UInt64 DEFAULT 0`,
 		// v0.8.283 — synthetic monitor types beyond http+heartbeat: tcp,
 		// ssl-cert, keyword. Additive columns on the existing monitors
 		// state table (no new schema). `monitors` isn't a high-volume
@@ -4177,6 +4194,15 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasAnomalyEpisodeCols.Store(aeOK)
 	if !aeOK {
 		log.Printf("[chstore] `episode_count`/`first_started_at` columns not present on anomaly_events (err=%v) — carry read/INSERT/SELECT omit them and every write resets the counter to its DEFAULT; every anomaly reads as a first episode (recurring marker off, deploy attribution by started_at — the pre-v0.10.1049 behaviour) until the deferred-DDL re-probe or the next boot", aeErr)
+	}
+
+	// exception_groups.occurrences_at_resolve probe'u (v0.10.1072) — bölüm
+	// kolonları probe'unun şekli (system.columns metadata). false iken
+	// okuma/INSERT kolonu atlar; regressed grup P2'de kalır (bugünkü davranış).
+	exOK, exErr := s.probeExResolveSnapCol(ctx)
+	s.hasExResolveSnapCol.Store(exOK)
+	if !exOK {
+		log.Printf("[chstore] `occurrences_at_resolve` column not present on exception_groups (err=%v) — read/INSERT omit it; regressed groups stay P2 (the pre-v0.10.1072 ladder) until the deferred-DDL re-probe or the next boot", exErr)
 	}
 
 	// topology_edges_5m.cluster probe (v0.9.1025) — comparator ile birebir

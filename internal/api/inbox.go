@@ -890,6 +890,9 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 		// sayaçlarından ÖNCE uygulanır ki öncelik chip'leri de zorlanmış
 		// değerleri saysın. Yalnız inbox GÖRÜNÜM önceliği — evaluator'ın
 		// Problem.Priority'si (bildirim yönlendirme, drawer) değişmez.
+		// v0.10.1072 — dar istisna listesi (kritik hata oranı anomalisi,
+		// builtin-*, db-health:*, kritik incident) kaynak önceliğini korur;
+		// sıra AYNEN sayaçlardan önce, yani P1 çipi korunan satırları sayar.
 		forceNonExceptionP3(items)
 
 		// v0.9.330 — facet counts are computed HERE, over everything that
@@ -1001,18 +1004,14 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 // bir sınıf adı olmadığı için ayrı tür chip'i aldı. Kural exception'ları
 // "operatörün triage sinyali" diye korurken aynı sinyalin HTTP yarısını
 // kesiyordu. Kural problem/anomaly/incident için aynen sürer.
+//
+// v0.10.1072 (operatör onaylı, prod 2026-10-02: "Dün akşam CRM database'inde
+// sorun oldu ama problemlerde P1 gelmedi") — KISMİ REVİZYON: problem_priority
+// blobunun DAR istisna listesine (`inboxKeepSourcePriority`) uyan kaynak
+// kendi P1/P2'sini korur; gerisi aynen P3. Çekirdek ve gerekçe metni
+// inbox_keep_priority.go'da. Liste bir kez okunur (atomik, CH yok).
 func forceNonExceptionP3(items []InboxItem) {
-	for i := range items {
-		if items[i].Kind == "exception" || items[i].Kind == "httperror" {
-			continue
-		}
-		if items[i].Priority == "P3" {
-			continue
-		}
-		orig := items[i].Priority
-		items[i].Priority = "P3"
-		items[i].PriorityReason = "tür kuralı: exception/HTTP error dışı kalemler inbox'ta P3 (kaynak önceliği " + orig + ")"
-	}
+	forceNonExceptionP3With(items, chstore.CurrentProblemPriority().InboxKeepSourcePriorityList())
 }
 
 // pickStatus translates the inbox filter into a Problem status.
@@ -1160,6 +1159,9 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// sürümün cache'lediği sayfa (dış kaynak satırsız) yeni sözleşmeymiş
 	// gibi servis edilmesin; kayan dağıtımda iki sürüm aynı anahtarı
 	// paylaşıp listeyi her poll'da değiştirmesin.
+	// :v9: — v0.10.1072 istisna listesi satır önceliklerini değiştirdi (:v6:
+	// emsali). Listenin KENDİSİ anahtarda değil: PUT önek düşürür
+	// (invalidateInboxCaches), susturma yazımlarıyla aynı duruş.
 	//
 	// `subject` anahtara GİRMEK ZORUNDA ve `kind` onun yerine geçemez:
 	// db şeridi kinds'i ["problem"]e ZORLUYOR, yani servis şeridinde
@@ -1167,7 +1169,7 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// aynı kind dizisini üretir. Ayrı bir alan olmasaydı ikisi TEK cache
 	// girdisini paylaşır ve biri diğerinin satırlarını görürdü — v0.5.187
 	// çapraz-zehirlenmesinin birebir şekli.
-	return fmt.Sprintf("inbox:v8:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	return fmt.Sprintf("inbox:v9:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }
@@ -2172,7 +2174,20 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 
 	// v0.10.949 — "regressed" olgusu tek yerden (exceptionIsRegressed):
 	// varsayılan tabanın regressed istisnası aynı yüklemi kullanır.
+	//
+	// v0.10.1072 (operatör onaylı, prod 2026-10-02) — 54.812 oluşumlu bir
+	// grup regressed olduğu için P2 görünüyordu: bu dal hacim kapısından
+	// ÖNCE dönüyor, yani "kazanılmış P1 düşmez" regressed grupta geçerli
+	// değildi. Kapıyı bu dalın üstüne ÖMÜR BOYU toplamla taşımak her kronik
+	// regressed grubu P1 yapardı (sel) — onun yerine resolve anındaki sayı
+	// saklanıyor (occurrences_at_resolve) ve YENİDEN AÇILDIKTAN SONRAKİ
+	// hacim aynı eşikle (P1MinOccurrences) ölçülüyor. Anlık görüntüsü
+	// olmayan grup (bu sürümden önce çözülmüş) P2'de kalır.
 	if exceptionIsRegressed(g.State) {
+		if since, ok := chstore.ExceptionOccurrencesSinceResolve(g); ok && since >= uint64(cfg.P1MinOccurrences) {
+			return "P1", fmt.Sprintf("yeniden açıldıktan sonra ≥%s oluşum (%s yeni · %s toplam)",
+				fmtThousands(uint64(cfg.P1MinOccurrences)), fmtThousands(since), fmtThousands(g.Occurrences))
+		}
 		return "P2", "regressed"
 	}
 	// v0.9.524 — operatör-bildirimli: "28 Haziran'daki problemde bile
@@ -2219,7 +2234,8 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 	// basamaklara iner" istisnası KALKTI (o istisna tam olarak operatörün
 	// gördüğü P1→P3 geçişiydi). Bedel bilinçli: uzun ömürlü damlama grupları
 	// resolve/ignore edilene dek P1 listesinde kalır. `regressed` dalı
-	// yukarıda AYNEN (P2 "regressed"): operatör onayı. Cümle dürüstlüğü
+	// yukarıda P2 "regressed" (operatör onayı); v0.10.1072'ten beri yeniden
+	// açıldıktan sonra ≥P1MinOccurrences üreten regressed grup P1. Cümle dürüstlüğü
 	// aynen: "active in last 5min" ya da "stopped N ago".
 	if g.Occurrences >= uint64(cfg.P1MinOccurrences) {
 		if freshMin {

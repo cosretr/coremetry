@@ -1,6 +1,7 @@
 package chstore
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -381,8 +382,15 @@ func TestNormalizeProblemPriority(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := NormalizeProblemPriority(c.in); got != c.want {
+			// v0.10.1072 — istisna listesi işaretçi taşıdığı için alan alan:
+			// sayısal vidalar birebir, liste ETKİN içeriğiyle (nil = varsayılan).
+			got := NormalizeProblemPriority(c.in)
+			if got.BigBreachRatio != c.want.BigBreachRatio || got.StaleCriticalHours != c.want.StaleCriticalHours ||
+				!reflect.DeepEqual(got.InboxKeepSourcePriorityList(), c.want.InboxKeepSourcePriorityList()) {
 				t.Errorf("Normalize(%+v) = %+v, %+v bekleniyordu", c.in, got, c.want)
+			}
+			if got.InboxKeepSourcePriority == nil {
+				t.Error("Normalize istisna listesini somutlaştırmadı (nil kaldı)")
 			}
 		})
 	}

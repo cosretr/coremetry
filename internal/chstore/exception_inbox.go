@@ -65,6 +65,11 @@ type ExceptionGroup struct {
 	// damgası olmadan operatör 6 saatlik bir çıkarımı canlı sayının
 	// altında taze sanar. 0 = özet yok.
 	AISummaryAt int64 `json:"aiSummaryAt,omitempty"`
+	// OccurrencesAtResolve (v0.10.1072) — grubun EN SON resolve edildiği
+	// andaki Occurrences (exception_resolve_snapshot.go). Regressed grubun
+	// P1 kapısı bunun ÜSTÜNDEKİ hacme bakar. 0 = anlık görüntü yok. Tam-satır
+	// replace: her yazma yolu taşır (Scan'e dahil, merge ileri taşır).
+	OccurrencesAtResolve uint64 `json:"occurrencesAtResolve,omitempty"`
 	// Spread / SpreadServices — v0.10.949 — YALNIZ JSON (CH kolonu değil,
 	// Scan/INSERT'e girmez): aynı exception aynı anda kaç serviste (kendisi
 	// dahil) ve ortak servislerin ilk 5'i. api.annotateExceptionSpread
@@ -323,6 +328,10 @@ func mergeExceptionGroup(g ExceptionGroup, existing *ExceptionGroup) ExceptionGr
 		// lastSeen ilerliyordu (operatör ekranı: 191 donuk, timeline Σ697).
 		g.Occurrences += existing.Occurrences
 		g.ResolvedAt = existing.ResolvedAt
+		// v0.10.1072 — resolve anlık görüntüsü regresyonda DA taşınır: P1
+		// kapısı tam o anda (regressed) onu okuyor. Yenileme taraması bu
+		// alanı üretmez; taşınmazsa her tik sıfırlardı.
+		g.OccurrencesAtResolve = existing.OccurrencesAtResolve
 	} else {
 		g.State = ExStateNew
 		if g.FirstSeen == 0 {
@@ -360,10 +369,8 @@ func (s *Store) GetExceptionGroupsByFingerprints(ctx context.Context, fps []stri
 		holders[i] = "?"
 		args[i] = fp
 	}
-	rows, err := s.conn.Query(ctx, `SELECT fingerprint, ex_type, ex_message, service, state,
-		       assignee, toUnixTimestamp64Nano(first_seen), toUnixTimestamp64Nano(last_seen),
-		       resolved_at, occurrences, notes, ai_summary,
-		       toUnixTimestamp64Nano(ai_summary_at)
+	snap := s.hasExResolveSnapCol.Load() // v0.10.1072 — SELECT ve Scan aynı anlık görüntüden
+	rows, err := s.conn.Query(ctx, `SELECT `+exGroupSelectCols(snap)+`
 		FROM exception_groups FINAL
 		WHERE fingerprint IN (`+strings.Join(holders, ",")+`)
 		SETTINGS max_execution_time = 20`, args...)
@@ -374,9 +381,7 @@ func (s *Store) GetExceptionGroupsByFingerprints(ctx context.Context, fps []stri
 	for rows.Next() {
 		var g ExceptionGroup
 		var resolvedAt *time.Time
-		if err := rows.Scan(&g.Fingerprint, &g.Type, &g.Message, &g.Service, &g.State,
-			&g.Assignee, &g.FirstSeen, &g.LastSeen, &resolvedAt, &g.Occurrences,
-			&g.Notes, &g.AISummary, &g.AISummaryAt); err != nil {
+		if err := rows.Scan(exGroupScanDest(&g, &resolvedAt, snap)...); err != nil {
 			return nil, err
 		}
 		if resolvedAt != nil {
@@ -422,10 +427,17 @@ func (s *Store) UpsertExceptionGroups(ctx context.Context, gs []ExceptionGroup) 
 }
 
 func (s *Store) writeExceptionGroup(ctx context.Context, g ExceptionGroup) error {
-	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO exception_groups
-		(fingerprint, ex_type, ex_message, service, state, assignee,
+	// v0.10.1072 — occurrences_at_resolve yalnız kolon varken (iki-boot
+	// sözleşmesi; probe false iken kolonu anmak her yazımı code 16 ile düşürür).
+	snap := s.hasExResolveSnapCol.Load()
+	cols := `fingerprint, ex_type, ex_message, service, state, assignee,
 		 first_seen, last_seen, resolved_at, occurrences, notes, ai_summary,
-		 ai_summary_at)`)
+		 ai_summary_at`
+	if snap {
+		cols += `, occurrences_at_resolve`
+	}
+	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO exception_groups
+		(`+cols+`)`)
 	if err != nil {
 		return fmt.Errorf("prepare exception_groups: %w", err)
 	}
@@ -434,7 +446,7 @@ func (s *Store) writeExceptionGroup(ctx context.Context, g ExceptionGroup) error
 		t := time.Unix(0, *g.ResolvedAt).UTC()
 		resolved = &t
 	}
-	if err := batch.Append(
+	vals := []any{
 		g.Fingerprint, g.Type, g.Message, g.Service, g.State, g.Assignee,
 		time.Unix(0, g.FirstSeen).UTC(),
 		time.Unix(0, g.LastSeen).UTC(),
@@ -443,7 +455,11 @@ func (s *Store) writeExceptionGroup(ctx context.Context, g ExceptionGroup) error
 		g.Notes,
 		g.AISummary,
 		time.Unix(0, g.AISummaryAt).UTC(),
-	); err != nil {
+	}
+	if snap {
+		vals = append(vals, g.OccurrencesAtResolve)
+	}
+	if err := batch.Append(vals...); err != nil {
 		return fmt.Errorf("append exception_group: %w", err)
 	}
 	return batch.Send()
@@ -471,19 +487,14 @@ func (s *Store) UpsertExceptionGroupAISummary(ctx context.Context, fingerprint, 
 }
 
 func (s *Store) GetExceptionGroup(ctx context.Context, fingerprint string) (*ExceptionGroup, error) {
+	snap := s.hasExResolveSnapCol.Load() // v0.10.1072
 	row := s.conn.QueryRow(ctx, `
-		SELECT fingerprint, ex_type, ex_message, service, state, assignee,
-		       toUnixTimestamp64Nano(first_seen),
-		       toUnixTimestamp64Nano(last_seen),
-		       resolved_at,
-		       occurrences, notes, ai_summary,
-		       toUnixTimestamp64Nano(ai_summary_at)
+		SELECT `+exGroupSelectCols(snap)+`
 		FROM exception_groups FINAL
 		WHERE fingerprint = ? LIMIT 1`, fingerprint)
 	var g ExceptionGroup
 	var resolvedAt *time.Time
-	if err := row.Scan(&g.Fingerprint, &g.Type, &g.Message, &g.Service, &g.State, &g.Assignee,
-		&g.FirstSeen, &g.LastSeen, &resolvedAt, &g.Occurrences, &g.Notes, &g.AISummary, &g.AISummaryAt); err != nil {
+	if err := row.Scan(exGroupScanDest(&g, &resolvedAt, snap)...); err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
 		}
@@ -723,12 +734,9 @@ func (s *Store) ListExceptionGroups(ctx context.Context, f ExceptionGroupFilter)
 	}
 	wc := buildExceptionGroupWhere(f)
 	args := append(wc.args, f.Limit, f.Offset)
+	snap := s.hasExResolveSnapCol.Load() // v0.10.1072 — merdiven (regressed P1) bunu okur
 	rows, err := s.conn.Query(ctx, `
-		SELECT fingerprint, ex_type, ex_message, service, state, assignee,
-		       toUnixTimestamp64Nano(first_seen),
-		       toUnixTimestamp64Nano(last_seen),
-		       resolved_at, occurrences, notes, ai_summary,
-		       toUnixTimestamp64Nano(ai_summary_at)
+		SELECT `+exGroupSelectCols(snap)+`
 		FROM exception_groups FINAL `+wc.sql()+`
 		`+exceptionGroupsOrderBy(f.Sort, f.Dir)+`
 		LIMIT ? OFFSET ?`, args...)
@@ -740,8 +748,7 @@ func (s *Store) ListExceptionGroups(ctx context.Context, f ExceptionGroupFilter)
 	for rows.Next() {
 		var g ExceptionGroup
 		var resolvedAt *time.Time
-		if err := rows.Scan(&g.Fingerprint, &g.Type, &g.Message, &g.Service, &g.State, &g.Assignee,
-			&g.FirstSeen, &g.LastSeen, &resolvedAt, &g.Occurrences, &g.Notes, &g.AISummary, &g.AISummaryAt); err != nil {
+		if err := rows.Scan(exGroupScanDest(&g, &resolvedAt, snap)...); err != nil {
 			return nil, err
 		}
 		if resolvedAt != nil {
@@ -810,8 +817,8 @@ func (s *Store) SetExceptionGroupState(ctx context.Context, fingerprint, newStat
 	}
 	g.State = newState
 	if newState == ExStateResolved {
-		now := time.Now().UnixNano()
-		g.ResolvedAt = &now
+		// v0.10.1072 — damga + hacim anlık görüntüsü tek yerden.
+		markExceptionResolved(g, time.Now().UnixNano())
 	} else if g.State != ExStateResolved {
 		g.ResolvedAt = nil
 	}
@@ -877,12 +884,9 @@ func (s *Store) AutoResolveStaleExceptionGroups(ctx context.Context, staleAfter 
 	// volumes there are a handful of stale groups per sweep, never
 	// thousands; the LIMIT is a safety belt against an install
 	// that's been ignored for a year.
+	snap := s.hasExResolveSnapCol.Load() // v0.10.1072 — tam satır: kolon da taşınır
 	rows, err := s.conn.Query(ctx, `
-		SELECT fingerprint, ex_type, ex_message, service, state, assignee,
-		       toUnixTimestamp64Nano(first_seen),
-		       toUnixTimestamp64Nano(last_seen),
-		       resolved_at, occurrences, notes, ai_summary,
-		       toUnixTimestamp64Nano(ai_summary_at)
+		SELECT `+exGroupSelectCols(snap)+`
 		FROM exception_groups FINAL
 		WHERE state IN ('new','acknowledged','regressed')
 		  AND last_seen < ?
@@ -895,9 +899,7 @@ func (s *Store) AutoResolveStaleExceptionGroups(ctx context.Context, staleAfter 
 	for rows.Next() {
 		var g ExceptionGroup
 		var resolvedAt *time.Time
-		if err := rows.Scan(&g.Fingerprint, &g.Type, &g.Message, &g.Service,
-			&g.State, &g.Assignee, &g.FirstSeen, &g.LastSeen, &resolvedAt,
-			&g.Occurrences, &g.Notes, &g.AISummary, &g.AISummaryAt); err != nil {
+		if err := rows.Scan(exGroupScanDest(&g, &resolvedAt, snap)...); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -913,10 +915,8 @@ func (s *Store) AutoResolveStaleExceptionGroups(ctx context.Context, staleAfter 
 	}
 	for i := range stale {
 		// resolved_at = the group's own last_seen, not now() —
-		// honest audit trail.
-		ts := stale[i].LastSeen
-		stale[i].State = ExStateResolved
-		stale[i].ResolvedAt = &ts
+		// honest audit trail. v0.10.1072 — hacim anlık görüntüsü de burada.
+		markExceptionResolved(&stale[i], stale[i].LastSeen)
 		if err := s.writeExceptionGroup(ctx, stale[i]); err != nil {
 			return 0, fmt.Errorf("upsert resolved group %s: %w", stale[i].Fingerprint, err)
 		}

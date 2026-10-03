@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -37,8 +38,14 @@ import (
 // chstore.EnrichProblemsWithPriority paket-düzeyi bir fonksiyon ve
 // notify / anomaly paketlerinden de çağrılıyor, yani config'i okuyan yer
 // chstore'un kendisi olmak zorunda.
+//
+// v0.10.1072 — okuma hatasında SON İYİ DEĞER korunur (LoadProblemPriorityWith):
+// istisna listesi inbox'ın P1 görünümünü belirliyor, bir CH hıçkırığı onu
+// varsayılana döndürüp satırları bir tik oynatmamalı.
 func (s *Server) LoadProblemPriority(ctx context.Context) {
-	chstore.SetProblemPriority(s.store.GetProblemPriority(ctx))
+	chstore.LoadProblemPriorityWith(func() (chstore.ProblemPriorityConfig, error) {
+		return s.store.ReadProblemPriority(ctx)
+	})
 }
 
 // StartProblemPriorityRefresh — çok-pod yakınsaması. PUT'u alan pod
@@ -63,8 +70,17 @@ func (s *Server) StartProblemPriorityRefresh(ctx context.Context, interval time.
 // olabilir (bu pod henüz yenilemedi) ve ayar sayfası KAYDEDİLENİ
 // göstermeli — operatör ne yazdığını görsün, hangi pod'a düştüğünü değil.
 // metric_exclusions ucunun duruşuyla aynı.
+//
+// v0.10.1072 — okuma hatası artık HATA döner (varsayılan DEĞİL): ayar ekranı
+// varsayılanla dolup bir Kaydet'te kayıtlı istisna listesini ezebilirdi
+// (anomaly_sensitivity v0.10.1039 emsali).
 func (s *Server) getProblemPriority(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.store.GetProblemPriority(r.Context()))
+	c, err := s.store.ReadProblemPriority(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, c)
 }
 
 // putProblemPriority validates + persists the knobs and swaps the
@@ -76,12 +92,18 @@ func (s *Server) getProblemPriority(w http.ResponseWriter, r *http.Request) {
 // "eşiği aşan HER ŞEY büyük ihlal" demek olurdu ve merdivenin üst
 // basamağı anlamsızlaşırdı.
 func (s *Server) putProblemPriority(w http.ResponseWriter, r *http.Request) {
-	// Varsayılanlarla ÖNCEDEN DOLDURULMUŞ struct'a decode: gövdede
-	// olmayan bir alan varsayılanında kalır. Yoksa yalnız bir alanı
-	// gönderen bir istemci, staleCriticalHours'ı sessizce 0'a (terfi
-	// kapalı) çekerdi — operatörün yazmadığı bir karar.
-	c := chstore.DefaultProblemPriority()
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+	// v0.10.1072 — KAYITLI değerin üstüne decode (eskiden varsayılanların
+	// üstüne): gövdede olmayan alan KAYITLI hâlinde kalır. Varsayılan tabanı,
+	// istisna listesini göndermeyen bir istemcinin (eski UI, betik) kayıtlı
+	// listeyi — operatörün `[]` ile kapattığı dahil — sessizce varsayılana
+	// döndürmesi demekti. Okuma hatası 5xx: tahminin üstüne yazmayız.
+	stored, err := s.store.ReadProblemPriority(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	c, err := decodeProblemPriorityPut(stored, r.Body)
+	if err != nil {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -96,19 +118,50 @@ func (s *Server) putProblemPriority(w http.ResponseWriter, r *http.Request) {
 			http.StatusBadRequest)
 		return
 	}
+	// v0.10.1072 — istisna listesi: normalize'ın SESSİZCE düşüreceği bir
+	// girdi (literal öneksiz / 3 literalden az — "*:*" —, aşırı uzun, 20'den
+	// fazla farklı kalıp) burada 400 — operatör yazdığının kaydedilmediğini görsün.
+	if c.InboxKeepSourcePriority != nil {
+		if err := chstore.ValidateInboxKeepSourcePriority(*c.InboxKeepSourcePriority); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	c = chstore.NormalizeProblemPriority(c)
 	if err := s.store.SaveProblemPriority(r.Context(), c); err != nil {
 		writeErr(w, err)
 		return
 	}
 	chstore.SetProblemPriority(c)
+	// Liste inbox satır önceliklerini değiştirir; 15 sn'lik önbellek eski
+	// görünümü servis etmesin (susturma yazımlarıyla aynı önek düşürme).
+	s.invalidateInboxCaches(r)
+	keepJSON, _ := json.Marshal(c.InboxKeepSourcePriorityList())
 	s.audit(r, "settings.update", "problem_priority", "problem_priority",
-		fmt.Sprintf(`{"bigBreachRatio":%g,"staleCriticalHours":%g}`,
-			c.BigBreachRatio, c.StaleCriticalHours))
+		fmt.Sprintf(`{"bigBreachRatio":%g,"staleCriticalHours":%g,"inboxKeepSourcePriority":%s}`,
+			c.BigBreachRatio, c.StaleCriticalHours, keepJSON))
 	staleNote := fmt.Sprintf("%gsa", c.StaleCriticalHours)
 	if c.StaleCriticalHours == 0 {
 		staleNote = "KAPALI"
 	}
 	log.Printf("[settings] problem_priority: ihlal katı %g× · bayat-critical %s",
 		c.BigBreachRatio, staleNote)
-	writeJSON(w, chstore.NormalizeProblemPriority(c))
+	writeJSON(w, c)
+}
+
+// decodeProblemPriorityPut — PUT gövdesini KAYITLI değerin üstüne çözer
+// (SAF, tablo-testli). Gövdede olmayan alan kayıtlı hâlinde kalır; istisna
+// listesi taze bir dilime kopyalanır ki decode kayıtlı değerin dizisini
+// yerinde ezmesin. `"inboxKeepSourcePriority": null` açıkça varsayılana
+// dönüş demektir (nil işaretçi = varsayılan liste).
+func decodeProblemPriorityPut(stored chstore.ProblemPriorityConfig, body io.Reader) (chstore.ProblemPriorityConfig, error) {
+	c := stored
+	if stored.InboxKeepSourcePriority != nil {
+		cp := append([]string{}, *stored.InboxKeepSourcePriority...)
+		c.InboxKeepSourcePriority = &cp
+	}
+	if err := json.NewDecoder(body).Decode(&c); err != nil {
+		return chstore.ProblemPriorityConfig{}, err
+	}
+	return c, nil
 }

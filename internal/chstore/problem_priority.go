@@ -3,6 +3,8 @@ package chstore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"sync/atomic"
 )
 
@@ -41,11 +43,33 @@ type ProblemPriorityConfig struct {
 	// critical "hâlâ ilgilenilmedi" demek, "şu an daha acil" demek değil.
 	// Negatif değer kelepçeyle 0'a düşer.
 	StaleCriticalHours float64 `json:"staleCriticalHours"`
+	// InboxKeepSourcePriority — v0.10.1072 (operatör, prod 2026-10-02: "Dün
+	// akşam CRM database'inde sorun oldu ama problemlerde P1 gelmedi"): inbox
+	// görünüm kuralının (v0.9.487, exception dışı türler HEP P3) DAR istisna
+	// listesi. Kaynak kimliği (Problem.RuleID; incident için
+	// "incident:<severity>") bu kalıplardan birine uyan satır inbox'ta kendi
+	// P1/P2'sini KORUR; gerisi bugünkü gibi P3'e çivilenir. Kalıp sözdizimi ve
+	// varsayılan liste problem_priority_inbox.go'da.
+	//
+	// *[]string ÇÜNKÜ "yok" ile "boş" ayrı anlam taşıyor (BatchServicePatterns
+	// emsali): nil = alan yazılmamış = varsayılan liste; boş liste = operatör
+	// istisnayı KAPATTI (saf v0.9.487). Normalize somutlaştırır.
+	InboxKeepSourcePriority *[]string `json:"inboxKeepSourcePriority,omitempty"`
 }
 
 // DefaultProblemPriority — v0.9.838 ÖNCESİNİN gömülü sabitleri, birebir.
 // Bu değerler değişirse davranış değişir; sürüm notunda söylenmeli.
 func DefaultProblemPriority() ProblemPriorityConfig {
+	c := defaultProblemPriorityKnobs()
+	// v0.10.1072 — BİLİNÇLİ varsayılan davranış değişikliği (operatör
+	// onaylı): dar istisna listesi kutudan açık gelir.
+	c.InboxKeepSourcePriority = inboxKeepPtr(DefaultInboxKeepSourcePriority())
+	return c
+}
+
+// defaultProblemPriorityKnobs — iki sayısal vidanın varsayılanı, listesiz
+// (sıcak yol ayırma yapmasın).
+func defaultProblemPriorityKnobs() ProblemPriorityConfig {
 	return ProblemPriorityConfig{
 		BigBreachRatio:     2.0,
 		StaleCriticalHours: 4,
@@ -70,10 +94,25 @@ const problemPriorityKey = "problem_priority"
 // olarak yakalamak, `ProblemPriorityConfig{}` yazan bir çağıranın
 // sessizce bayat-critical terfisini kapatmasını engelliyor — ve
 // BigBreachRatio 0'da `ratio >= 0` HER problemi büyük ihlal yapardı.
+//
+// v0.10.1072 — "tamamen sıfır" artık YALNIZ iki sayısal alana bakar (dilim
+// işaretçisi struct'ı karşılaştırılamaz yaptı); istisna listesi kendi
+// kuralıyla somutlaşır: nil → varsayılan liste, boş liste boş kalır.
 func NormalizeProblemPriority(c ProblemPriorityConfig) ProblemPriorityConfig {
-	d := DefaultProblemPriority()
-	if c == (ProblemPriorityConfig{}) {
-		return d
+	c = normalizeProblemPriorityKnobs(c)
+	c.InboxKeepSourcePriority = inboxKeepPtr(c.InboxKeepSourcePriorityList())
+	return c
+}
+
+// normalizeProblemPriorityKnobs — yalnız iki sayısal vida. computePriority
+// SATIR BAŞINA bunu çağırır: istisna listesini her satırda yeniden
+// normalize etmek (dilim + harita ayırma) sıcak yolda boşa iş olurdu ve
+// merdiven listeyi okumuyor bile.
+func normalizeProblemPriorityKnobs(c ProblemPriorityConfig) ProblemPriorityConfig {
+	d := defaultProblemPriorityKnobs()
+	if c.BigBreachRatio == 0 && c.StaleCriticalHours == 0 {
+		c.BigBreachRatio, c.StaleCriticalHours = d.BigBreachRatio, d.StaleCriticalHours
+		return c
 	}
 	if c.BigBreachRatio <= 0 {
 		c.BigBreachRatio = d.BigBreachRatio
@@ -115,31 +154,72 @@ func SetProblemPriority(c ProblemPriorityConfig) {
 	problemPriorityCfg.Store(&n)
 }
 
-// GetProblemPriority returns the persisted config, or the defaults when
-// nothing is saved. Soft-fails to defaults on CH error — GetExceptionTriage
-// ile aynı duruş: geçici bir CH tökezlemesi öncelik merdivenini sessizce
-// değiştiremez.
+// ReadProblemPriority — KAYITLI blob, hatayı SAKLAMADAN (v0.10.1072;
+// ReadAnomalySensitivity emsali). Satır yok → varsayılanlar + nil (başarılı
+// okuma: "ayar yok" bilgisi); CH ya da JSON hatası → hata döner.
 //
 // Unmarshal ÖNCEDEN DOLDURULMUŞ bir struct'a yapılıyor: JSON'da olmayan
 // bir alan varsayılanında kalır. Yoksa `{"bigBreachRatio":3}` gibi elle
 // yazılmış bir blob, staleCriticalHours'ı sessizce 0'a (terfi kapalı)
 // çekerdi — operatörün yazmadığı bir karar.
-func (s *Store) GetProblemPriority(ctx context.Context) ProblemPriorityConfig {
+func (s *Store) ReadProblemPriority(ctx context.Context) (ProblemPriorityConfig, error) {
 	raw, err := s.GetSetting(ctx, problemPriorityKey)
-	if err != nil || len(raw) == 0 {
-		return DefaultProblemPriority()
+	if err != nil {
+		return ProblemPriorityConfig{}, err
+	}
+	if len(raw) == 0 {
+		return DefaultProblemPriority(), nil
 	}
 	c := DefaultProblemPriority()
 	if err := json.Unmarshal(raw, &c); err != nil {
+		return ProblemPriorityConfig{}, fmt.Errorf("problem_priority blob'u çözülemedi: %w", err)
+	}
+	return NormalizeProblemPriority(c), nil
+}
+
+// GetProblemPriority — ReadProblemPriority'nin hatada varsayılana yumuşak
+// düşen hâli (eski imza). Yeni çağıran Read* kullanmalı.
+func (s *Store) GetProblemPriority(ctx context.Context) ProblemPriorityConfig {
+	c, err := s.ReadProblemPriority(ctx)
+	if err != nil {
 		return DefaultProblemPriority()
 	}
-	return NormalizeProblemPriority(c)
+	return c
+}
+
+// problemPriorityReadFailing — hata geçişini BİR KEZ loglamak için (30 sn'de
+// bir değil).
+var problemPriorityReadFailing atomic.Bool
+
+// LoadProblemPriorityWith — boot hidrasyonu + 30 sn yenilemenin gövdesi,
+// okuyucu enjekte edilebilir (test CH'siz).
+//
+// v0.10.1072 — OKUMA HATASINDA SON İYİ DEĞER KORUNUR (anomaly_sensitivity
+// v0.10.1039 emsali). Hatada varsayılanı yayınlamak, operatörün daralttığı ya
+// da boşalttığı istisna listesini tek bir CH hıçkırığında varsayılana
+// döndürür ve inbox'ta P1 satırları bir tik görünüp kaybolurdu. Hiç yayın
+// yoksa CurrentProblemPriority zaten varsayılan döner.
+func LoadProblemPriorityWith(read func() (ProblemPriorityConfig, error)) ProblemPriorityConfig {
+	c, err := read()
+	if err != nil {
+		if problemPriorityReadFailing.CompareAndSwap(false, true) {
+			log.Printf("[settings] problem_priority okunamadı: %v — son yayınlanan değer korunuyor", err)
+		}
+		return CurrentProblemPriority()
+	}
+	if problemPriorityReadFailing.CompareAndSwap(true, false) {
+		log.Printf("[settings] problem_priority yeniden okunabiliyor — kayıtlı değer yayınlandı")
+	}
+	SetProblemPriority(c)
+	return CurrentProblemPriority()
 }
 
 // SaveProblemPriority persists the config under system_settings — yeni
 // şema yok, her operatör ayarıyla aynı anahtar/değer tablosu.
 func (s *Store) SaveProblemPriority(ctx context.Context, c ProblemPriorityConfig) error {
-	raw, err := json.Marshal(c)
+	// v0.10.1072 — normalize edilmiş hâli yazılır: boş istisna listesi `[]`
+	// olarak (null DEĞİL) kalır, yoksa geri okumada nil = varsayılan olurdu.
+	raw, err := json.Marshal(NormalizeProblemPriority(c))
 	if err != nil {
 		return err
 	}

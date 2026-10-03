@@ -157,8 +157,11 @@ func (s *Store) reprobePromotedAttrs() {
 		// kaldıkça bu pod'un her yazımı onu DEFAULT'a geri yazar — o yüzden
 		// terfi kolonları bulunsa bile bu doğrulanana dek denemeye devam edilir.
 		episodeDone := s.reprobeAnomalyEpisodeCols(ctx)
+		// v0.10.1072 — exception_groups.occurrences_at_resolve: bayrak false
+		// kaldıkça resolve anlık görüntüsü yazılmaz (regressed P2'de kalır).
+		snapDone := s.reprobeExResolveSnapCol(ctx)
 		cancel()
-		if attrsDone && episodeDone {
+		if attrsDone && episodeDone && snapDone {
 			return
 		}
 	}
@@ -167,5 +170,8 @@ func (s *Store) reprobePromotedAttrs() {
 	}
 	if !s.hasAnomalyEpisodeCols.Load() {
 		log.Printf("[chstore] anomaly_events bölüm kolonları hâlâ doğrulanamadı — sayaç yazılmıyor (yazımlar DEFAULT'a sıfırlar), sonraki boot yeniden deneyecek")
+	}
+	if !s.hasExResolveSnapCol.Load() {
+		log.Printf("[chstore] exception_groups.occurrences_at_resolve hâlâ doğrulanamadı — resolve anlık görüntüsü yazılmıyor (regressed P2'de kalır), sonraki boot yeniden deneyecek")
 	}
 }

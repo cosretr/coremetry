@@ -1156,6 +1156,34 @@ okumalar (`/api/logs`, `/search`, `/timeseries`, `/fieldstats`, `/patterns`, `/s
 `PatternSearchText` silindi; /anomalies "logs ↗" ve AI kartının "Loglar (desen)"i de `pattern=` (`PatternKQL` silindi). (2) Sistem adı alternasyondan ve token'dan çıktı,
 testte adı `payments-bpm` sentetiğiyle değişti.
 
+## 2026-10-03 — P1 görünürlüğü: inbox dar istisna listesi + regressed grupta yeniden açılış hacmi (v0.10.1072)
+
+**Operatör (prod):** "Dün akşam CRM database'inde sorun oldu ama problemlerde P1 gelmedi." İki ayrı kusur:
+kritik hata oranı anomalisi kaynağında P1'di (`computePriority`: critical + 14.9× ≥ 2×) ama inbox v0.9.487 görünüm
+kuralıyla P3 gösterdi; 54.812 oluşumlu bir exception grubu `regressed` olduğu için P2 kaldı (regressed dalı hacim
+kapısından ÖNCE dönüyordu — "kazanılmış P1 düşmez" bu grupta geçerli değildi). Operatör onayı: "go".
+
+**A — v0.9.487 KISMİ REVİZYONU:** "exception dışı türler inbox'ta HEP P3" kuralı DAR bir istisna listesiyle
+gevşedi: `problem_priority.inboxKeepSourcePriority` (glob; `*` her dizi, tam eşleşme; varsayılan
+`anomaly:*:error_rate`, `builtin-*`, `db-health:*`, `incident:critical`). Kimlik: Problem'de RuleID, incident'te
+`incident:<severity>`. Uyan satır kaynak P1/P2'sini korur, gerekçe "kaynak önceliği korundu (kritik hata oranı) · …".
+Bilinçli olarak DIŞARIDA: trace_op / trace_op_latency / log_* / behavior_change / `anomaly-auto:*` / SLO burn /
+yavaş ifade / self-health — v0.9.487'nin susturduğu gürültü onlar. Kural facet sayaçlarından önce (sıra aynı).
+nil = varsayılan, `[]` = saf v0.9.487; geniş kalıp 400 (ilk `*`'tan önce literal önek + en az 3 literal karakter
+şart — `*:*` reddedilir; 20 tavanı tekilleştirilmiş listede). PUT gövdesi KAYITLI değerin üstüne çözülür: alanı
+göndermeyen istemci kayıtlı listeyi (`[]` dahil) ezmez. Okuma hatasında son iyi değer korunur; PUT inbox önbelleğini
+düşürür, anahtar `inbox:v9`. Ayar ekranında salt-okunur. `builtin-*` operatörün `builtin-` ile başlayan kendi kural
+kimliklerine de uyar — kabul edildi. Kod: `chstore/problem_priority_inbox.go`, `api/inbox_keep_priority.go`.
+
+**C — regressed + yeniden açılış hacmi ⇒ P1:** resolve (manuel ya da bayat süpürme) anında `occurrences` anlık
+görüntüsü `exception_groups.occurrences_at_resolve`'a yazılır (ALTER ADD COLUMN, iki-boot probe
+`hasExResolveSnapCol`). Regressed grupta `occurrences − occurrences_at_resolve ≥ p1MinOccurrences` (500) ⇒ P1
+"yeniden açıldıktan sonra ≥500 oluşum"; değilse P2 "regressed". Kapıyı ömür boyu toplamla regressed'in üstüne
+taşımak her kronik grubu P1 yapardı — reddedildi. Bu sürümden önce çözülmüş (anlık görüntüsüz) grup P2'de kalır.
+Yükseltme yalnız GÖRÜNÜM/öncelik değişikliği: exception bildiricisinin tekilleştirmesi (`<fp>:regressed`,
+`notify/exception_notifier.go` routeGroups) regresyonda bir kez gönderir, yani grup sonradan 500'ü aşıp P1 olunca
+yalnız-P1 kanallar bildirim ALMAZ. Bildirici bu sürümde bilinçli olarak değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

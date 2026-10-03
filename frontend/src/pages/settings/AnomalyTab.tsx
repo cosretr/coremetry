@@ -1195,6 +1195,23 @@ function ProblemPrioritySection() {
                 )}
               </div>
             </Field>
+
+            {/* v0.10.1072 — inbox görünüm kuralının dar istisna listesi; salt-okunur
+                (değiştirmek PUT /api/settings/problem-priority ile, bilinçli). */}
+            <Field label="Inbox'ta kaynak önceliğini koruyanlar (salt-okunur)">
+              <div style={{ fontSize: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {(cfg.inboxKeepSourcePriority ?? []).length === 0
+                  ? <span style={{ color: 'var(--text3)' }}>yok — exception dışı her satır inbox&apos;ta P3</span>
+                  : (cfg.inboxKeepSourcePriority ?? []).map(p => <code key={p}>{p}</code>)}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                Exception dışı satırlar inbox&apos;ta P3 görünür; kaynak kimliği
+                (kural id&apos;si, incident için <code>incident:&lt;önem&gt;</code>)
+                bu kalıplardan birine uyan satır kendi P1/P2&apos;sini korur ve
+                gerekçesinde &laquo;kaynak önceliği korundu&raquo; yazar.
+                <code>*</code> herhangi bir dizi, eşleşme tam.
+              </div>
+            </Field>
           </div>
 
           <div style={{ marginTop: 18, display: 'flex', gap: 8, alignItems: 'center' }}>

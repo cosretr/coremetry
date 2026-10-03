@@ -57,7 +57,8 @@ func TestInboxListKeyCarriesSubject(t *testing.T) {
 	// v0.10.1026 — :v8:: varsayılan şeridin SATIR kümesi değişti (dış
 	// kaynak problemleri de giriyor); eski sürümün cache'lediği sayfa yeni
 	// anahtardan servis edilmemeli (:v6: emsali).
-	if !strings.HasPrefix(svc, "inbox:v8:") {
+	// v0.10.1072 — :v9:: istisna listesi satır önceliklerini değiştirdi.
+	if !strings.HasPrefix(svc, "inbox:v9:") {
 		t.Errorf("anahtar sürümü ilerlememiş: %s", svc)
 	}
 }
