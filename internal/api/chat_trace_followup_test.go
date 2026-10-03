@@ -143,9 +143,10 @@ func TestBuildTraceFollowUp(t *testing.T) {
 	})
 }
 
-// TestTraceFollowUpCompareWindow — v0.10.948: takibin kıyas penceresi ilk
-// cevabınkiyle (traceCompareWindow, trace'in kendi kapsamı) AYNI; ÖNCEKİ
-// AÇIKLAMA'nın K sayıları ile takibin compare_periods'u aynı dönemden.
+// TestTraceFollowUpCompareWindow — v0.10.948: takibin kıyas penceresi
+// traceCompareWindow'dan (trace'in kendi kapsamı, trace ortalı).
+// v0.10.1075 — satır olmayan "K bölümü"ne atıf yapmaz: klasik ilk cevapta
+// (v0.10.1036) dönem kıyası yok, model orada bir bölüm aramamalı.
 func TestTraceFollowUpCompareWindow(t *testing.T) {
 	anchor := time.Date(2026, 9, 26, 10, 20, 0, 0, time.UTC)
 	fromMs := time.Date(2026, 9, 26, 10, 14, 0, 0, time.UTC).UnixMilli()
@@ -173,6 +174,20 @@ func TestTraceFollowUpCompareWindow(t *testing.T) {
 		if l := line(tf); !strings.Contains(l, want) || !strings.Contains(l, "reference=previous") || !strings.Contains(l, "compare_periods") {
 			t.Fatalf("now=%v: kıyas satırı %q, want %q", now, l, want)
 		}
+		// v0.10.1075 — olmayan bölüme atıf yok; pencere kendi tarifini taşır.
+		l := line(tf)
+		for _, gone := range []string{"K bölüm", "ilk cevabın"} {
+			if strings.Contains(l, gone) {
+				t.Fatalf("now=%v: kıyas satırı silinmiş bölüme atıf yapıyor (%q): %q", now, gone, l)
+			}
+		}
+		if !strings.Contains(l, "trace ortalı") || !strings.Contains(l, "ilk cevapta dönem kıyası yok") {
+			t.Fatalf("now=%v: kıyas satırı pencereyi tarif etmiyor: %q", now, l)
+		}
+	}
+	// Tam trace bölümü (ek talimat + önceki açıklama dahil) de "K bölümü" demez.
+	if p := traceFollowUpPromptTR(&traceFollowUp{TraceID: tfTrace, CmpFrom: anchor, CmpTo: anchor.Add(15 * time.Minute)}, "önceki"); strings.Contains(p, "K bölüm") {
+		t.Fatalf("trace takip bölümü olmayan K bölümüne atıf yapıyor:\n%s", p)
 	}
 	noRange := *page
 	noRange.TimeRange = nil

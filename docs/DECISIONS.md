@@ -1224,6 +1224,16 @@ birleşebilir. `db:` öznelerinin topoloji komşusu yok, bu yüzden problem ça�
 "etkilenen" bayrağında p99 mutlak (kronik yavaş çağıran, hata % ihlalinde çağıran kapısını doldurabilir). db.name'inde
 '/' olan veritabanının id çözümü instance'a kayar.
 
+## 2026-10-03 — Takip sohbeti prompt'u: olmayan "K bölümü" atfı kaldırıldı (v0.10.1075)
+
+**Kusur:** v0.10.1065 incelemeyi silince trace takip sohbetinin AKTİF BAĞLAM satırı hâlâ "kıyas penceresi (ilk
+cevabın K bölümüyle AYNI …)" diyordu; klasik ilk cevapta (İşlem Akışı ve Veri Özeti / Stacktrace Detayı / Kök Neden
+ve Sonraki Adım) böyle bir bölüm ve dönem kıyası yok — model olmayan bir bölümü arayabilir ya da ona atıf yapabilirdi.
+**Karar:** satır pencereyi kendi tarifiyle verir: "kıyas penceresi (trace ortalı; ilk cevapta dönem kıyası yok —
+compare_periods'ta bunu kullan, reference=previous)". Yalnız metin: pencere hesabı (`traceCompareWindow`), girdiler,
+araçlar ve `TraceFollowUpAddendum` aynı. Satır `chat_trace_followup.go`'da çalışma-zamanı önsözü olduğundan
+`promptVersionRegistry`'de değil; global istem sürümü değişmez. `TestTraceFollowUpCompareWindow` "K bölüm" yokluğunu pinler.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

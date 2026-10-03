@@ -101,9 +101,10 @@ type traceFollowUp struct {
 	// From/To — sorgu penceresi: istemcinin rangeS/toMs'i (trace ±5 dk,
 	// traceChatWindow); ekran önsözü ve araç çıpasıyla AYNI değerler.
 	From, To time.Time
-	// CmpFrom/CmpTo — v0.10.948 — ilk cevabın kıyas penceresi: trace'in KENDİ
+	// CmpFrom/CmpTo — v0.10.948 — takibin kıyas penceresi: trace'in KENDİ
 	// kapsamı üzerinden traceCompareWindow (max(15 dk, kapsam), trace ortalı).
-	// ÖNCEKİ AÇIKLAMA'nın K bölümü bu pencereden; takip kıyası da buradan.
+	// v0.10.1075 — klasik ilk cevapta (v0.10.1036) dönem kıyası yok; pencere
+	// yalnız takibin compare_periods çağrısı içindir.
 	CmpFrom, CmpTo time.Time
 }
 
@@ -123,9 +124,10 @@ func traceFollowUpPage(subj drawerSubject, page *agentctx.PageContext) *agentctx
 // ikisi aynı (bayat) traceCtx'ten türüyor. page hiç gelmediyse istek env'i
 // yedektir. now yalnız kıyas penceresinin şimdiye kırpılması için (saflık).
 //
-// v0.10.948 — bilinen kalıntı: page.timeRange ms'ye dışa yuvarlı ve takipteki
-// now ilk cevabınkinden sonra; kıyas penceresi yalnız kırpma ufkundaki (yeni)
-// bir trace'te bir saniye ya da geçen süre kadar kayabilir — kabul edildi.
+// v0.10.948 — bilinen kalıntı: page.timeRange ms'ye dışa yuvarlı; kıyas
+// penceresi kırpma ufkundaki (yeni) bir trace'te turdan tura bir saniye ya da
+// geçen süre kadar kayabilir — kabul edildi. v0.10.1075 — ilk cevapta kıyas
+// olmadığından "ilk cevaptan sapma" artık söz konusu değil.
 func buildTraceFollowUp(subj drawerSubject, page *agentctx.PageContext, ctxEnv string, rangeS int64, anchorTo, now time.Time) traceFollowUp {
 	tf := traceFollowUp{TraceID: subj.ID}
 	if subj.Kind == "span" {
@@ -207,9 +209,11 @@ func traceFollowUpPromptTR(tf *traceFollowUp, explain string) string {
 			tf.From.Format(time.RFC3339), tf.To.Format(time.RFC3339))
 	}
 	if !tf.CmpFrom.IsZero() {
-		// v0.10.948 — log/pod/metrik ±5 dk sorgu penceresinde kalır; kıyas ilk
-		// cevabın penceresini ve tabanını (previous) aynen tekrarlar.
-		fmt.Fprintf(&b, "- kıyas penceresi (ilk cevabın K bölümüyle AYNI; compare_periods'ta bunu kullan, reference=previous): from_iso=%s to_iso=%s\n",
+		// v0.10.948 — log/pod/metrik ±5 dk sorgu penceresinde kalır; kıyas trace
+		// ortalı pencereyi önceki dönemle (previous) karşılaştırır.
+		// v0.10.1075 — "ilk cevabın K bölümü" atfı silindi: o bölüm v0.10.1065'te
+		// incelemeyle gitti, klasik ilk cevapta dönem kıyası yok.
+		fmt.Fprintf(&b, "- kıyas penceresi (trace ortalı; ilk cevapta dönem kıyası yok — compare_periods'ta bunu kullan, reference=previous): from_iso=%s to_iso=%s\n",
 			tf.CmpFrom.Format(time.RFC3339), tf.CmpTo.Format(time.RFC3339))
 	}
 	if tf.From.IsZero() && tf.TraceFrom.IsZero() {
