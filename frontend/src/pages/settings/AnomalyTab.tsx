@@ -1243,7 +1243,13 @@ function ProblemPrioritySection() {
 
 // v0.10.1073 — db-health varsayılanları (Go chstore.DefaultDBHealth ikizi;
 // dbSlowQuery.test.ts pinler).
-const DB_HEALTH_DEFAULTS: DBHealthConfig = { enabled: true, errorPct: 5, p99Ms: 2000, p99RiseFactor: 3, minCallerCalls: 10, minCalls: 100, minCallers: 2, maxNewPerTick: 20, minErrorCount: 50, errorRiseFactor: 3, minCallerErrors: 10 };
+const DB_HEALTH_DEFAULTS: DBHealthConfig = { enabled: true, errorPct: 5, p99Ms: 2000, p99RiseFactor: 3, minCallerCalls: 10, minCalls: 100, minCallers: 2, maxNewPerTick: 20, minErrorCount: 50, errorRiseFactor: 3, minCallerErrors: 10, excludeSystems: ['couchbase'] };
+
+// v0.10.1084 — "Hariç sistemler" metni → liste (virgül ya da boşlukla ayrılmış).
+// Son biçim sunucuda (küçük harf, kırpma, tekrarsız); burada yalnız ayrıştırma.
+function parseExcludeSystems(text: string): string[] {
+  return text.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+}
 
 // ── DB yavaş sorgu dedektörü (v0.10.325, operatör isteği) ────────────
 // EscalationSection ile aynı anatomi: yükle → düzenle → kaydet; evaluator
@@ -1252,6 +1258,10 @@ function DBSlowQuerySection() {
   const [cfg, setCfg] = useState<DBSlowQueryConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // v0.10.1084 — hariç sistem kutusunun yazılan metni (virgül/boşluk yazarken
+  // listeden yeniden üretilip silinmesin); kayıttan sonra sunucunun normalize
+  // listesine döner (null).
+  const [exText, setExText] = useState<string | null>(null);
   useEffect(() => {
     api.getDBSlowQuery().then(c => setCfg(c)).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
   }, []);
@@ -1261,6 +1271,7 @@ function DBSlowQuerySection() {
     try {
       const saved = await api.putDBSlowQuery(cfg);
       setCfg(saved);
+      setExText(null);
       setFlash({ kind: 'ok', text: 'Saved — next evaluator tick picks it up automatically.' });
     } catch (err) {
       setFlash({ kind: 'err', text: humanize(err) });
@@ -1371,6 +1382,15 @@ function DBSlowQuerySection() {
             <Field label="minimum errors per caller / 5 min">
               <input type="number" min={1} max={1000000} value={health.minCallerErrors} onChange={hnum('minCallerErrors')} disabled={!health.enabled} />
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Varsayılan 10 — hata sayısı kolunda bundan az hata alan servis "etkilenen" sayılmaz.</div>
+            </Field>
+            {/* v0.10.1084 (operatör: "%100 hata oranı gerçek değil") — hariç sistemler
+                okumada SQL'de düşer; açık problemleri bir sonraki tikte kapanır. */}
+            <Field label="Hariç sistemler">
+              <input type="text" aria-label="Hariç sistemler"
+                value={exText ?? (health.excludeSystems ?? DB_HEALTH_DEFAULTS.excludeSystems ?? []).join(', ')}
+                onChange={e => { setExText(e.target.value); setHealth({ excludeSystems: parseExcludeSystems(e.target.value) }); }}
+                placeholder="couchbase" disabled={!health.enabled} />
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>hata oranı anlamsız olan istemciler, ör. couchbase: KV 'bulunamadı' cevabı hata sayılır</div>
             </Field>
           </div>
           <div style={{ marginTop: 18, display: 'flex', gap: 8, alignItems: 'center' }}>

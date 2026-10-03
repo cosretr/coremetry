@@ -36,7 +36,7 @@ import { traceHref } from '@/lib/traceHref';
 import { QueryErrorInline } from '@/components/QueryError';
 import { PageShell } from '@/components/ui/PageShell';
 import { stripMarkdown } from '@/components/Markdown';
-import { IconSparkles } from '@/components/icons';
+import { TriageTitleCell } from './TriageTitleCell'; // v0.10.1084 — Problems kuyruğuyla ortak
 
 // v0.10.751 — sekmeler tek kaynaktan (tabs.ts): Inbox = ignored hariç her
 // durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
@@ -623,55 +623,32 @@ export default function ProblemsPage() {
                       <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}><StateBadge s={g.state} /></Link></td>
                       <td className="row-cell">
                         <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>
-                        <div className="mono" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 11.5, color: 'var(--err)' }}
-                          title={g.type}>
-                          {/* v0.10.1068 — flex satırda tip "…" ile kırpılsın (dt-trunc). */}
-                          <span className="dt-trunc">{g.type}</span>
-                          {/* First observed within the last hour —
-                              the highest-signal marker for an SRE
-                              scanning the list in the morning: these
-                              did not exist yesterday.
-
-                              v0.9.314 — was labelled "NEW", which now
-                              belongs to the STATE column. "<1h" says
-                              literally what it means and cannot be
-                              read as a triage state. */}
-                          {Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
-                            <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
-                              title="First seen within the last hour — this exception did not exist before that.">
-                              &lt;1h
-                            </span>
-                          )}
-                        </div>
-                        <div className="mono" style={{ fontSize: 10.5, color: 'var(--text3)',
-                                      maxWidth: 480, overflow: 'hidden',
-                                      textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                             title={g.message}>
-                          {g.message || '—'}
-                        </div>
-                        {/* v0.9.1133 (AI Faz 2.3) — PASİF özet satırı.
-                            ExceptionExplainer'ın arka planda yazdığı
-                            `aiSummary` (v0.9.415) bu listenin payload'ında
-                            ZATEN geliyordu (ListExceptionGroups ai_summary'yi
-                            seçiyor) ama hiçbir yerde çizilmiyordu — yalnız
-                            detay sayfası gösteriyordu. Sıfır fetch, sıfır
-                            LLM: satır ne yazılmışsa onu okur. Özet YOKSA
-                            hiçbir şey çizilmez (uydurma bir cümle yerine
-                            sessizlik); yalnız çip durur.
-                            stripMarkdown ŞART: model `**kalın**` üretiyor ve
-                            tek satırlık kırpılmış bir yüzeyde yıldızlar
-                            ekrana dökülür (v0.9.641/696 sınıfı). */}
-                        {g.aiSummary && (
-                          <div style={{
-                            display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 3,
-                            fontSize: 10.5, color: 'var(--text2)', maxWidth: 480, minWidth: 0,
-                          }} title={stripMarkdown(g.aiSummary)}>
-                            <IconSparkles size={10} />
-                            <span style={{
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>{stripMarkdown(g.aiSummary)}</span>
-                          </div>
-                        )}
+                        {/* v0.10.1084 — başlık hücresi Problems kuyruğuyla ORTAK
+                            bileşen (TriageTitleCell; operatör: "Exceptions'taki
+                            format güzel"): tip (mono, hata rengi) + mesaj + AI.
+                            v0.10.1068 — tip "…" ile kırpılır (dt-trunc).
+                            v0.9.1133 — AI özeti PASİF: payload'da zaten var, sıfır
+                            fetch; yoksa hiçbir şey çizilmez. stripMarkdown ŞART
+                            (kırpılmış yüzeyde `**` dökülür, v0.9.641/696). */}
+                        <TriageTitleCell
+                          title={g.type}
+                          code
+                          chips={
+                            /* First observed within the last hour — the
+                               highest-signal marker for an SRE scanning the
+                               list in the morning. v0.9.314 — "<1h", not
+                               "NEW" (NEW is the STATE column's word). */
+                            Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
+                              <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
+                                title="First seen within the last hour — this exception did not exist before that.">
+                                &lt;1h
+                              </span>
+                            )
+                          }
+                          detail={g.message || '—'}
+                          detailTitle={g.message}
+                          detailMono
+                          ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined} />
                         </Link>
                       </td>
                       <td>

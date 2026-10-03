@@ -74,6 +74,18 @@ func validateDBSlowQuery(c chstore.DBSlowQueryConfig) error {
 		if h.MinCallerErrors != 0 && (h.MinCallerErrors < 1 || h.MinCallerErrors > 1000000) {
 			return fmt.Errorf("health.minCallerErrors must be between 1 and 1000000")
 		}
+		// v0.10.1084 — hariç sistemler: normalize sonrası ≤ 20 ad, her biri ≤ 64.
+		if h.ExcludeSystems != nil {
+			ex := chstore.NormalizeDBHealthSystems(*h.ExcludeSystems)
+			if len(ex) > chstore.DBHealthMaxExcludeSystems {
+				return fmt.Errorf("health.excludeSystems must have at most %d entries", chstore.DBHealthMaxExcludeSystems)
+			}
+			for _, s := range ex {
+				if len(s) > 64 {
+					return fmt.Errorf("health.excludeSystems entries must be at most 64 characters")
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -81,9 +93,19 @@ func validateDBSlowQuery(c chstore.DBSlowQueryConfig) error {
 // keepStoredHealth — SAF (v0.10.1073): PUT gövdesi `health` taşımıyorsa
 // (alanı bilmeyen eski sekme) saklı değer korunur; yoksa Normalize
 // varsayılanı yazar ve operatörün kapattığı db-health sessizce geri açılırdı.
+// v0.10.1084 — aynı kural `health.excludeSystems` için: gövde health taşıyıp
+// listeyi taşımıyorsa (alanı bilmeyen eski sekme) saklı liste korunur;
+// operatörün boşalttığı ([]) liste sessizce couchbase'e dönmesin.
 func keepStoredHealth(in, stored chstore.DBSlowQueryConfig) chstore.DBSlowQueryConfig {
 	if in.Health == nil && stored.Health != nil {
 		h := *stored.Health
+		in.Health = &h
+		return in
+	}
+	if in.Health != nil && in.Health.ExcludeSystems == nil && stored.Health != nil && stored.Health.ExcludeSystems != nil {
+		h := *in.Health
+		ex := append([]string{}, *stored.Health.ExcludeSystems...)
+		h.ExcludeSystems = &ex
 		in.Health = &h
 	}
 	return in
@@ -99,7 +121,7 @@ func (s *Server) putDBSlowQuery(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if c.Health == nil {
+	if c.Health == nil || c.Health.ExcludeSystems == nil {
 		stored, err := s.store.LoadDBSlowQuery(r.Context())
 		if err != nil {
 			writeErr(w, err)
@@ -116,12 +138,15 @@ func (s *Server) putDBSlowQuery(w http.ResponseWriter, r *http.Request) {
 	if saved.Health != nil {
 		h = *saved.Health
 	}
+	// v0.10.1084 — hariç sistemler JSON dizisi olarak (ad kullanıcı girdisi;
+	// elle tırnaklama değil json.Marshal).
+	exJSON, _ := json.Marshal(h.ExcludedSystems())
 	s.audit(r, "settings.db_slow_query.update", "settings", "db_slow_query",
 		fmt.Sprintf(`{"enabled":%v,"thresholdMs":%v,"criticalMs":%v,"minExecutions":%d,"forBuckets":%d,"cooldownSec":%d,`+
 			`"health":{"enabled":%v,"errorPct":%v,"p99Ms":%v,"p99RiseFactor":%v,"minCalls":%d,"minCallerCalls":%d,"minCallers":%d,"maxNewPerTick":%d,`+
-			`"minErrorCount":%d,"errorRiseFactor":%v,"minCallerErrors":%d}}`,
+			`"minErrorCount":%d,"errorRiseFactor":%v,"minCallerErrors":%d,"excludeSystems":%s}}`,
 			saved.Enabled, saved.ThresholdMs, saved.CriticalMs, saved.MinExecutions, saved.ForBuckets, saved.CooldownSec,
 			h.On(), h.ErrorPct, h.P99Ms, h.P99RiseFactor, h.MinCalls, h.MinCallerCalls, h.MinCallers, h.MaxNewPerTick,
-			h.MinErrorCount, h.ErrorRiseFactor, h.MinCallerErrors))
+			h.MinErrorCount, h.ErrorRiseFactor, h.MinCallerErrors, exJSON))
 	writeJSON(w, saved)
 }

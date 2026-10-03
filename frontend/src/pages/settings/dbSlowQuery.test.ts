@@ -27,7 +27,20 @@ describe('DB yavaş sorgu ayarları', () => {
     const sec = tab.slice(tab.indexOf('function DBSlowQuerySection()'));
     expect(sec.indexOf("hnum('errorPct')")).toBeGreaterThan(sec.indexOf("num('cooldownSec')"));
     const go = readFileSync(resolve(__dirname, '../../../../internal/chstore/db_slow_statement.go'), 'utf8');
-    expect(go).toContain('DBHealthConfig{Enabled: &on, ErrorPct: 5, P99Ms: 2000, P99RiseFactor: 3, MinCallerCalls: 10, MinCalls: 100, MinCallers: 2, MaxNewPerTick: 20,\n\t\tMinErrorCount: 50, ErrorRiseFactor: 3, MinCallerErrors: 10}');
-    expect(tab).toContain('{ enabled: true, errorPct: 5, p99Ms: 2000, p99RiseFactor: 3, minCallerCalls: 10, minCalls: 100, minCallers: 2, maxNewPerTick: 20, minErrorCount: 50, errorRiseFactor: 3, minCallerErrors: 10 }');
+    // v0.10.1084 — hariç sistemler varsayılanı couchbase (Go dbHealthDefaultExclude ile aynı).
+    expect(go).toContain('DBHealthConfig{Enabled: &on, ErrorPct: 5, P99Ms: 2000, P99RiseFactor: 3, MinCallerCalls: 10, MinCalls: 100, MinCallers: 2, MaxNewPerTick: 20,\n\t\tMinErrorCount: 50, ErrorRiseFactor: 3, MinCallerErrors: 10, ExcludeSystems: &ex}');
+    expect(go).toContain('func dbHealthDefaultExclude() []string { return []string{"couchbase"} }');
+    expect(tab).toContain("{ enabled: true, errorPct: 5, p99Ms: 2000, p99RiseFactor: 3, minCallerCalls: 10, minCalls: 100, minCallers: 2, maxNewPerTick: 20, minErrorCount: 50, errorRiseFactor: 3, minCallerErrors: 10, excludeSystems: ['couchbase'] }");
+  });
+  // v0.10.1084 (operatör: "%100 hata oranı gerçek değil") — "Hariç sistemler" alanı
+  // db-health bölümünde, tek satırlık Türkçe yardımla; tip alanı isteğe bağlı dizi.
+  it('Hariç sistemler alanı + yardım metni + tip', () => {
+    expect(types).toMatch(/export interface DBHealthConfig \{[^}]*excludeSystems\?: string\[\]/);
+    const sec = tab.slice(tab.indexOf('function DBSlowQuerySection()'));
+    expect(sec).toContain('<Field label="Hariç sistemler">');
+    expect(sec).toContain("hata oranı anlamsız olan istemciler, ör. couchbase: KV 'bulunamadı' cevabı hata sayılır");
+    expect(sec).toContain('setHealth({ excludeSystems: parseExcludeSystems(e.target.value) })');
+    // Ayrıştırma virgül ya da boşlukla; son biçim (küçük harf, tekrarsız) sunucuda.
+    expect(tab).toContain("return text.split(/[,\\s]+/).map(s => s.trim()).filter(Boolean);");
   });
 });

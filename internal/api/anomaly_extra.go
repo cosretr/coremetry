@@ -205,7 +205,7 @@ func (s *Server) bulkDeleteAnomalySilences(w http.ResponseWriter, r *http.Reques
 // hemen sonra çağırır.
 //
 // v0.10.1042 (operatör: "Anomalide 'Mute' sonrası satır listeden düşsün") —
-// inbox listesi (inbox:v9:…) ve rozeti (inbox:count:…) artık susturmaları
+// inbox listesi (inbox:v10:…) ve rozeti (inbox:count:…) artık susturmaları
 // okuyor ama 15 sn önbellekli (+SWR 45 sn). Ack / exception durumu /
 // incident yazımlarının emsali AYNEN: açık önek düşürme (inboxListCachePrefix,
 // sürümsüz — v0.9.321), anahtara susturma özeti DEĞİL. Özet her cache

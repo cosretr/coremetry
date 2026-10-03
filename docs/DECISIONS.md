@@ -1377,6 +1377,27 @@ hata; ≥ 2×50 critical → P1 (metrik `db.error_count`, kategori ERROR). Okuma
 sorgusuna kolon). Kapanış/histerezis diğer kollarla aynı. Problem detayına "Hata kırılımı" pivotu (Databases
 detayının hata kartı, `#db-errors`). Bilinen asimetri: dünkü referans batch çağıranları da sayar → kol temkinli yönde susar.
 
+## 2026-10-03 — db-health hariç sistemler (couchbase); Problems listesi incident başına tek satır, Exceptions biçimi (v0.10.1084)
+
+**Operatör:** "%100 hata oranı gerçek değil" (birkaç Couchbase veritabanında P1, %100 / %67 / %11) ve "tekilleştir,
+Exceptions'taki format güzel" → onaylı. **Kök neden (A):** Couchbase SDK'sı KV "bulunamadı" cevabını span'de ERROR
+işaretliyor (biz değil — dönüştürücü OTLP status'u aynen kopyalar); önbellek deseninde her ıska hata sayılıyor.
+
+**Karar A:** `db_slow_query.health.excludeSystems` (varsayılan `["couchbase"]`, küçük harf + kırpma + tekrarsız, ≤ 20,
+keep-last-good; alanı bilmeyen sekmenin PUT'u saklı listeyi korur; `[]` = hiçbiri). Hariç sistem ana okumada ve
+referans okumasında SQL'de düşer (`lower(trimBoth(db_system)) NOT IN ?`; boş listede koşul yok). Açık satırları bir
+sonraki tikte normal kapanış yoluyla "system excluded (db-health)" gerekçesiyle kapanır (incident kaskadı görür),
+bir kez. Settings → Database health "Hariç sistemler". Kalıcı çözüm (kuyrukta): "beklenen hata" türleri
+(`DocumentNotFound` vb.) kaynakta ya da ölçü katmanında ayrılsın — sistemi bütünüyle susturmak gerçek Couchbase
+kesintisini de gizler (bedel).
+
+**Karar B:** /inbox'ta AÇIK incident'ın bağlı problem satırları gizlenir, incident satırı kalır: başlığı birincil
+bağlı problemin cümlesi, Occurrences "N problem", öncelik bağlıların görünüm önceliklerinin en yükseği, ilk görülme
+en erken / son görülme en geç. Sunucuda, görünüm önceliğinden sonra, sayaç / sıralama / tavandan önce; incident'ı
+kapanınca problem kendisi olarak döner; incident satırı süzgeçle elendiyse problem gizlenmez. Satır biçimi Exceptions
+listesiyle ORTAK bileşen (`TriageTitleCell`): kalın başlık + satır içi durum çipi, soluk ayrıntı; ayrı Source kolonu
+kalktı. Bilinen sınırlar: rozet (/api/inbox/count) katlamayı uygulamaz; Problems türü seçili değilken tür çipi COUNT'tan.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

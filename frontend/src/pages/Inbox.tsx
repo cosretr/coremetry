@@ -9,7 +9,9 @@ import { Users, Shield } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
 import { useInbox, useServicesMetadata } from '@/lib/queries';
 import { tsCompact, tsLong, fmtFixed, fmtAgoNs } from '@/lib/utils';
-import { IconSparkles } from '@/components/icons';
+// v0.10.1084 — Exceptions listesiyle ortak başlık hücresi + satır metni (saf).
+import { TriageTitleCell } from '@/features/anomalies/TriageTitleCell';
+import { inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel } from '@/lib/inboxRowText';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL } from '@/lib/inboxUrl';
@@ -89,7 +91,9 @@ const PRIO_DEFAULT = ['P1'] as const;
 const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };
 // Sunucunun tanıdığı sıralama kimlikleri (normalizeInboxSort ile birebir);
 // bayat bir `s_inbox` varsayılana düşer.
-const INBOX_SORT_IDS = ['priority', 'source', 'service', 'detail', 'occurrences', 'firstSeen', 'lastSeen', 'assignee'] as const;
+// v0.10.1084 — 'source' kolonu kalktı (kaynak ikinci satırın başında); bayat
+// `s_inbox=source` varsayılana düşer (sunucu kimliği hâlâ tanır).
+const INBOX_SORT_IDS = ['priority', 'service', 'detail', 'occurrences', 'firstSeen', 'lastSeen', 'assignee'] as const;
 const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
 // v0.9.328 — operator: "Problems ilk açtığında exception görsün, kullanıcılar
 // ona göre tasarlar." Exceptions are the signal operators trust: a thrown
@@ -183,21 +187,25 @@ const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 // + öncelik: kap taşıyamazsa önce First seen, sonra Assignee / Last seen /
 // Source düşer ("+N sütun"); Detail en az 240 px. Damgalar yılsız
 // (tsCompact, tam damga title'da) — 168 px'lik tam damga 1366'da kırpılıyordu.
+// v0.10.1084 (operatör: "tekilleştir, Exceptions'taki format güzel") — kolon
+// düzeni Exceptions listesininki: Prio · başlık (kalın cümle / tip + satır içi
+// durum çipi, soluk ayrıntı) · Service · Occurrences · First seen · Last seen ·
+// Assignee. Ayrı Source kolonu kalktı: kaynak ikinci satırın başında. Tabanlar
+// ve öncelikler v0.10.1068'deki gibi.
 const INBOX_COLS: DataTableColumn<InboxItem>[] = [
   { id: 'priority', label: 'Priority', sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
-  { id: 'source',   label: 'Source',   sortValue: it => it.source,           naturalDir: 'asc', width: 100, minWidth: 90, priority: 3 },
-  { id: 'service',  label: 'Service',  sortValue: it => it.service,          naturalDir: 'asc', width: 190, minWidth: 140, priority: 1 },
   // v0.9.648 — ESNEK kolon: başlık serbest metin ve en geniş olan.
   // Sabit toplam 1330 → 950px, tablo sığıyor.
-  { id: 'detail',   label: 'Detail',   sortValue: it => it.title,            naturalDir: 'asc', flex: true, minWidth: 240, priority: 1 },
+  { id: 'detail',   label: 'Problem',  sortValue: it => inboxRowHeadline(it), naturalDir: 'asc', flex: true, minWidth: 240, priority: 1 },
+  { id: 'service',  label: 'Service',  sortValue: it => it.service,          naturalDir: 'asc', width: 190, minWidth: 140, priority: 1 },
   // v0.9.331 — Occurrences is back. The operator insisted on keeping this
   // column on /problems (v0.9.315: "ben occurences kolonu kalkmasını
   // istemedim"); when the merged queue took over the Problems name in
   // v0.9.323 the column did not come with it. On a triage list the number
   // answers the question the row cannot: is this sustained, or did it fire
-  // once. It sits next to Detail because that is the comparison the eye makes.
+  // once. v0.10.1084 — incident satırında bağlı (katlanmış) problem sayısı.
   { id: 'occurrences', label: 'Occurrences',
-    sortValue: it => it.exception?.occurrences ?? 0,
+    sortValue: it => it.exception?.occurrences ?? it.incident?.problemCount ?? 0,
     naturalDir: 'desc', numeric: true, width: 110, minWidth: 96, priority: 2 },
   // v0.9.333 — First seen is its own column again (operator: "First seen ayrı
   // kolon olabilir, öyleydi"). It was folded into the Last seen cell as a
@@ -1166,10 +1174,20 @@ export default function InboxPage() {
                   <td>
                     <PriorityBadge p={it.priority} reason={it.priorityReason} />
                   </td>
-                  <td className="cell-faint" title={it.displayId}>
-                    {it.source}
-                    {/* v0.10.706 — kategori rozeti kaynağın altında (sütun eklenmedi). */}
-                    {it.category && <div className="mono" style={{ fontSize: 9, letterSpacing: 0.3 }}>{it.category}</div>}
+                  <td>
+                    {/* v0.10.1084 (operatör: "Exceptions'taki format güzel") —
+                        Exceptions listesiyle ORTAK başlık hücresi: kalın cümle /
+                        exception tipi + satır içi durum çipleri, soluk ayrıntı
+                        (kaynak · kural · ölçü / mesaj), varsa AI özeti. */}
+                    <TriageTitleCell
+                      title={inboxRowHeadline(it)}
+                      code={isExcFamily(it)}
+                      chips={<RowChips it={it} real={verdictOf(it, verdicts) === 'real'} />}
+                      detail={<DetailLine it={it} />}
+                      detailMono={isExcFamily(it)}
+                      detailTitle={isExcFamily(it) ? it.exception?.message : inboxRowLabel(it) ?? undefined}
+                      ai={it.aiSummary ? stripMarkdown(it.aiSummary) : undefined}
+                      aiAge={it.aiSummaryAt ? fmtAgoNs(it.aiSummaryAt) : undefined} />
                   </td>
                   <td>
                     {/* v0.9.860 (UX denetimi K1) — satırın kendi olay
@@ -1220,55 +1238,9 @@ export default function InboxPage() {
                       </div>
                     )}
                   </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                      <span className="dt-trunc" style={{ fontWeight: 600 }} title={it.title}>{it.title}</span>
-                      {/* v0.10.1015 — öğretme işareti (yalnız "gerçek problem";
-                          "problem değil" satırları kendi görünümünde). */}
-                      {verdictOf(it, verdicts) === 'real' && (
-                        <span className="badge b-gray" style={{ fontSize: 9 }} title="Gerçek problem olarak işaretlendi">gerçek</span>
-                      )}
-                      {/* v0.10.1049 — yinelenen anomali: nötr tek kelime, sayı +
-                          ilk görülme ipucunda (yinelenmemişte hiçbir şey). */}
-                      {it.anomaly && (
-                        <RecurringMarker episodeCount={it.anomaly.episodeCount} firstStartedAt={it.anomaly.firstStartedAt} />
-                      )}
-                      {/* v0.10.1054 — anomaliden terfi etmiş Problem satırı da aynı
-                          işareti taşır (sunucu yalnız terfi Problem'ine kaynak
-                          olayın sayacını iliştirir; diğer satırlarda hiçbir şey). */}
-                      {it.problem && promotedRecurrence(it.problem) && (
-                        <RecurringMarker episodeCount={it.problem.episodeCount} firstStartedAt={it.problem.firstStartedAt} priorDeploy={it.priorDeploy} />
-                      )}
-                      {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama
-                          hiç çizilmiyordu: "all" pivotunda çözülmüş bir satır
-                          yenisiyle birebir aynı görünüyordu. */}
-                      <StatusBadge s={it.status} />
-                      {/* Bunlar backend'in ZATEN hesaplayıp attığı iki bilgi
-                          (v0.9.255). Operatörün bir satırda ilk aradığı şeyler:
-                          "runbook var mı" ve "az önce deploy oldu mu". */}
-                      {it.runbookUrl && (
-                        // v0.10.922 (sade palet adım 1) — üst veri: nötr.
-                        <a href={it.runbookUrl} target="_blank" rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="badge b-gray" title="Runbook aç">📕 runbook</a>
-                      )}
-                      {/* v0.10.1055 (operatör: "Okdir") — ipucu "undefined v…"
-                          başlıyordu: deploy nesnesinde `service` yok
-                          (chstore.RecentDeploy), servis satırın kendisinde. */}
-                      {it.recentDeploy && (
-                        <span className="badge b-warn"
-                          title={`${it.service} ${it.recentDeploy.version} — ${tsLong(it.recentDeploy.timeUnixNs)}`}>
-                          ⟳ deploy {it.recentDeploy.version}
-                        </span>
-                      )}
-                    </div>
-                    <DetailLine it={it} />
-                    <AISummaryLine it={it} />
-                  </td>
                   <td className="num">
-                    {it.exception
-                      ? it.exception.occurrences.toLocaleString()
-                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                    {/* v0.10.1084 — incident satırında katlanmış (bağlı) problem sayısı. */}
+                    {inboxOccurrencesLabel(it) ?? <span style={{ color: 'var(--text3)' }}>—</span>}
                   </td>
                   {/* v0.10.736 (operatör: "tarih fontu biraz daha büyük olabilir")
                       — 11 → 13 px (--fs-md), sınıfta; yaş satırı 11 px kalır. */}
@@ -1387,66 +1359,76 @@ function AssigneePill({ v }: { v: string }) {
   );
 }
 
-// DetailLine — kind-specific subtitle. Surfaces the single most
-// useful number per source: the breach ratio for Problems, the
-// occurrence count for Exceptions, the peak ratio for Anomalies.
-// AISummaryLine — v0.9.530. Arka plan işçilerinin (ProblemExplainer /
-// ExceptionExplainer) yazdığı proaktif kök-sebep cümlesi. Operatör
-// hiçbir şey tıklamaz; satır zaten telde gelen veriyle çizilir.
-//
-// KÖKEN İŞARETİ ŞART. Bu bir LLM ÇIKARIMI ve satırın geri kalanı olgu.
-// Projedeki diğer tüm AI render'ları kökeni işaretliyor (ProblemDetail
-// :501-508 ve :307-319: IconSparkles + accent-soft zemin + sol accent
-// kenar); en çok taranan yüzeyde tahmini olguyla aynı tipografide
-// basmak, operatörün ikisini ayırmasını imkânsız kılardı.
-//
-// YAŞ DAMGASI ŞART. Özet TEK YAZIMLIK ama satırın gövdesi (occurrences,
-// mesaj) altından değişmeye devam eder. Damgasız bir çıkarım canlı
-// sayının hemen altında taze görünür — bu yüzden exception tarafına
-// ai_summary_at kolonu v0.9.530'da eklendi (problems'ta zaten vardı).
-//
-// YOKLUĞUNDA HİÇBİR ŞEY ÇİZİLMEZ, ve bunun gerekçesi RootCauseRibbon
-// DEĞİL (o görünür bir "henüz yok" dalı çiziyor — farklı bağlam, tek
-// bir özneye adanmış panel). Burada bağlam bir TARAMA tablosu: yüzlerce
-// satırın her birine "henüz özet yok" basmak gürültüdür ve rozetin
-// yokluğu bir tablo satırında zaten iddia taşımaz. Buna karşılık
-// yokluğun olayın önemiyle değil işçinin debisiyle korele olduğunu
-// bilmek gerekir (ExceptionExplainer tik başına 4 grup / 60s), yani
-// "özeti yok" bir hüküm değil, sadece sıranın gelmemiş olması.
-function AISummaryLine({ it }: { it: InboxItem }) {
-  if (!it.aiSummary) return null;
-  const age = it.aiSummaryAt ? fmtAgoNs(it.aiSummaryAt) : '';
-  // v0.9.696 — KIRPILMIŞ yüzey: markdown DÜZLEŞTİRİLİYOR, render EDİLMİYOR.
-  // RenderedMarkdown burada yanlış olurdu (<p>/<ul> tek-satır kırpmasını
-  // bozar) ve `title` bir HTML özniteliği — React düğümü alamaz.
-  const summary = stripMarkdown(it.aiSummary);
+// RowChips — v0.10.1084: başlık satırının satır içi çipleri (Exceptions
+// satırının "<1h" çipiyle aynı yer). Sıra: durum, ilk görülme < 1 sa, öğretme
+// işareti, yinelenen, runbook, deploy. AI özeti artık TriageTitleCell'de
+// (köken ✨ + yaş damgası korunur; v0.9.530 gerekçesi orada).
+function RowChips({ it, real }: { it: InboxItem; real: boolean }) {
   return (
-    <div
-      title={age ? `${summary}\n\nAI çıkarımı · ${age}` : summary}
-      style={{
-        fontSize: 11, color: 'var(--text2)', marginTop: 4,
-        padding: '3px 7px', borderRadius: 'var(--radius-sm)',
-        background: 'var(--accent-soft)',
-        borderLeft: '2px solid var(--accent)',
-        // Tek satıra çivili: satır yüksekliği sınırlı kalsın, yoksa
-        // .cv-row yer-tutucu tahmini (--row-h) daha da yanlışlaşır ve
-        // kaydırma çubuğu zıplar.
-        display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
-        overflow: 'hidden',
-      }}
-    >
-      <IconSparkles size={10} /> {summary}
-      {age && <span style={{ color: 'var(--text3)' }}> · {age}</span>}
-    </div>
+    <>
+      {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama hiç
+          çizilmiyordu: "all" pivotunda çözülmüş bir satır yenisiyle birebir
+          aynı görünüyordu. */}
+      <StatusBadge s={it.status} />
+      {/* Exceptions satırıyla aynı işaret: son bir saatte ORTAYA ÇIKTI. */}
+      {it.startedAt > 0 && Date.now() - it.startedAt / 1e6 < 60 * 60 * 1000 && (
+        <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
+          title="First seen within the last hour — this did not exist before that.">
+          &lt;1h
+        </span>
+      )}
+      {/* v0.10.1015 — öğretme işareti (yalnız "gerçek problem"; "problem
+          değil" satırları kendi görünümünde). */}
+      {real && (
+        <span className="badge b-gray" style={{ fontSize: 9 }} title="Gerçek problem olarak işaretlendi">gerçek</span>
+      )}
+      {/* v0.10.1049 — yinelenen anomali: nötr tek kelime, sayı + ilk görülme
+          ipucunda (yinelenmemişte hiçbir şey). */}
+      {it.anomaly && (
+        <RecurringMarker episodeCount={it.anomaly.episodeCount} firstStartedAt={it.anomaly.firstStartedAt} />
+      )}
+      {/* v0.10.1054 — anomaliden terfi etmiş Problem satırı da aynı işareti
+          taşır (sunucu yalnız terfi Problem'ine kaynak olayın sayacını
+          iliştirir; diğer satırlarda hiçbir şey). */}
+      {it.problem && promotedRecurrence(it.problem) && (
+        <RecurringMarker episodeCount={it.problem.episodeCount} firstStartedAt={it.problem.firstStartedAt} priorDeploy={it.priorDeploy} />
+      )}
+      {/* Backend'in ZATEN hesaplayıp attığı iki bilgi (v0.9.255): "runbook
+          var mı" ve "az önce deploy oldu mu". */}
+      {it.runbookUrl && (
+        // v0.10.922 (sade palet adım 1) — üst veri: nötr.
+        <a href={it.runbookUrl} target="_blank" rel="noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="badge b-gray" title="Runbook aç">📕 runbook</a>
+      )}
+      {/* v0.10.1055 (operatör: "Okdir") — ipucu "undefined v…" başlıyordu:
+          deploy nesnesinde `service` yok (chstore.RecentDeploy), servis
+          satırın kendisinde. */}
+      {it.recentDeploy && (
+        <span className="badge b-warn"
+          title={`${it.service} ${it.recentDeploy.version} — ${tsLong(it.recentDeploy.timeUnixNs)}`}>
+          ⟳ deploy {it.recentDeploy.version}
+        </span>
+      )}
+    </>
   );
 }
 
-// v0.10.1068 — satırlar `dt-trunc`: iç içe blok satırda `tbody td`nin "…"su
-// işlemiyor, metin kolonda "…" olmadan kesiliyordu.
+// DetailLine — başlığın altındaki SOLUK satırın içeriği (sarmalayıcı
+// TriageTitleCell'in `.triage-sub`u, "…" orada). v0.10.1084: Exceptions
+// biçimi — exception ailesinde yalnız mesaj (oluşum kendi kolonunda, gerekçe
+// P rozetinin ipucunda); diğer türlerde kaynak · (kural / incident adı) ·
+// türe özel ölçü.
 function DetailLine({ it }: { it: InboxItem }) {
+  if (isExcFamily(it)) {
+    return <>{it.exception!.message || '—'}</>;
+  }
+  const label = inboxRowLabel(it);
+  const lead = <>{it.source}{label && <> · {label}</>}</>;
   if (it.kind === 'problem' && it.problem) {
     return (
-      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
+      <>
+        {lead}{' · '}
         <span className="mono">{it.problem.metric}</span>
         {' = '}
         {/* v0.10.922 (sade palet adım 1) — değer düz metin (--text, 600),
@@ -1454,54 +1436,27 @@ function DetailLine({ it }: { it: InboxItem }) {
         <span className="mono"><b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(it.problem.value, 2)}</b></span>
         <span className="mono" style={{ color: 'var(--text3)' }}> / {fmtFixed(it.problem.threshold, 2)}</span>
         {it.priorityReason && <span> · {it.priorityReason}</span>}
-      </div>
-    );
-  }
-  if (isExcFamily(it)) {
-    return (
-      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
-        <span className="mono">{it.exception!.occurrences.toLocaleString()}</span>
-        {' occurrences'}
-        {it.priorityReason && <span> · {it.priorityReason}</span>}
-        {it.exception!.message && (
-          <div className="dt-trunc" style={{ marginTop: 2, color: 'var(--text2)' }}>
-            {it.exception!.message.length > 160
-              ? `${it.exception!.message.slice(0, 160)}…`
-              : it.exception!.message}
-          </div>
-        )}
-      </div>
+      </>
     );
   }
   if (it.kind === 'incident' && it.incident) {
-    // v0.10.1081 (operatör: "ekteki hata mesela hiç anlaşılmıyor") — satırın
-    // metni incident'ın DÜZ cümlesi: otomatik açılışta incident özeti = onu
-    // açan problemin açıklaması (ör. "couchbase orders veritabanında hata
-    // oranı %100 (eşik %5), 3 çağıran servis etkilendi"), incident sayfasının
-    // manşetiyle aynı kaynak. "Declared incident, critical" / "kaynak önceliği
-    // korundu …" gerekçesi satırdan çıktı — P rozetinin ipucunda duruyor.
-    // Özet yoksa (elle açılmış, özetsiz) gerekçe tek satır kalır. Duruma özel
-    // rozet yok (v0.9.571: durum başlık satırındaki StatusBadge'de, bir kez).
-    return (
-      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text2)' }}>
-        {it.description
-          ? <span title={it.description}>{it.description}</span>
-          : it.priorityReason && <span style={{ color: 'var(--text3)' }}>{it.priorityReason}</span>}
-      </div>
-    );
+    // v0.10.1081 (operatör: "ekteki hata mesela hiç anlaşılmıyor") — incident
+    // satırının metni DÜZ cümle (artık kalın başlıkta; v0.10.1084 sunucu
+    // katlamasında birincil bağlı problemin cümlesi). "Declared incident,
+    // critical" / "kaynak önceliği korundu …" gerekçesi satırda YOK — P
+    // rozetinin ipucunda duruyor. Burada yalnız kaynak + incident adı.
+    return lead;
   }
   if (it.kind === 'anomaly' && it.anomaly) {
     return (
-      <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
+      <>
+        {lead}{' · '}
         peak <span className="mono">{fmtFixed(it.anomaly.peakRatio, 1)}x</span>
         {' · '}now <span className="mono">{fmtFixed(it.anomaly.currentRatio, 1)}x</span>
         {it.priorityReason && <span> · {it.priorityReason}</span>}
-      </div>
+      </>
     );
   }
-  return (
-    <div className="dt-trunc" style={{ fontSize: 11, color: 'var(--text3)' }}>
-      {it.priorityReason || it.description}
-    </div>
-  );
+  const rest = it.priorityReason || it.description;
+  return <>{lead}{rest && <> · {rest}</>}</>;
 }

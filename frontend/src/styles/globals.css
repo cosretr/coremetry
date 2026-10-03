@@ -1770,6 +1770,28 @@ tbody td.cell-wrap > .row-link { white-space: normal; overflow: visible; text-ov
    kırpar). `min-width: 0` flex öğesinin içerik genişliğinin altına inmesine
    izin verir. */
 .dt-trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v0.10.1084 (operatör: "Exceptions'taki format güzel") — triyaj satırının
+   başlık hücresi, Exceptions listesi ile Problems (/inbox) kuyruğunun ORTAK
+   anatomisi (features/anomalies/TriageTitleCell.tsx): 1. satır kalın başlık
+   (cümle / exception tipi) + satır içi durum çipleri, 2. satır soluk ayrıntı
+   (mesaj / gerekçe), varsa AI özeti. Değerler Exceptions satırının satır içi
+   stillerinden taşındı (11.5 / 10.5 px) — ikinci bir tasarım yok.
+   --code: exception tipi (mono, hata rengi); cümle başlığı düz metin. */
+.triage-title {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  font-weight: 600; font-size: 11.5px; color: var(--text);
+}
+.triage-title--code { color: var(--err); }
+.triage-sub {
+  font-size: 10.5px; color: var(--text3); margin-top: 1px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.triage-ai {
+  display: flex; align-items: baseline; gap: 5px; margin-top: 3px; min-width: 0;
+  font-size: 10.5px; color: var(--text2);
+}
+.triage-ai__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.triage-ai__age { color: var(--text3); flex: none; }
 /* v0.10.1068 — "+N sütun" (ui/DataTable/HeadMenu.tsx): kaba sığmadığı için
    gizlenen kolon varken ⋯'nin yerini alır ve HEP görünür (hover beklemez);
    zemin ⋯ ile aynı (altındaki etiket ucunu örter). Yer, sığdırmada son

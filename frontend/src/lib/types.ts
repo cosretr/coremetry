@@ -2757,7 +2757,10 @@ export interface InboxItem {
     /** v0.10.1049 — AnomalyEvent.episodeCount / firstStartedAt ile aynı anlam. */
     episodeCount?: number; firstStartedAt?: number;
   };
-  incident?: { id: string; severity: string; status: string };
+  /** v0.10.1084 — problemCount: açık incident'ın bağlı problem sayısı; o
+   *  problemlerin satırları sunucuda bu satıra katlanır (inbox_incident_fold.go).
+   *  Yok = bilinmiyor / bağlı problem yok. */
+  incident?: { id: string; severity: string; status: string; problemCount?: number };
 }
 
 // Role hierarchy used everywhere. `editor` was introduced for the
@@ -8611,6 +8614,10 @@ export interface DBHealthConfig {
   minErrorCount: number;
   errorRiseFactor: number;
   minCallerErrors: number;
+  /** v0.10.1084 — hata oranı anlamsız olan db.system'ler (varsayılan ['couchbase']:
+   *  SDK KV "bulunamadı" cevabını ERROR işaretliyor). Sunucu küçük harfe çevirir,
+   *  kırpar, tekrarı atar; ≤ 20 ad. Yok = eski sunucu (varsayılan uygulanır). */
+  excludeSystems?: string[];
 }
 
 // /api/settings/trace-facets (v0.10.302/303, trace arama Dilim 2) — operatör

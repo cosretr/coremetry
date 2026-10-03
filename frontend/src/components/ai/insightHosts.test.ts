@@ -65,8 +65,9 @@ describe('exception satırı — yuva KALDIRILDI (AnomaliesPage)', () => {
     // ListExceptionGroups ai_summary'yi zaten seçiyor; v0.9.1133'e dek
     // liste onu hiç göstermiyordu. Basım yolu (stripMarkdown) ayrıca
     // markdownSurfaces kapısında.
-    expect(src).toMatch(/g\.aiSummary && \(/);
-    expect(src).toContain('stripMarkdown(g.aiSummary)');
+    // v0.10.1084 — satır Problems kuyruğuyla ortak TriageTitleCell'den çizer;
+    // özet yoksa prop undefined → hiçbir şey çizilmez.
+    expect(src).toContain('ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined}');
   });
 });
 

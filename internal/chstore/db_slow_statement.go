@@ -15,6 +15,7 @@ package chstore
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -77,15 +78,70 @@ type DBHealthConfig struct {
 	MinErrorCount   uint64  `json:"minErrorCount"`   // varsayılan 50 / 5 dk; 2× → critical
 	ErrorRiseFactor float64 `json:"errorRiseFactor"` // varsayılan 3 (dünkü aynı kovaya göre)
 	MinCallerErrors uint64  `json:"minCallerErrors"` // varsayılan 10 — çağıran başına hata tabanı
+	// ExcludeSystems — v0.10.1084 (operatör: "%100 hata oranı gerçek değil"):
+	// hata oranı ANLAMSIZ olan istemcilerin db.system'leri. Couchbase SDK'sı KV
+	// "bulunamadı" (DocumentNotFound) cevabını span'de ERROR işaretliyor; önbellek
+	// deseninde (get → yoksa yükle) her ıska hata sayılır ve %100/%67 hata oranı
+	// gerçek bir olay değildir. Hariç sistem ana okumada ve referans okumasında
+	// SQL'de düşer (Go'da sonradan değil); açık problemleri bir sonraki tikte
+	// "system excluded" gerekçesiyle kapanır. Varsayılanı DOLU liste → *[]string
+	// (aiops §11): nil = varsayılan ["couchbase"], [] = hiçbir sistem hariç değil.
+	// Normalize küçük harf + kırpılmış + tekrarsız, daima nil olmayan dilim yazar.
+	ExcludeSystems *[]string `json:"excludeSystems,omitempty"`
 }
 
 // On — etkin mi (nil = varsayılan açık).
 func (h DBHealthConfig) On() bool { return h.Enabled == nil || *h.Enabled }
 
+// dbHealthDefaultExclude — hariç sistemlerin varsayılanı (v0.10.1084).
+func dbHealthDefaultExclude() []string { return []string{"couchbase"} }
+
+// DBHealthMaxExcludeSystems — hariç sistem listesinin tavanı (PUT doğrulaması).
+const DBHealthMaxExcludeSystems = 20
+
+// NormalizeDBHealthSystems — SAF: kırp + küçük harf + boşları at + tekrarsız
+// (ilk görülme sırası). Sonuç daima nil olmayan dilim (`[]` "hiçbiri" demek,
+// `null` geri okununca varsayılana dönerdi).
+func NormalizeDBHealthSystems(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := make(map[string]bool, len(in))
+	for _, s := range in {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
+}
+
+// ExcludedSystems — normalize edilmiş hariç sistem listesi (nil alan =
+// varsayılan). SQL `NOT IN ?` bağı ve Go yüklemi aynı listeden okur.
+func (h DBHealthConfig) ExcludedSystems() []string {
+	if h.ExcludeSystems == nil {
+		return dbHealthDefaultExclude()
+	}
+	return NormalizeDBHealthSystems(*h.ExcludeSystems)
+}
+
+// SystemExcluded — db.system hariç mi (DBHealthRuleID ile aynı katlama:
+// kırpılmış + küçük harf). SQL ikizi dbHealthExcludeSQL.
+func (h DBHealthConfig) SystemExcluded(system string) bool {
+	s := strings.ToLower(strings.TrimSpace(system))
+	for _, x := range h.ExcludedSystems() {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 func DefaultDBHealth() DBHealthConfig {
 	on := true
+	ex := dbHealthDefaultExclude()
 	return DBHealthConfig{Enabled: &on, ErrorPct: 5, P99Ms: 2000, P99RiseFactor: 3, MinCallerCalls: 10, MinCalls: 100, MinCallers: 2, MaxNewPerTick: 20,
-		MinErrorCount: 50, ErrorRiseFactor: 3, MinCallerErrors: 10}
+		MinErrorCount: 50, ErrorRiseFactor: 3, MinCallerErrors: 10, ExcludeSystems: &ex}
 }
 
 // NormalizeDBHealth — sıfır/negatif alan varsayılana; ErrorPct 100'de
@@ -129,6 +185,10 @@ func NormalizeDBHealth(h DBHealthConfig) DBHealthConfig {
 	if h.MinCallerErrors == 0 {
 		h.MinCallerErrors = d.MinCallerErrors
 	}
+	// v0.10.1084 — hariç sistemler: alan yok → varsayılan; değer → normalize
+	// (yeni dilim; çağıranın dizisi paylaşılmasın).
+	ex := h.ExcludedSystems()
+	h.ExcludeSystems = &ex
 	return h
 }
 

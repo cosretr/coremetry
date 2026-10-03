@@ -41,6 +41,11 @@ package evaluator
 // Kural kapatılınca açık problemler "rule disabled" gerekçesiyle kapanır
 // (v0.10.1069 emsali; süpürmeye bırakılmaz).
 //
+// v0.10.1084 — HARİÇ SİSTEMLER (operatör: "%100 hata oranı gerçek değil"):
+// `health.excludeSystems` (varsayılan couchbase) iki okumada SQL'de düşer; o
+// sistemin açık satırları bir sonraki tikte "system excluded" gerekçesiyle
+// normal kapanış yolundan kapanır (dbHealthSplitExcluded).
+//
 // Karar SAF (dbHealthDecide, tablo-testli); G/Ç yalnız evaluateDBHealth'te.
 // Okuma tik başına bir ana sorgu (chstore.DBHealthBuckets) + yalnız p99 ya da
 // hata sayısı adayı varken bir referans sorgusu (chstore.DBHealthReference).
@@ -66,6 +71,9 @@ const (
 	dbHealthClearReads = 2
 	// dbHealthDisabledNote — kural kapatılınca açık satırın DÜRÜST gerekçesi.
 	dbHealthDisabledNote = "· resolved: rule disabled (db-health kapalı — Settings → Anomaly → Database health)"
+	// dbHealthExcludedNote — v0.10.1084: sistemi hariç listesine giren açık
+	// satırın gerekçesi (operatör: "%100 hata oranı gerçek değil" — couchbase).
+	dbHealthExcludedNote = "· resolved: system excluded (db-health)"
 )
 
 type dbHealthKey struct{ System, Instance, DBName string }
@@ -343,16 +351,37 @@ func dbHealthOpenRows(all []*chstore.Problem) []*chstore.Problem {
 // dbHealthDisabledResolutions — SAF: kural kapalıyken açık satırların
 // kapanmış KOPYALARI, dürüst gerekçeyle (anlık görüntü satırı değişmez).
 func dbHealthDisabledResolutions(open []*chstore.Problem, nowNs int64) []chstore.Problem {
+	return dbHealthResolutionsWith(open, dbHealthDisabledNote, nowNs)
+}
+
+// dbHealthResolutionsWith — SAF: açık satırların gerekçe ekli, kapanmış
+// KOPYALARI (gerekçe iki kez eklenmez; Value ezilmez — MarkResolved).
+func dbHealthResolutionsWith(open []*chstore.Problem, note string, nowNs int64) []chstore.Problem {
 	out := make([]chstore.Problem, 0, len(open))
 	for _, p := range open {
 		q := *p
-		if !strings.Contains(q.Description, dbHealthDisabledNote) {
-			q.Description = strings.TrimRight(q.Description, " ") + " " + dbHealthDisabledNote
+		if !strings.Contains(q.Description, note) {
+			q.Description = strings.TrimRight(q.Description, " ") + " " + note
 		}
 		chstore.MarkResolved(&q, nowNs)
 		out = append(out, q)
 	}
 	return out
+}
+
+// dbHealthSplitExcluded — SAF (v0.10.1084): açık satırları sistemi hariç
+// listesinde olanlar ve kalanlar diye ayırır. Kural id'si çözülemeyen satır
+// KALIR (bugünkü yol ona karar verir). Kapanmış satır zaten açık listesinde
+// değildir (dbHealthOpenRows) → kapanış tek seferlik, idempotent.
+func dbHealthSplitExcluded(open []*chstore.Problem, cfg chstore.DBHealthConfig) (excluded, kept []*chstore.Problem) {
+	for _, p := range open {
+		if k, ok := dbHealthKeyOf(p.RuleID); ok && cfg.SystemExcluded(k.System) {
+			excluded = append(excluded, p)
+			continue
+		}
+		kept = append(kept, p)
+	}
+	return excluded, kept
 }
 
 // fmtNum — ondalık sıfırsız sayı ("5", "2.5").
@@ -508,6 +537,12 @@ func (e *Evaluator) evaluateDBHealth(ctx context.Context) {
 		e.resolveDBHealthDisabled(ctx, open, now)
 		return
 	}
+	// v0.10.1084 — hariç sistemin açık satırı okumadan ÖNCE normal kapanış
+	// yoluyla kapanır (incident kaskadı onu görür) ve openIDs'e girmez: okuma
+	// o sistemi SQL'de düşürdüğü için satırları gelmez, aksi hâlde "verisiz =
+	// temiz" sayılıp iki tik sonra yanlış gerekçeyle kapanırdı.
+	excluded, open := dbHealthSplitExcluded(open, cfg)
+	e.resolveDBHealthExcluded(ctx, excluded, now)
 	openIDs := make([]string, 0, len(open))
 	openSet := make(map[string]bool, len(open))
 	for _, p := range open {
@@ -527,7 +562,7 @@ func (e *Evaluator) evaluateDBHealth(ctx context.Context) {
 	}
 	refStart := cur.Add(-dbHealthRefShift - 2*dbHealthBucket)
 	refs, err := e.store.DBHealthReference(ctx, refStart, refStart.Add(3*dbHealthBucket), dbHealthRefShift,
-		dbHealthRefCandidates(rows, cfg))
+		cfg, dbHealthRefCandidates(rows, cfg))
 	if err != nil {
 		// Referanssız p99 / hata sayısı boyutu KAPALI sayılırdı → açık problem
 		// sahte "temiz" görünüp kapanırdı. Ana okuma hatasıyla aynı yön: yalnız tazele.
@@ -607,6 +642,21 @@ func (e *Evaluator) resolveDBHealthDisabled(ctx context.Context, open []*chstore
 		}
 		e.countResolved()
 		log.Printf("[evaluator] PROBLEM RESOLVED (db.health, rule disabled): %s", q.ID)
+	}
+}
+
+// resolveDBHealthExcluded — v0.10.1084: sistemi hariç listesinde olan açık
+// satırlar "system excluded" gerekçesiyle, NORMAL kapanış yoluyla (UpsertProblem
+// + resolved; incident kaskadı aynı tikte bağlı incident'ı kapatır) kapanır.
+// Kapanmış satır bir daha açık listesine girmez → tek seferlik.
+func (e *Evaluator) resolveDBHealthExcluded(ctx context.Context, excluded []*chstore.Problem, now time.Time) {
+	for _, q := range dbHealthResolutionsWith(excluded, dbHealthExcludedNote, now.UnixNano()) {
+		if err := e.store.UpsertProblem(ctx, q); err != nil {
+			log.Printf("[evaluator] db-health resolve (system excluded) %s: %v", q.ID, err)
+			continue
+		}
+		e.countResolved()
+		log.Printf("[evaluator] PROBLEM RESOLVED (db.health, system excluded): %s", q.ID)
 	}
 }
 

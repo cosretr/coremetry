@@ -40,6 +40,7 @@ func TestDBHealthBucketsSQLGolden(t *testing.T) {
 			       c_errs >= ?                                                   AS c_err_affected
 			FROM db_caller_summary_5m
 			WHERE time_bucket >= ? AND time_bucket < ?
+			  AND lower(trimBoth(db_system)) NOT IN ?
 			  AND NOT (positionCaseInsensitive(service_name, ?) > 0 OR positionCaseInsensitive(service_name, ?) > 0)
 			GROUP BY db_system, instance, db_name, service_name, time_bucket
 		)
@@ -56,8 +57,15 @@ func TestDBHealthBucketsSQLGolden(t *testing.T) {
 		t.Fatalf("bind sayısı %d, argüman %d", strings.Count(sql, "?"), len(args))
 	}
 	// v0.10.1083 — çağıran hata tabanı (10) iç SELECT'te, hata sayısı tabanı (50) HAVING'de.
-	wantArgs := []any{uint64(10), 5.0, 2000.0, uint64(10), since, until, "-batch", "nightly-job", 5.0, 2000.0, uint64(50)}
+	// v0.10.1084 — hariç sistemler (varsayılan ["couchbase"]) zamandan hemen sonra, TEK dizi bağı.
+	wantArgs := []any{uint64(10), 5.0, 2000.0, uint64(10), since, until, nil, "-batch", "nightly-job", 5.0, 2000.0, uint64(50)}
 	for i := range wantArgs {
+		if i == 6 {
+			if ex, ok := args[i].([]string); !ok || len(ex) != 1 || ex[0] != "couchbase" {
+				t.Errorf("arg[6] hariç sistem dizisi olmalı (couchbase): %#v", args[i])
+			}
+			continue
+		}
 		if args[i] != wantArgs[i] {
 			t.Errorf("arg[%d] = %v, istenen %v", i, args[i], wantArgs[i])
 		}
@@ -76,9 +84,15 @@ func TestDBHealthBucketsSQLGolden(t *testing.T) {
 	}
 
 	// Batch listesi boş (`[]` = kural kapalı) → batch dalı YOK; açık id yok → boş dizi (nil değil).
-	off, offArgs := dbHealthBucketsQuery(since, until, cfg, AnomalySensitivityConfig{BatchServicePatterns: ptrStrings([]string{})}, nil)
-	if strings.Contains(off, "positionCaseInsensitive") || len(offArgs) != 10 {
-		t.Errorf("boş batch listesinde batch koşulu olmamalı: %d arg\n%s", len(offArgs), off)
+	// v0.10.1084 — hariç liste boş (`[]`) → NOT IN koşulu ve bağı YOK.
+	none := cfg
+	none.ExcludeSystems = ptrStrings([]string{})
+	off, offArgs := dbHealthBucketsQuery(since, until, none, AnomalySensitivityConfig{BatchServicePatterns: ptrStrings([]string{})}, nil)
+	if strings.Contains(off, "positionCaseInsensitive") || strings.Contains(off, "NOT IN") || len(offArgs) != 10 {
+		t.Errorf("boş batch + boş hariç listesinde iki koşul da olmamalı: %d arg\n%s", len(offArgs), off)
+	}
+	if strings.Count(off, "?") != len(offArgs) {
+		t.Errorf("boş listede bind sayısı %d, argüman %d", strings.Count(off, "?"), len(offArgs))
 	}
 	if ids, ok := offArgs[9].([]string); !ok || ids == nil {
 		t.Errorf("açık id yokken boş dizi bağlanmalı: %#v", offArgs[9])
@@ -102,17 +116,79 @@ func TestDBHealthRuleIDSQLTwin(t *testing.T) {
 }
 
 func TestDBHealthReferenceSQLContract(t *testing.T) {
-	sql := dbHealthReferenceSQL()
+	since := time.Date(2026, 10, 1, 21, 30, 0, 0, time.UTC)
+	ids := []string{"db-health:oracle@db-host-01/crm-db"}
+	sql, args := dbHealthReferenceQuery(since, since.Add(15*time.Minute), DefaultDBHealth(), ids)
 	// v0.10.1083 — aynı okuma dünkü kovanın çağrı + hata sayısını da getirir.
+	// v0.10.1084 — hariç sistemler referans okumasında da SQL'de düşer.
 	for _, w := range []string{"FROM db_summary_5m", "time_bucket >= ? AND time_bucket < ?", dbHealthRuleIDSQL + " IN ?",
+		"AND lower(trimBoth(db_system)) NOT IN ?",
 		"countMerge(span_count_state)", "countIfMerge(error_count_state)",
 		"GROUP BY db_system, instance, db_name, time_bucket", "LIMIT 20000", "max_execution_time = 10"} {
 		if !strings.Contains(sql, w) {
 			t.Errorf("%q yok:\n%s", w, sql)
 		}
 	}
-	if strings.Count(sql, "?") != 3 {
-		t.Errorf("3 bind bekleniyor, %d", strings.Count(sql, "?"))
+	if strings.Count(sql, "?") != 4 || len(args) != 4 {
+		t.Errorf("4 bind bekleniyor: %d ?, %d arg", strings.Count(sql, "?"), len(args))
+	}
+	if ex, ok := args[2].([]string); !ok || len(ex) != 1 || ex[0] != "couchbase" {
+		t.Errorf("arg[2] hariç sistem dizisi olmalı: %#v", args[2])
+	}
+	if got, ok := args[3].([]string); !ok || len(got) != 1 || got[0] != ids[0] {
+		t.Errorf("son arg kural id dizisi olmalı: %#v", args[3])
+	}
+	// Boş hariç listesi → koşul yok, 3 bind (bugünkü okuma birebir).
+	none := DefaultDBHealth()
+	none.ExcludeSystems = ptrStrings([]string{})
+	off, offArgs := dbHealthReferenceQuery(since, since.Add(15*time.Minute), none, ids)
+	if strings.Contains(off, "NOT IN") || strings.Count(off, "?") != 3 || len(offArgs) != 3 {
+		t.Errorf("boş hariç listesinde koşul olmamalı: %d arg\n%s", len(offArgs), off)
+	}
+}
+
+// v0.10.1084 — hariç sistemler: varsayılan couchbase, normalize (kırp + küçük
+// harf + tekrarsız), `[]` = hiçbiri (gidiş-dönüşte varsayılana DÖNMEZ), alan
+// yok (eski blob) = varsayılan; Go yüklemi SQL ikiziyle aynı katlamada.
+func TestDBHealthExcludeSystemsNormalize(t *testing.T) {
+	d := DefaultDBHealth()
+	if got := d.ExcludedSystems(); len(got) != 1 || got[0] != "couchbase" {
+		t.Fatalf("varsayılan hariç liste: %v", got)
+	}
+	if !d.SystemExcluded(" Couchbase ") || d.SystemExcluded("oracle") {
+		t.Error("yüklem kırpılmış + küçük harf karşılaştırmalı")
+	}
+	h := NormalizeDBHealth(DBHealthConfig{ExcludeSystems: ptrStrings([]string{" CouchBase", "redis", "", "couchbase", "Redis "})})
+	if got := *h.ExcludeSystems; len(got) != 2 || got[0] != "couchbase" || got[1] != "redis" {
+		t.Errorf("normalize: %v", got)
+	}
+	// Eski blob (alan yok) → varsayılan.
+	var old DBSlowQueryConfig
+	if err := json.Unmarshal([]byte(`{"enabled":true,"health":{"errorPct":5}}`), &old); err != nil {
+		t.Fatal(err)
+	}
+	if got := NormalizeDBSlowQuery(old).Health.ExcludedSystems(); len(got) != 1 || got[0] != "couchbase" {
+		t.Errorf("eski blob varsayılanı almalı: %v", got)
+	}
+	// Operatörün boşalttığı liste gidiş-dönüşte boş kalır (null → nil → couchbase olmaz).
+	empty := NormalizeDBHealth(DBHealthConfig{ExcludeSystems: ptrStrings(nil)})
+	raw, _ := json.Marshal(DBSlowQueryConfig{Health: &empty})
+	if !strings.Contains(string(raw), `"excludeSystems":[]`) {
+		t.Fatalf("boş liste `[]` yazılmalı: %s", raw)
+	}
+	var back DBSlowQueryConfig
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if got := NormalizeDBSlowQuery(back).Health.ExcludedSystems(); len(got) != 0 {
+		t.Errorf("boşaltılmış liste geri açıldı: %v", got)
+	}
+	// Normalize çağıranın dizisini paylaşmaz.
+	src := []string{"Couchbase"}
+	n := NormalizeDBHealth(DBHealthConfig{ExcludeSystems: &src})
+	(*n.ExcludeSystems)[0] = "x"
+	if src[0] != "Couchbase" {
+		t.Error("normalize girdiyi değiştirdi")
 	}
 }
 

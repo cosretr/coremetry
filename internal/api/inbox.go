@@ -121,6 +121,10 @@ type InboxIncidentRef struct {
 	ID       string `json:"id"`
 	Severity string `json:"severity"`
 	Status   string `json:"status"`
+	// ProblemCount — v0.10.1084: açık incident'ın bağlı problem sayısı; o
+	// problemlerin satırları listede bu satıra katlanır (foldIncidentProblems).
+	// 0 / yok = bağlı problem bilinmiyor (FE Occurrences "—").
+	ProblemCount int `json:"problemCount,omitempty"`
 }
 
 type InboxProblemRef struct {
@@ -894,6 +898,11 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 		// builtin-*, db-health:*, kritik incident) kaynak önceliğini korur;
 		// sıra AYNEN sayaçlardan önce, yani P1 çipi korunan satırları sayar.
 		forceNonExceptionP3(items)
+		// v0.10.1084 (operatör: "tekilleştir") — açık incident'ın bağlı problem
+		// satırları incident satırına katlanır: görünüm öncelikleri (yukarıda)
+		// kesinleştikten SONRA (en yükseği taşınsın), sayaçlardan ÖNCE (çipler
+		// gizlenen satırı saymasın). inbox_incident_fold.go.
+		items = s.foldInboxIncidents(ctx, items)
 
 		// v0.9.330 — facet counts are computed HERE, over everything that
 		// survived the row-level narrows and BEFORE the kind/priority facets
@@ -1151,6 +1160,8 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// :v9: — v0.10.1072 istisna listesi satır önceliklerini değiştirdi (:v6:
 	// emsali). Listenin KENDİSİ anahtarda değil: PUT önek düşürür
 	// (invalidateInboxCaches), susturma yazımlarıyla aynı duruş.
+	// :v10: — v0.10.1084 incident katlaması SATIR KÜMESİNİ (bağlı problemler
+	// gizlenir) ve gövdeyi (incident.problemCount) değiştirdi (:v6: emsali).
 	//
 	// `subject` anahtara GİRMEK ZORUNDA ve `kind` onun yerine geçemez:
 	// db şeridi kinds'i ["problem"]e ZORLUYOR, yani servis şeridinde
@@ -1158,7 +1169,7 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// aynı kind dizisini üretir. Ayrı bir alan olmasaydı ikisi TEK cache
 	// girdisini paylaşır ve biri diğerinin satırlarını görürdü — v0.5.187
 	// çapraz-zehirlenmesinin birebir şekli.
-	return fmt.Sprintf("inbox:v9:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	return fmt.Sprintf("inbox:v10:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }
@@ -1547,8 +1558,9 @@ func sortInboxItems(items []InboxItem, id, dir string) {
 				return strings.ToLower(a.Service) < strings.ToLower(b.Service)
 			}
 		case "detail":
-			if !strings.EqualFold(a.Title, b.Title) {
-				return strings.ToLower(a.Title) < strings.ToLower(b.Title)
+			// v0.10.1084 — ekranda kalın okunan başlık (inboxHeadline).
+			if ha, hb := inboxHeadline(a), inboxHeadline(b); !strings.EqualFold(ha, hb) {
+				return strings.ToLower(ha) < strings.ToLower(hb)
 			}
 		case "lastSeen":
 			if a.LastSeen != b.LastSeen {
@@ -1626,9 +1638,15 @@ func inboxSortAndCap(items []InboxItem, sortID, sortDir string, limit int) ([]In
 // don't have one. Problems come from alert-rule firings and incidents are
 // declared by a human — neither counts occurrences, so they sort as 0 and
 // render as "—" rather than pretending to a number they don't have.
+//
+// v0.10.1084 — katlanmış incident satırı Occurrences kolonunda bağlı problem
+// sayısını gösterir ("2 problem"); sıralama aynı sayıya bakar.
 func inboxOccurrences(it InboxItem) uint64 {
 	if it.Exception != nil {
 		return it.Exception.Occurrences
+	}
+	if it.Incident != nil && it.Incident.ProblemCount > 0 {
+		return uint64(it.Incident.ProblemCount)
 	}
 	return 0
 }
@@ -1642,7 +1660,7 @@ func inboxPrimaryEqual(a, b InboxItem, id string) bool {
 	case "service":
 		return strings.EqualFold(a.Service, b.Service)
 	case "detail":
-		return strings.EqualFold(a.Title, b.Title)
+		return strings.EqualFold(inboxHeadline(a), inboxHeadline(b))
 	case "lastSeen":
 		return a.LastSeen == b.LastSeen
 	case "assignee":

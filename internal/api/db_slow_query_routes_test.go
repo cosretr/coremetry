@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -87,5 +88,59 @@ func TestValidateDBHealthAndKeepStored(t *testing.T) {
 	in.Health = &h
 	if got := keepStoredHealth(in, stored); !got.Health.On() {
 		t.Error("gövde health taşıyorsa o yazılır")
+	}
+}
+
+// v0.10.1084 — health.excludeSystems: ≤ 20 ad (normalize sonrası; tekrar ve
+// boşluk sayılmaz), her biri ≤ 64; alanı bilmeyen sekmenin PUT'u saklı listeyi
+// (operatörün boşalttığı [] dahil) ezmez; gövde listeyi taşıyorsa o yazılır.
+func TestValidateDBHealthExcludeSystemsAndKeepStored(t *testing.T) {
+	base := chstore.DefaultDBSlowQuery()
+	with := func(list []string) chstore.DBSlowQueryConfig {
+		c := base
+		h := *base.Health
+		h.ExcludeSystems = &list
+		c.Health = &h
+		return c
+	}
+	many := make([]string, 21)
+	for i := range many {
+		many[i] = "sys-" + string(rune('a'+i))
+	}
+	if err := validateDBSlowQuery(with(many)); err == nil {
+		t.Error("21 ad reddedilmeli")
+	}
+	if err := validateDBSlowQuery(with(many[:20])); err != nil {
+		t.Errorf("20 ad geçmeli: %v", err)
+	}
+	dup := append(append([]string{}, many[:20]...), " SYS-A ", "", "sys-b")
+	if err := validateDBSlowQuery(with(dup)); err != nil {
+		t.Errorf("tekrar/boş ad tavana sayılmamalı: %v", err)
+	}
+	if err := validateDBSlowQuery(with([]string{strings.Repeat("x", 65)})); err == nil {
+		t.Error("65 karakterlik ad reddedilmeli")
+	}
+	if err := validateDBSlowQuery(with([]string{})); err != nil {
+		t.Errorf("boş liste (hiçbiri hariç değil) geçmeli: %v", err)
+	}
+
+	// Saklı liste boşaltılmış ([]); eski sekme health'i excludeSystems'siz yollar.
+	stored := chstore.DefaultDBSlowQuery()
+	emptyList := []string{}
+	stored.Health.ExcludeSystems = &emptyList
+	old := chstore.DefaultDBHealth()
+	old.ExcludeSystems = nil
+	old.ErrorPct = 7
+	in := chstore.DBSlowQueryConfig{Enabled: true, ThresholdMs: 1000, CriticalMs: 5000, MinExecutions: 20, ForBuckets: 2, Health: &old}
+	got := chstore.NormalizeDBSlowQuery(keepStoredHealth(in, stored))
+	if ex := got.Health.ExcludedSystems(); len(ex) != 0 || got.Health.ErrorPct != 7 {
+		t.Errorf("saklı boş liste korunmalı, gelen diğer alanlar yazılmalı: %v %%%v", ex, got.Health.ErrorPct)
+	}
+	// Gövde listeyi taşıyor → o yazılır.
+	newList := []string{"Redis"}
+	old.ExcludeSystems = &newList
+	got = chstore.NormalizeDBSlowQuery(keepStoredHealth(in, stored))
+	if ex := got.Health.ExcludedSystems(); len(ex) != 1 || ex[0] != "redis" {
+		t.Errorf("gövdedeki liste yazılmalı (normalize): %v", ex)
 	}
 }

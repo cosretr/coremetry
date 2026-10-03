@@ -38,6 +38,12 @@ package chstore
 // veritabanının çağrıları içinde %5'e ulaşmıyordu): ana okuma çağıran başına
 // "≥ minCallerErrors hata" bayrağını sayar, referans okuması dünkü kovanın
 // hata sayısını da getirir (DBHealthReference). Okuma sayısı DEĞİŞMEDİ.
+//
+// v0.10.1084 — HARİÇ SİSTEMLER (operatör: "%100 hata oranı gerçek değil"):
+// DBHealthConfig.ExcludeSystems'teki db.system'ler (varsayılan couchbase — SDK
+// KV "bulunamadı" cevabını ERROR işaretliyor) iki okumada da İÇ WHERE'de düşer
+// (`lower(trimBoth(db_system)) NOT IN ?`); boş listede koşul YOK. Go'da sonradan
+// süzmek LIMIT'i ve HAVING'in açık-id dalını hariç satırlara harcardı.
 
 import (
 	"context"
@@ -68,6 +74,22 @@ const dbHealthRowLimit = 20000
 // system'i kırpıp küçültür). Açık problem kimlikleriyle eşleşme ve referans
 // okumasının süzgeci bunu kullanır. Önek sabitten gelir (kullanıcı girdisi değil).
 const dbHealthRuleIDSQL = `concat('` + RuleDBHealthPrefix + `', lower(trimBoth(db_system)), '@', instance, '/', db_name)`
+
+// dbHealthExcludeSQL — DBHealthConfig.SystemExcluded'ın SQL ikizi (aynı katlama:
+// kırpılmış + küçük harf; kural id'si de böyle kurulur). Bağ: normalize liste
+// (dizi). Liste boşsa koşul hiç yazılmaz (dbHealthExcludeCond).
+const dbHealthExcludeSQL = `lower(trimBoth(db_system)) NOT IN ?`
+
+// dbHealthExcludeCond — SAF: hariç liste boşsa ("", nil), değilse WHERE eki
+// ve tek bağ (dizi).
+func dbHealthExcludeCond(cfg DBHealthConfig) (string, []any) {
+	ex := cfg.ExcludedSystems()
+	if len(ex) == 0 {
+		return "", nil
+	}
+	return `
+			  AND ` + dbHealthExcludeSQL, []any{ex}
+}
 
 // DBHealthBucket — bir veritabanının bir 5 dk kovadaki sağlık ölçüsü
 // (batch olmayan çağıranlar üzerinden).
@@ -114,9 +136,10 @@ func (b DBHealthBucket) ErrorPct() float64 {
 }
 
 // dbHealthBucketsSQL — SAF. batchCond boşsa batch dalı YOK (kalıp listesi
-// boş = kural kapalı). Bind sırası: minCallerCalls, errorPct, p99Ms,
-// minCallerErrors, since, until, [kalıplar], errorPct, p99Ms, minErrorCount,
-// açık kural id'leri (dizi).
+// boş = kural kapalı); excludeCond boşsa hariç sistem koşulu YOK (v0.10.1084).
+// Bind sırası: minCallerCalls, errorPct, p99Ms, minCallerErrors, since, until,
+// [hariç sistemler (dizi)], [kalıplar], errorPct, p99Ms, minErrorCount, açık
+// kural id'leri (dizi).
 //
 // Çağıranın p99'u TEK birleştirmeyle: durum bir kez -MergeState ile kurulur,
 // finalizeAggregation onu sonlandırır (ikinci tDigest birleştirmesi yok).
@@ -124,7 +147,7 @@ func (b DBHealthBucket) ErrorPct() float64 {
 // v0.10.1083 — mutlak hata sayısı kolu AYNI sorguda: çağıranın "hata
 // üretti" bayrağı (c_err_affected, ≥ minCallerErrors hata), dışta sayısı
 // (err_callers), HAVING'de hata sayısı tabanı. Yeni okuma YOK.
-func dbHealthBucketsSQL(batchCond string) string {
+func dbHealthBucketsSQL(excludeCond, batchCond string) string {
 	excl := ""
 	if batchCond != "" {
 		excl = `
@@ -149,7 +172,7 @@ func dbHealthBucketsSQL(batchCond string) string {
 			         OR (arrayElement(finalizeAggregation(c_q), 3) / 1e6 >= ?))  AS c_affected,
 			       c_errs >= ?                                                   AS c_err_affected
 			FROM db_caller_summary_5m
-			WHERE time_bucket >= ? AND time_bucket < ?` + excl + `
+			WHERE time_bucket >= ? AND time_bucket < ?` + excludeCond + excl + `
 			GROUP BY db_system, instance, db_name, service_name, time_bucket
 		)
 		GROUP BY db_system, instance, db_name, time_bucket
@@ -169,10 +192,12 @@ func dbHealthBucketsQuery(since, until time.Time, cfg DBHealthConfig, sens Anoma
 		openIDs = []string{}
 	}
 	cond, bargs := sens.BatchServiceSQL("service_name")
+	exCond, exArgs := dbHealthExcludeCond(cfg)
 	args := []any{cfg.MinCallerCalls, cfg.ErrorPct, cfg.P99Ms, cfg.MinCallerErrors, since, until}
+	args = append(args, exArgs...)
 	args = append(args, bargs...)
 	args = append(args, cfg.ErrorPct, cfg.P99Ms, cfg.MinErrorCount, openIDs)
-	return dbHealthBucketsSQL(cond), args
+	return dbHealthBucketsSQL(exCond, cond), args
 }
 
 // DBHealthBuckets — [since, until) arasındaki (db, kova) sağlık satırları:
@@ -205,23 +230,34 @@ func (s *Store) DBHealthBuckets(ctx context.Context, since, until time.Time, cfg
 // p99'u ve (v0.10.1083) çağrı + hata sayısı — aynı okuma, iki ek kolon.
 // Kaynak db_summary_5m (çağıran boyutu gerekmez; Databases listesinin MV'si).
 // Süzgeç: yalnız p99 ya da hata sayısı adayı veritabanlarının kural id'leri
-// (dizi). Bind sırası: since, until, kural id'leri.
+// (dizi). Bind sırası: since, until, [hariç sistemler (dizi)], kural id'leri.
+// v0.10.1084 — hariç sistemler burada da SQL'de düşer (adaylar zaten ana
+// okumadan geliyor; koşul ikinci kemer — referans hariç sisteme hiç bakmaz).
 //
 // Bilinen asimetri: db_summary_5m batch çağıranları da sayar (cari okuma
 // düşürür) — referans en kötü ihtimalle YÜKSEK çıkar, kol temkinli yönde
 // susar (sahte açılış değil).
-func dbHealthReferenceSQL() string {
+func dbHealthReferenceSQL(excludeCond string) string {
 	return `
 		SELECT db_system, instance, db_name, time_bucket,
 		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms,
 		       countMerge(span_count_state)                                                     AS calls,
 		       countIfMerge(error_count_state)                                                  AS errs
 		FROM db_summary_5m
-		WHERE time_bucket >= ? AND time_bucket < ?
+		WHERE time_bucket >= ? AND time_bucket < ?` + excludeCond + `
 		  AND ` + dbHealthRuleIDSQL + ` IN ?
 		GROUP BY db_system, instance, db_name, time_bucket
 		LIMIT ` + itoa(dbHealthRowLimit) + `
 		SETTINGS max_execution_time = 10`
+}
+
+// dbHealthReferenceQuery — SAF: referans SQL'i + argümanlar (golden test).
+func dbHealthReferenceQuery(since, until time.Time, cfg DBHealthConfig, ruleIDs []string) (string, []any) {
+	exCond, exArgs := dbHealthExcludeCond(cfg)
+	args := []any{since, until}
+	args = append(args, exArgs...)
+	args = append(args, ruleIDs)
+	return dbHealthReferenceSQL(exCond), args
 }
 
 // DBHealthRefKey — referans haritasının anahtarı: kural id + kova (unix sn,
@@ -243,13 +279,14 @@ type DBHealthRef struct {
 // DBHealthReference — ruleIDs için [since, until) penceresindeki kova
 // ölçüleri; anahtarın kovası shift kadar ileri kaydırılır (24 sa önceki kova
 // → bugünkü karşılığı). ruleIDs boşsa okuma yok. Çağrısı da p99'u da olmayan
-// satır atlanır (referans yok).
-func (s *Store) DBHealthReference(ctx context.Context, since, until time.Time, shift time.Duration, ruleIDs []string) (map[DBHealthRefKey]DBHealthRef, error) {
+// satır atlanır (referans yok). cfg yalnız hariç sistemler için (v0.10.1084).
+func (s *Store) DBHealthReference(ctx context.Context, since, until time.Time, shift time.Duration, cfg DBHealthConfig, ruleIDs []string) (map[DBHealthRefKey]DBHealthRef, error) {
 	out := map[DBHealthRefKey]DBHealthRef{}
 	if len(ruleIDs) == 0 {
 		return out, nil
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, dbHealthReferenceSQL(), since, until, ruleIDs)
+	q, args := dbHealthReferenceQuery(since, until, cfg, ruleIDs)
+	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
