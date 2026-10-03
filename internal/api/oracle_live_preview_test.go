@@ -30,7 +30,7 @@ func TestBuildOracleLivePreview(t *testing.T) {
 		ch("yalniz-exception", true, "exception"),
 	}
 	stats := chstore.ExternalProblemStats{Opened24h: 37, Opened7d: 212, Critical7d: 40, Clusters7d: 3, OpenNow: 5,
-		Top: []chstore.ExternalProblemTop{{Subject: "bsa-payments", Opened: 61}}}
+		Top: []chstore.ExternalProblemTop{{Subject: "acme-payments", Opened: 61}}}
 	src := oracle.SourceConfig{ID: "s1", Name: "core-oracle"} // kip boş → shadow
 
 	p := buildOracleLivePreview(src, stats, channels, chstore.TeamContacts{Enabled: true, Contacts: map[string]string{"sre": "a@example.test"}}, 20, now)

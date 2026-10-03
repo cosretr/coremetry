@@ -24,7 +24,7 @@ import (
 // operator-reported "filter problems by owner/SRE team like the
 // Services page" request; MUST behave identically to the inbox
 // filter it mirrors.
-// v0.9.427 — alias-farkındalıklı: LDAP adı ("SY-Dijital Bankacılık") ile
+// v0.9.427 — alias-farkındalıklı: LDAP adı ("SY-Dijital Altyapı") ile
 // telemetri adı ("dijitalsy") operatörün team_aliases tablosu üzerinden
 // aynı takıma iner. Boş tablo = eski EqualFold davranışı (TeamEqual'ın
 // normalizasyonu case-fold'u kapsar).

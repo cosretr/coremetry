@@ -8,9 +8,9 @@ import "strings"
 // BFF servislerinin Logs sekmesi tamamen boştu. Sebep aranan ALAN değil,
 // aranan DEĞER — servis adı env ekli ama log dokümanı eksiz taşıyor:
 //
-//	service (Coremetry)       : mobile-overview-bff-prod
-//	kubernetes.container_name : mobile-overview-bff
-//	kubernetes.labels.app     : mobile-overview-bff
+//	service (Coremetry)       : mobile-home-bff-prod
+//	kubernetes.container_name : mobile-home-bff
+//	kubernetes.labels.app     : mobile-home-bff
 //	kubernetes.namespace_name : mobile-bff-prod      ← ek BURADA
 //
 // Yani filo, ortam bilgisini NAMESPACE'e yazıyor; iş yükü adı eksiz.

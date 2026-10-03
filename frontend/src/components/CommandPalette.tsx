@@ -361,7 +361,7 @@ export function CommandPalette() {
     return () => { cancelled = true; clearTimeout(t); };
   }, [query, open, locationSearch]);
 
-  // v0.10.1002 — Oracle operasyon adı araması: "DIGITAL_TRANSFER_EFT" yazan
+  // v0.10.1002 — Oracle operasyon adı araması: "TRANSFER_SERVICE" yazan
   // operatör o operasyonun trace'lerine gider. Endpoint aramasıyla aynı desen
   // (200ms debounce + stale-guard); ≥3 karakter, trace id değilse. Etkin
   // Oracle kaynağı yoksa sunucu CH'ye gitmeden boş döner.

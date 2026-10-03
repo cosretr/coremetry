@@ -149,7 +149,7 @@ func betterTeamDisplay(cand, cur, canon string) bool {
 // ada göre artan — deterministik sıra, map iterasyonu sızmaz).
 //
 // Tekilleştirme CanonTeam üzerinden: alias tablosu ve Türkçe katlama
-// dahil, yani "avengerSY"/"Avengersy" TEK takımdır. Aynı servis hem owner
+// dahil, yani "orionSY"/"Orionsy" TEK takımdır. Aynı servis hem owner
 // hem SRE olarak aynı takımı gösteriyorsa İKİ kez sayılmaz.
 //
 // v0.9.1134'te api/copilot_guided.go'da doğdu; v0.9.1244'te buraya taşındı
@@ -536,7 +536,7 @@ func listTeamsTool(d Deps) mcp.Tool {
 			"Telemetri değil katalog okuması — pencere argümanı yok.",
 		Description: "List the teams that own services in Coremetry, with how many services each one owns. " +
 			"Source is the operator-curated service catalog (ownerTeam / sreTeam on each service), NOT live telemetry — so a team appears here the moment it is assigned, even if its services are idle. " +
-			"Use it as the entry point for every ownership question ('who owns checkout', 'how is the payments team doing') and ALWAYS to resolve the exact spelling before calling get_team_services — team names are Turkish and case/alias variants ('avengerSY' vs 'Avengersy') are folded into ONE row here. " +
+			"Use it as the entry point for every ownership question ('who owns checkout', 'how is the payments team doing') and ALWAYS to resolve the exact spelling before calling get_team_services — team names are Turkish and case/alias variants ('orionSY' vs 'Orionsy') are folded into ONE row here. " +
 			"NO 'my team': an MCP token carries a role, not a user, so there is nobody to resolve 'mine' to. If the operator asks about 'my services', ask which team they mean and offer the names from this list — never guess. " +
 			"Sorted by service count descending, so the largest teams come first. Cheap: a cached catalog read with no time window and no span scan. " +
 			"An empty list is not an error: `reasons` distinguishes an empty catalog from a catalog where nobody has been assigned a team yet.",

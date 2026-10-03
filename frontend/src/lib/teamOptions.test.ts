@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { teamOptionsCI } from './teamOptions';
 
 // v0.8.330 — operator-reported: SRE/owner team names arrive from span
-// resource attrs with inconsistent casing ("avengerSY" vs "Avengersy"), and
+// resource attrs with inconsistent casing ("orionSY" vs "Orionsy"), and
 // the filter dropdowns built a case-SENSITIVE Set — the same team listed as
 // two separate options. The filter match itself was already EqualFold
 // backend-side, so the fix is canonical, case-insensitive OPTION building:
@@ -10,7 +10,7 @@ import { teamOptionsCI } from './teamOptions';
 // lexicographically first for determinism), sorted case-insensitively.
 describe('teamOptionsCI', () => {
   it('merges casing variants into one option', () => {
-    expect(teamOptionsCI(['avengerSY', 'Avengersy', 'avengerSY'])).toEqual(['avengerSY']);
+    expect(teamOptionsCI(['orionSY', 'Orionsy', 'orionSY'])).toEqual(['orionSY']);
   });
 
   it('majority casing wins the display form', () => {

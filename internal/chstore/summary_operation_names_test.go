@@ -24,7 +24,7 @@ import (
 )
 
 func TestOperationNamesQueryExcludesSelfTelemetryWhenUnscoped(t *testing.T) {
-	wc, _ := operationNamesQuery("", "bsa-mobile")
+	wc, _ := operationNamesQuery("", "acme-mobile")
 	sql := wc.sql()
 	if !strings.Contains(sql, "service_name NOT IN") {
 		t.Fatalf("servissiz aramada öz-telemetri dışlanmalı:\n%s", sql)
@@ -34,12 +34,12 @@ func TestOperationNamesQueryExcludesSelfTelemetryWhenUnscoped(t *testing.T) {
 	}
 	found := false
 	for _, a := range wc.args {
-		if s, ok := a.(string); ok && s == "%bsa-mobile%" {
+		if s, ok := a.(string); ok && s == "%acme-mobile%" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("ILIKE argümanı %%bsa-mobile%% olmalı: %v", wc.args)
+		t.Fatalf("ILIKE argümanı %%acme-mobile%% olmalı: %v", wc.args)
 	}
 	// Servis seçiliyken dışlama YOK (dogfood: öz-telemetri açıkça seçilebilir).
 	wc2, _ := operationNamesQuery("coremetry-frontend", "")
@@ -49,7 +49,7 @@ func TestOperationNamesQueryExcludesSelfTelemetryWhenUnscoped(t *testing.T) {
 }
 
 func TestOperationNamesQueryPrefixFirstWithoutWildcard(t *testing.T) {
-	_, order := operationNamesQuery("", "bsa-mobile")
+	_, order := operationNamesQuery("", "acme-mobile")
 	if !strings.Contains(order, "startsWith(lowerUTF8(name)") || !strings.HasSuffix(strings.TrimSpace(order), ", name") {
 		t.Fatalf("jokersiz aramada önek eşleşmesi öne gelmeli, sonra alfabetik: %q", order)
 	}
@@ -66,14 +66,14 @@ func TestOperationNamesQueryPrefixFirstWithoutWildcard(t *testing.T) {
 // v0.10.667 — ham-span fallback'i MV yoluyla aynı sözleşmeyi taşır.
 // Mutasyon (ölçüldü): plan'daki NOT IN'i kaldırmak bu testi düşürür.
 func TestOperationNamesFallbackPlanMatchesMVPath(t *testing.T) {
-	extra, args, orderBy, orderArg := operationNamesFallbackPlan("", "bsa-mobile")
+	extra, args, orderBy, orderArg := operationNamesFallbackPlan("", "acme-mobile")
 	if !strings.Contains(extra, "service_name NOT IN ?") || !strings.Contains(extra, "name ILIKE ?") {
 		t.Fatalf("servissiz fallback: öz-telemetri dışı + ILIKE bekleniyor: %q", extra)
 	}
-	if len(args) != 2 || args[1] != "%bsa-mobile%" {
+	if len(args) != 2 || args[1] != "%acme-mobile%" {
 		t.Fatalf("argümanlar (servis listesi, like): %v", args)
 	}
-	if !strings.HasPrefix(orderBy, "startsWith(lowerUTF8(name)") || orderArg == nil || *orderArg != "bsa-mobile" {
+	if !strings.HasPrefix(orderBy, "startsWith(lowerUTF8(name)") || orderArg == nil || *orderArg != "acme-mobile" {
 		t.Fatalf("jokersiz: önek sıralaması + bind: %q %v", orderBy, orderArg)
 	}
 	_, pageQ := rawPickerSQLOrdered("name", extra, orderBy)

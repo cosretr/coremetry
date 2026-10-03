@@ -101,14 +101,14 @@ func TestAskServiceChipsRoundTrip(t *testing.T) {
 }
 
 func TestTeamCodeTolerance(t *testing.T) {
-	teams := []string{"SY-XYZ", "UG", "Avengersy"}
+	teams := []string{"SY-XYZ", "UG", "Orionsy"}
 	if got := extractTeamEntity("sy xyz takımının servisleri", teams); got != "SY-XYZ" {
 		t.Fatalf("boşluklu kod: %q", got)
 	}
 	if got := extractTeamEntity("SY-XYZ'e ait servisleri listele", teams); got != "SY-XYZ" {
 		t.Fatalf("tireli kod: %q", got)
 	}
-	if got := extractTeamEntity("avengersy-legacy nasıl", teams); got != "" {
+	if got := extractTeamEntity("orionsy-legacy nasıl", teams); got != "" {
 		t.Fatalf("tek jetonlu ad tireli uzun adın içinde eşleşmemeli: %q", got)
 	}
 	if got := matchLiveTeam("sy-xyz", teams); got != "SY-XYZ" {

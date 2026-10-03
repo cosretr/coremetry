@@ -275,8 +275,8 @@ func TestPodMatcher(t *testing.T) {
 		t.Errorf("boş podRe eski seçiciyi vermeli, got %s", got)
 	}
 	// Dolu = tam-eşleşen regex (PromQL =~ zaten tam eşler).
-	want := `pod=~"(mobile-overview-bff-prod|mobile-overview-bff)-.*"`
-	if got := podMatcher(`(mobile-overview-bff-prod|mobile-overview-bff)-.*`); got != want {
+	want := `pod=~"(mobile-home-bff-prod|mobile-home-bff)-.*"`
+	if got := podMatcher(`(mobile-home-bff-prod|mobile-home-bff)-.*`); got != want {
 		t.Errorf("podMatcher = %s, beklenen %s", got, want)
 	}
 	// Tırnak kaçışı — değer PromQL string'ine gömülür.
@@ -322,7 +322,7 @@ func TestPodQueriesCarryPodRe(t *testing.T) {
 // container!="" seçicisi kullanılsaydı ağ serisi HİÇ dönmezdi —
 // sessizce boş grafik.
 func TestDeployTrendQueryNetwork(t *testing.T) {
-	in := deployTrendQuery("mobile-bff-prod", "mobile-overview-bff", "netin", true)
+	in := deployTrendQuery("mobile-bff-prod", "mobile-home-bff", "netin", true)
 	if !strings.Contains(in, "container_network_receive_bytes_total") {
 		t.Errorf("netin receive sayacını kullanmalı:\n%s", in)
 	}
@@ -334,7 +334,7 @@ func TestDeployTrendQueryNetwork(t *testing.T) {
 		t.Errorf("netout transmit sayacını kullanmalı:\n%s", out)
 	}
 	// Pod seçicisi ve namespace yine kapsamda.
-	if !strings.Contains(in, `namespace="mobile-bff-prod"`) || !strings.Contains(in, `pod=~"mobile-overview-bff-.*"`) {
+	if !strings.Contains(in, `namespace="mobile-bff-prod"`) || !strings.Contains(in, `pod=~"mobile-home-bff-.*"`) {
 		t.Errorf("kapsam kaybolmuş:\n%s", in)
 	}
 	// byPod=true → pod başına grup.

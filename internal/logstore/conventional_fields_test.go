@@ -73,7 +73,7 @@ func TestEnsureConventionalFields(t *testing.T) {
 // v0.9.480 (operator-reported, prod OpenShift ES) — trace'in Logs
 // sekmesinde bazı kayıtların SERVICE kolonu boştu: kayıt OTel-şekilli
 // değil, düz service_name ise gövde JSON'unda ve OPERASYON adı
-// (DIGITAL_TRANSFER_EFT). Asıl servis kimliği kubernetes.container_name.
+// (TRANSFER_SERVICE). Asıl servis kimliği kubernetes.container_name.
 // Pinler: (1) k8s işyükü alanları gösterim zincirinde VAR ve düz
 // service_name'den ÖNCE (operasyon adının servis kolonunu ele geçirmesi
 // yanlış yönde çözülmesin); (2) eklenen alanlar servis FİLTRESİNİN

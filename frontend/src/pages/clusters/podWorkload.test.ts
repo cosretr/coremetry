@@ -110,14 +110,14 @@ describe('podMatchesService', () => {
 });
 
 // v0.9.535 — operatör direktifi: "mobile*bff-prod sonunda prod olmadan
-// bul" + somut örnek: servis mobile-overview-prod, pod
-// mobile-overview-bff-<hash>-<rand>. İki adlandırma boşluğu birden:
+// bul" + somut örnek: servis mobile-home-prod, pod
+// mobile-home-bff-<hash>-<rand>. İki adlandırma boşluğu birden:
 // (a) k8s deployment adı servis adındaki env ekini taşımıyor,
 // (b) pod'da servis adında olmayan bir -bff kuyruğu olabiliyor.
 describe('stripEnvSuffix', () => {
   it('bilinen env ekleri kuyruktayken soyulur', () => {
     expect(stripEnvSuffix('mobile-loans-bff-prod')).toBe('mobile-loans-bff');
-    expect(stripEnvSuffix('mobile-overview-prod')).toBe('mobile-overview');
+    expect(stripEnvSuffix('mobile-home-prod')).toBe('mobile-home');
     expect(stripEnvSuffix('shop-login-int')).toBe('shop-login');
     expect(stripEnvSuffix('svc-uat')).toBe('svc');
     expect(stripEnvSuffix('svc-prep')).toBe('svc');
@@ -143,10 +143,10 @@ describe('podMatchesService — env eki soyulmuş aday (v0.9.535)', () => {
       { service: 'mobile-loans-bff-prod', ...noOpts },
     )).toBe(true);
   });
-  it('BFF şekli 2 (operatör örneği): servis mobile-overview-prod, pod mobile-overview-bff-*', () => {
+  it('BFF şekli 2 (operatör örneği): servis mobile-home-prod, pod mobile-home-bff-*', () => {
     expect(podMatchesService(
-      { pod: 'mobile-overview-bff-c747d59bc-s66gr', namespace: 'mobile-bff-prod' },
-      { service: 'mobile-overview-prod', ...noOpts },
+      { pod: 'mobile-home-bff-c747d59bc-s66gr', namespace: 'mobile-bff-prod' },
+      { service: 'mobile-home-prod', ...noOpts },
     )).toBe(true);
   });
   it('kardeş disiplini: shop-login-prod, shop-login-prep podunu ALMAZ', () => {
@@ -155,10 +155,10 @@ describe('podMatchesService — env eki soyulmuş aday (v0.9.535)', () => {
       { service: 'shop-login-prod', ...noOpts },
     )).toBe(false);
   });
-  it('bilinmeyen kuyruk eşleşmez: mobile-overview-web pod, overview-prod servis', () => {
+  it('bilinmeyen kuyruk eşleşmez: mobile-home-web pod, overview-prod servis', () => {
     expect(podMatchesService(
-      { pod: 'mobile-overview-web-c747d59bc-s66gr', namespace: 'x' },
-      { service: 'mobile-overview-prod', ...noOpts },
+      { pod: 'mobile-home-web-c747d59bc-s66gr', namespace: 'x' },
+      { service: 'mobile-home-prod', ...noOpts },
     )).toBe(false);
   });
   it('eski davranış bozulmadı: SHOP tam eşitlik hâlâ tutar', () => {
@@ -197,12 +197,12 @@ describe('dominantWorkload (v0.9.535 — effDeploy yedeği)', () => {
 // pod'u eşleştiremez.
 describe('servicePodRegex', () => {
   it('katalog deploy + servis + soyulmuş ad, sıralı ve tekilleşmiş', () => {
-    expect(servicePodRegex('mobile-overview-bff-prod', ''))
-      .toBe('(mobile-overview-bff-prod|mobile-overview-bff)-.*');
+    expect(servicePodRegex('mobile-home-bff-prod', ''))
+      .toBe('(mobile-home-bff-prod|mobile-home-bff)-.*');
   });
   it('deploy doluysa başa girer', () => {
-    expect(servicePodRegex('mobile-overview-prod', 'mobile-overview-bff'))
-      .toBe('(mobile-overview-bff|mobile-overview-prod|mobile-overview)-.*');
+    expect(servicePodRegex('mobile-home-prod', 'mobile-home-bff'))
+      .toBe('(mobile-home-bff|mobile-home-prod|mobile-home)-.*');
   });
   it('eksiz ad tek aday üretir (çift üretme)', () => {
     expect(servicePodRegex('coremetry-monolithic', ''))

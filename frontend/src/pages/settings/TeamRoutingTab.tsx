@@ -251,8 +251,8 @@ export function TeamRoutingTab() {
 }
 
 // ── Takım eşleştirme (v0.9.427, operatör istegi) ────────────────────────────
-// LDAP takım adı ("SY-Dijital Bankacılık") ile telemetri metadata'sındaki
-// ad ("dijitalsy", "avengersy") aynı takımın farklı yazımları olabiliyor —
+// LDAP takım adı ("SY-Dijital Altyapı") ile telemetri metadata'sındaki
+// ad ("dijitalsy", "orionsy") aynı takımın farklı yazımları olabiliyor —
 // eşleme operatör tablosudur; my_services/my_problems soruları, inbox ve
 // /problems owner/SRE filtreleri bu tablo üzerinden eşleşir. Karşılaştırma
 // büyük/küçük harf + Türkçe İ/ı duyarsızdır; buradaki yazım yalnız gösterim.
@@ -293,7 +293,7 @@ export function TeamAliasesCard() {
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
         <h3>Takım eşleştirme (alias)</h3>
-        <span className="ov-sub">LDAP adı ↔ telemetri adı — "dijitalsy" → "SY-Dijital Bankacılık"</span>
+        <span className="ov-sub">LDAP adı ↔ telemetri adı — "dijitalsy" → "SY-Dijital Altyapı"</span>
       </div>
       <div className="ov-card-b">
         {ta === undefined && <Spinner />}
@@ -332,11 +332,11 @@ export function TeamAliasesCard() {
             ))}
             <form onSubmit={add} style={{ display: 'flex', gap: 8, marginTop: 10 }}>
               <input value={newAlias} onChange={e => setNewAlias(e.target.value)}
-                placeholder="telemetri adı (örn. avengersy)" disabled={busy}
+                placeholder="telemetri adı (örn. orionsy)" disabled={busy}
                 style={{ flex: 1, padding: '6px 9px', fontSize: 12, background: 'var(--bg)',
                   color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6 }} />
               <input value={newCanon} onChange={e => setNewCanon(e.target.value)}
-                placeholder="kanonik ad (örn. SY-Krediler ve Sigorta)" disabled={busy}
+                placeholder="kanonik ad (örn. SY-Ortak Servisler)" disabled={busy}
                 style={{ flex: 1, padding: '6px 9px', fontSize: 12, background: 'var(--bg)',
                   color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6 }} />
               <Button variant="primary" type="submit" disabled={busy || !newAlias.trim() || !newCanon.trim()}>Ekle</Button>

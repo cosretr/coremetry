@@ -15,8 +15,8 @@ func TestRuleNotifyNormalizeValidate(t *testing.T) {
 		NormalizeRuleNotify(&RuleNotify{Teams: []string{"", "  "}}) != nil {
 		t.Fatal("boş hedef nil olmalı")
 	}
-	n := NormalizeRuleNotify(&RuleNotify{Teams: []string{" dijitalsy ", "DijitalSY", "avengers", ""}, Mode: " ONLY "})
-	if len(n.Teams) != 2 || n.Teams[0] != "dijitalsy" || n.Teams[1] != "avengers" || n.Mode != RuleNotifyModeOnly {
+	n := NormalizeRuleNotify(&RuleNotify{Teams: []string{" dijitalsy ", "DijitalSY", "orions", ""}, Mode: " ONLY "})
+	if len(n.Teams) != 2 || n.Teams[0] != "dijitalsy" || n.Teams[1] != "orions" || n.Mode != RuleNotifyModeOnly {
 		t.Fatalf("normalize: %+v", n)
 	}
 	if m := NormalizeRuleNotify(&RuleNotify{Teams: []string{"x"}}).Mode; m != RuleNotifyModeAdd {

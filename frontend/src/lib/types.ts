@@ -1950,7 +1950,7 @@ export interface OracleTestResult {
   /** v0.10.845 — LONG/LONG RAW kolon ön kontrolü (örnek sorgudan ÖNCE koşar;
    *  hata durumunda da dolu gelir). */
   long?: OracleLongCheck;
-  /** v0.10.886 — eşlenen kolonlar tabloda var mı; önekli öneri (MCA_ERR_*). */
+  /** v0.10.886 — eşlenen kolonlar tabloda var mı; önekli öneri (APP_ERR_*). */
   mapping?: OracleMappingCheck;
   /** "hata yok + satır yok" açıklaması (tablo kipi geniş pencere / özel kip). */
   hint?: string;
@@ -5083,7 +5083,7 @@ export interface OccurrencePoint {
 // ── Settings + notifications ─────────────────────────────────────────────────
 
 // TeamAliases (v0.9.427) — LDAP↔telemetri takım adı eşleme tablosu:
-// alias → kanonik ad ("dijitalsy" → "SY-Dijital Bankacılık").
+// alias → kanonik ad ("dijitalsy" → "SY-Dijital Altyapı").
 export interface TeamAliases { aliases: Record<string, string> }
 
 // TeamContacts (v0.8.429) — problem-open → team e-mail routing config.

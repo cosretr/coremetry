@@ -101,7 +101,7 @@ const oracleOpCodeLimit = 2000
 
 // oracleFunctionCodeAttrExpr — v0.10.1001: satırın fonksiyon kodu, eşlenmeyen
 // kolonlardan (attribute). Anahtar adı kaynağa göre değişir (FUNCTIONCODE,
-// FUNCTION_CODE, MCA_ERR_FUNCTIONCODE…); kural internal/oracle
+// FUNCTION_CODE, APP_ERR_FUNCTIONCODE…); kural internal/oracle
 // isFunctionCodeColumn ile AYNI: büyük harf, alt çizgisiz, "FUNCTIONCODE" ile
 // biter. Eşleşme yoksa arrayFirstIndex 0 döner → attr_values[0] = ”.
 const oracleFunctionCodeAttrExpr = `trimBoth(attr_values[arrayFirstIndex(k -> endsWith(replaceAll(upper(k), '_', ''), 'FUNCTIONCODE'), attr_keys)])`

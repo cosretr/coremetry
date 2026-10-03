@@ -1,7 +1,7 @@
 // teamOptions — canonical, case-insensitive team option building
 // (v0.8.330, operator-reported). ug-team / sy-team resource attrs arrive
-// with whatever casing each service's deploy pipeline used ("avengerSY" vs
-// "Avengersy"), and the auto-derived catalog stores them verbatim — a
+// with whatever casing each service's deploy pipeline used ("orionSY" vs
+// "Orionsy"), and the auto-derived catalog stores them verbatim — a
 // case-sensitive Set then lists the same team twice in every filter
 // dropdown. The backend filter match is already EqualFold
 // (servicesForTeam / matchesTeamFilter), so collapsing the OPTIONS is the

@@ -155,17 +155,17 @@ one from real catalog data):
 ```bash
 docker exec coremetry-clickhouse clickhouse-client --database=coremetry --query "
 INSERT INTO service_metadata (service, owner_team, sre_team)
-VALUES ('checkout-service', 'avengers', 'avengers-sre')
+VALUES ('checkout-service', 'orions', 'orions-sre')
 "
 ```
 
 ```bash
-echo "=== ownerTeam=avengers (expect checkout-service) ==="
-curl -s "http://localhost:8088/api/deployment-report?since=$SINCE_NS&ownerTeam=avengers&refresh=1" \
+echo "=== ownerTeam=orions (expect checkout-service) ==="
+curl -s "http://localhost:8088/api/deployment-report?since=$SINCE_NS&ownerTeam=orions&refresh=1" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print([s['service'] for s in json.load(sys.stdin)['services']])"
 
-echo "=== ownerTeam=Avengers, different casing (expect same result) ==="
-curl -s "http://localhost:8088/api/deployment-report?since=$SINCE_NS&ownerTeam=Avengers&refresh=1" \
+echo "=== ownerTeam=Orions, different casing (expect same result) ==="
+curl -s "http://localhost:8088/api/deployment-report?since=$SINCE_NS&ownerTeam=Orions&refresh=1" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print([s['service'] for s in json.load(sys.stdin)['services']])"
 
 echo "=== ownerTeam=some-other-team (expect empty) ==="

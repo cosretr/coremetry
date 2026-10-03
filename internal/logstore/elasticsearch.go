@@ -2692,10 +2692,10 @@ func (s *ESStore) buildQuery(f Filter) map[string]any {
 		//
 		// v0.9.545 — operator-reported (prod, ES zemin gerçeğiyle):
 		// BFF servislerinin Logs sekmesi TAMAMEN boştu. Sebep alan değil
-		// DEĞER: servis adı env ekli (`mobile-overview-bff-prod`) ama
+		// DEĞER: servis adı env ekli (`mobile-home-bff-prod`) ama
 		// log dokümanı eksiz taşıyor —
-		//   kubernetes.container_name : mobile-overview-bff
-		//   kubernetes.labels.app     : mobile-overview-bff
+		//   kubernetes.container_name : mobile-home-bff
+		//   kubernetes.labels.app     : mobile-home-bff
 		//   kubernetes.namespace_name : mobile-bff-prod   (ek BURADA)
 		// Yani env eki namespace'e yazılmış, iş yükü adına değil. Aynı
 		// adlandırma boşluğunun pod tarafındaki ikizi v0.9.535'te
@@ -3013,8 +3013,8 @@ func (s *ESStore) mapHit(id string, src map[string]any, dv map[string]any, expec
 	// v0.9.480 (operator-reported, prod OpenShift ES): k8s işyükü
 	// kimliği uygulama-yayımlı düz alanlardan ÖNCE gelir. Cluster-logging
 	// kayıtlarında düz `service_name` çoğu zaman uygulamanın kendi
-	// OPERASYON adıdır (DIGITAL_TRANSFER_EFT,
-	// ADKSERVICES_APPROVEBOX_..._REST_SERVICE) — servis değil; asıl
+	// OPERASYON adıdır (TRANSFER_SERVICE,
+	// APPROVAL_BOX_SERVICE) — servis değil; asıl
 	// servis kimliği kubernetes.container_name'dedir. Trace'in Logs
 	// sekmesinde bu kayıtların SERVICE kolonu boş kalıyordu (alan gövde
 	// JSON'undaydı, indekste yoktu) ya da yanlış dolacaktı. Yalnız

@@ -9,8 +9,8 @@ import (
 )
 
 // team_aliases.go — LDAP↔telemetri takım adı eşleme ayarları
-// (v0.9.427, operatör istegi: "SY-Dijital Bankacılık" LDAP'ta,
-// telemetride "dijitalsy"/"avengersy" — eşleme operatör tablosu).
+// (v0.9.427, operatör istegi: "SY-Dijital Altyapı" LDAP'ta,
+// telemetride "dijitalsy"/"orionsy" — eşleme operatör tablosu).
 // team_contacts ile aynı desen: settings blob + admin GET/PUT + audit.
 // Tüketiciler: guided my_services/my_problems (servicesForUserTeam),
 // inbox owner/SRE takım filtreleri (servicesForTeam + satır filtresi).

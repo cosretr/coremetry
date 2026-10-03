@@ -470,7 +470,7 @@ func TestSlowQueryLinks(t *testing.T) {
 	now := int64(1_700_000_000) * sec
 	ev := SlowQueryEvidence{
 		StmtParam: "12345|oracle", Statement: "SELECT * FROM T WHERE ID = ?",
-		DBSystem: "oracle", DBName: "COREBANK",
+		DBSystem: "oracle", DBName: "CORE_LEDGER",
 		Calls: 100, P95Ms: 900,
 		Callers:      []CallerRef{{Service: "payments api", Calls: 80}, {Service: "web"}},
 		SlowTraceID:  "slow1",

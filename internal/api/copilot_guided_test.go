@@ -620,7 +620,7 @@ func TestPickGuidedOperation(t *testing.T) {
 // bff) HEPSİNİ bounded segment olarak içeren 2+ servis = aile.
 func TestExtractServiceFamily(t *testing.T) {
 	services := []string{
-		"mobile-overview-bff-prod", "mobile-loan-bff-prod",
+		"mobile-home-bff-prod", "mobile-loan-bff-prod",
 		"mobile-gateway-prod", "checkout-service", "rebuff-svc",
 	}
 	envs := []string{"uat", "prep"}
@@ -650,7 +650,7 @@ func TestExtractServiceFamily(t *testing.T) {
 // Router seviyesi: aile sorusu guidedFamilyHealth'e gider; açık tek
 // servis adı aileden ÖNCE kazanır; sayfa-context aile sorusunu ezmez.
 func TestRouteGuidedIntentFamily(t *testing.T) {
-	services := []string{"mobile-overview-bff-prod", "mobile-loan-bff-prod", "checkout-service"}
+	services := []string{"mobile-home-bff-prod", "mobile-loan-bff-prod", "checkout-service"}
 	got := routeGuidedIntent("mobile bff'lerde hangisinde hata var", services, nil, nil, "")
 	if got.Intent != guidedFamilyHealth || len(got.Family) != 2 {
 		t.Fatalf("family route: got intent=%q family=%v", got.Intent, got.Family)

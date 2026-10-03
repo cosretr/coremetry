@@ -6,18 +6,18 @@ import (
 )
 
 // v0.10.886 — eşlenen kolon tabloda yoksa söylenir; zaman/tip kutusundaki
-// önek (MCA_ERR_TIMESTAMP → MCA_) tablodaki karşılığı önerir; kapalı alan
+// önek (APP_ERR_TIMESTAMP → APP_) tablodaki karşılığı önerir; kapalı alan
 // sayılmaz; sözlük boşsa hüküm yok.
 func TestMappingCheckFromRows(t *testing.T) {
 	cfg := cfgFor(t)
-	cfg.TimestampColumn, cfg.TypeColumn = "MCA_ERR_TIMESTAMP", "MCA_ERR_TYPE"
+	cfg.TimestampColumn, cfg.TypeColumn = "APP_ERR_TIMESTAMP", "APP_ERR_TYPE"
 	cfg.Columns = map[string]string{FieldLocation: ""} // kapalı
 	rows := []map[string]any{}
-	for _, n := range []string{"MCA_ERR_TIMESTAMP", "MCA_ERR_TYPE", "MCA_ERR_TRACEID", "MCA_ERR_CODE", "MCA_ERR_SERVICE", "ERR_MESSAGE", "MCA_ERR_ERRORDUMP"} {
+	for _, n := range []string{"APP_ERR_TIMESTAMP", "APP_ERR_TYPE", "APP_ERR_TRACEID", "APP_ERR_CODE", "APP_ERR_SERVICE", "ERR_MESSAGE", "APP_ERR_ERRORDUMP"} {
 		rows = append(rows, map[string]any{"COLUMN_NAME": n})
 	}
 	c := mappingCheckFromRows(cfg, rows)
-	if !c.Checked || c.Error != "" || c.Prefix != "MCA_" {
+	if !c.Checked || c.Error != "" || c.Prefix != "APP_" {
 		t.Fatalf("hüküm: %+v", c)
 	}
 	if c.Present != 3 { // timestamp, type, message
@@ -30,7 +30,7 @@ func TestMappingCheckFromRows(t *testing.T) {
 			t.Error("kapalı alan eksik sayılmamalı")
 		}
 	}
-	if got[FieldTraceID] != "MCA_ERR_TRACEID" || got[FieldCode] != "MCA_ERR_CODE" || got[FieldService] != "MCA_ERR_SERVICE" {
+	if got[FieldTraceID] != "APP_ERR_TRACEID" || got[FieldCode] != "APP_ERR_CODE" || got[FieldService] != "APP_ERR_SERVICE" {
 		t.Errorf("öneriler: %v", got)
 	}
 	if s, ok := got[FieldHost]; !ok || s != "" {

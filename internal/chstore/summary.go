@@ -72,7 +72,7 @@ type ServiceSummaryRow struct {
 var selfTelemetryServices = []string{"coremetry-frontend"}
 
 // operationNamesQuery — SAF (summary_operation_names_test.go): WHERE +
-// ORDER BY. Joker yoksa önek eşleşmesi öne gelir (operatör "bsa-mobile"
+// ORDER BY. Joker yoksa önek eşleşmesi öne gelir (operatör "acme-mobile"
 // yazınca URL'nin ortasında geçen adlar değil, öyle BAŞLAYAN operasyonlar).
 func operationNamesQuery(service, pattern string) (whereClause, string) {
 	var wc whereClause

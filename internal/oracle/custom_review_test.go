@@ -134,9 +134,9 @@ func TestNormalizeCustomTimestampAndTableModeDropsAggFields(t *testing.T) {
 		t.Fatalf("özel kipte zaman kolonu zorunlu: %v", err)
 	}
 	tb := base()
-	tb.Columns = map[string]string{FieldCount: "ADET", FieldTraceIDs: "TRACEIDS", FieldCode: "MCA_ERR_CODE"}
+	tb.Columns = map[string]string{FieldCount: "ADET", FieldTraceIDs: "TRACEIDS", FieldCode: "APP_ERR_CODE"}
 	out := mustNormalize(t, one(tb), Settings{}).Sources[0]
-	if _, has := out.Columns[FieldCount]; has || out.Columns[FieldCode] != "MCA_ERR_CODE" {
+	if _, has := out.Columns[FieldCount]; has || out.Columns[FieldCode] != "APP_ERR_CODE" {
 		t.Fatalf("tablo kipi eşlemesi: %v", out.Columns)
 	}
 	nt := customSource()

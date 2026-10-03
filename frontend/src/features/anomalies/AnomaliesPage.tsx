@@ -373,7 +373,7 @@ export default function ProblemsPage() {
   // same source the alert-rules section + Services page use.
   const catalogQ = useServicesMetadata();
   // v0.8.330 — case-insensitive dedup: mixed-casing team attrs
-  // ("avengerSY"/"Avengersy") listed the same team twice.
+  // ("orionSY"/"Orionsy") listed the same team twice.
   const ownerTeamOptions = useMemo(
     () => teamOptionsCI(Object.values(catalogQ.data ?? {}).map(m => m.ownerTeam)),
     [catalogQ.data]);

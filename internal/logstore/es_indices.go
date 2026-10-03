@@ -247,7 +247,7 @@ func (s *ESStore) templateIndex(ctx context.Context, service string) string {
 // rolloverRemainder matches what may follow "<stream-name>-" in a
 // rollover / dated child: digits, dots, dashes only ("000079",
 // "2026.07.03-000391"). Anything else means the prefix cut a LONGER
-// stream name mid-way (app-identityhub vs app-identityhub-int) — that
+// stream name mid-way (app-auth-hub vs app-auth-hub-int) — that
 // must NOT count as a match.
 var rolloverRemainder = regexp.MustCompile(`^[0-9][0-9.\-]*$`)
 

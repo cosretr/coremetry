@@ -494,12 +494,12 @@ func TestSelectListMappedOnly(t *testing.T) {
 		t.Fatalf("kapalı → *: %q %v", got, err)
 	}
 	cfg.SelectMappedOnly = true
-	cfg.TimestampColumn = "MCA_ERR_TIMESTAMP"
-	cfg.TypeColumn = "MCA_ERR_TYPE"
+	cfg.TimestampColumn = "APP_ERR_TIMESTAMP"
+	cfg.TypeColumn = "APP_ERR_TYPE"
 	cfg.Columns = map[string]string{
-		FieldSeverity: "MCA_ERR_SEVERITY", FieldMessage: "MCA_ERR_MESSAGE", FieldTraceID: "MCA_ERR_TRACEID",
+		FieldSeverity: "APP_ERR_SEVERITY", FieldMessage: "APP_ERR_MESSAGE", FieldTraceID: "APP_ERR_TRACEID",
 		FieldLocation: "",                // tabloda yok
-		FieldTellerID: "mca_err_traceid", // aynı kolon iki alana → bir kez (harf büyüklüğü fark etmez)
+		FieldTellerID: "app_err_traceid", // aynı kolon iki alana → bir kez (harf büyüklüğü fark etmez)
 	}
 	got, err := selectList(cfg)
 	if err != nil {
@@ -508,16 +508,16 @@ func TestSelectListMappedOnly(t *testing.T) {
 	if strings.Contains(got, "*") {
 		t.Fatalf("yıldız kaldı: %s", got)
 	}
-	if !strings.HasPrefix(got, "MCA_ERR_TIMESTAMP, MCA_ERR_SEVERITY, MCA_ERR_MESSAGE, MCA_ERR_TRACEID, ") {
+	if !strings.HasPrefix(got, "APP_ERR_TIMESTAMP, APP_ERR_SEVERITY, APP_ERR_MESSAGE, APP_ERR_TRACEID, ") {
 		t.Fatalf("sıra fieldOrder değil: %s", got)
 	}
-	if strings.Count(strings.ToUpper(got), "MCA_ERR_TRACEID") != 1 {
+	if strings.Count(strings.ToUpper(got), "APP_ERR_TRACEID") != 1 {
 		t.Fatalf("yinelenen kolon: %s", got)
 	}
 	if strings.Contains(got, "ERR_LOCATION") {
 		t.Fatalf("kapalı alan listede: %s", got)
 	}
-	if !strings.Contains(got, ", MCA_ERR_TYPE,") {
+	if !strings.Contains(got, ", APP_ERR_TYPE,") {
 		t.Fatalf("tip kolonu listede yok: %s", got)
 	}
 	from := time.Date(2026, 9, 22, 21, 0, 0, 0, time.UTC)
@@ -559,7 +559,7 @@ func TestLongCheckFromRows(t *testing.T) {
 	if q := longColumnSQL(); !strings.Contains(q, "ALL_TAB_COLUMNS") || !strings.Contains(q, "'LONG RAW'") || !strings.Contains(q, "'LONG'") {
 		t.Fatalf("sözlük sorgusu: %s", q)
 	}
-	rows := []map[string]any{{"COLUMN_NAME": "mca_err_detail"}, {"COLUMN_NAME": "MCA_ERR_DUMP"}, {"COLUMN_NAME": "  "}}
+	rows := []map[string]any{{"COLUMN_NAME": "app_err_detail"}, {"COLUMN_NAME": "APP_ERR_DUMP"}, {"COLUMN_NAME": "  "}}
 	cfg := cfgFor(t)
 
 	c := longCheckFromRows(cfg, nil)
@@ -568,20 +568,20 @@ func TestLongCheckFromRows(t *testing.T) {
 	}
 
 	c = longCheckFromRows(cfg, rows) // SELECT *
-	if c.MappedOnly || len(c.Columns) != 2 || len(c.Selected) != 2 || c.Columns[0] != "MCA_ERR_DETAIL" {
+	if c.MappedOnly || len(c.Columns) != 2 || len(c.Selected) != 2 || c.Columns[0] != "APP_ERR_DETAIL" {
 		t.Fatalf("SELECT * kipi: %+v", c)
 	}
 
 	cfg.SelectMappedOnly = true
-	cfg.Columns = map[string]string{FieldMessage: "MCA_ERR_MESSAGE"}
+	cfg.Columns = map[string]string{FieldMessage: "APP_ERR_MESSAGE"}
 	c = longCheckFromRows(cfg, rows)
 	if !c.MappedOnly || len(c.Columns) != 2 || len(c.Selected) != 0 {
 		t.Fatalf("eşlenen kip, LONG eşlenmemiş: %+v", c)
 	}
 
-	cfg.Columns = map[string]string{FieldMessage: "mca_err_detail"} // LONG kolon eşlemeye girdi
+	cfg.Columns = map[string]string{FieldMessage: "app_err_detail"} // LONG kolon eşlemeye girdi
 	c = longCheckFromRows(cfg, rows)
-	if len(c.Selected) != 1 || c.Selected[0] != "MCA_ERR_DETAIL" {
+	if len(c.Selected) != 1 || c.Selected[0] != "APP_ERR_DETAIL" {
 		t.Fatalf("eşlenen LONG yakalanmadı: %+v", c)
 	}
 }

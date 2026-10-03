@@ -87,6 +87,6 @@ Dört alan da dolu dönerse GC portu yeterli; `memberOf` boşsa 389/636
 
 Ekip bilgisi yanlış (TECHNOLOGY) geliyorsa: Settings → LDAP → **Kullanıcı
 incele** → kendi kullanıcı adın → tablodaki **Ekip adayları** sütununda
-doğru değere tıkla (ör. `SY-Dijital Bankacılık`) → Team attribute/regex
+doğru değere tıkla (ör. `SY-Dijital Altyapı`) → Team attribute/regex
 otomatik dolar → **Save** → çıkış/giriş. Sonra katalog UG/SY takım
 etiketlerini kullanıcıların gerçek team değerleriyle hizala.

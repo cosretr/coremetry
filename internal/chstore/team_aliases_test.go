@@ -7,9 +7,9 @@ import "testing"
 // alias çözümü; boş tablo = eski case-insensitive davranış.
 func TestTeamAliases(t *testing.T) {
 	ta := TeamAliases{Aliases: map[string]string{
-		"dijitalsy":              "SY-Dijital Bankacılık",
-		"avengersy":              "SY-Krediler ve Sigorta",
-		"SY-KREDİLER VE SİGORTA": "SY-Krediler ve Sigorta", // kendi-kendine alias zararsız
+		"dijitalsy":          "SY-Dijital Altyapı",
+		"orionsy":            "SY-Ortak Servisler",
+		"SY-ORTAK SERVİSLER": "SY-Ortak Servisler", // kendi-kendine alias zararsız
 	}}
 
 	cases := []struct {
@@ -17,16 +17,16 @@ func TestTeamAliases(t *testing.T) {
 		want bool
 	}{
 		// Operatörün gerçek senaryoları:
-		{"SY-Dijital Bankacılık", "dijitalsy", true},
-		{"dijitalsy", "SY-DİJİTAL BANKACILIK", true}, // Türkçe İ katlaması
-		{"avengersy", "SY-Krediler ve Sigorta", true},
-		{"AvengerSY", "sy-krediler ve sigorta", true},
+		{"SY-Dijital Altyapı", "dijitalsy", true},
+		{"dijitalsy", "SY-DİJİTAL ALTYAPI", true}, // Türkçe İ katlaması
+		{"orionsy", "SY-Ortak Servisler", true},
+		{"OrionSY", "sy-ortak servisler", true},
 		// Alias'sız adlar: normalizasyonlu eşitlik (eski EqualFold kapsanır).
 		{"SY-Ödemeler", "sy-ödemeler", true},
 		{"  SY-Ödemeler ", "SY-Ödemeler", true},
 		// Farklı takımlar eşleşmez.
-		{"dijitalsy", "avengersy", false},
-		{"SY-Dijital Bankacılık", "SY-Krediler ve Sigorta", false},
+		{"dijitalsy", "orionsy", false},
+		{"SY-Dijital Altyapı", "SY-Ortak Servisler", false},
 		// Boş ad asla eşleşmez (boş-boş dahil — filtre semantiği).
 		{"", "", false},
 		{"", "dijitalsy", false},

@@ -633,7 +633,7 @@ func guidedAnswerLinkTargets(route guidedRoute) []guidedAnswerLink {
 // devralınan temel mesaj (operasyon çözümü için) ve değişiklik bayrağı.
 // changed=false → çağıran kendi route/rangeS'iyle devam eder.
 // teams (v0.9.1134) — canlı takım kataloğu; önceki turun yeniden
-// yönlendirilmesinde takım rotası da tanınsın diye taşınıyor ("avengersy
+// yönlendirilmesinde takım rotası da tanınsın diye taşınıyor ("orionsy
 // takımı" → "peki son 24 saatte?").
 func applyFollowUpContext(route guidedRoute, question string, prior []string, services, envs, teams []string) (guidedRoute, int64, string, bool) {
 	msg := normalizeGuidedMsg(question)

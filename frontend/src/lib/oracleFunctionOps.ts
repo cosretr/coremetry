@@ -1,6 +1,6 @@
 // oracleFunctionOps — v0.10.1003 (kuyruk: "operasyon adını trace sayfasında
 // göster"). Span'lerin taşıdığı FUNCTION_CODE değerini Oracle hata tablosundaki
-// OPERASYON ADINA çevirir (DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE gibi) — ad
+// OPERASYON ADINA çevirir (TRANSFER_CONFIRM_SERVICE gibi) — ad
 // trace'lerde yok, köprü fonksiyon kodu (GET /api/oracle/function-codes).
 //
 // SAF çekirdek: span'lerden kod toplama + sözlükten ad çözme. Anahtar YAZIMI

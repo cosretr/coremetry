@@ -55,7 +55,7 @@ const (
 )
 
 // isFunctionCodeColumn — SAF: kolon adı bir fonksiyon kodu kolonu mu
-// (FUNCTIONCODE, FUNCTION_CODE, MCA_ERR_FUNCTIONCODE…). Harf ve alt çizgi
+// (FUNCTIONCODE, FUNCTION_CODE, APP_ERR_FUNCTIONCODE…). Harf ve alt çizgi
 // duyarsız; ad "FUNCTIONCODE" ile biter.
 func isFunctionCodeColumn(name string) bool {
 	n := strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(name)), "_", "")

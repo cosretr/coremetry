@@ -31,10 +31,10 @@ export function podWorkloadName(pod: string): string {
 // soyulup servise eşlenir; "-batch"/"-uat" gibi kardeş İŞ YÜKLERİ
 // listede DEĞİL — onlar ayrı servistir, prefix eşleşmesi bilinçli yok.
 //
-// "-bff" — v0.9.535, operatör örneği: servis mobile-overview-prod,
-// deployment mobile-overview-bff. Pod adında servis adında OLMAYAN bir
-// -bff kuyruğu var; env eki soyulunca (mobile-overview) varyant
-// eşitliği onu yakalar. Kardeş disiplini korunur: mobile-overview-web
+// "-bff" — v0.9.535, operatör örneği: servis mobile-home-prod,
+// deployment mobile-home-bff. Pod adında servis adında OLMAYAN bir
+// -bff kuyruğu var; env eki soyulunca (mobile-home) varyant
+// eşitliği onu yakalar. Kardeş disiplini korunur: mobile-home-web
 // gibi başka bir kuyruk eşleşmez.
 const WORKLOAD_VARIANT_SUFFIXES = ['-oneagent', '-bff'];
 
@@ -97,8 +97,8 @@ export function dominantWorkload(pods: string[]): string {
 // operator-reported: 0.001 core'luk BFF pod'ları top-500'e giremiyordu).
 //
 // Adaylar: katalog deployment'ı (varsa) + servis adı + env eki soyulmuş
-// hâli. Önek kalıbı BİLİNÇLİ gevşek — "(mobile-overview)-.*" hem
-// mobile-overview-bff'i hem olası kardeşleri getirir; kesin ayrımı
+// hâli. Önek kalıbı BİLİNÇLİ gevşek — "(mobile-home)-.*" hem
+// mobile-home-bff'i hem olası kardeşleri getirir; kesin ayrımı
 // istemcideki podMatchesService eşitlik disiplini yapar (sunucu
 // DARALTIR, istemci AYIKLAR).
 export function servicePodRegex(service: string, deploy: string): string {

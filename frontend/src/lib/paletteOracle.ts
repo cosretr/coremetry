@@ -1,7 +1,7 @@
 // paletteOracle — v0.10.1002 (operatör: "operasyon ismiyle trace bulabilir
 // miyim" → "yap"). Komut paletinin Oracle OPERASYON ADI sonuçları.
 //
-// Operasyon adı (DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE gibi) trace'lerde yok;
+// Operasyon adı (TRANSFER_CONFIRM_SERVICE gibi) trace'lerde yok;
 // köprü Oracle hata satırlarında (GET /api/oracle/operations). Her isabet en
 // çok iki sonuca açılır:
 //

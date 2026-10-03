@@ -6,7 +6,7 @@ package api
 //
 //	GET /api/oracle/operations?q=<metin>&limit=
 //
-// Operasyon adı (DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE gibi) trace'lerde YOK;
+// Operasyon adı (TRANSFER_CONFIRM_SERVICE gibi) trace'lerde YOK;
 // köprü Oracle hata satırlarında: her isabet için
 //
 //   - functionCodes — operasyonun satırlarındaki fonksiyon kodları. Aynı değer

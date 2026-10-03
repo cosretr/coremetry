@@ -54,10 +54,10 @@ func TestServiceFilterTriesBothFieldShapes(t *testing.T) {
 
 func TestIndexKnown(t *testing.T) {
 	names := []string{
-		"app-checkout.prod",                         // plain index
-		"app-payments-bpm-int-000079",               // rollover child
-		"app-orders.prod-2026.07.03",                // dated child
-		".ds-app-identityhub-int-2026.06.24-000391", // data-stream backing
+		"app-checkout.prod",                      // plain index
+		"app-payments-bpm-int-000079",            // rollover child
+		"app-orders.prod-2026.07.03",             // dated child
+		".ds-app-auth-hub-int-2026.06.24-000391", // data-stream backing
 	}
 	cases := []struct {
 		resolved string
@@ -66,9 +66,9 @@ func TestIndexKnown(t *testing.T) {
 		{"app-checkout.prod", true},    // exact
 		{"app-payments-bpm-int", true}, // rollover parent
 		{"app-orders.prod", true},      // dated parent
-		{"app-identityhub-int", true},  // data-stream name via .ds- backing
+		{"app-auth-hub-int", true},     // data-stream name via .ds- backing
 		{"app-checkout.uat", false},    // wrong namespace
-		{"app-identityhub", false},     // prefix of a LONGER stream name must NOT match…
+		{"app-auth-hub", false},        // prefix of a LONGER stream name must NOT match…
 		{"app-payments", false},        // …same (app-payments-bpm-int is a different stream)
 	}
 	for _, c := range cases {
@@ -117,8 +117,8 @@ func TestQueryIndicesTemplateFallsBackWhenResolvedUnknown(t *testing.T) {
 
 // v0.9.545 — operator-reported (prod): BFF servislerinin Logs sekmesi
 // TAMAMEN boştu. Kök sebep aranan ALAN değil aranan DEĞER: servis adı
-// env ekli (mobile-overview-bff-prod) ama log dokümanı eksiz taşıyor
-// (kubernetes.container_name = mobile-overview-bff). Ortam bilgisi
+// env ekli (mobile-home-bff-prod) ama log dokümanı eksiz taşıyor
+// (kubernetes.container_name = mobile-home-bff). Ortam bilgisi
 // NAMESPACE'e yazılmış (mobile-bff-prod), iş yükü adına değil.
 //
 // Aynı adlandırma boşluğunun pod tarafındaki ikizi v0.9.535'te
@@ -127,7 +127,7 @@ func TestQueryIndicesTemplateFallsBackWhenResolvedUnknown(t *testing.T) {
 func TestStripLogEnvSuffix(t *testing.T) {
 	cases := []struct{ in, want string }{
 		// Operatörün gerçek vakası.
-		{"mobile-overview-bff-prod", "mobile-overview-bff"},
+		{"mobile-home-bff-prod", "mobile-home-bff"},
 		{"mobile-loans-bff-prod", "mobile-loans-bff"},
 		{"shop-login-int", "shop-login"},
 		{"svc-uat", "svc"},
@@ -140,7 +140,7 @@ func TestStripLogEnvSuffix(t *testing.T) {
 
 		// Bilinmeyen varyant ve eksiz ad aynen kalır.
 		{"svc-production", "svc-production"},
-		{"mobile-overview-bff", "mobile-overview-bff"},
+		{"mobile-home-bff", "mobile-home-bff"},
 
 		// Yalnız ekten ibaret ad soyulmaz: boş arama terimi üretmek
 		// filtreyi SESSİZCE kaldırmak demek olurdu.

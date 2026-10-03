@@ -163,7 +163,7 @@ var patterns = []logPattern{
 	{"JDBC pool exhausted", `HikariPool-.* - Connection is not available|connection pool .*exhausted|IJ000453|IJ000655|Could not acquire JDBC Connection|Unable to get managed connection|No managed connections available|MQJCA1011`, []string{"hikaripool", "exhausted", "ij000453", "ij000655", "could not acquire jdbc", "managed connection", "mqjca"}},
 	{"Hibernate / JPA", `(LazyInitialization|OptimisticLock|StaleObjectState|TransactionTimedOut|TransactionRequired)Exception`, []string{"lazyinitialization", "optimisticlock", "staleobjectstate", "transactiontimedout", "transactionrequired"}},
 
-	// ── v0.9.316 — operatörün kendi Grafana panosundan ("airX - Genel -
+	// ── v0.9.316 — operatörün kendi Grafana panosundan ("ops board -
 	// OCP Watcher Errors Metrics") gelen üretim arıza şekilleri.
 	//
 	// MALİYET KURALI, operatörün kısıtı: recorder DAKİKADA BİR koşuyor,

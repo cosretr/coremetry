@@ -9,9 +9,9 @@ import type { LogRow } from '@/lib/types';
 // bölüm varsayılan kapalı (yalnız açıkken sorgu).
 describe('podLogs', () => {
   it('pod pili kubernetes.pod_name + serbest metin', () => {
-    const q = podLogSearch('bsa-mobile-login-prod-7b99-l4bg5', '');
+    const q = podLogSearch('acme-mobile-login-prod-7b99-l4bg5', '');
     expect(q).toContain('kubernetes.pod_name');
-    expect(q).toContain('bsa-mobile-login-prod-7b99-l4bg5');
+    expect(q).toContain('acme-mobile-login-prod-7b99-l4bg5');
     const q2 = podLogSearch('p-1', ' connection refused ');
     expect(q2).toContain('kubernetes.pod_name');
     expect(q2).toContain('connection refused');

@@ -175,33 +175,33 @@ func TestTeamToolsGroupedNearOwnershipFamily(t *testing.T) {
 
 func TestTeamCatalogueOrderAndDedup(t *testing.T) {
 	mds := map[string]chstore.ServiceMetadata{
-		"a": {OwnerTeam: "Avengersy", SRETeam: "Platform"},
-		"b": {OwnerTeam: "avengerSY"},
+		"a": {OwnerTeam: "Orionsy", SRETeam: "Platform"},
+		"b": {OwnerTeam: "orionSY"},
 		"c": {SRETeam: "Platform"},
 		// Aynı takım iki rolde → servis BİR kez sayılmalı.
 		"d": {OwnerTeam: "Ödeme", SRETeam: "Ödeme"},
 		"e": {OwnerTeam: "  ", SRETeam: ""},
 	}
 	got := TeamCatalogueNames(TeamCatalogue(chstore.TeamAliases{}, mds))
-	want := []string{"Avengersy", "Platform", "Ödeme"}
+	want := []string{"Orionsy", "Platform", "Ödeme"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("TeamCatalogue = %v, want %v", got, want)
 	}
-	// Sayımlar da doğru: Avengersy 2 (a + b, alias'sız iki yazım AYRI
+	// Sayımlar da doğru: Orionsy 2 (a + b, alias'sız iki yazım AYRI
 	// değil — katlama zaten tek takıma indiriyor), Platform 2, Ödeme 1.
 	rows := TeamCatalogue(chstore.TeamAliases{}, mds)
 	counts := map[string]int{}
 	for _, r := range rows {
 		counts[r.Team] = r.Services
 	}
-	if counts["Avengersy"] != 2 || counts["Platform"] != 2 || counts["Ödeme"] != 1 {
+	if counts["Orionsy"] != 2 || counts["Platform"] != 2 || counts["Ödeme"] != 1 {
 		t.Errorf("servis sayıları yanlış: %+v", rows)
 	}
 	// Alias tablosu iki yazımı TEK takıma indirir; sayım da birleşir,
 	// yani alias'lı takım sıralamada yukarı çıkar.
-	ta := chstore.TeamAliases{Aliases: map[string]string{"SY-Dijital Bankacılık": "Ödeme"}}
-	mds["f"] = chstore.ServiceMetadata{OwnerTeam: "SY-Dijital Bankacılık"}
-	mds["g"] = chstore.ServiceMetadata{OwnerTeam: "SY-Dijital Bankacılık"}
+	ta := chstore.TeamAliases{Aliases: map[string]string{"SY-Dijital Altyapı": "Ödeme"}}
+	mds["f"] = chstore.ServiceMetadata{OwnerTeam: "SY-Dijital Altyapı"}
+	mds["g"] = chstore.ServiceMetadata{OwnerTeam: "SY-Dijital Altyapı"}
 	got = TeamCatalogueNames(TeamCatalogue(ta, mds))
 	if len(got) != 3 {
 		t.Fatalf("alias birleştirmesi çalışmadı: %v", got)
@@ -222,8 +222,8 @@ func TestTeamCatalogueOrderAndDedup(t *testing.T) {
 // servicesForTeam (AND, inbox filtresi) ile karıştırılmamalı.
 func TestTeamServiceNamesUnion(t *testing.T) {
 	mds := map[string]chstore.ServiceMetadata{
-		"checkout": {OwnerTeam: "Avengersy"},
-		"ledger":   {SRETeam: "avengerSY"}, // yalnız SRE + farklı yazım
+		"checkout": {OwnerTeam: "Orionsy"},
+		"ledger":   {SRETeam: "orionSY"}, // yalnız SRE + farklı yazım
 		"search":   {OwnerTeam: "Platform", SRETeam: "Platform"},
 		"idle":     {},
 	}
@@ -232,8 +232,8 @@ func TestTeamServiceNamesUnion(t *testing.T) {
 		team string
 		want []string
 	}{
-		{"owner + sre birleşimi, katlamalı", "Avengersy", []string{"checkout", "ledger"}},
-		{"çıplak yazım da eşleşir", "avengersy", []string{"checkout", "ledger"}},
+		{"owner + sre birleşimi, katlamalı", "Orionsy", []string{"checkout", "ledger"}},
+		{"çıplak yazım da eşleşir", "orionsy", []string{"checkout", "ledger"}},
 		{"tek takım", "Platform", []string{"search"}},
 		{"eşleşmeyen takım", "Yok", nil},
 		{"boş takım nil döner (tüm filo DEĞİL)", "", nil},
@@ -248,8 +248,8 @@ func TestTeamServiceNamesUnion(t *testing.T) {
 	}
 	// Alias tablosu: LDAP yazımı telemetri yazımına eşlenince servisler
 	// LDAP adıyla da bulunur.
-	ta := chstore.TeamAliases{Aliases: map[string]string{"SY-Dijital Bankacılık": "Avengersy"}}
-	if got := TeamServiceNames(ta, mds, "SY-Dijital Bankacılık"); len(got) != 2 {
+	ta := chstore.TeamAliases{Aliases: map[string]string{"SY-Dijital Altyapı": "Orionsy"}}
+	if got := TeamServiceNames(ta, mds, "SY-Dijital Altyapı"); len(got) != 2 {
 		t.Errorf("alias'lı takım adı çözülmedi: %v", got)
 	}
 }
@@ -414,7 +414,7 @@ func TestSilentTeamServices(t *testing.T) {
 
 func TestTeamServicesPayloadEnvelope(t *testing.T) {
 	data := TeamServicesData{
-		Team:     "Avengersy",
+		Team:     "Orionsy",
 		Services: []string{"a", "b", "c"},
 		Trimmed:  7,
 		Rows: []chstore.ServiceSummary{

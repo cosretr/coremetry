@@ -9,7 +9,7 @@ import (
 // mapping_check.go — v0.10.886 (operatör-bildirimli, prod 2026-09-23):
 // "eşleşen operasyon kodu / hata kodu / servis yok, trace bulunamadı diyor
 // ama aslında var — kolon adlarından mı?" Evet, olabilir: varsayılan eşleme
-// ERR_TRACEID / ERR_CODE / ERR_SERVICE, kurum tablosu MCA_ERR_*. Eşlenmeyen
+// ERR_TRACEID / ERR_CODE / ERR_SERVICE, kurum tablosu APP_ERR_*. Eşlenmeyen
 // kolon sessizce boş okunur; özet "0 trace id" der, arayüz "trace bulunamadı"
 // yazar — cümle yanlış olmasa da sebebi gizler. Bu kontrol sebebi SÖYLER:
 // hangi alanın kolonu tabloda yok ve (zaman/tip kutusundan türeyen önekle)
@@ -29,7 +29,7 @@ type MappingCheck struct {
 	Present int           `json:"present"`
 	Missing []MappingMiss `json:"missing"`
 	// Prefix — önerilerin türetildiği önek (zaman/tip kolonu varsayılanın
-	// önekli hâliyse, ör. MCA_ERR_TIMESTAMP → "MCA_"). Boş = öneri yok.
+	// önekli hâliyse, ör. APP_ERR_TIMESTAMP → "APP_"). Boş = öneri yok.
 	Prefix string `json:"prefix,omitempty"`
 	// Source — v0.10.902: "query" = özel SQL kipinde sorgunun çıktı kolonlarına
 	// karşı (sözlük değil); boş = tablo sözlüğü (ALL_TAB_COLUMNS).

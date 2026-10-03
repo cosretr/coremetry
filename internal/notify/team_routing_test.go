@@ -14,8 +14,8 @@ import (
 // sendOne/notification_log paths, exercised by their own tests.
 func TestResolveTeamRecipients(t *testing.T) {
 	contacts := chstore.TeamContacts{Contacts: map[string]string{
-		"AvengersUG": "ug@bank.example",
-		"avengersy":  "sy@bank.example, oncall@bank.example",
+		"OrionsUG":   "ug@bank.example",
+		"orionsy":    "sy@bank.example, oncall@bank.example",
 		"SharedTeam": "same@bank.example",
 		"emptyteam":  "   ",
 	}}
@@ -30,16 +30,16 @@ func TestResolveTeamRecipients(t *testing.T) {
 		want []string
 	}{
 		{"both teams resolve, comma-split on SRE",
-			md("AvengersUG", "AvengerSY"),
+			md("OrionsUG", "OrionSY"),
 			[]string{"ug@bank.example", "sy@bank.example", "oncall@bank.example"}},
 		{"case-insensitive team lookup (v0.8.330 mixed-casing lesson)",
-			md("AVENGERSUG", ""),
+			md("ORIONSUG", ""),
 			[]string{"ug@bank.example"}},
 		{"same DL on both teams dedupes to one",
 			md("SharedTeam", "sharedteam"),
 			[]string{"same@bank.example"}},
 		{"team without a configured address is skipped silently",
-			md("UnknownTeam", "AvengersUG"),
+			md("UnknownTeam", "OrionsUG"),
 			[]string{"ug@bank.example"}},
 		{"whitespace-only contact value is no address",
 			md("emptyteam", ""),

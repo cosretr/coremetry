@@ -11,7 +11,7 @@ import (
 //
 // go-ora v2.9.0 düz time.Time'ı TIMESTAMP WITH TIME ZONE olarak bağlar
 // (parameter_encode.go:40-46). Kolon TIMESTAMP(3) / DATE olunca Oracle
-// karşılaştırma için KOLONU çevirir (INTERNAL_FUNCTION(MCA_ERR_TIMESTAMP))
+// karşılaştırma için KOLONU çevirir (INTERNAL_FUNCTION(APP_ERR_TIMESTAMP))
 // → partition budaması ve indeks düşer → 167 M satırlık tablo baştan sona
 // taranır → 30 sn'de zaman aşımı. Operatör aynı pencereyi ek koşula
 // TO_DATE('…') literaliyle yazınca sorgu 132 ms'de döndü: yüklem kolonu

@@ -452,7 +452,7 @@ export default function ServicesPage() {
 
   // Distinct team values from the catalog — feeds the two
   // dropdowns. Sorted for stable rendering.
-  // v0.8.330 — case-insensitive dedup ("avengerSY"/"Avengersy" = one team).
+  // v0.8.330 — case-insensitive dedup ("orionSY"/"Orionsy" = one team).
   const ownerTeamOptions = useMemo(
     () => teamOptionsCI(Object.values(catalog).map(m => m.ownerTeam)), [catalog]);
   const sreTeamOptions = useMemo(

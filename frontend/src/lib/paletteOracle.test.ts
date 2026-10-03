@@ -33,18 +33,18 @@ describe('oraclePaletteResults', () => {
   const resp: OracleOperationsResponse = {
     enabled: true, spanAttrKey: 'function_code',
     operations: [
-      { operation: 'DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE', rows: 370, lastSeen: 1, functionCodes: ['EFT001'], lastTraceId: 'ab12cd34ef56ab12cd34ef56ab12cd34', service: 'bsa-localtransfer-prod' },
+      { operation: 'TRANSFER_CONFIRM_SERVICE', rows: 370, lastSeen: 1, functionCodes: ['EFT001'], lastTraceId: 'ab12cd34ef56ab12cd34ef56ab12cd34', service: 'acme-localtransfer-prod' },
       { operation: 'OP_MANY', rows: 90, lastSeen: 1, functionCodes: ['A1', 'B2', 'C3'] },
-      { operation: 'OP_SERVICE_ONLY', rows: 12, lastSeen: 1, functionCodes: [], service: 'bsa-atm-core-prod' },
+      { operation: 'OP_SERVICE_ONLY', rows: 12, lastSeen: 1, functionCodes: [], service: 'acme-atm-core-prod' },
       { operation: 'OP_NOTHING', rows: 3, lastSeen: 1, functionCodes: [] },
     ],
   };
 
   it('fonksiyon kodu olan operasyon: Traces süzgeci + son hata trace\'i', () => {
     const r = oraclePaletteResults(resp, win);
-    expect(r[0]).toMatchObject({ kind: 'operation', label: 'DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE', hint: "Oracle operasyonu · fonksiyon kodu EFT001 → trace'ler" });
+    expect(r[0]).toMatchObject({ kind: 'operation', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Oracle operasyonu · fonksiyon kodu EFT001 → trace'ler" });
     expect(filtersOf(r[0].to)).toEqual([{ k: 'function_code', op: '=', v: ['EFT001'] }]);
-    expect(r[1]).toMatchObject({ kind: 'trace', label: 'DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE', hint: "Oracle · son hata trace'i" });
+    expect(r[1]).toMatchObject({ kind: 'trace', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Oracle · son hata trace'i" });
     expect(r[1].to).toContain('/trace?id=ab12cd34ef56ab12cd34ef56ab12cd34');
     expect(r[1].to).toContain('tab=logs');
   });
@@ -55,9 +55,9 @@ describe('oraclePaletteResults', () => {
     expect(many?.hint).toBe("Oracle operasyonu · fonksiyon kodu A1, B2 +1 → trace'ler");
     expect(filtersOf(many!.to)).toEqual([{ k: 'function_code', op: 'IN', v: ['A1', 'B2', 'C3'] }]);
     const svc = r.find(x => x.label === 'OP_SERVICE_ONLY');
-    expect(svc?.hint).toBe("Oracle operasyonu · fonksiyon kodu yok → bsa-atm-core-prod hatalı trace'leri");
+    expect(svc?.hint).toBe("Oracle operasyonu · fonksiyon kodu yok → acme-atm-core-prod hatalı trace'leri");
     const q = new URLSearchParams(svc!.to.slice(svc!.to.indexOf('?') + 1));
-    expect(q.get('service')).toBe('bsa-atm-core-prod');
+    expect(q.get('service')).toBe('acme-atm-core-prod');
     expect(q.get('hasError')).toBe('true');
     expect(r.some(x => x.label === 'OP_NOTHING')).toBe(false);
     expect(r).toHaveLength(4);

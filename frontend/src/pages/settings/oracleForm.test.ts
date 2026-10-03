@@ -459,8 +459,8 @@ describe('özel SQL kipi — inceleme regresyonları', () => {
     expect(out.selectMappedOnly).toBeUndefined();
   });
   it('tablo kipinde count/traceIds eşlemesi gövdeye girmez', () => {
-    const out = sourceForSave(goodSource({ columns: { count: 'ADET', traceIds: 'TRACEIDS', code: 'MCA_ERR_CODE' } }));
-    expect(out.columns).toEqual({ code: 'MCA_ERR_CODE' });
+    const out = sourceForSave(goodSource({ columns: { count: 'ADET', traceIds: 'TRACEIDS', code: 'APP_ERR_CODE' } }));
+    expect(out.columns).toEqual({ code: 'APP_ERR_CODE' });
     const c = sourceForSave(custom({ columns: { count: 'ADET', traceIds: 'TRACEIDS' } }));
     expect(c.columns).toEqual({ count: 'ADET', traceIds: 'TRACEIDS' });
   });

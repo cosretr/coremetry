@@ -319,7 +319,7 @@ func TestFunctionCodeOf(t *testing.T) {
 	}{
 		{"code ← ERRORCODE, FUNCTIONCODE attribute", SourceConfig{Columns: errCols}, row("COR-91157", "ADET", "2", "FUNCTIONCODE", "CAF0001 "), "CAF0001"},
 		{"alt çizgili ad", SourceConfig{Columns: errCols}, row("COR-91157", "FUNCTION_CODE", "INVLD02"), "INVLD02"},
-		{"önekli tablo kolonu", SourceConfig{}, row("E1", "MCA_ERR_FUNCTIONCODE", "F9"), "F9"},
+		{"önekli tablo kolonu", SourceConfig{}, row("E1", "APP_ERR_FUNCTIONCODE", "F9"), "F9"},
 		{"küçük harf anahtar", SourceConfig{}, row("E1", "functionCode", "F7"), "F7"},
 		{"code ← FUNCTIONCODE (eski eşleme)", SourceConfig{Columns: fnCodeCols}, row(" CAF0001 ", "ADET", "2"), "CAF0001"},
 		{"code ← function_code", SourceConfig{Columns: map[string]string{FieldCode: "function_code"}}, row("F5"), "F5"},
@@ -342,8 +342,8 @@ func TestSubjectResolverFunctionCodeFromAttribute(t *testing.T) {
 		return chstore.OracleErrorRow{OperationCode: op, ErrorCode: errCode, AttrKeys: []string{"ADET", "FUNCTIONCODE"}, AttrValues: []string{"1", fn}}
 	}
 	rows := []chstore.OracleErrorRow{
-		attr("CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST", "COR-91157", "CAF0001"),
-		attr("CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST", "MCA-00196", "CAF0001"),
+		attr("CUSTOMER_ADDRESS_REST", "COR-91157", "CAF0001"),
+		attr("CUSTOMER_ADDRESS_REST", "APP-00196", "CAF0001"),
 		{OperationCode: "NOFN", ErrorCode: "COR-91157"},
 	}
 	h.observe(src, rows...)
@@ -352,7 +352,7 @@ func TestSubjectResolverFunctionCodeFromAttribute(t *testing.T) {
 		t.Fatalf("arama: %v", h.calls)
 	}
 	// Seri (op, HATA kodu, kanal, -): operasyonun fonksiyon kodundan çözülür.
-	got := h.r.Resolve(ctx, "o-a", []string{"CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST", "COR-91157", "060203", "-"})
+	got := h.r.Resolve(ctx, "o-a", []string{"CUSTOMER_ADDRESS_REST", "COR-91157", "060203", "-"})
 	if got.Service != "mobile-customer-contact-bff-prod" || got.Source != SubjectSourceFunctionCode || !strings.HasPrefix(got.Note, "fonksiyon kodundan CAF0001→") {
 		t.Fatalf("attribute'tan: %+v", got)
 	}
@@ -360,7 +360,7 @@ func TestSubjectResolverFunctionCodeFromAttribute(t *testing.T) {
 	if got := h.r.Resolve(ctx, "o-a", []string{"NOFN", "COR-91157", "060203", "-"}); got.Service != "" || got.Note != "operasyon seviyesi — servis bilinmiyor" {
 		t.Fatalf("fonksiyon kodsuz: %+v", got)
 	}
-	if e := h.r.Learned(ctx, "o-a").Entries["CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST"]; e == nil || e.Service != "mobile-customer-contact-bff-prod" || e.Total != 1 {
+	if e := h.r.Learned(ctx, "o-a").Entries["CUSTOMER_ADDRESS_REST"]; e == nil || e.Service != "mobile-customer-contact-bff-prod" || e.Total != 1 {
 		t.Fatalf("(op, fonksiyon kodu) başına tek oy: %+v", e)
 	}
 }

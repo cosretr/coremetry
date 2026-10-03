@@ -33,7 +33,7 @@ describe('traceOracleOperations', () => {
   const dict: OracleFunctionCodesResponse = {
     enabled: true,
     codes: {
-      CAF0001: { ops: ['CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST'], total: 1 },
+      CAF0001: { ops: ['CUSTOMER_ADDRESS_REST'], total: 1 },
       SHARED: { ops: ['OP_A', 'OP_B', 'OP_C'], total: 5 },
       EMPTY: { ops: [], total: 0 },
     },
@@ -45,7 +45,7 @@ describe('traceOracleOperations', () => {
   it('sözlükte olan kod ada çevrilir; olmayan / boş kod sonuç üretmez', () => {
     const ops = traceOracleOperations(codes, dict);
     expect(ops).toEqual([
-      { key: 'function_code', code: 'CAF0001', operation: 'CUSTOMER_MANAGEMENT_DIGITAL_ADDRESS_FUNCTIONS_REST', others: [], total: 1 },
+      { key: 'function_code', code: 'CAF0001', operation: 'CUSTOMER_ADDRESS_REST', others: [], total: 1 },
       { key: 'FUNCTION_CODE', code: 'SHARED', operation: 'OP_A', others: ['OP_B', 'OP_C'], total: 5 },
     ]);
   });

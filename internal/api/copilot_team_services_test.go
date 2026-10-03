@@ -32,11 +32,11 @@ import (
 // "sy" ARTIK GEÇERLİ bir takım (v0.9.1246). Operatör: gerçek takım adları
 // "SY"/"UG" gibi 2 harfli kısa kodlar — eski 3-karakter tabanı onların
 // hiçbir soruda çözülmemesi demekti. Kısa kodun yanında uzun kardeşi
-// ("SY-Dijital Bankacılık") duruyor ki "en uzun kazanır" kuralı da
+// ("SY-Dijital Altyapı") duruyor ki "en uzun kazanır" kuralı da
 // kısa-kod dünyasında sınanmış olsun.
 var teamTestTeams = []string{
-	"Avengersy",
-	"SY-Dijital Bankacılık",
+	"Orionsy",
+	"SY-Dijital Altyapı",
 	"payment-service",
 	"sy",
 }
@@ -47,19 +47,19 @@ func TestExtractTeamEntity(t *testing.T) {
 		msg  string
 		want string
 	}{
-		{"çıplak ad (çip turu)", "avengersy", "Avengersy"},
-		{"çıplak ad + soru işareti", "Avengersy?", "Avengersy"},
-		{"cümle içinde", "avengersy takımının servisleri nasıl", "Avengersy"},
-		{"büyük harf", "AVENGERSY servisleri", "Avengersy"},
-		// Türkçe katlama: katalogda "Bankacılık", operatör ASCII yazıyor.
-		{"ı/i katlaması (ascii yazım)", "sy-dijital bankacilik servisleri", "SY-Dijital Bankacılık"},
-		{"ı/i katlaması (tam büyük)", "SY-DIJITAL BANKACILIK", "SY-Dijital Bankacılık"},
-		{"aksanlı yazım aynen", "sy-dijital bankacılık", "SY-Dijital Bankacılık"},
+		{"çıplak ad (çip turu)", "orionsy", "Orionsy"},
+		{"çıplak ad + soru işareti", "Orionsy?", "Orionsy"},
+		{"cümle içinde", "orionsy takımının servisleri nasıl", "Orionsy"},
+		{"büyük harf", "ORIONSY servisleri", "Orionsy"},
+		// Türkçe katlama: katalogda "Altyapı", operatör ASCII yazıyor.
+		{"ı/i katlaması (ascii yazım)", "sy-dijital altyapi servisleri", "SY-Dijital Altyapı"},
+		{"ı/i katlaması (tam büyük)", "SY-DIJITAL ALTYAPI", "SY-Dijital Altyapı"},
+		{"aksanlı yazım aynen", "sy-dijital altyapı", "SY-Dijital Altyapı"},
 		// En uzun ad kazanır: kısa kod ("sy") uzun kardeşinin içinde
 		// geçse bile gölgelenmeli.
-		{"en uzun eşleşme kazanır", "sy-dijital bankacılık takımı", "SY-Dijital Bankacılık"},
+		{"en uzun eşleşme kazanır", "sy-dijital altyapı takımı", "SY-Dijital Altyapı"},
 		{"servisle aynı ad — çıkarım katalogdan, karar router'ın", "payment-service", "payment-service"},
-		{"sınır: ad-içi eşleşme yok", "avengersy-legacy nasıl", ""},
+		{"sınır: ad-içi eşleşme yok", "orionsy-legacy nasıl", ""},
 		// v0.9.1246 (operatör: takım adları "SY"/"UG" gibi 2 harfli
 		// olabilir) — eskiden "" bekleniyordu (3-karakter tabanı).
 		// Taban kalksaydı bile eşleşme SINIRLI kalır: aşağıdaki iki
@@ -67,9 +67,9 @@ func TestExtractTeamEntity(t *testing.T) {
 		{"2 harflik kısa kod (çip turu)", "sy", "sy"},
 		{"2 harflik kod cümle içinde", "sy takımının exceptionları", "sy"},
 		{"kısa kod ad-içinde eşleşmez", "kaysysteam nasıl", ""},
-		{"kısa kod uzun kardeşine yapışmaz", "avengersy", "Avengersy"},
+		{"kısa kod uzun kardeşine yapışmaz", "orionsy", "Orionsy"},
 		{"katalogda olmayan", "checkout-service nasıl", ""},
-		{"boş katalog", "avengersy", ""},
+		{"boş katalog", "orionsy", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -89,14 +89,14 @@ func TestIsBareTeamAsk(t *testing.T) {
 		msg, team string
 		want      bool
 	}{
-		{"avengersy", "Avengersy", true},
-		{"Avengersy?", "Avengersy", true},
-		{"  avengersy .", "Avengersy", true},
-		{"sy-dijital bankacılık", "SY-Dijital Bankacılık", true},
-		{"avengersy servisleri", "Avengersy", false},
-		{"avengersy takımı nasıl", "Avengersy", false},
-		{"avengersy 5", "Avengersy", false},
-		{"avengersy", "", false},
+		{"orionsy", "Orionsy", true},
+		{"Orionsy?", "Orionsy", true},
+		{"  orionsy .", "Orionsy", true},
+		{"sy-dijital altyapı", "SY-Dijital Altyapı", true},
+		{"orionsy servisleri", "Orionsy", false},
+		{"orionsy takımı nasıl", "Orionsy", false},
+		{"orionsy 5", "Orionsy", false},
+		{"orionsy", "", false},
 	}
 	for _, c := range cases {
 		if got := isBareTeamAsk(normalizeGuidedMsg(c.msg), c.team); got != c.want {
@@ -113,9 +113,9 @@ func TestMayNameTeam(t *testing.T) {
 		msg  string
 		want bool
 	}{
-		{"avengersy", true},
-		{"sy-dijital bankacılık", true},
-		{"Avengersy takımı", true},
+		{"orionsy", true},
+		{"sy-dijital altyapı", true},
+		{"Orionsy takımı", true},
 		// v0.9.1246 — 2 harflik takım KODLARI ("SY"/"UG") gerçek
 		// (operatör). "hangi takım?" çipine basınca mesaj tam olarak bu
 		// çıplak koddan ibaret olur; kapı 3-karakter tabanında kalsaydı
@@ -145,18 +145,18 @@ func TestRouteGuidedIntentTeamPlacement(t *testing.T) {
 		svc    string
 	}{
 		// (a) çıplak ad — "hangi takım?" cevabı.
-		{"çıplak takım adı", "avengersy", guidedTeamServices, "Avengersy", ""},
+		{"çıplak takım adı", "orionsy", guidedTeamServices, "Orionsy", ""},
 		// GÖLGELEME KARARI: ad hem takım hem SERVİS. Çıplakken takım
 		// kazanır, yoksa çip sessizce servis sağlığına düşerdi.
 		{"çıplak ad servisle çakışıyor → takım", "payment-service", guidedTeamServices, "payment-service", ""},
 		// (b) takım/ekip kelimesi.
-		{"takım kelimesi", "avengersy takımının servisleri", guidedTeamServices, "Avengersy", ""},
-		{"ekip kelimesi", "avengersy ekibinin durumu nasıl", guidedTeamServices, "Avengersy", ""},
-		{"team english", "avengersy team services", guidedTeamServices, "Avengersy", ""},
+		{"takım kelimesi", "orionsy takımının servisleri", guidedTeamServices, "Orionsy", ""},
+		{"ekip kelimesi", "orionsy ekibinin durumu nasıl", guidedTeamServices, "Orionsy", ""},
+		{"team english", "orionsy team services", guidedTeamServices, "Orionsy", ""},
 		// (c) servis çözülmedi + liste/sağlık/hata şekli.
-		{"servis listesi şekli", "avengersy servisleri", guidedTeamServices, "Avengersy", ""},
-		{"sağlık şekli", "avengersy nasıl", guidedTeamServices, "Avengersy", ""},
-		{"hata şekli", "avengersy hataları", guidedTeamServices, "Avengersy", ""},
+		{"servis listesi şekli", "orionsy servisleri", guidedTeamServices, "Orionsy", ""},
+		{"sağlık şekli", "orionsy nasıl", guidedTeamServices, "Orionsy", ""},
+		{"hata şekli", "orionsy hataları", guidedTeamServices, "Orionsy", ""},
 		// Kapı KAPALI: ad servisle çakışıyor VE servis sinyali var →
 		// SERVİS kazanır (takım dalı svc == "" istiyor).
 		{"servis sinyali gölgelenmiyor (health)", "payment-service nasıl", guidedServiceHealth, "", "payment-service"},
@@ -168,9 +168,9 @@ func TestRouteGuidedIntentTeamPlacement(t *testing.T) {
 		{"takım kelimesi servis sinyalini yener", "payment-service takımı nasıl", guidedTeamServices, "payment-service", ""},
 		// İYELİK her zaman önce — kimlikten çözülür, ad taşımaz.
 		{"iyelik takım dalı önce", "takımımın servisleri nasıl", guidedMyServices, "", ""},
-		{"iyelik + ad → yine iyelik", "benim takımım avengersy servisleri", guidedMyServices, "", ""},
+		{"iyelik + ad → yine iyelik", "benim takımım orionsy servisleri", guidedMyServices, "", ""},
 		// Takım kataloğu YOKKEN davranış bayt-bayt eskisi.
-		{"takım kataloğu yok → eski davranış", "avengersy servisleri", guidedNone, "", ""},
+		{"takım kataloğu yok → eski davranış", "orionsy servisleri", guidedNone, "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -196,8 +196,8 @@ func TestRouteGuidedIntentTeamPlacement(t *testing.T) {
 // bir servis sayfasında "hangi takım?" çipine bastığında da takım
 // cevabını almalı.
 func TestRouteTeamBeatsContextService(t *testing.T) {
-	got := routeGuidedIntent("avengersy", guidedTestServices, guidedTestEnvs, teamTestTeams, "checkout-service")
-	if got.Intent != guidedTeamServices || got.Team != "Avengersy" {
+	got := routeGuidedIntent("orionsy", guidedTestServices, guidedTestEnvs, teamTestTeams, "checkout-service")
+	if got.Intent != guidedTeamServices || got.Team != "Orionsy" {
 		t.Fatalf("ekran servisi çıplak takım adını gölgeledi: %+v", got)
 	}
 }
@@ -220,8 +220,8 @@ func TestRenderTeamServicesEvidenceTR(t *testing.T) {
 		})
 	}
 	// 22 servis okundu (2'si pencerede sessiz), 3'ü tavana takıldı.
-	out := renderTeamServicesEvidenceTR("Avengersy", rows, 22, 3, 3600, "uat")
-	if !strings.Contains(out, "Takım: Avengersy — 25 servis") {
+	out := renderTeamServicesEvidenceTR("Orionsy", rows, 22, 3, 3600, "uat")
+	if !strings.Contains(out, "Takım: Orionsy — 25 servis") {
 		t.Errorf("başlık toplam servis sayısını (okunan+kırpılan) taşımalı:\n%s", out)
 	}
 	if !strings.Contains(out, "ilk 100 servis okundu, 3 servis dışarıda kaldı") {
@@ -251,7 +251,7 @@ func TestRenderTeamServicesEvidenceTR(t *testing.T) {
 	}
 
 	// Veri yoksa SESSİZ geçilmez.
-	empty := renderTeamServicesEvidenceTR("Avengersy", nil, 4, 0, 1800, "")
+	empty := renderTeamServicesEvidenceTR("Orionsy", nil, 4, 0, 1800, "")
 	if !strings.Contains(empty, "span verisi yok") {
 		t.Errorf("boş pencerede dürüst satır yok:\n%s", empty)
 	}
@@ -264,9 +264,9 @@ func TestRenderTeamServicesEvidenceTR(t *testing.T) {
 // KENDİ BAŞINA guidedTeamServices'e yönlenir. Akışın tek dayanağı bu:
 // sunucuda konuşma durumu yok.
 func TestGuidedTeamAskFlowSuggestionsRoute(t *testing.T) {
-	route := guidedRoute{Intent: guidedMyServices, TeamOptions: []string{"Avengersy", "SY-Dijital Bankacılık"}}
+	route := guidedRoute{Intent: guidedMyServices, TeamOptions: []string{"Orionsy", "SY-Dijital Altyapı"}}
 	sugg := guidedSuggestions(route)
-	if strings.Join(sugg, "|") != "Avengersy|SY-Dijital Bankacılık" {
+	if strings.Join(sugg, "|") != "Orionsy|SY-Dijital Altyapı" {
 		t.Fatalf("çipler takım adlarını taşımalı, got %v", sugg)
 	}
 	for _, q := range sugg {
@@ -285,7 +285,7 @@ func TestGuidedTeamAskFlowSuggestionsRoute(t *testing.T) {
 	}
 	// TeamOptions BOŞKEN my_services davranışı bayt-bayt eskisi.
 	old := guidedSuggestions(guidedRoute{Intent: guidedMyServices})
-	if len(old) == 0 || old[0] == "Avengersy" {
+	if len(old) == 0 || old[0] == "Orionsy" {
 		t.Errorf("takım seçeneği yokken eski öneriler kalmalı: %v", old)
 	}
 }
@@ -294,7 +294,7 @@ func TestGuidedTeamAskFlowSuggestionsRoute(t *testing.T) {
 // jenerik çip operatörü servis SEÇEMEZ hâlde bırakıyordu).
 func TestGuidedTeamServicesSuggestions(t *testing.T) {
 	route := guidedRoute{
-		Intent: guidedTeamServices, Team: "Avengersy",
+		Intent: guidedTeamServices, Team: "Orionsy",
 		TeamServices: []string{"payment-service", "checkout-service"},
 	}
 	sugg := guidedSuggestions(route)
@@ -307,7 +307,7 @@ func TestGuidedTeamServicesSuggestions(t *testing.T) {
 		}
 	}
 	// Servis listesi boşken de çip üretilir (boş şerit çıkmazdır).
-	if len(guidedSuggestions(guidedRoute{Intent: guidedTeamServices, Team: "Avengersy"})) == 0 {
+	if len(guidedSuggestions(guidedRoute{Intent: guidedTeamServices, Team: "Orionsy"})) == 0 {
 		t.Error("servissiz takım cevabında çip yok")
 	}
 }
@@ -319,7 +319,7 @@ func TestGuidedTeamServicesSuggestions(t *testing.T) {
 // filtresiz listeyi açardı.
 func TestTeamServicesLinksAvoidDeadServicesParam(t *testing.T) {
 	links := guidedAnswerLinks(guidedRoute{
-		Intent: guidedTeamServices, Team: "Avengersy",
+		Intent: guidedTeamServices, Team: "Orionsy",
 		TeamServices: []string{"päy ments", "checkout-service"},
 	}, noLinkWindow())
 	// v0.9.1246 — üçüncü link: takım-filtreli exception kuyruğu. /inbox
@@ -328,7 +328,7 @@ func TestTeamServicesLinksAvoidDeadServicesParam(t *testing.T) {
 	if len(links) != 3 {
 		t.Fatalf("takım cevabı üç link taşımalı (Servisler + en kötü servis + takım exception'ları): %+v", links)
 	}
-	if links[2].Href != "/inbox?kind=exception&team=Avengersy" {
+	if links[2].Href != "/inbox?kind=exception&team=Orionsy" {
 		t.Errorf("takım exception linki beklenen şekilde değil: %s", links[2].Href)
 	}
 	for _, l := range links {
@@ -359,8 +359,8 @@ func TestTeamServicesLinksAvoidDeadServicesParam(t *testing.T) {
 // Takım rotası SOMUT öznedir: çekmece bağlamı onu bastırmamalı (bastırma
 // kuralı "özneye oturmayan rota" içindi).
 func TestDrawerDoesNotSuppressTeamRoute(t *testing.T) {
-	route := guidedRoute{Intent: guidedTeamServices, Team: "Avengersy"}
-	if drawerSuppressesGuided("ekrandaki açıklama metni", route, "avengersy servisleri") {
+	route := guidedRoute{Intent: guidedTeamServices, Team: "Orionsy"}
+	if drawerSuppressesGuided("ekrandaki açıklama metni", route, "orionsy servisleri") {
 		t.Error("takım rotası çekmece bağlamıyla bastırıldı — guided gerçek RED'i getirmeli")
 	}
 }

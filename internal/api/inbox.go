@@ -997,7 +997,7 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 // yüzeyi) değişmez; PriorityReason zorlamayı açıkça söyler.
 //
 // v0.10.884 (operatör-bildirimli, prod 2026-09-23) — "httperror" MUAF.
-// bsa-investment-equity-order 503: 929 olay / 57 dk, merdiven P1 demiş
+// acme-investment-equity-order 503: 929 olay / 57 dk, merdiven P1 demiş
 // ("929 total · stopped 10h ago"), tür kuralı P3'e çivilemiş. HTTP error
 // grubu exception grubunun ta kendisi (v0.9.443 — aynı store, error.type
 // fallback'i; aynı merdiven exceptionPriorityAt), yalnız ADI farklı: "503"

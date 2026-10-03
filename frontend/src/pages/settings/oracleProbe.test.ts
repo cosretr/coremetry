@@ -49,9 +49,9 @@ import type { OracleLongCheck } from '@/lib/types';
 describe('oracleProbe — LONG kolon hükmü', () => {
   const l = (o: Partial<OracleLongCheck>): OracleLongCheck => ({ checked: true, mappedOnly: false, columns: [], selected: [], ...o });
   it('SELECT * kipinde LONG kolon kırmızı ve kutuyu açmayı söyler', () => {
-    const v = longVerdict(l({ columns: ['MCA_ERR_DETAIL'], selected: ['MCA_ERR_DETAIL'] }));
+    const v = longVerdict(l({ columns: ['APP_ERR_DETAIL'], selected: ['APP_ERR_DETAIL'] }));
     expect(v?.tone).toBe('b-err');
-    expect(v?.text).toContain('MCA_ERR_DETAIL');
+    expect(v?.text).toContain('APP_ERR_DETAIL');
     expect(v?.detail).toContain('yalnız eşlenen kolonlar');
   });
   it('eşlenen kipte: eşlenen LONG kırmızı, eşlenmemiş LONG nötr', () => {
@@ -77,12 +77,12 @@ describe('oracleProbe — eşleme hükmü', () => {
     expect(mappingVerdict({ ...ok, checked: false, error: 'yetki' })?.tone).toBe('b-gray');
   });
   it('traceId eksik → kırmızı, önekli öneri metinde', () => {
-    const v = mappingVerdict({ checked: true, present: 2, prefix: 'MCA_',
-      missing: [{ field: 'traceId', column: 'ERR_TRACEID', suggest: 'MCA_ERR_TRACEID' }, { field: 'host', column: 'ERR_HOSTNAME' }] });
+    const v = mappingVerdict({ checked: true, present: 2, prefix: 'APP_',
+      missing: [{ field: 'traceId', column: 'ERR_TRACEID', suggest: 'APP_ERR_TRACEID' }, { field: 'host', column: 'ERR_HOSTNAME' }] });
     expect(v?.tone).toBe('b-err');
     expect(v?.text).toContain('trace/servis/hata kodu okunmaz');
     expect(v?.detail).toContain('traceId→ERR_TRACEID');
-    expect(v?.detail).toContain('MCA_ önekli karşılıkları var (1/2)');
+    expect(v?.detail).toContain('APP_ önekli karşılıkları var (1/2)');
   });
   it('yalnız yan alan eksik → sarı, öneri yoksa eşleme formuna yönlendirir', () => {
     const v = mappingVerdict({ checked: true, present: 15, missing: [{ field: 'location', column: 'ERR_LOCATION' }] });
@@ -123,7 +123,7 @@ describe('oracleProbe — canlıya geçiş önizlemesi', () => {
   const base: OracleLivePreview = {
     sourceId: 's1', sourceName: 'core-oracle', mode: 'shadow',
     opened24h: 37, opened7d: 1212, critical7d: 40, clusters7d: 3, openNow: 5,
-    top: [{ subject: 'bsa-payments', opened: 61 }, { subject: 'ext:core-oracle/OP9', opened: 20 }],
+    top: [{ subject: 'acme-payments', opened: 61 }, { subject: 'ext:core-oracle/OP9', opened: 20 }],
     notifyKind: 'anomaly', channelsEnabled: 4, channelsAccepting: 2, channelNames: ['ops-mail', 'sre-slack'],
     teamMail: true, openCapPerTick: 20, generatedAt: 0,
   };
@@ -135,7 +135,7 @@ describe('oracleProbe — canlıya geçiş önizlemesi', () => {
       'Canlıda her yeni açılış bir bildirimdir (tür: Anomali): etkin 4 kanaldan 2 tanesi alıyor (ops-mail, sre-slack); ekip maili alıyor. Kanalın servis / ekip / öncelik süzgeçleri ayrıca uygulanır.',
       'Kipi canlıya alınca zaten açık olan 5 Problem için bildirim gönderilmez; yalnız yeni açılışlar bildirilir.',
       "Okuma başına en çok 20 açılış; fazlası tek özet Problem'de toplanır (Anomali ayarları).",
-      'En çok açan özneler (7 gün): bsa-payments (61), ext:core-oracle/OP9 (20).',
+      'En çok açan özneler (7 gün): acme-payments (61), ext:core-oracle/OP9 (20).',
     ]);
   });
   it('hiçbir kanal ve ekip maili türü almıyor → uyarı: canlıda bildirim GİTMEZ', () => {
@@ -178,7 +178,7 @@ describe('oracleProbe — özne kapsamı', () => {
     byReason: { no_trace_id: 120, trace_not_found: 80, multi_service: 50, dead_service: 30, unconfirmed: 12, no_operation: 5 },
     unresolved: [
       { operation: 'OP_HOST', rows: 120, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'WMOBAPPP84', host: 'WMOBAPPP84' },
-      { operation: 'OP_MULTI', rows: 50, withTrace: 50, status: 'unresolved', reason: 'multi_service', service: 'bsa-a-prod', votes: '4/10' },
+      { operation: 'OP_MULTI', rows: 50, withTrace: 50, status: 'unresolved', reason: 'multi_service', service: 'acme-a-prod', votes: '4/10' },
       { operation: 'OP_PODX', rows: 9, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'legacy-batch-7b9949bb74-l4bg5', podLike: true },
       { operation: '', rows: 5, withTrace: 0, status: 'unresolved', reason: 'no_operation', host: 'WMOBAPPP90' },
     ],
@@ -194,7 +194,7 @@ describe('oracleProbe — özne kapsamı', () => {
     ]);
     expect(t.ops).toEqual([
       'OP_HOST · 120 satır · satırlarda trace kimliği yok · instance WMOBAPPP84 (pod adı değil)',
-      'OP_MULTI · 50 satır · çok servisli operasyon · aday bsa-a-prod (4/10)',
+      'OP_MULTI · 50 satır · çok servisli operasyon · aday acme-a-prod (4/10)',
       'OP_PODX · 9 satır · satırlarda trace kimliği yok · pod legacy-batch-7b9949bb74-l4bg5 (canlı bir servise çözülmedi)',
       '(boş) · 5 satır · operasyon kodu boş · host WMOBAPPP90',
     ]);

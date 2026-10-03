@@ -69,7 +69,7 @@ func TestCleanFunctionCodes(t *testing.T) {
 // v0.10.1001 — (operasyon, fonksiyon kodu) dökümü kodu doğru yerden okur:
 // kaynakta code ← FUNCTIONCODE ise error_code, değilse (code ← ERRORCODE;
 // operatörün güncel sorgusu) satırın FUNCTIONCODE attribute'u. İfade yerel
-// ClickHouse'ta doğrulandı (FUNCTIONCODE / MCA_ERR_FUNCTION_CODE anahtarları,
+// ClickHouse'ta doğrulandı (FUNCTIONCODE / APP_ERR_FUNCTION_CODE anahtarları,
 // dolgulu değer, anahtarsız satır).
 func TestOracleOpCodesSQL(t *testing.T) {
 	attr, code := oracleOpCodesSQL(false), oracleOpCodesSQL(true)

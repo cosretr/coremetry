@@ -717,14 +717,14 @@ func extractEnvEntity(msg string, envs []string) string {
 // çözer (asla tahmin değil; teamCatalogue = service_metadata'nın boş
 // olmayan ownerTeam+sreTeam değerleri). extractEnvEntity'nin ikizi:
 // sınırlı (bounded) tam-ad eşleşmesi, en UZUN kazanır ("SY-Dijital
-// Bankacılık", "dijitalsy" alt-adını gölgeler).
+// Altyapı", "dijitalsy" alt-adını gölgeler).
 //
 // KATLAMA: iki taraf da chstore.NormTeamName'den geçer — takım adları
 // Türkçe yazılıyor ve iki I tuzağı burada da geçerli ("Bankacılık" vs
 // "BANKACILIK"). Katlama i/ı'yı tek forma indirdiği için hem katalog adı
 // hem mesaj ASCII'ye iner; sınır denetimi (indexBounded) o yüzden çalışır.
 //
-// ÇIPLAK takım adı da eşleşir ("avengersy") — "hangi takım?" sorusuna
+// ÇIPLAK takım adı da eşleşir ("orionsy") — "hangi takım?" sorusuna
 // verilen cevap turu tam olarak bu şekildedir ve akışın tek dayanağıdır.
 //
 // UZUNLUK TABANI 2 (v0.9.1246, operatör: gerçek takım adları "SY"/"UG"
@@ -768,8 +768,8 @@ func extractTeamEntity(msg string, teams []string) string {
 		}
 		fts := nameTokens(ft)
 		// Yalnız ÇOK-JETONLU takım adı ("sy-xyz" ↔ "sy xyz"): tek jetonlu ad
-		// tireli daha uzun bir adın içinde eşleşemez ("avengersy" ↛
-		// "avengersy-legacy" — sınır kuralı, copilot_team_services_test).
+		// tireli daha uzun bir adın içinde eşleşemez ("orionsy" ↛
+		// "orionsy-legacy" — sınır kuralı, copilot_team_services_test).
 		if len(fts) < 2 {
 			continue
 		}
@@ -798,8 +798,8 @@ func extractTeamEntity(msg string, teams []string) string {
 	return ""
 }
 
-// isBareTeamAsk — mesaj SADECE takım adından mı oluşuyor ("avengersy",
-// "Avengersy?"). "hangi takım?" çipine tıklayan operatörün ürettiği tur
+// isBareTeamAsk — mesaj SADECE takım adından mı oluşuyor ("orionsy",
+// "Orionsy?"). "hangi takım?" çipine tıklayan operatörün ürettiği tur
 // budur; router'da takım dalının tek başına açılmasını haklı kılan sinyal.
 // Ad çıkarıldıktan sonra kalanın harf/rakam taşımaması yeterli — noktalama
 // ve boşluk serbest.
@@ -830,7 +830,7 @@ func hasTeamWord(tokens []string) bool {
 }
 
 // hasServiceListWord — "servis/service" kökü; adı geçen takımın SERVİS
-// listesini isteyen şekiller ("avengersy servisleri").
+// listesini isteyen şekiller ("orionsy servisleri").
 func hasServiceListWord(tokens []string) bool {
 	return tokenHasPrefix(tokens, "servis", "service")
 }
@@ -840,7 +840,7 @@ func hasServiceListWord(tokens []string) bool {
 //
 // Neden gerekli: hasGuidedSignal'da takım adı diye bir sinyal YOKTUR ve
 // olamaz (adlar canlı katalogdan gelir). "hangi takım?" çipine basan
-// operatörün mesajı ("avengersy") hiçbir guided kelimesi taşımaz, yani
+// operatörün mesajı ("orionsy") hiçbir guided kelimesi taşımaz, yani
 // hızlı-çıkış onu serbest tool döngüsüne atardı — çipin vaadi tam orada
 // kırılırdı.
 //
@@ -885,7 +885,7 @@ func mayNameTeam(norm string) bool {
 // ise sıradan bağımsız (en uzun ad kazanır).
 //
 // Tekilleştirme CanonTeam üzerinden — alias tablosu ve Türkçe katlama
-// dahil, yani "avengerSY"/"Avengersy" TEK takımdır (v0.8.330'un
+// dahil, yani "orionSY"/"Orionsy" TEK takımdır (v0.8.330'un
 // /services tarafında yaptığı işin sunucu ikizi). Gösterilen yazımı
 // betterTeamDisplay seçer (deterministik).
 //
@@ -1190,7 +1190,7 @@ func routeGuidedIntent(raw string, services, envs, teams []string, ctxService st
 	//
 	// Neden buraya: (1) iyelik ("takımımın servisleri") kimlikten çözülür
 	// ve mesajda ad taşımaz — o dal önce kalmalı, yoksa "benim takımım
-	// avengersy" gibi bir cümlede ad, kimliği ezerdi. (2) Servis
+	// orionsy" gibi bir cümlede ad, kimliği ezerdi. (2) Servis
 	// dallarından önce, çünkü bir takım SERVİSLE AYNI ADI taşıyabilir
 	// ("payments" hem takım hem servis) ve o durumda çıplak ad
 	// gölgelenirse "hangi takım?" diyaloğu ÇALIŞMAZ: operatörün tıkladığı
@@ -1202,7 +1202,7 @@ func routeGuidedIntent(raw string, services, envs, teams []string, ctxService st
 	//   a) mesaj SADECE takım adı (çip turu),
 	//   b) takım/ekip kelimesi de var ("payments takımının servisleri"),
 	//   c) servis çözülmedi VE liste/sağlık/hata şekli var
-	//      ("avengersy servisleri nasıl").
+	//      ("orionsy servisleri nasıl").
 	// (c)'deki `svc == ""` şartı sayesinde "payments neden yavaş" gibi
 	// SERVİS soruları takıma kaçmaz; ada ek bir sinyal gerekmesi de
 	// "payments hataları" sorusunu servis tarafında bırakır.
@@ -1275,7 +1275,7 @@ func routeGuidedIntent(raw string, services, envs, teams []string, ctxService st
 // extractServiceFamily resolves a family-of-services ask against the
 // LIVE service list (v0.9.192). Fragments = message tokens that occur
 // inside ≥1 service name as a BOUNDED segment ("mobile", "bff" inside
-// "mobile-overview-bff-prod"; separators -_.). The family = services
+// "mobile-home-bff-prod"; separators -_.). The family = services
 // containing ALL fragments. <2 matches → nil (single-service paths
 // already handle 1; zero fragments = not a name-shaped ask). >40 →
 // nil: a lone generic fragment ("prod") must not claim the fleet.

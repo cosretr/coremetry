@@ -73,7 +73,7 @@ export function ChannelModal({ initial, onClose, onSaved }: {
   // v0.9.828 — takım adı ÖNERİLERİ. Katalog zaten yüklü (60 sn cache,
   // Settings'in başka sekmeleri de okuyor), yani ek istek yok.
   // teamOptionsCI harf-durumu varyantlarını tekilleştiriyor: aynı takım
-  // "avengerSY" ve "Avengersy" olarak iki kez listelenmesin (v0.8.330).
+  // "orionSY" ve "Orionsy" olarak iki kez listelenmesin (v0.8.330).
   const mdQ = useServicesMetadata();
   const teamOptions = useMemo(
     () => teamOptionsCI(Object.values(mdQ.data ?? {}).flatMap(m => [m.sreTeam, m.ownerTeam])),

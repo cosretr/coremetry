@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// v0.9.316 — the operator's own Grafana board ("airX - Genel - OCP
+// v0.9.316 — the operator's own Grafana board ("ops board - OCP
 // Watcher Errors Metrics") is the list of shapes they actually watch.
 // Adding them came with an explicit constraint: "elastice çok sorgu
 // yükü oluşturma sakın."

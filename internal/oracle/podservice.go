@@ -19,8 +19,8 @@ var (
 )
 
 // podServiceCandidates — SAF: pod adından aday servis adları, öncelik sırasıyla,
-// tekrarsız. bsa-mobile-login-prod-7b9949bb74-l4bg5 →
-// [bsa-mobile-login-prod, bsa-mobile-login]; …-prod-oneagent-55675dfc-xxxxx →
+// tekrarsız. acme-mobile-login-prod-7b9949bb74-l4bg5 →
+// [acme-mobile-login-prod, acme-mobile-login]; …-prod-oneagent-55675dfc-xxxxx →
 // [...-prod-oneagent, ...-prod, ...]. Pod biçimine uymayan değer (host adı:
 // WMOBAPPP84) aday üretmez.
 func podServiceCandidates(pod string) []string {

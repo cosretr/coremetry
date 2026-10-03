@@ -620,9 +620,9 @@ func (s *Store) PutTeamContacts(ctx context.Context, tc TeamContacts) error {
 }
 
 // ── Team aliases (v0.9.427, operatör istegi) ────────────────────────────────
-// LDAP takım adı ("SY-Dijital Bankacılık") ile telemetri metadata'sındaki
-// takım adları ("dijitalsy", "avengersy"…) aynı takımın farklı yazımları
-// olabiliyor; hiçbir algoritma "avengersy → SY-Krediler ve Sigorta"yı
+// LDAP takım adı ("SY-Dijital Altyapı") ile telemetri metadata'sındaki
+// takım adları ("dijitalsy", "orionsy"…) aynı takımın farklı yazımları
+// olabiliyor; hiçbir algoritma "orionsy → SY-Ortak Servisler"yı
 // bilemez — eşleme OPERATÖR tablosudur. Tek settings anahtarı,
 // invariant #6.
 
