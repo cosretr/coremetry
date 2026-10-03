@@ -77,7 +77,8 @@ import { traceHref } from '@/lib/traceHref';
 
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatHeaderLabel, type StripStat } from '@/components/traces/stripStat';
-import { stripScope, stripRootOnly, volumeEmptyNote, volumeUnitFor, weightedStatAvg } from '@/components/traces/volumeSeries';
+import { stripScope, stripRootOnly, volumeEmptyNote, volumeUnitFor, weightedStatAvg, errorStripUnit, errorStripHint } from '@/components/traces/volumeSeries';
+import { traceScopeParams, errorStripEligible } from './traces/scopeParams'; // v0.10.1082
 import { groupLeaves } from '@/lib/urlState';
 import { LatencyScatter } from '@/components/traces/LatencyScatter';
 import { ShapesView } from '@/components/traces/ShapesView';
@@ -579,24 +580,11 @@ function TracesPageInner() {
     const { from, to } = useTimeRange ? listRangeNs : { from: undefined, to: undefined };
     const listParams: TracesParams = {
       limit: 50, offset: page * 50, from, to, sort, order,
-      service: filter.service || undefined,
-      search: effectiveTraceSearch(filter),
-      traceId: traceIdExact,
-      minMs: filter.minMs || undefined,
-      maxMs: filter.maxMs || undefined,
-      hasError: filter.hasError || undefined,
-      rootOnly: filter.rootOnly || undefined,
-      // Global Topbar env filter (v0.8.383) — first-class param so it
-      // composes with filters AND filterGroup server-side.
-      env: env || undefined,
-      // v0.9.943 (B3) — pivotun taşıdığı cluster kapsamı. Aynı
-      // birinci-sınıf gerekçe: FilterRoot düz filtreleri supersede eder.
-      cluster: clusterScope || undefined,
-      services: filter.requireServices.length ? filter.requireServices : undefined,
-      // Grouped builder supersedes the flat filters when an OR/nested group is
-      // active; flat-AND encodes to '' so the legacy filters path stays in use.
-      filterGroup: advGroupParam || undefined,
-      filters: advGroupParam ? undefined : (advFiltersEff.length ? JSON.stringify(advFiltersEff) : undefined),
+      // v0.10.1082 — süzgeç alanları TEK kaynaktan (pages/traces/scopeParams.ts):
+      // Errors şeridi (/api/traces/error-histogram) aynı fonksiyonu çağırır.
+      // env/cluster birinci-sınıf (v0.8.383 / v0.9.943 — FilterRoot düz
+      // filtreleri supersede eder); gruplu kök düz çipleri supersede eder.
+      ...traceScopeParams({ filter, env, cluster: clusterScope, filtersEff: advFiltersEff, groupParam: advGroupParam }),
       // FAZ 2 — the list fetch is ALWAYS narrow (no extraAttrs): attribute
       // columns arrive via the phase-2 enrichment effect below, so a column
       // toggle never re-runs this (window-wide) query. extraCols is
@@ -674,6 +662,8 @@ function TracesPageInner() {
     count: SpanMetricSeries[] | null;
     errors: SpanMetricSeries[] | null;
     rt: SpanMetricSeries[] | null;
+    // v0.10.1082 — Errors şeridi (error-histogram) cevabının kipi; yoksa metric-batch.
+    errStrip?: { mode: 'span' | 'trace'; capped: boolean };
   } | null>(null);
   useEffect(() => {
     if (view !== 'list') return;
@@ -686,6 +676,27 @@ function TracesPageInner() {
     // v0.9.715 (operatör: "barlar çok küçülmüş") — bar bütçesi: ~12px/bar.
     // v0.10.1007 (operatör: "histogram bar sayısı … çok") — tavan 100 çubuk.
     const step = stepForPoints(windowSec, traceStripMaxDataPoints());
+    // v0.10.1082 (operator-reported, prod: "Error seçildiğinde histogram
+    // gelmiyor") — Errors + span-düzeyi çip: şerit metric-batch'te hatayı
+    // SAYILAN span'de arıyordu (`status = error` çipi; giriş kapsamında bir de
+    // kind), liste ise iki basamakta (çipe uyan hatalı span ↔ trace düzeyi).
+    // Bu sınıfta şerit listenin süzgecini AYNEN yollar, sunucu listenin kip
+    // kararını paylaşır (chstore/trace_error_histogram.go). Diğer hâller aşağıda.
+    const scopeP = traceScopeParams({ filter, env, cluster: clusterScope, filtersEff: advFiltersEff, groupParam: advGroupParam });
+    if (errorStripEligible(scopeP)) {
+      let cancelledE = false;
+      const ctlE = new AbortController();
+      api.tracesErrorHistogram({ ...scopeP, from, to, step, stat: stripStat }, ctlE.signal)
+        .then(r => {
+          if (cancelledE) return;
+          setVolSeries({
+            count: r.series.count ?? [], errors: r.series.errors ?? [], rt: r.series.rt ?? [],
+            errStrip: { mode: r.mode, capped: r.capped },
+          });
+        })
+        .catch((e: unknown) => { if (!cancelledE && !isCanceled(e)) setVolSeries(null); });
+      return () => { cancelledE = true; ctlE.abort(); };
+    }
     // v0.10.655 (operatör, prod: "filtreli sorguda 34 trace, histogram milyon")
     // — metric-batch artık filterGroup alıyor: gruplu kipte grup olduğu gibi
     // gider (düz advFilters DEĞİL, çünkü grup onların üst kümesi), bağlam
@@ -763,7 +774,7 @@ function TracesPageInner() {
       })
       .catch((e: unknown) => { if (!cancelled && !isCanceled(e)) setVolSeries(null); });
     return () => { cancelled = true; ctl.abort(); };
-  }, [view, listRangeNs, filter.service, filter.search, filter.traceId, filter.rootOnly, filter.hasError, env, clusterScope, advFiltersEff, grouped, advGroupParam, stripStat]); // v0.10.655 advGroupParam // v0.10.484, v0.10.513 stripStat, v0.10.523 traceId
+  }, [view, listRangeNs, filter, env, clusterScope, advFiltersEff, grouped, advGroupParam, advGroup, stripStat]); // v0.10.655 advGroupParam // v0.10.484, v0.10.513 stripStat, v0.10.523 traceId; v0.10.1082 filter (Errors şeridi uygunluğu süre/services'i de okur)
 
   // v0.9.637 — anahtar önerisi YALNIZ boş sonuçta çekilir. CLAUDE.md
   // ES/CH maliyet disiplini: liste boyunca prefetch yok, poll yok —
@@ -977,7 +988,12 @@ function TracesPageInner() {
   // (whole window), so they describe real traffic rather than the 50-row page.
   // v0.10.660 (operatör): süre istatistiği artık kovaların MAX'ı değil,
   // istek-ağırlıklı ortalaması (weightedStatAvg) — tek sıçrayan kova pencereyi tanımlamasın.
-  const volumeUnit = volumeUnitFor(!!filter.service, stripScope(!grouped ? advFilters : [], filter.search ?? ''));
+  // v0.10.1082 — Errors şeridinde birim sunucunun kipinden: 'span' → çipe uyan
+  // hatalı span'ler, 'trace' → listenin trace'leri (başlangıç kovasında).
+  const errStrip = volSeries?.errStrip;
+  const volumeUnit = errStrip
+    ? errorStripUnit(errStrip.mode)
+    : volumeUnitFor(!!filter.service, stripScope(!grouped ? advFilters : [], filter.search ?? ''));
   const headerStats = useMemo(() => {
     const cPts = volSeries?.count?.[0]?.points ?? [];
     const eMap = new Map((volSeries?.errors?.[0]?.points ?? []).map(p => [p.time, p.value]));
@@ -1314,7 +1330,11 @@ function TracesPageInner() {
               // v0.10.268 — Dynatrace ölçeği (mockup A: 200 px).
               // v0.10.486 (operatör: "histogram biraz daha shrink edilebilir") — kompakt 170 → 130.
               // v0.10.513 — shrink/expand kaldırıldı; tek yükseklik.
-              height={130} unit={volumeUnit} emptyNote={volumeEmptyNote(volumeUnit, filter.hasError)} onBrush={applyBrush} onZoomReset={clearBrush}
+              // v0.10.1082 — "hata başka span'de" cümlesi yalnız DOĞRU olduğunda:
+              // metric-batch yolu (span düzeyi) + liste dolu. Errors şeridi listeyle
+              // aynı kümeyi saydığı için orada boş şerit = boş liste.
+              height={130} unit={volumeUnit} emptyNote={volumeEmptyNote(volumeUnit, filter.hasError, traces.length > 0, !!errStrip)}
+              hint={errStrip ? errorStripHint(errStrip.mode, errStrip.capped) : undefined} onBrush={applyBrush} onZoomReset={clearBrush}
               collapsed={stripCollapsed}
               xRange={{ from: listRangeNs.from / 1e9, to: listRangeNs.to / 1e9 }}
               header={vizToggle}

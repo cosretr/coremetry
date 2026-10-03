@@ -38,7 +38,7 @@ OracleLogsResponse,
   Role, LDAPConfig, LDAPDirectoryUser,
   FilterExpr,
   ESQueryError, ESLogstoreSnapshot, ESLogstoreInput,
-  OtlpExemplar, TraceLinks, TraceCountResponse, CorrelationLinkSettings,
+  OtlpExemplar, TraceLinks, TraceCountResponse, TraceErrorHistogramResponse, CorrelationLinkSettings,
   ExceptionTriageConfig, ProblemPriorityConfig, FailureSLOConfig, MetricExclusions, AnomalyTrackedConfig,
   InsightKind, InsightResponse, InsightSignal, InsightLink, InsightChartSpec,
   AnomalySensitivityConfig, TailPoint , MetricCompareReport , LogPatternsResult, LogTemplate, TraceFacet, TraceFacetsResponse, DBSlowQueryConfig, StatementSearchRow,
@@ -748,6 +748,10 @@ export const api = {
 
   tracesCount: (params: TracesParams, signal?: AbortSignal) =>
     get<TraceCountResponse>(`/api/traces/count?${qs(params)}`, signal),
+  // v0.10.1082 — Errors + span-düzeyi çipte /traces şeridi: listenin AYNI
+  // süzgeç parametreleri (pages/traces/scopeParams.ts) + kova adımı + istatistik.
+  tracesErrorHistogram: (params: TracesParams & { step: number; stat: string }, signal?: AbortSignal) =>
+    get<TraceErrorHistogramResponse>(`/api/traces/error-histogram?${qs(params)}`, signal),
 
   // v0.9.969 (Ö15) — window is now `{ since }` OR `{ fromNs, toNs }`
   // (lib/attrKeyWindow.attrKeyWindowParams). `since` can only say "the last

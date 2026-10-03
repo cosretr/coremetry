@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT } from './volumeSeries';
+import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT, errorStripUnit, errorStripHint } from './volumeSeries';
 
 const S = 1_000_000_000; // 1 saniye, ns
 const T0 = 1_700_000_000 * S;
@@ -196,13 +196,35 @@ describe('stripScope', () => {
   });
   // v0.10.1011 (operator-reported, prod: function_code çipi + Errors → liste
   // dolu, şerit "No traces in view") — boş şerit nedenini söyler.
-  it('boş şerit: spans kapsamı + Errors nedenini yazar; diğer hâllerde eski metin', () => {
-    const note = volumeEmptyNote('spans', true);
-    expect(note).toContain("hata aynı trace'in başka bir span'inde");
-    expect(note).toContain("Errors'u kaldırın");
-    expect(volumeEmptyNote('spans', false)).toBe(VOLUME_EMPTY_DEFAULT);
-    expect(volumeEmptyNote('traces', true)).toBe(VOLUME_EMPTY_DEFAULT);
-    expect(volumeEmptyNote('requests', true)).toBe(VOLUME_EMPTY_DEFAULT);
+  // v0.10.1082 (operator-reported: "Error seçildiğinde histogram gelmiyor") —
+  // cümle yalnız DOĞRU olduğunda: metric-batch yolu (span düzeyi) + liste dolu.
+  // Errors şeridi (error-histogram) listeyle aynı kümeyi sayar; orada boş şerit
+  // boş liste demektir ve "hata başka span'de" demek yalan olurdu.
+  it.each([
+    // [birim, Errors, liste dolu, Errors şeridi, cümle?]
+    ['spans', true, true, false, true],    // tek meşru hâl (ör. arama + Errors)
+    ['spans', true, false, false, false],  // liste de boş → "başka span" iddiası yok
+    ['spans', true, true, true, false],    // Errors şeridi: listeyle aynı küme
+    ['traces', true, true, true, false],   // trace kipi şeridi
+    ['spans', false, true, false, false],  // Errors kapalı
+    ['traces', true, true, false, false],  // giriş kapsamı
+    ['requests', true, true, false, false],
+  ] as const)('birim %s, Errors %s, liste dolu %s, Errors şeridi %s → cümle %s', (unit, hasError, listNonEmpty, errorStrip, want) => {
+    const note = volumeEmptyNote(unit, hasError, listNonEmpty, errorStrip);
+    if (want) {
+      expect(note).toContain("hata aynı trace'in başka bir span'inde");
+      expect(note).toContain("Errors'u kaldırın");
+    } else {
+      expect(note).toBe(VOLUME_EMPTY_DEFAULT);
+    }
+  });
+  it('Errors şeridi: birim ve ipucu sunucu kipinden', () => {
+    expect(errorStripUnit('span')).toBe('spans');
+    expect(errorStripUnit('trace')).toBe('traces');
+    expect(errorStripHint('trace', false)).toContain('başlangıç');
+    expect(errorStripHint('span', false)).toContain("hatalı span'ler");
+    expect(errorStripHint('trace', true)).toContain('tavana');
+    expect(errorStripHint('span', false)).not.toContain('tavana');
   });
   it('birim ve ipucu kapsamı söyler', () => {
     expect(volumeUnitFor(true, 'entry')).toBe('traces');

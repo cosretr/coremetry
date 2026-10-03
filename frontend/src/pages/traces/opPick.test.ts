@@ -30,7 +30,10 @@ describe('opPick — kablolama', () => {
     expect(traces).toContain("['op',       filter.op]");
     expect(traces).toContain('onPick={');
     // Liste + toplu + sayım: ÜÇ istek de etkin çipleri (op dahil) gönderir; şerit de.
-    expect((traces.match(/JSON\.stringify\(advFiltersEff\)/g) ?? []).length).toBe(3);
+    // v0.10.1082 — liste ve Errors şeridi ortak süzgeç yardımcısından
+    // (scopeParams.ts traceScopeParams, filtersEff: advFiltersEff); toplu + sayım doğrudan.
+    expect((traces.match(/JSON\.stringify\(advFiltersEff\)/g) ?? []).length).toBe(2);
+    expect((traces.match(/filtersEff: advFiltersEff/g) ?? []).length).toBe(2);
     expect(traces).toContain('[...advFiltersEff]');
     expect(traces).toContain('opCellText(op, opDisplayName(t.rootName, t.rootRoute))'); // v0.10.756 gösterim adı
     expect(traces).toContain(', filter.op);'); // çağrı yeri seçili operasyonu geçirir

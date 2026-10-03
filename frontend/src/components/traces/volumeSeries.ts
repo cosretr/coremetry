@@ -200,13 +200,33 @@ export function stripRootOnly(scope: StripScope, rootOnly: boolean): boolean {
  * Hata başka span'de — bunu grafiğe çevirmek trace düzeyinde bir kesişim serisi
  * ister (pahalı; bilinçli yapılmadı). Çıplak "No traces" ise listeyle çelişen
  * bir yalandı: boş durum artık nedenini ve ne yapılacağını söyler.
+ *
+ * v0.10.1082 (operator-reported, prod: "Error seçildiğinde histogram gelmiyor")
+ * — Errors + span-düzeyi çip artık /api/traces/error-histogram'dan okunur ve
+ * listeyle AYNI kümeyi sayar (Traces.tsx errorStripEligible); o yolda boş şerit
+ * = boş liste, cümle YALAN olurdu. Cümle yalnız DOĞRU olduğu hâlde kalır:
+ * metric-batch yolu (span düzeyi — ör. serbest metin araması + Errors), birim
+ * "spans", Errors açık VE liste dolu. Liste boşken neden "başka span" olsun.
  */
 export const VOLUME_EMPTY_DEFAULT = 'No traces in view to bucket.';
-export function volumeEmptyNote(unit: string, hasError: boolean): string {
-  if (unit === 'spans' && hasError) {
+export function volumeEmptyNote(unit: string, hasError: boolean, listNonEmpty: boolean, errorStrip: boolean): string {
+  if (!errorStrip && listNonEmpty && unit === 'spans' && hasError) {
     return "Süzgece uyan span'lerin hiçbiri hatalı değil — hata aynı trace'in başka bir span'inde. Liste trace düzeyinde eşleşir; grafiği görmek için Errors'u kaldırın.";
   }
   return VOLUME_EMPTY_DEFAULT;
+}
+
+/** errorStripUnit — v0.10.1082: Errors şeridinin birimi sunucu kipinden. SAF. */
+export function errorStripUnit(mode: 'span' | 'trace'): string {
+  return mode === 'trace' ? 'traces' : 'spans';
+}
+
+/** errorStripHint — v0.10.1082: Errors şeridinin neyi saydığı (başlık ipucu). SAF. */
+export function errorStripHint(mode: 'span' | 'trace', capped: boolean): string {
+  const base = mode === 'trace'
+    ? "Errors + çip: çipe uyan span'ler hatasız, hata aynı trace'in başka span'inde — liste trace düzeyinde eşleşir; şerit listenin trace'lerini başlangıç zamanına göre sayar."
+    : "Errors + çip: çipe uyan hatalı span'ler sayılır — listeyle aynı küme (liste bu span'leri taşıyan trace'leri gösterir).";
+  return capped ? base + ' Aday kümesi tavana çarptı: en yeni trace\'ler sayıldı.' : base;
 }
 
 /** volumeUnitFor — birim etiketi: spans kapsamında "spans", değilse eski kural. */

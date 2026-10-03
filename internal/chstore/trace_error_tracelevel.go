@@ -79,11 +79,25 @@ func traceErrWheres(f TraceFilter, clusterExpr string) (chip, errw, both whereCl
 	chipF.Filters, chipF.FilterRoot, chipF.NoPromoted = f.Filters, f.FilterRoot, f.NoPromoted
 	chip = buildGetTracesWhere(chipF, clusterExpr)
 	errw = buildGetTracesWhere(scope, clusterExpr)
-	errw.add("status_code = 'error'")
-	both = buildGetTracesWhere(chipF, clusterExpr)
-	both.add("status_code = 'error'")
-	return chip, errw, both
+	errw.add(traceErrSpanPredicate)
+	return chip, errw, traceErrBothWhere(f, clusterExpr)
 }
+
+// traceErrBothWhere — SAF (v0.10.1082): ① basamağının WHERE'i — kapsamda çipe
+// uyan VE hatalı span. Listenin probu (traceErrWheres) ve /traces hacim
+// şeridinin span kipi (trace_error_histogram.go) bu TEK fonksiyonu çağırır;
+// iki yüzeyin çip çevirisi / hata yüklemi / kapsamı ayrışamaz.
+func traceErrBothWhere(f TraceFilter, clusterExpr string) whereClause {
+	chipF := traceErrScope(f)
+	chipF.Filters, chipF.FilterRoot, chipF.NoPromoted = f.Filters, f.FilterRoot, f.NoPromoted
+	both := buildGetTracesWhere(chipF, clusterExpr)
+	both.add(traceErrSpanPredicate)
+	return both
+}
+
+// traceErrSpanPredicate — span-düzeyi hata yüklemi; listenin HAVING'i
+// (traceHasErrorHaving) ile aynı kolon ve değer.
+const traceErrSpanPredicate = "status_code = 'error'"
 
 // traceErrCountSQL — SAF: tavanlı satır sayımı (taraf seçimi / varlık probu).
 func traceErrCountSQL(whereSQL string) string {

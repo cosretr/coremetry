@@ -285,6 +285,9 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// (15 dk örneklem, res_keys has() varlık sayaçları; k8s_coverage.go ile
 		// aynı sınıf). State okumaz.
 		"rollout_probe_spans.go": true,
+		// v0.10.1082 — SAF telemetri: /traces Errors şeridi, tek FROM'u spans
+		// (listenin kip probu trace_error_tracelevel.go ile aynı havuz). State okumaz.
+		"trace_error_histogram.go": true,
 		// TAŞINMAZ ÜÇÜNCÜ SINIF: sysstats.go + cluster.go system.* okuyor.
 		// Bunlar NODE-LOKAL tablolar; RoundRobin'e verilirse disk/utilizasyon
 		// panelleri her çağrıda BAŞKA node'u raporlar (SQL konsolunun in-order

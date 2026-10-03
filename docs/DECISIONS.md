@@ -1333,6 +1333,25 @@ yapabilirim" (tek problemde ondan — db-health'te Veritabanı sayfası + trace'
 zaman çizelgesi altta. "Declared incident" / "kaynak önceliği korundu" gerekçesi şeritten ve satırdan çıktı (kapalı
 Teknik ayrıntı'da); kuyruk satırı incident özetini (= onu açan problemin açıklaması) basar.
 
+## 2026-10-03 — Traces: Errors + nitelik süzgecinde histogram listeyle aynı kümeyi sayar (v0.10.1082)
+
+**Operatör (prod):** "Error seçildiğinde histogram gelmiyor." `hasError=true` + `function_code = KYC0001` (ya da
+`k8s.pod.name = …`) → liste dolu, şerit "0 SPANS · 0 ERROR SPANS"; boş durum "hata aynı trace'in başka bir span'inde"
+diyordu. **Neden:** iki yüzey hatayı farklı yerde arıyordu. Liste iki basamaklı (v0.10.1010): çipe uyan hatalı span
+varsa o, yoksa trace düzeyi (çip bir span'de, hata başka span'de). Şerit `/api/spans/metric-batch`'te Errors'u span
+düzeyinde `status = error` çipi olarak AND'liyordu (`span_metric_batch.go`), giriş kapsamındaki çiplerde (k8s.*)
+üstüne `kind IN (server, consumer)`; ayrıca pencere başı listenin 5 dk hizasını almıyordu. Trace kipinde ve hata
+istemci/iç span'deyken sayım yapısal olarak sıfırdı.
+**Karar:** Errors + span-düzeyi çip (arama / süre / services / trace id yokken) şerit yeni `GET /api/traces/error-histogram`'dan
+okur: listenin sorgu dizesi, aynı ayrıştırıcı (`parseTraceFilter`), aynı kip kararı (`traceLevelErrorCandidates`).
+Span kipinde listenin probuyla AYNI WHERE (`traceErrBothWhere`, tek yardımcı) kovalanır (birim "spans", tavansız,
+eski şeritle aynı maliyet sınıfı); trace kipinde listenin aday kümesi (≤6000 id, `PREWHERE trace_id IN`) trace
+başlangıcına göre kovalanır (birim "traces", Root adaylar üstünde, tavanlıysa ipucu söyler). `trace_summary_5m`
+nitelik taşımadığı için ham `spans`, zaman sınırı + LIMIT + `max_execution_time` ile. Diğer hâller metric-batch'te
+(MV / dar rollup korunur). "Başka span'de" cümlesi yalnız doğruyken: metric-batch yolu + Errors + birim spans + liste
+dolu (ör. arama + Errors). Pin: `chstore/trace_error_histogram_test.go`, `api/trace_error_histogram_test.go`,
+`pages/traces/scopeParams.test.ts`, `volumeSeries.test.ts`.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

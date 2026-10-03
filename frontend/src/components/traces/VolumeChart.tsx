@@ -16,7 +16,7 @@ import { volumeHint, buildVolumeSeries, fmtVolumeDuration, VOLUME_EMPTY_DEFAULT 
 import { STRIP_STAT_DEFAULT, type StripStat } from './stripStat';
 
 export function VolumeChart({
-  count, errors, latency, stat = STRIP_STAT_DEFAULT, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces', collapsed = false, emptyNote,
+  count, errors, latency, stat = STRIP_STAT_DEFAULT, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces', collapsed = false, emptyNote, hint,
 }: {
   count: SpanMetricSeries[] | null;
   errors: SpanMetricSeries[] | null;
@@ -48,6 +48,9 @@ export function VolumeChart({
   collapsed?: boolean;
   // v0.10.1011 — boş durum cümlesi (volumeEmptyNote); verilmezse eski metin.
   emptyNote?: string;
+  // v0.10.1082 — başlık ipucunu çağıran verir (Errors şeridi: errorStripHint);
+  // verilmezse birimden (volumeHint).
+  hint?: string;
 }) {
   const { times, series, bucketMin } = useMemo(
     () => buildVolumeSeries(count, errors, latency, unit, stat),
@@ -69,7 +72,7 @@ export function VolumeChart({
         {header}
         {!collapsed && (
           <span style={{ fontFamily: 'var(--font-mono)' }}
-            title={volumeHint(unit ?? 'traces')}>
+            title={hint ?? volumeHint(unit ?? 'traces')}>
             {unit} / {bucketMin}m bucket · sürükle = zaman seç</span>
         )}
         {headerRight && (

@@ -7637,6 +7637,18 @@ export interface TraceCountResponse {
   reason?: 'raw-path-filter' | 'duration-filter' | 'service+filter';
 }
 
+// v0.10.1082 — GET /api/traces/error-histogram zarfı (Go:
+// api/trace_error_histogram.go traceErrorHistogramPayload). Errors + span-düzeyi
+// çipte /traces şeridi listeyle AYNI kümeyi sayar. Seri şekli metric-batch'inki;
+// mode 'span' = çipe uyan hatalı span'ler, 'trace' = listenin aday trace'leri
+// (başlangıç kovasında). capped: aday kümesi tavana çarptı (en yeni N trace).
+export interface TraceErrorHistogramResponse {
+  series: { count: SpanMetricSeries[]; errors: SpanMetricSeries[]; rt: SpanMetricSeries[] };
+  stepSeconds: number;
+  mode: 'span' | 'trace';
+  capped: boolean;
+}
+
 // v0.9.657 — dış log sistemi köprü şablonları (v0.9.655 backend'i).
 //
 // Ortam → URL şablonu. "default" soneksiz (prod) servisler için; int/uat/
