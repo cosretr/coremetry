@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { logsUrlSig, writeLogsParams, readLogsParams, logsRangeParam, buildDocPermalink, parseDocParam, logsHref, type LogsUrlFilter, parseLogsPanel } from './logsUrl';
+import { logsUrlSig, writeLogsParams, readLogsParams, logsRangeParam, buildDocPermalink, parseDocParam, logsHref, type LogsUrlFilter, parseLogsPanel, readLogsUrlState } from './logsUrl';
 import { decodeRange } from './urlState';
 
 // v0.8.546 — /logs `severity` was a live filter that never round-tripped
@@ -360,6 +360,29 @@ describe('logsHref — agrees with readLogsParams, its own consumer', () => {
     const p = lp(logsHref({ window: null, service: 'a b&c', q: 'x=y' }));
     expect(p.get('service')).toBe('a b&c');
     expect(p.get('q')).toBe('x=y');
+  });
+});
+
+// v0.10.1076 — sayfanın ilk render'ı ve içe aktarma efekti aynı okumayı
+// yapar; ilk render'ın ön-yazdığı sig, yazımın (writeLogsParams) ürettiği
+// URL'in sig'iyle aynı olmalı ki bağlama anındaki içe aktarma no-op olsun.
+describe('readLogsUrlState (v0.10.1076)', () => {
+  it('derin link → süzgeç + ham filters/cols + sig, yazımla tutarlı', () => {
+    const f: LogsUrlFilter = { ...base, service: 'checkout-svc', search: 'boom', pattern: 'Disk full', severity: 13 };
+    const p = writeLogsParams(new URLSearchParams('range=1h'), f, '[["k","v"]]', 'ts,body');
+    const s = readLogsUrlState(p);
+    expect(s.filter).toEqual(f);
+    expect(s.filtersRaw).toBe('[["k","v"]]');
+    expect(s.colsRaw).toBe('ts,body');
+    expect(s.sig).toBe(logsUrlSig(f, '[["k","v"]]', 'ts,body'));
+  });
+
+  it('çıplak /logs → boş varsayılan', () => {
+    const s = readLogsUrlState(new URLSearchParams());
+    expect(s.filter).toEqual(base);
+    expect(s.filtersRaw).toBe('');
+    expect(s.colsRaw).toBe('');
+    expect(s.sig).toBe(logsUrlSig(base, '', ''));
   });
 });
 

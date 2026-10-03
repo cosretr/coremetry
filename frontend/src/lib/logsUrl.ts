@@ -78,6 +78,20 @@ export function readLogsParams(p: URLSearchParams): LogsUrlFilter {
   };
 }
 
+// readLogsUrlState — v0.10.1076. URL → {süzgeç, ham filters/cols, sig} tek
+// yerde: sayfanın İLK render'ı (useState başlatıcıları) ile sig-guard'lı içe
+// aktarma efekti AYNI okumayı yapsın diye. Eskiden durum boş varsayılanla
+// başlıyor, URL ancak ilk commit'ten sonraki efektte içe aktarılıyordu; o
+// arada liste + histogram süzgeçsiz bir ES isteği atıyordu (her derin link).
+export function readLogsUrlState(p: URLSearchParams): {
+  filter: LogsUrlFilter; filtersRaw: string; colsRaw: string; sig: string;
+} {
+  const filtersRaw = p.get('filters') ?? '';
+  const colsRaw = p.get('cols') ?? '';
+  const filter = readLogsParams(p);
+  return { filter, filtersRaw, colsRaw, sig: logsUrlSig(filter, filtersRaw, colsRaw) };
+}
+
 // logsRangeParam — v0.9.853 (UX denetimi K3). The ONE producer of the time
 // window token /logs actually reads.
 //

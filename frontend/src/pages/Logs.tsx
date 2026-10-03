@@ -49,7 +49,7 @@ import {
   extractHighlightTerms, toggleExistsFilter, replaceFilterAt,
 } from '@/lib/logFilters';
 import type { LogFilter } from '@/lib/logFilters';
-import { logsUrlSig, writeLogsParams, readLogsParams, buildDocPermalink, parseDocParam, parseLogsPanel } from '@/lib/logsUrl';
+import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parseDocParam, parseLogsPanel } from '@/lib/logsUrl';
 import type { LogsResponse, LogRow, TimeRange } from '@/lib/types';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
@@ -194,15 +194,16 @@ function LogsInner() {
   // (Dashboard.tsx gerekçesi) ve setRange zoom yığınını siler. Otomatik
   // aralık YOK (ES maliyet disiplini, lib/queries/logs.ts) — yalnız tık.
   const [nowTick, setNowTick] = useState(0);
-  const [filter, setFilter] = useState({
-    service: '', cluster: '', search: '', severity: 0, traceId: '', spanId: '',
-    // hasTrace (v0.8.406 — operator ask): keep only rows with a trace
-    // correlation so every visible line can pivot to its trace.
-    hasTrace: false,
-    // v0.10.1071 — küratörlü log deseni adı (`?pattern=`); sunucu dedektörün
-    // yüklemini uygular, serbest metin onunla AND. Kutuya YAZILMAZ — çip.
-    pattern: '',
-  });
+  // v0.10.1076 — süzgeç durumu İLK render'da URL'den kurulur (aşağıdaki
+  // filters / logCols / lastUrlSigRef de aynı okumadan). Eskiden boş
+  // varsayılanla başlıyordu ve içe aktarma efekti ilk commit'ten SONRA
+  // koştuğu için her derin link (anomali "Logları aç", kayıtlı görünüm,
+  // paylaşılan link) önce süzgeçsiz bir liste + histogram isteği atıyordu.
+  // Alanlar (LogsUrlFilter): service, cluster, search, severity, traceId,
+  // spanId, hasTrace (v0.8.406 — yalnız trace'li satırlar), pattern
+  // (v0.10.1071 — küratörlü desen adı; kutuya YAZILMAZ, çip).
+  const [initialUrl] = useState(() => readLogsUrlState(searchParams));
+  const [filter, setFilter] = useState(initialUrl.filter);
   const [draft, setDraft] = useState(filter);
   // v0.10.298 — "Desenler" paneli (log-search Dilim 2b): açık/kapalı kalıcı;
   // fetch yalnız açıkken. Satır/"Ara" → türetilmiş sorgu serbest metne.
@@ -261,7 +262,7 @@ function LogsInner() {
   // query goes out (compiledSearch below), so the backend contract
   // is unchanged. Pills live in the ?filters= URL param so Copy link
   // and SavedViewsBar reproduce them.
-  const [filters, setFilters] = useState<LogFilter[]>([]);
+  const [filters, setFilters] = useState<LogFilter[]>(() => parseFiltersParam(initialUrl.filtersRaw)); // v0.10.1076 — ilk render URL'den
   // Dynamic table columns (Discover revamp step 3). localStorage is
   // the operator's standing preference; the ?cols= URL param (only
   // written when non-default) wins on deep links so a shared view
@@ -269,6 +270,8 @@ function LogsInner() {
   // stored preference.
   const COLS_STORE_KEY = 'dt.logs.columns';
   const [logCols, setLogCols] = useState<string[]>(() => {
+    // v0.10.1076 — derin linkin cols'u ilk render'dan (içe aktarma efektiyle aynı kural).
+    if (initialUrl.colsRaw) return initialUrl.colsRaw.split(',').filter(Boolean);
     const raw = getRaw(COLS_STORE_KEY);
     if (raw) {
       try {
@@ -402,12 +405,12 @@ function LogsInner() {
     if (visible.length) setLogCols(visible);
   }, [prefs.model]);
   const urlSig = logsUrlSig;
-  const lastUrlSigRef = useRef<string | null>(null);
+  // v0.10.1076 — ilk sig önceden yazılı: durum zaten URL'den kuruldu, bağlama
+  // anındaki içe aktarma no-op'tur (ikinci, aynı dilimli set yok). Sonraki
+  // URL değişimleri (SPA gezinmesi, kayıtlı görünüm) sig farkıyla içe aktarılır.
+  const lastUrlSigRef = useRef<string | null>(initialUrl.sig);
   useEffect(() => {
-    const filtersRaw = searchParams.get('filters') ?? '';
-    const colsRaw = searchParams.get('cols') ?? '';
-    const next = readLogsParams(searchParams);
-    const sig = urlSig(next, filtersRaw, colsRaw);
+    const { filter: next, filtersRaw, colsRaw, sig } = readLogsUrlState(searchParams);
     if (sig === lastUrlSigRef.current) return;
     lastUrlSigRef.current = sig;
     setFilter(next);
@@ -418,7 +421,6 @@ function LogsInner() {
     // /logs link never resets their column setup.
     if (colsRaw) setLogCols(colsRaw.split(',').filter(Boolean));
     resetPaging();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // State → URL. Writes every filter-bearing param (replace:true — a

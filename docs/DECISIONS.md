@@ -1234,6 +1234,19 @@ compare_periods'ta bunu kullan, reference=previous)". Yalnız metin: pencere hes
 araçlar ve `TraceFollowUpAddendum` aynı. Satır `chat_trace_followup.go`'da çalışma-zamanı önsözü olduğundan
 `promptVersionRegistry`'de değil; global istem sürümü değişmez. `TestTraceFollowUpCompareWindow` "K bölüm" yokluğunu pinler.
 
+## 2026-10-03 — Logs: ilk yüklemede süzgeçsiz istek yok (v0.10.1076)
+
+**Kusur:** `/logs?q=…&pattern=…&service=…&range=…` derin linki (anomali "Logları aç", kayıtlı görünüm,
+paylaşılan link) önce SÜZGEÇSİZ bir liste + histogram isteği atıyordu, sonra süzgeçli olanları. Kök neden
+efekt sırası: `filter`/`filters` boş varsayılanla başlıyor, URL içe aktarma efekti ilk commit'ten SONRA
+koşuyordu. O commit'te `useLogs` sorgusu ve `LogsHistogram`'ın fetch efekti varsayılan durumla ES'e
+gitmişti. Pencere (`useUrlRange`) ve env zaten senkron okunduğu için istek doğru pencerede ama süzgeçsizdi.
+Milyar-belge indekste her derin linkte boşa giden bir tam-pencere sorgusu. **Karar:** süzgeç durumu
+(`filter`, `filters`, `cols`) ilk render'da URL'den kurulur. Okuma `lib/logsUrl.ts`
+`readLogsUrlState` içinde, efektle ortak. Sig-guard'ın ref'i ilk sig ile başlar, bağlama anındaki içe
+aktarma no-op olur; sonraki URL değişimleri (geri/ileri, kayıtlı görünüm) eskisi gibi içe aktarılır. URL
+şeması değişmedi. Çıplak `/logs` davranışı aynı (tek varsayılan istek). Test: `Logs.firstLoad.test.tsx`.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
