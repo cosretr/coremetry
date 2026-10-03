@@ -118,6 +118,8 @@ func (r *Recorder) tick(ctx context.Context) {
 			CurrentRatio: a.Ratio,
 			CurrentCount: a.CurrentCount,
 			Sample:       a.Sample,
+			// v0.10.1080 — ES örneklem doğrulaması (0 = örneklenmedi / CH).
+			VerifiedRatio: a.VerifiedRatio,
 		}
 		if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
 			log.Printf("[anomaly-recorder] upsert log-pattern %s: %v", a.Pattern, err)

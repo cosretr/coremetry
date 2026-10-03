@@ -81,6 +81,18 @@ export function patternLogsPivot(
   return { href, topServices };
 }
 
+// verifiedRatioNote — v0.10.1080 (operatör, prod ES: "Oracle TNS error diyor
+// ama loglarda öyle bir şey yok"). ES'te grafik ve dedektör token'la sayar
+// (regex ES'te uygulanamaz); dedektör tetiklemeden önce örneklemle doğrular.
+// Oran < 1 ise barlar token eşleşmesidir, desen sayısı değil — alt başlık
+// bunu kısaca söyler. Oran yok / 0 (CH, örneklenmedi) / 1 → not yok. Yüzde
+// [1, 99]'a kıstırılır (Go VerifiedRatioNote ikizi).
+export function verifiedRatioNote(r: number | null | undefined): string | null {
+  if (r == null || !Number.isFinite(r) || r <= 0 || r >= 1) return null;
+  const pct = Math.min(99, Math.max(1, Math.round(r * 100)));
+  return `token eşleşmesi · örneklemde %${pct} doğrulandı`;
+}
+
 /** Kova genişliği düz Türkçe ("1 dk", "2 sa", "1 gün"). */
 export function bucketLabel(sec: number): string {
   if (!Number.isFinite(sec) || sec <= 0) return '—';

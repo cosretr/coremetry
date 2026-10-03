@@ -1318,6 +1318,20 @@ func (e *Evaluator) escalateStaleProblems(ctx context.Context) {
 // v0.5.59 behaviour.
 const promoteAnomalyRuleID = "anomaly-auto:"
 
+// anomalyPromotionDescription — terfi Problem'inin açıklaması (SAF). v0.10.1080:
+// ES log deseni örneklemde kısmen doğrulandıysa (0 < r < 1) sayı bir tahmindir;
+// açıklama bunu söyler ("örneklemde %40 regex doğrulandı"). r 0 / 1 → metin
+// bugünküyle bayt bayt aynı.
+func anomalyPromotionDescription(ev chstore.AnomalyEvent) string {
+	tail := ""
+	if note := logstore.VerifiedRatioNote(ev.VerifiedRatio); note != "" {
+		tail = "; " + note
+	}
+	return "Auto-promoted from anomaly: " + ev.Kind + " / " + ev.Pattern +
+		" (peak ratio " + formatFloat(ev.PeakRatio, 1) +
+		"×, count " + formatUint(ev.CurrentCount) + tail + ")"
+}
+
 // promoteStrongAnomalies converts strong, sustained
 // AnomalyEvents into first-class Problems so the existing
 // notify / incident-attach / SSE wiring picks them up. The
@@ -1428,12 +1442,7 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		if ev.PeakRatio >= cfg.CriticalPeakRatio {
 			sev = "critical"
 		}
-		desc := truncate(
-			"Auto-promoted from anomaly: "+ev.Kind+" / "+ev.Pattern+
-				" (peak ratio "+formatFloat(ev.PeakRatio, 1)+
-				"×, count "+formatUint(ev.CurrentCount)+")",
-			480,
-		)
+		desc := truncate(anomalyPromotionDescription(ev), 480)
 		var startedAt int64
 		var id string
 		if open != nil {

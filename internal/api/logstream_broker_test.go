@@ -26,6 +26,9 @@ func (stubLogStore) Search(context.Context, logstore.Filter) (*logstore.Page, er
 func (stubLogStore) CountPatterns(context.Context, []logstore.PatternSpec, time.Time, time.Time, time.Time) ([]logstore.PatternStats, error) {
 	return nil, nil
 }
+func (stubLogStore) VerifyPatterns(context.Context, []logstore.PatternSpec, time.Time, time.Time) ([]logstore.PatternVerification, error) {
+	return nil, nil
+}
 func (stubLogStore) Histogram(context.Context, logstore.Filter, int, string) ([]logstore.LogSeries, error) {
 	return nil, nil
 }

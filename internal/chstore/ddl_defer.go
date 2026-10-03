@@ -160,8 +160,11 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.1072 — exception_groups.occurrences_at_resolve: bayrak false
 		// kaldıkça resolve anlık görüntüsü yazılmaz (regressed P2'de kalır).
 		snapDone := s.reprobeExResolveSnapCol(ctx)
+		// v0.10.1080 — anomaly_events.verified_ratio: bayrak false kaldıkça
+		// desen doğrulama oranı yazılmaz (grafik notu yok).
+		verifiedDone := s.reprobeAnomalyVerifiedCol(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone {
+		if attrsDone && episodeDone && snapDone && verifiedDone {
 			return
 		}
 	}
@@ -170,6 +173,9 @@ func (s *Store) reprobePromotedAttrs() {
 	}
 	if !s.hasAnomalyEpisodeCols.Load() {
 		log.Printf("[chstore] anomaly_events bölüm kolonları hâlâ doğrulanamadı — sayaç yazılmıyor (yazımlar DEFAULT'a sıfırlar), sonraki boot yeniden deneyecek")
+	}
+	if !s.hasAnomalyVerifiedCol.Load() {
+		log.Printf("[chstore] anomaly_events.verified_ratio hâlâ doğrulanamadı — desen doğrulama oranı yazılmıyor, sonraki boot yeniden deneyecek")
 	}
 	if !s.hasExResolveSnapCol.Load() {
 		log.Printf("[chstore] exception_groups.occurrences_at_resolve hâlâ doğrulanamadı — resolve anlık görüntüsü yazılmıyor (regressed P2'de kalır), sonraki boot yeniden deneyecek")

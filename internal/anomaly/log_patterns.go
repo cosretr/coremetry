@@ -2,6 +2,8 @@ package anomaly
 
 import (
 	"context"
+	"log"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -42,6 +44,12 @@ type LogPatternAnomaly struct {
 	// "disk full" OR "enospc"). Curated per pattern in the
 	// patterns[] slice below.
 	Tokens []string `json:"tokens,omitempty"`
+	// VerifiedRatio — v0.10.1080: ES'te token sayımının örneklemle regex'e
+	// karşı doğrulanma oranı (0 < r ≤ 1). 0 = örneklenmedi: CH (sayım regex'i
+	// zaten içerir) ya da tik bütçesi dışında kalan desen. r < 1 iken
+	// CurrentCount / BaselineCount r ile ölçeklenmiş TAHMİNDİR (açıklama notu:
+	// logstore.VerifiedRatioNote).
+	VerifiedRatio float64 `json:"verifiedRatio,omitempty"`
 }
 
 type logPattern struct {
@@ -242,6 +250,10 @@ func LogPatternSpecByName(name string) (logstore.PatternSpec, bool) {
 // field (regex is ignored; tokens must be zero-false-negative
 // vs the regex). Cross-backend correctness depends on detector
 // authors keeping the Tokens list synchronized with the Regex.
+//
+// v0.10.1080 — ES'in token sayımı regex'in ÜST kümesidir (çıplak `tns`
+// terimi); tetiklemek üzere olan adaylar verifyLogPatternCands ile örneklemle
+// regex'e karşı doğrulanır (CH'de no-op).
 func DetectLogPatterns(ctx context.Context, store logstore.Store, window time.Duration) ([]LogPatternAnomaly, error) {
 	now := time.Now()
 	curStart := now.Add(-window)
@@ -270,70 +282,51 @@ func DetectLogPatterns(ctx context.Context, store logstore.Store, window time.Du
 		return nil, err
 	}
 
-	type result struct {
-		anomaly LogPatternAnomaly
-		ok      bool
+	// Normalise the trailing baseline to the same window length as `cur`
+	// so a spike is "current rate is 2x+ the trailing-window rate"
+	// regardless of how long the baseline lookback is. Without this, a 12x
+	// longer baseline window inflates `base` by 12x and the spike check
+	// would never fire.
+	windowRatio := float64(window) / float64(baseLookback)
+	cands := make([]logPatternCand, 0, 4)
+	for i := range patterns {
+		if i >= len(stats) || stats[i].Cur == 0 {
+			continue
+		}
+		basePerWindow := float64(stats[i].Base) * windowRatio
+		kind, ratio := qualifyLogPattern(stats[i].Cur, basePerWindow)
+		if kind == "" {
+			continue
+		}
+		cands = append(cands, logPatternCand{
+			idx: i, cur: stats[i].Cur, base: basePerWindow,
+			kind: kind, ratio: ratio, sample: stats[i].Sample,
+		})
 	}
-	results := make([]result, len(patterns))
 
-	var wg sync.WaitGroup
-	wg.Add(len(patterns))
-	for i, p := range patterns {
-		i, p := i, p // capture for the goroutine
-		go func() {
-			defer wg.Done()
-			st := stats[i]
-			if st.Cur == 0 {
-				return
-			}
-			cur := st.Cur
-			base := st.Base
-			service := st.Service
-			sample := st.Sample
-			lastNs := st.LastSeenNs
-
-			// Normalise the trailing baseline to the same window
-			// length as `cur` so a spike is "current rate is 2x+
-			// the trailing-window rate" regardless of how long
-			// the baseline lookback is. Without this, a 12x
-			// longer baseline window inflates `base` by 12x and
-			// the spike check would never fire.
-			windowRatio := float64(window) / float64(baseLookback)
-			basePerWindow := float64(base) * windowRatio
-
-			kind, ratio := qualifyLogPattern(cur, basePerWindow)
-			if kind == "" {
-				return
-			}
-
-			results[i] = result{
-				anomaly: LogPatternAnomaly{
-					Pattern:      p.Name,
-					Regex:        p.Regex,
-					Kind:         kind,
-					CurrentCount: cur,
-					// Rendered to the operator as the
-					// per-window-equivalent baseline rate so
-					// the UI's "cur vs base" reads intuitively.
-					BaselineCount: uint64(basePerWindow),
-					Ratio:         ratio,
-					Service:       service,
-					Sample:        truncateSample(sample, 240),
-					LastSeenNs:    lastNs,
-					TopServices:   st.TopServices,
-					Tokens:        p.Tokens,
-				},
-				ok: true,
-			}
-		}()
-	}
-	wg.Wait()
+	// v0.10.1080 — ES'te token sayımı regex'e karşı örneklemle doğrulanır
+	// (CH'de VerifyPatterns nil döner, sorgu yok; adaylar aynen kalır).
+	cands = verifyLogPatternCands(ctx, store, cands, curStart, now, logPatternVerifyBudget, time.Now())
 
 	out := []LogPatternAnomaly{}
-	for _, r := range results {
-		if r.ok {
-			out = append(out, r.anomaly)
-		}
+	for _, c := range cands {
+		p, st := patterns[c.idx], stats[c.idx]
+		out = append(out, LogPatternAnomaly{
+			Pattern:      p.Name,
+			Regex:        p.Regex,
+			Kind:         c.kind,
+			CurrentCount: c.cur,
+			// Rendered to the operator as the per-window-equivalent baseline
+			// rate so the UI's "cur vs base" reads intuitively.
+			BaselineCount: uint64(c.base),
+			Ratio:         c.ratio,
+			Service:       st.Service,
+			Sample:        truncateSample(c.sample, 240),
+			LastSeenNs:    st.LastSeenNs,
+			TopServices:   st.TopServices,
+			Tokens:        p.Tokens,
+			VerifiedRatio: c.verified,
+		})
 	}
 
 	// Sort: new ones first (most operationally interesting), then
@@ -348,6 +341,163 @@ func DetectLogPatterns(ctx context.Context, store logstore.Store, window time.Du
 		return out[i].CurrentCount > out[j].CurrentCount
 	})
 	return out, nil
+}
+
+// ── v0.10.1080 — ES token sayımının regex doğrulaması ─────────────────────
+//
+// Operatör (prod, ES): "Oracle TNS error diyor ama loglarda öyle bir şey yok,
+// hatalı desen buluyor." ES CountPatterns regex'i uygulamaz; `message:"tns-"`
+// standart çözümleyicide çıplak `tns` terimidir. Tetiklemek üzere olan
+// desenlerden örnek çekilir (logstore.VerifyPatterns, tek _msearch) ve regex
+// Go'da uygulanır. Sayım sonrası, karar anında: tetiklemeyen desen için hiç
+// istek yok.
+
+// logPatternVerifyBudget — tik başına en çok kaç aday örneklenir (oran
+// sırasıyla ilk N). Bütçe dışı aday doğrulanmadan, bugünkü gibi yazılır
+// (VerifiedRatio 0) — on aynı anda tetikleyen desen zaten olağan dışı.
+const logPatternVerifyBudget = 10
+
+// logPatternCand — eşikleri geçmiş, henüz yazılmamış bir desen.
+type logPatternCand struct {
+	idx      int // patterns / stats indeksi
+	cur      uint64
+	base     float64 // pencereye normalize taban
+	kind     string
+	ratio    float64
+	verified float64 // 0 = örneklenmedi
+	sample   string
+}
+
+// applyLogPatternVerification — SAF, tablo testli: doğrulama oranının
+// sayımlara etkisi.
+//
+//	örnek yok (Sampled 0) → sayımlar aynen, r 0 (bilinmiyor; bastırma YOK)
+//	r == 0                → suppress: token eşleşti, regex hiç doğrulanmadı
+//	0 < r < 1             → cur VE taban r ile ölçeklenir
+//	r == 1                → aynen, r 1
+//
+// Taban da token sayımıdır (aynı yüklem, aynı yanlılık); ikisini aynı r ile
+// ölçeklemek oranı dürüst tutar — spike oranı (cur/taban) değişmez, yalnız
+// mutlak tabanlar (logPatternMinCount / logPatternMinNewCount) ve "new"
+// dalının oranı (= sayı) tahmini regex sayısına göre yeniden sınanır.
+func applyLogPatternVerification(cur uint64, base float64, v logstore.PatternVerification) (uint64, float64, float64, bool) {
+	r, ok := v.Ratio()
+	switch {
+	case !ok:
+		return cur, base, 0, false
+	case r <= 0:
+		return 0, 0, 0, true
+	case r >= 1:
+		return cur, base, 1, false
+	}
+	return uint64(math.Round(float64(cur) * r)), base * r, r, false
+}
+
+// pickLogPatternVerify — SAF: bütçe dahilinde örneklenecek adayların
+// indeksleri; oran azalan, eşitlikte sayı azalan (operatörün önüne ilk
+// çıkacak olanlar önce doğrulanır).
+func pickLogPatternVerify(cands []logPatternCand, budget int) []int {
+	order := make([]int, len(cands))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		ca, cb := cands[order[a]], cands[order[b]]
+		if ca.ratio != cb.ratio {
+			return ca.ratio > cb.ratio
+		}
+		return ca.cur > cb.cur
+	})
+	if budget < 0 {
+		budget = 0
+	}
+	if len(order) > budget {
+		order = order[:budget]
+	}
+	return order
+}
+
+// verifyLogPatternCands — adayları doğrular; bastırılan / ölçeklenince eşiğin
+// altına düşen aday listeden çıkar. VerifyPatterns tik başına EN ÇOK BİR kez
+// çağrılır (aday yoksa hiç). Hata → adaylar doğrulanmadan aynen (bugünkü
+// davranış; bir ES aksaması log desenlerini toptan susturmasın).
+func verifyLogPatternCands(ctx context.Context, store logstore.Store, cands []logPatternCand,
+	from, to time.Time, budget int, now time.Time) []logPatternCand {
+	pick := pickLogPatternVerify(cands, budget)
+	if len(pick) == 0 {
+		return cands
+	}
+	specs := make([]logstore.PatternSpec, len(pick))
+	for k, ci := range pick {
+		p := patterns[cands[ci].idx]
+		specs[k] = logstore.PatternSpec{Name: p.Name, Regex: p.Regex, Tokens: p.Tokens}
+	}
+	vs, err := store.VerifyPatterns(ctx, specs, from, to)
+	if err != nil {
+		log.Printf("[anomaly] log desen doğrulaması okunamadı, adaylar doğrulanmadan yazılıyor: %v", err)
+		return cands
+	}
+	if vs == nil { // CH: sayım regex'i zaten içeriyor
+		return cands
+	}
+	drop := make(map[int]bool)
+	for k, ci := range pick {
+		if k >= len(vs) {
+			break
+		}
+		c := &cands[ci]
+		cur, base, r, suppress := applyLogPatternVerification(c.cur, c.base, vs[k])
+		if suppress {
+			drop[ci] = true
+			if unverifiedLogLimiter.allow(patterns[c.idx].Name, now) {
+				log.Printf("[anomaly] log deseni %q: token eşleşti, regex doğrulanamadı (örneklem %d, eşleşen 0) — olay yazılmadı",
+					patterns[c.idx].Name, vs[k].Sampled)
+			}
+			continue
+		}
+		if r == 0 {
+			continue // örnek yok: aynen
+		}
+		kind, ratio := qualifyLogPattern(cur, base)
+		if kind == "" {
+			drop[ci] = true // tahmini regex sayısı tabanların altında
+			continue
+		}
+		c.cur, c.base, c.kind, c.ratio, c.verified = cur, base, kind, ratio, r
+		if vs[k].Sample != "" {
+			c.sample = vs[k].Sample // desene gerçekten uyan satır
+		}
+	}
+	if len(drop) == 0 {
+		return cands
+	}
+	kept := cands[:0]
+	for i, c := range cands {
+		if !drop[i] {
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
+// unverifiedLogLimiter — "regex doğrulanamadı" satırı desen başına saatte bir
+// (dedektör dakikada bir koşar; her tik aynı satırı basmasın).
+var unverifiedLogLimiter = &perKeyLimiter{every: time.Hour, last: map[string]time.Time{}}
+
+type perKeyLimiter struct {
+	mu    sync.Mutex
+	every time.Duration
+	last  map[string]time.Time
+}
+
+func (l *perKeyLimiter) allow(key string, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if t, ok := l.last[key]; ok && now.Sub(t) < l.every {
+		return false
+	}
+	l.last[key] = now
+	return true
 }
 
 func truncateSample(s string, n int) string {

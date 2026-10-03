@@ -5,8 +5,22 @@ import { describe, it, expect } from 'vitest';
 import type { AnomalyEvent, LogPatternSeries } from '@/lib/types';
 import {
   anomalyRegion, bucketLabel, hasLogPatternSeries, logPatternSeriesArgs, logPatternSeriesState,
-  logPatternSeriesToSpan, logPatternSeriesWindow, patternLogsPivot,
+  logPatternSeriesToSpan, logPatternSeriesWindow, patternLogsPivot, verifiedRatioNote,
 } from './logPatternSeries';
+
+// v0.10.1080 — ES token sayımının örneklem doğrulama notu (Go VerifiedRatioNote ikizi).
+describe('verifiedRatioNote', () => {
+  it.each<[number | undefined, string | null]>([
+    [undefined, null],
+    [0, null],
+    [1, null],
+    [0.4, 'token eşleşmesi · örneklemde %40 doğrulandı'],
+    [0.996, 'token eşleşmesi · örneklemde %99 doğrulandı'],
+    [0.004, 'token eşleşmesi · örneklemde %1 doğrulandı'],
+  ])('%s → %s', (r, want) => {
+    expect(verifiedRatioNote(r)).toBe(want);
+  });
+});
 
 const MIN = 60e9;
 const T0 = 1_759_399_980 * 1e9; // dakikaya hizalı

@@ -6001,6 +6001,10 @@ export interface AnomalyEvent {
   // için "yinelenen" = o ömür içinde yeniden tetiklenmiş.
   episodeCount?: number;
   firstStartedAt?: number;
+  // v0.10.1080 — yalnız log_pattern + ES: token sayımının örneklemle regex'e
+  // karşı doğrulanma oranı (0 < r ≤ 1). Yok / 0 = örneklenmedi (CH sayımı
+  // regex'i zaten içerir). r < 1 → grafik alt başlığında not.
+  verifiedRatio?: number;
   // v0.10.1049 — yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
   // anomaliler" satırında: anomali o deploy'dan önce de DÜZENLİ görülüyordu
   // (chstore.AnomalyPredatesDeploy). Satır listede kalır, "yinelenen" işaretli.

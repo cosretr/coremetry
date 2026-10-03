@@ -297,7 +297,8 @@ type IndexInfo struct {
 //
 // Tokens are lowercase substrings the body must contain when
 // the regex matches. The detector author picks them so the OR
-// clause has zero false-negatives vs the regex.
+// clause has zero false-negatives vs the regex. False POSITIVES
+// are expected on ES (v0.10.1080: VerifyPatterns samples them).
 type PatternSpec struct {
 	// Name — v0.10.1071: küratörlü desen adı (anomaly.LogPatternSpecByName
 	// doldurur). Yalnız kimlik: /logs önbellek anahtarı ve çip; eşleşmeye
@@ -337,6 +338,26 @@ type PatternStats struct {
 	// rosette without a follow-up call. Empty when only one
 	// service or when the backend doesn't track it.
 	TopServices []PatternServiceHit
+}
+
+// PatternVerification — VerifyPatterns'ın desen başına cevabı (v0.10.1080).
+// Sampled: örneklenen (token'la eşleşmiş) gövde sayısı; Matched: bunlardan
+// regex'e uyanlar; Sample: regex'e uyan ilk gövde ("" = yok) — dedektörün
+// gösterdiği örnek satır token'la eşleşen ama desene uymayan bir satır
+// olmasın diye.
+type PatternVerification struct {
+	Sampled int
+	Matched int
+	Sample  string
+}
+
+// Ratio — regex doğrulama oranı (Matched / Sampled). ok=false: örnek yok,
+// oran bilinmiyor (sıfır DEĞİL — boş örnek "desen yok" kanıtı değildir).
+func (v PatternVerification) Ratio() (r float64, ok bool) {
+	if v.Sampled <= 0 {
+		return 0, false
+	}
+	return float64(v.Matched) / float64(v.Sampled), true
 }
 
 // PatternHistogramResult — PatternHistogram cevabı (v0.10.1060). Points
@@ -457,6 +478,17 @@ type Store interface {
 	// input slice index; empty PatternStats indicates "no match
 	// in current window" (detector ignores these).
 	CountPatterns(ctx context.Context, pats []PatternSpec, curStart, baseStart, now time.Time) ([]PatternStats, error)
+
+	// VerifyPatterns — v0.10.1080: CountPatterns'ın ES'teki kör noktasının
+	// doğrulaması. ES sayımı regex'i UYGULAMAZ (token-OR query_string;
+	// standart çözümleyici "tns-"yi çıplak `tns` terimine indirir), CH
+	// uygular. ES: [from, to) penceresinde desen başına sınırlı bir örnek
+	// (≤patternSampleSize gövde, tek _msearch) çekilir, PatternSpec.Regex
+	// Go'da CH'nin match() anlamıyla uygulanır. CH: nil döner, SORGU YOK —
+	// sayım regex'i zaten içeriyor. Dilim indeksi girdiyle eşleşir;
+	// Sampled 0 = örnek yok (bilinmiyor, çağıran sayımı değiştirmez).
+	// Yalnız tetiklemek üzere olan desenler için, tik başına bir kez çağrılır.
+	VerifyPatterns(ctx context.Context, pats []PatternSpec, from, to time.Time) ([]PatternVerification, error)
 
 	// PatternHistogram — v0.10.1060: CountPatterns'ın ZAMAN EKSENİ. Tek
 	// desenin [from, to) penceresindeki eşleşme sayısını bucketSec'lik

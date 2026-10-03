@@ -161,4 +161,16 @@ describe('LogPatternCountSection', () => {
     const p = panel(await mount(ev()));
     expect(p.dataset.note).toBe('Log arka ucu zaman aşımına uğradı — sayımlar eksik olabilir.');
   });
+
+  // v0.10.1080 — ES örneklem doğrulaması < 1: alt başlıkta kısa not; 1 / yok
+  // (CH) → alt başlık aynen.
+  it('ES doğrulama oranı < 1: alt başlıkta "token eşleşmesi" notu; 1 / yok → not yok', async () => {
+    let el = await mount(ev({ verifiedRatio: 0.4 }));
+    expect(el.querySelector('.pb-sect .h')?.textContent)
+      .toBe('Desen sayısı1 dk · tüm servisler · token eşleşmesi · örneklemde %40 doğrulandı');
+    act(() => { root?.unmount(); });
+    host?.remove();
+    el = await mount(ev({ verifiedRatio: 1 }));
+    expect(el.querySelector('.pb-sect .h')?.textContent).toBe('Desen sayısı1 dk · tüm servisler');
+  });
 });

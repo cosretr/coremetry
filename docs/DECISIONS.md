@@ -1286,6 +1286,22 @@ var), bu yüzden 90 gün içindeki SONRAKİ bir P2 regresyonu tabanı bir kez g�
 iyi sığar." **Karar:** `.pd-cols-14` (1.4fr 1fr, v0.8.61) → `.pd-cols-11` (1fr 1fr); telefon katmanı tek kolon
 aynen. Anomali detayının `.pd-cols-15`i (grafik 1.5fr / "Ne yapabilirim" 1fr) değişmedi.
 
+## 2026-10-03 — ES log desenleri: token eşleşmesi örneklemle regex'e karşı doğrulanır (v0.10.1080)
+
+**Operatör (prod, ES):** "Oracle TNS error diyor ama loglarda öyle bir şey yok, hatalı desen buluyor." Desen
+filtresiyle açılan 13 satırın hiçbiri `TNS-NNNN` değildi. **Neden:** ES dedektörü `message:"tns-"` ile sayar;
+standart çözümleyici tireyi atar, ifade çıplak `tns` terimidir ve regex ES'te hiç uygulanmaz (CH uygular).
+**Karar:** sayım sonrası, tetiklemek üzere olan adaylar (oran sırasıyla tik başına ≤10) tek `_msearch`'le
+örneklenir (`logstore.VerifyPatterns`: size/terminate_after 50, `_source` yalnız gövde, `_doc` sırası, ≤5 s,
+request_cache) ve `PatternSpec.Regex` Go'da CH `match()` anlamıyla (`(?s)`, harf duyarlı) uygulanır. r = 0 →
+olay yazılmaz (desen başına saatte bir log); 0 < r < 1 → cur ve taban r ile ölçeklenip eşikler yeniden sınanır
+(taban da token sayımı: spike oranı korunur, mutlak tabanlar tahmini sayıya uygulanır); r = 1 → aynen. Örnek
+satır regex'e uyan gövdeden gelir. Tetiklemeyen desen için istek yok; örnek alınamazsa sayım aynen. Oran
+`anomaly_events.verified_ratio`'da (probe'lu ALTER, iki-boot); terfi açıklaması "örneklemde %r regex
+doğrulandı", grafik alt başlığı "token eşleşmesi · örneklemde %r doğrulandı" (yalnız r < 1). Grafik ve
+`pattern=` pivotu token tabanlı kalır. CH yolu değişmedi (`VerifyPatterns` sorgusuz nil). Oracle token'ları
+değişmedi: standart çözümleyicide "tire + rakam" AND'i kurulamaz, örnekleme yeterli.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

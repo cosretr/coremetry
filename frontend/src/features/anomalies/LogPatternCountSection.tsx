@@ -5,7 +5,7 @@ import type { AnomalyEvent } from '@/lib/types';
 import { Sect } from './detailSections';
 import {
   LOG_PATTERN_SERIES_TEXT, anomalyRegion, bucketLabel, logPatternSeriesArgs, logPatternSeriesState,
-  logPatternSeriesToSpan,
+  logPatternSeriesToSpan, verifiedRatioNote,
 } from './logPatternSeries';
 
 // LogPatternCountSection — log deseni anomalisinin "Desen sayısı" bar grafiği
@@ -38,9 +38,12 @@ export function LogPatternCountSection({ event }: { event: AnomalyEvent }) {
   const regions = useMemo(
     () => (data ? [anomalyRegion({ startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }, data.to)] : []),
     [data, event.startedAt, event.lastSeen, event.status]);
+  // v0.10.1080 — ES'te örneklem doğrulaması < 1 ise kısa not (CH'de hiç yok).
+  const note = verifiedRatioNote(event.verifiedRatio);
+  const sub = (data ? `${bucketLabel(data.bucketSec)} · tüm servisler` : 'tüm servisler') + (note ? ` · ${note}` : '');
 
   return (
-    <Sect title="Desen sayısı" sub={data ? `${bucketLabel(data.bucketSec)} · tüm servisler` : 'tüm servisler'}>
+    <Sect title="Desen sayısı" sub={sub}>
       <Suspense fallback={<Spinner />}>
         <CorePanelMultiLazy
           title=""

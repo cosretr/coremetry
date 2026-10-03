@@ -2226,7 +2226,10 @@ func (s *ESStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupB
 // the cur vs base window counts, top_hits returns a sample +
 // the latest timestamp, terms returns the dominant service.
 // Regex itself is ignored — detector authors must ship tokens
-// that have zero false-negatives vs the regex.
+// that have zero false-negatives vs the regex. v0.10.1080: the
+// token count is a SUPERSET of the regex (`"tns-"` analyzes to the
+// bare term `tns`); the detector verifies its firing candidates
+// with VerifyPatterns (es_pattern_verify.go) before writing.
 //
 // Empty Tokens = drop the probe (returns zero stats). Skips
 // the regex-fallback path because regex queries on a billion-

@@ -263,6 +263,14 @@ type Store struct {
 	// ASLA). Ertelenen DDL inince reprobePromotedAttrs bayrağı çevirir.
 	hasExResolveSnapCol atomic.Bool
 
+	// hasAnomalyVerifiedCol — anomaly_events.verified_ratio taşıyor mu
+	// (v0.10.1080, ES log deseni regex doğrulaması). hasAnomalyEpisodeCols ile
+	// AYNI sınıf ve iki-boot sözleşmesi. false ⇒ okuma/INSERT kolonu ATLAR,
+	// oran 0 okunur = "örneklenmedi" → grafik notu çizilmez (güvenli yön:
+	// dedektörün bastırma/ölçekleme kararı kolondan bağımsız, yalnız not
+	// kaybolur). Ertelenen DDL inince reprobePromotedAttrs bayrağı çevirir.
+	hasAnomalyVerifiedCol atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -3775,6 +3783,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		// hasAnomalyEpisodeCols (iki-boot sözleşmesi).
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS episode_count UInt32 DEFAULT 1`,
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS first_started_at DateTime64(9) DEFAULT toDateTime64(0, 9)`,
+		// v0.10.1080 — ES log deseni: token sayımının örneklemle regex'e karşı
+		// doğrulanma oranı (log_patterns.go verifyLogPatternCands). DEFAULT 0 =
+		// "örneklenmedi" (CH, eski satır, diğer türler). ORDER BY / TTL'e
+		// girmez; CREATE TABLE'a bilinçli EKLENMEDİ (episode emsali). Probe
+		// hasAnomalyVerifiedCol (iki-boot).
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS verified_ratio Float64 DEFAULT 0`,
 		// v0.9.415 — P1 exception gruplarına proaktif kök-sebep özeti
 		// (ExceptionExplainer, problems ai_summary'nin exception ikizi).
 		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS ai_summary String DEFAULT ''`,
@@ -4194,6 +4208,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasAnomalyEpisodeCols.Store(aeOK)
 	if !aeOK {
 		log.Printf("[chstore] `episode_count`/`first_started_at` columns not present on anomaly_events (err=%v) — carry read/INSERT/SELECT omit them and every write resets the counter to its DEFAULT; every anomaly reads as a first episode (recurring marker off, deploy attribution by started_at — the pre-v0.10.1049 behaviour) until the deferred-DDL re-probe or the next boot", aeErr)
+	}
+
+	// anomaly_events.verified_ratio probe'u (v0.10.1080) — aynı şekil.
+	vrOK, vrErr := s.probeAnomalyVerifiedCol(ctx)
+	s.hasAnomalyVerifiedCol.Store(vrOK)
+	if !vrOK {
+		log.Printf("[chstore] `verified_ratio` column not present on anomaly_events (err=%v) — read/INSERT omit it; log-pattern verification ratio reads 0 (no chart note; detector suppression/scaling unaffected) until the deferred-DDL re-probe or the next boot", vrErr)
 	}
 
 	// exception_groups.occurrences_at_resolve probe'u (v0.10.1072) — bölüm

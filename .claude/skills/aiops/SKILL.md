@@ -110,7 +110,11 @@ Ne üretiyorsun?
 | `incident:<id>` (notify-only) | `incident_alert.go:35` | created/resolved | — | saklanmaz |
 
 anomaly_events üreticileri (Problem değil): recorder (`recorder.go:107,129`; `log_pattern`
-koşulsuz; `log_template_new` **varsayılan KAPALI** v0.10.1061, `anomaly_sensitivity.logTemplateNew`
+koşulsuz — ES'te sayım token-OR, regex'in ÜST kümesi (`"tns-"` → çıplak `tns` terimi); v0.10.1080
+tetiklemek üzere olan ≤10 aday (oran sırası) tek `_msearch` örneklemiyle (`VerifyPatterns`, ≤50
+gövde) Go'da regex'e karşı doğrulanır: r=0 bastırır, 0<r<1 cur VE taban ×r, oran
+`anomaly_events.verified_ratio`'da (grafik alt başlığı notu); CH no-op. Örneklemi kaldırma: standart
+çözümleyicide "tire + rakam" token'la ifade edilemez; `log_template_new` **varsayılan KAPALI** v0.10.1061, `anomaly_sensitivity.logTemplateNew`
 *bool nil = kapalı — operatör onaylı: "Bu log anomalileri de false pozitif geliyor"; kapı
 `DetectNewLogTemplates` başında + recorder adımı `recordNewLogTemplates`; templater / `log_templates`
 defteri sürer, açık olaylar 10 dk sonra düşer — yeniden önerme),
