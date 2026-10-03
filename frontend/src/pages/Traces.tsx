@@ -1373,6 +1373,48 @@ function TracesPageInner() {
             yanıtladığı için tek şeritte topluluyor (~43px kazanç). `.controls`
             zaten flex-wrap, dar ekranda ikinci satıra kırılır. */}
         <PageControls sticky style={{ marginBottom: 8, alignItems: 'center' }}>
+              {/* v0.9.951 (E5/Ö31) — `/` kısayolunun AÇIK hedefi.
+                  İşaretsizken GlobalShortcuts "ilk görünür metin
+                  kutusu"na düşüyor ve bu sayfada o kutu DOM sırasında
+                  "Trace ID…": `/` basan operatör servis aramak isterken
+                  trace-id kutusunda buluyordu kendini. Mekanizma
+                  v0.5.454'te TAM bu vaka için yazılmıştı (yorumu da
+                  öyle diyor) ama işaret hiçbir sayfaya konmamıştı. */}
+              <ServicePicker value={draft.service} onChange={v => setDraft({ ...draft, service: v })}
+                placeholder="Filter by service…" width={170} onEnter={(v) => apply(v)} shortcutSearch />
+              <OperationPicker service={draft.service} value={draft.op || draft.search}
+                onChange={v => setDraft({ ...draft, search: v, op: '' })}
+                onPick={v => setDraft(d => ({ ...d, op: v, search: '' }))}
+                placeholder="Operation, or an id (function_id / trace ID)…" width={240} onEnter={() => apply()} />
+              <input placeholder="Min ms" value={draft.minMs}
+                onChange={e => setDraft({ ...draft, minMs: e.target.value })} type="number" style={{ width: 72 }} />
+              <input placeholder="Max ms" value={draft.maxMs}
+                onChange={e => setDraft({ ...draft, maxMs: e.target.value })} type="number" style={{ width: 72 }} />
+              {/* v0.9.303 (operatör) — Errors only / Root traces artık
+                  Search'ün SOLUNDA, kendi satırlarında değil. İkisi de
+                  SUNUCU filtresi, yani tam olarak yanlarındaki alanlarla
+                  aynı şeyi yapıyorlar: sorguyu yeniden çalıştırırlar. Ayrı
+                  bir şeritte durmaları onları istemci-taraflı hızlı
+                  kısayollarla aynı görsel dile sokuyordu ve bir satır
+                  yüksekliği yiyordu. */}
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                title="Yalnız hatalı trace'ler. SUNUCU filtresi — seçili pencerenin tamamına uygulanır ve sorguyu yeniden çalıştırır.">
+                <input type="checkbox" checked={draft.hasError}
+                  onChange={() => setDraft({ ...draft, hasError: !draft.hasError })} />
+                <span style={{ color: draft.hasError ? 'var(--err)' : 'var(--text2)' }}>Errors</span>
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                title={`Kök span'i depoya düşmüş trace'ler — yarım trace'leri gizler. SUNUCU filtresi. Kök tanımı: ${rootDefLabel} (Admin → ClickHouse → kök kapsaması).`}>
+                <input type="checkbox" checked={draft.rootOnly}
+                  onChange={() => setDraft({ ...draft, rootOnly: !draft.rootOnly })} />
+                <span style={{ color: draft.rootOnly ? 'var(--accent2)' : 'var(--text2)' }}>Root</span>
+              </label>
+              <Button variant="primary" size="sm" onClick={() => apply()}>Search</Button>
+          {/* v0.10.1088 (operatör: "Traces sayfasındaki service search sol başta
+              olabilir") — görünüm anahtarı (Traces / Aggregated / Shapes) ve
+              Aggregated'ın grup alanları şeridin SONUNA; servis seçici Services
+              sayfasındaki gibi en solda. */}
+          <span style={{ marginLeft: 'auto' }} />
           <SegmentedControl aria-label="Trace görünümü" value={view} onChange={setView} options={[
             { value: 'list', label: 'Traces' },
             { value: 'aggregate', label: 'Aggregated' },
@@ -1434,43 +1476,6 @@ function TracesPageInner() {
             </>
           )}
 
-              {/* v0.9.951 (E5/Ö31) — `/` kısayolunun AÇIK hedefi.
-                  İşaretsizken GlobalShortcuts "ilk görünür metin
-                  kutusu"na düşüyor ve bu sayfada o kutu DOM sırasında
-                  "Trace ID…": `/` basan operatör servis aramak isterken
-                  trace-id kutusunda buluyordu kendini. Mekanizma
-                  v0.5.454'te TAM bu vaka için yazılmıştı (yorumu da
-                  öyle diyor) ama işaret hiçbir sayfaya konmamıştı. */}
-              <ServicePicker value={draft.service} onChange={v => setDraft({ ...draft, service: v })}
-                placeholder="Filter by service…" width={170} onEnter={(v) => apply(v)} shortcutSearch />
-              <OperationPicker service={draft.service} value={draft.op || draft.search}
-                onChange={v => setDraft({ ...draft, search: v, op: '' })}
-                onPick={v => setDraft(d => ({ ...d, op: v, search: '' }))}
-                placeholder="Operation, or an id (function_id / trace ID)…" width={240} onEnter={() => apply()} />
-              <input placeholder="Min ms" value={draft.minMs}
-                onChange={e => setDraft({ ...draft, minMs: e.target.value })} type="number" style={{ width: 72 }} />
-              <input placeholder="Max ms" value={draft.maxMs}
-                onChange={e => setDraft({ ...draft, maxMs: e.target.value })} type="number" style={{ width: 72 }} />
-              {/* v0.9.303 (operatör) — Errors only / Root traces artık
-                  Search'ün SOLUNDA, kendi satırlarında değil. İkisi de
-                  SUNUCU filtresi, yani tam olarak yanlarındaki alanlarla
-                  aynı şeyi yapıyorlar: sorguyu yeniden çalıştırırlar. Ayrı
-                  bir şeritte durmaları onları istemci-taraflı hızlı
-                  kısayollarla aynı görsel dile sokuyordu ve bir satır
-                  yüksekliği yiyordu. */}
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                title="Yalnız hatalı trace'ler. SUNUCU filtresi — seçili pencerenin tamamına uygulanır ve sorguyu yeniden çalıştırır.">
-                <input type="checkbox" checked={draft.hasError}
-                  onChange={() => setDraft({ ...draft, hasError: !draft.hasError })} />
-                <span style={{ color: draft.hasError ? 'var(--err)' : 'var(--text2)' }}>Errors</span>
-              </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                title={`Kök span'i depoya düşmüş trace'ler — yarım trace'leri gizler. SUNUCU filtresi. Kök tanımı: ${rootDefLabel} (Admin → ClickHouse → kök kapsaması).`}>
-                <input type="checkbox" checked={draft.rootOnly}
-                  onChange={() => setDraft({ ...draft, rootOnly: !draft.rootOnly })} />
-                <span style={{ color: draft.rootOnly ? 'var(--accent2)' : 'var(--text2)' }}>Root</span>
-              </label>
-              <Button variant="primary" size="sm" onClick={() => apply()}>Search</Button>
         </PageControls>
 
 

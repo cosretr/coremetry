@@ -1483,6 +1483,12 @@ bantlarından beri varsayıyor); `query_string` reddi tuzağı burada yok. **Bed
 false` kümede prefix reddedilir (seviye histogramıyla aynı risk); `wfly` öneki WildFly kodlarını (`WFLYCTL0013`) artık
 bulur ama regex `(WFLY|JBAS)[0-9]+` onları eşlemez — 1080 örneklemi bastırır, CH ile aynı (regex düzeltmesi ayrı iş).
 
+## 2026-10-03 — Traces: servis seçici şeridin solunda, görünüm anahtarı sağda (v0.10.1088)
+
+**Operatör:** "Traces sayfasındaki service search sol başta olabilir." Traces / Aggregated / Shapes anahtarı ve
+Aggregated'ın grup alanları şeridin sonuna (`margin-left:auto`), servis seçici Services sayfasındaki gibi en solda.
+Davranış değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
