@@ -1040,6 +1040,15 @@ testler. **Kalan:** klasik varsayılan + "Kodu da incele" (`explainTraceClassicP
 `chat_trace_followup.go`'ya taşındı), sohbet `read_source_code`, `StateBadges`, Durdur. Klasik varsayılanı
 pinleyen testler (`trace_explain_default_test.go`, `CopilotExplain.classicDefault.test.tsx`) yerinde.
 
+## 2026-10-03 — Exception oluşum çubukları OTel sarısı, sayım ekseni tam sayı (v0.10.1066)
+
+**Operatör (prod, exception detayı):** "Barlar eskiden sarı renkteydi, OpenTelemetry sarısında yine öyle olsun." +
+"Occurrences decimal yazıyor, düz adet yazsa daha iyi."
+**Kök:** çubuk rengi `statusColor('warn')` idi — açık temada `--warn` koyu zeytin (#8f5c04); sayım bir durum değil.
+Sol eksen bölmeleri `[0, max/2, max]` ve headroom'lu max → "0 · 0.55 · 1.1".
+**Karar:** `OTEL_YELLOW` (#f5a800, logo rengi) sabit; `TimeChart.leftInteger` → bölmeler tam sayıya yuvarlı ve tekilleşmiş
+(`integerSplits`). Yalnız bu grafik `leftInteger` kullanır; oran/süre eksenleri değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

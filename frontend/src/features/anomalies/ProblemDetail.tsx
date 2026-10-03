@@ -19,7 +19,7 @@ import { ProblemNotifyPanel } from './ProblemNotifyPanel';
 import { IconSparkles } from '@/components/icons';
 import { TimeChart } from '@/components/charts/TimeChart';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
-import { statusColor } from '@/lib/statusColor';
+import { OTEL_YELLOW } from '@/lib/statusColor';
 import { fmtStartedTs } from './problemTime';
 import { emptySamplesNote } from './exceptionSamples';
 import { ExceptionPodsPanel } from './ExceptionPodsPanel';
@@ -396,9 +396,12 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
     const pad = Math.max((to - from) * OCC_EDGE_PAD, (occTimes[1] - occTimes[0]) * 2);
     return { from: from - pad, to: to + pad };
   }, [occTimes]);
+  // v0.10.1066 (operatör: "Barlar eskiden sarı renkteydi, OpenTelemetry
+  // sarısında yine öyle olsun") — renk tema uyarısı (--warn, açık temada
+  // koyu zeytin) DEĞİL, sabit OTel sarısı; sayım bir durum rengi değildir.
   const occSeries = useMemo(() => [{
     key: 'occ', label: 'occurrences', data: occ.map(p => p.count),
-    color: statusColor('warn'), type: 'bar' as const,
+    color: OTEL_YELLOW, type: 'bar' as const,
   }], [occ]);
   // Grafana-parite M3 — problemin penceresi (firstSeen → resolvedAt | grafik
   // sonu) histograma x-bölgesi olarak biner: kırmızı gölge + üst şerit +
@@ -599,7 +602,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                yok gibi") — 110 → 140 px: x ekseni etiketlerine yer; her tik
                tarih+saat (fmtOccTick), gün sınırı beklemez. */
             <TimeChart times={occTimes} series={occSeries} height={140} regions={probRegions}
-              xRange={occXRange} fmtX={fmtOccTick}
+              xRange={occXRange} fmtX={fmtOccTick} leftInteger
               onBrush={(fromMs, toMs) => setZoomMs({ from: fromMs, to: toMs })}
               onZoomReset={() => setZoomMs(null)} />
           )}

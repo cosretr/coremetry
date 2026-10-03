@@ -14,3 +14,8 @@ const STATUS_COLOR: Record<Status, string> = {
 export function statusColor(s: Status): string {
   return STATUS_COLOR[s];
 }
+
+// v0.10.1066 — OpenTelemetry sarısı (logo rengi, public/opentelemetry.svg).
+// Sayım çubukları gibi "durum değil, veri" olan yüzeyler için; temadan
+// bağımsız sabit (operatör: "OpenTelemetry sarısında yine öyle olsun").
+export const OTEL_YELLOW = '#f5a800';

@@ -3,6 +3,7 @@ import { useEscLayer } from '@/lib/escLayer';
 import uPlot from 'uplot';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { fmtXTicks, fmtAxisTick, fmtTooltipTime } from '@/lib/chartFmt';
+import { integerSplits } from '@/lib/chart/integerSplits';
 import { timeChartBuildSignature } from '@/lib/chartBuildSig';
 import { resolveVar, chartMonoFont } from '@/lib/chart/resolveVar';
 import { yRangeHeadroom } from '@/lib/chart/yRange';
@@ -93,6 +94,11 @@ interface Props {
   // (StatsLegend.onPick/pickable geçişi); seri indeksiyle çağrılır.
   onSeriesPick?: (i: number) => void;
   seriesPickable?: (i: number) => boolean;
+  // v0.10.1066 (operatör: "occurrences decimal yazıyor, düz adet yazsa daha
+  // iyi") — sol eksen tam SAYIM: tick'ler tam sayıya yuvarlanır ve yinelenen
+  // atılır (max 1.1 → "0, 1"; eskiden "0, 0.55, 1.1"). Oran/süre eksenleri
+  // dokunulmadan kalır.
+  leftInteger?: boolean;
 }
 
 // v0.9.75 (chart-consolidation Adım 0) — cssVar/yRange lib/chart/'a çıkarıldı
@@ -104,7 +110,7 @@ const MAX_BAR_PX = 18;
 
 export function TimeChart({
   times, series, height = 150, leftUnit = '', rightUnit = '',
-  deployMarkers, thresholds, regions, onBrush, onZoomReset, syncKey, fmtLeft, fmtRight, fmtX, xRange,
+  deployMarkers, thresholds, regions, onBrush, onZoomReset, syncKey, fmtLeft, fmtRight, fmtX, xRange, leftInteger = false,
   legendCollapsed, hideLegend, barSize = 0.86, onSeriesPick, seriesPickable,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -238,18 +244,18 @@ export function TimeChart({
     // Axis whose ticks/splits derive from the LIVE scale max so a setData
     // re-fit updates the gridlines (the old build-time `max` closure would go
     // stale on the fast-path). fmt read through its ref for live formatting.
-    const yAxis = (scale: string, side: 0 | 1, fmtRef: React.MutableRefObject<((v: number) => string) | undefined>, showGrid: boolean, unit: string): uPlot.Axis => ({
+    const yAxis = (scale: string, side: 0 | 1, fmtRef: React.MutableRefObject<((v: number) => string) | undefined>, showGrid: boolean, unit: string, integer = false): uPlot.Axis => ({
       scale, side, stroke: text3, size: 38, font: axisFont,
       grid: showGrid ? { stroke: gridc, width: 1, dash: [3, 4] } : { show: false },
       // v0.9.245 — kısa tick çentikleri. Etiketler eksene "yapışık" durduğu
       // için hangi sayının hangi çizgiye ait olduğu okunmuyordu (operatör:
       // "x y aksisleri belli belirsiz").
       ticks: { show: true, stroke: gridc, width: 1, size: 3 },
-      splits: u => { const mx = (u.scales[scale].max ?? 1); return [0, mx / 2, mx]; },
+      splits: u => { const mx = (u.scales[scale].max ?? 1); return integer ? integerSplits(mx) : [0, mx / 2, mx]; },
       // Consumer fmtLeft/fmtRight still wins; v0.9.102 (Grafana-parity #3) the
       // FALLBACK is now the shared unit-aware fmtAxisTick (was local kfmt) —
       // "125ms" / "1.2k" instead of a bare count.
-      values: (_u, sp) => sp.map(v => (fmtRef.current ? fmtRef.current(v) : fmtAxisTick(v, unit))),
+      values: (_u, sp) => sp.map(v => (fmtRef.current ? fmtRef.current(v) : integer ? String(v) : fmtAxisTick(v, unit))),
     });
 
     const axes: uPlot.Axis[] = [
@@ -269,7 +275,7 @@ export function TimeChart({
         values: (_u, sp) => (fmtXRef.current ? sp.map(fmtXRef.current) : fmtXTicks(sp)),
         space: fmtX ? 90 : 70,
       },
-      yAxis('y', 0, fmtLeftRef, true, leftUnit),
+      yAxis('y', 0, fmtLeftRef, true, leftUnit, leftInteger),
     ];
     if (hasRight) axes.push(yAxis('y2', 1, fmtRightRef, false, rightUnit));
 
