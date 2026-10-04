@@ -3,13 +3,17 @@
 [![CI](https://github.com/cosretr/coremetry/actions/workflows/ci.yml/badge.svg)](https://github.com/cosretr/coremetry/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/cosretr/coremetry?display_name=tag&sort=semver)](https://github.com/cosretr/coremetry/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/cilcenk/coremetry)](https://goreportcard.com/report/github.com/cilcenk/coremetry)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cosretr/coremetry)](https://goreportcard.com/report/github.com/cosretr/coremetry)
 
 **Open-source, OpenTelemetry-native, enterprise-grade APM.**
 Traces, metrics, logs, profiles, RUM — all on ClickHouse, all
 behind a single Go binary, all manageable via Helm. Designed
 for billion-span/day production scale; runs on a laptop in
 docker-compose for evaluation.
+
+<p align="center">
+  <a href="docs/screenshots/trace-waterfall.png"><img src="docs/screenshots/trace-waterfall.png" alt="Coremetry trace waterfall view" width="900" /></a>
+</p>
 
 ```
 apps ──▶ OTel Collector ──▶ Coremetry  (gRPC :4317  /  HTTP :8088)
@@ -18,6 +22,17 @@ apps ──▶ OTel Collector ──▶ Coremetry  (gRPC :4317  /  HTTP :8088)
                               ├── Redis       — response cache + leader lock (optional)
                               └── Web UI      — Vite SPA embedded into the binary
 ```
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| [![SRE dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) **Golden Signals / RED dashboard** | [![Service map](docs/screenshots/service-graph.png)](docs/screenshots/service-graph.png) **Service map from trace edges** |
+| [![Problems and incidents](docs/screenshots/problems.png)](docs/screenshots/problems.png) **Alerts grouped into incidents** | [![SLOs](docs/screenshots/slos.png)](docs/screenshots/slos.png) **SLOs with error-budget burn rate** |
+
+More in [`docs/screenshots/`](docs/screenshots/): services list, profiling flamegraph, exception stack traces, Grafana Tempo data source.
 
 ---
 
