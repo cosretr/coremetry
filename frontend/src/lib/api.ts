@@ -1333,6 +1333,9 @@ export const api = {
   // v0.10.707 — etkilenen varlıklar (çağıranlar ∪ pod'lar ∪ cluster'lar), 60 s cache; aç-üzerine-getir.
   problemAffected: (id: string, signal?: AbortSignal) =>
     get<import('./types').ProblemAffectedResponse>(`/api/problems/${encodeURIComponent(id)}/affected`, signal),
+  // v0.10.1106 — terfi Problem'inin kaynak olay özeti (desen sayısı grafiği), 30 s cache.
+  problemSourceEvent: (id: string, signal?: AbortSignal) =>
+    get<import('./types').ProblemSourceEventResponse>(`/api/problems/${encodeURIComponent(id)}/source-event`, signal),
   // v0.10.561 — sohbet arşivi saklama süresi (admin).
   aiChatRetention: () => get<import('./types').AIChatRetention>(`/api/ai/chat-retention`),
   putAIChatRetention: (c: import('./types').AIChatRetention) =>

@@ -8,7 +8,7 @@
 // olduğunu, hangi pencereyi soracağını ve cevabın nasıl çizileceğini söyler;
 // bileşen (LogPatternCountSection) yalnız çizer.
 
-import type { AnomalyEvent, LogPatternSeries, SpanMetricSeries } from '@/lib/types';
+import type { AnomalyEvent, LogPatternSeries, Problem, PromotedSourceEvent, SpanMetricSeries } from '@/lib/types';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { logsHref } from '@/lib/logsUrl';
 import { anomalyChartWindow } from './anomalyDetail';
@@ -43,6 +43,37 @@ export function logPatternSeriesWindow(
     fromNs: Math.min(lead, ev.fromNs),
     toNs: e.status === 'active' ? null : ev.toNs,
   };
+}
+
+/** LogPatternCountSection'ın okuduğu alanlar — olay detayı tam AnomalyEvent,
+ *  Problem detayı (v0.10.1106) promotedPatternChartEvent'in çıktısını verir. */
+export type LogPatternChartEvent = Pick<AnomalyEvent, 'pattern' | 'startedAt' | 'lastSeen' | 'status' | 'verifiedRatio'>;
+
+// promotedPatternChartEvent — v0.10.1106 (operatör kuyruğu, onaylı; v0.10.1060
+// ertelemesi kalktı): terfi Problem'inin (`anomaly-auto:`) detayında desen
+// sayısı grafiğinin girdisi. SAF.
+//
+// Grafik YALNIZ hasLogPatternSeries'in kabul ettiği kaynakta (ikinci yüklem
+// yok): trace_op / log_template_new / elastic_ml kaynaklı terfide null.
+// Pencere: kaynak olay hâlâ bu Problem'in bölümündeyse (startedAt eşit —
+// chstore.PromotedProblemSource kuralı, v0.10.1054) olayın kendi alanları →
+// olay detayıyla AYNI sorgu anahtarı, aynı grafik. Olay o zamandan beri YENİ
+// bir bölüme geçtiyse (eski, kapanmış terfi Problem'i) olayın penceresi bu
+// Problem'i anlatmaz: Problem'in KENDİ penceresi (startedAt → resolvedAt;
+// açıksa sürüyor), desen adı ve doğrulama oranı olaydan.
+export function promotedPatternChartEvent(
+  problem: Pick<Problem, 'startedAt' | 'resolvedAt' | 'status'>,
+  src: PromotedSourceEvent | null | undefined,
+): LogPatternChartEvent | null {
+  if (!src || !hasLogPatternSeries(src)) return null;
+  const base = { pattern: src.pattern, verifiedRatio: src.verifiedRatio };
+  if (src.startedAt === problem.startedAt) {
+    return { ...base, startedAt: src.startedAt, lastSeen: src.lastSeen, status: src.status };
+  }
+  if (!(problem.startedAt > 0)) return null;
+  const resolved = problem.status === 'resolved';
+  const end = problem.resolvedAt && problem.resolvedAt > problem.startedAt ? problem.resolvedAt : problem.startedAt;
+  return { ...base, startedAt: problem.startedAt, lastSeen: end, status: resolved ? 'cleared' : 'active' };
 }
 
 /** Desen sayısı okumasının argümanları — grafik bölümü ve "Ne yapabilirim"

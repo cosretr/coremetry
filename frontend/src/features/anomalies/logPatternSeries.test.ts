@@ -2,10 +2,12 @@
 // artışın ne zaman başladığını göstermiyor. Elastic'e gidip bakınca barlardan
 // net görüyorum."). Log deseni "Desen sayısı" grafiğinin saf çekirdeği.
 import { describe, it, expect } from 'vitest';
-import type { AnomalyEvent, LogPatternSeries } from '@/lib/types';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { AnomalyEvent, LogPatternSeries, PromotedSourceEvent } from '@/lib/types';
 import {
   anomalyRegion, bucketLabel, hasLogPatternSeries, logPatternSeriesArgs, logPatternSeriesState,
-  logPatternSeriesToSpan, logPatternSeriesWindow, patternLogsPivot, verifiedRatioNote,
+  logPatternSeriesToSpan, logPatternSeriesWindow, patternLogsPivot, promotedPatternChartEvent, verifiedRatioNote,
 } from './logPatternSeries';
 
 // v0.10.1080 — ES token sayımının örneklem doğrulama notu (Go VerifiedRatioNote ikizi).
@@ -145,5 +147,59 @@ describe('patternLogsPivot', () => {
     expect(sp.has('q')).toBe(false);
     expect(sp.get('pattern')).toBe('External system rejected');
     expect([...sp.keys()].sort()).toEqual(['pattern', 'range']);
+  });
+});
+
+// v0.10.1106 — terfi Problem'inin (anomaly-auto:) detayında grafik girdisi.
+describe('promotedPatternChartEvent', () => {
+  const src = (over: Partial<PromotedSourceEvent> = {}): PromotedSourceEvent => ({
+    id: '0123456789abcdef', kind: 'log_pattern', pattern: 'Oracle errors (ORA-)', service: 'svc-orders',
+    startedAt: T0, lastSeen: T0 + 20 * MIN, status: 'cleared', ...over,
+  });
+
+  it('kaynak yok / boş cevap → null', () => {
+    expect(promotedPatternChartEvent({ startedAt: T0, status: 'open' }, undefined)).toBeNull();
+    expect(promotedPatternChartEvent({ startedAt: T0, status: 'open' }, null)).toBeNull();
+  });
+
+  it.each<[AnomalyEvent['kind'], string]>([
+    ['trace_op', 'POST /checkout'],
+    ['trace_op_latency', 'GET /orders'],
+    ['log_template_new', 'tpl-1'],
+    ['elastic_ml', 'ml-job'],
+    ['log_pattern', ''],
+  ])('grafiği olmayan kaynak (%s %j) → null (hasLogPatternSeries ile aynı yüklem)', (kind, pattern) => {
+    const s = src({ kind, pattern });
+    expect(hasLogPatternSeries(s)).toBe(false);
+    expect(promotedPatternChartEvent({ startedAt: T0, status: 'open' }, s)).toBeNull();
+  });
+
+  it('aynı bölüm → olayın kendi alanları (olay detayıyla aynı sorgu anahtarı)', () => {
+    const s = src({ status: 'active', verifiedRatio: 0.4 });
+    const got = promotedPatternChartEvent({ startedAt: T0, status: 'open' }, s)!;
+    expect(got).toEqual({ pattern: s.pattern, verifiedRatio: 0.4, startedAt: T0, lastSeen: T0 + 20 * MIN, status: 'active' });
+    expect(logPatternSeriesArgs(got)).toEqual(logPatternSeriesArgs(s));
+  });
+
+  it('olay yeni bölüme geçmiş (eski, kapanmış Problem) → Problem\'in kendi penceresi, desen olaydan', () => {
+    const s = src({ startedAt: T0 + 5 * 24 * 60 * MIN, lastSeen: T0 + 5 * 24 * 60 * MIN + 30 * MIN, status: 'active' });
+    const got = promotedPatternChartEvent({ startedAt: T0, resolvedAt: T0 + 45 * MIN, status: 'resolved' }, s)!;
+    expect(got).toEqual({ pattern: s.pattern, verifiedRatio: undefined, startedAt: T0, lastSeen: T0 + 45 * MIN, status: 'cleared' });
+  });
+
+  it('bölüm farklı ama Problem açık → sürüyor (aktif pencere); bozuk startedAt → null', () => {
+    const s = src({ startedAt: T0 + 60 * MIN });
+    expect(promotedPatternChartEvent({ startedAt: T0, status: 'acknowledged' }, s)?.status).toBe('active');
+    expect(promotedPatternChartEvent({ startedAt: 0, status: 'open' }, s)).toBeNull();
+  });
+
+  it('kaynak pin: ikinci bir "log_pattern" yüklemi yazılmadı — Problem detayı hasLogPatternSeries\'e dayanır', () => {
+    const helper = readFileSync(resolve(__dirname, 'logPatternSeries.ts'), 'utf8');
+    const body = helper.slice(helper.indexOf('export function promotedPatternChartEvent'));
+    expect(body.slice(0, body.indexOf('\n}\n'))).toContain('hasLogPatternSeries(src)');
+    for (const f of ['PromotedPatternSection.tsx', 'ProblemDetail.tsx']) {
+      const code = readFileSync(resolve(__dirname, f), 'utf8').replace(/\/\/.*$/gm, '');
+      expect(code, f).not.toMatch(/['"]log_pattern['"]/);
+    }
   });
 });

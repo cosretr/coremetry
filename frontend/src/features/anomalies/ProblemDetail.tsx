@@ -51,6 +51,7 @@ import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule 
 import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
 import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
+import { PromotedLogPatternCount, PromotedPatternLogsLink } from './PromotedPatternSection'; // v0.10.1106
 import { alertSeriesArgs, hasAlertMetricChart, isProblemLive } from './alertMetricSeries'; // v0.10.1064
 import { dbHealthPivots } from './dbHealthPivots'; // v0.10.1073
 import { isSvcSlowdownRule, svcSlowdownPivots } from './svcSlowdownPivots'; // v0.10.1091
@@ -956,6 +957,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               ve başlangıç işaretli. Yalnız span-metrik alarm kurallarında;
               dizisi olmayan türde hiç çizilmez. */}
           {hasAlertMetricChart(problem) && <AlertMetricChartSection problem={problem} />}
+          {/* v0.10.1106 (operatör kuyruğu; v0.10.1060 ertelemesi kalktı) — terfi
+              Problem'inin (anomaly-auto:) kaynağı log deseniyse olay detayıyla
+              AYNI "Desen sayısı" grafiği, aynı yerde (sol kolonun ilki, açık).
+              Diğer her Problem'de null, istek yok. */}
+          <PromotedLogPatternCount problem={problem} />
           <Sect title="Root cause analysis" accent>
             {/* v0.10.1032 (inceleme) — kural adı satırı KALKTI: hemen üstteki
                 özet cümlesi kural adıyla başlıyor (ad boşsa metrikle), yani
@@ -1132,6 +1138,10 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           </Sect>
 
           <Sect title="Correlated signals">
+            {/* v0.10.1106 — terfi Problem'inin log deseni kaynağı: desene uyan
+                satırlarla /logs (olay detayının "Logları aç"ı; özne dalından
+                bağımsız — servissiz desen olayında da). Diğerlerinde null. */}
+            <PromotedPatternLogsLink problem={problem} />
             {/* v0.9.1339 (entity-model Faz 4b) — bu bölümün TAMAMI bir
                 SERVİS ADI varsayıyor: /logs `service.name:"…"`, /traces
                 `?service=`, /service-map `?focus=`. Özne bir veritabanı

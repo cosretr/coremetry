@@ -1794,6 +1794,27 @@ tarayıcıya kalır. **Kapsam dışı (yalnız raporlandı):** trace olmayan, ya
 satırlar (Profiling, Databases/SlowQueries ifade satırı, servis Overview operasyon/DB satırları,
 TopEndpointsCard, Clusters pod satırı, DependenciesTable, Inbox) — ayrı karar.
 
+## 2026-10-04 — Problem detayında log deseni sayım grafiği (terfi Problem'i kaynak olayını okur) (v0.10.1106)
+
+**Bağlam:** v0.10.1060 "Desen sayısı" bar grafiğini yalnız anomali OLAYI detayına koydu ve terfi Problem'ini
+(`anomaly-auto:`) bilerek dışarıda bıraktı ("kaynak olayı ayrıca okumak gerekir"). **Erteleme kalktı — operatör
+isteği (kuyruk, onaylı):** artışın ne zaman başladığı Problem detayında, kaynak olayı açmadan görünsün.
+**Karar:** yeni uç `GET /api/problems/{id}/source-event` (`problem_source_event.go`, defterden; api.go büyümedi).
+`/api/problems/{id}` yükü genişletilmedi: detay Problem'i önce zaten yüklü listeden çözer, by-id ucu yalnız
+derin-link yedeği — grafik çoğu açılışta gelmezdi; liste yüküne koymak sıcak `/api/problems`'e okuma eklerdi.
+`/api/anomalies/event` kullanılmadı: tam satır + dört zenginleştirme okuması, grafik yedi kolon ister. Olay
+kimliği SORGUSUZ (`PromotedAnomalyEventID`, v0.10.1054 — Problem kimliği `anomaly-auto:<fp>:<servis>`'i kabul
+eder; problems okunmaz); terfi değilse okuma yok. **Okuma sınırı:** `chstore.GetPromotedSourceEvent` — TEK
+okuma, PK eşitliği + `FINAL` + `ORDER BY last_seen DESC LIMIT 1` + `max_execution_time = 2`, yalnız id / tür /
+desen / servis / başlangıç / son görülme / türetilmiş durum (+ probe varsa `verified_ratio`); sample / oranlar /
+bölüm kolonları yok. Zaman sınırı yok: 30 gün TTL'li küçük state tablosu, `GetAnomalyEvent` emsali.
+`serveCached` 30 s, anahtar olay kimliği. Olay yok → alan yok; okuma hatası önbelleğe yazılmaz. **Ön yüz:**
+`AlertProblemDetail` sol kolonunun ilk bölümü olay detayıyla AYNI `LogPatternCountSection` (açık; sözleşme aynen:
+kova ≤120, ≤7 gün, 60 s önbellek, yalnız aktifte 60 s yoklama) + "Correlated signals"ta desen log pivotu
+(`patternLogsPivot`). Grafik yalnız `hasLogPatternSeries` kaynağında (ikinci yüklem yok); kaynak aynı bölümdeyse
+olayın alanları (olay detayıyla aynı sorgu anahtarı), olay yeni bölüme geçtiyse Problem'in kendi penceresi
+(`promotedPatternChartEvent`). Okunurken / hata / desen dışı türde bölüm çizilmez.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

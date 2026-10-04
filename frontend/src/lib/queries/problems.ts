@@ -166,6 +166,23 @@ export function useProblemInsight(id: string) {
   });
 }
 
+// v0.10.1106 — terfi Problem'inin (`anomaly-auto:`) kaynak olay özeti: detayın
+// "Desen sayısı" grafiği ve desen log pivotu için. Yalnız terfi Problem'i
+// detayı açıkken (enabled — çağıran öneki sınar; kimliği sunucu ayrıştırır),
+// staleTime = sunucu TTL (30 s), yoklama YOK (olay detayının
+// useAnomalyEventByID duruşu; grafiğin kendi 60 s yoklaması aktif olayda sürer).
+// placeholderData: undefined — başka Problem'in olayı bu sayfada görünmesin
+// (küresel keepPreviousData tuzağı).
+export function useProblemSourceEvent(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.problems.sourceEvent(id),
+    queryFn: ({ signal }) => api.problemSourceEvent(id, signal),
+    enabled: enabled && !!id,
+    staleTime: 30_000,
+    placeholderData: undefined,
+  });
+}
+
 // v0.10.707 — etkilenen varlıklar; yalnız çekmece/detay açıkken (enabled),
 // staleTime = sunucu TTL (60 s).
 export function useProblemAffected(id: string, enabled = true) {

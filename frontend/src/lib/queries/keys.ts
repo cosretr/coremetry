@@ -73,6 +73,7 @@ export const keys = {
     // v0.10.874 — ProblemsSection kova çipleri ağaca girdi: ack/resolve invalidation'ı ulaşsın.
     buckets:     (f: { status?: string; service?: string; env?: string; ownerTeam?: string; sreTeam?: string; cluster?: string }) => ['problems', 'buckets', f] as const,
     affected:    (id: string) => ['problems', 'affected', id] as const, // v0.10.707
+    sourceEvent: (id: string) => ['problems', 'source-event', id] as const, // v0.10.1106
     list:        (filter: { status?: string; service?: string; ownerTeam?: string; sreTeam?: string; env?: string; limit?: number }) =>
                    ['problems', 'list', filter] as const,
     // v0.9.825 — tekil kayıt (bildirim derin linki yedek yolu).

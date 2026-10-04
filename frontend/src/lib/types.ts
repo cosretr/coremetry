@@ -6149,6 +6149,17 @@ export interface AnomalyEvent {
   verdictAt?: number; // unix ns
 }
 export type AnomalyVerdictKind = 'anomaly' | 'not_anomaly';
+// PromotedSourceEvent — GET /api/problems/{id}/source-event (v0.10.1106; Go:
+// chstore.PromotedSourceEvent). Terfi Problem'inin (`anomaly-auto:`) kaynak
+// olayının yalnız "Desen sayısı" grafiğinin okuduğu alanları — anlamları
+// AnomalyEvent'tekiyle birebir (sahte alan yok: sample / oranlar okunmaz).
+export type PromotedSourceEvent = Pick<AnomalyEvent,
+  'id' | 'kind' | 'pattern' | 'service' | 'startedAt' | 'lastSeen' | 'status' | 'verifiedRatio'>;
+// Go: api.problemSourceEventResponse. sourceEvent yalnız terfi Problem'inin
+// kaynak olayı okunabildiyse var (terfi değil / olay TTL ile düşmüş → yok).
+export interface ProblemSourceEventResponse {
+  sourceEvent?: PromotedSourceEvent;
+}
 // LogPatternSeries — GET /api/anomalies/log-pattern-series (v0.10.1060; Go:
 // api.logPatternSeriesResponse). Log deseni anomalisinin zaman içindeki
 // eşleşme sayısı, dedektörün kendi yüklemiyle. from/to kovaya hizalı unix ns

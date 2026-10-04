@@ -1,11 +1,10 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { useLogPatternSeries } from '@/lib/queries';
-import type { AnomalyEvent } from '@/lib/types';
 import { Sect } from './detailSections';
 import {
   LOG_PATTERN_SERIES_TEXT, anomalyRegion, bucketLabel, logPatternSeriesArgs, logPatternSeriesState,
-  logPatternSeriesToSpan, verifiedRatioNote,
+  logPatternSeriesToSpan, verifiedRatioNote, type LogPatternChartEvent,
 } from './logPatternSeries';
 
 // LogPatternCountSection — log deseni anomalisinin "Desen sayısı" bar grafiği
@@ -21,10 +20,15 @@ import {
 // Sorgu yalnız bu bölüm mount'luyken (sayfa açık), aktif olayda 60 s yoklama
 // (gizli sekmede durur). Hata yalnız bu panelin içinde kalır — sayfanın geri
 // kalanı etkilenmez.
+//
+// v0.10.1106 — prop yalnız okunan beş alan (LogPatternChartEvent): terfi
+// Problem'inin detayı aynı bileşeni kaynak olayın özetiyle çizer
+// (promotedPatternChartEvent); sözleşme (kova ≤ 120, ≤ 7 gün, 60 s önbellek,
+// yalnız aktifte 60 s yoklama) aynen.
 const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
-export function LogPatternCountSection({ event }: { event: AnomalyEvent }) {
+export function LogPatternCountSection({ event }: { event: LogPatternChartEvent }) {
   // v0.10.1062 — argümanlar ortak kurucudan: "Ne yapabilirim" kartı AYNI
   // anahtarla okur (ikinci istek yok).
   const args = useMemo(
