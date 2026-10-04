@@ -14,8 +14,8 @@
 // of the sample — so virtualisation isn't needed here).
 
 import { useEffect, useMemo, useState } from 'react';
-import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
-import { useNavigate } from 'react-router-dom';
+import { rowActivation, stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { percentiles } from '@/lib/perf/transforms';
 import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
@@ -158,9 +158,15 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
                   <td className="num">{fmtDur(r.p50)}</td>
                   <td className="num">{fmtDur(r.p95)}</td>
                   <td className="num">{fmtDur(r.p99)}</td>
-                  {/* v0.10.945 — --accent2 bir hücre sınıfı değil (sapma tonu değil, bağlantı rengi): satır içi kalır. */}
+                  {/* v0.10.945 — --accent2 bir hücre sınıfı değil (sapma tonu değil, bağlantı rengi): satır içi kalır.
+                      v0.10.1105 (operatör: trace id'ler orta tıkla yeni sekmede açılsın) —
+                      exemplar artık GERÇEK bağlantı (react-router Link, /trace?id=… href'li): orta / Ctrl / ⌘ tık
+                      tarayıcının yeni sekmesi. Satırın rowActivation'ı (düz tık + Enter)
+                      kalır; Link'in tıkı satıra çıkmaz (stopRowClick) → çift gezinme yok. */}
                   <td className="mono" style={{ color: 'var(--accent2)' }}>
-                    {r.exemplar ? `${r.exemplar.slice(0, 12)}…` : '—'}
+                    {r.exemplar
+                      ? <Link to={traceHref(r.exemplar, { pageRange: range })} className="mono" onClick={stopRowClick} title={r.exemplar}>{r.exemplar.slice(0, 12)}…</Link>
+                      : '—'}
                   </td>
                 </tr>
               );

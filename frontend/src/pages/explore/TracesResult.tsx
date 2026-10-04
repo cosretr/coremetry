@@ -7,6 +7,7 @@ import { fmtNum, tsLong, rowClickHandlers } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TraceRow } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
+import { stopRowClick } from '@/lib/a11y'; // v0.10.1105 — paylaşılan Link-tıkı kesici
 import { IconButton } from '@/components/ui/IconButton';
 
 // TracesResult — the Explore "Traces" result-mode table (the block
@@ -154,7 +155,7 @@ export function TracesResult({
                     className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                   <td className="mono">
                     <Link to={traceHref(t.traceId)}
-                          onClick={e => e.stopPropagation()}
+                          onClick={stopRowClick}
                           style={{ fontSize: 11 }}>
                       {t.traceId.slice(0, 12)}…
                     </Link>

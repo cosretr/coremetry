@@ -18,6 +18,21 @@ export function rowKeyboard<E extends HTMLElement = HTMLTableRowElement>(onActiv
   return { role, tabIndex, onKeyDown };
 }
 
+/** v0.10.1104 → v0.10.1105 (paylaşılan yere taşındı): rowActivation'lı satırın
+ *  içindeki <Link>'in tıkı satıra ÇIKMASIN (çift gezinme). preventDefault YOK:
+ *  Link düz tıkta router'la gider, Ctrl/⌘/orta tık tarayıcının yeni sekmesi —
+ *  satırın onClick'i hiç çalışmadığı için aynı sekmede de gezinmez. */
+export function stopRowClick(e: MouseEvent): void {
+  e.stopPropagation();
+}
+
+/** v0.10.1105 — SPA içi gezinmeye yalnız DÜZ sol tık el koyar. Ctrl/⌘/Shift/Alt
+ *  ya da orta tık tarayıcıya kalır (yeni sekme / pencere / indirme). Elle
+ *  `preventDefault()` + navigate() yapan her <a> işleyicisinin kapısı. */
+export function isPlainLeftClick(e: Pick<MouseEvent, 'button' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>): boolean {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
 export function rowActivation<E extends HTMLElement = HTMLTableRowElement>(onActivate: () => void): {
   role: 'button';
   tabIndex: 0;

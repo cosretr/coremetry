@@ -53,6 +53,17 @@ describe('clickable rows use rowActivation (D3)', () => {
     }
     expect(offenders).toEqual([]);
   });
+  // v0.10.1105 — trace id taşıyan satır listelerinde id GERÇEK <Link> (orta /
+  // Ctrl / ⌘ tık yeni sekme) ve tıkı satıra çıkmaz (paylaşılan stopRowClick);
+  // satırın rowActivation / rowClickHandlers'ı düz tık + klavye için kalır.
+  // Davranış: components/traces/traceIdRowLinks.render.test.tsx.
+  it('trace-id row sites carry a real Link guarded by stopRowClick (v0.10.1105)', () => {
+    for (const f of ['features/anomalies/ExceptionSampleRow.tsx', 'components/traces/ShapesView.tsx', 'pages/explore/RepeatsResult.tsx', 'pages/explore/TracesResult.tsx']) {
+      const src = readFileSync(join(root, f), 'utf8');
+      expect(src, f).toMatch(/<Link to=\{traceHref\(/);
+      expect(src, f).toContain('onClick={stopRowClick}');
+    }
+  });
   it('the D3 sites adopted the helper', () => {
     for (const f of ['components/DBQueriesPanel.tsx', 'features/anomalies/AnomaliesPage.tsx', 'pages/AIObservability.tsx', 'pages/AdminElastic.tsx', 'pages/Profiling.tsx', 'pages/service/ServicePodsTable.tsx', 'pages/Clusters.tsx', 'pages/Inbox.tsx', 'pages/Hosts.tsx', 'pages/Databases.tsx', 'pages/SlowQueries.tsx', 'pages/service/OverviewTables.tsx', 'components/LogPatternsPanel.tsx']) {
       expect(readFileSync(join(root, f), 'utf8')).toMatch(ROW_ACTIVATION_SPREAD);

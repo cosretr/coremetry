@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
+import { rowActivation, stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1105 stopRowClick
 import { Link, useNavigate } from 'react-router-dom';
 import { readState } from '@/lib/readState';
 import {
@@ -98,7 +98,7 @@ export function RepeatsResult({
                     className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                   <td className="mono">
                     <Link to={traceHref(r.traceId)}
-                          onClick={e => e.stopPropagation()}
+                          onClick={stopRowClick}
                           style={{ fontSize: 11 }}>
                       {r.traceId.slice(0, 12)}…
                     </Link>

@@ -11,6 +11,7 @@ import { escapeHTML } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import type { ChatTurn, ChatStepDetail, ChatTypedBlock } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
+import { isPlainLeftClick } from '@/lib/a11y'; // v0.10.1105
 import { CosreChart, type CosreChartSpec } from '@/components/CosreChart';
 import { parseChatBlocks, type ChatBlock } from './chatMarkdown';
 import { parseStepPreview, fmtPreviewBytes } from './stepPreview';
@@ -486,9 +487,13 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
   const [evId, setEvId] = useState<number | null>(null);
   // v0.9.419 — mdLite'ın enjekte ettiği data-nav linkleri (trace id'ler)
   // SPA içi gider: tam sayfa yenilenmesi efemer chat'i sıfırlardı.
+  // v0.10.1105 (operatör: trace id'ler orta/Ctrl tıkla yeni sekmede açılsın) —
+  // yalnız DÜZ sol tık yakalanır. Eskiden her tıkta preventDefault vardı:
+  // Ctrl/⌘-tık yeni sekme yerine AYNI sekmede gidiyordu. Değiştiricili tık ve
+  // orta tık tarayıcıya kalır (href zaten gerçek /trace?id=… yolu).
   const onBodyClick = (e: React.MouseEvent) => {
     const a = (e.target as HTMLElement).closest?.('a[data-nav]');
-    if (a) {
+    if (a && isPlainLeftClick(e)) {
       e.preventDefault();
       navigate(a.getAttribute('href') ?? '/');
     }

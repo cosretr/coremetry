@@ -1776,6 +1776,24 @@ span'den doğar). Ön yüz `false`'ta link basmaz: soluk mono id + `badge b-gray
 trace'ler önce. **Değişmeyen:** span gruplarının örnek sorgusu ve yanıtı; uç `serveCached`'li değil (anahtar
 yok). **Bilinen sınır:** yalnız CH spans'a bakılır — Tempo yedeğinden açılabilecek trace de "yok" görünür.
 
+## 2026-10-04 — Trace id bağlantıları her listede gerçek <a> (orta tık yeni sekme) (v0.10.1105)
+
+**Operatör:** v0.10.1104'teki Exceptions düzeltmesi diğer sayfalarda da uygulansın. **Kural:** trace id
+taşıyan her kayıt-listesi satırında id react-router `<Link to={traceHref(…)}>` = gerçek `<a href>`; satırın
+`rowActivation`'ı (düz tık + Enter/Boşluk) kalır, link tıkı paylaşılan `stopRowClick` ile satıra çıkmaz
+(`lib/a11y.ts`'e taşındı; `features/anomalies/sampleTrace.ts` yeniden dışa açar) → düz tık tek gezinme,
+Ctrl/⌘/orta tık tarayıcının yeni sekmesi ve aynı sekmeyi gezdirmez. **Düzeltilen:** Traces → Shapes
+(`ShapesView.tsx`) exemplar hücresi düz metindi, satır yalnız `navigate()` çağırıyordu — artık `<Link
+className="mono">`, renk/hücre aynı. Explore Repeats / Traces (`RepeatsResult.tsx`, `TracesResult.tsx`)
+zaten `<Link>` + elle `stopPropagation` taşıyordu; paylaşılan `stopRowClick`'e geçti. /traces listesi
+(`Traces.tsx`) v0.10.216'dan beri her hücrede `row-link` `<Link>` — değişmedi. **Sohbet balonu
+(`ChatBubble.tsx`):** `data-nav` trace linki işleyicisi HER tıkta `preventDefault()` + `navigate()`
+yapıyordu; Ctrl/⌘-tık yeni sekme yerine aynı sekmede gidiyordu. Artık yalnız düz sol tık
+(`isPlainLeftClick`: `button === 0` ve Ctrl/⌘/Shift/Alt yok) SPA içi gider; değiştiricili ve orta tık
+tarayıcıya kalır. **Kapsam dışı (yalnız raporlandı):** trace olmayan, yalnız `navigate()` ile gezinen
+satırlar (Profiling, Databases/SlowQueries ifade satırı, servis Overview operasyon/DB satırları,
+TopEndpointsCard, Clusters pod satırı, DependenciesTable, Inbox) — ayrı karar.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -24,8 +24,8 @@
 //       paylaşıyor, ama paylaşımın DURDUĞU ancak mount'la görülür.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { act, useEffect } from 'react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -156,6 +156,61 @@ describe('tablo', () => {
     // <b> de metin olarak kaldı: escape mdLite'ın İLK adımı.
     expect(qa('table b').length).toBe(0);
     expect(text()).toContain('<img src=x onerror=alert(1)>');
+  });
+});
+
+// v0.10.1105 (operatör: trace id'ler Ctrl/⌘/orta tıkla yeni sekmede açılsın) —
+// data-nav işleyicisi eskiden HER tıkta preventDefault + navigate yapıyordu:
+// Ctrl/⌘-tık aynı sekmede gidiyordu. Artık yalnız DÜZ sol tık yakalanır.
+describe('data-nav trace linki — değiştiricili tık tarayıcıya kalır (v0.10.1105)', () => {
+  let visits: string[] = [];
+  function Probe() {
+    const loc = useLocation();
+    useEffect(() => { visits.push(loc.pathname + loc.search); }, [loc]);
+    return null;
+  }
+  // React'in kök dinleyicisinden SONRA (belge, kabarma evresi): işleyicinin
+  // kararı (defaultPrevented) okunur, sonra jsdom'un desteklemediği belge
+  // gezinmesi yutulur.
+  let prevented: boolean[] = [];
+  const record = (e: Event) => { prevented.push(e.defaultPrevented); e.preventDefault(); };
+  beforeEach(() => { visits = []; prevented = []; document.addEventListener('click', record); });
+  afterEach(() => { document.removeEventListener('click', record); });
+
+  async function mountWithProbe() {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/chat']}>
+          <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+            <Probe />
+            <ChatBubble turn={asst(`kanıt: ${TID}`)} />
+          </QueryClientProvider>
+        </MemoryRouter>
+      );
+    });
+    const a = q<HTMLAnchorElement>('a[data-nav]');
+    expect(a?.getAttribute('href')).toBe(`/trace?id=${TID}`);
+    return a!;
+  }
+
+  it('Ctrl / ⌘ / Shift ile tık preventDefault EDİLMEZ, SPA gezinmesi olmaz', async () => {
+    const a = await mountWithProbe();
+    await act(async () => {
+      for (const mod of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
+        a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...mod }));
+      }
+    });
+    expect(prevented).toEqual([false, false, false]);
+    expect(visits).toEqual(['/chat']);
+  });
+
+  it('düz sol tık preventDefault edilir ve SPA içinde /trace\'e gider', async () => {
+    const a = await mountWithProbe();
+    await act(async () => {
+      a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(prevented).toEqual([true]);
+    expect(visits).toEqual(['/chat', `/trace?id=${TID}`]);
   });
 });
 

@@ -17,11 +17,11 @@
 //      link YOK, satır tıklanmaz (tablo standardı: satır yalnız açılıyorsa
 //      tıklanır görünür). true / undefined → link.
 import { Link, useNavigate } from 'react-router-dom';
-import { rowActivation } from '@/lib/a11y';
+import { rowActivation, stopRowClick } from '@/lib/a11y';
 import { traceHref } from '@/lib/traceHref';
 import { tsLong } from '@/lib/utils';
 import type { ExceptionSample } from '@/lib/types';
-import { TRACE_MISSING_LABEL, TRACE_MISSING_TITLE, sampleTraceLinkable, stopRowClick } from './sampleTrace';
+import { TRACE_MISSING_LABEL, TRACE_MISSING_TITLE, sampleTraceLinkable } from './sampleTrace';
 
 /** Coremetry'de olmayan trace id: soluk mono metin + gri rozet, link yok. */
 export function TraceMissingId({ traceId, chars = 16 }: { traceId: string; chars?: number }) {
