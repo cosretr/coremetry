@@ -1736,6 +1736,26 @@ bir `match[]` (panellerin `service_name=~` eşleştiricisi), CH aynı FilterExpr
 kapsam kendi anahtarıyla önbellekli (`kafka-page-scope:v1`), cevap anahtarı sayfa anahtarlarını, türetilen
 kümelerin FNV özetini ve karşı süzgeci taşır (`kafka-label-values:v3`).
 
+## 2026-10-04 — Oracle hata grubu AI açıklaması: Coremetry trace'i ve logları da girdide (v0.10.1103)
+
+**Operatör:** "Oracle hata grubu için varsa coremetry üzerindeki trace ve o trace loglarını da kullanabilsin."
+v0.10.1100'ün Oracle girdisi trace id'leri yalnız servise + exception tipine çözüyordu; çağıran operasyon ve
+uygulamanın hata anında yazdığı log modele gitmiyordu. **Karar:** en yeni ≤50 satırdan çözülen ≤5 trace id
+içinden (en yeni önce) `TraceFactsByIDs`'in Coremetry'de BULDUĞU ilki TEK trace olarak okunur — span yoluyla
+aynı yardımcılar (`anomaly/trace_evidence.go`; span yolunun satır içi gövdesi oraya çıkarıldı, prompt'u bayt
+bayt aynı, eski kodun kopyasına karşı pinli): `GetTrace` 8 sn, kompakt blokta ≤60 span (≤20 hata span'i
+garantili), ≤5 kanıt span'i, hata span'lerinden ≤3 SQL; ve YALNIZ trace yüklendiyse o trace'in logları
+(`LogsForTrace` 6 sn, ≤30 çekilir, severity'ye göre ≤12 satır, stack çözücü + tekrar katlaması). Yüklenmeyen
+trace için log sorgusu yok (v0.9.414 ES maliyet disiplini); log deposu yoksa (CH-only) log bloğu atlanır.
+Prompt'ta bloklar çözülen trace'lerin JSON'undan sonra; trace yoksa açık "Coremetry trace'i: yok" satırı ve
+sistem prompt'u yeni "Çağıran taraf (Coremetry trace)" bölümünde çağıran servis/operasyonu ve logu ister,
+trace yoksa çağıranı tahmin etmez. `EvSpans` / `LogsBlock` / `DBStatements` kardeşteki gibi dolar; kartın
+örnek trace çipi yüklenen trace'e gider. Explain, insight kartı ve arka plan özeti aynı kurucudan geçer.
+**Değişmeyen:** kod çekilmez ("Kodu da incele" Oracle'da koşmaz, `Stack` boş); AI çekmecesinin takip sohbeti
+aynen; yeni tablo yok. **Neden tek trace, beş değil:** her trace bir span okuması + bir ES sorgusu demek ve
+tık başına bedel beş katına çıkar; aynı (kod, operasyon) grubunun trace'leri aynı çağrı yolunu taşır — en yeni
+bulunan trace kanıta yeter, kalan dört id servis çözümüyle zaten prompt'ta.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

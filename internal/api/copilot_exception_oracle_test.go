@@ -16,6 +16,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/logstore"
 )
 
 func TestExceptionExplainInputRoutesByGroupSource(t *testing.T) {
@@ -53,6 +54,40 @@ func TestDefaultOracleExceptionInputNilStore(t *testing.T) {
 		t.Fatalf("varsayılan Oracle kurucusu: %+v", in.Oracle)
 	}
 }
+
+// v0.10.1103 (operatör: "Oracle hata grubu için varsa coremetry üzerindeki
+// trace ve o trace loglarını da kullanabilsin") — varsayılan Oracle kurucusu
+// s.logs'u Oracle builder'ına geçirir (yoksa trace'in logları hiç okunmaz);
+// log deposu yoksa nil arayüz gider (CH-only kurulum, log bloğu atlanır).
+func TestDefaultOracleExceptionInputPassesLogs(t *testing.T) {
+	orig := buildOracleExceptionInput
+	t.Cleanup(func() { buildOracleExceptionInput = orig })
+	var got logstore.Store
+	calls := 0
+	buildOracleExceptionInput = func(_ context.Context, _ anomaly.OracleContextReader, logs logstore.Store, _ *chstore.ExceptionGroup, _ *time.Location) anomaly.ExceptionExplainInput {
+		calls++
+		got = logs
+		return anomaly.ExceptionExplainInput{Oracle: &anomaly.OracleExplainContext{}}
+	}
+	ora := &chstore.ExceptionGroup{Fingerprint: chstore.OracleGroupFingerprint("o-1", "ORA-00001", "OP_ORDER"), Type: "ORA-00001", Message: "OP_ORDER"}
+	cases := []struct {
+		name string
+		logs logstore.Store
+	}{
+		{"log deposu var", &seamLogs{}},
+		{"log deposu yok", nil},
+	}
+	for _, tc := range cases {
+		calls, got = 0, nil
+		s := &Server{logs: tc.logs}
+		if _, sys := s.exceptionExplainInput(context.Background(), ora, time.UTC); calls != 1 || got != tc.logs || sys != copilot.SystemPromptOracleException() {
+			t.Fatalf("%s: s.logs Oracle kurucusuna ulaşmalı: calls=%d got=%v", tc.name, calls, got)
+		}
+	}
+}
+
+// seamLogs — kimlik karşılaştırması için boş log deposu.
+type seamLogs struct{ logstore.Store }
 
 // Kaynak pini: explain ve insight TEK dağıtıcıdan geçer (çekmece takip sohbeti
 // — read_source_code yolu — bilinçli olarak değişmedi, kendi pini var); Oracle

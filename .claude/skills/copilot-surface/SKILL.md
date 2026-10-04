@@ -45,7 +45,10 @@ If omitted, ask the user. Don't invent a surface name.
   `ora:` (Oracle error-table) groups get
   `anomaly.BuildOracleExceptionExplainInput` +
   `SystemPromptOracleException`, span groups the old builder + prompt;
-  the background ExceptionExplainer routes the same way.
+  the background ExceptionExplainer routes the same way. v0.10.1103: the
+  Oracle input also carries ONE Coremetry trace (first resolved id found
+  in Coremetry) + that trace's logs via the span path's shared helpers
+  (`anomaly/trace_evidence.go`) — reuse them, don't re-inline trace/log reads.
 
 ## Files to touch (5)
 

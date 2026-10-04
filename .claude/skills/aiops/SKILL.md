@@ -391,6 +391,8 @@ satırlarına dallanır (kaynak parmak izinden geri çözülür; seri dakika ba�
 `anomaly.BuildOracleExceptionExplainInput` (kaynak, kod+operasyon, saatlik akış + oran, kanal %, servisler, host/instance,
 ≤5 çözülen trace, en yeni 3 satırın eşlenen alanları; `OracleErrorsByOpCode` tavanı 50) + `SystemPromptOracleException`;
 blob gerçekleri `anomaly.SetOracleExplainFacts` (main.go, aynı `GroupStatsCache`). "Kodu da incele" Oracle'da koşmaz.
+**v0.10.1103:** çözülen id'lerden Coremetry'de bulunan İLKİ tek trace olarak span + log ile girer (span yoluyla ortak
+yardımcılar `anomaly/trace_evidence.go`; yüklenmeyen trace için log sorgusu yok; `logs` nil-güvenli).
 Yeni bir grup kaynağı eklerken: önek + span dedektörlerinden dışlama + örnek/oluşum dalı + bildirim kapısı + öncelik
 kuralı + AI girdi kurucusu (ve gecikmesi varsa oto-özet aday yaşı) altılısı.
 
@@ -426,7 +428,7 @@ de notification_log'a, v0.9.1344). Her üretici paketi kendi önekini pinler
 | Yüzey | Prompt kurucu | Sistem promptu |
 |---|---|---|
 | Problem explain (tık + arka plan) | `anomaly.buildProblemPrompt` `problem_explainer.go:240-279` (kural → `HypothesisPromptBlockTR` → `renderEvidence` → `renderDeepEvidence` + uydurma-yasağı) | `SystemPromptProblem` `copilot/prompts.go:152` |
-| Exception explain | `BuildExceptionExplainInput` `exception_context.go:246` → `assembleExceptionPrompt` :538 (damga operatör diliminde, v0.10.745) | `SystemPromptException` :225 |
+| Exception explain | `BuildExceptionExplainInput` `exception_context.go:298` (örnek trace + loglar `sampleTraceEvidence` → `trace_evidence.go`) → `assembleExceptionPrompt` :509 (damga operatör diliminde, v0.10.745) | `SystemPromptException` :225 |
 | RCA düzyazı / hüküm | `rootcause.go:411,476`; `rca_verdict.go:144` | `SystemPromptRCAVerdict` :841 |
 | Insight kartı | `api/insight.go:78` — deterministik yarı AI kapalıyken de çalışır | — |
 

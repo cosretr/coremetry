@@ -25,7 +25,9 @@ import (
 func TestLogStackReadersUseTheResolver(t *testing.T) {
 	for _, f := range []struct{ path, what string }{
 		{"explain_trace_input.go", "trace explain kanıt paketi"},
-		{"../anomaly/exception_context.go", "exception kök-sebep girdisi"},
+		// v0.10.1103 — exception girdisinin (span + Oracle) trace log okuması
+		// exception_context.go'dan ortak yardımcıya taşındı.
+		{"../anomaly/trace_evidence.go", "exception kök-sebep girdisi (trace logları)"},
 	} {
 		b, err := os.ReadFile(f.path)
 		if err != nil {

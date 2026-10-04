@@ -165,7 +165,7 @@ func TestAssembleOracleExplainContext(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := assembleOracleExplainContext(g, tc.facts, tc.factsOK, tc.rows, oracleExplainRowLimit, tf, time.UTC)
-			tc.check(t, c, renderOracleExplainPrompt(g, c, time.UTC))
+			tc.check(t, c, renderOracleExplainPrompt(g, c, time.UTC, "", ""))
 		})
 	}
 	// Sentetik servis (`oracle:<ad>`) kaynak adına çözülür.
@@ -187,6 +187,20 @@ type fakeOracleReader struct {
 	gotSrc      string
 	gotIDs      []string
 	traceErr    error
+	// v0.10.1103 — found nil: yalnız ids[0] Coremetry'de (eski davranış);
+	// dolu: yalnız bu id'ler. spans: GetTrace cevabı (id → span'ler).
+	found       []string
+	spans       map[string][]chstore.SpanRow
+	getTraceErr error
+	gotTraces   []string
+}
+
+func (f *fakeOracleReader) GetTrace(_ context.Context, id string) ([]chstore.SpanRow, error) {
+	f.gotTraces = append(f.gotTraces, id)
+	if f.getTraceErr != nil {
+		return nil, f.getTraceErr
+	}
+	return f.spans[id], nil
 }
 
 func (f *fakeOracleReader) OracleGroupSource(_ context.Context, _ *chstore.ExceptionGroup) (string, error) {
@@ -210,6 +224,13 @@ func (f *fakeOracleReader) TraceFactsByIDs(_ context.Context, ids []string, _, _
 	if f.traceErr != nil {
 		return nil, f.traceErr
 	}
+	if f.found != nil {
+		out := map[string]chstore.TraceFact{}
+		for _, id := range f.found {
+			out[id] = chstore.TraceFact{Service: "svc-orders"}
+		}
+		return out, nil
+	}
 	return map[string]chstore.TraceFact{ids[0]: {Service: "svc-ledger"}}, nil
 }
 
@@ -220,7 +241,7 @@ func TestBuildOracleExceptionExplainInput(t *testing.T) {
 	// Gerçekler enjekte → kaynak oradan (geri çözüm sorgusu YOK), okumalar sınırlı.
 	SetOracleExplainFacts(func(chstore.ExceptionGroup) (OracleExplainFacts, bool) { return oraFacts(), true })
 	rd := &fakeOracleReader{rows: oraRows(200, 12)}
-	in := BuildOracleExceptionExplainInput(context.Background(), rd, g, time.UTC)
+	in := BuildOracleExceptionExplainInput(context.Background(), rd, nil, g, time.UTC)
 	if rd.sourceCalls != 0 || rd.gotSrc != "o-1" || rd.gotLimit != oracleExplainRowLimit {
 		t.Fatalf("kaynak/tavan: calls=%d src=%q limit=%d", rd.sourceCalls, rd.gotSrc, rd.gotLimit)
 	}
@@ -241,19 +262,19 @@ func TestBuildOracleExceptionExplainInput(t *testing.T) {
 	// Gerçek yok → kaynak parmak izinden geri çözülür; trace çözümü düşerse servis boş.
 	oracleFactsFn.Store(nil)
 	rd2 := &fakeOracleReader{source: "o-1", rows: oraRows(3, 3), traceErr: fmt.Errorf("ch down")}
-	in2 := BuildOracleExceptionExplainInput(context.Background(), rd2, g, time.UTC)
+	in2 := BuildOracleExceptionExplainInput(context.Background(), rd2, nil, g, time.UTC)
 	if rd2.sourceCalls != 1 || rd2.gotSrc != "o-1" || in2.Oracle == nil || in2.Oracle.Traces[0].Service != "" || len(in2.Oracle.Samples) != 3 {
 		t.Fatalf("geri çözüm/düşüş: %+v", in2.Oracle)
 	}
 
 	// Kaynak hiç bulunamaz → satır okunmaz, girdi yine kurulur.
 	rd3 := &fakeOracleReader{}
-	in3 := BuildOracleExceptionExplainInput(context.Background(), rd3, g, time.UTC)
+	in3 := BuildOracleExceptionExplainInput(context.Background(), rd3, nil, g, time.UTC)
 	if rd3.gotLimit != 0 || in3.Oracle == nil || !strings.Contains(in3.User, "Örnek satır: yok") {
 		t.Fatalf("kaynaksız: limit=%d\n%s", rd3.gotLimit, in3.User)
 	}
 	// nil okuyucu panik yapmaz.
-	if in4 := BuildOracleExceptionExplainInput(context.Background(), nil, g, nil); in4.Oracle == nil {
+	if in4 := BuildOracleExceptionExplainInput(context.Background(), nil, nil, g, nil); in4.Oracle == nil {
 		t.Fatal("nil okuyucu")
 	}
 }

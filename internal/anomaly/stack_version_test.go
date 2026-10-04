@@ -105,20 +105,30 @@ func TestExceptionStackVersionSameOccurrence(t *testing.T) {
 // yüklenen örnek trace'in span'leri ve logundan doldurur — ek okuma yok
 // ([[feedback-tested-but-unreachable]]).
 func TestExceptionInputCarriesStackVersion(t *testing.T) {
-	b, err := os.ReadFile("exception_context.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := strings.Join(strings.Fields(string(b)), " ")
-	for _, want := range []string{
-		"stackForPrompt, stackRaw, stackSvc, stackSample := pickExceptionStack(",
-		"stackVersion := exceptionStackVersion(samples, stackSample, traceID, traceSpans,",
-		"StackVersion: stackVersion,",
-		"traceSpans = spans",
-		"logStackSpan, logStackRes = lg.SpanID, lg.ResourceAttributes",
+	// v0.10.1103 — örnek trace + log gövdesi ortak yardımcılara taşındı
+	// (sampleTraceEvidence → traceEvidence / traceLogsEvidence); pinler aynı
+	// bağları yeni yerlerinde arar.
+	for file, wants := range map[string][]string{
+		"exception_context.go": {
+			"o.StackForPrompt, o.StackRaw, o.StackService, o.StackSample = pickExceptionStack(",
+			"stackVersion := exceptionStackVersion(samples, st.StackSample, traceID, st.Trace.Spans,",
+			"verSvc, st.Logs.StackSpan, st.Logs.StackRes,",
+			"StackVersion: stackVersion,",
+		},
+		"trace_evidence.go": {
+			"r := traceEvidenceResult{Spans: spans,",
+			"r.StackSpan, r.StackRes = lg.SpanID, lg.ResourceAttributes",
+		},
 	} {
-		if !strings.Contains(src, want) {
-			t.Errorf("exception_context.go: %q yok — sürüm stack'in olayından gelmiyor", want)
+		b, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := strings.Join(strings.Fields(string(b)), " ")
+		for _, want := range wants {
+			if !strings.Contains(src, want) {
+				t.Errorf("%s: %q yok — sürüm stack'in olayından gelmiyor", file, want)
+			}
 		}
 	}
 }

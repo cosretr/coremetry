@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
-	"github.com/cilcenk/coremetry/internal/stackparse"
 )
 
 // exception_context.go — exception kök-sebep girdi kurucusu (v0.9.415).
@@ -311,158 +309,22 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 		trend, trendRef = t.PromptLine(loc), &t
 	}
 
-	// En yeni trace'li örnek → tam trace + kanıt (error span'ler GARANTİLİ
-	// — v0.9.414 verify bulgusu: düz head-cap derindeki hatayı düşürüyordu).
-	type liteSpan struct {
-		Name       string  `json:"name"`
-		Service    string  `json:"service"`
-		Kind       string  `json:"kind"`
-		ParentSpan string  `json:"parent,omitempty"`
-		SpanID     string  `json:"id"`
-		DurationMs float64 `json:"durMs"`
-		Status     string  `json:"status,omitempty"`
-		StatusMsg  string  `json:"statusMsg,omitempty"`
-		// v0.10.115 — yalnız hata span'larında: SQL hatasında çalışan ifade.
-		DBSystem    string `json:"dbSystem,omitempty"`
-		DBStatement string `json:"dbStatement,omitempty"`
-	}
-	var traceBlock, logsBlock string
-	var dbStmts []string
-	seenStmt := map[string]bool{}
-	// v0.9.1225 — kod çekicinin log-fallback istihkakı (aşağıdaki logs
-	// döngüsünde dolar; yalnız örnekler stack taşımıyorsa kullanılır).
-	var logStack, logStackSvc string
-	// v0.10.1044 — stack'li logun KENDİ span'i ve resource'u (çalışan sürüm
-	// önce oradan; canary'de çoğunluk yanlış sürümü seçer).
-	var logStackSpan string
-	var logStackRes map[string]string
-	// v0.9.1239 — log satırları ve HAM stack'leri; JSON'a çevirme
-	// pickExceptionStack'ten SONRAYA ertelendi (bkz. foldDuplicateLogStacks).
-	var logLines []liteLog
-	var logStacks []string
-	var evTraces, evSpans []string
+	// En yeni trace'li örnek → tam trace + o trace'in logları + temsilî stack.
+	// v0.10.1103 — sampleTraceEvidence (aşağıda; okumalar trace_evidence.go'nun
+	// ortak yardımcılarında, Oracle grubu da onları kullanır); çıktı bayt bayt
+	// eski — pin trace_evidence_test.go eski satır içi kodun kopyasına karşı.
 	traceID := ""
-	var traceMinT, traceMaxT int64
-	// v0.10.1044 — örnek trace'in span'leri, çalışan sürüm seçimi için
-	// saklanır (StackVersion; ek okuma yok).
-	var traceSpans []chstore.SpanRow
 	for _, sm := range samples {
 		if sm.TraceID != "" {
 			traceID = sm.TraceID
 			break
 		}
 	}
-	if traceID != "" {
-		tctx, cancel := context.WithTimeout(ctx, 8*time.Second)
-		spans, terr := store.GetTrace(tctx, traceID)
-		cancel()
-		if terr == nil && len(spans) > 0 {
-			evTraces = append(evTraces, traceID)
-			traceSpans = spans
-			traceMinT, traceMaxT = spans[0].StartTime, spans[0].EndTime
-			for _, sp := range spans {
-				if sp.StartTime < traceMinT {
-					traceMinT = sp.StartTime
-				}
-				if sp.EndTime > traceMaxT {
-					traceMaxT = sp.EndTime
-				}
-			}
-			include := make([]bool, len(spans))
-			kept, errKept := 0, 0
-			for i, sp := range spans {
-				if sp.StatusCode == "error" && errKept < 20 {
-					include[i] = true
-					kept++
-					errKept++
-				}
-			}
-			for i := range spans {
-				if kept >= 60 {
-					break
-				}
-				if !include[i] {
-					include[i] = true
-					kept++
-				}
-			}
-			compact := make([]liteSpan, 0, kept)
-			for i, sp := range spans {
-				if !include[i] {
-					continue
-				}
-				l := liteSpan{Name: sp.Name, Service: sp.ServiceName, Kind: sp.Kind,
-					ParentSpan: sp.ParentSpanID, SpanID: sp.SpanID,
-					DurationMs: float64(sp.EndTime-sp.StartTime) / 1e6}
-				if sp.StatusCode == "error" {
-					l.Status = "error"
-					l.StatusMsg = sp.StatusMessage
-					if len(evSpans) < 5 {
-						evSpans = append(evSpans, sp.SpanID)
-					}
-					if sp.DBStatement != "" {
-						l.DBSystem = sp.DBSystem
-						l.DBStatement = truncRunes(sp.DBStatement, 600)
-						if len(dbStmts) < 3 && !seenStmt[l.DBStatement] {
-							seenStmt[l.DBStatement] = true
-							dbStmts = append(dbStmts, l.DBStatement)
-						}
-					}
-				}
-				compact = append(compact, l)
-			}
-			if tp, e := json.Marshal(compact); e == nil {
-				traceBlock = fmt.Sprintf("\n\nÖrnek hata TRACE'i (%s, %d span):\n```json\n%s\n```",
-					traceID, len(compact), string(tp))
-			}
-		}
+	sampleStacks := make([]string, 0, len(samples))
+	for _, sm := range samples {
+		sampleStacks = append(sampleStacks, sm.Stacktrace)
 	}
-
-	// Trace'in logları — tek pivot sorgusu; trace yüklenemediyse (1970
-	// penceresi) HİÇ gitme (v0.9.414 verify bulgusu, ES maliyet disiplini).
-	if logs != nil && traceID != "" && traceMaxT > 0 {
-		from := time.Unix(0, traceMinT).Add(-time.Minute)
-		to := time.Unix(0, traceMaxT).Add(time.Minute)
-		lctx, cancel := context.WithTimeout(ctx, 6*time.Second)
-		if page, lerr := logstore.LogsForTrace(lctx, logs, traceID, from, to, 30); lerr == nil && page != nil && len(page.Logs) > 0 {
-			lgs := page.Logs
-			sort.SliceStable(lgs, func(i, j int) bool { return lgs[i].Severity > lgs[j].Severity })
-			ll := make([]liteLog, 0, 12)
-			for _, lg := range lgs {
-				if len(ll) >= 12 {
-					break
-				}
-				// v0.9.1182 — kardeş yolla AYNI çözücü. Burası da tek yazıma
-				// (`exception.stacktrace`) bakıyordu; ECS kurulumlarında alan
-				// `error.stack_trace` ve Java'nın yaygın deseninde stack
-				// gövdenin içinde. Trace-explain tarafını düzeltip burayı
-				// bırakmak, aynı bug'ın bilinen bir kopyasını bilerek yerinde
-				// bırakmak olurdu.
-				stackText, stackFromBody := stackparse.FromLog(lg.Attributes, lg.Body)
-				// v0.9.1225 — kardeş yolun (explain_trace_input.go rawStack/
-				// stackService) eksik yarısı: span-örnekleri stack taşımıyorsa
-				// kod çekicinin istihkakı LOGLARDAN gelir. Servis de birlikte
-				// taşınır — logu atan servis g.Service'ten farklı olabilir ve
-				// svc- depo çözümü yanlış depoya gitmesin.
-				if logStack == "" && stackText != "" {
-					logStack, logStackSvc = stackText, lg.ServiceName
-					logStackSpan, logStackRes = lg.SpanID, lg.ResourceAttributes
-				}
-				bodyForPrompt := lg.Body
-				if stackFromBody {
-					bodyForPrompt = stackparse.MessageHead(lg.Body)
-				}
-				e := liteLog{Sev: lg.SeverityText, Svc: lg.ServiceName, Body: truncRunes(bodyForPrompt, 500)}
-				e.ExType = lg.Attributes["exception.type"] // nil map okuması güvenli
-				// Stack HAM biriktirilir; kırpma + tekrar katlaması
-				// temsilî stack seçildikten SONRA yapılır.
-				ll = append(ll, e)
-				logStacks = append(logStacks, stackText)
-			}
-			logLines = ll
-		}
-		cancel()
-	}
+	st := sampleTraceEvidence(ctx, store, logs, traceID, sampleStacks)
 
 	// Deploy penceresi — FirstSeen'e YAKINLIĞA göre seçim + önce/sonra
 	// açık etiket (v0.9.414 verify bulguları).
@@ -482,33 +344,6 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 		}
 	}
 
-	// v0.9.1225 — prompt kopyası ile kod-çekici istihkakı AYRILDI. User
-	// bayt-bayt eski (1800 rune'luk kırpık); Stack ise HAM taşınır —
-	// kardeş yol explain_trace_input.go v0.9.831'de aynı gerekçeyle
-	// ("kesik bir satır konumlandırılamaz") ham taşıyordu, burası kırpığı
-	// veriyordu: derin JBoss stack'lerinde Caused-by uygulama frame'leri
-	// 1800'ün altında kalıp pencereleme hiç isabet etmiyordu.
-	sampleStacks := make([]string, 0, len(samples))
-	for _, sm := range samples {
-		sampleStacks = append(sampleStacks, sm.Stacktrace)
-	}
-	stackForPrompt, stackRaw, stackSvc, stackSample := pickExceptionStack(sampleStacks, logStack, logStackSvc)
-
-	// v0.9.1239 — log bloğu ANCAK ŞİMDİ kurulabilir: her logun stack'i
-	// prompt'ta GÖRÜNEN temsilî stack'e karşı katlanıyor ve o seçim
-	// (pickExceptionStack) log döngüsünün kendi çıktısına bağlı.
-	if len(logLines) > 0 {
-		folded := foldDuplicateLogStacks(logStacks, stackForPrompt)
-		for i := range logLines {
-			if i < len(folded) {
-				logLines[i].Stack = folded[i]
-			}
-		}
-		if lp, e := json.Marshal(logLines); e == nil {
-			logsBlock = fmt.Sprintf("\n\nBu trace'in ilişkili LOGLARI (yüksek severity önce):\n```json\n%s\n```", string(lp))
-		}
-	}
-
 	// v0.10.847 (operatör-bildirimli) — pod/instance yoğunlaşması. En
 	// sonda: iki okuma da yumuşak düşer ve düştüklerinde yalnız bu
 	// kanıt "ölçülemedi" olur; prompt'un geri kalanı etkilenmez.
@@ -516,29 +351,81 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 
 	// v0.10.1044 — kod çekici depoyu stackSvc'den (boşsa grup servisi)
 	// çözer; çalışan sürüm stack'i veren OLAYDAN (exceptionStackVersion).
-	verSvc := stackSvc
+	verSvc := st.StackService
 	if verSvc == "" {
 		verSvc = g.Service
 	}
-	stackVersion := exceptionStackVersion(samples, stackSample, traceID, traceSpans,
-		verSvc, logStackSpan, logStackRes, stackRaw != "")
+	stackVersion := exceptionStackVersion(samples, st.StackSample, traceID, st.Trace.Spans,
+		verSvc, st.Logs.StackSpan, st.Logs.StackRes, st.StackRaw != "")
 
 	return ExceptionExplainInput{
-		User: assembleExceptionPrompt(g, loc, trend, stackForPrompt, traceBlock, logsBlock, deployBlock,
+		User: assembleExceptionPrompt(g, loc, trend, st.StackForPrompt, st.TraceBlock, st.LogsBlock, deployBlock,
 			renderPodConcentration(pods)),
-		EvTraces:     evTraces,
-		EvSpans:      evSpans,
-		LogsBlock:    logsBlock,
-		Stack:        stackRaw,
-		StackService: stackSvc,
+		EvTraces:     st.EvTraces,
+		EvSpans:      st.Trace.EvSpans,
+		LogsBlock:    st.LogsBlock,
+		Stack:        st.StackRaw,
+		StackService: st.StackService,
 		StackVersion: stackVersion,
-		DBStatements: dbStmts,
-		ErrorText:    truncRunes(g.Type+": "+g.Message+"\n"+stackRaw, 2000),
+		DBStatements: st.Trace.DBStatements,
+		ErrorText:    truncRunes(g.Type+": "+g.Message+"\n"+st.StackRaw, 2000),
 		TraceID:      traceID,
 		Trend:        trendRef,
 		Deploys:      nearby,
 		Pods:         pods,
 	}
+}
+
+// sampleTraceOut — span yolunun örnek trace kanıtı (v0.10.1103 çıkarımı).
+type sampleTraceOut struct {
+	TraceBlock, LogsBlock string
+	EvTraces              []string
+	Trace                 traceEvidenceResult
+	Logs                  traceLogsResult
+	// pickExceptionStack çıktısı (prompt kopyası / HAM / log-fallback servisi / örnek indeksi).
+	StackForPrompt, StackRaw, StackService string
+	StackSample                            int
+}
+
+// sampleTraceEvidence — örnek trace → kompakt span bloğu + o trace'in logları
+// + temsilî stack seçimi. v0.10.1103'e dek BuildExceptionExplainInput'un satır
+// içi gövdesiydi; okumalar artık ortak yardımcılarda (traceEvidence /
+// traceLogsEvidence — Oracle grubu da onları kullanır), biçim dizeleri ve
+// sıralama AYNEN (prompt bayt bayt eski; pin trace_evidence_test.go).
+func sampleTraceEvidence(ctx context.Context, store TraceSpanLoader, logs logstore.Store, traceID string, sampleStacks []string) sampleTraceOut {
+	var o sampleTraceOut
+	// Tam trace + kanıt (error span'ler GARANTİLİ — v0.9.414 verify bulgusu:
+	// düz head-cap derindeki hatayı düşürüyordu). Trace.Spans çalışan sürüm
+	// seçimine gider (v0.10.1044; ek okuma yok).
+	o.Trace = traceEvidence(ctx, store, traceID)
+	if o.Trace.Loaded() {
+		o.EvTraces = append(o.EvTraces, traceID)
+		if tp, ok := o.Trace.compactJSON(); ok {
+			o.TraceBlock = fmt.Sprintf("\n\nÖrnek hata TRACE'i (%s, %d span):\n```json\n%s\n```",
+				traceID, len(o.Trace.Compact), tp)
+		}
+	}
+	// Trace'in logları — tek pivot sorgusu; trace yüklenemediyse (1970
+	// penceresi) HİÇ gitme (v0.9.414 verify bulgusu, ES maliyet disiplini).
+	// İlk stack'li logun stack'i + servisi (v0.9.1225) ve span'i + resource'u
+	// (v0.10.1044) Logs.Stack* alanlarında.
+	o.Logs = traceLogsEvidence(ctx, logs, traceID, o.Trace.MinT, o.Trace.MaxT)
+
+	// v0.9.1225 — prompt kopyası ile kod-çekici istihkakı AYRILDI. User
+	// bayt-bayt eski (1800 rune'luk kırpık); Stack ise HAM taşınır —
+	// kardeş yol explain_trace_input.go v0.9.831'de aynı gerekçeyle
+	// ("kesik bir satır konumlandırılamaz") ham taşıyordu, burası kırpığı
+	// veriyordu: derin JBoss stack'lerinde Caused-by uygulama frame'leri
+	// 1800'ün altında kalıp pencereleme hiç isabet etmiyordu.
+	o.StackForPrompt, o.StackRaw, o.StackService, o.StackSample = pickExceptionStack(sampleStacks, o.Logs.Stack, o.Logs.StackService)
+
+	// v0.9.1239 — log bloğu ANCAK ŞİMDİ kurulabilir: her logun stack'i
+	// prompt'ta GÖRÜNEN temsilî stack'e karşı katlanıyor ve o seçim
+	// (pickExceptionStack) log döngüsünün kendi çıktısına bağlı.
+	if lp, ok := o.Logs.foldedJSON(o.StackForPrompt); ok {
+		o.LogsBlock = fmt.Sprintf("\n\nBu trace'in ilişkili LOGLARI (yüksek severity önce):\n```json\n%s\n```", lp)
+	}
+	return o
 }
 
 // NearbyDeploy — grubun başlangıcı çevresinde SEÇİLMİŞ deploy

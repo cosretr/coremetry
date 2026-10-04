@@ -154,7 +154,8 @@ func (e *ExceptionExplainer) run(ctx context.Context) {
 // tarayıcı yok → sunucu varsayılan dilimi (COREMETRY_TZ, v0.10.746).
 func (e *ExceptionExplainer) explainInput(ctx context.Context, g *chstore.ExceptionGroup) (ExceptionExplainInput, string) {
 	if chstore.IsOracleGroup(g.Fingerprint) {
-		return BuildOracleExceptionExplainInput(ctx, e.store, g, tzdefault.Location()), copilot.SystemPromptOracleException()
+		// v0.10.1103 — e.logs: Coremetry trace'inin logları (nil-güvenli).
+		return BuildOracleExceptionExplainInput(ctx, e.store, e.logs, g, tzdefault.Location()), copilot.SystemPromptOracleException()
 	}
 	return BuildExceptionExplainInput(ctx, e.store, e.logs, g, tzdefault.Location()), copilot.SystemPromptException()
 }

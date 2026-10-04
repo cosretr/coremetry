@@ -29,8 +29,13 @@ var (
 		if s.store != nil { // nil *Store'u arayüze sarmak nil olmayan arayüz verirdi
 			rd = s.store
 		}
-		return anomaly.BuildOracleExceptionExplainInput(ctx, rd, g, loc)
+		// v0.10.1103 — s.logs: satırın trace'i Coremetry'de varsa o trace'in
+		// logları da girdiye (nil = CH-only kurulum, log bloğu atlanır).
+		return buildOracleExceptionInput(ctx, rd, s.logs, g, loc)
 	}
+	// buildOracleExceptionInput — v0.10.1103 test dikişi: s.logs'un kurucuya
+	// ulaştığı store'suz testte pinlenir.
+	buildOracleExceptionInput = anomaly.BuildOracleExceptionExplainInput
 )
 
 // exceptionExplainInput — grubun girdisi + sistem prompt'u. `ora:` → Oracle
