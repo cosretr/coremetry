@@ -221,12 +221,35 @@ export function errorStripUnit(mode: 'span' | 'trace'): string {
   return mode === 'trace' ? 'traces' : 'spans';
 }
 
-/** errorStripHint — v0.10.1082: Errors şeridinin neyi saydığı (başlık ipucu). SAF. */
-export function errorStripHint(mode: 'span' | 'trace', capped: boolean): string {
-  const base = mode === 'trace'
-    ? "Errors + çip: çipe uyan span'ler hatasız, hata aynı trace'in başka span'inde — liste trace düzeyinde eşleşir; şerit listenin trace'lerini başlangıç zamanına göre sayar."
-    : "Errors + çip: çipe uyan hatalı span'ler sayılır — listeyle aynı küme (liste bu span'leri taşıyan trace'leri gösterir).";
+/** errorStripHint — v0.10.1082: Errors şeridinin neyi saydığı (başlık ipucu). SAF.
+ *  v0.10.1101 — scopeOnly: çipsiz Errors (yalnız servis / ortam / küme). */
+export function errorStripHint(mode: 'span' | 'trace', capped: boolean, scopeOnly = false): string {
+  const base = scopeOnly
+    ? "Errors: kapsamdaki TÜM hatalı span'ler sayılır (giriş, istemci, iç) — listenin yüklemiyle aynı (liste bu span'leri taşıyan trace'leri gösterir; liste tavanlıysa yalnız en yeni trace'leri)."
+    : mode === 'trace'
+      ? "Errors + çip: çipe uyan span'ler hatasız, hata aynı trace'in başka span'inde — liste trace düzeyinde eşleşir; şerit listenin trace'lerini başlangıç zamanına göre sayar."
+      : "Errors + çip: çipe uyan hatalı span'ler sayılır — listeyle aynı küme (liste bu span'leri taşıyan trace'leri gösterir).";
   return capped ? base + ' Aday kümesi tavana çarptı: en yeni trace\'ler sayıldı.' : base;
+}
+
+/** Şerit başlığı sayıları (TOTAL · ERRORS · ERR RATE · <stat> AVG). */
+export interface StripHeaderStats { total: number; err: number; errRate: number; rtAvg: number }
+
+/**
+ * stripHeaderStats — SAF (v0.10.1101; önce Traces.tsx'te satır içiydi): başlık
+ * sayıları ŞERİDİN KENDİ cevabından — count / errors / rt aynı uçtan (Errors
+ * şeridinde /api/traces/error-histogram, diğerlerinde metric-batch). Başlık ile
+ * çubuklar ayrı kaynaktan okuyamaz; Errors şeridinde ikisi de listenin kümesi.
+ */
+export function stripHeaderStats(vol: {
+  count: SpanMetricSeries[] | null; errors: SpanMetricSeries[] | null; rt: SpanMetricSeries[] | null;
+} | null | undefined): StripHeaderStats {
+  const cPts = vol?.count?.[0]?.points ?? [];
+  const eMap = new Map((vol?.errors?.[0]?.points ?? []).map(p => [p.time, p.value]));
+  let total = 0, err = 0;
+  for (const p of cPts) { total += p.value; err += eMap.get(p.time) ?? 0; }
+  const rtAvg = weightedStatAvg(vol?.count ?? null, vol?.rt ?? null);
+  return { total, err, errRate: total > 0 ? (err / total) * 100 : 0, rtAvg };
 }
 
 /** volumeUnitFor — birim etiketi: spans kapsamında "spans", değilse eski kural. */

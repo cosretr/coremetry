@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT, errorStripUnit, errorStripHint } from './volumeSeries';
+import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT, errorStripUnit, errorStripHint, stripHeaderStats } from './volumeSeries';
 
 const S = 1_000_000_000; // 1 saniye, ns
 const T0 = 1_700_000_000 * S;
@@ -225,6 +225,25 @@ describe('stripScope', () => {
     expect(errorStripHint('span', false)).toContain("hatalı span'ler");
     expect(errorStripHint('trace', true)).toContain('tavana');
     expect(errorStripHint('span', false)).not.toContain('tavana');
+    // v0.10.1101 — çipsiz Errors: tüm hatalı span'ler (giriş + istemci + iç).
+    expect(errorStripHint('span', false, true)).toContain('istemci');
+    expect(errorStripHint('span', false, true)).not.toContain('çip');
+  });
+  // v0.10.1101 — çipsiz Errors (yalnız / servis / ortam / küme): başlık sayıları
+  // (SPANS · ERROR SPANS · ERR RATE · <stat> AVG) şeridin KENDİ cevabından —
+  // error-histogram'ın count / errors / rt'si; eskiden metric-batch giriş
+  // span'lerini sayıyordu ve sayılar satırlarla tutmuyordu.
+  it('stripHeaderStats — error-histogram cevabından: toplam = hatalı span, oran %100, rt ağırlıklı', () => {
+    const resp = { count: mk([3, 0, 1]), errors: mk([3, 0, 1]), rt: mk([10, 0, 50]) };
+    expect(stripHeaderStats(resp)).toEqual({ total: 4, err: 4, errRate: 100, rtAvg: 20 });
+  });
+  it('stripHeaderStats — metric-batch cevabı (Errors kapalı): oran hatalı / toplam', () => {
+    expect(stripHeaderStats({ count: mk([90, 10]), errors: mk([1, 1]), rt: mk([5, 5]) }))
+      .toEqual({ total: 100, err: 2, errRate: 2, rtAvg: 5 });
+  });
+  it('stripHeaderStats — cevap yok / boş seri → sıfırlar (NaN yok)', () => {
+    expect(stripHeaderStats(null)).toEqual({ total: 0, err: 0, errRate: 0, rtAvg: 0 });
+    expect(stripHeaderStats({ count: [], errors: [], rt: [] })).toEqual({ total: 0, err: 0, errRate: 0, rtAvg: 0 });
   });
   it('birim ve ipucu kapsamı söyler', () => {
     expect(volumeUnitFor(true, 'entry')).toBe('traces');

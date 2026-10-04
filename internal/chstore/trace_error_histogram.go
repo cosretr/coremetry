@@ -32,6 +32,26 @@ package chstore
 // Neden trace_summary_5m değil: MV nitelik taşımaz (function_code / pod yok),
 // çip yüklemi ona karşı onurlandırılamaz. Ham `spans` burada zorunlu ve
 // sınırlı: zaman sınırı + LIMIT + max_execution_time her sorguda.
+//
+// v0.10.1101 — ÇİPSİZ Errors (yalnız servis / ortam / küme kapsamı) da bu
+// uçta. 1082 bu sınıfı metric-batch'te bırakmıştı: şerit GİRİŞ span'lerinin
+// hatasını sayıyordu (`kind IN (server, consumer)` + `status = error`), liste
+// ise HERHANGİ bir span'i hatalı trace'leri gösteriyor → istemci / iç span
+// hataları şeritte ve başlık sayılarında yoktu. Şimdi ③ kapsam kipi:
+// listenin kendi yüklemi (`status_code = 'error'`, hasErrorSpanLocal → WHERE)
+// span düzeyinde kovalanır, birim "spans", Mode "span".
+//   - Dar rollup önce (service_name, span_kind, status_code; 10s→1h): ortam /
+//     küme yoksa yüklem rollup boyutlarına birebir oturur ve kind kısıtı
+//     YOK — eski şeridin MV maliyet sınıfı korunur.
+//   - Yoksa (ortam / küme, rollup tablosu yok / kapsamıyor / step uymuyor)
+//     ham spans, listenin ham WHERE'iyle BAYT BAYT aynı (traceErrScopeWhere).
+//
+// Listenin trace_summary_5m'i bu sınıfta neden şerit kaynağı DEĞİL: span
+// süresi kuantil durumu taşımaz (rt serisi kurulamaz), 5 dk'dan ince kova
+// veremez, servis boyutu yok (servisli liste "servisin hatalı span'i olan
+// trace"), ve kova başına sayım tüm pencerenin durum satırlarını okumak
+// demek (prod'da 5 dk'lık kova ~milyon trace). Dar rollup aynı yüklemi
+// birkaç bin satırla cevaplar.
 
 import (
 	"context"
@@ -46,17 +66,157 @@ type TraceErrorHistogram struct {
 	Mode   string
 	Step   int
 	Capped bool
+	// Source — v0.10.1101: "rollup" (dar rollup) | "spans" (ham). Teşhis içindir.
+	Source string
 	Count  []SpanMetricPoint
 	Errors []SpanMetricPoint
 	RT     []SpanMetricPoint
 }
 
-// TraceErrorHistogramEligible — SAF: liste bu süzgeçte iki basamaklı hata
+// TraceErrorHistogramEligible — SAF: (i) liste bu süzgeçte iki basamaklı hata
 // kararını (traceLevelErrorEligible) veriyor VE ek bir trace-düzeyi daraltma
-// (süre / RequireServices) taşımıyor. Uygun değilse şerit metric-batch'te
-// kalır (frontend errorStripEligible aynası).
+// (süre / RequireServices) taşımıyor; ya da (ii) v0.10.1101 — çipsiz Errors,
+// yalnız servis / ortam / küme kapsamı (traceErrScopeOnlyEligible). Uygun
+// değilse şerit metric-batch'te kalır (frontend errorStripEligible aynası).
 func TraceErrorHistogramEligible(f TraceFilter) bool {
+	if traceErrScopeOnlyEligible(f) {
+		return true
+	}
 	return traceLevelErrorEligible(f) && f.MinMs == 0 && f.MaxMs == 0 && len(f.RequireServices) == 0
+}
+
+// traceErrScopeOnlyEligible — SAF (v0.10.1101): Errors + YALNIZ kapsam
+// (pencere / servis / ortam / küme); çip, arama, trace id, süre, services ve
+// kök YOK. Bu sınıfta hasErrorSpanLocal doğrudur: liste hatayı WHERE'de span
+// düzeyinde arar (`status_code = 'error'`), MV dalı aynı yüklemi
+// error_count_state > 0 olarak okur. Kök hariç: kök trace düzeyi bir HAVING,
+// span sayımı onu taşıyamaz → metric-batch'te kalır.
+func traceErrScopeOnlyEligible(f TraceFilter) bool {
+	return f.HasError && len(f.Filters) == 0 && (f.FilterRoot == nil || !f.FilterRoot.hasPredicate()) &&
+		f.Search == "" && f.TraceID == "" && len(f.TraceIDs) == 0 && len(f.CandidateIDs) == 0 &&
+		f.MinMs == 0 && f.MaxMs == 0 && len(f.RequireServices) == 0 && !f.RootOnly
+}
+
+// traceErrScopeWhere — SAF (v0.10.1101): ③ kapsam kipinin WHERE'i = listenin
+// ham yolunun KENDİ çağrısı (GetTraces → buildGetTracesWhere(f)); hata yüklemi
+// servisin hemen ardında, ortam / küme ondan sonra. Servisli MV dalının
+// hata-önce adayları (errorFirstCandidates) aynı baytları üretir — parite
+// testli (trace_error_histogram_test.go).
+func traceErrScopeWhere(f TraceFilter, clusterExpr string) whereClause {
+	return buildGetTracesWhere(f, clusterExpr)
+}
+
+// traceErrScopeRollupFilter — SAF (v0.10.1101): aynı yüklemin dar rollup
+// karşılığı: status = error (+ servis), kind kısıtı YOK. Pencere başı
+// listenin ham WHERE'inin KENDİ ilk argümanı (5 dk hizası, buildGetTracesWhere)
+// — iki yüzeyin pencere başı ayrışamaz. Ortam / küme rollup boyutu değil →
+// ok=false, ham yol (eski şerit de o hâlde hamdı).
+//
+// Katman tavanı 5 dk (traceErrScopeRollupMaxStep): adım 5 dk'yı aşınca
+// (≈50 sa+ pencere → 1 sa adım) rollup 1 sa katmanına düşer ve `ts >= listFrom`
+// 5 dk hizalı pencere başının içindeki ilk kısmi saati OKUMAZDI (liste onu
+// sayar). Bu yüzden okuma hep ≤5 dk katmandan (adım 300'ün katı değilse ham
+// yol), çıktı kovasına Go'da katlanır (foldHeadBuckets). Pencere sonu:
+// "şimdi"de biten pencerede fazlalık olamaz; fırçalanmış pencerede son kısmi
+// 5 dk satırı pencere sonunu ≤5 dk aşabilir (eski şeritte de öyleydi; not).
+func traceErrScopeRollupFilter(f TraceFilter, stepSec int, q float64) (SpanMetricBatchFilter, bool) {
+	if f.Env != "" || f.Cluster != "" || f.From.IsZero() || f.To.IsZero() {
+		return SpanMetricBatchFilter{}, false
+	}
+	listFrom, ok := traceErrScopeWhere(f, "").args[0].(time.Time)
+	if !ok {
+		return SpanMetricBatchFilter{}, false
+	}
+	if stepSec > traceErrScopeRollupMaxStep {
+		if stepSec%traceErrScopeRollupMaxStep != 0 {
+			return SpanMetricBatchFilter{}, false
+		}
+		stepSec = traceErrScopeRollupMaxStep
+	}
+	filters := []FilterExpr{{Key: "status", Op: "=", Values: []string{"error"}}}
+	if f.Service != "" {
+		filters = append(filters, FilterExpr{Key: "service.name", Op: "=", Values: []string{f.Service}})
+	}
+	return SpanMetricBatchFilter{
+		Filters:     filters,
+		From:        listFrom,
+		To:          f.To,
+		StepSeconds: stepSec,
+		Aggs: []SpanMetricAggSpec{
+			{Name: "count", Aggregation: "count"},
+			{Name: "rt", Aggregation: traceErrHistRollupQuantile(q), Field: "duration_ms"},
+		},
+	}, true
+}
+
+// traceErrScopeRollupMaxStep — ③ kapsam kipinde rollup okuma adımının tavanı (sn).
+const traceErrScopeRollupMaxStep = 300
+
+// traceErrHistRollupQuantile — SAF: q → dar rollup agg adı (p50/p95/p99;
+// handler beyaz listesiyle aynı üç değer).
+func traceErrHistRollupQuantile(q float64) string {
+	switch q {
+	case 0.95:
+		return "p95"
+	case 0.99:
+		return "p99"
+	default:
+		return "p50"
+	}
+}
+
+// foldHeadBuckets — SAF (tablo testli): rollup noktaları çıktı adımına
+// (stepNs; 0 = adım katlama yok) hizalanır ve pencere başından önceki kovalar
+// (listenin 5 dk hizalı dilimi) ilk kovaya katlanır — ham yolun greatest()
+// kuralının rollup karşılığı; toplam liste kadar kalır. Sayı toplanır; rt
+// katlanan kovada sayı-ağırlıklı ortalama (rollup tDigest durumu Go'ya
+// gelmez; yaklaşık). Tek katkılı kovanın rt'si aynen.
+func foldHeadBuckets(count, rt []SpanMetricPoint, first, stepNs int64) ([]SpanMetricPoint, []SpanMetricPoint) {
+	if len(count) == 0 {
+		return nil, nil
+	}
+	rtAt := make(map[int64]float64, len(rt))
+	for _, p := range rt {
+		rtAt[p.Time] = p.Value
+	}
+	type acc struct {
+		n, w, rt float64
+		k        int
+	}
+	by := map[int64]*acc{}
+	keys := make([]int64, 0, len(count))
+	for _, p := range count {
+		t := p.Time
+		if stepNs > 0 {
+			t = (t / stepNs) * stepNs
+		}
+		if t < first {
+			t = first
+		}
+		a := by[t]
+		if a == nil {
+			a = &acc{}
+			by[t] = a
+			keys = append(keys, t)
+		}
+		a.n += p.Value
+		a.w += p.Value * rtAt[p.Time]
+		a.rt = rtAt[p.Time]
+		a.k++
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	oc := make([]SpanMetricPoint, 0, len(keys))
+	or := make([]SpanMetricPoint, 0, len(keys))
+	for _, k := range keys {
+		a := by[k]
+		v := a.rt
+		if a.k > 1 && a.n > 0 {
+			v = a.w / a.n
+		}
+		oc = append(oc, SpanMetricPoint{Time: k, Value: a.n})
+		or = append(or, SpanMetricPoint{Time: k, Value: v})
+	}
+	return oc, or
 }
 
 // traceErrHistBucketExpr — kova ifadesi: pencere başından önceki satırlar
@@ -158,9 +318,29 @@ func quantileLinear(xs []float64, q float64) float64 {
 // q = yanıt-süresi istatistiği (0.5 / 0.95 / 0.99); step clampSpanMetricStep'ten
 // geçer (nokta bütçesi metric-batch ile aynı).
 func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec int, q float64) (TraceErrorHistogram, error) {
-	out := TraceErrorHistogram{Step: clampSpanMetricStep(stepSec, f.From, f.To, 0)}
+	out := TraceErrorHistogram{Step: clampSpanMetricStep(stepSec, f.From, f.To, 0), Source: "spans"}
 	if !TraceErrorHistogramEligible(f) {
-		return out, fmt.Errorf("trace error histogram: süzgeç uygun değil (Errors + span-düzeyi çip, arama / süre / services yok)")
+		return out, fmt.Errorf("trace error histogram: süzgeç uygun değil (Errors + span-düzeyi çip ya da yalnız servis / ortam / küme; arama / süre / services yok)")
+	}
+	stepNs := int64(out.Step) * int64(time.Second)
+	fromNs := f.From.UnixNano()
+	if traceErrScopeOnlyEligible(f) {
+		// ③ — v0.10.1101: çipsiz Errors; liste kip probu koşmaz (çip yok).
+		out.Mode = traceErrModeSpan
+		if bf, ok := traceErrScopeRollupFilter(f, out.Step, q); ok {
+			if res, ok := s.tryNarrowRollupFastPathMulti(ctx, bf, 0, 0); ok {
+				out.Source = "rollup"
+				out.Count, out.RT = foldHeadBuckets(firstSeriesPoints(res["count"]), firstSeriesPoints(res["rt"]), (fromNs/stepNs)*stepNs, stepNs)
+				out.Errors = out.Count // yüklem status = error: her sayılan span hatalı
+				return out, nil
+			}
+		}
+		count, rt, err := s.traceErrHistSpanRows(ctx, traceErrScopeWhere(f, s.clusterExpr()), fromNs, stepNs, q)
+		if err != nil {
+			return out, err
+		}
+		out.Count, out.RT, out.Errors = count, rt, count
+		return out, nil
 	}
 	// Liste ile AYNI kip kararı (aynı fonksiyon, aynı prob).
 	ids, mode, capped, err := s.traceLevelErrorCandidates(ctx, f)
@@ -168,34 +348,16 @@ func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec 
 		return out, err
 	}
 	out.Mode = mode
-	stepNs := int64(out.Step) * int64(time.Second)
-	fromNs := f.From.UnixNano()
 	if mode == traceErrModeSpan {
 		// ① — listenin probuyla AYNI WHERE. Root bayrağı span kipinde
 		// uygulanmaz (v0.10.1008 kararı: kök yüklemi çipli span'de AND'lenince
 		// sıfır; liste kökü trace düzeyinde ayrıca doğrular).
-		wc := traceErrBothWhere(f, s.clusterExpr())
-		args := append([]any{fromNs, stepNs, stepNs}, wc.args...)
-		rows, err := s.telemetryReadConn().Query(ctx, traceErrHistSpanSQL(wc.sql(), q), args...)
+		count, rt, err := s.traceErrHistSpanRows(ctx, traceErrBothWhere(f, s.clusterExpr()), fromNs, stepNs, q)
 		if err != nil {
-			return out, fmt.Errorf("trace error histogram (span): %w", err)
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var b int64
-			var n uint64
-			var rt float64
-			if err := rows.Scan(&b, &n, &rt); err != nil {
-				return out, err
-			}
-			out.Count = append(out.Count, SpanMetricPoint{Time: b, Value: float64(n)})
-			out.RT = append(out.RT, SpanMetricPoint{Time: b, Value: rt})
-		}
-		if err := rows.Err(); err != nil {
 			return out, err
 		}
 		// Her sayılan span hatalıdır (yüklem bunu şart koşuyor).
-		out.Errors = out.Count
+		out.Count, out.RT, out.Errors = count, rt, count
 		return out, nil
 	}
 	// ② — listenin aday kümesi; boşsa liste de boş.
@@ -230,6 +392,37 @@ func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec 
 	// ② kümesindeki her trace hatalıdır (aday = hata-doğrulanmış).
 	out.Errors = out.Count
 	return out, nil
+}
+
+// traceErrHistSpanRows — span kipi okuması (① ve ③ ham): verilen WHERE'e
+// uyan span'ler kovalanır (traceErrHistSpanSQL; zaman sınırı WHERE'de, LIMIT
+// + max_execution_time SQL'de).
+func (s *Store) traceErrHistSpanRows(ctx context.Context, wc whereClause, fromNs, stepNs int64, q float64) (count, rt []SpanMetricPoint, err error) {
+	args := append([]any{fromNs, stepNs, stepNs}, wc.args...)
+	rows, err := s.telemetryReadConn().Query(ctx, traceErrHistSpanSQL(wc.sql(), q), args...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("trace error histogram (span): %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var b int64
+		var n uint64
+		var v float64
+		if err := rows.Scan(&b, &n, &v); err != nil {
+			return nil, nil, err
+		}
+		count = append(count, SpanMetricPoint{Time: b, Value: float64(n)})
+		rt = append(rt, SpanMetricPoint{Time: b, Value: v})
+	}
+	return count, rt, rows.Err()
+}
+
+// firstSeriesPoints — SAF: grupsuz batch cevabının tek serisi (yoksa nil).
+func firstSeriesPoints(ss []SpanMetricSeries) []SpanMetricPoint {
+	if len(ss) == 0 {
+		return nil
+	}
+	return ss[0].Points
 }
 
 // traceErrHistTraceRows — adayların başlangıç + süresi; kapsam listenin satır

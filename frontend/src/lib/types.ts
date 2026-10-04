@@ -7742,6 +7742,8 @@ export interface TraceErrorHistogramResponse {
   stepSeconds: number;
   mode: 'span' | 'trace';
   capped: boolean;
+  /** v0.10.1101 — "rollup" (dar rollup) | "spans" (ham); teşhis. */
+  source?: 'rollup' | 'spans';
 }
 
 // v0.9.657 — dış log sistemi köprü şablonları (v0.9.655 backend'i).

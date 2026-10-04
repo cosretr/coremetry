@@ -16,6 +16,11 @@ package api
 // metric-batch'in gövdesi (filters + dsl + bağlam çipleri) bu eşlemeyi ancak
 // elle yeniden kurarak taşıyabilirdi; tam o elle kurulum bu bug'ı üretti.
 //
+// v0.10.1101 — çipsiz Errors (yalnız servis / ortam / küme) da bu uca geldi:
+// metric-batch orada giriş span'lerinin hatasını sayıyordu (kind kısıtı),
+// liste herhangi bir span'i hatalı trace'leri. Kip ve kaynak seçimi (dar
+// rollup önce, yoksa listenin ham WHERE'i): chstore/trace_error_histogram.go.
+//
 //	GET /api/traces/error-histogram?<listenin süzgeç parametreleri>&step=&stat=p50|p95|p99
 //
 // Rol kapısı YOK — /api/traces gibi salt-okunur. serveCached 30s (şeridin
@@ -76,6 +81,7 @@ func traceErrorHistogramPayload(h chstore.TraceErrorHistogram) map[string]any {
 		"stepSeconds": h.Step,
 		"mode":        h.Mode,
 		"capped":      h.Capped,
+		"source":      h.Source, // v0.10.1101 — "rollup" | "spans" (teşhis)
 	}
 }
 
@@ -88,7 +94,7 @@ func (s *Server) getTraceErrorHistogram(w http.ResponseWriter, r *http.Request) 
 	}
 	if !chstore.TraceErrorHistogramEligible(f) {
 		writeJSONError(w, http.StatusBadRequest,
-			"error-histogram yalnız Errors + span-düzeyi çip içindir (arama / süre / services / traceId yok); diğer hâller /api/spans/metric-batch")
+			"error-histogram yalnız Errors + span-düzeyi çip ya da Errors + yalnız servis / ortam / küme içindir (arama / süre / services / traceId yok; çipsizken Root yok); diğer hâller /api/spans/metric-batch")
 		return
 	}
 	step := parseInt(q.Get("step"), 0)

@@ -40,10 +40,30 @@ func TestTraceErrorHistogramSharesListParser(t *testing.T) {
 	}
 }
 
+// v0.10.1101 — çipsiz Errors (yalnız / servis / ortam / küme): liste sorgu
+// dizesinden uygun TraceFilter kurulur; şerit metric-batch'e düşmez.
+func TestTraceErrorHistogramScopeOnlyEligible(t *testing.T) {
+	for _, qs := range []string{
+		"hasError=true",
+		"hasError=true&service=svc-a",
+		"hasError=true&env=prod",
+		"hasError=true&service=svc-a&cluster=c1",
+	} {
+		q, _ := url.ParseQuery("from=1791021600000000000&to=1791025200000000000&" + qs)
+		f, err := parseTraceFilter(q)
+		if err != nil {
+			t.Fatalf("%s: %v", qs, err)
+		}
+		if !chstore.TraceErrorHistogramEligible(f) {
+			t.Errorf("%s: uygun olmalı", qs)
+		}
+	}
+}
+
 func TestTraceErrorHistogramRejectsIneligible(t *testing.T) {
 	s := &Server{}
 	cases := []string{
-		"hasError=true", // çip yok → metric-batch
+		"hasError=true&rootOnly=true", // v0.10.1101 — çipsiz + Root → metric-batch (kök trace düzeyi)
 		"filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`), // Errors yok
 		"hasError=true&search=x&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`),
 		"hasError=true&minMs=5&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`),
@@ -90,17 +110,18 @@ func TestTraceErrorHistogramKey(t *testing.T) {
 // kip/tavan; boş seri null değil [] (FE .map()'liyor).
 func TestTraceErrorHistogramPayload(t *testing.T) {
 	p := []chstore.SpanMetricPoint{{Time: 1, Value: 2}}
-	b, _ := json.Marshal(traceErrorHistogramPayload(chstore.TraceErrorHistogram{Mode: "trace", Step: 60, Capped: true, Count: p, Errors: p, RT: p}))
+	b, _ := json.Marshal(traceErrorHistogramPayload(chstore.TraceErrorHistogram{Mode: "trace", Step: 60, Capped: true, Source: "rollup", Count: p, Errors: p, RT: p}))
 	var got struct {
 		Series      map[string][]chstore.SpanMetricSeries `json:"series"`
 		StepSeconds int                                   `json:"stepSeconds"`
 		Mode        string                                `json:"mode"`
 		Capped      bool                                  `json:"capped"`
+		Source      string                                `json:"source"` // v0.10.1101
 	}
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.StepSeconds != 60 || got.Mode != "trace" || !got.Capped || len(got.Series["count"]) != 1 || got.Series["errors"][0].Points[0].Value != 2 {
+	if got.StepSeconds != 60 || got.Mode != "trace" || !got.Capped || got.Source != "rollup" || len(got.Series["count"]) != 1 || got.Series["errors"][0].Points[0].Value != 2 {
 		t.Fatalf("zarf: %s", b)
 	}
 	b, _ = json.Marshal(traceErrorHistogramPayload(chstore.TraceErrorHistogram{Mode: "trace", Step: 60}))

@@ -41,7 +41,16 @@ func TestTraceErrorHistogramEligible(t *testing.T) {
 		{"Errors + k8s.pod.name çipi", histFilter(chipPod), true},
 		{"servisli de", withSvc, true},
 		{"Errors yok → metric-batch", TraceFilter{Filters: []FilterExpr{chipFunctionCode}}, false},
-		{"çip yok → metric-batch (dar rollup)", TraceFilter{HasError: true}, false},
+		// v0.10.1101 — çipsiz Errors da bu uçta (③ kapsam kipi).
+		{"çip yok, yalnız Errors", TraceFilter{HasError: true}, true},
+		{"çip yok, Errors + servis", TraceFilter{HasError: true, Service: "svc-a"}, true},
+		{"çip yok, Errors + ortam + küme", TraceFilter{HasError: true, Env: "prod", Cluster: "c1"}, true},
+		{"çip yok + Root → metric-batch (kök trace düzeyi)", TraceFilter{HasError: true, RootOnly: true}, false},
+		{"çip yok + arama → metric-batch", TraceFilter{HasError: true, Search: "timeout"}, false},
+		{"çip yok + süre → metric-batch", TraceFilter{HasError: true, MaxMs: 900}, false},
+		{"çip yok + services → metric-batch", TraceFilter{HasError: true, RequireServices: []string{"a"}}, false},
+		{"çip yok + trace id → metric-batch", TraceFilter{HasError: true, TraceID: "abc"}, false},
+		{"çip yok, Errors yok → metric-batch", TraceFilter{Service: "svc-a"}, false},
 		{"arama + çip → liste HAVING'de, metric-batch", func() TraceFilter { f := histFilter(chipFunctionCode); f.Search = "x"; return f }(), false},
 		{"süre süzgeci → metric-batch", func() TraceFilter { f := histFilter(chipFunctionCode); f.MinMs = 5; return f }(), false},
 		{"services → metric-batch", func() TraceFilter { f := histFilter(chipFunctionCode); f.RequireServices = []string{"a"}; return f }(), false},
@@ -227,6 +236,173 @@ func TestQuantileLinear(t *testing.T) {
 	}
 }
 
+// v0.10.1101 — Errors açık, çip YOK (yalnız servis / ortam / küme). 1082 bu
+// sınıfı metric-batch'te bırakmıştı: şerit giriş span'lerinin hatasını
+// sayıyordu (`kind IN (server, consumer)` + `status = error`), liste herhangi
+// bir span'i hatalı trace'leri gösteriyor → istemci / iç span hataları şeritte
+// ve "x ERROR SPANS / ERR RATE" başlığında yoktu. Parite: şeridin ham WHERE'i
+// listenin bu sınıftaki HER yolunun WHERE'iyle bayt bayt aynı.
+func TestTraceErrScopeWhereMatchesList(t *testing.T) {
+	const ce = "cluster_name"
+	base := TraceFilter{HasError: true, From: histFrom, To: histFrom.Add(time.Hour), Limit: 50, CountMode: "skip"}
+	cases := []struct {
+		name      string
+		mut       func(*TraceFilter)
+		wantWhere string
+		wantArgs  []any
+		// listenin bu süzgeçte koştuğu yol
+		listMV, errorFirst bool
+		// dar rollup'a oturur mu (ortam / küme rollup boyutu değil)
+		rollup bool
+	}{
+		{"(a) yalnız Errors", func(*TraceFilter) {},
+			"WHERE time >= ? AND time <= ? AND status_code = 'error'",
+			[]any{histFrom.Truncate(5 * time.Minute), histFrom.Add(time.Hour)}, true, false, true},
+		{"(b) Errors + servis", func(f *TraceFilter) { f.Service = "svc-a" },
+			"WHERE time >= ? AND time <= ? AND service_name = ? AND status_code = 'error'",
+			[]any{histFrom.Truncate(5 * time.Minute), histFrom.Add(time.Hour), "svc-a"}, true, true, true},
+		{"(c) Errors + ortam", func(f *TraceFilter) { f.Env = "prod" },
+			"WHERE time >= ? AND time <= ? AND status_code = 'error' AND deploy_env = ?",
+			[]any{histFrom.Truncate(5 * time.Minute), histFrom.Add(time.Hour), "prod"}, false, false, false},
+		{"(c) Errors + servis + küme", func(f *TraceFilter) { f.Service, f.Cluster = "svc-a", "c1" },
+			"WHERE time >= ? AND time <= ? AND service_name = ? AND status_code = 'error' AND cluster_name = ?",
+			[]any{histFrom.Truncate(5 * time.Minute), histFrom.Add(time.Hour), "svc-a", "c1"}, false, false, false},
+	}
+	for _, c := range cases {
+		f := base
+		c.mut(&f)
+		if !traceErrScopeOnlyEligible(f) || !TraceErrorHistogramEligible(f) {
+			t.Fatalf("%s: ③ kapsam kipine uygun olmalı", c.name)
+		}
+		if !hasErrorSpanLocal(f) {
+			t.Fatalf("%s: bu sınıfta liste hatayı WHERE'de aramalı (hasErrorSpanLocal)", c.name)
+		}
+		strip := traceErrScopeWhere(f, ce)
+		if strip.sql() != c.wantWhere || !reflect.DeepEqual(strip.args, c.wantArgs) {
+			t.Errorf("%s: şerit WHERE\n got %s %#v\nwant %s %#v", c.name, strip.sql(), strip.args, c.wantWhere, c.wantArgs)
+		}
+		if strings.Contains(strip.sql(), "kind") {
+			t.Errorf("%s: şerit giriş kind kısıtı taşımamalı (liste taşımıyor)", c.name)
+		}
+		// Listenin ham yolu (MV dışı / MV-gap / <5 dk pencere): GetTraces →
+		// buildGetTracesWhere(f) — kip probu ve hata-önce bu sınıfta koşmaz.
+		if traceLevelErrorEligible(f) || errorFirstEligible(f) {
+			t.Errorf("%s: ham liste yolu WHERE'i değiştirmemeli", c.name)
+		}
+		raw := buildGetTracesWhere(f, ce)
+		if raw.sql() != strip.sql() || !reflect.DeepEqual(raw.args, strip.args) {
+			t.Errorf("%s: liste ham WHERE'i ayrıştı:\n%s\n%s", c.name, raw.sql(), strip.sql())
+		}
+		if got := tracesMVEligible(f) && countModeAllowsMV(f.CountMode); got != c.listMV {
+			t.Errorf("%s: liste MV yolu %v, beklenen %v", c.name, got, c.listMV)
+		}
+		if c.errorFirst {
+			// Servisli MV dalı: adaylar hata-önce (spans) — aynı WHERE.
+			ef := buildGetTracesWhere(errorFirstFilter(f), ce)
+			ef.add("status_code = 'error'")
+			if ef.sql() != strip.sql() || !reflect.DeepEqual(ef.args, strip.args) {
+				t.Errorf("%s: hata-önce WHERE'i ayrıştı:\n%s\n%s", c.name, ef.sql(), strip.sql())
+			}
+		}
+		if c.listMV && !c.errorFirst {
+			// Servissiz MV dalı: trace_summary_5m'de aynı yüklem (hatalı span ≥ 1).
+			if !noServiceSlicePlan(f).errorsPrefilter ||
+				!strings.Contains((&Store{}).traceSliceScanSQL("desc", true), "finalizeAggregation(error_count_state) > 0") {
+				t.Errorf("%s: liste MV dilimi hata ön süzgecini taşımalı", c.name)
+			}
+		}
+		// Dar rollup: aynı yüklem (status = error [+ servis]), kind YOK, aynı pencere başı.
+		bf, ok := traceErrScopeRollupFilter(f, 60, 0.95)
+		if ok != c.rollup {
+			t.Fatalf("%s: rollup uygunluğu %v, beklenen %v", c.name, ok, c.rollup)
+		}
+		if !ok {
+			continue
+		}
+		q, nok := narrowRollupEligible(bf)
+		if !nok {
+			t.Fatalf("%s: rollup süzgeci dar rollup'a oturmalı", c.name)
+		}
+		got := map[string][]string{}
+		for _, cj := range q.conjuncts {
+			got[cj.col] = cj.values
+		}
+		want := map[string][]string{"status_code": {"error"}}
+		if f.Service != "" {
+			want["service_name"] = []string{f.Service}
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: rollup yüklemi %v, beklenen %v", c.name, got, want)
+		}
+		if !bf.From.Equal(strip.args[0].(time.Time)) || !bf.To.Equal(f.To) {
+			t.Errorf("%s: rollup penceresi listeninkinden ayrıştı: %v–%v", c.name, bf.From, bf.To)
+		}
+		if bf.Aggs[1].Aggregation != "p95" {
+			t.Errorf("%s: rt istatistiği p95 olmalı: %v", c.name, bf.Aggs[1])
+		}
+	}
+}
+
+// v0.10.1101 — rollup okuma adımı ≤5 dk: saatlik katman ilk kısmi saati kaçırırdı.
+func TestTraceErrScopeRollupStepCap(t *testing.T) {
+	f := TraceFilter{HasError: true, From: time.Unix(1_700_000_000, 0), To: time.Unix(1_700_259_200, 0)}
+	for _, c := range []struct {
+		step, want int
+		ok         bool
+	}{{60, 60, true}, {300, 300, true}, {3600, 300, true}, {14400, 300, true}, {450, 0, false}} {
+		bf, ok := traceErrScopeRollupFilter(f, c.step, 0.95)
+		if ok != c.ok || (ok && bf.StepSeconds != c.want) {
+			t.Errorf("adım %d: ok=%v step=%d, beklenen ok=%v step=%d", c.step, ok, bf.StepSeconds, c.ok, c.want)
+		}
+	}
+}
+
+func TestTraceErrHistRollupQuantile(t *testing.T) {
+	for q, want := range map[float64]string{0.5: "p50", 0.95: "p95", 0.99: "p99", 0.9: "p50"} {
+		if got := traceErrHistRollupQuantile(q); got != want {
+			t.Errorf("%v → %s, beklenen %s", q, got, want)
+		}
+	}
+}
+
+// Rollup kovaları ham yolun greatest() kuralıyla ilk kovaya katlanır; toplam korunur.
+func TestFoldHeadBuckets(t *testing.T) {
+	t.Run("adım katlama: 5 dk satırları saatlik kovaya, baş dilimi ilk kovaya", func(t *testing.T) {
+		p := func(t int64, v float64) SpanMetricPoint { return SpanMetricPoint{Time: t, Value: v} }
+		// first = 3600 (pencere başı 3600 hizalı), adım 3600; satırlar 300 adımlı.
+		count := []SpanMetricPoint{p(3300, 1), p(3600, 2), p(6900, 3), p(7200, 4)}
+		rt := []SpanMetricPoint{p(3300, 10), p(3600, 20), p(6900, 30), p(7200, 40)}
+		gc, gr := foldHeadBuckets(count, rt, 3600, 3600)
+		wantC := []SpanMetricPoint{p(3600, 6), p(7200, 4)}
+		wantRT := []SpanMetricPoint{p(3600, (10*1+20*2+30*3)/6.0), p(7200, 40)}
+		if !reflect.DeepEqual(gc, wantC) || !reflect.DeepEqual(gr, wantRT) {
+			t.Errorf("sayı %v rt %v", gc, gr)
+		}
+	})
+
+	const first = int64(600)
+	p := func(t int64, v float64) SpanMetricPoint { return SpanMetricPoint{Time: t, Value: v} }
+	cases := []struct {
+		name          string
+		count, rt     []SpanMetricPoint
+		wantC, wantRT []SpanMetricPoint
+	}{
+		{"boş", nil, nil, nil, nil},
+		{"katlanacak yok, rt aynen", []SpanMetricPoint{p(600, 3), p(660, 1)}, []SpanMetricPoint{p(600, 12.5), p(660, 7)},
+			[]SpanMetricPoint{p(600, 3), p(660, 1)}, []SpanMetricPoint{p(600, 12.5), p(660, 7)}},
+		{"baş dilimi ilk kovaya, rt sayı-ağırlıklı", []SpanMetricPoint{p(480, 1), p(540, 1), p(600, 2)}, []SpanMetricPoint{p(480, 40), p(540, 20), p(600, 10)},
+			[]SpanMetricPoint{p(600, 4)}, []SpanMetricPoint{p(600, 20)}},
+		{"ilk kova boşken baş dilimi onu kurar", []SpanMetricPoint{p(540, 2), p(720, 1)}, []SpanMetricPoint{p(540, 9), p(720, 3)},
+			[]SpanMetricPoint{p(600, 2), p(720, 1)}, []SpanMetricPoint{p(600, 9), p(720, 3)}},
+	}
+	for _, c := range cases {
+		gc, gr := foldHeadBuckets(c.count, c.rt, first, 0)
+		if !reflect.DeepEqual(gc, c.wantC) || !reflect.DeepEqual(gr, c.wantRT) {
+			t.Errorf("%s: sayı %v rt %v", c.name, gc, gr)
+		}
+	}
+}
+
 // Kablolama: kip kararı listenin KENDİ fonksiyonundan (traceLevelErrorCandidates),
 // ① WHERE'i traceErrBothWhere'den; liste probu da aynı yardımcıyı çağırır.
 func TestTraceErrorHistogramWiring(t *testing.T) {
@@ -244,10 +420,18 @@ func TestTraceErrorHistogramWiring(t *testing.T) {
 		"traceErrBothWhere(f, s.clusterExpr())",
 		"s.filterRootTracesAt(ctx, cands, f.From, f.To",
 		"bucketTraceStarts(tr, fromNs, out.Step, q)",
+		// v0.10.1101 — ③ kapsam kipi: rollup önce, yoksa listenin ham WHERE'i.
+		"s.tryNarrowRollupFastPathMulti(ctx, bf, 0, 0)",
+		"traceErrScopeWhere(f, s.clusterExpr())",
+		"return buildGetTracesWhere(f, clusterExpr)",
 	} {
 		if !strings.Contains(src, w) {
 			t.Errorf("trace_error_histogram.go %q taşımalı", w)
 		}
+	}
+	// ③'ün ham WHERE'i listenin ham yolunun KENDİ çağrısıdır (GetTraces).
+	if !strings.Contains(funcBody(t, "repo.go", "func (s *Store) GetTraces("), "wc := buildGetTracesWhere(f, s.clusterExpr())") {
+		t.Error("GetTraces ham yolu buildGetTracesWhere(f, …) çağırmalı (şerit ③ aynı çağrıyı paylaşır)")
 	}
 	lvl := readSrc(t, "trace_error_tracelevel.go")
 	if !strings.Contains(lvl, "return chip, errw, traceErrBothWhere(f, clusterExpr)") {

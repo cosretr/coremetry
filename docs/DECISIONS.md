@@ -1697,6 +1697,25 @@ gecikmesi (`GroupLag`, aynı önbellek) kadar geriden ölçer — eskiden ≥16 
 bulunmayan grup aday değil; tik başına 4 / kota kapıları aynen. AI çekmecesinin takip sohbeti (read_source_code yolu)
 değişmedi.
 
+## 2026-10-04 — Traces: süzgeçsiz Errors'ta da histogram listeyle aynı kümeyi sayar (v0.10.1101)
+
+**Sorun (1082'de açık kalan):** Errors açık, çip yok (ya da yalnız servis / ortam / küme) → şerit metric-batch'te
+GİRİŞ span'lerinin hatasını sayıyordu (`kind IN (server, consumer)` + `status = error`); liste ise herhangi bir
+span'i hatalı trace'leri gösteriyor. İstemci / iç span hataları şeritte ve "x ERROR SPANS / ERR RATE" başlığında
+yoktu. **Karar:** bu sınıf da v0.10.1082'nin `GET /api/traces/error-histogram`'ına gider (③ kapsam kipi, birim
+"spans", Mode "span"): listenin kendi yüklemi `status_code = 'error'` (hasErrorSpanLocal → WHERE). Kaynak: ortam /
+küme yoksa DAR rollup (service_name, span_kind, status_code; kind kısıtı yok, pencere başı listenin 5 dk hizası,
+baş dilimi ilk kovaya katlanır) — eski şeridin MV maliyet sınıfı; yoksa ham `spans`, listenin ham WHERE'iyle bayt bayt
+aynı (`traceErrScopeWhere` = `buildGetTracesWhere(f)`; servisli MV dalının hata-önce WHERE'i de aynı). Liste bu
+sınıfta `trace_summary_5m`'den okur (servissiz dilim `error_count_state > 0`), ama şerit kaynağı olamaz: span süresi
+kuantili yok, 5 dk'dan ince kova yok, servis boyutu yok, kova sayımı pencerenin tüm durum satırlarını okur. Çipsiz +
+Root metric-batch'te kalır (kök trace düzeyi; span sayımı taşıyamaz). Errors kapalı hâller değişmedi. Başlık
+sayıları şeridin kendi cevabından (`stripHeaderStats`). Pin: `chstore/trace_error_histogram_test.go` (parite
+a/b/c), `api/trace_error_histogram_test.go`, `pages/traces/scopeParams.test.ts`, `volumeSeries.test.ts`. İnceleme
+düzeltmesi: rollup okuma adımı ≤5 dk (`traceErrScopeRollupMaxStep`) — 3g+ pencerede saatlik katman 5 dk hizalı pencere
+başının ilk kısmi saatini okumuyordu; şimdi 5 dk satırları Go'da çıktı adımına katlanır. Fırçalanmış pencerede son
+kısmi 5 dk satırı pencere sonunu ≤5 dk aşabilir (eski şeritte de öyleydi, kabul).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

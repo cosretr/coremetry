@@ -77,8 +77,8 @@ import { traceHref } from '@/lib/traceHref';
 
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatHeaderLabel, type StripStat } from '@/components/traces/stripStat';
-import { stripScope, stripRootOnly, volumeEmptyNote, volumeUnitFor, weightedStatAvg, errorStripUnit, errorStripHint } from '@/components/traces/volumeSeries';
-import { traceScopeParams, errorStripEligible } from './traces/scopeParams'; // v0.10.1082
+import { stripScope, stripRootOnly, volumeEmptyNote, volumeUnitFor, stripHeaderStats, errorStripUnit, errorStripHint } from '@/components/traces/volumeSeries';
+import { traceScopeParams, errorStripEligible, errorStripScopeOnly } from './traces/scopeParams'; // v0.10.1082; v0.10.1101 çipsiz
 import { groupLeaves } from '@/lib/urlState';
 import { LatencyScatter } from '@/components/traces/LatencyScatter';
 import { ShapesView } from '@/components/traces/ShapesView';
@@ -663,7 +663,8 @@ function TracesPageInner() {
     errors: SpanMetricSeries[] | null;
     rt: SpanMetricSeries[] | null;
     // v0.10.1082 — Errors şeridi (error-histogram) cevabının kipi; yoksa metric-batch.
-    errStrip?: { mode: 'span' | 'trace'; capped: boolean };
+    // v0.10.1101 — scopeOnly: çipsiz Errors (yalnız servis / ortam / küme).
+    errStrip?: { mode: 'span' | 'trace'; capped: boolean; scopeOnly: boolean };
   } | null>(null);
   useEffect(() => {
     if (view !== 'list') return;
@@ -682,16 +683,20 @@ function TracesPageInner() {
     // kind), liste ise iki basamakta (çipe uyan hatalı span ↔ trace düzeyi).
     // Bu sınıfta şerit listenin süzgecini AYNEN yollar, sunucu listenin kip
     // kararını paylaşır (chstore/trace_error_histogram.go). Diğer hâller aşağıda.
+    // v0.10.1101 — çipsiz Errors (yalnız servis / ortam / küme) da bu uçta:
+    // metric-batch giriş span'lerinin hatasını sayıyordu (kind kısıtı), liste
+    // herhangi bir span'i hatalı trace'leri; başlık sayıları da bu cevaptan.
     const scopeP = traceScopeParams({ filter, env, cluster: clusterScope, filtersEff: advFiltersEff, groupParam: advGroupParam });
     if (errorStripEligible(scopeP)) {
       let cancelledE = false;
       const ctlE = new AbortController();
+      const scopeOnly = errorStripScopeOnly(scopeP);
       api.tracesErrorHistogram({ ...scopeP, from, to, step, stat: stripStat }, ctlE.signal)
         .then(r => {
           if (cancelledE) return;
           setVolSeries({
             count: r.series.count ?? [], errors: r.series.errors ?? [], rt: r.series.rt ?? [],
-            errStrip: { mode: r.mode, capped: r.capped },
+            errStrip: { mode: r.mode, capped: r.capped, scopeOnly },
           });
         })
         .catch((e: unknown) => { if (!cancelledE && !isCanceled(e)) setVolSeries(null); });
@@ -994,14 +999,9 @@ function TracesPageInner() {
   const volumeUnit = errStrip
     ? errorStripUnit(errStrip.mode)
     : volumeUnitFor(!!filter.service, stripScope(!grouped ? advFilters : [], filter.search ?? ''));
-  const headerStats = useMemo(() => {
-    const cPts = volSeries?.count?.[0]?.points ?? [];
-    const eMap = new Map((volSeries?.errors?.[0]?.points ?? []).map(p => [p.time, p.value]));
-    let total = 0, err = 0;
-    for (const p of cPts) { total += p.value; err += eMap.get(p.time) ?? 0; }
-    const rtAvg = weightedStatAvg(volSeries?.count ?? null, volSeries?.rt ?? null);
-    return { total, err, errRate: total > 0 ? (err / total) * 100 : 0, rtAvg };
-  }, [volSeries]);
+  // v0.10.1101 — saf yardımcıya taşındı (stripHeaderStats, vitest'li): sayılar
+  // şeridin KENDİ cevabından (Errors şeridinde error-histogram).
+  const headerStats = useMemo(() => stripHeaderStats(volSeries), [volSeries]);
 
   const openTrace = (t: TraceRow) => navigate(traceHref(t.traceId, { pageRange: range }));
 
@@ -1299,8 +1299,10 @@ function TracesPageInner() {
           const vizStats = (
             <>
               {/* v0.10.268 — giriş span'ı sayımı: servisli pencerede trace, servissiz istek. */}
+              {/* v0.10.1101 — Errors şeridinde başlık giriş span'i SAYMAZ; ipucu şeridin kendi tanımı. */}
               <HeaderStat label={volumeUnit.toUpperCase()} value={fmtNum(headerStats.total)}
-                title="Giriş span'leri (server/consumer): servis seçiliyken istek = trace; servissiz pencerede her hop sayılır." />
+                title={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly)
+                  : "Giriş span'leri (server/consumer): servis seçiliyken istek = trace; servissiz pencerede her hop sayılır."} />
               {/* v0.9.222 — scope spelled out. This counts error SPANS
                   across the whole window; the "Errors N" quick-chip below
                   counts error TRACES on the loaded page. Both were right
@@ -1308,7 +1310,8 @@ function TracesPageInner() {
                   pixels above 3 read as a broken number. */}
               <HeaderStat label={'ERROR ' + volumeUnit.toUpperCase()} value={fmtNum(headerStats.err)}
                 tone={headerStats.err > 0 ? 'err' : undefined}
-                title="Seçili pencerenin tamamındaki hatalı giriş span'ı sayısı — yüklü satırlardan bağımsız, gerçek trafiği tarif eder." />
+                title={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly)
+                  : "Seçili pencerenin tamamındaki hatalı giriş span'ı sayısı — yüklü satırlardan bağımsız, gerçek trafiği tarif eder."} />
               <HeaderStat label="ERR RATE" value={`${headerStats.errRate.toFixed(2)}%`} tone={headerStats.errRate > 0 ? 'err' : undefined} />
               <HeaderStat label={stripStatHeaderLabel(stripStat)} value={headerStats.rtAvg ? fmtDur(headerStats.rtAvg) : '—'}
                 title={`Giriş span'ı ${stripStat} yanıt süresinin penceredeki en yüksek kovası.`} />
@@ -1334,7 +1337,7 @@ function TracesPageInner() {
               // metric-batch yolu (span düzeyi) + liste dolu. Errors şeridi listeyle
               // aynı kümeyi saydığı için orada boş şerit = boş liste.
               height={130} unit={volumeUnit} emptyNote={volumeEmptyNote(volumeUnit, filter.hasError, traces.length > 0, !!errStrip)}
-              hint={errStrip ? errorStripHint(errStrip.mode, errStrip.capped) : undefined} onBrush={applyBrush} onZoomReset={clearBrush}
+              hint={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly) : undefined} onBrush={applyBrush} onZoomReset={clearBrush}
               collapsed={stripCollapsed}
               xRange={{ from: listRangeNs.from / 1e9, to: listRangeNs.to / 1e9 }}
               header={vizToggle}

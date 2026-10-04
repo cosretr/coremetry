@@ -58,14 +58,25 @@ export function traceScopeParams(i: TraceScopeInput): TraceScopeParams {
  * Go `chstore.TraceErrorHistogramEligible` aynası: Errors + span-düzeyi çip
  * (düz ya da gruplu), arama / trace id / süre / services YOK. Bu hâlde liste
  * hatayı iki basamakta (çipe uyan hatalı span ↔ trace düzeyi) arar ve şerit
- * aynı kararı sunucuda paylaşır. Diğer her hâl metric-batch'te kalır (MV /
- * dar rollup fast-path'leri korunur).
+ * aynı kararı sunucuda paylaşır.
+ *
+ * v0.10.1101 — çipsiz Errors (yalnız servis / ortam / küme) da buraya gelir:
+ * metric-batch o hâlde GİRİŞ span'lerinin hatasını sayıyordu (kind kısıtı),
+ * liste herhangi bir span'i hatalı trace'leri — istemci / iç span hataları
+ * şeritte ve başlıkta yoktu. Sunucu dar rollup'tan (yoksa listenin ham
+ * WHERE'iyle) okur. Çipsizken Root metric-batch'te kalır (kök trace düzeyi).
+ * Errors kapalı her hâl metric-batch'te (hacim / gecikme fast-path'leri).
  */
 export function errorStripEligible(p: TraceScopeParams): boolean {
   if (!p.hasError) return false;
-  if (!p.filters && !p.filterGroup) return false;
   if (p.search || p.traceId) return false;
   if (p.minMs || p.maxMs) return false;
   if (p.services && p.services.length) return false;
-  return true;
+  if (p.filters || p.filterGroup) return true;
+  return !p.rootOnly;
+}
+
+/** errorStripScopeOnly — SAF (v0.10.1101): Errors şeridi çipsiz mi (③ kapsam kipi)? İpucu metni için. */
+export function errorStripScopeOnly(p: TraceScopeParams): boolean {
+  return errorStripEligible(p) && !p.filters && !p.filterGroup;
 }
