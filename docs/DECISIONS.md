@@ -1608,6 +1608,12 @@ değişmedi. **Çip:** /traces'te "statement #<kısa id>" (detay başlığındak
 değeri taşır. Yeni indeks yok; ham `spans` okuması listenin mevcut sınırları içinde (pencere + LIMIT +
 max_execution_time).
 
+## 2026-10-04 — Endpoint detayı: gecikme karosunda büyük sayı ortalama, alt satır p99 (v0.10.1094)
+
+**Operatör:** "13 ms yerine average yazsın. Avg ile p99 yer değiştirsin." Karo "Avg latency": büyük sayı pencere
+ortalaması, alt satır "p99 N ms". Kova serisi ve grafik başlığı p99 kalır (MV'de ortalama sparkline yok;
+`MetricTile.chartLabel`). Davranış değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

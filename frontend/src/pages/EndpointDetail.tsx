@@ -268,9 +268,13 @@ export default function EndpointDetailPage() {
             range={range} regions={eventRegions}
             emptyLabel={row ? undefined : 'endpoint not in the current window'}
             onZoom={handleZoom} onZoomReset={handleZoomReset} />
-          <MetricTile label="P99 latency" storageKey="p99"
-            big={row ? `${row.p99Ms.toFixed(0)} ms` : '—'}
-            sub={row ? `avg ${row.avgMs.toFixed(0)} ms` : 'no row in window'}
+          {/* v0.10.1094 (operatör: "13 ms yerine average yazsın; avg ile p99
+              yer değiştirsin") — büyük sayı ORTALAMA, alt satır p99. Kova
+              serisi hâlâ p99 (MV'de avg sparkline yok), grafik başlığı
+              bunu söyler. */}
+          <MetricTile label="Avg latency" chartLabel="P99 latency" storageKey="p99"
+            big={row ? `${row.avgMs.toFixed(0)} ms` : '—'}
+            sub={row ? `p99 ${row.p99Ms.toFixed(0)} ms` : 'no row in window'}
             series={series.p99} unit="ms"
             range={range} regions={eventRegions}
             emptyLabel={row ? undefined : 'endpoint not in the current window'}

@@ -23,9 +23,12 @@ const CorePanelMultiLazy = lazy(() =>
 
 export function MetricTile({
   label, big, sub, subCls, series, unit, role, storageKey, range,
-  emptyLabel, onZoom, onZoomReset, regions,
+  emptyLabel, onZoom, onZoomReset, regions, chartLabel,
 }: {
   label: string; big: string; sub: string; subCls?: string;
+  /** v0.10.1094 — grafik başlığı/serisi tile etiketinden ayrıysa (ör. tile
+   *  "Avg latency" ama kova serisi p99: avg kova serisi MV'de yok). */
+  chartLabel?: string;
   series: SpanMetricSeries[]; unit?: string;
   /** Role comes from the CALLER, never guessed from the label. */
   role?: 'data' | 'error' | 'success' | 'muted';
@@ -67,7 +70,7 @@ export function MetricTile({
       <div style={{ position: 'relative' }}>
         <Suspense fallback={<div style={{ height: 140, display: 'grid', placeItems: 'center' }}><Spinner /></div>}>
           <CorePanelMultiLazy
-            title={label}
+            title={chartLabel ?? label}
             storageKey={`endpoint-detail-${storageKey}`}
             height={140}
             unit={unit}
@@ -75,7 +78,7 @@ export function MetricTile({
             // The '-ms' suffix is the ENGINE NAMESPACE (v0.9.789).
             syncKey={msSyncKey('endpoint-detail')}
             emptyReason={hasData ? undefined : (emptyLabel ?? 'Bu pencerede veri yok')}
-            items={[{ name: label, role: role ?? 'data', series }]}
+            items={[{ name: chartLabel ?? label, role: role ?? 'data', series }]}
             regions={regions}
             onZoom={onZoom}
             onZoomReset={onZoomReset} />
