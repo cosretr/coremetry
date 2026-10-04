@@ -26,7 +26,7 @@ import { timeRangeToNs } from '@/lib/utils';
 import type { FilterExpr, FilterOp } from '@/lib/types';
 import {
   FILTER_OPS, OP_NEEDS_VALUE, OP_SHORT, opFromShorthand, parseInlineFilter, splitListValues,
-  chipValueLabel, filterKey, upsertFilter, pushRecent, parseRecent, rankKeys,
+  chipValueLabel, chipDisplay, filterKey, upsertFilter, pushRecent, parseRecent, rankKeys,
 } from '@/lib/filterQuery';
 
 type Step = 'key' | 'op' | 'value';
@@ -255,14 +255,16 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
       <div className={draft ? 'fq-bar is-open' : 'fq-bar'} role="combobox" aria-expanded={draft !== null} aria-haspopup="listbox"
         aria-owns={draft ? listId : undefined} onClick={() => inputRef.current?.focus()}>
         <span className="fq-lens" aria-hidden>⌕</span>
-        {value.map((f, i) => (
+        {value.map((f, i) => { const d = chipDisplay(f); return (
           <span key={`${filterKey(f)}#${i}`} className={draft?.editing === i ? 'fq-chip is-editing' : 'fq-chip'}
             title={`${f.k} ${f.op} ${chipValueLabel(f)} — tık: düzenle`}>
-            <span className="fq-k" onClick={e => { e.stopPropagation(); editChip(i); }}>{f.k}</span>
-            <span className="fq-o mono" onClick={e => { e.stopPropagation(); editChip(i); }}>{OP_SHORT[f.op]}</span>
+            {/* v0.10.1093 — görünen metin chipDisplay'den (db_stmt_hash →
+                "statement #…"); title ve düzenleme ham değeri taşır. */}
+            <span className="fq-k" onClick={e => { e.stopPropagation(); editChip(i); }}>{d.key}</span>
+            {d.op && <span className="fq-o mono" onClick={e => { e.stopPropagation(); editChip(i); }}>{d.op}</span>}
             {OP_NEEDS_VALUE[f.op] && (
               <span className="fq-v" onClick={e => { e.stopPropagation(); editChip(i); }}>
-                {chipValueLabel(f)}
+                {d.value}
                 {(f.op === 'IN' || f.op === 'NOT IN') && f.v.length > 1 && <span className="fq-n">{f.v.length}</span>}
               </span>
             )}
@@ -274,7 +276,7 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
               aria-label={`Filtreyi kaldır: ${f.k}`} onClick={e => { e.stopPropagation(); removeAt(i); }}
               icon="✕" />
           </span>
-        ))}
+        ); })}
         {draft && draft.step !== 'key' && (
           <span className="fq-chip is-draft" aria-live="polite">
             <span className="fq-k">{draft.k}</span>

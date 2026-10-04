@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SLOW_QUERY_SNIPPET_LEN } from '@/pages/slowqueries/tracesHref';
 import { tracesPivotHref, messagingTracesHref, dbTracesHref, operationTracesHref,
-  statementTracesHref, bucketTracesHref, STATEMENT_LIKE_PREFIX_LEN } from './pivotHref';
+  statementTracesHref, bucketTracesHref, stmtIdentityTracesHref, STATEMENT_LIKE_PREFIX_LEN } from './pivotHref';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { decodeRange } from './urlState';
@@ -521,5 +521,43 @@ describe('bucketTracesHref', () => {
   });
   it('tracesPivotHref: sort yazılmazsa param yok', () => {
     expect(params(tracesPivotHref({ window: { fromNs: FROM_NS, toNs: TO_NS }, service: 'api' })).get('sort')).toBeNull();
+  });
+});
+
+// v0.10.1093 — statement detayı → sınıfın TÜM trace'leri. Operatör: "Bu sayfada
+// traces alanı yok, ilgili statement'ın trace'lerine gidemiyorum." Süzgeç
+// kimlik (db_stmt_hash = exemplar okumasının yüklemi), metin DEĞİL; pencere
+// zorunlu; servis daraltması yok; rootOnly false.
+describe('stmtIdentityTracesHref', () => {
+  const HASH = '12345678901234567890';
+  it('Trace\'ler → — kimlik + sistem süzgeci, pencere, liste, rootOnly=false', () => {
+    const href = stmtIdentityTracesHref({ window: { preset: '6h' }, hash: HASH, system: 'postgresql' });
+    expect(href.startsWith('/traces?')).toBe(true);
+    const q = params(href);
+    expect(JSON.parse(q.get('filters')!)).toEqual([
+      { k: 'db_stmt_hash', op: '=', v: [HASH] },
+      { k: 'db.system', op: '=', v: ['postgresql'] },
+    ]);
+    expect(q.get('range')).toBe('6h');
+    expect(q.get('rootOnly')).toBe('false');
+    expect(q.get('view')).toBe('list');
+    expect(q.get('hasError')).toBeNull();
+    expect(q.get('service')).toBeNull();
+    expect(q.get('services')).toBeNull();
+    expect(q.get('search')).toBeNull();
+    expect(href).not.toMatch(/LIKE|db\.statement/);
+  });
+  it('Hatalı trace\'ler → — aynı süzgeç + hasError; mutlak pencere', () => {
+    const q = params(stmtIdentityTracesHref({
+      window: { preset: 'custom', fromMs: 1_700_000_000_000, toMs: 1_700_000_900_000 },
+      hash: HASH, hasError: true,
+    }));
+    expect(q.get('hasError')).toBe('true');
+    expect(q.get('range')).toBe('custom:1700000000000-1700000900000');
+    // Sistem yoksa yalnız kimlik (katalogun motorlar-arası varsayılanı).
+    expect(JSON.parse(q.get('filters')!)).toEqual([{ k: 'db_stmt_hash', op: '=', v: [HASH] }]);
+  });
+  it('reddedilen pencerede range yazılmaz (windowRangeParam sözleşmesi)', () => {
+    expect(params(stmtIdentityTracesHref({ window: { preset: 'custom' }, hash: HASH })).get('range')).toBeNull();
   });
 });

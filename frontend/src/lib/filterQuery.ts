@@ -101,6 +101,37 @@ export function chipValueLabel(f: FilterExpr): string {
   return f.v[0] ?? '';
 }
 
+// v0.10.1093 — ifade kimliği süzgeci (statement detayı → /traces). Değer
+// spans.db_stmt_hash'in ondalık metni (stmtParam.ts); çipte ham 20 hane yerine
+// statement detayının başlığındaki kısa kimlik görünür: "statement #12345678".
+// Süzgecin kendisi (URL / istek) ham değeri taşır — yalnız GÖRÜNÜM değişir;
+// düzenleme ham değeri açar (chipValueLabel).
+export const STMT_HASH_FILTER_KEY = 'db_stmt_hash';
+
+/** stmtShortId — statement detayı başlığındaki `#…` kısa kimliği. */
+export function stmtShortId(hash: string): string {
+  return hash.slice(0, 8);
+}
+
+export interface ChipDisplay {
+  key: string;
+  /** '' = op parçası çizilmez. */
+  op: string;
+  value: string;
+}
+
+/** chipDisplay — çipin üç parçasının görünen metni. SAF. */
+export function chipDisplay(f: FilterExpr): ChipDisplay {
+  if (f.k === STMT_HASH_FILTER_KEY) {
+    return {
+      key: 'statement',
+      op: f.op === '=' ? '' : OP_SHORT[f.op],
+      value: f.v.map(v => `#${stmtShortId(v)}`).join(', '),
+    };
+  }
+  return { key: f.k, op: OP_SHORT[f.op], value: chipValueLabel(f) };
+}
+
 export function filterKey(f: FilterExpr): string {
   // v0.10.266 — ayraçlar KAÇIŞ dizisi olarak (u001f / u001e); 264 gerçek NUL baytı
   // gömmüştü ve git dosyayı ikili saydı (sourceHygiene gate'i yakaladı).

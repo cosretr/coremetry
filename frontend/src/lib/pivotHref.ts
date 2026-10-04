@@ -1,5 +1,6 @@
 import { windowRangeParam, encodeFilterGroup, encodeFilters } from '@/lib/urlState';
 import type { TimeRange, FilterExpr } from '@/lib/types';
+import { STMT_HASH_FILTER_KEY } from '@/lib/filterQuery';
 
 // pivotHref — cross-signal deep links that CANNOT drop the time window.
 //
@@ -362,6 +363,38 @@ export function statementTracesHref(p: {
   });
 }
 
+
+// stmtIdentityTracesHref — v0.10.1093. Operator-reported (prod, statement
+// detayı): "Bu sayfada traces alanı yok, ilgili statement'ın trace'lerine
+// gidemiyorum." Exemplar linkleri TEK trace'e gider; bu, sınıfın TÜM
+// trace'leri.
+//
+// statementTracesHref'in (LIKE öneki) kardeşi DEĞİL, halefi de değil: o
+// yüzey (Dependencies, Oracle V$SQL) elinde yalnız METİN tutar. Statement
+// detayı ise kalıcı kimliği tutar ve exemplar okuması onu kullanır
+// (spans.db_stmt_hash = ? [AND db_system = ?], dbStmtExemplarWhere) — bu link
+// AYNI yüklemi /traces'e taşır: `db_stmt_hash = <id>` (+ sistem varsa
+// `db.system = …`). Metin süzgece girmez (normalize ≠ ham, yukarıdaki iki
+// başlık). rootOnly:false — ifadeyi taşıyan span çocuk CLIENT span'i
+// (v0.8.585 sınıfı). Servis daraltması YOK: kimlik zaten kesin.
+export function stmtIdentityTracesHref(p: {
+  window: TracesPivot['window'];
+  /** spans.db_stmt_hash, ondalık metin (stmtParam.ts). */
+  hash: string;
+  /** Kimliğin db.system yarısı (`?stmt=<hash>|<system>`); boşsa yazılmaz. */
+  system?: string;
+  hasError?: boolean;
+}): string {
+  const filters: FilterExpr[] = [{ k: STMT_HASH_FILTER_KEY, op: '=', v: [p.hash] }];
+  if (p.system) filters.push({ k: 'db.system', op: '=', v: [p.system] });
+  return tracesPivotHref({
+    window: p.window,
+    hasError: p.hasError,
+    filters: encodeFilters(filters),
+    view: 'list',
+    rootOnly: false,
+  });
+}
 
 // repeatsExploreHref — v0.9.1277 (Dynatrace-parite #6). Pivot into
 // Explore's "Repeats" result mode: "hangi trace'lerde bu çağrı N+ kez

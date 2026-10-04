@@ -14,8 +14,9 @@ import { useDBStmtDetail } from '@/lib/queries';
 import { decodeStmtParam } from '@/pages/slowqueries/stmtParam';
 import {
   StmtText, StmtSummarySection, StmtTrendSection,
-  StmtCallersSection, StmtExemplarsSection,
+  StmtCallersSection, StmtExemplarsSection, StmtTracesPivotRow,
 } from '@/pages/slowqueries/stmtDetailSections';
+import { stmtShortId } from '@/lib/filterQuery';
 import type { DBStmtDetail } from '@/lib/types';
 
 // /databases/statement — the full-page statement detail (v0.9.1374).
@@ -119,7 +120,7 @@ export default function StatementDetailPage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>Statement detail</span>
           <span className="mono" style={{ fontSize: 10, color: 'var(--text3)' }}
             title={`Persistent statement identity (stmt_hash ${refObj.hash})`}>
-            #{refObj.hash.slice(0, 8)}
+            #{stmtShortId(refObj.hash)}
           </span>
           {/* v0.10.331 — bu ifade için hedefli alarm kuralı (editör/admin).
               v0.10.516 (operatör: "Alarm oluştur yazısı çok küçük") — xs → sm. */}
@@ -139,6 +140,11 @@ export default function StatementDetailPage() {
             vs prior
           </label>
         </div>
+
+        {/* v0.10.1093 — sınıfın tüm trace'leri (operatör: "traces alanı
+            yok"). Kimlik URL'den; detail yüklenirken de tıklanabilir. */}
+        <StmtTracesPivotRow hash={refObj.hash} system={refObj.system || undefined}
+          range={range} callers={detail?.callers} />
 
         <StmtText
           statement={detail?.statement || ''}

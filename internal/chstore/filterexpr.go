@@ -114,13 +114,13 @@ var wellKnown = map[string]string{
 // pushes the key as a parameter. For numeric ops we cast to Float64 so that
 // even string-stored attributes compare correctly when they parse.
 func (f FilterExpr) SQL() (string, []any, error) {
-	return f.sql("", wellKnown, wellKnownResource, promotedCols(), AttrIndexAvailable())
+	return f.spansSQL("", promotedCols())
 }
 
 // SQLWithPromoted — v0.10.339: terfi haritası ÇAĞIRANDAN. nil = dizi yolu
 // (TraceFilter.NoPromoted; promoted_attr.go §v0.10.339 uyuşmazlık düşüşü).
 func (f FilterExpr) SQLWithPromoted(promoted map[string]string) (string, []any, error) {
-	return f.sql("", wellKnown, wellKnownResource, promoted, AttrIndexAvailable())
+	return f.spansSQL("", promoted)
 }
 
 // SQLForMetricPoints resolves against metric_points' column set
@@ -143,7 +143,7 @@ func (f FilterExpr) SQLForMetricPoints() (string, []any, error) {
 // caller (relations.go uses the fixed literals "c" / "p"), never threaded
 // from user input. Keys and values still flow exclusively as `?` params.
 func (f FilterExpr) SQLAliased(alias string) (string, []any, error) {
-	return f.sql(alias, wellKnown, wellKnownResource, promotedCols(), AttrIndexAvailable())
+	return f.spansSQL(alias, promotedCols())
 }
 
 // qualCol prefixes a well-known column expression (which may itself be a
@@ -706,6 +706,10 @@ func (f FilterExpr) Validate() error {
 	}
 	if strings.TrimSpace(f.Key) == "" {
 		return fmt.Errorf("filter with operator %q has no key", f.Op)
+	}
+	// v0.10.1093 — ifade kimliği: yalnız eşitlik/küme + ondalık uint64.
+	if f.Key == StmtHashFilterKey {
+		return validateStmtHash(op, f.Values)
 	}
 	return nil
 }

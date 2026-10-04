@@ -4487,6 +4487,9 @@ func (s *Store) migrate(ctx context.Context) error {
 		dhProbeErr = err
 		s.hasDBStmtHashCol = err == nil && present
 	}
+	// v0.10.1093 — /traces `db_stmt_hash` süzgeci kolonu yalnız probe
+	// doğrularsa anar; yoksa MATERIALIZED ifadeyi satırda hesaplar.
+	stmtHashColReady.Store(s.hasDBStmtHashCol)
 	dhErr := dhProbeErr
 	// v0.10.331 — alert_rules.target_json probu: küme kipinde kolon ertelenmiş
 	// DDL ile bir sonraki boot'ta gelir; gelene dek hedefli kural kaydı 409,

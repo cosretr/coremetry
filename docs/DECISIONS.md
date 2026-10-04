@@ -1591,6 +1591,23 @@ Satır > tavan → "tavan: pencerenin tamamı okunamadı (N sayfa)", sayaç son-
 last_seen'i duvar saatinin ~windowMin gerisinde; saatlik pencereler 10 dk tanesinde; trace → servis oyları operasyon
 düzeyinde.
 
+## 2026-10-04 — Statement detayı: ifadenin tüm trace'lerine geçiş (db_stmt_hash süzgeci) (v0.10.1093)
+
+**Operatör (prod, Databases › Top statements › statement detail):** "Bu sayfada traces alanı yok, ilgili
+statement'ın trace'lerine gidemiyorum." Exemplar linkleri (slowest / worst error) TEK trace'e, N+1 linki
+Explore'a gidiyordu; sınıfın tüm trace'lerini listeleyen bir yol yoktu. **Karar:** başlığın altında tek
+satır: "Trace'ler →" ve "Hatalı trace'ler →" — /traces'e sayfanın penceresiyle, `rootOnly=false`. Süzgeç
+exemplar okumasının KİMLİĞİ: `db_stmt_hash = <id>` (+ URL'de sistem varsa `db.system = …`), normalize SQL
+metni değil (span'deki metin ham; tam eşleşme boş, LIKE öneki başka sınıfları toplar). Servis daraltması
+yok — kimlik kesin; çağıranlar yalnız link başlığında. **Arka uç:** `db_stmt_hash` süzgeç anahtarı değildi
+(dizi aramasına düşüp boş dönerdi). Artık spans süzgeç derleyicisinde kolona çözülür: yalnız `=`, `!=`,
+`IN`, `NOT IN`, değer ondalık uint64 (sınırda 400), UInt64 olarak bağlanır; dizi/metin/LIKE yolu yok. Kolon
+yoksa (dış Distributed, `cluster_name` boş) aynı MATERIALIZED ifade satırda hesaplanır — süzgeç sessizce
+düşmez. Liste ile v0.10.1082 hata şeridi aynı derleyiciden geçer; parite testli. metric_points yolu
+değişmedi. **Çip:** /traces'te "statement #<kısa id>" (detay başlığındaki kimlik); istek ve düzenleme ham
+değeri taşır. Yeni indeks yok; ham `spans` okuması listenin mevcut sınırları içinde (pencere + LIMIT +
+max_execution_time).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

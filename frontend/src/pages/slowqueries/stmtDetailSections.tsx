@@ -13,7 +13,7 @@ import { fmtNum } from '@/lib/utils';
 import type { TimeRange, DBStmtDetail, DBStmtCaller } from '@/lib/types';
 import { stmtTrendGrid, stmtTrendSeries, stmtBucketLabel } from './stmtTrend';
 import { serviceHref } from '@/lib/serviceHref';
-import { repeatsExploreHref } from '@/lib/pivotHref';
+import { repeatsExploreHref, stmtIdentityTracesHref } from '@/lib/pivotHref';
 import { traceHref } from '@/lib/traceHref';
 
 // stmtDetailSections — the statement detail BODY (v0.9.1374).
@@ -337,6 +337,41 @@ export function StmtExemplarsSection({ detail, range }: {
           N+1 trace'leri →
         </Link>
       </div>
+    </div>
+  );
+}
+
+// StmtTracesPivotRow — v0.10.1093. Operator-reported (prod): "Bu sayfada
+// traces alanı yok, ilgili statement'ın trace'lerine gidemiyorum." Exemplar
+// pivotları TEK trace'e gider; bu satır sınıfın TÜM trace'lerine (ve yalnız
+// hatalılarına) gider. Süzgeç kimliktir (db_stmt_hash, exemplar okumasıyla
+// aynı yüklem), normalize SQL metni değil — gerekçe stmtIdentityTracesHref
+// başında. Servis daraltması yok; çağıranlar yalnız link başlığında.
+// `detail` beklemez: kimlik URL'de, pencere sayfada — yüklenirken de çalışır.
+export function StmtTracesPivotRow({ hash, system, range, callers }: {
+  hash: string;
+  system?: string;
+  range: TimeRange;
+  callers?: DBStmtCaller[] | null;
+}) {
+  const allHref = stmtIdentityTracesHref({ window: range, hash, system });
+  const errHref = stmtIdentityTracesHref({ window: range, hash, system, hasError: true });
+  const svcs = (callers ?? []).map(c => c.service).filter(Boolean);
+  const callerNote = svcs.length
+    ? ` Çağıranlar: ${svcs.slice(0, 4).join(', ')}${svcs.length > 4 ? ` +${svcs.length - 4}` : ''} — süzgeç servisle daraltılmaz.`
+    : '';
+  const scope = `db_stmt_hash = ${hash}${system ? `, db.system = ${system}` : ''}, aynı zaman penceresi`;
+  return (
+    <div data-testid="stmt-traces-row"
+      style={{ display: 'flex', gap: 16, fontSize: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+      <Link to={allHref} style={{ color: 'var(--accent2)' }}
+        title={`Bu ifade sınıfının span'ini taşıyan tüm trace'ler (${scope}).${callerNote}`}>
+        Trace'ler →
+      </Link>
+      <Link to={errHref} style={{ color: 'var(--err)' }}
+        title={`Aynı küme, yalnız hatalı trace'ler (${scope}).${callerNote}`}>
+        Hatalı trace'ler →
+      </Link>
     </div>
   );
 }

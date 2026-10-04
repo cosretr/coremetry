@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   opFromShorthand, parseInlineFilter, splitListValues, chipValueLabel, upsertFilter,
   pushRecent, parseRecent, rankKeys, OP_SHORT, FILTER_OPS,
+  chipDisplay, stmtShortId, STMT_HASH_FILTER_KEY,
 } from './filterQuery';
 
 describe('opFromShorthand', () => {
@@ -47,6 +48,19 @@ describe('chip / upsert / recent / rank', () => {
     expect(chipValueLabel({ k: 'a', op: 'IN', v: ['x', 'y'] })).toBe('x, y');
     expect(chipValueLabel({ k: 'a', op: 'EXISTS', v: [] })).toBe('');
     expect(splitListValues(' a, ,b ,a')).toEqual(['a', 'b']);
+  });
+  // v0.10.1093 — ifade kimliği çipi: ham 20 hane yerine statement detayının
+  // kısa kimliği; düzenleme metni (chipValueLabel) ham kalır.
+  it('chipDisplay: db_stmt_hash → "statement #<id>", diğerleri aynen', () => {
+    const f = { k: STMT_HASH_FILTER_KEY, op: '=' as const, v: ['12345678901234567890'] };
+    expect(chipDisplay(f)).toEqual({ key: 'statement', op: '', value: '#12345678' });
+    expect(chipValueLabel(f)).toBe('12345678901234567890');
+    expect(chipDisplay({ k: STMT_HASH_FILTER_KEY, op: '!=', v: ['987654321'] }))
+      .toEqual({ key: 'statement', op: '≠', value: '#98765432' });
+    expect(chipDisplay({ k: STMT_HASH_FILTER_KEY, op: 'IN', v: ['111111111', '222222222'] }).value)
+      .toBe('#11111111, #22222222');
+    expect(chipDisplay({ k: 'http.route', op: '=', v: ['/x'] })).toEqual({ key: 'http.route', op: '=', value: '/x' });
+    expect(stmtShortId('12345678901234567890')).toBe('12345678');
   });
   it('upsertFilter aynı k+op günceller', () => {
     const out = upsertFilter([{ k: 'a', op: '=', v: ['1'] }], { k: 'a', op: '=', v: ['2'] });
