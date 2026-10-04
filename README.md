@@ -48,6 +48,35 @@ No proprietary SDK, no vendor agent, no shim layer.
 
 ---
 
+## How Coremetry compares
+
+The closest open-source neighbours are SigNoz, Uptrace and HyperDX,
+which also build on ClickHouse, and the Grafana stack (Tempo, Loki,
+Mimir, Grafana). Commercial APMs (Datadog, Dynatrace, New Relic,
+Honeycomb) are the usual incumbents. Rather than a feature matrix
+that goes stale, here is what Coremetry deliberately chooses:
+
+| Choice | What Coremetry does |
+|---|---|
+| **Moving parts** | One Go binary with the UI embedded, ClickHouse as the only store, Redis optional. One Helm chart, one image tag per release. No separate query, ingest, UI or rules services to version together. |
+| **Ingest** | OTLP only (gRPC + HTTP). No proprietary agent, no vendor SDK, no second wire protocol. Whatever the OTel collector or SDK already emits is the input. |
+| **Day-one SRE workflow** | Golden Signals / RED / USE and an Incident War Room are pre-seeded. Alerts are auto-grouped into incidents by a topological correlator; SLOs carry error-budget burn rate; runbooks can execute automated steps. These are built in, not dashboards you assemble. |
+| **Enterprise access** | OIDC, LDAP / Active Directory with group-to-role mapping, RBAC and an append-only audit log ship in the open-source build, because that is the bar for running inside a regulated organisation. |
+| **Existing log pipelines** | Logs always land in ClickHouse, but the read path can be pointed at an existing Elasticsearch cluster so teams keep their current log tooling while adopting traces and metrics. |
+| **Platforms** | Helm for Kubernetes, flat manifests for OpenShift (restricted-v2 SCC), docker-compose for evaluation. |
+| **LLM access** | A built-in MCP server exposes services, problems, traces, logs and metrics to Claude Desktop or any MCP client, with the same RBAC as the UI. |
+| **Scale shape** | Same image runs monolithic for small installs or as ingest / api / worker deployments for billion-span/day. Switching is a Helm values change and a rolling upgrade. |
+
+Where another tool may be the better fit: the Grafana ecosystem
+offers a far larger catalogue of community dashboards, data sources
+and plugins; commercial vendors offer managed hosting, APM agents
+for languages without good OTel coverage, and support contracts;
+and projects with longer histories have more battle-tested
+migration tooling. Coremetry is pre-1.0 and says so in
+[Status](#status).
+
+---
+
 ## Features
 
 ### Signal coverage
