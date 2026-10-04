@@ -20,8 +20,9 @@ import { PostgresPanel } from '@/features/dependencies/panels/PostgresPanel';
 import { MySQLPanel } from '@/features/dependencies/panels/MySQLPanel';
 import { RedisPanel } from '@/features/dependencies/panels/RedisPanel';
 import type {
-  DBCallerBreakdown, DBDetail, DBTrend, SlowQueryRow, SpanMetricSeries, TimeRange,
+  DBCallerBreakdown, DBDetail, DBDetailTrend, DBTrendPoint, SlowQueryRow, SpanMetricSeries, TimeRange,
 } from '@/lib/types';
+import { dbTrendPanelTitle } from './trendBucket';
 import type { DatabaseRef } from './databaseParam';
 import { addressScopeNotice } from './addressScope';
 import { errRatePpDelta } from './errRateDelta';
@@ -287,24 +288,29 @@ function PpDelta({ cur, prior }: { cur: number; prior: number }) {
 // ── üç seri kartı ────────────────────────────────────────────────────────
 
 /**
- * DatabaseTrendCards — Calls/s · Error % · P99, `/api/databases/trends`
- * payload'ının bu kimliğe düşen satırından. Fetch SAYFADA: uç filo geneli
- * ve /databases tablosunun tam olarak aynısı, yani sayfa tablonun sıcak
- * cache'ini miras alıyor ve paylaşılan uca satır-başına parametre eklenmiyor.
+ * DatabaseTrendCards — Calls/s · Error % · P99.
+ *
+ * v0.10.1095 — kaynak artık TEK veritabanının trend ucu
+ * (`/api/databases/detail/trend`): ≤ 3 sa pencerede db_summary_1m'den 1 dk
+ * kova, üstünde db_summary_5m'den 5 dk (operatör kararı, DECISIONS
+ * 2026-10-04). Eskiden filo geneli `/api/databases/trends` yükünün bu kimliğe
+ * düşen satırıydı — 5 dk ızgarada 10 dakikalık bir olay tek nokta oluyordu.
+ * Fetch hâlâ SAYFADA; başlık kova genişliğini söyler ("· 1 dk" / "· 5 dk").
  */
 export function DatabaseTrendCards({ trend, pending, xRange }: {
-  trend: DBTrend | undefined;
+  trend: DBDetailTrend | null | undefined;
   pending: boolean;
   xRange: { from: number; to: number };
 }) {
-  const series = useMemo(() => trendSeries(trend), [trend]);
+  const series = useMemo(() => trendSeries(trend?.points), [trend]);
+  const bucketSec = trend?.bucketSec;
   return (
     <div className="ov-grid ov-charts-3 ov-mb">
       {(['calls', 'errors', 'p99'] as const).map(k => (
         <LazyMount key={k} minHeight={170}>
           <Suspense fallback={<div style={{ height: 170, display: 'grid', placeItems: 'center' }}><Spinner /></div>}>
             <CorePanelMultiLazy
-              title={SERIES_TITLE[k]}
+              title={dbTrendPanelTitle(SERIES_TITLE[k], bucketSec)}
               storageKey={`database-detail-${k}`}
               height={150}
               unit={SERIES_UNIT[k]}
@@ -607,13 +613,15 @@ const CALLER_COLS: ColumnDef<DBCallerBreakdown>[] = [
   { id: 'impact',  label: 'Time %',     sortValue: r => r.spanCount * r.avgDurationMs, numeric: true, width: 80 },
 ];
 
-/** trendSeries — one DBTrend's buckets into the three CorePanel series.
+/** trendSeries — one database's buckets into the three CorePanel series.
  *  DBTrendPoint.t is already unix NANOSECONDS (the SpanMetricSeries
- *  contract), so there is no unit conversion here to get wrong. */
-function trendSeries(t: DBTrend | undefined): {
+ *  contract), so there is no unit conversion here to get wrong. rps is
+ *  per-second over the bucket's OWN width (the server divides by
+ *  bucketSec), so 1 dk and 5 dk series share one axis unit. */
+function trendSeries(points: DBTrendPoint[] | undefined): {
   calls: SpanMetricSeries[]; errors: SpanMetricSeries[]; p99: SpanMetricSeries[];
 } {
-  const pts = t?.points ?? [];
+  const pts = points ?? [];
   if (pts.length === 0) return { calls: [], errors: [], p99: [] };
   const build = (pick: (p: typeof pts[number]) => number, label: string): SpanMetricSeries[] =>
     [{ groupKey: [label], points: pts.map(p => ({ time: p.t, value: pick(p) })) }];

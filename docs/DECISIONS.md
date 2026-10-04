@@ -1614,6 +1614,22 @@ max_execution_time).
 ortalaması, alt satır "p99 N ms". Kova serisi ve grafik başlığı p99 kalır (MV'de ortalama sparkline yok;
 `MetricTile.chartLabel`). Davranış değişmedi.
 
+## 2026-10-04 — db_summary_1m: kısa pencerede veritabanı grafikleri 1 dakikalık (v0.10.1095)
+
+**Operatör:** "Önerin A yapalım." /database detayının üç grafiği (Calls/s · Error % · P99) `db_summary_5m`'in
+5 dk kovalarını çiziyordu; 10 dakikalık bir DB olayı tek nokta oluyordu. **Karar:** yeni MV `db_summary_1m` —
+`db_summary_5m`'in birebir ikizi (anahtar `(db_system, instance, db_name)`, aynı instance/db_name zincirleri, aynı
+dört state; `quantilesTDigestState`), kova 1 dk, **TTL 7 gün** (yalnız kısa pencere; uzun vadeli depo 5m kalır).
+Küme kipinde `_local` + Distributed, shard anahtarı kardeşle aynı `cityHash64(db_system)`. **Geriye dolmaz**:
+tarihçe deploy anından başlar. **Seçici:** pencere **≤ 3 sa** ve 1m tablonun ilk kovası pencere başından önceyse
+1m, aksi 5m (kapsama probu 60 sn önbellekli; tablo yok / DDL ertelendi / boş → sessizce 5m, iki boot gerekmez).
+Yeni uç `GET /api/databases/detail/trend` (önbellek anahtarı seçilen grenliği taşır); panel başlığı "· 1 dk" /
+"· 5 dk". **Değişmeyenler:** karolar (db_caller_summary_5m), /databases tablo sparkline + rozeti
+(/api/databases/trends, 5 dk), db-health dedektörü (5m), Statement detayı (MV'si ifade başına,
+`db_statement_summary_5m`; 1 dk ikizi yok). **Yazma bedeli:** db span'i taşıyan her INSERT bloğu bir MV daha
+tetikler (blok başına satır sayısı 5m kardeşiyle aynı mertebe: blok tipik 1-2 kova görür); kalıcı satır DB kimliği
+başına günde ≤ 1440 (× span'in düştüğü shard sayısı), 7 günde ~10k — 5m'in 90 günlük ~26k'sının ~%40'ı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

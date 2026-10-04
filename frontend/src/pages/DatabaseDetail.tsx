@@ -18,7 +18,7 @@ import {
 } from '@/pages/databases/detailSections';
 import { DatabaseProblemsSection } from '@/pages/databases/DatabaseProblemsSection';
 import { DatabaseErrorsSection } from '@/pages/databases/DatabaseErrorsSection';
-import type { DBDetail, DBTrend, SlowQueryRow } from '@/lib/types';
+import type { DBDetail, SlowQueryRow } from '@/lib/types';
 import { PageShell } from '@/components/ui/PageShell';
 
 // /database — the full-page database detail (v0.9.840).
@@ -35,6 +35,10 @@ import { PageShell } from '@/components/ui/PageShell';
 // page-wide one the table also issues — same params, so React Query
 // serves this page from the same cache entry rather than adding a
 // per-row parameter to a shared endpoint.
+// v0.10.1095 — o son cümle ARTIK GEÇERSİZ: grafikler kendi ucundan
+// (/api/databases/detail/trend, ≤ 3 sa → 1 dk kova). Paylaşılan uç
+// tablonun 5 dk rozet ızgarasına bağlı kaldığı için parametre eklenmedi;
+// yeni uç kimlik üçlüsüyle PK önekinde süzer.
 //
 // NO WAITS & LOCKS (v0.9.846, operator's call; v0.9.852'de TAMAMEN
 // SÖKÜLDÜ). The wait/lock strip read /api/databases/waitlock, which is
@@ -84,21 +88,18 @@ export default function DatabaseDetailPage() {
     staleTime: 30_000,
   });
 
-  // The SAME key /databases uses, on purpose: no new parameter on a
-  // shared endpoint, and the page inherits the table's warm cache.
-  const trendsQ = useQuery({
-    queryKey: ['db-trends', from, to],
-    queryFn: () => api.dbTrends(from, to),
+  // v0.10.1095 — üç grafik artık TEK veritabanının trend ucundan
+  // (/api/databases/detail/trend): ≤ 3 sa pencerede 1 dk kova
+  // (db_summary_1m), üstünde 5 dk. Eskiden filo geneli /api/databases/trends
+  // yükü çekilip bu kimliğe süzülüyordu (tablonun sıcak cache'i) — ama o uç
+  // 5 dk ızgarada kalmak zorunda (tablonun rozet kuralı), 10 dakikalık bir
+  // olay tek nokta oluyordu. staleTime = sunucu TTL'i (30 sn).
+  const trendQ = useQuery({
+    queryKey: ['database-detail-trend', system, instance, dbName, from, to],
+    queryFn: ({ signal }) => api.dbDetailTrend(system, instance, dbName, from, to, signal),
     enabled: !!refObj,
     staleTime: 30_000,
   });
-  const trend: DBTrend | undefined = useMemo(() => {
-    if (!refObj) return undefined;
-    return (trendsQ.data ?? []).find(t =>
-      t.dbSystem === refObj.system
-      && t.instance === refObj.instance
-      && (t.dbName ?? '') === refObj.dbName);
-  }, [trendsQ.data, refObj]);
 
   const stmtsQ = useQuery({
     queryKey: ['database-statements', system, dbName, from, to],
@@ -179,11 +180,9 @@ export default function DatabaseDetailPage() {
           <>
             <DatabaseSignalStrip d={d} />
 
-            {/* Three series, from the SAME /api/databases/trends payload
-                the overview grid uses — filtered client-side by the
-                identity triple. No per-row parameter added to a shared,
-                cached endpoint. */}
-            <DatabaseTrendCards trend={trend} pending={trendsQ.isPending} xRange={xRange} />
+            {/* Üç seri — tek veritabanının trend ucundan; başlık kova
+                genişliğini söyler (1 dk / 5 dk, v0.10.1095). */}
+            <DatabaseTrendCards trend={trendQ.data} pending={trendQ.isPending} xRange={xRange} />
 
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',

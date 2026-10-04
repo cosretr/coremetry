@@ -1582,6 +1582,14 @@ export const api = {
   // açık problem "şimdi"dir (pencereye bağlı değil), db özneleri env'e bağlı değil.
   databaseProblems: (signal?: AbortSignal) =>
     get<import('./types').DBProblemsResponse | null>('/api/databases/problems', signal),
+  // v0.10.1095 — /database detay grafikleri (Calls/s · Error % · P99): tek
+  // veritabanının kova serisi. Sunucu kaynağı pencereye göre seçer (≤ 3 sa →
+  // db_summary_1m, 1 dk kova; aksi db_summary_5m) ve yük bucketSec'i söyler.
+  dbDetailTrend: (system: string, instance: string, dbName: string, fromNs: number, toNs: number, signal?: AbortSignal) =>
+    get<import('./types').DBDetailTrend | null>(
+      `/api/databases/detail/trend?system=${encodeURIComponent(system)}&instance=${encodeURIComponent(instance)}`
+      + (dbName ? `&dbName=${encodeURIComponent(dbName)}` : '')
+      + `&from=${fromNs}&to=${toNs}`, signal),
   databaseDetail: (system: string, instance: string, dbName: string, fromNs: number, toNs: number, signal?: AbortSignal) =>
     get<import('./types').DBDetail | null>(
       `/api/databases/detail?system=${encodeURIComponent(system)}&instance=${encodeURIComponent(instance)}`

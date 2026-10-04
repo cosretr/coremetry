@@ -47,8 +47,20 @@ func TestServiceEnvSummaryMVShape(t *testing.T) {
 	if !highVolumeTables[name] || defaultShardPolicy[name] != defaultShardPolicy["service_summary_5m"] || !tablesWithoutTraceID[name] {
 		t.Error("terfi / shard anahtarı / trace_id'siz kayıtları kardeşle aynı olmalı")
 	}
-	if names[len(names)-1] != name {
-		t.Errorf("yeni MV dilimin sonunda olmalı (konumsal pinler), son: %s", names[len(names)-1])
+	// v0.10.1095 — kural "yeni MV dilimin sonuna": bu MV'den SONRA yalnız
+	// ondan daha yeni MV'ler durabilir (db_summary_1m, db_summary_1m_test.go
+	// kendi "son" pinini taşır).
+	newer := map[string]bool{"db_summary_1m": true}
+	idx := -1
+	for i, n := range names {
+		if n == name {
+			idx = i
+		}
+	}
+	for _, n := range names[idx+1:] {
+		if !newer[n] {
+			t.Errorf("%s'den sonra daha eski bir MV var (%s) — konumsal pinler kayar", name, n)
+		}
 	}
 }
 

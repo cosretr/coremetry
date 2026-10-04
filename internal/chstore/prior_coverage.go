@@ -46,6 +46,10 @@ const (
 	priorSrcDBCallerSummary                     // /database detayı
 	priorSrcMsgSummary                          // /messaging listesi
 	priorSrcMsgCallerSummary                    // /messaging listesi (üretim/tüketim ayrımı)
+	// v0.10.1095 — prior değil, AYNI kapsama sorusu: /database detay
+	// grafikleri db_summary_1m'i yalnız ilk kovası pencere başından önceyse
+	// okur (db_detail_trend.go). Geriye dolmayan MV + 60 sn prob deseni.
+	priorSrcDBSummary1m
 	priorSourceCount
 )
 
@@ -55,6 +59,7 @@ var priorSourceProbeSQL = [priorSourceCount]string{
 	priorSrcDBCallerSummary:  "SELECT min(time_bucket), count() FROM db_caller_summary_5m SETTINGS max_execution_time = 5",
 	priorSrcMsgSummary:       "SELECT min(time_bucket), count() FROM messaging_summary_5m SETTINGS max_execution_time = 5",
 	priorSrcMsgCallerSummary: "SELECT min(time_bucket), count() FROM messaging_caller_summary_5m SETTINGS max_execution_time = 5",
+	priorSrcDBSummary1m:      "SELECT min(time_bucket), count() FROM db_summary_1m SETTINGS max_execution_time = 5",
 }
 
 // spansLiveBeforeSQL — ham yolun varlık probu: [pFrom − 24 sa, pFrom)

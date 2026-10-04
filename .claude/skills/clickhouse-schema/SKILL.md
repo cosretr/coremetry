@@ -6,7 +6,8 @@ description: Coremetry ClickHouse guardrails — decision tree for new tables/MV
 # /clickhouse-schema — Coremetry CH sözleşmesi
 
 Ölçek sayımları kayar — kullanmadan önce yeniden say: span MV'leri
-`canonicalMVs()` (`internal/chstore/store.go`; taban 2026-09-26: 22),
+`canonicalMVs()` (`internal/chstore/store.go`; taban 2026-09-26: 22 →
+2026-10-04: 23, `db_summary_1m` eklendi),
 operatör katmanı `grep -ci 'CREATE MATERIALIZED VIEW' migrations/*.sql`
 (taban: 16). Prod dış Distributed CH (2 shard × 2 replica), lokal chc-0/chc-1.
 
@@ -220,6 +221,17 @@ Alternatif (yıkıcı olmayan): inner-table `ALTER` + `MODIFY QUERY` —
 | **GENİŞ** (span) | `0002_rollup_wide.sql` | 1m→5m→1h | 6 | 3 |
 | **METRİK** | `0003_rollup_metrics.sql` | 1m→5m→1h | 6 | 3 |
 | **ROUTE** | `0008_rollup_metrics_route.sql` | 1m→5m→1h | 6 | 3 |
+
+> **Uygulama sahipli (store.go) grenlik çiftleri — aile DEĞİL, kaskad yok.** İkisi de
+> `spans`'tan BAĞIMSIZ beslenir (1m→5m kaskadı yok), `migrations/`'ta değil `canonicalMVs()`'te:
+>
+> | Çift | İnce | Kaba | İnce TTL | Seçici |
+> |---|---|---|---|---|
+> | spanmetrics | `spanmetrics_1m` (+10s/1s) | `operation_summary_5m` | 30g | `selectMetricTier` (metricresolve.go) |
+> | db (v0.10.1095) | `db_summary_1m` | `db_summary_5m` | **7g** | `dbTrendGrainFor` (db_detail_trend.go): pencere ≤ 3 sa **ve** `sourceCovers(priorSrcDBSummary1m)` → 1m, aksi 5m |
+>
+> `db_summary_1m` yalnız /database detay grafiklerini besler; karolar, /databases sparkline'ı,
+> db-health ve Statement detayı 5m'de. Geriye dolmaz — okuyucu ilk kovayı ölçer, kapsamıyorsa 5m.
 
 ### DAR vs GENİŞ
 

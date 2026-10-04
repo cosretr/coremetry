@@ -249,6 +249,7 @@ var tablesWithoutTraceID = map[string]bool{
 	"service_summary_5m":     true,
 	"service_env_summary_5m": true, // v0.10.881
 	"db_summary_5m":          true,
+	"db_summary_1m":          true, // v0.10.1095 — 1 dk ikiz, aynı projeksiyon
 	"db_caller_summary_5m":   true,
 	// v0.8.375 — statement-identity MV projects stmt_hash, never trace_id.
 	"db_statement_summary_5m": true,
@@ -372,7 +373,10 @@ var defaultShardPolicy = map[string]string{
 	// caller-aware variant lives in db_caller_summary_5m). Shard
 	// by db_system; ORDER BY already leads with db_system so
 	// reads filtered by it land on one shard.
-	"db_summary_5m":        "cityHash64(db_system)",
+	"db_summary_5m": "cityHash64(db_system)",
+	// v0.10.1095 — 1 dk ikiz kardeşiyle AYNI anahtar: ORDER BY db_system
+	// ile başlıyor (O5), detay okuması db_system = ? süzer.
+	"db_summary_1m":        "cityHash64(db_system)",
 	"db_caller_summary_5m": "cityHash64(service_name)",
 	// v0.8.375 (Stage-2 D1) — statement-identity rollup. Like the other
 	// spans-fed MVs the key is largely decorative (the insert trigger
@@ -932,6 +936,10 @@ var highVolumeTables = map[string]bool{
 	"topology_edges_5m":    true,
 	"topology_op_edges_5m": true,
 	"db_summary_5m":        true,
+	// v0.10.1095 — 1 dk ikiz (db_detail_trend.go), gün-bir üç kayıt: bu
+	// satır olmadan adaptDDL `_local` + Distributed kurmaz ve her okuma
+	// TEK shard'ın dilimini görürdü (v0.8.356/358 eksik-sayım sınıfı).
+	"db_summary_1m":        true,
 	"db_caller_summary_5m": true,
 	// v0.8.375 (Stage-2 D1) — statement-identity rollup, an MV reading
 	// FROM spans like its db_* siblings above. Registered here ON DAY ONE

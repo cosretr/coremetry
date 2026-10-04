@@ -2025,6 +2025,54 @@ func canonicalMVs() []string {
 		   countIfState(duration > %d AND duration <= %d) AS apdex_tolerating_state
 		 FROM spans
 		 GROUP BY service_name, cluster, deploy_env, time_bucket`, clusterDeriveExpr, apdexT, apdexT, apdex4T),
+
+		// v0.10.1095 — db_summary_1m: db_summary_5m'in 1 DAKİKALIK ikizi
+		// (operatör kararı "Önerin A yapalım", docs/DECISIONS.md 2026-10-04).
+		// /database detayının üç grafiği (Calls/s · Error % · P99) 5 dk kova
+		// çiziyordu; 10 dakikalık bir DB olayı tek nokta oluyordu. Okuyucu
+		// (db_detail_trend.go) ≤ 3 sa pencerede bunu, üstünde 5m'i okur.
+		//
+		// Kardeşle BİREBİR: anahtar (db_system, instance, db_name), instance /
+		// db_name zincirleri, WHERE ve dört state kolonu aynı — aynı *Merge
+		// okuyucuları iki tabloda da çalışsın (db_summary_1m_test.go metni
+		// kardeşten türetip karşılaştırır; zincir ayrışırsa test düşer).
+		// Fark yalnız üç yerde: kova 1 dk, TTL 7 gün (yalnız kısa pencere;
+		// uzun vadeli depo 5m), ad.
+		//
+		// Geriye DOLMAZ: tarihçe kurulduğu andan başlar. Okuyucu ilk kovayı
+		// ölçer (sourceCovers, 60 sn), kapsamıyorsa ya da tablo yoksa
+		// (küme kipinde DDL ertelendi) sessizce 5m'e düşer — iki boot gerekmez.
+		// Gün-bir üç kayıt (highVolumeTables + defaultShardPolicy +
+		// tablesWithoutTraceID, v0.5.426 dersi); DİLİMİN SONUNDA (konumsal
+		// pinler eski sırayı korur).
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS db_summary_1m
+		 ENGINE = AggregatingMergeTree
+		 PARTITION BY toDate(time_bucket)
+		 ORDER BY (db_system, instance, db_name, time_bucket)
+		 TTL toDate(time_bucket) + INTERVAL 7 DAY
+		 SETTINGS index_granularity = 8192
+		 AS SELECT
+		   db_system,
+		   -- v0.5.349 — same fallback chain as db_summary_5m so
+		   -- row identities match across the two MVs.
+		   coalesce(
+		     nullIf(peer_service, ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'server.address')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'net.peer.name')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'db.host')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'db.name')], ''),
+		     nullIf(service_name, ''),
+		     'unknown'
+		   )                                                                       AS instance,
+		   coalesce(nullIf(attr_values[indexOf(attr_keys, 'db.name')], ''), 'default') AS db_name,
+		   toStartOfInterval(time, INTERVAL 1 MINUTE)    AS time_bucket,
+		   countState()                                  AS span_count_state,
+		   countIfState(status_code = 'error')           AS error_count_state,
+		   sumState(duration)                            AS duration_sum_state,
+		   quantilesTDigestState(0.5, 0.95, 0.99)(duration)     AS duration_q_state
+		 FROM spans
+		 WHERE db_system != ''
+		 GROUP BY db_system, instance, db_name, time_bucket`,
 	}
 	return mvs
 }

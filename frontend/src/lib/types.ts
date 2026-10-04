@@ -335,6 +335,16 @@ export interface DBTrendPoint {
   p99Ms: number;      // p99 duration, ms
 }
 
+// DBDetailTrend — v0.10.1095 — /database detay grafiklerinin yükü
+// (chstore.DBDetailTrend, GET /api/databases/detail/trend). Pencere ≤ 3 sa
+// ve db_summary_1m kapsıyorsa bucketSec=60 (source 'db_summary_1m'), aksi
+// 300 (db_summary_5m). points'te rps = kova çağrısı / bucketSec.
+export interface DBDetailTrend {
+  bucketSec: number;
+  source: 'db_summary_1m' | 'db_summary_5m';
+  points: DBTrendPoint[];
+}
+
 // DBTrend — per-row sparkline (#1) + latest-bucket health snapshot
 // (#6) for the /databases + /messaging overview grid. Keyed
 // identically to DBInstance / the DepRow join key:

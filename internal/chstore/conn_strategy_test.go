@@ -218,6 +218,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// (AggregatingMergeTree telemetri MV'si, state tablosu DEĞİL).
 		// dependencies.go / db_trends.go'daki kardeş okumalarla aynı havuz.
 		"databases_series.go": true,
+		// v0.10.1095 — SAF telemetri: tek FROM'u db_summary_1m ya da
+		// db_summary_5m (AggregatingMergeTree telemetri MV'leri, state
+		// tablosu DEĞİL). Kapsama probu sourceCovers'tan (s.conn, ayrı dosya).
+		"db_detail_trend.go": true,
 		// v0.9.1345 — SAF telemetri: tek FROM'u db_caller_summary_5m
 		// (AggregatingMergeTree telemetri MV'si, state tablosu DEĞİL).
 		// dependencies.go'daki kardeş okumalarla aynı kaynak, aynı havuz.
