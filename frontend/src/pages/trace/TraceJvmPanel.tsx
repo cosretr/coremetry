@@ -39,12 +39,15 @@ import { jvmPodSeries } from './traceMetrics';
 // "…6b7d9f8c5-m3t9w" yerine "m3t9w"), `seriesColors` o etiketlerin
 // çakışmasız rengini MultiLineChart'a geçirir: bir pod dört grafikte de tek
 // renk. Süzgeç (only) HAM pod adıyla eşleşir; yeniden adlandırma sonra.
+//
+// v0.10.1096 — `chartHeight`: satır altı ayrıntıda heap ve GC, Bellek/CPU ile
+// AYNI yatay ızgarada ve aynı yükseklikte çizilir (varsayılan 180 / 160).
 
 const HEAP: FilterExpr = { k: 'jvm.memory.type', op: '=', v: ['heap'] };
 const POD_KEY = 'resource.k8s.pod.name';
 
 export function TraceJvmPanel({
-  service, pods, from, to, syncKey, deploys, xRange, runtime, queryPods, maxDataPoints, labelOf, seriesColors,
+  service, pods, from, to, syncKey, deploys, xRange, runtime, queryPods, maxDataPoints, labelOf, seriesColors, chartHeight,
 }: {
   service: string;
   pods: string[];
@@ -58,6 +61,7 @@ export function TraceJvmPanel({
   maxDataPoints?: number;
   labelOf?: (pod: string) => string;
   seriesColors?: ReadonlyMap<string, string>;
+  chartHeight?: number;
 }) {
   const runtimeQ = useQuery({
     queryKey: ['svc-runtime', service],
@@ -96,7 +100,7 @@ export function TraceJvmPanel({
   const heapTitle = postGc.length > 0 ? 'JVM heap, GC sonrası (bytes)' : 'JVM heap, anlık kullanım (bytes)';
   const gc = jvmPodSeries(only(gcQ.data), 1000, labelOf);
   const pending = postGcQ.isLoading || usedQ.isLoading || gcQ.isLoading;
-  if (pending) return <Skeleton height={120} />;
+  if (pending) return <Skeleton height={chartHeight ?? 120} />;
   if (heap.length === 0 && gc.length === 0 && (postGcQ.isError || usedQ.isError || gcQ.isError)) {
     return <div className="pod-cap is-err">JVM runtime metrikleri okunamadı — sorgu hata verdi.</div>;
   }
@@ -108,14 +112,14 @@ export function TraceJvmPanel({
       {heap.length > 0 && (
         <div className="tpp-chart">
           <div className="tpp-sec-title"><span>{heapTitle}</span></div>
-          <MultiLineChart series={heap} height={180} syncKey={syncKey} unit="bytes" deploys={deploys} xRange={xRange} zeroBase
+          <MultiLineChart series={heap} height={chartHeight ?? 180} syncKey={syncKey} unit="bytes" deploys={deploys} xRange={xRange} zeroBase
             seriesColors={seriesColors} />
         </div>
       )}
       {gc.length > 0 && (
         <div className="tpp-chart">
           <div className="tpp-sec-title"><span>GC duraklaması, ortalama (ms)</span></div>
-          <MultiLineChart series={gc} height={160} syncKey={syncKey} unit="ms" deploys={deploys} xRange={xRange} zeroBase
+          <MultiLineChart series={gc} height={chartHeight ?? 160} syncKey={syncKey} unit="ms" deploys={deploys} xRange={xRange} zeroBase
             seriesColors={seriesColors} />
         </div>
       )}

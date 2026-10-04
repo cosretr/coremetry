@@ -2,10 +2,30 @@
 // 400px yan panel, onaylı mockup Main.dc.html sağ panel; operatör "3 onay",
 // 2026-09-27).
 //
+// v0.10.1096 — GRAFİKLER ÜSTTE, METİN TEK SATIR + KATLI AYRINTI (operatör,
+// prod: "Çok fazla yazı var; sadece metrik yatayda inline gözükse olacak.
+// Diğer yazılar aşağı olabilir."). v0.10.976'nın iki sütunlu gövdesi (solda üç
+// yoğun metin bloğu, sağda sıkışmış iki grafik) kalktı. Yeni sıra:
+//   • başlık satırı + alt satır/rozetler — AYNEN (eylemler yerinde);
+//   • grafik başlık çubuğu: SAĞDA küçük "Karşılaştır" denetimi (çipler +
+//     "Kardeş çizgileri", `CompareSection compact`) — blok değil;
+//   • TEK yatay ızgara (`.tpp-chart-row`, dar ekranda sarar): Bellek · CPU
+//     (+ JVM servisinde heap · GC); her grafiğin tek satır başlığı "Bellek
+//     9,03 GiB · limit 16 GiB" (chartHeadline), trace bandı grafikte;
+//   • TEK satır özet (`.tpp-facts`, podFacts): span · hata · kritik yol · en
+//     büyük öz süre ↗ · faz · restart (· son sonlanma rozeti);
+//   • kapalı "Teknik ayrıntı" (ayrıntı/sorun sayfalarının Sect deseni; kapalıyken
+//     mount edilmez): Bu trace'te / Trace anında / Şu an blokları, grafik
+//     açıklaması ("Mavi bant: …"), JVM-dışı runtime notu.
+// Hiçbir sayı ya da bağlantı silinmedi; yalnız yer değiştirdi / katlandı.
+// JVM artık kapalı açılır bölüm değil: seçimle açılan panelde grafik sırasında
+// (§6 "fetch on open" — sorgu servis başına bir kez, çip değişimi istek atmaz).
+//
 // v0.10.976 — SATIR ALTI KOMPAKT AYRINTI (operatör: "inline daha iyi olur").
 // Yan panel tabloyu sıkıştırıp CPU/Bellek hücrelerini "%…"ya kırpıyordu; panel
 // artık TracePodTable'ın seçili satırının altında tam genişlikte (kabuk
-// `detail` prop'uyla verir; bölge ve odak tabloda). Yerleşim YATAY:
+// `detail` prop'uyla verir; bölge ve odak tabloda). Yerleşim YATAY (gövde
+// kısmı v0.10.1096'te yukarıdaki sıraya döndü):
 //   • başlık satırı — ad (ortadan kırpma), kopyala, "Odak görünümü",
 //     "Pod sayfasında aç", "Span'ları Trace'te göster", ×;
 //   • alt satır + rozetler;
@@ -62,15 +82,19 @@ import {
 import { fmtClockNs, fmtDurNs, fmtPct } from './traceMetricsFmt';
 import { shortPod, togglePod, traceMetricsPodHref } from './traceMetrics';
 import { TraceJvmPanel } from './TraceJvmPanel';
-import { TracePodCharts } from './TracePodCharts';
+import { PodChart } from './TracePodCharts';
+import { podChartsCaption, usePodChartBuilds } from './usePodChartBuilds';
 import { usePanelNote } from './usePanelNote';
 import {
-  agoText, CAP_REASON, clusterNameOf, compareChipLayout, compareColors, hhmm, momentRow, nowNote, nowSection, podBadges,
-  servicePods, siblingCopy, siblingStats, stateMessage, subLine, suffixLabels,
-  type CompareChip, type MomentRow, type NowRow,
+  agoText, CAP_REASON, chartHeadline, clusterNameOf, compareChipLayout, compareColors, hhmm, momentRow, nowNote, nowSection,
+  podBadges, podFacts, servicePods, siblingCopy, siblingStats, stateMessage, subLine, suffixLabels,
+  type ChartHeadline, type CompareChip, type MomentRow, type NowRow,
 } from './tracePodPanelModel';
 
 // ── Paylaşılan parçalar ──────────────────────────────────────────────────
+
+/** v0.10.1096 — satır altı ayrıntıda grafik yüksekliği (Bellek, CPU, JVM heap, GC). */
+const DETAIL_CHART_H = 168;
 
 /** v0.10.968 — "Pod adını kopyala": lib/clipboard (düz HTTP'de execCommand
  *  yedeği); "kopyalandı" YALNIZ kopya gerçekten yapıldıysa, değilse
@@ -199,9 +223,13 @@ const CAP_ANNOUNCE = 'Karşılaştırmada en çok 4 pod.';
  *  `pn.hasLive`); başarılı tık notu siler. Menü açıkken üyeliği donar
  *  (`menuPods` → compareChipLayout `pinned`); taşma boşalınca menü kapanır
  *  (çapasız açık kalıp sonra kendiliğinden açılıp odak çalmasın); yalnız
- *  karşılaştırmada olduğu için görünen çip çıkarılınca odak "+N"ye geçer. */
+ *  karşılaştırmada olduğu için görünen çip çıkarılınca odak "+N"ye geçer.
+ *
+ *  v0.10.1096 — `compact`: satır altı ayrıntıda grafik sırasının başlık
+ *  çubuğunda SAĞA yaslı tek satır denetim (etiket + xs çipler + "Kardeş
+ *  çizgileri"); bölüm çizgisi/başlığı yok. Davranış ve notlar aynı. */
 export function CompareSection({
-  model, p, compare, metrics, siblingLines, onCompareChange, onToggleSiblingLines, announce, note = '', setNote,
+  model, p, compare, metrics, siblingLines, onCompareChange, onToggleSiblingLines, announce, note = '', setNote, compact = false,
 }: {
   model: TraceMetricsModel;
   p: TracePodInfo;
@@ -213,6 +241,7 @@ export function CompareSection({
   announce: (m: string) => void;
   note?: string;
   setNote?: (m: string) => void;
+  compact?: boolean;
 }) {
   const themeTick = useThemeTick();
   const pods = useMemo(() => servicePods(model, p.service), [model, p.service]);
@@ -247,38 +276,61 @@ export function CompareSection({
   };
   const capBlocked = [...visible, ...overflow].some(c => c.disabled && c.title === CAP_REASON);
   const showNote = note !== '' && !(capBlocked && note === CAP_ANNOUNCE);
+  const chipSize = compact ? 'xs' : undefined;
+  const label = <span>Karşılaştır · aynı servisten ({compare.length}/{TRACE_METRICS_MAX_COMPARE})</span>;
+  const siblingsChip = <Chip size="xs" active={siblingLines} onClick={onToggleSiblingLines}>Kardeş çizgileri</Chip>;
+  const chips = (
+    <div className="tpp-chips">
+      {visible.map(c => (
+        <Chip key={c.pod} size={chipSize} active={c.on} disabled={c.disabled} title={c.title} onClick={() => toggle(c)}>
+          <ChipBody c={c} color={colors.get(c.label)} />
+        </Chip>
+      ))}
+      {overflow.length > 0 && (
+        <>
+          <Chip ref={moreRef} size={chipSize} aria-haspopup="menu" aria-expanded={menuPods !== null} title={`Diğer ${overflow.length} pod`}
+            onClick={() => setMenuPods(m => (m ? null : new Set(overflow.map(c => c.pod))))}>
+            +{overflow.length}
+          </Chip>
+          <Popover anchorRef={moreRef} open={menuPods !== null} onClose={() => setMenuPods(null)} kind="menu" ariaLabel={`${p.service} için diğer pod'lar`} width={280}>
+            {overflow.map(c => (
+              <MenuItem key={c.pod} role="menuitemcheckbox" aria-checked={c.on} aria-disabled={c.disabled || undefined}
+                title={c.title} onClick={() => toggle(c)}>
+                <span className="mono">{c.label}</span> · {c.spans}{c.errors > 0 && <span className="cell-err"> · ⚠{c.errors}</span>}
+                {c.note && <span className="cell-faint"> · {c.note}</span>}
+              </MenuItem>
+            ))}
+          </Popover>
+        </>
+      )}
+    </div>
+  );
+  const notes = (
+    <>
+      {capBlocked && <div className="tpp-note">{CAP_REASON}</div>}
+      {showNote && <div className="tpp-note" data-panel-note="">{note}</div>}
+    </>
+  );
+  if (compact) {
+    return (
+      <section className="tpp-cmp" aria-label="Karşılaştır">
+        <div className="tpp-cmp-line">
+          <span className="tpp-cmp-label">{label}</span>
+          {chips}
+          {siblingsChip}
+        </div>
+        {notes}
+      </section>
+    );
+  }
   return (
     <section className="tpp-sec" aria-label="Karşılaştır">
       <div className="tpp-sec-title">
-        <span>Karşılaştır · aynı servisten ({compare.length}/{TRACE_METRICS_MAX_COMPARE})</span>
-        <Chip size="xs" active={siblingLines} onClick={onToggleSiblingLines}>Kardeş çizgileri</Chip>
+        {label}
+        {siblingsChip}
       </div>
-      <div className="tpp-chips">
-        {visible.map(c => (
-          <Chip key={c.pod} active={c.on} disabled={c.disabled} title={c.title} onClick={() => toggle(c)}>
-            <ChipBody c={c} color={colors.get(c.label)} />
-          </Chip>
-        ))}
-        {overflow.length > 0 && (
-          <>
-            <Chip ref={moreRef} aria-haspopup="menu" aria-expanded={menuPods !== null} title={`Diğer ${overflow.length} pod`}
-              onClick={() => setMenuPods(m => (m ? null : new Set(overflow.map(c => c.pod))))}>
-              +{overflow.length}
-            </Chip>
-            <Popover anchorRef={moreRef} open={menuPods !== null} onClose={() => setMenuPods(null)} kind="menu" ariaLabel={`${p.service} için diğer pod'lar`} width={280}>
-              {overflow.map(c => (
-                <MenuItem key={c.pod} role="menuitemcheckbox" aria-checked={c.on} aria-disabled={c.disabled || undefined}
-                  title={c.title} onClick={() => toggle(c)}>
-                  <span className="mono">{c.label}</span> · {c.spans}{c.errors > 0 && <span className="cell-err"> · ⚠{c.errors}</span>}
-                  {c.note && <span className="cell-faint"> · {c.note}</span>}
-                </MenuItem>
-              ))}
-            </Popover>
-          </>
-        )}
-      </div>
-      {capBlocked && <div className="tpp-note">{CAP_REASON}</div>}
-      {showNote && <div className="tpp-note" data-panel-note="">{note}</div>}
+      {chips}
+      {notes}
     </section>
   );
 }
@@ -325,14 +377,14 @@ export function StateBlock({ state, pod, onRetry, height = 140 }: { state: PodMe
  *  Seri etiketi ve rengi çip / Bellek / CPU ile AYNI (suffixLabels +
  *  compareColors): bir pod dört grafikte de tek ad, tek renk.
  *
- *  v0.10.976 — `collapsible`: satır altı ayrıntıda KAPALI açılır bölüm;
- *  TraceJvmPanel yalnız açıkken bağlanır (sorgu o zaman gider). Odak
- *  görünümü açık (dikey) kullanır. */
-export function JvmSection({ model, p, compare, window: w, collapsible = false }: {
-  model: TraceMetricsModel; p: TracePodInfo; compare: string[]; window: TraceMetricsWindowInfo; collapsible?: boolean;
+ *  v0.10.976'nın `collapsible`ı (kapalı açılır bölüm) v0.10.1096'te kalktı:
+ *  `inline` — satır altı ayrıntıda heap ve GC, Bellek/CPU ile AYNI yatay
+ *  ızgarada birer hücre (bölüm başlığı yok, yükseklik 168); JVM değilse hiç
+ *  (not "Teknik ayrıntı"da, JvmNote). Odak görünümü bölümlü (dikey) kullanır. */
+export function JvmSection({ model, p, compare, window: w, inline = false }: {
+  model: TraceMetricsModel; p: TracePodInfo; compare: string[]; window: TraceMetricsWindowInfo; inline?: boolean;
 }) {
   const themeTick = useThemeTick();
-  const [open, setOpen] = useState(false);
   const svcPods = useMemo(() => servicePods(model, p.service), [model, p.service]);
   const queryPods = useMemo(() => svcPods.map(x => x.pod), [svcPods]);
   const labels = useMemo(() => suffixLabels(svcPods), [svcPods]);
@@ -342,29 +394,25 @@ export function JvmSection({ model, p, compare, window: w, collapsible = false }
   const deploys = useMemo(() => [{ timeUnixNs: w.startNs, label: 'trace' }], [w.startNs]);
   const xRange = useMemo(() => ({ from: w.fromNs / 1e9, to: w.toNs / 1e9 }), [w.fromNs, w.toNs]);
   if (!p.runtime) return null;
-  if (familyOf(p.runtime) !== 'jvm') return <div className="tpp-note">JVM paneli yok · runtime: {p.runtime}</div>;
+  if (familyOf(p.runtime) !== 'jvm') return inline ? null : <JvmNote runtime={p.runtime} />;
   const panel = (
     <TraceJvmPanel service={p.service} pods={compare} queryPods={queryPods} runtime={p.runtime}
       from={w.fromNs} to={w.toNs} syncKey={`trace-metrics-${p.service}`} deploys={deploys} xRange={xRange}
-      labelOf={labelOf} seriesColors={colors} />
+      labelOf={labelOf} seriesColors={colors} chartHeight={inline ? DETAIL_CHART_H : undefined} />
   );
-  if (collapsible) {
-    return (
-      <section className="tpp-sec" aria-label="JVM · heap ve GC">
-        <div className="tpp-sec-title">
-          <DisclosureButton anatomy="row" expanded={open} onClick={() => setOpen(o => !o)}>JVM · heap ve GC</DisclosureButton>
-          <span>OTel jvm.* · ClickHouse</span>
-        </div>
-        {open && panel}
-      </section>
-    );
-  }
+  if (inline) return panel;
   return (
     <section className="tpp-sec" aria-label="JVM · heap ve GC">
       <div className="tpp-sec-title"><span>JVM · heap ve GC</span><span>OTel jvm.* · ClickHouse</span></div>
       {panel}
     </section>
   );
+}
+
+/** v0.10.968 — JVM olmayan runtime'ın tek satır notu; runtime bilinmiyorsa hiç. */
+function JvmNote({ runtime }: { runtime: string }) {
+  if (!runtime || familyOf(runtime) === 'jvm') return null;
+  return <div className="tpp-note">JVM paneli yok · runtime: {runtime}</div>;
 }
 
 function NowValue({ r }: { r: NowRow }) {
@@ -410,8 +458,69 @@ export function NowSection({ state, traceStartNs, columns = false }: { state: Po
 
 // ── Panel ─────────────────────────────────────────────────────────────────
 
-/** v0.10.976 — satır altı kompakt ayrıntı (yerleşim dosya başlığında). Bölge
- *  (aria-label "<pod> ayrıntısı") ve odak TracePodTable'da; burası içerik. */
+const HEAD_LEVEL: Record<ChartHeadline['level'], string> = { none: 'cell-strong', warn: 'cell-warn cell-strong', err: 'cell-err cell-strong' };
+
+/** v0.10.1096 — tek satır grafik başlığı: "Bellek 9,03 GiB · limit 16 GiB".
+ *  Renk yalnız limite göre sapmada; tam "Trace anında" cümlesi ipucunda. */
+function ChartHead({ h }: { h: ChartHeadline }) {
+  return (
+    <span className="tpp-chart-head" title={h.title}>
+      <span>{h.k}</span>{' '}
+      <span className={HEAD_LEVEL[h.level]}>{h.value}</span>
+      {h.limit && <span className="cell-faint"> · {h.limit}</span>}
+    </span>
+  );
+}
+
+/** v0.10.1096 — grafiklerin altındaki TEK satır özet (podFacts). Span'e giden
+ *  segmentler LinkButton (Trace sekmesinde o span'i açar). */
+function PodFactsRow({ model, p, state, onOpenSpan }: {
+  model: TraceMetricsModel; p: TracePodInfo; state: PodMetricState; onOpenSpan: (id: string) => void;
+}) {
+  const selfName = useMemo(
+    () => model.podSpans.get(p.pod)?.find(s => s.spanId === p.maxSelfSpanId)?.name ?? '',
+    [model, p.pod, p.maxSelfSpanId]);
+  const now = state.kind === 'ok' ? state.data.now : null;
+  const segs = podFacts(p, { selfKnown: model.selfKnown, selfName, now, traceStartNs: model.traceStartNs });
+  return (
+    <ul className="tpp-facts" aria-label="Özet">
+      {segs.map(s => {
+        const tone = s.tone === 'err' ? 'cell-err' : s.tone === 'warn' ? 'cell-warn' : s.tone === 'faint' ? 'cell-faint' : undefined;
+        let body: ReactNode;
+        if (s.badge) body = <Badge tone={s.badge}>{s.t}</Badge>;
+        else if (s.spanId) {
+          const id = s.spanId;
+          body = <LinkButton className={tone} title={s.title} onClick={() => onOpenSpan(id)}>{s.t}</LinkButton>;
+        } else body = <span className={tone}>{s.t}</span>;
+        return (
+          <li key={s.id} data-fact={s.id} title={s.spanId ? undefined : s.title}>
+            {s.label && <span className="cell-faint">{s.label} </span>}
+            {body}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** v0.10.1096 — "Teknik ayrıntı": ayrıntı/sorun sayfalarının Sect deseni
+ *  (ui/DisclosureButton, KAPALI başlar, kapalıyken gövde mount edilmez).
+ *  Açıklık yerel durum — paylaşılan link bölüm durumunu taşımaz. */
+function TechFold({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="tpp-sec" aria-label="Teknik ayrıntı">
+      <div className="tpp-sec-title">
+        <DisclosureButton anatomy="row" expanded={open} onClick={() => setOpen(o => !o)}>Teknik ayrıntı</DisclosureButton>
+      </div>
+      {open && <div className="tpp-fold-body">{children}</div>}
+    </section>
+  );
+}
+
+/** v0.10.976 — satır altı kompakt ayrıntı; v0.10.1096 yerleşimi dosya
+ *  başlığında. Bölge (aria-label "<pod> ayrıntısı") ve odak TracePodTable'da;
+ *  burası içerik. */
 export function TracePodPanel(props: TracePodPanelProps) {
   const {
     model, selected: p, compare, metrics, window: w, siblingLines,
@@ -420,6 +529,7 @@ export function TracePodPanel(props: TracePodPanelProps) {
   const state = metrics(p.pod);
   const sub = subLine(p, state);
   const { note, setNote, say } = usePanelNote(p.pod, announce);
+  const builds = usePodChartBuilds({ model, selected: p, compare, metrics, window: w, siblingLines });
   const ok = state.kind === 'ok';
   return (
     <div className="tpp tpp-detail" data-pod={p.pod}>
@@ -436,27 +546,37 @@ export function TracePodPanel(props: TracePodPanelProps) {
         {sub.map((s, i) => <span key={i}>{i > 0 ? '· ' : ''}{s}</span>)}
         <PodBadges p={p} />
       </div>
-      <div className="tpp-detail-body">
+      {ok && (
+        <div className="tpp-chart-bar">
+          <CompareSection model={model} p={p} compare={compare} metrics={metrics} siblingLines={siblingLines}
+            onCompareChange={onCompareChange} onToggleSiblingLines={onToggleSiblingLines} announce={say}
+            note={note} setNote={setNote} compact />
+        </div>
+      )}
+      {/* v0.10.916 (operator-reported) — bellek önce, CPU sonra; ikisi de zeroBase. */}
+      <div className="tpp-chart-row">
+        {state.kind === 'ok' ? (
+          <>
+            <PodChart build={builds.mem} height={DETAIL_CHART_H} syncKey={builds.syncKey} xRange={builds.xRange}
+              head={<ChartHead h={chartHeadline('mem', state.data)} />} legendLimit={false} />
+            <PodChart build={builds.cpu} height={DETAIL_CHART_H} syncKey={builds.syncKey} xRange={builds.xRange}
+              head={<ChartHead h={chartHeadline('cpu', state.data)} />} legendLimit={false} />
+          </>
+        ) : (
+          <StateBlock state={state} pod={p.pod} onRetry={onRetry} height={80} />
+        )}
+        <JvmSection model={model} p={p} compare={compare} window={w} inline />
+      </div>
+      <PodFactsRow model={model} p={p} state={state} onOpenSpan={onOpenSpan} />
+      <TechFold>
         <div className="tpp-kv3">
           <TraceFacts model={model} p={p} onOpenSpan={onOpenSpan} />
           {state.kind === 'ok' && <MomentSection model={model} p={p} data={state.data} metrics={metrics} />}
           <NowSection state={state} traceStartNs={model.traceStartNs} />
         </div>
-        <div className="tpp-detail-charts">
-          {ok ? (
-            <>
-              <CompareSection model={model} p={p} compare={compare} metrics={metrics} siblingLines={siblingLines}
-                onCompareChange={onCompareChange} onToggleSiblingLines={onToggleSiblingLines} announce={say}
-                note={note} setNote={setNote} />
-              <TracePodCharts model={model} selected={p} compare={compare} metrics={metrics} window={w}
-                siblingLines={siblingLines} height={168} layout="row" />
-            </>
-          ) : (
-            <StateBlock state={state} pod={p.pod} onRetry={onRetry} height={80} />
-          )}
-        </div>
-      </div>
-      <JvmSection model={model} p={p} compare={compare} window={w} collapsible />
+        {ok && <p className="tpp-caption">{podChartsCaption(builds, w, p.service)}</p>}
+        <JvmNote runtime={p.runtime} />
+      </TechFold>
     </div>
   );
 }

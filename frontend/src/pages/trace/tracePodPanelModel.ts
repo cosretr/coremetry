@@ -24,7 +24,7 @@ import {
   LEVEL_ERR, MAX_SIBLING_LINES, SIBLING_RATIO_WARN,
   type MetricLevel, type PodMetricSeries, type PodMetricState, type TraceMetricsModel, type TracePodInfo,
 } from './traceMetricsModel';
-import { fmtBytesTr, fmtClockSec, fmtCores, fmtCoresShort, fmtDurNs, fmtPct, fmtRatio } from './traceMetricsFmt';
+import { fmtBytesTr, fmtClockNs, fmtClockSec, fmtCores, fmtCoresShort, fmtDurNs, fmtPct, fmtRatio } from './traceMetricsFmt';
 import { trPossessive } from './trSuffix';
 import { podAtCap, shortPod } from './traceMetrics';
 
@@ -696,4 +696,83 @@ export function legendValue(kind: 'mem' | 'cpu', v: number | null): string {
 /** v0.10.968 — lejant limit metni: "limit 1 çekirdek (şu an)" / "limit 2 GiB (şu an)". */
 export function limitLegend(kind: 'mem' | 'cpu', limit: number): string {
   return `limit ${kind === 'cpu' ? fmtCores(limit) : fmtBytesTr(limit)} (şu an)`;
+}
+
+// ── v0.10.1096 — grafik başlığı + tek satırlık özet ──────────────────────
+// Operatör (prod, satır altı ayrıntı): "Çok fazla yazı var; sadece metrik
+// yatayda inline gözükse olacak. Diğer yazılar aşağı olabilir." Grafikler
+// panelin en üstüne yan yana çıktı; her birinin TEK satırlık başlığı trace
+// anı değeri + limit, altında TEK satır özet. Ayrıntılı metin (Bu trace'te /
+// Trace anında / Şu an, açıklama) kapalı "Teknik ayrıntı"da — silinmedi.
+
+export interface ChartHeadline {
+  k: 'Bellek' | 'CPU';
+  value: string;        // trace anı değeri ("9,03 GiB" / "0,053 çekirdek")
+  limit: string | null; // "limit 16 GiB" / "limit 1,6" / "limit tanımsız" / "limit bilinmiyor"
+  level: MetricLevel;   // renk YALNIZ limit bilinirken ve sapmada (momentRow kararı)
+  title: string;        // ipucu: "Trace anında" satırının tam cümlesi (+ kısıtlama notu)
+}
+
+/** v0.10.1096 — grafik başlığı: "Bellek 9,03 GiB · limit 16 GiB" / "CPU 0,053
+ *  çekirdek · limit 1,6". Limitin "şu an" olduğu ve kısıtlama notu ipucunda
+ *  (momentRow ile tek kaynak). Örnek yoksa değer "—", limit yazılmaz. */
+export function chartHeadline(kind: 'cpu' | 'mem', d: PodMetricSeries): ChartHeadline {
+  const row = momentRow(kind, d);
+  const v = kind === 'cpu' ? d.cpuAt : d.memAt;
+  const lim = kind === 'cpu' ? d.cpuLimit : d.memLimit;
+  const title = [`Trace anında: ${row.main}${row.rest}`.replace(/\s+/g, ' ').trim(), row.title, row.cap].filter(Boolean).join(' — ');
+  if (!isNum(v)) return { k: row.k, value: '—', limit: null, level: 'none', title };
+  let limit: string;
+  if (isNum(lim) && lim > 0) limit = `limit ${kind === 'cpu' ? coreNum(lim) : fmtBytesTr(lim)}`;
+  else if (d.inventory !== 'present' || d.instantPartial) limit = 'limit bilinmiyor';
+  else limit = 'limit tanımsız';
+  return { k: row.k, value: kind === 'cpu' ? fmtCores(v) : fmtBytesTr(v), limit, level: row.level, title };
+}
+
+export interface FactSeg {
+  id: 'spans' | 'errors' | 'crit' | 'self' | 'phase' | 'restarts' | 'term';
+  t: string;
+  /** Bağlantının önündeki düz önek ("en büyük öz süre:"). */
+  label?: string;
+  tone?: 'err' | 'warn' | 'faint';
+  /** Verilirse segment Trace sekmesinde bu span'i açan bağlantı. */
+  spanId?: string;
+  title?: string;
+  /** Verilirse segment rozet (son sonlanma nedeni). */
+  badge?: 'danger' | 'neutral';
+}
+
+/** v0.10.1096 — grafiklerin altındaki TEK satır: "9 span · 0 hata · kritik yol
+ *  %86 · 17 ms · en büyük öz süre: <op> · 21 ms ↗ · Running · restart 0".
+ *  Hata >0 ve ilk hata biliniyorsa "N hata ↗" ilk hatalı span'i açar; son
+ *  sonlanma nedeni rozet (OOMKilled tehlike). `now` yalnız metrik ok iken
+ *  (faz/restart "şu an"dır — ipucu söyler). */
+export function podFacts(p: TracePodInfo, o: {
+  selfKnown: boolean; selfName: string; now: PodMetricSeries['now'] | null; traceStartNs: number;
+}): FactSeg[] {
+  const out: FactSeg[] = [{ id: 'spans', t: `${p.spans} span` }];
+  const fe = p.firstError;
+  if (p.errors > 0) {
+    out.push(fe
+      ? { id: 'errors', t: `${p.errors} hata ↗`, tone: 'err', spanId: fe.spanId, title: `İlk hatalı span'i aç: ${fe.name} · ${fe.status} · ${fmtClockNs(fe.timeNs)}` }
+      : { id: 'errors', t: `${p.errors} hata`, tone: 'err' });
+  } else {
+    out.push({ id: 'errors', t: '0 hata', tone: 'faint' });
+  }
+  out.push(p.critNs > 0
+    ? { id: 'crit', t: `kritik yol ${fmtPct(p.critShare)} · ${fmtDurNs(p.critNs)}` }
+    : { id: 'crit', t: 'kritik yolda değil', tone: 'faint' });
+  if (o.selfKnown && p.maxSelfSpanId) {
+    out.push({ id: 'self', label: 'en büyük öz süre:', t: `${o.selfName || p.maxSelfSpanId} · ${fmtDurNs(p.maxSelfNs)} ↗`, spanId: p.maxSelfSpanId });
+  }
+  const n = o.now;
+  if (n) {
+    if (n.phase) out.push({ id: 'phase', t: n.phase, title: 'Faz — şu an (trace anı değil)' });
+    if (isNum(n.restarts)) out.push({ id: 'restarts', t: `restart ${n.restarts}`, tone: n.restarts > 0 ? 'warn' : undefined, title: 'Restart — şu an (trace anı değil)' });
+    if (n.lastTermReason) {
+      const when = isNum(n.lastTermAtSec) ? `${fmtClockSec(n.lastTermAtSec)} · ${relToTrace(n.lastTermAtSec, o.traceStartNs)}` : 'zaman bilinmiyor';
+      out.push({ id: 'term', t: n.lastTermReason, badge: n.lastTermReason === 'OOMKilled' ? 'danger' : 'neutral', title: `Son sonlanma: ${n.lastTermReason} · ${when}` });
+    }
+  }
+  return out;
 }

@@ -1630,6 +1630,22 @@ Yeni uç `GET /api/databases/detail/trend` (önbellek anahtarı seçilen grenli�
 tetikler (blok başına satır sayısı 5m kardeşiyle aynı mertebe: blok tipik 1-2 kova görür); kalıcı satır DB kimliği
 başına günde ≤ 1440 (× span'in düştüğü shard sayısı), 7 günde ~10k — 5m'in 90 günlük ~26k'sının ~%40'ı.
 
+## 2026-10-04 — Trace Metrics pod paneli: grafikler üstte yan yana, metin tek satır + katlı ayrıntı (v0.10.1096)
+
+**Operatör (prod, Trace › Metrics, seçili pod'un satır altı ayrıntısı):** "Çok fazla yazı var; sadece metrik
+yatayda inline gözükse olacak. Diğer yazılar aşağı olabilir." v0.10.976'nın gövdesi solda üç yoğun metin
+bloğu (Bu trace'te / Trace anında / Şu an), sağda sıkışmış iki grafik ve uzun gri açıklamaydı. **Karar:**
+başlık satırı, alt satır ve eylemler (Odak görünümü, Pod sayfasında aç, Span'ları Trace'te göster) aynen;
+altında sağa yaslı küçük "Karşılaştır" denetimi (xs çipler + Kardeş çizgileri), sonra TEK yatay ızgara
+(auto-fit, dar ekranda sarar): Bellek · CPU, JVM servisinde heap · GC; her grafiğin tek satır başlığı
+"Bellek 9,03 GiB · limit 16 GiB" (renk yalnız limite göre sapmada, "şu an" ve kısıtlama notu ipucunda),
+trace bandı grafikte. Altında tek satır özet: span · hata ↗ · kritik yol · en büyük öz süre ↗ · faz ·
+restart (· son sonlanma rozeti). Kalan metin (üç blok, sayılar ve bağlantılarıyla, grafik açıklaması,
+JVM-dışı runtime notu) kapalı "Teknik ayrıntı"da — anomali/sorun sayfalarının deseni, kapalıyken mount
+edilmez; hiçbir şey silinmedi. JVM artık kapalı açılır bölüm değil: seçimle açılan panelde sorgulanır (fetch
+on open; servis başına bir kez, çip değişimi istek atmaz). "Kaynak: …" dipnotu sekmenin altında kalır
+(tabloya da ait). Odak görünümü değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

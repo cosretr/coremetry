@@ -4963,7 +4963,10 @@ a.ins-val:hover { text-decoration: underline; }
 .tpp-msg.is-err { color: var(--err); }
 .tpp-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .tpp-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex: none; vertical-align: middle; }
-.tpp-chart { display: grid; gap: var(--sp-2); min-width: 0; }
+/* v0.10.1096 — tek kolon minmax(0,1fr): örtük `auto` iz, uPlot tuvalinin
+   ilk çizim genişliğini min-content sayıp dar ızgara hücresinden taşıyordu
+   (JVM heap/GC hücreleri komşusunun üstüne biniyordu). */
+.tpp-chart { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); min-width: 0; }
 .tpp-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
 .tpp-caption { font-size: var(--fs-2xs); color: var(--text3); line-height: 1.5; }
 .tpp-focus { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--sp-6); min-width: 0; }
@@ -4977,21 +4980,38 @@ a.ins-val:hover { text-decoration: underline; }
 .tpp-tl-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
 /* v0.10.976 — satır altı KOMPAKT ayrıntı (TracePodPanel; operatör "inline daha
    iyi olur"). Başlık satırı sarar (ad + kopyala + Odak görünümü + Pod sayfası +
-   Span'lar + ×). Gövde iki sütun: solda üç özet bloğu YAN YANA (auto-fit: dar
-   sütunda 2 → 1'e iner, etiket sütunu dar), sağda Karşılaştır + yan yana
-   Bellek/CPU. ≤1024 (tablet eşiği; mobileBreakpoints tek kaynak) tek sütun. */
+   Span'lar + ×).
+   v0.10.1096 (operatör: "sadece metrik yatayda inline gözükse olacak. Diğer
+   yazılar aşağı olabilir.") — iki sütunlu gövde (.tpp-detail-body /
+   .tpp-detail-charts) söküldü. Sıra: sağa yaslı Karşılaştır çubuğu → TEK yatay
+   grafik ızgarası (Bellek · CPU · JVM heap · GC) → tek satır özet → kapalı
+   "Teknik ayrıntı" (içinde üç özet bloğu yan yana, .tpp-kv3). */
 .tpp-detail { gap: var(--sp-4); }
 .tpp-detail > .tpp-head { flex-wrap: wrap; }
 .tpp-detail > .tpp-sub { align-items: center; }
-.tpp-detail-body { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--sp-6); min-width: 0; align-items: start; }
 .tpp-kv3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-5); min-width: 0; }
 .tpp-kv3 .keyval { --kv-label-w: 96px; }
-.tpp-detail-charts { display: grid; gap: var(--sp-4); min-width: 0; align-content: start; }
-/* v0.10.976 — grafik sütunu içsel (auto-fit, .tpp-kv3 ile aynı kalıp): kap
-   2×240 px'ten darsa Bellek/CPU ALT ALTA iner. Viewport eşiği yan çubuğun
-   genişliğini (220 / 56 px) göremiyordu — 1025 px'te iki sütunlu gövdede her
-   grafik ~158 px'e düşüyordu. 1100 → ~361 px alt alta; ≥~1470 yan yana. */
-.tpp-chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: var(--sp-5); min-width: 0; }
+/* v0.10.976 — grafik ızgarası içsel (auto-fit, .tpp-kv3 ile aynı kalıp): kap
+   dar ise hücreler ALT ALTA iner (viewport eşiği yan çubuğun 220 / 56 px'ini
+   göremiyordu). v0.10.1096 — ızgara tam genişlik ve panelin en üstünde; 2–4
+   hücre (JVM servisinde heap + GC da), viewport kuralı artık yok. */
+.tpp-chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: var(--sp-5); min-width: 0; align-items: start; }
+/* v0.10.1096 — tek satır grafik başlığı ("Bellek 9,03 GiB · limit 16 GiB"):
+   .tpp-sec-title'ın 600 ağırlığını değer taşır, etiket normal. */
+.tpp-chart-head { font-weight: 400; color: var(--text2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpp-chart-head .cell-strong { color: var(--text); }
+.tpp-chart-head .cell-warn.cell-strong { color: var(--warn); }
+.tpp-chart-head .cell-err.cell-strong { color: var(--err); }
+/* Karşılaştır: blok değil, ızgaranın başlık çubuğunda sağa yaslı tek satır. */
+.tpp-chart-bar { display: flex; justify-content: flex-end; min-width: 0; }
+.tpp-cmp { display: grid; justify-items: end; gap: var(--sp-2); min-width: 0; }
+.tpp-cmp-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2) var(--sp-3); min-width: 0; }
+.tpp-cmp-label { font-size: var(--fs-xs); color: var(--text2); }
+/* Tek satır özet: segmentler "·" ile ayrılır (ayraç CSS'te, metinde değil). */
+.tpp-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); min-width: 0; }
+.tpp-facts > li { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.tpp-facts > li + li::before { content: '·'; color: var(--text3); margin-right: var(--sp-1); }
+.tpp-fold-body { display: grid; gap: var(--sp-4); min-width: 0; }
 
 /* ── v0.10.968 — Trace › Metrics kabuğu + gruplu pod tablosu (tpm-*) ─────
    Operatör onayı 2026-09-27 (mockup Main.dc.html). Renk YALNIZ sapmada
@@ -5071,8 +5091,9 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .tpm-note { font-size: var(--fs-xs); flex: none; }
 
 /* v0.10.968 — tablet eşiği (mevcut 1024): odak görünümü tek kolona iner.
-   v0.10.976 — satır altı ayrıntının gövdesi ve yan yana grafikleri de alt alta. */
+   v0.10.1096 — satır altı ayrıntının grafik ızgarası buradan çıktı: içsel
+   auto-fit kendi sarar (tam genişlikte 1024'te de iki grafik yan yana sığar). */
 @media (max-width: 1024px) {
-  .tpp-focus, .tpp-cols, .tpp-detail-body, .tpp-chart-row { grid-template-columns: minmax(0, 1fr); }
+  .tpp-focus, .tpp-cols { grid-template-columns: minmax(0, 1fr); }
   .tpp-rail { border-right: 0; border-bottom: 1px solid var(--divider); max-height: 240px; }
 }

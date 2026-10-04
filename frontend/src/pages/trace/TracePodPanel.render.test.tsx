@@ -23,6 +23,15 @@
 // Bellek/CPU (168 px). JVM yalnız JVM servisinde, KAPALI açılır bölüm —
 // açılmadan ClickHouse isteği YOK. v0.10.968'in her parçası yerinde (son
 // describe bunu tek tek sayar).
+//
+// v0.10.1096 — operatör: "Çok fazla yazı var; sadece metrik yatayda inline
+// gözükse olacak. Diğer yazılar aşağı olabilir." Grafikler (Bellek, CPU, JVM
+// servisinde heap + GC) panelin EN ÜSTÜNDE tek yatay ızgarada, her biri tek
+// satır başlıklı; Karşılaştır başlık çubuğunda sağda küçük denetim; altında
+// TEK satır özet; Bu trace'te / Trace anında / Şu an + açıklama kapalı
+// "Teknik ayrıntı"da (kapalıyken mount edilmez — testler önce açar). JVM artık
+// kapalı bölüm değil, panel açılınca sorulur. Yalnız eski SIRAYI / yerleşimi
+// çivileyen testler güncellendi; sayılar ve bağlantılar aynen aranıyor.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -199,8 +208,10 @@ function Harness(o: Partial<TracePodPanelProps> & { initial: string[] }) {
 
 const buttons = (el: HTMLElement) => [...el.querySelectorAll<HTMLButtonElement>('button')];
 const byText = (el: HTMLElement, t: string) => buttons(el).find(b => b.textContent?.includes(t));
-// v0.10.976 — JVM açılır bölümünün başlık düğmesi (DisclosureButton, aria-expanded).
-const jvmToggle = (el: HTMLElement) => buttons(el).find(b => b.hasAttribute('aria-expanded') && b.textContent?.includes('JVM · heap ve GC'))!;
+// v0.10.1096 — "Teknik ayrıntı" katının düğmesi (DisclosureButton, aria-expanded) ve gövdesi.
+const techToggle = (el: HTMLElement) => buttons(el).find(b => b.hasAttribute('aria-expanded') && b.textContent?.includes('Teknik ayrıntı'))!;
+const techFold = (el: HTMLElement) => el.querySelector('section[aria-label="Teknik ayrıntı"]')!;
+const openTech = (el: HTMLElement) => { act(() => { techToggle(el).click(); }); return techFold(el); };
 const chip = (el: HTMLElement, podName: string) =>
   [...el.querySelectorAll<HTMLButtonElement>('button.btn-chip')].find(b => b.title.startsWith(`${podName} · `) || (b.title === CAP_REASON && b.textContent?.includes(podName.slice(-5))))!;
 
@@ -219,16 +230,25 @@ describe('TracePodPanel — v0.10.968', () => {
     // v0.10.976 — satır altı ayrıntı: "Genişlet" ikonu yerine "Odak görünümü" düğmesi, × "Ayrıntıyı kapat".
     for (const l of ['Pod adını kopyala', 'Ayrıntıyı kapat']) expect(el.querySelector(`[aria-label="${l}"]`)).not.toBeNull();
     expect(byText(el, 'Odak görünümü')).not.toBeUndefined();
+    // v0.10.1096 — grafik başlıkları: değer seviye renginde (CPU hata, bellek uyarı), limit soluk.
+    expect([...el.querySelectorAll('.tpp-chart-head')].map(h => h.textContent)).toEqual([
+      'Bellek 1,42 GiB · limit 2 GiB', 'CPU 0,97 çekirdek · limit 1',
+    ]);
+    expect(el.querySelector('.tpp-chart-head .cell-err.cell-strong')!.textContent).toBe('0,97 çekirdek');
+    expect(el.querySelector('.tpp-chart-head .cell-warn.cell-strong')!.textContent).toBe('1,42 GiB');
+    // v0.10.1096 — ayrıntılı metin "Teknik ayrıntı"da (kapalı başlar; açılınca aynen).
+    const fold = openTech(el);
     // "Bu trace'te": hata zamanı ve en büyük öz süre span'i açan bağlantılar.
-    expect(el.textContent).toContain('4 · ilk: POST /v1/score · DEADLINE_EXCEEDED · ');
+    expect(fold.textContent).toContain('4 · ilk: POST /v1/score · DEADLINE_EXCEEDED · ');
     // Trace anında: CPU hata tonunda + kısıtlama notu, bellek uyarı tonunda.
-    expect(el.querySelector('.cell-err.cell-strong')!.textContent).toBe("0,97 çekirdek · limitin %97'si");
-    expect(el.querySelector('.cell-warn.cell-strong')!.textContent).toBe("1,42 GiB · limitin %71'i");
-    expect(el.textContent).toContain('Limite dayandı: CPU kısıtlaması (throttling) olası.');
-    expect(el.textContent).toContain('Trace anında · Thanos, ±1 adım (15 sn)');
-    // Şu an: OOMKilled tehlike rozeti, restart uyarı.
-    expect([...el.querySelectorAll('.badge.b-err')].some(b => b.textContent === 'OOMKilled')).toBe(true);
-    expect(el.textContent).toMatch(/Şu an \(trace anı değil\) · \d\d:\d\d itibarıyla · trace /);
+    expect(fold.querySelector('.cell-err.cell-strong')!.textContent).toBe("0,97 çekirdek · limitin %97'si");
+    expect(fold.querySelector('.cell-warn.cell-strong')!.textContent).toBe("1,42 GiB · limitin %71'i");
+    expect(fold.textContent).toContain('Limite dayandı: CPU kısıtlaması (throttling) olası.');
+    expect(fold.textContent).toContain('Trace anında · Thanos, ±1 adım (15 sn)');
+    // Şu an: OOMKilled tehlike rozeti (özet satırında da), restart uyarı.
+    expect([...fold.querySelectorAll('.badge.b-err')].some(b => b.textContent === 'OOMKilled')).toBe(true);
+    expect([...el.querySelectorAll('.tpp-facts .badge.b-err')].some(b => b.textContent === 'OOMKilled')).toBe(true);
+    expect(fold.textContent).toMatch(/Şu an \(trace anı değil\) · \d\d:\d\d itibarıyla · trace /);
   });
 
   it('bağlantı eylemleri: en büyük öz süre / ilk hata span\'i açar, span\'ları göster, kopyala duyurur', async () => {
@@ -236,7 +256,12 @@ describe('TracePodPanel — v0.10.968', () => {
     const el = await mount(<TracePodPanel {...p} />);
     act(() => { byText(el, 'score.model.evaluate · 1,21 sn ↗')!.click(); });
     expect(p.onOpenSpan).toHaveBeenCalledWith('s-self');
+    // v0.10.1096 — özet satırının "4 hata ↗"sı da ilk hatalı span'i açar.
+    act(() => { el.querySelector<HTMLButtonElement>('.tpp-facts [data-fact="errors"] button')!.click(); });
+    expect(p.onOpenSpan).toHaveBeenLastCalledWith('s-err');
+    openTech(el); // hata zamanı bağlantısı "Bu trace'te" bloğunda (Teknik ayrıntı)
     act(() => { buttons(el).find(b => b.className.includes('btn-link') && /^\d\d:\d\d:\d\d\.\d{3}$/.test(b.textContent ?? ''))!.click(); });
+    expect(p.onOpenSpan).toHaveBeenCalledTimes(3);
     expect(p.onOpenSpan).toHaveBeenLastCalledWith('s-err');
     act(() => { byText(el, "Span'ları Trace'te göster (61)")!.click(); });
     expect(p.onShowSpans).toHaveBeenCalledWith(PODS[0].pod);
@@ -270,9 +295,13 @@ describe('TracePodPanel — v0.10.968', () => {
     expect(charts[0].getAttribute('data-items')).toBe('m3t9w:data|h8k2v:data|p5r8d:muted|w9z2c:muted|k7n4b:muted');
     expect(charts[1].getAttribute('data-thr')).toBe('1');
     expect(charts[0].getAttribute('data-region')).toBe(`${T0 / 1e9}-${T0 / 1e9 + 15}`);
-    const titles = [...el.querySelectorAll('[data-chart] .tpp-sec-title')].map(t => t.textContent);
-    expect(titles).toEqual(['Bellek (working set)', 'CPU (çekirdek)']);
-    expect(el.querySelector('.tpp-caption')!.textContent).toContain(`Soluk çizgiler: ${SVC} servisinin bu trace'teki diğer 3 pod'u.`);
+    // v0.10.1096 — görünen başlık tek satır değer + limit; grafik adı erişilebilir adda kalır.
+    const names = [...el.querySelectorAll('[data-chart]')].map(t => t.getAttribute('aria-label'));
+    expect(names).toEqual(['Bellek (working set)', 'CPU (çekirdek)']);
+    expect([...el.querySelectorAll('[data-chart] .tpp-sec-title')].map(t => t.textContent!.split(' ')[0])).toEqual(['Bellek', 'CPU']);
+    // Açıklama "Teknik ayrıntı"da.
+    expect(el.querySelector('.tpp-caption')).toBeNull();
+    expect(openTech(el).querySelector('.tpp-caption')!.textContent).toContain(`Soluk çizgiler: ${SVC} servisinin bu trace'teki diğer 3 pod'u.`);
   });
 
   it('hata 3 korunur: error → "Veri okunamadı — bu bir hata, boş sonuç değil." + Yeniden dene; no_samples ve unmapped metinleri', async () => {
@@ -298,7 +327,7 @@ describe('TracePodPanel — v0.10.968', () => {
     const u = el3.querySelector('[data-state="unmapped"]')!;
     expect(u.textContent).toContain("Bu pod'un cluster'ı (dc-east-2) bir Remote Cluster kaydına eşlenmemiş — metrik gösterilemiyor.");
     expect(u.querySelector('a')!.getAttribute('href')).toBe('/settings/clusters');
-    expect(el3.textContent).toContain('Cluster eşlenmemiş: faz, restart ve limitler okunamıyor.');
+    expect(openTech(el3).textContent).toContain('Cluster eşlenmemiş: faz, restart ve limitler okunamıyor.');
   });
 
   it('hata 4 korunur: 4 karşılaştırmada seçisiz aynı-servis çipi devre dışı + gerekçe; tık compare\'i değiştirmez', async () => {
@@ -384,16 +413,14 @@ describe('TracePodPanel — v0.10.968', () => {
   it('runtime go → "JVM paneli yok"; java → TraceJvmPanel queryPods = servisin tüm pod\'ları, runtime isteği YOK', async () => {
     const goSel = { ...PODS[0], runtime: 'go' };
     const el = await mount(<TracePodPanel {...props({ selected: goSel })} />);
-    expect(el.textContent).toContain('JVM paneli yok · runtime: go');
+    // v0.10.1096 — not "Teknik ayrıntı"da (grafik sırası JVM hücresi açmaz).
+    expect(el.textContent).not.toContain('JVM paneli yok');
+    expect(openTech(el).textContent).toContain('JVM paneli yok · runtime: go');
     expect(m.metricCalls).toHaveLength(0);
 
     act(() => { root?.unmount(); }); host?.remove();
-    const el2 = await mount(<TracePodPanel {...props({ compare: [PODS[0].pod, PODS[1].pod] })} />);
-    await wait();
-    expect(el2.textContent).toContain('JVM · heap ve GC');
-    // v0.10.976 — kompakt ayrıntıda JVM KAPALI açılır bölüm: açılmadan istek YOK (ES/CH maliyet disiplini).
-    expect(m.metricCalls).toHaveLength(0);
-    act(() => { jvmToggle(el2).click(); });
+    // v0.10.1096 — JVM heap/GC grafik sırasında: seçimle açılan panelde sorgu hemen gider (§6 fetch on open).
+    await mount(<TracePodPanel {...props({ compare: [PODS[0].pod, PODS[1].pod] })} />);
     await wait();
     expect(m.runtimeCalls).toBe(0);
     expect(m.metricCalls.map(c => c.name).sort()).toEqual(['jvm.gc.duration', 'jvm.memory.used', 'jvm.memory.used_after_last_gc']);
@@ -401,9 +428,11 @@ describe('TracePodPanel — v0.10.968', () => {
     expect(inList).toEqual(PODS.map(p => p.pod));
 
     act(() => { root?.unmount(); }); host?.remove();
+    m.metricCalls.length = 0;
     const el3 = await mount(<TracePodPanel {...props({ selected: { ...PODS[0], runtime: '' } })} />);
-    expect(el3.textContent).not.toContain('JVM paneli yok');
-    expect(el3.textContent).not.toContain('JVM · heap ve GC');
+    expect(openTech(el3).textContent).not.toContain('JVM paneli yok');
+    expect(el3.textContent).not.toContain('JVM heap');
+    expect(m.metricCalls).toHaveLength(0);
   });
 });
 
@@ -510,7 +539,6 @@ describe('TracePodPanel — v0.10.968 inceleme turu', () => {
     const cmp = [PODS[0].pod, PODS[1].pod];
     m.jvmPods = PODS.map(p => p.pod);
     const el = await mount(<TracePodPanel {...props({ compare: cmp })} />);
-    act(() => { jvmToggle(el).click(); }); // v0.10.976 — JVM bölümü kapalı başlar
     await wait();
     await wait();
     expect(m.mlc.length).toBeGreaterThan(0);
@@ -583,7 +611,7 @@ describe('TracePodPanel — v0.10.968 inceleme turu', () => {
   it('F6: bütün kardeşleri okunamayan pod — "Kardeşlere göre" hata tonunda "okunamadı"', async () => {
     const err: PodMetricState = { kind: 'error', message: 'x', timeout: false };
     const el = await mount(<TracePodPanel {...props({ metrics: pp => (pp === PODS[0].pod ? ok() : err) })} />);
-    const seg = [...el.querySelectorAll('.cell-err.cell-strong')].find(x => x.textContent?.includes('okunamadı'))!;
+    const seg = [...openTech(el).querySelectorAll('.cell-err.cell-strong')].find(x => x.textContent?.includes('okunamadı'))!;
     expect(seg.textContent).toBe("Bu trace'teki diğer 4 pod'un metrikleri okunamadı — kıyaslanacak kardeş yok");
     expect(el.textContent).not.toContain('metriği yok');
   });
@@ -619,57 +647,65 @@ describe('TracePodPanel — v0.10.976 kompakt satır altı ayrıntı', () => {
     expect(el.querySelector('[aria-label="Paneli kapat"]')).toBeNull();
   });
 
-  it('gövde iki sütun: solda üç özet bloğu yan yana (Bu trace\'te / Trace anında / Şu an), sağda Karşılaştır + yan yana Bellek/CPU 168 px', async () => {
+  it('grafik sırası (v0.10.1096 — v0.10.976\'nın iki sütunlu gövdesinin yerine): Karşılaştır çubuğu → yan yana Bellek/CPU 168 px → özet → Teknik ayrıntı', async () => {
     const el = await mount(<TracePodPanel {...props({ compare: [PODS[0].pod, PODS[1].pod] })} />);
-    const body = el.querySelector('.tpp-detail-body')!;
-    expect(body).not.toBeNull();
-    const left = body.querySelector('.tpp-kv3')!;
-    expect(secLabels(left)).toEqual(["Bu trace'te", 'Trace anında', 'Şu an']);
-    expect(left.querySelectorAll('dl.keyval')).toHaveLength(3);
-    const right = body.querySelector('.tpp-detail-charts')!;
-    expect(right.querySelector('section[aria-label="Karşılaştır"]')).not.toBeNull();
-    const row = right.querySelector('.tpp-chart-row')!;
+    expect(el.querySelector('.tpp-detail-body')).toBeNull();
+    expect(el.querySelector('.tpp-detail-charts')).toBeNull();
+    const row = el.querySelector('.tpp-detail > .tpp-chart-row')!;
     expect([...row.querySelectorAll('[data-chart]')].map(c => c.getAttribute('data-chart'))).toEqual(['mem', 'cpu']);
     // v0.10.976 (inceleme) — her grafik adlandırılmış grup (CorePanel'e title="" gider, h3 boş; ad kaptan).
     expect([...row.querySelectorAll('[data-chart][role="group"]')].map(c => c.getAttribute('aria-label')))
       .toEqual(['Bellek (working set)', 'CPU (çekirdek)']);
-    // v0.10.976 (inceleme) — grafik satırı İÇSEL auto-fit: kap 2×240 px'ten darsa alt alta
-    // (viewport eşiği yan çubuğun 220/56 px'ini göremiyordu; 1025 px'te grafik ~158 px'e düşüyordu).
+    // v0.10.976 (inceleme) — grafik ızgarası İÇSEL auto-fit: kap dar ise alt alta; v0.10.1096 — viewport kuralı yok.
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(css).toMatch(/\.tpp-chart-row \{[^}]*repeat\(auto-fit, minmax\(min\(240px, 100%\), 1fr\)\)/);
+    expect(css).not.toMatch(/\.tpp-detail-body|\.tpp-detail-charts/);
+    expect(css).not.toMatch(/@media \(max-width: 1024px\) \{[^}]*\.tpp-chart-row/);
     const charts = [...row.querySelectorAll('[data-cpm]')];
     expect(charts.map(c => c.getAttribute('data-h'))).toEqual(['168', '168']);
-    // Limit çizgisi, etkin aralık bandı, kardeş çizgileri (muted) — hepsi kompakt grafikte.
+    // Limit çizgisi, etkin aralık (trace) bandı, kardeş çizgileri (muted) — hepsi grafikte.
     expect(charts[1].getAttribute('data-thr')).toBe('1');
     expect(charts[0].getAttribute('data-region')).toBe(`${T0 / 1e9}-${T0 / 1e9 + 15}`);
     expect(charts[0].getAttribute('data-items')).toBe('m3t9w:data|h8k2v:data|p5r8d:muted|w9z2c:muted|k7n4b:muted');
-    // Çipler + "Kardeş çizgileri" çipi sağ sütunda, grafiklerin ÜSTÜNDE.
-    const chips = right.querySelector('.tpp-chips')!;
-    expect(chips.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect([...right.querySelectorAll('button.btn-chip')].some(b => b.textContent === 'Kardeş çizgileri')).toBe(true);
-    // Açıklama ve "Kaynak" dipnotu DEĞİL: dipnot sekme altında kalır (kabuk), burada yalnız grafik açıklaması.
-    expect(right.querySelector('.tpp-caption')!.textContent).toContain('Soluk çizgiler');
+    // Karşılaştır: blok değil, ızgaranın başlık çubuğunda küçük denetim (çipler + "Kardeş çizgileri").
+    const bar = el.querySelector('.tpp-chart-bar')!;
+    const cmp = bar.querySelector('section.tpp-cmp[aria-label="Karşılaştır"]')!;
+    expect(cmp.querySelector('.tpp-sec-title')).toBeNull();
+    expect([...cmp.querySelectorAll('button.btn-chip')].some(b => b.textContent === 'Kardeş çizgileri')).toBe(true);
+    expect([...cmp.querySelectorAll('button.btn-chip')].every(b => b.classList.contains('ch-xs'))).toBe(true);
+    expect(bar.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Grafik başlığında limit var → lejant tekrar etmez.
+    expect(el.querySelector('.tpp-legend')!.textContent).not.toContain('limit');
+    // "Kaynak" dipnotu sekme altında kalır (kabuk); grafik açıklaması katta.
     expect(el.textContent).not.toContain('Kaynak: trace span');
+    expect(openTech(el).querySelector('.tpp-caption')!.textContent).toContain('Soluk çizgiler');
   });
 
-  it('"+N" taşma menüsü kompakt sağ sütunda da çalışır', async () => {
+  it('"+N" taşma menüsü Karşılaştır çubuğunda da çalışır', async () => {
     const many = ['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8'].map(s => pod(`${SVC}-6b7d9f8c5-${s}xyz`));
     const el = await mount(<TracePodPanel {...props({ model: model(many), selected: many[0], compare: [many[0].pod] })} />);
-    const more = [...el.querySelectorAll<HTMLButtonElement>('.tpp-detail-charts button.btn-chip')].find(b => b.textContent === '+2')!;
+    const more = [...el.querySelectorAll<HTMLButtonElement>('.tpp-chart-bar button.btn-chip')].find(b => b.textContent === '+2')!;
     expect(more).not.toBeUndefined();
     act(() => { more.click(); });
     await wait();
     expect(el.querySelector('[role="menu"] [role="menuitemcheckbox"]')).not.toBeNull();
   });
 
-  it('v0.10.968\'in her parçası yerinde (yan panelden düşen YOK)', async () => {
+  it('v0.10.968\'in her parçası yerinde (yan panelden düşen YOK; v0.10.1096 — metin Teknik ayrıntıda)', async () => {
     const el = await mount(<TracePodPanel {...props()} />);
-    const t = el.textContent!;
     // alt satır + rozetler
     for (const s of [SVC, 'ns payments', 'dc-east-1', 'java']) expect(el.querySelector('.tpp-sub')!.textContent).toContain(s);
     expect([...el.querySelectorAll('.tpp-badges .badge')].map(b => b.textContent)).toEqual(['kök hata', '4 hata', 'kritik yol %38 · 1,30 sn', 'en büyük öz süre']);
+    // Karşılaştır
+    expect(el.textContent).toContain('Karşılaştır · aynı servisten (1/4)');
+    // Grafikler: tek satır başlık değer + limit (limit "şu an" — ipucunda).
+    const heads = [...el.querySelectorAll<HTMLElement>('.tpp-chart-head')];
+    expect(heads.map(x => x.textContent)).toEqual(['Bellek 1,42 GiB · limit 2 GiB', 'CPU 0,97 çekirdek · limit 1']);
+    expect(heads[1].title).toContain('limit 1 çekirdek (şu an)');
+    expect(heads[1].title).toContain('Limite dayandı: CPU kısıtlaması (throttling) olası.');
+    const t = openTech(el).textContent!;
     // Bu trace'te
     for (const k of ['Span', 'Hata', 'En büyük öz süre', 'Kritik yol payı', 'Etkin aralık']) expect(t).toContain(k);
     expect(t).toContain('4 · ilk: POST /v1/score · DEADLINE_EXCEEDED · ');
@@ -677,58 +713,117 @@ describe('TracePodPanel — v0.10.976 kompakt satır altı ayrıntı', () => {
     expect(t).toContain('Trace anında · Thanos, ±1 adım (15 sn)');
     for (const k of ['CPU', 'Bellek', 'Kardeşlere göre']) expect(t).toContain(k);
     expect(t).toContain('Limite dayandı: CPU kısıtlaması (throttling) olası.');
-    // Karşılaştır
-    expect(t).toContain('Karşılaştır · aynı servisten (1/4)');
-    // Grafikler
-    expect([...el.querySelectorAll('[data-chart] .tpp-sec-title')].map(x => x.textContent)).toEqual(['Bellek (working set)', 'CPU (çekirdek)']);
-    expect(el.querySelector('.tpp-legend')!.textContent).toContain('limit');
-    // JVM (java) — kapalı açılır bölüm
-    expect(jvmToggle(el).getAttribute('aria-expanded')).toBe('false');
     // Şu an
     expect(t).toMatch(/Şu an \(trace anı değil\) · \d\d:\d\d itibarıyla · trace /);
-    expect([...el.querySelectorAll('.badge.b-err')].some(b => b.textContent === 'OOMKilled')).toBe(true);
-    for (const k of ['Faz', 'Restart']) expect(t).toContain(k);
+    expect([...techFold(el).querySelectorAll('.badge.b-err')].some(b => b.textContent === 'OOMKilled')).toBe(true);
+    for (const k of ['Faz', 'Restart', 'Son sonlanma', 'CPU limit / istek', 'Bellek limit / istek']) expect(t).toContain(k);
+    // Grafik açıklaması
+    expect(t).toContain('Mavi bant: trace (3,42 sn; en az bir 15 sn adım genişliğinde çizilir).');
   });
 
-  it('JVM: yalnız JVM servisinde ve KAPALI başlar; açılınca sorgu gider ve panel çizilir; go → not; runtime yok → hiç', async () => {
+  it('JVM: heap + GC grafik ızgarasında Bellek/CPU\'nun ARDINDAN (aynı yükseklik); açılışta tek sorgu turu; go → not katta; runtime yok → hiç', async () => {
     m.jvmPods = PODS.map(p => p.pod); // seri dönsün ki MultiLineChart bağlansın (MF-2 emsali)
     const el = await mount(<TracePodPanel {...props()} />);
-    const tg = jvmToggle(el);
-    expect(tg.getAttribute('aria-expanded')).toBe('false');
-    expect(m.metricCalls).toHaveLength(0);
-    expect(el.querySelector('[data-mlc]')).toBeNull();
-    act(() => { tg.click(); });
     await wait();
     await wait(); // sorgu → seri → MultiLineChart (iki tik)
-    expect(jvmToggle(el).getAttribute('aria-expanded')).toBe('true');
     expect(m.metricCalls.length).toBe(3);
-    expect(el.querySelector('[data-mlc]')).not.toBeNull();
-    // Tekrar kapat: panel kalkar (istek sayısı değişmez).
-    act(() => { jvmToggle(el).click(); });
+    const row = el.querySelector('.tpp-chart-row')!;
+    const cells = [...row.children].map(c => c.getAttribute('data-chart') ?? (c.querySelector('[data-mlc]')?.getAttribute('data-mlc')));
+    expect(cells).toEqual(['mem', 'cpu', 'bytes', 'ms']);
+    expect(el.querySelector('[aria-expanded][class*="btn-disclose"]')!.textContent).toContain('Teknik ayrıntı'); // JVM açılır bölümü yok
+    expect(el.textContent).not.toContain('JVM · heap ve GC');
+    // Pod değişse de (aynı servis) sorgu anahtarı servisin tüm pod'ları — yeniden istek YOK.
+    rerender(<TracePodPanel {...props({ compare: [PODS[1].pod] })} />);
     await wait();
-    expect(el.querySelector('[data-mlc]')).toBeNull();
     expect(m.metricCalls.length).toBe(3);
 
     act(() => { root?.unmount(); }); host?.remove();
     const el2 = await mount(<TracePodPanel {...props({ selected: { ...PODS[0], runtime: 'go' } })} />);
-    expect(el2.textContent).toContain('JVM paneli yok · runtime: go');
-    expect([...el2.querySelectorAll('button')].some(b => b.hasAttribute('aria-expanded'))).toBe(false);
+    expect(el2.querySelector('.tpp-chart-row [data-mlc]')).toBeNull();
+    expect(openTech(el2).textContent).toContain('JVM paneli yok · runtime: go');
 
     act(() => { root?.unmount(); }); host?.remove();
     const el3 = await mount(<TracePodPanel {...props({ selected: { ...PODS[0], runtime: '' } })} />);
-    expect(el3.textContent).not.toContain('JVM');
+    expect(openTech(el3).textContent).not.toContain('JVM');
+    expect(el3.querySelector('.tpp-chart-row')!.children).toHaveLength(2);
   });
 
-  it('metrik hatası: sağ sütunda durum kutusu (grafiğin yerine, Yeniden dene), solda Bu trace\'te + Şu an', async () => {
+  it('metrik hatası: ızgarada durum kutusu (grafiğin yerine, Yeniden dene); özet satırı durur; katta Bu trace\'te + Şu an', async () => {
     const p = props({ metrics: () => ({ kind: 'error', message: 'x', timeout: false }) });
     const el = await mount(<TracePodPanel {...p} />);
-    const body = el.querySelector('.tpp-detail-body')!;
-    expect(secLabels(body.querySelector('.tpp-kv3')!)).toEqual(["Bu trace'te", 'Şu an']);
-    const right = body.querySelector('.tpp-detail-charts')!;
-    expect(right.querySelector('[data-state="error"]')).not.toBeNull();
-    expect(right.querySelector('[data-cpm]')).toBeNull();
-    expect(right.querySelector('section[aria-label="Karşılaştır"]')).toBeNull();
+    const row = el.querySelector('.tpp-chart-row')!;
+    expect(row.querySelector('[data-state="error"]')).not.toBeNull();
+    expect(row.querySelector('[data-cpm]')).toBeNull();
+    expect(el.querySelector('section[aria-label="Karşılaştır"]')).toBeNull();
+    // Özet: trace bilgisi tam; faz/restart metrik ok değilken yok.
+    expect([...el.querySelectorAll('.tpp-facts > li')].map(li => li.getAttribute('data-fact'))).toEqual(['spans', 'errors', 'crit', 'self']);
+    expect(secLabels(openTech(el).querySelector('.tpp-kv3')!)).toEqual(["Bu trace'te", 'Şu an']);
     act(() => { byText(el, 'Yeniden dene')!.click(); });
     expect(p.onRetry).toHaveBeenCalledWith(PODS[0].pod);
+  });
+});
+
+// ── v0.10.1096 — grafikler üstte, metin tek satır + katlı ayrıntı ─────────────
+// Operatör (prod): "Çok fazla yazı var; sadece metrik yatayda inline gözükse
+// olacak. Diğer yazılar aşağı olabilir."
+describe('TracePodPanel — v0.10.1096 grafikler üstte, tek satır özet, Teknik ayrıntı', () => {
+  const secLabels = (root: Element) => [...root.querySelectorAll(':scope > section')].map(s => s.getAttribute('aria-label'));
+  it('grafikler özet satırından ÖNCE, özet Teknik ayrıntıdan önce; eylemler başlıkta', async () => {
+    const el = await mount(<TracePodPanel {...props()} />);
+    const detail = el.querySelector('.tpp-detail')!;
+    const order = [...detail.children].map(c => c.className.split(' ')[0]);
+    expect(order).toEqual(['tpp-head', 'tpp-sub', 'tpp-chart-bar', 'tpp-chart-row', 'tpp-facts', 'tpp-sec']);
+    const row = detail.querySelector('.tpp-chart-row')!;
+    const facts = detail.querySelector('.tpp-facts')!;
+    expect(row.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(facts.compareDocumentPosition(techFold(el)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Eylemler yerinde (başlık satırı).
+    const head = detail.querySelector('.tpp-head')!;
+    for (const t of ['Odak görünümü', "Span'ları Trace'te göster (61)"]) expect([...head.querySelectorAll('button')].some(b => b.textContent?.includes(t))).toBe(true);
+    expect([...head.querySelectorAll('a')].some(a => a.textContent?.includes('Pod sayfasında aç'))).toBe(true);
+  });
+
+  it('özet satırı anahtar sayıları taşır: span · hata ↗ · kritik yol · en büyük öz süre ↗ · faz · restart · son sonlanma', async () => {
+    const el = await mount(<TracePodPanel {...props()} />);
+    const facts = el.querySelector('.tpp-facts')!;
+    expect(facts.tagName).toBe('UL');
+    const items = [...facts.querySelectorAll(':scope > li')].map(li => [li.getAttribute('data-fact'), li.textContent]);
+    expect(items).toEqual([
+      ['spans', '61 span'],
+      ['errors', '4 hata ↗'],
+      ['crit', 'kritik yol %38 · 1,30 sn'],
+      ['self', 'en büyük öz süre: score.model.evaluate · 1,21 sn ↗'],
+      ['phase', 'Running'],
+      ['restarts', 'restart 3'],
+      ['term', 'OOMKilled'],
+    ]);
+    // Renk yalnız sapmada: hata kırmızı, restart>0 uyarı; OOMKilled tehlike rozeti.
+    expect(facts.querySelector('[data-fact="errors"] button')!.classList.contains('cell-err')).toBe(true);
+    expect(facts.querySelector('[data-fact="restarts"] .cell-warn')).not.toBeNull();
+    expect(facts.querySelector('[data-fact="term"] .badge.b-err')).not.toBeNull();
+    expect(facts.querySelector<HTMLElement>('[data-fact="term"]')!.title).toContain("Son sonlanma: OOMKilled · ");
+    // Tek satır: blok başlıkları / KeyValue yok.
+    expect(facts.querySelector('dl, .tpp-sec-title')).toBeNull();
+  });
+
+  it('Teknik ayrıntı KAPALI başlar (gövde mount edilmez); açılınca taşınan metnin hepsi orada; tekrar kapanır', async () => {
+    const el = await mount(<TracePodPanel {...props({ compare: [PODS[0].pod, PODS[1].pod] })} />);
+    const tg = techToggle(el);
+    expect(tg.getAttribute('aria-expanded')).toBe('false');
+    expect(techFold(el).querySelector('.tpp-fold-body')).toBeNull();
+    // Kapalıyken taşınan metin görünmez.
+    for (const s of ["Bu trace'te", 'Trace anında · Thanos', 'Şu an (trace anı değil)', 'Etkin aralık', 'Kardeşlere göre', 'Mavi bant: trace', 'CPU limit / istek'])
+      expect(el.textContent).not.toContain(s);
+    const fold = openTech(el);
+    expect(techToggle(el).getAttribute('aria-expanded')).toBe('true');
+    const body = fold.querySelector('.tpp-fold-body')!;
+    expect(secLabels(body.querySelector('.tpp-kv3')!)).toEqual(["Bu trace'te", 'Trace anında', 'Şu an']);
+    expect(body.querySelectorAll('dl.keyval')).toHaveLength(3);
+    const t = body.textContent!;
+    for (const s of ['Etkin aralık', 'Trace anında · Thanos, ±1 adım (15 sn)', 'Kardeşlere göre', 'Şu an (trace anı değil)',
+      'CPU limit / istek', '1 / 0,5 çekirdek', 'Bellek limit / istek', '2 GiB / 1,5 GiB', 'Mavi bant: trace (3,42 sn',
+      `Soluk çizgiler: ${SVC} servisinin bu trace'teki diğer 3 pod'u.`]) expect(t).toContain(s);
+    act(() => { techToggle(el).click(); });
+    expect(techFold(el).querySelector('.tpp-fold-body')).toBeNull();
   });
 });

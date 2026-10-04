@@ -8,7 +8,7 @@ import {
   median, siblingRatio, siblingStats, siblingCopy, compareChipLayout, CAP_REASON, buildChartItems, chartPods,
   chartCaption, timelineLanes, timelineTicks, timelineModel, nowSection, nowNote, stateMessage, errorReason,
   momentRow, THROTTLE_NOTE, podSuffix, suffixLabels, flaggedNav, relToTrace, agoText, podBadges, subLine,
-  clusterNameOf, funnelCaption, compareColors, type LaneSpan,
+  clusterNameOf, funnelCaption, compareColors, chartHeadline, podFacts, type LaneSpan,
 } from './tracePodPanelModel';
 import { preferredSlot, seriesColor } from '@/lib/chartFmt';
 
@@ -534,5 +534,59 @@ describe('v0.10.968 — "+N" menüsü açıkken üyelik donar (F4 ui)', () => {
     const { visible } = compareChipLayout(ps, [ps[0].pod], () => ok());
     expect(visible[0].title).toBe(`${ps[0].pod} · son pod karşılaştırmadan çıkarılamaz`);
     expect(compareChipLayout(ps, [ps[0].pod, ps[1].pod], () => ok()).visible[0].title).toBe(`${ps[0].pod} · karşılaştırmadan çıkar`);
+  });
+});
+
+// ── v0.10.1096 — grafik başlığı + tek satır özet (operatör: "Çok fazla yazı
+// var; sadece metrik yatayda inline gözükse olacak. Diğer yazılar aşağı olabilir.")
+describe('v0.10.1096 — grafik başlığı (chartHeadline)', () => {
+  it('limitli: "Bellek 9,03 GiB · limit 16 GiB" / "CPU 0,053 çekirdek · limit 1,6"; seviye momentRow\'dan', () => {
+    const d = series({ memAt: 9.03 * 1024 ** 3, memLimit: 16 * 1024 ** 3, cpuAt: 0.053, cpuLimit: 1.6 });
+    expect(chartHeadline('mem', d)).toMatchObject({ k: 'Bellek', value: '9,03 GiB', limit: 'limit 16 GiB', level: 'none' });
+    expect(chartHeadline('cpu', d)).toMatchObject({ k: 'CPU', value: '0,053 çekirdek', limit: 'limit 1,6', level: 'none' });
+    const hot = chartHeadline('cpu', series({ cpuAt: 0.97, cpuLevel: 'err' }));
+    expect(hot.level).toBe('err');
+    // ipucu: trace anı cümlesinin tamamı + "(şu an)" + kısıtlama notu (katlanan metin kaybolmaz).
+    expect(hot.title).toBe(`Trace anında: 0,97 çekirdek · limitin %97'si limit 1 çekirdek (şu an) — ${THROTTLE_NOTE}`);
+  });
+  it('limit yok: tanımsız / bilinmiyor (envanter yok, kısmi) — renk yok; örnek yok → "—", limit yazılmaz', () => {
+    expect(chartHeadline('cpu', series({ cpuLimit: undefined }))).toMatchObject({ limit: 'limit tanımsız', level: 'none' });
+    expect(chartHeadline('cpu', series({ cpuLimit: undefined, inventory: 'absent' })).limit).toBe('limit bilinmiyor');
+    expect(chartHeadline('mem', series({ memLimit: undefined, instantPartial: true })).limit).toBe('limit bilinmiyor');
+    expect(chartHeadline('mem', series({ memAt: null, memLevel: 'warn' }))).toMatchObject({ value: '—', limit: null, level: 'none' });
+  });
+});
+
+describe('v0.10.1096 — tek satır özet (podFacts)', () => {
+  const base = { selfKnown: true, selfName: 'score.model.evaluate', traceStartNs: T0 };
+  it('sıra: span · hata · kritik yol · en büyük öz süre ↗ · faz · restart', () => {
+    const p = pod(`${SVC}-6b7d9f8c5-m3t9w`, { spans: 9, critShare: 0.86, critNs: 17e6, maxSelfSpanId: 's-self', maxSelfNs: 21e6 });
+    const f = podFacts(p, { ...base, now: { phase: 'Running', restarts: 0 } });
+    expect(f.map(s => [s.id, s.label ? `${s.label} ${s.t}` : s.t])).toEqual([
+      ['spans', '9 span'], ['errors', '0 hata'], ['crit', 'kritik yol %86 · 17 ms'],
+      ['self', 'en büyük öz süre: score.model.evaluate · 21 ms ↗'], ['phase', 'Running'], ['restarts', 'restart 0'],
+    ]);
+    expect(f.find(s => s.id === 'self')!.spanId).toBe('s-self');
+    expect(f.find(s => s.id === 'errors')!.tone).toBe('faint');
+    expect(f.find(s => s.id === 'restarts')!.tone).toBeUndefined();
+  });
+  it('hata ilk hatalı span\'i açar; restart >0 uyarı; OOMKilled tehlike rozeti; kritik yolda değil soluk', () => {
+    const p = pod(`${SVC}-6b7d9f8c5-m3t9w`, {
+      errors: 4, firstError: { spanId: 's-err', name: 'POST /v1/score', status: 'DEADLINE_EXCEEDED', timeNs: T0 + 1.802e9 },
+    });
+    const f = podFacts(p, { ...base, now: { phase: 'Running', restarts: 3, lastTermReason: 'OOMKilled', lastTermAtSec: T0 / 1e9 + 720 } });
+    const err = f.find(s => s.id === 'errors')!;
+    expect(err).toMatchObject({ t: '4 hata ↗', tone: 'err', spanId: 's-err' });
+    expect(err.title).toMatch(/^İlk hatalı span'i aç: POST \/v1\/score · DEADLINE_EXCEEDED · \d\d:\d\d:\d\d\.802$/);
+    expect(f.find(s => s.id === 'crit')).toMatchObject({ t: 'kritik yolda değil', tone: 'faint' });
+    expect(f.find(s => s.id === 'restarts')).toMatchObject({ t: 'restart 3', tone: 'warn' });
+    expect(f.find(s => s.id === 'term')).toMatchObject({ t: 'OOMKilled', badge: 'danger' });
+    expect(f.find(s => s.id === 'term')!.title).toContain("trace'ten 12 dk sonra");
+    expect(podFacts(pod('x-y'), { ...base, now: { lastTermReason: 'Error' } }).find(s => s.id === 'term')!.badge).toBe('neutral');
+  });
+  it('öz süre bilinmiyor → segment yok; metrik ok değil (now null) → faz/restart yok', () => {
+    const p = pod(`${SVC}-6b7d9f8c5-m3t9w`, { maxSelfSpanId: 's-self', maxSelfNs: 1e6 });
+    const f = podFacts(p, { ...base, selfKnown: false, now: null });
+    expect(f.map(s => s.id)).toEqual(['spans', 'errors', 'crit']);
   });
 });
