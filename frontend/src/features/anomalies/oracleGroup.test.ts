@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import type { ExceptionGroup } from '@/lib/types';
 import {
   isOracleGroup, isSyntheticOracleService, oracleRowTitle, oracleRowDetail, oracleSourceName,
-  oracleChannelsText, oracleRowTooltip, parseOracleFacet, oracleFacetParam,
+  oracleChannelsText, oracleRowTooltip, parseOracleFacet, oracleFacetParam, oracleExplainLine,
 } from './oracleGroup';
 
 const g = (over: Partial<ExceptionGroup> = {}): ExceptionGroup => ({
@@ -54,5 +54,13 @@ describe('oracleGroup', () => {
     expect(parseOracleFacet('ONLY')).toBe('all');
     expect(oracleFacetParam('all')).toBeUndefined();
     expect(oracleFacetParam('only')).toBe('only');
+  });
+
+  // v0.10.1100 — AI paneli başlık satırı (kod çipi yerine).
+  it('AI paneli Oracle bağlam satırı', () => {
+    expect(oracleExplainLine(g().oracle)).toBe('Oracle · app-err · APP_ERR_001 · OP_TRANSFER');
+    expect(oracleExplainLine({ sourceName: ' ', code: 'APP_ERR_001', operation: '' })).toBe('Oracle · APP_ERR_001');
+    expect(oracleExplainLine(undefined)).toBe('Oracle hata grubu');
+    expect(oracleExplainLine(null)).toBe('Oracle hata grubu');
   });
 });

@@ -39,6 +39,13 @@ If omitted, ask the user. Don't invent a surface name.
 - Surface name is derived from the URL path
   (`/api/copilot/explain-X` → `"explain-X"`) by the helper in
   `internal/api/ai_observability.go`.
+- One surface, several evidence sources: pick the input builder AND the
+  system prompt in one dispatcher, not a second endpoint. Emsal
+  (v0.10.1100): exception explain → `api.exceptionExplainInput` —
+  `ora:` (Oracle error-table) groups get
+  `anomaly.BuildOracleExceptionExplainInput` +
+  `SystemPromptOracleException`, span groups the old builder + prompt;
+  the background ExceptionExplainer routes the same way.
 
 ## Files to touch (5)
 

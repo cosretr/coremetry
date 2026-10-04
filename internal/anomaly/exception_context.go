@@ -226,6 +226,10 @@ type ExceptionExplainInput struct {
 	// olarak da taşınıyor — kart ile modelin gördüğü ayrışamasın.
 	// Kind boşsa hiç hesaplanmadı (prompt bloğu da basılmaz).
 	Pods PodConcentration
+
+	// Oracle (v0.10.1100) — `ora:` grubunda girdi Oracle verisinden kuruldu
+	// (BuildOracleExceptionExplainInput); span alanları boş. nil = span grubu.
+	Oracle *OracleExplainContext
 }
 
 // CodeService — "Kodu da incele"nin depoyu çözdüğü servis (v0.9.1225 kuralı):

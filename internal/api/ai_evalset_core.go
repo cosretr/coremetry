@@ -195,6 +195,8 @@ func evalSystemPrompt(surface string) (string, bool) {
 		return copilot.SystemPromptProblem(), true
 	case "Exception":
 		return copilot.SystemPromptException(), true
+	case "OracleException": // v0.10.1100 — Oracle hata grubu (`ora:`)
+		return copilot.SystemPromptOracleException(), true
 	case "Incident":
 		return copilot.SystemPromptIncident(), true
 	case "Anomaly":

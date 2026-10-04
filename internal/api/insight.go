@@ -117,12 +117,13 @@ func (s *Server) insightException(w http.ResponseWriter, r *http.Request, fp str
 		return
 	}
 	// v0.10.745 — GET ucu: dilim ?tz=&tzOffsetMin= sorgusundan (gövde yok).
-	in := anomaly.BuildExceptionExplainInput(r.Context(), s.store, s.logs, g, decodeExplainOptions(r).location())
+	// v0.10.1100 — `ora:` grubunda Oracle bağlamı + kendi prompt'u.
+	in, system := s.exceptionExplainInput(r.Context(), g, decodeExplainOptions(r).location())
 	ev := exceptionEvidence(g, in, time.Now().UnixNano())
 
 	resp := insight.Response{Charts: insight.ExceptionCharts(ev), Links: insight.ExceptionLinks(ev)}
 	resp.Signals, resp.Truncated = insight.ExceptionSignals(ev)
-	s.deliverInsight(w, r, resp, copilot.SystemPromptException(), in.User)
+	s.deliverInsight(w, r, resp, system, in.User)
 }
 
 // exceptionEvidence — chstore/anomaly → saf kanıt dönüşümü. SAF

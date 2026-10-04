@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 
-	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/devops"
 )
@@ -30,17 +29,20 @@ func (s *Server) copilotExplainException(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	opts := decodeExplainOptions(r)
-	in := anomaly.BuildExceptionExplainInput(r.Context(), s.store, s.logs, g, opts.location())
+	// v0.10.1100 — `ora:` grubu Oracle bağlamı + kendi prompt'u
+	// (copilot_exception_oracle.go); span grubu bayt bayt eski girdi.
+	in, system := s.exceptionExplainInput(r.Context(), g, opts.location())
 
 	// v0.9.831 — "Kodu da incele". Varsayılan KAPALI: kod çekmek bir
 	// depo listelemesi + dosya okuması demek, her Explain tıkında
 	// ödenecek bir maliyet değil. İşaretlendiğinde de fail-open —
 	// kod gelmezse açıklama yine üretilir, cc.Reason yanıtta döner.
+	// Oracle grubunda stack yok → kod dalı hiç koşmaz.
 	var cc devops.CodeContext
-	run := s.explainPrompt(r, copilot.SystemPromptException(), in.User)
+	run := s.explainPrompt(r, system, in.User)
 	// v0.10.83 — anahtar GERÇEK prompt'tan; kod dalında blok da kimlik.
-	cacheKey := explainCacheKey(copilot.SystemPromptException(), in.User, "")
-	if opts.IncludeCode {
+	cacheKey := explainCacheKey(system, in.User, "")
+	if opts.IncludeCode && in.Oracle == nil {
 		// v0.9.1225 — stack log-fallback'ten geldiyse depo çözümü logu
 		// atan servise gider (svc- önek deseni servis adından türetilir).
 		// v0.10.1053 — kural tek yerde (anomaly CodeService); exception
@@ -63,6 +65,6 @@ func (s *Server) copilotExplainException(w http.ResponseWriter, r *http.Request)
 	s.deliverExplain(w, r, xid, map[string]any{
 		"evidenceTraceIds": in.EvTraces,
 		"evidenceSpanIds":  in.EvSpans,
-		"code":             codePayload(cc, opts.IncludeCode),
+		"code":             codePayload(cc, opts.IncludeCode && in.Oracle == nil),
 	}, run, g.Service, cacheKey)
 }

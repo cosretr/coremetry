@@ -1078,7 +1078,11 @@ func main() {
 	// v0.10.1092 — Oracle exception gruplarının öncelik / satır istatistiği
 	// (kaynak başına TTL'li blob: saatlik toplamlar, kırılım, kapanmış dakika
 	// gecikmesi). Her rolde: Exceptions/inbox (api) ve bildirimci (worker) aynı yol.
-	api.SetOracleGroupStats(oracle.NewGroupStatsCache(store.GetSetting, oracleSvc.CurrentSettings).Stats)
+	oracleGroupStats := oracle.NewGroupStatsCache(store.GetSetting, oracleSvc.CurrentSettings)
+	api.SetOracleGroupStats(oracleGroupStats.Stats)
+	// v0.10.1100 — aynı önbellek AI açıklamasının Oracle bağlamını ve otomatik
+	// özetin gecikmeli aday kuralını besler (anomaly oracle'ı import edemez).
+	anomaly.SetOracleExplainFacts(oracleGroupStats.ExplainFacts)
 	// v0.10.605 — bayat süpürme muafiyeti (592) yalnız YAŞAYAN poller
 	// kaynakları için: özne ext:<ad> etkin bir Oracle kaynağına
 	// karşılık gelmiyorsa ext-down/ext-cap Problem'i süpürülür — silinen

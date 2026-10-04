@@ -31,6 +31,7 @@ var promptVersionRegistry = map[string]string{
 	"systemSpan":                 systemSpan,
 	"systemProblem":              systemProblem,
 	"systemExceptionBody":        systemExceptionBody,
+	"systemOracleException":      systemOracleException, // v0.10.1100 — Oracle hata grubu
 	"systemIncident":             systemIncident,
 	"systemAnomaly":              systemAnomaly,
 	"systemServiceHealth":        systemServiceHealth,

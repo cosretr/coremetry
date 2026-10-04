@@ -51,6 +51,7 @@ func promptRegistry() map[string]promptClass {
 		"Problem":           classDirective,
 		"Exception":         classDirective,
 		"ExceptionWithCode": classDirective,
+		"OracleException":   classDirective, // v0.10.1100 — Oracle hata grubu (span değil)
 		"Incident":          classDirective,
 		"Anomaly":           classDirective,
 		"ServiceHealth":     classDirective,
@@ -114,7 +115,7 @@ func promptTexts() map[string]string {
 		"AlertNoise": SystemPromptAlertNoise(), "LogPatterns": SystemPromptLogPatterns(),
 		"Postmortem": SystemPromptPostmortem(), "RunbookUpdate": SystemPromptRunbookUpdate(),
 		"NLToQuery": SystemPromptNLToQuery(), "CHQueryOptimize": SystemPromptCHQueryOptimize(),
-		"ServiceTags": SystemPromptServiceTags(),
+		"ServiceTags": SystemPromptServiceTags(), "OracleException": SystemPromptOracleException(),
 	}
 }
 

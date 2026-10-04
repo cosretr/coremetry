@@ -1678,6 +1678,25 @@ saydığı arıza işaretsiz `JBAS` INFO satırları (`JBAS015876: Starting depl
 regex'leri (`ORA-`/`TNS-` + rakam, `IJ000453`/`IJ000655`, `MQJCA1011`) aynı hatayı taşımıyor: kodları önekten
 sonra doğrudan rakam. Test: `log_patterns_wfly_test.go` (CH `match()` tablosu), ES önek fikstürüne 7 satır.
 
+## 2026-10-04 — Oracle hata grubu için AI açıklaması: span yerine Oracle bağlamı (v0.10.1100)
+
+**Operatör onaylı.** `ora:` exception gruplarında (v0.10.1092) "Explain root cause" span girdisini kuruyordu (stack,
+örnek trace, loglar, pod) — Oracle satırı bunları taşımaz, açıklama boş/jenerik çıkıyordu. **Karar:** girdi grubun
+kaynağına göre tek noktada seçilir (`api.exceptionExplainInput`; explain ucu + insight kartı). Oracle girdisi
+(`anomaly.BuildOracleExceptionExplainInput`): kaynak, kod + operasyon, son 1 sa / önceki 1 sa + oran + akış sınıfı
+(patlama ≥3× öncelik kuralıyla aynı / yeni akış / sürekli / sönüyor), kanal kırılımı (ilk 3, %), servisler (ilk 3), en
+yeni satırlardan host / instance, ≤5 trace (mevcut trace → servis çözümü: servis + exception tipi; kök operasyon
+okunmaz — ek sorgu gerekirdi), ilk/son görülme, en yeni 3 satırın eşlenen alanları (mesaj, dış kod, tip, ≤8 eşlenmeyen
+kolon; SONUC/mesaj/kod adlıları önce). Okumalar sınırlı: `OracleErrorsByOpCode` tavanı 50 (son görülmeden 1 sa geri),
+trace çözümü ≤5 id; yeni tablo yok. Saatlik sayı ve kırılım `oracle.GroupStatsCache`'ten (Exceptions satırıyla aynı
+sayı; anomaly oracle'ı import edemediği için `anomaly.SetOracleExplainFacts` ile main.go enjekte eder). Ayrı sistem
+prompt'u `SystemPromptOracleException` (sicilde, Türkçe cevap): kodun anlamı (ORA-/PLS-/TNS- biliniyorsa), yoğunlaşma,
+patlama mı akış mı, DB tarafı mı çağıran mı. Oracle grubunda "Kodu da incele" koşmaz (FE çipi yerine "Oracle · <kaynak> ·
+<kod> · <operasyon>" satırı). **Otomatik özet:** aday kuralı (≤5 dk, ≥500) Oracle grubunda yaşı kapanmış dakika
+gecikmesi (`GroupLag`, aynı önbellek) kadar geriden ölçer — eskiden ≥16 dk gecikme yüzünden hiç aday olmuyordu; kaynağı
+bulunmayan grup aday değil; tik başına 4 / kota kapıları aynen. AI çekmecesinin takip sohbeti (read_source_code yolu)
+değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

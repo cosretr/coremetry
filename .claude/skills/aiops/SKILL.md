@@ -27,7 +27,7 @@ Tüm döngüler `if mode.worker` (`main.go:652,1221,1251`) + Redis lider kilidi
 | Topology correlator | `correlator/correlator.go:70` — kilit YOK (saf önbellek) | 5 dk | bellek (komşu grafı) |
 | Exception refresher | `main.go:1616` | 60 s; bayat süpürme her 6. tik | exception_groups |
 | Oracle exception tazeleyicisi (v0.10.1092) | `oracle/exgroups.go` ← oracle poller kancası (oracle-poller lideri) | başarılı poll başına | exception_groups (`ora:`) |
-| ProblemExplainer / ExceptionExplainer | `problem_explainer.go:43`, `exception_explainer.go:35` | 30 s / 60 s | ai_summary |
+| ProblemExplainer / ExceptionExplainer | `problem_explainer.go:43`, `exception_explainer.go:35` | 30 s / 60 s | ai_summary — v0.10.1100: `ora:` grubu Oracle bağlamı + `SystemPromptOracleException`; aday yaşı kapanmış dakika gecikmesi kadar geriden (`isExceptionExplainCandidateAt`, `GroupStatsCache` gecikmesi), kaynaksız Oracle grubu aday değil |
 | RootCauseSynthesizer | `rootcause_worker.go:84` — `api.NewServer` SONRASI başlar (`main.go:1276`) | 30 s | root_cause_hypotheses |
 | ExternalScanner (Oracle serileri) | `external.go:117` ← poller kancası | 30 s | problems (kind=external) |
 | Rollout reconciler | `main.go:1124` | ayar | rollout olayları → RCA girdisi |
@@ -387,8 +387,12 @@ Exceptions ve bildirimci aynı sayı. Span-merkezli okuyucular (`RecentNewExcept
 `NotOracleGroupSQL` ile dışlar — pin `chstore/oracle_exception_groups_test.go`. Örnek/oluşum ucu önekte Oracle
 satırlarına dallanır (kaynak parmak izinden geri çözülür; seri dakika başına ağırlık, son 24 sa). Liste
 `?oracle=only|exclude` (varsayılan dahil), satır bilgisi `ExceptionGroup.Oracle` (yalnız JSON, `api/exception_oracle.go`).
+**AI açıklaması (v0.10.1100):** `ora:` grubunda explain / insight girdisi `api.exceptionExplainInput` üzerinden
+`anomaly.BuildOracleExceptionExplainInput` (kaynak, kod+operasyon, saatlik akış + oran, kanal %, servisler, host/instance,
+≤5 çözülen trace, en yeni 3 satırın eşlenen alanları; `OracleErrorsByOpCode` tavanı 50) + `SystemPromptOracleException`;
+blob gerçekleri `anomaly.SetOracleExplainFacts` (main.go, aynı `GroupStatsCache`). "Kodu da incele" Oracle'da koşmaz.
 Yeni bir grup kaynağı eklerken: önek + span dedektörlerinden dışlama + örnek/oluşum dalı + bildirim kapısı + öncelik
-kuralı beşlisi.
+kuralı + AI girdi kurucusu (ve gecikmesi varsa oto-özet aday yaşı) altılısı.
 
 ## 8. Self-health (kendi kendini izleme)
 

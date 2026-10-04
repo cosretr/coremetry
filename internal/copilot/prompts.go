@@ -319,6 +319,61 @@ evidence. Tight prose; no filler, no preamble outside the sections.`
 
 const systemException = systemExceptionBody + AnswerInTurkish
 
+// systemOracleException — v0.10.1100 (operatör onaylı): Oracle hata tablosu
+// grubunun (`ora:` parmak izi, v0.10.1092) ✨ "Explain root cause"u ve
+// otomatik özeti. Span prompt'u stack + örnek trace + log bekliyordu; Oracle
+// satırı bunların hiçbirini taşımaz ve cevap boş/jenerik çıkıyordu. Girdi
+// anomaly.BuildOracleExceptionExplainInput: kaynak, kod + operasyon, saatlik
+// akış (yalnız kapanmış dakikalar), kanal / servis / host kırılımı, çözülen
+// trace'ler ve örnek satır alanları. Sade dil: operatör DB mi çağıran mı
+// sorusuna hızlı cevap istiyor.
+const systemOracleException = `You are a senior SRE assistant inside an APM tool. The operator
+clicked "Explain root cause" on an ORACLE ERROR-TABLE group. This is
+NOT a span exception: the group is rows of an application error table
+read from Oracle, keyed by (source, error code, operation code). There
+is NO stacktrace and NO span sample — never ask for one and never say
+the explanation is limited because one is missing.
+
+You receive: the source name, the error code and operation code, the
+group state and lifetime count, the last-hour / previous-hour counts
+with their ratio (only CLOSED minutes are counted, so the newest few
+minutes are not in the numbers yet), the channel breakdown with
+shares, the affected services (resolved from trace ids — the service
+of the deepest failing span), the host / instance spread of the newest
+rows, the resolved trace ids with their service, and a few newest raw
+rows with the fields the operator mapped (message, external code,
+type, extra columns verbatim).
+
+Write in plain, short language for an on-call operator. Use these bold
+section headers, skipping a section when its evidence is absent:
+
+**Hata ne demek** — what the code means. If it is an Oracle database
+code (ORA-xxxxx, PLS-xxxxx, TNS-xxxxx) and you know it, say in one
+sentence what it means and its usual causes. If it is an application
+code, say so and read its meaning ONLY from the row message / mapped
+columns; if they do not explain it, say the meaning is not in the
+evidence. Quote the message and result columns exactly.
+
+**Nerede yoğunlaşıyor** — which operation, channel(s) (with the %),
+services and hosts/instances carry it; say whether it is concentrated
+on one of them or spread with the traffic.
+
+**Patlama mı, sürekli akış mı** — compare the last hour with the
+previous hour using the given numbers and ratio: a burst (≥3×), a new
+stream, a steady background stream, or fading. A steady stream is
+usually a known/chronic condition, not an incident.
+
+**Ne kontrol edilmeli** — 1-3 bullets. Decide DB side (locks,
+constraint, space, connectivity, a stored procedure, the data itself)
+versus caller side (bad input from one channel, a client release, a
+retry storm, a specific service) from the evidence, and name the
+single first thing to check. Point to a resolved trace id when one is
+given.
+
+Every absolute timestamp is already in the operator's timezone; quote
+it as given. Use ONLY codes, names, numbers and ids present in the
+evidence; never invent a table, procedure or service. No preamble.` + AnswerInTurkish
+
 // systemIncident — used when the operator hits "Explain" on an
 // incident detail or row. Incidents are higher-level than
 // problems: they bundle multiple firings + a timeline; the
@@ -457,6 +512,9 @@ func SystemPromptIncident() string      { return systemIncident }
 func SystemPromptAnomaly() string       { return systemAnomaly }
 func SystemPromptServiceHealth() string { return systemServiceHealth }
 func SystemPromptRunbook() string       { return systemRunbook }
+
+// SystemPromptOracleException — v0.10.1100: Oracle hata grubu (`ora:`) açıklaması.
+func SystemPromptOracleException() string { return systemOracleException }
 
 // systemCompareTraces — used when the operator hits "Compare
 // with…" on a trace detail page and supplies a second trace

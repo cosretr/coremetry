@@ -109,7 +109,10 @@ func (e *ExceptionExplainer) run(ctx context.Context) {
 			if len(candidates) >= e.batch {
 				break
 			}
-			if isExceptionExplainCandidate(g, now) {
+			// v0.10.1100 — Oracle grubunun last_seen'i kapanmış dakika
+			// gecikmesi kadar geriden gelir (≥16 dk); yaş o kadar geriden ölçülür.
+			lag, ok := exceptionExplainLag(g)
+			if ok && isExceptionExplainCandidateAt(g, now, lag) {
 				candidates = append(candidates, g)
 			}
 		}
@@ -119,14 +122,16 @@ func (e *ExceptionExplainer) run(ctx context.Context) {
 		g := candidates[i]
 		// Arka planda tarayıcı yok → sunucu varsayılanı (COREMETRY_TZ, imajda
 		// Europe/Istanbul; v0.10.746), prompt'ta etiketli (v0.10.745).
-		in := BuildExceptionExplainInput(ctx, e.store, e.logs, &g, tzdefault.Location())
+		// v0.10.1100 — `ora:` grubu Oracle bağlamı + kendi prompt'u (span
+		// girdisi orada boş kalıyordu).
+		in, system := e.explainInput(ctx, &g)
 		cctx := copilot.WithMeta(ctx, copilot.CallMeta{
 			Surface: "exception-auto-explain", UserID: "system",
 			Shield: func(prompt, answer string) uint8 {
 				return rca.CountUnknownEntities(rca.LowerKnownSet(), prompt, answer)
 			}, // v0.10.421 (E6)
 		})
-		summary, err := e.copilot.Explain(cctx, copilot.SystemPromptException(), in.User)
+		summary, err := e.copilot.Explain(cctx, system, in.User)
 		if err != nil {
 			log.Printf("[exception-explainer] %s: %v", g.Fingerprint, err)
 			continue
@@ -145,12 +150,47 @@ func (e *ExceptionExplainer) run(ctx context.Context) {
 	}
 }
 
+// explainInput — grubun kaynağına göre girdi + sistem prompt'u. Arka planda
+// tarayıcı yok → sunucu varsayılan dilimi (COREMETRY_TZ, v0.10.746).
+func (e *ExceptionExplainer) explainInput(ctx context.Context, g *chstore.ExceptionGroup) (ExceptionExplainInput, string) {
+	if chstore.IsOracleGroup(g.Fingerprint) {
+		return BuildOracleExceptionExplainInput(ctx, e.store, g, tzdefault.Location()), copilot.SystemPromptOracleException()
+	}
+	return BuildExceptionExplainInput(ctx, e.store, e.logs, g, tzdefault.Location()), copilot.SystemPromptException()
+}
+
+// exceptionExplainLag — SAF olmayan ince sarmalayıcı: span grubu (0, true);
+// Oracle grubu enjekte edilen GroupStatsCache gecikmesi (v0.10.1092 ile AYNI
+// kaynak). Kaynağı bulunamayan Oracle grubu (silinmiş) aday DEĞİL: bildirim
+// kapısıyla aynı duruş — sahipsiz grup sessiz kalır.
+func exceptionExplainLag(g chstore.ExceptionGroup) (time.Duration, bool) {
+	if !chstore.IsOracleGroup(g.Fingerprint) {
+		return 0, true
+	}
+	f, ok := OracleExplainFactsFor(g)
+	if !ok {
+		return 0, false
+	}
+	return f.Lag, true
+}
+
 // isExceptionExplainCandidate — inbox P1 formülü (exceptionPriority,
 // internal/api/inbox.go) + özet-boşluğu. Saf — tablo-testli.
 func isExceptionExplainCandidate(g chstore.ExceptionGroup, now time.Time) bool {
+	return isExceptionExplainCandidateAt(g, now, 0)
+}
+
+// isExceptionExplainCandidateAt — v0.10.1100: yaş "şimdi − lag"den ölçülür.
+// Oracle grubu yalnız KAPANMIŞ dakikaları sayar; last_seen duvar saatinin
+// ≥16 dk gerisinde olduğundan düz 5 dk kuralında HİÇ aday olamıyordu. Span
+// grubunda lag 0 → kural bayt bayt eski. Saf — tablo-testli.
+func isExceptionExplainCandidateAt(g chstore.ExceptionGroup, now time.Time, lag time.Duration) bool {
 	if strings.TrimSpace(g.AISummary) != "" {
 		return false
 	}
-	age := now.UnixNano() - g.LastSeen
+	if lag < 0 {
+		lag = 0
+	}
+	age := now.Add(-lag).UnixNano() - g.LastSeen
 	return time.Duration(age) <= 5*time.Minute && g.Occurrences >= 500
 }

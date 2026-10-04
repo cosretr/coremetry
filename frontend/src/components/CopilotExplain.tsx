@@ -15,6 +15,8 @@ import { readAiCodeParam, readAiSrcParam, writeAiCodeParam } from '@/lib/aiSubje
 import { AIFeedbackButtons } from '@/components/ai/AIFeedbackButtons';
 import { shouldAskForCode, type CodeAskState } from './codeAsk';
 import { codeSourceRef } from './codeSourceRef'; // v0.10.1044 — çalışan sürüm / dal
+import { isOracleGroup } from '@/features/anomalies/oracleGroup'; // v0.10.1100
+import { OracleExplainContextLine } from '@/features/anomalies/OracleExplainContextLine';
 
 // CopilotExplain — drop-in Explain button that calls the
 // CoSRE (copilot) endpoint for the given subject and renders the
@@ -117,7 +119,10 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
   // gelmeli, çünkü auto-koşu efekti mount'ta çalışır. Sonradan bir
   // useEffect ile düzeltmek, kodsuz isteğin çoktan yola çıkmış olması
   // demekti (düzeltmeye çalıştığımız hatanın ta kendisi).
-  const codeCapable = kind === 'exception' || kind === 'trace';
+  // v0.10.1100 — Oracle hata grubu (`ora:`) stack taşımaz: kod incelemesi yok,
+  // panel çipin yerine Oracle bağlam satırını çizer.
+  const oracleGroup = kind === 'exception' && isOracleGroup(id);
+  const codeCapable = (kind === 'exception' && !oracleGroup) || kind === 'trace';
   // v0.10.60 — OPERATÖR KARARI: kutu HER AÇILIŞTA KAPALI başlar.
   //
   // v0.9.1238 tercihi hatırlıyordu (çekmece her özne için yeni mount
@@ -377,6 +382,7 @@ export function CopilotExplain({ kind, id, label, fromNs, toNs, spanId, auto, on
           burada yeniden kurmak iki yazımın sessizce ayrışmasına izin
           verirdi. URL yoksa hiç çizilmiyor — yanlış link, link
           olmamasından kötüdür. */}
+{oracleGroup && <OracleExplainContextLine fingerprint={id} />}
 {codeCapable && (
         // v0.9.1184 (operatör: "Kodu incele checkboxı da çok küçük daha
         // belirgin olabilir") — 11px'lik çıplak etiket dipnot gibi
