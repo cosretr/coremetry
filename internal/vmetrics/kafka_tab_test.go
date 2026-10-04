@@ -102,14 +102,58 @@ func TestKafkaLabelSelectorsGolden(t *testing.T) {
 		t.Fatalf("etiket seçici\n got: %s\nwant: %s", names, wantNames)
 	}
 	// q regex-kaçışlı (nokta \.), backtick düşer, tırnak raw string içinde zararsız.
-	vals := KafkaLabelValuesSelector([]string{"kafka.consumer.connection_count"}, "client_id", "a.b\"c`d")
-	wantVals := "{__name__=~\"^(kafka\\\\.consumer\\\\.connection_count|kafka_consumer_connection_count)$\", client_id=~`(?i).*a\\.b\"cd.*`}"
-	if vals != wantVals {
-		t.Fatalf("değer seçici\n got: %s\nwant: %s", vals, wantVals)
+	sc := KafkaLabelScope{Consumers: []string{"svc-b"}}
+	vals, err := KafkaLabelValuesSelectors([]string{"kafka.consumer.connection_count"}, "client_id", "a.b\"c`d", sc)
+	wantVals := "{__name__=~\"^(kafka\\\\.consumer\\\\.connection_count|kafka_consumer_connection_count)$\", service_name=\"svc-b\", client_id=~`(?i).*a\\.b\"cd.*`}"
+	if err != nil || len(vals) != 1 || vals[0] != wantVals {
+		t.Fatalf("değer seçici (%v)\n got: %v\nwant: %s", err, vals, wantVals)
 	}
-	// q boş → yalnız ad eşleştiricisi (tam liste, ama limit'li uç).
-	if got := KafkaLabelValuesSelector([]string{"kafka.consumer.connection_count"}, "topic", "  "); strings.Contains(got, "topic=~") {
-		t.Fatalf("boş q süzgeç eklememeli: %s", got)
+	// q boş → ad + kapsam eşleştiricisi, alt dize yüklemi yok (limit'li uç).
+	got, _ := KafkaLabelValuesSelectors([]string{"kafka.consumer.connection_count"}, "topic", "  ", sc)
+	if len(got) != 1 || strings.Contains(got[0], "topic=~") {
+		t.Fatalf("boş q süzgeç eklememeli: %v", got)
+	}
+}
+
+// v0.10.1102 (operatör-onaylı) — seçici önerileri SAYFA kapsamında: taraf
+// başına servis kümesi (panellerin service_name=~ eşleştiricisinin aynısı) +
+// karşı süzgeç. Golden: VM'e giden match[] listesi bayt bayt.
+func TestKafkaScopedLabelValuesSelectorsGolden(t *testing.T) {
+	metrics := []string{"kafka.producer.connection_count", "kafka.consumer.connection_count"}
+	sc := KafkaLabelScope{
+		Producers: []string{"svc-pay", "svc-api", "svc-pay"},
+		Consumers: []string{"svc-ledger"},
+		Topic:     "orders.v1",
+		ClientID:  "consumer-7",
+	}
+	// client_id aranırken: kapsam + seçili topic; kendi (client_id) süzgeci YOK.
+	got, err := KafkaLabelValuesSelectors(metrics, "client_id", "", sc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`{__name__=~"^(kafka\\.producer\\.connection_count|kafka_producer_connection_count)$", service_name=~"svc-api|svc-pay", topic="orders.v1"}`,
+		`{__name__=~"^(kafka\\.consumer\\.connection_count|kafka_consumer_connection_count)$", service_name="svc-ledger", topic="orders.v1"}`,
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("client_id seçicileri\n got: %s\nwant: %s", strings.Join(got, "\n      "), strings.Join(want, "\n      "))
+	}
+	// topic aranırken: kapsam + seçili client_id; kendi (topic) süzgeci YOK.
+	got, _ = KafkaLabelValuesSelectors(metrics, "topic", "ord", sc)
+	want = []string{
+		"{__name__=~\"^(kafka\\\\.producer\\\\.connection_count|kafka_producer_connection_count)$\", service_name=~\"svc-api|svc-pay\", client_id=\"consumer-7\", topic=~`(?i).*ord.*`}",
+		"{__name__=~\"^(kafka\\\\.consumer\\\\.connection_count|kafka_consumer_connection_count)$\", service_name=\"svc-ledger\", client_id=\"consumer-7\", topic=~`(?i).*ord.*`}",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("topic seçicileri\n got: %s\nwant: %s", strings.Join(got, "\n      "), strings.Join(want, "\n      "))
+	}
+	// Servisi olmayan taraf DÜŞER; hiç servis yoksa seçici yok (filoya açılmaz).
+	got, _ = KafkaLabelValuesSelectors(metrics, "client_id", "", KafkaLabelScope{Consumers: []string{"svc-ledger"}})
+	if len(got) != 1 || !strings.Contains(got[0], "consumer") {
+		t.Fatalf("üreticisiz kapsam tek (tüketici) seçici vermeli: %v", got)
+	}
+	if got, _ = KafkaLabelValuesSelectors(metrics, "client_id", "", KafkaLabelScope{}); len(got) != 0 {
+		t.Fatalf("boş kapsam seçici üretmemeli (filo geneli yasak): %v", got)
 	}
 }
 

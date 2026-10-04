@@ -396,6 +396,34 @@ func kafkaClientsNote(source string, available, envAmbiguous bool, reason, scope
 	return b.String()
 }
 
+// kafkaServiceScope — sayfanın taraf başına servis kapsamı. v0.10.1102:
+// /api/messaging/clients ile Kafka seçici araması (kafka-label-values) AYNI
+// gövdeden türetir — seçici önerisi panellerin kapsamından sapamaz.
+type kafkaServiceScope struct {
+	Producers           []string `json:"producers"`
+	Consumers           []string `json:"consumers"`
+	DiscoveredProducers []string `json:"discoveredProducers"`
+	DiscoveredConsumers []string `json:"discoveredConsumers"`
+	Truncated           bool     `json:"truncated"`
+}
+
+// resolveKafkaServiceScope — SAF (kaynak arayüz + caller listesi).
+// v0.10.609 — kapsam = span ∪ topic etiketli metrikten keşif (operatör-
+// bildirimi: log topic'inin tüketicisi span üretmiyor ama kafka-clients
+// metriği üretiyor; yalnız span'la tüm tüketici panelleri "kapsam boş"
+// kalıyordu). Keşif her sette koşar (2 kısa VM sorgusu, cevap cache'li).
+func resolveKafkaServiceScope(ctx context.Context, src metricSource, p messagingClientsPlan, callers []chstore.MsgCallerService) kafkaServiceScope {
+	spanP, spanC := splitCallerRoles(callers)
+	var sc kafkaServiceScope
+	var truncP, truncC bool
+	sc.Producers, sc.DiscoveredProducers, truncP = mergeKafkaScope(spanP,
+		discoverKafkaServices(ctx, src, "producer", p.Destination, p.From, p.To, p.Env), msgScopeServiceCap)
+	sc.Consumers, sc.DiscoveredConsumers, truncC = mergeKafkaScope(spanC,
+		discoverKafkaServices(ctx, src, "consumer", p.Destination, p.From, p.To, p.Env), msgScopeServiceCap)
+	sc.Truncated = truncP || truncC
+	return sc
+}
+
 // buildMessagingClients — SAF (kaynak arayüz + caller listesi): topic soruları.
 func buildMessagingClients(ctx context.Context, src metricSource, p messagingClientsPlan, callers []chstore.MsgCallerService) (messagingClientsResponse, error) {
 	set := p.Set
@@ -424,17 +452,10 @@ func buildMessagingClients(ctx context.Context, src metricSource, p messagingCli
 		}
 		p.Mdp = 2
 	}
-	spanP, spanC := splitCallerRoles(callers)
-	// v0.10.609 — kapsam = span ∪ topic etiketli metrikten keşif (operatör-
-	// bildirimi: log topic'inin tüketicisi span üretmiyor ama kafka-clients
-	// metriği üretiyor; yalnız span'la tüm tüketici panelleri "kapsam boş"
-	// kalıyordu). Keşif her sette koşar (2 kısa VM sorgusu, cevap cache'li).
-	var truncP, truncC bool
-	resp.Producers, resp.DiscoveredProducers, truncP = mergeKafkaScope(spanP,
-		discoverKafkaServices(ctx, src, "producer", p.Destination, p.From, p.To, p.Env), msgScopeServiceCap)
-	resp.Consumers, resp.DiscoveredConsumers, truncC = mergeKafkaScope(spanC,
-		discoverKafkaServices(ctx, src, "consumer", p.Destination, p.From, p.To, p.Env), msgScopeServiceCap)
-	resp.ScopeTruncated = truncP || truncC
+	sc := resolveKafkaServiceScope(ctx, src, p, callers)
+	resp.Producers, resp.Consumers = sc.Producers, sc.Consumers
+	resp.DiscoveredProducers, resp.DiscoveredConsumers = sc.DiscoveredProducers, sc.DiscoveredConsumers
+	resp.ScopeTruncated = sc.Truncated
 	if len(resp.DiscoveredProducers) > 0 || len(resp.DiscoveredConsumers) > 0 {
 		caveat += fmt.Sprintf(" Kapsama topic etiketli metrikten keşfedilen %d üretici / %d tüketici eklendi (span'de görünmüyorlar).",
 			len(resp.DiscoveredProducers), len(resp.DiscoveredConsumers))

@@ -3,7 +3,9 @@
 // görünümü öğeleri ve kısa kaynak satırı. Bileşen (KafkaClientsTab.tsx) yalnız
 // bunları çağırır; davranış burada tablo testli (kafkaTab.test.ts).
 import type { CorePanelMultiItem } from '@/components/chart/corePanelEntry';
-import type { KafkaConnections, KafkaMetricBlock, KafkaTabLabels, SpanMetricSeries } from '@/lib/types';
+import type {
+  KafkaConnections, KafkaLabelScope, KafkaMetricBlock, KafkaTabLabels, MessagingClients, SpanMetricSeries,
+} from '@/lib/types';
 import { kafkaShortLabels } from './kafkaClients';
 
 // ── URL durumu ──────────────────────────────────────────────────────────────
@@ -57,6 +59,30 @@ export interface KafkaTabControls {
 export function kafkaTabControls(labels: KafkaTabLabels | null | undefined): KafkaTabControls {
   if (!labels?.detected) return { topic: false, client: false, podToggle: false };
   return { topic: !!labels.topic, client: !!labels.clientId, podToggle: !!labels.pod };
+}
+
+// ── Seçici kapsamı (v0.10.1102) ─────────────────────────────────────────────
+/**
+ * kafkaLabelScopeOf — seçici önerilerinin kapsamı: sayfanın anahtarları
+ * (sunucu servis kümelerini panellerle aynı yoldan türetir) + sunucunun
+ * UYGULADIĞI süzgeç (istenen değil — etiketsiz süzgeç uygulanmaz, öneriyi de
+ * daraltmamalı).
+ */
+export function kafkaLabelScopeOf(
+  page: { system: string; cluster: string; destination: string },
+  data: Pick<MessagingClients, 'filter'> | null | undefined,
+): KafkaLabelScope {
+  return {
+    system: page.system, cluster: page.cluster, destination: page.destination,
+    topic: data?.filter?.topic || undefined,
+    clientId: data?.filter?.clientId || undefined,
+  };
+}
+
+/** Aramayı tazeleyen imza: yalnız etkili girdiler (aranan etiketin kendi süzgeci girmez). */
+export function kafkaLabelScopeSig(label: 'topic' | 'client_id', sc: KafkaLabelScope): string {
+  const other = label === 'client_id' ? (sc.topic ?? '') : (sc.clientId ?? '');
+  return JSON.stringify([sc.system, sc.cluster, sc.destination, other]);
 }
 
 // ── Pod görünümü öğeleri ────────────────────────────────────────────────────

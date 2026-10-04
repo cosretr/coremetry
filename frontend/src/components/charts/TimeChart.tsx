@@ -4,6 +4,7 @@ import uPlot from 'uplot';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { fmtXTicks, fmtAxisTick, fmtTooltipTime } from '@/lib/chartFmt';
 import { integerSplits } from '@/lib/chart/integerSplits';
+import { measuredAxisSize } from '@/lib/chart/axisSize';
 import { timeChartBuildSignature } from '@/lib/chartBuildSig';
 import { resolveVar, chartMonoFont } from '@/lib/chart/resolveVar';
 import { yRangeHeadroom } from '@/lib/chart/yRange';
@@ -245,8 +246,13 @@ export function TimeChart({
     // Axis whose ticks/splits derive from the LIVE scale max so a setData
     // re-fit updates the gridlines (the old build-time `max` closure would go
     // stale on the fast-path). fmt read through its ref for live formatting.
+    // v0.10.1102 — oluk SABİT 38 px değil, axisSize.ts measuredAxisSize.
+    // DİKKAT: ana eksen side 0 = uPlot'ta ÜST şerit (v0.8.91'den beri; sola
+    // taşımak operatör kararı bekliyor). Orada oluk YÜKSEKLİKtir: punto
+    // ölçülür, tabana kelepçelenir (32 px). Etiket GENİŞLİĞİ yalnız sağ (y2,
+    // side 1) eksende ölçülür — sol kırpma sınıfı bu presette yalnız orada var.
     const yAxis = (scale: string, side: 0 | 1, fmtRef: React.MutableRefObject<((v: number) => string) | undefined>, showGrid: boolean, unit: string, integer = false): uPlot.Axis => ({
-      scale, side, stroke: text3, size: 38, font: axisFont,
+      scale, side, stroke: text3, size: measuredAxisSize(axisFont), font: axisFont,
       grid: showGrid ? { stroke: gridc, width: 1, dash: [3, 4] } : { show: false },
       // v0.9.245 — kısa tick çentikleri. Etiketler eksene "yapışık" durduğu
       // için hangi sayının hangi çizgiye ait olduğu okunmuyordu (operatör:

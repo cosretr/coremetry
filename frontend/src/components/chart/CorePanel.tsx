@@ -38,7 +38,7 @@ import {
 import type { DataFrame, DecimalCount } from '@grafana/data';
 import { framesToAligned, chartTheme } from '@/lib/chart/dataFrame';
 import {
-  AXIS_FONT_SIZE, axisTickPlan, decimalsForIncr, widestLabelPx, axisGutterPx,
+  AXIS_FONT_SIZE, axisTickPlan, decimalsForIncr, measuredAxisSize, type MeasuredAxisSize,
   decimalsForScaledIncr, displayScaleOf, scaleRefTick,
   seriesExtent, paddedExtent,
 } from '@/lib/chart/axisSize';
@@ -105,6 +105,29 @@ function bucketWindowAt(u: uPlot, clientX: number, clientY: number) {
 // imleç noktası ölçüsü de bu civarda (seri nokta çapı × 2).
 const CURSOR_POINT_PX = 10;
 const CURSOR_POINT_BORDER_PX = 2;
+
+// v0.10.1102 — y oluğu ÖLÇEN builder. @grafana/ui'nin AxisProps.size'ı
+// yalnız sayı kabul ediyor (verilmezse sabit 'Inter' ile ölçen
+// calculateAxisSize devreye girer — v0.9.799 kusuru). uPlot ise size'ı
+// `(self, values, axisIdx, cycleNum)` geri çağrısı olarak da alır ve
+// ÇİZECEĞİ etiketlerle çağırır. Kurulan config'te y ekseninin size'ı
+// measuredAxisSize ile değiştirilir; builder config'i önbelleğe aldığı için
+// yazım her çağrıda aynı nesneye iner (idempotent). Grafana yüzeyi değişmez:
+// aynı sınıf, yalnız getConfig'in son adımı.
+class MeasuredAxisConfigBuilder extends UPlotConfigBuilder {
+  private readonly ySize: MeasuredAxisSize;
+  constructor(ySize: MeasuredAxisSize) {
+    super();
+    this.ySize = ySize;
+  }
+  getConfig() {
+    const cfg = super.getConfig();
+    for (const a of cfg.axes ?? []) {
+      if (a.scale === 'y') a.size = this.ySize;
+    }
+    return cfg;
+  }
+}
 
 // v0.10.928 — ipucu içindeki ayraç iç çizgi: --divider.
 const PIN_TIP_HTML =
@@ -536,97 +559,56 @@ export function CorePanel({
     u.redraw(false, true); // v0.9.744 — gizlenen serinin ◆'ları da kalksın
   }, [drawOrder, vis]);
 
-  // ── v0.9.799 — y ekseni oluk genişliği (operatör: "00 req/s") ────────────
+  // ── v0.9.1368 — y tick ONDALIĞI (operatör: "memory hep aynı değer") ─────
   //
-  // Kök neden ve neden Grafana'nın otomatiğine güvenemediğimiz
-  // axisSize.ts'in dosya başında: measureText fontu SABİT 'Inter' yazıyor,
-  // biz o fontu kullanmıyoruz, ölçüm çizilenden dar çıkıyor ve etiketin
-  // baş rakamı kırpılıyor.
-  //
-  // Burada tick kümesi ÇİZİMDEN ÖNCE tahmin edilir (uPlot'un 1/2/5
-  // merdiveni), etiketler panelin KENDİ display processor'ıyla üretilir
-  // (birim + ondalık tek kaynaktan) ve GERÇEK eksen fontuyla ölçülür.
-  //
-  // Uçlar TÜM seriden okunur — gizli seriler ve zoom penceresi dışarıda
-  // kalan noktalar dahil. uPlot ölçeği onları dışlar, yani oluk gerektiği
-  // kadar VEYA biraz daha geniş çıkar. Yön bilinçli: fazla oluk birkaç
-  // piksel yer yer, eksik oluk etiketi kırpar (düzelttiğimiz kusur).
-  // v0.9.1368 — TICK ONDALIĞI (operatör-bildirimi: "Clusters altında
-  // memory hep aynı değeri gösteriyor"). Ondalık, değerin büyüklüğünden
-  // DEĞİL tick adımından türer; adım da GÖSTERİLEN birimde ölçülür.
-  // Gerekçenin tamamı axisSize.ts/decimalsForScaledIncr'de.
+  // Ondalık, değerin büyüklüğünden DEĞİL tick adımından türer; adım da
+  // GÖSTERİLEN birimde ölçülür. Gerekçenin tamamı
+  // axisSize.ts/decimalsForScaledIncr'de. Tick kümesi ÇİZİMDEN ÖNCE
+  // tahmin edilir (1/2/5 merdiveni); uçlar TÜM seriden + eşikten okunur.
   //
   // Buradan çıkan sayı eksen + tooltip + lejant hücrelerinin ORTAK
   // ondalığı: üçü aynı display processor'ı çağırıyor, üçü de aynı
   // çözünürlükte okunmalı (v0.9.774'ün "tek kaynak" sözleşmesi). 0 ise
   // hiç geçilmez ve bugünkü Grafana otomatiği aynen sürer.
   //
-  // Ondalık ve oluk TEK memo'dan çıkar: ikisi de aynı tick planına
-  // dayanıyor ve ayrı memo'lara bölmek planı iki kez kurardı (ayrıca
-  // `frames` üzerinden ikinci bir hook bağımlılığı doğururdu).
-  const yAxisPlan = useMemo((): { px: number; dec: number } => {
-    const none = { px: 0, dec: 0 };
-    if (data.state !== 'ready' || frames.length === 0) return none;
-    // v0.10.384 — oluk planı da eşiği görsün (ölçek eşiğe uzayınca tick
-    // etiketleri eşiğin basamağında ölçülür).
+  // v0.10.1102 — OLUK bu plandan ARTIK ölçülmüyor. Tahmin edilen etiket
+  // uPlot'un çizdiğiyle ayrışıyordu (uPlot 1/2/2.5/5 merdiveni: "12.5"
+  // planda yoktu, oluk "10" genişliğinde kaldı → "2.5"). Oluk uPlot'un
+  // size geri çağrısında çizilen etiketlerden ölçülür (config'te
+  // measuredAxisSize); eski "yalnız büyür" mandalı da gereksizleşti —
+  // genişlik config kimliğinin parçası değil, uPlot rebuild'siz yerleştirir.
+  const yTickDecimals = useMemo((): number => {
+    if (data.state !== 'ready' || frames.length === 0) return 0;
+    // v0.10.384 — plan eşiği de görsün (ölçek eşiğe uzar).
     const thrRow = (thresholds ?? []).map(t => t.value).filter(v => Number.isFinite(v));
     const ext = seriesExtent([...(drawData.slice(1) as (number | null)[][]), ...(thrRow.length ? [thrRow] : [])]);
-    if (!ext) return none;
+    if (!ext) return 0;
     // Log ölçekte dolgu yok (decade'ler zaten sınırları kapsıyor).
     const [lo, hi] = effLog ? ext : paddedExtent(ext);
     // Çizim yüksekliği ≈ panel yüksekliği − x ekseni şeridi.
     const plan = axisTickPlan(lo, hi, Math.max(40, height - 34), effLog);
-    if (plan.ticks.length === 0) return none;
+    if (plan.ticks.length === 0) return 0;
     const disp = frames[0]?.fields[1].display;
-    // v0.9.1368 — ondalık TICK ADIMINDAN, gösterilen birimde ölçülerek.
     // Ölçek en BÜYÜK tick'ten geri okunur: biçimlendirici birimi ona
     // göre seçiyor ("0" tick'i 6.85 TiB'lik eksende ölçeği ele vermez).
     const ref = scaleRefTick(plan.ticks);
-    const dec = disp
+    return disp
       ? decimalsForScaledIncr(plan.incr, displayScaleOf(ref, disp(ref).text))
       : decimalsForIncr(plan.incr);
-    const labels = plan.ticks.map((v) => {
-      if (!disp) return fmtSmart(v);
-      const d = disp(v, dec > 0 ? dec : undefined);
-      return `${d.text}${d.suffix ?? ''}`;
-    });
-    // Oluk, ÇİZİLECEK etiketin ondalığıyla ölçülür — aksi hâlde 6.8503
-    // yazan eksen 6.85 genişliğinde oluk alır ve baş rakam kırpılır
-    // (v0.9.799'un düzelttiği kusur sınıfı).
-    const px = axisGutterPx(
-      widestLabelPx(labels, `${AXIS_FONT_SIZE}px ${chartTheme().typography.fontFamily}`),
-      width);
-    return { px, dec };
-    // themeTick: font ailesi temayla değişebilir → ölçüm tazelenir.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.state, frames, drawData, effLog, height, width, themeTick, thresholds]);
+  }, [data.state, frames, drawData, effLog, height, thresholds]);
 
-  const yTickDecimals = yAxisPlan.dec;
-  const yGutterNeeded = yAxisPlan.px;
   // uPlot hook'ları (eksen/tooltip) config kurulduğu anki closure'ı taşır;
   // ondalık ref'ten CANLI okunur ki veri değişimi grafiği
   // destroy/recreate ETMESİN (v0.9.704 kimlik dersi, framesRef emsali).
   const yDecRef = useRef(yTickDecimals);
   yDecRef.current = yTickDecimals;
 
-  // MANDAL — oluk seri kümesi boyunca YALNIZ BÜYÜR. Genişlik config'in bir
-  // parçası ve config kimliği değişince UPlotChart uPlot'u
-  // destroy/recreate ediyor (v0.9.704). Son değeri 98↔102 arasında
-  // salınan bir panelde oluğu her poll'da yeniden hesaplayıp küçültseydik
-  // grafik 10 saniyede bir yeniden doğardı. Küçülme YALNIZ seri kümesi
-  // değişince olur — o an config zaten yeniden kuruluyor, yani bedava.
-  const seriesSig = aligned.names.join('|');
-  const [yGutter, setYGutter] = useState<{ sig: string; px: number }>({ sig: '', px: 0 });
-  useEffect(() => {
-    setYGutter(prev => {
-      if (prev.sig !== seriesSig) return { sig: seriesSig, px: yGutterNeeded };
-      return yGutterNeeded > prev.px ? { sig: seriesSig, px: yGutterNeeded } : prev;
-    });
-  }, [yGutterNeeded, seriesSig]);
-
   const config = useMemo(() => {
     const theme = chartTheme();
-    const b = new UPlotConfigBuilder();
+    // v0.10.1102 — ölçüm fontu = @grafana/ui'nin eksene yazdığı font
+    // (UPlotAxisBuilder: `${12}px ${theme.typography.fontFamily}`).
+    const b = new MeasuredAxisConfigBuilder(
+      measuredAxisSize(`${AXIS_FONT_SIZE}px ${theme.typography.fontFamily}`));
     b.addScale({
       scaleKey: 'x', isTime: true,
       orientation: ScaleOrientation.Horizontal, direction: ScaleDirection.Right,
@@ -706,9 +688,9 @@ export function CorePanel({
       // 00 req/s yazıyor"). Grafana'nın otomatiği en uzun etiketi SABİT
       // 'Inter' fontuyla ölçüyor; Coremetry'de o font yok, ölçüm çizilen
       // fonttan dar çıkıyor ve etiketin baş rakamı kırpılıyor
-      // (axisSize.ts dosya başı). 0 iken Grafana otomatiği devrede kalır
-      // — ilk boyanmada (ölçüm henüz yokken) davranış bugünküdür.
-      size: yGutter.px || undefined,
+      // (axisSize.ts dosya başı). v0.10.1102 — AxisProps.size yalnız SAYI
+      // alıyor; ölçen geri çağrıyı MeasuredAxisConfigBuilder getConfig'te
+      // y eksenine yazar (sabit sayı = tahmin edilen etiket = kırpma).
     });
     // v0.9.785 — bars markı. Grafana'nın kendi UPlotSeriesBuilder'ı
     // drawStyle=Bars görünce path builder'ı `bars({size:[barWidthFactor,
@@ -1023,11 +1005,11 @@ export function CorePanel({
     //                için ilk günden latent değil, doğrudan bozuk olurdu).
     //   • dashed   — join(',') ile İÇERİK imzası (dizi kimliği değil:
     //                inline [] her render'da yeni kimlik = sürekli yıkım).
-    //   • yGutter.px — eksen oluk genişliği (v0.9.799). Bir ÇİZİM girdisi
-    //                değil ÖLÇÜ; mandal yüzünden yalnız büyür, yani
-    //                rebuild seyrek ve gerçekten gerekli olduğunda olur.
+    // v0.10.1102 — eksen oluğu (v0.9.799'dan beri buradaydı) bağımlılıktan
+    // çıktı: oluk uPlot'un size geri çağrısında ölçülür, config kimliğine
+    // girmez (measuredAxisSize).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), yGutter.px]);
+  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(',')]);
 
   // ── v0.9.793 — focusedLabel (lejant hover vurgusu) ───────────────────────
   //

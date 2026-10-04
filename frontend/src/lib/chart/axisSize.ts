@@ -19,6 +19,23 @@
 //
 // Bu dosya SAF: ölçüm dışında hiçbir yan etkisi yok, @grafana/* importu
 // yok (decimals'ı çağıran verir — böylece testi node ortamında koşar).
+//
+// v0.10.1102 (operatör-bildirimi: Trace › Metrics pod panelinde JVM heap
+// "953.7 MiB" → "353.7 MiB"; Kafka bağlantı grafiğinde "12.5" → "2.5").
+// İKİNCİ KÖK NEDEN, ölçülmüş: oluk ÇİZİLEN etiketlerden değil TAHMİN
+// edilen etiketlerden ölçülüyordu. CorePanel tick kümesini 1/2/5
+// merdiveniyle önceden kuruyordu; uPlot ise 1/2/2.5/5 merdiveni ve kendi
+// aralık yuvarlamasıyla çiziyor — "12.5" tahmin kümesinde hiç yoktu,
+// oluk "10" genişliğinde kaldı. OverviewChart'ta oluk SABİT 34 px'ti (10 px
+// mono fontta "125ms" sığmaz). Dar ızgara hücresi kısa grafik demek: tick
+// aralığı küçülür, 2.5'lik adım ve uzun etiket orada çıkar. (TimeChart'ın
+// ana ekseni side 0 = üst şerit; orada oluk yüksekliktir, bkz. aşağıda.)
+// ÇÖZÜM: oluk uPlot'un `size(self, values, axisIdx, cycleNum)` geri
+// çağrısında, uPlot'un GERÇEKTEN çizeceği etiketlerden ölçülür
+// (measuredAxisSize). uPlot bunu her ölçek değişiminde (setData dahil)
+// yeniden çağırır — çizim ile oluk artık ayrışamaz.
+
+import type uPlot from 'uplot';
 
 /** UPLOT_AXIS_FONT_SIZE (@grafana/ui) — eksen yazı boyutu. */
 export const AXIS_FONT_SIZE = 12;
@@ -29,9 +46,13 @@ export const AXIS_GAP = 5;
 /** Yuvarlama + alt-piksel payı: ölçüm doğru olsa bile 1-2 px kırpılma
  *  tek karakterlik bir okuma hatası üretir, tersi yalnız 4 px yer alır. */
 export const AXIS_SAFETY_PX = 4;
-/** Grafana'nın kendi tavanı (calculateAxisSize): oluk panelin %40'ından
- *  geniş olamaz — patlayan tek bir etiket grafiği yutmasın. */
-export const AXIS_MAX_GUTTER_RATIO = 0.4;
+/** v0.10.1102 — oluk sınırları. Taban: kısa etiketli eksen ("0", "5") yine
+ *  okunur bir boşluk alır. Tavan: patlayan tek bir etiket dar hücredeki
+ *  grafiği yutmasın (96 px ≈ 12 px fontta 12-13 karakter; en uzun birimli
+ *  etiketlerimiz "1.04K req/s" boyunda). Panelin %40'ı tavanı KALKTI: dar
+ *  hücrede tam da kırpmayı üreten oydu. */
+export const AXIS_MIN_SIZE_PX = 32;
+export const AXIS_MAX_SIZE_PX = 96;
 /** Y_TICK_SPACING_NORMAL / _SMALL (@grafana/ui calculateSpace). */
 export const AXIS_TICK_SPACING_PX = 30;
 export const AXIS_TICK_SPACING_SMALL_PX = 15;
@@ -246,9 +267,13 @@ export function measureLabelWidthPx(label: string, font: string): number {
 /** labelWidthFloorPx — font dizesindeki punto × karakter × 0.55 em; font
  *  punto taşımıyorsa AXIS_FONT_SIZE. SAF; axisSize.test.ts pinler. */
 export function labelWidthFloorPx(label: string, font: string): number {
+  return label.length * fontPxOf(font) * AXIS_EM_PER_CHAR_FLOOR;
+}
+
+/** fontPxOf — font dizesindeki punto; yoksa AXIS_FONT_SIZE. SAF. */
+export function fontPxOf(font: string): number {
   const m = /(\d+(?:\.\d+)?)px/.exec(font);
-  const px = m ? parseFloat(m[1]) : AXIS_FONT_SIZE;
-  return label.length * px * AXIS_EM_PER_CHAR_FLOOR;
+  return m ? parseFloat(m[1]) : AXIS_FONT_SIZE;
 }
 
 /** widestLabelPx — etiket kümesinin en geniş ölçüsü. */
@@ -258,18 +283,43 @@ export function widestLabelPx(labels: readonly string[], font: string): number {
   return w;
 }
 
-/** axisGutterPx — en geniş etiketten uPlot `axis.size` değeri.
+/** axisSizePx — en geniş etiketten uPlot `axis.size` değeri.
  *
  *  Bileşimi @grafana/ui'nin calculateAxisSize'ı ile AYNI (tick çentiği +
- *  boşluk + metin) — tek fark ölçümün doğru fontla yapılması ve güvenlik
- *  payı. plotWidthPx verilirse Grafana'nın %40 tavanı da uygulanır.
+ *  boşluk + metin) — fark: ölçüm doğru fontla, güvenlik payı ve
+ *  [AXIS_MIN_SIZE_PX, AXIS_MAX_SIZE_PX] kelepçesi. Çentik/boşluk eksenin
+ *  KENDİ değerleridir (TimeChart çentiği 3 px, Grafana 4 px).
  */
-export function axisGutterPx(maxLabelWidthPx: number, plotWidthPx?: number): number {
+export function axisSizePx(maxLabelWidthPx: number, tickPx: number = AXIS_TICK_SIZE, gapPx: number = AXIS_GAP): number {
   const raw = isFinite(maxLabelWidthPx) && maxLabelWidthPx > 0 ? maxLabelWidthPx : 0;
-  const capped = plotWidthPx && plotWidthPx > 0
-    ? Math.min(plotWidthPx * AXIS_MAX_GUTTER_RATIO, raw)
-    : raw;
-  return Math.ceil(AXIS_TICK_SIZE + AXIS_GAP + AXIS_SAFETY_PX + capped);
+  const tick = isFinite(tickPx) && tickPx > 0 ? tickPx : 0;
+  const gap = isFinite(gapPx) && gapPx > 0 ? gapPx : 0;
+  const need = Math.ceil(tick + gap + AXIS_SAFETY_PX + raw);
+  return Math.min(AXIS_MAX_SIZE_PX, Math.max(AXIS_MIN_SIZE_PX, need));
+}
+
+/** uPlot.Axis.Size ile uyumlu geri çağrı. `values` ilk kurulumda null
+ *  gelir (uPlot initAxis), sonra çizilecek biçimli etiketler. */
+export type MeasuredAxisSize = (
+  self: uPlot, values: readonly (string | number | null)[] | null, axisIdx: number, cycleNum: number,
+) => number;
+
+/** measuredAxisSize — y ekseni `size` geri çağrısı (v0.10.1102): uPlot'un
+ *  ÇİZECEĞİ etiketleri `font` ile ölçer; çentik çizilmiyorsa (ticks.show
+ *  false) payı sıfırdır — uPlot da etiketi o zaman çentiksiz yerleştirir.
+ *  Tüm y-ekseni aileleri (TimeChart, OverviewChart, CorePanel) bunu kullanır.
+ *  Yatay eksende (side 0 üst / 2 alt) oluk YÜKSEKLİKtir: etiket genişliği
+ *  değil punto ölçülür (TimeChart'ın sol ekseni side 0 ile kurulu — üstte). */
+export function measuredAxisSize(font: string): MeasuredAxisSize {
+  return (self, values, axisIdx) => {
+    const ax = self.axes?.[axisIdx];
+    const tick = ax?.ticks?.show === false ? 0 : (ax?.ticks?.size ?? AXIS_TICK_SIZE);
+    const gap = ax?.gap ?? AXIS_GAP;
+    if (ax?.side === 0 || ax?.side === 2) return axisSizePx(fontPxOf(font), tick, gap);
+    const labels: string[] = [];
+    for (const v of values ?? []) if (v != null && v !== '') labels.push(String(v));
+    return axisSizePx(widestLabelPx(labels, font), tick, gap);
+  };
 }
 
 /** seriesExtent — çizilen matrisin y uçları (null/NaN atlanır).

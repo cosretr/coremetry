@@ -863,20 +863,23 @@ describe('CorePanel eksen + imleç (v0.9.799)', () => {
 
   it('🔴 oluk genişliği SAF modülden — panel kendi ölçüm kopyasını yazmaz', () => {
     expect(src).toMatch(/from '@\/lib\/chart\/axisSize'/);
-    expect(src).toMatch(/size: yGutter\.px \|\| undefined/);
-    expect(src).toMatch(/axisGutterPx\(/);
+    // v0.10.1102 — oluk ÇİZİLEN etiketten (uPlot size geri çağrısı); tahmin
+    // planından ölçülen sabit sayı geri gelmemeli ("12.5" → "2.5" kusuru).
+    expect(src).toMatch(/new MeasuredAxisConfigBuilder\(\s*measuredAxisSize\(/);
+    expect(src).toMatch(/if \(a\.scale === 'y'\) a\.size = this\.ySize;/);
+    expect(src).not.toMatch(/yGutter/);
+    expect(src).not.toMatch(/axisGutterPx\(/);
+    // Ondalık planı yerinde (v0.9.1368).
     expect(src).toMatch(/axisTickPlan\(/);
     // Ölçüm GERÇEK eksen fontuyla (Grafana'nın sabit 'Inter'i DEĞİL).
-    expect(src).toMatch(/AXIS_FONT_SIZE\}px \$\{chartTheme\(\)\.typography\.fontFamily\}/);
+    expect(src).toMatch(/AXIS_FONT_SIZE\}px \$\{theme\.typography\.fontFamily\}/);
   });
 
-  it('🟠 oluk MANDALI: seri kümesi boyunca yalnız büyür (rebuild thrash yok)', () => {
-    expect(src).toMatch(/yGutterNeeded > prev\.px \? \{ sig: seriesSig, px: yGutterNeeded \} : prev/);
-    // Yeni seri kümesi = temiz sayfa (o an config zaten yeniden kuruluyor).
-    expect(src).toMatch(/if \(prev\.sig !== seriesSig\) return \{ sig: seriesSig, px: yGutterNeeded \};/);
+  it('🟠 oluk config kimliğine GİRMEZ (rebuild thrash yok)', () => {
     const deps = src.match(/\}, \[[^\]]*\]\);/g) ?? [];
     const cfg = deps.filter(d => d.includes('overlaySig'));
-    expect(cfg[0]).toContain('yGutter.px');
+    expect(cfg[0]).toBeTruthy();
+    expect(cfg[0]).not.toMatch(/gutter/i);
   });
 
   it('🔴 imleç noktası SAYISAL boyut alır — "show: true" YASAK', () => {
@@ -978,16 +981,17 @@ describe('CorePanel tick ondalığı (v0.9.1368)', () => {
     expect(src).not.toMatch(/\{ const d = disp\(v\); return/);
   });
 
-  it('🔴 oluk ölçümü ÇİZİLEN ondalığı kullanır — etiket kırpılmaz', () => {
-    // Aynı `dec` hem etiket üretiminde hem genişlik ölçümünde.
-    expect(src).toMatch(/const dec = disp\s*\?\s*decimalsForScaledIncr\(/);
+  it('🔴 ondalık planı ölçeği temsilci tick\'ten okur', () => {
+    expect(src).toMatch(/return disp\s*\?\s*decimalsForScaledIncr\(/);
     // Ölçek temsilcisi SAF modülden: panel `plan.ticks[0]`a düşerse
     // birim sınırını aşan eksende ondalık eksik çıkar (mutasyon turunda
     // yakalandı — o sapma yalnız bu kapıyla ısırıyor).
     expect(src).toMatch(/scaleRefTick\(plan\.ticks\)/);
     expect(src).not.toMatch(/plan\.ticks\[0\]/);
-    expect(src).toMatch(/disp\(v, dec > 0 \? dec : undefined\)/);
-    expect(src).toMatch(/return \{ px, dec \};/);
+    // v0.10.1102 — oluk artık plandan ölçülmüyor: uPlot'un size geri
+    // çağrısı ÇİZİLEN (ondalığı uygulanmış) etiketi görür; plan yalnız
+    // ondalığı üretir. Plan etiketinden oluk ölçümü geri gelmemeli.
+    expect(src).not.toMatch(/return \{ px, dec \};/);
   });
 });
 

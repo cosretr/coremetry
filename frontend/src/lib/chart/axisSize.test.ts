@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import type uPlot from 'uplot';
 import {
-  AXIS_TICK_SIZE, AXIS_GAP, AXIS_MAX_GUTTER_RATIO,
+  AXIS_TICK_SIZE, AXIS_GAP, AXIS_SAFETY_PX, AXIS_MIN_SIZE_PX, AXIS_MAX_SIZE_PX,
   niceIncr, maxTicksFor, axisTickPlan, decimalsForIncr,
-  estimateLabelWidthPx, axisGutterPx, widestLabelPx,
+  estimateLabelWidthPx, axisSizePx, widestLabelPx, measuredAxisSize,
   seriesExtent, paddedExtent, decimalsForScaledIncr, displayScaleOf, scaleRefTick,
   labelWidthFloorPx, AXIS_EM_PER_CHAR_FLOOR, AXIS_FONT_SIZE,
 } from './axisSize';
@@ -106,7 +107,7 @@ describe('axisTickPlan — brief tablosu (0-0.2 ondalıklı · 0-300 tam sayı)'
 });
 
 // ── madde 2: etiket oluğa SIĞAR ─────────────────────────────────────────
-describe('axisGutterPx — "formatlanmış tick eksen boyutunu aşmaz"', () => {
+describe('axisSizePx — "formatlanmış tick eksen boyutunu aşmaz"', () => {
   // Bu diziler gerçek çıktıdır: @grafana/data'nın display processor'ı
   // reqps/ms birimlerinde tam olarak bunları üretiyor (ölçüldü, v0.9.799).
   const REQPS = ['0 req/s', '100 req/s', '200 req/s', '300 req/s', '1.04K req/s'];
@@ -115,7 +116,7 @@ describe('axisGutterPx — "formatlanmış tick eksen boyutunu aşmaz"', () => {
   for (const [unit, labels] of [['req/s', REQPS], ['ms/s', MS]] as const) {
     it(`${unit}: oluk her etiketi + çentik + boşluğu taşır`, () => {
       const w = widestLabelPx(labels, '12px sans-serif');
-      const gutter = axisGutterPx(w);
+      const gutter = axisSizePx(w);
       for (const l of labels) {
         expect(gutter).toBeGreaterThanOrEqual(
           estimateLabelWidthPx(l) + AXIS_TICK_SIZE + AXIS_GAP);
@@ -124,21 +125,81 @@ describe('axisGutterPx — "formatlanmış tick eksen boyutunu aşmaz"', () => {
   }
 
   it('en uzun etiket oluğu belirler — kısası daralt(ma)maz', () => {
-    const wide = axisGutterPx(widestLabelPx(REQPS, '12px sans-serif'));
-    const narrow = axisGutterPx(widestLabelPx(['0 req/s'], '12px sans-serif'));
+    const wide = axisSizePx(widestLabelPx(REQPS, '12px sans-serif'));
+    const narrow = axisSizePx(widestLabelPx(['0 req/s'], '12px sans-serif'));
     expect(wide).toBeGreaterThan(narrow);
   });
 
-  it('Grafana tavanı korunur: oluk panelin %40\'ını aşamaz', () => {
-    const g = axisGutterPx(5000, 600);
-    expect(g).toBeLessThanOrEqual(
-      Math.ceil(600 * AXIS_MAX_GUTTER_RATIO) + AXIS_TICK_SIZE + AXIS_GAP + 4);
+  it('v0.10.1102 — kelepçe [AXIS_MIN_SIZE_PX, AXIS_MAX_SIZE_PX]; panel oranı tavanı YOK', () => {
+    expect(axisSizePx(5000)).toBe(AXIS_MAX_SIZE_PX);
+    expect(axisSizePx(1)).toBe(AXIS_MIN_SIZE_PX);
   });
 
-  it('boş / geçersiz ölçüm oluğu negatife düşürmez', () => {
-    expect(axisGutterPx(0)).toBeGreaterThan(0);
-    expect(axisGutterPx(NaN)).toBeGreaterThan(0);
-    expect(axisGutterPx(-10)).toBeGreaterThan(0);
+  it('boş / geçersiz ölçüm oluğu tabanın altına düşürmez', () => {
+    expect(axisSizePx(0)).toBe(AXIS_MIN_SIZE_PX);
+    expect(axisSizePx(NaN)).toBe(AXIS_MIN_SIZE_PX);
+    expect(axisSizePx(-10)).toBe(AXIS_MIN_SIZE_PX);
+    expect(axisSizePx(40, NaN, -3)).toBe(Math.ceil(40 + AXIS_SAFETY_PX));
+  });
+});
+
+// ── v0.10.1102 — çizilen etiketten ölçülen oluk ─────────────────────────
+//
+// Operatör-bildirimi: Trace › Metrics pod panelinde JVM heap "953.7 MiB"
+// "353.7 MiB" okunuyordu; Kafka bağlantı grafiğinde "12.5" → "2.5". Oluk
+// ya sabitti (TimeChart 38 px) ya da uPlot'un çizmediği bir tahmin
+// kümesinden ölçülüyordu (CorePanel 1/2/5 merdiveni; uPlot 2.5'i de
+// kullanır). Tablo: her etiket için oluk ≥ çentik + boşluk + ölçülen metin.
+describe('axisSizePx tablosu — dar hücre etiketleri (v0.10.1102)', () => {
+  const FONTS = ['12px Inter, Helvetica, Arial, sans-serif', '10px ui-monospace, monospace'];
+  const LABELS = ['953.7 MiB', '12.5', '1.6 cores', '100 req/s', '0 B', '4.407 GiB', '0.15 cores'];
+  for (const font of FONTS) {
+    for (const l of LABELS) {
+      it(`${font.split(' ')[0]} · "${l}" sığar`, () => {
+        const w = widestLabelPx([l], font);
+        const size = axisSizePx(w, 4, 5);
+        expect(size).toBeGreaterThanOrEqual(Math.ceil(w + 4 + 5));
+        expect(size).toBeLessThanOrEqual(AXIS_MAX_SIZE_PX);
+        // Ölçüm tabanı (0.55 em/karakter) — yedek font ölçümü bile kırpmaz.
+        expect(w).toBeGreaterThanOrEqual(labelWidthFloorPx(l, font) - 1e-9);
+      });
+    }
+  }
+});
+
+describe('measuredAxisSize — uPlot size geri çağrısı', () => {
+  // uPlot'un size'a verdiği self: yalnız axes[i].ticks / gap okunur.
+  const fakeU = (ticks: { show?: boolean; size?: number }, gap?: number) =>
+    ({ axes: [{}, { ticks, gap }] }) as unknown as uPlot;
+  const FONT = '12px Inter, Helvetica, Arial, sans-serif';
+
+  it('ÇİZİLEN etiketlerden ölçer — "12.5" tahmin kümesinde olmasa da', () => {
+    const fn = measuredAxisSize(FONT);
+    const drawn = ['0', '2.5', '5', '7.5', '10', '12.5'];
+    const size = fn(fakeU({ show: true, size: 4 }, 5), drawn, 1, 0);
+    expect(size).toBeGreaterThanOrEqual(Math.ceil(widestLabelPx(['12.5'], FONT) + 4 + 5));
+    // Eski kusur: oluk "10"a göre ölçülürdü — artık ondan geniş.
+    expect(size).toBeGreaterThan(axisSizePx(widestLabelPx(['10'], FONT), 4, 5));
+  });
+
+  it('çentik gizliyse payı 0 (uPlot etiketi çentiksiz yerleştirir)', () => {
+    const fn = measuredAxisSize(FONT);
+    const shown = fn(fakeU({ show: true, size: 10 }, 5), ['953.7 MiB'], 1, 0);
+    const hidden = fn(fakeU({ show: false, size: 10 }, 5), ['953.7 MiB'], 1, 0);
+    expect(shown - hidden).toBe(10);
+  });
+
+  it('yatay eksen (side 0/2): oluk YÜKSEKLİK — punto ölçülür, etiket genişliği değil', () => {
+    const fn = measuredAxisSize('10px monospace');
+    const u = ({ axes: [{}, { side: 0, ticks: { show: true, size: 3 }, gap: 5 }] }) as unknown as uPlot;
+    expect(fn(u, ['953.7 MiB', '1.06 GB'], 1, 0)).toBe(axisSizePx(10, 3, 5));
+    expect(fn(u, ['953.7 MiB', '1.06 GB'], 1, 0)).toBe(AXIS_MIN_SIZE_PX);
+  });
+
+  it('ilk kurulum (values=null) ve null/boş etiket tabana düşer', () => {
+    const fn = measuredAxisSize(FONT);
+    expect(fn(fakeU({ size: 4 }, 5), null, 1, 0)).toBe(AXIS_MIN_SIZE_PX);
+    expect(fn(fakeU({ size: 4 }, 5), [null, ''], 1, 0)).toBe(AXIS_MIN_SIZE_PX);
   });
 });
 

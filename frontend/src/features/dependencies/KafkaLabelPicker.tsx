@@ -9,25 +9,35 @@
 // sorgusu demek olurdu); listeden seçim, Enter ya da temizleme (✕) uygular.
 // Odaktan çıkışta taslak uygulanmış değere döner — ekranda uygulanmamış bir
 // süzgeç metni kalmaz.
+//
+// v0.10.1102 — öneriler SAYFA kapsamında (`scope`: sayfa anahtarları + karşı
+// süzgeç; sunucu bu topic'in üretici/tüketici servislerini türetir). Filo
+// geneli öneri, bu topic'e hiç dokunmayan bir client_id'yi sunup boş panel
+// veriyordu.
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import type { KafkaLabelScope } from '@/lib/types';
 import { Combobox } from '@/components/Combobox';
 import { usePickerSearch } from '@/components/usePickerSearch';
+import { kafkaLabelScopeSig } from './kafkaTab';
 
-export function KafkaLabelPicker({ label, value, onCommit, fromNs, toNs, placeholder }: {
+export function KafkaLabelPicker({ label, value, onCommit, fromNs, toNs, scope, placeholder }: {
   label: 'topic' | 'client_id';
   /** Uygulanmış değer (URL'den). */
   value: string;
   onCommit: (v: string) => void;
   fromNs: number;
   toNs: number;
+  scope: KafkaLabelScope;
   placeholder?: string;
 }) {
   const [draft, setDraft] = useState(value);
   // URL dışarıdan değişirse (geri tuşu, paylaşılan link) taslak izler.
   useEffect(() => { setDraft(value); }, [value]);
-  const search = usePickerSearch(draft, `${label}:${fromNs}:${toNs}`, q =>
-    api.kafkaLabelValues(label, q, fromNs, toNs).then(r => ({ items: r.values, total: r.values.length })));
+  // Kapsam imzası aramayı tazeler: karşı süzgeç ya da servis kümesi değişince
+  // eski liste kalmaz (usePickerSearch scope bağımlılığı).
+  const search = usePickerSearch(draft, `${label}:${fromNs}:${toNs}:${kafkaLabelScopeSig(label, scope)}`, q =>
+    api.kafkaLabelValues(label, q, fromNs, toNs, scope).then(r => ({ items: r.values, total: r.values.length })));
   const commit = (v: string) => {
     const t = v.trim();
     setDraft(t);

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/promapi"
 )
 
@@ -118,11 +119,84 @@ func KafkaLabelNamesSelector(metrics []string) string {
 	return "{" + kafkaUnionNameMatcher(metrics) + "}"
 }
 
-// KafkaLabelValuesSelector — /api/v1/label/<l>/values match[] (SAF). q →
-// büyük/küçük harf duyarsız alt dize, regexp.QuoteMeta'lı (labelValuesMatch
-// ile aynı kaçış; tek yazım).
-func KafkaLabelValuesSelector(metrics []string, label, q string) string {
-	return labelValuesMatch(kafkaUnionNameMatcher(metrics), promLabel(label), q)
+// KafkaLabelScope — v0.10.1102 (operatör-onaylı): seçici önerileri SAYFA
+// kapsamında. v0.10.1097'de değer araması filo genelindeydi (son ≤ 1 sa):
+// bu topic'e hiç dokunmayan bir servisin client_id'si önerilip boş panel
+// veriyordu. Kapsam, panellerin ZATEN kullandığı küme: taraf başına servis
+// listesi (yanıttaki producers / consumers) + karşı süzgeç (client_id
+// aranırken seçili topic, topic aranırken seçili client_id).
+type KafkaLabelScope struct {
+	Producers, Consumers []string
+	Topic, ClientID      string
+}
+
+// KafkaLabelSide — bir tarafın değer araması: o tarafın metrikleri +
+// panellerin süzgeçleri (KafkaQuery ile aynı FilterExpr'ler).
+type KafkaLabelSide struct {
+	Side    string // producer | consumer
+	Metrics []string
+	Filters []chstore.FilterExpr
+}
+
+// KafkaLabelSides — SAF: metrik kümesi + kapsam → taraf listesi. Panellerin
+// scopeFor kuralı: producer metriği üretici servislerle, diğerleri
+// tüketicilerle. Servisi boş taraf DÜŞER — kapsamsız taraf filoya açılmaz.
+// Aranan etiketin kendi süzgeci uygulanmaz (seçici kendini daraltmaz).
+func KafkaLabelSides(metrics []string, label string, sc KafkaLabelScope) []KafkaLabelSide {
+	bySide := map[string][]string{}
+	for _, m := range metrics {
+		km, ok := KafkaMetricByName(m)
+		if !ok {
+			continue
+		}
+		side := "consumer"
+		if km.Side == "producer" {
+			side = "producer"
+		}
+		bySide[side] = append(bySide[side], m)
+	}
+	out := []KafkaLabelSide{}
+	for _, side := range []string{"producer", "consumer"} {
+		svcs := sc.Consumers
+		if side == "producer" {
+			svcs = sc.Producers
+		}
+		svcs = uniqSorted(svcs)
+		if len(svcs) == 0 || len(bySide[side]) == 0 {
+			continue
+		}
+		filters := []chstore.FilterExpr{{Key: "service.name", Op: "IN", Values: svcs}}
+		if t := strings.TrimSpace(sc.Topic); t != "" && label != "topic" {
+			filters = append(filters, chstore.FilterExpr{Key: "topic", Op: "=", Values: []string{t}})
+		}
+		if c := strings.TrimSpace(sc.ClientID); c != "" && label != "client_id" {
+			filters = append(filters, chstore.FilterExpr{Key: "client_id", Op: "=", Values: []string{c}})
+		}
+		out = append(out, KafkaLabelSide{Side: side, Metrics: bySide[side], Filters: filters})
+	}
+	return out
+}
+
+// KafkaLabelValuesSelectors — /api/v1/label/<l>/values match[] listesi (SAF,
+// golden testli): taraf başına bir seçici; VM birden çok match[]'in
+// BİRLEŞİMİNİ döndürür. Süzgeçler panellerin promMatcher'ından geçer —
+// `service_name=~"a|b"` panel sorgusundakiyle bayt-aynı. q → büyük/küçük
+// harf duyarsız alt dize, regexp.QuoteMeta'lı (labelValuesMatch kaçışı).
+func KafkaLabelValuesSelectors(metrics []string, label, q string, sc KafkaLabelScope) ([]string, error) {
+	sides := KafkaLabelSides(metrics, label, sc)
+	out := make([]string, 0, len(sides))
+	for _, s := range sides {
+		parts := []string{kafkaUnionNameMatcher(s.Metrics)}
+		for _, fe := range s.Filters {
+			m, err := promMatcher(fe)
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, m)
+		}
+		out = append(out, labelValuesMatch(strings.Join(parts, ", "), promLabel(label), q))
+	}
+	return out, nil
 }
 
 // KafkaLabelNames — sekme metriklerinin pencere içindeki etiket adları (tek
@@ -153,8 +227,9 @@ func (s *Service) KafkaLabelNames(ctx context.Context, metrics []string, from, t
 }
 
 // KafkaLabelValues — seçici araması: etiketin değerleri, sunucu tarafı alt
-// dize + limit (tam katalog ASLA çekilmez).
-func (s *Service) KafkaLabelValues(ctx context.Context, metrics []string, label, q string, from, to time.Time, limit int) ([]string, error) {
+// dize + limit (tam katalog ASLA çekilmez). v0.10.1102 — sayfa kapsamında
+// (KafkaLabelScope); kapsam boşsa VM'e gidilmez, boş liste döner.
+func (s *Service) KafkaLabelValues(ctx context.Context, metrics []string, label, q string, sc KafkaLabelScope, from, to time.Time, limit int) ([]string, error) {
 	cfg, err := s.ready()
 	if err != nil {
 		return nil, err
@@ -166,11 +241,18 @@ func (s *Service) KafkaLabelValues(ctx context.Context, metrics []string, label,
 	if limit < 1 || limit > 1000 {
 		limit = 50
 	}
+	sels, err := KafkaLabelValuesSelectors(metrics, label, q, sc)
+	if err != nil {
+		return nil, err
+	}
+	if len(sels) == 0 {
+		return []string{}, nil
+	}
 	from, to = KafkaLabelWindow(from, to)
 	params := url.Values{
 		"start":   {promTime(from)},
 		"end":     {promTime(to)},
-		"match[]": {KafkaLabelValuesSelector(metrics, label, q)},
+		"match[]": sels,
 		"limit":   {strconv.Itoa(limit)},
 	}
 	res, err := promapi.QueryStringsMeta(ctx, s.request("/api/v1/label/"+url.PathEscape(l)+"/values", params, cfg))

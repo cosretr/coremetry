@@ -395,9 +395,20 @@ func (s *Store) MetricAttrKeys(ctx context.Context, metric, service string, sinc
 // LIMIT bağlı. DISTINCT'i LIMIT sınırlamaz — tavan max_execution_time
 // (metric_query_bounds_test bu şekli pinler).
 func metricLabelValuesSQL(expr string, withQ bool) string {
+	return metricLabelValuesScopedSQL(expr, withQ, nil)
+}
+
+// metricLabelValuesScopedSQL — SAF (v0.10.1102): panel süzgeçlerinin
+// koşulları (ApplyMetricFilters çıktısı) zaman yükleminden SONRA, q'dan
+// ÖNCE eklenir; argüman sırası MetricLabelValuesScoped ile aynı. conds
+// boşsa SQL metricLabelValuesSQL ile bayt-aynı.
+func metricLabelValuesScopedSQL(expr string, withQ bool, conds []string) string {
 	q := `SELECT DISTINCT ` + expr + ` AS v
 		 FROM metric_points
 		 WHERE metric = ? AND time >= ? AND time <= ?`
+	for _, c := range conds {
+		q += ` AND ` + c
+	}
 	if withQ {
 		q += ` AND positionCaseInsensitive(` + expr + `, ?) > 0`
 	}
@@ -410,6 +421,13 @@ func metricLabelValuesSQL(expr string, withQ bool) string {
 // MetricLabelValues — bir metriğin bir etiketinde GÖRÜLMÜŞ değerler (öneri
 // listesi). v0.10.868: q (alt dize, sunucuda) + limit (1..1000, 0 → 200).
 func (s *Store) MetricLabelValues(ctx context.Context, metric, key string, since time.Duration, q string, limit int) ([]string, error) {
+	return s.MetricLabelValuesScoped(ctx, metric, key, since, q, limit, nil)
+}
+
+// MetricLabelValuesScoped — v0.10.1102: MetricLabelValues + süzgeç
+// (Kafka seçicisi: sayfanın servis kümesi + karşı süzgeç, panellerle AYNI
+// FilterExpr'ler). filters boşsa sorgu MetricLabelValues ile aynı.
+func (s *Store) MetricLabelValuesScoped(ctx context.Context, metric, key string, since time.Duration, q string, limit int, filters []FilterExpr) ([]string, error) {
 	if metric == "" || key == "" {
 		return nil, nil
 	}
@@ -424,11 +442,14 @@ func (s *Store) MetricLabelValues(ctx context.Context, metric, key string, since
 	now := time.Now()
 	cutoff := now.Add(-since)
 	queryArgs := append(append([]any{}, args...), metric, cutoff, now)
+	var wc whereClause
+	ApplyMetricFilters(&wc, filters)
+	queryArgs = append(queryArgs, wc.args...)
 	if q != "" {
 		queryArgs = append(append(queryArgs, args...), q)
 	}
 	queryArgs = append(queryArgs, limit)
-	rows, err := s.conn.Query(ctx, metricLabelValuesSQL(expr, q != ""), queryArgs...)
+	rows, err := s.conn.Query(ctx, metricLabelValuesScopedSQL(expr, q != "", wc.conds), queryArgs...)
 	if err != nil {
 		return nil, err
 	}

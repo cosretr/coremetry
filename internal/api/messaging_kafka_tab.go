@@ -21,14 +21,21 @@ package api
 // defteriyle:
 //
 //	GET /api/messaging/kafka-label-values?label=topic|client_id&q=&from=&to=&limit=
+//	    &system=&cluster=&destination=&env=&topicFilter=&clientFilter=   (v0.10.1102)
 //
 // Rol kapısı YOK (salt-okunur; viewer görür). serveCached 60 s, anahtar TÜM
 // girdileri taşır (kafkaLabelValuesKey, test pinli). Pencere ≤ 1 sa'e kırpılır
 // (varlık sorusu), limit 1..100, q ≤ 200 karakter — keyfi istek sınırsız
-// önbellek girdisi basamaz.
+// önbellek girdisi basamaz. v0.10.1102 — öneriler SAYFA kapsamında: istemci
+// yalnız sayfa anahtarlarını yollar; üretici/tüketici kümeleri sunucuda
+// /api/messaging/clients ile AYNI yoldan türetilir (resolveKafkaServiceScope,
+// ≤ 200'er, panellerin service_name=~ eşleştiricisi) + karşı süzgeç; servis
+// listesi URL'e binmez (başlık tamponu / virgüllü ad sorunu yok). Türetilen
+// kapsam boşsa 400.
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -64,7 +71,7 @@ const (
 // kaynakta keşif yapılmaz — etiket "yok" sayılır, denetim çizilmez.
 type kafkaLabelSource interface {
 	KafkaLabelNames(ctx context.Context, metrics []string, from, to time.Time) ([]string, error)
-	KafkaLabelValues(ctx context.Context, metrics []string, label, q string, from, to time.Time, limit int) ([]string, error)
+	KafkaLabelValues(ctx context.Context, metrics []string, label, q string, sc vmetrics.KafkaLabelScope, from, to time.Time, limit int) ([]string, error)
 }
 
 func (v vmMetricSource) KafkaLabelNames(ctx context.Context, metrics []string, from, to time.Time) ([]string, error) {
@@ -72,8 +79,8 @@ func (v vmMetricSource) KafkaLabelNames(ctx context.Context, metrics []string, f
 	return out, upstream(err)
 }
 
-func (v vmMetricSource) KafkaLabelValues(ctx context.Context, metrics []string, label, q string, from, to time.Time, limit int) ([]string, error) {
-	out, err := v.svc.KafkaLabelValues(ctx, metrics, label, q, from, to, limit)
+func (v vmMetricSource) KafkaLabelValues(ctx context.Context, metrics []string, label, q string, sc vmetrics.KafkaLabelScope, from, to time.Time, limit int) ([]string, error) {
+	out, err := v.svc.KafkaLabelValues(ctx, metrics, label, q, sc, from, to, limit)
 	return out, upstream(err)
 }
 
@@ -109,19 +116,23 @@ func (c chMetricSource) KafkaLabelNames(ctx context.Context, metrics []string, f
 	return out, nil
 }
 
-func (c chMetricSource) KafkaLabelValues(ctx context.Context, metrics []string, label, q string, from, to time.Time, limit int) ([]string, error) {
+// v0.10.1102 — CH de sayfa kapsamında: taraf başına (vmetrics.KafkaLabelSides)
+// o tarafın temsilî metriği, panellerle AYNI FilterExpr'lerle süzülür.
+func (c chMetricSource) KafkaLabelValues(ctx context.Context, metrics []string, label, q string, sc vmetrics.KafkaLabelScope, from, to time.Time, limit int) ([]string, error) {
 	from, _ = vmetrics.KafkaLabelWindow(from, to)
 	seen := map[string]bool{}
 	out := []string{}
-	for _, m := range chKafkaProbeMetrics(metrics) {
-		vals, err := c.store.MetricLabelValues(ctx, m, label, time.Since(from), q, limit)
-		if err != nil {
-			return nil, err
-		}
-		for _, v := range vals {
-			if v != "" && !seen[v] {
-				seen[v] = true
-				out = append(out, v)
+	for _, side := range vmetrics.KafkaLabelSides(metrics, label, sc) {
+		for _, m := range chKafkaProbeMetrics(side.Metrics) {
+			vals, err := c.store.MetricLabelValuesScoped(ctx, m, label, time.Since(from), q, limit, side.Filters)
+			if err != nil {
+				return nil, err
+			}
+			for _, v := range vals {
+				if v != "" && !seen[v] {
+					seen[v] = true
+					out = append(out, v)
+				}
 			}
 		}
 	}
@@ -417,9 +428,34 @@ func buildKafkaConnections(ctx context.Context, src metricSource, t kafkaTab, bl
 	return foldKafkaConnections(blocks[kafkaProducerConnKey], blocks[kafkaConsumerConnKey], pod)
 }
 
+// kafkaLabelValuesReq — seçici aramasının ayrıştırılmış girdileri.
+// v0.10.1102 — Page: sayfanın kapsam anahtarları (system / cluster /
+// destination / env / pencere — /api/messaging/clients ile AYNI ayrıştırıcı);
+// servis kümeleri istemciden GELMEZ, sunucuda türetilir. Topic / ClientID:
+// karşı süzgeç (aranan etiketin kendisi düşer).
+type kafkaLabelValuesReq struct {
+	Label, Q        string
+	Limit           int
+	Page            messagingClientsPlan
+	Topic, ClientID string
+}
+
 // kafkaLabelValuesKey — SAF; regresyon testi tüm girdileri pinler (v0.5.187).
-func kafkaLabelValuesKey(src, label, q string, limit int, from, to time.Time) string {
-	return fmt.Sprintf("kafka-label-values:v1:src=%s:label=%s:q=%q:lim=%d:%s", src, label, q, limit, cacheBucket(from, to))
+// v3 (v0.10.1102): sayfa anahtarları + TÜRETİLMİŞ taraf kümelerinin sıralı
+// FNV özeti (uzunluk değil içerik) + karşı süzgeç.
+func kafkaLabelValuesKey(src string, p kafkaLabelValuesReq, sc kafkaServiceScope) string {
+	return fmt.Sprintf("kafka-label-values:v3:src=%s:sys=%q:clu=%q:dest=%q:env=%q:label=%s:q=%q:lim=%d:p=%s:c=%s:ft=%q:fc=%q:%s",
+		src, p.Page.System, p.Page.Cluster, p.Page.Destination, p.Page.Env, p.Label, p.Q, p.Limit,
+		blastRadiusSetDigest(sortedCopyOf(sc.Producers)), blastRadiusSetDigest(sortedCopyOf(sc.Consumers)),
+		p.Topic, p.ClientID, cacheBucket(p.Page.From, p.Page.To))
+}
+
+// kafkaPageScopeKey — sayfa kapsamının (servis kümeleri) kendi önbellek
+// anahtarı: her tuş vuruşu caller SQL'i + iki keşif sorgusunu tekrar koşmasın.
+// mx: metrik dışlamaları keşif sorgusunu etkiler (messagingClientsKey emsali).
+func kafkaPageScopeKey(src, mx string, p messagingClientsPlan) string {
+	return fmt.Sprintf("kafka-page-scope:v1:src=%s:sys=%q:clu=%q:dest=%q:env=%q:mx=%s:%s",
+		src, p.System, p.Cluster, p.Destination, p.Env, mx, cacheBucket(p.From, p.To))
 }
 
 type kafkaLabelValuesResponse struct {
@@ -430,49 +466,119 @@ type kafkaLabelValuesResponse struct {
 
 // kafkaLabelValuesParams — SAF ayrıştırıcı: etiket beyaz listesi (yalnız
 // sekmenin süzgeçleri), q tavanı, limit kelepçesi. Hata = 400 metni.
-func kafkaLabelValuesParams(r *http.Request) (label, q string, limit int, err error) {
+// v0.10.1102 — sayfa anahtarları messagingClientsPlanFrom'dan (system +
+// destination zorunlu, cluster varsayılanı, env, pencere): panellerin
+// kapsamıyla bayt-aynı girdi. Aranan etiketin kendi süzgeci düşer
+// (topicFilter yalnız client_id aranırken, clientFilter yalnız topic aranırken).
+func kafkaLabelValuesParams(r *http.Request) (kafkaLabelValuesReq, error) {
 	v := r.URL.Query()
-	label = strings.TrimSpace(v.Get("label"))
-	if label != "topic" && label != "client_id" {
-		return "", "", 0, fmt.Errorf("label parametresi geçersiz: topic | client_id")
+	p := kafkaLabelValuesReq{Label: strings.TrimSpace(v.Get("label"))}
+	if p.Label != "topic" && p.Label != "client_id" {
+		return kafkaLabelValuesReq{}, fmt.Errorf("label parametresi geçersiz: topic | client_id")
 	}
-	q = strings.TrimSpace(v.Get("q"))
-	if len(q) > kafkaFilterMaxLen {
-		return "", "", 0, fmt.Errorf("q en çok %d karakter", kafkaFilterMaxLen)
+	p.Q = strings.TrimSpace(v.Get("q"))
+	if len(p.Q) > kafkaFilterMaxLen {
+		return kafkaLabelValuesReq{}, fmt.Errorf("q en çok %d karakter", kafkaFilterMaxLen)
 	}
-	limit = parseInt(v.Get("limit"), 50)
-	if limit < 1 || limit > 100 {
-		limit = 50
+	p.Limit = parseInt(v.Get("limit"), 50)
+	if p.Limit < 1 || p.Limit > 100 {
+		p.Limit = 50
 	}
-	return label, q, limit, nil
+	page, err := messagingClientsPlanFrom(r)
+	if err != nil {
+		return kafkaLabelValuesReq{}, err
+	}
+	// Seçiciye ait olmayan plan alanları anahtarı parçalamasın.
+	p.Page = messagingClientsPlan{System: page.System, Cluster: page.Cluster, Destination: page.Destination,
+		Env: page.Env, From: page.From, To: page.To}
+	ft, fc := strings.TrimSpace(v.Get("topicFilter")), strings.TrimSpace(v.Get("clientFilter"))
+	if len(ft) > kafkaFilterMaxLen || len(fc) > kafkaFilterMaxLen {
+		return kafkaLabelValuesReq{}, fmt.Errorf("süzgeç değeri en çok %d karakter", kafkaFilterMaxLen)
+	}
+	if p.Label == "client_id" {
+		p.Topic = ft
+	} else {
+		p.ClientID = fc
+	}
+	return p, nil
+}
+
+// errKafkaScopeEmpty — türetilen kapsamda servis yok: filo geneline açılmak
+// yerine 400 (panellerin "kapsam boş" hâliyle aynı karar).
+var errKafkaScopeEmpty = fmt.Errorf("kapsam boş: bu topic için üretici/tüketici servisi yok (span ve topic etiketli metrik)")
+
+// kafkaLabelScopeFor — SAF: türetilen sayfa kapsamı + karşı süzgeç → seçici
+// kapsamı. Servis yoksa hata (400).
+func kafkaLabelScopeFor(sc kafkaServiceScope, p kafkaLabelValuesReq) (vmetrics.KafkaLabelScope, error) {
+	if len(sc.Producers) == 0 && len(sc.Consumers) == 0 {
+		return vmetrics.KafkaLabelScope{}, errKafkaScopeEmpty
+	}
+	return vmetrics.KafkaLabelScope{Producers: sc.Producers, Consumers: sc.Consumers, Topic: p.Topic, ClientID: p.ClientID}, nil
+}
+
+// kafkaPageScope — sayfanın servis kümeleri, /api/messaging/clients ile AYNI
+// yoldan (MessagingCallerServices + resolveKafkaServiceScope: span ∪ keşif,
+// taraf başına ≤ msgScopeServiceCap); kendi anahtarıyla 60 sn önbellekli.
+func (s *Server) kafkaPageScope(r *http.Request, src metricSource, p messagingClientsPlan) (kafkaServiceScope, error) {
+	key := kafkaPageScopeKey(src.Name(), s.store.MetricExclusions().Digest(), p)
+	body, _, err := s.cachedJSON(r.Context(), key, kafkaLabelValuesTTL, false, func(ctx context.Context) (any, error) {
+		callers, err := s.store.MessagingCallerServices(ctx, p.System, p.Cluster, p.Destination, p.From, p.To)
+		if err != nil {
+			return nil, err
+		}
+		return resolveKafkaServiceScope(ctx, src, p, callers), nil
+	})
+	if err != nil {
+		return kafkaServiceScope{}, err
+	}
+	var sc kafkaServiceScope
+	if err := json.Unmarshal(body, &sc); err != nil {
+		return kafkaServiceScope{}, err
+	}
+	return sc, nil
 }
 
 // getKafkaLabelValues — GET /api/messaging/kafka-label-values (seçici araması).
 func (s *Server) getKafkaLabelValues(w http.ResponseWriter, r *http.Request) {
-	label, q, limit, err := kafkaLabelValuesParams(r)
+	p, err := kafkaLabelValuesParams(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	from, to := parseFromTo(r, time.Hour)
 	src, err := s.metricSourceFor(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.serveCached(w, r, kafkaLabelValuesKey(src.Name(), label, q, limit, from, to), kafkaLabelValuesTTL, func(ctx context.Context) (any, error) {
-		resp := kafkaLabelValuesResponse{Label: label, Source: src.Name(), Values: []string{}}
-		ks, ok := src.(kafkaLabelSource)
-		if !ok {
-			return resp, nil
-		}
-		vals, err := ks.KafkaLabelValues(ctx, vmetrics.KafkaClientsTabMetrics(), label, q, from, to, limit)
-		if err != nil {
-			return nil, err
-		}
-		if vals != nil {
-			resp.Values = vals
-		}
-		return resp, nil
+	page, err := s.kafkaPageScope(r, src, p.Page)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	sc, err := kafkaLabelScopeFor(page, p)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.serveCached(w, r, kafkaLabelValuesKey(src.Name(), p, page), kafkaLabelValuesTTL, func(ctx context.Context) (any, error) {
+		return buildKafkaLabelValues(ctx, src, p, sc)
 	})
+}
+
+// buildKafkaLabelValues — handler gövdesi (kaynak arayüzü üzerinden; test
+// sahte kaynakla kapsamın iletildiğini pinler).
+func buildKafkaLabelValues(ctx context.Context, src metricSource, p kafkaLabelValuesReq, sc vmetrics.KafkaLabelScope) (kafkaLabelValuesResponse, error) {
+	resp := kafkaLabelValuesResponse{Label: p.Label, Source: src.Name(), Values: []string{}}
+	ks, ok := src.(kafkaLabelSource)
+	if !ok {
+		return resp, nil
+	}
+	vals, err := ks.KafkaLabelValues(ctx, vmetrics.KafkaClientsTabMetrics(), p.Label, p.Q, sc, p.Page.From, p.Page.To, p.Limit)
+	if err != nil {
+		return resp, err
+	}
+	if vals != nil {
+		resp.Values = vals
+	}
+	return resp, nil
 }

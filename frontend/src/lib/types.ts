@@ -934,6 +934,17 @@ export interface KafkaTabFilter {
   topic?: string;
   clientId?: string;
 }
+// v0.10.1102 — seçici önerilerinin SAYFA kapsamı: /api/messaging/clients'in
+// anahtarları (sunucu üretici/tüketici kümelerini panellerle AYNI yoldan
+// türetir; servis listesi istemciden gitmez) + UYGULANMIŞ süzgeç (sunucu
+// aranan etiketin kendisini düşürür, karşı süzgeci uygular).
+export interface KafkaLabelScope {
+  system: string;
+  cluster: string;
+  destination: string;
+  topic?: string;
+  clientId?: string;
+}
 // "Bağlantılar" paneli — connection_count, pod başına (üretici + tüketici).
 export interface KafkaConnections {
   podLabel?: string;           // boş = pod etiketi yok, seriler servis · istemci

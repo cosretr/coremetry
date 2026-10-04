@@ -6,6 +6,7 @@ import { fmtXTicks, fmtAxisTick, fmtTooltipTime } from '@/lib/chartFmt';
 import { overviewChartBuildSignature } from '@/lib/chartBuildSig';
 import { resolveVar, chartMonoFont } from '@/lib/chart/resolveVar';
 import { yRangeHeadroom } from '@/lib/chart/yRange';
+import { measuredAxisSize } from '@/lib/chart/axisSize';
 import { yRefitScale } from '@/lib/chart/zoomState';
 import { xRangePinned, type XPin } from '@/lib/chart/xRange';
 import { useChartEngine } from '@/lib/chart/engine';
@@ -265,7 +266,9 @@ export function OverviewChart({
           values: (_u, sp) => fmtXTicks(sp as number[]),
         },
         {
-          stroke: text3, size: 34, font: axisFont,
+          // v0.10.1102 — sabit 34 px değil, çizilecek etiketten ölçülür
+          // ("125ms" 10 px mono fontta 34 px'e sığmıyordu; axisSize.ts).
+          stroke: text3, size: measuredAxisSize(axisFont), font: axisFont,
           grid: { stroke: gridc, width: 1, dash: [3, 4] },
           ticks: { show: false },
           // splits derive from the LIVE scale max so a setData re-fit updates

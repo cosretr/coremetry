@@ -23,7 +23,8 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { spanSeriesToFrames } from '@/lib/chart/dataFrame';
+import { spanSeriesToFrames, chartTheme } from '@/lib/chart/dataFrame';
+import { AXIS_FONT_SIZE, widestLabelPx } from '@/lib/chart/axisSize';
 import type { PanelMenuAction } from '@/lib/chart/panelMenu';
 import { MetricPanel } from '@/components/MetricPanel';
 import { metricQuery } from '@/lib/metricQuery';
@@ -97,6 +98,12 @@ vi.mock('@grafana/ui', async (importOriginal) => {
       // kaynak taraması "satır duruyor mu" der, bu "builder gerçekten
       // üretti mi" der (iki kapı ayrı sınıfları yakalar).
       const yAxis = (cfg.axes ?? []).find(a => a.scale === 'y');
+      // v0.10.1102 — oluk uPlot'un size GERİ ÇAĞRISI: uPlot'un yapacağı gibi
+      // çizilecek etiketlerle çağrılır (dar hücrenin geniş etiketi dahil).
+      const ySize = typeof yAxis?.size === 'function'
+        ? (yAxis.size as (u: unknown, v: string[] | null, i: number, c: number) => number)(
+          { axes: [{}, { ticks: { show: true, size: 4 }, gap: 5 }] }, ['0 B', '476.8 MiB', '953.7 MiB'], 1, 0)
+        : `sabit:${String(yAxis?.size ?? '')}`;
       const pts = cfg.cursor?.points ?? {};
       // v0.9.811 — y ÖLÇEĞİNİN GERÇEK aralık fonksiyonu çağrılır. Kaynak
       // taraması "softMin: 0 satırı duruyor" der; bu, @grafana/ui'nin o
@@ -131,7 +138,7 @@ vi.mock('@grafana/ui', async (importOriginal) => {
         <div data-testid="uplot"
           data-series={String(n)}
           data-bands={String((cfg.bands ?? []).length)}
-          data-yaxis-size={String(yAxis?.size ?? '')}
+          data-yaxis-size={String(ySize)}
           data-cursor-pt={`${String(pts.size ?? '')}/${String(pts.width ?? '')}/${String(pts.show ?? '')}`}
           // Yüksek ve dar bir veri aralığı: taban kaymasının en görünür
           // olduğu şekil (1200-1260 arası gezen bir seri).
@@ -322,13 +329,17 @@ describe('CorePanel render duman testi (UPlotChart vi.mock ile stub)', () => {
   });
 
   // ── v0.9.799 — eksen oluğu + imleç noktaları (operatör-raporlu) ────────
-  it('y ekseni oluk genişliği SAYISAL gelir — Grafana otomatiğine bırakılmaz', () => {
+  it('y ekseni oluğu ÇİZİLEN etiketten ölçülür — sabit sayı / Grafana otomatiği değil', () => {
     const el = render(<CorePanel title="L" storageKey="smoke-gutter"
       data={{ state: 'ready', frames: TWO_SERIES }} />);
     const size = el.querySelector('[data-testid="uplot"]')!.getAttribute('data-yaxis-size');
-    // jsdom'da canvas ölçmez → kaba tahmine düşer; kapının derdi ZATEN
-    // mutlak piksel değil, oluğun HESAPLANMIŞ olması.
-    expect(Number(size), 'eksen size verilmedi').toBeGreaterThan(0);
+    // v0.10.1102 (operatör: "953.7 MiB" → "353.7 MiB") — builder'ın ürettiği
+    // geri çağrı, uPlot'un vereceği etiketlerle çağrıldı. jsdom'da canvas
+    // ölçmez → kaba tahmin; sözleşme "oluk ≥ çentik + boşluk + ölçülen
+    // metin" eşitsizliği, mutlak piksel değil.
+    expect(size, 'eksen size geri çağrı değil').not.toMatch(/^sabit:/);
+    const font = `${AXIS_FONT_SIZE}px ${chartTheme().typography.fontFamily}`;
+    expect(Number(size)).toBeGreaterThanOrEqual(Math.ceil(widestLabelPx(['953.7 MiB'], font) + 4 + 5));
   });
 
   it('imleç noktası boyutu SAYI, show hiç yazılmaz (uPlot tuzağı)', () => {

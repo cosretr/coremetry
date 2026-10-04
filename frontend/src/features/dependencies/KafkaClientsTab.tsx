@@ -27,7 +27,7 @@ import { timeRangeToNs } from '@/lib/utils';
 import { useKafkaClientsTab } from '@/lib/queries/messaging';
 import { kafkaBlockItems, kafkaDegradeTR, kafkaLastRows, kafkaPanelUnit, kafkaScopeNoteTR } from './kafkaClients';
 import {
-  KAFKA_CONN_BLOCK_KEYS, KAFKA_POD_CAP, kafkaConnState, kafkaPodBlockItems, kafkaSourceLineTR,
+  KAFKA_CONN_BLOCK_KEYS, KAFKA_POD_CAP, kafkaConnState, kafkaLabelScopeOf, kafkaPodBlockItems, kafkaSourceLineTR,
   kafkaTabControls, parseKafkaTabState, writeKafkaTabState, type KafkaTabState,
 } from './kafkaTab';
 import { KafkaLabelPicker } from './KafkaLabelPicker';
@@ -67,6 +67,10 @@ export function KafkaClientsTab({ system, cluster, destination, range, xRange, s
     return <div className="kc-line" title={data?.note}>◌ {degrade}</div>;
   }
   const controls = kafkaTabControls(data.labels);
+  // v0.10.1102 — seçici önerileri sayfa kapsamında (sayfa anahtarları →
+  // sunucu panellerin servislerini türetir + uygulanmış karşı süzgeç); filo
+  // geneli öneri boş panel veriyordu.
+  const labelScope = kafkaLabelScopeOf({ system, cluster, destination }, data);
   const podView = data.view === 'pod';
   // Bağlantı paneli bu iki bloğu kendi (pod) kırılımıyla çiziyor; ızgarada
   // ikinci kez çizilmesin. Son-değer tablosunda kalırlar.
@@ -99,14 +103,14 @@ export function KafkaClientsTab({ system, cluster, destination, range, xRange, s
             <div className="kc-filter">
               <span className="kc-filter-lbl">topic</span>
               <KafkaLabelPicker label="topic" value={st.topic} onCommit={v => patch({ topic: v })}
-                fromNs={win.from} toNs={win.to} placeholder="(tümü)" />
+                fromNs={win.from} toNs={win.to} scope={labelScope} placeholder="(tümü)" />
             </div>
           )}
           {controls.client && (
             <div className="kc-filter">
               <span className="kc-filter-lbl">client_id</span>
               <KafkaLabelPicker label="client_id" value={st.client} onCommit={v => patch({ client: v })}
-                fromNs={win.from} toNs={win.to} placeholder="(tümü)" />
+                fromNs={win.from} toNs={win.to} scope={labelScope} placeholder="(tümü)" />
             </div>
           )}
           {controls.podToggle && (

@@ -1716,6 +1716,26 @@ düzeltmesi: rollup okuma adımı ≤5 dk (`traceErrScopeRollupMaxStep`) — 3g+
 başının ilk kısmi saatini okumuyordu; şimdi 5 dk satırları Go'da çıktı adımına katlanır. Fırçalanmış pencerede son
 kısmi 5 dk satırı pencere sonunu ≤5 dk aşabilir (eski şeritte de öyleydi, kabul).
 
+## 2026-10-04 — Grafik y-ekseni etiketi ölçülür (kırpılma yok); Kafka seçici önerileri sayfa kapsamında (v0.10.1102)
+
+**Operatör:** Trace › Metrics pod panelinde JVM heap "953.7 MiB" "353.7 MiB", Kafka bağlantı grafiğinde "12.5"
+"2.5" okunuyordu. **Kök neden:** oluk çizilen etiketten ölçülmüyordu — CorePanel'de (MultiLineChart dahil)
+1/2/5 merdiveniyle TAHMİN edilen tick'lerden, uPlot ise 1/2/2.5/5 ve kendi aralık yuvarlamasıyla çiziyor
+("12.5" tahminde yoktu); OverviewChart'ta sabit 34 px. **Karar:** y oluğu uPlot'un `size(self, values, …)`
+geri çağrısında, çizilecek etiketlerden eksen fontuyla ölçülür (`measuredAxisSize`): çentik + boşluk + 4 px
+pay + en geniş etiket, [32, 96] px; panelin %40'ı tavanı kalktı (dar hücrede kırpan oydu). CorePanel'de
+Grafana `AxisProps.size` sayı istediği için builder alt sınıfı config'te y eksenine yazar; oluk config
+kimliğinden çıktı, "yalnız büyür" mandalı silindi. TimeChart'ın ana ekseni side 0 = üst şerit (v0.8.91'den
+beri; sola taşımak ayrı operatör kararı): orada oluk yüksekliktir (38 → 32 px), genişlik yalnız sağ (y2)
+eksende ölçülür. **Kafka seçici:** `kafka-label-values` filo geneli değil. İstemci yalnız sayfa
+anahtarlarını (system / cluster / destination, pencere) ve karşı süzgeci (client_id aranırken seçili topic,
+topic aranırken seçili client_id) yollar; üretici/tüketici kümeleri sunucuda `/api/messaging/clients` ile
+AYNI yoldan türetilir (`resolveKafkaServiceScope`: span ∪ keşif, taraf başına ≤ 200) — 200+200 adlık sorgu
+dizesi ingress başlık tamponunu aşar, virgüllü ad bölünürdü. Türetilen kapsam boşsa 400. VM taraf başına
+bir `match[]` (panellerin `service_name=~` eşleştiricisi), CH aynı FilterExpr'lerle. ≤ 100 değer, 60 sn;
+kapsam kendi anahtarıyla önbellekli (`kafka-page-scope:v1`), cevap anahtarı sayfa anahtarlarını, türetilen
+kümelerin FNV özetini ve karşı süzgeci taşır (`kafka-label-values:v3`).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

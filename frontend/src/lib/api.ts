@@ -1626,9 +1626,18 @@ export const api = {
       + (tab ? amp(qs(tab)) : ''), signal),
   // v0.10.1097 — sekme süzgeçlerinin seçici araması (server-debounced, limitli;
   // tam katalog çekilmez). Etiket beyaz listesi sunucuda: topic | client_id.
-  kafkaLabelValues: (label: 'topic' | 'client_id', q: string, fromNs: number, toNs: number, limit = 50) =>
+  // v0.10.1102 — öneriler SAYFA kapsamında: yalnız sayfa anahtarları
+  // (system / cluster / destination; servis kümeleri sunucuda türetilir) +
+  // karşı süzgeç (topicFilter / clientFilter) — aranan etiketin kendisi gitmez.
+  kafkaLabelValues: (label: 'topic' | 'client_id', q: string, fromNs: number, toNs: number,
+    scope: import('./types').KafkaLabelScope, limit = 50) =>
     get<{ label: string; source: string; values: string[] }>(
-      `/api/messaging/kafka-label-values?${qs({ label, q, from: fromNs, to: toNs, limit })}`),
+      `/api/messaging/kafka-label-values?${qs({
+        label, q, from: fromNs, to: toNs, limit,
+        system: scope.system, cluster: scope.cluster, destination: scope.destination,
+        topicFilter: label === 'client_id' ? scope.topic : undefined,
+        clientFilter: label === 'topic' ? scope.clientId : undefined,
+      })}`),
   // v0.10.552 — servisin Kafka istemci sağlığı (Infra sekmesi paneli). env
   // verilirse sunucu VM'de ifade edemezse envAmbiguous ilan eder.
   serviceKafkaClients: (svc: string, fromNs: number, toNs: number, env?: string, signal?: AbortSignal) =>

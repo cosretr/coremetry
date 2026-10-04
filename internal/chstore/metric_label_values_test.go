@@ -20,3 +20,27 @@ func TestMetricLabelValuesSQLSubstringAndLimit(t *testing.T) {
 		t.Fatalf("q'lu şekil expr'i tekrar bağlar + q: %s", withQ)
 	}
 }
+
+// v0.10.1102 — Kafka seçicisi sayfa kapsamında: panel süzgeçleri zaman
+// yükleminden sonra, q'dan önce; koşulsuz şekil eskisiyle bayt-aynı.
+func TestMetricLabelValuesScopedSQL(t *testing.T) {
+	expr := "attr_values[indexOf(attr_keys, ?)]"
+	if metricLabelValuesScopedSQL(expr, true, nil) != metricLabelValuesSQL(expr, true) {
+		t.Fatal("koşulsuz şekil eski SQL ile aynı olmalı")
+	}
+	var wc whereClause
+	ApplyMetricFilters(&wc, []FilterExpr{
+		{Key: "service.name", Op: "IN", Values: []string{"svc-a", "svc-b"}},
+		{Key: "topic", Op: "=", Values: []string{"orders"}},
+	})
+	got := metricLabelValuesScopedSQL(expr, true, wc.conds)
+	iSvc := strings.Index(got, "service_name")
+	iTime := strings.Index(got, "time <= ?")
+	iQ := strings.Index(got, "positionCaseInsensitive")
+	if iSvc < 0 || !(iTime < iSvc && iSvc < iQ) {
+		t.Fatalf("süzgeç sırası (zaman < süzgeç < q) bozuk:\n%s", got)
+	}
+	if len(wc.conds) != 2 || len(wc.args) == 0 {
+		t.Fatalf("iki süzgeç koşulu bekleniyordu: %v %v", wc.conds, wc.args)
+	}
+}

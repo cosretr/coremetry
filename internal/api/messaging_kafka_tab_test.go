@@ -26,6 +26,7 @@ type fakeKafkaLabelSource struct {
 	*fakeEPSource
 	labels     []string
 	labelCalls int
+	onValues   func(label string, sc vmetrics.KafkaLabelScope)
 }
 
 func (f *fakeKafkaLabelSource) KafkaLabelNames(context.Context, []string, time.Time, time.Time) ([]string, error) {
@@ -33,7 +34,10 @@ func (f *fakeKafkaLabelSource) KafkaLabelNames(context.Context, []string, time.T
 	return f.labels, nil
 }
 
-func (f *fakeKafkaLabelSource) KafkaLabelValues(context.Context, []string, string, string, time.Time, time.Time, int) ([]string, error) {
+func (f *fakeKafkaLabelSource) KafkaLabelValues(_ context.Context, _ []string, label, _ string, sc vmetrics.KafkaLabelScope, _, _ time.Time, _ int) ([]string, error) {
+	if f.onValues != nil {
+		f.onValues(label, sc)
+	}
 	return []string{"orders"}, nil
 }
 
@@ -368,29 +372,166 @@ func TestMessagingClientsKeyKafkaTab(t *testing.T) {
 	}
 }
 
+// v0.10.1102 — seçici araması sayfa ANAHTARLARINI taşır (servis listesi değil);
+// ayrıştırıcı /api/messaging/clients ile aynı (messagingClientsPlanFrom).
 func TestKafkaLabelValuesParamsAndKey(t *testing.T) {
-	ok := httptest.NewRequest(http.MethodGet, "/api/messaging/kafka-label-values?label=client_id&q=%20pay%20&limit=500", nil)
-	label, q, limit, err := kafkaLabelValuesParams(ok)
-	if err != nil || label != "client_id" || q != "pay" || limit != 50 {
-		t.Fatalf("ayrıştırma: %q %q %d %v", label, q, limit, err)
+	ok := httptest.NewRequest(http.MethodGet, "/api/messaging/kafka-label-values?label=client_id&q=%20pay%20&limit=500"+
+		"&system=kafka&destination=orders.v1&env=prod&topicFilter=orders.v1&clientFilter=ignored", nil)
+	p, err := kafkaLabelValuesParams(ok)
+	if err != nil || p.Label != "client_id" || p.Q != "pay" || p.Limit != 50 {
+		t.Fatalf("ayrıştırma: %+v %v", p, err)
 	}
-	for _, bad := range []string{"label=pod", "label=", "label=topic&q=" + strings.Repeat("x", kafkaFilterMaxLen+1)} {
-		if _, _, _, err := kafkaLabelValuesParams(httptest.NewRequest(http.MethodGet, "/x?"+bad, nil)); err == nil {
+	if p.Page.System != "kafka" || p.Page.Cluster != "(default)" || p.Page.Destination != "orders.v1" || p.Page.Env != "prod" {
+		t.Fatalf("sayfa anahtarları: %+v", p.Page)
+	}
+	// Aranan etiketin kendi süzgeci düşer.
+	if p.Topic != "orders.v1" || p.ClientID != "" {
+		t.Fatalf("karşı süzgeç: topic=%q client=%q", p.Topic, p.ClientID)
+	}
+	tq, err := kafkaLabelValuesParams(httptest.NewRequest(http.MethodGet,
+		"/x?label=topic&system=kafka&destination=orders.v1&topicFilter=self&clientFilter=consumer-7", nil))
+	if err != nil || tq.Topic != "" || tq.ClientID != "consumer-7" {
+		t.Fatalf("topic aranırken yalnız client süzgeci: %+v %v", tq, err)
+	}
+	for _, bad := range []string{
+		"label=pod&system=kafka&destination=o", "label=&system=kafka&destination=o",
+		"label=topic&system=kafka&destination=o&q=" + strings.Repeat("x", kafkaFilterMaxLen+1),
+		"label=topic",                    // sayfa anahtarı yok → filo geneli YASAK
+		"label=topic&system=kafka",       // destination zorunlu
+		"label=topic&destination=orders", // system zorunlu
+		"label=client_id&system=kafka&destination=o&topicFilter=" + strings.Repeat("x", kafkaFilterMaxLen+1),
+	} {
+		if _, err := kafkaLabelValuesParams(httptest.NewRequest(http.MethodGet, "/x?"+bad, nil)); err == nil {
 			t.Errorf("%s reddedilmeli", bad)
 		}
 	}
+
 	from, to := kafkaFixtureWindow()
-	k0 := kafkaLabelValuesKey("vm", "topic", "pay", 50, from, to)
-	for i, k := range []string{
-		kafkaLabelValuesKey("ch", "topic", "pay", 50, from, to),
-		kafkaLabelValuesKey("vm", "client_id", "pay", 50, from, to),
-		kafkaLabelValuesKey("vm", "topic", "pa", 50, from, to),
-		kafkaLabelValuesKey("vm", "topic", "pay", 20, from, to),
-		kafkaLabelValuesKey("vm", "topic", "pay", 50, from, to.Add(time.Minute)),
+	base := kafkaLabelValuesReq{Label: "topic", Q: "pay", Limit: 50, ClientID: "consumer-7",
+		Page: messagingClientsPlan{System: "kafka", Cluster: "c1", Destination: "orders.v1", From: from, To: to}}
+	scope := kafkaServiceScope{Producers: []string{"svc-a"}, Consumers: []string{"svc-c"}}
+	k0 := kafkaLabelValuesKey("vm", base, scope)
+	type mut func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string
+	for i, m := range []mut{
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { return "ch" },
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.Label = "client_id"; return "vm" },
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.Q = "pa"; return "vm" },
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.Limit = 20; return "vm" },
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string {
+			p.Page.To = to.Add(time.Minute)
+			return "vm"
+		},
+		// Sayfa anahtarları.
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.Page.System = "kafka2"; return "vm" },
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.Page.Cluster = "c2"; return "vm" },
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string {
+			p.Page.Destination = "payments"
+			return "vm"
+		},
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.Page.Env = "prod"; return "vm" },
+		// Türetilen kümeler (içerik, uzunluk değil) + taraf takası.
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string {
+			sc.Producers = []string{"svc-b"}
+			return "vm"
+		},
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string {
+			sc.Consumers = []string{"svc-d"}
+			return "vm"
+		},
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string {
+			sc.Producers, sc.Consumers = []string{"svc-c"}, []string{"svc-a"}
+			return "vm"
+		},
+		// Karşı süzgeç.
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.ClientID = "consumer-8"; return "vm" },
+		func(p *kafkaLabelValuesReq, sc *kafkaServiceScope) string { p.Topic = "orders"; return "vm" },
 	} {
-		if k == k0 {
+		p, sc := base, kafkaServiceScope{
+			Producers: append([]string(nil), scope.Producers...), Consumers: append([]string(nil), scope.Consumers...)}
+		src := m(&p, &sc)
+		if k := kafkaLabelValuesKey(src, p, sc); k == k0 {
 			t.Fatalf("mutasyon %d anahtarı değiştirmedi", i)
 		}
+	}
+	a := kafkaServiceScope{Producers: []string{"svc-a", "svc-b"}}
+	b := kafkaServiceScope{Producers: []string{"svc-b", "svc-a"}}
+	if kafkaLabelValuesKey("vm", base, a) != kafkaLabelValuesKey("vm", base, b) {
+		t.Fatal("küme sırası anahtarı değiştirmemeli")
+	}
+	// Sayfa kapsamı anahtarı da her sayfa girdisini taşır.
+	pk := kafkaPageScopeKey("vm", "mx0", base.Page)
+	for i, p := range []messagingClientsPlan{
+		{System: "k2", Cluster: "c1", Destination: "orders.v1", From: from, To: to},
+		{System: "kafka", Cluster: "c2", Destination: "orders.v1", From: from, To: to},
+		{System: "kafka", Cluster: "c1", Destination: "x", From: from, To: to},
+		{System: "kafka", Cluster: "c1", Destination: "orders.v1", Env: "prod", From: from, To: to},
+		{System: "kafka", Cluster: "c1", Destination: "orders.v1", From: from, To: to.Add(time.Minute)},
+	} {
+		if kafkaPageScopeKey("vm", "mx0", p) == pk {
+			t.Fatalf("sayfa mutasyonu %d anahtarı değiştirmedi", i)
+		}
+	}
+	if kafkaPageScopeKey("ch", "mx0", base.Page) == pk || kafkaPageScopeKey("vm", "mx1", base.Page) == pk {
+		t.Fatal("kaynak / dışlama özeti anahtara girmeli")
+	}
+}
+
+// v0.10.1102 — seçici kapsamı /api/messaging/clients'in kapsamıyla AYNI
+// gövdeden türer (span ∪ keşif); boş kapsam 400 (filoya açılmaz).
+func TestKafkaLabelScopeMatchesClientsScope(t *testing.T) {
+	src := &fakeKafkaLabelSource{fakeEPSource: &fakeEPSource{name: "vm",
+		queryFn: func(f chstore.MetricQueryFilter) ([]chstore.SpanMetricSeries, error) {
+			if isKafkaDiscoveryQuery(f) {
+				// Span'de görünmeyen, topic etiketli metrikten keşfedilen servis.
+				return []chstore.SpanMetricSeries{{GroupKey: []string{"discovered-d"}}}, nil
+			}
+			return kafkaSeries(1), nil
+		}}}
+	p := msgSetPlan(msgSetClients)
+	resp, err := buildMessagingClients(context.Background(), src, p, msgSetCallers())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := resolveKafkaServiceScope(context.Background(), src, p, msgSetCallers())
+	if strings.Join(sc.Producers, ",") != strings.Join(resp.Producers, ",") ||
+		strings.Join(sc.Consumers, ",") != strings.Join(resp.Consumers, ",") {
+		t.Fatalf("seçici kapsamı panellerden saptı: %+v vs %v / %v", sc, resp.Producers, resp.Consumers)
+	}
+	if !strings.Contains(strings.Join(sc.Consumers, ","), "discovered-d") {
+		t.Fatalf("keşfedilen servis kapsamda olmalı: %v", sc.Consumers)
+	}
+	req := kafkaLabelValuesReq{Label: "client_id", Topic: "orders.v1"}
+	got, err := kafkaLabelScopeFor(sc, req)
+	if err != nil || got.Topic != "orders.v1" || got.ClientID != "" || len(got.Producers) == 0 || len(got.Consumers) == 0 {
+		t.Fatalf("seçici kapsamı: %+v %v", got, err)
+	}
+	if _, err := kafkaLabelScopeFor(kafkaServiceScope{}, req); err != errKafkaScopeEmpty {
+		t.Fatalf("boş kapsam 400 olmalı: %v", err)
+	}
+}
+
+// v0.10.1102 — handler gövdesi kapsamı kaynağa İLETİR (taraf + karşı süzgeç).
+func TestBuildKafkaLabelValuesPassesScope(t *testing.T) {
+	src := &fakeKafkaLabelSource{fakeEPSource: &fakeEPSource{name: "vm"}}
+	var gotLabel string
+	var gotScope vmetrics.KafkaLabelScope
+	src.onValues = func(label string, sc vmetrics.KafkaLabelScope) { gotLabel, gotScope = label, sc }
+	p, err := kafkaLabelValuesParams(httptest.NewRequest(http.MethodGet,
+		"/x?label=client_id&system=kafka&destination=orders.v1&topicFilter=orders.v1", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, err := kafkaLabelScopeFor(kafkaServiceScope{Producers: []string{"svc-pay"}, Consumers: []string{"svc-ledger"}}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := buildKafkaLabelValues(context.Background(), src, p, sc)
+	if err != nil || len(resp.Values) != 1 {
+		t.Fatalf("cevap: %+v %v", resp, err)
+	}
+	if gotLabel != "client_id" || strings.Join(gotScope.Producers, ",") != "svc-pay" ||
+		strings.Join(gotScope.Consumers, ",") != "svc-ledger" || gotScope.Topic != "orders.v1" {
+		t.Fatalf("kapsam iletilmedi: %q %+v", gotLabel, gotScope)
 	}
 }
 

@@ -27,6 +27,8 @@ const m = vi.hoisted(() => {
     labels: 'all' as 'all' | 'noTopic',
     connEmpty: false,
     calls: [] as Array<{ set?: string; tab?: { topicFilter?: string; clientFilter?: string; view?: string } }>,
+    // v0.10.1102 — seçici istekleri (etiket + kapsam).
+    labelCalls: [] as Array<{ label: string; scope: { system: string; cluster: string; destination: string; topic?: string; clientId?: string } }>,
   };
 });
 
@@ -37,8 +39,8 @@ function series(n: number, svc = 'orders-consumer'): SpanMetricSeries[] {
   }));
 }
 
-function fixture(view: string): MessagingClients {
-  const podView = view === 'pod';
+function fixture(tab?: { topicFilter?: string; clientFilter?: string; view?: string }): MessagingClients {
+  const podView = tab?.view === 'pod';
   const block = (label: string, metric: string) => ({
     metric, label, unit: '{connection}', kind: 'gauge', agg: 'sum',
     groupBy: podView ? ['service.name', 'k8s_pod_name'] : ['service.name', 'client_id'],
@@ -56,7 +58,9 @@ function fixture(view: string): MessagingClients {
     labels: m.labels === 'all'
       ? { detected: true, topic: true, clientId: true, pod: 'k8s_pod_name' }
       : { detected: true, topic: false, clientId: true, pod: 'k8s_pod_name' },
-    filter: {}, view: podView ? 'pod' : '', stepSeconds: 15,
+    // Sunucu UYGULANAN süzgeci yansıtır (etiket var → istenen = uygulanan).
+    filter: { topic: tab?.topicFilter || undefined, clientId: tab?.clientFilter || undefined },
+    view: podView ? 'pod' : '', stepSeconds: 15,
     connections: m.connEmpty
       ? { series: [], total: 0, podLabel: 'k8s_pod_name', activePods: 0 }
       : { series: series(4), total: 4, podLabel: 'k8s_pod_name', activePods: 3 },
@@ -68,9 +72,13 @@ vi.mock('@/lib/api', () => ({
     messagingClients: (_s: string, _c: string, _d: string, _f: number, _t: number, _sig: AbortSignal,
       set?: string, tab?: { topicFilter?: string; clientFilter?: string; view?: string }) => {
       m.calls.push({ set, tab });
-      return Promise.resolve(fixture(tab?.view ?? ''));
+      return Promise.resolve(fixture(tab));
     },
-    kafkaLabelValues: async () => ({ label: 'topic', source: 'vm', values: ['payments'] }),
+    kafkaLabelValues: async (label: string, _q: string, _f: number, _t: number,
+      scope: { system: string; cluster: string; destination: string; topic?: string; clientId?: string }) => {
+      m.labelCalls.push({ label, scope });
+      return { label, source: 'vm', values: ['payments'] };
+    },
   },
   isCanceled: () => false,
 }));
@@ -122,7 +130,7 @@ async function flush() {
   for (let i = 0; i < 5; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); });
 }
 
-beforeEach(() => { m.labels = 'all'; m.connEmpty = false; m.calls = []; loc = ''; });
+beforeEach(() => { m.labels = 'all'; m.connEmpty = false; m.calls = []; m.labelCalls = []; loc = ''; });
 afterEach(() => { act(() => root?.unmount()); root = null; host?.remove(); });
 
 describe('KafkaClientsTab', () => {
@@ -181,6 +189,20 @@ describe('KafkaClientsTab', () => {
     expect(conn?.textContent).toContain('aktif pod 3 / 4');
     expect(host.querySelector('[data-panel="Açık bağlantı (tüketici) — istemci"]')).toBeNull();
     expect(host.querySelector('[data-panel="Rebalance/saat — istemci"]')).not.toBeNull();
+  });
+
+  // v0.10.1102 (operatör-onaylı) — öneriler SAYFA kapsamında: seçici isteği
+  // sayfa anahtarlarını + uygulanmış karşı süzgeci taşır (servis listesi değil).
+  it('seçici isteği sayfanın kapsamını ve karşı süzgeci taşır', async () => {
+    await mount('?system=kafka&cluster=c1&destination=orders&tab=clients&ktopic=payments&kclient=consumer-orders-1');
+    // usePickerSearch 180 ms debounce — gerçek zamanlayıcı.
+    await act(async () => { await new Promise(r => setTimeout(r, 250)); });
+    const client = m.labelCalls.filter(c => c.label === 'client_id').at(-1);
+    const topic = m.labelCalls.filter(c => c.label === 'topic').at(-1);
+    // Sayfa anahtarları (sunucu servis kümelerini panellerle aynı yoldan türetir).
+    expect(client?.scope).toMatchObject({ system: 'kafka', cluster: 'c1', destination: 'orders', topic: 'payments' });
+    expect(client?.scope).not.toHaveProperty('producers');
+    expect(topic?.scope).toMatchObject({ destination: 'orders', clientId: 'consumer-orders-1' });
   });
 
   it('Bağlantılar: seri yoksa "metrik yok"', async () => {
