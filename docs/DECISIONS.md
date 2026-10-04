@@ -1663,6 +1663,21 @@ CH'de yazılmaz), uzun metin ipucunda. **Bağlantılar:** mevcut `connection_cou
 Pod görünümünde ek sorgu yok, Toplam'da iki ek soru. Yeni metrik/kardinalite yok; adım mevcut mdp
 kelepçesinden; anahtar süzgeç+görünümü taşır (`msg-clients:v2`); sekme açıkken 30 sn yoklama, gizli sekmede durur.
 
+## 2026-10-04 — Log desenleri: WildFly/JBoss kod regex'i gerçek kod biçimiyle (v0.10.1098)
+
+**Neden:** "JBoss / WildFly errors" regex'i `(WFLY|JBAS)[0-9]+` önekten hemen sonra rakam istiyordu; gerçek WildFly
+kodu önek + 2–6 harf alt sistem + rakam (`WFLYCTL0013`, `WFLYEJB0034`, `WFLYMSGAMQ0090`). CH bu satırları hiç
+saymıyor, ES'te `wfly` öneki (1087) buluyor ama 1080 örneklemi regex'e uymadığı için bastırıyordu — desen iki arka
+uçta da ölüydü. **Karar:**
+`\b(WFLY[A-Z]{2,6}[0-9]{4,6}|JBAS[0-9]{6})\b.*(?i:fail|error|exception|unable to|could not|cannot|missing)`. Kod harf duyarlı, `\b` RE2 ASCII sözcük sınırı (Go ve CH re2 aynı; yerel CH 26.3
+`match()` ile 22 tablo satırında Go'yla birebir). Kodun kendisi seviye taşımaz ve aynı önek açılıştaki INFO/WARN
+satırlarında da var (`WFLYSRV0049 … starting`, `WFLYUT0021 Registered web context`, `WFLYTX0013`); ad "errors"
+dediği için kodun ARDINDAN arıza işareti aranır — yoksa her yeniden başlatma spike olurdu. Bu yüzden eski regex'in
+saydığı arıza işaretsiz `JBAS` INFO satırları (`JBAS015876: Starting deployment`) artık sayılmaz. Token'lar
+(`wfly`/`jbas`, ES'te prefix) aynen; ES'in bulduğu INFO fazlasını 1080 örneklemi ayıklar. Diğer küratörlü kod
+regex'leri (`ORA-`/`TNS-` + rakam, `IJ000453`/`IJ000655`, `MQJCA1011`) aynı hatayı taşımıyor: kodları önekten
+sonra doğrudan rakam. Test: `log_patterns_wfly_test.go` (CH `match()` tablosu), ES önek fikstürüne 7 satır.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -136,7 +136,7 @@ func chTokensHit(p logPattern, body string) bool {
 
 // esFixture — sentetik gövde; old = düzeltme öncesi ES eşleşmesi (false =
 // belgelenen eksik sayım), regex = desenin regex'i eşler mi (CH sayar mı).
-// Yeni plan her satırda regex'le aynı sonucu vermeli (bkz. not: WFLY).
+// Yeni plan her satırda regex'le aynı sonucu vermeli.
 var esFixture = []struct {
 	pattern, body string
 	old, regex    bool
@@ -151,6 +151,16 @@ var esFixture = []struct {
 	{"SQL exception", "Caused by: java.sql.SQLException: Connection closed", false, true},
 	{"JDBC pool exhausted", "MQJCA1011: Failed to allocate a JMS connection.", false, true},
 	{"JBoss / WildFly errors", "JBAS014777: Services which failed to start: service jboss.web.deployment", false, true},
+	// v0.10.1098 — gerçek biçimli (sentetik) WildFly / JBoss AS kodları:
+	// önek + alt sistem harfleri + rakam. `wflyctl0013` tek terim, yalnız
+	// `wfly` öneki bulur; eski regex hiçbirini eşlemiyordu.
+	{"JBoss / WildFly errors", "WFLYCTL0013: Operation (\"deploy\") failed - address: ([(\"deployment\" => \"orders.war\")])", false, true},
+	{"JBoss / WildFly errors", "WFLYEJB0034: Jakarta Enterprise Beans Invocation failed on component OrdersBean for method public void com.example.Orders.place()", false, true},
+	{"JBoss / WildFly errors", "WFLYUT0012: Unable to start listener demo-https on 0.0.0.0:8443", false, true},
+	{"JBoss / WildFly errors", "WFLYSRV0026: WildFly Full 26.1.3.Final (WildFly Core 18.1.2.Final) started (with errors) in 9123ms", false, true},
+	{"JBoss / WildFly errors", "WFLYCTL0180: Services with missing/unavailable dependencies", false, true},
+	{"JBoss / WildFly errors", "WFLYMSGAMQ0090: Could not create queue jms.queue.DemoOrders", false, true},
+	{"JBoss / WildFly errors", "JBAS014612: Operation (\"add\") failed - address: ([(\"subsystem\" => \"datasources\")])", false, true},
 	{"Class init / load failure", "Caused by: java.lang.ClassNotFoundException: com.example.orders.Handler from [Module \"deployment.orders.war\"]", false, true},
 	{"Class init / load failure", "java.lang.NoClassDefFoundError: Could not initialize class com.example.Cfg", false, true},
 	{"Class init / load failure", "java.lang.ExceptionInInitializerError", false, true},
@@ -210,12 +220,6 @@ var esFixture = []struct {
 	{"TLS / certificate", "parsed x5091 field", false, false},
 }
 
-// wflyKnownRegexGap — `(WFLY|JBAS)[0-9]+` WildFly'ın gerçek kodlarını
-// (`WFLYCTL0013`: WFLY + alt sistem harfleri + rakam) eşlemez; CH de
-// saymaz. ES'te `wfly` öneki bu satırı artık bulur, 1080 örneklemi regex'e
-// uymadığı için bastırır — CH ile aynı sonuç. Regex düzeltmesi ayrı iş.
-const wflyKnownRegexGap = "WFLYCTL0013: Operation (\"deploy\") failed - address: ([(\"deployment\" => \"orders.war\")])"
-
 func TestESPrefixFixture_UndercountFixed(t *testing.T) {
 	byName := map[string]logPattern{}
 	for _, p := range patterns {
@@ -261,15 +265,6 @@ func TestESPrefixFixture_UndercountFixed(t *testing.T) {
 	if newHits != regexHits {
 		t.Errorf("yeni plan regex'le aynı sayıda satır saymalı: %d ≠ %d", newHits, regexHits)
 	}
-
-	wfly := byName["JBoss / WildFly errors"]
-	doc := standardAnalyze(wflyKnownRegexGap)
-	if !esPlanHits(logstore.ESPatternTerms(wfly.spec()), doc) || esPlanHits(phrasePlan(wfly), doc) {
-		t.Errorf("WFLY: yeni plan bulmalı, eski bulmamalı (terimler %q)", doc)
-	}
-	if regexp.MustCompile(wfly.Regex).MatchString(wflyKnownRegexGap) {
-		t.Error("WFLY regex boşluğu kapandı: wflyKnownRegexGap'i fikstüre taşı")
-	}
 }
 
 // esPrefixForms sözleşmesi: anahtar gerçek desen; girdi küçük harf, standart
@@ -304,9 +299,6 @@ func TestESPrefixForms_Contract(t *testing.T) {
 						covered = true
 					}
 				}
-			}
-			if name == "JBoss / WildFly errors" && f == "wfly" {
-				covered = true // bkz. wflyKnownRegexGap
 			}
 			if !covered {
 				t.Errorf("%s: %q için regex'in eşlediği fikstür satırı yok", name, f)

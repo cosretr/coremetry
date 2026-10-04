@@ -161,7 +161,19 @@ var patterns = []logPattern{
 	// exhaustion. Each token list is lowercase and represents
 	// substrings the body MUST contain when the regex matches
 	// (case-insensitive prefilter).
-	{"JBoss / WildFly errors", `(WFLY|JBAS)[0-9]+`, []string{"wfly", "jbas"}},
+	//
+	// v0.10.1098 — eski `(WFLY|JBAS)[0-9]+` önekten hemen sonra rakam
+	// istiyordu; gerçek WildFly kodu önek + 2–6 harf alt sistem + 4–6
+	// rakam (`WFLYCTL0013`, `WFLYEJB0034`, `WFLYMSGAMQ0001`), JBoss AS
+	// kodu `JBAS` + 6 rakam (`JBAS014612`). WFLY kodlarını CH hiç
+	// saymıyor, ES'te 1080 örneklemi bastırıyordu: desen iki arka uçta da
+	// ölüydü. Kodun kendisi seviye taşımaz — aynı önek açılıştaki INFO /
+	// WARN satırlarında da var (`WFLYSRV0049 … starting`, `WFLYUT0021
+	// Registered web context`); ad "errors" dediği için kodun ARDINDAN bir
+	// arıza işareti aranır (harf duyarsız, kod duyarlı kalır). Aksi hâlde
+	// her yeniden başlatma bir spike olurdu. `\b` RE2'de (Go + CH re2)
+	// ASCII sözcük sınırı: `xWFLYCTL0013`, `JBAS0146120` eşlenmez.
+	{"JBoss / WildFly errors", `\b(WFLY[A-Z]{2,6}[0-9]{4,6}|JBAS[0-9]{6})\b.*(?i:fail|error|exception|unable to|could not|cannot|missing)`, []string{"wfly", "jbas"}},
 	{"JBoss deployment fail", `Failed to start service|Deployment ".*" was rolled back|service .* in service registry has failed`, []string{"failed to start service", "was rolled back", "service registry"}},
 	{"Spring app failed", `APPLICATION FAILED TO START|Error starting ApplicationContext`, []string{"application failed to start", "error starting applicationcontext"}},
 	{"Spring bean failure", `(BeanCreation|NoSuchBeanDefinition|BeanInstantiation|UnsatisfiedDependency|CircularDependency)Exception`, []string{"beancreation", "nosuchbeandefinition", "beaninstantiation", "unsatisfieddependency", "circulardependency"}},
