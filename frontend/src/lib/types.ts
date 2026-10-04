@@ -5173,6 +5173,10 @@ export interface ExceptionSample {
   // devops.RunningVersion; kod incelemesiyle aynı yardımcı). Yoksa/boşsa
   // bilinmiyor → frame linkleri bugünkü gibi dal ucunda.
   runningVersion?: string;
+  // v0.10.1104 — yalnız Oracle (`ora:`) grubunda dolar: Oracle satırının trace
+  // id'si spans'ta bulundu mu. false → link YOK ("Coremetry'de yok");
+  // true / undefined (bilinmiyor; span grubu) → link.
+  traceInCoremetry?: boolean;
 }
 
 // One time-bucket of the "occurrences over time" histogram on the

@@ -17,6 +17,8 @@ import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
 import type { ExceptionGroup, ExceptionSample } from '@/lib/types';
 import { oracleChannelsText, isSyntheticOracleService, oracleSourceName } from './oracleGroup';
+import { sampleTraceLinkable } from './sampleTrace'; // v0.10.1104
+import { TraceMissingId } from './ExceptionSampleRow';
 
 export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; samples: ExceptionSample[] }) {
   const q = useQuery({
@@ -26,7 +28,13 @@ export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; sa
   });
   const info = q.data ?? group.oracle;
   const win = { fromNs: group.firstSeen, toNs: group.lastSeen };
-  const traces = samples.filter(s => s.traceId).slice(0, 3);
+  // v0.10.1104 — ayrık id (aynı trace birden çok Oracle satırı taşır; React
+  // anahtarı çakışıyordu) ve Coremetry'de BULUNANLAR önce (kararlı sıralama):
+  // ilk üç çip mümkünse açılabilen trace'ler.
+  const traces = samples
+    .filter((s, i, all) => s.traceId && all.findIndex(o => o.traceId === s.traceId) === i)
+    .sort((a, b) => Number(!sampleTraceLinkable(a)) - Number(!sampleTraceLinkable(b)))
+    .slice(0, 3);
   const services = info?.services ?? [];
   const channels = oracleChannelsText(info, 6);
   return (
@@ -60,10 +68,12 @@ export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; sa
             )} title="Trace → servis çözümü (hata veren en derin span'ın servisi), yoksa pod adı" />
             <KeyValueRow k="Trace'ler" v={traces.length === 0 ? '' : (
               <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 8 }}>
-                {traces.map(s => (
+                {/* v0.10.1104 — Coremetry'de olmayan trace (traceInCoremetry=false)
+                    linksiz + "Coremetry'de yok"; boş /trace sayfasına götürmez. */}
+                {traces.map(s => sampleTraceLinkable(s) ? (
                   <Link key={s.traceId} to={traceHref(s.traceId)} className="mono"
                     title="Trace'i aç — Logs sekmesinde bu Oracle satırları görünür">{s.traceId.slice(0, 16)}…</Link>
-                ))}
+                ) : <TraceMissingId key={s.traceId} traceId={s.traceId} />)}
               </span>
             )} />
           </KeyValue>

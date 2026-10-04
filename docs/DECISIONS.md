@@ -1756,6 +1756,26 @@ aynen; yeni tablo yok. **Neden tek trace, beş değil:** her trace bir span okum
 tık başına bedel beş katına çıkar; aynı (kod, operasyon) grubunun trace'leri aynı çağrı yolunu taşır — en yeni
 bulunan trace kanıta yeter, kalan dört id servis çözümüyle zaten prompt'ta.
 
+## 2026-10-04 — Exceptions: trace id'ler gerçek bağlantı (orta tık yeni sekme); Coremetry'de olmayan Oracle trace'leri işaretli (v0.10.1104)
+
+**Operatör:** "Exceptions sayfasındaki traceidler mouse orta clickle yeni sekmede açmıyorum. Bu arada bazı
+traceidler de aslında coremetry üzerinde olmayabilir"
+Exception detayının "Sample traces" satırında trace id bir `<span>`'dı, satır yalnız `navigate()` çağırıyordu —
+orta / Ctrl / ⌘ tık hiçbir şey yapmıyordu. **Karar (1):** satır `ExceptionSampleRow.tsx`'e çıkarıldı; trace id
+react-router `<Link to={traceHref(id)}>` = gerçek `<a href>`, tarayıcının yeni-sekme davranışı kendiliğinden
+gelir. Satırın `rowActivation`'ı (düz tık + Enter/Boşluk) kalır; link tıkı `stopPropagation` ile satıra
+çıkmaz (a11y.ts sözleşmesi) → düz tık tek gezinme, değiştiricili tık aynı sekmeyi gezdirmez. Sayfadaki diğer
+trace id'ler (Oracle paneli, dış kanıt, kök neden örneği, liste quick-peek) zaten `<Link>`. **Karar (2):**
+`ora:` grubunun örnekleri Oracle hata satırlarından gelir; trace o satırın taşıdığı değerdir ve Coremetry'ye
+hiç ulaşmamış olabilir (boş /trace sayfası). `oracleGroupSamples` örnekleri kurduktan sonra ayrık trace
+id'leri (≤100) TEK `TraceFactsByIDs` sorgusuyla arar — pencere örnek satırlarının aralığı ±5 dk (v0.10.1100
+explain payı), 6 sn bütçe; hata/zaman aşımı alanı boş bırakır, örnek çağrısı asla düşmez.
+`ExceptionSample.traceInCoremetry` (*bool, omitempty): nil = bilinmiyor (span grupları hiç aranmaz — örnek
+span'den doğar). Ön yüz `false`'ta link basmaz: soluk mono id + `badge b-gray` "Coremetry'de yok", title
+"Bu trace Coremetry'de yok — yalnız Oracle hata satırı taşıyor", satır tıklanmaz; Oracle panelinde bulunan
+trace'ler önce. **Değişmeyen:** span gruplarının örnek sorgusu ve yanıtı; uç `serveCached`'li değil (anahtar
+yok). **Bilinen sınır:** yalnız CH spans'a bakılır — Tempo yedeğinden açılabilecek trace de "yok" görünür.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -48,9 +48,14 @@ describe('exception örnek tablosu — durum satırı tablonun içinde (v0.10.97
     // stack kartı div'i + durum (error / empty) = en az 3 kullanım
     expect(src.match(/emptyNote\.text/g)!.length).toBeGreaterThanOrEqual(3);
     expect(src).toContain(": samples.length === 0 ? emptyNote.text");
-    expect(src).toContain("className={isEv ? 'wf-evidence' : undefined}");
-    expect(src).toContain('rowActivation(() => navigate(traceHref(s.traceId!)))');
-    expect(src).toContain('data-trace-id={s.traceId || undefined}');
+    // v0.10.1104 — satır ExceptionSampleRow.tsx'e taşındı (trace id gerçek link,
+    // Coremetry'de olmayan Oracle trace'i linksiz); davranış orada pinli
+    // (ExceptionSampleRow.render.test.tsx), sözleşme metni burada.
+    const row = readFileSync(resolve(__dirname, 'ExceptionSampleRow.tsx'), 'utf8');
+    expect(src).toContain('<ExceptionSampleRow key={i} s={s} isEv={!!s.traceId && evTraces.includes(s.traceId)} />');
+    expect(row).toContain("className={isEv ? 'wf-evidence' : undefined}");
+    expect(row).toContain('{...(linkable ? rowActivation(() => navigate(traceHref(s.traceId))) : {})}');
+    expect(row).toContain('data-trace-id={s.traceId || undefined}');
     // Spinner sayfanın başka yerinde hâlâ kullanılıyor; içe aktarma kalır.
     expect(src).toContain("import { Spinner, Empty } from '@/components/Spinner';");
     expect(src).toContain('{opsQ.isPending && <Spinner />}');

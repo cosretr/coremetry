@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { useEscLayer } from '@/lib/escLayer';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { rolloutEvidenceHref } from '@/lib/rolloutRow';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { keys, useServicesMetadata } from '@/lib/queries';
-import { fmtFixed, fmtNum, tsLong } from '@/lib/utils';
+import { fmtFixed, fmtNum } from '@/lib/utils';
 import { Spinner, Empty } from '@/components/Spinner';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { RenderedMarkdown } from '@/components/Markdown';
@@ -46,7 +45,7 @@ import { latencyThresholdMs, slowTracesHref } from '@/features/anomalies/slowTra
 import { problemWindowNs, topOffenders } from '@/features/anomalies/problemOffenders';
 import { ProblemLogEvidence } from '@/features/anomalies/ProblemLogEvidence'; // v0.10.452 (C1)
 import { operationTracesHref } from '@/lib/pivotHref';
-import { traceHref } from '@/lib/traceHref';
+import { ExceptionSampleRow } from './ExceptionSampleRow'; // v0.10.1104
 import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
@@ -295,7 +294,6 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   onBack: () => void;
   onChanged: () => void;
 }) {
-  const navigate = useNavigate();
   const [state, setState] = useState<ExceptionGroupState>(group.state);
   const [copied, setCopied] = useState(false);
   const ora = isOracleGroup(group); // v0.10.1092
@@ -712,33 +710,13 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             <table>
               <tbody>
                 {(samplesQ.isLoading || samples.length === 0) && <DataTableState colSpan={3} {...samplesState} />}
-                {samples.slice(0, 14).map((s, i) => {
-                  const isEv = !!s.traceId && evTraces.includes(s.traceId);
-                  return (
-                  // data-trace-id (v0.9.477): AI çekmecesindeki kanıt satırı
-                  // tıklanınca buraya kaydırılır.
-                  <tr key={i} data-trace-id={s.traceId || undefined}
-                    className={isEv ? 'wf-evidence' : undefined}
-                    {...(s.traceId ? rowActivation(() => navigate(traceHref(s.traceId!))) : {})}>
-                    {/* v0.10.977 — uç hücrelerin 14px kenar dolgusu kart kenarıyla hizalanır
-                        (başlıksız liste; §2b özel dolgu, sınıf karşılığı yok). */}
-                    <td className="mono" style={{ paddingLeft: 14 }}>
-                      <span style={{ color: 'var(--accent2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: 150 }}>
-                        {s.traceId ? s.traceId.slice(0, 16) + '…' : '—'}
-                      </span>
-                    </td>
-                    {/* v0.10.922 (sade palet adım 1) — her satırdaki kırmızı
-                        "ERROR" rozeti KALKTI: tablo yalnız hata örneklerini
-                        listeliyor, sabit rozet bilgi taşımıyordu. "kanıt"
-                        kelimesi kalır ama nötr — satırın rengini zaten
-                        .wf-evidence veriyor (bir olgu = bir sinyal). */}
-                    <td title={isEv ? 'Explain kanıtı — kök neden bu trace üzerinden soruşturuldu' : undefined}>
-                      {isEv && <span className="badge b-gray">kanıt</span>}
-                    </td>
-                    <td className="mono cell-faint" style={{ textAlign: 'right', paddingRight: 14 }}>{tsLong(s.time)}</td>
-                  </tr>
-                  );
-                })}
+                {/* v0.10.1104 (operatör: "traceidler mouse orta clickle yeni sekmede
+                    açmıyor") — satır ExceptionSampleRow'a taşındı: trace id gerçek
+                    <a href> (orta/Ctrl/⌘-tık), Coremetry'de olmayan Oracle trace'i
+                    linksiz + "Coremetry'de yok". */}
+                {samples.slice(0, 14).map((s, i) => (
+                  <ExceptionSampleRow key={i} s={s} isEv={!!s.traceId && evTraces.includes(s.traceId)} />
+                ))}
               </tbody>
             </table>
           </div>

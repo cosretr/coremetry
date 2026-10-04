@@ -268,6 +268,9 @@ func (s *Store) oracleGroupSamples(ctx context.Context, g *ExceptionGroup, limit
 	for _, r := range rows {
 		res.Samples = append(res.Samples, oracleSampleFromRow(r))
 	}
+	// v0.10.1104 — Oracle satırının trace id'si Coremetry'de olmayabilir:
+	// tek sınırlı sorguyla işaretlenir; hata = alan boş (bilinmiyor), çağrı düşmez.
+	markOracleSampleTraces(ctx, res.Samples, s.TraceFactsByIDs)
 	return res, nil
 }
 

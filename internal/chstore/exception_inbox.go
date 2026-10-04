@@ -1005,6 +1005,12 @@ type ExceptionSample struct {
 	// gösterilen örneğin bu alanını yollar. Boş = bilinmiyor → linkler bugünkü
 	// gibi dal ucunda.
 	RunningVersion string `json:"runningVersion,omitempty"`
+	// TraceInCoremetry (v0.10.1104, operatör: "bazı traceidler de aslında
+	// coremetry üzerinde olmayabilir") — yalnız `ora:` grubunda dolar: Oracle
+	// satırının taşıdığı trace id spans'ta bulundu mu (oracle_sample_traces.go,
+	// TraceFactsByIDs tek sorgu). nil = bilinmiyor/bakılmadı (span grubu:
+	// örnek span'den doğar, trace zaten var; ya da sorgu düştü) → link kalır.
+	TraceInCoremetry *bool `json:"traceInCoremetry,omitempty"`
 }
 
 // exSampleVersionKeys — örnek sorgusunun okuduğu resource anahtarları; sıra
