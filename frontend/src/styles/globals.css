@@ -4764,6 +4764,17 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .kc-subhead { font-size: var(--fs-2xs); font-weight: 600; color: var(--text2); margin-bottom: var(--sp-2); }
 .kc-empty { font-size: var(--fs-2xs); color: var(--text3); }
 .kc-key { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v0.10.1097 — "Kafka istemcileri" sekmesi (KafkaClientsTab): süzgeç satırı
+   (etiket varsa), tek satır kaynak notu, kompakt "Bağlantılar" paneli. */
+.kc-head-act { margin-left: auto; }
+.kc-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-3); }
+.kc-filter { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.kc-filter-lbl { font-size: var(--fs-2xs); color: var(--text3); font-family: var(--font-mono); }
+.kc-src { font-size: var(--fs-2xs); color: var(--text3); margin-bottom: var(--sp-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+.kc-conn { margin-bottom: var(--sp-4); } /* tek çerçeve: kartı CorePanel taşır */
+.kc-conn-head { display: flex; align-items: baseline; gap: var(--sp-4); }
+.kc-conn-stat { font-size: var(--fs-2xs); color: var(--text3); font-variant-numeric: tabular-nums; }
+.kc-conn-stat b { color: var(--text); font-weight: 600; }
 
 /* v0.10.558 — sohbet kanıt kartı (EvidenceCard; guided kök-neden evidence bloğu) */
 .ev-card { margin-top: var(--sp-4); padding: var(--sp-4) var(--sp-5); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); font-size: var(--fs-xs); display: grid; gap: var(--sp-3); }

@@ -44,6 +44,8 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   { file: 'dependencies.ts', hooks: ['api.dbTrends(', 'api.msgTrends(', 'api.databaseDetail(', 'api.messagingDetail('] },
   // v0.10.551 / 552; v0.10.575 — messagingDetail: /messaging/topic sayfasının
   // açılış okuması (callers + operations + topOps + e2e, tek yükte).
+  // v0.10.1097 — useKafkaClientsTab ikinci messagingClients çağrısı (sekme). callSpan
+  // ilk eşleşmeyi tarar; sekme kancasının signal'i kafkaTab.test.ts'te ayrı pinli.
   { file: 'messaging.ts', hooks: ['api.messagingClients(', 'api.serviceKafkaClients(', 'api.messagingDetail('] },
   // v0.9.810 — Explore'un fan-out'u. Bu dosya lib/queries'te DEĞİL
   // (pages/explore altında) ama kusur sınıfı birebir aynı ve ölçeği daha

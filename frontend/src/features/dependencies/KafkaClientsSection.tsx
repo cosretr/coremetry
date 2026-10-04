@@ -4,51 +4,65 @@
 // servis·istemci) + iki "son değer" tablosu (useDataTable). available=false →
 // TEK satır soluk not (bölüm gizlenmez, sebep title'da). Liste sayfasına grafik
 // KONMAZ (v0.9.834 kararı) — yalnız çekmece.
+//
+// v0.10.1097 — `set="clients"` (topic sayfasının "Kafka istemcileri" sekmesi)
+// artık KafkaClientsTab'a devredilir: süzgeç/görünüm URL durumu, bağlantı
+// paneli ve kısa kaynak satırı orada. Çekmece yolu (set yok / 'topic') bayt
+// bayt aynı; "son değer" tablosu iki yolun ortak dosyasına (KafkaLastTable)
+// taşındı.
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal'; // v0.10.554
 import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange } from '@/lib/types';
-import { fmtNum, timeRangeToNs } from '@/lib/utils';
+import { timeRangeToNs } from '@/lib/utils';
 import { useMessagingClients } from '@/lib/queries/messaging';
 import {
   kafkaBlockItems, kafkaDegradeTR, kafkaLastRows, kafkaPanelUnit, kafkaScopeNoteTR,
-  KAFKA_CONSUMER_COLS, KAFKA_PRODUCER_COLS, type KafkaLastRow,
+  KAFKA_CONSUMER_COLS, KAFKA_PRODUCER_COLS,
 } from './kafkaClients';
+import { KafkaLastTable } from './KafkaLastTable';
+import { KafkaClientsTab } from './KafkaClientsTab';
 
 const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
-export function KafkaClientsSection({ system, cluster, destination, range, xRange, syncKey, set, title, enabled }: {
+interface KafkaClientsSectionProps {
   system: string; cluster: string; destination: string; range: TimeRange;
   xRange: { from: number; to: number }; syncKey?: string;
   /**
    * v0.10.575 — istenecek SORU KÜMESİ. Verilmezse tel bugünkü hâlinde kalır
    * (çekmece hiçbirini geçmiyor, davranışı bayt-bayt aynı).
    *   • 'topic'   → çekmecenin beş sorusu, açıkça istenmiş hâli
-   *   • 'clients' → bağlantı/gecikme/rebalance; blok ADLARI ÖNCEDEN BİLİNMİYOR,
-   *                 o yüzden bu kipte bölüm bloklar üzerinde GENEL çizer
-   *                 (blok başına panel + tek "son değer" tablosu). Sabit
-   *                 kolon listesi yazmak, sunucu bir aile eklediğinde onu
-   *                 sessizce görünmez yapardı.
+   *   • 'clients' → bağlantı/gecikme/rebalance; v0.10.1097'ten beri
+   *                 KafkaClientsTab çizer (blok adları sunucudan, genel ızgara).
    */
   set?: 'topic' | 'clients';
   /** Başlık metni (sayfa "Kafka istemcileri" sekmesinde kendi başlığını verir). */
   title?: string;
   /** Sorgu kapısı — sekme seçili değilken VM'e hiç gidilmez (ES/VM maliyet disiplini). */
   enabled?: boolean;
-}) {
+}
+
+export function KafkaClientsSection(props: KafkaClientsSectionProps) {
+  // Kapı kapalıyken sorgu HİÇ koşmaz; RQ bunu 'pending' diye raporlar ve
+  // spinner dalı sonsuz bir "yükleniyor" çizerdi (v0.9.748 sınıfı).
+  if (props.enabled === false) return null;
+  if (props.set === 'clients') {
+    return (
+      <KafkaClientsTab system={props.system} cluster={props.cluster} destination={props.destination}
+        range={props.range} xRange={props.xRange} syncKey={props.syncKey} title={props.title} />
+    );
+  }
+  return <KafkaClientsDrawerSection {...props} />;
+}
+
+function KafkaClientsDrawerSection({ system, cluster, destination, range, xRange, syncKey, set, title }: KafkaClientsSectionProps) {
   // timeRangeToNs MEMO içinde (v0.5.184 sonsuz refetch sınıfı).
   const win = useMemo(() => timeRangeToNs(range), [range]);
-  const q = useMessagingClients({ system, cluster, destination, fromNs: win.from, toNs: win.to, set, enabled });
+  const q = useMessagingClients({ system, cluster, destination, fromNs: win.from, toNs: win.to, set });
   const [alertOpen, setAlertOpen] = useState(false); // v0.10.554 — lag alarmı modalı
-  // Kapı kapalıyken sorgu HİÇ koşmaz; RQ bunu 'pending' diye raporlar ve
-  // aşağıdaki dal sonsuz bir spinner çizerdi ("yükleniyor" diyen ama hiçbir
-  // şey beklemeyen bir durum, v0.9.748 sınıfı).
-  if (enabled === false) return null;
   if (q.isPending) {
     return <div className="kc-line" role="status" aria-busy="true"><Spinner /> Kafka istemci metrikleri…</div>;
   }
@@ -57,10 +71,6 @@ export function KafkaClientsSection({ system, cluster, destination, range, xRang
   if (degrade || !data) {
     return <div className="kc-line" title={data?.note}>◌ {degrade}</div>;
   }
-  // v0.10.575 — `set=clients` kipinde blok ADLARI sunucudan gelir; sabit bir
-  // liste yazmak, sunucu yeni bir aile eklediğinde onu sessizce görünmez
-  // yapardı ("boş küme kaybolur" değil, GÖRÜNMEYEN küme).
-  const blockKeys = Object.keys(data.blocks ?? {});
   const err = kafkaBlockItems(data.blocks.producer_error_rate);
   const lag = kafkaBlockItems(data.blocks.consumer_lag_max);
   const producers = kafkaLastRows(data.blocks, KAFKA_PRODUCER_COLS.map(c => c.id));
@@ -92,42 +102,6 @@ export function KafkaClientsSection({ system, cluster, destination, range, xRang
       <div className="kc-note">
         {data.note}
       </div>
-      {set === 'clients' ? (
-        <>
-          {blockKeys.length === 0 ? (
-            <div className="kc-empty">Bu pencerede istemci metriği serisi yok.</div>
-          ) : (
-            <>
-              <div className="kc-grid">
-                {blockKeys.map(k => {
-                  const b = data.blocks[k];
-                  const it = kafkaBlockItems(b);
-                  return (
-                    <LazyMount key={k} minHeight={170}>
-                      <Suspense fallback={<div className="kc-fallback"><Spinner /></div>}>
-                        <CorePanelMultiLazy
-                          title={b.label || k}
-                          storageKey={`msg-topic-kafka-${k}`}
-                          height={150} unit={kafkaPanelUnit(b.unit)} xRange={xRange} syncKey={syncKey}
-                          note={b.error ? `sorgu hatası: ${b.error}`
-                            : it.truncated ? `+${it.truncated} seri gösterilmiyor`
-                            : b.groupBy.join(' · ') || undefined}
-                          items={it.items} />
-                      </Suspense>
-                    </LazyMount>
-                  );
-                })}
-              </div>
-              <div className="kc-grid">
-                <KafkaLastTable storageKey="msg-topic-clients-last" title="Son değer" keyLabel="Servis · istemci"
-                  rows={kafkaLastRows(data.blocks, blockKeys)}
-                  cols={blockKeys.map(k => ({ id: k, label: data.blocks[k].label || k }))} />
-              </div>
-            </>
-          )}
-        </>
-      ) : (
-      <>
       <div className="kc-grid">
         <LazyMount minHeight={170}>
           <Suspense fallback={<div className="kc-fallback"><Spinner /></div>}>
@@ -156,46 +130,6 @@ export function KafkaClientsSection({ system, cluster, destination, range, xRang
         <KafkaLastTable storageKey="deps-kafka-consumers" title="Tüketiciler (son değer)" keyLabel="Servis · istemci"
           rows={consumers} cols={KAFKA_CONSUMER_COLS} />
       </div>
-      </>
-      )}
     </section>
-  );
-}
-
-function KafkaLastTable({ storageKey, title, keyLabel, rows, cols }: {
-  storageKey: string; title: string; keyLabel: string; rows: KafkaLastRow[];
-  cols: ReadonlyArray<{ readonly id: string; readonly label: string }>;
-}) {
-  const columns = useMemo<DataTableColumn<KafkaLastRow>[]>(() => [
-    { id: 'key', label: keyLabel, sortValue: r => r.key, naturalDir: 'asc', width: 200 },
-    ...cols.map(c => ({
-      id: c.id, label: c.label, sortValue: (r: KafkaLastRow) => r.values[c.id] ?? -1,
-      numeric: true, naturalDir: 'desc' as const, width: 96,
-    })),
-  ], [cols, keyLabel]);
-  const dt = useDataTable<KafkaLastRow>({ storageKey, columns, rows, initialSort: { id: cols[0]?.id ?? 'key', dir: 'desc' } });
-  return (
-    <div className="kc-table">
-      <div className="kc-subhead">{title} · {rows.length}</div>
-      {/* v0.10.954 — tablo standardı T12: "seri yok" paragrafı tablonun
-          İÇİNDE boş satır; başlık durur. */}
-      <div className="table-wrap">
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {rows.length === 0 ? <DataTableState dt={dt} kind="empty" message="Bu pencerede seri yok" /> : dt.sortedRows.map(r => (
-              <tr key={r.key}>
-                <td className="mono kc-key" title={r.key}>{r.key}</td>
-                {cols.map(c => {
-                  const v = r.values[c.id];
-                  return <td key={c.id} className="num">{v === null || v === undefined ? '—' : fmtNum(v)}</td>;
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }

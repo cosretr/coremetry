@@ -916,6 +916,32 @@ export interface KafkaMetricBlock {
   groupBy: string[];
   series: SpanMetricSeries[];
   error?: string;
+  // v0.10.1097 — pod görünümünde SON serinin ("diğer N") içine katlanan seri
+  // sayısı; 0/yok = katlama yok.
+  folded?: number;
+}
+// v0.10.1097 — "Kafka istemcileri" sekmesi (messaging_kafka_tab.go). Etiket
+// keşfi tek /api/v1/labels; `detected` false = kaynak keşif yapamadı → FE
+// denetimleri hiç çizmez (ölü denetim yok).
+export interface KafkaTabLabels {
+  detected: boolean;
+  topic: boolean;
+  clientId: boolean;
+  pod?: string;      // kaynağın kendi yazımı (k8s_pod_name | pod)
+}
+// UYGULANAN süzgeç (istenen değil) — etiket yoksa sunucu boş döner.
+export interface KafkaTabFilter {
+  topic?: string;
+  clientId?: string;
+}
+// "Bağlantılar" paneli — connection_count, pod başına (üretici + tüketici).
+export interface KafkaConnections {
+  podLabel?: string;           // boş = pod etiketi yok, seriler servis · istemci
+  series: SpanMetricSeries[];  // ≤ 12 + "diğer N"
+  folded?: number;
+  total: number;               // katlamadan önceki seri sayısı
+  activePods?: number;         // son adımda ≥ 1 bağlantı; yalnız pod etiketi varken
+  error?: string;
 }
 export interface MessagingClients {
   system: string;
@@ -941,6 +967,12 @@ export interface MessagingClients {
   discoveredConsumers?: string[];
   scopeTruncated?: boolean;
   blocks: Record<string, KafkaMetricBlock>;
+  // v0.10.1097 — yalnız set=clients.
+  labels?: KafkaTabLabels;
+  filter?: KafkaTabFilter;
+  view?: '' | 'pod';
+  stepSeconds?: number;
+  connections?: KafkaConnections;
 }
 // ServiceKafkaClients — GET /api/services/{name}/kafka-clients (v0.10.550);
 // servis sayfası Infra sekmesi "Kafka client" paneli (v0.10.552).

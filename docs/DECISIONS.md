@@ -1646,6 +1646,23 @@ edilmez; hiçbir şey silinmedi. JVM artık kapalı açılır bölüm değil: se
 on open; servis başına bir kez, çip değişimi istek atmaz). "Kaynak: …" dipnotu sekmenin altında kalır
 (tabloya da ait). Odak görünümü değişmedi.
 
+## 2026-10-04 — Kafka istemcileri: topic/client_id süzgeci (etiket varsa), pod bazlı görünüm, kısa kaynak notu, bağlantı paneli (v0.10.1097)
+
+**Operatör:** "9'u yap" (dördü birden). /messaging/topic "Kafka istemcileri" sekmesi (`set=clients`). **Etiket
+keşfi:** sekme metriklerinin ad birleşimi üzerinde TEK `/api/v1/labels` (pencere ≤ 1 sa, cevap `set=clients`
+önbelleğinde); CH'de iki temsilî metrikte attr_keys. Süzgeç ve görünüm ancak etiket serilerde varsa
+uygulanır; yoksa denetim çizilmez, hakkında bir şey yazılmaz (ölü denetim / görünmez daraltma yok). Katalog
+`topic` demese de keşifte görülen etiket `KafkaScope.ExtraLabels` ile kabul edilir. **Topic / client_id:**
+sunucu araması (`GET /api/messaging/kafka-label-values`, beyaz liste topic|client_id, limit ≤ 100, 60 sn
+önbellek); topic süzgeci uygulanınca kapsam "topic" olur ve "süzülemez" uyarısı düşer. URL: `ktopic`, `kclient`.
+**Pod bazlı:** pod etiketi (`k8s_pod_name` → `pod`) varsa "Toplam / Pod bazlı"; pod görünümünde blok başına
+ilk 12 pod + "diğer N" sunucuda katlanır (blok toplamasıyla), varsayılan Toplam; URL `kview=pod`. **Kaynak
+notu:** tek satır "Kaynak: VictoriaMetrics · kafka client metrikleri · N sn adım" (adım sorgunun promStep'i;
+CH'de yazılmaz), uzun metin ipucunda. **Bağlantılar:** mevcut `connection_count` (iki taraf toplamı) pod başına,
+"aktif pod" = son adımda ≥ 1 bağlantı; seri yoksa "metrik yok"; bu iki blok ızgarada ikinci kez çizilmez.
+Pod görünümünde ek sorgu yok, Toplam'da iki ek soru. Yeni metrik/kardinalite yok; adım mevcut mdp
+kelepçesinden; anahtar süzgeç+görünümü taşır (`msg-clients:v2`); sekme açıkken 30 sn yoklama, gizli sekmede durur.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

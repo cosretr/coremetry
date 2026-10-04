@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 // v0.10.551 — /messaging çekmecesi "Kafka istemcileri · METRİK" bölümü.
@@ -20,6 +20,27 @@ export function useMessagingClients(p: {
     queryFn: ({ signal }) => api.messagingClients(p.system, p.cluster, p.destination, p.fromNs, p.toNs, signal, p.set),
     enabled: (p.enabled ?? true) && !!p.system && !!p.destination,
     staleTime: 30_000,
+  });
+}
+
+// v0.10.1097 — "Kafka istemcileri" SEKMESİ (set=clients + süzgeç/görünüm).
+// Anahtar TÜM girdileri taşır (süzgeç/görünüm dahil; girmeseydi iki süzgeç
+// aynı gövdeyi taze sayardı). Yalnız sekme mount'luyken (enabled), 30 s
+// yoklama = sunucu TTL'i; RQ refetchInterval gizli sekmede DURUR
+// (refetchIntervalInBackground varsayılan false). keepPreviousData: süzgeç
+// değişirken denetimler sökülüp yeniden kurulmasın (seçici odağı kaybolmaz).
+export function useKafkaClientsTab(p: {
+  system: string; cluster: string; destination: string; fromNs: number; toNs: number;
+  topicFilter: string; clientFilter: string; view: '' | 'pod'; enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['messaging', 'clients-tab', p.system, p.cluster, p.destination, p.fromNs, p.toNs, p.topicFilter, p.clientFilter, p.view],
+    queryFn: ({ signal }) => api.messagingClients(p.system, p.cluster, p.destination, p.fromNs, p.toNs, signal, 'clients',
+      { topicFilter: p.topicFilter, clientFilter: p.clientFilter, view: p.view }),
+    enabled: (p.enabled ?? true) && !!p.system && !!p.destination,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
   });
 }
 

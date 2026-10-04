@@ -208,6 +208,24 @@ type KafkaScope struct {
 	ClientID      string
 	From, To      time.Time
 	MaxDataPoints int
+	// ExtraLabels — v0.10.1097: canlı etiket keşfinde (/api/v1/labels) GÖRÜLEN
+	// ama katalogda yazmayan etiketler (topic, pod). Süzgeç/kırılım doğrulaması
+	// katalog ∪ bunlar üzerinden: katalog "topic yok" dese de seriler taşıyorsa
+	// süzgeç uygulanır. Uydurma yok — liste yalnız keşiften dolar.
+	ExtraLabels []string
+}
+
+// scopeHasLabel — katalog etiketi ya da keşifte görülen ek etiket.
+func scopeHasLabel(m KafkaMetric, sc KafkaScope, l string) bool {
+	if hasLabel(m, l) {
+		return true
+	}
+	for _, x := range sc.ExtraLabels {
+		if x == l {
+			return true
+		}
+	}
+	return false
 }
 
 // KafkaQuery — katalog satırı + kapsam + kırılım → seam süzgeci. SAF.
@@ -221,13 +239,13 @@ func KafkaQuery(m KafkaMetric, sc KafkaScope, groupBy []string) (chstore.MetricQ
 	}
 	filters := []chstore.FilterExpr{{Key: "service.name", Op: "IN", Values: svcs}}
 	if t := strings.TrimSpace(sc.Topic); t != "" {
-		if !hasLabel(m, "topic") {
+		if !scopeHasLabel(m, sc, "topic") {
 			return chstore.MetricQueryFilter{}, fmt.Errorf("%s: topic label'ı yok, topic süzgeci uygulanamaz", m.Name)
 		}
 		filters = append(filters, chstore.FilterExpr{Key: "topic", Op: "=", Values: []string{t}})
 	}
 	if c := strings.TrimSpace(sc.ClientID); c != "" {
-		if !hasLabel(m, "client_id") {
+		if !scopeHasLabel(m, sc, "client_id") {
 			return chstore.MetricQueryFilter{}, fmt.Errorf("%s: client_id label'ı yok", m.Name)
 		}
 		filters = append(filters, chstore.FilterExpr{Key: "client_id", Op: "=", Values: []string{c}})
@@ -238,7 +256,7 @@ func KafkaQuery(m KafkaMetric, sc KafkaScope, groupBy []string) (chstore.MetricQ
 		if g == "" {
 			continue
 		}
-		if g != "service.name" && g != "host.name" && !hasLabel(m, g) {
+		if g != "service.name" && g != "host.name" && !scopeHasLabel(m, sc, g) {
 			return chstore.MetricQueryFilter{}, fmt.Errorf("%s: groupBy %q bu metriğin label'ı değil", m.Name, g)
 		}
 		gb = append(gb, g)

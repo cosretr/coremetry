@@ -7,6 +7,8 @@ package api
 // (init → registerRoutesExtra), api.go'ya satır girmez.
 //
 //   GET /api/messaging/clients?system=&cluster=&destination=&set=&from=&to=&env=&maxDataPoints=
+//       (+ v0.10.1097, yalnız set=clients: &topicFilter=&clientFilter=&view=toplam|pod —
+//        messaging_kafka_tab.go)
 //   GET /api/services/{name}/kafka-clients?from=&to=&env=&maxDataPoints=
 //
 // v0.10.575 — ?set= SORU SETİ. Topic detay sayfası üç ayrı yerde metrik
@@ -72,6 +74,10 @@ type messagingClientsPlan struct {
 	Set                               string // topic (varsayılan) | chart | clients — v0.10.575
 	From, To                          time.Time
 	Mdp                               int
+	// v0.10.1097 — yalnız set=clients (sekme): istenen topic/client_id
+	// süzgeci ve görünüm ("" toplam | pod). Etiket yoksa uygulanmaz
+	// (resolveKafkaTab); diğer setlerde ayrıştırıcı boşaltır.
+	TopicFilter, ClientFilter, View string
 }
 
 type serviceKafkaClientsPlan struct {
@@ -135,8 +141,12 @@ func messagingSetScope(set string) string {
 const msgClientsScopeCaveat = " Bu bloklar topic'e göre SÜZÜLEMEZ (bağlantı/gecikme/rebalance metrikleri `topic` label'ı taşımaz): kapsam bu topic'e dokunan servislerin istemcileridir, aynı istemcinin diğer topic trafiği de sayıya girer."
 
 func messagingClientsKey(p messagingClientsPlan, srcName, mx string) string {
-	return fmt.Sprintf("msg-clients:v1:src=%s:sys=%s:clu=%s:dest=%s:set=%s:%s:mdp%d:env=%s:mx=%s",
-		srcName, p.System, p.Cluster, p.Destination, p.Set, cacheBucket(p.From, p.To), p.Mdp, p.Env, mx)
+	// v0.10.1097 — v2: süzgeç + görünüm anahtarda (girmezse iki süzgeç aynı
+	// gövdeyi alır, v0.5.187); değerler %q — iki nokta içeren değer alan
+	// sınırını kaydıramaz.
+	return fmt.Sprintf("msg-clients:v2:src=%s:sys=%s:clu=%s:dest=%s:set=%s:%s:mdp%d:env=%s:mx=%s:ft=%q:fc=%q:view=%s",
+		srcName, p.System, p.Cluster, p.Destination, p.Set, cacheBucket(p.From, p.To), p.Mdp, p.Env, mx,
+		p.TopicFilter, p.ClientFilter, p.View)
 }
 
 func serviceKafkaClientsKey(p serviceKafkaClientsPlan, srcName, mx string) string {
@@ -155,6 +165,9 @@ type kafkaMetricBlock struct {
 	GroupBy []string                   `json:"groupBy"`
 	Series  []chstore.SpanMetricSeries `json:"series"`
 	Error   string                     `json:"error,omitempty"`
+	// Folded — v0.10.1097: pod görünümünde son "diğer N" serisine katlanan
+	// seri sayısı (0 = katlama yok).
+	Folded int `json:"folded,omitempty"`
 }
 
 type messagingClientsResponse struct {
@@ -175,6 +188,13 @@ type messagingClientsResponse struct {
 	DiscoveredConsumers []string                    `json:"discoveredConsumers,omitempty"`
 	ScopeTruncated      bool                        `json:"scopeTruncated,omitempty"`
 	Blocks              map[string]kafkaMetricBlock `json:"blocks"`
+	// v0.10.1097 — yalnız set=clients (messaging_kafka_tab.go): etiket keşfi,
+	// UYGULANAN süzgeç, görünüm, sorgu adımı, bağlantı paneli.
+	Labels      *kafkaTabLabels   `json:"labels,omitempty"`
+	Filter      *kafkaTabFilter   `json:"filter,omitempty"`
+	View        string            `json:"view,omitempty"`
+	StepSeconds int               `json:"stepSeconds,omitempty"`
+	Connections *kafkaConnections `json:"connections,omitempty"`
 }
 
 // msgScopeServiceCap — v0.10.609: kapsam servis tavanı. Kapsam VM'e
@@ -426,6 +446,27 @@ func buildMessagingClients(ctx context.Context, src metricSource, p messagingCli
 		resp.Note = kafkaClientsNote(resp.Source, false, false, "span tarafında da topic etiketli metrikte de bu topic için üretici/tüketici görülmedi; metrik sorgusu atılmadı.", caveat)
 		return resp, nil
 	}
+	// v0.10.1097 — sekme (set=clients): etiket keşfi + süzgeç/görünüm çözümü
+	// (messaging_kafka_tab.go). Etiketi olmayan süzgeç uygulanmaz; topic
+	// süzgeci uygulanınca kapsam artık "topic" ve "SÜZÜLEMEZ" uyarısı düşer.
+	qs := messagingSetQuestions(set)
+	var tab *kafkaTab
+	var clientID string
+	var extraLabels []string
+	if set == msgSetClients {
+		t := prepareKafkaTab(ctx, src, p)
+		tab = &t
+		labels := t.Labels
+		resp.Labels = &labels
+		resp.Filter = &kafkaTabFilter{Topic: t.Topic, ClientID: t.ClientID}
+		resp.View = t.View
+		if t.Topic != "" {
+			topic, resp.Scope = t.Topic, "topic"
+			caveat = strings.Replace(caveat, msgClientsScopeCaveat, "", 1)
+		}
+		caveat += t.NoteSuffix()
+		clientID, extraLabels, qs = t.ClientID, t.ExtraLabels(), t.Questions()
+	}
 	scopeFor := func(m vmetrics.KafkaMetric) *vmetrics.KafkaScope {
 		svcs := resp.Consumers
 		if m.Side == "producer" {
@@ -434,9 +475,26 @@ func buildMessagingClients(ctx context.Context, src metricSource, p messagingCli
 		if len(svcs) == 0 {
 			return nil
 		}
-		return &vmetrics.KafkaScope{Services: svcs, Topic: topic, From: p.From, To: p.To, MaxDataPoints: p.Mdp}
+		return &vmetrics.KafkaScope{Services: svcs, Topic: topic, ClientID: clientID, ExtraLabels: extraLabels,
+			From: p.From, To: p.To, MaxDataPoints: p.Mdp}
 	}
-	blocks, available, envAmbiguous := runKafkaQuestions(ctx, src, messagingSetQuestions(set), p.Env, scopeFor)
+	blocks, available, envAmbiguous := runKafkaQuestions(ctx, src, qs, p.Env, scopeFor)
+	if tab != nil {
+		// Bağlantı paneli KATLAMADAN önce: pod görünümünde blokların ham pod
+		// serilerini okur ("aktif pod" katlanan pod'ları da saymalı).
+		resp.Connections = buildKafkaConnections(ctx, src, *tab, blocks, p.Env, scopeFor)
+		if tab.View == kafkaViewPod {
+			for k, b := range blocks {
+				b.Series, b.Folded = foldKafkaSeries(b.Series, kafkaPodSeriesCap, b.Agg)
+				blocks[k] = b
+			}
+		}
+		// Adım yalnız VM'de bu formülle; CH kendi dışa-aktarım kelepçesini
+		// uygular (metric_export_interval.go) — yanlış sayı yazmaktansa yazma.
+		if src.Name() == metricSourceVM {
+			resp.StepSeconds = vmetrics.KafkaStepSeconds(p.From, p.To, p.Mdp)
+		}
+	}
 	if set == msgSetPartitions {
 		// Sunucu tarafı tavan: en kötü 50 kalır (son değere göre). FE 20
 		// gösterir ve kalan sayıyı yazar; tel sınırı burada.
@@ -520,10 +578,28 @@ func messagingClientsPlanFrom(r *http.Request) (messagingClientsPlan, error) {
 	if cluster == "" {
 		cluster = "(default)"
 	}
+	// v0.10.1097 — sekme süzgeçleri. Yalnız set=clients'ta anlamlı; diğer
+	// setlerde BOŞALTILIR ki anahtar parçalanmasın (aynı gövde, tek girdi).
+	tf, cf := strings.TrimSpace(q.Get("topicFilter")), strings.TrimSpace(q.Get("clientFilter"))
+	if len(tf) > kafkaFilterMaxLen || len(cf) > kafkaFilterMaxLen {
+		return messagingClientsPlan{}, fmt.Errorf("topicFilter / clientFilter en çok %d karakter", kafkaFilterMaxLen)
+	}
+	view := strings.TrimSpace(q.Get("view"))
+	switch view {
+	case "", "toplam":
+		view = ""
+	case kafkaViewPod:
+	default:
+		return messagingClientsPlan{}, fmt.Errorf("view parametresi geçersiz: toplam | pod")
+	}
+	if set != msgSetClients {
+		tf, cf, view = "", "", ""
+	}
 	from, to := parseFromTo(r, time.Hour)
 	return messagingClientsPlan{
 		System: system, Cluster: cluster, Destination: dest, Env: strings.TrimSpace(q.Get("env")), Set: set,
 		From: from, To: to, Mdp: kafkaClientsMdp(q.Get("maxDataPoints")),
+		TopicFilter: tf, ClientFilter: cf, View: view,
 	}, nil
 }
 

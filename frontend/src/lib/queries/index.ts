@@ -66,7 +66,7 @@ export { useInbox, useInboxCount } from './inbox';
 export { useProfiles, useProfileHotspots } from './profiles';
 export { useSlowQueries, useDBStmtDetail } from './databases';
 export { useEndpoints, useEndpointDetail, useEndpointSplit, useEndpointDownstream, useEndpointCallers } from './endpoints';
-export { useMessagingClients, useServiceKafkaClients } from './messaging';
+export { useMessagingClients, useServiceKafkaClients, useKafkaClientsTab } from './messaging';
 export {
   useEntityClusters, useEntityEnabled, useEntities, useEntity, useEntityServices, useEntityMetrics, useEntityContainers, useEntityLatency,
 } from './entities';

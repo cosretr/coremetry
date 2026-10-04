@@ -1616,10 +1616,19 @@ export const api = {
   //   • 'topic'  → çekmecenin 5 sorusu, açıkça istenmiş hâli
   //   • 'clients'→ bağlantı/gecikme/rebalance; kapsamı SERVİS (yanıtta
   //                scope='services'), yalnız o sekme seçilince istenir.
-  messagingClients: (system: string, cluster: string, destination: string, fromNs: number, toNs: number, signal?: AbortSignal, set?: 'chart' | 'topic' | 'clients' | 'partitions') =>
+  //   • v0.10.1097 `tab` (yalnız 'clients'): topic/client_id süzgeci + görünüm;
+  //     boş alan yazılmaz (qs), sunucu etiketi yoksa süzgeci uygulamaz.
+  messagingClients: (system: string, cluster: string, destination: string, fromNs: number, toNs: number, signal?: AbortSignal, set?: 'chart' | 'topic' | 'clients' | 'partitions',
+    tab?: { topicFilter?: string; clientFilter?: string; view?: string }) =>
     get<import('./types').MessagingClients | null>(
       `/api/messaging/clients?system=${encodeURIComponent(system)}&cluster=${encodeURIComponent(cluster)}&destination=${encodeURIComponent(destination)}&from=${fromNs}&to=${toNs}`
-      + (set ? `&set=${encodeURIComponent(set)}` : ''), signal),
+      + (set ? `&set=${encodeURIComponent(set)}` : '')
+      + (tab ? amp(qs(tab)) : ''), signal),
+  // v0.10.1097 — sekme süzgeçlerinin seçici araması (server-debounced, limitli;
+  // tam katalog çekilmez). Etiket beyaz listesi sunucuda: topic | client_id.
+  kafkaLabelValues: (label: 'topic' | 'client_id', q: string, fromNs: number, toNs: number, limit = 50) =>
+    get<{ label: string; source: string; values: string[] }>(
+      `/api/messaging/kafka-label-values?${qs({ label, q, from: fromNs, to: toNs, limit })}`),
   // v0.10.552 — servisin Kafka istemci sağlığı (Infra sekmesi paneli). env
   // verilirse sunucu VM'de ifade edemezse envAmbiguous ilan eder.
   serviceKafkaClients: (svc: string, fromNs: number, toNs: number, env?: string, signal?: AbortSignal) =>
