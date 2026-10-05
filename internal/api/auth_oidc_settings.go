@@ -8,6 +8,11 @@ package api
 //
 //	GET  /api/settings/oidc        admin — etkin yapılandırma, secret YOK (clientSecretStored)
 //	PUT  /api/settings/oidc        admin — kaydet + canlı takas + audit settings.oidc.update + publishConfigReload("oidc")
+//
+// v0.10.1110 — aynı blob merkezi login yetki servisinin ayarlarını da taşır
+// (permissionService*, permissionsClaim, roleFromClaim; uç
+// auth_permissions.go). Anahtar clientSecret gibi: GET'te yok
+// (permissionServiceKeySet), boş PUT kayıtlıyı korur, audit'e girmez.
 //	POST /api/settings/oidc/test   admin — yalnız keşif (≤10 s); hiçbir şey yazmaz
 //
 // ÜÇÜ DE ADMIN ve yalnız OTURUM kullanıcısı: API token'ı (UserID
@@ -72,6 +77,8 @@ const oidcSettingsBodyMax = 64 << 10
 type oidcSettingsInput struct {
 	auth.OIDCSettings
 	ClientSecret string `json:"clientSecret"`
+	// v0.10.1110 — yetki servisi anahtarı da `json:"-"`; boş = kayıtlıyı koru.
+	PermissionServiceKey string `json:"permissionServiceKey"`
 }
 
 func (s *Server) getOIDCSettings(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +93,7 @@ func decodeOIDCSettings(w http.ResponseWriter, r *http.Request) (auth.OIDCSettin
 	}
 	out := in.OIDCSettings
 	out.ClientSecret = in.ClientSecret
+	out.PermissionServiceKey = in.PermissionServiceKey
 	return out, true
 }
 
@@ -99,6 +107,7 @@ func (s *Server) putOIDCSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secretChanged := strings.TrimSpace(in.ClientSecret) != ""
+	permKeyChanged := strings.TrimSpace(in.PermissionServiceKey) != ""
 	snap, err := s.oidc.SaveSettings(r.Context(), in)
 	if err != nil {
 		var verr *auth.OIDCSettingsError
@@ -118,6 +127,10 @@ func (s *Server) putOIDCSettings(w http.ResponseWriter, r *http.Request) {
 		"redirectUrl": snap.RedirectURL, "scopes": snap.Scopes, "displayName": snap.DisplayName,
 		"defaultRole": snap.DefaultRole, "allowedDomains": snap.AllowedDomains,
 		"clientSecretChanged": secretChanged,
+		// v0.10.1110 — yetki servisi; anahtar YOK, yalnız "değişti mi".
+		"permissionServiceEnabled": snap.PermissionServiceEnabled, "permissionTTLSeconds": snap.PermissionTTLSeconds,
+		"permissionsClaim": snap.PermissionsClaim, "roleFromClaim": snap.RoleFromClaim,
+		"permissionServiceKeyChanged": permKeyChanged,
 	})
 	s.audit(r, "settings.oidc.update", "settings", "oidc", string(details))
 	writeJSON(w, snap)

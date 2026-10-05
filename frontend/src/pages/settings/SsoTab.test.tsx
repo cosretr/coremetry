@@ -43,6 +43,8 @@ const stored: OidcSettingsSnapshot = {
   defaultRedirectUrl: 'https://apm.example.test/api/auth/oidc/callback',
   scopes: ['openid', 'email', 'profile'], displayName: 'Kurumsal SSO', defaultRole: 'viewer',
   allowedDomains: ['example.test'], source: 'settings', active: true,
+  permissionServiceEnabled: false, permissionServiceKeySet: false, permissionTTLSeconds: 300,
+  permissionsClaim: 'permissions', roleFromClaim: false,
 };
 
 let host: HTMLDivElement | null = null;
@@ -139,6 +141,51 @@ describe('SSOTab — admin', () => {
     h.test.mockRejectedValueOnce(new Error('HTTP 403: {"error":"forbidden"}'));
     await act(async () => { button(el, 'Bağlantıyı test et')!.click(); });
     expect(el.querySelector('.sso-result')!.textContent).toContain('Bağlantı başarısız: forbidden');
+  });
+
+  // v0.10.1110 — Yetki servisi (merkezi login) alt bölümü.
+  it('yetki servisi: kayıtlı anahtar işareti, uç + başlık satırı, claim KAPALI açıklaması', async () => {
+    h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceKeySet: true, permissionTTLSeconds: 600 });
+    const el = await mount();
+    const sec = el.querySelector('.sso-perm')!;
+    expect(sec.textContent).toContain('Yetki servisi (merkezi login)');
+    const key = input(el, 'Paylaşılan anahtar');
+    expect(key.type).toBe('password');
+    expect(key.value).toBe('');
+    expect(sec.textContent).toContain('Paylaşılan anahtar · kayıtlı');
+    expect(input(el, 'Önbellek süresi').value).toBe('600');
+    expect(input(el, 'Claim adı').value).toBe('permissions');
+    expect(sec.textContent).toContain('POST /api/auth/permissions');
+    expect(sec.textContent).toContain('X-Coremetry-Auth-Key');
+    // Operatör kararı 2026-10-05: tanımsız kullanıcı → varsayılan rol, 204 yalnız devre dışı hesap.
+    expect(sec.textContent).toContain('tanımsız kullanıcıya varsayılan rol');
+    expect(sec.textContent).toContain('devre dışı bırakılmış hesaba yetki verilmez (204)');
+    // Operatör kararı 2026-10-05: claim'den rol kapalıyken varsayılan rol + Kullanıcılar sayfası.
+    expect(sec.textContent).toContain('Kapalı (varsayılan)');
+    expect(sec.textContent).toContain('Kullanıcılar sayfası');
+    expect(sec.textContent).toContain('viewer');
+  });
+
+  it('yetki servisi: claim\'den rol AÇIKKEN açıklama "yalnız düşürür" der', async () => {
+    h.get.mockResolvedValue({ ...stored, roleFromClaim: true });
+    const el = await mount();
+    const sec = el.querySelector('.sso-perm')!;
+    expect(sec.textContent).toContain('yalnız düşürür');
+    expect(sec.textContent).toContain('yükseltme Kullanıcılar sayfasından');
+  });
+
+  it('yetki servisi: boş anahtar gövdeye girmez, roleFromClaim kapalı gider', async () => {
+    h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceKeySet: true });
+    h.put.mockResolvedValue(stored);
+    const el = await mount();
+    await act(async () => {
+      el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    const body = h.put.mock.calls[0][0];
+    expect('permissionServiceKey' in body).toBe(false);
+    expect(body.permissionServiceEnabled).toBe(true);
+    expect(body.roleFromClaim).toBe(false);
+    expect(body.permissionTTLSeconds).toBe(300);
   });
 
   it('okuma hatası formu çizmez (boş form kaydedilemez)', async () => {

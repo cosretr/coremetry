@@ -1666,7 +1666,9 @@ export interface TempoSettingsInput {
 // auth.OIDCSnapshot (GET/PUT cevabı), auth.OIDCSettings (PUT/test gövdesi),
 // auth.OIDCDiscovery (test sonucu) — internal/auth/oidc_settings.go, oidc.go.
 // Secret sözleşmesi: clientSecret hiçbir cevapta yok (clientSecretStored);
-// PUT'ta boş clientSecret kayıtlıyı korur.
+// PUT'ta boş clientSecret kayıtlıyı korur. v0.10.1110 — aynı blob merkezi
+// login yetki servisini (POST /api/auth/permissions) taşır; anahtarı da
+// secret: cevapta yalnız permissionServiceKeySet, boş PUT kayıtlıyı korur.
 export type OidcSettingsSource = 'settings' | 'config';
 export interface OidcSettingsSnapshot {
   enabled: boolean;
@@ -1679,6 +1681,11 @@ export interface OidcSettingsSnapshot {
   displayName: string;
   defaultRole: string;
   allowedDomains: string[];
+  permissionServiceEnabled: boolean;
+  permissionServiceKeySet: boolean;
+  permissionTTLSeconds: number;
+  permissionsClaim: string;
+  roleFromClaim: boolean;
   source: OidcSettingsSource;
   active: boolean;
   lastError?: string;
@@ -1693,6 +1700,11 @@ export interface OidcSettingsInput {
   displayName: string;
   defaultRole: string;
   allowedDomains: string[];
+  permissionServiceEnabled: boolean;
+  permissionServiceKey?: string;
+  permissionTTLSeconds: number;
+  permissionsClaim: string;
+  roleFromClaim: boolean;
 }
 export interface OidcDiscovery {
   issuer: string;

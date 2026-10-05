@@ -6,7 +6,8 @@ import { api } from '@/lib/api';
 import type { OidcSettingsSnapshot, OidcTestResult } from '@/lib/types';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner, FlashBox, humanize } from './shared';
 import {
-  OIDC_ROLES, formToInput, oidcStatus, publicOidcSnapshot, snapshotToForm, type OidcForm,
+  OIDC_ROLES, PERMISSION_ENDPOINT, PERMISSION_HEADER, formToInput, oidcStatus, publicOidcSnapshot,
+  snapshotToForm, type OidcForm,
 } from './oidcForm';
 import { SsoPresets } from './SsoPresets';
 
@@ -19,6 +20,13 @@ import { SsoPresets } from './SsoPresets';
 // Secret sözleşmesi (Tempo/Oracle emsali): sunucu secret'ı hiç döndürmez,
 // "· kayıtlı" işareti clientSecretStored'dan; boş bırakılan kutu kayıtlıyı
 // korur. "Bağlantıyı test et" yalnız keşif koşar, hiçbir şey kaydetmez.
+//
+// v0.10.1110 — "Yetki servisi (merkezi login)" alt bölümü: müşterinin merkezi
+// login'i oturum başına POST /api/auth/permissions'ı çağırır ve dönen
+// permissions dizisini access token'a gömer. Anahtar clientSecret gibi
+// (kayıtlı işareti, boş = koru). "Rolü token'daki claim'den al" varsayılan
+// KAPALI (operatör kararı 2026-10-05): kapalıyken giriş rolü bugünkü gibi
+// varsayılan rol (viewer) + Kullanıcılar sayfası.
 //
 // Admin olmayan: ayar ucu admin-only (IdP adresi / client id hassas); form
 // yine BOŞ çizilmez — public /api/auth/config'ten SSO'nun açık olup
@@ -155,6 +163,8 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
               placeholder={adminOnly ?? 'example.test, corp.example.test'}
               hint="Virgülle ayırın; boş bırakılırsa herkes girebilir." />
           </div>
+
+          <PermissionServiceSection form={form} snap={snap} patch={patch} adminOnly={adminOnly} />
         </fieldset>
 
         {tr && <OidcTestResultView tr={tr} />}
@@ -175,6 +185,71 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
 
       <SsoPresets />
     </div>
+  );
+}
+
+// Yetki servisi (merkezi login) — v0.10.1110. Ayrı bileşen: SSO alanlarıyla
+// aynı form/fieldset (tek Kaydet, tek PUT), ama okuyucu bölümü ayrı görür.
+function PermissionServiceSection({ form, snap, patch, adminOnly }: {
+  form: OidcForm;
+  snap: OidcSettingsSnapshot;
+  patch: (p: Partial<OidcForm>) => void;
+  adminOnly: string | undefined;
+}) {
+  const role = form.defaultRole || 'viewer';
+  return (
+    <section className="sso-perm" aria-label="Yetki servisi (merkezi login)">
+      <h3 className="sso-subtitle">Yetki servisi (merkezi login)</h3>
+      <p className="sso-note">
+        Merkezi login, kullanıcı oturumu başına bir kez bu uca sorar ve dönen yetkileri access
+        token'a <code>{form.permissionsClaim || 'permissions'}</code> claim'i olarak koyar. Roller
+        Coremetry'de yönetilir; servis yalnız kullanıcının rolünü bildirir. Coremetry'de tanımsız
+        kullanıcıya varsayılan rol (<b>{role}</b>) bildirilir — herkes girebilir; yalnız devre dışı
+        bırakılmış hesaba yetki verilmez (204).
+      </p>
+      <label className="sso-check">
+        <input type="checkbox" checked={form.permissionServiceEnabled}
+          onChange={e => patch({ permissionServiceEnabled: e.target.checked })} />
+        <span>Yetki servisini aç</span>
+      </label>
+      <div className="sso-row">
+        <Field type="password" autoComplete="new-password" value={form.permissionServiceKey}
+          label={<>Paylaşılan anahtar{snap.permissionServiceKeySet && <span style={{ color: 'var(--text3)' }}> · kayıtlı</span>}</>}
+          onChange={e => patch({ permissionServiceKey: e.target.value })}
+          placeholder={adminOnly ?? (snap.permissionServiceKeySet
+            ? '(kayıtlı değeri korumak için boş bırakın)'
+            : 'en az 16 karakter, ör. openssl rand -hex 32')}
+          hint="Merkezi login bu değeri başlıkta gönderir. Saklanır, geri gösterilmez." />
+        <Field type="number" min={60} max={3600} step={1} value={form.permissionTTLSeconds}
+          label="Önbellek süresi (ttlSeconds)"
+          onChange={e => patch({ permissionTTLSeconds: e.target.value })}
+          hint="Merkezi login'in cevabı önbellekte tutma süresi; 60–3600 sn, varsayılan 300." />
+      </div>
+      <div className="sso-row">
+        <Field label="Claim adı" value={form.permissionsClaim} autoComplete="off" maxLength={64}
+          onChange={e => patch({ permissionsClaim: e.target.value })}
+          placeholder="permissions"
+          hint="Token'da yetkilerin bulunduğu claim; varsayılan permissions." />
+      </div>
+      <label className="sso-check sso-check--tight">
+        <input type="checkbox" checked={form.roleFromClaim}
+          onChange={e => patch({ roleFromClaim: e.target.checked })} />
+        <span>Rolü token'daki claim'den al</span>
+      </label>
+      <p className="sso-note sso-perm__explain">
+        {form.roleFromClaim
+          ? <>Açık: claim (dizi) <code>COREMETRY_ADMIN</code> / <code>COREMETRY_EDITOR</code> / <code>COREMETRY_VIEWER</code>
+            taşıyor ve kayıtlı rolden DÜŞÜKSE kullanıcının rolü SSO girişinde ona düşürülür; claim'den rol yalnız
+            düşürür, yükseltme Kullanıcılar sayfasından. Claim yoksa rol değişmez; ilk kez giren kullanıcı yine
+            varsayılan rolle (<b>{role}</b>) açılır.</>
+          : <>Kapalı (varsayılan): SSO ile ilk kez giren kullanıcı varsayılan rolle (<b>{role}</b>) açılır; rol
+            yalnız Coremetry'nin Kullanıcılar sayfasından değişir, token'daki claim yok sayılır.</>}
+      </p>
+      <KeyValue>
+        <KeyValueRow k="Uç" v={`POST ${PERMISSION_ENDPOINT}`} mono />
+        <KeyValueRow k="Başlık" v={PERMISSION_HEADER} mono />
+      </KeyValue>
+    </section>
   );
 }
 

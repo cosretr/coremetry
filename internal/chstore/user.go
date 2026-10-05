@@ -104,6 +104,59 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error)
 	return u, nil
 }
 
+// GetUserByEmailAnyState — v0.10.1110 (güvenlik incelemesi F1b): disabled
+// satırları da gören e-posta okuması. GetUserByEmail disabled=0 süzdüğü için
+// OIDC callback'i devre dışı bırakılmış bir kullanıcıyı "yok" görüp YENİ bir
+// viewer satırıyla yeniden açıyordu (users ORDER BY id — aynı e-postaya ikinci
+// satır). Aktif satır varsa O döner (disabled ASC), yoksa en yeni disabled
+// satır; hiç yoksa (nil, nil).
+func (s *Store) GetUserByEmailAnyState(ctx context.Context, email string) (*User, error) {
+	row := s.conn.QueryRow(ctx, `
+		SELECT `+s.userSelectExpr()+`
+		FROM users FINAL
+		WHERE email = ?
+		ORDER BY disabled ASC, created_at DESC
+		LIMIT 1
+		SETTINGS max_execution_time = 5`, email)
+	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+// GetUserByLdapUsername — v0.10.1110 (merkezi login yetki servisi,
+// internal/api/auth_permissions.go): directory kullanıcı adıyla TEK
+// sınırlı okuma (FINAL, LIMIT 1). Disabled satırları da GÖRÜR (aktif satır
+// önce): yetki servisi tanımsız kullanıcıya varsayılan rolü, devre dışı
+// hesaba 204 döner — ikisini ayırt etmesi gerekir. Girdi çağıranda küçük harfe indirilir;
+// sütun da lowerUTF8 ile karşılaştırılır (loginViaLDAP küçük harf yazar, eski
+// satırlara karşı savunma). Sütun yoksa (hasLdapUsernameCol=false) ya da
+// girdi boşsa (nil, nil) — "eşleşme yok". users küçük tablo (≤10k).
+func (s *Store) GetUserByLdapUsername(ctx context.Context, username string) (*User, error) {
+	if username == "" || !s.hasLdapUsernameCol {
+		return nil, nil
+	}
+	row := s.conn.QueryRow(ctx, `
+		SELECT `+s.userSelectExpr()+`
+		FROM users FINAL
+		WHERE ldap_username != '' AND lowerUTF8(ldap_username) = ?
+		ORDER BY disabled ASC, created_at DESC
+		LIMIT 1
+		SETTINGS max_execution_time = 5`, username)
+	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
 func (s *Store) GetUserByID(ctx context.Context, id string) (*User, error) {
 	row := s.conn.QueryRow(ctx, `
 		SELECT `+s.userSelectExpr()+`

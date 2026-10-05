@@ -57,6 +57,15 @@ const (
 	oidcURLMax         = 512
 	oidcMaxDomains     = 50
 	oidcMaxScopes      = 20
+
+	// v0.10.1110 — merkezi login yetki servisi (oidc_permissions.go).
+	PermissionTTLDefault   = 300
+	PermissionTTLMin       = 60
+	PermissionTTLMax       = 3600
+	PermissionClaimDefault = "permissions"
+	permissionKeyMinLen    = 16
+	permissionKeyMaxLen    = 256
+	permissionClaimMax     = 64
 )
 
 var oidcDefaultScopes = []string{"openid", "email", "profile"}
@@ -81,13 +90,23 @@ type OIDCSettings struct {
 	DisplayName    string   `json:"displayName"`
 	DefaultRole    string   `json:"defaultRole"`
 	AllowedDomains []string `json:"allowedDomains"`
+	// v0.10.1110 — merkezi login yetki servisi + token claim'inden rol
+	// (oidc_permissions.go). PermissionServiceKey bir SECRET: `json:"-"`,
+	// kalıcı biçim oidcStored, cevapta yalnız PermissionServiceKeySet.
+	PermissionServiceEnabled bool   `json:"permissionServiceEnabled"`
+	PermissionServiceKey     string `json:"-"`
+	PermissionTTLSeconds     int    `json:"permissionTTLSeconds"`
+	PermissionsClaim         string `json:"permissionsClaim"`
+	RoleFromClaim            bool   `json:"roleFromClaim"`
 }
 
 // String / GoString — %v, %+v, %#v ile kazara loglansa bile secret basılmasın.
 func (s OIDCSettings) String() string {
-	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v}",
+	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v}",
 		s.Enabled, s.IssuerURL, s.ClientID, s.ClientSecret != "", s.RedirectURL,
-		s.Scopes, s.DisplayName, s.DefaultRole, s.AllowedDomains)
+		s.Scopes, s.DisplayName, s.DefaultRole, s.AllowedDomains,
+		s.PermissionServiceEnabled, s.PermissionServiceKey != "", s.PermissionTTLSeconds,
+		s.PermissionsClaim, s.RoleFromClaim)
 }
 
 func (s OIDCSettings) GoString() string { return "auth.OIDCSettings" + s.String() }
@@ -104,6 +123,12 @@ type oidcStored struct {
 	DisplayName    string   `json:"displayName"`
 	DefaultRole    string   `json:"defaultRole"`
 	AllowedDomains []string `json:"allowedDomains"`
+	// v0.10.1110 — alan SIRASI OIDCSettings ile birebir (tip dönüşümü).
+	PermissionServiceEnabled bool   `json:"permissionServiceEnabled,omitempty"`
+	PermissionServiceKey     string `json:"permissionServiceKey,omitempty"`
+	PermissionTTLSeconds     int    `json:"permissionTTLSeconds,omitempty"`
+	PermissionsClaim         string `json:"permissionsClaim,omitempty"`
+	RoleFromClaim            bool   `json:"roleFromClaim,omitempty"`
 }
 
 func (s OIDCSettings) stored() oidcStored   { return oidcStored(s) }
@@ -121,6 +146,12 @@ type OIDCSnapshot struct {
 	DisplayName        string   `json:"displayName"`
 	DefaultRole        string   `json:"defaultRole"`
 	AllowedDomains     []string `json:"allowedDomains"`
+	// v0.10.1110 — yetki servisi. Anahtar YOK; yalnız "kayıtlı mı".
+	PermissionServiceEnabled bool   `json:"permissionServiceEnabled"`
+	PermissionServiceKeySet  bool   `json:"permissionServiceKeySet"`
+	PermissionTTLSeconds     int    `json:"permissionTTLSeconds"`
+	PermissionsClaim         string `json:"permissionsClaim"`
+	RoleFromClaim            bool   `json:"roleFromClaim"`
 	// Source — etkin yapılandırmanın kaynağı: settings (blob) | config (config.yaml).
 	Source string `json:"source"`
 	// Active — bu pod'da canlı istemci var mı (giriş düğmesi). İstenen
@@ -233,6 +264,12 @@ func NormalizeOIDCSettings(in OIDCSettings, publicURL string) OIDCSettings {
 		doms[i] = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(d)), "@")
 	}
 	s.AllowedDomains = dedupe(doms)
+	s.PermissionServiceKey = strings.TrimSpace(s.PermissionServiceKey)
+	s.PermissionTTLSeconds = clampPermissionTTL(s.PermissionTTLSeconds)
+	s.PermissionsClaim = strings.TrimSpace(s.PermissionsClaim)
+	if s.PermissionsClaim == "" {
+		s.PermissionsClaim = PermissionClaimDefault
+	}
 	return s
 }
 
@@ -245,9 +282,15 @@ func isASCII(s string) bool {
 	return true
 }
 
-// ValidateOIDCSettings — yalnız Enabled iken; kapatma her zaman geçer.
-// allowInsecure = config.yaml allow_insecure_issuer (http issuer). SAF.
+// ValidateOIDCSettings — SSO alanları yalnız Enabled iken; kapatma her
+// zaman geçer. v0.10.1110: yetki servisi alanları SSO'dan BAĞIMSIZ her
+// zaman denetlenir (servis SSO kapalıyken de açık olabilir; geçersiz
+// anahtarla açılamaz). allowInsecure = config.yaml allow_insecure_issuer
+// (http issuer). SAF.
 func ValidateOIDCSettings(s OIDCSettings, allowInsecure bool) error {
+	if err := validatePermissionSettings(s); err != nil {
+		return err
+	}
 	if !s.Enabled {
 		return nil
 	}
@@ -328,6 +371,101 @@ func ValidateOIDCIssuer(issuer string, allowInsecure bool) error {
 	return nil
 }
 
+// clampPermissionTTL — 0/negatif → varsayılan 300; [60, 3600]. SAF.
+func clampPermissionTTL(v int) int {
+	switch {
+	case v <= 0:
+		return PermissionTTLDefault
+	case v < PermissionTTLMin:
+		return PermissionTTLMin
+	case v > PermissionTTLMax:
+		return PermissionTTLMax
+	}
+	return v
+}
+
+// reservedClaimNames — yetki claim'i olarak SEÇİLEMEYEN standart kimlik /
+// profil / protokol claim'leri (OIDC Core §5.1 + JWT kayıtlı adlar).
+// Güvenlik incelemesi F2: bunların bir kısmını kullanıcı IdP profilinden
+// kendisi düzenleyebilir; rol oradan okunmasın.
+var reservedClaimNames = map[string]bool{
+	"sub": true, "name": true, "given_name": true, "family_name": true, "middle_name": true,
+	"nickname": true, "preferred_username": true, "profile": true, "picture": true, "website": true,
+	"email": true, "email_verified": true, "gender": true, "birthdate": true, "zoneinfo": true,
+	"locale": true, "phone_number": true, "phone_number_verified": true, "address": true,
+	"updated_at": true, "iss": true, "aud": true, "exp": true, "iat": true, "nonce": true,
+	"at_hash": true, "azp": true,
+}
+
+// validPermissionsClaim — claim adı: 1-64, harf/rakam ve `_ - . :`. SAF.
+func validPermissionsClaim(c string) bool {
+	if c == "" || len(c) > permissionClaimMax {
+		return false
+	}
+	for i := 0; i < len(c); i++ {
+		b := c[i]
+		ok := (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') ||
+			b == '_' || b == '-' || b == '.' || b == ':'
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// validatePermissionSettings — yetki servisi alanları (normalize edilmiş
+// girdi). Anahtar: dolu ise ≥16, ≤256, yazdırılabilir ASCII, yer tutucu
+// değil (secret_strength.go weakSecretMarkers); servis açıksa zorunlu.
+// Hata metni anahtarı TAŞIMAZ. SAF.
+func validatePermissionSettings(s OIDCSettings) error {
+	k := s.PermissionServiceKey
+	if s.PermissionServiceEnabled && k == "" {
+		return &OIDCSettingsError{"permissionServiceKey", "Yetki servisi açıkken paylaşılan anahtar gerekli"}
+	}
+	if k != "" {
+		if len(k) < permissionKeyMinLen {
+			return &OIDCSettingsError{"permissionServiceKey", "Paylaşılan anahtar en az 16 karakter olmalı"}
+		}
+		if len(k) > permissionKeyMaxLen {
+			return &OIDCSettingsError{"permissionServiceKey", "Paylaşılan anahtar çok uzun (en çok 256)"}
+		}
+		for i := 0; i < len(k); i++ {
+			if k[i] < 0x21 || k[i] > 0x7e {
+				return &OIDCSettingsError{"permissionServiceKey", "Paylaşılan anahtar boşluksuz yazdırılabilir ASCII olmalı"}
+			}
+		}
+		low := strings.ToLower(k)
+		for _, m := range weakSecretMarkers {
+			if strings.Contains(low, m) {
+				return &OIDCSettingsError{"permissionServiceKey", "Paylaşılan anahtar yer tutucu değerde — rastgele bir değer üretin (openssl rand -hex 32)"}
+			}
+		}
+	}
+	// 0 / "" = normalize edilmemiş girdi → varsayılan (NormalizeOIDCSettings).
+	if t := s.PermissionTTLSeconds; t != 0 && (t < PermissionTTLMin || t > PermissionTTLMax) {
+		return &OIDCSettingsError{"permissionTTLSeconds", "TTL 60–3600 saniye olmalı"}
+	}
+	if s.PermissionsClaim != "" && !validPermissionsClaim(s.PermissionsClaim) {
+		return &OIDCSettingsError{"permissionsClaim", "Claim adı 1-64 karakter; harf, rakam ve _ - . : olabilir"}
+	}
+	if reservedClaimNames[strings.ToLower(s.PermissionsClaim)] {
+		return &OIDCSettingsError{"permissionsClaim", "Claim adı standart bir kimlik/profil claim'i olamaz (ör. permissions kullanın)"}
+	}
+	return nil
+}
+
+// disablePermissionService — geçersiz yetki servisi alanlarıyla kaydedilmiş /
+// içe aktarılmış blobda YALNIZ servisi kapatır (anahtar düşer, claim'den rol
+// kapanır, varsayılanlar); SSO alanlarına dokunmaz. SAF.
+func disablePermissionService(s OIDCSettings) OIDCSettings {
+	s.PermissionServiceEnabled = false
+	s.PermissionServiceKey = ""
+	s.RoleFromClaim = false
+	s.PermissionsClaim = PermissionClaimDefault
+	s.PermissionTTLSeconds = PermissionTTLDefault
+	return s
+}
+
 func settingsFromConfig(c config.OIDCConfig) OIDCSettings {
 	return OIDCSettings{
 		Enabled: c.Enabled, IssuerURL: c.IssuerURL, ClientID: c.ClientID,
@@ -402,10 +540,27 @@ func (o *OIDCService) LoadPersisted(ctx context.Context) error {
 		return o.badBlob(raw, errors.New("oidc blobu çözülemedi"))
 	}
 	s := NormalizeOIDCSettings(stored.settings(), o.publicURL)
+	// v0.10.1110 (güvenlik incelemesi N4): yetki servisi alanları geçersizse
+	// SSO DÜŞMEZ — yalnız servis kapanır (log + lastError). Geçersiz blob
+	// elle yazılmış ya da içe aktarılmış olabilir; PUT yolu zaten 400 verir.
+	permErr := validatePermissionSettings(s)
+	if permErr != nil {
+		s = disablePermissionService(s)
+	}
 	if err := ValidateOIDCSettings(s, o.uiPolicy.allowInsecure); err != nil {
 		return o.badBlob(raw, fmt.Errorf("oidc blobu geçersiz: %w", err))
 	}
-	return o.apply(ctx, s, OIDCSourceSettings, raw)
+	applyErr := o.apply(ctx, s, OIDCSourceSettings, raw)
+	if permErr != nil {
+		msg := "yetki servisi ayarı geçersiz — servis kapatıldı: " + permErr.Error()
+		log.Printf("[auth] %s", msg)
+		if applyErr == nil {
+			o.mu.Lock()
+			o.st.lastErr = msg
+			o.mu.Unlock()
+		}
+	}
+	return applyErr
 }
 
 // badBlob — bozuk/geçersiz blob: yüklüyse canlı istemci ve kaynak yerinde
@@ -467,6 +622,11 @@ func (o *OIDCService) SaveSettings(ctx context.Context, in OIDCSettings) (OIDCSn
 	defer o.applyMu.Unlock()
 	prev := NormalizeOIDCSettings(o.state().eff, o.publicURL)
 	s := NormalizeOIDCSettings(in, o.publicURL)
+	// v0.10.1110 — yetki servisi anahtarı kimliğe bağlı değil: boş girdi
+	// kayıtlıyı HER ZAMAN korur (clientSecret kalıbı, kimlik koşulu yok).
+	if s.PermissionServiceKey == "" {
+		s.PermissionServiceKey = prev.PermissionServiceKey
+	}
 	if s.ClientSecret == "" && prev.ClientSecret != "" {
 		if s.IssuerURL == prev.IssuerURL && s.ClientID == prev.ClientID {
 			s.ClientSecret = prev.ClientSecret
@@ -530,7 +690,8 @@ func (o *OIDCService) TestDiscovery(ctx context.Context, in OIDCSettings) (*OIDC
 // Snapshot — GET cevabı (secret yok). Ağ beklemez (mu keşif sırasında tutulmaz).
 func (o *OIDCService) Snapshot() OIDCSnapshot {
 	if o == nil {
-		return OIDCSnapshot{Source: OIDCSourceConfig, Scopes: []string{}, AllowedDomains: []string{}}
+		return OIDCSnapshot{Source: OIDCSourceConfig, Scopes: []string{}, AllowedDomains: []string{},
+			PermissionTTLSeconds: PermissionTTLDefault, PermissionsClaim: PermissionClaimDefault}
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -544,18 +705,23 @@ func (o *OIDCService) snapshotLocked() OIDCSnapshot {
 		src = OIDCSourceConfig
 	}
 	return OIDCSnapshot{
-		Enabled:            s.Enabled,
-		IssuerURL:          s.IssuerURL,
-		ClientID:           s.ClientID,
-		ClientSecretStored: s.ClientSecret != "",
-		RedirectURL:        s.RedirectURL,
-		DefaultRedirectURL: DefaultOIDCRedirectURL(o.publicURL),
-		Scopes:             append([]string{}, s.Scopes...),
-		DisplayName:        s.DisplayName,
-		DefaultRole:        s.DefaultRole,
-		AllowedDomains:     append([]string{}, s.AllowedDomains...),
-		Source:             src,
-		Active:             o.live.Load() != nil,
-		LastError:          o.st.lastErr,
+		Enabled:                  s.Enabled,
+		IssuerURL:                s.IssuerURL,
+		ClientID:                 s.ClientID,
+		ClientSecretStored:       s.ClientSecret != "",
+		RedirectURL:              s.RedirectURL,
+		DefaultRedirectURL:       DefaultOIDCRedirectURL(o.publicURL),
+		Scopes:                   append([]string{}, s.Scopes...),
+		DisplayName:              s.DisplayName,
+		DefaultRole:              s.DefaultRole,
+		AllowedDomains:           append([]string{}, s.AllowedDomains...),
+		PermissionServiceEnabled: s.PermissionServiceEnabled,
+		PermissionServiceKeySet:  s.PermissionServiceKey != "",
+		PermissionTTLSeconds:     s.PermissionTTLSeconds,
+		PermissionsClaim:         s.PermissionsClaim,
+		RoleFromClaim:            s.RoleFromClaim,
+		Source:                   src,
+		Active:                   o.live.Load() != nil,
+		LastError:                o.st.lastErr,
 	}
 }

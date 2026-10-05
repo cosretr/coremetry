@@ -104,6 +104,10 @@ type fakeIdP struct {
 	tokenStatus int            // 0 → id_token döner
 	jwksStatus  int            // 0 → anahtar döner
 	claims      map[string]any // id_token ek/ezen claim'ler
+	// v0.10.1110 — access token: nil → opak "at"; dolu → imzalı JWT
+	// (accessKey nil → IdP anahtarı; doluysa JWKS'te OLMAYAN anahtar).
+	accessClaims map[string]any
+	accessKey    *rsa.PrivateKey
 }
 
 func newFakeIdPOpt(t *testing.T, useTLS bool) *fakeIdP {
@@ -117,6 +121,7 @@ func newFakeIdPOpt(t *testing.T, useTLS bool) *fakeIdP {
 		f.mu.Lock()
 		status, issuer, redirect, huge, tokSt, jwksSt := f.status, f.issuer, f.redirect, f.big, f.tokenStatus, f.jwksStatus
 		extra := f.claims
+		atClaims, atKey := f.accessClaims, f.accessKey
 		f.mu.Unlock()
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
@@ -156,9 +161,22 @@ func newFakeIdPOpt(t *testing.T, useTLS bool) *fakeIdP {
 			for k, v := range extra {
 				claims[k] = v
 			}
+			at := "at"
+			if atClaims != nil {
+				k := f.key
+				if atKey != nil {
+					k = atKey
+				}
+				full := map[string]any{"iss": f.URL, "aud": "account", "sub": "u-1",
+					"iat": time.Now().Unix(), "exp": time.Now().Add(5 * time.Minute).Unix()}
+				for kk, v := range atClaims {
+					full[kk] = v
+				}
+				at = signTestJWT(t, k, full)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"access_token": "at", "token_type": "Bearer", "expires_in": 300,
+				"access_token": at, "token_type": "Bearer", "expires_in": 300,
 				"id_token": signTestJWT(t, f.key, claims),
 			})
 		case "/jwks":

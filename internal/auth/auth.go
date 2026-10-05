@@ -286,6 +286,13 @@ func SkipPath(method, path string) bool {
 	if path == "/api/branding" && method == http.MethodGet {
 		return true
 	}
+	// v0.10.1110 — merkezi login yetki servisi: sunucudan-sunucuya çağrı,
+	// oturum yok. Sınır paylaşılan anahtar başlığı (X-Coremetry-Auth-Key,
+	// sabit-zamanlı karşılaştırma; internal/api/auth_permissions.go).
+	// Yalnız POST muaf.
+	if path == "/api/auth/permissions" && method == http.MethodPost {
+		return true
+	}
 	if strings.HasPrefix(path, "/v1/traces") ||
 		strings.HasPrefix(path, "/v1/logs") ||
 		strings.HasPrefix(path, "/v1/metrics") ||

@@ -17,6 +17,24 @@ export interface OidcForm {
   displayName: string;
   defaultRole: string;
   allowedDomains: string;
+  // v0.10.1110 — merkezi login yetki servisi + claim'den rol.
+  permissionServiceEnabled: boolean;
+  permissionServiceKey: string;
+  permissionTTLSeconds: string;
+  permissionsClaim: string;
+  roleFromClaim: boolean;
+}
+
+/** Yetki servisi ucunun sabitleri (sunucu: internal/api/auth_permissions.go). */
+export const PERMISSION_ENDPOINT = '/api/auth/permissions';
+export const PERMISSION_HEADER = 'X-Coremetry-Auth-Key';
+export const PERMISSION_TTL_DEFAULT = 300;
+
+/** TTL kutusu → sayı; boş/geçersiz → varsayılan, [60, 3600] kıskacı (sunucuyla aynı). */
+export function parsePermissionTTL(v: string): number {
+  const n = Math.round(Number(v.trim()));
+  if (!v.trim() || !Number.isFinite(n) || n <= 0) return PERMISSION_TTL_DEFAULT;
+  return Math.min(3600, Math.max(60, n));
 }
 
 export const OIDC_ROLES = ['viewer', 'editor', 'admin'] as const;
@@ -42,11 +60,17 @@ export function snapshotToForm(s: OidcSettingsSnapshot): OidcForm {
     displayName: s.displayName ?? '',
     defaultRole: s.defaultRole || 'viewer',
     allowedDomains: (s.allowedDomains ?? []).join(', '),
+    permissionServiceEnabled: !!s.permissionServiceEnabled,
+    permissionServiceKey: '', // asla sunucudan gelmez
+    permissionTTLSeconds: String(s.permissionTTLSeconds || PERMISSION_TTL_DEFAULT),
+    permissionsClaim: s.permissionsClaim || 'permissions',
+    roleFromClaim: !!s.roleFromClaim,
   };
 }
 
 export function formToInput(f: OidcForm): OidcSettingsInput {
   const secret = f.clientSecret.trim();
+  const permKey = f.permissionServiceKey.trim();
   return {
     enabled: f.enabled,
     issuerUrl: f.issuerUrl.trim(),
@@ -57,6 +81,11 @@ export function formToInput(f: OidcForm): OidcSettingsInput {
     displayName: f.displayName.trim(),
     defaultRole: f.defaultRole,
     allowedDomains: splitList(f.allowedDomains).map(d => d.toLowerCase()),
+    permissionServiceEnabled: f.permissionServiceEnabled,
+    ...(permKey ? { permissionServiceKey: permKey } : {}),
+    permissionTTLSeconds: parsePermissionTTL(f.permissionTTLSeconds),
+    permissionsClaim: f.permissionsClaim.trim() || 'permissions',
+    roleFromClaim: f.roleFromClaim,
   };
 }
 
@@ -77,6 +106,11 @@ export function publicOidcSnapshot(c: AuthConfigResponse): OidcSettingsSnapshot 
     displayName: c.oidc?.displayName ?? '',
     defaultRole: 'viewer',
     allowedDomains: [],
+    permissionServiceEnabled: false,
+    permissionServiceKeySet: false,
+    permissionTTLSeconds: PERMISSION_TTL_DEFAULT,
+    permissionsClaim: 'permissions',
+    roleFromClaim: false,
     source: 'config',
     active: on,
   };

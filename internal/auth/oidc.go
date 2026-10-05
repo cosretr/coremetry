@@ -55,7 +55,11 @@ type oidcClient struct {
 	httpCli  *http.Client   // keşif + JWKS + token değişimi — hepsi sınırlı
 	provider *oidc.Provider
 	verifier *oidc.IDTokenVerifier
-	oauth    oauth2.Config
+	// atVerifier — v0.10.1110: JWT access token (permissions claim). AYNI
+	// JWKS ve issuer; audience denetimi yok (access token'ın aud'u çoğu
+	// IdP'de client id değil, kaynak sunucu).
+	atVerifier *oidc.IDTokenVerifier
+	oauth      oauth2.Config
 }
 
 func (o *OIDCService) client() *oidcClient {
@@ -102,6 +106,11 @@ type OIDCClaims struct {
 	EmailVerified bool   `json:"email_verified"`
 	Subject       string `json:"-"`
 	Nonce         string `json:"-"`
+	// ClaimRole — v0.10.1110: roleFromClaim açıkken permissions claim'inden
+	// çözülen rol ("" = claim yok/boş/tanınmayan → rol değişmez);
+	// ClaimRoleSource "access_token" | "id_token" | "".
+	ClaimRole       string `json:"-"`
+	ClaimRoleSource string `json:"-"`
 }
 
 // OIDCLoginError — giriş akışı hatası. v0.10.1067: token ucu (oauth2
@@ -176,6 +185,10 @@ func (o *OIDCService) Exchange(ctx context.Context, code, codeVerifier, expected
 	if !c.allowEmail(cl.Email) {
 		return nil, loginErr("email_domain_denied", nil)
 	}
+	// v0.10.1110 — token claim'inden rol (oidc_permissions.go). Burada
+	// yalnız ÇÖZÜLÜR; depoya yazım callback'te (api auth_permissions.go
+	// oidcLoginUser — yalnız düşürür).
+	cl.ClaimRole, cl.ClaimRoleSource = o.claimRole(ctx, c, tok.AccessToken, idTok)
 	return cl, nil
 }
 
@@ -575,11 +588,12 @@ func buildOIDCClient(ctx context.Context, cfg config.OIDCConfig, p oidcNetPolicy
 	}
 	prov := pc.NewProvider(oidc.ClientContext(context.Background(), httpCli))
 	return &oidcClient{
-		cfg:      cfg,
-		disc:     d,
-		httpCli:  httpCli,
-		provider: prov,
-		verifier: prov.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
+		cfg:        cfg,
+		disc:       d,
+		httpCli:    httpCli,
+		provider:   prov,
+		verifier:   prov.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
+		atVerifier: prov.Verifier(&oidc.Config{SkipClientIDCheck: true}),
 		oauth: oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,

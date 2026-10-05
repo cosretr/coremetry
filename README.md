@@ -156,6 +156,8 @@ migration tooling. Coremetry is pre-1.0 and says so in
 ### Enterprise
 
 - **OIDC SSO** — Google, Microsoft, Okta, generic OIDC.
+  Central-login permission service (`POST /api/auth/permissions`):
+  [docs/SSO-PERMISSION-SERVICE.md](docs/SSO-PERMISSION-SERVICE.md).
 - **LDAP / Active Directory** — AD group → role mapping,
   recursive memberOf lookup, LDAPS + StartTLS, internal-CA
   paste-in.

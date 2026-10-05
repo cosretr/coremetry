@@ -1877,6 +1877,61 @@ anonsu (`run`, grup ömrü başına bir), kaynak kipi kapısı — **shadow kayn
 için kaynak `problemMode=live` olmalı. Bilinen sınırlar: Problems araması "teknik" ile Oracle satırı bulmaz (SQL
 araması kod/operasyon/servis; kaynak `source` "Oracle"); env seçiliyken sentetik servisli grup iki sayfada da gizli.
 
+## 2026-10-05 — Merkezi login yetki servisi: POST /api/auth/permissions + token claim'inden rol (v0.10.1110)
+
+**Bağlam (müşterinin merkezi login standardı):** merkezi OIDC girişi, kullanıcı oturumu başına BİR kez (token
+yenilemede değil) uygulamanın "yetki servisine" POST atar ve dönen `permissions` dizisini access token'a claim
+olarak gömer; 200/204 dışı her durumda token claim'siz basılır; zaman aşımları bağlantı ≤1 s, cevap ≤2 s.
+**Sözleşme (uygulanan):** `POST /api/auth/permissions`, gövde `{"userId","username","email","registrationNumber"}`
+(JSON ≤4 KB, `registrationNumber` zorunlu, alan ≤256) → `200 {"subject":<registrationNumber AYNEN>,
+"permissions":["COREMETRY_ADMIN"|"COREMETRY_EDITOR"|"COREMETRY_VIEWER"|"COREMETRY_ROLE_<AD>"],"ttlSeconds":N}` ·
+`204` gövdesiz (YALNIZ devre dışı hesap) · `400` bozuk gövde · `401` gövdesiz (anahtar yok/yanlış) · `404`
+gövdesiz (servis kapalı ya da anahtar yok). Sıra 404 → 401 → 400: kimliksiz çağıran gövde doğrulamasından bilgi
+almaz. Özel rol (viewer tabanlı) katalogda varsa `COREMETRY_ROLE_<BÜYÜK_AD>`, yoksa taban rol. **Eşleme sırası
+(operatör kararı):** (1) `email` → kullanıcı e-postası; (2) yoksa `ldap_username` = `username`, sonra =
+`registrationNumber` (küçük harf; yeni `GetUserByLdapUsername`, FINAL + LIMIT 1); (3) yoksa **tanımsız kullanıcı →
+viewer** — her adım tek sınırlı okuma, disabled satırları da görür (aktif önce). **Operatör kararı (2026-10-05):
+"herkesin viewer rolünde login olabilmesi gerekir — kullanıcı ilk defa login olacaksa da viewer":** tanımsız
+kullanıcıya 200 + SSO `defaultRole`'ün yetkisi (varsayılan `["COREMETRY_VIEWER"]`), `subject` yankısı ve aynı TTL;
+**204 yalnız devre dışı hesap** (204 = "bu uygulamada yetki yok", merkezi login'de girişi engelleyebilir; devre dışı
+hesabı Coremetry girişi de reddeder). **Güvenlik:** uç oturumsuz (sunucudan-sunucuya) — `auth.SkipPath` yalnız `POST
+/api/auth/permissions`'ı muaf tutar (login / OIDC callback'le aynı yer); sınır `X-Coremetry-Auth-Key` paylaşılan
+anahtarı, SHA-256 özetleri üzerinden `crypto/subtle` ile karşılaştırılır (uzunluk da sızmaz). Anahtar bir secret:
+OIDC blobunda saklanır, hiçbir GET/PUT cevabında, audit'te ya da logda yok (`permissionServiceKeySet`), boş PUT
+kayıtlıyı korur (clientSecret kalıbı, kimlik koşulu yok); ≥16 karakter, boşluksuz ASCII, yer tutucu reddi
+(`weakSecretMarkers`). Depo hatası 500 gövdesiz (iç ayrıntı dış sisteme gitmez). Hız sınırı EKLENMEDİ: login'de
+de sınırlayıcı yok; yanlış anahtar depoya ulaşmaz (yalnız bir özet), ve paylaşılan ingress arkasında IP kilidi
+meşru IdP'yi kilitleyebilirdi — yerine sayaç `auth_permission_requests_total{result}` (401 fırtınası görünür).
+Log çağrı başına tek satır, slog DEBUG, PII yalnız kullanıcı kimliği. **Ayarlar:** `auth_oidc` blobuna
+`permissionServiceEnabled`, `permissionServiceKey`, `permissionTTLSeconds` (varsayılan 300, 60–3600 kıskacı),
+`permissionsClaim` (varsayılan `permissions`), `roleFromClaim` (varsayılan KAPALI); servis SSO'nun açık olmasından
+bağımsız, alanları SSO kapalıyken de doğrulanır; son-iyi ve audit (`settings.oidc.update`, anahtar yerine
+`permissionServiceKeyChanged`) mevcut OIDC yolundan. **Coremetry'de kalan:** rol yönetimi — admin rolü Kullanıcılar
+sayfasında atar, servis yalnız RAPORLAR. **Operatör kararı (2026-10-05): "oidc ile kullanıcılar login olduğunda yine
+default viewer olsun."** `roleFromClaim` varsayılan kapalı; kapalıyken claim hiç okunmaz, giriş bugünkü gibi: ilk
+kez gelen OIDC kullanıcısı `defaultRole` (viewer) ile açılır, rol yalnız Coremetry'den değişir. Açıkken claim access
+token'dan okunur (id_token ile aynı JWKS'le imza doğrulanır, aud denetimsiz; opak ya da doğrulanamayan access
+token'da id_token'daki aynı adlı claim); claim YALNIZ dizgi dizisi kabul edilir (tek dizgi yok sayılır) ve claim adı
+standart kimlik/profil claim'i (`sub`, `name`, `preferred_username`, `email`, … `azp`) olamaz — kullanıcının
+düzenleyebildiği serbest metinden rol okunmasın. `ADMIN > EDITOR > VIEWER` ilk eşleşen, yalnız KAYITLI kullanıcıya
+uygulanır ve **claim'den rol yalnız düşürür; yükseltme Users sayfasından** (müşteri cevabı önbellekliyor, token IdP
+oturumu boyunca yaşıyor — bayat bir claim düşürülmüş ya da ele geçirildiği için düşürülmüş bir admin'i yeniden
+yükseltemesin). Düşürme audit'lenir (`user.set_role_from_claim`, aktör rolü ÖNCEKİ rol, istek IP'si, ayrıntıda
+from→to), son admin düşürülmez; claim yok / boş / tanınmayan → rol değişmez (müşteri servis cevap vermeyince
+token'ı claim'siz basıyor; Coremetry'de atanmış rol korunur); ilk giriş bu açıkken de `defaultRole`. Yazım
+callback'te: `api.go` `oidcCallback`'in kullanıcı okuması TEK satırda `s.oidcLoginUser(r, email, claims)`
+(`auth_permissions.go`) ile değişti, satır sayısı aynı (11576). **Mevcut hata düzeltildi (güvenlik incelemesi):**
+`GetUserByEmail` `disabled=0` süzdüğü için callback devre dışı bırakılmış kullanıcıyı "yok" sayıp YENİ bir viewer
+satırıyla yeniden açıyordu (`users ORDER BY id`); artık `GetUserByEmailAnyState` ile disabled satır görülür ve giriş
+"hesap devre dışı" ile reddedilir. **Dayanıklılık:** depodaki / içe aktarılmış blobda yetki servisi alanları
+geçersizse SSO düşmez — yalnız servis kapanır (anahtar düşer, claim'den rol kapanır, `lastError` + log); PUT yolu
+aynı alanlara 400 verir. **Bilinen, bırakılan:** (1) müşteri cevabı `ttlSeconds` boyunca önbellekler — düşürme
+yönünde bayat claim, Coremetry'de yeni yükseltilmiş bir kullanıcıyı o süre içindeki girişte geri düşürebilir; TTL
+kısa tutulur (operatör belgesi: `docs/SSO-PERMISSION-SERVICE.md`). (2) Son-admin kapısı oku-sonra-yaz (CountAdmins →
+Upsert); iki admin aynı anda claim'le düşürülürse ikisi de geçebilir — `setUserRole`'daki kapıyla aynı yarış sınıfı.
+(3) Yetki servisi anahtarı, `clientSecret` gibi, `auth_oidc` blobuyla birlikte yapılandırma dışa aktarımına/yedeğe
+girer.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

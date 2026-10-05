@@ -1665,6 +1665,11 @@ tbody td.dt-state.dt-state--loading, [data-density] tbody td.dt-state.dt-state--
 .sso-check { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-6); font-size: var(--fs-sm); }
 .sso-row { display: flex; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-5); }
 .sso-row > .field { flex: 1 1 260px; min-width: 0; }
+/* v0.10.1110 — Yetki servisi (merkezi login) alt bölümü */
+.sso-perm { margin-top: var(--sp-7); padding-top: var(--sp-6); border-top: 1px solid var(--border); }
+.sso-subtitle { font-size: var(--fs-sm); font-weight: 600; margin-bottom: var(--sp-3); }
+.sso-check--tight { margin-bottom: var(--sp-3); }
+.sso-perm__explain { margin-bottom: var(--sp-5); }
 .sso-actions { display: flex; gap: var(--sp-4); justify-content: flex-end; margin-top: var(--sp-6); }
 .sso-result { margin-top: var(--sp-5); padding: var(--sp-5) var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg1); font-size: var(--fs-sm); }
 .sso-result__head { font-weight: 600; margin-bottom: var(--sp-3); }

@@ -6391,7 +6391,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	// Lookup or auto-provision. Email is the identity key; existing local
 	// users with the same email are kept (they can use either method).
 	email := strings.ToLower(claims.Email)
-	user, err := s.store.GetUserByEmail(r.Context(), email)
+	user, err := s.oidcLoginUser(r, email, claims) // v0.10.1110: disabled reddi + claim rolü (auth_permissions.go)
 	if err != nil {
 		s.oidcFail(w, r, err.Error())
 		return
