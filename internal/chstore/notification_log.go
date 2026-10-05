@@ -437,6 +437,36 @@ func (s *Store) HasNotification(ctx context.Context, relatedKind, relatedID, cha
 	return rows.Next(), rows.Err()
 }
 
+// LastNotificationAt — v0.10.1109: (relatedKind, relatedID) için son `within`
+// içindeki son BAŞARILI gönderimin zamanı; yoksa sıfır zaman. Oracle P1 olay
+// bildiriminin soğuması okur (notify sentWithin). Pencere soğuma kadar: tablo
+// ORDER BY (sent_at, id), related_id indeksi yok — 90 günü taramasın.
+func (s *Store) LastNotificationAt(ctx context.Context, relatedKind, relatedID string, within time.Duration) (time.Time, error) {
+	secs := int64(within / time.Second)
+	if secs <= 0 {
+		return time.Time{}, nil
+	}
+	rows, err := s.conn.Query(ctx, `
+		SELECT sent_at FROM notification_log
+		WHERE sent_at >= now() - toIntervalSecond(?)
+		  AND related_kind = ? AND related_id = ? AND ok = 1
+		ORDER BY sent_at DESC
+		LIMIT 1
+		SETTINGS max_execution_time = 10`,
+		secs, relatedKind, relatedID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer rows.Close()
+	var last time.Time
+	if rows.Next() {
+		if err := rows.Scan(&last); err != nil {
+			return time.Time{}, err
+		}
+	}
+	return last, rows.Err()
+}
+
 // HasAnyNotification — v0.10.782: kanal adından bağımsız "bu kayıt için
 // herhangi bir kanala başarılı gönderim oldu mu" (exception grubu
 // bildirimleri: grup ömrü başına bir kez, restart'ta yeniden gönderme yok).

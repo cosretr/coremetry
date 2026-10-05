@@ -36,6 +36,16 @@ export function oracleRowTitle(g: Pick<ExceptionGroup, 'type' | 'message'>): str
   return op ? `${code} · ${op}` : code;
 }
 
+/**
+ * v0.10.1109 — Problems kuyruğu (/inbox) satırının soluk satırı: "<etiket> ·
+ * <operasyon>". Satır listede zaten vardı ama span exception'ından ayırt
+ * edilemiyordu (1108 etiketi yalnız Exceptions'a girmişti).
+ */
+export function oracleInboxDetail(operation: string, label: string): string {
+  const op = operation.trim();
+  return op ? `${label} · ${op}` : label;
+}
+
 /** Kaynak adı: bilgi yoksa sentetik servisten (`oracle:<ad>`), o da yoksa "?". */
 export function oracleSourceName(g: Pick<ExceptionGroup, 'service' | 'oracle'>): string {
   if (g.oracle?.sourceName) return g.oracle.sourceName;

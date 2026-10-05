@@ -801,7 +801,8 @@ func (s *Store) ListExceptionGroups(ctx context.Context, f ExceptionGroupFilter)
 		SELECT `+exGroupSelectCols(snap)+`
 		FROM exception_groups FINAL `+wc.sql()+`
 		`+exceptionGroupsOrderBy(f.Sort, f.Dir)+`
-		LIMIT ? OFFSET ?`, args...)
+		LIMIT ? OFFSET ?
+		SETTINGS max_execution_time = 10`, args...) // v0.10.1109 — FINAL okuma sınırlı
 	if err != nil {
 		return nil, err
 	}

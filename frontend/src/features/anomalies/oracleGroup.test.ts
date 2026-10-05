@@ -9,7 +9,7 @@ import type { ExceptionGroup } from '@/lib/types';
 import {
   isOracleGroup, isSyntheticOracleService, oracleRowTitle, oracleRowDetail, oracleSourceName,
   oracleChannelsText, oracleRowTooltip, parseOracleFacet, oracleFacetParam, oracleExplainLine,
-  oracleFacetLabels,
+  oracleFacetLabels, oracleInboxDetail,
 } from './oracleGroup';
 import { DEFAULT_BRANDING, oracleGroupLabelOf, resolveBranding } from '@/lib/branding';
 
@@ -41,6 +41,13 @@ describe('oracleGroup', () => {
     expect(oracleRowDetail(g({ oracle: undefined, service: 'oracle:app-err' }), L)).toBe('Teknik hata · app-err · servis bilinmiyor');
     expect(oracleRowDetail(g(), 'DB hatası')).toBe('DB hatası · app-err · 2 servis');
     expect(oracleSourceName(g({ oracle: undefined, service: 'svc-x' }))).toBe('?');
+  });
+
+  // v0.10.1109 — Problems kuyruğu satırı da etiketi taşır (1108'de yalnız Exceptions).
+  it('Problems satırı soluk satırı: "<etiket> · <operasyon>"', () => {
+    expect(oracleInboxDetail('OP_TRANSFER', L)).toBe('Teknik hata · OP_TRANSFER');
+    expect(oracleInboxDetail('  ', L)).toBe('Teknik hata');
+    expect(oracleInboxDetail('OP_TRANSFER', 'DB hatası')).toBe('DB hatası · OP_TRANSFER');
   });
 
   it('sentetik servis link almaz', () => {

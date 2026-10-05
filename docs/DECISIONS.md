@@ -1839,6 +1839,44 @@ aria-label'ı, detay kartı alt satırı ve Settings yolu dipnotu, trace-yok ipu
 (exception satırında çizilmiyor, arama anahtarı); kod adları, `?oracle=`, `ora:` parmak izi; AI istemleri
 (model Oracle olduğunu bilmeli). Bildirim e-postası zaten "Oracle" taşımıyordu.
 
+## 2026-10-05 — Oracle "Teknik hata" grupları Problems sayfasında ve bildirimde (v0.10.1109)
+
+**Operatör:** "oracledan gelen teknik hatalar problems sayfasında da gözüksün isterim" / "bu sayede P1 tipinde
+gözüken oracle teknik hataları notifikasyon da gönderilmiş olur". **Bulgu 1 — liste DÜŞÜRMÜYORDU:** gerçek bir
+ClickHouse'a karşı tam `inboxView` derlemesi (varsayılan `prio=P1`, ilk görülme sıralı) `ora:` P1 grubunu exception
+satırı, P1, "<etiket> patlaması" gerekçesiyle döndürdü; tür kuralı, oluşum tabanı, katlama, tavan ona dokunmuyor
+(pin `api/inbox_oracle_default_view_test.go`, düzeltmeden önce de yeşil). Görünmezlik **kimlikti**: v0.10.1108
+etiketi yalnız Exceptions'a girmişti; Problems satırı span exception'ından ayırt edilemiyordu (yalnız kod +
+operasyon). **Bulgu 2 — kök neden bildirimde:** kanal yolu (`notify/exception_notifier.go` `routeGroups`) her gruba
+span grubunun tazelik kapısını (`isChannelCandidate`: `new` yalnız ilk görülmeden sonraki 15 dk, ya da `regressed`)
+uyguluyordu. Oracle P1'i yapışkan değil, saatlik toplamlardan doğan bir OLAY (patlama ya da P1 penceresinde yeni
+grup); (kaynak, kod, operasyon) grupları kalıcı olduğundan patlama hemen her zaman günler önce doğmuş bir grupta olur
+→ Exceptions'ta P1 görünen Oracle grubu HİÇBİR kanala gitmiyordu. İkincil (yapısal): tarama `last_seen DESC LIMIT 300`
+idi; Oracle grubunun son görülmesi kapanmış dakika gecikmesi kadar geride, büyük filoda canlı span grupları onu
+pencereden itebiliyordu. Elenen şüpheliler: istatistik önbelleği worker'da da kurulu (`main.go`, her rol); triyaj
+ayarı her rolde hidrate; `inboxKeepSourcePriority` exception türüne dokunmaz; env süzgeci Exceptions ile Problems'te
+simetrik. **Karar:** (1) Oracle grubu merdivende P1 VE (gecikme kaydırılmış) son 10 dk içinde görülmüşse ilk görülme
+yaşına bakılmadan kanala girer; kimlik `exception-group:ora:<hex>:p1` (Sustur bağlantısı kalıcı; grubun yeni-grup
+Sustur'u ve "problem değil" de susturur); grup başına 4 sa soğuma (`exOracleP1Cooldown`; lider defteri + yeni
+`chstore.LastNotificationAt` — yalnız soğuma penceresini okur (`ORDER BY sent_at DESC LIMIT 1`, 10 sn; tablo
+related_id indeksi taşımaz, 90 günü taramaz); restart'ta çift yok, soğuma sonrası yeni patlama yeniden); susturulmuş
+grup defterde "alındı" (negatif önbellek — patlayan susturulmuş grup her tik CH okumaz); P1 gidince grubun taban
+kimliği de defterde, aynı bölümün P2'si çalmaz. Sentetik Problem adı "<etiket> · <kod> · <operasyon>", P1 →
+critical, tür exception (kanalın "Exception" türü). **Fırtına özeti:** aynı tikte bir kaynağın 5'ten FAZLA grubu P1
+olursa (DB kesintisi, deploy, kaynak shadow → live) tek tek N kritik yerine TEK özet — `exception-group:ora-source:
+<kaynak>:p1`, "<etiket> · <kaynak> · N grup P1", gövdede son 1 sa'e göre ilk 10 grup, aynı soğuma, bağlantı
+Exceptions'ın Oracle çipi; özete giren grupların `:p1`'i talep edilmiş sayılır (sonraki tiklerde tek tek çalmazlar);
+≤ 5 grup ve kaynağı çözülemeyen grup tek tek. Kaynak + son 1 sa aynı `GroupStatsCache`'ten (main.go
+`SetOracleGroupRef`). (2) Kanal taraması dört geçiş: span (`oracle=exclude`, şekli aynı) ve Oracle (`only`, son
+görülme ≥ şimdi − 40 dk: 10 dk tazelik + 30 dk en çok gecikme) ayrı, new/regressed; `ListExceptionGroups`'a
+`max_execution_time = 10`.
+(3) Problems satırında Oracle grubu Exceptions'taki etiket rozetini ve "<etiket> · <operasyon>" soluk satırını
+taşır; sentetik `oracle:<kaynak>` servisi link almaz. **Değişmeyen:** Oracle öncelik kuralı (P1 yalnız patlama /
+yeni grup), Problems varsayılanı (yalnız P1 + ilk görülme), span gruplarının kanal kuralı ve kimlikleri, takım
+anonsu (`run`, grup ömrü başına bir), kaynak kipi kapısı — **shadow kaynağın grubu yine bildirim almaz**, bildirim
+için kaynak `problemMode=live` olmalı. Bilinen sınırlar: Problems araması "teknik" ile Oracle satırı bulmaz (SQL
+araması kod/operasyon/servis; kaynak `source` "Oracle"); env seçiliyken sentetik servisli grup iki sayfada da gizli.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

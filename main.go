@@ -1394,6 +1394,15 @@ func main() {
 		exNotifier.SetGroupGate(func(g chstore.ExceptionGroup) (bool, time.Duration) {
 			return oracle.GroupNotifyGate(oracleSvc.CurrentSettings(), g, time.Now())
 		})
+		// v0.10.1109 — Oracle P1 olayının kaynak özeti (aynı tikte > 5 grup):
+		// kaynak + son 1 sa aynı istatistik önbelleğinden.
+		exNotifier.SetOracleGroupRef(func(g chstore.ExceptionGroup) (notify.OracleGroupRef, bool) {
+			st, ok := oracleGroupStats.Stats(g)
+			if !ok {
+				return notify.OracleGroupRef{}, false
+			}
+			return notify.OracleGroupRef{SourceID: st.Source.ID, SourceName: st.Source.Name, LastHour: st.LastHour}, true
+		})
 		go exNotifier.Start(ctx)
 	}
 

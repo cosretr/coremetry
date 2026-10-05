@@ -82,6 +82,13 @@ func (n *Notifier) subjectURL(p chstore.Problem) string {
 		}
 		return base + "/incident?id=" + p.ID
 	}
+	if isOracleSourceRollupID(p.ID) { // v0.10.1109 — kaynak özeti: Exceptions'ın Oracle çipi
+		base := n.PublicURL()
+		if base == "" {
+			return ""
+		}
+		return base + "/problems?oracle=only"
+	}
 	if fp := exceptionGroupFingerprint(p.ID); fp != "" { // v0.10.782 — grup satırı Exceptions'ta açılır
 		base := n.PublicURL()
 		if base == "" {

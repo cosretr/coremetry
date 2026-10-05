@@ -59,6 +59,15 @@ type ExceptionNotifier struct {
 	sent map[string]int64
 	// logged — kalıcı defter sorusu (v0.10.1078; testte sahte).
 	logged func(ctx context.Context, id string) (bool, error)
+	// lastSent / ignored — v0.10.1109 Oracle P1 olayının soğuması (son `within`
+	// içindeki son başarılı gönderim) ve Sustur kapısı (testte sahte; nil = kayıt
+	// yok / susturulmamış). oracleRef — grubun kaynağı + son 1 sa (main.go;
+	// nil/false = kaynak bilinmiyor → tek tek). send — testte sahte; nil =
+	// Notifier.SendProblemAlert. Ayrıntı: exception_oracle_p1.go.
+	lastSent  func(ctx context.Context, id string, within time.Duration) (time.Time, error)
+	ignored   func(ctx context.Context, id string) (bool, error)
+	oracleRef func(g chstore.ExceptionGroup) (OracleGroupRef, bool)
+	send      func(ctx context.Context, p chstore.Problem)
 	// gate — v0.10.1092: grubun bildirim hattına girip girmeyeceği + tazelik
 	// ölçüsünün kayması (nil = hepsi, kayma 0). main.go Oracle kaynak kipini
 	// bağlar: `ora:` grubu yalnız kaynağı problemMode=live iken bildirilir
@@ -96,6 +105,10 @@ func NewExceptionNotifier(store *chstore.Store, n *Notifier, lock cache.Lock, pr
 		logged: func(ctx context.Context, id string) (bool, error) {
 			return store.HasAnyNotification(ctx, "exception", id)
 		},
+		lastSent: func(ctx context.Context, id string, within time.Duration) (time.Time, error) {
+			return store.LastNotificationAt(ctx, "exception", id, within)
+		},
+		ignored: store.NotificationIgnored,
 	}
 }
 
@@ -185,6 +198,9 @@ func exceptionGroupFingerprint(id string) string {
 		return ""
 	}
 	rest := strings.TrimPrefix(id, chstore.ExceptionGroupRulePrefix)
+	if strings.HasPrefix(rest, oracleSourceRollupTag) {
+		return "" // v0.10.1109 — kaynak özeti tek bir grup değil
+	}
 	if strings.HasPrefix(rest, chstore.OracleGroupPrefix) {
 		fp, _, _ := strings.Cut(strings.TrimPrefix(rest, chstore.OracleGroupPrefix), ":")
 		return chstore.OracleGroupPrefix + fp
@@ -208,6 +224,44 @@ func isChannelCandidate(g chstore.ExceptionGroup, state string, now time.Time) b
 	return state == chstore.ExStateRegressed
 }
 
+// exceptionChannelKey — SAF: grubun bu tikte kanal yoluna gireceği kimlik
+// ("" = aday değil). gnow: kapının kaydırdığı "şimdi". Regressed span grubunda
+// gerçek kimliği claimRegressed seçer (taban ya da `:p1:<epoch>`).
+func exceptionChannelKey(g chstore.ExceptionGroup, state, prio string, gnow time.Time) string {
+	if chstore.IsOracleGroup(g.Fingerprint) && prio == "P1" {
+		sinceLast := time.Duration(gnow.UnixNano() - g.LastSeen)
+		if g.Occurrences < exChannelMinOccur || sinceLast < 0 || sinceLast > exChannelActiveWin {
+			return ""
+		}
+		return exceptionOracleP1ID(g.Fingerprint)
+	}
+	if !isChannelCandidate(g, state, gnow) || (prio != "P1" && prio != "P2") {
+		return ""
+	}
+	return exceptionGroupID(g.Fingerprint, state)
+}
+
+// exceptionChannelPasses — v0.10.1109: Oracle grupları AYRI taramada. Son
+// görülmeleri kapanmış dakika gecikmesi kadar (≥ pencere + 1 dk) geride;
+// last_seen DESC LIMIT 300 penceresini canlı span gruplarıyla paylaşınca
+// büyük filoda pencerenin dışında kalabiliyorlardı. Oracle geçişleri son
+// görülmeyle sınırlı (exOracleScanLookback) — FINAL tüm tabloyu taramasın;
+// span geçişlerinin şekli değişmedi.
+var exceptionChannelPasses = []struct{ state, oracle string }{
+	{chstore.ExStateNew, "exclude"}, {chstore.ExStateRegressed, "exclude"},
+	{chstore.ExStateNew, "only"}, {chstore.ExStateRegressed, "only"},
+}
+
+// exceptionChannelFilter — SAF: geçişin liste süzgeci. Oracle geçişi
+// `last_seen ≥ now − (10 dk tazelik + 30 dk en çok gecikme)`.
+func exceptionChannelFilter(state, oracle string, now time.Time) chstore.ExceptionGroupFilter {
+	f := chstore.ExceptionGroupFilter{State: state, Limit: 300, MinOccurrences: exChannelMinOccur, Oracle: oracle}
+	if oracle == "only" {
+		f.ActiveFromNs = now.Add(-exOracleScanLookback).UnixNano()
+	}
+	return f
+}
+
 var httpErrorTypeRe = regexp.MustCompile(chstore.HTTPErrorTypeRe)
 
 // exceptionGroupProblem — SAF: kanal hunisine giren sentetik Problem.
@@ -226,10 +280,22 @@ func exceptionGroupProblem(g chstore.ExceptionGroup, state, prio, reason string)
 	if state == chstore.ExStateRegressed {
 		label = "geri döndü (regressed)"
 	}
+	name := kind + " · " + g.Type
+	if chstore.IsOracleGroup(g.Fingerprint) {
+		// v0.10.1109 — Oracle grubu kullanıcıya görünen adıyla (v0.10.1108
+		// branding etiketi, varsayılan "Teknik hata") + operasyon; P1'i bir olay.
+		name = chstore.CurrentOracleGroupLabel() + " · " + g.Type
+		if op := strings.TrimSpace(g.Message); op != "" {
+			name += " · " + op
+		}
+		if prio == "P1" {
+			label = "P1 olayı"
+		}
+	}
 	return chstore.Problem{
 		ID:             exceptionGroupID(g.Fingerprint, state),
 		RuleID:         chstore.ExceptionGroupRulePrefix + state,
-		RuleName:       kind + " · " + g.Type,
+		RuleName:       name,
 		Service:        g.Service,
 		Severity:       sev,
 		Status:         "open",
@@ -247,30 +313,42 @@ func (e *ExceptionNotifier) routeGroups(ctx context.Context, now time.Time) {
 		return
 	}
 	sent := 0
-	for _, state := range []string{chstore.ExStateNew, chstore.ExStateRegressed} {
-		groups, err := e.store.ListExceptionGroups(ctx, chstore.ExceptionGroupFilter{
-			State: state, Limit: 300, MinOccurrences: exChannelMinOccur,
-		})
+	// v0.10.1109 — Oracle P1 olay adayları toplanır, taramalardan SONRA kaynak
+	// başına özetlenir ya da tek tek gider (routeOracleP1).
+	var oraP1 []oracleP1Cand
+passes:
+	for _, pass := range exceptionChannelPasses {
+		state := pass.state
+		groups, err := e.store.ListExceptionGroups(ctx, exceptionChannelFilter(state, pass.oracle, now))
 		if err != nil {
-			log.Printf("[exception-notifier] kanal yolu list %s: %v", state, err)
+			log.Printf("[exception-notifier] kanal yolu list %s/%s: %v", state, pass.oracle, err)
 			continue
 		}
 		for _, g := range groups {
 			if sent >= exChannelMaxPerTick {
 				log.Printf("[exception-notifier] tik tavanı (%d) — kalan gruplar sonraki tikte", exChannelMaxPerTick)
-				return
+				break passes
 			}
 			ok, gnow := e.admit(g, now)
-			if !ok || !isChannelCandidate(g, state, gnow) {
+			if !ok {
 				continue
 			}
+			oracleGroup := chstore.IsOracleGroup(g.Fingerprint)
+			if !oracleGroup && !isChannelCandidate(g, state, gnow) {
+				continue // ucuz ön eleme: merdiven yalnız adayda (eski sıra)
+			}
 			prio, reason := e.prio(g)
-			if prio != "P1" && prio != "P2" {
+			key := exceptionChannelKey(g, state, prio, gnow)
+			if key == "" {
 				continue
 			}
 			// v0.10.1016 — "problem değil" grubu tik tavanını yemesin
 			// (SendProblemAlert zaten susturur; burada defter de kirlenmez).
 			if e.n.verdictSilenced(ctx, exceptionVerdictSignature(g.Fingerprint)) {
+				continue
+			}
+			if oracleGroup && prio == "P1" {
+				oraP1 = append(oraP1, oracleP1Cand{g: g, state: state, reason: reason})
 				continue
 			}
 			var id string
@@ -292,12 +370,18 @@ func (e *ExceptionNotifier) routeGroups(ctx context.Context, now time.Time) {
 				}
 				e.sent[id] = now.UnixNano()
 			}
+			// v0.10.1109 — aynı bölümün P1'i az önce gittiyse Oracle P2'si çalmaz.
+			// Talepten SONRA: kimlik defterde, sonraki tiklerde CH okuması yok.
+			if oracleGroup && prio != "P1" && e.sentWithin(ctx, exceptionOracleP1ID(g.Fingerprint), now, exOracleP1Cooldown) {
+				continue
+			}
 			p := exceptionGroupProblem(g, state, prio, reason)
 			p.ID = id
 			e.n.SendProblemAlert(ctx, p)
 			sent++
 		}
 	}
+	sent = e.routeOracleP1(ctx, now, oraP1, sent)
 	if sent > 0 {
 		log.Printf("[exception-notifier] %d exception/HTTP-hata grubu kanallara yönlendirildi", sent)
 	}

@@ -45,6 +45,9 @@ import { stripMarkdown } from '@/components/Markdown';
 import { serviceHref, inboxItemWindow } from '@/lib/serviceHref';
 import { SubjectLink } from '../components/SubjectLink';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle } from '@/features/anomalies/spread'; // v0.10.949
+import { isOracleGroup, isSyntheticOracleService, oracleInboxDetail } from '@/features/anomalies/oracleGroup'; // v0.10.1109
+import { useBranding } from '@/lib/branding'; // v0.10.1109 — Oracle grubu görünen adı
+import { Badge } from '@/components/ui/Badge';
 import type { SubjectLane } from '@/lib/types';
 import { useProblemVerdicts } from '@/lib/queries';
 import { ProblemVerdictPolicyBar } from '@/components/ProblemVerdictPolicyBar';
@@ -502,6 +505,7 @@ export default function InboxPage() {
   // less global alerts), same semantics as /problems. Hint chip in
   // the facet bar spells it out.
   const [env] = useUrlEnv();
+  const oraLabel = useBranding().oracleGroupLabel; // v0.10.1109
   // v0.9.319 — the sort now runs on the SERVER, before the cap. Seeded from
   // the same precedence useDataTable restores with (resolveInitialSort), so
   // the first fetch and the header arrow agree at mount instead of the page
@@ -1157,6 +1161,8 @@ export default function InboxPage() {
               {dt.sortedRows.length === 0 ? <DataTableState dt={dt} leading={[34]} {...inboxState} /> : dt.sortedRows.map((it, i) => {
                 const rp = dt.rowProps(i);
                 const spread = spreadOf(it.exception); // v0.10.949
+                // v0.10.1109 — Oracle hata tablosu grubu: Exceptions'taki etiket.
+                const ora = isExcFamily(it) && isOracleGroup(it.exception!.fingerprint);
                 return (
                 <tr key={it.id}
                   {...rp}
@@ -1182,8 +1188,8 @@ export default function InboxPage() {
                     <TriageTitleCell
                       title={inboxRowHeadline(it)}
                       code={isExcFamily(it)}
-                      chips={<RowChips it={it} real={verdictOf(it, verdicts) === 'real'} />}
-                      detail={<DetailLine it={it} />}
+                      chips={<RowChips it={it} real={verdictOf(it, verdicts) === 'real'} oraLabel={ora ? oraLabel : undefined} />}
+                      detail={ora ? oracleInboxDetail(it.exception!.message, oraLabel) : <DetailLine it={it} />}
                       detailMono={isExcFamily(it)}
                       detailTitle={isExcFamily(it) ? it.exception?.message : inboxRowLabel(it) ?? undefined}
                       ai={it.aiSummary ? stripMarkdown(it.aiSummary) : undefined}
@@ -1193,11 +1199,16 @@ export default function InboxPage() {
                     {/* v0.9.860 (UX denetimi K1) — satırın kendi olay
                         penceresi taşınır; aksi hâlde servis sayfası
                         "şimdi" açılır ve olay görünmez. */}
+                    {ora && isSyntheticOracleService(it.service) ? (
+                      // v0.10.1109 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok (Exceptions ile aynı).
+                      <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{it.service}</span>
+                    ) : (
                     <SubjectLink service={it.service} subjectKind={it.subjectKind}
                       href={serviceHref(it.service, { range: inboxItemWindow(it) })}
                       onClick={e => e.stopPropagation()}
                       style={{ fontWeight: 600 }}
                       emptyFallback={<span style={{ color: 'var(--text3)' }}>(none)</span>} />
+                    )}
                     {/* v0.10.949 — aynı exception aynı anda N serviste: tek
                         satır nokta+metin, soluk (T9: renk yalnız sapan
                         değerde; T11: ortakların tam listesi ipucunda). */}
@@ -1363,13 +1374,20 @@ function AssigneePill({ v }: { v: string }) {
 // satırının "<1h" çipiyle aynı yer). Sıra: durum, ilk görülme < 1 sa, öğretme
 // işareti, yinelenen, runbook, deploy. AI özeti artık TriageTitleCell'de
 // (köken ✨ + yaş damgası korunur; v0.9.530 gerekçesi orada).
-function RowChips({ it, real }: { it: InboxItem; real: boolean }) {
+function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean; oraLabel?: string }) {
   return (
     <>
       {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama hiç
           çizilmiyordu: "all" pivotunda çözülmüş bir satır yenisiyle birebir
           aynı görünüyordu. */}
       <StatusBadge s={it.status} />
+      {/* v0.10.1109 — Oracle hata tablosu grubu rozeti (Exceptions satırıyla aynı). */}
+      {oraLabel && (
+        <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
+          title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
+          {oraLabel}
+        </Badge>
+      )}
       {/* Exceptions satırıyla aynı işaret: son bir saatte ORTAYA ÇIKTI. */}
       {it.startedAt > 0 && Date.now() - it.startedAt / 1e6 < 60 * 60 * 1000 && (
         <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
